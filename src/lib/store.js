@@ -227,8 +227,13 @@ export default {
   normalizeStr, normalizeMST, toISODate,
   isExportDecl, isExportByNumber, isImportByNumber, isExportByType, isImportByType,
   getMSTRowsRaw, getMSTMap, getMSTFor, upsertMSTRows,
+
   getDeclRows, saveDeclRows, sortDeclRows, getRecentDeclRows,
   getData, setData,
+
+  getDeclRows, saveDeclRows,
+  getData, setData,
+
   getRules, setRules, K_RULES,
   pushImportLog,
 };

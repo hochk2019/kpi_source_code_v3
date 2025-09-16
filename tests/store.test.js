@@ -3,6 +3,8 @@ import { saveDeclRows, getDeclRows, sortDeclRows, getRecentDeclRows } from '@/li
 beforeEach(() => {
   localStorage.clear();
 });
+import { describe, it, expect } from 'vitest';
+import { saveDeclRows, getDeclRows } from '@/lib/store.js';
 
 describe('saveDeclRows', () => {
   it('merges rows using so_tk + nhanh when overwrite=false', () => {
@@ -24,7 +26,6 @@ describe('saveDeclRows', () => {
     ]);
   });
 });
-
 
 describe('sortDeclRows', () => {
   it('đưa các tờ khai mới nhất lên trước và fallback theo số tờ khai', () => {

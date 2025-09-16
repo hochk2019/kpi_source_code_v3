@@ -5,6 +5,10 @@ import { getDeclRows, saveDeclRows, sortDeclRows, pushImportLog } from "@/lib/st
 import { mapRow } from "@/lib/importer.js";
 
 const PAGE_SIZE = 20;
+import { saveDeclRows, pushImportLog } from "@/lib/store.js";
+import { mapRow } from "@/lib/importer.js";
+
+const PAGE_SIZE = 50;
 
 export default function DataImporter() {
   const fileRef = useRef(null);
