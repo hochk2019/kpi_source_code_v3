@@ -1,10 +1,12 @@
 /* /src/components/ReportViewer.jsx */
 import React, { useMemo, useState } from "react";
-import { getData, K_DECLS, getKpiRules } from "@/lib/store.js";
+import { getDeclRows, getRules } from "@/lib/store.js";
 
 export default function ReportViewer() {
-  const decls = getData(K_DECLS, []);
-  const rules = getKpiRules(); // để sau mở rộng tính KPI
+  const decls = getDeclRows();
+  const rules = getRules(); // để sau mở rộng tính KPI
+  const ruleTitle = rules?.name || "Chưa đặt tên";
+  const ruleApply = rules?.applyFrom ? `Áp dụng từ ${rules.applyFrom}` : "Áp dụng ngay";
 
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
@@ -23,7 +25,10 @@ export default function ReportViewer() {
       <div className="rounded border p-3 flex gap-3 items-center">
         <input type="date" value={from} onChange={e=>setFrom(e.target.value)} className="border rounded px-2 py-1"/>
         <input type="date" value={to} onChange={e=>setTo(e.target.value)} className="border rounded px-2 py-1"/>
-        <div className="ml-auto text-sm opacity-70">{filtered.length} tờ khai</div>
+        <div className="ml-auto text-sm opacity-70 space-x-3">
+          <span>{filtered.length} tờ khai</span>
+          <span className="italic">{ruleTitle} — {ruleApply}</span>
+        </div>
       </div>
 
       {!filtered.length ? (

@@ -25,7 +25,7 @@ export function toISODate(d) {
   const s = normalizeStr(d);
   if (!s) return "";
   if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
-  const m = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/);
+  const m = s.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})$/);
   if (!m) return "";
   let [_, dd, mm, yyyy] = m;
   if (yyyy.length === 2) yyyy = "20" + yyyy;
@@ -66,9 +66,51 @@ export function getMSTRowsRaw() {
   return safeParse(localStorage.getItem(MST_KEY), []);
 }
 
+function sanitizeMSTRow(row) {
+  const mst = normalizeMST(row?.mst);
+  if (!mst) return null;
+
+  return {
+    mst,
+    company: normalizeStr(row?.company ?? ""),
+    person_import: normalizeStr(row?.person_import ?? ""),
+    person_export: normalizeStr(row?.person_export ?? ""),
+    team: normalizeStr(row?.team ?? ""),
+    effective_from: toISODate(row?.effective_from) || "",
+  };
+}
+
+/** Lấy toàn bộ bảng gán MST, đã chuẩn hoá + sắp xếp */
+export function getMSTMap() {
+  const raw = getMSTRowsRaw();
+  const rows = Array.isArray(raw) ? raw : [];
+  return rows
+    .map(sanitizeMSTRow)
+    .filter(Boolean)
+    .sort((a, b) => {
+      const byMST = a.mst.localeCompare(b.mst);
+      if (byMST !== 0) return byMST;
+      return (a.effective_from || "").localeCompare(b.effective_from || "");
+    });
+}
+
+/** Ghi đè/bổ sung bảng gán MST (đã chuẩn hoá dữ liệu đầu vào) */
+export function upsertMSTRows(rows) {
+  const sanitized = Array.isArray(rows)
+    ? rows.map(sanitizeMSTRow).filter(Boolean)
+    : [];
+  sanitized.sort((a, b) => {
+    const byMST = a.mst.localeCompare(b.mst);
+    if (byMST !== 0) return byMST;
+    return (a.effective_from || "").localeCompare(b.effective_from || "");
+  });
+  localStorage.setItem(MST_KEY, JSON.stringify(sanitized));
+  return sanitized.length;
+}
+
 /** Lấy người phụ trách theo MST & ngày hiệu lực gần nhất (<= ngày tờ khai) */
 export function getMSTFor(mst, isoDate) {
-  const rows = getMSTRowsRaw().filter(r => normalizeMST(r.mst) === normalizeMST(mst));
+  const rows = getMSTMap().filter(r => normalizeMST(r.mst) === normalizeMST(mst));
   if (rows.length === 0) return null;
 
   const dateVal = isoDate ? new Date(isoDate).getTime() : Number.POSITIVE_INFINITY;
@@ -76,7 +118,7 @@ export function getMSTFor(mst, isoDate) {
   // Xếp theo hiệu lực gần nhất với ngày TK
   const picked = rows
     .map(r => {
-      const ef = toISODate(r.effective_from) || "0001-01-01";
+      const ef = r.effective_from || "0001-01-01";
       const ts = new Date(ef).getTime();
       const rank = ts <= dateVal ? (dateVal - ts) : Number.POSITIVE_INFINITY - ts;
       return { r, rank };
@@ -89,6 +131,44 @@ export function getMSTFor(mst, isoDate) {
 // ===== DECL rows (tờ khai) =====
 export function getDeclRows() {
   return safeParse(localStorage.getItem(DECL_KEY), []);
+}
+
+export function sortDeclRows(rows) {
+  const arr = Array.isArray(rows) ? rows : [];
+  const parseTime = (value) => {
+    if (!value) return 0;
+    const ts = Date.parse(value);
+    return Number.isFinite(ts) ? ts : 0;
+  };
+
+  return arr
+    .map((row, idx) => ({ row, idx, ts: parseTime(row?.date) }))
+    .sort((a, b) => {
+      if (a.ts !== b.ts) return b.ts - a.ts; // mới nhất trước
+
+      const soA = (a.row?.so_tk ?? "").toString();
+      const soB = (b.row?.so_tk ?? "").toString();
+      if (soA !== soB) {
+        const cmp = soB.localeCompare(soA, undefined, { numeric: true, sensitivity: "base" });
+        if (cmp !== 0) return cmp;
+      }
+
+      const nhanhA = (a.row?.nhanh ?? "").toString();
+      const nhanhB = (b.row?.nhanh ?? "").toString();
+      if (nhanhA !== nhanhB) {
+        const cmpNhanh = nhanhB.localeCompare(nhanhA, undefined, { numeric: true, sensitivity: "base" });
+        if (cmpNhanh !== 0) return cmpNhanh;
+      }
+
+      return b.idx - a.idx; // giữ thứ tự chèn gần nhất
+    })
+    .map(item => item.row);
+}
+
+export function getRecentDeclRows(limit = 20) {
+  const sorted = sortDeclRows(getDeclRows());
+  if (!Number.isFinite(limit) || limit <= 0) return sorted;
+  return sorted.slice(0, limit);
 }
 
 /** Lưu tờ khai:
@@ -146,8 +226,8 @@ export default {
   DECL_KEY, MST_KEY, RULES_KEY,
   normalizeStr, normalizeMST, toISODate,
   isExportDecl, isExportByNumber, isImportByNumber, isExportByType, isImportByType,
-  getMSTRowsRaw, getMSTFor,
-  getDeclRows, saveDeclRows,
+  getMSTRowsRaw, getMSTMap, getMSTFor, upsertMSTRows,
+  getDeclRows, saveDeclRows, sortDeclRows, getRecentDeclRows,
   getData, setData,
   getRules, setRules, K_RULES,
   pushImportLog,

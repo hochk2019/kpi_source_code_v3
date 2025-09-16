@@ -1,92 +1,37 @@
 // src/components/DataImporter.jsx
-import React, { useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as XLSX from "xlsx";
-import {
-  saveDeclRows, pushImportLog,
-  normalizeStr, normalizeMST, toISODate,
-  getMSTFor, isExportDecl,
-} from "@/lib/store.js";
+import { getDeclRows, saveDeclRows, sortDeclRows, pushImportLog } from "@/lib/store.js";
+import { mapRow } from "@/lib/importer.js";
 
-const PAGE_SIZE = 50;
-
-const NAME_MAP = {
-  so_tk: ["Số TK","Số tờ khai","So TK","So to khai","Số tờ khai TM","Số tờ khai TM "],
-  nhanh: ["Nhánh","Nhanh","branch"],
-  date: ["date","ngày","Ngay","Ngày"],
-  ma_hq: ["Mã HQ","Ma HQ","Mã hq","ma_hq"],
-  loai_hinh: ["Loại hình","Loai hinh","Loai hình","loai_hinh"],
-  so_hoa_don: ["Số hóa đơn TM","So hoa don TM","Số hoá đơn TM"],
-  van_don: ["Vận đơn","Van don","Vận đơn "],
-  phuong_thuc_vc: ["Phương thức vận chuyển","Phuong thuc van chuyen"],
-  so_luong_kien: ["Số lượng kiện","So luong kien"],
-  gross: ["Tổng trọng lượng hàng (Gross)","Tong trong luong hang (Gross)"],
-  so_luong: ["Số lượng","So luong"],
-  phan_luong: ["Phân luồng","Phan luong"],
-  muc_hang: ["Mục hàng","Muc hang","num_items"],
-  mst: ["MST","mst"],
-  cong_ty: ["Công ty","Cong ty","customer"],
-};
-
-function pick(row, keys) {
-  for (const k of keys) {
-    if (row.hasOwnProperty(k)) return row[k];
-  }
-  return "";
-}
-
-function mapRow(row, opts) {
-  const so_tk = normalizeStr(pick(row, NAME_MAP.so_tk));
-  const nhanh = normalizeStr(pick(row, NAME_MAP.nhanh));
-  const dateISO = toISODate(pick(row, NAME_MAP.date));
-  const ma_hq = normalizeStr(pick(row, NAME_MAP.ma_hq));
-  const loai_hinh = normalizeStr(pick(row, NAME_MAP.loai_hinh));
-  const so_hoa_don = normalizeStr(pick(row, NAME_MAP.so_hoa_don));
-  const van_don = normalizeStr(pick(row, NAME_MAP.van_don));
-  const phuong_thuc_vc = normalizeStr(pick(row, NAME_MAP.phuong_thuc_vc));
-  const so_luong_kien = Number(pick(row, NAME_MAP.so_luong_kien)) || 0;
-  const gross = Number(String(pick(row, NAME_MAP.gross)).replaceAll(",", "")) || 0;
-  const so_luong = Number(pick(row, NAME_MAP.so_luong)) || 0;
-  const phan_luong = normalizeStr(pick(row, NAME_MAP.phan_luong));
-  const muc_hang = Number(pick(row, NAME_MAP.muc_hang)) || 0;
-  const mst = normalizeMST(pick(row, NAME_MAP.mst));
-  const cong_ty = normalizeStr(pick(row, NAME_MAP.cong_ty));
-
-  // Tra xem là xuất hay nhập để lấy đúng người phụ trách
-  let nhan_vien = normalizeStr(row["nhan_vien"] || row["Nhân viên"] || "");
-  let team = normalizeStr(row["team"] || row["Tổ đội"] || "");
-
-  if (opts.autoAssignStaff) {
-    const isExport = isExportDecl(so_tk, loai_hinh);
-    const m = getMSTFor(mst, dateISO) || {};
-    if (!nhan_vien) nhan_vien = isExport ? (m.person_export || "") : (m.person_import || "");
-    if (!team) team = m.team || "";
-  }
-
-  return {
-    date: dateISO,
-    so_tk,
-    soToKhai: so_tk,          // alias để chỗ khác dùng
-    nhanh,
-    ma_hq,
-    loai_hinh, loaiHinh: loai_hinh,
-    so_hoa_don, van_don, phuong_thuc_vc,
-    so_luong_kien, gross, so_luong,
-    phan_luong, muc_hang,
-    mst, cong_ty,
-    nhan_vien, team,
-  };
-}
+const PAGE_SIZE = 20;
 
 export default function DataImporter() {
   const fileRef = useRef(null);
   const [rawRows, setRawRows] = useState([]);        // dữ liệu xem trước (đã map)
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
+  const [mode, setMode] = useState("saved");         // saved | preview
+  const [selectedFile, setSelectedFile] = useState("");
 
   // Tuỳ chọn
   const [overwrite, setOverwrite] = useState(false);         // Ghi đè toàn bộ
   const [upsert11, setUpsert11] = useState(true);            // Upsert theo 11 số đầu (nếu có dùng merge cục bộ)
   const [autoAssignStaff, setAutoAssignStaff] = useState(true); // Tự gán nhân viên theo MST nếu trống
+
+  const loadSavedRows = useCallback(() => {
+    const saved = sortDeclRows(getDeclRows());
+    setRawRows(saved);
+    setMode("saved");
+    setPage(1);
+    setQuery("");
+    setSelectedFile("");
+    if (fileRef.current) fileRef.current.value = "";
+  }, [fileRef]);
+
+  useEffect(() => {
+    loadSavedRows();
+  }, [loadSavedRows]);
 
   // Đọc file XLSX
   function handleFileChange(e) {
@@ -102,8 +47,11 @@ export default function DataImporter() {
         .map(r => mapRow(r, { autoAssignStaff }))
         .filter(r => r.so_tk && r.date);
 
-      setRawRows(mapped);
+      setRawRows(sortDeclRows(mapped));
       setPage(1);
+      setMode("preview");
+      setSelectedFile(f.name || "");
+      setQuery("");
     };
     reader.readAsArrayBuffer(f);
   }
@@ -134,6 +82,10 @@ export default function DataImporter() {
   }
 
   function handleImport() {
+    if (mode !== "preview") {
+      alert("Hãy chọn file XLSX để import.");
+      return;
+    }
     if (rawRows.length === 0) {
       alert("Không có dữ liệu để import");
       return;
@@ -146,18 +98,67 @@ export default function DataImporter() {
     const count = saveDeclRows(rows, { overwrite });
     pushImportLog(`Import XLSX: ${rawRows.length} dòng → sau hợp nhất còn ${count}`);
     alert("Import xong!");
+    if (fileRef.current) fileRef.current.value = "";
+    loadSavedRows();
   }
 
   function handleSaveAll() {
-    if (rawRows.length === 0) return;
+    if (mode !== "saved") {
+      alert("Chỉ có thể lưu chỉnh sửa khi đang xem dữ liệu đã lưu. Hãy import file hoặc quay lại chế độ dữ liệu đã lưu.");
+      return;
+    }
+    if (rawRows.length === 0) {
+      alert("Không có dữ liệu để lưu");
+      return;
+    }
     const count = saveDeclRows(rawRows, { overwrite: true });
     alert(`Đã lưu ${count} bản ghi (ghi đè).`);
+    loadSavedRows();
   }
+
+  const canImport = mode === "preview" && rawRows.length > 0;
+  const canSave = mode === "saved" && rawRows.length > 0;
+  const modeLabel = mode === "preview" ? "Đang xem dữ liệu từ file (chưa lưu)" : "Đang xem dữ liệu đã lưu";
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center gap-2">
-        <input type="file" ref={fileRef} onChange={handleFileChange} accept=".xls,.xlsx" />
+      <div className="flex flex-wrap items-center gap-2">
+        <input
+          type="file"
+          ref={fileRef}
+          onChange={handleFileChange}
+          accept=".xls,.xlsx"
+          className="hidden"
+        />
+        <button
+          type="button"
+          onClick={() => fileRef.current?.click()}
+          className="px-3 py-1.5 rounded border bg-white shadow-sm hover:bg-gray-50"
+        >
+          Chọn file XLSX
+        </button>
+        {selectedFile && (
+          <span className="text-sm text-gray-600">Đã chọn: {selectedFile}</span>
+        )}
+        <button
+          type="button"
+          onClick={handleImport}
+          disabled={!canImport}
+          className={`px-3 py-1.5 rounded ${canImport ? "bg-black text-white" : "bg-gray-200 text-gray-500 cursor-not-allowed"}`}
+        >
+          Import XLSX
+        </button>
+        <button
+          type="button"
+          onClick={loadSavedRows}
+          className="px-3 py-1.5 rounded border"
+        >
+          Hiển thị dữ liệu đã lưu
+        </button>
+        <span className="ml-auto text-sm text-gray-600">{modeLabel}</span>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
         <label className="flex items-center gap-1">
           <input type="checkbox" checked={autoAssignStaff} onChange={e => setAutoAssignStaff(e.target.checked)} />
           <span>Tự gán nhân viên theo MST nếu trống (ON)</span>
@@ -170,7 +171,6 @@ export default function DataImporter() {
           <input type="checkbox" checked={overwrite} onChange={e => setOverwrite(e.target.checked)} />
           <span>Ghi đè toàn bộ dữ liệu hiện có</span>
         </label>
-        <button onClick={handleImport} className="px-3 py-1 rounded bg-black text-white">Import XLSX</button>
       </div>
 
       <div className="flex items-center gap-2">
@@ -186,9 +186,19 @@ export default function DataImporter() {
         <div className="ml-auto flex items-center gap-2">
           <button onClick={() => setPage(p => Math.max(1, p - 1))} className="px-2 py-1 border rounded">« Trước</button>
           <button onClick={() => setPage(p => Math.min(maxPage, p + 1))} className="px-2 py-1 border rounded">Sau »</button>
-          <button onClick={handleSaveAll} className="px-3 py-1 rounded border">Lưu (ghi đè)</button>
+          <button
+            onClick={handleSaveAll}
+            disabled={!canSave}
+            className={`px-3 py-1 rounded border ${canSave ? "" : "opacity-50 cursor-not-allowed"}`}
+          >
+            Lưu chỉnh sửa
+          </button>
         </div>
       </div>
+
+      {!query && mode === "saved" && (
+        <div className="text-xs text-gray-500">Hiển thị tối đa 20 dòng mới nhất. Nhập từ khóa để tìm các tờ khai khác.</div>
+      )}
 
       <div className="overflow-auto border rounded">
         <table className="min-w-full text-sm">
