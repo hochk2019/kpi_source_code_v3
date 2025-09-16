@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { mapRow } from '@/components/DataImporter.jsx';
+import { mapRow } from '@/lib/importer.js';
 
 describe('mapRow', () => {
   it('normalises fields and exposes aliases used by other modules', () => {
