@@ -29,7 +29,7 @@ const NAME_MAP = {
 
 function pick(row, keys) {
   for (const k of keys) {
-    if (row.hasOwnProperty(k)) return row[k];
+    if (Object.prototype.hasOwnProperty.call(row, k)) return row[k];
   }
   return "";
 }

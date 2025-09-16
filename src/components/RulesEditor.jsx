@@ -8,7 +8,7 @@ import {
   saveRules,
   computeKPI,
 } from "@/lib/rules.js";
-import { getData, setData, K_RULES } from "@/lib/store.js";
+import { getData } from "@/lib/store.js";
 
 /* Input number an toàn */
 function Num({ value, onChange, step = "0.1" }) {
