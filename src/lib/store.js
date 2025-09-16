@@ -133,6 +133,44 @@ export function getDeclRows() {
   return safeParse(localStorage.getItem(DECL_KEY), []);
 }
 
+export function sortDeclRows(rows) {
+  const arr = Array.isArray(rows) ? rows : [];
+  const parseTime = (value) => {
+    if (!value) return 0;
+    const ts = Date.parse(value);
+    return Number.isFinite(ts) ? ts : 0;
+  };
+
+  return arr
+    .map((row, idx) => ({ row, idx, ts: parseTime(row?.date) }))
+    .sort((a, b) => {
+      if (a.ts !== b.ts) return b.ts - a.ts; // mới nhất trước
+
+      const soA = (a.row?.so_tk ?? "").toString();
+      const soB = (b.row?.so_tk ?? "").toString();
+      if (soA !== soB) {
+        const cmp = soB.localeCompare(soA, undefined, { numeric: true, sensitivity: "base" });
+        if (cmp !== 0) return cmp;
+      }
+
+      const nhanhA = (a.row?.nhanh ?? "").toString();
+      const nhanhB = (b.row?.nhanh ?? "").toString();
+      if (nhanhA !== nhanhB) {
+        const cmpNhanh = nhanhB.localeCompare(nhanhA, undefined, { numeric: true, sensitivity: "base" });
+        if (cmpNhanh !== 0) return cmpNhanh;
+      }
+
+      return b.idx - a.idx; // giữ thứ tự chèn gần nhất
+    })
+    .map(item => item.row);
+}
+
+export function getRecentDeclRows(limit = 20) {
+  const sorted = sortDeclRows(getDeclRows());
+  if (!Number.isFinite(limit) || limit <= 0) return sorted;
+  return sorted.slice(0, limit);
+}
+
 /** Lưu tờ khai:
  * - overwrite=true: ghi đè toàn bộ
  * - overwrite=false: merge theo key "so_tk + '_' + (nhanh||'')"
@@ -189,8 +227,13 @@ export default {
   normalizeStr, normalizeMST, toISODate,
   isExportDecl, isExportByNumber, isImportByNumber, isExportByType, isImportByType,
   getMSTRowsRaw, getMSTMap, getMSTFor, upsertMSTRows,
+
+  getDeclRows, saveDeclRows, sortDeclRows, getRecentDeclRows,
+  getData, setData,
+
   getDeclRows, saveDeclRows,
   getData, setData,
+
   getRules, setRules, K_RULES,
   pushImportLog,
 };
