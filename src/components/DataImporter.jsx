@@ -1,10 +1,6 @@
 // src/components/DataImporter.jsx
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import * as XLSX from "xlsx";
-import { getDeclRows, saveDeclRows, sortDeclRows, pushImportLog } from "@/lib/store.js";
-import { mapRow } from "@/lib/importer.js";
-
-const PAGE_SIZE = 20;
 import { saveDeclRows, pushImportLog } from "@/lib/store.js";
 import { mapRow } from "@/lib/importer.js";
 
@@ -15,27 +11,11 @@ export default function DataImporter() {
   const [rawRows, setRawRows] = useState([]);        // dữ liệu xem trước (đã map)
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
-  const [mode, setMode] = useState("saved");         // saved | preview
-  const [selectedFile, setSelectedFile] = useState("");
 
   // Tuỳ chọn
   const [overwrite, setOverwrite] = useState(false);         // Ghi đè toàn bộ
   const [upsert11, setUpsert11] = useState(true);            // Upsert theo 11 số đầu (nếu có dùng merge cục bộ)
   const [autoAssignStaff, setAutoAssignStaff] = useState(true); // Tự gán nhân viên theo MST nếu trống
-
-  const loadSavedRows = useCallback(() => {
-    const saved = sortDeclRows(getDeclRows());
-    setRawRows(saved);
-    setMode("saved");
-    setPage(1);
-    setQuery("");
-    setSelectedFile("");
-    if (fileRef.current) fileRef.current.value = "";
-  }, [fileRef]);
-
-  useEffect(() => {
-    loadSavedRows();
-  }, [loadSavedRows]);
 
   // Đọc file XLSX
   function handleFileChange(e) {
@@ -51,11 +31,8 @@ export default function DataImporter() {
         .map(r => mapRow(r, { autoAssignStaff }))
         .filter(r => r.so_tk && r.date);
 
-      setRawRows(sortDeclRows(mapped));
+      setRawRows(mapped);
       setPage(1);
-      setMode("preview");
-      setSelectedFile(f.name || "");
-      setQuery("");
     };
     reader.readAsArrayBuffer(f);
   }
@@ -86,10 +63,6 @@ export default function DataImporter() {
   }
 
   function handleImport() {
-    if (mode !== "preview") {
-      alert("Hãy chọn file XLSX để import.");
-      return;
-    }
     if (rawRows.length === 0) {
       alert("Không có dữ liệu để import");
       return;
@@ -102,67 +75,18 @@ export default function DataImporter() {
     const count = saveDeclRows(rows, { overwrite });
     pushImportLog(`Import XLSX: ${rawRows.length} dòng → sau hợp nhất còn ${count}`);
     alert("Import xong!");
-    if (fileRef.current) fileRef.current.value = "";
-    loadSavedRows();
   }
 
   function handleSaveAll() {
-    if (mode !== "saved") {
-      alert("Chỉ có thể lưu chỉnh sửa khi đang xem dữ liệu đã lưu. Hãy import file hoặc quay lại chế độ dữ liệu đã lưu.");
-      return;
-    }
-    if (rawRows.length === 0) {
-      alert("Không có dữ liệu để lưu");
-      return;
-    }
+    if (rawRows.length === 0) return;
     const count = saveDeclRows(rawRows, { overwrite: true });
     alert(`Đã lưu ${count} bản ghi (ghi đè).`);
-    loadSavedRows();
   }
-
-  const canImport = mode === "preview" && rawRows.length > 0;
-  const canSave = mode === "saved" && rawRows.length > 0;
-  const modeLabel = mode === "preview" ? "Đang xem dữ liệu từ file (chưa lưu)" : "Đang xem dữ liệu đã lưu";
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap items-center gap-2">
-        <input
-          type="file"
-          ref={fileRef}
-          onChange={handleFileChange}
-          accept=".xls,.xlsx"
-          className="hidden"
-        />
-        <button
-          type="button"
-          onClick={() => fileRef.current?.click()}
-          className="px-3 py-1.5 rounded border bg-white shadow-sm hover:bg-gray-50"
-        >
-          Chọn file XLSX
-        </button>
-        {selectedFile && (
-          <span className="text-sm text-gray-600">Đã chọn: {selectedFile}</span>
-        )}
-        <button
-          type="button"
-          onClick={handleImport}
-          disabled={!canImport}
-          className={`px-3 py-1.5 rounded ${canImport ? "bg-black text-white" : "bg-gray-200 text-gray-500 cursor-not-allowed"}`}
-        >
-          Import XLSX
-        </button>
-        <button
-          type="button"
-          onClick={loadSavedRows}
-          className="px-3 py-1.5 rounded border"
-        >
-          Hiển thị dữ liệu đã lưu
-        </button>
-        <span className="ml-auto text-sm text-gray-600">{modeLabel}</span>
-      </div>
-
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex items-center gap-2">
+        <input type="file" ref={fileRef} onChange={handleFileChange} accept=".xls,.xlsx" />
         <label className="flex items-center gap-1">
           <input type="checkbox" checked={autoAssignStaff} onChange={e => setAutoAssignStaff(e.target.checked)} />
           <span>Tự gán nhân viên theo MST nếu trống (ON)</span>
@@ -175,6 +99,7 @@ export default function DataImporter() {
           <input type="checkbox" checked={overwrite} onChange={e => setOverwrite(e.target.checked)} />
           <span>Ghi đè toàn bộ dữ liệu hiện có</span>
         </label>
+        <button onClick={handleImport} className="px-3 py-1 rounded bg-black text-white">Import XLSX</button>
       </div>
 
       <div className="flex items-center gap-2">
@@ -190,19 +115,9 @@ export default function DataImporter() {
         <div className="ml-auto flex items-center gap-2">
           <button onClick={() => setPage(p => Math.max(1, p - 1))} className="px-2 py-1 border rounded">« Trước</button>
           <button onClick={() => setPage(p => Math.min(maxPage, p + 1))} className="px-2 py-1 border rounded">Sau »</button>
-          <button
-            onClick={handleSaveAll}
-            disabled={!canSave}
-            className={`px-3 py-1 rounded border ${canSave ? "" : "opacity-50 cursor-not-allowed"}`}
-          >
-            Lưu chỉnh sửa
-          </button>
+          <button onClick={handleSaveAll} className="px-3 py-1 rounded border">Lưu (ghi đè)</button>
         </div>
       </div>
-
-      {!query && mode === "saved" && (
-        <div className="text-xs text-gray-500">Hiển thị tối đa 20 dòng mới nhất. Nhập từ khóa để tìm các tờ khai khác.</div>
-      )}
 
       <div className="overflow-auto border rounded">
         <table className="min-w-full text-sm">
