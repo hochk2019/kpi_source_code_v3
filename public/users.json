@@ -1,0 +1,16 @@
+{
+  "users": [
+    {
+      "username": "admin",
+      "password": "admin123",
+      "role": "admin",
+      "name": "Quản trị viên"
+    },
+    {
+      "username": "nhanvien",
+      "password": "123456",
+      "role": "staff",
+      "name": "Nhân viên"
+    }
+  ]
+}

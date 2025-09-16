@@ -1,0 +1,112 @@
+// src/components/DataImporter.jsx
+import React, { useMemo, useRef, useState } from "react";
+import * as XLSX from "xlsx";
+import {
+  upsertDeclarations,
+  getImportLogs,
+  pushImportLog,
+} from "@/lib/store.js";
+
+export default function DataImporter() {
+  const fileRef = useRef(null);
+  const [autoAssign, setAutoAssign] = useState(true);
+  const [upsert11, setUpsert11] = useState(true);
+  const [overwrite, setOverwrite] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const logs = useMemo(() => getImportLogs(), []);
+
+  const handleImport = async () => {
+    const file = fileRef.current?.files?.[0];
+    if (!file) return alert("Hãy chọn file Excel trước.");
+    setBusy(true);
+    try {
+      const buf = await file.arrayBuffer();
+      const wb = XLSX.read(buf, { type: "array" });
+      const sheet = wb.Sheets[wb.SheetNames[0]];
+      const list = XLSX.utils.sheet_to_json(sheet, {
+        defval: "",
+        raw: false, // đọc theo text để giữ số 0 đầu, ngày dạng chuỗi
+        blankrows: false,
+      });
+      if (!Array.isArray(list)) {
+        throw new Error("Không đọc được dữ liệu từ sheet đầu tiên.");
+      }
+      const merged = upsertDeclarations(list, {
+        upsertBy11: upsert11,
+        overwrite,
+        autoAssign,
+      });
+      pushImportLog(
+        `Import "${file.name}": ${list.length} dòng -> sau hợp nhất còn ${merged.length}`
+      );
+      alert("Import xong!");
+    } catch (e) {
+      console.error(e);
+      alert("Import lỗi: " + (e?.message || e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="rounded-lg border p-4">
+        <div className="flex items-center gap-3 flex-wrap">
+          <input
+            ref={fileRef}
+            type="file"
+            accept=".xls,.xlsx"
+            className="border p-2 rounded"
+          />
+          <label className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={autoAssign}
+              onChange={(e) => setAutoAssign(e.target.checked)}
+            />
+            <span>Tự gán nhân viên theo MST nếu trống (ON)</span>
+          </label>
+          <label className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={upsert11}
+              onChange={(e) => setUpsert11(e.target.checked)}
+            />
+            <span>Upsert theo 11 số đầu của Số tờ khai</span>
+          </label>
+          <label className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={overwrite}
+              onChange={(e) => setOverwrite(e.target.checked)}
+            />
+            <span>Ghi đè toàn bộ dữ liệu hiện có</span>
+          </label>
+          <button
+            className="px-3 py-2 rounded bg-black text-white disabled:opacity-60"
+            disabled={busy}
+            onClick={handleImport}
+          >
+            {busy ? "Đang import..." : "Import XLSX"}
+          </button>
+        </div>
+      </div>
+
+      <div className="rounded-lg border p-4">
+        <div className="font-semibold mb-2">Nhật ký import gần đây</div>
+        {logs.length === 0 ? (
+          <div className="text-sm opacity-70">Chưa có</div>
+        ) : (
+          <ul className="list-disc pl-6 text-sm space-y-1">
+            {logs.map((l, i) => (
+              <li key={i}>
+                <span className="opacity-60">{new Date(l.time).toLocaleString()}</span>{" "}
+                — {l.msg}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </div>
+  );
+}
