@@ -3,7 +3,7 @@
 // QUY TẮC KPI + TÍNH KPI THEO NHÓM & BẬC (CÓ LỊCH SỬ)
 // - Hỗ trợ cộng dồn cho Nhóm 3&4 (1–10 là base, +0.5 cho 11–20, 21–30, 31–40, 41–50)
 // - Cho phép cấu hình bậc cho Nhóm 1 và Nhóm 2 (mặc định đúng “chuẩn cũ”)
-// - Loại trừ giấy phép (vd: ZN02, HDGC) áp dụng cho 5 cặp cột “Mã/Số giấy phép (1→5)”
+// - Loại trừ giấy phép (vd: ZN02, HDGC) áp dụng cho 6 cặp cột “Mã/Số giấy phép (0→5)”
 // - “Áp dụng từ ngày…”: lưu phiên bản quy tắc và tính lại KPI từ ngày đó trở đi
 // --------------------------------------------------
 
@@ -53,7 +53,7 @@ export const DEFAULT_RULES = {
   license: {
     perType: 1,             // mỗi LOẠI giấy phép +1 điểm
     maxTypes: 5,            // tối đa số LOẠI tính điểm
-    excludeCodes: ['ZN02','HDGC'] // các mã “Mã giấy phép” KHÔNG tính (áp dụng cho 5 cặp)
+    excludeCodes: ['ZN02','HDGC'] // các mã “Mã giấy phép” KHÔNG tính (áp dụng cho 6 cặp)
   }
 };
 
@@ -65,14 +65,20 @@ export function loadRules() {
   try {
     const r = JSON.parse(localStorage.getItem(KEY_ACTIVE) || 'null');
     if (r && r.groups && r.license) return r;
-  } catch {}
+  } catch (err) {
+    console.warn('loadRules: invalid data, fallback to default', err);
+  }
   // lần đầu: lưu mặc định
   saveRules(DEFAULT_RULES, { appendHistory: false });
   return DEFAULT_RULES;
 }
 
 export function getRulesHistory() {
-  try { return JSON.parse(localStorage.getItem(KEY_HISTORY) || '[]'); } catch { return []; }
+  try { return JSON.parse(localStorage.getItem(KEY_HISTORY) || '[]'); }
+  catch (err) {
+    console.warn('getRulesHistory: invalid data, reset history', err);
+    return [];
+  }
 }
 
 /**
@@ -163,7 +169,9 @@ export function computeKPI(row, rulesInput) {
   const rules = rulesInput || loadRules();
 
   const code = norm(row?.loaiHinh);
-  const items = Number(row?.num_items || 0) || 0;
+  const items = Number(
+    row?.num_items ?? row?.muc_hang ?? 0
+  ) || 0;
 
   const gKey = detectGroup(code, rules);
   const g = rules.groups[gKey] || null;
