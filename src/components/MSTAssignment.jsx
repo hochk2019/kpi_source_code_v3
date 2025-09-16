@@ -32,7 +32,7 @@ const toISO = (v) => {
   }
   const s = v.toString().trim();
   // dd/mm/yyyy
-  const m1 = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+  const m1 = s.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
   if (m1) {
     const d = m1[1].padStart(2, "0");
     const m = m1[2].padStart(2, "0");
@@ -40,7 +40,7 @@ const toISO = (v) => {
     return `${y}-${m}-${d}`;
   }
   // yyyy-mm-dd
-  const m2 = s.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/);
+  const m2 = s.match(/^(\d{4})[/-](\d{1,2})[/-](\d{1,2})$/);
   if (m2) {
     const y = m2[1];
     const m = m2[2].padStart(2, "0");
