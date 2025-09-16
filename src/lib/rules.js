@@ -169,7 +169,9 @@ export function computeKPI(row, rulesInput) {
   const rules = rulesInput || loadRules();
 
   const code = norm(row?.loaiHinh);
-  const items = Number(row?.num_items || 0) || 0;
+  const items = Number(
+    row?.num_items ?? row?.muc_hang ?? 0
+  ) || 0;
 
   const gKey = detectGroup(code, rules);
   const g = rules.groups[gKey] || null;

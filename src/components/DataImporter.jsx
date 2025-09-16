@@ -34,7 +34,7 @@ function pick(row, keys) {
   return "";
 }
 
-function mapRow(row, opts) {
+export function mapRow(row, opts) {
   const so_tk = normalizeStr(pick(row, NAME_MAP.so_tk));
   const nhanh = normalizeStr(pick(row, NAME_MAP.nhanh));
   const dateISO = toISODate(pick(row, NAME_MAP.date));
@@ -71,8 +71,8 @@ function mapRow(row, opts) {
     loai_hinh, loaiHinh: loai_hinh,
     so_hoa_don, van_don, phuong_thuc_vc,
     so_luong_kien, gross, so_luong,
-    phan_luong, muc_hang,
-    mst, cong_ty,
+    phan_luong, muc_hang, num_items: muc_hang,
+    mst, cong_ty, customer: cong_ty,
     nhan_vien, team,
   };
 }

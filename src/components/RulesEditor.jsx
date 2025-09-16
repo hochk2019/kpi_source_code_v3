@@ -94,7 +94,7 @@ export default function RulesEditor() {
   const data = getData();
   const testList = useMemo(() => {
     return data.map((r) => ({
-      key: `${r.date || ""} || ${r.soToKhai || ""} || ${r.customer || ""} || ${r.loaiHinh || ""}`,
+      key: `${r.date || ""} || ${r.soToKhai || ""} || ${r.cong_ty || ""} || ${r.loaiHinh || ""}`,
       row: r,
     })).slice(0, 300);
   }, [data]);
@@ -326,7 +326,7 @@ export default function RulesEditor() {
                     <b>Loại hình:</b> {picked.loaiHinh} &nbsp;
                     <b>Mục hàng:</b> {picked.num_items || 0} &nbsp;
                     <b>MST:</b> {picked.mst || ""} &nbsp;
-                    <b>Cty:</b> {picked.customer || ""}
+                    <b>Cty:</b> {picked.cong_ty || ""}
                   </div>
                   <div className="mt-1"><b>KẾT QUẢ:</b> {kpiPicked}</div>
                 </>
