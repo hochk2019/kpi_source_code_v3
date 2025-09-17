@@ -7,7 +7,7 @@
 // - “Áp dụng từ ngày…”: lưu phiên bản quy tắc và tính lại KPI từ ngày đó trở đi
 // --------------------------------------------------
 
-import { getData, setData } from './store.js';
+import { getData, setData, RULES_KEY, setRules as persistRules } from './store.js';
 
 // ====== CẤU HÌNH MẶC ĐỊNH ======
 export const DEFAULT_RULES = {
@@ -58,16 +58,30 @@ export const DEFAULT_RULES = {
 };
 
 // ====== LƯU / TẢI QUY TẮC (CÓ LỊCH SỬ) ======
-const KEY_ACTIVE = 'kpi_rules';            // quy tắc hiện hành
 const KEY_HISTORY = 'kpi_rules_history';   // mảng phiên bản đã lưu
+const LEGACY_KEY_ACTIVE = 'kpi_rules';
 
 export function loadRules() {
   try {
-    const r = JSON.parse(localStorage.getItem(KEY_ACTIVE) || 'null');
-    if (r && r.groups && r.license) return r;
+    const stored = JSON.parse(localStorage.getItem(RULES_KEY) || 'null');
+    if (stored && stored.groups && stored.license) {
+      return stored;
+    }
   } catch (err) {
     console.warn('loadRules: invalid data, fallback to default', err);
   }
+
+  // Thử migrate từ khoá cũ nếu còn
+  try {
+    const legacy = JSON.parse(localStorage.getItem(LEGACY_KEY_ACTIVE) || 'null');
+    if (legacy && legacy.groups && legacy.license) {
+      persistRules(legacy);
+      return legacy;
+    }
+  } catch (err) {
+    console.warn('loadRules: legacy data invalid, fallback to default', err);
+  }
+
   // lần đầu: lưu mặc định
   saveRules(DEFAULT_RULES, { appendHistory: false });
   return DEFAULT_RULES;
@@ -89,7 +103,9 @@ export function getRulesHistory() {
 export function saveRules(rules, opts = {}) {
   const cloned = JSON.parse(JSON.stringify(rules || {}));
   cloned.updatedAt = new Date().toISOString();
-  localStorage.setItem(KEY_ACTIVE, JSON.stringify(cloned));
+  persistRules(cloned);
+  // ghi thêm key cũ để tương thích với bản lưu trước
+  localStorage.setItem(LEGACY_KEY_ACTIVE, JSON.stringify(cloned));
 
   if (opts.appendHistory !== false) {
     const hist = getRulesHistory();
