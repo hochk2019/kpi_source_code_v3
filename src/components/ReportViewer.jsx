@@ -255,7 +255,7 @@ function TeamDetailCard({ team }) {
   );
 }
 
-export default function ReportViewer() {
+export default function ReportViewer({ canExport = true }) {
   const initialRange = useMemo(() => computeQuickRange("this_month"), []);
   const [quickRange, setQuickRange] = useState("this_month");
   const [from, setFrom] = useState(initialRange.from);
@@ -343,6 +343,10 @@ export default function ReportViewer() {
   };
 
   const handleExport = () => {
+    if (!canExport) {
+      alert("Tài khoản hiện tại không được phép xuất báo cáo.");
+      return;
+    }
     if (typeof window === "undefined") return;
     if (!summary.decls) {
       alert("Không có dữ liệu để xuất");
@@ -657,14 +661,20 @@ export default function ReportViewer() {
         <button
           type="button"
           onClick={handleExport}
-          className="rounded bg-black px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-gray-900"
+          disabled={!canExport}
+          className={`rounded px-3 py-2 text-sm font-semibold shadow-sm ${
+            canExport ? "bg-black text-white hover:bg-gray-900" : "bg-gray-200 text-gray-500"
+          }`}
         >
           Xuất Excel
         </button>
         <button
           type="button"
           onClick={handlePrint}
-          className="rounded border px-3 py-2 text-sm shadow-sm hover:bg-gray-50"
+          disabled={!canExport}
+          className={`rounded border px-3 py-2 text-sm shadow-sm ${
+            canExport ? "hover:bg-gray-50" : "text-gray-400"
+          }`}
         >
           In / Xuất PDF
         </button>

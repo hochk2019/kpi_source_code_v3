@@ -17,7 +17,7 @@ function makeMemberId(teamId) {
   return `${teamId}-${stamp}-${random}`;
 }
 
-function TeamManager() {
+function TeamManager({ canEdit = true, currentUser = null }) {
   const initialRosterRef = useRef(null);
   if (!initialRosterRef.current) {
     initialRosterRef.current = getTeamRoster();
@@ -35,6 +35,9 @@ function TeamManager() {
   const [memberNameDraft, setMemberNameDraft] = useState("");
   const [dirty, setDirty] = useState(false);
   const [companyPage, setCompanyPage] = useState(1);
+
+  const actor = currentUser?.username || "guest";
+  const isReadOnly = !canEdit;
 
   const selectedTeam = useMemo(
     () => roster.teams.find((team) => team.id === selectedTeamId) ?? null,
@@ -172,6 +175,7 @@ function TeamManager() {
   };
 
   const handleAddMember = (event) => {
+    if (isReadOnly) return;
     event.preventDefault();
     if (!selectedTeam) return;
     const trimmed = normalizeStr(newMemberName);
@@ -202,6 +206,7 @@ function TeamManager() {
   };
 
   const handleRemoveMember = (memberId) => {
+    if (isReadOnly) return;
     if (!selectedTeam) return;
     const member = selectedTeam.members.find((m) => m.id === memberId);
     if (!member) return;
@@ -222,6 +227,7 @@ function TeamManager() {
   };
 
   const handleMoveMember = (memberId, targetTeamId) => {
+    if (isReadOnly) return;
     if (!targetTeamId || targetTeamId === selectedTeamId) return;
     const targetTeam = roster.teams.find((team) => team.id === targetTeamId);
     if (!targetTeam) return;
@@ -260,6 +266,7 @@ function TeamManager() {
   };
 
   const commitMemberName = () => {
+    if (isReadOnly) return;
     if (!activeMember || !selectedTeam) return;
     const trimmed = normalizeStr(memberNameDraft);
     if (!trimmed) {
@@ -308,12 +315,22 @@ function TeamManager() {
   };
 
   const handleSave = () => {
+    if (isReadOnly) {
+      alert("Bạn không có quyền lưu thay đổi tổ đội.");
+      return;
+    }
     try {
-      const sanitized = setTeamRoster(roster);
+      const sanitized = setTeamRoster(roster, {
+        actor,
+        detail: "Cập nhật tổ đội từ giao diện",
+      });
       setRoster(sanitized);
       const { rows, changed } = applyTeamRosterToMST(sanitized, mstRows);
       if (changed) {
-        upsertMSTRows(rows);
+        upsertMSTRows(rows, {
+          actor,
+          detail: "Đồng bộ tổ đội sang bảng MST",
+        });
         setMstRows(getMSTMap());
       }
       setDirty(false);
@@ -335,13 +352,19 @@ function TeamManager() {
 
   return (
     <div className="p-6 space-y-6">
+      {isReadOnly && (
+        <div className="rounded border border-amber-300 bg-amber-50 p-3 text-sm text-amber-700">
+          Bạn đang xem quản lý tổ đội ở chế độ chỉ xem. Đăng nhập bằng tài khoản quản trị hoặc được phân quyền để thêm, sửa hoặc điều chuyển thành viên.
+        </div>
+      )}
       <div className="flex flex-wrap items-center gap-3">
         <button
           onClick={handleSave}
-          disabled={!dirty}
+          disabled={!dirty || isReadOnly}
           className={`px-3 py-1 rounded text-white ${
-            dirty ? "bg-emerald-600 hover:bg-emerald-700" : "bg-gray-400"
+            dirty && !isReadOnly ? "bg-emerald-600 hover:bg-emerald-700" : "bg-gray-400"
           }`}
+          title={isReadOnly ? "Chỉ người được cấp quyền mới có thể lưu" : "Lưu thay đổi tổ đội"}
         >
           Lưu thay đổi
         </button>
@@ -357,9 +380,14 @@ function TeamManager() {
         >
           Tải lại dữ liệu MST
         </button>
-        {dirty && (
+        {dirty && !isReadOnly && (
           <span className="text-sm text-amber-600">
             Có thay đổi chưa lưu
+          </span>
+        )}
+        {isReadOnly && (
+          <span className="text-sm text-amber-600">
+            Chế độ chỉ xem — không thể lưu thay đổi
           </span>
         )}
         <span className="ml-auto text-sm text-gray-500">
@@ -402,20 +430,26 @@ function TeamManager() {
               <h3 className="font-semibold text-sm uppercase text-gray-500">
                 Thành viên của {selectedTeam.name}
               </h3>
-              <form className="flex gap-2" onSubmit={handleAddMember}>
-                <input
-                  value={newMemberName}
-                  onChange={(e) => setNewMemberName(e.target.value)}
-                  placeholder="Tên thành viên mới"
-                  className="flex-1 border rounded px-2 py-1"
-                />
-                <button
-                  type="submit"
-                  className="px-3 py-1 rounded bg-emerald-600 text-white"
-                >
-                  Thêm
-                </button>
-              </form>
+              {canEdit ? (
+                <form className="flex gap-2" onSubmit={handleAddMember}>
+                  <input
+                    value={newMemberName}
+                    onChange={(e) => setNewMemberName(e.target.value)}
+                    placeholder="Tên thành viên mới"
+                    className="flex-1 border rounded px-2 py-1"
+                  />
+                  <button
+                    type="submit"
+                    className="px-3 py-1 rounded bg-emerald-600 text-white"
+                  >
+                    Thêm
+                  </button>
+                </form>
+              ) : (
+                <div className="rounded border border-dashed p-3 text-sm text-gray-500">
+                  Đăng nhập bằng tài khoản được cấp quyền để thêm thành viên mới.
+                </div>
+              )}
               <div className="max-h-72 overflow-y-auto border rounded">
                 {selectedTeam.members.length === 0 ? (
                   <div className="p-3 text-sm text-gray-500 text-center">
@@ -464,6 +498,8 @@ function TeamManager() {
                       onBlur={commitMemberName}
                       onKeyDown={handleMemberNameKey}
                       className="mt-1 w-full border rounded px-2 py-1"
+                      readOnly={isReadOnly}
+                      disabled={isReadOnly}
                     />
                   </div>
                   <div>
@@ -476,6 +512,7 @@ function TeamManager() {
                         handleMoveMember(activeMember.id, e.target.value)
                       }
                       className="mt-1 w-full border rounded px-2 py-1"
+                      disabled={isReadOnly}
                     >
                       {roster.teams.map((team) => (
                         <option key={team.id} value={team.id}>
@@ -484,20 +521,22 @@ function TeamManager() {
                       ))}
                     </select>
                   </div>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={commitMemberName}
-                      className="px-3 py-1 rounded border"
-                    >
-                      Cập nhật tên
-                    </button>
-                    <button
-                      onClick={() => handleRemoveMember(activeMember.id)}
-                      className="px-3 py-1 rounded bg-red-500 text-white"
-                    >
-                      Xóa thành viên
-                    </button>
-                  </div>
+                  {canEdit && (
+                    <div className="flex gap-2">
+                      <button
+                        onClick={commitMemberName}
+                        className="px-3 py-1 rounded border"
+                      >
+                        Cập nhật tên
+                      </button>
+                      <button
+                        onClick={() => handleRemoveMember(activeMember.id)}
+                        className="px-3 py-1 rounded bg-red-500 text-white"
+                      >
+                        Xóa thành viên
+                      </button>
+                    </div>
+                  )}
                   <div>
                     <div className="font-medium text-sm mb-1">
                       Doanh nghiệp phụ trách ({memberCompanies.length})

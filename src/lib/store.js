@@ -5,10 +5,15 @@ export const DECL_KEY  = "decl_rows_v1";   // dữ liệu tờ khai
 export const MST_KEY   = "mst_rows_v2";    // gán MST -> nhân viên/team/effective_from
 export const RULES_KEY = "kpi_rules_v2";   // quy tắc KPI
 export const TEAM_KEY  = "team_roster_v1"; // danh sách tổ đội & thành viên
+export const AUDIT_KEY = "audit_logs_v1";  // nhật ký hành động quản trị
 
 // ===== Helpers =====
 function safeParse(json, fallback) {
   try { const v = JSON.parse(json); return v ?? fallback; } catch { return fallback; }
+}
+
+function shallowClone(obj) {
+  return JSON.parse(JSON.stringify(obj ?? null));
 }
 
 // Chuẩn hoá chuỗi (trim + bỏ khoảng trắng thừa)
@@ -107,7 +112,7 @@ export function getMSTMap() {
 }
 
 /** Ghi đè/bổ sung bảng gán MST (đã chuẩn hoá dữ liệu đầu vào) */
-export function upsertMSTRows(rows) {
+export function upsertMSTRows(rows, { actor = "system", detail = "" } = {}) {
   const sanitized = Array.isArray(rows)
     ? rows.map(sanitizeMSTRow).filter(Boolean)
     : [];
@@ -117,6 +122,11 @@ export function upsertMSTRows(rows) {
     return (a.effective_from || "").localeCompare(b.effective_from || "");
   });
   localStorage.setItem(MST_KEY, JSON.stringify(sanitized));
+  pushAuditLog({
+    actor,
+    action: "mst.save",
+    detail: detail || `Cập nhật ${sanitized.length} dòng gán MST`,
+  });
   return sanitized.length;
 }
 
@@ -339,7 +349,7 @@ export function getTeamRoster() {
   return sanitized;
 }
 
-export function setTeamRoster(next) {
+export function setTeamRoster(next, { actor = "system", detail = "" } = {}) {
   const normalizedInput = Array.isArray(next?.teams) || Array.isArray(next)
     ? next
     : deepCloneRoster(DEFAULT_ROSTER);
@@ -350,6 +360,11 @@ export function setTeamRoster(next) {
       : normalizedInput
   );
   localStorage.setItem(TEAM_KEY, JSON.stringify(sanitized));
+  pushAuditLog({
+    actor,
+    action: "team.save",
+    detail: detail || `Cập nhật ${sanitized.teams.length} tổ đội`,
+  });
   return sanitized;
 }
 
@@ -398,10 +413,15 @@ export function applyTeamRosterToMST(rosterLike, rows) {
  * - overwrite=true: ghi đè toàn bộ
  * - overwrite=false: merge theo key "so_tk + '_' + (nhanh||'')"
  */
-export function saveDeclRows(newRows, { overwrite = false } = {}) {
+export function saveDeclRows(newRows, { overwrite = false, actor = "system", detail = "" } = {}) {
   const cleaned = Array.isArray(newRows) ? newRows : [];
   if (overwrite) {
     localStorage.setItem(DECL_KEY, JSON.stringify(cleaned));
+    pushAuditLog({
+      actor,
+      action: "decl.overwrite",
+      detail: detail || `Ghi đè ${cleaned.length} tờ khai`,
+    });
     return cleaned.length;
   }
   const cur = getDeclRows();
@@ -413,6 +433,11 @@ export function saveDeclRows(newRows, { overwrite = false } = {}) {
 
   const merged = Array.from(map.values());
   localStorage.setItem(DECL_KEY, JSON.stringify(merged));
+  pushAuditLog({
+    actor,
+    action: "decl.merge",
+    detail: detail || `Hợp nhất ${cleaned.length} tờ khai (tổng ${merged.length})`,
+  });
   return merged.length;
 }
 
@@ -444,9 +469,44 @@ export function setRules(v) {
   localStorage.setItem(RULES_KEY, JSON.stringify(v));
 }
 
+// ===== Nhật ký hệ thống =====
+
+export function pushAuditLog({ actor = "system", action = "unknown", detail = "", meta = null } = {}) {
+  const entry = {
+    ts: new Date().toISOString(),
+    actor,
+    action,
+    detail,
+    meta: meta == null ? null : shallowClone(meta),
+  };
+  const logs = safeParse(localStorage.getItem(AUDIT_KEY), []);
+  logs.unshift(entry);
+  const limited = logs.slice(0, 200);
+  localStorage.setItem(AUDIT_KEY, JSON.stringify(limited));
+  return entry;
+}
+
+export function getAuditLogs(limit = 100) {
+  const logs = safeParse(localStorage.getItem(AUDIT_KEY), []);
+  if (!Number.isFinite(limit) || limit <= 0) return logs;
+  return logs.slice(0, limit);
+}
+
+export function clearAuditLogs({ actor = "system", note = "Xóa toàn bộ nhật ký" } = {}) {
+  const entry = {
+    ts: new Date().toISOString(),
+    actor,
+    action: "audit.clear",
+    detail: note,
+    meta: null,
+  };
+  localStorage.setItem(AUDIT_KEY, JSON.stringify([entry]));
+  return entry;
+}
+
 // ===== Default export (tuỳ nơi dùng)
 export default {
-  DECL_KEY, MST_KEY, RULES_KEY, TEAM_KEY,
+  DECL_KEY, MST_KEY, RULES_KEY, TEAM_KEY, AUDIT_KEY,
   normalizeStr, normalizeMST, toISODate, normalizeName,
   isExportDecl, isExportByNumber, isImportByNumber, isExportByType, isImportByType,
   getMSTRowsRaw, getMSTMap, getMSTFor, upsertMSTRows,
@@ -455,4 +515,5 @@ export default {
   getData, setData,
   getRules, setRules, K_RULES,
   pushImportLog,
+  pushAuditLog, getAuditLogs, clearAuditLogs,
 };

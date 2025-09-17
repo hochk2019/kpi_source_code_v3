@@ -7,7 +7,7 @@
 // - “Áp dụng từ ngày…”: lưu phiên bản quy tắc và tính lại KPI từ ngày đó trở đi
 // --------------------------------------------------
 
-import { getData, setData, RULES_KEY, setRules as persistRules } from './store.js';
+import { getData, setData, RULES_KEY, setRules as persistRules, pushAuditLog } from './store.js';
 
 // ====== CẤU HÌNH MẶC ĐỊNH ======
 export const DEFAULT_RULES = {
@@ -118,6 +118,15 @@ export function saveRules(rules, opts = {}) {
   if (opts.recalcFrom) {
     recalcKPIFrom(opts.recalcFrom, cloned);
   }
+
+  const actor = opts.actor || 'system';
+  const applyNote = cloned.applyFrom ? ` (áp dụng từ ${cloned.applyFrom || 'ngay'})` : '';
+  pushAuditLog({
+    actor,
+    action: 'rules.save',
+    detail: `Lưu quy tắc KPI${applyNote}`,
+    meta: { recalcFrom: opts.recalcFrom || '' },
+  });
 }
 
 // ====== TIỆN ÍCH: chuẩn hoá chuỗi mã LH & giấy phép ======

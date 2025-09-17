@@ -25,7 +25,7 @@ function ensureLicenseFields(row) {
   return { ...row, licenses: normalized, so_luong_gp: normalized };
 }
 
-export default function DataImporter() {
+export default function DataImporter({ canEdit = true, currentUser = null }) {
   const fileRef = useRef(null);
   const [rawRows, setRawRows] = useState([]);        // dữ liệu xem trước (đã map)
   const [query, setQuery] = useState("");
@@ -37,6 +37,9 @@ export default function DataImporter() {
   const [overwrite, setOverwrite] = useState(false);         // Ghi đè toàn bộ
   const [upsert11, setUpsert11] = useState(true);            // Upsert theo 11 số đầu (nếu có dùng merge cục bộ)
   const [autoAssignStaff, setAutoAssignStaff] = useState(true); // Tự gán nhân viên theo MST nếu trống
+
+  const actor = currentUser?.username || "guest";
+  const isReadOnly = !canEdit;
 
   const loadSavedRows = useCallback(() => {
     const saved = sortDeclRows(getDeclRows()).map(ensureLicenseFields);
@@ -54,6 +57,10 @@ export default function DataImporter() {
 
   // Đọc file XLSX
   function handleFileChange(e) {
+    if (isReadOnly) {
+      alert("Bạn đang ở chế độ chỉ xem — hãy đăng nhập để import dữ liệu.");
+      return;
+    }
     const f = e.target.files?.[0];
     if (!f) return;
     const reader = new FileReader();
@@ -97,6 +104,7 @@ export default function DataImporter() {
   const pageRows = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   function onChangeCell(idx, field, value) {
+    if (isReadOnly) return;
     const pos = (page - 1) * PAGE_SIZE + idx;
     setRawRows(prev => {
       const cp = prev.slice();
@@ -106,6 +114,10 @@ export default function DataImporter() {
   }
 
   function handleImport() {
+    if (isReadOnly) {
+      alert("Bạn không có quyền import dữ liệu. Đăng nhập bằng tài khoản được cấp quyền để tiếp tục.");
+      return;
+    }
     if (mode !== "preview") {
       alert("Hãy chọn file XLSX để import.");
       return;
@@ -119,7 +131,11 @@ export default function DataImporter() {
       ? rawRows.map(r => ({ ...r, so_tk: (r.so_tk || "").toString().slice(0, 11) }))
       : rawRows;
 
-    const count = saveDeclRows(rows, { overwrite });
+    const count = saveDeclRows(rows, {
+      overwrite,
+      actor,
+      detail: `Import từ ${selectedFile || "file XLSX"}`,
+    });
     pushImportLog(`Import XLSX: ${rawRows.length} dòng → sau hợp nhất còn ${count}`);
     alert("Import xong!");
     if (fileRef.current) fileRef.current.value = "";
@@ -127,6 +143,10 @@ export default function DataImporter() {
   }
 
   function handleSaveAll() {
+    if (isReadOnly) {
+      alert("Bạn không có quyền lưu chỉnh sửa.");
+      return;
+    }
     if (mode !== "saved") {
       alert("Chỉ có thể lưu chỉnh sửa khi đang xem dữ liệu đã lưu. Hãy import file hoặc quay lại chế độ dữ liệu đã lưu.");
       return;
@@ -135,17 +155,26 @@ export default function DataImporter() {
       alert("Không có dữ liệu để lưu");
       return;
     }
-    const count = saveDeclRows(rawRows, { overwrite: true });
+    const count = saveDeclRows(rawRows, {
+      overwrite: true,
+      actor,
+      detail: "Lưu chỉnh sửa tờ khai thủ công",
+    });
     alert(`Đã lưu ${count} bản ghi (ghi đè).`);
     loadSavedRows();
   }
 
-  const canImport = mode === "preview" && rawRows.length > 0;
-  const canSave = mode === "saved" && rawRows.length > 0;
+  const canImport = !isReadOnly && mode === "preview" && rawRows.length > 0;
+  const canSave = !isReadOnly && mode === "saved" && rawRows.length > 0;
   const modeLabel = mode === "preview" ? "Đang xem dữ liệu từ file (chưa lưu)" : "Đang xem dữ liệu đã lưu";
 
   return (
     <div className="space-y-3">
+      {isReadOnly && (
+        <div className="rounded border border-amber-300 bg-amber-50 text-amber-700 p-3 text-sm">
+          Bạn đang ở chế độ chỉ xem. Đăng nhập bằng tài khoản được cấp quyền để import, chỉnh sửa và lưu dữ liệu tờ khai.
+        </div>
+      )}
       <div className="flex flex-wrap items-center gap-2">
         <input
           type="file"
@@ -153,25 +182,30 @@ export default function DataImporter() {
           onChange={handleFileChange}
           accept=".xls,.xlsx"
           className="hidden"
+          disabled={isReadOnly}
         />
-        <button
-          type="button"
-          onClick={() => fileRef.current?.click()}
-          className="px-3 py-1.5 rounded border bg-white shadow-sm hover:bg-gray-50"
-        >
-          Chọn file XLSX
-        </button>
+        {canEdit && (
+          <button
+            type="button"
+            onClick={() => fileRef.current?.click()}
+            className="px-3 py-1.5 rounded border bg-white shadow-sm hover:bg-gray-50"
+          >
+            Chọn file XLSX
+          </button>
+        )}
         {selectedFile && (
           <span className="text-sm text-gray-600">Đã chọn: {selectedFile}</span>
         )}
-        <button
-          type="button"
-          onClick={handleImport}
-          disabled={!canImport}
-          className={`px-3 py-1.5 rounded ${canImport ? "bg-black text-white" : "bg-gray-200 text-gray-500 cursor-not-allowed"}`}
-        >
-          Import XLSX
-        </button>
+        {canEdit && (
+          <button
+            type="button"
+            onClick={handleImport}
+            disabled={!canImport}
+            className={`px-3 py-1.5 rounded ${canImport ? "bg-black text-white" : "bg-gray-200 text-gray-500 cursor-not-allowed"}`}
+          >
+            Import XLSX
+          </button>
+        )}
         <button
           type="button"
           onClick={loadSavedRows}
@@ -182,20 +216,22 @@ export default function DataImporter() {
         <span className="ml-auto text-sm text-gray-600">{modeLabel}</span>
       </div>
 
-      <div className="flex flex-wrap items-center gap-2">
-        <label className="flex items-center gap-1">
-          <input type="checkbox" checked={autoAssignStaff} onChange={e => setAutoAssignStaff(e.target.checked)} />
-          <span>Tự gán nhân viên theo MST nếu trống (ON)</span>
-        </label>
-        <label className="flex items-center gap-1">
-          <input type="checkbox" checked={upsert11} onChange={e => setUpsert11(e.target.checked)} />
-          <span>Upsert theo 11 số đầu của Số tờ khai</span>
-        </label>
-        <label className="flex items-center gap-1">
-          <input type="checkbox" checked={overwrite} onChange={e => setOverwrite(e.target.checked)} />
-          <span>Ghi đè toàn bộ dữ liệu hiện có</span>
-        </label>
-      </div>
+      {canEdit && (
+        <div className="flex flex-wrap items-center gap-2">
+          <label className="flex items-center gap-1">
+            <input type="checkbox" checked={autoAssignStaff} onChange={e => setAutoAssignStaff(e.target.checked)} />
+            <span>Tự gán nhân viên theo MST nếu trống (ON)</span>
+          </label>
+          <label className="flex items-center gap-1">
+            <input type="checkbox" checked={upsert11} onChange={e => setUpsert11(e.target.checked)} />
+            <span>Upsert theo 11 số đầu của Số tờ khai</span>
+          </label>
+          <label className="flex items-center gap-1">
+            <input type="checkbox" checked={overwrite} onChange={e => setOverwrite(e.target.checked)} />
+            <span>Ghi đè toàn bộ dữ liệu hiện có</span>
+          </label>
+        </div>
+      )}
 
       <div className="flex items-center gap-2">
         <input
@@ -210,13 +246,15 @@ export default function DataImporter() {
         <div className="ml-auto flex items-center gap-2">
           <button onClick={() => setPage(p => Math.max(1, p - 1))} className="px-2 py-1 border rounded">« Trước</button>
           <button onClick={() => setPage(p => Math.min(maxPage, p + 1))} className="px-2 py-1 border rounded">Sau »</button>
-          <button
-            onClick={handleSaveAll}
-            disabled={!canSave}
-            className={`px-3 py-1 rounded border ${canSave ? "" : "opacity-50 cursor-not-allowed"}`}
-          >
-            Lưu chỉnh sửa
-          </button>
+          {canEdit && (
+            <button
+              onClick={handleSaveAll}
+              disabled={!canSave}
+              className={`px-3 py-1 rounded border ${canSave ? "" : "opacity-50 cursor-not-allowed"}`}
+            >
+              Lưu chỉnh sửa
+            </button>
+          )}
         </div>
       </div>
 
@@ -249,54 +287,66 @@ export default function DataImporter() {
                 <td className="px-2 py-1">{r.loai_hinh}</td>
                 <td className="px-2 py-1">{r.muc_hang}</td>
                 <td className="px-2 py-1">
-                  <input
-                    className="border rounded px-1 py-0.5 w-32"
-                    value={r.nhan_vien || ""}
-                    onChange={e => onChangeCell(i, "nhan_vien", e.target.value)}
-                  />
+                  {isReadOnly ? (
+                    <span>{r.nhan_vien || ""}</span>
+                  ) : (
+                    <input
+                      className="border rounded px-1 py-0.5 w-32"
+                      value={r.nhan_vien || ""}
+                      onChange={e => onChangeCell(i, "nhan_vien", e.target.value)}
+                    />
+                  )}
                 </td>
                 <td className="px-2 py-1">
-                  <input
-                    className="border rounded px-1 py-0.5 w-24"
-                    value={r.team || ""}
-                    onChange={e => onChangeCell(i, "team", e.target.value)}
-                  />
+                  {isReadOnly ? (
+                    <span>{r.team || ""}</span>
+                  ) : (
+                    <input
+                      className="border rounded px-1 py-0.5 w-24"
+                      value={r.team || ""}
+                      onChange={e => onChangeCell(i, "team", e.target.value)}
+                    />
+                  )}
                 </td>
                 <td className="px-2 py-1">
-                  <input
-                    type="number"
-                    min="0"
-                    step="1"
-                    className="border rounded px-1 py-0.5 w-24"
-                    value={r.licenses ?? r.so_luong_gp ?? ""}
-                    onChange={e => {
-                      const input = e.target.value;
-                      setRawRows(prev => {
-                        const pos = (page - 1) * PAGE_SIZE + i;
-                        if (!prev[pos]) return prev;
-                        const next = prev.slice();
-                        if (input !== "") {
-                          const parsed = Number(input);
-                          if (!Number.isFinite(parsed)) {
-                            return prev;
+                  {isReadOnly ? (
+                    <span>{r.licenses ?? r.so_luong_gp ?? ""}</span>
+                  ) : (
+                    <input
+                      type="number"
+                      min="0"
+                      step="1"
+                      className="border rounded px-1 py-0.5 w-24"
+                      value={r.licenses ?? r.so_luong_gp ?? ""}
+                      onChange={e => {
+                        const input = e.target.value;
+                        setRawRows(prev => {
+                          const pos = (page - 1) * PAGE_SIZE + i;
+                          if (!prev[pos]) return prev;
+                          const next = prev.slice();
+                          if (input !== "") {
+                            const parsed = Number(input);
+                            if (!Number.isFinite(parsed)) {
+                              return prev;
+                            }
+                            const normalized = Math.max(0, Math.round(parsed));
+                            next[pos] = {
+                              ...next[pos],
+                              licenses: normalized,
+                              so_luong_gp: normalized,
+                            };
+                            return next;
                           }
-                          const normalized = Math.max(0, Math.round(parsed));
                           next[pos] = {
                             ...next[pos],
-                            licenses: normalized,
-                            so_luong_gp: normalized,
+                            licenses: "",
+                            so_luong_gp: "",
                           };
                           return next;
-                        }
-                        next[pos] = {
-                          ...next[pos],
-                          licenses: "",
-                          so_luong_gp: "",
-                        };
-                        return next;
-                      });
-                    }}
-                  />
+                        });
+                      }}
+                    />
+                  )}
                 </td>
               </tr>
             ))}

@@ -11,13 +11,14 @@ import {
 import { getData } from "@/lib/store.js";
 
 /* Input number an toàn */
-function Num({ value, onChange, step = "0.1" }) {
+function Num({ value, onChange, step = "0.1", disabled = false }) {
   const v = value === 0 ? 0 : (value ?? "");
   return (
     <input
       type="number"
       step={step}
       value={v}
+      disabled={disabled}
       onChange={(e) => {
         const raw = e.target.value;
         if (raw === "") return onChange("");
@@ -30,7 +31,7 @@ function Num({ value, onChange, step = "0.1" }) {
 }
 
 /* ------- SỬA LỖI Ở ĐÂY: LUÔN TRẢ VỀ ARRAY, KHÔNG TRUYỀN FUNCTION ------- */
-function TierEditor({ title, tiers = [], setTiers, hint, cumulative = false }) {
+function TierEditor({ title, tiers = [], setTiers, hint, cumulative = false, editable = true }) {
   const safeTiers = Array.isArray(tiers) ? tiers : [];
 
   const addRow = () =>
@@ -60,22 +61,26 @@ function TierEditor({ title, tiers = [], setTiers, hint, cumulative = false }) {
         {safeTiers.map((t, i) => (
           <React.Fragment key={i}>
             <div className="col-span-3">
-              <Num step="1" value={t.from} onChange={(v) => updCell(i, "from", v)} />
+              <Num step="1" value={t.from} onChange={(v) => updCell(i, "from", v)} disabled={!editable} />
             </div>
             <div className="col-span-3">
-              <Num step="1" value={t.to} onChange={(v) => updCell(i, "to", v)} />
+              <Num step="1" value={t.to} onChange={(v) => updCell(i, "to", v)} disabled={!editable} />
             </div>
             <div className="col-span-3">
-              <Num value={t.add} onChange={(v) => updCell(i, "add", v)} />
+              <Num value={t.add} onChange={(v) => updCell(i, "add", v)} disabled={!editable} />
             </div>
             <div className="col-span-3">
-              <Button variant="outline" onClick={() => delRow(i)}>Xóa</Button>
+              {editable && (
+                <Button variant="outline" onClick={() => delRow(i)}>Xóa</Button>
+              )}
             </div>
           </React.Fragment>
         ))}
       </div>
 
-      <Button variant="outline" onClick={addRow}>Thêm bậc</Button>
+      {editable && (
+        <Button variant="outline" onClick={addRow}>Thêm bậc</Button>
+      )}
       {cumulative && (
         <div className="text-xs text-emerald-700 mt-2">
           * Nhóm này <b>cộng dồn</b> theo từng bậc.
@@ -85,10 +90,13 @@ function TierEditor({ title, tiers = [], setTiers, hint, cumulative = false }) {
   );
 }
 
-export default function RulesEditor() {
+export default function RulesEditor({ canEdit = true, currentUser = null }) {
   const [rules, setRules] = useState(loadRules());
   const [applyFrom, setApplyFrom] = useState(rules.applyFrom || "");
   const [applyNow, setApplyNow] = useState(false);
+
+  const actor = currentUser?.username || 'guest';
+  const isReadOnly = !canEdit;
 
   // Test nhanh từ dữ liệu đã import
   const data = getData();
@@ -126,16 +134,22 @@ export default function RulesEditor() {
   };
 
   const onSave = () => {
+    if (isReadOnly) {
+      alert("Bạn không có quyền chỉnh sửa quy tắc KPI.");
+      return;
+    }
     const newRules = { ...rules, applyFrom: (applyFrom || "").trim() };
     // Lưu + tùy chọn tính lại từ ngày applyFrom
     saveRules(newRules, {
       appendHistory: true,
-      recalcFrom: applyNow && applyFrom ? applyFrom : ""
+      recalcFrom: applyNow && applyFrom ? applyFrom : "",
+      actor,
     });
     alert(`Đã lưu quy tắc${applyNow && applyFrom ? ` và tính lại KPI từ ${applyFrom}` : ""}.`);
   };
 
   const onReset = () => {
+    if (isReadOnly) return;
     setRules(DEFAULT_RULES);
     setApplyFrom(DEFAULT_RULES.applyFrom || "");
     setApplyNow(false);
@@ -150,6 +164,10 @@ export default function RulesEditor() {
   };
 
   const importJSON = (e) => {
+    if (isReadOnly) {
+      alert("Bạn không có quyền import quy tắc.");
+      return;
+    }
     const f = e.target.files?.[0];
     if (!f) return;
     const reader = new FileReader();
@@ -167,6 +185,11 @@ export default function RulesEditor() {
 
   return (
     <div className="max-w-6xl mx-auto p-4 space-y-6">
+      {isReadOnly && (
+        <div className="rounded border border-amber-300 bg-amber-50 p-3 text-sm text-amber-700">
+          Bạn đang xem quy tắc KPI ở chế độ chỉ xem. Các trường cấu hình bị khóa; vẫn có thể dùng khu vực test để kiểm tra điểm KPI.
+        </div>
+      )}
       <Card>
         <CardHeader>
           <CardTitle>Quy tắc KPI (chuẩn + có thể điều chỉnh)</CardTitle>
@@ -181,11 +204,16 @@ export default function RulesEditor() {
               onChange={(e) =>
                 upd("groups.group1.codes", e.target.value.split(",").map((s) => s.trim()).filter(Boolean))
               }
+              disabled={isReadOnly}
             />
             <div className="grid md:grid-cols-3 gap-4">
               <div>
                 <label className="text-sm">Điểm cơ bản</label>
-                <Num value={rules.groups.group1.base} onChange={(v) => upd("groups.group1.base", v)} />
+                <Num
+                  value={rules.groups.group1.base}
+                  onChange={(v) => upd("groups.group1.base", v)}
+                  disabled={isReadOnly}
+                />
               </div>
             </div>
             <TierEditor
@@ -193,6 +221,7 @@ export default function RulesEditor() {
               tiers={rules.groups.group1.tiers}
               setTiers={(arr) => upd("groups.group1.tiers", arr)}
               hint="Mặc định để trống (đúng quy tắc cũ). Nếu thêm bậc, hệ thống áp dụng bậc cao nhất thỏa (không cộng dồn)."
+              editable={canEdit}
             />
           </div>
 
@@ -205,11 +234,16 @@ export default function RulesEditor() {
               onChange={(e) =>
                 upd("groups.group2.codes", e.target.value.split(",").map((s) => s.trim()).filter(Boolean))
               }
+              disabled={isReadOnly}
             />
             <div className="grid md:grid-cols-3 gap-4">
               <div>
                 <label className="text-sm">Điểm cơ bản</label>
-                <Num value={rules.groups.group2.base} onChange={(v) => upd("groups.group2.base", v)} />
+                <Num
+                  value={rules.groups.group2.base}
+                  onChange={(v) => upd("groups.group2.base", v)}
+                  disabled={isReadOnly}
+                />
               </div>
             </div>
             <TierEditor
@@ -217,6 +251,7 @@ export default function RulesEditor() {
               tiers={rules.groups.group2.tiers}
               setTiers={(arr) => upd("groups.group2.tiers", arr)}
               hint="Mặc định: +0.5 cho 31–50 (không cộng dồn). Bạn có thể sửa các bậc này."
+              editable={canEdit}
             />
           </div>
 
@@ -229,11 +264,16 @@ export default function RulesEditor() {
               onChange={(e) =>
                 upd("groups.group34.codes", e.target.value.split(",").map((s) => s.trim()).filter(Boolean))
               }
+              disabled={isReadOnly}
             />
             <div className="grid md:grid-cols-3 gap-4">
               <div>
                 <label className="text-sm">Điểm cơ bản (1–10 mục hàng)</label>
-                <Num value={rules.groups.group34.base} onChange={(v) => upd("groups.group34.base", v)} />
+                <Num
+                  value={rules.groups.group34.base}
+                  onChange={(v) => upd("groups.group34.base", v)}
+                  disabled={isReadOnly}
+                />
               </div>
             </div>
             <TierEditor
@@ -242,6 +282,7 @@ export default function RulesEditor() {
               setTiers={(arr) => upd("groups.group34.tiers", arr)}
               hint="Chuẩn: +0.5 cho mỗi bậc 11–20, 21–30, 31–40, 41–50 (CỘNG DỒN)."
               cumulative
+              editable={canEdit}
             />
           </div>
 
@@ -251,11 +292,20 @@ export default function RulesEditor() {
             <div className="grid md:grid-cols-3 gap-4">
               <div>
                 <label className="text-sm">Mỗi LOẠI giấy phép (+)</label>
-                <Num value={rules.license.perType} onChange={(v) => upd("license.perType", v)} />
+                <Num
+                  value={rules.license.perType}
+                  onChange={(v) => upd("license.perType", v)}
+                  disabled={isReadOnly}
+                />
               </div>
               <div>
                 <label className="text-sm">Tối đa số LOẠI tính điểm</label>
-                <Num value={rules.license.maxTypes} onChange={(v) => upd("license.maxTypes", v)} step="1" />
+                <Num
+                  value={rules.license.maxTypes}
+                  onChange={(v) => upd("license.maxTypes", v)}
+                  step="1"
+                  disabled={isReadOnly}
+                />
               </div>
               <div className="md:col-span-3">
                 <label className="text-sm">Mã giấy phép KHÔNG tính (phẩy) — ví dụ: ZN02, HDGC</label>
@@ -267,6 +317,7 @@ export default function RulesEditor() {
                       e.target.value.split(",").map((s) => s.trim()).filter(Boolean)
                     )
                   }
+                  disabled={isReadOnly}
                 />
               </div>
             </div>
@@ -282,6 +333,7 @@ export default function RulesEditor() {
                   value={applyFrom}
                   onChange={(e) => setApplyFrom(e.target.value)}
                   placeholder="yyyy-mm-dd"
+                  disabled={isReadOnly}
                 />
               </div>
               <label className="inline-flex items-center gap-2 mt-6">
@@ -289,17 +341,22 @@ export default function RulesEditor() {
                   type="checkbox"
                   checked={applyNow}
                   onChange={(e) => setApplyNow(e.target.checked)}
+                  disabled={isReadOnly}
                 />
                 Tính lại KPI cho dữ liệu từ ngày này sau khi Lưu
               </label>
             </div>
             <div className="flex gap-2">
-              <Button onClick={onSave}>Lưu</Button>
-              <Button variant="outline" onClick={onReset}>Khôi phục mặc định</Button>
+              <Button onClick={onSave} disabled={isReadOnly}>Lưu</Button>
+              <Button variant="outline" onClick={onReset} disabled={isReadOnly}>Khôi phục mặc định</Button>
               <Button variant="outline" onClick={exportJSON}>Export JSON</Button>
               <label className="inline-flex items-center gap-2">
-                <input id="impjson" className="hidden" type="file" accept=".json" onChange={importJSON} />
-                <Button variant="outline" onClick={() => document.getElementById("impjson").click()}>
+                <input id="impjson" className="hidden" type="file" accept=".json" onChange={importJSON} disabled={isReadOnly} />
+                <Button
+                  variant="outline"
+                  onClick={() => !isReadOnly && document.getElementById("impjson").click()}
+                  disabled={isReadOnly}
+                >
                   Import JSON
                 </Button>
               </label>
