@@ -3,9 +3,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs.j
 import DataImporter from './DataImporter.jsx';
 import RulesEditor from './RulesEditor.jsx';
 import MSTAssignment from './MSTAssignment.jsx';
+import TeamManager from './TeamManager.jsx';
 import ReportViewer from './ReportViewer.jsx';
 
 const KPICalculator = ({ role = "admin" }) => {
+  const isAdmin = role === 'admin';
+  const tabListClass = isAdmin ? 'grid grid-cols-5 gap-2' : 'grid grid-cols-2 gap-2';
+
   return (
     <div className="max-w-6xl mx-auto p-4">
       <div className="text-center mb-6">
@@ -14,10 +18,11 @@ const KPICalculator = ({ role = "admin" }) => {
       </div>
 
       <Tabs defaultValue="import" className="space-y-6">
-        <TabsList className="grid grid-cols-4 gap-2">
+        <TabsList className={tabListClass}>
           <TabsTrigger value="import">Import Excel</TabsTrigger>
-          {role === 'admin' && (<TabsTrigger value="rules">Quy tắc KPI</TabsTrigger>)}
-          {role === 'admin' && (<TabsTrigger value="mst">Gán MST</TabsTrigger>)}
+          {isAdmin && (<TabsTrigger value="rules">Quy tắc KPI</TabsTrigger>)}
+          {isAdmin && (<TabsTrigger value="mst">Gán MST</TabsTrigger>)}
+          {isAdmin && (<TabsTrigger value="teams">Quản lý Thành viên &amp; Tổ đội</TabsTrigger>)}
           <TabsTrigger value="reports">Báo cáo/In</TabsTrigger>
         </TabsList>
 
@@ -25,15 +30,21 @@ const KPICalculator = ({ role = "admin" }) => {
           <DataImporter />
         </TabsContent>
 
-        {role === 'admin' && (
+        {isAdmin && (
           <TabsContent value="rules">
             <RulesEditor />
           </TabsContent>
         )}
 
-        {role === 'admin' && (
+        {isAdmin && (
           <TabsContent value="mst">
             <MSTAssignment />
+          </TabsContent>
+        )}
+
+        {isAdmin && (
+          <TabsContent value="teams">
+            <TeamManager />
           </TabsContent>
         )}
 

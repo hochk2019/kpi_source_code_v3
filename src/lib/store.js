@@ -4,6 +4,7 @@
 export const DECL_KEY  = "decl_rows_v1";   // dữ liệu tờ khai
 export const MST_KEY   = "mst_rows_v2";    // gán MST -> nhân viên/team/effective_from
 export const RULES_KEY = "kpi_rules_v2";   // quy tắc KPI
+export const TEAM_KEY  = "team_roster_v1"; // danh sách tổ đội & thành viên
 
 // ===== Helpers =====
 function safeParse(json, fallback) {
@@ -13,6 +14,17 @@ function safeParse(json, fallback) {
 // Chuẩn hoá chuỗi (trim + bỏ khoảng trắng thừa)
 export function normalizeStr(s) {
   return (s ?? "").toString().replace(/\s+/g, " ").trim();
+}
+
+function stripDiacritics(input) {
+  return normalizeStr(input)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
+}
+
+export function normalizeName(name) {
+  return stripDiacritics(name).toLowerCase();
 }
 
 // MST: giữ dạng chuỗi số, bỏ mọi ký tự không phải số
@@ -25,7 +37,7 @@ export function toISODate(d) {
   const s = normalizeStr(d);
   if (!s) return "";
   if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
-  const m = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/);
+  const m = s.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})$/);
   if (!m) return "";
   let [_, dd, mm, yyyy] = m;
   if (yyyy.length === 2) yyyy = "20" + yyyy;
@@ -66,9 +78,51 @@ export function getMSTRowsRaw() {
   return safeParse(localStorage.getItem(MST_KEY), []);
 }
 
+function sanitizeMSTRow(row) {
+  const mst = normalizeMST(row?.mst);
+  if (!mst) return null;
+
+  return {
+    mst,
+    company: normalizeStr(row?.company ?? ""),
+    person_import: normalizeStr(row?.person_import ?? ""),
+    person_export: normalizeStr(row?.person_export ?? ""),
+    team: normalizeStr(row?.team ?? ""),
+    effective_from: toISODate(row?.effective_from) || "",
+  };
+}
+
+/** Lấy toàn bộ bảng gán MST, đã chuẩn hoá + sắp xếp */
+export function getMSTMap() {
+  const raw = getMSTRowsRaw();
+  const rows = Array.isArray(raw) ? raw : [];
+  return rows
+    .map(sanitizeMSTRow)
+    .filter(Boolean)
+    .sort((a, b) => {
+      const byMST = a.mst.localeCompare(b.mst);
+      if (byMST !== 0) return byMST;
+      return (a.effective_from || "").localeCompare(b.effective_from || "");
+    });
+}
+
+/** Ghi đè/bổ sung bảng gán MST (đã chuẩn hoá dữ liệu đầu vào) */
+export function upsertMSTRows(rows) {
+  const sanitized = Array.isArray(rows)
+    ? rows.map(sanitizeMSTRow).filter(Boolean)
+    : [];
+  sanitized.sort((a, b) => {
+    const byMST = a.mst.localeCompare(b.mst);
+    if (byMST !== 0) return byMST;
+    return (a.effective_from || "").localeCompare(b.effective_from || "");
+  });
+  localStorage.setItem(MST_KEY, JSON.stringify(sanitized));
+  return sanitized.length;
+}
+
 /** Lấy người phụ trách theo MST & ngày hiệu lực gần nhất (<= ngày tờ khai) */
 export function getMSTFor(mst, isoDate) {
-  const rows = getMSTRowsRaw().filter(r => normalizeMST(r.mst) === normalizeMST(mst));
+  const rows = getMSTMap().filter(r => normalizeMST(r.mst) === normalizeMST(mst));
   if (rows.length === 0) return null;
 
   const dateVal = isoDate ? new Date(isoDate).getTime() : Number.POSITIVE_INFINITY;
@@ -76,7 +130,7 @@ export function getMSTFor(mst, isoDate) {
   // Xếp theo hiệu lực gần nhất với ngày TK
   const picked = rows
     .map(r => {
-      const ef = toISODate(r.effective_from) || "0001-01-01";
+      const ef = r.effective_from || "0001-01-01";
       const ts = new Date(ef).getTime();
       const rank = ts <= dateVal ? (dateVal - ts) : Number.POSITIVE_INFINITY - ts;
       return { r, rank };
@@ -89,6 +143,255 @@ export function getMSTFor(mst, isoDate) {
 // ===== DECL rows (tờ khai) =====
 export function getDeclRows() {
   return safeParse(localStorage.getItem(DECL_KEY), []);
+}
+
+export function sortDeclRows(rows) {
+  const arr = Array.isArray(rows) ? rows : [];
+  const parseTime = (value) => {
+    if (!value) return 0;
+    const ts = Date.parse(value);
+    return Number.isFinite(ts) ? ts : 0;
+  };
+
+  return arr
+    .map((row, idx) => ({ row, idx, ts: parseTime(row?.date) }))
+    .sort((a, b) => {
+      if (a.ts !== b.ts) return b.ts - a.ts; // mới nhất trước
+
+      const soA = (a.row?.so_tk ?? "").toString();
+      const soB = (b.row?.so_tk ?? "").toString();
+      if (soA !== soB) {
+        const cmp = soB.localeCompare(soA, undefined, { numeric: true, sensitivity: "base" });
+        if (cmp !== 0) return cmp;
+      }
+
+      const nhanhA = (a.row?.nhanh ?? "").toString();
+      const nhanhB = (b.row?.nhanh ?? "").toString();
+      if (nhanhA !== nhanhB) {
+        const cmpNhanh = nhanhB.localeCompare(nhanhA, undefined, { numeric: true, sensitivity: "base" });
+        if (cmpNhanh !== 0) return cmpNhanh;
+      }
+
+      return b.idx - a.idx; // giữ thứ tự chèn gần nhất
+    })
+    .map(item => item.row);
+}
+
+export function getRecentDeclRows(limit = 20) {
+  const sorted = sortDeclRows(getDeclRows());
+  if (!Number.isFinite(limit) || limit <= 0) return sorted;
+  return sorted.slice(0, limit);
+}
+
+// ===== Team roster (tổ đội) =====
+
+const DEFAULT_ROSTER = Object.freeze({
+  version: 1,
+  teams: [
+    {
+      id: "team-1",
+      name: "Team 1",
+      members: [
+        { id: "team-1-phuong", name: "Phương" },
+        { id: "team-1-hanh", name: "Hạnh" },
+        { id: "team-1-bao", name: "Bảo" },
+        { id: "team-1-ha-be", name: "Hà Bé" },
+        { id: "team-1-huong", name: "Hương" },
+      ],
+    },
+    {
+      id: "team-2",
+      name: "Team 2",
+      members: [
+        { id: "team-2-tuan", name: "Tuấn" },
+        { id: "team-2-hoa", name: "Hòa" },
+        { id: "team-2-thu", name: "Thu" },
+        { id: "team-2-hang", name: "Hằng" },
+        { id: "team-2-huyen", name: "Huyền" },
+      ],
+    },
+    {
+      id: "team-3",
+      name: "Team 3",
+      members: [
+        { id: "team-3-hoc", name: "Học" },
+        { id: "team-3-thanh", name: "Thanh" },
+        { id: "team-3-huy", name: "Huy" },
+        { id: "team-3-linh", name: "Linh" },
+        { id: "team-3-thao", name: "Thảo" },
+        { id: "team-3-hung", name: "Hưng" },
+      ],
+    },
+  ],
+});
+
+function deepCloneRoster(roster) {
+  return {
+    version: roster?.version ?? 1,
+    teams: Array.isArray(roster?.teams)
+      ? roster.teams.map((team) => ({
+          id: team.id,
+          name: team.name,
+          members: Array.isArray(team.members)
+            ? team.members.map((m) => ({ id: m.id, name: m.name, notes: m.notes ?? "" }))
+            : [],
+        }))
+      : [],
+  };
+}
+
+function slugify(value, fallback = "") {
+  const base = stripDiacritics(value) || fallback;
+  const slug = base
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return slug || fallback || "item";
+}
+
+function sanitizeMember(member, teamId, usedMemberIds, index) {
+  const name = normalizeStr(member?.name);
+  if (!name) return null;
+
+  let candidateId = normalizeStr(member?.id);
+  const memberFallback = `nv-${index + 1}`;
+  if (!candidateId) {
+    candidateId = `${teamId}-${slugify(name, memberFallback)}`;
+  }
+  candidateId = slugify(candidateId, `${teamId}-nv-${index + 1}`);
+
+  let suffix = 1;
+  let finalId = candidateId;
+  while (usedMemberIds.has(finalId)) {
+    finalId = `${candidateId}-${suffix++}`;
+  }
+  usedMemberIds.add(finalId);
+
+  const notes = normalizeStr(member?.notes);
+
+  return notes
+    ? { id: finalId, name, notes }
+    : { id: finalId, name };
+}
+
+function sanitizeTeam(team, fallbackName, usedTeamIds, index) {
+  const name = normalizeStr(team?.name) || fallbackName || `Team ${index + 1}`;
+
+  let candidateId = normalizeStr(team?.id);
+  if (!candidateId) {
+    candidateId = `team-${slugify(name, String(index + 1))}`;
+  }
+  candidateId = slugify(candidateId, `team-${index + 1}`);
+  if (!candidateId.startsWith("team-")) {
+    candidateId = `team-${candidateId}`;
+  }
+
+  let suffix = 1;
+  let finalId = candidateId;
+  while (usedTeamIds.has(finalId)) {
+    finalId = `${candidateId}-${suffix++}`;
+  }
+  usedTeamIds.add(finalId);
+
+  const rawMembers = Array.isArray(team?.members) ? team.members : [];
+  const usedMemberIds = new Set();
+  const members = rawMembers
+    .map((m, idx) => sanitizeMember(m, finalId, usedMemberIds, idx))
+    .filter(Boolean)
+    .sort((a, b) => a.name.localeCompare(b.name, "vi", { sensitivity: "base" }));
+
+  return { id: finalId, name, members };
+}
+
+function sanitizeRoster(data) {
+  if (!data) {
+    return deepCloneRoster(DEFAULT_ROSTER);
+  }
+
+  const teamsInput = Array.isArray(data.teams)
+    ? data.teams
+    : Array.isArray(data)
+    ? data
+    : [];
+
+  if (!teamsInput.length) {
+    return deepCloneRoster(DEFAULT_ROSTER);
+  }
+
+  const usedTeamIds = new Set();
+  const teams = teamsInput
+    .map((team, idx) => sanitizeTeam(team, team?.name, usedTeamIds, idx))
+    .filter(Boolean);
+
+  if (!teams.length) {
+    return deepCloneRoster(DEFAULT_ROSTER);
+  }
+
+  return { version: 1, teams };
+}
+
+export function getTeamRoster() {
+  const raw = safeParse(localStorage.getItem(TEAM_KEY), null);
+  const sanitized = sanitizeRoster(raw);
+  if (!raw || !raw.teams) {
+    localStorage.setItem(TEAM_KEY, JSON.stringify(sanitized));
+  }
+  return sanitized;
+}
+
+export function setTeamRoster(next) {
+  const normalizedInput = Array.isArray(next?.teams) || Array.isArray(next)
+    ? next
+    : deepCloneRoster(DEFAULT_ROSTER);
+
+  const sanitized = sanitizeRoster(
+    Array.isArray(normalizedInput)
+      ? { version: 1, teams: normalizedInput }
+      : normalizedInput
+  );
+  localStorage.setItem(TEAM_KEY, JSON.stringify(sanitized));
+  return sanitized;
+}
+
+export function mapMemberNamesToTeams(source) {
+  const roster = sanitizeRoster(
+    Array.isArray(source?.teams) || Array.isArray(source)
+      ? source
+      : deepCloneRoster(DEFAULT_ROSTER)
+  );
+
+  const map = new Map();
+  for (const team of roster.teams) {
+    const teamName = normalizeStr(team?.name);
+    if (!teamName) continue;
+    for (const member of team.members || []) {
+      const key = normalizeName(member?.name);
+      if (!key) continue;
+      map.set(key, teamName);
+    }
+  }
+  return map;
+}
+
+export function applyTeamRosterToMST(rosterLike, rows) {
+  const memberMap = mapMemberNamesToTeams(rosterLike);
+  const sanitizedRows = Array.isArray(rows)
+    ? rows.map(sanitizeMSTRow).filter(Boolean)
+    : [];
+
+  let changed = false;
+  const updated = sanitizedRows.map((row) => {
+    const importKey = normalizeName(row.person_import);
+    const exportKey = normalizeName(row.person_export);
+    const targetTeam = memberMap.get(importKey) || memberMap.get(exportKey);
+    if (targetTeam && normalizeName(row.team) !== normalizeName(targetTeam)) {
+      changed = true;
+      return { ...row, team: targetTeam };
+    }
+    return row;
+  });
+
+  return { rows: updated, changed };
 }
 
 /** Lưu tờ khai:
@@ -143,11 +446,12 @@ export function setRules(v) {
 
 // ===== Default export (tuỳ nơi dùng)
 export default {
-  DECL_KEY, MST_KEY, RULES_KEY,
-  normalizeStr, normalizeMST, toISODate,
+  DECL_KEY, MST_KEY, RULES_KEY, TEAM_KEY,
+  normalizeStr, normalizeMST, toISODate, normalizeName,
   isExportDecl, isExportByNumber, isImportByNumber, isExportByType, isImportByType,
-  getMSTRowsRaw, getMSTFor,
-  getDeclRows, saveDeclRows,
+  getMSTRowsRaw, getMSTMap, getMSTFor, upsertMSTRows,
+  getDeclRows, saveDeclRows, sortDeclRows, getRecentDeclRows,
+  getTeamRoster, setTeamRoster, mapMemberNamesToTeams, applyTeamRosterToMST,
   getData, setData,
   getRules, setRules, K_RULES,
   pushImportLog,
