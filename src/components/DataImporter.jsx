@@ -8,6 +8,8 @@ import {
   pushImportLog,
   getTeamRoster,
   mapMemberNamesToTeams,
+  normalizeMST,
+  toISODate,
 } from "@/lib/store.js";
 import { mapRow, detectDateOrder } from "@/lib/importer.js";
 import { loadRules, computeKPI } from "@/lib/rules.js";
@@ -156,6 +158,12 @@ export default function DataImporter({ canEdit = true, currentUser = null }) {
   const safePage = Math.min(page, maxPage);
   const pageRows = filtered.slice((safePage - 1) * pageSize, safePage * pageSize);
 
+  const preferMonthFirstForEdits = useMemo(() => {
+    if (!rawRows || rawRows.length === 0) return false;
+    const sample = rawRows.slice(0, 50).map(row => ({ Ngày: row?.raw_date || row?.date || "" }));
+    return detectDateOrder(sample) === "mdy";
+  }, [rawRows]);
+
   useEffect(() => {
     if (page !== safePage) {
       setPage(safePage);
@@ -172,15 +180,55 @@ export default function DataImporter({ canEdit = true, currentUser = null }) {
     return `${soTk}_${nhanh}`;
   }, []);
 
-  function onChangeCell(idx, field, value) {
+  const applyEdit = useCallback((idx, updater) => {
     if (isReadOnly) return;
     const pos = (safePage - 1) * pageSize + idx;
     setRawRows(prev => {
-      const cp = prev.slice();
-      cp[pos] = { ...cp[pos], [field]: value };
-      return cp;
+      if (!Array.isArray(prev) || !prev[pos]) return prev;
+      const current = prev[pos];
+      const updates = updater(current);
+      if (!updates || typeof updates !== "object") return prev;
+
+      let changed = false;
+      const nextRow = { ...current };
+      for (const [key, value] of Object.entries(updates)) {
+        if (nextRow[key] !== value) {
+          nextRow[key] = value;
+          changed = true;
+        }
+      }
+
+      if (!changed) return prev;
+
+      nextRow.updatedAt = new Date().toISOString();
+      const recalculated = computeKPI(nextRow, rules);
+      if (Number.isFinite(recalculated)) {
+        nextRow.kpi = Math.round(recalculated * 10) / 10;
+      }
+      const copy = prev.slice();
+      copy[pos] = nextRow;
+
+      const oldKey = keyOfRow(current);
+      const newKey = keyOfRow(nextRow);
+      if (oldKey !== newKey) {
+        setSelectedKeys(keys => {
+          if (!Array.isArray(keys) || keys.length === 0) return keys;
+          if (!keys.includes(oldKey)) return keys;
+          return keys.filter(k => k !== oldKey);
+        });
+      }
+
+      return copy;
     });
-  }
+  }, [isReadOnly, pageSize, safePage, keyOfRow, rules]);
+
+  const onChangeCell = useCallback((idx, field, value, transform) => {
+    applyEdit(idx, (row) => {
+      const nextValue = typeof transform === "function" ? transform(value, row) : value;
+      if (nextValue === row[field]) return null;
+      return { [field]: nextValue };
+    });
+  }, [applyEdit]);
 
   const handleToggleSelect = useCallback((row) => {
     const key = keyOfRow(row);
@@ -469,12 +517,132 @@ export default function DataImporter({ canEdit = true, currentUser = null }) {
                     />
                   </td>
                 )}
-                <td className="px-2 py-1">{r.date}</td>
-                <td className="px-2 py-1">{r.so_tk}</td>
-                <td className="px-2 py-1">{r.mst}</td>
-                <td className="px-2 py-1">{r.cong_ty}</td>
-                <td className="px-2 py-1">{r.loai_hinh}</td>
-                <td className="px-2 py-1">{r.muc_hang}</td>
+                <td className="px-2 py-1">
+                  {isReadOnly ? (
+                    <span>{r.raw_date || r.date || ""}</span>
+                  ) : (
+                    <input
+                      className="border rounded px-1 py-0.5 w-32"
+                      value={r.raw_date || r.date || ""}
+                      onChange={e => {
+                        const raw = e.target.value;
+                        const trimmed = raw.trim();
+                        if (!trimmed) {
+                          applyEdit(i, () => ({ date: "", raw_date: "" }));
+                          return;
+                        }
+                        applyEdit(i, () => {
+                          const updates = { raw_date: trimmed };
+                          const isoFromHint = toISODate(trimmed, { preferMonthFirst: preferMonthFirstForEdits });
+                          if (isoFromHint) {
+                            updates.date = isoFromHint;
+                          } else {
+                            const isoFallback = toISODate(trimmed, { preferMonthFirst: !preferMonthFirstForEdits });
+                            if (isoFallback) {
+                              updates.date = isoFallback;
+                            }
+                          }
+                          return updates;
+                        });
+                      }}
+                    />
+                  )}
+                </td>
+                <td className="px-2 py-1">
+                  {isReadOnly ? (
+                    <span>{r.so_tk || ""}</span>
+                  ) : (
+                    <input
+                      className="border rounded px-1 py-0.5 w-40"
+                      value={r.so_tk || ""}
+                      onChange={e => {
+                        const value = e.target.value;
+                        const sanitized = value.replace(/\s+/g, "").trim();
+                        applyEdit(i, () => ({
+                          so_tk: sanitized,
+                          soToKhai: sanitized,
+                        }));
+                      }}
+                    />
+                  )}
+                </td>
+                <td className="px-2 py-1">
+                  {isReadOnly ? (
+                    <span>{r.mst || ""}</span>
+                  ) : (
+                    <input
+                      className="border rounded px-1 py-0.5 w-36"
+                      value={r.mst || ""}
+                      onChange={e => {
+                        const value = e.target.value;
+                        const sanitized = normalizeMST(value);
+                        applyEdit(i, () => ({ mst: sanitized }));
+                      }}
+                    />
+                  )}
+                </td>
+                <td className="px-2 py-1">
+                  {isReadOnly ? (
+                    <span>{r.cong_ty || ""}</span>
+                  ) : (
+                    <input
+                      className="border rounded px-1 py-0.5 w-60"
+                      value={r.cong_ty || ""}
+                      onChange={e => {
+                        const value = e.target.value;
+                        applyEdit(i, () => ({
+                          cong_ty: value,
+                          customer: value,
+                        }));
+                      }}
+                    />
+                  )}
+                </td>
+                <td className="px-2 py-1">
+                  {isReadOnly ? (
+                    <span>{r.loai_hinh || ""}</span>
+                  ) : (
+                    <input
+                      className="border rounded px-1 py-0.5 w-28 uppercase"
+                      value={r.loai_hinh || ""}
+                      onChange={e => {
+                        const value = e.target.value;
+                        const normalized = value.toUpperCase().replace(/\s+/g, "");
+                        applyEdit(i, () => ({
+                          loai_hinh: normalized,
+                          loaiHinh: normalized,
+                        }));
+                      }}
+                    />
+                  )}
+                </td>
+                <td className="px-2 py-1">
+                  {isReadOnly ? (
+                    <span>{r.muc_hang ?? ""}</span>
+                  ) : (
+                    <input
+                      type="number"
+                      min="0"
+                      step="1"
+                      className="border rounded px-1 py-0.5 w-24"
+                      value={r.muc_hang ?? ""}
+                      onChange={e => {
+                        const input = e.target.value;
+                        if (input === "") {
+                          applyEdit(i, () => ({ muc_hang: "", num_items: "" }));
+                          return;
+                        }
+                        const parsed = Number(input);
+                        if (!Number.isFinite(parsed)) return;
+                        const normalized = Math.max(0, Math.round(parsed));
+                        applyEdit(i, () => ({
+                          muc_hang: normalized,
+                          num_items: normalized,
+                        }));
+                      }}
+                    />
+                  )}
+                </td>
                 <td className="px-2 py-1">
                   {isReadOnly ? (
                     <span>{r.nhan_vien || ""}</span>
@@ -509,30 +677,14 @@ export default function DataImporter({ canEdit = true, currentUser = null }) {
                       value={r.licenses ?? r.so_luong_gp ?? ""}
                       onChange={e => {
                         const input = e.target.value;
-                        setRawRows(prev => {
-                          const pos = (safePage - 1) * pageSize + i;
-                          if (!prev[pos]) return prev;
-                          const next = prev.slice();
-                          if (input !== "") {
-                            const parsed = Number(input);
-                            if (!Number.isFinite(parsed)) {
-                              return prev;
-                            }
-                            const normalized = Math.max(0, Math.round(parsed));
-                            next[pos] = {
-                              ...next[pos],
-                              licenses: normalized,
-                              so_luong_gp: normalized,
-                            };
-                            return next;
-                          }
-                          next[pos] = {
-                            ...next[pos],
-                            licenses: "",
-                            so_luong_gp: "",
-                          };
-                          return next;
-                        });
+                        if (input === "") {
+                          applyEdit(i, () => ({ licenses: "", so_luong_gp: "" }));
+                          return;
+                        }
+                        const parsed = Number(input);
+                        if (!Number.isFinite(parsed)) return;
+                        const normalized = Math.max(0, Math.round(parsed));
+                        applyEdit(i, () => ({ licenses: normalized, so_luong_gp: normalized }));
                       }}
                     />
                   )}
