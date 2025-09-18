@@ -314,6 +314,7 @@ export function buildReportData(rowsInput, { roster, rules, from, to } = {}) {
   }
 
   const summaryStats = createStats();
+  const companyKeys = new Set();
   const staffMap = new Map();
   const teamMap = new Map();
 
@@ -386,6 +387,11 @@ export function buildReportData(rowsInput, { roster, rules, from, to } = {}) {
       ? Number(sanitized.kpi)
       : computeKPI(sanitized, effectiveRules);
 
+    const companyKey = sanitized.mst || sanitized.cong_ty;
+    if (companyKey) {
+      companyKeys.add(companyKey);
+    }
+
     const detailRow = {
       date,
       so_tk: sanitized.so_tk,
@@ -454,10 +460,12 @@ export function buildReportData(rowsInput, { roster, rules, from, to } = {}) {
       rows: sorted,
     };
   }).sort((a, b) => {
-    const teamA = a.teamLabel || "";
-    const teamB = b.teamLabel || "";
-    const cmpTeam = teamA.localeCompare(teamB, "vi", { sensitivity: "base" });
-    if (cmpTeam !== 0) return cmpTeam;
+    if ((b.stats.kpi || 0) !== (a.stats.kpi || 0)) {
+      return (b.stats.kpi || 0) - (a.stats.kpi || 0);
+    }
+    if ((b.stats.decls || 0) !== (a.stats.decls || 0)) {
+      return (b.stats.decls || 0) - (a.stats.decls || 0);
+    }
     return a.name.localeCompare(b.name, "vi", { sensitivity: "base" });
   });
 
@@ -477,7 +485,12 @@ export function buildReportData(rowsInput, { roster, rules, from, to } = {}) {
         return a.so_tk.localeCompare(b.so_tk, undefined, { numeric: true, sensitivity: "base" });
       }),
     })).sort((a, b) => {
-      if (a.stats.decls !== b.stats.decls) return b.stats.decls - a.stats.decls;
+      if ((b.stats.kpi || 0) !== (a.stats.kpi || 0)) {
+        return (b.stats.kpi || 0) - (a.stats.kpi || 0);
+      }
+      if ((b.stats.decls || 0) !== (a.stats.decls || 0)) {
+        return (b.stats.decls || 0) - (a.stats.decls || 0);
+      }
       return a.name.localeCompare(b.name, "vi", { sensitivity: "base" });
     });
 
@@ -489,13 +502,23 @@ export function buildReportData(rowsInput, { roster, rules, from, to } = {}) {
       members,
       memberNames: members.map((m) => m.name),
     };
-  }).sort((a, b) => a.name.localeCompare(b.name, "vi", { sensitivity: "base" }));
+  }).sort((a, b) => {
+    if ((b.stats.kpi || 0) !== (a.stats.kpi || 0)) {
+      return (b.stats.kpi || 0) - (a.stats.kpi || 0);
+    }
+    if ((b.stats.decls || 0) !== (a.stats.decls || 0)) {
+      return (b.stats.decls || 0) - (a.stats.decls || 0);
+    }
+    return a.name.localeCompare(b.name, "vi", { sensitivity: "base" });
+  });
 
   const teamKeys = teamList.map((t) => t.key).join("|");
 
+  const summaryFinal = finalizeStats(summaryStats);
+
   return {
     rows: sortedRows,
-    summary: finalizeStats(summaryStats),
+    summary: { ...summaryFinal, companyCount: companyKeys.size },
     staff: {
       list: staffList,
       byKey: new Map(staffList.map((item) => [item.key, item])),

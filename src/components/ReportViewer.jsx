@@ -1034,9 +1034,9 @@ export default function ReportViewer({ canExport = true }) {
           subtitle="Bao gồm điểm loại hình và giấy phép"
         />
         <SummaryCard
-          title="Tổng mục hàng"
-          value={formatInt(summary.items)}
-          subtitle="Cộng dồn tất cả tờ khai"
+          title="Tổng số công ty"
+          value={formatInt(summary.companyCount)}
+          subtitle="Doanh nghiệp duy nhất trong giai đoạn"
         />
         <SummaryCard
           title="Số giấy phép hợp lệ"

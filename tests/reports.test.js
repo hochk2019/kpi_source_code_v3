@@ -82,6 +82,14 @@ describe('buildReportData', () => {
     expect(report.summary.items).toBe(12 + 18);
     expect(report.summary.licenses).toBe(3);
     expect(report.summary.kpi).toBeCloseTo(5.2, 1);
+    expect(report.summary.companyCount).toBe(2);
+
+    expect(report.staff.list[0].name).toBe('Tuấn');
+    expect(report.staff.list[1].name).toBe('Phương');
+
+    expect(report.teams.list[0].name).toBe('Team 2');
+    const topMemberNames = report.teams.list[0].members.map((m) => m.name);
+    expect(topMemberNames[0]).toBe('Tuấn');
 
     const staffPhuong = report.staff.byKey.get('phuong') || report.staff.byKey.get('__unassigned_staff__');
     expect(staffPhuong).toBeTruthy();
@@ -140,6 +148,7 @@ describe('buildReportData', () => {
     });
 
     expect(report.summary.decls).toBe(2);
+    expect(report.summary.companyCount).toBe(2);
     expect(report.rows.some((row) => row.date === '2024-08-01')).toBe(true);
     expect(report.rows.some((row) => row.date === '2024-08-13')).toBe(true);
   });
@@ -180,6 +189,7 @@ describe('buildReportData', () => {
     });
 
     expect(report.summary.decls).toBe(2);
+    expect(report.summary.companyCount).toBe(2);
     expect(report.range.from).toBe('2024-08-01');
     expect(report.range.to).toBe('2024-08-31');
   });
