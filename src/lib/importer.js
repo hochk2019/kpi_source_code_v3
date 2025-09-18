@@ -46,8 +46,8 @@ export function detectDateOrder(rows) {
       const monthVal = Number.parseInt(isoLike[2], 10);
       const dayVal = Number.parseInt(isoLike[3], 10);
       if (monthVal > 12 && dayVal >= 1 && dayVal <= 12) {
-        dayFirst += 1;
-      } else if (dayVal > 12 && monthVal >= 1 && monthVal <= 12) {
+        monthFirst += 1;
+      } else if (dayVal > 12 && monthVal > 12) {
         monthFirst += 1;
       }
       continue;

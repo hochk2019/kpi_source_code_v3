@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   getTeamRoster,
   setTeamRoster,
@@ -7,6 +7,7 @@ import {
   normalizeName,
   normalizeStr,
   applyTeamRosterToMST,
+  mapMemberNamesToTeams,
 } from "@/lib/store.js";
 
 const COMPANY_PAGE_SIZE = 20;
@@ -78,6 +79,32 @@ function TeamManager({ canEdit = true, currentUser = null }) {
     setCompanyPage(1);
   }, [selectedTeamId, selectedMemberId]);
 
+  const memberTeamMap = useMemo(
+    () => mapMemberNamesToTeams(roster),
+    [roster]
+  );
+
+  const resolveTeamForRow = useCallback(
+    (row) => {
+      if (!row) return "";
+      const direct = normalizeStr(row.team);
+      if (direct) return direct;
+
+      const importKey = normalizeName(row.person_import);
+      if (importKey && memberTeamMap.has(importKey)) {
+        return memberTeamMap.get(importKey)?.team || "";
+      }
+
+      const exportKey = normalizeName(row.person_export);
+      if (exportKey && memberTeamMap.has(exportKey)) {
+        return memberTeamMap.get(exportKey)?.team || "";
+      }
+
+      return "";
+    },
+    [memberTeamMap]
+  );
+
   const memberAssignments = useMemo(() => {
     const map = new Map();
     const push = (rawName, row, role) => {
@@ -88,7 +115,7 @@ function TeamManager({ canEdit = true, currentUser = null }) {
         mst: row.mst,
         company: row.company || "",
         role,
-        team: row.team || "",
+        team: resolveTeamForRow(row),
         person_import: row.person_import || "",
         person_export: row.person_export || "",
         effective_from: row.effective_from || "",
@@ -112,14 +139,14 @@ function TeamManager({ canEdit = true, currentUser = null }) {
     }
 
     return map;
-  }, [mstRows]);
+  }, [mstRows, resolveTeamForRow]);
 
   const teamCompanies = useMemo(() => {
     if (!selectedTeam) return [];
     const teamKey = normalizeName(selectedTeam.name);
     if (!teamKey) return [];
     const companies = mstRows
-      .filter((row) => normalizeName(row.team) === teamKey)
+      .filter((row) => normalizeName(resolveTeamForRow(row)) === teamKey)
       .map((row) => ({
         mst: row.mst,
         company: row.company || "",
@@ -137,7 +164,7 @@ function TeamManager({ canEdit = true, currentUser = null }) {
     });
 
     return companies;
-  }, [selectedTeam, mstRows]);
+  }, [selectedTeam, mstRows, resolveTeamForRow]);
 
   const memberCompanies = useMemo(() => {
     if (!activeMember) return [];
@@ -160,12 +187,12 @@ function TeamManager({ canEdit = true, currentUser = null }) {
   const teamCompanyCounts = useMemo(() => {
     const counts = new Map();
     for (const row of mstRows) {
-      const key = normalizeName(row.team);
+      const key = normalizeName(resolveTeamForRow(row));
       if (!key) continue;
       counts.set(key, (counts.get(key) ?? 0) + 1);
     }
     return counts;
-  }, [mstRows]);
+  }, [mstRows, resolveTeamForRow]);
 
   const handleRefreshMST = () => {
     setMstRows(getMSTMap());

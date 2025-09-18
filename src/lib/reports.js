@@ -256,8 +256,8 @@ function detectPreferredMonthFirst(rows) {
         monthFirst += 1;
         return;
       }
-      if (day > 12 && month >= 1 && month <= 12) {
-        dayFirst += 1;
+      if (day > 12 && month > 12) {
+        monthFirst += 1;
         return;
       }
       return;
@@ -301,8 +301,12 @@ export function buildReportData(rowsInput, { roster, rules, from, to } = {}) {
 
   let start = from ? from.trim() : "";
   let end = to ? to.trim() : "";
-  if (start && !/^\d{4}-\d{2}-\d{2}$/.test(start)) start = toISODate(start);
-  if (end && !/^\d{4}-\d{2}-\d{2}$/.test(end)) end = toISODate(end);
+  if (start && !/^\d{4}-\d{2}-\d{2}$/.test(start)) {
+    start = toISODate(start, { preferMonthFirst });
+  }
+  if (end && !/^\d{4}-\d{2}-\d{2}$/.test(end)) {
+    end = toISODate(end, { preferMonthFirst });
+  }
   if (start && end && start > end) {
     const tmp = start;
     start = end;

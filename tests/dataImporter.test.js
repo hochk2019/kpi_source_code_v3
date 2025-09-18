@@ -144,4 +144,14 @@ describe('detectDateOrder', () => {
 
     expect(detectDateOrder(rows)).toBe('dmy');
   });
+
+  it('không chuyển sang month-first khi dữ liệu đã có dạng ISO yyyy-mm-dd', () => {
+    const rows = [
+      { 'Ngày': '01/08/2024' },
+      { 'Ngày': '2024-08-31' },
+      { 'Ngày': '15/08/2024' },
+    ];
+
+    expect(detectDateOrder(rows)).toBe('dmy');
+  });
 });
