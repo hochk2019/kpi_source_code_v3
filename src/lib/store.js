@@ -380,16 +380,62 @@ export function mapMemberNamesToTeams(source) {
     const teamName = normalizeStr(team?.name);
     if (!teamName) continue;
     for (const member of team.members || []) {
-      const key = normalizeName(member?.name);
+      const memberName = normalizeStr(member?.name);
+      const key = normalizeName(memberName);
       if (!key) continue;
-      map.set(key, teamName);
+      if (!map.has(key)) {
+        map.set(key, {
+          team: teamName,
+          name: memberName,
+        });
+      }
     }
   }
   return map;
 }
 
-export function applyTeamRosterToMST(rosterLike, rows) {
-  const memberMap = mapMemberNamesToTeams(rosterLike);
+export function applyTeamRosterToMST(rosterLike, rows, options = {}) {
+  const sanitizedRoster = sanitizeRoster(
+    Array.isArray(rosterLike?.teams) || Array.isArray(rosterLike)
+      ? rosterLike
+      : deepCloneRoster(DEFAULT_ROSTER)
+  );
+  const memberMap = mapMemberNamesToTeams(sanitizedRoster);
+
+  const previousRoster = options?.previousRoster
+    ? sanitizeRoster(options.previousRoster)
+    : null;
+
+  if (previousRoster) {
+    const prevById = new Map();
+    for (const team of previousRoster.teams) {
+      const prevTeamName = normalizeStr(team?.name);
+      for (const member of team.members || []) {
+        prevById.set(member.id, {
+          name: normalizeStr(member?.name),
+          team: prevTeamName,
+        });
+      }
+    }
+
+    for (const team of sanitizedRoster.teams) {
+      const teamName = normalizeStr(team?.name);
+      for (const member of team.members || []) {
+        const info = {
+          team: teamName,
+          name: normalizeStr(member?.name),
+        };
+        const prev = prevById.get(member.id);
+        if (prev) {
+          const prevKey = normalizeName(prev.name);
+          if (prevKey) {
+            memberMap.set(prevKey, info);
+          }
+        }
+      }
+    }
+  }
+
   const sanitizedRows = Array.isArray(rows)
     ? rows.map(sanitizeMSTRow).filter(Boolean)
     : [];
@@ -398,12 +444,32 @@ export function applyTeamRosterToMST(rosterLike, rows) {
   const updated = sanitizedRows.map((row) => {
     const importKey = normalizeName(row.person_import);
     const exportKey = normalizeName(row.person_export);
-    const targetTeam = memberMap.get(importKey) || memberMap.get(exportKey);
-    if (targetTeam && normalizeName(row.team) !== normalizeName(targetTeam)) {
+    const importInfo = importKey ? memberMap.get(importKey) : null;
+    const exportInfo = exportKey ? memberMap.get(exportKey) : null;
+    const preferredInfo = importInfo || exportInfo;
+
+    let next = row;
+    const applyChanges = (updates) => {
+      if (next === row) {
+        next = { ...row };
+      }
+      Object.assign(next, updates);
       changed = true;
-      return { ...row, team: targetTeam };
+    };
+
+    if (importInfo?.name && importInfo.name !== row.person_import) {
+      applyChanges({ person_import: importInfo.name });
     }
-    return row;
+    if (exportInfo?.name && exportInfo.name !== row.person_export) {
+      applyChanges({ person_export: exportInfo.name });
+    }
+
+    const targetTeam = preferredInfo?.team;
+    if (targetTeam && normalizeName(row.team) !== normalizeName(targetTeam)) {
+      applyChanges({ team: targetTeam });
+    }
+
+    return next;
   });
 
   return { rows: updated, changed };

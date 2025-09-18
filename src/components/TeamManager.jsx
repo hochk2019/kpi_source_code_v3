@@ -327,18 +327,21 @@ function TeamManager({ canEdit = true, currentUser = null }) {
       return;
     }
     try {
+      const previousRoster = getTeamRoster();
       const sanitized = setTeamRoster(roster, {
         actor,
         detail: "Cập nhật tổ đội từ giao diện",
       });
       setRoster(sanitized);
-      const { rows, changed } = applyTeamRosterToMST(sanitized, mstRows);
+      const { rows, changed } = applyTeamRosterToMST(sanitized, mstRows, {
+        previousRoster,
+      });
       if (changed) {
         upsertMSTRows(rows, {
           actor,
           detail: "Đồng bộ tổ đội sang bảng MST",
         });
-        setMstRows(getMSTMap());
+        setMstRows(rows);
       }
       setDirty(false);
       alert(

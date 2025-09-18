@@ -285,10 +285,11 @@ export function buildReportData(rowsInput, { roster, rules, from, to } = {}) {
     if (end && date > end) continue;
 
     const staffKey = normalizeName(sanitized.nhan_vien);
-    const staffName = sanitized.nhan_vien || "Chưa gán";
+    const staffInfo = staffKey ? memberTeamMap.get(staffKey) : null;
+    const staffName = staffInfo?.name || sanitized.nhan_vien || "Chưa gán";
     let teamName = sanitized.team;
-    if (!teamName && staffKey && memberTeamMap.has(staffKey)) {
-      teamName = memberTeamMap.get(staffKey);
+    if (!teamName && staffInfo?.team) {
+      teamName = staffInfo.team;
     }
     const teamEntry = ensureTeam(teamName);
 

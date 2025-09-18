@@ -137,7 +137,9 @@ describe('team roster helpers', () => {
     });
 
     const mapping = mapMemberNamesToTeams(roster);
-    expect(mapping.get(normalizeName('HOA'))).toBe('Team 1');
+    const info = mapping.get(normalizeName('HOA'));
+    expect(info?.team).toBe('Team 1');
+    expect(info?.name).toBe('Hòa');
   });
 
   it('applyTeamRosterToMST đồng bộ tên team dựa vào thành viên phụ trách', () => {
@@ -157,12 +159,54 @@ describe('team roster helpers', () => {
     const { rows, changed } = applyTeamRosterToMST(roster, mstRows);
     expect(changed).toBe(true);
 
-    const team111 = rows.find((row) => row.mst === '111')?.team;
-    const team222 = rows.find((row) => row.mst === '222')?.team;
-    const team333 = rows.find((row) => row.mst === '333')?.team;
+    const row111 = rows.find((row) => row.mst === '111');
+    const row222 = rows.find((row) => row.mst === '222');
+    const row333 = rows.find((row) => row.mst === '333');
 
-    expect(team111).toBe('Team 1');
-    expect(team222).toBe('Team 2');
-    expect(team333).toBe('Team 1');
+    expect(row111?.team).toBe('Team 1');
+    expect(row222?.team).toBe('Team 2');
+    expect(row333?.team).toBe('Team 1');
+  });
+
+  it('applyTeamRosterToMST cập nhật lại tên thành viên khi đổi tên', () => {
+    const baseRoster = setTeamRoster({
+      teams: [
+        {
+          name: 'Team 1',
+          members: [{ name: 'Phuong' }],
+        },
+      ],
+    });
+
+    const mstRows = [
+      {
+        mst: '555',
+        company: 'Công ty X',
+        person_import: 'Phuong',
+        person_export: '',
+        team: 'Team 1',
+      },
+    ];
+
+    const renamedRoster = setTeamRoster({
+      teams: baseRoster.teams.map((team) => ({
+        ...team,
+        members: team.members.map((member) =>
+          normalizeName(member.name) === normalizeName('Phuong')
+            ? { ...member, name: 'Phương Nguyễn' }
+            : member
+        ),
+      })),
+    });
+
+    const { rows, changed } = applyTeamRosterToMST(renamedRoster, mstRows, {
+      previousRoster: baseRoster,
+    });
+
+    expect(changed).toBe(true);
+    expect(rows[0]).toMatchObject({
+      person_import: 'Phương Nguyễn',
+      team: 'Team 1',
+    });
   });
 });
