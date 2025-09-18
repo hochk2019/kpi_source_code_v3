@@ -1,11 +1,17 @@
 // src/components/DataImporter.jsx
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as XLSX from "xlsx";
-import { getDeclRows, saveDeclRows, sortDeclRows, pushImportLog } from "@/lib/store.js";
+import {
+  getDeclRows,
+  saveDeclRows,
+  sortDeclRows,
+  pushImportLog,
+} from "@/lib/store.js";
 import { mapRow } from "@/lib/importer.js";
-import { loadRules } from "@/lib/rules.js";
+import { loadRules, computeKPI } from "@/lib/rules.js";
 
-const PAGE_SIZE = 20;
+const DEFAULT_PAGE_SIZE = 20;
+const PAGE_SIZE_OPTIONS = [20, 50, 100, 200];
 
 function coerceLicenseValue(value) {
   if (value === "" || value === null || value === undefined) return "";
@@ -32,6 +38,11 @@ export default function DataImporter({ canEdit = true, currentUser = null }) {
   const [page, setPage] = useState(1);
   const [mode, setMode] = useState("saved");         // saved | preview
   const [selectedFile, setSelectedFile] = useState("");
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
+  const [filterNoStaff, setFilterNoStaff] = useState(false);
+  const [filterNoTeam, setFilterNoTeam] = useState(false);
+  const [selectedKeys, setSelectedKeys] = useState([]);
+  const [rules, setRules] = useState(() => loadRules());
 
   // Tuỳ chọn
   const [overwrite, setOverwrite] = useState(false);         // Ghi đè toàn bộ
@@ -42,12 +53,18 @@ export default function DataImporter({ canEdit = true, currentUser = null }) {
   const isReadOnly = !canEdit;
 
   const loadSavedRows = useCallback(() => {
+    const activeRules = loadRules();
+    setRules(activeRules);
     const saved = sortDeclRows(getDeclRows()).map(ensureLicenseFields);
     setRawRows(saved);
     setMode("saved");
     setPage(1);
+    setPageSize(DEFAULT_PAGE_SIZE);
     setQuery("");
     setSelectedFile("");
+    setFilterNoStaff(false);
+    setFilterNoTeam(false);
+    setSelectedKeys([]);
     if (fileRef.current) fileRef.current.value = "";
   }, [fileRef]);
 
@@ -68,50 +85,149 @@ export default function DataImporter({ canEdit = true, currentUser = null }) {
       const wb = XLSX.read(reader.result, { type: "array" });
       const sheet = wb.Sheets[wb.SheetNames[0]];
       const rows = XLSX.utils.sheet_to_json(sheet, { raw: false, defval: "" });
-      const rules = loadRules();
-      const excludeCodes = Array.isArray(rules?.license?.excludeCodes)
-        ? rules.license.excludeCodes
+      const loadedRules = loadRules();
+      setRules(loadedRules);
+      const excludeCodes = Array.isArray(loadedRules?.license?.excludeCodes)
+        ? loadedRules.license.excludeCodes
         : [];
 
       const mapped = rows
-        .map(r => mapRow(r, { autoAssignStaff, rules, licenseExcludes: excludeCodes }))
+        .map(r =>
+          mapRow(r, {
+            autoAssignStaff,
+            rules: loadedRules,
+            licenseExcludes: excludeCodes,
+          })
+        )
         .map(ensureLicenseFields)
         .filter(r => r.so_tk && r.date);
 
       setRawRows(sortDeclRows(mapped));
       setPage(1);
+      setPageSize(DEFAULT_PAGE_SIZE);
       setMode("preview");
       setSelectedFile(f.name || "");
       setQuery("");
+      setFilterNoStaff(false);
+      setFilterNoTeam(false);
+      setSelectedKeys([]);
     };
     reader.readAsArrayBuffer(f);
   }
 
   // Tìm nhanh
   const filtered = useMemo(() => {
-    const q = query.toLowerCase();
-    if (!q) return rawRows;
-    return rawRows.filter(r =>
-      r.so_tk.toLowerCase().includes(q) ||
-      (r.mst || "").toLowerCase().includes(q) ||
-      (r.cong_ty || "").toLowerCase().includes(q)
-    );
-  }, [rawRows, query]);
+    const q = query.toLowerCase().trim();
+    const hasText = q.length > 0;
+    return rawRows.filter(r => {
+      const soTk = (r.so_tk || "").toString().toLowerCase();
+      const mst = (r.mst || "").toString().toLowerCase();
+      const company = (r.cong_ty || "").toString().toLowerCase();
+      if (hasText && !(
+        soTk.includes(q) ||
+        mst.includes(q) ||
+        company.includes(q)
+      )) {
+        return false;
+      }
+      if (filterNoStaff) {
+        const hasStaff = Boolean((r.nhan_vien || "").toString().trim());
+        if (hasStaff) return false;
+      }
+      if (filterNoTeam) {
+        const hasTeam = Boolean((r.team || "").toString().trim());
+        if (hasTeam) return false;
+      }
+      return true;
+    });
+  }, [rawRows, query, filterNoStaff, filterNoTeam]);
 
   // Phân trang
   const total = filtered.length;
-  const maxPage = Math.max(1, Math.ceil(total / PAGE_SIZE));
-  const pageRows = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const maxPage = Math.max(1, Math.ceil(total / pageSize));
+  const safePage = Math.min(page, maxPage);
+  const pageRows = filtered.slice((safePage - 1) * pageSize, safePage * pageSize);
+
+  useEffect(() => {
+    if (page !== safePage) {
+      setPage(safePage);
+    }
+  }, [safePage, page]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [pageSize, filterNoStaff, filterNoTeam]);
+
+  const keyOfRow = useCallback((row) => {
+    const soTk = (row.so_tk || "").toString();
+    const nhanh = (row.nhanh || "").toString();
+    return `${soTk}_${nhanh}`;
+  }, []);
 
   function onChangeCell(idx, field, value) {
     if (isReadOnly) return;
-    const pos = (page - 1) * PAGE_SIZE + idx;
+    const pos = (safePage - 1) * pageSize + idx;
     setRawRows(prev => {
       const cp = prev.slice();
       cp[pos] = { ...cp[pos], [field]: value };
       return cp;
     });
   }
+
+  const handleToggleSelect = useCallback((row) => {
+    const key = keyOfRow(row);
+    setSelectedKeys(prev => {
+      if (prev.includes(key)) {
+        return prev.filter(k => k !== key);
+      }
+      return [...prev, key];
+    });
+  }, [keyOfRow]);
+
+  const handleClearSelection = useCallback(() => {
+    setSelectedKeys([]);
+  }, []);
+
+  const deleteRowsByKeys = useCallback((keys) => {
+    if (!Array.isArray(keys) || keys.length === 0) return;
+    const keySet = new Set(keys);
+    const remaining = rawRows.filter(row => !keySet.has(keyOfRow(row)));
+    const removedCount = rawRows.length - remaining.length;
+    if (removedCount <= 0) return;
+    saveDeclRows(remaining, {
+      overwrite: true,
+      actor,
+      detail: `Xóa ${removedCount} tờ khai từ giao diện Import Excel`,
+    });
+    alert(`Đã xóa ${removedCount} tờ khai.`);
+    loadSavedRows();
+  }, [actor, keyOfRow, loadSavedRows, rawRows]);
+
+  const handleDeleteSelected = useCallback(() => {
+    if (isReadOnly) return;
+    if (mode !== "saved") {
+      alert("Chỉ có thể xóa khi đang xem dữ liệu đã lưu.");
+      return;
+    }
+    if (selectedKeys.length === 0) {
+      alert("Chưa chọn tờ khai để xóa.");
+      return;
+    }
+    if (!window.confirm(`Bạn chắc chắn muốn xóa ${selectedKeys.length} tờ khai đã chọn?`)) {
+      return;
+    }
+    deleteRowsByKeys(selectedKeys);
+  }, [deleteRowsByKeys, isReadOnly, mode, selectedKeys]);
+
+  const handleDeleteSingle = useCallback((row) => {
+    if (isReadOnly) return;
+    if (mode !== "saved") {
+      alert("Chỉ có thể xóa khi đang xem dữ liệu đã lưu.");
+      return;
+    }
+    if (!window.confirm("Xóa tờ khai này?")) return;
+    deleteRowsByKeys([keyOfRow(row)]);
+  }, [deleteRowsByKeys, isReadOnly, keyOfRow, mode]);
 
   function handleImport() {
     if (isReadOnly) {
@@ -166,6 +282,7 @@ export default function DataImporter({ canEdit = true, currentUser = null }) {
 
   const canImport = !isReadOnly && mode === "preview" && rawRows.length > 0;
   const canSave = !isReadOnly && mode === "saved" && rawRows.length > 0;
+  const canDelete = !isReadOnly && mode === "saved" && selectedKeys.length > 0;
   const modeLabel = mode === "preview" ? "Đang xem dữ liệu từ file (chưa lưu)" : "Đang xem dữ liệu đã lưu";
 
   return (
@@ -233,17 +350,42 @@ export default function DataImporter({ canEdit = true, currentUser = null }) {
         </div>
       )}
 
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 flex-wrap">
         <input
           className="border rounded px-2 py-1 w-72"
           placeholder="Tìm nhanh (Số TK / MST / Công ty)"
           value={query}
           onChange={e => { setQuery(e.target.value); setPage(1); }}
         />
+        <label className="flex items-center gap-1 text-sm">
+          <input
+            type="checkbox"
+            checked={filterNoStaff}
+            onChange={e => setFilterNoStaff(e.target.checked)}
+          />
+          <span>Chưa gán Nhân viên</span>
+        </label>
+        <label className="flex items-center gap-1 text-sm">
+          <input
+            type="checkbox"
+            checked={filterNoTeam}
+            onChange={e => setFilterNoTeam(e.target.checked)}
+          />
+          <span>Chưa gán Tổ đội</span>
+        </label>
         <div className="opacity-70 text-sm">
-          {total} dòng — Trang {page}/{maxPage}
+          {total} dòng — Trang {safePage}/{maxPage}
         </div>
         <div className="ml-auto flex items-center gap-2">
+          <select
+            value={pageSize}
+            onChange={e => setPageSize(Number(e.target.value) || DEFAULT_PAGE_SIZE)}
+            className="border rounded px-2 py-1 text-sm"
+          >
+            {PAGE_SIZE_OPTIONS.map(size => (
+              <option key={size} value={size}>{size}/trang</option>
+            ))}
+          </select>
           <button onClick={() => setPage(p => Math.max(1, p - 1))} className="px-2 py-1 border rounded">« Trước</button>
           <button onClick={() => setPage(p => Math.min(maxPage, p + 1))} className="px-2 py-1 border rounded">Sau »</button>
           {canEdit && (
@@ -259,13 +401,41 @@ export default function DataImporter({ canEdit = true, currentUser = null }) {
       </div>
 
       {!query && mode === "saved" && (
-        <div className="text-xs text-gray-500">Hiển thị tối đa 20 dòng mới nhất. Nhập từ khóa để tìm các tờ khai khác.</div>
+        <div className="text-xs text-gray-500">
+          Hiển thị tối đa {pageSize} dòng trên một trang. Nhập từ khóa hoặc dùng bộ lọc để tìm thêm tờ khai.
+        </div>
+      )}
+
+      {canEdit && mode === "saved" && (
+        <div className="flex flex-wrap items-center gap-2 text-sm">
+          <span className="text-gray-600">Đã chọn {selectedKeys.length} tờ khai</span>
+          <button
+            type="button"
+            onClick={handleDeleteSelected}
+            disabled={!canDelete}
+            className={`px-3 py-1 rounded border ${
+              canDelete ? "bg-red-50 text-red-600 border-red-300" : "opacity-50 cursor-not-allowed"
+            }`}
+          >
+            Xóa các tờ khai đã chọn
+          </button>
+          {selectedKeys.length > 0 && (
+            <button
+              type="button"
+              onClick={handleClearSelection}
+              className="px-3 py-1 rounded border"
+            >
+              Bỏ chọn
+            </button>
+          )}
+        </div>
       )}
 
       <div className="overflow-auto border rounded">
         <table className="min-w-full text-sm">
           <thead className="bg-gray-50">
             <tr>
+              {canEdit && mode === "saved" && <th className="px-2 py-1 text-left w-10">Chọn</th>}
               <th className="px-2 py-1 text-left">Ngày</th>
               <th className="px-2 py-1 text-left">Số tờ khai</th>
               <th className="px-2 py-1 text-left">MST</th>
@@ -275,11 +445,22 @@ export default function DataImporter({ canEdit = true, currentUser = null }) {
               <th className="px-2 py-1 text-left">Nhân viên</th>
               <th className="px-2 py-1 text-left">Tổ đội</th>
               <th className="px-2 py-1 text-left">Số lượng GP</th>
+              <th className="px-2 py-1 text-left">KPI</th>
+              {canEdit && mode === "saved" && <th className="px-2 py-1 text-left w-16">Xóa</th>}
             </tr>
           </thead>
           <tbody>
             {pageRows.map((r, i) => (
               <tr key={i} className="odd:bg-white even:bg-gray-50">
+                {canEdit && mode === "saved" && (
+                  <td className="px-2 py-1">
+                    <input
+                      type="checkbox"
+                      checked={selectedKeys.includes(keyOfRow(r))}
+                      onChange={() => handleToggleSelect(r)}
+                    />
+                  </td>
+                )}
                 <td className="px-2 py-1">{r.date}</td>
                 <td className="px-2 py-1">{r.so_tk}</td>
                 <td className="px-2 py-1">{r.mst}</td>
@@ -321,7 +502,7 @@ export default function DataImporter({ canEdit = true, currentUser = null }) {
                       onChange={e => {
                         const input = e.target.value;
                         setRawRows(prev => {
-                          const pos = (page - 1) * PAGE_SIZE + i;
+                          const pos = (safePage - 1) * pageSize + i;
                           if (!prev[pos]) return prev;
                           const next = prev.slice();
                           if (input !== "") {
@@ -348,10 +529,35 @@ export default function DataImporter({ canEdit = true, currentUser = null }) {
                     />
                   )}
                 </td>
+                <td className="px-2 py-1">
+                  {(() => {
+                    const kpi = computeKPI(r, rules);
+                    if (!Number.isFinite(kpi)) return "-";
+                    return kpi.toFixed(1);
+                  })()}
+                </td>
+                {canEdit && mode === "saved" && (
+                  <td className="px-2 py-1">
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteSingle(r)}
+                      className="px-2 py-0.5 rounded bg-red-500 text-white text-xs"
+                    >
+                      Xóa
+                    </button>
+                  </td>
+                )}
               </tr>
             ))}
             {pageRows.length === 0 && (
-              <tr><td className="px-2 py-4 text-center text-gray-500" colSpan={9}>Không có dữ liệu</td></tr>
+              <tr>
+                <td
+                  className="px-2 py-4 text-center text-gray-500"
+                  colSpan={10 + (canEdit && mode === "saved" ? 2 : 0)}
+                >
+                  Không có dữ liệu
+                </td>
+              </tr>
             )}
           </tbody>
         </table>

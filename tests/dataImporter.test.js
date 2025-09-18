@@ -1,5 +1,10 @@
-import { describe, it, expect } from 'vitest';
+import { beforeEach, describe, it, expect } from 'vitest';
 import { mapRow } from '@/lib/importer.js';
+import { MST_KEY } from '@/lib/store.js';
+
+beforeEach(() => {
+  localStorage.clear();
+});
 
 describe('mapRow', () => {
   it('normalises fields and exposes aliases used by other modules', () => {
@@ -48,5 +53,30 @@ describe('mapRow', () => {
 
     expect(mapped.licenses).toBe(2); // GP01 + GP02 (ZN02 bị loại và GP01 không trùng tính)
     expect(mapped.so_luong_gp).toBe(2);
+  });
+
+  it('autoAssignStaff fills nhân viên và tổ đội dựa trên bảng MST hiện có', () => {
+    localStorage.setItem(MST_KEY, JSON.stringify([
+      {
+        mst: '0101234567',
+        person_import: 'Hạnh',
+        person_export: 'Tuấn',
+        team: 'Team 1',
+        effective_from: '2024-01-01',
+      },
+    ]));
+
+    const mapped = mapRow(
+      {
+        'Số tờ khai': 'TK01',
+        'Ngày': '05/09/2024',
+        'MST': '0101234567',
+        'Loại hình': 'A11',
+      },
+      { autoAssignStaff: true }
+    );
+
+    expect(mapped.nhan_vien).toBe('Hạnh');
+    expect(mapped.team).toBe('Team 1');
   });
 });

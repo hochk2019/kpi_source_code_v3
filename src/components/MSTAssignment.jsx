@@ -102,6 +102,7 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
   const [applyFrom, setApplyFrom] = useState(""); // yyyy-mm-dd
   const [page, setPage] = useState(1);
   const fileRef = useRef();
+  const [selectedFileName, setSelectedFileName] = useState("");
 
   const actor = currentUser?.username || "guest";
   const isReadOnly = !canEdit;
@@ -192,6 +193,7 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
       alert("Không thể đọc file .xlsx — kiểm tra lại định dạng.");
     } finally {
       if (fileRef.current) fileRef.current.value = "";
+      setSelectedFileName("");
     }
   };
 
@@ -242,15 +244,30 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
               ref={fileRef}
               type="file"
               accept=".xlsx,.xls"
-              className="border rounded px-2 py-1"
+              className="hidden"
               disabled={isReadOnly}
+              onChange={(e) => {
+                const name = e.target.files?.[0]?.name || "";
+                setSelectedFileName(name);
+              }}
             />
+            <button
+              type="button"
+              onClick={() => fileRef.current?.click()}
+              className="px-3 py-1 rounded border bg-white hover:bg-gray-50"
+            >
+              Chọn file XLSX
+            </button>
             <button
               onClick={onImportXLSX}
               className="px-3 py-1 rounded bg-black text-white"
+              type="button"
             >
               Import XLSX
             </button>
+            {selectedFileName && (
+              <span className="text-sm text-gray-600">Đã chọn: {selectedFileName}</span>
+            )}
           </>
         )}
 
@@ -264,6 +281,10 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
             title="Áp dụng từ ngày (ghi vào trường trống khi import)"
           />
         )}
+
+        <span className="text-xs text-gray-500 ml-auto">
+          * Khi lưu, quy tắc mới chỉ áp dụng cho tờ khai có ngày khai báo từ ngày này trở đi.
+        </span>
 
         <div className="flex-1" />
 

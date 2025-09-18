@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card.jsx";
 import { Button } from "@/components/ui/button.jsx";
 import { Input } from "@/components/ui/input.jsx";
@@ -101,14 +101,64 @@ export default function RulesEditor({ canEdit = true, currentUser = null }) {
   // Test nhanh từ dữ liệu đã import
   const data = getData();
   const testList = useMemo(() => {
-    return data.map((r) => ({
-      key: `${r.date || ""} || ${r.soToKhai || ""} || ${r.cong_ty || ""} || ${r.loaiHinh || ""}`,
-      row: r,
-    })).slice(0, 300);
+    return data.map((r, idx) => {
+      const soTkRaw =
+        r?.so_tk ?? r?.soToKhai ?? r?.soTK ?? r?.so_to_khai ?? "";
+      const soTk = soTkRaw ? String(soTkRaw).trim() : "";
+      const date = r?.date || r?.ngay || "";
+      const company = r?.cong_ty || r?.company || r?.customer || "";
+      const mst = r?.mst || "";
+      const loai = r?.loai_hinh || r?.loaiHinh || "";
+      const label = [date, soTk, mst, company, loai]
+        .filter(Boolean)
+        .join(" | ") || `Tờ khai ${idx + 1}`;
+      return {
+        key: `${idx}-${soTk}-${date}`,
+        soTk,
+        label,
+        labelLower: label.toLowerCase(),
+        soTkLower: soTk.toLowerCase(),
+        row: r,
+      };
+    });
   }, [data]);
 
-  const [pickedIdx, setPickedIdx] = useState(-1);
-  const picked = pickedIdx >= 0 ? testList[pickedIdx]?.row : null;
+  const [testSearch, setTestSearch] = useState("");
+  const filteredTestList = useMemo(() => {
+    const q = testSearch.trim().toLowerCase();
+    const base = q
+      ? testList.filter((item) =>
+          item.soTkLower.includes(q) || item.labelLower.includes(q)
+        )
+      : testList;
+    return base.slice(0, 400);
+  }, [testList, testSearch]);
+
+  const [pickedKey, setPickedKey] = useState("");
+  const firstMatch = useMemo(() => {
+    const q = testSearch.trim().toLowerCase();
+    if (!q) return null;
+    return testList.find((item) => item.soTkLower.includes(q)) || null;
+  }, [testList, testSearch]);
+
+  const handleSearchSubmit = useCallback(
+    (event) => {
+      event.preventDefault();
+      if (firstMatch) {
+        setPickedKey(firstMatch.key);
+      } else if (testSearch.trim()) {
+        alert("Không tìm thấy tờ khai khớp với số đã nhập.");
+      }
+    },
+    [firstMatch, testSearch]
+  );
+
+  const pickedEntry = useMemo(
+    () => testList.find((item) => item.key === pickedKey) || null,
+    [testList, pickedKey]
+  );
+
+  const picked = pickedEntry?.row || null;
   const kpiPicked = picked ? computeKPI(picked, rules) : 0;
 
   // Test nhập tay
@@ -366,26 +416,46 @@ export default function RulesEditor({ canEdit = true, currentUser = null }) {
           {/* Test nhanh */}
           <div className="space-y-4 border rounded p-3">
             <div className="font-semibold">Test nhanh 1 tờ khai đã import</div>
+            <form
+              className="flex flex-col sm:flex-row gap-2"
+              onSubmit={handleSearchSubmit}
+            >
+              <Input
+                placeholder="Nhập số tờ khai để tìm nhanh"
+                value={testSearch}
+                onChange={(e) => setTestSearch(e.target.value)}
+              />
+              <Button type="submit" variant="outline">
+                Tìm theo số tờ khai
+              </Button>
+            </form>
+            <div className="text-xs text-gray-500">
+              Hiển thị {filteredTestList.length} / {testList.length} tờ khai đã lưu
+            </div>
             <select
               className="border rounded p-2 w-full h-40"
               size={8}
-              value={pickedIdx}
-              onChange={(e) => setPickedIdx(Number(e.target.value))}
+              value={pickedKey}
+              onChange={(e) => setPickedKey(e.target.value)}
             >
-              {testList.map((x, i) => (
-                <option key={i} value={i}>{x.key}</option>
+              <option value="">-- Chọn 1 tờ khai --</option>
+              {filteredTestList.map((item) => (
+                <option key={item.key} value={item.key}>
+                  {item.label}
+                </option>
               ))}
             </select>
             <div className="text-sm">
               {picked ? (
                 <>
                   <div>
-                    <b>Loại hình:</b> {picked.loaiHinh} &nbsp;
-                    <b>Mục hàng:</b> {picked.num_items || 0} &nbsp;
+                    <b>Số tờ khai:</b> {picked.so_tk || picked.soToKhai || ""} &nbsp;
+                    <b>Loại hình:</b> {picked.loai_hinh || picked.loaiHinh || ""} &nbsp;
+                    <b>Mục hàng:</b> {picked.num_items ?? picked.muc_hang ?? 0} &nbsp;
                     <b>MST:</b> {picked.mst || ""} &nbsp;
-                    <b>Cty:</b> {picked.cong_ty || ""}
+                    <b>Cty:</b> {picked.cong_ty || picked.company || ""}
                   </div>
-                  <div className="mt-1"><b>KẾT QUẢ:</b> {kpiPicked}</div>
+                  <div className="mt-1"><b>KẾT QUẢ:</b> {kpiPicked.toFixed(1)}</div>
                 </>
               ) : <i>Chọn 1 dòng để test…</i>}
             </div>

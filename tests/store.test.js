@@ -34,6 +34,24 @@ describe('saveDeclRows', () => {
       { so_tk: '99999999999', nhanh: '', date: '2024-09-17', loai_hinh: 'B11' },
     ]);
   });
+
+  it('replaces storage completely when overwrite=true, enabling deletions', () => {
+    const baseline = [
+      { so_tk: 'TK01', nhanh: 'A', date: '2024-08-01' },
+      { so_tk: 'TK02', nhanh: 'B', date: '2024-08-02' },
+      { so_tk: 'TK03', nhanh: 'C', date: '2024-08-03' },
+    ];
+
+    saveDeclRows(baseline, { overwrite: true });
+    expect(getDeclRows()).toHaveLength(3);
+
+    const remaining = baseline.slice(0, 2);
+    saveDeclRows(remaining, { overwrite: true });
+
+    const stored = getDeclRows();
+    expect(stored).toHaveLength(2);
+    expect(stored.find(r => r.so_tk === 'TK03')).toBeUndefined();
+  });
 });
 
 

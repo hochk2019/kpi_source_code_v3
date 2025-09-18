@@ -27,9 +27,7 @@ function TeamManager({ canEdit = true, currentUser = null }) {
   const [selectedTeamId, setSelectedTeamId] = useState(
     initialRosterRef.current.teams[0]?.id ?? null
   );
-  const [selectedMemberId, setSelectedMemberId] = useState(
-    initialRosterRef.current.teams[0]?.members[0]?.id ?? null
-  );
+  const [selectedMemberId, setSelectedMemberId] = useState(null);
   const [mstRows, setMstRows] = useState(() => getMSTMap());
   const [newMemberName, setNewMemberName] = useState("");
   const [memberNameDraft, setMemberNameDraft] = useState("");
@@ -64,8 +62,11 @@ function TeamManager({ canEdit = true, currentUser = null }) {
       if (selectedMemberId !== null) setSelectedMemberId(null);
       return;
     }
-    if (!selectedTeam.members.some((m) => m.id === selectedMemberId)) {
-      setSelectedMemberId(selectedTeam.members[0]?.id ?? null);
+    if (
+      selectedMemberId &&
+      !selectedTeam.members.some((m) => m.id === selectedMemberId)
+    ) {
+      setSelectedMemberId(null);
     }
   }, [selectedTeam, selectedMemberId]);
 
@@ -75,7 +76,7 @@ function TeamManager({ canEdit = true, currentUser = null }) {
 
   useEffect(() => {
     setCompanyPage(1);
-  }, [selectedTeamId]);
+  }, [selectedTeamId, selectedMemberId]);
 
   const memberAssignments = useMemo(() => {
     const map = new Map();
@@ -138,21 +139,23 @@ function TeamManager({ canEdit = true, currentUser = null }) {
     return companies;
   }, [selectedTeam, mstRows]);
 
-  const totalCompanyPages = Math.max(
-    1,
-    Math.ceil(teamCompanies.length / COMPANY_PAGE_SIZE)
-  );
-  const currentCompanyPage = Math.min(companyPage, totalCompanyPages);
-  const pagedCompanies = teamCompanies.slice(
-    (currentCompanyPage - 1) * COMPANY_PAGE_SIZE,
-    currentCompanyPage * COMPANY_PAGE_SIZE
-  );
-
   const memberCompanies = useMemo(() => {
     if (!activeMember) return [];
     const key = normalizeName(activeMember.name);
     return memberAssignments.get(key) ?? [];
   }, [activeMember, memberAssignments]);
+
+  const displayCompanies = activeMember ? memberCompanies : teamCompanies;
+
+  const totalCompanyPages = Math.max(
+    1,
+    Math.ceil(displayCompanies.length / COMPANY_PAGE_SIZE)
+  );
+  const currentCompanyPage = Math.min(companyPage, totalCompanyPages);
+  const pagedCompanies = displayCompanies.slice(
+    (currentCompanyPage - 1) * COMPANY_PAGE_SIZE,
+    currentCompanyPage * COMPANY_PAGE_SIZE
+  );
 
   const teamCompanyCounts = useMemo(() => {
     const counts = new Map();
@@ -166,6 +169,7 @@ function TeamManager({ canEdit = true, currentUser = null }) {
 
   const handleRefreshMST = () => {
     setMstRows(getMSTMap());
+    setCompanyPage(1);
   };
 
   const handleReloadRoster = () => {
@@ -224,6 +228,9 @@ function TeamManager({ canEdit = true, currentUser = null }) {
       ),
     }));
     setDirty(true);
+    if (selectedMemberId === memberId) {
+      setSelectedMemberId(null);
+    }
   };
 
   const handleMoveMember = (memberId, targetTeamId) => {
@@ -409,7 +416,10 @@ function TeamManager({ canEdit = true, currentUser = null }) {
           return (
             <button
               key={team.id}
-              onClick={() => setSelectedTeamId(team.id)}
+              onClick={() => {
+                setSelectedTeamId(team.id);
+                setSelectedMemberId(null);
+              }}
               className={`px-4 py-2 rounded border text-left ${
                 isActive ? "bg-blue-600 text-white" : "bg-white"
               }`}
@@ -537,39 +547,8 @@ function TeamManager({ canEdit = true, currentUser = null }) {
                       </button>
                     </div>
                   )}
-                  <div>
-                    <div className="font-medium text-sm mb-1">
-                      Doanh nghiệp phụ trách ({memberCompanies.length})
-                    </div>
-                    <div className="border rounded max-h-48 overflow-y-auto">
-                      {memberCompanies.length === 0 ? (
-                        <div className="p-3 text-gray-500">
-                          Chưa có doanh nghiệp gán cho thành viên này.
-                        </div>
-                      ) : (
-                        <table className="w-full text-xs">
-                          <thead className="bg-gray-50">
-                            <tr>
-                              <th className="p-2 text-left w-24">MST</th>
-                              <th className="p-2 text-left">Công ty</th>
-                              <th className="p-2 text-left w-20">Vai trò</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                    {memberCompanies.map((row, idx) => (
-                      <tr
-                        key={`${row.mst}-${row.role}-${idx}`}
-                        className="border-t"
-                      >
-                                <td className="p-2">{row.mst}</td>
-                                <td className="p-2">{row.company}</td>
-                                <td className="p-2">{row.role}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      )}
-                    </div>
+                  <div className="text-xs text-gray-500">
+                    Thành viên đang phụ trách {memberCompanies.length} doanh nghiệp.
                   </div>
                 </div>
               ) : (
@@ -581,18 +560,33 @@ function TeamManager({ canEdit = true, currentUser = null }) {
           </div>
 
           <div className="border rounded p-4 bg-white shadow-sm space-y-4">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <h3 className="font-semibold text-sm uppercase text-gray-500">
-                Doanh nghiệp theo {selectedTeam.name}
+                {activeMember
+                  ? `Doanh nghiệp phụ trách của ${activeMember.name}`
+                  : `Doanh nghiệp theo ${selectedTeam.name}`}
               </h3>
-              <span className="text-xs text-gray-500">
-                {teamCompanies.length} doanh nghiệp đang gán cho team
-              </span>
+              <div className="flex items-center gap-2 text-xs text-gray-500">
+                <span>
+                  {displayCompanies.length} doanh nghiệp đang được gán
+                </span>
+                {activeMember && (
+                  <button
+                    type="button"
+                    onClick={() => setSelectedMemberId(null)}
+                    className="px-3 py-1 rounded border bg-white hover:bg-gray-50"
+                  >
+                    Xem toàn bộ team
+                  </button>
+                )}
+              </div>
             </div>
             <div className="overflow-x-auto border rounded">
-              {teamCompanies.length === 0 ? (
+              {displayCompanies.length === 0 ? (
                 <div className="p-4 text-sm text-gray-500">
-                  Team chưa được gán doanh nghiệp nào trong bảng MST.
+                  {activeMember
+                    ? "Thành viên này chưa được gán doanh nghiệp nào trong bảng MST."
+                    : "Team chưa được gán doanh nghiệp nào trong bảng MST."}
                 </div>
               ) : (
                 <table className="w-full text-sm">
@@ -600,21 +594,33 @@ function TeamManager({ canEdit = true, currentUser = null }) {
                     <tr>
                       <th className="p-2 text-left w-28">MST</th>
                       <th className="p-2 text-left">Công ty</th>
-                      <th className="p-2 text-left w-40">Phụ trách Nhập</th>
-                      <th className="p-2 text-left w-40">Phụ trách Xuất</th>
+                      {activeMember ? (
+                        <th className="p-2 text-left w-24">Vai trò</th>
+                      ) : (
+                        <>
+                          <th className="p-2 text-left w-40">Phụ trách Nhập</th>
+                          <th className="p-2 text-left w-40">Phụ trách Xuất</th>
+                        </>
+                      )}
                       <th className="p-2 text-left w-32">Áp dụng từ</th>
                     </tr>
                   </thead>
                   <tbody>
                     {pagedCompanies.map((row, idx) => (
                       <tr
-                        key={`${row.mst}-${row.company}-${idx}`}
+                        key={`${row.mst}-${row.company}-${idx}-${activeMember ? row.role : "team"}`}
                         className="border-t"
                       >
                         <td className="p-2">{row.mst}</td>
                         <td className="p-2">{row.company}</td>
-                        <td className="p-2">{row.person_import}</td>
-                        <td className="p-2">{row.person_export}</td>
+                        {activeMember ? (
+                          <td className="p-2">{row.role}</td>
+                        ) : (
+                          <>
+                            <td className="p-2">{row.person_import}</td>
+                            <td className="p-2">{row.person_export}</td>
+                          </>
+                        )}
                         <td className="p-2">{row.effective_from || ""}</td>
                       </tr>
                     ))}
@@ -623,7 +629,7 @@ function TeamManager({ canEdit = true, currentUser = null }) {
               )}
             </div>
 
-            {teamCompanies.length > COMPANY_PAGE_SIZE && (
+            {displayCompanies.length > COMPANY_PAGE_SIZE && (
               <div className="flex items-center justify-between text-sm">
                 <button
                   onClick={() =>
