@@ -45,6 +45,7 @@ export default function DataImporter({ canEdit = true, currentUser = null }) {
   const [filterNoTeam, setFilterNoTeam] = useState(false);
   const [selectedKeys, setSelectedKeys] = useState([]);
   const [rules, setRules] = useState(() => loadRules());
+  const [hasUnsaved, setHasUnsaved] = useState(false);
 
   // Tuỳ chọn
   const [overwrite, setOverwrite] = useState(false);         // Ghi đè toàn bộ
@@ -54,7 +55,17 @@ export default function DataImporter({ canEdit = true, currentUser = null }) {
   const actor = currentUser?.username || "guest";
   const isReadOnly = !canEdit;
 
-  const loadSavedRows = useCallback(() => {
+  const loadSavedRows = useCallback((opts = {}) => {
+    const { bypassConfirm = false } = opts;
+    if (!bypassConfirm && hasUnsaved && mode === "saved") {
+      const shouldDiscard = window.confirm(
+        "Bạn có các thay đổi chưa lưu. Tiếp tục sẽ bỏ qua các chỉnh sửa đó. Bạn có muốn tiếp tục?"
+      );
+      if (!shouldDiscard) {
+        if (fileRef.current) fileRef.current.value = "";
+        return false;
+      }
+    }
     const activeRules = loadRules();
     setRules(activeRules);
     const saved = sortDeclRows(getDeclRows()).map(ensureLicenseFields);
@@ -67,18 +78,44 @@ export default function DataImporter({ canEdit = true, currentUser = null }) {
     setFilterNoStaff(false);
     setFilterNoTeam(false);
     setSelectedKeys([]);
+    setHasUnsaved(false);
     if (fileRef.current) fileRef.current.value = "";
-  }, [fileRef]);
+    return true;
+  }, [fileRef, hasUnsaved, mode]);
 
   useEffect(() => {
-    loadSavedRows();
-  }, [loadSavedRows]);
+    if (mode !== "saved") return;
+    if (hasUnsaved) return;
+    if (rawRows.length > 0) return;
+    loadSavedRows({ bypassConfirm: true });
+  }, [loadSavedRows, mode, hasUnsaved, rawRows.length]);
+
+  useEffect(() => {
+    if (!hasUnsaved) return undefined;
+    const handler = (event) => {
+      event.preventDefault();
+      event.returnValue = "";
+      return "";
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [hasUnsaved]);
 
   // Đọc file XLSX
   function handleFileChange(e) {
     if (isReadOnly) {
       alert("Bạn đang ở chế độ chỉ xem — hãy đăng nhập để import dữ liệu.");
       return;
+    }
+    if (hasUnsaved && mode === "saved") {
+      const proceed = window.confirm(
+        "Bạn có các thay đổi chưa lưu. Chọn file mới sẽ làm mất các chỉnh sửa đó. Bạn có chắc chắn muốn tiếp tục?"
+      );
+      if (!proceed) {
+        if (fileRef.current) fileRef.current.value = "";
+        e.target.value = "";
+        return;
+      }
     }
     const f = e.target.files?.[0];
     if (!f) return;
@@ -119,6 +156,7 @@ export default function DataImporter({ canEdit = true, currentUser = null }) {
       setFilterNoStaff(false);
       setFilterNoTeam(false);
       setSelectedKeys([]);
+      setHasUnsaved(false);
     };
     reader.readAsArrayBuffer(f);
   }
@@ -172,11 +210,13 @@ export default function DataImporter({ canEdit = true, currentUser = null }) {
     return `${soTk}_${nhanh}`;
   }, []);
 
-  const applyEdit = useCallback((idx, updater) => {
+  const applyEdit = useCallback((rowKey, updater) => {
     if (isReadOnly) return;
-    const pos = (safePage - 1) * pageSize + idx;
+    let didChange = false;
     setRawRows(prev => {
-      if (!Array.isArray(prev) || !prev[pos]) return prev;
+      if (!Array.isArray(prev) || prev.length === 0) return prev;
+      const pos = prev.findIndex(row => keyOfRow(row) === rowKey);
+      if (pos === -1) return prev;
       const current = prev[pos];
       const updates = updater(current);
       if (!updates || typeof updates !== "object") return prev;
@@ -210,12 +250,16 @@ export default function DataImporter({ canEdit = true, currentUser = null }) {
         });
       }
 
+      didChange = true;
       return copy;
     });
-  }, [isReadOnly, pageSize, safePage, keyOfRow, rules]);
+    if (didChange && mode === "saved") {
+      setHasUnsaved(true);
+    }
+  }, [isReadOnly, keyOfRow, rules, mode]);
 
-  const onChangeCell = useCallback((idx, field, value, transform) => {
-    applyEdit(idx, (row) => {
+  const onChangeCell = useCallback((rowKey, field, value, transform) => {
+    applyEdit(rowKey, (row) => {
       const nextValue = typeof transform === "function" ? transform(value, row) : value;
       if (nextValue === row[field]) return null;
       return { [field]: nextValue };
@@ -248,6 +292,7 @@ export default function DataImporter({ canEdit = true, currentUser = null }) {
       detail: `Xóa ${removedCount} tờ khai từ giao diện Import Excel`,
     });
     alert(`Đã xóa ${removedCount} tờ khai.`);
+    setHasUnsaved(false);
     loadSavedRows();
   }, [actor, keyOfRow, loadSavedRows, rawRows]);
 
@@ -303,7 +348,7 @@ export default function DataImporter({ canEdit = true, currentUser = null }) {
     pushImportLog(`Import XLSX: ${rawRows.length} dòng → sau hợp nhất còn ${count}`);
     alert("Import xong!");
     if (fileRef.current) fileRef.current.value = "";
-    loadSavedRows();
+    loadSavedRows({ bypassConfirm: true });
   }
 
   function handleSaveAll() {
@@ -325,7 +370,8 @@ export default function DataImporter({ canEdit = true, currentUser = null }) {
       detail: "Lưu chỉnh sửa tờ khai thủ công",
     });
     alert(`Đã lưu ${count} bản ghi (ghi đè).`);
-    loadSavedRows();
+    setHasUnsaved(false);
+    loadSavedRows({ bypassConfirm: true });
   }
 
   const canImport = !isReadOnly && mode === "preview" && rawRows.length > 0;
@@ -373,7 +419,7 @@ export default function DataImporter({ canEdit = true, currentUser = null }) {
         )}
         <button
           type="button"
-          onClick={loadSavedRows}
+          onClick={() => loadSavedRows()}
           className="px-3 py-1.5 rounded border"
         >
           Hiển thị dữ liệu đã lưu
@@ -498,13 +544,15 @@ export default function DataImporter({ canEdit = true, currentUser = null }) {
             </tr>
           </thead>
           <tbody>
-            {pageRows.map((r, i) => (
-              <tr key={i} className="odd:bg-white even:bg-gray-50">
+      {pageRows.map((r, i) => {
+            const rowKey = keyOfRow(r);
+            return (
+              <tr key={`${rowKey}_${i}`} className="odd:bg-white even:bg-gray-50">
                 {canEdit && mode === "saved" && (
                   <td className="px-2 py-1">
                     <input
                       type="checkbox"
-                      checked={selectedKeys.includes(keyOfRow(r))}
+                      checked={selectedKeys.includes(rowKey)}
                       onChange={() => handleToggleSelect(r)}
                     />
                   </td>
@@ -534,7 +582,7 @@ export default function DataImporter({ canEdit = true, currentUser = null }) {
                     <input
                       className="border rounded px-1 py-0.5 w-32"
                       value={r.nhan_vien || ""}
-                      onChange={e => onChangeCell(i, "nhan_vien", e.target.value)}
+                      onChange={e => onChangeCell(rowKey, "nhan_vien", e.target.value)}
                     />
                   )}
                 </td>
@@ -545,7 +593,7 @@ export default function DataImporter({ canEdit = true, currentUser = null }) {
                     <input
                       className="border rounded px-1 py-0.5 w-24"
                       value={r.team || ""}
-                      onChange={e => onChangeCell(i, "team", e.target.value)}
+                      onChange={e => onChangeCell(rowKey, "team", e.target.value)}
                     />
                   )}
                 </td>
@@ -562,13 +610,13 @@ export default function DataImporter({ canEdit = true, currentUser = null }) {
                       onChange={e => {
                         const input = e.target.value;
                         if (input === "") {
-                          applyEdit(i, () => ({ licenses: "", so_luong_gp: "" }));
+                          applyEdit(rowKey, () => ({ licenses: "", so_luong_gp: "" }));
                           return;
                         }
                         const parsed = Number(input);
                         if (!Number.isFinite(parsed)) return;
                         const normalized = Math.max(0, Math.round(parsed));
-                        applyEdit(i, () => ({ licenses: normalized, so_luong_gp: normalized }));
+                        applyEdit(rowKey, () => ({ licenses: normalized, so_luong_gp: normalized }));
                       }}
                     />
                   )}
@@ -592,7 +640,8 @@ export default function DataImporter({ canEdit = true, currentUser = null }) {
                   </td>
                 )}
               </tr>
-            ))}
+            );
+          })}
             {pageRows.length === 0 && (
               <tr>
                 <td
