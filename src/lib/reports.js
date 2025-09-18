@@ -511,8 +511,82 @@ export function buildReportData(rowsInput, { roster, rules, from, to } = {}) {
   };
 }
 
+export function aggregateByCompany(rows, options = {}) {
+  const {
+    includeStaff = false,
+    includeTeam = false,
+  } = options;
+
+  if (!Array.isArray(rows) || rows.length === 0) {
+    return [];
+  }
+
+  const map = new Map();
+
+  for (const row of rows) {
+    if (!row) continue;
+    const mst = normalizeStr(row.mst) || "";
+    const company = normalizeStr(row.cong_ty) || "";
+    const staffName = includeStaff ? normalizeStr(row.nhan_vien) || "Chưa gán" : "";
+    const teamName = includeTeam ? normalizeStr(row.team) || "Chưa gán tổ đội" : "";
+
+    const keyParts = [mst, company];
+    if (includeTeam) keyParts.push(teamName);
+    if (includeStaff) keyParts.push(staffName);
+    const key = keyParts.join("|#|");
+
+    if (!map.has(key)) {
+      map.set(key, {
+        mst: mst || row.mst || "",
+        cong_ty: company || row.cong_ty || "",
+        staff: includeStaff ? (row.nhan_vien || "Chưa gán") : undefined,
+        team: includeTeam ? (row.team || "Chưa gán tổ đội") : undefined,
+        decls: 0,
+        items: 0,
+        licenses: 0,
+        kpi: 0,
+        loai_hinh: new Set(),
+        modes: new Set(),
+      });
+    }
+
+    const entry = map.get(key);
+    entry.decls += 1;
+    entry.items += Number(row.num_items || 0);
+    entry.licenses += Number(row.licenses || 0);
+    entry.kpi += Number(row.kpi || 0);
+
+    if (row.loai_hinh) {
+      entry.loai_hinh.add(row.loai_hinh);
+    }
+    if (row.isExport === true) {
+      entry.modes.add("Xuất");
+    } else if (row.isExport === false) {
+      entry.modes.add("Nhập");
+    }
+  }
+
+  return Array.from(map.values()).map((entry) => ({
+    mst: entry.mst,
+    cong_ty: entry.cong_ty,
+    staff: entry.staff,
+    team: entry.team,
+    decls: entry.decls,
+    items: entry.items,
+    licenses: entry.licenses,
+    kpi: Math.round(entry.kpi * 10) / 10,
+    loai_hinh: Array.from(entry.loai_hinh).join(", ") || "—",
+    modes: Array.from(entry.modes).join(", ") || "—",
+  })).sort((a, b) => {
+    if (b.kpi !== a.kpi) return b.kpi - a.kpi;
+    if (b.decls !== a.decls) return b.decls - a.decls;
+    return (a.cong_ty || "").localeCompare(b.cong_ty || "", "vi", { sensitivity: "base" });
+  });
+}
+
 export default {
   QUICK_RANGE_OPTIONS,
   computeQuickRange,
   buildReportData,
+  aggregateByCompany,
 };
