@@ -6,8 +6,10 @@ import {
   saveDeclRows,
   sortDeclRows,
   pushImportLog,
+  getTeamRoster,
+  mapMemberNamesToTeams,
 } from "@/lib/store.js";
-import { mapRow } from "@/lib/importer.js";
+import { mapRow, detectDateOrder } from "@/lib/importer.js";
 import { loadRules, computeKPI } from "@/lib/rules.js";
 
 const DEFAULT_PAGE_SIZE = 20;
@@ -90,6 +92,10 @@ export default function DataImporter({ canEdit = true, currentUser = null }) {
       const excludeCodes = Array.isArray(loadedRules?.license?.excludeCodes)
         ? loadedRules.license.excludeCodes
         : [];
+      const dateOrder = detectDateOrder(rows);
+      const preferMonthFirst = dateOrder === "mdy";
+      const roster = getTeamRoster();
+      const memberMap = mapMemberNamesToTeams(roster);
 
       const mapped = rows
         .map(r =>
@@ -97,6 +103,8 @@ export default function DataImporter({ canEdit = true, currentUser = null }) {
             autoAssignStaff,
             rules: loadedRules,
             licenseExcludes: excludeCodes,
+            preferMonthFirst,
+            memberMap,
           })
         )
         .map(ensureLicenseFields)

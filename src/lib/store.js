@@ -38,15 +38,64 @@ export function normalizeMST(mst) {
 }
 
 // dd/mm/yyyy -> yyyy-mm-dd ; nếu đã yyyy-mm-dd thì giữ nguyên
-export function toISODate(d) {
+export function toISODate(d, options = {}) {
+  const { preferMonthFirst = false } = options;
   const s = normalizeStr(d);
   if (!s) return "";
-  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
-  const m = s.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})$/);
-  if (!m) return "";
-  let [_, dd, mm, yyyy] = m;
-  if (yyyy.length === 2) yyyy = "20" + yyyy;
-  return `${yyyy.padStart(4,"0")}-${mm.padStart(2,"0")}-${dd.padStart(2,"0")}`;
+
+  const pad = (value) => String(value).padStart(2, "0");
+  const normalizeYear = (value) => {
+    const num = Number.parseInt(value, 10);
+    if (!Number.isFinite(num)) return "";
+    if (value.length === 2) {
+      return String(num >= 70 ? 1900 + num : 2000 + num);
+    }
+    return String(num).padStart(4, "0");
+  };
+
+  const tryFromParts = ({ year, month, day }) => {
+    if (!year || !month || !day) return "";
+    const y = normalizeYear(year);
+    const m = Number.parseInt(month, 10);
+    const dNum = Number.parseInt(day, 10);
+    if (!y || !Number.isFinite(m) || !Number.isFinite(dNum)) return "";
+    if (m < 1 || m > 12) return "";
+    if (dNum < 1 || dNum > 31) return "";
+    return `${y}-${pad(m)}-${pad(dNum)}`;
+  };
+
+  const isoLike = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:[ T].*)?$/);
+  if (isoLike) {
+    let [, y, m, dNum] = isoLike;
+    const monthVal = Number.parseInt(m, 10);
+    const dayVal = Number.parseInt(dNum, 10);
+    if (monthVal > 12 && dayVal >= 1 && dayVal <= 12) {
+      return tryFromParts({ year: y, month: dNum, day: m });
+    }
+    return tryFromParts({ year: y, month: m, day: dNum });
+  }
+
+  const slashLike = s.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{2,4})(?:[ T].*)?$/);
+  if (!slashLike) return "";
+
+  const [, first, second, year] = slashLike;
+  const a = Number.parseInt(first, 10);
+  const b = Number.parseInt(second, 10);
+  const pickMonthDay = () => {
+    if (a > 12 && b <= 12) {
+      return { month: second, day: first };
+    }
+    if (b > 12 && a <= 12) {
+      return { month: first, day: second };
+    }
+    if (preferMonthFirst) {
+      return { month: first, day: second };
+    }
+    return { month: second, day: first };
+  };
+
+  const { month, day } = pickMonthDay();
+  return tryFromParts({ year, month, day });
 }
 
 // ===== Quy tắc xác định Nhập/Xuất =====

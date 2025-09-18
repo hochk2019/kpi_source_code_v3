@@ -1,5 +1,6 @@
 import { beforeEach, describe, it, expect } from 'vitest';
-import { mapRow } from '@/lib/importer.js';
+import { mapRow, detectDateOrder } from '@/lib/importer.js';
+import { normalizeName } from '@/lib/store.js';
 import { MST_KEY } from '@/lib/store.js';
 
 beforeEach(() => {
@@ -23,6 +24,7 @@ describe('mapRow', () => {
     expect(mapped.so_tk).toBe('1234567890123');
     expect(mapped.nhanh).toBe('01');
     expect(mapped.date).toBe('2024-09-15');
+    expect(mapped.raw_date).toBe('15/09/2024');
     expect(mapped.mst).toBe('0101234567');
     expect(mapped.cong_ty).toBe('ABC Corp');
     expect(mapped.customer).toBe('ABC Corp');
@@ -78,5 +80,68 @@ describe('mapRow', () => {
 
     expect(mapped.nhan_vien).toBe('Hạnh');
     expect(mapped.team).toBe('Team 1');
+  });
+
+  it('supports month-first files when requested', () => {
+    const mapped = mapRow(
+      {
+        'Số tờ khai': 'TK02',
+        'Ngày': '08/01/2024',
+        'MST': '0999999999',
+      },
+      { autoAssignStaff: false, preferMonthFirst: true }
+    );
+
+    expect(mapped.date).toBe('2024-08-01');
+    expect(mapped.raw_date).toBe('08/01/2024');
+  });
+
+  it('prefers roster team info over MST team when member map is provided', () => {
+    localStorage.setItem(MST_KEY, JSON.stringify([
+      {
+        mst: '0101234567',
+        person_import: 'Hạnh',
+        person_export: '',
+        team: 'Team 9',
+        effective_from: '2024-01-01',
+      },
+    ]));
+
+    const memberMap = new Map([
+      [normalizeName('Hạnh'), { name: 'Hạnh', team: 'Team 1' }],
+    ]);
+
+    const mapped = mapRow(
+      {
+        'Số tờ khai': 'TK03',
+        'Ngày': '01/09/2024',
+        'MST': '0101234567',
+        'Loại hình': 'A11',
+      },
+      { autoAssignStaff: true, memberMap }
+    );
+
+    expect(mapped.nhan_vien).toBe('Hạnh');
+    expect(mapped.team).toBe('Team 1');
+  });
+});
+
+describe('detectDateOrder', () => {
+  it('detects month-first spreadsheets when days exceed 12', () => {
+    const rows = [
+      { 'Ngày': '08/01/2024' },
+      { 'Ngày': '08/15/2024' },
+    ];
+
+    expect(detectDateOrder(rows)).toBe('mdy');
+  });
+
+  it('defaults to day-first when ambiguous', () => {
+    const rows = [
+      { 'Ngày': '15/09/2024' },
+      { 'Ngày': '05/07/2024' },
+    ];
+
+    expect(detectDateOrder(rows)).toBe('dmy');
   });
 });

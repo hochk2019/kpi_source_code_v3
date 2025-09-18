@@ -163,17 +163,49 @@ function finalizeStats(stats) {
   };
 }
 
-function resolveDate(value) {
+function normalizeDateCandidate(value, preferMonthFirst = false) {
   if (!value) return "";
-  if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value.trim())) {
-    return value.trim();
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return formatISO(value);
   }
-  return toISODate(value);
+
+  const str = normalizeStr(value);
+  if (!str) return "";
+
+  const strictIso = str.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (strictIso) {
+    const month = Number.parseInt(strictIso[2], 10);
+    const day = Number.parseInt(strictIso[3], 10);
+    if (month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+      return `${strictIso[1]}-${strictIso[2]}-${strictIso[3]}`;
+    }
+    if (month > 12 && day >= 1 && day <= 12) {
+      return `${strictIso[1]}-${strictIso[3]}-${strictIso[2]}`;
+    }
+  }
+
+  return toISODate(str, { preferMonthFirst });
 }
 
-function sanitizeRow(row) {
+function resolveDate(values, preferMonthFirstHint = false) {
+  const list = Array.isArray(values) ? values : [values];
+  const candidates = list.filter((v) => v !== undefined && v !== null);
+  const orders = preferMonthFirstHint ? [true, false] : [false, true];
+  for (const prefer of orders) {
+    for (const candidate of candidates) {
+      const normalized = normalizeDateCandidate(candidate, prefer);
+      if (normalized) return normalized;
+    }
+  }
+  return "";
+}
+
+function sanitizeRow(row, preferMonthFirst = false) {
   if (!row || typeof row !== "object") return null;
-  const date = resolveDate(row.date || row.ngay || row.ngay_dang_ky || row.date_created);
+  const date = resolveDate(
+    [row.raw_date, row.rawDate, row.date, row.ngay, row.ngay_dang_ky, row.date_created],
+    preferMonthFirst
+  );
   const so_tk = normalizeStr(row.so_tk || row.soToKhai || row.so_tk_tm || "");
   if (!date || !so_tk) return null;
 
@@ -208,12 +240,64 @@ function sanitizeRow(row) {
   };
 }
 
+function detectPreferredMonthFirst(rows) {
+  let monthFirst = 0;
+  let dayFirst = 0;
+
+  const consider = (value) => {
+    const str = normalizeStr(value);
+    if (!str) return;
+
+    const iso = str.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:[ T].*)?$/);
+    if (iso) {
+      const month = Number.parseInt(iso[2], 10);
+      const day = Number.parseInt(iso[3], 10);
+      if (month > 12 && day >= 1 && day <= 12) {
+        monthFirst += 1;
+        return;
+      }
+      if (day > 12 && month >= 1 && month <= 12) {
+        dayFirst += 1;
+        return;
+      }
+      return;
+    }
+
+    const slash = str.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{2,4})(?:[ T].*)?$/);
+    if (slash) {
+      const first = Number.parseInt(slash[1], 10);
+      const second = Number.parseInt(slash[2], 10);
+      if (first > 12 && second <= 12) {
+        dayFirst += 1;
+        return;
+      }
+      if (second > 12 && first <= 12) {
+        monthFirst += 1;
+      }
+    }
+  };
+
+  for (const row of Array.isArray(rows) ? rows : []) {
+    if (!row || typeof row !== "object") continue;
+    consider(row.raw_date);
+    consider(row.rawDate);
+    consider(row.date);
+    consider(row.ngay);
+    consider(row.ngay_dang_ky);
+    consider(row.date_created);
+  }
+
+  return monthFirst > dayFirst;
+}
+
 export function buildReportData(rowsInput, { roster, rules, from, to } = {}) {
   const rows = Array.isArray(rowsInput) ? rowsInput : [];
   const effectiveRules = rules && rules.groups ? rules : DEFAULT_RULES;
 
   const sanitizedRoster = roster && roster.teams ? roster : { version: 1, teams: [] };
   const memberTeamMap = mapMemberNamesToTeams(sanitizedRoster);
+
+  const preferMonthFirst = detectPreferredMonthFirst(rows);
 
   let start = from ? from.trim() : "";
   let end = to ? to.trim() : "";
@@ -277,7 +361,7 @@ export function buildReportData(rowsInput, { roster, rules, from, to } = {}) {
   const preparedRows = [];
 
   for (const raw of rows) {
-    const sanitized = sanitizeRow(raw);
+    const sanitized = sanitizeRow(raw, preferMonthFirst);
     if (!sanitized) continue;
 
     const { date } = sanitized;
@@ -287,9 +371,10 @@ export function buildReportData(rowsInput, { roster, rules, from, to } = {}) {
     const staffKey = normalizeName(sanitized.nhan_vien);
     const staffInfo = staffKey ? memberTeamMap.get(staffKey) : null;
     const staffName = staffInfo?.name || sanitized.nhan_vien || "Chưa gán";
+    const rosterTeam = staffInfo?.team;
     let teamName = sanitized.team;
-    if (!teamName && staffInfo?.team) {
-      teamName = staffInfo.team;
+    if (rosterTeam && (!teamName || normalizeName(teamName) !== normalizeName(rosterTeam))) {
+      teamName = rosterTeam;
     }
     const teamEntry = ensureTeam(teamName);
 

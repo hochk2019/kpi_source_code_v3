@@ -53,7 +53,7 @@ describe('buildReportData', () => {
         num_items: 18,
         licenses: 2,
         nhan_vien: 'Tuấn',
-        team: '',
+        team: 'Team 1',
         mst: '0201234567',
         cong_ty: 'Công ty B',
       },
@@ -102,5 +102,45 @@ describe('buildReportData', () => {
     expect(team2).toBeTruthy();
     expect(team2.stats.decls).toBe(1);
     expect(team2.members.some((m) => m.name === 'Tuấn')).toBe(true);
+  });
+
+  it('sử dụng raw_date để sửa các ngày dạng month-first', () => {
+    const rows = [
+      {
+        date: '2024-01-08',
+        raw_date: '08/01/2024',
+        so_tk: '10234567890',
+        loai_hinh: 'E11',
+        num_items: 10,
+        licenses: 1,
+        nhan_vien: 'Phương',
+        team: 'Team 1',
+        mst: '0101234567',
+        cong_ty: 'Công ty A',
+      },
+      {
+        date: '2024-13-08',
+        raw_date: '08/13/2024',
+        so_tk: '20234567890',
+        loai_hinh: 'B11',
+        num_items: 12,
+        licenses: 0,
+        nhan_vien: 'Tuấn',
+        team: 'Team 2',
+        mst: '0201234567',
+        cong_ty: 'Công ty B',
+      },
+    ];
+
+    const report = buildReportData(rows, {
+      roster: sampleRoster,
+      rules: DEFAULT_RULES,
+      from: '2024-08-01',
+      to: '2024-08-31',
+    });
+
+    expect(report.summary.decls).toBe(2);
+    expect(report.rows.some((row) => row.date === '2024-08-01')).toBe(true);
+    expect(report.rows.some((row) => row.date === '2024-08-13')).toBe(true);
   });
 });

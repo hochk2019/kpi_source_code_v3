@@ -10,9 +10,25 @@ import {
   mapMemberNamesToTeams,
   applyTeamRosterToMST,
   normalizeName,
+  toISODate,
 } from '@/lib/store.js';
 beforeEach(() => {
   localStorage.clear();
+});
+
+describe('toISODate', () => {
+  it('parses day-first strings by default', () => {
+    expect(toISODate('15/09/2024')).toBe('2024-09-15');
+  });
+
+  it('supports month-first parsing when requested', () => {
+    expect(toISODate('08/01/2024', { preferMonthFirst: true })).toBe('2024-08-01');
+  });
+
+  it('normalises ISO strings with swapped month/day segments', () => {
+    expect(toISODate('2024-31-08')).toBe('2024-08-31');
+    expect(toISODate('2024-08-01T12:00:00')).toBe('2024-08-01');
+  });
 });
 
 describe('saveDeclRows', () => {
