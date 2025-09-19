@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import * as XLSX from "xlsx";
 import {
   getTeamRoster,
   setTeamRoster,
@@ -193,6 +194,87 @@ function TeamManager({ canEdit = true, currentUser = null }) {
     }
     return counts;
   }, [mstRows, resolveTeamForRow]);
+
+  const handleExportExcel = useCallback(() => {
+    const workbook = XLSX.utils.book_new();
+    const teams = Array.isArray(roster?.teams) ? roster.teams : [];
+
+    const memberRows = [];
+    for (const team of teams) {
+      const teamName = normalizeStr(team?.name) || "";
+      const members = Array.isArray(team?.members) ? team.members : [];
+      if (members.length) {
+        for (const member of members) {
+          memberRows.push({
+            "Tổ đội": teamName,
+            "Thành viên": member?.name ? normalizeStr(member.name) : "",
+          });
+        }
+      } else {
+        memberRows.push({ "Tổ đội": teamName, "Thành viên": "" });
+      }
+    }
+
+    if (!memberRows.length) {
+      memberRows.push({ "Tổ đội": "", "Thành viên": "" });
+    }
+
+    const memberSheet = XLSX.utils.json_to_sheet(memberRows);
+    XLSX.utils.book_append_sheet(workbook, memberSheet, "Thanh_vien");
+
+    const companyRows = [];
+    for (const team of teams) {
+      const teamName = normalizeStr(team?.name) || "";
+      const teamKey = normalizeName(teamName);
+      const rowsForTeam = mstRows
+        .filter((row) => normalizeName(resolveTeamForRow(row)) === teamKey)
+        .map((row) => ({
+          "Tổ đội": teamName,
+          MST: row?.mst ? normalizeStr(row.mst) : "",
+          "Công ty": row?.company ? normalizeStr(row.company) : "",
+          "Người phụ trách Nhập": row?.person_import ? normalizeStr(row.person_import) : "",
+          "Người phụ trách Xuất": row?.person_export ? normalizeStr(row.person_export) : "",
+          "Áp dụng từ ngày": row?.effective_from ? normalizeStr(row.effective_from) : "",
+        }))
+        .sort((a, b) => {
+          const cmpCompany = a["Công ty"].localeCompare(b["Công ty"], "vi", {
+            sensitivity: "base",
+          });
+          if (cmpCompany !== 0) return cmpCompany;
+          return a.MST.localeCompare(b.MST);
+        });
+
+      if (!rowsForTeam.length) {
+        rowsForTeam.push({
+          "Tổ đội": teamName,
+          MST: "",
+          "Công ty": "",
+          "Người phụ trách Nhập": "",
+          "Người phụ trách Xuất": "",
+          "Áp dụng từ ngày": "",
+        });
+      }
+
+      companyRows.push(...rowsForTeam);
+    }
+
+    if (!companyRows.length) {
+      companyRows.push({
+        "Tổ đội": "",
+        MST: "",
+        "Công ty": "",
+        "Người phụ trách Nhập": "",
+        "Người phụ trách Xuất": "",
+        "Áp dụng từ ngày": "",
+      });
+    }
+
+    const companySheet = XLSX.utils.json_to_sheet(companyRows);
+    XLSX.utils.book_append_sheet(workbook, companySheet, "Cong_ty");
+
+    const stamp = new Date().toISOString().slice(0, 10);
+    XLSX.writeFile(workbook, `to-doi_${stamp}.xlsx`);
+  }, [roster, mstRows, resolveTeamForRow]);
 
   const handleRefreshMST = () => {
     setMstRows(getMSTMap());
@@ -427,7 +509,14 @@ function TeamManager({ canEdit = true, currentUser = null }) {
             Chế độ chỉ xem — không thể lưu thay đổi
           </span>
         )}
-        <span className="ml-auto text-sm text-gray-500">
+        <button
+          type="button"
+          onClick={handleExportExcel}
+          className="ml-auto px-3 py-1 rounded border bg-white hover:bg-gray-50"
+        >
+          Export Excel
+        </button>
+        <span className="text-sm text-gray-500 ml-2">
           Tổng cộng {roster.teams.length} tổ đội — {totalMembers} thành viên
         </span>
       </div>

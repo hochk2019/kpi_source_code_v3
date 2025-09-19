@@ -3,6 +3,10 @@ import {
   getDeclRows,
   getTeamRoster,
   sortDeclRows,
+  getMSTMap,
+  normalizeName,
+  normalizeStr,
+  mapMemberNamesToTeams,
 } from "@/lib/store.js";
 import { loadRules } from "@/lib/rules.js";
 import {
@@ -538,11 +542,13 @@ export default function ReportViewer({ canExport = true }) {
 
   const [rules, setRulesState] = useState(() => loadRules());
   const [roster, setRoster] = useState(() => getTeamRoster());
+  const [mstRows, setMstRows] = useState(() => getMSTMap());
   const [declarations, setDeclarations] = useState(() => sortDeclRows(getDeclRows()));
 
   useEffect(() => {
     setRulesState(loadRules());
     setRoster(getTeamRoster());
+    setMstRows(getMSTMap());
     setDeclarations(sortDeclRows(getDeclRows()));
   }, [version]);
 
@@ -550,6 +556,64 @@ export default function ReportViewer({ canExport = true }) {
     () => buildReportData(declarations, { roster, rules, from, to }),
     [declarations, roster, rules, from, to]
   );
+
+  const managedCompanyCount = useMemo(() => {
+    const teams = Array.isArray(roster?.teams) ? roster.teams : [];
+    if (!teams.length || !Array.isArray(mstRows) || !mstRows.length) {
+      return 0;
+    }
+
+    const teamKeys = new Set();
+    for (const team of teams) {
+      const teamName = normalizeStr(team?.name);
+      const key = normalizeName(teamName);
+      if (key) {
+        teamKeys.add(key);
+      }
+    }
+
+    if (!teamKeys.size) {
+      return 0;
+    }
+
+    const memberMap = mapMemberNamesToTeams(roster);
+    const seen = new Set();
+
+    for (const row of mstRows) {
+      if (!row) continue;
+
+      let teamKey = normalizeName(normalizeStr(row.team));
+      if (!teamKey) {
+        const importKey = normalizeName(row.person_import);
+        if (memberMap.has(importKey)) {
+          teamKey = normalizeName(memberMap.get(importKey)?.team ?? "");
+        }
+      }
+      if (!teamKey) {
+        const exportKey = normalizeName(row.person_export);
+        if (memberMap.has(exportKey)) {
+          teamKey = normalizeName(memberMap.get(exportKey)?.team ?? "");
+        }
+      }
+
+      if (!teamKey || !teamKeys.has(teamKey)) {
+        continue;
+      }
+
+      const mst = normalizeStr(row.mst);
+      if (mst) {
+        seen.add(mst);
+        continue;
+      }
+
+      const company = normalizeStr(row.company);
+      if (company) {
+        seen.add(`${teamKey}|${company}`);
+      }
+    }
+
+    return seen.size;
+  }, [mstRows, roster]);
 
   useEffect(() => {
     if (scope === "staff" && selectedStaff !== "all") {
@@ -578,6 +642,13 @@ export default function ReportViewer({ canExport = true }) {
   }, [selectedTeam, scope]);
 
   const summary = report.summary;
+  const summaryCompanyCardValue = managedCompanyCount || summary.companyCount;
+  const teamCountForSubtitle = Array.isArray(roster?.teams)
+    ? roster.teams.length
+    : 0;
+  const companyCardSubtitle = teamCountForSubtitle
+    ? `Doanh nghiệp do ${teamCountForSubtitle} tổ đội quản lý`
+    : "Doanh nghiệp duy nhất trong giai đoạn";
   const ruleTitle = report.rules?.name || "Chưa đặt tên";
   const ruleApply = report.rules?.applyFrom
     ? `Áp dụng từ ${report.rules.applyFrom}`
@@ -1035,8 +1106,8 @@ export default function ReportViewer({ canExport = true }) {
         />
         <SummaryCard
           title="Tổng số công ty"
-          value={formatInt(summary.companyCount)}
-          subtitle="Doanh nghiệp duy nhất trong giai đoạn"
+          value={formatInt(summaryCompanyCardValue)}
+          subtitle={companyCardSubtitle}
         />
         <SummaryCard
           title="Số giấy phép hợp lệ"

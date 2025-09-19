@@ -317,7 +317,6 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
               <th className="p-2 text-left">Công ty</th>
               <th className="p-2 text-left w-40">Người phụ trách Nhập</th>
               <th className="p-2 text-left w-40">Người phụ trách Xuất</th>
-              <th className="p-2 text-left w-28">Tổ đội</th>
               <th className="p-2 text-left w-40">Áp dụng từ ngày</th>
               <th className="p-2 w-16">Xóa</th>
             </tr>
@@ -325,7 +324,7 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
           <tbody>
             {pageRows.length === 0 ? (
               <tr>
-                <td className="p-3 text-center text-gray-500" colSpan={7}>
+                <td className="p-3 text-center text-gray-500" colSpan={6}>
                   Chưa có dữ liệu
                 </td>
               </tr>
@@ -380,17 +379,6 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
                         onChange={(e) =>
                           updateRow(r.mst, { person_export: e.target.value })
                         }
-                        className="border rounded px-2 py-1 w-full"
-                      />
-                    )}
-                  </td>
-                  <td className="p-2">
-                    {isReadOnly ? (
-                      <span>{r.team || ""}</span>
-                    ) : (
-                      <input
-                        value={r.team || ""}
-                        onChange={(e) => updateRow(r.mst, { team: e.target.value })}
                         className="border rounded px-2 py-1 w-full"
                       />
                     )}
