@@ -1,5 +1,7 @@
 // src/lib/store.js
 
+import { getItem, setItem } from './storageClient.js';
+
 // ===== Keys in localStorage =====
 export const DECL_KEY  = "decl_rows_v1";   // dữ liệu tờ khai
 export const MST_KEY   = "mst_rows_v2";    // gán MST -> nhân viên/team/effective_from
@@ -129,7 +131,7 @@ export function isExportDecl(soTk, loaiHinh) {
 
 // ===== MST map (gán nhân viên theo ngày hiệu lực) =====
 export function getMSTRowsRaw() {
-  return safeParse(localStorage.getItem(MST_KEY), []);
+  return safeParse(getItem(MST_KEY), []);
 }
 
 function sanitizeMSTRow(row) {
@@ -170,7 +172,7 @@ export function upsertMSTRows(rows, { actor = "system", detail = "" } = {}) {
     if (byMST !== 0) return byMST;
     return (a.effective_from || "").localeCompare(b.effective_from || "");
   });
-  localStorage.setItem(MST_KEY, JSON.stringify(sanitized));
+  setItem(MST_KEY, JSON.stringify(sanitized));
   pushAuditLog({
     actor,
     action: "mst.save",
@@ -201,7 +203,7 @@ export function getMSTFor(mst, isoDate) {
 
 // ===== DECL rows (tờ khai) =====
 export function getDeclRows() {
-  return safeParse(localStorage.getItem(DECL_KEY), []);
+  return safeParse(getItem(DECL_KEY), []);
 }
 
 export function sortDeclRows(rows) {
@@ -390,10 +392,10 @@ function sanitizeRoster(data) {
 }
 
 export function getTeamRoster() {
-  const raw = safeParse(localStorage.getItem(TEAM_KEY), null);
+  const raw = safeParse(getItem(TEAM_KEY), null);
   const sanitized = sanitizeRoster(raw);
   if (!raw || !raw.teams) {
-    localStorage.setItem(TEAM_KEY, JSON.stringify(sanitized));
+    setItem(TEAM_KEY, JSON.stringify(sanitized));
   }
   return sanitized;
 }
@@ -408,7 +410,7 @@ export function setTeamRoster(next, { actor = "system", detail = "" } = {}) {
       ? { version: 1, teams: normalizedInput }
       : normalizedInput
   );
-  localStorage.setItem(TEAM_KEY, JSON.stringify(sanitized));
+  setItem(TEAM_KEY, JSON.stringify(sanitized));
   pushAuditLog({
     actor,
     action: "team.save",
@@ -531,7 +533,7 @@ export function applyTeamRosterToMST(rosterLike, rows, options = {}) {
 export function saveDeclRows(newRows, { overwrite = false, actor = "system", detail = "" } = {}) {
   const cleaned = Array.isArray(newRows) ? newRows : [];
   if (overwrite) {
-    localStorage.setItem(DECL_KEY, JSON.stringify(cleaned));
+    setItem(DECL_KEY, JSON.stringify(cleaned));
     pushAuditLog({
       actor,
       action: "decl.overwrite",
@@ -547,7 +549,7 @@ export function saveDeclRows(newRows, { overwrite = false, actor = "system", det
   for (const r of cleaned) map.set(keyOf(r), r);
 
   const merged = Array.from(map.values());
-  localStorage.setItem(DECL_KEY, JSON.stringify(merged));
+  setItem(DECL_KEY, JSON.stringify(merged));
   pushAuditLog({
     actor,
     action: "decl.merge",
@@ -567,21 +569,21 @@ export function setData(rows, opts) { // rules.js/RulesEditor.jsx có thể gọ
 // Nhật ký import
 export function pushImportLog(msg) {
   const LOG_KEY = "import_logs_v1";
-  const a = safeParse(localStorage.getItem(LOG_KEY), []);
+  const a = safeParse(getItem(LOG_KEY), []);
   a.unshift({ ts: new Date().toISOString(), msg });
-  localStorage.setItem(LOG_KEY, JSON.stringify(a.slice(0,50)));
+  setItem(LOG_KEY, JSON.stringify(a.slice(0,50)));
 }
 
 // ===== K_RULES (để RulesEditor không lỗi khi chưa có dữ liệu) =====
-export const K_RULES = safeParse(localStorage.getItem(RULES_KEY), {
+export const K_RULES = safeParse(getItem(RULES_KEY), {
   version: 1,
   points: { base: 1 },
 });
 export function getRules() {
-  return safeParse(localStorage.getItem(RULES_KEY), K_RULES);
+  return safeParse(getItem(RULES_KEY), K_RULES);
 }
 export function setRules(v) {
-  localStorage.setItem(RULES_KEY, JSON.stringify(v));
+  setItem(RULES_KEY, JSON.stringify(v));
 }
 
 // ===== Nhật ký hệ thống =====
@@ -594,15 +596,15 @@ export function pushAuditLog({ actor = "system", action = "unknown", detail = ""
     detail,
     meta: meta == null ? null : shallowClone(meta),
   };
-  const logs = safeParse(localStorage.getItem(AUDIT_KEY), []);
+  const logs = safeParse(getItem(AUDIT_KEY), []);
   logs.unshift(entry);
   const limited = logs.slice(0, 200);
-  localStorage.setItem(AUDIT_KEY, JSON.stringify(limited));
+  setItem(AUDIT_KEY, JSON.stringify(limited));
   return entry;
 }
 
 export function getAuditLogs(limit = 100) {
-  const logs = safeParse(localStorage.getItem(AUDIT_KEY), []);
+  const logs = safeParse(getItem(AUDIT_KEY), []);
   if (!Number.isFinite(limit) || limit <= 0) return logs;
   return logs.slice(0, limit);
 }
@@ -615,7 +617,7 @@ export function clearAuditLogs({ actor = "system", note = "Xóa toàn bộ nhậ
     detail: note,
     meta: null,
   };
-  localStorage.setItem(AUDIT_KEY, JSON.stringify([entry]));
+  setItem(AUDIT_KEY, JSON.stringify([entry]));
   return entry;
 }
 

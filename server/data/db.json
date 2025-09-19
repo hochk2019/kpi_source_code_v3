@@ -1,0 +1,9 @@
+{
+  "decl_rows_v1": "[]",
+  "mst_rows_v2": "[]",
+  "kpi_rules_v2": "{\"version\":1,\"points\":{\"base\":1}}",
+  "team_roster_v1": "{\"version\":1,\"teams\":[{\"id\":\"team-1\",\"name\":\"Team 1\",\"members\":[{\"id\":\"team-1-phuong\",\"name\":\"Phương\"},{\"id\":\"team-1-hanh\",\"name\":\"Hạnh\"},{\"id\":\"team-1-bao\",\"name\":\"Bảo\"},{\"id\":\"team-1-ha-be\",\"name\":\"Hà Bé\"},{\"id\":\"team-1-huong\",\"name\":\"Hương\"}]},{\"id\":\"team-2\",\"name\":\"Team 2\",\"members\":[{\"id\":\"team-2-tuan\",\"name\":\"Tuấn\"},{\"id\":\"team-2-hoa\",\"name\":\"Hòa\"},{\"id\":\"team-2-thu\",\"name\":\"Thu\"},{\"id\":\"team-2-hang\",\"name\":\"Hằng\"},{\"id\":\"team-2-huyen\",\"name\":\"Huyền\"}]},{\"id\":\"team-3\",\"name\":\"Team 3\",\"members\":[{\"id\":\"team-3-hoc\",\"name\":\"Học\"},{\"id\":\"team-3-thanh\",\"name\":\"Thanh\"},{\"id\":\"team-3-huy\",\"name\":\"Huy\"},{\"id\":\"team-3-linh\",\"name\":\"Linh\"},{\"id\":\"team-3-thao\",\"name\":\"Thảo\"},{\"id\":\"team-3-hung\",\"name\":\"Hưng\"}]}]}",
+  "audit_logs_v1": "[]",
+  "import_logs_v1": "[]",
+  "kpi_users_v1": "[{\"username\":\"admin\",\"password\":\"admin123\",\"role\":\"admin\",\"name\":\"Quản trị viên\",\"permissions\":{\"importEdit\":true,\"mstEdit\":true,\"rulesEdit\":true,\"teamsEdit\":true,\"reportsExport\":true,\"accountManage\":true}},{\"username\":\"nhanvien\",\"password\":\"123456\",\"role\":\"staff\",\"name\":\"Nhân viên\",\"permissions\":{\"importEdit\":true,\"mstEdit\":false,\"rulesEdit\":false,\"teamsEdit\":false,\"reportsExport\":true,\"accountManage\":false}}]"
+}

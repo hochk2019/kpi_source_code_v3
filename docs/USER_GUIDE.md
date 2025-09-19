@@ -5,6 +5,7 @@ Tài liệu này mô tả cách sử dụng hệ thống KPI ở cả hai chế 
 ## 1. Truy cập và phân quyền tổng quát
 
 - Khi mở ứng dụng tại `http://localhost:5173`, mọi người đều có thể xem dữ liệu đã lưu mà **không cần đăng nhập**. Ở chế độ này chỉ được phép tra cứu và xuất báo cáo, không thể sửa hoặc import dữ liệu.
+- Dữ liệu được lưu tập trung trên máy chủ nội bộ (chạy `pnpm server`). Tất cả máy trong cùng mạng LAN truy cập giao diện (`pnpm dev` hoặc `pnpm start`) sẽ dùng chung nguồn dữ liệu này.
 - Nút **“Đăng nhập quản trị”** ở góc trên bên phải dành cho quản trị viên. Tài khoản mặc định:
   - `admin / admin123` (quản trị viên toàn quyền)
   - `nhanvien / 123456` (tài khoản mẫu quyền hạn hạn chế)

@@ -1,4 +1,5 @@
 import { pushAuditLog } from "@/lib/store.js";
+import { getItem as getStorageItem, setItem as setStorageItem } from "@/lib/storageClient.js";
 
 const SESSION_KEY = "kpi_auth";
 const USERS_KEY = "kpi_users_v1";
@@ -91,16 +92,16 @@ function normalizeUserRecord(record) {
 function persistUsers(users) {
   const normalized = users.map(normalizeUserRecord).filter(Boolean);
   normalized.sort((a, b) => a.username.localeCompare(b.username, "vi", { sensitivity: "base" }));
-  localStorage.setItem(USERS_KEY, JSON.stringify(normalized));
+  setStorageItem(USERS_KEY, JSON.stringify(normalized));
   return normalized;
 }
 
 function loadUsers() {
-  const raw = safeParse(localStorage.getItem(USERS_KEY), null);
+  const raw = safeParse(getStorageItem(USERS_KEY), null);
   let normalized = Array.isArray(raw) ? raw.map(normalizeUserRecord).filter(Boolean) : [];
   if (!normalized.length) {
     normalized = RAW_DEFAULT_USERS.map(normalizeUserRecord).filter(Boolean);
-    localStorage.setItem(USERS_KEY, JSON.stringify(normalized));
+    setStorageItem(USERS_KEY, JSON.stringify(normalized));
   }
   normalized.sort((a, b) => a.username.localeCompare(b.username, "vi", { sensitivity: "base" }));
   return normalized;

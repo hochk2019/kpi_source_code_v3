@@ -1,4 +1,5 @@
 import { beforeEach, afterEach, vi } from 'vitest';
+import { clearStorageCache } from '@/lib/storageClient.js';
 
 class LocalStorageMock {
   constructor() {
@@ -39,6 +40,7 @@ Object.defineProperty(globalThis, 'localStorage', {
 beforeEach(() => {
   globalThis.localStorage = new LocalStorageMock();
   globalThis.alert = vi.fn();
+  clearStorageCache();
 });
 
 afterEach(() => {

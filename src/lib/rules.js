@@ -8,6 +8,7 @@
 // --------------------------------------------------
 
 import { getData, setData, RULES_KEY, setRules as persistRules, pushAuditLog } from './store.js';
+import { getItem as getStorageItem, setItem as setStorageItem } from './storageClient.js';
 
 // ====== CẤU HÌNH MẶC ĐỊNH ======
 export const DEFAULT_RULES = {
@@ -63,7 +64,7 @@ const LEGACY_KEY_ACTIVE = 'kpi_rules';
 
 export function loadRules() {
   try {
-    const stored = JSON.parse(localStorage.getItem(RULES_KEY) || 'null');
+    const stored = JSON.parse(getStorageItem(RULES_KEY) || 'null');
     if (stored && stored.groups && stored.license) {
       return stored;
     }
@@ -73,7 +74,7 @@ export function loadRules() {
 
   // Thử migrate từ khoá cũ nếu còn
   try {
-    const legacy = JSON.parse(localStorage.getItem(LEGACY_KEY_ACTIVE) || 'null');
+    const legacy = JSON.parse(getStorageItem(LEGACY_KEY_ACTIVE) || 'null');
     if (legacy && legacy.groups && legacy.license) {
       persistRules(legacy);
       return legacy;
@@ -88,7 +89,7 @@ export function loadRules() {
 }
 
 export function getRulesHistory() {
-  try { return JSON.parse(localStorage.getItem(KEY_HISTORY) || '[]'); }
+  try { return JSON.parse(getStorageItem(KEY_HISTORY) || '[]'); }
   catch (err) {
     console.warn('getRulesHistory: invalid data, reset history', err);
     return [];
@@ -105,13 +106,13 @@ export function saveRules(rules, opts = {}) {
   cloned.updatedAt = new Date().toISOString();
   persistRules(cloned);
   // ghi thêm key cũ để tương thích với bản lưu trước
-  localStorage.setItem(LEGACY_KEY_ACTIVE, JSON.stringify(cloned));
+  setStorageItem(LEGACY_KEY_ACTIVE, JSON.stringify(cloned));
 
   if (opts.appendHistory !== false) {
     const hist = getRulesHistory();
     hist.unshift(cloned);
     while (hist.length > 20) hist.pop();
-    localStorage.setItem(KEY_HISTORY, JSON.stringify(hist));
+    setStorageItem(KEY_HISTORY, JSON.stringify(hist));
   }
 
   // Tính lại KPI nếu có yêu cầu
