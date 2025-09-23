@@ -52,5 +52,7 @@ describe('ReportViewer', () => {
     expect(html).toContain('tờ khai hợp lệ');
     expect(html).toContain('Phương');
     expect(html).toContain('Team 1');
+    expect(html).toContain('Xu hướng KPI 6 kỳ gần nhất');
+    expect(html).toContain('So sánh KPI theo tổ đội');
   });
 });

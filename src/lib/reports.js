@@ -66,6 +66,12 @@ function endOfYear(date) {
   return new Date(date.getFullYear(), 12, 0);
 }
 
+function formatMonthLabel(key) {
+  if (!key || typeof key !== "string" || key.length < 7) return key || "";
+  const [year, month] = key.split("-");
+  return `${month}/${year}`;
+}
+
 export const QUICK_RANGE_OPTIONS = [
   { value: "this_week", label: "Tuần này" },
   { value: "last_week", label: "Tuần trước" },
@@ -364,12 +370,27 @@ export function buildReportData(rowsInput, { roster, rules, from, to } = {}) {
   }
 
   const preparedRows = [];
+  const comparisonRows = [];
 
   for (const raw of rows) {
     const sanitized = sanitizeRow(raw, preferMonthFirst);
     if (!sanitized) continue;
 
     const { date } = sanitized;
+    const baseKpi = Number.isFinite(Number(sanitized.kpi))
+      ? Number(sanitized.kpi)
+      : computeKPI(sanitized, effectiveRules);
+    const kpiValue = Math.round(baseKpi * 10) / 10;
+    const exportFlag = isExportDecl(sanitized.so_tk, sanitized.loai_hinh);
+
+    comparisonRows.push({
+      date,
+      num_items: sanitized.num_items,
+      licenses: sanitized.licenses,
+      kpi: kpiValue,
+      isExport: exportFlag,
+    });
+
     if (start && date < start) continue;
     if (end && date > end) continue;
 
@@ -382,10 +403,6 @@ export function buildReportData(rowsInput, { roster, rules, from, to } = {}) {
       teamName = rosterTeam;
     }
     const teamEntry = ensureTeam(teamName);
-
-    const kpiValue = Number.isFinite(Number(sanitized.kpi))
-      ? Number(sanitized.kpi)
-      : computeKPI(sanitized, effectiveRules);
 
     const companyKey = sanitized.mst || sanitized.cong_ty;
     if (companyKey) {
@@ -402,8 +419,8 @@ export function buildReportData(rowsInput, { roster, rules, from, to } = {}) {
       licenses: sanitized.licenses,
       nhan_vien: staffName,
       team: teamEntry.name,
-      isExport: isExportDecl(sanitized.so_tk, sanitized.loai_hinh),
-      kpi: Math.round(kpiValue * 10) / 10,
+      isExport: exportFlag,
+      kpi: kpiValue,
     };
 
     preparedRows.push(detailRow);
@@ -516,6 +533,92 @@ export function buildReportData(rowsInput, { roster, rules, from, to } = {}) {
 
   const summaryFinal = finalizeStats(summaryStats);
 
+  const timelineByMonth = new Map();
+  const teamTimelineByMonth = new Map();
+
+  const registerTimeline = (row) => {
+    const monthKey = row.date ? row.date.slice(0, 7) : "";
+    if (!monthKey) return;
+    if (!timelineByMonth.has(monthKey)) {
+      timelineByMonth.set(monthKey, { key: monthKey, label: formatMonthLabel(monthKey), stats: createStats() });
+    }
+    accumulate(timelineByMonth.get(monthKey).stats, row);
+
+    if (!teamTimelineByMonth.has(monthKey)) {
+      teamTimelineByMonth.set(monthKey, new Map());
+    }
+    const monthTeamMap = teamTimelineByMonth.get(monthKey);
+    const teamName = row.team || "Chưa gán tổ đội";
+    if (!monthTeamMap.has(teamName)) {
+      monthTeamMap.set(teamName, createStats());
+    }
+    accumulate(monthTeamMap.get(teamName), row);
+  };
+
+  preparedRows.forEach(registerTimeline);
+
+  const sortedTimeline = Array.from(timelineByMonth.values()).sort((a, b) => a.key.localeCompare(b.key));
+  const recentTimeline = sortedTimeline.slice(-6);
+  const trendSeries = recentTimeline.map((entry) => ({
+    period: entry.label,
+    kpi: Math.round(entry.stats.kpi * 10) / 10,
+    decls: entry.stats.decls,
+    items: entry.stats.items,
+    licenses: entry.stats.licenses,
+  }));
+
+  const topTeamNames = teamList.slice(0, 3).map((team) => team.name);
+  const teamTrendSeries = recentTimeline.map((entry) => {
+    const monthTeams = teamTimelineByMonth.get(entry.key) || new Map();
+    const row = { period: entry.label };
+    for (const teamName of topTeamNames) {
+      const stats = monthTeams.get(teamName);
+      row[teamName] = stats ? Math.round(stats.kpi * 10) / 10 : 0;
+    }
+    row.Tổng = Math.round(entry.stats.kpi * 10) / 10;
+    return row;
+  });
+
+  const computeStatsInRange = (fromISO, toISO) => {
+    const fromTs = fromISO ? new Date(fromISO).getTime() : Number.NEGATIVE_INFINITY;
+    const toTs = toISO ? new Date(toISO).getTime() : Number.POSITIVE_INFINITY;
+    const stats = createStats();
+    for (const row of comparisonRows) {
+      const ts = row.date ? new Date(row.date).getTime() : Number.NaN;
+      if (Number.isNaN(ts)) continue;
+      if (ts < fromTs || ts > toTs) continue;
+      accumulate(stats, row);
+    }
+    return finalizeStats(stats);
+  };
+
+  let comparison = null;
+  if (start && end) {
+    const startDate = new Date(start);
+    const endDate = new Date(end);
+    if (!Number.isNaN(startDate) && !Number.isNaN(endDate)) {
+      const rangeMs = endDate.getTime() - startDate.getTime() + 24 * 60 * 60 * 1000;
+      const prevEnd = new Date(startDate.getTime() - 24 * 60 * 60 * 1000);
+      const prevStart = new Date(prevEnd.getTime() - rangeMs + 24 * 60 * 60 * 1000);
+      const prevFromISO = formatISO(prevStart);
+      const prevToISO = formatISO(prevEnd);
+      const currentStats = finalizeStats(summaryStats);
+      const previousStats = computeStatsInRange(prevFromISO, prevToISO);
+      comparison = {
+        current: currentStats,
+        previous: previousStats,
+        delta: {
+          kpi: Math.round((currentStats.kpi - previousStats.kpi) * 10) / 10,
+          kpiPercent:
+            previousStats.kpi > 0
+              ? Math.round(((currentStats.kpi - previousStats.kpi) / previousStats.kpi) * 1000) / 10
+              : null,
+          decls: currentStats.decls - previousStats.decls,
+        },
+      };
+    }
+  }
+
   return {
     rows: sortedRows,
     summary: { ...summaryFinal, companyCount: companyKeys.size },
@@ -531,6 +634,12 @@ export function buildReportData(rowsInput, { roster, rules, from, to } = {}) {
     },
     range: { from: start || "", to: end || "" },
     rules: effectiveRules,
+    trend: {
+      series: trendSeries,
+      teamSeries: teamTrendSeries,
+      comparison,
+      topTeams: topTeamNames,
+    },
   };
 }
 

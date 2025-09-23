@@ -21,6 +21,18 @@ import {
   exportAllTeamReport,
   exportTeamReport,
 } from "@/lib/reportExport.js";
+import {
+  ResponsiveContainer,
+  LineChart,
+  Line,
+  CartesianGrid,
+  XAxis,
+  YAxis,
+  Tooltip,
+  Legend,
+  BarChart,
+  Bar,
+} from "recharts";
 
 function formatInt(value) {
   const num = Number(value || 0);
@@ -208,6 +220,98 @@ function TeamPieWidget({ data }) {
             <li className="text-gray-500">Chưa có dữ liệu KPI cho các tổ đội.</li>
           )}
         </ul>
+      </div>
+    </section>
+  );
+}
+
+function TrendLineChart({ data, comparison }) {
+  if (!data || data.length === 0) {
+    return (
+      <section className="rounded-lg border bg-white p-4 shadow-sm">
+        <h3 className="text-base font-semibold text-gray-900">Xu hướng KPI 6 kỳ gần nhất</h3>
+        <p className="mt-3 text-sm text-gray-500">Chưa có dữ liệu để hiển thị biểu đồ xu hướng.</p>
+      </section>
+    );
+  }
+
+  const deltaKPI = comparison?.delta?.kpi ?? 0;
+  const deltaDecls = comparison?.delta?.decls ?? 0;
+  const deltaPercent = comparison?.delta?.kpiPercent ?? null;
+  const deltaClass = deltaKPI > 0 ? "text-emerald-600" : deltaKPI < 0 ? "text-red-600" : "text-gray-600";
+
+  return (
+    <section className="rounded-lg border bg-white p-4 shadow-sm">
+      <div className="flex items-baseline justify-between gap-2">
+        <h3 className="text-base font-semibold text-gray-900">Xu hướng KPI 6 kỳ gần nhất</h3>
+        {comparison && (
+          <div className="text-xs text-gray-500">
+            So với kỳ liền trước:
+            <span className={`ml-1 font-medium ${deltaClass}`}>
+              {deltaKPI > 0 ? "+" : ""}{deltaKPI.toFixed(1)} điểm KPI
+            </span>
+            {deltaPercent !== null && (
+              <span className={`ml-1 ${deltaClass}`}>
+                ({deltaPercent > 0 ? "+" : ""}{deltaPercent.toFixed(1)}%)
+              </span>
+            )}
+            <span className="ml-2 text-gray-400">• {deltaDecls > 0 ? "+" : ""}{deltaDecls} tờ khai</span>
+          </div>
+        )}
+      </div>
+      <div className="mt-4 h-64 w-full">
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart data={data} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis dataKey="period" />
+            <YAxis yAxisId="left" stroke="#2563eb" />
+            <YAxis yAxisId="right" orientation="right" stroke="#22c55e" />
+            <Tooltip />
+            <Legend />
+            <Line yAxisId="left" type="monotone" dataKey="kpi" name="Điểm KPI" stroke="#2563eb" strokeWidth={2} />
+            <Line yAxisId="right" type="monotone" dataKey="decls" name="Tờ khai" stroke="#22c55e" strokeWidth={2} />
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+    </section>
+  );
+}
+
+function TeamTrendChart({ data, teams }) {
+  const baseTeams = Array.isArray(teams) ? teams.filter(Boolean) : [];
+  const plottedTeams = baseTeams.includes("Tổng") ? baseTeams : [...baseTeams, "Tổng"];
+
+  if (!data || data.length === 0) {
+    return (
+      <section className="rounded-lg border bg-white p-4 shadow-sm">
+        <h3 className="text-base font-semibold text-gray-900">So sánh KPI theo tổ đội</h3>
+        <p className="mt-3 text-sm text-gray-500">Chưa có dữ liệu để hiển thị biểu đồ tổ đội.</p>
+      </section>
+    );
+  }
+
+  return (
+    <section className="rounded-lg border bg-white p-4 shadow-sm">
+      <h3 className="text-base font-semibold text-gray-900">So sánh KPI theo tổ đội (6 kỳ gần nhất)</h3>
+      <div className="mt-4 h-64 w-full">
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart data={data} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis dataKey="period" />
+            <YAxis />
+            <Tooltip />
+            <Legend />
+            {plottedTeams.map((team, idx) => (
+              <Bar
+                key={team}
+                dataKey={team}
+                name={team}
+                fill={chartColors[idx % chartColors.length]}
+                stackId={team === "Tổng" ? "total" : undefined}
+              />
+            ))}
+          </BarChart>
+        </ResponsiveContainer>
       </div>
     </section>
   );
@@ -671,6 +775,12 @@ export default function ReportViewer({ canExport = true }) {
     }));
   }, [report.teams.list]);
 
+  const trend = report.trend || {};
+  const trendSeries = trend.series || [];
+  const teamTrendSeries = trend.teamSeries || [];
+  const trendComparison = trend.comparison || null;
+  const trendTeams = trend.topTeams || [];
+
   const companySummaryAllStaff = useMemo(
     () => aggregateByCompany(report.rows, { includeStaff: true, includeTeam: false }),
     [report.rows]
@@ -1109,11 +1219,16 @@ export default function ReportViewer({ canExport = true }) {
           value={formatInt(summaryCompanyCardValue)}
           subtitle={companyCardSubtitle}
         />
-        <SummaryCard
-          title="Số giấy phép hợp lệ"
-          value={formatInt(summary.licenses)}
-          subtitle="Đã loại trừ theo quy tắc KPI"
-        />
+      <SummaryCard
+        title="Số giấy phép hợp lệ"
+        value={formatInt(summary.licenses)}
+        subtitle="Đã loại trừ theo quy tắc KPI"
+      />
+    </div>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <TrendLineChart data={trendSeries} comparison={trendComparison} />
+        <TeamTrendChart data={teamTrendSeries} teams={trendTeams} />
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">

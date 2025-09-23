@@ -558,6 +558,33 @@ export function saveDeclRows(newRows, { overwrite = false, actor = "system", det
   return merged.length;
 }
 
+export function markDeclRowsReviewed(keys, { actor = "system" } = {}) {
+  if (!Array.isArray(keys) || keys.length === 0) return 0;
+  const keySet = new Set(keys);
+  let updated = 0;
+  const next = getDeclRows().map((row) => {
+    const key = `${(row?.so_tk ?? "").toString()}_${normalizeStr(row?.nhanh || "")}`;
+    if (!keySet.has(key)) return row;
+    if (row?.reviewed) return row;
+    updated += 1;
+    return {
+      ...row,
+      reviewed: true,
+      reviewed_at: new Date().toISOString(),
+    };
+  });
+  if (updated > 0) {
+    setItem(DECL_KEY, JSON.stringify(next));
+    pushAuditLog({
+      actor,
+      action: "decl.review",
+      detail: `Đánh dấu đã rà soát ${updated} tờ khai`,
+      meta: { keys: Array.from(keySet) },
+    });
+  }
+  return updated;
+}
+
 // ===== Compat layer cho các file khác =====
 export function getData() {           // RulesEditor.jsx đang import
   return getDeclRows();

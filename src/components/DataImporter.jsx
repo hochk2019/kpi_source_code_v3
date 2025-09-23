@@ -8,6 +8,7 @@ import {
   pushImportLog,
   getTeamRoster,
   mapMemberNamesToTeams,
+  markDeclRowsReviewed,
 } from "@/lib/store.js";
 import { mapRow, detectDateOrder } from "@/lib/importer.js";
 import { loadRules, computeKPI } from "@/lib/rules.js";
@@ -33,7 +34,12 @@ function ensureLicenseFields(row) {
   return { ...row, licenses: normalized, so_luong_gp: normalized };
 }
 
-export default function DataImporter({ canEdit = true, currentUser = null }) {
+export default function DataImporter({
+  canEdit = true,
+  currentUser = null,
+  canManageSync = false,
+  canManageAlerts = false,
+}) {
   const fileRef = useRef(null);
   const [rawRows, setRawRows] = useState([]);        // dữ liệu xem trước (đã map)
   const [query, setQuery] = useState("");
@@ -53,7 +59,17 @@ export default function DataImporter({ canEdit = true, currentUser = null }) {
   const [autoAssignStaff, setAutoAssignStaff] = useState(true); // Tự gán nhân viên theo MST nếu trống
 
   const actor = currentUser?.username || "guest";
-  const isReadOnly = !canEdit;
+  const isReadOnlyForEdits = !canEdit;
+  const canReviewAlerts = canEdit || canManageAlerts;
+  const [syncConfig, setSyncConfig] = useState(null);
+  const [syncForm, setSyncForm] = useState(null);
+  const [syncLoading, setSyncLoading] = useState(false);
+  const [syncRunning, setSyncRunning] = useState(false);
+  const [syncMessage, setSyncMessage] = useState("");
+  const [manualRange, setManualRange] = useState({ from: "", to: "" });
+  const [alertSummary, setAlertSummary] = useState({ outstanding: 0, totalTracked: 0, lastEvaluatedAt: null });
+  const [alertEntries, setAlertEntries] = useState([]);
+  const [alertLoading, setAlertLoading] = useState(false);
 
   const loadSavedRows = useCallback((opts = {}) => {
     const { bypassConfirm = false } = opts;
@@ -101,9 +117,245 @@ export default function DataImporter({ canEdit = true, currentUser = null }) {
     return () => window.removeEventListener("beforeunload", handler);
   }, [hasUnsaved]);
 
+  const applyConfigToForm = useCallback((config) => {
+    if (!config || typeof config !== "object") {
+      setSyncConfig(null);
+      setSyncForm(null);
+      return;
+    }
+    setSyncConfig(config);
+    setSyncForm({
+      enabled: !!config.enabled,
+      schedule: config.schedule || "0 * * * *",
+      rangeDays: config.rangeDays ?? 1,
+      preferMonthFirst: !!config.preferMonthFirst,
+      server: config.connection?.server || "",
+      database: config.connection?.database || "",
+      user: config.connection?.user || "",
+      password: "",
+      hasPassword: !!config.connection?.hasPassword,
+    });
+  }, []);
+
+  const fetchSyncConfig = useCallback(async () => {
+    setSyncLoading(true);
+    try {
+      const response = await fetch("/api/import/ecus/config", { cache: "no-store" });
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      const payload = await response.json();
+      if (payload?.config) {
+        applyConfigToForm(payload.config);
+      }
+    } catch (err) {
+      console.error("Không thể tải cấu hình đồng bộ ECUS", err);
+    } finally {
+      setSyncLoading(false);
+    }
+  }, [applyConfigToForm]);
+
+  const fetchAlerts = useCallback(async () => {
+    setAlertLoading(true);
+    try {
+      const response = await fetch("/api/import/alerts", { cache: "no-store" });
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      const payload = await response.json();
+      if (payload?.alerts) {
+        setAlertEntries(Array.isArray(payload.alerts) ? payload.alerts : []);
+      }
+      if (payload?.summary) {
+        setAlertSummary(payload.summary);
+      }
+    } catch (err) {
+      console.error("Không thể tải cảnh báo tờ khai", err);
+    } finally {
+      setAlertLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchSyncConfig();
+    fetchAlerts();
+  }, [fetchSyncConfig, fetchAlerts]);
+
+  const handleSaveSyncConfig = useCallback(async () => {
+    if (!canManageSync) {
+      alert("Bạn không có quyền cập nhật cấu hình đồng bộ.");
+      return;
+    }
+    if (!syncForm) return;
+    setSyncLoading(true);
+    setSyncMessage("");
+    try {
+      const payload = {
+        config: {
+          enabled: !!syncForm.enabled,
+          schedule: syncForm.schedule || "0 * * * *",
+          rangeDays: Number(syncForm.rangeDays) || 1,
+          preferMonthFirst: !!syncForm.preferMonthFirst,
+          connection: {
+            server: syncForm.server || "",
+            database: syncForm.database || "",
+            user: syncForm.user || "",
+          },
+        },
+        preservePassword: !syncForm.password && syncForm.hasPassword,
+      };
+      if (syncForm.password) {
+        payload.config.connection.password = syncForm.password;
+      }
+      if (syncConfig?.columnMap) {
+        payload.config.columnMap = syncConfig.columnMap;
+      }
+      const response = await fetch("/api/import/ecus/config", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      const next = await response.json();
+      if (next?.config) {
+        applyConfigToForm(next.config);
+        setSyncMessage("Đã lưu cấu hình đồng bộ ECUS.");
+      }
+    } catch (err) {
+      console.error("Không thể lưu cấu hình ECUS", err);
+      alert(err?.message || "Không thể lưu cấu hình đồng bộ");
+    } finally {
+      setSyncLoading(false);
+    }
+  }, [applyConfigToForm, canManageSync, syncConfig, syncForm]);
+
+  const handleRunSync = useCallback(async () => {
+    if (!canManageSync) {
+      alert("Bạn không có quyền chạy đồng bộ ECUS.");
+      return;
+    }
+    setSyncRunning(true);
+    setSyncMessage("Đang đồng bộ...");
+    try {
+      const response = await fetch("/api/import/ecus/run", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          actor,
+          from: manualRange.from || undefined,
+          to: manualRange.to || undefined,
+        }),
+      });
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      const payload = await response.json();
+      const imported = payload?.result?.imported ?? 0;
+      setSyncMessage(`Đã đồng bộ ${imported} tờ khai từ ECUS.`);
+      await fetchSyncConfig();
+      await fetchAlerts();
+      loadSavedRows({ bypassConfirm: true });
+    } catch (err) {
+      console.error("Đồng bộ ECUS thất bại", err);
+      setSyncMessage(err?.message ? `Lỗi: ${err.message}` : "Không thể đồng bộ ECUS");
+    } finally {
+      setSyncRunning(false);
+    }
+  }, [actor, canManageSync, fetchAlerts, fetchSyncConfig, loadSavedRows, manualRange.from, manualRange.to]);
+
+  const handleManualRangeChange = useCallback((field, value) => {
+    setManualRange((prev) => ({ ...prev, [field]: value }));
+  }, []);
+
+  const handleRefreshAlerts = useCallback(() => {
+    fetchAlerts();
+  }, [fetchAlerts]);
+
+  const handleMarkReviewed = useCallback(async () => {
+    if (!canReviewAlerts) {
+      alert("Bạn không có quyền đánh dấu đã rà soát các tờ khai.");
+      return;
+    }
+    if (mode !== "saved") {
+      alert("Chỉ đánh dấu rà soát khi đang xem dữ liệu đã lưu.");
+      return;
+    }
+    if (selectedKeys.length === 0) {
+      alert("Chưa chọn tờ khai để đánh dấu.");
+      return;
+    }
+    const updated = markDeclRowsReviewed(selectedKeys, { actor });
+    if (updated === 0) {
+      alert("Các tờ khai đã được đánh dấu hoặc không tìm thấy.");
+    }
+    try {
+      await fetch("/api/import/alerts/review", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ keys: selectedKeys, actor }),
+      });
+    } catch (err) {
+      console.warn("Không thể đồng bộ trạng thái rà soát với máy chủ", err);
+    }
+    setSelectedKeys([]);
+    setHasUnsaved(false);
+    loadSavedRows({ bypassConfirm: true });
+    fetchAlerts();
+  }, [actor, canReviewAlerts, fetchAlerts, loadSavedRows, mode, selectedKeys]);
+
+  const summaryStats = useMemo(() => {
+    if (!Array.isArray(rawRows) || rawRows.length === 0 || mode !== "saved") {
+      return { total: rawRows.length, missingStaff: 0, missingTeam: 0, reviewed: 0 };
+    }
+    let missingStaff = 0;
+    let missingTeam = 0;
+    let reviewed = 0;
+    for (const row of rawRows) {
+      if (!row) continue;
+      const hasStaff = !!(row.nhan_vien && row.nhan_vien.toString().trim());
+      const hasTeam = !!(row.team && row.team.toString().trim());
+      if (!hasStaff) missingStaff += 1;
+      if (!hasTeam) missingTeam += 1;
+      if (row.reviewed) reviewed += 1;
+    }
+    return { total: rawRows.length, missingStaff, missingTeam, reviewed };
+  }, [mode, rawRows]);
+
+  const outstandingAlerts = useMemo(() => {
+    return alertEntries.filter((entry) => !entry.resolved).slice(0, 5);
+  }, [alertEntries]);
+
+  const summaryCards = useMemo(() => [
+    { label: "Tổng tờ khai (đang xem)", value: summaryStats.total },
+    { label: "Chưa gán nhân viên", value: summaryStats.missingStaff },
+    { label: "Chưa gán tổ đội", value: summaryStats.missingTeam },
+    { label: "Đã rà soát", value: summaryStats.reviewed },
+    { label: "Cảnh báo chờ xử lý", value: alertSummary.outstanding || 0 },
+  ], [alertSummary.outstanding, summaryStats]);
+
+  const lastAlertEvaluated = useMemo(() => {
+    if (!alertSummary.lastEvaluatedAt) return "Chưa tính";
+    try {
+      return new Date(alertSummary.lastEvaluatedAt).toLocaleString("vi-VN");
+    } catch {
+      return alertSummary.lastEvaluatedAt;
+    }
+  }, [alertSummary.lastEvaluatedAt]);
+
+  const syncLastRunLabel = useMemo(() => {
+    if (!syncConfig?.lastRun) return "Chưa chạy";
+    try {
+      return new Date(syncConfig.lastRun).toLocaleString("vi-VN");
+    } catch {
+      return syncConfig.lastRun;
+    }
+  }, [syncConfig?.lastRun]);
+
   // Đọc file XLSX
   function handleFileChange(e) {
-    if (isReadOnly) {
+    if (isReadOnlyForEdits) {
       alert("Bạn đang ở chế độ chỉ xem — hãy đăng nhập để import dữ liệu.");
       return;
     }
@@ -211,7 +463,7 @@ export default function DataImporter({ canEdit = true, currentUser = null }) {
   }, []);
 
   const applyEdit = useCallback((rowKey, updater) => {
-    if (isReadOnly) return;
+    if (isReadOnlyForEdits) return;
     let didChange = false;
     setRawRows(prev => {
       if (!Array.isArray(prev) || prev.length === 0) return prev;
@@ -256,7 +508,7 @@ export default function DataImporter({ canEdit = true, currentUser = null }) {
     if (didChange && mode === "saved") {
       setHasUnsaved(true);
     }
-  }, [isReadOnly, keyOfRow, rules, mode]);
+  }, [isReadOnlyForEdits, keyOfRow, rules, mode]);
 
   const onChangeCell = useCallback((rowKey, field, value, transform) => {
     applyEdit(rowKey, (row) => {
@@ -294,10 +546,14 @@ export default function DataImporter({ canEdit = true, currentUser = null }) {
     alert(`Đã xóa ${removedCount} tờ khai.`);
     setHasUnsaved(false);
     loadSavedRows();
-  }, [actor, keyOfRow, loadSavedRows, rawRows]);
+    fetchAlerts();
+  }, [actor, fetchAlerts, keyOfRow, loadSavedRows, rawRows]);
 
   const handleDeleteSelected = useCallback(() => {
-    if (isReadOnly) return;
+    if (isReadOnlyForEdits) {
+      alert("Bạn không có quyền xóa tờ khai.");
+      return;
+    }
     if (mode !== "saved") {
       alert("Chỉ có thể xóa khi đang xem dữ liệu đã lưu.");
       return;
@@ -310,20 +566,23 @@ export default function DataImporter({ canEdit = true, currentUser = null }) {
       return;
     }
     deleteRowsByKeys(selectedKeys);
-  }, [deleteRowsByKeys, isReadOnly, mode, selectedKeys]);
+  }, [deleteRowsByKeys, isReadOnlyForEdits, mode, selectedKeys]);
 
   const handleDeleteSingle = useCallback((row) => {
-    if (isReadOnly) return;
+    if (isReadOnlyForEdits) {
+      alert("Bạn không có quyền xóa tờ khai.");
+      return;
+    }
     if (mode !== "saved") {
       alert("Chỉ có thể xóa khi đang xem dữ liệu đã lưu.");
       return;
     }
     if (!window.confirm("Xóa tờ khai này?")) return;
     deleteRowsByKeys([keyOfRow(row)]);
-  }, [deleteRowsByKeys, isReadOnly, keyOfRow, mode]);
+  }, [deleteRowsByKeys, isReadOnlyForEdits, keyOfRow, mode]);
 
   function handleImport() {
-    if (isReadOnly) {
+    if (isReadOnlyForEdits) {
       alert("Bạn không có quyền import dữ liệu. Đăng nhập bằng tài khoản được cấp quyền để tiếp tục.");
       return;
     }
@@ -349,10 +608,11 @@ export default function DataImporter({ canEdit = true, currentUser = null }) {
     alert("Import xong!");
     if (fileRef.current) fileRef.current.value = "";
     loadSavedRows({ bypassConfirm: true });
+    fetchAlerts();
   }
 
   function handleSaveAll() {
-    if (isReadOnly) {
+    if (isReadOnlyForEdits) {
       alert("Bạn không có quyền lưu chỉnh sửa.");
       return;
     }
@@ -372,20 +632,231 @@ export default function DataImporter({ canEdit = true, currentUser = null }) {
     alert(`Đã lưu ${count} bản ghi (ghi đè).`);
     setHasUnsaved(false);
     loadSavedRows({ bypassConfirm: true });
+    fetchAlerts();
   }
 
-  const canImport = !isReadOnly && mode === "preview" && rawRows.length > 0;
-  const canSave = !isReadOnly && mode === "saved" && rawRows.length > 0;
-  const canDelete = !isReadOnly && mode === "saved" && selectedKeys.length > 0;
+  const selectionEnabled = mode === "saved" && (canEdit || canManageAlerts);
+  const deleteEnabled = canEdit && mode === "saved";
+  const baseColumnCount = 11; // Ngày, Số TK, MST, Công ty, Loại hình, Mục hàng, Nhân viên, Tổ đội, Trạng thái, Số lượng GP, KPI
+  const totalColumns = baseColumnCount + (selectionEnabled ? 1 : 0) + (deleteEnabled ? 1 : 0);
+
+  const canImport = !isReadOnlyForEdits && mode === "preview" && rawRows.length > 0;
+  const canSave = !isReadOnlyForEdits && mode === "saved" && rawRows.length > 0;
+  const canDelete = deleteEnabled && selectedKeys.length > 0;
+  const canReview = selectionEnabled && selectedKeys.length > 0 && canReviewAlerts;
   const modeLabel = mode === "preview" ? "Đang xem dữ liệu từ file (chưa lưu)" : "Đang xem dữ liệu đã lưu";
 
   return (
     <div className="space-y-3">
-      {isReadOnly && (
+      {isReadOnlyForEdits && !canManageAlerts && (
         <div className="rounded border border-amber-300 bg-amber-50 text-amber-700 p-3 text-sm">
           Bạn đang ở chế độ chỉ xem. Đăng nhập bằng tài khoản được cấp quyền để import, chỉnh sửa và lưu dữ liệu tờ khai.
         </div>
       )}
+      {isReadOnlyForEdits && canManageAlerts && (
+        <div className="rounded border border-blue-300 bg-blue-50 p-3 text-sm text-blue-700">
+          Bạn có thể rà soát và đánh dấu các tờ khai thiếu thông tin nhưng không thể chỉnh sửa dữ liệu tờ khai.
+        </div>
+      )}
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+        {summaryCards.map((card) => (
+          <div key={card.label} className="rounded border bg-white p-3 shadow-sm">
+            <div className="text-xs uppercase tracking-wide text-gray-500">{card.label}</div>
+            <div className="mt-1 text-2xl font-semibold text-gray-900">{card.value?.toLocaleString?.("vi-VN") ?? card.value}</div>
+          </div>
+        ))}
+      </div>
+
+      {canManageSync ? (
+        <section className="rounded border bg-white p-4 shadow-sm">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h2 className="text-base font-semibold text-gray-900">Đồng bộ tự động từ ECUS5VNACCS</h2>
+              <p className="text-xs text-gray-500">Lần chạy gần nhất: {syncLastRunLabel} • Trạng thái: {syncConfig?.lastStatus || "Chưa có"}</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={fetchSyncConfig}
+                className="rounded border px-3 py-1 text-sm"
+                disabled={syncLoading}
+              >
+                Tải lại cấu hình
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveSyncConfig}
+                className="rounded bg-black px-3 py-1 text-sm text-white disabled:opacity-50"
+                disabled={syncLoading || !syncForm}
+              >
+                Lưu cấu hình
+              </button>
+            </div>
+          </div>
+          {syncForm ? (
+            <div className="mt-3 space-y-3">
+              <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={syncForm.enabled}
+                    onChange={(e) => setSyncForm((prev) => ({ ...prev, enabled: e.target.checked }))}
+                  />
+                  <span>Bật đồng bộ định kỳ</span>
+                </label>
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-gray-600">Biểu thức cron</label>
+                  <input
+                    className="w-full rounded border px-2 py-1 text-sm"
+                    value={syncForm.schedule}
+                    onChange={(e) => setSyncForm((prev) => ({ ...prev, schedule: e.target.value }))}
+                    placeholder="0 * * * *"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-gray-600">Khoảng mặc định (số ngày)</label>
+                  <input
+                    type="number"
+                    min="1"
+                    className="w-full rounded border px-2 py-1 text-sm"
+                    value={syncForm.rangeDays}
+                    onChange={(e) => setSyncForm((prev) => ({ ...prev, rangeDays: Number(e.target.value) || 1 }))}
+                  />
+                </div>
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={syncForm.preferMonthFirst}
+                    onChange={(e) => setSyncForm((prev) => ({ ...prev, preferMonthFirst: e.target.checked }))}
+                  />
+                  <span>Ngày dạng MM/DD/YYYY</span>
+                </label>
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-gray-600">Máy chủ SQL Server</label>
+                  <input
+                    className="w-full rounded border px-2 py-1 text-sm"
+                    value={syncForm.server}
+                    onChange={(e) => setSyncForm((prev) => ({ ...prev, server: e.target.value }))}
+                    placeholder="192.168.x.x\\SQL2019"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-gray-600">Cơ sở dữ liệu</label>
+                  <input
+                    className="w-full rounded border px-2 py-1 text-sm"
+                    value={syncForm.database}
+                    onChange={(e) => setSyncForm((prev) => ({ ...prev, database: e.target.value }))}
+                    placeholder="ECUS5VNACCS"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-gray-600">Tài khoản</label>
+                  <input
+                    className="w-full rounded border px-2 py-1 text-sm"
+                    value={syncForm.user}
+                    onChange={(e) => setSyncForm((prev) => ({ ...prev, user: e.target.value }))}
+                    placeholder="sa"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-gray-600">Mật khẩu</label>
+                  <input
+                    type="password"
+                    className="w-full rounded border px-2 py-1 text-sm"
+                    value={syncForm.password}
+                    onChange={(e) => setSyncForm((prev) => ({ ...prev, password: e.target.value }))}
+                    placeholder={syncForm.hasPassword ? "(giữ nguyên nếu để trống)" : "Nhập mật khẩu"}
+                  />
+                </div>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xs uppercase tracking-wide text-gray-500">Khoảng thời gian chạy tay</span>
+                <input
+                  type="date"
+                  className="rounded border px-2 py-1 text-sm"
+                  value={manualRange.from}
+                  onChange={(e) => handleManualRangeChange("from", e.target.value)}
+                />
+                <span className="text-xs text-gray-500">đến</span>
+                <input
+                  type="date"
+                  className="rounded border px-2 py-1 text-sm"
+                  value={manualRange.to}
+                  onChange={(e) => handleManualRangeChange("to", e.target.value)}
+                />
+                <button
+                  type="button"
+                  onClick={handleRunSync}
+                  disabled={syncRunning}
+                  className="rounded bg-emerald-600 px-3 py-1 text-sm text-white disabled:opacity-50"
+                >
+                  Đồng bộ ngay
+                </button>
+              </div>
+              {syncMessage && <div className="text-sm text-emerald-600">{syncMessage}</div>}
+            </div>
+          ) : (
+            <p className="mt-3 text-sm text-gray-500">Đang tải cấu hình đồng bộ...</p>
+          )}
+        </section>
+      ) : (
+        <section className="rounded border bg-white p-4 shadow-sm">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h2 className="text-base font-semibold text-gray-900">Đồng bộ ECUS</h2>
+              <p className="text-xs text-gray-500">Lần chạy gần nhất: {syncLastRunLabel} • Trạng thái: {syncConfig?.lastStatus || "Chưa có"}</p>
+            </div>
+            <button type="button" onClick={fetchSyncConfig} className="rounded border px-3 py-1 text-sm" disabled={syncLoading}>
+              Cập nhật trạng thái
+            </button>
+          </div>
+        </section>
+      )}
+
+      <section className="rounded border bg-white p-4 shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h2 className="text-base font-semibold text-gray-900">Cảnh báo tờ khai thiếu thông tin</h2>
+            <p className="text-xs text-gray-500">Lần rà soát: {lastAlertEvaluated} • Tổng theo dõi: {alertSummary.totalTracked || 0}</p>
+          </div>
+          <button type="button" onClick={handleRefreshAlerts} className="rounded border px-3 py-1 text-sm" disabled={alertLoading}>
+            Làm mới danh sách
+          </button>
+        </div>
+        {alertLoading ? (
+          <p className="mt-3 text-sm text-gray-500">Đang tải danh sách cảnh báo...</p>
+        ) : outstandingAlerts.length ? (
+          <div className="mt-3 overflow-auto">
+            <table className="min-w-full text-sm">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-2 py-1 text-left">Số tờ khai</th>
+                  <th className="px-2 py-1 text-left">MST</th>
+                  <th className="px-2 py-1 text-left">Công ty</th>
+                  <th className="px-2 py-1 text-left">Thiếu thông tin</th>
+                  <th className="px-2 py-1 text-left">Ngày tờ khai</th>
+                  <th className="px-2 py-1 text-left">Cập nhật</th>
+                </tr>
+              </thead>
+              <tbody>
+                {outstandingAlerts.map((alert) => (
+                  <tr key={alert.key} className="odd:bg-white even:bg-gray-50">
+                    <td className="px-2 py-1">{alert.so_tk}</td>
+                    <td className="px-2 py-1">{alert.mst}</td>
+                    <td className="px-2 py-1">{alert.company}</td>
+                    <td className="px-2 py-1 text-amber-600">{(alert.missing || []).join(", ")}</td>
+                    <td className="px-2 py-1">{alert.date || ""}</td>
+                    <td className="px-2 py-1">{alert.lastUpdated ? new Date(alert.lastUpdated).toLocaleString("vi-VN") : ""}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="mt-3 text-sm text-gray-500">Không có cảnh báo nào đang chờ xử lý.</p>
+        )}
+      </section>
+
       <div className="flex flex-wrap items-center gap-2">
         <input
           type="file"
@@ -393,7 +864,7 @@ export default function DataImporter({ canEdit = true, currentUser = null }) {
           onChange={handleFileChange}
           accept=".xls,.xlsx"
           className="hidden"
-          disabled={isReadOnly}
+          disabled={isReadOnlyForEdits}
         />
         {canEdit && (
           <button
@@ -500,19 +971,31 @@ export default function DataImporter({ canEdit = true, currentUser = null }) {
         </div>
       )}
 
-      {canEdit && mode === "saved" && (
+      {selectionEnabled && (
         <div className="flex flex-wrap items-center gap-2 text-sm">
           <span className="text-gray-600">Đã chọn {selectedKeys.length} tờ khai</span>
           <button
             type="button"
-            onClick={handleDeleteSelected}
-            disabled={!canDelete}
+            onClick={handleMarkReviewed}
+            disabled={!canReview}
             className={`px-3 py-1 rounded border ${
-              canDelete ? "bg-red-50 text-red-600 border-red-300" : "opacity-50 cursor-not-allowed"
+              canReview ? "bg-emerald-50 text-emerald-700 border-emerald-300" : "opacity-50 cursor-not-allowed"
             }`}
           >
-            Xóa các tờ khai đã chọn
+            Đánh dấu đã rà soát
           </button>
+          {canEdit && (
+            <button
+              type="button"
+              onClick={handleDeleteSelected}
+              disabled={!canDelete}
+              className={`px-3 py-1 rounded border ${
+                canDelete ? "bg-red-50 text-red-600 border-red-300" : "opacity-50 cursor-not-allowed"
+              }`}
+            >
+              Xóa các tờ khai đã chọn
+            </button>
+          )}
           {selectedKeys.length > 0 && (
             <button
               type="button"
@@ -529,7 +1012,7 @@ export default function DataImporter({ canEdit = true, currentUser = null }) {
         <table className="min-w-full text-sm">
           <thead className="bg-gray-50">
             <tr>
-              {canEdit && mode === "saved" && <th className="px-2 py-1 text-left w-10">Chọn</th>}
+              {selectionEnabled && <th className="px-2 py-1 text-left w-10">Chọn</th>}
               <th className="px-2 py-1 text-left">Ngày</th>
               <th className="px-2 py-1 text-left">Số tờ khai</th>
               <th className="px-2 py-1 text-left">MST</th>
@@ -538,17 +1021,18 @@ export default function DataImporter({ canEdit = true, currentUser = null }) {
               <th className="px-2 py-1 text-left">Mục hàng</th>
               <th className="px-2 py-1 text-left">Nhân viên</th>
               <th className="px-2 py-1 text-left">Tổ đội</th>
+              <th className="px-2 py-1 text-left">Trạng thái</th>
               <th className="px-2 py-1 text-left">Số lượng GP</th>
               <th className="px-2 py-1 text-left">KPI</th>
               {canEdit && mode === "saved" && <th className="px-2 py-1 text-left w-16">Xóa</th>}
             </tr>
           </thead>
           <tbody>
-      {pageRows.map((r, i) => {
+          {pageRows.map((r, i) => {
             const rowKey = keyOfRow(r);
             return (
               <tr key={`${rowKey}_${i}`} className="odd:bg-white even:bg-gray-50">
-                {canEdit && mode === "saved" && (
+                {selectionEnabled && (
                   <td className="px-2 py-1">
                     <input
                       type="checkbox"
@@ -576,7 +1060,7 @@ export default function DataImporter({ canEdit = true, currentUser = null }) {
                   <span>{r.muc_hang ?? ""}</span>
                 </td>
                 <td className="px-2 py-1">
-                  {isReadOnly ? (
+                  {isReadOnlyForEdits ? (
                     <span>{r.nhan_vien || ""}</span>
                   ) : (
                     <input
@@ -587,7 +1071,7 @@ export default function DataImporter({ canEdit = true, currentUser = null }) {
                   )}
                 </td>
                 <td className="px-2 py-1">
-                  {isReadOnly ? (
+                  {isReadOnlyForEdits ? (
                     <span>{r.team || ""}</span>
                   ) : (
                     <input
@@ -598,7 +1082,23 @@ export default function DataImporter({ canEdit = true, currentUser = null }) {
                   )}
                 </td>
                 <td className="px-2 py-1">
-                  {isReadOnly ? (
+                  {(() => {
+                    const hasStaff = !!(r.nhan_vien && r.nhan_vien.toString().trim());
+                    const hasTeam = !!(r.team && r.team.toString().trim());
+                    if (r.reviewed) {
+                      return <span className="text-emerald-700">Đã rà soát</span>;
+                    }
+                    if (!hasStaff || !hasTeam) {
+                      const missing = [];
+                      if (!hasStaff) missing.push("nhân viên");
+                      if (!hasTeam) missing.push("tổ đội");
+                      return <span className="text-amber-600">Thiếu {missing.join(" & ")}</span>;
+                    }
+                    return <span className="text-gray-600">Đủ thông tin</span>;
+                  })()}
+                </td>
+                <td className="px-2 py-1">
+                  {isReadOnlyForEdits ? (
                     <span>{r.licenses ?? r.so_luong_gp ?? ""}</span>
                   ) : (
                     <input
@@ -628,7 +1128,7 @@ export default function DataImporter({ canEdit = true, currentUser = null }) {
                     return kpi.toFixed(1);
                   })()}
                 </td>
-                {canEdit && mode === "saved" && (
+                {deleteEnabled && (
                   <td className="px-2 py-1">
                     <button
                       type="button"
@@ -644,10 +1144,7 @@ export default function DataImporter({ canEdit = true, currentUser = null }) {
           })}
             {pageRows.length === 0 && (
               <tr>
-                <td
-                  className="px-2 py-4 text-center text-gray-500"
-                  colSpan={10 + (canEdit && mode === "saved" ? 2 : 0)}
-                >
+                <td className="px-2 py-4 text-center text-gray-500" colSpan={totalColumns}>
                   Không có dữ liệu
                 </td>
               </tr>

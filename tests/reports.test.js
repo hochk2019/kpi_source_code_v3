@@ -110,6 +110,12 @@ describe('buildReportData', () => {
     expect(team2).toBeTruthy();
     expect(team2.stats.decls).toBe(1);
     expect(team2.members.some((m) => m.name === 'Tuấn')).toBe(true);
+
+    expect(report.trend.series).toHaveLength(1);
+    expect(report.trend.series[0]).toMatchObject({ period: '08/2024' });
+    expect(report.trend.teamSeries).toHaveLength(1);
+    expect(report.trend.teamSeries[0].Tổng).toBeCloseTo(report.summary.kpi, 1);
+    expect(report.trend.topTeams).toContain('Team 1');
   });
 
   it('sử dụng raw_date để sửa các ngày dạng month-first', () => {
@@ -192,5 +198,44 @@ describe('buildReportData', () => {
     expect(report.summary.companyCount).toBe(2);
     expect(report.range.from).toBe('2024-08-01');
     expect(report.range.to).toBe('2024-08-31');
+  });
+
+  it('tính toán so sánh với kỳ liền trước', () => {
+    const rows = [
+      {
+        date: '2024-07-15',
+        so_tk: '10234567890',
+        loai_hinh: 'E11',
+        num_items: 8,
+        licenses: 1,
+        nhan_vien: 'Phương',
+        team: 'Team 1',
+        mst: '0101234567',
+        cong_ty: 'Công ty A',
+      },
+      {
+        date: '2024-08-10',
+        so_tk: '30234567890',
+        loai_hinh: 'B11',
+        num_items: 12,
+        licenses: 2,
+        nhan_vien: 'Tuấn',
+        team: 'Team 2',
+        mst: '0201234567',
+        cong_ty: 'Công ty B',
+      },
+    ];
+
+    const report = buildReportData(rows, {
+      roster: sampleRoster,
+      rules: DEFAULT_RULES,
+      from: '2024-08-01',
+      to: '2024-08-31',
+    });
+
+    expect(report.trend.comparison).toBeTruthy();
+    expect(report.trend.comparison.previous.decls).toBe(1);
+    expect(report.trend.comparison.current.decls).toBe(1);
+    expect(report.trend.comparison.delta.decls).toBe(0);
   });
 });

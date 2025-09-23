@@ -9,7 +9,10 @@ export const PERMISSION_KEYS = [
   "mstEdit",
   "rulesEdit",
   "teamsEdit",
+  "syncManage",
   "reportsExport",
+  "alertsManage",
+  "auditView",
   "accountManage",
 ];
 
@@ -18,7 +21,10 @@ const VIEW_ONLY_PERMISSIONS = Object.freeze({
   mstEdit: false,
   rulesEdit: false,
   teamsEdit: false,
+  syncManage: false,
   reportsExport: true,
+  alertsManage: false,
+  auditView: false,
   accountManage: false,
 });
 
@@ -27,7 +33,10 @@ const ADMIN_PERMISSIONS = Object.freeze({
   mstEdit: true,
   rulesEdit: true,
   teamsEdit: true,
+  syncManage: true,
   reportsExport: true,
+  alertsManage: true,
+  auditView: true,
   accountManage: true,
 });
 
@@ -47,6 +56,7 @@ const RAW_DEFAULT_USERS = [
     permissions: {
       ...VIEW_ONLY_PERMISSIONS,
       importEdit: true,
+      reportsExport: true,
     },
   },
 ];

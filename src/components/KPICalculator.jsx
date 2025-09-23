@@ -17,6 +17,9 @@ const KPICalculator = ({ auth }) => {
   const canTeamsEdit = !!permissions.teamsEdit;
   const canManageAccounts = !!permissions.accountManage;
   const canExportReports = permissions.reportsExport !== false;
+  const canManageSync = !!permissions.syncManage;
+  const canManageAlerts = !!permissions.alertsManage;
+  const canViewAudit = !!permissions.auditView || canManageAccounts;
 
   return (
     <div className="max-w-6xl mx-auto p-4">
@@ -33,11 +36,16 @@ const KPICalculator = ({ auth }) => {
           <TabsTrigger value="teams">Quản lý Thành viên &amp; Tổ đội</TabsTrigger>
           <TabsTrigger value="reports">Báo cáo/In</TabsTrigger>
           {canManageAccounts && <TabsTrigger value="accounts">Tài khoản</TabsTrigger>}
-          {canManageAccounts && <TabsTrigger value="audit">Nhật ký</TabsTrigger>}
+          {canViewAudit && <TabsTrigger value="audit">Nhật ký</TabsTrigger>}
         </TabsList>
 
         <TabsContent value="import">
-          <DataImporter canEdit={canImportEdit} currentUser={effectiveAuth} />
+          <DataImporter
+            canEdit={canImportEdit}
+            currentUser={effectiveAuth}
+            canManageSync={canManageSync}
+            canManageAlerts={canManageAlerts}
+          />
         </TabsContent>
 
         <TabsContent value="rules">
@@ -62,7 +70,7 @@ const KPICalculator = ({ auth }) => {
           </TabsContent>
         )}
 
-        {canManageAccounts && (
+        {canViewAudit && (
           <TabsContent value="audit">
             <AuditLog currentUser={effectiveAuth} />
           </TabsContent>
