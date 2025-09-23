@@ -7,7 +7,14 @@
 // - “Áp dụng từ ngày…”: lưu phiên bản quy tắc và tính lại KPI từ ngày đó trở đi
 // --------------------------------------------------
 
-import { getData, setData, RULES_KEY, setRules as persistRules, pushAuditLog } from './store.js';
+import {
+  getData,
+  setData,
+  RULES_KEY,
+  getRules as readPersistedRules,
+  setRules as persistRules,
+  pushAuditLog,
+} from './store.js';
 import { getItem as getStorageItem, setItem as setStorageItem } from './storageClient.js';
 
 // ====== CẤU HÌNH MẶC ĐỊNH ======
@@ -64,7 +71,7 @@ const LEGACY_KEY_ACTIVE = 'kpi_rules';
 
 export function loadRules() {
   try {
-    const stored = JSON.parse(getStorageItem(RULES_KEY) || 'null');
+    const stored = readPersistedRules();
     if (stored && stored.groups && stored.license) {
       return stored;
     }

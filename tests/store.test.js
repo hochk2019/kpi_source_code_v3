@@ -11,6 +11,8 @@ import {
   applyTeamRosterToMST,
   normalizeName,
   toISODate,
+  upsertMSTRows,
+  getMSTFor,
 } from '@/lib/store.js';
 beforeEach(() => {
   localStorage.clear();
@@ -224,5 +226,69 @@ describe('team roster helpers', () => {
       person_import: 'Phương Nguyễn',
       team: 'Team 1',
     });
+  });
+});
+
+describe('getMSTFor', () => {
+  it('chọn dòng có ngày hiệu lực gần nhất nhưng không vượt quá ngày tờ khai', () => {
+    upsertMSTRows(
+      [
+        {
+          mst: '2301158516',
+          company: 'Công ty A',
+          person_import: 'Phương',
+          person_export: '',
+          team: 'Team 1',
+          effective_from: '2024-07-01',
+        },
+        {
+          mst: '2301158516',
+          company: 'Công ty A',
+          person_import: 'Phương',
+          person_export: '',
+          team: 'Team 1',
+          effective_from: '2024-08-15',
+        },
+        {
+          mst: '2301158516',
+          company: 'Công ty A',
+          person_import: 'Phương',
+          person_export: '',
+          team: 'Team 1',
+          effective_from: '2024-09-05',
+        },
+      ],
+      { actor: 'test' }
+    );
+
+    const picked = getMSTFor('2301158516', '2024-08-31');
+    expect(picked?.effective_from).toBe('2024-08-15');
+  });
+
+  it('fallback về dòng đầu tiên khi ngày tờ khai trước mọi mốc hiệu lực', () => {
+    upsertMSTRows(
+      [
+        {
+          mst: '9999999999',
+          company: 'Công ty B',
+          person_import: 'Tuấn',
+          person_export: '',
+          team: 'Team 2',
+          effective_from: '2024-05-01',
+        },
+        {
+          mst: '9999999999',
+          company: 'Công ty B',
+          person_import: 'Tuấn',
+          person_export: '',
+          team: 'Team 2',
+          effective_from: '2024-06-01',
+        },
+      ],
+      { actor: 'test' }
+    );
+
+    const picked = getMSTFor('9999999999', '2024-04-15');
+    expect(picked?.effective_from).toBe('2024-05-01');
   });
 });
