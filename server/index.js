@@ -4,9 +4,11 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import fs from 'node:fs/promises';
 import process from 'node:process';
+import Database from 'better-sqlite3';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
-const DATA_FILE = path.resolve(__dirname, 'data/db.json');
+const DB_FILE = path.resolve(__dirname, 'data/storage.sqlite');
+const LEGACY_JSON = path.resolve(__dirname, 'data/db.json');
 const DIST_DIR = path.resolve(__dirname, '../dist');
 
 const DEFAULT_STORAGE = {
@@ -86,32 +88,91 @@ const DEFAULT_STORAGE = {
   ]),
 };
 
-async function ensureDataFile() {
-  try {
-    await fs.access(DATA_FILE);
-  } catch {
-    const dir = path.dirname(DATA_FILE);
-    await fs.mkdir(dir, { recursive: true });
-    await fs.writeFile(DATA_FILE, JSON.stringify(DEFAULT_STORAGE, null, 2), 'utf8');
+function normalizeValue(value) {
+  if (value === null || value === undefined) {
+    return null;
   }
+  return typeof value === 'string' ? value : JSON.stringify(value);
 }
 
-async function readStorage() {
-  await ensureDataFile();
+async function initializeDatabase() {
+  await fs.mkdir(path.dirname(DB_FILE), { recursive: true });
+  const database = new Database(DB_FILE);
+  database.pragma('journal_mode = WAL');
+  database.exec(
+    'CREATE TABLE IF NOT EXISTS kv_store (key TEXT PRIMARY KEY, value TEXT NOT NULL)'
+  );
+
+  let seedData = { ...DEFAULT_STORAGE };
   try {
-    const raw = await fs.readFile(DATA_FILE, 'utf8');
+    const raw = await fs.readFile(LEGACY_JSON, 'utf8');
     const parsed = JSON.parse(raw);
-    return { ...DEFAULT_STORAGE, ...parsed };
+    if (parsed && typeof parsed === 'object') {
+      seedData = { ...seedData, ...parsed };
+    }
   } catch (err) {
-    console.error('Không thể đọc file dữ liệu, sử dụng mặc định.', err);
-    return { ...DEFAULT_STORAGE };
+    if (err?.code !== 'ENOENT') {
+      console.warn('Không thể đọc dữ liệu JSON cũ, tiếp tục với giá trị mặc định.', err);
+    }
   }
+
+  const existingKeys = new Set(
+    database
+      .prepare('SELECT key FROM kv_store')
+      .all()
+      .map((row) => row.key)
+  );
+
+  if (existingKeys.size === 0) {
+    const insertMany = database.transaction((entries) => {
+      const stmt = database.prepare('INSERT INTO kv_store (key, value) VALUES (?, ?)');
+      for (const [key, value] of entries) {
+        stmt.run(key, normalizeValue(value));
+      }
+    });
+    insertMany(Object.entries(seedData));
+  } else {
+    const missingEntries = Object.entries(seedData).filter(([key]) => !existingKeys.has(key));
+    if (missingEntries.length > 0) {
+      const insertMissing = database.transaction((entries) => {
+        const stmt = database.prepare(
+          'INSERT INTO kv_store (key, value) VALUES (?, ?) ON CONFLICT(key) DO NOTHING'
+        );
+        for (const [key, value] of entries) {
+          stmt.run(key, normalizeValue(value));
+        }
+      });
+      insertMissing(missingEntries);
+    }
+  }
+
+  return database;
 }
 
-async function writeStorage(store) {
-  const merged = { ...DEFAULT_STORAGE, ...store };
-  await fs.writeFile(DATA_FILE, JSON.stringify(merged, null, 2), 'utf8');
-  return merged;
+const db = await initializeDatabase();
+
+function readStorage() {
+  const rows = db.prepare('SELECT key, value FROM kv_store').all();
+  const store = { ...DEFAULT_STORAGE };
+  for (const row of rows) {
+    store[row.key] = row.value;
+  }
+  return store;
+}
+
+function upsertValue(key, value) {
+  const normalized = normalizeValue(value);
+  if (normalized === null) {
+    db.prepare('DELETE FROM kv_store WHERE key = ?').run(key);
+    return;
+  }
+  db.prepare(
+    'INSERT INTO kv_store (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value'
+  ).run(key, normalized);
+}
+
+function deleteValue(key) {
+  db.prepare('DELETE FROM kv_store WHERE key = ?').run(key);
 }
 
 const app = express();
@@ -124,12 +185,12 @@ app.get('/api/health', (req, res) => {
   res.json({ ok: true });
 });
 
-app.get('/api/bootstrap', async (req, res) => {
-  const store = await readStorage();
+app.get('/api/bootstrap', (req, res) => {
+  const store = readStorage();
   res.json({ data: store });
 });
 
-app.put('/api/storage/:key', async (req, res) => {
+app.put('/api/storage/:key', (req, res) => {
   const key = req.params.key;
   if (!key) {
     res.status(400).json({ ok: false, error: 'Thiếu key' });
@@ -137,13 +198,11 @@ app.put('/api/storage/:key', async (req, res) => {
   }
   const { value } = req.body || {};
   try {
-    const store = await readStorage();
     if (value === null || value === undefined) {
-      delete store[key];
+      deleteValue(key);
     } else {
-      store[key] = typeof value === 'string' ? value : JSON.stringify(value);
+      upsertValue(key, value);
     }
-    await writeStorage(store);
     res.json({ ok: true });
   } catch (err) {
     console.error('Lỗi ghi dữ liệu', err);
@@ -151,16 +210,14 @@ app.put('/api/storage/:key', async (req, res) => {
   }
 });
 
-app.delete('/api/storage/:key', async (req, res) => {
+app.delete('/api/storage/:key', (req, res) => {
   const key = req.params.key;
   if (!key) {
     res.status(400).json({ ok: false, error: 'Thiếu key' });
     return;
   }
   try {
-    const store = await readStorage();
-    delete store[key];
-    await writeStorage(store);
+    deleteValue(key);
     res.json({ ok: true });
   } catch (err) {
     console.error('Lỗi xóa dữ liệu', err);

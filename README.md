@@ -10,6 +10,10 @@ chia sẻ dữ liệu mà không cần copy `localStorage` thủ công.
 pnpm install
 ```
 
+> Nếu trong quá trình cài đặt xuất hiện cảnh báo `Ignored build scripts:
+> better-sqlite3`, hãy chạy `pnpm approve-builds` hoặc `pnpm rebuild
+> better-sqlite3` để cho phép biên dịch native module của SQLite.
+
 ## 2. Khởi chạy cho môi trường phát triển
 
 Mở **hai** cửa sổ terminal:
@@ -20,8 +24,11 @@ Mở **hai** cửa sổ terminal:
    pnpm server
    ```
 
-   Máy chủ này lưu dữ liệu vào `server/data/db.json` và cung cấp các API REST
-   dưới đường dẫn `/api/...`.
+   Máy chủ này lưu dữ liệu vào cơ sở dữ liệu SQLite tại
+   `server/data/storage.sqlite` và cung cấp các API REST dưới đường dẫn
+   `/api/...`. Nếu bạn nâng cấp từ phiên bản cũ còn sử dụng file
+   `server/data/db.json`, máy chủ sẽ tự động nhập dữ liệu ban đầu từ file này
+   (nếu tồn tại) trong lần chạy đầu tiên.
 
 2. Chạy giao diện Vite (port mặc định: `5173`):
 
@@ -60,7 +67,9 @@ Mở **hai** cửa sổ terminal:
    hình). Nếu muốn dùng port khác, đặt `PORT=... pnpm start`.
 
 3. Tất cả dữ liệu (tờ khai, gán MST, quy tắc KPI, tài khoản, nhật ký…) được lưu
-   ở `server/data/db.json`. Sao lưu file này định kỳ để tránh mất dữ liệu.
+   trong `server/data/storage.sqlite`. Sao lưu file này định kỳ để tránh mất dữ
+   liệu. Bạn có thể xóa `server/data/db.json` sau khi đã nâng cấp nếu không còn
+   sử dụng bản lưu trữ cũ.
 
 ## 4. Tài khoản mặc định
 
