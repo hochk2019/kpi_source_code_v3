@@ -34,6 +34,23 @@ describe('mapRow', () => {
     expect(mapped.so_luong_gp).toBe(0);
   });
 
+  it('hiểu các alias ECUS như MA_LH và TotalItems', () => {
+    const raw = {
+      'So TK': 'TK-ALIAS-01',
+      'Ngày đăng ký': '02/09/2024',
+      'Mã số thuế': '0109998888',
+      'customer': 'Công ty Alias',
+      'MA_LH': 'B13',
+      'TotalItems': '12',
+    };
+
+    const mapped = mapRow(raw, { autoAssignStaff: false });
+
+    expect(mapped.loai_hinh).toBe('B13');
+    expect(mapped.muc_hang).toBe(12);
+    expect(mapped.num_items).toBe(12);
+  });
+
   it('counts eligible license types while respecting excluded codes', () => {
     const raw = {
       'Số tờ khai': 'TK01',
