@@ -4,6 +4,9 @@ import {
   toISODate,
   getMSTFor,
   isExportDecl,
+  normalizeName,
+} from "@/lib/store.js";
+import { loadRules, countLicenseTypesFromRowObj } from "@/lib/rules.js";
 } from "@/lib/store.js";
 
 const NAME_MAP = {
@@ -31,6 +34,47 @@ function pick(row, keys) {
   return "";
 }
 
+export function detectDateOrder(rows) {
+  let monthFirst = 0;
+  let dayFirst = 0;
+  for (const row of Array.isArray(rows) ? rows : []) {
+    if (!row || typeof row !== "object") continue;
+    const raw = normalizeStr(pick(row, NAME_MAP.date));
+    if (!raw) continue;
+
+    const isoLike = raw.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:[ T].*)?$/);
+    if (isoLike) {
+      const monthVal = Number.parseInt(isoLike[2], 10);
+      const dayVal = Number.parseInt(isoLike[3], 10);
+      if (monthVal > 12 && dayVal >= 1 && dayVal <= 12) {
+        monthFirst += 1;
+      } else if (dayVal > 12 && monthVal > 12) {
+        monthFirst += 1;
+      }
+      continue;
+    }
+
+  const slashLike = raw.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{2,4})(?:[ T].*)?$/);
+    if (!slashLike) continue;
+    const first = Number.parseInt(slashLike[1], 10);
+    const second = Number.parseInt(slashLike[2], 10);
+    if (first > 12 && second <= 12) {
+      dayFirst += 1;
+    } else if (second > 12 && first <= 12) {
+      monthFirst += 1;
+    }
+  }
+
+  if (monthFirst > dayFirst) return "mdy";
+  if (dayFirst > monthFirst) return "dmy";
+  return "dmy";
+}
+
+export function mapRow(row, opts = {}) {
+  const so_tk = normalizeStr(pick(row, NAME_MAP.so_tk));
+  const nhanh = normalizeStr(pick(row, NAME_MAP.nhanh));
+  const rawDate = pick(row, NAME_MAP.date);
+  const dateISO = toISODate(rawDate, { preferMonthFirst: opts.preferMonthFirst });
 export function mapRow(row, opts) {
   const so_tk = normalizeStr(pick(row, NAME_MAP.so_tk));
   const nhanh = normalizeStr(pick(row, NAME_MAP.nhanh));
@@ -50,6 +94,16 @@ export function mapRow(row, opts) {
 
   let nhan_vien = normalizeStr(row["nhan_vien"] || row["Nhân viên"] || "");
   let team = normalizeStr(row["team"] || row["Tổ đội"] || "");
+  const autoAssignStaff = opts.autoAssignStaff !== false;
+
+  const licenseExcludes = Array.isArray(opts.licenseExcludes)
+    ? opts.licenseExcludes
+    : (opts.rules?.license?.excludeCodes
+        || loadRules()?.license?.excludeCodes
+        || []);
+  const licenses = countLicenseTypesFromRowObj(row, licenseExcludes);
+
+  if (autoAssignStaff) {
 
   if (opts.autoAssignStaff) {
     const isExport = isExportDecl(so_tk, loai_hinh);
@@ -58,6 +112,18 @@ export function mapRow(row, opts) {
     if (!team) team = m.team || "";
   }
 
+  if (nhan_vien && opts.memberMap instanceof Map) {
+    const info = opts.memberMap.get(normalizeName(nhan_vien));
+    if (info?.team) {
+      if (!team || normalizeName(team) !== normalizeName(info.team)) {
+        team = info.team;
+      }
+    }
+  }
+
+  return {
+    date: dateISO,
+    raw_date: normalizeStr(rawDate),
   return {
     date: dateISO,
     so_tk,
@@ -80,5 +146,7 @@ export function mapRow(row, opts) {
     customer: cong_ty,
     nhan_vien,
     team,
+    licenses,
+    so_luong_gp: licenses,
   };
 }

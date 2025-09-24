@@ -7,7 +7,15 @@
 // - “Áp dụng từ ngày…”: lưu phiên bản quy tắc và tính lại KPI từ ngày đó trở đi
 // --------------------------------------------------
 
-import { getData, setData } from './store.js';
+import {
+  getData,
+  setData,
+  RULES_KEY,
+  getRules as readPersistedRules,
+  setRules as persistRules,
+  pushAuditLog,
+} from './store.js';
+import { getItem as getStorageItem, setItem as setStorageItem } from './storageClient.js';
 
 // ====== CẤU HÌNH MẶC ĐỊNH ======
 export const DEFAULT_RULES = {
@@ -58,11 +66,30 @@ export const DEFAULT_RULES = {
 };
 
 // ====== LƯU / TẢI QUY TẮC (CÓ LỊCH SỬ) ======
-const KEY_ACTIVE = 'kpi_rules';            // quy tắc hiện hành
 const KEY_HISTORY = 'kpi_rules_history';   // mảng phiên bản đã lưu
+const LEGACY_KEY_ACTIVE = 'kpi_rules';
 
 export function loadRules() {
   try {
+    const stored = readPersistedRules();
+    if (stored && stored.groups && stored.license) {
+      return stored;
+    }
+  } catch (err) {
+    console.warn('loadRules: invalid data, fallback to default', err);
+  }
+
+  // Thử migrate từ khoá cũ nếu còn
+  try {
+    const legacy = JSON.parse(getStorageItem(LEGACY_KEY_ACTIVE) || 'null');
+    if (legacy && legacy.groups && legacy.license) {
+      persistRules(legacy);
+      return legacy;
+    }
+  } catch (err) {
+    console.warn('loadRules: legacy data invalid, fallback to default', err);
+  }
+
     const r = JSON.parse(localStorage.getItem(KEY_ACTIVE) || 'null');
     if (r && r.groups && r.license) return r;
   } catch (err) {
@@ -74,6 +101,7 @@ export function loadRules() {
 }
 
 export function getRulesHistory() {
+  try { return JSON.parse(getStorageItem(KEY_HISTORY) || '[]'); }
   try { return JSON.parse(localStorage.getItem(KEY_HISTORY) || '[]'); }
   catch (err) {
     console.warn('getRulesHistory: invalid data, reset history', err);
@@ -89,19 +117,30 @@ export function getRulesHistory() {
 export function saveRules(rules, opts = {}) {
   const cloned = JSON.parse(JSON.stringify(rules || {}));
   cloned.updatedAt = new Date().toISOString();
-  localStorage.setItem(KEY_ACTIVE, JSON.stringify(cloned));
+  persistRules(cloned);
+  // ghi thêm key cũ để tương thích với bản lưu trước
+  setStorageItem(LEGACY_KEY_ACTIVE, JSON.stringify(cloned));
 
   if (opts.appendHistory !== false) {
     const hist = getRulesHistory();
     hist.unshift(cloned);
     while (hist.length > 20) hist.pop();
-    localStorage.setItem(KEY_HISTORY, JSON.stringify(hist));
+    setStorageItem(KEY_HISTORY, JSON.stringify(hist));
   }
 
   // Tính lại KPI nếu có yêu cầu
   if (opts.recalcFrom) {
     recalcKPIFrom(opts.recalcFrom, cloned);
   }
+
+  const actor = opts.actor || 'system';
+  const applyNote = cloned.applyFrom ? ` (áp dụng từ ${cloned.applyFrom || 'ngay'})` : '';
+  pushAuditLog({
+    actor,
+    action: 'rules.save',
+    detail: `Lưu quy tắc KPI${applyNote}`,
+    meta: { recalcFrom: opts.recalcFrom || '' },
+  });
 }
 
 // ====== TIỆN ÍCH: chuẩn hoá chuỗi mã LH & giấy phép ======
