@@ -23,16 +23,38 @@ const DEFAULT_MEMBERS = [
   { name: 'Hưng', team: 'Team 3' },
 ];
 
+function normalizeColumnKey(value) {
+  return String(value ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]/gi, '')
+    .toLowerCase();
+}
+
 const COLUMN_ALIASES = {
-  so_tk: ['so_tk', 'So_tk', 'SoTK', 'sotk'],
-  date: ['ngay_dang_ky', 'Ngay_dang_ky', 'ngay_dk', 'NgayDK', 'NgayLapToKhai'],
-  mst: ['mst', 'MST', 'ma_so_thue', 'MaSoThue'],
-  cong_ty: ['cong_ty', 'ten_dn', 'TenDoanhNghiep'],
-  loai_hinh: ['loai_hinh', 'Loai_hinh', 'ma_loai_hinh'],
-  num_items: ['muc_hang', 'so_muc'],
-  licenses: ['ds_gp', 'ds_giay_phep', 'DanhSachGiayPhep', 'ma_gp'],
-  nhan_vien_import: ['nhan_vien_nhap', 'NhanVienNhap', 'NVNhap'],
-  nhan_vien_export: ['nhan_vien_xuat', 'NhanVienXuat', 'NVXuat'],
+  so_tk: ['so_tk', 'So_tk', 'SoTK', 'sotk', 'Số tờ khai', 'So to khai'],
+  date: [
+    'ngay_dang_ky',
+    'Ngay_dang_ky',
+    'ngay_dk',
+    'NgayDK',
+    'NgayLapToKhai',
+    'Ngày đăng ký',
+  ],
+  mst: ['mst', 'MST', 'ma_so_thue', 'MaSoThue', 'Mã số thuế'],
+  cong_ty: ['cong_ty', 'ten_dn', 'TenDoanhNghiep', 'Tên doanh nghiệp'],
+  loai_hinh: ['loai_hinh', 'Loai_hinh', 'ma_loai_hinh', 'Loại hình'],
+  num_items: ['muc_hang', 'so_muc', 'Số mục hàng'],
+  licenses: [
+    'ds_gp',
+    'ds_giay_phep',
+    'DanhSachGiayPhep',
+    'ma_gp',
+    'Số lượng GP',
+    'Số lượng giấy phép',
+  ],
+  nhan_vien_import: ['nhan_vien_nhap', 'NhanVienNhap', 'NVNhap', 'Nhân viên nhập'],
+  nhan_vien_export: ['nhan_vien_xuat', 'NhanVienXuat', 'NVXuat', 'Nhân viên xuất'],
 };
 
 function usage() {
@@ -93,15 +115,25 @@ function buildMockRows({ count, start, range }) {
 function buildKeyLookup(record) {
   const lookup = new Map();
   for (const key of Object.keys(record)) {
-    lookup.set(key.toLowerCase(), key);
+    const lower = key.toLowerCase();
+    if (!lookup.has(lower)) {
+      lookup.set(lower, key);
+    }
+    const normalized = normalizeColumnKey(key);
+    if (normalized && !lookup.has(normalized)) {
+      lookup.set(normalized, key);
+    }
   }
   return lookup;
 }
 
 function readField(record, lookup, name) {
   if (!name) return undefined;
-  const key = lookup.get(String(name).toLowerCase());
-  return key ? record[key] : undefined;
+  const asString = String(name);
+  const direct = lookup.get(asString.toLowerCase());
+  if (direct) return record[direct];
+  const normalized = lookup.get(normalizeColumnKey(asString));
+  return normalized ? record[normalized] : undefined;
 }
 
 function normalizeDeclaration(record) {

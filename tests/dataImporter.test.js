@@ -13,8 +13,8 @@ describe('mapRow', () => {
       'Số TK': ' 1234567890123 ',
       'Nhánh': ' 01 ',
       'Ngay': '15/09/2024',
-      'MST': '0101234567',
-      'Công ty': '  ABC Corp  ',
+      'Mã số thuế': '0101234567',
+      'Tên doanh nghiệp': '  ABC Corp  ',
       'Muc hang': '7',
       'Loai hinh': 'a11',
     };

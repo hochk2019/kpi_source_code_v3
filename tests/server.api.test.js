@@ -282,6 +282,57 @@ describe('ECUS sync API', () => {
     });
   });
 
+  it('đồng bộ được bản ghi với tiêu đề cột tiếng Việt có dấu', async () => {
+    await request(app)
+      .put('/api/import/ecus/config')
+      .send({
+        config: {
+          enabled: true,
+          connection: {
+            server: 'MRHOC\\ECUSSQL2008',
+            database: 'ECUS5VNACCS',
+            user: 'sa',
+            password: '123456',
+          },
+        },
+      });
+
+    sqlMock.__setMockResult([
+      {
+        'Số tờ khai': '305254416960',
+        'Ngày đăng ký': '2025-08-15',
+        'Mã số thuế': '2301158516',
+        'Tên doanh nghiệp': 'CÔNG TY TNHH XYZ',
+        'Số mục hàng': '4',
+        'Số lượng GP': '3',
+        'Nhân viên xuất': 'Học',
+        'Tổ đội': 'Team 3',
+      },
+    ]);
+
+    const runRes = await request(app)
+      .post('/api/import/ecus/run')
+      .send({ from: '2025-08-01', to: '2025-08-31', actor: 'tester' });
+
+    expect(runRes.status).toBe(200);
+    expect(runRes.body.ok).toBe(true);
+    expect(runRes.body.result.imported).toBe(1);
+
+    const row = getDb()
+      .prepare('SELECT value FROM kv_store WHERE key = ?')
+      .get('decl_rows_v1');
+    const stored = JSON.parse(row.value);
+    expect(stored).toHaveLength(1);
+    expect(stored[0]).toMatchObject({
+      so_tk: '305254416960',
+      mst: '2301158516',
+      cong_ty: 'CÔNG TY TNHH XYZ',
+      so_luong_gp: 3,
+      team: 'Team 3',
+      nhan_vien: 'Học',
+    });
+  });
+
   it('ghi nhận lỗi khi SQL Server gặp sự cố', async () => {
     await request(app)
       .put('/api/import/ecus/config')

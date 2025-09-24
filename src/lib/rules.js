@@ -147,6 +147,23 @@ function inCodes(code, arr) {
 
 // ====== ĐẾM SỐ LOẠI GIẤY PHÉP (từ RAW ROW của ECUS5) ======
 export function countLicenseTypesFromRowObj(row, excludeList = []) {
+  const directCountFields = [
+    'Số lượng GP',
+    'So luong GP',
+    'Số lượng giấy phép',
+    'So luong giay phep',
+  ];
+  for (const field of directCountFields) {
+    const raw = row?.[field];
+    if (raw === undefined || raw === null || raw === '') continue;
+    const normalized = norm(raw);
+    if (/^\d+(?:\.\d+)?$/.test(normalized)) {
+      const numeric = Number(normalized);
+      if (Number.isFinite(numeric)) {
+        return Math.max(0, Math.round(numeric));
+      }
+    }
+  }
   // cặp “Mã/Số giấy phép” chuẩn ECUS5: 0..5 (gốc + 1..5)
   const pairs = [
     ['Mã giấy phép', 'Số giấy phép'],

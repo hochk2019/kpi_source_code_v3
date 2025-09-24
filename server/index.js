@@ -802,6 +802,15 @@ function parseLicenseCount(rawValue, excludeSet) {
   const tokens = str.split(/[,;|]/g)
     .map((token) => normalizeStr(token).toUpperCase())
     .filter((token) => token && !excludeSet.has(token));
+  if (tokens.length === 1) {
+    const single = tokens[0];
+    if (/^\d+(?:\.\d+)?$/.test(single)) {
+      const numericSingle = Number(single);
+      if (Number.isFinite(numericSingle)) {
+        return Math.max(0, Math.round(numericSingle));
+      }
+    }
+  }
   if (!tokens.length) {
     const numeric = Number(str);
     if (Number.isFinite(numeric)) {
@@ -811,8 +820,26 @@ function parseLicenseCount(rawValue, excludeSet) {
   return tokens.length;
 }
 
+function normalizeColumnKey(value) {
+  return String(value ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]/gi, '')
+    .toLowerCase();
+}
+
 const COLUMN_ALIASES = Object.freeze({
-  so_tk: ['so_tk', 'sotk', 'soTk', 'So_tk', 'SoTK', 'SO_TK'],
+  so_tk: [
+    'so_tk',
+    'sotk',
+    'soTk',
+    'So_tk',
+    'SoTK',
+    'SO_TK',
+    'Số tờ khai',
+    'So to khai',
+    'Số tờ khai TM',
+  ],
   date: [
     'ngay_dang_ky',
     'Ngay_dang_ky',
@@ -822,9 +849,22 @@ const COLUMN_ALIASES = Object.freeze({
     'ngayKhai',
     'NgayKhai',
     'ngaylap',
+    'Ngày đăng ký',
+    'Ngay dang ky',
   ],
   nhanh: ['nhanh', 'chi_cuc', 'Chi_cuc', 'chiCuc', 'ma_chi_cuc', 'ChiCuc'],
-  mst: ['mst', 'MST', 'ma_so_thue', 'Ma_so_thue', 'maSoThue', 'MaSoThue', 'mst_dn', 'ma_so_thue_dn'],
+  mst: [
+    'mst',
+    'MST',
+    'ma_so_thue',
+    'Ma_so_thue',
+    'maSoThue',
+    'MaSoThue',
+    'mst_dn',
+    'ma_so_thue_dn',
+    'Mã số thuế',
+    'Ma so thue',
+  ],
   cong_ty: [
     'cong_ty',
     'Cong_ty',
@@ -834,9 +874,22 @@ const COLUMN_ALIASES = Object.freeze({
     'TenDoanhNghiep',
     'doanh_nghiep',
     'ten_khach_hang',
+    'Tên doanh nghiệp',
+    'Ten doanh nghiep',
+    'Tên khách hàng',
   ],
-  loai_hinh: ['loai_hinh', 'Loai_hinh', 'ma_loai_hinh', 'MaLoaiHinh'],
-  num_items: ['num_items', 'muc_hang', 'Muc_hang', 'so_muc', 'So_muc', 'so_luong_mh', 'SoLuongMatHang'],
+  loai_hinh: ['loai_hinh', 'Loai_hinh', 'ma_loai_hinh', 'MaLoaiHinh', 'Loại hình', 'Loai hinh'],
+  num_items: [
+    'num_items',
+    'muc_hang',
+    'Muc_hang',
+    'so_muc',
+    'So_muc',
+    'so_luong_mh',
+    'SoLuongMatHang',
+    'Số mục hàng',
+    'So muc hang',
+  ],
   licenses: [
     'licenses',
     'license_codes',
@@ -847,14 +900,22 @@ const COLUMN_ALIASES = Object.freeze({
     'ds_giay_phep',
     'giay_phep',
     'GP',
+    'Danh sách giấy phép',
+    'Danh sach giay phep',
+    'Số lượng GP',
+    'So luong GP',
+    'Số lượng giấy phép',
+    'So luong giay phep',
   ],
-  nhan_vien: ['nhan_vien', 'Nhan_vien', 'nhanVien'],
+  nhan_vien: ['nhan_vien', 'Nhan_vien', 'nhanVien', 'Nhân viên', 'Nhan vien'],
   nhan_vien_import: [
     'nhan_vien_nhap',
     'Nhan_vien_nhap',
     'nv_nhap',
     'NVNhap',
     'NhanVienNhap',
+    'Nhân viên nhập',
+    'Nhan vien nhap',
   ],
   nhan_vien_export: [
     'nhan_vien_xuat',
@@ -862,14 +923,23 @@ const COLUMN_ALIASES = Object.freeze({
     'nv_xuat',
     'NVXuat',
     'NhanVienXuat',
+    'Nhân viên xuất',
+    'Nhan vien xuat',
   ],
-  team: ['team', 'team_name', 'to_doi', 'To_doi', 'ten_to', 'ToDoi'],
+  team: ['team', 'team_name', 'to_doi', 'To_doi', 'ten_to', 'ToDoi', 'Tổ đội', 'To doi'],
 });
 
 function buildRecordKeyLookup(record) {
   const lookup = new Map();
   for (const key of Object.keys(record)) {
-    lookup.set(key.toLowerCase(), key);
+    const lower = key.toLowerCase();
+    if (!lookup.has(lower)) {
+      lookup.set(lower, key);
+    }
+    const normalized = normalizeColumnKey(key);
+    if (normalized && !lookup.has(normalized)) {
+      lookup.set(normalized, key);
+    }
   }
   return lookup;
 }
@@ -879,7 +949,10 @@ function readRecordValue(record, lookup, candidate) {
     return undefined;
   }
   const keyString = String(candidate);
-  const actualKey = lookup.get(keyString.toLowerCase());
+  let actualKey = lookup.get(keyString.toLowerCase());
+  if (actualKey === undefined) {
+    actualKey = lookup.get(normalizeColumnKey(keyString));
+  }
   if (actualKey !== undefined) {
     return record[actualKey];
   }
