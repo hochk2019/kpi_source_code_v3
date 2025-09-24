@@ -3,11 +3,19 @@
 // QUY TẮC KPI + TÍNH KPI THEO NHÓM & BẬC (CÓ LỊCH SỬ)
 // - Hỗ trợ cộng dồn cho Nhóm 3&4 (1–10 là base, +0.5 cho 11–20, 21–30, 31–40, 41–50)
 // - Cho phép cấu hình bậc cho Nhóm 1 và Nhóm 2 (mặc định đúng “chuẩn cũ”)
-// - Loại trừ giấy phép (vd: ZN02, HDGC) áp dụng cho 5 cặp cột “Mã/Số giấy phép (1→5)”
+// - Loại trừ giấy phép (vd: ZN02, HDGC) áp dụng cho 6 cặp cột “Mã/Số giấy phép (0→5)”
 // - “Áp dụng từ ngày…”: lưu phiên bản quy tắc và tính lại KPI từ ngày đó trở đi
 // --------------------------------------------------
 
-import { getData, setData } from './store.js';
+import {
+  getData,
+  setData,
+  RULES_KEY,
+  getRules as readPersistedRules,
+  setRules as persistRules,
+  pushAuditLog,
+} from './store.js';
+import { getItem as getStorageItem, setItem as setStorageItem } from './storageClient.js';
 
 // ====== CẤU HÌNH MẶC ĐỊNH ======
 export const DEFAULT_RULES = {
@@ -53,26 +61,46 @@ export const DEFAULT_RULES = {
   license: {
     perType: 1,             // mỗi LOẠI giấy phép +1 điểm
     maxTypes: 5,            // tối đa số LOẠI tính điểm
-    excludeCodes: ['ZN02','HDGC'] // các mã “Mã giấy phép” KHÔNG tính (áp dụng cho 5 cặp)
+    excludeCodes: ['ZN02','HDGC'] // các mã “Mã giấy phép” KHÔNG tính (áp dụng cho 6 cặp)
   }
 };
 
 // ====== LƯU / TẢI QUY TẮC (CÓ LỊCH SỬ) ======
-const KEY_ACTIVE = 'kpi_rules';            // quy tắc hiện hành
 const KEY_HISTORY = 'kpi_rules_history';   // mảng phiên bản đã lưu
+const LEGACY_KEY_ACTIVE = 'kpi_rules';
 
 export function loadRules() {
   try {
-    const r = JSON.parse(localStorage.getItem(KEY_ACTIVE) || 'null');
-    if (r && r.groups && r.license) return r;
-  } catch {}
+    const stored = readPersistedRules();
+    if (stored && stored.groups && stored.license) {
+      return stored;
+    }
+  } catch (err) {
+    console.warn('loadRules: invalid data, fallback to default', err);
+  }
+
+  // Thử migrate từ khoá cũ nếu còn
+  try {
+    const legacy = JSON.parse(getStorageItem(LEGACY_KEY_ACTIVE) || 'null');
+    if (legacy && legacy.groups && legacy.license) {
+      persistRules(legacy);
+      return legacy;
+    }
+  } catch (err) {
+    console.warn('loadRules: legacy data invalid, fallback to default', err);
+  }
+
   // lần đầu: lưu mặc định
   saveRules(DEFAULT_RULES, { appendHistory: false });
   return DEFAULT_RULES;
 }
 
 export function getRulesHistory() {
-  try { return JSON.parse(localStorage.getItem(KEY_HISTORY) || '[]'); } catch { return []; }
+  try { return JSON.parse(getStorageItem(KEY_HISTORY) || '[]'); }
+  catch (err) {
+    console.warn('getRulesHistory: invalid data, reset history', err);
+    return [];
+  }
 }
 
 /**
@@ -83,19 +111,30 @@ export function getRulesHistory() {
 export function saveRules(rules, opts = {}) {
   const cloned = JSON.parse(JSON.stringify(rules || {}));
   cloned.updatedAt = new Date().toISOString();
-  localStorage.setItem(KEY_ACTIVE, JSON.stringify(cloned));
+  persistRules(cloned);
+  // ghi thêm key cũ để tương thích với bản lưu trước
+  setStorageItem(LEGACY_KEY_ACTIVE, JSON.stringify(cloned));
 
   if (opts.appendHistory !== false) {
     const hist = getRulesHistory();
     hist.unshift(cloned);
     while (hist.length > 20) hist.pop();
-    localStorage.setItem(KEY_HISTORY, JSON.stringify(hist));
+    setStorageItem(KEY_HISTORY, JSON.stringify(hist));
   }
 
   // Tính lại KPI nếu có yêu cầu
   if (opts.recalcFrom) {
     recalcKPIFrom(opts.recalcFrom, cloned);
   }
+
+  const actor = opts.actor || 'system';
+  const applyNote = cloned.applyFrom ? ` (áp dụng từ ${cloned.applyFrom || 'ngay'})` : '';
+  pushAuditLog({
+    actor,
+    action: 'rules.save',
+    detail: `Lưu quy tắc KPI${applyNote}`,
+    meta: { recalcFrom: opts.recalcFrom || '' },
+  });
 }
 
 // ====== TIỆN ÍCH: chuẩn hoá chuỗi mã LH & giấy phép ======
@@ -163,7 +202,9 @@ export function computeKPI(row, rulesInput) {
   const rules = rulesInput || loadRules();
 
   const code = norm(row?.loaiHinh);
-  const items = Number(row?.num_items || 0) || 0;
+  const items = Number(
+    row?.num_items ?? row?.muc_hang ?? 0
+  ) || 0;
 
   const gKey = detectGroup(code, rules);
   const g = rules.groups[gKey] || null;
