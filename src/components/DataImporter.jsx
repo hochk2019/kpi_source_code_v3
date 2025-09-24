@@ -40,6 +40,12 @@ export default function DataImporter({
   canManageSync = false,
   canManageAlerts = false,
 }) {
+import { saveDeclRows, pushImportLog } from "@/lib/store.js";
+import { mapRow } from "@/lib/importer.js";
+
+const PAGE_SIZE = 50;
+
+export default function DataImporter() {
   const fileRef = useRef(null);
   const [rawRows, setRawRows] = useState([]);        // dữ liệu xem trước (đã map)
   const [query, setQuery] = useState("");

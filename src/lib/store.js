@@ -99,6 +99,16 @@ export function toISODate(d, options = {}) {
   const { month, day } = pickMonthDay();
   return tryFromParts({ year, month, day });
 }
+export function toISODate(d) {
+  const s = normalizeStr(d);
+  if (!s) return "";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  const m = s.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})$/);
+  if (!m) return "";
+  let [_, dd, mm, yyyy] = m;
+  if (yyyy.length === 2) yyyy = "20" + yyyy;
+  return `${yyyy.padStart(4,"0")}-${mm.padStart(2,"0")}-${dd.padStart(2,"0")}`;
+}
 
 // ===== Quy tắc xác định Nhập/Xuất =====
 // 30xxxxxxxxxxx -> xuất; 10xxxxxxxxxxx -> nhập
@@ -132,6 +142,7 @@ export function isExportDecl(soTk, loaiHinh) {
 // ===== MST map (gán nhân viên theo ngày hiệu lực) =====
 export function getMSTRowsRaw() {
   return safeParse(getItem(MST_KEY), []);
+  return safeParse(localStorage.getItem(MST_KEY), []);
 }
 
 function sanitizeMSTRow(row) {
@@ -164,6 +175,7 @@ export function getMSTMap() {
 
 /** Ghi đè/bổ sung bảng gán MST (đã chuẩn hoá dữ liệu đầu vào) */
 export function upsertMSTRows(rows, { actor = "system", detail = "" } = {}) {
+export function upsertMSTRows(rows) {
   const sanitized = Array.isArray(rows)
     ? rows.map(sanitizeMSTRow).filter(Boolean)
     : [];
@@ -178,6 +190,7 @@ export function upsertMSTRows(rows, { actor = "system", detail = "" } = {}) {
     action: "mst.save",
     detail: detail || `Cập nhật ${sanitized.length} dòng gán MST`,
   });
+  localStorage.setItem(MST_KEY, JSON.stringify(sanitized));
   return sanitized.length;
 }
 
@@ -660,4 +673,14 @@ export default {
   getRules, setRules, K_RULES,
   pushImportLog,
   pushAuditLog, getAuditLogs, clearAuditLogs,
+};
+export default {
+  DECL_KEY, MST_KEY, RULES_KEY,
+  normalizeStr, normalizeMST, toISODate,
+  isExportDecl, isExportByNumber, isImportByNumber, isExportByType, isImportByType,
+  getMSTRowsRaw, getMSTMap, getMSTFor, upsertMSTRows,
+  getDeclRows, saveDeclRows,
+  getData, setData,
+  getRules, setRules, K_RULES,
+  pushImportLog,
 };

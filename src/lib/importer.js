@@ -7,6 +7,7 @@ import {
   normalizeName,
 } from "@/lib/store.js";
 import { loadRules, countLicenseTypesFromRowObj } from "@/lib/rules.js";
+} from "@/lib/store.js";
 
 const NAME_MAP = {
   so_tk: ["Số TK", "Số tờ khai", "So TK", "So to khai", "Số tờ khai TM", "Số tờ khai TM "],
@@ -74,6 +75,10 @@ export function mapRow(row, opts = {}) {
   const nhanh = normalizeStr(pick(row, NAME_MAP.nhanh));
   const rawDate = pick(row, NAME_MAP.date);
   const dateISO = toISODate(rawDate, { preferMonthFirst: opts.preferMonthFirst });
+export function mapRow(row, opts) {
+  const so_tk = normalizeStr(pick(row, NAME_MAP.so_tk));
+  const nhanh = normalizeStr(pick(row, NAME_MAP.nhanh));
+  const dateISO = toISODate(pick(row, NAME_MAP.date));
   const ma_hq = normalizeStr(pick(row, NAME_MAP.ma_hq));
   const loai_hinh = normalizeStr(pick(row, NAME_MAP.loai_hinh));
   const so_hoa_don = normalizeStr(pick(row, NAME_MAP.so_hoa_don));
@@ -99,6 +104,8 @@ export function mapRow(row, opts = {}) {
   const licenses = countLicenseTypesFromRowObj(row, licenseExcludes);
 
   if (autoAssignStaff) {
+
+  if (opts.autoAssignStaff) {
     const isExport = isExportDecl(so_tk, loai_hinh);
     const m = getMSTFor(mst, dateISO) || {};
     if (!nhan_vien) nhan_vien = isExport ? m.person_export || "" : m.person_import || "";
@@ -117,6 +124,8 @@ export function mapRow(row, opts = {}) {
   return {
     date: dateISO,
     raw_date: normalizeStr(rawDate),
+  return {
+    date: dateISO,
     so_tk,
     soToKhai: so_tk,
     nhanh,
