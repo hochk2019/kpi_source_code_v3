@@ -231,6 +231,7 @@ export default function HQAgencyManager({ canEdit = true, currentUser = null }) 
         <input
           type="file"
           className="hidden"
+          data-testid="hq-file-input"
           ref={fileRef}
           accept=".xls,.xlsx"
           onChange={handleFilePick}
