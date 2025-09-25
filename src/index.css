@@ -1,2 +1,6 @@
-
-@media print { .print\:page-break-after{ page-break-after: always; } .print\:hidden{ display:none !important; } }
+@media print {
+  .print\:page-break-after { page-break-after: always; break-after: page; }
+  .print\:page-break-before { page-break-before: always; break-before: page; }
+  .print\:avoid-break { break-inside: avoid; page-break-inside: avoid; }
+  .print\:hidden { display: none !important; }
+}

@@ -1,17 +1,112 @@
-import React, { useEffect, useState } from 'react'
-import KPICalculator from './components/KPICalculator.jsx'
-import Login from './components/Login.jsx'
-import { getAuth, logout } from './auth/localAuth.js'
-import './App.css'
-export default function App(){
-  const [auth,setAuth]=useState(null)
-  useEffect(()=>{ setAuth(getAuth()) },[])
-  if(!auth) return <Login onLoggedIn={setAuth} />
-  return (<div className="min-h-screen bg-gray-50">
-    <div className="flex justify-between items-center p-3 border-b bg-white">
-      <div className="text-sm">Xin chào, <b>{auth.name}</b> ({auth.role})</div>
-      <button onClick={()=>{logout();setAuth(null)}} className="text-sm underline">Đăng xuất</button>
+import React, { useEffect, useState } from 'react';
+import KPICalculator from './components/KPICalculator.jsx';
+import Login from './components/Login.jsx';
+import ChangePasswordDialog from './components/ChangePasswordDialog.jsx';
+import { getAuth, getViewerAuth, logout } from './auth/localAuth.js';
+import './App.css';
+
+export default function App() {
+  const [auth, setAuth] = useState(null);
+  const [showLogin, setShowLogin] = useState(false);
+  const [showChangePassword, setShowChangePassword] = useState(false);
+
+  useEffect(() => {
+    setAuth(getAuth());
+  }, []);
+
+  const viewer = getViewerAuth();
+  const effectiveAuth = auth || viewer;
+
+  const handleLogout = () => {
+    logout(auth?.username);
+    setAuth(null);
+  };
+
+  const handlePasswordDialogClose = (changed) => {
+    setShowChangePassword(false);
+    if (changed) {
+      setAuth(getAuth());
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      <header className="border-b bg-white shadow-sm">
+        <div className="mx-auto flex max-w-6xl flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-3">
+            <img
+              src="/golden-logistics-logo.svg"
+              alt="Logo Golden Logistics"
+              className="h-14 w-14 flex-shrink-0"
+            />
+            <div className="text-gray-800">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-600">
+                Golden Logistics Co., Ltd
+              </p>
+              <h1 className="text-xl font-semibold leading-tight">Hệ thống KPI nhân viên khai báo hải quan</h1>
+              <p className="text-sm text-gray-500">Công ty TNHH Tiếp Vận Hoàng Kim</p>
+            </div>
+          </div>
+          <div className="flex flex-col items-stretch gap-2 text-sm sm:items-end">
+            <div className="text-right text-gray-600">
+              {auth ? (
+                <span>
+                  Xin chào, <b>{auth.name}</b> ({auth.role})
+                </span>
+              ) : (
+                <span>Đang xem với quyền hạn giới hạn (khách).</span>
+              )}
+            </div>
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              {auth ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setShowChangePassword(true)}
+                    className="rounded border border-amber-400 px-3 py-1 text-amber-700 hover:bg-amber-50"
+                  >
+                    Đổi mật khẩu
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleLogout}
+                    className="rounded border border-gray-300 px-3 py-1 hover:bg-gray-100"
+                  >
+                    Đăng xuất
+                  </button>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setShowLogin(true)}
+                  className="rounded bg-amber-500 px-3 py-1 font-medium text-white shadow-sm hover:bg-amber-600"
+                >
+                  Đăng nhập quản trị
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <main className="px-4 py-6">
+        <KPICalculator auth={effectiveAuth} />
+      </main>
+
+      {showLogin && (
+        <Login
+          variant="modal"
+          onLoggedIn={(user) => {
+            setAuth(user);
+            setShowLogin(false);
+          }}
+          onCancel={() => setShowLogin(false)}
+        />
+      )}
+
+      {showChangePassword && auth && (
+        <ChangePasswordDialog currentUser={auth} onClose={handlePasswordDialogClose} />
+      )}
     </div>
-    <KPICalculator role={auth.role} />
-  </div>)
+  );
 }

@@ -32,7 +32,7 @@ const toISO = (v) => {
   }
   const s = v.toString().trim();
   // dd/mm/yyyy
-  const m1 = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+  const m1 = s.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
   if (m1) {
     const d = m1[1].padStart(2, "0");
     const m = m1[2].padStart(2, "0");
@@ -40,7 +40,7 @@ const toISO = (v) => {
     return `${y}-${m}-${d}`;
   }
   // yyyy-mm-dd
-  const m2 = s.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/);
+  const m2 = s.match(/^(\d{4})[/-](\d{1,2})[/-](\d{1,2})$/);
   if (m2) {
     const y = m2[1];
     const m = m2[2].padStart(2, "0");
@@ -96,12 +96,16 @@ const tidyMST = (v) => {
 
 const pageSize = 50;
 
-export default function MSTAssignment() {
+export default function MSTAssignment({ canEdit = true, currentUser = null }) {
   const [rows, setRows] = useState([]); // toàn bộ
   const [search, setSearch] = useState("");
   const [applyFrom, setApplyFrom] = useState(""); // yyyy-mm-dd
   const [page, setPage] = useState(1);
   const fileRef = useRef();
+  const [selectedFileName, setSelectedFileName] = useState("");
+
+  const actor = currentUser?.username || "guest";
+  const isReadOnly = !canEdit;
 
   /** Load lần đầu */
   useEffect(() => {
@@ -132,6 +136,10 @@ export default function MSTAssignment() {
 
   /** Excel import */
   const onImportXLSX = async () => {
+    if (isReadOnly) {
+      alert("Bạn không có quyền import bảng MST. Đăng nhập bằng tài khoản được cấp quyền để tiếp tục.");
+      return;
+    }
     const f = fileRef.current?.files?.[0];
     if (!f) {
       alert("Chưa chọn file .xlsx/.xls");
@@ -185,13 +193,21 @@ export default function MSTAssignment() {
       alert("Không thể đọc file .xlsx — kiểm tra lại định dạng.");
     } finally {
       if (fileRef.current) fileRef.current.value = "";
+      setSelectedFileName("");
     }
   };
 
   /** Lưu */
   const onSave = () => {
+    if (isReadOnly) {
+      alert("Bạn không có quyền lưu bảng MST.");
+      return;
+    }
     try {
-      upsertMSTRows(rows);
+      upsertMSTRows(rows, {
+        actor,
+        detail: "Cập nhật gán MST từ giao diện",
+      });
       alert("Lưu thành công!");
     } catch (e) {
       console.error(e);
@@ -201,12 +217,14 @@ export default function MSTAssignment() {
 
   /** Thao tác inline */
   const updateRow = (mst, patch) => {
+    if (isReadOnly) return;
     setRows((prev) =>
       prev.map((r) => (r.mst === mst ? { ...r, ...patch } : r))
     );
   };
 
   const removeRow = (mst) => {
+    if (isReadOnly) return;
     if (!confirm(`Xóa MST ${mst}?`)) return;
     setRows((prev) => prev.filter((r) => r.mst !== mst));
   };
@@ -214,28 +232,59 @@ export default function MSTAssignment() {
   /** UI */
   return (
     <div className="p-6 max-w-6xl mx-auto">
+      {isReadOnly && (
+        <div className="mb-4 rounded border border-amber-300 bg-amber-50 p-3 text-sm text-amber-700">
+          Bạn đang xem bảng gán MST ở chế độ chỉ xem. Đăng nhập bằng tài khoản quản trị hoặc được cấp quyền để import, chỉnh sửa và lưu thay đổi.
+        </div>
+      )}
       <div className="flex items-center gap-2 mb-3">
-        <input
-          ref={fileRef}
-          type="file"
-          accept=".xlsx,.xls"
-          className="border rounded px-2 py-1"
-        />
-        <button
-          onClick={onImportXLSX}
-          className="px-3 py-1 rounded bg-black text-white"
-        >
-          Import XLSX
-        </button>
+        {canEdit && (
+          <>
+            <input
+              ref={fileRef}
+              type="file"
+              accept=".xlsx,.xls"
+              className="hidden"
+              disabled={isReadOnly}
+              onChange={(e) => {
+                const name = e.target.files?.[0]?.name || "";
+                setSelectedFileName(name);
+              }}
+            />
+            <button
+              type="button"
+              onClick={() => fileRef.current?.click()}
+              className="px-3 py-1 rounded border bg-white hover:bg-gray-50"
+            >
+              Chọn file XLSX
+            </button>
+            <button
+              onClick={onImportXLSX}
+              className="px-3 py-1 rounded bg-black text-white"
+              type="button"
+            >
+              Import XLSX
+            </button>
+            {selectedFileName && (
+              <span className="text-sm text-gray-600">Đã chọn: {selectedFileName}</span>
+            )}
+          </>
+        )}
 
-        <input
-          type="date"
-          value={applyFrom}
-          onChange={(e) => setApplyFrom(e.target.value)}
-          className="border rounded px-2 py-1 ml-4"
-          placeholder="Áp dụng từ ngày"
-          title="Áp dụng từ ngày (ghi vào trường trống khi import)"
-        />
+        {canEdit && (
+          <input
+            type="date"
+            value={applyFrom}
+            onChange={(e) => setApplyFrom(e.target.value)}
+            className="border rounded px-2 py-1 ml-4"
+            placeholder="Áp dụng từ ngày"
+            title="Áp dụng từ ngày (ghi vào trường trống khi import)"
+          />
+        )}
+
+        <span className="text-xs text-gray-500 ml-auto">
+          * Khi lưu, quy tắc mới chỉ áp dụng cho tờ khai có ngày khai báo từ ngày này trở đi.
+        </span>
 
         <div className="flex-1" />
 
@@ -249,9 +298,11 @@ export default function MSTAssignment() {
           placeholder="Tìm nhanh (MST / Công ty)"
           className="border rounded px-2 py-1 w-64"
         />
-        <button onClick={onSave} className="px-3 py-1 rounded bg-emerald-600 text-white">
-          Lưu
-        </button>
+        {canEdit && (
+          <button onClick={onSave} className="px-3 py-1 rounded bg-emerald-600 text-white">
+            Lưu
+          </button>
+        )}
       </div>
 
       <div className="text-sm text-gray-500 mb-2">
@@ -266,7 +317,6 @@ export default function MSTAssignment() {
               <th className="p-2 text-left">Công ty</th>
               <th className="p-2 text-left w-40">Người phụ trách Nhập</th>
               <th className="p-2 text-left w-40">Người phụ trách Xuất</th>
-              <th className="p-2 text-left w-28">Tổ đội</th>
               <th className="p-2 text-left w-40">Áp dụng từ ngày</th>
               <th className="p-2 w-16">Xóa</th>
             </tr>
@@ -274,7 +324,7 @@ export default function MSTAssignment() {
           <tbody>
             {pageRows.length === 0 ? (
               <tr>
-                <td className="p-3 text-center text-gray-500" colSpan={7}>
+                <td className="p-3 text-center text-gray-500" colSpan={6}>
                   Chưa có dữ liệu
                 </td>
               </tr>
@@ -282,66 +332,83 @@ export default function MSTAssignment() {
               pageRows.map((r) => (
                 <tr key={r.mst} className="border-t">
                   <td className="p-2">
-                    <input
-                      value={r.mst}
-                      onChange={(e) =>
-                        updateRow(r.mst, { mst: tidyMST(e.target.value) })
-                      }
-                      className="border rounded px-2 py-1 w-full"
-                    />
+                    {isReadOnly ? (
+                      <span>{r.mst}</span>
+                    ) : (
+                      <input
+                        value={r.mst}
+                        onChange={(e) =>
+                          updateRow(r.mst, { mst: tidyMST(e.target.value) })
+                        }
+                        className="border rounded px-2 py-1 w-full"
+                      />
+                    )}
                   </td>
                   <td className="p-2">
-                    <input
-                      value={r.company || ""}
-                      onChange={(e) =>
-                        updateRow(r.mst, { company: e.target.value })
-                      }
-                      className="border rounded px-2 py-1 w-full"
-                    />
+                    {isReadOnly ? (
+                      <span>{r.company || ""}</span>
+                    ) : (
+                      <input
+                        value={r.company || ""}
+                        onChange={(e) =>
+                          updateRow(r.mst, { company: e.target.value })
+                        }
+                        className="border rounded px-2 py-1 w-full"
+                      />
+                    )}
                   </td>
                   <td className="p-2">
-                    <input
-                      value={r.person_import || ""}
-                      onChange={(e) =>
-                        updateRow(r.mst, { person_import: e.target.value })
-                      }
-                      className="border rounded px-2 py-1 w-full"
-                    />
+                    {isReadOnly ? (
+                      <span>{r.person_import || ""}</span>
+                    ) : (
+                      <input
+                        value={r.person_import || ""}
+                        onChange={(e) =>
+                          updateRow(r.mst, { person_import: e.target.value })
+                        }
+                        className="border rounded px-2 py-1 w-full"
+                      />
+                    )}
                   </td>
                   <td className="p-2">
-                    <input
-                      value={r.person_export || ""}
-                      onChange={(e) =>
-                        updateRow(r.mst, { person_export: e.target.value })
-                      }
-                      className="border rounded px-2 py-1 w-full"
-                    />
+                    {isReadOnly ? (
+                      <span>{r.person_export || ""}</span>
+                    ) : (
+                      <input
+                        value={r.person_export || ""}
+                        onChange={(e) =>
+                          updateRow(r.mst, { person_export: e.target.value })
+                        }
+                        className="border rounded px-2 py-1 w-full"
+                      />
+                    )}
                   </td>
                   <td className="p-2">
-                    <input
-                      value={r.team || ""}
-                      onChange={(e) => updateRow(r.mst, { team: e.target.value })}
-                      className="border rounded px-2 py-1 w-full"
-                    />
-                  </td>
-                  <td className="p-2">
-                    <input
-                      type="date"
-                      value={r.effective_from || ""}
-                      onChange={(e) =>
-                        updateRow(r.mst, { effective_from: e.target.value })
-                      }
-                      className="border rounded px-2 py-1 w-full"
-                    />
+                    {isReadOnly ? (
+                      <span>{r.effective_from || ""}</span>
+                    ) : (
+                      <input
+                        type="date"
+                        value={r.effective_from || ""}
+                        onChange={(e) =>
+                          updateRow(r.mst, { effective_from: e.target.value })
+                        }
+                        className="border rounded px-2 py-1 w-full"
+                      />
+                    )}
                   </td>
                   <td className="p-2 text-center">
-                    <button
-                      onClick={() => removeRow(r.mst)}
-                      className="px-2 py-1 rounded bg-red-500 text-white"
-                      title="Xóa dòng"
-                    >
-                      Xóa
-                    </button>
+                    {canEdit ? (
+                      <button
+                        onClick={() => removeRow(r.mst)}
+                        className="px-2 py-1 rounded bg-red-500 text-white"
+                        title="Xóa dòng"
+                      >
+                        Xóa
+                      </button>
+                    ) : (
+                      <span className="text-xs text-gray-400">—</span>
+                    )}
                   </td>
                 </tr>
               ))
