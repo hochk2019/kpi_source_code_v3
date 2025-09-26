@@ -17,6 +17,33 @@ import { loadRules, computeKPI } from "@/lib/rules.js";
 const DEFAULT_PAGE_SIZE = 20;
 const PAGE_SIZE_OPTIONS = [20, 50, 100, 200];
 
+const DEFAULT_SYNC_CONFIG = Object.freeze({
+  enabled: false,
+  schedule: "0 * * * *",
+  rangeDays: 1,
+  preferMonthFirst: false,
+  connection: {
+    server: "",
+    database: "",
+    user: "",
+    hasPassword: false,
+  },
+  lastRun: null,
+  lastStatus: null,
+});
+
+const RANGE_PRESETS = Object.freeze([
+  { label: "1 ngày gần nhất", days: 1 },
+  { label: "3 ngày", days: 3 },
+  { label: "7 ngày", days: 7 },
+  { label: "30 ngày", days: 30 },
+]);
+
+function toDateInputValue(date) {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) return "";
+  return [date.getFullYear(), String(date.getMonth() + 1).padStart(2, "0"), String(date.getDate()).padStart(2, "0")].join("-");
+}
+
 function coerceLicenseValue(value) {
   if (value === "" || value === null || value === undefined) return "";
   const str = String(value).trim();
@@ -62,11 +89,22 @@ export default function DataImporter({
   const actor = currentUser?.username || "guest";
   const isReadOnlyForEdits = !canEdit;
   const canReviewAlerts = canEdit || canManageAlerts;
-  const [syncConfig, setSyncConfig] = useState(null);
-  const [syncForm, setSyncForm] = useState(null);
+  const [syncConfig, setSyncConfig] = useState(() => ({ ...DEFAULT_SYNC_CONFIG }));
+  const [syncForm, setSyncForm] = useState(() => ({
+    enabled: DEFAULT_SYNC_CONFIG.enabled,
+    schedule: DEFAULT_SYNC_CONFIG.schedule,
+    rangeDays: DEFAULT_SYNC_CONFIG.rangeDays,
+    preferMonthFirst: DEFAULT_SYNC_CONFIG.preferMonthFirst,
+    server: DEFAULT_SYNC_CONFIG.connection.server,
+    database: DEFAULT_SYNC_CONFIG.connection.database,
+    user: DEFAULT_SYNC_CONFIG.connection.user,
+    password: "",
+    hasPassword: !!DEFAULT_SYNC_CONFIG.connection.hasPassword,
+  }));
   const [syncLoading, setSyncLoading] = useState(false);
   const [syncRunning, setSyncRunning] = useState(false);
   const [syncMessage, setSyncMessage] = useState("");
+  const [syncError, setSyncError] = useState("");
   const [manualRange, setManualRange] = useState({ from: "", to: "" });
   const [alertSummary, setAlertSummary] = useState({ outstanding: 0, totalTracked: 0, lastEvaluatedAt: null });
   const [alertEntries, setAlertEntries] = useState([]);
@@ -119,27 +157,33 @@ export default function DataImporter({
   }, [hasUnsaved]);
 
   const applyConfigToForm = useCallback((config) => {
-    if (!config || typeof config !== "object") {
-      setSyncConfig(null);
-      setSyncForm(null);
-      return;
-    }
-    setSyncConfig(config);
+    const normalizedConfig = {
+      ...DEFAULT_SYNC_CONFIG,
+      ...(config && typeof config === "object" ? config : {}),
+      connection: {
+        ...DEFAULT_SYNC_CONFIG.connection,
+        ...((config && typeof config === "object" && config.connection && typeof config.connection === "object")
+          ? config.connection
+          : {}),
+      },
+    };
+    setSyncConfig(normalizedConfig);
     setSyncForm({
-      enabled: !!config.enabled,
-      schedule: config.schedule || "0 * * * *",
-      rangeDays: config.rangeDays ?? 1,
-      preferMonthFirst: !!config.preferMonthFirst,
-      server: config.connection?.server || "",
-      database: config.connection?.database || "",
-      user: config.connection?.user || "",
+      enabled: !!normalizedConfig.enabled,
+      schedule: normalizedConfig.schedule || "0 * * * *",
+      rangeDays: normalizedConfig.rangeDays ?? 1,
+      preferMonthFirst: !!normalizedConfig.preferMonthFirst,
+      server: normalizedConfig.connection?.server || "",
+      database: normalizedConfig.connection?.database || "",
+      user: normalizedConfig.connection?.user || "",
       password: "",
-      hasPassword: !!config.connection?.hasPassword,
+      hasPassword: !!normalizedConfig.connection?.hasPassword,
     });
   }, []);
 
   const fetchSyncConfig = useCallback(async () => {
     setSyncLoading(true);
+    setSyncError("");
     try {
       const response = await fetch("/api/import/ecus/config", { cache: "no-store" });
       if (!response.ok) {
@@ -148,9 +192,18 @@ export default function DataImporter({
       const payload = await response.json();
       if (payload?.config) {
         applyConfigToForm(payload.config);
+        setSyncMessage("Đã tải cấu hình đồng bộ mới nhất.");
+      } else {
+        setSyncMessage("Không tìm thấy cấu hình lưu trữ, sử dụng giá trị mặc định.");
+        applyConfigToForm(DEFAULT_SYNC_CONFIG);
       }
     } catch (err) {
       console.error("Không thể tải cấu hình đồng bộ ECUS", err);
+      setSyncError(
+        "Không thể tải cấu hình đồng bộ ECUS. Hãy kiểm tra dịch vụ backend (pnpm server) hoặc kết nối mạng LAN."
+      );
+      setSyncMessage("");
+      applyConfigToForm(DEFAULT_SYNC_CONFIG);
     } finally {
       setSyncLoading(false);
     }
@@ -190,6 +243,7 @@ export default function DataImporter({
     if (!syncForm) return;
     setSyncLoading(true);
     setSyncMessage("");
+    setSyncError("");
     try {
       const payload = {
         config: {
@@ -226,7 +280,7 @@ export default function DataImporter({
       }
     } catch (err) {
       console.error("Không thể lưu cấu hình ECUS", err);
-      alert(err?.message || "Không thể lưu cấu hình đồng bộ");
+      setSyncError(err?.message || "Không thể lưu cấu hình đồng bộ");
     } finally {
       setSyncLoading(false);
     }
@@ -237,8 +291,17 @@ export default function DataImporter({
       alert("Bạn không có quyền chạy đồng bộ ECUS.");
       return;
     }
+    if (!manualRange.from && !manualRange.to) {
+      const confirmDefault = window.confirm(
+        "Bạn chưa chọn khoảng thời gian cụ thể. Hệ thống sẽ dùng số ngày mặc định trong cấu hình (RangeDays). Bạn có muốn tiếp tục?"
+      );
+      if (!confirmDefault) {
+        return;
+      }
+    }
     setSyncRunning(true);
     setSyncMessage("Đang đồng bộ...");
+    setSyncError("");
     try {
       const response = await fetch("/api/import/ecus/run", {
         method: "POST",
@@ -260,7 +323,8 @@ export default function DataImporter({
       loadSavedRows({ bypassConfirm: true });
     } catch (err) {
       console.error("Đồng bộ ECUS thất bại", err);
-      setSyncMessage(err?.message ? `Lỗi: ${err.message}` : "Không thể đồng bộ ECUS");
+      setSyncMessage("");
+      setSyncError(err?.message || "Không thể đồng bộ ECUS");
     } finally {
       setSyncRunning(false);
     }
@@ -268,6 +332,16 @@ export default function DataImporter({
 
   const handleManualRangeChange = useCallback((field, value) => {
     setManualRange((prev) => ({ ...prev, [field]: value }));
+  }, []);
+
+  const applyRangePreset = useCallback((days) => {
+    const totalDays = Math.max(0, Number(days) || 0);
+    const end = new Date();
+    const start = new Date(end.getTime() - totalDays * 24 * 60 * 60 * 1000);
+    setManualRange({
+      from: toDateInputValue(start),
+      to: toDateInputValue(end),
+    });
   }, []);
 
   const handleRefreshAlerts = useCallback(() => {
@@ -642,7 +716,7 @@ export default function DataImporter({
 
   const selectionEnabled = mode === "saved" && (canEdit || canManageAlerts);
   const deleteEnabled = canEdit && mode === "saved";
-  const baseColumnCount = 12; // Ngày, Số TK, MST, Công ty, Loại hình, Mục hàng, Nhân viên, Tổ đội, Đại lý, Trạng thái, Số lượng GP, KPI
+  const baseColumnCount = 12; // 12 cột chính: ngày, Số TK, MST, Công ty, Loại hình, Mục hàng, Nhân viên, Tổ đội, Đại lý, Trạng thái, Số lượng GP, KPI
   const totalColumns = baseColumnCount + (selectionEnabled ? 1 : 0) + (deleteEnabled ? 1 : 0);
 
   const canImport = !isReadOnlyForEdits && mode === "preview" && rawRows.length > 0;
@@ -776,11 +850,26 @@ export default function DataImporter({
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <span className="text-xs uppercase tracking-wide text-gray-500">Khoảng thời gian chạy tay</span>
+                <div className="flex flex-wrap items-center gap-1">
+                  {RANGE_PRESETS.map((preset) => (
+                    <button
+                      key={preset.days}
+                      type="button"
+                      className="rounded border px-2 py-1 text-xs text-gray-600 hover:bg-gray-50"
+                      onClick={() => applyRangePreset(preset.days)}
+                      disabled={syncRunning}
+                    >
+                      {preset.label}
+                    </button>
+                  ))}
+                </div>
+                <span className="text-xs text-gray-500">hoặc chọn ngày cụ thể</span>
                 <input
                   type="date"
                   className="rounded border px-2 py-1 text-sm"
                   value={manualRange.from}
                   onChange={(e) => handleManualRangeChange("from", e.target.value)}
+                  disabled={syncRunning}
                 />
                 <span className="text-xs text-gray-500">đến</span>
                 <input
@@ -788,6 +877,7 @@ export default function DataImporter({
                   className="rounded border px-2 py-1 text-sm"
                   value={manualRange.to}
                   onChange={(e) => handleManualRangeChange("to", e.target.value)}
+                  disabled={syncRunning}
                 />
                 <button
                   type="button"
@@ -799,6 +889,7 @@ export default function DataImporter({
                 </button>
               </div>
               {syncMessage && <div className="text-sm text-emerald-600">{syncMessage}</div>}
+              {syncError && <div className="text-sm text-red-600">{syncError}</div>}
             </div>
           ) : (
             <p className="mt-3 text-sm text-gray-500">Đang tải cấu hình đồng bộ...</p>
