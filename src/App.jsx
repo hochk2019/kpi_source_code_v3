@@ -1,7 +1,7 @@
-import React, { useEffect, useState } from 'react';
-import KPICalculator from './components/KPICalculator.jsx';
-import Login from './components/Login.jsx';
-import ChangePasswordDialog from './components/ChangePasswordDialog.jsx';
+import React, { Suspense, useEffect, useState } from 'react';
+const KPICalculator = React.lazy(() => import('./components/KPICalculator.jsx'));
+const Login = React.lazy(() => import('./components/Login.jsx'));
+const ChangePasswordDialog = React.lazy(() => import('./components/ChangePasswordDialog.jsx'));
 import { getAuth, getViewerAuth, logout } from './auth/localAuth.js';
 import './App.css';
 
@@ -90,23 +90,29 @@ export default function App() {
       </header>
 
       <main className="px-4 py-6">
-        <KPICalculator auth={effectiveAuth} />
+        <Suspense fallback={<div className="text-sm text-gray-500">Đang tải dashboard...</div>}>
+          <KPICalculator auth={effectiveAuth} />
+        </Suspense>
       </main>
 
-      {showLogin && (
-        <Login
-          variant="modal"
-          onLoggedIn={(user) => {
-            setAuth(user);
-            setShowLogin(false);
-          }}
-          onCancel={() => setShowLogin(false)}
-        />
-      )}
+      <Suspense fallback={null}>
+        {showLogin && (
+          <Login
+            variant="modal"
+            onLoggedIn={(user) => {
+              setAuth(user);
+              setShowLogin(false);
+            }}
+            onCancel={() => setShowLogin(false)}
+          />
+        )}
+      </Suspense>
 
-      {showChangePassword && auth && (
-        <ChangePasswordDialog currentUser={auth} onClose={handlePasswordDialogClose} />
-      )}
+      <Suspense fallback={null}>
+        {showChangePassword && auth && (
+          <ChangePasswordDialog currentUser={auth} onClose={handlePasswordDialogClose} />
+        )}
+      </Suspense>
     </div>
   );
 }

@@ -2,6 +2,7 @@
 import process from 'node:process';
 import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest';
 import request from 'supertest';
+import { resetSqlMonitor, getSqlTimeoutEvents } from '../server/sqlMonitor.js';
 
 process.env.NODE_ENV = 'test';
 process.env.VITEST = 'true';
@@ -203,6 +204,7 @@ afterAll(() => {
 beforeEach(() => {
   resetDb();
   sqlMock.__resetMock();
+  resetSqlMonitor();
 });
 
 describe('ECUS sync API', () => {
@@ -216,6 +218,14 @@ describe('ECUS sync API', () => {
         enabled: false,
       },
     });
+  });
+
+  it('trả về trạng thái chưa cấu hình khi thiếu thông tin SQL', async () => {
+    const res = await request(app).get('/api/import/ecus/status');
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+    expect(res.body.backend).toMatchObject({ ok: true, state: 'online' });
+    expect(res.body.database).toMatchObject({ ok: false, state: 'not_configured' });
   });
 
   it('lưu cấu hình và chạy đồng bộ thành công', async () => {
@@ -280,6 +290,68 @@ describe('ECUS sync API', () => {
       nhan_vien: 'Phương',
       so_luong_gp: 2,
     });
+  });
+
+  it('đánh dấu C/O khi dữ liệu ECUS có mã biểu thuế phù hợp', async () => {
+    await request(app)
+      .put('/api/import/ecus/config')
+      .send({
+        config: {
+          enabled: true,
+          connection: {
+            server: 'MRHOC\\ECUSSQL2008',
+            database: 'ECUS5VNACCS',
+            user: 'sa',
+            password: '123456',
+          },
+        },
+      });
+
+    sqlMock.__setMockResult([
+      {
+        'Số tờ khai': '105110557420',
+        'Ngày đăng ký': '2025-08-01',
+        'Mã số thuế': '1051105574',
+        'Tên doanh nghiệp': 'CÔNG TY TNHH C/O',
+        'Mã biểu thuế XNK': 'B05',
+        'Số mục hàng': '1',
+      },
+    ]);
+
+    const runRes = await request(app)
+      .post('/api/import/ecus/run')
+      .send({ from: '2025-08-01', to: '2025-08-31', actor: 'tester' });
+
+    expect(runRes.status).toBe(200);
+    const row = getDb().prepare('SELECT value FROM kv_store WHERE key = ?').get('decl_rows_v1');
+    const storedRows = JSON.parse(row.value);
+    expect(storedRows[0]).toMatchObject({ co: 'Có', has_co: true });
+  });
+
+  it('kiểm tra trạng thái SQL Server thành công khi đã cấu hình', async () => {
+    await request(app)
+      .put('/api/import/ecus/config')
+      .send({
+        config: {
+          enabled: true,
+          connection: {
+            server: 'MRHOC\\ECUSSQL2008',
+            database: 'ECUS5VNACCS',
+            user: 'sa',
+            password: '123456',
+          },
+        },
+      });
+
+    sqlMock.__setMockResult([{ ok: 1 }]);
+
+    const res = await request(app).get('/api/import/ecus/status');
+    expect(res.status).toBe(200);
+    expect(res.body.database.ok).toBe(true);
+    expect(res.body.database.state).toBe('ready');
+
+    const state = sqlMock.__getState();
+    expect(state.lastQuery).toMatch(/SELECT 1/i);
   });
 
   it('đồng bộ được bản ghi với tiêu đề cột tiếng Việt có dấu', async () => {
@@ -356,6 +428,9 @@ describe('ECUS sync API', () => {
 
     expect(res.status).toBe(500);
     expect(res.body.ok).toBe(false);
+
+    const timeoutEvents = getSqlTimeoutEvents();
+    expect(timeoutEvents.some((event) => event.message?.includes('SQL timeout'))).toBe(true);
 
     const configRes = await request(app).get('/api/import/ecus/config');
     expect(configRes.body.config.lastStatus).toMatch(/error/i);

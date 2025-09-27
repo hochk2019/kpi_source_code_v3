@@ -24,6 +24,26 @@ export default defineConfig({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            if (id.includes('react') || id.includes('scheduler')) {
+              return 'vendor-react';
+            }
+            if (id.includes('@radix-ui')) {
+              return 'vendor-radix';
+            }
+            if (id.includes('xlsx')) {
+              return 'vendor-xlsx';
+            }
+          }
+          return undefined;
+        },
+      },
+    },
+  },
   test: {
     environment: 'jsdom',
     setupFiles: './vitest.setup.js',
