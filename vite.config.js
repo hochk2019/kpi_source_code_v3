@@ -13,7 +13,7 @@ export default defineConfig({
     host: true,
     proxy: {
       '/api': {
-        target: process.env.VITE_API_BASE || 'http://localhost:4000',
+        target: process.env.VITE_API_BASE || 'http://localhost:5000',
         changeOrigin: true,
       },
     },
@@ -22,6 +22,26 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
+    },
+  },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            if (id.includes('react') || id.includes('scheduler')) {
+              return 'vendor-react';
+            }
+            if (id.includes('@radix-ui')) {
+              return 'vendor-radix';
+            }
+            if (id.includes('xlsx')) {
+              return 'vendor-xlsx';
+            }
+          }
+          return undefined;
+        },
+      },
     },
   },
   test: {

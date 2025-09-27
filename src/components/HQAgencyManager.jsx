@@ -5,6 +5,7 @@ import {
   upsertHQAgencies,
   normalizeMST,
   normalizeStr,
+  getDeclRows,
 } from "@/lib/store.js";
 
 const PAGE_SIZE = 50;
@@ -57,6 +58,31 @@ function mergeRows(current, incoming) {
   });
 }
 
+function suggestCompanyByMST(mst) {
+  const normalized = normalizeMST(mst);
+  if (!normalized) return "";
+  const rows = getDeclRows();
+  if (!Array.isArray(rows) || rows.length === 0) return "";
+  const freq = new Map();
+  for (const row of rows) {
+    const rowMst = normalizeMST(row?.mst);
+    if (rowMst !== normalized) continue;
+    const company = normalizeStr(row?.cong_ty || row?.company || row?.customer || "");
+    if (!company) continue;
+    const count = freq.get(company) || 0;
+    freq.set(company, count + 1);
+  }
+  let best = "";
+  let bestCount = 0;
+  for (const [company, count] of freq.entries()) {
+    if (count > bestCount) {
+      best = company;
+      bestCount = count;
+    }
+  }
+  return best;
+}
+
 export default function HQAgencyManager({ canEdit = true, currentUser = null }) {
   const [rows, setRows] = useState(() => getHQAgencies());
   const [search, setSearch] = useState("");
@@ -96,7 +122,14 @@ export default function HQAgencyManager({ canEdit = true, currentUser = null }) 
   const handleChangeField = useCallback((index, field, value) => {
     setRows(prev => {
       const next = prev.slice();
-      const target = { ...next[index], [field]: field === "mst" ? normalizeMST(value) : normalizeStr(value) };
+      const nextValue = field === "mst" ? normalizeMST(value) : normalizeStr(value);
+      const target = { ...next[index], [field]: nextValue };
+      if (field === "mst") {
+        const suggestion = suggestCompanyByMST(nextValue);
+        if (suggestion && !normalizeStr(target.company)) {
+          target.company = suggestion;
+        }
+      }
       next[index] = target;
       return next;
     });
