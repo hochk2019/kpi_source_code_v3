@@ -10,6 +10,7 @@ const SHARED_KEYS = new Set([
 
 const cache = new Map();
 const listeners = new Map();
+const syncListeners = new Set();
 let remoteEnabled = false;
 let apiBase = '';
 let bootstrapPromise = null;
@@ -19,6 +20,8 @@ let retryTimer = null;
 const RETRY_MIN_MS = 5000;
 const RETRY_MAX_MS = 60000;
 let retryDelayMs = RETRY_MIN_MS;
+let lastSyncError = null;
+let nextRetryAt = null;
 
 function getLocalStorage() {
   if (typeof window !== 'undefined' && window.localStorage) {
@@ -40,6 +43,29 @@ function notify(key) {
       console.error('Shared storage listener error', err);
     }
   }
+}
+
+function createSyncSnapshot() {
+  return {
+    remoteEnabled,
+    pendingWrites: pendingWrites.size,
+    waitingForBackend: pendingWrites.size > 0 && !remoteEnabled,
+    lastError: lastSyncError,
+    retryDelayMs,
+    nextRetryAt,
+  };
+}
+
+function emitSyncStatus() {
+  const snapshot = createSyncSnapshot();
+  for (const listener of syncListeners) {
+    try {
+      listener(snapshot);
+    } catch (err) {
+      console.error('Shared storage sync listener error', err);
+    }
+  }
+  return snapshot;
 }
 
 function writeLocal(key, value) {
@@ -82,6 +108,12 @@ function scheduleRetry() {
     return;
   }
   const base = typeof apiBase === 'string' ? apiBase : '';
+  nextRetryAt = Date.now() + retryDelayMs;
+  emitSyncStatus();
+  retryTimer = setTimeout(async () => {
+    retryTimer = null;
+    nextRetryAt = null;
+    emitSyncStatus();
   retryTimer = setTimeout(async () => {
     retryTimer = null;
     const ok = await bootstrapFromServer(base);
@@ -89,6 +121,7 @@ function scheduleRetry() {
       retryDelayMs = Math.min(Math.max(Math.floor(retryDelayMs * 1.5), RETRY_MIN_MS), RETRY_MAX_MS);
       scheduleRetry();
     }
+    emitSyncStatus();
   }, retryDelayMs);
 }
 
@@ -123,16 +156,22 @@ async function flushPending() {
       try {
         const base = typeof apiBase === 'string' ? apiBase : '';
         await sendWrite(base, key, value);
+        emitSyncStatus();
       } catch (err) {
         console.error('Không thể đồng bộ dữ liệu lên máy chủ', err);
         pendingWrites.set(key, value);
         remoteEnabled = false;
+        lastSyncError = err?.message || 'Không thể kết nối backend';
+        retryDelayMs = Math.min(Math.max(Math.floor(retryDelayMs * 1.5), RETRY_MIN_MS), RETRY_MAX_MS);
+        scheduleRetry();
+        emitSyncStatus();
         retryDelayMs = Math.min(Math.max(Math.floor(retryDelayMs * 1.5), RETRY_MIN_MS), RETRY_MAX_MS);
         scheduleRetry();
         break;
       }
     }
     flushPromise = null;
+    emitSyncStatus();
   })();
   return flushPromise;
 }
@@ -155,11 +194,15 @@ async function bootstrapFromServer(baseUrl) {
       const payload = await response.json();
       applyRemoteSnapshot(payload?.data);
       remoteEnabled = true;
+      lastSyncError = null;
+      emitSyncStatus();
       retryDelayMs = RETRY_MIN_MS;
       return true;
     } catch (err) {
       console.warn('Không thể đồng bộ dữ liệu từ máy chủ, sử dụng dữ liệu cục bộ.', err);
       remoteEnabled = false;
+      lastSyncError = err?.message || 'Không thể kết nối backend';
+      emitSyncStatus();
       return false;
     } finally {
       bootstrapPromise = null;
@@ -179,6 +222,7 @@ function queueSync(key, value) {
     return;
   }
   pendingWrites.set(key, value === undefined ? null : value);
+  emitSyncStatus();
   if (!remoteEnabled) {
     scheduleRetry();
     return;
@@ -255,3 +299,30 @@ export function clearStorageCache() {
 }
 
 export const sharedStorageKeys = SHARED_KEYS;
+
+export function getSyncStatus() {
+  return createSyncSnapshot();
+}
+
+export function subscribeSyncStatus(listener) {
+  const fn = typeof listener === 'function' ? listener : null;
+  if (!fn) {
+    return () => {};
+  }
+  syncListeners.add(fn);
+  const emitInitial = () => {
+    try {
+      fn(createSyncSnapshot());
+    } catch (err) {
+      console.error('Shared storage sync listener error', err);
+    }
+  };
+  if (typeof queueMicrotask === 'function') {
+    queueMicrotask(emitInitial);
+  } else {
+    Promise.resolve().then(emitInitial);
+  }
+  return () => {
+    syncListeners.delete(fn);
+  };
+}
