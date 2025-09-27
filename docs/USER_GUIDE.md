@@ -22,12 +22,18 @@ Hệ thống được triển khai cho Công ty TNHH Tiếp Vận Hoàng Kim (Go
 | Khách (không đăng nhập) | Xem dữ liệu đã lưu theo từng trang (20 dòng), tra cứu bằng ô "Tìm nhanh" (Số TK / MST / Công ty / Đại lý) và các bộ lọc thiếu Nhân viên/Tổ đội. Không thể import file, chỉnh sửa hay lưu dữ liệu. |
 | Có quyền `Import Data` | Chọn file `.xlsx`, cấu hình ghi đè hoặc hợp nhất, tự động gán nhân viên/tổ đội, chỉnh sửa các cột Nhân viên – Tổ đội – Số lượng GP – Đại lý, đánh dấu đã rà soát, xóa dòng và lưu lại. Mọi thao tác được ghi vào nhật ký. |
 
+- Bảng dữ liệu đã bổ sung cột **C/O**. Hệ thống tự động ghi "Có" khi phát hiện tờ khai có mã biểu thuế khác các mã không ưu đãi (B01, B03, B30) dựa trên dữ liệu ECUS/XML/Excel, đồng thời cộng điểm KPI theo Rule v2 khi quy tắc bật.
+- Nếu màn hình hiển thị chật, bảng cho phép kéo ngang (horizontal scroll) để quan sát đủ cột.
+- Khu vực **Đồng bộ ECUS** hiển thị trạng thái backend và kết nối SQL Server. Nút **Kiểm tra kết nối** sẽ gọi API `/api/import/ecus/status` để thông báo cần khởi động dịch vụ trước khi đồng bộ thủ công.
+
 ### 2.2 Đại Lý HQ
 
 | Chế độ | Quyền hạn |
 | --- | --- |
 | Khách | Tìm kiếm và xem danh sách MST – doanh nghiệp – Đại lý hải quan đã cấu hình. |
 | Có quyền `Gán MST` | Import danh sách từ Excel hoặc nhập thủ công, chỉnh sửa/thêm/xóa dòng và lưu. Khi lưu hệ thống tự đồng bộ tên công ty & đại lý sang bảng MST và các tờ khai liên quan. |
+
+- Khi nhập MST mới, chỉ cần điền cột **Mã số thuế**, hệ thống sẽ tự đề xuất tên công ty theo dữ liệu tờ khai đã có (nếu tìm thấy). Người dùng chỉ việc chọn Đại lý HQ tương ứng và lưu lại.
 
 ### 2.3 Gán MST
 
@@ -48,7 +54,9 @@ Hệ thống được triển khai cho Công ty TNHH Tiếp Vận Hoàng Kim (Go
 | Chế độ | Quyền hạn |
 | --- | --- |
 | Khách | Các trường cấu hình bị khóa, vẫn có thể dùng khu vực **Test nhanh** để kiểm tra điểm KPI của tờ khai đã lưu hoặc nhập tay. |
-| Có quyền `Quy tắc KPI` | Chỉnh sửa quy tắc (nhóm loại hình, bậc cộng, giấy phép), lưu phiên bản mới, xuất/import JSON, khôi phục mặc định. Lưu quy tắc sẽ ghi nhận vào nhật ký. |
+| Có quyền `Quy tắc KPI` | Chỉnh sửa quy tắc (nhóm loại hình, bậc cộng, giấy phép, điểm cộng C/O), lưu phiên bản mới, xuất/import JSON, khôi phục mặc định. Lưu quy tắc sẽ ghi nhận vào nhật ký. |
+
+- Quy tắc mặc định đã chuyển sang **Rules v2** với tuỳ chọn cộng điểm C/O. Có thể bật/tắt và chỉnh mức điểm cộng trong giao diện Quy tắc KPI.
 
 ### 2.6 Báo cáo KPI
 
@@ -90,6 +98,14 @@ Hệ thống được triển khai cho Công ty TNHH Tiếp Vận Hoàng Kim (Go
 - Sau khi chạy thử, nên đổi mật khẩu của tài khoản `admin` (dùng nút **Đổi mật khẩu**).
 - Có thể tạo thêm tài khoản với quyền hạn phù hợp cho từng nhóm (ví dụ tài khoản chỉ được import dữ liệu nhưng không chỉnh sửa quy tắc).
 - Nếu quên mật khẩu, quản trị viên khác có thể đặt lại trong tab **Tài khoản**.
+
+## 7. Công cụ hỗ trợ vận hành
+
+- Để tránh phải gõ lệnh `pnpm server` khi vận hành trên Windows, dùng script `scripts/kpi-control-gui.ps1`. Script này cung cấp giao diện (PowerShell + WPF) với các chức năng:
+  - Khởi động/tạm dừng/tắt server KPI, reset nhanh (`pnpm server:rebuild`), đổi port và kiểm tra trạng thái.
+  - Bật/tắt chế độ khởi động cùng Windows (tạo Scheduled Task chạy `kpi-control-gui.ps1 -AutoStart`).
+  - Ghi log theo thời gian thực ở khung dưới cùng để tiện theo dõi.
+- Chạy script bằng PowerShell (Run with PowerShell). Khi đổi port trong giao diện, hệ thống sẽ tự khởi động lại server với port mới.
 
 ---
 

@@ -7,6 +7,7 @@ import {
   normalizeName,
 } from "@/lib/store.js";
 import { loadRules, countLicenseTypesFromRowObj } from "@/lib/rules.js";
+import { deriveCOStatus } from "@/shared/co.js";
 
 const NAME_MAP = {
   so_tk: [
@@ -154,7 +155,7 @@ export function mapRow(row, opts = {}) {
     }
   }
 
-  return {
+  const base = {
     date: dateISO,
     raw_date: normalizeStr(rawDate),
     so_tk,
@@ -182,4 +183,5 @@ export function mapRow(row, opts = {}) {
     licenses,
     so_luong_gp: licenses,
   };
+  return deriveCOStatus(row, base);
 }

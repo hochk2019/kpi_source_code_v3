@@ -133,13 +133,13 @@ describe('Luồng đăng nhập và import thực tế', () => {
     render(<App />);
 
     await user.click(screen.getByRole('button', { name: /đăng nhập quản trị/i }));
-    await user.type(screen.getByPlaceholderText('admin'), 'admin');
-    await user.type(screen.getByPlaceholderText(/•/), 'admin123');
+    await user.type(await screen.findByPlaceholderText('admin'), 'admin');
+    await user.type(await screen.findByPlaceholderText(/•/), 'admin123');
     await user.click(screen.getByRole('button', { name: /^đăng nhập$/i }));
 
     await waitFor(() => expect(screen.getByText(/Xin chào, /i)).toBeInTheDocument());
 
-    await user.click(screen.getByRole('tab', { name: /Import Data/i }));
+    await user.click(await screen.findByRole('tab', { name: /Import Data/i }));
 
     const file = createWorkbookFile();
     const input = document.querySelector('input[type="file"]');

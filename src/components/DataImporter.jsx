@@ -13,6 +13,7 @@ import {
 } from "@/lib/store.js";
 import { mapRow, detectDateOrder } from "@/lib/importer.js";
 import { loadRules, computeKPI } from "@/lib/rules.js";
+import { deriveCOStatus, coLabel } from "@/shared/co.js";
 
 const DEFAULT_PAGE_SIZE = 20;
 const PAGE_SIZE_OPTIONS = [20, 50, 100, 200];
@@ -62,6 +63,15 @@ function ensureLicenseFields(row) {
   return { ...row, licenses: normalized, so_luong_gp: normalized };
 }
 
+function ensureCOFields(row) {
+  if (!row || typeof row !== "object") return row;
+  const status = deriveCOStatus(row, row);
+  if (status.co === row.co && status.has_co === row.has_co) {
+    return row;
+  }
+  return status;
+}
+
 export default function DataImporter({
   canEdit = true,
   currentUser = null,
@@ -109,6 +119,9 @@ export default function DataImporter({
   const [alertSummary, setAlertSummary] = useState({ outstanding: 0, totalTracked: 0, lastEvaluatedAt: null });
   const [alertEntries, setAlertEntries] = useState([]);
   const [alertLoading, setAlertLoading] = useState(false);
+  const [statusInfo, setStatusInfo] = useState({ backend: null, database: null, checkedAt: null });
+  const [statusLoading, setStatusLoading] = useState(false);
+  const [statusError, setStatusError] = useState("");
 
   const loadSavedRows = useCallback((opts = {}) => {
     const { bypassConfirm = false } = opts;
@@ -123,7 +136,7 @@ export default function DataImporter({
     }
     const activeRules = loadRules();
     setRules(activeRules);
-    const saved = sortDeclRows(getDeclRows()).map(ensureLicenseFields);
+    const saved = sortDeclRows(getDeclRows()).map(ensureLicenseFields).map(ensureCOFields);
     setRawRows(saved);
     setMode("saved");
     setPage(1);
@@ -209,6 +222,32 @@ export default function DataImporter({
     }
   }, [applyConfigToForm]);
 
+  const fetchSyncStatus = useCallback(async () => {
+    setStatusLoading(true);
+    setStatusError("");
+    try {
+      const response = await fetch("/api/import/ecus/status", { cache: "no-store" });
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      const payload = await response.json();
+      setStatusInfo({
+        backend: payload?.backend || null,
+        database: payload?.database || null,
+        checkedAt:
+          payload?.database?.checkedAt || payload?.backend?.checkedAt || new Date().toISOString(),
+      });
+      if (payload?.config) {
+        applyConfigToForm(payload.config);
+      }
+    } catch (err) {
+      console.error("Không thể tải trạng thái đồng bộ", err);
+      setStatusError("Không thể kiểm tra kết nối backend/SQL Server.");
+    } finally {
+      setStatusLoading(false);
+    }
+  }, [applyConfigToForm]);
+
   const fetchAlerts = useCallback(async () => {
     setAlertLoading(true);
     try {
@@ -233,7 +272,8 @@ export default function DataImporter({
   useEffect(() => {
     fetchSyncConfig();
     fetchAlerts();
-  }, [fetchSyncConfig, fetchAlerts]);
+    fetchSyncStatus();
+  }, [fetchSyncConfig, fetchAlerts, fetchSyncStatus]);
 
   const handleSaveSyncConfig = useCallback(async () => {
     if (!canManageSync) {
@@ -319,6 +359,7 @@ export default function DataImporter({
       const imported = payload?.result?.imported ?? 0;
       setSyncMessage(`Đã đồng bộ ${imported} tờ khai từ ECUS.`);
       await fetchSyncConfig();
+      await fetchSyncStatus();
       await fetchAlerts();
       loadSavedRows({ bypassConfirm: true });
     } catch (err) {
@@ -328,7 +369,7 @@ export default function DataImporter({
     } finally {
       setSyncRunning(false);
     }
-  }, [actor, canManageSync, fetchAlerts, fetchSyncConfig, loadSavedRows, manualRange.from, manualRange.to]);
+  }, [actor, canManageSync, fetchAlerts, fetchSyncConfig, fetchSyncStatus, loadSavedRows, manualRange.from, manualRange.to]);
 
   const handleManualRangeChange = useCallback((field, value) => {
     setManualRange((prev) => ({ ...prev, [field]: value }));
@@ -716,7 +757,7 @@ export default function DataImporter({
 
   const selectionEnabled = mode === "saved" && (canEdit || canManageAlerts);
   const deleteEnabled = canEdit && mode === "saved";
-  const baseColumnCount = 12; // 12 cột chính: ngày, Số TK, MST, Công ty, Loại hình, Mục hàng, Nhân viên, Tổ đội, Đại lý, Trạng thái, Số lượng GP, KPI
+  const baseColumnCount = 13; // thêm cột C/O
   const totalColumns = baseColumnCount + (selectionEnabled ? 1 : 0) + (deleteEnabled ? 1 : 0);
 
   const canImport = !isReadOnlyForEdits && mode === "preview" && rawRows.length > 0;
@@ -724,6 +765,38 @@ export default function DataImporter({
   const canDelete = deleteEnabled && selectedKeys.length > 0;
   const canReview = selectionEnabled && selectedKeys.length > 0 && canReviewAlerts;
   const modeLabel = mode === "preview" ? "Đang xem dữ liệu từ file (chưa lưu)" : "Đang xem dữ liệu đã lưu";
+
+  const toneClassMap = {
+    success: "border border-emerald-200 bg-emerald-50 text-emerald-700",
+    warning: "border border-amber-200 bg-amber-50 text-amber-700",
+    danger: "border border-red-200 bg-red-50 text-red-700",
+    muted: "border border-gray-200 bg-gray-100 text-gray-600",
+  };
+
+  const resolveStatusMeta = (status, fallback, kind = "database") => {
+    if (!status) {
+      return { tone: "muted", label: fallback, detail: "" };
+    }
+    if (status.ok) {
+      const label = kind === "backend" ? "Backend hoạt động" : "SQL Server sẵn sàng";
+      return { tone: "success", label, detail: status.message || "" };
+    }
+    if (status.state === "not_configured") {
+      return { tone: "warning", label: "Chưa cấu hình SQL Server", detail: "" };
+    }
+    if (status.state === "timeout") {
+      return { tone: "danger", label: "Timeout kết nối SQL Server", detail: status.message || "" };
+    }
+    const detail = status.message || "";
+    const label = kind === "backend" ? "Backend gặp sự cố" : "Lỗi kết nối SQL Server";
+    return { tone: "danger", label, detail };
+  };
+
+  const backendMeta = resolveStatusMeta(statusInfo.backend, "Backend chưa kiểm tra", "backend");
+  const databaseMeta = resolveStatusMeta(statusInfo.database, "SQL Server chưa kiểm tra", "database");
+  const statusCheckedLabel = statusInfo.checkedAt
+    ? new Date(statusInfo.checkedAt).toLocaleString("vi-VN")
+    : "Chưa kiểm tra";
 
   return (
     <div className="space-y-3">
@@ -764,6 +837,14 @@ export default function DataImporter({
               </button>
               <button
                 type="button"
+                onClick={fetchSyncStatus}
+                className="rounded border px-3 py-1 text-sm"
+                disabled={statusLoading}
+              >
+                {statusLoading ? "Đang kiểm tra..." : "Kiểm tra kết nối"}
+              </button>
+              <button
+                type="button"
                 onClick={handleSaveSyncConfig}
                 className="rounded bg-black px-3 py-1 text-sm text-white disabled:opacity-50"
                 disabled={syncLoading || !syncForm}
@@ -771,6 +852,23 @@ export default function DataImporter({
                 Lưu cấu hình
               </button>
             </div>
+          </div>
+          <div className="mt-3 space-y-1">
+            <div className="flex flex-wrap items-center gap-2 text-xs md:text-sm">
+              <span className={`rounded px-2 py-1 ${toneClassMap[backendMeta.tone] || toneClassMap.muted}`}>
+                Backend: {backendMeta.label}
+              </span>
+              <span className={`rounded px-2 py-1 ${toneClassMap[databaseMeta.tone] || toneClassMap.muted}`}>
+                SQL Server: {databaseMeta.label}
+              </span>
+            </div>
+            <div className="text-xs text-gray-500">Lần kiểm tra: {statusCheckedLabel}</div>
+            {(backendMeta.detail || databaseMeta.detail) && (
+              <div className="text-xs text-gray-500">
+                {[backendMeta.detail, databaseMeta.detail].filter(Boolean).join(" • ")}
+              </div>
+            )}
+            {statusError && <div className="text-xs text-red-600">{statusError}</div>}
           </div>
           {syncForm ? (
             <div className="mt-3 space-y-3">
@@ -902,9 +1000,36 @@ export default function DataImporter({
               <h2 className="text-base font-semibold text-gray-900">Đồng bộ ECUS</h2>
               <p className="text-xs text-gray-500">Lần chạy gần nhất: {syncLastRunLabel} • Trạng thái: {syncConfig?.lastStatus || "Chưa có"}</p>
             </div>
-            <button type="button" onClick={fetchSyncConfig} className="rounded border px-3 py-1 text-sm" disabled={syncLoading}>
-              Cập nhật trạng thái
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  fetchSyncConfig();
+                  fetchSyncStatus();
+                }}
+                className="rounded border px-3 py-1 text-sm"
+                disabled={syncLoading || statusLoading}
+              >
+                {statusLoading ? "Đang kiểm tra..." : "Cập nhật trạng thái"}
+              </button>
+            </div>
+          </div>
+          <div className="mt-3 space-y-1">
+            <div className="flex flex-wrap items-center gap-2 text-xs md:text-sm">
+              <span className={`rounded px-2 py-1 ${toneClassMap[backendMeta.tone] || toneClassMap.muted}`}>
+                Backend: {backendMeta.label}
+              </span>
+              <span className={`rounded px-2 py-1 ${toneClassMap[databaseMeta.tone] || toneClassMap.muted}`}>
+                SQL Server: {databaseMeta.label}
+              </span>
+            </div>
+            <div className="text-xs text-gray-500">Lần kiểm tra: {statusCheckedLabel}</div>
+            {(backendMeta.detail || databaseMeta.detail) && (
+              <div className="text-xs text-gray-500">
+                {[backendMeta.detail, databaseMeta.detail].filter(Boolean).join(" • ")}
+              </div>
+            )}
+            {statusError && <div className="text-xs text-red-600">{statusError}</div>}
           </div>
         </section>
       )}
@@ -1104,8 +1229,8 @@ export default function DataImporter({
         </div>
       )}
 
-      <div className="overflow-auto border rounded">
-        <table className="min-w-full text-sm">
+      <div className="overflow-x-auto overflow-y-hidden border rounded">
+        <table className="w-full min-w-[1200px] text-sm">
           <thead className="bg-gray-50">
             <tr>
               {selectionEnabled && <th className="px-2 py-1 text-left w-10">Chọn</th>}
@@ -1114,6 +1239,7 @@ export default function DataImporter({
               <th className="px-2 py-1 text-left">MST</th>
               <th className="px-2 py-1 text-left">Công ty</th>
               <th className="px-2 py-1 text-left">Loại hình</th>
+              <th className="px-2 py-1 text-left">C/O</th>
               <th className="px-2 py-1 text-left">Mục hàng</th>
               <th className="px-2 py-1 text-left">Nhân viên</th>
               <th className="px-2 py-1 text-left">Tổ đội</th>
@@ -1152,6 +1278,16 @@ export default function DataImporter({
                 </td>
                 <td className="px-2 py-1">
                   <span>{r.loai_hinh || ""}</span>
+                </td>
+                <td className="px-2 py-1">
+                  {(() => {
+                    const status = coLabel(r);
+                    return (
+                      <span className={status ? "text-emerald-600 font-medium" : "text-gray-400"}>
+                        {status || "Không"}
+                      </span>
+                    );
+                  })()}
                 </td>
                 <td className="px-2 py-1">
                   <span>{r.muc_hang ?? ""}</span>
