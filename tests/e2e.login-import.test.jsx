@@ -91,6 +91,7 @@ describe('Luồng đăng nhập và import thực tế', () => {
 
     const importTab = await screen.findByRole('tab', { name: /Import Data/i }, { timeout: 5000 });
     await user.click(importTab);
+    await user.click(await screen.findByRole('tab', { name: /Import Data/i }));
 
     const file = createWorkbookFile();
     const input = document.querySelector('input[type="file"]');
