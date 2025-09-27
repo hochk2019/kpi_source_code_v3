@@ -114,6 +114,8 @@ function scheduleRetry() {
     retryTimer = null;
     nextRetryAt = null;
     emitSyncStatus();
+  retryTimer = setTimeout(async () => {
+    retryTimer = null;
     const ok = await bootstrapFromServer(base);
     if (!ok) {
       retryDelayMs = Math.min(Math.max(Math.floor(retryDelayMs * 1.5), RETRY_MIN_MS), RETRY_MAX_MS);
@@ -163,6 +165,8 @@ async function flushPending() {
         retryDelayMs = Math.min(Math.max(Math.floor(retryDelayMs * 1.5), RETRY_MIN_MS), RETRY_MAX_MS);
         scheduleRetry();
         emitSyncStatus();
+        retryDelayMs = Math.min(Math.max(Math.floor(retryDelayMs * 1.5), RETRY_MIN_MS), RETRY_MAX_MS);
+        scheduleRetry();
         break;
       }
     }
