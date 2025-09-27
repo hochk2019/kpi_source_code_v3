@@ -19,7 +19,7 @@ pnpm install
 
 Mở **hai** cửa sổ terminal:
 
-1. Chạy máy chủ lưu trữ dùng chung (port mặc định: `4000`):
+1. Chạy máy chủ lưu trữ dùng chung (port mặc định: `5000`):
 
    ```bash
    pnpm server
@@ -27,7 +27,7 @@ Mở **hai** cửa sổ terminal:
 
    Máy chủ này lưu dữ liệu vào cơ sở dữ liệu SQLite tại
    `server/data/storage.sqlite` và cung cấp các API REST dưới đường dẫn
-   `/api/...`. Nếu bạn nâng cấp từ phiên bản cũ còn sử dụng file
+   `/api/...`. Ứng dụng giao diện sẽ tự động thử lại kết nối định kỳ: nếu thời điểm mở trang máy chủ chưa hoạt động, dữ liệu tạm ghi localStorage sẽ được đẩy lên cơ sở dữ liệu ngay khi kết nối thông suốt. Nếu bạn nâng cấp từ phiên bản cũ còn sử dụng file
    `server/data/db.json`, máy chủ sẽ tự động nhập dữ liệu ban đầu từ file này
    (nếu tồn tại) trong lần chạy đầu tiên.
 
@@ -40,7 +40,7 @@ Mở **hai** cửa sổ terminal:
    pnpm dev
    ```
 
-   Vite đã cấu hình proxy `/api` → `http://localhost:4000`, vì vậy giao diện và
+   Vite đã cấu hình proxy `/api` → `http://localhost:5000`, vì vậy giao diện và
    API có thể hoạt động song song. Từ máy khác trong LAN, truy cập
    `http://<IP_MAY_CHU>:5173` (ví dụ `http://192.168.1.114:5173`).
 
@@ -48,8 +48,8 @@ Mở **hai** cửa sổ terminal:
 > chạy `pnpm server`, đồng thời cấu hình `VITE_API_BASE` cho Vite, ví dụ:
 >
 > ```bash
-> PORT=5000 pnpm server
-> VITE_API_BASE=http://localhost:5000 pnpm dev
+> PORT=6000 pnpm server
+> VITE_API_BASE=http://localhost:6000 pnpm dev
 > ```
 
 ## 3. Triển khai cho môi trường vận hành nội bộ
@@ -67,7 +67,7 @@ Mở **hai** cửa sổ terminal:
    ```
 
    Máy chủ sẽ phục vụ cả API `/api/...` lẫn nội dung tĩnh trong thư mục `dist/`.
-   Người dùng chỉ cần truy cập `http://<IP_MAY_CHU>:4000` (hoặc port bạn cấu
+   Người dùng chỉ cần truy cập `http://<IP_MAY_CHU>:5000` (hoặc port bạn cấu
    hình). Nếu muốn dùng port khác, đặt `PORT=... pnpm start`.
 
 3. Tất cả dữ liệu (tờ khai, gán MST, quy tắc KPI, tài khoản, nhật ký…) được lưu

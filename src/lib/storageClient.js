@@ -12,7 +12,13 @@ const cache = new Map();
 const listeners = new Map();
 let remoteEnabled = false;
 let apiBase = '';
-let initPromise = null;
+let bootstrapPromise = null;
+const pendingWrites = new Map();
+let flushPromise = null;
+let retryTimer = null;
+const RETRY_MIN_MS = 5000;
+const RETRY_MAX_MS = 60000;
+let retryDelayMs = RETRY_MIN_MS;
 
 function getLocalStorage() {
   if (typeof window !== 'undefined' && window.localStorage) {
@@ -46,18 +52,138 @@ function writeLocal(key, value) {
   }
 }
 
-function queueSync(key, value) {
-  if (!remoteEnabled || !SHARED_KEYS.has(key) || !apiBase) {
+function normalizeBaseUrl(value) {
+  if (typeof value !== 'string') {
+    return '';
+  }
+  return value.endsWith('/') ? value.slice(0, -1) : value;
+}
+
+function applyRemoteSnapshot(data) {
+  const entries = data && typeof data === 'object' ? Object.entries(data) : [];
+  for (const [key, value] of entries) {
+    if (value === null || value === undefined) {
+      cache.delete(key);
+      writeLocal(key, null);
+    } else if (typeof value === 'string') {
+      cache.set(key, value);
+      writeLocal(key, value);
+    } else {
+      const stringValue = JSON.stringify(value);
+      cache.set(key, stringValue);
+      writeLocal(key, stringValue);
+    }
+    notify(key);
+  }
+}
+
+function scheduleRetry() {
+  if (retryTimer || typeof fetch !== 'function') {
     return;
   }
+  const base = typeof apiBase === 'string' ? apiBase : '';
+  retryTimer = setTimeout(async () => {
+    retryTimer = null;
+    const ok = await bootstrapFromServer(base);
+    if (!ok) {
+      retryDelayMs = Math.min(Math.max(Math.floor(retryDelayMs * 1.5), RETRY_MIN_MS), RETRY_MAX_MS);
+      scheduleRetry();
+    }
+  }, retryDelayMs);
+}
+
+async function sendWrite(base, key, value) {
   const payload = value === null || value === undefined ? { value: null } : { value };
-  fetch(`${apiBase}/api/storage/${encodeURIComponent(key)}`, {
+  const urlBase = base || '';
+  const response = await fetch(`${urlBase}/api/storage/${encodeURIComponent(key)}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
-  }).catch((err) => {
-    console.error('Không thể đồng bộ dữ liệu lên máy chủ', err);
   });
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status}`);
+  }
+}
+
+async function flushPending() {
+  if (flushPromise || pendingWrites.size === 0 || typeof fetch !== 'function') {
+    return flushPromise;
+  }
+  flushPromise = (async () => {
+    while (pendingWrites.size > 0) {
+      if (!remoteEnabled) {
+        break;
+      }
+      const iterator = pendingWrites.entries().next();
+      if (iterator.done) {
+        break;
+      }
+      const [key, value] = iterator.value;
+      pendingWrites.delete(key);
+      try {
+        const base = typeof apiBase === 'string' ? apiBase : '';
+        await sendWrite(base, key, value);
+      } catch (err) {
+        console.error('Không thể đồng bộ dữ liệu lên máy chủ', err);
+        pendingWrites.set(key, value);
+        remoteEnabled = false;
+        retryDelayMs = Math.min(Math.max(Math.floor(retryDelayMs * 1.5), RETRY_MIN_MS), RETRY_MAX_MS);
+        scheduleRetry();
+        break;
+      }
+    }
+    flushPromise = null;
+  })();
+  return flushPromise;
+}
+
+async function bootstrapFromServer(baseUrl) {
+  if (bootstrapPromise) {
+    return bootstrapPromise;
+  }
+  if (typeof fetch !== 'function') {
+    return false;
+  }
+  const normalizedBase = normalizeBaseUrl(baseUrl ?? '');
+  apiBase = normalizedBase;
+  bootstrapPromise = (async () => {
+    try {
+      const response = await fetch(`${normalizedBase}/api/bootstrap`, { cache: 'no-store' });
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      const payload = await response.json();
+      applyRemoteSnapshot(payload?.data);
+      remoteEnabled = true;
+      retryDelayMs = RETRY_MIN_MS;
+      return true;
+    } catch (err) {
+      console.warn('Không thể đồng bộ dữ liệu từ máy chủ, sử dụng dữ liệu cục bộ.', err);
+      remoteEnabled = false;
+      return false;
+    } finally {
+      bootstrapPromise = null;
+    }
+  })();
+  const ok = await bootstrapPromise;
+  if (ok) {
+    await flushPending();
+  } else {
+    scheduleRetry();
+  }
+  return ok;
+}
+
+function queueSync(key, value) {
+  if (!SHARED_KEYS.has(key) || typeof fetch !== 'function') {
+    return;
+  }
+  pendingWrites.set(key, value === undefined ? null : value);
+  if (!remoteEnabled) {
+    scheduleRetry();
+    return;
+  }
+  flushPending();
 }
 
 export function getItem(key) {
@@ -111,50 +237,17 @@ export function subscribe(key, listener) {
 }
 
 export async function initSharedStorage(options = {}) {
-  if (initPromise) {
-    return initPromise;
-  }
-  const baseUrl = options.baseUrl ?? options.apiBase ?? (typeof import.meta !== 'undefined' ? import.meta.env?.VITE_API_BASE : '') ?? '';
-  const normalizedBase = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
-
+  const baseUrl =
+    options.baseUrl ??
+    options.apiBase ??
+    (typeof import.meta !== 'undefined' ? import.meta.env?.VITE_API_BASE : '') ??
+    '';
+  const normalizedBase = normalizeBaseUrl(baseUrl);
+  apiBase = normalizedBase;
   if (typeof fetch !== 'function') {
     return false;
   }
-
-  initPromise = (async () => {
-    try {
-      const response = await fetch(`${normalizedBase}/api/bootstrap`, { cache: 'no-store' });
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
-      const payload = await response.json();
-      const data = payload?.data && typeof payload.data === 'object' ? payload.data : {};
-      for (const [key, value] of Object.entries(data)) {
-        if (value === null || value === undefined) {
-          cache.delete(key);
-          writeLocal(key, null);
-        } else if (typeof value === 'string') {
-          cache.set(key, value);
-          writeLocal(key, value);
-        } else {
-          const stringValue = JSON.stringify(value);
-          cache.set(key, stringValue);
-          writeLocal(key, stringValue);
-        }
-        notify(key);
-      }
-      apiBase = normalizedBase || '';
-      remoteEnabled = true;
-      return true;
-    } catch (err) {
-      console.warn('Không thể đồng bộ dữ liệu từ máy chủ, sử dụng dữ liệu cục bộ.', err);
-      remoteEnabled = false;
-      apiBase = normalizedBase || '';
-      return false;
-    }
-  })();
-
-  return initPromise;
+  return bootstrapFromServer(normalizedBase);
 }
 
 export function clearStorageCache() {
