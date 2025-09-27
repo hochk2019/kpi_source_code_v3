@@ -1,36 +1,19 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, waitFor, cleanup } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import Login from '@/components/Login.jsx';
 import KPICalculator from '@/components/KPICalculator.jsx';
 import { getViewerAuth, login } from '@/auth/localAuth.js';
+import { installMockApi } from './helpers/mockApi.js';
 
 beforeEach(() => {
   cleanup();
-  vi.stubGlobal(
-    'fetch',
-    vi.fn(async (input, init) => {
-      const method = init?.method || 'GET';
-      const url = typeof input === 'string' ? input : input?.url ?? '';
-      if (url.includes('/api/import/ecus/config')) {
-        return {
-          ok: true,
-          json: async () => ({ ok: true, config: { enabled: false, connection: { hasPassword: false, password: '' } } }),
-        };
-      }
-      if (url.includes('/api/import/alerts')) {
-        return {
-          ok: true,
-          json: async () => ({ ok: true, alerts: [], summary: { outstanding: 0, totalTracked: 0, lastEvaluatedAt: null } }),
-        };
-      }
-      if (url.includes('/api/import/ecus/run') && method === 'POST') {
-        return { ok: true, json: async () => ({ ok: true, result: { imported: 0, fetched: 0, alerts: {} } }) };
-      }
-      return { ok: true, json: async () => ({ ok: true }) };
-    })
-  );
+  installMockApi();
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
 });
 
 describe('Login component', () => {

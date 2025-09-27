@@ -1,21 +1,49 @@
-import React, { useEffect, useState } from 'react';
-import KPICalculator from './components/KPICalculator.jsx';
-import Login from './components/Login.jsx';
-import ChangePasswordDialog from './components/ChangePasswordDialog.jsx';
+import React, { Suspense, useEffect, useMemo, useState } from 'react';
+const KPICalculator = React.lazy(() => import('./components/KPICalculator.jsx'));
+const Login = React.lazy(() => import('./components/Login.jsx'));
+const ChangePasswordDialog = React.lazy(() => import('./components/ChangePasswordDialog.jsx'));
 import { getAuth, getViewerAuth, logout } from './auth/localAuth.js';
 import './App.css';
+import { getSyncStatus, subscribeSyncStatus } from './lib/storageClient.js';
 
 export default function App() {
   const [auth, setAuth] = useState(null);
   const [showLogin, setShowLogin] = useState(false);
   const [showChangePassword, setShowChangePassword] = useState(false);
+  const [syncStatus, setSyncStatus] = useState(() => getSyncStatus());
 
   useEffect(() => {
     setAuth(getAuth());
   }, []);
 
+  useEffect(() => {
+    const unsubscribe = subscribeSyncStatus((status) => {
+      setSyncStatus(status);
+    });
+    return () => unsubscribe();
+  }, []);
+
   const viewer = getViewerAuth();
   const effectiveAuth = auth || viewer;
+
+  const syncDetail = useMemo(() => {
+    if (!syncStatus?.waitingForBackend) {
+      return '';
+    }
+    const parts = [];
+    if (typeof syncStatus.pendingWrites === 'number' && syncStatus.pendingWrites > 0) {
+      parts.push(`${syncStatus.pendingWrites.toLocaleString('vi-VN')} thay đổi chưa gửi`);
+    }
+    if (syncStatus.nextRetryAt) {
+      parts.push(`Thử lại lúc ${new Date(syncStatus.nextRetryAt).toLocaleTimeString('vi-VN')}`);
+    } else if (syncStatus.retryDelayMs) {
+      parts.push(`Thử lại sau khoảng ${Math.round(syncStatus.retryDelayMs / 1000)} giây`);
+    }
+    if (syncStatus.lastError) {
+      parts.push(`Lý do gần nhất: ${syncStatus.lastError}`);
+    }
+    return parts.join(' • ');
+  }, [syncStatus]);
 
   const handleLogout = () => {
     logout(auth?.username);
@@ -89,24 +117,44 @@ export default function App() {
         </div>
       </header>
 
+      {syncStatus?.waitingForBackend && (
+        <div className="border-b border-amber-200 bg-amber-50">
+          <div className="mx-auto flex max-w-6xl flex-col gap-1 px-4 py-3 text-sm text-amber-800 sm:flex-row sm:items-center sm:justify-between">
+            <div className="font-medium">
+              Dữ liệu mới đang tạm lưu cục bộ vì backend chưa sẵn sàng đồng bộ.
+            </div>
+            {syncDetail && <div className="text-xs text-amber-700 sm:text-sm">{syncDetail}</div>}
+            <div className="text-xs text-amber-700 sm:text-sm">
+              Vui lòng khởi động dịch vụ backend (pnpm server) hoặc kiểm tra kết nối LAN rồi chờ hệ thống tự đồng bộ.
+            </div>
+          </div>
+        </div>
+      )}
+
       <main className="px-4 py-6">
-        <KPICalculator auth={effectiveAuth} />
+        <Suspense fallback={<div className="text-sm text-gray-500">Đang tải dashboard...</div>}>
+          <KPICalculator auth={effectiveAuth} />
+        </Suspense>
       </main>
 
-      {showLogin && (
-        <Login
-          variant="modal"
-          onLoggedIn={(user) => {
-            setAuth(user);
-            setShowLogin(false);
-          }}
-          onCancel={() => setShowLogin(false)}
-        />
-      )}
+      <Suspense fallback={null}>
+        {showLogin && (
+          <Login
+            variant="modal"
+            onLoggedIn={(user) => {
+              setAuth(user);
+              setShowLogin(false);
+            }}
+            onCancel={() => setShowLogin(false)}
+          />
+        )}
+      </Suspense>
 
-      {showChangePassword && auth && (
-        <ChangePasswordDialog currentUser={auth} onClose={handlePasswordDialogClose} />
-      )}
+      <Suspense fallback={null}>
+        {showChangePassword && auth && (
+          <ChangePasswordDialog currentUser={auth} onClose={handlePasswordDialogClose} />
+        )}
+      </Suspense>
     </div>
   );
 }
