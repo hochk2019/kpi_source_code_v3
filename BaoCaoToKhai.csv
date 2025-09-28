@@ -1,0 +1,112 @@
+﻿STT,Chọn hiển thị,Field Value,FieldValueAs,IsGroupBy,FieldGroupBy,FieldFormat,Tên Cột ,Số TT hiển thị
+1,1,a.SOTK,SOTK,1,a.SOTK,,Số TK,1
+2,1,a.SOTK_NHANH,SOTK_NHANH,1,a.SOTK_NHANH,,Nhánh,2
+3,1,a.NGAY_DK,NGAY_DK,1,a.NGAY_DK,dd/MM/yyyy,Ngày ĐK,3
+4,1,a.MA_HQ,MA_HQ,1,a.MA_HQ,,Mã HQ,4
+5,1,a.MA_LH,MA_LH,1,a.MA_LH,,Mã loại hình,5
+6,1,a.SO_HDTM,SO_HDTM,1,a.SO_HDTM,,Số hóa đơn TM,6
+7,1,a.VAN_DON,VAN_DON,1,a.VAN_DON,,Vận đơn,7
+8,1,f.TEN_MO_TA,LOAI_PTVC,1,f.TEN_MO_TA,,Phương thức vận chuyển,8
+9,1,a.SO_KIEN,SO_KIEN,1,a.SO_KIEN,"###,###,###,##0.######",Số lượng kiện,9
+10,1,a.TR_LUONG,TR_LUONG,1,a.TR_LUONG,"###,###,###,##0.######",Tổng trọng lượng hàng (Gross),10
+11,1,a.SO_CONTAINER,SO_CONTAINER,1,a.SO_CONTAINER,,Số lượng cont,11
+12,1,case when a.PLuong = 'Xanh' then N'Luồng Xanh'   when a.PLuong = 'Vang'  then N'Luồng vàng'   when a.PLuong = 'Do'  then N'Luồng đỏ' end ,PLUONG,1,PLUONG,,Phân luồng,12
+13,-1,[dbo].[fn_TK_TotalItems](a.SOTK),TotalItems,0,,"#,##0",Tổng số mục hàng,12
+14,1,a.DV_DT,DV_DT,1,a.DV_DT,,Tên đối tác,13
+15,1,a.MA_GH,MA_GH,1,a.MA_GH,,Điều kiện giá hóa đơn,14
+16,1, sum (d.LUONG),TONGLUONG,,,"###,###,###,##0.######",Tổng lượng hàng,15
+17,1,a.NGAY_HDTM,NGAY_HDTM,1,a.NGAY_HDTM,dd/MM/yyyy,Ngày HĐTM,16
+18,-1,A.MA_DV,MA_DV,1,MA_DV,,Mã doanh nghiệp,17
+19,1,A._Ten_DV_L1,TEN_DV,1,A._Ten_DV_L1,,Tên doanh nghiệp,18
+20,-1,a.MA_CANGNN,MA_CANGNN,1,a.MA_CANGNN,,Mã địa điểm dỡ hàng,18
+21,-1,a.CANGNN,CANGNN,1,a.CANGNN,,Tên địa đểm dỡ hàng,19
+22,-1,a.TEN_PTVT,TEN_PTVT,1,a.TEN_PTVT,,Tênphương tiện vận chuyển,19
+23,-1,a.NGAYDEN,NGAYDEN,1,a.NGAYDEN,dd/MM/yyyy,Ngày đến,19
+24,-1,a.MA_CK,MA_CK,1,a.MA_CK,,Mã địa điểm xếp hàng,19
+25,-1,a.TEN_CK,TEN_CK,1,a.TEN_CK,,Tên địa điểm xếp hàng,19
+26,-1,case  when a.TTTK = 'N' then N'Nhập mới' when a.TTTK = 'E' then N'Đã đăng ký' when a.TTTK = 'D' then N'Đã khai báo' when a.TTTK = 'K' then N'Đã kiểm hóa' when a.TTTK = 'S' then N'Đã tính thuế sau kiểm hóa' when a.TTTK = 'C' then N'Điều chỉnh thuế' when a.TTTK = 'H' then N'Hủy tờ khai' when a.TTTK = 'P' then N'Đã phân luồng' when a.TTTK = 'T' then N'Đã thông quan' end,TTTK,1,TTTK,,Trạng thái,21
+27,-1,b.TRUNG_CHUYEN_GHI_CHU,TRUNG_CHUYEN_GHI_CHU,1,TRUNG_CHUYEN_GHI_CHU,,Ghi chú,22
+28,-1,MA_LY_DO_BP,MA_LY_DO_BP,1,MA_LY_DO_BP,,Lý do đề nghị BP,45
+29,-1,DAM_BAO_MA_NG_HANG,DAM_BAO_MA_NG_HANG,1,DAM_BAO_MA_NG_HANG,,Mã ngân hàng trả thuế,46
+30,-1,g.TEN_NH,DAM_BAO_TEN_NG_HANG,1,g.TEN_NH,,Tên ngân hàng trả thuế,47
+31,-1,DAM_BAO_NAM_PHAT_HANH,DAM_BAO_NAM_PHAT_HANH,1,DAM_BAO_NAM_PHAT_HANH,,Năm phát hành hạn mức,48
+32,-1,DAM_BAO_KY_HIEU_CT,DAM_BAO_KY_HIEU_CT,1,DAM_BAO_KY_HIEU_CT,,Ký hiệu CT hạn mức,49
+33,-1,DAM_BAO_SO_CT,DAM_BAO_SO_CT,1,DAM_BAO_SO_CT,,Số CT hạn mức,51
+34,-1,MA_THOI_HAN_NOP_THUE,MA_THOI_HAN_NOP_THUE,1,MA_THOI_HAN_NOP_THUE,,Mã xđ thời hạn nộp thuế,52
+35,-1,BL_THUE_MA_NG_HANG,BL_THUE_MA_NG_HANG,1,BL_THUE_MA_NG_HANG,,Mã ngân hàng bảo lãnh,53
+36,-1,h.TEN_NH,BL_THUE_TEN_NG_HANG,1,h.TEN_NH,,Tên ngân hàng bảo lãnh,54
+37,-1,BL_THUE_NAM_CT,BL_THUE_NAM_CT,1,BL_THUE_NAM_CT,,Năm phát hành bảo lãnh,55
+38,-1,BL_THUE_KY_HIEU_CT,BL_THUE_KY_HIEU_CT,1,BL_THUE_KY_HIEU_CT,,Ký hiệu CT bảo lãnh,56
+39,-1,BL_THUE_SO_CT,BL_THUE_SO_CT,1,BL_THUE_SO_CT,,Số hiệu CT bảo lãnh,57
+40,-1,b.NGAY_CAP_PHEP,NGAY_CAP_PHEP,1,b.NGAY_CAP_PHEP,dd/MM/yyyy,Ngày thông quan,58
+41,-1,a.NGAY_HD,NGAY_HD,1,a.NGAY_HD,dd/MM/yyyy,Ngày hợp đồng,59
+42,-1,a.NGAY_HHHD,NGAY_HHHD,1,a.NGAY_HHHD,dd/MM/yyyy,Ngày HHHĐ,60
+43,-1,case  when MA_SAC_THUE = 'N' then TONG_THUE when MA_SAC_THUE2 = 'N' then TONG_THUE2 when MA_SAC_THUE3 = 'N' then TONG_THUE3 when MA_SAC_THUE4 = 'N' then TONG_THUE4 when MA_SAC_THUE5 = 'N' then TONG_THUE5 when MA_SAC_THUE6 = 'N' then TONG_THUE6 end,THUE_XNK,1,"MA_SAC_THUE,TONG_THUE,MA_SAC_THUE2,TONG_THUE2,MA_SAC_THUE3,TONG_THUE3,MA_SAC_THUE4,TONG_THUE4,MA_SAC_THUE5,TONG_THUE5,MA_SAC_THUE6,TONG_THUE6","###,###,###,##0.######",Tổng thuế XNK,64
+44,-1,"case  when MA_SAC_THUE in ('G','B') then TONG_THUE when MA_SAC_THUE2 in ('G','B') then TONG_THUE2 when MA_SAC_THUE3 in ('G','B') then TONG_THUE3 when MA_SAC_THUE4 in ('G','B') then TONG_THUE4 when MA_SAC_THUE5 in ('G','B') then TONG_THUE5 when MA_SAC_THUE6 in ('G','B') then TONG_THUE6 end",THUE_TV,1,"MA_SAC_THUE,TONG_THUE,MA_SAC_THUE2,TONG_THUE2,MA_SAC_THUE3,TONG_THUE3,MA_SAC_THUE4,TONG_THUE4,MA_SAC_THUE5,TONG_THUE5,MA_SAC_THUE6,TONG_THUE6","###,###,###,##0.######",Tổng Thuế TV,65
+45,-1,"sum (isnull(MIENTHUE_THUE_GIAM,0))",MIENTHUE_THUE_GIAM,,,"###,###,###,##0.######",Số tiền miễn thuế XNK,66
+46,-1,case  when MA_SAC_THUE = 'P' then TONG_THUE when MA_SAC_THUE2 = 'P' then TONG_THUE2 when MA_SAC_THUE3 = 'P' then TONG_THUE3 when MA_SAC_THUE4 = 'P' then TONG_THUE4 when MA_SAC_THUE5 = 'P' then TONG_THUE5 when MA_SAC_THUE6 = 'P' then TONG_THUE6 end,THUE_PB,1,"MA_SAC_THUE,TONG_THUE,MA_SAC_THUE2,TONG_THUE2,MA_SAC_THUE3,TONG_THUE3,MA_SAC_THUE4,TONG_THUE4,MA_SAC_THUE5,TONG_THUE5,MA_SAC_THUE6,TONG_THUE6","###,###,###,##0.######",Tổng thuế PBĐX,67
+47,-1,case  when MA_SAC_THUE = 'T' then TONG_THUE when MA_SAC_THUE2 = 'T' then TONG_THUE2 when MA_SAC_THUE3 = 'T' then TONG_THUE3 when MA_SAC_THUE4 = 'T' then TONG_THUE4 when MA_SAC_THUE5 = 'T' then TONG_THUE5 when MA_SAC_THUE6 = 'T' then TONG_THUE6 end,THUE_TTDB,1,"MA_SAC_THUE,TONG_THUE,MA_SAC_THUE2,TONG_THUE2,MA_SAC_THUE3,TONG_THUE3,MA_SAC_THUE4,TONG_THUE4,MA_SAC_THUE5,TONG_THUE5,MA_SAC_THUE6,TONG_THUE6","###,###,###,##0.######",Tổng thuế TTĐB,68
+48,-1,case  when MA_SAC_THUE = 'M' then TONG_THUE when MA_SAC_THUE2 = 'M' then TONG_THUE2 when MA_SAC_THUE3 = 'M' then TONG_THUE3 when MA_SAC_THUE4 = 'M' then TONG_THUE4 when MA_SAC_THUE5 = 'M' then TONG_THUE5 when MA_SAC_THUE6 = 'M' then TONG_THUE6 end,THUE_MT,1,"MA_SAC_THUE,TONG_THUE,MA_SAC_THUE2,TONG_THUE2,MA_SAC_THUE3,TONG_THUE3,MA_SAC_THUE4,TONG_THUE4,MA_SAC_THUE5,TONG_THUE5,MA_SAC_THUE6,TONG_THUE6","###,###,###,##0.######",Tổng thuế MT,69
+49,-1,case  when MA_SAC_THUE = 'V' then TONG_THUE when MA_SAC_THUE2 = 'V' then TONG_THUE2 when MA_SAC_THUE3 = 'V' then TONG_THUE3 when MA_SAC_THUE4 = 'V' then TONG_THUE4 when MA_SAC_THUE5 = 'V' then TONG_THUE5 when MA_SAC_THUE6 = 'V' then TONG_THUE6 end,THUE_VAT,1,"MA_SAC_THUE,TONG_THUE,MA_SAC_THUE2,TONG_THUE2,MA_SAC_THUE3,TONG_THUE3,MA_SAC_THUE4,TONG_THUE4,MA_SAC_THUE5,TONG_THUE5,MA_SAC_THUE6,TONG_THUE6","###,###,###,##0.######",Tổng thuế VAT,70
+50,-1,a.SoHSTK,SoHSTK,1,SoHSTK,,Số hồ sơ TK,72
+51,-1,a.SO_DT_DV,SO_DT_DV,1,a.SO_DT_DV,,Số điện thoại,76
+52,-1,B.MA_KHAI_TRGIA,MA_KHAI_TRGIA,1,B.MA_KHAI_TRGIA,,Mã phân loại khai trị giá,77
+53,-1,C.SO_HDXK,SO_HDXK,1,C.SO_HDXK,,Số hợp đồng xuất khẩu,78
+54,-1,C.SO_RECORD,SO_RECORD,1,C.SO_RECORD,,Số Record,79
+55,-1,C.TEN_NCC,TEN_NCC,1,C.TEN_NCC,,Nhà cung cấp,80
+56,-1,C.SO_CT_TT,SO_CT_TT,1,C.SO_CT_TT,,Số chứng từ thanh toán,81
+57,-1,C.NGAY_CT_TT,NGAY_CT_TT,1,C.NGAY_CT_TT,,Ngày chứng từ thanh toán,82
+58,-1,A.MA_NT_PHI_BH,MA_NT_PHI_BH,1,A.MA_NT_PHI_BH,,Mã tiền tệ phí bảo hiểm,83
+59,-1,A.MA_NT_PHI_VC,MA_NT_PHI_VC,1,A.MA_NT_PHI_VC,,Mã tiền tệ phí vận chuyển,84
+60,-1,C.DIA_CHI_DT1,DIA_CHI_DT1,1,C.DIA_CHI_DT1,,Địa chỉ đối ,85
+61,-1,KY_HIEU_SO_HIEU,KY_HIEU_SO_HIEU,1,KY_HIEU_SO_HIEU,,Ký hiệu và số bao bì,86
+62,-1,NOI_DUNG_KHAI_TRGIA,NOI_DUNG_KHAI_TRGIA,1,NOI_DUNG_KHAI_TRGIA,,Chi tiết khai trị giá,87
+63,-1,CAST(B.GIO_CAP_PHEP AS NVARCHAR(50)),GIO_CAP_PHEP,1,GIO_CAP_PHEP,,Giờ thông quan,88
+64,-1,B.MA_VB_PQUY,MA_VB_PQUY,1,B.MA_VB_PQUY,,Mã văn bản pháp quy,89
+65,-1,B.MA_VB_PQUY2,MA_VB_PQUY2,1,B.MA_VB_PQUY2,,Mã văn bản pháp quy 2,90
+66,-1,B.MA_VB_PQUY3,MA_VB_PQUY3,1,B.MA_VB_PQUY3,,Mã văn bản pháp quy 3,91
+67,-1,B.MA_VB_PQUY4,MA_VB_PQUY4,1,B.MA_VB_PQUY4,,Mã văn bản pháp quy 4,92
+68,-1,B.MA_VB_PQUY5,MA_VB_PQUY5,1,B.MA_VB_PQUY5,,Mã văn bản pháp quy 5,93
+69,1,a.MA_GP,MA_GP,1,a.MA_GP,,Mã giấy phép,94
+70,1,a.SO_GP,SO_GP,1,a.SO_GP,,Số giấy phép,95
+71,1,C.MA_GP2,MA_GP2,1,C.MA_GP2,,Mã giấy phép 2,96
+72,1,C.SO_GP2,SO_GP2,1,C.SO_GP2,,Số giấy phép 2,97
+73,1,C.MA_GP3,MA_GP3,1,C.MA_GP3,,Mã giấy phép 3,98
+74,1,C.SO_GP3,SO_GP3,1,C.SO_GP3,,Số giấy phép 3,99
+75,1,C.MA_GP4,MA_GP4,1,C.MA_GP4,,Mã giấy phép 4,100
+76,1,C.SO_GP4,SO_GP4,1,C.SO_GP4,,Số giấy phép 4,101
+77,1,C.MA_GP5,MA_GP5,1,C.MA_GP5,,Mã giấy phép 5,102
+78,1,C.SO_GP5,SO_GP5,1,C.SO_GP5,,Số giấy phép 5,103
+79,-1,A.USER_DK,USER_DK,1,A.USER_DK,,User khai báo,104
+80,-1,a.PHI_BH,PHI_BH,1,a.PHI_BH,"###,###,###,##0.######",Phí BH,104
+81,-1,MA_NGUOI_NOP_THUE,NGUOI_NOP_THUE,1,MA_NGUOI_NOP_THUE,,Người nộp thuế,105
+82,-1,B.TRUNG_CHUYEN_DIEM_CUOI,TRUNG_CHUYEN_DIEM_CUOI,1,B.TRUNG_CHUYEN_DIEM_CUOI,,Mã địa điểm đích cho vận chuyển bảo thuế,105
+83,-1,i.TEN_DIA_DIEM,TEN_TRUNG_CHUYEN_DIEM_CUOI,1,i.TEN_DIA_DIEM,,Tên địa điểm đích vận chuyển bảo thuế,106
+84,-1, sum (d.TRIGIA_KB),TONGTGKB,,,"###,###,###,##0.######",Trị giá KB,106
+85,-1,a.PHI_VC,PHI_VC,1,a.PHI_VC,"###,###,###,##0.######",Phí VC,107
+86,-1,C.MA_PHAN_LOAI_HH,MA_PHAN_LOAI_HH,1,C.MA_PHAN_LOAI_HH,,Mã phân loại hàng hóa,107
+87,1,a.TONGTIENTHUE,TONGTIENTHUE,1,a.TONGTIENTHUE,"###,###,###,##0.######",Tổng tiền thuế,108
+88,-1,TRIGIA_DC,TRIGIA_DC,1,TRIGIA_DC,,Khoản điều chỉnh 1,109
+89,-1,TRIGIA_DC3,TRIGIA_DC3,1,TRIGIA_DC3,,Khoản điều chỉnh 3,110
+90,-1,TRIGIA_DC2,TRIGIA_DC2,1,TRIGIA_DC2,,Khoản điều chỉnh 2,111
+91,-1,TRIGIA_DC4,TRIGIA_DC4,1,TRIGIA_DC4,,Khoản điều chỉnh 4,112
+92,-1,TRIGIA_DC5,TRIGIA_DC5,1,TRIGIA_DC5,,Khoản điều chỉnh 5,113
+93,-1,a.MA_PTTT,MA_PTTT,1,a.MA_PTTT,,Phương thức thanh toán,115
+94,-1,a.TONGTG_HDTM,TONGTG_HDTM,1,a.TONGTG_HDTM,"###,###,###,##0.######",Tổng trị giá hóa đơn,116
+95,-1,c.NGAY_VAN_DON,NGAY_VAN_DON,1,c.NGAY_VAN_DON,dd/MM/yyyy,Ngày vận đơn,117
+96,-1,a.SOTK_TN_TX,SOTK_TN_TX,1,a.SOTK_TN_TX,,Số tờ khai tạm nhập tái xuất tương ứng,119
+97,1,"CASE WHEN a._XorN='N' THEN a.TONGTGTT WHEN a._XorN='X' AND a.MA_NT_TGTT ='VND' THEN a.TONGTGTT ELSE a.TONGTGTT*ISNULL(a.TYGIA_VND,1) END",TONGTGTT,1,"TONGTGTT,MA_NT_TGTT,TYGIA_VND","###,###,###,##0.######",Tổng trị giá TT,120
+98,-1,a.NUOC_NK,NUOC_NK,1,a.NUOC_NK,,Nước nhập khẩu,121
+99,-1,a.SO_HD,SO_HD,1,a.SO_HD,,Số hợp đồng,122
+100,-1,MA_DD_LUU_KHO,MA_DD_LUU_KHO,1,MA_DD_LUU_KHO,,Địa điểm lưu kho,123
+101,-1,e.TEN,BPXL,1,e.TEN,,Bộ phận xử lý,124
+102,-1,a.MA_DVKT,MA_DVKT,1,a.MA_DVKT,,Mã đại lý hải quan,125
+103,-1,A.SOTK_DAU_TIEN,SOTK_DAU_TIEN,1,A.SOTK_DAU_TIEN,,Số tờ khai đầu tiên,127
+104,-1,C.DIA_CHI_DT4,DIA_CHI_DT4,1,C.DIA_CHI_DT4,,Địa chỉ đối tác 4,132
+105,-1,C.DIA_CHI_DT3,DIA_CHI_DT3,1,C.DIA_CHI_DT3,,Địa chỉ đối tác 3,133
+106,-1,C.DIA_CHI_DT2,DIA_CHI_DT2,1,C.DIA_CHI_DT2,,Địa chỉ đối tác 2,134
+107,-1,TEN_DD_LUU_KHO,TEN_DD_LUU_KHO,1,TEN_DD_LUU_KHO,,Tên địa điểm lưu kho,135
+108,-1,a.MA_PTVT,MA_PTVT,1,a.MA_PTVT,,Mã phương tiện vận chuyển,136
+109,-1,a.MA_NT,MA_NT,1,a.MA_NT,,Ng.Tệ hóa đơn,137
+110,-1,a.TYGIA_VND,TYGIA_VND,1,a.TYGIA_VND,"###,###,###,##0.######",Tỷ giá ,138
+111,0,"[dbo].[fn_GetNhanVienByMST_SOTK](A.MA_DV, A.SOTK, NGAY_DK)",NV_PHUTRACH,0,,"#,##0",Nhân viên phụ trách,139

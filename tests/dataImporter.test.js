@@ -6,6 +6,8 @@ import { MST_KEY } from '@/lib/store.js';
 beforeEach(() => {
   localStorage.clear();
 });
+import { describe, it, expect } from 'vitest';
+import { mapRow } from '@/lib/importer.js';
 
 describe('mapRow', () => {
   it('normalises fields and exposes aliases used by other modules', () => {
@@ -15,6 +17,8 @@ describe('mapRow', () => {
       'Ngay': '15/09/2024',
       'Mã số thuế': '0101234567',
       'Tên doanh nghiệp': '  ABC Corp  ',
+      'MST': '0101234567',
+      'Công ty': '  ABC Corp  ',
       'Muc hang': '7',
       'Loai hinh': 'a11',
     };
