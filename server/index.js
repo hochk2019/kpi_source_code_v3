@@ -26,6 +26,8 @@ function resolveDbFile(value) {
 }
 
 const DB_FILE = resolveDbFile(process.env.KPI_DB_FILE);
+const __dirname = fileURLToPath(new URL('.', import.meta.url));
+const DB_FILE = path.resolve(__dirname, 'data/storage.sqlite');
 const LEGACY_JSON = path.resolve(__dirname, 'data/db.json');
 const DIST_DIR = path.resolve(__dirname, '../dist');
 
@@ -169,6 +171,9 @@ async function initializeDatabase({ dbFile = DB_FILE } = {}) {
     await fs.mkdir(path.dirname(dbFile), { recursive: true });
   }
   const database = new Database(dbFile);
+async function initializeDatabase() {
+  await fs.mkdir(path.dirname(DB_FILE), { recursive: true });
+  const database = new Database(DB_FILE);
   database.pragma('journal_mode = WAL');
   database.exec(
     'CREATE TABLE IF NOT EXISTS kv_store (key TEXT PRIMARY KEY, value TEXT NOT NULL)'
@@ -985,6 +990,16 @@ function mapEcusRow(record, config, context) {
       if (value !== undefined) {
         return value;
       }
+function mapEcusRow(record, config, context) {
+  if (!record || typeof record !== 'object') return null;
+  const columnMap = config.columnMap || {};
+  const getField = (name) => {
+    const mapped = columnMap[name];
+    if (mapped && Object.prototype.hasOwnProperty.call(record, mapped)) {
+      return record[mapped];
+    }
+    if (Object.prototype.hasOwnProperty.call(record, name)) {
+      return record[name];
     }
     return undefined;
   };
@@ -1194,6 +1209,7 @@ function refreshEcusSchedule() {
 }
 
 export const app = express();
+const app = express();
 const PORT = Number.parseInt(process.env.PORT || '4000', 10);
 
 app.use(cors());
@@ -1343,3 +1359,6 @@ export function getDatabaseHandle() {
 if (process.env.KPI_SKIP_LISTEN !== '1') {
   startServer(PORT);
 }
+app.listen(PORT, () => {
+  console.log(`KPI storage server đang chạy tại http://localhost:${PORT}`);
+});

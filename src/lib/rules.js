@@ -90,6 +90,11 @@ export function loadRules() {
     console.warn('loadRules: legacy data invalid, fallback to default', err);
   }
 
+    const r = JSON.parse(localStorage.getItem(KEY_ACTIVE) || 'null');
+    if (r && r.groups && r.license) return r;
+  } catch (err) {
+    console.warn('loadRules: invalid data, fallback to default', err);
+  }
   // lần đầu: lưu mặc định
   saveRules(DEFAULT_RULES, { appendHistory: false });
   return DEFAULT_RULES;
@@ -97,6 +102,7 @@ export function loadRules() {
 
 export function getRulesHistory() {
   try { return JSON.parse(getStorageItem(KEY_HISTORY) || '[]'); }
+  try { return JSON.parse(localStorage.getItem(KEY_HISTORY) || '[]'); }
   catch (err) {
     console.warn('getRulesHistory: invalid data, reset history', err);
     return [];

@@ -32,6 +32,8 @@ describe('toISODate', () => {
     expect(toISODate('2024-08-01T12:00:00')).toBe('2024-08-01');
   });
 });
+import { describe, it, expect } from 'vitest';
+import { saveDeclRows, getDeclRows } from '@/lib/store.js';
 
 describe('saveDeclRows', () => {
   it('merges rows using so_tk + nhanh when overwrite=false', () => {
