@@ -29,6 +29,8 @@ const NAME_MAP = {
     "Mã loại hình",
     "Ma loai hinh",
     "MA_LH",
+    "ma_lh",
+  ],
   ],
 } from "@/lib/store.js";
 
@@ -52,6 +54,10 @@ const NAME_MAP = {
     "Số mục hàng",
     "So muc hang",
     "TotalItems",
+    "totalitems",
+  ],
+  mst: ["MST", "mst", "Mã số thuế", "Ma so thue"],
+  cong_ty: ["Công ty", "Cong ty", "customer", "Tên doanh nghiệp", "Ten doanh nghiep"],
   ],
   mst: ["MST", "mst", "Mã số thuế", "Ma so thue"],
   cong_ty: ["Công ty", "Cong ty", "customer", "Tên doanh nghiệp", "Ten doanh nghiep"],

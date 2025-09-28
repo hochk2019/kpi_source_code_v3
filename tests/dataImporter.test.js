@@ -55,6 +55,23 @@ describe('mapRow', () => {
     expect(mapped.num_items).toBe(12);
   });
 
+  it('nhận dạng thêm alias chữ thường ma_lh và totalitems', () => {
+    const raw = {
+      'So TK': 'TK-ALIAS-LOWER',
+      'Ngày đăng ký': '03/09/2024',
+      'MST': '0101112222',
+      'Tên doanh nghiệp': 'Công ty Lower',
+      'ma_lh': 'C11',
+      totalitems: '9',
+    };
+
+    const mapped = mapRow(raw, { autoAssignStaff: false });
+
+    expect(mapped.loai_hinh).toBe('C11');
+    expect(mapped.muc_hang).toBe(9);
+    expect(mapped.num_items).toBe(9);
+  });
+
   it('counts eligible license types while respecting excluded codes', () => {
     const raw = {
       'Số tờ khai': 'TK01',

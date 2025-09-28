@@ -25,6 +25,25 @@ function coerceLicenseValue(value) {
   return Math.max(0, Math.round(num));
 }
 
+function ensureLicenseFields(row) {
+  if (!row || typeof row !== "object") return row;
+  const source = row.licenses ?? row.so_luong_gp;
+  if (source === undefined) return row;
+  const normalized = coerceLicenseValue(source);
+  if (row.licenses === normalized && row.so_luong_gp === normalized) return row;
+  return { ...row, licenses: normalized, so_luong_gp: normalized };
+}
+
+
+function coerceLicenseValue(value) {
+  if (value === "" || value === null || value === undefined) return "";
+  const str = String(value).trim();
+  if (str === "") return "";
+  const num = Number(str);
+  if (!Number.isFinite(num)) return "";
+  return Math.max(0, Math.round(num));
+}
+
 
 function coerceLicenseValue(value) {
   if (value === "" || value === null || value === undefined) return "";
@@ -1154,6 +1173,239 @@ export default function DataImporter() {
         <span className="ml-auto text-sm text-gray-600">{modeLabel}</span>
       </div>
 
+      </div>
+
+      {canManageSync ? (
+        <section className="rounded border bg-white p-4 shadow-sm">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h2 className="text-base font-semibold text-gray-900">Đồng bộ tự động từ ECUS5VNACCS</h2>
+              <p className="text-xs text-gray-500">Lần chạy gần nhất: {syncLastRunLabel} • Trạng thái: {syncConfig?.lastStatus || "Chưa có"}</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={fetchSyncConfig}
+                className="rounded border px-3 py-1 text-sm"
+                disabled={syncLoading}
+              >
+                Tải lại cấu hình
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveSyncConfig}
+                className="rounded bg-black px-3 py-1 text-sm text-white disabled:opacity-50"
+                disabled={syncLoading || !syncForm}
+              >
+                Lưu cấu hình
+              </button>
+            </div>
+          </div>
+          {syncForm ? (
+            <div className="mt-3 space-y-3">
+              <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={syncForm.enabled}
+                    onChange={(e) => setSyncForm((prev) => ({ ...prev, enabled: e.target.checked }))}
+                  />
+                  <span>Bật đồng bộ định kỳ</span>
+                </label>
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-gray-600">Biểu thức cron</label>
+                  <input
+                    className="w-full rounded border px-2 py-1 text-sm"
+                    value={syncForm.schedule}
+                    onChange={(e) => setSyncForm((prev) => ({ ...prev, schedule: e.target.value }))}
+                    placeholder="0 * * * *"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-gray-600">Khoảng mặc định (số ngày)</label>
+                  <input
+                    type="number"
+                    min="1"
+                    className="w-full rounded border px-2 py-1 text-sm"
+                    value={syncForm.rangeDays}
+                    onChange={(e) => setSyncForm((prev) => ({ ...prev, rangeDays: Number(e.target.value) || 1 }))}
+                  />
+                </div>
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={syncForm.preferMonthFirst}
+                    onChange={(e) => setSyncForm((prev) => ({ ...prev, preferMonthFirst: e.target.checked }))}
+                  />
+                  <span>Ngày dạng MM/DD/YYYY</span>
+                </label>
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-gray-600">Máy chủ SQL Server</label>
+                  <input
+                    className="w-full rounded border px-2 py-1 text-sm"
+                    value={syncForm.server}
+                    onChange={(e) => setSyncForm((prev) => ({ ...prev, server: e.target.value }))}
+                    placeholder="192.168.x.x\\SQL2019"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-gray-600">Cơ sở dữ liệu</label>
+                  <input
+                    className="w-full rounded border px-2 py-1 text-sm"
+                    value={syncForm.database}
+                    onChange={(e) => setSyncForm((prev) => ({ ...prev, database: e.target.value }))}
+                    placeholder="ECUS5VNACCS"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-gray-600">Tài khoản</label>
+                  <input
+                    className="w-full rounded border px-2 py-1 text-sm"
+                    value={syncForm.user}
+                    onChange={(e) => setSyncForm((prev) => ({ ...prev, user: e.target.value }))}
+                    placeholder="sa"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-gray-600">Mật khẩu</label>
+                  <input
+                    type="password"
+                    className="w-full rounded border px-2 py-1 text-sm"
+                    value={syncForm.password}
+                    onChange={(e) => setSyncForm((prev) => ({ ...prev, password: e.target.value }))}
+                    placeholder={syncForm.hasPassword ? "(giữ nguyên nếu để trống)" : "Nhập mật khẩu"}
+                  />
+                </div>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xs uppercase tracking-wide text-gray-500">Khoảng thời gian chạy tay</span>
+                <input
+                  type="date"
+                  className="rounded border px-2 py-1 text-sm"
+                  value={manualRange.from}
+                  onChange={(e) => handleManualRangeChange("from", e.target.value)}
+                />
+                <span className="text-xs text-gray-500">đến</span>
+                <input
+                  type="date"
+                  className="rounded border px-2 py-1 text-sm"
+                  value={manualRange.to}
+                  onChange={(e) => handleManualRangeChange("to", e.target.value)}
+                />
+                <button
+                  type="button"
+                  onClick={handleRunSync}
+                  disabled={syncRunning}
+                  className="rounded bg-emerald-600 px-3 py-1 text-sm text-white disabled:opacity-50"
+                >
+                  Đồng bộ ngay
+                </button>
+              </div>
+              {syncMessage && <div className="text-sm text-emerald-600">{syncMessage}</div>}
+            </div>
+          ) : (
+            <p className="mt-3 text-sm text-gray-500">Đang tải cấu hình đồng bộ...</p>
+          )}
+        </section>
+      ) : (
+        <section className="rounded border bg-white p-4 shadow-sm">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h2 className="text-base font-semibold text-gray-900">Đồng bộ ECUS</h2>
+              <p className="text-xs text-gray-500">Lần chạy gần nhất: {syncLastRunLabel} • Trạng thái: {syncConfig?.lastStatus || "Chưa có"}</p>
+            </div>
+            <button type="button" onClick={fetchSyncConfig} className="rounded border px-3 py-1 text-sm" disabled={syncLoading}>
+              Cập nhật trạng thái
+            </button>
+          </div>
+        </section>
+      )}
+
+      <section className="rounded border bg-white p-4 shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h2 className="text-base font-semibold text-gray-900">Cảnh báo tờ khai thiếu thông tin</h2>
+            <p className="text-xs text-gray-500">Lần rà soát: {lastAlertEvaluated} • Tổng theo dõi: {alertSummary.totalTracked || 0}</p>
+          </div>
+          <button type="button" onClick={handleRefreshAlerts} className="rounded border px-3 py-1 text-sm" disabled={alertLoading}>
+            Làm mới danh sách
+          </button>
+        </div>
+        {alertLoading ? (
+          <p className="mt-3 text-sm text-gray-500">Đang tải danh sách cảnh báo...</p>
+        ) : outstandingAlerts.length ? (
+          <div className="mt-3 overflow-auto">
+            <table className="min-w-full text-sm">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-2 py-1 text-left">Số tờ khai</th>
+                  <th className="px-2 py-1 text-left">MST</th>
+                  <th className="px-2 py-1 text-left">Công ty</th>
+                  <th className="px-2 py-1 text-left">Thiếu thông tin</th>
+                  <th className="px-2 py-1 text-left">Ngày tờ khai</th>
+                  <th className="px-2 py-1 text-left">Cập nhật</th>
+                </tr>
+              </thead>
+              <tbody>
+                {outstandingAlerts.map((alert) => (
+                  <tr key={alert.key} className="odd:bg-white even:bg-gray-50">
+                    <td className="px-2 py-1">{alert.so_tk}</td>
+                    <td className="px-2 py-1">{alert.mst}</td>
+                    <td className="px-2 py-1">{alert.company}</td>
+                    <td className="px-2 py-1 text-amber-600">{(alert.missing || []).join(", ")}</td>
+                    <td className="px-2 py-1">{alert.date || ""}</td>
+                    <td className="px-2 py-1">{alert.lastUpdated ? new Date(alert.lastUpdated).toLocaleString("vi-VN") : ""}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="mt-3 text-sm text-gray-500">Không có cảnh báo nào đang chờ xử lý.</p>
+        )}
+      </section>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <input
+          type="file"
+          ref={fileRef}
+          onChange={handleFileChange}
+          accept=".xls,.xlsx"
+          className="hidden"
+          disabled={isReadOnlyForEdits}
+        />
+        {canEdit && (
+          <button
+            type="button"
+            onClick={() => fileRef.current?.click()}
+            className="px-3 py-1.5 rounded border bg-white shadow-sm hover:bg-gray-50"
+          >
+            Chọn file XLSX
+          </button>
+        )}
+        {selectedFile && (
+          <span className="text-sm text-gray-600">Đã chọn: {selectedFile}</span>
+        )}
+        {canEdit && (
+          <button
+            type="button"
+            onClick={handleImport}
+            disabled={!canImport}
+            className={`px-3 py-1.5 rounded ${canImport ? "bg-black text-white" : "bg-gray-200 text-gray-500 cursor-not-allowed"}`}
+          >
+            Import XLSX
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={() => loadSavedRows()}
+          className="px-3 py-1.5 rounded border"
+        >
+          Hiển thị dữ liệu đã lưu
+        </button>
+        <span className="ml-auto text-sm text-gray-600">{modeLabel}</span>
+      </div>
+
       {canEdit && (
         <div className="flex flex-wrap items-center gap-2">
           <label className="flex items-center gap-1">
@@ -1325,6 +1577,59 @@ export default function DataImporter() {
                       onChange={e => onChangeCell(rowKey, "nhan_vien", e.target.value)}
                     />
                   )}
+                </td>
+                <td className="px-2 py-1">
+                  {isReadOnlyForEdits ? (
+                    <span>{r.team || ""}</span>
+                  ) : (
+                    <input
+                      className="border rounded px-1 py-0.5 w-24"
+                      value={r.team || ""}
+                      onChange={e => onChangeCell(rowKey, "team", e.target.value)}
+                    />
+                  )}
+                </td>
+                <td className="px-2 py-1">
+                  {(() => {
+                    const hasStaff = !!(r.nhan_vien && r.nhan_vien.toString().trim());
+                    const hasTeam = !!(r.team && r.team.toString().trim());
+                    if (r.reviewed) {
+                      return <span className="text-emerald-700">Đã rà soát</span>;
+                    }
+                    if (!hasStaff || !hasTeam) {
+                      const missing = [];
+                      if (!hasStaff) missing.push("nhân viên");
+                      if (!hasTeam) missing.push("tổ đội");
+                      return <span className="text-amber-600">Thiếu {missing.join(" & ")}</span>;
+                    }
+                    return <span className="text-gray-600">Đủ thông tin</span>;
+                  })()}
+                </td>
+                <td className="px-2 py-1">
+                  {isReadOnlyForEdits ? (
+                    <span>{r.licenses ?? r.so_luong_gp ?? ""}</span>
+                  ) : (
+                    <input
+                      type="number"
+                      min="0"
+                      step="1"
+                      className="border rounded px-1 py-0.5 w-24"
+                      value={r.licenses ?? r.so_luong_gp ?? ""}
+                      onChange={e => {
+                        const input = e.target.value;
+                        if (input === "") {
+                          applyEdit(rowKey, () => ({ licenses: "", so_luong_gp: "" }));
+                          return;
+                        }
+                        const parsed = Number(input);
+                        if (!Number.isFinite(parsed)) return;
+                        const normalized = Math.max(0, Math.round(parsed));
+                        applyEdit(rowKey, () => ({ licenses: normalized, so_luong_gp: normalized }));
+                      }}
+                    />
+                  )}
+                </td>
+                <td className="px-2 py-1">
                 </td>
                 <td className="px-2 py-1">
                   {isReadOnlyForEdits ? (

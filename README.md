@@ -30,6 +30,9 @@ Mở **hai** cửa sổ terminal:
    `server/data/db.json`, máy chủ sẽ tự động nhập dữ liệu ban đầu từ file này
    (nếu tồn tại) trong lần chạy đầu tiên.
 
+   > Nếu gặp lỗi không thể tải `better-sqlite3`, hãy chạy `pnpm server:rebuild`
+   > hoặc `pnpm rebuild better-sqlite3` trước khi thử lại.
+
 2. Chạy giao diện Vite (port mặc định: `5173`):
 
    ```bash
