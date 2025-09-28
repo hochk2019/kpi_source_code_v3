@@ -15,6 +15,8 @@ describe('mapRow', () => {
       'Số TK': ' 1234567890123 ',
       'Nhánh': ' 01 ',
       'Ngay': '15/09/2024',
+      'Mã số thuế': '0101234567',
+      'Tên doanh nghiệp': '  ABC Corp  ',
       'MST': '0101234567',
       'Công ty': '  ABC Corp  ',
       'Muc hang': '7',
@@ -34,6 +36,23 @@ describe('mapRow', () => {
     expect(mapped.num_items).toBe(7);
     expect(mapped.licenses).toBe(0);
     expect(mapped.so_luong_gp).toBe(0);
+  });
+
+  it('hiểu các alias ECUS như MA_LH và TotalItems', () => {
+    const raw = {
+      'So TK': 'TK-ALIAS-01',
+      'Ngày đăng ký': '02/09/2024',
+      'Mã số thuế': '0109998888',
+      'customer': 'Công ty Alias',
+      'MA_LH': 'B13',
+      'TotalItems': '12',
+    };
+
+    const mapped = mapRow(raw, { autoAssignStaff: false });
+
+    expect(mapped.loai_hinh).toBe('B13');
+    expect(mapped.muc_hang).toBe(12);
+    expect(mapped.num_items).toBe(12);
   });
 
   it('counts eligible license types while respecting excluded codes', () => {

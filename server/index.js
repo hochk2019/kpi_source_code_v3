@@ -8,6 +8,24 @@ import Database from 'better-sqlite3';
 import cron from 'node-cron';
 import sql from 'mssql';
 
+const moduleUrl = typeof import.meta !== 'undefined' ? import.meta.url || '' : '';
+const __dirname = moduleUrl.startsWith('file:')
+  ? fileURLToPath(new URL('.', moduleUrl))
+  : path.resolve(process.cwd(), 'server');
+function resolveDbFile(value) {
+  if (!value) {
+    return path.resolve(__dirname, 'data/storage.sqlite');
+  }
+  if (value === ':memory:') {
+    return ':memory:';
+  }
+  if (path.isAbsolute(value)) {
+    return value;
+  }
+  return path.resolve(__dirname, value);
+}
+
+const DB_FILE = resolveDbFile(process.env.KPI_DB_FILE);
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 const DB_FILE = path.resolve(__dirname, 'data/storage.sqlite');
 const LEGACY_JSON = path.resolve(__dirname, 'data/db.json');
@@ -148,6 +166,11 @@ function normalizeValue(value) {
   return typeof value === 'string' ? value : JSON.stringify(value);
 }
 
+async function initializeDatabase({ dbFile = DB_FILE } = {}) {
+  if (dbFile !== ':memory:') {
+    await fs.mkdir(path.dirname(dbFile), { recursive: true });
+  }
+  const database = new Database(dbFile);
 async function initializeDatabase() {
   await fs.mkdir(path.dirname(DB_FILE), { recursive: true });
   const database = new Database(DB_FILE);
@@ -252,6 +275,23 @@ function getJSONValue(key, fallback) {
 
 function setJSONValue(key, value) {
   upsertValue(key, value === undefined ? null : JSON.stringify(value));
+}
+
+export function resetDatabaseForTests() {
+  if (process.env.NODE_ENV !== 'test' && process.env.VITEST !== 'true') {
+    throw new Error('resetDatabaseForTests chỉ sử dụng trong môi trường kiểm thử');
+  }
+
+  db.exec('DELETE FROM kv_store');
+  const insertMany = db.transaction((entries) => {
+    const stmt = db.prepare(
+      'INSERT INTO kv_store (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value'
+    );
+    for (const [key, value] of entries) {
+      stmt.run(key, normalizeValue(value));
+    }
+  });
+  insertMany(Object.entries(DEFAULT_STORAGE));
 }
 
 function normalizeStr(input) {
@@ -734,11 +774,48 @@ function parseLicenseCount(rawValue, excludeSet) {
       .map((code) => normalizeStr(code).toUpperCase())
       .filter((code) => code && !excludeSet.has(code)).length;
   }
+  if (rawValue && typeof rawValue === 'object') {
+    const stack = [rawValue];
+    const tokens = [];
+    while (stack.length > 0) {
+      const current = stack.pop();
+      if (current === null || current === undefined) continue;
+      if (Array.isArray(current)) {
+        for (const item of current) {
+          stack.push(item);
+        }
+        continue;
+      }
+      if (typeof current === 'object') {
+        for (const value of Object.values(current)) {
+          stack.push(value);
+        }
+        continue;
+      }
+      tokens.push(current);
+    }
+    if (tokens.length) {
+      return tokens
+        .map((token) => normalizeStr(token).toUpperCase())
+        .filter((token) => token && !excludeSet.has(token)).length;
+    }
+    return 0;
+  }
+
   const str = normalizeStr(rawValue);
   if (!str) return 0;
   const tokens = str.split(/[,;|]/g)
     .map((token) => normalizeStr(token).toUpperCase())
     .filter((token) => token && !excludeSet.has(token));
+  if (tokens.length === 1) {
+    const single = tokens[0];
+    if (/^\d+(?:\.\d+)?$/.test(single)) {
+      const numericSingle = Number(single);
+      if (Number.isFinite(numericSingle)) {
+        return Math.max(0, Math.round(numericSingle));
+      }
+    }
+  }
   if (!tokens.length) {
     const numeric = Number(str);
     if (Number.isFinite(numeric)) {
@@ -748,6 +825,171 @@ function parseLicenseCount(rawValue, excludeSet) {
   return tokens.length;
 }
 
+function normalizeColumnKey(value) {
+  return String(value ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]/gi, '')
+    .toLowerCase();
+}
+
+const COLUMN_ALIASES = Object.freeze({
+  so_tk: [
+    'so_tk',
+    'sotk',
+    'soTk',
+    'So_tk',
+    'SoTK',
+    'SO_TK',
+    'Số tờ khai',
+    'So to khai',
+    'Số tờ khai TM',
+  ],
+  date: [
+    'ngay_dang_ky',
+    'Ngay_dang_ky',
+    'ngay_dk',
+    'Ngay_dk',
+    'NgayDK',
+    'ngayKhai',
+    'NgayKhai',
+    'ngaylap',
+    'Ngày đăng ký',
+    'Ngay dang ky',
+  ],
+  nhanh: ['nhanh', 'chi_cuc', 'Chi_cuc', 'chiCuc', 'ma_chi_cuc', 'ChiCuc'],
+  mst: [
+    'mst',
+    'MST',
+    'ma_so_thue',
+    'Ma_so_thue',
+    'maSoThue',
+    'MaSoThue',
+    'mst_dn',
+    'ma_so_thue_dn',
+    'Mã số thuế',
+    'Ma so thue',
+  ],
+  cong_ty: [
+    'cong_ty',
+    'Cong_ty',
+    'ten_dn',
+    'Ten_dn',
+    'ten_doanh_nghiep',
+    'TenDoanhNghiep',
+    'doanh_nghiep',
+    'ten_khach_hang',
+    'Tên doanh nghiệp',
+    'Ten doanh nghiep',
+    'Tên khách hàng',
+  ],
+  loai_hinh: ['loai_hinh', 'Loai_hinh', 'ma_loai_hinh', 'MaLoaiHinh', 'Loại hình', 'Loai hinh'],
+  num_items: [
+    'num_items',
+    'muc_hang',
+    'Muc_hang',
+    'so_muc',
+    'So_muc',
+    'so_luong_mh',
+    'SoLuongMatHang',
+    'Số mục hàng',
+    'So muc hang',
+  ],
+  licenses: [
+    'licenses',
+    'license_codes',
+    'ma_gp',
+    'Ma_gp',
+    'ds_gp',
+    'DanhSachGiayPhep',
+    'ds_giay_phep',
+    'giay_phep',
+    'GP',
+    'Danh sách giấy phép',
+    'Danh sach giay phep',
+    'Số lượng GP',
+    'So luong GP',
+    'Số lượng giấy phép',
+    'So luong giay phep',
+  ],
+  nhan_vien: ['nhan_vien', 'Nhan_vien', 'nhanVien', 'Nhân viên', 'Nhan vien'],
+  nhan_vien_import: [
+    'nhan_vien_nhap',
+    'Nhan_vien_nhap',
+    'nv_nhap',
+    'NVNhap',
+    'NhanVienNhap',
+    'Nhân viên nhập',
+    'Nhan vien nhap',
+  ],
+  nhan_vien_export: [
+    'nhan_vien_xuat',
+    'Nhan_vien_xuat',
+    'nv_xuat',
+    'NVXuat',
+    'NhanVienXuat',
+    'Nhân viên xuất',
+    'Nhan vien xuat',
+  ],
+  team: ['team', 'team_name', 'to_doi', 'To_doi', 'ten_to', 'ToDoi', 'Tổ đội', 'To doi'],
+});
+
+function buildRecordKeyLookup(record) {
+  const lookup = new Map();
+  for (const key of Object.keys(record)) {
+    const lower = key.toLowerCase();
+    if (!lookup.has(lower)) {
+      lookup.set(lower, key);
+    }
+    const normalized = normalizeColumnKey(key);
+    if (normalized && !lookup.has(normalized)) {
+      lookup.set(normalized, key);
+    }
+  }
+  return lookup;
+}
+
+function readRecordValue(record, lookup, candidate) {
+  if (!candidate && candidate !== 0) {
+    return undefined;
+  }
+  const keyString = String(candidate);
+  let actualKey = lookup.get(keyString.toLowerCase());
+  if (actualKey === undefined) {
+    actualKey = lookup.get(normalizeColumnKey(keyString));
+  }
+  if (actualKey !== undefined) {
+    return record[actualKey];
+  }
+  return undefined;
+}
+
+function mapEcusRow(record, config, context) {
+  if (!record || typeof record !== 'object') return null;
+  const columnMap = config.columnMap || {};
+  const keyLookup = buildRecordKeyLookup(record);
+  const getField = (name) => {
+    const rawCandidates = [];
+    const mapped = columnMap[name];
+    if (Array.isArray(mapped)) {
+      rawCandidates.push(...mapped);
+    } else if (mapped) {
+      rawCandidates.push(mapped);
+    }
+    rawCandidates.push(name);
+    if (COLUMN_ALIASES[name]) {
+      rawCandidates.push(...COLUMN_ALIASES[name]);
+    }
+
+    const seen = new Set();
+    for (const candidate of rawCandidates) {
+      const keyLower = String(candidate).toLowerCase();
+      if (seen.has(keyLower)) continue;
+      seen.add(keyLower);
+      const value = readRecordValue(record, keyLookup, candidate);
+      if (value !== undefined) {
+        return value;
+      }
 function mapEcusRow(record, config, context) {
   if (!record || typeof record !== 'object') return null;
   const columnMap = config.columnMap || {};
@@ -942,6 +1184,13 @@ async function runEcusSyncWithErrorHandling(params) {
 let scheduledSync = null;
 
 function refreshEcusSchedule() {
+  if (process.env.KPI_DISABLE_CRON === '1') {
+    if (scheduledSync) {
+      scheduledSync.stop();
+      scheduledSync = null;
+    }
+    return;
+  }
   if (scheduledSync) {
     scheduledSync.stop();
     scheduledSync = null;
@@ -959,6 +1208,7 @@ function refreshEcusSchedule() {
   }
 }
 
+export const app = express();
 const app = express();
 const PORT = Number.parseInt(process.env.PORT || '4000', 10);
 
@@ -1083,6 +1333,32 @@ app.get('*', async (req, res, next) => {
   }
 });
 
+let httpServer = null;
+
+export function startServer(port = PORT) {
+  if (httpServer) {
+    return httpServer;
+  }
+  httpServer = app.listen(port, () => {
+    console.log(`KPI storage server đang chạy tại http://localhost:${port}`);
+  });
+  return httpServer;
+}
+
+export function stopServer() {
+  if (httpServer) {
+    httpServer.close();
+    httpServer = null;
+  }
+}
+
+export function getDatabaseHandle() {
+  return db;
+}
+
+if (process.env.KPI_SKIP_LISTEN !== '1') {
+  startServer(PORT);
+}
 app.listen(PORT, () => {
   console.log(`KPI storage server đang chạy tại http://localhost:${PORT}`);
 });

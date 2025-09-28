@@ -7,6 +7,29 @@ import {
   normalizeName,
 } from "@/lib/store.js";
 import { loadRules, countLicenseTypesFromRowObj } from "@/lib/rules.js";
+
+const NAME_MAP = {
+  so_tk: [
+    "Số TK",
+    "Số tờ khai",
+    "So TK",
+    "So to khai",
+    "Số tờ khai TM",
+    "Số tờ khai TM ",
+    "Số tờ khai xuất nhập khẩu",
+  ],
+  nhanh: ["Nhánh", "Nhanh", "branch"],
+  date: ["date", "ngày", "Ngay", "Ngày", "Ngày đăng ký", "Ngay dang ky"],
+  ma_hq: ["Mã HQ", "Ma HQ", "Mã hq", "ma_hq"],
+  loai_hinh: [
+    "Loại hình",
+    "Loai hinh",
+    "Loại hình",
+    "loai_hinh",
+    "Mã loại hình",
+    "Ma loai hinh",
+    "MA_LH",
+  ],
 } from "@/lib/store.js";
 
 const NAME_MAP = {
@@ -22,6 +45,16 @@ const NAME_MAP = {
   gross: ["Tổng trọng lượng hàng (Gross)", "Tong trong luong hang (Gross)"],
   so_luong: ["Số lượng", "So luong"],
   phan_luong: ["Phân luồng", "Phan luong"],
+  muc_hang: [
+    "Mục hàng",
+    "Muc hang",
+    "num_items",
+    "Số mục hàng",
+    "So muc hang",
+    "TotalItems",
+  ],
+  mst: ["MST", "mst", "Mã số thuế", "Ma so thue"],
+  cong_ty: ["Công ty", "Cong ty", "customer", "Tên doanh nghiệp", "Ten doanh nghiep"],
   muc_hang: ["Mục hàng", "Muc hang", "num_items"],
   mst: ["MST", "mst"],
   cong_ty: ["Công ty", "Cong ty", "customer"],

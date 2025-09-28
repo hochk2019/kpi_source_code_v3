@@ -88,3 +88,25 @@ pnpm test --run
 
 Các bài test sử dụng Vitest (môi trường `jsdom`) và không phụ thuộc vào máy chủ
 API, vì vậy có thể chạy độc lập.
+
+### Kiểm thử API backend
+
+Để kiểm tra các route đồng bộ ECUS và cảnh báo tờ khai, Vitest đã bổ sung
+integration test dùng `supertest`. Các test này tự động tạo cơ sở dữ liệu
+SQLite trong bộ nhớ (`:memory:`) và mô phỏng kết nối SQL Server, giúp phát hiện
+lỗi kết nối hoặc mapping dữ liệu ngay trên CI.
+
+## 6. Công cụ hỗ trợ dữ liệu ECUS
+
+Các tác vụ CLI mới giúp kiểm thử/khảo sát dữ liệu ECUS khi chưa kết nối được
+SQL Server thật:
+
+- `pnpm ecus:mock [--count 50 --start 2025-08-01 --range 10 --output mock.json]`
+  tạo danh sách tờ khai giả lập đúng định dạng API (mặc định in ra STDOUT).
+- `pnpm ecus:inspect --file <đường-dẫn-tệp-xml>` phân tích file XML xuất từ
+  ECUS5VNACCS, liệt kê đường dẫn nút tờ khai cùng các trường quan trọng
+  (Số tờ khai, ngày đăng ký, MST, doanh nghiệp, loại hình, giấy phép...).
+
+Bạn có thể dùng dữ liệu mock để chạy thử `/api/import/ecus/run` mà không cần
+kết nối tới SQL Server, hoặc dùng lệnh `inspect` để xác định rõ tên cột trước
+khi viết câu truy vấn đồng bộ.

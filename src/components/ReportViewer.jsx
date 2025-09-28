@@ -312,6 +312,29 @@ function TeamTrendChart({ data, teams }) {
             ))}
           </BarChart>
         </ResponsiveContainer>
+
+  return (
+    <section className="rounded-lg border bg-white p-4 shadow-sm">
+      <h3 className="text-base font-semibold text-gray-900">So sánh KPI theo tổ đội (6 kỳ gần nhất)</h3>
+      <div className="mt-4 h-64 w-full">
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart data={data} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis dataKey="period" />
+            <YAxis />
+            <Tooltip />
+            <Legend />
+            {plottedTeams.map((team, idx) => (
+              <Bar
+                key={team}
+                dataKey={team}
+                name={team}
+                fill={chartColors[idx % chartColors.length]}
+                stackId={team === "Tổng" ? "total" : undefined}
+              />
+            ))}
+          </BarChart>
+        </ResponsiveContainer>
 /* /src/components/ReportViewer.jsx */
 import React, { useMemo, useState } from "react";
 import { getDeclRows, getRules } from "@/lib/store.js";
@@ -357,6 +380,72 @@ function SummaryCard({ title, value, subtitle }) {
     </div>
   );
 }
+
+function StaffDetailCard({ staff, canExport, onExport, onPrint }) {
+  const { stats, rows } = staff;
+  const [mode, setMode] = useState("detail");
+  const aggregated = useMemo(
+    () => aggregateByCompany(rows, { includeStaff: false, includeTeam: false }),
+    [rows]
+  );
+  const infoLine = `${stats.decls} tờ khai — Nhập: ${formatInt(stats.import)} • Xuất: ${formatInt(stats.export)}`;
+
+  return (
+    <section className="space-y-3 rounded-lg border bg-white p-4 shadow-sm print:avoid-break">
+      <header className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h3 className="text-lg font-semibold text-gray-900">Nhân viên: {staff.name}</h3>
+          <p className="text-sm text-gray-600">Tổ đội: {staff.teamLabel}</p>
+          <p className="text-xs text-gray-500">{infoLine}</p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2 text-sm">
+          <span className="font-semibold text-gray-900">Điểm KPI: {formatDecimal(stats.kpi)}</span>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setMode("summary")}
+              className={`rounded px-3 py-1.5 text-xs font-semibold ${
+                mode === "summary"
+                  ? "bg-black text-white"
+                  : "border bg-white text-gray-700 hover:bg-gray-50"
+              }`}
+            >
+              Báo cáo tổng hợp
+            </button>
+            <button
+              type="button"
+              onClick={() => setMode("detail")}
+              className={`rounded px-3 py-1.5 text-xs font-semibold ${
+                mode === "detail"
+                  ? "bg-black text-white"
+                  : "border bg-white text-gray-700 hover:bg-gray-50"
+              }`}
+            >
+              Báo cáo chi tiết
+            </button>
+          </div>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={onExport}
+              disabled={!canExport}
+              className={`rounded px-3 py-1.5 text-xs font-semibold shadow-sm ${
+                canExport ? "bg-black text-white hover:bg-gray-900" : "bg-gray-200 text-gray-500"
+              }`}
+            >
+              Xuất Excel
+            </button>
+            <button
+              type="button"
+              onClick={onPrint}
+              className="rounded border px-3 py-1.5 text-xs shadow-sm hover:bg-gray-50"
+            >
+              In / Xuất PDF
+            </button>
+          </div>
+        </div>
+      </header>
+
 
 function StaffDetailCard({ staff, canExport, onExport, onPrint }) {
   const { stats, rows } = staff;
@@ -508,6 +597,53 @@ function TeamDetailCard({ team, canExport, onExport, onPrint }) {
             Thành viên: {memberNames.length ? memberNames.join(", ") : "Chưa có thành viên trong roster"}
           </p>
           <p className="text-xs text-gray-500">{infoLine}</p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2 text-sm">
+          <span className="font-semibold text-gray-900">Điểm KPI: {formatDecimal(stats.kpi)}</span>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => setMode("summary")}
+              className={`rounded px-3 py-1.5 text-xs font-semibold ${
+                mode === "summary"
+                  ? "bg-black text-white"
+                  : "border bg-white text-gray-700 hover:bg-gray-50"
+              }`}
+            >
+              Báo cáo tổng hợp
+            </button>
+            <button
+              type="button"
+              onClick={() => setMode("detail")}
+              className={`rounded px-3 py-1.5 text-xs font-semibold ${
+                mode === "detail"
+                  ? "bg-black text-white"
+                  : "border bg-white text-gray-700 hover:bg-gray-50"
+              }`}
+            >
+              Báo cáo chi tiết
+            </button>
+          </div>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={onExport}
+              disabled={!canExport}
+              className={`rounded px-3 py-1.5 text-xs font-semibold shadow-sm ${
+                canExport ? "bg-black text-white hover:bg-gray-900" : "bg-gray-200 text-gray-500"
+              }`}
+            >
+              Xuất Excel
+            </button>
+            <button
+              type="button"
+              onClick={onPrint}
+              className="rounded border px-3 py-1.5 text-xs shadow-sm hover:bg-gray-50"
+            >
+              In / Xuất PDF
+            </button>
+          </div>
+        </div>
         </div>
         <div className="flex flex-wrap items-center gap-2 text-sm">
           <span className="font-semibold text-gray-900">Điểm KPI: {formatDecimal(stats.kpi)}</span>

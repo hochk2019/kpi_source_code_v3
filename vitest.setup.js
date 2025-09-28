@@ -1,4 +1,5 @@
 import { beforeEach, afterEach, vi } from 'vitest';
+import '@testing-library/jest-dom/vitest';
 import { clearStorageCache } from '@/lib/storageClient.js';
 
 class LocalStorageMock {
