@@ -2,9 +2,10 @@ import { beforeEach, describe, it, expect } from 'vitest';
 import { mapRow, detectDateOrder } from '@/lib/importer.js';
 import { normalizeName } from '@/lib/store.js';
 import { MST_KEY } from '@/lib/store.js';
+import { clearStorageCache, setItem as sharedSetItem } from '@/lib/storageClient.js';
 
 beforeEach(() => {
-  localStorage.clear();
+  clearStorageCache();
 });
 
 describe('mapRow', () => {
@@ -92,7 +93,7 @@ describe('mapRow', () => {
   });
 
   it('autoAssignStaff fills nhân viên và tổ đội dựa trên bảng MST hiện có', () => {
-    localStorage.setItem(MST_KEY, JSON.stringify([
+    sharedSetItem(MST_KEY, JSON.stringify([
       {
         mst: '0101234567',
         person_import: 'Hạnh',
@@ -131,7 +132,7 @@ describe('mapRow', () => {
   });
 
   it('prefers roster team info over MST team when member map is provided', () => {
-    localStorage.setItem(MST_KEY, JSON.stringify([
+    sharedSetItem(MST_KEY, JSON.stringify([
       {
         mst: '0101234567',
         person_import: 'Hạnh',
