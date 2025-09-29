@@ -1,5 +1,4 @@
 import React, { Suspense, useEffect, useMemo, useState } from 'react';
-import React, { Suspense, useEffect, useState } from 'react';
 const KPICalculator = React.lazy(() => import('./components/KPICalculator.jsx'));
 const Login = React.lazy(() => import('./components/Login.jsx'));
 const ChangePasswordDialog = React.lazy(() => import('./components/ChangePasswordDialog.jsx'));
