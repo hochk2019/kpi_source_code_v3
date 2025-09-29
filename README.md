@@ -13,7 +13,9 @@ pnpm install
 
 > Nếu trong quá trình cài đặt xuất hiện cảnh báo `Ignored build scripts:
 > better-sqlite3`, hãy chạy `pnpm approve-builds` hoặc `pnpm rebuild
-> better-sqlite3` để cho phép biên dịch native module của SQLite.
+> better-sqlite3` để cho phép biên dịch native module của SQLite. Script
+> khởi động backend (`pnpm server`) cũng sẽ tự động rebuild nếu phát hiện
+> thiếu binding.
 
 ## 2. Khởi chạy cho môi trường phát triển
 
@@ -34,8 +36,9 @@ Mở **hai** cửa sổ terminal:
    `server/data/db.json`, máy chủ sẽ tự động nhập dữ liệu ban đầu từ file này
    (nếu tồn tại) trong lần chạy đầu tiên.
 
-   > Nếu gặp lỗi không thể tải `better-sqlite3`, hãy chạy `pnpm server:rebuild`
-   > hoặc `pnpm rebuild better-sqlite3` trước khi thử lại.
+  > Nếu sau bước tự động vẫn gặp lỗi không thể tải `better-sqlite3`, hãy chạy
+  > `pnpm server:rebuild` hoặc `pnpm rebuild better-sqlite3` để kiểm tra lại
+  > toolchain biên dịch.
 
 2. Chạy giao diện Vite (port mặc định: `5173`):
 
