@@ -41,6 +41,7 @@ describe('buildReportData', () => {
         loai_hinh: 'E11',
         num_items: 12,
         licenses: 1,
+        licenseCodes: ['ZB03'],
         nhan_vien: 'Phương',
         team: 'Team 1',
         mst: '0101234567',
@@ -52,6 +53,7 @@ describe('buildReportData', () => {
         loai_hinh: 'B11',
         num_items: 18,
         licenses: 2,
+        licenseCodes: ['ZB02', 'ZB03'],
         nhan_vien: 'Tuấn',
         team: 'Team 1',
         mst: '0201234567',
@@ -63,6 +65,7 @@ describe('buildReportData', () => {
         loai_hinh: 'E11',
         num_items: 5,
         licenses: 1,
+        licenseCodes: ['ZC01'],
         nhan_vien: 'Phương',
         team: 'Team 1',
       },
@@ -81,7 +84,7 @@ describe('buildReportData', () => {
     expect(report.summary.export).toBe(1);
     expect(report.summary.items).toBe(12 + 18);
     expect(report.summary.licenses).toBe(3);
-    expect(report.summary.kpi).toBeCloseTo(5.2, 1);
+    expect(report.summary.kpi).toBeCloseTo(4.2, 1);
     expect(report.summary.companyCount).toBe(2);
 
     expect(report.staff.list[0].name).toBe('Tuấn');
@@ -95,7 +98,7 @@ describe('buildReportData', () => {
     expect(staffPhuong).toBeTruthy();
     expect(staffPhuong.stats.decls).toBe(1);
     expect(staffPhuong.stats.items).toBe(12);
-    expect(staffPhuong.stats.kpi).toBeCloseTo(2.0, 1);
+    expect(staffPhuong.stats.kpi).toBeCloseTo(1.6, 1);
 
     const staffBao = report.staff.byKey.get('bao');
     expect(staffBao).toBeTruthy();
@@ -104,7 +107,7 @@ describe('buildReportData', () => {
     const staffTuan = report.staff.byKey.get('tuan');
     expect(staffTuan).toBeTruthy();
     expect(staffTuan.teamLabel).toContain('Team 2');
-    expect(staffTuan.stats.kpi).toBeCloseTo(3.2, 1);
+    expect(staffTuan.stats.kpi).toBeCloseTo(2.6, 1);
 
     const team2 = report.teams.list.find((team) => team.name === 'Team 2');
     expect(team2).toBeTruthy();

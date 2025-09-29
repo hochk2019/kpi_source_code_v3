@@ -90,6 +90,7 @@ describe('mapRow', () => {
 
     expect(mapped.licenses).toBe(2); // GP01 + GP02 (ZN02 bị loại và GP01 không trùng tính)
     expect(mapped.so_luong_gp).toBe(2);
+    expect(mapped.licenseCodes).toEqual(["GP01", "ZN02", "GP02"]);
   });
 
   it('autoAssignStaff fills nhân viên và tổ đội dựa trên bảng MST hiện có', () => {

@@ -74,7 +74,7 @@ ví dụ:
 Một số XML lưu danh sách giấy phép dưới dạng mảng hoặc cây con phức tạp
 (ví dụ: `<DS_GP><GP>GP01</GP><GP>ZN02</GP></DS_GP>`). Hàm
 `parseLicenseCount` đã hỗ trợ duyệt đệ quy các mảng/đối tượng con, lọc những mã
-nằm trong danh sách loại trừ (`license.excludeCodes`) rồi đếm số giấy phép hợp
+nằm trong danh sách loại trừ (`license.exclude.codes`) rồi đếm số giấy phép hợp
 lệ. Vì vậy chỉ cần bảo đảm cây con chứa mã giấy phép nằm trong một trường được
 ánh xạ tới `licenses` hoặc `license_codes` là đủ.
 

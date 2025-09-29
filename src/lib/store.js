@@ -1,5 +1,6 @@
 // src/lib/store.js
 
+import { createDefaultRuleCollection } from '@/shared/defaultRules.js';
 import { getItem, setItem } from './storageClient.js';
 
 // ===== Keys trong kho chia sẻ =====
@@ -724,12 +725,11 @@ export function pushImportLog(msg) {
 }
 
 // ===== K_RULES (để RulesEditor không lỗi khi chưa có dữ liệu) =====
-export const K_RULES = safeParse(getItem(RULES_KEY), {
-  version: 1,
-  points: { base: 1 },
-});
+export const K_RULES = (() => {
+  return safeParse(getItem(RULES_KEY), createDefaultRuleCollection());
+})();
 export function getRules() {
-  return safeParse(getItem(RULES_KEY), K_RULES);
+  return safeParse(getItem(RULES_KEY), createDefaultRuleCollection());
 }
 export function setRules(v) {
   setItem(RULES_KEY, JSON.stringify(v));
