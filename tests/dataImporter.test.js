@@ -199,6 +199,15 @@ describe('detectDateOrder', () => {
     expect(detectDateOrder(rows)).toBe('dmy');
   });
 
+  it('giữ ưu tiên day-first khi gặp dữ liệu ISO bị đảo yyyy-dd-mm', () => {
+    const rows = [
+      { 'Ngày': '2024-31-05' },
+      { 'Ngày': '2024-12-11' },
+    ];
+
+    expect(detectDateOrder(rows)).toBe('dmy');
+  });
+
   it('không chuyển sang month-first khi dữ liệu đã có dạng ISO yyyy-mm-dd', () => {
     const rows = [
       { 'Ngày': '01/08/2024' },
