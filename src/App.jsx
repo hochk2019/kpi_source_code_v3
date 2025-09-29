@@ -2,7 +2,7 @@ import React, { Suspense, useEffect, useMemo, useState } from 'react';
 const KPICalculator = React.lazy(() => import('./components/KPICalculator.jsx'));
 const Login = React.lazy(() => import('./components/Login.jsx'));
 const ChangePasswordDialog = React.lazy(() => import('./components/ChangePasswordDialog.jsx'));
-import { getAuth, getViewerAuth, logout } from './auth/localAuth.js';
+import { getAuth, getViewerAuth, loadSession, logout } from './auth/localAuth.js';
 import './App.css';
 import { getSyncStatus, subscribeSyncStatus } from './lib/storageClient.js';
 
@@ -14,6 +14,13 @@ export default function App() {
 
   useEffect(() => {
     setAuth(getAuth());
+    loadSession()
+      .then((session) => {
+        setAuth(session);
+      })
+      .catch(() => {
+        setAuth(null);
+      });
   }, []);
 
   useEffect(() => {
@@ -46,8 +53,9 @@ export default function App() {
   }, [syncStatus]);
 
   const handleLogout = () => {
-    logout(auth?.username);
-    setAuth(null);
+    logout(auth?.username).finally(() => {
+      setAuth(getAuth());
+    });
   };
 
   const handlePasswordDialogClose = (changed) => {

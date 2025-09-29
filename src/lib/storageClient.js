@@ -24,16 +24,6 @@ let retryDelayMs = RETRY_MIN_MS;
 let lastSyncError = null;
 let nextRetryAt = null;
 
-function getLocalStorage() {
-  if (typeof window !== 'undefined' && window.localStorage) {
-    return window.localStorage;
-  }
-  if (typeof globalThis !== 'undefined' && globalThis.localStorage) {
-    return globalThis.localStorage;
-  }
-  return null;
-}
-
 function notify(key) {
   const subs = listeners.get(key);
   if (!subs) return;
@@ -69,16 +59,6 @@ function emitSyncStatus() {
   return snapshot;
 }
 
-function writeLocal(key, value) {
-  const store = getLocalStorage();
-  if (!store) return;
-  if (value === null || value === undefined) {
-    store.removeItem(key);
-  } else {
-    store.setItem(key, value);
-  }
-}
-
 function normalizeBaseUrl(value) {
   if (typeof value !== 'string') {
     return '';
@@ -91,14 +71,11 @@ function applyRemoteSnapshot(data) {
   for (const [key, value] of entries) {
     if (value === null || value === undefined) {
       cache.delete(key);
-      writeLocal(key, null);
     } else if (typeof value === 'string') {
       cache.set(key, value);
-      writeLocal(key, value);
     } else {
       const stringValue = JSON.stringify(value);
       cache.set(key, stringValue);
-      writeLocal(key, stringValue);
     }
     notify(key);
   }
@@ -134,6 +111,7 @@ async function sendWrite(base, key, value) {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
+    credentials: 'include',
   });
   if (!response.ok) {
     throw new Error(`HTTP ${response.status}`);
@@ -187,7 +165,10 @@ async function bootstrapFromServer(baseUrl) {
   apiBase = normalizedBase;
   bootstrapPromise = (async () => {
     try {
-      const response = await fetch(`${normalizedBase}/api/bootstrap`, { cache: 'no-store' });
+      const response = await fetch(`${normalizedBase}/api/bootstrap`, {
+        cache: 'no-store',
+        credentials: 'include',
+      });
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`);
       }
@@ -231,25 +212,15 @@ function queueSync(key, value) {
 }
 
 export function getItem(key) {
-  if (cache.has(key)) {
-    return cache.get(key);
-  }
-  const store = getLocalStorage();
-  const value = store ? store.getItem(key) : null;
-  if (value !== null && value !== undefined) {
-    cache.set(key, value);
-  }
-  return value;
+  return cache.has(key) ? cache.get(key) : null;
 }
 
 export function setItem(key, value) {
   const stringValue = value === null || value === undefined ? null : String(value);
   if (stringValue === null) {
     cache.delete(key);
-    writeLocal(key, null);
   } else {
     cache.set(key, stringValue);
-    writeLocal(key, stringValue);
   }
   notify(key);
   queueSync(key, stringValue);
@@ -258,7 +229,6 @@ export function setItem(key, value) {
 
 export function removeItem(key) {
   cache.delete(key);
-  writeLocal(key, null);
   notify(key);
   queueSync(key, null);
 }
