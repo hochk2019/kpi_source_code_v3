@@ -13,6 +13,10 @@ import {
   toISODate,
   upsertMSTRows,
   getMSTFor,
+  getMSTMap,
+  HQ_KEY,
+  getHQAgencies,
+  upsertHQAgencies
 } from '@/lib/store.js';
 beforeEach(() => {
   localStorage.clear();
@@ -32,8 +36,6 @@ describe('toISODate', () => {
     expect(toISODate('2024-08-01T12:00:00')).toBe('2024-08-01');
   });
 });
-import { describe, it, expect } from 'vitest';
-import { saveDeclRows, getDeclRows } from '@/lib/store.js';
 
 describe('saveDeclRows', () => {
   it('merges rows using so_tk + nhanh when overwrite=false', () => {
@@ -103,6 +105,50 @@ describe('getRecentDeclRows', () => {
 
     expect(latest).toHaveLength(3);
     expect(latest.map(r => r.so_tk)).toEqual(['TK04', 'TK03', 'TK02']);
+  });
+});
+
+describe('hq agency helpers', () => {
+  it('chuẩn hoá và gộp dữ liệu đại lý theo MST', () => {
+    const stored = upsertHQAgencies([
+      { mst: '010-123-4567', company: '  Công ty A  ', agent: 'FCL' },
+      { mst: '0101234567', company: 'Công ty A cập nhật', agent: '' },
+    ], { actor: 'tester' });
+
+    expect(stored).toEqual([
+      { mst: '0101234567', company: 'Công ty A cập nhật', agent: 'FCL' },
+    ]);
+
+    const saved = JSON.parse(localStorage.getItem(HQ_KEY));
+    expect(saved).toHaveLength(1);
+    expect(saved[0].mst).toBe('0101234567');
+  });
+
+  it('đồng bộ tên công ty và đại lý vào MST cùng tờ khai', () => {
+    upsertMSTRows([
+      { mst: '0101234567', company: 'Tên cũ', person_import: '', person_export: '', team: '' },
+    ], { actor: 'tester' });
+
+    saveDeclRows([
+      { so_tk: 'TK01', nhanh: '', date: '2024-09-10', mst: '0101234567', cong_ty: 'Tên cũ' },
+    ], { overwrite: true, actor: 'tester' });
+
+    upsertHQAgencies([
+      { mst: '0101234567', company: 'Công ty Golden', agent: 'FCL' },
+    ], { actor: 'tester' });
+
+    const agencies = getHQAgencies();
+    expect(agencies).toEqual([
+      { mst: '0101234567', company: 'Công ty Golden', agent: 'FCL' },
+    ]);
+
+    const mstRows = getMSTMap();
+    expect(mstRows[0].company).toBe('Công ty Golden');
+
+    const decls = getDeclRows();
+    expect(decls[0].agency).toBe('FCL');
+    expect(decls[0].dai_ly).toBe('FCL');
+    expect(decls[0].cong_ty).toBe('Công ty Golden');
   });
 });
 

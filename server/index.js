@@ -7,6 +7,9 @@ import process from 'node:process';
 import Database from 'better-sqlite3';
 import cron from 'node-cron';
 import sql from 'mssql';
+import { DEFAULT_RULES as SHARED_DEFAULT_RULES } from '../src/shared/defaultRules.js';
+import { deriveCOStatus } from '../src/shared/co.js';
+import { recordSqlTimeout } from './sqlMonitor.js';
 
 const moduleUrl = typeof import.meta !== 'undefined' ? import.meta.url || '' : '';
 const __dirname = moduleUrl.startsWith('file:')
@@ -26,8 +29,6 @@ function resolveDbFile(value) {
 }
 
 const DB_FILE = resolveDbFile(process.env.KPI_DB_FILE);
-const __dirname = fileURLToPath(new URL('.', import.meta.url));
-const DB_FILE = path.resolve(__dirname, 'data/storage.sqlite');
 const LEGACY_JSON = path.resolve(__dirname, 'data/db.json');
 const DIST_DIR = path.resolve(__dirname, '../dist');
 
@@ -76,7 +77,7 @@ const DEFAULT_ALERT_STATE = {
 const DEFAULT_STORAGE = {
   decl_rows_v1: '[]',
   mst_rows_v2: '[]',
-  kpi_rules_v2: JSON.stringify({ version: 1, points: { base: 1 } }),
+  kpi_rules_v2: JSON.stringify(SHARED_DEFAULT_RULES),
   team_roster_v1: JSON.stringify({
     version: 1,
     teams: [
@@ -171,9 +172,6 @@ async function initializeDatabase({ dbFile = DB_FILE } = {}) {
     await fs.mkdir(path.dirname(dbFile), { recursive: true });
   }
   const database = new Database(dbFile);
-async function initializeDatabase() {
-  await fs.mkdir(path.dirname(DB_FILE), { recursive: true });
-  const database = new Database(DB_FILE);
   database.pragma('journal_mode = WAL');
   database.exec(
     'CREATE TABLE IF NOT EXISTS kv_store (key TEXT PRIMARY KEY, value TEXT NOT NULL)'
@@ -427,7 +425,7 @@ function saveDeclRowsServer(newRows, { overwrite = false, actor = 'system', deta
 }
 
 function getRulesValue() {
-  return getJSONValue('kpi_rules_v2', { version: 1, points: { base: 1 } });
+  return getJSONValue('kpi_rules_v2', SHARED_DEFAULT_RULES);
 }
 
 function getRosterValue() {
@@ -990,16 +988,6 @@ function mapEcusRow(record, config, context) {
       if (value !== undefined) {
         return value;
       }
-function mapEcusRow(record, config, context) {
-  if (!record || typeof record !== 'object') return null;
-  const columnMap = config.columnMap || {};
-  const getField = (name) => {
-    const mapped = columnMap[name];
-    if (mapped && Object.prototype.hasOwnProperty.call(record, mapped)) {
-      return record[mapped];
-    }
-    if (Object.prototype.hasOwnProperty.call(record, name)) {
-      return record[name];
     }
     return undefined;
   };
@@ -1046,7 +1034,7 @@ function mapEcusRow(record, config, context) {
     }
   }
 
-  return {
+  const base = {
     date: dateISO,
     raw_date: rawDate instanceof Date ? rawDate.toISOString().slice(0, 10) : normalizeStr(rawDate),
     so_tk: soTk,
@@ -1062,6 +1050,7 @@ function mapEcusRow(record, config, context) {
     team,
     isExport,
   };
+  return deriveCOStatus(record, base);
 }
 
 async function fetchEcusDeclarations(range, config) {
@@ -1070,7 +1059,12 @@ async function fetchEcusDeclarations(range, config) {
     throw new Error('Chưa cấu hình máy chủ hoặc cơ sở dữ liệu SQL Server');
   }
 
-  const pool = new sql.ConnectionPool(connectionConfig);
+  const pool = new sql.ConnectionPool({
+    ...connectionConfig,
+    connectionTimeout: connectionConfig.connectionTimeout ?? 5000,
+    requestTimeout: connectionConfig.requestTimeout ?? 10000,
+    pool: { max: 5, min: 0, idleTimeoutMillis: 5000 },
+  });
   const poolClose = () => pool.close().catch(() => {});
   await pool.connect();
   try {
@@ -1086,6 +1080,51 @@ async function fetchEcusDeclarations(range, config) {
     const query = config.query || DEFAULT_ECUS_SYNC_CONFIG.query;
     const result = await request.query(query);
     return result?.recordset || [];
+  } finally {
+    await poolClose();
+  }
+}
+
+async function checkSqlServerHealth() {
+  const config = getEcusConfig();
+  const connectionConfig = buildSqlConnectionConfig(config);
+  if (!connectionConfig.server || !connectionConfig.database) {
+    return {
+      ok: false,
+      state: 'not_configured',
+      message: 'Chưa cấu hình máy chủ hoặc cơ sở dữ liệu SQL Server',
+    };
+  }
+  const pool = new sql.ConnectionPool({
+    ...connectionConfig,
+    connectionTimeout: connectionConfig.connectionTimeout ?? 5000,
+    requestTimeout: connectionConfig.requestTimeout ?? 5000,
+    pool: { max: 1, min: 0, idleTimeoutMillis: 3000 },
+  });
+  const poolClose = () => pool.close().catch(() => {});
+  try {
+    await pool.connect();
+    await pool.request().query('SELECT 1 AS ok');
+    return {
+      ok: true,
+      state: 'ready',
+      server: connectionConfig.server,
+      database: connectionConfig.database,
+      checkedAt: new Date().toISOString(),
+    };
+  } catch (err) {
+    const timeout = isSqlTimeoutError(err);
+    if (timeout) {
+      recordSqlTimeout({ message: err?.message, context: { actor: 'healthcheck', reason: 'status-check' } });
+    }
+    return {
+      ok: false,
+      state: timeout ? 'timeout' : 'error',
+      message: err?.message || 'Không thể kết nối SQL Server',
+      code: err?.code || null,
+      number: err?.number || null,
+      checkedAt: new Date().toISOString(),
+    };
   } finally {
     await poolClose();
   }
@@ -1168,6 +1207,9 @@ async function runEcusSyncWithErrorHandling(params) {
     return await runEcusSync(params);
   } catch (err) {
     console.error('ECUS sync failed', err);
+    if (isSqlTimeoutError(err)) {
+      recordSqlTimeout({ message: err?.message, context: { actor: params?.actor, reason: params?.reason } });
+    }
     saveEcusConfig({
       lastRun: new Date().toISOString(),
       lastStatus: `error: ${err.message}`,
@@ -1179,6 +1221,15 @@ async function runEcusSyncWithErrorHandling(params) {
     });
     throw err;
   }
+}
+
+function isSqlTimeoutError(err) {
+  if (!err) return false;
+  const message = String(err?.message || err).toLowerCase();
+  if (message.includes('timeout')) return true;
+  if (err?.code && String(err.code).toLowerCase().includes('timeout')) return true;
+  if (err?.number && String(err.number).toLowerCase().includes('timeout')) return true;
+  return false;
 }
 
 let scheduledSync = null;
@@ -1209,8 +1260,7 @@ function refreshEcusSchedule() {
 }
 
 export const app = express();
-const app = express();
-const PORT = Number.parseInt(process.env.PORT || '4000', 10);
+const PORT = Number.parseInt(process.env.PORT || '5000', 10);
 
 app.use(cors());
 app.use(express.json({ limit: '5mb' }));
@@ -1268,6 +1318,25 @@ app.delete('/api/storage/:key', (req, res) => {
 app.get('/api/import/ecus/config', (req, res) => {
   const config = formatEcusConfigForClient(getEcusConfig());
   res.json({ ok: true, config });
+});
+
+app.get('/api/import/ecus/status', async (req, res) => {
+  try {
+    const database = await checkSqlServerHealth();
+    const backend = {
+      ok: true,
+      state: 'online',
+      checkedAt: new Date().toISOString(),
+    };
+    res.json({
+      ok: true,
+      backend,
+      database,
+      config: formatEcusConfigForClient(getEcusConfig()),
+    });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err?.message || 'Không thể kiểm tra trạng thái ECUS' });
+  }
 });
 
 app.put('/api/import/ecus/config', (req, res) => {
@@ -1359,6 +1428,3 @@ export function getDatabaseHandle() {
 if (process.env.KPI_SKIP_LISTEN !== '1') {
   startServer(PORT);
 }
-app.listen(PORT, () => {
-  console.log(`KPI storage server đang chạy tại http://localhost:${PORT}`);
-});

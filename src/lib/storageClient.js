@@ -10,9 +10,18 @@ const SHARED_KEYS = new Set([
 
 const cache = new Map();
 const listeners = new Map();
+const syncListeners = new Set();
 let remoteEnabled = false;
 let apiBase = '';
-let initPromise = null;
+let bootstrapPromise = null;
+const pendingWrites = new Map();
+let flushPromise = null;
+let retryTimer = null;
+const RETRY_MIN_MS = 5000;
+const RETRY_MAX_MS = 60000;
+let retryDelayMs = RETRY_MIN_MS;
+let lastSyncError = null;
+let nextRetryAt = null;
 
 function getLocalStorage() {
   if (typeof window !== 'undefined' && window.localStorage) {
@@ -36,6 +45,29 @@ function notify(key) {
   }
 }
 
+function createSyncSnapshot() {
+  return {
+    remoteEnabled,
+    pendingWrites: pendingWrites.size,
+    waitingForBackend: pendingWrites.size > 0 && !remoteEnabled,
+    lastError: lastSyncError,
+    retryDelayMs,
+    nextRetryAt,
+  };
+}
+
+function emitSyncStatus() {
+  const snapshot = createSyncSnapshot();
+  for (const listener of syncListeners) {
+    try {
+      listener(snapshot);
+    } catch (err) {
+      console.error('Shared storage sync listener error', err);
+    }
+  }
+  return snapshot;
+}
+
 function writeLocal(key, value) {
   const store = getLocalStorage();
   if (!store) return;
@@ -46,18 +78,155 @@ function writeLocal(key, value) {
   }
 }
 
-function queueSync(key, value) {
-  if (!remoteEnabled || !SHARED_KEYS.has(key) || !apiBase) {
+function normalizeBaseUrl(value) {
+  if (typeof value !== 'string') {
+    return '';
+  }
+  return value.endsWith('/') ? value.slice(0, -1) : value;
+}
+
+function applyRemoteSnapshot(data) {
+  const entries = data && typeof data === 'object' ? Object.entries(data) : [];
+  for (const [key, value] of entries) {
+    if (value === null || value === undefined) {
+      cache.delete(key);
+      writeLocal(key, null);
+    } else if (typeof value === 'string') {
+      cache.set(key, value);
+      writeLocal(key, value);
+    } else {
+      const stringValue = JSON.stringify(value);
+      cache.set(key, stringValue);
+      writeLocal(key, stringValue);
+    }
+    notify(key);
+  }
+}
+
+function scheduleRetry() {
+  if (retryTimer || typeof fetch !== 'function') {
     return;
   }
+  const base = typeof apiBase === 'string' ? apiBase : '';
+  nextRetryAt = Date.now() + retryDelayMs;
+  emitSyncStatus();
+  retryTimer = setTimeout(async () => {
+    retryTimer = null;
+    nextRetryAt = null;
+    emitSyncStatus();
+    const ok = await bootstrapFromServer(base);
+    if (!ok) {
+      retryDelayMs = Math.min(
+        Math.max(Math.floor(retryDelayMs * 1.5), RETRY_MIN_MS),
+        RETRY_MAX_MS,
+      );
+      scheduleRetry();
+    }
+    emitSyncStatus();
+  }, retryDelayMs);
+}
+
+async function sendWrite(base, key, value) {
   const payload = value === null || value === undefined ? { value: null } : { value };
-  fetch(`${apiBase}/api/storage/${encodeURIComponent(key)}`, {
+  const urlBase = base || '';
+  const response = await fetch(`${urlBase}/api/storage/${encodeURIComponent(key)}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
-  }).catch((err) => {
-    console.error('Không thể đồng bộ dữ liệu lên máy chủ', err);
   });
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status}`);
+  }
+}
+
+async function flushPending() {
+  if (flushPromise || pendingWrites.size === 0 || typeof fetch !== 'function') {
+    return flushPromise;
+  }
+  flushPromise = (async () => {
+    while (pendingWrites.size > 0) {
+      if (!remoteEnabled) {
+        break;
+      }
+      const iterator = pendingWrites.entries().next();
+      if (iterator.done) {
+        break;
+      }
+      const [key, value] = iterator.value;
+      pendingWrites.delete(key);
+      try {
+        const base = typeof apiBase === 'string' ? apiBase : '';
+        await sendWrite(base, key, value);
+        emitSyncStatus();
+      } catch (err) {
+        console.error('Không thể đồng bộ dữ liệu lên máy chủ', err);
+        pendingWrites.set(key, value);
+        remoteEnabled = false;
+        lastSyncError = err?.message || 'Không thể kết nối backend';
+        retryDelayMs = Math.min(Math.max(Math.floor(retryDelayMs * 1.5), RETRY_MIN_MS), RETRY_MAX_MS);
+        emitSyncStatus();
+        scheduleRetry();
+        break;
+      }
+    }
+    flushPromise = null;
+    emitSyncStatus();
+  })();
+  return flushPromise;
+}
+
+async function bootstrapFromServer(baseUrl) {
+  if (bootstrapPromise) {
+    return bootstrapPromise;
+  }
+  if (typeof fetch !== 'function') {
+    return false;
+  }
+  const normalizedBase = normalizeBaseUrl(baseUrl ?? '');
+  apiBase = normalizedBase;
+  bootstrapPromise = (async () => {
+    try {
+      const response = await fetch(`${normalizedBase}/api/bootstrap`, { cache: 'no-store' });
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      const payload = await response.json();
+      applyRemoteSnapshot(payload?.data);
+      remoteEnabled = true;
+      lastSyncError = null;
+      emitSyncStatus();
+      retryDelayMs = RETRY_MIN_MS;
+      return true;
+    } catch (err) {
+      console.warn('Không thể đồng bộ dữ liệu từ máy chủ, sử dụng dữ liệu cục bộ.', err);
+      remoteEnabled = false;
+      lastSyncError = err?.message || 'Không thể kết nối backend';
+      emitSyncStatus();
+      return false;
+    } finally {
+      bootstrapPromise = null;
+    }
+  })();
+  const ok = await bootstrapPromise;
+  if (ok) {
+    await flushPending();
+  } else {
+    scheduleRetry();
+  }
+  return ok;
+}
+
+function queueSync(key, value) {
+  if (!SHARED_KEYS.has(key) || typeof fetch !== 'function') {
+    return;
+  }
+  pendingWrites.set(key, value === undefined ? null : value);
+  emitSyncStatus();
+  if (!remoteEnabled) {
+    scheduleRetry();
+    return;
+  }
+  flushPending();
 }
 
 export function getItem(key) {
@@ -111,50 +280,17 @@ export function subscribe(key, listener) {
 }
 
 export async function initSharedStorage(options = {}) {
-  if (initPromise) {
-    return initPromise;
-  }
-  const baseUrl = options.baseUrl ?? options.apiBase ?? (typeof import.meta !== 'undefined' ? import.meta.env?.VITE_API_BASE : '') ?? '';
-  const normalizedBase = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
-
+  const baseUrl =
+    options.baseUrl ??
+    options.apiBase ??
+    (typeof import.meta !== 'undefined' ? import.meta.env?.VITE_API_BASE : '') ??
+    '';
+  const normalizedBase = normalizeBaseUrl(baseUrl);
+  apiBase = normalizedBase;
   if (typeof fetch !== 'function') {
     return false;
   }
-
-  initPromise = (async () => {
-    try {
-      const response = await fetch(`${normalizedBase}/api/bootstrap`, { cache: 'no-store' });
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
-      const payload = await response.json();
-      const data = payload?.data && typeof payload.data === 'object' ? payload.data : {};
-      for (const [key, value] of Object.entries(data)) {
-        if (value === null || value === undefined) {
-          cache.delete(key);
-          writeLocal(key, null);
-        } else if (typeof value === 'string') {
-          cache.set(key, value);
-          writeLocal(key, value);
-        } else {
-          const stringValue = JSON.stringify(value);
-          cache.set(key, stringValue);
-          writeLocal(key, stringValue);
-        }
-        notify(key);
-      }
-      apiBase = normalizedBase || '';
-      remoteEnabled = true;
-      return true;
-    } catch (err) {
-      console.warn('Không thể đồng bộ dữ liệu từ máy chủ, sử dụng dữ liệu cục bộ.', err);
-      remoteEnabled = false;
-      apiBase = normalizedBase || '';
-      return false;
-    }
-  })();
-
-  return initPromise;
+  return bootstrapFromServer(normalizedBase);
 }
 
 export function clearStorageCache() {
@@ -162,3 +298,30 @@ export function clearStorageCache() {
 }
 
 export const sharedStorageKeys = SHARED_KEYS;
+
+export function getSyncStatus() {
+  return createSyncSnapshot();
+}
+
+export function subscribeSyncStatus(listener) {
+  const fn = typeof listener === 'function' ? listener : null;
+  if (!fn) {
+    return () => {};
+  }
+  syncListeners.add(fn);
+  const emitInitial = () => {
+    try {
+      fn(createSyncSnapshot());
+    } catch (err) {
+      console.error('Shared storage sync listener error', err);
+    }
+  };
+  if (typeof queueMicrotask === 'function') {
+    queueMicrotask(emitInitial);
+  } else {
+    Promise.resolve().then(emitInitial);
+  }
+  return () => {
+    syncListeners.delete(fn);
+  };
+}

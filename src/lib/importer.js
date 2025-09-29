@@ -7,6 +7,7 @@ import {
   normalizeName,
 } from "@/lib/store.js";
 import { loadRules, countLicenseTypesFromRowObj } from "@/lib/rules.js";
+import { deriveCOStatus } from "@/shared/co.js";
 
 const NAME_MAP = {
   so_tk: [
@@ -31,15 +32,6 @@ const NAME_MAP = {
     "MA_LH",
     "ma_lh",
   ],
-  ],
-} from "@/lib/store.js";
-
-const NAME_MAP = {
-  so_tk: ["Số TK", "Số tờ khai", "So TK", "So to khai", "Số tờ khai TM", "Số tờ khai TM "],
-  nhanh: ["Nhánh", "Nhanh", "branch"],
-  date: ["date", "ngày", "Ngay", "Ngày"],
-  ma_hq: ["Mã HQ", "Ma HQ", "Mã hq", "ma_hq"],
-  loai_hinh: ["Loại hình", "Loai hinh", "Loại hình", "loai_hinh"],
   so_hoa_don: ["Số hóa đơn TM", "So hoa don TM", "Số hoá đơn TM"],
   van_don: ["Vận đơn", "Van don", "Vận đơn "],
   phuong_thuc_vc: ["Phương thức vận chuyển", "Phuong thuc van chuyen"],
@@ -58,12 +50,7 @@ const NAME_MAP = {
   ],
   mst: ["MST", "mst", "Mã số thuế", "Ma so thue"],
   cong_ty: ["Công ty", "Cong ty", "customer", "Tên doanh nghiệp", "Ten doanh nghiep"],
-  ],
-  mst: ["MST", "mst", "Mã số thuế", "Ma so thue"],
-  cong_ty: ["Công ty", "Cong ty", "customer", "Tên doanh nghiệp", "Ten doanh nghiep"],
-  muc_hang: ["Mục hàng", "Muc hang", "num_items"],
-  mst: ["MST", "mst"],
-  cong_ty: ["Công ty", "Cong ty", "customer"],
+  agency: ["Đại lý", "Đại lý HQ", "Dai ly", "Dai ly HQ", "Agency"],
 };
 
 function pick(row, keys) {
@@ -86,6 +73,8 @@ export function detectDateOrder(rows) {
       const monthVal = Number.parseInt(isoLike[2], 10);
       const dayVal = Number.parseInt(isoLike[3], 10);
       if (monthVal > 12 && dayVal >= 1 && dayVal <= 12) {
+        dayFirst += 1;
+      } else if (dayVal > 12 && monthVal >= 1 && monthVal <= 12) {
         monthFirst += 1;
       } else if (dayVal > 12 && monthVal > 12) {
         monthFirst += 1;
@@ -93,7 +82,7 @@ export function detectDateOrder(rows) {
       continue;
     }
 
-  const slashLike = raw.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{2,4})(?:[ T].*)?$/);
+    const slashLike = raw.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{2,4})(?:[ T].*)?$/);
     if (!slashLike) continue;
     const first = Number.parseInt(slashLike[1], 10);
     const second = Number.parseInt(slashLike[2], 10);
@@ -114,10 +103,6 @@ export function mapRow(row, opts = {}) {
   const nhanh = normalizeStr(pick(row, NAME_MAP.nhanh));
   const rawDate = pick(row, NAME_MAP.date);
   const dateISO = toISODate(rawDate, { preferMonthFirst: opts.preferMonthFirst });
-export function mapRow(row, opts) {
-  const so_tk = normalizeStr(pick(row, NAME_MAP.so_tk));
-  const nhanh = normalizeStr(pick(row, NAME_MAP.nhanh));
-  const dateISO = toISODate(pick(row, NAME_MAP.date));
   const ma_hq = normalizeStr(pick(row, NAME_MAP.ma_hq));
   const loai_hinh = normalizeStr(pick(row, NAME_MAP.loai_hinh));
   const so_hoa_don = normalizeStr(pick(row, NAME_MAP.so_hoa_don));
@@ -129,12 +114,13 @@ export function mapRow(row, opts) {
   const phan_luong = normalizeStr(pick(row, NAME_MAP.phan_luong));
   const muc_hang = Number(pick(row, NAME_MAP.muc_hang)) || 0;
   const mst = normalizeMST(pick(row, NAME_MAP.mst));
-  const cong_ty = normalizeStr(pick(row, NAME_MAP.cong_ty));
+  let cong_ty = normalizeStr(pick(row, NAME_MAP.cong_ty));
+  let agency = normalizeStr(pick(row, NAME_MAP.agency));
 
   let nhan_vien = normalizeStr(row["nhan_vien"] || row["Nhân viên"] || "");
   let team = normalizeStr(row["team"] || row["Tổ đội"] || "");
   const autoAssignStaff = opts.autoAssignStaff !== false;
-
+  const agencyMap = opts.agencyMap instanceof Map ? opts.agencyMap : null;
   const licenseExcludes = Array.isArray(opts.licenseExcludes)
     ? opts.licenseExcludes
     : (opts.rules?.license?.excludeCodes
@@ -143,8 +129,6 @@ export function mapRow(row, opts) {
   const licenses = countLicenseTypesFromRowObj(row, licenseExcludes);
 
   if (autoAssignStaff) {
-
-  if (opts.autoAssignStaff) {
     const isExport = isExportDecl(so_tk, loai_hinh);
     const m = getMSTFor(mst, dateISO) || {};
     if (!nhan_vien) nhan_vien = isExport ? m.person_export || "" : m.person_import || "";
@@ -160,11 +144,21 @@ export function mapRow(row, opts) {
     }
   }
 
-  return {
+  if (agencyMap && mst) {
+    const info = agencyMap.get(mst);
+    if (info) {
+      if (!agency) {
+        agency = info.agent || "";
+      }
+      if (info.company && normalizeStr(cong_ty) !== info.company) {
+        cong_ty = info.company;
+      }
+    }
+  }
+
+  const base = {
     date: dateISO,
     raw_date: normalizeStr(rawDate),
-  return {
-    date: dateISO,
     so_tk,
     soToKhai: so_tk,
     nhanh,
@@ -185,7 +179,10 @@ export function mapRow(row, opts) {
     customer: cong_ty,
     nhan_vien,
     team,
+    agency,
+    dai_ly: agency,
     licenses,
     so_luong_gp: licenses,
   };
+  return deriveCOStatus(row, base);
 }

@@ -6,8 +6,6 @@ import { MST_KEY } from '@/lib/store.js';
 beforeEach(() => {
   localStorage.clear();
 });
-import { describe, it, expect } from 'vitest';
-import { mapRow } from '@/lib/importer.js';
 
 describe('mapRow', () => {
   it('normalises fields and exposes aliases used by other modules', () => {
@@ -17,8 +15,6 @@ describe('mapRow', () => {
       'Ngay': '15/09/2024',
       'Mã số thuế': '0101234567',
       'Tên doanh nghiệp': '  ABC Corp  ',
-      'MST': '0101234567',
-      'Công ty': '  ABC Corp  ',
       'Muc hang': '7',
       'Loai hinh': 'a11',
     };
@@ -162,6 +158,26 @@ describe('mapRow', () => {
     expect(mapped.nhan_vien).toBe('Hạnh');
     expect(mapped.team).toBe('Team 1');
   });
+
+  it('gán đại lý HQ dựa trên mapping', () => {
+    const mapped = mapRow(
+      {
+        'Số tờ khai': 'TK04',
+        'Ngày': '07/09/2024',
+        'MST': '0101234567',
+      },
+      {
+        autoAssignStaff: false,
+        agencyMap: new Map([
+          ['0101234567', { company: 'Công ty Golden', agent: 'FCL' }],
+        ]),
+      }
+    );
+
+    expect(mapped.agency).toBe('FCL');
+    expect(mapped.dai_ly).toBe('FCL');
+    expect(mapped.cong_ty).toBe('Công ty Golden');
+  });
 });
 
 describe('detectDateOrder', () => {
@@ -183,11 +199,47 @@ describe('detectDateOrder', () => {
     expect(detectDateOrder(rows)).toBe('dmy');
   });
 
+  it('giữ ưu tiên day-first khi gặp dữ liệu ISO bị đảo yyyy-dd-mm', () => {
+    const rows = [
+      { 'Ngày': '2024-31-05' },
+      { 'Ngày': '2024-12-11' },
+    ];
+
+    expect(detectDateOrder(rows)).toBe('dmy');
+  });
+
   it('không chuyển sang month-first khi dữ liệu đã có dạng ISO yyyy-mm-dd', () => {
     const rows = [
       { 'Ngày': '01/08/2024' },
       { 'Ngày': '2024-08-31' },
       { 'Ngày': '15/08/2024' },
+    ];
+
+    expect(detectDateOrder(rows)).toBe('dmy');
+  });
+
+  it('giữ suy luận day-first với chuỗi dạng dd-mm-yy', () => {
+    const rows = [
+      { 'Ngày': '31-05-24' },
+      { 'Ngày': '07-06-24' },
+    ];
+
+    expect(detectDateOrder(rows)).toBe('dmy');
+  });
+
+  it('chuyển sang month-first khi ngày nằm ở vị trí thứ hai với dấu gạch', () => {
+    const rows = [
+      { 'Ngày': '05-31-2024' },
+      { 'Ngày': '09-13-2024' },
+    ];
+
+    expect(detectDateOrder(rows)).toBe('mdy');
+  });
+
+  it('hiểu đúng chuỗi ISO kèm thời gian khi ngày và tháng bị đảo', () => {
+    const rows = [
+      { 'Ngày': '2024-31-05T00:00:00Z' },
+      { 'Ngày': '2024-21-01 00:00:00' },
     ];
 
     expect(detectDateOrder(rows)).toBe('dmy');

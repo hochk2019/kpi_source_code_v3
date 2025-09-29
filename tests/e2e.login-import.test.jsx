@@ -24,6 +24,7 @@ import * as XLSX from 'xlsx';
 
 import App from '@/App.jsx';
 import { getDeclRows } from '@/lib/store.js';
+import { installMockApi } from './helpers/mockApi.js';
 
 function createWorkbookFile() {
   return new File(['dummy'], 'import-e2e.xlsx', {
@@ -45,57 +46,6 @@ class MockFileReader {
   }
 }
 
-function setupFetchStub() {
-  const fetchMock = vi.fn(async (input, init) => {
-    const url = typeof input === 'string' ? input : input?.url ?? '';
-    const method = init?.method || 'GET';
-
-    if (url.includes('/api/import/ecus/config')) {
-      return {
-        ok: true,
-        json: async () => ({
-          ok: true,
-          config: {
-            enabled: false,
-            schedule: '0 * * * *',
-            rangeDays: 1,
-            connection: { server: '', database: '', user: '', hasPassword: false },
-          },
-        }),
-      };
-    }
-
-    if (url.includes('/api/import/alerts')) {
-      if (method === 'POST') {
-        return {
-          ok: true,
-          json: async () => ({ ok: true, updated: [] }),
-        };
-      }
-      return {
-        ok: true,
-        json: async () => ({
-          ok: true,
-          alerts: [],
-          summary: { outstanding: 0, totalTracked: 0, lastEvaluatedAt: null },
-        }),
-      };
-    }
-
-    if (url.includes('/api/import/ecus/run') && method === 'POST') {
-      return { ok: true, json: async () => ({ ok: true, result: { fetched: 0, imported: 0 } }) };
-    }
-
-    if (url.includes('/api/audit')) {
-      return { ok: true, json: async () => ({ ok: true, logs: [] }) };
-    }
-
-    return { ok: true, json: async () => ({ ok: true }) };
-  });
-  vi.stubGlobal('fetch', fetchMock);
-  return fetchMock;
-}
-
 function ensureTestGlobals() {
   if (!globalThis.ResizeObserver) {
     vi.stubGlobal('ResizeObserver', class {
@@ -113,7 +63,7 @@ describe('Luồng đăng nhập và import thực tế', () => {
 
   beforeEach(() => {
     localStorage.clear();
-    fetchMock = setupFetchStub();
+    fetchMock = installMockApi();
     vi.stubGlobal('FileReader', MockFileReader);
     alertMock = vi.fn();
     confirmMock = vi.fn(() => true);
@@ -133,11 +83,15 @@ describe('Luồng đăng nhập và import thực tế', () => {
     render(<App />);
 
     await user.click(screen.getByRole('button', { name: /đăng nhập quản trị/i }));
-    await user.type(screen.getByPlaceholderText('admin'), 'admin');
-    await user.type(screen.getByPlaceholderText(/•/), 'admin123');
+    await user.type(await screen.findByPlaceholderText('admin'), 'admin');
+    await user.type(await screen.findByPlaceholderText(/•/), 'admin123');
     await user.click(screen.getByRole('button', { name: /^đăng nhập$/i }));
 
     await waitFor(() => expect(screen.getByText(/Xin chào, /i)).toBeInTheDocument());
+
+    const importTab = await screen.findByRole('tab', { name: /Import Data/i }, { timeout: 5000 });
+    await user.click(importTab);
+    await user.click(await screen.findByRole('tab', { name: /Import Data/i }));
 
     const file = createWorkbookFile();
     const input = document.querySelector('input[type="file"]');

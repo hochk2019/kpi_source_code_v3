@@ -10,12 +10,12 @@ import {
 } from "@/auth/localAuth.js";
 
 const PERMISSION_LABELS = {
-  importEdit: "Import Excel – chỉnh sửa & lưu",
+  importEdit: "Import Data – chỉnh sửa & lưu",
   mstEdit: "Gán MST – chỉnh sửa",
   rulesEdit: "Quy tắc KPI – chỉnh sửa",
   teamsEdit: "Quản lý tổ đội – chỉnh sửa",
   syncManage: "Đồng bộ ECUS – cấu hình & chạy tay",
-  reportsExport: "Báo cáo/In – xuất file",
+  reportsExport: "Báo cáo KPI – xuất file",
   alertsManage: "Quản lý cảnh báo tờ khai thiếu thông tin",
   auditView: "Xem nhật ký hệ thống",
   accountManage: "Quản lý tài khoản",

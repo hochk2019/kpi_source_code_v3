@@ -1,0 +1,240 @@
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+
+let initSharedStorage;
+let sharedSetItem;
+let sharedGetItem;
+let clearStorageCacheFn;
+let getSyncStatus;
+let subscribeSyncStatus;
+
+function createBootstrapResponse(data) {
+  return {
+    ok: true,
+    json: async () => ({ data }),
+  };
+}
+
+async function waitForCondition(check, tries = 10) {
+  for (let attempt = 0; attempt < tries; attempt += 1) {
+    if (check()) {
+      return true;
+    }
+    await Promise.resolve();
+  }
+  return check();
+}
+
+describe('storageClient remote đồng bộ lại khi server lên trễ', () => {
+  beforeEach(async () => {
+    localStorage.clear();
+    vi.useFakeTimers();
+    vi.resetModules();
+    const storageModule = await import('@/lib/storageClient.js');
+    initSharedStorage = storageModule.initSharedStorage;
+    sharedSetItem = storageModule.setItem;
+    sharedGetItem = storageModule.getItem;
+    clearStorageCacheFn = storageModule.clearStorageCache;
+    getSyncStatus = storageModule.getSyncStatus;
+    subscribeSyncStatus = storageModule.subscribeSyncStatus;
+    clearStorageCacheFn();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+    clearStorageCacheFn?.();
+    localStorage.clear();
+  });
+
+  it('tự động flush dữ liệu pending khi kết nối server thành công sau đó', async () => {
+    const bootstrapQueue = [
+      { kind: 'error' },
+      { kind: 'success', data: { decl_rows_v1: '[]' } },
+    ];
+    const storageWrites = [];
+
+    const fetchMock = vi.fn(async (input, init) => {
+      const method = (init?.method || 'GET').toUpperCase();
+      const url = typeof input === 'string' ? input : input?.url ?? '';
+      if (url.includes('/api/bootstrap')) {
+        const next = bootstrapQueue.shift() ?? { kind: 'success', data: {} };
+        if (next.kind === 'error') {
+          throw new Error('offline');
+        }
+        return createBootstrapResponse(next.data);
+      }
+      if (url.includes('/api/storage/') && method === 'PUT') {
+        storageWrites.push({ url, body: init?.body });
+        return { ok: true, json: async () => ({ ok: true }) };
+      }
+      return { ok: true, json: async () => ({ ok: true }) };
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const initial = await initSharedStorage({ baseUrl: '' });
+    expect(initial).toBe(false);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    const payload = JSON.stringify([{ so_tk: 'TK-RETRY-001' }]);
+    sharedSetItem('decl_rows_v1', payload);
+    expect(sharedGetItem('decl_rows_v1')).toBe(payload);
+    expect(storageWrites).toHaveLength(0);
+
+    await vi.advanceTimersByTimeAsync(5000);
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(storageWrites).toHaveLength(1);
+    const saved = JSON.parse(storageWrites[0].body);
+    expect(saved.value).toBe(payload);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  it('phát sự kiện chờ backend khi hàng đợi chưa thể đồng bộ', async () => {
+    const bootstrapQueue = [
+      { kind: 'error' },
+      { kind: 'success', data: { decl_rows_v1: '[]' } },
+    ];
+    const storageWrites = [];
+    const fetchMock = vi.fn(async (input, init) => {
+      const method = (init?.method || 'GET').toUpperCase();
+      const url = typeof input === 'string' ? input : input?.url ?? '';
+      if (url.includes('/api/bootstrap')) {
+        const next = bootstrapQueue.shift() ?? { kind: 'success', data: {} };
+        if (next.kind === 'error') {
+          throw new Error('offline');
+        }
+        return createBootstrapResponse(next.data);
+      }
+      if (url.includes('/api/storage/') && method === 'PUT') {
+        storageWrites.push({ url, body: init?.body });
+        return { ok: true, json: async () => ({ ok: true }) };
+      }
+      return { ok: true, json: async () => ({ ok: true }) };
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const initial = await initSharedStorage({ baseUrl: '' });
+    expect(initial).toBe(false);
+
+    const events = [];
+    const unsubscribe = subscribeSyncStatus((status) => {
+      events.push(status);
+    });
+
+    const payload = JSON.stringify([{ so_tk: 'CHO-BACKEND' }]);
+    sharedSetItem('decl_rows_v1', payload);
+
+    const waitingStatus = getSyncStatus();
+    expect(waitingStatus.waitingForBackend).toBe(true);
+    expect(waitingStatus.pendingWrites).toBe(1);
+
+    await vi.advanceTimersByTimeAsync(5000);
+    await Promise.resolve();
+
+    const finalStatus = getSyncStatus();
+    expect(finalStatus.waitingForBackend).toBe(false);
+    expect(finalStatus.pendingWrites).toBe(0);
+    expect(storageWrites).toHaveLength(1);
+
+    unsubscribe();
+
+    expect(events.some((status) => status.waitingForBackend)).toBe(true);
+  });
+
+  it('không lập lịch retry trùng lặp khi đã có timer đang chờ', async () => {
+    const fetchMock = vi.fn(async (input) => {
+      const url = typeof input === 'string' ? input : input?.url ?? '';
+      if (url.includes('/api/bootstrap')) {
+        throw new Error('offline');
+      }
+      return { ok: true, json: async () => ({ ok: true }) };
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const setTimeoutSpy = vi.spyOn(globalThis, 'setTimeout');
+
+    const initial = await initSharedStorage({ baseUrl: '' });
+    expect(initial).toBe(false);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(setTimeoutSpy).toHaveBeenCalledTimes(1);
+
+    const firstDelay = setTimeoutSpy.mock.calls[0]?.[1];
+    expect(firstDelay).toBe(5000);
+
+    sharedSetItem('decl_rows_v1', JSON.stringify([{ so_tk: 'RETRY-ONCE' }]));
+    sharedSetItem('decl_rows_v1', JSON.stringify([{ so_tk: 'RETRY-TWICE' }]));
+
+    expect(setTimeoutSpy).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(firstDelay ?? 0);
+    await Promise.resolve();
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(setTimeoutSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it('tăng backoff đúng một lần khi flushPending thất bại', async () => {
+    const storageWrites = [];
+    let bootstrapCalls = 0;
+    const fetchMock = vi.fn(async (input, init) => {
+      const method = (init?.method || 'GET').toUpperCase();
+      const url = typeof input === 'string' ? input : input?.url ?? '';
+      if (url.includes('/api/bootstrap')) {
+        bootstrapCalls += 1;
+        if (bootstrapCalls === 1) {
+          return createBootstrapResponse({ decl_rows_v1: '[]' });
+        }
+        throw new Error('offline');
+      }
+      if (url.includes('/api/storage/') && method === 'PUT') {
+        storageWrites.push({ url, body: init?.body });
+        throw new Error('failed to write');
+      }
+      return { ok: true, json: async () => ({ ok: true }) };
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const setTimeoutSpy = vi.spyOn(globalThis, 'setTimeout');
+
+    const initial = await initSharedStorage({ baseUrl: '' });
+    expect(initial).toBe(true);
+    const beforeFailureDelay = getSyncStatus().retryDelayMs;
+    expect(beforeFailureDelay).toBe(5000);
+
+    const payload = JSON.stringify([{ so_tk: 'FLUSH-RETRY' }]);
+    sharedSetItem('decl_rows_v1', payload);
+
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const remoteDisabled = await waitForCondition(() => !getSyncStatus().remoteEnabled);
+    expect(remoteDisabled).toBe(true);
+
+    const statusAfterFailure = getSyncStatus();
+    expect(statusAfterFailure.remoteEnabled).toBe(false);
+    expect(statusAfterFailure.pendingWrites).toBe(1);
+    const expectedDelay = Math.min(
+      Math.max(Math.floor(beforeFailureDelay * 1.5), 5000),
+      60000,
+    );
+    expect(statusAfterFailure.retryDelayMs).toBe(expectedDelay);
+    expect(storageWrites).toHaveLength(1);
+    expect(setTimeoutSpy).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(statusAfterFailure.retryDelayMs);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    const afterRetry = getSyncStatus();
+    const expectedAfterRetryDelay = Math.min(
+      Math.max(Math.floor(expectedDelay * 1.5), 5000),
+      60000,
+    );
+    expect(afterRetry.retryDelayMs).toBe(expectedAfterRetryDelay);
+  });
+});

@@ -16,64 +16,46 @@ import {
   pushAuditLog,
 } from './store.js';
 import { getItem as getStorageItem, setItem as setStorageItem } from './storageClient.js';
-
-// ====== CẤU HÌNH MẶC ĐỊNH ======
-export const DEFAULT_RULES = {
-  // Version metadata
-  name: 'Rules v1',
-  applyFrom: '',            // yyyy-mm-dd (rỗng = áp dụng ngay cho bản ghi mới)
-  updatedAt: new Date().toISOString(),
-
-  // Nhóm loại hình (có thể sửa trên UI)
-  groups: {
-    group1: {
-      title: 'Nhóm 1',
-      // “Chuẩn cũ”: E11, E15, E21, E31, E42, E52, E62, E82, H21
-      codes: 'E11,E15,E21,E31,E42,E52,E62,E82,H21'.split(','),
-      base: 1,
-      // Cho phép chỉnh bậc như nhóm 3&4 nếu muốn (mặc định để trống = không cộng bậc)
-      tiers: [] // ví dụ: [{ from: 11, to: 20, add: 0.5 }]
-    },
-    group2: {
-      title: 'Nhóm 2',
-      // “Chuẩn cũ”: B11, E41, G51, G61
-      codes: 'B11,E41,G51,G61'.split(','),
-      base: 1.2,
-      // “Chuẩn cũ”: +0.5 từ 31–50 (không cộng dồn theo từng bậc)
-      tiers: [{ from: 31, to: 50, add: 0.5 }]
-    },
-    group34: {
-      title: 'Nhóm 3 & 4',
-      // “Chuẩn cũ”: H11, A11, A12, A21, A31, A41, A42, E13, G12, G13, B13, G22, G23
-      codes: 'H11,A11,A12,A21,A31,A41,A42,E13,G12,G13,B13,G22,G23'.split(','),
-      base: 1.5,
-      // Cộng dồn 4 bậc (chuẩn bạn xác nhận)
-      tiers: [
-        { from: 11, to: 20, add: 0.5 },
-        { from: 21, to: 30, add: 0.5 },
-        { from: 31, to: 40, add: 0.5 },
-        { from: 41, to: 50, add: 0.5 },
-      ]
-    }
-  },
-
-  // Điểm giấy phép
-  license: {
-    perType: 1,             // mỗi LOẠI giấy phép +1 điểm
-    maxTypes: 5,            // tối đa số LOẠI tính điểm
-    excludeCodes: ['ZN02','HDGC'] // các mã “Mã giấy phép” KHÔNG tính (áp dụng cho 6 cặp)
-  }
-};
+import { DEFAULT_RULES } from '@/shared/defaultRules.js';
+export { DEFAULT_RULES } from '@/shared/defaultRules.js';
 
 // ====== LƯU / TẢI QUY TẮC (CÓ LỊCH SỬ) ======
 const KEY_HISTORY = 'kpi_rules_history';   // mảng phiên bản đã lưu
 const LEGACY_KEY_ACTIVE = 'kpi_rules';
 
+function clone(obj) {
+  return JSON.parse(JSON.stringify(obj ?? null));
+}
+
+function normalizeRulesData(raw) {
+  const base = clone(DEFAULT_RULES);
+  if (!raw || typeof raw !== 'object') {
+    return base;
+  }
+
+  const next = clone({ ...base, ...raw });
+  const rawGroups = raw.groups || {};
+  next.groups = {
+    group1: { ...base.groups.group1, ...(rawGroups.group1 || {}) },
+    group2: { ...base.groups.group2, ...(rawGroups.group2 || {}) },
+    group34: { ...base.groups.group34, ...(rawGroups.group34 || {}) },
+  };
+  next.license = { ...base.license, ...(raw.license || {}) };
+  const rawBonuses = raw.bonuses || {};
+  next.bonuses = {
+    co: { ...base.bonuses.co, ...(rawBonuses.co || {}) },
+  };
+  next.name = raw.name || base.name;
+  next.applyFrom = raw.applyFrom || '';
+  next.updatedAt = raw.updatedAt || base.updatedAt;
+  return next;
+}
+
 export function loadRules() {
   try {
     const stored = readPersistedRules();
     if (stored && stored.groups && stored.license) {
-      return stored;
+      return normalizeRulesData(stored);
     }
   } catch (err) {
     console.warn('loadRules: invalid data, fallback to default', err);
@@ -83,26 +65,21 @@ export function loadRules() {
   try {
     const legacy = JSON.parse(getStorageItem(LEGACY_KEY_ACTIVE) || 'null');
     if (legacy && legacy.groups && legacy.license) {
-      persistRules(legacy);
-      return legacy;
+      const normalized = normalizeRulesData(legacy);
+      persistRules(normalized);
+      return normalized;
     }
   } catch (err) {
     console.warn('loadRules: legacy data invalid, fallback to default', err);
   }
-
-    const r = JSON.parse(localStorage.getItem(KEY_ACTIVE) || 'null');
-    if (r && r.groups && r.license) return r;
-  } catch (err) {
-    console.warn('loadRules: invalid data, fallback to default', err);
-  }
   // lần đầu: lưu mặc định
-  saveRules(DEFAULT_RULES, { appendHistory: false });
-  return DEFAULT_RULES;
+  const defaults = normalizeRulesData(DEFAULT_RULES);
+  saveRules(defaults, { appendHistory: false });
+  return defaults;
 }
 
 export function getRulesHistory() {
   try { return JSON.parse(getStorageItem(KEY_HISTORY) || '[]'); }
-  try { return JSON.parse(localStorage.getItem(KEY_HISTORY) || '[]'); }
   catch (err) {
     console.warn('getRulesHistory: invalid data, reset history', err);
     return [];
@@ -115,7 +92,7 @@ export function getRulesHistory() {
  * @param {object} opts   - { appendHistory: true, recalcFrom: 'yyyy-mm-dd' | '' }
  */
 export function saveRules(rules, opts = {}) {
-  const cloned = JSON.parse(JSON.stringify(rules || {}));
+  const cloned = normalizeRulesData(rules);
   cloned.updatedAt = new Date().toISOString();
   persistRules(cloned);
   // ghi thêm key cũ để tương thích với bản lưu trước
@@ -269,6 +246,14 @@ export function computeKPI(row, rulesInput) {
   if (maxTypes > 0 && licenseTypes > maxTypes) licenseTypes = maxTypes;
 
   point += licenseTypes * Number(licCfg.perType || 0);
+
+  const coBonus = rules?.bonuses?.co;
+  if (coBonus?.enabled) {
+    const hasCO = !!(row?.has_co || String(row?.co || '').trim().toLowerCase() === 'có');
+    if (hasCO) {
+      point += Number(coBonus.points || 0);
+    }
+  }
 
   return Math.max(0, Math.round(point * 10) / 10);
 }

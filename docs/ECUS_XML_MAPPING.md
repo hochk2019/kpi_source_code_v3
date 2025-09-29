@@ -51,8 +51,6 @@ cần cấu hình thêm `columnMap`:
 | `cong_ty`       | `cong_ty`, `ten_dn`, `TenDoanhNghiep`, `doanh_nghiep` |
 | `loai_hinh`     | `loai_hinh`, `Loai_hinh`, `ma_loai_hinh`, `MA_LH`, `ma_lh` |
 | `num_items`     | `muc_hang`, `so_muc`, `so_luong_mh`, `TotalItems`, `totalitems` |
-| `loai_hinh`     | `loai_hinh`, `Loai_hinh`, `ma_loai_hinh` |
-| `num_items`     | `muc_hang`, `so_muc`, `so_luong_mh`, `TotalItems` |
 | `licenses`      | `licenses`, `ds_gp`, `ds_giay_phep`, `DanhSachGiayPhep`, `ma_gp`, các mảng con chứa mã GP |
 | `nhan_vien_nhap`| `nhan_vien_nhap`, `NhanVienNhap`, `NVNhap` |
 | `nhan_vien_xuat`| `nhan_vien_xuat`, `NhanVienXuat`, `NVXuat` |

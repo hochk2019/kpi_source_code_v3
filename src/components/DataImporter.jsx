@@ -9,13 +9,42 @@ import {
   getTeamRoster,
   mapMemberNamesToTeams,
   markDeclRowsReviewed,
+  mapHQAgenciesByMST,
 } from "@/lib/store.js";
 import { mapRow, detectDateOrder } from "@/lib/importer.js";
 import { loadRules, computeKPI } from "@/lib/rules.js";
+import { deriveCOStatus, coLabel } from "@/shared/co.js";
 
 const DEFAULT_PAGE_SIZE = 20;
 const PAGE_SIZE_OPTIONS = [20, 50, 100, 200];
 
+const DEFAULT_SYNC_CONFIG = Object.freeze({
+  enabled: false,
+  schedule: "0 * * * *",
+  rangeDays: 1,
+  preferMonthFirst: false,
+  connection: {
+    server: "",
+    database: "",
+    user: "",
+    hasPassword: false,
+  },
+  lastRun: null,
+  lastStatus: null,
+});
+
+const RANGE_PRESETS = Object.freeze([
+  { label: "1 ngày gần nhất", days: 1 },
+  { label: "3 ngày", days: 3 },
+  { label: "7 ngày", days: 7 },
+  { label: "30 ngày", days: 30 },
+]);
+
+function toDateInputValue(date) {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) return "";
+  return [date.getFullYear(), String(date.getMonth() + 1).padStart(2, "0"), String(date.getDate()).padStart(2, "0")].join("-");
+}
+
 function coerceLicenseValue(value) {
   if (value === "" || value === null || value === undefined) return "";
   const str = String(value).trim();
@@ -34,33 +63,13 @@ function ensureLicenseFields(row) {
   return { ...row, licenses: normalized, so_luong_gp: normalized };
 }
 
-
-function coerceLicenseValue(value) {
-  if (value === "" || value === null || value === undefined) return "";
-  const str = String(value).trim();
-  if (str === "") return "";
-  const num = Number(str);
-  if (!Number.isFinite(num)) return "";
-  return Math.max(0, Math.round(num));
-}
-
-
-function coerceLicenseValue(value) {
-  if (value === "" || value === null || value === undefined) return "";
-  const str = String(value).trim();
-  if (str === "") return "";
-  const num = Number(str);
-  if (!Number.isFinite(num)) return "";
-  return Math.max(0, Math.round(num));
-}
-
-function ensureLicenseFields(row) {
+function ensureCOFields(row) {
   if (!row || typeof row !== "object") return row;
-  const source = row.licenses ?? row.so_luong_gp;
-  if (source === undefined) return row;
-  const normalized = coerceLicenseValue(source);
-  if (row.licenses === normalized && row.so_luong_gp === normalized) return row;
-  return { ...row, licenses: normalized, so_luong_gp: normalized };
+  const status = deriveCOStatus(row, row);
+  if (status.co === row.co && status.has_co === row.has_co) {
+    return row;
+  }
+  return status;
 }
 
 export default function DataImporter({
@@ -69,12 +78,6 @@ export default function DataImporter({
   canManageSync = false,
   canManageAlerts = false,
 }) {
-import { saveDeclRows, pushImportLog } from "@/lib/store.js";
-import { mapRow } from "@/lib/importer.js";
-
-const PAGE_SIZE = 50;
-
-export default function DataImporter() {
   const fileRef = useRef(null);
   const [rawRows, setRawRows] = useState([]);        // dữ liệu xem trước (đã map)
   const [query, setQuery] = useState("");
@@ -96,15 +99,29 @@ export default function DataImporter() {
   const actor = currentUser?.username || "guest";
   const isReadOnlyForEdits = !canEdit;
   const canReviewAlerts = canEdit || canManageAlerts;
-  const [syncConfig, setSyncConfig] = useState(null);
-  const [syncForm, setSyncForm] = useState(null);
+  const [syncConfig, setSyncConfig] = useState(() => ({ ...DEFAULT_SYNC_CONFIG }));
+  const [syncForm, setSyncForm] = useState(() => ({
+    enabled: DEFAULT_SYNC_CONFIG.enabled,
+    schedule: DEFAULT_SYNC_CONFIG.schedule,
+    rangeDays: DEFAULT_SYNC_CONFIG.rangeDays,
+    preferMonthFirst: DEFAULT_SYNC_CONFIG.preferMonthFirst,
+    server: DEFAULT_SYNC_CONFIG.connection.server,
+    database: DEFAULT_SYNC_CONFIG.connection.database,
+    user: DEFAULT_SYNC_CONFIG.connection.user,
+    password: "",
+    hasPassword: !!DEFAULT_SYNC_CONFIG.connection.hasPassword,
+  }));
   const [syncLoading, setSyncLoading] = useState(false);
   const [syncRunning, setSyncRunning] = useState(false);
   const [syncMessage, setSyncMessage] = useState("");
+  const [syncError, setSyncError] = useState("");
   const [manualRange, setManualRange] = useState({ from: "", to: "" });
   const [alertSummary, setAlertSummary] = useState({ outstanding: 0, totalTracked: 0, lastEvaluatedAt: null });
   const [alertEntries, setAlertEntries] = useState([]);
   const [alertLoading, setAlertLoading] = useState(false);
+  const [statusInfo, setStatusInfo] = useState({ backend: null, database: null, checkedAt: null });
+  const [statusLoading, setStatusLoading] = useState(false);
+  const [statusError, setStatusError] = useState("");
 
   const loadSavedRows = useCallback((opts = {}) => {
     const { bypassConfirm = false } = opts;
@@ -119,7 +136,7 @@ export default function DataImporter() {
     }
     const activeRules = loadRules();
     setRules(activeRules);
-    const saved = sortDeclRows(getDeclRows()).map(ensureLicenseFields);
+    const saved = sortDeclRows(getDeclRows()).map(ensureLicenseFields).map(ensureCOFields);
     setRawRows(saved);
     setMode("saved");
     setPage(1);
@@ -153,27 +170,33 @@ export default function DataImporter() {
   }, [hasUnsaved]);
 
   const applyConfigToForm = useCallback((config) => {
-    if (!config || typeof config !== "object") {
-      setSyncConfig(null);
-      setSyncForm(null);
-      return;
-    }
-    setSyncConfig(config);
+    const normalizedConfig = {
+      ...DEFAULT_SYNC_CONFIG,
+      ...(config && typeof config === "object" ? config : {}),
+      connection: {
+        ...DEFAULT_SYNC_CONFIG.connection,
+        ...((config && typeof config === "object" && config.connection && typeof config.connection === "object")
+          ? config.connection
+          : {}),
+      },
+    };
+    setSyncConfig(normalizedConfig);
     setSyncForm({
-      enabled: !!config.enabled,
-      schedule: config.schedule || "0 * * * *",
-      rangeDays: config.rangeDays ?? 1,
-      preferMonthFirst: !!config.preferMonthFirst,
-      server: config.connection?.server || "",
-      database: config.connection?.database || "",
-      user: config.connection?.user || "",
+      enabled: !!normalizedConfig.enabled,
+      schedule: normalizedConfig.schedule || "0 * * * *",
+      rangeDays: normalizedConfig.rangeDays ?? 1,
+      preferMonthFirst: !!normalizedConfig.preferMonthFirst,
+      server: normalizedConfig.connection?.server || "",
+      database: normalizedConfig.connection?.database || "",
+      user: normalizedConfig.connection?.user || "",
       password: "",
-      hasPassword: !!config.connection?.hasPassword,
+      hasPassword: !!normalizedConfig.connection?.hasPassword,
     });
   }, []);
 
   const fetchSyncConfig = useCallback(async () => {
     setSyncLoading(true);
+    setSyncError("");
     try {
       const response = await fetch("/api/import/ecus/config", { cache: "no-store" });
       if (!response.ok) {
@@ -182,11 +205,46 @@ export default function DataImporter() {
       const payload = await response.json();
       if (payload?.config) {
         applyConfigToForm(payload.config);
+        setSyncMessage("Đã tải cấu hình đồng bộ mới nhất.");
+      } else {
+        setSyncMessage("Không tìm thấy cấu hình lưu trữ, sử dụng giá trị mặc định.");
+        applyConfigToForm(DEFAULT_SYNC_CONFIG);
       }
     } catch (err) {
       console.error("Không thể tải cấu hình đồng bộ ECUS", err);
+      setSyncError(
+        "Không thể tải cấu hình đồng bộ ECUS. Hãy kiểm tra dịch vụ backend (pnpm server) hoặc kết nối mạng LAN."
+      );
+      setSyncMessage("");
+      applyConfigToForm(DEFAULT_SYNC_CONFIG);
     } finally {
       setSyncLoading(false);
+    }
+  }, [applyConfigToForm]);
+
+  const fetchSyncStatus = useCallback(async () => {
+    setStatusLoading(true);
+    setStatusError("");
+    try {
+      const response = await fetch("/api/import/ecus/status", { cache: "no-store" });
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      const payload = await response.json();
+      setStatusInfo({
+        backend: payload?.backend || null,
+        database: payload?.database || null,
+        checkedAt:
+          payload?.database?.checkedAt || payload?.backend?.checkedAt || new Date().toISOString(),
+      });
+      if (payload?.config) {
+        applyConfigToForm(payload.config);
+      }
+    } catch (err) {
+      console.error("Không thể tải trạng thái đồng bộ", err);
+      setStatusError("Không thể kiểm tra kết nối backend/SQL Server.");
+    } finally {
+      setStatusLoading(false);
     }
   }, [applyConfigToForm]);
 
@@ -214,7 +272,8 @@ export default function DataImporter() {
   useEffect(() => {
     fetchSyncConfig();
     fetchAlerts();
-  }, [fetchSyncConfig, fetchAlerts]);
+    fetchSyncStatus();
+  }, [fetchSyncConfig, fetchAlerts, fetchSyncStatus]);
 
   const handleSaveSyncConfig = useCallback(async () => {
     if (!canManageSync) {
@@ -224,6 +283,7 @@ export default function DataImporter() {
     if (!syncForm) return;
     setSyncLoading(true);
     setSyncMessage("");
+    setSyncError("");
     try {
       const payload = {
         config: {
@@ -260,7 +320,7 @@ export default function DataImporter() {
       }
     } catch (err) {
       console.error("Không thể lưu cấu hình ECUS", err);
-      alert(err?.message || "Không thể lưu cấu hình đồng bộ");
+      setSyncError(err?.message || "Không thể lưu cấu hình đồng bộ");
     } finally {
       setSyncLoading(false);
     }
@@ -271,8 +331,17 @@ export default function DataImporter() {
       alert("Bạn không có quyền chạy đồng bộ ECUS.");
       return;
     }
+    if (!manualRange.from && !manualRange.to) {
+      const confirmDefault = window.confirm(
+        "Bạn chưa chọn khoảng thời gian cụ thể. Hệ thống sẽ dùng số ngày mặc định trong cấu hình (RangeDays). Bạn có muốn tiếp tục?"
+      );
+      if (!confirmDefault) {
+        return;
+      }
+    }
     setSyncRunning(true);
     setSyncMessage("Đang đồng bộ...");
+    setSyncError("");
     try {
       const response = await fetch("/api/import/ecus/run", {
         method: "POST",
@@ -290,18 +359,30 @@ export default function DataImporter() {
       const imported = payload?.result?.imported ?? 0;
       setSyncMessage(`Đã đồng bộ ${imported} tờ khai từ ECUS.`);
       await fetchSyncConfig();
+      await fetchSyncStatus();
       await fetchAlerts();
       loadSavedRows({ bypassConfirm: true });
     } catch (err) {
       console.error("Đồng bộ ECUS thất bại", err);
-      setSyncMessage(err?.message ? `Lỗi: ${err.message}` : "Không thể đồng bộ ECUS");
+      setSyncMessage("");
+      setSyncError(err?.message || "Không thể đồng bộ ECUS");
     } finally {
       setSyncRunning(false);
     }
-  }, [actor, canManageSync, fetchAlerts, fetchSyncConfig, loadSavedRows, manualRange.from, manualRange.to]);
+  }, [actor, canManageSync, fetchAlerts, fetchSyncConfig, fetchSyncStatus, loadSavedRows, manualRange.from, manualRange.to]);
 
   const handleManualRangeChange = useCallback((field, value) => {
     setManualRange((prev) => ({ ...prev, [field]: value }));
+  }, []);
+
+  const applyRangePreset = useCallback((days) => {
+    const totalDays = Math.max(0, Number(days) || 0);
+    const end = new Date();
+    const start = new Date(end.getTime() - totalDays * 24 * 60 * 60 * 1000);
+    setManualRange({
+      from: toDateInputValue(start),
+      to: toDateInputValue(end),
+    });
   }, []);
 
   const handleRefreshAlerts = useCallback(() => {
@@ -420,6 +501,7 @@ export default function DataImporter() {
       const preferMonthFirst = dateOrder === "mdy";
       const roster = getTeamRoster();
       const memberMap = mapMemberNamesToTeams(roster);
+      const agencyMap = mapHQAgenciesByMST();
 
       const mapped = rows
         .map(r =>
@@ -429,6 +511,7 @@ export default function DataImporter() {
             licenseExcludes: excludeCodes,
             preferMonthFirst,
             memberMap,
+            agencyMap,
           })
         )
         .map(ensureLicenseFields)
@@ -456,10 +539,12 @@ export default function DataImporter() {
       const soTk = (r.so_tk || "").toString().toLowerCase();
       const mst = (r.mst || "").toString().toLowerCase();
       const company = (r.cong_ty || "").toString().toLowerCase();
+      const agency = (r.agency || r.dai_ly || "").toString().toLowerCase();
       if (hasText && !(
         soTk.includes(q) ||
         mst.includes(q) ||
-        company.includes(q)
+        company.includes(q) ||
+        agency.includes(q)
       )) {
         return false;
       }
@@ -490,13 +575,6 @@ export default function DataImporter() {
   useEffect(() => {
     setPage(1);
   }, [pageSize, filterNoStaff, filterNoTeam]);
-
-  const keyOfRow = useCallback((row) => {
-    const soTk = (row.so_tk || "").toString();
-    const nhanh = (row.nhanh || "").toString();
-    return `${soTk}_${nhanh}`;
-  }, []);
-
 
   const keyOfRow = useCallback((row) => {
     const soTk = (row.so_tk || "").toString();
@@ -583,7 +661,7 @@ export default function DataImporter() {
     saveDeclRows(remaining, {
       overwrite: true,
       actor,
-      detail: `Xóa ${removedCount} tờ khai từ giao diện Import Excel`,
+      detail: `Xóa ${removedCount} tờ khai từ giao diện Import Data`,
     });
     alert(`Đã xóa ${removedCount} tờ khai.`);
     setHasUnsaved(false);
@@ -679,7 +757,7 @@ export default function DataImporter() {
 
   const selectionEnabled = mode === "saved" && (canEdit || canManageAlerts);
   const deleteEnabled = canEdit && mode === "saved";
-  const baseColumnCount = 11; // Ngày, Số TK, MST, Công ty, Loại hình, Mục hàng, Nhân viên, Tổ đội, Trạng thái, Số lượng GP, KPI
+  const baseColumnCount = 13; // thêm cột C/O
   const totalColumns = baseColumnCount + (selectionEnabled ? 1 : 0) + (deleteEnabled ? 1 : 0);
 
   const canImport = !isReadOnlyForEdits && mode === "preview" && rawRows.length > 0;
@@ -687,6 +765,38 @@ export default function DataImporter() {
   const canDelete = deleteEnabled && selectedKeys.length > 0;
   const canReview = selectionEnabled && selectedKeys.length > 0 && canReviewAlerts;
   const modeLabel = mode === "preview" ? "Đang xem dữ liệu từ file (chưa lưu)" : "Đang xem dữ liệu đã lưu";
+
+  const toneClassMap = {
+    success: "border border-emerald-200 bg-emerald-50 text-emerald-700",
+    warning: "border border-amber-200 bg-amber-50 text-amber-700",
+    danger: "border border-red-200 bg-red-50 text-red-700",
+    muted: "border border-gray-200 bg-gray-100 text-gray-600",
+  };
+
+  const resolveStatusMeta = (status, fallback, kind = "database") => {
+    if (!status) {
+      return { tone: "muted", label: fallback, detail: "" };
+    }
+    if (status.ok) {
+      const label = kind === "backend" ? "Backend hoạt động" : "SQL Server sẵn sàng";
+      return { tone: "success", label, detail: status.message || "" };
+    }
+    if (status.state === "not_configured") {
+      return { tone: "warning", label: "Chưa cấu hình SQL Server", detail: "" };
+    }
+    if (status.state === "timeout") {
+      return { tone: "danger", label: "Timeout kết nối SQL Server", detail: status.message || "" };
+    }
+    const detail = status.message || "";
+    const label = kind === "backend" ? "Backend gặp sự cố" : "Lỗi kết nối SQL Server";
+    return { tone: "danger", label, detail };
+  };
+
+  const backendMeta = resolveStatusMeta(statusInfo.backend, "Backend chưa kiểm tra", "backend");
+  const databaseMeta = resolveStatusMeta(statusInfo.database, "SQL Server chưa kiểm tra", "database");
+  const statusCheckedLabel = statusInfo.checkedAt
+    ? new Date(statusInfo.checkedAt).toLocaleString("vi-VN")
+    : "Chưa kiểm tra";
 
   return (
     <div className="space-y-3">
@@ -727,6 +837,14 @@ export default function DataImporter() {
               </button>
               <button
                 type="button"
+                onClick={fetchSyncStatus}
+                className="rounded border px-3 py-1 text-sm"
+                disabled={statusLoading}
+              >
+                {statusLoading ? "Đang kiểm tra..." : "Kiểm tra kết nối"}
+              </button>
+              <button
+                type="button"
                 onClick={handleSaveSyncConfig}
                 className="rounded bg-black px-3 py-1 text-sm text-white disabled:opacity-50"
                 disabled={syncLoading || !syncForm}
@@ -734,6 +852,23 @@ export default function DataImporter() {
                 Lưu cấu hình
               </button>
             </div>
+          </div>
+          <div className="mt-3 space-y-1">
+            <div className="flex flex-wrap items-center gap-2 text-xs md:text-sm">
+              <span className={`rounded px-2 py-1 ${toneClassMap[backendMeta.tone] || toneClassMap.muted}`}>
+                Backend: {backendMeta.label}
+              </span>
+              <span className={`rounded px-2 py-1 ${toneClassMap[databaseMeta.tone] || toneClassMap.muted}`}>
+                SQL Server: {databaseMeta.label}
+              </span>
+            </div>
+            <div className="text-xs text-gray-500">Lần kiểm tra: {statusCheckedLabel}</div>
+            {(backendMeta.detail || databaseMeta.detail) && (
+              <div className="text-xs text-gray-500">
+                {[backendMeta.detail, databaseMeta.detail].filter(Boolean).join(" • ")}
+              </div>
+            )}
+            {statusError && <div className="text-xs text-red-600">{statusError}</div>}
           </div>
           {syncForm ? (
             <div className="mt-3 space-y-3">
@@ -813,11 +948,26 @@ export default function DataImporter() {
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <span className="text-xs uppercase tracking-wide text-gray-500">Khoảng thời gian chạy tay</span>
+                <div className="flex flex-wrap items-center gap-1">
+                  {RANGE_PRESETS.map((preset) => (
+                    <button
+                      key={preset.days}
+                      type="button"
+                      className="rounded border px-2 py-1 text-xs text-gray-600 hover:bg-gray-50"
+                      onClick={() => applyRangePreset(preset.days)}
+                      disabled={syncRunning}
+                    >
+                      {preset.label}
+                    </button>
+                  ))}
+                </div>
+                <span className="text-xs text-gray-500">hoặc chọn ngày cụ thể</span>
                 <input
                   type="date"
                   className="rounded border px-2 py-1 text-sm"
                   value={manualRange.from}
                   onChange={(e) => handleManualRangeChange("from", e.target.value)}
+                  disabled={syncRunning}
                 />
                 <span className="text-xs text-gray-500">đến</span>
                 <input
@@ -825,6 +975,7 @@ export default function DataImporter() {
                   className="rounded border px-2 py-1 text-sm"
                   value={manualRange.to}
                   onChange={(e) => handleManualRangeChange("to", e.target.value)}
+                  disabled={syncRunning}
                 />
                 <button
                   type="button"
@@ -836,6 +987,7 @@ export default function DataImporter() {
                 </button>
               </div>
               {syncMessage && <div className="text-sm text-emerald-600">{syncMessage}</div>}
+              {syncError && <div className="text-sm text-red-600">{syncError}</div>}
             </div>
           ) : (
             <p className="mt-3 text-sm text-gray-500">Đang tải cấu hình đồng bộ...</p>
@@ -846,477 +998,38 @@ export default function DataImporter() {
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
               <h2 className="text-base font-semibold text-gray-900">Đồng bộ ECUS</h2>
-              <p className="text-xs text-gray-500">Lần chạy gần nhất: {syncLastRunLabel} • Trạng thái: {syncConfig?.lastStatus || "Chưa có"}</p>
-            </div>
-            <button type="button" onClick={fetchSyncConfig} className="rounded border px-3 py-1 text-sm" disabled={syncLoading}>
-              Cập nhật trạng thái
-            </button>
-          </div>
-        </section>
-      )}
-
-      <section className="rounded border bg-white p-4 shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div>
-            <h2 className="text-base font-semibold text-gray-900">Cảnh báo tờ khai thiếu thông tin</h2>
-            <p className="text-xs text-gray-500">Lần rà soát: {lastAlertEvaluated} • Tổng theo dõi: {alertSummary.totalTracked || 0}</p>
-          </div>
-          <button type="button" onClick={handleRefreshAlerts} className="rounded border px-3 py-1 text-sm" disabled={alertLoading}>
-            Làm mới danh sách
-          </button>
-        </div>
-        {alertLoading ? (
-          <p className="mt-3 text-sm text-gray-500">Đang tải danh sách cảnh báo...</p>
-        ) : outstandingAlerts.length ? (
-          <div className="mt-3 overflow-auto">
-            <table className="min-w-full text-sm">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-2 py-1 text-left">Số tờ khai</th>
-                  <th className="px-2 py-1 text-left">MST</th>
-                  <th className="px-2 py-1 text-left">Công ty</th>
-                  <th className="px-2 py-1 text-left">Thiếu thông tin</th>
-                  <th className="px-2 py-1 text-left">Ngày tờ khai</th>
-                  <th className="px-2 py-1 text-left">Cập nhật</th>
-                </tr>
-              </thead>
-              <tbody>
-                {outstandingAlerts.map((alert) => (
-                  <tr key={alert.key} className="odd:bg-white even:bg-gray-50">
-                    <td className="px-2 py-1">{alert.so_tk}</td>
-                    <td className="px-2 py-1">{alert.mst}</td>
-                    <td className="px-2 py-1">{alert.company}</td>
-                    <td className="px-2 py-1 text-amber-600">{(alert.missing || []).join(", ")}</td>
-                    <td className="px-2 py-1">{alert.date || ""}</td>
-                    <td className="px-2 py-1">{alert.lastUpdated ? new Date(alert.lastUpdated).toLocaleString("vi-VN") : ""}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <p className="mt-3 text-sm text-gray-500">Không có cảnh báo nào đang chờ xử lý.</p>
-        )}
-      </section>
-
-      <div className="flex flex-wrap items-center gap-2">
-        <input
-          type="file"
-          ref={fileRef}
-          onChange={handleFileChange}
-          accept=".xls,.xlsx"
-          className="hidden"
-          disabled={isReadOnlyForEdits}
-        />
-        {canEdit && (
-          <button
-            type="button"
-            onClick={() => fileRef.current?.click()}
-            className="px-3 py-1.5 rounded border bg-white shadow-sm hover:bg-gray-50"
-          >
-            Chọn file XLSX
-          </button>
-        )}
-        {selectedFile && (
-          <span className="text-sm text-gray-600">Đã chọn: {selectedFile}</span>
-        )}
-        {canEdit && (
-          <button
-            type="button"
-            onClick={handleImport}
-            disabled={!canImport}
-            className={`px-3 py-1.5 rounded ${canImport ? "bg-black text-white" : "bg-gray-200 text-gray-500 cursor-not-allowed"}`}
-          >
-            Import XLSX
-          </button>
-        )}
-        <button
-          type="button"
-          onClick={() => loadSavedRows()}
-          className="px-3 py-1.5 rounded border"
-        >
-          Hiển thị dữ liệu đã lưu
-        </button>
-        <span className="ml-auto text-sm text-gray-600">{modeLabel}</span>
-      </div>
-
-      </div>
-
-      {canManageSync ? (
-        <section className="rounded border bg-white p-4 shadow-sm">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div>
-              <h2 className="text-base font-semibold text-gray-900">Đồng bộ tự động từ ECUS5VNACCS</h2>
               <p className="text-xs text-gray-500">Lần chạy gần nhất: {syncLastRunLabel} • Trạng thái: {syncConfig?.lastStatus || "Chưa có"}</p>
             </div>
             <div className="flex items-center gap-2">
               <button
                 type="button"
-                onClick={fetchSyncConfig}
+                onClick={() => {
+                  fetchSyncConfig();
+                  fetchSyncStatus();
+                }}
                 className="rounded border px-3 py-1 text-sm"
-                disabled={syncLoading}
+                disabled={syncLoading || statusLoading}
               >
-                Tải lại cấu hình
-              </button>
-              <button
-                type="button"
-                onClick={handleSaveSyncConfig}
-                className="rounded bg-black px-3 py-1 text-sm text-white disabled:opacity-50"
-                disabled={syncLoading || !syncForm}
-              >
-                Lưu cấu hình
+                {statusLoading ? "Đang kiểm tra..." : "Cập nhật trạng thái"}
               </button>
             </div>
           </div>
-          {syncForm ? (
-            <div className="mt-3 space-y-3">
-              <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-                <label className="flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={syncForm.enabled}
-                    onChange={(e) => setSyncForm((prev) => ({ ...prev, enabled: e.target.checked }))}
-                  />
-                  <span>Bật đồng bộ định kỳ</span>
-                </label>
-                <div className="space-y-1">
-                  <label className="text-xs font-medium text-gray-600">Biểu thức cron</label>
-                  <input
-                    className="w-full rounded border px-2 py-1 text-sm"
-                    value={syncForm.schedule}
-                    onChange={(e) => setSyncForm((prev) => ({ ...prev, schedule: e.target.value }))}
-                    placeholder="0 * * * *"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-xs font-medium text-gray-600">Khoảng mặc định (số ngày)</label>
-                  <input
-                    type="number"
-                    min="1"
-                    className="w-full rounded border px-2 py-1 text-sm"
-                    value={syncForm.rangeDays}
-                    onChange={(e) => setSyncForm((prev) => ({ ...prev, rangeDays: Number(e.target.value) || 1 }))}
-                  />
-                </div>
-                <label className="flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={syncForm.preferMonthFirst}
-                    onChange={(e) => setSyncForm((prev) => ({ ...prev, preferMonthFirst: e.target.checked }))}
-                  />
-                  <span>Ngày dạng MM/DD/YYYY</span>
-                </label>
-                <div className="space-y-1">
-                  <label className="text-xs font-medium text-gray-600">Máy chủ SQL Server</label>
-                  <input
-                    className="w-full rounded border px-2 py-1 text-sm"
-                    value={syncForm.server}
-                    onChange={(e) => setSyncForm((prev) => ({ ...prev, server: e.target.value }))}
-                    placeholder="192.168.x.x\\SQL2019"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-xs font-medium text-gray-600">Cơ sở dữ liệu</label>
-                  <input
-                    className="w-full rounded border px-2 py-1 text-sm"
-                    value={syncForm.database}
-                    onChange={(e) => setSyncForm((prev) => ({ ...prev, database: e.target.value }))}
-                    placeholder="ECUS5VNACCS"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-xs font-medium text-gray-600">Tài khoản</label>
-                  <input
-                    className="w-full rounded border px-2 py-1 text-sm"
-                    value={syncForm.user}
-                    onChange={(e) => setSyncForm((prev) => ({ ...prev, user: e.target.value }))}
-                    placeholder="sa"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-xs font-medium text-gray-600">Mật khẩu</label>
-                  <input
-                    type="password"
-                    className="w-full rounded border px-2 py-1 text-sm"
-                    value={syncForm.password}
-                    onChange={(e) => setSyncForm((prev) => ({ ...prev, password: e.target.value }))}
-                    placeholder={syncForm.hasPassword ? "(giữ nguyên nếu để trống)" : "Nhập mật khẩu"}
-                  />
-                </div>
+          <div className="mt-3 space-y-1">
+            <div className="flex flex-wrap items-center gap-2 text-xs md:text-sm">
+              <span className={`rounded px-2 py-1 ${toneClassMap[backendMeta.tone] || toneClassMap.muted}`}>
+                Backend: {backendMeta.label}
+              </span>
+              <span className={`rounded px-2 py-1 ${toneClassMap[databaseMeta.tone] || toneClassMap.muted}`}>
+                SQL Server: {databaseMeta.label}
+              </span>
+            </div>
+            <div className="text-xs text-gray-500">Lần kiểm tra: {statusCheckedLabel}</div>
+            {(backendMeta.detail || databaseMeta.detail) && (
+              <div className="text-xs text-gray-500">
+                {[backendMeta.detail, databaseMeta.detail].filter(Boolean).join(" • ")}
               </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-xs uppercase tracking-wide text-gray-500">Khoảng thời gian chạy tay</span>
-                <input
-                  type="date"
-                  className="rounded border px-2 py-1 text-sm"
-                  value={manualRange.from}
-                  onChange={(e) => handleManualRangeChange("from", e.target.value)}
-                />
-                <span className="text-xs text-gray-500">đến</span>
-                <input
-                  type="date"
-                  className="rounded border px-2 py-1 text-sm"
-                  value={manualRange.to}
-                  onChange={(e) => handleManualRangeChange("to", e.target.value)}
-                />
-                <button
-                  type="button"
-                  onClick={handleRunSync}
-                  disabled={syncRunning}
-                  className="rounded bg-emerald-600 px-3 py-1 text-sm text-white disabled:opacity-50"
-                >
-                  Đồng bộ ngay
-                </button>
-              </div>
-              {syncMessage && <div className="text-sm text-emerald-600">{syncMessage}</div>}
-            </div>
-          ) : (
-            <p className="mt-3 text-sm text-gray-500">Đang tải cấu hình đồng bộ...</p>
-          )}
-        </section>
-      ) : (
-        <section className="rounded border bg-white p-4 shadow-sm">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div>
-              <h2 className="text-base font-semibold text-gray-900">Đồng bộ ECUS</h2>
-              <p className="text-xs text-gray-500">Lần chạy gần nhất: {syncLastRunLabel} • Trạng thái: {syncConfig?.lastStatus || "Chưa có"}</p>
-            </div>
-            <button type="button" onClick={fetchSyncConfig} className="rounded border px-3 py-1 text-sm" disabled={syncLoading}>
-              Cập nhật trạng thái
-            </button>
-          </div>
-        </section>
-      )}
-
-      <section className="rounded border bg-white p-4 shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div>
-            <h2 className="text-base font-semibold text-gray-900">Cảnh báo tờ khai thiếu thông tin</h2>
-            <p className="text-xs text-gray-500">Lần rà soát: {lastAlertEvaluated} • Tổng theo dõi: {alertSummary.totalTracked || 0}</p>
-          </div>
-          <button type="button" onClick={handleRefreshAlerts} className="rounded border px-3 py-1 text-sm" disabled={alertLoading}>
-            Làm mới danh sách
-          </button>
-        </div>
-        {alertLoading ? (
-          <p className="mt-3 text-sm text-gray-500">Đang tải danh sách cảnh báo...</p>
-        ) : outstandingAlerts.length ? (
-          <div className="mt-3 overflow-auto">
-            <table className="min-w-full text-sm">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-2 py-1 text-left">Số tờ khai</th>
-                  <th className="px-2 py-1 text-left">MST</th>
-                  <th className="px-2 py-1 text-left">Công ty</th>
-                  <th className="px-2 py-1 text-left">Thiếu thông tin</th>
-                  <th className="px-2 py-1 text-left">Ngày tờ khai</th>
-                  <th className="px-2 py-1 text-left">Cập nhật</th>
-                </tr>
-              </thead>
-              <tbody>
-                {outstandingAlerts.map((alert) => (
-                  <tr key={alert.key} className="odd:bg-white even:bg-gray-50">
-                    <td className="px-2 py-1">{alert.so_tk}</td>
-                    <td className="px-2 py-1">{alert.mst}</td>
-                    <td className="px-2 py-1">{alert.company}</td>
-                    <td className="px-2 py-1 text-amber-600">{(alert.missing || []).join(", ")}</td>
-                    <td className="px-2 py-1">{alert.date || ""}</td>
-                    <td className="px-2 py-1">{alert.lastUpdated ? new Date(alert.lastUpdated).toLocaleString("vi-VN") : ""}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <p className="mt-3 text-sm text-gray-500">Không có cảnh báo nào đang chờ xử lý.</p>
-        )}
-      </section>
-
-      <div className="flex flex-wrap items-center gap-2">
-        <input
-          type="file"
-          ref={fileRef}
-          onChange={handleFileChange}
-          accept=".xls,.xlsx"
-          className="hidden"
-          disabled={isReadOnlyForEdits}
-        />
-        {canEdit && (
-          <button
-            type="button"
-            onClick={() => fileRef.current?.click()}
-            className="px-3 py-1.5 rounded border bg-white shadow-sm hover:bg-gray-50"
-          >
-            Chọn file XLSX
-          </button>
-        )}
-        {selectedFile && (
-          <span className="text-sm text-gray-600">Đã chọn: {selectedFile}</span>
-        )}
-        {canEdit && (
-          <button
-            type="button"
-            onClick={handleImport}
-            disabled={!canImport}
-            className={`px-3 py-1.5 rounded ${canImport ? "bg-black text-white" : "bg-gray-200 text-gray-500 cursor-not-allowed"}`}
-          >
-            Import XLSX
-          </button>
-        )}
-        <button
-          type="button"
-          onClick={() => loadSavedRows()}
-          className="px-3 py-1.5 rounded border"
-        >
-          Hiển thị dữ liệu đã lưu
-        </button>
-        <span className="ml-auto text-sm text-gray-600">{modeLabel}</span>
-      </div>
-
-      </div>
-
-      {canManageSync ? (
-        <section className="rounded border bg-white p-4 shadow-sm">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div>
-              <h2 className="text-base font-semibold text-gray-900">Đồng bộ tự động từ ECUS5VNACCS</h2>
-              <p className="text-xs text-gray-500">Lần chạy gần nhất: {syncLastRunLabel} • Trạng thái: {syncConfig?.lastStatus || "Chưa có"}</p>
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={fetchSyncConfig}
-                className="rounded border px-3 py-1 text-sm"
-                disabled={syncLoading}
-              >
-                Tải lại cấu hình
-              </button>
-              <button
-                type="button"
-                onClick={handleSaveSyncConfig}
-                className="rounded bg-black px-3 py-1 text-sm text-white disabled:opacity-50"
-                disabled={syncLoading || !syncForm}
-              >
-                Lưu cấu hình
-              </button>
-            </div>
-          </div>
-          {syncForm ? (
-            <div className="mt-3 space-y-3">
-              <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-                <label className="flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={syncForm.enabled}
-                    onChange={(e) => setSyncForm((prev) => ({ ...prev, enabled: e.target.checked }))}
-                  />
-                  <span>Bật đồng bộ định kỳ</span>
-                </label>
-                <div className="space-y-1">
-                  <label className="text-xs font-medium text-gray-600">Biểu thức cron</label>
-                  <input
-                    className="w-full rounded border px-2 py-1 text-sm"
-                    value={syncForm.schedule}
-                    onChange={(e) => setSyncForm((prev) => ({ ...prev, schedule: e.target.value }))}
-                    placeholder="0 * * * *"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-xs font-medium text-gray-600">Khoảng mặc định (số ngày)</label>
-                  <input
-                    type="number"
-                    min="1"
-                    className="w-full rounded border px-2 py-1 text-sm"
-                    value={syncForm.rangeDays}
-                    onChange={(e) => setSyncForm((prev) => ({ ...prev, rangeDays: Number(e.target.value) || 1 }))}
-                  />
-                </div>
-                <label className="flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={syncForm.preferMonthFirst}
-                    onChange={(e) => setSyncForm((prev) => ({ ...prev, preferMonthFirst: e.target.checked }))}
-                  />
-                  <span>Ngày dạng MM/DD/YYYY</span>
-                </label>
-                <div className="space-y-1">
-                  <label className="text-xs font-medium text-gray-600">Máy chủ SQL Server</label>
-                  <input
-                    className="w-full rounded border px-2 py-1 text-sm"
-                    value={syncForm.server}
-                    onChange={(e) => setSyncForm((prev) => ({ ...prev, server: e.target.value }))}
-                    placeholder="192.168.x.x\\SQL2019"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-xs font-medium text-gray-600">Cơ sở dữ liệu</label>
-                  <input
-                    className="w-full rounded border px-2 py-1 text-sm"
-                    value={syncForm.database}
-                    onChange={(e) => setSyncForm((prev) => ({ ...prev, database: e.target.value }))}
-                    placeholder="ECUS5VNACCS"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-xs font-medium text-gray-600">Tài khoản</label>
-                  <input
-                    className="w-full rounded border px-2 py-1 text-sm"
-                    value={syncForm.user}
-                    onChange={(e) => setSyncForm((prev) => ({ ...prev, user: e.target.value }))}
-                    placeholder="sa"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-xs font-medium text-gray-600">Mật khẩu</label>
-                  <input
-                    type="password"
-                    className="w-full rounded border px-2 py-1 text-sm"
-                    value={syncForm.password}
-                    onChange={(e) => setSyncForm((prev) => ({ ...prev, password: e.target.value }))}
-                    placeholder={syncForm.hasPassword ? "(giữ nguyên nếu để trống)" : "Nhập mật khẩu"}
-                  />
-                </div>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-xs uppercase tracking-wide text-gray-500">Khoảng thời gian chạy tay</span>
-                <input
-                  type="date"
-                  className="rounded border px-2 py-1 text-sm"
-                  value={manualRange.from}
-                  onChange={(e) => handleManualRangeChange("from", e.target.value)}
-                />
-                <span className="text-xs text-gray-500">đến</span>
-                <input
-                  type="date"
-                  className="rounded border px-2 py-1 text-sm"
-                  value={manualRange.to}
-                  onChange={(e) => handleManualRangeChange("to", e.target.value)}
-                />
-                <button
-                  type="button"
-                  onClick={handleRunSync}
-                  disabled={syncRunning}
-                  className="rounded bg-emerald-600 px-3 py-1 text-sm text-white disabled:opacity-50"
-                >
-                  Đồng bộ ngay
-                </button>
-              </div>
-              {syncMessage && <div className="text-sm text-emerald-600">{syncMessage}</div>}
-            </div>
-          ) : (
-            <p className="mt-3 text-sm text-gray-500">Đang tải cấu hình đồng bộ...</p>
-          )}
-        </section>
-      ) : (
-        <section className="rounded border bg-white p-4 shadow-sm">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div>
-              <h2 className="text-base font-semibold text-gray-900">Đồng bộ ECUS</h2>
-              <p className="text-xs text-gray-500">Lần chạy gần nhất: {syncLastRunLabel} • Trạng thái: {syncConfig?.lastStatus || "Chưa có"}</p>
-            </div>
-            <button type="button" onClick={fetchSyncConfig} className="rounded border px-3 py-1 text-sm" disabled={syncLoading}>
-              Cập nhật trạng thái
-            </button>
+            )}
+            {statusError && <div className="text-xs text-red-600">{statusError}</div>}
           </div>
         </section>
       )}
@@ -1426,7 +1139,7 @@ export default function DataImporter() {
       <div className="flex items-center gap-2 flex-wrap">
         <input
           className="border rounded px-2 py-1 w-72"
-          placeholder="Tìm nhanh (Số TK / MST / Công ty)"
+          placeholder="Tìm nhanh (Số TK / MST / Công ty / Đại lý)"
           value={query}
           onChange={e => { setQuery(e.target.value); setPage(1); }}
         />
@@ -1516,8 +1229,8 @@ export default function DataImporter() {
         </div>
       )}
 
-      <div className="overflow-auto border rounded">
-        <table className="min-w-full text-sm">
+      <div className="overflow-x-auto overflow-y-hidden border rounded">
+        <table className="w-full min-w-[1200px] text-sm">
           <thead className="bg-gray-50">
             <tr>
               {selectionEnabled && <th className="px-2 py-1 text-left w-10">Chọn</th>}
@@ -1526,9 +1239,11 @@ export default function DataImporter() {
               <th className="px-2 py-1 text-left">MST</th>
               <th className="px-2 py-1 text-left">Công ty</th>
               <th className="px-2 py-1 text-left">Loại hình</th>
+              <th className="px-2 py-1 text-left">C/O</th>
               <th className="px-2 py-1 text-left">Mục hàng</th>
               <th className="px-2 py-1 text-left">Nhân viên</th>
               <th className="px-2 py-1 text-left">Tổ đội</th>
+              <th className="px-2 py-1 text-left">Đại lý</th>
               <th className="px-2 py-1 text-left">Trạng thái</th>
               <th className="px-2 py-1 text-left">Số lượng GP</th>
               <th className="px-2 py-1 text-left">KPI</th>
@@ -1565,6 +1280,16 @@ export default function DataImporter() {
                   <span>{r.loai_hinh || ""}</span>
                 </td>
                 <td className="px-2 py-1">
+                  {(() => {
+                    const status = coLabel(r);
+                    return (
+                      <span className={status ? "text-emerald-600 font-medium" : "text-gray-400"}>
+                        {status || "Không"}
+                      </span>
+                    );
+                  })()}
+                </td>
+                <td className="px-2 py-1">
                   <span>{r.muc_hang ?? ""}</span>
                 </td>
                 <td className="px-2 py-1">
@@ -1590,55 +1315,13 @@ export default function DataImporter() {
                   )}
                 </td>
                 <td className="px-2 py-1">
-                  {(() => {
-                    const hasStaff = !!(r.nhan_vien && r.nhan_vien.toString().trim());
-                    const hasTeam = !!(r.team && r.team.toString().trim());
-                    if (r.reviewed) {
-                      return <span className="text-emerald-700">Đã rà soát</span>;
-                    }
-                    if (!hasStaff || !hasTeam) {
-                      const missing = [];
-                      if (!hasStaff) missing.push("nhân viên");
-                      if (!hasTeam) missing.push("tổ đội");
-                      return <span className="text-amber-600">Thiếu {missing.join(" & ")}</span>;
-                    }
-                    return <span className="text-gray-600">Đủ thông tin</span>;
-                  })()}
-                </td>
-                <td className="px-2 py-1">
                   {isReadOnlyForEdits ? (
-                    <span>{r.licenses ?? r.so_luong_gp ?? ""}</span>
+                    <span>{r.agency || r.dai_ly || ""}</span>
                   ) : (
                     <input
-                      type="number"
-                      min="0"
-                      step="1"
-                      className="border rounded px-1 py-0.5 w-24"
-                      value={r.licenses ?? r.so_luong_gp ?? ""}
-                      onChange={e => {
-                        const input = e.target.value;
-                        if (input === "") {
-                          applyEdit(rowKey, () => ({ licenses: "", so_luong_gp: "" }));
-                          return;
-                        }
-                        const parsed = Number(input);
-                        if (!Number.isFinite(parsed)) return;
-                        const normalized = Math.max(0, Math.round(parsed));
-                        applyEdit(rowKey, () => ({ licenses: normalized, so_luong_gp: normalized }));
-                      }}
-                    />
-                  )}
-                </td>
-                <td className="px-2 py-1">
-                </td>
-                <td className="px-2 py-1">
-                  {isReadOnlyForEdits ? (
-                    <span>{r.team || ""}</span>
-                  ) : (
-                    <input
-                      className="border rounded px-1 py-0.5 w-24"
-                      value={r.team || ""}
-                      onChange={e => onChangeCell(rowKey, "team", e.target.value)}
+                      className="border rounded px-1 py-0.5 w-28"
+                      value={r.agency || r.dai_ly || ""}
+                      onChange={e => applyEdit(rowKey, () => ({ agency: e.target.value, dai_ly: e.target.value }))}
                     />
                   )}
                 </td>

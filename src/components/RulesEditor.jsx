@@ -121,10 +121,6 @@ export default function RulesEditor({ canEdit = true, currentUser = null }) {
         row: r,
       };
     });
-    return data.map((r) => ({
-      key: `${r.date || ""} || ${r.soToKhai || ""} || ${r.cong_ty || ""} || ${r.loaiHinh || ""}`,
-      row: r,
-    })).slice(0, 300);
   }, [data]);
 
   const [testSearch, setTestSearch] = useState("");
@@ -181,7 +177,13 @@ export default function RulesEditor({ canEdit = true, currentUser = null }) {
       const cloned = structuredClone(r);
       const seg = path.split(".");
       let ref = cloned;
-      for (let i = 0; i < seg.length - 1; i++) ref = ref[seg[i]];
+      for (let i = 0; i < seg.length - 1; i++) {
+        const key = seg[i];
+        if (typeof ref[key] !== "object" || ref[key] === null) {
+          ref[key] = {};
+        }
+        ref = ref[key];
+      }
       ref[seg.at(-1)] = val;
       return cloned;
     });
@@ -377,6 +379,34 @@ export default function RulesEditor({ canEdit = true, currentUser = null }) {
             </div>
           </div>
 
+          <div className="space-y-3 border rounded p-3">
+            <div className="font-semibold">Điểm cộng thêm</div>
+            <label className="inline-flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={rules?.bonuses?.co?.enabled ?? false}
+                onChange={(e) =>
+                  upd("bonuses.co.enabled", e.target.checked)
+                }
+                disabled={isReadOnly}
+              />
+              Cộng điểm khi tờ khai có C/O
+            </label>
+            <div className="grid md:grid-cols-2 gap-4">
+              <div>
+                <label className="text-sm">Điểm cộng mỗi tờ khai có C/O</label>
+                <Num
+                  value={rules?.bonuses?.co?.points ?? 0}
+                  onChange={(v) => upd("bonuses.co.points", v)}
+                  disabled={isReadOnly || !(rules?.bonuses?.co?.enabled ?? false)}
+                />
+              </div>
+              <div className="text-xs text-gray-500 md:col-span-2">
+                Khi bật, mọi tờ khai được xác định có C/O sẽ tự động cộng thêm điểm theo cấu hình này.
+              </div>
+            </div>
+          </div>
+
           {/* Áp dụng từ ngày… + Lưu */}
           <div className="space-y-2 border rounded p-3">
             <div className="font-semibold">Áp dụng</div>
@@ -458,7 +488,6 @@ export default function RulesEditor({ canEdit = true, currentUser = null }) {
                     <b>Mục hàng:</b> {picked.num_items ?? picked.muc_hang ?? 0} &nbsp;
                     <b>MST:</b> {picked.mst || ""} &nbsp;
                     <b>Cty:</b> {picked.cong_ty || picked.company || ""}
-                    <b>Cty:</b> {picked.cong_ty || ""}
                   </div>
                   <div className="mt-1"><b>KẾT QUẢ:</b> {kpiPicked.toFixed(1)}</div>
                 </>
