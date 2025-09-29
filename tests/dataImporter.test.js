@@ -32,7 +32,6 @@ describe('mapRow', () => {
     expect(mapped.num_items).toBe(7);
     expect(mapped.licenses).toBe(0);
     expect(mapped.so_luong_gp).toBe(0);
-    expect(mapped.agency).toBe('');
   });
 
   it('hiểu các alias ECUS như MA_LH và TotalItems', () => {

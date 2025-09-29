@@ -106,7 +106,6 @@ Hệ thống được triển khai cho Công ty TNHH Tiếp Vận Hoàng Kim (Go
   - Bật/tắt chế độ khởi động cùng Windows (tạo Scheduled Task chạy `kpi-control-gui.ps1 -AutoStart`).
   - Ghi log theo thời gian thực ở khung dưới cùng để tiện theo dõi.
 - Chạy script bằng PowerShell (Run with PowerShell). Khi đổi port trong giao diện, hệ thống sẽ tự khởi động lại server với port mới.
-
 ---
 
 Chúc bạn quản lý và theo dõi KPI hiệu quả! Nếu cần mở rộng thêm tính năng hoặc quyền chi tiết hơn, hãy cập nhật cấu hình trong tab **Tài khoản** hoặc liên hệ nhóm phát triển để được hỗ trợ.

@@ -19,6 +19,54 @@ import { getItem as getStorageItem, setItem as setStorageItem } from './storageC
 import { DEFAULT_RULES } from '@/shared/defaultRules.js';
 export { DEFAULT_RULES } from '@/shared/defaultRules.js';
 
+// ====== CẤU HÌNH MẶC ĐỊNH ======
+export const DEFAULT_RULES = {
+  // Version metadata
+  name: 'Rules v1',
+  applyFrom: '',            // yyyy-mm-dd (rỗng = áp dụng ngay cho bản ghi mới)
+  updatedAt: new Date().toISOString(),
+
+  // Nhóm loại hình (có thể sửa trên UI)
+  groups: {
+    group1: {
+      title: 'Nhóm 1',
+      // “Chuẩn cũ”: E11, E15, E21, E31, E42, E52, E62, E82, H21
+      codes: 'E11,E15,E21,E31,E42,E52,E62,E82,H21'.split(','),
+      base: 1,
+      // Cho phép chỉnh bậc như nhóm 3&4 nếu muốn (mặc định để trống = không cộng bậc)
+      tiers: [] // ví dụ: [{ from: 11, to: 20, add: 0.5 }]
+    },
+    group2: {
+      title: 'Nhóm 2',
+      // “Chuẩn cũ”: B11, E41, G51, G61
+      codes: 'B11,E41,G51,G61'.split(','),
+      base: 1.2,
+      // “Chuẩn cũ”: +0.5 từ 31–50 (không cộng dồn theo từng bậc)
+      tiers: [{ from: 31, to: 50, add: 0.5 }]
+    },
+    group34: {
+      title: 'Nhóm 3 & 4',
+      // “Chuẩn cũ”: H11, A11, A12, A21, A31, A41, A42, E13, G12, G13, B13, G22, G23
+      codes: 'H11,A11,A12,A21,A31,A41,A42,E13,G12,G13,B13,G22,G23'.split(','),
+      base: 1.5,
+      // Cộng dồn 4 bậc (chuẩn bạn xác nhận)
+      tiers: [
+        { from: 11, to: 20, add: 0.5 },
+        { from: 21, to: 30, add: 0.5 },
+        { from: 31, to: 40, add: 0.5 },
+        { from: 41, to: 50, add: 0.5 },
+      ]
+    }
+  },
+
+  // Điểm giấy phép
+  license: {
+    perType: 1,             // mỗi LOẠI giấy phép +1 điểm
+    maxTypes: 5,            // tối đa số LOẠI tính điểm
+    excludeCodes: ['ZN02','HDGC'] // các mã “Mã giấy phép” KHÔNG tính (áp dụng cho 6 cặp)
+  }
+};
+
 // ====== LƯU / TẢI QUY TẮC (CÓ LỊCH SỬ) ======
 const KEY_HISTORY = 'kpi_rules_history';   // mảng phiên bản đã lưu
 const LEGACY_KEY_ACTIVE = 'kpi_rules';
@@ -72,7 +120,6 @@ export function loadRules() {
   } catch (err) {
     console.warn('loadRules: legacy data invalid, fallback to default', err);
   }
-
   // lần đầu: lưu mặc định
   const defaults = normalizeRulesData(DEFAULT_RULES);
   saveRules(defaults, { appendHistory: false });

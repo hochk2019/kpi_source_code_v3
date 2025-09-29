@@ -119,7 +119,6 @@ export function mapRow(row, opts = {}) {
   let team = normalizeStr(row["team"] || row["Tổ đội"] || "");
   const autoAssignStaff = opts.autoAssignStaff !== false;
   const agencyMap = opts.agencyMap instanceof Map ? opts.agencyMap : null;
-
   const licenseExcludes = Array.isArray(opts.licenseExcludes)
     ? opts.licenseExcludes
     : (opts.rules?.license?.excludeCodes

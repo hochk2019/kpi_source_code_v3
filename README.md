@@ -28,6 +28,7 @@ Mở **hai** cửa sổ terminal:
    Máy chủ này lưu dữ liệu vào cơ sở dữ liệu SQLite tại
    `server/data/storage.sqlite` và cung cấp các API REST dưới đường dẫn
    `/api/...`. Ứng dụng giao diện sẽ tự động thử lại kết nối định kỳ: nếu thời điểm mở trang máy chủ chưa hoạt động, dữ liệu tạm ghi localStorage sẽ được đẩy lên cơ sở dữ liệu ngay khi kết nối thông suốt. Nếu bạn nâng cấp từ phiên bản cũ còn sử dụng file
+   `/api/...`. Nếu bạn nâng cấp từ phiên bản cũ còn sử dụng file
    `server/data/db.json`, máy chủ sẽ tự động nhập dữ liệu ban đầu từ file này
    (nếu tồn tại) trong lần chạy đầu tiên.
 
