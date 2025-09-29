@@ -17,34 +17,49 @@ function run(command, args, options = {}) {
   });
 }
 
-async function ensureBetterSqlite3({ autoRebuild = false } = {}) {
-  try {
-    await import('better-sqlite3');
-    return;
-  } catch (err) {
-    console.error('Không thể tải thư viện better-sqlite3.', err.message);
-    if (!autoRebuild) {
-      console.error('\nHãy chạy: pnpm rebuild better-sqlite3');
-      console.error('Hoặc chạy lại script này với tham số --rebuild để tự động biên dịch.');
-      throw err;
-    }
+async function ensureBetterSqlite3({ forceRebuild = false } = {}) {
+  let rebuildAttempted = false;
+
+  async function rebuild(reason) {
+    const label = reason === 'force' ? 'theo yêu cầu (--rebuild)' : 'tự động do thiếu native binding';
+    console.log(`Đang chạy "pnpm rebuild better-sqlite3" ${label}...`);
+    await run('pnpm', ['rebuild', 'better-sqlite3']);
+    rebuildAttempted = true;
   }
 
-  console.log('Đang chạy "pnpm rebuild better-sqlite3"...');
-  await run('pnpm', ['rebuild', 'better-sqlite3']);
-  try {
-    await import('better-sqlite3');
-    console.log('better-sqlite3 đã sẵn sàng.');
-  } catch (err) {
-    console.error('Vẫn không thể nạp better-sqlite3 sau khi rebuild.');
-    throw err;
+  if (forceRebuild) {
+    await rebuild('force');
+  }
+
+  while (true) {
+    try {
+      await import('better-sqlite3');
+      if (rebuildAttempted || forceRebuild) {
+        console.log('better-sqlite3 đã sẵn sàng.');
+      }
+      return;
+    } catch (err) {
+      if (rebuildAttempted) {
+        console.error('Vẫn không thể nạp better-sqlite3 sau khi thử rebuild.');
+        console.error('Hãy chạy "pnpm rebuild better-sqlite3" thủ công hoặc chuẩn bị binary phù hợp cho môi trường hiện tại.');
+        throw err;
+      }
+
+      try {
+        await rebuild('auto');
+      } catch (rebuildError) {
+        console.error('Rebuild better-sqlite3 thất bại:', rebuildError.message);
+        console.error('Vui lòng chạy lại "pnpm rebuild better-sqlite3" hoặc kiểm tra toolchain C++/Python của hệ thống.');
+        throw rebuildError;
+      }
+    }
   }
 }
 
 async function startServer() {
   const args = process.argv.slice(2);
-  const autoRebuild = args.includes('--rebuild');
-  await ensureBetterSqlite3({ autoRebuild });
+  const forceRebuild = args.includes('--rebuild');
+  await ensureBetterSqlite3({ forceRebuild });
 
   const serverEntry = resolve(__dirname, '..', 'server', 'index.js');
   console.log('Khởi động backend từ', serverEntry);

@@ -4,10 +4,11 @@ import { renderToString } from 'react-dom/server';
 import ReportViewer from '@/components/ReportViewer.jsx';
 import { DECL_KEY, RULES_KEY } from '@/lib/store.js';
 import { DEFAULT_RULES } from '@/lib/rules.js';
+import { clearStorageCache, setItem as sharedSetItem } from '@/lib/storageClient.js';
 
-// đảm bảo dữ liệu localStorage sạch trước mỗi test
+// đảm bảo bộ nhớ dùng chung sạch trước mỗi test
 beforeEach(() => {
-  localStorage.clear();
+  clearStorageCache();
 });
 
 describe('ReportViewer', () => {
@@ -41,8 +42,8 @@ describe('ReportViewer', () => {
     rules.name = 'Rules tháng 8';
     rules.applyFrom = '2024-08-01';
 
-    localStorage.setItem(DECL_KEY, JSON.stringify(rows));
-    localStorage.setItem(RULES_KEY, JSON.stringify(rules));
+    sharedSetItem(DECL_KEY, JSON.stringify(rows));
+    sharedSetItem(RULES_KEY, JSON.stringify(rules));
 
     const html = renderToString(<ReportViewer />);
 

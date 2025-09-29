@@ -39,7 +39,7 @@ function createDefaultAccountsState() {
     ['admin', 'admin123'],
     ['nhanvien', '123456'],
   ]);
-  return { accounts, passwords };
+  return { accounts, passwords, currentUser: null };
 }
 
 function normalizePermissions(permissions, role) {
@@ -115,7 +115,13 @@ function createDefaultHandlers(state) {
       if (state.passwords.get(account.username) !== password) {
         return jsonResponse({ ok: false, error: 'Sai tài khoản hoặc mật khẩu' }, 401);
       }
+      state.currentUser = account;
       return jsonResponse({ ok: true, user: account });
+    },
+    'GET /api/auth/session': () => jsonResponse({ ok: true, user: state.currentUser }),
+    'POST /api/auth/logout': () => {
+      state.currentUser = null;
+      return jsonResponse({ ok: true });
     },
   };
 }
@@ -185,6 +191,9 @@ export function installMockApi(overrides = {}) {
           return jsonResponse({ ok: false, error: 'Không tìm thấy tài khoản' }, 404);
         }
         state.passwords.set(username, password);
+        if (state.currentUser?.username === username) {
+          state.currentUser = null;
+        }
         return jsonResponse({ ok: true, accounts: state.accounts.slice() });
       }
 
@@ -205,6 +214,9 @@ export function installMockApi(overrides = {}) {
         account.role = nextRole;
         account.name = String(body?.name ?? account.name ?? username).trim();
         account.permissions = normalizePermissions(body?.permissions ?? account.permissions, account.role);
+        if (state.currentUser?.username === account.username) {
+          state.currentUser = account;
+        }
         return jsonResponse({ ok: true, account, accounts: state.accounts.slice() });
       }
       if (method === 'DELETE') {
@@ -221,6 +233,9 @@ export function installMockApi(overrides = {}) {
         const index = state.accounts.findIndex((entry) => entry.username === username);
         state.accounts.splice(index, 1);
         state.passwords.delete(username);
+        if (state.currentUser?.username === username) {
+          state.currentUser = null;
+        }
         return jsonResponse({ ok: true, accounts: state.accounts.slice() });
       }
     }
@@ -266,6 +281,7 @@ export function installMockApi(overrides = {}) {
       }
       state.passwords.set(username, newPassword);
       const account = state.accounts.find((entry) => entry.username === username);
+      state.currentUser = account ?? null;
       return jsonResponse({ ok: true, account });
     }
 

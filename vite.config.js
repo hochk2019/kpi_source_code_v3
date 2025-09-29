@@ -18,7 +18,7 @@ export default defineConfig({
       },
     },
   },
-  plugins: [react(),tailwindcss()],
+  plugins: [react(), tailwindcss()],
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
@@ -29,11 +29,20 @@ export default defineConfig({
       output: {
         manualChunks(id) {
           if (id.includes('node_modules')) {
-            if (id.includes('react') || id.includes('scheduler')) {
+            if (id.includes('react-dom') || id.includes('scheduler')) {
+              return 'vendor-react-dom';
+            }
+            if (id.includes('/react/')) {
               return 'vendor-react';
             }
             if (id.includes('@radix-ui')) {
               return 'vendor-radix';
+            }
+            if (id.includes('recharts')) {
+              return 'vendor-charts';
+            }
+            if (id.includes('date-fns')) {
+              return 'vendor-date';
             }
             if (id.includes('xlsx')) {
               return 'vendor-xlsx';
@@ -43,6 +52,7 @@ export default defineConfig({
         },
       },
     },
+    chunkSizeWarningLimit: 1024,
   },
   test: {
     environment: 'jsdom',

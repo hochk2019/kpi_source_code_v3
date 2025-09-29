@@ -2,7 +2,7 @@
 
 import { getItem, setItem } from './storageClient.js';
 
-// ===== Keys in localStorage =====
+// ===== Keys trong kho chia sẻ =====
 export const DECL_KEY  = "decl_rows_v1";      // dữ liệu tờ khai
 export const MST_KEY   = "mst_rows_v2";       // gán MST -> nhân viên/team/effective_from
 export const RULES_KEY = "kpi_rules_v2";      // quy tắc KPI

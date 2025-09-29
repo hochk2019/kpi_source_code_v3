@@ -3,7 +3,7 @@
 Ứng dụng tính điểm KPI cho nhân viên làm thủ tục hải quan. Phiên bản này bổ sung
 Giải pháp được thiết kế cho Công ty TNHH Tiếp Vận Hoàng Kim (Golden Logistics Co., Ltd) để chuẩn hóa dữ liệu và chia sẻ báo cáo KPI minh bạch trong toàn bộ đội ngũ khai báo. 
 máy chủ API cục bộ để nhiều máy trong cùng mạng LAN có thể cùng truy cập và
-chia sẻ dữ liệu mà không cần copy `localStorage` thủ công.
+chia sẻ dữ liệu mà không cần sao chép thủ công giữa các máy.
 
 ## 1. Cài đặt
 
@@ -11,9 +11,18 @@ chia sẻ dữ liệu mà không cần copy `localStorage` thủ công.
 pnpm install
 ```
 
+```bash
+pnpm db:init
+```
+
+Lệnh `db:init` tạo sẵn file `server/data/storage.sqlite` cùng dữ liệu mặc
+định để có thể chạy thử backend ngay cả khi chưa khởi động server lần đầu.
+
 > Nếu trong quá trình cài đặt xuất hiện cảnh báo `Ignored build scripts:
 > better-sqlite3`, hãy chạy `pnpm approve-builds` hoặc `pnpm rebuild
-> better-sqlite3` để cho phép biên dịch native module của SQLite.
+> better-sqlite3` để cho phép biên dịch native module của SQLite. Script
+> khởi động backend (`pnpm server`) cũng sẽ tự động rebuild nếu phát hiện
+> thiếu binding.
 
 ## 2. Khởi chạy cho môi trường phát triển
 
@@ -26,14 +35,18 @@ Mở **hai** cửa sổ terminal:
    ```
 
    Máy chủ này lưu dữ liệu vào cơ sở dữ liệu SQLite tại
-   `server/data/storage.sqlite` và cung cấp các API REST dưới đường dẫn
-   `/api/...`. Ứng dụng giao diện sẽ tự động thử lại kết nối định kỳ: nếu thời điểm mở trang máy chủ chưa hoạt động, dữ liệu tạm ghi localStorage sẽ được đẩy lên cơ sở dữ liệu ngay khi kết nối thông suốt. Nếu bạn nâng cấp từ phiên bản cũ còn sử dụng file
-   `/api/...`. Nếu bạn nâng cấp từ phiên bản cũ còn sử dụng file
-   `server/data/db.json`, máy chủ sẽ tự động nhập dữ liệu ban đầu từ file này
-   (nếu tồn tại) trong lần chạy đầu tiên.
+   `server/data/storage.sqlite` (file sẽ được tạo tự động ngay khi chạy `pnpm
+   server` hoặc thủ công bằng `pnpm db:init`) và cung cấp các API REST dưới
+   đường dẫn `/api/...`. Ứng dụng giao diện sẽ tự động thử lại kết nối định kỳ:
+   nếu thời điểm mở trang máy chủ chưa hoạt động, người dùng sẽ thấy thông báo
+   “đang đợi backend” và các thao tác sẽ được đẩy lên ngay khi kết nối thông
+   suốt. Nếu bạn nâng cấp từ phiên bản cũ còn sử dụng file `server/data/db.json`,
+   máy chủ sẽ tự động nhập dữ liệu ban đầu từ file này (nếu tồn tại) trong lần
+   chạy đầu tiên.
 
-   > Nếu gặp lỗi không thể tải `better-sqlite3`, hãy chạy `pnpm server:rebuild`
-   > hoặc `pnpm rebuild better-sqlite3` trước khi thử lại.
+  > Nếu sau bước tự động vẫn gặp lỗi không thể tải `better-sqlite3`, hãy chạy
+  > `pnpm server:rebuild` hoặc `pnpm rebuild better-sqlite3` để kiểm tra lại
+  > toolchain biên dịch.
 
 2. Chạy giao diện Vite (port mặc định: `5173`):
 

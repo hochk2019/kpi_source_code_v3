@@ -1,13 +1,20 @@
-import React from 'react';
+import React, { Suspense, useEffect } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs.jsx';
-import DataImporter from './DataImporter.jsx';
-import RulesEditor from './RulesEditor.jsx';
-import MSTAssignment from './MSTAssignment.jsx';
-import TeamManager from './TeamManager.jsx';
-import ReportViewer from './ReportViewer.jsx';
-import AccountManager from './AccountManager.jsx';
-import AuditLog from './AuditLog.jsx';
-import HQAgencyManager from './HQAgencyManager.jsx';
+
+const DataImporter = React.lazy(() => import('./DataImporter.jsx'));
+const RulesEditor = React.lazy(() => import('./RulesEditor.jsx'));
+const MSTAssignment = React.lazy(() => import('./MSTAssignment.jsx'));
+const TeamManager = React.lazy(() => import('./TeamManager.jsx'));
+const ReportViewer = React.lazy(() => import('./ReportViewer.jsx'));
+const AccountManager = React.lazy(() => import('./AccountManager.jsx'));
+const AuditLog = React.lazy(() => import('./AuditLog.jsx'));
+const HQAgencyManager = React.lazy(() => import('./HQAgencyManager.jsx'));
+
+const TabPanel = ({ children }) => (
+  <Suspense fallback={<div className="p-4 text-sm text-gray-500">Đang tải nội dung...</div>}>
+    {children}
+  </Suspense>
+);
 
 const KPICalculator = ({ auth }) => {
   const effectiveAuth = auth || { username: 'guest', role: 'viewer', permissions: {} };
@@ -21,6 +28,10 @@ const KPICalculator = ({ auth }) => {
   const canManageSync = !!permissions.syncManage;
   const canManageAlerts = !!permissions.alertsManage;
   const canViewAudit = !!permissions.auditView || canManageAccounts;
+
+  useEffect(() => {
+    import('./ReportViewer.jsx');
+  }, []);
 
   return (
     <div className="mx-auto max-w-6xl">
@@ -37,43 +48,59 @@ const KPICalculator = ({ auth }) => {
         </TabsList>
 
         <TabsContent value="mst">
-          <MSTAssignment canEdit={canMstEdit} currentUser={effectiveAuth} />
+          <TabPanel>
+            <MSTAssignment canEdit={canMstEdit} currentUser={effectiveAuth} />
+          </TabPanel>
         </TabsContent>
 
         <TabsContent value="hq">
-          <HQAgencyManager canEdit={canMstEdit} currentUser={effectiveAuth} />
+          <TabPanel>
+            <HQAgencyManager canEdit={canMstEdit} currentUser={effectiveAuth} />
+          </TabPanel>
         </TabsContent>
 
         <TabsContent value="import">
-          <DataImporter
-            canEdit={canImportEdit}
-            currentUser={effectiveAuth}
-            canManageSync={canManageSync}
-            canManageAlerts={canManageAlerts}
-          />
+          <TabPanel>
+            <DataImporter
+              canEdit={canImportEdit}
+              currentUser={effectiveAuth}
+              canManageSync={canManageSync}
+              canManageAlerts={canManageAlerts}
+            />
+          </TabPanel>
         </TabsContent>
 
         <TabsContent value="teams">
-          <TeamManager canEdit={canTeamsEdit} currentUser={effectiveAuth} />
+          <TabPanel>
+            <TeamManager canEdit={canTeamsEdit} currentUser={effectiveAuth} />
+          </TabPanel>
         </TabsContent>
 
         <TabsContent value="rules">
-          <RulesEditor canEdit={canRulesEdit} currentUser={effectiveAuth} />
+          <TabPanel>
+            <RulesEditor canEdit={canRulesEdit} currentUser={effectiveAuth} />
+          </TabPanel>
         </TabsContent>
 
         <TabsContent value="reports">
-          <ReportViewer canExport={canExportReports} currentUser={effectiveAuth} />
+          <TabPanel>
+            <ReportViewer canExport={canExportReports} currentUser={effectiveAuth} />
+          </TabPanel>
         </TabsContent>
 
         {canManageAccounts && (
           <TabsContent value="accounts">
-            <AccountManager currentUser={effectiveAuth} />
+            <TabPanel>
+              <AccountManager currentUser={effectiveAuth} />
+            </TabPanel>
           </TabsContent>
         )}
 
         {canViewAudit && (
           <TabsContent value="audit">
-            <AuditLog currentUser={effectiveAuth} />
+            <TabPanel>
+              <AuditLog currentUser={effectiveAuth} />
+            </TabPanel>
           </TabsContent>
         )}
       </Tabs>
