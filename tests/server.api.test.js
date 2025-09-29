@@ -1,4 +1,5 @@
 /* eslint-env node */
+/* @vitest-environment node */
 import process from 'node:process';
 import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest';
 import request from 'supertest';
@@ -206,6 +207,21 @@ function resetMockState() {
   mockState.closed = false;
 }
 
+function binaryParser(res, callback) {
+  res.setEncoding('binary');
+  let data = '';
+  res.on('data', (chunk) => {
+    data += chunk;
+  });
+  res.on('end', () => {
+    try {
+      callback(null, Buffer.from(data, 'binary'));
+    } catch (err) {
+      callback(err);
+    }
+  });
+}
+
 vi.mock('mssql', () => ({
   __esModule: true,
   default: {
@@ -242,6 +258,106 @@ vi.mock('better-sqlite3', () => ({
   __esModule: true,
   default: FakeDatabase,
 }));
+
+vi.mock('bcryptjs', () => ({
+  __esModule: true,
+  default: {
+    hashSync: (value) => `$2a$${value}`,
+    compare: async (input, hash) => hash === `$2a$${input}` || hash === input,
+  },
+}));
+
+vi.mock('exceljs', () => {
+  class MockCell {
+    constructor() {
+      this.value = null;
+      this.font = {};
+      this.alignment = {};
+      this.border = {};
+    }
+  }
+
+  class MockRow {
+    constructor() {
+      this.cells = new Map();
+      this.height = 0;
+    }
+
+    getCell(index) {
+      const key = Number(index) || 1;
+      if (!this.cells.has(key)) {
+        this.cells.set(key, new MockCell());
+      }
+      return this.cells.get(key);
+    }
+
+    commit() {}
+  }
+
+  function columnToIndex(column) {
+    return column
+      .toUpperCase()
+      .split('')
+      .reduce((acc, char) => acc * 26 + (char.charCodeAt(0) - 64), 0);
+  }
+
+  class MockWorksheet {
+    constructor(name = 'Sheet1') {
+      this.name = name;
+      this.rows = new Map();
+      this.pageSetup = {};
+      this.columns = [];
+    }
+
+    mergeCells() {}
+
+    getRow(index) {
+      const key = Number(index) || 1;
+      if (!this.rows.has(key)) {
+        this.rows.set(key, new MockRow());
+      }
+      return this.rows.get(key);
+    }
+
+    getCell(ref, colIndex) {
+      if (typeof ref === 'string') {
+        const match = ref.match(/^([A-Z]+)(\d+)$/i);
+        if (match) {
+          const [, column, row] = match;
+          return this.getRow(Number(row)).getCell(columnToIndex(column));
+        }
+        return this.getRow(1).getCell(1);
+      }
+      if (typeof ref === 'number') {
+        return this.getRow(ref).getCell(colIndex || 1);
+      }
+      return this.getRow(1).getCell(1);
+    }
+  }
+
+  class MockWorkbook {
+    constructor() {
+      this.worksheets = [];
+      this.xlsx = {
+        writeBuffer: async () => Buffer.from('excel-mock'),
+      };
+    }
+
+    addWorksheet(name) {
+      const sheet = new MockWorksheet(name);
+      this.worksheets.push(sheet);
+      return sheet;
+    }
+  }
+
+  const excelNamespace = { Workbook: MockWorkbook };
+
+  return {
+    __esModule: true,
+    default: excelNamespace,
+    Workbook: MockWorkbook,
+  };
+});
 
 const sqlModule = await import('mssql');
 const sqlMock = sqlModule.default;
@@ -595,6 +711,85 @@ describe('ECUS sync API', () => {
       .prepare('SELECT value FROM kv_store WHERE key = ?')
       .get('decl_rows_v1');
     expect(JSON.parse(row.value)).toHaveLength(0);
+  });
+});
+
+describe('Report export API', () => {
+  it('yêu cầu đăng nhập trước khi xuất báo cáo', async () => {
+    const res = await request(app)
+      .post('/api/reports/export')
+      .send({ kind: 'staff', payload: {} });
+    expect(res.status).toBe(401);
+    expect(res.body.ok).toBe(false);
+  });
+
+  it('từ chối khi tài khoản không có quyền báo cáo', async () => {
+    const admin = request.agent(app);
+    const loginAdmin = await admin.post('/api/auth/login').send({ username: 'admin', password: 'admin123' });
+    expect(loginAdmin.status).toBe(200);
+
+    await admin.post('/api/auth/accounts').send({
+      username: 'noperm',
+      password: '123456',
+      name: 'Không quyền',
+      role: 'staff',
+      permissions: { reportsExport: false },
+    });
+
+    const staffAgent = request.agent(app);
+    const staffLogin = await staffAgent.post('/api/auth/login').send({ username: 'noperm', password: '123456' });
+    expect(staffLogin.status).toBe(200);
+
+    const exportRes = await staffAgent
+      .post('/api/reports/export')
+      .send({ kind: 'staff', payload: {} });
+
+    expect(exportRes.status).toBe(403);
+    expect(exportRes.body.ok).toBe(false);
+
+    const cleanup = await admin.delete('/api/auth/accounts/noperm');
+    expect(cleanup.status).toBe(200);
+  });
+
+  it('xuất file báo cáo KPI nhân viên thành công', async () => {
+    const agent = request.agent(app);
+    const loginRes = await agent.post('/api/auth/login').send({ username: 'admin', password: 'admin123' });
+    expect(loginRes.status).toBe(200);
+
+    const payload = {
+      staff: {
+        name: 'Nguyễn Văn A',
+        teamLabel: 'Team 1',
+        stats: { decls: 1, kpi: 2.5, import: 1, export: 0, items: 5, licenses: 1 },
+        rows: [
+          {
+            date: '2025-01-01',
+            so_tk: 'TK001',
+            mst: '0123456789',
+            cong_ty: 'CÔNG TY A',
+            loai_hinh: 'A11',
+            isExport: false,
+            num_items: 5,
+            licenses: 1,
+            kpi: 2.5,
+          },
+        ],
+      },
+      range: { from: '2025-01-01', to: '2025-01-31' },
+      rules: { name: 'Quy tắc demo', applyFrom: '2025-01-01' },
+    };
+
+    const res = await agent
+      .post('/api/reports/export')
+      .buffer(true)
+      .parse(binaryParser)
+      .send({ kind: 'staff', payload });
+
+    expect(res.status).toBe(200);
+    expect(res.headers['content-type']).toContain('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    expect(res.headers['content-disposition']).toMatch(/bao-cao-kpi-nhan-vien/);
+    expect(Buffer.isBuffer(res.body)).toBe(true);
+    expect(res.body.byteLength).toBeGreaterThan(0);
   });
 });
 

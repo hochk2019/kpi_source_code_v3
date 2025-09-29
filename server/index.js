@@ -9,6 +9,7 @@ import cron from 'node-cron';
 import sql from 'mssql';
 import bcrypt from 'bcryptjs';
 import crypto from 'node:crypto';
+import { generateReport } from './reportExport.js';
 import { DEFAULT_RULES as SHARED_DEFAULT_RULES } from '../src/shared/defaultRules.js';
 import { deriveCOStatus } from '../src/shared/co.js';
 import { recordSqlTimeout } from './sqlMonitor.js';
@@ -411,6 +412,15 @@ function resolveActor(req, fallback = 'api') {
     return req.query.actor;
   }
   return fallback;
+}
+
+function setAttachmentHeaders(res, filename) {
+  const original = filename || 'bao-cao-kpi.xlsx';
+  const fallback = original.replace(/[^a-zA-Z0-9_.-]/g, '_') || 'bao-cao-kpi.xlsx';
+  res.setHeader(
+    'Content-Disposition',
+    `attachment; filename="${fallback}"; filename*=UTF-8''${encodeURIComponent(original)}`,
+  );
 }
 
 pruneExpiredSessions();
@@ -1676,6 +1686,37 @@ app.get('/api/health', (req, res) => {
 app.get('/api/bootstrap', (req, res) => {
   const store = buildBootstrapSnapshot();
   res.json({ data: store });
+});
+
+app.post('/api/reports/export', async (req, res) => {
+  try {
+    const context = getSessionContext(req);
+    if (!context) {
+      res.status(401).json({ ok: false, error: 'Bạn cần đăng nhập để xuất báo cáo' });
+      return;
+    }
+    if (context.account?.permissions?.reportsExport === false) {
+      res.status(403).json({ ok: false, error: 'Tài khoản hiện không được phép xuất báo cáo' });
+      return;
+    }
+
+    const kind = typeof req.body?.kind === 'string' ? req.body.kind : '';
+    if (!kind) {
+      res.status(400).json({ ok: false, error: 'Thiếu loại báo cáo cần xuất' });
+      return;
+    }
+
+    const payload = req.body?.payload && typeof req.body.payload === 'object' ? req.body.payload : {};
+    const { buffer, filename } = await generateReport(kind, payload);
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    setAttachmentHeaders(res, filename);
+    res.send(buffer);
+  } catch (err) {
+    console.error('Không thể xuất báo cáo', err);
+    const status = err?.message && /không hợp lệ/i.test(err.message) ? 400 : 500;
+    res.status(status).json({ ok: false, error: err?.message || 'Không thể xuất báo cáo' });
+  }
 });
 
 app.post('/api/auth/login', async (req, res) => {
