@@ -114,11 +114,12 @@ function scheduleRetry() {
     retryTimer = null;
     nextRetryAt = null;
     emitSyncStatus();
-  retryTimer = setTimeout(async () => {
-    retryTimer = null;
     const ok = await bootstrapFromServer(base);
     if (!ok) {
-      retryDelayMs = Math.min(Math.max(Math.floor(retryDelayMs * 1.5), RETRY_MIN_MS), RETRY_MAX_MS);
+      retryDelayMs = Math.min(
+        Math.max(Math.floor(retryDelayMs * 1.5), RETRY_MIN_MS),
+        RETRY_MAX_MS,
+      );
       scheduleRetry();
     }
     emitSyncStatus();
@@ -163,9 +164,7 @@ async function flushPending() {
         remoteEnabled = false;
         lastSyncError = err?.message || 'Không thể kết nối backend';
         retryDelayMs = Math.min(Math.max(Math.floor(retryDelayMs * 1.5), RETRY_MIN_MS), RETRY_MAX_MS);
-        scheduleRetry();
         emitSyncStatus();
-        retryDelayMs = Math.min(Math.max(Math.floor(retryDelayMs * 1.5), RETRY_MIN_MS), RETRY_MAX_MS);
         scheduleRetry();
         break;
       }
