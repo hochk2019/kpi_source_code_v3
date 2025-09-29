@@ -7,6 +7,7 @@ import process from 'node:process';
 import Database from 'better-sqlite3';
 import cron from 'node-cron';
 import sql from 'mssql';
+import bcrypt from 'bcryptjs';
 import { DEFAULT_RULES as SHARED_DEFAULT_RULES } from '../src/shared/defaultRules.js';
 import { deriveCOStatus } from '../src/shared/co.js';
 import { recordSqlTimeout } from './sqlMonitor.js';
@@ -74,6 +75,95 @@ const DEFAULT_ALERT_STATE = {
   lastEvaluatedAt: null,
 };
 
+const ACCOUNT_PERMISSION_KEYS = [
+  'importEdit',
+  'mstEdit',
+  'rulesEdit',
+  'teamsEdit',
+  'syncManage',
+  'reportsExport',
+  'alertsManage',
+  'auditView',
+  'accountManage',
+];
+
+const VIEW_ONLY_PERMISSIONS = Object.freeze({
+  importEdit: false,
+  mstEdit: false,
+  rulesEdit: false,
+  teamsEdit: false,
+  syncManage: false,
+  reportsExport: true,
+  alertsManage: false,
+  auditView: false,
+  accountManage: false,
+});
+
+const ADMIN_PERMISSIONS = Object.freeze({
+  importEdit: true,
+  mstEdit: true,
+  rulesEdit: true,
+  teamsEdit: true,
+  syncManage: true,
+  reportsExport: true,
+  alertsManage: true,
+  auditView: true,
+  accountManage: true,
+});
+
+const PASSWORD_SALT_ROUNDS = 10;
+const MIN_PASSWORD_LENGTH = 6;
+
+const DEFAULT_ACCOUNT_SEED = [
+  {
+    username: 'admin',
+    password: 'admin123',
+    role: 'admin',
+    name: 'Quản trị viên',
+    permissions: ADMIN_PERMISSIONS,
+  },
+  {
+    username: 'nhanvien',
+    password: '123456',
+    role: 'staff',
+    name: 'Nhân viên',
+    permissions: {
+      ...VIEW_ONLY_PERMISSIONS,
+      importEdit: true,
+      reportsExport: true,
+    },
+  },
+];
+
+function normalizePermissionsForRole(permissions, role = 'staff') {
+  const roleKey = role === 'admin' ? 'admin' : 'staff';
+  const base = roleKey === 'admin' ? ADMIN_PERMISSIONS : VIEW_ONLY_PERMISSIONS;
+  const normalized = { ...base };
+  if (permissions && typeof permissions === 'object') {
+    for (const key of ACCOUNT_PERMISSION_KEYS) {
+      if (key === 'reportsExport') {
+        normalized[key] = permissions[key] !== false;
+      } else {
+        normalized[key] = !!permissions[key];
+      }
+    }
+  }
+  if (roleKey === 'admin') {
+    normalized.accountManage = true;
+  }
+  return normalized;
+}
+
+function buildDefaultAccounts() {
+  return DEFAULT_ACCOUNT_SEED.map((entry) => ({
+    username: entry.username,
+    passwordHash: bcrypt.hashSync(entry.password, PASSWORD_SALT_ROUNDS),
+    role: entry.role,
+    name: entry.name,
+    permissions: normalizePermissionsForRole(entry.permissions, entry.role),
+  }));
+}
+
 const DEFAULT_STORAGE = {
   decl_rows_v1: '[]',
   mst_rows_v2: '[]',
@@ -119,45 +209,11 @@ const DEFAULT_STORAGE = {
   }),
   audit_logs_v1: '[]',
   import_logs_v1: '[]',
+  hq_agencies_v1: '[]',
   ecus_sync_config_v1: JSON.stringify(DEFAULT_ECUS_SYNC_CONFIG),
   decl_alert_config_v1: JSON.stringify(DEFAULT_ALERT_CONFIG),
   decl_alert_state_v1: JSON.stringify(DEFAULT_ALERT_STATE),
-  kpi_users_v1: JSON.stringify([
-    {
-      username: 'admin',
-      password: 'admin123',
-      role: 'admin',
-      name: 'Quản trị viên',
-      permissions: {
-        importEdit: true,
-        mstEdit: true,
-        rulesEdit: true,
-        teamsEdit: true,
-        syncManage: true,
-        reportsExport: true,
-        alertsManage: true,
-        auditView: true,
-        accountManage: true,
-      },
-    },
-    {
-      username: 'nhanvien',
-      password: '123456',
-      role: 'staff',
-      name: 'Nhân viên',
-      permissions: {
-        importEdit: true,
-        mstEdit: false,
-        rulesEdit: false,
-        teamsEdit: false,
-        syncManage: false,
-        reportsExport: true,
-        alertsManage: false,
-        auditView: false,
-        accountManage: false,
-      },
-    },
-  ]),
+  kpi_users_v1: JSON.stringify(buildDefaultAccounts()),
 };
 
 function normalizeValue(value) {
@@ -275,6 +331,98 @@ function setJSONValue(key, value) {
   upsertValue(key, value === undefined ? null : JSON.stringify(value));
 }
 
+function sortAccountRecords(records) {
+  return records.sort((a, b) => a.username.localeCompare(b.username, 'vi', { sensitivity: 'base' }));
+}
+
+function sanitizeAccountRecord(record) {
+  if (!record) return null;
+  return {
+    username: record.username,
+    role: record.role === 'admin' ? 'admin' : 'staff',
+    name: record.name || record.username,
+    permissions: normalizePermissionsForRole(record.permissions, record.role),
+  };
+}
+
+function persistAccountRecords(records) {
+  const normalized = Array.isArray(records) ? records.filter(Boolean) : [];
+  sortAccountRecords(normalized);
+  setJSONValue('kpi_users_v1', normalized);
+  return normalized;
+}
+
+function loadAccountRecords() {
+  const raw = getJSONValue('kpi_users_v1', []);
+  const records = [];
+  const seen = new Set();
+  let mutated = false;
+
+  if (Array.isArray(raw)) {
+    for (const entry of raw) {
+      const username = (entry?.username ?? '').toString().trim();
+      if (!username) {
+        mutated = true;
+        continue;
+      }
+      const key = username.toLowerCase();
+      if (seen.has(key)) {
+        mutated = true;
+        continue;
+      }
+      const role = entry?.role === 'admin' ? 'admin' : 'staff';
+      const name = (entry?.name ?? username).toString().trim();
+      let passwordHash = typeof entry?.passwordHash === 'string' ? entry.passwordHash : '';
+      if (!passwordHash && entry?.password) {
+        passwordHash = bcrypt.hashSync(String(entry.password), PASSWORD_SALT_ROUNDS);
+        mutated = true;
+      }
+      if (!passwordHash) {
+        mutated = true;
+        continue;
+      }
+      const permissions = normalizePermissionsForRole(entry?.permissions, role);
+      seen.add(key);
+      records.push({ username, passwordHash, role, name, permissions });
+    }
+  }
+
+  if (records.length === 0) {
+    records.push(...buildDefaultAccounts());
+    mutated = true;
+  }
+
+  if (!records.some((record) => record.role === 'admin')) {
+    const [defaultAdmin] = buildDefaultAccounts();
+    if (defaultAdmin) {
+      records.push(defaultAdmin);
+      mutated = true;
+    }
+  }
+
+  sortAccountRecords(records);
+
+  if (mutated) {
+    setJSONValue('kpi_users_v1', records);
+  }
+
+  return records;
+}
+
+function listAccountsForClient() {
+  return loadAccountRecords().map((record) => sanitizeAccountRecord(record));
+}
+
+function buildBootstrapSnapshot() {
+  const store = readStorage();
+  try {
+    store.kpi_users_v1 = JSON.stringify(listAccountsForClient());
+  } catch {
+    store.kpi_users_v1 = '[]';
+  }
+  return store;
+}
+
 export function resetDatabaseForTests() {
   if (process.env.NODE_ENV !== 'test' && process.env.VITEST !== 'true') {
     throw new Error('resetDatabaseForTests chỉ sử dụng trong môi trường kiểm thử');
@@ -384,6 +532,125 @@ function pushAuditLog(entry) {
   logs.unshift(payload);
   setJSONValue('audit_logs_v1', logs.slice(0, 200));
   return payload;
+}
+
+function countAdmins(records) {
+  return records.filter((record) => record.role === 'admin').length;
+}
+
+function createAccountRecord(payload, { actor = 'system' } = {}) {
+  const accounts = loadAccountRecords();
+  const username = (payload?.username ?? '').toString().trim();
+  if (!username) {
+    throw new Error('Vui lòng nhập tài khoản');
+  }
+  const key = username.toLowerCase();
+  if (accounts.some((record) => record.username.toLowerCase() === key)) {
+    throw new Error('Tài khoản đã tồn tại');
+  }
+  const password = (payload?.password ?? '').toString().trim();
+  if (password.length < MIN_PASSWORD_LENGTH) {
+    throw new Error(`Mật khẩu cần tối thiểu ${MIN_PASSWORD_LENGTH} ký tự`);
+  }
+  const role = payload?.role === 'admin' ? 'admin' : 'staff';
+  const name = (payload?.name ?? username).toString().trim();
+  const permissions = normalizePermissionsForRole(payload?.permissions, role);
+  const passwordHash = bcrypt.hashSync(password, PASSWORD_SALT_ROUNDS);
+  accounts.push({ username, passwordHash, role, name, permissions });
+  persistAccountRecords(accounts);
+  pushAuditLog({ actor, action: 'account.create', detail: `Tạo tài khoản ${username} (${role})` });
+  return sanitizeAccountRecord(accounts.find((record) => record.username === username));
+}
+
+function updateAccountRecord(usernameInput, patch, { actor = 'system' } = {}) {
+  const username = (usernameInput ?? '').toString().trim();
+  if (!username) {
+    throw new Error('Thiếu tài khoản cần cập nhật');
+  }
+  const accounts = loadAccountRecords();
+  const index = accounts.findIndex((record) => record.username === username);
+  if (index < 0) {
+    throw new Error('Không tìm thấy tài khoản');
+  }
+  const current = accounts[index];
+  const nextRole = patch?.role === 'admin' ? 'admin' : current.role;
+  if (current.role === 'admin' && nextRole !== 'admin' && countAdmins(accounts) <= 1) {
+    throw new Error('Cần ít nhất một quản trị viên');
+  }
+  const name = (patch?.name ?? current.name ?? current.username).toString().trim();
+  const permissions = normalizePermissionsForRole(patch?.permissions ?? current.permissions, nextRole);
+  accounts[index] = { ...current, role: nextRole, name, permissions };
+  persistAccountRecords(accounts);
+  pushAuditLog({ actor, action: 'account.update', detail: `Cập nhật tài khoản ${username}` });
+  return sanitizeAccountRecord(accounts[index]);
+}
+
+function setAccountPasswordRecord(usernameInput, newPasswordInput, { actor = 'system' } = {}) {
+  const username = (usernameInput ?? '').toString().trim();
+  if (!username) {
+    throw new Error('Thiếu tài khoản cần đặt mật khẩu');
+  }
+  const newPassword = (newPasswordInput ?? '').toString().trim();
+  if (newPassword.length < MIN_PASSWORD_LENGTH) {
+    throw new Error(`Mật khẩu cần tối thiểu ${MIN_PASSWORD_LENGTH} ký tự`);
+  }
+  const accounts = loadAccountRecords();
+  const index = accounts.findIndex((record) => record.username === username);
+  if (index < 0) {
+    throw new Error('Không tìm thấy tài khoản');
+  }
+  const passwordHash = bcrypt.hashSync(newPassword, PASSWORD_SALT_ROUNDS);
+  accounts[index] = { ...accounts[index], passwordHash };
+  persistAccountRecords(accounts);
+  pushAuditLog({ actor, action: 'account.reset_password', detail: `Đặt lại mật khẩu cho ${username}` });
+  return true;
+}
+
+function deleteAccountRecord(usernameInput, { actor = 'system' } = {}) {
+  const username = (usernameInput ?? '').toString().trim();
+  if (!username) {
+    throw new Error('Thiếu tài khoản cần xóa');
+  }
+  const accounts = loadAccountRecords();
+  const index = accounts.findIndex((record) => record.username === username);
+  if (index < 0) {
+    throw new Error('Không tìm thấy tài khoản');
+  }
+  const target = accounts[index];
+  if (target.role === 'admin' && countAdmins(accounts) <= 1) {
+    throw new Error('Không thể xoá quản trị viên cuối cùng');
+  }
+  accounts.splice(index, 1);
+  persistAccountRecords(accounts);
+  pushAuditLog({ actor, action: 'account.delete', detail: `Xóa tài khoản ${username}` });
+  return listAccountsForClient();
+}
+
+async function changeOwnPasswordRecord(usernameInput, currentPasswordInput, newPasswordInput) {
+  const username = (usernameInput ?? '').toString().trim();
+  if (!username) {
+    throw new Error('Thiếu tài khoản cần đổi mật khẩu');
+  }
+  const currentPassword = (currentPasswordInput ?? '').toString();
+  const newPassword = (newPasswordInput ?? '').toString().trim();
+  if (newPassword.length < MIN_PASSWORD_LENGTH) {
+    throw new Error(`Mật khẩu mới cần tối thiểu ${MIN_PASSWORD_LENGTH} ký tự`);
+  }
+  const accounts = loadAccountRecords();
+  const index = accounts.findIndex((record) => record.username === username);
+  if (index < 0) {
+    throw new Error('Không tìm thấy tài khoản');
+  }
+  const current = accounts[index];
+  const ok = await bcrypt.compare(currentPassword, current.passwordHash);
+  if (!ok) {
+    throw new Error('Mật khẩu hiện tại không đúng');
+  }
+  const passwordHash = bcrypt.hashSync(newPassword, PASSWORD_SALT_ROUNDS);
+  accounts[index] = { ...current, passwordHash };
+  persistAccountRecords(accounts);
+  pushAuditLog({ actor: username, action: 'account.change_password', detail: 'Đổi mật khẩu cá nhân' });
+  return sanitizeAccountRecord(accounts[index]);
 }
 
 function pushImportLog(message) {
@@ -1270,14 +1537,110 @@ app.get('/api/health', (req, res) => {
 });
 
 app.get('/api/bootstrap', (req, res) => {
-  const store = readStorage();
+  const store = buildBootstrapSnapshot();
   res.json({ data: store });
+});
+
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const usernameInput = (req.body?.username ?? '').toString().trim();
+    const passwordInput = (req.body?.password ?? '').toString();
+    if (!usernameInput || !passwordInput) {
+      res.status(400).json({ ok: false, error: 'Thiếu thông tin đăng nhập' });
+      return;
+    }
+    const accounts = loadAccountRecords();
+    const account = accounts.find(
+      (record) => record.username.toLowerCase() === usernameInput.toLowerCase()
+    );
+    if (!account) {
+      pushAuditLog({ actor: usernameInput || 'unknown', action: 'auth.login_fail', detail: 'Đăng nhập thất bại' });
+      res.status(401).json({ ok: false, error: 'Sai tài khoản hoặc mật khẩu' });
+      return;
+    }
+    const ok = await bcrypt.compare(passwordInput, account.passwordHash);
+    if (!ok) {
+      pushAuditLog({ actor: usernameInput || 'unknown', action: 'auth.login_fail', detail: 'Đăng nhập thất bại' });
+      res.status(401).json({ ok: false, error: 'Sai tài khoản hoặc mật khẩu' });
+      return;
+    }
+    pushAuditLog({ actor: account.username, action: 'auth.login', detail: 'Đăng nhập thành công' });
+    res.json({ ok: true, user: sanitizeAccountRecord(account) });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err?.message || 'Không thể đăng nhập' });
+  }
+});
+
+app.get('/api/auth/accounts', (req, res) => {
+  try {
+    res.json({ ok: true, accounts: listAccountsForClient() });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err?.message || 'Không thể tải danh sách tài khoản' });
+  }
+});
+
+app.post('/api/auth/accounts', (req, res) => {
+  try {
+    const actor = req.body?.actor || 'api';
+    const account = createAccountRecord(req.body, { actor });
+    res.status(201).json({ ok: true, account, accounts: listAccountsForClient() });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err?.message || 'Không thể tạo tài khoản' });
+  }
+});
+
+app.patch('/api/auth/accounts/:username', (req, res) => {
+  try {
+    const actor = req.body?.actor || 'api';
+    const account = updateAccountRecord(req.params.username, req.body, { actor });
+    res.json({ ok: true, account, accounts: listAccountsForClient() });
+  } catch (err) {
+    const status = err?.message && err.message.includes('Không tìm thấy') ? 404 : 400;
+    res.status(status).json({ ok: false, error: err?.message || 'Không thể cập nhật tài khoản' });
+  }
+});
+
+app.post('/api/auth/accounts/:username/password', (req, res) => {
+  try {
+    const actor = req.body?.actor || 'api';
+    setAccountPasswordRecord(req.params.username, req.body?.password, { actor });
+    res.json({ ok: true, accounts: listAccountsForClient() });
+  } catch (err) {
+    const status = err?.message && err.message.includes('Không tìm thấy') ? 404 : 400;
+    res.status(status).json({ ok: false, error: err?.message || 'Không thể đặt lại mật khẩu' });
+  }
+});
+
+app.delete('/api/auth/accounts/:username', (req, res) => {
+  try {
+    const actor = req.body?.actor || 'api';
+    const accounts = deleteAccountRecord(req.params.username, { actor });
+    res.json({ ok: true, accounts });
+  } catch (err) {
+    const status = err?.message && err.message.includes('Không tìm thấy') ? 404 : 400;
+    res.status(status).json({ ok: false, error: err?.message || 'Không thể xóa tài khoản' });
+  }
+});
+
+app.post('/api/auth/password/change', async (req, res) => {
+  try {
+    const { username, currentPassword, newPassword } = req.body || {};
+    const account = await changeOwnPasswordRecord(username, currentPassword, newPassword);
+    res.json({ ok: true, account });
+  } catch (err) {
+    const status = err?.message && err.message.includes('Không tìm thấy') ? 404 : 400;
+    res.status(status).json({ ok: false, error: err?.message || 'Không thể đổi mật khẩu' });
+  }
 });
 
 app.put('/api/storage/:key', (req, res) => {
   const key = req.params.key;
   if (!key) {
     res.status(400).json({ ok: false, error: 'Thiếu key' });
+    return;
+  }
+  if (key === 'kpi_users_v1') {
+    res.status(403).json({ ok: false, error: 'Khoá này chỉ chỉnh sửa qua API tài khoản' });
     return;
   }
   const { value } = req.body || {};
@@ -1304,6 +1667,10 @@ app.delete('/api/storage/:key', (req, res) => {
   const key = req.params.key;
   if (!key) {
     res.status(400).json({ ok: false, error: 'Thiếu key' });
+    return;
+  }
+  if (key === 'kpi_users_v1') {
+    res.status(403).json({ ok: false, error: 'Khoá này chỉ chỉnh sửa qua API tài khoản' });
     return;
   }
   try {

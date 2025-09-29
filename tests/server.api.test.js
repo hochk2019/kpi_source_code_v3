@@ -197,8 +197,71 @@ beforeAll(async () => {
   stopServer = serverModule.stopServer;
 });
 
+describe('API xác thực & bootstrap', () => {
+  beforeEach(() => {
+    resetDb();
+  });
+
+  it('bootstrap trả về tài khoản đã khử mật khẩu và có cấu hình HQ mặc định', async () => {
+    const response = await request(app).get('/api/bootstrap');
+    expect(response.status).toBe(200);
+    const payload = response.body?.data;
+    expect(payload).toBeTruthy();
+    expect(payload).toHaveProperty('hq_agencies_v1', '[]');
+    const accounts = JSON.parse(payload.kpi_users_v1 || '[]');
+    expect(Array.isArray(accounts)).toBe(true);
+    expect(accounts.length).toBeGreaterThan(0);
+    for (const account of accounts) {
+      expect(account).not.toHaveProperty('password');
+      expect(account).not.toHaveProperty('passwordHash');
+    }
+  });
+
+  it('cho phép đăng nhập bằng tài khoản mặc định', async () => {
+    const response = await request(app).post('/api/auth/login').send({ username: 'admin', password: 'admin123' });
+    expect(response.status).toBe(200);
+    expect(response.body?.ok).toBe(true);
+    expect(response.body?.user).toMatchObject({ username: 'admin', role: 'admin' });
+    expect(response.body?.user).not.toHaveProperty('passwordHash');
+  });
+
+  it('từ chối đăng nhập khi mật khẩu sai', async () => {
+    const response = await request(app).post('/api/auth/login').send({ username: 'admin', password: 'sai' });
+    expect(response.status).toBe(401);
+    expect(response.body?.ok).toBe(false);
+  });
+
+  it('không cho phép ghi đè kpi_users_v1 qua API storage chung', async () => {
+    const response = await request(app)
+      .put('/api/storage/kpi_users_v1')
+      .send({ value: JSON.stringify([]) });
+    expect(response.status).toBe(403);
+  });
+
+  it('danh sách tài khoản không lộ hash mật khẩu', async () => {
+    const response = await request(app).get('/api/auth/accounts');
+    expect(response.status).toBe(200);
+    const accounts = response.body?.accounts ?? [];
+    expect(Array.isArray(accounts)).toBe(true);
+    for (const account of accounts) {
+      expect(account).not.toHaveProperty('password');
+      expect(account).not.toHaveProperty('passwordHash');
+    }
+  });
+
+  it('lưu mật khẩu dạng băm trong cơ sở dữ liệu', () => {
+    const db = getDb();
+    const row = db.prepare('SELECT value FROM kv_store WHERE key = ?').get('kpi_users_v1');
+    expect(row?.value).toBeTruthy();
+    const accounts = JSON.parse(row.value || '[]');
+    expect(accounts.length).toBeGreaterThan(0);
+    expect(accounts[0]).not.toHaveProperty('password');
+    expect(accounts[0].passwordHash).toMatch(/^\$2[abyx]\$/);
+  });
+});
+
 afterAll(() => {
-  stopServer();
+  stopServer?.();
 });
 
 beforeEach(() => {

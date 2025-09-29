@@ -1,5 +1,4 @@
 import { pushAuditLog } from "@/lib/store.js";
-import { getItem as getStorageItem, setItem as setStorageItem } from "@/lib/storageClient.js";
 
 const SESSION_KEY = "kpi_auth";
 const USERS_KEY = "kpi_users_v1";
@@ -40,26 +39,7 @@ const ADMIN_PERMISSIONS = Object.freeze({
   accountManage: true,
 });
 
-const RAW_DEFAULT_USERS = [
-  {
-    username: "admin",
-    password: "admin123",
-    role: "admin",
-    name: "Quản trị viên",
-    permissions: ADMIN_PERMISSIONS,
-  },
-  {
-    username: "nhanvien",
-    password: "123456",
-    role: "staff",
-    name: "Nhân viên",
-    permissions: {
-      ...VIEW_ONLY_PERMISSIONS,
-      importEdit: true,
-      reportsExport: true,
-    },
-  },
-];
+const MIN_PASSWORD_LENGTH = 6;
 
 function safeParse(json, fallback) {
   try {
@@ -68,6 +48,16 @@ function safeParse(json, fallback) {
   } catch {
     return fallback;
   }
+}
+
+function getLocalStorage() {
+  if (typeof window !== "undefined" && window.localStorage) {
+    return window.localStorage;
+  }
+  if (typeof globalThis !== "undefined" && globalThis.localStorage) {
+    return globalThis.localStorage;
+  }
+  return null;
 }
 
 function normalizePermissions(perms, role) {
@@ -94,54 +84,118 @@ function normalizeUserRecord(record) {
   if (!username) return null;
   const role = record?.role === "admin" ? "admin" : "staff";
   const name = String(record?.name || username).trim();
-  const password = String(record?.password || "");
   const permissions = normalizePermissions(record?.permissions, role);
-  return { username, password, role, name, permissions };
+  return { username, role, name, permissions };
 }
 
-function persistUsers(users) {
-  const normalized = users.map(normalizeUserRecord).filter(Boolean);
-  normalized.sort((a, b) => a.username.localeCompare(b.username, "vi", { sensitivity: "base" }));
-  setStorageItem(USERS_KEY, JSON.stringify(normalized));
-  return normalized;
+function readAccountCache() {
+  const store = getLocalStorage();
+  if (!store) return [];
+  const raw = store.getItem(USERS_KEY);
+  const parsed = safeParse(raw, []);
+  return Array.isArray(parsed) ? parsed.map(normalizeUserRecord).filter(Boolean) : [];
 }
 
-function loadUsers() {
-  const raw = safeParse(getStorageItem(USERS_KEY), null);
-  let normalized = Array.isArray(raw) ? raw.map(normalizeUserRecord).filter(Boolean) : [];
-  if (!normalized.length) {
-    normalized = RAW_DEFAULT_USERS.map(normalizeUserRecord).filter(Boolean);
-    setStorageItem(USERS_KEY, JSON.stringify(normalized));
+function writeAccountCache(accounts) {
+  const store = getLocalStorage();
+  if (!store) return;
+  try {
+    store.setItem(USERS_KEY, JSON.stringify(accounts ?? []));
+  } catch {
+    // ignore quota errors
   }
-  normalized.sort((a, b) => a.username.localeCompare(b.username, "vi", { sensitivity: "base" }));
+}
+
+function setAccountCache(accounts) {
+  const normalized = Array.isArray(accounts) ? accounts.map(normalizeUserRecord).filter(Boolean) : [];
+  writeAccountCache(normalized);
   return normalized;
+}
+
+let apiBaseCache = null;
+
+function resolveApiBase() {
+  if (apiBaseCache !== null) {
+    return apiBaseCache;
+  }
+  let base = "";
+  if (typeof import.meta !== "undefined") {
+    base = import.meta.env?.VITE_API_BASE ?? "";
+  }
+  if (typeof base !== "string") {
+    base = "";
+  }
+  base = base.trim();
+  apiBaseCache = base.endsWith("/") ? base.slice(0, -1) : base;
+  return apiBaseCache;
+}
+
+function buildUrl(path) {
+  const base = resolveApiBase();
+  if (!path) return base || "";
+  if (path.startsWith("http://") || path.startsWith("https://")) {
+    return path;
+  }
+  const normalized = path.startsWith("/") ? path : `/${path}`;
+  return `${base || ""}${normalized}`;
+}
+
+async function requestJson(path, { method = "GET", body } = {}) {
+  if (typeof fetch !== "function") {
+    throw new Error("fetch không khả dụng");
+  }
+  const headers = new Headers();
+  const init = { method, headers };
+  if (body !== undefined) {
+    headers.set("Content-Type", "application/json");
+    init.body = JSON.stringify(body);
+  }
+  const response = await fetch(buildUrl(path), init);
+  let payload = null;
+  try {
+    payload = await response.json();
+  } catch {
+    payload = null;
+  }
+  if (!response.ok) {
+    const message = payload?.error || payload?.message || `HTTP ${response.status}`;
+    throw new Error(message);
+  }
+  return payload;
 }
 
 function sanitizeUserForSession(user) {
+  if (!user) return null;
   return {
     username: user.username,
-    role: user.role,
-    name: user.name,
+    role: user.role === "admin" ? "admin" : "staff",
+    name: user.name || user.username,
     permissions: normalizePermissions(user.permissions, user.role),
   };
 }
 
 function setSessionFromUser(user) {
+  const store = getLocalStorage();
+  if (!store) return null;
   if (!user) {
-    localStorage.removeItem(SESSION_KEY);
+    store.removeItem(SESSION_KEY);
     return null;
   }
   const session = { ...sanitizeUserForSession(user), ts: Date.now() };
-  localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+  store.setItem(SESSION_KEY, JSON.stringify(session));
   return session;
 }
 
 function syncSessionForUser(user) {
   const current = getAuth();
-  if (current && current.username === user.username) {
+  if (current && user && current.username === user.username) {
     return setSessionFromUser(user);
   }
   return null;
+}
+
+function loadUsers() {
+  return readAccountCache();
 }
 
 export function getViewerAuth() {
@@ -156,20 +210,26 @@ export function getViewerAuth() {
 export async function login(usernameInput, passwordInput) {
   const username = String(usernameInput || "").trim();
   const password = String(passwordInput || "");
-  const users = loadUsers();
-  const user = users.find((entry) => entry.username.toLowerCase() === username.toLowerCase());
-  if (user && user.password === password) {
-    const session = setSessionFromUser(user);
-    pushAuditLog({ actor: user.username, action: "auth.login", detail: "Đăng nhập thành công" });
-    return { ok: true, user: session };
+  if (!username || !password) {
+    return { ok: false, error: "Sai tài khoản hoặc mật khẩu" };
   }
-  pushAuditLog({ actor: username || "unknown", action: "auth.login_fail", detail: "Đăng nhập thất bại" });
-  return { ok: false, error: "Sai tài khoản hoặc mật khẩu" };
+  try {
+    const payload = await requestJson("/api/auth/login", {
+      method: "POST",
+      body: { username, password },
+    });
+    const session = setSessionFromUser(payload?.user);
+    reloadAccounts().catch(() => {});
+    return { ok: true, user: session };
+  } catch (err) {
+    return { ok: false, error: err?.message || "Sai tài khoản hoặc mật khẩu" };
+  }
 }
 
 export function logout(actorName) {
+  const store = getLocalStorage();
   const session = getAuth();
-  localStorage.removeItem(SESSION_KEY);
+  store?.removeItem(SESSION_KEY);
   if (session) {
     pushAuditLog({ actor: actorName || session.username, action: "auth.logout", detail: "Đăng xuất khỏi hệ thống" });
   }
@@ -177,12 +237,13 @@ export function logout(actorName) {
 
 export function getAuth() {
   try {
-    const stored = JSON.parse(localStorage.getItem(SESSION_KEY) || "null");
+    const store = getLocalStorage();
+    const stored = safeParse(store?.getItem(SESSION_KEY), null);
     if (!stored) return null;
     const users = loadUsers();
     const user = users.find((entry) => entry.username === stored.username);
     if (!user) {
-      localStorage.removeItem(SESSION_KEY);
+      store?.removeItem(SESSION_KEY);
       return null;
     }
     return { ...sanitizeUserForSession(user), ts: stored.ts || Date.now() };
@@ -192,134 +253,100 @@ export function getAuth() {
 }
 
 export function listAccounts() {
-  return loadUsers().map((user) => sanitizeUserForSession(user));
+  return loadUsers();
 }
 
 export function getPermissionTemplate(role = "staff") {
   return normalizePermissions({}, role === "admin" ? "admin" : "staff");
 }
 
-export function createAccount(payload, { actor = "system" } = {}) {
-  const users = loadUsers();
-  const usernameRaw = String(payload?.username || "").trim();
-  if (!usernameRaw) throw new Error("Vui lòng nhập tài khoản");
-  const username = usernameRaw;
-  const key = username.toLowerCase();
-  if (users.some((user) => user.username.toLowerCase() === key)) {
-    throw new Error("Tài khoản đã tồn tại");
+export async function reloadAccounts() {
+  try {
+    const payload = await requestJson("/api/auth/accounts");
+    return setAccountCache(payload?.accounts ?? []);
+  } catch (err) {
+    throw err;
   }
-  const password = String(payload?.password || "").trim();
-  if (password.length < 6) {
-    throw new Error("Mật khẩu cần tối thiểu 6 ký tự");
-  }
-  const role = payload?.role === "admin" ? "admin" : "staff";
-  const name = String(payload?.name || username).trim();
-  const permissions = normalizePermissions(payload?.permissions, role);
-  const updated = persistUsers([...users, { username, password, role, name, permissions }]);
-  const created = updated.find((user) => user.username === username);
-  if (created) {
-    pushAuditLog({ actor, action: "account.create", detail: `Tạo tài khoản ${username} (${role})` });
-  }
-  return sanitizeUserForSession(created);
 }
 
-export function updateAccount(usernameInput, patch, { actor = "system" } = {}) {
-  const users = loadUsers();
-  const username = String(usernameInput || "").trim();
-  const index = users.findIndex((user) => user.username === username);
-  if (index < 0) throw new Error("Không tìm thấy tài khoản");
-  const current = users[index];
-  const nextRole = patch?.role === "admin" ? "admin" : current.role;
-  if (current.role === "admin" && nextRole !== "admin") {
-    const admins = users.filter((user) => user.role === "admin");
-    if (admins.length <= 1) {
-      throw new Error("Cần ít nhất một quản trị viên");
+export async function createAccount(payload, { actor = "system" } = {}) {
+  try {
+    const response = await requestJson("/api/auth/accounts", {
+      method: "POST",
+      body: { ...payload, actor },
+    });
+    setAccountCache(response?.accounts ?? []);
+    return response?.account ?? null;
+  } catch (err) {
+    throw err;
+  }
+}
+
+export async function updateAccount(usernameInput, patch, { actor = "system" } = {}) {
+  try {
+    const response = await requestJson(`/api/auth/accounts/${encodeURIComponent(usernameInput)}`, {
+      method: "PATCH",
+      body: { ...patch, actor },
+    });
+    const accounts = setAccountCache(response?.accounts ?? []);
+    syncSessionForUser(response?.account);
+    return response?.account ?? accounts.find((account) => account.username === usernameInput) ?? null;
+  } catch (err) {
+    throw err;
+  }
+}
+
+export async function setAccountPassword(usernameInput, newPasswordInput, { actor = "system" } = {}) {
+  const password = String(newPasswordInput || "").trim();
+  if (password.length < MIN_PASSWORD_LENGTH) {
+    throw new Error(`Mật khẩu cần tối thiểu ${MIN_PASSWORD_LENGTH} ký tự`);
+  }
+  try {
+    const response = await requestJson(`/api/auth/accounts/${encodeURIComponent(usernameInput)}/password`, {
+      method: "POST",
+      body: { password, actor },
+    });
+    setAccountCache(response?.accounts ?? []);
+    return true;
+  } catch (err) {
+    throw err;
+  }
+}
+
+export async function deleteAccount(usernameInput, { actor = "system" } = {}) {
+  try {
+    const response = await requestJson(`/api/auth/accounts/${encodeURIComponent(usernameInput)}`, {
+      method: "DELETE",
+      body: { actor },
+    });
+    const accounts = setAccountCache(response?.accounts ?? []);
+    const session = getAuth();
+    if (session?.username === usernameInput) {
+      const store = getLocalStorage();
+      store?.removeItem(SESSION_KEY);
     }
+    return accounts;
+  } catch (err) {
+    throw err;
   }
-  const displayName = patch?.name ?? current.name ?? current.username;
-  const next = {
-    ...current,
-    role: nextRole,
-    name: String(displayName || "").trim(),
-    permissions: normalizePermissions(patch?.permissions ?? current.permissions, nextRole),
-  };
-  const updated = persistUsers([
-    ...users.slice(0, index),
-    next,
-    ...users.slice(index + 1),
-  ]);
-  const refreshed = updated.find((user) => user.username === username) || next;
-  syncSessionForUser(refreshed);
-  pushAuditLog({ actor, action: "account.update", detail: `Cập nhật tài khoản ${username}` });
-  return sanitizeUserForSession(refreshed);
 }
 
-export function setAccountPassword(usernameInput, newPasswordInput, { actor = "system" } = {}) {
-  const username = String(usernameInput || "").trim();
-  const newPassword = String(newPasswordInput || "").trim();
-  if (newPassword.length < 6) {
-    throw new Error("Mật khẩu cần tối thiểu 6 ký tự");
-  }
-  const users = loadUsers();
-  const index = users.findIndex((user) => user.username === username);
-  if (index < 0) throw new Error("Không tìm thấy tài khoản");
-  const next = { ...users[index], password: newPassword };
-  const updated = persistUsers([
-    ...users.slice(0, index),
-    next,
-    ...users.slice(index + 1),
-  ]);
-  const refreshed = updated.find((user) => user.username === username) || next;
-  syncSessionForUser(refreshed);
-  pushAuditLog({ actor, action: "account.reset_password", detail: `Đặt lại mật khẩu cho ${username}` });
-  return true;
-}
-
-export function deleteAccount(usernameInput, { actor = "system" } = {}) {
-  const username = String(usernameInput || "").trim();
-  const users = loadUsers();
-  const index = users.findIndex((user) => user.username === username);
-  if (index < 0) throw new Error("Không tìm thấy tài khoản");
-  const target = users[index];
-  if (target.role === "admin") {
-    const admins = users.filter((user) => user.role === "admin");
-    if (admins.length <= 1) {
-      throw new Error("Không thể xoá quản trị viên cuối cùng");
-    }
-  }
-  const remaining = persistUsers([
-    ...users.slice(0, index),
-    ...users.slice(index + 1),
-  ]);
-  const session = getAuth();
-  if (session?.username === username) {
-    localStorage.removeItem(SESSION_KEY);
-  }
-  pushAuditLog({ actor, action: "account.delete", detail: `Xóa tài khoản ${username}` });
-  return remaining.map((user) => sanitizeUserForSession(user));
-}
-
-export function changeOwnPassword(usernameInput, currentPasswordInput, newPasswordInput) {
+export async function changeOwnPassword(usernameInput, currentPasswordInput, newPasswordInput) {
   const username = String(usernameInput || "").trim();
   const currentPassword = String(currentPasswordInput || "");
   const newPassword = String(newPasswordInput || "").trim();
-  if (newPassword.length < 6) {
-    throw new Error("Mật khẩu mới cần tối thiểu 6 ký tự");
+  if (newPassword.length < MIN_PASSWORD_LENGTH) {
+    throw new Error(`Mật khẩu mới cần tối thiểu ${MIN_PASSWORD_LENGTH} ký tự`);
   }
-  const users = loadUsers();
-  const index = users.findIndex((user) => user.username === username);
-  if (index < 0) throw new Error("Không tìm thấy tài khoản");
-  if (users[index].password !== currentPassword) {
-    throw new Error("Mật khẩu hiện tại không đúng");
+  try {
+    const response = await requestJson("/api/auth/password/change", {
+      method: "POST",
+      body: { username, currentPassword, newPassword },
+    });
+    await reloadAccounts();
+    const session = setSessionFromUser(response?.account);
+    return session;
+  } catch (err) {
+    throw err;
   }
-  const next = { ...users[index], password: newPassword };
-  const updated = persistUsers([
-    ...users.slice(0, index),
-    next,
-    ...users.slice(index + 1),
-  ]);
-  const refreshed = updated.find((user) => user.username === username) || next;
-  const session = setSessionFromUser(refreshed);
-  pushAuditLog({ actor: username, action: "account.change_password", detail: "Đổi mật khẩu cá nhân" });
-  return session;
 }
