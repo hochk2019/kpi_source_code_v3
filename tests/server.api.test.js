@@ -26,8 +26,9 @@ class FakeStatement {
     this.sql = sql;
   }
 
-  run(key, value) {
+  run(...params) {
     if (this.sql.includes('INSERT INTO kv_store')) {
+      const [key, value] = params;
       if (value === null || value === undefined) {
         this.database.store.delete(String(key));
         return { changes: 1 };
@@ -36,18 +37,65 @@ class FakeStatement {
       return { changes: 1 };
     }
     if (this.sql.includes('DELETE FROM kv_store')) {
+      const [key] = params;
       const deleted = this.database.store.delete(String(key));
       return { changes: deleted ? 1 : 0 };
+    }
+    if (this.sql.includes('INSERT INTO auth_sessions')) {
+      const [token, username, createdAt, expiresAt] = params;
+      this.database.sessions.set(String(token), {
+        token: String(token),
+        username: String(username),
+        created_at: Number(createdAt),
+        expires_at: Number(expiresAt),
+      });
+      return { changes: 1 };
+    }
+    if (this.sql.includes('DELETE FROM auth_sessions WHERE token')) {
+      const [token] = params;
+      const deleted = this.database.sessions.delete(String(token));
+      return { changes: deleted ? 1 : 0 };
+    }
+    if (this.sql.includes('DELETE FROM auth_sessions WHERE username')) {
+      const [username] = params;
+      let changes = 0;
+      for (const [token, session] of Array.from(this.database.sessions.entries())) {
+        if (session.username === String(username)) {
+          this.database.sessions.delete(token);
+          changes += 1;
+        }
+      }
+      return { changes };
+    }
+    if (this.sql.includes('DELETE FROM auth_sessions WHERE expires_at')) {
+      const [expiresAt] = params;
+      let changes = 0;
+      for (const [token, session] of Array.from(this.database.sessions.entries())) {
+        if (session.expires_at <= Number(expiresAt)) {
+          this.database.sessions.delete(token);
+          changes += 1;
+        }
+      }
+      return { changes };
     }
     return { changes: 0 };
   }
 
-  get(key) {
+  get(...params) {
     if (this.sql.includes('SELECT value FROM kv_store WHERE key')) {
+      const [key] = params;
       if (this.database.store.has(String(key))) {
         return { value: this.database.store.get(String(key)) };
       }
       return undefined;
+    }
+    if (this.sql.includes('SELECT token, username, created_at, expires_at FROM auth_sessions WHERE token = ?')) {
+      const [token] = params;
+      const session = this.database.sessions.get(String(token));
+      if (!session) {
+        return undefined;
+      }
+      return { ...session };
     }
     return undefined;
   }
@@ -59,6 +107,15 @@ class FakeStatement {
     if (this.sql.includes('SELECT key, value FROM kv_store')) {
       return Array.from(this.database.store.entries()).map(([key, value]) => ({ key, value }));
     }
+    if (this.sql.includes('SELECT token, username FROM auth_sessions')) {
+      return Array.from(this.database.sessions.values()).map((session) => ({
+        token: session.token,
+        username: session.username,
+      }));
+    }
+    if (this.sql.includes('SELECT token FROM auth_sessions')) {
+      return Array.from(this.database.sessions.keys()).map((token) => ({ token }));
+    }
     return [];
   }
 }
@@ -66,6 +123,7 @@ class FakeStatement {
 class FakeDatabase {
   constructor() {
     this.store = new Map();
+    this.sessions = new Map();
   }
 
   pragma() {}
@@ -73,6 +131,9 @@ class FakeDatabase {
   exec(sql) {
     if (sql.includes('DELETE FROM kv_store')) {
       this.store.clear();
+    }
+    if (sql.includes('DELETE FROM auth_sessions')) {
+      this.sessions.clear();
     }
   }
 
@@ -86,6 +147,7 @@ class FakeDatabase {
 
   close() {
     this.store.clear();
+    this.sessions.clear();
   }
 }
 
@@ -223,6 +285,37 @@ describe('API xác thực & bootstrap', () => {
     expect(response.body?.ok).toBe(true);
     expect(response.body?.user).toMatchObject({ username: 'admin', role: 'admin' });
     expect(response.body?.user).not.toHaveProperty('passwordHash');
+    expect(response.headers['set-cookie']).toBeDefined();
+  });
+
+  it('duy trì phiên đăng nhập và cho phép đăng xuất', async () => {
+    const agent = request.agent(app);
+    const loginRes = await agent.post('/api/auth/login').send({ username: 'admin', password: 'admin123' });
+    expect(loginRes.status).toBe(200);
+    const sessionRes = await agent.get('/api/auth/session');
+    expect(sessionRes.status).toBe(200);
+    expect(sessionRes.body?.user).toMatchObject({ username: 'admin', role: 'admin' });
+
+    const logoutRes = await agent.post('/api/auth/logout').send();
+    expect(logoutRes.status).toBe(200);
+
+    const sessionAfterLogout = await agent.get('/api/auth/session');
+    expect(sessionAfterLogout.body?.user).toBeNull();
+  });
+
+  it('cấp lại cookie phiên sau khi người dùng đổi mật khẩu', async () => {
+    const agent = request.agent(app);
+    const loginRes = await agent.post('/api/auth/login').send({ username: 'admin', password: 'admin123' });
+    expect(loginRes.status).toBe(200);
+
+    const changeRes = await agent
+      .post('/api/auth/password/change')
+      .send({ username: 'admin', currentPassword: 'admin123', newPassword: 'admin999' });
+    expect(changeRes.status).toBe(200);
+    expect(changeRes.headers['set-cookie']).toBeDefined();
+
+    const sessionAfterChange = await agent.get('/api/auth/session');
+    expect(sessionAfterChange.body?.user).toMatchObject({ username: 'admin' });
   });
 
   it('từ chối đăng nhập khi mật khẩu sai', async () => {
