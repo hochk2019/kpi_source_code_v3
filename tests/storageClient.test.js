@@ -26,7 +26,6 @@ async function waitForCondition(check, tries = 10) {
 
 describe('storageClient remote đồng bộ lại khi server lên trễ', () => {
   beforeEach(async () => {
-    localStorage.clear();
     vi.useFakeTimers();
     vi.resetModules();
     const storageModule = await import('@/lib/storageClient.js');
@@ -44,7 +43,6 @@ describe('storageClient remote đồng bộ lại khi server lên trễ', () => 
     vi.unstubAllGlobals();
     vi.useRealTimers();
     clearStorageCacheFn?.();
-    localStorage.clear();
   });
 
   it('tự động flush dữ liệu pending khi kết nối server thành công sau đó', async () => {
