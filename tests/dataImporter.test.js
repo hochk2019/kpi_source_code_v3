@@ -217,4 +217,31 @@ describe('detectDateOrder', () => {
 
     expect(detectDateOrder(rows)).toBe('dmy');
   });
+
+  it('giữ suy luận day-first với chuỗi dạng dd-mm-yy', () => {
+    const rows = [
+      { 'Ngày': '31-05-24' },
+      { 'Ngày': '07-06-24' },
+    ];
+
+    expect(detectDateOrder(rows)).toBe('dmy');
+  });
+
+  it('chuyển sang month-first khi ngày nằm ở vị trí thứ hai với dấu gạch', () => {
+    const rows = [
+      { 'Ngày': '05-31-2024' },
+      { 'Ngày': '09-13-2024' },
+    ];
+
+    expect(detectDateOrder(rows)).toBe('mdy');
+  });
+
+  it('hiểu đúng chuỗi ISO kèm thời gian khi ngày và tháng bị đảo', () => {
+    const rows = [
+      { 'Ngày': '2024-31-05T00:00:00Z' },
+      { 'Ngày': '2024-21-01 00:00:00' },
+    ];
+
+    expect(detectDateOrder(rows)).toBe('dmy');
+  });
 });
