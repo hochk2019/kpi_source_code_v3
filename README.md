@@ -11,6 +11,13 @@ chia sẻ dữ liệu mà không cần sao chép thủ công giữa các máy.
 pnpm install
 ```
 
+```bash
+pnpm db:init
+```
+
+Lệnh `db:init` tạo sẵn file `server/data/storage.sqlite` cùng dữ liệu mặc
+định để có thể chạy thử backend ngay cả khi chưa khởi động server lần đầu.
+
 > Nếu trong quá trình cài đặt xuất hiện cảnh báo `Ignored build scripts:
 > better-sqlite3`, hãy chạy `pnpm approve-builds` hoặc `pnpm rebuild
 > better-sqlite3` để cho phép biên dịch native module của SQLite. Script
@@ -28,13 +35,14 @@ Mở **hai** cửa sổ terminal:
    ```
 
    Máy chủ này lưu dữ liệu vào cơ sở dữ liệu SQLite tại
-   `server/data/storage.sqlite` và cung cấp các API REST dưới đường dẫn
-   `/api/...`. Ứng dụng giao diện sẽ tự động thử lại kết nối định kỳ: nếu thời
-   điểm mở trang máy chủ chưa hoạt động, người dùng sẽ thấy thông báo “đang đợi
-   backend” và các thao tác sẽ được đẩy lên ngay khi kết nối thông suốt. Nếu bạn
-   nâng cấp từ phiên bản cũ còn sử dụng file
-   `server/data/db.json`, máy chủ sẽ tự động nhập dữ liệu ban đầu từ file này
-   (nếu tồn tại) trong lần chạy đầu tiên.
+   `server/data/storage.sqlite` (file sẽ được tạo tự động ngay khi chạy `pnpm
+   server` hoặc thủ công bằng `pnpm db:init`) và cung cấp các API REST dưới
+   đường dẫn `/api/...`. Ứng dụng giao diện sẽ tự động thử lại kết nối định kỳ:
+   nếu thời điểm mở trang máy chủ chưa hoạt động, người dùng sẽ thấy thông báo
+   “đang đợi backend” và các thao tác sẽ được đẩy lên ngay khi kết nối thông
+   suốt. Nếu bạn nâng cấp từ phiên bản cũ còn sử dụng file `server/data/db.json`,
+   máy chủ sẽ tự động nhập dữ liệu ban đầu từ file này (nếu tồn tại) trong lần
+   chạy đầu tiên.
 
   > Nếu sau bước tự động vẫn gặp lỗi không thể tải `better-sqlite3`, hãy chạy
   > `pnpm server:rebuild` hoặc `pnpm rebuild better-sqlite3` để kiểm tra lại

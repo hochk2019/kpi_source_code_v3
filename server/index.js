@@ -30,7 +30,7 @@ function resolveDbFile(value) {
   return path.resolve(__dirname, value);
 }
 
-const DB_FILE = resolveDbFile(process.env.KPI_DB_FILE);
+export const DB_FILE = resolveDbFile(process.env.KPI_DB_FILE);
 const LEGACY_JSON = path.resolve(__dirname, 'data/db.json');
 const DIST_DIR = path.resolve(__dirname, '../dist');
 
@@ -226,7 +226,7 @@ function normalizeValue(value) {
   return typeof value === 'string' ? value : JSON.stringify(value);
 }
 
-async function initializeDatabase({ dbFile = DB_FILE } = {}) {
+export async function initializeDatabase({ dbFile = DB_FILE } = {}) {
   if (dbFile !== ':memory:') {
     await fs.mkdir(path.dirname(dbFile), { recursive: true });
   }

@@ -1084,6 +1084,7 @@ export default function DataImporter({
       <div className="flex flex-wrap items-center gap-2">
         <input
           type="file"
+          data-testid="import-file-input"
           ref={fileRef}
           onChange={handleFileChange}
           accept=".xls,.xlsx"

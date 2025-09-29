@@ -95,7 +95,7 @@ describe('Luồng đăng nhập và import thực tế', () => {
     await user.click(await screen.findByRole('tab', { name: /Import Data/i }));
 
     const file = createWorkbookFile();
-    const input = document.querySelector('input[type="file"]');
+    const input = await screen.findByTestId('import-file-input');
     await user.upload(input, file);
 
     await waitFor(() => {

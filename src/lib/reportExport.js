@@ -1,5 +1,13 @@
-import ExcelJS from "exceljs";
 import { aggregateByCompany } from "@/lib/reports.js";
+
+let excelJsPromise;
+async function loadExcelJs() {
+  if (!excelJsPromise) {
+    excelJsPromise = import("exceljs");
+  }
+  const module = await excelJsPromise;
+  return module?.default ?? module;
+}
 
 function ensureWindow() {
   if (typeof window === "undefined") {
@@ -188,6 +196,7 @@ function addSectionTitle(sheet, rowIndex, title) {
 
 export async function exportStaffReport({ staff, range, rules }) {
   ensureWindow();
+  const ExcelJS = await loadExcelJs();
   const workbook = new ExcelJS.Workbook();
   const sheet = workbook.addWorksheet("Nhan vien");
   configureSheet(sheet);
@@ -251,6 +260,7 @@ export async function exportStaffReport({ staff, range, rules }) {
 
 export async function exportTeamReport({ team, range, rules }) {
   ensureWindow();
+  const ExcelJS = await loadExcelJs();
   const workbook = new ExcelJS.Workbook();
   const sheet = workbook.addWorksheet("To doi");
   configureSheet(sheet);
@@ -316,6 +326,7 @@ export async function exportTeamReport({ team, range, rules }) {
 
 export async function exportAllStaffReport({ staffList, summary, range, rules }) {
   ensureWindow();
+  const ExcelJS = await loadExcelJs();
   const workbook = new ExcelJS.Workbook();
   const sheet = workbook.addWorksheet("Tong hop NV");
   configureSheet(sheet);
@@ -386,6 +397,7 @@ export async function exportAllStaffReport({ staffList, summary, range, rules })
 
 export async function exportAllTeamReport({ teamList, summary, range, rules }) {
   ensureWindow();
+  const ExcelJS = await loadExcelJs();
   const workbook = new ExcelJS.Workbook();
   const sheet = workbook.addWorksheet("Tong hop to doi");
   configureSheet(sheet);
