@@ -1,5 +1,83 @@
 import ExcelJS from 'exceljs';
 
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 phút
+const MAX_CACHE_ENTRIES = 20;
+
+const reportCache = new Map();
+
+function normalizeCacheValue(value) {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  if (Array.isArray(value)) {
+    return value.map((item) => normalizeCacheValue(item));
+  }
+  if (typeof value === 'object') {
+    const normalized = {};
+    const keys = Object.keys(value).sort();
+    for (const key of keys) {
+      normalized[key] = normalizeCacheValue(value[key]);
+    }
+    return normalized;
+  }
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return Number(value);
+  }
+  if (typeof value === 'boolean') {
+    return value;
+  }
+  return value.toString();
+}
+
+function buildCacheKey(kind, payload) {
+  const normalizedPayload = normalizeCacheValue(payload || {});
+  return JSON.stringify({ kind, payload: normalizedPayload });
+}
+
+function purgeExpiredEntries(now = Date.now()) {
+  for (const [key, entry] of reportCache.entries()) {
+    if (now - entry.timestamp > CACHE_TTL_MS) {
+      reportCache.delete(key);
+    }
+  }
+}
+
+function rememberCacheEntry(key, result, timestamp) {
+  if (!result || !Buffer.isBuffer(result.buffer) || !result.filename) {
+    return;
+  }
+  if (reportCache.size >= MAX_CACHE_ENTRIES) {
+    const oldestKey = reportCache.keys().next().value;
+    if (oldestKey) {
+      reportCache.delete(oldestKey);
+    }
+  }
+  reportCache.set(key, {
+    buffer: Buffer.from(result.buffer),
+    filename: result.filename,
+    timestamp,
+  });
+}
+
+function readCacheEntry(key, now = Date.now()) {
+  const entry = reportCache.get(key);
+  if (!entry) {
+    return null;
+  }
+  if (now - entry.timestamp > CACHE_TTL_MS) {
+    reportCache.delete(key);
+    return null;
+  }
+  return {
+    buffer: Buffer.from(entry.buffer),
+    filename: entry.filename,
+  };
+}
+
+export function clearReportCache() {
+  reportCache.clear();
+}
+
 function normalizeStr(value) {
   return (value ?? '')
     .toString()
@@ -552,19 +630,31 @@ export async function generateAllTeamReport(payload = {}) {
   return { buffer, filename: 'bao-cao-kpi-to-doi-tong-hop.xlsx' };
 }
 
+const REPORT_GENERATORS = {
+  staff: generateStaffReport,
+  team: generateTeamReport,
+  allStaff: generateAllStaffReport,
+  allTeam: generateAllTeamReport,
+};
+
 export async function generateReport(kind, payload) {
-  switch (kind) {
-    case 'staff':
-      return generateStaffReport(payload);
-    case 'team':
-      return generateTeamReport(payload);
-    case 'allStaff':
-      return generateAllStaffReport(payload);
-    case 'allTeam':
-      return generateAllTeamReport(payload);
-    default:
-      throw new Error('Loại báo cáo không hợp lệ');
+  const generator = REPORT_GENERATORS[kind];
+  if (!generator) {
+    throw new Error('Loại báo cáo không hợp lệ');
   }
+
+  const cacheKey = buildCacheKey(kind, payload);
+  const now = Date.now();
+  purgeExpiredEntries(now);
+
+  const cached = readCacheEntry(cacheKey, now);
+  if (cached) {
+    return cached;
+  }
+
+  const result = await generator(payload);
+  rememberCacheEntry(cacheKey, result, now);
+  return result;
 }
 
 export default {
@@ -573,5 +663,6 @@ export default {
   generateTeamReport,
   generateAllStaffReport,
   generateAllTeamReport,
+  clearReportCache,
 };
 

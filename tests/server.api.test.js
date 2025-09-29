@@ -335,8 +335,11 @@ vi.mock('exceljs', () => {
     }
   }
 
+  let workbookCreateCount = 0;
+
   class MockWorkbook {
     constructor() {
+      workbookCreateCount += 1;
       this.worksheets = [];
       this.xlsx = {
         writeBuffer: async () => Buffer.from('excel-mock'),
@@ -350,7 +353,13 @@ vi.mock('exceljs', () => {
     }
   }
 
-  const excelNamespace = { Workbook: MockWorkbook };
+  const excelNamespace = {
+    Workbook: MockWorkbook,
+    __getWorkbookCreateCount: () => workbookCreateCount,
+    __resetWorkbookCreateCount: () => {
+      workbookCreateCount = 0;
+    },
+  };
 
   return {
     __esModule: true,
@@ -361,6 +370,10 @@ vi.mock('exceljs', () => {
 
 const sqlModule = await import('mssql');
 const sqlMock = sqlModule.default;
+const excelModule = await import('exceljs');
+const excelMock = excelModule.default;
+const reportExportModule = await import('../server/reportExport.js');
+const { clearReportCache } = reportExportModule;
 
 let app;
 let resetDb;
@@ -477,6 +490,8 @@ beforeEach(() => {
   resetDb();
   sqlMock.__resetMock();
   resetSqlMonitor();
+  clearReportCache();
+  excelMock.__resetWorkbookCreateCount?.();
 });
 
 describe('ECUS sync API', () => {
@@ -790,6 +805,54 @@ describe('Report export API', () => {
     expect(res.headers['content-disposition']).toMatch(/bao-cao-kpi-nhan-vien/);
     expect(Buffer.isBuffer(res.body)).toBe(true);
     expect(res.body.byteLength).toBeGreaterThan(0);
+  });
+
+  it('tái sử dụng cache khi xuất cùng tham số', async () => {
+    const agent = request.agent(app);
+    const loginRes = await agent.post('/api/auth/login').send({ username: 'admin', password: 'admin123' });
+    expect(loginRes.status).toBe(200);
+
+    const payload = {
+      staff: {
+        name: 'Nguyễn Văn B',
+        teamLabel: 'Team 2',
+        stats: { decls: 2, kpi: 5, import: 1, export: 1, items: 10, licenses: 0 },
+        rows: [
+          {
+            date: '2025-02-01',
+            so_tk: 'TK002',
+            mst: '9876543210',
+            cong_ty: 'CÔNG TY B',
+            loai_hinh: 'B11',
+            isExport: true,
+            num_items: 10,
+            licenses: 0,
+            kpi: 5,
+          },
+        ],
+      },
+      range: { from: '2025-02-01', to: '2025-02-28' },
+    };
+
+    const first = await agent
+      .post('/api/reports/export')
+      .buffer(true)
+      .parse(binaryParser)
+      .send({ kind: 'staff', payload });
+
+    expect(first.status).toBe(200);
+    expect(excelMock.__getWorkbookCreateCount()).toBe(1);
+
+    const second = await agent
+      .post('/api/reports/export')
+      .buffer(true)
+      .parse(binaryParser)
+      .send({ kind: 'staff', payload });
+
+    expect(second.status).toBe(200);
+    expect(excelMock.__getWorkbookCreateCount()).toBe(1);
+    expect(Buffer.isBuffer(second.body)).toBe(true);
+    expect(second.body.byteLength).toBeGreaterThan(0);
   });
 });
 
