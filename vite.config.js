@@ -44,6 +44,7 @@ export default defineConfig({
             if (id.includes('date-fns')) {
               return 'vendor-date';
             }
+
             if (id.includes('xlsx')) {
               return 'vendor-xlsx';
             }
