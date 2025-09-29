@@ -92,6 +92,37 @@ describe('storageClient remote đồng bộ lại khi server lên trễ', () => 
     expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 
+  it('đồng bộ cấu hình Đại lý HQ lên server khi có kết nối', async () => {
+    const storageWrites = [];
+    const fetchMock = vi.fn(async (input, init) => {
+      const method = (init?.method || 'GET').toUpperCase();
+      const url = typeof input === 'string' ? input : input?.url ?? '';
+      if (url.includes('/api/bootstrap')) {
+        return createBootstrapResponse({ hq_agencies_v1: '[]' });
+      }
+      if (url.includes('/api/storage/') && method === 'PUT') {
+        storageWrites.push({ url, body: init?.body });
+        return { ok: true, json: async () => ({ ok: true }) };
+      }
+      return { ok: true, json: async () => ({ ok: true }) };
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const initial = await initSharedStorage({ baseUrl: '' });
+    expect(initial).toBe(true);
+
+    const payload = JSON.stringify([{ mst: '0100109106', agency: 'Test HQ' }]);
+    sharedSetItem('hq_agencies_v1', payload);
+
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(storageWrites).toHaveLength(1);
+    expect(storageWrites[0].url).toContain('/api/storage/hq_agencies_v1');
+    const saved = JSON.parse(storageWrites[0].body);
+    expect(saved.value).toBe(payload);
+  });
+
   it('phát sự kiện chờ backend khi hàng đợi chưa thể đồng bộ', async () => {
     const bootstrapQueue = [
       { kind: 'error' },

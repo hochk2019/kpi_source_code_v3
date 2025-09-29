@@ -1,6 +1,7 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   listAccounts,
+  reloadAccounts,
   createAccount,
   updateAccount,
   setAccountPassword,
@@ -43,13 +44,19 @@ export default function AccountManager({ currentUser }) {
 
   const currentActor = currentUser?.username || "system";
 
-  const refresh = () => {
-    setAccounts(listAccounts());
-  };
+  const refresh = useCallback(async () => {
+    try {
+      const updated = await reloadAccounts();
+      setAccounts(updated);
+    } catch (err) {
+      console.error(err);
+      setError(err?.message || "Không thể tải danh sách tài khoản");
+    }
+  }, []);
 
   useEffect(() => {
-    refresh();
-  }, []);
+    refresh().catch(() => {});
+  }, [refresh]);
 
   const permissionList = useMemo(() => PERMISSION_KEYS.map((key) => ({ key, label: PERMISSION_LABELS[key] })), []);
 
@@ -63,14 +70,14 @@ export default function AccountManager({ currentUser }) {
     });
   };
 
-  const handleCreate = (event) => {
+  const handleCreate = async (event) => {
     event.preventDefault();
     setError("");
     try {
-      createAccount(form, { actor: currentActor });
+      await createAccount(form, { actor: currentActor });
       alert("Đã tạo tài khoản mới.");
       resetForm();
-      refresh();
+      setAccounts(listAccounts());
     } catch (err) {
       setError(err?.message || "Không thể tạo tài khoản");
     }
@@ -91,43 +98,43 @@ export default function AccountManager({ currentUser }) {
     }));
   };
 
-  const togglePermission = (username, key, value) => {
+  const togglePermission = async (username, key, value) => {
     try {
       const target = accounts.find((account) => account.username === username);
       if (!target) return;
       const nextPermissions = { ...target.permissions, [key]: value };
-      updateAccount(username, { permissions: nextPermissions }, { actor: currentActor });
-      refresh();
+      await updateAccount(username, { permissions: nextPermissions }, { actor: currentActor });
+      setAccounts(listAccounts());
     } catch (err) {
       alert(err?.message || "Không thể cập nhật quyền");
     }
   };
 
-  const changeRole = (username, role) => {
+  const changeRole = async (username, role) => {
     try {
-      updateAccount(username, { role }, { actor: currentActor });
-      refresh();
+      await updateAccount(username, { role }, { actor: currentActor });
+      setAccounts(listAccounts());
     } catch (err) {
       alert(err?.message || "Không thể cập nhật vai trò");
     }
   };
 
-  const resetPassword = (username) => {
+  const resetPassword = async (username) => {
     const nextPassword = window.prompt(`Nhập mật khẩu mới cho ${username} (>=6 ký tự):`);
     if (!nextPassword) return;
     try {
-      setAccountPassword(username, nextPassword, { actor: currentActor });
+      await setAccountPassword(username, nextPassword, { actor: currentActor });
       alert(`Đã đặt lại mật khẩu cho ${username}.`);
     } catch (err) {
       alert(err?.message || "Không thể đặt lại mật khẩu");
     }
   };
 
-  const removeAccount = (username) => {
+  const removeAccount = async (username) => {
     if (!window.confirm(`Xóa tài khoản ${username}?`)) return;
     try {
-      deleteAccount(username, { actor: currentActor });
-      refresh();
+      await deleteAccount(username, { actor: currentActor });
+      setAccounts(listAccounts());
     } catch (err) {
       alert(err?.message || "Không thể xóa tài khoản");
     }

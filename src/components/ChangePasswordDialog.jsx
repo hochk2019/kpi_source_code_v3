@@ -25,7 +25,7 @@ export default function ChangePasswordDialog({ currentUser, onClose }) {
     }
     try {
       setLoading(true);
-      changeOwnPassword(currentUser.username, currentPassword, newPassword);
+      await changeOwnPassword(currentUser.username, currentPassword, newPassword);
       alert("Đổi mật khẩu thành công. Vui lòng đăng nhập lại nếu được yêu cầu.");
       onClose?.(true);
     } catch (err) {
