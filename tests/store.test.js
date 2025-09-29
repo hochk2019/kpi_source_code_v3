@@ -18,8 +18,9 @@ import {
   getHQAgencies,
   upsertHQAgencies
 } from '@/lib/store.js';
+import { clearStorageCache, getItem as sharedGetItem } from '@/lib/storageClient.js';
 beforeEach(() => {
-  localStorage.clear();
+  clearStorageCache();
 });
 
 describe('toISODate', () => {
@@ -119,7 +120,7 @@ describe('hq agency helpers', () => {
       { mst: '0101234567', company: 'Công ty A cập nhật', agent: 'FCL' },
     ]);
 
-    const saved = JSON.parse(localStorage.getItem(HQ_KEY));
+    const saved = JSON.parse(sharedGetItem(HQ_KEY) || '[]');
     expect(saved).toHaveLength(1);
     expect(saved[0].mst).toBe('0101234567');
   });
@@ -153,13 +154,13 @@ describe('hq agency helpers', () => {
 });
 
 describe('team roster helpers', () => {
-  it('getTeamRoster trả về dữ liệu mặc định và seed localStorage', () => {
-    expect(localStorage.getItem(TEAM_KEY)).toBeNull();
+  it('getTeamRoster trả về dữ liệu mặc định và seed bộ nhớ dùng chung', () => {
+    expect(sharedGetItem(TEAM_KEY)).toBeNull();
 
     const roster = getTeamRoster();
     expect(roster.teams).toHaveLength(3);
 
-    const stored = JSON.parse(localStorage.getItem(TEAM_KEY));
+    const stored = JSON.parse(sharedGetItem(TEAM_KEY));
     expect(Array.isArray(stored.teams)).toBe(true);
     expect(stored.teams.length).toBe(3);
   });

@@ -8,6 +8,8 @@ import Database from 'better-sqlite3';
 import cron from 'node-cron';
 import sql from 'mssql';
 import bcrypt from 'bcryptjs';
+import crypto from 'node:crypto';
+import { generateReport } from './reportExport.js';
 import { DEFAULT_RULES as SHARED_DEFAULT_RULES } from '../src/shared/defaultRules.js';
 import { deriveCOStatus } from '../src/shared/co.js';
 import { recordSqlTimeout } from './sqlMonitor.js';
@@ -29,7 +31,7 @@ function resolveDbFile(value) {
   return path.resolve(__dirname, value);
 }
 
-const DB_FILE = resolveDbFile(process.env.KPI_DB_FILE);
+export const DB_FILE = resolveDbFile(process.env.KPI_DB_FILE);
 const LEGACY_JSON = path.resolve(__dirname, 'data/db.json');
 const DIST_DIR = path.resolve(__dirname, '../dist');
 
@@ -113,6 +115,8 @@ const ADMIN_PERMISSIONS = Object.freeze({
 
 const PASSWORD_SALT_ROUNDS = 10;
 const MIN_PASSWORD_LENGTH = 6;
+const SESSION_COOKIE_NAME = 'kpi_session';
+const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 ngày
 
 const DEFAULT_ACCOUNT_SEED = [
   {
@@ -223,7 +227,7 @@ function normalizeValue(value) {
   return typeof value === 'string' ? value : JSON.stringify(value);
 }
 
-async function initializeDatabase({ dbFile = DB_FILE } = {}) {
+export async function initializeDatabase({ dbFile = DB_FILE } = {}) {
   if (dbFile !== ':memory:') {
     await fs.mkdir(path.dirname(dbFile), { recursive: true });
   }
@@ -231,6 +235,12 @@ async function initializeDatabase({ dbFile = DB_FILE } = {}) {
   database.pragma('journal_mode = WAL');
   database.exec(
     'CREATE TABLE IF NOT EXISTS kv_store (key TEXT PRIMARY KEY, value TEXT NOT NULL)'
+  );
+  database.exec(
+    'CREATE TABLE IF NOT EXISTS auth_sessions (token TEXT PRIMARY KEY, username TEXT NOT NULL, created_at INTEGER NOT NULL, expires_at INTEGER NOT NULL)'
+  );
+  database.exec(
+    'CREATE INDEX IF NOT EXISTS idx_auth_sessions_username ON auth_sessions(username)'
   );
 
   let seedData = { ...DEFAULT_STORAGE };
@@ -280,6 +290,140 @@ async function initializeDatabase({ dbFile = DB_FILE } = {}) {
 }
 
 const db = await initializeDatabase();
+
+function pruneExpiredSessions() {
+  try {
+    db.prepare('DELETE FROM auth_sessions WHERE expires_at <= ?').run(Date.now());
+  } catch (err) {
+    console.error('Không thể dọn dẹp phiên đăng nhập đã hết hạn', err);
+  }
+}
+
+function parseCookies(header) {
+  if (!header || typeof header !== 'string') {
+    return {};
+  }
+  return header.split(';').reduce((acc, part) => {
+    const [name, ...rest] = part.split('=');
+    if (!name) return acc;
+    const key = name.trim();
+    if (!key) return acc;
+    acc[key] = decodeURIComponent(rest.join('=')?.trim() ?? '');
+    return acc;
+  }, {});
+}
+
+function getSessionTokenFromRequest(req) {
+  const cookies = parseCookies(req.headers?.cookie || '');
+  return cookies[SESSION_COOKIE_NAME] || '';
+}
+
+function findAccountRecord(username) {
+  if (!username) return null;
+  const accounts = loadAccountRecords();
+  return accounts.find((record) => record.username === username) || null;
+}
+
+function getSessionContext(req) {
+  const token = getSessionTokenFromRequest(req);
+  if (!token) return null;
+  const row = db
+    .prepare('SELECT token, username, created_at, expires_at FROM auth_sessions WHERE token = ?')
+    .get(token);
+  if (!row) {
+    return null;
+  }
+  if (row.expires_at <= Date.now()) {
+    deleteSessionToken(token);
+    return null;
+  }
+  const account = findAccountRecord(row.username);
+  if (!account) {
+    deleteSessionToken(token);
+    return null;
+  }
+  return { token: row.token, expiresAt: row.expires_at, account };
+}
+
+function setSessionCookie(res, token, expiresAt) {
+  const secure = process.env.NODE_ENV === 'production';
+  res.cookie(SESSION_COOKIE_NAME, token, {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure,
+    expires: new Date(expiresAt),
+  });
+}
+
+function clearSessionCookie(res) {
+  const secure = process.env.NODE_ENV === 'production';
+  res.cookie(SESSION_COOKIE_NAME, '', {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure,
+    expires: new Date(0),
+  });
+}
+
+function createSessionForUser(username) {
+  if (!username) {
+    throw new Error('Thiếu tài khoản để tạo phiên');
+  }
+  pruneExpiredSessions();
+  const token = crypto.randomBytes(32).toString('base64url');
+  const now = Date.now();
+  const expiresAt = now + SESSION_TTL_MS;
+  db.prepare('INSERT INTO auth_sessions (token, username, created_at, expires_at) VALUES (?, ?, ?, ?)').run(
+    token,
+    username,
+    now,
+    expiresAt
+  );
+  return { token, expiresAt };
+}
+
+function deleteSessionToken(token) {
+  if (!token) return;
+  try {
+    db.prepare('DELETE FROM auth_sessions WHERE token = ?').run(token);
+  } catch (err) {
+    console.error('Không thể xoá phiên đăng nhập', err);
+  }
+}
+
+function deleteSessionsForUser(username) {
+  if (!username) return;
+  try {
+    db.prepare('DELETE FROM auth_sessions WHERE username = ?').run(username);
+  } catch (err) {
+    console.error('Không thể xoá phiên của người dùng', err);
+  }
+}
+
+function resolveActor(req, fallback = 'api') {
+  const session = getSessionContext(req);
+  if (session?.account?.username) {
+    return session.account.username;
+  }
+  if (req.body?.actor) {
+    return req.body.actor;
+  }
+  if (req.query?.actor) {
+    return req.query.actor;
+  }
+  return fallback;
+}
+
+function setAttachmentHeaders(res, filename) {
+  const original = filename || 'bao-cao-kpi.xlsx';
+  const fallback = original.replace(/[^a-zA-Z0-9_.-]/g, '_') || 'bao-cao-kpi.xlsx';
+  res.setHeader(
+    'Content-Disposition',
+    `attachment; filename="${fallback}"; filename*=UTF-8''${encodeURIComponent(original)}`,
+  );
+}
+
+pruneExpiredSessions();
 
 function readStorage() {
   const rows = db.prepare('SELECT key, value FROM kv_store').all();
@@ -429,6 +573,7 @@ export function resetDatabaseForTests() {
   }
 
   db.exec('DELETE FROM kv_store');
+  db.exec('DELETE FROM auth_sessions');
   const insertMany = db.transaction((entries) => {
     const stmt = db.prepare(
       'INSERT INTO kv_store (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value'
@@ -602,6 +747,7 @@ function setAccountPasswordRecord(usernameInput, newPasswordInput, { actor = 'sy
   const passwordHash = bcrypt.hashSync(newPassword, PASSWORD_SALT_ROUNDS);
   accounts[index] = { ...accounts[index], passwordHash };
   persistAccountRecords(accounts);
+  deleteSessionsForUser(username);
   pushAuditLog({ actor, action: 'account.reset_password', detail: `Đặt lại mật khẩu cho ${username}` });
   return true;
 }
@@ -622,6 +768,7 @@ function deleteAccountRecord(usernameInput, { actor = 'system' } = {}) {
   }
   accounts.splice(index, 1);
   persistAccountRecords(accounts);
+  deleteSessionsForUser(username);
   pushAuditLog({ actor, action: 'account.delete', detail: `Xóa tài khoản ${username}` });
   return listAccountsForClient();
 }
@@ -1529,7 +1676,7 @@ function refreshEcusSchedule() {
 export const app = express();
 const PORT = Number.parseInt(process.env.PORT || '5000', 10);
 
-app.use(cors());
+app.use(cors({ origin: true, credentials: true }));
 app.use(express.json({ limit: '5mb' }));
 
 app.get('/api/health', (req, res) => {
@@ -1539,6 +1686,37 @@ app.get('/api/health', (req, res) => {
 app.get('/api/bootstrap', (req, res) => {
   const store = buildBootstrapSnapshot();
   res.json({ data: store });
+});
+
+app.post('/api/reports/export', async (req, res) => {
+  try {
+    const context = getSessionContext(req);
+    if (!context) {
+      res.status(401).json({ ok: false, error: 'Bạn cần đăng nhập để xuất báo cáo' });
+      return;
+    }
+    if (context.account?.permissions?.reportsExport === false) {
+      res.status(403).json({ ok: false, error: 'Tài khoản hiện không được phép xuất báo cáo' });
+      return;
+    }
+
+    const kind = typeof req.body?.kind === 'string' ? req.body.kind : '';
+    if (!kind) {
+      res.status(400).json({ ok: false, error: 'Thiếu loại báo cáo cần xuất' });
+      return;
+    }
+
+    const payload = req.body?.payload && typeof req.body.payload === 'object' ? req.body.payload : {};
+    const { buffer, filename } = await generateReport(kind, payload);
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    setAttachmentHeaders(res, filename);
+    res.send(buffer);
+  } catch (err) {
+    console.error('Không thể xuất báo cáo', err);
+    const status = err?.message && /không hợp lệ/i.test(err.message) ? 400 : 500;
+    res.status(status).json({ ok: false, error: err?.message || 'Không thể xuất báo cáo' });
+  }
 });
 
 app.post('/api/auth/login', async (req, res) => {
@@ -1555,19 +1733,54 @@ app.post('/api/auth/login', async (req, res) => {
     );
     if (!account) {
       pushAuditLog({ actor: usernameInput || 'unknown', action: 'auth.login_fail', detail: 'Đăng nhập thất bại' });
+      clearSessionCookie(res);
       res.status(401).json({ ok: false, error: 'Sai tài khoản hoặc mật khẩu' });
       return;
     }
     const ok = await bcrypt.compare(passwordInput, account.passwordHash);
     if (!ok) {
       pushAuditLog({ actor: usernameInput || 'unknown', action: 'auth.login_fail', detail: 'Đăng nhập thất bại' });
+      clearSessionCookie(res);
       res.status(401).json({ ok: false, error: 'Sai tài khoản hoặc mật khẩu' });
       return;
     }
+    deleteSessionsForUser(account.username);
+    const { token, expiresAt } = createSessionForUser(account.username);
+    setSessionCookie(res, token, expiresAt);
+    const user = sanitizeAccountRecord(account);
     pushAuditLog({ actor: account.username, action: 'auth.login', detail: 'Đăng nhập thành công' });
-    res.json({ ok: true, user: sanitizeAccountRecord(account) });
+    res.json({ ok: true, user, expiresAt });
   } catch (err) {
     res.status(500).json({ ok: false, error: err?.message || 'Không thể đăng nhập' });
+  }
+});
+
+app.get('/api/auth/session', (req, res) => {
+  try {
+    const context = getSessionContext(req);
+    if (!context) {
+      clearSessionCookie(res);
+      res.json({ ok: true, user: null });
+      return;
+    }
+    const user = sanitizeAccountRecord(context.account);
+    res.json({ ok: true, user, expiresAt: context.expiresAt });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err?.message || 'Không thể tải phiên đăng nhập' });
+  }
+});
+
+app.post('/api/auth/logout', (req, res) => {
+  try {
+    const context = getSessionContext(req);
+    if (context) {
+      deleteSessionToken(context.token);
+      pushAuditLog({ actor: context.account.username, action: 'auth.logout', detail: 'Đăng xuất khỏi hệ thống' });
+    }
+    clearSessionCookie(res);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err?.message || 'Không thể đăng xuất' });
   }
 });
 
@@ -1581,7 +1794,7 @@ app.get('/api/auth/accounts', (req, res) => {
 
 app.post('/api/auth/accounts', (req, res) => {
   try {
-    const actor = req.body?.actor || 'api';
+    const actor = resolveActor(req);
     const account = createAccountRecord(req.body, { actor });
     res.status(201).json({ ok: true, account, accounts: listAccountsForClient() });
   } catch (err) {
@@ -1591,7 +1804,7 @@ app.post('/api/auth/accounts', (req, res) => {
 
 app.patch('/api/auth/accounts/:username', (req, res) => {
   try {
-    const actor = req.body?.actor || 'api';
+    const actor = resolveActor(req);
     const account = updateAccountRecord(req.params.username, req.body, { actor });
     res.json({ ok: true, account, accounts: listAccountsForClient() });
   } catch (err) {
@@ -1602,7 +1815,7 @@ app.patch('/api/auth/accounts/:username', (req, res) => {
 
 app.post('/api/auth/accounts/:username/password', (req, res) => {
   try {
-    const actor = req.body?.actor || 'api';
+    const actor = resolveActor(req);
     setAccountPasswordRecord(req.params.username, req.body?.password, { actor });
     res.json({ ok: true, accounts: listAccountsForClient() });
   } catch (err) {
@@ -1613,7 +1826,7 @@ app.post('/api/auth/accounts/:username/password', (req, res) => {
 
 app.delete('/api/auth/accounts/:username', (req, res) => {
   try {
-    const actor = req.body?.actor || 'api';
+    const actor = resolveActor(req);
     const accounts = deleteAccountRecord(req.params.username, { actor });
     res.json({ ok: true, accounts });
   } catch (err) {
@@ -1626,7 +1839,10 @@ app.post('/api/auth/password/change', async (req, res) => {
   try {
     const { username, currentPassword, newPassword } = req.body || {};
     const account = await changeOwnPasswordRecord(username, currentPassword, newPassword);
-    res.json({ ok: true, account });
+    deleteSessionsForUser(account?.username || username);
+    const { token, expiresAt } = createSessionForUser(account?.username || username);
+    setSessionCookie(res, token, expiresAt);
+    res.json({ ok: true, account, expiresAt });
   } catch (err) {
     const status = err?.message && err.message.includes('Không tìm thấy') ? 404 : 400;
     res.status(status).json({ ok: false, error: err?.message || 'Không thể đổi mật khẩu' });
@@ -1644,6 +1860,7 @@ app.put('/api/storage/:key', (req, res) => {
     return;
   }
   const { value } = req.body || {};
+  const actor = resolveActor(req);
   try {
     if (value === null || value === undefined) {
       deleteValue(key);
@@ -1651,7 +1868,7 @@ app.put('/api/storage/:key', (req, res) => {
       upsertValue(key, value);
     }
     if (key === 'decl_rows_v1') {
-      evaluateDeclarationAlerts({ actor: req.body?.actor || 'api', reason: 'storage-put' });
+      evaluateDeclarationAlerts({ actor, reason: 'storage-put' });
     }
     if (key === 'ecus_sync_config_v1') {
       refreshEcusSchedule();
@@ -1720,7 +1937,7 @@ app.put('/api/import/ecus/config', (req, res) => {
 
 app.post('/api/import/ecus/run', async (req, res) => {
   try {
-    const actor = req.body?.actor || 'api';
+    const actor = resolveActor(req);
     const { from, to } = req.body || {};
     const result = await runEcusSyncWithErrorHandling({ from, to, actor, reason: 'manual' });
     res.json({ ok: true, result: { ...result, config: formatEcusConfigForClient(result.config) } });
@@ -1740,7 +1957,7 @@ app.get('/api/import/alerts/config', (req, res) => {
 
 app.put('/api/import/alerts/config', (req, res) => {
   try {
-    const actor = req.body?.actor || 'api';
+    const actor = resolveActor(req);
     const next = saveAlertConfig(req.body?.config || {});
     const summary = evaluateDeclarationAlerts({ actor, reason: 'alert-config' });
     res.json({ ok: true, config: next, summary });
@@ -1751,7 +1968,7 @@ app.put('/api/import/alerts/config', (req, res) => {
 
 app.post('/api/import/alerts/review', (req, res) => {
   const keys = Array.isArray(req.body?.keys) ? req.body.keys : [];
-  const actor = req.body?.actor || 'api';
+  const actor = resolveActor(req);
   const updated = markDeclarationsReviewed(keys, { actor });
   const summary = evaluateDeclarationAlerts({ actor, reason: 'manual-review' });
   res.json({ ok: true, updated, summary });

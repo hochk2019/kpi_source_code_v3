@@ -16,12 +16,6 @@ import {
   aggregateByCompany,
 } from "@/lib/reports.js";
 import {
-  exportAllStaffReport,
-  exportStaffReport,
-  exportAllTeamReport,
-  exportTeamReport,
-} from "@/lib/reportExport.js";
-import {
   ResponsiveContainer,
   LineChart,
   Line,
@@ -33,6 +27,14 @@ import {
   BarChart,
   Bar,
 } from "recharts";
+
+let reportExporterPromise;
+function loadReportExporterModule() {
+  if (!reportExporterPromise) {
+    reportExporterPromise = import("@/lib/reportExport.js");
+  }
+  return reportExporterPromise;
+}
 
 function formatInt(value) {
   const num = Number(value || 0);
@@ -327,7 +329,7 @@ function SummaryCard({ title, value, subtitle }) {
   );
 }
 
-function StaffDetailCard({ staff, canExport, onExport, onPrint }) {
+function StaffDetailCard({ staff, canExport, onExport, onPrint, exporting }) {
   const { stats, rows } = staff;
   const [mode, setMode] = useState("detail");
   const aggregated = useMemo(
@@ -374,12 +376,14 @@ function StaffDetailCard({ staff, canExport, onExport, onPrint }) {
             <button
               type="button"
               onClick={onExport}
-              disabled={!canExport}
+              disabled={!canExport || exporting}
               className={`rounded px-3 py-1.5 text-xs font-semibold shadow-sm ${
-                canExport ? "bg-black text-white hover:bg-gray-900" : "bg-gray-200 text-gray-500"
+                canExport && !exporting
+                  ? "bg-black text-white hover:bg-gray-900"
+                  : "bg-gray-200 text-gray-500"
               }`}
             >
-              Xuất Excel
+              {exporting ? "Đang xuất..." : "Xuất Excel"}
             </button>
             <button
               type="button"
@@ -458,7 +462,7 @@ function StaffDetailCard({ staff, canExport, onExport, onPrint }) {
   );
 }
 
-function TeamDetailCard({ team, canExport, onExport, onPrint }) {
+function TeamDetailCard({ team, canExport, onExport, onPrint, exporting }) {
   const { stats, members, rows } = team;
   const [mode, setMode] = useState("detail");
   const aggregated = useMemo(
@@ -508,12 +512,14 @@ function TeamDetailCard({ team, canExport, onExport, onPrint }) {
             <button
               type="button"
               onClick={onExport}
-              disabled={!canExport}
+              disabled={!canExport || exporting}
               className={`rounded px-3 py-1.5 text-xs font-semibold shadow-sm ${
-                canExport ? "bg-black text-white hover:bg-gray-900" : "bg-gray-200 text-gray-500"
+                canExport && !exporting
+                  ? "bg-black text-white hover:bg-gray-900"
+                  : "bg-gray-200 text-gray-500"
               }`}
             >
-              Xuất Excel
+              {exporting ? "Đang xuất..." : "Xuất Excel"}
             </button>
             <button
               type="button"
@@ -643,6 +649,7 @@ export default function ReportViewer({ canExport = true }) {
   const [staffViewMode, setStaffViewMode] = useState("detail");
   const [teamViewMode, setTeamViewMode] = useState("detail");
   const [version, setVersion] = useState(0);
+  const [exporting, setExporting] = useState(false);
 
   const [rules, setRulesState] = useState(() => loadRules());
   const [roster, setRoster] = useState(() => getTeamRoster());
@@ -840,42 +847,63 @@ export default function ReportViewer({ canExport = true }) {
     return true;
   };
 
+  const withExporter = async (runner) => {
+    setExporting(true);
+    try {
+      const exporter = await loadReportExporterModule();
+      await runner(exporter);
+    } catch (err) {
+      console.error("Không thể xuất báo cáo", err);
+      alert(`Không thể xuất báo cáo: ${err?.message || "Lỗi không xác định"}`);
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const handleExportStaffAll = async () => {
     if (!ensureExportPermission()) return;
-    await exportAllStaffReport({
-      staffList: report.staff.list,
-      summary,
-      range: report.range,
-      rules: report.rules,
-    });
+    await withExporter((module) =>
+      module.exportAllStaffReport({
+        staffList: report.staff.list,
+        summary,
+        range: report.range,
+        rules: report.rules,
+      })
+    );
   };
 
   const handleExportStaffDetail = async (staffEntry) => {
     if (!ensureExportPermission()) return;
-    await exportStaffReport({
-      staff: staffEntry,
-      range: report.range,
-      rules: report.rules,
-    });
+    await withExporter((module) =>
+      module.exportStaffReport({
+        staff: staffEntry,
+        range: report.range,
+        rules: report.rules,
+      })
+    );
   };
 
   const handleExportTeamAll = async () => {
     if (!ensureExportPermission()) return;
-    await exportAllTeamReport({
-      teamList: report.teams.list,
-      summary,
-      range: report.range,
-      rules: report.rules,
-    });
+    await withExporter((module) =>
+      module.exportAllTeamReport({
+        teamList: report.teams.list,
+        summary,
+        range: report.range,
+        rules: report.rules,
+      })
+    );
   };
 
   const handleExportTeamDetail = async (teamEntry) => {
     if (!ensureExportPermission()) return;
-    await exportTeamReport({
-      team: teamEntry,
-      range: report.range,
-      rules: report.rules,
-    });
+    await withExporter((module) =>
+      module.exportTeamReport({
+        team: teamEntry,
+        range: report.range,
+        rules: report.rules,
+      })
+    );
   };
 
   const handlePrint = () => {
@@ -924,12 +952,14 @@ export default function ReportViewer({ canExport = true }) {
               <button
                 type="button"
                 onClick={handleExportStaffAll}
-                disabled={!canExport}
+                disabled={!canExport || exporting}
                 className={`rounded px-3 py-1.5 text-xs font-semibold shadow-sm ${
-                  canExport ? "bg-black text-white hover:bg-gray-900" : "bg-gray-200 text-gray-500"
+                  canExport && !exporting
+                    ? "bg-black text-white hover:bg-gray-900"
+                    : "bg-gray-200 text-gray-500"
                 }`}
               >
-                Xuất Excel
+                {exporting ? "Đang xuất..." : "Xuất Excel"}
               </button>
               <button
                 type="button"
@@ -984,6 +1014,7 @@ export default function ReportViewer({ canExport = true }) {
                     canExport={canExport}
                     onExport={() => handleExportStaffDetail(item)}
                     onPrint={handlePrint}
+                    exporting={exporting}
                   />
                 ))}
               </div>
@@ -1003,6 +1034,7 @@ export default function ReportViewer({ canExport = true }) {
         canExport={canExport}
         onExport={() => handleExportStaffDetail(activeStaff)}
         onPrint={handlePrint}
+        exporting={exporting}
       />
     );
   };
@@ -1048,12 +1080,14 @@ export default function ReportViewer({ canExport = true }) {
               <button
                 type="button"
                 onClick={handleExportTeamAll}
-                disabled={!canExport}
+                disabled={!canExport || exporting}
                 className={`rounded px-3 py-1.5 text-xs font-semibold shadow-sm ${
-                  canExport ? "bg-black text-white hover:bg-gray-900" : "bg-gray-200 text-gray-500"
+                  canExport && !exporting
+                    ? "bg-black text-white hover:bg-gray-900"
+                    : "bg-gray-200 text-gray-500"
                 }`}
               >
-                Xuất Excel
+                {exporting ? "Đang xuất..." : "Xuất Excel"}
               </button>
               <button
                 type="button"
@@ -1106,6 +1140,7 @@ export default function ReportViewer({ canExport = true }) {
                     canExport={canExport}
                     onExport={() => handleExportTeamDetail(item)}
                     onPrint={handlePrint}
+                    exporting={exporting}
                   />
                 ))}
               </div>
@@ -1125,6 +1160,7 @@ export default function ReportViewer({ canExport = true }) {
         canExport={canExport}
         onExport={() => handleExportTeamDetail(activeTeam)}
         onPrint={handlePrint}
+        exporting={exporting}
       />
     );
   };

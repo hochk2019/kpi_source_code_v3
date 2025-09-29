@@ -5,6 +5,7 @@ import userEvent from '@testing-library/user-event';
 
 import HQAgencyManager from '@/components/HQAgencyManager.jsx';
 import { HQ_KEY } from '@/lib/store.js';
+import { clearStorageCache, getItem as sharedGetItem } from '@/lib/storageClient.js';
 
 vi.mock('xlsx', () => {
   const sheet_to_json = vi.fn(() => []);
@@ -25,7 +26,7 @@ describe('HQAgencyManager', () => {
   let confirmMock;
 
   beforeEach(() => {
-    localStorage.clear();
+    clearStorageCache();
     XLSX.utils.sheet_to_json.mockReset();
     alertMock = vi.spyOn(window, 'alert').mockImplementation(() => {});
     confirmMock = vi.spyOn(window, 'confirm').mockImplementation(() => true);
@@ -64,7 +65,7 @@ describe('HQAgencyManager', () => {
 
     await user.click(screen.getByRole('button', { name: /Lưu cấu hình/i }));
 
-    const saved = JSON.parse(localStorage.getItem(HQ_KEY));
+    const saved = JSON.parse(sharedGetItem(HQ_KEY) || '[]');
     expect(saved).toEqual([
       { mst: '0201234567', company: 'Alpha Trading', agent: 'AIR' },
       { mst: '0101234567', company: 'Beta Logistics', agent: 'FCL' },

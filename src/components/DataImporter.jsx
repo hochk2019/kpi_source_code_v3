@@ -198,7 +198,7 @@ export default function DataImporter({
     setSyncLoading(true);
     setSyncError("");
     try {
-      const response = await fetch("/api/import/ecus/config", { cache: "no-store" });
+      const response = await fetch("/api/import/ecus/config", { cache: "no-store", credentials: "include" });
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`);
       }
@@ -226,7 +226,7 @@ export default function DataImporter({
     setStatusLoading(true);
     setStatusError("");
     try {
-      const response = await fetch("/api/import/ecus/status", { cache: "no-store" });
+      const response = await fetch("/api/import/ecus/status", { cache: "no-store", credentials: "include" });
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`);
       }
@@ -251,7 +251,7 @@ export default function DataImporter({
   const fetchAlerts = useCallback(async () => {
     setAlertLoading(true);
     try {
-      const response = await fetch("/api/import/alerts", { cache: "no-store" });
+      const response = await fetch("/api/import/alerts", { cache: "no-store", credentials: "include" });
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`);
       }
@@ -309,6 +309,7 @@ export default function DataImporter({
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
+        credentials: "include",
       });
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`);
@@ -351,6 +352,7 @@ export default function DataImporter({
           from: manualRange.from || undefined,
           to: manualRange.to || undefined,
         }),
+        credentials: "include",
       });
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`);
@@ -411,6 +413,7 @@ export default function DataImporter({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ keys: selectedKeys, actor }),
+        credentials: "include",
       });
     } catch (err) {
       console.warn("Không thể đồng bộ trạng thái rà soát với máy chủ", err);
@@ -1081,6 +1084,7 @@ export default function DataImporter({
       <div className="flex flex-wrap items-center gap-2">
         <input
           type="file"
+          data-testid="import-file-input"
           ref={fileRef}
           onChange={handleFileChange}
           accept=".xls,.xlsx"

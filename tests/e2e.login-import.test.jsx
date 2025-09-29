@@ -25,6 +25,7 @@ import * as XLSX from 'xlsx';
 import App from '@/App.jsx';
 import { getDeclRows } from '@/lib/store.js';
 import { installMockApi } from './helpers/mockApi.js';
+import { clearStorageCache } from '@/lib/storageClient.js';
 
 function createWorkbookFile() {
   return new File(['dummy'], 'import-e2e.xlsx', {
@@ -62,7 +63,7 @@ describe('Luồng đăng nhập và import thực tế', () => {
   let fetchMock;
 
   beforeEach(() => {
-    localStorage.clear();
+    clearStorageCache();
     fetchMock = installMockApi();
     vi.stubGlobal('FileReader', MockFileReader);
     alertMock = vi.fn();
@@ -94,7 +95,7 @@ describe('Luồng đăng nhập và import thực tế', () => {
     await user.click(await screen.findByRole('tab', { name: /Import Data/i }));
 
     const file = createWorkbookFile();
-    const input = document.querySelector('input[type="file"]');
+    const input = await screen.findByTestId('import-file-input');
     await user.upload(input, file);
 
     await waitFor(() => {
