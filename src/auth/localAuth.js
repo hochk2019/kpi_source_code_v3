@@ -1,8 +1,3 @@
-import { pushAuditLog } from "@/lib/store.js";
-
-const SESSION_KEY = "kpi_auth";
-const USERS_KEY = "kpi_users_v1";
-
 export const PERMISSION_KEYS = [
   "importEdit",
   "mstEdit",
@@ -41,24 +36,8 @@ const ADMIN_PERMISSIONS = Object.freeze({
 
 const MIN_PASSWORD_LENGTH = 6;
 
-function safeParse(json, fallback) {
-  try {
-    const parsed = JSON.parse(json);
-    return parsed ?? fallback;
-  } catch {
-    return fallback;
-  }
-}
-
-function getLocalStorage() {
-  if (typeof window !== "undefined" && window.localStorage) {
-    return window.localStorage;
-  }
-  if (typeof globalThis !== "undefined" && globalThis.localStorage) {
-    return globalThis.localStorage;
-  }
-  return null;
-}
+let sessionCache = null;
+let accountCache = [];
 
 function normalizePermissions(perms, role) {
   const roleKey = role === "admin" ? "admin" : "staff";
@@ -88,28 +67,10 @@ function normalizeUserRecord(record) {
   return { username, role, name, permissions };
 }
 
-function readAccountCache() {
-  const store = getLocalStorage();
-  if (!store) return [];
-  const raw = store.getItem(USERS_KEY);
-  const parsed = safeParse(raw, []);
-  return Array.isArray(parsed) ? parsed.map(normalizeUserRecord).filter(Boolean) : [];
-}
-
-function writeAccountCache(accounts) {
-  const store = getLocalStorage();
-  if (!store) return;
-  try {
-    store.setItem(USERS_KEY, JSON.stringify(accounts ?? []));
-  } catch {
-    // ignore quota errors
-  }
-}
-
 function setAccountCache(accounts) {
   const normalized = Array.isArray(accounts) ? accounts.map(normalizeUserRecord).filter(Boolean) : [];
-  writeAccountCache(normalized);
-  return normalized;
+  accountCache = normalized;
+  return accountCache;
 }
 
 let apiBaseCache = null;
@@ -145,7 +106,7 @@ async function requestJson(path, { method = "GET", body } = {}) {
     throw new Error("fetch không khả dụng");
   }
   const headers = new Headers();
-  const init = { method, headers };
+  const init = { method, headers, credentials: "include" };
   if (body !== undefined) {
     headers.set("Content-Type", "application/json");
     init.body = JSON.stringify(body);
@@ -175,27 +136,24 @@ function sanitizeUserForSession(user) {
 }
 
 function setSessionFromUser(user) {
-  const store = getLocalStorage();
-  if (!store) return null;
   if (!user) {
-    store.removeItem(SESSION_KEY);
+    sessionCache = null;
     return null;
   }
   const session = { ...sanitizeUserForSession(user), ts: Date.now() };
-  store.setItem(SESSION_KEY, JSON.stringify(session));
+  sessionCache = session;
   return session;
 }
 
 function syncSessionForUser(user) {
-  const current = getAuth();
-  if (current && user && current.username === user.username) {
+  if (sessionCache && user && sessionCache.username === user.username) {
     return setSessionFromUser(user);
   }
   return null;
 }
 
 function loadUsers() {
-  return readAccountCache();
+  return accountCache.slice();
 }
 
 export function getViewerAuth() {
@@ -219,37 +177,39 @@ export async function login(usernameInput, passwordInput) {
       body: { username, password },
     });
     const session = setSessionFromUser(payload?.user);
-    reloadAccounts().catch(() => {});
+    await reloadAccounts().catch(() => {});
     return { ok: true, user: session };
   } catch (err) {
     return { ok: false, error: err?.message || "Sai tài khoản hoặc mật khẩu" };
   }
 }
 
-export function logout(actorName) {
-  const store = getLocalStorage();
-  const session = getAuth();
-  store?.removeItem(SESSION_KEY);
-  if (session) {
-    pushAuditLog({ actor: actorName || session.username, action: "auth.logout", detail: "Đăng xuất khỏi hệ thống" });
+export async function loadSession() {
+  try {
+    const payload = await requestJson("/api/auth/session");
+    const session = setSessionFromUser(payload?.user);
+    if (payload?.user) {
+      await reloadAccounts().catch(() => {});
+    }
+    return session;
+  } catch (err) {
+    setSessionFromUser(null);
+    throw err;
+  }
+}
+
+export async function logout() {
+  try {
+    await requestJson("/api/auth/logout", { method: "POST" });
+  } catch {
+    // bỏ qua lỗi đăng xuất
+  } finally {
+    setSessionFromUser(null);
   }
 }
 
 export function getAuth() {
-  try {
-    const store = getLocalStorage();
-    const stored = safeParse(store?.getItem(SESSION_KEY), null);
-    if (!stored) return null;
-    const users = loadUsers();
-    const user = users.find((entry) => entry.username === stored.username);
-    if (!user) {
-      store?.removeItem(SESSION_KEY);
-      return null;
-    }
-    return { ...sanitizeUserForSession(user), ts: stored.ts || Date.now() };
-  } catch {
-    return null;
-  }
+  return sessionCache;
 }
 
 export function listAccounts() {
@@ -263,7 +223,14 @@ export function getPermissionTemplate(role = "staff") {
 export async function reloadAccounts() {
   try {
     const payload = await requestJson("/api/auth/accounts");
-    return setAccountCache(payload?.accounts ?? []);
+    const accounts = setAccountCache(payload?.accounts ?? []);
+    if (sessionCache) {
+      const current = accounts.find((entry) => entry.username === sessionCache.username);
+      if (current) {
+        setSessionFromUser(current);
+      }
+    }
+    return accounts;
   } catch (err) {
     throw err;
   }
@@ -307,6 +274,9 @@ export async function setAccountPassword(usernameInput, newPasswordInput, { acto
       body: { password, actor },
     });
     setAccountCache(response?.accounts ?? []);
+    if (sessionCache?.username === usernameInput) {
+      setSessionFromUser(null);
+    }
     return true;
   } catch (err) {
     throw err;
@@ -322,8 +292,7 @@ export async function deleteAccount(usernameInput, { actor = "system" } = {}) {
     const accounts = setAccountCache(response?.accounts ?? []);
     const session = getAuth();
     if (session?.username === usernameInput) {
-      const store = getLocalStorage();
-      store?.removeItem(SESSION_KEY);
+      setSessionFromUser(null);
     }
     return accounts;
   } catch (err) {
@@ -343,7 +312,7 @@ export async function changeOwnPassword(usernameInput, currentPasswordInput, new
       method: "POST",
       body: { username, currentPassword, newPassword },
     });
-    await reloadAccounts();
+    await reloadAccounts().catch(() => {});
     const session = setSessionFromUser(response?.account);
     return session;
   } catch (err) {
