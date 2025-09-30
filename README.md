@@ -101,6 +101,49 @@ Server đặt cookie phiên `kpi_session` dựa trên biến môi trường `KPI
 > `X-Forwarded-Proto` tương ứng với giao thức người dùng truy cập. Nếu không thể
 > sửa proxy, hãy đặt `KPI_COOKIE_SECURE=always` để tránh mất phiên khi đăng nhập qua HTTPS.
 
+> **Ví dụ `.env.production`**
+>
+> ```env
+> # Chỉ bật `secure` khi request thực sự đi qua HTTPS hoặc proxy báo `X-Forwarded-Proto: https`
+> KPI_COOKIE_SECURE=auto
+> # Tùy chọn: giới hạn host và port backend khi chạy nội bộ
+> KPI_LISTEN_HOST=0.0.0.0
+> PORT=5000
+> ```
+
+> **Cấu hình header `X-Forwarded-Proto` phổ biến**
+>
+> - **Nginx**
+>
+>   ```nginx
+>   location / {
+>     proxy_set_header Host $host;
+>     proxy_set_header X-Real-IP $remote_addr;
+>     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+>     proxy_set_header X-Forwarded-Proto $scheme;
+>     proxy_pass http://127.0.0.1:5000;
+>   }
+>   ```
+>
+> - **Traefik (file provider)**
+>
+>   ```yaml
+>   http:
+>     routers:
+>       kpi:
+>         rule: Host(`kpi.example.com`)
+>         entryPoints: ["websecure"]
+>         service: kpi
+>         tls: {}
+>     services:
+>       kpi:
+>         loadBalancer:
+>           servers:
+>             - url: "http://127.0.0.1:5000"
+>   ```
+>
+>   Traefik tự động bổ sung `X-Forwarded-Proto=https` cho các entry point TLS, do đó backend sẽ bật `secure` mà không cần cấu hình bổ sung.
+
 > `pnpm build` sẽ tự động chạy `pnpm healthcheck` trước khi đóng gói nhằm đảm
 > bảo SQLite (và tuỳ chọn SQL Server) đã sẵn sàng. Bạn có thể gọi thủ công
 > `pnpm healthcheck` sau khi cài đặt trên Windows để kiểm tra nhanh tình trạng
