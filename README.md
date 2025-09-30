@@ -131,3 +131,10 @@ SQL Server thật:
 Bạn có thể dùng dữ liệu mock để chạy thử `/api/import/ecus/run` mà không cần
 kết nối tới SQL Server, hoặc dùng lệnh `inspect` để xác định rõ tên cột trước
 khi viết câu truy vấn đồng bộ.
+
+## 7. Kế hoạch triển khai chi tiết cho Windows 11 & phân quyền
+
+Trước khi mở rộng triển khai cho toàn bộ đội ngũ, vui lòng tham khảo tài liệu
+[docs/windows11-permission-plan.md](docs/windows11-permission-plan.md) để nắm
+rõ kiến trúc, ma trận quyền và lộ trình kiểm thử hồi quy nhằm tránh phát sinh
+sai lệch dữ liệu khi vận hành trên Windows 11.

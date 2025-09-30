@@ -9,6 +9,7 @@ import {
   getDeclRows,
   upsertHQAgencies,
   upsertMSTRows,
+  getMSTMap,
 } from '@/lib/store.js';
 import { clearStorageCache, setItem as setSharedItem } from '@/lib/storageClient.js';
 
@@ -106,5 +107,76 @@ describe('Tích hợp dữ liệu Đại lý HQ & import', () => {
       so_luong_gp: 2,
     });
     expect(mapped.licenseCodes).toEqual(['ZN02', 'GP01', 'GP02']);
+  });
+
+  it('saveDeclRows tự gắn công ty và đại lý theo bảng Đại lý HQ hiện hành', () => {
+    upsertHQAgencies(
+      [
+        { mst: '0105556667', company: 'CÔNG TY THẾ GIỚI', agent: 'AIR' },
+      ],
+      { actor: 'admin' }
+    );
+
+    saveDeclRows(
+      [
+        {
+          so_tk: '1024000000001',
+          nhanh: '01',
+          mst: '0105556667',
+          cong_ty: '',
+          agency: '',
+        },
+      ],
+      { overwrite: true, actor: 'import-json' }
+    );
+
+    const stored = getDeclRows();
+    expect(stored).toHaveLength(1);
+    expect(stored[0]).toMatchObject({
+      mst: '0105556667',
+      cong_ty: 'CÔNG TY THẾ GIỚI',
+      customer: 'CÔNG TY THẾ GIỚI',
+      agency: 'AIR',
+      dai_ly: 'AIR',
+    });
+  });
+
+  it('Đại lý HQ mới sẽ đồng bộ lại tên công ty trong bảng MST', () => {
+    upsertMSTRows(
+      [
+        {
+          mst: '0107778889',
+          company: 'Tên cũ',
+          person_import: 'Lan',
+          person_export: 'Huy',
+          team: 'Team 1',
+          effective_from: '2024-01-01',
+        },
+      ],
+      { actor: 'seed' }
+    );
+
+    upsertHQAgencies(
+      [
+        {
+          mst: '0107778889',
+          company: 'CÔNG TY SAO MAI',
+          agent: 'FCL',
+        },
+      ],
+      { actor: 'admin' }
+    );
+
+    const mstRows = getMSTMap();
+    expect(mstRows).toEqual([
+      {
+        mst: '0107778889',
+        company: 'CÔNG TY SAO MAI',
+        person_import: 'Lan',
+        person_export: 'Huy',
+        team: 'Team 1',
+        effective_from: '2024-01-01',
+      },
+    ]);
   });
 });
