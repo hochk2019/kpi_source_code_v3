@@ -6,7 +6,7 @@ import {
   isExportDecl,
   normalizeName,
 } from "@/lib/store.js";
-import { loadRules, countLicenseTypesFromRowObj } from "@/lib/rules.js";
+import { loadRules, countLicenseTypesFromRowObj, extractLicenseCodesFromRowObj } from "@/lib/rules.js";
 import { deriveCOStatus } from "@/shared/co.js";
 
 const NAME_MAP = {
@@ -121,12 +121,23 @@ export function mapRow(row, opts = {}) {
   let team = normalizeStr(row["team"] || row["Tổ đội"] || "");
   const autoAssignStaff = opts.autoAssignStaff !== false;
   const agencyMap = opts.agencyMap instanceof Map ? opts.agencyMap : null;
-  const licenseExcludes = Array.isArray(opts.licenseExcludes)
+  const licenseExcludeRaw = Array.isArray(opts.licenseExcludes)
     ? opts.licenseExcludes
-    : (opts.rules?.license?.excludeCodes
-        || loadRules()?.license?.excludeCodes
+    : (opts.rules?.license?.exclude?.codes
+        || loadRules()?.license?.exclude?.codes
         || []);
-  const licenses = countLicenseTypesFromRowObj(row, licenseExcludes);
+  const excludeSet = new Set(
+    licenseExcludeRaw
+      .map((code) => String(code || '').trim().toUpperCase())
+      .filter(Boolean)
+  );
+  const rawLicenseCodes = extractLicenseCodesFromRowObj(row)
+    .map((code) => String(code || '').trim().toUpperCase())
+    .filter(Boolean);
+  const uniqueCodes = Array.from(new Set(rawLicenseCodes));
+  const licenses = uniqueCodes.length
+    ? uniqueCodes.filter((code) => !excludeSet.has(code)).length
+    : countLicenseTypesFromRowObj(row, Array.from(excludeSet));
 
   if (autoAssignStaff) {
     const isExport = isExportDecl(so_tk, loai_hinh);
@@ -183,6 +194,7 @@ export function mapRow(row, opts = {}) {
     dai_ly: agency,
     licenses,
     so_luong_gp: licenses,
+    licenseCodes: uniqueCodes,
   };
   return deriveCOStatus(row, base);
 }

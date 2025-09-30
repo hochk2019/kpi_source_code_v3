@@ -1,246 +1,509 @@
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card.jsx";
 import { Button } from "@/components/ui/button.jsx";
 import { Input } from "@/components/ui/input.jsx";
+import { Badge } from "@/components/ui/badge.jsx";
 import {
-  DEFAULT_RULES,
+  loadRuleSets,
   loadRules,
   saveRules,
+  setDefaultRule,
+  createRuleTemplate,
   computeKPI,
 } from "@/lib/rules.js";
 import { getData } from "@/lib/store.js";
 
-/* Input number an toàn */
 function Num({ value, onChange, step = "0.1", disabled = false }) {
-  const v = value === 0 ? 0 : (value ?? "");
+  const display = value === 0 ? 0 : value ?? "";
   return (
     <input
       type="number"
       step={step}
-      value={v}
+      value={display}
       disabled={disabled}
-      onChange={(e) => {
-        const raw = e.target.value;
-        if (raw === "") return onChange("");
-        const n = Number(raw);
-        onChange(Number.isFinite(n) ? n : 0);
+      onChange={(event) => {
+        const raw = event.target.value;
+        if (raw === "") {
+          onChange("");
+          return;
+        }
+        const parsed = Number(raw);
+        onChange(Number.isFinite(parsed) ? parsed : 0);
       }}
-      className="border rounded p-2 w-full"
+      className="w-full rounded border p-2"
     />
   );
 }
 
-/* ------- SỬA LỖI Ở ĐÂY: LUÔN TRẢ VỀ ARRAY, KHÔNG TRUYỀN FUNCTION ------- */
-function TierEditor({ title, tiers = [], setTiers, hint, cumulative = false, editable = true }) {
+function TierEditor({ tiers = [], onChange, disabled = false, title = "Bậc cộng thêm" }) {
   const safeTiers = Array.isArray(tiers) ? tiers : [];
 
-  const addRow = () =>
-    setTiers([...safeTiers, { from: 11, to: 20, add: 0.5 }]);
-
-  const delRow = (i) => {
-    const arr = safeTiers.filter((_, j) => j !== i);
-    setTiers(arr);
+  const handleAdd = () => {
+    onChange([...safeTiers, { from: 11, to: 20, add: 0.5 }]);
   };
 
-  const updCell = (i, key, val) => {
-    const arr = safeTiers.map((t, j) => (j === i ? { ...t, [key]: val } : t));
-    setTiers(arr);
+  const handleDelete = (index) => {
+    onChange(safeTiers.filter((_, idx) => idx !== index));
   };
+
+  const handleChange = (index, key, value) => {
+    onChange(
+      safeTiers.map((tier, idx) =>
+        idx === index
+          ? { ...tier, [key]: value }
+          : tier
+      )
+    );
+  };
+
+  if (!safeTiers.length && disabled) {
+    return null;
+  }
 
   return (
     <div className="space-y-2">
       <div className="font-medium">{title}</div>
-      {hint && <div className="text-xs text-gray-500">{hint}</div>}
-
-      <div className="grid grid-cols-12 gap-2 items-center">
-        <div className="col-span-3 font-medium">Từ</div>
-        <div className="col-span-3 font-medium">Đến</div>
-        <div className="col-span-3 font-medium">Cộng (+)</div>
+      <div className="grid grid-cols-12 gap-2 items-center text-sm font-medium">
+        <div className="col-span-3">Từ</div>
+        <div className="col-span-3">Đến</div>
+        <div className="col-span-3">Cộng (+)</div>
         <div className="col-span-3" />
-
-        {safeTiers.map((t, i) => (
-          <React.Fragment key={i}>
-            <div className="col-span-3">
-              <Num step="1" value={t.from} onChange={(v) => updCell(i, "from", v)} disabled={!editable} />
-            </div>
-            <div className="col-span-3">
-              <Num step="1" value={t.to} onChange={(v) => updCell(i, "to", v)} disabled={!editable} />
-            </div>
-            <div className="col-span-3">
-              <Num value={t.add} onChange={(v) => updCell(i, "add", v)} disabled={!editable} />
-            </div>
-            <div className="col-span-3">
-              {editable && (
-                <Button variant="outline" onClick={() => delRow(i)}>Xóa</Button>
-              )}
-            </div>
-          </React.Fragment>
-        ))}
       </div>
-
-      {editable && (
-        <Button variant="outline" onClick={addRow}>Thêm bậc</Button>
-      )}
-      {cumulative && (
-        <div className="text-xs text-emerald-700 mt-2">
-          * Nhóm này <b>cộng dồn</b> theo từng bậc.
+      {safeTiers.map((tier, index) => (
+        <div key={`${index}-${tier.from}-${tier.to}`} className="grid grid-cols-12 gap-2 items-center">
+          <div className="col-span-3">
+            <Num step="1" value={tier.from} onChange={(val) => handleChange(index, "from", val)} disabled={disabled} />
+          </div>
+          <div className="col-span-3">
+            <Num step="1" value={tier.to} onChange={(val) => handleChange(index, "to", val)} disabled={disabled} />
+          </div>
+          <div className="col-span-3">
+            <Num value={tier.add} onChange={(val) => handleChange(index, "add", val)} disabled={disabled} />
+          </div>
+          <div className="col-span-3">
+            {!disabled && (
+              <Button variant="outline" onClick={() => handleDelete(index)}>
+                Xóa
+              </Button>
+            )}
+          </div>
         </div>
+      ))}
+      {!disabled && (
+        <Button variant="outline" onClick={handleAdd}>
+          Thêm bậc
+        </Button>
+      )}
+    </div>
+  );
+}
+
+function LicensePointTable({ config, onChange, disabled }) {
+  const entries = Array.isArray(config?.codePoints) ? config.codePoints : [];
+
+  const updateEntry = (index, key, value) => {
+    const next = entries.map((entry, idx) =>
+      idx === index
+        ? { ...entry, [key]: key === "code" ? value.toUpperCase() : value }
+        : entry
+    );
+    onChange({ ...config, codePoints: next });
+  };
+
+  const addEntry = () => {
+    onChange({
+      ...config,
+      codePoints: [...entries, { code: "", points: config?.defaultPoints ?? 0 }],
+    });
+  };
+
+  const deleteEntry = (index) => {
+    onChange({
+      ...config,
+      codePoints: entries.filter((_, idx) => idx !== index),
+    });
+  };
+
+  return (
+    <div className="space-y-2">
+      <div className="font-medium">Điểm theo từng mã giấy phép</div>
+      {entries.length === 0 && disabled ? (
+        <div className="text-sm text-gray-500">Không có cấu hình riêng cho mã giấy phép.</div>
+      ) : (
+        <div className="space-y-2">
+          {entries.map((entry, index) => (
+            <div key={`${entry.code}-${index}`} className="grid grid-cols-12 gap-2 items-center">
+              <div className="col-span-6">
+                <Input
+                  value={entry.code || ""}
+                  disabled={disabled}
+                  onChange={(event) => updateEntry(index, "code", event.target.value)}
+                  placeholder="Ví dụ: ZB02"
+                />
+              </div>
+              <div className="col-span-4">
+                <Num
+                  value={entry.points}
+                  onChange={(val) => updateEntry(index, "points", val)}
+                  disabled={disabled}
+                />
+              </div>
+              <div className="col-span-2">
+                {!disabled && (
+                  <Button variant="outline" onClick={() => deleteEntry(index)}>
+                    Xóa
+                  </Button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      {!disabled && (
+        <Button variant="outline" onClick={addEntry}>
+          Thêm mã giấy phép
+        </Button>
+      )}
+    </div>
+  );
+}
+
+function AgencyExcludeEditor({ agencies, onChange, disabled }) {
+  const list = Array.isArray(agencies) ? agencies : [];
+
+  const updateEntry = (index, key, value) => {
+    const next = list.map((entry, idx) =>
+      idx === index
+        ? {
+            ...entry,
+            [key]: key === "codes"
+              ? value
+                  .split(",")
+                  .map((code) => code.trim().toUpperCase())
+                  .filter(Boolean)
+              : value.toUpperCase(),
+          }
+        : entry
+    );
+    onChange(next);
+  };
+
+  const addEntry = () => {
+    onChange([...list, { agency: "", codes: [] }]);
+  };
+
+  const deleteEntry = (index) => {
+    onChange(list.filter((_, idx) => idx !== index));
+  };
+
+  return (
+    <div className="space-y-2">
+      <div className="font-medium">Loại trừ theo đại lý hải quan</div>
+      <div className="text-xs text-gray-500">
+        Khi đại lý khớp với tên trong danh sách, các mã giấy phép tương ứng sẽ không được cộng điểm.
+      </div>
+      {list.length === 0 && disabled ? (
+        <div className="text-sm text-gray-500">Không có đại lý bị loại trừ.</div>
+      ) : (
+        <div className="space-y-3">
+          {list.map((entry, index) => (
+            <div key={`${entry.agency || "agency"}-${index}`} className="grid gap-2 md:grid-cols-6">
+              <div className="md:col-span-2">
+                <label className="text-sm text-gray-600">Tên đại lý</label>
+                <Input
+                  value={entry.agency || ""}
+                  disabled={disabled}
+                  onChange={(event) => updateEntry(index, "agency", event.target.value)}
+                  placeholder="Ví dụ: G&B"
+                />
+              </div>
+              <div className="md:col-span-3">
+                <label className="text-sm text-gray-600">Mã giấy phép (phẩy)</label>
+                <Input
+                  value={(entry.codes || []).join(",")}
+                  disabled={disabled}
+                  onChange={(event) => updateEntry(index, "codes", event.target.value)}
+                  placeholder="Ví dụ: ZB02,ZB03"
+                />
+              </div>
+              <div className="md:col-span-1 flex items-end">
+                {!disabled && (
+                  <Button variant="outline" onClick={() => deleteEntry(index)} className="w-full">
+                    Xóa
+                  </Button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      {!disabled && (
+        <Button variant="outline" onClick={addEntry}>
+          Thêm đại lý loại trừ
+        </Button>
       )}
     </div>
   );
 }
 
 export default function RulesEditor({ canEdit = true, currentUser = null }) {
-  const [rules, setRules] = useState(loadRules());
-  const [applyFrom, setApplyFrom] = useState(rules.applyFrom || "");
+  const actor = currentUser?.username || "guest";
+  const [version, setVersion] = useState(0);
+  const [collection, setCollection] = useState(() => loadRuleSets());
+  const [activeTab, setActiveTab] = useState(collection.activeId);
+  const [rule, setRule] = useState(() => loadRules(collection.activeId));
   const [applyNow, setApplyNow] = useState(false);
+  const [dirty, setDirty] = useState(false);
 
-  const actor = currentUser?.username || 'guest';
+  useEffect(() => {
+    const nextCollection = loadRuleSets();
+    setCollection(nextCollection);
+    const tabId = nextCollection.sets.some((entry) => entry.id === activeTab)
+      ? activeTab
+      : nextCollection.activeId;
+    setActiveTab(tabId);
+    setRule(loadRules(tabId));
+    setApplyNow(false);
+    setDirty(false);
+  }, [version]);
+
   const isReadOnly = !canEdit;
 
-  // Test nhanh từ dữ liệu đã import
-  const data = getData();
+  const data = useMemo(() => getData(), []);
   const testList = useMemo(() => {
-    return data.map((r, idx) => {
-      const soTkRaw =
-        r?.so_tk ?? r?.soToKhai ?? r?.soTK ?? r?.so_to_khai ?? "";
+    return data.map((row, index) => {
+      const soTkRaw = row?.so_tk ?? row?.soToKhai ?? row?.soTK ?? row?.so_to_khai ?? "";
       const soTk = soTkRaw ? String(soTkRaw).trim() : "";
-      const date = r?.date || r?.ngay || "";
-      const company = r?.cong_ty || r?.company || r?.customer || "";
-      const mst = r?.mst || "";
-      const loai = r?.loai_hinh || r?.loaiHinh || "";
+      const date = row?.date || row?.ngay || "";
+      const company = row?.cong_ty || row?.company || row?.customer || "";
+      const mst = row?.mst || "";
+      const loai = row?.loai_hinh || row?.loaiHinh || "";
       const label = [date, soTk, mst, company, loai]
         .filter(Boolean)
-        .join(" | ") || `Tờ khai ${idx + 1}`;
+        .join(" | ") || `Tờ khai ${index + 1}`;
       return {
-        key: `${idx}-${soTk}-${date}`,
+        key: `${index}-${soTk}-${date}`,
         soTk,
         label,
         labelLower: label.toLowerCase(),
         soTkLower: soTk.toLowerCase(),
-        row: r,
+        row,
       };
     });
   }, [data]);
 
   const [testSearch, setTestSearch] = useState("");
+  const [pickedKey, setPickedKey] = useState("");
+
   const filteredTestList = useMemo(() => {
-    const q = testSearch.trim().toLowerCase();
-    const base = q
+    const keyword = testSearch.trim().toLowerCase();
+    const base = keyword
       ? testList.filter((item) =>
-          item.soTkLower.includes(q) || item.labelLower.includes(q)
+          item.soTkLower.includes(keyword) || item.labelLower.includes(keyword)
         )
       : testList;
     return base.slice(0, 400);
   }, [testList, testSearch]);
 
-  const [pickedKey, setPickedKey] = useState("");
   const firstMatch = useMemo(() => {
-    const q = testSearch.trim().toLowerCase();
-    if (!q) return null;
-    return testList.find((item) => item.soTkLower.includes(q)) || null;
+    const keyword = testSearch.trim().toLowerCase();
+    if (!keyword) return null;
+    return testList.find((item) => item.soTkLower.includes(keyword)) || null;
   }, [testList, testSearch]);
 
-  const handleSearchSubmit = useCallback(
-    (event) => {
-      event.preventDefault();
-      if (firstMatch) {
-        setPickedKey(firstMatch.key);
-      } else if (testSearch.trim()) {
-        alert("Không tìm thấy tờ khai khớp với số đã nhập.");
-      }
-    },
-    [firstMatch, testSearch]
-  );
+  const handleSearchSubmit = useCallback((event) => {
+    event.preventDefault();
+    if (firstMatch) {
+      setPickedKey(firstMatch.key);
+    } else if (testSearch.trim()) {
+      alert("Không tìm thấy tờ khai khớp với số đã nhập.");
+    }
+  }, [firstMatch, testSearch]);
 
   const pickedEntry = useMemo(
     () => testList.find((item) => item.key === pickedKey) || null,
     [testList, pickedKey]
   );
 
-  const picked = pickedEntry?.row || null;
-  const kpiPicked = picked ? computeKPI(picked, rules) : 0;
+  const pickedRow = pickedEntry?.row || null;
+  const kpiPicked = pickedRow ? computeKPI(pickedRow, rule) : 0;
 
-  // Test nhập tay
-  const [testLH, setTestLH] = useState("A11");
-  const [testItems, setTestItems] = useState(10);
-  const [testLicenses, setTestLicenses] = useState("QC, HN, HOACHAT");
-  const testRowManual = useMemo(() => {
-    const codes = testLicenses.split(",").map((s) => s.trim()).filter(Boolean);
-    return { loaiHinh: testLH, num_items: Number(testItems || 0), licenseCodes: codes };
-  }, [testLH, testItems, testLicenses]);
-  const kpiManual = computeKPI(testRowManual, rules);
+  const [manualType, setManualType] = useState("A11");
+  const [manualItems, setManualItems] = useState(10);
+  const [manualLicenses, setManualLicenses] = useState("ZB02,ZB03");
+  const [manualAgency, setManualAgency] = useState("G&B");
+  const [manualHasCO, setManualHasCO] = useState(true);
 
-  // Helper cập nhật sâu
-  const upd = (path, val) => {
-    setRules((r) => {
-      const cloned = structuredClone(r);
-      const seg = path.split(".");
-      let ref = cloned;
-      for (let i = 0; i < seg.length - 1; i++) {
-        const key = seg[i];
-        if (typeof ref[key] !== "object" || ref[key] === null) {
-          ref[key] = {};
-        }
-        ref = ref[key];
-      }
-      ref[seg.at(-1)] = val;
-      return cloned;
+  const manualRow = useMemo(() => {
+    const codes = manualLicenses
+      .split(",")
+      .map((code) => code.trim().toUpperCase())
+      .filter(Boolean);
+    return {
+      loaiHinh: manualType,
+      num_items: Number(manualItems || 0),
+      licenseCodes: codes,
+      agency: manualAgency,
+      has_co: manualHasCO,
+      co: manualHasCO ? "Có" : "",
+    };
+  }, [manualAgency, manualHasCO, manualItems, manualLicenses, manualType]);
+
+  const kpiManual = computeKPI(manualRow, rule);
+
+  const handleSelectTab = (ruleId) => {
+    if (ruleId === activeTab) return;
+    if (dirty && !isReadOnly) {
+      const proceed = window.confirm(
+        "Bạn có thay đổi chưa lưu. Chuyển sang bộ quy tắc khác sẽ bỏ các thay đổi này. Bạn có chắc chắn?"
+      );
+      if (!proceed) return;
+    }
+    setActiveTab(ruleId);
+    setRule(loadRules(ruleId));
+    setApplyNow(false);
+    setDirty(false);
+  };
+
+  const updateRule = (updater) => {
+    setRule((prev) => {
+      const next = typeof updater === "function" ? updater(prev) : updater;
+      return next;
+    });
+    setDirty(true);
+  };
+
+  const updateGroup = (groupKey, updater) => {
+    updateRule((prev) => {
+      const group = prev.groups?.[groupKey] || {};
+      const nextGroup = typeof updater === "function" ? updater(group) : updater;
+      return {
+        ...prev,
+        groups: {
+          ...prev.groups,
+          [groupKey]: nextGroup,
+        },
+      };
     });
   };
 
-  const onSave = () => {
+  const handleCodesChange = (groupKey, value) => {
+    const codes = value
+      .split(",")
+      .map((code) => code.trim().toUpperCase())
+      .filter(Boolean);
+    updateGroup(groupKey, (group) => ({ ...group, codes }));
+  };
+
+  const handleGroupNumber = (groupKey, key, value) => {
+    updateGroup(groupKey, (group) => ({ ...group, [key]: value }));
+  };
+
+  const handleLicenseChange = (updater) => {
+    updateRule((prev) => ({
+      ...prev,
+      license: typeof updater === "function" ? updater(prev.license || {}) : updater,
+    }));
+  };
+
+  const handleAgencyChange = (nextList) => {
+    handleLicenseChange((license) => ({
+      ...license,
+      exclude: {
+        codes: license.exclude?.codes || [],
+        agencies: nextList,
+      },
+    }));
+  };
+
+  const groups = rule?.groups || {};
+  const licenseConfig = rule?.license || { defaultPoints: 0, codePoints: [], exclude: { codes: [], agencies: [] } };
+
+  const handleSave = () => {
     if (isReadOnly) {
       alert("Bạn không có quyền chỉnh sửa quy tắc KPI.");
       return;
     }
-    const newRules = { ...rules, applyFrom: (applyFrom || "").trim() };
-    // Lưu + tùy chọn tính lại từ ngày applyFrom
-    saveRules(newRules, {
-      appendHistory: true,
-      recalcFrom: applyNow && applyFrom ? applyFrom : "",
+    const recalcFrom = applyNow && rule.applyFrom ? rule.applyFrom : "";
+    saveRules(rule, {
       actor,
+      recalcFrom,
+      setAsDefault: collection.activeId === rule.id,
     });
-    alert(`Đã lưu quy tắc${applyNow && applyFrom ? ` và tính lại KPI từ ${applyFrom}` : ""}.`);
+    setVersion((prev) => prev + 1);
+    alert(
+      `Đã lưu bộ quy tắc ${rule.name}${recalcFrom ? ` và tính lại KPI từ ${recalcFrom}` : ""}.`
+    );
   };
 
-  const onReset = () => {
+  const handleReset = () => {
     if (isReadOnly) return;
-    setRules(DEFAULT_RULES);
-    setApplyFrom(DEFAULT_RULES.applyFrom || "");
+    setRule(loadRules(activeTab));
     setApplyNow(false);
+    setDirty(false);
+  };
+
+  const handleSetDefault = (event) => {
+    const nextId = event.target.value;
+    const updated = setDefaultRule(nextId, { actor });
+    setCollection(updated);
+    setActiveTab(nextId);
+    setRule(loadRules(nextId));
+    setApplyNow(false);
+    setDirty(false);
+  };
+
+  const handleSetDefaultButton = () => {
+    if (collection.activeId === rule.id) return;
+    const updated = setDefaultRule(rule.id, { actor });
+    setCollection(updated);
+    alert(`Đã đặt "${rule.name}" làm bộ quy tắc mặc định.`);
   };
 
   const exportJSON = () => {
-    const blob = new Blob([JSON.stringify(rules, null, 2)], { type: "application/json" });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = "kpi_rules.json";
-    a.click();
+    const blob = new Blob([JSON.stringify(rule, null, 2)], { type: "application/json" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = `${rule.name || "kpi_rules"}.json`;
+    link.click();
   };
 
-  const importJSON = (e) => {
+  const importJSON = (event) => {
     if (isReadOnly) {
       alert("Bạn không có quyền import quy tắc.");
       return;
     }
-    const f = e.target.files?.[0];
-    if (!f) return;
+    const file = event.target.files?.[0];
+    if (!file) return;
     const reader = new FileReader();
-    reader.onload = (ev) => {
+    reader.onload = () => {
       try {
-        const obj = JSON.parse(ev.target.result);
-        setRules(obj);
-        setApplyFrom(obj.applyFrom || "");
-      } catch {
+        const parsed = JSON.parse(reader.result);
+        saveRules({ ...parsed, id: rule.id }, { actor, appendHistory: false });
+        setVersion((prev) => prev + 1);
+        alert("Đã import và áp dụng dữ liệu cho bộ quy tắc hiện tại.");
+      } catch (err) {
+        console.error(err);
         alert("File JSON không hợp lệ.");
       }
     };
-    reader.readAsText(f);
+    reader.readAsText(file);
   };
 
+  const handleAddRule = () => {
+    if (isReadOnly) return;
+    const template = createRuleTemplate(rule, {
+      name: `Rule mới ${collection.sets.length + 1}`,
+    });
+    const saved = saveRules(template, { actor, appendHistory: false });
+    setActiveTab(saved.id);
+    setVersion((prev) => prev + 1);
+  };
+
+  const isDefaultRule = collection.activeId === rule.id;
+
   return (
-    <div className="max-w-6xl mx-auto p-4 space-y-6">
+    <div className="mx-auto max-w-6xl space-y-6 p-4">
       {isReadOnly && (
         <div className="rounded border border-amber-300 bg-amber-50 p-3 text-sm text-amber-700">
           Bạn đang xem quy tắc KPI ở chế độ chỉ xem. Các trường cấu hình bị khóa; vẫn có thể dùng khu vực test để kiểm tra điểm KPI.
@@ -248,197 +511,257 @@ export default function RulesEditor({ canEdit = true, currentUser = null }) {
       )}
       <Card>
         <CardHeader>
-          <CardTitle>Quy tắc KPI (chuẩn + có thể điều chỉnh)</CardTitle>
+          <CardTitle>Quy tắc KPI</CardTitle>
         </CardHeader>
         <CardContent className="space-y-8">
-          {/* Nhóm 1 */}
-          <div className="space-y-3 border rounded p-3">
-            <div className="font-semibold">Nhóm 1</div>
-            <label className="text-sm">Mã loại hình (phẩy):</label>
-            <Input
-              value={(rules.groups.group1.codes || []).join(",")}
-              onChange={(e) =>
-                upd("groups.group1.codes", e.target.value.split(",").map((s) => s.trim()).filter(Boolean))
-              }
-              disabled={isReadOnly}
-            />
-            <div className="grid md:grid-cols-3 gap-4">
-              <div>
-                <label className="text-sm">Điểm cơ bản</label>
-                <Num
-                  value={rules.groups.group1.base}
-                  onChange={(v) => upd("groups.group1.base", v)}
-                  disabled={isReadOnly}
-                />
-              </div>
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center gap-2">
+              {collection.sets.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => handleSelectTab(item.id)}
+                  className={`rounded border px-3 py-2 text-sm transition ${
+                    item.id === activeTab
+                      ? "border-blue-500 bg-blue-50 text-blue-700"
+                      : "border-gray-200 bg-white hover:border-blue-300"
+                  }`}
+                >
+                  <span className="font-medium">{item.name || "Bộ quy tắc"}</span>
+                  {collection.activeId === item.id && (
+                    <Badge variant="secondary" className="ml-2">Mặc định</Badge>
+                  )}
+                </button>
+              ))}
+              {!isReadOnly && (
+                <Button variant="outline" onClick={handleAddRule}>
+                  Thêm bộ quy tắc
+                </Button>
+              )}
             </div>
-            <TierEditor
-              title="Bậc cộng theo mục hàng (tuỳ chọn)"
-              tiers={rules.groups.group1.tiers}
-              setTiers={(arr) => upd("groups.group1.tiers", arr)}
-              hint="Mặc định để trống (đúng quy tắc cũ). Nếu thêm bậc, hệ thống áp dụng bậc cao nhất thỏa (không cộng dồn)."
-              editable={canEdit}
-            />
+            <div className="flex flex-wrap items-center gap-3 text-sm">
+              <label className="text-gray-600">Bộ quy tắc mặc định:</label>
+              <select
+                value={collection.activeId}
+                onChange={handleSetDefault}
+                className="rounded border px-3 py-2"
+              >
+                {collection.sets.map((item) => (
+                  <option key={item.id} value={item.id}>
+                    {item.name || "Bộ quy tắc"}
+                  </option>
+                ))}
+              </select>
+              {!isDefaultRule && !isReadOnly && (
+                <Button variant="outline" onClick={handleSetDefaultButton}>
+                  Đặt bộ đang mở làm mặc định
+                </Button>
+              )}
+            </div>
           </div>
 
-          {/* Nhóm 2 */}
-          <div className="space-y-3 border rounded p-3">
-            <div className="font-semibold">Nhóm 2</div>
-            <label className="text-sm">Mã loại hình (phẩy):</label>
-            <Input
-              value={(rules.groups.group2.codes || []).join(",")}
-              onChange={(e) =>
-                upd("groups.group2.codes", e.target.value.split(",").map((s) => s.trim()).filter(Boolean))
-              }
-              disabled={isReadOnly}
-            />
-            <div className="grid md:grid-cols-3 gap-4">
+          <div className="space-y-3 rounded border p-3">
+            <div className="font-semibold">Thông tin chung</div>
+            <div className="grid gap-4 md:grid-cols-2">
               <div>
-                <label className="text-sm">Điểm cơ bản</label>
-                <Num
-                  value={rules.groups.group2.base}
-                  onChange={(v) => upd("groups.group2.base", v)}
-                  disabled={isReadOnly}
-                />
-              </div>
-            </div>
-            <TierEditor
-              title="Bậc cộng theo mục hàng"
-              tiers={rules.groups.group2.tiers}
-              setTiers={(arr) => upd("groups.group2.tiers", arr)}
-              hint="Mặc định: +0.5 cho 31–50 (không cộng dồn). Bạn có thể sửa các bậc này."
-              editable={canEdit}
-            />
-          </div>
-
-          {/* Nhóm 3 & 4 (cộng dồn) */}
-          <div className="space-y-3 border rounded p-3">
-            <div className="font-semibold">Nhóm 3 & 4</div>
-            <label className="text-sm">Mã loại hình (phẩy):</label>
-            <Input
-              value={(rules.groups.group34.codes || []).join(",")}
-              onChange={(e) =>
-                upd("groups.group34.codes", e.target.value.split(",").map((s) => s.trim()).filter(Boolean))
-              }
-              disabled={isReadOnly}
-            />
-            <div className="grid md:grid-cols-3 gap-4">
-              <div>
-                <label className="text-sm">Điểm cơ bản (1–10 mục hàng)</label>
-                <Num
-                  value={rules.groups.group34.base}
-                  onChange={(v) => upd("groups.group34.base", v)}
-                  disabled={isReadOnly}
-                />
-              </div>
-            </div>
-            <TierEditor
-              title="Bậc cộng dồn theo mục hàng"
-              tiers={rules.groups.group34.tiers}
-              setTiers={(arr) => upd("groups.group34.tiers", arr)}
-              hint="Chuẩn: +0.5 cho mỗi bậc 11–20, 21–30, 31–40, 41–50 (CỘNG DỒN)."
-              cumulative
-              editable={canEdit}
-            />
-          </div>
-
-          {/* Điểm giấy phép */}
-          <div className="space-y-3 border rounded p-3">
-            <div className="font-semibold">Điểm giấy phép</div>
-            <div className="grid md:grid-cols-3 gap-4">
-              <div>
-                <label className="text-sm">Mỗi LOẠI giấy phép (+)</label>
-                <Num
-                  value={rules.license.perType}
-                  onChange={(v) => upd("license.perType", v)}
-                  disabled={isReadOnly}
-                />
-              </div>
-              <div>
-                <label className="text-sm">Tối đa số LOẠI tính điểm</label>
-                <Num
-                  value={rules.license.maxTypes}
-                  onChange={(v) => upd("license.maxTypes", v)}
-                  step="1"
-                  disabled={isReadOnly}
-                />
-              </div>
-              <div className="md:col-span-3">
-                <label className="text-sm">Mã giấy phép KHÔNG tính (phẩy) — ví dụ: ZN02, HDGC</label>
+                <label className="text-sm text-gray-600">Tên bộ quy tắc</label>
                 <Input
-                  value={(rules.license.excludeCodes || []).join(",")}
-                  onChange={(e) =>
-                    upd(
-                      "license.excludeCodes",
-                      e.target.value.split(",").map((s) => s.trim()).filter(Boolean)
-                    )
-                  }
+                  value={rule.name || ""}
+                  onChange={(event) => updateRule({ ...rule, name: event.target.value })}
+                  disabled={isReadOnly}
+                />
+              </div>
+              <div>
+                <label className="text-sm text-gray-600">Ghi chú (tuỳ chọn)</label>
+                <Input
+                  value={rule.description || ""}
+                  onChange={(event) => updateRule({ ...rule, description: event.target.value })}
                   disabled={isReadOnly}
                 />
               </div>
             </div>
           </div>
 
-          <div className="space-y-3 border rounded p-3">
+          <div className="grid gap-6 md:grid-cols-3">
+            {Object.entries(groups).map(([groupKey, groupConfig]) => (
+              <div key={groupKey} className="space-y-3 rounded border p-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="font-semibold">{groupConfig.title || groupKey}</div>
+                    {groupConfig.description && (
+                      <div className="text-xs text-gray-500">{groupConfig.description}</div>
+                    )}
+                  </div>
+                </div>
+                <div>
+                  <label className="text-sm text-gray-600">Mã loại hình (phẩy)</label>
+                  <Input
+                    value={(groupConfig.codes || []).join(",")}
+                    onChange={(event) => handleCodesChange(groupKey, event.target.value)}
+                    disabled={isReadOnly}
+                  />
+                </div>
+                <div>
+                  <label className="text-sm text-gray-600">Điểm cơ bản mỗi tờ khai</label>
+                  <Num
+                    value={groupConfig.base}
+                    onChange={(val) => handleGroupNumber(groupKey, "base", val)}
+                    disabled={isReadOnly}
+                  />
+                </div>
+                <div>
+                  <label className="text-sm text-gray-600">Điểm cộng theo mỗi mục hàng</label>
+                  <Num
+                    value={groupConfig.perItem}
+                    onChange={(val) => handleGroupNumber(groupKey, "perItem", val)}
+                    disabled={isReadOnly}
+                  />
+                </div>
+                {groupConfig.perItem === 0 && groupConfig.tiers?.length ? (
+                  <div className="rounded border border-dashed p-2">
+                    <div className="text-xs text-gray-500 mb-2">
+                      Nhóm này đang sử dụng cấu hình bậc thay vì điểm theo mục hàng.
+                    </div>
+                    <TierEditor
+                      tiers={groupConfig.tiers}
+                      onChange={(nextTiers) => handleGroupNumber(groupKey, "tiers", nextTiers)}
+                      disabled={isReadOnly}
+                      title="Các bậc cộng thêm"
+                    />
+                  </div>
+                ) : null}
+              </div>
+            ))}
+          </div>
+
+          <div className="space-y-3 rounded border p-3">
+            <div className="font-semibold">Cấu hình điểm giấy phép</div>
+            <div className="grid gap-4 md:grid-cols-3">
+              <div>
+                <label className="text-sm text-gray-600">Điểm mặc định mỗi loại giấy phép</label>
+                <Num
+                  value={licenseConfig.defaultPoints}
+                  onChange={(val) => handleLicenseChange({
+                    ...licenseConfig,
+                    defaultPoints: val,
+                  })}
+                  disabled={isReadOnly}
+                />
+              </div>
+              <div className="md:col-span-2">
+                <label className="text-sm text-gray-600">Các mã giấy phép bị loại trừ (phẩy)</label>
+                <Input
+                  value={(licenseConfig.exclude?.codes || []).join(",")}
+                  onChange={(event) => handleLicenseChange({
+                    ...licenseConfig,
+                    exclude: {
+                      ...licenseConfig.exclude,
+                      codes: event.target.value
+                        .split(",")
+                        .map((code) => code.trim().toUpperCase())
+                        .filter(Boolean),
+                      agencies: licenseConfig.exclude?.agencies || [],
+                    },
+                  })}
+                  disabled={isReadOnly}
+                />
+              </div>
+            </div>
+            <LicensePointTable
+              config={licenseConfig}
+              onChange={(next) => handleLicenseChange(next)}
+              disabled={isReadOnly}
+            />
+            <AgencyExcludeEditor
+              agencies={licenseConfig.exclude?.agencies || []}
+              onChange={handleAgencyChange}
+              disabled={isReadOnly}
+            />
+          </div>
+
+          <div className="space-y-3 rounded border p-3">
             <div className="font-semibold">Điểm cộng thêm</div>
-            <label className="inline-flex items-center gap-2">
+            <label className="inline-flex items-center gap-2 text-sm">
               <input
                 type="checkbox"
-                checked={rules?.bonuses?.co?.enabled ?? false}
-                onChange={(e) =>
-                  upd("bonuses.co.enabled", e.target.checked)
+                checked={rule?.bonuses?.co?.enabled ?? false}
+                onChange={(event) =>
+                  updateRule({
+                    ...rule,
+                    bonuses: {
+                      ...rule.bonuses,
+                      co: {
+                        ...rule.bonuses?.co,
+                        enabled: event.target.checked,
+                      },
+                    },
+                  })
                 }
                 disabled={isReadOnly}
               />
               Cộng điểm khi tờ khai có C/O
             </label>
-            <div className="grid md:grid-cols-2 gap-4">
+            <div className="grid gap-4 md:grid-cols-2">
               <div>
-                <label className="text-sm">Điểm cộng mỗi tờ khai có C/O</label>
+                <label className="text-sm text-gray-600">Điểm cộng mỗi tờ khai có C/O</label>
                 <Num
-                  value={rules?.bonuses?.co?.points ?? 0}
-                  onChange={(v) => upd("bonuses.co.points", v)}
-                  disabled={isReadOnly || !(rules?.bonuses?.co?.enabled ?? false)}
+                  value={rule?.bonuses?.co?.points ?? 0}
+                  onChange={(val) =>
+                    updateRule({
+                      ...rule,
+                      bonuses: {
+                        ...rule.bonuses,
+                        co: {
+                          ...rule.bonuses?.co,
+                          points: val,
+                        },
+                      },
+                    })
+                  }
+                  disabled={isReadOnly || !(rule?.bonuses?.co?.enabled ?? false)}
                 />
-              </div>
-              <div className="text-xs text-gray-500 md:col-span-2">
-                Khi bật, mọi tờ khai được xác định có C/O sẽ tự động cộng thêm điểm theo cấu hình này.
               </div>
             </div>
           </div>
 
-          {/* Áp dụng từ ngày… + Lưu */}
-          <div className="space-y-2 border rounded p-3">
+          <div className="space-y-3 rounded border p-3">
             <div className="font-semibold">Áp dụng</div>
-            <div className="grid md:grid-cols-3 gap-4">
+            <div className="grid gap-4 md:grid-cols-3">
               <div>
-                <label className="text-sm">Áp dụng từ ngày (yyyy-mm-dd)</label>
+                <label className="text-sm text-gray-600">Áp dụng từ ngày (yyyy-mm-dd)</label>
                 <Input
-                  value={applyFrom}
-                  onChange={(e) => setApplyFrom(e.target.value)}
+                  value={rule.applyFrom || ""}
+                  onChange={(event) => updateRule({ ...rule, applyFrom: event.target.value })}
                   placeholder="yyyy-mm-dd"
                   disabled={isReadOnly}
                 />
               </div>
-              <label className="inline-flex items-center gap-2 mt-6">
+              <label className="mt-6 inline-flex items-center gap-2 text-sm">
                 <input
                   type="checkbox"
                   checked={applyNow}
-                  onChange={(e) => setApplyNow(e.target.checked)}
+                  onChange={(event) => setApplyNow(event.target.checked)}
                   disabled={isReadOnly}
                 />
-                Tính lại KPI cho dữ liệu từ ngày này sau khi Lưu
+                Tính lại KPI cho dữ liệu từ ngày này sau khi lưu
               </label>
             </div>
-            <div className="flex gap-2">
-              <Button onClick={onSave} disabled={isReadOnly}>Lưu</Button>
-              <Button variant="outline" onClick={onReset} disabled={isReadOnly}>Khôi phục mặc định</Button>
+            <div className="flex flex-wrap gap-2">
+              <Button onClick={handleSave} disabled={isReadOnly}>Lưu</Button>
+              <Button variant="outline" onClick={handleReset} disabled={isReadOnly}>Khôi phục bản đã lưu</Button>
               <Button variant="outline" onClick={exportJSON}>Export JSON</Button>
               <label className="inline-flex items-center gap-2">
-                <input id="impjson" className="hidden" type="file" accept=".json" onChange={importJSON} disabled={isReadOnly} />
+                <input
+                  id="import-rule-json"
+                  type="file"
+                  accept=".json"
+                  className="hidden"
+                  onChange={importJSON}
+                  disabled={isReadOnly}
+                />
                 <Button
                   variant="outline"
-                  onClick={() => !isReadOnly && document.getElementById("impjson").click()}
+                  onClick={() => !isReadOnly && document.getElementById("import-rule-json").click()}
                   disabled={isReadOnly}
                 >
                   Import JSON
@@ -447,17 +770,13 @@ export default function RulesEditor({ canEdit = true, currentUser = null }) {
             </div>
           </div>
 
-          {/* Test nhanh */}
-          <div className="space-y-4 border rounded p-3">
+          <div className="space-y-4 rounded border p-3">
             <div className="font-semibold">Test nhanh 1 tờ khai đã import</div>
-            <form
-              className="flex flex-col sm:flex-row gap-2"
-              onSubmit={handleSearchSubmit}
-            >
+            <form className="flex flex-col gap-2 sm:flex-row" onSubmit={handleSearchSubmit}>
               <Input
-                placeholder="Nhập số tờ khai để tìm nhanh"
+                placeholder="Nhập số tờ khai để tìm"
                 value={testSearch}
-                onChange={(e) => setTestSearch(e.target.value)}
+                onChange={(event) => setTestSearch(event.target.value)}
               />
               <Button type="submit" variant="outline">
                 Tìm theo số tờ khai
@@ -467,10 +786,10 @@ export default function RulesEditor({ canEdit = true, currentUser = null }) {
               Hiển thị {filteredTestList.length} / {testList.length} tờ khai đã lưu
             </div>
             <select
-              className="border rounded p-2 w-full h-40"
+              className="h-40 w-full rounded border p-2"
               size={8}
               value={pickedKey}
-              onChange={(e) => setPickedKey(e.target.value)}
+              onChange={(event) => setPickedKey(event.target.value)}
             >
               <option value="">-- Chọn 1 tờ khai --</option>
               {filteredTestList.map((item) => (
@@ -480,42 +799,58 @@ export default function RulesEditor({ canEdit = true, currentUser = null }) {
               ))}
             </select>
             <div className="text-sm">
-              {picked ? (
+              {pickedRow ? (
                 <>
                   <div>
-                    <b>Số tờ khai:</b> {picked.so_tk || picked.soToKhai || ""} &nbsp;
-                    <b>Loại hình:</b> {picked.loai_hinh || picked.loaiHinh || ""} &nbsp;
-                    <b>Mục hàng:</b> {picked.num_items ?? picked.muc_hang ?? 0} &nbsp;
-                    <b>MST:</b> {picked.mst || ""} &nbsp;
-                    <b>Cty:</b> {picked.cong_ty || picked.company || ""}
+                    <b>Số tờ khai:</b> {pickedRow.so_tk || pickedRow.soToKhai || ""} &nbsp;
+                    <b>Loại hình:</b> {pickedRow.loai_hinh || pickedRow.loaiHinh || ""} &nbsp;
+                    <b>Mục hàng:</b> {pickedRow.num_items ?? pickedRow.muc_hang ?? 0} &nbsp;
+                    <b>MST:</b> {pickedRow.mst || ""} &nbsp;
+                    <b>Cty:</b> {pickedRow.cong_ty || pickedRow.company || ""}
                   </div>
-                  <div className="mt-1"><b>KẾT QUẢ:</b> {kpiPicked.toFixed(1)}</div>
+                  <div className="mt-1">
+                    <b>KẾT QUẢ:</b> {kpiPicked.toFixed(1)}
+                  </div>
                 </>
-              ) : <i>Chọn 1 dòng để test…</i>}
+              ) : (
+                <i>Chọn 1 dòng để test…</i>
+              )}
             </div>
           </div>
 
-          {/* Test nhập tay */}
-          <div className="space-y-4 border rounded p-3">
+          <div className="space-y-4 rounded border p-3">
             <div className="font-semibold">Test nhập tay</div>
-            <div className="grid md:grid-cols-3 gap-4">
+            <div className="grid gap-4 md:grid-cols-2">
               <div>
-                <label className="text-sm">Loại hình</label>
-                <Input value={testLH} onChange={(e) => setTestLH(e.target.value)} />
+                <label className="text-sm text-gray-600">Loại hình</label>
+                <Input value={manualType} onChange={(event) => setManualType(event.target.value.toUpperCase())} />
               </div>
               <div>
-                <label className="text-sm">Tổng số mục hàng</label>
-                <Num step="1" value={testItems} onChange={setTestItems} />
+                <label className="text-sm text-gray-600">Tổng số mục hàng</label>
+                <Num step="1" value={manualItems} onChange={setManualItems} />
               </div>
               <div>
-                <label className="text-sm">Mã giấy phép (phẩy) – ví dụ: QC, VN, HOACHAT</label>
-                <Input value={testLicenses} onChange={(e) => setTestLicenses(e.target.value)} />
+                <label className="text-sm text-gray-600">Mã giấy phép (phẩy)</label>
+                <Input value={manualLicenses} onChange={(event) => setManualLicenses(event.target.value)} />
               </div>
+              <div>
+                <label className="text-sm text-gray-600">Đại lý HQ</label>
+                <Input value={manualAgency} onChange={(event) => setManualAgency(event.target.value)} />
+              </div>
+              <label className="inline-flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={manualHasCO}
+                  onChange={(event) => setManualHasCO(event.target.checked)}
+                />
+                Có C/O
+              </label>
             </div>
-            <div><b>KẾT QUẢ:</b> {kpiManual}</div>
+            <div>
+              <b>KẾT QUẢ:</b> {kpiManual.toFixed(1)}
+            </div>
             <div className="text-xs text-gray-500">
-              * Kết quả = Điểm cơ bản + cộng theo bậc + (số LOẠI GP hợp lệ × điểm mỗi LOẠI).
-              Áp dụng danh sách loại trừ & giới hạn tối đa.
+              * Kết quả = Điểm cơ bản + (số mục hàng × điểm mỗi mục) + điểm giấy phép (áp dụng loại trừ) + điểm C/O (nếu bật).
             </div>
           </div>
         </CardContent>

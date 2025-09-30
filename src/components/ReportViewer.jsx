@@ -15,6 +15,7 @@ import {
   buildReportData,
   aggregateByCompany,
 } from "@/lib/reports.js";
+import { seedSampleDeclarations } from "@/shared/sampleDeclarations.js";
 import {
   ResponsiveContainer,
   LineChart,
@@ -651,6 +652,16 @@ export default function ReportViewer({ canExport = true }) {
   const [version, setVersion] = useState(0);
   const [exporting, setExporting] = useState(false);
 
+  const handleSeedSamples = () => {
+    const confirmed = window.confirm(
+      "Tạo dữ liệu mẫu sẽ ghi đè các tờ khai hiện có bằng 100 dòng thử nghiệm tháng 8-9. Bạn có chắc chắn muốn tiếp tục?"
+    );
+    if (!confirmed) return;
+    const generated = seedSampleDeclarations({ actor: "ui-sample", count: 100 });
+    setVersion((value) => value + 1);
+    alert(`Đã sinh ${generated.length} tờ khai mẫu.`);
+  };
+
   const [rules, setRulesState] = useState(() => loadRules());
   const [roster, setRoster] = useState(() => getTeamRoster());
   const [mstRows, setMstRows] = useState(() => getMSTMap());
@@ -1165,8 +1176,8 @@ export default function ReportViewer({ canExport = true }) {
     );
   };
 
-  const excludeCodes = Array.isArray(report.rules?.license?.excludeCodes)
-    ? report.rules.license.excludeCodes.join(", ") || "Không có"
+  const excludeCodes = Array.isArray(report.rules?.license?.exclude?.codes)
+    ? report.rules.license.exclude.codes.join(", ") || "Không có"
     : "Không có";
 
   return (
@@ -1217,6 +1228,13 @@ export default function ReportViewer({ canExport = true }) {
             className="ml-auto rounded border bg-white px-3 py-2 text-sm shadow-sm hover:bg-gray-50"
           >
             Tải lại dữ liệu
+          </button>
+          <button
+            type="button"
+            onClick={handleSeedSamples}
+            className="rounded border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-700 shadow-sm hover:bg-blue-100"
+          >
+            Sinh dữ liệu mẫu (100 dòng)
           </button>
         </div>
 

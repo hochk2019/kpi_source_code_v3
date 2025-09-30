@@ -497,8 +497,8 @@ export default function DataImporter({
       const rows = XLSX.utils.sheet_to_json(sheet, { raw: false, defval: "" });
       const loadedRules = loadRules();
       setRules(loadedRules);
-      const excludeCodes = Array.isArray(loadedRules?.license?.excludeCodes)
-        ? loadedRules.license.excludeCodes
+      const excludeCodes = Array.isArray(loadedRules?.license?.exclude?.codes)
+        ? loadedRules.license.exclude.codes
         : [];
       const dateOrder = detectDateOrder(rows);
       const preferMonthFirst = dateOrder === "mdy";

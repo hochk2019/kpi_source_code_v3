@@ -1565,8 +1565,8 @@ async function runEcusSync({ from, to, actor = 'system', reason = 'manual' } = {
   const rawRows = await fetchEcusDeclarations(range, config);
   const rules = getRulesValue();
   const excludeSet = new Set(
-    Array.isArray(rules?.license?.excludeCodes)
-      ? rules.license.excludeCodes.map((code) => normalizeStr(code).toUpperCase())
+    Array.isArray(rules?.license?.exclude?.codes)
+      ? rules.license.exclude.codes.map((code) => normalizeStr(code).toUpperCase())
       : [],
   );
   const context = {
