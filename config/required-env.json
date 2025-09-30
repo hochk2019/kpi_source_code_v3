@@ -1,0 +1,7 @@
+{
+  "requiredVariables": [
+    "KPI_LISTEN_HOST",
+    "PORT",
+    "VITE_API_BASE"
+  ]
+}

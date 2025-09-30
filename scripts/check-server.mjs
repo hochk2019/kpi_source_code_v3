@@ -1,4 +1,4 @@
-import { access } from 'node:fs/promises';
+import { access, readFile } from 'node:fs/promises';
 import { constants } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -19,6 +19,7 @@ const envCandidates = [
   join(projectRoot, '.env.production'),
   join(projectRoot, '.env.development'),
 ];
+const requiredEnvConfigPath = join(projectRoot, 'config', 'required-env.json');
 
 async function pathExists(targetPath) {
   try {
@@ -84,8 +85,131 @@ async function runCheck({ description, paths, mode = 'all', required = true, fix
 
 const isStrictMode = process.argv.includes('--strict');
 
+async function loadRequiredEnvVariables() {
+  try {
+    const raw = await readFile(requiredEnvConfigPath, 'utf8');
+    const data = JSON.parse(raw);
+
+    let list;
+    if (Array.isArray(data)) {
+      list = data;
+    } else if (data && Array.isArray(data.requiredVariables)) {
+      list = data.requiredVariables;
+    } else if (data && Array.isArray(data.required)) {
+      list = data.required;
+    } else {
+      throw new Error('Cấu hình không hợp lệ.');
+    }
+
+    const invalid = list.filter((item) => typeof item !== 'string' || item.trim() === '');
+    if (invalid.length > 0) {
+      throw new Error(`Giá trị không hợp lệ: ${invalid.join(', ')}`);
+    }
+
+    return list.map((item) => item.trim());
+  } catch (error) {
+    throw new Error(
+      `Không thể đọc danh sách biến môi trường từ ${requiredEnvConfigPath}. ${error.message}`,
+    );
+  }
+}
+
+async function findFirstExisting(paths) {
+  for (const candidate of paths) {
+    if (await pathExists(candidate)) {
+      return candidate;
+    }
+  }
+  return null;
+}
+
+function parseEnvContent(content) {
+  const result = new Map();
+  const lines = content.split(/\r?\n/);
+
+  for (const originalLine of lines) {
+    let line = originalLine.trim();
+    if (line === '' || line.startsWith('#')) {
+      continue;
+    }
+
+    if (line.startsWith('export ')) {
+      line = line.slice(7);
+    }
+
+    const equalsIndex = line.indexOf('=');
+    if (equalsIndex === -1) {
+      continue;
+    }
+
+    const key = line.slice(0, equalsIndex).trim();
+    const value = line.slice(equalsIndex + 1).trim();
+
+    if (key === '') {
+      continue;
+    }
+
+    const unquotedValue = value.replace(/^['"]/, '').replace(/['"]$/, '');
+    result.set(key, unquotedValue);
+  }
+
+  return result;
+}
+
+async function ensureRequiredEnvVariables(requiredVariables) {
+  if (requiredVariables.length === 0) {
+    console.log('ℹ️ Không có biến môi trường bắt buộc nào được cấu hình.');
+    return { passed: true };
+  }
+
+  const declaredVariables = new Set();
+  Object.entries(process.env).forEach(([key, value]) => {
+    if (typeof value === 'string' && value.trim() !== '') {
+      declaredVariables.add(key);
+    }
+  });
+
+  let envFileUsed = null;
+  try {
+    envFileUsed = await findFirstExisting(envCandidates);
+    if (envFileUsed) {
+      const content = await readFile(envFileUsed, 'utf8');
+      const parsed = parseEnvContent(content);
+      parsed.forEach((value, key) => {
+        if (value.trim() !== '') {
+          declaredVariables.add(key);
+        }
+      });
+    }
+  } catch (error) {
+    console.warn('⚠️ Không thể đọc tệp môi trường để xác minh biến bắt buộc.', error.message);
+  }
+
+  const missing = requiredVariables.filter((variable) => !declaredVariables.has(variable));
+
+  if (missing.length === 0) {
+    console.log('✅ Đã xác nhận đầy đủ biến môi trường bắt buộc.');
+    return { passed: true };
+  }
+
+  const message = `Thiếu biến môi trường bắt buộc: ${missing.join(', ')}`;
+  const fixSuggestion = envFileUsed
+    ? `Bổ sung vào ${envFileUsed}.`
+    : 'Tạo hoặc cập nhật tệp .env và khai báo đầy đủ các biến yêu cầu.';
+
+  if (isStrictMode) {
+    console.error(`❌ ${message}`);
+    console.error(`   Gợi ý: ${fixSuggestion}`);
+    return { passed: false };
+  }
+
+  console.warn(`⚠️ ${message}`);
+  console.warn(`   Gợi ý: ${fixSuggestion}`);
+  return { passed: true, warned: true };
+}
+
 async function main() {
-  const results = await Promise.all([
+  const checks = [
     runCheck({
       description: 'thư mục backend (server)',
       paths: [serverDir],
@@ -114,7 +238,25 @@ async function main() {
       required: isStrictMode,
       fix: 'Tạo file .env (hoặc biến thể tương ứng) để khai báo KPI_LISTEN_HOST, PORT, VITE_API_BASE và các biến môi trường cần thiết.',
     }),
-  ]);
+    runCheck({
+      description: 'cấu hình danh sách biến môi trường bắt buộc (config/required-env.json)',
+      paths: [requiredEnvConfigPath],
+      fix: 'Tạo file config/required-env.json và liệt kê các biến môi trường bắt buộc, ví dụ {"requiredVariables":["KPI_LISTEN_HOST","PORT","VITE_API_BASE"]}.',
+    }),
+  ];
+
+  const results = await Promise.all(checks);
+
+  if (results.every((result) => result.passed || result.warned)) {
+    try {
+      const requiredVariables = await loadRequiredEnvVariables();
+      const envVariableResult = await ensureRequiredEnvVariables(requiredVariables);
+      results.push(envVariableResult);
+    } catch (error) {
+      console.error(`❌ ${error.message}`);
+      results.push({ passed: false });
+    }
+  }
 
   const hasFailure = results.some((result) => !result.passed);
   const hasWarning = results.some((result) => result.warned);
