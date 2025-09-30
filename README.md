@@ -76,10 +76,16 @@ Từ máy khác trong cùng mạng hãy truy cập `http://<IP_MAY_CHU>:5173` (v
    ```
 
    Máy chủ sẽ phục vụ cả API `/api/...` lẫn nội dung tĩnh trong thư mục `dist/`.
-   Lệnh `pnpm start` nay dùng `cross-env` nên hoạt động ổn định trên Windows 11.
+   Lệnh `pnpm start` sử dụng script Node thuần nên tương thích Windows 11,
+   tự đặt `NODE_ENV=production` và không còn phụ thuộc `cross-env`.
    Người dùng chỉ cần truy cập `http://<IP_MAY_CHU>:5000` (hoặc port bạn cấu
    hình). Có thể giới hạn địa chỉ lắng nghe bằng biến `KPI_LISTEN_HOST`, ví dụ
    `KPI_LISTEN_HOST=192.168.1.114 pnpm start`, và đổi port bằng `PORT=... pnpm start`.
+
+> `pnpm build` sẽ tự động chạy `pnpm healthcheck` trước khi đóng gói nhằm đảm
+> bảo SQLite (và tuỳ chọn SQL Server) đã sẵn sàng. Bạn có thể gọi thủ công
+> `pnpm healthcheck` sau khi cài đặt trên Windows để kiểm tra nhanh tình trạng
+> môi trường trước khi triển khai.
 
 3. Tất cả dữ liệu (tờ khai, gán MST, quy tắc KPI, tài khoản, nhật ký…) được lưu
    trong `server/data/storage.sqlite`. Sao lưu file này định kỳ để tránh mất dữ
