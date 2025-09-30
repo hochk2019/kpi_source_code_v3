@@ -92,7 +92,20 @@ Từ máy khác trong cùng mạng hãy truy cập `http://<IP_MAY_CHU>:5173` (v
    liệu. Bạn có thể xóa `server/data/db.json` sau khi đã nâng cấp nếu không còn
    sử dụng bản lưu trữ cũ.
 
-## 4. Tài khoản mặc định
+## 4. Khắc phục sự cố backend
+
+Thông báo "Dữ liệu mới đang tạm lưu cục bộ vì backend chưa sẵn sàng đồng bộ." xuất hiện khi ứng dụng frontend phát hiện cờ `syncStatus.waitingForBackend` trong `src/App.jsx`. Điều này có nghĩa là dữ liệu người dùng vừa nhập chỉ mới được lưu tại trình duyệt và chưa thể gửi tới máy chủ.
+
+Để khôi phục khả năng đồng bộ, hãy lần lượt thực hiện các bước sau:
+
+1. Khởi động dịch vụ backend bằng `pnpm server` và đảm bảo tiến trình vẫn chạy ổn định.
+2. Xác nhận cơ sở dữ liệu đã được tạo bằng cách chạy lại `pnpm db:init` nếu cần.
+3. Kiểm tra log của tiến trình backend, đặc biệt thông báo "Lỗi ghi dữ liệu" để phát hiện sự cố ghi file hoặc quyền truy cập.
+4. Xác minh biến môi trường `VITE_API_BASE` mà frontend đang sử dụng trỏ đúng tới địa chỉ backend.
+
+Sau khi hoàn tất các bước trên, thông báo cảnh báo sẽ tự biến mất khi frontend đồng bộ thành công. Bạn cũng có thể tham khảo thêm phần [Kiểm thử](#6-kiểm-thử) để chạy `pnpm healthcheck` hỗ trợ tự chẩn đoán hệ thống.
+
+## 5. Tài khoản mặc định
 
 - `admin / admin123` – toàn quyền.
 - `nhanvien / 123456` – tài khoản mẫu với quyền hạn chế.
@@ -100,7 +113,7 @@ Từ máy khác trong cùng mạng hãy truy cập `http://<IP_MAY_CHU>:5173` (v
 Bạn có thể tạo thêm tài khoản và phân quyền trong tab **Tài khoản** của giao
 diện. Mọi thao tác chỉnh sửa đều ghi lại trong tab **Nhật ký**.
 
-## 5. Kiểm thử
+## 6. Kiểm thử
 
 ```bash
 pnpm lint
@@ -117,7 +130,7 @@ integration test dùng `supertest`. Các test này tự động tạo cơ sở d
 SQLite trong bộ nhớ (`:memory:`) và mô phỏng kết nối SQL Server, giúp phát hiện
 lỗi kết nối hoặc mapping dữ liệu ngay trên CI.
 
-## 6. Công cụ hỗ trợ dữ liệu ECUS
+## 7. Công cụ hỗ trợ dữ liệu ECUS
 
 Các tác vụ CLI mới giúp kiểm thử/khảo sát dữ liệu ECUS khi chưa kết nối được
 SQL Server thật:
@@ -132,7 +145,7 @@ Bạn có thể dùng dữ liệu mock để chạy thử `/api/import/ecus/run`
 kết nối tới SQL Server, hoặc dùng lệnh `inspect` để xác định rõ tên cột trước
 khi viết câu truy vấn đồng bộ.
 
-## 7. Kế hoạch triển khai chi tiết cho Windows 11 & phân quyền
+## 8. Kế hoạch triển khai chi tiết cho Windows 11 & phân quyền
 
 Trước khi mở rộng triển khai cho toàn bộ đội ngũ, vui lòng tham khảo tài liệu
 [docs/windows11-permission-plan.md](docs/windows11-permission-plan.md) để nắm
