@@ -82,6 +82,8 @@ async function runCheck({ description, paths, mode = 'all', required = true, fix
   return { passed: true, warned: true };
 }
 
+const isStrictMode = process.argv.includes('--strict');
+
 async function main() {
   const results = await Promise.all([
     runCheck({
@@ -109,7 +111,7 @@ async function main() {
       description: 'tệp cấu hình môi trường (.env/.env.local/.env.production/.env.development)',
       paths: envCandidates,
       mode: 'any',
-      required: false,
+      required: isStrictMode,
       fix: 'Tạo file .env (hoặc biến thể tương ứng) để khai báo KPI_LISTEN_HOST, PORT, VITE_API_BASE và các biến môi trường cần thiết.',
     }),
   ]);
@@ -128,7 +130,11 @@ async function main() {
     console.warn('\nLưu ý: một số tệp cấu hình tùy chọn chưa được thiết lập. Hãy cập nhật chúng trước khi triển khai để tránh lỗi môi trường.');
   }
 
-  console.log('\u2705 Đã xác nhận các thành phần backend cốt lõi tồn tại.');
+  if (isStrictMode) {
+    console.log('\u2705 Đã xác nhận đầy đủ các tệp backend và cấu hình môi trường trong chế độ nghiêm ngặt.');
+  } else {
+    console.log('\u2705 Đã xác nhận các thành phần backend cốt lõi tồn tại.');
+  }
 }
 
 main().catch((error) => {
