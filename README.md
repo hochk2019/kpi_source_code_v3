@@ -97,6 +97,12 @@ Server đặt cookie phiên `kpi_session` dựa trên biến môi trường `KPI
 - `never`, `false`, `0`: luôn tắt `secure`, phù hợp cho môi trường LAN chỉ sử dụng HTTP
   và không muốn bắt buộc HTTPS.
 
+| Giá trị `KPI_COOKIE_SECURE` | Điều kiện bật cờ `secure`                                                         | Môi trường khuyến nghị                                  | Ghi chú                                                                                             |
+| --------------------------- | --------------------------------------------------------------------------------- | ------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| *(trống)* / `auto` *(mặc định)* | Khi request thực sự đi qua HTTPS hoặc có header `X-Forwarded-Proto: https`.        | Reverse proxy chuẩn, môi trường nội bộ hỗn hợp HTTP/HTTPS | Ưu tiên tự động, không cần chỉnh tay khi proxy cấu hình đúng.                                       |
+| `always` / `true` / `1`    | Luôn bật `secure` cho mọi request.                                               | Proxy/ingress HTTPS nhưng kết nối backend bằng HTTP      | Dùng khi không kiểm soát được `X-Forwarded-Proto` nhưng vẫn muốn đảm bảo cookie chỉ gửi qua HTTPS. |
+| `never` / `false` / `0`    | Không bao giờ bật `secure`.                                                       | Máy trạm LAN nội bộ chỉ dùng HTTP                        | Tránh mất phiên khi chỉ có HTTP nội bộ; cần cân nhắc rủi ro khi truy cập qua mạng không an toàn.    |
+
 > **Lưu ý khi đặt sau reverse proxy:** đảm bảo proxy luôn chuyển tiếp header
 > `X-Forwarded-Proto` tương ứng với giao thức người dùng truy cập. Nếu không thể
 > sửa proxy, hãy đặt `KPI_COOKIE_SECURE=always` để tránh mất phiên khi đăng nhập qua HTTPS.
