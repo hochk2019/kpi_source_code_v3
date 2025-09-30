@@ -258,14 +258,15 @@ export default function RulesEditor({ canEdit = true, currentUser = null }) {
   useEffect(() => {
     const nextCollection = loadRuleSets();
     setCollection(nextCollection);
-    const tabId = nextCollection.sets.some((entry) => entry.id === activeTab)
-      ? activeTab
-      : nextCollection.activeId;
-    setActiveTab(tabId);
+    const currentTabValid = nextCollection.sets.some((entry) => entry.id === activeTab);
+    const tabId = currentTabValid ? activeTab : nextCollection.activeId;
+    if (tabId !== activeTab) {
+      setActiveTab(tabId);
+    }
     setRule(loadRules(tabId));
     setApplyNow(false);
     setDirty(false);
-  }, [version]);
+  }, [version, activeTab]);
 
   const isReadOnly = !canEdit;
 

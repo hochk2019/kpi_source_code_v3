@@ -1,6 +1,7 @@
 /* eslint-env node */
 /* @vitest-environment node */
 import process from 'node:process';
+import { Buffer } from 'node:buffer';
 import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest';
 import request from 'supertest';
 import { resetSqlMonitor, getSqlTimeoutEvents } from '../server/sqlMonitor.js';
@@ -868,10 +869,16 @@ describe('Alert API', () => {
     team: '',
   };
 
+  let adminAgent;
+
   beforeEach(async () => {
-    await request(app)
+    adminAgent = request.agent(app);
+    const loginRes = await adminAgent.post('/api/auth/login').send({ username: 'admin', password: 'admin123' });
+    expect(loginRes.status).toBe(200);
+    const putRes = await adminAgent
       .put('/api/storage/decl_rows_v1')
       .send({ value: JSON.stringify([missingDecl]) });
+    expect(putRes.status).toBe(200);
   });
 
   it('trả về danh sách cảnh báo và cấu hình hiện tại', async () => {
