@@ -1675,6 +1675,18 @@ function refreshEcusSchedule() {
 
 export const app = express();
 const PORT = Number.parseInt(process.env.PORT || '5000', 10);
+const HOST = (process.env.KPI_LISTEN_HOST || '').trim() || '0.0.0.0';
+
+function logServerAddresses(port, host) {
+  const normalizedHost = host || '0.0.0.0';
+  const displayHost = normalizedHost === '0.0.0.0' || normalizedHost === '::' ? 'localhost' : normalizedHost;
+  console.log(`KPI storage server đang chạy tại http://${displayHost}:${port}`);
+  if (normalizedHost === '0.0.0.0' || normalizedHost === '::') {
+    console.log(`Có thể truy cập từ mạng LAN qua địa chỉ IP của máy chủ (ví dụ: http://192.168.x.x:${port}).`);
+  } else {
+    console.log(`Đang lắng nghe trên địa chỉ mạng: ${normalizedHost}`);
+  }
+}
 
 app.use(cors({ origin: true, credentials: true }));
 app.use(express.json({ limit: '5mb' }));
@@ -1992,8 +2004,8 @@ export function startServer(port = PORT) {
   if (httpServer) {
     return httpServer;
   }
-  httpServer = app.listen(port, () => {
-    console.log(`KPI storage server đang chạy tại http://localhost:${port}`);
+  httpServer = app.listen(port, HOST, () => {
+    logServerAddresses(port, HOST);
   });
   return httpServer;
 }

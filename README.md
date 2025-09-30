@@ -26,45 +26,40 @@ Lệnh `db:init` tạo sẵn file `server/data/storage.sqlite` cùng dữ liệu
 
 ## 2. Khởi chạy cho môi trường phát triển
 
-Mở **hai** cửa sổ terminal:
+Chỉ cần một lệnh duy nhất:
 
-1. Chạy máy chủ lưu trữ dùng chung (port mặc định: `5000`):
+```bash
+pnpm dev
+```
 
-   ```bash
-   pnpm server
-   ```
+Script này sẽ tự động:
 
-   Máy chủ này lưu dữ liệu vào cơ sở dữ liệu SQLite tại
-   `server/data/storage.sqlite` (file sẽ được tạo tự động ngay khi chạy `pnpm
-   server` hoặc thủ công bằng `pnpm db:init`) và cung cấp các API REST dưới
-   đường dẫn `/api/...`. Ứng dụng giao diện sẽ tự động thử lại kết nối định kỳ:
-   nếu thời điểm mở trang máy chủ chưa hoạt động, người dùng sẽ thấy thông báo
-   “đang đợi backend” và các thao tác sẽ được đẩy lên ngay khi kết nối thông
-   suốt. Nếu bạn nâng cấp từ phiên bản cũ còn sử dụng file `server/data/db.json`,
-   máy chủ sẽ tự động nhập dữ liệu ban đầu từ file này (nếu tồn tại) trong lần
-   chạy đầu tiên.
+- đảm bảo native module `better-sqlite3` sẵn sàng (tương đương với `pnpm server:rebuild` khi cần);
+- khởi chạy backend tại `http://localhost:5000` và Vite tại `http://localhost:5173` song song;
+- dừng cả hai tiến trình ngay khi bạn nhấn `Ctrl+C`.
 
-  > Nếu sau bước tự động vẫn gặp lỗi không thể tải `better-sqlite3`, hãy chạy
-  > `pnpm server:rebuild` hoặc `pnpm rebuild better-sqlite3` để kiểm tra lại
-  > toolchain biên dịch.
+Script hoạt động thuần Node nên tương thích với Windows 11 và không phụ thuộc shell đặc thù.
 
-2. Chạy giao diện Vite (port mặc định: `5173`):
+Nhờ đó việc đăng nhập bằng lệnh `pnpm dev` không còn gặp lỗi HTTP 500 khi backend chưa được mở riêng như trước.
 
-   ```bash
-   pnpm dev
-   ```
+### Tuỳ chọn khác
 
-   Vite đã cấu hình proxy `/api` → `http://localhost:5000`, vì vậy giao diện và
-   API có thể hoạt động song song. Từ máy khác trong LAN, truy cập
-   `http://<IP_MAY_CHU>:5173` (ví dụ `http://192.168.1.114:5173`).
+- `pnpm server`: chỉ khởi động backend (thích hợp cho môi trường staging hoặc khi muốn ghép với reverse proxy khác).
+- `pnpm dev:frontend`: chỉ chạy Vite để phát triển giao diện, vẫn sử dụng proxy `/api` trỏ về `VITE_API_BASE` (mặc định `http://localhost:5000`).
 
-> **Lưu ý:** Nếu muốn đổi port của máy chủ, đặt biến môi trường `PORT` trước khi
-> chạy `pnpm server`, đồng thời cấu hình `VITE_API_BASE` cho Vite, ví dụ:
+> Nếu vẫn gặp lỗi native module, bạn có thể chủ động chạy `pnpm server:rebuild` hoặc `pnpm rebuild better-sqlite3` trước khi `pnpm dev`.
+
+### Kết nối qua mạng LAN
+
+Từ máy khác trong cùng mạng hãy truy cập `http://<IP_MAY_CHU>:5173` (ví dụ `http://192.168.1.114:5173`). Backend lắng nghe trên mọi địa chỉ (`0.0.0.0`) theo mặc định, đồng thời cho phép ghi đè thông qua biến môi trường `KPI_LISTEN_HOST` nếu bạn chỉ muốn phục vụ trên một IP cố định.
+
+> **Ví dụ:**
 >
 > ```bash
-> PORT=6000 pnpm server
-> VITE_API_BASE=http://localhost:6000 pnpm dev
+> KPI_LISTEN_HOST=192.168.1.114 pnpm start
 > ```
+>
+> Khi thay đổi port của backend, đừng quên cập nhật `VITE_API_BASE` trước khi chạy `pnpm dev` hoặc `pnpm dev:frontend`.
 
 ## 3. Triển khai cho môi trường vận hành nội bộ
 
@@ -81,8 +76,10 @@ Mở **hai** cửa sổ terminal:
    ```
 
    Máy chủ sẽ phục vụ cả API `/api/...` lẫn nội dung tĩnh trong thư mục `dist/`.
+   Lệnh `pnpm start` nay dùng `cross-env` nên hoạt động ổn định trên Windows 11.
    Người dùng chỉ cần truy cập `http://<IP_MAY_CHU>:5000` (hoặc port bạn cấu
-   hình). Nếu muốn dùng port khác, đặt `PORT=... pnpm start`.
+   hình). Có thể giới hạn địa chỉ lắng nghe bằng biến `KPI_LISTEN_HOST`, ví dụ
+   `KPI_LISTEN_HOST=192.168.1.114 pnpm start`, và đổi port bằng `PORT=... pnpm start`.
 
 3. Tất cả dữ liệu (tờ khai, gán MST, quy tắc KPI, tài khoản, nhật ký…) được lưu
    trong `server/data/storage.sqlite`. Sao lưu file này định kỳ để tránh mất dữ
