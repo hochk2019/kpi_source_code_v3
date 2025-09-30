@@ -139,6 +139,18 @@ const DEFAULT_ACCOUNT_SEED = [
   },
 ];
 
+const STORAGE_PERMISSION_REQUIREMENTS = Object.freeze({
+  decl_rows_v1: 'importEdit',
+  import_logs_v1: 'importEdit',
+  mst_rows_v2: 'mstEdit',
+  team_roster_v1: 'teamsEdit',
+  kpi_rules_v2: 'rulesEdit',
+  hq_agencies_v1: 'mstEdit',
+  decl_alert_config_v1: 'alertsManage',
+  decl_alert_state_v1: 'alertsManage',
+  ecus_sync_config_v1: 'syncManage',
+});
+
 function normalizePermissionsForRole(permissions, role = 'staff') {
   const roleKey = role === 'admin' ? 'admin' : 'staff';
   const base = roleKey === 'admin' ? ADMIN_PERMISSIONS : VIEW_ONLY_PERMISSIONS;
@@ -412,6 +424,24 @@ function resolveActor(req, fallback = 'api') {
     return req.query.actor;
   }
   return fallback;
+}
+
+function verifyStoragePermission(req, res, key) {
+  const required = STORAGE_PERMISSION_REQUIREMENTS[key];
+  if (!required) {
+    return { context: getSessionContext(req), required, denied: false };
+  }
+  const context = getSessionContext(req);
+  if (!context) {
+    res.status(401).json({ ok: false, error: 'Bạn cần đăng nhập để thao tác với dữ liệu này' });
+    return { context: null, required, denied: true };
+  }
+  const allowed = context.account?.permissions?.[required];
+  if (!allowed) {
+    res.status(403).json({ ok: false, error: 'Tài khoản hiện không có quyền chỉnh sửa mục này' });
+    return { context, required, denied: true };
+  }
+  return { context, required, denied: false };
 }
 
 function setAttachmentHeaders(res, filename) {
@@ -1499,7 +1529,7 @@ async function fetchEcusDeclarations(range, config) {
   }
 }
 
-async function checkSqlServerHealth() {
+export async function checkSqlServerHealth() {
   const config = getEcusConfig();
   const connectionConfig = buildSqlConnectionConfig(config);
   if (!connectionConfig.server || !connectionConfig.database) {
@@ -1675,6 +1705,18 @@ function refreshEcusSchedule() {
 
 export const app = express();
 const PORT = Number.parseInt(process.env.PORT || '5000', 10);
+const HOST = (process.env.KPI_LISTEN_HOST || '').trim() || '0.0.0.0';
+
+function logServerAddresses(port, host) {
+  const normalizedHost = host || '0.0.0.0';
+  const displayHost = normalizedHost === '0.0.0.0' || normalizedHost === '::' ? 'localhost' : normalizedHost;
+  console.log(`KPI storage server đang chạy tại http://${displayHost}:${port}`);
+  if (normalizedHost === '0.0.0.0' || normalizedHost === '::') {
+    console.log(`Có thể truy cập từ mạng LAN qua địa chỉ IP của máy chủ (ví dụ: http://192.168.x.x:${port}).`);
+  } else {
+    console.log(`Đang lắng nghe trên địa chỉ mạng: ${normalizedHost}`);
+  }
+}
 
 app.use(cors({ origin: true, credentials: true }));
 app.use(express.json({ limit: '5mb' }));
@@ -1860,7 +1902,11 @@ app.put('/api/storage/:key', (req, res) => {
     return;
   }
   const { value } = req.body || {};
-  const actor = resolveActor(req);
+  const { context, denied } = verifyStoragePermission(req, res, key);
+  if (denied) {
+    return;
+  }
+  const actor = context?.account?.username || resolveActor(req);
   try {
     if (value === null || value === undefined) {
       deleteValue(key);
@@ -1888,6 +1934,10 @@ app.delete('/api/storage/:key', (req, res) => {
   }
   if (key === 'kpi_users_v1') {
     res.status(403).json({ ok: false, error: 'Khoá này chỉ chỉnh sửa qua API tài khoản' });
+    return;
+  }
+  const { denied } = verifyStoragePermission(req, res, key);
+  if (denied) {
     return;
   }
   try {
@@ -1992,8 +2042,8 @@ export function startServer(port = PORT) {
   if (httpServer) {
     return httpServer;
   }
-  httpServer = app.listen(port, () => {
-    console.log(`KPI storage server đang chạy tại http://localhost:${port}`);
+  httpServer = app.listen(port, HOST, () => {
+    logServerAddresses(port, HOST);
   });
   return httpServer;
 }

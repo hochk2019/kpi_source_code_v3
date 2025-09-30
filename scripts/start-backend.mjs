@@ -56,14 +56,42 @@ async function ensureBetterSqlite3({ forceRebuild = false } = {}) {
   }
 }
 
+function extractFlags(argv) {
+  const flags = new Set();
+  const passthrough = [];
+  for (const arg of argv) {
+    if (arg === '--rebuild') {
+      flags.add('rebuild');
+      continue;
+    }
+    if (arg === '--prod' || arg === '--production') {
+      flags.add('production');
+      continue;
+    }
+    passthrough.push(arg);
+  }
+  return { flags, passthrough };
+}
+
 async function startServer() {
   const args = process.argv.slice(2);
-  const forceRebuild = args.includes('--rebuild');
+  const { flags, passthrough } = extractFlags(args);
+  const forceRebuild = flags.has('rebuild');
+  const production = flags.has('production');
+
+  if (production) {
+    process.env.NODE_ENV = 'production';
+  } else if (!process.env.NODE_ENV) {
+    process.env.NODE_ENV = 'development';
+  }
+
   await ensureBetterSqlite3({ forceRebuild });
 
   const serverEntry = resolve(__dirname, '..', 'server', 'index.js');
   console.log('Khởi động backend từ', serverEntry);
-  const child = spawn(process.execPath, [serverEntry], { stdio: 'inherit' });
+  const childEnv = { ...process.env };
+  const childArgs = [serverEntry, ...passthrough];
+  const child = spawn(process.execPath, childArgs, { stdio: 'inherit', env: childEnv });
 
   const exitCode = await new Promise((resolve) => {
     child.on('exit', (code) => resolve(code ?? 0));
