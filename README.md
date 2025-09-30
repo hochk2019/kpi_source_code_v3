@@ -170,6 +170,7 @@ Thông báo "Dữ liệu mới đang tạm lưu cục bộ vì backend chưa s�
 2. Xác nhận cơ sở dữ liệu đã được tạo bằng cách chạy lại `pnpm db:init` nếu cần.
 3. Kiểm tra log của tiến trình backend, đặc biệt thông báo "Lỗi ghi dữ liệu" để phát hiện sự cố ghi file hoặc quyền truy cập.
 4. Xác minh biến môi trường `VITE_API_BASE` mà frontend đang sử dụng trỏ đúng tới địa chỉ backend.
+- Nếu gặp lỗi `Cannot find module .../server/index.js`, hãy kiểm tra lại thư mục `server` (đặc biệt file `index.js`) có còn tồn tại hay không. Sao lưu và tải lại dự án nếu thiếu thư mục, sau đó quay lại [bước cài đặt](#1-cài-đặt) để chạy lại `pnpm install` và `pnpm db:init` trước khi khởi động backend.
 
 Sau khi hoàn tất các bước trên, thông báo cảnh báo sẽ tự biến mất khi frontend đồng bộ thành công. Bạn cũng có thể tham khảo thêm phần [Kiểm thử](#6-kiểm-thử) để chạy `pnpm healthcheck` hỗ trợ tự chẩn đoán hệ thống.
 
