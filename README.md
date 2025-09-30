@@ -82,6 +82,74 @@ Từ máy khác trong cùng mạng hãy truy cập `http://<IP_MAY_CHU>:5173` (v
    hình). Có thể giới hạn địa chỉ lắng nghe bằng biến `KPI_LISTEN_HOST`, ví dụ
    `KPI_LISTEN_HOST=192.168.1.114 pnpm start`, và đổi port bằng `PORT=... pnpm start`.
 
+### 3.1. Thiết lập cookie an toàn (KPI_COOKIE_SECURE)
+
+Server đặt cookie phiên `kpi_session` dựa trên biến môi trường `KPI_COOKIE_SECURE`
+để quyết định có bật cờ `secure` (chỉ gửi qua HTTPS) hay không. Các giá trị hỗ trợ:
+
+- **Bỏ trống** hoặc `auto` *(mặc định)*: backend sẽ kiểm tra trực tiếp request để
+  xác định giao thức thật. Cookie chỉ bật `secure` khi kết nối HTTPS hoặc
+  request có header `X-Forwarded-Proto: https`. Cách này phù hợp cho máy chủ nội bộ
+  truy cập qua HTTP và cho các reverse proxy có cấu hình chuẩn.
+- `always`, `true`, `1`: luôn bật `secure` bất kể request đi qua HTTP hay HTTPS.
+  Dùng khi backend chạy phía sau reverse proxy/ingress kết nối tới client bằng HTTPS
+  nhưng chỉ chuyển tiếp HTTP xuống Node.js (ví dụ Nginx terminate TLS).
+- `never`, `false`, `0`: luôn tắt `secure`, phù hợp cho môi trường LAN chỉ sử dụng HTTP
+  và không muốn bắt buộc HTTPS.
+
+| Giá trị `KPI_COOKIE_SECURE` | Điều kiện bật cờ `secure`                                                         | Môi trường khuyến nghị                                  | Ghi chú                                                                                             |
+| --------------------------- | --------------------------------------------------------------------------------- | ------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| *(trống)* / `auto` *(mặc định)* | Khi request thực sự đi qua HTTPS hoặc có header `X-Forwarded-Proto: https`.        | Reverse proxy chuẩn, môi trường nội bộ hỗn hợp HTTP/HTTPS | Ưu tiên tự động, không cần chỉnh tay khi proxy cấu hình đúng.                                       |
+| `always` / `true` / `1`    | Luôn bật `secure` cho mọi request.                                               | Proxy/ingress HTTPS nhưng kết nối backend bằng HTTP      | Dùng khi không kiểm soát được `X-Forwarded-Proto` nhưng vẫn muốn đảm bảo cookie chỉ gửi qua HTTPS. |
+| `never` / `false` / `0`    | Không bao giờ bật `secure`.                                                       | Máy trạm LAN nội bộ chỉ dùng HTTP                        | Tránh mất phiên khi chỉ có HTTP nội bộ; cần cân nhắc rủi ro khi truy cập qua mạng không an toàn.    |
+
+> **Lưu ý khi đặt sau reverse proxy:** đảm bảo proxy luôn chuyển tiếp header
+> `X-Forwarded-Proto` tương ứng với giao thức người dùng truy cập. Nếu không thể
+> sửa proxy, hãy đặt `KPI_COOKIE_SECURE=always` để tránh mất phiên khi đăng nhập qua HTTPS.
+
+> **Ví dụ `.env.production`**
+>
+> ```env
+> # Chỉ bật `secure` khi request thực sự đi qua HTTPS hoặc proxy báo `X-Forwarded-Proto: https`
+> KPI_COOKIE_SECURE=auto
+> # Tùy chọn: giới hạn host và port backend khi chạy nội bộ
+> KPI_LISTEN_HOST=0.0.0.0
+> PORT=5000
+> ```
+
+> **Cấu hình header `X-Forwarded-Proto` phổ biến**
+>
+> - **Nginx**
+>
+>   ```nginx
+>   location / {
+>     proxy_set_header Host $host;
+>     proxy_set_header X-Real-IP $remote_addr;
+>     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+>     proxy_set_header X-Forwarded-Proto $scheme;
+>     proxy_pass http://127.0.0.1:5000;
+>   }
+>   ```
+>
+> - **Traefik (file provider)**
+>
+>   ```yaml
+>   http:
+>     routers:
+>       kpi:
+>         rule: Host(`kpi.example.com`)
+>         entryPoints: ["websecure"]
+>         service: kpi
+>         tls: {}
+>     services:
+>       kpi:
+>         loadBalancer:
+>           servers:
+>             - url: "http://127.0.0.1:5000"
+>   ```
+>
+>   Traefik tự động bổ sung `X-Forwarded-Proto=https` cho các entry point TLS, do đó backend sẽ bật `secure` mà không cần cấu hình bổ sung.
+
 > `pnpm build` sẽ tự động chạy `pnpm healthcheck` trước khi đóng gói nhằm đảm
 > bảo SQLite (và tuỳ chọn SQL Server) đã sẵn sàng. Bạn có thể gọi thủ công
 > `pnpm healthcheck` sau khi cài đặt trên Windows để kiểm tra nhanh tình trạng

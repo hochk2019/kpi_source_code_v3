@@ -118,6 +118,24 @@ const MIN_PASSWORD_LENGTH = 6;
 const SESSION_COOKIE_NAME = 'kpi_session';
 const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 ngày
 
+function shouldUseSecureCookies(req) {
+  const preference = (process.env.KPI_COOKIE_SECURE || '').toString().trim().toLowerCase();
+  if (['always', 'true', '1'].includes(preference)) {
+    return true;
+  }
+  if (['never', 'false', '0'].includes(preference)) {
+    return false;
+  }
+  const forwardedProto = req?.headers?.['x-forwarded-proto'];
+  const proto = Array.isArray(forwardedProto)
+    ? forwardedProto[0]
+    : typeof forwardedProto === 'string'
+    ? forwardedProto.split(',')[0]
+    : '';
+  const normalizedProto = proto.trim().toLowerCase();
+  return req?.secure || normalizedProto === 'https';
+}
+
 const DEFAULT_ACCOUNT_SEED = [
   {
     username: 'admin',
@@ -357,8 +375,8 @@ function getSessionContext(req) {
   return { token: row.token, expiresAt: row.expires_at, account };
 }
 
-function setSessionCookie(res, token, expiresAt) {
-  const secure = process.env.NODE_ENV === 'production';
+function setSessionCookie(req, res, token, expiresAt) {
+  const secure = shouldUseSecureCookies(req);
   res.cookie(SESSION_COOKIE_NAME, token, {
     httpOnly: true,
     sameSite: 'lax',
@@ -367,8 +385,8 @@ function setSessionCookie(res, token, expiresAt) {
   });
 }
 
-function clearSessionCookie(res) {
-  const secure = process.env.NODE_ENV === 'production';
+function clearSessionCookie(req, res) {
+  const secure = shouldUseSecureCookies(req);
   res.cookie(SESSION_COOKIE_NAME, '', {
     httpOnly: true,
     sameSite: 'lax',
@@ -1775,20 +1793,20 @@ app.post('/api/auth/login', async (req, res) => {
     );
     if (!account) {
       pushAuditLog({ actor: usernameInput || 'unknown', action: 'auth.login_fail', detail: 'Đăng nhập thất bại' });
-      clearSessionCookie(res);
+      clearSessionCookie(req, res);
       res.status(401).json({ ok: false, error: 'Sai tài khoản hoặc mật khẩu' });
       return;
     }
     const ok = await bcrypt.compare(passwordInput, account.passwordHash);
     if (!ok) {
       pushAuditLog({ actor: usernameInput || 'unknown', action: 'auth.login_fail', detail: 'Đăng nhập thất bại' });
-      clearSessionCookie(res);
+      clearSessionCookie(req, res);
       res.status(401).json({ ok: false, error: 'Sai tài khoản hoặc mật khẩu' });
       return;
     }
     deleteSessionsForUser(account.username);
     const { token, expiresAt } = createSessionForUser(account.username);
-    setSessionCookie(res, token, expiresAt);
+    setSessionCookie(req, res, token, expiresAt);
     const user = sanitizeAccountRecord(account);
     pushAuditLog({ actor: account.username, action: 'auth.login', detail: 'Đăng nhập thành công' });
     res.json({ ok: true, user, expiresAt });
@@ -1801,7 +1819,7 @@ app.get('/api/auth/session', (req, res) => {
   try {
     const context = getSessionContext(req);
     if (!context) {
-      clearSessionCookie(res);
+      clearSessionCookie(req, res);
       res.json({ ok: true, user: null });
       return;
     }
@@ -1819,7 +1837,7 @@ app.post('/api/auth/logout', (req, res) => {
       deleteSessionToken(context.token);
       pushAuditLog({ actor: context.account.username, action: 'auth.logout', detail: 'Đăng xuất khỏi hệ thống' });
     }
-    clearSessionCookie(res);
+    clearSessionCookie(req, res);
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ ok: false, error: err?.message || 'Không thể đăng xuất' });
@@ -1883,7 +1901,7 @@ app.post('/api/auth/password/change', async (req, res) => {
     const account = await changeOwnPasswordRecord(username, currentPassword, newPassword);
     deleteSessionsForUser(account?.username || username);
     const { token, expiresAt } = createSessionForUser(account?.username || username);
-    setSessionCookie(res, token, expiresAt);
+    setSessionCookie(req, res, token, expiresAt);
     res.json({ ok: true, account, expiresAt });
   } catch (err) {
     const status = err?.message && err.message.includes('Không tìm thấy') ? 404 : 400;
