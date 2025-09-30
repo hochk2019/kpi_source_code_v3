@@ -2,6 +2,7 @@
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
+import { existsSync } from 'node:fs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -88,6 +89,14 @@ async function startServer() {
   await ensureBetterSqlite3({ forceRebuild });
 
   const serverEntry = resolve(__dirname, '..', 'server', 'index.js');
+  if (!existsSync(serverEntry)) {
+    console.error('Không tìm thấy file backend:', serverEntry);
+    console.error('Vui lòng kiểm tra các bước sau:');
+    console.error('- Đảm bảo bạn đã giải nén đầy đủ mã nguồn hoặc đã clone repo đúng cách (git clone).');
+    console.error('- Chạy "pnpm install" để cài đặt dependencies cần thiết.');
+    console.error('- Nếu vẫn gặp lỗi, hãy kiểm tra lại đường dẫn và quyền truy cập file.');
+    process.exit(1);
+  }
   console.log('Khởi động backend từ', serverEntry);
   const childEnv = { ...process.env };
   const childArgs = [serverEntry, ...passthrough];
