@@ -221,46 +221,34 @@ export function getPermissionTemplate(role = "staff") {
 }
 
 export async function reloadAccounts() {
-  try {
-    const payload = await requestJson("/api/auth/accounts");
-    const accounts = setAccountCache(payload?.accounts ?? []);
-    if (sessionCache) {
-      const current = accounts.find((entry) => entry.username === sessionCache.username);
-      if (current) {
-        setSessionFromUser(current);
-      }
+  const payload = await requestJson("/api/auth/accounts");
+  const accounts = setAccountCache(payload?.accounts ?? []);
+  if (sessionCache) {
+    const current = accounts.find((entry) => entry.username === sessionCache.username);
+    if (current) {
+      setSessionFromUser(current);
     }
-    return accounts;
-  } catch (err) {
-    throw err;
   }
+  return accounts;
 }
 
 export async function createAccount(payload, { actor = "system" } = {}) {
-  try {
-    const response = await requestJson("/api/auth/accounts", {
-      method: "POST",
-      body: { ...payload, actor },
-    });
-    setAccountCache(response?.accounts ?? []);
-    return response?.account ?? null;
-  } catch (err) {
-    throw err;
-  }
+  const response = await requestJson("/api/auth/accounts", {
+    method: "POST",
+    body: { ...payload, actor },
+  });
+  setAccountCache(response?.accounts ?? []);
+  return response?.account ?? null;
 }
 
 export async function updateAccount(usernameInput, patch, { actor = "system" } = {}) {
-  try {
-    const response = await requestJson(`/api/auth/accounts/${encodeURIComponent(usernameInput)}`, {
-      method: "PATCH",
-      body: { ...patch, actor },
-    });
-    const accounts = setAccountCache(response?.accounts ?? []);
-    syncSessionForUser(response?.account);
-    return response?.account ?? accounts.find((account) => account.username === usernameInput) ?? null;
-  } catch (err) {
-    throw err;
-  }
+  const response = await requestJson(`/api/auth/accounts/${encodeURIComponent(usernameInput)}`, {
+    method: "PATCH",
+    body: { ...patch, actor },
+  });
+  const accounts = setAccountCache(response?.accounts ?? []);
+  syncSessionForUser(response?.account);
+  return response?.account ?? accounts.find((account) => account.username === usernameInput) ?? null;
 }
 
 export async function setAccountPassword(usernameInput, newPasswordInput, { actor = "system" } = {}) {
@@ -268,36 +256,28 @@ export async function setAccountPassword(usernameInput, newPasswordInput, { acto
   if (password.length < MIN_PASSWORD_LENGTH) {
     throw new Error(`Mật khẩu cần tối thiểu ${MIN_PASSWORD_LENGTH} ký tự`);
   }
-  try {
-    const response = await requestJson(`/api/auth/accounts/${encodeURIComponent(usernameInput)}/password`, {
-      method: "POST",
-      body: { password, actor },
-    });
-    setAccountCache(response?.accounts ?? []);
-    if (sessionCache?.username === usernameInput) {
-      setSessionFromUser(null);
-    }
-    return true;
-  } catch (err) {
-    throw err;
+  const response = await requestJson(`/api/auth/accounts/${encodeURIComponent(usernameInput)}/password`, {
+    method: "POST",
+    body: { password, actor },
+  });
+  setAccountCache(response?.accounts ?? []);
+  if (sessionCache?.username === usernameInput) {
+    setSessionFromUser(null);
   }
+  return true;
 }
 
 export async function deleteAccount(usernameInput, { actor = "system" } = {}) {
-  try {
-    const response = await requestJson(`/api/auth/accounts/${encodeURIComponent(usernameInput)}`, {
-      method: "DELETE",
-      body: { actor },
-    });
-    const accounts = setAccountCache(response?.accounts ?? []);
-    const session = getAuth();
-    if (session?.username === usernameInput) {
-      setSessionFromUser(null);
-    }
-    return accounts;
-  } catch (err) {
-    throw err;
+  const response = await requestJson(`/api/auth/accounts/${encodeURIComponent(usernameInput)}`, {
+    method: "DELETE",
+    body: { actor },
+  });
+  const accounts = setAccountCache(response?.accounts ?? []);
+  const session = getAuth();
+  if (session?.username === usernameInput) {
+    setSessionFromUser(null);
   }
+  return accounts;
 }
 
 export async function changeOwnPassword(usernameInput, currentPasswordInput, newPasswordInput) {
@@ -307,15 +287,11 @@ export async function changeOwnPassword(usernameInput, currentPasswordInput, new
   if (newPassword.length < MIN_PASSWORD_LENGTH) {
     throw new Error(`Mật khẩu mới cần tối thiểu ${MIN_PASSWORD_LENGTH} ký tự`);
   }
-  try {
-    const response = await requestJson("/api/auth/password/change", {
-      method: "POST",
-      body: { username, currentPassword, newPassword },
-    });
-    await reloadAccounts().catch(() => {});
-    const session = setSessionFromUser(response?.account);
-    return session;
-  } catch (err) {
-    throw err;
-  }
+  const response = await requestJson("/api/auth/password/change", {
+    method: "POST",
+    body: { username, currentPassword, newPassword },
+  });
+  await reloadAccounts().catch(() => {});
+  const session = setSessionFromUser(response?.account);
+  return session;
 }

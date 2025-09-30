@@ -1,6 +1,7 @@
 /* eslint-env node */
 /* @vitest-environment node */
 import process from 'node:process';
+import { Buffer } from 'node:buffer';
 import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest';
 import request from 'supertest';
 import { resetSqlMonitor, getSqlTimeoutEvents } from '../server/sqlMonitor.js';

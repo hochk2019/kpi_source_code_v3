@@ -1,4 +1,5 @@
 import ExcelJS from 'exceljs';
+import { Buffer } from 'node:buffer';
 
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 phút
 const MAX_CACHE_ENTRIES = 20;
