@@ -63,6 +63,16 @@ function Assert-PnpmEnvironment {
         )
     }
 
+    $pnpmVersion = $null
+    try {
+        $pnpmVersion = (& $pnpm.Source '--version' 2>$null).Trim()
+    } catch {
+        Write-Host "⚠️ Không thể lấy phiên bản pnpm: $($_.Exception.Message)" -ForegroundColor Yellow
+    }
+    if ($pnpmVersion) {
+        Write-Host "✅ pnpm phiên bản $pnpmVersion (đường dẫn: $($pnpm.Source))." -ForegroundColor Green
+    }
+
     $node = Get-Command 'node' -ErrorAction SilentlyContinue
     if (-not $node) {
         Stop-DueToMissingPrerequisite -Reason "Không tìm thấy 'node' (Node.js) trong PATH." -Guidance @(
@@ -70,6 +80,16 @@ function Assert-PnpmEnvironment {
             'Trong quá trình cài đặt nhớ chọn tùy chọn thêm Node vào PATH.',
             'Khởi động lại PowerShell rồi chạy lại script sau khi cài đặt hoàn tất.'
         )
+    }
+
+    $nodeVersion = $null
+    try {
+        $nodeVersion = (& $node.Source '--version' 2>$null).Trim()
+    } catch {
+        Write-Host "⚠️ Không thể lấy phiên bản Node.js: $($_.Exception.Message)" -ForegroundColor Yellow
+    }
+    if ($nodeVersion) {
+        Write-Host "✅ Node.js phiên bản $nodeVersion (đường dẫn: $($node.Source))." -ForegroundColor Green
     }
 }
 
