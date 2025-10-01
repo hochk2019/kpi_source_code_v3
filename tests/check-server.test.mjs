@@ -96,6 +96,8 @@ describe('ensureRequiredEnvVariables', () => {
     expect(result.ok).toBe(false);
     expect(result.recommendedFile).toBe('.env.production');
     expect(result.fixSuggestion).toContain('.env.production');
+    expect(result.suggestedFilePerVariable.VITE_API_BASE).toBe('.env.production');
+    expect(result.fixSuggestion).toContain('→ Gợi ý: thêm vào .env.production');
   });
 
   it('ưu tiên giá trị từ biến môi trường hiện tại', () => {
@@ -119,5 +121,26 @@ describe('ensureRequiredEnvVariables', () => {
     const entry = result.resolved.find((item) => item.key === 'VITE_API_BASE');
     expect(entry.source).toBe('runtime');
     expect(entry.value).toBe('http://runtime');
+  });
+
+  it('khuyến nghị tạo file cơ bản khi chưa có file .env', () => {
+    const cascade = loadEnvCascade({
+      cwd,
+      candidates: ['.env', '.env.local'],
+    });
+
+    const result = ensureRequiredEnvVariables(
+      [{ key: 'VITE_API_BASE', description: 'URL backend' }],
+      {
+        runtimeEnv: {},
+        fileEnv: cascade.merged,
+        origins: cascade.origins,
+        filesRead: cascade.filesRead,
+        candidates: ['.env', '.env.local'],
+      },
+    );
+
+    expect(result.recommendedFile).toBe('.env');
+    expect(result.suggestedFilePerVariable.VITE_API_BASE).toBe('.env');
   });
 });
