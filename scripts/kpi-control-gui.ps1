@@ -53,8 +53,29 @@ function Assert-WpfAssemblies {
     }
 }
 
+function Assert-PnpmEnvironment {
+    $pnpm = Get-Command 'pnpm.cmd' -ErrorAction SilentlyContinue
+    if (-not $pnpm) {
+        Stop-DueToMissingPrerequisite -Reason "Không tìm thấy 'pnpm.cmd' trong PATH." -Guidance @(
+            'Cài Node.js LTS từ https://nodejs.org/ hoặc dùng winget install OpenJS.NodeJS.LTS.',
+            'Sau khi có Node.js, bật pnpm bằng lệnh: corepack enable pnpm (PowerShell 5+) hoặc npm install -g pnpm.',
+            'Đóng và mở lại PowerShell (hoặc logoff/login) để biến PATH được cập nhật.'
+        )
+    }
+
+    $node = Get-Command 'node' -ErrorAction SilentlyContinue
+    if (-not $node) {
+        Stop-DueToMissingPrerequisite -Reason "Không tìm thấy 'node' (Node.js) trong PATH." -Guidance @(
+            'Tải và cài Node.js bản LTS từ https://nodejs.org/ hoặc chạy winget install OpenJS.NodeJS.LTS.',
+            'Trong quá trình cài đặt nhớ chọn tùy chọn thêm Node vào PATH.',
+            'Khởi động lại PowerShell rồi chạy lại script sau khi cài đặt hoàn tất.'
+        )
+    }
+}
+
 Assert-DesktopPowerShell
 Assert-WpfAssemblies
+Assert-PnpmEnvironment
 
 $script:RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $script:CurrentPort = $Port
