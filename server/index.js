@@ -40,6 +40,7 @@ const DEFAULT_ECUS_SYNC_CONFIG = {
   schedule: '0 * * * *',
   rangeDays: 1,
   preferMonthFirst: false,
+  batchSize: 500,
   connection: {
     server: '',
     database: '',
@@ -1212,6 +1213,11 @@ function buildAlertPayload() {
 
 function buildSqlConnectionConfig(config) {
   const connection = config?.connection || {};
+  const poolOptions = connection.pool && typeof connection.pool === 'object' ? connection.pool : undefined;
+  const parseTimeout = (value) => {
+    const num = Number(value);
+    return Number.isFinite(num) && num >= 0 ? num : undefined;
+  };
   return {
     server: connection.server || process.env.ECUS_SQL_SERVER || '',
     database: connection.database || process.env.ECUS_SQL_DATABASE || '',
@@ -1221,8 +1227,124 @@ function buildSqlConnectionConfig(config) {
       encrypt: connection.options?.encrypt ?? false,
       trustServerCertificate: connection.options?.trustServerCertificate ?? true,
     },
+    connectionTimeout: parseTimeout(connection.connectionTimeout),
+    requestTimeout: parseTimeout(connection.requestTimeout),
+    pool: poolOptions,
   };
 }
+
+const SQL_POOL_DEFAULT_CONNECTION_TIMEOUT = 5000;
+const SQL_POOL_DEFAULT_REQUEST_TIMEOUT = 10000;
+const SQL_POOL_DEFAULT_OPTIONS = { max: 5, min: 0, idleTimeoutMillis: 5000 };
+
+function createSqlPoolManager() {
+  let pool = null;
+  let poolKey = null;
+  let connectPromise = null;
+
+  const close = async () => {
+    const pending = connectPromise;
+    connectPromise = null;
+    if (pending) {
+      try {
+        await pending;
+      } catch {
+        // bỏ qua lỗi kết nối đang xử lý
+      }
+    }
+    if (pool) {
+      const closing = pool;
+      pool = null;
+      poolKey = null;
+      try {
+        await closing.close();
+      } catch {
+        // bỏ qua lỗi đóng kết nối
+      }
+    }
+  };
+
+  const getPool = async (config) => {
+    const { connectionTimeout, requestTimeout, pool: poolOptions, ...core } = config || {};
+    const normalizedKey = JSON.stringify(core);
+    if (pool && poolKey === normalizedKey) {
+      if (pool.connected) {
+        return pool;
+      }
+      if (!connectPromise) {
+        connectPromise = pool.connect();
+      }
+      await connectPromise;
+      connectPromise = null;
+      return pool;
+    }
+
+    await close();
+    const effectiveConnectionTimeout =
+      connectionTimeout ?? SQL_POOL_DEFAULT_CONNECTION_TIMEOUT;
+    const effectiveRequestTimeout = requestTimeout ?? SQL_POOL_DEFAULT_REQUEST_TIMEOUT;
+    const effectivePoolOptions = {
+      ...SQL_POOL_DEFAULT_OPTIONS,
+      ...(poolOptions || {}),
+    };
+    const nextPool = new sql.ConnectionPool({
+      ...core,
+      connectionTimeout: effectiveConnectionTimeout,
+      requestTimeout: effectiveRequestTimeout,
+      pool: effectivePoolOptions,
+    });
+    pool = nextPool;
+    poolKey = normalizedKey;
+    connectPromise = nextPool.connect();
+    try {
+      await connectPromise;
+    } catch (err) {
+      await close();
+      throw err;
+    } finally {
+      connectPromise = null;
+    }
+    return pool;
+  };
+
+  return {
+    getPool,
+    close,
+  };
+}
+
+function registerSqlPoolShutdown(manager) {
+  if (!manager) return;
+  let shuttingDown = false;
+
+  const handleSignal = async (signal) => {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    try {
+      await manager.close();
+    } catch (err) {
+      console.error('Không thể đóng SQL pool khi thoát ứng dụng', err);
+    } finally {
+      const exitCode = signal === 'SIGINT' ? 130 : signal === 'SIGTERM' ? 143 : 0;
+      process.exit(exitCode);
+    }
+  };
+
+  process.on('exit', () => {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    manager.close().catch(() => {});
+  });
+
+  for (const signal of ['SIGINT', 'SIGTERM']) {
+    process.once(signal, () => {
+      void handleSignal(signal);
+    });
+  }
+}
+
+const sqlPoolManager = createSqlPoolManager();
+registerSqlPoolShutdown(sqlPoolManager);
 
 function parseLicenseCount(rawValue, excludeSet) {
   if (rawValue === null || rawValue === undefined) return 0;
@@ -1515,35 +1637,81 @@ function mapEcusRow(record, config, context) {
   return deriveCOStatus(record, base);
 }
 
-async function fetchEcusDeclarations(range, config) {
+async function* fetchEcusDeclarations(range, config) {
   const connectionConfig = buildSqlConnectionConfig(config);
   if (!connectionConfig.server || !connectionConfig.database) {
     throw new Error('Chưa cấu hình máy chủ hoặc cơ sở dữ liệu SQL Server');
   }
 
-  const pool = new sql.ConnectionPool({
-    ...connectionConfig,
-    connectionTimeout: connectionConfig.connectionTimeout ?? 5000,
-    requestTimeout: connectionConfig.requestTimeout ?? 10000,
-    pool: { max: 5, min: 0, idleTimeoutMillis: 5000 },
-  });
-  const poolClose = () => pool.close().catch(() => {});
-  await pool.connect();
-  try {
-    const request = pool.request();
-    const fromDate = range.from ? new Date(range.from) : null;
-    const toDate = range.to ? new Date(range.to) : null;
-    if (fromDate) {
+  const pool = await sqlPoolManager.getPool(connectionConfig);
+  const requestTimeout =
+    connectionConfig.requestTimeout ?? SQL_POOL_DEFAULT_REQUEST_TIMEOUT;
+  const queryText = (config.query || DEFAULT_ECUS_SYNC_CONFIG.query || '').trim();
+  if (!queryText) {
+    return;
+  }
+  const baseQuery = queryText.replace(/;\s*$/u, '');
+  const configuredBatchSize = Number(config?.batchSize);
+  const defaultBatchSize = Number(DEFAULT_ECUS_SYNC_CONFIG.batchSize);
+  const normalizedBatchSize =
+    Number.isFinite(configuredBatchSize) && configuredBatchSize > 0
+      ? configuredBatchSize
+      : defaultBatchSize;
+  const batchSize =
+    Number.isFinite(normalizedBatchSize) && normalizedBatchSize > 0
+      ? Math.max(1, Math.floor(normalizedBatchSize))
+      : 0;
+  const fromDate = range.from ? new Date(range.from) : null;
+  const toDate = range.to ? new Date(range.to) : null;
+
+  const attachRangeParameters = (request) => {
+    if (fromDate instanceof Date && !Number.isNaN(fromDate.getTime())) {
       request.input('from', sql.DateTime, fromDate);
     }
-    if (toDate) {
+    if (toDate instanceof Date && !Number.isNaN(toDate.getTime())) {
       request.input('to', sql.DateTime, toDate);
     }
-    const query = config.query || DEFAULT_ECUS_SYNC_CONFIG.query;
-    const result = await request.query(query);
-    return result?.recordset || [];
-  } finally {
-    await poolClose();
+  };
+
+  const lowerQuery = baseQuery.toLowerCase();
+  const containsOffset = /\boffset\s+\d+/u.test(lowerQuery) || /\bfetch\s+next\s+/u.test(lowerQuery);
+  const supportsPagination = batchSize > 0 && !containsOffset;
+
+  if (!supportsPagination) {
+    const request = pool.request();
+    request.timeout = requestTimeout;
+    attachRangeParameters(request);
+    const result = await request.query(baseQuery);
+    const rows = result?.recordset || [];
+    if (rows.length > 0) {
+      yield rows;
+    }
+    return;
+  }
+
+  const hasOrderBy = /order\s+by/u.test(lowerQuery);
+  const wrappedQuery = hasOrderBy
+    ? baseQuery
+    : `SELECT * FROM (${baseQuery}) AS base_query ORDER BY (SELECT NULL)`;
+  const pagedQuery = `${wrappedQuery} OFFSET @__offset ROWS FETCH NEXT @__limit ROWS ONLY`;
+
+  let offset = 0;
+  while (true) {
+    const request = pool.request();
+    request.timeout = requestTimeout;
+    attachRangeParameters(request);
+    request.input('__offset', sql.Int, offset);
+    request.input('__limit', sql.Int, batchSize);
+    const result = await request.query(pagedQuery);
+    const rows = result?.recordset || [];
+    if (!rows.length) {
+      break;
+    }
+    yield rows;
+    if (rows.length < batchSize) {
+      break;
+    }
+    offset += rows.length;
   }
 }
 
@@ -1557,16 +1725,12 @@ export async function checkSqlServerHealth() {
       message: 'Chưa cấu hình máy chủ hoặc cơ sở dữ liệu SQL Server',
     };
   }
-  const pool = new sql.ConnectionPool({
-    ...connectionConfig,
-    connectionTimeout: connectionConfig.connectionTimeout ?? 5000,
-    requestTimeout: connectionConfig.requestTimeout ?? 5000,
-    pool: { max: 1, min: 0, idleTimeoutMillis: 3000 },
-  });
-  const poolClose = () => pool.close().catch(() => {});
   try {
-    await pool.connect();
-    await pool.request().query('SELECT 1 AS ok');
+    const pool = await sqlPoolManager.getPool(connectionConfig);
+    const request = pool.request();
+    const timeout = connectionConfig.requestTimeout ?? 5000;
+    request.timeout = timeout;
+    await request.query('SELECT 1 AS ok');
     return {
       ok: true,
       state: 'ready',
@@ -1587,8 +1751,6 @@ export async function checkSqlServerHealth() {
       number: err?.number || null,
       checkedAt: new Date().toISOString(),
     };
-  } finally {
-    await poolClose();
   }
 }
 
@@ -1610,7 +1772,7 @@ async function runEcusSync({ from, to, actor = 'system', reason = 'manual' } = {
   const config = getEcusConfig();
   const range = computeRangeWindow(config, { from, to });
   const syncReason = reason || 'manual';
-  const rawRows = await fetchEcusDeclarations(range, config);
+  const rawIterator = fetchEcusDeclarations(range, config);
   const rules = getRulesValue();
   const excludeSet = new Set(
     Array.isArray(rules?.license?.exclude?.codes)
@@ -1621,23 +1783,41 @@ async function runEcusSync({ from, to, actor = 'system', reason = 'manual' } = {
     licenseExcludeSet: excludeSet,
     memberTeamMap: getMemberTeamMap(),
   };
-
-  const mapped = rawRows
-    .map((row) => mapEcusRow(row, config, context))
-    .filter((row) => row && row.so_tk && row.date);
-
   const runAtIso = new Date().toISOString();
+  const existingRows = getDeclRows();
+  const keyOf = (row) => `${(row?.so_tk ?? '').toString()}_${normalizeStr(row?.nhanh || '')}`;
+  const mergedMap = new Map();
+  for (const row of existingRows) {
+    if (!row) continue;
+    mergedMap.set(keyOf(row), row);
+  }
 
-  const saved = saveDeclRowsServer(mapped, {
-    overwrite: false,
+  let totalFetched = 0;
+  let totalImported = 0;
+
+  for await (const batch of rawIterator) {
+    totalFetched += batch.length;
+    const mappedBatch = batch
+      .map((row) => mapEcusRow(row, config, context))
+      .filter((row) => row && row.so_tk && row.date);
+    totalImported += mappedBatch.length;
+    for (const row of mappedBatch) {
+      mergedMap.set(keyOf(row), row);
+    }
+  }
+
+  const mergedRows = Array.from(mergedMap.values());
+  setJSONValue('decl_rows_v1', mergedRows);
+  pushAuditLog({
     actor,
-    detail: `Đồng bộ ${mapped.length} tờ khai từ ECUS (${range.from || '...'} → ${range.to || '...'}) [${syncReason}]`,
+    action: 'decl.merge',
+    detail: `Đồng bộ ${totalImported} tờ khai từ ECUS (${range.from || '...'} → ${range.to || '...'}) [${syncReason}] – tổng lưu: ${mergedRows.length}`,
   });
 
   const alertSummary = evaluateDeclarationAlerts({ actor, reason: 'ecus-sync' });
 
   pushImportLog(
-    `ECUS sync (${syncReason}) ${mapped.length} dòng (${range.from || '...'} → ${range.to || '...'}) – tổng lưu: ${saved}`,
+    `ECUS sync (${syncReason}) ${totalImported} dòng (${range.from || '...'} → ${range.to || '...'}) – tổng lưu: ${mergedRows.length}`,
   );
 
   const nextConfig = saveEcusConfig({
@@ -1645,9 +1825,9 @@ async function runEcusSync({ from, to, actor = 'system', reason = 'manual' } = {
     lastStatus: 'success',
     lastSummary: {
       runAt: runAtIso,
-      rowsFetched: rawRows.length,
-      rowsImported: mapped.length,
-      totalStored: saved,
+      rowsFetched: totalFetched,
+      rowsImported: totalImported,
+      totalStored: mergedRows.length,
       range,
       alerts: alertSummary,
     },
@@ -1655,9 +1835,9 @@ async function runEcusSync({ from, to, actor = 'system', reason = 'manual' } = {
 
   return {
     config: nextConfig,
-    fetched: rawRows.length,
-    imported: mapped.length,
-    storedTotal: saved,
+    fetched: totalFetched,
+    imported: totalImported,
+    storedTotal: mergedRows.length,
     range,
     alerts: alertSummary,
     runAt: runAtIso,
