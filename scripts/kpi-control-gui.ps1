@@ -4,8 +4,57 @@ param(
     [switch]$AutoStart
 )
 
-Add-Type -AssemblyName PresentationFramework | Out-Null
-Add-Type -AssemblyName PresentationCore | Out-Null
+function Stop-DueToMissingPrerequisite {
+    param(
+        [string]$Reason,
+        [string[]]$Guidance = @()
+    )
+
+    Write-Host "" # tạo khoảng trắng để dễ đọc
+    Write-Host "❌ $Reason" -ForegroundColor Red
+    if ($Guidance -and $Guidance.Count -gt 0) {
+        Write-Host "Hướng dẫn khắc phục:" -ForegroundColor Yellow
+        foreach ($item in $Guidance) {
+            Write-Host "  - $item"
+        }
+    }
+    exit 1
+}
+
+function Assert-DesktopPowerShell {
+    if (-not $IsWindows) {
+        Stop-DueToMissingPrerequisite -Reason 'Script giao diện cần chạy trên Windows vì phụ thuộc WPF.' -Guidance @(
+            'Hãy chạy file này bằng PowerShell trên Windows 10/11 thay vì môi trường Linux/WSL.',
+            'Nếu đang dùng máy ảo hoặc container, hãy chuyển sang PowerShell trên máy Windows chính.'
+        )
+    }
+
+    if ($PSVersionTable.PSVersion.Major -lt 5) {
+        Stop-DueToMissingPrerequisite -Reason "Phiên bản PowerShell $($PSVersionTable.PSVersion) quá cũ để khởi tạo WPF." -Guidance @(
+            'Cài Windows PowerShell 5.1 (mặc định trên Windows) hoặc PowerShell 7 trở lên.',
+            'Có thể cài nhanh bằng: winget install Microsoft.PowerShell -s winget.'
+        )
+    }
+}
+
+function Assert-WpfAssemblies {
+    $assemblies = @('PresentationFramework', 'PresentationCore')
+
+    foreach ($assembly in $assemblies) {
+        try {
+            Add-Type -AssemblyName $assembly -ErrorAction Stop | Out-Null
+        } catch {
+            Stop-DueToMissingPrerequisite -Reason "Không thể nạp thư viện WPF '$assembly': $($_.Exception.Message)" -Guidance @(
+                'Bật .NET Framework 4.8 trong Control Panel -> Turn Windows features on or off.',
+                'Hoặc cài .NET Desktop Runtime: winget install Microsoft.DotNet.DesktopRuntime.7 hoặc tải từ https://aka.ms/dotnet-desktop-runtime.',
+                'Khởi động lại PowerShell sau khi cài đặt rồi chạy lại script.'
+            )
+        }
+    }
+}
+
+Assert-DesktopPowerShell
+Assert-WpfAssemblies
 
 $script:RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $script:CurrentPort = $Port
