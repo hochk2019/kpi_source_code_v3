@@ -31,6 +31,19 @@ function resolveDbFile(value) {
   return path.resolve(__dirname, value);
 }
 
+function resolveBackupDir(value) {
+  if (!value) {
+    return path.resolve(__dirname, 'data/backups');
+  }
+  if (value === ':memory:') {
+    return ':memory:';
+  }
+  if (path.isAbsolute(value)) {
+    return value;
+  }
+  return path.resolve(__dirname, value);
+}
+
 function normalizeRangeDate(value, { isEnd = false } = {}) {
   if (value === null || value === undefined) {
     return null;
@@ -87,8 +100,11 @@ function normalizeRangeDate(value, { isEnd = false } = {}) {
 }
 
 export const DB_FILE = resolveDbFile(process.env.KPI_DB_FILE);
+export const DB_BACKUP_DIR = resolveBackupDir(process.env.KPI_DB_BACKUP_DIR);
 const LEGACY_JSON = path.resolve(__dirname, 'data/db.json');
 const DIST_DIR = path.resolve(__dirname, '../dist');
+const DB_BACKUP_CRON = (process.env.KPI_DB_BACKUP_CRON || '0 3 * * *').trim();
+const DB_BACKUP_RETENTION = Number.parseInt(process.env.KPI_DB_BACKUP_RETENTION || '14', 10);
 
 const DEFAULT_ECUS_SYNC_CONFIG = {
   enabled: false,
@@ -133,6 +149,17 @@ const DEFAULT_ALERT_STATE = {
   entries: {},
   lastEvaluatedAt: null,
 };
+
+const databaseInitState = {
+  seeded: false,
+  insertedEntries: 0,
+  missingInserted: 0,
+  timestamp: null,
+  dbFile: null,
+};
+
+let dbBackupJob = null;
+let backupInProgress = false;
 
 const ACCOUNT_PERMISSION_KEYS = [
   'importEdit',
@@ -315,10 +342,17 @@ function normalizeValue(value) {
 }
 
 export async function initializeDatabase({ dbFile = DB_FILE } = {}) {
-  if (dbFile !== ':memory:') {
-    await fs.mkdir(path.dirname(dbFile), { recursive: true });
+  const targetFile = dbFile === ':memory:' ? ':memory:' : path.resolve(dbFile);
+  databaseInitState.seeded = false;
+  databaseInitState.insertedEntries = 0;
+  databaseInitState.missingInserted = 0;
+  databaseInitState.timestamp = new Date().toISOString();
+  databaseInitState.dbFile = targetFile;
+
+  if (targetFile !== ':memory:') {
+    await fs.mkdir(path.dirname(targetFile), { recursive: true });
   }
-  const database = new Database(dbFile);
+  const database = new Database(targetFile);
   database.pragma('journal_mode = WAL');
   database.exec(
     'CREATE TABLE IF NOT EXISTS kv_store (key TEXT PRIMARY KEY, value TEXT NOT NULL)'
@@ -358,6 +392,9 @@ export async function initializeDatabase({ dbFile = DB_FILE } = {}) {
       }
     });
     insertMany(Object.entries(seedData));
+    databaseInitState.seeded = true;
+    databaseInitState.insertedEntries = Object.keys(seedData).length;
+    databaseInitState.missingInserted = 0;
   } else {
     const missingEntries = Object.entries(seedData).filter(([key]) => !existingKeys.has(key));
     if (missingEntries.length > 0) {
@@ -370,13 +407,133 @@ export async function initializeDatabase({ dbFile = DB_FILE } = {}) {
         }
       });
       insertMissing(missingEntries);
+      databaseInitState.seeded = false;
+      databaseInitState.insertedEntries = 0;
+      databaseInitState.missingInserted = missingEntries.length;
+    } else {
+      databaseInitState.seeded = false;
+      databaseInitState.insertedEntries = 0;
+      databaseInitState.missingInserted = 0;
     }
   }
 
   return database;
 }
 
+async function ensureBackupDirectory(backupDir) {
+  if (!backupDir || backupDir === ':memory:') {
+    throw new Error('Thư mục sao lưu không hợp lệ.');
+  }
+  await fs.mkdir(backupDir, { recursive: true });
+}
+
+async function rotateBackups(backupDir, retention) {
+  if (!Number.isFinite(retention) || retention <= 0) {
+    return;
+  }
+  const entries = await fs.readdir(backupDir, { withFileTypes: true });
+  const files = [];
+  for (const entry of entries) {
+    if (!entry.isFile()) continue;
+    const fullPath = path.join(backupDir, entry.name);
+    try {
+      const stats = await fs.stat(fullPath);
+      files.push({ path: fullPath, mtime: stats.mtimeMs });
+    } catch {
+      // ignore file that disappeared
+    }
+  }
+  files.sort((a, b) => b.mtime - a.mtime);
+  while (files.length > retention) {
+    const removed = files.pop();
+    if (!removed) break;
+    try {
+      await fs.rm(removed.path);
+    } catch (err) {
+      console.warn('Không thể xóa bản sao lưu cũ', removed.path, err);
+    }
+  }
+}
+
+export async function performDatabaseBackup({
+  dbFile = DB_FILE,
+  backupDir = DB_BACKUP_DIR,
+  retention = DB_BACKUP_RETENTION,
+  reason = 'manual',
+  actor = 'system',
+} = {}) {
+  if (!dbFile || dbFile === ':memory:') {
+    return { ok: false, reason: 'memory_db' };
+  }
+  if (!backupDir || backupDir === ':memory:') {
+    return { ok: false, reason: 'invalid_backup_dir' };
+  }
+  const sourceFile = dbFile === ':memory:' ? null : path.resolve(dbFile);
+  if (!sourceFile) {
+    return { ok: false, reason: 'memory_db' };
+  }
+  if (backupInProgress) {
+    return { ok: false, reason: 'in_progress' };
+  }
+  backupInProgress = true;
+  try {
+    await fs.access(sourceFile);
+  } catch {
+    backupInProgress = false;
+    return { ok: false, reason: 'missing_source' };
+  }
+
+  try {
+    await ensureBackupDirectory(backupDir);
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const filename = `storage-${timestamp}.sqlite`;
+    const destination = path.join(backupDir, filename);
+    await fs.copyFile(sourceFile, destination);
+    const stats = await fs.stat(destination);
+    await rotateBackups(backupDir, retention);
+    pushAuditLog({
+      actor,
+      action: 'db.backup',
+      detail: `Sao lưu CSDL (${reason})`,
+      meta: { file: destination, bytes: stats.size },
+    });
+    console.log(`💾 Đã sao lưu CSDL tới ${destination}`);
+    return { ok: true, file: destination, bytes: stats.size, reason };
+  } catch (err) {
+    console.error('Không thể sao lưu CSDL:', err);
+    return { ok: false, error: err?.message || String(err) };
+  } finally {
+    backupInProgress = false;
+  }
+}
+
+function refreshDatabaseBackupSchedule() {
+  if (dbBackupJob) {
+    dbBackupJob.stop();
+    dbBackupJob = null;
+  }
+  if (process.env.KPI_DISABLE_CRON === '1') {
+    return;
+  }
+  if (!DB_BACKUP_CRON || DB_BACKUP_CRON === 'never') {
+    return;
+  }
+  if (DB_FILE === ':memory:' || DB_BACKUP_DIR === ':memory:') {
+    return;
+  }
+  try {
+    dbBackupJob = cron.schedule(DB_BACKUP_CRON, () => {
+      performDatabaseBackup({ reason: 'scheduled' }).catch((err) => {
+        console.error('Cron sao lưu CSDL thất bại:', err);
+      });
+    });
+  } catch (err) {
+    console.error('Không thể thiết lập lịch sao lưu CSDL:', err);
+  }
+}
+
 const db = await initializeDatabase();
+refreshDatabaseBackupSchedule();
 
 function pruneExpiredSessions() {
   try {
@@ -2513,6 +2670,10 @@ export function stopServer() {
 
 export function getDatabaseHandle() {
   return db;
+}
+
+export function getDatabaseInitState() {
+  return { ...databaseInitState };
 }
 
 if (process.env.KPI_SKIP_LISTEN !== '1') {

@@ -1,5 +1,13 @@
 import { describe, it, expect } from 'vitest';
-import { computeKPI, DEFAULT_RULES, saveRules, deleteRule, loadRuleSets } from '@/lib/rules.js';
+import {
+  computeKPI,
+  DEFAULT_RULES,
+  saveRules,
+  deleteRule,
+  loadRuleSets,
+  exportRuleCollection,
+  restoreRuleCollection,
+} from '@/lib/rules.js';
 
 describe('computeKPI', () => {
   it('uses muc_hang when num_items is missing', () => {
@@ -74,5 +82,31 @@ describe('deleteRule', () => {
     const persisted = loadRuleSets();
     expect(persisted.sets.some((entry) => entry.id === extra.id)).toBe(false);
     expect(persisted.sets.length).toBeGreaterThanOrEqual(1);
+  });
+});
+
+describe('exportRuleCollection & restoreRuleCollection', () => {
+  it('sao lưu và khôi phục bộ quy tắc thành công', () => {
+    const snapshot = exportRuleCollection();
+    const backup = JSON.parse(JSON.stringify(snapshot));
+    const target = { ...backup.sets[0], name: 'Bộ khôi phục kiểm thử' };
+    const restoredData = {
+      version: backup.version,
+      activeId: target.id,
+      sets: [target],
+    };
+
+    try {
+      const restored = restoreRuleCollection(restoredData, { actor: 'tester' });
+      expect(restored.activeId).toBe(target.id);
+      expect(restored.sets).toHaveLength(1);
+      expect(restored.sets[0].name).toBe('Bộ khôi phục kiểm thử');
+
+      const persisted = loadRuleSets();
+      expect(persisted.activeId).toBe(target.id);
+      expect(persisted.sets).toHaveLength(1);
+    } finally {
+      restoreRuleCollection(snapshot, { actor: 'tester' });
+    }
   });
 });

@@ -13,6 +13,8 @@ import {
   createRuleTemplate,
   computeKPI,
   deleteRule,
+  exportRuleCollection,
+  restoreRuleCollection,
 } from "@/lib/rules.js";
 import { getData } from "@/lib/store.js";
 
@@ -500,20 +502,22 @@ export default function RulesEditor({ canEdit = true, currentUser = null }) {
     }
   };
 
-  const exportJSON = () => {
+  const exportCurrentRule = () => {
     const blob = new Blob([JSON.stringify(rule, null, 2)], { type: "application/json" });
     const link = document.createElement("a");
     link.href = URL.createObjectURL(blob);
     link.download = `${rule.name || "kpi_rules"}.json`;
     link.click();
+    setTimeout(() => URL.revokeObjectURL(link.href), 1000);
   };
 
-  const importJSON = (event) => {
+  const importCurrentRule = (event) => {
     if (isReadOnly) {
       alert("Bạn không có quyền import quy tắc.");
       return;
     }
-    const file = event.target.files?.[0];
+    const input = event.target;
+    const file = input.files?.[0];
     if (!file) return;
     const reader = new FileReader();
     reader.onload = () => {
@@ -526,6 +530,62 @@ export default function RulesEditor({ canEdit = true, currentUser = null }) {
         console.error(err);
         alert("File JSON không hợp lệ.");
       }
+      input.value = "";
+    };
+    reader.onerror = () => {
+      alert("Không thể đọc file JSON.");
+      input.value = "";
+    };
+    reader.readAsText(file);
+  };
+
+  const exportAllRules = () => {
+    const collection = exportRuleCollection();
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const blob = new Blob([JSON.stringify(collection, null, 2)], { type: "application/json" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = `kpi-rules-backup-${timestamp}.json`;
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+  };
+
+  const importAllRules = (event) => {
+    if (isReadOnly) {
+      alert("Bạn không có quyền khôi phục quy tắc.");
+      return;
+    }
+    const input = event.target;
+    const file = input.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const parsed = JSON.parse(reader.result);
+        const proceed = window.confirm(
+          "Khôi phục toàn bộ bộ quy tắc từ file sẽ ghi đè dữ liệu hiện tại. Bạn có chắc chắn?"
+        );
+        if (!proceed) {
+          return;
+        }
+        const restored = restoreRuleCollection(parsed, { actor });
+        setCollection(restored);
+        setActiveTab(restored.activeId);
+        setRule(loadRules(restored.activeId));
+        setApplyNow(false);
+        setDirty(false);
+        setVersion((prev) => prev + 1);
+        alert("Đã khôi phục toàn bộ bộ quy tắc từ file sao lưu.");
+      } catch (err) {
+        console.error(err);
+        alert("File sao lưu không hợp lệ.");
+      } finally {
+        input.value = "";
+      }
+    };
+    reader.onerror = () => {
+      alert("Không thể đọc file sao lưu.");
+      input.value = "";
     };
     reader.readAsText(file);
   };
@@ -827,22 +887,48 @@ export default function RulesEditor({ canEdit = true, currentUser = null }) {
             <div className="flex flex-wrap gap-2">
               <Button onClick={handleSave} disabled={isReadOnly}>Lưu</Button>
               <Button variant="outline" onClick={handleReset} disabled={isReadOnly}>Khôi phục bản đã lưu</Button>
-              <Button variant="outline" onClick={exportJSON}>Export JSON</Button>
+              <Button variant="outline" onClick={exportCurrentRule}>Xuất bộ đang mở</Button>
               <label className="inline-flex items-center gap-2">
                 <input
                   id="import-rule-json"
                   type="file"
                   accept=".json"
                   className="hidden"
-                  onChange={importJSON}
+                  onChange={importCurrentRule}
                   disabled={isReadOnly}
                 />
                 <Button
                   variant="outline"
-                  onClick={() => !isReadOnly && document.getElementById("import-rule-json").click()}
+                  onClick={() => {
+                    if (isReadOnly) return;
+                    const input = document.getElementById("import-rule-json");
+                    if (input) input.click();
+                  }}
                   disabled={isReadOnly}
                 >
-                  Import JSON
+                  Nhập vào bộ đang mở
+                </Button>
+              </label>
+              <Button variant="outline" onClick={exportAllRules}>Xuất quy tắc (sao lưu)</Button>
+              <label className="inline-flex items-center gap-2">
+                <input
+                  id="import-rules-collection"
+                  type="file"
+                  accept=".json"
+                  className="hidden"
+                  onChange={importAllRules}
+                  disabled={isReadOnly}
+                />
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    if (isReadOnly) return;
+                    const input = document.getElementById("import-rules-collection");
+                    if (input) input.click();
+                  }}
+                  disabled={isReadOnly}
+                >
+                  Khôi phục toàn bộ quy tắc
                 </Button>
               </label>
               <Button

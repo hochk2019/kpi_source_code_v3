@@ -9,7 +9,7 @@ console.log('🔍 Đang chạy health check backend...');
 
 try {
   const serverModule = await import('../server/index.js');
-  const { DB_FILE, getDatabaseHandle, checkSqlServerHealth } = serverModule;
+  const { DB_FILE, getDatabaseHandle, checkSqlServerHealth, getDatabaseInitState } = serverModule;
   const db = typeof serverModule.getDatabaseHandle === 'function'
     ? serverModule.getDatabaseHandle()
     : getDatabaseHandle?.();
@@ -21,6 +21,18 @@ try {
   try {
     db.prepare('SELECT 1').get();
     console.log(`✅ SQLite sẵn sàng (${DB_FILE || 'in-memory'})`);
+    if (typeof getDatabaseInitState === 'function') {
+      const initInfo = getDatabaseInitState();
+      if (initInfo?.seeded) {
+        console.warn(
+          `⚠️ Cảnh báo: SQLite vừa được seed lại với ${initInfo.insertedEntries} khóa mặc định. Hãy kiểm tra và khôi phục sao lưu nếu cần.`
+        );
+      } else if (initInfo?.missingInserted) {
+        console.log(
+          `ℹ️ SQLite đã bổ sung ${initInfo.missingInserted} khóa mặc định còn thiếu trong lần khởi động này.`
+        );
+      }
+    }
   } catch (err) {
     console.error('❌ Không thể truy vấn SQLite:', err.message);
     process.exit(1);

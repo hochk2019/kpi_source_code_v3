@@ -439,6 +439,25 @@ export function createRuleTemplate(baseRule = null, overrides = {}) {
   return next;
 }
 
+export function exportRuleCollection() {
+  return clone(loadRuleCollection());
+}
+
+export function restoreRuleCollection(collectionInput, { actor = 'system' } = {}) {
+  const persisted = persistCollection(collectionInput);
+  const activeRule = persisted.sets.find((entry) => entry.id === persisted.activeId);
+  pushAuditLog({
+    actor,
+    action: 'rules.restore_collection',
+    detail: `Khôi phục ${persisted.sets.length} bộ quy tắc`,
+    meta: {
+      activeId: persisted.activeId,
+      activeName: activeRule?.name || '',
+    },
+  });
+  return clone(persisted);
+}
+
 // ====== QUẢN LÝ GIẤY PHÉP ======
 const DIRECT_LICENSE_COUNT_FIELDS = [
   'Số lượng GP',

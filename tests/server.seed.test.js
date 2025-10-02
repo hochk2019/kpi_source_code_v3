@@ -13,9 +13,10 @@ process.env.KPI_SKIP_LISTEN = '1';
 process.env.KPI_DISABLE_CRON = '1';
 
 let initializeDatabase;
+let getDatabaseInitState;
 
 beforeAll(async () => {
-  ({ initializeDatabase } = await import('../server/index.js'));
+  ({ initializeDatabase, getDatabaseInitState } = await import('../server/index.js'));
 });
 
 describe('initializeDatabase seed logic', () => {
@@ -37,6 +38,10 @@ describe('initializeDatabase seed logic', () => {
     expect(() => JSON.parse(usersRow.value)).not.toThrow();
 
     db.close();
+
+    const info = getDatabaseInitState();
+    expect(info.seeded).toBe(true);
+    expect(info.insertedEntries).toBeGreaterThan(0);
   });
 
   it('giữ nguyên giá trị đã có và chỉ bổ sung key thiếu', async () => {
@@ -66,6 +71,9 @@ describe('initializeDatabase seed logic', () => {
     ]));
 
     db.close();
+    const info = getDatabaseInitState();
+    expect(info.seeded).toBe(false);
+    expect(info.missingInserted).toBeGreaterThanOrEqual(0);
     await fs.rm(tmpDir, { recursive: true, force: true });
   });
 });
