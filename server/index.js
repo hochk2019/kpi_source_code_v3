@@ -1240,6 +1240,62 @@ function buildSqlConnectionConfig(config) {
 const SQL_POOL_DEFAULT_CONNECTION_TIMEOUT = 5000;
 const SQL_POOL_DEFAULT_REQUEST_TIMEOUT = 10000;
 const SQL_POOL_DEFAULT_OPTIONS = { max: 5, min: 0, idleTimeoutMillis: 5000 };
+const SQL_CAPABILITY_CACHE = new Map();
+
+async function resolveSqlPaginationCapabilities(pool, connectionConfig, requestTimeout) {
+  const server = String(connectionConfig?.server ?? '').trim();
+  const database = String(connectionConfig?.database ?? '').trim();
+  if (!server || !database) {
+    return null;
+  }
+
+  const cacheKey = `${server}::${database}`;
+  const cached = SQL_CAPABILITY_CACHE.get(cacheKey);
+  if (cached) {
+    return cached;
+  }
+
+  try {
+    const request = pool.request();
+    if (Number.isFinite(requestTimeout) && requestTimeout > 0) {
+      request.timeout = requestTimeout;
+    }
+    request.input('dbName', sql.NVarChar, database);
+    const result = await request.query(`
+      SELECT
+        CAST(SERVERPROPERTY('ProductVersion') AS NVARCHAR(128)) AS productVersion,
+        CAST(SERVERPROPERTY('Edition') AS NVARCHAR(128)) AS edition,
+        d.compatibility_level AS compatibilityLevel
+      FROM sys.databases AS d
+      WHERE d.name = @dbName;
+    `);
+    const row = result?.recordset?.[0] || {};
+    const level = Number(row.compatibilityLevel);
+    const compatibilityLevel = Number.isFinite(level) ? level : null;
+    const supportsOffsetFetch = compatibilityLevel !== null ? compatibilityLevel >= 110 : false;
+    if (!supportsOffsetFetch) {
+      const levelText = compatibilityLevel === null ? 'unknown' : compatibilityLevel;
+      console.warn(
+        `SQL Server compatibility level ${levelText} does not support OFFSET/FETCH pagination; falling back to non-paginated sync.`
+      );
+    }
+    const payload = {
+      productVersion: row.productVersion || null,
+      edition: row.edition || null,
+      compatibilityLevel,
+      supportsOffsetFetch,
+    };
+
+    SQL_CAPABILITY_CACHE.set(cacheKey, payload);
+    return payload;
+  } catch (err) {
+    console.warn('Failed to discover SQL Server pagination capabilities', err);
+    const fallback = { compatibilityLevel: null, supportsOffsetFetch: false };
+    SQL_CAPABILITY_CACHE.set(cacheKey, fallback);
+    return fallback;
+  }
+}
+
 
 function createSqlPoolManager() {
   let pool = null;
@@ -1679,7 +1735,12 @@ async function* fetchEcusDeclarations(range, config) {
 
   const lowerQuery = baseQuery.toLowerCase();
   const containsOffset = /\boffset\s+\d+/u.test(lowerQuery) || /\bfetch\s+next\s+/u.test(lowerQuery);
-  const supportsPagination = batchSize > 0 && !containsOffset;
+  let supportsOffsetFetch = true;
+  if (batchSize > 0 && !containsOffset) {
+    const capabilities = await resolveSqlPaginationCapabilities(pool, connectionConfig, requestTimeout);
+    supportsOffsetFetch = capabilities?.supportsOffsetFetch !== false;
+  }
+  const supportsPagination = batchSize > 0 && !containsOffset && supportsOffsetFetch;
 
   if (!supportsPagination) {
     const request = pool.request();
