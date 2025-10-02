@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { computeKPI, DEFAULT_RULES } from '@/lib/rules.js';
+import { computeKPI, DEFAULT_RULES, saveRules, deleteRule, loadRuleSets } from '@/lib/rules.js';
 
 describe('computeKPI', () => {
   it('uses muc_hang when num_items is missing', () => {
@@ -38,5 +38,41 @@ describe('computeKPI', () => {
     const point = computeKPI(row, DEFAULT_RULES);
     // Nhóm 2: base 0.2 + 1 × 0.15 = 0.35, + C/O 0.3 → 0.65
     expect(point).toBe(0.7);
+  });
+
+  it('cộng điểm theo số dòng áp C/O khi có cấu hình', () => {
+    const row = {
+      loaiHinh: 'E41',
+      num_items: 1,
+      co_line_count: 5,
+      has_co: true,
+    };
+    const point = computeKPI(row, DEFAULT_RULES);
+    // 0.35 + 0.3 + (5 × 0.05) = 0.9
+    expect(point).toBe(0.9);
+  });
+});
+
+describe('deleteRule', () => {
+  it('không cho phép xóa bộ quy tắc cuối cùng', () => {
+    const onlyRule = loadRuleSets().sets[0];
+    expect(() => deleteRule(onlyRule.id)).toThrow(/cuối cùng/i);
+  });
+
+  it('xóa bộ quy tắc phụ và giữ lại các bộ khác', () => {
+    const extra = saveRules({
+      ...DEFAULT_RULES,
+      id: 'rule-phu',
+      name: 'Rule phụ',
+    }, { actor: 'tester', appendHistory: false, ruleId: 'rule-phu' });
+
+    const before = loadRuleSets();
+    expect(before.sets.some((entry) => entry.id === extra.id)).toBe(true);
+
+    const afterDelete = deleteRule(extra.id, { actor: 'tester' });
+    expect(afterDelete.sets.some((entry) => entry.id === extra.id)).toBe(false);
+    const persisted = loadRuleSets();
+    expect(persisted.sets.some((entry) => entry.id === extra.id)).toBe(false);
+    expect(persisted.sets.length).toBeGreaterThanOrEqual(1);
   });
 });

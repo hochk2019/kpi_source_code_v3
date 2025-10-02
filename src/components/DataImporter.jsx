@@ -13,7 +13,7 @@ import {
 } from "@/lib/store.js";
 import { mapRow, detectDateOrder } from "@/lib/importer.js";
 import { loadRules, computeKPI } from "@/lib/rules.js";
-import { deriveCOStatus, coLabel } from "@/shared/co.js";
+import { deriveCOStatus, coLabel, coLineCount } from "@/shared/co.js";
 
 const DEFAULT_PAGE_SIZE = 10;
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100, 200];
@@ -66,7 +66,11 @@ function ensureLicenseFields(row) {
 function ensureCOFields(row) {
   if (!row || typeof row !== "object") return row;
   const status = deriveCOStatus(row, row);
-  if (status.co === row.co && status.has_co === row.has_co) {
+  if (
+    status.co === row.co &&
+    status.has_co === row.has_co &&
+    status.co_line_count === row.co_line_count
+  ) {
     return row;
   }
   return status;
@@ -1436,10 +1440,13 @@ export default function DataImporter({
                 </td>
                 <td className="px-2 py-1">
                   {(() => {
+                    const lines = coLineCount(r);
                     const status = coLabel(r);
+                    const display = lines > 0 ? String(lines) : status;
+                    const hasValue = !!display;
                     return (
-                      <span className={status ? "text-emerald-600 font-medium" : "text-gray-400"}>
-                        {status || "Không"}
+                      <span className={hasValue ? "text-emerald-600 font-medium" : "text-gray-400"}>
+                        {display || ""}
                       </span>
                     );
                   })()}

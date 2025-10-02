@@ -10,6 +10,7 @@ import {
   setDefaultRule,
   createRuleTemplate,
   computeKPI,
+  deleteRule,
 } from "@/lib/rules.js";
 import { getData } from "@/lib/store.js";
 
@@ -334,21 +335,25 @@ export default function RulesEditor({ canEdit = true, currentUser = null }) {
   const [manualLicenses, setManualLicenses] = useState("ZB02,ZB03");
   const [manualAgency, setManualAgency] = useState("G&B");
   const [manualHasCO, setManualHasCO] = useState(true);
+  const [manualCoLines, setManualCoLines] = useState(0);
 
   const manualRow = useMemo(() => {
     const codes = manualLicenses
       .split(",")
       .map((code) => code.trim().toUpperCase())
       .filter(Boolean);
+    const coLines = Number(manualCoLines || 0);
+    const hasCOFlag = manualHasCO || coLines > 0;
     return {
       loaiHinh: manualType,
       num_items: Number(manualItems || 0),
       licenseCodes: codes,
       agency: manualAgency,
-      has_co: manualHasCO,
-      co: manualHasCO ? "Có" : "",
+      has_co: hasCOFlag,
+      co: hasCOFlag ? "Có" : "",
+      co_line_count: coLines,
     };
-  }, [manualAgency, manualHasCO, manualItems, manualLicenses, manualType]);
+  }, [manualAgency, manualCoLines, manualHasCO, manualItems, manualLicenses, manualType]);
 
   const kpiManual = computeKPI(manualRow, rule);
 
@@ -459,6 +464,38 @@ export default function RulesEditor({ canEdit = true, currentUser = null }) {
     const updated = setDefaultRule(rule.id, { actor });
     setCollection(updated);
     alert(`Đã đặt "${rule.name}" làm bộ quy tắc mặc định.`);
+  };
+
+  const handleDeleteRule = () => {
+    if (isReadOnly) return;
+    if (!rule?.id) return;
+    if (collection.sets.length <= 1) {
+      alert("Không thể xóa bộ quy tắc cuối cùng.");
+      return;
+    }
+    const confirmMessage = `Bạn chắc chắn muốn xóa bộ quy tắc "${rule.name || rule.id}"?`;
+    if (!window.confirm(confirmMessage)) {
+      return;
+    }
+    const removedName = rule.name || rule.id;
+    try {
+      const updated = deleteRule(rule.id, { actor });
+      setCollection(updated);
+      const nextActiveId = updated.activeId || updated.sets[0]?.id || null;
+      if (nextActiveId) {
+        setActiveTab(nextActiveId);
+        setRule(loadRules(nextActiveId));
+      } else {
+        setRule(loadRules());
+      }
+      setApplyNow(false);
+      setDirty(false);
+      setVersion((prev) => prev + 1);
+      alert(`Đã xóa bộ quy tắc ${removedName}.`);
+    } catch (err) {
+      console.error(err);
+      alert(err?.message || "Không thể xóa bộ quy tắc.");
+    }
   };
 
   const exportJSON = () => {
@@ -722,6 +759,28 @@ export default function RulesEditor({ canEdit = true, currentUser = null }) {
                   disabled={isReadOnly || !(rule?.bonuses?.co?.enabled ?? false)}
                 />
               </div>
+              <div>
+                <label className="text-sm text-gray-600">Điểm cộng mỗi dòng áp C/O</label>
+                <Num
+                  value={rule?.bonuses?.co?.perLine ?? 0}
+                  onChange={(val) =>
+                    updateRule({
+                      ...rule,
+                      bonuses: {
+                        ...rule.bonuses,
+                        co: {
+                          ...rule.bonuses?.co,
+                          perLine: val,
+                        },
+                      },
+                    })
+                  }
+                  disabled={isReadOnly || !(rule?.bonuses?.co?.enabled ?? false)}
+                />
+                <div className="text-xs text-gray-500 mt-1">
+                  Điểm này nhân với số dòng hàng áp C/O trong tờ khai.
+                </div>
+              </div>
             </div>
           </div>
 
@@ -768,6 +827,13 @@ export default function RulesEditor({ canEdit = true, currentUser = null }) {
                   Import JSON
                 </Button>
               </label>
+              <Button
+                variant="destructive"
+                onClick={handleDeleteRule}
+                disabled={isReadOnly || collection.sets.length <= 1}
+              >
+                Xóa bộ quy tắc
+              </Button>
             </div>
           </div>
 
@@ -838,14 +904,23 @@ export default function RulesEditor({ canEdit = true, currentUser = null }) {
                 <label className="text-sm text-gray-600">Đại lý HQ</label>
                 <Input value={manualAgency} onChange={(event) => setManualAgency(event.target.value)} />
               </div>
-              <label className="inline-flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={manualHasCO}
-                  onChange={(event) => setManualHasCO(event.target.checked)}
-                />
-                Có C/O
-              </label>
+              <div className="flex items-center gap-2 text-sm">
+                <label className="inline-flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={manualHasCO}
+                    onChange={(event) => setManualHasCO(event.target.checked)}
+                  />
+                  Có C/O
+                </label>
+              </div>
+              <div>
+                <label className="text-sm text-gray-600">Số dòng áp C/O</label>
+                <Num step="1" value={manualCoLines} onChange={setManualCoLines} />
+                <div className="text-xs text-gray-500 mt-1">
+                  Điểm C/O theo dòng = số dòng × điểm mỗi dòng.
+                </div>
+              </div>
             </div>
             <div>
               <b>KẾT QUẢ:</b> {kpiManual.toFixed(1)}

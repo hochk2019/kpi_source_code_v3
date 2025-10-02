@@ -622,6 +622,7 @@ describe('ECUS sync API', () => {
         MaSoThue: '5555555555',
         Ten_doanh_nghiep: 'CÔNG TY MỚI',
         Loai_hinh: 'E11',
+        ts_xnk_ma_bt: '<TS_XNK_MA_BT>B05</TS_XNK_MA_BT>',
       },
     ]);
 
@@ -635,6 +636,8 @@ describe('ECUS sync API', () => {
     const statuses = res.body.preview.rows.map((row) => row.status);
     expect(statuses).toContain('existing');
     expect(statuses).toContain('new');
+    const newRow = res.body.preview.rows.find((row) => row.status === 'new');
+    expect(newRow?.co_line_count).toBe(1);
   });
 
   it('lưu cấu hình và chạy đồng bộ thành công', async () => {

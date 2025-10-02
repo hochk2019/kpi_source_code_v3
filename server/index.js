@@ -11,7 +11,7 @@ import bcrypt from 'bcryptjs';
 import crypto from 'node:crypto';
 import { generateReport } from './reportExport.js';
 import { DEFAULT_RULES as SHARED_DEFAULT_RULES } from '../src/shared/defaultRules.js';
-import { deriveCOStatus } from '../src/shared/co.js';
+import { deriveCOStatus, parseCoLineCount } from '../src/shared/co.js';
 import { recordSqlTimeout } from './sqlMonitor.js';
 
 const moduleUrl = typeof import.meta !== 'undefined' ? import.meta.url || '' : '';
@@ -1655,6 +1655,30 @@ const COLUMN_ALIASES = Object.freeze({
     'Nhan vien xuat',
   ],
   team: ['team', 'team_name', 'to_doi', 'To_doi', 'ten_to', 'ToDoi', 'Tổ đội', 'To doi'],
+  co_line_count: [
+    'co_line_count',
+    'coLineCount',
+    'co_lines',
+    'coLines',
+    'co_line',
+    'coLine',
+    'co_count',
+    'coCount',
+    'so_dong_co',
+    'So_dong_co',
+    'sodongco',
+    'so_dong_ap_co',
+    'So_dong_ap_co',
+    'dong_hang_ap_co',
+    'Dong_hang_ap_co',
+    'donghangapco',
+    'co_lines_count',
+    'coLineItems',
+    'co_line_items',
+    'CO_Count',
+    'CO_LINES',
+    'CO_Lines',
+  ],
 });
 
 function buildRecordKeyLookup(record) {
@@ -1735,6 +1759,8 @@ function mapEcusRow(record, config, context) {
     licensesRaw !== undefined ? licensesRaw : getField('license_codes'),
     context.licenseExcludeSet,
   );
+  const coLineRaw = getField('co_line_count');
+  const coLineCount = parseCoLineCount(coLineRaw);
 
   let nhanVien = normalizeStr(getField('nhan_vien'));
   if (!nhanVien) {
@@ -1774,6 +1800,7 @@ function mapEcusRow(record, config, context) {
     nhan_vien: nhanVien,
     team,
     isExport,
+    co_line_count: coLineCount,
   };
   return deriveCOStatus(record, base);
 }

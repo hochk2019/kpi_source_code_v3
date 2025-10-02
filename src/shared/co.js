@@ -1,6 +1,25 @@
-const NON_CO_CODES = new Set(["B01", "B03", "B30"]);
+const NON_CO_CODES = new Set(["B01", "B03", "B30", "B02"]);
 const DIRECT_TRUE_VALUES = new Set(["CO", "CÓ", "YES", "TRUE", "1", "X", "AVAILABLE", "HAS"]);
 const DIRECT_FALSE_VALUES = new Set(["KHÔNG", "NO", "FALSE", "0", "", "NONE"]);
+
+const CO_LINE_KEY_PATTERNS = new Set([
+  "colinecount",
+  "colines",
+  "coline",
+  "co_lines",
+  "coitems",
+  "coitem",
+  "co_count",
+  "cocount",
+  "co_dong",
+  "codong",
+  "donghangapco",
+  "donghangco",
+  "so_dong_co",
+  "sodongco",
+  "so_dong_ap_co",
+  "sodongapco",
+]);
 
 function normalizeString(value) {
   if (value === null || value === undefined) return "";
@@ -12,6 +31,56 @@ function normalizeCode(code) {
   return normalized.replace(/[^A-Z0-9]/g, "");
 }
 
+function normalizeKey(value) {
+  return normalizeString(value)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^A-Za-z0-9]/g, "")
+    .toLowerCase();
+}
+
+export function parseCoLineCount(value) {
+  if (value === null || value === undefined) return 0;
+  if (typeof value === "number") {
+    return Number.isFinite(value) && value > 0 ? Math.round(value) : 0;
+  }
+  if (typeof value === "string") {
+    const text = value.trim();
+    if (!text) return 0;
+    const match = text.replace(/,/g, ".").match(/-?\d+(?:\.\d+)?/);
+    if (!match) return 0;
+    const num = Number(match[0]);
+    return Number.isFinite(num) && num > 0 ? Math.round(num) : 0;
+  }
+  if (Array.isArray(value)) {
+    let total = 0;
+    for (const item of value) {
+      total += parseCoLineCount(item);
+    }
+    return total;
+  }
+  if (typeof value === "object") {
+    const candidate = value.count ?? value.total ?? value.value ?? value.lines ?? value.co ?? null;
+    if (candidate !== null && candidate !== undefined) {
+      return parseCoLineCount(candidate);
+    }
+  }
+  return 0;
+}
+
+function readCoLineCount(record) {
+  if (!record || typeof record !== "object") return 0;
+  for (const [key, value] of Object.entries(record)) {
+    const normalized = normalizeKey(key);
+    if (!normalized) continue;
+    if (CO_LINE_KEY_PATTERNS.has(normalized)) {
+      const parsed = parseCoLineCount(value);
+      if (parsed > 0) return parsed;
+    }
+  }
+  return 0;
+}
+
 function extractCodesFromString(raw, collector) {
   if (!raw) return;
   const text = raw.toString();
@@ -21,6 +90,7 @@ function extractCodesFromString(raw, collector) {
   }
   // Generic uppercase codes separated by punctuation/newlines
   for (const part of text.split(/[\s,;|]+/g)) {
+    if (/TS_XNK_MA_BT/i.test(part)) continue;
     collector(normalizeCode(part));
   }
 }
@@ -118,24 +188,49 @@ export function evaluateCOFromRecord(record) {
     hasCO,
     codes: Array.from(codes).filter(Boolean),
     matched: filtered,
+    lineCount: filtered.length,
   };
 }
 
 export function deriveCOStatus(record, existing = {}) {
   const evaluation = evaluateCOFromRecord(record);
-  const hasCO = evaluation.hasCO || existing.has_co || existing.co === "Có";
+  const existingCount = readCoLineCount(existing);
+  const recordCount = readCoLineCount(record);
+  const evaluationCount = evaluation.lineCount || 0;
+  const coLineCount = Math.max(existingCount, recordCount, evaluationCount);
+  const hasCO = evaluation.hasCO || existing.has_co || existing.co === "Có" || coLineCount > 0;
   const label = hasCO ? "Có" : "";
   return {
     ...existing,
     co: label,
     has_co: !!hasCO,
     co_codes: evaluation.codes,
+    co_line_count: coLineCount,
   };
 }
 
 export function coLabel(row) {
   if (!row) return "";
+  const lines = coLineCount(row);
+  if (lines > 0) return String(lines);
   if (typeof row.co === "string" && row.co.trim()) return row.co.trim();
   if (row.has_co) return "Có";
   return "";
+}
+
+export function coLineCount(row) {
+  if (!row || typeof row !== "object") return 0;
+  const direct = readCoLineCount(row);
+  if (direct > 0) return direct;
+  const codes = Array.isArray(row.co_codes) ? row.co_codes : [];
+  if (codes.length) {
+    const matched = new Set();
+    for (const code of codes) {
+      const normalized = normalizeCode(code);
+      if (!normalized || NON_CO_CODES.has(normalized)) continue;
+      matched.add(normalized);
+    }
+    if (matched.size > 0) return matched.size;
+  }
+  return 0;
 }

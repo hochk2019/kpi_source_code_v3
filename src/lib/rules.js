@@ -19,6 +19,7 @@ import {
   createDefaultRuleCollection,
   createDefaultRuleSetV2,
 } from '@/shared/defaultRules.js';
+import { coLineCount } from '@/shared/co.js';
 export { DEFAULT_RULES } from '@/shared/defaultRules.js';
 
 const KEY_HISTORY = 'kpi_rules_history';
@@ -157,11 +158,20 @@ function normalizeBonuses(rawBonuses, fallbackBonuses) {
   const base = clone(fallbackBonuses || {});
   const input = rawBonuses || {};
   const rawCo = input.co || base.co || {};
+  const perLineRaw =
+    rawCo.perLine ??
+    rawCo.perLinePoints ??
+    rawCo.perLineBonus ??
+    base.co?.perLine ??
+    base.co?.perLinePoints ??
+    base.co?.perLineBonus ??
+    0;
   return {
     co: {
       enabled: Boolean(rawCo.enabled),
       label: normText(rawCo.label) || normText(base.co?.label) || 'Cộng điểm khi tờ khai có C/O',
       points: Number.isFinite(Number(rawCo.points)) ? Number(rawCo.points) : Number(base.co?.points) || 0,
+      perLine: Number.isFinite(Number(perLineRaw)) ? Number(perLineRaw) : 0,
     },
   };
 }
@@ -566,6 +576,7 @@ function detectGroup(code, rules) {
 }
 
 function hasCOFlag(row) {
+  if (coLineCount(row) > 0) return true;
   if (row?.has_co) return true;
   const coText = String(row?.co || '').trim().toLowerCase();
   if (!coText) return false;
@@ -605,11 +616,50 @@ export function computeKPI(row, rulesInput) {
   point += licensePoints;
 
   const coBonus = rules?.bonuses?.co;
-  if (coBonus?.enabled && hasCOFlag(row)) {
-    point += Number(coBonus.points || 0);
+  if (coBonus?.enabled) {
+    if (hasCOFlag(row)) {
+      point += Number(coBonus.points || 0);
+    }
+    const perLine = Number(coBonus?.perLine || 0);
+    if (perLine) {
+      const lines = coLineCount(row);
+      if (lines > 0) {
+        point += lines * perLine;
+      }
+    }
   }
 
   return Math.max(0, Math.round((point + Number.EPSILON) * 10) / 10);
+}
+
+export function deleteRule(ruleId, { actor = 'system' } = {}) {
+  const collection = loadRuleCollection();
+  const normalizedId = normText(ruleId);
+  if (!normalizedId) {
+    throw new Error('Thiếu mã bộ quy tắc cần xóa');
+  }
+  if (collection.sets.length <= 1) {
+    throw new Error('Không thể xóa bộ quy tắc cuối cùng');
+  }
+  const idx = collection.sets.findIndex((entry) => entry.id === normalizedId);
+  if (idx < 0) {
+    return clone(collection);
+  }
+  const [removed] = collection.sets.splice(idx, 1);
+  if (!collection.sets.length) {
+    throw new Error('Không thể xóa toàn bộ bộ quy tắc');
+  }
+  if (collection.activeId === normalizedId) {
+    collection.activeId = collection.sets[0]?.id || collection.activeId;
+  }
+  const persisted = persistCollection(collection);
+  pushAuditLog({
+    actor,
+    action: 'rules.delete',
+    detail: removed ? `Xóa bộ quy tắc ${removed.name}` : 'Xóa bộ quy tắc',
+    meta: { ruleId: normalizedId },
+  });
+  return clone(persisted);
 }
 
 function addByTiers(numItems, tiers = [], isCumulative = false) {
