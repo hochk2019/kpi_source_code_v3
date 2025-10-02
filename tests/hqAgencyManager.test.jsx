@@ -1,11 +1,11 @@
 import React from 'react';
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import HQAgencyManager from '@/components/HQAgencyManager.jsx';
-import { HQ_KEY } from '@/lib/store.js';
-import { clearStorageCache, getItem as sharedGetItem } from '@/lib/storageClient.js';
+import { HQ_KEY, DECL_KEY } from '@/lib/store.js';
+import { clearStorageCache, getItem as sharedGetItem, setItem as sharedSetItem } from '@/lib/storageClient.js';
 
 vi.mock('xlsx', () => {
   const sheet_to_json = vi.fn(() => []);
@@ -27,12 +27,15 @@ describe('HQAgencyManager', () => {
 
   beforeEach(() => {
     clearStorageCache();
+    sharedSetItem(HQ_KEY, '[]');
+    sharedSetItem(DECL_KEY, '[]');
     XLSX.utils.sheet_to_json.mockReset();
     alertMock = vi.spyOn(window, 'alert').mockImplementation(() => {});
     confirmMock = vi.spyOn(window, 'confirm').mockImplementation(() => true);
   });
 
   afterEach(() => {
+    cleanup();
     alertMock.mockRestore();
     confirmMock.mockRestore();
   });
@@ -63,12 +66,43 @@ describe('HQAgencyManager', () => {
       expect(screen.getByDisplayValue('Beta Logistics')).toBeInTheDocument();
     });
 
-    await user.click(screen.getByRole('button', { name: /Lưu cấu hình/i }));
+    const saveButtons = screen.getAllByRole('button', { name: /Lưu cấu hình/i });
+    await user.click(saveButtons[0]);
 
     const saved = JSON.parse(sharedGetItem(HQ_KEY) || '[]');
     expect(saved).toEqual([
       { mst: '0201234567', company: 'Alpha Trading', agent: 'AIR' },
       { mst: '0101234567', company: 'Beta Logistics', agent: 'FCL' },
+    ]);
+
+    expect(alertMock).toHaveBeenCalledWith('Đã lưu cấu hình Đại lý HQ.');
+  });
+
+  it('tự động gợi ý tên công ty dựa trên dữ liệu tờ khai khi lưu MST mới', async () => {
+    sharedSetItem(DECL_KEY, JSON.stringify([
+      {
+        so_tk: 'TK001',
+        nhanh: '',
+        date: '2025-01-01',
+        mst: '0101234567',
+        cong_ty: 'Công Ty Demo',
+      },
+    ]));
+    sharedSetItem(HQ_KEY, JSON.stringify([
+      { mst: '0101234567', company: '', agent: '' },
+    ]));
+
+    const user = userEvent.setup();
+    render(
+      <HQAgencyManager canEdit currentUser={{ username: 'admin' }} />
+    );
+
+    const saveButtons = screen.getAllByRole('button', { name: /Lưu cấu hình/i });
+    await user.click(saveButtons[0]);
+
+    const saved = JSON.parse(sharedGetItem(HQ_KEY) || '[]');
+    expect(saved).toEqual([
+      { mst: '0101234567', company: 'Công Ty Demo', agent: '' },
     ]);
 
     expect(alertMock).toHaveBeenCalledWith('Đã lưu cấu hình Đại lý HQ.');

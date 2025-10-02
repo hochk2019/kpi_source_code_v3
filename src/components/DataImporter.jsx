@@ -15,8 +15,8 @@ import { mapRow, detectDateOrder } from "@/lib/importer.js";
 import { loadRules, computeKPI } from "@/lib/rules.js";
 import { deriveCOStatus, coLabel } from "@/shared/co.js";
 
-const DEFAULT_PAGE_SIZE = 20;
-const PAGE_SIZE_OPTIONS = [20, 50, 100, 200];
+const DEFAULT_PAGE_SIZE = 10;
+const PAGE_SIZE_OPTIONS = [10, 20, 50, 100, 200];
 
 const DEFAULT_SYNC_CONFIG = Object.freeze({
   enabled: false,
@@ -122,6 +122,18 @@ export default function DataImporter({
   const [statusInfo, setStatusInfo] = useState({ backend: null, database: null, checkedAt: null });
   const [statusLoading, setStatusLoading] = useState(false);
   const [statusError, setStatusError] = useState("");
+  const [previewRows, setPreviewRows] = useState([]);
+  const [previewLimited, setPreviewLimited] = useState(false);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState("");
+  const [previewRangeInfo, setPreviewRangeInfo] = useState(null);
+
+  useEffect(() => {
+    setPreviewRows([]);
+    setPreviewLimited(false);
+    setPreviewError("");
+    setPreviewRangeInfo(null);
+  }, [manualRange.from, manualRange.to]);
 
   const loadSavedRows = useCallback((opts = {}) => {
     const { bypassConfirm = false } = opts;
@@ -359,7 +371,13 @@ export default function DataImporter({
       }
       const payload = await response.json();
       const imported = payload?.result?.imported ?? 0;
-      setSyncMessage(`Đã đồng bộ ${imported} tờ khai từ ECUS.`);
+      const skipped = payload?.result?.skipped ?? 0;
+      const skippedNote = skipped > 0 ? `, bỏ qua ${skipped} tờ khai đã có` : '';
+      setSyncMessage(`Đã đồng bộ ${imported} tờ khai mới từ ECUS${skippedNote}.`);
+      setPreviewRows([]);
+      setPreviewRangeInfo(null);
+      setPreviewLimited(false);
+      setPreviewError("");
       await fetchSyncConfig();
       await fetchSyncStatus();
       await fetchAlerts();
@@ -372,6 +390,46 @@ export default function DataImporter({
       setSyncRunning(false);
     }
   }, [actor, canManageSync, fetchAlerts, fetchSyncConfig, fetchSyncStatus, loadSavedRows, manualRange.from, manualRange.to]);
+
+  const handlePreviewSync = useCallback(async () => {
+    if (!canManageSync) {
+      alert("Bạn không có quyền xem trước dữ liệu đồng bộ.");
+      return;
+    }
+    setPreviewLoading(true);
+    setPreviewError("");
+    try {
+      const response = await fetch("/api/import/ecus/preview", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          from: manualRange.from || undefined,
+          to: manualRange.to || undefined,
+          limit: 100,
+        }),
+        credentials: "include",
+      });
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      const payload = await response.json();
+      const rows = Array.isArray(payload?.preview?.rows) ? payload.preview.rows : [];
+      setPreviewRows(rows);
+      setPreviewLimited(!!payload?.preview?.limited);
+      setPreviewRangeInfo(payload?.preview?.range || null);
+      if (!rows.length) {
+        setPreviewError("Không tìm thấy tờ khai mới trong khoảng thời gian đã chọn.");
+      }
+    } catch (err) {
+      console.error("Không thể xem trước dữ liệu ECUS", err);
+      setPreviewError(err?.message || "Không thể xem trước dữ liệu đồng bộ");
+      setPreviewRows([]);
+      setPreviewLimited(false);
+      setPreviewRangeInfo(null);
+    } finally {
+      setPreviewLoading(false);
+    }
+  }, [canManageSync, manualRange.from, manualRange.to]);
 
   const handleManualRangeChange = useCallback((field, value) => {
     setManualRange((prev) => ({ ...prev, [field]: value }));
@@ -471,6 +529,21 @@ export default function DataImporter({
       return syncConfig.lastRun;
     }
   }, [syncConfig?.lastRun]);
+
+  const lastSyncSummary = syncConfig?.lastSummary || null;
+  const lastSyncRangeLabel = useMemo(() => {
+    if (!lastSyncSummary?.range) return "";
+    const from = lastSyncSummary.range.from || "";
+    const to = lastSyncSummary.range.to || "";
+    if (from && to) {
+      return `${from} → ${to}`;
+    }
+    return from || to;
+  }, [lastSyncSummary?.range?.from, lastSyncSummary?.range?.to]);
+  const lastSyncInserted = lastSyncSummary?.rowsInserted ?? lastSyncSummary?.rowsImported ?? 0;
+  const lastSyncSkipped = lastSyncSummary?.rowsSkipped ?? 0;
+  const lastSyncFetched = lastSyncSummary?.rowsFetched ?? 0;
+  const lastSyncTotal = lastSyncSummary?.totalStored ?? 0;
 
   // Đọc file XLSX
   function handleFileChange(e) {
@@ -872,6 +945,18 @@ export default function DataImporter({
               </div>
             )}
             {statusError && <div className="text-xs text-red-600">{statusError}</div>}
+            {lastSyncSummary && (
+              <div className="rounded border border-emerald-200 bg-emerald-50 p-2 text-xs text-emerald-700">
+                <div className="font-medium text-emerald-800">Kết quả lần chạy gần nhất</div>
+                <div className="mt-1 flex flex-wrap gap-3">
+                  {lastSyncRangeLabel && <span>Khoảng: {lastSyncRangeLabel}</span>}
+                  <span>Thu thập: {lastSyncFetched.toLocaleString("vi-VN")}</span>
+                  <span>Thêm mới: {lastSyncInserted.toLocaleString("vi-VN")}</span>
+                  <span>Bỏ qua: {lastSyncSkipped.toLocaleString("vi-VN")}</span>
+                  <span>Tổng sau đồng bộ: {lastSyncTotal.toLocaleString("vi-VN")}</span>
+                </div>
+              </div>
+            )}
           </div>
           {syncForm ? (
             <div className="mt-3 space-y-3">
@@ -982,13 +1067,67 @@ export default function DataImporter({
                 />
                 <button
                   type="button"
+                  onClick={handlePreviewSync}
+                  disabled={previewLoading || syncRunning}
+                  className="rounded border border-emerald-600 px-3 py-1 text-sm text-emerald-700 hover:bg-emerald-50 disabled:opacity-50"
+                >
+                  {previewLoading ? "Đang xem trước..." : "Xem trước dữ liệu"}
+                </button>
+                <button
+                  type="button"
                   onClick={handleRunSync}
                   disabled={syncRunning}
                   className="rounded bg-emerald-600 px-3 py-1 text-sm text-white disabled:opacity-50"
                 >
-                  Đồng bộ ngay
+                  {syncRunning ? "Đang đồng bộ..." : "Đồng bộ ngay"}
                 </button>
               </div>
+              {previewRangeInfo && (
+                <div className="text-xs text-gray-500">
+                  Khoảng xem trước: {(previewRangeInfo.from || "...")} → {(previewRangeInfo.to || "...")}
+                  {previewLimited && " (giới hạn 100 dòng đầu tiên)"}
+                </div>
+              )}
+              {previewError && <div className="text-xs text-red-600">{previewError}</div>}
+              {previewRows.length > 0 && (
+                <div className="space-y-2">
+                  <div className="text-xs text-gray-600">
+                    Xem trước {previewRows.length.toLocaleString("vi-VN")} dòng đầu tiên sẽ nhập vào hệ thống.
+                  </div>
+                  <div className="max-h-64 overflow-auto rounded border">
+                    <table className="min-w-full text-xs">
+                      <thead className="bg-emerald-50 text-emerald-800">
+                        <tr>
+                          <th className="px-2 py-1 text-left">Số tờ khai</th>
+                          <th className="px-2 py-1 text-left">Ngày</th>
+                          <th className="px-2 py-1 text-left">MST</th>
+                          <th className="px-2 py-1 text-left">Công ty</th>
+                          <th className="px-2 py-1 text-left">Nhân viên</th>
+                          <th className="px-2 py-1 text-left">Trạng thái</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {previewRows.map((row) => (
+                          <tr key={`${row.so_tk}_${row.nhanh || ""}`} className="odd:bg-white even:bg-emerald-50/40">
+                            <td className="px-2 py-1">{row.so_tk}</td>
+                            <td className="px-2 py-1">{row.date}</td>
+                            <td className="px-2 py-1">{row.mst}</td>
+                            <td className="px-2 py-1">{row.cong_ty}</td>
+                            <td className="px-2 py-1">{row.nhan_vien || <span className="italic text-gray-400">(chưa gán)</span>}</td>
+                            <td className="px-2 py-1">
+                              {row.status === "existing" ? (
+                                <span className="rounded bg-gray-200 px-2 py-0.5 text-xs text-gray-700">Đã có</span>
+                              ) : (
+                                <span className="rounded bg-emerald-100 px-2 py-0.5 text-xs text-emerald-700">Mới</span>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
               {syncMessage && <div className="text-sm text-emerald-600">{syncMessage}</div>}
               {syncError && <div className="text-sm text-red-600">{syncError}</div>}
             </div>
@@ -1033,6 +1172,18 @@ export default function DataImporter({
               </div>
             )}
             {statusError && <div className="text-xs text-red-600">{statusError}</div>}
+            {lastSyncSummary && (
+              <div className="rounded border border-emerald-200 bg-emerald-50 p-2 text-xs text-emerald-700">
+                <div className="font-medium text-emerald-800">Kết quả đồng bộ gần nhất</div>
+                <div className="mt-1 flex flex-wrap gap-3">
+                  {lastSyncRangeLabel && <span>Khoảng: {lastSyncRangeLabel}</span>}
+                  <span>Thu thập: {lastSyncFetched.toLocaleString("vi-VN")}</span>
+                  <span>Thêm mới: {lastSyncInserted.toLocaleString("vi-VN")}</span>
+                  <span>Bỏ qua: {lastSyncSkipped.toLocaleString("vi-VN")}</span>
+                  <span>Tổng sau đồng bộ: {lastSyncTotal.toLocaleString("vi-VN")}</span>
+                </div>
+              </div>
+            )}
           </div>
         </section>
       )}

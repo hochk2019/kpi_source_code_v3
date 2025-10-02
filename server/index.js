@@ -31,6 +31,61 @@ function resolveDbFile(value) {
   return path.resolve(__dirname, value);
 }
 
+function normalizeRangeDate(value, { isEnd = false } = {}) {
+  if (value === null || value === undefined) {
+    return null;
+  }
+
+  if (value instanceof Date) {
+    if (Number.isNaN(value.getTime())) {
+      return null;
+    }
+    if (isEnd) {
+      const end = new Date(value.getTime());
+      end.setHours(23, 59, 59, 999);
+      return end;
+    }
+    return value;
+  }
+
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+      return null;
+    }
+    if (isEnd) {
+      date.setHours(23, 59, 59, 999);
+    }
+    return date;
+  }
+
+  const str = `${value}`.trim();
+  if (!str) {
+    return null;
+  }
+
+  const dateOnlyMatch = str.match(/^(\d{4})-(\d{2})-(\d{2})$/u);
+  if (dateOnlyMatch) {
+    const [, yearRaw, monthRaw, dayRaw] = dateOnlyMatch;
+    const year = Number.parseInt(yearRaw, 10);
+    const month = Number.parseInt(monthRaw, 10);
+    const day = Number.parseInt(dayRaw, 10);
+    if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) {
+      return null;
+    }
+    if (isEnd) {
+      return new Date(year, month - 1, day, 23, 59, 59, 999);
+    }
+    return new Date(year, month - 1, day, 0, 0, 0, 0);
+  }
+
+  const parsed = new Date(str);
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+  return parsed;
+}
+
 export const DB_FILE = resolveDbFile(process.env.KPI_DB_FILE);
 const LEGACY_JSON = path.resolve(__dirname, 'data/db.json');
 const DIST_DIR = path.resolve(__dirname, '../dist');
@@ -464,6 +519,24 @@ function verifyStoragePermission(req, res, key) {
   return { context, required, denied: false };
 }
 
+function requireAdminSyncManage(req, res) {
+  const context = getSessionContext(req);
+  if (!context) {
+    res.status(401).json({ ok: false, error: 'Bạn cần đăng nhập bằng tài khoản quản trị.' });
+    return { context: null, denied: true };
+  }
+  const account = context.account || {};
+  if (account.role !== 'admin') {
+    res.status(403).json({ ok: false, error: 'Chỉ tài khoản quản trị mới được phép thao tác đồng bộ ECUS.' });
+    return { context, denied: true };
+  }
+  if (!account.permissions?.syncManage) {
+    res.status(403).json({ ok: false, error: 'Tài khoản quản trị hiện chưa được cấp quyền quản lý đồng bộ ECUS.' });
+    return { context, denied: true };
+  }
+  return { context, denied: false };
+}
+
 function setAttachmentHeaders(res, filename) {
   const original = filename || 'bao-cao-kpi.xlsx';
   const fallback = original.replace(/[^a-zA-Z0-9_.-]/g, '_') || 'bao-cao-kpi.xlsx';
@@ -648,6 +721,15 @@ function normalizeName(input) {
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase();
+}
+
+function getDeclarationKey(row) {
+  if (!row || typeof row !== 'object') {
+    return '';
+  }
+  const soTk = (row?.so_tk ?? '').toString();
+  const branch = normalizeStr(row?.nhanh || '');
+  return `${soTk}_${branch}`;
 }
 
 function toISODate(value, { preferMonthFirst = false } = {}) {
@@ -872,12 +954,11 @@ function saveDeclRowsServer(newRows, { overwrite = false, actor = 'system', deta
 
   const current = getDeclRows();
   const map = new Map();
-  const keyOf = (row) => `${(row?.so_tk ?? '').toString()}_${normalizeStr(row?.nhanh || '')}`;
   for (const row of current) {
-    map.set(keyOf(row), row);
+    map.set(getDeclarationKey(row), row);
   }
   for (const row of cleaned) {
-    map.set(keyOf(row), row);
+    map.set(getDeclarationKey(row), row);
   }
   const merged = Array.from(map.values());
   setJSONValue('decl_rows_v1', merged);
@@ -1041,7 +1122,7 @@ function markDeclarationsReviewed(keys, { actor = 'system' } = {}) {
   const keySet = new Set(keys);
   let updatedCount = 0;
   const nextRows = getDeclRows().map((row) => {
-    const key = `${(row?.so_tk ?? '').toString()}_${normalizeStr(row?.nhanh || '')}`;
+    const key = getDeclarationKey(row);
     if (!keySet.has(key)) return row;
     if (row?.reviewed) return row;
     updatedCount += 1;
@@ -1721,8 +1802,8 @@ async function* fetchEcusDeclarations(range, config) {
     Number.isFinite(normalizedBatchSize) && normalizedBatchSize > 0
       ? Math.max(1, Math.floor(normalizedBatchSize))
       : 0;
-  const fromDate = range.from ? new Date(range.from) : null;
-  const toDate = range.to ? new Date(range.to) : null;
+  const fromDate = normalizeRangeDate(range.from);
+  const toDate = normalizeRangeDate(range.to, { isEnd: true });
 
   const attachRangeParameters = (request) => {
     if (fromDate instanceof Date && !Number.isNaN(fromDate.getTime())) {
@@ -1833,41 +1914,91 @@ function computeRangeWindow(config, explicit) {
   return { from: toISO(start), to: toISO(end) };
 }
 
-async function runEcusSync({ from, to, actor = 'system', reason = 'manual' } = {}) {
-  const config = getEcusConfig();
-  const range = computeRangeWindow(config, { from, to });
-  const syncReason = reason || 'manual';
-  const rawIterator = fetchEcusDeclarations(range, config);
+function buildEcusSyncContext(config) {
   const rules = getRulesValue();
   const excludeSet = new Set(
     Array.isArray(rules?.license?.exclude?.codes)
       ? rules.license.exclude.codes.map((code) => normalizeStr(code).toUpperCase())
       : [],
   );
-  const context = {
+  return {
     licenseExcludeSet: excludeSet,
     memberTeamMap: getMemberTeamMap(),
+    config,
   };
+}
+
+async function previewEcusSync(rangeInput, { limit = 50 } = {}) {
+  const config = getEcusConfig();
+  const range = computeRangeWindow(config, rangeInput || {});
+  const context = buildEcusSyncContext(config);
+  const iterator = fetchEcusDeclarations(range, config);
+  const existingRows = getDeclRows();
+  const existingKeys = new Set(existingRows.map((row) => getDeclarationKey(row)));
+  const normalizedLimit = Number.isFinite(Number(limit)) ? Math.max(0, Math.floor(Number(limit))) : 0;
+  const rows = [];
+  let totalFetched = 0;
+
+  for await (const batch of iterator) {
+    totalFetched += batch.length;
+    for (const raw of batch) {
+      const mapped = mapEcusRow(raw, config, context);
+      if (!mapped) continue;
+      const key = getDeclarationKey(mapped);
+      rows.push({ ...mapped, status: existingKeys.has(key) ? 'existing' : 'new' });
+      if (normalizedLimit > 0 && rows.length >= normalizedLimit) {
+        return {
+          rows,
+          totalFetched,
+          limited: true,
+          range,
+          config,
+        };
+      }
+    }
+  }
+
+  return {
+    rows,
+    totalFetched,
+    limited: false,
+    range,
+    config,
+  };
+}
+
+async function runEcusSync({ from, to, actor = 'system', reason = 'manual' } = {}) {
+  const config = getEcusConfig();
+  const range = computeRangeWindow(config, { from, to });
+  const syncReason = reason || 'manual';
+  const rawIterator = fetchEcusDeclarations(range, config);
+  const context = buildEcusSyncContext(config);
   const runAtIso = new Date().toISOString();
   const existingRows = getDeclRows();
-  const keyOf = (row) => `${(row?.so_tk ?? '').toString()}_${normalizeStr(row?.nhanh || '')}`;
+  const existingCount = existingRows.length;
   const mergedMap = new Map();
   for (const row of existingRows) {
     if (!row) continue;
-    mergedMap.set(keyOf(row), row);
+    mergedMap.set(getDeclarationKey(row), row);
   }
 
   let totalFetched = 0;
-  let totalImported = 0;
+  let totalInserted = 0;
+  let skippedExisting = 0;
 
   for await (const batch of rawIterator) {
     totalFetched += batch.length;
     const mappedBatch = batch
       .map((row) => mapEcusRow(row, config, context))
       .filter((row) => row && row.so_tk && row.date);
-    totalImported += mappedBatch.length;
     for (const row of mappedBatch) {
-      mergedMap.set(keyOf(row), row);
+      const key = getDeclarationKey(row);
+      if (mergedMap.has(key)) {
+        skippedExisting += 1;
+        continue;
+      }
+      mergedMap.set(key, row);
+      totalInserted += 1;
     }
   }
 
@@ -1876,13 +2007,13 @@ async function runEcusSync({ from, to, actor = 'system', reason = 'manual' } = {
   pushAuditLog({
     actor,
     action: 'decl.merge',
-    detail: `Đồng bộ ${totalImported} tờ khai từ ECUS (${range.from || '...'} → ${range.to || '...'}) [${syncReason}] – tổng lưu: ${mergedRows.length}`,
+    detail: `Đồng bộ ${totalInserted} tờ khai mới từ ECUS (${range.from || '...'} → ${range.to || '...'}) [${syncReason}] – giữ nguyên ${skippedExisting} tờ khai đã có – tổng lưu: ${mergedRows.length}`,
   });
 
   const alertSummary = evaluateDeclarationAlerts({ actor, reason: 'ecus-sync' });
 
   pushImportLog(
-    `ECUS sync (${syncReason}) ${totalImported} dòng (${range.from || '...'} → ${range.to || '...'}) – tổng lưu: ${mergedRows.length}`,
+    `ECUS sync (${syncReason}) thêm ${totalInserted} dòng, bỏ qua ${skippedExisting} (${range.from || '...'} → ${range.to || '...'}) – tổng lưu: ${mergedRows.length}`,
   );
 
   const nextConfig = saveEcusConfig({
@@ -1891,8 +2022,10 @@ async function runEcusSync({ from, to, actor = 'system', reason = 'manual' } = {
     lastSummary: {
       runAt: runAtIso,
       rowsFetched: totalFetched,
-      rowsImported: totalImported,
+      rowsInserted: totalInserted,
+      rowsSkipped: skippedExisting,
       totalStored: mergedRows.length,
+      existingBefore: existingCount,
       range,
       alerts: alertSummary,
     },
@@ -1901,8 +2034,11 @@ async function runEcusSync({ from, to, actor = 'system', reason = 'manual' } = {
   return {
     config: nextConfig,
     fetched: totalFetched,
-    imported: totalImported,
+    imported: totalInserted,
+    skipped: skippedExisting,
     storedTotal: mergedRows.length,
+    existingBefore: existingCount,
+    existingAfter: mergedRows.length,
     range,
     alerts: alertSummary,
     runAt: runAtIso,
@@ -2237,6 +2373,10 @@ app.get('/api/import/ecus/status', async (req, res) => {
 });
 
 app.put('/api/import/ecus/config', (req, res) => {
+  const { denied } = requireAdminSyncManage(req, res);
+  if (denied) {
+    return;
+  }
   try {
     const payload = req.body?.config ?? req.body ?? {};
     const preservePassword = !!(req.body && req.body.preservePassword);
@@ -2248,7 +2388,33 @@ app.put('/api/import/ecus/config', (req, res) => {
   }
 });
 
+app.post('/api/import/ecus/preview', async (req, res) => {
+  const { denied } = requireAdminSyncManage(req, res);
+  if (denied) {
+    return;
+  }
+  try {
+    const { from, to, limit } = req.body || {};
+    const preview = await previewEcusSync({ from, to }, { limit });
+    res.json({
+      ok: true,
+      preview: {
+        rows: preview.rows,
+        limited: preview.limited,
+        fetched: preview.totalFetched,
+        range: preview.range,
+      },
+    });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err?.message || 'Không thể xem trước dữ liệu đồng bộ' });
+  }
+});
+
 app.post('/api/import/ecus/run', async (req, res) => {
+  const { denied } = requireAdminSyncManage(req, res);
+  if (denied) {
+    return;
+  }
   try {
     const actor = resolveActor(req);
     const { from, to } = req.body || {};

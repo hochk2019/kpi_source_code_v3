@@ -102,6 +102,8 @@ function createDefaultHandlers(state) {
       }),
     'POST /api/import/alerts': () => jsonResponse({ ok: true, updated: [] }),
     'POST /api/import/ecus/run': () => jsonResponse({ ok: true, result: { imported: 0, fetched: 0, alerts: {} } }),
+    'POST /api/import/ecus/preview': () =>
+      jsonResponse({ ok: true, preview: { rows: [], limited: false, fetched: 0, range: { from: '', to: '' } } }),
     'GET /api/audit': () => jsonResponse({ ok: true, logs: [] }),
     'GET /api/auth/accounts': () => jsonResponse({ ok: true, accounts: state.accounts.slice() }),
     'POST /api/auth/login': ({ init }) => {
