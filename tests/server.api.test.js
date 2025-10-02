@@ -495,6 +495,81 @@ beforeEach(() => {
   excelMock.__resetWorkbookCreateCount?.();
 });
 
+describe('Backup summary API', () => {
+  it('từ chối khi chưa đăng nhập', async () => {
+    const res = await request(app).get('/api/admin/backups/summary');
+    expect(res.status).toBe(401);
+    expect(res.body.ok).toBe(false);
+  });
+
+  it('từ chối khi tài khoản không có quyền audit', async () => {
+    const staffAgent = request.agent(app);
+    const loginRes = await staffAgent
+      .post('/api/auth/login')
+      .send({ username: 'nhanvien', password: '123456' });
+    expect(loginRes.status).toBe(200);
+
+    const res = await staffAgent.get('/api/admin/backups/summary');
+    expect(res.status).toBe(403);
+    expect(res.body.ok).toBe(false);
+  });
+
+  it('trả về lịch sao lưu và nhật ký gần nhất cho quản trị viên', async () => {
+    const adminAgent = request.agent(app);
+    const loginRes = await adminAgent
+      .post('/api/auth/login')
+      .send({ username: 'admin', password: 'admin123' });
+    expect(loginRes.status).toBe(200);
+
+    const logs = [
+      {
+        ts: '2024-05-01T03:00:00.000Z',
+        actor: 'system',
+        action: 'db.backup',
+        detail: 'Sao lưu CSDL (scheduled)',
+        meta: { status: 'success', reason: 'scheduled', bytes: 2048 },
+      },
+      {
+        ts: '2024-05-01T02:00:00.000Z',
+        actor: 'system',
+        action: 'db.backup',
+        detail: 'Sao lưu CSDL thất bại (memory_db)',
+        meta: { status: 'failure', reason: 'memory_db' },
+      },
+      {
+        ts: '2024-04-30T23:00:00.000Z',
+        actor: 'tester',
+        action: 'other.action',
+        detail: 'ignored',
+      },
+    ];
+    const db = getDb();
+    db.prepare(
+      'INSERT INTO kv_store (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value'
+    ).run('audit_logs_v1', JSON.stringify(logs));
+
+    const res = await adminAgent.get('/api/admin/backups/summary');
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+    const summary = res.body.summary;
+    expect(summary.schedule).toMatchObject({
+      cron: '0 3 * * *',
+      active: false,
+    });
+    expect(Array.isArray(summary.schedule.reasons)).toBe(true);
+    expect(summary.schedule.reasons.length).toBeGreaterThan(0);
+    expect(summary.lastSuccess).toMatchObject({
+      actor: 'system',
+      meta: expect.objectContaining({ status: 'success', bytes: 2048 }),
+    });
+    expect(summary.lastFailure).toMatchObject({
+      meta: expect.objectContaining({ status: 'failure', reason: 'memory_db' }),
+    });
+    expect(Array.isArray(summary.recent)).toBe(true);
+    expect(summary.recent[0]).toMatchObject({ action: 'db.backup' });
+  });
+});
+
 describe('ECUS sync API', () => {
   it('trả về cấu hình mặc định', async () => {
     const res = await request(app).get('/api/import/ecus/config');

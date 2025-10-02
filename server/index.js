@@ -160,6 +160,12 @@ const databaseInitState = {
 
 let dbBackupJob = null;
 let backupInProgress = false;
+const backupScheduleMeta = {
+  active: false,
+  reasons: [],
+  lastError: null,
+  refreshedAt: null,
+};
 
 const ACCOUNT_PERMISSION_KEYS = [
   'importEdit',
@@ -525,18 +531,101 @@ export async function performDatabaseBackup({
   }
 }
 
+function normalizeBackupAuditEntry(entry) {
+  if (!entry || typeof entry !== 'object') {
+    return null;
+  }
+  const ts = typeof entry.ts === 'string' ? entry.ts : null;
+  const actor = entry.actor || 'system';
+  const action = entry.action || 'unknown';
+  const detail = entry.detail || '';
+  const meta = entry.meta ?? null;
+  return { ts, actor, action, detail, meta };
+}
+
+function nextBackupRunISO() {
+  if (!backupScheduleMeta.active || !dbBackupJob || typeof dbBackupJob.nextDates !== 'function') {
+    return null;
+  }
+  try {
+    const next = dbBackupJob.nextDates();
+    if (!next) return null;
+    if (typeof next.toISO === 'function') {
+      return next.toISO();
+    }
+    if (typeof next.toDate === 'function') {
+      return next.toDate().toISOString();
+    }
+    if (next instanceof Date) {
+      return next.toISOString();
+    }
+    const candidate = new Date(next);
+    return Number.isNaN(candidate.getTime()) ? null : candidate.toISOString();
+  } catch {
+    return null;
+  }
+}
+
+function buildBackupSummary({ limit = 10 } = {}) {
+  const logs = getJSONValue('audit_logs_v1', []);
+  const backupLogs = Array.isArray(logs)
+    ? logs.filter((entry) => entry && entry.action === 'db.backup')
+    : [];
+  const clamp = Number.isFinite(limit) && limit > 0 ? Math.min(limit, backupLogs.length) : backupLogs.length;
+  const recent = backupLogs.slice(0, clamp).map((entry) => normalizeBackupAuditEntry(entry)).filter(Boolean);
+  const lastSuccess = normalizeBackupAuditEntry(
+    backupLogs.find((entry) => entry?.meta?.status === 'success') || null
+  );
+  const lastFailure = normalizeBackupAuditEntry(
+    backupLogs.find((entry) => entry?.meta?.status === 'failure') || null
+  );
+  const retention = Number.isFinite(DB_BACKUP_RETENTION) && DB_BACKUP_RETENTION > 0 ? DB_BACKUP_RETENTION : null;
+
+  return {
+    schedule: {
+      cron: DB_BACKUP_CRON,
+      retentionDays: retention,
+      directory: DB_BACKUP_DIR,
+      active: backupScheduleMeta.active,
+      reasons: [...backupScheduleMeta.reasons],
+      lastError: backupScheduleMeta.lastError,
+      refreshedAt: backupScheduleMeta.refreshedAt,
+      nextRun: nextBackupRunISO(),
+    },
+    lastSuccess,
+    lastFailure,
+    recent,
+  };
+}
+
 function refreshDatabaseBackupSchedule() {
   if (dbBackupJob) {
     dbBackupJob.stop();
     dbBackupJob = null;
   }
+  backupScheduleMeta.active = false;
+  backupScheduleMeta.reasons = [];
+  backupScheduleMeta.lastError = null;
+  backupScheduleMeta.refreshedAt = new Date().toISOString();
   if (process.env.KPI_DISABLE_CRON === '1') {
+    backupScheduleMeta.reasons.push('cron_disabled_env');
     return;
   }
   if (!DB_BACKUP_CRON || DB_BACKUP_CRON === 'never') {
+    backupScheduleMeta.reasons.push('cron_disabled_config');
     return;
   }
   if (DB_FILE === ':memory:' || DB_BACKUP_DIR === ':memory:') {
+    if (DB_FILE === ':memory:') {
+      backupScheduleMeta.reasons.push('memory_db');
+    }
+    if (DB_BACKUP_DIR === ':memory:') {
+      backupScheduleMeta.reasons.push('memory_backup_dir');
+    }
+    return;
+  }
+  if (typeof cron.validate === 'function' && !cron.validate(DB_BACKUP_CRON)) {
+    backupScheduleMeta.reasons.push('invalid_cron_expression');
     return;
   }
   try {
@@ -545,8 +634,11 @@ function refreshDatabaseBackupSchedule() {
         console.error('Cron sao lưu CSDL thất bại:', err);
       });
     });
+    backupScheduleMeta.active = true;
   } catch (err) {
     console.error('Không thể thiết lập lịch sao lưu CSDL:', err);
+    backupScheduleMeta.lastError = err?.message || String(err);
+    backupScheduleMeta.reasons.push('schedule_error');
   }
 }
 
@@ -707,6 +799,20 @@ function requireAdminSyncManage(req, res) {
   }
   if (!account.permissions?.syncManage) {
     res.status(403).json({ ok: false, error: 'Tài khoản quản trị hiện chưa được cấp quyền quản lý đồng bộ ECUS.' });
+    return { context, denied: true };
+  }
+  return { context, denied: false };
+}
+
+function requireAuditView(req, res) {
+  const context = getSessionContext(req);
+  if (!context) {
+    res.status(401).json({ ok: false, error: 'Bạn cần đăng nhập để xem nhật ký sao lưu.' });
+    return { context: null, denied: true };
+  }
+  const account = context.account || {};
+  if (!(account.permissions?.auditView || account.permissions?.accountManage)) {
+    res.status(403).json({ ok: false, error: 'Tài khoản hiện không có quyền xem nhật ký hệ thống.' });
     return { context, denied: true };
   }
   return { context, denied: false };
@@ -2329,6 +2435,21 @@ app.get('/api/health', (req, res) => {
 app.get('/api/bootstrap', (req, res) => {
   const store = buildBootstrapSnapshot();
   res.json({ data: store });
+});
+
+app.get('/api/admin/backups/summary', (req, res) => {
+  const { denied } = requireAuditView(req, res);
+  if (denied) {
+    return;
+  }
+  try {
+    const limitRaw = Number.parseInt(req.query?.limit ?? '10', 10);
+    const limit = Number.isFinite(limitRaw) && limitRaw > 0 ? limitRaw : 10;
+    const summary = buildBackupSummary({ limit });
+    res.json({ ok: true, summary });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err?.message || 'Không thể tải thông tin sao lưu' });
+  }
 });
 
 app.post('/api/reports/export', async (req, res) => {
