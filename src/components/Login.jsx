@@ -56,7 +56,7 @@ export default function Login({ onLoggedIn, onCancel, variant = 'page' }) {
             Hủy
           </Button>
         )}
-        <p className="text-xs text-gray-500">Dùng thử: admin/admin123 hoặc nhanvien/123456</p>
+        <p className="text-xs text-gray-500">Liên hệ quản trị viên để được cấp tài khoản.</p>
       </CardContent>
     </Card>
   );
