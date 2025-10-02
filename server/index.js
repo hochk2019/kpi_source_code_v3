@@ -31,6 +31,61 @@ function resolveDbFile(value) {
   return path.resolve(__dirname, value);
 }
 
+function normalizeRangeDate(value, { isEnd = false } = {}) {
+  if (value === null || value === undefined) {
+    return null;
+  }
+
+  if (value instanceof Date) {
+    if (Number.isNaN(value.getTime())) {
+      return null;
+    }
+    if (isEnd) {
+      const end = new Date(value.getTime());
+      end.setHours(23, 59, 59, 999);
+      return end;
+    }
+    return value;
+  }
+
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+      return null;
+    }
+    if (isEnd) {
+      date.setHours(23, 59, 59, 999);
+    }
+    return date;
+  }
+
+  const str = `${value}`.trim();
+  if (!str) {
+    return null;
+  }
+
+  const dateOnlyMatch = str.match(/^(\d{4})-(\d{2})-(\d{2})$/u);
+  if (dateOnlyMatch) {
+    const [, yearRaw, monthRaw, dayRaw] = dateOnlyMatch;
+    const year = Number.parseInt(yearRaw, 10);
+    const month = Number.parseInt(monthRaw, 10);
+    const day = Number.parseInt(dayRaw, 10);
+    if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) {
+      return null;
+    }
+    if (isEnd) {
+      return new Date(year, month - 1, day, 23, 59, 59, 999);
+    }
+    return new Date(year, month - 1, day, 0, 0, 0, 0);
+  }
+
+  const parsed = new Date(str);
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+  return parsed;
+}
+
 export const DB_FILE = resolveDbFile(process.env.KPI_DB_FILE);
 const LEGACY_JSON = path.resolve(__dirname, 'data/db.json');
 const DIST_DIR = path.resolve(__dirname, '../dist');
@@ -1721,8 +1776,8 @@ async function* fetchEcusDeclarations(range, config) {
     Number.isFinite(normalizedBatchSize) && normalizedBatchSize > 0
       ? Math.max(1, Math.floor(normalizedBatchSize))
       : 0;
-  const fromDate = range.from ? new Date(range.from) : null;
-  const toDate = range.to ? new Date(range.to) : null;
+  const fromDate = normalizeRangeDate(range.from);
+  const toDate = normalizeRangeDate(range.to, { isEnd: true });
 
   const attachRangeParameters = (request) => {
     if (fromDate instanceof Date && !Number.isNaN(fromDate.getTime())) {

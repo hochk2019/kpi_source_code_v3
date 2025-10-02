@@ -563,8 +563,14 @@ describe('ECUS sync API', () => {
     });
 
     const state = sqlMock.__getState();
-    expect(state.requests[0].inputs).toHaveProperty('from');
-    expect(state.requests[0].inputs).toHaveProperty('to');
+    const rangeRequest = state.requests.find(
+      (req) =>
+        Object.prototype.hasOwnProperty.call(req.inputs, 'from') ||
+        Object.prototype.hasOwnProperty.call(req.inputs, 'to'),
+    );
+    expect(rangeRequest).toBeTruthy();
+    expect(rangeRequest.inputs).toHaveProperty('from');
+    expect(rangeRequest.inputs).toHaveProperty('to');
 
     const row = getDb()
       .prepare('SELECT value FROM kv_store WHERE key = ?')
@@ -691,6 +697,57 @@ describe('ECUS sync API', () => {
       team: 'Team 3',
       nhan_vien: 'Học',
     });
+  });
+
+  it('đặt tham số to tới cuối ngày khi truyền chuỗi ngày để không bỏ sót bản ghi cuối ngày', async () => {
+    await request(app)
+      .put('/api/import/ecus/config')
+      .send({
+        config: {
+          enabled: true,
+          connection: {
+            server: 'MRHOC\\ECUSSQL2008',
+            database: 'ECUS5VNACCS',
+            user: 'sa',
+            password: '123456',
+          },
+        },
+      });
+
+    sqlMock.__setMockResult([
+      {
+        So_tk: '999999999999',
+        Ngay_dang_ky: '2025-08-31T23:30:00',
+        MaSoThue: '1234567890',
+        Ten_doanh_nghiep: 'CÔNG TY ABC',
+        So_muc: 2,
+        Giay_phep: 'GP01;GP02',
+      },
+    ]);
+
+    const res = await request(app)
+      .post('/api/import/ecus/run')
+      .send({ from: '2025-08-30', to: '2025-08-31', actor: 'tester' });
+
+    expect(res.status).toBe(200);
+    expect(res.body?.ok).toBe(true);
+    expect(res.body?.result?.imported).toBe(1);
+
+    const state = sqlMock.__getState();
+    const lastRequest = state.requests.at(-1);
+    expect(lastRequest?.inputs?.to).toBeInstanceOf(Date);
+    const toValue = lastRequest.inputs.to;
+    expect(toValue.getHours()).toBe(23);
+    expect(toValue.getMinutes()).toBe(59);
+    expect(toValue.getSeconds()).toBe(59);
+    expect(toValue.getMilliseconds()).toBe(999);
+
+    const row = getDb()
+      .prepare('SELECT value FROM kv_store WHERE key = ?')
+      .get('decl_rows_v1');
+    const stored = JSON.parse(row.value);
+    expect(stored).toHaveLength(1);
+    expect(stored[0].date).toBe('2025-08-31');
   });
 
   it('ghi nhận lỗi khi SQL Server gặp sự cố', async () => {
