@@ -1,7 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import DataImporter from '@/components/DataImporter.jsx';
+import { setItem as sharedSetItem, clearStorageCache } from '@/lib/storageClient.js';
+import { DECL_KEY } from '@/lib/store.js';
 
 const createJsonResponse = (payload, status = 200) => ({
   ok: status >= 200 && status < 300,
@@ -12,6 +14,44 @@ const createJsonResponse = (payload, status = 200) => ({
 describe('DataImporter preview UI', () => {
   const originalFetch = global.fetch;
   let fetchMock;
+  const savedRows = [
+    {
+      so_tk: 'TK-CO-0',
+      date: '2025-07-01',
+      nhanh: '',
+      mst: '0100000000',
+      cong_ty: 'Công ty không CO',
+      loai_hinh: 'A11',
+      muc_hang: 3,
+      co: '',
+      has_co: false,
+      co_line_count: 0,
+    },
+    {
+      so_tk: 'TK-CO-1',
+      date: '2025-07-02',
+      nhanh: '',
+      mst: '0100000001',
+      cong_ty: 'Công ty 1 dòng',
+      loai_hinh: 'A11',
+      muc_hang: 4,
+      co: 'Có',
+      has_co: true,
+      co_line_count: 1,
+    },
+    {
+      so_tk: 'TK-CO-4',
+      date: '2025-07-03',
+      nhanh: '',
+      mst: '0100000004',
+      cong_ty: 'Công ty 4 dòng',
+      loai_hinh: 'A11',
+      muc_hang: 5,
+      co: 'Có',
+      has_co: true,
+      co_line_count: 4,
+    },
+  ];
   const previewRows = [
     {
       so_tk: '888888888888',
@@ -37,6 +77,8 @@ describe('DataImporter preview UI', () => {
 
   beforeEach(() => {
     window.confirm = vi.fn(() => true);
+    clearStorageCache();
+    sharedSetItem(DECL_KEY, JSON.stringify(savedRows));
     fetchMock = vi.fn((input, init = {}) => {
       const url = typeof input === 'string' ? input : input?.url || '';
       if (url === '/api/import/ecus/config') {
@@ -119,5 +161,65 @@ describe('DataImporter preview UI', () => {
     expect(body.limit).toBe(100);
     expect(body.from).toBeUndefined();
     expect(body.to).toBeUndefined();
+  });
+
+  it('lọc danh sách tờ khai theo số dòng C/O', async () => {
+    render(
+      <DataImporter
+        canEdit
+        currentUser={{ username: 'checker', permissions: [] }}
+      />
+    );
+
+    await screen.findAllByRole('table');
+    const pickMainTable = () => {
+      const allTables = screen.getAllByRole('table');
+      for (const candidate of allTables) {
+        if (within(candidate).queryByRole('columnheader', { name: 'C/O' })) {
+          return candidate;
+        }
+      }
+      return null;
+    };
+    await waitFor(() => {
+      const table = pickMainTable();
+      if (!table) {
+        throw new Error('Không tìm thấy bảng dữ liệu tờ khai');
+      }
+      const tableScope = within(table);
+      expect(tableScope.getByText('TK-CO-0')).toBeInTheDocument();
+      expect(tableScope.getByText('TK-CO-1')).toBeInTheDocument();
+      expect(tableScope.getByText('TK-CO-4')).toBeInTheDocument();
+    });
+
+    const coFilters = await screen.findAllByLabelText('Lọc C/O');
+    const coFilter = coFilters[0];
+    await userEvent.selectOptions(coFilter, 'has');
+
+    await waitFor(() => {
+      const table = pickMainTable();
+      if (!table) {
+        throw new Error('Không tìm thấy bảng dữ liệu tờ khai sau khi lọc');
+      }
+      const tableScope = within(table);
+      expect(tableScope.queryByText('TK-CO-0')).not.toBeInTheDocument();
+      expect(tableScope.getByText('TK-CO-1')).toBeInTheDocument();
+      expect(tableScope.getByText('TK-CO-4')).toBeInTheDocument();
+    });
+
+    await userEvent.selectOptions(coFilter, 'min');
+    const minInput = await screen.findByLabelText('Tối thiểu dòng C/O');
+    await userEvent.clear(minInput);
+    await userEvent.type(minInput, '3');
+
+    await waitFor(() => {
+      const table = pickMainTable();
+      if (!table) {
+        throw new Error('Không tìm thấy bảng dữ liệu tờ khai sau khi áp dụng ngưỡng');
+      }
+      const tableScope = within(table);
+      expect(tableScope.queryByText('TK-CO-1')).not.toBeInTheDocument();
+      expect(tableScope.getByText('TK-CO-4')).toBeInTheDocument();
+    });
   });
 });

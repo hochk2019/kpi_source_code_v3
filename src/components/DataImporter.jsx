@@ -17,6 +17,11 @@ import { deriveCOStatus, coLabel, coLineCount } from "@/shared/co.js";
 
 const DEFAULT_PAGE_SIZE = 10;
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100, 200];
+const CO_FILTER_OPTIONS = Object.freeze([
+  { value: "all", label: "Tất cả C/O" },
+  { value: "has", label: "Có C/O (≥ 1 dòng)" },
+  { value: "min", label: "Tùy chọn số dòng C/O" },
+]);
 
 const DEFAULT_SYNC_CONFIG = Object.freeze({
   enabled: false,
@@ -91,6 +96,8 @@ export default function DataImporter({
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [filterNoStaff, setFilterNoStaff] = useState(false);
   const [filterNoTeam, setFilterNoTeam] = useState(false);
+  const [coFilterMode, setCoFilterMode] = useState("all");
+  const [coFilterMin, setCoFilterMin] = useState(5);
   const [selectedKeys, setSelectedKeys] = useState([]);
   const [rules, setRules] = useState(() => loadRules());
   const [hasUnsaved, setHasUnsaved] = useState(false);
@@ -161,6 +168,8 @@ export default function DataImporter({
     setSelectedFile("");
     setFilterNoStaff(false);
     setFilterNoTeam(false);
+    setCoFilterMode("all");
+    setCoFilterMin(5);
     setSelectedKeys([]);
     setHasUnsaved(false);
     if (fileRef.current) fileRef.current.value = "";
@@ -605,6 +614,8 @@ export default function DataImporter({
       setQuery("");
       setFilterNoStaff(false);
       setFilterNoTeam(false);
+      setCoFilterMode("all");
+      setCoFilterMin(5);
       setSelectedKeys([]);
       setHasUnsaved(false);
     };
@@ -636,9 +647,19 @@ export default function DataImporter({
         const hasTeam = Boolean((r.team || "").toString().trim());
         if (hasTeam) return false;
       }
+      const lines = coLineCount(r);
+      if (coFilterMode === "has" && lines <= 0) {
+        return false;
+      }
+      if (coFilterMode === "min") {
+        const threshold = Math.max(0, Number(coFilterMin) || 0);
+        if (threshold > 0 && lines < threshold) {
+          return false;
+        }
+      }
       return true;
     });
-  }, [rawRows, query, filterNoStaff, filterNoTeam]);
+  }, [rawRows, query, filterNoStaff, filterNoTeam, coFilterMode, coFilterMin]);
 
   // Phân trang
   const total = filtered.length;
@@ -654,7 +675,7 @@ export default function DataImporter({
 
   useEffect(() => {
     setPage(1);
-  }, [pageSize, filterNoStaff, filterNoTeam]);
+  }, [pageSize, filterNoStaff, filterNoTeam, coFilterMode, coFilterMin]);
 
   const keyOfRow = useCallback((row) => {
     const soTk = (row.so_tk || "").toString();
@@ -1318,6 +1339,43 @@ export default function DataImporter({
           />
           <span>Chưa gán Tổ đội</span>
         </label>
+        <label className="flex items-center gap-1 text-sm">
+          <span>Lọc C/O</span>
+          <select
+            value={coFilterMode}
+            onChange={(e) => setCoFilterMode(e.target.value)}
+            className="border rounded px-2 py-1 text-sm"
+          >
+            {CO_FILTER_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        {coFilterMode === "min" && (
+          <label className="flex items-center gap-1 text-sm">
+            <span>Tối thiểu dòng C/O</span>
+            <input
+              type="number"
+              min={0}
+              className="w-20 border rounded px-2 py-1 text-sm"
+              value={coFilterMin}
+              onChange={(e) => {
+                const raw = Number(e.target.value);
+                if (!Number.isFinite(raw)) {
+                  setCoFilterMin(0);
+                  return;
+                }
+                if (raw <= 0) {
+                  setCoFilterMin(0);
+                  return;
+                }
+                setCoFilterMin(Math.round(raw));
+              }}
+            />
+          </label>
+        )}
         <div className="opacity-70 text-sm">
           {total} dòng — Trang {safePage}/{maxPage}
         </div>

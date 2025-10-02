@@ -3,6 +3,8 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card.j
 import { Button } from "@/components/ui/button.jsx";
 import { Input } from "@/components/ui/input.jsx";
 import { Badge } from "@/components/ui/badge.jsx";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip.jsx";
+import { InfoIcon } from "lucide-react";
 import {
   loadRuleSets,
   loadRules,
@@ -760,7 +762,23 @@ export default function RulesEditor({ canEdit = true, currentUser = null }) {
                 />
               </div>
               <div>
-                <label className="text-sm text-gray-600">Điểm cộng mỗi dòng áp C/O</label>
+                <div className="flex items-center gap-1 text-sm text-gray-600">
+                  <span>Điểm cộng mỗi dòng áp C/O</span>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        type="button"
+                        className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-gray-300 text-gray-500 hover:text-gray-700"
+                        aria-label="Giải thích cách tính điểm C/O theo dòng"
+                      >
+                        <InfoIcon className="h-3.5 w-3.5" />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent className="max-w-xs text-xs leading-relaxed">
+                      Điểm thưởng C/O = số dòng hàng áp C/O × giá trị cấu hình tại đây. Ví dụ: 5 dòng và mỗi dòng 0.05 điểm sẽ được cộng thêm 0.25 điểm.
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
                 <Num
                   value={rule?.bonuses?.co?.perLine ?? 0}
                   onChange={(val) =>
