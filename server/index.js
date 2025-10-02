@@ -60,6 +60,7 @@ const DEFAULT_ECUS_SYNC_CONFIG = {
     licenses: 'licenses',
     nhan_vien_import: 'nhan_vien_nhap',
     nhan_vien_export: 'nhan_vien_xuat',
+    co_count: 'co_count_num',
   },
   lastRun: null,
   lastStatus: null,
@@ -860,6 +861,7 @@ function getDeclRows() {
   return Array.isArray(rows) ? rows : [];
 }
 
+// eslint-disable-next-line no-unused-vars
 function saveDeclRowsServer(newRows, { overwrite = false, actor = 'system', detail = '' } = {}) {
   const cleaned = Array.isArray(newRows) ? newRows : [];
   if (overwrite) {
@@ -1224,9 +1226,11 @@ function buildSqlConnectionConfig(config) {
     user: connection.user || process.env.ECUS_SQL_USER || '',
     password: connection.password || process.env.ECUS_SQL_PASSWORD || '',
     options: {
+      ...(connection.options || {}),
       encrypt: connection.options?.encrypt ?? false,
       trustServerCertificate: connection.options?.trustServerCertificate ?? true,
     },
+    port: connection.port ? Number(connection.port) : undefined,
     connectionTimeout: parseTimeout(connection.connectionTimeout),
     requestTimeout: parseTimeout(connection.requestTimeout),
     pool: poolOptions,

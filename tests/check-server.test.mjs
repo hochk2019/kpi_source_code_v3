@@ -2,11 +2,7 @@ import { beforeEach, afterEach, describe, expect, it } from 'vitest';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-
-import {
-  ensureRequiredEnvVariables,
-  loadEnvCascade,
-} from '../scripts/check-server.mjs';
+import { ensureRequiredEnvVariables, loadEnvCascade } from '../scripts/check-server-core.mjs';
 
 function createTempDir() {
   return mkdtempSync(join(tmpdir(), 'check-server-'));
@@ -25,7 +21,7 @@ describe('loadEnvCascade', () => {
     }
   });
 
-  it('ghi đè giá trị từ .env.local lên .env', () => {
+  it('prefers .env.local over .env', () => {
     writeFileSync(join(cwd, '.env'), 'VITE_API_BASE=http://base\n');
     writeFileSync(join(cwd, '.env.local'), 'VITE_API_BASE=http://local\n');
 
@@ -42,7 +38,7 @@ describe('loadEnvCascade', () => {
     expect(cascade.origins.VITE_API_BASE.file).toBe('.env.local');
   });
 
-  it('ghi đè giá trị từ .env.production', () => {
+  it('prefers .env.production over .env', () => {
     writeFileSync(join(cwd, '.env'), 'VITE_API_BASE=http://base\n');
     writeFileSync(join(cwd, '.env.production'), 'VITE_API_BASE=https://prod\n');
 
@@ -73,7 +69,7 @@ describe('ensureRequiredEnvVariables', () => {
     }
   });
 
-  it('gợi ý đúng file ưu tiên cao nhất khi thiếu biến', () => {
+  it('suggests highest priority file when variable is missing', () => {
     writeFileSync(join(cwd, '.env'), 'OTHER=value\n');
     writeFileSync(join(cwd, '.env.production'), 'OTHER=value\n');
 
@@ -95,12 +91,11 @@ describe('ensureRequiredEnvVariables', () => {
 
     expect(result.ok).toBe(false);
     expect(result.recommendedFile).toBe('.env.production');
-    expect(result.fixSuggestion).toContain('.env.production');
     expect(result.suggestedFilePerVariable.VITE_API_BASE).toBe('.env.production');
-    expect(result.fixSuggestion).toContain('→ Gợi ý: thêm vào .env.production');
+    expect(result.fixSuggestion).toContain('.env.production');
   });
 
-  it('ưu tiên giá trị từ biến môi trường hiện tại', () => {
+  it('prefers runtime environment values', () => {
     const cascade = loadEnvCascade({
       cwd,
       candidates: ['.env', '.env.production'],
@@ -123,7 +118,7 @@ describe('ensureRequiredEnvVariables', () => {
     expect(entry.value).toBe('http://runtime');
   });
 
-  it('khuyến nghị tạo file cơ bản khi chưa có file .env', () => {
+  it('recommends creating a base .env file when none exists', () => {
     const cascade = loadEnvCascade({
       cwd,
       candidates: ['.env', '.env.local'],

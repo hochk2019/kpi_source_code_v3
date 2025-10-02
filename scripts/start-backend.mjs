@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { spawn } from 'node:child_process';
+import net from 'node:net';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { existsSync } from 'node:fs';
@@ -74,6 +75,86 @@ function extractFlags(argv) {
   return { flags, passthrough };
 }
 
+function normalizeListenHost(value) {
+  const trimmed = (value || '').trim();
+  if (!trimmed) {
+    return '0.0.0.0';
+  }
+  return trimmed;
+}
+
+function isWildcardHost(host) {
+  return !host || host === '0.0.0.0' || host === '::';
+}
+
+function formatHostForDisplay(host) {
+  return isWildcardHost(host) ? 'localhost' : host;
+}
+
+function formatHostForUrl(host) {
+  if (!host) {
+    return '';
+  }
+  return host.includes(':') && !host.startsWith('[') ? '[' + host + ']' : host;
+}
+
+async function isServerAlreadyRunning({ host, port, timeoutMs = 1500 }) {
+  if (typeof fetch !== 'function') {
+    return false;
+  }
+  const probeHost = isWildcardHost(host) ? '127.0.0.1' : host;
+  const targetHost = formatHostForUrl(probeHost);
+  const controller = typeof AbortController === 'function' ? new AbortController() : null;
+  const timer = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
+  try {
+    const response = await fetch('http://' + targetHost + ':' + port + '/api/health', {
+      signal: controller?.signal,
+    });
+    if (!response.ok) {
+      return false;
+    }
+    const payload = await response.json().catch(() => null);
+    return payload?.ok === true;
+  } catch {
+    return false;
+  } finally {
+    if (timer) {
+      clearTimeout(timer);
+    }
+  }
+}
+
+async function isPortBusy(host, port) {
+  return await new Promise((resolve) => {
+    const tester = net.createServer();
+    tester.unref();
+    tester.once('error', (err) => {
+      try {
+        tester.close();
+      } catch (closeErr) {
+        // ignore close errors
+      }
+      if (err && (err.code === 'EADDRINUSE' || err.code === 'EACCES')) {
+        resolve(true);
+      } else {
+        resolve(false);
+      }
+    });
+    tester.once('listening', () => {
+      tester.close(() => resolve(false));
+    });
+    const listenHost = isWildcardHost(host) ? undefined : host;
+    try {
+      tester.listen(port, listenHost);
+    } catch (err) {
+      if (err && (err.code === 'EADDRINUSE' || err.code === 'EACCES')) {
+        resolve(true);
+      } else {
+        resolve(false);
+      }
+    }
+  });
+}
 async function startServer() {
   const args = process.argv.slice(2);
   const { flags, passthrough } = extractFlags(args);
@@ -86,18 +167,36 @@ async function startServer() {
     process.env.NODE_ENV = 'development';
   }
 
+  const listenHost = normalizeListenHost(process.env.KPI_LISTEN_HOST);
+  const port = Number.parseInt(process.env.PORT || '5000', 10);
+  process.env.KPI_LISTEN_HOST = listenHost;
+  process.env.PORT = String(port);
+
+  if (await isServerAlreadyRunning({ host: listenHost, port })) {
+    const displayHost = formatHostForDisplay(listenHost);
+    console.log('Backend da chay san tai http://' + displayHost + ':' + port + ', bo qua khoi dong.');
+    return;
+  }
+
+  if (await isPortBusy(listenHost, port)) {
+    const displayHost = formatHostForDisplay(listenHost);
+    console.error('Khong the khoi dong backend: port ' + port + ' tren ' + displayHost + ' dang duoc su dung.');
+    console.error('Neu backend dang duoc chay o tien trinh khac, hay dung tien trinh do hoac doi PORT/KPI_LISTEN_HOST.');
+    process.exit(1);
+  }
+
   await ensureBetterSqlite3({ forceRebuild });
 
   const serverEntry = resolve(__dirname, '..', 'server', 'index.js');
   if (!existsSync(serverEntry)) {
-    console.error('Không tìm thấy file backend:', serverEntry);
-    console.error('Vui lòng kiểm tra các bước sau:');
-    console.error('- Đảm bảo bạn đã giải nén đầy đủ mã nguồn hoặc đã clone repo đúng cách (git clone).');
-    console.error('- Chạy "pnpm install" để cài đặt dependencies cần thiết.');
-    console.error('- Nếu vẫn gặp lỗi, hãy kiểm tra lại đường dẫn và quyền truy cập file.');
+    console.error('Khong tim thay file backend:', serverEntry);
+    console.error('Vui long kiem tra cac buoc sau:');
+    console.error('- Dam bao ban da giai nen day du ma nguon hoac da clone repo dung cach (git clone).');
+    console.error('- Chay "pnpm install" de cai dat dependencies can thiet.');
+    console.error('- Neu van gap loi, hay kiem tra lai duong dan va quyen truy cap file.');
     process.exit(1);
   }
-  console.log('Khởi động backend từ', serverEntry);
+  console.log('Khoi dong backend tu', serverEntry);
   const childEnv = { ...process.env };
   const childArgs = [serverEntry, ...passthrough];
   const child = spawn(process.execPath, childArgs, { stdio: 'inherit', env: childEnv });
@@ -105,13 +204,14 @@ async function startServer() {
   const exitCode = await new Promise((resolve) => {
     child.on('exit', (code) => resolve(code ?? 0));
     child.on('error', (err) => {
-      console.error('Lỗi khi chạy backend:', err.message);
+      console.error('Loi khi chay backend:', err.message);
       resolve(1);
     });
   });
 
   process.exit(exitCode);
 }
+
 
 startServer().catch((err) => {
   console.error('Không thể khởi động backend:', err.message);
