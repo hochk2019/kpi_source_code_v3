@@ -462,17 +462,38 @@ export async function performDatabaseBackup({
   reason = 'manual',
   actor = 'system',
 } = {}) {
+  const logOutcome = (status, meta = {}) => {
+    const detailReason = meta.reason || reason || 'không rõ';
+    pushAuditLog({
+      actor,
+      action: 'db.backup',
+      detail:
+        status === 'success'
+          ? `Sao lưu CSDL (${detailReason})`
+          : `Sao lưu CSDL thất bại (${detailReason})`,
+      meta: { status, reason: detailReason, ...meta },
+    });
+  };
+
+  const logFailure = (failureReason, extraMeta = {}) => {
+    logOutcome('failure', { reason: failureReason, ...extraMeta });
+  };
+
   if (!dbFile || dbFile === ':memory:') {
+    logFailure('memory_db', { dbFile });
     return { ok: false, reason: 'memory_db' };
   }
   if (!backupDir || backupDir === ':memory:') {
+    logFailure('invalid_backup_dir', { backupDir });
     return { ok: false, reason: 'invalid_backup_dir' };
   }
   const sourceFile = dbFile === ':memory:' ? null : path.resolve(dbFile);
   if (!sourceFile) {
+    logFailure('memory_db', { dbFile });
     return { ok: false, reason: 'memory_db' };
   }
   if (backupInProgress) {
+    logFailure('in_progress', { dbFile, backupDir });
     return { ok: false, reason: 'in_progress' };
   }
   backupInProgress = true;
@@ -480,6 +501,7 @@ export async function performDatabaseBackup({
     await fs.access(sourceFile);
   } catch {
     backupInProgress = false;
+    logFailure('missing_source', { dbFile: sourceFile });
     return { ok: false, reason: 'missing_source' };
   }
 
@@ -491,16 +513,12 @@ export async function performDatabaseBackup({
     await fs.copyFile(sourceFile, destination);
     const stats = await fs.stat(destination);
     await rotateBackups(backupDir, retention);
-    pushAuditLog({
-      actor,
-      action: 'db.backup',
-      detail: `Sao lưu CSDL (${reason})`,
-      meta: { file: destination, bytes: stats.size },
-    });
+    logOutcome('success', { reason, file: destination, bytes: stats.size });
     console.log(`💾 Đã sao lưu CSDL tới ${destination}`);
     return { ok: true, file: destination, bytes: stats.size, reason };
   } catch (err) {
     console.error('Không thể sao lưu CSDL:', err);
+    logFailure('error', { error: err?.message || String(err) });
     return { ok: false, error: err?.message || String(err) };
   } finally {
     backupInProgress = false;

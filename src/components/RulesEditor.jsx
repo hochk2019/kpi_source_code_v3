@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input.jsx";
 import { Badge } from "@/components/ui/badge.jsx";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip.jsx";
 import { InfoIcon } from "lucide-react";
+import { toast } from "sonner";
 import {
   loadRuleSets,
   loadRules,
@@ -513,7 +514,7 @@ export default function RulesEditor({ canEdit = true, currentUser = null }) {
 
   const importCurrentRule = (event) => {
     if (isReadOnly) {
-      alert("Bạn không có quyền import quy tắc.");
+      toast.error("Bạn không có quyền import quy tắc.");
       return;
     }
     const input = event.target;
@@ -525,15 +526,15 @@ export default function RulesEditor({ canEdit = true, currentUser = null }) {
         const parsed = JSON.parse(reader.result);
         saveRules({ ...parsed, id: rule.id }, { actor, appendHistory: false });
         setVersion((prev) => prev + 1);
-        alert("Đã import và áp dụng dữ liệu cho bộ quy tắc hiện tại.");
+        toast.success("Đã import và áp dụng dữ liệu cho bộ quy tắc hiện tại.");
       } catch (err) {
         console.error(err);
-        alert("File JSON không hợp lệ.");
+        toast.error("File JSON không hợp lệ.");
       }
       input.value = "";
     };
     reader.onerror = () => {
-      alert("Không thể đọc file JSON.");
+      toast.error("Không thể đọc file JSON.");
       input.value = "";
     };
     reader.readAsText(file);
@@ -552,7 +553,7 @@ export default function RulesEditor({ canEdit = true, currentUser = null }) {
 
   const importAllRules = (event) => {
     if (isReadOnly) {
-      alert("Bạn không có quyền khôi phục quy tắc.");
+      toast.error("Bạn không có quyền khôi phục quy tắc.");
       return;
     }
     const input = event.target;
@@ -575,16 +576,16 @@ export default function RulesEditor({ canEdit = true, currentUser = null }) {
         setApplyNow(false);
         setDirty(false);
         setVersion((prev) => prev + 1);
-        alert("Đã khôi phục toàn bộ bộ quy tắc từ file sao lưu.");
+        toast.success("Đã khôi phục toàn bộ bộ quy tắc từ file sao lưu.");
       } catch (err) {
         console.error(err);
-        alert("File sao lưu không hợp lệ.");
+        toast.error("File sao lưu không hợp lệ.");
       } finally {
         input.value = "";
       }
     };
     reader.onerror = () => {
-      alert("Không thể đọc file sao lưu.");
+      toast.error("Không thể đọc file sao lưu.");
       input.value = "";
     };
     reader.readAsText(file);
