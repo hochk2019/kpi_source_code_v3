@@ -207,6 +207,10 @@ describe('DataImporter preview UI', () => {
       expect(tableScope.getByText('TK-CO-4')).toBeInTheDocument();
     });
 
+    await waitFor(() => {
+      expect(screen.getByText('Đáp ứng C/O: 2 tờ khai')).toBeInTheDocument();
+    });
+
     await userEvent.selectOptions(coFilter, 'min');
     const minInput = await screen.findByLabelText('Tối thiểu dòng C/O');
     await userEvent.clear(minInput);
@@ -220,6 +224,10 @@ describe('DataImporter preview UI', () => {
       const tableScope = within(table);
       expect(tableScope.queryByText('TK-CO-1')).not.toBeInTheDocument();
       expect(tableScope.getByText('TK-CO-4')).toBeInTheDocument();
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText('Đáp ứng C/O: 1 tờ khai')).toBeInTheDocument();
     });
   });
 });

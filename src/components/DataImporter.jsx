@@ -623,6 +623,27 @@ export default function DataImporter({
   }
 
   // Tìm nhanh
+  const coThreshold = useMemo(() => Math.max(0, Number(coFilterMin) || 0), [coFilterMin]);
+  const coFilterActive = useMemo(() => {
+    if (coFilterMode === "has") return true;
+    if (coFilterMode === "min") return coThreshold > 0;
+    return false;
+  }, [coFilterMode, coThreshold]);
+
+  const coFilterMatches = useMemo(() => {
+    if (!coFilterActive) return rawRows.length;
+    return rawRows.reduce((count, row) => {
+      const lines = coLineCount(row);
+      if (coFilterMode === "has") {
+        return count + (lines > 0 ? 1 : 0);
+      }
+      if (coFilterMode === "min") {
+        return count + (lines >= coThreshold ? 1 : 0);
+      }
+      return count;
+    }, 0);
+  }, [rawRows, coFilterMode, coFilterActive, coThreshold]);
+
   const filtered = useMemo(() => {
     const q = query.toLowerCase().trim();
     const hasText = q.length > 0;
@@ -652,14 +673,13 @@ export default function DataImporter({
         return false;
       }
       if (coFilterMode === "min") {
-        const threshold = Math.max(0, Number(coFilterMin) || 0);
-        if (threshold > 0 && lines < threshold) {
+        if (coThreshold > 0 && lines < coThreshold) {
           return false;
         }
       }
       return true;
     });
-  }, [rawRows, query, filterNoStaff, filterNoTeam, coFilterMode, coFilterMin]);
+  }, [rawRows, query, filterNoStaff, filterNoTeam, coFilterMode, coThreshold]);
 
   // Phân trang
   const total = filtered.length;
@@ -675,7 +695,7 @@ export default function DataImporter({
 
   useEffect(() => {
     setPage(1);
-  }, [pageSize, filterNoStaff, filterNoTeam, coFilterMode, coFilterMin]);
+  }, [pageSize, filterNoStaff, filterNoTeam, coFilterMode, coThreshold]);
 
   const keyOfRow = useCallback((row) => {
     const soTk = (row.so_tk || "").toString();
@@ -1375,6 +1395,11 @@ export default function DataImporter({
               }}
             />
           </label>
+        )}
+        {coFilterActive && (
+          <span className="text-sm px-2 py-1 rounded bg-emerald-50 text-emerald-700">
+            Đáp ứng C/O: {coFilterMatches} tờ khai
+          </span>
         )}
         <div className="opacity-70 text-sm">
           {total} dòng — Trang {safePage}/{maxPage}
