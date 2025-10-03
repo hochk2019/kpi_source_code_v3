@@ -143,4 +143,23 @@ describe('performDatabaseBackup', () => {
 
     await fs.rm(tmpDir, { recursive: true, force: true });
   });
+
+  it('không xóa bản sao lưu khi retention = 0', async () => {
+    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'kpi-backup-'));
+    const dbFile = path.join(tmpDir, 'storage.sqlite');
+    const backupDir = path.join(tmpDir, 'backups');
+
+    const db = await initializeDatabase({ dbFile });
+    db.prepare('INSERT INTO kv_store (key, value) VALUES (?, ?)').run('custom_key', '"value"');
+    db.close();
+
+    await performDatabaseBackup({ dbFile, backupDir, retention: 0, reason: 'keep-all', actor: 'auditor' });
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    await performDatabaseBackup({ dbFile, backupDir, retention: 0, reason: 'keep-all', actor: 'auditor' });
+
+    const files = await fs.readdir(backupDir);
+    expect(files.length).toBe(2);
+
+    await fs.rm(tmpDir, { recursive: true, force: true });
+  });
 });

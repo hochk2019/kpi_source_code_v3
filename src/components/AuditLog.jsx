@@ -60,6 +60,8 @@ export default function AuditLog({ currentUser }) {
   const [cronDraft, setCronDraft] = useState("");
   const [cronError, setCronError] = useState("");
   const [savingCron, setSavingCron] = useState(false);
+  const [retentionDraft, setRetentionDraft] = useState("");
+  const [retentionError, setRetentionError] = useState("");
 
   const refreshLogs = useCallback(() => {
     setLogs(getAuditLogs(200));
@@ -106,6 +108,13 @@ export default function AuditLog({ currentUser }) {
     if (schedule && typeof schedule.cron === "string") {
       setCronDraft(schedule.cron);
     }
+    if (schedule) {
+      if (schedule.retentionCopies === null || schedule.retentionCopies === undefined) {
+        setRetentionDraft("");
+      } else {
+        setRetentionDraft(String(schedule.retentionCopies));
+      }
+    }
   }, [schedule]);
 
   const filteredLogs = useMemo(() => {
@@ -131,24 +140,45 @@ export default function AuditLog({ currentUser }) {
         setCronError("Vui lòng nhập biểu thức cron.");
         return;
       }
+      const retentionValueRaw = retentionDraft.trim();
+      let retentionPayload = null;
+      if (retentionValueRaw) {
+        if (!/^\d+$/.test(retentionValueRaw)) {
+          setRetentionError("Số bản sao lưu giữ lại phải là số nguyên không âm hoặc để trống.");
+          return;
+        }
+        retentionPayload = Number.parseInt(retentionValueRaw, 10);
+      }
       setSavingCron(true);
       setCronError("");
+      setRetentionError("");
       try {
         const response = await fetch("/api/admin/backups/schedule", {
           method: "POST",
           credentials: "include",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ cron: value }),
+          body: JSON.stringify({ cron: value, retentionCopies: retentionValueRaw ? retentionPayload : null }),
         });
         const payload = await response.json().catch(() => ({}));
         if (!response.ok || payload?.ok === false) {
           const message = payload?.error || response.statusText || `HTTP ${response.status}`;
           setCronError(message);
+          if (payload?.field === "retentionCopies") {
+            setRetentionError(message);
+          }
           toast.error(message || "Không thể cập nhật lịch sao lưu.");
           return;
         }
         if (typeof payload?.config?.cron === "string") {
           setCronDraft(payload.config.cron);
+        }
+        if (payload?.config && Object.prototype.hasOwnProperty.call(payload.config, "retentionCopies")) {
+          const storedRetention = payload.config.retentionCopies;
+          if (storedRetention === null || storedRetention === undefined) {
+            setRetentionDraft("");
+          } else {
+            setRetentionDraft(String(storedRetention));
+          }
         }
         if (payload?.summary) {
           setSummary(payload.summary);
@@ -164,7 +194,7 @@ export default function AuditLog({ currentUser }) {
         setSavingCron(false);
       }
     },
-    [canManageBackups, cronDraft, loadSummary]
+    [canManageBackups, cronDraft, loadSummary, retentionDraft]
   );
 
   const handleClear = () => {
@@ -192,6 +222,17 @@ export default function AuditLog({ currentUser }) {
   ]
     .filter(Boolean)
     .join(" • ");
+
+  const retentionLabel = (() => {
+    if (!schedule) return "";
+    if (schedule.retentionCopies === null || schedule.retentionCopies === undefined) {
+      return "Không giới hạn";
+    }
+    if (schedule.retentionCopies === 0) {
+      return "Không giới hạn";
+    }
+    return `${schedule.retentionCopies} bản sao lưu`;
+  })();
 
   return (
     <div className="space-y-4">
@@ -250,9 +291,7 @@ export default function AuditLog({ currentUser }) {
               </div>
               <div>
                 <div className="text-xs uppercase text-gray-500">Giữ lại</div>
-                <div className="text-sm">
-                  {schedule?.retentionDays ? `${schedule.retentionDays} bản sao lưu` : "Không giới hạn"}
-                </div>
+                <div className="text-sm">{retentionLabel}</div>
               </div>
               <div>
                 <div className="text-xs uppercase text-gray-500">Thư mục đích</div>
@@ -275,7 +314,7 @@ export default function AuditLog({ currentUser }) {
                 className="space-y-2 rounded border border-gray-200 bg-gray-50 p-3"
                 onSubmit={handleCronSubmit}
               >
-                <div className="flex flex-col gap-2 md:flex-row md:items-end">
+                <div className="flex flex-col gap-2 md:flex-row md:flex-wrap md:items-end">
                   <div className="flex-1 space-y-1">
                     <label className="text-xs font-medium text-gray-600" htmlFor="backup-cron-input">
                       Cập nhật biểu thức cron
@@ -293,9 +332,30 @@ export default function AuditLog({ currentUser }) {
                     </div>
                     {cronError && <div className="text-xs text-red-600">{cronError}</div>}
                   </div>
+                  <div className="w-full space-y-1 md:w-40">
+                    <label className="text-xs font-medium text-gray-600" htmlFor="backup-retention-input">
+                      Số bản sao lưu giữ lại
+                    </label>
+                    <input
+                      id="backup-retention-input"
+                      className="w-full rounded border px-2 py-1 text-sm"
+                      type="number"
+                      min="0"
+                      step="1"
+                      value={retentionDraft}
+                      onChange={(event) => {
+                        setRetentionDraft(event.target.value);
+                        setRetentionError("");
+                      }}
+                      placeholder="14"
+                      disabled={savingCron}
+                    />
+                    <div className="text-xs text-gray-500">Để trống hoặc nhập 0 để không giới hạn.</div>
+                    {retentionError && <div className="text-xs text-red-600">{retentionError}</div>}
+                  </div>
                   <button
                     type="submit"
-                    className="rounded bg-black px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                    className="self-start rounded bg-black px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
                     disabled={savingCron}
                   >
                     {savingCron ? "Đang lưu..." : "Lưu biểu thức"}

@@ -106,7 +106,12 @@ export const DB_BACKUP_DIR = resolveBackupDir(process.env.KPI_DB_BACKUP_DIR);
 const LEGACY_JSON = path.resolve(__dirname, 'data/db.json');
 const DIST_DIR = path.resolve(__dirname, '../dist');
 const DEFAULT_BACKUP_CRON = (process.env.KPI_DB_BACKUP_CRON || '0 3 * * *').trim();
-const DB_BACKUP_RETENTION = Number.parseInt(process.env.KPI_DB_BACKUP_RETENTION || '14', 10);
+const envBackupRetentionRaw = process.env.KPI_DB_BACKUP_RETENTION ?? '14';
+const envBackupRetentionParsed = Number.parseInt(envBackupRetentionRaw, 10);
+const DB_BACKUP_RETENTION =
+  Number.isFinite(envBackupRetentionParsed) && envBackupRetentionParsed >= 0
+    ? envBackupRetentionParsed
+    : 14;
 
 const DEFAULT_ECUS_SYNC_CONFIG = {
   enabled: false,
@@ -292,8 +297,36 @@ function buildDefaultAccounts() {
   }));
 }
 
+function normalizeRetentionCopies(value) {
+  if (value === undefined) {
+    return null;
+  }
+  if (value === null) {
+    return null;
+  }
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value) || value < 0) {
+      return null;
+    }
+    return Math.trunc(value);
+  }
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return null;
+    }
+    const parsed = Number.parseInt(trimmed, 10);
+    if (!Number.isFinite(parsed) || parsed < 0) {
+      return null;
+    }
+    return parsed;
+  }
+  return null;
+}
+
 const DEFAULT_BACKUP_CONFIG = {
   cron: DEFAULT_BACKUP_CRON,
+  retentionCopies: normalizeRetentionCopies(DB_BACKUP_RETENTION) ?? 14,
 };
 
 const DEFAULT_STORAGE = {
@@ -443,13 +476,17 @@ async function ensureBackupDirectory(backupDir) {
 }
 
 async function rotateBackups(backupDir, retention) {
-  if (!Number.isFinite(retention) || retention <= 0) {
+  const limit = Number.isFinite(retention) && retention >= 0 ? Math.trunc(retention) : null;
+  if (limit === null) {
     return;
   }
   const entries = await fs.readdir(backupDir, { withFileTypes: true });
   const files = [];
   for (const entry of entries) {
     if (!entry.isFile()) continue;
+    if (!entry.name.startsWith('storage-') || !entry.name.endsWith('.sqlite')) {
+      continue;
+    }
     const fullPath = path.join(backupDir, entry.name);
     try {
       const stats = await fs.stat(fullPath);
@@ -459,7 +496,10 @@ async function rotateBackups(backupDir, retention) {
     }
   }
   files.sort((a, b) => b.mtime - a.mtime);
-  while (files.length > retention) {
+  if (limit === 0) {
+    return;
+  }
+  while (files.length > limit) {
     const removed = files.pop();
     if (!removed) break;
     try {
@@ -473,7 +513,7 @@ async function rotateBackups(backupDir, retention) {
 export async function performDatabaseBackup({
   dbFile = DB_FILE,
   backupDir = DB_BACKUP_DIR,
-  retention = DB_BACKUP_RETENTION,
+  retention,
   reason = 'manual',
   actor = 'system',
 } = {}) {
@@ -520,6 +560,30 @@ export async function performDatabaseBackup({
     return { ok: false, reason: 'missing_source' };
   }
 
+  let retentionLimit = null;
+  if (Number.isFinite(retention) && retention >= 0) {
+    retentionLimit = Math.trunc(retention);
+  } else {
+    const config = getBackupConfig();
+    let retentionFromConfig = false;
+    if (config) {
+      if (config.retentionCopies === null) {
+        retentionLimit = null;
+        retentionFromConfig = true;
+      } else if (Number.isFinite(config.retentionCopies) && config.retentionCopies >= 0) {
+        retentionLimit = Math.trunc(config.retentionCopies);
+        retentionFromConfig = true;
+      }
+    }
+    if (!retentionFromConfig) {
+      if (Number.isFinite(DB_BACKUP_RETENTION) && DB_BACKUP_RETENTION >= 0) {
+        retentionLimit = Math.trunc(DB_BACKUP_RETENTION);
+      } else {
+        retentionLimit = null;
+      }
+    }
+  }
+
   try {
     await ensureBackupDirectory(backupDir);
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
@@ -527,8 +591,8 @@ export async function performDatabaseBackup({
     const destination = path.join(backupDir, filename);
     await fs.copyFile(sourceFile, destination);
     const stats = await fs.stat(destination);
-    await rotateBackups(backupDir, retention);
-    logOutcome('success', { reason, file: destination, bytes: stats.size });
+    await rotateBackups(backupDir, retentionLimit);
+    logOutcome('success', { reason, file: destination, bytes: stats.size, retention: retentionLimit });
     console.log(`💾 Đã sao lưu CSDL tới ${destination}`);
     return { ok: true, file: destination, bytes: stats.size, reason };
   } catch (err) {
@@ -609,7 +673,8 @@ function buildBackupSummary({ limit = 10 } = {}) {
   );
   const config = getBackupConfig();
   const cronExpr = normalizeCronExpression(config.cron);
-  const retention = Number.isFinite(config.retentionDays) && config.retentionDays > 0 ? config.retentionDays : null;
+  const retention =
+    Number.isFinite(config.retentionCopies) && config.retentionCopies >= 0 ? config.retentionCopies : null;
   const nextRun = nextBackupRunISO();
   const nextRunHuman = formatNextRunHuman(nextRun);
   const description = backupScheduleMeta.description || describeCronExpression(cronExpr);
@@ -618,7 +683,7 @@ function buildBackupSummary({ limit = 10 } = {}) {
     schedule: {
       cron: cronExpr,
       cronDescription: description,
-      retentionDays: retention,
+      retentionCopies: retention,
       directory: DB_BACKUP_DIR,
       active: backupScheduleMeta.active,
       reasons: [...backupScheduleMeta.reasons],
@@ -1378,20 +1443,59 @@ function normalizeCronExpression(value) {
 }
 
 function getBackupConfig() {
-  const stored = getJSONValue('db_backup_config_v1', DEFAULT_BACKUP_CONFIG);
+  const stored = getJSONValue('db_backup_config_v1', DEFAULT_BACKUP_CONFIG) || {};
   const cronExpr = normalizeCronExpression(stored?.cron);
-  const fallback = normalizeCronExpression(DEFAULT_BACKUP_CONFIG.cron);
-  const cronValue = cronExpr || fallback || '';
-  const retentionDays = Number.isFinite(DB_BACKUP_RETENTION) && DB_BACKUP_RETENTION > 0 ? DB_BACKUP_RETENTION : null;
+  const fallbackCron = normalizeCronExpression(DEFAULT_BACKUP_CONFIG.cron);
+  const cronValue = cronExpr || fallbackCron || '';
+  const hasStoredRetention = Object.prototype.hasOwnProperty.call(stored, 'retentionCopies');
+  let retention = null;
+  if (hasStoredRetention) {
+    if (stored.retentionCopies === null) {
+      retention = null;
+    } else {
+      const normalized = normalizeRetentionCopies(stored.retentionCopies);
+      retention = normalized ?? null;
+    }
+  } else {
+    const fallbackRetention = normalizeRetentionCopies(DEFAULT_BACKUP_CONFIG.retentionCopies);
+    retention = fallbackRetention ?? null;
+  }
   return {
     cron: cronValue,
-    retentionDays,
+    retentionCopies: retention,
   };
 }
 
 function saveBackupConfig(config) {
-  const nextCron = normalizeCronExpression(config?.cron);
-  setJSONValue('db_backup_config_v1', { cron: nextCron });
+  const stored = getJSONValue('db_backup_config_v1', DEFAULT_BACKUP_CONFIG) || {};
+  const nextCron = normalizeCronExpression(config?.cron ?? stored?.cron ?? DEFAULT_BACKUP_CONFIG.cron);
+  let nextRetention;
+  if (config && Object.prototype.hasOwnProperty.call(config, 'retentionCopies')) {
+    if (config.retentionCopies === null) {
+      nextRetention = null;
+    } else {
+      nextRetention = normalizeRetentionCopies(config.retentionCopies);
+      if (nextRetention === null) {
+        nextRetention = null;
+      }
+    }
+  } else if (Object.prototype.hasOwnProperty.call(stored, 'retentionCopies')) {
+    if (stored.retentionCopies === null) {
+      nextRetention = null;
+    } else {
+      nextRetention = normalizeRetentionCopies(stored.retentionCopies);
+      if (nextRetention === null) {
+        nextRetention = null;
+      }
+    }
+  } else {
+    nextRetention = normalizeRetentionCopies(DEFAULT_BACKUP_CONFIG.retentionCopies);
+    if (nextRetention === null) {
+      nextRetention = null;
+    }
+  }
+
+  setJSONValue('db_backup_config_v1', { cron: nextCron, retentionCopies: nextRetention });
   return getBackupConfig();
 }
 
@@ -2575,7 +2679,8 @@ app.post('/api/admin/backups/schedule', (req, res) => {
     return;
   }
   try {
-    const cronExpr = normalizeCronExpression(req.body?.cron);
+    const body = req.body ?? {};
+    const cronExpr = normalizeCronExpression(body?.cron);
     if (!cronExpr) {
       res.status(400).json({ ok: false, error: 'Vui lòng nhập biểu thức cron.' });
       return;
@@ -2584,14 +2689,51 @@ app.post('/api/admin/backups/schedule', (req, res) => {
       res.status(400).json({ ok: false, error: 'Biểu thức cron không hợp lệ.' });
       return;
     }
-    const config = saveBackupConfig({ cron: cronExpr });
+    const hasRetentionField =
+      Object.prototype.hasOwnProperty.call(body, 'retentionCopies') ||
+      Object.prototype.hasOwnProperty.call(body, 'retention');
+    let retentionValue;
+    if (hasRetentionField) {
+      const rawRetention = Object.prototype.hasOwnProperty.call(body, 'retentionCopies')
+        ? body.retentionCopies
+        : body.retention;
+      if (rawRetention === null || (typeof rawRetention === 'string' && rawRetention.trim() === '')) {
+        retentionValue = null;
+      } else if (typeof rawRetention === 'number') {
+        if (!Number.isFinite(rawRetention) || rawRetention < 0) {
+          res
+            .status(400)
+            .json({ ok: false, error: 'Số bản sao lưu giữ lại phải là số nguyên không âm.', field: 'retentionCopies' });
+          return;
+        }
+        retentionValue = Math.trunc(rawRetention);
+      } else if (typeof rawRetention === 'string') {
+        const trimmed = rawRetention.trim();
+        if (!/^\d+$/u.test(trimmed)) {
+          res
+            .status(400)
+            .json({ ok: false, error: 'Số bản sao lưu giữ lại phải là số nguyên không âm.', field: 'retentionCopies' });
+          return;
+        }
+        retentionValue = Number.parseInt(trimmed, 10);
+      } else {
+        res
+          .status(400)
+          .json({ ok: false, error: 'Số bản sao lưu giữ lại phải là số nguyên không âm.', field: 'retentionCopies' });
+        return;
+      }
+    }
+
+    const config = saveBackupConfig(
+      hasRetentionField ? { cron: cronExpr, retentionCopies: retentionValue } : { cron: cronExpr }
+    );
     refreshDatabaseBackupSchedule();
     const actor = context.account?.username || 'system';
     pushAuditLog({
       actor,
       action: 'db.backup_schedule.update',
       detail: 'Cập nhật lịch sao lưu CSDL',
-      meta: { cron: cronExpr },
+      meta: { cron: cronExpr, retentionCopies: config.retentionCopies },
     });
     const summary = buildBackupSummary();
     res.json({ ok: true, config, summary });

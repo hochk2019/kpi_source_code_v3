@@ -10,7 +10,7 @@ const SUCCESS_SUMMARY = {
   schedule: {
     cron: '0 3 * * *',
     cronDescription: 'Vào 03:00 hằng ngày',
-    retentionDays: 14,
+    retentionCopies: 14,
     directory: '/var/backups/kpi',
     active: false,
     reasons: ['cron_disabled_env'],
@@ -79,6 +79,7 @@ describe('AuditLog', () => {
     expect(screen.getByText('0 3 * * *')).toBeInTheDocument();
     expect(screen.getByText(/Mô tả lịch/i)).toBeInTheDocument();
     expect(screen.getByText('Vào 03:00 hằng ngày')).toBeInTheDocument();
+    expect(screen.getByText('14 bản sao lưu')).toBeInTheDocument();
     expect(screen.getByText(/Đang tắt tự động/i)).toBeInTheDocument();
     expect(screen.getByText(/Cron tự động đang bị tắt/)).toBeInTheDocument();
     expect(screen.getByText(/nguồn: scheduled/i)).toBeInTheDocument();
@@ -114,13 +115,14 @@ describe('AuditLog', () => {
         cronDescription: 'Mỗi 30 phút',
         active: true,
         reasons: [],
+        retentionCopies: 7,
       },
     };
     const updateResponse = Promise.resolve({
       ok: true,
       json: async () => ({
         ok: true,
-        config: { cron: '*/30 * * * *' },
+        config: { cron: '*/30 * * * *', retentionCopies: 7 },
         summary: updatedSummary,
       }),
     });
@@ -143,17 +145,24 @@ describe('AuditLog', () => {
     });
 
     fireEvent.change(input, { target: { value: '*/30 * * * *' } });
+    const retentionInput = await screen.findByLabelText(/Số bản sao lưu giữ lại/i);
+    fireEvent.change(retentionInput, { target: { value: '7' } });
     fireEvent.submit(input.closest('form'));
 
     await waitFor(() => {
       expect(global.fetch).toHaveBeenCalledTimes(2);
     });
-    expect(global.fetch).toHaveBeenLastCalledWith('/api/admin/backups/schedule', expect.objectContaining({
-      method: 'POST',
-    }));
+    expect(global.fetch).toHaveBeenLastCalledWith(
+      '/api/admin/backups/schedule',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ cron: '*/30 * * * *', retentionCopies: 7 }),
+      })
+    );
 
     await waitFor(() => {
       expect(screen.getByText('Mỗi 30 phút')).toBeInTheDocument();
     });
+    expect(screen.getByText('7 bản sao lưu')).toBeInTheDocument();
   });
 });

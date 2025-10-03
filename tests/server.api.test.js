@@ -556,6 +556,7 @@ describe('Backup summary API', () => {
       cron: '0 3 * * *',
       cronDescription: expect.stringContaining('03:00'),
       active: false,
+      retentionCopies: 14,
     });
     expect(Array.isArray(summary.schedule.reasons)).toBe(true);
     expect(summary.schedule.reasons.length).toBeGreaterThan(0);
@@ -599,13 +600,14 @@ describe('Backup summary API', () => {
 
     const res = await adminAgent
       .post('/api/admin/backups/schedule')
-      .send({ cron: '*/30 * * * *' });
+      .send({ cron: '*/30 * * * *', retentionCopies: 5 });
     expect(res.status).toBe(200);
     expect(res.body.ok).toBe(true);
-    expect(res.body.config).toMatchObject({ cron: '*/30 * * * *' });
+    expect(res.body.config).toMatchObject({ cron: '*/30 * * * *', retentionCopies: 5 });
     expect(res.body.summary.schedule).toMatchObject({
       cron: '*/30 * * * *',
       cronDescription: 'Mỗi 30 phút',
+      retentionCopies: 5,
     });
     const row = getDb()
       .prepare('SELECT value FROM kv_store WHERE key = ?')
@@ -613,8 +615,22 @@ describe('Backup summary API', () => {
     const logs = JSON.parse(row?.value || '[]');
     expect(logs[0]).toMatchObject({
       action: 'db.backup_schedule.update',
-      meta: expect.objectContaining({ cron: '*/30 * * * *' }),
+      meta: expect.objectContaining({ cron: '*/30 * * * *', retentionCopies: 5 }),
     });
+  });
+
+  it('trả lỗi khi retention không hợp lệ', async () => {
+    const adminAgent = request.agent(app);
+    const loginRes = await adminAgent
+      .post('/api/auth/login')
+      .send({ username: 'admin', password: 'admin123' });
+    expect(loginRes.status).toBe(200);
+
+    const res = await adminAgent
+      .post('/api/admin/backups/schedule')
+      .send({ cron: '*/15 * * * *', retentionCopies: -1 });
+    expect(res.status).toBe(400);
+    expect(res.body).toMatchObject({ ok: false, field: 'retentionCopies' });
   });
 
   it('trả lỗi khi cập nhật cron không hợp lệ', async () => {
