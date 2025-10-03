@@ -11,8 +11,10 @@ import bcrypt from 'bcryptjs';
 import crypto from 'node:crypto';
 import { generateReport } from './reportExport.js';
 import { DEFAULT_RULES as SHARED_DEFAULT_RULES } from '../src/shared/defaultRules.js';
-import { deriveCOStatus } from '../src/shared/co.js';
+import { deriveCOStatus, parseCoLineCount } from '../src/shared/co.js';
 import { recordSqlTimeout } from './sqlMonitor.js';
+import cronstrue from 'cronstrue';
+import 'cronstrue/locales/vi.js';
 
 const moduleUrl = typeof import.meta !== 'undefined' ? import.meta.url || '' : '';
 const __dirname = moduleUrl.startsWith('file:')
@@ -21,6 +23,19 @@ const __dirname = moduleUrl.startsWith('file:')
 function resolveDbFile(value) {
   if (!value) {
     return path.resolve(__dirname, 'data/storage.sqlite');
+  }
+  if (value === ':memory:') {
+    return ':memory:';
+  }
+  if (path.isAbsolute(value)) {
+    return value;
+  }
+  return path.resolve(__dirname, value);
+}
+
+function resolveBackupDir(value) {
+  if (!value) {
+    return path.resolve(__dirname, 'data/backups');
   }
   if (value === ':memory:') {
     return ':memory:';
@@ -87,8 +102,16 @@ function normalizeRangeDate(value, { isEnd = false } = {}) {
 }
 
 export const DB_FILE = resolveDbFile(process.env.KPI_DB_FILE);
+export const DB_BACKUP_DIR = resolveBackupDir(process.env.KPI_DB_BACKUP_DIR);
 const LEGACY_JSON = path.resolve(__dirname, 'data/db.json');
 const DIST_DIR = path.resolve(__dirname, '../dist');
+const DEFAULT_BACKUP_CRON = (process.env.KPI_DB_BACKUP_CRON || '0 3 * * *').trim();
+const envBackupRetentionRaw = process.env.KPI_DB_BACKUP_RETENTION ?? '14';
+const envBackupRetentionParsed = Number.parseInt(envBackupRetentionRaw, 10);
+const DB_BACKUP_RETENTION =
+  Number.isFinite(envBackupRetentionParsed) && envBackupRetentionParsed >= 0
+    ? envBackupRetentionParsed
+    : 14;
 
 const DEFAULT_ECUS_SYNC_CONFIG = {
   enabled: false,
@@ -132,6 +155,25 @@ const DEFAULT_ALERT_CONFIG = {
 const DEFAULT_ALERT_STATE = {
   entries: {},
   lastEvaluatedAt: null,
+};
+
+const databaseInitState = {
+  seeded: false,
+  insertedEntries: 0,
+  missingInserted: 0,
+  timestamp: null,
+  dbFile: null,
+};
+
+let dbBackupJob = null;
+let backupInProgress = false;
+const backupScheduleMeta = {
+  active: false,
+  reasons: [],
+  lastError: null,
+  refreshedAt: null,
+  cron: '',
+  description: '',
 };
 
 const ACCOUNT_PERMISSION_KEYS = [
@@ -255,6 +297,38 @@ function buildDefaultAccounts() {
   }));
 }
 
+function normalizeRetentionCopies(value) {
+  if (value === undefined) {
+    return null;
+  }
+  if (value === null) {
+    return null;
+  }
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value) || value < 0) {
+      return null;
+    }
+    return Math.trunc(value);
+  }
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return null;
+    }
+    const parsed = Number.parseInt(trimmed, 10);
+    if (!Number.isFinite(parsed) || parsed < 0) {
+      return null;
+    }
+    return parsed;
+  }
+  return null;
+}
+
+const DEFAULT_BACKUP_CONFIG = {
+  cron: DEFAULT_BACKUP_CRON,
+  retentionCopies: normalizeRetentionCopies(DB_BACKUP_RETENTION) ?? 14,
+};
+
 const DEFAULT_STORAGE = {
   decl_rows_v1: '[]',
   mst_rows_v2: '[]',
@@ -305,6 +379,7 @@ const DEFAULT_STORAGE = {
   decl_alert_config_v1: JSON.stringify(DEFAULT_ALERT_CONFIG),
   decl_alert_state_v1: JSON.stringify(DEFAULT_ALERT_STATE),
   kpi_users_v1: JSON.stringify(buildDefaultAccounts()),
+  db_backup_config_v1: JSON.stringify(DEFAULT_BACKUP_CONFIG),
 };
 
 function normalizeValue(value) {
@@ -315,10 +390,17 @@ function normalizeValue(value) {
 }
 
 export async function initializeDatabase({ dbFile = DB_FILE } = {}) {
-  if (dbFile !== ':memory:') {
-    await fs.mkdir(path.dirname(dbFile), { recursive: true });
+  const targetFile = dbFile === ':memory:' ? ':memory:' : path.resolve(dbFile);
+  databaseInitState.seeded = false;
+  databaseInitState.insertedEntries = 0;
+  databaseInitState.missingInserted = 0;
+  databaseInitState.timestamp = new Date().toISOString();
+  databaseInitState.dbFile = targetFile;
+
+  if (targetFile !== ':memory:') {
+    await fs.mkdir(path.dirname(targetFile), { recursive: true });
   }
-  const database = new Database(dbFile);
+  const database = new Database(targetFile);
   database.pragma('journal_mode = WAL');
   database.exec(
     'CREATE TABLE IF NOT EXISTS kv_store (key TEXT PRIMARY KEY, value TEXT NOT NULL)'
@@ -358,6 +440,9 @@ export async function initializeDatabase({ dbFile = DB_FILE } = {}) {
       }
     });
     insertMany(Object.entries(seedData));
+    databaseInitState.seeded = true;
+    databaseInitState.insertedEntries = Object.keys(seedData).length;
+    databaseInitState.missingInserted = 0;
   } else {
     const missingEntries = Object.entries(seedData).filter(([key]) => !existingKeys.has(key));
     if (missingEntries.length > 0) {
@@ -370,13 +455,299 @@ export async function initializeDatabase({ dbFile = DB_FILE } = {}) {
         }
       });
       insertMissing(missingEntries);
+      databaseInitState.seeded = false;
+      databaseInitState.insertedEntries = 0;
+      databaseInitState.missingInserted = missingEntries.length;
+    } else {
+      databaseInitState.seeded = false;
+      databaseInitState.insertedEntries = 0;
+      databaseInitState.missingInserted = 0;
     }
   }
 
   return database;
 }
 
+async function ensureBackupDirectory(backupDir) {
+  if (!backupDir || backupDir === ':memory:') {
+    throw new Error('Thư mục sao lưu không hợp lệ.');
+  }
+  await fs.mkdir(backupDir, { recursive: true });
+}
+
+async function rotateBackups(backupDir, retention) {
+  const limit = Number.isFinite(retention) && retention >= 0 ? Math.trunc(retention) : null;
+  if (limit === null) {
+    return;
+  }
+  const entries = await fs.readdir(backupDir, { withFileTypes: true });
+  const files = [];
+  for (const entry of entries) {
+    if (!entry.isFile()) continue;
+    if (!entry.name.startsWith('storage-') || !entry.name.endsWith('.sqlite')) {
+      continue;
+    }
+    const fullPath = path.join(backupDir, entry.name);
+    try {
+      const stats = await fs.stat(fullPath);
+      files.push({ path: fullPath, mtime: stats.mtimeMs });
+    } catch {
+      // ignore file that disappeared
+    }
+  }
+  files.sort((a, b) => b.mtime - a.mtime);
+  if (limit === 0) {
+    return;
+  }
+  while (files.length > limit) {
+    const removed = files.pop();
+    if (!removed) break;
+    try {
+      await fs.rm(removed.path);
+    } catch (err) {
+      console.warn('Không thể xóa bản sao lưu cũ', removed.path, err);
+    }
+  }
+}
+
+export async function performDatabaseBackup({
+  dbFile = DB_FILE,
+  backupDir = DB_BACKUP_DIR,
+  retention,
+  reason = 'manual',
+  actor = 'system',
+} = {}) {
+  const logOutcome = (status, meta = {}) => {
+    const detailReason = meta.reason || reason || 'không rõ';
+    pushAuditLog({
+      actor,
+      action: 'db.backup',
+      detail:
+        status === 'success'
+          ? `Sao lưu CSDL (${detailReason})`
+          : `Sao lưu CSDL thất bại (${detailReason})`,
+      meta: { status, reason: detailReason, ...meta },
+    });
+  };
+
+  const logFailure = (failureReason, extraMeta = {}) => {
+    logOutcome('failure', { reason: failureReason, ...extraMeta });
+  };
+
+  if (!dbFile || dbFile === ':memory:') {
+    logFailure('memory_db', { dbFile });
+    return { ok: false, reason: 'memory_db' };
+  }
+  if (!backupDir || backupDir === ':memory:') {
+    logFailure('invalid_backup_dir', { backupDir });
+    return { ok: false, reason: 'invalid_backup_dir' };
+  }
+  const sourceFile = dbFile === ':memory:' ? null : path.resolve(dbFile);
+  if (!sourceFile) {
+    logFailure('memory_db', { dbFile });
+    return { ok: false, reason: 'memory_db' };
+  }
+  if (backupInProgress) {
+    logFailure('in_progress', { dbFile, backupDir });
+    return { ok: false, reason: 'in_progress' };
+  }
+  backupInProgress = true;
+  try {
+    await fs.access(sourceFile);
+  } catch {
+    backupInProgress = false;
+    logFailure('missing_source', { dbFile: sourceFile });
+    return { ok: false, reason: 'missing_source' };
+  }
+
+  let retentionLimit = null;
+  if (Number.isFinite(retention) && retention >= 0) {
+    retentionLimit = Math.trunc(retention);
+  } else {
+    const config = getBackupConfig();
+    let retentionFromConfig = false;
+    if (config) {
+      if (config.retentionCopies === null) {
+        retentionLimit = null;
+        retentionFromConfig = true;
+      } else if (Number.isFinite(config.retentionCopies) && config.retentionCopies >= 0) {
+        retentionLimit = Math.trunc(config.retentionCopies);
+        retentionFromConfig = true;
+      }
+    }
+    if (!retentionFromConfig) {
+      if (Number.isFinite(DB_BACKUP_RETENTION) && DB_BACKUP_RETENTION >= 0) {
+        retentionLimit = Math.trunc(DB_BACKUP_RETENTION);
+      } else {
+        retentionLimit = null;
+      }
+    }
+  }
+
+  try {
+    await ensureBackupDirectory(backupDir);
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const filename = `storage-${timestamp}.sqlite`;
+    const destination = path.join(backupDir, filename);
+    await fs.copyFile(sourceFile, destination);
+    const stats = await fs.stat(destination);
+    await rotateBackups(backupDir, retentionLimit);
+    logOutcome('success', { reason, file: destination, bytes: stats.size, retention: retentionLimit });
+    console.log(`💾 Đã sao lưu CSDL tới ${destination}`);
+    return { ok: true, file: destination, bytes: stats.size, reason };
+  } catch (err) {
+    console.error('Không thể sao lưu CSDL:', err);
+    logFailure('error', { error: err?.message || String(err) });
+    return { ok: false, error: err?.message || String(err) };
+  } finally {
+    backupInProgress = false;
+  }
+}
+
+function normalizeBackupAuditEntry(entry) {
+  if (!entry || typeof entry !== 'object') {
+    return null;
+  }
+  const ts = typeof entry.ts === 'string' ? entry.ts : null;
+  const actor = entry.actor || 'system';
+  const action = entry.action || 'unknown';
+  const detail = entry.detail || '';
+  const meta = entry.meta ?? null;
+  return { ts, actor, action, detail, meta };
+}
+
+function nextBackupRunISO() {
+  if (!backupScheduleMeta.active || !dbBackupJob || typeof dbBackupJob.nextDates !== 'function') {
+    return null;
+  }
+  try {
+    const next = dbBackupJob.nextDates();
+    if (!next) return null;
+    if (typeof next.toISO === 'function') {
+      return next.toISO();
+    }
+    if (typeof next.toDate === 'function') {
+      return next.toDate().toISOString();
+    }
+    if (next instanceof Date) {
+      return next.toISOString();
+    }
+    const candidate = new Date(next);
+    return Number.isNaN(candidate.getTime()) ? null : candidate.toISOString();
+  } catch {
+    return null;
+  }
+}
+
+function formatNextRunHuman(isoValue) {
+  if (!isoValue) {
+    return null;
+  }
+  try {
+    return new Date(isoValue).toLocaleString('vi-VN', {
+      hour12: false,
+      weekday: 'long',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  } catch {
+    return null;
+  }
+}
+
+function buildBackupSummary({ limit = 10 } = {}) {
+  const logs = getJSONValue('audit_logs_v1', []);
+  const backupLogs = Array.isArray(logs)
+    ? logs.filter((entry) => entry && entry.action === 'db.backup')
+    : [];
+  const clamp = Number.isFinite(limit) && limit > 0 ? Math.min(limit, backupLogs.length) : backupLogs.length;
+  const recent = backupLogs.slice(0, clamp).map((entry) => normalizeBackupAuditEntry(entry)).filter(Boolean);
+  const lastSuccess = normalizeBackupAuditEntry(
+    backupLogs.find((entry) => entry?.meta?.status === 'success') || null
+  );
+  const lastFailure = normalizeBackupAuditEntry(
+    backupLogs.find((entry) => entry?.meta?.status === 'failure') || null
+  );
+  const config = getBackupConfig();
+  const cronExpr = normalizeCronExpression(config.cron);
+  const retention =
+    Number.isFinite(config.retentionCopies) && config.retentionCopies >= 0 ? config.retentionCopies : null;
+  const nextRun = nextBackupRunISO();
+  const nextRunHuman = formatNextRunHuman(nextRun);
+  const description = backupScheduleMeta.description || describeCronExpression(cronExpr);
+
+  return {
+    schedule: {
+      cron: cronExpr,
+      cronDescription: description,
+      retentionCopies: retention,
+      directory: DB_BACKUP_DIR,
+      active: backupScheduleMeta.active,
+      reasons: [...backupScheduleMeta.reasons],
+      lastError: backupScheduleMeta.lastError,
+      refreshedAt: backupScheduleMeta.refreshedAt,
+      nextRun,
+      nextRunHuman,
+    },
+    lastSuccess,
+    lastFailure,
+    recent,
+  };
+}
+
+function refreshDatabaseBackupSchedule() {
+  if (dbBackupJob) {
+    dbBackupJob.stop();
+    dbBackupJob = null;
+  }
+  backupScheduleMeta.active = false;
+  backupScheduleMeta.reasons = [];
+  backupScheduleMeta.lastError = null;
+  backupScheduleMeta.refreshedAt = new Date().toISOString();
+  const config = getBackupConfig();
+  const cronExpr = normalizeCronExpression(config.cron);
+  backupScheduleMeta.cron = cronExpr;
+  backupScheduleMeta.description = describeCronExpression(cronExpr);
+  if (process.env.KPI_DISABLE_CRON === '1') {
+    backupScheduleMeta.reasons.push('cron_disabled_env');
+    return;
+  }
+  if (!cronExpr || cronExpr.toLowerCase() === 'never') {
+    backupScheduleMeta.reasons.push('cron_disabled_config');
+    return;
+  }
+  if (DB_FILE === ':memory:' || DB_BACKUP_DIR === ':memory:') {
+    if (DB_FILE === ':memory:') {
+      backupScheduleMeta.reasons.push('memory_db');
+    }
+    if (DB_BACKUP_DIR === ':memory:') {
+      backupScheduleMeta.reasons.push('memory_backup_dir');
+    }
+    return;
+  }
+  if (typeof cron.validate === 'function' && !cron.validate(cronExpr)) {
+    backupScheduleMeta.reasons.push('invalid_cron_expression');
+    return;
+  }
+  try {
+    dbBackupJob = cron.schedule(cronExpr, () => {
+      performDatabaseBackup({ reason: 'scheduled' }).catch((err) => {
+        console.error('Cron sao lưu CSDL thất bại:', err);
+      });
+    });
+    backupScheduleMeta.active = true;
+  } catch (err) {
+    console.error('Không thể thiết lập lịch sao lưu CSDL:', err);
+    backupScheduleMeta.lastError = err?.message || String(err);
+    backupScheduleMeta.reasons.push('schedule_error');
+  }
+}
+
 const db = await initializeDatabase();
+refreshDatabaseBackupSchedule();
 
 function pruneExpiredSessions() {
   try {
@@ -517,6 +888,56 @@ function verifyStoragePermission(req, res, key) {
     return { context, required, denied: true };
   }
   return { context, required, denied: false };
+}
+
+function requireAdminSyncManage(req, res) {
+  const context = getSessionContext(req);
+  if (!context) {
+    res.status(401).json({ ok: false, error: 'Bạn cần đăng nhập bằng tài khoản quản trị.' });
+    return { context: null, denied: true };
+  }
+  const account = context.account || {};
+  if (account.role !== 'admin') {
+    res.status(403).json({ ok: false, error: 'Chỉ tài khoản quản trị mới được phép thao tác đồng bộ ECUS.' });
+    return { context, denied: true };
+  }
+  if (!account.permissions?.syncManage) {
+    res.status(403).json({ ok: false, error: 'Tài khoản quản trị hiện chưa được cấp quyền quản lý đồng bộ ECUS.' });
+    return { context, denied: true };
+  }
+  return { context, denied: false };
+}
+
+function requireAdminBackupManage(req, res) {
+  const context = getSessionContext(req);
+  if (!context) {
+    res.status(401).json({ ok: false, error: 'Bạn cần đăng nhập bằng tài khoản quản trị.' });
+    return { context: null, denied: true };
+  }
+  const account = context.account || {};
+  if (account.role !== 'admin') {
+    res.status(403).json({ ok: false, error: 'Chỉ tài khoản quản trị mới được phép chỉnh sửa lịch sao lưu.' });
+    return { context, denied: true };
+  }
+  if (!account.permissions?.accountManage) {
+    res.status(403).json({ ok: false, error: 'Tài khoản hiện chưa được cấp quyền quản trị hệ thống.' });
+    return { context, denied: true };
+  }
+  return { context, denied: false };
+}
+
+function requireAuditView(req, res) {
+  const context = getSessionContext(req);
+  if (!context) {
+    res.status(401).json({ ok: false, error: 'Bạn cần đăng nhập để xem nhật ký sao lưu.' });
+    return { context: null, denied: true };
+  }
+  const account = context.account || {};
+  if (!(account.permissions?.auditView || account.permissions?.accountManage)) {
+    res.status(403).json({ ok: false, error: 'Tài khoản hiện không có quyền xem nhật ký hệ thống.' });
+    return { context, denied: true };
+  }
+  return { context, denied: false };
 }
 
 function setAttachmentHeaders(res, filename) {
@@ -703,6 +1124,15 @@ function normalizeName(input) {
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase();
+}
+
+function getDeclarationKey(row) {
+  if (!row || typeof row !== 'object') {
+    return '';
+  }
+  const soTk = (row?.so_tk ?? '').toString();
+  const branch = normalizeStr(row?.nhanh || '');
+  return `${soTk}_${branch}`;
 }
 
 function toISODate(value, { preferMonthFirst = false } = {}) {
@@ -927,12 +1357,11 @@ function saveDeclRowsServer(newRows, { overwrite = false, actor = 'system', deta
 
   const current = getDeclRows();
   const map = new Map();
-  const keyOf = (row) => `${(row?.so_tk ?? '').toString()}_${normalizeStr(row?.nhanh || '')}`;
   for (const row of current) {
-    map.set(keyOf(row), row);
+    map.set(getDeclarationKey(row), row);
   }
   for (const row of cleaned) {
-    map.set(keyOf(row), row);
+    map.set(getDeclarationKey(row), row);
   }
   const merged = Array.from(map.values());
   setJSONValue('decl_rows_v1', merged);
@@ -1004,6 +1433,105 @@ function getMSTForServer(mst, isoDate) {
     })
     .sort((a, b) => a.rank - b.rank);
   return ranked[0]?.row || null;
+}
+
+function normalizeCronExpression(value) {
+  if (value === null || value === undefined) {
+    return '';
+  }
+  return `${value}`.trim();
+}
+
+function getBackupConfig() {
+  const stored = getJSONValue('db_backup_config_v1', DEFAULT_BACKUP_CONFIG) || {};
+  const cronExpr = normalizeCronExpression(stored?.cron);
+  const fallbackCron = normalizeCronExpression(DEFAULT_BACKUP_CONFIG.cron);
+  const cronValue = cronExpr || fallbackCron || '';
+  const hasStoredRetention = Object.prototype.hasOwnProperty.call(stored, 'retentionCopies');
+  let retention = null;
+  if (hasStoredRetention) {
+    if (stored.retentionCopies === null) {
+      retention = null;
+    } else {
+      const normalized = normalizeRetentionCopies(stored.retentionCopies);
+      retention = normalized ?? null;
+    }
+  } else {
+    const fallbackRetention = normalizeRetentionCopies(DEFAULT_BACKUP_CONFIG.retentionCopies);
+    retention = fallbackRetention ?? null;
+  }
+  return {
+    cron: cronValue,
+    retentionCopies: retention,
+  };
+}
+
+function saveBackupConfig(config) {
+  const stored = getJSONValue('db_backup_config_v1', DEFAULT_BACKUP_CONFIG) || {};
+  const nextCron = normalizeCronExpression(config?.cron ?? stored?.cron ?? DEFAULT_BACKUP_CONFIG.cron);
+  let nextRetention;
+  if (config && Object.prototype.hasOwnProperty.call(config, 'retentionCopies')) {
+    if (config.retentionCopies === null) {
+      nextRetention = null;
+    } else {
+      nextRetention = normalizeRetentionCopies(config.retentionCopies);
+      if (nextRetention === null) {
+        nextRetention = null;
+      }
+    }
+  } else if (Object.prototype.hasOwnProperty.call(stored, 'retentionCopies')) {
+    if (stored.retentionCopies === null) {
+      nextRetention = null;
+    } else {
+      nextRetention = normalizeRetentionCopies(stored.retentionCopies);
+      if (nextRetention === null) {
+        nextRetention = null;
+      }
+    }
+  } else {
+    nextRetention = normalizeRetentionCopies(DEFAULT_BACKUP_CONFIG.retentionCopies);
+    if (nextRetention === null) {
+      nextRetention = null;
+    }
+  }
+
+  setJSONValue('db_backup_config_v1', { cron: nextCron, retentionCopies: nextRetention });
+  return getBackupConfig();
+}
+
+function describeCronExpression(expression) {
+  const cronExpr = normalizeCronExpression(expression);
+  if (!cronExpr) {
+    return '';
+  }
+  if (cronExpr.toLowerCase() === 'never') {
+    return 'Không chạy tự động';
+  }
+  if (typeof cron.validate === 'function' && !cron.validate(cronExpr)) {
+    return 'Biểu thức cron không hợp lệ';
+  }
+  try {
+    const output = cronstrue.toString(cronExpr, {
+      locale: 'vi',
+      use24HourTimeFormat: true,
+      throwExceptionOnParseError: false,
+    });
+    if (!output || /lỗi/i.test(output) || /error/i.test(output)) {
+      return 'Không thể diễn giải biểu thức cron';
+    }
+    const parts = cronExpr.split(/\s+/);
+    if (parts.length >= 5) {
+      const dayOfMonth = parts[2];
+      const dayOfWeek = parts[4];
+      const isDaily = ['*', '?'].includes(dayOfMonth) && ['*', '?'].includes(dayOfWeek);
+      if (isDaily && /^Vào\s+\d{1,2}:\d{2}$/u.test(output)) {
+        return `${output} hằng ngày`;
+      }
+    }
+    return output;
+  } catch (err) {
+    return 'Không thể diễn giải biểu thức cron';
+  }
 }
 
 function getEcusConfig() {
@@ -1096,7 +1624,7 @@ function markDeclarationsReviewed(keys, { actor = 'system' } = {}) {
   const keySet = new Set(keys);
   let updatedCount = 0;
   const nextRows = getDeclRows().map((row) => {
-    const key = `${(row?.so_tk ?? '').toString()}_${normalizeStr(row?.nhanh || '')}`;
+    const key = getDeclarationKey(row);
     if (!keySet.has(key)) return row;
     if (row?.reviewed) return row;
     updatedCount += 1;
@@ -1629,6 +2157,30 @@ const COLUMN_ALIASES = Object.freeze({
     'Nhan vien xuat',
   ],
   team: ['team', 'team_name', 'to_doi', 'To_doi', 'ten_to', 'ToDoi', 'Tổ đội', 'To doi'],
+  co_line_count: [
+    'co_line_count',
+    'coLineCount',
+    'co_lines',
+    'coLines',
+    'co_line',
+    'coLine',
+    'co_count',
+    'coCount',
+    'so_dong_co',
+    'So_dong_co',
+    'sodongco',
+    'so_dong_ap_co',
+    'So_dong_ap_co',
+    'dong_hang_ap_co',
+    'Dong_hang_ap_co',
+    'donghangapco',
+    'co_lines_count',
+    'coLineItems',
+    'co_line_items',
+    'CO_Count',
+    'CO_LINES',
+    'CO_Lines',
+  ],
 });
 
 function buildRecordKeyLookup(record) {
@@ -1709,6 +2261,8 @@ function mapEcusRow(record, config, context) {
     licensesRaw !== undefined ? licensesRaw : getField('license_codes'),
     context.licenseExcludeSet,
   );
+  const coLineRaw = getField('co_line_count');
+  const coLineCount = parseCoLineCount(coLineRaw);
 
   let nhanVien = normalizeStr(getField('nhan_vien'));
   if (!nhanVien) {
@@ -1748,6 +2302,7 @@ function mapEcusRow(record, config, context) {
     nhan_vien: nhanVien,
     team,
     isExport,
+    co_line_count: coLineCount,
   };
   return deriveCOStatus(record, base);
 }
@@ -1888,41 +2443,91 @@ function computeRangeWindow(config, explicit) {
   return { from: toISO(start), to: toISO(end) };
 }
 
-async function runEcusSync({ from, to, actor = 'system', reason = 'manual' } = {}) {
-  const config = getEcusConfig();
-  const range = computeRangeWindow(config, { from, to });
-  const syncReason = reason || 'manual';
-  const rawIterator = fetchEcusDeclarations(range, config);
+function buildEcusSyncContext(config) {
   const rules = getRulesValue();
   const excludeSet = new Set(
     Array.isArray(rules?.license?.exclude?.codes)
       ? rules.license.exclude.codes.map((code) => normalizeStr(code).toUpperCase())
       : [],
   );
-  const context = {
+  return {
     licenseExcludeSet: excludeSet,
     memberTeamMap: getMemberTeamMap(),
+    config,
   };
+}
+
+async function previewEcusSync(rangeInput, { limit = 50 } = {}) {
+  const config = getEcusConfig();
+  const range = computeRangeWindow(config, rangeInput || {});
+  const context = buildEcusSyncContext(config);
+  const iterator = fetchEcusDeclarations(range, config);
+  const existingRows = getDeclRows();
+  const existingKeys = new Set(existingRows.map((row) => getDeclarationKey(row)));
+  const normalizedLimit = Number.isFinite(Number(limit)) ? Math.max(0, Math.floor(Number(limit))) : 0;
+  const rows = [];
+  let totalFetched = 0;
+
+  for await (const batch of iterator) {
+    totalFetched += batch.length;
+    for (const raw of batch) {
+      const mapped = mapEcusRow(raw, config, context);
+      if (!mapped) continue;
+      const key = getDeclarationKey(mapped);
+      rows.push({ ...mapped, status: existingKeys.has(key) ? 'existing' : 'new' });
+      if (normalizedLimit > 0 && rows.length >= normalizedLimit) {
+        return {
+          rows,
+          totalFetched,
+          limited: true,
+          range,
+          config,
+        };
+      }
+    }
+  }
+
+  return {
+    rows,
+    totalFetched,
+    limited: false,
+    range,
+    config,
+  };
+}
+
+async function runEcusSync({ from, to, actor = 'system', reason = 'manual' } = {}) {
+  const config = getEcusConfig();
+  const range = computeRangeWindow(config, { from, to });
+  const syncReason = reason || 'manual';
+  const rawIterator = fetchEcusDeclarations(range, config);
+  const context = buildEcusSyncContext(config);
   const runAtIso = new Date().toISOString();
   const existingRows = getDeclRows();
-  const keyOf = (row) => `${(row?.so_tk ?? '').toString()}_${normalizeStr(row?.nhanh || '')}`;
+  const existingCount = existingRows.length;
   const mergedMap = new Map();
   for (const row of existingRows) {
     if (!row) continue;
-    mergedMap.set(keyOf(row), row);
+    mergedMap.set(getDeclarationKey(row), row);
   }
 
   let totalFetched = 0;
-  let totalImported = 0;
+  let totalInserted = 0;
+  let skippedExisting = 0;
 
   for await (const batch of rawIterator) {
     totalFetched += batch.length;
     const mappedBatch = batch
       .map((row) => mapEcusRow(row, config, context))
       .filter((row) => row && row.so_tk && row.date);
-    totalImported += mappedBatch.length;
     for (const row of mappedBatch) {
-      mergedMap.set(keyOf(row), row);
+      const key = getDeclarationKey(row);
+      if (mergedMap.has(key)) {
+        skippedExisting += 1;
+        continue;
+      }
+      mergedMap.set(key, row);
+      totalInserted += 1;
     }
   }
 
@@ -1931,13 +2536,13 @@ async function runEcusSync({ from, to, actor = 'system', reason = 'manual' } = {
   pushAuditLog({
     actor,
     action: 'decl.merge',
-    detail: `Đồng bộ ${totalImported} tờ khai từ ECUS (${range.from || '...'} → ${range.to || '...'}) [${syncReason}] – tổng lưu: ${mergedRows.length}`,
+    detail: `Đồng bộ ${totalInserted} tờ khai mới từ ECUS (${range.from || '...'} → ${range.to || '...'}) [${syncReason}] – giữ nguyên ${skippedExisting} tờ khai đã có – tổng lưu: ${mergedRows.length}`,
   });
 
   const alertSummary = evaluateDeclarationAlerts({ actor, reason: 'ecus-sync' });
 
   pushImportLog(
-    `ECUS sync (${syncReason}) ${totalImported} dòng (${range.from || '...'} → ${range.to || '...'}) – tổng lưu: ${mergedRows.length}`,
+    `ECUS sync (${syncReason}) thêm ${totalInserted} dòng, bỏ qua ${skippedExisting} (${range.from || '...'} → ${range.to || '...'}) – tổng lưu: ${mergedRows.length}`,
   );
 
   const nextConfig = saveEcusConfig({
@@ -1946,8 +2551,10 @@ async function runEcusSync({ from, to, actor = 'system', reason = 'manual' } = {
     lastSummary: {
       runAt: runAtIso,
       rowsFetched: totalFetched,
-      rowsImported: totalImported,
+      rowsInserted: totalInserted,
+      rowsSkipped: skippedExisting,
       totalStored: mergedRows.length,
+      existingBefore: existingCount,
       range,
       alerts: alertSummary,
     },
@@ -1956,8 +2563,11 @@ async function runEcusSync({ from, to, actor = 'system', reason = 'manual' } = {
   return {
     config: nextConfig,
     fetched: totalFetched,
-    imported: totalImported,
+    imported: totalInserted,
+    skipped: skippedExisting,
     storedTotal: mergedRows.length,
+    existingBefore: existingCount,
+    existingAfter: mergedRows.length,
     range,
     alerts: alertSummary,
     runAt: runAtIso,
@@ -2046,6 +2656,90 @@ app.get('/api/health', (req, res) => {
 app.get('/api/bootstrap', (req, res) => {
   const store = buildBootstrapSnapshot();
   res.json({ data: store });
+});
+
+app.get('/api/admin/backups/summary', (req, res) => {
+  const { denied } = requireAuditView(req, res);
+  if (denied) {
+    return;
+  }
+  try {
+    const limitRaw = Number.parseInt(req.query?.limit ?? '10', 10);
+    const limit = Number.isFinite(limitRaw) && limitRaw > 0 ? limitRaw : 10;
+    const summary = buildBackupSummary({ limit });
+    res.json({ ok: true, summary });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err?.message || 'Không thể tải thông tin sao lưu' });
+  }
+});
+
+app.post('/api/admin/backups/schedule', (req, res) => {
+  const { context, denied } = requireAdminBackupManage(req, res);
+  if (denied) {
+    return;
+  }
+  try {
+    const body = req.body ?? {};
+    const cronExpr = normalizeCronExpression(body?.cron);
+    if (!cronExpr) {
+      res.status(400).json({ ok: false, error: 'Vui lòng nhập biểu thức cron.' });
+      return;
+    }
+    if (cronExpr.toLowerCase() !== 'never' && typeof cron.validate === 'function' && !cron.validate(cronExpr)) {
+      res.status(400).json({ ok: false, error: 'Biểu thức cron không hợp lệ.' });
+      return;
+    }
+    const hasRetentionField =
+      Object.prototype.hasOwnProperty.call(body, 'retentionCopies') ||
+      Object.prototype.hasOwnProperty.call(body, 'retention');
+    let retentionValue;
+    if (hasRetentionField) {
+      const rawRetention = Object.prototype.hasOwnProperty.call(body, 'retentionCopies')
+        ? body.retentionCopies
+        : body.retention;
+      if (rawRetention === null || (typeof rawRetention === 'string' && rawRetention.trim() === '')) {
+        retentionValue = null;
+      } else if (typeof rawRetention === 'number') {
+        if (!Number.isFinite(rawRetention) || rawRetention < 0) {
+          res
+            .status(400)
+            .json({ ok: false, error: 'Số bản sao lưu giữ lại phải là số nguyên không âm.', field: 'retentionCopies' });
+          return;
+        }
+        retentionValue = Math.trunc(rawRetention);
+      } else if (typeof rawRetention === 'string') {
+        const trimmed = rawRetention.trim();
+        if (!/^\d+$/u.test(trimmed)) {
+          res
+            .status(400)
+            .json({ ok: false, error: 'Số bản sao lưu giữ lại phải là số nguyên không âm.', field: 'retentionCopies' });
+          return;
+        }
+        retentionValue = Number.parseInt(trimmed, 10);
+      } else {
+        res
+          .status(400)
+          .json({ ok: false, error: 'Số bản sao lưu giữ lại phải là số nguyên không âm.', field: 'retentionCopies' });
+        return;
+      }
+    }
+
+    const config = saveBackupConfig(
+      hasRetentionField ? { cron: cronExpr, retentionCopies: retentionValue } : { cron: cronExpr }
+    );
+    refreshDatabaseBackupSchedule();
+    const actor = context.account?.username || 'system';
+    pushAuditLog({
+      actor,
+      action: 'db.backup_schedule.update',
+      detail: 'Cập nhật lịch sao lưu CSDL',
+      meta: { cron: cronExpr, retentionCopies: config.retentionCopies },
+    });
+    const summary = buildBackupSummary();
+    res.json({ ok: true, config, summary });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err?.message || 'Không thể cập nhật lịch sao lưu' });
+  }
 });
 
 app.post('/api/reports/export', async (req, res) => {
@@ -2292,6 +2986,10 @@ app.get('/api/import/ecus/status', async (req, res) => {
 });
 
 app.put('/api/import/ecus/config', (req, res) => {
+  const { denied } = requireAdminSyncManage(req, res);
+  if (denied) {
+    return;
+  }
   try {
     const payload = req.body?.config ?? req.body ?? {};
     const preservePassword = !!(req.body && req.body.preservePassword);
@@ -2303,7 +3001,33 @@ app.put('/api/import/ecus/config', (req, res) => {
   }
 });
 
+app.post('/api/import/ecus/preview', async (req, res) => {
+  const { denied } = requireAdminSyncManage(req, res);
+  if (denied) {
+    return;
+  }
+  try {
+    const { from, to, limit } = req.body || {};
+    const preview = await previewEcusSync({ from, to }, { limit });
+    res.json({
+      ok: true,
+      preview: {
+        rows: preview.rows,
+        limited: preview.limited,
+        fetched: preview.totalFetched,
+        range: preview.range,
+      },
+    });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err?.message || 'Không thể xem trước dữ liệu đồng bộ' });
+  }
+});
+
 app.post('/api/import/ecus/run', async (req, res) => {
+  const { denied } = requireAdminSyncManage(req, res);
+  if (denied) {
+    return;
+  }
   try {
     const actor = resolveActor(req);
     const { from, to } = req.body || {};
@@ -2375,6 +3099,10 @@ export function stopServer() {
 
 export function getDatabaseHandle() {
   return db;
+}
+
+export function getDatabaseInitState() {
+  return { ...databaseInitState };
 }
 
 if (process.env.KPI_SKIP_LISTEN !== '1') {

@@ -112,6 +112,7 @@ export function generateSampleDeclarations({
 
     const hasCO = index % 3 === 0;
     const coLabel = hasCO ? "Có" : "";
+    const coLines = hasCO ? (index % 5) + 1 : 0;
 
     const row = {
       date: isoDate,
@@ -134,6 +135,7 @@ export function generateSampleDeclarations({
       licenseCodes,
       has_co: hasCO,
       co: coLabel,
+      co_line_count: coLines,
     };
 
     row.kpi = computeKPI(row, rules);

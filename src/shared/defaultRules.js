@@ -68,6 +68,7 @@ const BASE_RULE_SET_V2 = {
       enabled: true,
       label: "Cộng điểm khi tờ khai có C/O",
       points: 0.3,
+      perLine: 0.05,
     },
   },
 };

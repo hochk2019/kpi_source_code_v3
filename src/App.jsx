@@ -1,4 +1,5 @@
 import React, { Suspense, useEffect, useMemo, useState } from 'react';
+import { Toaster } from 'sonner';
 const KPICalculator = React.lazy(() => import('./components/KPICalculator.jsx'));
 const Login = React.lazy(() => import('./components/Login.jsx'));
 const ChangePasswordDialog = React.lazy(() => import('./components/ChangePasswordDialog.jsx'));
@@ -163,6 +164,8 @@ export default function App() {
           <ChangePasswordDialog currentUser={auth} onClose={handlePasswordDialogClose} />
         )}
       </Suspense>
+
+      <Toaster position="top-right" richColors />
     </div>
   );
 }

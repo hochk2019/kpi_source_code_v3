@@ -7,7 +7,7 @@ import {
   normalizeName,
 } from "@/lib/store.js";
 import { loadRules, countLicenseTypesFromRowObj, extractLicenseCodesFromRowObj } from "@/lib/rules.js";
-import { deriveCOStatus } from "@/shared/co.js";
+import { deriveCOStatus, parseCoLineCount } from "@/shared/co.js";
 
 const NAME_MAP = {
   so_tk: [
@@ -51,6 +51,27 @@ const NAME_MAP = {
   mst: ["MST", "mst", "Mã số thuế", "Ma so thue"],
   cong_ty: ["Công ty", "Cong ty", "customer", "Tên doanh nghiệp", "Ten doanh nghiep"],
   agency: ["Đại lý", "Đại lý HQ", "Dai ly", "Dai ly HQ", "Agency"],
+  co_line_count: [
+    "Dòng hàng áp C/O",
+    "Dong hang ap C/O",
+    "Dòng hàng áp CO",
+    "Dong hang ap CO",
+    "Dòng C/O",
+    "Dong CO",
+    "CO Lines",
+    "CO Line Count",
+    "co_line_count",
+    "coLineCount",
+    "co_lines",
+    "coLines",
+    "co_line",
+    "CO_Count",
+    "COCount",
+    "Số dòng C/O",
+    "So dong C/O",
+    "Số dòng áp C/O",
+    "So dong ap C/O",
+  ],
 };
 
 function pick(row, keys) {
@@ -139,6 +160,22 @@ export function mapRow(row, opts = {}) {
     ? uniqueCodes.filter((code) => !excludeSet.has(code)).length
     : countLicenseTypesFromRowObj(row, Array.from(excludeSet));
 
+  const coLineCandidates = [
+    NAME_MAP.co_line_count ? pick(row, NAME_MAP.co_line_count) : "",
+    row.co_line_count,
+    row.coLineCount,
+    row.co_lines,
+    row.coLines,
+  ];
+  let co_line_count = 0;
+  for (const candidate of coLineCandidates) {
+    const parsed = parseCoLineCount(candidate);
+    if (parsed > 0) {
+      co_line_count = parsed;
+      break;
+    }
+  }
+
   if (autoAssignStaff) {
     const isExport = isExportDecl(so_tk, loai_hinh);
     const m = getMSTFor(mst, dateISO) || {};
@@ -195,6 +232,7 @@ export function mapRow(row, opts = {}) {
     licenses,
     so_luong_gp: licenses,
     licenseCodes: uniqueCodes,
+    co_line_count,
   };
   return deriveCOStatus(row, base);
 }

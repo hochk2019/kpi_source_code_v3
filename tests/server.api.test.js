@@ -495,6 +495,157 @@ beforeEach(() => {
   excelMock.__resetWorkbookCreateCount?.();
 });
 
+describe('Backup summary API', () => {
+  it('từ chối khi chưa đăng nhập', async () => {
+    const res = await request(app).get('/api/admin/backups/summary');
+    expect(res.status).toBe(401);
+    expect(res.body.ok).toBe(false);
+  });
+
+  it('từ chối khi tài khoản không có quyền audit', async () => {
+    const staffAgent = request.agent(app);
+    const loginRes = await staffAgent
+      .post('/api/auth/login')
+      .send({ username: 'nhanvien', password: '123456' });
+    expect(loginRes.status).toBe(200);
+
+    const res = await staffAgent.get('/api/admin/backups/summary');
+    expect(res.status).toBe(403);
+    expect(res.body.ok).toBe(false);
+  });
+
+  it('trả về lịch sao lưu và nhật ký gần nhất cho quản trị viên', async () => {
+    const adminAgent = request.agent(app);
+    const loginRes = await adminAgent
+      .post('/api/auth/login')
+      .send({ username: 'admin', password: 'admin123' });
+    expect(loginRes.status).toBe(200);
+
+    const logs = [
+      {
+        ts: '2024-05-01T03:00:00.000Z',
+        actor: 'system',
+        action: 'db.backup',
+        detail: 'Sao lưu CSDL (scheduled)',
+        meta: { status: 'success', reason: 'scheduled', bytes: 2048 },
+      },
+      {
+        ts: '2024-05-01T02:00:00.000Z',
+        actor: 'system',
+        action: 'db.backup',
+        detail: 'Sao lưu CSDL thất bại (memory_db)',
+        meta: { status: 'failure', reason: 'memory_db' },
+      },
+      {
+        ts: '2024-04-30T23:00:00.000Z',
+        actor: 'tester',
+        action: 'other.action',
+        detail: 'ignored',
+      },
+    ];
+    const db = getDb();
+    db.prepare(
+      'INSERT INTO kv_store (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value'
+    ).run('audit_logs_v1', JSON.stringify(logs));
+
+    const res = await adminAgent.get('/api/admin/backups/summary');
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+    const summary = res.body.summary;
+    expect(summary.schedule).toMatchObject({
+      cron: '0 3 * * *',
+      cronDescription: expect.stringContaining('03:00'),
+      active: false,
+      retentionCopies: 14,
+    });
+    expect(Array.isArray(summary.schedule.reasons)).toBe(true);
+    expect(summary.schedule.reasons.length).toBeGreaterThan(0);
+    expect(summary.lastSuccess).toMatchObject({
+      actor: 'system',
+      meta: expect.objectContaining({ status: 'success', bytes: 2048 }),
+    });
+    expect(summary.lastFailure).toMatchObject({
+      meta: expect.objectContaining({ status: 'failure', reason: 'memory_db' }),
+    });
+    expect(Array.isArray(summary.recent)).toBe(true);
+    expect(summary.recent[0]).toMatchObject({ action: 'db.backup' });
+  });
+
+  it('từ chối cập nhật cron sao lưu khi chưa đăng nhập', async () => {
+    const res = await request(app)
+      .post('/api/admin/backups/schedule')
+      .send({ cron: '*/15 * * * *' });
+    expect(res.status).toBe(401);
+    expect(res.body.ok).toBe(false);
+  });
+
+  it('từ chối cập nhật cron sao lưu với tài khoản không có quyền', async () => {
+    const staffAgent = request.agent(app);
+    const loginRes = await staffAgent
+      .post('/api/auth/login')
+      .send({ username: 'nhanvien', password: '123456' });
+    expect(loginRes.status).toBe(200);
+
+    const res = await staffAgent.post('/api/admin/backups/schedule').send({ cron: '*/15 * * * *' });
+    expect(res.status).toBe(403);
+    expect(res.body.ok).toBe(false);
+  });
+
+  it('cho phép quản trị viên cập nhật biểu thức cron hợp lệ', async () => {
+    const adminAgent = request.agent(app);
+    const loginRes = await adminAgent
+      .post('/api/auth/login')
+      .send({ username: 'admin', password: 'admin123' });
+    expect(loginRes.status).toBe(200);
+
+    const res = await adminAgent
+      .post('/api/admin/backups/schedule')
+      .send({ cron: '*/30 * * * *', retentionCopies: 5 });
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+    expect(res.body.config).toMatchObject({ cron: '*/30 * * * *', retentionCopies: 5 });
+    expect(res.body.summary.schedule).toMatchObject({
+      cron: '*/30 * * * *',
+      cronDescription: 'Mỗi 30 phút',
+      retentionCopies: 5,
+    });
+    const row = getDb()
+      .prepare('SELECT value FROM kv_store WHERE key = ?')
+      .get('audit_logs_v1');
+    const logs = JSON.parse(row?.value || '[]');
+    expect(logs[0]).toMatchObject({
+      action: 'db.backup_schedule.update',
+      meta: expect.objectContaining({ cron: '*/30 * * * *', retentionCopies: 5 }),
+    });
+  });
+
+  it('trả lỗi khi retention không hợp lệ', async () => {
+    const adminAgent = request.agent(app);
+    const loginRes = await adminAgent
+      .post('/api/auth/login')
+      .send({ username: 'admin', password: 'admin123' });
+    expect(loginRes.status).toBe(200);
+
+    const res = await adminAgent
+      .post('/api/admin/backups/schedule')
+      .send({ cron: '*/15 * * * *', retentionCopies: -1 });
+    expect(res.status).toBe(400);
+    expect(res.body).toMatchObject({ ok: false, field: 'retentionCopies' });
+  });
+
+  it('trả lỗi khi cập nhật cron không hợp lệ', async () => {
+    const adminAgent = request.agent(app);
+    const loginRes = await adminAgent
+      .post('/api/auth/login')
+      .send({ username: 'admin', password: 'admin123' });
+    expect(loginRes.status).toBe(200);
+
+    const res = await adminAgent.post('/api/admin/backups/schedule').send({ cron: 'not-a-cron' });
+    expect(res.status).toBe(400);
+    expect(res.body.ok).toBe(false);
+  });
+});
+
 describe('ECUS sync API', () => {
   it('trả về cấu hình mặc định', async () => {
     const res = await request(app).get('/api/import/ecus/config');
@@ -508,6 +659,24 @@ describe('ECUS sync API', () => {
     });
   });
 
+  it('từ chối cập nhật cấu hình khi chưa đăng nhập', async () => {
+    const res = await request(app).put('/api/import/ecus/config').send({ config: {} });
+    expect(res.status).toBe(401);
+    expect(res.body.ok).toBe(false);
+  });
+
+  it('từ chối cập nhật cấu hình khi tài khoản không phải admin', async () => {
+    const staffAgent = request.agent(app);
+    const loginRes = await staffAgent
+      .post('/api/auth/login')
+      .send({ username: 'nhanvien', password: '123456' });
+    expect(loginRes.status).toBe(200);
+
+    const res = await staffAgent.put('/api/import/ecus/config').send({ config: {} });
+    expect(res.status).toBe(403);
+    expect(res.body.ok).toBe(false);
+  });
+
   it('trả về trạng thái chưa cấu hình khi thiếu thông tin SQL', async () => {
     const res = await request(app).get('/api/import/ecus/status');
     expect(res.status).toBe(200);
@@ -516,7 +685,117 @@ describe('ECUS sync API', () => {
     expect(res.body.database).toMatchObject({ ok: false, state: 'not_configured' });
   });
 
+  it('từ chối chạy đồng bộ khi không đăng nhập', async () => {
+    const res = await request(app)
+      .post('/api/import/ecus/run')
+      .send({ from: '2025-01-01', to: '2025-01-02' });
+    expect(res.status).toBe(401);
+    expect(res.body.ok).toBe(false);
+  });
+
+  it('từ chối chạy đồng bộ khi tài khoản không phải admin', async () => {
+    const staffAgent = request.agent(app);
+    const loginRes = await staffAgent
+      .post('/api/auth/login')
+      .send({ username: 'nhanvien', password: '123456' });
+    expect(loginRes.status).toBe(200);
+
+    const res = await staffAgent
+      .post('/api/import/ecus/run')
+      .send({ from: '2025-01-01', to: '2025-01-02' });
+    expect(res.status).toBe(403);
+    expect(res.body.ok).toBe(false);
+  });
+
+  it('từ chối xem trước dữ liệu ECUS khi chưa đăng nhập', async () => {
+    const res = await request(app)
+      .post('/api/import/ecus/preview')
+      .send({ from: '2025-01-01', to: '2025-01-02' });
+    expect(res.status).toBe(401);
+    expect(res.body.ok).toBe(false);
+  });
+
+  it('từ chối xem trước dữ liệu ECUS khi tài khoản không phải admin', async () => {
+    const staffAgent = request.agent(app);
+    const loginRes = await staffAgent
+      .post('/api/auth/login')
+      .send({ username: 'nhanvien', password: '123456' });
+    expect(loginRes.status).toBe(200);
+
+    const res = await staffAgent
+      .post('/api/import/ecus/preview')
+      .send({ from: '2025-01-01', to: '2025-01-02' });
+    expect(res.status).toBe(403);
+    expect(res.body.ok).toBe(false);
+  });
+
+  it('xem trước dữ liệu phân loại tờ khai mới và đã tồn tại', async () => {
+    const adminAgent = request.agent(app);
+    const loginRes = await adminAgent
+      .post('/api/auth/login')
+      .send({ username: 'admin', password: 'admin123' });
+    expect(loginRes.status).toBe(200);
+
+    await adminAgent.put('/api/import/ecus/config').send({
+      config: {
+        enabled: true,
+        connection: {
+          server: 'MRHOC\\ECUSSQL2008',
+          database: 'ECUS5VNACCS',
+          user: 'sa',
+          password: '123456',
+        },
+      },
+    });
+
+    const existingRow = [{
+      so_tk: '999999999999',
+      nhanh: '',
+      date: '2025-08-01',
+      mst: '1234567890',
+      cong_ty: 'CÔNG TY ABC',
+    }];
+    getDb()
+      .prepare('INSERT INTO kv_store (key, value) VALUES (?, ?)')
+      .run('decl_rows_v1', JSON.stringify(existingRow));
+
+    sqlMock.__setMockResult([
+      {
+        So_tk: '999999999999',
+        Ngay_dang_ky: '2025-08-01',
+        MaSoThue: '1234567890',
+        Ten_doanh_nghiep: 'CÔNG TY ABC',
+        Loai_hinh: 'A11',
+      },
+      {
+        So_tk: '888888888888',
+        Ngay_dang_ky: '2025-08-01',
+        MaSoThue: '5555555555',
+        Ten_doanh_nghiep: 'CÔNG TY MỚI',
+        Loai_hinh: 'E11',
+        ts_xnk_ma_bt: '<TS_XNK_MA_BT>B05</TS_XNK_MA_BT>',
+      },
+    ]);
+
+    const res = await adminAgent
+      .post('/api/import/ecus/preview')
+      .send({ from: '2025-08-01', to: '2025-08-02' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+    expect(Array.isArray(res.body.preview?.rows)).toBe(true);
+    const statuses = res.body.preview.rows.map((row) => row.status);
+    expect(statuses).toContain('existing');
+    expect(statuses).toContain('new');
+    const newRow = res.body.preview.rows.find((row) => row.status === 'new');
+    expect(newRow?.co_line_count).toBe(1);
+  });
+
   it('lưu cấu hình và chạy đồng bộ thành công', async () => {
+    const adminAgent = request.agent(app);
+    const loginRes = await adminAgent.post('/api/auth/login').send({ username: 'admin', password: 'admin123' });
+    expect(loginRes.status).toBe(200);
+
     const configPayload = {
       config: {
         enabled: true,
@@ -530,7 +809,7 @@ describe('ECUS sync API', () => {
         },
       },
     };
-    const saveRes = await request(app).put('/api/import/ecus/config').send(configPayload);
+    const saveRes = await adminAgent.put('/api/import/ecus/config').send(configPayload);
     expect(saveRes.status).toBe(200);
     expect(saveRes.body.config.connection.password).toBe('');
     expect(saveRes.body.config.connection.hasPassword).toBe(true);
@@ -548,7 +827,7 @@ describe('ECUS sync API', () => {
       },
     ]);
 
-    const runRes = await request(app)
+    const runRes = await adminAgent
       .post('/api/import/ecus/run')
       .send({ from: '2025-08-01', to: '2025-08-31', actor: 'tester' });
 
@@ -557,6 +836,8 @@ describe('ECUS sync API', () => {
       ok: true,
       result: {
         imported: 1,
+        skipped: 0,
+        existingBefore: 0,
         fetched: 1,
         alerts: expect.any(Object),
       },
@@ -586,8 +867,88 @@ describe('ECUS sync API', () => {
     });
   });
 
+  it('bỏ qua tờ khai đã có và giữ nguyên dữ liệu hiện tại', async () => {
+    const adminAgent = request.agent(app);
+    const loginRes = await adminAgent.post('/api/auth/login').send({ username: 'admin', password: 'admin123' });
+    expect(loginRes.status).toBe(200);
+
+    await adminAgent.put('/api/import/ecus/config').send({
+      config: {
+        enabled: true,
+        connection: {
+          server: 'MRHOC\\ECUSSQL2008',
+          database: 'ECUS5VNACCS',
+          user: 'sa',
+          password: '123456',
+        },
+      },
+    });
+
+    sqlMock.__setMockResult([
+      {
+        So_tk: '777777777777',
+        Ngay_dang_ky: '2025-08-01',
+        MaSoThue: '7777777777',
+        TenDoanhNghiep: 'CÔNG TY XYZ',
+        Loai_hinh: 'A11',
+        muc_hang: 3,
+        NhanVienNhap: 'Phương',
+      },
+    ]);
+
+    const firstRun = await adminAgent
+      .post('/api/import/ecus/run')
+      .send({ from: '2025-08-01', to: '2025-08-02', actor: 'tester' });
+    expect(firstRun.status).toBe(200);
+    expect(firstRun.body.result.imported).toBe(1);
+
+    const manualRow = [{
+      so_tk: '777777777777',
+      nhanh: '',
+      date: '2025-08-01',
+      mst: '7777777777',
+      cong_ty: 'CÔNG TY XYZ',
+      nhan_vien: 'Manual Edit',
+      muc_hang: 3,
+    }];
+    getDb()
+      .prepare('INSERT INTO kv_store (key, value) VALUES (?, ?)')
+      .run('decl_rows_v1', JSON.stringify(manualRow));
+
+    sqlMock.__setMockResult([
+      {
+        So_tk: '777777777777',
+        Ngay_dang_ky: '2025-08-01',
+        MaSoThue: '7777777777',
+        TenDoanhNghiep: 'CÔNG TY XYZ',
+        Loai_hinh: 'A11',
+        muc_hang: 3,
+        NhanVienNhap: 'Khác',
+      },
+    ]);
+
+    const secondRun = await adminAgent
+      .post('/api/import/ecus/run')
+      .send({ from: '2025-08-01', to: '2025-08-02', actor: 'tester' });
+
+    expect(secondRun.status).toBe(200);
+    expect(secondRun.body.result.imported).toBe(0);
+    expect(secondRun.body.result.skipped).toBe(1);
+
+    const row = getDb()
+      .prepare('SELECT value FROM kv_store WHERE key = ?')
+      .get('decl_rows_v1');
+    const storedRows = JSON.parse(row.value);
+    expect(storedRows).toHaveLength(1);
+    expect(storedRows[0].nhan_vien).toBe('Manual Edit');
+  });
+
   it('đánh dấu C/O khi dữ liệu ECUS có mã biểu thuế phù hợp', async () => {
-    await request(app)
+    const adminAgent = request.agent(app);
+    const loginRes = await adminAgent.post('/api/auth/login').send({ username: 'admin', password: 'admin123' });
+    expect(loginRes.status).toBe(200);
+
+    await adminAgent
       .put('/api/import/ecus/config')
       .send({
         config: {
@@ -612,7 +973,7 @@ describe('ECUS sync API', () => {
       },
     ]);
 
-    const runRes = await request(app)
+    const runRes = await adminAgent
       .post('/api/import/ecus/run')
       .send({ from: '2025-08-01', to: '2025-08-31', actor: 'tester' });
 
@@ -623,7 +984,13 @@ describe('ECUS sync API', () => {
   });
 
   it('kiểm tra trạng thái SQL Server thành công khi đã cấu hình', async () => {
-    await request(app)
+    const adminAgent = request.agent(app);
+    const loginRes = await adminAgent
+      .post('/api/auth/login')
+      .send({ username: 'admin', password: 'admin123' });
+    expect(loginRes.status).toBe(200);
+
+    await adminAgent
       .put('/api/import/ecus/config')
       .send({
         config: {
@@ -639,7 +1006,7 @@ describe('ECUS sync API', () => {
 
     sqlMock.__setMockResult([{ ok: 1 }]);
 
-    const res = await request(app).get('/api/import/ecus/status');
+    const res = await adminAgent.get('/api/import/ecus/status');
     expect(res.status).toBe(200);
     expect(res.body.database.ok).toBe(true);
     expect(res.body.database.state).toBe('ready');
@@ -649,7 +1016,13 @@ describe('ECUS sync API', () => {
   });
 
   it('đồng bộ được bản ghi với tiêu đề cột tiếng Việt có dấu', async () => {
-    await request(app)
+    const adminAgent = request.agent(app);
+    const loginRes = await adminAgent
+      .post('/api/auth/login')
+      .send({ username: 'admin', password: 'admin123' });
+    expect(loginRes.status).toBe(200);
+
+    await adminAgent
       .put('/api/import/ecus/config')
       .send({
         config: {
@@ -676,7 +1049,7 @@ describe('ECUS sync API', () => {
       },
     ]);
 
-    const runRes = await request(app)
+    const runRes = await adminAgent
       .post('/api/import/ecus/run')
       .send({ from: '2025-08-01', to: '2025-08-31', actor: 'tester' });
 
@@ -700,7 +1073,13 @@ describe('ECUS sync API', () => {
   });
 
   it('đặt tham số to tới cuối ngày khi truyền chuỗi ngày để không bỏ sót bản ghi cuối ngày', async () => {
-    await request(app)
+    const adminAgent = request.agent(app);
+    const loginRes = await adminAgent
+      .post('/api/auth/login')
+      .send({ username: 'admin', password: 'admin123' });
+    expect(loginRes.status).toBe(200);
+
+    await adminAgent
       .put('/api/import/ecus/config')
       .send({
         config: {
@@ -725,7 +1104,7 @@ describe('ECUS sync API', () => {
       },
     ]);
 
-    const res = await request(app)
+    const res = await adminAgent
       .post('/api/import/ecus/run')
       .send({ from: '2025-08-30', to: '2025-08-31', actor: 'tester' });
 
@@ -751,7 +1130,11 @@ describe('ECUS sync API', () => {
   });
 
   it('ghi nhận lỗi khi SQL Server gặp sự cố', async () => {
-    await request(app)
+    const adminAgent = request.agent(app);
+    const loginRes = await adminAgent.post('/api/auth/login').send({ username: 'admin', password: 'admin123' });
+    expect(loginRes.status).toBe(200);
+
+    await adminAgent
       .put('/api/import/ecus/config')
       .send({
         config: {
@@ -767,7 +1150,7 @@ describe('ECUS sync API', () => {
 
     sqlMock.__setMockErrors({ queryError: new Error('SQL timeout') });
 
-    const res = await request(app)
+    const res = await adminAgent
       .post('/api/import/ecus/run')
       .send({ from: '2025-08-01', to: '2025-08-31', actor: 'tester' });
 

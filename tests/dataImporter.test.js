@@ -180,6 +180,22 @@ describe('mapRow', () => {
     expect(mapped.dai_ly).toBe('FCL');
     expect(mapped.cong_ty).toBe('Công ty Golden');
   });
+
+  it('ghi nhận số dòng áp C/O và giữ trạng thái C/O', () => {
+    const mapped = mapRow(
+      {
+        'Số tờ khai': 'TK05',
+        'Ngày': '10/09/2024',
+        'MST': '0102223334',
+        'Dòng hàng áp C/O': '5',
+      },
+      { autoAssignStaff: false }
+    );
+
+    expect(mapped.co_line_count).toBe(5);
+    expect(mapped.has_co).toBe(true);
+    expect(mapped.co).toBe('Có');
+  });
 });
 
 describe('detectDateOrder', () => {

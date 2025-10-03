@@ -214,7 +214,16 @@ export default function HQAgencyManager({ canEdit = true, currentUser = null }) 
       alert("Bạn không có quyền lưu cấu hình Đại lý HQ.");
       return;
     }
-    const sanitized = rows.filter(row => row.mst);
+    const sanitized = rows.filter(row => row.mst).map(row => {
+      if (normalizeStr(row.company)) {
+        return row;
+      }
+      const suggestion = suggestCompanyByMST(row.mst);
+      if (!suggestion) {
+        return row;
+      }
+      return { ...row, company: suggestion };
+    });
     upsertHQAgencies(sanitized, {
       actor,
       detail: "Cập nhật danh sách Đại lý HQ từ giao diện",

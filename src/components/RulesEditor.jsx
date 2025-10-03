@@ -3,6 +3,9 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card.j
 import { Button } from "@/components/ui/button.jsx";
 import { Input } from "@/components/ui/input.jsx";
 import { Badge } from "@/components/ui/badge.jsx";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip.jsx";
+import { InfoIcon } from "lucide-react";
+import { toast } from "sonner";
 import {
   loadRuleSets,
   loadRules,
@@ -10,6 +13,9 @@ import {
   setDefaultRule,
   createRuleTemplate,
   computeKPI,
+  deleteRule,
+  exportRuleCollection,
+  restoreRuleCollection,
 } from "@/lib/rules.js";
 import { getData } from "@/lib/store.js";
 
@@ -334,21 +340,25 @@ export default function RulesEditor({ canEdit = true, currentUser = null }) {
   const [manualLicenses, setManualLicenses] = useState("ZB02,ZB03");
   const [manualAgency, setManualAgency] = useState("G&B");
   const [manualHasCO, setManualHasCO] = useState(true);
+  const [manualCoLines, setManualCoLines] = useState(0);
 
   const manualRow = useMemo(() => {
     const codes = manualLicenses
       .split(",")
       .map((code) => code.trim().toUpperCase())
       .filter(Boolean);
+    const coLines = Number(manualCoLines || 0);
+    const hasCOFlag = manualHasCO || coLines > 0;
     return {
       loaiHinh: manualType,
       num_items: Number(manualItems || 0),
       licenseCodes: codes,
       agency: manualAgency,
-      has_co: manualHasCO,
-      co: manualHasCO ? "Có" : "",
+      has_co: hasCOFlag,
+      co: hasCOFlag ? "Có" : "",
+      co_line_count: coLines,
     };
-  }, [manualAgency, manualHasCO, manualItems, manualLicenses, manualType]);
+  }, [manualAgency, manualCoLines, manualHasCO, manualItems, manualLicenses, manualType]);
 
   const kpiManual = computeKPI(manualRow, rule);
 
@@ -461,20 +471,54 @@ export default function RulesEditor({ canEdit = true, currentUser = null }) {
     alert(`Đã đặt "${rule.name}" làm bộ quy tắc mặc định.`);
   };
 
-  const exportJSON = () => {
+  const handleDeleteRule = () => {
+    if (isReadOnly) return;
+    if (!rule?.id) return;
+    if (collection.sets.length <= 1) {
+      alert("Không thể xóa bộ quy tắc cuối cùng.");
+      return;
+    }
+    const confirmMessage = `Bạn chắc chắn muốn xóa bộ quy tắc "${rule.name || rule.id}"?`;
+    if (!window.confirm(confirmMessage)) {
+      return;
+    }
+    const removedName = rule.name || rule.id;
+    try {
+      const updated = deleteRule(rule.id, { actor });
+      setCollection(updated);
+      const nextActiveId = updated.activeId || updated.sets[0]?.id || null;
+      if (nextActiveId) {
+        setActiveTab(nextActiveId);
+        setRule(loadRules(nextActiveId));
+      } else {
+        setRule(loadRules());
+      }
+      setApplyNow(false);
+      setDirty(false);
+      setVersion((prev) => prev + 1);
+      alert(`Đã xóa bộ quy tắc ${removedName}.`);
+    } catch (err) {
+      console.error(err);
+      alert(err?.message || "Không thể xóa bộ quy tắc.");
+    }
+  };
+
+  const exportCurrentRule = () => {
     const blob = new Blob([JSON.stringify(rule, null, 2)], { type: "application/json" });
     const link = document.createElement("a");
     link.href = URL.createObjectURL(blob);
     link.download = `${rule.name || "kpi_rules"}.json`;
     link.click();
+    setTimeout(() => URL.revokeObjectURL(link.href), 1000);
   };
 
-  const importJSON = (event) => {
+  const importCurrentRule = (event) => {
     if (isReadOnly) {
-      alert("Bạn không có quyền import quy tắc.");
+      toast.error("Bạn không có quyền import quy tắc.");
       return;
     }
-    const file = event.target.files?.[0];
+    const input = event.target;
+    const file = input.files?.[0];
     if (!file) return;
     const reader = new FileReader();
     reader.onload = () => {
@@ -482,11 +526,67 @@ export default function RulesEditor({ canEdit = true, currentUser = null }) {
         const parsed = JSON.parse(reader.result);
         saveRules({ ...parsed, id: rule.id }, { actor, appendHistory: false });
         setVersion((prev) => prev + 1);
-        alert("Đã import và áp dụng dữ liệu cho bộ quy tắc hiện tại.");
+        toast.success("Đã import và áp dụng dữ liệu cho bộ quy tắc hiện tại.");
       } catch (err) {
         console.error(err);
-        alert("File JSON không hợp lệ.");
+        toast.error("File JSON không hợp lệ.");
       }
+      input.value = "";
+    };
+    reader.onerror = () => {
+      toast.error("Không thể đọc file JSON.");
+      input.value = "";
+    };
+    reader.readAsText(file);
+  };
+
+  const exportAllRules = () => {
+    const collection = exportRuleCollection();
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const blob = new Blob([JSON.stringify(collection, null, 2)], { type: "application/json" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = `kpi-rules-backup-${timestamp}.json`;
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+  };
+
+  const importAllRules = (event) => {
+    if (isReadOnly) {
+      toast.error("Bạn không có quyền khôi phục quy tắc.");
+      return;
+    }
+    const input = event.target;
+    const file = input.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const parsed = JSON.parse(reader.result);
+        const proceed = window.confirm(
+          "Khôi phục toàn bộ bộ quy tắc từ file sẽ ghi đè dữ liệu hiện tại. Bạn có chắc chắn?"
+        );
+        if (!proceed) {
+          return;
+        }
+        const restored = restoreRuleCollection(parsed, { actor });
+        setCollection(restored);
+        setActiveTab(restored.activeId);
+        setRule(loadRules(restored.activeId));
+        setApplyNow(false);
+        setDirty(false);
+        setVersion((prev) => prev + 1);
+        toast.success("Đã khôi phục toàn bộ bộ quy tắc từ file sao lưu.");
+      } catch (err) {
+        console.error(err);
+        toast.error("File sao lưu không hợp lệ.");
+      } finally {
+        input.value = "";
+      }
+    };
+    reader.onerror = () => {
+      toast.error("Không thể đọc file sao lưu.");
+      input.value = "";
     };
     reader.readAsText(file);
   };
@@ -722,6 +822,44 @@ export default function RulesEditor({ canEdit = true, currentUser = null }) {
                   disabled={isReadOnly || !(rule?.bonuses?.co?.enabled ?? false)}
                 />
               </div>
+              <div>
+                <div className="flex items-center gap-1 text-sm text-gray-600">
+                  <span>Điểm cộng mỗi dòng áp C/O</span>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        type="button"
+                        className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-gray-300 text-gray-500 hover:text-gray-700"
+                        aria-label="Giải thích cách tính điểm C/O theo dòng"
+                      >
+                        <InfoIcon className="h-3.5 w-3.5" />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent className="max-w-xs text-xs leading-relaxed">
+                      Điểm thưởng C/O = số dòng hàng áp C/O × giá trị cấu hình tại đây. Ví dụ: 5 dòng và mỗi dòng 0.05 điểm sẽ được cộng thêm 0.25 điểm.
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
+                <Num
+                  value={rule?.bonuses?.co?.perLine ?? 0}
+                  onChange={(val) =>
+                    updateRule({
+                      ...rule,
+                      bonuses: {
+                        ...rule.bonuses,
+                        co: {
+                          ...rule.bonuses?.co,
+                          perLine: val,
+                        },
+                      },
+                    })
+                  }
+                  disabled={isReadOnly || !(rule?.bonuses?.co?.enabled ?? false)}
+                />
+                <div className="text-xs text-gray-500 mt-1">
+                  Điểm này nhân với số dòng hàng áp C/O trong tờ khai.
+                </div>
+              </div>
             </div>
           </div>
 
@@ -750,24 +888,57 @@ export default function RulesEditor({ canEdit = true, currentUser = null }) {
             <div className="flex flex-wrap gap-2">
               <Button onClick={handleSave} disabled={isReadOnly}>Lưu</Button>
               <Button variant="outline" onClick={handleReset} disabled={isReadOnly}>Khôi phục bản đã lưu</Button>
-              <Button variant="outline" onClick={exportJSON}>Export JSON</Button>
+              <Button variant="outline" onClick={exportCurrentRule}>Xuất bộ đang mở</Button>
               <label className="inline-flex items-center gap-2">
                 <input
                   id="import-rule-json"
                   type="file"
                   accept=".json"
                   className="hidden"
-                  onChange={importJSON}
+                  onChange={importCurrentRule}
                   disabled={isReadOnly}
                 />
                 <Button
                   variant="outline"
-                  onClick={() => !isReadOnly && document.getElementById("import-rule-json").click()}
+                  onClick={() => {
+                    if (isReadOnly) return;
+                    const input = document.getElementById("import-rule-json");
+                    if (input) input.click();
+                  }}
                   disabled={isReadOnly}
                 >
-                  Import JSON
+                  Nhập vào bộ đang mở
                 </Button>
               </label>
+              <Button variant="outline" onClick={exportAllRules}>Xuất quy tắc (sao lưu)</Button>
+              <label className="inline-flex items-center gap-2">
+                <input
+                  id="import-rules-collection"
+                  type="file"
+                  accept=".json"
+                  className="hidden"
+                  onChange={importAllRules}
+                  disabled={isReadOnly}
+                />
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    if (isReadOnly) return;
+                    const input = document.getElementById("import-rules-collection");
+                    if (input) input.click();
+                  }}
+                  disabled={isReadOnly}
+                >
+                  Khôi phục toàn bộ quy tắc
+                </Button>
+              </label>
+              <Button
+                variant="destructive"
+                onClick={handleDeleteRule}
+                disabled={isReadOnly || collection.sets.length <= 1}
+              >
+                Xóa bộ quy tắc
+              </Button>
             </div>
           </div>
 
@@ -838,14 +1009,23 @@ export default function RulesEditor({ canEdit = true, currentUser = null }) {
                 <label className="text-sm text-gray-600">Đại lý HQ</label>
                 <Input value={manualAgency} onChange={(event) => setManualAgency(event.target.value)} />
               </div>
-              <label className="inline-flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={manualHasCO}
-                  onChange={(event) => setManualHasCO(event.target.checked)}
-                />
-                Có C/O
-              </label>
+              <div className="flex items-center gap-2 text-sm">
+                <label className="inline-flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={manualHasCO}
+                    onChange={(event) => setManualHasCO(event.target.checked)}
+                  />
+                  Có C/O
+                </label>
+              </div>
+              <div>
+                <label className="text-sm text-gray-600">Số dòng áp C/O</label>
+                <Num step="1" value={manualCoLines} onChange={setManualCoLines} />
+                <div className="text-xs text-gray-500 mt-1">
+                  Điểm C/O theo dòng = số dòng × điểm mỗi dòng.
+                </div>
+              </div>
             </div>
             <div>
               <b>KẾT QUẢ:</b> {kpiManual.toFixed(1)}

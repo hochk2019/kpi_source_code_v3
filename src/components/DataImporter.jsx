@@ -13,10 +13,15 @@ import {
 } from "@/lib/store.js";
 import { mapRow, detectDateOrder } from "@/lib/importer.js";
 import { loadRules, computeKPI } from "@/lib/rules.js";
-import { deriveCOStatus, coLabel } from "@/shared/co.js";
+import { deriveCOStatus, coLabel, coLineCount } from "@/shared/co.js";
 
-const DEFAULT_PAGE_SIZE = 20;
-const PAGE_SIZE_OPTIONS = [20, 50, 100, 200];
+const DEFAULT_PAGE_SIZE = 10;
+const PAGE_SIZE_OPTIONS = [10, 20, 50, 100, 200];
+const CO_FILTER_OPTIONS = Object.freeze([
+  { value: "all", label: "Tất cả C/O" },
+  { value: "has", label: "Có C/O (≥ 1 dòng)" },
+  { value: "min", label: "Tùy chọn số dòng C/O" },
+]);
 
 const DEFAULT_SYNC_CONFIG = Object.freeze({
   enabled: false,
@@ -66,7 +71,11 @@ function ensureLicenseFields(row) {
 function ensureCOFields(row) {
   if (!row || typeof row !== "object") return row;
   const status = deriveCOStatus(row, row);
-  if (status.co === row.co && status.has_co === row.has_co) {
+  if (
+    status.co === row.co &&
+    status.has_co === row.has_co &&
+    status.co_line_count === row.co_line_count
+  ) {
     return row;
   }
   return status;
@@ -87,6 +96,8 @@ export default function DataImporter({
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [filterNoStaff, setFilterNoStaff] = useState(false);
   const [filterNoTeam, setFilterNoTeam] = useState(false);
+  const [coFilterMode, setCoFilterMode] = useState("all");
+  const [coFilterMin, setCoFilterMin] = useState(5);
   const [selectedKeys, setSelectedKeys] = useState([]);
   const [rules, setRules] = useState(() => loadRules());
   const [hasUnsaved, setHasUnsaved] = useState(false);
@@ -122,6 +133,18 @@ export default function DataImporter({
   const [statusInfo, setStatusInfo] = useState({ backend: null, database: null, checkedAt: null });
   const [statusLoading, setStatusLoading] = useState(false);
   const [statusError, setStatusError] = useState("");
+  const [previewRows, setPreviewRows] = useState([]);
+  const [previewLimited, setPreviewLimited] = useState(false);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState("");
+  const [previewRangeInfo, setPreviewRangeInfo] = useState(null);
+
+  useEffect(() => {
+    setPreviewRows([]);
+    setPreviewLimited(false);
+    setPreviewError("");
+    setPreviewRangeInfo(null);
+  }, [manualRange.from, manualRange.to]);
 
   const loadSavedRows = useCallback((opts = {}) => {
     const { bypassConfirm = false } = opts;
@@ -145,6 +168,8 @@ export default function DataImporter({
     setSelectedFile("");
     setFilterNoStaff(false);
     setFilterNoTeam(false);
+    setCoFilterMode("all");
+    setCoFilterMin(5);
     setSelectedKeys([]);
     setHasUnsaved(false);
     if (fileRef.current) fileRef.current.value = "";
@@ -359,7 +384,13 @@ export default function DataImporter({
       }
       const payload = await response.json();
       const imported = payload?.result?.imported ?? 0;
-      setSyncMessage(`Đã đồng bộ ${imported} tờ khai từ ECUS.`);
+      const skipped = payload?.result?.skipped ?? 0;
+      const skippedNote = skipped > 0 ? `, bỏ qua ${skipped} tờ khai đã có` : '';
+      setSyncMessage(`Đã đồng bộ ${imported} tờ khai mới từ ECUS${skippedNote}.`);
+      setPreviewRows([]);
+      setPreviewRangeInfo(null);
+      setPreviewLimited(false);
+      setPreviewError("");
       await fetchSyncConfig();
       await fetchSyncStatus();
       await fetchAlerts();
@@ -372,6 +403,46 @@ export default function DataImporter({
       setSyncRunning(false);
     }
   }, [actor, canManageSync, fetchAlerts, fetchSyncConfig, fetchSyncStatus, loadSavedRows, manualRange.from, manualRange.to]);
+
+  const handlePreviewSync = useCallback(async () => {
+    if (!canManageSync) {
+      alert("Bạn không có quyền xem trước dữ liệu đồng bộ.");
+      return;
+    }
+    setPreviewLoading(true);
+    setPreviewError("");
+    try {
+      const response = await fetch("/api/import/ecus/preview", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          from: manualRange.from || undefined,
+          to: manualRange.to || undefined,
+          limit: 100,
+        }),
+        credentials: "include",
+      });
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      const payload = await response.json();
+      const rows = Array.isArray(payload?.preview?.rows) ? payload.preview.rows : [];
+      setPreviewRows(rows);
+      setPreviewLimited(!!payload?.preview?.limited);
+      setPreviewRangeInfo(payload?.preview?.range || null);
+      if (!rows.length) {
+        setPreviewError("Không tìm thấy tờ khai mới trong khoảng thời gian đã chọn.");
+      }
+    } catch (err) {
+      console.error("Không thể xem trước dữ liệu ECUS", err);
+      setPreviewError(err?.message || "Không thể xem trước dữ liệu đồng bộ");
+      setPreviewRows([]);
+      setPreviewLimited(false);
+      setPreviewRangeInfo(null);
+    } finally {
+      setPreviewLoading(false);
+    }
+  }, [canManageSync, manualRange.from, manualRange.to]);
 
   const handleManualRangeChange = useCallback((field, value) => {
     setManualRange((prev) => ({ ...prev, [field]: value }));
@@ -472,6 +543,21 @@ export default function DataImporter({
     }
   }, [syncConfig?.lastRun]);
 
+  const lastSyncSummary = syncConfig?.lastSummary || null;
+  const lastSyncRangeLabel = useMemo(() => {
+    if (!lastSyncSummary?.range) return "";
+    const from = lastSyncSummary.range.from || "";
+    const to = lastSyncSummary.range.to || "";
+    if (from && to) {
+      return `${from} → ${to}`;
+    }
+    return from || to;
+  }, [lastSyncSummary?.range?.from, lastSyncSummary?.range?.to]);
+  const lastSyncInserted = lastSyncSummary?.rowsInserted ?? lastSyncSummary?.rowsImported ?? 0;
+  const lastSyncSkipped = lastSyncSummary?.rowsSkipped ?? 0;
+  const lastSyncFetched = lastSyncSummary?.rowsFetched ?? 0;
+  const lastSyncTotal = lastSyncSummary?.totalStored ?? 0;
+
   // Đọc file XLSX
   function handleFileChange(e) {
     if (isReadOnlyForEdits) {
@@ -528,6 +614,8 @@ export default function DataImporter({
       setQuery("");
       setFilterNoStaff(false);
       setFilterNoTeam(false);
+      setCoFilterMode("all");
+      setCoFilterMin(5);
       setSelectedKeys([]);
       setHasUnsaved(false);
     };
@@ -535,6 +623,27 @@ export default function DataImporter({
   }
 
   // Tìm nhanh
+  const coThreshold = useMemo(() => Math.max(0, Number(coFilterMin) || 0), [coFilterMin]);
+  const coFilterActive = useMemo(() => {
+    if (coFilterMode === "has") return true;
+    if (coFilterMode === "min") return coThreshold > 0;
+    return false;
+  }, [coFilterMode, coThreshold]);
+
+  const coFilterMatches = useMemo(() => {
+    if (!coFilterActive) return rawRows.length;
+    return rawRows.reduce((count, row) => {
+      const lines = coLineCount(row);
+      if (coFilterMode === "has") {
+        return count + (lines > 0 ? 1 : 0);
+      }
+      if (coFilterMode === "min") {
+        return count + (lines >= coThreshold ? 1 : 0);
+      }
+      return count;
+    }, 0);
+  }, [rawRows, coFilterMode, coFilterActive, coThreshold]);
+
   const filtered = useMemo(() => {
     const q = query.toLowerCase().trim();
     const hasText = q.length > 0;
@@ -559,9 +668,18 @@ export default function DataImporter({
         const hasTeam = Boolean((r.team || "").toString().trim());
         if (hasTeam) return false;
       }
+      const lines = coLineCount(r);
+      if (coFilterMode === "has" && lines <= 0) {
+        return false;
+      }
+      if (coFilterMode === "min") {
+        if (coThreshold > 0 && lines < coThreshold) {
+          return false;
+        }
+      }
       return true;
     });
-  }, [rawRows, query, filterNoStaff, filterNoTeam]);
+  }, [rawRows, query, filterNoStaff, filterNoTeam, coFilterMode, coThreshold]);
 
   // Phân trang
   const total = filtered.length;
@@ -577,7 +695,7 @@ export default function DataImporter({
 
   useEffect(() => {
     setPage(1);
-  }, [pageSize, filterNoStaff, filterNoTeam]);
+  }, [pageSize, filterNoStaff, filterNoTeam, coFilterMode, coThreshold]);
 
   const keyOfRow = useCallback((row) => {
     const soTk = (row.so_tk || "").toString();
@@ -872,6 +990,18 @@ export default function DataImporter({
               </div>
             )}
             {statusError && <div className="text-xs text-red-600">{statusError}</div>}
+            {lastSyncSummary && (
+              <div className="rounded border border-emerald-200 bg-emerald-50 p-2 text-xs text-emerald-700">
+                <div className="font-medium text-emerald-800">Kết quả lần chạy gần nhất</div>
+                <div className="mt-1 flex flex-wrap gap-3">
+                  {lastSyncRangeLabel && <span>Khoảng: {lastSyncRangeLabel}</span>}
+                  <span>Thu thập: {lastSyncFetched.toLocaleString("vi-VN")}</span>
+                  <span>Thêm mới: {lastSyncInserted.toLocaleString("vi-VN")}</span>
+                  <span>Bỏ qua: {lastSyncSkipped.toLocaleString("vi-VN")}</span>
+                  <span>Tổng sau đồng bộ: {lastSyncTotal.toLocaleString("vi-VN")}</span>
+                </div>
+              </div>
+            )}
           </div>
           {syncForm ? (
             <div className="mt-3 space-y-3">
@@ -982,13 +1112,67 @@ export default function DataImporter({
                 />
                 <button
                   type="button"
+                  onClick={handlePreviewSync}
+                  disabled={previewLoading || syncRunning}
+                  className="rounded border border-emerald-600 px-3 py-1 text-sm text-emerald-700 hover:bg-emerald-50 disabled:opacity-50"
+                >
+                  {previewLoading ? "Đang xem trước..." : "Xem trước dữ liệu"}
+                </button>
+                <button
+                  type="button"
                   onClick={handleRunSync}
                   disabled={syncRunning}
                   className="rounded bg-emerald-600 px-3 py-1 text-sm text-white disabled:opacity-50"
                 >
-                  Đồng bộ ngay
+                  {syncRunning ? "Đang đồng bộ..." : "Đồng bộ ngay"}
                 </button>
               </div>
+              {previewRangeInfo && (
+                <div className="text-xs text-gray-500">
+                  Khoảng xem trước: {(previewRangeInfo.from || "...")} → {(previewRangeInfo.to || "...")}
+                  {previewLimited && " (giới hạn 100 dòng đầu tiên)"}
+                </div>
+              )}
+              {previewError && <div className="text-xs text-red-600">{previewError}</div>}
+              {previewRows.length > 0 && (
+                <div className="space-y-2">
+                  <div className="text-xs text-gray-600">
+                    Xem trước {previewRows.length.toLocaleString("vi-VN")} dòng đầu tiên sẽ nhập vào hệ thống.
+                  </div>
+                  <div className="max-h-64 overflow-auto rounded border">
+                    <table className="min-w-full text-xs">
+                      <thead className="bg-emerald-50 text-emerald-800">
+                        <tr>
+                          <th className="px-2 py-1 text-left">Số tờ khai</th>
+                          <th className="px-2 py-1 text-left">Ngày</th>
+                          <th className="px-2 py-1 text-left">MST</th>
+                          <th className="px-2 py-1 text-left">Công ty</th>
+                          <th className="px-2 py-1 text-left">Nhân viên</th>
+                          <th className="px-2 py-1 text-left">Trạng thái</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {previewRows.map((row) => (
+                          <tr key={`${row.so_tk}_${row.nhanh || ""}`} className="odd:bg-white even:bg-emerald-50/40">
+                            <td className="px-2 py-1">{row.so_tk}</td>
+                            <td className="px-2 py-1">{row.date}</td>
+                            <td className="px-2 py-1">{row.mst}</td>
+                            <td className="px-2 py-1">{row.cong_ty}</td>
+                            <td className="px-2 py-1">{row.nhan_vien || <span className="italic text-gray-400">(chưa gán)</span>}</td>
+                            <td className="px-2 py-1">
+                              {row.status === "existing" ? (
+                                <span className="rounded bg-gray-200 px-2 py-0.5 text-xs text-gray-700">Đã có</span>
+                              ) : (
+                                <span className="rounded bg-emerald-100 px-2 py-0.5 text-xs text-emerald-700">Mới</span>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
               {syncMessage && <div className="text-sm text-emerald-600">{syncMessage}</div>}
               {syncError && <div className="text-sm text-red-600">{syncError}</div>}
             </div>
@@ -1033,6 +1217,18 @@ export default function DataImporter({
               </div>
             )}
             {statusError && <div className="text-xs text-red-600">{statusError}</div>}
+            {lastSyncSummary && (
+              <div className="rounded border border-emerald-200 bg-emerald-50 p-2 text-xs text-emerald-700">
+                <div className="font-medium text-emerald-800">Kết quả đồng bộ gần nhất</div>
+                <div className="mt-1 flex flex-wrap gap-3">
+                  {lastSyncRangeLabel && <span>Khoảng: {lastSyncRangeLabel}</span>}
+                  <span>Thu thập: {lastSyncFetched.toLocaleString("vi-VN")}</span>
+                  <span>Thêm mới: {lastSyncInserted.toLocaleString("vi-VN")}</span>
+                  <span>Bỏ qua: {lastSyncSkipped.toLocaleString("vi-VN")}</span>
+                  <span>Tổng sau đồng bộ: {lastSyncTotal.toLocaleString("vi-VN")}</span>
+                </div>
+              </div>
+            )}
           </div>
         </section>
       )}
@@ -1163,6 +1359,48 @@ export default function DataImporter({
           />
           <span>Chưa gán Tổ đội</span>
         </label>
+        <label className="flex items-center gap-1 text-sm">
+          <span>Lọc C/O</span>
+          <select
+            value={coFilterMode}
+            onChange={(e) => setCoFilterMode(e.target.value)}
+            className="border rounded px-2 py-1 text-sm"
+          >
+            {CO_FILTER_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        {coFilterMode === "min" && (
+          <label className="flex items-center gap-1 text-sm">
+            <span>Tối thiểu dòng C/O</span>
+            <input
+              type="number"
+              min={0}
+              className="w-20 border rounded px-2 py-1 text-sm"
+              value={coFilterMin}
+              onChange={(e) => {
+                const raw = Number(e.target.value);
+                if (!Number.isFinite(raw)) {
+                  setCoFilterMin(0);
+                  return;
+                }
+                if (raw <= 0) {
+                  setCoFilterMin(0);
+                  return;
+                }
+                setCoFilterMin(Math.round(raw));
+              }}
+            />
+          </label>
+        )}
+        {coFilterActive && (
+          <span className="text-sm px-2 py-1 rounded bg-emerald-50 text-emerald-700">
+            Đáp ứng C/O: {coFilterMatches} tờ khai
+          </span>
+        )}
         <div className="opacity-70 text-sm">
           {total} dòng — Trang {safePage}/{maxPage}
         </div>
@@ -1285,10 +1523,13 @@ export default function DataImporter({
                 </td>
                 <td className="px-2 py-1">
                   {(() => {
+                    const lines = coLineCount(r);
                     const status = coLabel(r);
+                    const display = lines > 0 ? String(lines) : status;
+                    const hasValue = !!display;
                     return (
-                      <span className={status ? "text-emerald-600 font-medium" : "text-gray-400"}>
-                        {status || "Không"}
+                      <span className={hasValue ? "text-emerald-600 font-medium" : "text-gray-400"}>
+                        {display || ""}
                       </span>
                     );
                   })()}
