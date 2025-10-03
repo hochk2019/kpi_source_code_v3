@@ -1119,7 +1119,7 @@ describe('ECUS sync API', () => {
     expect(toValue.getHours()).toBe(23);
     expect(toValue.getMinutes()).toBe(59);
     expect(toValue.getSeconds()).toBe(59);
-    expect(toValue.getMilliseconds()).toBe(999);
+    expect(toValue.getMilliseconds()).toBe(997);
 
     const row = getDb()
       .prepare('SELECT value FROM kv_store WHERE key = ?')
@@ -1127,6 +1127,7 @@ describe('ECUS sync API', () => {
     const stored = JSON.parse(row.value);
     expect(stored).toHaveLength(1);
     expect(stored[0].date).toBe('2025-08-31');
+    expect(stored.some((entry) => entry.date === '2025-09-01')).toBe(false);
   });
 
   it('ghi nhận lỗi khi SQL Server gặp sự cố', async () => {
