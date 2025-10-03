@@ -57,7 +57,7 @@ function normalizeRangeDate(value, { isEnd = false } = {}) {
     }
     if (isEnd) {
       const end = new Date(value.getTime());
-      end.setHours(23, 59, 59, 999);
+      end.setHours(23, 59, 59, 997);
       return end;
     }
     return value;
@@ -69,7 +69,7 @@ function normalizeRangeDate(value, { isEnd = false } = {}) {
       return null;
     }
     if (isEnd) {
-      date.setHours(23, 59, 59, 999);
+      date.setHours(23, 59, 59, 997);
     }
     return date;
   }
@@ -89,7 +89,7 @@ function normalizeRangeDate(value, { isEnd = false } = {}) {
       return null;
     }
     if (isEnd) {
-      return new Date(year, month - 1, day, 23, 59, 59, 999);
+      return new Date(year, month - 1, day, 23, 59, 59, 997);
     }
     return new Date(year, month - 1, day, 0, 0, 0, 0);
   }
