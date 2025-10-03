@@ -1,6 +1,6 @@
 import React from 'react';
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 import AuditLog from '@/components/AuditLog.jsx';
 import { AUDIT_KEY } from '@/lib/store.js';
@@ -9,13 +9,15 @@ import { clearStorageCache, setItem as sharedSetItem } from '@/lib/storageClient
 const SUCCESS_SUMMARY = {
   schedule: {
     cron: '0 3 * * *',
+    cronDescription: 'Vào 03:00 hằng ngày',
     retentionDays: 14,
     directory: '/var/backups/kpi',
     active: false,
     reasons: ['cron_disabled_env'],
     lastError: null,
     refreshedAt: '2024-05-01T00:00:00.000Z',
-    nextRun: null,
+    nextRun: '2024-05-01T03:00:00.000Z',
+    nextRunHuman: '03:00 Thứ Tư, 01/05/2024',
   },
   lastSuccess: {
     ts: '2024-05-01T03:00:00.000Z',
@@ -75,6 +77,8 @@ describe('AuditLog', () => {
     });
 
     expect(screen.getByText('0 3 * * *')).toBeInTheDocument();
+    expect(screen.getByText(/Mô tả lịch/i)).toBeInTheDocument();
+    expect(screen.getByText('Vào 03:00 hằng ngày')).toBeInTheDocument();
     expect(screen.getByText(/Đang tắt tự động/i)).toBeInTheDocument();
     expect(screen.getByText(/Cron tự động đang bị tắt/)).toBeInTheDocument();
     expect(screen.getByText(/nguồn: scheduled/i)).toBeInTheDocument();
@@ -94,6 +98,62 @@ describe('AuditLog', () => {
 
     await waitFor(() => {
       expect(screen.getByText(/Không thể tải thông tin sao lưu/i)).toBeInTheDocument();
+    });
+  });
+
+  it('cho phép quản trị viên cập nhật biểu thức cron sao lưu', async () => {
+    const summaryResponse = Promise.resolve({
+      ok: true,
+      json: async () => ({ ok: true, summary: SUCCESS_SUMMARY }),
+    });
+    const updatedSummary = {
+      ...SUCCESS_SUMMARY,
+      schedule: {
+        ...SUCCESS_SUMMARY.schedule,
+        cron: '*/30 * * * *',
+        cronDescription: 'Mỗi 30 phút',
+        active: true,
+        reasons: [],
+      },
+    };
+    const updateResponse = Promise.resolve({
+      ok: true,
+      json: async () => ({
+        ok: true,
+        config: { cron: '*/30 * * * *' },
+        summary: updatedSummary,
+      }),
+    });
+    const responses = [summaryResponse, updateResponse];
+    global.fetch = vi.fn(() => responses.shift() ?? summaryResponse);
+
+    render(
+      <AuditLog
+        currentUser={{
+          username: 'admin',
+          role: 'admin',
+          permissions: { accountManage: true },
+        }}
+      />
+    );
+
+    const input = await screen.findByLabelText(/Cập nhật biểu thức cron/i);
+    await waitFor(() => {
+      expect(input).toHaveValue('0 3 * * *');
+    });
+
+    fireEvent.change(input, { target: { value: '*/30 * * * *' } });
+    fireEvent.submit(input.closest('form'));
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledTimes(2);
+    });
+    expect(global.fetch).toHaveBeenLastCalledWith('/api/admin/backups/schedule', expect.objectContaining({
+      method: 'POST',
+    }));
+
+    await waitFor(() => {
+      expect(screen.getByText('Mỗi 30 phút')).toBeInTheDocument();
     });
   });
 });

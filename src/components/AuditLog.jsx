@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
 import { getAuditLogs, clearAuditLogs } from "@/lib/store.js";
 
 function formatTime(value) {
@@ -17,7 +18,7 @@ const BACKUP_REASON_LABELS = {
   cron_disabled_config: "Biểu thức cron chưa được cấu hình hoặc đặt ở trạng thái 'never'.",
   memory_db: "CSDL đang chạy ở chế độ :memory: nên không thể sao lưu tự động.",
   memory_backup_dir: "Thư mục sao lưu hiện không hợp lệ (:memory:).",
-  invalid_cron_expression: "Biểu thức cron KPI_DB_BACKUP_CRON không hợp lệ.",
+  invalid_cron_expression: "Biểu thức cron sao lưu không hợp lệ.",
   schedule_error: "Không thể khởi tạo lịch sao lưu tự động, vui lòng kiểm tra log máy chủ.",
 };
 
@@ -56,6 +57,9 @@ export default function AuditLog({ currentUser }) {
   const [summary, setSummary] = useState(null);
   const [summaryError, setSummaryError] = useState("");
   const [summaryLoading, setSummaryLoading] = useState(false);
+  const [cronDraft, setCronDraft] = useState("");
+  const [cronError, setCronError] = useState("");
+  const [savingCron, setSavingCron] = useState(false);
 
   const refreshLogs = useCallback(() => {
     setLogs(getAuditLogs(200));
@@ -97,6 +101,13 @@ export default function AuditLog({ currentUser }) {
     refresh();
   }, [refresh]);
 
+  const schedule = summary?.schedule;
+  useEffect(() => {
+    if (schedule && typeof schedule.cron === "string") {
+      setCronDraft(schedule.cron);
+    }
+  }, [schedule]);
+
   const filteredLogs = useMemo(() => {
     const keyword = filter.trim().toLowerCase();
     if (!keyword) return logs;
@@ -107,13 +118,61 @@ export default function AuditLog({ currentUser }) {
     );
   }, [logs, filter]);
 
+  const canManageBackups = Boolean(
+    currentUser?.role === "admin" && currentUser?.permissions?.accountManage
+  );
+
+  const handleCronSubmit = useCallback(
+    async (event) => {
+      event.preventDefault();
+      if (!canManageBackups) return;
+      const value = cronDraft.trim();
+      if (!value) {
+        setCronError("Vui lòng nhập biểu thức cron.");
+        return;
+      }
+      setSavingCron(true);
+      setCronError("");
+      try {
+        const response = await fetch("/api/admin/backups/schedule", {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ cron: value }),
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok || payload?.ok === false) {
+          const message = payload?.error || response.statusText || `HTTP ${response.status}`;
+          setCronError(message);
+          toast.error(message || "Không thể cập nhật lịch sao lưu.");
+          return;
+        }
+        if (typeof payload?.config?.cron === "string") {
+          setCronDraft(payload.config.cron);
+        }
+        if (payload?.summary) {
+          setSummary(payload.summary);
+        } else {
+          await loadSummary();
+        }
+        toast.success("Đã cập nhật lịch sao lưu CSDL.");
+      } catch (err) {
+        const message = err?.message || "Không thể cập nhật lịch sao lưu.";
+        setCronError(message);
+        toast.error(message);
+      } finally {
+        setSavingCron(false);
+      }
+    },
+    [canManageBackups, cronDraft, loadSummary]
+  );
+
   const handleClear = () => {
     if (!window.confirm("Xóa toàn bộ nhật ký và ghi lại thao tác này?")) return;
     clearAuditLogs({ actor: currentUser?.username || "system", note: "Xóa nhật ký thủ công" });
     refresh();
   };
 
-  const schedule = summary?.schedule;
   const lastSuccess = summary?.lastSuccess;
   const lastFailure = summary?.lastFailure;
   const reasons = Array.isArray(schedule?.reasons) ? schedule.reasons : [];
@@ -173,14 +232,21 @@ export default function AuditLog({ currentUser }) {
                 <div className="font-mono text-sm">{schedule?.cron || "Chưa cấu hình"}</div>
               </div>
               <div>
+                <div className="text-xs uppercase text-gray-500">Mô tả lịch</div>
+                <div className="text-sm">{schedule?.cronDescription || "Không xác định"}</div>
+              </div>
+              <div>
                 <div className="text-xs uppercase text-gray-500">Lần chạy kế tiếp</div>
-                <div className="text-sm">
-                  {schedule?.active
-                    ? schedule?.nextRun
-                      ? formatTime(schedule.nextRun)
-                      : "Không xác định"
-                    : "Đang tắt tự động"}
-                </div>
+                {schedule?.active ? (
+                  <div className="space-y-1 text-sm">
+                    <div>{schedule?.nextRunHuman || (schedule?.nextRun ? formatTime(schedule.nextRun) : "Không xác định")}</div>
+                    {schedule?.nextRunHuman && schedule?.nextRun && (
+                      <div className="text-xs text-gray-500">{formatTime(schedule.nextRun)}</div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="text-sm">Đang tắt tự động</div>
+                )}
               </div>
               <div>
                 <div className="text-xs uppercase text-gray-500">Giữ lại</div>
@@ -202,6 +268,40 @@ export default function AuditLog({ currentUser }) {
                   <li key={code}>{BACKUP_REASON_LABELS[code] || code}</li>
                 ))}
               </ul>
+            )}
+
+            {canManageBackups && (
+              <form
+                className="space-y-2 rounded border border-gray-200 bg-gray-50 p-3"
+                onSubmit={handleCronSubmit}
+              >
+                <div className="flex flex-col gap-2 md:flex-row md:items-end">
+                  <div className="flex-1 space-y-1">
+                    <label className="text-xs font-medium text-gray-600" htmlFor="backup-cron-input">
+                      Cập nhật biểu thức cron
+                    </label>
+                    <input
+                      id="backup-cron-input"
+                      className="w-full rounded border px-2 py-1 text-sm font-mono"
+                      value={cronDraft}
+                      onChange={(event) => setCronDraft(event.target.value)}
+                      placeholder="0 3 * * *"
+                      disabled={savingCron}
+                    />
+                    <div className="text-xs text-gray-500">
+                      Nhập "never" để tắt tự động sao lưu.
+                    </div>
+                    {cronError && <div className="text-xs text-red-600">{cronError}</div>}
+                  </div>
+                  <button
+                    type="submit"
+                    className="rounded bg-black px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                    disabled={savingCron}
+                  >
+                    {savingCron ? "Đang lưu..." : "Lưu biểu thức"}
+                  </button>
+                </div>
+              </form>
             )}
 
             <div className="grid gap-3 md:grid-cols-2">

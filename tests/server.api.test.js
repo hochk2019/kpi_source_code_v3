@@ -554,6 +554,7 @@ describe('Backup summary API', () => {
     const summary = res.body.summary;
     expect(summary.schedule).toMatchObject({
       cron: '0 3 * * *',
+      cronDescription: expect.stringContaining('03:00'),
       active: false,
     });
     expect(Array.isArray(summary.schedule.reasons)).toBe(true);
@@ -567,6 +568,65 @@ describe('Backup summary API', () => {
     });
     expect(Array.isArray(summary.recent)).toBe(true);
     expect(summary.recent[0]).toMatchObject({ action: 'db.backup' });
+  });
+
+  it('từ chối cập nhật cron sao lưu khi chưa đăng nhập', async () => {
+    const res = await request(app)
+      .post('/api/admin/backups/schedule')
+      .send({ cron: '*/15 * * * *' });
+    expect(res.status).toBe(401);
+    expect(res.body.ok).toBe(false);
+  });
+
+  it('từ chối cập nhật cron sao lưu với tài khoản không có quyền', async () => {
+    const staffAgent = request.agent(app);
+    const loginRes = await staffAgent
+      .post('/api/auth/login')
+      .send({ username: 'nhanvien', password: '123456' });
+    expect(loginRes.status).toBe(200);
+
+    const res = await staffAgent.post('/api/admin/backups/schedule').send({ cron: '*/15 * * * *' });
+    expect(res.status).toBe(403);
+    expect(res.body.ok).toBe(false);
+  });
+
+  it('cho phép quản trị viên cập nhật biểu thức cron hợp lệ', async () => {
+    const adminAgent = request.agent(app);
+    const loginRes = await adminAgent
+      .post('/api/auth/login')
+      .send({ username: 'admin', password: 'admin123' });
+    expect(loginRes.status).toBe(200);
+
+    const res = await adminAgent
+      .post('/api/admin/backups/schedule')
+      .send({ cron: '*/30 * * * *' });
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+    expect(res.body.config).toMatchObject({ cron: '*/30 * * * *' });
+    expect(res.body.summary.schedule).toMatchObject({
+      cron: '*/30 * * * *',
+      cronDescription: 'Mỗi 30 phút',
+    });
+    const row = getDb()
+      .prepare('SELECT value FROM kv_store WHERE key = ?')
+      .get('audit_logs_v1');
+    const logs = JSON.parse(row?.value || '[]');
+    expect(logs[0]).toMatchObject({
+      action: 'db.backup_schedule.update',
+      meta: expect.objectContaining({ cron: '*/30 * * * *' }),
+    });
+  });
+
+  it('trả lỗi khi cập nhật cron không hợp lệ', async () => {
+    const adminAgent = request.agent(app);
+    const loginRes = await adminAgent
+      .post('/api/auth/login')
+      .send({ username: 'admin', password: 'admin123' });
+    expect(loginRes.status).toBe(200);
+
+    const res = await adminAgent.post('/api/admin/backups/schedule').send({ cron: 'not-a-cron' });
+    expect(res.status).toBe(400);
+    expect(res.body.ok).toBe(false);
   });
 });
 

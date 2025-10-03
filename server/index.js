@@ -13,6 +13,8 @@ import { generateReport } from './reportExport.js';
 import { DEFAULT_RULES as SHARED_DEFAULT_RULES } from '../src/shared/defaultRules.js';
 import { deriveCOStatus, parseCoLineCount } from '../src/shared/co.js';
 import { recordSqlTimeout } from './sqlMonitor.js';
+import cronstrue from 'cronstrue';
+import 'cronstrue/locales/vi.js';
 
 const moduleUrl = typeof import.meta !== 'undefined' ? import.meta.url || '' : '';
 const __dirname = moduleUrl.startsWith('file:')
@@ -103,7 +105,7 @@ export const DB_FILE = resolveDbFile(process.env.KPI_DB_FILE);
 export const DB_BACKUP_DIR = resolveBackupDir(process.env.KPI_DB_BACKUP_DIR);
 const LEGACY_JSON = path.resolve(__dirname, 'data/db.json');
 const DIST_DIR = path.resolve(__dirname, '../dist');
-const DB_BACKUP_CRON = (process.env.KPI_DB_BACKUP_CRON || '0 3 * * *').trim();
+const DEFAULT_BACKUP_CRON = (process.env.KPI_DB_BACKUP_CRON || '0 3 * * *').trim();
 const DB_BACKUP_RETENTION = Number.parseInt(process.env.KPI_DB_BACKUP_RETENTION || '14', 10);
 
 const DEFAULT_ECUS_SYNC_CONFIG = {
@@ -165,6 +167,8 @@ const backupScheduleMeta = {
   reasons: [],
   lastError: null,
   refreshedAt: null,
+  cron: '',
+  description: '',
 };
 
 const ACCOUNT_PERMISSION_KEYS = [
@@ -288,6 +292,10 @@ function buildDefaultAccounts() {
   }));
 }
 
+const DEFAULT_BACKUP_CONFIG = {
+  cron: DEFAULT_BACKUP_CRON,
+};
+
 const DEFAULT_STORAGE = {
   decl_rows_v1: '[]',
   mst_rows_v2: '[]',
@@ -338,6 +346,7 @@ const DEFAULT_STORAGE = {
   decl_alert_config_v1: JSON.stringify(DEFAULT_ALERT_CONFIG),
   decl_alert_state_v1: JSON.stringify(DEFAULT_ALERT_STATE),
   kpi_users_v1: JSON.stringify(buildDefaultAccounts()),
+  db_backup_config_v1: JSON.stringify(DEFAULT_BACKUP_CONFIG),
 };
 
 function normalizeValue(value) {
@@ -566,6 +575,25 @@ function nextBackupRunISO() {
   }
 }
 
+function formatNextRunHuman(isoValue) {
+  if (!isoValue) {
+    return null;
+  }
+  try {
+    return new Date(isoValue).toLocaleString('vi-VN', {
+      hour12: false,
+      weekday: 'long',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  } catch {
+    return null;
+  }
+}
+
 function buildBackupSummary({ limit = 10 } = {}) {
   const logs = getJSONValue('audit_logs_v1', []);
   const backupLogs = Array.isArray(logs)
@@ -579,18 +607,25 @@ function buildBackupSummary({ limit = 10 } = {}) {
   const lastFailure = normalizeBackupAuditEntry(
     backupLogs.find((entry) => entry?.meta?.status === 'failure') || null
   );
-  const retention = Number.isFinite(DB_BACKUP_RETENTION) && DB_BACKUP_RETENTION > 0 ? DB_BACKUP_RETENTION : null;
+  const config = getBackupConfig();
+  const cronExpr = normalizeCronExpression(config.cron);
+  const retention = Number.isFinite(config.retentionDays) && config.retentionDays > 0 ? config.retentionDays : null;
+  const nextRun = nextBackupRunISO();
+  const nextRunHuman = formatNextRunHuman(nextRun);
+  const description = backupScheduleMeta.description || describeCronExpression(cronExpr);
 
   return {
     schedule: {
-      cron: DB_BACKUP_CRON,
+      cron: cronExpr,
+      cronDescription: description,
       retentionDays: retention,
       directory: DB_BACKUP_DIR,
       active: backupScheduleMeta.active,
       reasons: [...backupScheduleMeta.reasons],
       lastError: backupScheduleMeta.lastError,
       refreshedAt: backupScheduleMeta.refreshedAt,
-      nextRun: nextBackupRunISO(),
+      nextRun,
+      nextRunHuman,
     },
     lastSuccess,
     lastFailure,
@@ -607,11 +642,15 @@ function refreshDatabaseBackupSchedule() {
   backupScheduleMeta.reasons = [];
   backupScheduleMeta.lastError = null;
   backupScheduleMeta.refreshedAt = new Date().toISOString();
+  const config = getBackupConfig();
+  const cronExpr = normalizeCronExpression(config.cron);
+  backupScheduleMeta.cron = cronExpr;
+  backupScheduleMeta.description = describeCronExpression(cronExpr);
   if (process.env.KPI_DISABLE_CRON === '1') {
     backupScheduleMeta.reasons.push('cron_disabled_env');
     return;
   }
-  if (!DB_BACKUP_CRON || DB_BACKUP_CRON === 'never') {
+  if (!cronExpr || cronExpr.toLowerCase() === 'never') {
     backupScheduleMeta.reasons.push('cron_disabled_config');
     return;
   }
@@ -624,12 +663,12 @@ function refreshDatabaseBackupSchedule() {
     }
     return;
   }
-  if (typeof cron.validate === 'function' && !cron.validate(DB_BACKUP_CRON)) {
+  if (typeof cron.validate === 'function' && !cron.validate(cronExpr)) {
     backupScheduleMeta.reasons.push('invalid_cron_expression');
     return;
   }
   try {
-    dbBackupJob = cron.schedule(DB_BACKUP_CRON, () => {
+    dbBackupJob = cron.schedule(cronExpr, () => {
       performDatabaseBackup({ reason: 'scheduled' }).catch((err) => {
         console.error('Cron sao lưu CSDL thất bại:', err);
       });
@@ -799,6 +838,24 @@ function requireAdminSyncManage(req, res) {
   }
   if (!account.permissions?.syncManage) {
     res.status(403).json({ ok: false, error: 'Tài khoản quản trị hiện chưa được cấp quyền quản lý đồng bộ ECUS.' });
+    return { context, denied: true };
+  }
+  return { context, denied: false };
+}
+
+function requireAdminBackupManage(req, res) {
+  const context = getSessionContext(req);
+  if (!context) {
+    res.status(401).json({ ok: false, error: 'Bạn cần đăng nhập bằng tài khoản quản trị.' });
+    return { context: null, denied: true };
+  }
+  const account = context.account || {};
+  if (account.role !== 'admin') {
+    res.status(403).json({ ok: false, error: 'Chỉ tài khoản quản trị mới được phép chỉnh sửa lịch sao lưu.' });
+    return { context, denied: true };
+  }
+  if (!account.permissions?.accountManage) {
+    res.status(403).json({ ok: false, error: 'Tài khoản hiện chưa được cấp quyền quản trị hệ thống.' });
     return { context, denied: true };
   }
   return { context, denied: false };
@@ -1311,6 +1368,66 @@ function getMSTForServer(mst, isoDate) {
     })
     .sort((a, b) => a.rank - b.rank);
   return ranked[0]?.row || null;
+}
+
+function normalizeCronExpression(value) {
+  if (value === null || value === undefined) {
+    return '';
+  }
+  return `${value}`.trim();
+}
+
+function getBackupConfig() {
+  const stored = getJSONValue('db_backup_config_v1', DEFAULT_BACKUP_CONFIG);
+  const cronExpr = normalizeCronExpression(stored?.cron);
+  const fallback = normalizeCronExpression(DEFAULT_BACKUP_CONFIG.cron);
+  const cronValue = cronExpr || fallback || '';
+  const retentionDays = Number.isFinite(DB_BACKUP_RETENTION) && DB_BACKUP_RETENTION > 0 ? DB_BACKUP_RETENTION : null;
+  return {
+    cron: cronValue,
+    retentionDays,
+  };
+}
+
+function saveBackupConfig(config) {
+  const nextCron = normalizeCronExpression(config?.cron);
+  setJSONValue('db_backup_config_v1', { cron: nextCron });
+  return getBackupConfig();
+}
+
+function describeCronExpression(expression) {
+  const cronExpr = normalizeCronExpression(expression);
+  if (!cronExpr) {
+    return '';
+  }
+  if (cronExpr.toLowerCase() === 'never') {
+    return 'Không chạy tự động';
+  }
+  if (typeof cron.validate === 'function' && !cron.validate(cronExpr)) {
+    return 'Biểu thức cron không hợp lệ';
+  }
+  try {
+    const output = cronstrue.toString(cronExpr, {
+      locale: 'vi',
+      use24HourTimeFormat: true,
+      throwExceptionOnParseError: false,
+    });
+    if (!output || /lỗi/i.test(output) || /error/i.test(output)) {
+      return 'Không thể diễn giải biểu thức cron';
+    }
+    const parts = cronExpr.split(/\s+/);
+    if (parts.length >= 5) {
+      const dayOfMonth = parts[2];
+      const dayOfWeek = parts[4];
+      const isDaily = ['*', '?'].includes(dayOfMonth) && ['*', '?'].includes(dayOfWeek);
+      if (isDaily && /^Vào\s+\d{1,2}:\d{2}$/u.test(output)) {
+        return `${output} hằng ngày`;
+      }
+    }
+    return output;
+  } catch (err) {
+    return 'Không thể diễn giải biểu thức cron';
+  }
 }
 
 function getEcusConfig() {
@@ -2449,6 +2566,37 @@ app.get('/api/admin/backups/summary', (req, res) => {
     res.json({ ok: true, summary });
   } catch (err) {
     res.status(500).json({ ok: false, error: err?.message || 'Không thể tải thông tin sao lưu' });
+  }
+});
+
+app.post('/api/admin/backups/schedule', (req, res) => {
+  const { context, denied } = requireAdminBackupManage(req, res);
+  if (denied) {
+    return;
+  }
+  try {
+    const cronExpr = normalizeCronExpression(req.body?.cron);
+    if (!cronExpr) {
+      res.status(400).json({ ok: false, error: 'Vui lòng nhập biểu thức cron.' });
+      return;
+    }
+    if (cronExpr.toLowerCase() !== 'never' && typeof cron.validate === 'function' && !cron.validate(cronExpr)) {
+      res.status(400).json({ ok: false, error: 'Biểu thức cron không hợp lệ.' });
+      return;
+    }
+    const config = saveBackupConfig({ cron: cronExpr });
+    refreshDatabaseBackupSchedule();
+    const actor = context.account?.username || 'system';
+    pushAuditLog({
+      actor,
+      action: 'db.backup_schedule.update',
+      detail: 'Cập nhật lịch sao lưu CSDL',
+      meta: { cron: cronExpr },
+    });
+    const summary = buildBackupSummary();
+    res.json({ ok: true, config, summary });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err?.message || 'Không thể cập nhật lịch sao lưu' });
   }
 });
 
