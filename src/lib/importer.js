@@ -1,6 +1,7 @@
 import {
   normalizeStr,
   normalizeMST,
+  normalizeDeclarationNumber,
   toISODate,
   getMSTFor,
   isExportDecl,
@@ -9,54 +10,64 @@ import {
 import { loadRules, countLicenseTypesFromRowObj, extractLicenseCodesFromRowObj } from "@/lib/rules.js";
 import { deriveCOStatus, parseCoLineCount } from "@/shared/co.js";
 
+const normalizeCodeValue = (value) => String(value ?? "").trim().toUpperCase();
+const normalizeLookupKey = (value) =>
+  String(value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/đ/g, "d")
+    .replace(/[\s]+/g, " ")
+    .trim();
+
 const NAME_MAP = {
   so_tk: [
-    "Số TK",
-    "Số tờ khai",
+    "Sá»‘ TK",
+    "Sá»‘ tá» khai",
     "So TK",
     "So to khai",
-    "Số tờ khai TM",
-    "Số tờ khai TM ",
-    "Số tờ khai xuất nhập khẩu",
+    "Sá»‘ tá» khai TM",
+    "Sá»‘ tá» khai TM ",
+    "Sá»‘ tá» khai xuáº¥t nháº­p kháº©u",
   ],
-  nhanh: ["Nhánh", "Nhanh", "branch"],
-  date: ["date", "ngày", "Ngay", "Ngày", "Ngày đăng ký", "Ngay dang ky"],
-  ma_hq: ["Mã HQ", "Ma HQ", "Mã hq", "ma_hq"],
+  nhanh: ["NhÃ¡nh", "Nhanh", "branch"],
+  date: ["date", "ngÃ y", "Ngay", "NgÃ y", "NgÃ y Ä‘Äƒng kÃ½", "Ngay dang ky"],
+  ma_hq: ["MÃ£ HQ", "Ma HQ", "MÃ£ hq", "ma_hq"],
   loai_hinh: [
-    "Loại hình",
+    "Loáº¡i hÃ¬nh",
     "Loai hinh",
-    "Loại hình",
+    "Loáº¡i hÃ¬nh",
     "loai_hinh",
-    "Mã loại hình",
+    "MÃ£ loáº¡i hÃ¬nh",
     "Ma loai hinh",
     "MA_LH",
     "ma_lh",
   ],
-  so_hoa_don: ["Số hóa đơn TM", "So hoa don TM", "Số hoá đơn TM"],
-  van_don: ["Vận đơn", "Van don", "Vận đơn "],
-  phuong_thuc_vc: ["Phương thức vận chuyển", "Phuong thuc van chuyen"],
-  so_luong_kien: ["Số lượng kiện", "So luong kien"],
-  gross: ["Tổng trọng lượng hàng (Gross)", "Tong trong luong hang (Gross)"],
-  so_luong: ["Số lượng", "So luong"],
-  phan_luong: ["Phân luồng", "Phan luong"],
+  so_hoa_don: ["Sá»‘ hÃ³a Ä‘Æ¡n TM", "So hoa don TM", "Sá»‘ hoÃ¡ Ä‘Æ¡n TM"],
+  van_don: ["Váº­n Ä‘Æ¡n", "Van don", "Váº­n Ä‘Æ¡n "],
+  phuong_thuc_vc: ["PhÆ°Æ¡ng thá»©c váº­n chuyá»ƒn", "Phuong thuc van chuyen"],
+  so_luong_kien: ["Sá»‘ lÆ°á»£ng kiá»‡n", "So luong kien"],
+  gross: ["Tá»•ng trá»ng lÆ°á»£ng hÃ ng (Gross)", "Tong trong luong hang (Gross)"],
+  so_luong: ["Sá»‘ lÆ°á»£ng", "So luong"],
+  phan_luong: ["PhÃ¢n luá»“ng", "Phan luong"],
   muc_hang: [
-    "Mục hàng",
+    "Má»¥c hÃ ng",
     "Muc hang",
     "num_items",
-    "Số mục hàng",
+    "Sá»‘ má»¥c hÃ ng",
     "So muc hang",
     "TotalItems",
     "totalitems",
   ],
-  mst: ["MST", "mst", "Mã số thuế", "Ma so thue"],
-  cong_ty: ["Công ty", "Cong ty", "customer", "Tên doanh nghiệp", "Ten doanh nghiep"],
-  agency: ["Đại lý", "Đại lý HQ", "Dai ly", "Dai ly HQ", "Agency"],
+  mst: ["MST", "mst", "MÃ£ sá»‘ thuáº¿", "Ma so thue"],
+  cong_ty: ["CÃ´ng ty", "Cong ty", "customer", "TÃªn doanh nghiá»‡p", "Ten doanh nghiep"],
+  agency: ["Äáº¡i lÃ½", "Äáº¡i lÃ½ HQ", "Dai ly", "Dai ly HQ", "Agency"],
   co_line_count: [
-    "Dòng hàng áp C/O",
+    "DÃ²ng hÃ ng Ã¡p C/O",
     "Dong hang ap C/O",
-    "Dòng hàng áp CO",
+    "DÃ²ng hÃ ng Ã¡p CO",
     "Dong hang ap CO",
-    "Dòng C/O",
+    "DÃ²ng C/O",
     "Dong CO",
     "CO Lines",
     "CO Line Count",
@@ -67,9 +78,9 @@ const NAME_MAP = {
     "co_line",
     "CO_Count",
     "COCount",
-    "Số dòng C/O",
+    "Sá»‘ dÃ²ng C/O",
     "So dong C/O",
-    "Số dòng áp C/O",
+    "Sá»‘ dÃ²ng Ã¡p C/O",
     "So dong ap C/O",
   ],
 };
@@ -77,6 +88,20 @@ const NAME_MAP = {
 function pick(row, keys) {
   for (const k of keys) {
     if (Object.prototype.hasOwnProperty.call(row, k)) return row[k];
+  }
+  if (!row || typeof row !== "object") return "";
+  const lookup = new Map();
+  for (const actualKey of Object.keys(row)) {
+    const normalized = normalizeLookupKey(actualKey);
+    if (!normalized || lookup.has(normalized)) continue;
+    lookup.set(normalized, actualKey);
+  }
+  for (const candidate of keys) {
+    const normalizedCandidate = normalizeLookupKey(candidate);
+    const actual = lookup.get(normalizedCandidate);
+    if (actual !== undefined) {
+      return row[actual];
+    }
   }
   return "";
 }
@@ -120,7 +145,9 @@ export function detectDateOrder(rows) {
 }
 
 export function mapRow(row, opts = {}) {
-  const so_tk = normalizeStr(pick(row, NAME_MAP.so_tk));
+
+  const so_tk_full = normalizeStr(pick(row, NAME_MAP.so_tk));
+  const so_tk = normalizeDeclarationNumber(so_tk_full);
   const nhanh = normalizeStr(pick(row, NAME_MAP.nhanh));
   const rawDate = pick(row, NAME_MAP.date);
   const dateISO = toISODate(rawDate, { preferMonthFirst: opts.preferMonthFirst });
@@ -138,28 +165,39 @@ export function mapRow(row, opts = {}) {
   let cong_ty = normalizeStr(pick(row, NAME_MAP.cong_ty));
   let agency = normalizeStr(pick(row, NAME_MAP.agency));
 
-  let nhan_vien = normalizeStr(row["nhan_vien"] || row["Nhân viên"] || "");
-  let team = normalizeStr(row["team"] || row["Tổ đội"] || "");
+  let nhan_vien = normalizeStr(row["nhan_vien"] || row["NhÃ¢n viÃªn"] || "");
+  let team = normalizeStr(row["team"] || row["Tá»• Ä‘á»™i"] || "");
   const autoAssignStaff = opts.autoAssignStaff !== false;
   const agencyMap = opts.agencyMap instanceof Map ? opts.agencyMap : null;
+  const ruleLicenseConfig = opts.rules?.license || null;
   const licenseExcludeRaw = Array.isArray(opts.licenseExcludes)
     ? opts.licenseExcludes
-    : (opts.rules?.license?.exclude?.codes
+    : (ruleLicenseConfig?.exclude?.codes
         || loadRules()?.license?.exclude?.codes
         || []);
   const excludeSet = new Set(
     licenseExcludeRaw
-      .map((code) => String(code || '').trim().toUpperCase())
+      .map(normalizeCodeValue)
       .filter(Boolean)
   );
+  const agencyExcludeMap = new Map();
+  const ruleAgencyExclude = Array.isArray(ruleLicenseConfig?.exclude?.agencies)
+    ? ruleLicenseConfig.exclude.agencies
+    : [];
+  for (const entry of ruleAgencyExclude) {
+    if (!entry) continue;
+    const agencyKey = normalizeCodeValue(entry.agency);
+    if (!agencyKey) continue;
+    const codes = (Array.isArray(entry.codes) ? entry.codes : [])
+      .map(normalizeCodeValue)
+      .filter(Boolean);
+    if (!codes.length) continue;
+    agencyExcludeMap.set(agencyKey, new Set(codes));
+  }
   const rawLicenseCodes = extractLicenseCodesFromRowObj(row)
     .map((code) => String(code || '').trim().toUpperCase())
     .filter(Boolean);
   const uniqueCodes = Array.from(new Set(rawLicenseCodes));
-  const licenses = uniqueCodes.length
-    ? uniqueCodes.filter((code) => !excludeSet.has(code)).length
-    : countLicenseTypesFromRowObj(row, Array.from(excludeSet));
-
   const coLineCandidates = [
     NAME_MAP.co_line_count ? pick(row, NAME_MAP.co_line_count) : "",
     row.co_line_count,
@@ -204,11 +242,26 @@ export function mapRow(row, opts = {}) {
     }
   }
 
+  if (!so_tk || !dateISO) {
+    return null;
+  }
+
+  const agencyKeyNormalized = normalizeCodeValue(agency);
+  const combinedExcludeSet = agencyKeyNormalized && agencyExcludeMap.has(agencyKeyNormalized)
+    ? new Set([...excludeSet, ...agencyExcludeMap.get(agencyKeyNormalized)])
+    : excludeSet;
+
+  const licenses = uniqueCodes.length
+    ? uniqueCodes.filter((code) => !combinedExcludeSet.has(code)).length
+    : countLicenseTypesFromRowObj(row, Array.from(combinedExcludeSet));
+
   const base = {
     date: dateISO,
     raw_date: normalizeStr(rawDate),
     so_tk,
-    soToKhai: so_tk,
+    so_tk_full,
+    so_tk_suffix: so_tk_full.slice(so_tk.length),
+    soToKhai: so_tk_full || so_tk,
     nhanh,
     ma_hq,
     loai_hinh,

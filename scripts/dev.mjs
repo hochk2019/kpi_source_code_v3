@@ -7,6 +7,19 @@ import process from 'node:process';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
+const isWin = process.platform === 'win32';
+
+function resolvePnpmCommand() {
+  const execPath = process.env.npm_execpath;
+  if (execPath && !isWin) {
+    return { command: process.execPath, args: [execPath] };
+  }
+  if (isWin) {
+    return { command: 'cmd.exe', args: ['/c', 'pnpm'] };
+  }
+  return { command: 'pnpm', args: [] };
+}
+
 const children = [];
 let shuttingDown = false;
 
@@ -57,6 +70,8 @@ process.on('SIGTERM', () => shutdown(0));
 
 const backendScript = resolve(__dirname, 'start-backend.mjs');
 run('backend', process.execPath, [backendScript], { env: { ...process.env, KPI_SKIP_LISTEN: undefined } });
-run('frontend', 'pnpm', ['exec', 'vite'], { env: { ...process.env } });
+
+const { command: pnpmCommand, args: pnpmArgs } = resolvePnpmCommand();
+run('frontend', pnpmCommand, [...pnpmArgs, 'exec', 'vite'], { env: { ...process.env } });
 
 setInterval(() => {}, 1 << 30);

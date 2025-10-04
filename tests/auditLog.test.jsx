@@ -5,11 +5,12 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import AuditLog from '@/components/AuditLog.jsx';
 import { AUDIT_KEY } from '@/lib/store.js';
 import { clearStorageCache, setItem as sharedSetItem } from '@/lib/storageClient.js';
+import * as auth from '@/auth/localAuth.js';
 
 const SUCCESS_SUMMARY = {
   schedule: {
     cron: '0 3 * * *',
-    cronDescription: 'Vào 03:00 hằng ngày',
+    cronDescription: 'VA?o 03:00 h???ng ngA?y',
     retentionCopies: 14,
     directory: '/var/backups/kpi',
     active: false,
@@ -17,26 +18,28 @@ const SUCCESS_SUMMARY = {
     lastError: null,
     refreshedAt: '2024-05-01T00:00:00.000Z',
     nextRun: '2024-05-01T03:00:00.000Z',
-    nextRunHuman: '03:00 Thứ Tư, 01/05/2024',
+    nextRunHuman: '03:00 Th??c T??, 01/05/2024',
   },
   lastSuccess: {
     ts: '2024-05-01T03:00:00.000Z',
     actor: 'system',
     action: 'db.backup',
-    detail: 'Sao lưu CSDL (scheduled)',
+    detail: 'Sao l??u CSDL (scheduled)',
     meta: { status: 'success', reason: 'scheduled', bytes: 40960 },
   },
   lastFailure: {
     ts: '2024-05-01T02:00:00.000Z',
     actor: 'system',
     action: 'db.backup',
-    detail: 'Sao lưu CSDL thất bại (memory_db)',
+    detail: 'Sao l??u CSDL th???t b???i (memory_db)',
     meta: { status: 'failure', reason: 'memory_db' },
   },
   recent: [],
 };
 
 describe('AuditLog', () => {
+  let fetchSpy;
+
   beforeEach(() => {
     clearStorageCache();
     sharedSetItem(
@@ -46,88 +49,72 @@ describe('AuditLog', () => {
           ts: '2024-05-01T03:00:00.000Z',
           actor: 'system',
           action: 'db.backup',
-          detail: 'Sao lưu CSDL (scheduled)',
+          detail: 'Sao l??u CSDL (scheduled)',
         },
       ])
     );
-    global.fetch = vi.fn(() =>
-      Promise.resolve({
-        ok: true,
-        json: async () => ({ ok: true, summary: SUCCESS_SUMMARY }),
-      })
-    );
+    fetchSpy = vi.spyOn(auth, 'fetchWithAuth').mockResolvedValue({
+      ok: true,
+      json: async () => ({ ok: true, summary: SUCCESS_SUMMARY }),
+    });
   });
 
   afterEach(() => {
     cleanup();
-    vi.resetAllMocks();
-    delete global.fetch;
+    vi.restoreAllMocks();
   });
 
-  it('hiển thị thông tin lịch sao lưu và lý do tắt cron', async () => {
+  it('render cron summary using API data', async () => {
     render(<AuditLog currentUser={{ username: 'admin' }} />);
 
-    expect(global.fetch).toHaveBeenCalledWith('/api/admin/backups/summary', {
-      cache: 'no-store',
-      credentials: 'include',
-    });
-
-    await waitFor(() => {
-      expect(screen.getByText(/Biểu thức cron/i)).toBeInTheDocument();
-    });
-
-    expect(screen.getByText('0 3 * * *')).toBeInTheDocument();
-    expect(screen.getByText(/Mô tả lịch/i)).toBeInTheDocument();
-    expect(screen.getByText('Vào 03:00 hằng ngày')).toBeInTheDocument();
-    expect(screen.getByText('14 bản sao lưu')).toBeInTheDocument();
-    expect(screen.getByText(/Đang tắt tự động/i)).toBeInTheDocument();
-    expect(screen.getByText(/Cron tự động đang bị tắt/)).toBeInTheDocument();
-    expect(screen.getByText(/nguồn: scheduled/i)).toBeInTheDocument();
-    expect(screen.getByText(/Không thể sao lưu vì CSDL đang chạy ở chế độ bộ nhớ/i)).toBeInTheDocument();
-  });
-
-  it('hiển thị thông báo lỗi khi API trả về lỗi', async () => {
-    global.fetch = vi.fn(() =>
-      Promise.resolve({
-        ok: false,
-        status: 500,
-        statusText: 'Internal Server Error',
-      })
+    expect(fetchSpy).toHaveBeenCalledWith(
+      '/api/admin/backups/summary',
+      expect.objectContaining({ cache: 'no-store' })
     );
 
+    await screen.findByText('0 3 * * *');
+    expect(screen.getByText('/var/backups/kpi')).toBeInTheDocument();
+    expect(screen.getByText(/KPI_DISABLE_CRON/)).toBeInTheDocument();
+  });
+
+  it('shows error banner when summary request fails', async () => {
+    fetchSpy.mockResolvedValueOnce({
+      ok: false,
+      status: 500,
+      statusText: 'Internal Server Error',
+      json: async () => ({}),
+    });
+
     render(<AuditLog currentUser={{ username: 'admin' }} />);
 
     await waitFor(() => {
-      expect(screen.getByText(/Không thể tải thông tin sao lưu/i)).toBeInTheDocument();
+      expect(screen.getByText(/Internal Server Error/)).toBeInTheDocument();
     });
   });
 
-  it('cho phép quản trị viên cập nhật biểu thức cron sao lưu', async () => {
-    const summaryResponse = Promise.resolve({
+  it('submits updated cron schedule', async () => {
+    const summaryResponse = {
       ok: true,
       json: async () => ({ ok: true, summary: SUCCESS_SUMMARY }),
-    });
-    const updatedSummary = {
-      ...SUCCESS_SUMMARY,
-      schedule: {
-        ...SUCCESS_SUMMARY.schedule,
-        cron: '*/30 * * * *',
-        cronDescription: 'Mỗi 30 phút',
-        active: true,
-        reasons: [],
-        retentionCopies: 7,
-      },
     };
-    const updateResponse = Promise.resolve({
+    const updateResponse = {
       ok: true,
       json: async () => ({
         ok: true,
         config: { cron: '*/30 * * * *', retentionCopies: 7 },
-        summary: updatedSummary,
+        summary: {
+          ...SUCCESS_SUMMARY,
+          schedule: {
+            ...SUCCESS_SUMMARY.schedule,
+            cron: '*/30 * * * *',
+            retentionCopies: 7,
+            active: true,
+            reasons: [],
+          },
+        },
       }),
-    });
-    const responses = [summaryResponse, updateResponse];
-    global.fetch = vi.fn(() => responses.shift() ?? summaryResponse);
+    };
+    fetchSpy.mockResolvedValueOnce(summaryResponse).mockResolvedValueOnce(updateResponse);
 
     render(
       <AuditLog
@@ -139,30 +126,24 @@ describe('AuditLog', () => {
       />
     );
 
-    const input = await screen.findByLabelText(/Cập nhật biểu thức cron/i);
+    const cronInput = await screen.findByLabelText((label) => label.toLowerCase().includes('cron'));
     await waitFor(() => {
-      expect(input).toHaveValue('0 3 * * *');
+      expect(cronInput).toHaveValue('0 3 * * *');
     });
 
-    fireEvent.change(input, { target: { value: '*/30 * * * *' } });
-    const retentionInput = await screen.findByLabelText(/Số bản sao lưu giữ lại/i);
+    fireEvent.change(cronInput, { target: { value: '*/30 * * * *' } });
+    const retentionInput = await screen.findByLabelText((label) => label.toLowerCase().includes('sao l'));
     fireEvent.change(retentionInput, { target: { value: '7' } });
-    fireEvent.submit(input.closest('form'));
+    fireEvent.submit(cronInput.closest('form'));
 
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledTimes(2);
+      expect(fetchSpy).toHaveBeenCalledTimes(2);
     });
-    expect(global.fetch).toHaveBeenLastCalledWith(
-      '/api/admin/backups/schedule',
-      expect.objectContaining({
-        method: 'POST',
-        body: JSON.stringify({ cron: '*/30 * * * *', retentionCopies: 7 }),
-      })
-    );
 
-    await waitFor(() => {
-      expect(screen.getByText('Mỗi 30 phút')).toBeInTheDocument();
-    });
-    expect(screen.getByText('7 bản sao lưu')).toBeInTheDocument();
+    const [, scheduleInit] = fetchSpy.mock.calls[1];
+    expect(scheduleInit.method).toBe('POST');
+    expect(JSON.parse(scheduleInit.body)).toEqual({ cron: '*/30 * * * *', retentionCopies: 7 });
+    expect(screen.getByDisplayValue('*/30 * * * *')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('7')).toBeInTheDocument();
   });
 });

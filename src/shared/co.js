@@ -1,4 +1,8 @@
-const NON_CO_CODES = new Set(["B01", "B03", "B30", "B02"]);
+const DEFAULT_NON_CO_CODES = Object.freeze(["B01", "B03", "B30", "B02"]);
+let preferentialCodeConfig = {
+  whitelist: null,
+  blacklist: new Set(DEFAULT_NON_CO_CODES),
+};
 const DIRECT_TRUE_VALUES = new Set(["CO", "CÓ", "YES", "TRUE", "1", "X", "AVAILABLE", "HAS"]);
 const DIRECT_FALSE_VALUES = new Set(["KHÔNG", "NO", "FALSE", "0", "", "NONE"]);
 
@@ -29,6 +33,44 @@ function normalizeString(value) {
 function normalizeCode(code) {
   const normalized = normalizeString(code).toUpperCase();
   return normalized.replace(/[^A-Z0-9]/g, "");
+}
+
+function normalizeCodeList(input) {
+  if (!Array.isArray(input)) return new Set();
+  const set = new Set();
+  for (const item of input) {
+    const normalized = normalizeCode(item);
+    if (!normalized) continue;
+    set.add(normalized);
+  }
+  return set;
+}
+
+export function setPreferentialCodeConfig({ whitelist = [], blacklist = [] } = {}) {
+  const whitelistSet = normalizeCodeList(whitelist);
+  const blacklistSet = normalizeCodeList(blacklist);
+  preferentialCodeConfig = {
+    whitelist: whitelistSet.size > 0 ? whitelistSet : null,
+    blacklist: blacklistSet.size > 0 ? blacklistSet : new Set(DEFAULT_NON_CO_CODES),
+  };
+}
+
+export function getPreferentialCodeConfig() {
+  const { whitelist, blacklist } = preferentialCodeConfig;
+  return {
+    whitelist: Array.from(whitelist ?? []),
+    blacklist: Array.from(blacklist ?? []),
+  };
+}
+
+function isPreferentialCode(code) {
+  const normalized = normalizeCode(code);
+  if (!normalized) return false;
+  const { whitelist, blacklist } = preferentialCodeConfig;
+  if (whitelist && whitelist.size > 0) {
+    return whitelist.has(normalized);
+  }
+  return !blacklist.has(normalized);
 }
 
 function normalizeKey(value) {
@@ -182,13 +224,13 @@ export function evaluateCOFromRecord(record) {
     codes.add(code);
   };
   scanRecordForCodes(record, collector);
-  const filtered = Array.from(codes).filter((code) => code && !NON_CO_CODES.has(code));
-  const hasCO = filtered.length > 0;
+  const preferential = Array.from(codes).filter((code) => isPreferentialCode(code));
+  const hasCO = preferential.length > 0;
   return {
     hasCO,
     codes: Array.from(codes).filter(Boolean),
-    matched: filtered,
-    lineCount: filtered.length,
+    matched: preferential,
+    lineCount: preferential.length,
   };
 }
 
@@ -227,7 +269,7 @@ export function coLineCount(row) {
     const matched = new Set();
     for (const code of codes) {
       const normalized = normalizeCode(code);
-      if (!normalized || NON_CO_CODES.has(normalized)) continue;
+      if (!normalized || !isPreferentialCode(normalized)) continue;
       matched.add(normalized);
     }
     if (matched.size > 0) return matched.size;

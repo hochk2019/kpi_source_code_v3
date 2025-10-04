@@ -4,6 +4,19 @@ import path from 'node:path';
 import process from 'node:process';
 import { spawn } from 'node:child_process';
 
+const isWin = process.platform === 'win32';
+
+function resolvePnpmCommand() {
+  const execPath = process.env.npm_execpath;
+  if (execPath && !isWin) {
+    return { command: process.execPath, args: [execPath] };
+  }
+  if (isWin) {
+    return { command: 'cmd.exe', args: ['/c', 'pnpm'] };
+  }
+  return { command: 'pnpm', args: [] };
+}
+
 async function run(command, args, options = {}) {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, { stdio: 'inherit', ...options });
@@ -29,7 +42,8 @@ async function ensureBetterSqlite3() {
         throw err;
       }
       console.log('Đang chạy "pnpm rebuild better-sqlite3" để chuẩn bị native binding...');
-      await run('pnpm', ['rebuild', 'better-sqlite3']);
+      const { command, args } = resolvePnpmCommand();
+      await run(command, [...args, 'rebuild', 'better-sqlite3']);
       rebuilt = true;
     }
   }

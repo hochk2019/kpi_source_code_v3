@@ -6,6 +6,7 @@ import {
   isExportDecl,
 } from "@/lib/store.js";
 import { computeKPI, DEFAULT_RULES } from "@/lib/rules.js";
+import { formatDisplayDate } from "@/shared/format.js";
 
 const UNASSIGNED_STAFF_KEY = "__unassigned_staff__";
 const UNASSIGNED_TEAM_KEY = "__unassigned_team__";
@@ -377,9 +378,8 @@ export function buildReportData(rowsInput, { roster, rules, from, to } = {}) {
     if (!sanitized) continue;
 
     const { date } = sanitized;
-    const baseKpi = Number.isFinite(Number(sanitized.kpi))
-      ? Number(sanitized.kpi)
-      : computeKPI(sanitized, effectiveRules);
+    // Always recompute so the report reflects the currently selected rules.
+    const baseKpi = computeKPI(sanitized, effectiveRules);
     const kpiValue = Math.round(baseKpi * 10) / 10;
     const exportFlag = isExportDecl(sanitized.so_tk, sanitized.loai_hinh);
 
@@ -411,6 +411,7 @@ export function buildReportData(rowsInput, { roster, rules, from, to } = {}) {
 
     const detailRow = {
       date,
+      displayDate: formatDisplayDate(date),
       so_tk: sanitized.so_tk,
       mst: sanitized.mst,
       cong_ty: sanitized.cong_ty,
@@ -722,3 +723,4 @@ export default {
   buildReportData,
   aggregateByCompany,
 };
+

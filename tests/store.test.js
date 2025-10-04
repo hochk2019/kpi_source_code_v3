@@ -52,9 +52,24 @@ describe('saveDeclRows', () => {
     const total = saveDeclRows(incoming, { overwrite: false });
 
     expect(total).toBe(2);
-    expect(getDeclRows()).toEqual([
-      { so_tk: '12345678901', nhanh: 'A', date: '2024-09-16', loai_hinh: 'A12' },
-      { so_tk: '99999999999', nhanh: '', date: '2024-09-17', loai_hinh: 'B11' },
+    const stored = getDeclRows();
+    expect(stored).toEqual([
+      expect.objectContaining({
+        so_tk: '12345678901',
+        so_tk_full: '12345678901',
+        so_tk_suffix: '',
+        nhanh: 'A',
+        date: '2024-09-16',
+        loai_hinh: 'A12',
+      }),
+      expect.objectContaining({
+        so_tk: '99999999999',
+        so_tk_full: '99999999999',
+        so_tk_suffix: '',
+        nhanh: '',
+        date: '2024-09-17',
+        loai_hinh: 'B11',
+      }),
     ]);
   });
 
@@ -73,7 +88,7 @@ describe('saveDeclRows', () => {
 
     const stored = getDeclRows();
     expect(stored).toHaveLength(2);
-    expect(stored.find(r => r.so_tk === 'TK03')).toBeUndefined();
+    expect(stored.find(r => r.so_tk === '00000000003')).toBeUndefined();
   });
 });
 
@@ -105,7 +120,8 @@ describe('getRecentDeclRows', () => {
     const latest = getRecentDeclRows(3);
 
     expect(latest).toHaveLength(3);
-    expect(latest.map(r => r.so_tk)).toEqual(['TK04', 'TK03', 'TK02']);
+    expect(latest.map(r => r.so_tk)).toEqual(['00000000004', '00000000003', '00000000002']);
+    expect(latest.map(r => r.so_tk_full)).toEqual(['TK04', 'TK03', 'TK02']);
   });
 });
 

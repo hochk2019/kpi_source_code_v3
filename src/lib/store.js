@@ -3,13 +3,13 @@
 import { createDefaultRuleCollection } from '@/shared/defaultRules.js';
 import { getItem, setItem } from './storageClient.js';
 
-// ===== Keys trong kho chia sẻ =====
-export const DECL_KEY  = "decl_rows_v1";      // dữ liệu tờ khai
-export const MST_KEY   = "mst_rows_v2";       // gán MST -> nhân viên/team/effective_from
-export const RULES_KEY = "kpi_rules_v2";      // quy tắc KPI
-export const TEAM_KEY  = "team_roster_v1";    // danh sách tổ đội & thành viên
-export const AUDIT_KEY = "audit_logs_v1";     // nhật ký hành động quản trị
-export const HQ_KEY    = "hq_agencies_v1";    // cấu hình Đại lý hải quan theo MST
+// ===== Keys trong kho chia sáº» =====
+export const DECL_KEY  = "decl_rows_v1";      // dá»¯ liá»‡u tá» khai
+export const MST_KEY   = "mst_rows_v2";       // gÃ¡n MST -> nhÃ¢n viÃªn/team/effective_from
+export const RULES_KEY = "kpi_rules_v2";      // quy táº¯c KPI
+export const TEAM_KEY  = "team_roster_v1";    // danh sÃ¡ch tá»• Ä‘á»™i & thÃ nh viÃªn
+export const AUDIT_KEY = "audit_logs_v1";     // nháº­t kÃ½ hÃ nh Ä‘á»™ng quáº£n trá»‹
+export const HQ_KEY    = "hq_agencies_v1";    // cáº¥u hÃ¬nh Äáº¡i lÃ½ háº£i quan theo MST
 
 // ===== Helpers =====
 function safeParse(json, fallback) {
@@ -20,7 +20,7 @@ function shallowClone(obj) {
   return JSON.parse(JSON.stringify(obj ?? null));
 }
 
-// Chuẩn hoá chuỗi (trim + bỏ khoảng trắng thừa)
+// Chuáº©n hoÃ¡ chuá»—i (trim + bá» khoáº£ng tráº¯ng thá»«a)
 export function normalizeStr(s) {
   return (s ?? "").toString().replace(/\s+/g, " ").trim();
 }
@@ -36,12 +36,98 @@ export function normalizeName(name) {
   return stripDiacritics(name).toLowerCase();
 }
 
-// MST: giữ dạng chuỗi số, bỏ mọi ký tự không phải số
+// MST: giá»¯ dáº¡ng chuá»—i sá»‘, bá» má»i kÃ½ tá»± khÃ´ng pháº£i sá»‘
 export function normalizeMST(mst) {
   return (mst ?? "").toString().replace(/\D/g, "");
 }
 
-// dd/mm/yyyy -> yyyy-mm-dd ; nếu đã yyyy-mm-dd thì giữ nguyên
+export function normalizeDeclarationNumber(input, length = 11) {
+  const raw = (input ?? "").toString();
+  if (!raw.trim()) return "";
+  const digits = raw.replace(/[^0-9]/g, "");
+  if (!digits) return "";
+  const maxLength = Number.isFinite(length) && length > 0 ? length : 11;
+  if (digits.length >= maxLength) {
+    return digits.slice(0, maxLength);
+  }
+  return digits.padStart(maxLength, "0");
+}
+
+function normalizeDeclarationRow(row) {
+  if (!row || typeof row !== "object") return null;
+  const clone = { ...row };
+  const sourceNumber = (row.so_tk_full ?? row.so_tk ?? "").toString();
+  const normalized = normalizeDeclarationNumber(sourceNumber || row.so_tk);
+  clone.so_tk = normalized;
+  if (sourceNumber) {
+    clone.so_tk_full = sourceNumber;
+    const suffix = normalized ? sourceNumber.slice(normalized.length) : sourceNumber;
+    clone.so_tk_suffix = suffix || "";
+  }
+  if (!clone.nhanh && clone.branch) {
+    clone.nhanh = clone.branch;
+  }
+  return clone;
+}
+
+function getDeclarationKey(row) {
+  if (!row || typeof row !== "object") return "";
+  const soTk = normalizeDeclarationNumber(row.so_tk ?? row.so_tk_full ?? "");
+  if (!soTk) return "";
+  const branch = normalizeStr(row.nhanh || row.branch || "");
+  return `${soTk}_${branch}`;
+}
+
+function mergeDeclarationRowClient(existing, incoming) {
+  if (!existing) return incoming;
+  const merged = { ...existing };
+  const skipFields = new Set(['nhan_vien', 'team', 'agency', 'dai_ly', 'licenses', 'so_luong_gp', 'reviewed', 'reviewed_at']);
+  for (const [key, value] of Object.entries(incoming)) {
+    if (skipFields.has(key)) continue;
+    if (key === 'co_line_count') {
+      const parsed = Number(value);
+      merged[key] = Number.isFinite(parsed) ? parsed : merged[key];
+      continue;
+    }
+    if (key === 'co') {
+      merged[key] = normalizeStr(value || '');
+      continue;
+    }
+    if (key === 'has_co') {
+      merged[key] = !!value;
+      continue;
+    }
+    if (key === 'co_codes' || key === 'licenseCodes') {
+      merged[key] = Array.isArray(value) ? value.map((item) => normalizeStr(item)).filter(Boolean) : [];
+      continue;
+    }
+    merged[key] = value;
+  }
+  const fillIfBlank = (field) => {
+    const current = normalizeStr(merged[field] || '');
+    const incomingValue = normalizeStr(incoming[field] || '');
+    if (!current && incomingValue) {
+      merged[field] = incoming[field];
+    }
+  };
+  fillIfBlank('nhan_vien');
+  fillIfBlank('team');
+  fillIfBlank('agency');
+  fillIfBlank('dai_ly');
+
+  const fillNumeric = (field) => {
+    if (!Object.prototype.hasOwnProperty.call(incoming, field)) return;
+    const parsed = Number(incoming[field]);
+    if (Number.isFinite(parsed)) {
+      merged[field] = parsed;
+    }
+  };
+  fillNumeric('licenses');
+  fillNumeric('so_luong_gp');
+  return merged;
+}
+
+// dd/mm/yyyy -> yyyy-mm-dd ; náº¿u Ä‘Ã£ yyyy-mm-dd thÃ¬ giá»¯ nguyÃªn
 export function toISODate(d, options = {}) {
   const { preferMonthFirst = false } = options;
   const s = normalizeStr(d);
@@ -102,17 +188,17 @@ export function toISODate(d, options = {}) {
   return tryFromParts({ year, month, day });
 }
 
-// ===== Quy tắc xác định Nhập/Xuất =====
-// 30xxxxxxxxxxx -> xuất; 10xxxxxxxxxxx -> nhập
+// ===== Quy táº¯c xÃ¡c Ä‘á»‹nh Nháº­p/Xuáº¥t =====
+// 30xxxxxxxxxxx -> xuáº¥t; 10xxxxxxxxxxx -> nháº­p
 export function isExportByNumber(soTk) {
   const s = (soTk ?? "").toString().replace(/\D/g,"");
-  return /^30\d{10}$/.test(s);
+  return /^30\\d{9,10}$/.test(s);
 }
 export function isImportByNumber(soTk) {
   const s = (soTk ?? "").toString().replace(/\D/g,"");
-  return /^10\d{10}$/.test(s);
+  return /^10\\d{9,10}$/.test(s);
 }
-// fallback theo loại hình
+// fallback theo loáº¡i hÃ¬nh
 const EXPORT_TYPES = new Set(["B11","B12","B13","E42","E52","E62","E82","G22","G23","G24","G61","H21"]);
 const IMPORT_TYPES = new Set(["E11","E13","E15","E21","E31","E41","A11","A12","A41","A42","G13","G12","G51","H11"]);
 export function isExportByType(loaiHinh) {
@@ -128,10 +214,10 @@ export function isExportDecl(soTk, loaiHinh) {
   if (isImportByNumber(soTk)) return false;
   if (isExportByType(loaiHinh)) return true;
   if (isImportByType(loaiHinh)) return false;
-  return false; // không rõ thì coi là nhập
+  return false; // khÃ´ng rÃµ thÃ¬ coi lÃ  nháº­p
 }
 
-// ===== MST map (gán nhân viên theo ngày hiệu lực) =====
+// ===== MST map (gÃ¡n nhÃ¢n viÃªn theo ngÃ y hiá»‡u lá»±c) =====
 export function getMSTRowsRaw() {
   return safeParse(getItem(MST_KEY), []);
 }
@@ -150,7 +236,7 @@ function sanitizeMSTRow(row) {
   };
 }
 
-/** Lấy toàn bộ bảng gán MST, đã chuẩn hoá + sắp xếp */
+/** Láº¥y toÃ n bá»™ báº£ng gÃ¡n MST, Ä‘Ã£ chuáº©n hoÃ¡ + sáº¯p xáº¿p */
 export function getMSTMap() {
   const raw = getMSTRowsRaw();
   const rows = Array.isArray(raw) ? raw : [];
@@ -164,7 +250,7 @@ export function getMSTMap() {
     });
 }
 
-/** Ghi đè/bổ sung bảng gán MST (đã chuẩn hoá dữ liệu đầu vào) */
+/** Ghi Ä‘Ã¨/bá»• sung báº£ng gÃ¡n MST (Ä‘Ã£ chuáº©n hoÃ¡ dá»¯ liá»‡u Ä‘áº§u vÃ o) */
 export function upsertMSTRows(rows, { actor = "system", detail = "" } = {}) {
   const sanitized = Array.isArray(rows)
     ? rows.map(sanitizeMSTRow).filter(Boolean)
@@ -178,19 +264,19 @@ export function upsertMSTRows(rows, { actor = "system", detail = "" } = {}) {
   pushAuditLog({
     actor,
     action: "mst.save",
-    detail: detail || `Cập nhật ${sanitized.length} dòng gán MST`,
+    detail: detail || `Cáº­p nháº­t ${sanitized.length} dÃ²ng gÃ¡n MST`,
   });
   return sanitized.length;
 }
 
-/** Lấy người phụ trách theo MST & ngày hiệu lực gần nhất (<= ngày tờ khai) */
+/** Láº¥y ngÆ°á»i phá»¥ trÃ¡ch theo MST & ngÃ y hiá»‡u lá»±c gáº§n nháº¥t (<= ngÃ y tá» khai) */
 export function getMSTFor(mst, isoDate) {
   const rows = getMSTMap().filter(r => normalizeMST(r.mst) === normalizeMST(mst));
   if (rows.length === 0) return null;
 
   const dateVal = isoDate ? new Date(isoDate).getTime() : Number.POSITIVE_INFINITY;
 
-  // Xếp theo hiệu lực gần nhất với ngày TK
+  // Xáº¿p theo hiá»‡u lá»±c gáº§n nháº¥t vá»›i ngÃ y TK
   const picked = rows
     .map(r => {
       const ef = r.effective_from || "0001-01-01";
@@ -203,10 +289,47 @@ export function getMSTFor(mst, isoDate) {
   return picked?.r ?? rows[0];
 }
 
-// ===== DECL rows (tờ khai) =====
+// ===== DECL rows (tá» khai) =====
+function normalizeDeclRows(rows) {
+  const input = Array.isArray(rows) ? rows : [];
+  const map = new Map();
+  const extras = [];
+  for (const entry of input) {
+    if (!entry || typeof entry !== 'object') {
+      continue;
+    }
+    const normalized = normalizeDeclarationRow(entry) || entry;
+    const key = getDeclarationKey(normalized);
+    if (!key) {
+      extras.push(normalized);
+      continue;
+    }
+    const existing = map.get(key);
+    if (!existing) {
+      map.set(key, normalized);
+    } else {
+      map.set(key, mergeDeclarationRowClient(existing, normalized));
+    }
+  }
+  return extras.concat(Array.from(map.values()));
+}
+
+function getDeclRowsRaw() {
+  const stored = safeParse(getItem(DECL_KEY), []);
+  const normalized = normalizeDeclRows(stored);
+  setItem(DECL_KEY, JSON.stringify(normalized));
+  return normalized;
+}
+
+function writeDeclRows(rows) {
+  const normalized = normalizeDeclRows(rows);
+  setItem(DECL_KEY, JSON.stringify(normalized));
+  return normalized;
+}
+
 export function getDeclRows() {
-  const rows = safeParse(getItem(DECL_KEY), []);
-  return applyAgenciesToDeclRows(Array.isArray(rows) ? rows : []);
+  const rows = getDeclRowsRaw();
+  return applyAgenciesToDeclRows(rows);
 }
 
 export function sortDeclRows(rows) {
@@ -220,7 +343,7 @@ export function sortDeclRows(rows) {
   return arr
     .map((row, idx) => ({ row, idx, ts: parseTime(row?.date) }))
     .sort((a, b) => {
-      if (a.ts !== b.ts) return b.ts - a.ts; // mới nhất trước
+      if (a.ts !== b.ts) return b.ts - a.ts; // má»›i nháº¥t trÆ°á»›c
 
       const soA = (a.row?.so_tk ?? "").toString();
       const soB = (b.row?.so_tk ?? "").toString();
@@ -236,7 +359,7 @@ export function sortDeclRows(rows) {
         if (cmpNhanh !== 0) return cmpNhanh;
       }
 
-      return b.idx - a.idx; // giữ thứ tự chèn gần nhất
+      return b.idx - a.idx; // giá»¯ thá»© tá»± chÃ¨n gáº§n nháº¥t
     })
     .map(item => item.row);
 }
@@ -247,7 +370,7 @@ export function getRecentDeclRows(limit = 20) {
   return sorted.slice(0, limit);
 }
 
-// ===== Team roster (tổ đội) =====
+// ===== Team roster (tá»• Ä‘á»™i) =====
 
 const DEFAULT_ROSTER = Object.freeze({
   version: 1,
@@ -256,34 +379,34 @@ const DEFAULT_ROSTER = Object.freeze({
       id: "team-1",
       name: "Team 1",
       members: [
-        { id: "team-1-phuong", name: "Phương" },
-        { id: "team-1-hanh", name: "Hạnh" },
-        { id: "team-1-bao", name: "Bảo" },
-        { id: "team-1-ha-be", name: "Hà Bé" },
-        { id: "team-1-huong", name: "Hương" },
+        { id: "team-1-phuong", name: "PhÆ°Æ¡ng" },
+        { id: "team-1-hanh", name: "Háº¡nh" },
+        { id: "team-1-bao", name: "Báº£o" },
+        { id: "team-1-ha-be", name: "HÃ  BÃ©" },
+        { id: "team-1-huong", name: "HÆ°Æ¡ng" },
       ],
     },
     {
       id: "team-2",
       name: "Team 2",
       members: [
-        { id: "team-2-tuan", name: "Tuấn" },
-        { id: "team-2-hoa", name: "Hòa" },
+        { id: "team-2-tuan", name: "Tuáº¥n" },
+        { id: "team-2-hoa", name: "HÃ²a" },
         { id: "team-2-thu", name: "Thu" },
-        { id: "team-2-hang", name: "Hằng" },
-        { id: "team-2-huyen", name: "Huyền" },
+        { id: "team-2-hang", name: "Háº±ng" },
+        { id: "team-2-huyen", name: "Huyá»n" },
       ],
     },
     {
       id: "team-3",
       name: "Team 3",
       members: [
-        { id: "team-3-hoc", name: "Học" },
+        { id: "team-3-hoc", name: "Há»c" },
         { id: "team-3-thanh", name: "Thanh" },
         { id: "team-3-huy", name: "Huy" },
         { id: "team-3-linh", name: "Linh" },
-        { id: "team-3-thao", name: "Thảo" },
-        { id: "team-3-hung", name: "Hưng" },
+        { id: "team-3-thao", name: "Tháº£o" },
+        { id: "team-3-hung", name: "HÆ°ng" },
       ],
     },
   ],
@@ -417,7 +540,7 @@ export function setTeamRoster(next, { actor = "system", detail = "" } = {}) {
   pushAuditLog({
     actor,
     action: "team.save",
-    detail: detail || `Cập nhật ${sanitized.teams.length} tổ đội`,
+    detail: detail || `Cáº­p nháº­t ${sanitized.teams.length} tá»• Ä‘á»™i`,
   });
   return sanitized;
 }
@@ -529,7 +652,7 @@ export function applyTeamRosterToMST(rosterLike, rows, options = {}) {
   return { rows: updated, changed };
 }
 
-// ===== Đại lý Hải quan (MST -> tên công ty & đại lý) =====
+// ===== Äáº¡i lÃ½ Háº£i quan (MST -> tÃªn cÃ´ng ty & Ä‘áº¡i lÃ½) =====
 
 export function getHQAgenciesRaw() {
   return safeParse(getItem(HQ_KEY), []);
@@ -540,7 +663,7 @@ function sanitizeAgencyRow(row) {
   if (!mst) return null;
   const company = normalizeStr(row?.company ?? row?.cong_ty ?? row?.customer ?? "");
   const agent = normalizeStr(
-    row?.agent ?? row?.agency ?? row?.dai_ly ?? row?.dai_ly_hq ?? row?.['Đại lý HQ'] ?? row?.['Dai ly HQ'] ?? ""
+    row?.agent ?? row?.agency ?? row?.dai_ly ?? row?.dai_ly_hq ?? row?.['Äáº¡i lÃ½ HQ'] ?? row?.['Dai ly HQ'] ?? ""
   );
   return { mst, company, agent };
 }
@@ -587,7 +710,7 @@ export function upsertHQAgencies(rows, { actor = "system", detail = "" } = {}) {
   pushAuditLog({
     actor,
     action: "hq.save",
-    detail: detail || `Cập nhật ${finalRows.length} cấu hình Đại lý HQ`,
+    detail: detail || `Cáº­p nháº­t ${finalRows.length} cáº¥u hÃ¬nh Äáº¡i lÃ½ HQ`,
   });
 
   const finalByMst = new Map(finalRows.map((row) => [row.mst, row]));
@@ -601,7 +724,7 @@ export function upsertHQAgencies(rows, { actor = "system", detail = "" } = {}) {
     return { ...row, company: info.company };
   });
   if (mstChanged) {
-    upsertMSTRows(syncedMst, { actor, detail: 'Đồng bộ tên công ty theo Đại lý HQ' });
+    upsertMSTRows(syncedMst, { actor, detail: 'Äá»“ng bá»™ tÃªn cÃ´ng ty theo Äáº¡i lÃ½ HQ' });
   }
 
   const existingDecls = getDeclRows();
@@ -611,7 +734,7 @@ export function upsertHQAgencies(rows, { actor = "system", detail = "" } = {}) {
     saveDeclRows(reannotatedDecls, {
       overwrite: true,
       actor,
-      detail: 'Đồng bộ Đại lý HQ với dữ liệu tờ khai',
+      detail: 'Äá»“ng bá»™ Äáº¡i lÃ½ HQ vá»›i dá»¯ liá»‡u tá» khai',
     });
   }
 
@@ -649,44 +772,41 @@ export function applyAgenciesToDeclRows(rows, agencyMapParam = null) {
   });
 }
 
-/** Lưu tờ khai:
- * - overwrite=true: ghi đè toàn bộ
+/** LÆ°u tá» khai:
+ * - overwrite=true: ghi Ä‘Ã¨ toÃ n bá»™
  * - overwrite=false: merge theo key "so_tk + '_' + (nhanh||'')"
  */
 export function saveDeclRows(newRows, { overwrite = false, actor = "system", detail = "" } = {}) {
-  const cleaned = applyAgenciesToDeclRows(Array.isArray(newRows) ? newRows : []);
+  const cleaned = Array.isArray(newRows)
+    ? newRows.map((row) => normalizeDeclarationRow(row)).filter((row) => row && typeof row === 'object')
+    : [];
   if (overwrite) {
-    setItem(DECL_KEY, JSON.stringify(cleaned));
+    const stored = writeDeclRows(cleaned);
     pushAuditLog({
       actor,
       action: "decl.overwrite",
-      detail: detail || `Ghi đè ${cleaned.length} tờ khai`,
+      detail: detail || `Ghi de ${stored.length} to khai`,
     });
-    return cleaned.length;
+    return stored.length;
   }
-  const cur = getDeclRows();
-  const map = new Map();
-  const keyOf = (r) => `${(r.so_tk ?? "").toString()}_${normalizeStr(r.nhanh)}`;
-
-  for (const r of cur) map.set(keyOf(r), r);
-  for (const r of cleaned) map.set(keyOf(r), r);
-
-  const merged = Array.from(map.values());
+  const current = getDeclRowsRaw();
+  const merged = normalizeDeclRows(current.concat(cleaned));
   setItem(DECL_KEY, JSON.stringify(merged));
   pushAuditLog({
     actor,
     action: "decl.merge",
-    detail: detail || `Hợp nhất ${cleaned.length} tờ khai (tổng ${merged.length})`,
+    detail: detail || `Hop nhat ${cleaned.length} to khai (tong ${merged.length})`,
   });
   return merged.length;
 }
+
 
 export function markDeclRowsReviewed(keys, { actor = "system" } = {}) {
   if (!Array.isArray(keys) || keys.length === 0) return 0;
   const keySet = new Set(keys);
   let updated = 0;
   const next = getDeclRows().map((row) => {
-    const key = `${(row?.so_tk ?? "").toString()}_${normalizeStr(row?.nhanh || "")}`;
+    const key = getDeclarationKey(row);
     if (!keySet.has(key)) return row;
     if (row?.reviewed) return row;
     updated += 1;
@@ -701,30 +821,86 @@ export function markDeclRowsReviewed(keys, { actor = "system" } = {}) {
     pushAuditLog({
       actor,
       action: "decl.review",
-      detail: `Đánh dấu đã rà soát ${updated} tờ khai`,
+      detail: `ÄÃ¡nh dáº¥u Ä‘Ã£ rÃ  soÃ¡t ${updated} tá» khai`,
       meta: { keys: Array.from(keySet) },
     });
   }
   return updated;
 }
 
-// ===== Compat layer cho các file khác =====
-export function getData() {           // RulesEditor.jsx đang import
+// ===== Compat layer cho cÃ¡c file khÃ¡c =====
+export function getData() {           // RulesEditor.jsx Ä‘ang import
   return getDeclRows();
 }
-export function setData(rows, opts) { // rules.js/RulesEditor.jsx có thể gọi
+export function setData(rows, opts) { // rules.js/RulesEditor.jsx cÃ³ thá»ƒ gá»i
   return saveDeclRows(rows, { overwrite: true, ...(opts || {}) });
 }
 
-// Nhật ký import
-export function pushImportLog(msg) {
-  const LOG_KEY = "import_logs_v1";
-  const a = safeParse(getItem(LOG_KEY), []);
-  a.unshift({ ts: new Date().toISOString(), msg });
-  setItem(LOG_KEY, JSON.stringify(a.slice(0,50)));
+// Nháº­t kÃ½ import
+function normalizeLogDeclarationList(list, limit = 200) {
+  if (!Array.isArray(list) || list.length === 0) return [];
+  const normalized = [];
+  for (const entry of list) {
+    if (!entry || typeof entry !== 'object') continue;
+    const full = (entry.so_tk_full ?? entry.so_tk ?? entry.number ?? '').toString();
+    const soTk = normalizeDeclarationNumber(full || entry.so_tk);
+    if (!soTk) continue;
+    const branch = normalizeStr(entry.nhanh || entry.branch || '');
+    const fields = Array.isArray(entry.fields) ? Array.from(new Set(entry.fields.map((f) => String(f || '').trim()).filter(Boolean))) : undefined;
+    normalized.push({
+      so_tk: soTk,
+      so_tk_full: full || undefined,
+      nhanh: branch,
+      branch,
+      fields: fields && fields.length ? fields : undefined,
+    });
+    if (normalized.length >= limit) break;
+  }
+  return normalized;
 }
 
-// ===== K_RULES (để RulesEditor không lỗi khi chưa có dữ liệu) =====
+export function pushImportLog(entry, extraMeta = null) {
+  const LOG_KEY = 'import_logs_v1';
+  const logs = safeParse(getItem(LOG_KEY), []);
+  const timestamp = new Date().toISOString();
+  let record;
+  if (entry && typeof entry === 'object' && !Array.isArray(entry)) {
+    const {
+      msg,
+      message,
+      kind = 'info',
+      actor = 'system',
+      summary = null,
+      meta = null,
+      updatedDeclarations = [],
+      insertedDeclarations = [],
+    } = entry;
+    record = {
+      ts: timestamp,
+      kind,
+      actor,
+      msg: String(message ?? msg ?? ''),
+      summary: summary && typeof summary === 'object' ? { ...summary } : summary ?? null,
+      meta: meta && typeof meta === 'object' ? { ...meta } : meta ?? null,
+      updatedDeclarations: normalizeLogDeclarationList(updatedDeclarations),
+      insertedDeclarations: normalizeLogDeclarationList(insertedDeclarations),
+    };
+  } else {
+    const meta = extraMeta && typeof extraMeta === 'object' ? { ...extraMeta } : null;
+    record = {
+      ts: timestamp,
+      kind: 'info',
+      actor: 'system',
+      msg: entry == null ? '' : String(entry),
+      meta,
+    };
+  }
+  const cleaned = Object.fromEntries(Object.entries(record).filter(([, value]) => Array.isArray(value) ? value.length > 0 : value !== undefined));
+  logs.unshift(cleaned);
+  setItem(LOG_KEY, JSON.stringify(logs.slice(0, 50)));
+}
+
+// ===== K_RULES (Ä‘á»ƒ RulesEditor khÃ´ng lá»—i khi chÆ°a cÃ³ dá»¯ liá»‡u) =====
 export const K_RULES = (() => {
   return safeParse(getItem(RULES_KEY), createDefaultRuleCollection());
 })();
@@ -735,7 +911,7 @@ export function setRules(v) {
   setItem(RULES_KEY, JSON.stringify(v));
 }
 
-// ===== Nhật ký hệ thống =====
+// ===== Nháº­t kÃ½ há»‡ thá»‘ng =====
 
 export function pushAuditLog({ actor = "system", action = "unknown", detail = "", meta = null } = {}) {
   const entry = {
@@ -758,7 +934,7 @@ export function getAuditLogs(limit = 100) {
   return logs.slice(0, limit);
 }
 
-export function clearAuditLogs({ actor = "system", note = "Xóa toàn bộ nhật ký" } = {}) {
+export function clearAuditLogs({ actor = "system", note = "XÃ³a toÃ n bá»™ nháº­t kÃ½" } = {}) {
   const entry = {
     ts: new Date().toISOString(),
     actor,
@@ -770,10 +946,10 @@ export function clearAuditLogs({ actor = "system", note = "Xóa toàn bộ nhậ
   return entry;
 }
 
-// ===== Default export (tuỳ nơi dùng)
+// ===== Default export (tuá»³ nÆ¡i dÃ¹ng)
 export default {
   DECL_KEY, MST_KEY, RULES_KEY, TEAM_KEY, AUDIT_KEY, HQ_KEY,
-  normalizeStr, normalizeMST, toISODate, normalizeName,
+  normalizeStr, normalizeMST, normalizeDeclarationNumber, toISODate, normalizeName,
   isExportDecl, isExportByNumber, isImportByNumber, isExportByType, isImportByType,
   getMSTRowsRaw, getMSTMap, getMSTFor, upsertMSTRows,
   getDeclRows, saveDeclRows, sortDeclRows, getRecentDeclRows,

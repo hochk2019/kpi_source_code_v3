@@ -88,7 +88,7 @@ export function generateSampleDeclarations({
     const isoDate = formatISODate(date);
 
     const soTkPrefix = group.baseSoTk === "30" && index % 2 === 0 ? "30" : "10";
-    const soTk = `${soTkPrefix}${pad(index + 1, 10)}`;
+    const soTk = `${soTkPrefix}${pad(index + 1, 9)}`;
 
     const numItems = 1 + (index % 12);
     const agency = rotate(agencyOptions, index) || "";

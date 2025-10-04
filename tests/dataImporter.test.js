@@ -1,5 +1,6 @@
 import { beforeEach, describe, it, expect } from 'vitest';
 import { mapRow, detectDateOrder } from '@/lib/importer.js';
+import { DEFAULT_RULES } from '@/lib/rules.js';
 import { normalizeName } from '@/lib/store.js';
 import { MST_KEY } from '@/lib/store.js';
 import { clearStorageCache, setItem as sharedSetItem } from '@/lib/storageClient.js';
@@ -22,7 +23,8 @@ describe('mapRow', () => {
 
     const mapped = mapRow(raw, { autoAssignStaff: false });
 
-    expect(mapped.so_tk).toBe('1234567890123');
+    expect(mapped.so_tk).toBe('12345678901');
+    expect(mapped.so_tk_full).toBe('1234567890123');
     expect(mapped.nhanh).toBe('01');
     expect(mapped.date).toBe('2024-09-15');
     expect(mapped.raw_date).toBe('15/09/2024');
@@ -54,7 +56,7 @@ describe('mapRow', () => {
 
   it('nhận dạng thêm alias chữ thường ma_lh và totalitems', () => {
     const raw = {
-      'So TK': 'TK-ALIAS-LOWER',
+      'Số tờ khai': '1234567890123',
       'Ngày đăng ký': '03/09/2024',
       'MST': '0101112222',
       'Tên doanh nghiệp': 'Công ty Lower',
@@ -92,6 +94,27 @@ describe('mapRow', () => {
     expect(mapped.so_luong_gp).toBe(2);
     expect(mapped.licenseCodes).toEqual(["GP01", "ZN02", "GP02"]);
   });
+  it('loai tru ma giay phep theo cau hinh tung dai ly', () => {
+    const raw = {
+      'So TK': 'TK02',
+      'Ngay': '02/08/2024',
+      'MST': '0123456789',
+      'Cong ty': 'Cong ty TNHH A',
+      'Loai hinh': 'A11',
+      'Dai ly HQ': 'G&B',
+      'Mã giấy phép': 'ZB02',
+      'Số giấy phép': '001',
+      'Mã giấy phép 1': 'GP02',
+      'Số giấy phép 1': '002',
+    };
+
+    const mapped = mapRow(raw, { autoAssignStaff: false, rules: DEFAULT_RULES });
+
+    expect(mapped.licenseCodes).toEqual(['ZB02', 'GP02']);
+    expect(mapped.licenses).toBe(1);
+    expect(mapped.so_luong_gp).toBe(1);
+  });
+
 
   it('autoAssignStaff fills nhân viên và tổ đội dựa trên bảng MST hiện có', () => {
     sharedSetItem(MST_KEY, JSON.stringify([

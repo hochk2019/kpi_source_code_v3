@@ -1,3 +1,19 @@
+import { fetchWithAuth } from '@/auth/localAuth.js';
+
+async function sendWrite(base, key, value) {
+  const payload = value === null || value === undefined ? { value: null } : { value };
+  const urlBase = base || '';
+  const target = `${urlBase}/api/storage/${encodeURIComponent(key)}`;
+  const response = await fetchWithAuth(target, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status}`);
+  }
+}
+
 const SHARED_KEYS = new Set([
   'decl_rows_v1',
   'mst_rows_v2',
@@ -24,6 +40,33 @@ let retryDelayMs = RETRY_MIN_MS;
 let lastSyncError = null;
 let nextRetryAt = null;
 
+let pendingSyncSnapshot = null;
+let syncStatusScheduled = false;
+
+function scheduleSyncStatusBroadcast() {
+  if (syncStatusScheduled) {
+    return;
+  }
+  syncStatusScheduled = true;
+  const flush = () => {
+    syncStatusScheduled = false;
+    const snapshot = pendingSyncSnapshot ?? createSyncSnapshot();
+    pendingSyncSnapshot = null;
+    for (const listener of syncListeners) {
+      try {
+        listener(snapshot);
+      } catch (err) {
+        console.error('Shared storage sync listener error', err);
+      }
+    }
+  };
+  if (typeof queueMicrotask === 'function') {
+    queueMicrotask(flush);
+  } else {
+    Promise.resolve().then(flush);
+  }
+}
+
 function notify(key) {
   const subs = listeners.get(key);
   if (!subs) return;
@@ -48,15 +91,9 @@ function createSyncSnapshot() {
 }
 
 function emitSyncStatus() {
-  const snapshot = createSyncSnapshot();
-  for (const listener of syncListeners) {
-    try {
-      listener(snapshot);
-    } catch (err) {
-      console.error('Shared storage sync listener error', err);
-    }
-  }
-  return snapshot;
+  pendingSyncSnapshot = createSyncSnapshot();
+  scheduleSyncStatusBroadcast();
+  return pendingSyncSnapshot;
 }
 
 function normalizeBaseUrl(value) {
@@ -104,19 +141,6 @@ function scheduleRetry() {
   }, retryDelayMs);
 }
 
-async function sendWrite(base, key, value) {
-  const payload = value === null || value === undefined ? { value: null } : { value };
-  const urlBase = base || '';
-  const response = await fetch(`${urlBase}/api/storage/${encodeURIComponent(key)}`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-    credentials: 'include',
-  });
-  if (!response.ok) {
-    throw new Error(`HTTP ${response.status}`);
-  }
-}
 
 async function flushPending() {
   if (flushPromise || pendingWrites.size === 0 || typeof fetch !== 'function') {
@@ -165,9 +189,8 @@ async function bootstrapFromServer(baseUrl) {
   apiBase = normalizedBase;
   bootstrapPromise = (async () => {
     try {
-      const response = await fetch(`${normalizedBase}/api/bootstrap`, {
+      const response = await fetchWithAuth(`${normalizedBase}/api/bootstrap`, {
         cache: 'no-store',
-        credentials: 'include',
       });
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`);

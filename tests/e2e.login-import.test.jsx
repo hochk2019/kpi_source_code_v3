@@ -110,7 +110,8 @@ describe('Luồng đăng nhập và import thực tế', () => {
     const stored = getDeclRows();
     expect(stored).toHaveLength(1);
     expect(stored[0]).toMatchObject({
-      so_tk: 'TK-E2E-001',
+      so_tk: '00000002001',
+      so_tk_full: 'TK-E2E-001',
       mst: '0101234567',
       cong_ty: 'Công ty E2E',
     });

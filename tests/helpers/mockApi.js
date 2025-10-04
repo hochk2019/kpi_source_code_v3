@@ -39,7 +39,7 @@ function createDefaultAccountsState() {
     ['admin', 'admin123'],
     ['nhanvien', '123456'],
   ]);
-  return { accounts, passwords, currentUser: null };
+  return { accounts, passwords, currentUser: null, sessionToken: null };
 }
 
 function normalizePermissions(permissions, role) {
@@ -118,11 +118,13 @@ function createDefaultHandlers(state) {
         return jsonResponse({ ok: false, error: 'Sai tài khoản hoặc mật khẩu' }, 401);
       }
       state.currentUser = account;
-      return jsonResponse({ ok: true, user: account });
+      state.sessionToken = `mock-token-${account.username}-${Date.now()}`;
+      return jsonResponse({ ok: true, user: account, token: state.sessionToken });
     },
-    'GET /api/auth/session': () => jsonResponse({ ok: true, user: state.currentUser }),
+    'GET /api/auth/session': () => jsonResponse({ ok: true, user: state.currentUser, token: state.sessionToken }),
     'POST /api/auth/logout': () => {
       state.currentUser = null;
+      state.sessionToken = null;
       return jsonResponse({ ok: true });
     },
   };
@@ -273,18 +275,19 @@ export function installMockApi(overrides = {}) {
       const currentPassword = String(body?.currentPassword || '');
       const newPassword = String(body?.newPassword || '').trim();
       if (!username) {
-        return jsonResponse({ ok: false, error: 'Thiếu tài khoản cần đổi mật khẩu' }, 400);
+        return jsonResponse({ ok: false, error: "Thi???u tA?i kho???n c??\u0015n ?`??\u0007i m??-t kh??cu" }, 400);
       }
       if (newPassword.length < 6) {
-        return jsonResponse({ ok: false, error: 'Mật khẩu mới cần tối thiểu 6 ký tự' }, 400);
+        return jsonResponse({ ok: false, error: "M??-t kh??cu m??>i c??\u0015n t??`i thi???u 6 kA? t???" }, 400);
       }
       if (state.passwords.get(username) !== currentPassword) {
-        return jsonResponse({ ok: false, error: 'Mật khẩu hiện tại không đúng' }, 400);
+        return jsonResponse({ ok: false, error: "M??-t kh??cu hi???n t???i khA'ng ?`A?ng" }, 400);
       }
       state.passwords.set(username, newPassword);
       const account = state.accounts.find((entry) => entry.username === username);
       state.currentUser = account ?? null;
-      return jsonResponse({ ok: true, account });
+      state.sessionToken = `mock-token-${username}-${Date.now()}`;
+      return jsonResponse({ ok: true, account, token: state.sessionToken });
     }
 
     return jsonResponse({ ok: true });

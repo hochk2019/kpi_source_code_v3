@@ -1,3 +1,4 @@
+import { fetchWithAuth } from '@/auth/localAuth.js';
 function ensureWindow() {
   if (typeof window === "undefined") {
     throw new Error("Tính năng xuất báo cáo chỉ khả dụng trong trình duyệt");
@@ -67,11 +68,10 @@ async function requestExport(kind, payload, fallbackFilename) {
     throw new Error("Trình duyệt không hỗ trợ fetch");
   }
 
-  const response = await fetch(buildUrl("/api/reports/export"), {
+  const response = await fetchWithAuth(buildUrl("/api/reports/export"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ kind, payload }),
-    credentials: "include",
   });
 
   if (!response.ok) {

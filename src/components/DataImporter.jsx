@@ -14,6 +14,8 @@ import {
 import { mapRow, detectDateOrder } from "@/lib/importer.js";
 import { loadRules, computeKPI } from "@/lib/rules.js";
 import { deriveCOStatus, coLabel, coLineCount } from "@/shared/co.js";
+import { formatDisplayDate, formatDateRangeLabel } from "@/shared/format.js";
+import { fetchWithAuth } from "@/auth/localAuth.js";
 
 const DEFAULT_PAGE_SIZE = 10;
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100, 200];
@@ -68,6 +70,31 @@ function ensureLicenseFields(row) {
   return { ...row, licenses: normalized, so_luong_gp: normalized };
 }
 
+const CODE_INPUT_SPLIT = /[\s,;]+/;
+
+function parseCodeListInput(text) {
+  if (!text) return [];
+  return Array.from(
+    new Set(
+      text
+        .split(CODE_INPUT_SPLIT)
+        .map((code) => code.trim().toUpperCase())
+        .filter(Boolean)
+    )
+  );
+}
+
+function joinCodeList(list) {
+  if (!Array.isArray(list) || list.length === 0) return "";
+  return list.join("\n");
+}
+
+function formatDeclarationLabel(entry) {
+  if (!entry || typeof entry !== "object") return "";
+  const number = entry.so_tk_full ? String(entry.so_tk_full) : entry.so_tk ? String(entry.so_tk) : "";
+  const branch = entry.nhanh || entry.branch || "";
+  return branch ? `${number} (${branch})` : number;
+}
 function ensureCOFields(row) {
   if (!row || typeof row !== "object") return row;
   const status = deriveCOStatus(row, row);
@@ -138,6 +165,30 @@ export default function DataImporter({
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState("");
   const [previewRangeInfo, setPreviewRangeInfo] = useState(null);
+  const previewRangeLabel = useMemo(() => formatDateRangeLabel(previewRangeInfo), [previewRangeInfo]);
+
+  const [coCodeConfig, setCoCodeConfig] = useState(null);
+  const [coCodeForm, setCoCodeForm] = useState({ whitelist: "", blacklist: "" });
+  const [coCodeLoading, setCoCodeLoading] = useState(false);
+  const [coCodeSaving, setCoCodeSaving] = useState(false);
+  const [coCodeError, setCoCodeError] = useState("");
+  const [coCodeMessage, setCoCodeMessage] = useState("");
+
+  const [coDiscrepancyConfig, setCoDiscrepancyConfig] = useState(null);
+  const [coDiscrepancyState, setCoDiscrepancyState] = useState(null);
+  const [coDiscrepancyForm, setCoDiscrepancyForm] = useState({
+    enabled: false,
+    cron: "",
+    rangeDays: 3,
+    threshold: 10,
+    sampleLimit: 500,
+  });
+  const [coDiscrepancyRange, setCoDiscrepancyRange] = useState({ from: "", to: "" });
+  const [coDiscrepancyLoading, setCoDiscrepancyLoading] = useState(false);
+  const [coDiscrepancySaving, setCoDiscrepancySaving] = useState(false);
+  const [coDiscrepancyRunning, setCoDiscrepancyRunning] = useState(false);
+  const [coDiscrepancyError, setCoDiscrepancyError] = useState("");
+  const [coDiscrepancyMessage, setCoDiscrepancyMessage] = useState("");
 
   useEffect(() => {
     setPreviewRows([]);
@@ -219,11 +270,241 @@ export default function DataImporter({
     });
   }, []);
 
+  const syncCoCodeForm = useCallback((config) => {
+    const whitelist = Array.isArray(config?.whitelist) ? config.whitelist : [];
+    const blacklist = Array.isArray(config?.blacklist) ? config.blacklist : [];
+    const nextConfig = {
+      ...(config && typeof config === "object" ? config : {}),
+      version: Number.isInteger(config?.version) ? config.version : 1,
+      updatedAt: config?.updatedAt || null,
+      updatedBy: config?.updatedBy || null,
+      whitelist,
+      blacklist,
+    };
+    setCoCodeConfig(nextConfig);
+    setCoCodeForm({
+      whitelist: joinCodeList(whitelist),
+      blacklist: joinCodeList(blacklist),
+    });
+  }, []);
+
+  const fetchCoCodeConfig = useCallback(async () => {
+    setCoCodeLoading(true);
+    setCoCodeError("");
+    try {
+      const response = await fetchWithAuth("/api/import/co-codes", { cache: "no-store", credentials: "include" });
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      const payload = await response.json();
+      syncCoCodeForm(payload?.config || {});
+    } catch (err) {
+      console.error("Khong the tai cau hinh ma uu dai", err);
+      setCoCodeError(err?.message || "Khong the tai cau hinh ma uu dai");
+    } finally {
+      setCoCodeLoading(false);
+    }
+  }, [syncCoCodeForm]);
+
+  const handleSaveCoCodeConfig = useCallback(async () => {
+    if (!canManageSync) {
+      alert("Ban khong co quyen cap nhat cau hinh ma uu dai.");
+      return;
+    }
+    setCoCodeSaving(true);
+    setCoCodeError("");
+    setCoCodeMessage("");
+    try {
+      const payload = {
+        config: {
+          whitelist: parseCodeListInput(coCodeForm.whitelist),
+          blacklist: parseCodeListInput(coCodeForm.blacklist),
+        },
+      };
+      const response = await fetchWithAuth("/api/import/co-codes", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(payload),
+      });
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      const result = await response.json();
+      syncCoCodeForm(result?.config || payload.config);
+      setCoCodeMessage("Da luu cau hinh ma uu dai.");
+    } catch (err) {
+      console.error("Khong the luu cau hinh ma uu dai", err);
+      setCoCodeError(err?.message || "Khong the luu cau hinh ma uu dai");
+    } finally {
+      setCoCodeSaving(false);
+    }
+  }, [canManageSync, coCodeForm, syncCoCodeForm]);
+
+  const handleResetCoCodeForm = useCallback(() => {
+    if (coCodeConfig) {
+      setCoCodeForm({
+        whitelist: joinCodeList(coCodeConfig.whitelist),
+        blacklist: joinCodeList(coCodeConfig.blacklist),
+      });
+      setCoCodeError("");
+      setCoCodeMessage("");
+    } else {
+      setCoCodeForm({ whitelist: "", blacklist: "" });
+    }
+  }, [coCodeConfig]);
+
+  const syncCoDiscrepancyConfig = useCallback((config) => {
+    const enabled = config?.enabled === true;
+    const cron = (config?.cron || "").trim();
+    const rangeDays = Math.max(1, Math.round(Number(config?.rangeDays) || 3));
+    const threshold = Math.max(1, Math.round(Number(config?.threshold) || 10));
+    const sampleLimitRaw = Number(config?.sampleLimit);
+    const sampleLimit = Number.isFinite(sampleLimitRaw) ? Math.max(0, Math.round(sampleLimitRaw)) : 0;
+    const nextConfig = {
+      ...(config && typeof config === "object" ? config : {}),
+      enabled,
+      cron,
+      rangeDays,
+      threshold,
+      sampleLimit,
+      updatedAt: config?.updatedAt || null,
+      updatedBy: config?.updatedBy || null,
+    };
+    setCoDiscrepancyConfig(nextConfig);
+    setCoDiscrepancyForm({
+      enabled,
+      cron,
+      rangeDays,
+      threshold,
+      sampleLimit,
+    });
+  }, []);
+
+  const fetchCoDiscrepancy = useCallback(async () => {
+    setCoDiscrepancyLoading(true);
+    setCoDiscrepancyError("");
+    try {
+      const response = await fetchWithAuth("/api/import/co-discrepancy", { cache: "no-store", credentials: "include" });
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      const payload = await response.json();
+      syncCoDiscrepancyConfig(payload?.config || {});
+      setCoDiscrepancyState(payload?.state || null);
+    } catch (err) {
+      console.error("Khong the tai trang thai kiem tra CO", err);
+      setCoDiscrepancyError(err?.message || "Khong the tai trang thai kiem tra CO");
+    } finally {
+      setCoDiscrepancyLoading(false);
+    }
+  }, [syncCoDiscrepancyConfig]);
+
+  const handleSaveCoDiscrepancyConfig = useCallback(async () => {
+    if (!canManageSync) {
+      alert("Ban khong co quyen cap nhat cau hinh kiem tra CO.");
+      return;
+    }
+    setCoDiscrepancySaving(true);
+    setCoDiscrepancyError("");
+    setCoDiscrepancyMessage("");
+    try {
+      const payload = {
+        config: {
+          enabled: !!coDiscrepancyForm.enabled,
+          cron: (coDiscrepancyForm.cron || "").trim(),
+          rangeDays: Math.max(1, Math.round(Number(coDiscrepancyForm.rangeDays) || 1)),
+          threshold: Math.max(1, Math.round(Number(coDiscrepancyForm.threshold) || 1)),
+          sampleLimit: Math.max(0, Math.round(Number(coDiscrepancyForm.sampleLimit) || 0)),
+        },
+      };
+      const response = await fetchWithAuth("/api/import/co-discrepancy/config", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(payload),
+      });
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      const result = await response.json();
+      syncCoDiscrepancyConfig(result?.config || payload.config);
+      setCoDiscrepancyMessage("Da luu cau hinh kiem tra CO.");
+    } catch (err) {
+      console.error("Khong the luu cau hinh kiem tra CO", err);
+      setCoDiscrepancyError(err?.message || "Khong the luu cau hinh kiem tra CO");
+    } finally {
+      setCoDiscrepancySaving(false);
+    }
+  }, [canManageSync, coDiscrepancyForm, syncCoDiscrepancyConfig]);
+
+  const handleResetCoDiscrepancyForm = useCallback(() => {
+    if (!coDiscrepancyConfig) return;
+    setCoDiscrepancyForm({
+      enabled: !!coDiscrepancyConfig.enabled,
+      cron: coDiscrepancyConfig.cron || "",
+      rangeDays: coDiscrepancyConfig.rangeDays || 3,
+      threshold: coDiscrepancyConfig.threshold || 10,
+      sampleLimit: coDiscrepancyConfig.sampleLimit || 0,
+    });
+    setCoDiscrepancyError("");
+    setCoDiscrepancyMessage("");
+  }, [coDiscrepancyConfig]);
+
+  const handleRunCoDiscrepancy = useCallback(async () => {
+    if (!canManageSync) {
+      alert("Ban khong co quyen chay kiem tra CO.");
+      return;
+    }
+    setCoDiscrepancyRunning(true);
+    setCoDiscrepancyError("");
+    setCoDiscrepancyMessage("");
+    try {
+      const payload = {};
+      if (coDiscrepancyRange.from || coDiscrepancyRange.to) {
+        payload.range = {
+          from: coDiscrepancyRange.from || undefined,
+          to: coDiscrepancyRange.to || undefined,
+        };
+      }
+      const response = await fetchWithAuth("/api/import/co-discrepancy/run", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(payload),
+      });
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      const result = await response.json();
+      if (result?.result?.config) {
+        syncCoDiscrepancyConfig(result.result.config);
+      }
+      if (result?.result?.state) {
+        setCoDiscrepancyState(result.result.state);
+      }
+      setCoDiscrepancyMessage("Da chay kiem tra CO.");
+    } catch (err) {
+      console.error("Khong the chay kiem tra CO", err);
+      setCoDiscrepancyError(err?.message || "Khong the chay kiem tra CO");
+    } finally {
+      setCoDiscrepancyRunning(false);
+    }
+  }, [canManageSync, coDiscrepancyRange, syncCoDiscrepancyConfig]);
+
+  const handleRefreshCoCodeConfig = useCallback(() => {
+    fetchCoCodeConfig();
+  }, [fetchCoCodeConfig]);
+
+  const handleRefreshCoDiscrepancy = useCallback(() => {
+    fetchCoDiscrepancy();
+  }, [fetchCoDiscrepancy]);
+
   const fetchSyncConfig = useCallback(async () => {
     setSyncLoading(true);
     setSyncError("");
     try {
-      const response = await fetch("/api/import/ecus/config", { cache: "no-store", credentials: "include" });
+      const response = await fetchWithAuth("/api/import/ecus/config", { cache: "no-store", credentials: "include" });
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`);
       }
@@ -251,7 +532,7 @@ export default function DataImporter({
     setStatusLoading(true);
     setStatusError("");
     try {
-      const response = await fetch("/api/import/ecus/status", { cache: "no-store", credentials: "include" });
+      const response = await fetchWithAuth("/api/import/ecus/status", { cache: "no-store", credentials: "include" });
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`);
       }
@@ -276,7 +557,7 @@ export default function DataImporter({
   const fetchAlerts = useCallback(async () => {
     setAlertLoading(true);
     try {
-      const response = await fetch("/api/import/alerts", { cache: "no-store", credentials: "include" });
+      const response = await fetchWithAuth("/api/import/alerts", { cache: "no-store", credentials: "include" });
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`);
       }
@@ -298,7 +579,9 @@ export default function DataImporter({
     fetchSyncConfig();
     fetchAlerts();
     fetchSyncStatus();
-  }, [fetchSyncConfig, fetchAlerts, fetchSyncStatus]);
+    fetchCoCodeConfig();
+    fetchCoDiscrepancy();
+  }, [fetchSyncConfig, fetchAlerts, fetchSyncStatus, fetchCoCodeConfig, fetchCoDiscrepancy]);
 
   const handleSaveSyncConfig = useCallback(async () => {
     if (!canManageSync) {
@@ -330,7 +613,7 @@ export default function DataImporter({
       if (syncConfig?.columnMap) {
         payload.config.columnMap = syncConfig.columnMap;
       }
-      const response = await fetch("/api/import/ecus/config", {
+      const response = await fetchWithAuth("/api/import/ecus/config", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -369,7 +652,7 @@ export default function DataImporter({
     setSyncMessage("Đang đồng bộ...");
     setSyncError("");
     try {
-      const response = await fetch("/api/import/ecus/run", {
+      const response = await fetchWithAuth("/api/import/ecus/run", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -394,6 +677,7 @@ export default function DataImporter({
       await fetchSyncConfig();
       await fetchSyncStatus();
       await fetchAlerts();
+      await fetchCoDiscrepancy();
       loadSavedRows({ bypassConfirm: true });
     } catch (err) {
       console.error("Đồng bộ ECUS thất bại", err);
@@ -412,7 +696,7 @@ export default function DataImporter({
     setPreviewLoading(true);
     setPreviewError("");
     try {
-      const response = await fetch("/api/import/ecus/preview", {
+      const response = await fetchWithAuth("/api/import/ecus/preview", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -480,7 +764,7 @@ export default function DataImporter({
       alert("Các tờ khai đã được đánh dấu hoặc không tìm thấy.");
     }
     try {
-      await fetch("/api/import/alerts/review", {
+      await fetchWithAuth("/api/import/alerts/review", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ keys: selectedKeys, actor }),
@@ -544,19 +828,108 @@ export default function DataImporter({
   }, [syncConfig?.lastRun]);
 
   const lastSyncSummary = syncConfig?.lastSummary || null;
-  const lastSyncRangeLabel = useMemo(() => {
-    if (!lastSyncSummary?.range) return "";
-    const from = lastSyncSummary.range.from || "";
-    const to = lastSyncSummary.range.to || "";
-    if (from && to) {
-      return `${from} → ${to}`;
-    }
-    return from || to;
-  }, [lastSyncSummary?.range?.from, lastSyncSummary?.range?.to]);
-  const lastSyncInserted = lastSyncSummary?.rowsInserted ?? lastSyncSummary?.rowsImported ?? 0;
-  const lastSyncSkipped = lastSyncSummary?.rowsSkipped ?? 0;
+  const lastSyncRangeLabel = useMemo(
+    () => formatDateRangeLabel(lastSyncSummary?.range ?? null),
+    [lastSyncSummary?.range],
+  );
+  const lastSyncRunAtLabel = useMemo(
+    () => (lastSyncSummary?.runAt ? formatDisplayDate(lastSyncSummary.runAt) : ""),
+    [lastSyncSummary?.runAt],
+  );
   const lastSyncFetched = lastSyncSummary?.rowsFetched ?? 0;
+  const lastSyncInserted = lastSyncSummary?.rowsInserted ?? lastSyncSummary?.rowsImported ?? 0;
+  const lastSyncUpdated = lastSyncSummary?.rowsUpdated ?? 0;
+  const lastSyncSkipped = lastSyncSummary?.rowsSkipped ?? 0;
   const lastSyncTotal = lastSyncSummary?.totalStored ?? 0;
+  const updatedDeclarations = useMemo(
+    () => (Array.isArray(lastSyncSummary?.updatedDeclarations) ? lastSyncSummary.updatedDeclarations : []),
+    [lastSyncSummary?.updatedDeclarations],
+  );
+  const updatedKeys = useMemo(
+    () => (Array.isArray(lastSyncSummary?.updatedKeys) ? lastSyncSummary.updatedKeys : []),
+    [lastSyncSummary?.updatedKeys],
+  );
+  const updatedKeySet = useMemo(() => new Set(updatedKeys), [updatedKeys]);
+  const updatedPreview = useMemo(() => updatedDeclarations.slice(0, 10), [updatedDeclarations]);
+  const coMismatchList = useMemo(
+    () => (Array.isArray(coDiscrepancyState?.mismatches) ? coDiscrepancyState.mismatches : []),
+    [coDiscrepancyState?.mismatches],
+  );
+  const coMismatchKeys = useMemo(
+    () => coMismatchList.map((item) => item?.key).filter(Boolean),
+    [coMismatchList],
+  );
+  const coMismatchKeySet = useMemo(() => new Set(coMismatchKeys), [coMismatchKeys]);
+  const coMismatchPreview = useMemo(() => coMismatchList.slice(0, 10), [coMismatchList]);
+  const coDiscrepancyRangeLabel = useMemo(
+    () => formatDateRangeLabel(coDiscrepancyState?.range ?? null),
+    [coDiscrepancyState?.range],
+  );
+  const coDiscrepancyLastRunLabel = useMemo(() => {
+    if (!coDiscrepancyState?.lastRunAt) return "Chua chay";
+    try {
+      return new Date(coDiscrepancyState.lastRunAt).toLocaleString("vi-VN");
+    } catch (err) {
+      return coDiscrepancyState.lastRunAt;
+    }
+  }, [coDiscrepancyState?.lastRunAt]);
+  const coMismatchCount = coDiscrepancyState?.mismatchCount ?? coMismatchList.length;
+  const coCheckedCount = coDiscrepancyState?.totalChecked ?? 0;
+  const coMismatchLimited = coDiscrepancyState?.limited === true;
+  const showUpdatedBanner = lastSyncUpdated > 0 || updatedDeclarations.length > 0;
+  const coCodeUpdatedLabel = useMemo(() => {
+    if (!coCodeConfig?.updatedAt) return "Chua co cau hinh tuy chinh.";
+    try {
+      const time = new Date(coCodeConfig.updatedAt).toLocaleString("vi-VN");
+      const actor = coCodeConfig.updatedBy || "system";
+      return `Cap nhat lan cuoi: ${time} (${actor})`;
+    } catch (err) {
+      return `Cap nhat lan cuoi: ${coCodeConfig.updatedAt}`;
+    }
+  }, [coCodeConfig?.updatedAt, coCodeConfig?.updatedBy]);
+  const coDiscrepancyStatusLabel = coDiscrepancyState?.status || "idle";
+  const coDiscrepancyTriggered = coDiscrepancyState?.triggered === true;
+  const lastSyncSummaryCard = useMemo(() => {
+    if (!lastSyncSummary) return null;
+    return (
+      <div className="rounded border border-emerald-200 bg-emerald-50 p-2 text-xs text-emerald-700">
+        <div className="font-medium text-emerald-800">Ket qua dong bo gan nhat</div>
+        <div className="mt-1 flex flex-wrap gap-3">
+          {lastSyncRangeLabel && <span>Khoang: {lastSyncRangeLabel}</span>}
+          {lastSyncRunAtLabel && <span>Run: {lastSyncRunAtLabel}</span>}
+          <span>Thu thap: {lastSyncFetched.toLocaleString("vi-VN")}</span>
+          <span>Them moi: {lastSyncInserted.toLocaleString("vi-VN")}</span>
+          <span>Cap nhat: {lastSyncUpdated.toLocaleString("vi-VN")}</span>
+          <span>Bo qua: {lastSyncSkipped.toLocaleString("vi-VN")}</span>
+          <span>Tong: {lastSyncTotal.toLocaleString("vi-VN")}</span>
+        </div>
+      </div>
+    );
+  }, [lastSyncSummary, lastSyncRangeLabel, lastSyncRunAtLabel, lastSyncFetched, lastSyncInserted, lastSyncUpdated, lastSyncSkipped, lastSyncTotal]);
+
+  const handleSelectUpdated = useCallback(() => {
+    if (mode !== "saved") {
+      alert("Chi co the chon khi dang xem du lieu da luu.");
+      return;
+    }
+    if (!updatedKeySet.size) {
+      return;
+    }
+    setSelectedKeys(Array.from(updatedKeySet));
+    setPage(1);
+  }, [mode, updatedKeySet, setPage, setSelectedKeys]);
+
+  const handleSelectCoMismatches = useCallback(() => {
+    if (mode !== "saved") {
+      alert("Chi co the chon khi dang xem du lieu da luu.");
+      return;
+    }
+    if (!coMismatchKeySet.size) {
+      return;
+    }
+    setSelectedKeys(Array.from(coMismatchKeySet));
+    setPage(1);
+  }, [mode, coMismatchKeySet, setPage, setSelectedKeys]);
 
   // Đọc file XLSX
   function handleFileChange(e) {
@@ -940,6 +1313,50 @@ export default function DataImporter({
         ))}
       </div>
 
+      {showUpdatedBanner && (
+        <div className="rounded border border-emerald-300 bg-emerald-50 p-3 text-sm text-emerald-900">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <div className="font-semibold">Cap nhat {lastSyncUpdated.toLocaleString("vi-VN")} to khai trong lan dong bo gan nhat</div>
+              {lastSyncRunAtLabel && (
+                <div className="text-xs text-emerald-800/80">Thoi diem: {lastSyncRunAtLabel}</div>
+              )}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={handleSelectUpdated}
+                className="rounded border border-emerald-500 px-3 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-50"
+              >
+                Chon tren bang
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedKeys([])}
+                className="rounded border px-3 py-1 text-xs text-gray-600 hover:bg-gray-50"
+              >
+                Bo chon
+              </button>
+            </div>
+          </div>
+          {updatedPreview.length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-2 text-xs">
+              {updatedPreview.map((entry) => (
+                <span
+                  key={`${entry.so_tk}_${entry.nhanh || entry.branch || 'main'}`}
+                  className="rounded bg-white px-2 py-0.5 text-emerald-700 shadow-sm"
+                >
+                  {formatDeclarationLabel(entry)}
+                </span>
+              ))}
+              {updatedDeclarations.length > updatedPreview.length && (
+                <span className="text-emerald-700">+{updatedDeclarations.length - updatedPreview.length} khac</span>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
       {canManageSync ? (
         <section className="rounded border bg-white p-4 shadow-sm">
           <div className="flex flex-wrap items-center justify-between gap-2">
@@ -990,18 +1407,7 @@ export default function DataImporter({
               </div>
             )}
             {statusError && <div className="text-xs text-red-600">{statusError}</div>}
-            {lastSyncSummary && (
-              <div className="rounded border border-emerald-200 bg-emerald-50 p-2 text-xs text-emerald-700">
-                <div className="font-medium text-emerald-800">Kết quả lần chạy gần nhất</div>
-                <div className="mt-1 flex flex-wrap gap-3">
-                  {lastSyncRangeLabel && <span>Khoảng: {lastSyncRangeLabel}</span>}
-                  <span>Thu thập: {lastSyncFetched.toLocaleString("vi-VN")}</span>
-                  <span>Thêm mới: {lastSyncInserted.toLocaleString("vi-VN")}</span>
-                  <span>Bỏ qua: {lastSyncSkipped.toLocaleString("vi-VN")}</span>
-                  <span>Tổng sau đồng bộ: {lastSyncTotal.toLocaleString("vi-VN")}</span>
-                </div>
-              </div>
-            )}
+            {lastSyncSummaryCard}
           </div>
           {syncForm ? (
             <div className="mt-3 space-y-3">
@@ -1129,7 +1535,7 @@ export default function DataImporter({
               </div>
               {previewRangeInfo && (
                 <div className="text-xs text-gray-500">
-                  Khoảng xem trước: {(previewRangeInfo.from || "...")} → {(previewRangeInfo.to || "...")}
+                  Khoảng xem trước: {previewRangeLabel || "..."}
                   {previewLimited && " (giới hạn 100 dòng đầu tiên)"}
                 </div>
               )}
@@ -1155,7 +1561,7 @@ export default function DataImporter({
                         {previewRows.map((row) => (
                           <tr key={`${row.so_tk}_${row.nhanh || ""}`} className="odd:bg-white even:bg-emerald-50/40">
                             <td className="px-2 py-1">{row.so_tk}</td>
-                            <td className="px-2 py-1">{row.date}</td>
+                            <td className="px-2 py-1">{formatDisplayDate(row.date)}</td>
                             <td className="px-2 py-1">{row.mst}</td>
                             <td className="px-2 py-1">{row.cong_ty}</td>
                             <td className="px-2 py-1">{row.nhan_vien || <span className="italic text-gray-400">(chưa gán)</span>}</td>
@@ -1217,23 +1623,167 @@ export default function DataImporter({
               </div>
             )}
             {statusError && <div className="text-xs text-red-600">{statusError}</div>}
-            {lastSyncSummary && (
-              <div className="rounded border border-emerald-200 bg-emerald-50 p-2 text-xs text-emerald-700">
-                <div className="font-medium text-emerald-800">Kết quả đồng bộ gần nhất</div>
-                <div className="mt-1 flex flex-wrap gap-3">
-                  {lastSyncRangeLabel && <span>Khoảng: {lastSyncRangeLabel}</span>}
-                  <span>Thu thập: {lastSyncFetched.toLocaleString("vi-VN")}</span>
-                  <span>Thêm mới: {lastSyncInserted.toLocaleString("vi-VN")}</span>
-                  <span>Bỏ qua: {lastSyncSkipped.toLocaleString("vi-VN")}</span>
-                  <span>Tổng sau đồng bộ: {lastSyncTotal.toLocaleString("vi-VN")}</span>
-                </div>
-              </div>
-            )}
+            {lastSyncSummaryCard}
           </div>
         </section>
       )}
 
+            <section className="rounded border bg-white p-4 shadow-sm">
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <div>
+            <h2 className="text-base font-semibold text-gray-900">Cau hinh ma uu dai C/O</h2>
+            <p className="text-xs text-gray-500">Quan ly danh sach ma uu dai de he thong danh gia C/O chinh xac.</p>
+          </div>
+          <div className="flex gap-2">
+            <button type="button" onClick={handleRefreshCoCodeConfig} className="rounded border px-3 py-1 text-sm" disabled={coCodeLoading}>
+              {coCodeLoading ? "Dang tai..." : "Lam moi"}
+            </button>
+          </div>
+        </div>
+        {coCodeError && <div className="mt-2 text-sm text-red-600">{coCodeError}</div>}
+        {coCodeMessage && <div className="mt-2 text-sm text-emerald-600">{coCodeMessage}</div>}
+        <div className="mt-3 grid gap-3 md:grid-cols-2">
+          <div>
+            <label className="flex items-center justify-between text-sm font-medium text-gray-700">
+              <span>Whitelist uu tien</span>
+              <span className="text-xs text-gray-400">Moi dong mot ma (de trong neu khong dung)</span>
+            </label>
+            <textarea
+              value={coCodeForm.whitelist}
+              onChange={(e) => setCoCodeForm((prev) => ({ ...prev, whitelist: e.target.value }))}
+              className="mt-1 h-32 w-full resize-y rounded border px-3 py-2 text-sm"
+              placeholder="VD: CA3"
+              disabled={coCodeLoading || coCodeSaving || !canManageSync}
+            />
+          </div>
+          <div>
+            <label className="flex items-center justify-between text-sm font-medium text-gray-700">
+              <span>Blacklist khong CO</span>
+              <span className="text-xs text-gray-400">Moi dong mot ma</span>
+            </label>
+            <textarea
+              value={coCodeForm.blacklist}
+              onChange={(e) => setCoCodeForm((prev) => ({ ...prev, blacklist: e.target.value }))}
+              className="mt-1 h-32 w-full resize-y rounded border px-3 py-2 text-sm"
+              placeholder="VD: B01"
+              disabled={coCodeLoading || coCodeSaving || !canManageSync}
+            />
+          </div>
+        </div>
+        <p className="mt-2 text-xs text-gray-500">Neu whitelist de trong, he thong se su dung blacklist de loai bo cac ma khong duoc xem la C/O.</p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <button type="button" onClick={handleSaveCoCodeConfig} className="rounded bg-emerald-600 px-3 py-1 text-xs font-medium text-white disabled:opacity-50" disabled={coCodeSaving || coCodeLoading || !canManageSync}>
+            {coCodeSaving ? "Dang luu..." : "Luu cau hinh"}
+          </button>
+          <button type="button" onClick={handleResetCoCodeForm} className="rounded border px-3 py-1 text-xs text-gray-600 hover:bg-gray-50" disabled={coCodeLoading || coCodeSaving}>
+            Khoi phuc
+          </button>
+        </div>
+        <div className="mt-2 text-xs text-gray-400">{coCodeUpdatedLabel}</div>
+      </section>
+
       <section className="rounded border bg-white p-4 shadow-sm">
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <div>
+            <h2 className="text-base font-semibold text-gray-900">Doi soat C/O</h2>
+            <p className="text-xs text-gray-500">Theo doi chenh lech giua du lieu he thong va ECUS de xu ly kip thoi.</p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <input type="date" className="rounded border px-2 py-1 text-xs" value={coDiscrepancyRange.from} onChange={(e) => setCoDiscrepancyRange((prev) => ({ ...prev, from: e.target.value }))} />
+            <span className="text-xs text-gray-500">{"->"}</span>
+            <input type="date" className="rounded border px-2 py-1 text-xs" value={coDiscrepancyRange.to} onChange={(e) => setCoDiscrepancyRange((prev) => ({ ...prev, to: e.target.value }))} />
+            <button type="button" onClick={handleRunCoDiscrepancy} className="rounded bg-emerald-600 px-3 py-1 text-xs font-medium text-white disabled:opacity-50" disabled={coDiscrepancyRunning || coDiscrepancyLoading || !canManageSync}>
+              {coDiscrepancyRunning ? "Dang chay..." : "Chay kiem tra"}
+            </button>
+            <button type="button" onClick={handleRefreshCoDiscrepancy} className="rounded border px-3 py-1 text-xs" disabled={coDiscrepancyLoading}>
+              {coDiscrepancyLoading ? "Dang tai..." : "Lam moi"}
+            </button>
+          </div>
+        </div>
+        {coDiscrepancyError && <div className="mt-2 text-sm text-red-600">{coDiscrepancyError}</div>}
+        {coDiscrepancyMessage && <div className="mt-2 text-sm text-emerald-600">{coDiscrepancyMessage}</div>}
+        <div className="mt-3 grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+          <div className="rounded border bg-gray-50 px-3 py-2">
+            <div className="text-xs uppercase text-gray-500">Trang thai</div>
+            <div className="text-sm font-semibold text-gray-900">{coDiscrepancyStatusLabel}</div>
+          </div>
+          <div className="rounded border bg-gray-50 px-3 py-2">
+            <div className="text-xs uppercase text-gray-500">Lan chay gan nhat</div>
+            <div className="text-sm font-semibold text-gray-900">{coDiscrepancyLastRunLabel}</div>
+          </div>
+          <div className="rounded border bg-gray-50 px-3 py-2">
+            <div className="text-xs uppercase text-gray-500">Chenh lech</div>
+            <div className="text-sm font-semibold text-gray-900">{coMismatchCount.toLocaleString("vi-VN")}</div>
+          </div>
+          <div className="rounded border bg-gray-50 px-3 py-2">
+            <div className="text-xs uppercase text-gray-500">Tong da kiem</div>
+            <div className="text-sm font-semibold text-gray-900">{coCheckedCount.toLocaleString("vi-VN")}</div>
+          </div>
+        </div>
+        <div className="mt-3 grid gap-3 md:grid-cols-2">
+          <div className="space-y-2">
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" checked={coDiscrepancyForm.enabled} onChange={(e) => setCoDiscrepancyForm((prev) => ({ ...prev, enabled: e.target.checked }))} disabled={!canManageSync} />
+              <span>Bat doi soat tu dong</span>
+            </label>
+            <div className="grid gap-2 md:grid-cols-2">
+              <label className="text-xs font-medium text-gray-600">Cron tu dong<input className="mt-1 w-full rounded border px-2 py-1 text-sm" value={coDiscrepancyForm.cron} onChange={(e) => setCoDiscrepancyForm((prev) => ({ ...prev, cron: e.target.value }))} disabled={!canManageSync} placeholder="30 4 * * *" /></label>
+              <label className="text-xs font-medium text-gray-600">So ngay lay mau<input type="number" min={1} className="mt-1 w-full rounded border px-2 py-1 text-sm" value={coDiscrepancyForm.rangeDays} onChange={(e) => setCoDiscrepancyForm((prev) => ({ ...prev, rangeDays: e.target.value }))} disabled={!canManageSync} /></label>
+              <label className="text-xs font-medium text-gray-600">Nguong canh bao<input type="number" min={1} className="mt-1 w-full rounded border px-2 py-1 text-sm" value={coDiscrepancyForm.threshold} onChange={(e) => setCoDiscrepancyForm((prev) => ({ ...prev, threshold: e.target.value }))} disabled={!canManageSync} /></label>
+              <label className="text-xs font-medium text-gray-600">Gioi han mau<input type="number" min={0} className="mt-1 w-full rounded border px-2 py-1 text-sm" value={coDiscrepancyForm.sampleLimit} onChange={(e) => setCoDiscrepancyForm((prev) => ({ ...prev, sampleLimit: e.target.value }))} disabled={!canManageSync} /></label>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button type="button" onClick={handleSaveCoDiscrepancyConfig} className="rounded bg-emerald-600 px-3 py-1 text-xs font-medium text-white disabled:opacity-50" disabled={coDiscrepancySaving || !canManageSync}>
+                {coDiscrepancySaving ? "Dang luu..." : "Luu cau hinh"}
+              </button>
+              <button type="button" onClick={handleResetCoDiscrepancyForm} className="rounded border px-3 py-1 text-xs text-gray-600 hover:bg-gray-50" disabled={coDiscrepancySaving}>
+                Khoi phuc
+              </button>
+            </div>
+            <div className="text-xs text-gray-500">
+              {coDiscrepancyRangeLabel ? `Khoang lan chay gan nhat: ${coDiscrepancyRangeLabel}` : "Chua co ket qua doi soat."}
+              {coMismatchLimited ? " (Da cat bot danh sach do vuot gioi han mau)" : ""}
+            </div>
+          </div>
+          <div className="space-y-2">
+            <div className="flex items-center justify-between text-xs">
+              <span>Chenh lech goi y ({coMismatchPreview.length} / {coMismatchCount.toLocaleString("vi-VN")})</span>
+              <button type="button" onClick={handleSelectCoMismatches} className="rounded border px-2 py-0.5 text-[11px] text-amber-700 hover:bg-amber-50" disabled={!coMismatchKeySet.size}>
+                Chon tren bang
+              </button>
+            </div>
+            <div className="overflow-auto rounded border">
+              {coMismatchPreview.length ? (
+                <table className="min-w-full text-xs">
+                  <thead className="bg-amber-50 text-amber-800">
+                    <tr>
+                      <th className="px-2 py-1 text-left">To khai</th>
+                      <th className="px-2 py-1 text-center">CO luu tru</th>
+                      <th className="px-2 py-1 text-center">CO ECUS</th>
+                      <th className="px-2 py-1 text-center">Dong</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {coMismatchPreview.map((item) => (
+                      <tr key={item.key} className="odd:bg-white even:bg-amber-50/40">
+                        <td className="px-2 py-1">{formatDeclarationLabel(item)}</td>
+                        <td className="px-2 py-1 text-center">{item.stored?.has_co ? "Co" : "Khong"} ({item.stored?.co_line_count ?? 0})</td>
+                        <td className="px-2 py-1 text-center">{item.remote?.has_co ? "Co" : "Khong"} ({item.remote?.co_line_count ?? 0})</td>
+                        <td className="px-2 py-1 text-center">{item.remote?.co_codes?.length ?? 0}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : (
+                <div className="py-4 text-center text-xs text-gray-500">Chua phat hien chenh lech nao.</div>
+              )}
+            </div>
+          </div>
+        </div>
+      </section>
+
+
+<section className="rounded border bg-white p-4 shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
             <h2 className="text-base font-semibold text-gray-900">Cảnh báo tờ khai thiếu thông tin</h2>
@@ -1265,7 +1815,7 @@ export default function DataImporter({
                     <td className="px-2 py-1">{alert.mst}</td>
                     <td className="px-2 py-1">{alert.company}</td>
                     <td className="px-2 py-1 text-amber-600">{(alert.missing || []).join(", ")}</td>
-                    <td className="px-2 py-1">{alert.date || ""}</td>
+                    <td className="px-2 py-1">{formatDisplayDate(alert.date)}</td>
                     <td className="px-2 py-1">{alert.lastUpdated ? new Date(alert.lastUpdated).toLocaleString("vi-VN") : ""}</td>
                   </tr>
                 ))}
@@ -1507,10 +2057,21 @@ export default function DataImporter({
                   </td>
                 )}
                 <td className="px-2 py-1">
-                  <span>{r.raw_date || r.date || ""}</span>
+                  <span title={r.raw_date || ""}>{formatDisplayDate(r.date || r.raw_date || "")}</span>
                 </td>
                 <td className="px-2 py-1">
-                  <span>{r.so_tk || ""}</span>
+                  <div className="flex flex-wrap items-center gap-1">
+                    <span>{r.so_tk_full || r.so_tk || ""}</span>
+                    {r.so_tk_suffix ? (
+                      <span className="text-[10px] uppercase text-gray-400">{r.so_tk_suffix}</span>
+                    ) : null}
+                    {updatedKeySet.has(rowKey) && (
+                      <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700">Cap nhat</span>
+                    )}
+                    {coMismatchKeySet.has(rowKey) && (
+                      <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">CO lech</span>
+                    )}
+                  </div>
                 </td>
                 <td className="px-2 py-1">
                   <span>{r.mst || ""}</span>
@@ -1648,3 +2209,8 @@ export default function DataImporter({
     </div>
   );
 }
+
+
+
+
+

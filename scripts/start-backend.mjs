@@ -7,6 +7,18 @@ import { existsSync } from 'node:fs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
+const isWin = process.platform === 'win32';
+
+function resolvePnpmCommand() {
+  const execPath = process.env.npm_execpath;
+  if (execPath && !isWin) {
+    return { command: process.execPath, args: [execPath] };
+  }
+  if (isWin) {
+    return { command: 'cmd.exe', args: ['/c', 'pnpm'] };
+  }
+  return { command: 'pnpm', args: [] };
+}
 
 function run(command, args, options = {}) {
   return new Promise((resolvePromise, rejectPromise) => {
@@ -25,7 +37,8 @@ async function ensureBetterSqlite3({ forceRebuild = false } = {}) {
   async function rebuild(reason) {
     const label = reason === 'force' ? 'theo yêu cầu (--rebuild)' : 'tự động do thiếu native binding';
     console.log(`Đang chạy "pnpm rebuild better-sqlite3" ${label}...`);
-    await run('pnpm', ['rebuild', 'better-sqlite3']);
+    const { command, args } = resolvePnpmCommand();
+    await run(command, [...args, 'rebuild', 'better-sqlite3']);
     rebuildAttempted = true;
   }
 

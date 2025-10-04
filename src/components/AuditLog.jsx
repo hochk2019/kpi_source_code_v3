@@ -1,5 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
+import { fetchWithAuth } from '@/auth/localAuth.js';
+
 import { getAuditLogs, clearAuditLogs } from "@/lib/store.js";
 
 function formatTime(value) {
@@ -77,8 +79,7 @@ export default function AuditLog({ currentUser }) {
     setSummaryLoading(true);
     setSummaryError("");
     try {
-      const response = await fetch("/api/admin/backups/summary", {
-        credentials: "include",
+      const response = await fetchWithAuth("/api/admin/backups/summary", {
         cache: "no-store",
       });
       if (!response.ok) {
@@ -153,9 +154,8 @@ export default function AuditLog({ currentUser }) {
       setCronError("");
       setRetentionError("");
       try {
-        const response = await fetch("/api/admin/backups/schedule", {
+        const response = await fetchWithAuth("/api/admin/backups/schedule", {
           method: "POST",
-          credentials: "include",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ cron: value, retentionCopies: retentionValueRaw ? retentionPayload : null }),
         });

@@ -9,6 +9,7 @@ import {
   mapMemberNamesToTeams,
 } from "@/lib/store.js";
 import { loadRules } from "@/lib/rules.js";
+import { formatDisplayDate } from "@/shared/format.js";
 import {
   QUICK_RANGE_OPTIONS,
   computeQuickRange,
@@ -437,7 +438,7 @@ function StaffDetailCard({ staff, canExport, onExport, onPrint, exporting }) {
             <tbody>
               {rows.map((row, idx) => (
                 <tr key={`${row.so_tk}-${idx}`} className={idx % 2 === 0 ? "bg-white" : "bg-gray-50"}>
-                  <td className="px-3 py-1.5">{row.date}</td>
+                  <td className="px-3 py-1.5">{row.displayDate || formatDisplayDate(row.date)}</td>
                   <td className="px-3 py-1.5">{row.so_tk}</td>
                   <td className="px-3 py-1.5">{row.loai_hinh || ""}</td>
                   <td className="px-3 py-1.5">{row.isExport ? "Xuất" : "Nhập"}</td>
@@ -611,7 +612,7 @@ function TeamDetailCard({ team, canExport, onExport, onPrint, exporting }) {
               <tbody>
                 {rows.map((row, idx) => (
                   <tr key={`${row.so_tk}-${idx}`} className={idx % 2 === 0 ? "bg-white" : "bg-gray-50"}>
-                    <td className="px-3 py-1.5">{row.date}</td>
+                    <td className="px-3 py-1.5">{row.displayDate || formatDisplayDate(row.date)}</td>
                     <td className="px-3 py-1.5">{row.so_tk}</td>
                     <td className="px-3 py-1.5">{row.nhan_vien || ""}</td>
                     <td className="px-3 py-1.5">{row.loai_hinh || ""}</td>

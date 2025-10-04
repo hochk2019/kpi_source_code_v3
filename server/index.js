@@ -1,4 +1,4 @@
-import express from 'express';
+﻿import express from 'express';
 import cors from 'cors';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -11,7 +11,7 @@ import bcrypt from 'bcryptjs';
 import crypto from 'node:crypto';
 import { generateReport } from './reportExport.js';
 import { DEFAULT_RULES as SHARED_DEFAULT_RULES } from '../src/shared/defaultRules.js';
-import { deriveCOStatus, parseCoLineCount } from '../src/shared/co.js';
+import { deriveCOStatus, parseCoLineCount, setPreferentialCodeConfig, getPreferentialCodeConfig } from '../src/shared/co.js';
 import { recordSqlTimeout } from './sqlMonitor.js';
 import cronstrue from 'cronstrue';
 import 'cronstrue/locales/vi.js';
@@ -113,21 +113,116 @@ const DB_BACKUP_RETENTION =
     ? envBackupRetentionParsed
     : 14;
 
+const DEFAULT_ECUS_SCHEDULE_PRESET = Object.freeze({
+  mode: 'daily',
+  value: 1,
+  time: '03:00',
+});
+
+
+const LEGACY_KPI_DECLARATIONS_REGEX = /from\s+kpi_declarations/i;
+
+function normalizeEcusQueryInput(value) {
+  const text = typeof value === 'string' ? value.trim() : '';
+  if (!text) {
+    return DEFAULT_ECUS_SYNC_CONFIG.query;
+  }
+  if (LEGACY_KPI_DECLARATIONS_REGEX.test(text)) {
+    return DEFAULT_ECUS_SYNC_CONFIG.query;
+  }
+  return text;
+}
+
+function normalizeEcusColumnMap(map = {}) {
+  const normalized = { ...map };
+  if (normalized.licenses === 'licenses') {
+    normalized.licenses = 'license_count';
+  }
+  const coValue = normalized.co_line_count || normalized.co_count || 'co_count_num';
+  normalized.co_line_count = coValue;
+  normalized.co_count = coValue;
+  return normalized;
+}
+
+const SCHEDULE_VALUE_LIMITS = Object.freeze({
+  minutes: { min: 1, max: 60 },
+  hours: { min: 1, max: 24 },
+  daily: { min: 1, max: 31 },
+});
+
 const DEFAULT_ECUS_SYNC_CONFIG = {
   enabled: false,
-  schedule: '0 * * * *',
+  schedule: '0 3 * * *',
+  schedulePreset: DEFAULT_ECUS_SCHEDULE_PRESET,
   rangeDays: 1,
   preferMonthFirst: false,
   batchSize: 500,
   connection: {
-    server: '',
-    database: '',
-    user: '',
+    server: 'Server',
+    database: 'ECUS5VNACCS',
+    user: 'sa',
     password: '',
-    options: { encrypt: false, trustServerCertificate: true },
+    options: { encrypt: false, trustServerCertificate: true, enableArithAbort: true },
   },
-  query:
-    'SELECT so_tk, ngay_dang_ky, loai_hinh, mst, cong_ty, muc_hang, licenses, nhan_vien_nhap, nhan_vien_xuat FROM v_kpi_declarations WHERE ngay_dang_ky BETWEEN @from AND @to',
+  query: [
+    'SELECT',
+    '  CAST(lp.So_TK AS nvarchar(50)) AS so_tk,',
+    '  CAST(lp.Ngay_DK AS date) AS ngay_dang_ky,',
+    '  LTRIM(RTRIM(lp.Ma_LH)) AS loai_hinh,',
+    '  LTRIM(RTRIM(lp.Ma_DN)) AS mst,',
+    '  LTRIM(RTRIM(lp.TEN_DV)) AS cong_ty,',
+    '  ISNULL(items.muc_hang, 0) AS muc_hang,',
+    '  ISNULL(licenses.license_count, 0) AS license_count,',
+    "  ISNULL(licenses.license_codes, N'') AS license_codes,",
+    '  ISNULL(co_counts.co_count_num, 0) AS co_count_num',
+    'FROM dbo.DTBLP AS lp',
+    'LEFT JOIN dbo.DTOKHAIMD AS md ON md._DToKhaiMDID = lp._DTokhaiMDID',
+    'LEFT JOIN dbo.DTOKHAIMD_VNACCS2 AS md2 ON md2._DToKhaiMDID = lp._DTokhaiMDID',
+    'OUTER APPLY (',
+    '  SELECT COUNT(*) AS muc_hang',
+    '  FROM dbo.DHANGMDDK AS h',
+    '  WHERE h._DToKhaiMDID = lp._DTokhaiMDID',
+    ') AS items',
+    'OUTER APPLY (',
+    '  SELECT',
+    '    COUNT(*) AS license_count,',
+    '    STUFF((',
+    "      SELECT ',' + codes2.code",
+    '      FROM (',
+    '        SELECT DISTINCT LTRIM(RTRIM(code)) AS code',
+    '        FROM (',
+    '          SELECT md.MA_GP AS code',
+    '          UNION ALL SELECT md2.MA_GP2',
+    '          UNION ALL SELECT md2.MA_GP3',
+    '          UNION ALL SELECT md2.MA_GP4',
+    '          UNION ALL SELECT md2.MA_GP5',
+    '        ) AS raw_codes2',
+    "        WHERE LTRIM(RTRIM(code)) <> ''",
+    '      ) AS codes2',
+    "      FOR XML PATH(''), TYPE",
+    "    ).value('.', 'nvarchar(max)'), 1, 1, '') AS license_codes",
+    '  FROM (',
+    '    SELECT DISTINCT LTRIM(RTRIM(code)) AS code',
+    '    FROM (',
+    '      SELECT md.MA_GP AS code',
+    '      UNION ALL SELECT md2.MA_GP2',
+    '      UNION ALL SELECT md2.MA_GP3',
+    '      UNION ALL SELECT md2.MA_GP4',
+    '      UNION ALL SELECT md2.MA_GP5',
+    '    ) AS raw_codes',
+    "    WHERE LTRIM(RTRIM(code)) <> ''",
+    '  ) AS codes',
+    ') AS licenses',
+    'OUTER APPLY (',
+    '  SELECT COUNT(*) AS co_count_num',
+    '  FROM dbo.DHANGMDDK AS h2',
+    '  WHERE h2._DToKhaiMDID = lp._DTokhaiMDID',
+    "    AND LEFT(UPPER(LTRIM(RTRIM(CAST(h2.TS_XNK_MA_BT AS nvarchar(10))))), 3) LIKE 'B%'",
+    "    AND LEFT(UPPER(LTRIM(RTRIM(CAST(h2.TS_XNK_MA_BT AS nvarchar(10))))), 3) NOT IN ('B01', 'B02', 'B03', 'B30')",
+    ') AS co_counts',
+    'WHERE lp.Ngay_DK >= @from AND lp.Ngay_DK < DATEADD(DAY, 1, @to)',
+    'ORDER BY lp.Ngay_DK, so_tk',
+  ].join('\n'),
   columnMap: {
     so_tk: 'so_tk',
     date: 'ngay_dang_ky',
@@ -135,15 +230,192 @@ const DEFAULT_ECUS_SYNC_CONFIG = {
     mst: 'mst',
     cong_ty: 'cong_ty',
     num_items: 'muc_hang',
-    licenses: 'licenses',
+    licenses: 'license_count',
     nhan_vien_import: 'nhan_vien_nhap',
     nhan_vien_export: 'nhan_vien_xuat',
+    co_line_count: 'co_count_num',
     co_count: 'co_count_num',
   },
   lastRun: null,
   lastStatus: null,
   lastSummary: null,
 };
+
+function clampScheduleValueForMode(mode, rawValue, fallback = DEFAULT_ECUS_SCHEDULE_PRESET.value) {
+  const limits = SCHEDULE_VALUE_LIMITS[mode] || { min: 1, max: Number.MAX_SAFE_INTEGER };
+  const candidate = Number.parseInt(rawValue, 10);
+  if (Number.isFinite(candidate)) {
+    if (candidate < limits.min) return limits.min;
+    if (candidate > limits.max) return limits.max;
+    return candidate;
+  }
+  const fallbackCandidate = Number.parseInt(fallback, 10);
+  if (Number.isFinite(fallbackCandidate)) {
+    if (fallbackCandidate < limits.min) return limits.min;
+    if (fallbackCandidate > limits.max) return limits.max;
+    return fallbackCandidate;
+  }
+  return limits.min;
+}
+
+function normalizeScheduleTimeInput(value, fallback = DEFAULT_ECUS_SCHEDULE_PRESET.time) {
+  const base = typeof fallback === 'string' && fallback ? fallback : DEFAULT_ECUS_SCHEDULE_PRESET.time;
+  if (typeof value !== 'string') {
+    return base;
+  }
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return base;
+  }
+  const match = trimmed.match(/^(\d{1,2})(?::(\d{1,2}))?$/u);
+  if (!match) {
+    return base;
+  }
+  let hours = Number.parseInt(match[1], 10);
+  let minutes = match[2] === undefined ? 0 : Number.parseInt(match[2], 10);
+  if (!Number.isFinite(hours) || hours < 0) {
+    hours = 0;
+  }
+  if (!Number.isFinite(minutes) || minutes < 0) {
+    minutes = 0;
+  }
+  hours = Math.min(Math.max(hours, 0), 23);
+  minutes = Math.min(Math.max(minutes, 0), 59);
+  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+}
+
+function normalizeSchedulePreset(input, fallback = DEFAULT_ECUS_SCHEDULE_PRESET) {
+  const base = fallback && typeof fallback === 'object' ? fallback : DEFAULT_ECUS_SCHEDULE_PRESET;
+  const rawMode = typeof input?.mode === 'string' ? input.mode.trim().toLowerCase() : base.mode;
+  const validModes = new Set(['minutes', 'hours', 'daily', 'custom']);
+  const mode = validModes.has(rawMode) ? rawMode : base.mode;
+  const value = clampScheduleValueForMode(mode, input?.value, base.value);
+  const time = mode === 'minutes'
+    ? '00:00'
+    : normalizeScheduleTimeInput(input?.time ?? base.time, base.time);
+  const cron = normalizeCronExpression(input?.cron ?? input?.schedule ?? base.cron ?? DEFAULT_ECUS_SYNC_CONFIG.schedule);
+  return {
+    mode,
+    value,
+    time,
+    cron,
+  };
+}
+
+function buildCronFromPreset(preset, fallbackCron = DEFAULT_ECUS_SYNC_CONFIG.schedule) {
+  if (!preset) {
+    return normalizeCronExpression(fallbackCron);
+  }
+  const normalized = normalizeSchedulePreset(preset);
+  const { mode, value, time, cron } = normalized;
+  const [hour = 0, minute = 0] = time.split(':').map((part) => Number.parseInt(part, 10) || 0);
+  if (mode === 'minutes') {
+    if (value <= 1) {
+      return '* * * * *';
+    }
+    return `*/${value} * * * *`;
+  }
+  if (mode === 'hours') {
+    if (value <= 1) {
+      return `${minute} * * * *`;
+    }
+    return `${minute} */${value} * * *`;
+  }
+  if (mode === 'daily') {
+    const dayField = value <= 1 ? '*' : `*/${value}`;
+    return `${minute} ${hour} ${dayField} * *`;
+  }
+  return normalizeCronExpression(cron || fallbackCron);
+}
+
+function deriveSchedulePreset(cronExpr, fallback = DEFAULT_ECUS_SCHEDULE_PRESET) {
+  const fallbackPreset = normalizeSchedulePreset(fallback);
+  const cron = normalizeCronExpression(cronExpr);
+  if (!cron) {
+    return { ...fallbackPreset, mode: 'custom', cron: '' };
+  }
+  const parts = cron.split(/\s+/u).filter(Boolean);
+  if (parts.length === 6) {
+    parts.shift();
+  }
+  if (parts.length < 5) {
+    return { ...fallbackPreset, mode: 'custom', cron };
+  }
+  const [minuteRaw, hourRaw, domRaw, monthRaw, dowRaw] = parts;
+  const minuteNum = Number.parseInt(minuteRaw, 10);
+  const hourNum = Number.parseInt(hourRaw, 10);
+
+  if ((minuteRaw === '*' || minuteRaw.startsWith('*/')) && hourRaw === '*' && domRaw === '*' && monthRaw === '*' && dowRaw === '*') {
+    const interval = minuteRaw.startsWith('*/') ? Number.parseInt(minuteRaw.slice(2), 10) : 1;
+    const safeInterval = Number.isFinite(interval) && interval > 0 ? interval : 1;
+    return {
+      mode: 'minutes',
+      value: clampScheduleValueForMode('minutes', safeInterval, fallbackPreset.value),
+      time: '00:00',
+      cron,
+    };
+  }
+
+  if (!Number.isNaN(minuteNum) && (hourRaw === '*' || hourRaw.startsWith('*/')) && domRaw === '*' && monthRaw === '*' && dowRaw === '*') {
+    const interval = hourRaw.startsWith('*/') ? Number.parseInt(hourRaw.slice(2), 10) : 1;
+    const safeInterval = Number.isFinite(interval) && interval > 0 ? interval : 1;
+    const minutes = Math.min(Math.max(minuteNum, 0), 59);
+    return {
+      mode: 'hours',
+      value: clampScheduleValueForMode('hours', safeInterval, fallbackPreset.value),
+      time: normalizeScheduleTimeInput(`00:${String(minutes).padStart(2, '0')}`, fallbackPreset.time),
+      cron,
+    };
+  }
+
+  if (!Number.isNaN(minuteNum) && !Number.isNaN(hourNum) && monthRaw === '*' && dowRaw === '*') {
+    const timeLabel = normalizeScheduleTimeInput(`${hourNum}:${minuteNum}`, fallbackPreset.time);
+    if (domRaw === '*' || domRaw === '*/1') {
+      return {
+        mode: 'daily',
+        value: clampScheduleValueForMode('daily', 1, fallbackPreset.value),
+        time: timeLabel,
+        cron,
+      };
+    }
+    if (domRaw.startsWith('*/')) {
+      const interval = Number.parseInt(domRaw.slice(2), 10);
+      if (Number.isFinite(interval) && interval > 0) {
+        return {
+          mode: 'daily',
+          value: clampScheduleValueForMode('daily', interval, fallbackPreset.value),
+          time: timeLabel,
+          cron,
+        };
+      }
+    }
+  }
+
+  return { ...fallbackPreset, mode: 'custom', cron };
+}
+
+function resolveSchedulePresetFromConfig(config) {
+  if (config?.schedulePreset && typeof config.schedulePreset === 'object') {
+    return normalizeSchedulePreset(config.schedulePreset);
+  }
+  if (
+    config &&
+    (config.scheduleMode !== undefined ||
+      config.scheduleValue !== undefined ||
+      config.scheduleTime !== undefined)
+  ) {
+    return normalizeSchedulePreset({
+      mode: config.scheduleMode,
+      value: config.scheduleValue,
+      time: config.scheduleTime,
+      cron: config.schedule,
+    });
+  }
+  if (config?.schedule) {
+    return deriveSchedulePreset(config.schedule);
+  }
+  return normalizeSchedulePreset(DEFAULT_ECUS_SCHEDULE_PRESET);
+}
 
 const DEFAULT_ALERT_CONFIG = {
   enabled: true,
@@ -166,6 +438,7 @@ const databaseInitState = {
 };
 
 let dbBackupJob = null;
+let coDiscrepancyJob = null;
 let backupInProgress = false;
 const backupScheduleMeta = {
   active: false,
@@ -266,6 +539,9 @@ const STORAGE_PERMISSION_REQUIREMENTS = Object.freeze({
   decl_alert_config_v1: 'alertsManage',
   decl_alert_state_v1: 'alertsManage',
   ecus_sync_config_v1: 'syncManage',
+  co_tax_code_config_v1: 'syncManage',
+  co_discrepancy_config_v1: 'syncManage',
+  co_discrepancy_state_v1: 'syncManage',
 });
 
 function normalizePermissionsForRole(permissions, role = 'staff') {
@@ -329,6 +605,41 @@ const DEFAULT_BACKUP_CONFIG = {
   retentionCopies: normalizeRetentionCopies(DB_BACKUP_RETENTION) ?? 14,
 };
 
+const DEFAULT_CO_PREFERENTIAL_BLACKLIST = Object.freeze(['B01', 'B03', 'B30', 'B02']);
+
+const DEFAULT_CO_CODE_CONFIG = Object.freeze({
+  version: 1,
+  whitelist: [],
+  blacklist: DEFAULT_CO_PREFERENTIAL_BLACKLIST,
+  updatedAt: null,
+  updatedBy: null,
+});
+
+const DEFAULT_CO_DISCREPANCY_CONFIG = Object.freeze({
+  enabled: false,
+  cron: '30 4 * * *',
+  rangeDays: 3,
+  threshold: 10,
+  sampleLimit: 500,
+  updatedAt: null,
+  updatedBy: null,
+});
+
+const DEFAULT_CO_DISCREPANCY_STATE = Object.freeze({
+  lastRunAt: null,
+  range: null,
+  mismatchCount: 0,
+  totalChecked: 0,
+  status: 'idle',
+  error: null,
+  durationMs: 0,
+  mismatches: [],
+  triggered: false,
+  limited: false,
+  actor: null,
+  reason: null,
+});
+
 const DEFAULT_STORAGE = {
   decl_rows_v1: '[]',
   mst_rows_v2: '[]',
@@ -380,6 +691,9 @@ const DEFAULT_STORAGE = {
   decl_alert_state_v1: JSON.stringify(DEFAULT_ALERT_STATE),
   kpi_users_v1: JSON.stringify(buildDefaultAccounts()),
   db_backup_config_v1: JSON.stringify(DEFAULT_BACKUP_CONFIG),
+  co_tax_code_config_v1: JSON.stringify(DEFAULT_CO_CODE_CONFIG),
+  co_discrepancy_config_v1: JSON.stringify(DEFAULT_CO_DISCREPANCY_CONFIG),
+  co_discrepancy_state_v1: JSON.stringify(DEFAULT_CO_DISCREPANCY_STATE),
 };
 
 function normalizeValue(value) {
@@ -748,6 +1062,10 @@ function refreshDatabaseBackupSchedule() {
 
 const db = await initializeDatabase();
 refreshDatabaseBackupSchedule();
+applyCoCodeConfig(getCoCodeConfig());
+if (typeof refreshCoDiscrepancySchedule === 'function') {
+  refreshCoDiscrepancySchedule();
+}
 
 function pruneExpiredSessions() {
   try {
@@ -1126,12 +1444,50 @@ function normalizeName(input) {
     .toLowerCase();
 }
 
+function normalizeDeclarationNumber(input, { length = 11 } = {}) {
+  const raw = (input ?? '').toString();
+  if (!raw.trim()) {
+    return '';
+  }
+  const digitsOnly = raw.replace(/[^0-9]/g, '');
+  if (!digitsOnly) {
+    return '';
+  }
+  const maxLength = Number.isFinite(length) && length > 0 ? length : 11;
+  if (digitsOnly.length >= maxLength) {
+    return digitsOnly.slice(0, maxLength);
+  }
+  return digitsOnly.padStart(maxLength, '0');
+}
+
+function normalizeDeclarationRow(row) {
+  if (!row || typeof row !== 'object') {
+    return null;
+  }
+  const cloned = { ...row };
+  const originalNumber = (row.so_tk_full ?? row.so_tk ?? '').toString();
+  const normalizedNumber = normalizeDeclarationNumber(originalNumber || row.so_tk);
+  cloned.so_tk = normalizedNumber;
+  if (originalNumber) {
+    cloned.so_tk_full = originalNumber;
+    const suffix = normalizedNumber ? originalNumber.slice(normalizedNumber.length) : originalNumber;
+    cloned.so_tk_suffix = suffix || '';
+  }
+  if (!cloned.nhanh && cloned.branch) {
+    cloned.nhanh = cloned.branch;
+  }
+  return cloned;
+}
+
 function getDeclarationKey(row) {
   if (!row || typeof row !== 'object') {
     return '';
   }
-  const soTk = (row?.so_tk ?? '').toString();
-  const branch = normalizeStr(row?.nhanh || '');
+  const soTk = normalizeDeclarationNumber(row?.so_tk ?? row?.so_tk_full ?? '');
+  if (!soTk) {
+    return '';
+  }
+  const branch = normalizeStr(row?.nhanh || row?.branch || '');
   return `${soTk}_${branch}`;
 }
 
@@ -1335,42 +1691,163 @@ async function changeOwnPasswordRecord(usernameInput, currentPasswordInput, newP
   return sanitizeAccountRecord(accounts[index]);
 }
 
-function pushImportLog(message) {
+function normalizeLogDeclarationList(list, limit = 200) {
+  if (!Array.isArray(list) || list.length === 0) {
+    return [];
+  }
+  const normalized = [];
+  for (const entry of list) {
+    if (!entry || typeof entry !== 'object') {
+      continue;
+    }
+    const soTkFull = (entry.so_tk_full ?? entry.so_tk ?? entry.number ?? '').toString();
+    const soTk = normalizeDeclarationNumber(soTkFull || entry.so_tk);
+    if (!soTk) {
+      continue;
+    }
+    const branch = normalizeStr(entry.nhanh || entry.branch || '');
+    const fields = Array.isArray(entry.fields)
+      ? Array.from(new Set(entry.fields.map((f) => String(f || '').trim()).filter(Boolean)))
+      : undefined;
+    const record = {
+      so_tk: soTk,
+      so_tk_full: soTkFull || undefined,
+      nhanh: branch,
+      branch,
+      fields: fields && fields.length ? fields : undefined,
+    };
+    normalized.push(record);
+    if (normalized.length >= limit) {
+      break;
+    }
+  }
+  return normalized;
+}
+
+function pushImportLog(entry, extraMeta = null) {
   const logs = getJSONValue('import_logs_v1', []);
-  logs.unshift({ ts: new Date().toISOString(), msg: message });
+  const timestamp = new Date().toISOString();
+  let record;
+  if (entry && typeof entry === 'object' && !Array.isArray(entry)) {
+    const {
+      msg,
+      message,
+      kind = 'info',
+      actor = 'system',
+      summary = null,
+      meta = null,
+      updatedDeclarations = [],
+      insertedDeclarations = [],
+    } = entry;
+    const normalizedUpdated = normalizeLogDeclarationList(updatedDeclarations);
+    const normalizedInserted = normalizeLogDeclarationList(insertedDeclarations);
+    record = {
+      ts: timestamp,
+      kind,
+      actor,
+      msg: String(message ?? msg ?? ''),
+      summary: summary && typeof summary === 'object' ? { ...summary } : summary ?? null,
+      meta: meta && typeof meta === 'object' ? { ...meta } : meta ?? null,
+      updatedDeclarations: normalizedUpdated.length ? normalizedUpdated : undefined,
+      insertedDeclarations: normalizedInserted.length ? normalizedInserted : undefined,
+    };
+  } else {
+    const meta = extraMeta && typeof extraMeta === 'object' ? { ...extraMeta } : null;
+    record = {
+      ts: timestamp,
+      kind: 'info',
+      actor: 'system',
+      msg: entry == null ? '' : String(entry),
+      meta,
+    };
+  }
+  const cleaned = Object.fromEntries(Object.entries(record).filter(([, value]) => value !== undefined));
+  logs.unshift(cleaned);
   setJSONValue('import_logs_v1', logs.slice(0, 100));
+}
+
+function normalizeDeclRows(rows) {
+  const input = Array.isArray(rows) ? rows : [];
+  const map = new Map();
+  let changed = false;
+  let missingIndex = 0;
+  for (const entry of input) {
+    if (!entry || typeof entry !== 'object') {
+      changed = true;
+      continue;
+    }
+    const normalized = normalizeDeclarationRow(entry) || entry;
+    if (normalized !== entry) {
+      changed = true;
+    }
+    const key = getDeclarationKey(normalized);
+    if (!key) {
+      missingIndex += 1;
+      map.set(`__missing__${missingIndex}`, normalized);
+      continue;
+    }
+    if (!map.has(key)) {
+      map.set(key, normalized);
+      continue;
+    }
+    const existing = map.get(key);
+    const { row: mergedRow, changed: mergedChanged } = mergeDeclarationRow(existing, normalized);
+    map.set(key, mergedRow);
+    if (mergedChanged) {
+      changed = true;
+    }
+  }
+  const normalizedRows = Array.from(map.values());
+  if (normalizedRows.length !== input.length) {
+    changed = true;
+  }
+  return { normalizedRows, changed };
+}
+
+function writeDeclRows(rows) {
+  const { normalizedRows, changed } = normalizeDeclRows(rows);
+  if (changed) {
+    setJSONValue('decl_rows_v1', normalizedRows);
+    return normalizedRows;
+  }
+  setJSONValue('decl_rows_v1', normalizedRows);
+  return normalizedRows;
 }
 
 function getDeclRows() {
   const rows = getJSONValue('decl_rows_v1', []);
-  return Array.isArray(rows) ? rows : [];
+  const { normalizedRows, changed } = normalizeDeclRows(rows);
+  if (changed) {
+    setJSONValue('decl_rows_v1', normalizedRows);
+  }
+  return normalizedRows;
 }
 
 // eslint-disable-next-line no-unused-vars
 function saveDeclRowsServer(newRows, { overwrite = false, actor = 'system', detail = '' } = {}) {
   const cleaned = Array.isArray(newRows) ? newRows : [];
+  const normalizedInput = cleaned
+    .map((row) => normalizeDeclarationRow(row))
+    .filter((row) => row && typeof row === 'object');
+
   if (overwrite) {
-    setJSONValue('decl_rows_v1', cleaned);
-    pushAuditLog({ actor, action: 'decl.overwrite', detail: detail || `Ghi đè ${cleaned.length} tờ khai` });
-    return cleaned.length;
+    const stored = writeDeclRows(normalizedInput);
+    pushAuditLog({ actor, action: 'decl.overwrite', detail: detail || `Ghi đè ${stored.length} tờ khai` });
+    return stored.length;
   }
 
   const current = getDeclRows();
-  const map = new Map();
-  for (const row of current) {
-    map.set(getDeclarationKey(row), row);
-  }
-  for (const row of cleaned) {
-    map.set(getDeclarationKey(row), row);
-  }
-  const merged = Array.from(map.values());
-  setJSONValue('decl_rows_v1', merged);
+  const combined = Array.isArray(current)
+    ? current.concat(normalizedInput)
+    : normalizedInput;
+  const { normalizedRows } = normalizeDeclRows(combined);
+  writeDeclRows(normalizedRows);
   pushAuditLog({
     actor,
     action: 'decl.merge',
-    detail: detail || `Hợp nhất ${cleaned.length} tờ khai (tổng ${merged.length})`,
+    detail: detail || `Hợp nhất ${normalizedInput.length} tờ khai (tổng ${normalizedRows.length})`,
   });
-  return merged.length;
+  return normalizedRows.length;
 }
 
 function getRulesValue() {
@@ -1540,17 +2017,51 @@ function getEcusConfig() {
     ...DEFAULT_ECUS_SYNC_CONFIG.connection,
     ...(stored?.connection || {}),
   };
-  const columnMap = {
+  connection.options = {
+    encrypt: false,
+    trustServerCertificate: true,
+    enableArithAbort: true,
+    ...(connection.options || {}),
+  };
+  const rawColumnMap = {
     ...DEFAULT_ECUS_SYNC_CONFIG.columnMap,
     ...(stored?.columnMap || {}),
   };
+  const columnMap = normalizeEcusColumnMap(rawColumnMap);
+  const query = normalizeEcusQueryInput(stored?.query);
+  const basePreset = resolveSchedulePresetFromConfig(stored);
+  let schedule;
+  if (basePreset.mode === 'custom') {
+    schedule = normalizeCronExpression(stored?.schedule) || normalizeCronExpression(basePreset.cron) || DEFAULT_ECUS_SYNC_CONFIG.schedule;
+  } else {
+    schedule = buildCronFromPreset(basePreset) || normalizeCronExpression(stored?.schedule) || DEFAULT_ECUS_SYNC_CONFIG.schedule;
+  }
+  schedule = normalizeCronExpression(schedule) || DEFAULT_ECUS_SYNC_CONFIG.schedule;
+  const schedulePreset = {
+    ...normalizeSchedulePreset({ ...basePreset, cron: schedule }, basePreset),
+    cron: schedule,
+  };
+  const rangeDaysNumber = Number.parseInt(stored?.rangeDays, 10);
+  const rangeDays = Number.isFinite(rangeDaysNumber) && rangeDaysNumber > 0
+    ? rangeDaysNumber
+    : DEFAULT_ECUS_SYNC_CONFIG.rangeDays;
+  const sanitizedStored = {
+    ...stored,
+    query,
+  };
   return {
     ...DEFAULT_ECUS_SYNC_CONFIG,
-    ...stored,
+    ...sanitizedStored,
+    schedule,
+    schedulePreset,
+    rangeDays,
+    preferMonthFirst: !!stored?.preferMonthFirst,
     connection,
     columnMap,
+    query,
   };
 }
+
 
 function saveEcusConfig(config, { preservePassword = false } = {}) {
   const current = getEcusConfig();
@@ -1559,36 +2070,98 @@ function saveEcusConfig(config, { preservePassword = false } = {}) {
     ...current.connection,
     ...connectionPatch,
   };
+  nextConnection.options = {
+    encrypt: false,
+    trustServerCertificate: true,
+    enableArithAbort: true,
+    ...(nextConnection.options || {}),
+  };
   if (preservePassword && connectionPatch.password === undefined) {
     nextConnection.password = current.connection.password || '';
   } else {
     nextConnection.password = connectionPatch.password ?? '';
   }
+  nextConnection.hasPassword = nextConnection.password
+    ? true
+    : connectionPatch.hasPassword === true || current.connection?.hasPassword === true;
+
+  const rangeDaysNumber = Number.parseInt(config?.rangeDays, 10);
+  const nextRangeDays = Number.isFinite(rangeDaysNumber) && rangeDaysNumber > 0
+    ? rangeDaysNumber
+    : current.rangeDays;
+
+  const schedulePresetInput = config?.schedulePreset ?? {
+    mode: config?.scheduleMode,
+    value: config?.scheduleValue,
+    time: config?.scheduleTime,
+    cron: config?.schedule,
+  };
+  let schedulePreset = normalizeSchedulePreset(schedulePresetInput, current.schedulePreset);
+  let schedule;
+  if (schedulePreset.mode === 'custom') {
+    const customCron = normalizeCronExpression(config?.schedule ?? schedulePreset.cron ?? current.schedule);
+    schedule = customCron || current.schedule || DEFAULT_ECUS_SYNC_CONFIG.schedule;
+  } else {
+    schedule = buildCronFromPreset(schedulePreset) || current.schedule || DEFAULT_ECUS_SYNC_CONFIG.schedule;
+  }
+  schedule = normalizeCronExpression(schedule) || DEFAULT_ECUS_SYNC_CONFIG.schedule;
+  schedulePreset = { ...schedulePreset, cron: schedule };
+
+  const columnMapPatch = config?.columnMap || {};
 
   const nextConfig = {
     ...current,
     ...config,
+    enabled: config?.enabled !== undefined ? !!config.enabled : current.enabled,
+    rangeDays: nextRangeDays,
+    preferMonthFirst: config?.preferMonthFirst !== undefined ? !!config.preferMonthFirst : current.preferMonthFirst,
+    schedule,
+    schedulePreset,
     connection: nextConnection,
     columnMap: {
       ...current.columnMap,
-      ...(config?.columnMap || {}),
+      ...columnMapPatch,
     },
   };
+
+  nextConfig.columnMap = normalizeEcusColumnMap(nextConfig.columnMap);
+  nextConfig.query = normalizeEcusQueryInput(nextConfig.query);
+
+  delete nextConfig.scheduleMode;
+  delete nextConfig.scheduleValue;
+  delete nextConfig.scheduleTime;
+  delete nextConfig.scheduleDescription;
+
   setJSONValue('ecus_sync_config_v1', nextConfig);
   return nextConfig;
 }
 
+
 function formatEcusConfigForClient(config) {
   const source = config || getEcusConfig();
   const connection = { ...source.connection };
+  const derivedPreset = deriveSchedulePreset(source.schedule, source.schedulePreset);
+  const schedulePreset = {
+    ...normalizeSchedulePreset(source.schedulePreset || derivedPreset, derivedPreset),
+  };
+  schedulePreset.cron = normalizeCronExpression(schedulePreset.cron || source.schedule);
+  const scheduleDescription = describeCronExpression(source.schedule);
   const result = {
     ...source,
     connection,
+    schedulePreset,
+    scheduleMode: schedulePreset.mode,
+    scheduleValue: schedulePreset.value,
+    scheduleTime: schedulePreset.time,
+    scheduleDescription,
   };
-  connection.hasPassword = !!connection.password;
+  connection.hasPassword = connection.password
+    ? true
+    : connection.hasPassword === true || source.connection?.hasPassword === true;
   connection.password = '';
   return result;
 }
+
 
 function getAlertConfig() {
   const stored = getJSONValue('decl_alert_config_v1', DEFAULT_ALERT_CONFIG);
@@ -1601,6 +2174,137 @@ function saveAlertConfig(config) {
   return next;
 }
 
+function normalizeCodeListForConfig(list) {
+  if (!Array.isArray(list)) {
+    return [];
+  }
+  const set = new Set();
+  for (const item of list) {
+    const normalized = normalizeStr(item).toUpperCase();
+    if (!normalized) continue;
+    set.add(normalized);
+  }
+  return Array.from(set);
+}
+
+function getCoCodeConfig() {
+  const stored = getJSONValue('co_tax_code_config_v1', DEFAULT_CO_CODE_CONFIG);
+  const whitelist = normalizeCodeListForConfig(stored?.whitelist);
+  const blacklist = normalizeCodeListForConfig(stored?.blacklist);
+  return {
+    version: Number.isInteger(stored?.version) ? stored.version : DEFAULT_CO_CODE_CONFIG.version,
+    whitelist,
+    blacklist,
+    updatedAt: stored?.updatedAt || null,
+    updatedBy: stored?.updatedBy || null,
+  };
+}
+
+function applyCoCodeConfig(config) {
+  setPreferentialCodeConfig({
+    whitelist: Array.isArray(config?.whitelist) ? config.whitelist : [],
+    blacklist: Array.isArray(config?.blacklist) ? config.blacklist : [],
+  });
+}
+
+function saveCoCodeConfig(input, { actor = 'system' } = {}) {
+  const current = getCoCodeConfig();
+  const hasWhitelist = Object.prototype.hasOwnProperty.call(input || {}, 'whitelist');
+  const hasBlacklist = Object.prototype.hasOwnProperty.call(input || {}, 'blacklist');
+  const whitelist = hasWhitelist ? normalizeCodeListForConfig(input?.whitelist) : current.whitelist;
+  const blacklist = hasBlacklist ? normalizeCodeListForConfig(input?.blacklist) : current.blacklist;
+  const next = {
+    version: Number.isInteger(current.version) ? current.version : 1,
+    whitelist,
+    blacklist,
+    updatedAt: new Date().toISOString(),
+    updatedBy: actor,
+  };
+  setJSONValue('co_tax_code_config_v1', next);
+  applyCoCodeConfig(next);
+  return next;
+}
+
+function normalizeInteger(value, fallback, { min = Number.NEGATIVE_INFINITY } = {}) {
+  const parsed = Number.isFinite(Number(value)) ? Math.floor(Number(value)) : null;
+  if (parsed === null) {
+    return fallback;
+  }
+  return parsed < min ? min : parsed;
+}
+
+function getCoDiscrepancyConfig() {
+  const stored = getJSONValue('co_discrepancy_config_v1', DEFAULT_CO_DISCREPANCY_CONFIG);
+  const enabled = stored?.enabled === true;
+  const cronExpr = typeof stored?.cron === 'string' && stored.cron.trim()
+    ? stored.cron.trim()
+    : DEFAULT_CO_DISCREPANCY_CONFIG.cron;
+  const rangeDays = normalizeInteger(stored?.rangeDays, DEFAULT_CO_DISCREPANCY_CONFIG.rangeDays, { min: 1 });
+  const threshold = normalizeInteger(stored?.threshold, DEFAULT_CO_DISCREPANCY_CONFIG.threshold, { min: 1 });
+  const sampleLimit = normalizeInteger(stored?.sampleLimit, DEFAULT_CO_DISCREPANCY_CONFIG.sampleLimit, { min: 0 });
+  return {
+    enabled,
+    cron: cronExpr,
+    rangeDays,
+    threshold,
+    sampleLimit,
+    updatedAt: stored?.updatedAt || null,
+    updatedBy: stored?.updatedBy || null,
+  };
+}
+
+function saveCoDiscrepancyConfig(input, { actor = 'system' } = {}) {
+  const current = getCoDiscrepancyConfig();
+  const enabled = input?.enabled === true;
+  const cronExpr = typeof input?.cron === 'string' && input.cron.trim()
+    ? input.cron.trim()
+    : current.cron;
+  const rangeDays = normalizeInteger(input?.rangeDays, current.rangeDays, { min: 1 });
+  const threshold = normalizeInteger(input?.threshold, current.threshold, { min: 1 });
+  const sampleLimit = normalizeInteger(input?.sampleLimit, current.sampleLimit, { min: 0 });
+  const next = {
+    enabled,
+    cron: cronExpr,
+    rangeDays,
+    threshold,
+    sampleLimit,
+    updatedAt: new Date().toISOString(),
+    updatedBy: actor,
+  };
+  setJSONValue('co_discrepancy_config_v1', next);
+  return next;
+}
+
+function getCoDiscrepancyState() {
+  const stored = getJSONValue('co_discrepancy_state_v1', DEFAULT_CO_DISCREPANCY_STATE);
+  const mismatches = Array.isArray(stored?.mismatches) ? stored.mismatches : [];
+  return {
+    ...DEFAULT_CO_DISCREPANCY_STATE,
+    ...stored,
+    mismatches,
+  };
+}
+
+function saveCoDiscrepancyState(state) {
+  const mismatches = Array.isArray(state?.mismatches)
+    ? state.mismatches.slice(0, 200)
+    : [];
+  const range = state?.range && typeof state.range === 'object'
+    ? {
+        from: String(state.range.from || ''),
+        to: String(state.range.to || ''),
+      }
+    : null;
+  const next = {
+    ...DEFAULT_CO_DISCREPANCY_STATE,
+    ...state,
+    mismatches,
+    range,
+    status: typeof state?.status === 'string' ? state.status : DEFAULT_CO_DISCREPANCY_STATE.status,
+  };
+  setJSONValue('co_discrepancy_state_v1', next);
+  return next;
+}
 function getAlertState() {
   const stored = getJSONValue('decl_alert_state_v1', DEFAULT_ALERT_STATE);
   const entries = stored?.entries && typeof stored.entries === 'object' ? stored.entries : {};
@@ -1635,7 +2339,7 @@ function markDeclarationsReviewed(keys, { actor = 'system' } = {}) {
     };
   });
   if (updatedCount > 0) {
-    setJSONValue('decl_rows_v1', nextRows);
+    writeDeclRows(nextRows);
     pushAuditLog({
       actor,
       action: 'decl.review',
@@ -1809,9 +2513,10 @@ function buildSqlConnectionConfig(config) {
     user: connection.user || process.env.ECUS_SQL_USER || '',
     password: connection.password || process.env.ECUS_SQL_PASSWORD || '',
     options: {
+      encrypt: false,
+      trustServerCertificate: true,
+      enableArithAbort: true,
       ...(connection.options || {}),
-      encrypt: connection.options?.encrypt ?? false,
-      trustServerCertificate: connection.options?.trustServerCertificate ?? true,
     },
     port: connection.port ? Number(connection.port) : undefined,
     connectionTimeout: parseTimeout(connection.connectionTimeout),
@@ -2243,7 +2948,8 @@ function mapEcusRow(record, config, context) {
     return undefined;
   };
 
-  const soTk = normalizeStr(getField('so_tk'));
+  const soTkRaw = normalizeStr(getField('so_tk'));
+  const soTk = normalizeDeclarationNumber(soTkRaw);
   const nhanh = normalizeStr(getField('nhanh'));
   const rawDate = getField('date');
   const dateISO = rawDate instanceof Date
@@ -2291,6 +2997,8 @@ function mapEcusRow(record, config, context) {
     date: dateISO,
     raw_date: rawDate instanceof Date ? rawDate.toISOString().slice(0, 10) : normalizeStr(rawDate),
     so_tk: soTk,
+    so_tk_full: soTkRaw,
+    so_tk_suffix: soTkRaw.slice(soTk.length),
     nhanh,
     mst,
     cong_ty: company,
@@ -2304,7 +3012,131 @@ function mapEcusRow(record, config, context) {
     isExport,
     co_line_count: coLineCount,
   };
-  return deriveCOStatus(record, base);
+  const normalizedBase = normalizeDeclarationRow(base) || base;
+  return deriveCOStatus(record, normalizedBase);
+}
+
+function isEqualValue(a, b) {
+  if (Array.isArray(a) && Array.isArray(b)) {
+    if (a.length !== b.length) {
+      return false;
+    }
+    for (let i = 0; i < a.length; i += 1) {
+      if (!isEqualValue(a[i], b[i])) {
+        return false;
+      }
+    }
+    return true;
+  }
+  return Object.is(a, b);
+}
+
+function normalizeValueArray(value) {
+  if (Array.isArray(value)) {
+    return value
+      .filter((item) => item !== null && item !== undefined)
+      .map((item) => normalizeStr(item));
+  }
+  if (value === null || value === undefined) {
+    return [];
+  }
+  if (typeof value === 'string') {
+    return value
+      .split(/[\s,;|]+/g)
+      .map((part) => normalizeStr(part))
+      .filter(Boolean);
+  }
+  return [];
+}
+
+function mergeDeclarationRow(existing, incoming) {
+  if (!existing) {
+    return { row: incoming, changed: true, changedFields: Object.keys(incoming || {}) };
+  }
+  const merged = { ...existing };
+  let changed = false;
+  const changedFields = new Set();
+
+  const markChanged = (field) => {
+    changed = true;
+    if (field) {
+      changedFields.add(field);
+    }
+  };
+
+  const assign = (field, value) => {
+    if (!isEqualValue(merged[field], value)) {
+      merged[field] = value;
+      markChanged(field);
+    }
+  };
+
+  const skipFields = new Set([
+    'nhan_vien',
+    'team',
+    'agency',
+    'dai_ly',
+    'licenses',
+    'so_luong_gp',
+    'reviewed',
+    'reviewed_at',
+    'so_tk',
+    'so_tk_full',
+    'so_tk_suffix',
+  ]);
+
+  for (const [key, value] of Object.entries(incoming)) {
+    if (skipFields.has(key)) {
+      continue;
+    }
+    if (key === 'co_line_count') {
+      assign(key, parseCoLineCount(value));
+      continue;
+    }
+    if (key === 'co') {
+      assign(key, normalizeStr(value || ''));
+      continue;
+    }
+    if (key === 'has_co') {
+      assign(key, !!value);
+      continue;
+    }
+    if (key === 'co_codes' || key === 'licenseCodes') {
+      assign(key, normalizeValueArray(value));
+      continue;
+    }
+    assign(key, value);
+  }
+
+  const fillIfBlank = (field) => {
+    const current = normalizeStr(merged[field] || '');
+    const incomingValue = normalizeStr(incoming[field] || '');
+    if (!current && incomingValue) {
+      assign(field, incoming[field]);
+    }
+  };
+
+  fillIfBlank('nhan_vien');
+  fillIfBlank('team');
+  fillIfBlank('agency');
+  fillIfBlank('dai_ly');
+
+  const fillNumeric = (field) => {
+    const rawIncoming = incoming[field];
+    if (rawIncoming === undefined || rawIncoming === null || rawIncoming === '') {
+      return;
+    }
+    const incomingNumber = Number(rawIncoming);
+    if (!Number.isFinite(incomingNumber)) {
+      return;
+    }
+    assign(field, incomingNumber);
+  };
+
+  fillNumeric('licenses');
+  fillNumeric('so_luong_gp');
+
+  return { row: merged, changed, changedFields: Array.from(changedFields) };
 }
 
 async function* fetchEcusDeclarations(range, config) {
@@ -2514,6 +3346,10 @@ async function runEcusSync({ from, to, actor = 'system', reason = 'manual' } = {
   let totalFetched = 0;
   let totalInserted = 0;
   let skippedExisting = 0;
+  let updatedExisting = 0;
+
+  const updatedMap = new Map();
+  const insertedMap = new Map();
 
   for await (const batch of rawIterator) {
     totalFetched += batch.length;
@@ -2522,28 +3358,87 @@ async function runEcusSync({ from, to, actor = 'system', reason = 'manual' } = {
       .filter((row) => row && row.so_tk && row.date);
     for (const row of mappedBatch) {
       const key = getDeclarationKey(row);
+      if (!key) {
+        continue;
+      }
       if (mergedMap.has(key)) {
-        skippedExisting += 1;
+        const existing = mergedMap.get(key);
+        const { row: mergedRow, changed, changedFields = [] } = mergeDeclarationRow(existing, row);
+        mergedMap.set(key, mergedRow);
+        if (changed) {
+          updatedExisting += 1;
+          const entry = updatedMap.get(key) || {
+            so_tk: mergedRow.so_tk,
+            so_tk_full: mergedRow.so_tk_full || row.so_tk_full || existing.so_tk_full || row.so_tk,
+            nhanh: normalizeStr(mergedRow.nhanh || mergedRow.branch || ''),
+            fields: new Set(),
+          };
+          for (const field of changedFields) {
+            entry.fields.add(field);
+          }
+          updatedMap.set(key, entry);
+        } else {
+          skippedExisting += 1;
+        }
         continue;
       }
       mergedMap.set(key, row);
       totalInserted += 1;
+      insertedMap.set(key, {
+        so_tk: row.so_tk,
+        so_tk_full: row.so_tk_full || row.so_tk,
+        nhanh: normalizeStr(row.nhanh || row.branch || ''),
+      });
     }
   }
 
   const mergedRows = Array.from(mergedMap.values());
-  setJSONValue('decl_rows_v1', mergedRows);
+  const storedRows = writeDeclRows(mergedRows);
+  const totalStored = storedRows.length;
+
   pushAuditLog({
     actor,
     action: 'decl.merge',
-    detail: `Đồng bộ ${totalInserted} tờ khai mới từ ECUS (${range.from || '...'} → ${range.to || '...'}) [${syncReason}] – giữ nguyên ${skippedExisting} tờ khai đã có – tổng lưu: ${mergedRows.length}`,
+    detail: `Dong bo ${totalInserted} to khai moi tu ECUS (${range.from || '...'} -> ${range.to || '...'}) [${syncReason}] - cap nhat ${updatedExisting} - bo qua ${skippedExisting} - tong luu: ${totalStored}`,
   });
 
   const alertSummary = evaluateDeclarationAlerts({ actor, reason: 'ecus-sync' });
 
-  pushImportLog(
-    `ECUS sync (${syncReason}) thêm ${totalInserted} dòng, bỏ qua ${skippedExisting} (${range.from || '...'} → ${range.to || '...'}) – tổng lưu: ${mergedRows.length}`,
-  );
+  const updatedEntries = Array.from(updatedMap.values()).map((entry) => ({
+    so_tk: entry.so_tk,
+    so_tk_full: entry.so_tk_full,
+    nhanh: entry.nhanh,
+    fields: Array.from(entry.fields),
+  }));
+  const insertedEntries = Array.from(insertedMap.values());
+
+  pushImportLog({
+    kind: 'ecus-sync',
+    actor,
+    message: `ECUS sync (${syncReason}) +${totalInserted} / cap nhat ${updatedExisting} / bo qua ${skippedExisting} (${range.from || '...'} -> ${range.to || '...'}) - tong luu: ${totalStored}`,
+    summary: {
+      reason: syncReason,
+      range,
+      fetched: totalFetched,
+      inserted: totalInserted,
+      updated: updatedExisting,
+      skipped: skippedExisting,
+      stored: totalStored,
+    },
+    updatedDeclarations: updatedEntries,
+    insertedDeclarations: insertedEntries,
+  });
+
+  const updatedSummary = updatedEntries.slice(0, 200).map((entry) => ({
+    so_tk: entry.so_tk,
+    nhanh: entry.nhanh,
+  }));
+  const insertedSummary = insertedEntries.slice(0, 200).map((entry) => ({
+    so_tk: entry.so_tk,
+    nhanh: entry.nhanh,
+  }));
+  const updatedKeySet = new Set(updatedEntries.map((entry) => `${entry.so_tk}_${entry.nhanh || ''}`));
+  const updatedKeys = Array.from(updatedKeySet).slice(0, 400);
 
   const nextConfig = saveEcusConfig({
     lastRun: runAtIso,
@@ -2552,11 +3447,15 @@ async function runEcusSync({ from, to, actor = 'system', reason = 'manual' } = {
       runAt: runAtIso,
       rowsFetched: totalFetched,
       rowsInserted: totalInserted,
+      rowsUpdated: updatedExisting,
       rowsSkipped: skippedExisting,
-      totalStored: mergedRows.length,
+      totalStored,
       existingBefore: existingCount,
       range,
       alerts: alertSummary,
+      updatedDeclarations: updatedSummary,
+      insertedDeclarations: insertedSummary,
+      updatedKeys,
     },
   }, { preservePassword: true });
 
@@ -2564,13 +3463,16 @@ async function runEcusSync({ from, to, actor = 'system', reason = 'manual' } = {
     config: nextConfig,
     fetched: totalFetched,
     imported: totalInserted,
+    updated: updatedExisting,
     skipped: skippedExisting,
-    storedTotal: mergedRows.length,
+    storedTotal: totalStored,
     existingBefore: existingCount,
-    existingAfter: mergedRows.length,
+    existingAfter: totalStored,
     range,
     alerts: alertSummary,
     runAt: runAtIso,
+    updatedDeclarations: updatedSummary,
+    insertedDeclarations: insertedSummary,
   };
 }
 
@@ -2611,9 +3513,172 @@ function refreshEcusSchedule() {
     if (scheduledSync) {
       scheduledSync.stop();
       scheduledSync = null;
+  }
+  return;
+}
+
+async function runCoDiscrepancyCheck({ actor = 'system', reason = 'auto', range = null } = {}) {
+  const config = getCoDiscrepancyConfig();
+  const effectiveRange = range && typeof range === 'object'
+    ? {
+        from: range.from || '',
+        to: range.to || '',
+      }
+    : computeRangeWindow({ rangeDays: config.rangeDays }, {});
+  const limit = Number.isFinite(Number(config.sampleLimit))
+    ? Math.max(0, Math.floor(Number(config.sampleLimit)))
+    : 0;
+  const startedAt = Date.now();
+  try {
+    const preview = await previewEcusSync(effectiveRange, { limit });
+    const rows = Array.isArray(preview?.rows) ? preview.rows : [];
+    const storedRows = getDeclRows();
+    const storedMap = new Map();
+    for (const row of storedRows) {
+      const key = getDeclarationKey(row);
+      if (!key) continue;
+      storedMap.set(key, row);
     }
+    const mismatches = [];
+    for (const row of rows) {
+      const key = getDeclarationKey(row);
+      if (!key) {
+        continue;
+      }
+      const stored = storedMap.get(key);
+      if (!stored) {
+        continue;
+      }
+      const storedCount = Number(stored?.co_line_count) || 0;
+      const remoteCount = Number(row?.co_line_count) || 0;
+      const storedHasCo = !!(stored?.has_co || storedCount > 0 || (stored?.co && stored.co.trim()));
+      const remoteHasCo = !!(row?.has_co || remoteCount > 0 || (row?.co && row.co.trim()));
+      if (storedCount === remoteCount && storedHasCo === remoteHasCo) {
+        continue;
+      }
+      mismatches.push({
+        key,
+        so_tk: row.so_tk,
+        so_tk_full: row.so_tk_full || row.so_tk,
+        nhanh: normalizeStr(row.nhanh || row.branch || ''),
+        stored: {
+          co_line_count: storedCount,
+          has_co: storedHasCo,
+          co: stored?.co || '',
+          co_codes: Array.isArray(stored?.co_codes) ? stored.co_codes : [],
+        },
+        remote: {
+          co_line_count: remoteCount,
+          has_co: remoteHasCo,
+          co: row.co || '',
+          co_codes: Array.isArray(row?.co_codes) ? row.co_codes : [],
+        },
+      });
+    }
+    const mismatchCount = mismatches.length;
+    const totalChecked = rows.length;
+    const limited = !!preview?.limited;
+    const durationMs = Date.now() - startedAt;
+    const triggered = mismatchCount >= config.threshold;
+    const state = saveCoDiscrepancyState({
+      lastRunAt: new Date().toISOString(),
+      range: effectiveRange,
+      mismatchCount,
+      totalChecked,
+      mismatches: mismatches.slice(0, 200),
+      limited,
+      durationMs,
+      status: 'ok',
+      triggered,
+      actor,
+      reason,
+      error: null,
+    });
+    if (triggered) {
+      pushImportLog({
+        kind: 'co-discrepancy',
+        actor,
+        message: `Kiem tra CO: ${mismatchCount}/${totalChecked} to khai lech thong tin (nguong ${config.threshold})`,
+        summary: {
+          range: effectiveRange,
+          mismatchCount,
+          totalChecked,
+          threshold: config.threshold,
+          durationMs,
+        },
+        updatedDeclarations: mismatches,
+      });
+      pushAuditLog({
+        actor,
+        action: 'co.discrepancy',
+        detail: `Phat hien ${mismatchCount} to khai lech thong tin CO`,
+        meta: { range: effectiveRange, totalChecked, threshold: config.threshold },
+      });
+    }
+    return { ok: true, config, state };
+  } catch (err) {
+    const durationMs = Date.now() - startedAt;
+    const fallbackRange = range && typeof range === 'object'
+      ? { from: range.from || '', to: range.to || '' }
+      : computeRangeWindow({ rangeDays: config.rangeDays }, {});
+    saveCoDiscrepancyState({
+      lastRunAt: new Date().toISOString(),
+      range: fallbackRange,
+      mismatchCount: 0,
+      totalChecked: 0,
+      mismatches: [],
+      limited: false,
+      durationMs,
+      status: 'error',
+      triggered: false,
+      actor,
+      reason,
+      error: err?.message || 'Unknown error',
+    });
+    pushImportLog({
+      kind: 'co-discrepancy',
+      actor,
+      message: `Kiem tra CO that bai: ${err?.message || 'Unknown error'}`,
+      summary: { range: fallbackRange, error: err?.message || 'Unknown error' },
+    });
+    throw err;
+  }
+}
+
+function refreshCoDiscrepancySchedule() {
+  if (coDiscrepancyJob) {
+    try {
+      coDiscrepancyJob.stop();
+    } catch (err) {
+      console.warn('Khong the dung lich kiem tra CO hien tai', err);
+    }
+    coDiscrepancyJob = null;
+  }
+  if (process.env.KPI_DISABLE_CRON === '1') {
     return;
   }
+  const config = getCoDiscrepancyConfig();
+  if (!config.enabled) {
+    return;
+  }
+  const cronExpr = normalizeCronExpression(config.cron);
+  if (!cronExpr || cronExpr.toLowerCase() === 'never') {
+    return;
+  }
+  if (typeof cron.validate === 'function' && !cron.validate(cronExpr)) {
+    console.warn('CO discrepancy cron expression invalid:', cronExpr);
+    return;
+  }
+  try {
+    coDiscrepancyJob = cron.schedule(cronExpr, () => {
+      runCoDiscrepancyCheck({ actor: 'scheduler', reason: 'scheduled' }).catch((err) => {
+        console.error('Chay lich kiem tra CO that bai', err);
+      });
+    });
+  } catch (err) {
+    console.error('Khong the thiet lap lich kiem tra CO:', err);
+  }
+}
   if (scheduledSync) {
     scheduledSync.stop();
     scheduledSync = null;
@@ -2622,14 +3687,23 @@ function refreshEcusSchedule() {
   if (!config.enabled || !config.schedule) {
     return;
   }
+  const cronExpr = normalizeCronExpression(config.schedule);
+  if (!cronExpr) {
+    return;
+  }
+  if (typeof cron.validate === 'function' && !cron.validate(cronExpr)) {
+    console.warn('ECUS sync cron expression invalid:', cronExpr);
+    return;
+  }
   try {
-    scheduledSync = cron.schedule(config.schedule, () => {
+    scheduledSync = cron.schedule(cronExpr, () => {
       runEcusSyncWithErrorHandling({ actor: 'scheduler', reason: 'scheduled' }).catch(() => {});
     });
   } catch (err) {
     console.error('Không thể thiết lập lịch đồng bộ ECUS:', err);
   }
 }
+
 
 export const app = express();
 const PORT = Number.parseInt(process.env.PORT || '5000', 10);
@@ -2645,6 +3719,9 @@ function logServerAddresses(port, host) {
     console.log(`Đang lắng nghe trên địa chỉ mạng: ${normalizedHost}`);
   }
 }
+
+export { runEcusSyncWithErrorHandling, getEcusConfig };
+
 
 app.use(cors({ origin: true, credentials: true }));
 app.use(express.json({ limit: '5mb' }));
@@ -2803,7 +3880,7 @@ app.post('/api/auth/login', async (req, res) => {
     setSessionCookie(req, res, token, expiresAt);
     const user = sanitizeAccountRecord(account);
     pushAuditLog({ actor: account.username, action: 'auth.login', detail: 'Đăng nhập thành công' });
-    res.json({ ok: true, user, expiresAt });
+    res.json({ ok: true, user, token, expiresAt });
   } catch (err) {
     res.status(500).json({ ok: false, error: err?.message || 'Không thể đăng nhập' });
   }
@@ -2896,7 +3973,7 @@ app.post('/api/auth/password/change', async (req, res) => {
     deleteSessionsForUser(account?.username || username);
     const { token, expiresAt } = createSessionForUser(account?.username || username);
     setSessionCookie(req, res, token, expiresAt);
-    res.json({ ok: true, account, expiresAt });
+    res.json({ ok: true, account, token, expiresAt });
   } catch (err) {
     const status = err?.message && err.message.includes('Không tìm thấy') ? 404 : 400;
     res.status(status).json({ ok: false, error: err?.message || 'Không thể đổi mật khẩu' });
@@ -2931,6 +4008,12 @@ app.put('/api/storage/:key', (req, res) => {
     if (key === 'ecus_sync_config_v1') {
       refreshEcusSchedule();
     }
+    if (key === 'co_tax_code_config_v1') {
+      applyCoCodeConfig(getCoCodeConfig());
+    }
+    if (key === 'co_discrepancy_config_v1') {
+      refreshCoDiscrepancySchedule();
+    }
     res.json({ ok: true });
   } catch (err) {
     console.error('Lỗi ghi dữ liệu', err);
@@ -2954,6 +4037,12 @@ app.delete('/api/storage/:key', (req, res) => {
   }
   try {
     deleteValue(key);
+    if (key === 'co_tax_code_config_v1') {
+      applyCoCodeConfig(DEFAULT_CO_CODE_CONFIG);
+    }
+    if (key === 'co_discrepancy_config_v1') {
+      refreshCoDiscrepancySchedule();
+    }
     res.json({ ok: true });
   } catch (err) {
     console.error('Lỗi xóa dữ liệu', err);
@@ -3041,6 +4130,69 @@ app.post('/api/import/ecus/run', async (req, res) => {
 app.get('/api/import/alerts', (req, res) => {
   const payload = buildAlertPayload();
   res.json({ ok: true, ...payload });
+});
+
+app.get('/api/import/co-codes', (req, res) => {
+  try {
+    const config = getCoCodeConfig();
+    res.json({ ok: true, config });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err?.message || 'Khong the tai cau hinh ma uu dai' });
+  }
+});
+
+app.put('/api/import/co-codes', (req, res) => {
+  const { denied, context } = requireAdminSyncManage(req, res);
+  if (denied) {
+    return;
+  }
+  try {
+    const actor = context?.account?.username || resolveActor(req);
+    const next = saveCoCodeConfig(req.body?.config || req.body || {}, { actor });
+    res.json({ ok: true, config: next });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err?.message || 'Khong the luu cau hinh ma uu dai' });
+  }
+});
+
+app.get('/api/import/co-discrepancy', (req, res) => {
+  try {
+    const config = getCoDiscrepancyConfig();
+    const state = getCoDiscrepancyState();
+    res.json({ ok: true, config, state });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err?.message || 'Khong the tai trang thai kiem tra CO' });
+  }
+});
+
+app.put('/api/import/co-discrepancy/config', (req, res) => {
+  const { denied, context } = requireAdminSyncManage(req, res);
+  if (denied) {
+    return;
+  }
+  try {
+    const actor = context?.account?.username || resolveActor(req);
+    const next = saveCoDiscrepancyConfig(req.body?.config || req.body || {}, { actor });
+    refreshCoDiscrepancySchedule();
+    res.json({ ok: true, config: next });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err?.message || 'Khong the luu cau hinh kiem tra CO' });
+  }
+});
+
+app.post('/api/import/co-discrepancy/run', async (req, res) => {
+  const { denied, context } = requireAdminSyncManage(req, res);
+  if (denied) {
+    return;
+  }
+  try {
+    const actor = context?.account?.username || resolveActor(req);
+    const range = req.body?.range && typeof req.body.range === 'object' ? req.body.range : null;
+    const result = await runCoDiscrepancyCheck({ actor, reason: 'manual', range });
+    res.json({ ok: true, result });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err?.message || 'Khong the chay kiem tra CO' });
+  }
 });
 
 app.get('/api/import/alerts/config', (req, res) => {

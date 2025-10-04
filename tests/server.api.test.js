@@ -415,6 +415,7 @@ describe('API xác thực & bootstrap', () => {
     expect(response.body?.ok).toBe(true);
     expect(response.body?.user).toMatchObject({ username: 'admin', role: 'admin' });
     expect(response.body?.user).not.toHaveProperty('passwordHash');
+    expect(typeof response.body?.token).toBe('string');
     expect(response.headers['set-cookie']).toBeDefined();
   });
 
@@ -443,6 +444,8 @@ describe('API xác thực & bootstrap', () => {
       .send({ username: 'admin', currentPassword: 'admin123', newPassword: 'admin999' });
     expect(changeRes.status).toBe(200);
     expect(changeRes.headers['set-cookie']).toBeDefined();
+
+    expect(typeof changeRes.body?.token).toBe('string');
 
     const sessionAfterChange = await agent.get('/api/auth/session');
     expect(sessionAfterChange.body?.user).toMatchObject({ username: 'admin' });
@@ -652,11 +655,28 @@ describe('ECUS sync API', () => {
     expect(res.status).toBe(200);
     expect(res.body).toMatchObject({
       ok: true,
-      config: {
-        connection: { hasPassword: false, password: '' },
+      config: expect.objectContaining({
         enabled: false,
-      },
+        schedule: '0 3 * * *',
+        scheduleMode: 'daily',
+        scheduleValue: 1,
+        scheduleTime: '03:00',
+        connection: expect.objectContaining({
+          server: 'Server',
+          database: 'ECUS5VNACCS',
+          user: 'sa',
+          password: '',
+        }),
+      }),
     });
+    expect(typeof res.body.config.connection.hasPassword).toBe('boolean');
+    expect(res.body.config.schedulePreset).toEqual(expect.objectContaining({
+      mode: 'daily',
+      value: 1,
+      time: '03:00',
+      cron: '0 3 * * *',
+    }));
+    expect(typeof res.body.config.scheduleDescription).toBe('string');
   });
 
   it('từ chối cập nhật cấu hình khi chưa đăng nhập', async () => {
@@ -682,7 +702,7 @@ describe('ECUS sync API', () => {
     expect(res.status).toBe(200);
     expect(res.body.ok).toBe(true);
     expect(res.body.backend).toMatchObject({ ok: true, state: 'online' });
-    expect(res.body.database).toMatchObject({ ok: false, state: 'not_configured' });
+    expect(res.body.database).toMatchObject({ ok: true, state: 'ready' });
   });
 
   it('từ chối chạy đồng bộ khi không đăng nhập', async () => {
@@ -836,6 +856,7 @@ describe('ECUS sync API', () => {
       ok: true,
       result: {
         imported: 1,
+        updated: 0,
         skipped: 0,
         existingBefore: 0,
         fetched: 1,
@@ -859,7 +880,8 @@ describe('ECUS sync API', () => {
     const storedRows = JSON.parse(row.value);
     expect(storedRows).toHaveLength(1);
     expect(storedRows[0]).toMatchObject({
-      so_tk: '105110557420',
+      so_tk: '10511055742',
+      so_tk_full: '105110557420',
       mst: '1051105574',
       cong_ty: 'CÔNG TY TNHH ABC',
       nhan_vien: 'Phương',
@@ -933,7 +955,8 @@ describe('ECUS sync API', () => {
 
     expect(secondRun.status).toBe(200);
     expect(secondRun.body.result.imported).toBe(0);
-    expect(secondRun.body.result.skipped).toBe(1);
+    expect(secondRun.body.result.updated).toBe(1);
+    expect(secondRun.body.result.skipped).toBe(0);
 
     const row = getDb()
       .prepare('SELECT value FROM kv_store WHERE key = ?')
@@ -941,6 +964,73 @@ describe('ECUS sync API', () => {
     const storedRows = JSON.parse(row.value);
     expect(storedRows).toHaveLength(1);
     expect(storedRows[0].nhan_vien).toBe('Manual Edit');
+  });
+
+  it('cap nhat co_line_count cho to khai da ton tai', async () => {
+    const adminAgent = request.agent(app);
+    const loginRes = await adminAgent.post('/api/auth/login').send({ username: 'admin', password: 'admin123' });
+    expect(loginRes.status).toBe(200);
+
+    await adminAgent
+      .put('/api/import/ecus/config')
+      .send({
+        config: {
+          enabled: true,
+          connection: { server: 'MRHOC\\ECUSSQL2008', database: 'ECUS5VNACCS', user: 'sa', password: '123456' },
+        },
+      });
+
+    const existingRow = [{
+      so_tk: '107490433150',
+      nhanh: '',
+      date: '2025-09-03',
+      mst: '4601145670',
+      cong_ty: 'Cong ty TNHH SAMJU VINA',
+      loai_hinh: 'E11',
+      co_line_count: 0,
+      co: '',
+      has_co: false,
+      nhan_vien: 'Huyen',
+      team: 'Team 2',
+    }];
+    getDb()
+      .prepare('INSERT INTO kv_store (key, value) VALUES (?, ?)')
+      .run('decl_rows_v1', JSON.stringify(existingRow));
+
+    sqlMock.__setMockResult([
+      {
+        so_tk: '107490433150',
+        ngay_dang_ky: '2025-09-03',
+        mst: '4601145670',
+        cong_ty: 'Cong ty TNHH SAMJU VINA',
+        loai_hinh: 'E11',
+        muc_hang: 1,
+        co_count_num: 3,
+      },
+    ]);
+
+    const runRes = await adminAgent
+      .post('/api/import/ecus/run')
+      .send({ from: '2025-09-03', to: '2025-09-04', actor: 'tester' });
+
+    expect(runRes.status).toBe(200);
+    expect(runRes.body.result.imported).toBe(0);
+    expect(runRes.body.result.updated).toBe(1);
+    expect(runRes.body.result.skipped).toBe(0);
+
+    const row = getDb()
+      .prepare('SELECT value FROM kv_store WHERE key = ?')
+      .get('decl_rows_v1');
+    const storedRows = JSON.parse(row.value);
+    expect(storedRows).toHaveLength(1);
+    expect(storedRows[0]).toMatchObject({
+      so_tk: '10749043315',
+      so_tk_full: '107490433150',
+      co_line_count: 3,
+      has_co: true,
+      nhan_vien: 'Huyen',
+    });
+    expect(storedRows[0].co).toBeTruthy();
   });
 
   it('đánh dấu C/O khi dữ liệu ECUS có mã biểu thuế phù hợp', async () => {
@@ -1063,7 +1153,8 @@ describe('ECUS sync API', () => {
     const stored = JSON.parse(row.value);
     expect(stored).toHaveLength(1);
     expect(stored[0]).toMatchObject({
-      so_tk: '305254416960',
+      so_tk: '30525441696',
+      so_tk_full: '305254416960',
       mst: '2301158516',
       cong_ty: 'CÔNG TY TNHH XYZ',
       so_luong_gp: 3,
@@ -1301,6 +1392,7 @@ describe('Report export API', () => {
 describe('Alert API', () => {
   const missingDecl = {
     so_tk: 'TK001',
+    so_tk_full: 'TK001',
     nhanh: '',
     mst: '0100000001',
     cong_ty: 'CÔNG TY MINH HỌA',
@@ -1327,7 +1419,7 @@ describe('Alert API', () => {
     expect(res.status).toBe(200);
     expect(res.body.ok).toBe(true);
     expect(res.body.alerts.length).toBe(1);
-    expect(res.body.alerts[0]).toMatchObject({ so_tk: 'TK001', resolved: false });
+    expect(res.body.alerts[0]).toMatchObject({ so_tk: '00000000001', resolved: false });
   });
 
   it('cho phép cập nhật cấu hình cảnh báo và đánh dấu đã rà soát', async () => {

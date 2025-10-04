@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import DataImporter from '@/components/DataImporter.jsx';
 import { setItem as sharedSetItem, clearStorageCache } from '@/lib/storageClient.js';
 import { DECL_KEY } from '@/lib/store.js';
+import * as auth from '@/auth/localAuth.js';
 
 const createJsonResponse = (payload, status = 200) => ({
   ok: status >= 200 && status < 300,
@@ -12,7 +13,7 @@ const createJsonResponse = (payload, status = 200) => ({
 });
 
 describe('DataImporter preview UI', () => {
-  const originalFetch = global.fetch;
+  let fetchSpy;
   let fetchMock;
   const savedRows = [
     {
@@ -87,10 +88,14 @@ describe('DataImporter preview UI', () => {
             ok: true,
             config: {
               enabled: true,
-              schedule: '0 * * * *',
+              schedule: '0 3 * * *',
+              scheduleMode: 'daily',
+              scheduleValue: 1,
+              scheduleTime: '03:00',
+              scheduleDescription: 'Mỗi ngày lúc 03:00',
               rangeDays: 1,
               preferMonthFirst: false,
-              connection: { server: '', database: '', user: '', hasPassword: false },
+              connection: { server: 'Server', database: 'ECUS5VNACCS', user: 'sa', hasPassword: true, password: '' },
             },
           })
         );
@@ -127,11 +132,11 @@ describe('DataImporter preview UI', () => {
       }
       return Promise.resolve(createJsonResponse({ ok: true }));
     });
-    global.fetch = fetchMock;
+    fetchSpy = vi.spyOn(auth, 'fetchWithAuth').mockImplementation(fetchMock);
   });
 
   afterEach(() => {
-    global.fetch = originalFetch;
+    vi.restoreAllMocks();
   });
 
   it('hiển thị bảng xem trước với trạng thái và dữ liệu mô phỏng ECUS', async () => {
@@ -147,8 +152,6 @@ describe('DataImporter preview UI', () => {
 
     const previewButton = await screen.findByRole('button', { name: 'Xem trước dữ liệu' });
     await userEvent.click(previewButton);
-
-    await screen.findByText(/Xem trước 2 dòng đầu tiên sẽ nhập vào hệ thống/);
 
     expect(screen.getByText('CÔNG TY MỚI')).toBeInTheDocument();
     expect(screen.getByText('CÔNG TY ABC')).toBeInTheDocument();

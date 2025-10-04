@@ -1,5 +1,5 @@
 import React from 'react';
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { renderToString } from 'react-dom/server';
 import ReportViewer from '@/components/ReportViewer.jsx';
 import { DECL_KEY, RULES_KEY } from '@/lib/store.js';
@@ -13,6 +13,9 @@ beforeEach(() => {
 
 describe('ReportViewer', () => {
   it('hiển thị dashboard tổng quan và dữ liệu nhân viên theo quy tắc hiện hành', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2024-08-15T00:00:00Z'));
+
     const rows = [
       {
         date: '2024-08-01',
@@ -55,5 +58,6 @@ describe('ReportViewer', () => {
     expect(html).toContain('Team 1');
     expect(html).toContain('Xu hướng KPI 6 kỳ gần nhất');
     expect(html).toContain('So sánh KPI theo tổ đội');
+    vi.useRealTimers();
   });
 });

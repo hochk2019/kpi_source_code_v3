@@ -39,6 +39,68 @@ const MIN_PASSWORD_LENGTH = 6;
 let sessionCache = null;
 let accountCache = [];
 
+const SESSION_TOKEN_STORAGE_KEY = 'kpi_session_token';
+let sessionTokenCache = null;
+let sessionTokenLoaded = false;
+
+function getBrowserStorage() {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+  try {
+    return window.localStorage ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function loadSessionTokenFromStorage() {
+  if (sessionTokenLoaded) {
+    return sessionTokenCache;
+  }
+  sessionTokenLoaded = true;
+  const storage = getBrowserStorage();
+  if (!storage) {
+    sessionTokenCache = null;
+    return sessionTokenCache;
+  }
+  try {
+    const value = storage.getItem(SESSION_TOKEN_STORAGE_KEY);
+    if (value && typeof value === 'string') {
+      const trimmed = value.trim();
+      sessionTokenCache = trimmed ? trimmed : null;
+    } else {
+      sessionTokenCache = null;
+    }
+  } catch {
+    sessionTokenCache = null;
+  }
+  return sessionTokenCache;
+}
+
+function setSessionToken(token) {
+  const normalized = typeof token === 'string' ? token.trim() : '';
+  sessionTokenCache = normalized || null;
+  sessionTokenLoaded = true;
+  const storage = getBrowserStorage();
+  if (storage) {
+    try {
+      if (sessionTokenCache) {
+        storage.setItem(SESSION_TOKEN_STORAGE_KEY, sessionTokenCache);
+      } else {
+        storage.removeItem(SESSION_TOKEN_STORAGE_KEY);
+      }
+    } catch {
+      // ignore storage errors
+    }
+  }
+  return sessionTokenCache;
+}
+
+export function getSessionToken() {
+  return sessionTokenLoaded ? sessionTokenCache : loadSessionTokenFromStorage();
+}
+
 function normalizePermissions(perms, role) {
   const roleKey = role === "admin" ? "admin" : "staff";
   const base = roleKey === "admin" ? ADMIN_PERMISSIONS : VIEW_ONLY_PERMISSIONS;
@@ -91,7 +153,7 @@ function resolveApiBase() {
   return apiBaseCache;
 }
 
-function buildUrl(path) {
+export function buildUrl(path) {
   const base = resolveApiBase();
   if (!path) return base || "";
   if (path.startsWith("http://") || path.startsWith("https://")) {
@@ -101,17 +163,37 @@ function buildUrl(path) {
   return `${base || ""}${normalized}`;
 }
 
-async function requestJson(path, { method = "GET", body } = {}) {
-  if (typeof fetch !== "function") {
-    throw new Error("fetch không khả dụng");
+export function createAuthHeaders(baseHeaders) {
+  const headers =
+    baseHeaders instanceof Headers ? new Headers(baseHeaders) : new Headers(baseHeaders || undefined);
+  const token = getSessionToken();
+  if (token) {
+    headers.set('Authorization', `Bearer ${token}`);
   }
+  return headers;
+}
+
+export function fetchWithAuth(path, init = {}) {
+  if (typeof fetch !== 'function') {
+    throw new Error('fetch khA\'ng kh??? d???ng');
+  }
+  const finalInit = { ...init };
+  finalInit.headers = createAuthHeaders(init.headers);
+  if (finalInit.credentials === undefined) {
+    finalInit.credentials = 'include';
+  }
+  const target = buildUrl(path);
+  return fetch(target, finalInit);
+}
+
+async function requestJson(path, { method = "GET", body } = {}) {
   const headers = new Headers();
-  const init = { method, headers, credentials: "include" };
+  const init = { method, headers };
   if (body !== undefined) {
     headers.set("Content-Type", "application/json");
     init.body = JSON.stringify(body);
   }
-  const response = await fetch(buildUrl(path), init);
+  const response = await fetchWithAuth(path, init);
   let payload = null;
   try {
     payload = await response.json();
@@ -138,6 +220,7 @@ function sanitizeUserForSession(user) {
 function setSessionFromUser(user) {
   if (!user) {
     sessionCache = null;
+    setSessionToken(null);
     return null;
   }
   const session = { ...sanitizeUserForSession(user), ts: Date.now() };
@@ -176,6 +259,7 @@ export async function login(usernameInput, passwordInput) {
       method: "POST",
       body: { username, password },
     });
+    setSessionToken(payload?.token ?? null);
     const session = setSessionFromUser(payload?.user);
     await reloadAccounts().catch(() => {});
     return { ok: true, user: session };
@@ -188,6 +272,9 @@ export async function loadSession() {
   try {
     const payload = await requestJson("/api/auth/session");
     const session = setSessionFromUser(payload?.user);
+    if (payload?.token) {
+      setSessionToken(payload.token);
+    }
     if (payload?.user) {
       await reloadAccounts().catch(() => {});
     }
@@ -291,6 +378,7 @@ export async function changeOwnPassword(usernameInput, currentPasswordInput, new
     method: "POST",
     body: { username, currentPassword, newPassword },
   });
+  setSessionToken(response?.token ?? null);
   await reloadAccounts().catch(() => {});
   const session = setSessionFromUser(response?.account);
   return session;
