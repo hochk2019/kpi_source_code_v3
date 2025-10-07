@@ -93,6 +93,8 @@ describe('mapRow', () => {
     expect(mapped.licenses).toBe(2); // GP01 + GP02 (ZN02 bị loại và GP01 không trùng tính)
     expect(mapped.so_luong_gp).toBe(2);
     expect(mapped.licenseCodes).toEqual(["GP01", "ZN02", "GP02"]);
+    expect(mapped.licenseSourceCodes).toEqual(["GP01", "ZN02", "GP02"]);
+    expect(mapped.licenseExcludedCodes).toEqual(["ZN02"]);
   });
   it('loai tru ma giay phep theo cau hinh tung dai ly', () => {
     const raw = {
@@ -111,6 +113,8 @@ describe('mapRow', () => {
     const mapped = mapRow(raw, { autoAssignStaff: false, rules: DEFAULT_RULES });
 
     expect(mapped.licenseCodes).toEqual(['ZB02', 'GP02']);
+    expect(mapped.licenseSourceCodes).toEqual(['ZB02', 'GP02']);
+    expect(mapped.licenseExcludedCodes).toEqual(['ZB02']);
     expect(mapped.licenses).toBe(1);
     expect(mapped.so_luong_gp).toBe(1);
   });

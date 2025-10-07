@@ -505,6 +505,51 @@ export default function DataImporter({
     [licenseExcludeSet, licenseAgencyExcludeMap]
   );
 
+  const summarizeLicenseSnapshot = useCallback(
+    (row) => {
+      if (!row || typeof row !== "object") {
+        return {
+          sourceCodes: [],
+          includedCodes: [],
+          excludedCodes: [],
+          sourceCount: 0,
+          includedCount: 0,
+          excludedCount: 0,
+        };
+      }
+      const excludeSet = getLicenseExcludeSetForRow(row);
+      const baseSource = Array.isArray(row.licenseSourceCodes) ? row.licenseSourceCodes : [];
+      const currentCodes = Array.isArray(row.licenseCodes) ? row.licenseCodes : [];
+      const storedExcluded = Array.isArray(row.licenseExcludedCodes) ? row.licenseExcludedCodes : [];
+      const extracted = extractLicenseCodesFromRowObj(row) || [];
+      const normalizedSource = Array.from(
+        new Set(
+          [...baseSource, ...currentCodes, ...storedExcluded, ...extracted]
+            .map(normalizeLicenseCode)
+            .filter(Boolean)
+        )
+      );
+      const explicitExcluded = Array.from(
+        new Set(storedExcluded.map(normalizeLicenseCode).filter(Boolean))
+      );
+      const computedExcluded = normalizedSource.filter((code) => excludeSet.has(code));
+      const excludedSet = new Set([...explicitExcluded, ...computedExcluded]);
+      const includedCodes = normalizedSource.filter((code) => !excludedSet.has(code));
+      const manualCount = Number(row.licenses ?? row.so_luong_gp);
+      const includedCount = Number.isFinite(manualCount) && manualCount >= 0 ? manualCount : includedCodes.length;
+      const sourceCount = normalizedSource.length || includedCodes.length + excludedSet.size;
+      return {
+        sourceCodes: normalizedSource,
+        includedCodes,
+        excludedCodes: Array.from(excludedSet),
+        sourceCount,
+        includedCount,
+        excludedCount: excludedSet.size,
+      };
+    },
+    [getLicenseExcludeSetForRow]
+  );
+
   const [coCodeConfig, setCoCodeConfig] = useState(null);
   const [coCodeForm, setCoCodeForm] = useState({ whitelist: "", blacklist: "" });
   const [coCodeLoading, setCoCodeLoading] = useState(false);
@@ -1678,23 +1723,47 @@ export default function DataImporter({
       }
       matchedCount += 1;
       const excludeSet = getLicenseExcludeSetForRow(row);
-      const sourceCodes = Array.isArray(row.licenseCodes) && row.licenseCodes.length
-        ? row.licenseCodes
-        : extractLicenseCodesFromRowObj(row) || [];
-      const normalizedCodes = Array.from(new Set(sourceCodes.map(normalizeLicenseCode).filter(Boolean)));
-      const filteredCodes = normalizedCodes.filter((code) => !excludeSet.has(code));
+      const normalizedSource = new Set(
+        [
+          ...(Array.isArray(row.licenseSourceCodes) ? row.licenseSourceCodes : []),
+          ...(Array.isArray(row.licenseCodes) ? row.licenseCodes : []),
+          ...(Array.isArray(row.licenseExcludedCodes) ? row.licenseExcludedCodes : []),
+          ...(extractLicenseCodesFromRowObj(row) || []),
+        ].map(normalizeLicenseCode).filter(Boolean)
+      );
+      const effectiveCodes = Array.from(normalizedSource)
+        .filter((code) => !excludeSet.has(code))
+        .sort((a, b) => a.localeCompare(b));
+      const excludedCodes = Array.from(normalizedSource)
+        .filter((code) => excludeSet.has(code))
+        .sort((a, b) => a.localeCompare(b));
       const currentCodes = Array.isArray(row.licenseCodes)
-        ? row.licenseCodes.map(normalizeLicenseCode).filter(Boolean)
-        : normalizedCodes;
-      const nextLicenseCount = filteredCodes.length;
+        ? row.licenseCodes
+            .map(normalizeLicenseCode)
+            .filter(Boolean)
+            .sort((a, b) => a.localeCompare(b))
+        : Array.from(normalizedSource).sort((a, b) => a.localeCompare(b));
+      const currentExcludedCodes = Array.isArray(row.licenseExcludedCodes)
+        ? row.licenseExcludedCodes
+            .map(normalizeLicenseCode)
+            .filter(Boolean)
+            .sort((a, b) => a.localeCompare(b))
+        : [];
+      const nextLicenseCount = effectiveCodes.length;
       const currentLicenseCount = Number(row.licenses ?? row.so_luong_gp ?? currentCodes.length ?? 0);
-      if (nextLicenseCount === currentLicenseCount && arraysEqual(filteredCodes, currentCodes)) {
+      if (
+        nextLicenseCount === currentLicenseCount &&
+        arraysEqual(effectiveCodes, currentCodes) &&
+        arraysEqual(excludedCodes, currentExcludedCodes)
+      ) {
         return row;
       }
       changed += 1;
       const nextRow = {
         ...row,
-        licenseCodes: filteredCodes,
+        licenseSourceCodes: Array.from(normalizedSource).sort((a, b) => a.localeCompare(b)),
+        licenseExcludedCodes: excludedCodes,
+        licenseCodes: effectiveCodes,
         licenses: nextLicenseCount,
         so_luong_gp: nextLicenseCount,
         updatedAt: new Date().toISOString(),
@@ -1781,27 +1850,32 @@ export default function DataImporter({
       alert("Không tìm thấy tờ khai tương ứng để xuất.");
       return;
     }
-    const data = rows.map((row) => ({
-      Ngày: formatDisplayDate(row.date || row.raw_date || ""),
-      "Số tờ khai": row.so_tk_full || row.so_tk || "",
-      "Số TK AMA": row.so_tk_ama || "",
-      MST: row.mst || "",
-      "Công ty": row.cong_ty || "",
-      "Loại hình": row.loai_hinh || "",
-      "Nhân viên": row.nhan_vien || "",
-      "Tổ đội": row.team || "",
-      "Đại lý": row.agency || row.dai_ly || "",
-      "Số lượng GP": row.licenses ?? row.so_luong_gp ?? 0,
-      "Mã giấy phép": Array.isArray(row.licenseCodes) ? row.licenseCodes.join(", ") : "",
-      "C/O": coLabel(row),
-      "Dòng C/O": coLineCount(row),
-    }));
+    const data = rows.map((row) => {
+      const licenseInfo = summarizeLicenseSnapshot(row);
+      return {
+        Ngày: formatDisplayDate(row.date || row.raw_date || ""),
+        "Số tờ khai": row.so_tk_full || row.so_tk || "",
+        "Số TK AMA": row.so_tk_ama || "",
+        MST: row.mst || "",
+        "Công ty": row.cong_ty || "",
+        "Loại hình": row.loai_hinh || "",
+        "Nhân viên": row.nhan_vien || "",
+        "Tổ đội": row.team || "",
+        "Đại lý": row.agency || row.dai_ly || "",
+        "Số lượng GP gốc": licenseInfo.sourceCount,
+        "Số lượng GP (sau loại trừ)": licenseInfo.includedCount,
+        "Mã giấy phép hợp lệ": licenseInfo.includedCodes.join(", "),
+        "Mã giấy phép bị loại trừ": licenseInfo.excludedCodes.join(", "),
+        "C/O": coLabel(row),
+        "Dòng C/O": coLineCount(row),
+      };
+    });
     const worksheet = XLSX.utils.json_to_sheet(data);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "ToKhai");
     const timestamp = new Date().toISOString().slice(0, 10);
     XLSX.writeFile(workbook, `tokhai_da_chon_${timestamp}.xlsx`);
-  }, [selectedKeys, rawRows, keyOfRow]);
+  }, [selectedKeys, rawRows, keyOfRow, summarizeLicenseSnapshot]);
 
   const toneClassMap = {
     success: "border border-emerald-200 bg-emerald-50 text-emerald-700",

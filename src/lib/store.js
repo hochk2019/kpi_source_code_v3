@@ -72,6 +72,32 @@ function normalizeDeclarationRow(row) {
   if (!clone.nhanh && clone.branch) {
     clone.nhanh = clone.branch;
   }
+
+  const normalizeLicenseList = (value) => {
+    if (!Array.isArray(value)) return [];
+    const seen = new Set();
+    for (const entry of value) {
+      const normalizedCode = normalizeStr(entry).toUpperCase();
+      if (normalizedCode) {
+        seen.add(normalizedCode);
+      }
+    }
+    return Array.from(seen);
+  };
+
+  if (Array.isArray(clone.licenseCodes)) {
+    clone.licenseCodes = normalizeLicenseList(clone.licenseCodes);
+  }
+  if (Array.isArray(clone.licenseSourceCodes)) {
+    clone.licenseSourceCodes = normalizeLicenseList(clone.licenseSourceCodes);
+  } else if (clone.licenseSourceCodes) {
+    clone.licenseSourceCodes = normalizeLicenseList([clone.licenseSourceCodes]);
+  }
+  if (Array.isArray(clone.licenseExcludedCodes)) {
+    clone.licenseExcludedCodes = normalizeLicenseList(clone.licenseExcludedCodes);
+  } else if (clone.licenseExcludedCodes) {
+    clone.licenseExcludedCodes = normalizeLicenseList([clone.licenseExcludedCodes]);
+  }
   return clone;
 }
 
@@ -102,8 +128,12 @@ function mergeDeclarationRowClient(existing, incoming) {
       merged[key] = !!value;
       continue;
     }
-    if (key === 'co_codes' || key === 'licenseCodes') {
-      merged[key] = Array.isArray(value) ? value.map((item) => normalizeStr(item)).filter(Boolean) : [];
+    if (key === 'co_codes' || key === 'licenseCodes' || key === 'licenseSourceCodes' || key === 'licenseExcludedCodes') {
+      merged[key] = Array.isArray(value)
+        ? value
+            .map((item) => normalizeStr(item).toUpperCase())
+            .filter(Boolean)
+        : [];
       continue;
     }
     merged[key] = value;
