@@ -198,7 +198,7 @@ cấp linh hoạt:
 | `DELETE /api/ai/cache` | Xóa toàn bộ cache để ép gọi lại mô hình. | `aiAssistManage` |
 | `POST /api/ai/chat` | Gọi trợ lý AI với câu hỏi tiếng Việt, tự động dùng cache nếu có. | `aiAssistUse` |
 
-### 6.1. Biến môi trường hỗ trợ Azure OpenAI & Ollama
+### 6.1. Biến môi trường hỗ trợ Azure OpenAI, Google AI Studio & Ollama
 
 ```env
 # Azure OpenAI (gợi ý dùng GPT-4o mini để tối ưu chi phí)
@@ -206,6 +206,12 @@ AZURE_OPENAI_ENDPOINT=https://<tên-resource>.openai.azure.com
 AZURE_OPENAI_DEPLOYMENT=gpt-4o-mini
 AZURE_OPENAI_KEY=<mã khóa bí mật>
 AZURE_OPENAI_API_VERSION=2024-08-01-preview
+
+# Google AI Studio (Gemini, yêu cầu bật API Generative Language)
+GOOGLE_AI_STUDIO_API_KEY=<api key của dự án Google>
+# Tuỳ chọn: ghi đè endpoint và model nếu không dùng mặc định
+# GOOGLE_AI_STUDIO_ENDPOINT=https://generativelanguage.googleapis.com
+# GOOGLE_AI_STUDIO_MODEL=gemini-1.5-flash
 
 # Tuỳ chọn: Ollama nội bộ (Windows 11 có thể chạy qua WSL)
 OLLAMA_ENDPOINT=http://localhost:11434

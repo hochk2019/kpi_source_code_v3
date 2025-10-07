@@ -684,6 +684,10 @@ function createDefaultAiConfig() {
   const azureVersion = (process.env.AZURE_OPENAI_API_VERSION || '2024-08-01-preview').trim() || '2024-08-01-preview';
   const ollamaEndpoint = (process.env.OLLAMA_ENDPOINT || 'http://localhost:11434').trim() || 'http://localhost:11434';
   const ollamaModel = (process.env.OLLAMA_MODEL || 'llama3.1:8b').trim() || 'llama3.1:8b';
+  const googleEndpoint =
+    (process.env.GOOGLE_AI_STUDIO_ENDPOINT || 'https://generativelanguage.googleapis.com').trim() ||
+    'https://generativelanguage.googleapis.com';
+  const googleModel = (process.env.GOOGLE_AI_STUDIO_MODEL || 'gemini-1.5-flash').trim() || 'gemini-1.5-flash';
   return {
     version: 1,
     enabled: true,
@@ -720,6 +724,17 @@ function createDefaultAiConfig() {
         endpoint: ollamaEndpoint,
         model: ollamaModel,
         temperature: 0.1,
+        enabled: false,
+      },
+      {
+        id: 'google-ai-studio',
+        type: 'google-ai-studio',
+        label: 'Google AI Studio (Gemini 1.5 Flash)',
+        endpoint: googleEndpoint,
+        model: googleModel,
+        apiKeyEnv: 'GOOGLE_AI_STUDIO_API_KEY',
+        temperature: 0.3,
+        maxTokens: 1024,
         enabled: false,
       },
     ],
@@ -1996,6 +2011,109 @@ async function callOllamaChat(provider, payload, { signal } = {}) {
   };
 }
 
+function convertMessagesToGooglePayload(messages = []) {
+  const normalized = Array.isArray(messages) ? messages : [];
+  const contents = [];
+  const systemParts = [];
+  for (const entry of normalized) {
+    if (!entry || typeof entry !== 'object') {
+      continue;
+    }
+    const text = `${entry.content ?? ''}`.trim();
+    if (!text) {
+      continue;
+    }
+    const role = `${entry.role || 'user'}`.trim().toLowerCase();
+    if (role === 'system') {
+      systemParts.push({ text });
+      continue;
+    }
+    if (role === 'assistant' || role === 'model') {
+      contents.push({ role: 'model', parts: [{ text }] });
+      continue;
+    }
+    contents.push({ role: 'user', parts: [{ text }] });
+  }
+
+  if (contents.length === 0) {
+    contents.push({ role: 'user', parts: [{ text: 'Xin chào' }] });
+  }
+
+  const systemInstruction =
+    systemParts.length > 0
+      ? {
+          role: 'system',
+          parts: systemParts,
+        }
+      : null;
+
+  return { contents, systemInstruction };
+}
+
+async function callGoogleAiStudioChat(provider, payload, { signal } = {}) {
+  const endpoint = `${provider.endpoint || 'https://generativelanguage.googleapis.com'}`.trim() ||
+    'https://generativelanguage.googleapis.com';
+  const model = `${provider.model || 'gemini-1.5-flash'}`.trim() || 'gemini-1.5-flash';
+  const apiKeyEnv = `${provider.apiKeyEnv || 'GOOGLE_AI_STUDIO_API_KEY'}`.trim() || 'GOOGLE_AI_STUDIO_API_KEY';
+  const apiKey = provider.apiKey || process.env[apiKeyEnv];
+  if (!apiKey) {
+    throw new Error(`Thiếu khóa API ${apiKeyEnv} cho Google AI Studio.`);
+  }
+  const baseUrl = endpoint.replace(/\/+$/, '');
+  const url = `${baseUrl}/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
+  const { contents, systemInstruction } = convertMessagesToGooglePayload(payload.messages);
+  const generationConfig = {
+    temperature: toFiniteNumber(
+      payload.temperature,
+      provider.temperature ?? DEFAULT_AI_CONFIG.temperature
+    ),
+    maxOutputTokens: toPositiveInt(
+      payload.maxTokens,
+      provider.maxTokens ?? DEFAULT_AI_CONFIG.maxTokens
+    ),
+  };
+  const body = {
+    contents,
+    generationConfig,
+    responseMimeType: 'text/plain',
+  };
+  if (systemInstruction) {
+    body.systemInstruction = systemInstruction;
+  }
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+    signal,
+  });
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Google AI Studio trả về ${response.status}: ${truncateText(errorText, 200)}`);
+  }
+  const data = await response.json();
+  const parts = data?.candidates?.[0]?.content?.parts;
+  let message = '';
+  if (Array.isArray(parts)) {
+    message = parts
+      .map((part) => `${part?.text ?? ''}`.trim())
+      .filter((text) => text)
+      .join('\n')
+      .trim();
+  }
+  const usageMetadata = data?.usageMetadata;
+  const usage = usageMetadata
+    ? {
+        prompt_tokens: usageMetadata.promptTokenCount,
+        completion_tokens: usageMetadata.candidatesTokenCount,
+        total_tokens: usageMetadata.totalTokenCount,
+      }
+    : null;
+  return {
+    message,
+    usage,
+  };
+}
+
 async function dispatchAiChat(provider, payload, { signal } = {}) {
   const type = `${provider.type || ''}`.trim().toLowerCase();
   if (type === 'azure' || type === 'azure-openai') {
@@ -2003,6 +2121,9 @@ async function dispatchAiChat(provider, payload, { signal } = {}) {
   }
   if (type === 'ollama' || type === 'ollama-local') {
     return callOllamaChat(provider, payload, { signal });
+  }
+  if (type === 'google-ai-studio' || type === 'google' || type === 'gemini') {
+    return callGoogleAiStudioChat(provider, payload, { signal });
   }
   throw new Error(`Nhà cung cấp AI ${provider.id} chưa được hỗ trợ.`);
 }

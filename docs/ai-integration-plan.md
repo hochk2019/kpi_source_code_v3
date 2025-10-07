@@ -24,6 +24,7 @@ Frontend → /api/ai/chat → Server proxy → Nhà cung cấp AI
 | ID | Loại | Cách cấu hình | Ghi chú tiết kiệm token |
 | --- | --- | --- | --- |
 | `azure-openai` | Azure OpenAI (GPT-4o mini / GPT-4o) | Đặt biến môi trường `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_DEPLOYMENT`, `AZURE_OPENAI_KEY`, `AZURE_OPENAI_API_VERSION`. Server sẽ build URL theo chuẩn Azure. | Ưu tiên mô hình GPT-4o mini; tự động cắt ngắn prompt còn tối đa 4096 ký tự, bật cache với TTL 3 ngày. |
+| `google-ai-studio` | Google AI Studio (Gemini 1.5 Flash) | Tạo API key trong Google Cloud, đặt biến `GOOGLE_AI_STUDIO_API_KEY` (có thể tùy chọn `GOOGLE_AI_STUDIO_ENDPOINT`, `GOOGLE_AI_STUDIO_MODEL`). | Chi phí linh hoạt theo usage của Gemini; response mặc định dạng text/plain và trả về usageMetadata để tính token. |
 | `ollama-local` | Ollama self-host (ví dụ `llama3.1:8b`) | Cài đặt Ollama trên máy Windows/WSL và expose REST API (`http://localhost:11434`). Điền `endpoint` vào config. | Chi phí ~0, thích hợp xử lý yêu cầu dài nhưng trả lời chậm hơn. Cache giúp tránh lặp. |
 | `custom` | REST API khác | Có thể khai báo endpoint và header tùy chỉnh trong `providers` của config. | Tùy ý; nên bật `truncate` và `cache`. |
 
@@ -40,7 +41,7 @@ Frontend → /api/ai/chat → Server proxy → Nhà cung cấp AI
 - Mọi thao tác đều ghi lại trong `audit_logs_v1` (ví dụ `ai.chat`, `ai.config.update`).
 
 ## 6. Quy trình triển khai trên Windows 11 + SQL Server 2008 R2
-1. Cập nhật `.env` với các biến Azure OpenAI hoặc endpoint Ollama theo nhu cầu.
+1. Cập nhật `.env` với các biến Azure OpenAI, Google AI Studio hoặc endpoint Ollama theo nhu cầu.
 2. Chạy `pnpm db:init` (hoặc `pnpm db:migrate`) để đảm bảo bảng `kv_store` đã có khóa config/cache.
 3. Khởi động backend bằng `pnpm start` (script tương thích PowerShell 7).
 4. Đăng nhập tài khoản admin, truy cập trang cấu hình AI (sẽ phát triển ở sprint kế tiếp) để kiểm tra trạng thái kết nối.
