@@ -1073,6 +1073,155 @@ describe('ECUS sync API', () => {
     expect(storedRows[0]).toMatchObject({ co: 'Có', has_co: true });
   });
 
+  it('loại trừ giấy phép theo quy tắc toàn cục khi đồng bộ', async () => {
+    const adminAgent = request.agent(app);
+    const loginRes = await adminAgent
+      .post('/api/auth/login')
+      .send({ username: 'admin', password: 'admin123' });
+    expect(loginRes.status).toBe(200);
+
+    await adminAgent
+      .put('/api/import/ecus/config')
+      .send({
+        config: {
+          enabled: true,
+          connection: {
+            server: 'MRHOC\\ECUSSQL2008',
+            database: 'ECUS5VNACCS',
+            user: 'sa',
+            password: '123456',
+          },
+        },
+      });
+
+    const rulesPayload = {
+      version: 1,
+      license: {
+        exclude: {
+          codes: ['ZN02', 'HDGC'],
+          agencies: [],
+        },
+      },
+    };
+    const rulesRes = await adminAgent
+      .put('/api/storage/kpi_rules_v2')
+      .send({ value: JSON.stringify(rulesPayload) });
+    expect(rulesRes.status).toBe(200);
+
+    sqlMock.__setMockResult([
+      {
+        so_tk: '105110557420',
+        ngay_dang_ky: '2025-09-01',
+        mst: '0123456789',
+        cong_ty: 'Cong ty ABC',
+        loai_hinh: 'A11',
+        muc_hang: 1,
+        license_count: 3,
+        license_codes: 'GP01, ZN02 , HDGC',
+      },
+    ]);
+
+    const runRes = await adminAgent
+      .post('/api/import/ecus/run')
+      .send({ from: '2025-09-01', to: '2025-09-02', actor: 'tester' });
+
+    expect(runRes.status).toBe(200);
+    expect(runRes.body?.result?.imported).toBe(1);
+
+    const row = getDb().prepare('SELECT value FROM kv_store WHERE key = ?').get('decl_rows_v1');
+    const storedRows = JSON.parse(row.value);
+    expect(storedRows).toHaveLength(1);
+    expect(storedRows[0]).toMatchObject({
+      so_tk: '10511055742',
+      licenses: 1,
+      so_luong_gp: 1,
+    });
+    expect(storedRows[0].licenseCodes).toEqual(
+      expect.arrayContaining(['GP01', 'ZN02', 'HDGC'])
+    );
+  });
+
+  it('loại trừ giấy phép theo đại lý HQ khi đồng bộ', async () => {
+    const adminAgent = request.agent(app);
+    const loginRes = await adminAgent
+      .post('/api/auth/login')
+      .send({ username: 'admin', password: 'admin123' });
+    expect(loginRes.status).toBe(200);
+
+    await adminAgent
+      .put('/api/import/ecus/config')
+      .send({
+        config: {
+          enabled: true,
+          connection: {
+            server: 'MRHOC\\ECUSSQL2008',
+            database: 'ECUS5VNACCS',
+            user: 'sa',
+            password: '123456',
+          },
+        },
+      });
+
+    const rulesPayload = {
+      version: 1,
+      license: {
+        exclude: {
+          codes: [],
+          agencies: [
+            {
+              agency: 'Dai ly HQ 1',
+              codes: ['AG01'],
+            },
+          ],
+        },
+      },
+    };
+    const rulesRes = await adminAgent
+      .put('/api/storage/kpi_rules_v2')
+      .send({ value: JSON.stringify(rulesPayload) });
+    expect(rulesRes.status).toBe(200);
+
+    const hqPayload = [
+      { mst: '4601145670', company: 'Cong ty SAMJU', agent: 'Dai ly HQ 1' },
+    ];
+    const hqRes = await adminAgent
+      .put('/api/storage/hq_agencies_v1')
+      .send({ value: JSON.stringify(hqPayload) });
+    expect(hqRes.status).toBe(200);
+
+    sqlMock.__setMockResult([
+      {
+        so_tk: '107490433150',
+        ngay_dang_ky: '2025-09-03',
+        mst: '4601145670',
+        cong_ty: '',
+        loai_hinh: 'E11',
+        muc_hang: 1,
+        license_count: 2,
+        license_codes: 'AG01, GP02',
+      },
+    ]);
+
+    const runRes = await adminAgent
+      .post('/api/import/ecus/run')
+      .send({ from: '2025-09-03', to: '2025-09-04', actor: 'tester' });
+
+    expect(runRes.status).toBe(200);
+    expect(runRes.body?.result?.imported).toBe(1);
+
+    const row = getDb().prepare('SELECT value FROM kv_store WHERE key = ?').get('decl_rows_v1');
+    const storedRows = JSON.parse(row.value);
+    expect(storedRows).toHaveLength(1);
+    expect(storedRows[0]).toMatchObject({
+      so_tk: '10749043315',
+      licenses: 1,
+      so_luong_gp: 1,
+      agency: 'Dai ly HQ 1',
+      cong_ty: 'Cong ty SAMJU',
+    });
+    expect(storedRows[0].licenseCodes).toEqual(expect.arrayContaining(['AG01', 'GP02']));
+  });
+
   it('kiểm tra trạng thái SQL Server thành công khi đã cấu hình', async () => {
     const adminAgent = request.agent(app);
     const loginRes = await adminAgent

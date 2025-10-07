@@ -1876,6 +1876,119 @@ function getMemberTeamMap() {
   return map;
 }
 
+function normalizeLicenseCode(value) {
+  const str = normalizeStr(value);
+  if (!str) return '';
+  return str.toUpperCase();
+}
+
+function normalizeAgencyKey(value) {
+  const str = normalizeStr(value);
+  if (!str) return '';
+  return str.toUpperCase();
+}
+
+function splitAgencyValues(value) {
+  const str = normalizeStr(value);
+  if (!str) return [];
+  return str
+    .split(/[,;|]/g)
+    .map((part) => normalizeStr(part))
+    .filter(Boolean);
+}
+
+function getHqAgencyEntries() {
+  const raw = getJSONValue('hq_agencies_v1', []);
+  const rows = Array.isArray(raw) ? raw : [];
+  const entries = [];
+  for (const row of rows) {
+    const mst = normalizeMST(row?.mst);
+    if (!mst) continue;
+    const company = normalizeStr(row?.company || row?.cong_ty || row?.customer || '');
+    const agentRaw =
+      row?.agent ??
+      row?.agency ??
+      row?.dai_ly ??
+      row?.dai_ly_hq ??
+      row?.['Đại lý HQ'] ??
+      row?.['Dai ly HQ'] ??
+      '';
+    const agent = normalizeStr(agentRaw);
+    const normalizedAgentKeys = new Set();
+    if (agent) {
+      normalizedAgentKeys.add(normalizeAgencyKey(agent));
+    }
+    for (const part of splitAgencyValues(agentRaw)) {
+      const key = normalizeAgencyKey(part);
+      if (key) {
+        normalizedAgentKeys.add(key);
+      }
+    }
+    entries.push({
+      mst,
+      company,
+      agent,
+      normalizedAgents: Array.from(normalizedAgentKeys).filter(Boolean),
+    });
+  }
+  return entries;
+}
+
+function mapHqAgenciesByMST() {
+  const map = new Map();
+  for (const entry of getHqAgencyEntries()) {
+    if (!entry) continue;
+    if (!map.has(entry.mst)) {
+      map.set(entry.mst, entry);
+    }
+  }
+  return map;
+}
+
+function normalizeCodeList(value) {
+  if (Array.isArray(value)) {
+    return value;
+  }
+  if (typeof value === 'string') {
+    return value.split(/[,;|]/g);
+  }
+  return [];
+}
+
+function buildLicenseExcludeContext(rules) {
+  const excludeSet = new Set();
+  const agencyMap = new Map();
+
+  const globalCodes = normalizeCodeList(rules?.license?.exclude?.codes);
+  for (const code of globalCodes) {
+    const normalized = normalizeLicenseCode(code);
+    if (!normalized) continue;
+    excludeSet.add(normalized);
+  }
+
+  const agencyEntries = Array.isArray(rules?.license?.exclude?.agencies)
+    ? rules.license.exclude.agencies
+    : [];
+  for (const entry of agencyEntries) {
+    if (!entry) continue;
+    const agencyKey = normalizeAgencyKey(entry.agency);
+    if (!agencyKey) continue;
+    const codeList = normalizeCodeList(entry.codes);
+    if (!codeList.length) continue;
+    const normalizedCodes = codeList
+      .map((code) => normalizeLicenseCode(code))
+      .filter(Boolean);
+    if (!normalizedCodes.length) continue;
+    const existing = agencyMap.get(agencyKey) || new Set();
+    for (const code of normalizedCodes) {
+      existing.add(code);
+    }
+    agencyMap.set(agencyKey, existing);
+  }
+
+  return { excludeSet, agencyMap };
+}
+
 function getMSTRows() {
   const rows = getJSONValue('mst_rows_v2', []);
   if (!Array.isArray(rows)) return [];
@@ -2694,6 +2807,42 @@ function registerSqlPoolShutdown(manager) {
 const sqlPoolManager = createSqlPoolManager();
 registerSqlPoolShutdown(sqlPoolManager);
 
+function extractNormalizedLicenseCodes(rawValue) {
+  if (rawValue === null || rawValue === undefined) return [];
+  const normalized = new Set();
+  const stack = [rawValue];
+  while (stack.length > 0) {
+    const current = stack.pop();
+    if (current === null || current === undefined) {
+      continue;
+    }
+    if (Array.isArray(current)) {
+      for (const item of current) {
+        stack.push(item);
+      }
+      continue;
+    }
+    if (typeof current === 'object') {
+      for (const value of Object.values(current)) {
+        stack.push(value);
+      }
+      continue;
+    }
+    const str = normalizeStr(current);
+    if (!str) {
+      continue;
+    }
+    const tokens = str
+      .split(/[\s,;|]+/g)
+      .map((token) => normalizeStr(token).toUpperCase())
+      .filter((token) => token && !/^\d+(?:\.\d+)?$/.test(token));
+    for (const token of tokens) {
+      normalized.add(token);
+    }
+  }
+  return Array.from(normalized);
+}
+
 function parseLicenseCount(rawValue, excludeSet) {
   if (rawValue === null || rawValue === undefined) return 0;
   if (typeof rawValue === 'number' && Number.isFinite(rawValue)) {
@@ -2958,15 +3107,90 @@ function mapEcusRow(record, config, context) {
   if (!soTk || !dateISO) return null;
 
   const mst = normalizeMST(getField('mst'));
-  const company = normalizeStr(getField('cong_ty'));
+  let company = normalizeStr(getField('cong_ty'));
   const loaiHinh = normalizeStr(getField('loai_hinh'));
   const numItemsRaw = getField('num_items');
   const numItems = Number.parseInt(numItemsRaw, 10);
   const licensesRaw = getField('licenses');
-  const licenseCount = parseLicenseCount(
-    licensesRaw !== undefined ? licensesRaw : getField('license_codes'),
-    context.licenseExcludeSet,
-  );
+  const licenseCodesRaw = getField('license_codes');
+  let licenseCodes = extractNormalizedLicenseCodes(licenseCodesRaw);
+  if (!licenseCodes.length) {
+    licenseCodes = extractNormalizedLicenseCodes(licensesRaw);
+  }
+
+  const baseExcludeSet =
+    context?.licenseExcludeSet instanceof Set ? context.licenseExcludeSet : new Set();
+  const agencyExcludeMap =
+    context?.licenseAgencyExcludeMap instanceof Map ? context.licenseAgencyExcludeMap : null;
+  const hqAgencyMap = context?.hqAgencyMap instanceof Map ? context.hqAgencyMap : null;
+
+  const normalizedAgencyKeys = new Set();
+  const collectAgencyKeys = (value) => {
+    if (!value) return;
+    const normalizedFull = normalizeAgencyKey(value);
+    if (normalizedFull) {
+      normalizedAgencyKeys.add(normalizedFull);
+    }
+    for (const part of splitAgencyValues(value)) {
+      const key = normalizeAgencyKey(part);
+      if (key) {
+        normalizedAgencyKeys.add(key);
+      }
+    }
+  };
+
+  const recordAgencyRaw = normalizeStr(getField('agency'));
+  const recordDaiLyRaw = normalizeStr(getField('dai_ly'));
+  let agency = recordAgencyRaw || recordDaiLyRaw || '';
+  collectAgencyKeys(recordAgencyRaw);
+  collectAgencyKeys(recordDaiLyRaw);
+
+  let agencyInfo = null;
+  if (mst && hqAgencyMap) {
+    agencyInfo = hqAgencyMap.get(mst) || null;
+  }
+  if (agencyInfo) {
+    if (!agency && agencyInfo.agent) {
+      agency = agencyInfo.agent;
+    }
+    if (!company && agencyInfo.company) {
+      company = agencyInfo.company;
+    }
+    if (Array.isArray(agencyInfo.normalizedAgents)) {
+      for (const key of agencyInfo.normalizedAgents) {
+        if (key) {
+          normalizedAgencyKeys.add(key);
+        }
+      }
+    } else if (agencyInfo.agent) {
+      collectAgencyKeys(agencyInfo.agent);
+    }
+  }
+
+  collectAgencyKeys(agency);
+
+  let effectiveExcludeSet = baseExcludeSet;
+  if (agencyExcludeMap && normalizedAgencyKeys.size) {
+    for (const key of normalizedAgencyKeys) {
+      const agencyCodes = agencyExcludeMap.get(key);
+      if (!agencyCodes || agencyCodes.size === 0) {
+        continue;
+      }
+      if (effectiveExcludeSet === baseExcludeSet) {
+        effectiveExcludeSet = new Set(baseExcludeSet);
+      }
+      for (const code of agencyCodes) {
+        effectiveExcludeSet.add(code);
+      }
+    }
+  }
+
+  let licenseCount;
+  if (licenseCodes.length) {
+    licenseCount = licenseCodes.filter((code) => !effectiveExcludeSet.has(code)).length;
+  } else {
+    licenseCount = parseLicenseCount(licensesRaw, effectiveExcludeSet);
+  }
   const coLineRaw = getField('co_line_count');
   const coLineCount = parseCoLineCount(coLineRaw);
 
@@ -3009,8 +3233,11 @@ function mapEcusRow(record, config, context) {
     so_luong_gp: licenseCount,
     nhan_vien: nhanVien,
     team,
+    agency,
+    dai_ly: agency,
     isExport,
     co_line_count: coLineCount,
+    licenseCodes,
   };
   const normalizedBase = normalizeDeclarationRow(base) || base;
   return deriveCOStatus(record, normalizedBase);
@@ -3277,13 +3504,11 @@ function computeRangeWindow(config, explicit) {
 
 function buildEcusSyncContext(config) {
   const rules = getRulesValue();
-  const excludeSet = new Set(
-    Array.isArray(rules?.license?.exclude?.codes)
-      ? rules.license.exclude.codes.map((code) => normalizeStr(code).toUpperCase())
-      : [],
-  );
+  const { excludeSet, agencyMap } = buildLicenseExcludeContext(rules || {});
   return {
     licenseExcludeSet: excludeSet,
+    licenseAgencyExcludeMap: agencyMap,
+    hqAgencyMap: mapHqAgenciesByMST(),
     memberTeamMap: getMemberTeamMap(),
     config,
   };
