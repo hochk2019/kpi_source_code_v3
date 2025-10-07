@@ -1,4 +1,4 @@
-import React, { Suspense, useEffect, useMemo, useState } from 'react';
+import React, { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { Toaster } from 'sonner';
 const KPICalculator = React.lazy(() => import('./components/KPICalculator.jsx'));
 const Login = React.lazy(() => import('./components/Login.jsx'));
@@ -6,12 +6,16 @@ const ChangePasswordDialog = React.lazy(() => import('./components/ChangePasswor
 import { getAuth, getViewerAuth, loadSession, logout } from './auth/localAuth.js';
 import './App.css';
 import { getSyncStatus, subscribeSyncStatus } from './lib/storageClient.js';
+import useTooltipTitles from './hooks/useTooltipTitles.js';
 
 export default function App() {
   const [auth, setAuth] = useState(null);
   const [showLogin, setShowLogin] = useState(false);
   const [showChangePassword, setShowChangePassword] = useState(false);
   const [syncStatus, setSyncStatus] = useState(() => getSyncStatus());
+  const rootRef = useRef(null);
+
+  useTooltipTitles(rootRef, [auth, showLogin, showChangePassword, syncStatus]);
 
   useEffect(() => {
     setAuth(getAuth());
@@ -67,7 +71,7 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div ref={rootRef} className="min-h-screen bg-gray-50">
       <header className="border-b bg-white shadow-sm">
         <div className="mx-auto flex max-w-6xl flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3">
@@ -101,6 +105,7 @@ export default function App() {
                     type="button"
                     onClick={() => setShowChangePassword(true)}
                     className="rounded border border-amber-400 px-3 py-1 text-amber-700 hover:bg-amber-50"
+                    data-tooltip="Đổi mật khẩu cho tài khoản đang đăng nhập"
                   >
                     Đổi mật khẩu
                   </button>
@@ -108,6 +113,7 @@ export default function App() {
                     type="button"
                     onClick={handleLogout}
                     className="rounded border border-gray-300 px-3 py-1 hover:bg-gray-100"
+                    data-tooltip="Đăng xuất khỏi phiên làm việc hiện tại"
                   >
                     Đăng xuất
                   </button>
@@ -117,6 +123,7 @@ export default function App() {
                   type="button"
                   onClick={() => setShowLogin(true)}
                   className="rounded bg-amber-500 px-3 py-1 font-medium text-white shadow-sm hover:bg-amber-600"
+                  data-tooltip="Mở hộp thoại đăng nhập quản trị"
                 >
                   Đăng nhập quản trị
                 </button>

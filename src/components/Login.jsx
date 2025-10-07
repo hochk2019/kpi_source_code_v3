@@ -42,7 +42,12 @@ export default function Login({ onLoggedIn, onCancel, variant = 'page' }) {
           />
         </div>
         {error && <div className="text-sm text-red-600">{error}</div>}
-        <Button onClick={handle} disabled={loading} className="w-full">
+        <Button
+          onClick={handle}
+          disabled={loading}
+          className="w-full"
+          data-tooltip="Gửi thông tin đăng nhập quản trị"
+        >
           {loading ? 'Đang đăng nhập...' : 'Đăng nhập'}
         </Button>
         {onCancel && (
@@ -52,6 +57,7 @@ export default function Login({ onLoggedIn, onCancel, variant = 'page' }) {
             className="w-full"
             onClick={() => onCancel?.()}
             disabled={loading}
+            data-tooltip="Đóng hộp thoại và quay lại màn hình trước"
           >
             Hủy
           </Button>

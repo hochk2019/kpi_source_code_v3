@@ -229,6 +229,7 @@ export default function AccountManager({ currentUser }) {
             <button
               type="submit"
               className="rounded bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700"
+              data-tooltip="Tạo tài khoản mới với thông tin và quyền đã chọn"
             >
               Tạo tài khoản
             </button>
@@ -236,6 +237,7 @@ export default function AccountManager({ currentUser }) {
               type="button"
               onClick={resetForm}
               className="rounded border px-4 py-2 text-sm"
+              data-tooltip="Xóa nội dung biểu mẫu và nhập lại từ đầu"
             >
               Nhập lại
             </button>
@@ -300,6 +302,7 @@ export default function AccountManager({ currentUser }) {
                           type="button"
                           onClick={() => resetPassword(account.username)}
                           className="rounded border px-3 py-1 text-xs"
+                          data-tooltip="Đặt lại mật khẩu và yêu cầu người dùng đổi sau khi đăng nhập"
                         >
                           Đặt lại mật khẩu
                         </button>
@@ -307,6 +310,7 @@ export default function AccountManager({ currentUser }) {
                           type="button"
                           onClick={() => removeAccount(account.username)}
                           className="rounded border border-red-500 px-3 py-1 text-xs text-red-600"
+                          data-tooltip="Xóa tài khoản này khỏi hệ thống"
                         >
                           Xóa
                         </button>
