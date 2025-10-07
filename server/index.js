@@ -3744,6 +3744,13 @@ function refreshEcusSchedule() {
 
 async function runCoDiscrepancyCheck({ actor = 'system', reason = 'auto', range = null } = {}) {
   const config = getCoDiscrepancyConfig();
+  const ecusConfig = getEcusConfig();
+  const connectionConfig = buildSqlConnectionConfig(ecusConfig);
+  if (!connectionConfig.server || !connectionConfig.database) {
+    const error = new Error('Chưa cấu hình kết nối SQL Server cho chức năng đối soát C/O.');
+    error.statusCode = 400;
+    throw error;
+  }
   const effectiveRange = range && typeof range === 'object'
     ? {
         from: range.from || '',
@@ -3866,7 +3873,22 @@ async function runCoDiscrepancyCheck({ actor = 'system', reason = 'auto', range 
       message: `Kiem tra CO that bai: ${err?.message || 'Unknown error'}`,
       summary: { range: fallbackRange, error: err?.message || 'Unknown error' },
     });
-    throw err;
+    let errorToThrow = err;
+    if (!errorToThrow || typeof errorToThrow !== 'object') {
+      errorToThrow = new Error('Khong the chay kiem tra CO');
+    }
+    if (!errorToThrow.statusCode) {
+      if (isSqlTimeoutError(err)) {
+        errorToThrow = new Error('Kết nối SQL Server bị quá thời gian khi chạy đối soát C/O.');
+        errorToThrow.statusCode = 504;
+      } else if (err && typeof err === 'object' && (err.code === 'ELOGIN' || err.code === 'ESOCKET')) {
+        errorToThrow = new Error('Không thể đăng nhập SQL Server để đối soát C/O.');
+        errorToThrow.statusCode = 502;
+      } else {
+        errorToThrow.statusCode = 500;
+      }
+    }
+    throw errorToThrow;
   }
 }
 
@@ -4416,7 +4438,8 @@ app.post('/api/import/co-discrepancy/run', async (req, res) => {
     const result = await runCoDiscrepancyCheck({ actor, reason: 'manual', range });
     res.json({ ok: true, result });
   } catch (err) {
-    res.status(500).json({ ok: false, error: err?.message || 'Khong the chay kiem tra CO' });
+    const status = Number.isInteger(err?.statusCode) ? err.statusCode : 500;
+    res.status(status).json({ ok: false, error: err?.message || 'Khong the chay kiem tra CO' });
   }
 });
 

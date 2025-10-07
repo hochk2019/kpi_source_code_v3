@@ -30,6 +30,14 @@ const NAME_MAP = {
     "Sá»‘ tá» khai TM ",
     "Sá»‘ tá» khai xuáº¥t nháº­p kháº©u",
   ],
+  so_tk_ama: [
+    "Số TK AMA",
+    "Số tờ khai AMA",
+    "So TK AMA",
+    "So to khai AMA",
+    "TK AMA",
+    "To khai AMA",
+  ],
   nhanh: ["NhÃ¡nh", "Nhanh", "branch"],
   date: ["date", "ngÃ y", "Ngay", "NgÃ y", "NgÃ y Ä‘Äƒng kÃ½", "Ngay dang ky"],
   ma_hq: ["MÃ£ HQ", "Ma HQ", "MÃ£ hq", "ma_hq"],
@@ -148,6 +156,8 @@ export function mapRow(row, opts = {}) {
 
   const so_tk_full = normalizeStr(pick(row, NAME_MAP.so_tk));
   const so_tk = normalizeDeclarationNumber(so_tk_full);
+  const so_tk_ama_raw = pick(row, NAME_MAP.so_tk_ama || []) || row.so_tk_ama || row.soTkAma || row.tk_ama || row.tkAma || "";
+  const so_tk_ama = normalizeStr(so_tk_ama_raw);
   const nhanh = normalizeStr(pick(row, NAME_MAP.nhanh));
   const rawDate = pick(row, NAME_MAP.date);
   const dateISO = toISODate(rawDate, { preferMonthFirst: opts.preferMonthFirst });
@@ -261,6 +271,7 @@ export function mapRow(row, opts = {}) {
     so_tk,
     so_tk_full,
     so_tk_suffix: so_tk_full.slice(so_tk.length),
+    so_tk_ama,
     soToKhai: so_tk_full || so_tk,
     nhanh,
     ma_hq,
