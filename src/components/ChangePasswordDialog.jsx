@@ -78,6 +78,7 @@ export default function ChangePasswordDialog({ currentUser, onClose }) {
               onClick={() => onClose?.(false)}
               className="rounded border px-4 py-2 text-sm"
               disabled={loading}
+              data-tooltip="Đóng hộp thoại mà không thay đổi mật khẩu"
             >
               Hủy
             </button>
@@ -85,6 +86,7 @@ export default function ChangePasswordDialog({ currentUser, onClose }) {
               type="submit"
               className="rounded bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50"
               disabled={loading}
+              data-tooltip="Lưu mật khẩu mới cho tài khoản của bạn"
             >
               {loading ? "Đang xử lý..." : "Cập nhật"}
             </button>

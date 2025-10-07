@@ -37,16 +37,16 @@
 - [x] Đồng bộ dữ liệu với tab "Báo Cáo KPI" để phản ánh điểm cộng/trừ theo tháng.
 
 ### Tab "Báo Cáo KPI"
-- [ ] Tái cấu trúc giao diện và file Excel export để hiển thị đầy đủ các hạng mục KPI mới.
-- [ ] Bổ sung số lượng C/O, cột/tooltip hiển thị danh sách mã giấy phép, và khả năng tùy chọn ẩn/hiện cột khi in báo cáo.
-- [ ] Áp dụng template mới (ảnh 1, ảnh 2, logo ảnh 3) cho file Excel export.
+- [x] Tái cấu trúc giao diện và file Excel export để hiển thị đầy đủ các hạng mục KPI mới.
+- [x] Bổ sung số lượng C/O, cột/tooltip hiển thị danh sách mã giấy phép, và khả năng tùy chọn ẩn/hiện cột khi in báo cáo.
+- [x] Áp dụng template mới (ảnh 1, ảnh 2, logo ảnh 3) cho file Excel export.
 
 ### Tab "Tài Khoản"
-- [ ] Tự động tạo tài khoản cho nhân viên (Học, Phương, Tuấn – quyền trưởng nhóm) và quản lý (Hoàng Kim Hòa, Thúy Hà, Hoài Nam) với phân quyền tương ứng.
-- [ ] Xây dựng quy trình sync quyền với SQL Server để đảm bảo khởi tạo tài khoản không ảnh hưởng dữ liệu hiện hữu.
+- [x] Tự động tạo tài khoản cho nhân viên (Học, Phương, Tuấn – quyền trưởng nhóm) và quản lý (Hoàng Kim Hòa, Thúy Hà, Hoài Nam) với phân quyền tương ứng.
+- [x] Xây dựng quy trình sync quyền với SQL Server để đảm bảo khởi tạo tài khoản không ảnh hưởng dữ liệu hiện hữu.
 
 ### Cải tiến chung
-- [ ] Hiển thị tooltip mô tả ngắn khi hover vào mọi nút thao tác trong toàn hệ thống.
+- [x] Hiển thị tooltip mô tả ngắn khi hover vào mọi nút thao tác trong toàn hệ thống.
 - [ ] Nghiên cứu phương án tích hợp AI (API phân tích dữ liệu/chatbot) tiết kiệm token.
 - [ ] Thay favicon/tab logo bằng logo mới do khách hàng cung cấp.
 - [ ] Chuẩn hóa lại document hướng dẫn triển khai trên Windows 11 Pro + SQL Server 2008 R2 + PowerShell 7.
@@ -60,4 +60,6 @@
 - [x] Dọn gọn repo (xóa file dist/, _tmp_get_config.mjs, .vs/ sau khi hoàn thành) để review gọn.
 
 
-- [ ] D?n g?n repo (x?a file dist/, _tmp_get_config.mjs, .vs/ sau khi ho?n th?nh) d? review g?n.
+- [ ] D?n g?n repo (x?a file dist/, _tmp_get_config.mjs, .vs/ sau khi ho?n th?nh) d? review g?n.
+
+

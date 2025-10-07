@@ -53,7 +53,15 @@ function formatDecimal(value) {
 
 const chartColors = ["#2563eb", "#22c55e", "#f97316", "#a855f7", "#14b8a6"];
 
-function CompanySummaryTable({ rows, includeStaff = false, includeTeam = false }) {
+const COLUMN_VISIBILITY_OPTIONS = [
+  { key: "items", label: "Mục hàng" },
+  { key: "licenses", label: "Số giấy phép" },
+  { key: "co", label: "Tờ khai C/O" },
+  { key: "coLines", label: "Dòng C/O" },
+  { key: "licenseCodes", label: "Mã giấy phép" },
+];
+
+function CompanySummaryTable({ rows, includeStaff = false, includeTeam = false, visibleColumns = {} }) {
   const columns = [
     { key: "idx", label: "STT", align: "center" },
     { key: "cong_ty", label: "Công ty", align: "left" },
@@ -72,16 +80,27 @@ function CompanySummaryTable({ rows, includeStaff = false, includeTeam = false }
     { key: "modes", label: "Nhập/Xuất", align: "left" },
     { key: "decls", label: "Tờ khai", align: "right", format: formatInt },
     { key: "kpi", label: "Điểm KPI", align: "right", format: formatDecimal },
-    { key: "items", label: "Mục hàng", align: "right", format: formatInt },
-    { key: "licenses", label: "Số GP", align: "right", format: formatInt },
+    { key: "items", label: "Mục hàng", align: "right", format: formatInt, visibleKey: "items" },
+    { key: "licenses", label: "Số GP", align: "right", format: formatInt, visibleKey: "licenses" },
+    { key: "co", label: "Tờ khai C/O", align: "right", format: formatInt, visibleKey: "co" },
+    { key: "coLines", label: "Dòng C/O", align: "right", format: formatInt, visibleKey: "coLines" },
+    {
+      key: "licenseSummary",
+      label: "Mã giấy phép",
+      align: "left",
+      visibleKey: "licenseCodes",
+      isLicense: true,
+    },
   );
+
+  const activeColumns = columns.filter((col) => (col.visibleKey ? visibleColumns[col.visibleKey] !== false : true));
 
   return (
     <div className="overflow-auto rounded border">
       <table className="min-w-full text-sm">
         <thead className="bg-gray-100">
           <tr>
-            {columns.map((col) => {
+            {activeColumns.map((col) => {
               const alignClass =
                 col.align === "right"
                   ? "text-right"
@@ -100,7 +119,7 @@ function CompanySummaryTable({ rows, includeStaff = false, includeTeam = false }
           {rows.length ? (
             rows.map((row, idx) => (
               <tr key={`${row.mst}-${row.cong_ty}-${idx}`} className={idx % 2 === 0 ? "bg-white" : "bg-gray-50"}>
-                {columns.map((col) => {
+                {activeColumns.map((col) => {
                   const alignClass =
                     col.align === "right"
                       ? "text-right"
@@ -109,17 +128,18 @@ function CompanySummaryTable({ rows, includeStaff = false, includeTeam = false }
                       : "text-left";
                   const value = col.key === "idx" ? idx + 1 : row[col.key] ?? "";
                   const display = col.format ? col.format(value) : value;
+                  const tooltip = col.isLicense ? row.licenseTooltip : undefined;
                   return (
-                    <td key={col.key} className={`px-3 py-1.5 ${alignClass}`}>
+                    <td key={col.key} className={`px-3 py-1.5 ${alignClass}`} title={tooltip}>
                       {display || (col.align === "right" ? 0 : "—")}
                     </td>
                   );
-                })}
+                })
               </tr>
             ))
           ) : (
             <tr>
-              <td className="px-3 py-6 text-center text-gray-500" colSpan={columns.length}>
+              <td className="px-3 py-6 text-center text-gray-500" colSpan={activeColumns.length}>
                 Không có dữ liệu trong giai đoạn đã chọn.
               </td>
             </tr>
@@ -166,7 +186,7 @@ function TopStaffWidget({ data }) {
               <div className="mt-1 text-xs text-gray-500">
                 {`Tờ khai: ${formatInt(item.stats.decls)} • Mục hàng: ${formatInt(item.stats.items)} • GP: ${formatInt(
                   item.stats.licenses
-                )}`}
+                )} • C/O: ${formatInt(item.stats.co ?? 0)} • Dòng C/O: ${formatInt(item.stats.coLines ?? 0)}`}
               </div>
             </div>
           );
@@ -331,14 +351,37 @@ function SummaryCard({ title, value, subtitle }) {
   );
 }
 
-function StaffDetailCard({ staff, canExport, onExport, onPrint, exporting }) {
+function StaffDetailCard({ staff, canExport, onExport, onPrint, exporting, visibleColumns = {} }) {
   const { stats, rows } = staff;
   const [mode, setMode] = useState("detail");
   const aggregated = useMemo(
     () => aggregateByCompany(rows, { includeStaff: false, includeTeam: false }),
     [rows]
   );
-  const infoLine = `${stats.decls} tờ khai — Nhập: ${formatInt(stats.import)} • Xuất: ${formatInt(stats.export)}`;
+  const showItems = visibleColumns.items !== false;
+  const showLicenses = visibleColumns.licenses !== false;
+  const showCo = visibleColumns.co !== false;
+  const showCoLines = visibleColumns.coLines !== false;
+  const showLicenseCodes = visibleColumns.licenseCodes !== false;
+  const licenseSummary = (stats.licenseCodes || []).join(", ");
+  const infoLineParts = [
+    `${formatInt(stats.decls)} tờ khai`,
+    `Nhập: ${formatInt(stats.import)} • Xuất: ${formatInt(stats.export)}`,
+  ];
+  if (showCo) {
+    infoLineParts.push(`Có C/O: ${formatInt(stats.co ?? 0)}`);
+  }
+  if (showCoLines) {
+    infoLineParts.push(`Dòng C/O: ${formatInt(stats.coLines ?? 0)}`);
+  }
+  const infoLine = infoLineParts.join(" — ");
+  const detailColumnCount =
+    7 +
+    (showItems ? 1 : 0) +
+    (showLicenses ? 1 : 0) +
+    (showCo ? 1 : 0) +
+    (showCoLines ? 1 : 0) +
+    (showLicenseCodes ? 1 : 0);
 
   return (
     <section className="space-y-3 rounded-lg border bg-white p-4 shadow-sm print:avoid-break">
@@ -398,7 +441,7 @@ function StaffDetailCard({ staff, canExport, onExport, onPrint, exporting }) {
         </div>
       </header>
 
-      <div className="grid gap-2 text-sm sm:grid-cols-4">
+      <div className="grid gap-2 text-sm sm:grid-cols-4 lg:grid-cols-6">
         <div className="rounded border bg-gray-50 px-3 py-2">
           <div className="text-xs uppercase text-gray-500">Mục hàng</div>
           <div className="text-base font-semibold text-gray-900">{formatInt(stats.items)}</div>
@@ -415,10 +458,31 @@ function StaffDetailCard({ staff, canExport, onExport, onPrint, exporting }) {
           <div className="text-xs uppercase text-gray-500">Tờ khai xuất</div>
           <div className="text-base font-semibold text-gray-900">{formatInt(stats.export)}</div>
         </div>
+        {showCo ? (
+          <div className="rounded border bg-gray-50 px-3 py-2">
+            <div className="text-xs uppercase text-gray-500">Tờ khai có C/O</div>
+            <div className="text-base font-semibold text-gray-900">{formatInt(stats.co ?? 0)}</div>
+          </div>
+        ) : null}
+        {showCoLines ? (
+          <div className="rounded border bg-gray-50 px-3 py-2">
+            <div className="text-xs uppercase text-gray-500">Dòng C/O</div>
+            <div className="text-base font-semibold text-gray-900">{formatInt(stats.coLines ?? 0)}</div>
+          </div>
+        ) : null}
+        {showLicenseCodes ? (
+          <div className="rounded border bg-gray-50 px-3 py-2">
+            <div className="text-xs uppercase text-gray-500">Mã giấy phép</div>
+            <div className="text-base font-semibold text-gray-900">{formatInt(stats.licenseCount ?? 0)}</div>
+            <div className="mt-1 text-[11px] text-gray-500" title={licenseSummary || "—"}>
+              {licenseSummary || "—"}
+            </div>
+          </div>
+        ) : null}
       </div>
 
       {mode === "summary" ? (
-        <CompanySummaryTable rows={aggregated} />
+        <CompanySummaryTable rows={aggregated} visibleColumns={visibleColumns} />
       ) : (
         <div className="overflow-auto rounded border">
           <table className="min-w-full text-sm">
@@ -428,30 +492,63 @@ function StaffDetailCard({ staff, canExport, onExport, onPrint, exporting }) {
                 <th className="px-3 py-2 text-left">Số tờ khai</th>
                 <th className="px-3 py-2 text-left">Loại hình</th>
                 <th className="px-3 py-2 text-left">Nhập/Xuất</th>
-                <th className="px-3 py-2 text-right">Mục hàng</th>
-                <th className="px-3 py-2 text-right">Số GP</th>
+                {showItems ? <th className="px-3 py-2 text-right">Mục hàng</th> : null}
+                {showLicenses ? <th className="px-3 py-2 text-right">Số GP</th> : null}
+                {showCo ? <th className="px-3 py-2 text-center">C/O</th> : null}
+                {showCoLines ? <th className="px-3 py-2 text-right">Dòng C/O</th> : null}
+                {showLicenseCodes ? <th className="px-3 py-2 text-left">Mã giấy phép</th> : null}
                 <th className="px-3 py-2 text-right">Điểm KPI</th>
                 <th className="px-3 py-2 text-left">MST</th>
                 <th className="px-3 py-2 text-left">Công ty</th>
               </tr>
             </thead>
             <tbody>
-              {rows.map((row, idx) => (
-                <tr key={`${row.so_tk}-${idx}`} className={idx % 2 === 0 ? "bg-white" : "bg-gray-50"}>
-                  <td className="px-3 py-1.5">{row.displayDate || formatDisplayDate(row.date)}</td>
-                  <td className="px-3 py-1.5">{row.so_tk}</td>
-                  <td className="px-3 py-1.5">{row.loai_hinh || ""}</td>
-                  <td className="px-3 py-1.5">{row.isExport ? "Xuất" : "Nhập"}</td>
-                  <td className="px-3 py-1.5 text-right">{formatInt(row.num_items)}</td>
-                  <td className="px-3 py-1.5 text-right">{formatInt(row.licenses)}</td>
-                  <td className="px-3 py-1.5 text-right">{formatDecimal(row.kpi)}</td>
-                  <td className="px-3 py-1.5">{row.mst || ""}</td>
-                  <td className="px-3 py-1.5">{row.cong_ty || ""}</td>
-                </tr>
-              ))}
+              {rows.map((row, idx) => {
+                const licenseCodes = Array.isArray(row.licenseCodes) ? row.licenseCodes : [];
+                const excludedCodes = Array.isArray(row.licenseExcludedCodes)
+                  ? row.licenseExcludedCodes
+                  : [];
+                const licenseLabel = licenseCodes.join(", ") || "—";
+                const licenseTooltipParts = [];
+                if (licenseLabel && licenseLabel !== "—") {
+                  licenseTooltipParts.push(`Áp dụng: ${licenseLabel}`);
+                }
+                if (excludedCodes.length) {
+                  licenseTooltipParts.push(`Loại trừ: ${excludedCodes.join(", ")}`);
+                }
+                const licenseTooltip = licenseTooltipParts.join("\n") || "—";
+                return (
+                  <tr key={`${row.so_tk}-${idx}`} className={idx % 2 === 0 ? "bg-white" : "bg-gray-50"}>
+                    <td className="px-3 py-1.5">{row.displayDate || formatDisplayDate(row.date)}</td>
+                    <td className="px-3 py-1.5">{row.so_tk}</td>
+                    <td className="px-3 py-1.5">{row.loai_hinh || ""}</td>
+                    <td className="px-3 py-1.5">{row.isExport ? "Xuất" : "Nhập"}</td>
+                    {showItems ? (
+                      <td className="px-3 py-1.5 text-right">{formatInt(row.num_items)}</td>
+                    ) : null}
+                    {showLicenses ? (
+                      <td className="px-3 py-1.5 text-right">{formatInt(row.licenses)}</td>
+                    ) : null}
+                    {showCo ? (
+                      <td className="px-3 py-1.5 text-center">{row.coLabel || "Không"}</td>
+                    ) : null}
+                    {showCoLines ? (
+                      <td className="px-3 py-1.5 text-right">{formatInt(row.coLineCount || 0)}</td>
+                    ) : null}
+                    {showLicenseCodes ? (
+                      <td className="px-3 py-1.5" title={licenseTooltip}>
+                        {licenseLabel}
+                      </td>
+                    ) : null}
+                    <td className="px-3 py-1.5 text-right">{formatDecimal(row.kpi)}</td>
+                    <td className="px-3 py-1.5">{row.mst || ""}</td>
+                    <td className="px-3 py-1.5">{row.cong_ty || ""}</td>
+                  </tr>
+                );
+              })}
               {rows.length === 0 ? (
                 <tr>
-                  <td className="px-3 py-6 text-center text-gray-500" colSpan={9}>
+                  <td className="px-3 py-6 text-center text-gray-500" colSpan={detailColumnCount}>
                     Chưa có tờ khai nào trong giai đoạn được chọn.
                   </td>
                 </tr>
@@ -464,14 +561,44 @@ function StaffDetailCard({ staff, canExport, onExport, onPrint, exporting }) {
   );
 }
 
-function TeamDetailCard({ team, canExport, onExport, onPrint, exporting }) {
+function TeamDetailCard({ team, canExport, onExport, onPrint, exporting, visibleColumns = {} }) {
   const { stats, members, rows } = team;
   const [mode, setMode] = useState("detail");
   const aggregated = useMemo(
     () => aggregateByCompany(rows, { includeStaff: true, includeTeam: false }),
     [rows]
   );
-  const infoLine = `${stats.decls} tờ khai — Nhập: ${formatInt(stats.import)} • Xuất: ${formatInt(stats.export)}`;
+  const showItems = visibleColumns.items !== false;
+  const showLicenses = visibleColumns.licenses !== false;
+  const showCo = visibleColumns.co !== false;
+  const showCoLines = visibleColumns.coLines !== false;
+  const showLicenseCodes = visibleColumns.licenseCodes !== false;
+  const licenseSummary = (stats.licenseCodes || []).join(", ");
+  const infoLineParts = [
+    `${formatInt(stats.decls)} tờ khai`,
+    `Nhập: ${formatInt(stats.import)} • Xuất: ${formatInt(stats.export)}`,
+  ];
+  if (showCo) {
+    infoLineParts.push(`Có C/O: ${formatInt(stats.co ?? 0)}`);
+  }
+  if (showCoLines) {
+    infoLineParts.push(`Dòng C/O: ${formatInt(stats.coLines ?? 0)}`);
+  }
+  const infoLine = infoLineParts.join(" — ");
+  const memberColumnCount =
+    5 +
+    (showItems ? 1 : 0) +
+    (showLicenses ? 1 : 0) +
+    (showCo ? 1 : 0) +
+    (showCoLines ? 1 : 0) +
+    (showLicenseCodes ? 1 : 0);
+  const detailColumnCount =
+    8 +
+    (showItems ? 1 : 0) +
+    (showLicenses ? 1 : 0) +
+    (showCo ? 1 : 0) +
+    (showCoLines ? 1 : 0) +
+    (showLicenseCodes ? 1 : 0);
   const memberNames = members.map((m) => m.name).filter(Boolean);
 
   return (
@@ -534,7 +661,7 @@ function TeamDetailCard({ team, canExport, onExport, onPrint, exporting }) {
         </div>
       </header>
 
-      <div className="grid gap-2 text-sm sm:grid-cols-4">
+      <div className="grid gap-2 text-sm sm:grid-cols-4 lg:grid-cols-6">
         <div className="rounded border bg-gray-50 px-3 py-2">
           <div className="text-xs uppercase text-gray-500">Mục hàng</div>
           <div className="text-base font-semibold text-gray-900">{formatInt(stats.items)}</div>
@@ -551,10 +678,31 @@ function TeamDetailCard({ team, canExport, onExport, onPrint, exporting }) {
           <div className="text-xs uppercase text-gray-500">Tờ khai xuất</div>
           <div className="text-base font-semibold text-gray-900">{formatInt(stats.export)}</div>
         </div>
+        {showCo ? (
+          <div className="rounded border bg-gray-50 px-3 py-2">
+            <div className="text-xs uppercase text-gray-500">Tờ khai có C/O</div>
+            <div className="text-base font-semibold text-gray-900">{formatInt(stats.co ?? 0)}</div>
+          </div>
+        ) : null}
+        {showCoLines ? (
+          <div className="rounded border bg-gray-50 px-3 py-2">
+            <div className="text-xs uppercase text-gray-500">Dòng C/O</div>
+            <div className="text-base font-semibold text-gray-900">{formatInt(stats.coLines ?? 0)}</div>
+          </div>
+        ) : null}
+        {showLicenseCodes ? (
+          <div className="rounded border bg-gray-50 px-3 py-2">
+            <div className="text-xs uppercase text-gray-500">Mã giấy phép</div>
+            <div className="text-base font-semibold text-gray-900">{formatInt(stats.licenseCount ?? 0)}</div>
+            <div className="mt-1 text-[11px] text-gray-500" title={licenseSummary || "—"}>
+              {licenseSummary || "—"}
+            </div>
+          </div>
+        ) : null}
       </div>
 
       {mode === "summary" ? (
-        <CompanySummaryTable rows={aggregated} includeStaff />
+        <CompanySummaryTable rows={aggregated} includeStaff visibleColumns={visibleColumns} />
       ) : (
         <>
           <div className="overflow-auto rounded border">
@@ -566,8 +714,11 @@ function TeamDetailCard({ team, canExport, onExport, onPrint, exporting }) {
                   <th className="px-3 py-2 text-right">Điểm KPI</th>
                   <th className="px-3 py-2 text-right">Nhập</th>
                   <th className="px-3 py-2 text-right">Xuất</th>
-                  <th className="px-3 py-2 text-right">Mục hàng</th>
-                  <th className="px-3 py-2 text-right">Số GP</th>
+                  {showItems ? <th className="px-3 py-2 text-right">Mục hàng</th> : null}
+                  {showLicenses ? <th className="px-3 py-2 text-right">Số GP</th> : null}
+                  {showCo ? <th className="px-3 py-2 text-right">Tờ khai C/O</th> : null}
+                  {showCoLines ? <th className="px-3 py-2 text-right">Dòng C/O</th> : null}
+                  {showLicenseCodes ? <th className="px-3 py-2 text-left">Mã giấy phép</th> : null}
                 </tr>
               </thead>
               <tbody>
@@ -578,13 +729,31 @@ function TeamDetailCard({ team, canExport, onExport, onPrint, exporting }) {
                     <td className="px-3 py-1.5 text-right">{formatDecimal(member.stats.kpi)}</td>
                     <td className="px-3 py-1.5 text-right">{formatInt(member.stats.import)}</td>
                     <td className="px-3 py-1.5 text-right">{formatInt(member.stats.export)}</td>
-                    <td className="px-3 py-1.5 text-right">{formatInt(member.stats.items)}</td>
-                    <td className="px-3 py-1.5 text-right">{formatInt(member.stats.licenses)}</td>
+                    {showItems ? (
+                      <td className="px-3 py-1.5 text-right">{formatInt(member.stats.items)}</td>
+                    ) : null}
+                    {showLicenses ? (
+                      <td className="px-3 py-1.5 text-right">{formatInt(member.stats.licenses)}</td>
+                    ) : null}
+                    {showCo ? (
+                      <td className="px-3 py-1.5 text-right">{formatInt(member.stats.co ?? 0)}</td>
+                    ) : null}
+                    {showCoLines ? (
+                      <td className="px-3 py-1.5 text-right">{formatInt(member.stats.coLines ?? 0)}</td>
+                    ) : null}
+                    {showLicenseCodes ? (
+                      <td
+                        className="px-3 py-1.5"
+                        title={(member.stats.licenseCodes || []).join(", ") || "—"}
+                      >
+                        {(member.stats.licenseCodes || []).join(", ") || "—"}
+                      </td>
+                    ) : null}
                   </tr>
                 ))}
                 {members.length === 0 ? (
                   <tr>
-                    <td className="px-3 py-6 text-center text-gray-500" colSpan={7}>
+                    <td className="px-3 py-6 text-center text-gray-500" colSpan={memberColumnCount}>
                       Chưa có thành viên nào trong tổ đội này.
                     </td>
                   </tr>
@@ -602,31 +771,64 @@ function TeamDetailCard({ team, canExport, onExport, onPrint, exporting }) {
                   <th className="px-3 py-2 text-left">Nhân viên</th>
                   <th className="px-3 py-2 text-left">Loại hình</th>
                   <th className="px-3 py-2 text-left">Nhập/Xuất</th>
-                  <th className="px-3 py-2 text-right">Mục hàng</th>
-                  <th className="px-3 py-2 text-right">Số GP</th>
+                  {showItems ? <th className="px-3 py-2 text-right">Mục hàng</th> : null}
+                  {showLicenses ? <th className="px-3 py-2 text-right">Số GP</th> : null}
+                  {showCo ? <th className="px-3 py-2 text-center">C/O</th> : null}
+                  {showCoLines ? <th className="px-3 py-2 text-right">Dòng C/O</th> : null}
+                  {showLicenseCodes ? <th className="px-3 py-2 text-left">Mã giấy phép</th> : null}
                   <th className="px-3 py-2 text-right">Điểm KPI</th>
                   <th className="px-3 py-2 text-left">MST</th>
                   <th className="px-3 py-2 text-left">Công ty</th>
                 </tr>
               </thead>
               <tbody>
-                {rows.map((row, idx) => (
-                  <tr key={`${row.so_tk}-${idx}`} className={idx % 2 === 0 ? "bg-white" : "bg-gray-50"}>
-                    <td className="px-3 py-1.5">{row.displayDate || formatDisplayDate(row.date)}</td>
-                    <td className="px-3 py-1.5">{row.so_tk}</td>
-                    <td className="px-3 py-1.5">{row.nhan_vien || ""}</td>
-                    <td className="px-3 py-1.5">{row.loai_hinh || ""}</td>
-                    <td className="px-3 py-1.5">{row.isExport ? "Xuất" : "Nhập"}</td>
-                    <td className="px-3 py-1.5 text-right">{formatInt(row.num_items)}</td>
-                    <td className="px-3 py-1.5 text-right">{formatInt(row.licenses)}</td>
-                    <td className="px-3 py-1.5 text-right">{formatDecimal(row.kpi)}</td>
-                    <td className="px-3 py-1.5">{row.mst || ""}</td>
-                    <td className="px-3 py-1.5">{row.cong_ty || ""}</td>
-                  </tr>
-                ))}
+                {rows.map((row, idx) => {
+                  const licenseCodes = Array.isArray(row.licenseCodes) ? row.licenseCodes : [];
+                  const excludedCodes = Array.isArray(row.licenseExcludedCodes)
+                    ? row.licenseExcludedCodes
+                    : [];
+                  const licenseLabel = licenseCodes.join(", ") || "—";
+                  const licenseTooltipParts = [];
+                  if (licenseLabel && licenseLabel !== "—") {
+                    licenseTooltipParts.push(`Áp dụng: ${licenseLabel}`);
+                  }
+                  if (excludedCodes.length) {
+                    licenseTooltipParts.push(`Loại trừ: ${excludedCodes.join(", ")}`);
+                  }
+                  const licenseTooltip = licenseTooltipParts.join("\n") || "—";
+                  return (
+                    <tr key={`${row.so_tk}-${idx}`} className={idx % 2 === 0 ? "bg-white" : "bg-gray-50"}>
+                      <td className="px-3 py-1.5">{row.displayDate || formatDisplayDate(row.date)}</td>
+                      <td className="px-3 py-1.5">{row.so_tk}</td>
+                      <td className="px-3 py-1.5">{row.nhan_vien || ""}</td>
+                      <td className="px-3 py-1.5">{row.loai_hinh || ""}</td>
+                      <td className="px-3 py-1.5">{row.isExport ? "Xuất" : "Nhập"}</td>
+                      {showItems ? (
+                        <td className="px-3 py-1.5 text-right">{formatInt(row.num_items)}</td>
+                      ) : null}
+                      {showLicenses ? (
+                        <td className="px-3 py-1.5 text-right">{formatInt(row.licenses)}</td>
+                      ) : null}
+                      {showCo ? (
+                        <td className="px-3 py-1.5 text-center">{row.coLabel || "Không"}</td>
+                      ) : null}
+                      {showCoLines ? (
+                        <td className="px-3 py-1.5 text-right">{formatInt(row.coLineCount || 0)}</td>
+                      ) : null}
+                      {showLicenseCodes ? (
+                        <td className="px-3 py-1.5" title={licenseTooltip}>
+                          {licenseLabel}
+                        </td>
+                      ) : null}
+                      <td className="px-3 py-1.5 text-right">{formatDecimal(row.kpi)}</td>
+                      <td className="px-3 py-1.5">{row.mst || ""}</td>
+                      <td className="px-3 py-1.5">{row.cong_ty || ""}</td>
+                    </tr>
+                  );
+                })}
                 {rows.length === 0 ? (
                   <tr>
-                    <td className="px-3 py-6 text-center text-gray-500" colSpan={10}>
+                    <td className="px-3 py-6 text-center text-gray-500" colSpan={detailColumnCount}>
                       Chưa có tờ khai nào trong giai đoạn được chọn.
                     </td>
                   </tr>
@@ -652,6 +854,20 @@ export default function ReportViewer({ canExport = true }) {
   const [teamViewMode, setTeamViewMode] = useState("detail");
   const [version, setVersion] = useState(0);
   const [exporting, setExporting] = useState(false);
+  const [columnVisibility, setColumnVisibility] = useState(() => ({
+    items: true,
+    licenses: true,
+    co: true,
+    coLines: true,
+    licenseCodes: true,
+  }));
+
+  const handleToggleColumnVisibility = (key) => {
+    setColumnVisibility((prev) => ({
+      ...prev,
+      [key]: prev[key] === false,
+    }));
+  };
 
   const handleSeedSamples = () => {
     const confirmed = window.confirm(
@@ -984,7 +1200,11 @@ export default function ReportViewer({ canExport = true }) {
           </div>
 
           {staffViewMode === "summary" ? (
-            <CompanySummaryTable rows={companySummaryAllStaff} includeStaff />
+            <CompanySummaryTable
+              rows={companySummaryAllStaff}
+              includeStaff
+              visibleColumns={columnVisibility}
+            />
           ) : (
             <>
               <div className="overflow-auto rounded border">
@@ -997,8 +1217,21 @@ export default function ReportViewer({ canExport = true }) {
                       <th className="px-3 py-2 text-right">Điểm KPI</th>
                       <th className="px-3 py-2 text-right">Nhập</th>
                       <th className="px-3 py-2 text-right">Xuất</th>
-                      <th className="px-3 py-2 text-right">Mục hàng</th>
-                      <th className="px-3 py-2 text-right">Số GP</th>
+                      {columnVisibility.items !== false && (
+                        <th className="px-3 py-2 text-right">Mục hàng</th>
+                      )}
+                      {columnVisibility.licenses !== false && (
+                        <th className="px-3 py-2 text-right">Số GP</th>
+                      )}
+                      {columnVisibility.co !== false && (
+                        <th className="px-3 py-2 text-right">Tờ khai C/O</th>
+                      )}
+                      {columnVisibility.coLines !== false && (
+                        <th className="px-3 py-2 text-right">Dòng C/O</th>
+                      )}
+                      {columnVisibility.licenseCodes !== false && (
+                        <th className="px-3 py-2 text-left">Mã giấy phép</th>
+                      )}
                     </tr>
                   </thead>
                   <tbody>
@@ -1010,8 +1243,26 @@ export default function ReportViewer({ canExport = true }) {
                         <td className="px-3 py-1.5 text-right">{formatDecimal(item.stats.kpi)}</td>
                         <td className="px-3 py-1.5 text-right">{formatInt(item.stats.import)}</td>
                         <td className="px-3 py-1.5 text-right">{formatInt(item.stats.export)}</td>
-                        <td className="px-3 py-1.5 text-right">{formatInt(item.stats.items)}</td>
-                        <td className="px-3 py-1.5 text-right">{formatInt(item.stats.licenses)}</td>
+                        {columnVisibility.items !== false && (
+                          <td className="px-3 py-1.5 text-right">{formatInt(item.stats.items)}</td>
+                        )}
+                        {columnVisibility.licenses !== false && (
+                          <td className="px-3 py-1.5 text-right">{formatInt(item.stats.licenses)}</td>
+                        )}
+                        {columnVisibility.co !== false && (
+                          <td className="px-3 py-1.5 text-right">{formatInt(item.stats.co)}</td>
+                        )}
+                        {columnVisibility.coLines !== false && (
+                          <td className="px-3 py-1.5 text-right">{formatInt(item.stats.coLines)}</td>
+                        )}
+                        {columnVisibility.licenseCodes !== false && (
+                          <td
+                            className="px-3 py-1.5"
+                            title={(item.stats.licenseCodes || []).join(", ") || "—"}
+                          >
+                            {(item.stats.licenseCodes || []).join(", ") || "—"}
+                          </td>
+                        )}
                       </tr>
                     ))}
                   </tbody>
@@ -1027,6 +1278,7 @@ export default function ReportViewer({ canExport = true }) {
                     onExport={() => handleExportStaffDetail(item)}
                     onPrint={handlePrint}
                     exporting={exporting}
+                    visibleColumns={columnVisibility}
                   />
                 ))}
               </div>
@@ -1047,6 +1299,7 @@ export default function ReportViewer({ canExport = true }) {
         onExport={() => handleExportStaffDetail(activeStaff)}
         onPrint={handlePrint}
         exporting={exporting}
+        visibleColumns={columnVisibility}
       />
     );
   };
@@ -1112,7 +1365,12 @@ export default function ReportViewer({ canExport = true }) {
           </div>
 
           {teamViewMode === "summary" ? (
-            <CompanySummaryTable rows={companySummaryAllTeams} includeStaff includeTeam />
+            <CompanySummaryTable
+              rows={companySummaryAllTeams}
+              includeStaff
+              includeTeam
+              visibleColumns={columnVisibility}
+            />
           ) : (
             <>
               <div className="overflow-auto rounded border">
@@ -1124,8 +1382,21 @@ export default function ReportViewer({ canExport = true }) {
                       <th className="px-3 py-2 text-right">Điểm KPI</th>
                       <th className="px-3 py-2 text-right">Nhập</th>
                       <th className="px-3 py-2 text-right">Xuất</th>
-                      <th className="px-3 py-2 text-right">Mục hàng</th>
-                      <th className="px-3 py-2 text-right">Số GP</th>
+                      {columnVisibility.items !== false && (
+                        <th className="px-3 py-2 text-right">Mục hàng</th>
+                      )}
+                      {columnVisibility.licenses !== false && (
+                        <th className="px-3 py-2 text-right">Số GP</th>
+                      )}
+                      {columnVisibility.co !== false && (
+                        <th className="px-3 py-2 text-right">Tờ khai C/O</th>
+                      )}
+                      {columnVisibility.coLines !== false && (
+                        <th className="px-3 py-2 text-right">Dòng C/O</th>
+                      )}
+                      {columnVisibility.licenseCodes !== false && (
+                        <th className="px-3 py-2 text-left">Mã giấy phép</th>
+                      )}
                     </tr>
                   </thead>
                   <tbody>
@@ -1136,8 +1407,26 @@ export default function ReportViewer({ canExport = true }) {
                         <td className="px-3 py-1.5 text-right">{formatDecimal(item.stats.kpi)}</td>
                         <td className="px-3 py-1.5 text-right">{formatInt(item.stats.import)}</td>
                         <td className="px-3 py-1.5 text-right">{formatInt(item.stats.export)}</td>
-                        <td className="px-3 py-1.5 text-right">{formatInt(item.stats.items)}</td>
-                        <td className="px-3 py-1.5 text-right">{formatInt(item.stats.licenses)}</td>
+                        {columnVisibility.items !== false && (
+                          <td className="px-3 py-1.5 text-right">{formatInt(item.stats.items)}</td>
+                        )}
+                        {columnVisibility.licenses !== false && (
+                          <td className="px-3 py-1.5 text-right">{formatInt(item.stats.licenses)}</td>
+                        )}
+                        {columnVisibility.co !== false && (
+                          <td className="px-3 py-1.5 text-right">{formatInt(item.stats.co)}</td>
+                        )}
+                        {columnVisibility.coLines !== false && (
+                          <td className="px-3 py-1.5 text-right">{formatInt(item.stats.coLines)}</td>
+                        )}
+                        {columnVisibility.licenseCodes !== false && (
+                          <td
+                            className="px-3 py-1.5"
+                            title={(item.stats.licenseCodes || []).join(", ") || "—"}
+                          >
+                            {(item.stats.licenseCodes || []).join(", ") || "—"}
+                          </td>
+                        )}
                       </tr>
                     ))}
                   </tbody>
@@ -1153,6 +1442,7 @@ export default function ReportViewer({ canExport = true }) {
                     onExport={() => handleExportTeamDetail(item)}
                     onPrint={handlePrint}
                     exporting={exporting}
+                    visibleColumns={columnVisibility}
                   />
                 ))}
               </div>
@@ -1173,6 +1463,7 @@ export default function ReportViewer({ canExport = true }) {
         onExport={() => handleExportTeamDetail(activeTeam)}
         onPrint={handlePrint}
         exporting={exporting}
+        visibleColumns={columnVisibility}
       />
     );
   };
@@ -1274,12 +1565,22 @@ export default function ReportViewer({ canExport = true }) {
           value={formatInt(summaryCompanyCardValue)}
           subtitle={companyCardSubtitle}
         />
-      <SummaryCard
-        title="Số giấy phép hợp lệ"
-        value={formatInt(summary.licenses)}
-        subtitle="Đã loại trừ theo quy tắc KPI"
-      />
-    </div>
+        <SummaryCard
+          title="Số giấy phép hợp lệ"
+          value={formatInt(summary.licenses)}
+          subtitle={`Đã loại trừ • ${formatInt(summary.licenseCount ?? 0)} mã khác nhau`}
+        />
+        <SummaryCard
+          title="Tờ khai có C/O"
+          value={formatInt(summary.co ?? 0)}
+          subtitle={`Tổng dòng áp C/O: ${formatInt(summary.coLines ?? 0)}`}
+        />
+        <SummaryCard
+          title="Danh sách mã giấy phép"
+          value={formatInt(summary.licenseCount ?? 0)}
+          subtitle={summary.licenseSummary || "—"}
+        />
+      </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
         <TrendLineChart data={trendSeries} comparison={trendComparison} />
@@ -1344,6 +1645,32 @@ export default function ReportViewer({ canExport = true }) {
               ))}
             </select>
           )}
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2 text-xs text-gray-600">
+          <span className="font-semibold text-gray-900">Cột báo cáo</span>
+          {COLUMN_VISIBILITY_OPTIONS.map((option) => {
+            const checked = columnVisibility[option.key] !== false;
+            return (
+              <label
+                key={option.key}
+                className={`flex cursor-pointer items-center gap-1 rounded border px-2 py-1 ${
+                  checked ? "bg-black text-white" : "bg-white text-gray-600 hover:bg-gray-50"
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  className="h-3 w-3"
+                  checked={checked}
+                  onChange={() => handleToggleColumnVisibility(option.key)}
+                />
+                <span>{option.label}</span>
+              </label>
+            );
+          })}
+          <span className="ml-auto text-[11px] text-gray-400">
+            Ẩn/hiện sẽ được áp dụng cho cả giao diện và bản in.
+          </span>
         </div>
 
         <div>{scope === "staff" ? renderStaffSection() : renderTeamSection()}</div>

@@ -37,14 +37,34 @@ const KPICalculator = ({ auth }) => {
     <div className="mx-auto max-w-6xl">
       <Tabs defaultValue="reports" className="space-y-6">
         <TabsList className="flex flex-wrap gap-2">
-          <TabsTrigger value="mst">Gán MST</TabsTrigger>
-          <TabsTrigger value="hq">Đại Lý HQ</TabsTrigger>
-          <TabsTrigger value="import">Import Data</TabsTrigger>
-          <TabsTrigger value="teams">Quản lý Tổ đội</TabsTrigger>
-          <TabsTrigger value="rules">Quy tắc KPI</TabsTrigger>
-          <TabsTrigger value="reports">Báo cáo KPI</TabsTrigger>
-          {canManageAccounts && <TabsTrigger value="accounts">Tài khoản</TabsTrigger>}
-          {canViewAudit && <TabsTrigger value="audit">Nhật ký</TabsTrigger>}
+          <TabsTrigger value="mst" data-tooltip="Quản lý gán MST cho doanh nghiệp và người phụ trách">
+            Gán MST
+          </TabsTrigger>
+          <TabsTrigger value="hq" data-tooltip="Quản lý danh sách đại lý hải quan hợp tác">
+            Đại Lý HQ
+          </TabsTrigger>
+          <TabsTrigger value="import" data-tooltip="Nhập và đồng bộ dữ liệu tờ khai từ ECUS">
+            Import Data
+          </TabsTrigger>
+          <TabsTrigger value="teams" data-tooltip="Thiết lập tổ đội và phân bổ chỉ tiêu">
+            Quản lý Tổ đội
+          </TabsTrigger>
+          <TabsTrigger value="rules" data-tooltip="Cấu hình quy tắc tính điểm KPI">
+            Quy tắc KPI
+          </TabsTrigger>
+          <TabsTrigger value="reports" data-tooltip="Xem và xuất báo cáo KPI tổng hợp">
+            Báo cáo KPI
+          </TabsTrigger>
+          {canManageAccounts && (
+            <TabsTrigger value="accounts" data-tooltip="Quản trị tài khoản đăng nhập hệ thống">
+              Tài khoản
+            </TabsTrigger>
+          )}
+          {canViewAudit && (
+            <TabsTrigger value="audit" data-tooltip="Xem nhật ký thao tác hệ thống">
+              Nhật ký
+            </TabsTrigger>
+          )}
         </TabsList>
 
         <TabsContent value="mst">

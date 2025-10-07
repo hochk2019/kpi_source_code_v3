@@ -10,6 +10,7 @@
 1. **Tầng dữ liệu trung tâm**
    - SQLite làm nguồn dữ liệu chính, chia sẻ qua backend Express (đã tương thích Windows 11).
    - Sử dụng module `storageClient` ở chế độ remote-only, vô hiệu hóa cache cục bộ khi backend khả dụng.
+   - Backend duy trì bảng phân quyền `[dbo].[KPI_USER_ROLES]` trên SQL Server (tùy biến qua `KPI_ACCOUNT_SYNC_TABLE`) để không làm mất quyền hiện hữu khi khởi tạo lại dữ liệu.
 2. **Tầng API bảo mật**
    - Route `/api/auth/*` xử lý phiên đăng nhập, lưu token trong SQLite (bảng `auth_sessions`).
    - Thêm middleware kiểm tra quyền theo ma trận (xem mục 3) trước các thao tác nhạy cảm (`/api/rules/*`, `/api/import/*`, `/api/hq/*`).
@@ -20,15 +21,20 @@
    - Cho phép cấu hình `KPI_LISTEN_HOST`, `PORT`, `VITE_API_BASE` thông qua file `.env.local` để cố định IP nội bộ (ví dụ `192.168.1.114`).
 
 ## 3. Ma trận phân quyền chi tiết
-| Quyền | Admin | Trưởng nhóm | Nhân viên | Guest |
-|-------|:-----:|:-----------:|:---------:|:-----:|
-| Import JSON / đồng bộ ECUS | ✅ | ✅ (nếu được giao) | ❌ | ❌ |
-| Quản lý MST & Đại lý HQ | ✅ | ✅ | ❌ | ❌ |
-| Chỉnh sửa Quy tắc KPI | ✅ | ✅ (giới hạn 1-2 bộ) | ❌ | ❌ |
-| Đặt mặc định quy tắc | ✅ | ❌ | ❌ | ❌ |
-| Xem & xuất báo cáo | ✅ | ✅ | ✅ | ❌ |
-| Xem nhật ký (audit) | ✅ | ✅ | ❌ | ❌ |
-| Quản lý tài khoản | ✅ | ❌ | ❌ | ❌ |
+| Quyền | Admin | Quản lý | Trưởng nhóm | Nhân viên | Guest |
+|-------|:-----:|:------:|:-----------:|:---------:|:-----:|
+| Import JSON / đồng bộ ECUS | ✅ | ✅ | ✅ | ❌ | ❌ |
+| Quản lý MST & Đại lý HQ | ✅ | ✅ | ✅ | ❌ | ❌ |
+| Chỉnh sửa Quy tắc KPI | ✅ | ✅ | ❌ | ❌ | ❌ |
+| Đặt mặc định quy tắc | ✅ | ✅ | ❌ | ❌ | ❌ |
+| Đồng bộ ECUS nâng cao | ✅ | ✅ | ❌ | ❌ | ❌ |
+| Quản lý tổ đội | ✅ | ✅ | ✅ | ❌ | ❌ |
+| Quản lý cảnh báo thiếu thông tin | ✅ | ✅ | ✅ | ❌ | ❌ |
+| Xem & xuất báo cáo | ✅ | ✅ | ✅ | ✅ | ❌ |
+| Xem nhật ký (audit) | ✅ | ✅ | ✅ | ❌ | ❌ |
+| Quản lý tài khoản | ✅ | ❌ | ❌ | ❌ | ❌ |
+
+> Các vai trò "Quản lý" và "Trưởng nhóm" đã được tạo sẵn trong seed dữ liệu cùng mật khẩu tạm thời để bàn giao cho đội vận hành. Nên yêu cầu người dùng đổi mật khẩu ngay sau lần đăng nhập đầu tiên.
 
 > Khi cần thêm vai trò mới (ví dụ “Kiểm soát chất lượng”), mở rộng bảng `kpi_users_v1` với các cờ quyền mới và cập nhật middleware tương ứng.
 

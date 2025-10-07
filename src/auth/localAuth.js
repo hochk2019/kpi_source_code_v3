@@ -1,38 +1,20 @@
-export const PERMISSION_KEYS = [
-  "importEdit",
-  "mstEdit",
-  "rulesEdit",
-  "teamsEdit",
-  "syncManage",
-  "reportsExport",
-  "alertsManage",
-  "auditView",
-  "accountManage",
-];
+import {
+  ACCOUNT_PERMISSION_KEYS,
+  ADMIN_ROLE,
+  DEFAULT_ROLE,
+  getPermissionTemplate as getRolePermissionTemplate,
+  listRoleOptions,
+  mergePermissions,
+  normalizeRoleKey,
+} from "../shared/accountRoles.js";
 
-const VIEW_ONLY_PERMISSIONS = Object.freeze({
-  importEdit: false,
-  mstEdit: false,
-  rulesEdit: false,
-  teamsEdit: false,
-  syncManage: false,
-  reportsExport: true,
-  alertsManage: false,
-  auditView: false,
-  accountManage: false,
-});
+export const PERMISSION_KEYS = [...ACCOUNT_PERMISSION_KEYS];
+export const ROLE_OPTIONS = listRoleOptions();
+export { ADMIN_ROLE, DEFAULT_ROLE, TEAM_LEAD_ROLE, MANAGER_ROLE } from "../shared/accountRoles.js";
 
-const ADMIN_PERMISSIONS = Object.freeze({
-  importEdit: true,
-  mstEdit: true,
-  rulesEdit: true,
-  teamsEdit: true,
-  syncManage: true,
-  reportsExport: true,
-  alertsManage: true,
-  auditView: true,
-  accountManage: true,
-});
+export function normalizeRole(role) {
+  return normalizeRoleKey(role);
+}
 
 const MIN_PASSWORD_LENGTH = 6;
 
@@ -102,28 +84,14 @@ export function getSessionToken() {
 }
 
 function normalizePermissions(perms, role) {
-  const roleKey = role === "admin" ? "admin" : "staff";
-  const base = roleKey === "admin" ? ADMIN_PERMISSIONS : VIEW_ONLY_PERMISSIONS;
-  const normalized = { ...base };
-  if (perms && typeof perms === "object") {
-    for (const key of PERMISSION_KEYS) {
-      if (key === "reportsExport") {
-        normalized[key] = perms[key] !== false;
-      } else {
-        normalized[key] = !!perms[key];
-      }
-    }
-  }
-  if (roleKey === "admin") {
-    normalized.accountManage = true;
-  }
-  return normalized;
+  const roleKey = normalizeRoleKey(role);
+  return mergePermissions(roleKey, perms);
 }
 
 function normalizeUserRecord(record) {
   const username = String(record?.username || "").trim();
   if (!username) return null;
-  const role = record?.role === "admin" ? "admin" : "staff";
+  const role = normalizeRoleKey(record?.role);
   const name = String(record?.name || username).trim();
   const permissions = normalizePermissions(record?.permissions, role);
   return { username, role, name, permissions };
@@ -209,11 +177,12 @@ async function requestJson(path, { method = "GET", body } = {}) {
 
 function sanitizeUserForSession(user) {
   if (!user) return null;
+  const role = normalizeRoleKey(user.role);
   return {
     username: user.username,
-    role: user.role === "admin" ? "admin" : "staff",
+    role,
     name: user.name || user.username,
-    permissions: normalizePermissions(user.permissions, user.role),
+    permissions: normalizePermissions(user.permissions, role),
   };
 }
 
@@ -244,7 +213,7 @@ export function getViewerAuth() {
     username: "guest",
     role: "viewer",
     name: "Khách",
-    permissions: { ...VIEW_ONLY_PERMISSIONS },
+    permissions: getRolePermissionTemplate(DEFAULT_ROLE),
   };
 }
 
@@ -303,8 +272,8 @@ export function listAccounts() {
   return loadUsers();
 }
 
-export function getPermissionTemplate(role = "staff") {
-  return normalizePermissions({}, role === "admin" ? "admin" : "staff");
+export function getPermissionTemplate(role = DEFAULT_ROLE) {
+  return getRolePermissionTemplate(role);
 }
 
 export async function reloadAccounts() {
