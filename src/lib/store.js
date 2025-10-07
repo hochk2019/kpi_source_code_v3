@@ -1084,6 +1084,48 @@ export function saveDeclRows(newRows, { overwrite = false, actor = "system", det
   return stored.length;
 }
 
+export function markDeclRowsReviewed(keys, { actor = "system", note = "Đánh dấu rà soát" } = {}) {
+  const list = Array.isArray(keys) ? keys.map((key) => String(key || "").trim()).filter(Boolean) : [];
+  if (list.length === 0) {
+    return 0;
+  }
+  const keySet = new Set(list);
+  const actorName = normalizeStr(actor) || "system";
+  const timestamp = new Date().toISOString();
+  const rows = getDeclRowsRaw();
+  let changed = 0;
+  const nextRows = rows.map((row) => {
+    if (!row || typeof row !== "object") return row;
+    const soTk = (row.so_tk ?? "").toString();
+    const nhanh = (row.nhanh ?? "").toString();
+    const key = `${soTk}_${nhanh}`;
+    if (!keySet.has(key)) {
+      return row;
+    }
+    if (row.reviewed && row.reviewed_by && row.reviewed_at) {
+      return row;
+    }
+    changed += 1;
+    return {
+      ...row,
+      reviewed: true,
+      reviewed_by: actorName,
+      reviewed_at: timestamp,
+    };
+  });
+  if (changed === 0) {
+    return 0;
+  }
+  writeDeclRows(nextRows);
+  pushAuditLog({
+    actor: actorName,
+    action: "decl.review",
+    detail: `${note} ${changed} tờ khai`,
+    meta: { count: changed },
+  });
+  return changed;
+}
+
 function diffHQAgencyRows(prevRows, nextRows, actor) {
   const prevMap = new Map();
   for (const row of Array.isArray(prevRows) ? prevRows : []) {
@@ -1321,7 +1363,7 @@ export default {
   normalizeStr, normalizeMST, normalizeDeclarationNumber, toISODate, normalizeName,
   isExportDecl, isExportByNumber, isImportByNumber, isExportByType, isImportByType,
   getMSTRowsRaw, getMSTMap, getMSTFor, upsertMSTRows,
-  getDeclRows, saveDeclRows, sortDeclRows, getRecentDeclRows,
+  getDeclRows, saveDeclRows, markDeclRowsReviewed, sortDeclRows, getRecentDeclRows,
   getHQAgencies, mapHQAgenciesByMST, upsertHQAgencies, applyAgenciesToDeclRows,
   parseAgencyList, formatAgencyList, getHQHistoryEntries, getHQHistoryForMST,
   getTeamRoster, setTeamRoster, mapMemberNamesToTeams, applyTeamRosterToMST,

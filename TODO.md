@@ -12,7 +12,7 @@
 
 ### Import Data & Đồng bộ ECUS
 - [x] Bổ sung cơ chế đồng bộ và hiển thị cột "Số TK AMA" sau khi có thuật toán xác định tờ khai sửa.
-- [ ] Thêm bộ lọc khoảng thời gian nâng cao (hỗ trợ preset và lưu bộ lọc) cùng nút đối chiếu loại trừ KPI tự động.
+- [x] Thêm bộ lọc khoảng thời gian nâng cao (hỗ trợ preset và lưu bộ lọc) cùng nút đối chiếu loại trừ KPI tự động.
 - [ ] Cho phép export Excel danh sách tờ khai đã chọn với cấu trúc header mới (bao gồm giấy phép bị loại trừ).
 
 ### Tab "Gán MST"

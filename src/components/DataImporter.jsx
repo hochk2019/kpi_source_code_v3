@@ -50,6 +50,89 @@ const RANGE_PRESETS = Object.freeze([
   { label: "30 ngày", days: 30 },
 ]);
 
+const FILTER_STORAGE_KEY = "kpi:data-importer:filter:v1";
+
+const DATE_RANGE_PRESETS = Object.freeze([
+  {
+    key: "none",
+    label: "Tất cả thời gian",
+    getRange: () => ({ from: "", to: "" }),
+  },
+  {
+    key: "today",
+    label: "Hôm nay",
+    getRange: () => {
+      const today = new Date();
+      const value = toDateInputValue(today);
+      return { from: value, to: value };
+    },
+  },
+  {
+    key: "3days",
+    label: "3 ngày gần nhất",
+    getRange: () => {
+      const today = new Date();
+      const end = toDateInputValue(today);
+      const from = new Date(today);
+      from.setDate(from.getDate() - 2);
+      return { from: toDateInputValue(from), to: end };
+    },
+  },
+  {
+    key: "7days",
+    label: "7 ngày gần nhất",
+    getRange: () => {
+      const today = new Date();
+      const end = toDateInputValue(today);
+      const from = new Date(today);
+      from.setDate(from.getDate() - 6);
+      return { from: toDateInputValue(from), to: end };
+    },
+  },
+  {
+    key: "30days",
+    label: "30 ngày gần nhất",
+    getRange: () => {
+      const today = new Date();
+      const end = toDateInputValue(today);
+      const from = new Date(today);
+      from.setDate(from.getDate() - 29);
+      return { from: toDateInputValue(from), to: end };
+    },
+  },
+  {
+    key: "thisMonth",
+    label: "Tháng này",
+    getRange: () => {
+      const now = new Date();
+      const start = new Date(now.getFullYear(), now.getMonth(), 1);
+      const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+      return { from: toDateInputValue(start), to: toDateInputValue(end) };
+    },
+  },
+  {
+    key: "lastMonth",
+    label: "Tháng trước",
+    getRange: () => {
+      const now = new Date();
+      const start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const end = new Date(now.getFullYear(), now.getMonth(), 0);
+      return { from: toDateInputValue(start), to: toDateInputValue(end) };
+    },
+  },
+  {
+    key: "quarter",
+    label: "Quý hiện tại",
+    getRange: () => {
+      const now = new Date();
+      const quarter = Math.floor(now.getMonth() / 3);
+      const start = new Date(now.getFullYear(), quarter * 3, 1);
+      const end = new Date(now.getFullYear(), quarter * 3 + 3, 0);
+      return { from: toDateInputValue(start), to: toDateInputValue(end) };
+    },
+  },
+]);
+
 async function extractErrorMessage(response, fallbackMessage) {
   if (!response || typeof response !== "object") {
     return fallbackMessage;
@@ -198,6 +281,10 @@ export default function DataImporter({
   const [page, setPage] = useState(1);
   const [mode, setMode] = useState("saved");         // saved | preview
   const [selectedFile, setSelectedFile] = useState("");
+  const savedFilterRef = useRef(null);
+  const [hasSavedFilter, setHasSavedFilter] = useState(false);
+  const [filterSavedAt, setFilterSavedAt] = useState(null);
+  const [datePreset, setDatePreset] = useState("none");
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [filterNoStaff, setFilterNoStaff] = useState(false);
   const [filterNoTeam, setFilterNoTeam] = useState(false);
@@ -246,8 +333,143 @@ export default function DataImporter({
   const [previewRangeInfo, setPreviewRangeInfo] = useState(null);
   const previewRangeLabel = useMemo(() => formatDateRangeLabel(previewRangeInfo), [previewRangeInfo]);
 
+  const applyStoredFilter = useCallback((stored, { notify = false } = {}) => {
+    if (!stored || typeof stored !== "object") {
+      return;
+    }
+    savedFilterRef.current = stored;
+    setHasSavedFilter(true);
+    if (stored.savedAt) {
+      setFilterSavedAt(stored.savedAt);
+    }
+    if (typeof stored.query === "string") {
+      setQuery(stored.query);
+    }
+    if (stored.range && typeof stored.range === "object") {
+      setSearchRange({
+        from: stored.range.from || "",
+        to: stored.range.to || "",
+      });
+    }
+    if (stored.datePreset) {
+      setDatePreset(stored.datePreset);
+    }
+    if (typeof stored.filterNoStaff === "boolean") {
+      setFilterNoStaff(stored.filterNoStaff);
+    }
+    if (typeof stored.filterNoTeam === "boolean") {
+      setFilterNoTeam(stored.filterNoTeam);
+    }
+    if (typeof stored.coFilterMode === "string") {
+      setCoFilterMode(stored.coFilterMode);
+    }
+    if (Number.isFinite(stored.coFilterMin)) {
+      setCoFilterMin(Math.max(0, Math.round(stored.coFilterMin)));
+    }
+    setPage(1);
+    if (notify) {
+      alert("Đã áp dụng bộ lọc đã lưu.");
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    try {
+      const raw = window.localStorage.getItem(FILTER_STORAGE_KEY);
+      if (!raw) {
+        return;
+      }
+      const stored = JSON.parse(raw);
+      if (!stored || typeof stored !== "object") {
+        return;
+      }
+      applyStoredFilter(stored);
+    } catch (error) {
+      console.error("Không thể đọc bộ lọc đã lưu", error);
+    }
+  }, [applyStoredFilter]);
+
+  const filterSavedLabel = useMemo(() => {
+    if (!filterSavedAt) return "";
+    try {
+      return new Date(filterSavedAt).toLocaleString("vi-VN");
+    } catch (error) {
+      console.error("Không thể định dạng thời gian lưu bộ lọc", error);
+      return "";
+    }
+  }, [filterSavedAt]);
+
+  const applyDatePreset = useCallback((presetKey) => {
+    const preset = DATE_RANGE_PRESETS.find((item) => item.key === presetKey);
+    if (!preset) {
+      setDatePreset("custom");
+      return;
+    }
+    const range = preset.getRange();
+    setDatePreset(presetKey);
+    setSearchRange({
+      from: range?.from || "",
+      to: range?.to || "",
+    });
+  }, []);
+
+  const handleSaveCurrentFilter = useCallback(() => {
+    if (typeof window === "undefined") {
+      alert("Môi trường hiện tại không hỗ trợ lưu bộ lọc.");
+      return;
+    }
+    const payload = {
+      query,
+      range: { ...searchRange },
+      filterNoStaff,
+      filterNoTeam,
+      coFilterMode,
+      coFilterMin,
+      datePreset,
+      savedAt: new Date().toISOString(),
+    };
+    try {
+      window.localStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify(payload));
+      savedFilterRef.current = payload;
+      setHasSavedFilter(true);
+      setFilterSavedAt(payload.savedAt);
+      alert("Đã lưu bộ lọc hiện tại cho lần sử dụng tiếp theo.");
+    } catch (error) {
+      console.error("Không thể lưu bộ lọc", error);
+      alert("Không thể lưu bộ lọc. Vui lòng kiểm tra bộ nhớ trình duyệt.");
+    }
+  }, [query, searchRange, filterNoStaff, filterNoTeam, coFilterMode, coFilterMin, datePreset]);
+
+  const handleRestoreSavedFilter = useCallback(() => {
+    if (!savedFilterRef.current) {
+      alert("Chưa có bộ lọc nào được lưu.");
+      return;
+    }
+    applyStoredFilter(savedFilterRef.current, { notify: true });
+  }, [applyStoredFilter]);
+
+  const handleClearSavedFilter = useCallback(() => {
+    if (typeof window === "undefined") {
+      alert("Không thể xóa bộ lọc đã lưu trong môi trường hiện tại.");
+      return;
+    }
+    try {
+      window.localStorage.removeItem(FILTER_STORAGE_KEY);
+      savedFilterRef.current = null;
+      setHasSavedFilter(false);
+      setFilterSavedAt(null);
+      alert("Đã xóa bộ lọc đã lưu.");
+    } catch (error) {
+      console.error("Không thể xóa bộ lọc", error);
+      alert("Không thể xóa bộ lọc đã lưu. Vui lòng thử lại sau.");
+    }
+  }, []);
+
   const handleClearSearchRange = useCallback(() => {
     setSearchRange({ from: "", to: "" });
+    setDatePreset("none");
   }, []);
 
   const licenseExcludeSet = useMemo(() => {
@@ -1436,22 +1658,25 @@ export default function DataImporter({
     setPage(1);
   }, [selectionEnabled, filteredKeys]);
 
-  const handleApplyLicenseExclusion = useCallback(() => {
-    if (selectedKeys.length === 0) {
-      alert("Hãy chọn ít nhất một tờ khai để đối chiếu giấy phép.");
-      return;
-    }
+  const applyLicenseExclusionForKeys = useCallback((targetKeys) => {
     if (mode !== "saved") {
-      alert("Chỉ có thể điều chỉnh giấy phép khi đang xem dữ liệu đã lưu.");
-      return;
+      return { ok: false, reason: "mode" };
     }
-    const keySet = new Set(selectedKeys);
+    if (!Array.isArray(targetKeys) || targetKeys.length === 0) {
+      return { ok: false, reason: "empty" };
+    }
+    const keySet = new Set(targetKeys);
+    if (keySet.size === 0) {
+      return { ok: false, reason: "empty" };
+    }
     let changed = 0;
+    let matchedCount = 0;
     const nextRows = rawRows.map((row) => {
       const rowKey = keyOfRow(row);
       if (!keySet.has(rowKey)) {
         return row;
       }
+      matchedCount += 1;
       const excludeSet = getLicenseExcludeSetForRow(row);
       const sourceCodes = Array.isArray(row.licenseCodes) && row.licenseCodes.length
         ? row.licenseCodes
@@ -1480,14 +1705,70 @@ export default function DataImporter({
       }
       return nextRow;
     });
-    if (!changed) {
-      alert("Các tờ khai được chọn đã không còn mã giấy phép nằm trong danh sách loại trừ.");
-      return;
+    if (matchedCount === 0) {
+      return { ok: false, reason: "missing" };
+    }
+    if (changed === 0) {
+      return { ok: false, reason: "unchanged", matchedCount };
     }
     setRawRows(nextRows);
     setHasUnsaved(true);
-    alert(`Đã cập nhật loại trừ giấy phép cho ${changed} tờ khai.`);
-  }, [selectedKeys, mode, rawRows, keyOfRow, getLicenseExcludeSetForRow, rules]);
+    return { ok: true, changed, matchedCount };
+  }, [mode, rawRows, keyOfRow, getLicenseExcludeSetForRow, rules]);
+
+  const handleApplyLicenseExclusion = useCallback(() => {
+    if (selectedKeys.length === 0) {
+      alert("Hãy chọn ít nhất một tờ khai để đối chiếu giấy phép.");
+      return;
+    }
+    const result = applyLicenseExclusionForKeys(selectedKeys);
+    if (!result?.ok) {
+      if (result?.reason === "mode") {
+        alert("Chỉ có thể điều chỉnh giấy phép khi đang xem dữ liệu đã lưu.");
+        return;
+      }
+      if (result?.reason === "unchanged") {
+        alert("Các tờ khai được chọn đã không còn mã giấy phép nằm trong danh sách loại trừ.");
+        return;
+      }
+      if (result?.reason === "missing" || result?.reason === "empty") {
+        alert("Không tìm thấy tờ khai phù hợp để đối chiếu.");
+        return;
+      }
+      alert("Không thể đối chiếu giấy phép cho lựa chọn hiện tại.");
+      return;
+    }
+    alert(`Đã cập nhật loại trừ giấy phép cho ${result.changed}/${result.matchedCount} tờ khai đã chọn.`);
+  }, [selectedKeys, applyLicenseExclusionForKeys]);
+
+  const handleAutoApplyLicenseExclusion = useCallback(() => {
+    if (!canEdit) {
+      alert("Bạn không có quyền chỉnh sửa dữ liệu tờ khai.");
+      return;
+    }
+    if (mode !== "saved") {
+      alert("Hãy chuyển sang chế độ dữ liệu đã lưu để đối chiếu tự động.");
+      return;
+    }
+    if (!filteredKeys.length) {
+      alert("Không có tờ khai nào khớp với bộ lọc hiện tại để đối chiếu.");
+      return;
+    }
+    const result = applyLicenseExclusionForKeys(filteredKeys);
+    if (!result?.ok) {
+      if (result?.reason === "unchanged") {
+        alert("Tất cả tờ khai trong bộ lọc hiện tại đã loại trừ giấy phép đầy đủ.");
+        return;
+      }
+      if (result?.reason === "missing" || result?.reason === "empty") {
+        alert("Không có tờ khai hợp lệ để tự động đối chiếu.");
+        return;
+      }
+      alert("Không thể tự động đối chiếu loại trừ KPI. Vui lòng thử lại.");
+      return;
+    }
+    alert(`Đã tự động cập nhật loại trừ giấy phép cho ${result.changed}/${result.matchedCount} tờ khai đang hiển thị.`);
+  }, [applyLicenseExclusionForKeys, canEdit, filteredKeys, mode]);
 
   const handleExportSelected = useCallback(() => {
     if (selectedKeys.length === 0) {
@@ -2203,12 +2484,38 @@ export default function DataImporter({
           value={query}
           onChange={e => { setQuery(e.target.value); setPage(1); }}
         />
+        <label className="flex items-center gap-1 text-sm" data-tooltip="Chọn nhanh khoảng thời gian theo preset">
+          <span>Khoảng</span>
+          <select
+            className="border rounded px-2 py-1 text-sm"
+            value={datePreset}
+            onChange={(e) => {
+              const value = e.target.value;
+              if (value === "custom") {
+                setDatePreset("custom");
+                return;
+              }
+              applyDatePreset(value);
+            }}
+          >
+            {DATE_RANGE_PRESETS.map((preset) => (
+              <option key={preset.key} value={preset.key}>
+                {preset.label}
+              </option>
+            ))}
+            <option value="custom">Tự chọn</option>
+          </select>
+        </label>
         <label className="flex items-center gap-1 text-sm" data-tooltip="Lọc từ ngày (theo ngày đăng ký tờ khai)">
           <span>Từ ngày</span>
           <input
             type="date"
             value={searchRange.from}
-            onChange={(e) => setSearchRange((prev) => ({ ...prev, from: e.target.value }))}
+            onChange={(e) => {
+              const value = e.target.value;
+              setDatePreset("custom");
+              setSearchRange((prev) => ({ ...prev, from: value }));
+            }}
             className="border rounded px-2 py-1 text-sm"
           />
         </label>
@@ -2217,7 +2524,11 @@ export default function DataImporter({
           <input
             type="date"
             value={searchRange.to}
-            onChange={(e) => setSearchRange((prev) => ({ ...prev, to: e.target.value }))}
+            onChange={(e) => {
+              const value = e.target.value;
+              setDatePreset("custom");
+              setSearchRange((prev) => ({ ...prev, to: value }));
+            }}
             className="border rounded px-2 py-1 text-sm"
           />
         </label>
@@ -2288,6 +2599,49 @@ export default function DataImporter({
           <span className="text-sm px-2 py-1 rounded bg-emerald-50 text-emerald-700">
             Đáp ứng C/O: {coFilterMatches} tờ khai
           </span>
+        )}
+        <button
+          type="button"
+          onClick={handleSaveCurrentFilter}
+          className="rounded border px-3 py-1 text-xs text-gray-600 hover:bg-gray-50"
+        >
+          Lưu bộ lọc
+        </button>
+        {hasSavedFilter && (
+          <>
+            <button
+              type="button"
+              onClick={handleRestoreSavedFilter}
+              className="rounded border px-3 py-1 text-xs text-gray-600 hover:bg-gray-50"
+            >
+              Áp dụng bộ lọc đã lưu
+            </button>
+            <button
+              type="button"
+              onClick={handleClearSavedFilter}
+              className="rounded border px-3 py-1 text-xs text-gray-600 hover:bg-gray-50"
+            >
+              Xóa bộ lọc đã lưu
+            </button>
+            {filterSavedLabel && (
+              <span className="text-xs text-gray-500">Đã lưu: {filterSavedLabel}</span>
+            )}
+          </>
+        )}
+        {canEdit && mode === "saved" && (
+          <button
+            type="button"
+            onClick={handleAutoApplyLicenseExclusion}
+            disabled={!filteredKeys.length}
+            data-tooltip="Đối chiếu tự động loại trừ giấy phép cho toàn bộ tờ khai đang lọc"
+            className={`rounded border px-3 py-1 text-xs ${
+              filteredKeys.length
+                ? "border-emerald-300 bg-emerald-50 text-emerald-700"
+                : "opacity-50 cursor-not-allowed"
+            }`}
+          >
+            Đối chiếu KPI tự động
+          </button>
         )}
         <div className="opacity-70 text-sm">
           {total} dòng — Trang {safePage}/{maxPage}
