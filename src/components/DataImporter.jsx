@@ -18,6 +18,7 @@ import CollapsibleCard from "./CollapsibleCard.jsx";
 import { deriveCOStatus, coLabel, coLineCount } from "@/shared/co.js";
 import { formatDisplayDate, formatDateRangeLabel } from "@/shared/format.js";
 import { fetchWithAuth } from "@/auth/localAuth.js";
+import useTooltipTitles from "@/hooks/useTooltipTitles.js";
 
 const DEFAULT_PAGE_SIZE = 10;
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100, 200];
@@ -1184,25 +1185,16 @@ export default function DataImporter({
     return filteredKeys.every((key) => selectedSet.has(key));
   }, [filteredKeys, selectedKeys]);
 
-  useEffect(() => {
-    const root = rootRef.current;
-    if (!root) return;
-    const buttons = root.querySelectorAll("button");
-    buttons.forEach((button) => {
-      if (!(button instanceof HTMLElement)) return;
-      const tooltip = button.getAttribute("data-tooltip") || button.getAttribute("aria-label");
-      if (tooltip && button.getAttribute("title") !== tooltip) {
-        button.setAttribute("title", tooltip);
-        return;
-      }
-      if (!tooltip) {
-        const text = (button.textContent || "").trim();
-        if (text && button.getAttribute("title") !== text) {
-          button.setAttribute("title", text);
-        }
-      }
-    });
-  }, [rootRef, rawRows, filteredKeys, selectedKeys, coDiscrepancyState, syncConfig, coCodeConfig, coDiscrepancyForm, mode]);
+  useTooltipTitles(rootRef, [
+    rawRows,
+    filteredKeys,
+    selectedKeys,
+    coDiscrepancyState,
+    syncConfig,
+    coCodeConfig,
+    coDiscrepancyForm,
+    mode,
+  ]);
 
   const applyEdit = useCallback((rowKey, updater) => {
     if (isReadOnlyForEdits) return;
