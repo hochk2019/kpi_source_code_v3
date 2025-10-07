@@ -8,6 +8,10 @@ import {
   deleteAccount,
   getPermissionTemplate,
   PERMISSION_KEYS,
+  ROLE_OPTIONS,
+  ADMIN_ROLE,
+  DEFAULT_ROLE,
+  normalizeRole,
 } from "@/auth/localAuth.js";
 
 const PERMISSION_LABELS = {
@@ -38,8 +42,8 @@ export default function AccountManager({ currentUser }) {
     username: "",
     name: "",
     password: "",
-    role: "staff",
-    permissions: getPermissionTemplate("staff"),
+    role: DEFAULT_ROLE,
+    permissions: getPermissionTemplate(DEFAULT_ROLE),
   }));
 
   const currentActor = currentUser?.username || "system";
@@ -65,8 +69,8 @@ export default function AccountManager({ currentUser }) {
       username: "",
       name: "",
       password: "",
-      role: "staff",
-      permissions: getPermissionTemplate("staff"),
+      role: DEFAULT_ROLE,
+      permissions: getPermissionTemplate(DEFAULT_ROLE),
     });
   };
 
@@ -84,24 +88,33 @@ export default function AccountManager({ currentUser }) {
   };
 
   const updateFormRole = (role) => {
+    const normalized = normalizeRole(role);
     setForm((prev) => ({
       ...prev,
-      role,
-      permissions: getPermissionTemplate(role),
+      role: normalized,
+      permissions: getPermissionTemplate(normalized),
     }));
   };
 
   const updateFormPermission = (key, value) => {
-    setForm((prev) => ({
-      ...prev,
-      permissions: { ...prev.permissions, [key]: value },
-    }));
+    setForm((prev) => {
+      if (key === "accountManage" && prev.role !== ADMIN_ROLE) {
+        return prev;
+      }
+      return {
+        ...prev,
+        permissions: { ...prev.permissions, [key]: value },
+      };
+    });
   };
 
   const togglePermission = async (username, key, value) => {
     try {
       const target = accounts.find((account) => account.username === username);
       if (!target) return;
+      if (key === "accountManage" && target.role !== ADMIN_ROLE) {
+        return;
+      }
       const nextPermissions = { ...target.permissions, [key]: value };
       await updateAccount(username, { permissions: nextPermissions }, { actor: currentActor });
       setAccounts(listAccounts());
@@ -112,7 +125,8 @@ export default function AccountManager({ currentUser }) {
 
   const changeRole = async (username, role) => {
     try {
-      await updateAccount(username, { role }, { actor: currentActor });
+      const normalized = normalizeRole(role);
+      await updateAccount(username, { role: normalized }, { actor: currentActor });
       setAccounts(listAccounts());
     } catch (err) {
       alert(err?.message || "Không thể cập nhật vai trò");
@@ -187,8 +201,11 @@ export default function AccountManager({ currentUser }) {
               value={form.role}
               onChange={(e) => updateFormRole(e.target.value)}
             >
-              <option value="staff">Nhân viên</option>
-              <option value="admin">Quản trị viên</option>
+              {ROLE_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
             </select>
           </div>
           <div className="md:col-span-2">
@@ -200,6 +217,7 @@ export default function AccountManager({ currentUser }) {
                   label={label}
                   checked={form.permissions[key]}
                   onChange={(value) => updateFormPermission(key, value)}
+                  disabled={key === "accountManage" && form.role !== ADMIN_ROLE}
                 />
               ))}
             </div>
@@ -250,16 +268,19 @@ export default function AccountManager({ currentUser }) {
                   <tr key={account.username} className="align-top">
                     <td className="px-3 py-3 font-medium text-gray-900">{account.username}</td>
                     <td className="px-3 py-3">{account.name}</td>
-                    <td className="px-3 py-3">
-                      <select
-                        className="rounded border px-2 py-1"
-                        value={account.role}
-                        onChange={(e) => changeRole(account.username, e.target.value)}
-                      >
-                        <option value="staff">Nhân viên</option>
-                        <option value="admin">Quản trị viên</option>
-                      </select>
-                    </td>
+                      <td className="px-3 py-3">
+                        <select
+                          className="rounded border px-2 py-1"
+                          value={account.role}
+                          onChange={(e) => changeRole(account.username, e.target.value)}
+                        >
+                          {ROLE_OPTIONS.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                      </td>
                     <td className="px-3 py-3">
                       <div className="grid gap-2 md:grid-cols-2">
                         {permissionList.map(({ key, label }) => (
@@ -268,6 +289,7 @@ export default function AccountManager({ currentUser }) {
                             label={label}
                             checked={account.permissions?.[key]}
                             onChange={(value) => togglePermission(account.username, key, value)}
+                            disabled={key === "accountManage" && account.role !== ADMIN_ROLE}
                           />
                         ))}
                       </div>

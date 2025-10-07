@@ -308,6 +308,7 @@ vi.mock('exceljs', () => {
       this.rows = new Map();
       this.pageSetup = {};
       this.columns = [];
+      this.images = [];
     }
 
     mergeCells() {}
@@ -334,6 +335,10 @@ vi.mock('exceljs', () => {
       }
       return this.getRow(1).getCell(1);
     }
+
+    addImage(imageId, placement) {
+      this.images.push({ imageId, placement });
+    }
   }
 
   let workbookCreateCount = 0;
@@ -342,6 +347,7 @@ vi.mock('exceljs', () => {
     constructor() {
       workbookCreateCount += 1;
       this.worksheets = [];
+      this.images = [];
       this.xlsx = {
         writeBuffer: async () => Buffer.from('excel-mock'),
       };
@@ -351,6 +357,12 @@ vi.mock('exceljs', () => {
       const sheet = new MockWorksheet(name);
       this.worksheets.push(sheet);
       return sheet;
+    }
+
+    addImage(config) {
+      const id = this.images.length + 1;
+      this.images.push({ id, config });
+      return id;
     }
   }
 
@@ -404,6 +416,27 @@ describe('API xác thực & bootstrap', () => {
     const accounts = JSON.parse(payload.kpi_users_v1 || '[]');
     expect(Array.isArray(accounts)).toBe(true);
     expect(accounts.length).toBeGreaterThan(0);
+    const usernames = accounts.map((account) => account.username).sort();
+    expect(usernames).toEqual(
+      expect.arrayContaining([
+        'admin',
+        'nhanvien',
+        'lead.hoc',
+        'lead.phuong',
+        'lead.tuan',
+        'manager.hoangkimhoa',
+        'manager.thuyha',
+        'manager.hoainam',
+      ])
+    );
+    const teamLead = accounts.find((account) => account.username === 'lead.hoc');
+    expect(teamLead).toMatchObject({ role: 'lead' });
+    expect(teamLead?.permissions?.teamsEdit).toBe(true);
+    expect(teamLead?.permissions?.accountManage).toBe(false);
+    const manager = accounts.find((account) => account.username === 'manager.hoangkimhoa');
+    expect(manager).toMatchObject({ role: 'manager' });
+    expect(manager?.permissions?.rulesEdit).toBe(true);
+    expect(manager?.permissions?.accountManage).toBe(false);
     for (const account of accounts) {
       expect(account).not.toHaveProperty('password');
       expect(account).not.toHaveProperty('passwordHash');
@@ -418,6 +451,16 @@ describe('API xác thực & bootstrap', () => {
     expect(response.body?.user).not.toHaveProperty('passwordHash');
     expect(typeof response.body?.token).toBe('string');
     expect(response.headers['set-cookie']).toBeDefined();
+  });
+
+  it('cho phép trưởng nhóm đăng nhập với mật khẩu mặc định và không có quyền quản lý tài khoản', async () => {
+    const response = await request(app)
+      .post('/api/auth/login')
+      .send({ username: 'lead.phuong', password: 'Phuong@2024' });
+    expect(response.status).toBe(200);
+    expect(response.body?.ok).toBe(true);
+    expect(response.body?.user).toMatchObject({ username: 'lead.phuong', role: 'lead' });
+    expect(response.body?.user?.permissions?.accountManage).toBe(false);
   });
 
   it('duy trì phiên đăng nhập và cho phép đăng xuất', async () => {

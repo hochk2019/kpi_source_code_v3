@@ -13,6 +13,16 @@ import { generateReport } from './reportExport.js';
 import { DEFAULT_RULES as SHARED_DEFAULT_RULES } from '../src/shared/defaultRules.js';
 import { getRulesSeed, persistRulesSnapshot, loadRulesSnapshot } from './rulesPersistence.js';
 import { deriveCOStatus, parseCoLineCount, setPreferentialCodeConfig, getPreferentialCodeConfig } from '../src/shared/co.js';
+import {
+  ADMIN_ROLE,
+  DEFAULT_ROLE,
+  TEAM_LEAD_ROLE,
+  MANAGER_ROLE,
+  getPermissionTemplate as getRolePermissionTemplate,
+  normalizeRoleKey,
+  mergePermissions,
+  isAdminRole,
+} from '../src/shared/accountRoles.js';
 import { recordSqlTimeout } from './sqlMonitor.js';
 import cronstrue from 'cronstrue';
 import 'cronstrue/locales/vi.js';
@@ -464,42 +474,6 @@ const backupScheduleMeta = {
   description: '',
 };
 
-const ACCOUNT_PERMISSION_KEYS = [
-  'importEdit',
-  'mstEdit',
-  'rulesEdit',
-  'teamsEdit',
-  'syncManage',
-  'reportsExport',
-  'alertsManage',
-  'auditView',
-  'accountManage',
-];
-
-const VIEW_ONLY_PERMISSIONS = Object.freeze({
-  importEdit: false,
-  mstEdit: false,
-  rulesEdit: false,
-  teamsEdit: false,
-  syncManage: false,
-  reportsExport: true,
-  alertsManage: false,
-  auditView: false,
-  accountManage: false,
-});
-
-const ADMIN_PERMISSIONS = Object.freeze({
-  importEdit: true,
-  mstEdit: true,
-  rulesEdit: true,
-  teamsEdit: true,
-  syncManage: true,
-  reportsExport: true,
-  alertsManage: true,
-  auditView: true,
-  accountManage: true,
-});
-
 const PASSWORD_SALT_ROUNDS = 10;
 const MIN_PASSWORD_LENGTH = 6;
 const SESSION_COOKIE_NAME = 'kpi_session';
@@ -527,20 +501,58 @@ const DEFAULT_ACCOUNT_SEED = [
   {
     username: 'admin',
     password: 'admin123',
-    role: 'admin',
+    role: ADMIN_ROLE,
     name: 'Quản trị viên',
-    permissions: ADMIN_PERMISSIONS,
+    permissions: getRolePermissionTemplate(ADMIN_ROLE),
   },
   {
     username: 'nhanvien',
     password: '123456',
-    role: 'staff',
+    role: DEFAULT_ROLE,
     name: 'Nhân viên',
-    permissions: {
-      ...VIEW_ONLY_PERMISSIONS,
-      importEdit: true,
-      reportsExport: true,
-    },
+    permissions: mergePermissions(DEFAULT_ROLE, { importEdit: true }),
+  },
+  {
+    username: 'lead.hoc',
+    password: 'Hoc@2024',
+    role: TEAM_LEAD_ROLE,
+    name: 'Học',
+    permissions: getRolePermissionTemplate(TEAM_LEAD_ROLE),
+  },
+  {
+    username: 'lead.phuong',
+    password: 'Phuong@2024',
+    role: TEAM_LEAD_ROLE,
+    name: 'Phương',
+    permissions: getRolePermissionTemplate(TEAM_LEAD_ROLE),
+  },
+  {
+    username: 'lead.tuan',
+    password: 'Tuan@2024',
+    role: TEAM_LEAD_ROLE,
+    name: 'Tuấn',
+    permissions: getRolePermissionTemplate(TEAM_LEAD_ROLE),
+  },
+  {
+    username: 'manager.hoangkimhoa',
+    password: 'Hoa@2024',
+    role: MANAGER_ROLE,
+    name: 'Hoàng Kim Hòa',
+    permissions: getRolePermissionTemplate(MANAGER_ROLE),
+  },
+  {
+    username: 'manager.thuyha',
+    password: 'ThuyHa@2024',
+    role: MANAGER_ROLE,
+    name: 'Thúy Hà',
+    permissions: getRolePermissionTemplate(MANAGER_ROLE),
+  },
+  {
+    username: 'manager.hoainam',
+    password: 'Nam@2024',
+    role: MANAGER_ROLE,
+    name: 'Hoài Nam',
+    permissions: getRolePermissionTemplate(MANAGER_ROLE),
   },
 ];
 
@@ -560,33 +572,21 @@ const STORAGE_PERMISSION_REQUIREMENTS = Object.freeze({
   co_discrepancy_state_v1: 'syncManage',
 });
 
-function normalizePermissionsForRole(permissions, role = 'staff') {
-  const roleKey = role === 'admin' ? 'admin' : 'staff';
-  const base = roleKey === 'admin' ? ADMIN_PERMISSIONS : VIEW_ONLY_PERMISSIONS;
-  const normalized = { ...base };
-  if (permissions && typeof permissions === 'object') {
-    for (const key of ACCOUNT_PERMISSION_KEYS) {
-      if (key === 'reportsExport') {
-        normalized[key] = permissions[key] !== false;
-      } else {
-        normalized[key] = !!permissions[key];
-      }
-    }
-  }
-  if (roleKey === 'admin') {
-    normalized.accountManage = true;
-  }
-  return normalized;
+function normalizePermissionsForRole(permissions, role = DEFAULT_ROLE) {
+  return mergePermissions(role, permissions);
 }
 
 function buildDefaultAccounts() {
-  return DEFAULT_ACCOUNT_SEED.map((entry) => ({
-    username: entry.username,
-    passwordHash: bcrypt.hashSync(entry.password, PASSWORD_SALT_ROUNDS),
-    role: entry.role,
-    name: entry.name,
-    permissions: normalizePermissionsForRole(entry.permissions, entry.role),
-  }));
+  return DEFAULT_ACCOUNT_SEED.map((entry) => {
+    const role = normalizeRoleKey(entry.role);
+    return {
+      username: entry.username,
+      passwordHash: bcrypt.hashSync(entry.password, PASSWORD_SALT_ROUNDS),
+      role,
+      name: entry.name,
+      permissions: normalizePermissionsForRole(entry.permissions, role),
+    };
+  });
 }
 
 function normalizeRetentionCopies(value) {
@@ -1249,7 +1249,8 @@ function requireAdminSyncManage(req, res) {
     return { context: null, denied: true };
   }
   const account = context.account || {};
-  if (account.role !== 'admin') {
+  const role = normalizeRoleKey(account.role);
+  if (!(isAdminRole(role) || role === MANAGER_ROLE)) {
     res.status(403).json({ ok: false, error: 'Chỉ tài khoản quản trị mới được phép thao tác đồng bộ ECUS.' });
     return { context, denied: true };
   }
@@ -1267,7 +1268,7 @@ function requireAdminBackupManage(req, res) {
     return { context: null, denied: true };
   }
   const account = context.account || {};
-  if (account.role !== 'admin') {
+  if (!isAdminRole(normalizeRoleKey(account.role))) {
     res.status(403).json({ ok: false, error: 'Chỉ tài khoản quản trị mới được phép chỉnh sửa lịch sao lưu.' });
     return { context, denied: true };
   }
@@ -1390,11 +1391,12 @@ function sortAccountRecords(records) {
 
 function sanitizeAccountRecord(record) {
   if (!record) return null;
+  const role = normalizeRoleKey(record.role);
   return {
     username: record.username,
-    role: record.role === 'admin' ? 'admin' : 'staff',
+    role,
     name: record.name || record.username,
-    permissions: normalizePermissionsForRole(record.permissions, record.role),
+    permissions: normalizePermissionsForRole(record.permissions, role),
   };
 }
 
@@ -1423,7 +1425,7 @@ function loadAccountRecords() {
         mutated = true;
         continue;
       }
-      const role = entry?.role === 'admin' ? 'admin' : 'staff';
+      const role = normalizeRoleKey(entry?.role);
       const name = (entry?.name ?? username).toString().trim();
       let passwordHash = typeof entry?.passwordHash === 'string' ? entry.passwordHash : '';
       if (!passwordHash && entry?.password) {
@@ -1440,13 +1442,22 @@ function loadAccountRecords() {
     }
   }
 
+  const defaults = buildDefaultAccounts();
+
   if (records.length === 0) {
-    records.push(...buildDefaultAccounts());
+    records.push(...defaults);
     mutated = true;
+  } else {
+    for (const account of defaults) {
+      if (!records.some((record) => record.username === account.username)) {
+        records.push(account);
+        mutated = true;
+      }
+    }
   }
 
-  if (!records.some((record) => record.role === 'admin')) {
-    const [defaultAdmin] = buildDefaultAccounts();
+  if (!records.some((record) => normalizeRoleKey(record.role) === ADMIN_ROLE)) {
+    const defaultAdmin = defaults.find((account) => normalizeRoleKey(account.role) === ADMIN_ROLE);
     if (defaultAdmin) {
       records.push(defaultAdmin);
       mutated = true;
@@ -1639,7 +1650,7 @@ function pushAuditLog(entry) {
 }
 
 function countAdmins(records) {
-  return records.filter((record) => record.role === 'admin').length;
+  return records.filter((record) => normalizeRoleKey(record.role) === ADMIN_ROLE).length;
 }
 
 function createAccountRecord(payload, { actor = 'system' } = {}) {
@@ -1656,7 +1667,7 @@ function createAccountRecord(payload, { actor = 'system' } = {}) {
   if (password.length < MIN_PASSWORD_LENGTH) {
     throw new Error(`Mật khẩu cần tối thiểu ${MIN_PASSWORD_LENGTH} ký tự`);
   }
-  const role = payload?.role === 'admin' ? 'admin' : 'staff';
+  const role = normalizeRoleKey(payload?.role);
   const name = (payload?.name ?? username).toString().trim();
   const permissions = normalizePermissionsForRole(payload?.permissions, role);
   const passwordHash = bcrypt.hashSync(password, PASSWORD_SALT_ROUNDS);
@@ -1677,8 +1688,9 @@ function updateAccountRecord(usernameInput, patch, { actor = 'system' } = {}) {
     throw new Error('Không tìm thấy tài khoản');
   }
   const current = accounts[index];
-  const nextRole = patch?.role === 'admin' ? 'admin' : current.role;
-  if (current.role === 'admin' && nextRole !== 'admin' && countAdmins(accounts) <= 1) {
+  const nextRole = normalizeRoleKey(patch?.role ?? current.role);
+  const currentRole = normalizeRoleKey(current.role);
+  if (currentRole === ADMIN_ROLE && nextRole !== ADMIN_ROLE && countAdmins(accounts) <= 1) {
     throw new Error('Cần ít nhất một quản trị viên');
   }
   const name = (patch?.name ?? current.name ?? current.username).toString().trim();
@@ -1722,7 +1734,7 @@ function deleteAccountRecord(usernameInput, { actor = 'system' } = {}) {
     throw new Error('Không tìm thấy tài khoản');
   }
   const target = accounts[index];
-  if (target.role === 'admin' && countAdmins(accounts) <= 1) {
+  if (normalizeRoleKey(target.role) === ADMIN_ROLE && countAdmins(accounts) <= 1) {
     throw new Error('Không thể xoá quản trị viên cuối cùng');
   }
   accounts.splice(index, 1);

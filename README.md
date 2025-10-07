@@ -176,7 +176,9 @@ Sau khi hoàn tất các bước trên, thông báo cảnh báo sẽ tự biến
 
 ## 5. Tài khoản mặc định
 
-- `admin / admin123` – toàn quyền.
+- `admin / admin123` – quản trị viên toàn quyền.
+- `manager.hoangkimhoa / Hoa@2024`, `manager.thuyha / ThuyHa@2024`, `manager.hoainam / Nam@2024` – nhóm quản lý có đầy đủ quyền cấu hình (trừ quản lý tài khoản).
+- `lead.hoc / Hoc@2024`, `lead.phuong / Phuong@2024`, `lead.tuan / Tuan@2024` – trưởng nhóm phụ trách nhập liệu, MST và cảnh báo.
 - `nhanvien / 123456` – tài khoản mẫu với quyền hạn chế.
 
 Bạn có thể tạo thêm tài khoản và phân quyền trong tab **Tài khoản** của giao
@@ -220,3 +222,6 @@ Trước khi mở rộng triển khai cho toàn bộ đội ngũ, vui lòng tham
 [docs/windows11-permission-plan.md](docs/windows11-permission-plan.md) để nắm
 rõ kiến trúc, ma trận quyền và lộ trình kiểm thử hồi quy nhằm tránh phát sinh
 sai lệch dữ liệu khi vận hành trên Windows 11.
+
+Trong quá trình tạo Pull Request nếu gặp thông báo "Tệp nhị phân không được hỗ trợ" đối với file ảnh template, tham khảo thêm
+[docs/troubleshooting-pr-binary.md](docs/troubleshooting-pr-binary.md) để hiểu nguyên nhân và hướng xử lý.

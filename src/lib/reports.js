@@ -148,6 +148,9 @@ function createStats() {
     items: 0,
     licenses: 0,
     kpi: 0,
+    co: 0,
+    coLines: 0,
+    licenseCodes: new Set(),
   };
 }
 
@@ -161,12 +164,41 @@ function accumulate(stats, row) {
   } else {
     stats.import += 1;
   }
+
+  if (row.hasCO) {
+    stats.co += 1;
+  }
+  const coLines = Number(row.coLineCount || row.co_line_count || 0);
+  if (Number.isFinite(coLines)) {
+    stats.coLines += coLines;
+  }
+
+  const codes = Array.isArray(row.licenseCodes)
+    ? row.licenseCodes
+    : Array.isArray(row.licenseSourceCodes)
+    ? row.licenseSourceCodes
+    : [];
+  if (stats.licenseCodes instanceof Set) {
+    for (const code of codes) {
+      const normalized = normalizeStr(code).toUpperCase();
+      if (normalized) {
+        stats.licenseCodes.add(normalized);
+      }
+    }
+  }
 }
 
 function finalizeStats(stats) {
+  const { licenseCodes: rawLicenseSet, ...rest } = stats;
+  const licenseSet = rawLicenseSet instanceof Set ? rawLicenseSet : new Set();
+  const licenseCodes = Array.from(licenseSet);
   return {
-    ...stats,
-    kpi: Math.round(stats.kpi * 10) / 10,
+    ...rest,
+    kpi: Math.round(rest.kpi * 10) / 10,
+    co: rest.co,
+    coLines: rest.coLines,
+    licenseCodes,
+    licenseCount: licenseCodes.length,
   };
 }
 
@@ -409,6 +441,15 @@ export function buildReportData(rowsInput, { roster, rules, from, to } = {}) {
       companyKeys.add(companyKey);
     }
 
+    const licenseCodes = Array.isArray(sanitized.licenseCodes)
+      ? sanitized.licenseCodes.map((code) => normalizeStr(code).toUpperCase()).filter(Boolean)
+      : [];
+    const excludedCodes = Array.isArray(sanitized.licenseExcludedCodes)
+      ? sanitized.licenseExcludedCodes.map((code) => normalizeStr(code).toUpperCase()).filter(Boolean)
+      : [];
+    const hasCO = Boolean(sanitized.has_co || (Array.isArray(sanitized.co_codes) && sanitized.co_codes.length));
+    const coLineCount = Number(sanitized.co_line_count || 0) || 0;
+
     const detailRow = {
       date,
       displayDate: formatDisplayDate(date),
@@ -422,6 +463,11 @@ export function buildReportData(rowsInput, { roster, rules, from, to } = {}) {
       team: teamEntry.name,
       isExport: exportFlag,
       kpi: kpiValue,
+      hasCO,
+      coLineCount,
+      coLabel: hasCO ? (coLineCount > 0 ? `${coLineCount}` : "Có") : "Không",
+      licenseCodes,
+      licenseExcludedCodes: excludedCodes,
     };
 
     preparedRows.push(detailRow);
@@ -533,6 +579,8 @@ export function buildReportData(rowsInput, { roster, rules, from, to } = {}) {
   const teamKeys = teamList.map((t) => t.key).join("|");
 
   const summaryFinal = finalizeStats(summaryStats);
+  const summaryLicenseList = summaryFinal.licenseCodes || [];
+  const summaryLicenseSummary = summaryLicenseList.join(", ");
 
   const timelineByMonth = new Map();
   const teamTimelineByMonth = new Map();
@@ -622,7 +670,11 @@ export function buildReportData(rowsInput, { roster, rules, from, to } = {}) {
 
   return {
     rows: sortedRows,
-    summary: { ...summaryFinal, companyCount: companyKeys.size },
+    summary: {
+      ...summaryFinal,
+      companyCount: companyKeys.size,
+      licenseSummary: summaryLicenseSummary || "—",
+    },
     staff: {
       list: staffList,
       byKey: new Map(staffList.map((item) => [item.key, item])),
@@ -680,6 +732,10 @@ export function aggregateByCompany(rows, options = {}) {
         kpi: 0,
         loai_hinh: new Set(),
         modes: new Set(),
+        co: 0,
+        coLines: 0,
+        licenseCodes: new Set(),
+        licenseExcluded: new Set(),
       });
     }
 
@@ -697,20 +753,67 @@ export function aggregateByCompany(rows, options = {}) {
     } else if (row.isExport === false) {
       entry.modes.add("Nhập");
     }
+
+    if (row.hasCO) {
+      entry.co += 1;
+    }
+    const coLines = Number(row.coLineCount || row.co_line_count || 0);
+    if (Number.isFinite(coLines)) {
+      entry.coLines += coLines;
+    }
+
+    if (entry.licenseCodes instanceof Set) {
+      const codes = Array.isArray(row.licenseCodes) ? row.licenseCodes : [];
+      for (const code of codes) {
+        const normalized = normalizeStr(code).toUpperCase();
+        if (normalized) {
+          entry.licenseCodes.add(normalized);
+        }
+      }
+    }
+
+    if (entry.licenseExcluded instanceof Set) {
+      const excluded = Array.isArray(row.licenseExcludedCodes) ? row.licenseExcludedCodes : [];
+      for (const code of excluded) {
+        const normalized = normalizeStr(code).toUpperCase();
+        if (normalized) {
+          entry.licenseExcluded.add(normalized);
+        }
+      }
+    }
   }
 
-  return Array.from(map.values()).map((entry) => ({
-    mst: entry.mst,
-    cong_ty: entry.cong_ty,
-    staff: entry.staff,
-    team: entry.team,
-    decls: entry.decls,
-    items: entry.items,
-    licenses: entry.licenses,
-    kpi: Math.round(entry.kpi * 10) / 10,
-    loai_hinh: Array.from(entry.loai_hinh).join(", ") || "—",
-    modes: Array.from(entry.modes).join(", ") || "—",
-  })).sort((a, b) => {
+  return Array.from(map.values()).map((entry) => {
+    const licenseCodes = Array.from(entry.licenseCodes || []);
+    const licenseExcluded = Array.from(entry.licenseExcluded || []);
+    const licenseSummary = licenseCodes.join(", ");
+    const excludedSummary = licenseExcluded.join(", ");
+    const tooltipParts = [];
+    if (licenseSummary) {
+      tooltipParts.push(`Áp dụng: ${licenseSummary}`);
+    }
+    if (licenseExcluded.length) {
+      tooltipParts.push(`Loại trừ: ${excludedSummary}`);
+    }
+    return {
+      mst: entry.mst,
+      cong_ty: entry.cong_ty,
+      staff: entry.staff,
+      team: entry.team,
+      decls: entry.decls,
+      items: entry.items,
+      licenses: entry.licenses,
+      kpi: Math.round(entry.kpi * 10) / 10,
+      loai_hinh: Array.from(entry.loai_hinh).join(", ") || "—",
+      modes: Array.from(entry.modes).join(", ") || "—",
+      co: entry.co,
+      coLines: entry.coLines,
+      licenseCodes,
+      licenseExcluded,
+      licenseSummary: licenseSummary || "—",
+      licenseTooltip: tooltipParts.join("\n") || "—",
+    };
+  }).sort((a, b) => {
     if (b.kpi !== a.kpi) return b.kpi - a.kpi;
     if (b.decls !== a.decls) return b.decls - a.decls;
     return (a.cong_ty || "").localeCompare(b.cong_ty || "", "vi", { sensitivity: "base" });
