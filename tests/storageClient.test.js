@@ -28,6 +28,8 @@ describe('storageClient remote đồng bộ lại khi server lên trễ', () => 
   beforeEach(async () => {
     vi.useFakeTimers();
     vi.resetModules();
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
     const storageModule = await import('@/lib/storageClient.js');
     initSharedStorage = storageModule.initSharedStorage;
     sharedSetItem = storageModule.setItem;
