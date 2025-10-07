@@ -91,9 +91,34 @@ function joinCodeList(list) {
   return list.join("\n");
 }
 
-function normalizeLicenseCode(value) {
-  if (value === null || value === undefined) return "";
-  return String(value).trim().toUpperCase();
+function extractAgencyKeys(row) {
+  const keys = new Set();
+  const addKey = (value) => {
+    const normalized = normalizeLicenseCode(value);
+    if (normalized) {
+      keys.add(normalized);
+    }
+  };
+  if (Array.isArray(row?.agents)) {
+    for (const agent of row.agents) {
+      addKey(agent);
+    }
+  }
+  const raw = row?.agency ?? row?.dai_ly ?? row?.hq_agency ?? '';
+  if (Array.isArray(raw)) {
+    for (const value of raw) {
+      addKey(value);
+    }
+  } else if (typeof raw === 'string') {
+    raw
+      .split(/[\n,;|]/g)
+      .map((part) => part.trim())
+      .filter(Boolean)
+      .forEach(addKey);
+  } else if (raw) {
+    addKey(raw);
+  }
+  return Array.from(keys);
 }
 
 function arraysEqual(a, b) {
@@ -211,9 +236,10 @@ export default function DataImporter({
   const getLicenseExcludeSetForRow = useCallback(
     (row) => {
       const combined = new Set(licenseExcludeSet);
-      const agencyKey = normalizeLicenseCode(row?.agency || row?.dai_ly || row?.hq_agency || "");
-      if (agencyKey && licenseAgencyExcludeMap.has(agencyKey)) {
-        for (const code of licenseAgencyExcludeMap.get(agencyKey)) {
+      const agencyKeys = extractAgencyKeys(row);
+      for (const key of agencyKeys) {
+        if (!licenseAgencyExcludeMap.has(key)) continue;
+        for (const code of licenseAgencyExcludeMap.get(key)) {
           combined.add(code);
         }
       }
@@ -1081,12 +1107,17 @@ export default function DataImporter({
       const soTk = (r.so_tk || "").toString().toLowerCase();
       const mst = (r.mst || "").toString().toLowerCase();
       const company = (r.cong_ty || "").toString().toLowerCase();
-      const agency = (r.agency || r.dai_ly || "").toString().toLowerCase();
+      const agencySearch = [
+        r.agency || r.dai_ly || '',
+        ...(Array.isArray(r.agents) ? r.agents : []),
+      ]
+        .join(' ')
+        .toLowerCase();
       if (hasText && !(
         soTk.includes(q) ||
         mst.includes(q) ||
         company.includes(q) ||
-        agency.includes(q)
+        agencySearch.includes(q)
       )) {
         return false;
       }

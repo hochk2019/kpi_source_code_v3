@@ -1889,6 +1889,9 @@ function normalizeAgencyKey(value) {
 }
 
 function splitAgencyValues(value) {
+  if (Array.isArray(value)) {
+    return value.map((part) => normalizeStr(part)).filter(Boolean);
+  }
   const str = normalizeStr(value);
   if (!str) return [];
   return str
@@ -1913,17 +1916,29 @@ function getHqAgencyEntries() {
       row?.['Đại lý HQ'] ??
       row?.['Dai ly HQ'] ??
       '';
-    const agent = normalizeStr(agentRaw);
+    const agentListSet = new Set();
     const normalizedAgentKeys = new Set();
-    if (agent) {
-      normalizedAgentKeys.add(normalizeAgencyKey(agent));
-    }
-    for (const part of splitAgencyValues(agentRaw)) {
-      const key = normalizeAgencyKey(part);
+    const pushAgent = (value) => {
+      const normalized = normalizeStr(value);
+      if (!normalized) return;
+      agentListSet.add(normalized);
+      const key = normalizeAgencyKey(normalized);
       if (key) {
         normalizedAgentKeys.add(key);
       }
+    };
+    if (Array.isArray(row?.agents)) {
+      for (const value of row.agents) {
+        pushAgent(value);
+      }
     }
+    if (agentRaw) {
+      for (const part of splitAgencyValues(agentRaw)) {
+        pushAgent(part);
+      }
+    }
+    const agentList = Array.from(agentListSet);
+    const agent = agentList.join(', ');
     entries.push({
       mst,
       company,

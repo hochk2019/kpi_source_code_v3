@@ -7,6 +7,7 @@ import { getItem, setItem } from './storageClient.js';
 export const DECL_KEY  = "decl_rows_v1";      // dá»¯ liá»‡u tá» khai
 export const MST_KEY   = "mst_rows_v2";       // gÃ¡n MST -> nhÃ¢n viÃªn/team/effective_from
 export const MST_HISTORY_KEY = "mst_history_v1"; // lịch sử chỉnh sửa trường quan trọng của MST
+export const HQ_HISTORY_KEY = "hq_history_v1";   // lịch sử chỉnh sửa đại lý HQ theo MST
 export const RULES_KEY = "kpi_rules_v2";      // quy táº¯c KPI
 export const TEAM_KEY  = "team_roster_v1";    // danh sÃ¡ch tá»• Ä‘á»™i & thÃ nh viÃªn
 export const AUDIT_KEY = "audit_logs_v1";     // nháº­t kÃ½ hÃ nh Ä‘á»™ng quáº£n trá»‹
@@ -822,20 +823,48 @@ export function applyTeamRosterToMST(rosterLike, rows, options = {}) {
   return { rows: updated, changed };
 }
 
-// ===== Äáº¡i lÃ½ Háº£i quan (MST -> tÃªn cÃ´ng ty & Ä‘áº¡i lÃ½) =====
+// ===== Đại lý Hải quan (MST -> tên công ty & đại lý) =====
+
+const AGENCY_SPLIT_REGEX = /[\s,;|\n]+/;
 
 export function getHQAgenciesRaw() {
   return safeParse(getItem(HQ_KEY), []);
+}
+
+export function parseAgencyList(value) {
+  if (Array.isArray(value)) {
+    return Array.from(
+      new Set(
+        value
+          .map((item) => normalizeStr(item))
+          .filter(Boolean)
+      )
+    );
+  }
+  const str = normalizeStr(value);
+  if (!str) return [];
+  return Array.from(
+    new Set(
+      str
+        .split(AGENCY_SPLIT_REGEX)
+        .map((item) => normalizeStr(item))
+        .filter(Boolean)
+    )
+  );
+}
+
+export function formatAgencyList(list) {
+  if (!Array.isArray(list) || !list.length) return "";
+  return list.join(", " );
 }
 
 function sanitizeAgencyRow(row) {
   const mst = normalizeMST(row?.mst);
   if (!mst) return null;
   const company = normalizeStr(row?.company ?? row?.cong_ty ?? row?.customer ?? "");
-  const agent = normalizeStr(
-    row?.agent ?? row?.agency ?? row?.dai_ly ?? row?.dai_ly_hq ?? row?.['Äáº¡i lÃ½ HQ'] ?? row?.['Dai ly HQ'] ?? ""
-  );
-  return { mst, company, agent };
+  const agents = parseAgencyList(row?.agents ?? row?.agent ?? row?.agency ?? row?.dai_ly ?? row?.dai_ly_hq ?? row?.['Đại lý HQ'] ?? row?.['Dai ly HQ']);
+  const agent = formatAgencyList(agents);
+  return { mst, company, agent, agents };
 }
 
 export function getHQAgencies() {
@@ -859,7 +888,25 @@ export function mapHQAgenciesByMST() {
   return map;
 }
 
+function mergeAgencyEntries(target = [], incoming = []) {
+  const merged = new Set();
+  for (const value of Array.isArray(target) ? target : []) {
+    const normalized = normalizeStr(value);
+    if (normalized) merged.add(normalized);
+  }
+  for (const value of Array.isArray(incoming) ? incoming : []) {
+    const normalized = normalizeStr(value);
+    if (normalized) merged.add(normalized);
+  }
+  return Array.from(merged);
+}
+
+function formatAgencyHistoryValue(list) {
+  return formatAgencyList(Array.isArray(list) ? list : parseAgencyList(list));
+}
+
 export function upsertHQAgencies(rows, { actor = "system", detail = "" } = {}) {
+  const previousRows = getHQAgencies();
   const sanitized = Array.isArray(rows) ? rows.map(sanitizeAgencyRow).filter(Boolean) : [];
   const dedup = new Map();
   for (const row of sanitized) {
@@ -867,20 +914,31 @@ export function upsertHQAgencies(rows, { actor = "system", detail = "" } = {}) {
     dedup.set(row.mst, {
       mst: row.mst,
       company: row.company || prev.company || "",
-      agent: row.agent || prev.agent || "",
+      agents: mergeAgencyEntries(prev.agents, row.agents),
     });
   }
-  const finalRows = Array.from(dedup.values());
+  const finalRows = Array.from(dedup.values()).map((row) => ({
+    mst: row.mst,
+    company: row.company || "",
+    agents: mergeAgencyEntries([], row.agents),
+    agent: formatAgencyList(row.agents),
+  }));
   finalRows.sort((a, b) => {
     const cmpCompany = a.company.localeCompare(b.company, 'vi', { sensitivity: 'base' });
     if (cmpCompany !== 0) return cmpCompany;
     return a.mst.localeCompare(b.mst);
   });
   setItem(HQ_KEY, JSON.stringify(finalRows));
+
+  const historyEntries = diffHQAgencyRows(previousRows, finalRows, actor);
+  if (historyEntries.length) {
+    appendHQHistoryEntries(historyEntries);
+  }
+
   pushAuditLog({
     actor,
     action: "hq.save",
-    detail: detail || `Cáº­p nháº­t ${finalRows.length} cáº¥u hÃ¬nh Äáº¡i lÃ½ HQ`,
+    detail: detail || `Cập nhật ${finalRows.length} cấu hình đại lý HQ`,
   });
 
   const finalByMst = new Map(finalRows.map((row) => [row.mst, row]));
@@ -894,7 +952,7 @@ export function upsertHQAgencies(rows, { actor = "system", detail = "" } = {}) {
     return { ...row, company: info.company };
   });
   if (mstChanged) {
-    upsertMSTRows(syncedMst, { actor, detail: 'Äá»“ng bá»™ tÃªn cÃ´ng ty theo Äáº¡i lÃ½ HQ' });
+    upsertMSTRows(syncedMst, { actor, detail: 'Đồng bộ tên công ty theo Đại lý HQ' });
   }
 
   const existingDecls = getDeclRows();
@@ -904,98 +962,124 @@ export function upsertHQAgencies(rows, { actor = "system", detail = "" } = {}) {
     saveDeclRows(reannotatedDecls, {
       overwrite: true,
       actor,
-      detail: 'Äá»“ng bá»™ Äáº¡i lÃ½ HQ vá»›i dá»¯ liá»‡u tá» khai',
+      detail: 'Đồng bộ Đại lý HQ với dữ liệu tờ khai hiện có',
     });
   }
 
-  return finalRows;
+  return finalRows.length;
 }
 
-export function applyAgenciesToDeclRows(rows, agencyMapParam = null) {
-  const list = Array.isArray(rows) ? rows : [];
-  const agencyMap = agencyMapParam instanceof Map ? agencyMapParam : mapHQAgenciesByMST();
-  if (!agencyMap || agencyMap.size === 0) return list;
+function diffHQAgencyRows(prevRows, nextRows, actor) {
+  const prevMap = new Map();
+  for (const row of Array.isArray(prevRows) ? prevRows : []) {
+    if (!row?.mst) continue;
+    prevMap.set(row.mst, row);
+  }
 
-  return list.map((row) => {
-    const mst = normalizeMST(row?.mst);
-    if (!mst) return row;
-    const info = agencyMap.get(mst);
-    if (!info) return row;
+  const nextMap = new Map();
+  for (const row of Array.isArray(nextRows) ? nextRows : []) {
+    if (!row?.mst) continue;
+    nextMap.set(row.mst, row);
+  }
 
-    const desiredCompany = info.company || "";
-    const desiredAgent = info.agent || "";
+  const timestamp = new Date().toISOString();
+  const actorName = normalizeStr(actor) || 'system';
+  const entries = [];
 
-    let next = row;
-    if (desiredAgent && normalizeStr(row?.agency || row?.dai_ly || "") !== desiredAgent) {
-      if (next === row) next = { ...row };
-      next.agency = desiredAgent;
-      next.dai_ly = desiredAgent;
+  const recordChange = (mst, field, fromValue, toValue, type) => {
+    entries.push(
+      createHQHistoryEntry({
+        mst,
+        field,
+        from: fromValue,
+        to: toValue,
+        actor: actorName,
+        timestamp,
+        type,
+      })
+    );
+  };
+
+  for (const [mst, row] of nextMap.entries()) {
+    const prev = prevMap.get(mst);
+    if (!prev) {
+      const company = normalizeStr(row?.company);
+      if (company) {
+        recordChange(mst, 'company', '', company, 'create');
+      }
+      const agents = formatAgencyHistoryValue(row?.agents ?? row?.agent);
+      if (agents) {
+        recordChange(mst, 'agents', '', agents, 'create');
+      }
+      continue;
     }
 
-    if (desiredCompany && normalizeStr(row?.cong_ty) !== desiredCompany) {
-      if (next === row) next = { ...row };
-      next.cong_ty = desiredCompany;
-      next.customer = desiredCompany;
+    const prevCompany = normalizeStr(prev?.company);
+    const nextCompany = normalizeStr(row?.company);
+    if (prevCompany !== nextCompany) {
+      recordChange(mst, 'company', prevCompany, nextCompany, 'update');
     }
 
-    return next;
-  });
+    const prevAgents = formatAgencyHistoryValue(prev?.agents ?? prev?.agent);
+    const nextAgents = formatAgencyHistoryValue(row?.agents ?? row?.agent);
+    if (prevAgents !== nextAgents) {
+      recordChange(mst, 'agents', prevAgents, nextAgents, 'update');
+    }
+  }
+
+  for (const [mst, row] of prevMap.entries()) {
+    if (nextMap.has(mst)) continue;
+    const prevCompany = normalizeStr(row?.company);
+    if (prevCompany) {
+      recordChange(mst, 'company', prevCompany, '', 'delete');
+    }
+    const prevAgents = formatAgencyHistoryValue(row?.agents ?? row?.agent);
+    if (prevAgents) {
+      recordChange(mst, 'agents', prevAgents, '', 'delete');
+    }
+  }
+
+  return entries;
 }
 
-/** LÆ°u tá» khai:
- * - overwrite=true: ghi Ä‘Ã¨ toÃ n bá»™
- * - overwrite=false: merge theo key "so_tk + '_' + (nhanh||'')"
- */
-export function saveDeclRows(newRows, { overwrite = false, actor = "system", detail = "" } = {}) {
-  const cleaned = Array.isArray(newRows)
-    ? newRows.map((row) => normalizeDeclarationRow(row)).filter((row) => row && typeof row === 'object')
-    : [];
-  if (overwrite) {
-    const stored = writeDeclRows(cleaned);
-    pushAuditLog({
-      actor,
-      action: "decl.overwrite",
-      detail: detail || `Ghi de ${stored.length} to khai`,
-    });
-    return stored.length;
-  }
-  const current = getDeclRowsRaw();
-  const merged = normalizeDeclRows(current.concat(cleaned));
-  setItem(DECL_KEY, JSON.stringify(merged));
-  pushAuditLog({
-    actor,
-    action: "decl.merge",
-    detail: detail || `Hop nhat ${cleaned.length} to khai (tong ${merged.length})`,
-  });
-  return merged.length;
+function createHQHistoryEntry({ mst, field, from = '', to = '', actor = 'system', timestamp, type = 'update' }) {
+  return {
+    id: `hq-${mst}-${field}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    mst: normalizeMST(mst),
+    field,
+    from: field === 'agents' ? formatAgencyHistoryValue(from) : normalizeStr(from),
+    to: field === 'agents' ? formatAgencyHistoryValue(to) : normalizeStr(to),
+    actor: actor || 'system',
+    timestamp,
+    type,
+  };
 }
 
+const HQ_HISTORY_LIMIT = 500;
 
-export function markDeclRowsReviewed(keys, { actor = "system" } = {}) {
-  if (!Array.isArray(keys) || keys.length === 0) return 0;
-  const keySet = new Set(keys);
-  let updated = 0;
-  const next = getDeclRows().map((row) => {
-    const key = getDeclarationKey(row);
-    if (!keySet.has(key)) return row;
-    if (row?.reviewed) return row;
-    updated += 1;
-    return {
-      ...row,
-      reviewed: true,
-      reviewed_at: new Date().toISOString(),
-    };
-  });
-  if (updated > 0) {
-    setItem(DECL_KEY, JSON.stringify(next));
-    pushAuditLog({
-      actor,
-      action: "decl.review",
-      detail: `ÄÃ¡nh dáº¥u Ä‘Ã£ rÃ  soÃ¡t ${updated} tá» khai`,
-      meta: { keys: Array.from(keySet) },
-    });
-  }
-  return updated;
+function appendHQHistoryEntries(entries) {
+  if (!Array.isArray(entries) || entries.length === 0) return;
+  const existing = getHQHistoryEntries();
+  const merged = [...entries, ...existing]
+    .filter((item) => item && item.mst)
+    .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+    .slice(0, HQ_HISTORY_LIMIT);
+  setItem(HQ_HISTORY_KEY, JSON.stringify(merged));
+}
+
+export function getHQHistoryEntries(limit = HQ_HISTORY_LIMIT) {
+  const raw = safeParse(getItem(HQ_HISTORY_KEY), []);
+  const list = Array.isArray(raw) ? raw.filter((entry) => entry && entry.mst) : [];
+  if (!Number.isFinite(limit) || limit <= 0) return list;
+  return list.slice(0, limit);
+}
+
+export function getHQHistoryForMST(mst, limit = 50) {
+  const target = normalizeMST(mst);
+  if (!target) return [];
+  const entries = getHQHistoryEntries(HQ_HISTORY_LIMIT).filter((entry) => entry.mst === target);
+  if (!Number.isFinite(limit) || limit <= 0) return entries;
+  return entries.slice(0, limit);
 }
 
 // ===== Compat layer cho cÃ¡c file khÃ¡c =====
@@ -1124,6 +1208,7 @@ export default {
   getMSTRowsRaw, getMSTMap, getMSTFor, upsertMSTRows,
   getDeclRows, saveDeclRows, sortDeclRows, getRecentDeclRows,
   getHQAgencies, mapHQAgenciesByMST, upsertHQAgencies, applyAgenciesToDeclRows,
+  parseAgencyList, formatAgencyList, getHQHistoryEntries, getHQHistoryForMST,
   getTeamRoster, setTeamRoster, mapMemberNamesToTeams, applyTeamRosterToMST,
   getData, setData,
   getRules, setRules, K_RULES,
