@@ -25,16 +25,16 @@
 
 ### Khu vực "Quản Lý Tổ Đội"
 - [x] Thêm tooltip/nút ẩn hiện lịch sử thay đổi team và mã số thuế.
-- [ ] Đề xuất & xây dựng tính năng phân bổ KPI theo chỉ tiêu tháng/quý cho từng tổ đội (bao gồm biểu đồ tiến độ).
+- [x] Đề xuất & xây dựng tính năng phân bổ KPI theo chỉ tiêu tháng/quý cho từng tổ đội (bao gồm biểu đồ tiến độ).
 
 ### "Quy tắc KPI"
-- [ ] Thiết kế cơ chế lưu trữ quy tắc bền vững (ví dụ: lưu trong SQL hoặc file cấu hình) để không bị mất khi `pnpm build`.
+- [x] Thiết kế cơ chế lưu trữ quy tắc bền vững (ví dụ: lưu trong SQL hoặc file cấu hình) để không bị mất khi `pnpm build`.
 - [ ] Thay input nhập tay danh sách mã bằng component chọn đa lựa chọn/auto-complete từ dữ liệu đồng bộ.
 
 ### Tab mới "Điểm KPI +/- Thêm"
-- [ ] Thiết kế schema cơ sở dữ liệu cho các hạng mục cộng/trừ KPI (hỗ trợ lịch sử, duyệt, phân quyền nhập liệu).
-- [ ] Xây dựng giao diện nhập liệu cho từng hạng mục (hỗ trợ chọn tờ khai từ hệ thống hoặc nhập thủ công).
-- [ ] Đồng bộ dữ liệu với tab "Báo Cáo KPI" để phản ánh điểm cộng/trừ theo tháng.
+- [x] Thiết kế schema cơ sở dữ liệu cho các hạng mục cộng/trừ KPI (hỗ trợ lịch sử, duyệt, phân quyền nhập liệu).
+- [x] Xây dựng giao diện nhập liệu cho từng hạng mục (hỗ trợ chọn tờ khai từ hệ thống hoặc nhập thủ công).
+- [x] Đồng bộ dữ liệu với tab "Báo Cáo KPI" để phản ánh điểm cộng/trừ theo tháng.
 
 ### Tab "Báo Cáo KPI"
 - [ ] Tái cấu trúc giao diện và file Excel export để hiển thị đầy đủ các hạng mục KPI mới.

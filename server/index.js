@@ -11,6 +11,7 @@ import bcrypt from 'bcryptjs';
 import crypto from 'node:crypto';
 import { generateReport } from './reportExport.js';
 import { DEFAULT_RULES as SHARED_DEFAULT_RULES } from '../src/shared/defaultRules.js';
+import { getRulesSeed, persistRulesSnapshot, loadRulesSnapshot } from './rulesPersistence.js';
 import { deriveCOStatus, parseCoLineCount, setPreferentialCodeConfig, getPreferentialCodeConfig } from '../src/shared/co.js';
 import { recordSqlTimeout } from './sqlMonitor.js';
 import cronstrue from 'cronstrue';
@@ -659,7 +660,7 @@ const DEFAULT_STORAGE = {
   decl_rows_v1: '[]',
   mst_rows_v2: '[]',
   mst_history_v1: '[]',
-  kpi_rules_v2: JSON.stringify(SHARED_DEFAULT_RULES),
+  kpi_rules_v2: JSON.stringify(getRulesSeed(SHARED_DEFAULT_RULES)),
   team_roster_v1: JSON.stringify({
     version: 1,
     teams: [
@@ -794,6 +795,22 @@ export async function initializeDatabase({ dbFile = DB_FILE } = {}) {
       databaseInitState.insertedEntries = 0;
       databaseInitState.missingInserted = 0;
     }
+  }
+
+  try {
+    const row = database.prepare('SELECT value FROM kv_store WHERE key = ?').get('kpi_rules_v2');
+    const rawRules = row?.value || null;
+    if (typeof rawRules === 'string' && rawRules) {
+      const currentSnapshot = loadRulesSnapshot();
+      const existingRules = currentSnapshot?.rules || null;
+      const parsedRules = safeParse(rawRules, null);
+      if (parsedRules && JSON.stringify(existingRules) !== JSON.stringify(parsedRules)) {
+        const source = databaseInitState.seeded ? 'bootstrap-seed' : 'bootstrap-sync';
+        persistRulesSnapshot(rawRules, { actor: 'system', source });
+      }
+    }
+  } catch (err) {
+    console.warn('Không thể đồng bộ file quy tắc KPI khi khởi tạo', err);
   }
 
   return database;
@@ -1318,13 +1335,10 @@ function getValue(key) {
 }
 
 function upsertValue(key, value, options = {}) {
-  const { skipMstHistorySync = false } = options || {};
+  const { skipMstHistorySync = false, actor = 'system', source = 'storage' } = options || {};
   const normalized = normalizeValue(value);
   if (normalized === null) {
-    db.prepare('DELETE FROM kv_store WHERE key = ?').run(key);
-    if (key === 'mst_history_v1' && !skipMstHistorySync) {
-      scheduleMstHistorySqlSyncFromJson('[]');
-    }
+    deleteValue(key, { actor, source: source || 'storage-delete', skipMstHistorySync });
     return;
   }
   db.prepare(
@@ -1333,12 +1347,22 @@ function upsertValue(key, value, options = {}) {
   if (key === 'mst_history_v1' && !skipMstHistorySync) {
     scheduleMstHistorySqlSyncFromJson(normalized);
   }
+  if (key === 'kpi_rules_v2') {
+    persistRulesSnapshot(normalized, { actor, source });
+  }
 }
 
-function deleteValue(key) {
+function deleteValue(key, options = {}) {
+  const { actor = 'system', source = 'storage-delete', skipMstHistorySync = false } = options || {};
   db.prepare('DELETE FROM kv_store WHERE key = ?').run(key);
-  if (key === 'mst_history_v1') {
+  if (key === 'mst_history_v1' && !skipMstHistorySync) {
     scheduleMstHistorySqlSyncFromJson('[]');
+  }
+  if (key === 'kpi_rules_v2') {
+    persistRulesSnapshot(JSON.stringify(getRulesSeed(SHARED_DEFAULT_RULES)), {
+      actor,
+      source,
+    });
   }
 }
 
@@ -1356,8 +1380,8 @@ function getJSONValue(key, fallback) {
   return safeParse(getValue(key), fallback);
 }
 
-function setJSONValue(key, value) {
-  upsertValue(key, value === undefined ? null : JSON.stringify(value));
+function setJSONValue(key, value, options = {}) {
+  upsertValue(key, value === undefined ? null : JSON.stringify(value), options);
 }
 
 function sortAccountRecords(records) {
@@ -4811,9 +4835,9 @@ app.put('/api/storage/:key', (req, res) => {
   const actor = context?.account?.username || resolveActor(req);
   try {
     if (value === null || value === undefined) {
-      deleteValue(key);
+      deleteValue(key, { actor, source: 'api' });
     } else {
-      upsertValue(key, value);
+      upsertValue(key, value, { actor, source: 'api' });
     }
     if (key === 'decl_rows_v1') {
       evaluateDeclarationAlerts({ actor, reason: 'storage-put' });
@@ -4844,12 +4868,13 @@ app.delete('/api/storage/:key', (req, res) => {
     res.status(403).json({ ok: false, error: 'Khoá này chỉ chỉnh sửa qua API tài khoản' });
     return;
   }
-  const { denied } = verifyStoragePermission(req, res, key);
+  const { context, denied } = verifyStoragePermission(req, res, key);
   if (denied) {
     return;
   }
+  const actor = context?.account?.username || resolveActor(req);
   try {
-    deleteValue(key);
+    deleteValue(key, { actor, source: 'api-delete' });
     if (key === 'co_tax_code_config_v1') {
       applyCoCodeConfig(DEFAULT_CO_CODE_CONFIG);
     }
