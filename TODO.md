@@ -1,28 +1,62 @@
 # TODO
 
+## Giai đoạn 1 – Hoàn thiện các lỗi tồn đọng và tính năng đã phát triển dở dang
 
+- [ ] Rà soát lại tất cả các form nhập ở tab **Import Data** và **Gán MST** để đảm bảo tooltip hiển thị thống nhất, không chồng chéo.
+- [ ] Cập nhật lại các bài test backend/frontend bị vô hiệu hóa để chạy thành công sau khi sửa cấu hình `package.json` hoặc thiết lập script thay thế.
+- [ ] Khắc phục cảnh báo "Cannot update a component (App) while rendering..." trong `tests/e2e.login-import.test.jsx` bằng cách di chuyển thao tác `setState` ra ngoài luồng render.
+- [ ] Giảm/ẩn log "Không thể đồng bộ dữ liệu..." trong `tests/storageClient.test.js` để giữ kết quả test sạch.
+- [ ] Hoàn thiện UI cho "Cấu hình mã ưu đãi C/O" và "Đối soát C/O" (đồng bộ với API mới, xử lý lỗi HTTP 500).
 
-- [ ] Implement frontend updates for Import tab and KPI reports (date formatting, update banners, preferential code management UI, CO discrepancy display).
+## Giai đoạn 2 – Các yêu cầu còn lại của phiên bản 3.0
 
-- [ ] Extend automated tests (backend + frontend) and run validation suite once UI changes land.
+### Import Data & Đồng bộ ECUS
+- [ ] Bổ sung cơ chế đồng bộ và hiển thị cột "Số TK AMA" sau khi có thuật toán xác định tờ khai sửa.
+- [ ] Thêm bộ lọc khoảng thời gian nâng cao (hỗ trợ preset và lưu bộ lọc) cùng nút đối chiếu loại trừ KPI tự động.
+- [ ] Cho phép export Excel danh sách tờ khai đã chọn với cấu trúc header mới (bao gồm giấy phép bị loại trừ).
 
-- [ ] Investigate and fix preferential tax code handling in UI (wire new APIs, ensure state persists).
+### Tab "Gán MST"
+- [ ] Lưu lịch sử chỉnh sửa người phụ trách vào bảng riêng trong SQL Server và đồng bộ hai chiều khi restore dữ liệu.
+- [ ] Hoàn thiện giao diện lịch sử (filter theo ngày/thao tác, tooltip ngắn gọn khi hover).
 
-- [ ] Verify KPI license exclusion rules: ensure global exclusions (ZN02, HDGC) and per-agency exclusions are honored across ECUS sync and SQL imports.
+### Tab "Đại Lý HQ"
+- [ ] Lưu lịch sử thêm/sửa/xóa đại lý vào hệ thống log, cung cấp API truy vấn lịch sử để client hiển thị.
+- [ ] Viết tài liệu hướng dẫn nhập nhiều đại lý, giải thích chuẩn format phân tách bằng dấu phẩy.
 
-- [ ] Perform full regression pass (manual & pnpm test --run) after implementing the above.
+### Khu vực "Quản Lý Tổ Đội"
+- [ ] Thêm tooltip/nút ẩn hiện lịch sử thay đổi team và mã số thuế.
+- [ ] Đề xuất & xây dựng tính năng phân bổ KPI theo chỉ tiêu tháng/quý cho từng tổ đội (bao gồm biểu đồ tiến độ).
 
-- [x] S?a l?i c� ph�p DataImporter (key cho updatedPreview) d? Vitest kh�ng fail.
+### "Quy tắc KPI"
+- [ ] Thiết kế cơ chế lưu trữ quy tắc bền vững (ví dụ: lưu trong SQL hoặc file cấu hình) để không bị mất khi `pnpm build`.
+- [ ] Thay input nhập tay danh sách mã bằng component chọn đa lựa chọn/auto-complete từ dữ liệu đồng bộ.
 
-- [x] C?p nh?t logic/test d? danh s�ch so_tk trong store kh?p chu?n 11 ch? s? (vd. adjust tests expecting TK0x).
+### Tab mới "Điểm KPI +/- Thêm"
+- [ ] Thiết kế schema cơ sở dữ liệu cho các hạng mục cộng/trừ KPI (hỗ trợ lịch sử, duyệt, phân quyền nhập liệu).
+- [ ] Xây dựng giao diện nhập liệu cho từng hạng mục (hỗ trợ chọn tờ khai từ hệ thống hoặc nhập thủ công).
+- [ ] Đồng bộ dữ liệu với tab "Báo Cáo KPI" để phản ánh điểm cộng/trừ theo tháng.
 
+### Tab "Báo Cáo KPI"
+- [ ] Tái cấu trúc giao diện và file Excel export để hiển thị đầy đủ các hạng mục KPI mới.
+- [ ] Bổ sung số lượng C/O, cột/tooltip hiển thị danh sách mã giấy phép, và khả năng tùy chọn ẩn/hiện cột khi in báo cáo.
+- [ ] Áp dụng template mới (ảnh 1, ảnh 2, logo ảnh 3) cho file Excel export.
 
+### Tab "Tài Khoản"
+- [ ] Tự động tạo tài khoản cho nhân viên (Học, Phương, Tuấn – quyền trưởng nhóm) và quản lý (Hoàng Kim Hòa, Thúy Hà, Hoài Nam) với phân quyền tương ứng.
+- [ ] Xây dựng quy trình sync quyền với SQL Server để đảm bảo khởi tạo tài khoản không ảnh hưởng dữ liệu hiện hữu.
 
-- [ ] Kh?c ph?c c?nh b?o "Cannot update a component (App) while rendering..." trong tests/e2e.login-import.test.jsx (c?n di chuy?n setState ra ngo?i render).
-
-- [ ] Kh?i ph?c warning 'Cannot update a component (App) while rendering ...' (d?i setState ra ngo?i render) trong tests/e2e.login-import.test.jsx.
-
-- [ ] Gi?m th?i h?nho?c t?t b?nh 'Kh?ng th? ??ng b? d? li?u...' trong tests/storageClient.test.js ??? ki?m so?t log khi test ch?y.
+### Cải tiến chung
+- [ ] Hiển thị tooltip mô tả ngắn khi hover vào mọi nút thao tác trong toàn hệ thống.
+- [ ] Nghiên cứu phương án tích hợp AI (API phân tích dữ liệu/chatbot) tiết kiệm token.
+- [ ] Thay favicon/tab logo bằng logo mới do khách hàng cung cấp.
+- [ ] Chuẩn hóa lại document hướng dẫn triển khai trên Windows 11 Pro + SQL Server 2008 R2 + PowerShell 7.
+
+## Giai đoạn 3 – Kiểm thử và triển khai
+
+- [ ] Viết test E2E cho các luồng chính đã nâng cấp (Import, Gán MST, Đại Lý HQ, Báo Cáo KPI, Tài Khoản).
+- [ ] Chạy toàn bộ test (`pnpm test`, `pnpm lint`, build production) trên môi trường Windows 11 tương tự khách hàng.
+- [ ] Chuẩn bị checklist triển khai, kế hoạch rollback, và hướng dẫn sử dụng tính năng mới cho người dùng cuối.
+
 
 - [ ] Ho?n thi?n UI cho c?u h?nh m? ?u ??i / ??i so?t CO (frontend t??ng ?ng v?i API/backend m?i).
 
