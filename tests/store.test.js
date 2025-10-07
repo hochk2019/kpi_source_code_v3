@@ -127,18 +127,17 @@ describe('getRecentDeclRows', () => {
 
 describe('hq agency helpers', () => {
   it('chuẩn hoá và gộp dữ liệu đại lý theo MST', () => {
-    const stored = upsertHQAgencies([
+    const storedCount = upsertHQAgencies([
       { mst: '010-123-4567', company: '  Công ty A  ', agent: 'FCL' },
       { mst: '0101234567', company: 'Công ty A cập nhật', agent: '' },
     ], { actor: 'tester' });
 
-    expect(stored).toEqual([
-      { mst: '0101234567', company: 'Công ty A cập nhật', agent: 'FCL' },
-    ]);
+    expect(storedCount).toBe(1);
 
     const saved = JSON.parse(sharedGetItem(HQ_KEY) || '[]');
-    expect(saved).toHaveLength(1);
-    expect(saved[0].mst).toBe('0101234567');
+    expect(saved).toEqual([
+      { mst: '0101234567', company: 'Công ty A cập nhật', agent: 'FCL', agents: ['FCL'] },
+    ]);
   });
 
   it('đồng bộ tên công ty và đại lý vào MST cùng tờ khai', () => {
@@ -156,7 +155,7 @@ describe('hq agency helpers', () => {
 
     const agencies = getHQAgencies();
     expect(agencies).toEqual([
-      { mst: '0101234567', company: 'Công ty Golden', agent: 'FCL' },
+      { mst: '0101234567', company: 'Công ty Golden', agent: 'FCL', agents: ['FCL'] },
     ]);
 
     const mstRows = getMSTMap();

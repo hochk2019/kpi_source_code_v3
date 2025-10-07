@@ -57,5 +57,8 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     setupFiles: './vitest.setup.js',
+    environmentMatchGlobs: [
+      ['tests/server.*.test.js', 'node'],
+    ],
   },
 })

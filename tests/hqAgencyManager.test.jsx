@@ -71,8 +71,8 @@ describe('HQAgencyManager', () => {
 
     const saved = JSON.parse(sharedGetItem(HQ_KEY) || '[]');
     expect(saved).toEqual([
-      { mst: '0201234567', company: 'Alpha Trading', agent: 'AIR' },
-      { mst: '0101234567', company: 'Beta Logistics', agent: 'FCL' },
+      { mst: '0201234567', company: 'Alpha Trading', agent: 'AIR', agents: ['AIR'] },
+      { mst: '0101234567', company: 'Beta Logistics', agent: 'FCL', agents: ['FCL'] },
     ]);
 
     expect(alertMock).toHaveBeenCalledWith('Đã lưu cấu hình Đại lý HQ.');
@@ -102,7 +102,7 @@ describe('HQAgencyManager', () => {
 
     const saved = JSON.parse(sharedGetItem(HQ_KEY) || '[]');
     expect(saved).toEqual([
-      { mst: '0101234567', company: 'Công Ty Demo', agent: '' },
+      { mst: '0101234567', company: 'Công Ty Demo', agent: '', agents: [] },
     ]);
 
     expect(alertMock).toHaveBeenCalledWith('Đã lưu cấu hình Đại lý HQ.');

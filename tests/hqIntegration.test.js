@@ -10,6 +10,7 @@ import {
   upsertHQAgencies,
   upsertMSTRows,
   getMSTMap,
+  getHQAgencies,
 } from '@/lib/store.js';
 import { clearStorageCache, setItem as setSharedItem } from '@/lib/storageClient.js';
 
@@ -32,7 +33,7 @@ describe('Tích hợp dữ liệu Đại lý HQ & import', () => {
     const target = samples.find((row) => row?.mst);
     expect(target).toBeTruthy();
 
-    const updatedAgencies = upsertHQAgencies(
+    const updatedCount = upsertHQAgencies(
       [
         {
           mst: target.mst,
@@ -43,15 +44,18 @@ describe('Tích hợp dữ liệu Đại lý HQ & import', () => {
       { actor: 'admin' }
     );
 
-    expect(updatedAgencies).toHaveLength(1);
+    expect(updatedCount).toBe(1);
+
+    const agencyRows = getHQAgencies();
+    expect(agencyRows).toHaveLength(1);
 
     const stored = getDeclRows();
     const enriched = stored.find((row) => row.mst === target.mst);
     expect(enriched).toBeTruthy();
     expect(enriched).toMatchObject({
       cong_ty: 'CÔNG TY VÀNG ÁNH DƯƠNG',
-      agency: 'DL GOLD',
-      dai_ly: 'DL GOLD',
+      agency: 'DL, GOLD',
+      dai_ly: 'DL, GOLD',
     });
   });
 

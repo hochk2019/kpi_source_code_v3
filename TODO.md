@@ -3,7 +3,7 @@
 ## Giai đoạn 1 – Hoàn thiện các lỗi tồn đọng và tính năng đã phát triển dở dang
 
 - [x] Rà soát lại tất cả các form nhập ở tab **Import Data** và **Gán MST** để đảm bảo tooltip hiển thị thống nhất, không chồng chéo.
-- [ ] Cập nhật lại các bài test backend/frontend bị vô hiệu hóa để chạy thành công sau khi sửa cấu hình `package.json` hoặc thiết lập script thay thế.
+- [x] Cập nhật lại các bài test backend/frontend bị vô hiệu hóa để chạy thành công sau khi sửa cấu hình `package.json` hoặc thiết lập script thay thế.
 - [x] Khắc phục cảnh báo "Cannot update a component (App) while rendering..." trong `tests/e2e.login-import.test.jsx` bằng cách di chuyển thao tác `setState` ra ngoài luồng render.
 - [x] Giảm/ẩn log "Không thể đồng bộ dữ liệu..." trong `tests/storageClient.test.js` để giữ kết quả test sạch.
 - [ ] Hoàn thiện UI cho "Cấu hình mã ưu đãi C/O" và "Đối soát C/O" (đồng bộ với API mới, xử lý lỗi HTTP 500).
