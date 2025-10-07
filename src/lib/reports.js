@@ -4,6 +4,7 @@ import {
   toISODate,
   mapMemberNamesToTeams,
   isExportDecl,
+  KPI_ADJUSTMENT_CATEGORY_CONFIG,
 } from "@/lib/store.js";
 import { computeKPI, DEFAULT_RULES } from "@/lib/rules.js";
 import { formatDisplayDate } from "@/shared/format.js";
@@ -329,7 +330,7 @@ function detectPreferredMonthFirst(rows) {
   return monthFirst > dayFirst;
 }
 
-export function buildReportData(rowsInput, { roster, rules, from, to } = {}) {
+export function buildReportData(rowsInput, { roster, rules, from, to, adjustments = [] } = {}) {
   const rows = Array.isArray(rowsInput) ? rowsInput : [];
   const effectiveRules = rules && rules.groups ? rules : DEFAULT_RULES;
 
@@ -404,6 +405,15 @@ export function buildReportData(rowsInput, { roster, rules, from, to } = {}) {
 
   const preparedRows = [];
   const comparisonRows = [];
+  const adjustmentMeta = {
+    list: [],
+    applied: [],
+    totalPoints: 0,
+    pendingCount: 0,
+    approvedCount: 0,
+    rejectedCount: 0,
+    appliedCount: 0,
+  };
 
   for (const raw of rows) {
     const sanitized = sanitizeRow(raw, preferMonthFirst);
@@ -485,6 +495,95 @@ export function buildReportData(rowsInput, { roster, rules, from, to } = {}) {
     accumulate(memberEntry.stats, detailRow);
 
     accumulate(summaryStats, detailRow);
+  }
+
+  if (Array.isArray(adjustments) && adjustments.length) {
+    const startDateObj = start ? new Date(start) : null;
+    const endDateObj = end ? new Date(end) : null;
+    for (const adj of adjustments) {
+      if (!adj) continue;
+      const label = KPI_ADJUSTMENT_CATEGORY_CONFIG[adj.category]?.label || normalizeStr(adj.category) || 'Điểm bổ sung';
+      const entry = { ...adj, label };
+      adjustmentMeta.list.push(entry);
+      if (adj.status === 'approved') {
+        adjustmentMeta.approvedCount += 1;
+      } else if (adj.status === 'pending') {
+        adjustmentMeta.pendingCount += 1;
+      } else if (adj.status === 'rejected') {
+        adjustmentMeta.rejectedCount += 1;
+      }
+      if (adj.status !== 'approved') {
+        continue;
+      }
+      const month = normalizeStr(adj.month);
+      if (!month) continue;
+      const candidateDateStr = `${month}-01`;
+      const candidateDate = new Date(candidateDateStr);
+      if (Number.isNaN(candidateDate.getTime())) continue;
+      if (startDateObj && candidateDate < startDateObj) continue;
+      if (endDateObj && candidateDate > endDateObj) continue;
+
+      const staffNameRaw = normalizeStr(adj.staffName) || 'Chưa gán';
+      const staffKey = normalizeName(staffNameRaw);
+      const staffInfo = staffKey ? memberTeamMap.get(staffKey) : null;
+      const staffName = staffInfo?.name || staffNameRaw;
+      const rosterTeam = staffInfo?.team;
+      let teamName = normalizeStr(adj.teamName) || '';
+      if (!teamName && rosterTeam) {
+        teamName = rosterTeam;
+      }
+      const teamEntry = ensureTeam(teamName);
+      const staffEntry = ensureStaff(staffKey, staffName);
+      staffEntry.teams.add(teamEntry.name);
+      const memberEntry = ensureTeamMember(teamEntry, staffEntry.key, staffEntry.name);
+
+      const totalPoints = Number(adj.totalPoints || 0);
+      const detailRow = {
+        date: candidateDateStr,
+        displayDate: `${month}`,
+        so_tk: `Điểm bổ sung (${label})`,
+        mst: '',
+        cong_ty: '',
+        loai_hinh: label,
+        num_items: 0,
+        licenses: 0,
+        nhan_vien: staffName,
+        team: teamEntry.name,
+        isExport: false,
+        kpi: totalPoints,
+        hasCO: false,
+        coLineCount: 0,
+        coLabel: 'Không',
+        licenseCodes: [],
+        licenseExcludedCodes: [],
+        isAdjustment: true,
+        adjustment: {
+          id: adj.id,
+          category: adj.category,
+          label,
+          quantity: adj.quantity,
+          unitPoints: adj.unitPoints,
+          references: Array.isArray(adj.references) ? adj.references : [],
+          note: normalizeStr(adj.note),
+        },
+      };
+
+      preparedRows.push(detailRow);
+
+      staffEntry.rows.push(detailRow);
+      teamEntry.rows.push(detailRow);
+      memberEntry.rows.push(detailRow);
+
+      staffEntry.stats.kpi += totalPoints;
+      teamEntry.stats.kpi += totalPoints;
+      memberEntry.stats.kpi += totalPoints;
+      summaryStats.kpi += totalPoints;
+
+      adjustmentMeta.totalPoints += totalPoints;
+      adjustmentMeta.appliedCount += 1;
+      adjustmentMeta.applied.push({ ...detailRow, staffKey: staffEntry.key });
+      comparisonRows.push({ date: candidateDateStr, num_items: 0, licenses: 0, kpi: totalPoints, isExport: false });
+    }
   }
 
   // Seed roster information (members & teams without dữ liệu)
@@ -693,6 +792,7 @@ export function buildReportData(rowsInput, { roster, rules, from, to } = {}) {
       comparison,
       topTeams: topTeamNames,
     },
+    adjustments: adjustmentMeta,
   };
 }
 

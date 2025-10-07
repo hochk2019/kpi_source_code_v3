@@ -572,6 +572,7 @@ const STORAGE_PERMISSION_REQUIREMENTS = Object.freeze({
   co_tax_code_config_v1: 'syncManage',
   co_discrepancy_config_v1: 'syncManage',
   co_discrepancy_state_v1: 'syncManage',
+  kpi_adjustments_v1: 'adjustSubmit',
 });
 
 function normalizePermissionsForRole(permissions, role = DEFAULT_ROLE) {
@@ -675,6 +676,7 @@ const DEFAULT_STORAGE = {
   mst_rows_v2: '[]',
   mst_history_v1: '[]',
   kpi_rules_v2: JSON.stringify(getRulesSeed(SHARED_DEFAULT_RULES)),
+  kpi_adjustments_v1: '[]',
   team_roster_v1: JSON.stringify({
     version: 1,
     teams: [
