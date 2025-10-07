@@ -159,7 +159,10 @@ const HistoryDetails = ({ entries = [], label }) => {
 
   return (
     <details className="mt-1 text-xs text-gray-600">
-      <summary className="cursor-pointer text-blue-600 hover:text-blue-800">
+      <summary
+        className="cursor-pointer text-blue-600 hover:text-blue-800"
+        data-tooltip="Xem nhanh các lần chỉnh sửa trường này"
+      >
         Lịch sử {label || ""}
       </summary>
       <ul className="mt-1 space-y-2 max-h-40 overflow-auto pr-1">
@@ -169,6 +172,9 @@ const HistoryDetails = ({ entries = [], label }) => {
               {formatHistoryTime(entry.timestamp)} — {entry.actor || "Hệ thống"}
               {entry.type === "create" && (
                 <span className="ml-2 text-emerald-600">(Thêm mới)</span>
+              )}
+              {entry.type === "update" && (
+                <span className="ml-2 text-blue-600">(Chỉnh sửa)</span>
               )}
               {entry.type === "delete" && (
                 <span className="ml-2 text-red-600">(Đã xoá)</span>
@@ -198,9 +204,31 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
   const [historyEntries, setHistoryEntries] = useState(() =>
     getMSTHistoryEntries(500)
   );
+  const [historyFilter, setHistoryFilter] = useState({
+    from: "",
+    to: "",
+    type: "all",
+  });
+  const filteredHistoryEntries = useMemo(() => {
+    if (!historyEntries?.length) return [];
+    return historyEntries.filter((entry) => {
+      if (!entry) return false;
+      const entryDate = (entry.timestamp || "").slice(0, 10);
+      if (historyFilter.from && entryDate < historyFilter.from) {
+        return false;
+      }
+      if (historyFilter.to && entryDate > historyFilter.to) {
+        return false;
+      }
+      if (historyFilter.type !== "all" && entry.type !== historyFilter.type) {
+        return false;
+      }
+      return true;
+    });
+  }, [historyEntries, historyFilter]);
   const historyIndex = useMemo(
-    () => buildHistoryIndex(historyEntries),
-    [historyEntries]
+    () => buildHistoryIndex(filteredHistoryEntries),
+    [filteredHistoryEntries]
   );
   const [showAddForm, setShowAddForm] = useState(false);
   const [draft, setDraft] = useState({
@@ -219,6 +247,14 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
   const refreshHistory = useCallback(() => {
     setHistoryEntries(getMSTHistoryEntries(500));
   }, []);
+
+  const updateHistoryFilter = (patch) => {
+    setHistoryFilter((prev) => ({ ...prev, ...patch }));
+  };
+
+  const resetHistoryFilter = () => {
+    setHistoryFilter({ from: "", to: "", type: "all" });
+  };
 
   /** Load lần đầu */
   useEffect(() => {
@@ -358,12 +394,16 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
     page,
     showAddForm,
     selectedFileName,
+    historyFilter,
   ]);
   const pageRows = filtered.slice((page - 1) * pageSize, page * pageSize);
 
   useEffect(() => {
     if (page > totalPages) setPage(1);
   }, [totalPages, page]);
+
+  const totalHistoryCount = historyEntries.length;
+  const filteredHistoryCount = filteredHistoryEntries.length;
 
   /** Excel import */
   const onImportXLSX = async () => {
@@ -583,6 +623,60 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
               Lưu
             </button>
           )}
+        </div>
+      </div>
+
+      <div className="mb-4 rounded border border-sky-200 bg-sky-50 p-4 text-sm text-gray-700">
+        <div className="flex flex-wrap items-end gap-3">
+          <label className="flex flex-col gap-1">
+            <span className="font-medium">Từ ngày</span>
+            <input
+              type="date"
+              value={historyFilter.from}
+              onChange={(e) => updateHistoryFilter({ from: e.target.value })}
+              className="border rounded px-2 py-1"
+              data-tooltip="Giới hạn lịch sử từ ngày này trở đi"
+            />
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="font-medium">Đến ngày</span>
+            <input
+              type="date"
+              value={historyFilter.to}
+              onChange={(e) => updateHistoryFilter({ to: e.target.value })}
+              className="border rounded px-2 py-1"
+              data-tooltip="Giới hạn lịch sử tới hết ngày này"
+            />
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="font-medium">Thao tác</span>
+            <select
+              value={historyFilter.type}
+              onChange={(e) => updateHistoryFilter({ type: e.target.value })}
+              className="border rounded px-2 py-1"
+              data-tooltip="Lọc theo thao tác thêm/sửa/xóa"
+            >
+              <option value="all">Tất cả</option>
+              <option value="create">Thêm mới</option>
+              <option value="update">Chỉnh sửa</option>
+              <option value="delete">Xóa</option>
+            </select>
+          </label>
+          <button
+            type="button"
+            onClick={resetHistoryFilter}
+            className="px-3 py-1 rounded border bg-white hover:bg-gray-50"
+            data-tooltip="Xóa bộ lọc lịch sử"
+          >
+            Xóa lọc
+          </button>
+          <div className="flex-1" />
+          <div className="text-right text-xs text-gray-600">
+            <div>
+              Hiển thị {filteredHistoryCount} / {totalHistoryCount} bản ghi lịch sử.
+            </div>
+            <div>Áp dụng cho phần lịch sử của từng dòng bên dưới.</div>
+          </div>
         </div>
       </div>
 
