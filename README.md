@@ -193,10 +193,16 @@ cấp linh hoạt:
 
 | Route | Mô tả | Quyền yêu cầu |
 | ----- | ----- | ------------- |
+| `GET /api/ai/profile` | Trả về trạng thái rút gọn để người dùng biết nhà cung cấp đang bật, cache, TTL. | `aiAssistUse` |
 | `GET /api/ai/config` | Đọc cấu hình AI hiện tại, trả về cả danh sách cache gần nhất. | `aiAssistManage` |
 | `PUT /api/ai/config` | Cập nhật endpoint, prompt hệ thống, giới hạn token, TTL cache. | `aiAssistManage` |
 | `DELETE /api/ai/cache` | Xóa toàn bộ cache để ép gọi lại mô hình. | `aiAssistManage` |
 | `POST /api/ai/chat` | Gọi trợ lý AI với câu hỏi tiếng Việt, tự động dùng cache nếu có. | `aiAssistUse` |
+
+Giao diện **Trợ lý AI** (tab mới trong dashboard) cho phép:
+
+- Người dùng có quyền `aiAssistUse` trò chuyện trực tiếp, đính kèm ngữ cảnh và chọn nhà cung cấp nếu cần.
+- Quản trị viên cấu hình prompt hệ thống, chuyển đổi giữa Azure OpenAI / Google AI Studio / Ollama, điều chỉnh TTL cache và xem cache gần nhất.
 
 ### 6.1. Biến môi trường hỗ trợ Azure OpenAI, Google AI Studio & Ollama
 
