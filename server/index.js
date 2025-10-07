@@ -171,6 +171,7 @@ const DEFAULT_ECUS_SYNC_CONFIG = {
     '  LTRIM(RTRIM(lp.Ma_LH)) AS loai_hinh,',
     '  LTRIM(RTRIM(lp.Ma_DN)) AS mst,',
     '  LTRIM(RTRIM(lp.TEN_DV)) AS cong_ty,',
+    '  ISNULL(ama_child.so_tk_ama, ama_parent.so_tk_goc) AS so_tk_ama,',
     '  ISNULL(items.muc_hang, 0) AS muc_hang,',
     '  ISNULL(licenses.license_count, 0) AS license_count,',
     "  ISNULL(licenses.license_codes, N'') AS license_codes,",
@@ -214,6 +215,18 @@ const DEFAULT_ECUS_SYNC_CONFIG = {
     '  ) AS codes',
     ') AS licenses',
     'OUTER APPLY (',
+    '  SELECT TOP 1 CAST(child.So_TK AS nvarchar(50)) AS so_tk_ama',
+    '  FROM dbo.DTBLP AS child',
+    '  LEFT JOIN dbo.DTOKHAIMD_VNACCS2 AS child_md2 ON child_md2._DToKhaiMDID = child._DTokhaiMDID',
+    '  WHERE child_md2.DTOKHAIMDID_Parent = lp._DTokhaiMDID',
+    '  ORDER BY child.Ngay_DK DESC, child.So_TK DESC',
+    ') AS ama_child',
+    'OUTER APPLY (',
+    '  SELECT TOP 1 CAST(parent.So_TK AS nvarchar(50)) AS so_tk_goc',
+    '  FROM dbo.DTBLP AS parent',
+    '  WHERE parent._DTokhaiMDID = md2.DTOKHAIMDID_Parent',
+    ') AS ama_parent',
+    'OUTER APPLY (',
     '  SELECT COUNT(*) AS co_count_num',
     '  FROM dbo.DHANGMDDK AS h2',
     '  WHERE h2._DToKhaiMDID = lp._DTokhaiMDID',
@@ -229,6 +242,7 @@ const DEFAULT_ECUS_SYNC_CONFIG = {
     loai_hinh: 'loai_hinh',
     mst: 'mst',
     cong_ty: 'cong_ty',
+    so_tk_ama: 'so_tk_ama',
     num_items: 'muc_hang',
     licenses: 'license_count',
     nhan_vien_import: 'nhan_vien_nhap',
@@ -1472,6 +1486,9 @@ function normalizeDeclarationRow(row) {
     cloned.so_tk_full = originalNumber;
     const suffix = normalizedNumber ? originalNumber.slice(normalizedNumber.length) : originalNumber;
     cloned.so_tk_suffix = suffix || '';
+  }
+  if (cloned.so_tk_ama !== undefined) {
+    cloned.so_tk_ama = normalizeStr(cloned.so_tk_ama);
   }
   if (!cloned.nhanh && cloned.branch) {
     cloned.nhanh = cloned.branch;
@@ -2939,6 +2956,15 @@ const COLUMN_ALIASES = Object.freeze({
     'So to khai',
     'Số tờ khai TM',
   ],
+  so_tk_ama: [
+    'so_tk_ama',
+    'So_tk_ama',
+    'soTkAma',
+    'SoTkAma',
+    'SOTK_AMA',
+    'Số TK AMA',
+    'So TK AMA',
+  ],
   date: [
     'ngay_dang_ky',
     'Ngay_dang_ky',
@@ -3122,6 +3148,7 @@ function mapEcusRow(record, config, context) {
   if (!soTk || !dateISO) return null;
 
   const mst = normalizeMST(getField('mst'));
+  const soTkAma = normalizeStr(getField('so_tk_ama'));
   let company = normalizeStr(getField('cong_ty'));
   const loaiHinh = normalizeStr(getField('loai_hinh'));
   const numItemsRaw = getField('num_items');
@@ -3238,6 +3265,7 @@ function mapEcusRow(record, config, context) {
     so_tk: soTk,
     so_tk_full: soTkRaw,
     so_tk_suffix: soTkRaw.slice(soTk.length),
+    so_tk_ama: soTkAma,
     nhanh,
     mst,
     cong_ty: company,

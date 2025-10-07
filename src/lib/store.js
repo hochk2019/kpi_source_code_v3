@@ -66,6 +66,9 @@ function normalizeDeclarationRow(row) {
     const suffix = normalized ? sourceNumber.slice(normalized.length) : sourceNumber;
     clone.so_tk_suffix = suffix || "";
   }
+  if (clone.so_tk_ama !== undefined) {
+    clone.so_tk_ama = normalizeStr(clone.so_tk_ama);
+  }
   if (!clone.nhanh && clone.branch) {
     clone.nhanh = clone.branch;
   }

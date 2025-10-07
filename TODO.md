@@ -11,7 +11,7 @@
 ## Giai đoạn 2 – Các yêu cầu còn lại của phiên bản 3.0
 
 ### Import Data & Đồng bộ ECUS
-- [ ] Bổ sung cơ chế đồng bộ và hiển thị cột "Số TK AMA" sau khi có thuật toán xác định tờ khai sửa.
+- [x] Bổ sung cơ chế đồng bộ và hiển thị cột "Số TK AMA" sau khi có thuật toán xác định tờ khai sửa.
 - [ ] Thêm bộ lọc khoảng thời gian nâng cao (hỗ trợ preset và lưu bộ lọc) cùng nút đối chiếu loại trừ KPI tự động.
 - [ ] Cho phép export Excel danh sách tờ khai đã chọn với cấu trúc header mới (bao gồm giấy phép bị loại trừ).
 
@@ -59,6 +59,5 @@
 
 - [x] Dọn gọn repo (xóa file dist/, _tmp_get_config.mjs, .vs/ sau khi hoàn thành) để review gọn.
 
-- [ ] Ho?n thi?n UI cho c?u h?nh m? ?u ??i / ??i so?t CO (frontend t??ng ?ng v?i API/backend m?i).
-
+
 - [ ] D?n g?n repo (x?a file dist/, _tmp_get_config.mjs, .vs/ sau khi ho?n th?nh) d? review g?n.

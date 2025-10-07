@@ -90,6 +90,24 @@ describe('saveDeclRows', () => {
     expect(stored).toHaveLength(2);
     expect(stored.find(r => r.so_tk === '00000000003')).toBeUndefined();
   });
+
+  it('chuẩn hóa và lưu trường so_tk_ama khi có dữ liệu', () => {
+    const initial = [
+      { so_tk: '12345678901', nhanh: 'A', date: '2024-09-01', so_tk_ama: '  AMA-001  ' },
+    ];
+
+    saveDeclRows(initial, { overwrite: true });
+    const stored = getDeclRows();
+
+    expect(stored[0].so_tk_ama).toBe('AMA-001');
+
+    saveDeclRows([
+      { so_tk: '12345678901', nhanh: 'A', date: '2024-09-02', so_tk_ama: 'AMA-002' },
+    ], { overwrite: false });
+
+    const updated = getDeclRows();
+    expect(updated[0].so_tk_ama).toBe('AMA-002');
+  });
 });
 
 
