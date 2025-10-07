@@ -8,6 +8,10 @@ export const ACCOUNT_PERMISSION_KEYS = Object.freeze([
   'alertsManage',
   'auditView',
   'accountManage',
+  'adjustSubmit',
+  'adjustApprove',
+  'aiAssistUse',
+  'aiAssistManage',
 ]);
 
 export const DEFAULT_ROLE = 'staff';
@@ -26,6 +30,10 @@ const ROLE_PERMISSION_TEMPLATES = Object.freeze({
     alertsManage: false,
     auditView: false,
     accountManage: false,
+    adjustSubmit: true,
+    adjustApprove: false,
+    aiAssistUse: true,
+    aiAssistManage: false,
   }),
   [TEAM_LEAD_ROLE]: Object.freeze({
     importEdit: true,
@@ -37,6 +45,10 @@ const ROLE_PERMISSION_TEMPLATES = Object.freeze({
     alertsManage: true,
     auditView: true,
     accountManage: false,
+    adjustSubmit: true,
+    adjustApprove: true,
+    aiAssistUse: true,
+    aiAssistManage: false,
   }),
   [MANAGER_ROLE]: Object.freeze({
     importEdit: true,
@@ -48,6 +60,10 @@ const ROLE_PERMISSION_TEMPLATES = Object.freeze({
     alertsManage: true,
     auditView: true,
     accountManage: false,
+    adjustSubmit: true,
+    adjustApprove: true,
+    aiAssistUse: true,
+    aiAssistManage: true,
   }),
   [ADMIN_ROLE]: Object.freeze({
     importEdit: true,
@@ -59,6 +75,10 @@ const ROLE_PERMISSION_TEMPLATES = Object.freeze({
     alertsManage: true,
     auditView: true,
     accountManage: true,
+    adjustSubmit: true,
+    adjustApprove: true,
+    aiAssistUse: true,
+    aiAssistManage: true,
   }),
 });
 

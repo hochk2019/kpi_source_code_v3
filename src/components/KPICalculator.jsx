@@ -6,6 +6,7 @@ const RulesEditor = React.lazy(() => import('./RulesEditor.jsx'));
 const MSTAssignment = React.lazy(() => import('./MSTAssignment.jsx'));
 const TeamManager = React.lazy(() => import('./TeamManager.jsx'));
 const ReportViewer = React.lazy(() => import('./ReportViewer.jsx'));
+const KPIAdjustments = React.lazy(() => import('./KPIAdjustments.jsx'));
 const AccountManager = React.lazy(() => import('./AccountManager.jsx'));
 const AuditLog = React.lazy(() => import('./AuditLog.jsx'));
 const HQAgencyManager = React.lazy(() => import('./HQAgencyManager.jsx'));
@@ -51,6 +52,9 @@ const KPICalculator = ({ auth }) => {
           </TabsTrigger>
           <TabsTrigger value="rules" data-tooltip="Cấu hình quy tắc tính điểm KPI">
             Quy tắc KPI
+          </TabsTrigger>
+          <TabsTrigger value="adjustments" data-tooltip="Cộng/trừ điểm KPI bổ sung theo tháng">
+            Điểm KPI +/- Thêm
           </TabsTrigger>
           <TabsTrigger value="reports" data-tooltip="Xem và xuất báo cáo KPI tổng hợp">
             Báo cáo KPI
@@ -99,6 +103,12 @@ const KPICalculator = ({ auth }) => {
         <TabsContent value="rules">
           <TabPanel>
             <RulesEditor canEdit={canRulesEdit} currentUser={effectiveAuth} />
+          </TabPanel>
+        </TabsContent>
+
+        <TabsContent value="adjustments">
+          <TabPanel>
+            <KPIAdjustments currentUser={effectiveAuth} />
           </TabPanel>
         </TabsContent>
 

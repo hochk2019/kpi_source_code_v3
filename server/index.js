@@ -558,6 +558,9 @@ const DEFAULT_ACCOUNT_SEED = [
   },
 ];
 
+const AI_CONFIG_KEY = 'ai_provider_config_v1';
+const AI_CACHE_KEY = 'ai_usage_cache_v1';
+
 const STORAGE_PERMISSION_REQUIREMENTS = Object.freeze({
   decl_rows_v1: 'importEdit',
   import_logs_v1: 'importEdit',
@@ -572,6 +575,9 @@ const STORAGE_PERMISSION_REQUIREMENTS = Object.freeze({
   co_tax_code_config_v1: 'syncManage',
   co_discrepancy_config_v1: 'syncManage',
   co_discrepancy_state_v1: 'syncManage',
+  kpi_adjustments_v1: 'adjustSubmit',
+  [AI_CONFIG_KEY]: 'aiAssistManage',
+  [AI_CACHE_KEY]: 'aiAssistManage',
 });
 
 function normalizePermissionsForRole(permissions, role = DEFAULT_ROLE) {
@@ -670,11 +676,86 @@ const DEFAULT_CO_DISCREPANCY_STATE = Object.freeze({
   reason: null,
 });
 
+const AI_CACHE_LIMIT = 50;
+
+function createDefaultAiConfig() {
+  const azureEndpoint = (process.env.AZURE_OPENAI_ENDPOINT || '').trim();
+  const azureDeployment = (process.env.AZURE_OPENAI_DEPLOYMENT || 'gpt-4o-mini').trim() || 'gpt-4o-mini';
+  const azureVersion = (process.env.AZURE_OPENAI_API_VERSION || '2024-08-01-preview').trim() || '2024-08-01-preview';
+  const ollamaEndpoint = (process.env.OLLAMA_ENDPOINT || 'http://localhost:11434').trim() || 'http://localhost:11434';
+  const ollamaModel = (process.env.OLLAMA_MODEL || 'llama3.1:8b').trim() || 'llama3.1:8b';
+  const googleEndpoint =
+    (process.env.GOOGLE_AI_STUDIO_ENDPOINT || 'https://generativelanguage.googleapis.com').trim() ||
+    'https://generativelanguage.googleapis.com';
+  const googleModel = (process.env.GOOGLE_AI_STUDIO_MODEL || 'gemini-1.5-flash').trim() || 'gemini-1.5-flash';
+  return {
+    version: 1,
+    enabled: true,
+    defaultProvider: 'azure-openai',
+    fallbackProvider: 'ollama-local',
+    temperature: 0.2,
+    maxTokens: 800,
+    maxInputLength: 4000,
+    timeoutMs: 25000,
+    systemPrompt:
+      'Bạn là trợ lý KPI nội bộ cho bộ phận khai báo hải quan. Luôn trả lời ngắn gọn, súc tích bằng tiếng Việt, ưu tiên bullet và chỉ dựa trên dữ liệu được cung cấp.',
+    caching: {
+      enabled: true,
+      ttlMinutes: 72 * 60,
+      maxEntries: AI_CACHE_LIMIT,
+    },
+    providers: [
+      {
+        id: 'azure-openai',
+        type: 'azure',
+        label: 'Azure OpenAI GPT-4o mini',
+        endpoint: azureEndpoint,
+        deployment: azureDeployment,
+        apiVersion: azureVersion,
+        apiKeyEnv: 'AZURE_OPENAI_KEY',
+        maxTokens: 4096,
+        temperature: 0.2,
+        enabled: true,
+      },
+      {
+        id: 'ollama-local',
+        type: 'ollama',
+        label: 'Ollama cục bộ (llama3.1:8b)',
+        endpoint: ollamaEndpoint,
+        model: ollamaModel,
+        temperature: 0.1,
+        enabled: false,
+      },
+      {
+        id: 'google-ai-studio',
+        type: 'google-ai-studio',
+        label: 'Google AI Studio (Gemini 1.5 Flash)',
+        endpoint: googleEndpoint,
+        model: googleModel,
+        apiKeyEnv: 'GOOGLE_AI_STUDIO_API_KEY',
+        temperature: 0.3,
+        maxTokens: 1024,
+        enabled: false,
+      },
+    ],
+    updatedAt: null,
+    updatedBy: null,
+  };
+}
+
+const DEFAULT_AI_CONFIG = Object.freeze(createDefaultAiConfig());
+
+const DEFAULT_AI_USAGE_CACHE = Object.freeze({
+  version: 1,
+  entries: [],
+});
+
 const DEFAULT_STORAGE = {
   decl_rows_v1: '[]',
   mst_rows_v2: '[]',
   mst_history_v1: '[]',
   kpi_rules_v2: JSON.stringify(getRulesSeed(SHARED_DEFAULT_RULES)),
+  kpi_adjustments_v1: '[]',
   team_roster_v1: JSON.stringify({
     version: 1,
     teams: [
@@ -726,6 +807,8 @@ const DEFAULT_STORAGE = {
   co_tax_code_config_v1: JSON.stringify(DEFAULT_CO_CODE_CONFIG),
   co_discrepancy_config_v1: JSON.stringify(DEFAULT_CO_DISCREPANCY_CONFIG),
   co_discrepancy_state_v1: JSON.stringify(DEFAULT_CO_DISCREPANCY_STATE),
+  [AI_CONFIG_KEY]: JSON.stringify(DEFAULT_AI_CONFIG),
+  [AI_CACHE_KEY]: JSON.stringify(DEFAULT_AI_USAGE_CACHE),
 };
 
 function normalizeValue(value) {
@@ -1321,6 +1404,34 @@ function requireAuditView(req, res) {
   return { context, denied: false };
 }
 
+function requireAiAssistUsage(req, res) {
+  const context = getSessionContext(req);
+  if (!context) {
+    res.status(401).json({ ok: false, error: 'Vui lòng đăng nhập để sử dụng trợ lý AI.' });
+    return { context: null, denied: true };
+  }
+  const account = context.account || {};
+  if (account.permissions?.aiAssistUse !== true) {
+    res.status(403).json({ ok: false, error: 'Bạn không có quyền sử dụng trợ lý AI.' });
+    return { context, denied: true };
+  }
+  return { context, denied: false };
+}
+
+function requireAiAssistManage(req, res) {
+  const context = getSessionContext(req);
+  if (!context) {
+    res.status(401).json({ ok: false, error: 'Vui lòng đăng nhập bằng tài khoản quản trị.' });
+    return { context: null, denied: true };
+  }
+  const account = context.account || {};
+  if (account.permissions?.aiAssistManage !== true) {
+    res.status(403).json({ ok: false, error: 'Tài khoản hiện không có quyền cấu hình trợ lý AI.' });
+    return { context, denied: true };
+  }
+  return { context, denied: false };
+}
+
 function setAttachmentHeaders(res, filename) {
   const original = filename || 'bao-cao-kpi.xlsx';
   const fallback = original.replace(/[^a-zA-Z0-9_.-]/g, '_') || 'bao-cao-kpi.xlsx';
@@ -1397,6 +1508,640 @@ function getJSONValue(key, fallback) {
 
 function setJSONValue(key, value, options = {}) {
   upsertValue(key, value === undefined ? null : JSON.stringify(value), options);
+}
+
+function cloneJson(value) {
+  if (value === null || value === undefined) {
+    return value;
+  }
+  return JSON.parse(JSON.stringify(value));
+}
+
+function toFiniteNumber(value, fallback) {
+  if (value === null || value === undefined) {
+    return fallback;
+  }
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : fallback;
+  }
+  const text = `${value}`.trim();
+  if (!text) {
+    return fallback;
+  }
+  const parsed = Number(text);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function toPositiveInt(value, fallback) {
+  const parsed = toFiniteNumber(value, fallback);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return fallback;
+  }
+  return Math.floor(parsed);
+}
+
+function toNonNegativeInt(value, fallback) {
+  const parsed = toFiniteNumber(value, fallback);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    return fallback;
+  }
+  return Math.floor(parsed);
+}
+
+function mergeAiCaching(baseCaching = {}, overrideCaching = {}) {
+  const enabled = overrideCaching.enabled !== undefined ? !!overrideCaching.enabled : baseCaching.enabled !== undefined
+    ? !!baseCaching.enabled
+    : true;
+  const ttlMinutes = toPositiveInt(
+    overrideCaching.ttlMinutes !== undefined ? overrideCaching.ttlMinutes : baseCaching.ttlMinutes,
+    DEFAULT_AI_CONFIG.caching.ttlMinutes
+  );
+  const maxEntries = toPositiveInt(
+    overrideCaching.maxEntries !== undefined ? overrideCaching.maxEntries : baseCaching.maxEntries,
+    DEFAULT_AI_CONFIG.caching.maxEntries || AI_CACHE_LIMIT
+  );
+  return {
+    enabled,
+    ttlMinutes,
+    maxEntries,
+  };
+}
+
+function normalizeAiProviderEntry(sourceProvider, baseProvider = {}) {
+  const source = sourceProvider && typeof sourceProvider === 'object' ? sourceProvider : {};
+  const base = baseProvider && typeof baseProvider === 'object' ? baseProvider : {};
+  const id = `${source.id || source.providerId || base.id || ''}`.trim();
+  if (!id) {
+    return null;
+  }
+  const result = cloneJson(base) || {};
+  for (const [key, value] of Object.entries(source)) {
+    if (value !== undefined) {
+      result[key] = value;
+    }
+  }
+  result.id = id;
+  result.label = `${result.label || id}`.trim();
+  result.type = `${result.type || base.type || 'custom'}`.trim();
+  if (result.endpoint !== undefined && result.endpoint !== null) {
+    result.endpoint = `${result.endpoint}`.trim();
+  } else if (base.endpoint) {
+    result.endpoint = `${base.endpoint}`.trim();
+  } else {
+    result.endpoint = '';
+  }
+  if (result.deployment !== undefined && result.deployment !== null) {
+    result.deployment = `${result.deployment}`.trim();
+  } else if (base.deployment) {
+    result.deployment = `${base.deployment}`.trim();
+  }
+  if (result.apiVersion !== undefined && result.apiVersion !== null) {
+    result.apiVersion = `${result.apiVersion}`.trim();
+  } else if (base.apiVersion) {
+    result.apiVersion = `${base.apiVersion}`.trim();
+  }
+  if (result.apiKeyEnv !== undefined && result.apiKeyEnv !== null) {
+    result.apiKeyEnv = `${result.apiKeyEnv}`.trim();
+  } else if (base.apiKeyEnv) {
+    result.apiKeyEnv = `${base.apiKeyEnv}`.trim();
+  }
+  if (result.model !== undefined && result.model !== null) {
+    result.model = `${result.model}`.trim();
+  } else if (base.model) {
+    result.model = `${base.model}`.trim();
+  }
+  result.enabled = result.enabled !== undefined ? !!result.enabled : base.enabled !== undefined ? !!base.enabled : true;
+  if (result.temperature !== undefined) {
+    const parsedTemp = toFiniteNumber(result.temperature, base.temperature ?? DEFAULT_AI_CONFIG.temperature);
+    result.temperature = Number.isFinite(parsedTemp) ? parsedTemp : DEFAULT_AI_CONFIG.temperature;
+  } else if (base.temperature !== undefined) {
+    const parsedTemp = toFiniteNumber(base.temperature, DEFAULT_AI_CONFIG.temperature);
+    result.temperature = Number.isFinite(parsedTemp) ? parsedTemp : DEFAULT_AI_CONFIG.temperature;
+  } else {
+    result.temperature = DEFAULT_AI_CONFIG.temperature;
+  }
+  if (result.maxTokens !== undefined) {
+    result.maxTokens = toPositiveInt(result.maxTokens, base.maxTokens ?? DEFAULT_AI_CONFIG.maxTokens);
+  } else if (base.maxTokens !== undefined) {
+    result.maxTokens = toPositiveInt(base.maxTokens, DEFAULT_AI_CONFIG.maxTokens);
+  }
+  return result;
+}
+
+function mergeAiProviders(currentProviders = [], overrideProviders = []) {
+  const map = new Map();
+  for (const provider of currentProviders) {
+    if (!provider || typeof provider !== 'object') continue;
+    const normalized = normalizeAiProviderEntry(provider, provider);
+    if (normalized) {
+      map.set(normalized.id, normalized);
+    }
+  }
+  if (Array.isArray(overrideProviders)) {
+    for (const provider of overrideProviders) {
+      if (!provider || typeof provider !== 'object') continue;
+      const id = `${provider.id || provider.providerId || ''}`.trim();
+      if (!id) continue;
+      const base = map.get(id) || {};
+      const normalized = normalizeAiProviderEntry({ ...provider, id }, base);
+      if (normalized) {
+        map.set(id, normalized);
+      }
+    }
+  }
+  return Array.from(map.values());
+}
+
+function mergeAiConfig(baseConfig, overrideConfig) {
+  const merged = cloneJson(DEFAULT_AI_CONFIG) || {};
+  const sources = [baseConfig, overrideConfig];
+  for (const source of sources) {
+    if (!source || typeof source !== 'object') continue;
+    if (source.version) {
+      merged.version = source.version;
+    }
+    if (source.enabled !== undefined) {
+      merged.enabled = !!source.enabled;
+    }
+    if (source.defaultProvider !== undefined) {
+      const provider = `${source.defaultProvider}`.trim();
+      if (provider) {
+        merged.defaultProvider = provider;
+      }
+    }
+    if (source.fallbackProvider !== undefined) {
+      const fallback = `${source.fallbackProvider}`.trim();
+      merged.fallbackProvider = fallback || null;
+    }
+    if (source.temperature !== undefined) {
+      const temp = toFiniteNumber(source.temperature, merged.temperature);
+      if (Number.isFinite(temp)) {
+        merged.temperature = temp;
+      }
+    }
+    if (source.maxTokens !== undefined) {
+      merged.maxTokens = toPositiveInt(source.maxTokens, merged.maxTokens);
+    }
+    if (source.maxInputLength !== undefined) {
+      merged.maxInputLength = toPositiveInt(source.maxInputLength, merged.maxInputLength);
+    }
+    if (source.timeoutMs !== undefined) {
+      merged.timeoutMs = toPositiveInt(source.timeoutMs, merged.timeoutMs);
+    }
+    if (source.systemPrompt !== undefined && source.systemPrompt !== null) {
+      const prompt = `${source.systemPrompt}`.trim();
+      if (prompt) {
+        merged.systemPrompt = prompt;
+      }
+    }
+    if (source.caching) {
+      merged.caching = mergeAiCaching(merged.caching, source.caching);
+    }
+    if (Array.isArray(source.providers)) {
+      merged.providers = mergeAiProviders(merged.providers, source.providers);
+    }
+    if (source.updatedAt) {
+      merged.updatedAt = new Date(source.updatedAt).toISOString();
+    }
+    if (source.updatedBy) {
+      merged.updatedBy = `${source.updatedBy}`.trim() || merged.updatedBy;
+    }
+  }
+  return merged;
+}
+
+function getAiConfig() {
+  const stored = getJSONValue(AI_CONFIG_KEY, null);
+  if (!stored || typeof stored !== 'object') {
+    return cloneJson(DEFAULT_AI_CONFIG);
+  }
+  return mergeAiConfig(DEFAULT_AI_CONFIG, stored);
+}
+
+function setAiConfig(configUpdate, { actor = 'system' } = {}) {
+  const existing = getAiConfig();
+  const merged = mergeAiConfig(existing, configUpdate || {});
+  merged.updatedAt = new Date().toISOString();
+  merged.updatedBy = actor;
+  setJSONValue(AI_CONFIG_KEY, merged, { actor, source: 'ai-config' });
+  pushAuditLog({ actor, action: 'ai.config.update', detail: 'Cập nhật cấu hình trợ lý AI' });
+  return merged;
+}
+
+function getAiCacheSnapshotRaw() {
+  const raw = getJSONValue(AI_CACHE_KEY, DEFAULT_AI_USAGE_CACHE);
+  if (!raw || typeof raw !== 'object') {
+    return cloneJson(DEFAULT_AI_USAGE_CACHE);
+  }
+  const entries = Array.isArray(raw.entries) ? raw.entries : [];
+  return { version: 1, entries: entries.map((entry) => ({ ...entry })) };
+}
+
+function pruneAiCache(ttlMs, maxEntries = AI_CACHE_LIMIT) {
+  const snapshot = getAiCacheSnapshotRaw();
+  const now = Date.now();
+  let mutated = false;
+  const filtered = [];
+  for (const entry of snapshot.entries) {
+    if (!entry || typeof entry !== 'object') {
+      mutated = true;
+      continue;
+    }
+    const createdTime = Date.parse(entry.createdAt || entry.created_at || 0);
+    if (ttlMs && Number.isFinite(ttlMs) && ttlMs > 0 && Number.isFinite(createdTime)) {
+      if (now - createdTime > ttlMs) {
+        mutated = true;
+        continue;
+      }
+    }
+    filtered.push({ ...entry, createdAt: Number.isFinite(createdTime) ? new Date(createdTime).toISOString() : new Date().toISOString() });
+  }
+  filtered.sort((a, b) => {
+    const aTime = Date.parse(a.createdAt || 0) || 0;
+    const bTime = Date.parse(b.createdAt || 0) || 0;
+    return bTime - aTime;
+  });
+  const normalizedLimit = Number.isFinite(maxEntries) && maxEntries > 0 ? Math.floor(maxEntries) : AI_CACHE_LIMIT;
+  if (filtered.length > normalizedLimit) {
+    filtered.length = normalizedLimit;
+    mutated = true;
+  }
+  const result = { version: 1, entries: filtered };
+  if (mutated) {
+    setJSONValue(AI_CACHE_KEY, result, { actor: 'system', source: 'ai-cache-prune' });
+  }
+  return { cache: result, mutated };
+}
+
+function normalizeAiCacheEntry(entry) {
+  const key = `${entry?.key || ''}`.trim();
+  if (!key) {
+    throw new Error('Thiếu khoá cache AI.');
+  }
+  const providerId = `${entry?.providerId || ''}`.trim();
+  if (!providerId) {
+    throw new Error('Thiếu mã nhà cung cấp AI.');
+  }
+  const scope = `${entry?.scope || 'general'}`.trim() || 'general';
+  const prompt = entry?.prompt !== undefined && entry?.prompt !== null ? `${entry.prompt}` : '';
+  const response = entry?.response !== undefined && entry?.response !== null ? `${entry.response}` : '';
+  const actor = `${entry?.actor || 'system'}`.trim() || 'system';
+  const context = entry?.context !== undefined && entry?.context !== null ? `${entry.context}` : null;
+  const usage = entry?.usage && typeof entry.usage === 'object' ? { ...entry.usage } : null;
+  const createdAt = entry?.createdAt && !Number.isNaN(Date.parse(entry.createdAt))
+    ? new Date(entry.createdAt).toISOString()
+    : new Date().toISOString();
+  const tokensEstimated = entry?.tokensEstimated !== undefined ? toNonNegativeInt(entry.tokensEstimated, null) : null;
+  return {
+    key,
+    providerId,
+    scope,
+    prompt,
+    response,
+    actor,
+    createdAt,
+    context,
+    usage,
+    tokensEstimated,
+  };
+}
+
+function storeAiCacheEntry(entry, { actor = 'system', ttlMs, maxEntries = AI_CACHE_LIMIT } = {}) {
+  const normalized = normalizeAiCacheEntry(entry);
+  const { cache } = pruneAiCache(ttlMs, maxEntries);
+  const nextEntries = cache.entries.filter((item) => item?.key !== normalized.key);
+  nextEntries.unshift(normalized);
+  while (nextEntries.length > maxEntries) {
+    nextEntries.pop();
+  }
+  const result = { version: 1, entries: nextEntries };
+  setJSONValue(AI_CACHE_KEY, result, { actor, source: 'ai-cache-store' });
+  return normalized;
+}
+
+function clearAiCache({ actor = 'system' } = {}) {
+  setJSONValue(AI_CACHE_KEY, cloneJson(DEFAULT_AI_USAGE_CACHE), { actor, source: 'ai-cache-clear' });
+  pushAuditLog({ actor, action: 'ai.cache.clear', detail: 'Xóa cache trợ lý AI' });
+}
+
+function computeAiCacheKey({ providerId, prompt, scope, context }) {
+  const hash = crypto.createHash('sha256');
+  hash.update(`${providerId || ''}`);
+  hash.update('\n::prompt::\n');
+  hash.update(`${prompt || ''}`);
+  hash.update('\n::scope::\n');
+  hash.update(`${scope || ''}`);
+  hash.update('\n::context::\n');
+  hash.update(`${context || ''}`);
+  return hash.digest('hex');
+}
+
+function truncateText(text, limit) {
+  const str = `${text ?? ''}`;
+  if (!limit || !Number.isFinite(limit) || limit <= 0) {
+    return str;
+  }
+  if (str.length <= limit) {
+    return str;
+  }
+  return `${str.slice(0, limit)}…`;
+}
+
+function buildAbortSignal(timeoutMs) {
+  const ms = toPositiveInt(timeoutMs, DEFAULT_AI_CONFIG.timeoutMs);
+  if (!ms) {
+    return undefined;
+  }
+  if (typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function') {
+    return AbortSignal.timeout(ms);
+  }
+  const controller = new AbortController();
+  setTimeout(() => controller.abort(), ms);
+  return controller.signal;
+}
+
+function estimateTokensFromText(text) {
+  const str = `${text ?? ''}`;
+  if (!str) {
+    return 0;
+  }
+  return Math.max(1, Math.ceil(str.length / 4));
+}
+
+function normalizeAiUsage(rawUsage, prompt, response) {
+  const usage = rawUsage && typeof rawUsage === 'object' ? { ...rawUsage } : {};
+  const promptTokens = toNonNegativeInt(
+    usage.prompt_tokens ?? usage.promptTokens,
+    estimateTokensFromText(prompt)
+  );
+  const completionTokens = toNonNegativeInt(
+    usage.completion_tokens ?? usage.completionTokens,
+    estimateTokensFromText(response)
+  );
+  const totalTokens = toNonNegativeInt(
+    usage.total_tokens ?? usage.totalTokens,
+    promptTokens + completionTokens
+  );
+  return {
+    promptTokens,
+    completionTokens,
+    totalTokens,
+  };
+}
+
+function buildSystemPrompt(basePrompt, overridePrompt) {
+  const base = `${basePrompt ?? ''}`.trim();
+  const extra = `${overridePrompt ?? ''}`.trim();
+  if (base && extra) {
+    return `${base}\n\n${extra}`;
+  }
+  return base || extra || DEFAULT_AI_CONFIG.systemPrompt;
+}
+
+function selectAiProvider(config, preferredId) {
+  const providers = Array.isArray(config?.providers) ? config.providers : [];
+  if (providers.length === 0) {
+    return null;
+  }
+  const enabledProviders = providers
+    .map((provider) => normalizeAiProviderEntry(provider, provider))
+    .filter((provider) => provider && provider.enabled !== false);
+  if (enabledProviders.length === 0) {
+    return null;
+  }
+  const normalizedPreferred = `${preferredId || ''}`.trim();
+  if (normalizedPreferred) {
+    const found = enabledProviders.find((provider) => provider.id === normalizedPreferred);
+    if (found) {
+      return found;
+    }
+  }
+  const defaultId = `${config?.defaultProvider || ''}`.trim();
+  if (defaultId) {
+    const foundDefault = enabledProviders.find((provider) => provider.id === defaultId);
+    if (foundDefault) {
+      return foundDefault;
+    }
+  }
+  return enabledProviders[0];
+}
+
+async function callAzureOpenAiChat(provider, payload, { signal } = {}) {
+  const endpoint = `${provider.endpoint || ''}`.trim();
+  const deployment = `${provider.deployment || ''}`.trim();
+  const apiVersion = `${provider.apiVersion || '2024-08-01-preview'}`.trim() || '2024-08-01-preview';
+  const apiKeyEnv = `${provider.apiKeyEnv || 'AZURE_OPENAI_KEY'}`.trim() || 'AZURE_OPENAI_KEY';
+  const apiKey = provider.apiKey || process.env[apiKeyEnv];
+  if (!endpoint) {
+    throw new Error('Chưa cấu hình endpoint Azure OpenAI.');
+  }
+  if (!deployment) {
+    throw new Error('Chưa cấu hình deployment Azure OpenAI.');
+  }
+  if (!apiKey) {
+    throw new Error(`Thiếu khóa API ${apiKeyEnv} cho Azure OpenAI.`);
+  }
+  const url = `${endpoint.replace(/\/?$/, '')}/openai/deployments/${deployment}/chat/completions?api-version=${encodeURIComponent(apiVersion)}`;
+  const body = {
+    messages: payload.messages,
+    temperature: payload.temperature,
+    max_tokens: payload.maxTokens,
+    top_p: payload.topP,
+    frequency_penalty: payload.frequencyPenalty,
+    presence_penalty: payload.presencePenalty,
+  };
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'api-key': apiKey,
+    },
+    body: JSON.stringify(body),
+    signal,
+  });
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Azure OpenAI trả về ${response.status}: ${truncateText(errorText, 200)}`);
+  }
+  const data = await response.json();
+  const message = data?.choices?.[0]?.message?.content || '';
+  return {
+    message,
+    usage: data?.usage || null,
+  };
+}
+
+async function callOllamaChat(provider, payload, { signal } = {}) {
+  const endpoint = `${provider.endpoint || 'http://localhost:11434'}`.trim() || 'http://localhost:11434';
+  const model = `${provider.model || 'llama3.1:8b'}`.trim() || 'llama3.1:8b';
+  const body = {
+    model,
+    messages: payload.messages,
+    stream: false,
+    options: {
+      temperature: payload.temperature ?? provider.temperature ?? DEFAULT_AI_CONFIG.temperature,
+      num_predict: payload.maxTokens ?? provider.maxTokens ?? DEFAULT_AI_CONFIG.maxTokens,
+    },
+  };
+  const response = await fetch(`${endpoint.replace(/\/?$/, '')}/api/chat`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+    signal,
+  });
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Ollama trả về ${response.status}: ${truncateText(errorText, 200)}`);
+  }
+  const data = await response.json();
+  let message = '';
+  if (typeof data?.message?.content === 'string') {
+    message = data.message.content;
+  } else if (Array.isArray(data?.message)) {
+    message = data.message.map((part) => part?.content || '').join('\n').trim();
+  }
+  return {
+    message,
+    usage: {
+      prompt_tokens: data?.prompt_eval_count,
+      completion_tokens: data?.eval_count,
+      total_tokens:
+        (toNonNegativeInt(data?.prompt_eval_count, 0) || 0) + (toNonNegativeInt(data?.eval_count, 0) || 0),
+    },
+  };
+}
+
+function convertMessagesToGooglePayload(messages = []) {
+  const normalized = Array.isArray(messages) ? messages : [];
+  const contents = [];
+  const systemParts = [];
+  for (const entry of normalized) {
+    if (!entry || typeof entry !== 'object') {
+      continue;
+    }
+    const text = `${entry.content ?? ''}`.trim();
+    if (!text) {
+      continue;
+    }
+    const role = `${entry.role || 'user'}`.trim().toLowerCase();
+    if (role === 'system') {
+      systemParts.push({ text });
+      continue;
+    }
+    if (role === 'assistant' || role === 'model') {
+      contents.push({ role: 'model', parts: [{ text }] });
+      continue;
+    }
+    contents.push({ role: 'user', parts: [{ text }] });
+  }
+
+  if (contents.length === 0) {
+    contents.push({ role: 'user', parts: [{ text: 'Xin chào' }] });
+  }
+
+  const systemInstruction =
+    systemParts.length > 0
+      ? {
+          role: 'system',
+          parts: systemParts,
+        }
+      : null;
+
+  return { contents, systemInstruction };
+}
+
+async function callGoogleAiStudioChat(provider, payload, { signal } = {}) {
+  const endpoint = `${provider.endpoint || 'https://generativelanguage.googleapis.com'}`.trim() ||
+    'https://generativelanguage.googleapis.com';
+  const model = `${provider.model || 'gemini-1.5-flash'}`.trim() || 'gemini-1.5-flash';
+  const apiKeyEnv = `${provider.apiKeyEnv || 'GOOGLE_AI_STUDIO_API_KEY'}`.trim() || 'GOOGLE_AI_STUDIO_API_KEY';
+  const apiKey = provider.apiKey || process.env[apiKeyEnv];
+  if (!apiKey) {
+    throw new Error(`Thiếu khóa API ${apiKeyEnv} cho Google AI Studio.`);
+  }
+  const baseUrl = endpoint.replace(/\/+$/, '');
+  const url = `${baseUrl}/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
+  const { contents, systemInstruction } = convertMessagesToGooglePayload(payload.messages);
+  const generationConfig = {
+    temperature: toFiniteNumber(
+      payload.temperature,
+      provider.temperature ?? DEFAULT_AI_CONFIG.temperature
+    ),
+    maxOutputTokens: toPositiveInt(
+      payload.maxTokens,
+      provider.maxTokens ?? DEFAULT_AI_CONFIG.maxTokens
+    ),
+  };
+  const body = {
+    contents,
+    generationConfig,
+    responseMimeType: 'text/plain',
+  };
+  if (systemInstruction) {
+    body.systemInstruction = systemInstruction;
+  }
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+    signal,
+  });
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Google AI Studio trả về ${response.status}: ${truncateText(errorText, 200)}`);
+  }
+  const data = await response.json();
+  const parts = data?.candidates?.[0]?.content?.parts;
+  let message = '';
+  if (Array.isArray(parts)) {
+    message = parts
+      .map((part) => `${part?.text ?? ''}`.trim())
+      .filter((text) => text)
+      .join('\n')
+      .trim();
+  }
+  const usageMetadata = data?.usageMetadata;
+  const usage = usageMetadata
+    ? {
+        prompt_tokens: usageMetadata.promptTokenCount,
+        completion_tokens: usageMetadata.candidatesTokenCount,
+        total_tokens: usageMetadata.totalTokenCount,
+      }
+    : null;
+  return {
+    message,
+    usage,
+  };
+}
+
+async function dispatchAiChat(provider, payload, { signal } = {}) {
+  const type = `${provider.type || ''}`.trim().toLowerCase();
+  if (type === 'azure' || type === 'azure-openai') {
+    return callAzureOpenAiChat(provider, payload, { signal });
+  }
+  if (type === 'ollama' || type === 'ollama-local') {
+    return callOllamaChat(provider, payload, { signal });
+  }
+  if (type === 'google-ai-studio' || type === 'google' || type === 'gemini') {
+    return callGoogleAiStudioChat(provider, payload, { signal });
+  }
+  throw new Error(`Nhà cung cấp AI ${provider.id} chưa được hỗ trợ.`);
+}
+
+function summarizeAiCacheEntries(entries, { promptLimit = 160, responseLimit = 200 } = {}) {
+  if (!Array.isArray(entries)) {
+    return [];
+  }
+  return entries.map((entry) => ({
+    key: entry.key,
+    providerId: entry.providerId,
+    scope: entry.scope,
+    actor: entry.actor,
+    createdAt: entry.createdAt,
+    promptPreview: truncateText(entry.prompt, promptLimit),
+    responsePreview: truncateText(entry.response, responseLimit),
+    usage: entry.usage || null,
+  }));
 }
 
 function sortAccountRecords(records) {
@@ -5227,6 +5972,179 @@ app.delete('/api/storage/:key', (req, res) => {
   } catch (err) {
     console.error('Lỗi xóa dữ liệu', err);
     res.status(500).json({ ok: false, error: 'Không thể xóa dữ liệu' });
+  }
+});
+
+app.get('/api/ai/config', (req, res) => {
+  const { denied } = requireAiAssistManage(req, res);
+  if (denied) {
+    return;
+  }
+  try {
+    const config = getAiConfig();
+    const cachingEnabled = config?.caching?.enabled !== false;
+    const ttlMinutes = cachingEnabled
+      ? toPositiveInt(config?.caching?.ttlMinutes, DEFAULT_AI_CONFIG.caching.ttlMinutes)
+      : 0;
+    const maxEntries = toPositiveInt(config?.caching?.maxEntries, AI_CACHE_LIMIT);
+    const ttlMs = cachingEnabled && ttlMinutes ? ttlMinutes * 60 * 1000 : 0;
+    const { cache } = cachingEnabled ? pruneAiCache(ttlMs, maxEntries) : { cache: cloneJson(DEFAULT_AI_USAGE_CACHE) };
+    res.json({ ok: true, config, cacheSummary: summarizeAiCacheEntries(cache.entries) });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err?.message || 'Không thể tải cấu hình AI' });
+  }
+});
+
+app.put('/api/ai/config', (req, res) => {
+  const { denied, context } = requireAiAssistManage(req, res);
+  if (denied) {
+    return;
+  }
+  try {
+    const actor = context?.account?.username || resolveActor(req);
+    const payload = req.body?.config ?? req.body ?? {};
+    const next = setAiConfig(payload, { actor });
+    const cachingEnabled = next?.caching?.enabled !== false;
+    const ttlMinutes = cachingEnabled
+      ? toPositiveInt(next?.caching?.ttlMinutes, DEFAULT_AI_CONFIG.caching.ttlMinutes)
+      : 0;
+    const maxEntries = toPositiveInt(next?.caching?.maxEntries, AI_CACHE_LIMIT);
+    const ttlMs = cachingEnabled && ttlMinutes ? ttlMinutes * 60 * 1000 : 0;
+    if (cachingEnabled) {
+      pruneAiCache(ttlMs, maxEntries);
+    }
+    res.json({ ok: true, config: next });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err?.message || 'Không thể cập nhật cấu hình AI' });
+  }
+});
+
+app.delete('/api/ai/cache', (req, res) => {
+  const { denied, context } = requireAiAssistManage(req, res);
+  if (denied) {
+    return;
+  }
+  try {
+    const actor = context?.account?.username || resolveActor(req);
+    clearAiCache({ actor });
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err?.message || 'Không thể xóa cache AI' });
+  }
+});
+
+app.post('/api/ai/chat', async (req, res) => {
+  const { denied, context } = requireAiAssistUsage(req, res);
+  if (denied) {
+    return;
+  }
+  const actor = context?.account?.username || resolveActor(req);
+  try {
+    const config = getAiConfig();
+    if (config?.enabled === false) {
+      res.status(503).json({ ok: false, error: 'Tính năng trợ lý AI đang tạm tắt.' });
+      return;
+    }
+    const rawPrompt = req.body?.prompt ?? '';
+    const prompt = `${rawPrompt}`.trim();
+    if (!prompt) {
+      res.status(400).json({ ok: false, error: 'Nội dung câu hỏi trống.' });
+      return;
+    }
+    const scope = `${req.body?.scope || 'general'}`.trim() || 'general';
+    const provider = selectAiProvider(config, req.body?.providerId);
+    if (!provider) {
+      res.status(503).json({ ok: false, error: 'Chưa tìm thấy nhà cung cấp AI khả dụng.' });
+      return;
+    }
+    const contextTextRaw = req.body?.context ?? '';
+    const truncatedPrompt = truncateText(prompt, config.maxInputLength);
+    const contextText = truncateText(`${contextTextRaw || ''}`, config.maxInputLength);
+    const cachingEnabled = config?.caching?.enabled !== false;
+    const ttlMinutes = cachingEnabled
+      ? toPositiveInt(config?.caching?.ttlMinutes, DEFAULT_AI_CONFIG.caching.ttlMinutes)
+      : 0;
+    const maxEntries = toPositiveInt(config?.caching?.maxEntries, AI_CACHE_LIMIT);
+    const ttlMs = cachingEnabled && ttlMinutes ? ttlMinutes * 60 * 1000 : 0;
+    const cacheKey = computeAiCacheKey({ providerId: provider.id, prompt: truncatedPrompt, scope, context: contextText });
+    let cacheSnapshot = { version: 1, entries: [] };
+    if (cachingEnabled) {
+      cacheSnapshot = pruneAiCache(ttlMs, maxEntries).cache;
+      const cached = cacheSnapshot.entries.find((entry) => entry.key === cacheKey);
+      if (cached) {
+        pushAuditLog({
+          actor,
+          action: 'ai.chat',
+          detail: `Sử dụng cache trợ lý AI (${provider.id}) cho scope ${scope}`,
+        });
+        res.json({
+          ok: true,
+          cached: true,
+          message: cached.response,
+          usage: cached.usage || null,
+          providerId: cached.providerId,
+          scope,
+          cacheKey,
+        });
+        return;
+      }
+    }
+
+    const messages = [];
+    const systemPrompt = buildSystemPrompt(config.systemPrompt, req.body?.systemPrompt);
+    if (systemPrompt) {
+      messages.push({ role: 'system', content: systemPrompt });
+    }
+    if (contextText) {
+      messages.push({ role: 'system', content: `Ngữ cảnh bổ sung:\n${contextText}` });
+    }
+    messages.push({ role: 'user', content: truncatedPrompt });
+
+    const signal = buildAbortSignal(config.timeoutMs);
+    const temperature = toFiniteNumber(provider.temperature, config.temperature);
+    const maxTokens = toPositiveInt(provider.maxTokens, config.maxTokens);
+    const result = await dispatchAiChat(
+      provider,
+      {
+        messages,
+        temperature,
+        maxTokens,
+      },
+      { signal }
+    );
+    const usage = normalizeAiUsage(result.usage, truncatedPrompt, result.message);
+
+    if (cachingEnabled) {
+      storeAiCacheEntry(
+        {
+          key: cacheKey,
+          providerId: provider.id,
+          scope,
+          prompt: truncatedPrompt,
+          response: result.message,
+          context: contextText,
+          usage,
+          actor,
+          tokensEstimated: usage?.totalTokens ?? null,
+        },
+        { actor, ttlMs, maxEntries }
+      );
+    }
+
+    pushAuditLog({ actor, action: 'ai.chat', detail: `Gọi trợ lý AI (${provider.id}) cho scope ${scope}` });
+    res.json({
+      ok: true,
+      cached: false,
+      message: result.message,
+      usage,
+      providerId: provider.id,
+      scope,
+      cacheKey,
+    });
+  } catch (err) {
+    console.error('Lỗi AI chat', err);
+    const status = err?.name === 'AbortError' ? 504 : 502;
+    res.status(status).json({ ok: false, error: err?.message || 'Không thể gọi trợ lý AI' });
   }
 });
 

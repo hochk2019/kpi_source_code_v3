@@ -4,14 +4,15 @@ import { createDefaultRuleCollection } from '@/shared/defaultRules.js';
 import { getItem, setItem } from './storageClient.js';
 
 // ===== Keys trong kho chia sáº» =====
-export const DECL_KEY  = "decl_rows_v1";      // dá»¯ liá»‡u tá» khai
-export const MST_KEY   = "mst_rows_v2";       // gÃ¡n MST -> nhÃ¢n viÃªn/team/effective_from
+export const DECL_KEY = "decl_rows_v1"; // dữ liệu tờ khai
+export const MST_KEY = "mst_rows_v2"; // gán MST -> nhân viên/team/effective_from
 export const MST_HISTORY_KEY = "mst_history_v1"; // lịch sử chỉnh sửa trường quan trọng của MST
-export const HQ_HISTORY_KEY = "hq_history_v1";   // lịch sử chỉnh sửa đại lý HQ theo MST
-export const RULES_KEY = "kpi_rules_v2";      // quy táº¯c KPI
-export const TEAM_KEY  = "team_roster_v1";    // danh sÃ¡ch tá»• Ä‘á»™i & thÃ nh viÃªn
-export const AUDIT_KEY = "audit_logs_v1";     // nháº­t kÃ½ hÃ nh Ä‘á»™ng quáº£n trá»‹
-export const HQ_KEY    = "hq_agencies_v1";    // cáº¥u hÃ¬nh Äáº¡i lÃ½ háº£i quan theo MST
+export const HQ_HISTORY_KEY = "hq_history_v1"; // lịch sử chỉnh sửa đại lý HQ theo MST
+export const RULES_KEY = "kpi_rules_v2"; // quy tắc KPI
+export const TEAM_KEY = "team_roster_v1"; // danh sách tổ đội & thành viên
+export const AUDIT_KEY = "audit_logs_v1"; // nhật ký hành động quản trị
+export const HQ_KEY = "hq_agencies_v1"; // cấu hình Đại lý hải quan theo MST
+export const KPI_ADJUSTMENTS_KEY = "kpi_adjustments_v1"; // điểm KPI +/- bổ sung
 
 // ===== Helpers =====
 function safeParse(json, fallback) {
@@ -1269,6 +1270,407 @@ export function getHQHistoryForMST(mst, limit = 50) {
   return entries.slice(0, limit);
 }
 
+
+// ===== Điểm KPI +/- bổ sung =====
+export const KPI_ADJUSTMENT_STATUS_SET = new Set(['pending', 'approved', 'rejected']);
+
+export const KPI_ADJUSTMENT_CATEGORY_CONFIG = Object.freeze({
+  support_fixed: { label: 'Hỗ trợ thông quan (điểm cố định)', type: 'fixed', defaultUnit: 5 },
+  support_dynamic: { label: 'Hỗ trợ thông quan (hệ số theo số tờ khai)', type: 'quantity', defaultUnit: 1 },
+  cancel_staff: { label: 'Huỷ tờ khai do lỗi nhân viên', type: 'quantity', defaultUnit: -1 },
+  cancel_customer: { label: 'Huỷ tờ khai do lỗi khách hàng', type: 'quantity', defaultUnit: 1 },
+  correction_staff: { label: 'Sửa tờ khai do lỗi nhân viên', type: 'quantity', defaultUnit: -1 },
+  correction_customer: { label: 'Sửa tờ khai do lỗi khách hàng', type: 'quantity', defaultUnit: 1 },
+  tax_refund_staff: { label: 'Hoàn thuế do lỗi nhân viên', type: 'quantity', defaultUnit: -1 },
+  tax_refund_customer: { label: 'Hoàn thuế theo yêu cầu khách hàng', type: 'quantity', defaultUnit: 2 },
+  teamwork: {
+    label: 'Tinh thần hoạt động nhóm',
+    type: 'grade',
+    grades: [
+      { value: 10, label: 'Rất tốt (+10)' },
+      { value: 5, label: 'Tốt (+5)' },
+      { value: 0, label: 'Trung bình (0)' },
+      { value: -5, label: 'Yếu (-5)' },
+      { value: -10, label: 'Kém (-10)' },
+    ],
+  },
+  coworker_attitude: {
+    label: 'Thái độ với đồng nghiệp',
+    type: 'grade',
+    grades: [
+      { value: 10, label: 'Rất tốt (+10)' },
+      { value: 5, label: 'Tốt (+5)' },
+      { value: 0, label: 'Trung bình (0)' },
+      { value: -5, label: 'Yếu (-5)' },
+      { value: -10, label: 'Kém (-10)' },
+    ],
+  },
+  customer_attitude: {
+    label: 'Thái độ với khách hàng',
+    type: 'grade',
+    grades: [
+      { value: 10, label: 'Rất tốt (+10)' },
+      { value: 5, label: 'Tốt (+5)' },
+      { value: 0, label: 'Trung bình (0)' },
+      { value: -5, label: 'Yếu (-5)' },
+      { value: -10, label: 'Kém (-10)' },
+    ],
+  },
+  late: { label: 'Đi làm muộn', type: 'quantity', defaultUnit: -1 },
+});
+
+const KPI_ADJUSTMENT_HISTORY_LIMIT = 50;
+
+function normalizeAdjustmentCategory(value) {
+  const key = normalizeStr(value)
+    .toLowerCase()
+    .replace(/[^a-z0-9_]+/g, '_')
+    .replace(/_{2,}/g, '_')
+    .replace(/^_|_$/g, '');
+  if (key && KPI_ADJUSTMENT_CATEGORY_CONFIG[key]) {
+    return key;
+  }
+  return '';
+}
+
+function normalizeAdjustmentMonth(value) {
+  if (!value) return '';
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    const year = value.getFullYear();
+    const month = String(value.getMonth() + 1).padStart(2, '0');
+    return `${year}-${month}`;
+  }
+  const str = normalizeStr(value);
+  if (!str) return '';
+  const isoMonth = str.match(/^(\d{4})-(\d{2})$/);
+  if (isoMonth) {
+    const monthNum = Number.parseInt(isoMonth[2], 10);
+    if (monthNum >= 1 && monthNum <= 12) {
+      return `${isoMonth[1]}-${isoMonth[2]}`;
+    }
+  }
+  const isoDate = str.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (isoDate) {
+    const monthNum = Number.parseInt(isoDate[2], 10);
+    if (monthNum >= 1 && monthNum <= 12) {
+      return `${isoDate[1]}-${isoDate[2]}`;
+    }
+  }
+  const compact = str.match(/^(\d{4})(\d{2})$/);
+  if (compact) {
+    const monthNum = Number.parseInt(compact[2], 10);
+    if (monthNum >= 1 && monthNum <= 12) {
+      return `${compact[1]}-${compact[2]}`;
+    }
+  }
+  const slash = str.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{2,4})$/);
+  if (slash) {
+    let [, first, second, yearRaw] = slash;
+    let year = Number.parseInt(yearRaw, 10);
+    if (year < 100) {
+      year += year < 50 ? 2000 : 1900;
+    }
+    const a = Number.parseInt(first, 10);
+    const b = Number.parseInt(second, 10);
+    const month = a > 12 && b <= 12 ? b : a;
+    if (month >= 1 && month <= 12) {
+      return `${year}-${String(month).padStart(2, '0')}`;
+    }
+  }
+  return '';
+}
+
+function normalizeAdjustmentReferences(value) {
+  if (!value) return [];
+  const list = Array.isArray(value) ? value : [value];
+  const normalized = [];
+  const seen = new Set();
+  for (const item of list) {
+    const text = normalizeStr(item);
+    if (!text || seen.has(text)) continue;
+    seen.add(text);
+    normalized.push(text);
+  }
+  return normalized;
+}
+
+function normalizeAdjustmentHistoryEntry(entry) {
+  if (!entry || typeof entry !== 'object') return null;
+  const ts = entry.ts && !Number.isNaN(new Date(entry.ts).getTime()) ? new Date(entry.ts).toISOString() : new Date().toISOString();
+  const actor = normalizeStr(entry.actor) || 'system';
+  const action = normalizeStr(entry.action) || 'update';
+  const detail = normalizeStr(entry.detail);
+  const changes = entry.changes && typeof entry.changes === 'object' ? entry.changes : null;
+  return {
+    id: entry.id || `adj-hist-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    ts,
+    actor,
+    action,
+    detail,
+    changes,
+  };
+}
+
+function clampHistory(list) {
+  const entries = Array.isArray(list) ? list.map(normalizeAdjustmentHistoryEntry).filter(Boolean) : [];
+  return entries.slice(-KPI_ADJUSTMENT_HISTORY_LIMIT);
+}
+
+function computeAdjustmentTotal({ category, unitPoints, quantity }) {
+  const config = KPI_ADJUSTMENT_CATEGORY_CONFIG[category] || { type: 'quantity' };
+  const unit = Number.isFinite(unitPoints) ? unitPoints : 0;
+  if (config.type === 'fixed' || config.type === 'grade') {
+    return Math.round(unit * 10) / 10;
+  }
+  const qty = Number.isFinite(quantity) ? quantity : 0;
+  return Math.round(unit * qty * 10) / 10;
+}
+
+function normalizeAdjustmentInput(input, { now, actor, current } = {}) {
+  if (!input || typeof input !== 'object') {
+    return null;
+  }
+  const category = normalizeAdjustmentCategory(input.category || current?.category);
+  if (!category) {
+    return null;
+  }
+  const config = KPI_ADJUSTMENT_CATEGORY_CONFIG[category];
+  const staffName = normalizeStr(input.staffName ?? input.staff ?? current?.staffName ?? '');
+  const teamName = normalizeStr(input.teamName ?? input.team ?? current?.teamName ?? '');
+  const month = normalizeAdjustmentMonth(input.month ?? input.period ?? current?.month ?? '');
+  if (!month) {
+    return null;
+  }
+  const gradeValue = Number.parseFloat(input.grade ?? input.value ?? input.unitPoints ?? input.points ?? 0);
+  let unitPoints = Number.parseFloat(input.unitPoints ?? input.basePoint ?? input.pointsPerUnit ?? gradeValue);
+  if (!Number.isFinite(unitPoints)) {
+    unitPoints = Number.isFinite(current?.unitPoints) ? current.unitPoints : config?.defaultUnit ?? 0;
+  }
+  if (config?.type === 'grade' && config.grades?.length) {
+    const allowed = config.grades.map((item) => item.value);
+    if (!allowed.includes(unitPoints)) {
+      unitPoints = allowed.find((value) => value === Math.round(unitPoints)) ?? allowed[2] ?? 0;
+    }
+  }
+  let quantity = Number.parseFloat(input.quantity ?? input.count ?? input.total ?? current?.quantity ?? 0);
+  if (!Number.isFinite(quantity) || quantity < 0) {
+    quantity = 0;
+  }
+  if (config?.type === 'fixed' || config?.type === 'grade') {
+    quantity = 1;
+  }
+  if (config?.type === 'quantity' && quantity === 0) {
+    quantity = 1;
+  }
+  const references = normalizeAdjustmentReferences(input.references ?? input.reference ?? current?.references ?? []);
+  const note = normalizeStr(input.note ?? input.description ?? current?.note ?? '');
+  const statusCandidate = normalizeStr(input.status ?? current?.status ?? 'pending').toLowerCase();
+  const status = KPI_ADJUSTMENT_STATUS_SET.has(statusCandidate) ? statusCandidate : 'pending';
+  const totalOverride = Number.parseFloat(input.totalPoints ?? input.pointsTotal ?? input.total ?? NaN);
+  let totalPoints;
+  if (Number.isFinite(totalOverride)) {
+    totalPoints = Math.round(totalOverride * 10) / 10;
+  } else {
+    totalPoints = computeAdjustmentTotal({ category, unitPoints, quantity });
+  }
+  const createdAt = current?.createdAt && !Number.isNaN(new Date(current.createdAt).getTime())
+    ? new Date(current.createdAt).toISOString()
+    : now.toISOString();
+  const createdBy = current?.createdBy || actor;
+  const history = clampHistory(input.history ?? current?.history ?? []);
+  const payload = {
+    id: current?.id || input.id || `adj-${month.replace(/-/g, '')}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    category,
+    staffName,
+    teamName,
+    month,
+    quantity,
+    unitPoints: Math.round(unitPoints * 10) / 10,
+    totalPoints,
+    references,
+    note,
+    status,
+    createdAt,
+    createdBy,
+    history,
+  };
+  return payload;
+}
+
+function diffAdjustments(prev, next) {
+  if (!prev) return null;
+  const changes = {};
+  const fields = ['staffName', 'teamName', 'month', 'category', 'quantity', 'unitPoints', 'totalPoints', 'note'];
+  for (const field of fields) {
+    if (JSON.stringify(prev[field]) !== JSON.stringify(next[field])) {
+      changes[field] = { from: prev[field], to: next[field] };
+    }
+  }
+  if (JSON.stringify(prev.references) !== JSON.stringify(next.references)) {
+    changes.references = { from: prev.references, to: next.references };
+  }
+  return Object.keys(changes).length ? changes : null;
+}
+
+function getAllAdjustments() {
+  const raw = safeParse(getItem(KPI_ADJUSTMENTS_KEY), []);
+  const entries = Array.isArray(raw) ? raw : [];
+  return entries
+    .map((item) => normalizeAdjustmentInput(item, { now: new Date(), actor: 'system', current: item }))
+    .filter(Boolean)
+    .sort((a, b) => {
+      if (a.month !== b.month) {
+        return b.month.localeCompare(a.month);
+      }
+      if (a.staffName !== b.staffName) {
+        return a.staffName.localeCompare(b.staffName, 'vi', { sensitivity: 'base' });
+      }
+      return a.id.localeCompare(b.id);
+    });
+}
+
+function persistAdjustments(list) {
+  setItem(KPI_ADJUSTMENTS_KEY, JSON.stringify(list));
+}
+
+export function getKpiAdjustments() {
+  return getAllAdjustments();
+}
+
+export function saveKpiAdjustment(entry, { actor = 'system', permissions = {} } = {}) {
+  const now = new Date();
+  const adjustments = getAllAdjustments();
+  const existingIndex = entry?.id ? adjustments.findIndex((item) => item.id === entry.id) : -1;
+  const current = existingIndex >= 0 ? adjustments[existingIndex] : null;
+  const normalized = normalizeAdjustmentInput(entry, {
+    now,
+    actor,
+    current,
+  });
+  if (!normalized) {
+    throw new Error('Dữ liệu điểm KPI bổ sung không hợp lệ');
+  }
+  let status = current?.status || 'pending';
+  const requestedStatus = normalized.status || 'pending';
+  if (requestedStatus !== status) {
+    if ((requestedStatus === 'approved' || requestedStatus === 'rejected') && !permissions.adjustApprove) {
+      throw new Error('Bạn không có quyền duyệt điểm KPI bổ sung');
+    }
+    status = requestedStatus;
+  }
+  normalized.status = status;
+  normalized.updatedAt = now.toISOString();
+  normalized.updatedBy = actor;
+  if (!current) {
+    normalized.createdAt = now.toISOString();
+    normalized.createdBy = actor;
+  }
+  const history = current?.history ? current.history.slice() : [];
+  const changes = diffAdjustments(current, normalized);
+  history.push(
+    normalizeAdjustmentHistoryEntry({
+      action: current ? 'update' : 'create',
+      actor,
+      detail: normalized.note,
+      changes,
+    })
+  );
+  normalized.history = clampHistory(history);
+  if (existingIndex >= 0) {
+    adjustments[existingIndex] = { ...current, ...normalized };
+  } else {
+    adjustments.unshift(normalized);
+  }
+  persistAdjustments(adjustments);
+  pushAuditLog({
+    actor,
+    action: current ? 'kpi.adjustment.update' : 'kpi.adjustment.create',
+    detail: `${normalized.staffName || 'Chưa rõ'} - ${normalized.month} (${KPI_ADJUSTMENT_CATEGORY_CONFIG[normalized.category]?.label || normalized.category})`,
+    meta: { id: normalized.id, status: normalized.status, totalPoints: normalized.totalPoints },
+  });
+  return normalized;
+}
+
+export function updateKpiAdjustmentStatus(id, status, { actor = 'system', note = '', permissions = {} } = {}) {
+  const normalizedStatus = normalizeStr(status).toLowerCase();
+  if (!KPI_ADJUSTMENT_STATUS_SET.has(normalizedStatus)) {
+    throw new Error('Trạng thái điểm KPI bổ sung không hợp lệ');
+  }
+  if (!permissions.adjustApprove) {
+    throw new Error('Bạn không có quyền duyệt điểm KPI bổ sung');
+  }
+  const adjustments = getAllAdjustments();
+  const index = adjustments.findIndex((item) => item.id === id);
+  if (index === -1) {
+    throw new Error('Không tìm thấy điểm KPI bổ sung');
+  }
+  const entry = { ...adjustments[index] };
+  entry.status = normalizedStatus;
+  const now = new Date();
+  entry.updatedAt = now.toISOString();
+  entry.updatedBy = actor;
+  if (normalizedStatus === 'approved') {
+    entry.approvedAt = now.toISOString();
+    entry.approvedBy = actor;
+  } else if (normalizedStatus === 'rejected') {
+    entry.rejectedAt = now.toISOString();
+    entry.rejectedBy = actor;
+  }
+  const history = entry.history ? entry.history.slice() : [];
+  history.push(
+    normalizeAdjustmentHistoryEntry({
+      action: `status.${normalizedStatus}`,
+      actor,
+      detail: note,
+    })
+  );
+  entry.history = clampHistory(history);
+  adjustments[index] = entry;
+  persistAdjustments(adjustments);
+  pushAuditLog({
+    actor,
+    action: 'kpi.adjustment.status',
+    detail: `${entry.staffName || 'Chưa rõ'} - ${entry.month} (${entry.status})`,
+    meta: { id: entry.id, status: entry.status },
+  });
+  return entry;
+}
+
+export function removeKpiAdjustment(id, { actor = 'system', permissions = {} } = {}) {
+  if (!permissions.adjustApprove && !permissions.adjustSubmit) {
+    throw new Error('Bạn không có quyền xoá điểm KPI bổ sung');
+  }
+  const adjustments = getAllAdjustments();
+  const index = adjustments.findIndex((item) => item.id === id);
+  if (index === -1) {
+    return false;
+  }
+  const [removed] = adjustments.splice(index, 1);
+  persistAdjustments(adjustments);
+  pushAuditLog({
+    actor,
+    action: 'kpi.adjustment.delete',
+    detail: `${removed.staffName || 'Chưa rõ'} - ${removed.month}`,
+    meta: { id },
+  });
+  return true;
+}
+
+export function mapAdjustmentsByMonth(adjustments = []) {
+  const list = Array.isArray(adjustments) ? adjustments : [];
+  const map = new Map();
+  for (const entry of list) {
+    if (!entry || entry.status !== 'approved') continue;
+    const month = entry.month || '';
+    if (!month) continue;
+    if (!map.has(month)) {
+      map.set(month, []);
+    }
+    map.get(month).push(entry);
+  }
+  return map;
+}
+
 // ===== Compat layer cho cÃ¡c file khÃ¡c =====
 export function getData() {           // RulesEditor.jsx Ä‘ang import
   return getDeclRows();
@@ -1389,7 +1791,7 @@ export function clearAuditLogs({ actor = "system", note = "XÃ³a toÃ n bá»�
 
 // ===== Default export (tuá»³ nÆ¡i dÃ¹ng)
 export default {
-  DECL_KEY, MST_KEY, RULES_KEY, TEAM_KEY, AUDIT_KEY, HQ_KEY,
+  DECL_KEY, MST_KEY, RULES_KEY, TEAM_KEY, AUDIT_KEY, HQ_KEY, KPI_ADJUSTMENTS_KEY,
   normalizeStr, normalizeMST, normalizeDeclarationNumber, toISODate, normalizeName,
   isExportDecl, isExportByNumber, isImportByNumber, isExportByType, isImportByType,
   getMSTRowsRaw, getMSTMap, getMSTFor, upsertMSTRows,
@@ -1401,4 +1803,5 @@ export default {
   getRules, setRules, K_RULES,
   pushImportLog,
   pushAuditLog, getAuditLogs, clearAuditLogs,
+  getKpiAdjustments, saveKpiAdjustment, updateKpiAdjustmentStatus, removeKpiAdjustment, mapAdjustmentsByMonth,
 };

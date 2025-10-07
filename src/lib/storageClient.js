@@ -25,6 +25,7 @@ const SHARED_KEYS = new Set([
   'hq_agencies_v1',
   'hq_history_v1',
   'kpi_users_v1',
+  'kpi_adjustments_v1',
 ]);
 
 const cache = new Map();

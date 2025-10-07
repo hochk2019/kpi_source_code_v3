@@ -7,7 +7,10 @@ import {
   normalizeName,
   normalizeStr,
   mapMemberNamesToTeams,
+  getKpiAdjustments,
+  KPI_ADJUSTMENTS_KEY,
 } from "@/lib/store.js";
+import { subscribe as subscribeStorage } from "@/lib/storageClient.js";
 import { loadRules } from "@/lib/rules.js";
 import { formatDisplayDate } from "@/shared/format.js";
 import {
@@ -134,7 +137,7 @@ function CompanySummaryTable({ rows, includeStaff = false, includeTeam = false, 
                       {display || (col.align === "right" ? 0 : "—")}
                     </td>
                   );
-                })
+                })}
               </tr>
             ))
           ) : (
@@ -883,17 +886,28 @@ export default function ReportViewer({ canExport = true }) {
   const [roster, setRoster] = useState(() => getTeamRoster());
   const [mstRows, setMstRows] = useState(() => getMSTMap());
   const [declarations, setDeclarations] = useState(() => sortDeclRows(getDeclRows()));
+  const [adjustments, setAdjustments] = useState(() => getKpiAdjustments());
 
   useEffect(() => {
     setRulesState(loadRules());
     setRoster(getTeamRoster());
     setMstRows(getMSTMap());
     setDeclarations(sortDeclRows(getDeclRows()));
+    setAdjustments(getKpiAdjustments());
   }, [version]);
 
+  useEffect(() => {
+    const unsubscribe = subscribeStorage(KPI_ADJUSTMENTS_KEY, () => {
+      setAdjustments(getKpiAdjustments());
+    });
+    return () => {
+      unsubscribe();
+    };
+  }, []);
+
   const report = useMemo(
-    () => buildReportData(declarations, { roster, rules, from, to }),
-    [declarations, roster, rules, from, to]
+    () => buildReportData(declarations, { roster, rules, from, to, adjustments }),
+    [declarations, roster, rules, from, to, adjustments]
   );
 
   const managedCompanyCount = useMemo(() => {
@@ -992,6 +1006,29 @@ export default function ReportViewer({ canExport = true }) {
   const ruleApply = report.rules?.applyFrom
     ? `Áp dụng từ ${report.rules.applyFrom}`
     : "Áp dụng ngay";
+
+  const adjustmentsReport = useMemo(() => {
+    const base = report.adjustments || {};
+    return {
+      list: Array.isArray(base.list) ? base.list : [],
+      applied: Array.isArray(base.applied) ? base.applied : [],
+      totalPoints: Number(base.totalPoints || 0),
+      pendingCount: Number(base.pendingCount || 0),
+      approvedCount: Number(base.approvedCount || 0),
+      rejectedCount: Number(base.rejectedCount || 0),
+      appliedCount: Number(base.appliedCount || 0),
+    };
+  }, [report.adjustments]);
+
+  const appliedAdjustments = adjustmentsReport.applied;
+  const pendingAdjustments = useMemo(
+    () => adjustmentsReport.list.filter((item) => item?.status === "pending"),
+    [adjustmentsReport.list]
+  );
+  const rejectedAdjustments = useMemo(
+    () => adjustmentsReport.list.filter((item) => item?.status === "rejected"),
+    [adjustmentsReport.list]
+  );
 
   const topStaffData = useMemo(() => {
     return [...report.staff.list]
@@ -1561,6 +1598,13 @@ export default function ReportViewer({ canExport = true }) {
           subtitle="Bao gồm điểm loại hình và giấy phép"
         />
         <SummaryCard
+          title="Điểm KPI +/- bổ sung"
+          value={formatDecimal(adjustmentsReport.totalPoints || 0)}
+          subtitle={`Đã duyệt: ${formatInt(adjustmentsReport.approvedCount || 0)} • Chờ duyệt: ${formatInt(
+            adjustmentsReport.pendingCount || 0
+          )}`}
+        />
+        <SummaryCard
           title="Tổng số công ty"
           value={formatInt(summaryCompanyCardValue)}
           subtitle={companyCardSubtitle}
@@ -1580,6 +1624,129 @@ export default function ReportViewer({ canExport = true }) {
           value={formatInt(summary.licenseCount ?? 0)}
           subtitle={summary.licenseSummary || "—"}
         />
+      </div>
+
+      <div className="space-y-4 rounded-lg border bg-white p-4 shadow-sm">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <h3 className="text-base font-semibold text-gray-900">Điểm KPI +/- bổ sung</h3>
+            <p className="mt-1 text-sm text-gray-500">
+              Điểm cộng/trừ được duyệt sẽ được cộng trực tiếp vào KPI tháng tương ứng trong báo cáo.
+            </p>
+          </div>
+          <div className="text-sm text-gray-600 text-right">
+            <div>Đã duyệt: {formatInt(adjustmentsReport.approvedCount || 0)} mục</div>
+            <div>Chờ duyệt: {formatInt(adjustmentsReport.pendingCount || 0)} mục</div>
+            {adjustmentsReport.rejectedCount ? (
+              <div>Đã từ chối: {formatInt(adjustmentsReport.rejectedCount || 0)} mục</div>
+            ) : null}
+            <div className="mt-1 font-semibold text-emerald-600">
+              Điểm đã áp dụng: {formatDecimal(adjustmentsReport.totalPoints || 0)}
+            </div>
+          </div>
+        </div>
+
+        <div className="grid gap-4 lg:grid-cols-3">
+          <div className="lg:col-span-2">
+            <h4 className="mb-3 text-sm font-semibold text-gray-800">Chi tiết điểm đã áp dụng</h4>
+            <div className="overflow-auto rounded border">
+              <table className="min-w-full text-sm">
+                <thead className="bg-gray-100">
+                  <tr>
+                    <th className="px-3 py-2 text-left">Tháng</th>
+                    <th className="px-3 py-2 text-left">Hạng mục</th>
+                    <th className="px-3 py-2 text-left">Nhân viên</th>
+                    <th className="px-3 py-2 text-left">Tổ đội</th>
+                    <th className="px-3 py-2 text-right">Số lượng × Hệ số</th>
+                    <th className="px-3 py-2 text-right">Điểm</th>
+                    <th className="px-3 py-2 text-left">Tham chiếu</th>
+                    <th className="px-3 py-2 text-left">Ghi chú</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {appliedAdjustments.length ? (
+                    appliedAdjustments.map((item) => {
+                      const key = item.adjustment?.id || `${item.date}-${item.nhan_vien || ''}`;
+                      const quantity = Number.isFinite(Number(item.adjustment?.quantity))
+                        ? Number(item.adjustment.quantity)
+                        : null;
+                      const unitPoints = Number.isFinite(Number(item.adjustment?.unitPoints))
+                        ? Number(item.adjustment.unitPoints)
+                        : null;
+                      const references = Array.isArray(item.adjustment?.references)
+                        ? item.adjustment.references.filter(Boolean).join(', ')
+                        : '';
+                      const note = item.adjustment?.note || '';
+                      const scoreClass = item.kpi >= 0 ? 'text-emerald-600' : 'text-rose-600';
+                      return (
+                        <tr key={key} className="odd:bg-white even:bg-gray-50">
+                          <td className="px-3 py-1.5">{item.displayDate || (item.date ? item.date.slice(0, 7) : '—')}</td>
+                          <td className="px-3 py-1.5">{item.adjustment?.label || item.loai_hinh}</td>
+                          <td className="px-3 py-1.5">{item.nhan_vien || 'Chưa gán'}</td>
+                          <td className="px-3 py-1.5">{item.team || 'Chưa gán tổ đội'}</td>
+                          <td className="px-3 py-1.5 text-right">
+                            {quantity !== null ? formatDecimal(quantity) : '—'}
+                            {unitPoints !== null ? (
+                              <span className="ml-1 text-xs text-gray-500">× {formatDecimal(unitPoints)}</span>
+                            ) : null}
+                          </td>
+                          <td className={`px-3 py-1.5 text-right font-semibold ${scoreClass}`}>
+                            {formatDecimal(item.kpi)}
+                          </td>
+                          <td className="px-3 py-1.5">{references || '—'}</td>
+                          <td className="px-3 py-1.5">{note || '—'}</td>
+                        </tr>
+                      );
+                    })
+                  ) : (
+                    <tr>
+                      <td className="px-3 py-4 text-center text-gray-500" colSpan={8}>
+                        Chưa có điểm bổ sung nào được duyệt trong khoảng thời gian này.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <div className="space-y-4">
+            <div>
+              <h4 className="text-sm font-semibold text-gray-800">Chờ duyệt</h4>
+              {pendingAdjustments.length ? (
+                <ul className="mt-2 space-y-2 text-sm text-gray-600">
+                  {pendingAdjustments.map((item) => (
+                    <li key={item.id} className="rounded border border-dashed border-amber-300 bg-amber-50 px-3 py-2">
+                      <div className="font-medium text-gray-900">{item.label || item.category}</div>
+                      <div>{item.staffName || 'Chưa gán'} — {item.month}</div>
+                      <div>Điểm đề xuất: {formatDecimal(item.totalPoints || 0)}</div>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="mt-2 text-sm text-gray-500">Không có yêu cầu đang chờ.</p>
+              )}
+            </div>
+            {rejectedAdjustments.length ? (
+              <div>
+                <h4 className="text-sm font-semibold text-gray-800">Đã từ chối gần đây</h4>
+                <ul className="mt-2 space-y-2 text-sm text-gray-500">
+                  {rejectedAdjustments.slice(0, 3).map((item) => (
+                    <li key={item.id} className="rounded border px-3 py-2">
+                      <div className="font-medium text-gray-900">{item.label || item.category}</div>
+                      <div>{item.staffName || 'Chưa gán'} — {item.month}</div>
+                      <div>Điểm: {formatDecimal(item.totalPoints || 0)}</div>
+                    </li>
+                  ))}
+                </ul>
+                {rejectedAdjustments.length > 3 ? (
+                  <div className="pt-1 text-xs text-gray-400">
+                    Còn {rejectedAdjustments.length - 3} mục khác đã bị từ chối.
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+        </div>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">

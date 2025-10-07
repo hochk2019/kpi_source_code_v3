@@ -2,7 +2,7 @@ import React from 'react';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { renderToString } from 'react-dom/server';
 import ReportViewer from '@/components/ReportViewer.jsx';
-import { DECL_KEY, RULES_KEY } from '@/lib/store.js';
+import { DECL_KEY, RULES_KEY, KPI_ADJUSTMENTS_KEY } from '@/lib/store.js';
 import { DEFAULT_RULES } from '@/lib/rules.js';
 import { clearStorageCache, setItem as sharedSetItem } from '@/lib/storageClient.js';
 
@@ -47,6 +47,27 @@ describe('ReportViewer', () => {
 
     sharedSetItem(DECL_KEY, JSON.stringify(rows));
     sharedSetItem(RULES_KEY, JSON.stringify(rules));
+    sharedSetItem(
+      KPI_ADJUSTMENTS_KEY,
+      JSON.stringify([
+        {
+          id: 'adj-test-1',
+          category: 'support_fixed',
+          month: '2024-08',
+          staffName: 'Phương',
+          teamName: 'Team 1',
+          quantity: 1,
+          unitPoints: 5,
+          totalPoints: 5,
+          status: 'approved',
+          references: ['10234567890'],
+          note: 'Hỗ trợ thông quan',
+          createdAt: '2024-08-02T00:00:00Z',
+          updatedAt: '2024-08-02T00:00:00Z',
+          history: [],
+        },
+      ])
+    );
 
     const html = renderToString(<ReportViewer />);
 
@@ -56,6 +77,8 @@ describe('ReportViewer', () => {
     expect(html).toContain('tờ khai hợp lệ');
     expect(html).toContain('Phương');
     expect(html).toContain('Team 1');
+    expect(html).toContain('Điểm KPI +/- bổ sung');
+    expect(html).toContain('Điểm đã áp dụng');
     expect(html).toContain('Xu hướng KPI 6 kỳ gần nhất');
     expect(html).toContain('So sánh KPI theo tổ đội');
     vi.useRealTimers();

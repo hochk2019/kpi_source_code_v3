@@ -172,7 +172,7 @@ Thông báo "Dữ liệu mới đang tạm lưu cục bộ vì backend chưa s�
 4. Xác minh biến môi trường `VITE_API_BASE` mà frontend đang sử dụng trỏ đúng tới địa chỉ backend.
 - Nếu gặp lỗi `Cannot find module .../server/index.js`, hãy kiểm tra lại thư mục `server` (đặc biệt file `index.js`) có còn tồn tại hay không. Sao lưu và tải lại dự án nếu thiếu thư mục, sau đó quay lại [bước cài đặt](#1-cài-đặt) để chạy lại `pnpm install` và `pnpm db:init` trước khi khởi động backend.
 
-Sau khi hoàn tất các bước trên, thông báo cảnh báo sẽ tự biến mất khi frontend đồng bộ thành công. Bạn cũng có thể tham khảo thêm phần [Kiểm thử](#6-kiểm-thử) để chạy `pnpm healthcheck` hỗ trợ tự chẩn đoán hệ thống.
+Sau khi hoàn tất các bước trên, thông báo cảnh báo sẽ tự biến mất khi frontend đồng bộ thành công. Bạn cũng có thể tham khảo thêm phần [Kiểm thử](#7-kiểm-thử) để chạy `pnpm healthcheck` hỗ trợ tự chẩn đoán hệ thống.
 
 ## 5. Tài khoản mặc định
 
@@ -184,6 +184,68 @@ Sau khi hoàn tất các bước trên, thông báo cảnh báo sẽ tự biến
 Bạn có thể tạo thêm tài khoản và phân quyền trong tab **Tài khoản** của giao
 diện. Mọi thao tác chỉnh sửa đều ghi lại trong tab **Nhật ký**.
 
+## 6. Trợ lý AI tiết kiệm token
+
+Từ phiên bản 3.0, backend bổ sung các route `/api/ai/...` cho phép cấu hình và
+sử dụng trợ lý AI nội bộ mà không phụ thuộc vào máy khác. Tính năng này mặc định
+đã bật với các thiết lập tiết kiệm token, đồng thời hỗ trợ chuyển đổi nhà cung
+cấp linh hoạt:
+
+| Route | Mô tả | Quyền yêu cầu |
+| ----- | ----- | ------------- |
+| `GET /api/ai/config` | Đọc cấu hình AI hiện tại, trả về cả danh sách cache gần nhất. | `aiAssistManage` |
+| `PUT /api/ai/config` | Cập nhật endpoint, prompt hệ thống, giới hạn token, TTL cache. | `aiAssistManage` |
+| `DELETE /api/ai/cache` | Xóa toàn bộ cache để ép gọi lại mô hình. | `aiAssistManage` |
+| `POST /api/ai/chat` | Gọi trợ lý AI với câu hỏi tiếng Việt, tự động dùng cache nếu có. | `aiAssistUse` |
+
+### 6.1. Biến môi trường hỗ trợ Azure OpenAI, Google AI Studio & Ollama
+
+```env
+# Azure OpenAI (gợi ý dùng GPT-4o mini để tối ưu chi phí)
+AZURE_OPENAI_ENDPOINT=https://<tên-resource>.openai.azure.com
+AZURE_OPENAI_DEPLOYMENT=gpt-4o-mini
+AZURE_OPENAI_KEY=<mã khóa bí mật>
+AZURE_OPENAI_API_VERSION=2024-08-01-preview
+
+# Google AI Studio (Gemini, yêu cầu bật API Generative Language)
+GOOGLE_AI_STUDIO_API_KEY=<api key của dự án Google>
+# Tuỳ chọn: ghi đè endpoint và model nếu không dùng mặc định
+# GOOGLE_AI_STUDIO_ENDPOINT=https://generativelanguage.googleapis.com
+# GOOGLE_AI_STUDIO_MODEL=gemini-1.5-flash
+
+# Tuỳ chọn: Ollama nội bộ (Windows 11 có thể chạy qua WSL)
+OLLAMA_ENDPOINT=http://localhost:11434
+OLLAMA_MODEL=llama3.1:8b
+```
+
+Nếu không đặt biến môi trường, server vẫn tạo cấu hình mặc định và cho phép quản
+trị viên chỉnh sửa trong runtime bằng API kể trên.
+
+### 6.2. Cơ chế tiết kiệm token
+
+- Prompt và ngữ cảnh luôn được cắt xuống tối đa 4000 ký tự trước khi gửi.
+- Cache lưu trong SQLite (`kv_store`) với TTL mặc định 72 giờ và tối đa 50 mục.
+- Khi cache trùng khớp hash (provider + scope + prompt + ngữ cảnh), backend trả
+  lời ngay mà không gọi ra ngoài.
+- Usage (số token prompt/completion) được trả về để admin theo dõi ngân sách.
+
+### 6.3. Ví dụ gọi thử
+
+```bash
+curl -X POST \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <token đăng nhập>" \
+  http://localhost:5000/api/ai/chat \
+  -d '{
+    "scope": "bao-cao",
+    "prompt": "Tóm tắt điểm KPI cộng/trừ của tháng 8 cho phòng khai báo",
+    "context": "Tháng 8 có 4 nhân viên được cộng thêm điểm hỗ trợ thông quan."
+  }'
+```
+
+Nếu server trả về `{ "cached": true }`, nghĩa là câu hỏi tương tự đã được xử lý
+trong 72 giờ gần nhất nên không phát sinh chi phí token.
+
 ### Đồng bộ quyền tài khoản với SQL Server
 
 - Backend tự động lấy và đẩy dữ liệu bảng `[dbo].[KPI_USER_ROLES]` (có thể đổi tên qua biến môi trường `KPI_ACCOUNT_SYNC_TABLE`) nhằm tránh ghi đè quyền đã cấu hình trên hệ thống kế thừa.
@@ -191,7 +253,7 @@ diện. Mọi thao tác chỉnh sửa đều ghi lại trong tab **Nhật ký**.
 - Trước khi kích hoạt đồng bộ, hãy cấu hình `ECUS_SQL_SERVER` bằng tên máy chủ thật. Nếu để nguyên giá trị mặc định `Server`, ứng dụng sẽ bỏ qua việc kết nối để tránh phát sinh lỗi khi môi trường chưa sẵn sàng.
 - Bảng đồng bộ yêu cầu tối thiểu các cột `username`, `password_hash`, `role`, `name`, `permissions` (chuỗi JSON) và `updated_at` kiểu `DATETIME`.
 
-## 6. Kiểm thử
+## 7. Kiểm thử
 
 ```bash
 pnpm lint
@@ -208,7 +270,7 @@ integration test dùng `supertest`. Các test này tự động tạo cơ sở d
 SQLite trong bộ nhớ (`:memory:`) và mô phỏng kết nối SQL Server, giúp phát hiện
 lỗi kết nối hoặc mapping dữ liệu ngay trên CI.
 
-## 7. Công cụ hỗ trợ dữ liệu ECUS
+## 8. Công cụ hỗ trợ dữ liệu ECUS
 
 Các tác vụ CLI mới giúp kiểm thử/khảo sát dữ liệu ECUS khi chưa kết nối được
 SQL Server thật:
@@ -223,7 +285,7 @@ Bạn có thể dùng dữ liệu mock để chạy thử `/api/import/ecus/run`
 kết nối tới SQL Server, hoặc dùng lệnh `inspect` để xác định rõ tên cột trước
 khi viết câu truy vấn đồng bộ.
 
-## 8. Kế hoạch triển khai chi tiết cho Windows 11 & phân quyền
+## 9. Kế hoạch triển khai chi tiết cho Windows 11 & phân quyền
 
 Trước khi mở rộng triển khai cho toàn bộ đội ngũ, vui lòng tham khảo tài liệu
 [docs/windows11-permission-plan.md](docs/windows11-permission-plan.md) để nắm
