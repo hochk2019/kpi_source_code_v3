@@ -9,7 +9,9 @@ import {
   parseAgencyList,
   formatAgencyList,
   getHQHistoryEntries,
+  HQ_HISTORY_LIMIT,
 } from "@/lib/store.js";
+import { refreshHQHistoryCache } from "@/lib/hqHistoryClient.js";
 
 const PAGE_SIZE = 50;
 
@@ -131,8 +133,14 @@ export default function HQAgencyManager({ canEdit = true, currentUser = null }) 
   const actor = currentUser?.username || "guest";
   const isReadOnly = !canEdit;
 
-  const refreshHistory = useCallback(() => {
-    setHistoryStamp(Date.now());
+  const refreshHistory = useCallback(async () => {
+    try {
+      await refreshHQHistoryCache({ limit: HQ_HISTORY_LIMIT });
+    } catch (err) {
+      console.warn("Không thể tải lịch sử Đại lý HQ", err);
+    } finally {
+      setHistoryStamp(Date.now());
+    }
   }, []);
 
   const historyEntries = useMemo(() => getHQHistoryEntries(), [historyStamp]);
@@ -178,6 +186,10 @@ export default function HQAgencyManager({ canEdit = true, currentUser = null }) 
     }
   }, [safePage, page]);
 
+  useEffect(() => {
+    void refreshHistory();
+  }, [refreshHistory]);
+
   const handleChangeField = useCallback((index, field, value) => {
     setRows(prev => {
       const next = prev.slice();
@@ -221,7 +233,7 @@ export default function HQAgencyManager({ canEdit = true, currentUser = null }) 
     setDirty(true);
   }, []);
 
-  const handleReload = useCallback(() => {
+  const handleReload = useCallback(async () => {
     if (dirty && !window.confirm("Bạn có thay đổi chưa lưu. Bạn có chắc muốn bỏ qua và tải lại dữ liệu?")) {
       return;
     }
@@ -229,7 +241,7 @@ export default function HQAgencyManager({ canEdit = true, currentUser = null }) 
     setDirty(false);
     setSelectedFile("");
     if (fileRef.current) fileRef.current.value = "";
-    refreshHistory();
+    await refreshHistory();
   }, [dirty, refreshHistory]);
 
   const handleImport = useCallback(async () => {
@@ -283,7 +295,7 @@ export default function HQAgencyManager({ canEdit = true, currentUser = null }) 
     setSelectedFile(file ? file.name : "");
   }, []);
 
-  const handleSave = useCallback(() => {
+  const handleSave = useCallback(async () => {
     if (isReadOnly) {
       alert("Bạn không có quyền lưu cấu hình Đại lý HQ.");
       return;
@@ -308,7 +320,7 @@ export default function HQAgencyManager({ canEdit = true, currentUser = null }) 
       detail: "Cập nhật danh sách Đại lý HQ từ giao diện",
     });
     setRows(getHQAgencies());
-    refreshHistory();
+    await refreshHistory();
     setDirty(false);
     setSelectedFile("");
     alert("Đã lưu cấu hình Đại lý HQ.");

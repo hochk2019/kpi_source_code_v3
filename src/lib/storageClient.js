@@ -23,6 +23,7 @@ const SHARED_KEYS = new Set([
   'audit_logs_v1',
   'import_logs_v1',
   'hq_agencies_v1',
+  'hq_history_v1',
   'kpi_users_v1',
 ]);
 

@@ -550,6 +550,7 @@ const STORAGE_PERMISSION_REQUIREMENTS = Object.freeze({
   team_roster_v1: 'teamsEdit',
   kpi_rules_v2: 'rulesEdit',
   hq_agencies_v1: 'mstEdit',
+  hq_history_v1: 'mstEdit',
   decl_alert_config_v1: 'alertsManage',
   decl_alert_state_v1: 'alertsManage',
   ecus_sync_config_v1: 'syncManage',
@@ -701,6 +702,7 @@ const DEFAULT_STORAGE = {
   audit_logs_v1: '[]',
   import_logs_v1: '[]',
   hq_agencies_v1: '[]',
+  hq_history_v1: '[]',
   ecus_sync_config_v1: JSON.stringify(DEFAULT_ECUS_SYNC_CONFIG),
   decl_alert_config_v1: JSON.stringify(DEFAULT_ALERT_CONFIG),
   decl_alert_state_v1: JSON.stringify(DEFAULT_ALERT_STATE),
@@ -1254,6 +1256,20 @@ function requireAdminBackupManage(req, res) {
   }
   if (!account.permissions?.accountManage) {
     res.status(403).json({ ok: false, error: 'Tài khoản hiện chưa được cấp quyền quản trị hệ thống.' });
+    return { context, denied: true };
+  }
+  return { context, denied: false };
+}
+
+function requireHqHistoryAccess(req, res) {
+  const context = getSessionContext(req);
+  if (!context) {
+    res.status(401).json({ ok: false, error: 'Bạn cần đăng nhập để xem lịch sử Đại lý HQ.' });
+    return { context: null, denied: true };
+  }
+  const account = context.account || {};
+  if (!(account.permissions?.mstEdit || account.permissions?.auditView || account.permissions?.accountManage)) {
+    res.status(403).json({ ok: false, error: 'Tài khoản hiện không có quyền xem lịch sử Đại lý HQ.' });
     return { context, denied: true };
   }
   return { context, denied: false };
@@ -1986,6 +2002,183 @@ function mapHqAgenciesByMST() {
     }
   }
   return map;
+}
+
+const HQ_HISTORY_MAX_ENTRIES = 500;
+
+function normalizeHqHistoryEntries(entries) {
+  if (!Array.isArray(entries)) {
+    return [];
+  }
+  const normalized = [];
+  for (const entry of entries) {
+    if (!entry) continue;
+    const mst = normalizeMST(entry.mst);
+    if (!mst) continue;
+    const timestamp = new Date(entry.timestamp || entry.changed_at || entry.ts || Date.now());
+    if (Number.isNaN(timestamp.getTime())) {
+      continue;
+    }
+    const field = clampLength(normalizeStr(entry.field) || 'field', 64);
+    const type = clampLength(normalizeStr(entry.type) || 'update', 32);
+    const actor = clampLength(normalizeStr(entry.actor) || 'system', 128);
+    const fromValue = clampLength(normalizeStr(entry.from) || '', 255);
+    const toValue = clampLength(normalizeStr(entry.to) || '', 255);
+    normalized.push({
+      id: clampLength(entry.id || `hq-${mst}-${field}-${timestamp.getTime()}`, 120),
+      mst,
+      field,
+      from: fromValue,
+      to: toValue,
+      actor,
+      timestamp,
+      type,
+    });
+  }
+  normalized.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+  return normalized.slice(0, HQ_HISTORY_MAX_ENTRIES);
+}
+
+function serializeHqHistoryEntries(entries) {
+  return entries.map((entry) => ({
+    id: entry.id,
+    mst: entry.mst,
+    field: entry.field,
+    from: entry.from,
+    to: entry.to,
+    actor: entry.actor,
+    timestamp: entry.timestamp.toISOString(),
+    type: entry.type,
+  }));
+}
+
+function listHqHistoryEntries() {
+  const rawValue = getValue('hq_history_v1');
+  const parsed = safeParse(rawValue, []);
+  const normalized = normalizeHqHistoryEntries(parsed);
+  const serialized = JSON.stringify(serializeHqHistoryEntries(normalized));
+  if (serialized !== rawValue) {
+    upsertValue('hq_history_v1', serialized);
+  }
+  return normalized;
+}
+
+function parseHistoryParamList(value, normalizer) {
+  if (Array.isArray(value)) {
+    return parseHistoryParamList(value[0], normalizer);
+  }
+  const str = normalizeStr(value);
+  if (!str) return [];
+  const parts = str
+    .split(/[,;|\s]+/g)
+    .map((part) => (typeof normalizer === 'function' ? normalizer(part) : part))
+    .filter(Boolean);
+  return Array.from(new Set(parts));
+}
+
+function parseHistoryLowerBound(value) {
+  if (Array.isArray(value)) {
+    return parseHistoryLowerBound(value[0]);
+  }
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+  return date;
+}
+
+function parseHistoryUpperBound(value) {
+  if (Array.isArray(value)) {
+    return parseHistoryUpperBound(value[0]);
+  }
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+  if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value.trim())) {
+    date.setHours(23, 59, 59, 999);
+  }
+  return date;
+}
+
+function formatHqHistoryEntry(entry) {
+  return {
+    id: entry.id,
+    mst: entry.mst,
+    field: entry.field,
+    from: entry.from,
+    to: entry.to,
+    actor: entry.actor,
+    timestamp: entry.timestamp.toISOString(),
+    type: entry.type,
+  };
+}
+
+function queryHqHistoryEntries(params = {}) {
+  const entries = listHqHistoryEntries();
+  let filtered = entries.slice();
+
+  const mstList = parseHistoryParamList(params.mst, normalizeMST);
+  if (mstList.length > 0) {
+    const mstSet = new Set(mstList);
+    filtered = filtered.filter((entry) => mstSet.has(entry.mst));
+  }
+
+  const typeList = parseHistoryParamList(params.type, (value) => normalizeStr(value).toLowerCase());
+  if (typeList.length > 0) {
+    const typeSet = new Set(typeList);
+    filtered = filtered.filter((entry) => typeSet.has(entry.type.toLowerCase()));
+  }
+
+  const fieldList = parseHistoryParamList(params.field, (value) => normalizeStr(value).toLowerCase());
+  if (fieldList.length > 0) {
+    const fieldSet = new Set(fieldList);
+    filtered = filtered.filter((entry) => fieldSet.has(entry.field.toLowerCase()));
+  }
+
+  const actorFilter = normalizeStr(Array.isArray(params.actor) ? params.actor[0] : params.actor).toLowerCase();
+  if (actorFilter) {
+    filtered = filtered.filter((entry) => entry.actor.toLowerCase() === actorFilter);
+  }
+
+  const search = normalizeStr(Array.isArray(params.q) ? params.q[0] : params.q).toLowerCase();
+  if (search) {
+    filtered = filtered.filter((entry) => {
+      return (
+        entry.mst.includes(search) ||
+        entry.field.toLowerCase().includes(search) ||
+        entry.actor.toLowerCase().includes(search) ||
+        (entry.from && entry.from.toLowerCase().includes(search)) ||
+        (entry.to && entry.to.toLowerCase().includes(search))
+      );
+    });
+  }
+
+  const fromDate = parseHistoryLowerBound(params.from);
+  if (fromDate) {
+    const fromTs = fromDate.getTime();
+    filtered = filtered.filter((entry) => entry.timestamp.getTime() >= fromTs);
+  }
+
+  const toDate = parseHistoryUpperBound(params.to);
+  if (toDate) {
+    const toTs = toDate.getTime();
+    filtered = filtered.filter((entry) => entry.timestamp.getTime() <= toTs);
+  }
+
+  filtered.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+
+  const limitRaw = Number.parseInt(Array.isArray(params.limit) ? params.limit[0] : params.limit, 10);
+  const limit = Number.isFinite(limitRaw) && limitRaw > 0 ? Math.min(limitRaw, HQ_HISTORY_MAX_ENTRIES) : 100;
+  const entriesForClient = filtered.slice(0, limit).map((entry) => formatHqHistoryEntry(entry));
+
+  return {
+    total: filtered.length,
+    limit,
+    entries: entriesForClient,
+  };
 }
 
 function normalizeCodeList(value) {
@@ -4339,6 +4532,20 @@ app.get('/api/bootstrap', async (req, res) => {
   }
   const store = buildBootstrapSnapshot();
   res.json({ data: store });
+});
+
+app.get('/api/hq/history', (req, res) => {
+  const { denied } = requireHqHistoryAccess(req, res);
+  if (denied) {
+    return;
+  }
+  try {
+    const result = queryHqHistoryEntries(req.query || {});
+    res.json({ ok: true, ...result });
+  } catch (err) {
+    console.error('Không thể tải lịch sử Đại lý HQ', err);
+    res.status(500).json({ ok: false, error: 'Không thể tải lịch sử Đại lý HQ' });
+  }
 });
 
 app.get('/api/admin/backups/summary', (req, res) => {

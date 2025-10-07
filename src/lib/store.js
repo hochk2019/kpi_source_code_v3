@@ -1242,7 +1242,7 @@ function createHQHistoryEntry({ mst, field, from = '', to = '', actor = 'system'
   };
 }
 
-const HQ_HISTORY_LIMIT = 500;
+export const HQ_HISTORY_LIMIT = 500;
 
 function appendHQHistoryEntries(entries) {
   if (!Array.isArray(entries) || entries.length === 0) return;

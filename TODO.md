@@ -20,7 +20,7 @@
 - [x] Hoàn thiện giao diện lịch sử (filter theo ngày/thao tác, tooltip ngắn gọn khi hover).
 
 ### Tab "Đại Lý HQ"
-- [ ] Lưu lịch sử thêm/sửa/xóa đại lý vào hệ thống log, cung cấp API truy vấn lịch sử để client hiển thị.
+- [x] Lưu lịch sử thêm/sửa/xóa đại lý vào hệ thống log, cung cấp API truy vấn lịch sử để client hiển thị.
 - [ ] Viết tài liệu hướng dẫn nhập nhiều đại lý, giải thích chuẩn format phân tách bằng dấu phẩy.
 
 ### Khu vực "Quản Lý Tổ Đội"

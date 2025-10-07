@@ -7,6 +7,12 @@ import HQAgencyManager from '@/components/HQAgencyManager.jsx';
 import { HQ_KEY, DECL_KEY } from '@/lib/store.js';
 import { clearStorageCache, getItem as sharedGetItem, setItem as sharedSetItem } from '@/lib/storageClient.js';
 
+const historyMock = vi.hoisted(() => vi.fn().mockResolvedValue([]));
+
+vi.mock('@/lib/hqHistoryClient.js', () => ({
+  refreshHQHistoryCache: historyMock,
+}));
+
 vi.mock('xlsx', () => {
   const sheet_to_json = vi.fn(() => []);
   const read = vi.fn(() => ({
@@ -32,6 +38,8 @@ describe('HQAgencyManager', () => {
     XLSX.utils.sheet_to_json.mockReset();
     alertMock = vi.spyOn(window, 'alert').mockImplementation(() => {});
     confirmMock = vi.spyOn(window, 'confirm').mockImplementation(() => true);
+    historyMock.mockClear();
+    historyMock.mockResolvedValue([]);
   });
 
   afterEach(() => {

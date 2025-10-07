@@ -16,7 +16,9 @@ import {
   getMSTMap,
   HQ_KEY,
   getHQAgencies,
-  upsertHQAgencies
+  upsertHQAgencies,
+  getHQHistoryEntries,
+  HQ_HISTORY_KEY,
 } from '@/lib/store.js';
 import { clearStorageCache, getItem as sharedGetItem } from '@/lib/storageClient.js';
 beforeEach(() => {
@@ -183,6 +185,32 @@ describe('hq agency helpers', () => {
     expect(decls[0].agency).toBe('FCL');
     expect(decls[0].dai_ly).toBe('FCL');
     expect(decls[0].cong_ty).toBe('Công ty Golden');
+  });
+
+  it('ghi nhận lịch sử thao tác Đại lý HQ vào bộ nhớ chung', () => {
+    clearStorageCache();
+    upsertHQAgencies(
+      [
+        { mst: '0101234567', company: 'Công ty A', agent: 'FCL' },
+      ],
+      { actor: 'tester' }
+    );
+
+    const historyAfterCreate = getHQHistoryEntries();
+    expect(historyAfterCreate.length).toBeGreaterThanOrEqual(1);
+    expect(historyAfterCreate[0]).toMatchObject({
+      mst: '0101234567',
+      actor: 'tester',
+    });
+
+    const storedRaw = JSON.parse(sharedGetItem(HQ_HISTORY_KEY) || '[]');
+    expect(Array.isArray(storedRaw)).toBe(true);
+    expect(storedRaw[0]).toHaveProperty('timestamp');
+
+    upsertHQAgencies([], { actor: 'tester' });
+    const historyAfterDelete = getHQHistoryEntries();
+    expect(historyAfterDelete[0].type).toBe('delete');
+    expect(historyAfterDelete[0].mst).toBe('0101234567');
   });
 });
 
