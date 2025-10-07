@@ -50,6 +50,34 @@ const RANGE_PRESETS = Object.freeze([
   { label: "30 ngày", days: 30 },
 ]);
 
+async function extractErrorMessage(response, fallbackMessage) {
+  if (!response || typeof response !== "object") {
+    return fallbackMessage;
+  }
+  try {
+    const data = await response.clone().json();
+    if (data?.error && typeof data.error === "string") {
+      return data.error;
+    }
+    if (data?.message && typeof data.message === "string") {
+      return data.message;
+    }
+  } catch (jsonErr) {
+    try {
+      const text = await response.clone().text();
+      if (text && text.trim().length > 0) {
+        return text.trim();
+      }
+    } catch (textErr) {
+      console.error("Không thể đọc thông báo lỗi từ response", textErr, jsonErr);
+    }
+  }
+  if (Number.isInteger(response?.status) && response.status >= 400) {
+    return `HTTP ${response.status}`;
+  }
+  return fallbackMessage;
+}
+
 function toDateInputValue(date) {
   if (!(date instanceof Date) || Number.isNaN(date.getTime())) return "";
   return [date.getFullYear(), String(date.getMonth() + 1).padStart(2, "0"), String(date.getDate()).padStart(2, "0")].join("-");
@@ -382,13 +410,14 @@ export default function DataImporter({
     try {
       const response = await fetchWithAuth("/api/import/co-codes", { cache: "no-store", credentials: "include" });
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
+        const message = await extractErrorMessage(response, "Không thể tải cấu hình mã ưu đãi C/O.");
+        throw new Error(message);
       }
       const payload = await response.json();
       syncCoCodeForm(payload?.config || {});
     } catch (err) {
-      console.error("Khong the tai cau hinh ma uu dai", err);
-      setCoCodeError(err?.message || "Khong the tai cau hinh ma uu dai");
+      console.error("Không thể tải cấu hình mã ưu đãi C/O", err);
+      setCoCodeError(err?.message || "Không thể tải cấu hình mã ưu đãi C/O.");
     } finally {
       setCoCodeLoading(false);
     }
@@ -396,7 +425,7 @@ export default function DataImporter({
 
   const handleSaveCoCodeConfig = useCallback(async () => {
     if (!canManageSync) {
-      alert("Ban khong co quyen cap nhat cau hinh ma uu dai.");
+      alert("Bạn không có quyền cập nhật cấu hình mã ưu đãi C/O.");
       return;
     }
     setCoCodeSaving(true);
@@ -416,14 +445,15 @@ export default function DataImporter({
         body: JSON.stringify(payload),
       });
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
+        const message = await extractErrorMessage(response, "Không thể lưu cấu hình mã ưu đãi C/O.");
+        throw new Error(message);
       }
       const result = await response.json();
       syncCoCodeForm(result?.config || payload.config);
-      setCoCodeMessage("Da luu cau hinh ma uu dai.");
+      setCoCodeMessage("Đã lưu cấu hình mã ưu đãi C/O.");
     } catch (err) {
-      console.error("Khong the luu cau hinh ma uu dai", err);
-      setCoCodeError(err?.message || "Khong the luu cau hinh ma uu dai");
+      console.error("Không thể lưu cấu hình mã ưu đãi C/O", err);
+      setCoCodeError(err?.message || "Không thể lưu cấu hình mã ưu đãi C/O.");
     } finally {
       setCoCodeSaving(false);
     }
@@ -475,14 +505,15 @@ export default function DataImporter({
     try {
       const response = await fetchWithAuth("/api/import/co-discrepancy", { cache: "no-store", credentials: "include" });
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
+        const message = await extractErrorMessage(response, "Không thể tải trạng thái đối soát C/O.");
+        throw new Error(message);
       }
       const payload = await response.json();
       syncCoDiscrepancyConfig(payload?.config || {});
       setCoDiscrepancyState(payload?.state || null);
     } catch (err) {
-      console.error("Khong the tai trang thai kiem tra CO", err);
-      setCoDiscrepancyError(err?.message || "Khong the tai trang thai kiem tra CO");
+      console.error("Không thể tải trạng thái đối soát C/O", err);
+      setCoDiscrepancyError(err?.message || "Không thể tải trạng thái đối soát C/O.");
     } finally {
       setCoDiscrepancyLoading(false);
     }
@@ -490,7 +521,7 @@ export default function DataImporter({
 
   const handleSaveCoDiscrepancyConfig = useCallback(async () => {
     if (!canManageSync) {
-      alert("Ban khong co quyen cap nhat cau hinh kiem tra CO.");
+      alert("Bạn không có quyền cập nhật cấu hình đối soát C/O.");
       return;
     }
     setCoDiscrepancySaving(true);
@@ -513,14 +544,15 @@ export default function DataImporter({
         body: JSON.stringify(payload),
       });
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
+        const message = await extractErrorMessage(response, "Không thể lưu cấu hình đối soát C/O.");
+        throw new Error(message);
       }
       const result = await response.json();
       syncCoDiscrepancyConfig(result?.config || payload.config);
-      setCoDiscrepancyMessage("Da luu cau hinh kiem tra CO.");
+      setCoDiscrepancyMessage("Đã lưu cấu hình đối soát C/O.");
     } catch (err) {
-      console.error("Khong the luu cau hinh kiem tra CO", err);
-      setCoDiscrepancyError(err?.message || "Khong the luu cau hinh kiem tra CO");
+      console.error("Không thể lưu cấu hình đối soát C/O", err);
+      setCoDiscrepancyError(err?.message || "Không thể lưu cấu hình đối soát C/O.");
     } finally {
       setCoDiscrepancySaving(false);
     }
@@ -541,7 +573,7 @@ export default function DataImporter({
 
   const handleRunCoDiscrepancy = useCallback(async () => {
     if (!canManageSync) {
-      alert("Ban khong co quyen chay kiem tra CO.");
+      alert("Bạn không có quyền chạy đối soát C/O.");
       return;
     }
     setCoDiscrepancyRunning(true);
@@ -562,7 +594,8 @@ export default function DataImporter({
         body: JSON.stringify(payload),
       });
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
+        const message = await extractErrorMessage(response, "Không thể chạy đối soát C/O.");
+        throw new Error(message);
       }
       const result = await response.json();
       if (result?.result?.config) {
@@ -571,10 +604,10 @@ export default function DataImporter({
       if (result?.result?.state) {
         setCoDiscrepancyState(result.result.state);
       }
-      setCoDiscrepancyMessage("Da chay kiem tra CO.");
+      setCoDiscrepancyMessage("Đã chạy đối soát C/O thành công.");
     } catch (err) {
-      console.error("Khong the chay kiem tra CO", err);
-      setCoDiscrepancyError(err?.message || "Khong the chay kiem tra CO");
+      console.error("Không thể chạy đối soát C/O", err);
+      setCoDiscrepancyError(err?.message || "Không thể chạy đối soát C/O.");
     } finally {
       setCoDiscrepancyRunning(false);
     }
@@ -954,7 +987,7 @@ export default function DataImporter({
     [coDiscrepancyState?.range],
   );
   const coDiscrepancyLastRunLabel = useMemo(() => {
-    if (!coDiscrepancyState?.lastRunAt) return "Chua chay";
+    if (!coDiscrepancyState?.lastRunAt) return "Chưa chạy";
     try {
       return new Date(coDiscrepancyState.lastRunAt).toLocaleString("vi-VN");
     } catch (err) {
@@ -966,13 +999,13 @@ export default function DataImporter({
   const coMismatchLimited = coDiscrepancyState?.limited === true;
   const showUpdatedBanner = lastSyncUpdated > 0 || updatedDeclarations.length > 0;
   const coCodeUpdatedLabel = useMemo(() => {
-    if (!coCodeConfig?.updatedAt) return "Chua co cau hinh tuy chinh.";
+    if (!coCodeConfig?.updatedAt) return "Chưa có cấu hình tùy chỉnh.";
     try {
       const time = new Date(coCodeConfig.updatedAt).toLocaleString("vi-VN");
-      const actor = coCodeConfig.updatedBy || "system";
-      return `Cap nhat lan cuoi: ${time} (${actor})`;
+      const actor = coCodeConfig.updatedBy || "hệ thống";
+      return `Cập nhật lần cuối: ${time} (${actor})`;
     } catch (err) {
-      return `Cap nhat lan cuoi: ${coCodeConfig.updatedAt}`;
+      return `Cập nhật lần cuối: ${coCodeConfig.updatedAt}`;
     }
   }, [coCodeConfig?.updatedAt, coCodeConfig?.updatedBy]);
   const coDiscrepancyStatusLabel = coDiscrepancyState?.status || "idle";
@@ -1863,8 +1896,8 @@ export default function DataImporter({
 
       <CollapsibleCard
         id="co-code-config"
-        title="Cau hinh ma uu dai C/O"
-        description="Quan ly danh sach ma uu dai de he thong danh gia C/O chinh xac."
+        title="Cấu hình mã ưu đãi C/O"
+        description="Quản lý danh sách mã ưu đãi để hệ thống đánh giá C/O chính xác."
         actions={
           <div className="flex gap-2">
             <button
@@ -1874,7 +1907,7 @@ export default function DataImporter({
               disabled={coCodeLoading}
               data-tooltip="Tải lại cấu hình mã ưu đãi C/O"
             >
-              {coCodeLoading ? "Dang tai..." : "Lam moi"}
+              {coCodeLoading ? "Đang tải..." : "Làm mới"}
             </button>
           </div>
         }
@@ -1885,8 +1918,8 @@ export default function DataImporter({
         <div className="grid gap-3 md:grid-cols-2">
           <div>
             <label className="flex items-center justify-between text-sm font-medium text-gray-700">
-              <span>Whitelist uu tien</span>
-              <span className="text-xs text-gray-400">Moi dong mot ma (de trong neu khong dung)</span>
+              <span>Whitelist ưu tiên</span>
+              <span className="text-xs text-gray-400">Mỗi dòng một mã (để trống nếu không dùng)</span>
             </label>
             <textarea
               value={coCodeForm.whitelist}
@@ -1898,8 +1931,8 @@ export default function DataImporter({
           </div>
           <div>
             <label className="flex items-center justify-between text-sm font-medium text-gray-700">
-              <span>Blacklist khong CO</span>
-              <span className="text-xs text-gray-400">Moi dong mot ma</span>
+              <span>Blacklist không C/O</span>
+              <span className="text-xs text-gray-400">Mỗi dòng một mã</span>
             </label>
             <textarea
               value={coCodeForm.blacklist}
@@ -1910,7 +1943,7 @@ export default function DataImporter({
             />
           </div>
         </div>
-        <p className="text-xs text-gray-500">Neu whitelist de trong, he thong se su dung blacklist de loai bo cac ma khong duoc xem la C/O.</p>
+        <p className="text-xs text-gray-500">Nếu whitelist để trống, hệ thống sẽ sử dụng blacklist để loại bỏ các mã không được xem là C/O.</p>
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
@@ -1919,7 +1952,7 @@ export default function DataImporter({
             disabled={coCodeSaving || coCodeLoading || !canManageSync}
             data-tooltip="Lưu danh sách mã ưu đãi"
           >
-            {coCodeSaving ? "Dang luu..." : "Luu cau hinh"}
+            {coCodeSaving ? "Đang lưu..." : "Lưu cấu hình"}
           </button>
           <button
             type="button"
@@ -1928,7 +1961,7 @@ export default function DataImporter({
             disabled={coCodeLoading || coCodeSaving}
             data-tooltip="Khôi phục cấu hình mã ưu đãi"
           >
-            Khoi phuc
+            Khôi phục
           </button>
         </div>
         <div className="text-xs text-gray-400">{coCodeUpdatedLabel}</div>
@@ -1936,8 +1969,8 @@ export default function DataImporter({
 
       <CollapsibleCard
         id="co-discrepancy"
-        title="Doi soat C/O"
-        description="Theo doi chenh lech giua du lieu he thong va ECUS de xu ly kip thoi."
+        title="Đối soát C/O"
+        description="Theo dõi chênh lệch giữa dữ liệu hệ thống và ECUS để xử lý kịp thời."
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <input
@@ -1962,7 +1995,7 @@ export default function DataImporter({
               disabled={coDiscrepancyRunning || coDiscrepancyLoading || !canManageSync}
               data-tooltip="Chạy đối chiếu C/O với dữ liệu ECUS"
             >
-              {coDiscrepancyRunning ? "Dang chay..." : "Chay kiem tra"}
+              {coDiscrepancyRunning ? "Đang chạy..." : "Chạy kiểm tra"}
             </button>
             <button
               type="button"
@@ -1971,7 +2004,7 @@ export default function DataImporter({
               disabled={coDiscrepancyLoading}
               data-tooltip="Làm mới kết quả đối soát"
             >
-              {coDiscrepancyLoading ? "Dang tai..." : "Lam moi"}
+              {coDiscrepancyLoading ? "Đang tải..." : "Làm mới"}
             </button>
           </div>
         }
@@ -1981,19 +2014,19 @@ export default function DataImporter({
         {coDiscrepancyMessage && <div className="text-sm text-emerald-600">{coDiscrepancyMessage}</div>}
         <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
           <div className="rounded border bg-gray-50 px-3 py-2">
-            <div className="text-xs uppercase text-gray-500">Trang thai</div>
+            <div className="text-xs uppercase text-gray-500">Trạng thái</div>
             <div className="text-sm font-semibold text-gray-900">{coDiscrepancyStatusLabel}</div>
           </div>
           <div className="rounded border bg-gray-50 px-3 py-2">
-            <div className="text-xs uppercase text-gray-500">Lan chay gan nhat</div>
+            <div className="text-xs uppercase text-gray-500">Lần chạy gần nhất</div>
             <div className="text-sm font-semibold text-gray-900">{coDiscrepancyLastRunLabel}</div>
           </div>
           <div className="rounded border bg-gray-50 px-3 py-2">
-            <div className="text-xs uppercase text-gray-500">Chenh lech</div>
+            <div className="text-xs uppercase text-gray-500">Chênh lệch</div>
             <div className="text-sm font-semibold text-gray-900">{coMismatchCount.toLocaleString("vi-VN")}</div>
           </div>
           <div className="rounded border bg-gray-50 px-3 py-2">
-            <div className="text-xs uppercase text-gray-500">Tong da kiem</div>
+            <div className="text-xs uppercase text-gray-500">Tổng đã kiểm</div>
             <div className="text-sm font-semibold text-gray-900">{coCheckedCount.toLocaleString("vi-VN")}</div>
           </div>
         </div>
@@ -2001,32 +2034,32 @@ export default function DataImporter({
           <div className="space-y-2">
             <label className="flex items-center gap-2 text-sm">
               <input type="checkbox" checked={coDiscrepancyForm.enabled} onChange={(e) => setCoDiscrepancyForm((prev) => ({ ...prev, enabled: e.target.checked }))} disabled={!canManageSync} />
-              <span>Bat doi soat tu dong</span>
+              <span>Bật đối soát tự động</span>
             </label>
             <div className="grid gap-2 md:grid-cols-2">
-              <label className="text-xs font-medium text-gray-600">Cron tu dong<input className="mt-1 w-full rounded border px-2 py-1 text-sm" value={coDiscrepancyForm.cron} onChange={(e) => setCoDiscrepancyForm((prev) => ({ ...prev, cron: e.target.value }))} disabled={!canManageSync} placeholder="30 4 * * *" /></label>
-              <label className="text-xs font-medium text-gray-600">So ngay lay mau<input type="number" min={1} className="mt-1 w-full rounded border px-2 py-1 text-sm" value={coDiscrepancyForm.rangeDays} onChange={(e) => setCoDiscrepancyForm((prev) => ({ ...prev, rangeDays: e.target.value }))} disabled={!canManageSync} /></label>
-              <label className="text-xs font-medium text-gray-600">Nguong canh bao<input type="number" min={1} className="mt-1 w-full rounded border px-2 py-1 text-sm" value={coDiscrepancyForm.threshold} onChange={(e) => setCoDiscrepancyForm((prev) => ({ ...prev, threshold: e.target.value }))} disabled={!canManageSync} /></label>
-              <label className="text-xs font-medium text-gray-600">Gioi han mau<input type="number" min={0} className="mt-1 w-full rounded border px-2 py-1 text-sm" value={coDiscrepancyForm.sampleLimit} onChange={(e) => setCoDiscrepancyForm((prev) => ({ ...prev, sampleLimit: e.target.value }))} disabled={!canManageSync} /></label>
+              <label className="text-xs font-medium text-gray-600">Cron tự động<input className="mt-1 w-full rounded border px-2 py-1 text-sm" value={coDiscrepancyForm.cron} onChange={(e) => setCoDiscrepancyForm((prev) => ({ ...prev, cron: e.target.value }))} disabled={!canManageSync} placeholder="30 4 * * *" /></label>
+              <label className="text-xs font-medium text-gray-600">Số ngày lấy mẫu<input type="number" min={1} className="mt-1 w-full rounded border px-2 py-1 text-sm" value={coDiscrepancyForm.rangeDays} onChange={(e) => setCoDiscrepancyForm((prev) => ({ ...prev, rangeDays: e.target.value }))} disabled={!canManageSync} /></label>
+              <label className="text-xs font-medium text-gray-600">Ngưỡng cảnh báo<input type="number" min={1} className="mt-1 w-full rounded border px-2 py-1 text-sm" value={coDiscrepancyForm.threshold} onChange={(e) => setCoDiscrepancyForm((prev) => ({ ...prev, threshold: e.target.value }))} disabled={!canManageSync} /></label>
+              <label className="text-xs font-medium text-gray-600">Giới hạn mẫu<input type="number" min={0} className="mt-1 w-full rounded border px-2 py-1 text-sm" value={coDiscrepancyForm.sampleLimit} onChange={(e) => setCoDiscrepancyForm((prev) => ({ ...prev, sampleLimit: e.target.value }))} disabled={!canManageSync} /></label>
             </div>
             <div className="flex flex-wrap gap-2">
               <button type="button" onClick={handleSaveCoDiscrepancyConfig} className="rounded bg-emerald-600 px-3 py-1 text-xs font-medium text-white disabled:opacity-50" disabled={coDiscrepancySaving || !canManageSync}>
-                {coDiscrepancySaving ? "Dang luu..." : "Luu cau hinh"}
+                {coDiscrepancySaving ? "Đang lưu..." : "Lưu cấu hình"}
               </button>
               <button type="button" onClick={handleResetCoDiscrepancyForm} className="rounded border px-3 py-1 text-xs text-gray-600 hover:bg-gray-50" disabled={coDiscrepancySaving}>
-                Khoi phuc
+                Khôi phục
               </button>
             </div>
             <div className="text-xs text-gray-500">
-              {coDiscrepancyRangeLabel ? `Khoang lan chay gan nhat: ${coDiscrepancyRangeLabel}` : "Chua co ket qua doi soat."}
-              {coMismatchLimited ? " (Da cat bot danh sach do vuot gioi han mau)" : ""}
+              {coDiscrepancyRangeLabel ? `Khoảng lần chạy gần nhất: ${coDiscrepancyRangeLabel}` : "Chưa có kết quả đối soát."}
+              {coMismatchLimited ? " (Đã cắt bớt danh sách do vượt giới hạn mẫu)" : ""}
             </div>
           </div>
           <div className="space-y-2">
             <div className="flex items-center justify-between text-xs">
-              <span>Chenh lech goi y ({coMismatchPreview.length} / {coMismatchCount.toLocaleString("vi-VN")})</span>
+              <span>Chênh lệch gợi ý ({coMismatchPreview.length} / {coMismatchCount.toLocaleString("vi-VN")})</span>
               <button type="button" onClick={handleSelectCoMismatches} className="rounded border px-2 py-0.5 text-[11px] text-amber-700 hover:bg-amber-50" disabled={!coMismatchKeySet.size}>
-                Chon tren bang
+                Chọn trên bảng
               </button>
             </div>
             <div className="overflow-auto rounded border">
@@ -2034,25 +2067,25 @@ export default function DataImporter({
                 <table className="min-w-full text-xs">
                   <thead className="bg-amber-50 text-amber-800">
                     <tr>
-                      <th className="px-2 py-1 text-left">To khai</th>
-                      <th className="px-2 py-1 text-center">CO luu tru</th>
-                      <th className="px-2 py-1 text-center">CO ECUS</th>
-                      <th className="px-2 py-1 text-center">Dong</th>
+                      <th className="px-2 py-1 text-left">Tờ khai</th>
+                      <th className="px-2 py-1 text-center">C/O lưu trữ</th>
+                      <th className="px-2 py-1 text-center">C/O ECUS</th>
+                      <th className="px-2 py-1 text-center">Dòng</th>
                     </tr>
                   </thead>
                   <tbody>
                     {coMismatchPreview.map((item) => (
                       <tr key={item.key} className="odd:bg-white even:bg-amber-50/40">
                         <td className="px-2 py-1">{formatDeclarationLabel(item)}</td>
-                        <td className="px-2 py-1 text-center">{item.stored?.has_co ? "Co" : "Khong"} ({item.stored?.co_line_count ?? 0})</td>
-                        <td className="px-2 py-1 text-center">{item.remote?.has_co ? "Co" : "Khong"} ({item.remote?.co_line_count ?? 0})</td>
+                        <td className="px-2 py-1 text-center">{item.stored?.has_co ? "Có" : "Không"} ({item.stored?.co_line_count ?? 0})</td>
+                        <td className="px-2 py-1 text-center">{item.remote?.has_co ? "Có" : "Không"} ({item.remote?.co_line_count ?? 0})</td>
                         <td className="px-2 py-1 text-center">{item.remote?.co_codes?.length ?? 0}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               ) : (
-                <div className="py-4 text-center text-xs text-gray-500">Chua phat hien chenh lech nao.</div>
+                <div className="py-4 text-center text-xs text-gray-500">Chưa phát hiện chênh lệch nào.</div>
               )}
             </div>
           </div>
