@@ -29,7 +29,7 @@
 
 ### "Quy tắc KPI"
 - [x] Thiết kế cơ chế lưu trữ quy tắc bền vững (ví dụ: lưu trong SQL hoặc file cấu hình) để không bị mất khi `pnpm build`.
-- [ ] Thay input nhập tay danh sách mã bằng component chọn đa lựa chọn/auto-complete từ dữ liệu đồng bộ.
+- [x] Thay input nhập tay danh sách mã bằng component chọn đa lựa chọn/auto-complete từ dữ liệu đồng bộ.
 
 ### Tab mới "Điểm KPI +/- Thêm"
 - [x] Thiết kế schema cơ sở dữ liệu cho các hạng mục cộng/trừ KPI (hỗ trợ lịch sử, duyệt, phân quyền nhập liệu).
