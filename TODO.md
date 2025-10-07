@@ -3,25 +3,25 @@
 ## Giai đoạn 1 – Hoàn thiện các lỗi tồn đọng và tính năng đã phát triển dở dang
 
 - [x] Rà soát lại tất cả các form nhập ở tab **Import Data** và **Gán MST** để đảm bảo tooltip hiển thị thống nhất, không chồng chéo.
-- [ ] Cập nhật lại các bài test backend/frontend bị vô hiệu hóa để chạy thành công sau khi sửa cấu hình `package.json` hoặc thiết lập script thay thế.
-- [ ] Khắc phục cảnh báo "Cannot update a component (App) while rendering..." trong `tests/e2e.login-import.test.jsx` bằng cách di chuyển thao tác `setState` ra ngoài luồng render.
+- [x] Cập nhật lại các bài test backend/frontend bị vô hiệu hóa để chạy thành công sau khi sửa cấu hình `package.json` hoặc thiết lập script thay thế.
+- [x] Khắc phục cảnh báo "Cannot update a component (App) while rendering..." trong `tests/e2e.login-import.test.jsx` bằng cách di chuyển thao tác `setState` ra ngoài luồng render.
 - [x] Giảm/ẩn log "Không thể đồng bộ dữ liệu..." trong `tests/storageClient.test.js` để giữ kết quả test sạch.
-- [ ] Hoàn thiện UI cho "Cấu hình mã ưu đãi C/O" và "Đối soát C/O" (đồng bộ với API mới, xử lý lỗi HTTP 500).
+- [x] Hoàn thiện UI cho "Cấu hình mã ưu đãi C/O" và "Đối soát C/O" (đồng bộ với API mới, xử lý lỗi HTTP 500).
 
 ## Giai đoạn 2 – Các yêu cầu còn lại của phiên bản 3.0
 
 ### Import Data & Đồng bộ ECUS
-- [ ] Bổ sung cơ chế đồng bộ và hiển thị cột "Số TK AMA" sau khi có thuật toán xác định tờ khai sửa.
-- [ ] Thêm bộ lọc khoảng thời gian nâng cao (hỗ trợ preset và lưu bộ lọc) cùng nút đối chiếu loại trừ KPI tự động.
-- [ ] Cho phép export Excel danh sách tờ khai đã chọn với cấu trúc header mới (bao gồm giấy phép bị loại trừ).
+- [x] Bổ sung cơ chế đồng bộ và hiển thị cột "Số TK AMA" sau khi có thuật toán xác định tờ khai sửa.
+- [x] Thêm bộ lọc khoảng thời gian nâng cao (hỗ trợ preset và lưu bộ lọc) cùng nút đối chiếu loại trừ KPI tự động.
+- [x] Cho phép export Excel danh sách tờ khai đã chọn với cấu trúc header mới (bao gồm giấy phép bị loại trừ).
 
 ### Tab "Gán MST"
-- [ ] Lưu lịch sử chỉnh sửa người phụ trách vào bảng riêng trong SQL Server và đồng bộ hai chiều khi restore dữ liệu.
-- [ ] Hoàn thiện giao diện lịch sử (filter theo ngày/thao tác, tooltip ngắn gọn khi hover).
+- [x] Lưu lịch sử chỉnh sửa người phụ trách vào bảng riêng trong SQL Server và đồng bộ hai chiều khi restore dữ liệu.
+- [x] Hoàn thiện giao diện lịch sử (filter theo ngày/thao tác, tooltip ngắn gọn khi hover).
 
 ### Tab "Đại Lý HQ"
-- [ ] Lưu lịch sử thêm/sửa/xóa đại lý vào hệ thống log, cung cấp API truy vấn lịch sử để client hiển thị.
-- [ ] Viết tài liệu hướng dẫn nhập nhiều đại lý, giải thích chuẩn format phân tách bằng dấu phẩy.
+- [x] Lưu lịch sử thêm/sửa/xóa đại lý vào hệ thống log, cung cấp API truy vấn lịch sử để client hiển thị.
+- [x] Viết tài liệu hướng dẫn nhập nhiều đại lý, giải thích chuẩn format phân tách bằng dấu phẩy.
 
 ### Khu vực "Quản Lý Tổ Đội"
 - [ ] Thêm tooltip/nút ẩn hiện lịch sử thay đổi team và mã số thuế.
@@ -59,6 +59,5 @@
 
 - [x] Dọn gọn repo (xóa file dist/, _tmp_get_config.mjs, .vs/ sau khi hoàn thành) để review gọn.
 
-- [ ] Ho?n thi?n UI cho c?u h?nh m? ?u ??i / ??i so?t CO (frontend t??ng ?ng v?i API/backend m?i).
-
+
 - [ ] D?n g?n repo (x?a file dist/, _tmp_get_config.mjs, .vs/ sau khi ho?n th?nh) d? review g?n.

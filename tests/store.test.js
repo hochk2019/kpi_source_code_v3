@@ -16,7 +16,9 @@ import {
   getMSTMap,
   HQ_KEY,
   getHQAgencies,
-  upsertHQAgencies
+  upsertHQAgencies,
+  getHQHistoryEntries,
+  HQ_HISTORY_KEY,
 } from '@/lib/store.js';
 import { clearStorageCache, getItem as sharedGetItem } from '@/lib/storageClient.js';
 beforeEach(() => {
@@ -90,6 +92,24 @@ describe('saveDeclRows', () => {
     expect(stored).toHaveLength(2);
     expect(stored.find(r => r.so_tk === '00000000003')).toBeUndefined();
   });
+
+  it('chuẩn hóa và lưu trường so_tk_ama khi có dữ liệu', () => {
+    const initial = [
+      { so_tk: '12345678901', nhanh: 'A', date: '2024-09-01', so_tk_ama: '  AMA-001  ' },
+    ];
+
+    saveDeclRows(initial, { overwrite: true });
+    const stored = getDeclRows();
+
+    expect(stored[0].so_tk_ama).toBe('AMA-001');
+
+    saveDeclRows([
+      { so_tk: '12345678901', nhanh: 'A', date: '2024-09-02', so_tk_ama: 'AMA-002' },
+    ], { overwrite: false });
+
+    const updated = getDeclRows();
+    expect(updated[0].so_tk_ama).toBe('AMA-002');
+  });
 });
 
 
@@ -127,18 +147,17 @@ describe('getRecentDeclRows', () => {
 
 describe('hq agency helpers', () => {
   it('chuẩn hoá và gộp dữ liệu đại lý theo MST', () => {
-    const stored = upsertHQAgencies([
+    const storedCount = upsertHQAgencies([
       { mst: '010-123-4567', company: '  Công ty A  ', agent: 'FCL' },
       { mst: '0101234567', company: 'Công ty A cập nhật', agent: '' },
     ], { actor: 'tester' });
 
-    expect(stored).toEqual([
-      { mst: '0101234567', company: 'Công ty A cập nhật', agent: 'FCL' },
-    ]);
+    expect(storedCount).toBe(1);
 
     const saved = JSON.parse(sharedGetItem(HQ_KEY) || '[]');
-    expect(saved).toHaveLength(1);
-    expect(saved[0].mst).toBe('0101234567');
+    expect(saved).toEqual([
+      { mst: '0101234567', company: 'Công ty A cập nhật', agent: 'FCL', agents: ['FCL'] },
+    ]);
   });
 
   it('đồng bộ tên công ty và đại lý vào MST cùng tờ khai', () => {
@@ -156,7 +175,7 @@ describe('hq agency helpers', () => {
 
     const agencies = getHQAgencies();
     expect(agencies).toEqual([
-      { mst: '0101234567', company: 'Công ty Golden', agent: 'FCL' },
+      { mst: '0101234567', company: 'Công ty Golden', agent: 'FCL', agents: ['FCL'] },
     ]);
 
     const mstRows = getMSTMap();
@@ -166,6 +185,32 @@ describe('hq agency helpers', () => {
     expect(decls[0].agency).toBe('FCL');
     expect(decls[0].dai_ly).toBe('FCL');
     expect(decls[0].cong_ty).toBe('Công ty Golden');
+  });
+
+  it('ghi nhận lịch sử thao tác Đại lý HQ vào bộ nhớ chung', () => {
+    clearStorageCache();
+    upsertHQAgencies(
+      [
+        { mst: '0101234567', company: 'Công ty A', agent: 'FCL' },
+      ],
+      { actor: 'tester' }
+    );
+
+    const historyAfterCreate = getHQHistoryEntries();
+    expect(historyAfterCreate.length).toBeGreaterThanOrEqual(1);
+    expect(historyAfterCreate[0]).toMatchObject({
+      mst: '0101234567',
+      actor: 'tester',
+    });
+
+    const storedRaw = JSON.parse(sharedGetItem(HQ_HISTORY_KEY) || '[]');
+    expect(Array.isArray(storedRaw)).toBe(true);
+    expect(storedRaw[0]).toHaveProperty('timestamp');
+
+    upsertHQAgencies([], { actor: 'tester' });
+    const historyAfterDelete = getHQHistoryEntries();
+    expect(historyAfterDelete[0].type).toBe('delete');
+    expect(historyAfterDelete[0].mst).toBe('0101234567');
   });
 });
 

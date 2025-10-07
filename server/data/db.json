@@ -6,5 +6,6 @@
   "audit_logs_v1": "[]",
   "import_logs_v1": "[]",
   "kpi_users_v1": "[{\"username\":\"admin\",\"password\":\"admin123\",\"role\":\"admin\",\"name\":\"Qu\u1ea3n tr\u1ecb vi\u00ean\",\"permissions\":{\"importEdit\":true,\"mstEdit\":true,\"rulesEdit\":true,\"teamsEdit\":true,\"reportsExport\":true,\"accountManage\":true}},{\"username\":\"nhanvien\",\"password\":\"123456\",\"role\":\"staff\",\"name\":\"Nh\u00e2n vi\u00ean\",\"permissions\":{\"importEdit\":true,\"mstEdit\":false,\"rulesEdit\":false,\"teamsEdit\":false,\"reportsExport\":true,\"accountManage\":false}}]",
-  "hq_agencies_v1": "[]"
+  "hq_agencies_v1": "[]",
+  "hq_history_v1": "[]"
 }

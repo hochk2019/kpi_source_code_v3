@@ -50,6 +50,117 @@ const RANGE_PRESETS = Object.freeze([
   { label: "30 ngày", days: 30 },
 ]);
 
+const FILTER_STORAGE_KEY = "kpi:data-importer:filter:v1";
+
+const DATE_RANGE_PRESETS = Object.freeze([
+  {
+    key: "none",
+    label: "Tất cả thời gian",
+    getRange: () => ({ from: "", to: "" }),
+  },
+  {
+    key: "today",
+    label: "Hôm nay",
+    getRange: () => {
+      const today = new Date();
+      const value = toDateInputValue(today);
+      return { from: value, to: value };
+    },
+  },
+  {
+    key: "3days",
+    label: "3 ngày gần nhất",
+    getRange: () => {
+      const today = new Date();
+      const end = toDateInputValue(today);
+      const from = new Date(today);
+      from.setDate(from.getDate() - 2);
+      return { from: toDateInputValue(from), to: end };
+    },
+  },
+  {
+    key: "7days",
+    label: "7 ngày gần nhất",
+    getRange: () => {
+      const today = new Date();
+      const end = toDateInputValue(today);
+      const from = new Date(today);
+      from.setDate(from.getDate() - 6);
+      return { from: toDateInputValue(from), to: end };
+    },
+  },
+  {
+    key: "30days",
+    label: "30 ngày gần nhất",
+    getRange: () => {
+      const today = new Date();
+      const end = toDateInputValue(today);
+      const from = new Date(today);
+      from.setDate(from.getDate() - 29);
+      return { from: toDateInputValue(from), to: end };
+    },
+  },
+  {
+    key: "thisMonth",
+    label: "Tháng này",
+    getRange: () => {
+      const now = new Date();
+      const start = new Date(now.getFullYear(), now.getMonth(), 1);
+      const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+      return { from: toDateInputValue(start), to: toDateInputValue(end) };
+    },
+  },
+  {
+    key: "lastMonth",
+    label: "Tháng trước",
+    getRange: () => {
+      const now = new Date();
+      const start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const end = new Date(now.getFullYear(), now.getMonth(), 0);
+      return { from: toDateInputValue(start), to: toDateInputValue(end) };
+    },
+  },
+  {
+    key: "quarter",
+    label: "Quý hiện tại",
+    getRange: () => {
+      const now = new Date();
+      const quarter = Math.floor(now.getMonth() / 3);
+      const start = new Date(now.getFullYear(), quarter * 3, 1);
+      const end = new Date(now.getFullYear(), quarter * 3 + 3, 0);
+      return { from: toDateInputValue(start), to: toDateInputValue(end) };
+    },
+  },
+]);
+
+async function extractErrorMessage(response, fallbackMessage) {
+  if (!response || typeof response !== "object") {
+    return fallbackMessage;
+  }
+  try {
+    const data = await response.clone().json();
+    if (data?.error && typeof data.error === "string") {
+      return data.error;
+    }
+    if (data?.message && typeof data.message === "string") {
+      return data.message;
+    }
+  } catch (jsonErr) {
+    try {
+      const text = await response.clone().text();
+      if (text && text.trim().length > 0) {
+        return text.trim();
+      }
+    } catch (textErr) {
+      console.error("Không thể đọc thông báo lỗi từ response", textErr, jsonErr);
+    }
+  }
+  if (Number.isInteger(response?.status) && response.status >= 400) {
+    return `HTTP ${response.status}`;
+  }
+  return fallbackMessage;
+}
+
 function toDateInputValue(date) {
   if (!(date instanceof Date) || Number.isNaN(date.getTime())) return "";
   return [date.getFullYear(), String(date.getMonth() + 1).padStart(2, "0"), String(date.getDate()).padStart(2, "0")].join("-");
@@ -74,6 +185,12 @@ function ensureLicenseFields(row) {
 }
 
 const CODE_INPUT_SPLIT = /[\s,;]+/;
+
+function normalizeLicenseCode(value) {
+  const normalized = normalizeStr(value);
+  if (!normalized) return "";
+  return normalized.toUpperCase();
+}
 
 function parseCodeListInput(text) {
   if (!text) return [];
@@ -164,6 +281,10 @@ export default function DataImporter({
   const [page, setPage] = useState(1);
   const [mode, setMode] = useState("saved");         // saved | preview
   const [selectedFile, setSelectedFile] = useState("");
+  const savedFilterRef = useRef(null);
+  const [hasSavedFilter, setHasSavedFilter] = useState(false);
+  const [filterSavedAt, setFilterSavedAt] = useState(null);
+  const [datePreset, setDatePreset] = useState("none");
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [filterNoStaff, setFilterNoStaff] = useState(false);
   const [filterNoTeam, setFilterNoTeam] = useState(false);
@@ -212,8 +333,143 @@ export default function DataImporter({
   const [previewRangeInfo, setPreviewRangeInfo] = useState(null);
   const previewRangeLabel = useMemo(() => formatDateRangeLabel(previewRangeInfo), [previewRangeInfo]);
 
+  const applyStoredFilter = useCallback((stored, { notify = false } = {}) => {
+    if (!stored || typeof stored !== "object") {
+      return;
+    }
+    savedFilterRef.current = stored;
+    setHasSavedFilter(true);
+    if (stored.savedAt) {
+      setFilterSavedAt(stored.savedAt);
+    }
+    if (typeof stored.query === "string") {
+      setQuery(stored.query);
+    }
+    if (stored.range && typeof stored.range === "object") {
+      setSearchRange({
+        from: stored.range.from || "",
+        to: stored.range.to || "",
+      });
+    }
+    if (stored.datePreset) {
+      setDatePreset(stored.datePreset);
+    }
+    if (typeof stored.filterNoStaff === "boolean") {
+      setFilterNoStaff(stored.filterNoStaff);
+    }
+    if (typeof stored.filterNoTeam === "boolean") {
+      setFilterNoTeam(stored.filterNoTeam);
+    }
+    if (typeof stored.coFilterMode === "string") {
+      setCoFilterMode(stored.coFilterMode);
+    }
+    if (Number.isFinite(stored.coFilterMin)) {
+      setCoFilterMin(Math.max(0, Math.round(stored.coFilterMin)));
+    }
+    setPage(1);
+    if (notify) {
+      alert("Đã áp dụng bộ lọc đã lưu.");
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    try {
+      const raw = window.localStorage.getItem(FILTER_STORAGE_KEY);
+      if (!raw) {
+        return;
+      }
+      const stored = JSON.parse(raw);
+      if (!stored || typeof stored !== "object") {
+        return;
+      }
+      applyStoredFilter(stored);
+    } catch (error) {
+      console.error("Không thể đọc bộ lọc đã lưu", error);
+    }
+  }, [applyStoredFilter]);
+
+  const filterSavedLabel = useMemo(() => {
+    if (!filterSavedAt) return "";
+    try {
+      return new Date(filterSavedAt).toLocaleString("vi-VN");
+    } catch (error) {
+      console.error("Không thể định dạng thời gian lưu bộ lọc", error);
+      return "";
+    }
+  }, [filterSavedAt]);
+
+  const applyDatePreset = useCallback((presetKey) => {
+    const preset = DATE_RANGE_PRESETS.find((item) => item.key === presetKey);
+    if (!preset) {
+      setDatePreset("custom");
+      return;
+    }
+    const range = preset.getRange();
+    setDatePreset(presetKey);
+    setSearchRange({
+      from: range?.from || "",
+      to: range?.to || "",
+    });
+  }, []);
+
+  const handleSaveCurrentFilter = useCallback(() => {
+    if (typeof window === "undefined") {
+      alert("Môi trường hiện tại không hỗ trợ lưu bộ lọc.");
+      return;
+    }
+    const payload = {
+      query,
+      range: { ...searchRange },
+      filterNoStaff,
+      filterNoTeam,
+      coFilterMode,
+      coFilterMin,
+      datePreset,
+      savedAt: new Date().toISOString(),
+    };
+    try {
+      window.localStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify(payload));
+      savedFilterRef.current = payload;
+      setHasSavedFilter(true);
+      setFilterSavedAt(payload.savedAt);
+      alert("Đã lưu bộ lọc hiện tại cho lần sử dụng tiếp theo.");
+    } catch (error) {
+      console.error("Không thể lưu bộ lọc", error);
+      alert("Không thể lưu bộ lọc. Vui lòng kiểm tra bộ nhớ trình duyệt.");
+    }
+  }, [query, searchRange, filterNoStaff, filterNoTeam, coFilterMode, coFilterMin, datePreset]);
+
+  const handleRestoreSavedFilter = useCallback(() => {
+    if (!savedFilterRef.current) {
+      alert("Chưa có bộ lọc nào được lưu.");
+      return;
+    }
+    applyStoredFilter(savedFilterRef.current, { notify: true });
+  }, [applyStoredFilter]);
+
+  const handleClearSavedFilter = useCallback(() => {
+    if (typeof window === "undefined") {
+      alert("Không thể xóa bộ lọc đã lưu trong môi trường hiện tại.");
+      return;
+    }
+    try {
+      window.localStorage.removeItem(FILTER_STORAGE_KEY);
+      savedFilterRef.current = null;
+      setHasSavedFilter(false);
+      setFilterSavedAt(null);
+      alert("Đã xóa bộ lọc đã lưu.");
+    } catch (error) {
+      console.error("Không thể xóa bộ lọc", error);
+      alert("Không thể xóa bộ lọc đã lưu. Vui lòng thử lại sau.");
+    }
+  }, []);
+
   const handleClearSearchRange = useCallback(() => {
     setSearchRange({ from: "", to: "" });
+    setDatePreset("none");
   }, []);
 
   const licenseExcludeSet = useMemo(() => {
@@ -247,6 +503,51 @@ export default function DataImporter({
       return combined;
     },
     [licenseExcludeSet, licenseAgencyExcludeMap]
+  );
+
+  const summarizeLicenseSnapshot = useCallback(
+    (row) => {
+      if (!row || typeof row !== "object") {
+        return {
+          sourceCodes: [],
+          includedCodes: [],
+          excludedCodes: [],
+          sourceCount: 0,
+          includedCount: 0,
+          excludedCount: 0,
+        };
+      }
+      const excludeSet = getLicenseExcludeSetForRow(row);
+      const baseSource = Array.isArray(row.licenseSourceCodes) ? row.licenseSourceCodes : [];
+      const currentCodes = Array.isArray(row.licenseCodes) ? row.licenseCodes : [];
+      const storedExcluded = Array.isArray(row.licenseExcludedCodes) ? row.licenseExcludedCodes : [];
+      const extracted = extractLicenseCodesFromRowObj(row) || [];
+      const normalizedSource = Array.from(
+        new Set(
+          [...baseSource, ...currentCodes, ...storedExcluded, ...extracted]
+            .map(normalizeLicenseCode)
+            .filter(Boolean)
+        )
+      );
+      const explicitExcluded = Array.from(
+        new Set(storedExcluded.map(normalizeLicenseCode).filter(Boolean))
+      );
+      const computedExcluded = normalizedSource.filter((code) => excludeSet.has(code));
+      const excludedSet = new Set([...explicitExcluded, ...computedExcluded]);
+      const includedCodes = normalizedSource.filter((code) => !excludedSet.has(code));
+      const manualCount = Number(row.licenses ?? row.so_luong_gp);
+      const includedCount = Number.isFinite(manualCount) && manualCount >= 0 ? manualCount : includedCodes.length;
+      const sourceCount = normalizedSource.length || includedCodes.length + excludedSet.size;
+      return {
+        sourceCodes: normalizedSource,
+        includedCodes,
+        excludedCodes: Array.from(excludedSet),
+        sourceCount,
+        includedCount,
+        excludedCount: excludedSet.size,
+      };
+    },
+    [getLicenseExcludeSetForRow]
   );
 
   const [coCodeConfig, setCoCodeConfig] = useState(null);
@@ -376,13 +677,14 @@ export default function DataImporter({
     try {
       const response = await fetchWithAuth("/api/import/co-codes", { cache: "no-store", credentials: "include" });
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
+        const message = await extractErrorMessage(response, "Không thể tải cấu hình mã ưu đãi C/O.");
+        throw new Error(message);
       }
       const payload = await response.json();
       syncCoCodeForm(payload?.config || {});
     } catch (err) {
-      console.error("Khong the tai cau hinh ma uu dai", err);
-      setCoCodeError(err?.message || "Khong the tai cau hinh ma uu dai");
+      console.error("Không thể tải cấu hình mã ưu đãi C/O", err);
+      setCoCodeError(err?.message || "Không thể tải cấu hình mã ưu đãi C/O.");
     } finally {
       setCoCodeLoading(false);
     }
@@ -390,7 +692,7 @@ export default function DataImporter({
 
   const handleSaveCoCodeConfig = useCallback(async () => {
     if (!canManageSync) {
-      alert("Ban khong co quyen cap nhat cau hinh ma uu dai.");
+      alert("Bạn không có quyền cập nhật cấu hình mã ưu đãi C/O.");
       return;
     }
     setCoCodeSaving(true);
@@ -410,14 +712,15 @@ export default function DataImporter({
         body: JSON.stringify(payload),
       });
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
+        const message = await extractErrorMessage(response, "Không thể lưu cấu hình mã ưu đãi C/O.");
+        throw new Error(message);
       }
       const result = await response.json();
       syncCoCodeForm(result?.config || payload.config);
-      setCoCodeMessage("Da luu cau hinh ma uu dai.");
+      setCoCodeMessage("Đã lưu cấu hình mã ưu đãi C/O.");
     } catch (err) {
-      console.error("Khong the luu cau hinh ma uu dai", err);
-      setCoCodeError(err?.message || "Khong the luu cau hinh ma uu dai");
+      console.error("Không thể lưu cấu hình mã ưu đãi C/O", err);
+      setCoCodeError(err?.message || "Không thể lưu cấu hình mã ưu đãi C/O.");
     } finally {
       setCoCodeSaving(false);
     }
@@ -469,14 +772,15 @@ export default function DataImporter({
     try {
       const response = await fetchWithAuth("/api/import/co-discrepancy", { cache: "no-store", credentials: "include" });
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
+        const message = await extractErrorMessage(response, "Không thể tải trạng thái đối soát C/O.");
+        throw new Error(message);
       }
       const payload = await response.json();
       syncCoDiscrepancyConfig(payload?.config || {});
       setCoDiscrepancyState(payload?.state || null);
     } catch (err) {
-      console.error("Khong the tai trang thai kiem tra CO", err);
-      setCoDiscrepancyError(err?.message || "Khong the tai trang thai kiem tra CO");
+      console.error("Không thể tải trạng thái đối soát C/O", err);
+      setCoDiscrepancyError(err?.message || "Không thể tải trạng thái đối soát C/O.");
     } finally {
       setCoDiscrepancyLoading(false);
     }
@@ -484,7 +788,7 @@ export default function DataImporter({
 
   const handleSaveCoDiscrepancyConfig = useCallback(async () => {
     if (!canManageSync) {
-      alert("Ban khong co quyen cap nhat cau hinh kiem tra CO.");
+      alert("Bạn không có quyền cập nhật cấu hình đối soát C/O.");
       return;
     }
     setCoDiscrepancySaving(true);
@@ -507,14 +811,15 @@ export default function DataImporter({
         body: JSON.stringify(payload),
       });
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
+        const message = await extractErrorMessage(response, "Không thể lưu cấu hình đối soát C/O.");
+        throw new Error(message);
       }
       const result = await response.json();
       syncCoDiscrepancyConfig(result?.config || payload.config);
-      setCoDiscrepancyMessage("Da luu cau hinh kiem tra CO.");
+      setCoDiscrepancyMessage("Đã lưu cấu hình đối soát C/O.");
     } catch (err) {
-      console.error("Khong the luu cau hinh kiem tra CO", err);
-      setCoDiscrepancyError(err?.message || "Khong the luu cau hinh kiem tra CO");
+      console.error("Không thể lưu cấu hình đối soát C/O", err);
+      setCoDiscrepancyError(err?.message || "Không thể lưu cấu hình đối soát C/O.");
     } finally {
       setCoDiscrepancySaving(false);
     }
@@ -535,7 +840,7 @@ export default function DataImporter({
 
   const handleRunCoDiscrepancy = useCallback(async () => {
     if (!canManageSync) {
-      alert("Ban khong co quyen chay kiem tra CO.");
+      alert("Bạn không có quyền chạy đối soát C/O.");
       return;
     }
     setCoDiscrepancyRunning(true);
@@ -556,7 +861,8 @@ export default function DataImporter({
         body: JSON.stringify(payload),
       });
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
+        const message = await extractErrorMessage(response, "Không thể chạy đối soát C/O.");
+        throw new Error(message);
       }
       const result = await response.json();
       if (result?.result?.config) {
@@ -565,10 +871,10 @@ export default function DataImporter({
       if (result?.result?.state) {
         setCoDiscrepancyState(result.result.state);
       }
-      setCoDiscrepancyMessage("Da chay kiem tra CO.");
+      setCoDiscrepancyMessage("Đã chạy đối soát C/O thành công.");
     } catch (err) {
-      console.error("Khong the chay kiem tra CO", err);
-      setCoDiscrepancyError(err?.message || "Khong the chay kiem tra CO");
+      console.error("Không thể chạy đối soát C/O", err);
+      setCoDiscrepancyError(err?.message || "Không thể chạy đối soát C/O.");
     } finally {
       setCoDiscrepancyRunning(false);
     }
@@ -948,7 +1254,7 @@ export default function DataImporter({
     [coDiscrepancyState?.range],
   );
   const coDiscrepancyLastRunLabel = useMemo(() => {
-    if (!coDiscrepancyState?.lastRunAt) return "Chua chay";
+    if (!coDiscrepancyState?.lastRunAt) return "Chưa chạy";
     try {
       return new Date(coDiscrepancyState.lastRunAt).toLocaleString("vi-VN");
     } catch (err) {
@@ -960,13 +1266,13 @@ export default function DataImporter({
   const coMismatchLimited = coDiscrepancyState?.limited === true;
   const showUpdatedBanner = lastSyncUpdated > 0 || updatedDeclarations.length > 0;
   const coCodeUpdatedLabel = useMemo(() => {
-    if (!coCodeConfig?.updatedAt) return "Chua co cau hinh tuy chinh.";
+    if (!coCodeConfig?.updatedAt) return "Chưa có cấu hình tùy chỉnh.";
     try {
       const time = new Date(coCodeConfig.updatedAt).toLocaleString("vi-VN");
-      const actor = coCodeConfig.updatedBy || "system";
-      return `Cap nhat lan cuoi: ${time} (${actor})`;
+      const actor = coCodeConfig.updatedBy || "hệ thống";
+      return `Cập nhật lần cuối: ${time} (${actor})`;
     } catch (err) {
-      return `Cap nhat lan cuoi: ${coCodeConfig.updatedAt}`;
+      return `Cập nhật lần cuối: ${coCodeConfig.updatedAt}`;
     }
   }, [coCodeConfig?.updatedAt, coCodeConfig?.updatedBy]);
   const coDiscrepancyStatusLabel = coDiscrepancyState?.status || "idle";
@@ -1199,6 +1505,7 @@ export default function DataImporter({
   const applyEdit = useCallback((rowKey, updater) => {
     if (isReadOnlyForEdits) return;
     let didChange = false;
+    let pendingSelectionUpdater = null;
     setRawRows(prev => {
       if (!Array.isArray(prev) || prev.length === 0) return prev;
       const pos = prev.findIndex(row => keyOfRow(row) === rowKey);
@@ -1229,16 +1536,19 @@ export default function DataImporter({
       const oldKey = keyOfRow(current);
       const newKey = keyOfRow(nextRow);
       if (oldKey !== newKey) {
-        setSelectedKeys(keys => {
+        pendingSelectionUpdater = (keys) => {
           if (!Array.isArray(keys) || keys.length === 0) return keys;
           if (!keys.includes(oldKey)) return keys;
-          return keys.filter(k => k !== oldKey);
-        });
+          return keys.filter((k) => k !== oldKey);
+        };
       }
 
       didChange = true;
       return copy;
     });
+    if (pendingSelectionUpdater) {
+      setSelectedKeys(pendingSelectionUpdater);
+    }
     if (didChange && mode === "saved") {
       setHasUnsaved(true);
     }
@@ -1393,40 +1703,67 @@ export default function DataImporter({
     setPage(1);
   }, [selectionEnabled, filteredKeys]);
 
-  const handleApplyLicenseExclusion = useCallback(() => {
-    if (selectedKeys.length === 0) {
-      alert("Hãy chọn ít nhất một tờ khai để đối chiếu giấy phép.");
-      return;
-    }
+  const applyLicenseExclusionForKeys = useCallback((targetKeys) => {
     if (mode !== "saved") {
-      alert("Chỉ có thể điều chỉnh giấy phép khi đang xem dữ liệu đã lưu.");
-      return;
+      return { ok: false, reason: "mode" };
     }
-    const keySet = new Set(selectedKeys);
+    if (!Array.isArray(targetKeys) || targetKeys.length === 0) {
+      return { ok: false, reason: "empty" };
+    }
+    const keySet = new Set(targetKeys);
+    if (keySet.size === 0) {
+      return { ok: false, reason: "empty" };
+    }
     let changed = 0;
+    let matchedCount = 0;
     const nextRows = rawRows.map((row) => {
       const rowKey = keyOfRow(row);
       if (!keySet.has(rowKey)) {
         return row;
       }
+      matchedCount += 1;
       const excludeSet = getLicenseExcludeSetForRow(row);
-      const sourceCodes = Array.isArray(row.licenseCodes) && row.licenseCodes.length
-        ? row.licenseCodes
-        : extractLicenseCodesFromRowObj(row) || [];
-      const normalizedCodes = Array.from(new Set(sourceCodes.map(normalizeLicenseCode).filter(Boolean)));
-      const filteredCodes = normalizedCodes.filter((code) => !excludeSet.has(code));
+      const normalizedSource = new Set(
+        [
+          ...(Array.isArray(row.licenseSourceCodes) ? row.licenseSourceCodes : []),
+          ...(Array.isArray(row.licenseCodes) ? row.licenseCodes : []),
+          ...(Array.isArray(row.licenseExcludedCodes) ? row.licenseExcludedCodes : []),
+          ...(extractLicenseCodesFromRowObj(row) || []),
+        ].map(normalizeLicenseCode).filter(Boolean)
+      );
+      const effectiveCodes = Array.from(normalizedSource)
+        .filter((code) => !excludeSet.has(code))
+        .sort((a, b) => a.localeCompare(b));
+      const excludedCodes = Array.from(normalizedSource)
+        .filter((code) => excludeSet.has(code))
+        .sort((a, b) => a.localeCompare(b));
       const currentCodes = Array.isArray(row.licenseCodes)
-        ? row.licenseCodes.map(normalizeLicenseCode).filter(Boolean)
-        : normalizedCodes;
-      const nextLicenseCount = filteredCodes.length;
+        ? row.licenseCodes
+            .map(normalizeLicenseCode)
+            .filter(Boolean)
+            .sort((a, b) => a.localeCompare(b))
+        : Array.from(normalizedSource).sort((a, b) => a.localeCompare(b));
+      const currentExcludedCodes = Array.isArray(row.licenseExcludedCodes)
+        ? row.licenseExcludedCodes
+            .map(normalizeLicenseCode)
+            .filter(Boolean)
+            .sort((a, b) => a.localeCompare(b))
+        : [];
+      const nextLicenseCount = effectiveCodes.length;
       const currentLicenseCount = Number(row.licenses ?? row.so_luong_gp ?? currentCodes.length ?? 0);
-      if (nextLicenseCount === currentLicenseCount && arraysEqual(filteredCodes, currentCodes)) {
+      if (
+        nextLicenseCount === currentLicenseCount &&
+        arraysEqual(effectiveCodes, currentCodes) &&
+        arraysEqual(excludedCodes, currentExcludedCodes)
+      ) {
         return row;
       }
       changed += 1;
       const nextRow = {
         ...row,
-        licenseCodes: filteredCodes,
+        licenseSourceCodes: Array.from(normalizedSource).sort((a, b) => a.localeCompare(b)),
+        licenseExcludedCodes: excludedCodes,
+        licenseCodes: effectiveCodes,
         licenses: nextLicenseCount,
         so_luong_gp: nextLicenseCount,
         updatedAt: new Date().toISOString(),
@@ -1437,14 +1774,70 @@ export default function DataImporter({
       }
       return nextRow;
     });
-    if (!changed) {
-      alert("Các tờ khai được chọn đã không còn mã giấy phép nằm trong danh sách loại trừ.");
-      return;
+    if (matchedCount === 0) {
+      return { ok: false, reason: "missing" };
+    }
+    if (changed === 0) {
+      return { ok: false, reason: "unchanged", matchedCount };
     }
     setRawRows(nextRows);
     setHasUnsaved(true);
-    alert(`Đã cập nhật loại trừ giấy phép cho ${changed} tờ khai.`);
-  }, [selectedKeys, mode, rawRows, keyOfRow, getLicenseExcludeSetForRow, rules]);
+    return { ok: true, changed, matchedCount };
+  }, [mode, rawRows, keyOfRow, getLicenseExcludeSetForRow, rules]);
+
+  const handleApplyLicenseExclusion = useCallback(() => {
+    if (selectedKeys.length === 0) {
+      alert("Hãy chọn ít nhất một tờ khai để đối chiếu giấy phép.");
+      return;
+    }
+    const result = applyLicenseExclusionForKeys(selectedKeys);
+    if (!result?.ok) {
+      if (result?.reason === "mode") {
+        alert("Chỉ có thể điều chỉnh giấy phép khi đang xem dữ liệu đã lưu.");
+        return;
+      }
+      if (result?.reason === "unchanged") {
+        alert("Các tờ khai được chọn đã không còn mã giấy phép nằm trong danh sách loại trừ.");
+        return;
+      }
+      if (result?.reason === "missing" || result?.reason === "empty") {
+        alert("Không tìm thấy tờ khai phù hợp để đối chiếu.");
+        return;
+      }
+      alert("Không thể đối chiếu giấy phép cho lựa chọn hiện tại.");
+      return;
+    }
+    alert(`Đã cập nhật loại trừ giấy phép cho ${result.changed}/${result.matchedCount} tờ khai đã chọn.`);
+  }, [selectedKeys, applyLicenseExclusionForKeys]);
+
+  const handleAutoApplyLicenseExclusion = useCallback(() => {
+    if (!canEdit) {
+      alert("Bạn không có quyền chỉnh sửa dữ liệu tờ khai.");
+      return;
+    }
+    if (mode !== "saved") {
+      alert("Hãy chuyển sang chế độ dữ liệu đã lưu để đối chiếu tự động.");
+      return;
+    }
+    if (!filteredKeys.length) {
+      alert("Không có tờ khai nào khớp với bộ lọc hiện tại để đối chiếu.");
+      return;
+    }
+    const result = applyLicenseExclusionForKeys(filteredKeys);
+    if (!result?.ok) {
+      if (result?.reason === "unchanged") {
+        alert("Tất cả tờ khai trong bộ lọc hiện tại đã loại trừ giấy phép đầy đủ.");
+        return;
+      }
+      if (result?.reason === "missing" || result?.reason === "empty") {
+        alert("Không có tờ khai hợp lệ để tự động đối chiếu.");
+        return;
+      }
+      alert("Không thể tự động đối chiếu loại trừ KPI. Vui lòng thử lại.");
+      return;
+    }
+    alert(`Đã tự động cập nhật loại trừ giấy phép cho ${result.changed}/${result.matchedCount} tờ khai đang hiển thị.`);
+  }, [applyLicenseExclusionForKeys, canEdit, filteredKeys, mode]);
 
   const handleExportSelected = useCallback(() => {
     if (selectedKeys.length === 0) {
@@ -1457,27 +1850,32 @@ export default function DataImporter({
       alert("Không tìm thấy tờ khai tương ứng để xuất.");
       return;
     }
-    const data = rows.map((row) => ({
-      Ngày: formatDisplayDate(row.date || row.raw_date || ""),
-      "Số tờ khai": row.so_tk_full || row.so_tk || "",
-      "Số TK AMA": row.so_tk_ama || "",
-      MST: row.mst || "",
-      "Công ty": row.cong_ty || "",
-      "Loại hình": row.loai_hinh || "",
-      "Nhân viên": row.nhan_vien || "",
-      "Tổ đội": row.team || "",
-      "Đại lý": row.agency || row.dai_ly || "",
-      "Số lượng GP": row.licenses ?? row.so_luong_gp ?? 0,
-      "Mã giấy phép": Array.isArray(row.licenseCodes) ? row.licenseCodes.join(", ") : "",
-      "C/O": coLabel(row),
-      "Dòng C/O": coLineCount(row),
-    }));
+    const data = rows.map((row) => {
+      const licenseInfo = summarizeLicenseSnapshot(row);
+      return {
+        Ngày: formatDisplayDate(row.date || row.raw_date || ""),
+        "Số tờ khai": row.so_tk_full || row.so_tk || "",
+        "Số TK AMA": row.so_tk_ama || "",
+        MST: row.mst || "",
+        "Công ty": row.cong_ty || "",
+        "Loại hình": row.loai_hinh || "",
+        "Nhân viên": row.nhan_vien || "",
+        "Tổ đội": row.team || "",
+        "Đại lý": row.agency || row.dai_ly || "",
+        "Số lượng GP gốc": licenseInfo.sourceCount,
+        "Số lượng GP (sau loại trừ)": licenseInfo.includedCount,
+        "Mã giấy phép hợp lệ": licenseInfo.includedCodes.join(", "),
+        "Mã giấy phép bị loại trừ": licenseInfo.excludedCodes.join(", "),
+        "C/O": coLabel(row),
+        "Dòng C/O": coLineCount(row),
+      };
+    });
     const worksheet = XLSX.utils.json_to_sheet(data);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "ToKhai");
     const timestamp = new Date().toISOString().slice(0, 10);
     XLSX.writeFile(workbook, `tokhai_da_chon_${timestamp}.xlsx`);
-  }, [selectedKeys, rawRows, keyOfRow]);
+  }, [selectedKeys, rawRows, keyOfRow, summarizeLicenseSnapshot]);
 
   const toneClassMap = {
     success: "border border-emerald-200 bg-emerald-50 text-emerald-700",
@@ -1853,8 +2251,8 @@ export default function DataImporter({
 
       <CollapsibleCard
         id="co-code-config"
-        title="Cau hinh ma uu dai C/O"
-        description="Quan ly danh sach ma uu dai de he thong danh gia C/O chinh xac."
+        title="Cấu hình mã ưu đãi C/O"
+        description="Quản lý danh sách mã ưu đãi để hệ thống đánh giá C/O chính xác."
         actions={
           <div className="flex gap-2">
             <button
@@ -1864,7 +2262,7 @@ export default function DataImporter({
               disabled={coCodeLoading}
               data-tooltip="Tải lại cấu hình mã ưu đãi C/O"
             >
-              {coCodeLoading ? "Dang tai..." : "Lam moi"}
+              {coCodeLoading ? "Đang tải..." : "Làm mới"}
             </button>
           </div>
         }
@@ -1875,8 +2273,8 @@ export default function DataImporter({
         <div className="grid gap-3 md:grid-cols-2">
           <div>
             <label className="flex items-center justify-between text-sm font-medium text-gray-700">
-              <span>Whitelist uu tien</span>
-              <span className="text-xs text-gray-400">Moi dong mot ma (de trong neu khong dung)</span>
+              <span>Whitelist ưu tiên</span>
+              <span className="text-xs text-gray-400">Mỗi dòng một mã (để trống nếu không dùng)</span>
             </label>
             <textarea
               value={coCodeForm.whitelist}
@@ -1888,8 +2286,8 @@ export default function DataImporter({
           </div>
           <div>
             <label className="flex items-center justify-between text-sm font-medium text-gray-700">
-              <span>Blacklist khong CO</span>
-              <span className="text-xs text-gray-400">Moi dong mot ma</span>
+              <span>Blacklist không C/O</span>
+              <span className="text-xs text-gray-400">Mỗi dòng một mã</span>
             </label>
             <textarea
               value={coCodeForm.blacklist}
@@ -1900,7 +2298,7 @@ export default function DataImporter({
             />
           </div>
         </div>
-        <p className="text-xs text-gray-500">Neu whitelist de trong, he thong se su dung blacklist de loai bo cac ma khong duoc xem la C/O.</p>
+        <p className="text-xs text-gray-500">Nếu whitelist để trống, hệ thống sẽ sử dụng blacklist để loại bỏ các mã không được xem là C/O.</p>
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
@@ -1909,7 +2307,7 @@ export default function DataImporter({
             disabled={coCodeSaving || coCodeLoading || !canManageSync}
             data-tooltip="Lưu danh sách mã ưu đãi"
           >
-            {coCodeSaving ? "Dang luu..." : "Luu cau hinh"}
+            {coCodeSaving ? "Đang lưu..." : "Lưu cấu hình"}
           </button>
           <button
             type="button"
@@ -1918,7 +2316,7 @@ export default function DataImporter({
             disabled={coCodeLoading || coCodeSaving}
             data-tooltip="Khôi phục cấu hình mã ưu đãi"
           >
-            Khoi phuc
+            Khôi phục
           </button>
         </div>
         <div className="text-xs text-gray-400">{coCodeUpdatedLabel}</div>
@@ -1926,8 +2324,8 @@ export default function DataImporter({
 
       <CollapsibleCard
         id="co-discrepancy"
-        title="Doi soat C/O"
-        description="Theo doi chenh lech giua du lieu he thong va ECUS de xu ly kip thoi."
+        title="Đối soát C/O"
+        description="Theo dõi chênh lệch giữa dữ liệu hệ thống và ECUS để xử lý kịp thời."
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <input
@@ -1952,7 +2350,7 @@ export default function DataImporter({
               disabled={coDiscrepancyRunning || coDiscrepancyLoading || !canManageSync}
               data-tooltip="Chạy đối chiếu C/O với dữ liệu ECUS"
             >
-              {coDiscrepancyRunning ? "Dang chay..." : "Chay kiem tra"}
+              {coDiscrepancyRunning ? "Đang chạy..." : "Chạy kiểm tra"}
             </button>
             <button
               type="button"
@@ -1961,7 +2359,7 @@ export default function DataImporter({
               disabled={coDiscrepancyLoading}
               data-tooltip="Làm mới kết quả đối soát"
             >
-              {coDiscrepancyLoading ? "Dang tai..." : "Lam moi"}
+              {coDiscrepancyLoading ? "Đang tải..." : "Làm mới"}
             </button>
           </div>
         }
@@ -1971,19 +2369,19 @@ export default function DataImporter({
         {coDiscrepancyMessage && <div className="text-sm text-emerald-600">{coDiscrepancyMessage}</div>}
         <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
           <div className="rounded border bg-gray-50 px-3 py-2">
-            <div className="text-xs uppercase text-gray-500">Trang thai</div>
+            <div className="text-xs uppercase text-gray-500">Trạng thái</div>
             <div className="text-sm font-semibold text-gray-900">{coDiscrepancyStatusLabel}</div>
           </div>
           <div className="rounded border bg-gray-50 px-3 py-2">
-            <div className="text-xs uppercase text-gray-500">Lan chay gan nhat</div>
+            <div className="text-xs uppercase text-gray-500">Lần chạy gần nhất</div>
             <div className="text-sm font-semibold text-gray-900">{coDiscrepancyLastRunLabel}</div>
           </div>
           <div className="rounded border bg-gray-50 px-3 py-2">
-            <div className="text-xs uppercase text-gray-500">Chenh lech</div>
+            <div className="text-xs uppercase text-gray-500">Chênh lệch</div>
             <div className="text-sm font-semibold text-gray-900">{coMismatchCount.toLocaleString("vi-VN")}</div>
           </div>
           <div className="rounded border bg-gray-50 px-3 py-2">
-            <div className="text-xs uppercase text-gray-500">Tong da kiem</div>
+            <div className="text-xs uppercase text-gray-500">Tổng đã kiểm</div>
             <div className="text-sm font-semibold text-gray-900">{coCheckedCount.toLocaleString("vi-VN")}</div>
           </div>
         </div>
@@ -1991,32 +2389,32 @@ export default function DataImporter({
           <div className="space-y-2">
             <label className="flex items-center gap-2 text-sm">
               <input type="checkbox" checked={coDiscrepancyForm.enabled} onChange={(e) => setCoDiscrepancyForm((prev) => ({ ...prev, enabled: e.target.checked }))} disabled={!canManageSync} />
-              <span>Bat doi soat tu dong</span>
+              <span>Bật đối soát tự động</span>
             </label>
             <div className="grid gap-2 md:grid-cols-2">
-              <label className="text-xs font-medium text-gray-600">Cron tu dong<input className="mt-1 w-full rounded border px-2 py-1 text-sm" value={coDiscrepancyForm.cron} onChange={(e) => setCoDiscrepancyForm((prev) => ({ ...prev, cron: e.target.value }))} disabled={!canManageSync} placeholder="30 4 * * *" /></label>
-              <label className="text-xs font-medium text-gray-600">So ngay lay mau<input type="number" min={1} className="mt-1 w-full rounded border px-2 py-1 text-sm" value={coDiscrepancyForm.rangeDays} onChange={(e) => setCoDiscrepancyForm((prev) => ({ ...prev, rangeDays: e.target.value }))} disabled={!canManageSync} /></label>
-              <label className="text-xs font-medium text-gray-600">Nguong canh bao<input type="number" min={1} className="mt-1 w-full rounded border px-2 py-1 text-sm" value={coDiscrepancyForm.threshold} onChange={(e) => setCoDiscrepancyForm((prev) => ({ ...prev, threshold: e.target.value }))} disabled={!canManageSync} /></label>
-              <label className="text-xs font-medium text-gray-600">Gioi han mau<input type="number" min={0} className="mt-1 w-full rounded border px-2 py-1 text-sm" value={coDiscrepancyForm.sampleLimit} onChange={(e) => setCoDiscrepancyForm((prev) => ({ ...prev, sampleLimit: e.target.value }))} disabled={!canManageSync} /></label>
+              <label className="text-xs font-medium text-gray-600">Cron tự động<input className="mt-1 w-full rounded border px-2 py-1 text-sm" value={coDiscrepancyForm.cron} onChange={(e) => setCoDiscrepancyForm((prev) => ({ ...prev, cron: e.target.value }))} disabled={!canManageSync} placeholder="30 4 * * *" /></label>
+              <label className="text-xs font-medium text-gray-600">Số ngày lấy mẫu<input type="number" min={1} className="mt-1 w-full rounded border px-2 py-1 text-sm" value={coDiscrepancyForm.rangeDays} onChange={(e) => setCoDiscrepancyForm((prev) => ({ ...prev, rangeDays: e.target.value }))} disabled={!canManageSync} /></label>
+              <label className="text-xs font-medium text-gray-600">Ngưỡng cảnh báo<input type="number" min={1} className="mt-1 w-full rounded border px-2 py-1 text-sm" value={coDiscrepancyForm.threshold} onChange={(e) => setCoDiscrepancyForm((prev) => ({ ...prev, threshold: e.target.value }))} disabled={!canManageSync} /></label>
+              <label className="text-xs font-medium text-gray-600">Giới hạn mẫu<input type="number" min={0} className="mt-1 w-full rounded border px-2 py-1 text-sm" value={coDiscrepancyForm.sampleLimit} onChange={(e) => setCoDiscrepancyForm((prev) => ({ ...prev, sampleLimit: e.target.value }))} disabled={!canManageSync} /></label>
             </div>
             <div className="flex flex-wrap gap-2">
               <button type="button" onClick={handleSaveCoDiscrepancyConfig} className="rounded bg-emerald-600 px-3 py-1 text-xs font-medium text-white disabled:opacity-50" disabled={coDiscrepancySaving || !canManageSync}>
-                {coDiscrepancySaving ? "Dang luu..." : "Luu cau hinh"}
+                {coDiscrepancySaving ? "Đang lưu..." : "Lưu cấu hình"}
               </button>
               <button type="button" onClick={handleResetCoDiscrepancyForm} className="rounded border px-3 py-1 text-xs text-gray-600 hover:bg-gray-50" disabled={coDiscrepancySaving}>
-                Khoi phuc
+                Khôi phục
               </button>
             </div>
             <div className="text-xs text-gray-500">
-              {coDiscrepancyRangeLabel ? `Khoang lan chay gan nhat: ${coDiscrepancyRangeLabel}` : "Chua co ket qua doi soat."}
-              {coMismatchLimited ? " (Da cat bot danh sach do vuot gioi han mau)" : ""}
+              {coDiscrepancyRangeLabel ? `Khoảng lần chạy gần nhất: ${coDiscrepancyRangeLabel}` : "Chưa có kết quả đối soát."}
+              {coMismatchLimited ? " (Đã cắt bớt danh sách do vượt giới hạn mẫu)" : ""}
             </div>
           </div>
           <div className="space-y-2">
             <div className="flex items-center justify-between text-xs">
-              <span>Chenh lech goi y ({coMismatchPreview.length} / {coMismatchCount.toLocaleString("vi-VN")})</span>
+              <span>Chênh lệch gợi ý ({coMismatchPreview.length} / {coMismatchCount.toLocaleString("vi-VN")})</span>
               <button type="button" onClick={handleSelectCoMismatches} className="rounded border px-2 py-0.5 text-[11px] text-amber-700 hover:bg-amber-50" disabled={!coMismatchKeySet.size}>
-                Chon tren bang
+                Chọn trên bảng
               </button>
             </div>
             <div className="overflow-auto rounded border">
@@ -2024,25 +2422,25 @@ export default function DataImporter({
                 <table className="min-w-full text-xs">
                   <thead className="bg-amber-50 text-amber-800">
                     <tr>
-                      <th className="px-2 py-1 text-left">To khai</th>
-                      <th className="px-2 py-1 text-center">CO luu tru</th>
-                      <th className="px-2 py-1 text-center">CO ECUS</th>
-                      <th className="px-2 py-1 text-center">Dong</th>
+                      <th className="px-2 py-1 text-left">Tờ khai</th>
+                      <th className="px-2 py-1 text-center">C/O lưu trữ</th>
+                      <th className="px-2 py-1 text-center">C/O ECUS</th>
+                      <th className="px-2 py-1 text-center">Dòng</th>
                     </tr>
                   </thead>
                   <tbody>
                     {coMismatchPreview.map((item) => (
                       <tr key={item.key} className="odd:bg-white even:bg-amber-50/40">
                         <td className="px-2 py-1">{formatDeclarationLabel(item)}</td>
-                        <td className="px-2 py-1 text-center">{item.stored?.has_co ? "Co" : "Khong"} ({item.stored?.co_line_count ?? 0})</td>
-                        <td className="px-2 py-1 text-center">{item.remote?.has_co ? "Co" : "Khong"} ({item.remote?.co_line_count ?? 0})</td>
+                        <td className="px-2 py-1 text-center">{item.stored?.has_co ? "Có" : "Không"} ({item.stored?.co_line_count ?? 0})</td>
+                        <td className="px-2 py-1 text-center">{item.remote?.has_co ? "Có" : "Không"} ({item.remote?.co_line_count ?? 0})</td>
                         <td className="px-2 py-1 text-center">{item.remote?.co_codes?.length ?? 0}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               ) : (
-                <div className="py-4 text-center text-xs text-gray-500">Chua phat hien chenh lech nao.</div>
+                <div className="py-4 text-center text-xs text-gray-500">Chưa phát hiện chênh lệch nào.</div>
               )}
             </div>
           </div>
@@ -2160,12 +2558,38 @@ export default function DataImporter({
           value={query}
           onChange={e => { setQuery(e.target.value); setPage(1); }}
         />
+        <label className="flex items-center gap-1 text-sm" data-tooltip="Chọn nhanh khoảng thời gian theo preset">
+          <span>Khoảng</span>
+          <select
+            className="border rounded px-2 py-1 text-sm"
+            value={datePreset}
+            onChange={(e) => {
+              const value = e.target.value;
+              if (value === "custom") {
+                setDatePreset("custom");
+                return;
+              }
+              applyDatePreset(value);
+            }}
+          >
+            {DATE_RANGE_PRESETS.map((preset) => (
+              <option key={preset.key} value={preset.key}>
+                {preset.label}
+              </option>
+            ))}
+            <option value="custom">Tự chọn</option>
+          </select>
+        </label>
         <label className="flex items-center gap-1 text-sm" data-tooltip="Lọc từ ngày (theo ngày đăng ký tờ khai)">
           <span>Từ ngày</span>
           <input
             type="date"
             value={searchRange.from}
-            onChange={(e) => setSearchRange((prev) => ({ ...prev, from: e.target.value }))}
+            onChange={(e) => {
+              const value = e.target.value;
+              setDatePreset("custom");
+              setSearchRange((prev) => ({ ...prev, from: value }));
+            }}
             className="border rounded px-2 py-1 text-sm"
           />
         </label>
@@ -2174,7 +2598,11 @@ export default function DataImporter({
           <input
             type="date"
             value={searchRange.to}
-            onChange={(e) => setSearchRange((prev) => ({ ...prev, to: e.target.value }))}
+            onChange={(e) => {
+              const value = e.target.value;
+              setDatePreset("custom");
+              setSearchRange((prev) => ({ ...prev, to: value }));
+            }}
             className="border rounded px-2 py-1 text-sm"
           />
         </label>
@@ -2245,6 +2673,49 @@ export default function DataImporter({
           <span className="text-sm px-2 py-1 rounded bg-emerald-50 text-emerald-700">
             Đáp ứng C/O: {coFilterMatches} tờ khai
           </span>
+        )}
+        <button
+          type="button"
+          onClick={handleSaveCurrentFilter}
+          className="rounded border px-3 py-1 text-xs text-gray-600 hover:bg-gray-50"
+        >
+          Lưu bộ lọc
+        </button>
+        {hasSavedFilter && (
+          <>
+            <button
+              type="button"
+              onClick={handleRestoreSavedFilter}
+              className="rounded border px-3 py-1 text-xs text-gray-600 hover:bg-gray-50"
+            >
+              Áp dụng bộ lọc đã lưu
+            </button>
+            <button
+              type="button"
+              onClick={handleClearSavedFilter}
+              className="rounded border px-3 py-1 text-xs text-gray-600 hover:bg-gray-50"
+            >
+              Xóa bộ lọc đã lưu
+            </button>
+            {filterSavedLabel && (
+              <span className="text-xs text-gray-500">Đã lưu: {filterSavedLabel}</span>
+            )}
+          </>
+        )}
+        {canEdit && mode === "saved" && (
+          <button
+            type="button"
+            onClick={handleAutoApplyLicenseExclusion}
+            disabled={!filteredKeys.length}
+            data-tooltip="Đối chiếu tự động loại trừ giấy phép cho toàn bộ tờ khai đang lọc"
+            className={`rounded border px-3 py-1 text-xs ${
+              filteredKeys.length
+                ? "border-emerald-300 bg-emerald-50 text-emerald-700"
+                : "opacity-50 cursor-not-allowed"
+            }`}
+          >
+            Đối chiếu KPI tự động
+          </button>
         )}
         <div className="opacity-70 text-sm">
           {total} dòng — Trang {safePage}/{maxPage}

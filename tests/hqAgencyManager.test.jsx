@@ -7,6 +7,12 @@ import HQAgencyManager from '@/components/HQAgencyManager.jsx';
 import { HQ_KEY, DECL_KEY } from '@/lib/store.js';
 import { clearStorageCache, getItem as sharedGetItem, setItem as sharedSetItem } from '@/lib/storageClient.js';
 
+const historyMock = vi.hoisted(() => vi.fn().mockResolvedValue([]));
+
+vi.mock('@/lib/hqHistoryClient.js', () => ({
+  refreshHQHistoryCache: historyMock,
+}));
+
 vi.mock('xlsx', () => {
   const sheet_to_json = vi.fn(() => []);
   const read = vi.fn(() => ({
@@ -32,6 +38,8 @@ describe('HQAgencyManager', () => {
     XLSX.utils.sheet_to_json.mockReset();
     alertMock = vi.spyOn(window, 'alert').mockImplementation(() => {});
     confirmMock = vi.spyOn(window, 'confirm').mockImplementation(() => true);
+    historyMock.mockClear();
+    historyMock.mockResolvedValue([]);
   });
 
   afterEach(() => {
@@ -71,8 +79,8 @@ describe('HQAgencyManager', () => {
 
     const saved = JSON.parse(sharedGetItem(HQ_KEY) || '[]');
     expect(saved).toEqual([
-      { mst: '0201234567', company: 'Alpha Trading', agent: 'AIR' },
-      { mst: '0101234567', company: 'Beta Logistics', agent: 'FCL' },
+      { mst: '0201234567', company: 'Alpha Trading', agent: 'AIR', agents: ['AIR'] },
+      { mst: '0101234567', company: 'Beta Logistics', agent: 'FCL', agents: ['FCL'] },
     ]);
 
     expect(alertMock).toHaveBeenCalledWith('Đã lưu cấu hình Đại lý HQ.');
@@ -102,7 +110,7 @@ describe('HQAgencyManager', () => {
 
     const saved = JSON.parse(sharedGetItem(HQ_KEY) || '[]');
     expect(saved).toEqual([
-      { mst: '0101234567', company: 'Công Ty Demo', agent: '' },
+      { mst: '0101234567', company: 'Công Ty Demo', agent: '', agents: [] },
     ]);
 
     expect(alertMock).toHaveBeenCalledWith('Đã lưu cấu hình Đại lý HQ.');

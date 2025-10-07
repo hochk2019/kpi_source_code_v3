@@ -34,6 +34,13 @@ Hệ thống được triển khai cho Công ty TNHH Tiếp Vận Hoàng Kim (Go
 | Có quyền `Gán MST` | Import danh sách từ Excel hoặc nhập thủ công, chỉnh sửa/thêm/xóa dòng và lưu. Khi lưu hệ thống tự đồng bộ tên công ty & đại lý sang bảng MST và các tờ khai liên quan. |
 
 - Khi nhập MST mới, chỉ cần điền cột **Mã số thuế**, hệ thống sẽ tự đề xuất tên công ty theo dữ liệu tờ khai đã có (nếu tìm thấy). Người dùng chỉ việc chọn Đại lý HQ tương ứng và lưu lại.
+- **Nhập nhiều đại lý cho cùng một MST**:
+  1. Chuẩn bị file Excel với tối thiểu ba cột `Mã số thuế`, `Công ty` và `Đại lý HQ`. Có thể dùng dấu tiếng Việt hoặc chữ thường/hoa tùy ý, hệ thống sẽ tự chuẩn hóa.
+  2. Trong cột `Đại lý HQ`, hãy liệt kê các đại lý theo đúng thứ tự ưu tiên và ngăn cách bằng dấu phẩy, dấu chấm phẩy, dấu gạch dọc (`|`) hoặc xuống dòng. Ví dụ: `ABC Logistics, DEF Logistics`.
+  3. Khi import, hệ thống sẽ tự động tách danh sách theo các dấu phân cách nêu trên, loại bỏ khoảng trắng thừa, xóa trùng và hiển thị lại dưới dạng chuỗi chuẩn `Đại lý HQ` với dấu phẩy.
+  4. Nếu nhập thủ công trên giao diện, nhấn icon chỉnh sửa ở cột `Đại lý HQ` và nhập danh sách theo cùng định dạng. Nhấn **Enter** để lưu tạm trước khi bấm **Lưu thay đổi** toàn bảng.
+  5. Sau khi lưu, mở lịch sử (icon đồng hồ) để xác nhận hệ thống đã ghi nhận đầy đủ danh sách đại lý và người cập nhật.
+  6. Khi đồng bộ tờ khai, cả danh sách đại lý hợp lệ sẽ được dùng để gợi ý trong tab **Import Data** và ghi vào lịch sử gán MST.
 
 ### 2.3 Gán MST
 

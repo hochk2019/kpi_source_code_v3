@@ -261,8 +261,11 @@ export function mapRow(row, opts = {}) {
     ? new Set([...excludeSet, ...agencyExcludeMap.get(agencyKeyNormalized)])
     : excludeSet;
 
+  const excludedCodes = uniqueCodes.filter((code) => combinedExcludeSet.has(code));
+  const effectiveCodes = uniqueCodes.filter((code) => !combinedExcludeSet.has(code));
+
   const licenses = uniqueCodes.length
-    ? uniqueCodes.filter((code) => !combinedExcludeSet.has(code)).length
+    ? effectiveCodes.length
     : countLicenseTypesFromRowObj(row, Array.from(combinedExcludeSet));
 
   const base = {
@@ -296,6 +299,8 @@ export function mapRow(row, opts = {}) {
     licenses,
     so_luong_gp: licenses,
     licenseCodes: uniqueCodes,
+    licenseSourceCodes: uniqueCodes,
+    licenseExcludedCodes: excludedCodes,
     co_line_count,
   };
   return deriveCOStatus(row, base);

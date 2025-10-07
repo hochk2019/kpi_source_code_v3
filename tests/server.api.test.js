@@ -400,6 +400,7 @@ describe('API xác thực & bootstrap', () => {
     const payload = response.body?.data;
     expect(payload).toBeTruthy();
     expect(payload).toHaveProperty('hq_agencies_v1', '[]');
+    expect(payload).toHaveProperty('hq_history_v1', '[]');
     const accounts = JSON.parse(payload.kpi_users_v1 || '[]');
     expect(Array.isArray(accounts)).toBe(true);
     expect(accounts.length).toBeGreaterThan(0);
@@ -462,6 +463,78 @@ describe('API xác thực & bootstrap', () => {
       .put('/api/storage/kpi_users_v1')
       .send({ value: JSON.stringify([]) });
     expect(response.status).toBe(403);
+  });
+
+  it('yêu cầu đăng nhập khi truy vấn lịch sử Đại lý HQ', async () => {
+    const response = await request(app).get('/api/hq/history');
+    expect(response.status).toBe(401);
+    expect(response.body?.ok).toBe(false);
+  });
+
+  it('từ chối truy vấn lịch sử Đại lý HQ nếu tài khoản thiếu quyền mstEdit', async () => {
+    const agent = request.agent(app);
+    await agent.post('/api/auth/login').send({ username: 'nhanvien', password: '123456' });
+
+    const response = await agent.get('/api/hq/history');
+    expect(response.status).toBe(403);
+    expect(response.body?.ok).toBe(false);
+  });
+
+  it('trả về lịch sử Đại lý HQ kèm bộ lọc', async () => {
+    const agent = request.agent(app);
+    await agent.post('/api/auth/login').send({ username: 'admin', password: 'admin123' });
+
+    const historyEntries = [
+      {
+        id: 'hq-0101234567-company',
+        mst: '0101234567',
+        field: 'company',
+        from: '',
+        to: 'Công ty A',
+        actor: 'admin',
+        timestamp: new Date('2024-09-01T08:00:00Z').toISOString(),
+        type: 'create',
+      },
+      {
+        id: 'hq-0101234567-agents',
+        mst: '0101234567',
+        field: 'agents',
+        from: 'DL Cũ',
+        to: 'DL Mới',
+        actor: 'admin',
+        timestamp: new Date('2024-09-02T08:00:00Z').toISOString(),
+        type: 'update',
+      },
+      {
+        id: 'hq-0200000000-company',
+        mst: '0200000000',
+        field: 'company',
+        from: '',
+        to: 'Công ty B',
+        actor: 'tester',
+        timestamp: new Date('2024-09-03T08:00:00Z').toISOString(),
+        type: 'create',
+      },
+    ];
+
+    const putRes = await agent
+      .put('/api/storage/hq_history_v1')
+      .send({ value: JSON.stringify(historyEntries) });
+    expect(putRes.status).toBe(200);
+
+    const response = await agent
+      .get('/api/hq/history')
+      .query({ mst: '0101234567', field: 'agents', limit: 1 });
+
+    expect(response.status).toBe(200);
+    expect(response.body?.ok).toBe(true);
+    expect(response.body?.entries).toHaveLength(1);
+    expect(response.body.entries[0]).toMatchObject({
+      mst: '0101234567',
+      field: 'agents',
+      type: 'update',
+    });
+    expect(response.body.total).toBeGreaterThanOrEqual(1);
   });
 
   it('danh sách tài khoản không lộ hash mật khẩu', async () => {

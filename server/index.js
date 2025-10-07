@@ -171,6 +171,7 @@ const DEFAULT_ECUS_SYNC_CONFIG = {
     '  LTRIM(RTRIM(lp.Ma_LH)) AS loai_hinh,',
     '  LTRIM(RTRIM(lp.Ma_DN)) AS mst,',
     '  LTRIM(RTRIM(lp.TEN_DV)) AS cong_ty,',
+    '  ISNULL(ama_child.so_tk_ama, ama_parent.so_tk_goc) AS so_tk_ama,',
     '  ISNULL(items.muc_hang, 0) AS muc_hang,',
     '  ISNULL(licenses.license_count, 0) AS license_count,',
     "  ISNULL(licenses.license_codes, N'') AS license_codes,",
@@ -214,6 +215,18 @@ const DEFAULT_ECUS_SYNC_CONFIG = {
     '  ) AS codes',
     ') AS licenses',
     'OUTER APPLY (',
+    '  SELECT TOP 1 CAST(child.So_TK AS nvarchar(50)) AS so_tk_ama',
+    '  FROM dbo.DTBLP AS child',
+    '  LEFT JOIN dbo.DTOKHAIMD_VNACCS2 AS child_md2 ON child_md2._DToKhaiMDID = child._DTokhaiMDID',
+    '  WHERE child_md2.DTOKHAIMDID_Parent = lp._DTokhaiMDID',
+    '  ORDER BY child.Ngay_DK DESC, child.So_TK DESC',
+    ') AS ama_child',
+    'OUTER APPLY (',
+    '  SELECT TOP 1 CAST(parent.So_TK AS nvarchar(50)) AS so_tk_goc',
+    '  FROM dbo.DTBLP AS parent',
+    '  WHERE parent._DTokhaiMDID = md2.DTOKHAIMDID_Parent',
+    ') AS ama_parent',
+    'OUTER APPLY (',
     '  SELECT COUNT(*) AS co_count_num',
     '  FROM dbo.DHANGMDDK AS h2',
     '  WHERE h2._DToKhaiMDID = lp._DTokhaiMDID',
@@ -229,6 +242,7 @@ const DEFAULT_ECUS_SYNC_CONFIG = {
     loai_hinh: 'loai_hinh',
     mst: 'mst',
     cong_ty: 'cong_ty',
+    so_tk_ama: 'so_tk_ama',
     num_items: 'muc_hang',
     licenses: 'license_count',
     nhan_vien_import: 'nhan_vien_nhap',
@@ -536,6 +550,7 @@ const STORAGE_PERMISSION_REQUIREMENTS = Object.freeze({
   team_roster_v1: 'teamsEdit',
   kpi_rules_v2: 'rulesEdit',
   hq_agencies_v1: 'mstEdit',
+  hq_history_v1: 'mstEdit',
   decl_alert_config_v1: 'alertsManage',
   decl_alert_state_v1: 'alertsManage',
   ecus_sync_config_v1: 'syncManage',
@@ -643,6 +658,7 @@ const DEFAULT_CO_DISCREPANCY_STATE = Object.freeze({
 const DEFAULT_STORAGE = {
   decl_rows_v1: '[]',
   mst_rows_v2: '[]',
+  mst_history_v1: '[]',
   kpi_rules_v2: JSON.stringify(SHARED_DEFAULT_RULES),
   team_roster_v1: JSON.stringify({
     version: 1,
@@ -686,6 +702,7 @@ const DEFAULT_STORAGE = {
   audit_logs_v1: '[]',
   import_logs_v1: '[]',
   hq_agencies_v1: '[]',
+  hq_history_v1: '[]',
   ecus_sync_config_v1: JSON.stringify(DEFAULT_ECUS_SYNC_CONFIG),
   decl_alert_config_v1: JSON.stringify(DEFAULT_ALERT_CONFIG),
   decl_alert_state_v1: JSON.stringify(DEFAULT_ALERT_STATE),
@@ -1244,6 +1261,20 @@ function requireAdminBackupManage(req, res) {
   return { context, denied: false };
 }
 
+function requireHqHistoryAccess(req, res) {
+  const context = getSessionContext(req);
+  if (!context) {
+    res.status(401).json({ ok: false, error: 'Bạn cần đăng nhập để xem lịch sử Đại lý HQ.' });
+    return { context: null, denied: true };
+  }
+  const account = context.account || {};
+  if (!(account.permissions?.mstEdit || account.permissions?.auditView || account.permissions?.accountManage)) {
+    res.status(403).json({ ok: false, error: 'Tài khoản hiện không có quyền xem lịch sử Đại lý HQ.' });
+    return { context, denied: true };
+  }
+  return { context, denied: false };
+}
+
 function requireAuditView(req, res) {
   const context = getSessionContext(req);
   if (!context) {
@@ -1286,19 +1317,29 @@ function getValue(key) {
   return row.value;
 }
 
-function upsertValue(key, value) {
+function upsertValue(key, value, options = {}) {
+  const { skipMstHistorySync = false } = options || {};
   const normalized = normalizeValue(value);
   if (normalized === null) {
     db.prepare('DELETE FROM kv_store WHERE key = ?').run(key);
+    if (key === 'mst_history_v1' && !skipMstHistorySync) {
+      scheduleMstHistorySqlSyncFromJson('[]');
+    }
     return;
   }
   db.prepare(
     'INSERT INTO kv_store (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value'
   ).run(key, normalized);
+  if (key === 'mst_history_v1' && !skipMstHistorySync) {
+    scheduleMstHistorySqlSyncFromJson(normalized);
+  }
 }
 
 function deleteValue(key) {
   db.prepare('DELETE FROM kv_store WHERE key = ?').run(key);
+  if (key === 'mst_history_v1') {
+    scheduleMstHistorySqlSyncFromJson('[]');
+  }
 }
 
 function safeParse(json, fallback) {
@@ -1472,6 +1513,9 @@ function normalizeDeclarationRow(row) {
     cloned.so_tk_full = originalNumber;
     const suffix = normalizedNumber ? originalNumber.slice(normalizedNumber.length) : originalNumber;
     cloned.so_tk_suffix = suffix || '';
+  }
+  if (cloned.so_tk_ama !== undefined) {
+    cloned.so_tk_ama = normalizeStr(cloned.so_tk_ama);
   }
   if (!cloned.nhanh && cloned.branch) {
     cloned.nhanh = cloned.branch;
@@ -1958,6 +2002,183 @@ function mapHqAgenciesByMST() {
     }
   }
   return map;
+}
+
+const HQ_HISTORY_MAX_ENTRIES = 500;
+
+function normalizeHqHistoryEntries(entries) {
+  if (!Array.isArray(entries)) {
+    return [];
+  }
+  const normalized = [];
+  for (const entry of entries) {
+    if (!entry) continue;
+    const mst = normalizeMST(entry.mst);
+    if (!mst) continue;
+    const timestamp = new Date(entry.timestamp || entry.changed_at || entry.ts || Date.now());
+    if (Number.isNaN(timestamp.getTime())) {
+      continue;
+    }
+    const field = clampLength(normalizeStr(entry.field) || 'field', 64);
+    const type = clampLength(normalizeStr(entry.type) || 'update', 32);
+    const actor = clampLength(normalizeStr(entry.actor) || 'system', 128);
+    const fromValue = clampLength(normalizeStr(entry.from) || '', 255);
+    const toValue = clampLength(normalizeStr(entry.to) || '', 255);
+    normalized.push({
+      id: clampLength(entry.id || `hq-${mst}-${field}-${timestamp.getTime()}`, 120),
+      mst,
+      field,
+      from: fromValue,
+      to: toValue,
+      actor,
+      timestamp,
+      type,
+    });
+  }
+  normalized.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+  return normalized.slice(0, HQ_HISTORY_MAX_ENTRIES);
+}
+
+function serializeHqHistoryEntries(entries) {
+  return entries.map((entry) => ({
+    id: entry.id,
+    mst: entry.mst,
+    field: entry.field,
+    from: entry.from,
+    to: entry.to,
+    actor: entry.actor,
+    timestamp: entry.timestamp.toISOString(),
+    type: entry.type,
+  }));
+}
+
+function listHqHistoryEntries() {
+  const rawValue = getValue('hq_history_v1');
+  const parsed = safeParse(rawValue, []);
+  const normalized = normalizeHqHistoryEntries(parsed);
+  const serialized = JSON.stringify(serializeHqHistoryEntries(normalized));
+  if (serialized !== rawValue) {
+    upsertValue('hq_history_v1', serialized);
+  }
+  return normalized;
+}
+
+function parseHistoryParamList(value, normalizer) {
+  if (Array.isArray(value)) {
+    return parseHistoryParamList(value[0], normalizer);
+  }
+  const str = normalizeStr(value);
+  if (!str) return [];
+  const parts = str
+    .split(/[,;|\s]+/g)
+    .map((part) => (typeof normalizer === 'function' ? normalizer(part) : part))
+    .filter(Boolean);
+  return Array.from(new Set(parts));
+}
+
+function parseHistoryLowerBound(value) {
+  if (Array.isArray(value)) {
+    return parseHistoryLowerBound(value[0]);
+  }
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+  return date;
+}
+
+function parseHistoryUpperBound(value) {
+  if (Array.isArray(value)) {
+    return parseHistoryUpperBound(value[0]);
+  }
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+  if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value.trim())) {
+    date.setHours(23, 59, 59, 999);
+  }
+  return date;
+}
+
+function formatHqHistoryEntry(entry) {
+  return {
+    id: entry.id,
+    mst: entry.mst,
+    field: entry.field,
+    from: entry.from,
+    to: entry.to,
+    actor: entry.actor,
+    timestamp: entry.timestamp.toISOString(),
+    type: entry.type,
+  };
+}
+
+function queryHqHistoryEntries(params = {}) {
+  const entries = listHqHistoryEntries();
+  let filtered = entries.slice();
+
+  const mstList = parseHistoryParamList(params.mst, normalizeMST);
+  if (mstList.length > 0) {
+    const mstSet = new Set(mstList);
+    filtered = filtered.filter((entry) => mstSet.has(entry.mst));
+  }
+
+  const typeList = parseHistoryParamList(params.type, (value) => normalizeStr(value).toLowerCase());
+  if (typeList.length > 0) {
+    const typeSet = new Set(typeList);
+    filtered = filtered.filter((entry) => typeSet.has(entry.type.toLowerCase()));
+  }
+
+  const fieldList = parseHistoryParamList(params.field, (value) => normalizeStr(value).toLowerCase());
+  if (fieldList.length > 0) {
+    const fieldSet = new Set(fieldList);
+    filtered = filtered.filter((entry) => fieldSet.has(entry.field.toLowerCase()));
+  }
+
+  const actorFilter = normalizeStr(Array.isArray(params.actor) ? params.actor[0] : params.actor).toLowerCase();
+  if (actorFilter) {
+    filtered = filtered.filter((entry) => entry.actor.toLowerCase() === actorFilter);
+  }
+
+  const search = normalizeStr(Array.isArray(params.q) ? params.q[0] : params.q).toLowerCase();
+  if (search) {
+    filtered = filtered.filter((entry) => {
+      return (
+        entry.mst.includes(search) ||
+        entry.field.toLowerCase().includes(search) ||
+        entry.actor.toLowerCase().includes(search) ||
+        (entry.from && entry.from.toLowerCase().includes(search)) ||
+        (entry.to && entry.to.toLowerCase().includes(search))
+      );
+    });
+  }
+
+  const fromDate = parseHistoryLowerBound(params.from);
+  if (fromDate) {
+    const fromTs = fromDate.getTime();
+    filtered = filtered.filter((entry) => entry.timestamp.getTime() >= fromTs);
+  }
+
+  const toDate = parseHistoryUpperBound(params.to);
+  if (toDate) {
+    const toTs = toDate.getTime();
+    filtered = filtered.filter((entry) => entry.timestamp.getTime() <= toTs);
+  }
+
+  filtered.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+
+  const limitRaw = Number.parseInt(Array.isArray(params.limit) ? params.limit[0] : params.limit, 10);
+  const limit = Number.isFinite(limitRaw) && limitRaw > 0 ? Math.min(limitRaw, HQ_HISTORY_MAX_ENTRIES) : 100;
+  const entriesForClient = filtered.slice(0, limit).map((entry) => formatHqHistoryEntry(entry));
+
+  return {
+    total: filtered.length,
+    limit,
+    entries: entriesForClient,
+  };
 }
 
 function normalizeCodeList(value) {
@@ -2822,6 +3043,306 @@ function registerSqlPoolShutdown(manager) {
 const sqlPoolManager = createSqlPoolManager();
 registerSqlPoolShutdown(sqlPoolManager);
 
+const DEFAULT_MST_HISTORY_TABLE_NAME =
+  (process.env.KPI_MST_HISTORY_TABLE || 'dbo.KPI_MST_HISTORY').trim() || 'dbo.KPI_MST_HISTORY';
+const MST_HISTORY_MAX_ENTRIES = 500;
+
+function parseSqlTableName(input) {
+  const trimmed = `${input ?? ''}`.trim();
+  if (!trimmed) {
+    return null;
+  }
+  const rawParts = trimmed.split('.').map((part) => part.trim()).filter(Boolean);
+  if (!rawParts.length || rawParts.length > 2) {
+    return null;
+  }
+  const normalizedParts = rawParts
+    .map((part) => part.replace(/[^a-zA-Z0-9_]/g, ''))
+    .filter(Boolean);
+  if (!normalizedParts.length || normalizedParts.length > 2) {
+    return null;
+  }
+  if (normalizedParts.length === 1) {
+    normalizedParts.unshift('dbo');
+  }
+  const objectId = normalizedParts.join('.');
+  const quoted = normalizedParts.map((part) => `[${part}]`).join('.');
+  const indexName = normalizedParts.join('_');
+  return { objectId, quoted, indexName };
+}
+
+const MST_HISTORY_TABLE = parseSqlTableName(DEFAULT_MST_HISTORY_TABLE_NAME);
+let mstHistoryEnsurePromise = null;
+let mstHistorySyncPromise = null;
+
+function clampLength(value, max) {
+  if (!value) return '';
+  const str = `${value}`;
+  return str.length > max ? str.slice(0, max) : str;
+}
+
+function resolveEffectiveFrom(entry) {
+  if (!entry) return '';
+  const direct = entry.effective_from || entry.effectiveFrom;
+  const normalizedDirect = toISODate(direct || '');
+  if (normalizedDirect) {
+    return normalizedDirect;
+  }
+  const rowKey = `${entry.rowKey || ''}`;
+  const parts = rowKey.split('__');
+  if (parts.length >= 2) {
+    const iso = toISODate(parts[1]);
+    if (iso) {
+      return iso;
+    }
+  }
+  return '';
+}
+
+function normalizeMstHistoryEntries(entries) {
+  if (!Array.isArray(entries)) {
+    return [];
+  }
+  const normalized = [];
+  for (const entry of entries) {
+    if (!entry) continue;
+    const mst = normalizeMST(entry.mst);
+    if (!mst) continue;
+    const timestamp = new Date(entry.timestamp || Date.now());
+    if (Number.isNaN(timestamp.getTime())) {
+      timestamp.setTime(Date.now());
+    }
+    const field = normalizeStr(entry.field) || 'field';
+    const rowKey = normalizeStr(entry.rowKey) || `${mst}__${resolveEffectiveFrom(entry)}`;
+    const actor = normalizeStr(entry.actor) || 'system';
+    const type = normalizeStr(entry.type) || 'update';
+    const effectiveFrom = resolveEffectiveFrom(entry);
+    const normalizedEntry = {
+      id: clampLength(entry.id || `mst-${mst}-${field}-${timestamp.getTime()}`, 120),
+      mst,
+      field: clampLength(field, 64),
+      from: clampLength(normalizeStr(entry.from), 255),
+      to: clampLength(normalizeStr(entry.to), 255),
+      actor: clampLength(actor, 128),
+      timestamp,
+      rowKey: clampLength(rowKey, 128),
+      effectiveFrom: clampLength(effectiveFrom, 32),
+      type: clampLength(type, 32),
+    };
+    normalized.push(normalizedEntry);
+  }
+  normalized.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+  return normalized.slice(0, MST_HISTORY_MAX_ENTRIES);
+}
+
+function resolveMstHistorySqlConfig() {
+  if (!MST_HISTORY_TABLE) {
+    return null;
+  }
+  const config = getEcusConfig();
+  const connectionConfig = buildSqlConnectionConfig(config);
+  if (!connectionConfig.server || !connectionConfig.database) {
+    return null;
+  }
+  return { connectionConfig, table: MST_HISTORY_TABLE };
+}
+
+async function ensureMstHistoryTable(pool, tableMeta) {
+  if (!pool || !tableMeta) {
+    return false;
+  }
+  if (mstHistoryEnsurePromise) {
+    return mstHistoryEnsurePromise;
+  }
+  mstHistoryEnsurePromise = (async () => {
+    try {
+      const request = pool.request();
+      const createSql = `
+        IF OBJECT_ID('${tableMeta.objectId}', 'U') IS NULL
+        BEGIN
+          CREATE TABLE ${tableMeta.quoted} (
+            id NVARCHAR(128) NOT NULL PRIMARY KEY,
+            mst NVARCHAR(32) NOT NULL,
+            field NVARCHAR(64) NOT NULL,
+            from_value NVARCHAR(255) NULL,
+            to_value NVARCHAR(255) NULL,
+            actor NVARCHAR(128) NULL,
+            changed_at DATETIME NOT NULL,
+            row_key NVARCHAR(128) NULL,
+            effective_from NVARCHAR(32) NULL,
+            change_type NVARCHAR(32) NOT NULL
+          );
+          CREATE INDEX IX_${tableMeta.indexName}_mst_changed_at ON ${tableMeta.quoted}(mst, changed_at);
+        END
+      `;
+      await request.query(createSql);
+      return true;
+    } catch (err) {
+      console.error('Không thể đảm bảo bảng lịch sử Gán MST tồn tại', err);
+      recordSqlTimeout(err);
+      return false;
+    } finally {
+      mstHistoryEnsurePromise = null;
+    }
+  })();
+  return mstHistoryEnsurePromise;
+}
+
+async function syncMstHistoryToSql(entries) {
+  const config = resolveMstHistorySqlConfig();
+  if (!config) {
+    return;
+  }
+  try {
+    const pool = await sqlPoolManager.getPool(config.connectionConfig);
+    const ready = await ensureMstHistoryTable(pool, config.table);
+    if (!ready) {
+      return;
+    }
+    const normalizedEntries = normalizeMstHistoryEntries(entries);
+    const transaction = new sql.Transaction(pool);
+    await transaction.begin();
+    try {
+      const cleanupRequest = new sql.Request(transaction);
+      await cleanupRequest.query(`DELETE FROM ${config.table.quoted};`);
+      if (normalizedEntries.length) {
+        const insert = new sql.PreparedStatement(transaction);
+        insert.input('id', sql.NVarChar(128));
+        insert.input('mst', sql.NVarChar(32));
+        insert.input('field', sql.NVarChar(64));
+        insert.input('from', sql.NVarChar(255));
+        insert.input('to', sql.NVarChar(255));
+        insert.input('actor', sql.NVarChar(128));
+        insert.input('changed_at', sql.DateTime);
+        insert.input('row_key', sql.NVarChar(128));
+        insert.input('effective_from', sql.NVarChar(32));
+        insert.input('change_type', sql.NVarChar(32));
+        await insert.prepare(
+          `INSERT INTO ${config.table.quoted} (id, mst, field, from_value, to_value, actor, changed_at, row_key, effective_from, change_type)
+           VALUES (@id, @mst, @field, @from, @to, @actor, @changed_at, @row_key, @effective_from, @change_type)`
+        );
+        try {
+          for (const entry of normalizedEntries) {
+            await insert.execute({
+              id: entry.id,
+              mst: entry.mst,
+              field: entry.field,
+              from: entry.from,
+              to: entry.to,
+              actor: entry.actor,
+              changed_at: entry.timestamp,
+              row_key: entry.rowKey,
+              effective_from: entry.effectiveFrom,
+              change_type: entry.type,
+            });
+          }
+        } finally {
+          await insert.unprepare().catch(() => {});
+        }
+      }
+      await transaction.commit();
+    } catch (err) {
+      await transaction.rollback().catch(() => {});
+      throw err;
+    }
+  } catch (err) {
+    if (isSqlTimeoutError(err)) {
+      recordSqlTimeout(err);
+    }
+    console.error('Không thể đồng bộ lịch sử Gán MST lên SQL Server', err);
+  }
+}
+
+async function fetchMstHistoryFromSql() {
+  const config = resolveMstHistorySqlConfig();
+  if (!config) {
+    return [];
+  }
+  try {
+    const pool = await sqlPoolManager.getPool(config.connectionConfig);
+    const ready = await ensureMstHistoryTable(pool, config.table);
+    if (!ready) {
+      return [];
+    }
+    const request = pool.request();
+    request.input('limit', sql.Int, MST_HISTORY_MAX_ENTRIES);
+    const result = await request.query(
+      `SELECT TOP (@limit)
+         id,
+         mst,
+         field,
+         from_value,
+         to_value,
+         actor,
+         changed_at,
+         row_key,
+         effective_from,
+         change_type
+       FROM ${config.table.quoted}
+       ORDER BY changed_at DESC, id DESC;`
+    );
+    const rows = Array.isArray(result?.recordset) ? result.recordset : [];
+    return rows
+      .map((row) => {
+        const mst = normalizeMST(row?.mst);
+        if (!mst) return null;
+        const timestamp = row?.changed_at instanceof Date ? row.changed_at : new Date(row?.changed_at);
+        if (Number.isNaN(timestamp?.getTime?.())) {
+          return null;
+        }
+        return {
+          id: clampLength(row?.id, 120),
+          mst,
+          field: clampLength(normalizeStr(row?.field), 64),
+          from: clampLength(normalizeStr(row?.from_value), 255),
+          to: clampLength(normalizeStr(row?.to_value), 255),
+          actor: clampLength(normalizeStr(row?.actor), 128),
+          timestamp: timestamp.toISOString(),
+          rowKey: clampLength(normalizeStr(row?.row_key) || `${mst}__${toISODate(row?.effective_from || '')}`, 128),
+          type: clampLength(normalizeStr(row?.change_type), 32) || 'update',
+        };
+      })
+      .filter(Boolean);
+  } catch (err) {
+    if (isSqlTimeoutError(err)) {
+      recordSqlTimeout(err);
+    }
+    console.error('Không thể tải lịch sử Gán MST từ SQL Server', err);
+    return [];
+  }
+}
+
+async function maybeSyncMstHistoryFromSql() {
+  const entries = await fetchMstHistoryFromSql();
+  if (!entries.length) {
+    return;
+  }
+  const normalized = JSON.stringify(entries);
+  const current = getValue('mst_history_v1');
+  if (current !== normalized) {
+    upsertValue('mst_history_v1', normalized, { skipMstHistorySync: true });
+  }
+}
+
+function scheduleMstHistorySqlSyncFromJson(jsonValue) {
+  const entries = safeParse(jsonValue, []);
+  if (!Array.isArray(entries)) {
+    return;
+  }
+  const queue = mstHistorySyncPromise
+    ? mstHistorySyncPromise.catch(() => {}).then(() => syncMstHistoryToSql(entries))
+    : syncMstHistoryToSql(entries);
+  mstHistorySyncPromise = queue
+    .catch((err) => {
+      console.error('Đồng bộ lịch sử Gán MST lên SQL Server thất bại', err);
+    })
+    .finally(() => {
+      if (mstHistorySyncPromise === queue) {
+        mstHistorySyncPromise = null;
+      }
+    });
+}
+
 function extractNormalizedLicenseCodes(rawValue) {
   if (rawValue === null || rawValue === undefined) return [];
   const normalized = new Set();
@@ -2938,6 +3459,15 @@ const COLUMN_ALIASES = Object.freeze({
     'Số tờ khai',
     'So to khai',
     'Số tờ khai TM',
+  ],
+  so_tk_ama: [
+    'so_tk_ama',
+    'So_tk_ama',
+    'soTkAma',
+    'SoTkAma',
+    'SOTK_AMA',
+    'Số TK AMA',
+    'So TK AMA',
   ],
   date: [
     'ngay_dang_ky',
@@ -3122,6 +3652,7 @@ function mapEcusRow(record, config, context) {
   if (!soTk || !dateISO) return null;
 
   const mst = normalizeMST(getField('mst'));
+  const soTkAma = normalizeStr(getField('so_tk_ama'));
   let company = normalizeStr(getField('cong_ty'));
   const loaiHinh = normalizeStr(getField('loai_hinh'));
   const numItemsRaw = getField('num_items');
@@ -3238,6 +3769,7 @@ function mapEcusRow(record, config, context) {
     so_tk: soTk,
     so_tk_full: soTkRaw,
     so_tk_suffix: soTkRaw.slice(soTk.length),
+    so_tk_ama: soTkAma,
     nhanh,
     mst,
     cong_ty: company,
@@ -3992,9 +4524,28 @@ app.get('/api/health', (req, res) => {
   res.json({ ok: true });
 });
 
-app.get('/api/bootstrap', (req, res) => {
+app.get('/api/bootstrap', async (req, res) => {
+  try {
+    await maybeSyncMstHistoryFromSql();
+  } catch (err) {
+    console.warn('Không thể đồng bộ lịch sử Gán MST khi bootstrap', err);
+  }
   const store = buildBootstrapSnapshot();
   res.json({ data: store });
+});
+
+app.get('/api/hq/history', (req, res) => {
+  const { denied } = requireHqHistoryAccess(req, res);
+  if (denied) {
+    return;
+  }
+  try {
+    const result = queryHqHistoryEntries(req.query || {});
+    res.json({ ok: true, ...result });
+  } catch (err) {
+    console.error('Không thể tải lịch sử Đại lý HQ', err);
+    res.status(500).json({ ok: false, error: 'Không thể tải lịch sử Đại lý HQ' });
+  }
 });
 
 app.get('/api/admin/backups/summary', (req, res) => {
