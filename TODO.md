@@ -21,7 +21,7 @@
 
 ### Tab "Đại Lý HQ"
 - [x] Lưu lịch sử thêm/sửa/xóa đại lý vào hệ thống log, cung cấp API truy vấn lịch sử để client hiển thị.
-- [ ] Viết tài liệu hướng dẫn nhập nhiều đại lý, giải thích chuẩn format phân tách bằng dấu phẩy.
+- [x] Viết tài liệu hướng dẫn nhập nhiều đại lý, giải thích chuẩn format phân tách bằng dấu phẩy.
 
 ### Khu vực "Quản Lý Tổ Đội"
 - [ ] Thêm tooltip/nút ẩn hiện lịch sử thay đổi team và mã số thuế.
