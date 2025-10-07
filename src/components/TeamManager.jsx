@@ -9,9 +9,26 @@ import {
   normalizeStr,
   applyTeamRosterToMST,
   mapMemberNamesToTeams,
+  getMSTHistoryEntries,
+  getAuditLogs,
 } from "@/lib/store.js";
 
 const COMPANY_PAGE_SIZE = 20;
+const MST_HISTORY_FIELD_LABELS = {
+  person_import: "Người phụ trách Nhập",
+  person_export: "Người phụ trách Xuất",
+  effective_from: "Áp dụng từ ngày",
+};
+
+const formatHistoryTimestamp = (value) => {
+  if (!value) return "";
+  try {
+    return new Date(value).toLocaleString("vi-VN", { hour12: false });
+  } catch (error) {
+    console.warn("formatHistoryTimestamp", error);
+    return value;
+  }
+};
 
 function makeMemberId(teamId) {
   const random = Math.random().toString(36).slice(2, 8);
@@ -35,6 +52,14 @@ function TeamManager({ canEdit = true, currentUser = null }) {
   const [memberNameDraft, setMemberNameDraft] = useState("");
   const [dirty, setDirty] = useState(false);
   const [companyPage, setCompanyPage] = useState(1);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [historyTab, setHistoryTab] = useState("team");
+  const [teamHistory, setTeamHistory] = useState(() =>
+    getAuditLogs(100).filter((entry) => entry?.action?.startsWith("team"))
+  );
+  const [mstHistory, setMstHistory] = useState(() =>
+    getMSTHistoryEntries(100)
+  );
 
   const actor = currentUser?.username || "guest";
   const isReadOnly = !canEdit;
@@ -84,6 +109,19 @@ function TeamManager({ canEdit = true, currentUser = null }) {
     () => mapMemberNamesToTeams(roster),
     [roster]
   );
+
+  const refreshHistory = useCallback(() => {
+    setTeamHistory(
+      getAuditLogs(100).filter((entry) => entry?.action?.startsWith("team"))
+    );
+    setMstHistory(getMSTHistoryEntries(100));
+  }, []);
+
+  useEffect(() => {
+    if (historyOpen) {
+      refreshHistory();
+    }
+  }, [historyOpen, refreshHistory]);
 
   const resolveTeamForRow = useCallback(
     (row) => {
@@ -279,12 +317,14 @@ function TeamManager({ canEdit = true, currentUser = null }) {
   const handleRefreshMST = () => {
     setMstRows(getMSTMap());
     setCompanyPage(1);
+    refreshHistory();
   };
 
   const handleReloadRoster = () => {
     const fresh = getTeamRoster();
     setRoster(fresh);
     setDirty(false);
+    refreshHistory();
   };
 
   const handleAddMember = (event) => {
@@ -453,6 +493,7 @@ function TeamManager({ canEdit = true, currentUser = null }) {
         setMstRows(rows);
       }
       setDirty(false);
+      refreshHistory();
       alert(
         changed
           ? "Đã lưu tổ đội và đồng bộ dữ liệu MST thành công."
@@ -499,6 +540,21 @@ function TeamManager({ canEdit = true, currentUser = null }) {
         >
           Tải lại dữ liệu MST
         </button>
+        <button
+          type="button"
+          onClick={() => setHistoryOpen((prev) => !prev)}
+          className={`px-3 py-1 rounded border transition-colors ${
+            historyOpen ? "bg-blue-600 text-white" : "bg-white hover:bg-gray-50"
+          }`}
+          title={
+            historyOpen
+              ? "Ẩn bảng lịch sử thay đổi tổ đội và gán MST"
+              : "Xem lịch sử thay đổi tổ đội, team và trường MST liên quan"
+          }
+          data-tooltip="Xem/ẩn lịch sử thay đổi team và MST"
+        >
+          {historyOpen ? "Ẩn lịch sử" : "Lịch sử cập nhật"}
+        </button>
         {dirty && !isReadOnly && (
           <span className="text-sm text-amber-600">
             Có thay đổi chưa lưu
@@ -525,6 +581,109 @@ function TeamManager({ canEdit = true, currentUser = null }) {
         Quản lý danh sách tổ đội để đồng bộ với dữ liệu gán MST và báo cáo KPI.
         Chọn một team để xem thành viên, doanh nghiệp phụ trách và điều chỉnh.
       </p>
+
+      {historyOpen && (
+        <div className="border rounded-lg bg-white shadow-sm p-4 space-y-3">
+          <div className="flex flex-wrap items-center gap-2 text-sm">
+            <span className="font-semibold text-gray-700">
+              Lịch sử thay đổi
+            </span>
+            <button
+              type="button"
+              onClick={() => setHistoryTab("team")}
+              className={`px-3 py-1 rounded border text-xs ${
+                historyTab === "team"
+                  ? "bg-blue-600 text-white border-blue-600"
+                  : "bg-white hover:bg-gray-50"
+              }`}
+              title="Các lần lưu chỉnh sửa tổ đội"
+              data-tooltip="Hiển thị lịch sử lưu tổ đội"
+            >
+              Tổ đội
+            </button>
+            <button
+              type="button"
+              onClick={() => setHistoryTab("mst")}
+              className={`px-3 py-1 rounded border text-xs ${
+                historyTab === "mst"
+                  ? "bg-blue-600 text-white border-blue-600"
+                  : "bg-white hover:bg-gray-50"
+              }`}
+              title="Các lần chỉnh sửa trường MST (người phụ trách, hiệu lực)"
+              data-tooltip="Hiển thị lịch sử chỉnh sửa MST"
+            >
+              MST
+            </button>
+            <button
+              type="button"
+              onClick={refreshHistory}
+              className="ml-auto px-3 py-1 rounded border text-xs bg-white hover:bg-gray-50"
+              title="Làm mới lịch sử từ bộ nhớ"
+              data-tooltip="Tải lại lịch sử"
+            >
+              Làm mới
+            </button>
+          </div>
+          <div className="max-h-64 overflow-y-auto text-sm text-gray-700 pr-1">
+            {historyTab === "team" ? (
+              teamHistory.length ? (
+                <ul className="space-y-2">
+                  {teamHistory.map((entry, idx) => (
+                    <li
+                      key={`${entry.ts || "team"}-${idx}`}
+                      className="border rounded px-3 py-2 bg-gray-50"
+                    >
+                      <div className="font-medium text-gray-800">
+                        {formatHistoryTimestamp(entry.ts)} — {entry.actor || "Hệ thống"}
+                      </div>
+                      <div className="text-xs text-gray-600">
+                        {entry.detail || "Cập nhật tổ đội"}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="italic text-gray-500">
+                  Chưa ghi nhận lịch sử lưu tổ đội.
+                </p>
+              )
+            ) : mstHistory.length ? (
+              <ul className="space-y-2">
+                {mstHistory.map((entry) => (
+                  <li key={entry.id} className="border rounded px-3 py-2 bg-gray-50">
+                    <div className="font-medium text-gray-800">
+                      {formatHistoryTimestamp(entry.timestamp)} — {entry.actor || "Hệ thống"}
+                    </div>
+                    <div className="text-xs text-gray-600">
+                      MST: <span className="font-semibold">{entry.mst}</span> · Trường: {MST_HISTORY_FIELD_LABELS[entry.field] || entry.field}
+                    </div>
+                    <div className="text-xs text-gray-600">
+                      <span className="text-gray-500">Từ:</span>{" "}
+                      {entry.from ? (
+                        <span>{entry.from}</span>
+                      ) : (
+                        <span className="italic text-gray-400">(trống)</span>
+                      )}
+                    </div>
+                    <div className="text-xs text-gray-600">
+                      <span className="text-gray-500">Đến:</span>{" "}
+                      {entry.to ? (
+                        <span>{entry.to}</span>
+                      ) : (
+                        <span className="italic text-gray-400">(trống)</span>
+                      )}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="italic text-gray-500">
+                Chưa ghi nhận lịch sử thay đổi trường MST.
+              </p>
+            )}
+          </div>
+        </div>
+      )}
 
       <div className="flex flex-wrap gap-2">
         {roster.teams.map((team) => {
