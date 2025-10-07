@@ -10,6 +10,7 @@
 1. **Tầng dữ liệu trung tâm**
    - SQLite làm nguồn dữ liệu chính, chia sẻ qua backend Express (đã tương thích Windows 11).
    - Sử dụng module `storageClient` ở chế độ remote-only, vô hiệu hóa cache cục bộ khi backend khả dụng.
+   - Backend duy trì bảng phân quyền `[dbo].[KPI_USER_ROLES]` trên SQL Server (tùy biến qua `KPI_ACCOUNT_SYNC_TABLE`) để không làm mất quyền hiện hữu khi khởi tạo lại dữ liệu.
 2. **Tầng API bảo mật**
    - Route `/api/auth/*` xử lý phiên đăng nhập, lưu token trong SQLite (bảng `auth_sessions`).
    - Thêm middleware kiểm tra quyền theo ma trận (xem mục 3) trước các thao tác nhạy cảm (`/api/rules/*`, `/api/import/*`, `/api/hq/*`).

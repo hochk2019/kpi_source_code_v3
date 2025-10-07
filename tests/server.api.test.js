@@ -11,6 +11,7 @@ process.env.VITEST = 'true';
 process.env.KPI_DB_FILE = ':memory:';
 process.env.KPI_DISABLE_CRON = '1';
 process.env.KPI_SKIP_LISTEN = '1';
+process.env.ECUS_SQL_SERVER = 'MOCK-SERVER';
 
 const mockState = {
   result: [],
@@ -392,6 +393,7 @@ let app;
 let resetDb;
 let getDb;
 let stopServer;
+let waitAccountSync;
 
 beforeAll(async () => {
   const serverModule = await import('../server/index.js');
@@ -399,6 +401,7 @@ beforeAll(async () => {
   resetDb = serverModule.resetDatabaseForTests;
   getDb = serverModule.getDatabaseHandle;
   stopServer = serverModule.stopServer;
+  waitAccountSync = serverModule.waitForAccountSqlSyncIdle;
 });
 
 describe('API xác thực & bootstrap', () => {
@@ -441,6 +444,47 @@ describe('API xác thực & bootstrap', () => {
       expect(account).not.toHaveProperty('password');
       expect(account).not.toHaveProperty('passwordHash');
     }
+  });
+
+  it('ưu tiên dữ liệu tài khoản từ SQL Server khi đồng bộ bootstrap', async () => {
+    const updatedAt = new Date('2024-05-15T08:00:00Z');
+    sqlMock.__setMockResult([
+      {
+        username: 'admin',
+        password_hash: '$2a$AdminSql',
+        role: 'manager',
+        name: 'Quản trị SQL',
+        permissions: JSON.stringify({
+          importEdit: false,
+          mstEdit: true,
+          reportsExport: true,
+          accountManage: false,
+        }),
+        updated_at: updatedAt,
+      },
+    ]);
+
+    const response = await request(app).get('/api/bootstrap');
+    expect(response.status).toBe(200);
+    const payload = response.body?.data;
+    expect(payload).toBeTruthy();
+    const accounts = JSON.parse(payload?.kpi_users_v1 || '[]');
+    const admin = accounts.find((account) => account.username === 'admin');
+    expect(admin).toBeTruthy();
+    expect(admin?.role).toBe('manager');
+    expect(admin?.name).toBe('Quản trị SQL');
+    expect(admin?.permissions?.mstEdit).toBe(true);
+    expect(admin?.permissions?.importEdit).toBe(false);
+
+    const row = getDb()
+      .prepare('SELECT value FROM kv_store WHERE key = ?')
+      .get('kpi_users_v1');
+    expect(row?.value).toBeTruthy();
+    const storedAccounts = JSON.parse(row.value);
+    const storedAdmin = storedAccounts.find((account) => account.username === 'admin');
+    expect(storedAdmin?.role).toBe('manager');
+    expect(storedAdmin?.passwordHash).toBe('$2a$AdminSql');
+    expect(storedAdmin?.updatedAt).toBe('2024-05-15T08:00:00.000Z');
   });
 
   it('cho phép đăng nhập bằng tài khoản mặc định', async () => {
@@ -602,11 +646,44 @@ describe('API xác thực & bootstrap', () => {
   });
 });
 
+describe('Đồng bộ tài khoản với SQL Server', () => {
+  beforeEach(() => {
+    resetDb();
+    sqlMock.__resetMock();
+  });
+
+  it('đẩy thay đổi tài khoản lên SQL Server khi tạo mới', async () => {
+    const admin = request.agent(app);
+    const loginRes = await admin.post('/api/auth/login').send({ username: 'admin', password: 'admin123' });
+    expect(loginRes.status).toBe(200);
+
+    const state = sqlMock.__getState();
+    state.lastQuery = null;
+    state.requests.length = 0;
+
+    const createRes = await admin.post('/api/auth/accounts').send({
+      username: 'sync.user',
+      password: 'Abcdef1',
+      role: 'staff',
+    });
+    expect(createRes.status).toBe(201);
+
+    await waitAccountSync?.();
+
+    const finalState = sqlMock.__getState();
+    expect(finalState.lastQuery).toContain('INSERT INTO [dbo].[KPI_USER_ROLES]');
+    expect(finalState.lastQuery).toContain("sync.user");
+  });
+});
+
 afterAll(() => {
   stopServer?.();
 });
 
-beforeEach(() => {
+beforeEach(async () => {
+  if (typeof waitAccountSync === 'function') {
+    await waitAccountSync();
+  }
   resetDb();
   sqlMock.__resetMock();
   resetSqlMonitor();
@@ -1358,6 +1435,10 @@ describe('ECUS sync API', () => {
           },
         },
       });
+
+    const stateBefore = sqlMock.__getState();
+    stateBefore.lastQuery = null;
+    stateBefore.requests.length = 0;
 
     sqlMock.__setMockResult([{ ok: 1 }]);
 

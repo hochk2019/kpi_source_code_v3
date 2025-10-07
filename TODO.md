@@ -43,7 +43,7 @@
 
 ### Tab "Tài Khoản"
 - [x] Tự động tạo tài khoản cho nhân viên (Học, Phương, Tuấn – quyền trưởng nhóm) và quản lý (Hoàng Kim Hòa, Thúy Hà, Hoài Nam) với phân quyền tương ứng.
-- [ ] Xây dựng quy trình sync quyền với SQL Server để đảm bảo khởi tạo tài khoản không ảnh hưởng dữ liệu hiện hữu.
+- [x] Xây dựng quy trình sync quyền với SQL Server để đảm bảo khởi tạo tài khoản không ảnh hưởng dữ liệu hiện hữu.
 
 ### Cải tiến chung
 - [ ] Hiển thị tooltip mô tả ngắn khi hover vào mọi nút thao tác trong toàn hệ thống.

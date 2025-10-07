@@ -184,6 +184,13 @@ Sau khi hoàn tất các bước trên, thông báo cảnh báo sẽ tự biến
 Bạn có thể tạo thêm tài khoản và phân quyền trong tab **Tài khoản** của giao
 diện. Mọi thao tác chỉnh sửa đều ghi lại trong tab **Nhật ký**.
 
+### Đồng bộ quyền tài khoản với SQL Server
+
+- Backend tự động lấy và đẩy dữ liệu bảng `[dbo].[KPI_USER_ROLES]` (có thể đổi tên qua biến môi trường `KPI_ACCOUNT_SYNC_TABLE`) nhằm tránh ghi đè quyền đã cấu hình trên hệ thống kế thừa.
+- Khi thao tác với tài khoản, trường `updatedAt` sẽ được cập nhật và xuất hiện trong bản ghi SQLite để so sánh với cột `updated_at` trên SQL Server, bảo đảm bản ghi mới nhất luôn được ưu tiên.
+- Trước khi kích hoạt đồng bộ, hãy cấu hình `ECUS_SQL_SERVER` bằng tên máy chủ thật. Nếu để nguyên giá trị mặc định `Server`, ứng dụng sẽ bỏ qua việc kết nối để tránh phát sinh lỗi khi môi trường chưa sẵn sàng.
+- Bảng đồng bộ yêu cầu tối thiểu các cột `username`, `password_hash`, `role`, `name`, `permissions` (chuỗi JSON) và `updated_at` kiểu `DATETIME`.
+
 ## 6. Kiểm thử
 
 ```bash

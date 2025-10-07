@@ -497,6 +497,8 @@ function shouldUseSecureCookies(req) {
   return req?.secure || normalizedProto === 'https';
 }
 
+const DEFAULT_ACCOUNT_SEED_UPDATED_AT = '2024-01-01T00:00:00.000Z';
+
 const DEFAULT_ACCOUNT_SEED = [
   {
     username: 'admin',
@@ -576,6 +578,17 @@ function normalizePermissionsForRole(permissions, role = DEFAULT_ROLE) {
   return mergePermissions(role, permissions);
 }
 
+function normalizeAccountUpdatedAt(value) {
+  if (!value) {
+    return DEFAULT_ACCOUNT_SEED_UPDATED_AT;
+  }
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return DEFAULT_ACCOUNT_SEED_UPDATED_AT;
+  }
+  return date.toISOString();
+}
+
 function buildDefaultAccounts() {
   return DEFAULT_ACCOUNT_SEED.map((entry) => {
     const role = normalizeRoleKey(entry.role);
@@ -585,6 +598,7 @@ function buildDefaultAccounts() {
       role,
       name: entry.name,
       permissions: normalizePermissionsForRole(entry.permissions, role),
+      updatedAt: DEFAULT_ACCOUNT_SEED_UPDATED_AT,
     };
   });
 }
@@ -1400,10 +1414,31 @@ function sanitizeAccountRecord(record) {
   };
 }
 
-function persistAccountRecords(records) {
-  const normalized = Array.isArray(records) ? records.filter(Boolean) : [];
+function normalizeAccountRecordForStorage(record) {
+  if (!record) return null;
+  const role = normalizeRoleKey(record.role);
+  return {
+    username: (record.username ?? '').toString().trim(),
+    passwordHash: (record.passwordHash ?? '').toString(),
+    role,
+    name: (record.name ?? record.username ?? '').toString().trim(),
+    permissions: normalizePermissionsForRole(record.permissions, role),
+    updatedAt: normalizeAccountUpdatedAt(record.updatedAt),
+  };
+}
+
+function persistAccountRecords(records, options = {}) {
+  const { skipSqlSync = false } = options || {};
+  const normalized = Array.isArray(records)
+    ? records
+        .map((entry) => normalizeAccountRecordForStorage(entry))
+        .filter((entry) => entry && entry.username && entry.passwordHash)
+    : [];
   sortAccountRecords(normalized);
   setJSONValue('kpi_users_v1', normalized);
+  if (!skipSqlSync) {
+    scheduleAccountSqlSync(normalized.map((entry) => ({ ...entry }))); // clone to tránh mutate ngoài ý muốn
+  }
   return normalized;
 }
 
@@ -1437,8 +1472,9 @@ function loadAccountRecords() {
         continue;
       }
       const permissions = normalizePermissionsForRole(entry?.permissions, role);
+      const updatedAt = normalizeAccountUpdatedAt(entry?.updatedAt || entry?.updated_at);
       seen.add(key);
-      records.push({ username, passwordHash, role, name, permissions });
+      records.push({ username, passwordHash, role, name, permissions, updatedAt });
     }
   }
 
@@ -1503,6 +1539,7 @@ export function resetDatabaseForTests() {
     }
   });
   insertMany(Object.entries(DEFAULT_STORAGE));
+  resetAccountSyncState();
 }
 
 function normalizeStr(input) {
@@ -1671,7 +1708,8 @@ function createAccountRecord(payload, { actor = 'system' } = {}) {
   const name = (payload?.name ?? username).toString().trim();
   const permissions = normalizePermissionsForRole(payload?.permissions, role);
   const passwordHash = bcrypt.hashSync(password, PASSWORD_SALT_ROUNDS);
-  accounts.push({ username, passwordHash, role, name, permissions });
+  const updatedAt = new Date().toISOString();
+  accounts.push({ username, passwordHash, role, name, permissions, updatedAt });
   persistAccountRecords(accounts);
   pushAuditLog({ actor, action: 'account.create', detail: `Tạo tài khoản ${username} (${role})` });
   return sanitizeAccountRecord(accounts.find((record) => record.username === username));
@@ -1695,7 +1733,7 @@ function updateAccountRecord(usernameInput, patch, { actor = 'system' } = {}) {
   }
   const name = (patch?.name ?? current.name ?? current.username).toString().trim();
   const permissions = normalizePermissionsForRole(patch?.permissions ?? current.permissions, nextRole);
-  accounts[index] = { ...current, role: nextRole, name, permissions };
+  accounts[index] = { ...current, role: nextRole, name, permissions, updatedAt: new Date().toISOString() };
   persistAccountRecords(accounts);
   pushAuditLog({ actor, action: 'account.update', detail: `Cập nhật tài khoản ${username}` });
   return sanitizeAccountRecord(accounts[index]);
@@ -1716,7 +1754,7 @@ function setAccountPasswordRecord(usernameInput, newPasswordInput, { actor = 'sy
     throw new Error('Không tìm thấy tài khoản');
   }
   const passwordHash = bcrypt.hashSync(newPassword, PASSWORD_SALT_ROUNDS);
-  accounts[index] = { ...accounts[index], passwordHash };
+  accounts[index] = { ...accounts[index], passwordHash, updatedAt: new Date().toISOString() };
   persistAccountRecords(accounts);
   deleteSessionsForUser(username);
   pushAuditLog({ actor, action: 'account.reset_password', detail: `Đặt lại mật khẩu cho ${username}` });
@@ -1765,7 +1803,7 @@ async function changeOwnPasswordRecord(usernameInput, currentPasswordInput, newP
     throw new Error('Mật khẩu hiện tại không đúng');
   }
   const passwordHash = bcrypt.hashSync(newPassword, PASSWORD_SALT_ROUNDS);
-  accounts[index] = { ...current, passwordHash };
+  accounts[index] = { ...current, passwordHash, updatedAt: new Date().toISOString() };
   persistAccountRecords(accounts);
   pushAuditLog({ actor: username, action: 'account.change_password', detail: 'Đổi mật khẩu cá nhân' });
   return sanitizeAccountRecord(accounts[index]);
@@ -3111,6 +3149,15 @@ const MST_HISTORY_TABLE = parseSqlTableName(DEFAULT_MST_HISTORY_TABLE_NAME);
 let mstHistoryEnsurePromise = null;
 let mstHistorySyncPromise = null;
 
+const DEFAULT_ACCOUNT_SYNC_TABLE_NAME =
+  (process.env.KPI_ACCOUNT_SYNC_TABLE || 'dbo.KPI_USER_ROLES').trim() || 'dbo.KPI_USER_ROLES';
+const ACCOUNT_SYNC_TABLE = parseSqlTableName(DEFAULT_ACCOUNT_SYNC_TABLE_NAME);
+let accountTableEnsurePromise = null;
+let accountSyncPromise = null;
+let accountPullPromise = null;
+let lastAccountPullAt = 0;
+const ACCOUNT_SYNC_MIN_INTERVAL_MS = 5000;
+
 function clampLength(value, max) {
   if (!value) return '';
   const str = `${value}`;
@@ -3377,6 +3424,277 @@ function scheduleMstHistorySqlSyncFromJson(jsonValue) {
         mstHistorySyncPromise = null;
       }
     });
+}
+
+function resolveAccountSqlConfig() {
+  if (!ACCOUNT_SYNC_TABLE) {
+    return null;
+  }
+  const config = getEcusConfig();
+  const connectionConfig = buildSqlConnectionConfig(config);
+  let serverName = String(connectionConfig.server || '').trim();
+  if (!serverName || /^server$/i.test(serverName)) {
+    const envServer = String(process.env.ECUS_SQL_SERVER || '').trim();
+    if (!envServer || /^server$/i.test(envServer)) {
+      return null;
+    }
+    connectionConfig.server = envServer;
+    serverName = envServer;
+  }
+  if (!connectionConfig.database) {
+    return null;
+  }
+  return { connectionConfig, table: ACCOUNT_SYNC_TABLE };
+}
+
+async function ensureAccountSyncTable(pool, tableMeta) {
+  if (!pool || !tableMeta) {
+    return false;
+  }
+  if (accountTableEnsurePromise) {
+    return accountTableEnsurePromise;
+  }
+  accountTableEnsurePromise = (async () => {
+    try {
+      const request = pool.request();
+      const createSql = `
+        IF OBJECT_ID('${tableMeta.objectId}', 'U') IS NULL
+        BEGIN
+          CREATE TABLE ${tableMeta.quoted} (
+            username NVARCHAR(128) NOT NULL PRIMARY KEY,
+            password_hash NVARCHAR(255) NOT NULL,
+            role NVARCHAR(32) NOT NULL,
+            name NVARCHAR(255) NULL,
+            permissions NVARCHAR(MAX) NOT NULL,
+            updated_at DATETIME NOT NULL
+          );
+        END
+      `;
+      await request.query(createSql);
+      return true;
+    } catch (err) {
+      if (isSqlTimeoutError(err)) {
+        recordSqlTimeout({ message: err?.message, context: { feature: 'account-sync', action: 'ensure-table' } });
+      }
+      console.error('Không thể đảm bảo bảng phân quyền tài khoản tồn tại', err);
+      return false;
+    } finally {
+      accountTableEnsurePromise = null;
+    }
+  })();
+  return accountTableEnsurePromise;
+}
+
+function escapeSqlLiteral(value, { nvarchar = false } = {}) {
+  if (value === null || value === undefined) {
+    return nvarchar ? "N''" : "''";
+  }
+  const text = `${value}`.replace(/'/g, "''");
+  return nvarchar ? `N'${text}'` : `'${text}'`;
+}
+
+function serializeAccountRecordForSql(record) {
+  if (!record) {
+    return null;
+  }
+  const normalized = normalizeAccountRecordForStorage(record);
+  if (!normalized) {
+    return null;
+  }
+  return {
+    username: normalized.username,
+    passwordHash: normalized.passwordHash,
+    role: normalized.role,
+    name: normalized.name,
+    permissions: normalized.permissions,
+    permissionsJson: JSON.stringify(normalized.permissions || {}),
+    updatedAt: normalized.updatedAt,
+  };
+}
+
+function normalizeSqlAccountRow(row) {
+  if (!row) return null;
+  const username = normalizeStr(row.username);
+  if (!username) {
+    return null;
+  }
+  const passwordHash = (row.password_hash ?? row.passwordHash ?? '').toString().trim();
+  if (!passwordHash) {
+    return null;
+  }
+  const role = normalizeRoleKey(row.role);
+  const name = normalizeStr(row.name) || username;
+  const permissionsSource = row.permissions;
+  let parsedPermissions = null;
+  if (typeof permissionsSource === 'string' && permissionsSource.trim()) {
+    try {
+      parsedPermissions = JSON.parse(permissionsSource);
+    } catch {
+      parsedPermissions = null;
+    }
+  } else if (permissionsSource && typeof permissionsSource === 'object') {
+    parsedPermissions = permissionsSource;
+  }
+  const permissions = normalizePermissionsForRole(parsedPermissions, role);
+  const updatedAtRaw = row.updated_at || row.updatedAt;
+  const updatedAt = normalizeAccountUpdatedAt(updatedAtRaw);
+  return { username, passwordHash, role, name, permissions, updatedAt };
+}
+
+async function syncAccountsToSql(records) {
+  const config = resolveAccountSqlConfig();
+  if (!config) {
+    return;
+  }
+  try {
+    const pool = await sqlPoolManager.getPool(config.connectionConfig);
+    const ready = await ensureAccountSyncTable(pool, config.table);
+    if (!ready) {
+      return;
+    }
+    const serialized = Array.isArray(records)
+      ? records.map((record) => serializeAccountRecordForSql(record)).filter(Boolean)
+      : [];
+    const statements = serialized.map((record) => {
+      const username = escapeSqlLiteral(record.username, { nvarchar: true });
+      const passwordHash = escapeSqlLiteral(record.passwordHash, { nvarchar: true });
+      const role = escapeSqlLiteral(record.role, { nvarchar: true });
+      const name = escapeSqlLiteral(record.name || record.username, { nvarchar: true });
+      const permissions = escapeSqlLiteral(record.permissionsJson || '{}', { nvarchar: true });
+      const updatedAt = `CONVERT(DATETIME, ${escapeSqlLiteral(record.updatedAt, { nvarchar: true })}, 126)`;
+      return `INSERT INTO ${config.table.quoted} (username, password_hash, role, name, permissions, updated_at)
+VALUES (${username}, ${passwordHash}, ${role}, ${name}, ${permissions}, ${updatedAt});`;
+    });
+    const batch = [
+      'BEGIN TRY',
+      'BEGIN TRANSACTION;',
+      `DELETE FROM ${config.table.quoted};`,
+      ...statements,
+      'COMMIT TRANSACTION;',
+      'END TRY',
+      'BEGIN CATCH',
+      '  IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION;',
+      '  THROW;',
+      'END CATCH;',
+    ].join('\n');
+    await pool.request().query(batch);
+  } catch (err) {
+    if (isSqlTimeoutError(err)) {
+      recordSqlTimeout({ message: err?.message, context: { feature: 'account-sync', action: 'push' } });
+    }
+    console.error('Không thể đồng bộ tài khoản lên SQL Server', err);
+  }
+}
+
+function scheduleAccountSqlSync(records) {
+  if (!Array.isArray(records)) {
+    return;
+  }
+  const payload = records.map((record) => ({ ...record }));
+  const queue = accountSyncPromise
+    ? accountSyncPromise.catch(() => {}).then(() => syncAccountsToSql(payload))
+    : syncAccountsToSql(payload);
+  accountSyncPromise = queue
+    .catch(() => {})
+    .finally(() => {
+      if (accountSyncPromise === queue) {
+        accountSyncPromise = null;
+      }
+    });
+}
+
+async function maybeSyncAccountsFromSql({ force = false } = {}) {
+  const config = resolveAccountSqlConfig();
+  if (!config) {
+    return false;
+  }
+  const now = Date.now();
+  if (!force) {
+    if (accountPullPromise) {
+      return accountPullPromise;
+    }
+    if (lastAccountPullAt && now - lastAccountPullAt < ACCOUNT_SYNC_MIN_INTERVAL_MS) {
+      return false;
+    }
+  }
+  if (accountPullPromise) {
+    return accountPullPromise;
+  }
+  accountPullPromise = (async () => {
+    try {
+      const pool = await sqlPoolManager.getPool(config.connectionConfig);
+      const ready = await ensureAccountSyncTable(pool, config.table);
+      if (!ready) {
+        return false;
+      }
+      const result = await pool
+        .request()
+        .query(`SELECT username, password_hash, role, name, permissions, updated_at FROM ${config.table.quoted};`);
+      const rows = Array.isArray(result?.recordset) ? result.recordset : [];
+      const sqlRecords = rows.map((row) => normalizeSqlAccountRow(row)).filter(Boolean);
+      if (!sqlRecords.length) {
+        return false;
+      }
+      const currentRecords = loadAccountRecords();
+      const currentMap = new Map();
+      for (const record of currentRecords) {
+        currentMap.set(record.username.toLowerCase(), normalizeAccountRecordForStorage(record));
+      }
+      let changed = false;
+      for (const sqlRecord of sqlRecords) {
+        const key = sqlRecord.username.toLowerCase();
+        const existing = currentMap.get(key);
+        if (!existing) {
+          currentMap.set(key, sqlRecord);
+          changed = true;
+          continue;
+        }
+        const existingTime = Date.parse(existing.updatedAt) || 0;
+        const sqlTime = Date.parse(sqlRecord.updatedAt) || 0;
+        if (sqlTime >= existingTime) {
+          const diff =
+            existing.passwordHash !== sqlRecord.passwordHash ||
+            existing.role !== sqlRecord.role ||
+            existing.name !== sqlRecord.name ||
+            JSON.stringify(existing.permissions) !== JSON.stringify(sqlRecord.permissions) ||
+            sqlTime > existingTime;
+          if (diff) {
+            currentMap.set(key, sqlRecord);
+            changed = true;
+          }
+        }
+      }
+      const merged = Array.from(currentMap.values());
+      sortAccountRecords(merged);
+      const serializedMerged = JSON.stringify(merged);
+      const serializedCurrent = JSON.stringify(
+        currentRecords.map((record) => normalizeAccountRecordForStorage(record)).sort((a, b) =>
+          a.username.localeCompare(b.username, 'vi', { sensitivity: 'base' })
+        )
+      );
+      if (changed || serializedMerged !== serializedCurrent) {
+        persistAccountRecords(merged, { skipSqlSync: true });
+      }
+      return changed;
+    } catch (err) {
+      if (isSqlTimeoutError(err)) {
+        recordSqlTimeout({ message: err?.message, context: { feature: 'account-sync', action: 'pull' } });
+      }
+      console.error('Không thể tải tài khoản từ SQL Server', err);
+      return false;
+    } finally {
+      lastAccountPullAt = Date.now();
+      accountPullPromise = null;
+    }
+  })();
+  return accountPullPromise;
+}
+
+function resetAccountSyncState() {
+  accountSyncPromise = null;
+  accountPullPromise = null;
+  accountTableEnsurePromise = null;
+  lastAccountPullAt = 0;
 }
 
 function extractNormalizedLicenseCodes(rawValue) {
@@ -4566,6 +4884,11 @@ app.get('/api/bootstrap', async (req, res) => {
   } catch (err) {
     console.warn('Không thể đồng bộ lịch sử Gán MST khi bootstrap', err);
   }
+  try {
+    await maybeSyncAccountsFromSql();
+  } catch (err) {
+    console.warn('Không thể đồng bộ tài khoản từ SQL Server khi bootstrap', err);
+  }
   const store = buildBootstrapSnapshot();
   res.json({ data: store });
 });
@@ -4707,6 +5030,7 @@ app.post('/api/auth/login', async (req, res) => {
       res.status(400).json({ ok: false, error: 'Thiếu thông tin đăng nhập' });
       return;
     }
+    await maybeSyncAccountsFromSql();
     const accounts = loadAccountRecords();
     const account = accounts.find(
       (record) => record.username.toLowerCase() === usernameInput.toLowerCase()
@@ -4764,16 +5088,18 @@ app.post('/api/auth/logout', (req, res) => {
   }
 });
 
-app.get('/api/auth/accounts', (req, res) => {
+app.get('/api/auth/accounts', async (req, res) => {
   try {
+    await maybeSyncAccountsFromSql();
     res.json({ ok: true, accounts: listAccountsForClient() });
   } catch (err) {
     res.status(500).json({ ok: false, error: err?.message || 'Không thể tải danh sách tài khoản' });
   }
 });
 
-app.post('/api/auth/accounts', (req, res) => {
+app.post('/api/auth/accounts', async (req, res) => {
   try {
+    await maybeSyncAccountsFromSql();
     const actor = resolveActor(req);
     const account = createAccountRecord(req.body, { actor });
     res.status(201).json({ ok: true, account, accounts: listAccountsForClient() });
@@ -4782,8 +5108,9 @@ app.post('/api/auth/accounts', (req, res) => {
   }
 });
 
-app.patch('/api/auth/accounts/:username', (req, res) => {
+app.patch('/api/auth/accounts/:username', async (req, res) => {
   try {
+    await maybeSyncAccountsFromSql();
     const actor = resolveActor(req);
     const account = updateAccountRecord(req.params.username, req.body, { actor });
     res.json({ ok: true, account, accounts: listAccountsForClient() });
@@ -4793,8 +5120,9 @@ app.patch('/api/auth/accounts/:username', (req, res) => {
   }
 });
 
-app.post('/api/auth/accounts/:username/password', (req, res) => {
+app.post('/api/auth/accounts/:username/password', async (req, res) => {
   try {
+    await maybeSyncAccountsFromSql();
     const actor = resolveActor(req);
     setAccountPasswordRecord(req.params.username, req.body?.password, { actor });
     res.json({ ok: true, accounts: listAccountsForClient() });
@@ -4804,8 +5132,9 @@ app.post('/api/auth/accounts/:username/password', (req, res) => {
   }
 });
 
-app.delete('/api/auth/accounts/:username', (req, res) => {
+app.delete('/api/auth/accounts/:username', async (req, res) => {
   try {
+    await maybeSyncAccountsFromSql();
     const actor = resolveActor(req);
     const accounts = deleteAccountRecord(req.params.username, { actor });
     res.json({ ok: true, accounts });
@@ -4818,6 +5147,7 @@ app.delete('/api/auth/accounts/:username', (req, res) => {
 app.post('/api/auth/password/change', async (req, res) => {
   try {
     const { username, currentPassword, newPassword } = req.body || {};
+    await maybeSyncAccountsFromSql();
     const account = await changeOwnPasswordRecord(username, currentPassword, newPassword);
     deleteSessionsForUser(account?.username || username);
     const { token, expiresAt } = createSessionForUser(account?.username || username);
@@ -5106,6 +5436,17 @@ export function getDatabaseHandle() {
 
 export function getDatabaseInitState() {
   return { ...databaseInitState };
+}
+
+export async function waitForAccountSqlSyncIdle() {
+  if (!accountSyncPromise) {
+    return;
+  }
+  try {
+    await accountSyncPromise;
+  } catch {
+    // Bỏ qua lỗi để không làm gián đoạn luồng kiểm thử
+  }
 }
 
 if (process.env.KPI_SKIP_LISTEN !== '1') {
