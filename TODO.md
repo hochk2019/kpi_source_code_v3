@@ -24,7 +24,7 @@
 - [x] Viết tài liệu hướng dẫn nhập nhiều đại lý, giải thích chuẩn format phân tách bằng dấu phẩy.
 
 ### Khu vực "Quản Lý Tổ Đội"
-- [ ] Thêm tooltip/nút ẩn hiện lịch sử thay đổi team và mã số thuế.
+- [x] Thêm tooltip/nút ẩn hiện lịch sử thay đổi team và mã số thuế.
 - [ ] Đề xuất & xây dựng tính năng phân bổ KPI theo chỉ tiêu tháng/quý cho từng tổ đội (bao gồm biểu đồ tiến độ).
 
 ### "Quy tắc KPI"
