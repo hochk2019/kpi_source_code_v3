@@ -969,6 +969,118 @@ export function upsertHQAgencies(rows, { actor = "system", detail = "" } = {}) {
   return finalRows.length;
 }
 
+
+export function applyAgenciesToDeclRows(rows, agencyMapParam = null) {
+  const list = Array.isArray(rows) ? rows : [];
+  const agencyMap = agencyMapParam instanceof Map ? agencyMapParam : mapHQAgenciesByMST();
+  if (!agencyMap || agencyMap.size === 0) return list;
+
+  return list.map((row) => {
+    const mst = normalizeMST(row?.mst);
+    if (!mst) return row;
+
+    const info = agencyMap.get(mst);
+    if (!info) return row;
+
+    const desiredCompany = normalizeStr(info?.company ?? '');
+    const desiredAgents = Array.isArray(info?.agents)
+      ? info.agents.map((value) => normalizeStr(value)).filter(Boolean)
+      : parseAgencyList(info?.agent);
+    const desiredAgent = desiredAgents.length > 0 ? formatAgencyList(desiredAgents) : '';
+
+    let next = row;
+    const ensureClone = () => {
+      if (next === row) {
+        next = { ...row };
+      }
+    };
+
+    if (desiredCompany) {
+      const currentCompany = normalizeStr(row?.cong_ty ?? row?.customer ?? '');
+      if (currentCompany !== desiredCompany) {
+        ensureClone();
+        next.cong_ty = desiredCompany;
+        next.customer = desiredCompany;
+      }
+    }
+
+    if (desiredAgent) {
+      const currentAgent = normalizeStr(
+        row?.agency ??
+          row?.dai_ly ??
+          row?.dai_ly_hq ??
+          row?.['Đại lý HQ'] ??
+          row?.['Dai ly HQ'] ??
+          ''
+      );
+      if (currentAgent !== desiredAgent) {
+        ensureClone();
+        next.agency = desiredAgent;
+        next.dai_ly = desiredAgent;
+        next.dai_ly_hq = desiredAgent;
+        next['Đại lý HQ'] = desiredAgent;
+        next['Dai ly HQ'] = desiredAgent;
+      }
+    }
+
+    if (desiredAgents.length > 0) {
+      ensureClone();
+      next.agents = desiredAgents;
+    }
+
+    return next;
+  });
+}
+
+function persistAndAnnotateDeclRows(rows) {
+  const normalized = writeDeclRows(rows);
+  const annotated = applyAgenciesToDeclRows(normalized);
+  const changed =
+    annotated.length !== normalized.length ||
+    annotated.some((row, idx) => row !== normalized[idx]);
+
+  if (changed) {
+    setItem(DECL_KEY, JSON.stringify(annotated));
+    return annotated;
+  }
+
+  return normalized;
+}
+
+/**
+ * Lưu tờ khai vào kho dùng chung.
+ * - overwrite=true: ghi đè toàn bộ danh sách hiện tại.
+ * - overwrite=false: hợp nhất theo khoá "so_tk + '_' + (nhanh || '')".
+ */
+export function saveDeclRows(newRows, { overwrite = false, actor = "system", detail = "" } = {}) {
+  const incoming = Array.isArray(newRows) ? newRows : [];
+  const normalizedIncoming = normalizeDeclRows(incoming);
+
+  if (overwrite) {
+    const stored = persistAndAnnotateDeclRows(normalizedIncoming);
+    pushAuditLog({
+      actor,
+      action: "decl.overwrite",
+      detail: detail || `Ghi đè ${stored.length} tờ khai`,
+    });
+    return stored.length;
+  }
+
+  const current = getDeclRowsRaw();
+  const combined = Array.isArray(current)
+    ? current.concat(normalizedIncoming)
+    : normalizedIncoming;
+  const stored = persistAndAnnotateDeclRows(combined);
+
+  pushAuditLog({
+    actor,
+    action: "decl.merge",
+    detail: detail || `Hợp nhất ${normalizedIncoming.length} tờ khai (tổng ${stored.length})`,
+  });
+
+  return stored.length;
+}
+
 function diffHQAgencyRows(prevRows, nextRows, actor) {
   const prevMap = new Map();
   for (const row of Array.isArray(prevRows) ? prevRows : []) {
