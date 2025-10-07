@@ -6,6 +6,7 @@ import { getItem, setItem } from './storageClient.js';
 // ===== Keys trong kho chia sáº» =====
 export const DECL_KEY  = "decl_rows_v1";      // dá»¯ liá»‡u tá» khai
 export const MST_KEY   = "mst_rows_v2";       // gÃ¡n MST -> nhÃ¢n viÃªn/team/effective_from
+export const MST_HISTORY_KEY = "mst_history_v1"; // lịch sử chỉnh sửa trường quan trọng của MST
 export const RULES_KEY = "kpi_rules_v2";      // quy táº¯c KPI
 export const TEAM_KEY  = "team_roster_v1";    // danh sÃ¡ch tá»• Ä‘á»™i & thÃ nh viÃªn
 export const AUDIT_KEY = "audit_logs_v1";     // nháº­t kÃ½ hÃ nh Ä‘á»™ng quáº£n trá»‹
@@ -252,6 +253,8 @@ export function getMSTMap() {
 
 /** Ghi Ä‘Ã¨/bá»• sung báº£ng gÃ¡n MST (Ä‘Ã£ chuáº©n hoÃ¡ dá»¯ liá»‡u Ä‘áº§u vÃ o) */
 export function upsertMSTRows(rows, { actor = "system", detail = "" } = {}) {
+  const previous = getMSTMap();
+
   const sanitized = Array.isArray(rows)
     ? rows.map(sanitizeMSTRow).filter(Boolean)
     : [];
@@ -260,13 +263,180 @@ export function upsertMSTRows(rows, { actor = "system", detail = "" } = {}) {
     if (byMST !== 0) return byMST;
     return (a.effective_from || "").localeCompare(b.effective_from || "");
   });
+  const changes = diffMSTRows(previous, sanitized, actor);
   setItem(MST_KEY, JSON.stringify(sanitized));
+  if (changes.length) {
+    appendMSTHistoryEntries(changes);
+  }
   pushAuditLog({
     actor,
     action: "mst.save",
     detail: detail || `Cáº­p nháº­t ${sanitized.length} dÃ²ng gÃ¡n MST`,
   });
   return sanitized.length;
+}
+
+function diffMSTRows(prevRows, nextRows, actor) {
+  const prevMap = new Map();
+  for (const row of Array.isArray(prevRows) ? prevRows : []) {
+    prevMap.set(makeMSTRowKey(row), row);
+  }
+
+  const nextMap = new Map();
+  for (const row of Array.isArray(nextRows) ? nextRows : []) {
+    nextMap.set(makeMSTRowKey(row), row);
+  }
+
+  const timestamp = new Date().toISOString();
+  const actorName = normalizeStr(actor) || "system";
+  const trackedFields = ["person_import", "person_export", "effective_from"];
+  const entries = [];
+
+  for (const [key, row] of nextMap) {
+    const prev = prevMap.get(key);
+    if (!prev) {
+      for (const field of trackedFields) {
+        const value = normalizeStr(row?.[field]);
+        if (value) {
+          entries.push(
+            createMSTHistoryEntry({
+              mst: row.mst,
+              field,
+              from: "",
+              to: value,
+              actor: actorName,
+              timestamp,
+              rowKey: key,
+              type: "create",
+            })
+          );
+        }
+      }
+      continue;
+    }
+
+    for (const field of trackedFields) {
+      const prevValue = normalizeStr(prev?.[field]);
+      const nextValue = normalizeStr(row?.[field]);
+      if (prevValue === nextValue) continue;
+      entries.push(
+        createMSTHistoryEntry({
+          mst: row.mst,
+          field,
+          from: prevValue,
+          to: nextValue,
+          actor: actorName,
+          timestamp,
+          rowKey: key,
+          type: "update",
+        })
+      );
+    }
+  }
+
+  for (const [key, row] of prevMap) {
+    if (nextMap.has(key)) continue;
+    for (const field of trackedFields) {
+      const prevValue = normalizeStr(row?.[field]);
+      if (!prevValue) continue;
+      entries.push(
+        createMSTHistoryEntry({
+          mst: row.mst,
+          field,
+          from: prevValue,
+          to: "",
+          actor: actorName,
+          timestamp,
+          rowKey: key,
+          type: "delete",
+        })
+      );
+    }
+  }
+
+  return entries;
+}
+
+function makeMSTRowKey(row) {
+  if (!row) return "";
+  const mst = normalizeMST(row.mst);
+  const effective = toISODate(row?.effective_from) || "";
+  return `${mst || ""}__${effective}`;
+}
+
+function createMSTHistoryEntry({ mst, field, from, to, actor, timestamp, rowKey, type }) {
+  return {
+    id: `mst-${rowKey || mst}-${field}-${Date.now()}-${Math.random()
+      .toString(36)
+      .slice(2, 8)}`,
+    mst: normalizeMST(mst),
+    field,
+    from: normalizeStr(from),
+    to: normalizeStr(to),
+    actor: actor || "system",
+    timestamp,
+    rowKey: rowKey || makeMSTRowKey({ mst, effective_from: "" }),
+    type: type || "update",
+  };
+}
+
+const MST_HISTORY_LIMIT = 500;
+
+function appendMSTHistoryEntries(entries) {
+  if (!entries?.length) return;
+  const existing = getMSTHistoryEntries();
+  const merged = [...entries, ...existing]
+    .filter(Boolean)
+    .sort((a, b) => {
+      const timeA = new Date(a?.timestamp || 0).getTime();
+      const timeB = new Date(b?.timestamp || 0).getTime();
+      return timeB - timeA;
+    })
+    .slice(0, MST_HISTORY_LIMIT);
+  setItem(MST_HISTORY_KEY, JSON.stringify(merged));
+}
+
+export function getMSTHistoryEntries(limit = MST_HISTORY_LIMIT) {
+  const raw = safeParse(getItem(MST_HISTORY_KEY), []);
+  const entries = Array.isArray(raw) ? raw : [];
+  const normalized = entries
+    .map((entry) => {
+      if (!entry || !entry.mst) return null;
+      const timestamp = entry.timestamp || new Date().toISOString();
+      return {
+        id: entry.id || `mst-${entry.mst}-${entry.field || "field"}-${timestamp}`,
+        mst: normalizeMST(entry.mst),
+        field: entry.field || "",
+        from: normalizeStr(entry.from),
+        to: normalizeStr(entry.to),
+        actor: normalizeStr(entry.actor) || "system",
+        timestamp,
+        rowKey: entry.rowKey || makeMSTRowKey({ mst: entry.mst, effective_from: entry.effective_from || "" }),
+        type: entry.type || "update",
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => {
+      const timeA = new Date(a.timestamp || 0).getTime();
+      const timeB = new Date(b.timestamp || 0).getTime();
+      return timeB - timeA;
+    });
+
+  if (!Number.isFinite(limit) || limit <= 0) {
+    return normalized;
+  }
+  return normalized.slice(0, limit);
+}
+
+export function getMSTHistoryFor(mst, limit = 20) {
+  const normalizedMST = normalizeMST(mst);
+  if (!normalizedMST) return [];
+  const entries = getMSTHistoryEntries();
+  const filtered = entries.filter((entry) => entry.mst === normalizedMST);
+  if (!Number.isFinite(limit) || limit <= 0) {
+    return filtered;
+  }
+  return filtered.slice(0, limit);
 }
 
 /** Láº¥y ngÆ°á»i phá»¥ trÃ¡ch theo MST & ngÃ y hiá»‡u lá»±c gáº§n nháº¥t (<= ngÃ y tá» khai) */

@@ -1,6 +1,6 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as XLSX from "xlsx";
-import { getMSTMap, upsertMSTRows } from "@/lib/store.js";
+import { getMSTHistoryEntries, getMSTMap, upsertMSTRows } from "@/lib/store.js";
 
 /** Utils */
 const normalize = (s = "") =>
@@ -96,6 +96,96 @@ const tidyMST = (v) => {
 
 const pageSize = 50;
 
+const HISTORY_FIELD_LABELS = {
+  person_import: "Người phụ trách Nhập",
+  person_export: "Người phụ trách Xuất",
+  effective_from: "Áp dụng từ ngày",
+};
+
+const sortMSTRows = (list = []) => {
+  return [...list]
+    .filter(Boolean)
+    .sort((a, b) => {
+      const mstA = (a?.mst || "").toString();
+      const mstB = (b?.mst || "").toString();
+      const byMST = mstA.localeCompare(mstB);
+      if (byMST !== 0) return byMST;
+      const dateA = a?.effective_from || "";
+      const dateB = b?.effective_from || "";
+      return dateA.localeCompare(dateB);
+    });
+};
+
+const makeRowKey = (row) => {
+  if (!row) return "";
+  return `${row.mst || ""}__${row.effective_from || ""}`;
+};
+
+const buildHistoryIndex = (entries = []) => {
+  const map = new Map();
+  for (const entry of entries) {
+    if (!entry || !entry.rowKey || !entry.field) continue;
+    if (!map.has(entry.rowKey)) {
+      map.set(entry.rowKey, {});
+    }
+    const fieldBuckets = map.get(entry.rowKey);
+    if (!fieldBuckets[entry.field]) {
+      fieldBuckets[entry.field] = [];
+    }
+    fieldBuckets[entry.field].push(entry);
+  }
+  return map;
+};
+
+const formatHistoryTime = (value) => {
+  if (!value) return "";
+  try {
+    return new Date(value).toLocaleString("vi-VN", { hour12: false });
+  } catch (err) {
+    console.warn("formatHistoryTime error", err);
+    return value;
+  }
+};
+
+const HistoryDetails = ({ entries = [], label }) => {
+  if (!entries.length) return null;
+  const renderValue = (value) =>
+    value ? (
+      <span>{value}</span>
+    ) : (
+      <span className="italic text-gray-500">(trống)</span>
+    );
+
+  return (
+    <details className="mt-1 text-xs text-gray-600">
+      <summary className="cursor-pointer text-blue-600 hover:text-blue-800">
+        Lịch sử {label || ""}
+      </summary>
+      <ul className="mt-1 space-y-2 max-h-40 overflow-auto pr-1">
+        {entries.map((entry) => (
+          <li key={entry.id} className="border-t pt-1 first:border-t-0 first:pt-0">
+            <div className="font-medium text-gray-700">
+              {formatHistoryTime(entry.timestamp)} — {entry.actor || "Hệ thống"}
+              {entry.type === "create" && (
+                <span className="ml-2 text-emerald-600">(Thêm mới)</span>
+              )}
+              {entry.type === "delete" && (
+                <span className="ml-2 text-red-600">(Đã xoá)</span>
+              )}
+            </div>
+            <div className="text-gray-600">
+              <span className="text-gray-500">Từ:</span> {renderValue(entry.from)}
+            </div>
+            <div className="text-gray-600">
+              <span className="text-gray-500">Đến:</span> {renderValue(entry.to)}
+            </div>
+          </li>
+        ))}
+      </ul>
+    </details>
+  );
+};
+
 export default function MSTAssignment({ canEdit = true, currentUser = null }) {
   const [rows, setRows] = useState([]); // toàn bộ
   const [search, setSearch] = useState("");
@@ -103,19 +193,149 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
   const [page, setPage] = useState(1);
   const fileRef = useRef();
   const [selectedFileName, setSelectedFileName] = useState("");
+  const [historyEntries, setHistoryEntries] = useState(() =>
+    getMSTHistoryEntries(500)
+  );
+  const historyIndex = useMemo(
+    () => buildHistoryIndex(historyEntries),
+    [historyEntries]
+  );
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [draft, setDraft] = useState({
+    mst: "",
+    company: "",
+    person_import: "",
+    person_export: "",
+    team: "",
+    effective_from: "",
+  });
+  const [addError, setAddError] = useState("");
 
   const actor = currentUser?.username || "guest";
   const isReadOnly = !canEdit;
+
+  const refreshHistory = useCallback(() => {
+    setHistoryEntries(getMSTHistoryEntries(500));
+  }, []);
 
   /** Load lần đầu */
   useEffect(() => {
     try {
       const cur = getMSTMap() || [];
-      setRows(cur);
+      setRows(sortMSTRows(cur));
     } catch (e) {
       console.error("getMSTMap error:", e);
     }
   }, []);
+
+  useEffect(() => {
+    refreshHistory();
+  }, [refreshHistory]);
+
+  const toggleAddForm = () => {
+    if (isReadOnly) {
+      alert(
+        "Bạn không có quyền thêm mới thủ công. Đăng nhập bằng tài khoản được cấp quyền để tiếp tục."
+      );
+      return;
+    }
+    if (showAddForm) {
+      setShowAddForm(false);
+      setAddError("");
+      return;
+    }
+    setDraft({
+      mst: "",
+      company: "",
+      person_import: "",
+      person_export: "",
+      team: "",
+      effective_from: applyFrom || "",
+    });
+    setAddError("");
+    setShowAddForm(true);
+  };
+
+  const handleDraftChange = (field, formatter = (value) => value) => (event) => {
+    const raw = event?.target?.value ?? "";
+    const value = formatter(raw);
+    setDraft((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleAddSubmit = (event) => {
+    event.preventDefault();
+    if (isReadOnly) {
+      alert("Bạn không có quyền thêm mới.");
+      return;
+    }
+    const mst = tidyMST(draft.mst);
+    if (!mst) {
+      setAddError("Vui lòng nhập mã số thuế hợp lệ (chỉ chứa số).");
+      return;
+    }
+    const normalizedCompany = String(draft.company || "").trim();
+    const normalizedImport = String(draft.person_import || "").trim();
+    const normalizedExport = String(draft.person_export || "").trim();
+    const normalizedTeam = String(draft.team || "").trim();
+    const normalizedDate = draft.effective_from || "";
+
+    const newRow = {
+      mst,
+      company: normalizedCompany,
+      person_import: normalizedImport,
+      person_export: normalizedExport,
+      effective_from: normalizedDate,
+    };
+
+    setRows((prev) => {
+      const current = Array.isArray(prev) ? prev : [];
+      const newKey = makeRowKey(newRow);
+      const next = [...current];
+      const existingIndex = next.findIndex((row) => makeRowKey(row) === newKey);
+      const resolvedTeam = normalizedTeam || (existingIndex >= 0 ? next[existingIndex]?.team || "" : "");
+      const payload = { ...newRow, team: resolvedTeam };
+      if (existingIndex >= 0) {
+        next[existingIndex] = { ...next[existingIndex], ...payload };
+      } else {
+        next.push(payload);
+      }
+      return sortMSTRows(next);
+    });
+    setPage(1);
+    setShowAddForm(false);
+    setAddError("");
+    alert("Đã thêm vào danh sách. Bấm Lưu để ghi vào hệ thống.");
+  };
+
+  const exportRowsToExcel = (scope = "filtered") => {
+    const source = scope === "all" ? rows : filtered;
+    if (!source.length) {
+      alert("Không có dữ liệu để xuất Excel.");
+      return;
+    }
+    const data = source.map((item, index) => ({
+      STT: index + 1,
+      MST: item.mst,
+      "Công ty": item.company || "",
+      "Người phụ trách Nhập": item.person_import || "",
+      "Người phụ trách Xuất": item.person_export || "",
+      "Tổ đội": item.team || "",
+      "Áp dụng từ ngày": item.effective_from || "",
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(data);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Gan MST");
+    const now = new Date();
+    const timestamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(
+      now.getDate()
+    ).padStart(2, "0")}_${String(now.getHours()).padStart(2, "0")}${String(now.getMinutes()).padStart(
+      2,
+      "0"
+    )}`;
+    const suffix = scope === "all" ? "toan-bo" : "loc";
+    XLSX.writeFile(workbook, `gan-mst-${suffix}-${timestamp}.xlsx`);
+  };
 
   /** Filter + phân trang */
   const filtered = useMemo(() => {
@@ -177,15 +397,17 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
         return;
       }
 
-      // Gộp với dữ liệu hiện có theo mst (ưu tiên dòng sau – dữ liệu mới)
-      const byMST = new Map();
-      for (const r of rows) byMST.set(r.mst, { ...r });
-      for (const r of mapped) byMST.set(r.mst, { ...byMST.get(r.mst), ...r });
+      // Gộp với dữ liệu hiện có theo MST + ngày hiệu lực (ưu tiên dữ liệu mới)
+      const byKey = new Map();
+      for (const r of rows) {
+        byKey.set(makeRowKey(r), { ...r });
+      }
+      for (const r of mapped) {
+        const key = makeRowKey(r);
+        byKey.set(key, { ...byKey.get(key), ...r });
+      }
 
-      const merged = Array.from(byMST.values()).sort((a, b) =>
-        a.mst.localeCompare(b.mst)
-      );
-      setRows(merged);
+      setRows(sortMSTRows(Array.from(byKey.values())));
       setPage(1);
       alert(`Đọc file thành công: ${mapped.length} dòng. Bấm Lưu để ghi.`);
     } catch (e) {
@@ -208,6 +430,7 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
         actor,
         detail: "Cập nhật gán MST từ giao diện",
       });
+      refreshHistory();
       alert("Lưu thành công!");
     } catch (e) {
       console.error(e);
@@ -216,17 +439,31 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
   };
 
   /** Thao tác inline */
-  const updateRow = (mst, patch) => {
+  const updateRow = (originalRow, patch) => {
     if (isReadOnly) return;
+    const targetKey = makeRowKey(originalRow);
     setRows((prev) =>
-      prev.map((r) => (r.mst === mst ? { ...r, ...patch } : r))
+      sortMSTRows(
+        prev.map((r) => {
+          if (makeRowKey(r) !== targetKey) return r;
+          const next = { ...r, ...patch };
+          if (patch && Object.prototype.hasOwnProperty.call(patch, "mst")) {
+            next.mst = tidyMST(next.mst);
+          }
+          return next;
+        })
+      )
     );
   };
 
-  const removeRow = (mst) => {
+  const removeRow = (row) => {
     if (isReadOnly) return;
-    if (!confirm(`Xóa MST ${mst}?`)) return;
-    setRows((prev) => prev.filter((r) => r.mst !== mst));
+    const key = makeRowKey(row);
+    const label = row.effective_from
+      ? `${row.mst} (${row.effective_from})`
+      : row.mst;
+    if (!confirm(`Xóa dòng ${label}?`)) return;
+    setRows((prev) => prev.filter((r) => makeRowKey(r) !== key));
   };
 
   /** UI */
@@ -237,7 +474,7 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
           Bạn đang xem bảng gán MST ở chế độ chỉ xem. Đăng nhập bằng tài khoản quản trị hoặc được cấp quyền để import, chỉnh sửa và lưu thay đổi.
         </div>
       )}
-      <div className="flex items-center gap-2 mb-3">
+      <div className="flex flex-wrap items-end gap-2 mb-3">
         {canEdit && (
           <>
             <input
@@ -255,6 +492,7 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
               type="button"
               onClick={() => fileRef.current?.click()}
               className="px-3 py-1 rounded border bg-white hover:bg-gray-50"
+              title="Chọn file Excel chứa dữ liệu gán MST"
             >
               Chọn file XLSX
             </button>
@@ -262,8 +500,17 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
               onClick={onImportXLSX}
               className="px-3 py-1 rounded bg-black text-white"
               type="button"
+              title="Đọc file Excel và đổ vào danh sách tạm"
             >
               Import XLSX
+            </button>
+            <button
+              type="button"
+              onClick={toggleAddForm}
+              className="px-3 py-1 rounded border bg-white hover:bg-gray-50"
+              title="Thêm thủ công một dòng gán MST"
+            >
+              {showAddForm ? "Đóng thêm mới" : "Thêm mới"}
             </button>
             {selectedFileName && (
               <span className="text-sm text-gray-600">Đã chọn: {selectedFileName}</span>
@@ -276,34 +523,157 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
             type="date"
             value={applyFrom}
             onChange={(e) => setApplyFrom(e.target.value)}
-            className="border rounded px-2 py-1 ml-4"
+            className="border rounded px-2 py-1"
             placeholder="Áp dụng từ ngày"
             title="Áp dụng từ ngày (ghi vào trường trống khi import)"
           />
         )}
 
-        <span className="text-xs text-gray-500 ml-auto">
+        <span className="text-xs text-gray-500 whitespace-nowrap">
           * Khi lưu, quy tắc mới chỉ áp dụng cho tờ khai có ngày khai báo từ ngày này trở đi.
         </span>
 
         <div className="flex-1" />
 
-        <input
-          type="text"
-          value={search}
-          onChange={(e) => {
-            setSearch(e.target.value);
-            setPage(1);
-          }}
-          placeholder="Tìm nhanh (MST / Công ty)"
-          className="border rounded px-2 py-1 w-64"
-        />
-        {canEdit && (
-          <button onClick={onSave} className="px-3 py-1 rounded bg-emerald-600 text-white">
-            Lưu
+        <div className="flex flex-wrap items-center gap-2">
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setPage(1);
+            }}
+            placeholder="Tìm nhanh (MST / Công ty)"
+            className="border rounded px-2 py-1 w-64"
+            title="Tìm nhanh theo mã số thuế hoặc tên công ty"
+          />
+          <button
+            type="button"
+            onClick={() => exportRowsToExcel("filtered")}
+            className="px-3 py-1 rounded border bg-white hover:bg-gray-50"
+            title="Xuất ra Excel các dòng đang hiển thị theo bộ lọc hiện tại"
+          >
+            Export (lọc)
           </button>
-        )}
+          <button
+            type="button"
+            onClick={() => exportRowsToExcel("all")}
+            className="px-3 py-1 rounded border bg-white hover:bg-gray-50"
+            title="Xuất ra Excel toàn bộ danh sách đang quản lý"
+          >
+            Export (tất cả)
+          </button>
+          {canEdit && (
+            <button
+              onClick={onSave}
+              className="px-3 py-1 rounded bg-emerald-600 text-white"
+              title="Lưu danh sách đang hiển thị vào hệ thống"
+            >
+              Lưu
+            </button>
+          )}
+        </div>
       </div>
+
+      {showAddForm && (
+        <form
+          onSubmit={handleAddSubmit}
+          className="mb-4 rounded border border-gray-200 bg-white p-4 shadow-sm"
+        >
+          <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+            <label className="flex flex-col gap-1 text-sm font-medium text-gray-700">
+              Mã số thuế
+              <input
+                type="text"
+                value={draft.mst}
+                onChange={handleDraftChange("mst", tidyMST)}
+                className="border rounded px-2 py-1"
+                placeholder="Nhập mã số thuế"
+                required
+                title="Nhập mã số thuế (chỉ chứa số)"
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-sm font-medium text-gray-700">
+              Tên công ty
+              <input
+                type="text"
+                value={draft.company}
+                onChange={handleDraftChange("company")}
+                className="border rounded px-2 py-1"
+                placeholder="Tên công ty"
+                title="Tên doanh nghiệp tương ứng với MST"
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-sm font-medium text-gray-700">
+              Người phụ trách Nhập
+              <input
+                type="text"
+                value={draft.person_import}
+                onChange={handleDraftChange("person_import")}
+                className="border rounded px-2 py-1"
+                placeholder="Phụ trách nhập"
+                title="Người phụ trách tờ khai nhập khẩu"
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-sm font-medium text-gray-700">
+              Người phụ trách Xuất
+              <input
+                type="text"
+                value={draft.person_export}
+                onChange={handleDraftChange("person_export")}
+                className="border rounded px-2 py-1"
+                placeholder="Phụ trách xuất"
+                title="Người phụ trách tờ khai xuất khẩu"
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-sm font-medium text-gray-700">
+              Tổ đội (tuỳ chọn)
+              <input
+                type="text"
+                value={draft.team}
+                onChange={handleDraftChange("team")}
+                className="border rounded px-2 py-1"
+                placeholder="Tên tổ đội"
+                title="Ghi chú tổ đội/nhóm phụ trách nếu cần"
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-sm font-medium text-gray-700">
+              Áp dụng từ ngày
+              <input
+                type="date"
+                value={draft.effective_from}
+                onChange={handleDraftChange("effective_from")}
+                className="border rounded px-2 py-1"
+                title="Ngày bắt đầu áp dụng cấu hình"
+              />
+            </label>
+          </div>
+          {addError && <p className="mt-2 text-sm text-red-600">{addError}</p>}
+          <div className="mt-4 flex flex-wrap items-center gap-2">
+            <button
+              type="submit"
+              className="px-3 py-1.5 rounded bg-emerald-600 text-white"
+              title="Thêm dòng này vào danh sách tạm"
+            >
+              Thêm vào danh sách
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setShowAddForm(false);
+                setAddError("");
+              }}
+              className="px-3 py-1.5 rounded border bg-white hover:bg-gray-50"
+              title="Đóng biểu mẫu thêm mới"
+            >
+              Hủy
+            </button>
+            <span className="text-xs text-gray-500">
+              * Sau khi thêm, bấm Lưu để ghi dữ liệu vào hệ thống chính thức.
+            </span>
+          </div>
+        </form>
+      )}
 
       <div className="text-sm text-gray-500 mb-2">
         {filtered.length} dòng — Trang {page}/{totalPages}
@@ -329,8 +699,14 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
                 </td>
               </tr>
             ) : (
-              pageRows.map((r) => (
-                <tr key={r.mst} className="border-t">
+              pageRows.map((r) => {
+                const rowKey = makeRowKey(r);
+                const rowHistory = historyIndex.get(rowKey) || {};
+                const importHistory = rowHistory.person_import || [];
+                const exportHistory = rowHistory.person_export || [];
+                const effectiveHistory = rowHistory.effective_from || [];
+                return (
+                  <tr key={rowKey || r.mst} className="border-t">
                   <td className="p-2">
                     {isReadOnly ? (
                       <span>{r.mst}</span>
@@ -338,7 +714,7 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
                       <input
                         value={r.mst}
                         onChange={(e) =>
-                          updateRow(r.mst, { mst: tidyMST(e.target.value) })
+                          updateRow(r, { mst: tidyMST(e.target.value) })
                         }
                         className="border rounded px-2 py-1 w-full"
                       />
@@ -351,7 +727,7 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
                       <input
                         value={r.company || ""}
                         onChange={(e) =>
-                          updateRow(r.mst, { company: e.target.value })
+                          updateRow(r, { company: e.target.value })
                         }
                         className="border rounded px-2 py-1 w-full"
                       />
@@ -364,11 +740,15 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
                       <input
                         value={r.person_import || ""}
                         onChange={(e) =>
-                          updateRow(r.mst, { person_import: e.target.value })
+                          updateRow(r, { person_import: e.target.value })
                         }
                         className="border rounded px-2 py-1 w-full"
                       />
                     )}
+                    <HistoryDetails
+                      entries={importHistory}
+                      label={HISTORY_FIELD_LABELS.person_import}
+                    />
                   </td>
                   <td className="p-2">
                     {isReadOnly ? (
@@ -377,11 +757,15 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
                       <input
                         value={r.person_export || ""}
                         onChange={(e) =>
-                          updateRow(r.mst, { person_export: e.target.value })
+                          updateRow(r, { person_export: e.target.value })
                         }
                         className="border rounded px-2 py-1 w-full"
                       />
                     )}
+                    <HistoryDetails
+                      entries={exportHistory}
+                      label={HISTORY_FIELD_LABELS.person_export}
+                    />
                   </td>
                   <td className="p-2">
                     {isReadOnly ? (
@@ -391,16 +775,20 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
                         type="date"
                         value={r.effective_from || ""}
                         onChange={(e) =>
-                          updateRow(r.mst, { effective_from: e.target.value })
+                          updateRow(r, { effective_from: e.target.value })
                         }
                         className="border rounded px-2 py-1 w-full"
                       />
                     )}
+                    <HistoryDetails
+                      entries={effectiveHistory}
+                      label={HISTORY_FIELD_LABELS.effective_from}
+                    />
                   </td>
                   <td className="p-2 text-center">
                     {canEdit ? (
                       <button
-                        onClick={() => removeRow(r.mst)}
+                        onClick={() => removeRow(r)}
                         className="px-2 py-1 rounded bg-red-500 text-white"
                         title="Xóa dòng"
                       >
@@ -410,8 +798,9 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
                       <span className="text-xs text-gray-400">—</span>
                     )}
                   </td>
-                </tr>
-              ))
+                  </tr>
+                );
+              })
             )}
           </tbody>
         </table>
