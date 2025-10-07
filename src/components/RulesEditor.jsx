@@ -4,7 +4,16 @@ import { Button } from "@/components/ui/button.jsx";
 import { Input } from "@/components/ui/input.jsx";
 import { Badge } from "@/components/ui/badge.jsx";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip.jsx";
-import { InfoIcon } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover.jsx";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command.jsx";
+import { InfoIcon, Check, ChevronsUpDown, Plus, X } from "lucide-react";
 import { toast } from "sonner";
 import {
   loadRuleSets,
@@ -18,6 +27,7 @@ import {
   restoreRuleCollection,
 } from "@/lib/rules.js";
 import { getData } from "@/lib/store.js";
+import { cn } from "@/lib/utils.js";
 
 function Num({ value, onChange, step = "0.1", disabled = false }) {
   const display = value === 0 ? 0 : value ?? "";
@@ -99,6 +109,175 @@ function TierEditor({ tiers = [], onChange, disabled = false, title = "Bậc c�
         <Button variant="outline" onClick={handleAdd}>
           Thêm bậc
         </Button>
+      )}
+    </div>
+  );
+}
+
+function CodeMultiSelect({
+  value = [],
+  onChange,
+  options = [],
+  disabled = false,
+  placeholder = "Chọn mã loại hình",
+}) {
+  const selected = Array.isArray(value)
+    ? value.map((code) => String(code || "").trim().toUpperCase()).filter(Boolean)
+    : [];
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+
+  const normalizedOptions = useMemo(() => {
+    return options
+      .map((item) => ({
+        value: String(item?.value || "").trim().toUpperCase(),
+        count: Number.isFinite(item?.count) ? Number(item.count) : 0,
+        label: item?.label || "",
+      }))
+      .filter((item) => item.value)
+      .reduce((list, item) => {
+        if (list.some((entry) => entry.value === item.value)) return list;
+        return [...list, item];
+      }, [])
+      .sort((a, b) => {
+        if (b.count !== a.count) return b.count - a.count;
+        return a.value.localeCompare(b.value);
+      });
+  }, [options]);
+
+  const handleToggle = useCallback(
+    (code) => {
+      if (disabled) return;
+      const upper = String(code || "").trim().toUpperCase();
+      if (!upper) return;
+      const next = selected.includes(upper)
+        ? selected.filter((item) => item !== upper)
+        : [...selected, upper];
+      onChange?.(next.sort((a, b) => a.localeCompare(b)));
+    },
+    [disabled, onChange, selected]
+  );
+
+  const handleAddCustom = useCallback(() => {
+    if (disabled) return;
+    const upper = search.trim().toUpperCase();
+    if (!upper) return;
+    if (selected.includes(upper)) {
+      setOpen(false);
+      return;
+    }
+    onChange?.([...selected, upper].sort((a, b) => a.localeCompare(b)));
+    setSearch("");
+    setOpen(false);
+  }, [disabled, onChange, search, selected]);
+
+  useEffect(() => {
+    if (!open) {
+      setSearch("");
+    }
+  }, [open]);
+
+  const canAddCustom = useMemo(() => {
+    const upper = search.trim().toUpperCase();
+    if (!upper) return false;
+    if (selected.includes(upper)) return false;
+    return !normalizedOptions.some((item) => item.value === upper);
+  }, [normalizedOptions, search, selected]);
+
+  return (
+    <div className="space-y-2">
+      <Popover open={open} onOpenChange={disabled ? undefined : setOpen}>
+        <PopoverTrigger asChild>
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full justify-between"
+            disabled={disabled}
+          >
+            <span className="truncate text-left">
+              {selected.length
+                ? `${selected.length} mã đã chọn`
+                : placeholder}
+            </span>
+            <ChevronsUpDown className="ml-2 size-4 shrink-0 opacity-50" />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-80 p-0" align="start">
+          <Command>
+            <CommandInput
+              value={search}
+              onValueChange={setSearch}
+              placeholder="Tìm mã loại hình"
+            />
+            <CommandList className="max-h-64 overflow-y-auto">
+              <CommandEmpty>Không tìm thấy mã phù hợp.</CommandEmpty>
+              {canAddCustom ? (
+                <CommandGroup heading="Thêm mới">
+                  <CommandItem value={search} onSelect={handleAddCustom}>
+                    <Plus className="mr-2 size-4" />
+                    Thêm mã "{search.trim().toUpperCase()}"
+                  </CommandItem>
+                </CommandGroup>
+              ) : null}
+              <CommandGroup heading="Mã loại hình đã đồng bộ">
+                {normalizedOptions.map((item) => {
+                  const isSelected = selected.includes(item.value);
+                  return (
+                    <CommandItem
+                      key={item.value}
+                      value={`${item.value} ${item.label}`.trim()}
+                      onSelect={() => handleToggle(item.value)}
+                    >
+                      <Check
+                        className={cn(
+                          "mr-2 size-4",
+                          isSelected ? "opacity-100" : "opacity-0"
+                        )}
+                      />
+                      <div className="flex flex-1 flex-col">
+                        <span className="font-medium">{item.value}</span>
+                        {item.label ? (
+                          <span className="text-xs text-muted-foreground">
+                            {item.label}
+                          </span>
+                        ) : null}
+                      </div>
+                      {item.count ? (
+                        <span className="ml-auto text-xs text-muted-foreground">
+                          {item.count.toLocaleString("vi-VN")} tờ
+                        </span>
+                      ) : null}
+                    </CommandItem>
+                  );
+                })}
+              </CommandGroup>
+            </CommandList>
+          </Command>
+        </PopoverContent>
+      </Popover>
+      {selected.length ? (
+        <div className="flex flex-wrap gap-2">
+          {selected.map((code) => (
+            <Badge key={code} variant="secondary" className="flex items-center gap-1">
+              {code}
+              {!disabled && (
+                <button
+                  type="button"
+                  className="rounded-full p-0.5 text-muted-foreground transition hover:bg-white hover:text-red-600"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    handleToggle(code);
+                  }}
+                >
+                  <X className="size-3" />
+                </button>
+              )}
+            </Badge>
+          ))}
+        </div>
+      ) : (
+        <div className="text-xs text-muted-foreground">Chưa chọn mã nào.</div>
       )}
     </div>
   );
@@ -398,12 +577,12 @@ export default function RulesEditor({ canEdit = true, currentUser = null }) {
     });
   };
 
-  const handleCodesChange = (groupKey, value) => {
-    const codes = value
-      .split(",")
-      .map((code) => code.trim().toUpperCase())
-      .filter(Boolean);
-    updateGroup(groupKey, (group) => ({ ...group, codes }));
+  const handleCodesChange = (groupKey, codes) => {
+    const normalized = Array.isArray(codes)
+      ? codes.map((code) => String(code || "").trim().toUpperCase()).filter(Boolean)
+      : [];
+    const unique = Array.from(new Set(normalized));
+    updateGroup(groupKey, (group) => ({ ...group, codes: unique }));
   };
 
   const handleGroupNumber = (groupKey, key, value) => {
@@ -428,6 +607,34 @@ export default function RulesEditor({ canEdit = true, currentUser = null }) {
   };
 
   const groups = rule?.groups || {};
+  const typeOptions = useMemo(() => {
+    const counter = new Map();
+    data.forEach((row) => {
+      const raw =
+        row?.loai_hinh ||
+        row?.loaiHinh ||
+        row?.ma_loai_hinh ||
+        row?.maLoaiHinh ||
+        row?.loai_hinh_tm ||
+        "";
+      const code = String(raw || "").trim().toUpperCase();
+      if (!code) return;
+      const current = counter.get(code) || { value: code, count: 0 };
+      current.count += 1;
+      counter.set(code, current);
+    });
+    Object.values(groups).forEach((group) => {
+      (group?.codes || []).forEach((code) => {
+        const upper = String(code || "").trim().toUpperCase();
+        if (!upper || counter.has(upper)) return;
+        counter.set(upper, { value: upper, count: 0 });
+      });
+    });
+    return Array.from(counter.values()).sort((a, b) => {
+      if (b.count !== a.count) return b.count - a.count;
+      return a.value.localeCompare(b.value);
+    });
+  }, [data, groups]);
   const licenseConfig = rule?.license || { defaultPoints: 0, codePoints: [], exclude: { codes: [], agencies: [] } };
 
   const handleSave = () => {
@@ -695,10 +902,11 @@ export default function RulesEditor({ canEdit = true, currentUser = null }) {
                   </div>
                 </div>
                 <div>
-                  <label className="text-sm text-gray-600">Mã loại hình (phẩy)</label>
-                  <Input
-                    value={(groupConfig.codes || []).join(",")}
-                    onChange={(event) => handleCodesChange(groupKey, event.target.value)}
+                  <label className="text-sm text-gray-600">Mã loại hình</label>
+                  <CodeMultiSelect
+                    value={groupConfig.codes || []}
+                    onChange={(codes) => handleCodesChange(groupKey, codes)}
+                    options={typeOptions}
                     disabled={isReadOnly}
                   />
                 </div>
