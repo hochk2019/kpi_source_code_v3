@@ -52,10 +52,10 @@
     "bcryptjs": "^2.4.3",
     "better-sqlite3": "^11.8.1",
     "class-variance-authority": "^0.7.1",
-    "cronstrue": "^2.49.0",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
     "cors": "^2.8.5",
+    "cronstrue": "^2.49.0",
     "date-fns": "^3.6.0",
     "embla-carousel-react": "^8.6.0",
     "exceljs": "^4.4.0",
@@ -104,8 +104,8 @@
   "pnpm": {
     "onlyBuiltDependencies": [
       "@tailwindcss/oxide",
-      "better-sqlite3"
+      "better-sqlite3",
+      "esbuild"
     ]
   }
 }
-

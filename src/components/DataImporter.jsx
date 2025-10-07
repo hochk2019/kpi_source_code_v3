@@ -75,6 +75,12 @@ function ensureLicenseFields(row) {
 
 const CODE_INPUT_SPLIT = /[\s,;]+/;
 
+function normalizeLicenseCode(value) {
+  const normalized = normalizeStr(value);
+  if (!normalized) return "";
+  return normalized.toUpperCase();
+}
+
 function parseCodeListInput(text) {
   if (!text) return [];
   return Array.from(
@@ -1199,6 +1205,7 @@ export default function DataImporter({
   const applyEdit = useCallback((rowKey, updater) => {
     if (isReadOnlyForEdits) return;
     let didChange = false;
+    let pendingSelectionUpdater = null;
     setRawRows(prev => {
       if (!Array.isArray(prev) || prev.length === 0) return prev;
       const pos = prev.findIndex(row => keyOfRow(row) === rowKey);
@@ -1229,16 +1236,19 @@ export default function DataImporter({
       const oldKey = keyOfRow(current);
       const newKey = keyOfRow(nextRow);
       if (oldKey !== newKey) {
-        setSelectedKeys(keys => {
+        pendingSelectionUpdater = (keys) => {
           if (!Array.isArray(keys) || keys.length === 0) return keys;
           if (!keys.includes(oldKey)) return keys;
-          return keys.filter(k => k !== oldKey);
-        });
+          return keys.filter((k) => k !== oldKey);
+        };
       }
 
       didChange = true;
       return copy;
     });
+    if (pendingSelectionUpdater) {
+      setSelectedKeys(pendingSelectionUpdater);
+    }
     if (didChange && mode === "saved") {
       setHasUnsaved(true);
     }
