@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as XLSX from "xlsx";
 import { getMSTHistoryEntries, getMSTMap, upsertMSTRows } from "@/lib/store.js";
+import useTooltipTitles from "@/hooks/useTooltipTitles.js";
 
 /** Utils */
 const normalize = (s = "") =>
@@ -191,6 +192,7 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
   const [search, setSearch] = useState("");
   const [applyFrom, setApplyFrom] = useState(""); // yyyy-mm-dd
   const [page, setPage] = useState(1);
+  const rootRef = useRef(null);
   const fileRef = useRef();
   const [selectedFileName, setSelectedFileName] = useState("");
   const [historyEntries, setHistoryEntries] = useState(() =>
@@ -348,6 +350,15 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
   }, [rows, search]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+
+  useTooltipTitles(rootRef, [
+    rows,
+    search,
+    applyFrom,
+    page,
+    showAddForm,
+    selectedFileName,
+  ]);
   const pageRows = filtered.slice((page - 1) * pageSize, page * pageSize);
 
   useEffect(() => {
@@ -468,7 +479,7 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
 
   /** UI */
   return (
-    <div className="p-6 max-w-6xl mx-auto">
+    <div ref={rootRef} className="p-6 max-w-6xl mx-auto">
       {isReadOnly && (
         <div className="mb-4 rounded border border-amber-300 bg-amber-50 p-3 text-sm text-amber-700">
           Bạn đang xem bảng gán MST ở chế độ chỉ xem. Đăng nhập bằng tài khoản quản trị hoặc được cấp quyền để import, chỉnh sửa và lưu thay đổi.
@@ -492,7 +503,7 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
               type="button"
               onClick={() => fileRef.current?.click()}
               className="px-3 py-1 rounded border bg-white hover:bg-gray-50"
-              title="Chọn file Excel chứa dữ liệu gán MST"
+              data-tooltip="Chọn file Excel chứa dữ liệu gán MST"
             >
               Chọn file XLSX
             </button>
@@ -500,7 +511,7 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
               onClick={onImportXLSX}
               className="px-3 py-1 rounded bg-black text-white"
               type="button"
-              title="Đọc file Excel và đổ vào danh sách tạm"
+              data-tooltip="Đọc file Excel và đổ vào danh sách tạm"
             >
               Import XLSX
             </button>
@@ -508,7 +519,7 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
               type="button"
               onClick={toggleAddForm}
               className="px-3 py-1 rounded border bg-white hover:bg-gray-50"
-              title="Thêm thủ công một dòng gán MST"
+              data-tooltip="Thêm thủ công một dòng gán MST"
             >
               {showAddForm ? "Đóng thêm mới" : "Thêm mới"}
             </button>
@@ -525,7 +536,7 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
             onChange={(e) => setApplyFrom(e.target.value)}
             className="border rounded px-2 py-1"
             placeholder="Áp dụng từ ngày"
-            title="Áp dụng từ ngày (ghi vào trường trống khi import)"
+            data-tooltip="Áp dụng từ ngày (ghi vào trường trống khi import)"
           />
         )}
 
@@ -545,13 +556,13 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
             }}
             placeholder="Tìm nhanh (MST / Công ty)"
             className="border rounded px-2 py-1 w-64"
-            title="Tìm nhanh theo mã số thuế hoặc tên công ty"
+            data-tooltip="Tìm nhanh theo mã số thuế hoặc tên công ty"
           />
           <button
             type="button"
             onClick={() => exportRowsToExcel("filtered")}
             className="px-3 py-1 rounded border bg-white hover:bg-gray-50"
-            title="Xuất ra Excel các dòng đang hiển thị theo bộ lọc hiện tại"
+            data-tooltip="Xuất ra Excel các dòng đang hiển thị theo bộ lọc hiện tại"
           >
             Export (lọc)
           </button>
@@ -559,7 +570,7 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
             type="button"
             onClick={() => exportRowsToExcel("all")}
             className="px-3 py-1 rounded border bg-white hover:bg-gray-50"
-            title="Xuất ra Excel toàn bộ danh sách đang quản lý"
+            data-tooltip="Xuất ra Excel toàn bộ danh sách đang quản lý"
           >
             Export (tất cả)
           </button>
@@ -567,7 +578,7 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
             <button
               onClick={onSave}
               className="px-3 py-1 rounded bg-emerald-600 text-white"
-              title="Lưu danh sách đang hiển thị vào hệ thống"
+              data-tooltip="Lưu danh sách đang hiển thị vào hệ thống"
             >
               Lưu
             </button>
@@ -590,7 +601,7 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
                 className="border rounded px-2 py-1"
                 placeholder="Nhập mã số thuế"
                 required
-                title="Nhập mã số thuế (chỉ chứa số)"
+                data-tooltip="Nhập mã số thuế (chỉ chứa số)"
               />
             </label>
             <label className="flex flex-col gap-1 text-sm font-medium text-gray-700">
@@ -601,7 +612,7 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
                 onChange={handleDraftChange("company")}
                 className="border rounded px-2 py-1"
                 placeholder="Tên công ty"
-                title="Tên doanh nghiệp tương ứng với MST"
+                data-tooltip="Tên doanh nghiệp tương ứng với MST"
               />
             </label>
             <label className="flex flex-col gap-1 text-sm font-medium text-gray-700">
@@ -612,7 +623,7 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
                 onChange={handleDraftChange("person_import")}
                 className="border rounded px-2 py-1"
                 placeholder="Phụ trách nhập"
-                title="Người phụ trách tờ khai nhập khẩu"
+                data-tooltip="Người phụ trách tờ khai nhập khẩu"
               />
             </label>
             <label className="flex flex-col gap-1 text-sm font-medium text-gray-700">
@@ -623,7 +634,7 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
                 onChange={handleDraftChange("person_export")}
                 className="border rounded px-2 py-1"
                 placeholder="Phụ trách xuất"
-                title="Người phụ trách tờ khai xuất khẩu"
+                data-tooltip="Người phụ trách tờ khai xuất khẩu"
               />
             </label>
             <label className="flex flex-col gap-1 text-sm font-medium text-gray-700">
@@ -634,7 +645,7 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
                 onChange={handleDraftChange("team")}
                 className="border rounded px-2 py-1"
                 placeholder="Tên tổ đội"
-                title="Ghi chú tổ đội/nhóm phụ trách nếu cần"
+                data-tooltip="Ghi chú tổ đội/nhóm phụ trách nếu cần"
               />
             </label>
             <label className="flex flex-col gap-1 text-sm font-medium text-gray-700">
@@ -644,7 +655,7 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
                 value={draft.effective_from}
                 onChange={handleDraftChange("effective_from")}
                 className="border rounded px-2 py-1"
-                title="Ngày bắt đầu áp dụng cấu hình"
+                data-tooltip="Ngày bắt đầu áp dụng cấu hình"
               />
             </label>
           </div>
@@ -653,7 +664,7 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
             <button
               type="submit"
               className="px-3 py-1.5 rounded bg-emerald-600 text-white"
-              title="Thêm dòng này vào danh sách tạm"
+              data-tooltip="Thêm dòng này vào danh sách tạm"
             >
               Thêm vào danh sách
             </button>
@@ -664,7 +675,7 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
                 setAddError("");
               }}
               className="px-3 py-1.5 rounded border bg-white hover:bg-gray-50"
-              title="Đóng biểu mẫu thêm mới"
+              data-tooltip="Đóng biểu mẫu thêm mới"
             >
               Hủy
             </button>
@@ -790,7 +801,7 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
                       <button
                         onClick={() => removeRow(r)}
                         className="px-2 py-1 rounded bg-red-500 text-white"
-                        title="Xóa dòng"
+                        data-tooltip="Xóa dòng"
                       >
                         Xóa
                       </button>

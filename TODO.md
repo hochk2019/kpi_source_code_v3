@@ -2,10 +2,10 @@
 
 ## Giai đoạn 1 – Hoàn thiện các lỗi tồn đọng và tính năng đã phát triển dở dang
 
-- [ ] Rà soát lại tất cả các form nhập ở tab **Import Data** và **Gán MST** để đảm bảo tooltip hiển thị thống nhất, không chồng chéo.
+- [x] Rà soát lại tất cả các form nhập ở tab **Import Data** và **Gán MST** để đảm bảo tooltip hiển thị thống nhất, không chồng chéo.
 - [ ] Cập nhật lại các bài test backend/frontend bị vô hiệu hóa để chạy thành công sau khi sửa cấu hình `package.json` hoặc thiết lập script thay thế.
 - [ ] Khắc phục cảnh báo "Cannot update a component (App) while rendering..." trong `tests/e2e.login-import.test.jsx` bằng cách di chuyển thao tác `setState` ra ngoài luồng render.
-- [ ] Giảm/ẩn log "Không thể đồng bộ dữ liệu..." trong `tests/storageClient.test.js` để giữ kết quả test sạch.
+- [x] Giảm/ẩn log "Không thể đồng bộ dữ liệu..." trong `tests/storageClient.test.js` để giữ kết quả test sạch.
 - [ ] Hoàn thiện UI cho "Cấu hình mã ưu đãi C/O" và "Đối soát C/O" (đồng bộ với API mới, xử lý lỗi HTTP 500).
 
 ## Giai đoạn 2 – Các yêu cầu còn lại của phiên bản 3.0
@@ -57,7 +57,8 @@
 - [ ] Chạy toàn bộ test (`pnpm test`, `pnpm lint`, build production) trên môi trường Windows 11 tương tự khách hàng.
 - [ ] Chuẩn bị checklist triển khai, kế hoạch rollback, và hướng dẫn sử dụng tính năng mới cho người dùng cuối.
 
-
+- [x] Dọn gọn repo (xóa file dist/, _tmp_get_config.mjs, .vs/ sau khi hoàn thành) để review gọn.
+
 - [ ] Ho?n thi?n UI cho c?u h?nh m? ?u ??i / ??i so?t CO (frontend t??ng ?ng v?i API/backend m?i).
 
 - [ ] D?n g?n repo (x?a file dist/, _tmp_get_config.mjs, .vs/ sau khi ho?n th?nh) d? review g?n.
