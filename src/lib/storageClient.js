@@ -17,6 +17,7 @@ async function sendWrite(base, key, value) {
 const SHARED_KEYS = new Set([
   'decl_rows_v1',
   'mst_rows_v2',
+  'mst_history_v1',
   'kpi_rules_v2',
   'team_roster_v1',
   'audit_logs_v1',

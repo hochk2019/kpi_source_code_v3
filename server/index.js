@@ -657,6 +657,7 @@ const DEFAULT_CO_DISCREPANCY_STATE = Object.freeze({
 const DEFAULT_STORAGE = {
   decl_rows_v1: '[]',
   mst_rows_v2: '[]',
+  mst_history_v1: '[]',
   kpi_rules_v2: JSON.stringify(SHARED_DEFAULT_RULES),
   team_roster_v1: JSON.stringify({
     version: 1,
@@ -1300,19 +1301,29 @@ function getValue(key) {
   return row.value;
 }
 
-function upsertValue(key, value) {
+function upsertValue(key, value, options = {}) {
+  const { skipMstHistorySync = false } = options || {};
   const normalized = normalizeValue(value);
   if (normalized === null) {
     db.prepare('DELETE FROM kv_store WHERE key = ?').run(key);
+    if (key === 'mst_history_v1' && !skipMstHistorySync) {
+      scheduleMstHistorySqlSyncFromJson('[]');
+    }
     return;
   }
   db.prepare(
     'INSERT INTO kv_store (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value'
   ).run(key, normalized);
+  if (key === 'mst_history_v1' && !skipMstHistorySync) {
+    scheduleMstHistorySqlSyncFromJson(normalized);
+  }
 }
 
 function deleteValue(key) {
   db.prepare('DELETE FROM kv_store WHERE key = ?').run(key);
+  if (key === 'mst_history_v1') {
+    scheduleMstHistorySqlSyncFromJson('[]');
+  }
 }
 
 function safeParse(json, fallback) {
@@ -2839,6 +2850,306 @@ function registerSqlPoolShutdown(manager) {
 const sqlPoolManager = createSqlPoolManager();
 registerSqlPoolShutdown(sqlPoolManager);
 
+const DEFAULT_MST_HISTORY_TABLE_NAME =
+  (process.env.KPI_MST_HISTORY_TABLE || 'dbo.KPI_MST_HISTORY').trim() || 'dbo.KPI_MST_HISTORY';
+const MST_HISTORY_MAX_ENTRIES = 500;
+
+function parseSqlTableName(input) {
+  const trimmed = `${input ?? ''}`.trim();
+  if (!trimmed) {
+    return null;
+  }
+  const rawParts = trimmed.split('.').map((part) => part.trim()).filter(Boolean);
+  if (!rawParts.length || rawParts.length > 2) {
+    return null;
+  }
+  const normalizedParts = rawParts
+    .map((part) => part.replace(/[^a-zA-Z0-9_]/g, ''))
+    .filter(Boolean);
+  if (!normalizedParts.length || normalizedParts.length > 2) {
+    return null;
+  }
+  if (normalizedParts.length === 1) {
+    normalizedParts.unshift('dbo');
+  }
+  const objectId = normalizedParts.join('.');
+  const quoted = normalizedParts.map((part) => `[${part}]`).join('.');
+  const indexName = normalizedParts.join('_');
+  return { objectId, quoted, indexName };
+}
+
+const MST_HISTORY_TABLE = parseSqlTableName(DEFAULT_MST_HISTORY_TABLE_NAME);
+let mstHistoryEnsurePromise = null;
+let mstHistorySyncPromise = null;
+
+function clampLength(value, max) {
+  if (!value) return '';
+  const str = `${value}`;
+  return str.length > max ? str.slice(0, max) : str;
+}
+
+function resolveEffectiveFrom(entry) {
+  if (!entry) return '';
+  const direct = entry.effective_from || entry.effectiveFrom;
+  const normalizedDirect = toISODate(direct || '');
+  if (normalizedDirect) {
+    return normalizedDirect;
+  }
+  const rowKey = `${entry.rowKey || ''}`;
+  const parts = rowKey.split('__');
+  if (parts.length >= 2) {
+    const iso = toISODate(parts[1]);
+    if (iso) {
+      return iso;
+    }
+  }
+  return '';
+}
+
+function normalizeMstHistoryEntries(entries) {
+  if (!Array.isArray(entries)) {
+    return [];
+  }
+  const normalized = [];
+  for (const entry of entries) {
+    if (!entry) continue;
+    const mst = normalizeMST(entry.mst);
+    if (!mst) continue;
+    const timestamp = new Date(entry.timestamp || Date.now());
+    if (Number.isNaN(timestamp.getTime())) {
+      timestamp.setTime(Date.now());
+    }
+    const field = normalizeStr(entry.field) || 'field';
+    const rowKey = normalizeStr(entry.rowKey) || `${mst}__${resolveEffectiveFrom(entry)}`;
+    const actor = normalizeStr(entry.actor) || 'system';
+    const type = normalizeStr(entry.type) || 'update';
+    const effectiveFrom = resolveEffectiveFrom(entry);
+    const normalizedEntry = {
+      id: clampLength(entry.id || `mst-${mst}-${field}-${timestamp.getTime()}`, 120),
+      mst,
+      field: clampLength(field, 64),
+      from: clampLength(normalizeStr(entry.from), 255),
+      to: clampLength(normalizeStr(entry.to), 255),
+      actor: clampLength(actor, 128),
+      timestamp,
+      rowKey: clampLength(rowKey, 128),
+      effectiveFrom: clampLength(effectiveFrom, 32),
+      type: clampLength(type, 32),
+    };
+    normalized.push(normalizedEntry);
+  }
+  normalized.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+  return normalized.slice(0, MST_HISTORY_MAX_ENTRIES);
+}
+
+function resolveMstHistorySqlConfig() {
+  if (!MST_HISTORY_TABLE) {
+    return null;
+  }
+  const config = getEcusConfig();
+  const connectionConfig = buildSqlConnectionConfig(config);
+  if (!connectionConfig.server || !connectionConfig.database) {
+    return null;
+  }
+  return { connectionConfig, table: MST_HISTORY_TABLE };
+}
+
+async function ensureMstHistoryTable(pool, tableMeta) {
+  if (!pool || !tableMeta) {
+    return false;
+  }
+  if (mstHistoryEnsurePromise) {
+    return mstHistoryEnsurePromise;
+  }
+  mstHistoryEnsurePromise = (async () => {
+    try {
+      const request = pool.request();
+      const createSql = `
+        IF OBJECT_ID('${tableMeta.objectId}', 'U') IS NULL
+        BEGIN
+          CREATE TABLE ${tableMeta.quoted} (
+            id NVARCHAR(128) NOT NULL PRIMARY KEY,
+            mst NVARCHAR(32) NOT NULL,
+            field NVARCHAR(64) NOT NULL,
+            from_value NVARCHAR(255) NULL,
+            to_value NVARCHAR(255) NULL,
+            actor NVARCHAR(128) NULL,
+            changed_at DATETIME NOT NULL,
+            row_key NVARCHAR(128) NULL,
+            effective_from NVARCHAR(32) NULL,
+            change_type NVARCHAR(32) NOT NULL
+          );
+          CREATE INDEX IX_${tableMeta.indexName}_mst_changed_at ON ${tableMeta.quoted}(mst, changed_at);
+        END
+      `;
+      await request.query(createSql);
+      return true;
+    } catch (err) {
+      console.error('Không thể đảm bảo bảng lịch sử Gán MST tồn tại', err);
+      recordSqlTimeout(err);
+      return false;
+    } finally {
+      mstHistoryEnsurePromise = null;
+    }
+  })();
+  return mstHistoryEnsurePromise;
+}
+
+async function syncMstHistoryToSql(entries) {
+  const config = resolveMstHistorySqlConfig();
+  if (!config) {
+    return;
+  }
+  try {
+    const pool = await sqlPoolManager.getPool(config.connectionConfig);
+    const ready = await ensureMstHistoryTable(pool, config.table);
+    if (!ready) {
+      return;
+    }
+    const normalizedEntries = normalizeMstHistoryEntries(entries);
+    const transaction = new sql.Transaction(pool);
+    await transaction.begin();
+    try {
+      const cleanupRequest = new sql.Request(transaction);
+      await cleanupRequest.query(`DELETE FROM ${config.table.quoted};`);
+      if (normalizedEntries.length) {
+        const insert = new sql.PreparedStatement(transaction);
+        insert.input('id', sql.NVarChar(128));
+        insert.input('mst', sql.NVarChar(32));
+        insert.input('field', sql.NVarChar(64));
+        insert.input('from', sql.NVarChar(255));
+        insert.input('to', sql.NVarChar(255));
+        insert.input('actor', sql.NVarChar(128));
+        insert.input('changed_at', sql.DateTime);
+        insert.input('row_key', sql.NVarChar(128));
+        insert.input('effective_from', sql.NVarChar(32));
+        insert.input('change_type', sql.NVarChar(32));
+        await insert.prepare(
+          `INSERT INTO ${config.table.quoted} (id, mst, field, from_value, to_value, actor, changed_at, row_key, effective_from, change_type)
+           VALUES (@id, @mst, @field, @from, @to, @actor, @changed_at, @row_key, @effective_from, @change_type)`
+        );
+        try {
+          for (const entry of normalizedEntries) {
+            await insert.execute({
+              id: entry.id,
+              mst: entry.mst,
+              field: entry.field,
+              from: entry.from,
+              to: entry.to,
+              actor: entry.actor,
+              changed_at: entry.timestamp,
+              row_key: entry.rowKey,
+              effective_from: entry.effectiveFrom,
+              change_type: entry.type,
+            });
+          }
+        } finally {
+          await insert.unprepare().catch(() => {});
+        }
+      }
+      await transaction.commit();
+    } catch (err) {
+      await transaction.rollback().catch(() => {});
+      throw err;
+    }
+  } catch (err) {
+    if (isSqlTimeoutError(err)) {
+      recordSqlTimeout(err);
+    }
+    console.error('Không thể đồng bộ lịch sử Gán MST lên SQL Server', err);
+  }
+}
+
+async function fetchMstHistoryFromSql() {
+  const config = resolveMstHistorySqlConfig();
+  if (!config) {
+    return [];
+  }
+  try {
+    const pool = await sqlPoolManager.getPool(config.connectionConfig);
+    const ready = await ensureMstHistoryTable(pool, config.table);
+    if (!ready) {
+      return [];
+    }
+    const request = pool.request();
+    request.input('limit', sql.Int, MST_HISTORY_MAX_ENTRIES);
+    const result = await request.query(
+      `SELECT TOP (@limit)
+         id,
+         mst,
+         field,
+         from_value,
+         to_value,
+         actor,
+         changed_at,
+         row_key,
+         effective_from,
+         change_type
+       FROM ${config.table.quoted}
+       ORDER BY changed_at DESC, id DESC;`
+    );
+    const rows = Array.isArray(result?.recordset) ? result.recordset : [];
+    return rows
+      .map((row) => {
+        const mst = normalizeMST(row?.mst);
+        if (!mst) return null;
+        const timestamp = row?.changed_at instanceof Date ? row.changed_at : new Date(row?.changed_at);
+        if (Number.isNaN(timestamp?.getTime?.())) {
+          return null;
+        }
+        return {
+          id: clampLength(row?.id, 120),
+          mst,
+          field: clampLength(normalizeStr(row?.field), 64),
+          from: clampLength(normalizeStr(row?.from_value), 255),
+          to: clampLength(normalizeStr(row?.to_value), 255),
+          actor: clampLength(normalizeStr(row?.actor), 128),
+          timestamp: timestamp.toISOString(),
+          rowKey: clampLength(normalizeStr(row?.row_key) || `${mst}__${toISODate(row?.effective_from || '')}`, 128),
+          type: clampLength(normalizeStr(row?.change_type), 32) || 'update',
+        };
+      })
+      .filter(Boolean);
+  } catch (err) {
+    if (isSqlTimeoutError(err)) {
+      recordSqlTimeout(err);
+    }
+    console.error('Không thể tải lịch sử Gán MST từ SQL Server', err);
+    return [];
+  }
+}
+
+async function maybeSyncMstHistoryFromSql() {
+  const entries = await fetchMstHistoryFromSql();
+  if (!entries.length) {
+    return;
+  }
+  const normalized = JSON.stringify(entries);
+  const current = getValue('mst_history_v1');
+  if (current !== normalized) {
+    upsertValue('mst_history_v1', normalized, { skipMstHistorySync: true });
+  }
+}
+
+function scheduleMstHistorySqlSyncFromJson(jsonValue) {
+  const entries = safeParse(jsonValue, []);
+  if (!Array.isArray(entries)) {
+    return;
+  }
+  const queue = mstHistorySyncPromise
+    ? mstHistorySyncPromise.catch(() => {}).then(() => syncMstHistoryToSql(entries))
+    : syncMstHistoryToSql(entries);
+  mstHistorySyncPromise = queue
+    .catch((err) => {
+      console.error('Đồng bộ lịch sử Gán MST lên SQL Server thất bại', err);
+    })
+    .finally(() => {
+      if (mstHistorySyncPromise === queue) {
+        mstHistorySyncPromise = null;
+      }
+    });
+}
+
 function extractNormalizedLicenseCodes(rawValue) {
   if (rawValue === null || rawValue === undefined) return [];
   const normalized = new Set();
@@ -4020,7 +4331,12 @@ app.get('/api/health', (req, res) => {
   res.json({ ok: true });
 });
 
-app.get('/api/bootstrap', (req, res) => {
+app.get('/api/bootstrap', async (req, res) => {
+  try {
+    await maybeSyncMstHistoryFromSql();
+  } catch (err) {
+    console.warn('Không thể đồng bộ lịch sử Gán MST khi bootstrap', err);
+  }
   const store = buildBootstrapSnapshot();
   res.json({ data: store });
 });

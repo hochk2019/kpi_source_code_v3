@@ -16,7 +16,7 @@
 - [x] Cho phép export Excel danh sách tờ khai đã chọn với cấu trúc header mới (bao gồm giấy phép bị loại trừ).
 
 ### Tab "Gán MST"
-- [ ] Lưu lịch sử chỉnh sửa người phụ trách vào bảng riêng trong SQL Server và đồng bộ hai chiều khi restore dữ liệu.
+- [x] Lưu lịch sử chỉnh sửa người phụ trách vào bảng riêng trong SQL Server và đồng bộ hai chiều khi restore dữ liệu.
 - [ ] Hoàn thiện giao diện lịch sử (filter theo ngày/thao tác, tooltip ngắn gọn khi hover).
 
 ### Tab "Đại Lý HQ"

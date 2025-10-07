@@ -123,6 +123,49 @@ describe('storageClient remote đồng bộ lại khi server lên trễ', () => 
     expect(saved.value).toBe(payload);
   });
 
+  it('đồng bộ lịch sử Gán MST lên server khi lưu thay đổi', async () => {
+    const storageWrites = [];
+    const fetchMock = vi.fn(async (input, init) => {
+      const method = (init?.method || 'GET').toUpperCase();
+      const url = typeof input === 'string' ? input : input?.url ?? '';
+      if (url.includes('/api/bootstrap')) {
+        return createBootstrapResponse({ mst_history_v1: '[]' });
+      }
+      if (url.includes('/api/storage/') && method === 'PUT') {
+        storageWrites.push({ url, body: init?.body });
+        return { ok: true, json: async () => ({ ok: true }) };
+      }
+      return { ok: true, json: async () => ({ ok: true }) };
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const initial = await initSharedStorage({ baseUrl: '' });
+    expect(initial).toBe(true);
+
+    const payload = JSON.stringify([
+      {
+        id: 'mst-0100109106-20230901',
+        mst: '0100109106',
+        field: 'person_import',
+        from: 'Lan',
+        to: 'Hạnh',
+        actor: 'tester',
+        timestamp: new Date().toISOString(),
+        rowKey: '0100109106__2023-09-01',
+        type: 'update',
+      },
+    ]);
+    sharedSetItem('mst_history_v1', payload);
+
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(storageWrites).toHaveLength(1);
+    expect(storageWrites[0].url).toContain('/api/storage/mst_history_v1');
+    const saved = JSON.parse(storageWrites[0].body);
+    expect(saved.value).toBe(payload);
+  });
+
   it('phát sự kiện chờ backend khi hàng đợi chưa thể đồng bộ', async () => {
     const bootstrapQueue = [
       { kind: 'error' },
