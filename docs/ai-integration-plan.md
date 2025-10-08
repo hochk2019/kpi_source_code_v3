@@ -53,3 +53,8 @@ Frontend → /api/ai/chat → Server proxy → Nhà cung cấp AI
 - Bổ sung kiểm thử tự động (Vitest) mô phỏng gọi API, đảm bảo cache hoạt động và không lộ thông tin nhạy cảm.
 - Theo dõi usage để điều chỉnh mô hình phù hợp, cảnh báo khi vượt ngưỡng ngân sách token.
 
+## 8. Tình trạng thực tế (12/2024)
+- Đã bổ sung endpoint `GET /api/ai/profile` cung cấp thông tin rút gọn cho người dùng có quyền `aiAssistUse`.
+- Đã xây dựng tab **Trợ lý AI** trên dashboard: hỗ trợ chat, xem cache, chỉnh cấu hình provider/caching/prompt.
+- Vitest có kịch bản mô phỏng Ollama nội bộ và kiểm tra cache hoạt động, đảm bảo hệ thống sẵn sàng kết nối mô hình thật.
+

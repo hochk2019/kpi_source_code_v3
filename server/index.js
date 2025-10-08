@@ -1718,6 +1718,53 @@ function getAiConfig() {
   return mergeAiConfig(DEFAULT_AI_CONFIG, stored);
 }
 
+function buildAiProviderSummary(provider, { defaultProviderId, fallbackProviderId } = {}) {
+  if (!provider || typeof provider !== 'object') {
+    return null;
+  }
+  const id = `${provider.id || ''}`.trim();
+  if (!id) {
+    return null;
+  }
+  return {
+    id,
+    label: `${provider.label || id}`.trim() || id,
+    type: `${provider.type || 'custom'}`.trim() || 'custom',
+    enabled: provider.enabled !== false,
+    isDefault: id === defaultProviderId,
+    isFallback: fallbackProviderId ? id === fallbackProviderId : false,
+  };
+}
+
+function buildAiProfile(config) {
+  const normalized = config && typeof config === 'object' ? config : DEFAULT_AI_CONFIG;
+  const cachingEnabled = normalized?.caching?.enabled !== false;
+  const ttlMinutes = cachingEnabled
+    ? toPositiveInt(normalized?.caching?.ttlMinutes, DEFAULT_AI_CONFIG.caching.ttlMinutes)
+    : 0;
+  const maxEntries = toPositiveInt(normalized?.caching?.maxEntries, AI_CACHE_LIMIT);
+  const providersRaw = Array.isArray(normalized?.providers) ? normalized.providers : [];
+  const providers = providersRaw
+    .map((provider) => buildAiProviderSummary(provider, {
+      defaultProviderId: normalized?.defaultProvider,
+      fallbackProviderId: normalized?.fallbackProvider,
+    }))
+    .filter(Boolean);
+  return {
+    enabled: normalized?.enabled !== false,
+    defaultProvider: `${normalized?.defaultProvider || ''}`.trim() || null,
+    fallbackProvider: `${normalized?.fallbackProvider || ''}`.trim() || null,
+    providers,
+    caching: {
+      enabled: cachingEnabled,
+      ttlMinutes,
+      maxEntries,
+    },
+    updatedAt: normalized?.updatedAt || null,
+    updatedBy: normalized?.updatedBy || null,
+  };
+}
+
 function setAiConfig(configUpdate, { actor = 'system' } = {}) {
   const existing = getAiConfig();
   const merged = mergeAiConfig(existing, configUpdate || {});
@@ -5972,6 +6019,19 @@ app.delete('/api/storage/:key', (req, res) => {
   } catch (err) {
     console.error('Lỗi xóa dữ liệu', err);
     res.status(500).json({ ok: false, error: 'Không thể xóa dữ liệu' });
+  }
+});
+
+app.get('/api/ai/profile', (req, res) => {
+  const { denied } = requireAiAssistUsage(req, res);
+  if (denied) {
+    return;
+  }
+  try {
+    const config = getAiConfig();
+    res.json({ ok: true, profile: buildAiProfile(config) });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err?.message || 'Không thể tải trạng thái trợ lý AI' });
   }
 });
 

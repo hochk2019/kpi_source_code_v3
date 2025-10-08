@@ -193,10 +193,129 @@ cấp linh hoạt:
 
 | Route | Mô tả | Quyền yêu cầu |
 | ----- | ----- | ------------- |
+| `GET /api/ai/profile` | Trả về trạng thái rút gọn để người dùng biết nhà cung cấp đang bật, cache, TTL. | `aiAssistUse` |
 | `GET /api/ai/config` | Đọc cấu hình AI hiện tại, trả về cả danh sách cache gần nhất. | `aiAssistManage` |
 | `PUT /api/ai/config` | Cập nhật endpoint, prompt hệ thống, giới hạn token, TTL cache. | `aiAssistManage` |
 | `DELETE /api/ai/cache` | Xóa toàn bộ cache để ép gọi lại mô hình. | `aiAssistManage` |
 | `POST /api/ai/chat` | Gọi trợ lý AI với câu hỏi tiếng Việt, tự động dùng cache nếu có. | `aiAssistUse` |
+
+## 7. Hướng dẫn triển khai trên Windows 11 Pro + SQL Server 2008 R2 + PowerShell 7
+
+Tài liệu này tổng hợp các bước chuẩn hóa để chạy hệ thống đúng với môi trường
+khách hàng (máy trạm Windows 11 Pro, kết nối cơ sở dữ liệu ECUS5VNACCS trên SQL
+Server 2008 R2, shell mặc định PowerShell 7).
+
+### 7.1. Chuẩn bị môi trường
+
+1. **Cài đặt phần mềm bắt buộc**
+   - [Node.js 18 LTS](https://nodejs.org/) bản dành cho Windows (kèm theo `npm`).
+   - [pnpm](https://pnpm.io/installation) thông qua PowerShell:
+
+     ```powershell
+     iwr https://get.pnpm.io/install.ps1 -useb | iex
+     ```
+
+   - **PowerShell 7** (nếu máy chưa có) từ Microsoft Store hoặc MSI chính thức.
+   - **Visual Studio Build Tools 2019 trở lên** với workload "Desktop development with C++" để biên dịch `better-sqlite3`.
+   - **ODBC Driver 17 for SQL Server** (hoặc driver tương thích với SQL Server 2008 R2) để kết nối ECUS.
+
+2. **Thiết lập biến môi trường** (chạy trong PowerShell 7 với quyền admin):
+
+   ```powershell
+   [System.Environment]::SetEnvironmentVariable('KPI_LISTEN_HOST', '0.0.0.0', 'Machine')
+   [System.Environment]::SetEnvironmentVariable('ECUS_SQL_SERVER', 'TEN_MAY_CHU_SQL', 'Machine')
+   [System.Environment]::SetEnvironmentVariable('ECUS_SQL_DATABASE', 'ECUS5VNACCS', 'Machine')
+   [System.Environment]::SetEnvironmentVariable('ECUS_SQL_USER', 'ten_dang_nhap', 'Machine')
+   [System.Environment]::SetEnvironmentVariable('ECUS_SQL_PASSWORD', 'mat_khau', 'Machine')
+   ```
+
+   Có thể thay `'Machine'` bằng `'User'` nếu chỉ áp dụng cho người dùng hiện tại. Sau
+   khi đặt biến, hãy mở cửa sổ PowerShell mới trước khi chạy dự án.
+
+3. **Kiểm tra kết nối SQL Server 2008 R2**:
+
+   ```powershell
+   Test-NetConnection -ComputerName TEN_MAY_CHU_SQL -Port 1433
+   ```
+
+   Nếu kết quả `TcpTestSucceeded` là `False`, hãy kiểm tra firewall và đảm bảo SQL
+   Server bật chế độ "SQL Server and Windows Authentication". Bạn cũng nên mở SQL
+   Server Configuration Manager để bật TCP/IP.
+
+### 7.2. Thiết lập mã nguồn
+
+1. Mở PowerShell 7 **Run as Administrator** và clone repo:
+
+   ```powershell
+   git clone https://example.com/kpi_source_code_v3.git
+   cd kpi_source_code_v3
+   ```
+
+2. Cài đặt phụ thuộc:
+
+   ```powershell
+   pnpm install
+   pnpm db:init
+   pnpm healthcheck
+   ```
+
+   `pnpm healthcheck` giúp xác nhận driver SQLite và khả năng kết nối SQL Server.
+
+3. Khởi chạy môi trường phát triển:
+
+   ```powershell
+   pnpm dev
+   ```
+
+   Cửa sổ PowerShell sẽ hiển thị log backend và frontend. Địa chỉ truy cập mặc
+   định:
+   - Frontend: http://localhost:5173
+   - API backend: http://localhost:5000
+
+### 7.3. Đồng bộ dữ liệu ECUS5VNACCS
+
+1. Đảm bảo tài khoản ECUS có quyền đọc bảng tờ khai (`dbo.HoSoHaiQuan` hoặc tên
+   tương ứng) và các view liên quan.
+2. Mở file cấu hình `config/ecus.json` (nếu có) hoặc sử dụng UI trong tab **Import
+   Data** để nhập lại thông tin kết nối. Ứng dụng sẽ ưu tiên biến môi trường nếu có.
+3. Trong PowerShell, dùng script kiểm tra thử kết nối:
+
+   ```powershell
+   pnpm sql:ping
+   ```
+
+   Script sẽ báo thành công/ thất bại và gợi ý điều chỉnh timeout (`ECUS_SQL_REQUEST_TIMEOUT`).
+
+### 7.4. Quy trình build & triển khai nội bộ
+
+1. Build frontend:
+
+   ```powershell
+   pnpm build
+   ```
+
+2. Khởi động backend production (có thể tạo shortcut `.ps1` chạy cùng lúc):
+
+   ```powershell
+   pnpm start
+   ```
+
+3. Đặt shortcut trong `Task Scheduler` hoặc `shell:startup` để tự khởi động cùng Windows.
+4. Sao lưu thư mục `server/data/` và database SQL Server trước mỗi lần cập nhật.
+
+### 7.5. Các lỗi thường gặp trên Windows 11
+
+- **Lỗi `better-sqlite3.node` thiếu**: chạy `pnpm rebuild better-sqlite3` trong PowerShell 7 (Run as Administrator).
+- **Không kết nối được SQL Server**: kiểm tra lại driver ODBC, bật port 1433 và đảm bảo người dùng có quyền `db_datareader`.
+- **PowerShell Execution Policy**: nếu script `.ps1` bị chặn, dùng `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`.
+
+> Ghi chú: toàn bộ lệnh PowerShell ở trên tương thích với Windows Terminal. Nếu cần chạy trong PowerShell 5.1, hãy đảm bảo đã cài module
+> `Invoke-WebRequest` cập nhật và sử dụng encoding UTF-8 khi chỉnh sửa file cấu hình để tránh lỗi Unicode.
+
+Giao diện **Trợ lý AI** (tab mới trong dashboard) cho phép:
+
+- Người dùng có quyền `aiAssistUse` trò chuyện trực tiếp, đính kèm ngữ cảnh và chọn nhà cung cấp nếu cần.
+- Quản trị viên cấu hình prompt hệ thống, chuyển đổi giữa Azure OpenAI / Google AI Studio / Ollama, điều chỉnh TTL cache và xem cache gần nhất.
 
 ### 6.1. Biến môi trường hỗ trợ Azure OpenAI, Google AI Studio & Ollama
 
@@ -253,7 +372,7 @@ trong 72 giờ gần nhất nên không phát sinh chi phí token.
 - Trước khi kích hoạt đồng bộ, hãy cấu hình `ECUS_SQL_SERVER` bằng tên máy chủ thật. Nếu để nguyên giá trị mặc định `Server`, ứng dụng sẽ bỏ qua việc kết nối để tránh phát sinh lỗi khi môi trường chưa sẵn sàng.
 - Bảng đồng bộ yêu cầu tối thiểu các cột `username`, `password_hash`, `role`, `name`, `permissions` (chuỗi JSON) và `updated_at` kiểu `DATETIME`.
 
-## 7. Kiểm thử
+## 8. Kiểm thử
 
 ```bash
 pnpm lint
@@ -270,7 +389,7 @@ integration test dùng `supertest`. Các test này tự động tạo cơ sở d
 SQLite trong bộ nhớ (`:memory:`) và mô phỏng kết nối SQL Server, giúp phát hiện
 lỗi kết nối hoặc mapping dữ liệu ngay trên CI.
 
-## 8. Công cụ hỗ trợ dữ liệu ECUS
+## 9. Công cụ hỗ trợ dữ liệu ECUS
 
 Các tác vụ CLI mới giúp kiểm thử/khảo sát dữ liệu ECUS khi chưa kết nối được
 SQL Server thật:
@@ -285,7 +404,7 @@ Bạn có thể dùng dữ liệu mock để chạy thử `/api/import/ecus/run`
 kết nối tới SQL Server, hoặc dùng lệnh `inspect` để xác định rõ tên cột trước
 khi viết câu truy vấn đồng bộ.
 
-## 9. Kế hoạch triển khai chi tiết cho Windows 11 & phân quyền
+## 10. Kế hoạch triển khai chi tiết cho Windows 11 & phân quyền
 
 Trước khi mở rộng triển khai cho toàn bộ đội ngũ, vui lòng tham khảo tài liệu
 [docs/windows11-permission-plan.md](docs/windows11-permission-plan.md) để nắm

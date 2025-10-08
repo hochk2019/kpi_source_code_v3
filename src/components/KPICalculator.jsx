@@ -10,6 +10,7 @@ const KPIAdjustments = React.lazy(() => import('./KPIAdjustments.jsx'));
 const AccountManager = React.lazy(() => import('./AccountManager.jsx'));
 const AuditLog = React.lazy(() => import('./AuditLog.jsx'));
 const HQAgencyManager = React.lazy(() => import('./HQAgencyManager.jsx'));
+const AiAssistant = React.lazy(() => import('./AiAssistant.jsx'));
 
 const TabPanel = ({ children }) => (
   <Suspense fallback={<div className="p-4 text-sm text-gray-500">Đang tải nội dung...</div>}>
@@ -29,6 +30,7 @@ const KPICalculator = ({ auth }) => {
   const canManageSync = !!permissions.syncManage;
   const canManageAlerts = !!permissions.alertsManage;
   const canViewAudit = !!permissions.auditView || canManageAccounts;
+  const canUseAi = !!permissions.aiAssistUse || !!permissions.aiAssistManage;
 
   useEffect(() => {
     import('./ReportViewer.jsx');
@@ -59,6 +61,11 @@ const KPICalculator = ({ auth }) => {
           <TabsTrigger value="reports" data-tooltip="Xem và xuất báo cáo KPI tổng hợp">
             Báo cáo KPI
           </TabsTrigger>
+          {canUseAi && (
+            <TabsTrigger value="ai" data-tooltip="Trợ lý AI nội bộ hỗ trợ KPI và tờ khai">
+              Trợ lý AI
+            </TabsTrigger>
+          )}
           {canManageAccounts && (
             <TabsTrigger value="accounts" data-tooltip="Quản trị tài khoản đăng nhập hệ thống">
               Tài khoản
@@ -117,6 +124,14 @@ const KPICalculator = ({ auth }) => {
             <ReportViewer canExport={canExportReports} currentUser={effectiveAuth} />
           </TabPanel>
         </TabsContent>
+
+        {canUseAi && (
+          <TabsContent value="ai">
+            <TabPanel>
+              <AiAssistant currentUser={effectiveAuth} />
+            </TabPanel>
+          </TabsContent>
+        )}
 
         {canManageAccounts && (
           <TabsContent value="accounts">

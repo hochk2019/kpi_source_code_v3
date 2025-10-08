@@ -26,6 +26,12 @@ export async function fetchAiConfig({ signal } = {}) {
   };
 }
 
+export async function fetchAiProfile({ signal } = {}) {
+  const response = await fetchWithAuth('/api/ai/profile', { signal });
+  const data = await parseJsonResponse(response, 'Không thể tải trạng thái trợ lý AI.');
+  return data.profile || null;
+}
+
 export async function updateAiConfig(config, { signal } = {}) {
   const payload = { config };
   const response = await fetchWithAuth('/api/ai/config', {

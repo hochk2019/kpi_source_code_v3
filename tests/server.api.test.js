@@ -676,6 +676,127 @@ describe('Đồng bộ tài khoản với SQL Server', () => {
   });
 });
 
+describe('AI assistant API', () => {
+  it('từ chối khi chưa đăng nhập', async () => {
+    const res = await request(app).get('/api/ai/profile');
+    expect(res.status).toBe(401);
+    expect(res.body?.ok).toBe(false);
+  });
+
+  it('từ chối khi tài khoản không có quyền aiAssistUse', async () => {
+    const adminAgent = request.agent(app);
+    const loginAdmin = await adminAgent.post('/api/auth/login').send({ username: 'admin', password: 'admin123' });
+    expect(loginAdmin.status).toBe(200);
+
+    const createRes = await adminAgent.post('/api/auth/accounts').send({
+      username: 'no.ai',
+      password: 'Abcdef1',
+      role: 'staff',
+      permissions: { aiAssistUse: false },
+    });
+    expect(createRes.status).toBe(201);
+
+    const viewer = request.agent(app);
+    const loginViewer = await viewer.post('/api/auth/login').send({ username: 'no.ai', password: 'Abcdef1' });
+    expect(loginViewer.status).toBe(200);
+
+    const res = await viewer.get('/api/ai/profile');
+    expect(res.status).toBe(403);
+    expect(res.body?.ok).toBe(false);
+  });
+
+  it('trả về trạng thái rút gọn cho người dùng có quyền', async () => {
+    const staff = request.agent(app);
+    const loginRes = await staff.post('/api/auth/login').send({ username: 'nhanvien', password: '123456' });
+    expect(loginRes.status).toBe(200);
+
+    const res = await staff.get('/api/ai/profile');
+    expect(res.status).toBe(200);
+    expect(res.body?.ok).toBe(true);
+    const profile = res.body?.profile;
+    expect(profile).toBeTruthy();
+    expect(profile.enabled).toBe(true);
+    expect(Array.isArray(profile.providers)).toBe(true);
+    if (profile.providers.length > 0 && profile.defaultProvider) {
+      const found = profile.providers.find((provider) => provider.id === profile.defaultProvider);
+      expect(found).toBeTruthy();
+      expect(found).not.toHaveProperty('endpoint');
+      expect(found).not.toHaveProperty('apiKeyEnv');
+    }
+  });
+
+  it('cho phép cấu hình nhà cung cấp và trả lời qua Ollama mock với cache', async () => {
+    const admin = request.agent(app);
+    const adminLogin = await admin.post('/api/auth/login').send({ username: 'admin', password: 'admin123' });
+    expect(adminLogin.status).toBe(200);
+
+    const updateRes = await admin.put('/api/ai/config').send({
+      config: {
+        enabled: true,
+        defaultProvider: 'ollama-local',
+        fallbackProvider: null,
+        providers: [
+          { id: 'azure-openai', enabled: false },
+          { id: 'google-ai-studio', enabled: false },
+          {
+            id: 'ollama-local',
+            type: 'ollama',
+            enabled: true,
+            endpoint: 'http://ollama.test',
+            model: 'llama3.1:8b',
+          },
+        ],
+        caching: { enabled: true, ttlMinutes: 60, maxEntries: 10 },
+      },
+    });
+    expect(updateRes.status).toBe(200);
+
+    const staff = request.agent(app);
+    const staffLogin = await staff.post('/api/auth/login').send({ username: 'nhanvien', password: '123456' });
+    expect(staffLogin.status).toBe(200);
+
+    const fetchSpy = vi.spyOn(global, 'fetch').mockImplementation(async (url) => {
+      if (typeof url === 'string' && url.includes('ollama.test')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            message: { content: 'Trả lời thử nghiệm từ mô phỏng' },
+            prompt_eval_count: 12,
+            eval_count: 5,
+          }),
+          text: async () => 'ok',
+        };
+      }
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ ok: true }),
+        text: async () => 'ok',
+      };
+    });
+
+    try {
+      const payload = { prompt: 'Xin chào trợ lý', scope: 'test', providerId: 'ollama-local' };
+      const first = await staff.post('/api/ai/chat').send(payload);
+      expect(first.status).toBe(200);
+      expect(first.body?.ok).toBe(true);
+      expect(first.body.cached).toBe(false);
+      expect(first.body.message).toContain('Trả lời thử nghiệm');
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+
+      const second = await staff.post('/api/ai/chat').send(payload);
+      expect(second.status).toBe(200);
+      expect(second.body?.ok).toBe(true);
+      expect(second.body.cached).toBe(true);
+      expect(second.body.cacheKey).toBeTruthy();
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+});
+
 afterAll(() => {
   stopServer?.();
 });
