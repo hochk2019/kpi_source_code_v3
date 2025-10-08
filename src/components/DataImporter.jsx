@@ -11,6 +11,7 @@ import {
   markDeclRowsReviewed,
   mapHQAgenciesByMST,
   normalizeStr,
+  normalizeDeclarationNumber,
 } from "@/lib/store.js";
 import { mapRow, detectDateOrder } from "@/lib/importer.js";
 import { loadRules, computeKPI, extractLicenseCodesFromRowObj } from "@/lib/rules.js";
@@ -177,11 +178,50 @@ function coerceLicenseValue(value) {
 
 function ensureLicenseFields(row) {
   if (!row || typeof row !== "object") return row;
+  let next = row;
+  const ensureClone = () => {
+    if (next === row) {
+      next = { ...row };
+    }
+  };
+
   const source = row.licenses ?? row.so_luong_gp;
-  if (source === undefined) return row;
-  const normalized = coerceLicenseValue(source);
-  if (row.licenses === normalized && row.so_luong_gp === normalized) return row;
-  return { ...row, licenses: normalized, so_luong_gp: normalized };
+  if (source !== undefined) {
+    const normalized = coerceLicenseValue(source);
+    if (normalized === "") {
+      if (row.licenses !== "" || row.so_luong_gp !== "") {
+        ensureClone();
+        next.licenses = "";
+        next.so_luong_gp = "";
+      }
+    } else if (row.licenses !== normalized || row.so_luong_gp !== normalized) {
+      ensureClone();
+      next.licenses = normalized;
+      next.so_luong_gp = normalized;
+    }
+  }
+
+  if (Object.prototype.hasOwnProperty.call(row, "licenseManualCount")) {
+    const manualNormalized = coerceLicenseValue(row.licenseManualCount);
+    if (manualNormalized === "") {
+      if (row.licenseManualCount !== null && row.licenseManualCount !== undefined) {
+        ensureClone();
+        next.licenseManualCount = null;
+      }
+    } else if (row.licenseManualCount !== manualNormalized) {
+      ensureClone();
+      next.licenseManualCount = manualNormalized;
+    }
+    if (manualNormalized !== "") {
+      if (next.licenses !== manualNormalized || next.so_luong_gp !== manualNormalized) {
+        ensureClone();
+        next.licenses = manualNormalized;
+        next.so_luong_gp = manualNormalized;
+      }
+    }
+  }
+
+  return next;
 }
 
 const CODE_INPUT_SPLIT = /[\s,;]+/;
@@ -249,6 +289,61 @@ function arraysEqual(a, b) {
   return true;
 }
 
+function parseRowTimestamp(...values) {
+  return values.reduce((max, value) => {
+    if (!value) return max;
+    const ts = Date.parse(value);
+    if (!Number.isFinite(ts)) return max;
+    return Math.max(max, ts);
+  }, 0);
+}
+
+function computeDuplicateWeight(row) {
+  if (!row || typeof row !== "object") {
+    return { score: 0, timestamp: 0 };
+  }
+  let score = 0;
+  if (row.reviewed) score += 5;
+  if (row.nhan_vien) score += 2;
+  if (row.team) score += 2;
+  if (row.agency || row.dai_ly) score += 1;
+  if (Array.isArray(row.licenseCodes) && row.licenseCodes.length) score += 1;
+  const manual = Number(row.licenseManualCount);
+  if (Number.isFinite(manual) && manual >= 0) score += 3;
+  const licenseCount = Number(row.licenses ?? row.so_luong_gp);
+  if (Number.isFinite(licenseCount) && licenseCount > 0) score += 1;
+  const timestamp = parseRowTimestamp(
+    row.updatedAt,
+    row.reviewed_at,
+    row.syncedAt,
+    row.importedAt,
+    row.createdAt,
+    row.date,
+  );
+  return { score, timestamp };
+}
+
+function compareDuplicateCandidates(a, b) {
+  const weightA = computeDuplicateWeight(a);
+  const weightB = computeDuplicateWeight(b);
+  if (weightA.score !== weightB.score) {
+    return weightB.score - weightA.score;
+  }
+  if (weightA.timestamp !== weightB.timestamp) {
+    return weightB.timestamp - weightA.timestamp;
+  }
+  const kpiA = Number(a?.kpi);
+  const kpiB = Number(b?.kpi);
+  if (Number.isFinite(kpiA) && Number.isFinite(kpiB) && kpiA !== kpiB) {
+    return kpiB - kpiA;
+  }
+  return 0;
+}
+
+function extractDuplicatePrefix(row) {
+  return normalizeDeclarationNumber(row?.so_tk_full ?? row?.so_tk ?? "", 11);
+}
+
 function formatDeclarationLabel(entry) {
   if (!entry || typeof entry !== "object") return "";
   const number = entry.so_tk_full ? String(entry.so_tk_full) : entry.so_tk ? String(entry.so_tk) : "";
@@ -288,6 +383,7 @@ export default function DataImporter({
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [filterNoStaff, setFilterNoStaff] = useState(false);
   const [filterNoTeam, setFilterNoTeam] = useState(false);
+  const [filterDuplicate11, setFilterDuplicate11] = useState(false);
   const [coFilterMode, setCoFilterMode] = useState("all");
   const [coFilterMin, setCoFilterMin] = useState(5);
   const [selectedKeys, setSelectedKeys] = useState([]);
@@ -360,6 +456,9 @@ export default function DataImporter({
     if (typeof stored.filterNoTeam === "boolean") {
       setFilterNoTeam(stored.filterNoTeam);
     }
+    if (typeof stored.filterDuplicate11 === "boolean") {
+      setFilterDuplicate11(stored.filterDuplicate11);
+    }
     if (typeof stored.coFilterMode === "string") {
       setCoFilterMode(stored.coFilterMode);
     }
@@ -425,6 +524,7 @@ export default function DataImporter({
       range: { ...searchRange },
       filterNoStaff,
       filterNoTeam,
+      filterDuplicate11,
       coFilterMode,
       coFilterMin,
       datePreset,
@@ -440,7 +540,7 @@ export default function DataImporter({
       console.error("Không thể lưu bộ lọc", error);
       alert("Không thể lưu bộ lọc. Vui lòng kiểm tra bộ nhớ trình duyệt.");
     }
-  }, [query, searchRange, filterNoStaff, filterNoTeam, coFilterMode, coFilterMin, datePreset]);
+  }, [query, searchRange, filterNoStaff, filterNoTeam, filterDuplicate11, coFilterMode, coFilterMin, datePreset]);
 
   const handleRestoreSavedFilter = useCallback(() => {
     if (!savedFilterRef.current) {
@@ -535,7 +635,10 @@ export default function DataImporter({
       const computedExcluded = normalizedSource.filter((code) => excludeSet.has(code));
       const excludedSet = new Set([...explicitExcluded, ...computedExcluded]);
       const includedCodes = normalizedSource.filter((code) => !excludedSet.has(code));
-      const manualCount = Number(row.licenses ?? row.so_luong_gp);
+      const manualOverride = coerceLicenseValue(row.licenseManualCount);
+      const directCountSource =
+        manualOverride !== "" ? manualOverride : coerceLicenseValue(row.licenses ?? row.so_luong_gp);
+      const manualCount = directCountSource === "" ? null : Number(directCountSource);
       const includedCount = Number.isFinite(manualCount) && manualCount >= 0 ? manualCount : includedCodes.length;
       const sourceCount = normalizedSource.length || includedCodes.length + excludedSet.size;
       return {
@@ -602,6 +705,7 @@ export default function DataImporter({
     setSelectedFile("");
     setFilterNoStaff(false);
     setFilterNoTeam(false);
+    setFilterDuplicate11(false);
     setCoFilterMode("all");
     setCoFilterMin(5);
     setSelectedKeys([]);
@@ -616,6 +720,12 @@ export default function DataImporter({
     if (rawRows.length > 0) return;
     loadSavedRows({ bypassConfirm: true });
   }, [loadSavedRows, mode, hasUnsaved, rawRows.length]);
+
+  useEffect(() => {
+    if (mode !== "saved") {
+      setFilterDuplicate11(false);
+    }
+  }, [mode]);
 
   useEffect(() => {
     if (!hasUnsaved) return undefined;
@@ -1416,6 +1526,67 @@ export default function DataImporter({
     }, 0);
   }, [rawRows, coFilterMode, coFilterActive, coThreshold]);
 
+  const keyOfRow = useCallback((row) => {
+    const soTk = (row?.so_tk || "").toString();
+    const nhanh = (row?.nhanh || "").toString();
+    return `${soTk}_${nhanh}`;
+  }, []);
+
+  const duplicate11Summary = useMemo(() => {
+    const counts = new Map();
+    const groupsMap = new Map();
+    for (const row of rawRows) {
+      const prefix = extractDuplicatePrefix(row);
+      if (!prefix) continue;
+      counts.set(prefix, (counts.get(prefix) || 0) + 1);
+      if (!groupsMap.has(prefix)) {
+        groupsMap.set(prefix, [row]);
+      } else {
+        groupsMap.get(prefix).push(row);
+      }
+    }
+
+    let groups = 0;
+    let totalRows = 0;
+    const removalKeys = [];
+    const duplicatesSet = new Set();
+    const keptKeys = new Set();
+
+    for (const [, list] of groupsMap.entries()) {
+      if (!Array.isArray(list) || list.length <= 1) continue;
+      groups += 1;
+      totalRows += list.length;
+      const sorted = [...list].sort(compareDuplicateCandidates);
+      const keeper = sorted[0];
+      if (keeper) {
+        keptKeys.add(keyOfRow(keeper));
+      }
+      for (const item of sorted.slice(1)) {
+        const key = keyOfRow(item);
+        duplicatesSet.add(key);
+        removalKeys.push(key);
+      }
+    }
+
+    return {
+      counts,
+      groups,
+      totalRows,
+      removalKeys,
+      duplicatesSet,
+      keptKeys,
+      hasDuplicates: groups > 0,
+    };
+  }, [rawRows, keyOfRow]);
+
+  const duplicate11GroupCount = duplicate11Summary.groups;
+  const duplicate11RemovalKeys = duplicate11Summary.removalKeys;
+  const duplicate11RemovalCount = duplicate11RemovalKeys.length;
+  const duplicate11TotalRows = duplicate11Summary.totalRows;
+  const duplicate11DuplicatesSet = duplicate11Summary.duplicatesSet;
+  const duplicate11KeeperSet = duplicate11Summary.keptKeys;
+  const hasDuplicate11Rows = duplicate11Summary.hasDuplicates;
+
   const filtered = useMemo(() => {
     const q = query.toLowerCase().trim();
     const hasText = q.length > 0;
@@ -1465,9 +1636,28 @@ export default function DataImporter({
           return false;
         }
       }
+      if (filterDuplicate11) {
+        const prefix = extractDuplicatePrefix(r);
+        if (!prefix) return false;
+        const count = duplicate11Summary.counts.get(prefix) || 0;
+        if (count <= 1) {
+          return false;
+        }
+      }
       return true;
     });
-  }, [rawRows, query, filterNoStaff, filterNoTeam, coFilterMode, coThreshold, searchRange.from, searchRange.to]);
+  }, [
+    rawRows,
+    query,
+    filterNoStaff,
+    filterNoTeam,
+    filterDuplicate11,
+    duplicate11Summary,
+    coFilterMode,
+    coThreshold,
+    searchRange.from,
+    searchRange.to,
+  ]);
 
   // Phân trang
   const total = filtered.length;
@@ -1483,13 +1673,7 @@ export default function DataImporter({
 
   useEffect(() => {
     setPage(1);
-  }, [pageSize, filterNoStaff, filterNoTeam, coFilterMode, coThreshold, searchRange.from, searchRange.to]);
-
-  const keyOfRow = useCallback((row) => {
-    const soTk = (row.so_tk || "").toString();
-    const nhanh = (row.nhanh || "").toString();
-    return `${soTk}_${nhanh}`;
-  }, []);
+  }, [pageSize, filterNoStaff, filterNoTeam, filterDuplicate11, coFilterMode, coThreshold, searchRange.from, searchRange.to]);
 
   const filteredKeys = useMemo(() => {
     return Array.from(new Set(filtered.map((row) => keyOfRow(row))));
@@ -1699,6 +1883,7 @@ export default function DataImporter({
   const canSave = !isReadOnlyForEdits && mode === "saved" && rawRows.length > 0;
   const canDelete = deleteEnabled && selectedKeys.length > 0;
   const canReview = selectionEnabled && selectedKeys.length > 0 && canReviewAlerts;
+  const canDeleteDuplicates11 = deleteEnabled && duplicate11RemovalCount > 0;
   const modeLabel = mode === "preview" ? "Đang xem dữ liệu từ file (chưa lưu)" : "Đang xem dữ liệu đã lưu";
 
   const handleSelectFiltered = useCallback(() => {
@@ -1713,6 +1898,42 @@ export default function DataImporter({
     setSelectedKeys(filteredKeys);
     setPage(1);
   }, [selectionEnabled, filteredKeys]);
+
+  const handleToggleDuplicateFilter = useCallback(() => {
+    if (!hasDuplicate11Rows) {
+      alert("Không có tờ khai trùng 11 số đầu để lọc.");
+      return;
+    }
+    setFilterDuplicate11((prev) => !prev);
+    setPage(1);
+  }, [hasDuplicate11Rows]);
+
+  const handleDeleteDuplicates11 = useCallback(() => {
+    if (isReadOnlyForEdits) {
+      alert("Bạn không có quyền xóa tờ khai trùng.");
+      return;
+    }
+    if (mode !== "saved") {
+      alert("Chỉ có thể xóa tờ khai trùng khi đang xem dữ liệu đã lưu.");
+      return;
+    }
+    if (duplicate11RemovalCount === 0) {
+      alert("Không có tờ khai trùng để xóa.");
+      return;
+    }
+    const message = `Hệ thống sẽ xóa ${duplicate11RemovalCount.toLocaleString("vi-VN")} bản ghi trùng trong ${duplicate11GroupCount.toLocaleString("vi-VN")} nhóm (giữ lại bản mới nhất). Bạn có chắc chắn muốn tiếp tục?`;
+    if (!window.confirm(message)) {
+      return;
+    }
+    deleteRowsByKeys(duplicate11RemovalKeys);
+  }, [
+    isReadOnlyForEdits,
+    mode,
+    duplicate11RemovalCount,
+    duplicate11GroupCount,
+    duplicate11RemovalKeys,
+    deleteRowsByKeys,
+  ]);
 
   const applyLicenseExclusionForKeys = useCallback((targetKeys) => {
     if (mode !== "saved") {
@@ -1777,6 +1998,7 @@ export default function DataImporter({
         licenseCodes: effectiveCodes,
         licenses: nextLicenseCount,
         so_luong_gp: nextLicenseCount,
+        licenseManualCount: nextLicenseCount,
         updatedAt: new Date().toISOString(),
       };
       const recalculated = computeKPI(nextRow, rules);
@@ -2713,6 +2935,37 @@ export default function DataImporter({
             )}
           </>
         )}
+        <button
+          type="button"
+          onClick={handleToggleDuplicateFilter}
+          className={`rounded border px-3 py-1 text-xs ${
+            filterDuplicate11
+              ? "border-amber-400 bg-amber-50 text-amber-700"
+              : hasDuplicate11Rows
+              ? "text-gray-600 hover:bg-gray-50"
+              : "text-gray-400 cursor-not-allowed"
+          }`}
+          disabled={!hasDuplicate11Rows}
+        >
+          {filterDuplicate11 ? "Đang lọc tờ khai trùng 11 số đầu" : "Lọc tờ khai trùng 11 số đầu"}
+        </button>
+        {canDeleteDuplicates11 && (
+          <button
+            type="button"
+            onClick={handleDeleteDuplicates11}
+            className="rounded border border-red-300 bg-red-50 px-3 py-1 text-xs font-medium text-red-600 hover:bg-red-100"
+          >
+            Xóa bản trùng (giữ mới nhất)
+          </button>
+        )}
+        {hasDuplicate11Rows && (
+          <span className="text-xs text-amber-700">
+            {duplicate11GroupCount.toLocaleString("vi-VN")} nhóm / {duplicate11RemovalCount.toLocaleString("vi-VN")} bản ghi trùng
+            {duplicate11TotalRows > duplicate11RemovalCount
+              ? ` (tổng ${duplicate11TotalRows.toLocaleString("vi-VN")} dòng)`
+              : ""}
+          </span>
+        )}
         {canEdit && mode === "saved" && (
           <button
             type="button"
@@ -2888,6 +3141,12 @@ export default function DataImporter({
                     {coMismatchKeySet.has(rowKey) && (
                       <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">CO lech</span>
                     )}
+                    {duplicate11KeeperSet.has(rowKey) && (
+                      <span className="rounded bg-sky-100 px-1.5 py-0.5 text-[10px] font-medium text-sky-700">Giữ mới nhất</span>
+                    )}
+                    {duplicate11DuplicatesSet.has(rowKey) && (
+                      <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">Trùng 11 số</span>
+                    )}
                   </div>
                 </td>
                 <td className="px-2 py-1">
@@ -2980,13 +3239,17 @@ export default function DataImporter({
                       onChange={e => {
                         const input = e.target.value;
                         if (input === "") {
-                          applyEdit(rowKey, () => ({ licenses: "", so_luong_gp: "" }));
+                          applyEdit(rowKey, () => ({ licenses: "", so_luong_gp: "", licenseManualCount: null }));
                           return;
                         }
                         const parsed = Number(input);
                         if (!Number.isFinite(parsed)) return;
                         const normalized = Math.max(0, Math.round(parsed));
-                        applyEdit(rowKey, () => ({ licenses: normalized, so_luong_gp: normalized }));
+                        applyEdit(rowKey, () => ({
+                          licenses: normalized,
+                          so_luong_gp: normalized,
+                          licenseManualCount: normalized,
+                        }));
                       }}
                     />
                   )}
