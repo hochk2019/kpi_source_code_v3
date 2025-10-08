@@ -49,3 +49,4 @@ Nguồn tham chiếu: Checklist nghiệp vụ cung cấp ("Danh sách kiểm tra
 ## Kết luận
 - Toàn bộ hạng mục Checklist 3.0 đã có mặt trong mã nguồn và đã được chạy lại kiểm thử sau đợt tối ưu mã nguồn.
 - Duy trì lịch rà soát định kỳ để phát hiện mã thừa mới phát sinh trong các lần nâng cấp tiếp theo.
+- Việc gỡ bỏ `sidebar.jsx` và `use-mobile.js` không ảnh hưởng tới khả năng truy cập trên thiết bị di động: phần đầu trang sử dụng bố cục `flex-col`/`sm:flex-row`, cụm tab tự động xuống dòng (`flex-wrap`) và bảng dữ liệu hỗ trợ cuộn ngang khi màn hình hẹp, nên giao diện vẫn vận hành đầy đủ qua điện thoại trong mạng LAN.【F:src/App.jsx†L74-L134】【F:src/components/KPICalculator.jsx†L39-L140】【F:src/components/DataImporter.jsx†L2820-L2885】
