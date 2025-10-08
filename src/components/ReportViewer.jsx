@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   getDeclRows,
   getTeamRoster,
@@ -65,6 +65,86 @@ const SORT_OPTIONS = [
   { value: "decls", label: "Số tờ khai" },
   { value: "licenses", label: "Số giấy phép" },
 ];
+
+const REPORT_PREFS_STORAGE_KEY = "kpi_report_viewer_prefs_v1";
+const QUICK_RANGE_VALUES = new Set([
+  ...QUICK_RANGE_OPTIONS.map((option) => option.value),
+  "custom",
+]);
+const SCOPE_VALUES = new Set(["staff", "team"]);
+
+function sanitizeQuickRange(value) {
+  if (typeof value !== "string") {
+    return "this_month";
+  }
+  const normalized = value.trim();
+  if (QUICK_RANGE_VALUES.has(normalized)) {
+    return normalized;
+  }
+  return "this_month";
+}
+
+function sanitizeSortKey(value) {
+  if (METRIC_SORT_KEYS.includes(value)) {
+    return value;
+  }
+  return "kpi";
+}
+
+function sanitizeScope(value) {
+  if (typeof value !== "string") {
+    return "staff";
+  }
+  const normalized = value.trim();
+  return SCOPE_VALUES.has(normalized) ? normalized : "staff";
+}
+
+function sanitizeTopStaffMetric(value) {
+  return value === "decls" ? "decls" : "kpi";
+}
+
+function sanitizeSelection(value) {
+  if (typeof value !== "string") {
+    return "all";
+  }
+  const normalized = value.trim();
+  return normalized || "all";
+}
+
+function sanitizeDateInput(value, fallback) {
+  if (typeof value !== "string") {
+    return fallback;
+  }
+  const normalized = value.trim();
+  return normalized || fallback;
+}
+
+function loadReportPreferences() {
+  if (typeof window === "undefined" || !window.localStorage) {
+    return {};
+  }
+  try {
+    const raw = window.localStorage.getItem(REPORT_PREFS_STORAGE_KEY);
+    if (!raw) {
+      return {};
+    }
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveReportPreferences(prefs) {
+  if (typeof window === "undefined" || !window.localStorage) {
+    return;
+  }
+  try {
+    window.localStorage.setItem(REPORT_PREFS_STORAGE_KEY, JSON.stringify(prefs));
+  } catch (err) {
+    console.warn("Không thể lưu bộ lọc báo cáo vào localStorage", err);
+  }
+}
 
 function getCompanyRowLabel(row = {}) {
   if (row.staff && row.team) {
@@ -617,7 +697,7 @@ function StaffDetailCard({ staff, canExport, onExport, exporting, visibleColumns
                       <td className="px-3 py-1.5 text-right">{formatInt(row.licenses)}</td>
                     ) : null}
                     {showCo ? (
-                      <td className="px-3 py-1.5 text-center">{row.coLabel || "Không"}</td>
+                      <td className="px-3 py-1.5 text-center">{row.hasCO ? "Có" : "Không"}</td>
                     ) : null}
                     {showCoLines ? (
                       <td className="px-3 py-1.5 text-right">{formatInt(row.coLineCount || 0)}</td>
@@ -898,7 +978,7 @@ function TeamDetailCard({ team, canExport, onExport, exporting, visibleColumns =
                         <td className="px-3 py-1.5 text-right">{formatInt(row.licenses)}</td>
                       ) : null}
                       {showCo ? (
-                        <td className="px-3 py-1.5 text-center">{row.coLabel || "Không"}</td>
+                        <td className="px-3 py-1.5 text-center">{row.hasCO ? "Có" : "Không"}</td>
                       ) : null}
                       {showCoLines ? (
                         <td className="px-3 py-1.5 text-right">{formatInt(row.coLineCount || 0)}</td>
@@ -931,18 +1011,29 @@ function TeamDetailCard({ team, canExport, onExport, exporting, visibleColumns =
 }
 
 export default function ReportViewer({ canExport = true }) {
-  const initialRange = useMemo(() => computeQuickRange("this_month"), []);
-  const [quickRange, setQuickRange] = useState("this_month");
-  const [from, setFrom] = useState(initialRange.from);
-  const [to, setTo] = useState(initialRange.to);
-  const [scope, setScope] = useState("staff"); // staff | team
-  const [selectedStaff, setSelectedStaff] = useState("all");
-  const [selectedTeam, setSelectedTeam] = useState("all");
+  const storedPrefs = useMemo(() => loadReportPreferences(), []);
+  const initialQuickRange = sanitizeQuickRange(storedPrefs.quickRange);
+  const quickRangeBase = initialQuickRange === "custom" ? "this_month" : initialQuickRange;
+  const initialRange = useMemo(() => computeQuickRange(quickRangeBase), [quickRangeBase]);
+  const [quickRange, setQuickRange] = useState(initialQuickRange);
+  const [from, setFrom] = useState(() =>
+    initialQuickRange === "custom"
+      ? sanitizeDateInput(storedPrefs.from, initialRange.from)
+      : initialRange.from
+  );
+  const [to, setTo] = useState(() =>
+    initialQuickRange === "custom"
+      ? sanitizeDateInput(storedPrefs.to, initialRange.to)
+      : initialRange.to
+  );
+  const [scope, setScope] = useState(() => sanitizeScope(storedPrefs.scope));
+  const [selectedStaff, setSelectedStaff] = useState(() => sanitizeSelection(storedPrefs.selectedStaff));
+  const [selectedTeam, setSelectedTeam] = useState(() => sanitizeSelection(storedPrefs.selectedTeam));
   const [staffViewMode, setStaffViewMode] = useState("detail");
   const [teamViewMode, setTeamViewMode] = useState("detail");
-  const [topStaffMetric, setTopStaffMetric] = useState("kpi");
-  const [staffSortKey, setStaffSortKey] = useState("kpi");
-  const [teamSortKey, setTeamSortKey] = useState("kpi");
+  const [topStaffMetric, setTopStaffMetric] = useState(() => sanitizeTopStaffMetric(storedPrefs.topStaffMetric));
+  const [staffSortKey, setStaffSortKey] = useState(() => sanitizeSortKey(storedPrefs.staffSortKey));
+  const [teamSortKey, setTeamSortKey] = useState(() => sanitizeSortKey(storedPrefs.teamSortKey));
   const [version, setVersion] = useState(0);
   const [exporting, setExporting] = useState(false);
   const [columnVisibility, setColumnVisibility] = useState(() => ({
@@ -952,6 +1043,7 @@ export default function ReportViewer({ canExport = true }) {
     coLines: true,
     licenseCodes: true,
   }));
+  const prefsSnapshotRef = useRef("");
 
   const handleToggleColumnVisibility = (key) => {
     setColumnVisibility((prev) => ({
@@ -959,6 +1051,36 @@ export default function ReportViewer({ canExport = true }) {
       [key]: prev[key] === false,
     }));
   };
+
+  useEffect(() => {
+    const payload = {
+      quickRange,
+      from,
+      to,
+      scope,
+      selectedStaff,
+      selectedTeam,
+      staffSortKey,
+      teamSortKey,
+      topStaffMetric,
+    };
+    const snapshot = JSON.stringify(payload);
+    if (prefsSnapshotRef.current === snapshot) {
+      return;
+    }
+    prefsSnapshotRef.current = snapshot;
+    saveReportPreferences(payload);
+  }, [
+    quickRange,
+    from,
+    to,
+    scope,
+    selectedStaff,
+    selectedTeam,
+    staffSortKey,
+    teamSortKey,
+    topStaffMetric,
+  ]);
 
   const handleSeedSamples = () => {
     const confirmed = window.confirm(

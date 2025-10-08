@@ -560,6 +560,11 @@ const DEFAULT_ACCOUNT_SEED = [
 
 const AI_CONFIG_KEY = 'ai_provider_config_v1';
 const AI_CACHE_KEY = 'ai_usage_cache_v1';
+const AI_CHAT_HISTORY_PREFIX = 'ai_chat_history__';
+const MAX_AI_HISTORY_MESSAGES = 50;
+const MAX_AI_MESSAGE_LENGTH = 6000;
+const MAX_AI_SCOPE_LENGTH = 120;
+const MAX_AI_PROVIDER_LENGTH = 120;
 
 const STORAGE_PERMISSION_REQUIREMENTS = Object.freeze({
   decl_rows_v1: 'importEdit',
@@ -1430,6 +1435,120 @@ function requireAiAssistManage(req, res) {
     return { context, denied: true };
   }
   return { context, denied: false };
+}
+
+function createAiHistoryId() {
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function buildAiHistoryKey(username) {
+  const normalized = (username ?? '').toString().trim();
+  if (!normalized) {
+    throw new Error('Thiếu thông tin tài khoản để lưu lịch sử AI.');
+  }
+  return `${AI_CHAT_HISTORY_PREFIX}${normalized}`;
+}
+
+function sanitizeAiHistoryUsage(usage) {
+  if (!usage || typeof usage !== 'object') {
+    return null;
+  }
+  const prompt = Number(usage.promptTokens ?? usage.prompt_tokens);
+  const completion = Number(usage.completionTokens ?? usage.completion_tokens);
+  const total = Number(usage.totalTokens ?? usage.total_tokens);
+  const normalized = {};
+  if (Number.isFinite(prompt) && prompt >= 0) {
+    normalized.promptTokens = Math.trunc(prompt);
+  }
+  if (Number.isFinite(completion) && completion >= 0) {
+    normalized.completionTokens = Math.trunc(completion);
+  }
+  if (Number.isFinite(total) && total >= 0) {
+    normalized.totalTokens = Math.trunc(total);
+  }
+  return Object.keys(normalized).length ? normalized : null;
+}
+
+function sanitizeAiHistoryMessage(entry) {
+  if (!entry || typeof entry !== 'object') {
+    return null;
+  }
+  const role = entry.role;
+  if (role !== 'user' && role !== 'assistant' && role !== 'error') {
+    return null;
+  }
+  const rawText = entry.text === undefined || entry.text === null ? '' : String(entry.text);
+  const text = rawText.length > MAX_AI_MESSAGE_LENGTH ? rawText.slice(0, MAX_AI_MESSAGE_LENGTH) : rawText;
+  const scope = typeof entry.scope === 'string'
+    ? entry.scope.trim().slice(0, MAX_AI_SCOPE_LENGTH)
+    : '';
+  const providerId = typeof entry.providerId === 'string'
+    ? entry.providerId.trim().slice(0, MAX_AI_PROVIDER_LENGTH)
+    : '';
+  const createdAtSource = entry.createdAt ? new Date(entry.createdAt) : new Date();
+  const createdAt = Number.isNaN(createdAtSource.getTime())
+    ? new Date().toISOString()
+    : createdAtSource.toISOString();
+  return {
+    id:
+      typeof entry.id === 'string' && entry.id.trim()
+        ? entry.id.trim()
+        : createAiHistoryId(),
+    role,
+    text,
+    scope,
+    providerId: providerId || null,
+    cached: entry.cached === true,
+    usage: sanitizeAiHistoryUsage(entry.usage),
+    createdAt,
+  };
+}
+
+function clampAiHistoryMessages(messages) {
+  const list = Array.isArray(messages) ? messages.filter(Boolean) : [];
+  if (list.length <= MAX_AI_HISTORY_MESSAGES) {
+    return list;
+  }
+  return list.slice(list.length - MAX_AI_HISTORY_MESSAGES);
+}
+
+function loadAiChatHistory(username) {
+  const key = buildAiHistoryKey(username);
+  const raw = getValue(key);
+  if (!raw) {
+    return { messages: [], updatedAt: null };
+  }
+  const parsed = safeParse(raw, null);
+  if (Array.isArray(parsed)) {
+    const sanitized = clampAiHistoryMessages(parsed.map((item) => sanitizeAiHistoryMessage(item)).filter(Boolean));
+    return { messages: sanitized, updatedAt: null };
+  }
+  if (parsed && typeof parsed === 'object') {
+    const baseMessages = Array.isArray(parsed.messages) ? parsed.messages : [];
+    const sanitized = clampAiHistoryMessages(baseMessages.map((item) => sanitizeAiHistoryMessage(item)).filter(Boolean));
+    const updatedAt = typeof parsed.updatedAt === 'string' ? parsed.updatedAt : null;
+    return { messages: sanitized, updatedAt };
+  }
+  return { messages: [], updatedAt: null };
+}
+
+function saveAiChatHistory(username, messages, { actor = 'system' } = {}) {
+  const key = buildAiHistoryKey(username);
+  const sanitized = clampAiHistoryMessages(
+    (Array.isArray(messages) ? messages : []).map((item) => sanitizeAiHistoryMessage(item)).filter(Boolean)
+  );
+  const payload = {
+    version: 1,
+    updatedAt: new Date().toISOString(),
+    messages: sanitized,
+  };
+  upsertValue(key, JSON.stringify(payload), { actor, source: 'ai-history' });
+  return payload;
+}
+
+function deleteAiChatHistory(username, { actor = 'system' } = {}) {
+  const key = buildAiHistoryKey(username);
+  deleteValue(key, { actor, source: 'ai-history-delete' });
 }
 
 function setAttachmentHeaders(res, filename) {
@@ -2307,6 +2426,11 @@ function listAccountsForClient() {
 
 function buildBootstrapSnapshot() {
   const store = readStorage();
+  for (const key of Object.keys(store)) {
+    if (key.startsWith(AI_CHAT_HISTORY_PREFIX)) {
+      delete store[key];
+    }
+  }
   try {
     store.kpi_users_v1 = JSON.stringify(listAccountsForClient());
   } catch {
@@ -6032,6 +6156,63 @@ app.delete('/api/storage/:key', (req, res) => {
   } catch (err) {
     console.error('Lỗi xóa dữ liệu', err);
     res.status(500).json({ ok: false, error: 'Không thể xóa dữ liệu' });
+  }
+});
+
+app.get('/api/ai/history', (req, res) => {
+  const { context, denied } = requireAiAssistUsage(req, res);
+  if (denied) {
+    return;
+  }
+  const username = context?.account?.username;
+  if (!username) {
+    res.status(400).json({ ok: false, error: 'Không xác định được tài khoản hiện tại' });
+    return;
+  }
+  try {
+    const history = loadAiChatHistory(username);
+    res.json({ ok: true, messages: history.messages, updatedAt: history.updatedAt });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err?.message || 'Không thể tải lịch sử trò chuyện AI' });
+  }
+});
+
+app.put('/api/ai/history', (req, res) => {
+  const { context, denied } = requireAiAssistUsage(req, res);
+  if (denied) {
+    return;
+  }
+  const username = context?.account?.username;
+  if (!username) {
+    res.status(400).json({ ok: false, error: 'Không xác định được tài khoản hiện tại' });
+    return;
+  }
+  try {
+    const messages = Array.isArray(req.body?.messages) ? req.body.messages : [];
+    const actor = context.account?.username || resolveActor(req);
+    const saved = saveAiChatHistory(username, messages, { actor });
+    res.json({ ok: true, messages: saved.messages, updatedAt: saved.updatedAt });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err?.message || 'Không thể lưu lịch sử trò chuyện AI' });
+  }
+});
+
+app.delete('/api/ai/history', (req, res) => {
+  const { context, denied } = requireAiAssistUsage(req, res);
+  if (denied) {
+    return;
+  }
+  const username = context?.account?.username;
+  if (!username) {
+    res.status(400).json({ ok: false, error: 'Không xác định được tài khoản hiện tại' });
+    return;
+  }
+  try {
+    const actor = context.account?.username || resolveActor(req);
+    deleteAiChatHistory(username, { actor });
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err?.message || 'Không thể xóa lịch sử trò chuyện AI' });
   }
 });
 

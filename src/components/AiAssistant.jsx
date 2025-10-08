@@ -1,12 +1,15 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import clsx from 'clsx';
 import { toast } from 'sonner';
 import {
   clearAiCache,
   fetchAiConfig,
   fetchAiProfile,
+  fetchAiHistory,
   requestAiCompletion,
   updateAiConfig,
+  saveAiHistory,
+  clearAiHistory,
 } from '@/lib/aiClient.js';
 
 function formatDateTime(value) {
@@ -147,10 +150,155 @@ function createMessageId() {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
 }
 
+const MAX_HISTORY_MESSAGES = 50;
+const MAX_HISTORY_TEXT_LENGTH = 6000;
+const MAX_HISTORY_SCOPE_LENGTH = 120;
+const MAX_HISTORY_PROVIDER_LENGTH = 120;
+const LOCAL_HISTORY_KEY = 'ai_chat_history_guest_v1';
+const LOCAL_HISTORY_USER_PREFIX = 'ai_chat_history_user_';
+
+function sanitizeHistoryUsage(usage) {
+  if (!usage || typeof usage !== 'object') {
+    return null;
+  }
+  const prompt = Number(usage.promptTokens ?? usage.prompt_tokens);
+  const completion = Number(usage.completionTokens ?? usage.completion_tokens);
+  const total = Number(usage.totalTokens ?? usage.total_tokens);
+  const normalized = {};
+  if (Number.isFinite(prompt) && prompt >= 0) {
+    normalized.promptTokens = Math.trunc(prompt);
+  }
+  if (Number.isFinite(completion) && completion >= 0) {
+    normalized.completionTokens = Math.trunc(completion);
+  }
+  if (Number.isFinite(total) && total >= 0) {
+    normalized.totalTokens = Math.trunc(total);
+  }
+  return Object.keys(normalized).length ? normalized : null;
+}
+
+function sanitizeHistoryMessage(message) {
+  if (!message || typeof message !== 'object') {
+    return null;
+  }
+  const role = message.role === 'user' || message.role === 'assistant' || message.role === 'error'
+    ? message.role
+    : null;
+  if (!role) {
+    return null;
+  }
+  const rawText = message.text === undefined || message.text === null ? '' : String(message.text);
+  const text = rawText.length > MAX_HISTORY_TEXT_LENGTH
+    ? rawText.slice(0, MAX_HISTORY_TEXT_LENGTH)
+    : rawText;
+  const scope = typeof message.scope === 'string' ? message.scope.trim().slice(0, MAX_HISTORY_SCOPE_LENGTH) : '';
+  const providerId = typeof message.providerId === 'string'
+    ? message.providerId.trim().slice(0, MAX_HISTORY_PROVIDER_LENGTH)
+    : '';
+  const createdAt = (() => {
+    const source = message.createdAt ? new Date(message.createdAt) : new Date();
+    if (Number.isNaN(source.getTime())) {
+      return new Date().toISOString();
+    }
+    return source.toISOString();
+  })();
+  return {
+    id:
+      typeof message.id === 'string' && message.id.trim()
+        ? message.id.trim()
+        : createMessageId(),
+    role,
+    text,
+    scope,
+    providerId: providerId || null,
+    cached: message.cached === true,
+    usage: sanitizeHistoryUsage(message.usage),
+    createdAt,
+  };
+}
+
+function limitHistory(messages) {
+  if (!Array.isArray(messages)) {
+    return [];
+  }
+  if (messages.length <= MAX_HISTORY_MESSAGES) {
+    return messages.slice();
+  }
+  return messages.slice(messages.length - MAX_HISTORY_MESSAGES);
+}
+
+function prepareMessagesForStorage(messages) {
+  if (!Array.isArray(messages)) {
+    return [];
+  }
+  const sanitized = [];
+  for (const entry of messages) {
+    const normalized = sanitizeHistoryMessage(entry);
+    if (normalized) {
+      sanitized.push(normalized);
+    }
+  }
+  return limitHistory(sanitized);
+}
+
+function readLocalHistory(storageKey) {
+  if (typeof window === 'undefined' || !window.localStorage) {
+    return [];
+  }
+  try {
+    const raw = window.localStorage.getItem(storageKey);
+    if (!raw) {
+      return [];
+    }
+    const parsed = JSON.parse(raw);
+    return prepareMessagesForStorage(parsed);
+  } catch {
+    return [];
+  }
+}
+
+function writeLocalHistory(storageKey, messages) {
+  if (typeof window === 'undefined' || !window.localStorage) {
+    return;
+  }
+  const sanitized = prepareMessagesForStorage(messages);
+  try {
+    if (!sanitized.length) {
+      window.localStorage.removeItem(storageKey);
+    } else {
+      window.localStorage.setItem(storageKey, JSON.stringify(sanitized));
+    }
+  } catch (err) {
+    console.warn('Không thể lưu lịch sử AI vào localStorage', err);
+  }
+}
+
+function removeLocalHistory(storageKey) {
+  if (typeof window === 'undefined' || !window.localStorage) {
+    return;
+  }
+  try {
+    window.localStorage.removeItem(storageKey);
+  } catch {
+    // ignore
+  }
+}
+
+function getLocalHistoryKey(username) {
+  if (username && typeof username === 'string') {
+    return `${LOCAL_HISTORY_USER_PREFIX}${username}`;
+  }
+  return LOCAL_HISTORY_KEY;
+}
+
 export default function AiAssistant({ currentUser }) {
   const permissions = currentUser?.permissions || {};
   const canUse = permissions.aiAssistUse === true || permissions.aiAssistManage === true;
   const canManage = permissions.aiAssistManage === true;
+
+  const username = currentUser?.username || '';
+  const isAuthenticated = !!username;
+  const historyStorageKey = useMemo(() => getLocalHistoryKey(username), [username]);
 
   const [profile, setProfile] = useState(null);
   const [profileLoading, setProfileLoading] = useState(false);
@@ -170,6 +318,23 @@ export default function AiAssistant({ currentUser }) {
   const [scope, setScope] = useState('general');
   const [selectedProviderId, setSelectedProviderId] = useState('');
   const [sending, setSending] = useState(false);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyReady, setHistoryReady] = useState(false);
+  const historyLoadErrorShownRef = useRef(false);
+  const historyPersistErrorShownRef = useRef(false);
+  const lastSavedSnapshotRef = useRef(JSON.stringify([]));
+
+  const appendMessage = useCallback((entry) => {
+    const sanitized = sanitizeHistoryMessage(entry);
+    if (!sanitized) {
+      return;
+    }
+    setMessages((prev) => {
+      const next = Array.isArray(prev) ? prev.slice() : [];
+      next.push(sanitized);
+      return limitHistory(next);
+    });
+  }, []);
 
   const loadProfile = useCallback(async () => {
     if (!canUse) {
@@ -223,6 +388,99 @@ export default function AiAssistant({ currentUser }) {
     }
   }, [canManage, loadConfig]);
 
+  useEffect(() => {
+    if (!canUse) {
+      setMessages([]);
+      setHistoryLoading(false);
+      setHistoryReady(false);
+      lastSavedSnapshotRef.current = JSON.stringify([]);
+      historyLoadErrorShownRef.current = false;
+      historyPersistErrorShownRef.current = false;
+      return;
+    }
+    let cancelled = false;
+    setHistoryLoading(true);
+    setHistoryReady(false);
+    historyLoadErrorShownRef.current = false;
+    (async () => {
+      try {
+        let loaded = [];
+        if (isAuthenticated) {
+          const serverMessages = await fetchAiHistory();
+          loaded = prepareMessagesForStorage(serverMessages);
+        } else {
+          loaded = readLocalHistory(historyStorageKey);
+        }
+        if (cancelled) {
+          return;
+        }
+        setMessages(loaded);
+        lastSavedSnapshotRef.current = JSON.stringify(prepareMessagesForStorage(loaded));
+      } catch (err) {
+        if (cancelled) {
+          return;
+        }
+        console.error('Không thể tải lịch sử trợ lý AI', err);
+        if (!historyLoadErrorShownRef.current) {
+          toast.error(err?.message || 'Không thể tải lịch sử trò chuyện AI.');
+          historyLoadErrorShownRef.current = true;
+        }
+        const fallback = isAuthenticated ? [] : readLocalHistory(historyStorageKey);
+        setMessages(fallback);
+        lastSavedSnapshotRef.current = JSON.stringify(prepareMessagesForStorage(fallback));
+      } finally {
+        if (!cancelled) {
+          setHistoryLoading(false);
+          setHistoryReady(true);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [canUse, isAuthenticated, historyStorageKey]);
+
+  useEffect(() => {
+    if (!canUse || !historyReady) {
+      return;
+    }
+    const sanitized = prepareMessagesForStorage(messages);
+    const snapshot = JSON.stringify(sanitized);
+    if (snapshot === lastSavedSnapshotRef.current) {
+      return;
+    }
+    let cancelled = false;
+    const persist = async () => {
+      try {
+        if (isAuthenticated) {
+          if (sanitized.length === 0) {
+            await clearAiHistory();
+          } else {
+            await saveAiHistory(sanitized);
+          }
+        } else if (sanitized.length === 0) {
+          removeLocalHistory(historyStorageKey);
+        } else {
+          writeLocalHistory(historyStorageKey, sanitized);
+        }
+        if (!cancelled) {
+          lastSavedSnapshotRef.current = snapshot;
+          historyPersistErrorShownRef.current = false;
+        }
+      } catch (err) {
+        console.error('Không thể lưu lịch sử trợ lý AI', err);
+        if (!historyPersistErrorShownRef.current) {
+          toast.error(err?.message || 'Không thể lưu lịch sử trò chuyện AI.');
+          historyPersistErrorShownRef.current = true;
+        }
+      }
+    };
+    persist();
+    return () => {
+      cancelled = true;
+    };
+  }, [messages, canUse, historyReady, isAuthenticated, historyStorageKey]);
+
   const providerOptions = useMemo(() => {
     if (!profile?.providers) {
       return [];
@@ -241,6 +499,10 @@ export default function AiAssistant({ currentUser }) {
     if (!canUse || sending) {
       return;
     }
+    if (!historyReady) {
+      toast.error('Đang tải lịch sử hội thoại, vui lòng thử lại sau vài giây.');
+      return;
+    }
     const trimmedPrompt = prompt.trim();
     if (!trimmedPrompt) {
       toast.error('Vui lòng nhập nội dung câu hỏi.');
@@ -256,7 +518,7 @@ export default function AiAssistant({ currentUser }) {
       scope: scopeValue,
       createdAt: new Date().toISOString(),
     };
-    setMessages((prev) => [...prev, userMessage]);
+    appendMessage(userMessage);
     setPrompt('');
     setSending(true);
     try {
@@ -276,7 +538,7 @@ export default function AiAssistant({ currentUser }) {
         scope: result.scope || scopeValue,
         createdAt: new Date().toISOString(),
       };
-      setMessages((prev) => [...prev, assistantMessage]);
+      appendMessage(assistantMessage);
       toast.success(result.cached ? 'Đã trả lời từ cache.' : 'Đã nhận phản hồi từ trợ lý AI.');
     } catch (err) {
       const errorMessage = err?.message || 'Không thể gọi trợ lý AI.';
@@ -287,7 +549,7 @@ export default function AiAssistant({ currentUser }) {
         scope: scopeValue,
         createdAt: new Date().toISOString(),
       };
-      setMessages((prev) => [...prev, errorEntry]);
+      appendMessage(errorEntry);
       toast.error(errorMessage);
     } finally {
       setSending(false);
@@ -403,7 +665,8 @@ export default function AiAssistant({ currentUser }) {
                 <button
                   type="button"
                   onClick={handleClearHistory}
-                  className="rounded border border-gray-200 px-3 py-1 text-xs text-gray-600 hover:bg-gray-50"
+                  disabled={historyLoading || messages.length === 0}
+                  className="rounded border border-gray-200 px-3 py-1 text-xs text-gray-600 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   Xóa hội thoại
                 </button>
@@ -471,19 +734,21 @@ export default function AiAssistant({ currentUser }) {
               <div className="flex items-center justify-end gap-3">
                 <button
                   type="submit"
-                  disabled={sending}
+                  disabled={sending || historyLoading}
                   className="rounded bg-amber-500 px-4 py-2 text-sm font-medium text-white shadow hover:bg-amber-600 disabled:cursor-not-allowed disabled:opacity-70"
                 >
-                  {sending ? 'Đang gửi…' : 'Gửi yêu cầu'}
+                  {sending ? 'Đang gửi…' : historyLoading ? 'Đang tải…' : 'Gửi yêu cầu'}
                 </button>
               </div>
             </form>
             <div className="border-t border-gray-100 px-4 py-4">
               <h3 className="mb-3 text-sm font-semibold text-gray-700">Lịch sử hội thoại</h3>
               <div className="flex max-h-[320px] flex-col gap-3 overflow-y-auto rounded border border-gray-200 bg-gray-50 p-3 text-sm">
-                {messages.length === 0 && (
+                {historyLoading ? (
+                  <p className="text-gray-500">Đang tải lịch sử hội thoại…</p>
+                ) : messages.length === 0 ? (
                   <p className="text-gray-500">Chưa có hội thoại nào. Hãy nhập câu hỏi ở trên để bắt đầu.</p>
-                )}
+                ) : null}
                 {messages.map((message) => {
                   const usageText = formatUsage(message.usage);
                   const providerLabel = message.role === 'assistant'
