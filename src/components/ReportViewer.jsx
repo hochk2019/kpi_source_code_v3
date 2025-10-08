@@ -58,6 +58,67 @@ function formatDecimal(value) {
 
 const chartColors = ["#2563eb", "#22c55e", "#f97316", "#a855f7", "#14b8a6"];
 
+const METRIC_SORT_KEYS = ["kpi", "decls", "licenses"];
+
+const SORT_OPTIONS = [
+  { value: "kpi", label: "Điểm KPI" },
+  { value: "decls", label: "Số tờ khai" },
+  { value: "licenses", label: "Số giấy phép" },
+];
+
+function getCompanyRowLabel(row = {}) {
+  if (row.staff && row.team) {
+    return `${row.staff} — ${row.team}`;
+  }
+  if (row.staff) {
+    return row.staff;
+  }
+  if (row.team) {
+    return row.team;
+  }
+  if (row.cong_ty) {
+    return row.cong_ty;
+  }
+  if (row.mst) {
+    return row.mst;
+  }
+  return "";
+}
+
+function sortCompanyRows(rows = [], sortKey = "kpi") {
+  const key = METRIC_SORT_KEYS.includes(sortKey) ? sortKey : "kpi";
+  const fallbackKeys = METRIC_SORT_KEYS.filter((item) => item !== key);
+  return [...rows].sort((a = {}, b = {}) => {
+    const primaryDiff = Number(b[key] || 0) - Number(a[key] || 0);
+    if (primaryDiff !== 0) return primaryDiff;
+    for (const fallback of fallbackKeys) {
+      const diff = Number(b[fallback] || 0) - Number(a[fallback] || 0);
+      if (diff !== 0) return diff;
+    }
+    const labelA = getCompanyRowLabel(a) || "";
+    const labelB = getCompanyRowLabel(b) || "";
+    return labelA.localeCompare(labelB, "vi", { sensitivity: "base" });
+  });
+}
+
+function sortStatsCollection(list = [], sortKey = "kpi", getLabel = (item) => item?.name || "") {
+  const key = METRIC_SORT_KEYS.includes(sortKey) ? sortKey : "kpi";
+  const fallbackKeys = METRIC_SORT_KEYS.filter((item) => item !== key);
+  return [...list].sort((a = {}, b = {}) => {
+    const statsA = a.stats || {};
+    const statsB = b.stats || {};
+    const primaryDiff = Number(statsB[key] || 0) - Number(statsA[key] || 0);
+    if (primaryDiff !== 0) return primaryDiff;
+    for (const fallback of fallbackKeys) {
+      const diff = Number(statsB[fallback] || 0) - Number(statsA[fallback] || 0);
+      if (diff !== 0) return diff;
+    }
+    const labelA = getLabel(a) || "";
+    const labelB = getLabel(b) || "";
+    return labelA.localeCompare(labelB, "vi", { sensitivity: "base" });
+  });
+}
+
 const COLUMN_VISIBILITY_OPTIONS = [
   { key: "items", label: "Mục hàng" },
   { key: "licenses", label: "Số giấy phép" },
@@ -66,7 +127,13 @@ const COLUMN_VISIBILITY_OPTIONS = [
   { key: "licenseCodes", label: "Mã giấy phép" },
 ];
 
-function CompanySummaryTable({ rows, includeStaff = false, includeTeam = false, visibleColumns = {} }) {
+function CompanySummaryTable({
+  rows,
+  includeStaff = false,
+  includeTeam = false,
+  visibleColumns = {},
+  sortKey = "kpi",
+}) {
   const columns = [
     { key: "idx", label: "STT", align: "center" },
     { key: "cong_ty", label: "Công ty", align: "left" },
@@ -99,6 +166,7 @@ function CompanySummaryTable({ rows, includeStaff = false, includeTeam = false, 
   );
 
   const activeColumns = columns.filter((col) => (col.visibleKey ? visibleColumns[col.visibleKey] !== false : true));
+  const sortedRows = useMemo(() => sortCompanyRows(rows, sortKey), [rows, sortKey]);
 
   return (
     <div className="overflow-auto rounded border">
@@ -121,8 +189,8 @@ function CompanySummaryTable({ rows, includeStaff = false, includeTeam = false, 
           </tr>
         </thead>
         <tbody>
-          {rows.length ? (
-            rows.map((row, idx) => (
+          {sortedRows.length ? (
+            sortedRows.map((row, idx) => (
               <tr key={`${row.mst}-${row.cong_ty}-${idx}`} className={idx % 2 === 0 ? "bg-white" : "bg-gray-50"}>
                 {activeColumns.map((col) => {
                   const alignClass =
@@ -155,48 +223,106 @@ function CompanySummaryTable({ rows, includeStaff = false, includeTeam = false, 
   );
 }
 
-function TopStaffWidget({ data }) {
-  if (!data.length) {
-    return (
-      <section className="rounded-lg border bg-white p-4 shadow-sm">
-        <h3 className="text-base font-semibold text-gray-900">Top 5 nhân viên theo điểm KPI</h3>
-        <p className="mt-3 text-sm text-gray-500">Chưa có dữ liệu hợp lệ trong giai đoạn này.</p>
-      </section>
-    );
-  }
+function TopStaffWidget({ metric = "kpi", onMetricChange, kpiData = [], declData = [] }) {
+  const hasKpiData = kpiData.length > 0;
+  const hasDeclData = declData.length > 0;
+  const hasData = metric === "kpi" ? hasKpiData : hasDeclData;
 
-  const maxKPI = Math.max(...data.map((item) => item.stats.kpi || 0), 1);
+  const maxKPI = hasKpiData ? Math.max(...kpiData.map((item) => item.stats.kpi || 0), 1) : 1;
+  const totalDecls = hasDeclData ? declData.reduce((sum, item) => sum + (item.decls || 0), 0) : 0;
+
+  const renderEmptyState = (
+    <p className="mt-3 text-sm text-gray-500">Chưa có dữ liệu hợp lệ trong giai đoạn này.</p>
+  );
 
   return (
     <section className="rounded-lg border bg-white p-4 shadow-sm">
-      <h3 className="text-base font-semibold text-gray-900">Top 5 nhân viên theo điểm KPI</h3>
-      <div className="mt-4 space-y-4">
-        {data.map((item, idx) => {
-          const ratio = Math.max(0, Math.min(100, (item.stats.kpi / maxKPI) * 100));
-          const color = chartColors[idx % chartColors.length];
-          return (
-            <div key={item.key || idx}>
-              <div className="flex items-baseline justify-between text-sm">
-                <div className="font-medium text-gray-900">
-                  {idx + 1}. {item.name}
-                </div>
-                <div className="text-gray-600">{formatDecimal(item.stats.kpi)}</div>
-              </div>
-              <div className="mt-1 h-2 w-full overflow-hidden rounded-full bg-gray-200">
-                <div
-                  className="h-full rounded-full"
-                  style={{ width: `${ratio}%`, backgroundColor: color }}
-                />
-              </div>
-              <div className="mt-1 text-xs text-gray-500">
-                {`Tờ khai: ${formatInt(item.stats.decls)} • Mục hàng: ${formatInt(item.stats.items)} • GP: ${formatInt(
-                  item.stats.licenses
-                )} • C/O: ${formatInt(item.stats.co ?? 0)} • Dòng C/O: ${formatInt(item.stats.coLines ?? 0)}`}
-              </div>
-            </div>
-          );
-        })}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h3 className="text-base font-semibold text-gray-900">
+          Top 5 nhân viên theo {metric === "kpi" ? "điểm KPI" : "số tờ khai"}
+        </h3>
+        <div className="flex gap-2 text-xs font-semibold">
+          <button
+            type="button"
+            onClick={() => onMetricChange?.("kpi")}
+            className={`rounded px-3 py-1.5 ${
+              metric === "kpi" ? "bg-black text-white" : "border bg-white text-gray-700 hover:bg-gray-50"
+            }`}
+          >
+            Điểm KPI
+          </button>
+          <button
+            type="button"
+            onClick={() => onMetricChange?.("decls")}
+            className={`rounded px-3 py-1.5 ${
+              metric === "decls" ? "bg-black text-white" : "border bg-white text-gray-700 hover:bg-gray-50"
+            }`}
+          >
+            Số tờ khai
+          </button>
+        </div>
       </div>
+
+      {!hasData ? (
+        renderEmptyState
+      ) : metric === "kpi" ? (
+        <div className="mt-4 space-y-4">
+          {kpiData.map((item, idx) => {
+            const ratio = Math.max(0, Math.min(100, (item.stats.kpi / maxKPI) * 100));
+            const color = chartColors[idx % chartColors.length];
+            return (
+              <div key={item.key || idx}>
+                <div className="flex items-baseline justify-between text-sm">
+                  <div className="font-medium text-gray-900">
+                    {idx + 1}. {item.name}
+                  </div>
+                  <div className="text-gray-600">{formatDecimal(item.stats.kpi)}</div>
+                </div>
+                <div className="mt-1 h-2 w-full overflow-hidden rounded-full bg-gray-200">
+                  <div className="h-full rounded-full" style={{ width: `${ratio}%`, backgroundColor: color }} />
+                </div>
+                <div className="mt-1 text-xs text-gray-500">
+                  {`Tờ khai: ${formatInt(item.stats.decls)} • Mục hàng: ${formatInt(item.stats.items)} • GP: ${formatInt(
+                    item.stats.licenses
+                  )} • C/O: ${formatInt(item.stats.co ?? 0)} • Dòng C/O: ${formatInt(item.stats.coLines ?? 0)}`}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="mt-4 h-64 w-full">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart
+              layout="vertical"
+              data={declData}
+              margin={{ top: 10, right: 30, left: 0, bottom: 0 }}
+              barCategoryGap="20%"
+            >
+              <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+              <XAxis type="number" tickFormatter={formatInt} />
+              <YAxis type="category" dataKey="name" width={160} tick={{ fontSize: 12 }} />
+              <Tooltip
+                formatter={(value) => [`${formatInt(value)} tờ khai`, "Tờ khai"]}
+                labelFormatter={(label, payload) => {
+                  const entry = payload && payload[0] && payload[0].payload;
+                  if (entry?.team && entry.team !== "Chưa gán tổ đội") {
+                    return `${label} — ${entry.team}`;
+                  }
+                  return label;
+                }}
+              />
+              <Bar dataKey="decls" name="Tờ khai" radius={[0, 4, 4, 0]}>
+                {declData.map((item, idx) => (
+                  <Cell key={item.key || item.name || idx} fill={chartColors[idx % chartColors.length]} />
+                ))}
+                <LabelList dataKey="decls" position="right" formatter={(value) => formatInt(value)} />
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+          <div className="mt-2 text-xs text-gray-500">Tổng: {formatInt(totalDecls)} tờ khai</div>
+        </div>
+      )}
     </section>
   );
 }
@@ -306,63 +432,6 @@ function TrendLineChart({ data, comparison }) {
   );
 }
 
-function TopDeclarerChart({ data }) {
-  if (!data || data.length === 0) {
-    return (
-      <section className="rounded-lg border bg-white p-4 shadow-sm">
-        <h3 className="text-base font-semibold text-gray-900">Top 5 nhân viên mở tờ khai nhiều nhất</h3>
-        <p className="mt-3 text-sm text-gray-500">Chưa có dữ liệu để hiển thị bảng xếp hạng tờ khai.</p>
-      </section>
-    );
-  }
-
-  const totalDecls = data.reduce((sum, item) => sum + (item.decls || 0), 0);
-
-  return (
-    <section className="rounded-lg border bg-white p-4 shadow-sm">
-      <div className="flex items-baseline justify-between gap-2">
-        <h3 className="text-base font-semibold text-gray-900">Top 5 nhân viên mở tờ khai nhiều nhất</h3>
-        <div className="text-xs text-gray-500">Tổng: {formatInt(totalDecls)} tờ khai</div>
-      </div>
-      <div className="mt-4 h-64 w-full">
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart
-            layout="vertical"
-            data={data}
-            margin={{ top: 10, right: 30, left: 0, bottom: 0 }}
-            barCategoryGap="20%"
-          >
-            <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-            <XAxis type="number" tickFormatter={formatInt} />
-            <YAxis
-              type="category"
-              dataKey="name"
-              width={160}
-              tick={{ fontSize: 12 }}
-            />
-            <Tooltip
-              formatter={(value) => [`${formatInt(value)} tờ khai`, "Tờ khai"]}
-              labelFormatter={(label, payload) => {
-                const entry = payload && payload[0] && payload[0].payload;
-                if (entry?.team && entry.team !== "Chưa gán tổ đội") {
-                  return `${label} — ${entry.team}`;
-                }
-                return label;
-              }}
-            />
-            <Bar dataKey="decls" name="Tờ khai" radius={[0, 4, 4, 0]}>
-              {data.map((item, idx) => (
-                <Cell key={item.key || item.name || idx} fill={chartColors[idx % chartColors.length]} />
-              ))}
-              <LabelList dataKey="decls" position="right" formatter={(value) => formatInt(value)} />
-            </Bar>
-          </BarChart>
-        </ResponsiveContainer>
-      </div>
-    </section>
-  );
-}
-
 function SummaryCard({ title, value, subtitle }) {
   return (
     <div className="rounded-lg border bg-white p-4 shadow-sm">
@@ -373,7 +442,7 @@ function SummaryCard({ title, value, subtitle }) {
   );
 }
 
-function StaffDetailCard({ staff, canExport, onExport, onPrint, exporting, visibleColumns = {} }) {
+function StaffDetailCard({ staff, canExport, onExport, exporting, visibleColumns = {} }) {
   const { stats, rows } = staff;
   const [mode, setMode] = useState("detail");
   const aggregated = useMemo(
@@ -439,26 +508,22 @@ function StaffDetailCard({ staff, canExport, onExport, onPrint, exporting, visib
               Báo cáo chi tiết
             </button>
           </div>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={onExport}
-              disabled={!canExport || exporting}
-              className={`rounded px-3 py-1.5 text-xs font-semibold shadow-sm ${
-                canExport && !exporting
-                  ? "bg-black text-white hover:bg-gray-900"
-                  : "bg-gray-200 text-gray-500"
-              }`}
-            >
-              {exporting ? "Đang xuất..." : "Xuất Excel"}
-            </button>
-            <button
-              type="button"
-              onClick={onPrint}
-              className="rounded border px-3 py-1.5 text-xs shadow-sm hover:bg-gray-50"
-            >
-              In / Xuất PDF
-            </button>
+          <div className="flex flex-col gap-1 text-right">
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={onExport}
+                disabled={!canExport || exporting}
+                className={`rounded px-3 py-1.5 text-xs font-semibold shadow-sm ${
+                  canExport && !exporting
+                    ? "bg-black text-white hover:bg-gray-900"
+                    : "bg-gray-200 text-gray-500"
+                }`}
+              >
+                {exporting ? "Đang xuất..." : "Xuất Excel"}
+              </button>
+            </div>
+            <span className="text-[11px] text-gray-400">Dùng Ctrl+P nếu cần in nhanh</span>
           </div>
         </div>
       </header>
@@ -583,7 +648,7 @@ function StaffDetailCard({ staff, canExport, onExport, onPrint, exporting, visib
   );
 }
 
-function TeamDetailCard({ team, canExport, onExport, onPrint, exporting, visibleColumns = {} }) {
+function TeamDetailCard({ team, canExport, onExport, exporting, visibleColumns = {}, memberSortKey = "kpi" }) {
   const { stats, members, rows } = team;
   const [mode, setMode] = useState("detail");
   const aggregated = useMemo(
@@ -659,26 +724,22 @@ function TeamDetailCard({ team, canExport, onExport, onPrint, exporting, visible
               Báo cáo chi tiết
             </button>
           </div>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={onExport}
-              disabled={!canExport || exporting}
-              className={`rounded px-3 py-1.5 text-xs font-semibold shadow-sm ${
-                canExport && !exporting
-                  ? "bg-black text-white hover:bg-gray-900"
-                  : "bg-gray-200 text-gray-500"
-              }`}
-            >
-              {exporting ? "Đang xuất..." : "Xuất Excel"}
-            </button>
-            <button
-              type="button"
-              onClick={onPrint}
-              className="rounded border px-3 py-1.5 text-xs shadow-sm hover:bg-gray-50"
-            >
-              In / Xuất PDF
-            </button>
+          <div className="flex flex-col gap-1 text-right">
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={onExport}
+                disabled={!canExport || exporting}
+                className={`rounded px-3 py-1.5 text-xs font-semibold shadow-sm ${
+                  canExport && !exporting
+                    ? "bg-black text-white hover:bg-gray-900"
+                    : "bg-gray-200 text-gray-500"
+                }`}
+              >
+                {exporting ? "Đang xuất..." : "Xuất Excel"}
+              </button>
+            </div>
+            <span className="text-[11px] text-gray-400">Dùng Ctrl+P nếu cần in nhanh</span>
           </div>
         </div>
       </header>
@@ -724,7 +785,12 @@ function TeamDetailCard({ team, canExport, onExport, onPrint, exporting, visible
       </div>
 
       {mode === "summary" ? (
-        <CompanySummaryTable rows={aggregated} includeStaff visibleColumns={visibleColumns} />
+        <CompanySummaryTable
+          rows={aggregated}
+          includeStaff
+          visibleColumns={visibleColumns}
+          sortKey={memberSortKey}
+        />
       ) : (
         <>
           <div className="overflow-auto rounded border">
@@ -744,7 +810,7 @@ function TeamDetailCard({ team, canExport, onExport, onPrint, exporting, visible
                 </tr>
               </thead>
               <tbody>
-                {members.map((member, idx) => (
+                {sortStatsCollection(members, memberSortKey, (item) => item.name || "").map((member, idx) => (
                   <tr key={member.key || idx} className={idx % 2 === 0 ? "bg-white" : "bg-gray-50"}>
                     <td className="px-3 py-1.5">{member.name}</td>
                     <td className="px-3 py-1.5 text-right">{formatInt(member.stats.decls)}</td>
@@ -874,6 +940,9 @@ export default function ReportViewer({ canExport = true }) {
   const [selectedTeam, setSelectedTeam] = useState("all");
   const [staffViewMode, setStaffViewMode] = useState("detail");
   const [teamViewMode, setTeamViewMode] = useState("detail");
+  const [topStaffMetric, setTopStaffMetric] = useState("kpi");
+  const [staffSortKey, setStaffSortKey] = useState("kpi");
+  const [teamSortKey, setTeamSortKey] = useState("kpi");
   const [version, setVersion] = useState(0);
   const [exporting, setExporting] = useState(false);
   const [columnVisibility, setColumnVisibility] = useState(() => ({
@@ -1049,38 +1118,24 @@ export default function ReportViewer({ canExport = true }) {
     [adjustmentsReport.list]
   );
 
-  const topStaffData = useMemo(() => {
-    return [...report.staff.list]
-      .sort((a, b) => {
-        if (b.stats.kpi !== a.stats.kpi) return b.stats.kpi - a.stats.kpi;
-        if (b.stats.decls !== a.stats.decls) return b.stats.decls - a.stats.decls;
-        return a.name.localeCompare(b.name, "vi", { sensitivity: "base" });
-      })
-      .slice(0, 5);
+  const topStaffByKpi = useMemo(() => {
+    return sortStatsCollection(report.staff.list, "kpi", (item) => item.name || "").slice(0, 5);
   }, [report.staff.list]);
 
-  const topDeclarerSeries = useMemo(() => {
-    return [...report.staff.list]
+  const topStaffByDecls = useMemo(() => {
+    return sortStatsCollection(report.staff.list, "decls", (item) => item.name || "")
       .map((item) => {
-        const decls = Number(item?.stats?.decls || 0);
         const teamLabel = item.teamLabel && item.teamLabel !== "Chưa gán tổ đội"
           ? item.teamLabel
           : "Chưa gán tổ đội";
         return {
           key: item.key,
           name: item.name,
-          decls,
+          decls: Number(item?.stats?.decls || 0),
           team: teamLabel,
         };
       })
       .filter((item) => item.decls > 0)
-      .sort((a, b) => {
-        if (b.decls !== a.decls) return b.decls - a.decls;
-        if (a.team !== b.team) {
-          return a.team.localeCompare(b.team, "vi", { sensitivity: "base" });
-        }
-        return a.name.localeCompare(b.name, "vi", { sensitivity: "base" });
-      })
       .slice(0, 5);
   }, [report.staff.list]);
 
@@ -1090,6 +1145,21 @@ export default function ReportViewer({ canExport = true }) {
       value: Math.round((item.stats.kpi || 0) * 10) / 10,
     }));
   }, [report.teams.list]);
+
+  const sortedStaffList = useMemo(() => {
+    return sortStatsCollection(
+      report.staff.list,
+      staffSortKey,
+      (item) => {
+        const team = item.teamLabel && item.teamLabel !== "Chưa gán tổ đội" ? ` — ${item.teamLabel}` : "";
+        return `${item.name || ""}${team}`;
+      }
+    );
+  }, [report.staff.list, staffSortKey]);
+
+  const sortedTeamList = useMemo(() => {
+    return sortStatsCollection(report.teams.list, teamSortKey, (item) => item.name || "");
+  }, [report.teams.list, teamSortKey]);
 
   const trend = report.trend || {};
   const trendSeries = trend.series || [];
@@ -1213,11 +1283,6 @@ export default function ReportViewer({ canExport = true }) {
     );
   };
 
-  const handlePrint = () => {
-    if (typeof window === "undefined") return;
-    window.print();
-  };
-
   const renderStaffSection = () => {
     if (!summary.decls) {
       return (
@@ -1230,7 +1295,7 @@ export default function ReportViewer({ canExport = true }) {
     if (selectedStaff === "all") {
       return (
         <div className="space-y-6">
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-3">
             <div className="flex gap-2">
               <button
                 type="button"
@@ -1255,7 +1320,26 @@ export default function ReportViewer({ canExport = true }) {
                 Báo cáo chi tiết
               </button>
             </div>
-            <div className="ml-auto flex gap-2">
+            <div className="flex flex-wrap items-center gap-2 text-xs text-gray-600">
+              <span className="font-semibold text-gray-900">Sắp xếp theo:</span>
+              <div className="flex gap-1">
+                {SORT_OPTIONS.map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => setStaffSortKey(option.value)}
+                    className={`rounded px-2.5 py-1 font-semibold ${
+                      staffSortKey === option.value
+                        ? "bg-black text-white"
+                        : "border bg-white text-gray-700 hover:bg-gray-50"
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="ml-auto flex flex-col gap-1 text-right">
               <button
                 type="button"
                 onClick={handleExportStaffAll}
@@ -1268,13 +1352,7 @@ export default function ReportViewer({ canExport = true }) {
               >
                 {exporting ? "Đang xuất..." : "Xuất Excel"}
               </button>
-              <button
-                type="button"
-                onClick={handlePrint}
-                className="rounded border px-3 py-1.5 text-xs shadow-sm hover:bg-gray-50"
-              >
-                In / Xuất PDF
-              </button>
+              <span className="text-[11px] text-gray-400">Nhấn Ctrl+P để in nhanh toàn trang</span>
             </div>
           </div>
 
@@ -1283,6 +1361,7 @@ export default function ReportViewer({ canExport = true }) {
               rows={companySummaryAllStaff}
               includeStaff
               visibleColumns={columnVisibility}
+              sortKey={staffSortKey}
             />
           ) : (
             <>
@@ -1311,10 +1390,10 @@ export default function ReportViewer({ canExport = true }) {
                       {columnVisibility.licenseCodes !== false && (
                         <th className="px-3 py-2 text-left">Mã giấy phép</th>
                       )}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {report.staff.list.map((item, idx) => (
+                  </tr>
+                </thead>
+                <tbody>
+                    {sortedStaffList.map((item, idx) => (
                       <tr key={item.key} className={idx % 2 === 0 ? "bg-white" : "bg-gray-50"}>
                         <td className="px-3 py-1.5">{item.name}</td>
                         <td className="px-3 py-1.5">{item.teamLabel}</td>
@@ -1349,13 +1428,12 @@ export default function ReportViewer({ canExport = true }) {
               </div>
 
               <div className="space-y-6">
-                {report.staff.list.map((item) => (
+                {sortedStaffList.map((item) => (
                   <StaffDetailCard
                     key={item.key}
                     staff={item}
                     canExport={canExport}
                     onExport={() => handleExportStaffDetail(item)}
-                    onPrint={handlePrint}
                     exporting={exporting}
                     visibleColumns={columnVisibility}
                   />
@@ -1376,7 +1454,6 @@ export default function ReportViewer({ canExport = true }) {
         staff={activeStaff}
         canExport={canExport}
         onExport={() => handleExportStaffDetail(activeStaff)}
-        onPrint={handlePrint}
         exporting={exporting}
         visibleColumns={columnVisibility}
       />
@@ -1395,7 +1472,7 @@ export default function ReportViewer({ canExport = true }) {
     if (selectedTeam === "all") {
       return (
         <div className="space-y-6">
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-3">
             <div className="flex gap-2">
               <button
                 type="button"
@@ -1420,7 +1497,26 @@ export default function ReportViewer({ canExport = true }) {
                 Báo cáo chi tiết
               </button>
             </div>
-            <div className="ml-auto flex gap-2">
+            <div className="flex flex-wrap items-center gap-2 text-xs text-gray-600">
+              <span className="font-semibold text-gray-900">Sắp xếp theo:</span>
+              <div className="flex gap-1">
+                {SORT_OPTIONS.map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => setTeamSortKey(option.value)}
+                    className={`rounded px-2.5 py-1 font-semibold ${
+                      teamSortKey === option.value
+                        ? "bg-black text-white"
+                        : "border bg-white text-gray-700 hover:bg-gray-50"
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="ml-auto flex flex-col gap-1 text-right">
               <button
                 type="button"
                 onClick={handleExportTeamAll}
@@ -1433,13 +1529,7 @@ export default function ReportViewer({ canExport = true }) {
               >
                 {exporting ? "Đang xuất..." : "Xuất Excel"}
               </button>
-              <button
-                type="button"
-                onClick={handlePrint}
-                className="rounded border px-3 py-1.5 text-xs shadow-sm hover:bg-gray-50"
-              >
-                In / Xuất PDF
-              </button>
+              <span className="text-[11px] text-gray-400">Nhấn Ctrl+P để in nhanh toàn trang</span>
             </div>
           </div>
 
@@ -1449,6 +1539,7 @@ export default function ReportViewer({ canExport = true }) {
               includeStaff
               includeTeam
               visibleColumns={columnVisibility}
+              sortKey={teamSortKey}
             />
           ) : (
             <>
@@ -1476,10 +1567,10 @@ export default function ReportViewer({ canExport = true }) {
                       {columnVisibility.licenseCodes !== false && (
                         <th className="px-3 py-2 text-left">Mã giấy phép</th>
                       )}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {report.teams.list.map((item, idx) => (
+                  </tr>
+                </thead>
+                <tbody>
+                    {sortedTeamList.map((item, idx) => (
                       <tr key={item.key} className={idx % 2 === 0 ? "bg-white" : "bg-gray-50"}>
                         <td className="px-3 py-1.5">{item.name}</td>
                         <td className="px-3 py-1.5 text-right">{formatInt(item.stats.decls)}</td>
@@ -1513,15 +1604,15 @@ export default function ReportViewer({ canExport = true }) {
               </div>
 
               <div className="space-y-6">
-                {report.teams.list.map((item) => (
+                {sortedTeamList.map((item) => (
                   <TeamDetailCard
                     key={item.key}
                     team={item}
                     canExport={canExport}
                     onExport={() => handleExportTeamDetail(item)}
-                    onPrint={handlePrint}
                     exporting={exporting}
                     visibleColumns={columnVisibility}
+                    memberSortKey={teamSortKey}
                   />
                 ))}
               </div>
@@ -1540,9 +1631,9 @@ export default function ReportViewer({ canExport = true }) {
         team={activeTeam}
         canExport={canExport}
         onExport={() => handleExportTeamDetail(activeTeam)}
-        onPrint={handlePrint}
         exporting={exporting}
         visibleColumns={columnVisibility}
+        memberSortKey={teamSortKey}
       />
     );
   };
@@ -1793,12 +1884,15 @@ export default function ReportViewer({ canExport = true }) {
 
       <div className="grid gap-4 lg:grid-cols-2">
         <TrendLineChart data={trendSeries} comparison={trendComparison} />
-        <TopDeclarerChart data={topDeclarerSeries} />
-      </div>
-
-      <div className="grid gap-4 lg:grid-cols-2">
-        <TopStaffWidget data={topStaffData} />
-        <TeamPieWidget data={teamPieData} />
+        <TopStaffWidget
+          metric={topStaffMetric}
+          onMetricChange={setTopStaffMetric}
+          kpiData={topStaffByKpi}
+          declData={topStaffByDecls}
+        />
+        <div className="lg:col-span-2">
+          <TeamPieWidget data={teamPieData} />
+        </div>
       </div>
 
       <div className="space-y-4 rounded-lg border bg-white p-4 shadow-sm">
@@ -1897,9 +1991,9 @@ export default function ReportViewer({ canExport = true }) {
           Bạn có thể điều chỉnh danh sách này trong phần cấu hình quy tắc.
         </p>
         <p>
-          Để in báo cáo, hãy chọn phạm vi thời gian và chế độ xem mong muốn, sau đó sử dụng nút “In / Xuất PDF”.
-          Khi cần lưu trữ hoặc chia sẻ, sử dụng nút “Xuất Excel” để tải file theo template chứa bảng tổng hợp và
-          bảng chi tiết tương ứng.
+          Để in báo cáo, hãy chọn phạm vi thời gian và chế độ xem mong muốn, sau đó sử dụng tổ hợp phím
+          <strong> Ctrl+P</strong> (hoặc Command+P trên macOS). Khi cần lưu trữ hoặc chia sẻ, sử dụng nút “Xuất Excel”
+          để tải file theo template chứa bảng tổng hợp và bảng chi tiết tương ứng.
         </p>
       </div>
     </div>

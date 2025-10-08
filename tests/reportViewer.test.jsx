@@ -80,7 +80,7 @@ describe('ReportViewer', () => {
     expect(html).toContain('Điểm KPI +/- bổ sung');
     expect(html).toContain('Điểm đã áp dụng');
     expect(html).toContain('Xu hướng KPI 6 kỳ gần nhất');
-    expect(html).toContain('Top 5 nhân viên mở tờ khai nhiều nhất');
+    expect(html).toMatch(/Top 5 nhân viên theo .*điểm KPI/);
     vi.useRealTimers();
   });
 });
