@@ -13,6 +13,7 @@ Tài liệu này tổng hợp các bước cần thực hiện trước, trong v
 ## 2. Kiểm tra chức năng trước khi cập nhật
 - [ ] Chạy `pnpm install --frozen-lockfile` để đảm bảo không thay đổi dependency.
 - [ ] Chạy `pnpm lint`, `pnpm test`, `pnpm build` và ghi nhận kết quả.
+- [ ] Chạy `pnpm test:screenshot` để kiểm tra favicon/logo và tạo ảnh chụp Playwright phục vụ báo cáo triển khai.
 - [ ] Kiểm tra kết nối tới SQL Server 2008 R2 bằng PowerShell: `Test-NetConnection -ComputerName <db-host> -Port 1433`.
 - [ ] Đảm bảo script đồng bộ KPI truy cập được thư mục chia sẻ chứa file XML từ ECUS.
 - [ ] Xuất thử báo cáo Excel và xác minh logo/template mới hiển thị đúng.

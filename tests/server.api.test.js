@@ -755,7 +755,7 @@ describe('AI assistant API', () => {
     const staffLogin = await staff.post('/api/auth/login').send({ username: 'nhanvien', password: '123456' });
     expect(staffLogin.status).toBe(200);
 
-    const fetchSpy = vi.spyOn(global, 'fetch').mockImplementation(async (url) => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
       if (typeof url === 'string' && url.includes('ollama.test')) {
         return {
           ok: true,

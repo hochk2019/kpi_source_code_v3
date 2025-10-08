@@ -13,7 +13,6 @@ const createJsonResponse = (payload, status = 200) => ({
 });
 
 describe('DataImporter preview UI', () => {
-  let fetchSpy;
   let fetchMock;
   const savedRows = [
     {
@@ -80,7 +79,7 @@ describe('DataImporter preview UI', () => {
     window.confirm = vi.fn(() => true);
     clearStorageCache();
     sharedSetItem(DECL_KEY, JSON.stringify(savedRows));
-    fetchMock = vi.fn((input, init = {}) => {
+    fetchMock = vi.fn((input) => {
       const url = typeof input === 'string' ? input : input?.url || '';
       if (url === '/api/import/ecus/config') {
         return Promise.resolve(
@@ -132,7 +131,7 @@ describe('DataImporter preview UI', () => {
       }
       return Promise.resolve(createJsonResponse({ ok: true }));
     });
-    fetchSpy = vi.spyOn(auth, 'fetchWithAuth').mockImplementation(fetchMock);
+    vi.spyOn(auth, 'fetchWithAuth').mockImplementation(fetchMock);
   });
 
   afterEach(() => {

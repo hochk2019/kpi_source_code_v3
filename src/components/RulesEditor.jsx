@@ -29,6 +29,8 @@ import {
 import { getData } from "@/lib/store.js";
 import { cn } from "@/lib/utils.js";
 
+const EMPTY_GROUP_MAP = Object.freeze({});
+
 function Num({ value, onChange, step = "0.1", disabled = false }) {
   const display = value === 0 ? 0 : value ?? "";
   return (
@@ -121,9 +123,12 @@ function CodeMultiSelect({
   disabled = false,
   placeholder = "Chọn mã loại hình",
 }) {
-  const selected = Array.isArray(value)
-    ? value.map((code) => String(code || "").trim().toUpperCase()).filter(Boolean)
-    : [];
+  const selected = useMemo(() => {
+    if (!Array.isArray(value)) {
+      return [];
+    }
+    return value.map((code) => String(code || "").trim().toUpperCase()).filter(Boolean);
+  }, [value]);
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
 
@@ -606,7 +611,12 @@ export default function RulesEditor({ canEdit = true, currentUser = null }) {
     }));
   };
 
-  const groups = rule?.groups || {};
+  const groups = useMemo(() => {
+    if (rule?.groups && typeof rule.groups === "object") {
+      return rule.groups;
+    }
+    return EMPTY_GROUP_MAP;
+  }, [rule]);
   const typeOptions = useMemo(() => {
     const counter = new Map();
     data.forEach((row) => {

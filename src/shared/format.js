@@ -34,7 +34,7 @@ export function formatDisplayDate(input) {
       const year = String(date.getFullYear());
       return `${day}/${month}/${year}`;
     }
-  } catch (err) {
+  } catch {
     // ignore and fall through
   }
 

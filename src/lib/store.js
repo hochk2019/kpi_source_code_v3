@@ -250,10 +250,10 @@ export function isExportDecl(soTk, loaiHinh) {
   if (isImportByNumber(soTk)) return false;
   if (isExportByType(loaiHinh)) return true;
   if (isImportByType(loaiHinh)) return false;
-  return false; // khÃ´ng rÃµ thÃ¬ coi lÃ  nháº­p
+  return false; // Neu khong ro thi coi la nhap
 }
 
-// ===== MST map (gÃ¡n nhÃ¢n viÃªn theo ngÃ y hiá»‡u lá»±c) =====
+// ===== MST map (gan nhan vien theo ngay hieu luc) =====
 export function getMSTRowsRaw() {
   return safeParse(getItem(MST_KEY), []);
 }
@@ -272,7 +272,7 @@ function sanitizeMSTRow(row) {
   };
 }
 
-/** Láº¥y toÃ n bá»™ báº£ng gÃ¡n MST, Ä‘Ã£ chuáº©n hoÃ¡ + sáº¯p xáº¿p */
+/** Lay toan bo bang gan MST, da chuan hoa + sap xep */
 export function getMSTMap() {
   const raw = getMSTRowsRaw();
   const rows = Array.isArray(raw) ? raw : [];
@@ -286,7 +286,7 @@ export function getMSTMap() {
     });
 }
 
-/** Ghi Ä‘Ã¨/bá»• sung báº£ng gÃ¡n MST (Ä‘Ã£ chuáº©n hoÃ¡ dá»¯ liá»‡u Ä‘áº§u vÃ o) */
+/** Ghi de/bo sung bang gan MST (da chuan hoa du lieu dau vao) */
 export function upsertMSTRows(rows, { actor = "system", detail = "" } = {}) {
   const previous = getMSTMap();
 
@@ -474,14 +474,14 @@ export function getMSTHistoryFor(mst, limit = 20) {
   return filtered.slice(0, limit);
 }
 
-/** Láº¥y ngÆ°á»i phá»¥ trÃ¡ch theo MST & ngÃ y hiá»‡u lá»±c gáº§n nháº¥t (<= ngÃ y tá» khai) */
+/** Lay nguoi phu trach theo MST & ngay hieu luc gan nhat (<= ngay to khai) */
 export function getMSTFor(mst, isoDate) {
   const rows = getMSTMap().filter(r => normalizeMST(r.mst) === normalizeMST(mst));
   if (rows.length === 0) return null;
 
   const dateVal = isoDate ? new Date(isoDate).getTime() : Number.POSITIVE_INFINITY;
 
-  // Xáº¿p theo hiá»‡u lá»±c gáº§n nháº¥t vá»›i ngÃ y TK
+  // Xep theo hieu luc gan nhat va gioi han theo ngay TK
   const picked = rows
     .map(r => {
       const ef = r.effective_from || "0001-01-01";

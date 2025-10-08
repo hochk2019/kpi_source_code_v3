@@ -21,7 +21,10 @@
     "healthcheck": "node scripts/healthcheck.mjs",
     "ecus:mock": "node scripts/ecus-tools.mjs mock",
     "ecus:inspect": "node scripts/ecus-tools.mjs inspect",
-    "dev:frontend": "vite"
+    "dev:frontend": "vite",
+    "favicon:update": "node scripts/update-favicon.mjs",
+    "test:screenshot": "pnpm build && pnpm exec playwright test tests/playwright/favicon.spec.js",
+    "test:playwright": "pnpm exec playwright test"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.0.1",
@@ -85,6 +88,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.25.0",
+    "@playwright/test": "^1.56.0",
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.0.1",
     "@testing-library/user-event": "^14.5.2",

@@ -12,7 +12,7 @@ import crypto from 'node:crypto';
 import { generateReport } from './reportExport.js';
 import { DEFAULT_RULES as SHARED_DEFAULT_RULES } from '../src/shared/defaultRules.js';
 import { getRulesSeed, persistRulesSnapshot, loadRulesSnapshot } from './rulesPersistence.js';
-import { deriveCOStatus, parseCoLineCount, setPreferentialCodeConfig, getPreferentialCodeConfig } from '../src/shared/co.js';
+import { deriveCOStatus, parseCoLineCount, setPreferentialCodeConfig } from '../src/shared/co.js';
 import {
   ADMIN_ROLE,
   DEFAULT_ROLE,
@@ -3222,6 +3222,7 @@ function describeCronExpression(expression) {
     }
     return output;
   } catch (err) {
+    console.warn('Khong the dien giai bieu thuc cron', cronExpr, err);
     return 'Không thể diễn giải biểu thức cron';
   }
 }
@@ -5429,10 +5430,46 @@ let scheduledSync = null;
 function refreshEcusSchedule() {
   if (process.env.KPI_DISABLE_CRON === '1') {
     if (scheduledSync) {
-      scheduledSync.stop();
+      try {
+        scheduledSync.stop();
+      } catch (err) {
+        console.warn('Khong the dung lich dong bo ECUS hien tai', err);
+      }
       scheduledSync = null;
+    }
+    return;
   }
-  return;
+
+  if (scheduledSync) {
+    try {
+      scheduledSync.stop();
+    } catch (err) {
+      console.warn('Khong the dung lich dong bo ECUS hien tai', err);
+    }
+    scheduledSync = null;
+  }
+
+  const config = getEcusConfig();
+  if (!config.enabled || !config.schedule) {
+    return;
+  }
+
+  const cronExpr = normalizeCronExpression(config.schedule);
+  if (!cronExpr) {
+    return;
+  }
+  if (typeof cron.validate === 'function' && !cron.validate(cronExpr)) {
+    console.warn('ECUS sync cron expression invalid:', cronExpr);
+    return;
+  }
+
+  try {
+    scheduledSync = cron.schedule(cronExpr, () => {
+      runEcusSyncWithErrorHandling({ actor: 'scheduler', reason: 'scheduled' }).catch(() => {});
+    });
+  } catch (err) {
+    console.error('Không thể thiết lập lịch đồng bộ ECUS:', err);
+  }
 }
 
 async function runCoDiscrepancyCheck({ actor = 'system', reason = 'auto', range = null } = {}) {
@@ -5617,30 +5654,6 @@ function refreshCoDiscrepancySchedule() {
     });
   } catch (err) {
     console.error('Khong the thiet lap lich kiem tra CO:', err);
-  }
-}
-  if (scheduledSync) {
-    scheduledSync.stop();
-    scheduledSync = null;
-  }
-  const config = getEcusConfig();
-  if (!config.enabled || !config.schedule) {
-    return;
-  }
-  const cronExpr = normalizeCronExpression(config.schedule);
-  if (!cronExpr) {
-    return;
-  }
-  if (typeof cron.validate === 'function' && !cron.validate(cronExpr)) {
-    console.warn('ECUS sync cron expression invalid:', cronExpr);
-    return;
-  }
-  try {
-    scheduledSync = cron.schedule(cronExpr, () => {
-      runEcusSyncWithErrorHandling({ actor: 'scheduler', reason: 'scheduled' }).catch(() => {});
-    });
-  } catch (err) {
-    console.error('Không thể thiết lập lịch đồng bộ ECUS:', err);
   }
 }
 
