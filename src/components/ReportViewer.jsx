@@ -31,6 +31,8 @@ import {
   Legend,
   BarChart,
   Bar,
+  LabelList,
+  Cell,
 } from "recharts";
 
 let reportExporterPromise;
@@ -304,39 +306,56 @@ function TrendLineChart({ data, comparison }) {
   );
 }
 
-function TeamTrendChart({ data, teams }) {
-  const baseTeams = Array.isArray(teams) ? teams.filter(Boolean) : [];
-  const plottedTeams = baseTeams.includes("Tổng") ? baseTeams : [...baseTeams, "Tổng"];
-
+function TopDeclarerChart({ data }) {
   if (!data || data.length === 0) {
     return (
       <section className="rounded-lg border bg-white p-4 shadow-sm">
-        <h3 className="text-base font-semibold text-gray-900">So sánh KPI theo tổ đội</h3>
-        <p className="mt-3 text-sm text-gray-500">Chưa có dữ liệu để hiển thị biểu đồ tổ đội.</p>
+        <h3 className="text-base font-semibold text-gray-900">Top 5 nhân viên mở tờ khai nhiều nhất</h3>
+        <p className="mt-3 text-sm text-gray-500">Chưa có dữ liệu để hiển thị bảng xếp hạng tờ khai.</p>
       </section>
     );
   }
 
+  const totalDecls = data.reduce((sum, item) => sum + (item.decls || 0), 0);
+
   return (
     <section className="rounded-lg border bg-white p-4 shadow-sm">
-      <h3 className="text-base font-semibold text-gray-900">So sánh KPI theo tổ đội (6 kỳ gần nhất)</h3>
+      <div className="flex items-baseline justify-between gap-2">
+        <h3 className="text-base font-semibold text-gray-900">Top 5 nhân viên mở tờ khai nhiều nhất</h3>
+        <div className="text-xs text-gray-500">Tổng: {formatInt(totalDecls)} tờ khai</div>
+      </div>
       <div className="mt-4 h-64 w-full">
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={data} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="period" />
-            <YAxis />
-            <Tooltip />
-            <Legend />
-            {plottedTeams.map((team, idx) => (
-              <Bar
-                key={team}
-                dataKey={team}
-                name={team}
-                fill={chartColors[idx % chartColors.length]}
-                stackId={team === "Tổng" ? "total" : undefined}
-              />
-            ))}
+          <BarChart
+            layout="vertical"
+            data={data}
+            margin={{ top: 10, right: 30, left: 0, bottom: 0 }}
+            barCategoryGap="20%"
+          >
+            <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+            <XAxis type="number" tickFormatter={formatInt} />
+            <YAxis
+              type="category"
+              dataKey="name"
+              width={160}
+              tick={{ fontSize: 12 }}
+            />
+            <Tooltip
+              formatter={(value) => [`${formatInt(value)} tờ khai`, "Tờ khai"]}
+              labelFormatter={(label, payload) => {
+                const entry = payload && payload[0] && payload[0].payload;
+                if (entry?.team && entry.team !== "Chưa gán tổ đội") {
+                  return `${label} — ${entry.team}`;
+                }
+                return label;
+              }}
+            />
+            <Bar dataKey="decls" name="Tờ khai" radius={[0, 4, 4, 0]}>
+              {data.map((item, idx) => (
+                <Cell key={item.key || item.name || idx} fill={chartColors[idx % chartColors.length]} />
+              ))}
+              <LabelList dataKey="decls" position="right" formatter={(value) => formatInt(value)} />
+            </Bar>
           </BarChart>
         </ResponsiveContainer>
       </div>
@@ -1040,6 +1059,31 @@ export default function ReportViewer({ canExport = true }) {
       .slice(0, 5);
   }, [report.staff.list]);
 
+  const topDeclarerSeries = useMemo(() => {
+    return [...report.staff.list]
+      .map((item) => {
+        const decls = Number(item?.stats?.decls || 0);
+        const teamLabel = item.teamLabel && item.teamLabel !== "Chưa gán tổ đội"
+          ? item.teamLabel
+          : "Chưa gán tổ đội";
+        return {
+          key: item.key,
+          name: item.name,
+          decls,
+          team: teamLabel,
+        };
+      })
+      .filter((item) => item.decls > 0)
+      .sort((a, b) => {
+        if (b.decls !== a.decls) return b.decls - a.decls;
+        if (a.team !== b.team) {
+          return a.team.localeCompare(b.team, "vi", { sensitivity: "base" });
+        }
+        return a.name.localeCompare(b.name, "vi", { sensitivity: "base" });
+      })
+      .slice(0, 5);
+  }, [report.staff.list]);
+
   const teamPieData = useMemo(() => {
     return report.teams.list.map((item) => ({
       name: item.name,
@@ -1049,9 +1093,7 @@ export default function ReportViewer({ canExport = true }) {
 
   const trend = report.trend || {};
   const trendSeries = trend.series || [];
-  const teamTrendSeries = trend.teamSeries || [];
   const trendComparison = trend.comparison || null;
-  const trendTeams = trend.topTeams || [];
 
   const companySummaryAllStaff = useMemo(
     () => aggregateByCompany(report.rows, { includeStaff: true, includeTeam: false }),
@@ -1751,7 +1793,7 @@ export default function ReportViewer({ canExport = true }) {
 
       <div className="grid gap-4 lg:grid-cols-2">
         <TrendLineChart data={trendSeries} comparison={trendComparison} />
-        <TeamTrendChart data={teamTrendSeries} teams={trendTeams} />
+        <TopDeclarerChart data={topDeclarerSeries} />
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
