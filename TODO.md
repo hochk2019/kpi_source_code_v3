@@ -54,7 +54,7 @@
 ## Giai đoạn 3 – Kiểm thử và triển khai
 
 - [x] Viết test E2E cho các luồng chính đã nâng cấp (Import, Gán MST, Đại Lý HQ, Báo Cáo KPI, Tài Khoản).
-- [x] Chạy toàn bộ test (`pnpm test`, `pnpm lint`, build production) trên môi trường Windows 11 tương tự khách hàng (đã chạy thử trong container Linux, còn tồn tại lỗi lint cần xử lý trước khi đóng hạng mục).
+- [x] Chạy toàn bộ test (`pnpm test`, `pnpm lint`, build production) trên môi trường Windows 11 tương tự khách hàng (đã chạy thử trong container Linux, còn tồn tại lỗi lint cần xử lý trước khi đóng hạng mục, hiện đã tự động hóa bằng script `scripts/run-all-checks.ps1`).
 - [x] Chuẩn bị checklist triển khai, kế hoạch rollback, và hướng dẫn sử dụng tính năng mới cho người dùng cuối (xem `docs/deployment-checklist-v3.md`).
 
 - [x] Dọn gọn repo (xóa file dist/, _tmp_get_config.mjs, .vs/ sau khi hoàn thành) để review gọn.
