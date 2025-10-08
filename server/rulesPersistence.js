@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 
 const moduleUrl = typeof import.meta !== 'undefined' ? import.meta.url || '' : '';
@@ -26,7 +27,7 @@ function safeParse(json) {
   if (!json) return null;
   try {
     return JSON.parse(json);
-  } catch (err) {
+  } catch {
     return null;
   }
 }

@@ -155,6 +155,28 @@ Server đặt cookie phiên `kpi_session` dựa trên biến môi trường `KPI
 > `pnpm healthcheck` sau khi cài đặt trên Windows để kiểm tra nhanh tình trạng
 > môi trường trước khi triển khai.
 
+### 3.2. Script PowerShell kiểm thử toàn diện
+
+Để đảm bảo quy trình kiểm thử thống nhất trên Windows 11 Pro + PowerShell 7,
+chúng tôi cung cấp `scripts/run-all-checks.ps1`. Script sẽ:
+
+1. Kiểm tra phiên bản PowerShell/pnpm và tạo thư mục `.logs` lưu toàn bộ output.
+2. Chạy lần lượt `pnpm install --frozen-lockfile`, `pnpm lint`, `pnpm test`,
+   `pnpm build` và `pnpm test:screenshot`.
+3. Tự dừng ngay khi có bước thất bại, trả về mã lỗi khác 0 để dễ dàng tích hợp
+   vào quy trình CI/CD hoặc chạy thủ công.
+
+```powershell
+pwsh ./scripts/run-all-checks.ps1
+```
+
+Khi môi trường chưa sẵn sàng cho Playwright (thiếu trình duyệt, không cần ảnh
+chụp), thêm tham số `-SkipScreenshots` để bỏ qua bước cuối cùng.
+
+```powershell
+pwsh ./scripts/run-all-checks.ps1 -SkipScreenshots
+```
+
 3. Tất cả dữ liệu (tờ khai, gán MST, quy tắc KPI, tài khoản, nhật ký…) được lưu
    trong `server/data/storage.sqlite`. Sao lưu file này định kỳ để tránh mất dữ
    liệu. Bạn có thể xóa `server/data/db.json` sau khi đã nâng cấp nếu không còn

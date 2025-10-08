@@ -115,6 +115,7 @@ function formatDateTime(value) {
   try {
     return new Date(value).toLocaleString("vi-VN", { hour12: false });
   } catch (err) {
+    console.warn("Khong the dinh dang thoi gian dieu chinh KPI", value, err);
     return value;
   }
 }

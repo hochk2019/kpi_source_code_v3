@@ -1074,7 +1074,17 @@ export default function DataImporter({
     } finally {
       setSyncRunning(false);
     }
-  }, [actor, canManageSync, fetchAlerts, fetchSyncConfig, fetchSyncStatus, loadSavedRows, manualRange.from, manualRange.to]);
+  }, [
+    actor,
+    canManageSync,
+    fetchAlerts,
+    fetchCoDiscrepancy,
+    fetchSyncConfig,
+    fetchSyncStatus,
+    loadSavedRows,
+    manualRange.from,
+    manualRange.to,
+  ]);
 
   const handlePreviewSync = useCallback(async () => {
     if (!canManageSync) {
@@ -1258,6 +1268,7 @@ export default function DataImporter({
     try {
       return new Date(coDiscrepancyState.lastRunAt).toLocaleString("vi-VN");
     } catch (err) {
+      console.warn("Khong the dinh dang thoi gian chay doi soat CO", coDiscrepancyState?.lastRunAt, err);
       return coDiscrepancyState.lastRunAt;
     }
   }, [coDiscrepancyState?.lastRunAt]);
@@ -1272,11 +1283,11 @@ export default function DataImporter({
       const actor = coCodeConfig.updatedBy || "hệ thống";
       return `Cập nhật lần cuối: ${time} (${actor})`;
     } catch (err) {
+      console.warn("Khong the dinh dang thoi gian cap nhat cau hinh CO", coCodeConfig?.updatedAt, err);
       return `Cập nhật lần cuối: ${coCodeConfig.updatedAt}`;
     }
   }, [coCodeConfig?.updatedAt, coCodeConfig?.updatedBy]);
   const coDiscrepancyStatusLabel = coDiscrepancyState?.status || "idle";
-  const coDiscrepancyTriggered = coDiscrepancyState?.triggered === true;
   const lastSyncSummaryCard = useMemo(() => {
     if (!lastSyncSummary) return null;
     return (

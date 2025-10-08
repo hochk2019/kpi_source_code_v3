@@ -7,3 +7,4 @@ server/data/*.sqlite-wal
 server/data/kpi-rules.json
 server/data/rules-history/
 .env
+test-results/

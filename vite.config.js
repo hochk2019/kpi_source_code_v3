@@ -60,5 +60,6 @@ export default defineConfig({
     environmentMatchGlobs: [
       ['tests/server.*.test.js', 'node'],
     ],
+    exclude: ['tests/playwright/**', 'node_modules/**', 'dist/**'],
   },
 })

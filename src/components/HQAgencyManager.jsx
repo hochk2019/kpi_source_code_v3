@@ -116,6 +116,7 @@ function formatHistoryTimestamp(value) {
   try {
     return date.toLocaleString('vi-VN', { hour12: false });
   } catch (err) {
+    console.warn('Khong the dinh dang thoi gian lich su Dai ly HQ', value, err);
     return date.toISOString();
   }
 }
@@ -143,7 +144,7 @@ export default function HQAgencyManager({ canEdit = true, currentUser = null }) 
     }
   }, []);
 
-  const historyEntries = useMemo(() => getHQHistoryEntries(), [historyStamp]);
+  const historyEntries = useMemo(() => getHQHistoryEntries(historyStamp), [historyStamp]);
   const historyMap = useMemo(() => {
     const map = new Map();
     for (const entry of historyEntries) {

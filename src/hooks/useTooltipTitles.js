@@ -43,7 +43,7 @@ export function useTooltipTitles(rootRef, deps = []) {
         ensureTitle(button, text);
       }
     });
-  }, [rootRef, ...deps]);
+  }, [rootRef, deps]);
 }
 
 export default useTooltipTitles;
