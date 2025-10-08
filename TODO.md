@@ -48,14 +48,14 @@
 ### Cải tiến chung
 - [x] Hiển thị tooltip mô tả ngắn khi hover vào mọi nút thao tác trong toàn hệ thống.
 - [x] Nghiên cứu phương án tích hợp AI (API phân tích dữ liệu/chatbot) tiết kiệm token.
-- [ ] Thay favicon/tab logo bằng logo mới do khách hàng cung cấp.
+- [x] Thay favicon/tab logo bằng logo mới do khách hàng cung cấp (nhúng Base64 để tránh cảnh báo tệp nhị phân).
 - [x] Chuẩn hóa lại document hướng dẫn triển khai trên Windows 11 Pro + SQL Server 2008 R2 + PowerShell 7.
 
 ## Giai đoạn 3 – Kiểm thử và triển khai
 
 - [x] Viết test E2E cho các luồng chính đã nâng cấp (Import, Gán MST, Đại Lý HQ, Báo Cáo KPI, Tài Khoản).
-- [ ] Chạy toàn bộ test (`pnpm test`, `pnpm lint`, build production) trên môi trường Windows 11 tương tự khách hàng.
-- [ ] Chuẩn bị checklist triển khai, kế hoạch rollback, và hướng dẫn sử dụng tính năng mới cho người dùng cuối.
+- [ ] Chạy toàn bộ test (`pnpm test`, `pnpm lint`, build production) trên môi trường Windows 11 tương tự khách hàng (đã chạy thử trong container Linux, còn tồn tại lỗi lint cần xử lý trước khi đóng hạng mục).
+- [x] Chuẩn bị checklist triển khai, kế hoạch rollback, và hướng dẫn sử dụng tính năng mới cho người dùng cuối (xem `docs/deployment-checklist-v3.md`).
 
 - [x] Dọn gọn repo (xóa file dist/, _tmp_get_config.mjs, .vs/ sau khi hoàn thành) để review gọn.
 
