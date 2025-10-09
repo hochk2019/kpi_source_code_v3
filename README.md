@@ -435,3 +435,7 @@ sai lệch dữ liệu khi vận hành trên Windows 11.
 
 Trong quá trình tạo Pull Request nếu gặp thông báo "Tệp nhị phân không được hỗ trợ" đối với file ảnh template, tham khảo thêm
 [docs/troubleshooting-pr-binary.md](docs/troubleshooting-pr-binary.md) để hiểu nguyên nhân và hướng xử lý.
+
+## 11. Định hướng giao diện & tính năng tương lai
+
+Để đáp ứng yêu cầu hiện đại hóa, gom gộp chức năng và bổ sung cơ chế chuyển đổi giao diện sáng/tối, vui lòng tham khảo tài liệu [Đề xuất cải tiến giao diện và tính năng nâng cao](docs/de-xuat-giao-dien-hien-dai.md). Tài liệu này tổng hợp lộ trình triển khai, bao gồm xây dựng design system, trung tâm điều phối dữ liệu, theme Light/Dark và nâng cấp trải nghiệm chatbot AI.
