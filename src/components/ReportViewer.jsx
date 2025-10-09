@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   getDeclRows,
   getTeamRoster,
@@ -31,7 +31,10 @@ import {
   Legend,
   BarChart,
   Bar,
+  LabelList,
+  Cell,
 } from "recharts";
+import { useChartPalette } from "@/designSystem/hooks.js";
 
 let reportExporterPromise;
 function loadReportExporterModule() {
@@ -54,7 +57,148 @@ function formatDecimal(value) {
   });
 }
 
-const chartColors = ["#2563eb", "#22c55e", "#f97316", "#a855f7", "#14b8a6"];
+const DEFAULT_CHART_COLORS = ["#2563eb", "#22c55e", "#f97316", "#a855f7", "#14b8a6"];
+
+const METRIC_SORT_KEYS = ["kpi", "decls", "licenses"];
+
+const SORT_OPTIONS = [
+  { value: "kpi", label: "Điểm KPI" },
+  { value: "decls", label: "Số tờ khai" },
+  { value: "licenses", label: "Số giấy phép" },
+];
+
+const REPORT_PREFS_STORAGE_KEY = "kpi_report_viewer_prefs_v1";
+const QUICK_RANGE_VALUES = new Set([
+  ...QUICK_RANGE_OPTIONS.map((option) => option.value),
+  "custom",
+]);
+const SCOPE_VALUES = new Set(["staff", "team"]);
+
+function sanitizeQuickRange(value) {
+  if (typeof value !== "string") {
+    return "this_month";
+  }
+  const normalized = value.trim();
+  if (QUICK_RANGE_VALUES.has(normalized)) {
+    return normalized;
+  }
+  return "this_month";
+}
+
+function sanitizeSortKey(value) {
+  if (METRIC_SORT_KEYS.includes(value)) {
+    return value;
+  }
+  return "kpi";
+}
+
+function sanitizeScope(value) {
+  if (typeof value !== "string") {
+    return "staff";
+  }
+  const normalized = value.trim();
+  return SCOPE_VALUES.has(normalized) ? normalized : "staff";
+}
+
+function sanitizeTopStaffMetric(value) {
+  return value === "decls" ? "decls" : "kpi";
+}
+
+function sanitizeSelection(value) {
+  if (typeof value !== "string") {
+    return "all";
+  }
+  const normalized = value.trim();
+  return normalized || "all";
+}
+
+function sanitizeDateInput(value, fallback) {
+  if (typeof value !== "string") {
+    return fallback;
+  }
+  const normalized = value.trim();
+  return normalized || fallback;
+}
+
+function loadReportPreferences() {
+  if (typeof window === "undefined" || !window.localStorage) {
+    return {};
+  }
+  try {
+    const raw = window.localStorage.getItem(REPORT_PREFS_STORAGE_KEY);
+    if (!raw) {
+      return {};
+    }
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveReportPreferences(prefs) {
+  if (typeof window === "undefined" || !window.localStorage) {
+    return;
+  }
+  try {
+    window.localStorage.setItem(REPORT_PREFS_STORAGE_KEY, JSON.stringify(prefs));
+  } catch (err) {
+    console.warn("Không thể lưu bộ lọc báo cáo vào localStorage", err);
+  }
+}
+
+function getCompanyRowLabel(row = {}) {
+  if (row.staff && row.team) {
+    return `${row.staff} — ${row.team}`;
+  }
+  if (row.staff) {
+    return row.staff;
+  }
+  if (row.team) {
+    return row.team;
+  }
+  if (row.cong_ty) {
+    return row.cong_ty;
+  }
+  if (row.mst) {
+    return row.mst;
+  }
+  return "";
+}
+
+function sortCompanyRows(rows = [], sortKey = "kpi") {
+  const key = METRIC_SORT_KEYS.includes(sortKey) ? sortKey : "kpi";
+  const fallbackKeys = METRIC_SORT_KEYS.filter((item) => item !== key);
+  return [...rows].sort((a = {}, b = {}) => {
+    const primaryDiff = Number(b[key] || 0) - Number(a[key] || 0);
+    if (primaryDiff !== 0) return primaryDiff;
+    for (const fallback of fallbackKeys) {
+      const diff = Number(b[fallback] || 0) - Number(a[fallback] || 0);
+      if (diff !== 0) return diff;
+    }
+    const labelA = getCompanyRowLabel(a) || "";
+    const labelB = getCompanyRowLabel(b) || "";
+    return labelA.localeCompare(labelB, "vi", { sensitivity: "base" });
+  });
+}
+
+function sortStatsCollection(list = [], sortKey = "kpi", getLabel = (item) => item?.name || "") {
+  const key = METRIC_SORT_KEYS.includes(sortKey) ? sortKey : "kpi";
+  const fallbackKeys = METRIC_SORT_KEYS.filter((item) => item !== key);
+  return [...list].sort((a = {}, b = {}) => {
+    const statsA = a.stats || {};
+    const statsB = b.stats || {};
+    const primaryDiff = Number(statsB[key] || 0) - Number(statsA[key] || 0);
+    if (primaryDiff !== 0) return primaryDiff;
+    for (const fallback of fallbackKeys) {
+      const diff = Number(statsB[fallback] || 0) - Number(statsA[fallback] || 0);
+      if (diff !== 0) return diff;
+    }
+    const labelA = getLabel(a) || "";
+    const labelB = getLabel(b) || "";
+    return labelA.localeCompare(labelB, "vi", { sensitivity: "base" });
+  });
+}
 
 const COLUMN_VISIBILITY_OPTIONS = [
   { key: "items", label: "Mục hàng" },
@@ -64,7 +208,13 @@ const COLUMN_VISIBILITY_OPTIONS = [
   { key: "licenseCodes", label: "Mã giấy phép" },
 ];
 
-function CompanySummaryTable({ rows, includeStaff = false, includeTeam = false, visibleColumns = {} }) {
+function CompanySummaryTable({
+  rows,
+  includeStaff = false,
+  includeTeam = false,
+  visibleColumns = {},
+  sortKey = "kpi",
+}) {
   const columns = [
     { key: "idx", label: "STT", align: "center" },
     { key: "cong_ty", label: "Công ty", align: "left" },
@@ -97,6 +247,7 @@ function CompanySummaryTable({ rows, includeStaff = false, includeTeam = false, 
   );
 
   const activeColumns = columns.filter((col) => (col.visibleKey ? visibleColumns[col.visibleKey] !== false : true));
+  const sortedRows = useMemo(() => sortCompanyRows(rows, sortKey), [rows, sortKey]);
 
   return (
     <div className="overflow-auto rounded border">
@@ -119,8 +270,8 @@ function CompanySummaryTable({ rows, includeStaff = false, includeTeam = false, 
           </tr>
         </thead>
         <tbody>
-          {rows.length ? (
-            rows.map((row, idx) => (
+          {sortedRows.length ? (
+            sortedRows.map((row, idx) => (
               <tr key={`${row.mst}-${row.cong_ty}-${idx}`} className={idx % 2 === 0 ? "bg-white" : "bg-gray-50"}>
                 {activeColumns.map((col) => {
                   const alignClass =
@@ -153,62 +304,129 @@ function CompanySummaryTable({ rows, includeStaff = false, includeTeam = false, 
   );
 }
 
-function TopStaffWidget({ data }) {
-  if (!data.length) {
-    return (
-      <section className="rounded-lg border bg-white p-4 shadow-sm">
-        <h3 className="text-base font-semibold text-gray-900">Top 5 nhân viên theo điểm KPI</h3>
-        <p className="mt-3 text-sm text-gray-500">Chưa có dữ liệu hợp lệ trong giai đoạn này.</p>
-      </section>
-    );
-  }
+function TopStaffWidget({ metric = "kpi", onMetricChange, kpiData = [], declData = [], palette = DEFAULT_CHART_COLORS }) {
+  const hasKpiData = kpiData.length > 0;
+  const hasDeclData = declData.length > 0;
+  const hasData = metric === "kpi" ? hasKpiData : hasDeclData;
 
-  const maxKPI = Math.max(...data.map((item) => item.stats.kpi || 0), 1);
+  const maxKPI = hasKpiData ? Math.max(...kpiData.map((item) => item.stats.kpi || 0), 1) : 1;
+  const totalDecls = hasDeclData ? declData.reduce((sum, item) => sum + (item.decls || 0), 0) : 0;
+  const colors = Array.isArray(palette) && palette.length ? palette : DEFAULT_CHART_COLORS;
+
+  const renderEmptyState = (
+    <p className="mt-3 text-sm text-gray-500">Chưa có dữ liệu hợp lệ trong giai đoạn này.</p>
+  );
 
   return (
-    <section className="rounded-lg border bg-white p-4 shadow-sm">
-      <h3 className="text-base font-semibold text-gray-900">Top 5 nhân viên theo điểm KPI</h3>
-      <div className="mt-4 space-y-4">
-        {data.map((item, idx) => {
-          const ratio = Math.max(0, Math.min(100, (item.stats.kpi / maxKPI) * 100));
-          const color = chartColors[idx % chartColors.length];
-          return (
-            <div key={item.key || idx}>
-              <div className="flex items-baseline justify-between text-sm">
-                <div className="font-medium text-gray-900">
-                  {idx + 1}. {item.name}
-                </div>
-                <div className="text-gray-600">{formatDecimal(item.stats.kpi)}</div>
-              </div>
-              <div className="mt-1 h-2 w-full overflow-hidden rounded-full bg-gray-200">
-                <div
-                  className="h-full rounded-full"
-                  style={{ width: `${ratio}%`, backgroundColor: color }}
-                />
-              </div>
-              <div className="mt-1 text-xs text-gray-500">
-                {`Tờ khai: ${formatInt(item.stats.decls)} • Mục hàng: ${formatInt(item.stats.items)} • GP: ${formatInt(
-                  item.stats.licenses
-                )} • C/O: ${formatInt(item.stats.co ?? 0)} • Dòng C/O: ${formatInt(item.stats.coLines ?? 0)}`}
-              </div>
-            </div>
-          );
-        })}
+    <section className="ds-card space-y-4 p-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h3 className="text-base font-semibold text-gray-900">
+          Top 5 nhân viên theo {metric === "kpi" ? "điểm KPI" : "số tờ khai"}
+        </h3>
+        <div className="flex gap-2 text-xs font-semibold">
+          <button
+            type="button"
+            onClick={() => onMetricChange?.("kpi")}
+            className={`rounded px-3 py-1.5 ${
+              metric === "kpi" ? "bg-black text-white" : "border bg-white text-gray-700 hover:bg-gray-50"
+            }`}
+          >
+            Điểm KPI
+          </button>
+          <button
+            type="button"
+            onClick={() => onMetricChange?.("decls")}
+            className={`rounded px-3 py-1.5 ${
+              metric === "decls" ? "bg-black text-white" : "border bg-white text-gray-700 hover:bg-gray-50"
+            }`}
+          >
+            Số tờ khai
+          </button>
+        </div>
       </div>
+
+      {!hasData ? (
+        renderEmptyState
+      ) : metric === "kpi" ? (
+        <div className="mt-4 space-y-4">
+          {kpiData.map((item, idx) => {
+            const ratio = Math.max(0, Math.min(100, (item.stats.kpi / maxKPI) * 100));
+            const color = colors[idx % colors.length];
+            return (
+              <div key={item.key || idx}>
+                <div className="flex items-baseline justify-between text-sm">
+                  <div className="font-medium text-gray-900">
+                    {idx + 1}. {item.name}
+                  </div>
+                  <div className="text-gray-600">{formatDecimal(item.stats.kpi)}</div>
+                </div>
+                <div className="mt-1 h-2 w-full overflow-hidden rounded-full bg-gray-200">
+                  <div className="h-full rounded-full" style={{ width: `${ratio}%`, backgroundColor: color }} />
+                </div>
+                <div className="mt-1 text-xs text-gray-500">
+                  {`Tờ khai: ${formatInt(item.stats.decls)} • Mục hàng: ${formatInt(item.stats.items)} • GP: ${formatInt(
+                    item.stats.licenses
+                  )} • C/O: ${formatInt(item.stats.co ?? 0)} • Dòng C/O: ${formatInt(item.stats.coLines ?? 0)}`}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="mt-4 h-64 w-full">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart
+              layout="vertical"
+              data={declData}
+              margin={{ top: 10, right: 30, left: 0, bottom: 0 }}
+              barCategoryGap="20%"
+            >
+              <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+              <XAxis type="number" tickFormatter={formatInt} />
+              <YAxis type="category" dataKey="name" width={160} tick={{ fontSize: 12 }} />
+              <Tooltip
+                formatter={(value) => [`${formatInt(value)} tờ khai`, "Tờ khai"]}
+                labelFormatter={(label, payload) => {
+                  const entry = payload && payload[0] && payload[0].payload;
+                  if (entry?.team && entry.team !== "Chưa gán tổ đội") {
+                    return `${label} — ${entry.team}`;
+                  }
+                  return label;
+                }}
+              />
+              <Bar dataKey="decls" name="Tờ khai" radius={[0, 4, 4, 0]}>
+                {declData.map((item, idx) => (
+                  <Cell key={item.key || item.name || idx} fill={colors[idx % colors.length]} />
+                ))}
+                <LabelList dataKey="decls" position="right" formatter={(value) => formatInt(value)} />
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+          <div className="mt-2 text-xs text-gray-500">Tổng: {formatInt(totalDecls)} tờ khai</div>
+        </div>
+      )}
     </section>
   );
 }
 
-function TeamPieWidget({ data }) {
-  const total = data.reduce((sum, item) => sum + item.value, 0);
+function TeamMetricPieCard({ title, data, valueFormatter, percentLabel, emptyMessage, palette = DEFAULT_CHART_COLORS }) {
+  const normalizedData = Array.isArray(data)
+    ? data.map((item = {}) => ({
+        name: item.name || "",
+        value: Number(item.value || 0),
+      }))
+    : [];
+
+  const total = normalizedData.reduce((sum, item) => sum + item.value, 0);
   const segments = [];
   let cursor = 0;
+  const colors = Array.isArray(palette) && palette.length ? palette : DEFAULT_CHART_COLORS;
 
-  data.forEach((item, idx) => {
+  normalizedData.forEach((item, idx) => {
     const percent = total > 0 ? (item.value / total) * 100 : 0;
     const start = cursor;
     const end = cursor + percent;
-    const color = chartColors[idx % chartColors.length];
+    const color = colors[idx % colors.length];
     segments.push(`${color} ${start}% ${end}%`);
     cursor = end;
   });
@@ -216,11 +434,11 @@ function TeamPieWidget({ data }) {
   const gradient = segments.length ? `conic-gradient(${segments.join(", ")})` : "conic-gradient(#e5e7eb 0 100%)";
 
   return (
-    <section className="rounded-lg border bg-white p-4 shadow-sm">
-      <h3 className="text-base font-semibold text-gray-900">Phân bổ KPI theo tổ đội</h3>
+    <div className="space-y-4">
+      <h3 className="text-base font-semibold text-gray-900">{title}</h3>
       <div className="mt-4 flex flex-col items-center gap-4 sm:flex-row">
         <div
-          className="h-40 w-40 rounded-full border"
+          className="h-40 w-40 flex-shrink-0 rounded-full border border-subtle"
           style={{ backgroundImage: gradient }}
         >
           {total === 0 ? (
@@ -229,33 +447,61 @@ function TeamPieWidget({ data }) {
             </div>
           ) : null}
         </div>
-        <ul className="space-y-2 text-sm">
-          {data.length ? (
-            data.map((item, idx) => {
-              const color = chartColors[idx % chartColors.length];
+        <ul className="w-full space-y-2 text-sm">
+          {normalizedData.length ? (
+            normalizedData.map((item, idx) => {
+              const color = colors[idx % colors.length];
               const percent = total > 0 ? Math.round((item.value / total) * 1000) / 10 : 0;
               return (
-                <li key={item.name} className="flex items-center gap-2">
+                <li key={`${title}-${item.name}-${idx}`} className="flex flex-wrap items-center gap-x-2 gap-y-1">
                   <span className="h-3 w-3 rounded-full" style={{ backgroundColor: color }} />
-                  <span className="font-medium text-gray-900">{item.name}</span>
-                  <span className="text-gray-500">{formatDecimal(item.value)}</span>
-                  <span className="text-gray-500">({percent}% KPI)</span>
+                  <span className="font-medium text-gray-900">{item.name || "Chưa gán tổ đội"}</span>
+                  <span className="text-gray-500">{valueFormatter(item.value)}</span>
+                  <span className="text-gray-500">({percent}% {percentLabel})</span>
                 </li>
               );
             })
           ) : (
-            <li className="text-gray-500">Chưa có dữ liệu KPI cho các tổ đội.</li>
+            <li className="text-gray-500">{emptyMessage}</li>
           )}
         </ul>
+      </div>
+    </div>
+  );
+}
+
+function TeamPieWidget({ kpiData, declData, palette = DEFAULT_CHART_COLORS }) {
+  return (
+    <section className="ds-card space-y-6 p-4">
+      <div className="grid gap-6 lg:grid-cols-2">
+        <TeamMetricPieCard
+          title="Phân bổ KPI theo tổ đội"
+          data={kpiData}
+          valueFormatter={formatDecimal}
+          percentLabel="KPI"
+          emptyMessage="Chưa có dữ liệu KPI cho các tổ đội."
+          palette={palette}
+        />
+        <TeamMetricPieCard
+          title="Phân bổ lượng tờ khai theo tổ đội"
+          data={declData}
+          valueFormatter={formatInt}
+          percentLabel="tờ khai"
+          emptyMessage="Chưa có dữ liệu tờ khai cho các tổ đội."
+          palette={palette}
+        />
       </div>
     </section>
   );
 }
 
-function TrendLineChart({ data, comparison }) {
+function TrendLineChart({ data, comparison, palette = DEFAULT_CHART_COLORS }) {
+  const colors = Array.isArray(palette) && palette.length ? palette : DEFAULT_CHART_COLORS;
+  const kpiColor = colors[0] ?? DEFAULT_CHART_COLORS[0];
+  const declColor = colors[1] ?? DEFAULT_CHART_COLORS[1];
   if (!data || data.length === 0) {
     return (
-      <section className="rounded-lg border bg-white p-4 shadow-sm">
+      <section className="ds-card space-y-3 p-4">
         <h3 className="text-base font-semibold text-gray-900">Xu hướng KPI 6 kỳ gần nhất</h3>
         <p className="mt-3 text-sm text-gray-500">Chưa có dữ liệu để hiển thị biểu đồ xu hướng.</p>
       </section>
@@ -268,7 +514,7 @@ function TrendLineChart({ data, comparison }) {
   const deltaClass = deltaKPI > 0 ? "text-emerald-600" : deltaKPI < 0 ? "text-red-600" : "text-gray-600";
 
   return (
-    <section className="rounded-lg border bg-white p-4 shadow-sm">
+    <section className="ds-card space-y-4 p-4">
       <div className="flex items-baseline justify-between gap-2">
         <h3 className="text-base font-semibold text-gray-900">Xu hướng KPI 6 kỳ gần nhất</h3>
         {comparison && (
@@ -291,53 +537,13 @@ function TrendLineChart({ data, comparison }) {
           <LineChart data={data} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" />
             <XAxis dataKey="period" />
-            <YAxis yAxisId="left" stroke="#2563eb" />
-            <YAxis yAxisId="right" orientation="right" stroke="#22c55e" />
+            <YAxis yAxisId="left" stroke={kpiColor} />
+            <YAxis yAxisId="right" orientation="right" stroke={declColor} />
             <Tooltip />
             <Legend />
-            <Line yAxisId="left" type="monotone" dataKey="kpi" name="Điểm KPI" stroke="#2563eb" strokeWidth={2} />
-            <Line yAxisId="right" type="monotone" dataKey="decls" name="Tờ khai" stroke="#22c55e" strokeWidth={2} />
+            <Line yAxisId="left" type="monotone" dataKey="kpi" name="Điểm KPI" stroke={kpiColor} strokeWidth={2} />
+            <Line yAxisId="right" type="monotone" dataKey="decls" name="Tờ khai" stroke={declColor} strokeWidth={2} />
           </LineChart>
-        </ResponsiveContainer>
-      </div>
-    </section>
-  );
-}
-
-function TeamTrendChart({ data, teams }) {
-  const baseTeams = Array.isArray(teams) ? teams.filter(Boolean) : [];
-  const plottedTeams = baseTeams.includes("Tổng") ? baseTeams : [...baseTeams, "Tổng"];
-
-  if (!data || data.length === 0) {
-    return (
-      <section className="rounded-lg border bg-white p-4 shadow-sm">
-        <h3 className="text-base font-semibold text-gray-900">So sánh KPI theo tổ đội</h3>
-        <p className="mt-3 text-sm text-gray-500">Chưa có dữ liệu để hiển thị biểu đồ tổ đội.</p>
-      </section>
-    );
-  }
-
-  return (
-    <section className="rounded-lg border bg-white p-4 shadow-sm">
-      <h3 className="text-base font-semibold text-gray-900">So sánh KPI theo tổ đội (6 kỳ gần nhất)</h3>
-      <div className="mt-4 h-64 w-full">
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={data} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="period" />
-            <YAxis />
-            <Tooltip />
-            <Legend />
-            {plottedTeams.map((team, idx) => (
-              <Bar
-                key={team}
-                dataKey={team}
-                name={team}
-                fill={chartColors[idx % chartColors.length]}
-                stackId={team === "Tổng" ? "total" : undefined}
-              />
-            ))}
-          </BarChart>
         </ResponsiveContainer>
       </div>
     </section>
@@ -346,7 +552,7 @@ function TeamTrendChart({ data, teams }) {
 
 function SummaryCard({ title, value, subtitle }) {
   return (
-    <div className="rounded-lg border bg-white p-4 shadow-sm">
+    <div className="ds-card p-4">
       <div className="text-sm text-gray-500">{title}</div>
       <div className="mt-1 text-2xl font-semibold text-gray-900">{value}</div>
       {subtitle ? <div className="mt-1 text-xs text-gray-500">{subtitle}</div> : null}
@@ -354,7 +560,41 @@ function SummaryCard({ title, value, subtitle }) {
   );
 }
 
-function StaffDetailCard({ staff, canExport, onExport, onPrint, exporting, visibleColumns = {} }) {
+function AdjustmentDigestCard({ report }) {
+  const totalPoints = formatDecimal(report.totalPoints || 0);
+  const appliedCount = formatInt(report.approvedCount || report.appliedCount || 0);
+  const stats = [
+    { label: "Đã duyệt", value: formatInt(report.approvedCount || 0), tone: "text-emerald-600" },
+    { label: "Chờ duyệt", value: formatInt(report.pendingCount || 0), tone: "text-amber-600" },
+    { label: "Đã từ chối", value: formatInt(report.rejectedCount || 0), tone: "text-rose-500" },
+  ];
+
+  return (
+    <section className="ds-card space-y-4 p-4">
+      <div className="space-y-1">
+        <h3 className="text-base font-semibold text-gray-900">Điểm KPI +/- bổ sung</h3>
+        <p className="text-sm text-gray-500">
+          Tự động cộng/trừ vào KPI tổng khi trạng thái được duyệt.
+        </p>
+      </div>
+      <div className="rounded-xl border border-subtle bg-gray-50 px-4 py-3 dark:bg-slate-900/40">
+        <div className="text-xs uppercase tracking-wide text-gray-500">Điểm đã áp dụng</div>
+        <div className="mt-1 text-3xl font-semibold text-emerald-600">{totalPoints}</div>
+        <div className="text-xs text-gray-500">Từ {appliedCount} lượt xử lý thành công</div>
+      </div>
+      <ul className="space-y-1 text-sm text-gray-600">
+        {stats.map((item) => (
+          <li key={item.label} className="flex items-center justify-between">
+            <span>{item.label}</span>
+            <span className={`font-semibold ${item.tone}`}>{item.value}</span>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+function StaffDetailCard({ staff, canExport, onExport, exporting, visibleColumns = {} }) {
   const { stats, rows } = staff;
   const [mode, setMode] = useState("detail");
   const aggregated = useMemo(
@@ -420,26 +660,22 @@ function StaffDetailCard({ staff, canExport, onExport, onPrint, exporting, visib
               Báo cáo chi tiết
             </button>
           </div>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={onExport}
-              disabled={!canExport || exporting}
-              className={`rounded px-3 py-1.5 text-xs font-semibold shadow-sm ${
-                canExport && !exporting
-                  ? "bg-black text-white hover:bg-gray-900"
-                  : "bg-gray-200 text-gray-500"
-              }`}
-            >
-              {exporting ? "Đang xuất..." : "Xuất Excel"}
-            </button>
-            <button
-              type="button"
-              onClick={onPrint}
-              className="rounded border px-3 py-1.5 text-xs shadow-sm hover:bg-gray-50"
-            >
-              In / Xuất PDF
-            </button>
+          <div className="flex flex-col gap-1 text-right">
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={onExport}
+                disabled={!canExport || exporting}
+                className={`rounded px-3 py-1.5 text-xs font-semibold shadow-sm ${
+                  canExport && !exporting
+                    ? "bg-black text-white hover:bg-gray-900"
+                    : "bg-gray-200 text-gray-500"
+                }`}
+              >
+                {exporting ? "Đang xuất..." : "Xuất Excel"}
+              </button>
+            </div>
+            <span className="text-[11px] text-gray-400">Dùng Ctrl+P nếu cần in nhanh</span>
           </div>
         </div>
       </header>
@@ -533,7 +769,7 @@ function StaffDetailCard({ staff, canExport, onExport, onPrint, exporting, visib
                       <td className="px-3 py-1.5 text-right">{formatInt(row.licenses)}</td>
                     ) : null}
                     {showCo ? (
-                      <td className="px-3 py-1.5 text-center">{row.coLabel || "Không"}</td>
+                      <td className="px-3 py-1.5 text-center">{row.hasCO ? "Có" : "Không"}</td>
                     ) : null}
                     {showCoLines ? (
                       <td className="px-3 py-1.5 text-right">{formatInt(row.coLineCount || 0)}</td>
@@ -564,7 +800,7 @@ function StaffDetailCard({ staff, canExport, onExport, onPrint, exporting, visib
   );
 }
 
-function TeamDetailCard({ team, canExport, onExport, onPrint, exporting, visibleColumns = {} }) {
+function TeamDetailCard({ team, canExport, onExport, exporting, visibleColumns = {}, memberSortKey = "kpi" }) {
   const { stats, members, rows } = team;
   const [mode, setMode] = useState("detail");
   const aggregated = useMemo(
@@ -640,26 +876,22 @@ function TeamDetailCard({ team, canExport, onExport, onPrint, exporting, visible
               Báo cáo chi tiết
             </button>
           </div>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={onExport}
-              disabled={!canExport || exporting}
-              className={`rounded px-3 py-1.5 text-xs font-semibold shadow-sm ${
-                canExport && !exporting
-                  ? "bg-black text-white hover:bg-gray-900"
-                  : "bg-gray-200 text-gray-500"
-              }`}
-            >
-              {exporting ? "Đang xuất..." : "Xuất Excel"}
-            </button>
-            <button
-              type="button"
-              onClick={onPrint}
-              className="rounded border px-3 py-1.5 text-xs shadow-sm hover:bg-gray-50"
-            >
-              In / Xuất PDF
-            </button>
+          <div className="flex flex-col gap-1 text-right">
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={onExport}
+                disabled={!canExport || exporting}
+                className={`rounded px-3 py-1.5 text-xs font-semibold shadow-sm ${
+                  canExport && !exporting
+                    ? "bg-black text-white hover:bg-gray-900"
+                    : "bg-gray-200 text-gray-500"
+                }`}
+              >
+                {exporting ? "Đang xuất..." : "Xuất Excel"}
+              </button>
+            </div>
+            <span className="text-[11px] text-gray-400">Dùng Ctrl+P nếu cần in nhanh</span>
           </div>
         </div>
       </header>
@@ -705,7 +937,12 @@ function TeamDetailCard({ team, canExport, onExport, onPrint, exporting, visible
       </div>
 
       {mode === "summary" ? (
-        <CompanySummaryTable rows={aggregated} includeStaff visibleColumns={visibleColumns} />
+        <CompanySummaryTable
+          rows={aggregated}
+          includeStaff
+          visibleColumns={visibleColumns}
+          sortKey={memberSortKey}
+        />
       ) : (
         <>
           <div className="overflow-auto rounded border">
@@ -725,7 +962,7 @@ function TeamDetailCard({ team, canExport, onExport, onPrint, exporting, visible
                 </tr>
               </thead>
               <tbody>
-                {members.map((member, idx) => (
+                {sortStatsCollection(members, memberSortKey, (item) => item.name || "").map((member, idx) => (
                   <tr key={member.key || idx} className={idx % 2 === 0 ? "bg-white" : "bg-gray-50"}>
                     <td className="px-3 py-1.5">{member.name}</td>
                     <td className="px-3 py-1.5 text-right">{formatInt(member.stats.decls)}</td>
@@ -813,7 +1050,7 @@ function TeamDetailCard({ team, canExport, onExport, onPrint, exporting, visible
                         <td className="px-3 py-1.5 text-right">{formatInt(row.licenses)}</td>
                       ) : null}
                       {showCo ? (
-                        <td className="px-3 py-1.5 text-center">{row.coLabel || "Không"}</td>
+                        <td className="px-3 py-1.5 text-center">{row.hasCO ? "Có" : "Không"}</td>
                       ) : null}
                       {showCoLines ? (
                         <td className="px-3 py-1.5 text-right">{formatInt(row.coLineCount || 0)}</td>
@@ -846,15 +1083,29 @@ function TeamDetailCard({ team, canExport, onExport, onPrint, exporting, visible
 }
 
 export default function ReportViewer({ canExport = true }) {
-  const initialRange = useMemo(() => computeQuickRange("this_month"), []);
-  const [quickRange, setQuickRange] = useState("this_month");
-  const [from, setFrom] = useState(initialRange.from);
-  const [to, setTo] = useState(initialRange.to);
-  const [scope, setScope] = useState("staff"); // staff | team
-  const [selectedStaff, setSelectedStaff] = useState("all");
-  const [selectedTeam, setSelectedTeam] = useState("all");
+  const storedPrefs = useMemo(() => loadReportPreferences(), []);
+  const initialQuickRange = sanitizeQuickRange(storedPrefs.quickRange);
+  const quickRangeBase = initialQuickRange === "custom" ? "this_month" : initialQuickRange;
+  const initialRange = useMemo(() => computeQuickRange(quickRangeBase), [quickRangeBase]);
+  const [quickRange, setQuickRange] = useState(initialQuickRange);
+  const [from, setFrom] = useState(() =>
+    initialQuickRange === "custom"
+      ? sanitizeDateInput(storedPrefs.from, initialRange.from)
+      : initialRange.from
+  );
+  const [to, setTo] = useState(() =>
+    initialQuickRange === "custom"
+      ? sanitizeDateInput(storedPrefs.to, initialRange.to)
+      : initialRange.to
+  );
+  const [scope, setScope] = useState(() => sanitizeScope(storedPrefs.scope));
+  const [selectedStaff, setSelectedStaff] = useState(() => sanitizeSelection(storedPrefs.selectedStaff));
+  const [selectedTeam, setSelectedTeam] = useState(() => sanitizeSelection(storedPrefs.selectedTeam));
   const [staffViewMode, setStaffViewMode] = useState("detail");
   const [teamViewMode, setTeamViewMode] = useState("detail");
+  const [topStaffMetric, setTopStaffMetric] = useState(() => sanitizeTopStaffMetric(storedPrefs.topStaffMetric));
+  const [staffSortKey, setStaffSortKey] = useState(() => sanitizeSortKey(storedPrefs.staffSortKey));
+  const [teamSortKey, setTeamSortKey] = useState(() => sanitizeSortKey(storedPrefs.teamSortKey));
   const [version, setVersion] = useState(0);
   const [exporting, setExporting] = useState(false);
   const [columnVisibility, setColumnVisibility] = useState(() => ({
@@ -864,6 +1115,7 @@ export default function ReportViewer({ canExport = true }) {
     coLines: true,
     licenseCodes: true,
   }));
+  const prefsSnapshotRef = useRef("");
 
   const handleToggleColumnVisibility = (key) => {
     setColumnVisibility((prev) => ({
@@ -871,6 +1123,36 @@ export default function ReportViewer({ canExport = true }) {
       [key]: prev[key] === false,
     }));
   };
+
+  useEffect(() => {
+    const payload = {
+      quickRange,
+      from,
+      to,
+      scope,
+      selectedStaff,
+      selectedTeam,
+      staffSortKey,
+      teamSortKey,
+      topStaffMetric,
+    };
+    const snapshot = JSON.stringify(payload);
+    if (prefsSnapshotRef.current === snapshot) {
+      return;
+    }
+    prefsSnapshotRef.current = snapshot;
+    saveReportPreferences(payload);
+  }, [
+    quickRange,
+    from,
+    to,
+    scope,
+    selectedStaff,
+    selectedTeam,
+    staffSortKey,
+    teamSortKey,
+    topStaffMetric,
+  ]);
 
   const handleSeedSamples = () => {
     const confirmed = window.confirm(
@@ -1030,13 +1312,24 @@ export default function ReportViewer({ canExport = true }) {
     [adjustmentsReport.list]
   );
 
-  const topStaffData = useMemo(() => {
-    return [...report.staff.list]
-      .sort((a, b) => {
-        if (b.stats.kpi !== a.stats.kpi) return b.stats.kpi - a.stats.kpi;
-        if (b.stats.decls !== a.stats.decls) return b.stats.decls - a.stats.decls;
-        return a.name.localeCompare(b.name, "vi", { sensitivity: "base" });
+  const topStaffByKpi = useMemo(() => {
+    return sortStatsCollection(report.staff.list, "kpi", (item) => item.name || "").slice(0, 5);
+  }, [report.staff.list]);
+
+  const topStaffByDecls = useMemo(() => {
+    return sortStatsCollection(report.staff.list, "decls", (item) => item.name || "")
+      .map((item) => {
+        const teamLabel = item.teamLabel && item.teamLabel !== "Chưa gán tổ đội"
+          ? item.teamLabel
+          : "Chưa gán tổ đội";
+        return {
+          key: item.key,
+          name: item.name,
+          decls: Number(item?.stats?.decls || 0),
+          team: teamLabel,
+        };
       })
+      .filter((item) => item.decls > 0)
       .slice(0, 5);
   }, [report.staff.list]);
 
@@ -1047,11 +1340,33 @@ export default function ReportViewer({ canExport = true }) {
     }));
   }, [report.teams.list]);
 
+  const teamDeclPieData = useMemo(() => {
+    return report.teams.list.map((item) => ({
+      name: item.name,
+      value: Number(item.stats.decls || 0),
+    }));
+  }, [report.teams.list]);
+
+  const chartPalette = useChartPalette();
+
+  const sortedStaffList = useMemo(() => {
+    return sortStatsCollection(
+      report.staff.list,
+      staffSortKey,
+      (item) => {
+        const team = item.teamLabel && item.teamLabel !== "Chưa gán tổ đội" ? ` — ${item.teamLabel}` : "";
+        return `${item.name || ""}${team}`;
+      }
+    );
+  }, [report.staff.list, staffSortKey]);
+
+  const sortedTeamList = useMemo(() => {
+    return sortStatsCollection(report.teams.list, teamSortKey, (item) => item.name || "");
+  }, [report.teams.list, teamSortKey]);
+
   const trend = report.trend || {};
   const trendSeries = trend.series || [];
-  const teamTrendSeries = trend.teamSeries || [];
   const trendComparison = trend.comparison || null;
-  const trendTeams = trend.topTeams || [];
 
   const companySummaryAllStaff = useMemo(
     () => aggregateByCompany(report.rows, { includeStaff: true, includeTeam: false }),
@@ -1171,11 +1486,6 @@ export default function ReportViewer({ canExport = true }) {
     );
   };
 
-  const handlePrint = () => {
-    if (typeof window === "undefined") return;
-    window.print();
-  };
-
   const renderStaffSection = () => {
     if (!summary.decls) {
       return (
@@ -1188,7 +1498,7 @@ export default function ReportViewer({ canExport = true }) {
     if (selectedStaff === "all") {
       return (
         <div className="space-y-6">
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-3">
             <div className="flex gap-2">
               <button
                 type="button"
@@ -1213,7 +1523,26 @@ export default function ReportViewer({ canExport = true }) {
                 Báo cáo chi tiết
               </button>
             </div>
-            <div className="ml-auto flex gap-2">
+            <div className="flex flex-wrap items-center gap-2 text-xs text-gray-600">
+              <span className="font-semibold text-gray-900">Sắp xếp theo:</span>
+              <div className="flex gap-1">
+                {SORT_OPTIONS.map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => setStaffSortKey(option.value)}
+                    className={`rounded px-2.5 py-1 font-semibold ${
+                      staffSortKey === option.value
+                        ? "bg-black text-white"
+                        : "border bg-white text-gray-700 hover:bg-gray-50"
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="ml-auto flex flex-col gap-1 text-right">
               <button
                 type="button"
                 onClick={handleExportStaffAll}
@@ -1226,13 +1555,7 @@ export default function ReportViewer({ canExport = true }) {
               >
                 {exporting ? "Đang xuất..." : "Xuất Excel"}
               </button>
-              <button
-                type="button"
-                onClick={handlePrint}
-                className="rounded border px-3 py-1.5 text-xs shadow-sm hover:bg-gray-50"
-              >
-                In / Xuất PDF
-              </button>
+              <span className="text-[11px] text-gray-400">Nhấn Ctrl+P để in nhanh toàn trang</span>
             </div>
           </div>
 
@@ -1241,6 +1564,7 @@ export default function ReportViewer({ canExport = true }) {
               rows={companySummaryAllStaff}
               includeStaff
               visibleColumns={columnVisibility}
+              sortKey={staffSortKey}
             />
           ) : (
             <>
@@ -1269,10 +1593,10 @@ export default function ReportViewer({ canExport = true }) {
                       {columnVisibility.licenseCodes !== false && (
                         <th className="px-3 py-2 text-left">Mã giấy phép</th>
                       )}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {report.staff.list.map((item, idx) => (
+                  </tr>
+                </thead>
+                <tbody>
+                    {sortedStaffList.map((item, idx) => (
                       <tr key={item.key} className={idx % 2 === 0 ? "bg-white" : "bg-gray-50"}>
                         <td className="px-3 py-1.5">{item.name}</td>
                         <td className="px-3 py-1.5">{item.teamLabel}</td>
@@ -1307,13 +1631,12 @@ export default function ReportViewer({ canExport = true }) {
               </div>
 
               <div className="space-y-6">
-                {report.staff.list.map((item) => (
+                {sortedStaffList.map((item) => (
                   <StaffDetailCard
                     key={item.key}
                     staff={item}
                     canExport={canExport}
                     onExport={() => handleExportStaffDetail(item)}
-                    onPrint={handlePrint}
                     exporting={exporting}
                     visibleColumns={columnVisibility}
                   />
@@ -1334,7 +1657,6 @@ export default function ReportViewer({ canExport = true }) {
         staff={activeStaff}
         canExport={canExport}
         onExport={() => handleExportStaffDetail(activeStaff)}
-        onPrint={handlePrint}
         exporting={exporting}
         visibleColumns={columnVisibility}
       />
@@ -1353,7 +1675,7 @@ export default function ReportViewer({ canExport = true }) {
     if (selectedTeam === "all") {
       return (
         <div className="space-y-6">
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-3">
             <div className="flex gap-2">
               <button
                 type="button"
@@ -1378,7 +1700,26 @@ export default function ReportViewer({ canExport = true }) {
                 Báo cáo chi tiết
               </button>
             </div>
-            <div className="ml-auto flex gap-2">
+            <div className="flex flex-wrap items-center gap-2 text-xs text-gray-600">
+              <span className="font-semibold text-gray-900">Sắp xếp theo:</span>
+              <div className="flex gap-1">
+                {SORT_OPTIONS.map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => setTeamSortKey(option.value)}
+                    className={`rounded px-2.5 py-1 font-semibold ${
+                      teamSortKey === option.value
+                        ? "bg-black text-white"
+                        : "border bg-white text-gray-700 hover:bg-gray-50"
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="ml-auto flex flex-col gap-1 text-right">
               <button
                 type="button"
                 onClick={handleExportTeamAll}
@@ -1391,13 +1732,7 @@ export default function ReportViewer({ canExport = true }) {
               >
                 {exporting ? "Đang xuất..." : "Xuất Excel"}
               </button>
-              <button
-                type="button"
-                onClick={handlePrint}
-                className="rounded border px-3 py-1.5 text-xs shadow-sm hover:bg-gray-50"
-              >
-                In / Xuất PDF
-              </button>
+              <span className="text-[11px] text-gray-400">Nhấn Ctrl+P để in nhanh toàn trang</span>
             </div>
           </div>
 
@@ -1407,6 +1742,7 @@ export default function ReportViewer({ canExport = true }) {
               includeStaff
               includeTeam
               visibleColumns={columnVisibility}
+              sortKey={teamSortKey}
             />
           ) : (
             <>
@@ -1434,10 +1770,10 @@ export default function ReportViewer({ canExport = true }) {
                       {columnVisibility.licenseCodes !== false && (
                         <th className="px-3 py-2 text-left">Mã giấy phép</th>
                       )}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {report.teams.list.map((item, idx) => (
+                  </tr>
+                </thead>
+                <tbody>
+                    {sortedTeamList.map((item, idx) => (
                       <tr key={item.key} className={idx % 2 === 0 ? "bg-white" : "bg-gray-50"}>
                         <td className="px-3 py-1.5">{item.name}</td>
                         <td className="px-3 py-1.5 text-right">{formatInt(item.stats.decls)}</td>
@@ -1471,15 +1807,15 @@ export default function ReportViewer({ canExport = true }) {
               </div>
 
               <div className="space-y-6">
-                {report.teams.list.map((item) => (
+                {sortedTeamList.map((item) => (
                   <TeamDetailCard
                     key={item.key}
                     team={item}
                     canExport={canExport}
                     onExport={() => handleExportTeamDetail(item)}
-                    onPrint={handlePrint}
                     exporting={exporting}
                     visibleColumns={columnVisibility}
+                    memberSortKey={teamSortKey}
                   />
                 ))}
               </div>
@@ -1498,9 +1834,9 @@ export default function ReportViewer({ canExport = true }) {
         team={activeTeam}
         canExport={canExport}
         onExport={() => handleExportTeamDetail(activeTeam)}
-        onPrint={handlePrint}
         exporting={exporting}
         visibleColumns={columnVisibility}
+        memberSortKey={teamSortKey}
       />
     );
   };
@@ -1511,7 +1847,7 @@ export default function ReportViewer({ canExport = true }) {
 
   return (
     <div className="space-y-6">
-      <div className="rounded-lg border bg-white p-4 shadow-sm print:hidden">
+      <div className="ds-card p-4 print:hidden">
         <div className="flex flex-wrap items-end gap-4">
           <div className="flex flex-col">
             <label className="text-sm font-medium text-gray-700">Khoảng thời gian</label>
@@ -1551,23 +1887,25 @@ export default function ReportViewer({ canExport = true }) {
               }}
             />
           </div>
-          <button
-            type="button"
-            onClick={() => setVersion((v) => v + 1)}
-            className="ml-auto rounded border bg-white px-3 py-2 text-sm shadow-sm hover:bg-gray-50"
-          >
-            Tải lại dữ liệu
-          </button>
-          <button
-            type="button"
-            onClick={handleSeedSamples}
-            className="rounded border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-700 shadow-sm hover:bg-blue-100"
-          >
-            Sinh dữ liệu mẫu (100 dòng)
-          </button>
+          <div className="ml-auto flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setVersion((v) => v + 1)}
+              className="rounded border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm transition hover:bg-gray-50"
+            >
+              Tải lại dữ liệu
+            </button>
+            <button
+              type="button"
+              onClick={handleSeedSamples}
+              className="rounded border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-700 shadow-sm transition hover:bg-blue-100 dark:border-blue-500/40 dark:bg-blue-500/15 dark:text-blue-200"
+            >
+              Sinh dữ liệu mẫu (100 dòng)
+            </button>
+          </div>
         </div>
 
-        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded border bg-gray-50 px-3 py-3 text-sm text-gray-600">
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-subtle bg-gray-50 px-3 py-3 text-sm text-gray-600 dark:bg-slate-900/40">
           <div>
             <div className="text-xs uppercase text-gray-500">Quy tắc KPI</div>
             <div className="text-base font-semibold text-gray-900">{ruleTitle}</div>
@@ -1586,180 +1924,190 @@ export default function ReportViewer({ canExport = true }) {
         </div>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <SummaryCard
-          title="Tổng tờ khai"
-          value={formatInt(summary.decls)}
-          subtitle={`Nhập: ${formatInt(summary.import)} • Xuất: ${formatInt(summary.export)}`}
-        />
-        <SummaryCard
-          title="Tổng điểm KPI"
-          value={formatDecimal(summary.kpi)}
-          subtitle="Bao gồm điểm loại hình và giấy phép"
-        />
-        <SummaryCard
-          title="Điểm KPI +/- bổ sung"
-          value={formatDecimal(adjustmentsReport.totalPoints || 0)}
-          subtitle={`Đã duyệt: ${formatInt(adjustmentsReport.approvedCount || 0)} • Chờ duyệt: ${formatInt(
-            adjustmentsReport.pendingCount || 0
-          )}`}
-        />
-        <SummaryCard
-          title="Tổng số công ty"
-          value={formatInt(summaryCompanyCardValue)}
-          subtitle={companyCardSubtitle}
-        />
-        <SummaryCard
-          title="Số giấy phép hợp lệ"
-          value={formatInt(summary.licenses)}
-          subtitle={`Đã loại trừ • ${formatInt(summary.licenseCount ?? 0)} mã khác nhau`}
-        />
-        <SummaryCard
-          title="Tờ khai có C/O"
-          value={formatInt(summary.co ?? 0)}
-          subtitle={`Tổng dòng áp C/O: ${formatInt(summary.coLines ?? 0)}`}
-        />
-        <SummaryCard
-          title="Danh sách mã giấy phép"
-          value={formatInt(summary.licenseCount ?? 0)}
-          subtitle={summary.licenseSummary || "—"}
-        />
-      </div>
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+        <div className="space-y-6">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <SummaryCard
+              title="Tổng tờ khai"
+              value={formatInt(summary.decls)}
+              subtitle={`Nhập: ${formatInt(summary.import)} • Xuất: ${formatInt(summary.export)}`}
+            />
+            <SummaryCard
+              title="Tổng điểm KPI"
+              value={formatDecimal(summary.kpi)}
+              subtitle="Bao gồm điểm loại hình và giấy phép"
+            />
+            <SummaryCard
+              title="Điểm KPI +/- bổ sung"
+              value={formatDecimal(adjustmentsReport.totalPoints || 0)}
+              subtitle={`Đã duyệt: ${formatInt(adjustmentsReport.approvedCount || 0)} • Chờ duyệt: ${formatInt(
+                adjustmentsReport.pendingCount || 0
+              )}`}
+            />
+            <SummaryCard
+              title="Tổng số công ty"
+              value={formatInt(summaryCompanyCardValue)}
+              subtitle={companyCardSubtitle}
+            />
+            <SummaryCard
+              title="Số giấy phép hợp lệ"
+              value={formatInt(summary.licenses)}
+              subtitle={`Đã loại trừ • ${formatInt(summary.licenseCount ?? 0)} mã khác nhau`}
+            />
+            <SummaryCard
+              title="Tờ khai có C/O"
+              value={formatInt(summary.co ?? 0)}
+              subtitle={`Tổng dòng áp C/O: ${formatInt(summary.coLines ?? 0)}`}
+            />
+            <SummaryCard
+              title="Danh sách mã giấy phép"
+              value={formatInt(summary.licenseCount ?? 0)}
+              subtitle={summary.licenseSummary || "—"}
+            />
+          </div>
 
-      <div className="space-y-4 rounded-lg border bg-white p-4 shadow-sm">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <h3 className="text-base font-semibold text-gray-900">Điểm KPI +/- bổ sung</h3>
-            <p className="mt-1 text-sm text-gray-500">
-              Điểm cộng/trừ được duyệt sẽ được cộng trực tiếp vào KPI tháng tương ứng trong báo cáo.
-            </p>
-          </div>
-          <div className="text-sm text-gray-600 text-right">
-            <div>Đã duyệt: {formatInt(adjustmentsReport.approvedCount || 0)} mục</div>
-            <div>Chờ duyệt: {formatInt(adjustmentsReport.pendingCount || 0)} mục</div>
-            {adjustmentsReport.rejectedCount ? (
-              <div>Đã từ chối: {formatInt(adjustmentsReport.rejectedCount || 0)} mục</div>
-            ) : null}
-            <div className="mt-1 font-semibold text-emerald-600">
-              Điểm đã áp dụng: {formatDecimal(adjustmentsReport.totalPoints || 0)}
-            </div>
-          </div>
+          <TrendLineChart data={trendSeries} comparison={trendComparison} palette={chartPalette} />
+          <TeamPieWidget kpiData={teamPieData} declData={teamDeclPieData} palette={chartPalette} />
         </div>
 
-        <div className="grid gap-4 lg:grid-cols-3">
-          <div className="lg:col-span-2">
-            <h4 className="mb-3 text-sm font-semibold text-gray-800">Chi tiết điểm đã áp dụng</h4>
-            <div className="overflow-auto rounded border">
-              <table className="min-w-full text-sm">
-                <thead className="bg-gray-100">
-                  <tr>
-                    <th className="px-3 py-2 text-left">Tháng</th>
-                    <th className="px-3 py-2 text-left">Hạng mục</th>
-                    <th className="px-3 py-2 text-left">Nhân viên</th>
-                    <th className="px-3 py-2 text-left">Tổ đội</th>
-                    <th className="px-3 py-2 text-right">Số lượng × Hệ số</th>
-                    <th className="px-3 py-2 text-right">Điểm</th>
-                    <th className="px-3 py-2 text-left">Tham chiếu</th>
-                    <th className="px-3 py-2 text-left">Ghi chú</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {appliedAdjustments.length ? (
-                    appliedAdjustments.map((item) => {
-                      const key = item.adjustment?.id || `${item.date}-${item.nhan_vien || ''}`;
-                      const quantity = Number.isFinite(Number(item.adjustment?.quantity))
-                        ? Number(item.adjustment.quantity)
-                        : null;
-                      const unitPoints = Number.isFinite(Number(item.adjustment?.unitPoints))
-                        ? Number(item.adjustment.unitPoints)
-                        : null;
-                      const references = Array.isArray(item.adjustment?.references)
-                        ? item.adjustment.references.filter(Boolean).join(', ')
-                        : '';
-                      const note = item.adjustment?.note || '';
-                      const scoreClass = item.kpi >= 0 ? 'text-emerald-600' : 'text-rose-600';
-                      return (
-                        <tr key={key} className="odd:bg-white even:bg-gray-50">
-                          <td className="px-3 py-1.5">{item.displayDate || (item.date ? item.date.slice(0, 7) : '—')}</td>
-                          <td className="px-3 py-1.5">{item.adjustment?.label || item.loai_hinh}</td>
-                          <td className="px-3 py-1.5">{item.nhan_vien || 'Chưa gán'}</td>
-                          <td className="px-3 py-1.5">{item.team || 'Chưa gán tổ đội'}</td>
-                          <td className="px-3 py-1.5 text-right">
-                            {quantity !== null ? formatDecimal(quantity) : '—'}
-                            {unitPoints !== null ? (
-                              <span className="ml-1 text-xs text-gray-500">× {formatDecimal(unitPoints)}</span>
-                            ) : null}
-                          </td>
-                          <td className={`px-3 py-1.5 text-right font-semibold ${scoreClass}`}>
-                            {formatDecimal(item.kpi)}
-                          </td>
-                          <td className="px-3 py-1.5">{references || '—'}</td>
-                          <td className="px-3 py-1.5">{note || '—'}</td>
-                        </tr>
-                      );
-                    })
-                  ) : (
-                    <tr>
-                      <td className="px-3 py-4 text-center text-gray-500" colSpan={8}>
-                        Chưa có điểm bổ sung nào được duyệt trong khoảng thời gian này.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-          <div className="space-y-4">
-            <div>
-              <h4 className="text-sm font-semibold text-gray-800">Chờ duyệt</h4>
-              {pendingAdjustments.length ? (
-                <ul className="mt-2 space-y-2 text-sm text-gray-600">
-                  {pendingAdjustments.map((item) => (
-                    <li key={item.id} className="rounded border border-dashed border-amber-300 bg-amber-50 px-3 py-2">
-                      <div className="font-medium text-gray-900">{item.label || item.category}</div>
-                      <div>{item.staffName || 'Chưa gán'} — {item.month}</div>
-                      <div>Điểm đề xuất: {formatDecimal(item.totalPoints || 0)}</div>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="mt-2 text-sm text-gray-500">Không có yêu cầu đang chờ.</p>
-              )}
-            </div>
-            {rejectedAdjustments.length ? (
+        <div className="space-y-6">
+          <TopStaffWidget
+            metric={topStaffMetric}
+            onMetricChange={setTopStaffMetric}
+            kpiData={topStaffByKpi}
+            declData={topStaffByDecls}
+            palette={chartPalette}
+          />
+          <AdjustmentDigestCard report={adjustmentsReport} />
+        </div>
+
+        <div className="xl:col-span-2">
+          <div className="ds-card space-y-4 p-4">
+            <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
-                <h4 className="text-sm font-semibold text-gray-800">Đã từ chối gần đây</h4>
-                <ul className="mt-2 space-y-2 text-sm text-gray-500">
-                  {rejectedAdjustments.slice(0, 3).map((item) => (
-                    <li key={item.id} className="rounded border px-3 py-2">
-                      <div className="font-medium text-gray-900">{item.label || item.category}</div>
-                      <div>{item.staffName || 'Chưa gán'} — {item.month}</div>
-                      <div>Điểm: {formatDecimal(item.totalPoints || 0)}</div>
-                    </li>
-                  ))}
-                </ul>
-                {rejectedAdjustments.length > 3 ? (
-                  <div className="pt-1 text-xs text-gray-400">
-                    Còn {rejectedAdjustments.length - 3} mục khác đã bị từ chối.
+                <h3 className="text-base font-semibold text-gray-900">Điểm KPI +/- bổ sung</h3>
+                <p className="mt-1 text-sm text-gray-500">
+                  Điểm cộng/trừ được duyệt sẽ được cộng trực tiếp vào KPI tháng tương ứng trong báo cáo.
+                </p>
+              </div>
+              <div className="text-sm text-gray-600 text-right">
+                <div>Đã duyệt: {formatInt(adjustmentsReport.approvedCount || 0)} mục</div>
+                <div>Chờ duyệt: {formatInt(adjustmentsReport.pendingCount || 0)} mục</div>
+                {adjustmentsReport.rejectedCount ? (
+                  <div>Đã từ chối: {formatInt(adjustmentsReport.rejectedCount || 0)} mục</div>
+                ) : null}
+                <div className="mt-1 font-semibold text-emerald-600">
+                  Điểm đã áp dụng: {formatDecimal(adjustmentsReport.totalPoints || 0)}
+                </div>
+              </div>
+            </div>
+
+            <div className="grid gap-4 lg:grid-cols-3">
+              <div className="lg:col-span-2">
+                <h4 className="mb-3 text-sm font-semibold text-gray-800">Chi tiết điểm đã áp dụng</h4>
+                <div className="overflow-auto rounded border">
+                  <table className="min-w-full text-sm">
+                    <thead className="bg-gray-100">
+                      <tr>
+                        <th className="px-3 py-2 text-left">Tháng</th>
+                        <th className="px-3 py-2 text-left">Hạng mục</th>
+                        <th className="px-3 py-2 text-left">Nhân viên</th>
+                        <th className="px-3 py-2 text-left">Tổ đội</th>
+                        <th className="px-3 py-2 text-right">Số lượng × Hệ số</th>
+                        <th className="px-3 py-2 text-right">Điểm</th>
+                        <th className="px-3 py-2 text-left">Tham chiếu</th>
+                        <th className="px-3 py-2 text-left">Ghi chú</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {appliedAdjustments.length ? (
+                        appliedAdjustments.map((item) => {
+                          const key = item.adjustment?.id || `${item.date}-${item.nhan_vien || ''}`;
+                          const quantity = Number.isFinite(Number(item.adjustment?.quantity))
+                            ? Number(item.adjustment.quantity)
+                            : null;
+                          const unitPoints = Number.isFinite(Number(item.adjustment?.unitPoints))
+                            ? Number(item.adjustment.unitPoints)
+                            : null;
+                          const references = Array.isArray(item.adjustment?.references)
+                            ? item.adjustment.references.filter(Boolean).join(', ')
+                            : '';
+                          const note = item.adjustment?.note || '';
+                          const scoreClass = item.kpi >= 0 ? 'text-emerald-600' : 'text-rose-600';
+                          return (
+                            <tr key={key} className="odd:bg-white even:bg-gray-50">
+                              <td className="px-3 py-1.5">{item.displayDate || (item.date ? item.date.slice(0, 7) : '—')}</td>
+                              <td className="px-3 py-1.5">{item.adjustment?.label || item.loai_hinh}</td>
+                              <td className="px-3 py-1.5">{item.nhan_vien || 'Chưa gán'}</td>
+                              <td className="px-3 py-1.5">{item.team || 'Chưa gán tổ đội'}</td>
+                              <td className="px-3 py-1.5 text-right">
+                                {quantity !== null ? formatDecimal(quantity) : '—'}
+                                {unitPoints !== null ? (
+                                  <span className="ml-1 text-xs text-gray-500">× {formatDecimal(unitPoints)}</span>
+                                ) : null}
+                              </td>
+                              <td className={`px-3 py-1.5 text-right font-semibold ${scoreClass}`}>
+                                {formatDecimal(item.kpi)}
+                              </td>
+                              <td className="px-3 py-1.5">{references || '—'}</td>
+                              <td className="px-3 py-1.5">{note || '—'}</td>
+                            </tr>
+                          );
+                        })
+                      ) : (
+                        <tr>
+                          <td className="px-3 py-4 text-center text-gray-500" colSpan={8}>
+                            Chưa có điểm bổ sung nào được duyệt trong khoảng thời gian này.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+              <div className="space-y-4">
+                <div>
+                  <h4 className="text-sm font-semibold text-gray-800">Chờ duyệt</h4>
+                  {pendingAdjustments.length ? (
+                    <ul className="mt-2 space-y-2 text-sm text-gray-600">
+                      {pendingAdjustments.map((item) => (
+                        <li key={item.id} className="rounded border border-dashed border-amber-300 bg-amber-50 px-3 py-2">
+                          <div className="font-medium text-gray-900">{item.label || item.category}</div>
+                          <div>{item.staffName || 'Chưa gán'} — {item.month}</div>
+                          <div>Điểm đề xuất: {formatDecimal(item.totalPoints || 0)}</div>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="mt-2 text-sm text-gray-500">Không có yêu cầu đang chờ.</p>
+                  )}
+                </div>
+                {rejectedAdjustments.length ? (
+                  <div>
+                    <h4 className="text-sm font-semibold text-gray-800">Đã từ chối gần đây</h4>
+                    <ul className="mt-2 space-y-2 text-sm text-gray-500">
+                      {rejectedAdjustments.slice(0, 3).map((item) => (
+                        <li key={item.id} className="rounded border px-3 py-2">
+                          <div className="font-medium text-gray-900">{item.label || item.category}</div>
+                          <div>{item.staffName || 'Chưa gán'} — {item.month}</div>
+                          <div>Điểm: {formatDecimal(item.totalPoints || 0)}</div>
+                        </li>
+                      ))}
+                    </ul>
+                    {rejectedAdjustments.length > 3 ? (
+                      <div className="pt-1 text-xs text-gray-400">
+                        Còn {rejectedAdjustments.length - 3} mục khác đã bị từ chối.
+                      </div>
+                    ) : null}
                   </div>
                 ) : null}
               </div>
-            ) : null}
+            </div>
           </div>
         </div>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <TrendLineChart data={trendSeries} comparison={trendComparison} />
-        <TeamTrendChart data={teamTrendSeries} teams={trendTeams} />
-      </div>
-
-      <div className="grid gap-4 lg:grid-cols-2">
-        <TopStaffWidget data={topStaffData} />
-        <TeamPieWidget data={teamPieData} />
-      </div>
-
-      <div className="space-y-4 rounded-lg border bg-white p-4 shadow-sm">
+      <div className="ds-card space-y-4 p-4">
         <div className="flex flex-wrap items-center gap-3 text-sm text-gray-600">
           <div className="font-semibold text-gray-900">Chế độ xem</div>
           <div className="flex gap-2">
@@ -1843,7 +2191,7 @@ export default function ReportViewer({ canExport = true }) {
         <div>{scope === "staff" ? renderStaffSection() : renderTeamSection()}</div>
       </div>
 
-      <div className="space-y-2 rounded-lg border bg-white p-4 text-sm text-gray-600 shadow-sm">
+      <div className="ds-card ds-card--flat space-y-2 p-4 text-sm text-gray-600">
         <div className="font-semibold text-gray-900">Ghi chú & Quy tắc tính điểm</div>
         <p>
           Điểm KPI được tính tự động dựa trên quy tắc trong mục “Quy tắc KPI”. Khi bạn import tờ khai hợp lệ từ
@@ -1855,9 +2203,9 @@ export default function ReportViewer({ canExport = true }) {
           Bạn có thể điều chỉnh danh sách này trong phần cấu hình quy tắc.
         </p>
         <p>
-          Để in báo cáo, hãy chọn phạm vi thời gian và chế độ xem mong muốn, sau đó sử dụng nút “In / Xuất PDF”.
-          Khi cần lưu trữ hoặc chia sẻ, sử dụng nút “Xuất Excel” để tải file theo template chứa bảng tổng hợp và
-          bảng chi tiết tương ứng.
+          Để in báo cáo, hãy chọn phạm vi thời gian và chế độ xem mong muốn, sau đó sử dụng tổ hợp phím
+          <strong> Ctrl+P</strong> (hoặc Command+P trên macOS). Khi cần lưu trữ hoặc chia sẻ, sử dụng nút “Xuất Excel”
+          để tải file theo template chứa bảng tổng hợp và bảng chi tiết tương ứng.
         </p>
       </div>
     </div>

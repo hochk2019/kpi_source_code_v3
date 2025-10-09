@@ -78,3 +78,32 @@ export async function requestAiCompletion(payload, { signal } = {}) {
   };
 }
 
+export async function fetchAiHistory({ signal } = {}) {
+  const response = await fetchWithAuth('/api/ai/history', { signal });
+  const data = await parseJsonResponse(response, 'Không thể tải lịch sử trò chuyện AI.');
+  return Array.isArray(data.messages) ? data.messages : [];
+}
+
+export async function saveAiHistory(messages, { signal } = {}) {
+  const payload = {
+    messages: Array.isArray(messages) ? messages : [],
+  };
+  const response = await fetchWithAuth('/api/ai/history', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+    signal,
+  });
+  const data = await parseJsonResponse(response, 'Không thể lưu lịch sử trò chuyện AI.');
+  return Array.isArray(data.messages) ? data.messages : [];
+}
+
+export async function clearAiHistory({ signal } = {}) {
+  const response = await fetchWithAuth('/api/ai/history', {
+    method: 'DELETE',
+    signal,
+  });
+  await parseJsonResponse(response, 'Không thể xóa lịch sử trò chuyện AI.');
+  return true;
+}
+

@@ -99,6 +99,20 @@ function normalizeDeclarationRow(row) {
   } else if (clone.licenseExcludedCodes) {
     clone.licenseExcludedCodes = normalizeLicenseList([clone.licenseExcludedCodes]);
   }
+
+  if (Object.prototype.hasOwnProperty.call(clone, "licenseManualCount")) {
+    const manualRaw = clone.licenseManualCount;
+    if (manualRaw === null || manualRaw === undefined || manualRaw === "") {
+      delete clone.licenseManualCount;
+    } else {
+      const parsedManual = Number(manualRaw);
+      if (Number.isFinite(parsedManual)) {
+        clone.licenseManualCount = Math.max(0, Math.round(parsedManual));
+      } else {
+        delete clone.licenseManualCount;
+      }
+    }
+  }
   return clone;
 }
 
@@ -113,7 +127,17 @@ function getDeclarationKey(row) {
 function mergeDeclarationRowClient(existing, incoming) {
   if (!existing) return incoming;
   const merged = { ...existing };
-  const skipFields = new Set(['nhan_vien', 'team', 'agency', 'dai_ly', 'licenses', 'so_luong_gp', 'reviewed', 'reviewed_at']);
+  const skipFields = new Set([
+    'nhan_vien',
+    'team',
+    'agency',
+    'dai_ly',
+    'licenses',
+    'so_luong_gp',
+    'licenseManualCount',
+    'reviewed',
+    'reviewed_at',
+  ]);
   for (const [key, value] of Object.entries(incoming)) {
     if (skipFields.has(key)) continue;
     if (key === 'co_line_count') {

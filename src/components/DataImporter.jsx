@@ -6,11 +6,13 @@ import {
   saveDeclRows,
   sortDeclRows,
   pushImportLog,
+  pushAuditLog,
   getTeamRoster,
   mapMemberNamesToTeams,
   markDeclRowsReviewed,
   mapHQAgenciesByMST,
   normalizeStr,
+  normalizeDeclarationNumber,
 } from "@/lib/store.js";
 import { mapRow, detectDateOrder } from "@/lib/importer.js";
 import { loadRules, computeKPI, extractLicenseCodesFromRowObj } from "@/lib/rules.js";
@@ -19,6 +21,15 @@ import { deriveCOStatus, coLabel, coLineCount } from "@/shared/co.js";
 import { formatDisplayDate, formatDateRangeLabel } from "@/shared/format.js";
 import { fetchWithAuth } from "@/auth/localAuth.js";
 import useTooltipTitles from "@/hooks/useTooltipTitles.js";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog.jsx";
+import { ScrollArea } from "@/components/ui/scroll-area.jsx";
 
 const DEFAULT_PAGE_SIZE = 10;
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100, 200];
@@ -51,6 +62,18 @@ const RANGE_PRESETS = Object.freeze([
 ]);
 
 const FILTER_STORAGE_KEY = "kpi:data-importer:filter:v1";
+
+const DUPLICATE_MERGE_FIELDS = Object.freeze([
+  { key: "nhan_vien", label: "Nhân viên phụ trách" },
+  { key: "team", label: "Tổ đội" },
+  { key: "agency", label: "Đại lý HQ" },
+  { key: "dai_ly", label: "Đại lý ghi chú" },
+  { key: "kpi", label: "Điểm KPI" },
+  { key: "licenses", label: "Số GP hệ thống" },
+  { key: "so_luong_gp", label: "Số GP hiển thị" },
+  { key: "licenseManualCount", label: "Số GP nhập tay" },
+  { key: "reviewed", label: "Trạng thái rà soát" },
+]);
 
 const DATE_RANGE_PRESETS = Object.freeze([
   {
@@ -177,11 +200,50 @@ function coerceLicenseValue(value) {
 
 function ensureLicenseFields(row) {
   if (!row || typeof row !== "object") return row;
+  let next = row;
+  const ensureClone = () => {
+    if (next === row) {
+      next = { ...row };
+    }
+  };
+
   const source = row.licenses ?? row.so_luong_gp;
-  if (source === undefined) return row;
-  const normalized = coerceLicenseValue(source);
-  if (row.licenses === normalized && row.so_luong_gp === normalized) return row;
-  return { ...row, licenses: normalized, so_luong_gp: normalized };
+  if (source !== undefined) {
+    const normalized = coerceLicenseValue(source);
+    if (normalized === "") {
+      if (row.licenses !== "" || row.so_luong_gp !== "") {
+        ensureClone();
+        next.licenses = "";
+        next.so_luong_gp = "";
+      }
+    } else if (row.licenses !== normalized || row.so_luong_gp !== normalized) {
+      ensureClone();
+      next.licenses = normalized;
+      next.so_luong_gp = normalized;
+    }
+  }
+
+  if (Object.prototype.hasOwnProperty.call(row, "licenseManualCount")) {
+    const manualNormalized = coerceLicenseValue(row.licenseManualCount);
+    if (manualNormalized === "") {
+      if (row.licenseManualCount !== null && row.licenseManualCount !== undefined) {
+        ensureClone();
+        next.licenseManualCount = null;
+      }
+    } else if (row.licenseManualCount !== manualNormalized) {
+      ensureClone();
+      next.licenseManualCount = manualNormalized;
+    }
+    if (manualNormalized !== "") {
+      if (next.licenses !== manualNormalized || next.so_luong_gp !== manualNormalized) {
+        ensureClone();
+        next.licenses = manualNormalized;
+        next.so_luong_gp = manualNormalized;
+      }
+    }
+  }
+
+  return next;
 }
 
 const CODE_INPUT_SPLIT = /[\s,;]+/;
@@ -249,11 +311,230 @@ function arraysEqual(a, b) {
   return true;
 }
 
+const TIMESTAMP_FIELD_LABELS = Object.freeze({
+  updatedAt: "Cập nhật gần nhất",
+  updated_at: "Cập nhật gần nhất",
+  reviewed_at: "Rà soát",
+  syncedAt: "Đồng bộ ECUS",
+  synced_at: "Đồng bộ ECUS",
+  importedAt: "Import Excel",
+  imported_at: "Import Excel",
+  createdAt: "Khởi tạo",
+  created_at: "Khởi tạo",
+  date: "Ngày tờ khai",
+});
+
+const TIMESTAMP_FIELD_ORDER = Object.freeze([
+  "updatedAt",
+  "updated_at",
+  "reviewed_at",
+  "syncedAt",
+  "synced_at",
+  "importedAt",
+  "imported_at",
+  "createdAt",
+  "created_at",
+  "date",
+]);
+
+function extractRowTimestampDetail(row) {
+  if (!row || typeof row !== "object") {
+    return { timestamp: 0, field: null, label: "Không xác định", display: "Không xác định", iso: null };
+  }
+  let bestTs = 0;
+  let bestField = null;
+  for (const field of TIMESTAMP_FIELD_ORDER) {
+    const value = row[field];
+    if (!value) continue;
+    const ts = Date.parse(value);
+    if (!Number.isFinite(ts)) continue;
+    if (ts > bestTs) {
+      bestTs = ts;
+      bestField = field;
+    }
+  }
+  if (!bestTs) {
+    return { timestamp: 0, field: bestField, label: "Không xác định", display: "Không xác định", iso: null };
+  }
+  const formatter = new Intl.DateTimeFormat("vi-VN", { hour12: false });
+  return {
+    timestamp: bestTs,
+    field: bestField,
+    label: TIMESTAMP_FIELD_LABELS[bestField] || "Thời gian cập nhật",
+    display: formatter.format(new Date(bestTs)),
+    iso: new Date(bestTs).toISOString(),
+  };
+}
+
+function computeDuplicateWeight(row) {
+  if (!row || typeof row !== "object") {
+    return { score: 0, timestamp: 0, timestampDetail: extractRowTimestampDetail(row) };
+  }
+  let score = 0;
+  if (row.reviewed) score += 5;
+  if (row.nhan_vien) score += 2;
+  if (row.team) score += 2;
+  if (row.agency || row.dai_ly) score += 1;
+  if (Array.isArray(row.licenseCodes) && row.licenseCodes.length) score += 1;
+  const manual = Number(row.licenseManualCount);
+  if (Number.isFinite(manual) && manual >= 0) score += 3;
+  const licenseCount = Number(row.licenses ?? row.so_luong_gp);
+  if (Number.isFinite(licenseCount) && licenseCount > 0) score += 1;
+  const timestampDetail = extractRowTimestampDetail(row);
+  return { score, timestamp: timestampDetail.timestamp, timestampDetail };
+}
+
+function compareDuplicateCandidates(a, b) {
+  const weightA = computeDuplicateWeight(a);
+  const weightB = computeDuplicateWeight(b);
+  if (weightA.timestamp !== weightB.timestamp) {
+    return weightB.timestamp - weightA.timestamp;
+  }
+  if (weightA.score !== weightB.score) {
+    return weightB.score - weightA.score;
+  }
+  const kpiA = Number(a?.kpi);
+  const kpiB = Number(b?.kpi);
+  if (Number.isFinite(kpiA) && Number.isFinite(kpiB) && kpiA !== kpiB) {
+    return kpiB - kpiA;
+  }
+  return 0;
+}
+
+function applyMergeField(target, source, field) {
+  if (!target || typeof target !== "object" || !source || typeof source !== "object") {
+    return target;
+  }
+  switch (field) {
+    case "nhan_vien": {
+      target.nhan_vien = source.nhan_vien || "";
+      return target;
+    }
+    case "team": {
+      target.team = source.team || "";
+      return target;
+    }
+    case "agency": {
+      target.agency = source.agency || "";
+      return target;
+    }
+    case "dai_ly": {
+      target.dai_ly = source.dai_ly || "";
+      return target;
+    }
+    case "kpi": {
+      const parsed = Number(source.kpi);
+      if (Number.isFinite(parsed)) {
+        target.kpi = parsed;
+      }
+      return target;
+    }
+    case "licenses":
+    case "so_luong_gp": {
+      const parsed = Number(source.licenses ?? source.so_luong_gp);
+      if (Number.isFinite(parsed)) {
+        target.licenses = parsed;
+        target.so_luong_gp = parsed;
+      }
+      return target;
+    }
+    case "licenseManualCount": {
+      const parsed = Number(source.licenseManualCount);
+      if (Number.isFinite(parsed)) {
+        target.licenseManualCount = Math.max(0, Math.round(parsed));
+      } else {
+        delete target.licenseManualCount;
+      }
+      return target;
+    }
+    case "reviewed": {
+      if (source.reviewed) {
+        target.reviewed = true;
+        if (source.reviewed_at) target.reviewed_at = source.reviewed_at;
+        if (source.reviewed_by) target.reviewed_by = source.reviewed_by;
+      } else {
+        delete target.reviewed;
+        delete target.reviewed_at;
+        delete target.reviewed_by;
+      }
+      return target;
+    }
+    default: {
+      if (Object.prototype.hasOwnProperty.call(source, field)) {
+        target[field] = source[field];
+      }
+      return target;
+    }
+  }
+}
+
+function clearDuplicateReviewFlags(target) {
+  if (!target || typeof target !== "object") return target;
+  delete target.duplicate_review_pending;
+  delete target.duplicate_review_note;
+  delete target.duplicate_review_actor;
+  delete target.duplicate_review_updated_at;
+  return target;
+}
+
+function extractDuplicatePrefix(row) {
+  return normalizeDeclarationNumber(row?.so_tk_full ?? row?.so_tk ?? "", 11);
+}
+
+function inferRowSource(row) {
+  if (!row || typeof row !== "object") {
+    return { label: "Không xác định", code: "unknown" };
+  }
+  const direct = [row.origin, row.source, row.sourceLabel, row.dataSource, row.data_source, row.originSource]
+    .map((value) => (typeof value === "string" ? value.trim() : ""))
+    .find((value) => value.length > 0);
+  if (direct) {
+    return { label: direct, code: normalizeStr(direct) };
+  }
+  if (row.syncedAt || row.synced_at || row.ecusId || row.ecus_reference) {
+    return { label: "Đồng bộ ECUS", code: "ecus" };
+  }
+  if (row.importedAt || row.imported_at || row.importBatchId || row.import_batch_id) {
+    return { label: "Import Excel", code: "import" };
+  }
+  if (row.createdAt || row.created_at) {
+    return { label: "Nhập thủ công", code: "manual" };
+  }
+  return { label: "Không xác định", code: "unknown" };
+}
+
+function describeRowStatus(row) {
+  if (row?.duplicate_review_pending) {
+    return "Chờ rà soát trùng";
+  }
+  const hasStaff = !!(row?.nhan_vien && row.nhan_vien.toString().trim());
+  const hasTeam = !!(row?.team && row.team.toString().trim());
+  if (row?.reviewed) {
+    return "Đã rà soát";
+  }
+  if (!hasStaff || !hasTeam) {
+    const missing = [];
+    if (!hasStaff) missing.push("nhân viên");
+    if (!hasTeam) missing.push("tổ đội");
+    return `Thiếu ${missing.join(" & ")}`;
+  }
+  return "Đủ thông tin";
+}
+
 function formatDeclarationLabel(entry) {
   if (!entry || typeof entry !== "object") return "";
   const number = entry.so_tk_full ? String(entry.so_tk_full) : entry.so_tk ? String(entry.so_tk) : "";
   const branch = entry.nhanh || entry.branch || "";
   return branch ? `${number} (${branch})` : number;
+}
+
+function formatDuplicateGroupLabel(entry) {
+  if (!entry || typeof entry !== "object") {
+    return "Nhóm trùng";
+  }
+  const prefix = extractDuplicatePrefix(entry) || String(entry?.so_tk || "").slice(0, 11) || "Nhóm trùng";
+  const branch = entry.nhanh || entry.branch || "";
+  return branch ? `${prefix} – ${branch}` : prefix;
 }
 function ensureCOFields(row) {
   if (!row || typeof row !== "object") return row;
@@ -288,12 +569,16 @@ export default function DataImporter({
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [filterNoStaff, setFilterNoStaff] = useState(false);
   const [filterNoTeam, setFilterNoTeam] = useState(false);
+  const [filterDuplicate11, setFilterDuplicate11] = useState(false);
   const [coFilterMode, setCoFilterMode] = useState("all");
   const [coFilterMin, setCoFilterMin] = useState(5);
   const [selectedKeys, setSelectedKeys] = useState([]);
   const [searchRange, setSearchRange] = useState({ from: "", to: "" });
   const [rules, setRules] = useState(() => loadRules());
   const [hasUnsaved, setHasUnsaved] = useState(false);
+  const [duplicateReviewOpen, setDuplicateReviewOpen] = useState(false);
+  const [duplicateReviewConfirmed, setDuplicateReviewConfirmed] = useState(false);
+  const [duplicate11Plan, setDuplicate11Plan] = useState({});
 
   // Tuỳ chọn
   const [overwrite, setOverwrite] = useState(false);         // Ghi đè toàn bộ
@@ -360,6 +645,9 @@ export default function DataImporter({
     if (typeof stored.filterNoTeam === "boolean") {
       setFilterNoTeam(stored.filterNoTeam);
     }
+    if (typeof stored.filterDuplicate11 === "boolean") {
+      setFilterDuplicate11(stored.filterDuplicate11);
+    }
     if (typeof stored.coFilterMode === "string") {
       setCoFilterMode(stored.coFilterMode);
     }
@@ -425,6 +713,7 @@ export default function DataImporter({
       range: { ...searchRange },
       filterNoStaff,
       filterNoTeam,
+      filterDuplicate11,
       coFilterMode,
       coFilterMin,
       datePreset,
@@ -440,7 +729,7 @@ export default function DataImporter({
       console.error("Không thể lưu bộ lọc", error);
       alert("Không thể lưu bộ lọc. Vui lòng kiểm tra bộ nhớ trình duyệt.");
     }
-  }, [query, searchRange, filterNoStaff, filterNoTeam, coFilterMode, coFilterMin, datePreset]);
+  }, [query, searchRange, filterNoStaff, filterNoTeam, filterDuplicate11, coFilterMode, coFilterMin, datePreset]);
 
   const handleRestoreSavedFilter = useCallback(() => {
     if (!savedFilterRef.current) {
@@ -535,7 +824,10 @@ export default function DataImporter({
       const computedExcluded = normalizedSource.filter((code) => excludeSet.has(code));
       const excludedSet = new Set([...explicitExcluded, ...computedExcluded]);
       const includedCodes = normalizedSource.filter((code) => !excludedSet.has(code));
-      const manualCount = Number(row.licenses ?? row.so_luong_gp);
+      const manualOverride = coerceLicenseValue(row.licenseManualCount);
+      const directCountSource =
+        manualOverride !== "" ? manualOverride : coerceLicenseValue(row.licenses ?? row.so_luong_gp);
+      const manualCount = directCountSource === "" ? null : Number(directCountSource);
       const includedCount = Number.isFinite(manualCount) && manualCount >= 0 ? manualCount : includedCodes.length;
       const sourceCount = normalizedSource.length || includedCodes.length + excludedSet.size;
       return {
@@ -602,6 +894,7 @@ export default function DataImporter({
     setSelectedFile("");
     setFilterNoStaff(false);
     setFilterNoTeam(false);
+    setFilterDuplicate11(false);
     setCoFilterMode("all");
     setCoFilterMin(5);
     setSelectedKeys([]);
@@ -616,6 +909,12 @@ export default function DataImporter({
     if (rawRows.length > 0) return;
     loadSavedRows({ bypassConfirm: true });
   }, [loadSavedRows, mode, hasUnsaved, rawRows.length]);
+
+  useEffect(() => {
+    if (mode !== "saved") {
+      setFilterDuplicate11(false);
+    }
+  }, [mode]);
 
   useEffect(() => {
     if (!hasUnsaved) return undefined;
@@ -1416,6 +1715,160 @@ export default function DataImporter({
     }, 0);
   }, [rawRows, coFilterMode, coFilterActive, coThreshold]);
 
+  const keyOfRow = useCallback((row) => {
+    const soTk = (row?.so_tk || "").toString();
+    const nhanh = (row?.nhanh || "").toString();
+    return `${soTk}_${nhanh}`;
+  }, []);
+
+  const duplicate11Summary = useMemo(() => {
+    const counts = new Map();
+    const groupsMap = new Map();
+    for (const row of rawRows) {
+      const prefix = extractDuplicatePrefix(row);
+      if (!prefix) continue;
+      counts.set(prefix, (counts.get(prefix) || 0) + 1);
+      if (!groupsMap.has(prefix)) {
+        groupsMap.set(prefix, [row]);
+      } else {
+        groupsMap.get(prefix).push(row);
+      }
+    }
+
+    let groups = 0;
+    let totalRows = 0;
+    const removalKeys = [];
+    const duplicatesSet = new Set();
+    const keptKeys = new Set();
+    const details = [];
+
+    for (const [, list] of groupsMap.entries()) {
+      if (!Array.isArray(list) || list.length <= 1) continue;
+      groups += 1;
+      totalRows += list.length;
+      const sorted = [...list].sort(compareDuplicateCandidates);
+      const keeper = sorted[0];
+      if (keeper) {
+        keptKeys.add(keyOfRow(keeper));
+      }
+      const candidates = sorted.map((entry, index) => {
+        const key = keyOfRow(entry);
+        const weight = computeDuplicateWeight(entry);
+        const tsDetail = weight.timestampDetail ?? extractRowTimestampDetail(entry);
+        const source = inferRowSource(entry);
+        return {
+          key,
+          index,
+          row: entry,
+          label: formatDeclarationLabel(entry),
+          score: weight.score,
+          status: describeRowStatus(entry),
+          staff: entry.nhan_vien || "",
+          team: entry.team || "",
+          kpi: Number.isFinite(Number(entry?.kpi)) ? Number(entry.kpi) : null,
+          sourceLabel: source.label,
+          sourceCode: source.code,
+          timestampDisplay: tsDetail.display,
+          timestampLabel: tsDetail.label,
+          timestampISO: tsDetail.iso,
+        };
+      });
+      for (const item of sorted.slice(1)) {
+        const key = keyOfRow(item);
+        duplicatesSet.add(key);
+        removalKeys.push(key);
+      }
+      const firstTimestamp = candidates[0]?.timestampDisplay || "Không xác định";
+      const firstLabel = candidates[0]?.timestampLabel || "Thời gian cập nhật";
+      details.push({
+        prefix: formatDuplicateGroupLabel(list[0]),
+        rawPrefix: extractDuplicatePrefix(list[0]),
+        total: candidates.length,
+        keeperKey: keeper ? keyOfRow(keeper) : null,
+        keeperLabel: candidates[0]?.label || "",
+        referenceTimestamp: firstTimestamp,
+        referenceTimestampLabel: firstLabel,
+        items: candidates,
+      });
+    }
+
+    return {
+      counts,
+      groups,
+      totalRows,
+      removalKeys,
+      duplicatesSet,
+      keptKeys,
+      details,
+      hasDuplicates: groups > 0,
+    };
+  }, [rawRows, keyOfRow]);
+
+  const duplicate11GroupCount = duplicate11Summary.groups;
+  const duplicate11TotalRows = duplicate11Summary.totalRows;
+  const duplicate11DuplicatesSet = duplicate11Summary.duplicatesSet;
+  const duplicate11KeeperSet = duplicate11Summary.keptKeys;
+  const duplicate11Details = duplicate11Summary.details;
+  const hasDuplicate11Rows = duplicate11Summary.hasDuplicates;
+
+  useEffect(() => {
+    if (!Array.isArray(duplicate11Details) || duplicate11Details.length === 0) {
+      setDuplicate11Plan({});
+      return;
+    }
+    setDuplicate11Plan((prev) => {
+      const next = {};
+      for (const group of duplicate11Details) {
+        const prevEntry = prev[group.rawPrefix] || {};
+        const availableKeys = new Set(group.items.map((item) => item.key));
+        const fallbackKeeper = group.keeperKey || group.items[0]?.key || null;
+        const keeperKey = availableKeys.has(prevEntry.keeperKey) ? prevEntry.keeperKey : fallbackKeeper;
+        const merges = {};
+        for (const field of DUPLICATE_MERGE_FIELDS) {
+          const previous = prevEntry.merges?.[field.key];
+          merges[field.key] = availableKeys.has(previous) ? previous : keeperKey;
+        }
+        next[group.rawPrefix] = {
+          keeperKey,
+          merges,
+          resolution: prevEntry.resolution === "review" ? "review" : "delete",
+          note: prevEntry.note || "",
+        };
+      }
+      return next;
+    });
+  }, [duplicate11Details]);
+
+  const duplicate11PlanStats = useMemo(() => {
+    if (!Array.isArray(duplicate11Details) || duplicate11Details.length === 0) {
+      return { deleteGroups: 0, reviewGroups: 0, removalCount: 0 };
+    }
+    let deleteGroups = 0;
+    let reviewGroups = 0;
+    let removalCount = 0;
+    for (const group of duplicate11Details) {
+      const plan = duplicate11Plan[group.rawPrefix];
+      const items = Array.isArray(group.items) ? group.items : [];
+      if (!items.length) continue;
+      if (plan?.resolution === "review") {
+        reviewGroups += 1;
+        continue;
+      }
+      deleteGroups += 1;
+      const keeperKey = plan?.keeperKey && items.some((item) => item.key === plan.keeperKey)
+        ? plan.keeperKey
+        : group.keeperKey || items[0].key;
+      removalCount += items.filter((item) => item.key !== keeperKey).length;
+    }
+    return { deleteGroups, reviewGroups, removalCount };
+  }, [duplicate11Details, duplicate11Plan]);
+  const {
+    deleteGroups: duplicate11PlannedDeleteGroups,
+    reviewGroups: duplicate11PlannedReviewGroups,
+    removalCount: duplicate11PlannedRemovalCount,
+  } = duplicate11PlanStats;
+  const duplicate11PlanHasActions = duplicate11PlannedDeleteGroups > 0 || duplicate11PlannedReviewGroups > 0;
+
   const filtered = useMemo(() => {
     const q = query.toLowerCase().trim();
     const hasText = q.length > 0;
@@ -1465,9 +1918,28 @@ export default function DataImporter({
           return false;
         }
       }
+      if (filterDuplicate11) {
+        const prefix = extractDuplicatePrefix(r);
+        if (!prefix) return false;
+        const count = duplicate11Summary.counts.get(prefix) || 0;
+        if (count <= 1) {
+          return false;
+        }
+      }
       return true;
     });
-  }, [rawRows, query, filterNoStaff, filterNoTeam, coFilterMode, coThreshold, searchRange.from, searchRange.to]);
+  }, [
+    rawRows,
+    query,
+    filterNoStaff,
+    filterNoTeam,
+    filterDuplicate11,
+    duplicate11Summary,
+    coFilterMode,
+    coThreshold,
+    searchRange.from,
+    searchRange.to,
+  ]);
 
   // Phân trang
   const total = filtered.length;
@@ -1483,13 +1955,7 @@ export default function DataImporter({
 
   useEffect(() => {
     setPage(1);
-  }, [pageSize, filterNoStaff, filterNoTeam, coFilterMode, coThreshold, searchRange.from, searchRange.to]);
-
-  const keyOfRow = useCallback((row) => {
-    const soTk = (row.so_tk || "").toString();
-    const nhanh = (row.nhanh || "").toString();
-    return `${soTk}_${nhanh}`;
-  }, []);
+  }, [pageSize, filterNoStaff, filterNoTeam, filterDuplicate11, coFilterMode, coThreshold, searchRange.from, searchRange.to]);
 
   const filteredKeys = useMemo(() => {
     return Array.from(new Set(filtered.map((row) => keyOfRow(row))));
@@ -1699,6 +2165,7 @@ export default function DataImporter({
   const canSave = !isReadOnlyForEdits && mode === "saved" && rawRows.length > 0;
   const canDelete = deleteEnabled && selectedKeys.length > 0;
   const canReview = selectionEnabled && selectedKeys.length > 0 && canReviewAlerts;
+  const canResolveDuplicates11 = deleteEnabled && hasDuplicate11Rows;
   const modeLabel = mode === "preview" ? "Đang xem dữ liệu từ file (chưa lưu)" : "Đang xem dữ liệu đã lưu";
 
   const handleSelectFiltered = useCallback(() => {
@@ -1713,6 +2180,233 @@ export default function DataImporter({
     setSelectedKeys(filteredKeys);
     setPage(1);
   }, [selectionEnabled, filteredKeys]);
+
+  const handleToggleDuplicateFilter = useCallback(() => {
+    if (!hasDuplicate11Rows) {
+      alert("Không có tờ khai trùng 11 số đầu để lọc.");
+      return;
+    }
+    setFilterDuplicate11((prev) => !prev);
+    setPage(1);
+  }, [hasDuplicate11Rows]);
+
+  const handleChangeDuplicateKeeper = useCallback((prefix, keeperKey) => {
+    setDuplicate11Plan((prev) => {
+      const current = prev[prefix] || {};
+      const merges = { ...(current.merges || {}) };
+      const previousKeeper = current.keeperKey;
+      for (const field of DUPLICATE_MERGE_FIELDS) {
+        if (!merges[field.key] || merges[field.key] === previousKeeper) {
+          merges[field.key] = keeperKey;
+        }
+      }
+      return {
+        ...prev,
+        [prefix]: {
+          ...current,
+          keeperKey,
+          merges,
+        },
+      };
+    });
+  }, []);
+
+  const handleChangeDuplicateMerge = useCallback((prefix, field, value) => {
+    setDuplicate11Plan((prev) => {
+      const current = prev[prefix] || {};
+      return {
+        ...prev,
+        [prefix]: {
+          ...current,
+          merges: { ...(current.merges || {}), [field]: value },
+        },
+      };
+    });
+  }, []);
+
+  const handleChangeDuplicateResolution = useCallback((prefix, resolution) => {
+    setDuplicate11Plan((prev) => {
+      const current = prev[prefix] || {};
+      return {
+        ...prev,
+        [prefix]: {
+          ...current,
+          resolution,
+        },
+      };
+    });
+  }, []);
+
+  const handleChangeDuplicateNote = useCallback((prefix, note) => {
+    setDuplicate11Plan((prev) => {
+      const current = prev[prefix] || {};
+      return {
+        ...prev,
+        [prefix]: {
+          ...current,
+          note,
+        },
+      };
+    });
+  }, []);
+
+  const handleDeleteDuplicates11 = useCallback(() => {
+    if (isReadOnlyForEdits) {
+      alert("Bạn không có quyền xóa tờ khai trùng.");
+      return;
+    }
+    if (mode !== "saved") {
+      alert("Chỉ có thể xóa tờ khai trùng khi đang xem dữ liệu đã lưu.");
+      return;
+    }
+    if (!Array.isArray(duplicate11Details) || duplicate11Details.length === 0) {
+      alert("Không có nhóm tờ khai trùng để xử lý.");
+      return;
+    }
+    setDuplicateReviewConfirmed(false);
+    setDuplicateReviewOpen(true);
+  }, [
+    isReadOnlyForEdits,
+    mode,
+    duplicate11Details,
+  ]);
+
+  const handleCloseDuplicateReview = useCallback(() => {
+    setDuplicateReviewOpen(false);
+    setDuplicateReviewConfirmed(false);
+  }, []);
+
+  const handleConfirmDuplicateRemoval = useCallback(() => {
+    if (!Array.isArray(duplicate11Details) || duplicate11Details.length === 0) {
+      alert("Không có nhóm trùng để xử lý.");
+      handleCloseDuplicateReview();
+      return;
+    }
+
+    const nowISO = new Date().toISOString();
+    const rowMap = new Map(rawRows.map((row) => [keyOfRow(row), { ...row }]));
+    const updates = new Map();
+    const removalSet = new Set();
+    const auditGroups = [];
+    let deleteGroups = 0;
+    let reviewGroups = 0;
+
+    for (const group of duplicate11Details) {
+      const plan = duplicate11Plan[group.rawPrefix];
+      const items = Array.isArray(group.items) ? group.items : [];
+      if (!items.length) continue;
+      const availableKeys = new Set(items.map((item) => item.key));
+      const fallbackKeeper = group.keeperKey || items[0].key;
+      const keeperKey = plan?.keeperKey && availableKeys.has(plan.keeperKey)
+        ? plan.keeperKey
+        : fallbackKeeper;
+
+      if (plan?.resolution === "review") {
+        reviewGroups += 1;
+        const note = (plan?.note || "").trim();
+        for (const item of items) {
+          const original = rowMap.get(item.key) || {};
+          updates.set(item.key, {
+            ...original,
+            duplicate_review_pending: true,
+            duplicate_review_note: note,
+            duplicate_review_actor: actor,
+            duplicate_review_updated_at: nowISO,
+          });
+        }
+        auditGroups.push({
+          prefix: group.rawPrefix,
+          label: group.prefix,
+          resolution: "review",
+          note,
+          keys: items.map((item) => item.key),
+        });
+        continue;
+      }
+
+      deleteGroups += 1;
+      const keeperRow = { ...(rowMap.get(keeperKey) || {}) };
+      clearDuplicateReviewFlags(keeperRow);
+      const merges = plan?.merges || {};
+      const mergeMeta = {};
+      for (const field of DUPLICATE_MERGE_FIELDS) {
+        const chosen = merges[field.key];
+        const sourceKey = chosen && availableKeys.has(chosen) ? chosen : keeperKey;
+        const source = rowMap.get(sourceKey) || rowMap.get(keeperKey) || {};
+        applyMergeField(keeperRow, source, field.key);
+        mergeMeta[field.key] = sourceKey;
+      }
+      updates.set(keeperKey, keeperRow);
+
+      const removedKeys = [];
+      for (const item of items) {
+        if (item.key === keeperKey) continue;
+        removalSet.add(item.key);
+        removedKeys.push(item.key);
+      }
+
+      auditGroups.push({
+        prefix: group.rawPrefix,
+        label: group.prefix,
+        resolution: "delete",
+        keeperKey,
+        removedKeys,
+        merges: mergeMeta,
+      });
+    }
+
+    const removalCount = removalSet.size;
+    if (removalCount === 0 && updates.size === 0) {
+      alert("Không có thay đổi nào được áp dụng.");
+      handleCloseDuplicateReview();
+      return;
+    }
+
+    const nextRows = sortDeclRows(
+      rawRows
+        .map((row) => {
+          const key = keyOfRow(row);
+          if (removalSet.has(key)) {
+            return null;
+          }
+          if (updates.has(key)) {
+            return { ...row, ...updates.get(key) };
+          }
+          return row;
+        })
+        .filter(Boolean)
+    );
+
+    const detail = `Xử lý trùng 11 số: ${deleteGroups} nhóm xóa, ${reviewGroups} nhóm đánh dấu rà soát, loại bỏ ${removalCount} bản ghi`;
+
+    saveDeclRows(nextRows, {
+      overwrite: true,
+      actor,
+      detail,
+    });
+    pushAuditLog({
+      actor,
+      action: "decl.duplicate.resolve",
+      detail,
+      meta: {
+        groups: auditGroups,
+      },
+    });
+    alert(`Đã ${deleteGroups ? `xóa ${removalCount} bản ghi trong ${deleteGroups} nhóm` : "cập nhật đánh dấu"}${reviewGroups ? `, ${reviewGroups} nhóm được đánh dấu cần rà soát` : ""}.`);
+    handleCloseDuplicateReview();
+    setDuplicateReviewConfirmed(false);
+    loadSavedRows({ bypassConfirm: true });
+    fetchAlerts();
+  }, [
+    actor,
+    duplicate11Details,
+    duplicate11Plan,
+    fetchAlerts,
+    handleCloseDuplicateReview,
+    keyOfRow,
+    loadSavedRows,
+    rawRows,
+  ]);
 
   const applyLicenseExclusionForKeys = useCallback((targetKeys) => {
     if (mode !== "saved") {
@@ -1777,6 +2471,7 @@ export default function DataImporter({
         licenseCodes: effectiveCodes,
         licenses: nextLicenseCount,
         so_luong_gp: nextLicenseCount,
+        licenseManualCount: nextLicenseCount,
         updatedAt: new Date().toISOString(),
       };
       const recalculated = computeKPI(nextRow, rules);
@@ -1921,7 +2616,235 @@ export default function DataImporter({
     : "Chưa kiểm tra";
 
   return (
-    <div ref={rootRef} className="space-y-3">
+    <>
+      <Dialog
+        open={duplicateReviewOpen}
+        onOpenChange={(next) => {
+          if (next) {
+            setDuplicateReviewOpen(true);
+            return;
+          }
+          handleCloseDuplicateReview();
+        }}
+      >
+        <DialogContent className="max-w-5xl">
+          <DialogHeader>
+            <DialogTitle>Rà soát tờ khai trùng 11 số đầu</DialogTitle>
+            <DialogDescription>
+              Kiểm tra các nhóm trùng giữa nguồn Excel và ECUS5VNACCS. Hệ thống ưu tiên giữ bản có thời gian cập nhật mới nhất, sau đó mới xét điểm trọng số.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 text-sm">
+            <div className="rounded border border-sky-200 bg-sky-50 p-3 text-sky-800 dark:border-sky-700/60 dark:bg-sky-900/20 dark:text-sky-100">
+              {duplicate11PlanHasActions ? (
+                <p>
+                  Dự kiến xóa <strong>{duplicate11PlannedRemovalCount.toLocaleString("vi-VN")}</strong> bản ghi trong <strong>{duplicate11PlannedDeleteGroups.toLocaleString("vi-VN")}</strong> nhóm.
+                  {duplicate11PlannedReviewGroups > 0 && (
+                    <> • <strong>{duplicate11PlannedReviewGroups.toLocaleString("vi-VN")}</strong> nhóm sẽ được đánh dấu cần rà soát thay vì xóa.</>
+                  )}
+                </p>
+              ) : (
+                <p>Hãy chọn bản giữ lại hoặc chuyển nhóm sang trạng thái “Cần rà soát” trước khi xác nhận.</p>
+              )}
+              <p className="mt-1 text-xs text-sky-700 dark:text-sky-200/80">
+                Bạn có thể hợp nhất từng trường dữ liệu (nhân viên, KPI, giấy phép…) từ các bản khác nhau rồi mới xóa bản dư.
+              </p>
+            </div>
+            {duplicate11Details?.length ? (
+              <ScrollArea className="max-h-[60vh] pr-2">
+                <div className="space-y-4">
+                  {duplicate11Details.map((group) => {
+                    const planEntry = duplicate11Plan[group.rawPrefix] || {};
+                    const keeperKey = planEntry.keeperKey;
+                    const merges = planEntry.merges || {};
+                    const resolution = planEntry.resolution || "delete";
+                    const note = planEntry.note || "";
+                    const usageMap = new Map();
+                    for (const field of DUPLICATE_MERGE_FIELDS) {
+                      const selected = merges[field.key] || keeperKey;
+                      if (!usageMap.has(selected)) {
+                        usageMap.set(selected, []);
+                      }
+                      usageMap.get(selected)?.push(field.label);
+                    }
+                    return (
+                      <div key={`${group.rawPrefix || group.prefix}-${group.total}`} className="rounded border border-gray-200 bg-white p-3 shadow-sm dark:border-gray-700 dark:bg-gray-900/40">
+                        <div className="flex flex-col gap-1 md:flex-row md:items-start md:justify-between">
+                          <div>
+                            <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">{group.prefix}</h3>
+                            <p className="text-xs text-gray-500 dark:text-gray-400">
+                              Tham chiếu: <span className="font-medium text-emerald-600 dark:text-emerald-300">{group.keeperLabel || "Không xác định"}</span>
+                              {group.referenceTimestamp ? (
+                                <> • {group.referenceTimestampLabel}: {group.referenceTimestamp}</>
+                              ) : null}
+                            </p>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+                            <span>{group.total.toLocaleString("vi-VN")} bản ghi</span>
+                            {resolution === "review" && (
+                              <span className="rounded bg-amber-100 px-2 py-0.5 font-medium text-amber-700 dark:bg-amber-500/20 dark:text-amber-200">Đánh dấu cần rà soát</span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="mt-3 overflow-x-auto">
+                          <table className="min-w-full text-xs">
+                            <thead className="bg-gray-50 text-gray-600 dark:bg-gray-900/40 dark:text-gray-300">
+                              <tr>
+                                <th className="px-2 py-1 text-left">Giữ</th>
+                                <th className="px-2 py-1 text-left">Số tờ khai</th>
+                                <th className="px-2 py-1 text-left">Nguồn</th>
+                                <th className="px-2 py-1 text-left">Thời gian</th>
+                                <th className="px-2 py-1 text-left">Nhân viên</th>
+                                <th className="px-2 py-1 text-left">Tổ đội</th>
+                                <th className="px-2 py-1 text-left">Trạng thái</th>
+                                <th className="px-2 py-1 text-right">KPI</th>
+                                <th className="px-2 py-1 text-left">Trường sẽ lấy dữ liệu</th>
+                                <th className="px-2 py-1 text-right">Điểm</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {group.items.map((item, index) => {
+                                const isKeeper = keeperKey === item.key;
+                                const selectedFields = usageMap.get(item.key) || [];
+                                const rowClass = isKeeper
+                                  ? "bg-emerald-50 text-emerald-900 dark:bg-emerald-900/20 dark:text-emerald-100"
+                                  : index % 2 === 0
+                                    ? "bg-white dark:bg-transparent"
+                                    : "bg-gray-50 dark:bg-gray-900/40";
+                                return (
+                                  <tr key={item.key} className={`${rowClass} border-b last:border-b-0 dark:border-gray-800`}>
+                                    <td className="px-2 py-1">
+                                      <label className="flex items-center gap-1">
+                                        <input
+                                          type="radio"
+                                          name={`duplicate-keeper-${group.rawPrefix}`}
+                                          checked={isKeeper}
+                                          onChange={() => handleChangeDuplicateKeeper(group.rawPrefix, item.key)}
+                                        />
+                                        <span className="font-medium">Giữ</span>
+                                      </label>
+                                    </td>
+                                    <td className="px-2 py-1">
+                                      <div className="font-medium text-gray-900 dark:text-gray-100">{item.label}</div>
+                                      <div className="text-[10px] uppercase text-gray-400">{item.key}</div>
+                                    </td>
+                                    <td className="px-2 py-1">{item.sourceLabel}</td>
+                                    <td className="px-2 py-1">
+                                      <div>{item.timestampDisplay || "Không xác định"}</div>
+                                      <div className="text-[10px] text-gray-400">{item.timestampLabel}</div>
+                                    </td>
+                                    <td className="px-2 py-1">{item.staff || <span className="text-gray-400">(trống)</span>}</td>
+                                    <td className="px-2 py-1">{item.team || <span className="text-gray-400">(trống)</span>}</td>
+                                    <td className="px-2 py-1">{item.status}</td>
+                                    <td className="px-2 py-1 text-right">{Number.isFinite(item.kpi) ? item.kpi.toLocaleString("vi-VN") : "-"}</td>
+                                    <td className="px-2 py-1">
+                                      {selectedFields.length > 0 ? (
+                                        <div className="space-y-0.5">
+                                          {selectedFields.map((fieldLabel) => (
+                                            <span key={`${item.key}-${fieldLabel}`} className="block rounded bg-emerald-100 px-2 py-0.5 text-[10px] font-medium text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-200">
+                                              {fieldLabel}
+                                            </span>
+                                          ))}
+                                        </div>
+                                      ) : (
+                                        <span className="text-gray-400">(không)</span>
+                                      )}
+                                    </td>
+                                    <td className="px-2 py-1 text-right">{item.score.toLocaleString("vi-VN")}</td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                        <div className="mt-3 grid gap-3 lg:grid-cols-2">
+                          <div className="space-y-2 text-xs">
+                            <p className="font-semibold text-gray-600 dark:text-gray-300">Hợp nhất trường dữ liệu</p>
+                            {DUPLICATE_MERGE_FIELDS.map((field) => (
+                              <label key={`${group.rawPrefix}-${field.key}`} className="flex flex-col gap-1">
+                                <span className="text-[11px] font-medium text-gray-500 dark:text-gray-400">{field.label}</span>
+                                <select
+                                  className="rounded border border-gray-300 px-2 py-1 text-sm dark:border-gray-600 dark:bg-gray-900"
+                                  value={merges[field.key] || keeperKey}
+                                  onChange={(e) => handleChangeDuplicateMerge(group.rawPrefix, field.key, e.target.value)}
+                                  disabled={resolution === "review"}
+                                >
+                                  {group.items.map((item) => (
+                                    <option key={`${field.key}-${item.key}`} value={item.key}>
+                                      {item.label} — {item.sourceLabel}
+                                    </option>
+                                  ))}
+                                </select>
+                              </label>
+                            ))}
+                          </div>
+                          <div className="space-y-2 text-xs">
+                            <label className="flex flex-col gap-1">
+                              <span className="font-semibold text-gray-600 dark:text-gray-300">Hành động cho nhóm</span>
+                              <select
+                                className="rounded border border-gray-300 px-2 py-1 text-sm dark:border-gray-600 dark:bg-gray-900"
+                                value={resolution}
+                                onChange={(e) => handleChangeDuplicateResolution(group.rawPrefix, e.target.value)}
+                              >
+                                <option value="delete">Xóa bản dư (giữ 1 bản)</option>
+                                <option value="review">Đánh dấu cần rà soát</option>
+                              </select>
+                            </label>
+                            {resolution === "review" ? (
+                              <label className="flex flex-col gap-1">
+                                <span className="text-[11px] font-medium text-gray-500 dark:text-gray-400">Ghi chú (tùy chọn)</span>
+                                <textarea
+                                  className="min-h-[60px] rounded border border-gray-300 px-2 py-1 text-sm dark:border-gray-600 dark:bg-gray-900"
+                                  value={note}
+                                  onChange={(e) => handleChangeDuplicateNote(group.rawPrefix, e.target.value)}
+                                  placeholder="Ví dụ: Cần đối chiếu KPI với phòng chứng từ"
+                                />
+                              </label>
+                            ) : (
+                              <p className="text-gray-500 dark:text-gray-400">Các bản khác sẽ bị xóa sau khi bạn xác nhận.</p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </ScrollArea>
+            ) : (
+              <div className="rounded border border-gray-200 bg-white p-4 text-center text-sm text-gray-500 dark:border-gray-700 dark:bg-gray-900/40 dark:text-gray-300">
+                <p className="text-sm text-gray-500 dark:text-gray-400">Không tìm thấy nhóm trùng để rà soát.</p>
+              </div>
+            )}
+            <label className="flex items-start gap-2 text-sm text-gray-700 dark:text-gray-200">
+              <input
+                type="checkbox"
+                className="mt-1"
+                checked={duplicateReviewConfirmed}
+                onChange={(e) => setDuplicateReviewConfirmed(e.target.checked)}
+              />
+              <span>Tôi đã rà soát chi tiết từng nhóm và xác nhận thao tác xử lý (xóa hoặc đánh dấu cần rà soát).</span>
+            </label>
+          </div>
+          <DialogFooter>
+            <button
+              type="button"
+              onClick={handleCloseDuplicateReview}
+              className="rounded border px-3 py-1 text-sm text-gray-600 hover:bg-gray-100 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
+            >
+              Hủy
+            </button>
+            <button
+              type="button"
+              onClick={handleConfirmDuplicateRemoval}
+              disabled={!duplicateReviewConfirmed || !duplicate11PlanHasActions}
+              className={`rounded px-3 py-1 text-sm font-semibold text-white ${duplicateReviewConfirmed && duplicate11PlanHasActions ? "bg-red-600 hover:bg-red-700" : "bg-red-400 opacity-50"}`}
+            >
+              Thực hiện xử lý
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <div ref={rootRef} className="space-y-3">
       {isReadOnlyForEdits && !canManageAlerts && (
         <div className="rounded border border-amber-300 bg-amber-50 text-amber-700 p-3 text-sm">
           Bạn đang ở chế độ chỉ xem. Đăng nhập bằng tài khoản được cấp quyền để import, chỉnh sửa và lưu dữ liệu tờ khai.
@@ -2713,6 +3636,41 @@ export default function DataImporter({
             )}
           </>
         )}
+        <button
+          type="button"
+          onClick={handleToggleDuplicateFilter}
+          className={`rounded border px-3 py-1 text-xs ${
+            filterDuplicate11
+              ? "border-amber-400 bg-amber-50 text-amber-700"
+              : hasDuplicate11Rows
+              ? "text-gray-600 hover:bg-gray-50"
+              : "text-gray-400 cursor-not-allowed"
+          }`}
+          disabled={!hasDuplicate11Rows}
+        >
+          {filterDuplicate11 ? "Đang lọc tờ khai trùng 11 số đầu" : "Lọc tờ khai trùng 11 số đầu"}
+        </button>
+        {canResolveDuplicates11 && (
+          <button
+            type="button"
+            onClick={handleDeleteDuplicates11}
+            className="rounded border border-red-300 bg-red-50 px-3 py-1 text-xs font-medium text-red-600 hover:bg-red-100"
+          >
+            Xử lý tờ khai trùng 11 số đầu
+          </button>
+        )}
+        {hasDuplicate11Rows && (
+          <span className="text-xs text-amber-700">
+            {duplicate11GroupCount.toLocaleString("vi-VN")} nhóm trùng •
+            {` dự kiến xóa ${duplicate11PlannedRemovalCount.toLocaleString("vi-VN")} bản`}
+            {duplicate11PlannedReviewGroups > 0
+              ? ` • ${duplicate11PlannedReviewGroups.toLocaleString("vi-VN")} nhóm sẽ được đánh dấu rà soát`
+              : ""}
+            {duplicate11TotalRows > duplicate11PlannedRemovalCount
+              ? ` • tổng ${duplicate11TotalRows.toLocaleString("vi-VN")} dòng`
+              : ""}
+          </span>
+        )}
         {canEdit && mode === "saved" && (
           <button
             type="button"
@@ -2888,6 +3846,15 @@ export default function DataImporter({
                     {coMismatchKeySet.has(rowKey) && (
                       <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">CO lech</span>
                     )}
+                    {duplicate11KeeperSet.has(rowKey) && (
+                      <span className="rounded bg-sky-100 px-1.5 py-0.5 text-[10px] font-medium text-sky-700">Giữ mới nhất</span>
+                    )}
+                    {duplicate11DuplicatesSet.has(rowKey) && (
+                      <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">Trùng 11 số</span>
+                    )}
+                    {r.duplicate_review_pending && (
+                      <span className="rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-medium text-red-700">Chờ rà soát</span>
+                    )}
                   </div>
                 </td>
                 <td className="px-2 py-1">
@@ -2980,13 +3947,17 @@ export default function DataImporter({
                       onChange={e => {
                         const input = e.target.value;
                         if (input === "") {
-                          applyEdit(rowKey, () => ({ licenses: "", so_luong_gp: "" }));
+                          applyEdit(rowKey, () => ({ licenses: "", so_luong_gp: "", licenseManualCount: null }));
                           return;
                         }
                         const parsed = Number(input);
                         if (!Number.isFinite(parsed)) return;
                         const normalized = Math.max(0, Math.round(parsed));
-                        applyEdit(rowKey, () => ({ licenses: normalized, so_luong_gp: normalized }));
+                        applyEdit(rowKey, () => ({
+                          licenses: normalized,
+                          so_luong_gp: normalized,
+                          licenseManualCount: normalized,
+                        }));
                       }}
                     />
                   )}
@@ -3027,6 +3998,7 @@ export default function DataImporter({
         Bạn có thể điều chỉnh thủ công trước khi lưu để phản ánh thực tế kiểm tra.
       </p>
     </div>
+    </>
   );
 }
 
