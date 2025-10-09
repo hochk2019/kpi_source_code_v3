@@ -6,6 +6,7 @@ import {
   saveDeclRows,
   sortDeclRows,
   pushImportLog,
+  pushAuditLog,
   getTeamRoster,
   mapMemberNamesToTeams,
   markDeclRowsReviewed,
@@ -20,6 +21,15 @@ import { deriveCOStatus, coLabel, coLineCount } from "@/shared/co.js";
 import { formatDisplayDate, formatDateRangeLabel } from "@/shared/format.js";
 import { fetchWithAuth } from "@/auth/localAuth.js";
 import useTooltipTitles from "@/hooks/useTooltipTitles.js";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog.jsx";
+import { ScrollArea } from "@/components/ui/scroll-area.jsx";
 
 const DEFAULT_PAGE_SIZE = 10;
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100, 200];
@@ -289,18 +299,64 @@ function arraysEqual(a, b) {
   return true;
 }
 
-function parseRowTimestamp(...values) {
-  return values.reduce((max, value) => {
-    if (!value) return max;
+const TIMESTAMP_FIELD_LABELS = Object.freeze({
+  updatedAt: "Cập nhật gần nhất",
+  updated_at: "Cập nhật gần nhất",
+  reviewed_at: "Rà soát",
+  syncedAt: "Đồng bộ ECUS",
+  synced_at: "Đồng bộ ECUS",
+  importedAt: "Import Excel",
+  imported_at: "Import Excel",
+  createdAt: "Khởi tạo",
+  created_at: "Khởi tạo",
+  date: "Ngày tờ khai",
+});
+
+const TIMESTAMP_FIELD_ORDER = Object.freeze([
+  "updatedAt",
+  "updated_at",
+  "reviewed_at",
+  "syncedAt",
+  "synced_at",
+  "importedAt",
+  "imported_at",
+  "createdAt",
+  "created_at",
+  "date",
+]);
+
+function extractRowTimestampDetail(row) {
+  if (!row || typeof row !== "object") {
+    return { timestamp: 0, field: null, label: "Không xác định", display: "Không xác định", iso: null };
+  }
+  let bestTs = 0;
+  let bestField = null;
+  for (const field of TIMESTAMP_FIELD_ORDER) {
+    const value = row[field];
+    if (!value) continue;
     const ts = Date.parse(value);
-    if (!Number.isFinite(ts)) return max;
-    return Math.max(max, ts);
-  }, 0);
+    if (!Number.isFinite(ts)) continue;
+    if (ts > bestTs) {
+      bestTs = ts;
+      bestField = field;
+    }
+  }
+  if (!bestTs) {
+    return { timestamp: 0, field: bestField, label: "Không xác định", display: "Không xác định", iso: null };
+  }
+  const formatter = new Intl.DateTimeFormat("vi-VN", { hour12: false });
+  return {
+    timestamp: bestTs,
+    field: bestField,
+    label: TIMESTAMP_FIELD_LABELS[bestField] || "Thời gian cập nhật",
+    display: formatter.format(new Date(bestTs)),
+    iso: new Date(bestTs).toISOString(),
+  };
 }
 
 function computeDuplicateWeight(row) {
   if (!row || typeof row !== "object") {
-    return { score: 0, timestamp: 0 };
+    return { score: 0, timestamp: 0, timestampDetail: extractRowTimestampDetail(row) };
   }
   let score = 0;
   if (row.reviewed) score += 5;
@@ -312,25 +368,18 @@ function computeDuplicateWeight(row) {
   if (Number.isFinite(manual) && manual >= 0) score += 3;
   const licenseCount = Number(row.licenses ?? row.so_luong_gp);
   if (Number.isFinite(licenseCount) && licenseCount > 0) score += 1;
-  const timestamp = parseRowTimestamp(
-    row.updatedAt,
-    row.reviewed_at,
-    row.syncedAt,
-    row.importedAt,
-    row.createdAt,
-    row.date,
-  );
-  return { score, timestamp };
+  const timestampDetail = extractRowTimestampDetail(row);
+  return { score, timestamp: timestampDetail.timestamp, timestampDetail };
 }
 
 function compareDuplicateCandidates(a, b) {
   const weightA = computeDuplicateWeight(a);
   const weightB = computeDuplicateWeight(b);
-  if (weightA.score !== weightB.score) {
-    return weightB.score - weightA.score;
-  }
   if (weightA.timestamp !== weightB.timestamp) {
     return weightB.timestamp - weightA.timestamp;
+  }
+  if (weightA.score !== weightB.score) {
+    return weightB.score - weightA.score;
   }
   const kpiA = Number(a?.kpi);
   const kpiB = Number(b?.kpi);
@@ -344,11 +393,57 @@ function extractDuplicatePrefix(row) {
   return normalizeDeclarationNumber(row?.so_tk_full ?? row?.so_tk ?? "", 11);
 }
 
+function inferRowSource(row) {
+  if (!row || typeof row !== "object") {
+    return { label: "Không xác định", code: "unknown" };
+  }
+  const direct = [row.origin, row.source, row.sourceLabel, row.dataSource, row.data_source, row.originSource]
+    .map((value) => (typeof value === "string" ? value.trim() : ""))
+    .find((value) => value.length > 0);
+  if (direct) {
+    return { label: direct, code: normalizeStr(direct) };
+  }
+  if (row.syncedAt || row.synced_at || row.ecusId || row.ecus_reference) {
+    return { label: "Đồng bộ ECUS", code: "ecus" };
+  }
+  if (row.importedAt || row.imported_at || row.importBatchId || row.import_batch_id) {
+    return { label: "Import Excel", code: "import" };
+  }
+  if (row.createdAt || row.created_at) {
+    return { label: "Nhập thủ công", code: "manual" };
+  }
+  return { label: "Không xác định", code: "unknown" };
+}
+
+function describeRowStatus(row) {
+  const hasStaff = !!(row?.nhan_vien && row.nhan_vien.toString().trim());
+  const hasTeam = !!(row?.team && row.team.toString().trim());
+  if (row?.reviewed) {
+    return "Đã rà soát";
+  }
+  if (!hasStaff || !hasTeam) {
+    const missing = [];
+    if (!hasStaff) missing.push("nhân viên");
+    if (!hasTeam) missing.push("tổ đội");
+    return `Thiếu ${missing.join(" & ")}`;
+  }
+  return "Đủ thông tin";
+}
+
 function formatDeclarationLabel(entry) {
   if (!entry || typeof entry !== "object") return "";
   const number = entry.so_tk_full ? String(entry.so_tk_full) : entry.so_tk ? String(entry.so_tk) : "";
   const branch = entry.nhanh || entry.branch || "";
   return branch ? `${number} (${branch})` : number;
+}
+
+function formatDuplicateGroupLabel(entry) {
+  if (!entry || typeof entry !== "object") {
+    return "Nhóm trùng";
+  }
+  const prefix = extractDuplicatePrefix(entry) || String(entry?.so_tk || "").slice(0, 11) || "Nhóm trùng";
+  const branch = entry.nhanh || entry.branch || "";
+  return branch ? `${prefix} – ${branch}` : prefix;
 }
 function ensureCOFields(row) {
   if (!row || typeof row !== "object") return row;
@@ -390,6 +485,8 @@ export default function DataImporter({
   const [searchRange, setSearchRange] = useState({ from: "", to: "" });
   const [rules, setRules] = useState(() => loadRules());
   const [hasUnsaved, setHasUnsaved] = useState(false);
+  const [duplicateReviewOpen, setDuplicateReviewOpen] = useState(false);
+  const [duplicateReviewConfirmed, setDuplicateReviewConfirmed] = useState(false);
 
   // Tuỳ chọn
   const [overwrite, setOverwrite] = useState(false);         // Ghi đè toàn bộ
@@ -1551,6 +1648,7 @@ export default function DataImporter({
     const removalKeys = [];
     const duplicatesSet = new Set();
     const keptKeys = new Set();
+    const details = [];
 
     for (const [, list] of groupsMap.entries()) {
       if (!Array.isArray(list) || list.length <= 1) continue;
@@ -1561,11 +1659,45 @@ export default function DataImporter({
       if (keeper) {
         keptKeys.add(keyOfRow(keeper));
       }
+      const candidates = sorted.map((entry, index) => {
+        const key = keyOfRow(entry);
+        const weight = computeDuplicateWeight(entry);
+        const tsDetail = weight.timestampDetail ?? extractRowTimestampDetail(entry);
+        const source = inferRowSource(entry);
+        return {
+          key,
+          index,
+          row: entry,
+          label: formatDeclarationLabel(entry),
+          score: weight.score,
+          status: describeRowStatus(entry),
+          staff: entry.nhan_vien || "",
+          team: entry.team || "",
+          kpi: Number.isFinite(Number(entry?.kpi)) ? Number(entry.kpi) : null,
+          sourceLabel: source.label,
+          sourceCode: source.code,
+          timestampDisplay: tsDetail.display,
+          timestampLabel: tsDetail.label,
+          timestampISO: tsDetail.iso,
+        };
+      });
       for (const item of sorted.slice(1)) {
         const key = keyOfRow(item);
         duplicatesSet.add(key);
         removalKeys.push(key);
       }
+      const firstTimestamp = candidates[0]?.timestampDisplay || "Không xác định";
+      const firstLabel = candidates[0]?.timestampLabel || "Thời gian cập nhật";
+      details.push({
+        prefix: formatDuplicateGroupLabel(list[0]),
+        rawPrefix: extractDuplicatePrefix(list[0]),
+        total: candidates.length,
+        keeperKey: keeper ? keyOfRow(keeper) : null,
+        keeperLabel: candidates[0]?.label || "",
+        referenceTimestamp: firstTimestamp,
+        referenceTimestampLabel: firstLabel,
+        items: candidates,
+      });
     }
 
     return {
@@ -1575,6 +1707,7 @@ export default function DataImporter({
       removalKeys,
       duplicatesSet,
       keptKeys,
+      details,
       hasDuplicates: groups > 0,
     };
   }, [rawRows, keyOfRow]);
@@ -1585,6 +1718,30 @@ export default function DataImporter({
   const duplicate11TotalRows = duplicate11Summary.totalRows;
   const duplicate11DuplicatesSet = duplicate11Summary.duplicatesSet;
   const duplicate11KeeperSet = duplicate11Summary.keptKeys;
+  const duplicate11Details = duplicate11Summary.details;
+  const duplicate11AuditMeta = useMemo(() => {
+    if (!Array.isArray(duplicate11Details) || duplicate11Details.length === 0) {
+      return [];
+    }
+    return duplicate11Details.map((group) => ({
+      prefix: group.rawPrefix,
+      label: group.prefix,
+      keeper: group.items[0]
+        ? {
+            key: group.items[0].key,
+            label: group.items[0].label,
+            source: group.items[0].sourceLabel,
+            timestamp: group.items[0].timestampISO,
+          }
+        : null,
+      duplicates: group.items.slice(1).map((item) => ({
+        key: item.key,
+        label: item.label,
+        source: item.sourceLabel,
+        timestamp: item.timestampISO,
+      })),
+    }));
+  }, [duplicate11Details]);
   const hasDuplicate11Rows = duplicate11Summary.hasDuplicates;
 
   const filtered = useMemo(() => {
@@ -1921,18 +2078,43 @@ export default function DataImporter({
       alert("Không có tờ khai trùng để xóa.");
       return;
     }
-    const message = `Hệ thống sẽ xóa ${duplicate11RemovalCount.toLocaleString("vi-VN")} bản ghi trùng trong ${duplicate11GroupCount.toLocaleString("vi-VN")} nhóm (giữ lại bản mới nhất). Bạn có chắc chắn muốn tiếp tục?`;
-    if (!window.confirm(message)) {
-      return;
-    }
-    deleteRowsByKeys(duplicate11RemovalKeys);
+    setDuplicateReviewConfirmed(false);
+    setDuplicateReviewOpen(true);
   }, [
     isReadOnlyForEdits,
     mode,
     duplicate11RemovalCount,
-    duplicate11GroupCount,
-    duplicate11RemovalKeys,
+  ]);
+
+  const handleCloseDuplicateReview = useCallback(() => {
+    setDuplicateReviewOpen(false);
+    setDuplicateReviewConfirmed(false);
+  }, []);
+
+  const handleConfirmDuplicateRemoval = useCallback(() => {
+    if (duplicate11RemovalCount === 0) {
+      alert("Không có bản ghi trùng để xóa.");
+      handleCloseDuplicateReview();
+      return;
+    }
+    pushAuditLog({
+      actor,
+      action: "decl.duplicate.remove",
+      detail: `Xóa ${duplicate11RemovalCount.toLocaleString("vi-VN")} bản trùng trong ${duplicate11GroupCount.toLocaleString("vi-VN")} nhóm (ưu tiên bản mới nhất)`,
+      meta: {
+        groups: duplicate11AuditMeta,
+      },
+    });
+    deleteRowsByKeys(duplicate11RemovalKeys);
+    handleCloseDuplicateReview();
+  }, [
+    actor,
     deleteRowsByKeys,
+    duplicate11AuditMeta,
+    duplicate11GroupCount,
+    duplicate11RemovalCount,
+    duplicate11RemovalKeys,
+    handleCloseDuplicateReview,
   ]);
 
   const applyLicenseExclusionForKeys = useCallback((targetKeys) => {
@@ -2143,7 +2325,140 @@ export default function DataImporter({
     : "Chưa kiểm tra";
 
   return (
-    <div ref={rootRef} className="space-y-3">
+    <>
+      <Dialog
+        open={duplicateReviewOpen}
+        onOpenChange={(next) => {
+          if (next) {
+            setDuplicateReviewOpen(true);
+            return;
+          }
+          handleCloseDuplicateReview();
+        }}
+      >
+        <DialogContent className="max-w-5xl">
+          <DialogHeader>
+            <DialogTitle>Rà soát tờ khai trùng 11 số đầu</DialogTitle>
+            <DialogDescription>
+              Kiểm tra các nhóm trùng giữa nguồn Excel và ECUS5VNACCS. Hệ thống ưu tiên giữ bản có thời gian cập nhật mới nhất, sau đó mới xét điểm trọng số.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 text-sm">
+            <div className="rounded border border-sky-200 bg-sky-50 p-3 text-sky-800 dark:border-sky-700/60 dark:bg-sky-900/20 dark:text-sky-100">
+              <p>
+                Sẽ xóa <strong>{duplicate11RemovalCount.toLocaleString("vi-VN")}</strong> bản ghi trùng trong <strong>{duplicate11GroupCount.toLocaleString("vi-VN")}</strong> nhóm, đồng thời giữ lại mỗi nhóm một bản mới nhất.
+              </p>
+            </div>
+            {duplicate11Details?.length ? (
+              <ScrollArea className="max-h-[60vh] pr-2">
+                <div className="space-y-4">
+                  {duplicate11Details.map((group) => (
+                    <div key={`${group.rawPrefix || group.prefix}-${group.total}`} className="rounded border border-gray-200 bg-white p-3 shadow-sm dark:border-gray-700 dark:bg-gray-900/40">
+                      <div className="flex flex-col gap-1 md:flex-row md:items-start md:justify-between">
+                        <div>
+                          <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                            {group.prefix}
+                          </h3>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">
+                            Giữ: <span className="font-medium text-emerald-600 dark:text-emerald-300">{group.keeperLabel || "Không xác định"}</span>
+                            {group.referenceTimestamp ? (
+                              <> • {group.referenceTimestampLabel}: {group.referenceTimestamp}</>
+                            ) : null}
+                          </p>
+                        </div>
+                        <div className="text-xs text-gray-500 dark:text-gray-400">
+                          {group.total.toLocaleString("vi-VN")} bản ghi
+                        </div>
+                      </div>
+                      <div className="mt-3 overflow-x-auto">
+                        <table className="min-w-full text-xs">
+                          <thead className="bg-gray-50 text-gray-600 dark:bg-gray-900/40 dark:text-gray-300">
+                            <tr>
+                              <th className="px-2 py-1 text-left">Hành động</th>
+                              <th className="px-2 py-1 text-left">Số tờ khai</th>
+                              <th className="px-2 py-1 text-left">Nguồn</th>
+                              <th className="px-2 py-1 text-left">Thời gian</th>
+                              <th className="px-2 py-1 text-left">Nhân viên</th>
+                              <th className="px-2 py-1 text-left">Tổ đội</th>
+                              <th className="px-2 py-1 text-left">Trạng thái</th>
+                              <th className="px-2 py-1 text-right">KPI</th>
+                              <th className="px-2 py-1 text-right">Điểm</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {group.items.map((item, index) => {
+                              const rowClass = index === 0
+                                ? "bg-emerald-50 text-emerald-900 dark:bg-emerald-900/20 dark:text-emerald-100"
+                                : index % 2 === 0
+                                  ? "bg-white dark:bg-transparent"
+                                  : "bg-gray-50 dark:bg-gray-900/40";
+                              return (
+                                <tr key={item.key} className={`${rowClass} border-b last:border-b-0 dark:border-gray-800`}>
+                                  <td className="px-2 py-1 font-medium">
+                                    {index === 0 ? "Giữ (mới nhất)" : "Xóa"}
+                                  </td>
+                                  <td className="px-2 py-1">
+                                    {item.label}
+                                  </td>
+                                  <td className="px-2 py-1">
+                                    {item.sourceLabel}
+                                  </td>
+                                  <td className="px-2 py-1">
+                                    <div className="flex flex-col">
+                                      <span>{item.timestampDisplay}</span>
+                                      <span className="text-[10px] text-gray-500 dark:text-gray-400">{item.timestampLabel}</span>
+                                    </div>
+                                  </td>
+                                  <td className="px-2 py-1">{item.staff || <span className="text-gray-400">(trống)</span>}</td>
+                                  <td className="px-2 py-1">{item.team || <span className="text-gray-400">(trống)</span>}</td>
+                                  <td className="px-2 py-1">{item.status}</td>
+                                  <td className="px-2 py-1 text-right">
+                                    {item.kpi != null ? item.kpi.toLocaleString("vi-VN", { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : "–"}
+                                  </td>
+                                  <td className="px-2 py-1 text-right">{item.score}</td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </ScrollArea>
+            ) : (
+              <p className="text-sm text-gray-500 dark:text-gray-400">Không tìm thấy nhóm trùng để rà soát.</p>
+            )}
+            <label className="flex items-start gap-2 text-sm text-gray-700 dark:text-gray-200">
+              <input
+                type="checkbox"
+                className="mt-1"
+                checked={duplicateReviewConfirmed}
+                onChange={(e) => setDuplicateReviewConfirmed(e.target.checked)}
+              />
+              <span>Tôi đã rà soát chi tiết từng nhóm và đồng ý xóa các bản trùng kém mới hơn.</span>
+            </label>
+          </div>
+          <DialogFooter>
+            <button
+              type="button"
+              onClick={handleCloseDuplicateReview}
+              className="rounded border px-3 py-1 text-sm text-gray-600 hover:bg-gray-100 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
+            >
+              Hủy
+            </button>
+            <button
+              type="button"
+              onClick={handleConfirmDuplicateRemoval}
+              disabled={!duplicateReviewConfirmed || !duplicate11Details?.length}
+              className={`rounded px-3 py-1 text-sm font-semibold text-white ${duplicateReviewConfirmed && duplicate11Details?.length ? "bg-red-600 hover:bg-red-700" : "bg-red-400 opacity-50"}`}
+            >
+              Xóa bản trùng đã chọn
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <div ref={rootRef} className="space-y-3">
       {isReadOnlyForEdits && !canManageAlerts && (
         <div className="rounded border border-amber-300 bg-amber-50 text-amber-700 p-3 text-sm">
           Bạn đang ở chế độ chỉ xem. Đăng nhập bằng tài khoản được cấp quyền để import, chỉnh sửa và lưu dữ liệu tờ khai.
@@ -3290,6 +3605,7 @@ export default function DataImporter({
         Bạn có thể điều chỉnh thủ công trước khi lưu để phản ánh thực tế kiểm tra.
       </p>
     </div>
+    </>
   );
 }
 
