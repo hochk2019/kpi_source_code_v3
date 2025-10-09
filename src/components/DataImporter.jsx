@@ -63,6 +63,18 @@ const RANGE_PRESETS = Object.freeze([
 
 const FILTER_STORAGE_KEY = "kpi:data-importer:filter:v1";
 
+const DUPLICATE_MERGE_FIELDS = Object.freeze([
+  { key: "nhan_vien", label: "Nhân viên phụ trách" },
+  { key: "team", label: "Tổ đội" },
+  { key: "agency", label: "Đại lý HQ" },
+  { key: "dai_ly", label: "Đại lý ghi chú" },
+  { key: "kpi", label: "Điểm KPI" },
+  { key: "licenses", label: "Số GP hệ thống" },
+  { key: "so_luong_gp", label: "Số GP hiển thị" },
+  { key: "licenseManualCount", label: "Số GP nhập tay" },
+  { key: "reviewed", label: "Trạng thái rà soát" },
+]);
+
 const DATE_RANGE_PRESETS = Object.freeze([
   {
     key: "none",
@@ -389,6 +401,82 @@ function compareDuplicateCandidates(a, b) {
   return 0;
 }
 
+function applyMergeField(target, source, field) {
+  if (!target || typeof target !== "object" || !source || typeof source !== "object") {
+    return target;
+  }
+  switch (field) {
+    case "nhan_vien": {
+      target.nhan_vien = source.nhan_vien || "";
+      return target;
+    }
+    case "team": {
+      target.team = source.team || "";
+      return target;
+    }
+    case "agency": {
+      target.agency = source.agency || "";
+      return target;
+    }
+    case "dai_ly": {
+      target.dai_ly = source.dai_ly || "";
+      return target;
+    }
+    case "kpi": {
+      const parsed = Number(source.kpi);
+      if (Number.isFinite(parsed)) {
+        target.kpi = parsed;
+      }
+      return target;
+    }
+    case "licenses":
+    case "so_luong_gp": {
+      const parsed = Number(source.licenses ?? source.so_luong_gp);
+      if (Number.isFinite(parsed)) {
+        target.licenses = parsed;
+        target.so_luong_gp = parsed;
+      }
+      return target;
+    }
+    case "licenseManualCount": {
+      const parsed = Number(source.licenseManualCount);
+      if (Number.isFinite(parsed)) {
+        target.licenseManualCount = Math.max(0, Math.round(parsed));
+      } else {
+        delete target.licenseManualCount;
+      }
+      return target;
+    }
+    case "reviewed": {
+      if (source.reviewed) {
+        target.reviewed = true;
+        if (source.reviewed_at) target.reviewed_at = source.reviewed_at;
+        if (source.reviewed_by) target.reviewed_by = source.reviewed_by;
+      } else {
+        delete target.reviewed;
+        delete target.reviewed_at;
+        delete target.reviewed_by;
+      }
+      return target;
+    }
+    default: {
+      if (Object.prototype.hasOwnProperty.call(source, field)) {
+        target[field] = source[field];
+      }
+      return target;
+    }
+  }
+}
+
+function clearDuplicateReviewFlags(target) {
+  if (!target || typeof target !== "object") return target;
+  delete target.duplicate_review_pending;
+  delete target.duplicate_review_note;
+  delete target.duplicate_review_actor;
+  delete target.duplicate_review_updated_at;
+  return target;
+}
+
 function extractDuplicatePrefix(row) {
   return normalizeDeclarationNumber(row?.so_tk_full ?? row?.so_tk ?? "", 11);
 }
@@ -416,6 +504,9 @@ function inferRowSource(row) {
 }
 
 function describeRowStatus(row) {
+  if (row?.duplicate_review_pending) {
+    return "Chờ rà soát trùng";
+  }
   const hasStaff = !!(row?.nhan_vien && row.nhan_vien.toString().trim());
   const hasTeam = !!(row?.team && row.team.toString().trim());
   if (row?.reviewed) {
@@ -487,6 +578,7 @@ export default function DataImporter({
   const [hasUnsaved, setHasUnsaved] = useState(false);
   const [duplicateReviewOpen, setDuplicateReviewOpen] = useState(false);
   const [duplicateReviewConfirmed, setDuplicateReviewConfirmed] = useState(false);
+  const [duplicate11Plan, setDuplicate11Plan] = useState({});
 
   // Tuỳ chọn
   const [overwrite, setOverwrite] = useState(false);         // Ghi đè toàn bộ
@@ -1713,36 +1805,69 @@ export default function DataImporter({
   }, [rawRows, keyOfRow]);
 
   const duplicate11GroupCount = duplicate11Summary.groups;
-  const duplicate11RemovalKeys = duplicate11Summary.removalKeys;
-  const duplicate11RemovalCount = duplicate11RemovalKeys.length;
   const duplicate11TotalRows = duplicate11Summary.totalRows;
   const duplicate11DuplicatesSet = duplicate11Summary.duplicatesSet;
   const duplicate11KeeperSet = duplicate11Summary.keptKeys;
   const duplicate11Details = duplicate11Summary.details;
-  const duplicate11AuditMeta = useMemo(() => {
-    if (!Array.isArray(duplicate11Details) || duplicate11Details.length === 0) {
-      return [];
-    }
-    return duplicate11Details.map((group) => ({
-      prefix: group.rawPrefix,
-      label: group.prefix,
-      keeper: group.items[0]
-        ? {
-            key: group.items[0].key,
-            label: group.items[0].label,
-            source: group.items[0].sourceLabel,
-            timestamp: group.items[0].timestampISO,
-          }
-        : null,
-      duplicates: group.items.slice(1).map((item) => ({
-        key: item.key,
-        label: item.label,
-        source: item.sourceLabel,
-        timestamp: item.timestampISO,
-      })),
-    }));
-  }, [duplicate11Details]);
   const hasDuplicate11Rows = duplicate11Summary.hasDuplicates;
+
+  useEffect(() => {
+    if (!Array.isArray(duplicate11Details) || duplicate11Details.length === 0) {
+      setDuplicate11Plan({});
+      return;
+    }
+    setDuplicate11Plan((prev) => {
+      const next = {};
+      for (const group of duplicate11Details) {
+        const prevEntry = prev[group.rawPrefix] || {};
+        const availableKeys = new Set(group.items.map((item) => item.key));
+        const fallbackKeeper = group.keeperKey || group.items[0]?.key || null;
+        const keeperKey = availableKeys.has(prevEntry.keeperKey) ? prevEntry.keeperKey : fallbackKeeper;
+        const merges = {};
+        for (const field of DUPLICATE_MERGE_FIELDS) {
+          const previous = prevEntry.merges?.[field.key];
+          merges[field.key] = availableKeys.has(previous) ? previous : keeperKey;
+        }
+        next[group.rawPrefix] = {
+          keeperKey,
+          merges,
+          resolution: prevEntry.resolution === "review" ? "review" : "delete",
+          note: prevEntry.note || "",
+        };
+      }
+      return next;
+    });
+  }, [duplicate11Details]);
+
+  const duplicate11PlanStats = useMemo(() => {
+    if (!Array.isArray(duplicate11Details) || duplicate11Details.length === 0) {
+      return { deleteGroups: 0, reviewGroups: 0, removalCount: 0 };
+    }
+    let deleteGroups = 0;
+    let reviewGroups = 0;
+    let removalCount = 0;
+    for (const group of duplicate11Details) {
+      const plan = duplicate11Plan[group.rawPrefix];
+      const items = Array.isArray(group.items) ? group.items : [];
+      if (!items.length) continue;
+      if (plan?.resolution === "review") {
+        reviewGroups += 1;
+        continue;
+      }
+      deleteGroups += 1;
+      const keeperKey = plan?.keeperKey && items.some((item) => item.key === plan.keeperKey)
+        ? plan.keeperKey
+        : group.keeperKey || items[0].key;
+      removalCount += items.filter((item) => item.key !== keeperKey).length;
+    }
+    return { deleteGroups, reviewGroups, removalCount };
+  }, [duplicate11Details, duplicate11Plan]);
+  const {
+    deleteGroups: duplicate11PlannedDeleteGroups,
+    reviewGroups: duplicate11PlannedReviewGroups,
+    removalCount: duplicate11PlannedRemovalCount,
+  } = duplicate11PlanStats;
+  const duplicate11PlanHasActions = duplicate11PlannedDeleteGroups > 0 || duplicate11PlannedReviewGroups > 0;
 
   const filtered = useMemo(() => {
     const q = query.toLowerCase().trim();
@@ -2040,7 +2165,7 @@ export default function DataImporter({
   const canSave = !isReadOnlyForEdits && mode === "saved" && rawRows.length > 0;
   const canDelete = deleteEnabled && selectedKeys.length > 0;
   const canReview = selectionEnabled && selectedKeys.length > 0 && canReviewAlerts;
-  const canDeleteDuplicates11 = deleteEnabled && duplicate11RemovalCount > 0;
+  const canResolveDuplicates11 = deleteEnabled && hasDuplicate11Rows;
   const modeLabel = mode === "preview" ? "Đang xem dữ liệu từ file (chưa lưu)" : "Đang xem dữ liệu đã lưu";
 
   const handleSelectFiltered = useCallback(() => {
@@ -2065,6 +2190,66 @@ export default function DataImporter({
     setPage(1);
   }, [hasDuplicate11Rows]);
 
+  const handleChangeDuplicateKeeper = useCallback((prefix, keeperKey) => {
+    setDuplicate11Plan((prev) => {
+      const current = prev[prefix] || {};
+      const merges = { ...(current.merges || {}) };
+      const previousKeeper = current.keeperKey;
+      for (const field of DUPLICATE_MERGE_FIELDS) {
+        if (!merges[field.key] || merges[field.key] === previousKeeper) {
+          merges[field.key] = keeperKey;
+        }
+      }
+      return {
+        ...prev,
+        [prefix]: {
+          ...current,
+          keeperKey,
+          merges,
+        },
+      };
+    });
+  }, []);
+
+  const handleChangeDuplicateMerge = useCallback((prefix, field, value) => {
+    setDuplicate11Plan((prev) => {
+      const current = prev[prefix] || {};
+      return {
+        ...prev,
+        [prefix]: {
+          ...current,
+          merges: { ...(current.merges || {}), [field]: value },
+        },
+      };
+    });
+  }, []);
+
+  const handleChangeDuplicateResolution = useCallback((prefix, resolution) => {
+    setDuplicate11Plan((prev) => {
+      const current = prev[prefix] || {};
+      return {
+        ...prev,
+        [prefix]: {
+          ...current,
+          resolution,
+        },
+      };
+    });
+  }, []);
+
+  const handleChangeDuplicateNote = useCallback((prefix, note) => {
+    setDuplicate11Plan((prev) => {
+      const current = prev[prefix] || {};
+      return {
+        ...prev,
+        [prefix]: {
+          ...current,
+          note,
+        },
+      };
+    });
+  }, []);
+
   const handleDeleteDuplicates11 = useCallback(() => {
     if (isReadOnlyForEdits) {
       alert("Bạn không có quyền xóa tờ khai trùng.");
@@ -2074,8 +2259,8 @@ export default function DataImporter({
       alert("Chỉ có thể xóa tờ khai trùng khi đang xem dữ liệu đã lưu.");
       return;
     }
-    if (duplicate11RemovalCount === 0) {
-      alert("Không có tờ khai trùng để xóa.");
+    if (!Array.isArray(duplicate11Details) || duplicate11Details.length === 0) {
+      alert("Không có nhóm tờ khai trùng để xử lý.");
       return;
     }
     setDuplicateReviewConfirmed(false);
@@ -2083,7 +2268,7 @@ export default function DataImporter({
   }, [
     isReadOnlyForEdits,
     mode,
-    duplicate11RemovalCount,
+    duplicate11Details,
   ]);
 
   const handleCloseDuplicateReview = useCallback(() => {
@@ -2092,29 +2277,135 @@ export default function DataImporter({
   }, []);
 
   const handleConfirmDuplicateRemoval = useCallback(() => {
-    if (duplicate11RemovalCount === 0) {
-      alert("Không có bản ghi trùng để xóa.");
+    if (!Array.isArray(duplicate11Details) || duplicate11Details.length === 0) {
+      alert("Không có nhóm trùng để xử lý.");
       handleCloseDuplicateReview();
       return;
     }
+
+    const nowISO = new Date().toISOString();
+    const rowMap = new Map(rawRows.map((row) => [keyOfRow(row), { ...row }]));
+    const updates = new Map();
+    const removalSet = new Set();
+    const auditGroups = [];
+    let deleteGroups = 0;
+    let reviewGroups = 0;
+
+    for (const group of duplicate11Details) {
+      const plan = duplicate11Plan[group.rawPrefix];
+      const items = Array.isArray(group.items) ? group.items : [];
+      if (!items.length) continue;
+      const availableKeys = new Set(items.map((item) => item.key));
+      const fallbackKeeper = group.keeperKey || items[0].key;
+      const keeperKey = plan?.keeperKey && availableKeys.has(plan.keeperKey)
+        ? plan.keeperKey
+        : fallbackKeeper;
+
+      if (plan?.resolution === "review") {
+        reviewGroups += 1;
+        const note = (plan?.note || "").trim();
+        for (const item of items) {
+          const original = rowMap.get(item.key) || {};
+          updates.set(item.key, {
+            ...original,
+            duplicate_review_pending: true,
+            duplicate_review_note: note,
+            duplicate_review_actor: actor,
+            duplicate_review_updated_at: nowISO,
+          });
+        }
+        auditGroups.push({
+          prefix: group.rawPrefix,
+          label: group.prefix,
+          resolution: "review",
+          note,
+          keys: items.map((item) => item.key),
+        });
+        continue;
+      }
+
+      deleteGroups += 1;
+      const keeperRow = { ...(rowMap.get(keeperKey) || {}) };
+      clearDuplicateReviewFlags(keeperRow);
+      const merges = plan?.merges || {};
+      const mergeMeta = {};
+      for (const field of DUPLICATE_MERGE_FIELDS) {
+        const chosen = merges[field.key];
+        const sourceKey = chosen && availableKeys.has(chosen) ? chosen : keeperKey;
+        const source = rowMap.get(sourceKey) || rowMap.get(keeperKey) || {};
+        applyMergeField(keeperRow, source, field.key);
+        mergeMeta[field.key] = sourceKey;
+      }
+      updates.set(keeperKey, keeperRow);
+
+      const removedKeys = [];
+      for (const item of items) {
+        if (item.key === keeperKey) continue;
+        removalSet.add(item.key);
+        removedKeys.push(item.key);
+      }
+
+      auditGroups.push({
+        prefix: group.rawPrefix,
+        label: group.prefix,
+        resolution: "delete",
+        keeperKey,
+        removedKeys,
+        merges: mergeMeta,
+      });
+    }
+
+    const removalCount = removalSet.size;
+    if (removalCount === 0 && updates.size === 0) {
+      alert("Không có thay đổi nào được áp dụng.");
+      handleCloseDuplicateReview();
+      return;
+    }
+
+    const nextRows = sortDeclRows(
+      rawRows
+        .map((row) => {
+          const key = keyOfRow(row);
+          if (removalSet.has(key)) {
+            return null;
+          }
+          if (updates.has(key)) {
+            return { ...row, ...updates.get(key) };
+          }
+          return row;
+        })
+        .filter(Boolean)
+    );
+
+    const detail = `Xử lý trùng 11 số: ${deleteGroups} nhóm xóa, ${reviewGroups} nhóm đánh dấu rà soát, loại bỏ ${removalCount} bản ghi`;
+
+    saveDeclRows(nextRows, {
+      overwrite: true,
+      actor,
+      detail,
+    });
     pushAuditLog({
       actor,
-      action: "decl.duplicate.remove",
-      detail: `Xóa ${duplicate11RemovalCount.toLocaleString("vi-VN")} bản trùng trong ${duplicate11GroupCount.toLocaleString("vi-VN")} nhóm (ưu tiên bản mới nhất)`,
+      action: "decl.duplicate.resolve",
+      detail,
       meta: {
-        groups: duplicate11AuditMeta,
+        groups: auditGroups,
       },
     });
-    deleteRowsByKeys(duplicate11RemovalKeys);
+    alert(`Đã ${deleteGroups ? `xóa ${removalCount} bản ghi trong ${deleteGroups} nhóm` : "cập nhật đánh dấu"}${reviewGroups ? `, ${reviewGroups} nhóm được đánh dấu cần rà soát` : ""}.`);
     handleCloseDuplicateReview();
+    setDuplicateReviewConfirmed(false);
+    loadSavedRows({ bypassConfirm: true });
+    fetchAlerts();
   }, [
     actor,
-    deleteRowsByKeys,
-    duplicate11AuditMeta,
-    duplicate11GroupCount,
-    duplicate11RemovalCount,
-    duplicate11RemovalKeys,
+    duplicate11Details,
+    duplicate11Plan,
+    fetchAlerts,
     handleCloseDuplicateReview,
+    keyOfRow,
+    loadSavedRows,
+    rawRows,
   ]);
 
   const applyLicenseExclusionForKeys = useCallback((targetKeys) => {
@@ -2345,89 +2636,184 @@ export default function DataImporter({
           </DialogHeader>
           <div className="space-y-4 text-sm">
             <div className="rounded border border-sky-200 bg-sky-50 p-3 text-sky-800 dark:border-sky-700/60 dark:bg-sky-900/20 dark:text-sky-100">
-              <p>
-                Sẽ xóa <strong>{duplicate11RemovalCount.toLocaleString("vi-VN")}</strong> bản ghi trùng trong <strong>{duplicate11GroupCount.toLocaleString("vi-VN")}</strong> nhóm, đồng thời giữ lại mỗi nhóm một bản mới nhất.
+              {duplicate11PlanHasActions ? (
+                <p>
+                  Dự kiến xóa <strong>{duplicate11PlannedRemovalCount.toLocaleString("vi-VN")}</strong> bản ghi trong <strong>{duplicate11PlannedDeleteGroups.toLocaleString("vi-VN")}</strong> nhóm.
+                  {duplicate11PlannedReviewGroups > 0 && (
+                    <> • <strong>{duplicate11PlannedReviewGroups.toLocaleString("vi-VN")}</strong> nhóm sẽ được đánh dấu cần rà soát thay vì xóa.</>
+                  )}
+                </p>
+              ) : (
+                <p>Hãy chọn bản giữ lại hoặc chuyển nhóm sang trạng thái “Cần rà soát” trước khi xác nhận.</p>
+              )}
+              <p className="mt-1 text-xs text-sky-700 dark:text-sky-200/80">
+                Bạn có thể hợp nhất từng trường dữ liệu (nhân viên, KPI, giấy phép…) từ các bản khác nhau rồi mới xóa bản dư.
               </p>
             </div>
             {duplicate11Details?.length ? (
               <ScrollArea className="max-h-[60vh] pr-2">
                 <div className="space-y-4">
-                  {duplicate11Details.map((group) => (
-                    <div key={`${group.rawPrefix || group.prefix}-${group.total}`} className="rounded border border-gray-200 bg-white p-3 shadow-sm dark:border-gray-700 dark:bg-gray-900/40">
-                      <div className="flex flex-col gap-1 md:flex-row md:items-start md:justify-between">
-                        <div>
-                          <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                            {group.prefix}
-                          </h3>
-                          <p className="text-xs text-gray-500 dark:text-gray-400">
-                            Giữ: <span className="font-medium text-emerald-600 dark:text-emerald-300">{group.keeperLabel || "Không xác định"}</span>
-                            {group.referenceTimestamp ? (
-                              <> • {group.referenceTimestampLabel}: {group.referenceTimestamp}</>
-                            ) : null}
-                          </p>
+                  {duplicate11Details.map((group) => {
+                    const planEntry = duplicate11Plan[group.rawPrefix] || {};
+                    const keeperKey = planEntry.keeperKey;
+                    const merges = planEntry.merges || {};
+                    const resolution = planEntry.resolution || "delete";
+                    const note = planEntry.note || "";
+                    const usageMap = new Map();
+                    for (const field of DUPLICATE_MERGE_FIELDS) {
+                      const selected = merges[field.key] || keeperKey;
+                      if (!usageMap.has(selected)) {
+                        usageMap.set(selected, []);
+                      }
+                      usageMap.get(selected)?.push(field.label);
+                    }
+                    return (
+                      <div key={`${group.rawPrefix || group.prefix}-${group.total}`} className="rounded border border-gray-200 bg-white p-3 shadow-sm dark:border-gray-700 dark:bg-gray-900/40">
+                        <div className="flex flex-col gap-1 md:flex-row md:items-start md:justify-between">
+                          <div>
+                            <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">{group.prefix}</h3>
+                            <p className="text-xs text-gray-500 dark:text-gray-400">
+                              Tham chiếu: <span className="font-medium text-emerald-600 dark:text-emerald-300">{group.keeperLabel || "Không xác định"}</span>
+                              {group.referenceTimestamp ? (
+                                <> • {group.referenceTimestampLabel}: {group.referenceTimestamp}</>
+                              ) : null}
+                            </p>
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+                            <span>{group.total.toLocaleString("vi-VN")} bản ghi</span>
+                            {resolution === "review" && (
+                              <span className="rounded bg-amber-100 px-2 py-0.5 font-medium text-amber-700 dark:bg-amber-500/20 dark:text-amber-200">Đánh dấu cần rà soát</span>
+                            )}
+                          </div>
                         </div>
-                        <div className="text-xs text-gray-500 dark:text-gray-400">
-                          {group.total.toLocaleString("vi-VN")} bản ghi
+                        <div className="mt-3 overflow-x-auto">
+                          <table className="min-w-full text-xs">
+                            <thead className="bg-gray-50 text-gray-600 dark:bg-gray-900/40 dark:text-gray-300">
+                              <tr>
+                                <th className="px-2 py-1 text-left">Giữ</th>
+                                <th className="px-2 py-1 text-left">Số tờ khai</th>
+                                <th className="px-2 py-1 text-left">Nguồn</th>
+                                <th className="px-2 py-1 text-left">Thời gian</th>
+                                <th className="px-2 py-1 text-left">Nhân viên</th>
+                                <th className="px-2 py-1 text-left">Tổ đội</th>
+                                <th className="px-2 py-1 text-left">Trạng thái</th>
+                                <th className="px-2 py-1 text-right">KPI</th>
+                                <th className="px-2 py-1 text-left">Trường sẽ lấy dữ liệu</th>
+                                <th className="px-2 py-1 text-right">Điểm</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {group.items.map((item, index) => {
+                                const isKeeper = keeperKey === item.key;
+                                const selectedFields = usageMap.get(item.key) || [];
+                                const rowClass = isKeeper
+                                  ? "bg-emerald-50 text-emerald-900 dark:bg-emerald-900/20 dark:text-emerald-100"
+                                  : index % 2 === 0
+                                    ? "bg-white dark:bg-transparent"
+                                    : "bg-gray-50 dark:bg-gray-900/40";
+                                return (
+                                  <tr key={item.key} className={`${rowClass} border-b last:border-b-0 dark:border-gray-800`}>
+                                    <td className="px-2 py-1">
+                                      <label className="flex items-center gap-1">
+                                        <input
+                                          type="radio"
+                                          name={`duplicate-keeper-${group.rawPrefix}`}
+                                          checked={isKeeper}
+                                          onChange={() => handleChangeDuplicateKeeper(group.rawPrefix, item.key)}
+                                        />
+                                        <span className="font-medium">Giữ</span>
+                                      </label>
+                                    </td>
+                                    <td className="px-2 py-1">
+                                      <div className="font-medium text-gray-900 dark:text-gray-100">{item.label}</div>
+                                      <div className="text-[10px] uppercase text-gray-400">{item.key}</div>
+                                    </td>
+                                    <td className="px-2 py-1">{item.sourceLabel}</td>
+                                    <td className="px-2 py-1">
+                                      <div>{item.timestampDisplay || "Không xác định"}</div>
+                                      <div className="text-[10px] text-gray-400">{item.timestampLabel}</div>
+                                    </td>
+                                    <td className="px-2 py-1">{item.staff || <span className="text-gray-400">(trống)</span>}</td>
+                                    <td className="px-2 py-1">{item.team || <span className="text-gray-400">(trống)</span>}</td>
+                                    <td className="px-2 py-1">{item.status}</td>
+                                    <td className="px-2 py-1 text-right">{Number.isFinite(item.kpi) ? item.kpi.toLocaleString("vi-VN") : "-"}</td>
+                                    <td className="px-2 py-1">
+                                      {selectedFields.length > 0 ? (
+                                        <div className="space-y-0.5">
+                                          {selectedFields.map((fieldLabel) => (
+                                            <span key={`${item.key}-${fieldLabel}`} className="block rounded bg-emerald-100 px-2 py-0.5 text-[10px] font-medium text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-200">
+                                              {fieldLabel}
+                                            </span>
+                                          ))}
+                                        </div>
+                                      ) : (
+                                        <span className="text-gray-400">(không)</span>
+                                      )}
+                                    </td>
+                                    <td className="px-2 py-1 text-right">{item.score.toLocaleString("vi-VN")}</td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                        <div className="mt-3 grid gap-3 lg:grid-cols-2">
+                          <div className="space-y-2 text-xs">
+                            <p className="font-semibold text-gray-600 dark:text-gray-300">Hợp nhất trường dữ liệu</p>
+                            {DUPLICATE_MERGE_FIELDS.map((field) => (
+                              <label key={`${group.rawPrefix}-${field.key}`} className="flex flex-col gap-1">
+                                <span className="text-[11px] font-medium text-gray-500 dark:text-gray-400">{field.label}</span>
+                                <select
+                                  className="rounded border border-gray-300 px-2 py-1 text-sm dark:border-gray-600 dark:bg-gray-900"
+                                  value={merges[field.key] || keeperKey}
+                                  onChange={(e) => handleChangeDuplicateMerge(group.rawPrefix, field.key, e.target.value)}
+                                  disabled={resolution === "review"}
+                                >
+                                  {group.items.map((item) => (
+                                    <option key={`${field.key}-${item.key}`} value={item.key}>
+                                      {item.label} — {item.sourceLabel}
+                                    </option>
+                                  ))}
+                                </select>
+                              </label>
+                            ))}
+                          </div>
+                          <div className="space-y-2 text-xs">
+                            <label className="flex flex-col gap-1">
+                              <span className="font-semibold text-gray-600 dark:text-gray-300">Hành động cho nhóm</span>
+                              <select
+                                className="rounded border border-gray-300 px-2 py-1 text-sm dark:border-gray-600 dark:bg-gray-900"
+                                value={resolution}
+                                onChange={(e) => handleChangeDuplicateResolution(group.rawPrefix, e.target.value)}
+                              >
+                                <option value="delete">Xóa bản dư (giữ 1 bản)</option>
+                                <option value="review">Đánh dấu cần rà soát</option>
+                              </select>
+                            </label>
+                            {resolution === "review" ? (
+                              <label className="flex flex-col gap-1">
+                                <span className="text-[11px] font-medium text-gray-500 dark:text-gray-400">Ghi chú (tùy chọn)</span>
+                                <textarea
+                                  className="min-h-[60px] rounded border border-gray-300 px-2 py-1 text-sm dark:border-gray-600 dark:bg-gray-900"
+                                  value={note}
+                                  onChange={(e) => handleChangeDuplicateNote(group.rawPrefix, e.target.value)}
+                                  placeholder="Ví dụ: Cần đối chiếu KPI với phòng chứng từ"
+                                />
+                              </label>
+                            ) : (
+                              <p className="text-gray-500 dark:text-gray-400">Các bản khác sẽ bị xóa sau khi bạn xác nhận.</p>
+                            )}
+                          </div>
                         </div>
                       </div>
-                      <div className="mt-3 overflow-x-auto">
-                        <table className="min-w-full text-xs">
-                          <thead className="bg-gray-50 text-gray-600 dark:bg-gray-900/40 dark:text-gray-300">
-                            <tr>
-                              <th className="px-2 py-1 text-left">Hành động</th>
-                              <th className="px-2 py-1 text-left">Số tờ khai</th>
-                              <th className="px-2 py-1 text-left">Nguồn</th>
-                              <th className="px-2 py-1 text-left">Thời gian</th>
-                              <th className="px-2 py-1 text-left">Nhân viên</th>
-                              <th className="px-2 py-1 text-left">Tổ đội</th>
-                              <th className="px-2 py-1 text-left">Trạng thái</th>
-                              <th className="px-2 py-1 text-right">KPI</th>
-                              <th className="px-2 py-1 text-right">Điểm</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {group.items.map((item, index) => {
-                              const rowClass = index === 0
-                                ? "bg-emerald-50 text-emerald-900 dark:bg-emerald-900/20 dark:text-emerald-100"
-                                : index % 2 === 0
-                                  ? "bg-white dark:bg-transparent"
-                                  : "bg-gray-50 dark:bg-gray-900/40";
-                              return (
-                                <tr key={item.key} className={`${rowClass} border-b last:border-b-0 dark:border-gray-800`}>
-                                  <td className="px-2 py-1 font-medium">
-                                    {index === 0 ? "Giữ (mới nhất)" : "Xóa"}
-                                  </td>
-                                  <td className="px-2 py-1">
-                                    {item.label}
-                                  </td>
-                                  <td className="px-2 py-1">
-                                    {item.sourceLabel}
-                                  </td>
-                                  <td className="px-2 py-1">
-                                    <div className="flex flex-col">
-                                      <span>{item.timestampDisplay}</span>
-                                      <span className="text-[10px] text-gray-500 dark:text-gray-400">{item.timestampLabel}</span>
-                                    </div>
-                                  </td>
-                                  <td className="px-2 py-1">{item.staff || <span className="text-gray-400">(trống)</span>}</td>
-                                  <td className="px-2 py-1">{item.team || <span className="text-gray-400">(trống)</span>}</td>
-                                  <td className="px-2 py-1">{item.status}</td>
-                                  <td className="px-2 py-1 text-right">
-                                    {item.kpi != null ? item.kpi.toLocaleString("vi-VN", { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : "–"}
-                                  </td>
-                                  <td className="px-2 py-1 text-right">{item.score}</td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </ScrollArea>
             ) : (
-              <p className="text-sm text-gray-500 dark:text-gray-400">Không tìm thấy nhóm trùng để rà soát.</p>
+              <div className="rounded border border-gray-200 bg-white p-4 text-center text-sm text-gray-500 dark:border-gray-700 dark:bg-gray-900/40 dark:text-gray-300">
+                <p className="text-sm text-gray-500 dark:text-gray-400">Không tìm thấy nhóm trùng để rà soát.</p>
+              </div>
             )}
             <label className="flex items-start gap-2 text-sm text-gray-700 dark:text-gray-200">
               <input
@@ -2436,7 +2822,7 @@ export default function DataImporter({
                 checked={duplicateReviewConfirmed}
                 onChange={(e) => setDuplicateReviewConfirmed(e.target.checked)}
               />
-              <span>Tôi đã rà soát chi tiết từng nhóm và đồng ý xóa các bản trùng kém mới hơn.</span>
+              <span>Tôi đã rà soát chi tiết từng nhóm và xác nhận thao tác xử lý (xóa hoặc đánh dấu cần rà soát).</span>
             </label>
           </div>
           <DialogFooter>
@@ -2450,10 +2836,10 @@ export default function DataImporter({
             <button
               type="button"
               onClick={handleConfirmDuplicateRemoval}
-              disabled={!duplicateReviewConfirmed || !duplicate11Details?.length}
-              className={`rounded px-3 py-1 text-sm font-semibold text-white ${duplicateReviewConfirmed && duplicate11Details?.length ? "bg-red-600 hover:bg-red-700" : "bg-red-400 opacity-50"}`}
+              disabled={!duplicateReviewConfirmed || !duplicate11PlanHasActions}
+              className={`rounded px-3 py-1 text-sm font-semibold text-white ${duplicateReviewConfirmed && duplicate11PlanHasActions ? "bg-red-600 hover:bg-red-700" : "bg-red-400 opacity-50"}`}
             >
-              Xóa bản trùng đã chọn
+              Thực hiện xử lý
             </button>
           </DialogFooter>
         </DialogContent>
@@ -3264,20 +3650,24 @@ export default function DataImporter({
         >
           {filterDuplicate11 ? "Đang lọc tờ khai trùng 11 số đầu" : "Lọc tờ khai trùng 11 số đầu"}
         </button>
-        {canDeleteDuplicates11 && (
+        {canResolveDuplicates11 && (
           <button
             type="button"
             onClick={handleDeleteDuplicates11}
             className="rounded border border-red-300 bg-red-50 px-3 py-1 text-xs font-medium text-red-600 hover:bg-red-100"
           >
-            Xóa bản trùng (giữ mới nhất)
+            Xử lý tờ khai trùng 11 số đầu
           </button>
         )}
         {hasDuplicate11Rows && (
           <span className="text-xs text-amber-700">
-            {duplicate11GroupCount.toLocaleString("vi-VN")} nhóm / {duplicate11RemovalCount.toLocaleString("vi-VN")} bản ghi trùng
-            {duplicate11TotalRows > duplicate11RemovalCount
-              ? ` (tổng ${duplicate11TotalRows.toLocaleString("vi-VN")} dòng)`
+            {duplicate11GroupCount.toLocaleString("vi-VN")} nhóm trùng •
+            {` dự kiến xóa ${duplicate11PlannedRemovalCount.toLocaleString("vi-VN")} bản`}
+            {duplicate11PlannedReviewGroups > 0
+              ? ` • ${duplicate11PlannedReviewGroups.toLocaleString("vi-VN")} nhóm sẽ được đánh dấu rà soát`
+              : ""}
+            {duplicate11TotalRows > duplicate11PlannedRemovalCount
+              ? ` • tổng ${duplicate11TotalRows.toLocaleString("vi-VN")} dòng`
               : ""}
           </span>
         )}
@@ -3461,6 +3851,9 @@ export default function DataImporter({
                     )}
                     {duplicate11DuplicatesSet.has(rowKey) && (
                       <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">Trùng 11 số</span>
+                    )}
+                    {r.duplicate_review_pending && (
+                      <span className="rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-medium text-red-700">Chờ rà soát</span>
                     )}
                   </div>
                 </td>

@@ -36,6 +36,7 @@
 | 4 | Tối ưu hiệu năng, kiểm thử accessibility, đào tạo người dùng và thu thập phản hồi để cải tiến tiếp | ✅ Hoàn thành | Trung tâm hỗ trợ & đào tạo, API phản hồi người dùng và kiểm thử accessibility đã sẵn sàng. |
 | 5 | Command Center, theme tương phản cao và phím tắt điều hướng toàn hệ thống | ✅ Hoàn thành | Đã phát hành Command Center (Ctrl+K), theme High Contrast và cơ chế ghim thao tác. |
 | 6 | Làm sạch trùng 11 số - Sprint 1 | ✅ Hoàn thành | Ưu tiên bản mới nhất theo timestamp, bổ sung hộp thoại rà soát và ghi nhật ký quyết định xóa/giữ. |
+| 7 | Làm sạch trùng 11 số - Sprint 2 | ✅ Hoàn thành | Cho phép chọn bản giữ thủ công, hợp nhất trường dữ liệu và đánh dấu nhóm cần rà soát thay vì xóa ngay. |
 
 ### 6.1.1. Tổng kết giai đoạn 2
 
@@ -70,6 +71,13 @@ Các đề xuất trên nhằm mục tiêu hiện đại hóa giao diện, giúp
 - Thuật toán làm sạch tờ khai trùng 11 số ưu tiên timestamp mới nhất và chỉ dùng điểm trọng số khi cần phân hạng, giảm nguy cơ giữ lại bản cũ.
 - Bổ sung hộp thoại rà soát chi tiết: so sánh nguồn dữ liệu, thời gian cập nhật, nhân viên/tổ đội và trạng thái để admin quyết định trước khi xóa.
 - Ghi lại nhật ký thao tác xóa trùng với danh sách bản giữ/bản loại bỏ, hỗ trợ truy vết và kiểm toán sau này.
+
+### 6.1.6. Tổng kết giai đoạn 7
+
+- Cho phép admin chọn thủ công bản giữ lại trong mỗi nhóm trùng, đồng thời cấu hình hợp nhất từng trường dữ liệu trọng yếu (nhân viên, KPI, giấy phép, đại lý...).
+- Giao diện rà soát hiển thị rõ bản ghi nào đang cung cấp dữ liệu cho từng trường, giúp kiểm chứng trước khi xóa và hạn chế sai sót khi hợp nhất.
+- Bổ sung chế độ "Đánh dấu cần rà soát" kèm ghi chú, gắn nhãn "Chờ rà soát" trong bảng tờ khai để các bộ phận liên quan xử lý tiếp trước khi loại bỏ dữ liệu.
+- Audit log `decl.duplicate.resolve` lưu lại toàn bộ kế hoạch xử lý (giữ/xóa/đánh dấu) và hiển thị thống kê số nhóm dự kiến xóa hoặc chuyển rà soát trực tiếp trên giao diện.
 
 ### 6.1. Lộ trình xử lý trùng tờ khai giữa import Excel và ECUS5VNACCS
 
