@@ -1,4 +1,4 @@
-import React, { Suspense, useEffect } from 'react';
+import React, { Suspense, useEffect, useMemo, useState } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs.jsx';
 
 const DataImporter = React.lazy(() => import('./DataImporter.jsx'));
@@ -19,7 +19,7 @@ const TabPanel = ({ children }) => (
   </Suspense>
 );
 
-const KPICalculator = ({ auth }) => {
+const KPICalculator = ({ auth, activeTab = 'reports', onTabChange }) => {
   const effectiveAuth = auth || { username: 'guest', role: 'viewer', permissions: {} };
   const permissions = effectiveAuth.permissions || {};
   const canImportEdit = !!permissions.importEdit;
@@ -33,13 +33,52 @@ const KPICalculator = ({ auth }) => {
   const canViewAudit = !!permissions.auditView || canManageAccounts;
   const canUseAi = !!permissions.aiAssistUse || !!permissions.aiAssistManage;
 
+  const allowedTabs = useMemo(() => {
+    const base = new Set(['mst', 'hq', 'import', 'teams', 'rules', 'adjustments', 'reports', 'health']);
+    if (canUseAi) {
+      base.add('ai');
+    }
+    if (canManageAccounts) {
+      base.add('accounts');
+    }
+    if (canViewAudit) {
+      base.add('audit');
+    }
+    return base;
+  }, [canManageAccounts, canUseAi, canViewAudit]);
+
+  const initialTab = useMemo(() => (allowedTabs.has(activeTab) ? activeTab : 'reports'), [activeTab, allowedTabs]);
+  const [tabValue, setTabValue] = useState(initialTab);
+
+  useEffect(() => {
+    setTabValue(allowedTabs.has(activeTab) ? activeTab : 'reports');
+  }, [activeTab, allowedTabs]);
+
+  useEffect(() => {
+    if (!allowedTabs.has(tabValue)) {
+      const fallback = allowedTabs.has('reports') ? 'reports' : Array.from(allowedTabs)[0] || 'reports';
+      setTabValue(fallback);
+      if (fallback !== tabValue) {
+        onTabChange?.(fallback);
+      }
+    }
+  }, [allowedTabs, tabValue, onTabChange]);
+
   useEffect(() => {
     import('./ReportViewer.jsx');
   }, []);
 
+  const handleTabChange = (value) => {
+    if (!allowedTabs.has(value)) {
+      return;
+    }
+    setTabValue(value);
+    onTabChange?.(value);
+  };
+
   return (
     <div className="mx-auto max-w-6xl">
-      <Tabs defaultValue="reports" className="space-y-6">
+      <Tabs value={tabValue} onValueChange={handleTabChange} className="space-y-6">
         <TabsList className="flex flex-wrap gap-2">
           <TabsTrigger value="mst" data-tooltip="Quản lý gán MST cho doanh nghiệp và người phụ trách">
             Gán MST

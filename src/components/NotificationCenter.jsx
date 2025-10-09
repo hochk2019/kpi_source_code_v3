@@ -4,6 +4,7 @@ import {
   fetchNotificationHistory,
   subscribeNotificationStream,
 } from '@/lib/notificationClient.js';
+import { subscribeCommand } from '@/lib/commandBus.js';
 
 function formatDate(value) {
   if (!value) return 'Không xác định';
@@ -95,6 +96,15 @@ export default function NotificationCenter({ className }) {
     }
     return undefined;
   }, [open]);
+
+  useEffect(() => {
+    const unsubscribe = subscribeCommand((id) => {
+      if (id === 'open:notifications') {
+        setOpen(true);
+      }
+    });
+    return () => unsubscribe();
+  }, []);
 
   const unreadCount = useMemo(() => unreadIds.size, [unreadIds]);
 

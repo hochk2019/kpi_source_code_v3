@@ -34,6 +34,7 @@
 | 2 | Gom nhóm chức năng dữ liệu, bổ sung bộ lọc yêu thích và trung tâm điều phối dữ liệu | ✅ Hoàn thành | Hoàn thiện hub điều phối dữ liệu, quick action, bộ lọc yêu thích và thang đo sức khỏe dữ liệu. |
 | 3 | Nâng cấp chatbot AI, triển khai thông báo real-time và trang sức khỏe dữ liệu | ✅ Hoàn thành | Hoàn thiện chế độ trợ lý theo ngữ cảnh, thông báo real-time và dashboard Sức khỏe dữ liệu. |
 | 4 | Tối ưu hiệu năng, kiểm thử accessibility, đào tạo người dùng và thu thập phản hồi để cải tiến tiếp | ✅ Hoàn thành | Trung tâm hỗ trợ & đào tạo, API phản hồi người dùng và kiểm thử accessibility đã sẵn sàng. |
+| 5 | Command Center, theme tương phản cao và phím tắt điều hướng toàn hệ thống | ✅ Hoàn thành | Đã phát hành Command Center (Ctrl+K), theme High Contrast và cơ chế ghim thao tác. |
 
 ### 6.1.1. Tổng kết giai đoạn 2
 
@@ -56,6 +57,12 @@
 
 
 Các đề xuất trên nhằm mục tiêu hiện đại hóa giao diện, giúp người dùng thao tác nhanh hơn, giảm chi phí đào tạo và chuẩn bị cho khả năng mở rộng trong tương lai.
+
+### 6.1.4. Tổng kết giai đoạn 5
+
+- Ra mắt **Command Center** với phím tắt `Ctrl + K`, công cụ tìm kiếm thao tác, ghim lệnh yêu thích, thống kê số lần sử dụng và điều hướng tức thời giữa các tab (Import Data, Báo cáo KPI, Sức khỏe dữ liệu, Trợ lý AI...).
+- Bổ sung **theme Tương phản cao** bên cạnh chế độ Sáng/Tối, đồng bộ với ThemeProvider và các biểu đồ nhằm hỗ trợ người dùng thị lực yếu hoặc cần độ tương phản mạnh khi trình chiếu.
+- Mở rộng `commandBus` giúp Notification Center, Support Center và Data Hub phản hồi lệnh toàn cục (mở thông báo, mở tab góp ý, kích hoạt bộ lọc), chuẩn bị nền tảng cho các giai đoạn tự động hóa tiếp theo.
 
 ### 6.1. Lộ trình xử lý trùng tờ khai giữa import Excel và ECUS5VNACCS
 

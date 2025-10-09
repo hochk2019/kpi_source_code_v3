@@ -8,6 +8,7 @@ import React, {
 import * as Dialog from '@radix-ui/react-dialog';
 import * as Tabs from '@radix-ui/react-tabs';
 import { toast } from 'sonner';
+import { subscribeCommand } from '@/lib/commandBus.js';
 import {
   fetchFeedbackSummary,
   fetchTrainingResources,
@@ -142,6 +143,21 @@ export default function SupportCenter() {
 
   useEffect(() => {
     prefetchEngagementData();
+  }, []);
+
+  useEffect(() => {
+    const unsubscribe = subscribeCommand((id, payload) => {
+      if (id !== 'open:support') {
+        return;
+      }
+      setOpen(true);
+      if (payload?.tab === 'feedback') {
+        setActiveTab('feedback');
+      } else if (payload?.tab === 'training') {
+        setActiveTab('training');
+      }
+    });
+    return () => unsubscribe();
   }, []);
 
   useEffect(() => {

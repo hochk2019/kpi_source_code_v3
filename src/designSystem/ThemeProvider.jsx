@@ -28,6 +28,7 @@ export function ThemeProvider({ children, defaultTheme = 'system' }) {
   const [systemTheme, setSystemTheme] = useState(() => getSystemPreference());
 
   const resolvedTheme = theme === 'system' ? systemTheme : theme;
+  const isDarkLike = resolvedTheme === 'dark' || resolvedTheme === 'high-contrast';
 
   useEffect(() => {
     applyBaseTokens();
@@ -37,14 +38,14 @@ export function ThemeProvider({ children, defaultTheme = 'system' }) {
     applyThemePalette(resolvedTheme);
     const root = document.documentElement;
     if (!root) return;
-    if (resolvedTheme === 'dark') {
+    if (isDarkLike) {
       root.classList.add('dark');
     } else {
       root.classList.remove('dark');
     }
     root.dataset.theme = resolvedTheme;
-    root.style.colorScheme = resolvedTheme === 'dark' ? 'dark' : 'light';
-  }, [resolvedTheme]);
+    root.style.colorScheme = isDarkLike ? 'dark' : 'light';
+  }, [resolvedTheme, isDarkLike]);
 
   useEffect(() => {
     if (typeof window === 'undefined' || !window.matchMedia) return;

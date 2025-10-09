@@ -1,4 +1,4 @@
-import React, { Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Toaster } from 'sonner';
 const KPICalculator = React.lazy(() => import('./components/KPICalculator.jsx'));
 const Login = React.lazy(() => import('./components/Login.jsx'));
@@ -10,12 +10,15 @@ import { getSyncStatus, subscribeSyncStatus } from './lib/storageClient.js';
 import useTooltipTitles from './hooks/useTooltipTitles.js';
 import ThemeToggle from './components/ThemeToggle.jsx';
 import NotificationCenter from './components/NotificationCenter.jsx';
+import CommandCenter from './components/CommandCenter.jsx';
+import { subscribeCommand } from './lib/commandBus.js';
 
 export default function App() {
   const [auth, setAuth] = useState(null);
   const [showLogin, setShowLogin] = useState(false);
   const [showChangePassword, setShowChangePassword] = useState(false);
   const [syncStatus, setSyncStatus] = useState(() => getSyncStatus());
+  const [activeTab, setActiveTab] = useState('reports');
   const rootRef = useRef(null);
 
   useTooltipTitles(rootRef, [auth, showLogin, showChangePassword, syncStatus]);
@@ -89,11 +92,32 @@ export default function App() {
     return parts.join(' • ');
   }, [syncStatus]);
 
-  const handleLogout = () => {
+  const handleLogout = useCallback(() => {
     logout(auth?.username).finally(() => {
       setAuth(getAuth());
     });
-  };
+  }, [auth?.username]);
+
+  useEffect(() => {
+    const unsubscribe = subscribeCommand((id, payload) => {
+      if (id === 'navigate:tab') {
+        const target = typeof payload?.tab === 'string' ? payload.tab : null;
+        if (target) {
+          setActiveTab(target);
+          if (rootRef.current) {
+            rootRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }
+        }
+      } else if (id === 'open:login') {
+        setShowLogin(true);
+      } else if (id === 'open:change-password') {
+        setShowChangePassword(true);
+      } else if (id === 'open:logout') {
+        handleLogout();
+      }
+    });
+    return () => unsubscribe();
+  }, [handleLogout]);
 
   const handlePasswordDialogClose = (changed) => {
     setShowChangePassword(false);
@@ -129,6 +153,12 @@ export default function App() {
             ) : (
               <span>Đang xem với quyền hạn giới hạn (khách).</span>
             )}
+            <CommandCenter
+              currentUser={effectiveAuth}
+              onRequestLogin={() => setShowLogin(true)}
+              onRequestLogout={handleLogout}
+              onRequestChangePassword={() => setShowChangePassword(true)}
+            />
             <NotificationCenter />
             <Suspense fallback={null}>
               <SupportCenter />
@@ -186,7 +216,7 @@ export default function App() {
 
       <main className="px-4 py-6">
         <Suspense fallback={<div className="text-sm text-gray-500 dark:text-gray-400">Đang tải dashboard...</div>}>
-          <KPICalculator auth={effectiveAuth} />
+          <KPICalculator auth={effectiveAuth} activeTab={activeTab} onTabChange={setActiveTab} />
         </Suspense>
       </main>
 

@@ -67,6 +67,30 @@ const THEME_PALETTES = {
     "chart-4": "#c084fc",
     "chart-5": "#2dd4bf",
   },
+  "high-contrast": {
+    "surface-base": "oklch(0.12 0.03 255)",
+    "surface-muted": "oklch(0.18 0.04 255)",
+    "surface-card": "oklch(0.15 0.03 255)",
+    "surface-raised": "oklch(0.2 0.04 255)",
+    "surface-overlay": "oklch(0.1 0.04 255 / 0.85)",
+    "border-subtle": "color-mix(in srgb, oklch(0.62 0.05 255) 45%, transparent)",
+    "border-strong": "color-mix(in srgb, oklch(0.82 0.06 255) 65%, transparent)",
+    "text-primary": "oklch(0.98 0.02 255)",
+    "text-secondary": "oklch(0.9 0.015 255)",
+    "text-muted": "oklch(0.8 0.012 255)",
+    "text-muted-soft": "oklch(0.7 0.01 255)",
+    "text-inverse": "oklch(0.08 0.02 255)",
+    "accent": "oklch(0.72 0.23 20)",
+    "accent-strong": "oklch(0.82 0.24 20)",
+    "accent-soft": "oklch(0.4 0.1 20)",
+    "accent-muted": "oklch(0.32 0.08 20)",
+    "accent-ring": "oklch(0.85 0.24 20)",
+    "chart-1": "#facc15",
+    "chart-2": "#38bdf8",
+    "chart-3": "#fb7185",
+    "chart-4": "#a78bfa",
+    "chart-5": "#34d399",
+  },
 };
 
 export const DEFAULT_CHART_COLORS = ["#2563eb", "#22c55e", "#f97316", "#a855f7", "#14b8a6"];
@@ -119,7 +143,7 @@ export function getChartPalette() {
 export function sanitizeThemeName(value, fallback = "system") {
   if (typeof value !== "string") return fallback;
   const normalized = value.trim().toLowerCase();
-  if (["light", "dark", "system"].includes(normalized)) {
+  if (["light", "dark", "system", "high-contrast"].includes(normalized)) {
     return normalized;
   }
   return fallback;

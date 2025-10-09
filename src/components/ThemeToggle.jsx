@@ -1,5 +1,5 @@
 import React from 'react';
-import { MonitorSmartphone, MoonStar, Sun } from 'lucide-react';
+import { Contrast, MonitorSmartphone, MoonStar, Sun } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -29,12 +29,25 @@ const OPTIONS = [
     description: 'Giảm chói mắt khi làm việc ban đêm',
     icon: MoonStar,
   },
+  {
+    value: 'high-contrast',
+    label: 'Tương phản cao',
+    description: 'Độ tương phản đậm, hỗ trợ người suy giảm thị lực',
+    icon: Contrast,
+  },
 ];
 
 export default function ThemeToggle({ className = '' }) {
   const { theme, resolvedTheme, setTheme } = useTheme();
   const active = theme === 'system' ? resolvedTheme : theme;
-  const ActiveIcon = active === 'dark' ? MoonStar : active === 'light' ? Sun : MonitorSmartphone;
+  const ActiveIcon =
+    active === 'dark'
+      ? MoonStar
+      : active === 'light'
+        ? Sun
+        : active === 'high-contrast'
+          ? Contrast
+          : MonitorSmartphone;
 
   return (
     <DropdownMenu>
