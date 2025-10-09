@@ -34,6 +34,7 @@ import {
   LabelList,
   Cell,
 } from "recharts";
+import { useChartPalette } from "@/designSystem/hooks.js";
 
 let reportExporterPromise;
 function loadReportExporterModule() {
@@ -56,7 +57,7 @@ function formatDecimal(value) {
   });
 }
 
-const chartColors = ["#2563eb", "#22c55e", "#f97316", "#a855f7", "#14b8a6"];
+const DEFAULT_CHART_COLORS = ["#2563eb", "#22c55e", "#f97316", "#a855f7", "#14b8a6"];
 
 const METRIC_SORT_KEYS = ["kpi", "decls", "licenses"];
 
@@ -303,20 +304,21 @@ function CompanySummaryTable({
   );
 }
 
-function TopStaffWidget({ metric = "kpi", onMetricChange, kpiData = [], declData = [] }) {
+function TopStaffWidget({ metric = "kpi", onMetricChange, kpiData = [], declData = [], palette = DEFAULT_CHART_COLORS }) {
   const hasKpiData = kpiData.length > 0;
   const hasDeclData = declData.length > 0;
   const hasData = metric === "kpi" ? hasKpiData : hasDeclData;
 
   const maxKPI = hasKpiData ? Math.max(...kpiData.map((item) => item.stats.kpi || 0), 1) : 1;
   const totalDecls = hasDeclData ? declData.reduce((sum, item) => sum + (item.decls || 0), 0) : 0;
+  const colors = Array.isArray(palette) && palette.length ? palette : DEFAULT_CHART_COLORS;
 
   const renderEmptyState = (
     <p className="mt-3 text-sm text-gray-500">Chưa có dữ liệu hợp lệ trong giai đoạn này.</p>
   );
 
   return (
-    <section className="rounded-lg border bg-white p-4 shadow-sm">
+    <section className="ds-card space-y-4 p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 className="text-base font-semibold text-gray-900">
           Top 5 nhân viên theo {metric === "kpi" ? "điểm KPI" : "số tờ khai"}
@@ -349,7 +351,7 @@ function TopStaffWidget({ metric = "kpi", onMetricChange, kpiData = [], declData
         <div className="mt-4 space-y-4">
           {kpiData.map((item, idx) => {
             const ratio = Math.max(0, Math.min(100, (item.stats.kpi / maxKPI) * 100));
-            const color = chartColors[idx % chartColors.length];
+            const color = colors[idx % colors.length];
             return (
               <div key={item.key || idx}>
                 <div className="flex items-baseline justify-between text-sm">
@@ -394,7 +396,7 @@ function TopStaffWidget({ metric = "kpi", onMetricChange, kpiData = [], declData
               />
               <Bar dataKey="decls" name="Tờ khai" radius={[0, 4, 4, 0]}>
                 {declData.map((item, idx) => (
-                  <Cell key={item.key || item.name || idx} fill={chartColors[idx % chartColors.length]} />
+                  <Cell key={item.key || item.name || idx} fill={colors[idx % colors.length]} />
                 ))}
                 <LabelList dataKey="decls" position="right" formatter={(value) => formatInt(value)} />
               </Bar>
@@ -407,7 +409,7 @@ function TopStaffWidget({ metric = "kpi", onMetricChange, kpiData = [], declData
   );
 }
 
-function TeamMetricPieCard({ title, data, valueFormatter, percentLabel, emptyMessage }) {
+function TeamMetricPieCard({ title, data, valueFormatter, percentLabel, emptyMessage, palette = DEFAULT_CHART_COLORS }) {
   const normalizedData = Array.isArray(data)
     ? data.map((item = {}) => ({
         name: item.name || "",
@@ -418,12 +420,13 @@ function TeamMetricPieCard({ title, data, valueFormatter, percentLabel, emptyMes
   const total = normalizedData.reduce((sum, item) => sum + item.value, 0);
   const segments = [];
   let cursor = 0;
+  const colors = Array.isArray(palette) && palette.length ? palette : DEFAULT_CHART_COLORS;
 
   normalizedData.forEach((item, idx) => {
     const percent = total > 0 ? (item.value / total) * 100 : 0;
     const start = cursor;
     const end = cursor + percent;
-    const color = chartColors[idx % chartColors.length];
+    const color = colors[idx % colors.length];
     segments.push(`${color} ${start}% ${end}%`);
     cursor = end;
   });
@@ -431,11 +434,11 @@ function TeamMetricPieCard({ title, data, valueFormatter, percentLabel, emptyMes
   const gradient = segments.length ? `conic-gradient(${segments.join(", ")})` : "conic-gradient(#e5e7eb 0 100%)";
 
   return (
-    <div>
+    <div className="space-y-4">
       <h3 className="text-base font-semibold text-gray-900">{title}</h3>
       <div className="mt-4 flex flex-col items-center gap-4 sm:flex-row">
         <div
-          className="h-40 w-40 flex-shrink-0 rounded-full border"
+          className="h-40 w-40 flex-shrink-0 rounded-full border border-subtle"
           style={{ backgroundImage: gradient }}
         >
           {total === 0 ? (
@@ -447,7 +450,7 @@ function TeamMetricPieCard({ title, data, valueFormatter, percentLabel, emptyMes
         <ul className="w-full space-y-2 text-sm">
           {normalizedData.length ? (
             normalizedData.map((item, idx) => {
-              const color = chartColors[idx % chartColors.length];
+              const color = colors[idx % colors.length];
               const percent = total > 0 ? Math.round((item.value / total) * 1000) / 10 : 0;
               return (
                 <li key={`${title}-${item.name}-${idx}`} className="flex flex-wrap items-center gap-x-2 gap-y-1">
@@ -467,9 +470,9 @@ function TeamMetricPieCard({ title, data, valueFormatter, percentLabel, emptyMes
   );
 }
 
-function TeamPieWidget({ kpiData, declData }) {
+function TeamPieWidget({ kpiData, declData, palette = DEFAULT_CHART_COLORS }) {
   return (
-    <section className="rounded-lg border bg-white p-4 shadow-sm">
+    <section className="ds-card space-y-6 p-4">
       <div className="grid gap-6 lg:grid-cols-2">
         <TeamMetricPieCard
           title="Phân bổ KPI theo tổ đội"
@@ -477,6 +480,7 @@ function TeamPieWidget({ kpiData, declData }) {
           valueFormatter={formatDecimal}
           percentLabel="KPI"
           emptyMessage="Chưa có dữ liệu KPI cho các tổ đội."
+          palette={palette}
         />
         <TeamMetricPieCard
           title="Phân bổ lượng tờ khai theo tổ đội"
@@ -484,16 +488,20 @@ function TeamPieWidget({ kpiData, declData }) {
           valueFormatter={formatInt}
           percentLabel="tờ khai"
           emptyMessage="Chưa có dữ liệu tờ khai cho các tổ đội."
+          palette={palette}
         />
       </div>
     </section>
   );
 }
 
-function TrendLineChart({ data, comparison }) {
+function TrendLineChart({ data, comparison, palette = DEFAULT_CHART_COLORS }) {
+  const colors = Array.isArray(palette) && palette.length ? palette : DEFAULT_CHART_COLORS;
+  const kpiColor = colors[0] ?? DEFAULT_CHART_COLORS[0];
+  const declColor = colors[1] ?? DEFAULT_CHART_COLORS[1];
   if (!data || data.length === 0) {
     return (
-      <section className="rounded-lg border bg-white p-4 shadow-sm">
+      <section className="ds-card space-y-3 p-4">
         <h3 className="text-base font-semibold text-gray-900">Xu hướng KPI 6 kỳ gần nhất</h3>
         <p className="mt-3 text-sm text-gray-500">Chưa có dữ liệu để hiển thị biểu đồ xu hướng.</p>
       </section>
@@ -506,7 +514,7 @@ function TrendLineChart({ data, comparison }) {
   const deltaClass = deltaKPI > 0 ? "text-emerald-600" : deltaKPI < 0 ? "text-red-600" : "text-gray-600";
 
   return (
-    <section className="rounded-lg border bg-white p-4 shadow-sm">
+    <section className="ds-card space-y-4 p-4">
       <div className="flex items-baseline justify-between gap-2">
         <h3 className="text-base font-semibold text-gray-900">Xu hướng KPI 6 kỳ gần nhất</h3>
         {comparison && (
@@ -529,12 +537,12 @@ function TrendLineChart({ data, comparison }) {
           <LineChart data={data} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" />
             <XAxis dataKey="period" />
-            <YAxis yAxisId="left" stroke="#2563eb" />
-            <YAxis yAxisId="right" orientation="right" stroke="#22c55e" />
+            <YAxis yAxisId="left" stroke={kpiColor} />
+            <YAxis yAxisId="right" orientation="right" stroke={declColor} />
             <Tooltip />
             <Legend />
-            <Line yAxisId="left" type="monotone" dataKey="kpi" name="Điểm KPI" stroke="#2563eb" strokeWidth={2} />
-            <Line yAxisId="right" type="monotone" dataKey="decls" name="Tờ khai" stroke="#22c55e" strokeWidth={2} />
+            <Line yAxisId="left" type="monotone" dataKey="kpi" name="Điểm KPI" stroke={kpiColor} strokeWidth={2} />
+            <Line yAxisId="right" type="monotone" dataKey="decls" name="Tờ khai" stroke={declColor} strokeWidth={2} />
           </LineChart>
         </ResponsiveContainer>
       </div>
@@ -544,11 +552,45 @@ function TrendLineChart({ data, comparison }) {
 
 function SummaryCard({ title, value, subtitle }) {
   return (
-    <div className="rounded-lg border bg-white p-4 shadow-sm">
+    <div className="ds-card p-4">
       <div className="text-sm text-gray-500">{title}</div>
       <div className="mt-1 text-2xl font-semibold text-gray-900">{value}</div>
       {subtitle ? <div className="mt-1 text-xs text-gray-500">{subtitle}</div> : null}
     </div>
+  );
+}
+
+function AdjustmentDigestCard({ report }) {
+  const totalPoints = formatDecimal(report.totalPoints || 0);
+  const appliedCount = formatInt(report.approvedCount || report.appliedCount || 0);
+  const stats = [
+    { label: "Đã duyệt", value: formatInt(report.approvedCount || 0), tone: "text-emerald-600" },
+    { label: "Chờ duyệt", value: formatInt(report.pendingCount || 0), tone: "text-amber-600" },
+    { label: "Đã từ chối", value: formatInt(report.rejectedCount || 0), tone: "text-rose-500" },
+  ];
+
+  return (
+    <section className="ds-card space-y-4 p-4">
+      <div className="space-y-1">
+        <h3 className="text-base font-semibold text-gray-900">Điểm KPI +/- bổ sung</h3>
+        <p className="text-sm text-gray-500">
+          Tự động cộng/trừ vào KPI tổng khi trạng thái được duyệt.
+        </p>
+      </div>
+      <div className="rounded-xl border border-subtle bg-gray-50 px-4 py-3 dark:bg-slate-900/40">
+        <div className="text-xs uppercase tracking-wide text-gray-500">Điểm đã áp dụng</div>
+        <div className="mt-1 text-3xl font-semibold text-emerald-600">{totalPoints}</div>
+        <div className="text-xs text-gray-500">Từ {appliedCount} lượt xử lý thành công</div>
+      </div>
+      <ul className="space-y-1 text-sm text-gray-600">
+        {stats.map((item) => (
+          <li key={item.label} className="flex items-center justify-between">
+            <span>{item.label}</span>
+            <span className={`font-semibold ${item.tone}`}>{item.value}</span>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 
@@ -1305,6 +1347,8 @@ export default function ReportViewer({ canExport = true }) {
     }));
   }, [report.teams.list]);
 
+  const chartPalette = useChartPalette();
+
   const sortedStaffList = useMemo(() => {
     return sortStatsCollection(
       report.staff.list,
@@ -1803,7 +1847,7 @@ export default function ReportViewer({ canExport = true }) {
 
   return (
     <div className="space-y-6">
-      <div className="rounded-lg border bg-white p-4 shadow-sm print:hidden">
+      <div className="ds-card p-4 print:hidden">
         <div className="flex flex-wrap items-end gap-4">
           <div className="flex flex-col">
             <label className="text-sm font-medium text-gray-700">Khoảng thời gian</label>
@@ -1843,23 +1887,25 @@ export default function ReportViewer({ canExport = true }) {
               }}
             />
           </div>
-          <button
-            type="button"
-            onClick={() => setVersion((v) => v + 1)}
-            className="ml-auto rounded border bg-white px-3 py-2 text-sm shadow-sm hover:bg-gray-50"
-          >
-            Tải lại dữ liệu
-          </button>
-          <button
-            type="button"
-            onClick={handleSeedSamples}
-            className="rounded border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-700 shadow-sm hover:bg-blue-100"
-          >
-            Sinh dữ liệu mẫu (100 dòng)
-          </button>
+          <div className="ml-auto flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setVersion((v) => v + 1)}
+              className="rounded border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm transition hover:bg-gray-50"
+            >
+              Tải lại dữ liệu
+            </button>
+            <button
+              type="button"
+              onClick={handleSeedSamples}
+              className="rounded border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-700 shadow-sm transition hover:bg-blue-100 dark:border-blue-500/40 dark:bg-blue-500/15 dark:text-blue-200"
+            >
+              Sinh dữ liệu mẫu (100 dòng)
+            </button>
+          </div>
         </div>
 
-        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded border bg-gray-50 px-3 py-3 text-sm text-gray-600">
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-subtle bg-gray-50 px-3 py-3 text-sm text-gray-600 dark:bg-slate-900/40">
           <div>
             <div className="text-xs uppercase text-gray-500">Quy tắc KPI</div>
             <div className="text-base font-semibold text-gray-900">{ruleTitle}</div>
@@ -1878,183 +1924,190 @@ export default function ReportViewer({ canExport = true }) {
         </div>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <SummaryCard
-          title="Tổng tờ khai"
-          value={formatInt(summary.decls)}
-          subtitle={`Nhập: ${formatInt(summary.import)} • Xuất: ${formatInt(summary.export)}`}
-        />
-        <SummaryCard
-          title="Tổng điểm KPI"
-          value={formatDecimal(summary.kpi)}
-          subtitle="Bao gồm điểm loại hình và giấy phép"
-        />
-        <SummaryCard
-          title="Điểm KPI +/- bổ sung"
-          value={formatDecimal(adjustmentsReport.totalPoints || 0)}
-          subtitle={`Đã duyệt: ${formatInt(adjustmentsReport.approvedCount || 0)} • Chờ duyệt: ${formatInt(
-            adjustmentsReport.pendingCount || 0
-          )}`}
-        />
-        <SummaryCard
-          title="Tổng số công ty"
-          value={formatInt(summaryCompanyCardValue)}
-          subtitle={companyCardSubtitle}
-        />
-        <SummaryCard
-          title="Số giấy phép hợp lệ"
-          value={formatInt(summary.licenses)}
-          subtitle={`Đã loại trừ • ${formatInt(summary.licenseCount ?? 0)} mã khác nhau`}
-        />
-        <SummaryCard
-          title="Tờ khai có C/O"
-          value={formatInt(summary.co ?? 0)}
-          subtitle={`Tổng dòng áp C/O: ${formatInt(summary.coLines ?? 0)}`}
-        />
-        <SummaryCard
-          title="Danh sách mã giấy phép"
-          value={formatInt(summary.licenseCount ?? 0)}
-          subtitle={summary.licenseSummary || "—"}
-        />
-      </div>
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+        <div className="space-y-6">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <SummaryCard
+              title="Tổng tờ khai"
+              value={formatInt(summary.decls)}
+              subtitle={`Nhập: ${formatInt(summary.import)} • Xuất: ${formatInt(summary.export)}`}
+            />
+            <SummaryCard
+              title="Tổng điểm KPI"
+              value={formatDecimal(summary.kpi)}
+              subtitle="Bao gồm điểm loại hình và giấy phép"
+            />
+            <SummaryCard
+              title="Điểm KPI +/- bổ sung"
+              value={formatDecimal(adjustmentsReport.totalPoints || 0)}
+              subtitle={`Đã duyệt: ${formatInt(adjustmentsReport.approvedCount || 0)} • Chờ duyệt: ${formatInt(
+                adjustmentsReport.pendingCount || 0
+              )}`}
+            />
+            <SummaryCard
+              title="Tổng số công ty"
+              value={formatInt(summaryCompanyCardValue)}
+              subtitle={companyCardSubtitle}
+            />
+            <SummaryCard
+              title="Số giấy phép hợp lệ"
+              value={formatInt(summary.licenses)}
+              subtitle={`Đã loại trừ • ${formatInt(summary.licenseCount ?? 0)} mã khác nhau`}
+            />
+            <SummaryCard
+              title="Tờ khai có C/O"
+              value={formatInt(summary.co ?? 0)}
+              subtitle={`Tổng dòng áp C/O: ${formatInt(summary.coLines ?? 0)}`}
+            />
+            <SummaryCard
+              title="Danh sách mã giấy phép"
+              value={formatInt(summary.licenseCount ?? 0)}
+              subtitle={summary.licenseSummary || "—"}
+            />
+          </div>
 
-      <div className="space-y-4 rounded-lg border bg-white p-4 shadow-sm">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <h3 className="text-base font-semibold text-gray-900">Điểm KPI +/- bổ sung</h3>
-            <p className="mt-1 text-sm text-gray-500">
-              Điểm cộng/trừ được duyệt sẽ được cộng trực tiếp vào KPI tháng tương ứng trong báo cáo.
-            </p>
-          </div>
-          <div className="text-sm text-gray-600 text-right">
-            <div>Đã duyệt: {formatInt(adjustmentsReport.approvedCount || 0)} mục</div>
-            <div>Chờ duyệt: {formatInt(adjustmentsReport.pendingCount || 0)} mục</div>
-            {adjustmentsReport.rejectedCount ? (
-              <div>Đã từ chối: {formatInt(adjustmentsReport.rejectedCount || 0)} mục</div>
-            ) : null}
-            <div className="mt-1 font-semibold text-emerald-600">
-              Điểm đã áp dụng: {formatDecimal(adjustmentsReport.totalPoints || 0)}
-            </div>
-          </div>
+          <TrendLineChart data={trendSeries} comparison={trendComparison} palette={chartPalette} />
+          <TeamPieWidget kpiData={teamPieData} declData={teamDeclPieData} palette={chartPalette} />
         </div>
 
-        <div className="grid gap-4 lg:grid-cols-3">
-          <div className="lg:col-span-2">
-            <h4 className="mb-3 text-sm font-semibold text-gray-800">Chi tiết điểm đã áp dụng</h4>
-            <div className="overflow-auto rounded border">
-              <table className="min-w-full text-sm">
-                <thead className="bg-gray-100">
-                  <tr>
-                    <th className="px-3 py-2 text-left">Tháng</th>
-                    <th className="px-3 py-2 text-left">Hạng mục</th>
-                    <th className="px-3 py-2 text-left">Nhân viên</th>
-                    <th className="px-3 py-2 text-left">Tổ đội</th>
-                    <th className="px-3 py-2 text-right">Số lượng × Hệ số</th>
-                    <th className="px-3 py-2 text-right">Điểm</th>
-                    <th className="px-3 py-2 text-left">Tham chiếu</th>
-                    <th className="px-3 py-2 text-left">Ghi chú</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {appliedAdjustments.length ? (
-                    appliedAdjustments.map((item) => {
-                      const key = item.adjustment?.id || `${item.date}-${item.nhan_vien || ''}`;
-                      const quantity = Number.isFinite(Number(item.adjustment?.quantity))
-                        ? Number(item.adjustment.quantity)
-                        : null;
-                      const unitPoints = Number.isFinite(Number(item.adjustment?.unitPoints))
-                        ? Number(item.adjustment.unitPoints)
-                        : null;
-                      const references = Array.isArray(item.adjustment?.references)
-                        ? item.adjustment.references.filter(Boolean).join(', ')
-                        : '';
-                      const note = item.adjustment?.note || '';
-                      const scoreClass = item.kpi >= 0 ? 'text-emerald-600' : 'text-rose-600';
-                      return (
-                        <tr key={key} className="odd:bg-white even:bg-gray-50">
-                          <td className="px-3 py-1.5">{item.displayDate || (item.date ? item.date.slice(0, 7) : '—')}</td>
-                          <td className="px-3 py-1.5">{item.adjustment?.label || item.loai_hinh}</td>
-                          <td className="px-3 py-1.5">{item.nhan_vien || 'Chưa gán'}</td>
-                          <td className="px-3 py-1.5">{item.team || 'Chưa gán tổ đội'}</td>
-                          <td className="px-3 py-1.5 text-right">
-                            {quantity !== null ? formatDecimal(quantity) : '—'}
-                            {unitPoints !== null ? (
-                              <span className="ml-1 text-xs text-gray-500">× {formatDecimal(unitPoints)}</span>
-                            ) : null}
-                          </td>
-                          <td className={`px-3 py-1.5 text-right font-semibold ${scoreClass}`}>
-                            {formatDecimal(item.kpi)}
-                          </td>
-                          <td className="px-3 py-1.5">{references || '—'}</td>
-                          <td className="px-3 py-1.5">{note || '—'}</td>
-                        </tr>
-                      );
-                    })
-                  ) : (
-                    <tr>
-                      <td className="px-3 py-4 text-center text-gray-500" colSpan={8}>
-                        Chưa có điểm bổ sung nào được duyệt trong khoảng thời gian này.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-          <div className="space-y-4">
-            <div>
-              <h4 className="text-sm font-semibold text-gray-800">Chờ duyệt</h4>
-              {pendingAdjustments.length ? (
-                <ul className="mt-2 space-y-2 text-sm text-gray-600">
-                  {pendingAdjustments.map((item) => (
-                    <li key={item.id} className="rounded border border-dashed border-amber-300 bg-amber-50 px-3 py-2">
-                      <div className="font-medium text-gray-900">{item.label || item.category}</div>
-                      <div>{item.staffName || 'Chưa gán'} — {item.month}</div>
-                      <div>Điểm đề xuất: {formatDecimal(item.totalPoints || 0)}</div>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="mt-2 text-sm text-gray-500">Không có yêu cầu đang chờ.</p>
-              )}
-            </div>
-            {rejectedAdjustments.length ? (
+        <div className="space-y-6">
+          <TopStaffWidget
+            metric={topStaffMetric}
+            onMetricChange={setTopStaffMetric}
+            kpiData={topStaffByKpi}
+            declData={topStaffByDecls}
+            palette={chartPalette}
+          />
+          <AdjustmentDigestCard report={adjustmentsReport} />
+        </div>
+
+        <div className="xl:col-span-2">
+          <div className="ds-card space-y-4 p-4">
+            <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
-                <h4 className="text-sm font-semibold text-gray-800">Đã từ chối gần đây</h4>
-                <ul className="mt-2 space-y-2 text-sm text-gray-500">
-                  {rejectedAdjustments.slice(0, 3).map((item) => (
-                    <li key={item.id} className="rounded border px-3 py-2">
-                      <div className="font-medium text-gray-900">{item.label || item.category}</div>
-                      <div>{item.staffName || 'Chưa gán'} — {item.month}</div>
-                      <div>Điểm: {formatDecimal(item.totalPoints || 0)}</div>
-                    </li>
-                  ))}
-                </ul>
-                {rejectedAdjustments.length > 3 ? (
-                  <div className="pt-1 text-xs text-gray-400">
-                    Còn {rejectedAdjustments.length - 3} mục khác đã bị từ chối.
+                <h3 className="text-base font-semibold text-gray-900">Điểm KPI +/- bổ sung</h3>
+                <p className="mt-1 text-sm text-gray-500">
+                  Điểm cộng/trừ được duyệt sẽ được cộng trực tiếp vào KPI tháng tương ứng trong báo cáo.
+                </p>
+              </div>
+              <div className="text-sm text-gray-600 text-right">
+                <div>Đã duyệt: {formatInt(adjustmentsReport.approvedCount || 0)} mục</div>
+                <div>Chờ duyệt: {formatInt(adjustmentsReport.pendingCount || 0)} mục</div>
+                {adjustmentsReport.rejectedCount ? (
+                  <div>Đã từ chối: {formatInt(adjustmentsReport.rejectedCount || 0)} mục</div>
+                ) : null}
+                <div className="mt-1 font-semibold text-emerald-600">
+                  Điểm đã áp dụng: {formatDecimal(adjustmentsReport.totalPoints || 0)}
+                </div>
+              </div>
+            </div>
+
+            <div className="grid gap-4 lg:grid-cols-3">
+              <div className="lg:col-span-2">
+                <h4 className="mb-3 text-sm font-semibold text-gray-800">Chi tiết điểm đã áp dụng</h4>
+                <div className="overflow-auto rounded border">
+                  <table className="min-w-full text-sm">
+                    <thead className="bg-gray-100">
+                      <tr>
+                        <th className="px-3 py-2 text-left">Tháng</th>
+                        <th className="px-3 py-2 text-left">Hạng mục</th>
+                        <th className="px-3 py-2 text-left">Nhân viên</th>
+                        <th className="px-3 py-2 text-left">Tổ đội</th>
+                        <th className="px-3 py-2 text-right">Số lượng × Hệ số</th>
+                        <th className="px-3 py-2 text-right">Điểm</th>
+                        <th className="px-3 py-2 text-left">Tham chiếu</th>
+                        <th className="px-3 py-2 text-left">Ghi chú</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {appliedAdjustments.length ? (
+                        appliedAdjustments.map((item) => {
+                          const key = item.adjustment?.id || `${item.date}-${item.nhan_vien || ''}`;
+                          const quantity = Number.isFinite(Number(item.adjustment?.quantity))
+                            ? Number(item.adjustment.quantity)
+                            : null;
+                          const unitPoints = Number.isFinite(Number(item.adjustment?.unitPoints))
+                            ? Number(item.adjustment.unitPoints)
+                            : null;
+                          const references = Array.isArray(item.adjustment?.references)
+                            ? item.adjustment.references.filter(Boolean).join(', ')
+                            : '';
+                          const note = item.adjustment?.note || '';
+                          const scoreClass = item.kpi >= 0 ? 'text-emerald-600' : 'text-rose-600';
+                          return (
+                            <tr key={key} className="odd:bg-white even:bg-gray-50">
+                              <td className="px-3 py-1.5">{item.displayDate || (item.date ? item.date.slice(0, 7) : '—')}</td>
+                              <td className="px-3 py-1.5">{item.adjustment?.label || item.loai_hinh}</td>
+                              <td className="px-3 py-1.5">{item.nhan_vien || 'Chưa gán'}</td>
+                              <td className="px-3 py-1.5">{item.team || 'Chưa gán tổ đội'}</td>
+                              <td className="px-3 py-1.5 text-right">
+                                {quantity !== null ? formatDecimal(quantity) : '—'}
+                                {unitPoints !== null ? (
+                                  <span className="ml-1 text-xs text-gray-500">× {formatDecimal(unitPoints)}</span>
+                                ) : null}
+                              </td>
+                              <td className={`px-3 py-1.5 text-right font-semibold ${scoreClass}`}>
+                                {formatDecimal(item.kpi)}
+                              </td>
+                              <td className="px-3 py-1.5">{references || '—'}</td>
+                              <td className="px-3 py-1.5">{note || '—'}</td>
+                            </tr>
+                          );
+                        })
+                      ) : (
+                        <tr>
+                          <td className="px-3 py-4 text-center text-gray-500" colSpan={8}>
+                            Chưa có điểm bổ sung nào được duyệt trong khoảng thời gian này.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+              <div className="space-y-4">
+                <div>
+                  <h4 className="text-sm font-semibold text-gray-800">Chờ duyệt</h4>
+                  {pendingAdjustments.length ? (
+                    <ul className="mt-2 space-y-2 text-sm text-gray-600">
+                      {pendingAdjustments.map((item) => (
+                        <li key={item.id} className="rounded border border-dashed border-amber-300 bg-amber-50 px-3 py-2">
+                          <div className="font-medium text-gray-900">{item.label || item.category}</div>
+                          <div>{item.staffName || 'Chưa gán'} — {item.month}</div>
+                          <div>Điểm đề xuất: {formatDecimal(item.totalPoints || 0)}</div>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="mt-2 text-sm text-gray-500">Không có yêu cầu đang chờ.</p>
+                  )}
+                </div>
+                {rejectedAdjustments.length ? (
+                  <div>
+                    <h4 className="text-sm font-semibold text-gray-800">Đã từ chối gần đây</h4>
+                    <ul className="mt-2 space-y-2 text-sm text-gray-500">
+                      {rejectedAdjustments.slice(0, 3).map((item) => (
+                        <li key={item.id} className="rounded border px-3 py-2">
+                          <div className="font-medium text-gray-900">{item.label || item.category}</div>
+                          <div>{item.staffName || 'Chưa gán'} — {item.month}</div>
+                          <div>Điểm: {formatDecimal(item.totalPoints || 0)}</div>
+                        </li>
+                      ))}
+                    </ul>
+                    {rejectedAdjustments.length > 3 ? (
+                      <div className="pt-1 text-xs text-gray-400">
+                        Còn {rejectedAdjustments.length - 3} mục khác đã bị từ chối.
+                      </div>
+                    ) : null}
                   </div>
                 ) : null}
               </div>
-            ) : null}
+            </div>
           </div>
         </div>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <TrendLineChart data={trendSeries} comparison={trendComparison} />
-        <TopStaffWidget
-          metric={topStaffMetric}
-          onMetricChange={setTopStaffMetric}
-          kpiData={topStaffByKpi}
-          declData={topStaffByDecls}
-        />
-        <div className="lg:col-span-2">
-          <TeamPieWidget kpiData={teamPieData} declData={teamDeclPieData} />
-        </div>
-      </div>
-
-      <div className="space-y-4 rounded-lg border bg-white p-4 shadow-sm">
+      <div className="ds-card space-y-4 p-4">
         <div className="flex flex-wrap items-center gap-3 text-sm text-gray-600">
           <div className="font-semibold text-gray-900">Chế độ xem</div>
           <div className="flex gap-2">
@@ -2138,7 +2191,7 @@ export default function ReportViewer({ canExport = true }) {
         <div>{scope === "staff" ? renderStaffSection() : renderTeamSection()}</div>
       </div>
 
-      <div className="space-y-2 rounded-lg border bg-white p-4 text-sm text-gray-600 shadow-sm">
+      <div className="ds-card ds-card--flat space-y-2 p-4 text-sm text-gray-600">
         <div className="font-semibold text-gray-900">Ghi chú & Quy tắc tính điểm</div>
         <p>
           Điểm KPI được tính tự động dựa trên quy tắc trong mục “Quy tắc KPI”. Khi bạn import tờ khai hợp lệ từ
