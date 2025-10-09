@@ -28,10 +28,26 @@
 - Lưu lịch sử hội thoại thành timeline có thể tìm kiếm, hỗ trợ đánh dấu câu trả lời quan trọng và xuất ra Markdown/PDF khi cần chia sẻ.
 
 ## 6. Lộ trình triển khai đề xuất
-1. **Giai đoạn 1 (1-2 sprint):** xây dựng Design System, theme động, refactor layout dashboard KPI.
-2. **Giai đoạn 2 (2-3 sprint):** gom nhóm chức năng dữ liệu, bổ sung bộ lọc yêu thích và trung tâm điều phối dữ liệu.
-3. **Giai đoạn 3 (2 sprint):** nâng cấp chatbot AI, triển khai thông báo real-time và trang sức khỏe dữ liệu.
-4. **Giai đoạn 4 (liên tục):** tối ưu hiệu năng, kiểm thử accessibility, đào tạo người dùng và thu thập phản hồi để cải tiến tiếp.
+| Giai đoạn | Mục tiêu chính | Trạng thái | Ghi chú |
+| --- | --- | --- | --- |
+| 1 | Xây dựng Design System, theme động, refactor layout dashboard KPI | ✅ Hoàn thành | Đã phát hành trong sprint trước với ThemeProvider và bố cục KPI hai cột. |
+| 2 | Gom nhóm chức năng dữ liệu, bổ sung bộ lọc yêu thích và trung tâm điều phối dữ liệu | ✅ Hoàn thành | Hoàn thiện hub điều phối dữ liệu, quick action, bộ lọc yêu thích và thang đo sức khỏe dữ liệu. |
+| 3 | Nâng cấp chatbot AI, triển khai thông báo real-time và trang sức khỏe dữ liệu | ✅ Hoàn thành | Hoàn thiện chế độ trợ lý theo ngữ cảnh, thông báo real-time và dashboard Sức khỏe dữ liệu. |
+| 4 | Tối ưu hiệu năng, kiểm thử accessibility, đào tạo người dùng và thu thập phản hồi để cải tiến tiếp | ⏳ Chưa thực hiện | Tiếp tục cập nhật theo phản hồi vận hành thực tế. |
+
+### 6.1.1. Tổng kết giai đoạn 2
+
+- Thiết lập "Trung tâm điều phối dữ liệu" trên module Import Data với các quick action dẫn tới các khu vực quan trọng (Import Excel, Đồng bộ ECUS, Làm sạch trùng 11 số, Cảnh báo thiếu thông tin).
+- Hiển thị chỉ báo sức khỏe dữ liệu (trạng thái backend/SQL Server, số nhóm trùng 11 số, cảnh báo cần xử lý) để đội vận hành nắm bắt nhanh trước khi thao tác.
+- Cho phép lưu nhiều "Bộ lọc yêu thích" và áp dụng tức thời cho danh sách tờ khai, hỗ trợ đổi tên/xóa từng bộ để chia sẻ quy trình chuẩn.
+
+
+### 6.1.2. Tổng kết giai đoạn 3
+
+- Trợ lý AI có 3 chế độ hội thoại (Tư vấn nghiệp vụ, Thống kê nhanh, Trợ giúp nhập liệu) với system prompt riêng, gợi ý câu hỏi nhanh và bộ lọc tìm kiếm lịch sử hội thoại.
+- Thiết lập kênh thông báo real-time qua SSE, hiển thị trung tâm thông báo trên header và tự động phát tín hiệu khi đồng bộ ECUS, phát sinh cảnh báo hay lỗi SQL Server.
+- Bổ sung tab "Sức khỏe dữ liệu" với thẻ chỉ số, bảng nhóm trùng 11 số, cảnh báo tồn đọng, lịch sử timeout SQL và dòng sự kiện real-time để đội vận hành giám sát.
+
 
 Các đề xuất trên nhằm mục tiêu hiện đại hóa giao diện, giúp người dùng thao tác nhanh hơn, giảm chi phí đào tạo và chuẩn bị cho khả năng mở rộng trong tương lai.
 

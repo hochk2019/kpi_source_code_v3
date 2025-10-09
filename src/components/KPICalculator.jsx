@@ -11,6 +11,7 @@ const AccountManager = React.lazy(() => import('./AccountManager.jsx'));
 const AuditLog = React.lazy(() => import('./AuditLog.jsx'));
 const HQAgencyManager = React.lazy(() => import('./HQAgencyManager.jsx'));
 const AiAssistant = React.lazy(() => import('./AiAssistant.jsx'));
+const DataHealthDashboard = React.lazy(() => import('./DataHealthDashboard.jsx'));
 
 const TabPanel = ({ children }) => (
   <Suspense fallback={<div className="p-4 text-sm text-gray-500">Đang tải nội dung...</div>}>
@@ -60,6 +61,9 @@ const KPICalculator = ({ auth }) => {
           </TabsTrigger>
           <TabsTrigger value="reports" data-tooltip="Xem và xuất báo cáo KPI tổng hợp">
             Báo cáo KPI
+          </TabsTrigger>
+          <TabsTrigger value="health" data-tooltip="Theo dõi dữ liệu trùng, cảnh báo và trạng thái đồng bộ">
+            Sức khỏe dữ liệu
           </TabsTrigger>
           {canUseAi && (
             <TabsTrigger value="ai" data-tooltip="Trợ lý AI nội bộ hỗ trợ KPI và tờ khai">
@@ -122,6 +126,12 @@ const KPICalculator = ({ auth }) => {
         <TabsContent value="reports">
           <TabPanel>
             <ReportViewer canExport={canExportReports} currentUser={effectiveAuth} />
+          </TabPanel>
+        </TabsContent>
+
+        <TabsContent value="health">
+          <TabPanel>
+            <DataHealthDashboard currentUser={effectiveAuth} />
           </TabPanel>
         </TabsContent>
 

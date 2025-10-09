@@ -23,7 +23,12 @@ import {
   mergePermissions,
   isAdminRole,
 } from '../src/shared/accountRoles.js';
-import { recordSqlTimeout } from './sqlMonitor.js';
+import { recordSqlTimeout, getSqlTimeoutEvents, onSqlTimeout } from './sqlMonitor.js';
+import {
+  pushNotification,
+  listNotifications,
+  registerSseClient,
+} from './notificationBus.js';
 import cronstrue from 'cronstrue';
 import 'cronstrue/locales/vi.js';
 
@@ -3686,6 +3691,13 @@ function markDeclarationsReviewed(keys, { actor = 'system' } = {}) {
       detail: `Đánh dấu đã rà soát ${updatedCount} tờ khai`,
       meta: { keys: Array.from(keySet) },
     });
+    pushNotification({
+      type: 'import.alerts.reviewed',
+      severity: 'info',
+      title: 'Đánh dấu đã rà soát tờ khai',
+      message: `Đã cập nhật trạng thái cho ${updatedCount} tờ khai.`,
+      meta: { actor, count: updatedCount },
+    });
   }
   return updatedCount;
 }
@@ -3693,6 +3705,9 @@ function markDeclarationsReviewed(keys, { actor = 'system' } = {}) {
 function evaluateDeclarationAlerts({ actor = 'system', reason = 'auto' } = {}) {
   const config = getAlertConfig();
   const state = getAlertState();
+  const previousOutstanding = Object.values(state.entries || {}).filter(
+    (entry) => entry && entry.resolved !== true
+  ).length;
   const entries = state.entries;
   if (!config.enabled) {
     return { total: getDeclRows().length, outstanding: 0, triggered: 0 };
@@ -3797,7 +3812,32 @@ function evaluateDeclarationAlerts({ actor = 'system', reason = 'auto' } = {}) {
 
   const outstanding = Object.values(entries).filter((entry) => entry && entry.resolved !== true).length;
   saveAlertState({ entries, lastEvaluatedAt: nowIso });
-  return { total: rows.length, outstanding, triggered };
+  const summary = { total: rows.length, outstanding, triggered };
+
+  if (triggered > 0) {
+    pushNotification({
+      type: 'import.alerts.triggered',
+      severity: 'warning',
+      title: `${triggered} cảnh báo dữ liệu tờ khai`,
+      message: `Có ${triggered} tờ khai thiếu thông tin cần xử lý (${reason}).`,
+      meta: {
+        actor,
+        reason,
+        triggered,
+        outstanding,
+      },
+    });
+  } else if (previousOutstanding > 0 && outstanding === 0) {
+    pushNotification({
+      type: 'import.alerts.cleared',
+      severity: 'success',
+      title: 'Đã xử lý toàn bộ cảnh báo tờ khai',
+      message: 'Tất cả cảnh báo thiếu thông tin đã được giải quyết.',
+      meta: { actor, reason },
+    });
+  }
+
+  return summary;
 }
 
 function formatAlertEntries(entries) {
@@ -3837,6 +3877,143 @@ function buildAlertPayload() {
       totalTracked: alerts.length,
       lastEvaluatedAt: state.lastEvaluatedAt,
     },
+  };
+}
+
+function resolveRowTimestamp(row) {
+  const candidates = [
+    row?.updatedAt,
+    row?.updated_at,
+    row?.syncedAt,
+    row?.synced_at,
+    row?.importedAt,
+    row?.imported_at,
+    row?.savedAt,
+    row?.saved_at,
+    row?.cacheUpdatedAt,
+    row?.cache_updated_at,
+    row?.date,
+    row?.raw_date,
+  ];
+  for (const value of candidates) {
+    if (!value) continue;
+    const date = new Date(value);
+    if (!Number.isNaN(date.getTime())) {
+      return { ts: date.getTime(), iso: date.toISOString() };
+    }
+  }
+  return { ts: 0, iso: null };
+}
+
+function describeDuplicateRow(row) {
+  const timestamp = resolveRowTimestamp(row);
+  return {
+    so_tk: row?.so_tk || '',
+    so_tk_full: row?.so_tk_full || row?.so_tk || '',
+    branch: normalizeStr(row?.nhanh || row?.branch || ''),
+    mst: normalizeStr(row?.mst || ''),
+    company: normalizeStr(row?.cong_ty || ''),
+    staff: normalizeStr(row?.nhan_vien || ''),
+    team: normalizeStr(row?.team || ''),
+    source: normalizeStr(row?.source || row?.origin || row?._source || ''),
+    updatedAt: timestamp.iso,
+  };
+}
+
+function summarizeDuplicateGroups(rows) {
+  const map = new Map();
+  for (const row of rows) {
+    const normalized = normalizeDeclarationNumber(row?.so_tk ?? row?.so_tk_full ?? '');
+    if (!normalized) {
+      continue;
+    }
+    const prefix = normalized.slice(0, 11);
+    if (!prefix) {
+      continue;
+    }
+    const branch = normalizeStr(row?.nhanh || row?.branch || '');
+    const key = `${prefix}_${branch}`;
+    if (!map.has(key)) {
+      map.set(key, []);
+    }
+    map.get(key).push({ row, timestamp: resolveRowTimestamp(row) });
+  }
+
+  const groups = [];
+  let duplicateRows = 0;
+  for (const [key, entries] of map.entries()) {
+    if (!entries || entries.length <= 1) {
+      continue;
+    }
+    const sorted = entries
+      .slice()
+      .sort((a, b) => (b.timestamp.ts || 0) - (a.timestamp.ts || 0));
+    const keeper = describeDuplicateRow(sorted[0]?.row || {});
+    const duplicates = sorted.slice(1).map((item) => describeDuplicateRow(item.row));
+    duplicateRows += duplicates.length;
+    groups.push({
+      key,
+      prefix: key.split('_')[0],
+      branch: key.split('_')[1] || '',
+      total: entries.length,
+      keep: keeper,
+      duplicates,
+      latestUpdatedAt: keeper.updatedAt,
+    });
+  }
+
+  const sortedGroups = groups
+    .slice()
+    .sort((a, b) => {
+      if (b.total !== a.total) {
+        return b.total - a.total;
+      }
+      const timeA = a.latestUpdatedAt ? new Date(a.latestUpdatedAt).getTime() : 0;
+      const timeB = b.latestUpdatedAt ? new Date(b.latestUpdatedAt).getTime() : 0;
+      return timeB - timeA;
+    });
+
+  return {
+    totalGroups: map.size,
+    duplicateGroups: groups.length,
+    duplicateRows,
+    groups: sortedGroups,
+  };
+}
+
+function buildDataHealthSummary() {
+  const rows = getDeclRows();
+  const duplicateSummary = summarizeDuplicateGroups(rows);
+  const alertPayload = buildAlertPayload();
+  const ecusConfig = getEcusConfig();
+  const sqlTimeouts = getSqlTimeoutEvents().slice(-10).reverse();
+  const notifications = listNotifications({ limit: 20 });
+
+  return {
+    totals: {
+      declarations: rows.length,
+      duplicateGroups: duplicateSummary.duplicateGroups,
+      duplicateRows: duplicateSummary.duplicateRows,
+      alertsOutstanding: alertPayload.summary.outstanding,
+    },
+    duplicates: {
+      groups: duplicateSummary.groups.slice(0, 10),
+    },
+    alerts: {
+      outstanding: alertPayload.summary.outstanding,
+      totalTracked: alertPayload.summary.totalTracked,
+      lastEvaluatedAt: alertPayload.summary.lastEvaluatedAt,
+      recent: alertPayload.alerts.slice(0, 10),
+    },
+    sync: {
+      lastRunAt: ecusConfig?.lastSummary?.runAt || ecusConfig?.lastRun || null,
+      lastStatus: ecusConfig?.lastStatus || null,
+      lastSummary: ecusConfig?.lastSummary || null,
+    },
+    sqlServer: {
+      timeoutEvents: sqlTimeouts,
+    },
+    notifications,
   };
 }
 
@@ -5502,6 +5679,24 @@ async function runEcusSync({ from, to, actor = 'system', reason = 'manual' } = {
     },
   }, { preservePassword: true });
 
+  pushNotification({
+    type: 'ecus.sync.completed',
+    severity: 'info',
+    title: 'Đồng bộ ECUS hoàn tất',
+    message: `+${totalInserted} / cập nhật ${updatedExisting} / bỏ qua ${skippedExisting} (tổng ${totalStored})`,
+    meta: {
+      actor,
+      reason: syncReason,
+      fetched: totalFetched,
+      inserted: totalInserted,
+      updated: updatedExisting,
+      skipped: skippedExisting,
+      stored: totalStored,
+      range,
+      alerts: alertSummary,
+    },
+  });
+
   return {
     config: nextConfig,
     fetched: totalFetched,
@@ -5535,6 +5730,13 @@ async function runEcusSyncWithErrorHandling(params) {
       actor: params?.actor || 'system',
       action: 'ecus.sync_error',
       detail: err.message || 'Đồng bộ ECUS thất bại',
+    });
+    pushNotification({
+      type: 'ecus.sync.error',
+      severity: 'error',
+      title: 'Đồng bộ ECUS thất bại',
+      message: err?.message || 'Không thể đồng bộ dữ liệu từ ECUS.',
+      meta: { actor: params?.actor || 'system', reason: params?.reason || 'unknown' },
     });
     throw err;
   }
@@ -5783,6 +5985,16 @@ function refreshCoDiscrepancySchedule() {
 
 
 export const app = express();
+
+onSqlTimeout((event) => {
+  pushNotification({
+    type: 'sql.timeout',
+    severity: 'warning',
+    title: 'SQL Server phản hồi chậm',
+    message: event?.message || 'Ghi nhận lỗi timeout khi kết nối SQL Server.',
+    meta: event?.context ? { context: event.context } : null,
+  });
+});
 const PORT = Number.parseInt(process.env.PORT || '5000', 10);
 const HOST = (process.env.KPI_LISTEN_HOST || '').trim() || '0.0.0.0';
 
@@ -5805,6 +6017,30 @@ app.use(express.json({ limit: '5mb' }));
 
 app.get('/api/health', (req, res) => {
   res.json({ ok: true });
+});
+
+app.get('/api/data-health/summary', (req, res) => {
+  try {
+    const summary = buildDataHealthSummary();
+    res.json({ ok: true, summary });
+  } catch (err) {
+    console.error('Không thể xây dựng báo cáo sức khỏe dữ liệu', err);
+    res.status(500).json({ ok: false, error: err?.message || 'Không thể tải sức khỏe dữ liệu' });
+  }
+});
+
+app.get('/api/notifications', (req, res) => {
+  try {
+    const limitRaw = Number.parseInt(req.query?.limit ?? '50', 10);
+    const events = listNotifications({ limit: Number.isFinite(limitRaw) ? limitRaw : 50 });
+    res.json({ ok: true, events });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err?.message || 'Không thể tải thông báo' });
+  }
+});
+
+app.get('/api/notifications/stream', (req, res) => {
+  registerSseClient(res);
 });
 
 app.get('/api/bootstrap', async (req, res) => {

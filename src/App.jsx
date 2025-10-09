@@ -8,6 +8,7 @@ import './App.css';
 import { getSyncStatus, subscribeSyncStatus } from './lib/storageClient.js';
 import useTooltipTitles from './hooks/useTooltipTitles.js';
 import ThemeToggle from './components/ThemeToggle.jsx';
+import NotificationCenter from './components/NotificationCenter.jsx';
 
 export default function App() {
   const [auth, setAuth] = useState(null);
@@ -90,16 +91,17 @@ export default function App() {
             </div>
           </div>
           <div className="flex flex-col items-stretch gap-2 text-sm sm:items-end">
-            <div className="flex flex-wrap items-center justify-end gap-2 text-right text-gray-600 dark:text-gray-300">
-              {auth ? (
-                <span>
-                  Xin chào, <b>{auth.name}</b> ({auth.role})
-                </span>
-              ) : (
-                <span>Đang xem với quyền hạn giới hạn (khách).</span>
-              )}
-              <ThemeToggle />
-            </div>
+          <div className="flex flex-wrap items-center justify-end gap-2 text-right text-gray-600 dark:text-gray-300">
+            {auth ? (
+              <span>
+                Xin chào, <b>{auth.name}</b> ({auth.role})
+              </span>
+            ) : (
+              <span>Đang xem với quyền hạn giới hạn (khách).</span>
+            )}
+            <NotificationCenter />
+            <ThemeToggle />
+          </div>
             <div className="flex flex-wrap items-center justify-end gap-2">
               {auth ? (
                 <>
