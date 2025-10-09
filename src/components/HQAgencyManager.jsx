@@ -328,7 +328,7 @@ export default function HQAgencyManager({ canEdit = true, currentUser = null }) 
   }, [actor, isReadOnly, refreshHistory, rows]);
 
   return (
-    <section className="space-y-4">
+    <section className="hq-agency-view space-y-4">
       <header className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h2 className="text-lg font-semibold text-gray-900">Danh sách Đại lý Hải quan hợp tác</h2>

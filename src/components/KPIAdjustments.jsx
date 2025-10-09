@@ -167,6 +167,13 @@ export default function KPIAdjustments({ currentUser }) {
 
   const staffOptions = useMemo(() => buildStaffOptions(roster), [roster]);
   const teamOptions = useMemo(() => buildTeamOptions(roster), [roster]);
+  const normalizedTeamFilter = normalizeStr(form.teamName);
+  const filteredStaffOptions = useMemo(() => {
+    if (!normalizedTeamFilter) {
+      return staffOptions;
+    }
+    return staffOptions.filter((option) => normalizeStr(option.team) === normalizedTeamFilter);
+  }, [normalizedTeamFilter, staffOptions]);
 
   const stats = useMemo(() => {
     const base = { total: 0, approved: 0, pending: 0, rejected: 0, totalPoints: 0 };
@@ -385,11 +392,23 @@ export default function KPIAdjustments({ currentUser }) {
                 className="mt-1 rounded border px-3 py-2 text-sm"
                 placeholder="Nhập tên nhân viên"
                 value={form.staffName}
-                onChange={(e) => setForm((prev) => ({ ...prev, staffName: e.target.value }))}
+                onChange={(e) => {
+                  const nextName = e.target.value;
+                  const normalizedName = normalizeStr(nextName);
+                  const matched = staffOptions.find((option) => normalizeStr(option.name) === normalizedName);
+                  setForm((prev) => ({
+                    ...prev,
+                    staffName: nextName,
+                    teamName:
+                      matched && matched.team
+                        ? matched.team
+                        : prev.teamName,
+                  }));
+                }}
                 required
               />
               <datalist id="kpi-adjust-staff-options">
-                {staffOptions.map((option) => (
+                {filteredStaffOptions.map((option) => (
                   <option key={`${option.team}-${option.name}`} value={option.name}>
                     {option.name} — {option.team}
                   </option>
@@ -403,7 +422,27 @@ export default function KPIAdjustments({ currentUser }) {
                 className="mt-1 rounded border px-3 py-2 text-sm"
                 placeholder="Ví dụ: Team 1"
                 value={form.teamName}
-                onChange={(e) => setForm((prev) => ({ ...prev, teamName: e.target.value }))}
+                onChange={(e) => {
+                  const nextTeam = e.target.value;
+                  setForm((prev) => {
+                    const normalized = normalizeStr(nextTeam);
+                    if (!normalized) {
+                      return { ...prev, teamName: nextTeam };
+                    }
+                    const currentStaffNormalized = normalizeStr(prev.staffName);
+                    if (currentStaffNormalized) {
+                      const matched = staffOptions.find(
+                        (option) =>
+                          normalizeStr(option.name) === currentStaffNormalized &&
+                          normalizeStr(option.team) === normalized
+                      );
+                      if (!matched) {
+                        return { ...prev, teamName: nextTeam, staffName: '' };
+                      }
+                    }
+                    return { ...prev, teamName: nextTeam };
+                  });
+                }}
               />
               <datalist id="kpi-adjust-team-options">
                 {teamOptions.map((team) => (

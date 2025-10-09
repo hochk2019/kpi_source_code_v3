@@ -24,6 +24,10 @@ const PERMISSION_LABELS = {
   alertsManage: "Quản lý cảnh báo tờ khai thiếu thông tin",
   auditView: "Xem nhật ký hệ thống",
   accountManage: "Quản lý tài khoản",
+  adjustSubmit: "Điểm KPI +/- thêm – gửi đề xuất",
+  adjustApprove: "Điểm KPI +/- thêm – duyệt đề xuất",
+  aiAssistUse: "Trợ lý AI – sử dụng",
+  aiAssistManage: "Trợ lý AI – cấu hình",
 };
 
 function PermissionCheckbox({ checked, onChange, label, disabled = false }) {

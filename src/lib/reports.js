@@ -155,6 +155,96 @@ function createStats() {
   };
 }
 
+const ADJUSTMENT_CATEGORY_GROUPS = Object.freeze({
+  support: new Set(['support_fixed', 'support_dynamic']),
+  cancel: new Set(['cancel_staff', 'cancel_customer']),
+  correction: new Set(['correction_staff', 'correction_customer']),
+  tax: new Set(['tax_refund_staff', 'tax_refund_customer']),
+});
+
+function createAdjustmentTotals() {
+  return {
+    support: { points: 0, quantity: 0 },
+    cancel: { points: 0, quantity: 0 },
+    correction: { points: 0, quantity: 0 },
+    tax: { points: 0, quantity: 0 },
+  };
+}
+
+function cloneAdjustmentTotals(source = createAdjustmentTotals()) {
+  const base = createAdjustmentTotals();
+  const entries = source || {};
+  for (const key of Object.keys(base)) {
+    if (entries[key]) {
+      base[key] = {
+        points: Number(entries[key].points || 0),
+        quantity: Number(entries[key].quantity || 0),
+      };
+    }
+  }
+  return base;
+}
+
+function classifyAdjustmentCategory(category) {
+  const normalized = normalizeStr(category).toLowerCase();
+  for (const [group, set] of Object.entries(ADJUSTMENT_CATEGORY_GROUPS)) {
+    if (set.has(normalized)) {
+      return group;
+    }
+  }
+  return null;
+}
+
+function addAdjustmentTotals(targetTotals, groupKey, points, quantity) {
+  if (!groupKey || !targetTotals[groupKey]) {
+    return;
+  }
+  const pointValue = Number(points || 0);
+  const quantityValue = Number(quantity || 0);
+  if (Number.isFinite(pointValue)) {
+    targetTotals[groupKey].points += pointValue;
+  }
+  if (Number.isFinite(quantityValue)) {
+    targetTotals[groupKey].quantity += quantityValue;
+  }
+}
+
+function ensureStaffAdjustmentEntry(map, key, name, teamName) {
+  if (!key) return null;
+  if (!map.has(key)) {
+    map.set(key, {
+      key,
+      name: name || 'Chưa gán',
+      teamNames: new Set(),
+      totals: createAdjustmentTotals(),
+    });
+  }
+  const entry = map.get(key);
+  if (name && !entry.name) {
+    entry.name = name;
+  }
+  if (teamName) {
+    entry.teamNames.add(teamName);
+  }
+  return entry;
+}
+
+function ensureTeamAdjustmentEntry(map, key, name) {
+  if (!key) return null;
+  if (!map.has(key)) {
+    map.set(key, {
+      key,
+      name: name || 'Chưa gán tổ đội',
+      totals: createAdjustmentTotals(),
+    });
+  }
+  const entry = map.get(key);
+  if (name && !entry.name) {
+    entry.name = name;
+  }
+  return entry;
+}
+
 function accumulate(stats, row) {
   stats.decls += 1;
   stats.items += row.num_items;
@@ -413,6 +503,9 @@ export function buildReportData(rowsInput, { roster, rules, from, to, adjustment
     approvedCount: 0,
     rejectedCount: 0,
     appliedCount: 0,
+    totalsByCategory: createAdjustmentTotals(),
+    byStaff: new Map(),
+    byTeam: new Map(),
   };
 
   for (const raw of rows) {
@@ -451,12 +544,19 @@ export function buildReportData(rowsInput, { roster, rules, from, to, adjustment
       companyKeys.add(companyKey);
     }
 
-    const licenseCodes = Array.isArray(sanitized.licenseCodes)
+    const sourceCodes = Array.isArray(sanitized.licenseSourceCodes)
+      ? sanitized.licenseSourceCodes.map((code) => normalizeStr(code).toUpperCase()).filter(Boolean)
+      : [];
+    const includedCodesRaw = Array.isArray(sanitized.licenseCodes)
       ? sanitized.licenseCodes.map((code) => normalizeStr(code).toUpperCase()).filter(Boolean)
       : [];
     const excludedCodes = Array.isArray(sanitized.licenseExcludedCodes)
       ? sanitized.licenseExcludedCodes.map((code) => normalizeStr(code).toUpperCase()).filter(Boolean)
       : [];
+    const excludedSet = new Set(excludedCodes);
+    const licenseCodes = (includedCodesRaw.length ? includedCodesRaw : sourceCodes)
+      .filter((code) => !excludedSet.has(code))
+      .filter((code, index, arr) => arr.indexOf(code) === index);
     const hasCO = Boolean(sanitized.has_co || (Array.isArray(sanitized.co_codes) && sanitized.co_codes.length));
     const coLineCount = Number(sanitized.co_line_count || 0) || 0;
 
@@ -478,6 +578,7 @@ export function buildReportData(rowsInput, { roster, rules, from, to, adjustment
       coLabel: hasCO ? (coLineCount > 0 ? `${coLineCount}` : "Có") : "Không",
       licenseCodes,
       licenseExcludedCodes: excludedCodes,
+      licenseSourceCodes: sourceCodes,
     };
 
     preparedRows.push(detailRow);
@@ -538,6 +639,8 @@ export function buildReportData(rowsInput, { roster, rules, from, to, adjustment
       const memberEntry = ensureTeamMember(teamEntry, staffEntry.key, staffEntry.name);
 
       const totalPoints = Number(adj.totalPoints || 0);
+      const quantityValue = Number(adj.quantity || 0);
+      const groupKey = classifyAdjustmentCategory(adj.category);
       const detailRow = {
         date: candidateDateStr,
         displayDate: `${month}`,
@@ -579,6 +682,23 @@ export function buildReportData(rowsInput, { roster, rules, from, to, adjustment
       memberEntry.stats.kpi += totalPoints;
       summaryStats.kpi += totalPoints;
 
+      if (groupKey) {
+        addAdjustmentTotals(adjustmentMeta.totalsByCategory, groupKey, totalPoints, quantityValue);
+        const staffSummary = ensureStaffAdjustmentEntry(
+          adjustmentMeta.byStaff,
+          staffEntry.key,
+          staffEntry.name,
+          teamEntry.name
+        );
+        if (staffSummary) {
+          addAdjustmentTotals(staffSummary.totals, groupKey, totalPoints, quantityValue);
+        }
+        const teamSummary = ensureTeamAdjustmentEntry(adjustmentMeta.byTeam, teamEntry.key, teamEntry.name);
+        if (teamSummary) {
+          addAdjustmentTotals(teamSummary.totals, groupKey, totalPoints, quantityValue);
+        }
+      }
+
       adjustmentMeta.totalPoints += totalPoints;
       adjustmentMeta.appliedCount += 1;
       adjustmentMeta.applied.push({ ...detailRow, staffKey: staffEntry.key });
@@ -612,6 +732,7 @@ export function buildReportData(rowsInput, { roster, rules, from, to, adjustment
       if (a.date !== b.date) return b.date.localeCompare(a.date);
       return a.so_tk.localeCompare(b.so_tk, undefined, { numeric: true, sensitivity: "base" });
     });
+    const adjustmentEntry = adjustmentMeta.byStaff.get(entry.key);
     return {
       key: entry.key,
       name: entry.name,
@@ -621,6 +742,7 @@ export function buildReportData(rowsInput, { roster, rules, from, to, adjustment
         : "Chưa gán tổ đội",
       stats: finalizeStats(entry.stats),
       rows: sorted,
+      adjustmentSummary: cloneAdjustmentTotals(adjustmentEntry?.totals),
     };
   }).sort((a, b) => {
     if ((b.stats.kpi || 0) !== (a.stats.kpi || 0)) {
@@ -639,6 +761,7 @@ export function buildReportData(rowsInput, { roster, rules, from, to, adjustment
       if (a.date !== b.date) return b.date.localeCompare(a.date);
       return a.so_tk.localeCompare(b.so_tk, undefined, { numeric: true, sensitivity: "base" });
     });
+    const adjustmentEntry = adjustmentMeta.byTeam.get(entry.key);
     const members = Array.from(entry.members.values()).map((member) => ({
       key: member.key,
       name: member.name,
@@ -664,6 +787,7 @@ export function buildReportData(rowsInput, { roster, rules, from, to, adjustment
       rows: sortedRows,
       members,
       memberNames: members.map((m) => m.name),
+      adjustmentSummary: cloneAdjustmentTotals(adjustmentEntry?.totals),
     };
   }).sort((a, b) => {
     if ((b.stats.kpi || 0) !== (a.stats.kpi || 0)) {
@@ -678,6 +802,7 @@ export function buildReportData(rowsInput, { roster, rules, from, to, adjustment
   const teamKeys = teamList.map((t) => t.key).join("|");
 
   const summaryFinal = finalizeStats(summaryStats);
+  summaryFinal.adjustmentTotals = cloneAdjustmentTotals(adjustmentMeta.totalsByCategory);
   const summaryLicenseList = summaryFinal.licenseCodes || [];
   const summaryLicenseSummary = summaryLicenseList.join(", ");
 
@@ -766,6 +891,23 @@ export function buildReportData(rowsInput, { roster, rules, from, to, adjustment
       };
     }
   }
+
+  const staffAdjustmentSummaries = Array.from(adjustmentMeta.byStaff.values()).map((entry) => ({
+    key: entry.key,
+    name: entry.name,
+    teams: Array.from(entry.teamNames || []),
+    totals: cloneAdjustmentTotals(entry.totals),
+  }));
+  const teamAdjustmentSummaries = Array.from(adjustmentMeta.byTeam.values()).map((entry) => ({
+    key: entry.key,
+    name: entry.name,
+    totals: cloneAdjustmentTotals(entry.totals),
+  }));
+  adjustmentMeta.staffSummaries = staffAdjustmentSummaries;
+  adjustmentMeta.teamSummaries = teamAdjustmentSummaries;
+  adjustmentMeta.totalsByCategory = cloneAdjustmentTotals(adjustmentMeta.totalsByCategory);
+  delete adjustmentMeta.byStaff;
+  delete adjustmentMeta.byTeam;
 
   return {
     rows: sortedRows,

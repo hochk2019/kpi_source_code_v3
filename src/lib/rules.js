@@ -523,6 +523,22 @@ export function countLicenseTypesFromRowObj(row, excludeList = []) {
 }
 
 function resolveLicenseSource(row) {
+  if (row) {
+    let manualCandidate;
+    if (Object.prototype.hasOwnProperty.call(row, 'licenseManualCount')) {
+      manualCandidate = row.licenseManualCount;
+    } else if (Object.prototype.hasOwnProperty.call(row, 'manual_license_count')) {
+      manualCandidate = row.manual_license_count;
+    }
+    const manual = Number(manualCandidate);
+    if (Number.isFinite(manual) && manual >= 0) {
+      return {
+        codes: [],
+        directCount: Math.max(0, Math.round(manual)),
+      };
+    }
+  }
+
   if (Array.isArray(row?.licenseCodes) && row.licenseCodes.length) {
     return {
       codes: uniqueNormalized(row.licenseCodes),

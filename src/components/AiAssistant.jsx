@@ -1,12 +1,15 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import clsx from 'clsx';
 import { toast } from 'sonner';
 import {
   clearAiCache,
   fetchAiConfig,
   fetchAiProfile,
+  fetchAiHistory,
   requestAiCompletion,
   updateAiConfig,
+  saveAiHistory,
+  clearAiHistory,
 } from '@/lib/aiClient.js';
 
 function formatDateTime(value) {
@@ -89,6 +92,10 @@ function createDraftFromConfig(config) {
           model: provider.model || '',
           temperature: provider.temperature ?? '',
           maxTokens: provider.maxTokens ?? '',
+          apiKey: '',
+          apiKeyPreview: provider.apiKeyPreview || '',
+          hasStoredKey: provider.hasApiKey || false,
+          clearStoredKey: false,
         }))
       : [],
   };
@@ -126,19 +133,29 @@ function prepareConfigPayload(draft) {
       maxEntries: parseNumberInput(draft.caching?.maxEntries),
     },
     providers: Array.isArray(draft.providers)
-      ? draft.providers.map((provider) => ({
-          id: provider.id,
-          type: provider.type,
-          label: provider.label,
-          enabled: provider.enabled !== false,
-          endpoint: provider.endpoint || undefined,
-          deployment: provider.deployment || undefined,
-          apiVersion: provider.apiVersion || undefined,
-          apiKeyEnv: provider.apiKeyEnv || undefined,
-          model: provider.model || undefined,
-          temperature: parseNumberInput(provider.temperature),
-          maxTokens: parseNumberInput(provider.maxTokens),
-        }))
+      ? draft.providers.map((provider) => {
+          const entry = {
+            id: provider.id,
+            type: provider.type,
+            label: provider.label,
+            enabled: provider.enabled !== false,
+            endpoint: provider.endpoint || undefined,
+            deployment: provider.deployment || undefined,
+            apiVersion: provider.apiVersion || undefined,
+            apiKeyEnv: provider.apiKeyEnv || undefined,
+            model: provider.model || undefined,
+            temperature: parseNumberInput(provider.temperature),
+            maxTokens: parseNumberInput(provider.maxTokens),
+          };
+          const keyInput = typeof provider.apiKey === 'string' ? provider.apiKey.trim() : '';
+          if (provider.clearStoredKey) {
+            entry.clearStoredKey = true;
+            entry.apiKey = '';
+          } else if (keyInput) {
+            entry.apiKey = keyInput;
+          }
+          return entry;
+        })
       : [],
   };
 }
@@ -147,10 +164,291 @@ function createMessageId() {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
 }
 
+const MAX_HISTORY_MESSAGES = 50;
+const MAX_HISTORY_TEXT_LENGTH = 6000;
+const MAX_HISTORY_SCOPE_LENGTH = 120;
+const MAX_HISTORY_PROVIDER_LENGTH = 120;
+const LOCAL_HISTORY_KEY = 'ai_chat_history_guest_v1';
+const LOCAL_HISTORY_USER_PREFIX = 'ai_chat_history_user_';
+
+const AI_PROVIDER_PRESETS = [
+  {
+    key: 'openai-gpt4o',
+    label: 'OpenAI GPT-4o mini',
+    idBase: 'openai-gpt4o',
+    type: 'openai',
+    endpoint: 'https://api.openai.com/v1',
+    model: 'gpt-4o-mini',
+    apiKeyEnv: 'OPENAI_API_KEY',
+    temperature: 0.2,
+    maxTokens: 1024,
+  },
+  {
+    key: 'anthropic-claude',
+    label: 'Anthropic Claude 3.5 Sonnet',
+    idBase: 'anthropic-claude',
+    type: 'anthropic',
+    endpoint: 'https://api.anthropic.com',
+    model: 'claude-3-5-sonnet-20241022',
+    apiKeyEnv: 'ANTHROPIC_API_KEY',
+    apiVersion: '2023-06-01',
+    temperature: 0.2,
+    maxTokens: 1024,
+  },
+  {
+    key: 'google-gemini',
+    label: 'Google AI Studio Gemini',
+    idBase: 'google-ai-studio',
+    type: 'google-ai-studio',
+    endpoint: 'https://generativelanguage.googleapis.com',
+    model: 'gemini-1.5-flash',
+    apiKeyEnv: 'GOOGLE_AI_STUDIO_API_KEY',
+    temperature: 0.3,
+    maxTokens: 1024,
+  },
+  {
+    key: 'azure-custom',
+    label: 'Azure OpenAI (tùy chỉnh)',
+    idBase: 'azure-openai',
+    type: 'azure',
+    endpoint: '',
+    deployment: '',
+    apiVersion: '2024-08-01-preview',
+    apiKeyEnv: 'AZURE_OPENAI_KEY',
+    temperature: 0.2,
+    maxTokens: 2048,
+  },
+  {
+    key: 'custom',
+    label: 'Nhà cung cấp tùy chỉnh',
+    idBase: 'custom-provider',
+    type: 'custom',
+    endpoint: '',
+    model: '',
+  },
+];
+
+const ASSISTANT_MODES = [
+  {
+    id: 'business',
+    label: 'Tư vấn nghiệp vụ',
+    scope: 'business',
+    description: 'Giải đáp quy trình nghiệp vụ, chính sách KPI và phối hợp giữa các bộ phận.',
+    systemPrompt:
+      'Bạn là chuyên gia nghiệp vụ hải quan tại Golden Logistics. Hãy cung cấp câu trả lời chi tiết, bám sát quy trình nội bộ, ' +
+      'đưa ra khuyến nghị hành động rõ ràng và nhấn mạnh các bước kiểm soát rủi ro.',
+    prefillContext:
+      'Ưu tiên nhắc lại bước phê duyệt KPI, trách nhiệm từng vai trò và thời gian xử lý theo quy định nội bộ.',
+    suggestions: [
+      {
+        label: 'Quy trình duyệt KPI tháng',
+        prompt: 'Tóm tắt quy trình duyệt KPI tháng cho tổ đội mới tham gia hệ thống.',
+      },
+      {
+        label: 'Chuẩn hóa phân công nhân viên',
+        prompt: 'Gợi ý cách phân công nhân viên phụ trách tờ khai khi thiếu thông tin từ ECUS.',
+      },
+      {
+        label: 'Checklist bàn giao dữ liệu',
+        prompt: 'Liệt kê checklist bàn giao dữ liệu giữa bộ phận nhập liệu và trưởng nhóm.',
+      },
+    ],
+  },
+  {
+    id: 'analytics',
+    label: 'Thống kê nhanh',
+    scope: 'analytics',
+    description: 'Thực hiện tổng hợp số liệu KPI, so sánh xu hướng và nêu điểm bất thường.',
+    systemPrompt:
+      'Bạn là chuyên gia phân tích dữ liệu KPI. Hãy sử dụng giọng điệu súc tích, cung cấp số liệu theo bảng/bullet, ' +
+      'nhấn mạnh các chênh lệch đáng chú ý và đề xuất hành động xử lý.',
+    prefillContext:
+      'Sử dụng dữ liệu KPI đã đồng bộ 6 kỳ gần nhất. Ưu tiên hiển thị số liệu dạng bảng, phần trăm tăng/giảm.',
+    suggestions: [
+      {
+        label: 'So sánh KPI theo tổ',
+        prompt: 'So sánh KPI 3 tháng gần nhất của các tổ đội và đánh giá xu hướng tăng/giảm.',
+      },
+      {
+        label: 'Top nhân viên tăng trưởng',
+        prompt: 'Liệt kê top 5 nhân viên có mức tăng KPI cao nhất so với kỳ trước.',
+      },
+      {
+        label: 'Cảnh báo tụt hạng',
+        prompt: 'Phát hiện tổ đội nào đang tụt hạng KPI liên tiếp và đề xuất cách cải thiện.',
+      },
+    ],
+  },
+  {
+    id: 'data-entry',
+    label: 'Trợ giúp nhập liệu',
+    scope: 'data-entry',
+    description: 'Hướng dẫn chuẩn hóa tờ khai, loại trừ trùng lặp và cập nhật giấy phép nhanh chóng.',
+    systemPrompt:
+      'Bạn là trợ lý hỗ trợ nhập liệu tờ khai. Hãy cung cấp hướng dẫn từng bước, nêu rõ vị trí thao tác trong hệ thống và ' +
+      'nhắc nhở kiểm tra dữ liệu trùng hoặc thiếu.',
+    prefillContext:
+      'Tập trung vào module Import Data, chức năng làm sạch trùng 11 số đầu và xử lý cảnh báo thiếu nhân viên/tổ đội.',
+    suggestions: [
+      {
+        label: 'Làm sạch trùng 11 số',
+        prompt: 'Hướng dẫn thao tác xóa bản trùng 11 số đầu nhưng vẫn giữ bản mới nhất.',
+      },
+      {
+        label: 'Đối soát giấy phép',
+        prompt: 'Các bước rà soát lại giấy phép sau khi import Excel để tránh cộng trùng.',
+      },
+      {
+        label: 'Xử lý cảnh báo thiếu thông tin',
+        prompt: 'Chi tiết từng bước xử lý cảnh báo tờ khai thiếu nhân viên hoặc tổ đội.',
+      },
+    ],
+  },
+];
+
+function sanitizeHistoryUsage(usage) {
+  if (!usage || typeof usage !== 'object') {
+    return null;
+  }
+  const prompt = Number(usage.promptTokens ?? usage.prompt_tokens);
+  const completion = Number(usage.completionTokens ?? usage.completion_tokens);
+  const total = Number(usage.totalTokens ?? usage.total_tokens);
+  const normalized = {};
+  if (Number.isFinite(prompt) && prompt >= 0) {
+    normalized.promptTokens = Math.trunc(prompt);
+  }
+  if (Number.isFinite(completion) && completion >= 0) {
+    normalized.completionTokens = Math.trunc(completion);
+  }
+  if (Number.isFinite(total) && total >= 0) {
+    normalized.totalTokens = Math.trunc(total);
+  }
+  return Object.keys(normalized).length ? normalized : null;
+}
+
+function sanitizeHistoryMessage(message) {
+  if (!message || typeof message !== 'object') {
+    return null;
+  }
+  const role = message.role === 'user' || message.role === 'assistant' || message.role === 'error'
+    ? message.role
+    : null;
+  if (!role) {
+    return null;
+  }
+  const rawText = message.text === undefined || message.text === null ? '' : String(message.text);
+  const text = rawText.length > MAX_HISTORY_TEXT_LENGTH
+    ? rawText.slice(0, MAX_HISTORY_TEXT_LENGTH)
+    : rawText;
+  const scope = typeof message.scope === 'string' ? message.scope.trim().slice(0, MAX_HISTORY_SCOPE_LENGTH) : '';
+  const providerId = typeof message.providerId === 'string'
+    ? message.providerId.trim().slice(0, MAX_HISTORY_PROVIDER_LENGTH)
+    : '';
+  const createdAt = (() => {
+    const source = message.createdAt ? new Date(message.createdAt) : new Date();
+    if (Number.isNaN(source.getTime())) {
+      return new Date().toISOString();
+    }
+    return source.toISOString();
+  })();
+  return {
+    id:
+      typeof message.id === 'string' && message.id.trim()
+        ? message.id.trim()
+        : createMessageId(),
+    role,
+    text,
+    scope,
+    providerId: providerId || null,
+    cached: message.cached === true,
+    usage: sanitizeHistoryUsage(message.usage),
+    createdAt,
+  };
+}
+
+function limitHistory(messages) {
+  if (!Array.isArray(messages)) {
+    return [];
+  }
+  if (messages.length <= MAX_HISTORY_MESSAGES) {
+    return messages.slice();
+  }
+  return messages.slice(messages.length - MAX_HISTORY_MESSAGES);
+}
+
+function prepareMessagesForStorage(messages) {
+  if (!Array.isArray(messages)) {
+    return [];
+  }
+  const sanitized = [];
+  for (const entry of messages) {
+    const normalized = sanitizeHistoryMessage(entry);
+    if (normalized) {
+      sanitized.push(normalized);
+    }
+  }
+  return limitHistory(sanitized);
+}
+
+function readLocalHistory(storageKey) {
+  if (typeof window === 'undefined' || !window.localStorage) {
+    return [];
+  }
+  try {
+    const raw = window.localStorage.getItem(storageKey);
+    if (!raw) {
+      return [];
+    }
+    const parsed = JSON.parse(raw);
+    return prepareMessagesForStorage(parsed);
+  } catch {
+    return [];
+  }
+}
+
+function writeLocalHistory(storageKey, messages) {
+  if (typeof window === 'undefined' || !window.localStorage) {
+    return;
+  }
+  const sanitized = prepareMessagesForStorage(messages);
+  try {
+    if (!sanitized.length) {
+      window.localStorage.removeItem(storageKey);
+    } else {
+      window.localStorage.setItem(storageKey, JSON.stringify(sanitized));
+    }
+  } catch (err) {
+    console.warn('Không thể lưu lịch sử AI vào localStorage', err);
+  }
+}
+
+function removeLocalHistory(storageKey) {
+  if (typeof window === 'undefined' || !window.localStorage) {
+    return;
+  }
+  try {
+    window.localStorage.removeItem(storageKey);
+  } catch {
+    // ignore
+  }
+}
+
+function getLocalHistoryKey(username) {
+  if (username && typeof username === 'string') {
+    return `${LOCAL_HISTORY_USER_PREFIX}${username}`;
+  }
+  return LOCAL_HISTORY_KEY;
+}
+
 export default function AiAssistant({ currentUser }) {
   const permissions = currentUser?.permissions || {};
   const canUse = permissions.aiAssistUse === true || permissions.aiAssistManage === true;
   const canManage = permissions.aiAssistManage === true;
+
+  const username = currentUser?.username || '';
+  const isAuthenticated = !!username;
+  const historyStorageKey = useMemo(() => getLocalHistoryKey(username), [username]);
+  const defaultMode = ASSISTANT_MODES[0];
 
   const [profile, setProfile] = useState(null);
   const [profileLoading, setProfileLoading] = useState(false);
@@ -163,13 +461,65 @@ export default function AiAssistant({ currentUser }) {
   const [configSaving, setConfigSaving] = useState(false);
   const [configError, setConfigError] = useState('');
   const [clearCacheLoading, setClearCacheLoading] = useState(false);
+  const [newProviderPreset, setNewProviderPreset] = useState(
+    AI_PROVIDER_PRESETS[0]?.key || 'custom'
+  );
 
   const [messages, setMessages] = useState([]);
   const [prompt, setPrompt] = useState('');
-  const [context, setContext] = useState('');
-  const [scope, setScope] = useState('general');
+  const [context, setContext] = useState(defaultMode?.prefillContext ?? '');
+  const [scope, setScope] = useState(defaultMode?.scope || 'general');
   const [selectedProviderId, setSelectedProviderId] = useState('');
+  const [modeId, setModeId] = useState(ASSISTANT_MODES[0].id);
+  const activeMode = useMemo(
+    () => ASSISTANT_MODES.find((mode) => mode.id === modeId) || ASSISTANT_MODES[0],
+    [modeId]
+  );
+  const [historyKeyword, setHistoryKeyword] = useState('');
   const [sending, setSending] = useState(false);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyReady, setHistoryReady] = useState(false);
+  const historyLoadErrorShownRef = useRef(false);
+  const historyPersistErrorShownRef = useRef(false);
+  const lastSavedSnapshotRef = useRef(JSON.stringify([]));
+
+  const appendMessage = useCallback((entry) => {
+    const sanitized = sanitizeHistoryMessage(entry);
+    if (!sanitized) {
+      return;
+    }
+    setMessages((prev) => {
+      const next = Array.isArray(prev) ? prev.slice() : [];
+      next.push(sanitized);
+      return limitHistory(next);
+    });
+  }, []);
+
+  const handleModeChange = useCallback((nextModeId) => {
+    setModeId(nextModeId);
+    const preset = ASSISTANT_MODES.find((mode) => mode.id === nextModeId);
+    if (preset?.scope) {
+      setScope(preset.scope);
+    }
+    if (preset) {
+      setContext(preset.prefillContext ?? '');
+    }
+  }, []);
+
+  const handleSuggestionClick = useCallback((suggestion) => {
+    if (!suggestion) {
+      return;
+    }
+    if (suggestion.scope) {
+      setScope(suggestion.scope);
+    }
+    if (suggestion.context !== undefined) {
+      setContext(suggestion.context);
+    }
+    if (suggestion.prompt) {
+      setPrompt(suggestion.prompt);
+    }
+  }, []);
 
   const loadProfile = useCallback(async () => {
     if (!canUse) {
@@ -223,6 +573,99 @@ export default function AiAssistant({ currentUser }) {
     }
   }, [canManage, loadConfig]);
 
+  useEffect(() => {
+    if (!canUse) {
+      setMessages([]);
+      setHistoryLoading(false);
+      setHistoryReady(false);
+      lastSavedSnapshotRef.current = JSON.stringify([]);
+      historyLoadErrorShownRef.current = false;
+      historyPersistErrorShownRef.current = false;
+      return;
+    }
+    let cancelled = false;
+    setHistoryLoading(true);
+    setHistoryReady(false);
+    historyLoadErrorShownRef.current = false;
+    (async () => {
+      try {
+        let loaded = [];
+        if (isAuthenticated) {
+          const serverMessages = await fetchAiHistory();
+          loaded = prepareMessagesForStorage(serverMessages);
+        } else {
+          loaded = readLocalHistory(historyStorageKey);
+        }
+        if (cancelled) {
+          return;
+        }
+        setMessages(loaded);
+        lastSavedSnapshotRef.current = JSON.stringify(prepareMessagesForStorage(loaded));
+      } catch (err) {
+        if (cancelled) {
+          return;
+        }
+        console.error('Không thể tải lịch sử trợ lý AI', err);
+        if (!historyLoadErrorShownRef.current) {
+          toast.error(err?.message || 'Không thể tải lịch sử trò chuyện AI.');
+          historyLoadErrorShownRef.current = true;
+        }
+        const fallback = isAuthenticated ? [] : readLocalHistory(historyStorageKey);
+        setMessages(fallback);
+        lastSavedSnapshotRef.current = JSON.stringify(prepareMessagesForStorage(fallback));
+      } finally {
+        if (!cancelled) {
+          setHistoryLoading(false);
+          setHistoryReady(true);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [canUse, isAuthenticated, historyStorageKey]);
+
+  useEffect(() => {
+    if (!canUse || !historyReady) {
+      return;
+    }
+    const sanitized = prepareMessagesForStorage(messages);
+    const snapshot = JSON.stringify(sanitized);
+    if (snapshot === lastSavedSnapshotRef.current) {
+      return;
+    }
+    let cancelled = false;
+    const persist = async () => {
+      try {
+        if (isAuthenticated) {
+          if (sanitized.length === 0) {
+            await clearAiHistory();
+          } else {
+            await saveAiHistory(sanitized);
+          }
+        } else if (sanitized.length === 0) {
+          removeLocalHistory(historyStorageKey);
+        } else {
+          writeLocalHistory(historyStorageKey, sanitized);
+        }
+        if (!cancelled) {
+          lastSavedSnapshotRef.current = snapshot;
+          historyPersistErrorShownRef.current = false;
+        }
+      } catch (err) {
+        console.error('Không thể lưu lịch sử trợ lý AI', err);
+        if (!historyPersistErrorShownRef.current) {
+          toast.error(err?.message || 'Không thể lưu lịch sử trò chuyện AI.');
+          historyPersistErrorShownRef.current = true;
+        }
+      }
+    };
+    persist();
+    return () => {
+      cancelled = true;
+    };
+  }, [messages, canUse, historyReady, isAuthenticated, historyStorageKey]);
+
   const providerOptions = useMemo(() => {
     if (!profile?.providers) {
       return [];
@@ -236,9 +679,27 @@ export default function AiAssistant({ currentUser }) {
     }
   }, [profile, selectedProviderId]);
 
+  const filteredMessages = useMemo(() => {
+    const keyword = historyKeyword.trim().toLowerCase();
+    if (!keyword) {
+      return messages;
+    }
+    return messages.filter((message) => {
+      const text = `${message?.text || ''}`.toLowerCase();
+      const scopeText = `${message?.scope || ''}`.toLowerCase();
+      return text.includes(keyword) || scopeText.includes(keyword);
+    });
+  }, [messages, historyKeyword]);
+
+  const hasHistoryFilter = historyKeyword.trim().length > 0;
+
   const handleSendPrompt = async (event) => {
     event.preventDefault();
     if (!canUse || sending) {
+      return;
+    }
+    if (!historyReady) {
+      toast.error('Đang tải lịch sử hội thoại, vui lòng thử lại sau vài giây.');
       return;
     }
     const trimmedPrompt = prompt.trim();
@@ -246,7 +707,7 @@ export default function AiAssistant({ currentUser }) {
       toast.error('Vui lòng nhập nội dung câu hỏi.');
       return;
     }
-    const scopeValue = scope.trim() || 'general';
+    const scopeValue = (activeMode?.scope || scope || 'general').trim() || 'general';
     const contextText = context.trim();
     const providerId = selectedProviderId || undefined;
     const userMessage = {
@@ -256,7 +717,7 @@ export default function AiAssistant({ currentUser }) {
       scope: scopeValue,
       createdAt: new Date().toISOString(),
     };
-    setMessages((prev) => [...prev, userMessage]);
+    appendMessage(userMessage);
     setPrompt('');
     setSending(true);
     try {
@@ -265,6 +726,7 @@ export default function AiAssistant({ currentUser }) {
         context: contextText,
         providerId,
         scope: scopeValue,
+        systemPrompt: activeMode?.systemPrompt,
       });
       const assistantMessage = {
         id: createMessageId(),
@@ -276,7 +738,7 @@ export default function AiAssistant({ currentUser }) {
         scope: result.scope || scopeValue,
         createdAt: new Date().toISOString(),
       };
-      setMessages((prev) => [...prev, assistantMessage]);
+      appendMessage(assistantMessage);
       toast.success(result.cached ? 'Đã trả lời từ cache.' : 'Đã nhận phản hồi từ trợ lý AI.');
     } catch (err) {
       const errorMessage = err?.message || 'Không thể gọi trợ lý AI.';
@@ -287,7 +749,7 @@ export default function AiAssistant({ currentUser }) {
         scope: scopeValue,
         createdAt: new Date().toISOString(),
       };
-      setMessages((prev) => [...prev, errorEntry]);
+      appendMessage(errorEntry);
       toast.error(errorMessage);
     } finally {
       setSending(false);
@@ -331,6 +793,63 @@ export default function AiAssistant({ currentUser }) {
       return { ...prev, providers };
     });
   };
+
+  const handleAddProvider = useCallback(
+    (presetKey) => {
+      setDraft((prev) => {
+        if (!prev) {
+          return prev;
+        }
+        const providers = Array.isArray(prev.providers) ? prev.providers.slice() : [];
+        const preset = AI_PROVIDER_PRESETS.find((item) => item.key === presetKey) || AI_PROVIDER_PRESETS[AI_PROVIDER_PRESETS.length - 1];
+        const baseId = (preset?.idBase || 'provider').trim() || 'provider';
+        const used = new Set(providers.map((item) => item.id));
+        let candidate = baseId;
+        let counter = 1;
+        while (used.has(candidate)) {
+          candidate = `${baseId}-${counter++}`;
+        }
+        const nextProvider = {
+          id: candidate,
+          type: preset?.type || 'custom',
+          label: preset?.label || `Nhà cung cấp ${providers.length + 1}`,
+          enabled: true,
+          endpoint: preset?.endpoint || '',
+          deployment: preset?.deployment || '',
+          apiVersion: preset?.apiVersion || '',
+          apiKeyEnv: preset?.apiKeyEnv || '',
+          model: preset?.model || '',
+          temperature: preset?.temperature ?? '',
+          maxTokens: preset?.maxTokens ?? '',
+          apiKey: '',
+          apiKeyPreview: '',
+          hasStoredKey: false,
+          clearStoredKey: false,
+        };
+        return { ...prev, providers: [...providers, nextProvider] };
+      });
+    },
+    []
+  );
+
+  const handleRemoveProvider = useCallback((providerId) => {
+    setDraft((prev) => {
+      if (!prev) {
+        return prev;
+      }
+      const providers = Array.isArray(prev.providers)
+        ? prev.providers.filter((provider) => provider.id !== providerId)
+        : [];
+      const nextDefault = prev.defaultProvider === providerId ? providers[0]?.id || '' : prev.defaultProvider;
+      const nextFallback = prev.fallbackProvider === providerId ? '' : prev.fallbackProvider;
+      return {
+        ...prev,
+        providers,
+        defaultProvider: nextDefault,
+        fallbackProvider: nextFallback,
+      };
+    });
+  }, []);
 
   const handleConfigReset = () => {
     setDraft(createDraftFromConfig(config));
@@ -403,7 +922,8 @@ export default function AiAssistant({ currentUser }) {
                 <button
                   type="button"
                   onClick={handleClearHistory}
-                  className="rounded border border-gray-200 px-3 py-1 text-xs text-gray-600 hover:bg-gray-50"
+                  disabled={historyLoading || messages.length === 0}
+                  className="rounded border border-gray-200 px-3 py-1 text-xs text-gray-600 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   Xóa hội thoại
                 </button>
@@ -417,6 +937,51 @@ export default function AiAssistant({ currentUser }) {
                 </button>
               </div>
             </header>
+            <div className="border-t border-gray-100 bg-gray-50 px-4 py-3">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-gray-800">
+                    Chế độ hội thoại
+                    <span className="ml-2 rounded bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-700">
+                      {activeMode?.scope || 'general'}
+                    </span>
+                  </p>
+                  <p className="text-xs text-gray-500">{activeMode?.description}</p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {ASSISTANT_MODES.map((mode) => (
+                    <button
+                      key={mode.id}
+                      type="button"
+                      onClick={() => handleModeChange(mode.id)}
+                      className={clsx(
+                        'rounded-full px-3 py-1 text-xs font-medium transition',
+                        mode.id === modeId
+                          ? 'bg-amber-500 text-white shadow'
+                          : 'border border-gray-300 bg-white text-gray-600 hover:border-amber-400 hover:text-amber-600'
+                      )}
+                      aria-pressed={mode.id === modeId}
+                    >
+                      {mode.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {activeMode?.suggestions?.length ? (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {activeMode.suggestions.map((suggestion) => (
+                    <button
+                      key={suggestion.label}
+                      type="button"
+                      onClick={() => handleSuggestionClick(suggestion)}
+                      className="rounded-full border border-amber-300 px-3 py-1 text-xs text-amber-700 transition hover:bg-amber-50"
+                    >
+                      {suggestion.label}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+            </div>
             <form onSubmit={handleSendPrompt} className="space-y-4 px-4 py-4">
               <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,180px)]">
                 <label className="flex flex-col gap-1 text-sm">
@@ -471,20 +1036,49 @@ export default function AiAssistant({ currentUser }) {
               <div className="flex items-center justify-end gap-3">
                 <button
                   type="submit"
-                  disabled={sending}
+                  disabled={sending || historyLoading}
                   className="rounded bg-amber-500 px-4 py-2 text-sm font-medium text-white shadow hover:bg-amber-600 disabled:cursor-not-allowed disabled:opacity-70"
                 >
-                  {sending ? 'Đang gửi…' : 'Gửi yêu cầu'}
+                  {sending ? 'Đang gửi…' : historyLoading ? 'Đang tải…' : 'Gửi yêu cầu'}
                 </button>
               </div>
             </form>
             <div className="border-t border-gray-100 px-4 py-4">
               <h3 className="mb-3 text-sm font-semibold text-gray-700">Lịch sử hội thoại</h3>
-              <div className="flex max-h-[320px] flex-col gap-3 overflow-y-auto rounded border border-gray-200 bg-gray-50 p-3 text-sm">
-                {messages.length === 0 && (
-                  <p className="text-gray-500">Chưa có hội thoại nào. Hãy nhập câu hỏi ở trên để bắt đầu.</p>
+              <div className="mb-3 flex flex-wrap items-center gap-2">
+                <input
+                  type="search"
+                  value={historyKeyword}
+                  onChange={(event) => setHistoryKeyword(event.target.value)}
+                  placeholder="Tìm nội dung hoặc scope..."
+                  className="min-w-[180px] flex-1 rounded border border-gray-200 px-3 py-1.5 text-sm focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
+                />
+                <span className="text-xs text-gray-500">
+                  {hasHistoryFilter
+                    ? `${filteredMessages.length}/${messages.length} đoạn khớp`
+                    : `${messages.length} đoạn hội thoại`}
+                </span>
+                {hasHistoryFilter && (
+                  <button
+                    type="button"
+                    onClick={() => setHistoryKeyword('')}
+                    className="rounded border border-gray-300 px-2 py-1 text-xs text-gray-600 hover:bg-gray-100"
+                  >
+                    Xóa lọc
+                  </button>
                 )}
-                {messages.map((message) => {
+              </div>
+              <div className="flex max-h-[320px] flex-col gap-3 overflow-y-auto rounded border border-gray-200 bg-gray-50 p-3 text-sm">
+                {historyLoading ? (
+                  <p className="text-gray-500">Đang tải lịch sử hội thoại…</p>
+                ) : filteredMessages.length === 0 ? (
+                  <p className="text-gray-500">
+                    {hasHistoryFilter
+                      ? 'Không tìm thấy hội thoại phù hợp với từ khóa.'
+                      : 'Chưa có hội thoại nào. Hãy nhập câu hỏi ở trên để bắt đầu.'}
+                  </p>
+                ) : null}
+                {filteredMessages.map((message) => {
                   const usageText = formatUsage(message.usage);
                   const providerLabel = message.role === 'assistant'
                     ? resolveProviderLabel(profile, config, message.providerId)
@@ -788,6 +1382,39 @@ export default function AiAssistant({ currentUser }) {
 
                 <div className="space-y-4">
                   <h3 className="text-sm font-semibold text-gray-700">Nhà cung cấp</h3>
+                  <div className="rounded border border-dashed border-amber-200 bg-white/60 p-3">
+                    <div className="flex flex-wrap items-end gap-3">
+                      <label className="flex flex-col text-xs font-medium text-gray-700">
+                        <span>Preset nhà cung cấp</span>
+                        <select
+                          value={newProviderPreset}
+                          onChange={(event) => setNewProviderPreset(event.target.value)}
+                          className="mt-1 rounded border border-gray-200 px-3 py-1 text-sm text-gray-800 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
+                        >
+                          {AI_PROVIDER_PRESETS.map((preset) => (
+                            <option key={preset.key} value={preset.key}>
+                              {preset.label}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => handleAddProvider(newProviderPreset)}
+                        className="rounded bg-amber-500 px-3 py-1.5 text-xs font-semibold text-white shadow hover:bg-amber-600"
+                      >
+                        Thêm nhà cung cấp
+                      </button>
+                      <p className="text-xs text-gray-500">
+                        Có thể khai báo nhiều nhà cung cấp để chuyển đổi nhanh theo tình huống vận hành.
+                      </p>
+                    </div>
+                  </div>
+                  <p className="text-xs text-gray-500">
+                    Lưu ý: điền khóa API trực tiếp nếu chưa thiết lập biến môi trường tương ứng trên máy chủ.
+                    Ví dụ Google AI Studio dùng khóa dạng <span className="font-mono">AIza...</span>, OpenAI sử dụng Bearer token,
+                    Anthropic dùng khóa bắt đầu bằng <span className="font-mono">sk-ant-</span>.
+                  </p>
                   {draft.providers.map((provider) => (
                     <div key={provider.id} className="rounded border border-gray-100 bg-gray-50 p-4">
                       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -804,6 +1431,13 @@ export default function AiAssistant({ currentUser }) {
                           />
                           Kích hoạt
                         </label>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveProvider(provider.id)}
+                          className="text-xs font-medium text-red-600 hover:underline"
+                        >
+                          Xóa
+                        </button>
                       </div>
                       <div className="mt-3 grid gap-3 md:grid-cols-2">
                         <label className="flex flex-col gap-1 text-sm">
@@ -873,6 +1507,46 @@ export default function AiAssistant({ currentUser }) {
                             onChange={(event) => handleProviderChange(provider.id, { maxTokens: event.target.value })}
                             className="rounded border border-gray-200 px-3 py-2 text-sm text-gray-800 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
                           />
+                        </label>
+                        <label className="flex flex-col gap-1 text-sm md:col-span-2">
+                          <span>API Key trực tiếp</span>
+                          <input
+                            type="password"
+                            value={provider.apiKey || ''}
+                            onChange={(event) =>
+                              handleProviderChange(provider.id, {
+                                apiKey: event.target.value,
+                                clearStoredKey: false,
+                              })
+                            }
+                            placeholder={
+                              provider.hasStoredKey && provider.apiKeyPreview
+                                ? `Đang lưu: •••${provider.apiKeyPreview}`
+                                : 'Ví dụ: AIza..., sk-..., hoặc để trống nếu dùng biến môi trường'
+                            }
+                            className="rounded border border-gray-200 px-3 py-2 text-sm text-gray-800 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
+                          />
+                          <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-gray-500">
+                            <span>
+                              Để trống nếu dùng biến môi trường {provider.apiKeyEnv || '(chưa đặt)'}.
+                            </span>
+                            {provider.hasStoredKey && (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  handleProviderChange(provider.id, {
+                                    apiKey: '',
+                                    clearStoredKey: true,
+                                    hasStoredKey: false,
+                                    apiKeyPreview: '',
+                                  })
+                                }
+                                className="text-red-600 hover:underline"
+                              >
+                                Xóa khóa đã lưu
+                              </button>
+                            )}
+                          </div>
                         </label>
                       </div>
                     </div>

@@ -25,6 +25,7 @@ import {
   deleteRule,
   exportRuleCollection,
   restoreRuleCollection,
+  getRulesHistory,
 } from "@/lib/rules.js";
 import { getData } from "@/lib/store.js";
 import { cn } from "@/lib/utils.js";
@@ -51,6 +52,16 @@ function Num({ value, onChange, step = "0.1", disabled = false }) {
       className="w-full rounded border p-2"
     />
   );
+}
+
+function formatHistoryTimestamp(value) {
+  if (!value) return "—";
+  try {
+    return new Date(value).toLocaleString("vi-VN", { hour12: false });
+  } catch (err) {
+    console.warn("Không thể định dạng thời gian lịch sử quy tắc", value, err);
+    return value;
+  }
 }
 
 function TierEditor({ tiers = [], onChange, disabled = false, title = "Bậc cộng thêm" }) {
@@ -444,6 +455,8 @@ export default function RulesEditor({ canEdit = true, currentUser = null }) {
   const [rule, setRule] = useState(() => loadRules(collection.activeId));
   const [applyNow, setApplyNow] = useState(false);
   const [dirty, setDirty] = useState(false);
+  const [historyEntries, setHistoryEntries] = useState(() => getRulesHistory());
+  const [expandedHistoryId, setExpandedHistoryId] = useState(null);
 
   useEffect(() => {
     const nextCollection = loadRuleSets();
@@ -658,6 +671,8 @@ export default function RulesEditor({ canEdit = true, currentUser = null }) {
       recalcFrom,
       setAsDefault: collection.activeId === rule.id,
     });
+    setHistoryEntries(getRulesHistory());
+    setExpandedHistoryId(null);
     setVersion((prev) => prev + 1);
     alert(
       `Đã lưu bộ quy tắc ${rule.name}${recalcFrom ? ` và tính lại KPI từ ${recalcFrom}` : ""}.`
@@ -793,6 +808,8 @@ export default function RulesEditor({ canEdit = true, currentUser = null }) {
         setApplyNow(false);
         setDirty(false);
         setVersion((prev) => prev + 1);
+        setHistoryEntries(getRulesHistory());
+        setExpandedHistoryId(null);
         toast.success("Đã khôi phục toàn bộ bộ quy tắc từ file sao lưu.");
       } catch (err) {
         console.error(err);
@@ -1206,6 +1223,78 @@ export default function RulesEditor({ canEdit = true, currentUser = null }) {
                 <i>Chọn 1 dòng để test…</i>
               )}
             </div>
+          </div>
+
+          <div className="space-y-2 rounded border border-gray-200 bg-white p-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h3 className="text-sm font-semibold text-gray-700">Lịch sử cập nhật điểm KPI</h3>
+              <button
+                type="button"
+                onClick={() => {
+                  setHistoryEntries(getRulesHistory());
+                  setExpandedHistoryId(null);
+                }}
+                className="rounded border border-gray-200 px-3 py-1 text-xs text-gray-600 hover:bg-gray-50"
+              >
+                Làm mới
+              </button>
+            </div>
+            {historyEntries.length === 0 ? (
+              <p className="text-xs text-gray-500">Chưa có ghi nhận lịch sử nào.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-left text-xs uppercase text-gray-500">
+                      <th className="px-2 py-2">Cập nhật</th>
+                      <th className="px-2 py-2">Áp dụng từ</th>
+                      <th className="px-2 py-2">Tên bộ quy tắc</th>
+                      <th className="px-2 py-2 text-right">Điểm cơ bản</th>
+                      <th className="px-2 py-2 text-right">Chi tiết</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {historyEntries.map((entry, index) => {
+                      const rowId = entry.id || entry.snapshot?.id || `${entry.updatedAt || ''}-${index}`;
+                      const basePoints = Number(entry.snapshot?.points?.base);
+                      const baseLabel = Number.isFinite(basePoints) ? basePoints.toFixed(1) : '—';
+                      const isExpanded = expandedHistoryId === rowId;
+                      return (
+                        <React.Fragment key={rowId}>
+                          <tr className="border-t border-gray-100">
+                            <td className="px-2 py-2 text-xs text-gray-600">{formatHistoryTimestamp(entry.updatedAt)}</td>
+                            <td className="px-2 py-2 text-xs text-gray-600">{entry.applyFrom || 'Áp dụng ngay'}</td>
+                            <td className="px-2 py-2 text-sm text-gray-700">{entry.name || entry.snapshot?.name || rowId}</td>
+                            <td className="px-2 py-2 text-right text-sm font-medium text-gray-800">{baseLabel}</td>
+                            <td className="px-2 py-2 text-right">
+                              <button
+                                type="button"
+                                onClick={() => setExpandedHistoryId(isExpanded ? null : rowId)}
+                                className="text-xs font-medium text-amber-600 hover:underline"
+                              >
+                                {isExpanded ? 'Thu gọn' : 'Xem' }
+                              </button>
+                            </td>
+                          </tr>
+                          {isExpanded && (
+                            <tr>
+                              <td colSpan={5} className="px-2 pb-4 pt-1">
+                                <div className="rounded bg-slate-900 p-3 text-xs text-slate-100">
+                                  <div className="mb-2 font-semibold">Chi tiết điểm & cấu hình</div>
+                                  <pre className="max-h-52 overflow-auto whitespace-pre-wrap text-xs">
+{JSON.stringify(entry.snapshot?.points, null, 2)}
+                                  </pre>
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </React.Fragment>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
 
           <div className="space-y-4 rounded border p-3">
