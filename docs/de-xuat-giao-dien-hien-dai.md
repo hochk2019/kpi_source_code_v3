@@ -34,3 +34,22 @@
 4. **Giai đoạn 4 (liên tục):** tối ưu hiệu năng, kiểm thử accessibility, đào tạo người dùng và thu thập phản hồi để cải tiến tiếp.
 
 Các đề xuất trên nhằm mục tiêu hiện đại hóa giao diện, giúp người dùng thao tác nhanh hơn, giảm chi phí đào tạo và chuẩn bị cho khả năng mở rộng trong tương lai.
+
+### 6.1. Lộ trình xử lý trùng tờ khai giữa import Excel và ECUS5VNACCS
+
+**Hiện trạng:** Module Import Data đang phát hiện các nhóm trùng theo 11 số đầu và tự động gợi ý xóa bản trùng với nhãn "Xóa bản trùng (giữ mới nhất)". Tuy nhiên thuật toán hiện tại ưu tiên bản ghi có nhiều dữ liệu phụ trợ (đã gán nhân viên/tổ đội, đã duyệt, có nhật ký chỉnh sửa) thay vì thời điểm nhập gần nhất. Vì vậy khi nguồn ECUS đồng bộ lại một tờ khai mới hơn nhưng chưa kịp gán đủ thông tin, thao tác "giữ mới nhất" có thể thực chất giữ lại bản cũ và không cho phép admin chọn thủ công phiên bản muốn giữ.
+
+**Đề xuất triển khai:**
+
+1. **Sprint 1:**
+   - Cập nhật thuật toán so sánh để ưu tiên bản ghi có timestamp mới nhất (importedAt/syncedAt/updatedAt) và chỉ dùng điểm trọng số như tiêu chí phụ.
+   - Hiển thị bảng so sánh chi tiết giữa các bản trùng (nguồn dữ liệu, thời gian cập nhật, người nhập) trước khi xóa để admin nhận diện.
+   - Ghi lại nhật ký thao tác xóa/giữ bản trùng cùng thông tin người thực hiện.
+2. **Sprint 2:**
+   - Cho phép admin chọn thủ công bản cần giữ hoặc hợp nhất trường dữ liệu theo từng cột (ví dụ: giữ nhân viên từ bản cũ nhưng giữ KPI từ bản mới).
+   - Bổ sung chế độ "Đánh dấu cần rà soát" thay vì xóa ngay, giúp các bộ phận khác kiểm chứng trước khi loại bỏ dữ liệu.
+3. **Sprint 3:**
+   - Thêm thống kê "Sức khỏe dữ liệu" trong dashboard với số lượng tờ khai trùng, trạng thái đã xử lý, thời gian tồn đọng trung bình.
+   - Cấu hình chính sách tự động (ví dụ: sau 7 ngày không xử lý thì gửi thông báo) và tuỳ chọn khóa nguồn đồng bộ gây trùng bất thường.
+
+Lộ trình này bảo đảm việc làm sạch dữ liệu minh bạch, ưu tiên dữ liệu mới nhất và trao quyền quyết định cuối cùng cho admin, tránh thất thoát thông tin quan trọng khi nhập từ nhiều nguồn.
