@@ -33,7 +33,7 @@
 | 1 | Xây dựng Design System, theme động, refactor layout dashboard KPI | ✅ Hoàn thành | Đã phát hành trong sprint trước với ThemeProvider và bố cục KPI hai cột. |
 | 2 | Gom nhóm chức năng dữ liệu, bổ sung bộ lọc yêu thích và trung tâm điều phối dữ liệu | ✅ Hoàn thành | Hoàn thiện hub điều phối dữ liệu, quick action, bộ lọc yêu thích và thang đo sức khỏe dữ liệu. |
 | 3 | Nâng cấp chatbot AI, triển khai thông báo real-time và trang sức khỏe dữ liệu | ✅ Hoàn thành | Hoàn thiện chế độ trợ lý theo ngữ cảnh, thông báo real-time và dashboard Sức khỏe dữ liệu. |
-| 4 | Tối ưu hiệu năng, kiểm thử accessibility, đào tạo người dùng và thu thập phản hồi để cải tiến tiếp | ⏳ Chưa thực hiện | Tiếp tục cập nhật theo phản hồi vận hành thực tế. |
+| 4 | Tối ưu hiệu năng, kiểm thử accessibility, đào tạo người dùng và thu thập phản hồi để cải tiến tiếp | ✅ Hoàn thành | Trung tâm hỗ trợ & đào tạo, API phản hồi người dùng và kiểm thử accessibility đã sẵn sàng. |
 
 ### 6.1.1. Tổng kết giai đoạn 2
 
@@ -47,6 +47,12 @@
 - Trợ lý AI có 3 chế độ hội thoại (Tư vấn nghiệp vụ, Thống kê nhanh, Trợ giúp nhập liệu) với system prompt riêng, gợi ý câu hỏi nhanh và bộ lọc tìm kiếm lịch sử hội thoại.
 - Thiết lập kênh thông báo real-time qua SSE, hiển thị trung tâm thông báo trên header và tự động phát tín hiệu khi đồng bộ ECUS, phát sinh cảnh báo hay lỗi SQL Server.
 - Bổ sung tab "Sức khỏe dữ liệu" với thẻ chỉ số, bảng nhóm trùng 11 số, cảnh báo tồn đọng, lịch sử timeout SQL và dòng sự kiện real-time để đội vận hành giám sát.
+
+### 6.1.3. Tổng kết giai đoạn 4
+
+- Hoàn thiện trung tâm "Hỗ trợ & Đào tạo" ngay trên header: cung cấp tài liệu học tập, theo dõi tiến độ cá nhân, lưu trạng thái hoàn thành vào localStorage và đồng bộ theo theme sáng/tối.
+- Công bố API `/api/training-resources`, `/api/feedback`, `/api/feedback/summary` và cơ chế SSE thông báo phản hồi mới, giúp đội vận hành nhận tín hiệu real-time.
+- Bổ sung kiểm thử accessibility bằng `vitest-axe`, đảm bảo dialog hỗ trợ bàn phím/screen reader và thiết lập prefetch theo `requestIdleCallback` để cải thiện hiệu năng tải chậm.
 
 
 Các đề xuất trên nhằm mục tiêu hiện đại hóa giao diện, giúp người dùng thao tác nhanh hơn, giảm chi phí đào tạo và chuẩn bị cho khả năng mở rộng trong tương lai.

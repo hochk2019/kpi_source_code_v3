@@ -3,6 +3,7 @@ import { Toaster } from 'sonner';
 const KPICalculator = React.lazy(() => import('./components/KPICalculator.jsx'));
 const Login = React.lazy(() => import('./components/Login.jsx'));
 const ChangePasswordDialog = React.lazy(() => import('./components/ChangePasswordDialog.jsx'));
+const SupportCenter = React.lazy(() => import('./components/SupportCenter.jsx'));
 import { getAuth, getViewerAuth, loadSession, logout } from './auth/localAuth.js';
 import './App.css';
 import { getSyncStatus, subscribeSyncStatus } from './lib/storageClient.js';
@@ -35,6 +36,35 @@ export default function App() {
       setSyncStatus(status);
     });
     return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return undefined;
+    }
+    let idleHandle = null;
+    let timeoutId = null;
+    const prefetch = () => {
+      import('./components/SupportCenter.jsx');
+      import('./lib/feedbackClient.js').then((mod) => {
+        if (typeof mod.prefetchEngagementData === 'function') {
+          mod.prefetchEngagementData();
+        }
+      });
+    };
+    if (typeof window.requestIdleCallback === 'function') {
+      idleHandle = window.requestIdleCallback(prefetch, { timeout: 2500 });
+    } else {
+      timeoutId = window.setTimeout(prefetch, 1500);
+    }
+    return () => {
+      if (idleHandle && typeof window.cancelIdleCallback === 'function') {
+        window.cancelIdleCallback(idleHandle);
+      }
+      if (timeoutId) {
+        window.clearTimeout(timeoutId);
+      }
+    };
   }, []);
 
   const viewer = getViewerAuth();
@@ -100,6 +130,9 @@ export default function App() {
               <span>Đang xem với quyền hạn giới hạn (khách).</span>
             )}
             <NotificationCenter />
+            <Suspense fallback={null}>
+              <SupportCenter />
+            </Suspense>
             <ThemeToggle />
           </div>
             <div className="flex flex-wrap items-center justify-end gap-2">

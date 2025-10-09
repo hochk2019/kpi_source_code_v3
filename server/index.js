@@ -29,6 +29,8 @@ import {
   listNotifications,
   registerSseClient,
 } from './notificationBus.js';
+import { getTrainingResources } from './trainingResources.js';
+import { addFeedbackEntry, getFeedbackSummary, listFeedbackEntries } from './feedbackStore.js';
 import cronstrue from 'cronstrue';
 import 'cronstrue/locales/vi.js';
 
@@ -1437,6 +1439,21 @@ function requireAiAssistManage(req, res) {
   const account = context.account || {};
   if (account.permissions?.aiAssistManage !== true) {
     res.status(403).json({ ok: false, error: 'Tài khoản hiện không có quyền cấu hình trợ lý AI.' });
+    return { context, denied: true };
+  }
+  return { context, denied: false };
+}
+
+function requireFeedbackReview(req, res) {
+  const context = getSessionContext(req);
+  if (!context) {
+    res.status(401).json({ ok: false, error: 'Vui lòng đăng nhập để xem phản hồi người dùng.' });
+    return { context: null, denied: true };
+  }
+  const account = context.account || {};
+  const role = normalizeRoleKey(account.role);
+  if (!(isAdminRole(role) || role === MANAGER_ROLE)) {
+    res.status(403).json({ ok: false, error: 'Chỉ quản trị viên hoặc trưởng bộ phận mới xem được phản hồi người dùng.' });
     return { context, denied: true };
   }
   return { context, denied: false };
@@ -6026,6 +6043,69 @@ app.get('/api/data-health/summary', (req, res) => {
   } catch (err) {
     console.error('Không thể xây dựng báo cáo sức khỏe dữ liệu', err);
     res.status(500).json({ ok: false, error: err?.message || 'Không thể tải sức khỏe dữ liệu' });
+  }
+});
+
+app.get('/api/training-resources', async (req, res) => {
+  try {
+    const resources = await getTrainingResources();
+    res.json({ ok: true, resources });
+  } catch (err) {
+    console.error('Không thể tải danh sách tài liệu đào tạo', err);
+    res.status(500).json({ ok: false, error: 'Không thể tải tài liệu đào tạo' });
+  }
+});
+
+app.get('/api/feedback/summary', async (req, res) => {
+  try {
+    const summary = await getFeedbackSummary();
+    res.json({ ok: true, summary });
+  } catch (err) {
+    console.error('Không thể tổng hợp phản hồi người dùng', err);
+    res.status(500).json({ ok: false, error: 'Không thể tổng hợp phản hồi' });
+  }
+});
+
+app.get('/api/feedback', async (req, res) => {
+  const { denied } = requireFeedbackReview(req, res);
+  if (denied) {
+    return;
+  }
+  try {
+    const limitRaw = Number.parseInt(req.query?.limit ?? '50', 10);
+    const entries = await listFeedbackEntries({
+      limit: Number.isFinite(limitRaw) && limitRaw > 0 ? limitRaw : 50,
+    });
+    res.json({ ok: true, entries });
+  } catch (err) {
+    console.error('Không thể tải phản hồi người dùng', err);
+    res.status(500).json({ ok: false, error: 'Không thể tải phản hồi người dùng' });
+  }
+});
+
+app.post('/api/feedback', async (req, res) => {
+  const session = getSessionContext(req);
+  const body = req.body || {};
+  try {
+    const entry = await addFeedbackEntry({
+      category: typeof body.category === 'string' ? body.category : 'khac',
+      rating: body.rating,
+      message: body.message,
+      actor: session?.account?.username || body.actor,
+      contact: body.contact,
+      meta: body.meta,
+    });
+    pushNotification({
+      type: 'feedback.new',
+      severity: 'info',
+      title: 'Phản hồi mới từ người dùng',
+      message: `${entry.actor || 'Người dùng ẩn danh'} vừa gửi góp ý: ${entry.category}`,
+      meta: { feedbackId: entry.id },
+    });
+    res.status(201).json({ ok: true, entry });
+  } catch (err) {
+    console.error('Không thể lưu phản hồi người dùng', err);
+    res.status(400).json({ ok: false, error: err?.message || 'Không thể lưu phản hồi' });
   }
 });
 
