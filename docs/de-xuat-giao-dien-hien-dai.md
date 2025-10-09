@@ -37,6 +37,7 @@
 | 5 | Command Center, theme tương phản cao và phím tắt điều hướng toàn hệ thống | ✅ Hoàn thành | Đã phát hành Command Center (Ctrl+K), theme High Contrast và cơ chế ghim thao tác. |
 | 6 | Làm sạch trùng 11 số - Sprint 1 | ✅ Hoàn thành | Ưu tiên bản mới nhất theo timestamp, bổ sung hộp thoại rà soát và ghi nhật ký quyết định xóa/giữ. |
 | 7 | Làm sạch trùng 11 số - Sprint 2 | ✅ Hoàn thành | Cho phép chọn bản giữ thủ công, hợp nhất trường dữ liệu và đánh dấu nhóm cần rà soát thay vì xóa ngay. |
+| 8 | Làm sạch trùng 11 số - Sprint 3 | ✅ Hoàn thành | Thiết lập chính sách cảnh báo/khóa nguồn, API quản trị và dashboard sức khỏe dữ liệu cho các nhóm trùng kéo dài. |
 
 ### 6.1.1. Tổng kết giai đoạn 2
 
@@ -78,6 +79,12 @@ Các đề xuất trên nhằm mục tiêu hiện đại hóa giao diện, giúp
 - Giao diện rà soát hiển thị rõ bản ghi nào đang cung cấp dữ liệu cho từng trường, giúp kiểm chứng trước khi xóa và hạn chế sai sót khi hợp nhất.
 - Bổ sung chế độ "Đánh dấu cần rà soát" kèm ghi chú, gắn nhãn "Chờ rà soát" trong bảng tờ khai để các bộ phận liên quan xử lý tiếp trước khi loại bỏ dữ liệu.
 - Audit log `decl.duplicate.resolve` lưu lại toàn bộ kế hoạch xử lý (giữ/xóa/đánh dấu) và hiển thị thống kê số nhóm dự kiến xóa hoặc chuyển rà soát trực tiếp trên giao diện.
+
+### 6.1.7. Tổng kết giai đoạn 8
+
+- API `/api/duplicate-policy` cung cấp quyền quản trị cấu hình cảnh báo, tự động khóa/mở nguồn và ghi nhận nhật ký thao tác.
+- Dashboard "Sức khỏe dữ liệu" hiển thị thêm thống kê nhóm chờ xử lý, nhóm bị khóa, danh sách nguồn trùng nổi bật và cho phép thao tác khóa/mở khóa ngay trên giao diện.
+- Chính sách tự động gửi thông báo khi nhóm trùng tồn đọng quá hạn, đồng thời khóa nguồn gây trùng vượt ngưỡng và ghi nhận lịch sử cho báo cáo sức khỏe dữ liệu.
 
 ### 6.1. Lộ trình xử lý trùng tờ khai giữa import Excel và ECUS5VNACCS
 

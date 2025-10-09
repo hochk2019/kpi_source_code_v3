@@ -762,6 +762,22 @@ const DEFAULT_AI_USAGE_CACHE = Object.freeze({
   entries: [],
 });
 
+const DEFAULT_DUPLICATE_POLICY_CONFIG = Object.freeze({
+  autoNotifyAfterDays: 7,
+  notifyCooldownHours: 24,
+  evaluationWindowDays: 14,
+  autoLockEnabled: true,
+  autoLockAfterGroups: 12,
+  minGroupSizeForLock: 2,
+  autoUnlockAfterDays: 3,
+});
+
+const DEFAULT_DUPLICATE_POLICY_STATE = Object.freeze({
+  lastEvaluatedAt: null,
+  notifiedGroups: {},
+  lockedSources: {},
+});
+
 const DEFAULT_STORAGE = {
   decl_rows_v1: '[]',
   mst_rows_v2: '[]',
@@ -818,6 +834,8 @@ const DEFAULT_STORAGE = {
   db_backup_config_v1: JSON.stringify(DEFAULT_BACKUP_CONFIG),
   co_tax_code_config_v1: JSON.stringify(DEFAULT_CO_CODE_CONFIG),
   co_discrepancy_config_v1: JSON.stringify(DEFAULT_CO_DISCREPANCY_CONFIG),
+  duplicate_policy_config_v1: JSON.stringify(DEFAULT_DUPLICATE_POLICY_CONFIG),
+  duplicate_policy_state_v1: JSON.stringify(DEFAULT_DUPLICATE_POLICY_STATE),
   co_discrepancy_state_v1: JSON.stringify(DEFAULT_CO_DISCREPANCY_STATE),
   [AI_CONFIG_KEY]: JSON.stringify(DEFAULT_AI_CONFIG),
   [AI_CACHE_KEY]: JSON.stringify(DEFAULT_AI_USAGE_CACHE),
@@ -1365,6 +1383,25 @@ function requireAdminSyncManage(req, res) {
   }
   if (!account.permissions?.syncManage) {
     res.status(403).json({ ok: false, error: 'Tài khoản quản trị hiện chưa được cấp quyền quản lý đồng bộ ECUS.' });
+    return { context, denied: true };
+  }
+  return { context, denied: false };
+}
+
+function requireDuplicatePolicyManage(req, res) {
+  const context = getSessionContext(req);
+  if (!context) {
+    res.status(401).json({ ok: false, error: 'Bạn cần đăng nhập bằng tài khoản quản trị.' });
+    return { context: null, denied: true };
+  }
+  const account = context.account || {};
+  const role = normalizeRoleKey(account.role);
+  if (!(isAdminRole(role) || role === MANAGER_ROLE)) {
+    res.status(403).json({ ok: false, error: 'Chỉ quản trị viên hoặc quản lý mới được phép chỉnh sửa chính sách trùng 11 số.' });
+    return { context, denied: true };
+  }
+  if (!account.permissions?.syncManage) {
+    res.status(403).json({ ok: false, error: 'Tài khoản hiện chưa được cấp quyền quản lý dữ liệu nhập khẩu.' });
     return { context, denied: true };
   }
   return { context, denied: false };
@@ -3937,7 +3974,24 @@ function describeDuplicateRow(row) {
   };
 }
 
-function summarizeDuplicateGroups(rows) {
+function normalizeDuplicateSourceKey(value) {
+  const normalized = normalizeStr(value || '');
+  if (normalized) {
+    return normalized;
+  }
+  return 'Không xác định';
+}
+
+function summarizeDuplicateGroups(rows, options = {}) {
+  const now = Date.now();
+  const lockedSourceInput =
+    options?.lockedSources && typeof options.lockedSources === 'object' ? options.lockedSources : {};
+  const lockedSourceMap = new Map();
+  for (const [sourceKey, meta] of Object.entries(lockedSourceInput)) {
+    const normalizedKey = normalizeDuplicateSourceKey(sourceKey);
+    lockedSourceMap.set(normalizedKey, { ...meta });
+  }
+
   const map = new Map();
   for (const row of rows) {
     const normalized = normalizeDeclarationNumber(row?.so_tk ?? row?.so_tk_full ?? '');
@@ -3957,7 +4011,14 @@ function summarizeDuplicateGroups(rows) {
   }
 
   const groups = [];
+  const sourceStatsMap = new Map();
+  const statusCounts = {
+    awaitingAction: 0,
+    pendingReview: 0,
+    locked: 0,
+  };
   let duplicateRows = 0;
+
   for (const [key, entries] of map.entries()) {
     if (!entries || entries.length <= 1) {
       continue;
@@ -3968,7 +4029,79 @@ function summarizeDuplicateGroups(rows) {
     const keeper = describeDuplicateRow(sorted[0]?.row || {});
     const duplicates = sorted.slice(1).map((item) => describeDuplicateRow(item.row));
     duplicateRows += duplicates.length;
-    groups.push({
+
+    const oldest = sorted[sorted.length - 1]?.timestamp || { ts: 0, iso: null };
+    const latest = sorted[0]?.timestamp || { ts: 0, iso: null };
+    const ageDays = oldest.ts ? Math.max(0, Math.floor((now - oldest.ts) / (24 * 60 * 60 * 1000))) : 0;
+
+    const reviewEntries = entries.filter((entry) => entry.row?.duplicate_review_pending);
+    let reviewMeta = null;
+    if (reviewEntries.length > 0) {
+      const candidates = reviewEntries
+        .map((entry) => {
+          const updatedRaw = entry.row?.duplicate_review_updated_at;
+          const updatedDate = updatedRaw ? new Date(updatedRaw) : null;
+          const updatedValid = updatedDate && !Number.isNaN(updatedDate.getTime());
+          const baseTimestamp = resolveRowTimestamp(entry.row);
+          const ts = updatedValid ? updatedDate.getTime() : baseTimestamp.ts;
+          const iso = updatedValid ? updatedDate.toISOString() : baseTimestamp.iso;
+          return {
+            ts,
+            iso,
+            note: (entry.row?.duplicate_review_note ?? '').toString(),
+            actor: (entry.row?.duplicate_review_actor ?? '').toString(),
+          };
+        })
+        .filter((item) => Number.isFinite(item.ts))
+        .sort((a, b) => a.ts - b.ts);
+      if (candidates.length > 0) {
+        const chosen = candidates[0];
+        reviewMeta = {
+          ts: chosen.ts,
+          updatedAt: chosen.iso,
+          note: normalizeStr(chosen.note),
+          actor: normalizeStr(chosen.actor),
+        };
+      }
+    }
+
+    const sources = new Set();
+    for (const entry of entries) {
+      sources.add(normalizeDuplicateSourceKey(entry.row?.source ?? entry.row?.origin ?? entry.row?._source));
+    }
+    if (sources.size === 0) {
+      sources.add('Không xác định');
+    }
+    const lockedSources = Array.from(sources).filter((source) => lockedSourceMap.has(source));
+    const baseStatus = reviewMeta ? 'pending_review' : 'awaiting_action';
+    const status = lockedSources.length > 0 ? 'locked' : baseStatus;
+    if (status === 'pending_review') {
+      statusCounts.pendingReview += 1;
+    } else if (status === 'awaiting_action') {
+      statusCounts.awaitingAction += 1;
+    } else if (status === 'locked') {
+      statusCounts.locked += 1;
+    }
+
+    const pendingReference = reviewMeta
+      ? { ts: reviewMeta.ts, iso: reviewMeta.updatedAt }
+      : oldest;
+
+    const reviewPayload = reviewMeta
+      ? {
+          pending: true,
+          updatedAt: reviewMeta.updatedAt,
+          actor: reviewMeta.actor || null,
+          note: reviewMeta.note || '',
+        }
+      : {
+          pending: false,
+          updatedAt: null,
+          actor: null,
+          note: '',
+        };
+
+    const groupPayload = {
       key,
       prefix: key.split('_')[0],
       branch: key.split('_')[1] || '',
@@ -3976,7 +4109,65 @@ function summarizeDuplicateGroups(rows) {
       keep: keeper,
       duplicates,
       latestUpdatedAt: keeper.updatedAt,
-    });
+      latestUpdatedAtTs: latest.ts || null,
+      oldestUpdatedAt: oldest.iso,
+      oldestUpdatedAtTs: oldest.ts || null,
+      ageDays,
+      status,
+      baseStatus,
+      review: reviewPayload,
+      sources: Array.from(sources),
+      lockedSources,
+      pendingSince: pendingReference?.iso || null,
+      pendingSinceTs: pendingReference?.ts ?? null,
+    };
+    groups.push(groupPayload);
+
+    for (const source of sources) {
+      if (!sourceStatsMap.has(source)) {
+        sourceStatsMap.set(source, {
+          source,
+          totalGroups: 0,
+          awaitingActionGroups: 0,
+          pendingReviewGroups: 0,
+          lockedGroups: 0,
+          totalRows: 0,
+          latestActivity: null,
+          oldestPendingAt: null,
+          locked: false,
+          lockedAt: null,
+          lockedReason: '',
+        });
+      }
+      const stats = sourceStatsMap.get(source);
+      stats.totalGroups += 1;
+      stats.totalRows += entries.length;
+      if (baseStatus === 'awaiting_action') {
+        stats.awaitingActionGroups += 1;
+      }
+      if (baseStatus === 'pending_review') {
+        stats.pendingReviewGroups += 1;
+      }
+      if (status === 'locked') {
+        stats.lockedGroups += 1;
+      }
+      if (latest.ts && (!stats.latestActivity || new Date(stats.latestActivity).getTime() < latest.ts)) {
+        stats.latestActivity = latest.iso;
+      }
+      const candidatePending = pendingReference?.ts || null;
+      if (
+        candidatePending &&
+        (!stats.oldestPendingAt || new Date(stats.oldestPendingAt).getTime() > candidatePending)
+      ) {
+        stats.oldestPendingAt = new Date(candidatePending).toISOString();
+      }
+      const lockedMeta = lockedSourceMap.get(source);
+      if (lockedMeta) {
+        stats.locked = true;
+        stats.lockedAt = lockedMeta.lockedAt || lockedMeta.updatedAt || null;
+        stats.lockedReason = lockedMeta.reason || lockedMeta.note || '';
+      }
+    }
   }
 
   const sortedGroups = groups
@@ -3985,36 +4176,418 @@ function summarizeDuplicateGroups(rows) {
       if (b.total !== a.total) {
         return b.total - a.total;
       }
-      const timeA = a.latestUpdatedAt ? new Date(a.latestUpdatedAt).getTime() : 0;
-      const timeB = b.latestUpdatedAt ? new Date(b.latestUpdatedAt).getTime() : 0;
+      const timeA = a.latestUpdatedAtTs || 0;
+      const timeB = b.latestUpdatedAtTs || 0;
       return timeB - timeA;
     });
+
+  const sourceBreakdown = Array.from(sourceStatsMap.values()).sort((a, b) => {
+    if (b.totalGroups !== a.totalGroups) {
+      return b.totalGroups - a.totalGroups;
+    }
+    const latestA = a.latestActivity ? new Date(a.latestActivity).getTime() : 0;
+    const latestB = b.latestActivity ? new Date(b.latestActivity).getTime() : 0;
+    return latestB - latestA;
+  });
 
   return {
     totalGroups: map.size,
     duplicateGroups: groups.length,
     duplicateRows,
     groups: sortedGroups,
+    statusCounts,
+    sourceBreakdown,
+  };
+}
+
+function getDuplicatePolicyConfig() {
+  const stored = getJSONValue('duplicate_policy_config_v1', DEFAULT_DUPLICATE_POLICY_CONFIG) || {};
+  const base = DEFAULT_DUPLICATE_POLICY_CONFIG;
+  const autoNotifyAfterDays = toNonNegativeInt(stored.autoNotifyAfterDays, base.autoNotifyAfterDays);
+  const notifyCooldownHours = toPositiveInt(stored.notifyCooldownHours, base.notifyCooldownHours);
+  const evaluationWindowDays = toPositiveInt(stored.evaluationWindowDays, base.evaluationWindowDays);
+  const autoLockAfterGroups = toPositiveInt(stored.autoLockAfterGroups, base.autoLockAfterGroups);
+  const minGroupSizeForLock = toPositiveInt(stored.minGroupSizeForLock, base.minGroupSizeForLock);
+  const autoUnlockAfterDays = toNonNegativeInt(stored.autoUnlockAfterDays, base.autoUnlockAfterDays);
+  let autoLockEnabled;
+  if (stored.autoLockEnabled === true) {
+    autoLockEnabled = true;
+  } else if (stored.autoLockEnabled === false) {
+    autoLockEnabled = false;
+  } else {
+    autoLockEnabled = base.autoLockEnabled;
+  }
+  return {
+    autoNotifyAfterDays,
+    notifyCooldownHours,
+    evaluationWindowDays,
+    autoLockEnabled,
+    autoLockAfterGroups,
+    minGroupSizeForLock,
+    autoUnlockAfterDays,
+  };
+}
+
+function saveDuplicatePolicyConfig(input, { actor = 'system' } = {}) {
+  const current = getDuplicatePolicyConfig();
+  const next = {
+    autoNotifyAfterDays: toNonNegativeInt(input?.autoNotifyAfterDays, current.autoNotifyAfterDays),
+    notifyCooldownHours: toPositiveInt(input?.notifyCooldownHours, current.notifyCooldownHours),
+    evaluationWindowDays: toPositiveInt(input?.evaluationWindowDays, current.evaluationWindowDays),
+    autoLockEnabled:
+      input?.autoLockEnabled === true
+        ? true
+        : input?.autoLockEnabled === false
+        ? false
+        : current.autoLockEnabled,
+    autoLockAfterGroups: toPositiveInt(input?.autoLockAfterGroups, current.autoLockAfterGroups),
+    minGroupSizeForLock: toPositiveInt(input?.minGroupSizeForLock, current.minGroupSizeForLock),
+    autoUnlockAfterDays: toNonNegativeInt(input?.autoUnlockAfterDays, current.autoUnlockAfterDays),
+  };
+  setJSONValue('duplicate_policy_config_v1', next, { actor, source: 'duplicate-policy-config' });
+  return next;
+}
+
+function getDuplicatePolicyState() {
+  const stored = getJSONValue('duplicate_policy_state_v1', DEFAULT_DUPLICATE_POLICY_STATE) || {};
+  const notifiedGroups =
+    stored?.notifiedGroups && typeof stored.notifiedGroups === 'object' ? { ...stored.notifiedGroups } : {};
+  const sanitizedNotified = {};
+  for (const [key, value] of Object.entries(notifiedGroups)) {
+    if (!key) continue;
+    if (!value) continue;
+    sanitizedNotified[key] = value;
+  }
+
+  const lockedSourcesRaw =
+    stored?.lockedSources && typeof stored.lockedSources === 'object' ? stored.lockedSources : {};
+  const lockedSources = {};
+  for (const [sourceKey, meta] of Object.entries(lockedSourcesRaw)) {
+    if (!meta || typeof meta !== 'object') {
+      continue;
+    }
+    const normalizedKey = normalizeDuplicateSourceKey(sourceKey);
+    lockedSources[normalizedKey] = {
+      lockedAt: meta.lockedAt || null,
+      lockedBy: meta.lockedBy || null,
+      reason: meta.reason || meta.note || '',
+      note: meta.note || '',
+      auto: meta.auto === true,
+      manual: meta.manual === true,
+      unlockedAt: meta.unlockedAt || null,
+      unlockedBy: meta.unlockedBy || null,
+    };
+  }
+
+  return {
+    lastEvaluatedAt: stored?.lastEvaluatedAt || null,
+    notifiedGroups: sanitizedNotified,
+    lockedSources,
+  };
+}
+
+function saveDuplicatePolicyState(state, { actor = 'system', source = 'duplicate-policy-state' } = {}) {
+  const notifiedGroups =
+    state?.notifiedGroups && typeof state.notifiedGroups === 'object' ? state.notifiedGroups : {};
+  const sanitizedNotified = {};
+  for (const [key, value] of Object.entries(notifiedGroups)) {
+    if (!key) continue;
+    if (!value) continue;
+    sanitizedNotified[key] = value;
+  }
+
+  const lockedSources = {};
+  if (state?.lockedSources && typeof state.lockedSources === 'object') {
+    for (const [sourceKey, meta] of Object.entries(state.lockedSources)) {
+      if (!meta || typeof meta !== 'object') {
+        continue;
+      }
+      const normalizedKey = normalizeDuplicateSourceKey(sourceKey);
+      lockedSources[normalizedKey] = {
+        lockedAt: meta.lockedAt || null,
+        lockedBy: meta.lockedBy || null,
+        reason: meta.reason || meta.note || '',
+        note: meta.note || '',
+        auto: meta.auto === true,
+        manual: meta.manual === true,
+        unlockedAt: meta.unlockedAt || null,
+        unlockedBy: meta.unlockedBy || null,
+      };
+    }
+  }
+
+  const payload = {
+    lastEvaluatedAt: state?.lastEvaluatedAt || null,
+    notifiedGroups: sanitizedNotified,
+    lockedSources,
+  };
+  setJSONValue('duplicate_policy_state_v1', payload, { actor, source });
+  return payload;
+}
+
+function evaluateDuplicatePolicies({
+  summary,
+  config,
+  state,
+  actor = 'system',
+  force = false,
+} = {}) {
+  const effectiveConfig = config || getDuplicatePolicyConfig();
+  const currentState = state || getDuplicatePolicyState();
+  const now = Date.now();
+  const isoNow = new Date(now).toISOString();
+  const currentNotified = { ...(currentState.notifiedGroups || {}) };
+  const currentLockedSources = { ...(currentState.lockedSources || {}) };
+  const groupSummary = summary || summarizeDuplicateGroups(getDeclRows(), { lockedSources: currentLockedSources });
+  const groupKeys = new Set(groupSummary.groups.map((group) => group.key));
+
+  const autoNotifyAfterDays = toNonNegativeInt(
+    effectiveConfig.autoNotifyAfterDays,
+    DEFAULT_DUPLICATE_POLICY_CONFIG.autoNotifyAfterDays
+  );
+  const notifyCooldownHours = toPositiveInt(
+    effectiveConfig.notifyCooldownHours,
+    DEFAULT_DUPLICATE_POLICY_CONFIG.notifyCooldownHours
+  );
+  const notifyCooldownMs = Math.max(1, notifyCooldownHours) * 60 * 60 * 1000;
+
+  let stateChanged = false;
+  let lockedChanged = false;
+  const triggered = {
+    overdue: [],
+    locks: [],
+    unlocks: [],
+  };
+
+  if (autoNotifyAfterDays > 0) {
+    const thresholdMs = autoNotifyAfterDays * 24 * 60 * 60 * 1000;
+    for (const group of groupSummary.groups) {
+      if (!group?.key) continue;
+      const baseStatus = group.baseStatus || group.status;
+      if (!['awaiting_action', 'pending_review'].includes(baseStatus)) {
+        continue;
+      }
+      const referenceTs = group.pendingSinceTs || group.oldestUpdatedAtTs || group.latestUpdatedAtTs || 0;
+      if (!referenceTs) continue;
+      if (now - referenceTs < thresholdMs) {
+        continue;
+      }
+      const lastNotified = currentNotified[group.key]
+        ? new Date(currentNotified[group.key]).getTime()
+        : 0;
+      if (!force && lastNotified && now - lastNotified < notifyCooldownMs) {
+        continue;
+      }
+      currentNotified[group.key] = isoNow;
+      stateChanged = true;
+      triggered.overdue.push({
+        groupKey: group.key,
+        ageDays: group.ageDays,
+        status: baseStatus,
+        sources: group.sources,
+      });
+      pushNotification({
+        type: 'duplicate.policy.overdue',
+        severity: 'warning',
+        title: 'Nhóm trùng 11 số tồn đọng',
+        message: `Nhóm ${group.prefix} (${group.total} bản ghi) đã tồn tại ${group.ageDays} ngày chưa xử lý.`,
+        meta: {
+          groupKey: group.key,
+          ageDays: group.ageDays,
+          status: baseStatus,
+          sources: group.sources,
+        },
+      });
+    }
+  }
+
+  for (const key of Object.keys(currentNotified)) {
+    if (!groupKeys.has(key)) {
+      delete currentNotified[key];
+      stateChanged = true;
+    }
+  }
+
+  if (effectiveConfig.autoLockEnabled) {
+    const evaluationWindowDays = toPositiveInt(
+      effectiveConfig.evaluationWindowDays,
+      DEFAULT_DUPLICATE_POLICY_CONFIG.evaluationWindowDays
+    );
+    const evaluationWindowMs = evaluationWindowDays * 24 * 60 * 60 * 1000;
+    const autoLockAfterGroups = toPositiveInt(
+      effectiveConfig.autoLockAfterGroups,
+      DEFAULT_DUPLICATE_POLICY_CONFIG.autoLockAfterGroups
+    );
+    const minGroupSizeForLock = toPositiveInt(
+      effectiveConfig.minGroupSizeForLock,
+      DEFAULT_DUPLICATE_POLICY_CONFIG.minGroupSizeForLock
+    );
+    const autoUnlockAfterDays = toNonNegativeInt(
+      effectiveConfig.autoUnlockAfterDays,
+      DEFAULT_DUPLICATE_POLICY_CONFIG.autoUnlockAfterDays
+    );
+    const autoUnlockMs = autoUnlockAfterDays > 0 ? autoUnlockAfterDays * 24 * 60 * 60 * 1000 : null;
+
+    const counters = new Map();
+    for (const group of groupSummary.groups) {
+      if (!group?.sources) continue;
+      if (group.total < minGroupSizeForLock) continue;
+      const newestTs = group.latestUpdatedAtTs || group.oldestUpdatedAtTs || 0;
+      if (evaluationWindowMs > 0 && newestTs && now - newestTs > evaluationWindowMs) {
+        continue;
+      }
+      for (const sourceRaw of group.sources) {
+        const source = normalizeDuplicateSourceKey(sourceRaw);
+        if (!counters.has(source)) {
+          counters.set(source, { awaiting: 0, pendingReview: 0, total: 0 });
+        }
+        const bucket = counters.get(source);
+        bucket.total += 1;
+        if ((group.baseStatus || group.status) === 'awaiting_action') {
+          bucket.awaiting += 1;
+        }
+        if ((group.baseStatus || group.status) === 'pending_review') {
+          bucket.pendingReview += 1;
+        }
+      }
+    }
+
+    for (const [source, info] of counters.entries()) {
+      if (info.awaiting >= autoLockAfterGroups && !currentLockedSources[source]) {
+        currentLockedSources[source] = {
+          lockedAt: isoNow,
+          lockedBy: actor,
+          reason: `Tự động khóa do ${info.awaiting} nhóm trùng chưa xử lý trong ${evaluationWindowDays} ngày`,
+          note: '',
+          auto: true,
+          manual: false,
+          unlockedAt: null,
+          unlockedBy: null,
+        };
+        pushNotification({
+          type: 'duplicate.policy.lock',
+          severity: 'error',
+          title: `Khóa nguồn ${source}`,
+          message: `Nguồn ${source} bị khóa vì có ${info.awaiting} nhóm trùng chờ xử lý trong ${evaluationWindowDays} ngày gần đây.`,
+          meta: { source, awaiting: info.awaiting },
+        });
+        pushAuditLog({
+          actor,
+          action: 'duplicate.policy.lock',
+          detail: `Khóa nguồn ${source} do ${info.awaiting} nhóm trùng tồn đọng`,
+        });
+        triggered.locks.push({ source, awaiting: info.awaiting });
+        lockedChanged = true;
+      }
+    }
+
+    for (const [source, meta] of Object.entries(currentLockedSources)) {
+      const info = counters.get(source) || { awaiting: 0 };
+      const lockedAtTs = meta?.lockedAt ? new Date(meta.lockedAt).getTime() : 0;
+      const unlockThreshold = Math.max(1, Math.floor(autoLockAfterGroups / 2));
+      const shouldUnlockByCount = info.awaiting < unlockThreshold;
+      const shouldUnlockByTime = autoUnlockMs && lockedAtTs && now - lockedAtTs >= autoUnlockMs;
+      const isManual = meta?.manual === true;
+      if ((shouldUnlockByCount || shouldUnlockByTime) && !isManual) {
+        delete currentLockedSources[source];
+        pushNotification({
+          type: 'duplicate.policy.unlock',
+          severity: 'success',
+          title: `Mở khóa nguồn ${source}`,
+          message: shouldUnlockByCount
+            ? `Nguồn ${source} đã giảm xuống còn ${info.awaiting} nhóm trùng và được mở khóa.`
+            : `Nguồn ${source} được mở khóa sau ${autoUnlockAfterDays} ngày giám sát.`,
+          meta: { source },
+        });
+        pushAuditLog({
+          actor,
+          action: 'duplicate.policy.unlock',
+          detail: `Mở khóa nguồn ${source}`,
+        });
+        triggered.unlocks.push({ source });
+        lockedChanged = true;
+      }
+    }
+  }
+
+  const nextState = {
+    lastEvaluatedAt:
+      lockedChanged || stateChanged ? isoNow : currentState.lastEvaluatedAt || currentState.lastEvaluatedAt,
+    notifiedGroups: currentNotified,
+    lockedSources: currentLockedSources,
+  };
+
+  if (lockedChanged || stateChanged) {
+    saveDuplicatePolicyState(nextState, { actor, source: 'duplicate-policy-eval' });
+  }
+
+  return {
+    state: nextState,
+    stateChanged: lockedChanged || stateChanged,
+    lockedSourcesChanged: lockedChanged,
+    summary: groupSummary,
+    policyStats: {
+      overdueTriggered: triggered.overdue.length,
+      autoLocked: triggered.locks.length,
+      autoUnlocked: triggered.unlocks.length,
+      lockedSourceCount: Object.keys(nextState.lockedSources || {}).length,
+    },
   };
 }
 
 function buildDataHealthSummary() {
   const rows = getDeclRows();
-  const duplicateSummary = summarizeDuplicateGroups(rows);
+  const policyConfig = getDuplicatePolicyConfig();
+  const policyState = getDuplicatePolicyState();
+  let duplicateSummary = summarizeDuplicateGroups(rows, { lockedSources: policyState.lockedSources });
+  const evaluation = evaluateDuplicatePolicies({
+    summary: duplicateSummary,
+    config: policyConfig,
+    state: policyState,
+    actor: 'system',
+  });
+  const effectiveState = evaluation?.state || policyState;
+  if (evaluation?.lockedSourcesChanged) {
+    duplicateSummary = summarizeDuplicateGroups(rows, { lockedSources: effectiveState.lockedSources });
+  } else if (evaluation?.summary) {
+    duplicateSummary = evaluation.summary;
+  }
   const alertPayload = buildAlertPayload();
   const ecusConfig = getEcusConfig();
   const sqlTimeouts = getSqlTimeoutEvents().slice(-10).reverse();
   const notifications = listNotifications({ limit: 20 });
+  const lockedSourcesList = Object.entries(effectiveState.lockedSources || {}).map(([source, meta]) => ({
+    source,
+    lockedAt: meta?.lockedAt || null,
+    lockedBy: meta?.lockedBy || null,
+    reason: meta?.reason || '',
+    note: meta?.note || '',
+    auto: meta?.auto === true,
+    manual: meta?.manual === true,
+    unlockedAt: meta?.unlockedAt || null,
+    unlockedBy: meta?.unlockedBy || null,
+  }));
 
   return {
     totals: {
       declarations: rows.length,
       duplicateGroups: duplicateSummary.duplicateGroups,
       duplicateRows: duplicateSummary.duplicateRows,
+      duplicatesAwaiting: duplicateSummary.statusCounts?.awaitingAction || 0,
+      duplicatesPendingReview: duplicateSummary.statusCounts?.pendingReview || 0,
+      duplicatesLocked: duplicateSummary.statusCounts?.locked || 0,
       alertsOutstanding: alertPayload.summary.outstanding,
     },
     duplicates: {
       groups: duplicateSummary.groups.slice(0, 10),
+      statusCounts: duplicateSummary.statusCounts,
+      sourceBreakdown: duplicateSummary.sourceBreakdown.slice(0, 12),
+      policy: {
+        config: policyConfig,
+        lastEvaluatedAt: effectiveState.lastEvaluatedAt || null,
+        lockedSources: lockedSourcesList,
+        stats: evaluation?.policyStats || null,
+      },
     },
     alerts: {
       outstanding: alertPayload.summary.outstanding,
@@ -6043,6 +6616,150 @@ app.get('/api/data-health/summary', (req, res) => {
   } catch (err) {
     console.error('Không thể xây dựng báo cáo sức khỏe dữ liệu', err);
     res.status(500).json({ ok: false, error: err?.message || 'Không thể tải sức khỏe dữ liệu' });
+  }
+});
+
+app.get('/api/duplicate-policy', (req, res) => {
+  const { denied } = requireDuplicatePolicyManage(req, res);
+  if (denied) {
+    return;
+  }
+  try {
+    const config = getDuplicatePolicyConfig();
+    const state = getDuplicatePolicyState();
+    const summary = summarizeDuplicateGroups(getDeclRows(), { lockedSources: state.lockedSources });
+    res.json({
+      ok: true,
+      config,
+      state: {
+        lastEvaluatedAt: state.lastEvaluatedAt || null,
+        notifiedCount: Object.keys(state.notifiedGroups || {}).length,
+        lockedSources: Object.entries(state.lockedSources || {}).map(([source, meta]) => ({
+          source,
+          lockedAt: meta?.lockedAt || null,
+          lockedBy: meta?.lockedBy || null,
+          reason: meta?.reason || '',
+          note: meta?.note || '',
+          auto: meta?.auto === true,
+          manual: meta?.manual === true,
+          unlockedAt: meta?.unlockedAt || null,
+          unlockedBy: meta?.unlockedBy || null,
+        })),
+      },
+      summary: {
+        statusCounts: summary.statusCounts,
+        sourceBreakdown: summary.sourceBreakdown,
+      },
+    });
+  } catch (err) {
+    console.error('Không thể tải chính sách trùng 11 số', err);
+    res.status(500).json({ ok: false, error: 'Không thể tải chính sách trùng 11 số' });
+  }
+});
+
+app.put('/api/duplicate-policy', (req, res) => {
+  const { denied, context } = requireDuplicatePolicyManage(req, res);
+  if (denied) {
+    return;
+  }
+  const actor = context?.account?.username || 'system';
+  try {
+    const body = req.body || {};
+    let config = getDuplicatePolicyConfig();
+    if (body.config && typeof body.config === 'object') {
+      config = saveDuplicatePolicyConfig(body.config, { actor });
+    }
+
+    let state = getDuplicatePolicyState();
+    let stateChanged = false;
+    const nextLocked = { ...(state.lockedSources || {}) };
+
+    if (Array.isArray(body.unlockSources)) {
+      for (const entry of body.unlockSources) {
+        const key = normalizeDuplicateSourceKey(entry);
+        if (!key) continue;
+        if (nextLocked[key]) {
+          delete nextLocked[key];
+          stateChanged = true;
+          pushNotification({
+            type: 'duplicate.policy.unlock',
+            severity: 'success',
+            title: `Mở khóa nguồn ${key}`,
+            message: `Nguồn ${key} được mở khóa thủ công bởi ${actor}.`,
+            meta: { source: key, actor },
+          });
+          pushAuditLog({ actor, action: 'duplicate.policy.unlock', detail: `Mở khóa nguồn ${key} thủ công` });
+        }
+      }
+    }
+
+    if (Array.isArray(body.lockSources)) {
+      for (const entry of body.lockSources) {
+        if (!entry) continue;
+        const sourceKey = normalizeDuplicateSourceKey(entry.source || entry.name || entry.key || entry);
+        if (!sourceKey) continue;
+        const note = typeof entry.note === 'string' ? entry.note : '';
+        const reason = typeof entry.reason === 'string' && entry.reason.trim()
+          ? entry.reason.trim()
+          : 'Khóa thủ công bởi quản trị viên';
+        nextLocked[sourceKey] = {
+          lockedAt: new Date().toISOString(),
+          lockedBy: actor,
+          reason,
+          note,
+          auto: false,
+          manual: true,
+          unlockedAt: null,
+          unlockedBy: null,
+        };
+        pushNotification({
+          type: 'duplicate.policy.lock',
+          severity: 'warning',
+          title: `Khóa nguồn ${sourceKey}`,
+          message: `Nguồn ${sourceKey} bị khóa thủ công bởi ${actor}.`,
+          meta: { source: sourceKey, actor },
+        });
+        pushAuditLog({ actor, action: 'duplicate.policy.lock', detail: `Khóa nguồn ${sourceKey} thủ công` });
+        stateChanged = true;
+      }
+    }
+
+    if (stateChanged) {
+      state = { ...state, lockedSources: nextLocked };
+      saveDuplicatePolicyState(state, { actor, source: 'duplicate-policy-manual' });
+    }
+
+    const evaluation = evaluateDuplicatePolicies({ config, state, actor, force: true });
+    const effectiveState = evaluation?.state || state;
+    const summary = evaluation?.summary || summarizeDuplicateGroups(getDeclRows(), {
+      lockedSources: effectiveState.lockedSources,
+    });
+
+    res.json({
+      ok: true,
+      config,
+      state: {
+        lastEvaluatedAt: effectiveState.lastEvaluatedAt || null,
+        lockedSources: Object.entries(effectiveState.lockedSources || {}).map(([source, meta]) => ({
+          source,
+          lockedAt: meta?.lockedAt || null,
+          lockedBy: meta?.lockedBy || null,
+          reason: meta?.reason || '',
+          note: meta?.note || '',
+          auto: meta?.auto === true,
+          manual: meta?.manual === true,
+          unlockedAt: meta?.unlockedAt || null,
+          unlockedBy: meta?.unlockedBy || null,
+        })),
+      },
+      summary: {
+        statusCounts: summary.statusCounts,
+        sourceBreakdown: summary.sourceBreakdown,
+      },
+    });
+  } catch (err) {
+    console.error('Không thể cập nhật chính sách trùng 11 số', err);
+    res.status(500).json({ ok: false, error: 'Không thể cập nhật chính sách trùng 11 số' });
   }
 });
 

@@ -42,6 +42,13 @@ export default function DataHealthDashboard({ currentUser }) {
   const [error, setError] = useState('');
   const [liveNotifications, setLiveNotifications] = useState([]);
   const [historyNotifications, setHistoryNotifications] = useState([]);
+  const [policyConfig, setPolicyConfig] = useState(null);
+  const [policyForm, setPolicyForm] = useState(null);
+  const [policyState, setPolicyState] = useState(null);
+  const [policyStats, setPolicyStats] = useState(null);
+  const [policyLoading, setPolicyLoading] = useState(false);
+  const [policySaving, setPolicySaving] = useState(false);
+  const [policyError, setPolicyError] = useState('');
 
   const loadSummary = useCallback(async () => {
     setLoading(true);
@@ -72,6 +79,34 @@ export default function DataHealthDashboard({ currentUser }) {
     const interval = setInterval(loadSummary, 60000);
     return () => clearInterval(interval);
   }, [loadSummary]);
+
+  const loadPolicy = useCallback(async () => {
+    setPolicyLoading(true);
+    setPolicyError('');
+    try {
+      const response = await fetchWithAuth('/api/duplicate-policy', { cache: 'no-store' });
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      const payload = await response.json();
+      if (payload?.ok === false) {
+        throw new Error(payload.error || 'Không thể tải chính sách trùng 11 số');
+      }
+      setPolicyConfig(payload.config || null);
+      setPolicyForm(payload.config ? { ...payload.config } : null);
+      setPolicyState(payload.state || null);
+      setPolicyStats(payload.summary || null);
+    } catch (err) {
+      console.error('Không thể tải chính sách trùng 11 số', err);
+      setPolicyError(err?.message || 'Không thể tải chính sách trùng 11 số');
+    } finally {
+      setPolicyLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadPolicy();
+  }, [loadPolicy]);
 
   useEffect(() => {
     let cancelled = false;
@@ -108,6 +143,8 @@ export default function DataHealthDashboard({ currentUser }) {
 
   const metrics = useMemo(() => {
     const totals = summary?.totals || {};
+    const policyOverview = summary?.duplicates?.policy || {};
+    const lockedCount = Array.isArray(policyOverview.lockedSources) ? policyOverview.lockedSources.length : 0;
     return [
       {
         label: 'Tổng tờ khai',
@@ -118,6 +155,16 @@ export default function DataHealthDashboard({ currentUser }) {
         label: 'Nhóm trùng 11 số',
         value: totals.duplicateGroups,
         description: `${totals.duplicateRows || 0} bản ghi cần rà soát`,
+      },
+      {
+        label: 'Nhóm chờ xử lý',
+        value: totals.duplicatesAwaiting,
+        description: `${totals.duplicatesPendingReview || 0} nhóm đang chờ rà soát`,
+      },
+      {
+        label: 'Nguồn bị khóa',
+        value: lockedCount,
+        description: `${totals.duplicatesLocked || 0} nhóm thuộc nguồn khóa`,
       },
       {
         label: 'Cảnh báo thiếu thông tin',
@@ -131,6 +178,173 @@ export default function DataHealthDashboard({ currentUser }) {
       },
     ];
   }, [summary]);
+
+  const policyOverview = summary?.duplicates?.policy || {};
+  const policyLockedSources = useMemo(() => {
+    if (Array.isArray(policyOverview.lockedSources) && policyOverview.lockedSources.length > 0) {
+      return policyOverview.lockedSources;
+    }
+    if (Array.isArray(policyState?.lockedSources)) {
+      return policyState.lockedSources;
+    }
+    return [];
+  }, [policyOverview.lockedSources, policyState]);
+
+  const policySourceBreakdown = useMemo(() => {
+    if (Array.isArray(summary?.duplicates?.sourceBreakdown)) {
+      return summary.duplicates.sourceBreakdown;
+    }
+    if (Array.isArray(policyStats?.sourceBreakdown)) {
+      return policyStats.sourceBreakdown;
+    }
+    return [];
+  }, [summary, policyStats]);
+
+  const policyStatusCounts = useMemo(() => {
+    if (summary?.duplicates?.statusCounts) {
+      return summary.duplicates.statusCounts;
+    }
+    if (policyStats?.statusCounts) {
+      return policyStats.statusCounts;
+    }
+    return { awaitingAction: 0, pendingReview: 0, locked: 0 };
+  }, [summary, policyStats]);
+
+  const handleSavePolicy = useCallback(async () => {
+    if (!policyForm) {
+      alert('Chưa có dữ liệu cấu hình chính sách để lưu.');
+      return;
+    }
+    setPolicySaving(true);
+    setPolicyError('');
+    try {
+      const payload = {
+        config: {
+          autoNotifyAfterDays:
+            policyForm.autoNotifyAfterDays === '' || policyForm.autoNotifyAfterDays === null
+              ? 0
+              : Number(policyForm.autoNotifyAfterDays),
+          notifyCooldownHours:
+            policyForm.notifyCooldownHours === '' || policyForm.notifyCooldownHours === null
+              ? undefined
+              : Number(policyForm.notifyCooldownHours),
+          evaluationWindowDays:
+            policyForm.evaluationWindowDays === '' || policyForm.evaluationWindowDays === null
+              ? undefined
+              : Number(policyForm.evaluationWindowDays),
+          autoLockEnabled: !!policyForm.autoLockEnabled,
+          autoLockAfterGroups:
+            policyForm.autoLockAfterGroups === '' || policyForm.autoLockAfterGroups === null
+              ? undefined
+              : Number(policyForm.autoLockAfterGroups),
+          minGroupSizeForLock:
+            policyForm.minGroupSizeForLock === '' || policyForm.minGroupSizeForLock === null
+              ? undefined
+              : Number(policyForm.minGroupSizeForLock),
+          autoUnlockAfterDays:
+            policyForm.autoUnlockAfterDays === '' || policyForm.autoUnlockAfterDays === null
+              ? undefined
+              : Number(policyForm.autoUnlockAfterDays),
+        },
+      };
+      const response = await fetchWithAuth('/api/duplicate-policy', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      const data = await response.json();
+      if (data?.ok === false) {
+        throw new Error(data.error || 'Không thể cập nhật chính sách trùng 11 số');
+      }
+      setPolicyConfig(data.config || null);
+      setPolicyForm(data.config ? { ...data.config } : null);
+      setPolicyState(data.state || null);
+      setPolicyStats(data.summary || null);
+      await loadSummary();
+    } catch (err) {
+      console.error('Không thể cập nhật chính sách trùng 11 số', err);
+      setPolicyError(err?.message || 'Không thể cập nhật chính sách trùng 11 số');
+    } finally {
+      setPolicySaving(false);
+    }
+  }, [policyForm, loadSummary]);
+
+  const handleUnlockSource = useCallback(
+    async (source) => {
+      if (!source) return;
+      setPolicySaving(true);
+      setPolicyError('');
+      try {
+        const response = await fetchWithAuth('/api/duplicate-policy', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ unlockSources: [source] }),
+        });
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+        const data = await response.json();
+        if (data?.ok === false) {
+          throw new Error(data.error || 'Không thể mở khóa nguồn dữ liệu');
+        }
+        setPolicyConfig(data.config || null);
+        setPolicyForm(data.config ? { ...data.config } : null);
+        setPolicyState(data.state || null);
+        setPolicyStats(data.summary || null);
+        await loadSummary();
+      } catch (err) {
+        console.error('Không thể mở khóa nguồn dữ liệu', err);
+        setPolicyError(err?.message || 'Không thể mở khóa nguồn dữ liệu');
+      } finally {
+        setPolicySaving(false);
+      }
+    },
+    [loadSummary]
+  );
+
+  const handleLockSource = useCallback(
+    async (source) => {
+      if (!source) return;
+      let reason = 'Khóa tạm thời để rà soát dữ liệu trùng';
+      if (typeof window !== 'undefined') {
+        const input = window.prompt(`Nhập lý do khóa nguồn ${source}`, reason);
+        if (input === null) {
+          return;
+        }
+        reason = input.trim() || reason;
+      }
+      setPolicySaving(true);
+      setPolicyError('');
+      try {
+        const response = await fetchWithAuth('/api/duplicate-policy', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ lockSources: [{ source, reason }] }),
+        });
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+        const data = await response.json();
+        if (data?.ok === false) {
+          throw new Error(data.error || 'Không thể khóa nguồn dữ liệu');
+        }
+        setPolicyConfig(data.config || null);
+        setPolicyForm(data.config ? { ...data.config } : null);
+        setPolicyState(data.state || null);
+        setPolicyStats(data.summary || null);
+        await loadSummary();
+      } catch (err) {
+        console.error('Không thể khóa nguồn dữ liệu', err);
+        setPolicyError(err?.message || 'Không thể khóa nguồn dữ liệu');
+      } finally {
+        setPolicySaving(false);
+      }
+    },
+    [loadSummary]
+  );
 
   const combinedNotifications = useMemo(() => {
     const seen = new Set();
@@ -256,6 +470,238 @@ export default function DataHealthDashboard({ currentUser }) {
                 </div>
               ))
             )}
+          </div>
+        </div>
+      </section>
+
+      <section className="rounded border border-gray-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">Chính sách tự động trùng 11 số</h3>
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              Tinh chỉnh ngưỡng cảnh báo, trạng thái khóa nguồn và theo dõi lần đánh giá gần nhất.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={loadPolicy}
+              className="rounded border border-gray-300 px-3 py-1 text-xs text-gray-700 transition hover:bg-gray-100 dark:border-slate-600 dark:text-gray-200 dark:hover:bg-slate-800"
+              disabled={policyLoading || policySaving}
+            >
+              {policyLoading ? 'Đang tải…' : 'Tải lại'}
+            </button>
+            <button
+              type="button"
+              onClick={handleSavePolicy}
+              className="rounded bg-emerald-600 px-3 py-1 text-xs font-medium text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={policySaving}
+            >
+              {policySaving ? 'Đang lưu…' : 'Lưu cấu hình'}
+            </button>
+          </div>
+        </div>
+        {policyError && (
+          <div className="mt-3 rounded border border-red-200 bg-red-50 p-2 text-xs text-red-700 dark:border-red-500/50 dark:bg-red-500/10 dark:text-red-200">
+            {policyError}
+          </div>
+        )}
+        <div className="mt-4 grid gap-4 lg:grid-cols-2">
+          <div className="space-y-3">
+            <div className="grid gap-3 md:grid-cols-2">
+              <label className="space-y-1 text-xs font-medium text-gray-600 dark:text-gray-300">
+                Số ngày nhắc nhở tự động
+                <input
+                  type="number"
+                  min="0"
+                  value={policyForm?.autoNotifyAfterDays ?? ''}
+                  onChange={(event) => {
+                    const raw = event.target.value;
+                    setPolicyForm((prev) => ({ ...(prev || {}), autoNotifyAfterDays: raw === '' ? '' : Number(raw) }));
+                  }}
+                  className="w-full rounded border border-gray-300 px-2 py-1 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100"
+                />
+              </label>
+              <label className="space-y-1 text-xs font-medium text-gray-600 dark:text-gray-300">
+                Thời gian chờ nhắc lại (giờ)
+                <input
+                  type="number"
+                  min="1"
+                  value={policyForm?.notifyCooldownHours ?? ''}
+                  onChange={(event) => {
+                    const raw = event.target.value;
+                    setPolicyForm((prev) => ({ ...(prev || {}), notifyCooldownHours: raw === '' ? '' : Number(raw) }));
+                  }}
+                  className="w-full rounded border border-gray-300 px-2 py-1 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100"
+                />
+              </label>
+              <label className="space-y-1 text-xs font-medium text-gray-600 dark:text-gray-300">
+                Khoảng đánh giá (ngày)
+                <input
+                  type="number"
+                  min="1"
+                  value={policyForm?.evaluationWindowDays ?? ''}
+                  onChange={(event) => {
+                    const raw = event.target.value;
+                    setPolicyForm((prev) => ({ ...(prev || {}), evaluationWindowDays: raw === '' ? '' : Number(raw) }));
+                  }}
+                  className="w-full rounded border border-gray-300 px-2 py-1 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100"
+                />
+              </label>
+              <label className="space-y-1 text-xs font-medium text-gray-600 dark:text-gray-300">
+                Số nhóm trùng để khóa nguồn
+                <input
+                  type="number"
+                  min="1"
+                  value={policyForm?.autoLockAfterGroups ?? ''}
+                  onChange={(event) => {
+                    const raw = event.target.value;
+                    setPolicyForm((prev) => ({ ...(prev || {}), autoLockAfterGroups: raw === '' ? '' : Number(raw) }));
+                  }}
+                  className="w-full rounded border border-gray-300 px-2 py-1 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100"
+                />
+              </label>
+              <label className="space-y-1 text-xs font-medium text-gray-600 dark:text-gray-300">
+                Kích thước nhóm tối thiểu
+                <input
+                  type="number"
+                  min="1"
+                  value={policyForm?.minGroupSizeForLock ?? ''}
+                  onChange={(event) => {
+                    const raw = event.target.value;
+                    setPolicyForm((prev) => ({ ...(prev || {}), minGroupSizeForLock: raw === '' ? '' : Number(raw) }));
+                  }}
+                  className="w-full rounded border border-gray-300 px-2 py-1 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100"
+                />
+              </label>
+              <label className="space-y-1 text-xs font-medium text-gray-600 dark:text-gray-300">
+                Ngày tự mở khóa
+                <input
+                  type="number"
+                  min="0"
+                  value={policyForm?.autoUnlockAfterDays ?? ''}
+                  onChange={(event) => {
+                    const raw = event.target.value;
+                    setPolicyForm((prev) => ({ ...(prev || {}), autoUnlockAfterDays: raw === '' ? '' : Number(raw) }));
+                  }}
+                  className="w-full rounded border border-gray-300 px-2 py-1 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100"
+                />
+              </label>
+            </div>
+            <label className="flex items-center gap-2 text-xs font-medium text-gray-600 dark:text-gray-300">
+              <input
+                type="checkbox"
+                checked={!!policyForm?.autoLockEnabled}
+                onChange={(event) => {
+                  const checked = event.target.checked;
+                  setPolicyForm((prev) => ({ ...(prev || {}), autoLockEnabled: checked }));
+                }}
+                className="h-4 w-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500 dark:border-slate-600 dark:bg-slate-800"
+              />
+              Bật chế độ khóa nguồn tự động khi vượt ngưỡng
+            </label>
+            <div className="rounded border border-gray-200 bg-gray-50 p-3 text-xs text-gray-600 dark:border-slate-700 dark:bg-slate-800/80 dark:text-gray-300">
+              <div>• Nhóm chờ xử lý: {policyStatusCounts.awaitingAction || 0}</div>
+              <div>• Nhóm chờ rà soát: {policyStatusCounts.pendingReview || 0}</div>
+              <div>• Nhóm thuộc nguồn khóa: {policyStatusCounts.locked || 0}</div>
+              <div>
+                • Lần đánh giá gần nhất:{' '}
+                {policyOverview.lastEvaluatedAt
+                  ? formatDate(policyOverview.lastEvaluatedAt)
+                  : policyState?.lastEvaluatedAt
+                  ? formatDate(policyState.lastEvaluatedAt)
+                  : 'Chưa có'}
+              </div>
+            </div>
+          </div>
+          <div className="space-y-3">
+            <div className="rounded border border-gray-200 p-3 text-xs dark:border-slate-700 dark:bg-slate-800">
+              <div className="mb-2 flex items-center justify-between text-xs font-semibold text-gray-700 dark:text-gray-200">
+                <span>Nguồn dữ liệu</span>
+                <span>Tác vụ</span>
+              </div>
+              <div className="max-h-64 overflow-auto">
+                {policySourceBreakdown.length === 0 ? (
+                  <p className="text-xs text-gray-500 dark:text-gray-400">Chưa có thống kê nguồn dữ liệu.</p>
+                ) : (
+                  <ul className="space-y-2">
+                    {policySourceBreakdown.map((item) => (
+                      <li
+                        key={item.source}
+                        className="rounded border border-gray-200 px-2 py-1 text-xs dark:border-slate-700 dark:bg-slate-900/40"
+                      >
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div>
+                            <div className="font-semibold text-gray-700 dark:text-gray-200">{item.source}</div>
+                            <div className="text-[11px] text-gray-500 dark:text-gray-400">
+                              {item.awaitingActionGroups || 0} nhóm chờ xử lý • {item.pendingReviewGroups || 0} nhóm chờ rà soát
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {item.locked ? (
+                              <button
+                                type="button"
+                                onClick={() => handleUnlockSource(item.source)}
+                                className="rounded border border-emerald-500 px-2 py-1 text-[11px] text-emerald-600 hover:bg-emerald-50 dark:border-emerald-400 dark:text-emerald-300 dark:hover:bg-emerald-400/10"
+                                disabled={policySaving}
+                              >
+                                Mở khóa
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => handleLockSource(item.source)}
+                                className="rounded border border-amber-500 px-2 py-1 text-[11px] text-amber-600 hover:bg-amber-50 dark:border-amber-400 dark:text-amber-300 dark:hover:bg-amber-400/10"
+                                disabled={policySaving}
+                              >
+                                Khóa nguồn
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                        {item.locked && item.lockedAt && (
+                          <div className="mt-1 text-[11px] text-gray-500 dark:text-gray-400">
+                            Khóa lúc: {formatDate(item.lockedAt)}
+                            {item.lockedReason ? ` • ${item.lockedReason}` : ''}
+                          </div>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
+            <div className="rounded border border-gray-200 p-3 text-xs dark:border-slate-700 dark:bg-slate-800">
+              <div className="text-xs font-semibold text-gray-700 dark:text-gray-200">Nguồn đang khóa</div>
+              <div className="mt-2 space-y-2">
+                {policyLockedSources.length === 0 ? (
+                  <p className="text-xs text-gray-500 dark:text-gray-400">Không có nguồn nào bị khóa.</p>
+                ) : (
+                  policyLockedSources.map((item) => (
+                    <div
+                      key={item.source}
+                      className="rounded border border-amber-300 bg-amber-50 p-2 text-amber-700 dark:border-amber-500/50 dark:bg-amber-500/10 dark:text-amber-200"
+                    >
+                      <div className="flex items-center justify-between text-xs font-semibold">
+                        <span>{item.source}</span>
+                        <button
+                          type="button"
+                          className="rounded border border-amber-600 px-2 py-0.5 text-[11px] text-amber-700 hover:bg-amber-100 dark:border-amber-400 dark:text-amber-200 dark:hover:bg-amber-400/20"
+                          onClick={() => handleUnlockSource(item.source)}
+                          disabled={policySaving}
+                        >
+                          Mở khóa
+                        </button>
+                      </div>
+                      <div className="mt-1 text-[11px]">
+                        Khóa bởi: {item.lockedBy || 'Hệ thống'} • {item.lockedAt ? formatDate(item.lockedAt) : 'Không rõ thời gian'}
+                      </div>
+                      {item.reason && <div className="mt-1 text-[11px] opacity-80">Lý do: {item.reason}</div>}
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
           </div>
         </div>
       </section>
