@@ -407,12 +407,19 @@ function TopStaffWidget({ metric = "kpi", onMetricChange, kpiData = [], declData
   );
 }
 
-function TeamPieWidget({ data }) {
-  const total = data.reduce((sum, item) => sum + item.value, 0);
+function TeamMetricPieCard({ title, data, valueFormatter, percentLabel, emptyMessage }) {
+  const normalizedData = Array.isArray(data)
+    ? data.map((item = {}) => ({
+        name: item.name || "",
+        value: Number(item.value || 0),
+      }))
+    : [];
+
+  const total = normalizedData.reduce((sum, item) => sum + item.value, 0);
   const segments = [];
   let cursor = 0;
 
-  data.forEach((item, idx) => {
+  normalizedData.forEach((item, idx) => {
     const percent = total > 0 ? (item.value / total) * 100 : 0;
     const start = cursor;
     const end = cursor + percent;
@@ -424,11 +431,11 @@ function TeamPieWidget({ data }) {
   const gradient = segments.length ? `conic-gradient(${segments.join(", ")})` : "conic-gradient(#e5e7eb 0 100%)";
 
   return (
-    <section className="rounded-lg border bg-white p-4 shadow-sm">
-      <h3 className="text-base font-semibold text-gray-900">Phân bổ KPI theo tổ đội</h3>
+    <div>
+      <h3 className="text-base font-semibold text-gray-900">{title}</h3>
       <div className="mt-4 flex flex-col items-center gap-4 sm:flex-row">
         <div
-          className="h-40 w-40 rounded-full border"
+          className="h-40 w-40 flex-shrink-0 rounded-full border"
           style={{ backgroundImage: gradient }}
         >
           {total === 0 ? (
@@ -437,24 +444,47 @@ function TeamPieWidget({ data }) {
             </div>
           ) : null}
         </div>
-        <ul className="space-y-2 text-sm">
-          {data.length ? (
-            data.map((item, idx) => {
+        <ul className="w-full space-y-2 text-sm">
+          {normalizedData.length ? (
+            normalizedData.map((item, idx) => {
               const color = chartColors[idx % chartColors.length];
               const percent = total > 0 ? Math.round((item.value / total) * 1000) / 10 : 0;
               return (
-                <li key={item.name} className="flex items-center gap-2">
+                <li key={`${title}-${item.name}-${idx}`} className="flex flex-wrap items-center gap-x-2 gap-y-1">
                   <span className="h-3 w-3 rounded-full" style={{ backgroundColor: color }} />
-                  <span className="font-medium text-gray-900">{item.name}</span>
-                  <span className="text-gray-500">{formatDecimal(item.value)}</span>
-                  <span className="text-gray-500">({percent}% KPI)</span>
+                  <span className="font-medium text-gray-900">{item.name || "Chưa gán tổ đội"}</span>
+                  <span className="text-gray-500">{valueFormatter(item.value)}</span>
+                  <span className="text-gray-500">({percent}% {percentLabel})</span>
                 </li>
               );
             })
           ) : (
-            <li className="text-gray-500">Chưa có dữ liệu KPI cho các tổ đội.</li>
+            <li className="text-gray-500">{emptyMessage}</li>
           )}
         </ul>
+      </div>
+    </div>
+  );
+}
+
+function TeamPieWidget({ kpiData, declData }) {
+  return (
+    <section className="rounded-lg border bg-white p-4 shadow-sm">
+      <div className="grid gap-6 lg:grid-cols-2">
+        <TeamMetricPieCard
+          title="Phân bổ KPI theo tổ đội"
+          data={kpiData}
+          valueFormatter={formatDecimal}
+          percentLabel="KPI"
+          emptyMessage="Chưa có dữ liệu KPI cho các tổ đội."
+        />
+        <TeamMetricPieCard
+          title="Phân bổ lượng tờ khai theo tổ đội"
+          data={declData}
+          valueFormatter={formatInt}
+          percentLabel="tờ khai"
+          emptyMessage="Chưa có dữ liệu tờ khai cho các tổ đội."
+        />
       </div>
     </section>
   );
@@ -1268,6 +1298,13 @@ export default function ReportViewer({ canExport = true }) {
     }));
   }, [report.teams.list]);
 
+  const teamDeclPieData = useMemo(() => {
+    return report.teams.list.map((item) => ({
+      name: item.name,
+      value: Number(item.stats.decls || 0),
+    }));
+  }, [report.teams.list]);
+
   const sortedStaffList = useMemo(() => {
     return sortStatsCollection(
       report.staff.list,
@@ -2013,7 +2050,7 @@ export default function ReportViewer({ canExport = true }) {
           declData={topStaffByDecls}
         />
         <div className="lg:col-span-2">
-          <TeamPieWidget data={teamPieData} />
+          <TeamPieWidget kpiData={teamPieData} declData={teamDeclPieData} />
         </div>
       </div>
 
