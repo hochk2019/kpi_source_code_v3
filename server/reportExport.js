@@ -1,5 +1,6 @@
 import ExcelJS from 'exceljs';
 import { Buffer } from 'node:buffer';
+import { applyWorkbookWatermark } from './reportWatermark.js';
 import {
   cloneAdjustmentTotals,
   createAdjustmentTotals,
@@ -70,6 +71,7 @@ function rememberCacheEntry(key, result, timestamp) {
   reportCache.set(key, {
     buffer: Buffer.from(result.buffer),
     filename: result.filename,
+    signature: result.signature || null,
     timestamp,
   });
 }
@@ -86,6 +88,7 @@ function readCacheEntry(key, now = Date.now()) {
   return {
     buffer: Buffer.from(entry.buffer),
     filename: entry.filename,
+    signature: entry.signature || null,
   };
 }
 
@@ -711,12 +714,19 @@ function buildDetailRows(rows, options = {}) {
   });
 }
 
-async function finalizeWorkbook(workbook) {
+async function finalizeWorkbook(workbook, options = {}) {
+  const watermarkOptions = options?.watermark;
+  const watermark = watermarkOptions ? applyWorkbookWatermark(workbook, watermarkOptions) : null;
   const buffer = await workbook.xlsx.writeBuffer();
-  return Buffer.isBuffer(buffer) ? buffer : Buffer.from(buffer);
+  const normalizedBuffer = Buffer.isBuffer(buffer) ? buffer : Buffer.from(buffer);
+  return {
+    buffer: normalizedBuffer,
+    watermark,
+    signature: watermark?.signature || null,
+  };
 }
 
-export async function generateStaffReport(payload = {}) {
+export async function generateStaffReport(payload = {}, options = {}) {
   const { staff = {}, range = {}, rules = {}, columns = {} } = payload;
   const columnVisibility = sanitizeColumnVisibility(columns);
   const workbook = new ExcelJS.Workbook();
@@ -777,11 +787,11 @@ export async function generateStaffReport(payload = {}) {
   addDataRows(sheet, currentRow + 1, detailData);
 
   const filename = `bao-cao-kpi-nhan-vien-${slugify(staff.name || 'chua-gan')}.xlsx`;
-  const buffer = await finalizeWorkbook(workbook);
-  return { buffer, filename };
+  const { buffer, watermark, signature } = await finalizeWorkbook(workbook, options);
+  return { buffer, filename, watermark, signature };
 }
 
-export async function generateTeamReport(payload = {}) {
+export async function generateTeamReport(payload = {}, options = {}) {
   const { team = {}, range = {}, rules = {}, columns = {} } = payload;
   const columnVisibility = sanitizeColumnVisibility(columns);
   const workbook = new ExcelJS.Workbook();
@@ -842,11 +852,11 @@ export async function generateTeamReport(payload = {}) {
   addDataRows(sheet, currentRow + 1, teamDetailData);
 
   const filename = `bao-cao-kpi-to-doi-${slugify(team.name || 'chua-gan')}.xlsx`;
-  const buffer = await finalizeWorkbook(workbook);
-  return { buffer, filename };
+  const { buffer, watermark, signature } = await finalizeWorkbook(workbook, options);
+  return { buffer, filename, watermark, signature };
 }
 
-export async function generateAllStaffReport(payload = {}) {
+export async function generateAllStaffReport(payload = {}, options = {}) {
   const { staffList = [], summary = {}, range = {}, rules = {}, columns = {} } = payload;
   const columnVisibility = sanitizeColumnVisibility(columns);
   const workbook = new ExcelJS.Workbook();
@@ -944,11 +954,11 @@ export async function generateAllStaffReport(payload = {}) {
     : [allStaffCompanyHeaders.map((_, index) => (index === 1 ? 'Không có dữ liệu' : ''))];
   addDataRows(sheet, currentRow + 1, allStaffCompanyData);
 
-  const buffer = await finalizeWorkbook(workbook);
-  return { buffer, filename: 'bao-cao-kpi-nhan-vien-tong-hop.xlsx' };
+  const { buffer, watermark, signature } = await finalizeWorkbook(workbook, options);
+  return { buffer, filename: 'bao-cao-kpi-nhan-vien-tong-hop.xlsx', watermark, signature };
 }
 
-export async function generateAllTeamReport(payload = {}) {
+export async function generateAllTeamReport(payload = {}, options = {}) {
   const { teamList = [], summary = {}, range = {}, rules = {}, columns = {} } = payload;
   const columnVisibility = sanitizeColumnVisibility(columns);
   const workbook = new ExcelJS.Workbook();
@@ -1046,8 +1056,8 @@ export async function generateAllTeamReport(payload = {}) {
     : [allTeamCompanyHeaders.map((_, index) => (index === 1 ? 'Không có dữ liệu' : ''))];
   addDataRows(sheet, currentRow + 1, allTeamCompanyData);
 
-  const buffer = await finalizeWorkbook(workbook);
-  return { buffer, filename: 'bao-cao-kpi-to-doi-tong-hop.xlsx' };
+  const { buffer, watermark, signature } = await finalizeWorkbook(workbook, options);
+  return { buffer, filename: 'bao-cao-kpi-to-doi-tong-hop.xlsx', watermark, signature };
 }
 
 const REPORT_GENERATORS = {
@@ -1057,10 +1067,15 @@ const REPORT_GENERATORS = {
   allTeam: generateAllTeamReport,
 };
 
-export async function generateReport(kind, payload) {
+export async function generateReport(kind, payload, options = {}) {
   const generator = REPORT_GENERATORS[kind];
   if (!generator) {
     throw new Error('Loại báo cáo không hợp lệ');
+  }
+
+  const shouldUseCache = !options?.watermark;
+  if (!shouldUseCache) {
+    return generator(payload, options);
   }
 
   const cacheKey = buildCacheKey(kind, payload);
@@ -1072,7 +1087,7 @@ export async function generateReport(kind, payload) {
     return cached;
   }
 
-  const result = await generator(payload);
+  const result = await generator(payload, options);
   rememberCacheEntry(cacheKey, result, now);
   return result;
 }

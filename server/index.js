@@ -8855,11 +8855,54 @@ app.post('/api/reports/export', async (req, res) => {
     }
 
     const payload = req.body?.payload && typeof req.body.payload === 'object' ? req.body.payload : {};
-    const { buffer, filename } = await generateReport(kind, payload);
+    const ipHeader = req.headers['x-forwarded-for'];
+    const ipAddress = Array.isArray(ipHeader) ? ipHeader[0] : ipHeader || req.ip || '';
+    const requestId = crypto.randomUUID();
+    const { buffer, filename, signature, watermark } = await generateReport(kind, payload, {
+      watermark: {
+        actor: context.account?.username,
+        actorName: context.account?.name,
+        kind,
+        filters: payload,
+        ipAddress,
+        requestId,
+      },
+    });
+
+    if (signature) {
+      res.setHeader('X-KPI-Export-Signature', signature);
+    }
+    if (watermark?.shortSignature) {
+      res.setHeader('X-KPI-Export-Code', watermark.shortSignature);
+    }
+    if (watermark?.formattedIssuedAt) {
+      res.setHeader('X-KPI-Export-Issued-At', watermark.formattedIssuedAt);
+    }
+    if (watermark?.requestId) {
+      res.setHeader('X-KPI-Export-Request', watermark.requestId);
+    }
 
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     setAttachmentHeaders(res, filename);
     res.send(buffer);
+
+    const actor = context.account?.username || 'unknown';
+    pushAuditLog({
+      actor,
+      action: 'reports.export',
+      detail: `Xuất báo cáo ${kind}`,
+      meta: {
+        kind,
+        filename,
+        signature: signature || null,
+        shortSignature: watermark?.shortSignature || null,
+        issuedAt: watermark?.issuedAt ? watermark.issuedAt.toISOString() : new Date().toISOString(),
+        filterSummary: watermark?.filterSummary || null,
+        filters: watermark?.filters || null,
+        ip: ipAddress || null,
+        requestId: watermark?.requestId || requestId,
+      },
+    });
   } catch (err) {
     console.error('Không thể xuất báo cáo', err);
     const status = err?.message && /không hợp lệ/i.test(err.message) ? 400 : 500;
