@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import clsx from 'clsx';
-import { toast } from 'sonner';
+import { toast } from '@/shared/toast';
 import {
   clearAiCache,
   fetchAiConfig,

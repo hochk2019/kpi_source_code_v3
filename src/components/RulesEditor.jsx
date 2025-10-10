@@ -14,7 +14,7 @@ import {
   CommandList,
 } from "@/components/ui/command.jsx";
 import { InfoIcon, Check, ChevronsUpDown, Plus, X } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "@/shared/toast";
 import {
   loadRuleSets,
   loadRules,

@@ -7,7 +7,7 @@ import React, {
 } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import * as Tabs from '@radix-ui/react-tabs';
-import { toast } from 'sonner';
+import { toast } from '@/shared/toast';
 import { subscribeCommand } from '@/lib/commandBus.js';
 import {
   fetchFeedbackSummary,

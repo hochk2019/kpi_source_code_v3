@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { toast } from "sonner";
+import { toast } from "@/shared/toast";
 import { fetchWithAuth } from '@/auth/localAuth.js';
 
 import { getAuditLogs, clearAuditLogs } from "@/lib/store.js";
