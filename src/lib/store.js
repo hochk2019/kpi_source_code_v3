@@ -1,7 +1,13 @@
 // src/lib/store.js
 
 import { createDefaultRuleCollection } from '@/shared/defaultRules.js';
+import {
+  KPI_ADJUSTMENT_CATEGORY_CONFIG,
+  normalizeAdjustmentCategoryKey,
+} from '../../shared/kpiAdjustments.js';
 import { getItem, setItem } from './storageClient.js';
+
+export { KPI_ADJUSTMENT_CATEGORY_CONFIG } from '../../shared/kpiAdjustments.js';
 
 // ===== Keys trong kho chia sáº» =====
 export const DECL_KEY = "decl_rows_v1"; // dữ liệu tờ khai
@@ -1298,59 +1304,10 @@ export function getHQHistoryForMST(mst, limit = 50) {
 // ===== Điểm KPI +/- bổ sung =====
 export const KPI_ADJUSTMENT_STATUS_SET = new Set(['pending', 'approved', 'rejected']);
 
-export const KPI_ADJUSTMENT_CATEGORY_CONFIG = Object.freeze({
-  support_fixed: { label: 'Hỗ trợ thông quan (điểm cố định)', type: 'fixed', defaultUnit: 5 },
-  support_dynamic: { label: 'Hỗ trợ thông quan (hệ số theo số tờ khai)', type: 'quantity', defaultUnit: 1 },
-  cancel_staff: { label: 'Huỷ tờ khai do lỗi nhân viên', type: 'quantity', defaultUnit: -1 },
-  cancel_customer: { label: 'Huỷ tờ khai do lỗi khách hàng', type: 'quantity', defaultUnit: 1 },
-  correction_staff: { label: 'Sửa tờ khai do lỗi nhân viên', type: 'quantity', defaultUnit: -1 },
-  correction_customer: { label: 'Sửa tờ khai do lỗi khách hàng', type: 'quantity', defaultUnit: 1 },
-  tax_refund_staff: { label: 'Hoàn thuế do lỗi nhân viên', type: 'quantity', defaultUnit: -1 },
-  tax_refund_customer: { label: 'Hoàn thuế theo yêu cầu khách hàng', type: 'quantity', defaultUnit: 2 },
-  teamwork: {
-    label: 'Tinh thần hoạt động nhóm',
-    type: 'grade',
-    grades: [
-      { value: 10, label: 'Rất tốt (+10)' },
-      { value: 5, label: 'Tốt (+5)' },
-      { value: 0, label: 'Trung bình (0)' },
-      { value: -5, label: 'Yếu (-5)' },
-      { value: -10, label: 'Kém (-10)' },
-    ],
-  },
-  coworker_attitude: {
-    label: 'Thái độ với đồng nghiệp',
-    type: 'grade',
-    grades: [
-      { value: 10, label: 'Rất tốt (+10)' },
-      { value: 5, label: 'Tốt (+5)' },
-      { value: 0, label: 'Trung bình (0)' },
-      { value: -5, label: 'Yếu (-5)' },
-      { value: -10, label: 'Kém (-10)' },
-    ],
-  },
-  customer_attitude: {
-    label: 'Thái độ với khách hàng',
-    type: 'grade',
-    grades: [
-      { value: 10, label: 'Rất tốt (+10)' },
-      { value: 5, label: 'Tốt (+5)' },
-      { value: 0, label: 'Trung bình (0)' },
-      { value: -5, label: 'Yếu (-5)' },
-      { value: -10, label: 'Kém (-10)' },
-    ],
-  },
-  late: { label: 'Đi làm muộn', type: 'quantity', defaultUnit: -1 },
-});
-
 const KPI_ADJUSTMENT_HISTORY_LIMIT = 50;
 
 function normalizeAdjustmentCategory(value) {
-  const key = normalizeStr(value)
-    .toLowerCase()
-    .replace(/[^a-z0-9_]+/g, '_')
-    .replace(/_{2,}/g, '_')
-    .replace(/^_|_$/g, '');
+  const key = normalizeAdjustmentCategoryKey(value);
   if (key && KPI_ADJUSTMENT_CATEGORY_CONFIG[key]) {
     return key;
   }

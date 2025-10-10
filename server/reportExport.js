@@ -1,5 +1,10 @@
 import ExcelJS from 'exceljs';
 import { Buffer } from 'node:buffer';
+import {
+  cloneAdjustmentTotals,
+  createAdjustmentTotals,
+  toAdjustmentTotalsArray,
+} from '../shared/kpiAdjustments.js';
 
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 phút
 const MAX_CACHE_ENTRIES = 20;
@@ -190,36 +195,6 @@ function buildDetailHeaders({ includeStaff = false, includeTeam = false, visible
   return headers;
 }
 
-const ADJUSTMENT_CATEGORY_GROUPS = Object.freeze({
-  support: new Set(['support_fixed', 'support_dynamic']),
-  cancel: new Set(['cancel_staff', 'cancel_customer']),
-  correction: new Set(['correction_staff', 'correction_customer']),
-  tax: new Set(['tax_refund_staff', 'tax_refund_customer']),
-});
-
-function createAdjustmentSummaryTotals() {
-  return {
-    support: { points: 0, quantity: 0 },
-    cancel: { points: 0, quantity: 0 },
-    correction: { points: 0, quantity: 0 },
-    tax: { points: 0, quantity: 0 },
-  };
-}
-
-function cloneAdjustmentSummaryTotals(source = createAdjustmentSummaryTotals()) {
-  const base = createAdjustmentSummaryTotals();
-  const entries = source || {};
-  for (const key of Object.keys(base)) {
-    if (entries[key]) {
-      base[key] = {
-        points: Number(entries[key].points || 0),
-        quantity: Number(entries[key].quantity || 0),
-      };
-    }
-  }
-  return base;
-}
-
 function formatAdjustmentPoints(value) {
   const num = Number(value);
   if (!Number.isFinite(num) || Math.abs(num) < 0.05) {
@@ -250,31 +225,6 @@ function buildSummaryEntry(index, label, value, quantity = '') {
   ];
 }
 
-function classifyAdjustmentCategory(category) {
-  const normalized = normalizeStr(category).toLowerCase();
-  for (const [group, set] of Object.entries(ADJUSTMENT_CATEGORY_GROUPS)) {
-    if (set.has(normalized)) {
-      return group;
-    }
-  }
-  return null;
-}
-
-function applyAdjustmentTotals(summaryTotals, groupKey, points, quantity) {
-  if (!groupKey || !summaryTotals[groupKey]) {
-    return;
-  }
-  const target = summaryTotals[groupKey];
-  const pointValue = Number(points || 0);
-  const quantityValue = Number(quantity || 0);
-  if (Number.isFinite(pointValue)) {
-    target.points += pointValue;
-  }
-  if (Number.isFinite(quantityValue)) {
-    target.quantity += quantityValue;
-  }
-}
-
 function ensureStaffAdjustmentSummary(map, key, name, teamName) {
   if (!key) {
     return null;
@@ -284,7 +234,7 @@ function ensureStaffAdjustmentSummary(map, key, name, teamName) {
       key,
       name: name || 'Chưa gán',
       teamNames: new Set(),
-      totals: createAdjustmentSummaryTotals(),
+      totals: createAdjustmentTotals(),
     });
   }
   const entry = map.get(key);
@@ -305,7 +255,7 @@ function ensureTeamAdjustmentSummary(map, key, name) {
     map.set(key, {
       key,
       name: name || 'Chưa gán tổ đội',
-      totals: createAdjustmentSummaryTotals(),
+      totals: createAdjustmentTotals(),
     });
   }
   const entry = map.get(key);
@@ -321,14 +271,14 @@ function finalizeStaffAdjustmentEntry(entry) {
       key: '',
       name: 'Chưa gán',
       teams: [],
-      totals: createAdjustmentSummaryTotals(),
+      totals: createAdjustmentTotals(),
     };
   }
   return {
     key: entry.key,
     name: entry.name,
     teams: Array.from(entry.teamNames || []),
-    totals: cloneAdjustmentSummaryTotals(entry.totals),
+    totals: cloneAdjustmentTotals(entry.totals),
   };
 }
 
@@ -337,13 +287,13 @@ function finalizeTeamAdjustmentEntry(entry) {
     return {
       key: '',
       name: 'Chưa gán tổ đội',
-      totals: createAdjustmentSummaryTotals(),
+      totals: createAdjustmentTotals(),
     };
   }
   return {
     key: entry.key,
     name: entry.name,
-    totals: cloneAdjustmentSummaryTotals(entry.totals),
+    totals: cloneAdjustmentTotals(entry.totals),
   };
 }
 
@@ -627,17 +577,6 @@ function buildSummaryRows(statsInput, adjustmentTotalsInput) {
     ? stats.licenseCount
     : licenseCodes.length;
 
-  const totalsSource = adjustmentTotalsInput || stats.adjustmentTotals || {};
-  const totals = cloneAdjustmentSummaryTotals(totalsSource);
-  const supportPoints = formatAdjustmentPoints(totals.support?.points);
-  const supportQuantity = formatAdjustmentQuantity(totals.support?.quantity);
-  const cancelPoints = formatAdjustmentPoints(totals.cancel?.points);
-  const cancelQuantity = formatAdjustmentQuantity(totals.cancel?.quantity);
-  const correctionPoints = formatAdjustmentPoints(totals.correction?.points);
-  const correctionQuantity = formatAdjustmentQuantity(totals.correction?.quantity);
-  const taxPoints = formatAdjustmentPoints(totals.tax?.points);
-  const taxQuantity = formatAdjustmentQuantity(totals.tax?.quantity);
-
   const rows = [
     buildSummaryEntry('1', 'Tổng số tờ khai', stats?.decls || 0),
     buildSummaryEntry('2', 'Tổng điểm KPI', stats?.kpi || 0),
@@ -650,12 +589,21 @@ function buildSummaryRows(statsInput, adjustmentTotalsInput) {
     buildSummaryEntry('9', 'Mã giấy phép (khác nhau)', licenseCount || 0),
   ];
 
-  rows.push(
-    buildSummaryEntry('10', 'Hỗ trợ thông quan (điểm)', supportPoints, supportQuantity),
-    buildSummaryEntry('11', 'Điều chỉnh KPI – Huỷ tờ khai', cancelPoints, cancelQuantity),
-    buildSummaryEntry('12', 'Điều chỉnh KPI – Sửa tờ khai', correctionPoints, correctionQuantity),
-    buildSummaryEntry('13', 'Điều chỉnh KPI – Hoàn thuế', taxPoints, taxQuantity),
-  );
+  const totalsSource = adjustmentTotalsInput || stats.adjustmentTotals || {};
+  const totals = cloneAdjustmentTotals(totalsSource);
+  const totalsList = toAdjustmentTotalsArray(totals);
+  let indexCounter = 10;
+  for (const entry of totalsList) {
+    rows.push(
+      buildSummaryEntry(
+        String(indexCounter),
+        `Điều chỉnh KPI – ${entry.label}`,
+        formatAdjustmentPoints(entry.points),
+        formatAdjustmentQuantity(entry.quantity),
+      ),
+    );
+    indexCounter += 1;
+  }
 
   return rows;
 }

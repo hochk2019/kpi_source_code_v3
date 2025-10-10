@@ -20,6 +20,7 @@ import {
   aggregateByCompany,
 } from "@/lib/reports.js";
 import { seedSampleDeclarations } from "@/shared/sampleDeclarations.js";
+import { toAdjustmentTotalsArray } from "../../shared/kpiAdjustments.js";
 import {
   ResponsiveContainer,
   LineChart,
@@ -584,12 +585,17 @@ function AdjustmentDigestCard({ report }) {
   ];
 
   const totals = report.totalsByCategory || {};
-  const categories = [
-    { key: "support", label: "Hỗ trợ thông quan", tone: "text-emerald-600" },
-    { key: "cancel", label: "Huỷ tờ khai", tone: "text-rose-500" },
-    { key: "correction", label: "Sửa tờ khai", tone: "text-amber-600" },
-    { key: "tax", label: "Hoàn thuế", tone: "text-sky-600" },
-  ];
+  const categoryToneMap = {
+    support: "text-emerald-600",
+    cancel: "text-rose-500",
+    correction: "text-amber-600",
+    tax: "text-sky-600",
+    teamwork: "text-indigo-600",
+    coworker_attitude: "text-purple-600",
+    customer_attitude: "text-fuchsia-600",
+    discipline: "text-amber-700",
+  };
+  const categories = toAdjustmentTotalsArray(totals);
 
   const formatOptionalDecimal = (value) => {
     const num = Number(value);
@@ -632,7 +638,7 @@ function AdjustmentDigestCard({ report }) {
         <h4 className="text-sm font-semibold text-gray-900">Phân bổ theo hạng mục</h4>
         <ul className="mt-2 space-y-2">
           {categories.map((item) => {
-            const entry = totals[item.key] || { points: 0, quantity: 0 };
+            const tone = categoryToneMap[item.key] || "text-slate-600";
             return (
               <li
                 key={item.key}
@@ -640,10 +646,10 @@ function AdjustmentDigestCard({ report }) {
               >
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="font-medium text-gray-900 dark:text-gray-100">{item.label}</span>
-                  <span className={`font-semibold ${item.tone}`}>{formatOptionalDecimal(entry.points)}</span>
+                  <span className={`font-semibold ${tone}`}>{formatOptionalDecimal(item.points)}</span>
                 </div>
                 <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                  Số lượt: <span className="font-semibold text-gray-700 dark:text-gray-200">{formatOptionalInt(entry.quantity)}</span>
+                  Số lượt: <span className="font-semibold text-gray-700 dark:text-gray-200">{formatOptionalInt(item.quantity)}</span>
                 </div>
               </li>
             );

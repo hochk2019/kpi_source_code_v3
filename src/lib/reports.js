@@ -6,6 +6,11 @@ import {
   isExportDecl,
   KPI_ADJUSTMENT_CATEGORY_CONFIG,
 } from "@/lib/store.js";
+import {
+  addAdjustmentTotals,
+  cloneAdjustmentTotals,
+  createAdjustmentTotals,
+} from "../../shared/kpiAdjustments.js";
 import { computeKPI, DEFAULT_RULES } from "@/lib/rules.js";
 import { formatDisplayDate } from "@/shared/format.js";
 
@@ -153,60 +158,6 @@ function createStats() {
     coLines: 0,
     licenseCodes: new Set(),
   };
-}
-
-const ADJUSTMENT_CATEGORY_GROUPS = Object.freeze({
-  support: new Set(['support_fixed', 'support_dynamic']),
-  cancel: new Set(['cancel_staff', 'cancel_customer']),
-  correction: new Set(['correction_staff', 'correction_customer']),
-  tax: new Set(['tax_refund_staff', 'tax_refund_customer']),
-});
-
-function createAdjustmentTotals() {
-  return {
-    support: { points: 0, quantity: 0 },
-    cancel: { points: 0, quantity: 0 },
-    correction: { points: 0, quantity: 0 },
-    tax: { points: 0, quantity: 0 },
-  };
-}
-
-function cloneAdjustmentTotals(source = createAdjustmentTotals()) {
-  const base = createAdjustmentTotals();
-  const entries = source || {};
-  for (const key of Object.keys(base)) {
-    if (entries[key]) {
-      base[key] = {
-        points: Number(entries[key].points || 0),
-        quantity: Number(entries[key].quantity || 0),
-      };
-    }
-  }
-  return base;
-}
-
-function classifyAdjustmentCategory(category) {
-  const normalized = normalizeStr(category).toLowerCase();
-  for (const [group, set] of Object.entries(ADJUSTMENT_CATEGORY_GROUPS)) {
-    if (set.has(normalized)) {
-      return group;
-    }
-  }
-  return null;
-}
-
-function addAdjustmentTotals(targetTotals, groupKey, points, quantity) {
-  if (!groupKey || !targetTotals[groupKey]) {
-    return;
-  }
-  const pointValue = Number(points || 0);
-  const quantityValue = Number(quantity || 0);
-  if (Number.isFinite(pointValue)) {
-    targetTotals[groupKey].points += pointValue;
-  }
-  if (Number.isFinite(quantityValue)) {
-    targetTotals[groupKey].quantity += quantityValue;
-  }
 }
 
 function ensureStaffAdjustmentEntry(map, key, name, teamName) {
@@ -640,7 +591,6 @@ export function buildReportData(rowsInput, { roster, rules, from, to, adjustment
 
       const totalPoints = Number(adj.totalPoints || 0);
       const quantityValue = Number(adj.quantity || 0);
-      const groupKey = classifyAdjustmentCategory(adj.category);
       const detailRow = {
         date: candidateDateStr,
         displayDate: `${month}`,
@@ -682,21 +632,19 @@ export function buildReportData(rowsInput, { roster, rules, from, to, adjustment
       memberEntry.stats.kpi += totalPoints;
       summaryStats.kpi += totalPoints;
 
-      if (groupKey) {
-        addAdjustmentTotals(adjustmentMeta.totalsByCategory, groupKey, totalPoints, quantityValue);
-        const staffSummary = ensureStaffAdjustmentEntry(
-          adjustmentMeta.byStaff,
-          staffEntry.key,
-          staffEntry.name,
-          teamEntry.name
-        );
-        if (staffSummary) {
-          addAdjustmentTotals(staffSummary.totals, groupKey, totalPoints, quantityValue);
-        }
-        const teamSummary = ensureTeamAdjustmentEntry(adjustmentMeta.byTeam, teamEntry.key, teamEntry.name);
-        if (teamSummary) {
-          addAdjustmentTotals(teamSummary.totals, groupKey, totalPoints, quantityValue);
-        }
+      addAdjustmentTotals(adjustmentMeta.totalsByCategory, adj.category, totalPoints, quantityValue);
+      const staffSummary = ensureStaffAdjustmentEntry(
+        adjustmentMeta.byStaff,
+        staffEntry.key,
+        staffEntry.name,
+        teamEntry.name
+      );
+      if (staffSummary) {
+        addAdjustmentTotals(staffSummary.totals, adj.category, totalPoints, quantityValue);
+      }
+      const teamSummary = ensureTeamAdjustmentEntry(adjustmentMeta.byTeam, teamEntry.key, teamEntry.name);
+      if (teamSummary) {
+        addAdjustmentTotals(teamSummary.totals, adj.category, totalPoints, quantityValue);
       }
 
       adjustmentMeta.totalPoints += totalPoints;

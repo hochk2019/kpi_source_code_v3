@@ -1533,6 +1533,20 @@ function requireFeedbackReview(req, res) {
   return { context, denied: false };
 }
 
+function requireNotificationAccess(req, res) {
+  const context = getSessionContext(req);
+  if (!context) {
+    res.status(401).json({ ok: false, error: 'Vui lòng đăng nhập để xem thông báo hệ thống.' });
+    return { context: null, denied: true };
+  }
+  const account = context.account || {};
+  if (account.permissions && account.permissions.notificationView === false) {
+    res.status(403).json({ ok: false, error: 'Tài khoản hiện không được phép xem thông báo hệ thống.' });
+    return { context, denied: true };
+  }
+  return { context, denied: false };
+}
+
 function createAiHistoryId() {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }
@@ -7045,6 +7059,10 @@ app.post('/api/feedback', async (req, res) => {
 });
 
 app.get('/api/notifications', (req, res) => {
+  const { denied } = requireNotificationAccess(req, res);
+  if (denied) {
+    return;
+  }
   try {
     const limitRaw = Number.parseInt(req.query?.limit ?? '50', 10);
     const events = listNotifications({ limit: Number.isFinite(limitRaw) ? limitRaw : 50 });
@@ -7055,6 +7073,13 @@ app.get('/api/notifications', (req, res) => {
 });
 
 app.get('/api/notifications/stream', (req, res) => {
+  const { denied } = requireNotificationAccess(req, res);
+  if (denied) {
+    if (!res.headersSent) {
+      res.end();
+    }
+    return;
+  }
   registerSseClient(res);
 });
 
