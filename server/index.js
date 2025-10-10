@@ -12,6 +12,7 @@ import crypto from 'node:crypto';
 import { generateReport } from './reportExport.js';
 import { buildDefaultAiProviders } from './aiProviders/index.js';
 import { normalizeSqlUnicodeRecord } from './ecus/sqlUnicode.js';
+import { getSecureSqlCredentials } from './ecus/secureCredentials.js';
 import { deliverAlertNotification, hasAlertTargets } from './alerts/delivery.js';
 import { DEFAULT_RULES as SHARED_DEFAULT_RULES } from '../src/shared/defaultRules.js';
 import { getRulesSeed, persistRulesSnapshot, loadRulesSnapshot, listRulesHistory } from './rulesPersistence.js';
@@ -6291,11 +6292,16 @@ function buildSqlConnectionConfig(config) {
     const num = Number(value);
     return Number.isFinite(num) && num >= 0 ? num : undefined;
   };
+  const secureCredentials = getSecureSqlCredentials();
+  const server = `${connection.server || secureCredentials.server || ''}`.trim();
+  const database = `${connection.database || secureCredentials.database || ''}`.trim();
+  const user = `${connection.user || secureCredentials.user || ''}`.trim();
+  const password = connection.password || secureCredentials.password || '';
   return {
-    server: connection.server || process.env.ECUS_SQL_SERVER || '',
-    database: connection.database || process.env.ECUS_SQL_DATABASE || '',
-    user: connection.user || process.env.ECUS_SQL_USER || '',
-    password: connection.password || process.env.ECUS_SQL_PASSWORD || '',
+    server,
+    database,
+    user,
+    password,
     options: {
       encrypt: false,
       trustServerCertificate: true,
