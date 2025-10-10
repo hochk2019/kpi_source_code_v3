@@ -13,8 +13,8 @@
     "build": "vite build",
     "prelint": "node scripts/check-server.mjs",
     "lint": "eslint .",
-    "format:check": "prettier --check docs/system-improvement-proposals.md eslint.config.js package.json prettier.config.js \".github/workflows/**/*.yml\" \"server/ecus/**/*.js\"",
-    "format:write": "prettier --write docs/system-improvement-proposals.md eslint.config.js package.json prettier.config.js \".github/workflows/**/*.yml\" \"server/ecus/**/*.js\"",
+    "format:check": "prettier --check docs/system-improvement-proposals.md eslint.config.js package.json prettier.config.js \".github/workflows/**/*.yml\" \"server/ecus/**/*.js\" \"server/https/**/*.js\"",
+    "format:write": "prettier --write docs/system-improvement-proposals.md eslint.config.js package.json prettier.config.js \".github/workflows/**/*.yml\" \"server/ecus/**/*.js\" \"server/https/**/*.js\"",
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -25,6 +25,7 @@
     "ecus:inspect": "node scripts/ecus-tools.mjs inspect",
     "dev:frontend": "vite",
     "favicon:update": "node scripts/update-favicon.mjs",
+    "cert:ai": "pwsh -File ./scripts/create-ai-https-cert.ps1",
     "test:screenshot": "pnpm build && pnpm exec playwright test tests/playwright/favicon.spec.js",
     "test:playwright": "pnpm exec playwright test"
   },

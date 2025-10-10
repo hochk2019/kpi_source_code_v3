@@ -37,3 +37,9 @@
 - Khi sao lưu/khôi phục hệ thống, nhớ ghi nhận giá trị bí mật này. Nếu thay đổi secret, chữ ký cũ sẽ không khớp – cần ghi chú thời điểm thay đổi để tra cứu chính xác.
 - Báo cáo xuất tự động cần ghi nhận thêm metadata riêng (ví dụ `automation=true`) trong payload để dễ lọc log khi điều tra sự cố.
 
+## 6. Tra cứu lịch sử export
+
+- Tab **“Lịch sử export”** trong giao diện quản trị cho phép lọc bảng `export_audit` theo khoảng thời gian (tối đa 60 ngày), loại báo cáo và từ khóa (tài khoản, mã xác thực, IP, request ID).
+- Bảng hiển thị đầy đủ metadata: thời gian tải, người dùng, chữ ký/watermark, địa chỉ IP, user-agent cùng bộ lọc đã sử dụng. Nhấn “Xem chi tiết” để xem JSON bộ lọc gốc.
+- Có thể xuất danh sách ra Excel bằng phím tắt của trình duyệt hoặc copy trực tiếp khi cần phối hợp tra soát với bộ phận vận hành.
+

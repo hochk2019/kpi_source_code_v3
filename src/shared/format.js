@@ -54,3 +54,19 @@ export function formatDateRangeLabel(range) {
   }
   return from || to;
 }
+
+export function formatDateTime(input, { withSeconds = false } = {}) {
+  if (input === null || input === undefined || input === "") return "";
+  const date = input instanceof Date ? input : new Date(input);
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+  try {
+    return new Intl.DateTimeFormat("vi-VN", {
+      dateStyle: "short",
+      timeStyle: withSeconds ? "medium" : "short",
+    }).format(date);
+  } catch {
+    return date.toLocaleString("vi-VN");
+  }
+}

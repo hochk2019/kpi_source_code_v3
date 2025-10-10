@@ -39,6 +39,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog.jsx";
 import { ScrollArea } from "@/components/ui/scroll-area.jsx";
+import { toast } from "@/shared/toast.js";
 
 const DEFAULT_PAGE_SIZE = 10;
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100, 200];
@@ -227,6 +228,10 @@ const DUPLICATE_DIFF_FIELD_LABELS = Object.freeze({
   last_sync_at: "Đồng bộ ECUS trước",
   __timestamp_field: "Mốc thời gian ưu tiên",
 });
+
+const MAX_IMPORT_FILE_SIZE_BYTES = 5 * 1024 * 1024; // 5 MB
+const MAX_IMPORT_ROWS = 5000;
+const ACCEPTED_IMPORT_EXTENSIONS = Object.freeze([".xlsx", ".xlsm"]);
 
 const DUPLICATE_DIFF_IGNORED_KEYS = new Set([
   "__proto__",
@@ -2340,7 +2345,7 @@ export default function DataImporter({
   // Đọc file XLSX
   function handleFileChange(e) {
     if (isReadOnlyForEdits) {
-      alert("Bạn đang ở chế độ chỉ xem — hãy đăng nhập để import dữ liệu.");
+      alert("Bạn đang ở chế độ chỉ xem — hãy đăng nhập để import dữ liệu.`);
       return;
     }
     if (!canUploadFiles) {
@@ -2357,52 +2362,129 @@ export default function DataImporter({
         return;
       }
     }
-    const f = e.target.files?.[0];
-    if (!f) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      const wb = XLSX.read(reader.result, { type: "array" });
-      const sheet = wb.Sheets[wb.SheetNames[0]];
-      const rows = XLSX.utils.sheet_to_json(sheet, { raw: false, defval: "" });
-      const loadedRules = loadRules();
-      setRules(loadedRules);
-      const excludeCodes = Array.isArray(loadedRules?.license?.exclude?.codes)
-        ? loadedRules.license.exclude.codes
-        : [];
-      const dateOrder = detectDateOrder(rows);
-      const preferMonthFirst = dateOrder === "mdy";
-      const roster = getTeamRoster();
-      const memberMap = mapMemberNamesToTeams(roster);
-      const agencyMap = mapHQAgenciesByMST();
-
-      const mapped = rows
-        .map(r =>
-          mapRow(r, {
-            autoAssignStaff,
-            rules: loadedRules,
-            licenseExcludes: excludeCodes,
-            preferMonthFirst,
-            memberMap,
-            agencyMap,
-          })
-        )
-        .map(ensureLicenseFields)
-        .filter(r => r.so_tk && r.date);
-
-      setRawRows(sortDeclRows(mapped));
-      setPage(1);
-      setPageSize(DEFAULT_PAGE_SIZE);
-      setMode("preview");
-      setSelectedFile(f.name || "");
-      setQuery("");
-      setFilterNoStaff(false);
-      setFilterNoTeam(false);
-      setCoFilterMode("all");
-      setCoFilterMin(5);
-      setSelectedKeys([]);
-      setHasUnsaved(false);
+    const inputElement = e.target;
+    const resetInput = () => {
+      if (fileRef.current) {
+        fileRef.current.value = "";
+      }
+      if (inputElement) {
+        inputElement.value = "";
+      }
     };
-    reader.readAsArrayBuffer(f);
+
+    const file = inputElement.files?.[0];
+    if (!file) return;
+
+    const normalizedName = (file.name || "").toLowerCase();
+    const extension = normalizedName.slice(normalizedName.lastIndexOf("."));
+    if (extension && !ACCEPTED_IMPORT_EXTENSIONS.some(ext => normalizedName.endsWith(ext))) {
+      toast.error("Chỉ hỗ trợ import file Excel định dạng .xlsx hoặc .xlsm.");
+      resetInput();
+      return;
+    }
+
+    if (file.size > MAX_IMPORT_FILE_SIZE_BYTES) {
+      const limitMb = (MAX_IMPORT_FILE_SIZE_BYTES / (1024 * 1024)).toFixed(1).replace(/\.0$/, "");
+      toast.error(
+        `File vượt quá ${limitMb} MB. Vui lòng tách nhỏ hoặc xoá bớt sheet trước khi import.`
+      );
+      resetInput();
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onerror = () => {
+      toast.error("Không thể đọc file Excel. Vui lòng thử lại hoặc kiểm tra định dạng file.");
+      resetInput();
+    };
+    reader.onload = () => {
+      try {
+        const workbook = XLSX.read(reader.result, { type: "array" });
+        const sheetName = workbook.SheetNames?.[0];
+        if (!sheetName) {
+          toast.error("File Excel không chứa sheet dữ liệu nào. Vui lòng kiểm tra lại.");
+          resetInput();
+          return;
+        }
+        const sheet = workbook.Sheets[sheetName];
+        const rows = XLSX.utils.sheet_to_json(sheet, { raw: false, defval: "" });
+        if (!Array.isArray(rows) || rows.length === 0) {
+          toast.error("File Excel không có dữ liệu tờ khai. Vui lòng kiểm tra lại nội dung.");
+          resetInput();
+          return;
+        }
+        if (rows.length > MAX_IMPORT_ROWS) {
+          toast.error(
+            `File chứa ${rows.length.toLocaleString("vi-VN")} dòng, vượt giới hạn ${MAX_IMPORT_ROWS.toLocaleString(
+              "vi-VN"
+            )} dòng cho mỗi lần import. Vui lòng tách file hoặc lọc lại dữ liệu.`
+          );
+          resetInput();
+          return;
+        }
+
+        const loadedRules = loadRules();
+        setRules(loadedRules);
+        const excludeCodes = Array.isArray(loadedRules?.license?.exclude?.codes)
+          ? loadedRules.license.exclude.codes
+          : [];
+        const dateOrder = detectDateOrder(rows);
+        const preferMonthFirst = dateOrder === "mdy";
+        const roster = getTeamRoster();
+        const memberMap = mapMemberNamesToTeams(roster);
+        const agencyMap = mapHQAgenciesByMST();
+
+        const normalizedRows = rows
+          .map(r =>
+            mapRow(r, {
+              autoAssignStaff,
+              rules: loadedRules,
+              licenseExcludes: excludeCodes,
+              preferMonthFirst,
+              memberMap,
+              agencyMap,
+            })
+          )
+          .map(ensureLicenseFields);
+
+        const invalidDateCount = normalizedRows.filter(row => !row.date).length;
+        if (invalidDateCount > 0) {
+          toast.error(
+            `Có ${invalidDateCount.toLocaleString(
+              "vi-VN"
+            )} dòng có ngày tờ khai không hợp lệ. Vui lòng kiểm tra lại định dạng ngày (dd/mm/yyyy).`
+          );
+          resetInput();
+          return;
+        }
+
+        const sanitizedRows = normalizedRows.filter(row => row.so_tk && row.date);
+        if (!sanitizedRows.length) {
+          toast.error("Không tìm thấy tờ khai hợp lệ sau khi kiểm tra file Excel.");
+          resetInput();
+          return;
+        }
+
+        setRawRows(sortDeclRows(sanitizedRows));
+        setPage(1);
+        setPageSize(DEFAULT_PAGE_SIZE);
+        setMode("preview");
+        setSelectedFile(file.name || "");
+        setQuery("");
+        setFilterNoStaff(false);
+        setFilterNoTeam(false);
+        setCoFilterMode("all");
+        setCoFilterMin(5);
+        setSelectedKeys([]);
+        setHasUnsaved(false);
+      } catch (err) {
+        console.error("Không thể xử lý file Excel import", err);
+        toast.error("Không thể xử lý file Excel. Vui lòng kiểm tra định dạng và thử lại.");
+      } finally {
+        resetInput();
+      }
+    };
+    reader.readAsArrayBuffer(file);
   }
 
   // Tìm nhanh
@@ -2998,7 +3080,7 @@ export default function DataImporter({
       return;
     }
     if (mode !== "preview") {
-      alert("Hãy chọn file XLSX để import.");
+      alert("Hãy chọn file XLSX để import.`);
       return;
     }
     if (rawRows.length === 0) {

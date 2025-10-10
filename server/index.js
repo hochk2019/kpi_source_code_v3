@@ -3,6 +3,7 @@ import cors from 'cors';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import fs from 'node:fs/promises';
+import https from 'node:https';
 import process from 'node:process';
 import Database from 'better-sqlite3';
 import cron from 'node-cron';
@@ -14,6 +15,7 @@ import { buildDefaultAiProviders } from './aiProviders/index.js';
 import { normalizeSqlUnicodeRecord } from './ecus/sqlUnicode.js';
 import { getSecureSqlCredentials } from './ecus/secureCredentials.js';
 import { deliverAlertNotification, hasAlertTargets } from './alerts/delivery.js';
+import { loadAiHttpsConfig } from './https/aiHttpsConfig.js';
 import { DEFAULT_RULES as SHARED_DEFAULT_RULES } from '../src/shared/defaultRules.js';
 import { getRulesSeed, persistRulesSnapshot, loadRulesSnapshot, listRulesHistory } from './rulesPersistence.js';
 import { deriveCOStatus, parseCoLineCount, setPreferentialCodeConfig } from '../src/shared/co.js';
@@ -747,6 +749,10 @@ const FILTER_PRESET_SCOPE_DEFAULT = 'data-importer';
 const KNOWN_FILTER_PRESET_SCOPES = new Set([FILTER_PRESET_SCOPE_DEFAULT, 'report-viewer']);
 const FILTER_PRESET_MAX_PER_SCOPE = 20;
 
+const EXPORT_AUDIT_DEFAULT_LIMIT = 50;
+const EXPORT_AUDIT_MAX_LIMIT = 200;
+const EXPORT_AUDIT_MAX_RANGE_DAYS = 60;
+
 const ECUS_MONITOR_HISTORY_KEY = 'ecus_monitor_history_v1';
 const DEFAULT_ECUS_MONITOR_HISTORY = Object.freeze({
   version: 1,
@@ -1452,6 +1458,20 @@ function requireAuditView(req, res) {
   const account = context.account || {};
   if (!(account.permissions?.auditView || account.permissions?.accountManage)) {
     res.status(403).json({ ok: false, error: 'Tài khoản hiện không có quyền xem nhật ký hệ thống.' });
+    return { context, denied: true };
+  }
+  return { context, denied: false };
+}
+
+function requireExportAuditView(req, res) {
+  const context = getSessionContext(req);
+  if (!context) {
+    res.status(401).json({ ok: false, error: 'Bạn cần đăng nhập để xem lịch sử export.' });
+    return { context: null, denied: true };
+  }
+  const account = context.account || {};
+  if (!(account.permissions?.auditView || account.permissions?.accountManage)) {
+    res.status(403).json({ ok: false, error: 'Tài khoản hiện không có quyền xem lịch sử export.' });
     return { context, denied: true };
   }
   return { context, denied: false };
@@ -3440,6 +3460,44 @@ function toISODate(value, { preferMonthFirst = false } = {}) {
     return `${parsed.getFullYear()}-${pad(parsed.getMonth() + 1)}-${pad(parsed.getDate())}`;
   }
   return '';
+}
+
+function parseDateFilterParam(value, { endOfDay = false } = {}) {
+  const raw = Array.isArray(value) ? value[0] : value;
+  const normalized = normalizeStr(raw);
+  if (!normalized) {
+    return null;
+  }
+  const iso = toISODate(normalized);
+  if (!iso) {
+    return null;
+  }
+  const date = new Date(`${iso}T00:00:00`);
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+  if (endOfDay) {
+    date.setHours(23, 59, 59, 999);
+  }
+  return date.toISOString();
+}
+
+function clampPositiveInt(value, { min = 1, max = Number.MAX_SAFE_INTEGER, fallback = 1 } = {}) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) {
+    return fallback;
+  }
+  const normalized = Math.trunc(numeric);
+  if (Number.isNaN(normalized)) {
+    return fallback;
+  }
+  if (normalized < min) {
+    return min;
+  }
+  if (normalized > max) {
+    return max;
+  }
+  return normalized;
 }
 
 function isExportDecl(soTk, loaiHinh) {
@@ -8400,6 +8458,15 @@ function logServerAddresses(port, host) {
   }
 }
 
+function logAiHttpsAddresses({ port, host, certPath }) {
+  const normalizedHost = host || '127.0.0.1';
+  const displayHost = normalizedHost === '0.0.0.0' || normalizedHost === '::' ? 'localhost' : normalizedHost;
+  console.log(`[AI HTTPS] Đang phục vụ endpoint AI qua https://${displayHost}:${port}`);
+  if (certPath) {
+    console.log(`[AI HTTPS] Sử dụng chứng chỉ: ${certPath}`);
+  }
+}
+
 export {
   runEcusSyncWithErrorHandling,
   getEcusConfig,
@@ -9047,6 +9114,167 @@ app.post('/api/reports/export', async (req, res) => {
     console.error('Không thể xuất báo cáo', err);
     const status = err?.message && /không hợp lệ/i.test(err.message) ? 400 : 500;
     res.status(status).json({ ok: false, error: err?.message || 'Không thể xuất báo cáo' });
+  }
+});
+
+app.get('/api/reports/export/audit', (req, res) => {
+  const { context, denied } = requireExportAuditView(req, res);
+  if (denied) {
+    return;
+  }
+
+  const rawFrom = Array.isArray(req.query.from) ? req.query.from[0] : req.query.from;
+  const rawTo = Array.isArray(req.query.to) ? req.query.to[0] : req.query.to;
+  const fromIso = parseDateFilterParam(rawFrom);
+  const toIso = parseDateFilterParam(rawTo, { endOfDay: true });
+
+  if (fromIso && toIso) {
+    const fromDate = new Date(fromIso);
+    const toDate = new Date(toIso);
+    if (toDate.getTime() < fromDate.getTime()) {
+      res.status(400).json({ ok: false, error: 'Khoảng thời gian không hợp lệ: Ngày bắt đầu lớn hơn ngày kết thúc.' });
+      return;
+    }
+    const diffMs = toDate.getTime() - fromDate.getTime();
+    const maxRangeMs = EXPORT_AUDIT_MAX_RANGE_DAYS * 24 * 60 * 60 * 1000;
+    if (diffMs > maxRangeMs) {
+      res.status(400).json({
+        ok: false,
+        error: `Vui lòng giới hạn khoảng thời gian tra cứu trong ${EXPORT_AUDIT_MAX_RANGE_DAYS} ngày.`,
+      });
+      return;
+    }
+  }
+
+  const rawLimit = Array.isArray(req.query.limit) ? req.query.limit[0] : req.query.limit;
+  const rawPage = Array.isArray(req.query.page) ? req.query.page[0] : req.query.page;
+  const limit = clampPositiveInt(rawLimit, {
+    min: 10,
+    max: EXPORT_AUDIT_MAX_LIMIT,
+    fallback: EXPORT_AUDIT_DEFAULT_LIMIT,
+  });
+  const page = clampPositiveInt(rawPage, { min: 1, max: 1000, fallback: 1 });
+  const offset = (page - 1) * limit;
+
+  const rawKind = normalizeStr(Array.isArray(req.query.kind) ? req.query.kind[0] : req.query.kind).toLowerCase();
+  const kind = rawKind && rawKind !== 'all' ? rawKind : '';
+  const rawSearch = normalizeStr(Array.isArray(req.query.search) ? req.query.search[0] : req.query.search);
+  const search = rawSearch ? rawSearch.toLowerCase() : '';
+
+  const baseParams = {};
+  const conditions = [];
+
+  if (fromIso) {
+    baseParams.from = fromIso;
+    conditions.push('datetime(created_at) >= datetime(@from)');
+  }
+  if (toIso) {
+    baseParams.to = toIso;
+    conditions.push('datetime(created_at) <= datetime(@to)');
+  }
+  if (kind) {
+    baseParams.kind = kind;
+    conditions.push('LOWER(report_kind) = @kind');
+  }
+  if (search) {
+    baseParams.search = `%${search}%`;
+    const searchClauses = [
+      'LOWER(username) LIKE @search',
+      'LOWER(display_name) LIKE @search',
+      'LOWER(report_kind) LIKE @search',
+      'LOWER(signature) LIKE @search',
+      'LOWER(short_signature) LIKE @search',
+      'LOWER(ip_address) LIKE @search',
+      'LOWER(request_id) LIKE @search',
+    ];
+    conditions.push(`(${searchClauses.join(' OR ')})`);
+  }
+
+  const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+  const listParams = { ...baseParams, limit, offset };
+
+  try {
+    const rows = db
+      .prepare(
+        `SELECT * FROM export_audit ${whereClause} ORDER BY datetime(created_at) DESC LIMIT @limit OFFSET @offset`
+      )
+      .all(listParams);
+
+    const totalRow = db
+      .prepare(`SELECT COUNT(*) AS total FROM export_audit ${whereClause}`)
+      .get(baseParams);
+    const total = Number(totalRow?.total || 0);
+
+    const summaryByKind = db
+      .prepare(
+        `SELECT report_kind AS kind, COUNT(*) AS total FROM export_audit ${whereClause} GROUP BY report_kind ORDER BY total DESC`
+      )
+      .all(baseParams)
+      .map((item) => ({ kind: item.kind, total: Number(item.total) || 0 }));
+
+    const summaryTopUsers = db
+      .prepare(
+        `SELECT username, display_name, role, COUNT(*) AS total FROM export_audit ${whereClause} GROUP BY username, display_name, role ORDER BY total DESC LIMIT 5`
+      )
+      .all(baseParams)
+      .map((item) => ({
+        username: item.username,
+        displayName: item.display_name,
+        role: item.role,
+        total: Number(item.total) || 0,
+      }));
+
+    const availableKinds = db
+      .prepare('SELECT DISTINCT report_kind FROM export_audit ORDER BY report_kind COLLATE NOCASE')
+      .all()
+      .map((row) => row.report_kind)
+      .filter(Boolean);
+
+    const entries = rows.map((row) => ({
+      id: row.id,
+      createdAt: row.created_at,
+      issuedAt: row.issued_at,
+      username: row.username,
+      displayName: row.display_name,
+      role: row.role,
+      reportKind: row.report_kind,
+      filename: row.filename,
+      signature: row.signature,
+      shortSignature: row.short_signature,
+      filterSummary: row.filter_summary,
+      filters: safeParse(row.filters, null),
+      ipAddress: row.ip_address,
+      requestId: row.request_id,
+      userAgent: row.user_agent,
+    }));
+
+    const pageCount = Math.max(1, Math.ceil(total / limit));
+    const latestCreatedAt = entries.length ? entries[0].createdAt : null;
+
+    res.json({
+      ok: true,
+      entries,
+      total,
+      page,
+      pageSize: limit,
+      pageCount,
+      summary: {
+        total,
+        latestCreatedAt,
+        byKind: summaryByKind,
+        topUsers: summaryTopUsers,
+      },
+      filters: {
+        from: fromIso ? fromIso.slice(0, 10) : '',
+        to: toIso ? toIso.slice(0, 10) : '',
+        kind: kind || 'all',
+        search: rawSearch || '',
+      },
+      availableKinds,
+    });
+  } catch (err) {
+    console.error('Không thể tải lịch sử export', err);
+    res.status(500).json({ ok: false, error: err?.message || 'Không thể tải lịch sử export' });
   }
 });
 
@@ -9763,6 +9991,53 @@ app.get('*', async (req, res, next) => {
 });
 
 let httpServer = null;
+let aiHttpsServer = null;
+
+function startAiHttpsServerIfConfigured() {
+  if (aiHttpsServer) {
+    return aiHttpsServer;
+  }
+  const config = loadAiHttpsConfig({ env: process.env });
+  if (!config.enabled) {
+    const requested = `${process.env.KPI_AI_HTTPS_ENABLED || ''}`.trim();
+    if (requested) {
+      console.warn(
+        'Bỏ qua HTTPS nội bộ cho AI vì thiếu cấu hình chứng chỉ: %s',
+        config.reason || 'Không rõ nguyên nhân'
+      );
+    }
+    return null;
+  }
+
+  try {
+    aiHttpsServer = https.createServer(config.tlsOptions, (req, res) => {
+      if (!req.url || !req.url.startsWith('/api/ai')) {
+        res.writeHead(404, { 'content-type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ ok: false, error: 'Đường dẫn không được phục vụ qua kênh HTTPS nội bộ.' }));
+        return;
+      }
+      app(req, res);
+    });
+    aiHttpsServer.listen(config.port, config.host, () => {
+      logAiHttpsAddresses({ port: config.port, host: config.host, certPath: config.certPath });
+    });
+    aiHttpsServer.on('error', (err) => {
+      console.error('Không thể khởi chạy HTTPS nội bộ cho AI', err);
+    });
+  } catch (err) {
+    aiHttpsServer = null;
+    console.error('Lỗi thiết lập HTTPS nội bộ cho AI', err);
+  }
+
+  return aiHttpsServer;
+}
+
+function stopAiHttpsServer() {
+  if (aiHttpsServer) {
+    aiHttpsServer.close();
+    aiHttpsServer = null;
+  }
+}
 
 export function startServer(port = PORT) {
   if (httpServer) {
@@ -9771,6 +10046,7 @@ export function startServer(port = PORT) {
   httpServer = app.listen(port, HOST, () => {
     logServerAddresses(port, HOST);
   });
+  startAiHttpsServerIfConfigured();
   return httpServer;
 }
 
@@ -9779,6 +10055,7 @@ export function stopServer() {
     httpServer.close();
     httpServer = null;
   }
+  stopAiHttpsServer();
 }
 
 export function getDatabaseHandle() {

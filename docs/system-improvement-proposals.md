@@ -28,8 +28,9 @@
 - ✅ Mã hoá thông tin đăng nhập ECUS bằng DPAPI (PowerShell 7) với bộ script tạo/đọc `ecus.credentials.enc` và tự giải mã khi backend khởi động.
 - ✅ Bổ sung chữ ký số/watermark vào file Excel xuất khẩu để truy vết nguồn phát tán, đồng thời ghi log người tải.
 - ✅ Ghi nhận lịch sử tải báo cáo qua bảng `export_audit` trong kho SQLite nội bộ, phục vụ truy vết thay cho yêu cầu hạn chế quyền export.
-- Thêm lớp kiểm tra đầu vào khi import Excel (kích thước file, số dòng, định dạng ngày) để ngăn chặn dữ liệu độc hại hoặc lỗi Unicode.
-- Kích hoạt HTTPS nội bộ với chứng chỉ tự ký cho các endpoint AI để bảo vệ dữ liệu khi truyền giữa các dịch vụ.
+- ✅ Thêm lớp kiểm tra đầu vào khi import Excel (giới hạn 5 MB, tối đa 5.000 dòng, cảnh báo ngày sai định dạng) để ngăn chặn dữ liệu độc hại hoặc lỗi Unicode.
+- ✅ Bổ sung tab “Lịch sử export” trên giao diện quản trị để tra cứu bảng `export_audit` theo khoảng thời gian, loại báo cáo và từ khóa, hỗ trợ truy vết nhanh.
+- ✅ Kích hoạt HTTPS nội bộ với chứng chỉ tự ký cho các endpoint AI để bảo vệ dữ liệu khi truyền giữa các dịch vụ.
 
 ## 5. Lộ trình triển khai
 

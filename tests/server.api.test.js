@@ -1901,6 +1901,152 @@ describe('Report export API', () => {
     expect(Buffer.isBuffer(second.body)).toBe(true);
     expect(second.body.byteLength).toBeGreaterThan(0);
   });
+
+  it('yêu cầu đăng nhập trước khi tra cứu lịch sử export', async () => {
+    const res = await request(app).get('/api/reports/export/audit');
+    expect(res.status).toBe(401);
+    expect(res.body.ok).toBe(false);
+  });
+
+  it('từ chối khi tài khoản không có quyền xem lịch sử export', async () => {
+    resetDb();
+    const staffAgent = request.agent(app);
+    const loginRes = await staffAgent
+      .post('/api/auth/login')
+      .send({ username: 'nhanvien', password: '123456' });
+    expect(loginRes.status).toBe(200);
+
+    const res = await staffAgent.get('/api/reports/export/audit');
+    expect(res.status).toBe(403);
+    expect(res.body.ok).toBe(false);
+  });
+
+  it('trả về lịch sử export theo bộ lọc, phân trang và từ khóa', async () => {
+    resetDb();
+    const db = getDb();
+    const insertAudit = db.prepare(
+      `INSERT INTO export_audit (
+        created_at,
+        issued_at,
+        username,
+        display_name,
+        role,
+        report_kind,
+        filename,
+        signature,
+        short_signature,
+        filter_summary,
+        filters,
+        ip_address,
+        request_id,
+        user_agent
+      ) VALUES (
+        @created_at,
+        @issued_at,
+        @username,
+        @display_name,
+        @role,
+        @report_kind,
+        @filename,
+        @signature,
+        @short_signature,
+        @filter_summary,
+        @filters,
+        @ip_address,
+        @request_id,
+        @user_agent
+      )`
+    );
+
+    insertAudit.run({
+      created_at: '2025-03-01T03:15:00.000Z',
+      issued_at: '2025-03-01T03:10:00.000Z',
+      username: 'admin',
+      display_name: 'Quản trị viên',
+      role: 'admin',
+      report_kind: 'staff',
+      filename: 'bao-cao-staff.xlsx',
+      signature: 'SIG-001',
+      short_signature: 'AA1001',
+      filter_summary: 'Team 1 • Tháng 03/2025',
+      filters: JSON.stringify({ range: { from: '2025-03-01', to: '2025-03-31' }, team: 'Team 1' }),
+      ip_address: '10.0.0.1',
+      request_id: 'req-001',
+      user_agent: 'Vitest/1.0',
+    });
+
+    insertAudit.run({
+      created_at: '2025-03-02T09:30:00.000Z',
+      issued_at: '2025-03-02T09:25:00.000Z',
+      username: 'lead.hoc',
+      display_name: 'Trưởng nhóm Học',
+      role: 'lead',
+      report_kind: 'team',
+      filename: 'bao-cao-team.xlsx',
+      signature: 'SIG-002',
+      short_signature: 'BB2002',
+      filter_summary: 'Team 2 • So sánh KPI',
+      filters: JSON.stringify({ range: { from: '2025-03-01', to: '2025-03-02' }, team: 'Team 2' }),
+      ip_address: '10.0.0.2',
+      request_id: 'req-002',
+      user_agent: 'Vitest/1.0',
+    });
+
+    insertAudit.run({
+      created_at: '2025-04-01T08:00:00.000Z',
+      issued_at: '2025-04-01T07:58:00.000Z',
+      username: 'manager.hoainam',
+      display_name: 'Quản lý Nam',
+      role: 'manager',
+      report_kind: 'staff',
+      filename: 'bao-cao-thang4.xlsx',
+      signature: 'SIG-003',
+      short_signature: 'CC3003',
+      filter_summary: 'Tháng 04/2025',
+      filters: JSON.stringify({ range: { from: '2025-04-01', to: '2025-04-30' } }),
+      ip_address: '10.0.0.3',
+      request_id: 'req-003',
+      user_agent: 'Vitest/1.0',
+    });
+
+    const adminAgent = request.agent(app);
+    const loginRes = await adminAgent.post('/api/auth/login').send({ username: 'admin', password: 'admin123' });
+    expect(loginRes.status).toBe(200);
+
+    const res = await adminAgent
+      .get('/api/reports/export/audit')
+      .query({ from: '2025-03-01', to: '2025-03-07', limit: 2, page: 1 });
+
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+    expect(res.body.total).toBe(2);
+    expect(res.body.entries).toHaveLength(2);
+    expect(res.body.entries[0]).toMatchObject({ reportKind: 'team', shortSignature: 'BB2002' });
+    expect(res.body.entries[0].filters).toMatchObject({ range: { from: '2025-03-01', to: '2025-03-02' } });
+    expect(res.body.summary.byKind).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: 'staff', total: 1 }),
+        expect.objectContaining({ kind: 'team', total: 1 }),
+      ])
+    );
+    expect(res.body.summary.topUsers).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ username: 'lead.hoc', total: 1 }),
+        expect.objectContaining({ username: 'admin', total: 1 }),
+      ])
+    );
+
+    const searchRes = await adminAgent
+      .get('/api/reports/export/audit')
+      .query({ search: 'req-002', limit: 1, page: 1 });
+
+    expect(searchRes.status).toBe(200);
+    expect(searchRes.body.ok).toBe(true);
+    expect(searchRes.body.total).toBe(1);
+    expect(searchRes.body.entries).toHaveLength(1);
+    expect(searchRes.body.entries[0].requestId).toBe('req-002');
+    expect(searchRes.body.availableKinds).toEqual(expect.arrayContaining(['staff', 'team']));
+  });
 });
 
 describe('Alert API', () => {
