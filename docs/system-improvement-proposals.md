@@ -7,6 +7,7 @@
 - ✅ Bổ sung lớp mapping dữ liệu giữa SQL Server 2008 R2 và các mô-đun báo cáo để đảm bảo tương thích Unicode, tránh lỗi cắt chuỗi tiếng Việt.
 - ✅ Áp dụng kiểm tra lint và định dạng tự động trên CI (ESLint + Prettier) kèm quy tắc dành riêng cho môi trường Windows (dấu xuống dòng CRLF) nhằm giảm xung đột khi triển khai nội bộ.
 - ✅ Viết thêm bộ test E2E tối thiểu cho các luồng trọng yếu (nhập tờ khai, đồng bộ ECUS, xuất Excel) bằng Playwright ở chế độ headless để bắt sớm lỗi giao diện.
+- ✅ Dọn dẹp dữ liệu mẫu và chuyển vào `docs/samples` kèm hướng dẫn sử dụng để tránh lẫn với mã nguồn triển khai thực tế.
 
 ## 2. Giao diện & trải nghiệm người dùng
 

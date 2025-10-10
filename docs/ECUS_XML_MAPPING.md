@@ -9,12 +9,12 @@ các cột mong đợi trong hệ thống KPI.
 
 ## 1. Dùng CLI `pnpm ecus:inspect`
 
-1. Tải file XML cần phân tích (ví dụ
-   `ECUS5VNACCS2018_ToKhai_105110557420_STT2131.xml`).
+1. Tải file XML cần phân tích (ví dụ có sẵn trong thư mục
+   `docs/samples/ECUS5VNACCS2018_ToKhai_105110557420_STT2131.xml`).
 2. Chạy lệnh:
 
    ```bash
-   pnpm ecus:inspect --file ECUS5VNACCS2018_ToKhai_105110557420_STT2131.xml
+   pnpm ecus:inspect --file docs/samples/ECUS5VNACCS2018_ToKhai_105110557420_STT2131.xml
    ```
 
 3. Công cụ sẽ duyệt toàn bộ cây XML, tìm các nút có chứa các khóa giống
