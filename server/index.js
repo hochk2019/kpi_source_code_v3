@@ -5351,6 +5351,86 @@ function buildDataHealthSummary() {
   };
 }
 
+async function buildEcusSyncMonitorSnapshot() {
+  const [database, config] = await Promise.all([
+    checkSqlServerHealth().catch((error) => ({
+      ok: false,
+      state: 'error',
+      message: error?.message || 'Không thể kiểm tra SQL Server',
+      checkedAt: new Date().toISOString(),
+    })),
+    Promise.resolve(getEcusConfig()),
+  ]);
+
+  const lastSummary = config?.lastSummary || {};
+  const lastRunAt = lastSummary.runAt || config?.lastRun || null;
+  const lastStatus = config?.lastStatus || lastSummary.status || null;
+  const now = Date.now();
+  const lastRunDate = lastRunAt ? new Date(lastRunAt) : null;
+  const staleMinutes =
+    lastRunDate && Number.isFinite(lastRunDate.getTime())
+      ? Math.max(0, Math.round((now - lastRunDate.getTime()) / 60000))
+      : null;
+
+  const severityThreshold = {
+    warning: 90,
+    critical: 180,
+  };
+
+  const issues = [];
+  let severity = 'normal';
+
+  if (!database?.ok) {
+    severity = 'critical';
+    issues.push(
+      database?.message ||
+        'Không thể kết nối SQL Server ECUS. Vui lòng kiểm tra cấu hình hoặc trạng thái dịch vụ.',
+    );
+  }
+
+  if (typeof lastStatus === 'string' && lastStatus.toLowerCase().startsWith('error')) {
+    severity = 'critical';
+    issues.push('Lần đồng bộ gần nhất kết thúc với trạng thái lỗi.');
+  }
+
+  if (staleMinutes === null) {
+    severity = severity === 'critical' ? 'critical' : 'warning';
+    issues.push('Chưa có thống kê lần đồng bộ gần nhất.');
+  } else if (staleMinutes > severityThreshold.critical) {
+    severity = 'critical';
+    issues.push(`Lần đồng bộ gần nhất đã cách đây ${staleMinutes} phút (vượt ngưỡng ${severityThreshold.critical} phút).`);
+  } else if (staleMinutes > severityThreshold.warning && severity !== 'critical') {
+    severity = 'warning';
+    issues.push(
+      `Lần đồng bộ gần nhất đã cách đây ${staleMinutes} phút (vượt ngưỡng ${severityThreshold.warning} phút cảnh báo).`,
+    );
+  }
+
+  if (!issues.length && severity !== 'critical') {
+    severity = 'normal';
+  }
+
+  return {
+    generatedAt: new Date().toISOString(),
+    severity,
+    issues,
+    thresholds: severityThreshold,
+    sync: {
+      lastRunAt,
+      lastStatus,
+      staleMinutes,
+      rowsFetched: lastSummary.rowsFetched ?? null,
+      rowsInserted: lastSummary.rowsInserted ?? null,
+      rowsUpdated: lastSummary.rowsUpdated ?? null,
+      rowsSkipped: lastSummary.rowsSkipped ?? null,
+      totalStored: lastSummary.totalStored ?? null,
+      range: lastSummary.range || null,
+      alerts: lastSummary.alerts || null,
+    },
+    database,
+  };
+}
+
 function buildSqlConnectionConfig(config) {
   const connection = config?.connection || {};
   const poolOptions = connection.pool && typeof connection.pool === 'object' ? connection.pool : undefined;
@@ -7352,6 +7432,29 @@ app.use(express.json({ limit: '5mb' }));
 
 app.get('/api/health', (req, res) => {
   res.json({ ok: true });
+});
+
+const monitorAccessToken = (process.env.MONITOR_ACCESS_TOKEN || '').trim();
+
+app.get('/api/internal/monitor/ecus-sync', async (req, res) => {
+  if (!monitorAccessToken) {
+    res.status(503).json({ ok: false, error: 'Chưa cấu hình MONITOR_ACCESS_TOKEN trên máy chủ.' });
+    return;
+  }
+
+  const providedToken = String(req.get('x-monitor-token') || req.query.token || '').trim();
+  if (!providedToken || providedToken !== monitorAccessToken) {
+    res.status(403).json({ ok: false, error: 'Token xác thực không hợp lệ.' });
+    return;
+  }
+
+  try {
+    const snapshot = await buildEcusSyncMonitorSnapshot();
+    res.json({ ok: true, snapshot });
+  } catch (err) {
+    console.error('Không thể tạo snapshot giám sát ECUS', err);
+    res.status(500).json({ ok: false, error: err?.message || 'Không thể tổng hợp trạng thái đồng bộ ECUS.' });
+  }
 });
 
 app.get('/api/filter-presets', (req, res) => {
