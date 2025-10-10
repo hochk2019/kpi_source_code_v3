@@ -23,7 +23,7 @@ import {
   Users,
 } from 'lucide-react';
 import { emitCommand } from '@/lib/commandBus.js';
-import { useTheme } from '@/designSystem/ThemeProvider.jsx';
+import { useTheme } from '@/designSystem/useTheme.js';
 
 const PIN_STORAGE_KEY = 'kpi_command_center_pins_v1';
 const USAGE_STORAGE_KEY = 'kpi_command_center_usage_v1';

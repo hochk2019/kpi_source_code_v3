@@ -1,5 +1,5 @@
 import React from 'react';
-import { Contrast, MonitorSmartphone, MoonStar, Sun } from 'lucide-react';
+import { Contrast, MonitorSmartphone, MoonStar, Palette, Sun } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -8,7 +8,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu.jsx';
-import { useTheme } from '@/designSystem/ThemeProvider.jsx';
+import { useTheme } from '@/designSystem/useTheme.js';
 
 const OPTIONS = [
   {
@@ -38,7 +38,7 @@ const OPTIONS = [
 ];
 
 export default function ThemeToggle({ className = '' }) {
-  const { theme, resolvedTheme, setTheme } = useTheme();
+  const { theme, resolvedTheme, setTheme, brand, setBrand, brandOptions } = useTheme();
   const active = theme === 'system' ? resolvedTheme : theme;
   const ActiveIcon =
     active === 'dark'
@@ -75,6 +75,37 @@ export default function ThemeToggle({ className = '' }) {
                 <span className="block font-semibold">{option.label}</span>
                 <span className="block text-xs text-gray-500">{option.description}</span>
               </span>
+            </DropdownMenuItem>
+          );
+        })}
+        <DropdownMenuSeparator />
+        <DropdownMenuLabel className="flex items-center gap-2">
+          <Palette className="h-4 w-4" />
+          Bảng màu thương hiệu
+        </DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        {brandOptions.map((option) => {
+          const selected = brand === option.value;
+          return (
+            <DropdownMenuItem
+              key={option.value}
+              onSelect={() => setBrand(option.value)}
+              className={`flex items-start gap-3 text-sm ${selected ? 'text-[var(--ds-accent-strong)]' : ''}`}
+            >
+              <span
+                className="mt-0.5 h-5 w-5 flex-shrink-0 overflow-hidden rounded-full border border-black/10"
+                style={{ background: option.gradient ?? option.preview }}
+                aria-hidden="true"
+              />
+              <span>
+                <span className="block font-semibold">{option.label}</span>
+                <span className="block text-xs text-gray-500">{option.description}</span>
+              </span>
+              {selected && (
+                <span className="ml-auto mt-0.5 inline-flex h-5 w-5 items-center justify-center rounded-full bg-brand-soft text-[10px] font-semibold uppercase text-brand-700">
+                  Đang dùng
+                </span>
+              )}
             </DropdownMenuItem>
           );
         })}
