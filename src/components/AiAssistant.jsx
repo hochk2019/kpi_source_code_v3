@@ -10,6 +10,7 @@ import {
   updateAiConfig,
   saveAiHistory,
   clearAiHistory,
+  testAiProvider,
 } from '@/lib/aiClient.js';
 
 function formatDateTime(value) {
@@ -464,6 +465,7 @@ export default function AiAssistant({ currentUser }) {
   const [newProviderPreset, setNewProviderPreset] = useState(
     AI_PROVIDER_PRESETS[0]?.key || 'custom'
   );
+  const [providerTests, setProviderTests] = useState({});
 
   const [messages, setMessages] = useState([]);
   const [prompt, setPrompt] = useState('');
@@ -792,6 +794,17 @@ export default function AiAssistant({ currentUser }) {
       providers[index] = { ...providers[index], ...patch };
       return { ...prev, providers };
     });
+    setProviderTests((prev) => {
+      if (!prev || !prev[providerId]) {
+        return prev;
+      }
+      const next = { ...prev };
+      next[providerId] = {
+        ...prev[providerId],
+        status: 'stale',
+      };
+      return next;
+    });
   };
 
   const handleAddProvider = useCallback(
@@ -849,7 +862,65 @@ export default function AiAssistant({ currentUser }) {
         fallbackProvider: nextFallback,
       };
     });
+    setProviderTests((prev) => {
+      if (!prev || !prev[providerId]) {
+        return prev;
+      }
+      const next = { ...prev };
+      delete next[providerId];
+      return next;
+    });
   }, []);
+
+  const handleTestProvider = useCallback(
+    async (providerId) => {
+      if (!draft) {
+        toast.error('Chưa có cấu hình để kiểm tra.');
+        return;
+      }
+      const providers = Array.isArray(draft.providers) ? draft.providers : [];
+      const provider = providers.find((entry) => entry.id === providerId);
+      if (!provider) {
+        toast.error('Không tìm thấy nhà cung cấp tương ứng.');
+        return;
+      }
+      const payload = { ...provider };
+      if (payload.apiKey !== undefined && payload.apiKey !== null) {
+        payload.apiKey = `${payload.apiKey}`.trim();
+      }
+      delete payload.apiKeyPreview;
+      delete payload.hasStoredKey;
+      setProviderTests((prev) => ({
+        ...prev,
+        [providerId]: { status: 'testing', startedAt: new Date().toISOString() },
+      }));
+      try {
+        const result = await testAiProvider(payload);
+        setProviderTests((prev) => ({
+          ...prev,
+          [providerId]: {
+            status: 'success',
+            message: result?.message || 'Đã phản hồi',
+            usage: result?.usage || null,
+            checkedAt: new Date().toISOString(),
+          },
+        }));
+        toast.success('Đã kiểm tra kết nối thành công.');
+      } catch (error) {
+        const errorMessage = error?.message || 'Không thể kiểm thử nhà cung cấp AI.';
+        setProviderTests((prev) => ({
+          ...prev,
+          [providerId]: {
+            status: 'error',
+            error: errorMessage,
+            checkedAt: new Date().toISOString(),
+          },
+        }));
+        toast.error(errorMessage);
+      }
+    },
+    [draft],
+  );
 
   const handleConfigReset = () => {
     setDraft(createDraftFromConfig(config));
@@ -1410,13 +1481,36 @@ export default function AiAssistant({ currentUser }) {
                       </p>
                     </div>
                   </div>
-                  <p className="text-xs text-gray-500">
-                    Lưu ý: điền khóa API trực tiếp nếu chưa thiết lập biến môi trường tương ứng trên máy chủ.
-                    Ví dụ Google AI Studio dùng khóa dạng <span className="font-mono">AIza...</span>, OpenAI sử dụng Bearer token,
-                    Anthropic dùng khóa bắt đầu bằng <span className="font-mono">sk-ant-</span>.
-                  </p>
-                  {draft.providers.map((provider) => (
-                    <div key={provider.id} className="rounded border border-gray-100 bg-gray-50 p-4">
+                  <div className="space-y-1 text-xs text-gray-500">
+                    <p>
+                      Lưu ý: điền khóa API trực tiếp nếu chưa thiết lập biến môi trường tương ứng trên máy chủ.
+                    </p>
+                    <ul className="list-disc space-y-0.5 pl-4 text-[color:var(--ds-text-muted)]">
+                      <li>
+                        Google AI Studio: endpoint mặc định <code className="font-mono">https://generativelanguage.googleapis.com</code>,
+                        model đề xuất <code className="font-mono">gemini-1.5-flash</code>, khóa có dạng <code className="font-mono">AIza...</code>.
+                      </li>
+                      <li>
+                        OpenAI: endpoint <code className="font-mono">https://api.openai.com/v1</code>, model ví dụ <code className="font-mono">gpt-4o-mini</code>,
+                        khóa mang tiền tố <code className="font-mono">sk-</code>.
+                      </li>
+                      <li>
+                        Anthropic Claude: endpoint <code className="font-mono">https://api.anthropic.com</code>, version <code className="font-mono">2023-06-01</code>,
+                        khóa bắt đầu bằng <code className="font-mono">sk-ant-</code>.
+                      </li>
+                      <li>
+                        Azure OpenAI: điền Deployment name và API Version (ví dụ <code className="font-mono">2024-08-01-preview</code>),
+                        endpoint dạng <code className="font-mono">https://&lt;tên-dịch-vụ&gt;.openai.azure.com</code>.
+                      </li>
+                    </ul>
+                  </div>
+                  {draft.providers.map((provider) => {
+                    const testState = providerTests[provider.id] || null;
+                    return (
+                      <div
+                        key={provider.id}
+                        className="rounded border border-gray-100 bg-gray-50 p-4"
+                      >
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <div>
                           <p className="text-sm font-semibold text-gray-800">{provider.label || provider.id}</p>
@@ -1548,9 +1642,43 @@ export default function AiAssistant({ currentUser }) {
                             )}
                           </div>
                         </label>
+                        <div className="md:col-span-2">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => handleTestProvider(provider.id)}
+                              className="rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] px-3 py-1 text-xs font-medium text-[color:var(--ds-text-secondary)] shadow-sm transition hover:bg-[color:var(--ds-surface-muted)]"
+                            >
+                              Kiểm tra khóa API
+                            </button>
+                            {testState?.status === 'testing' && (
+                              <span className="text-xs text-[color:var(--ds-text-muted)]">Đang kiểm tra…</span>
+                            )}
+                            {testState?.status === 'stale' && (
+                              <span className="text-xs text-amber-600">
+                                Đã thay đổi cấu hình, cần kiểm tra lại.
+                              </span>
+                            )}
+                            {testState?.status === 'success' && (
+                              <span className="text-xs text-emerald-600">
+                                Thành công: {testState.message || 'Đã phản hồi'}
+                              </span>
+                            )}
+                            {testState?.status === 'error' && (
+                              <span className="text-xs text-red-500">Lỗi: {testState.error}</span>
+                            )}
+                          </div>
+                          {testState?.usage && (
+                            <p className="mt-1 text-[10px] text-[color:var(--ds-text-muted)]">
+                              {formatUsage(testState.usage)}
+                              {testState?.checkedAt && ` • ${new Date(testState.checkedAt).toLocaleString('vi-VN')}`}
+                            </p>
+                          )}
+                        </div>
                       </div>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
 
                 <div className="flex justify-end gap-2">

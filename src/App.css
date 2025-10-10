@@ -328,6 +328,10 @@
     background-color: var(--ds-surface-card) !important;
     color: var(--ds-text-primary) !important;
   }
+  [data-theme='high-contrast'] .import-data-view .bg-white,
+  [data-theme='high-contrast'] .hq-agency-view .bg-white {
+    background-color: color-mix(in srgb, var(--ds-surface-card) 92%, var(--ds-border-strong) 8%) !important;
+  }
   .import-data-view .border,
   .hq-agency-view .border {
     border-color: var(--ds-border-subtle) !important;
@@ -341,14 +345,19 @@
     background: color-mix(in srgb, var(--ds-surface-muted) 75%, transparent) !important;
     color: var(--ds-text-secondary) !important;
   }
+  [data-theme='high-contrast'] .import-data-view thead,
+  [data-theme='high-contrast'] .hq-agency-view thead {
+    background: color-mix(in srgb, var(--ds-surface-muted) 55%, var(--ds-border-strong) 45%) !important;
+    color: var(--ds-text-primary) !important;
+  }
   .import-data-view tbody tr:nth-child(odd),
   .hq-agency-view tbody tr:nth-child(odd) {
     background: color-mix(in srgb, var(--ds-surface-raised) 65%, transparent) !important;
   }
   .dark .import-data-view tbody tr:nth-child(odd),
   .dark .hq-agency-view tbody tr:nth-child(odd),
-  .high-contrast .import-data-view tbody tr:nth-child(odd),
-  .high-contrast .hq-agency-view tbody tr:nth-child(odd) {
+  [data-theme='high-contrast'] .import-data-view tbody tr:nth-child(odd),
+  [data-theme='high-contrast'] .hq-agency-view tbody tr:nth-child(odd) {
     background: color-mix(in srgb, var(--ds-surface-muted) 55%, transparent) !important;
   }
   .border-gray-200,

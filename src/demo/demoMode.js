@@ -328,6 +328,12 @@ export async function enableDemoMode() {
     aiCache: JSON.parse(bootstrapStore.ai_usage_cache_v1),
     aiHistory: { history: [] },
     aiChat: { messages: [{ role: 'assistant', content: 'Xin chào, tôi có thể giúp gì?' }] },
+    aiProviderTest: {
+      ok: true,
+      provider: { id: 'demo-ai', label: 'Demo AI', type: 'google-ai-studio' },
+      message: 'OK demo',
+      usage: { prompt_tokens: 8, completion_tokens: 12, total_tokens: 20 },
+    },
     storageOk: { ok: true },
     notifications: notificationHistory,
   }
@@ -351,6 +357,7 @@ export async function enableDemoMode() {
       if (url.includes('/api/ai/cache')) return createResponse(responses.aiCache)
       if (url.includes('/api/ai/history')) return createResponse(responses.aiHistory)
       if (url.includes('/api/ai/chat')) return createResponse(responses.aiChat)
+      if (url.includes('/api/ai/providers/test')) return createResponse(responses.aiProviderTest)
       if (url.includes('/api/storage/')) return createResponse(responses.storageOk)
       if (url.includes('/api/notifications')) return createResponse(responses.notifications)
     } catch (error) {

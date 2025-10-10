@@ -14,6 +14,7 @@ import {
   pushAuditLog,
 } from './store.js';
 import { getItem as getStorageItem, setItem as setStorageItem } from './storageClient.js';
+import { fetchWithAuth } from '@/auth/localAuth.js';
 import {
   DEFAULT_RULES,
   createDefaultRuleCollection,
@@ -335,6 +336,48 @@ export function getRulesHistory() {
   } catch (err) {
     console.warn('getRulesHistory: invalid data, reset history', err);
     return [];
+  }
+}
+
+export async function fetchRulesHistoryFromServer({ signal } = {}) {
+  try {
+    const response = await fetchWithAuth('/api/rules/history', { signal });
+    const data = await response.json();
+    if (!response.ok || data?.ok === false) {
+      throw new Error(data?.error || `HTTP ${response.status}`);
+    }
+    const rawHistory = Array.isArray(data?.history) ? data.history : [];
+    const normalized = rawHistory
+      .map((entry) => {
+        if (!entry) return null;
+        const snapshot = entry.rules ? normalizeRule(entry.rules) : null;
+        if (!snapshot) {
+          return null;
+        }
+        const updatedAt = entry.savedAt || snapshot.updatedAt || new Date().toISOString();
+        return {
+          id: snapshot.id,
+          name: snapshot.name,
+          updatedAt,
+          applyFrom: snapshot.applyFrom || '',
+          snapshot,
+        };
+      })
+      .filter(Boolean);
+    if (normalized.length > 0) {
+      try {
+        setStorageItem(KEY_HISTORY, JSON.stringify(normalized));
+      } catch (err) {
+        console.warn('Không thể lưu lịch sử quy tắc vào localStorage', err);
+      }
+      return normalized;
+    }
+    return getRulesHistory();
+  } catch (error) {
+    if (signal?.aborted) {
+      throw error;
+    }
+    throw new Error(error?.message || 'Không thể tải lịch sử quy tắc KPI.');
   }
 }
 

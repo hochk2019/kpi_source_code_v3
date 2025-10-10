@@ -164,6 +164,10 @@ const DATE_RANGE_PRESETS = Object.freeze([
   },
 ]);
 
+const CARD_SURFACE_CLASS = "rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] shadow-sm";
+const ZEBRA_TABLE_BODY_CLASS =
+  "[&_tbody_tr:nth-child(odd)]:bg-[color:var(--ds-surface-card)] [&_tbody_tr:nth-child(even)]:bg-[color:var(--ds-surface-muted)]";
+
 async function extractErrorMessage(response, fallbackMessage) {
   if (!response || typeof response !== "object") {
     return fallbackMessage;
@@ -2837,7 +2841,8 @@ export default function DataImporter({
     success: "border border-emerald-200 bg-emerald-50 text-emerald-700",
     warning: "border border-amber-200 bg-amber-50 text-amber-700",
     danger: "border border-red-200 bg-red-50 text-red-700",
-    muted: "border border-gray-200 bg-gray-100 text-gray-600",
+    muted:
+      "border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-muted)] text-[color:var(--ds-text-muted)]",
   };
 
   const resolveStatusMeta = (status, fallback, kind = "database") => {
@@ -2918,7 +2923,10 @@ export default function DataImporter({
                       usageMap.get(selected)?.push(field.label);
                     }
                     return (
-                      <div key={`${group.rawPrefix || group.prefix}-${group.total}`} className="rounded border border-gray-200 bg-white p-3 shadow-sm dark:border-gray-700 dark:bg-gray-900/40">
+                      <div
+                        key={`${group.rawPrefix || group.prefix}-${group.total}`}
+                        className="rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] p-3 shadow-sm"
+                      >
                         <div className="flex flex-col gap-1 md:flex-row md:items-start md:justify-between">
                           <div>
                             <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">{group.prefix}</h3>
@@ -2938,7 +2946,7 @@ export default function DataImporter({
                         </div>
                         <div className="mt-3 overflow-x-auto">
                           <table className="min-w-full text-xs">
-                            <thead className="bg-gray-50 text-gray-600 dark:bg-gray-900/40 dark:text-gray-300">
+                            <thead className="bg-[color:var(--ds-surface-muted)] text-[color:var(--ds-text-secondary)]">
                               <tr>
                                 <th className="px-2 py-1 text-left">Giữ</th>
                                 <th className="px-2 py-1 text-left">Số tờ khai</th>
@@ -2959,10 +2967,13 @@ export default function DataImporter({
                                 const rowClass = isKeeper
                                   ? "bg-emerald-50 text-emerald-900 dark:bg-emerald-900/20 dark:text-emerald-100"
                                   : index % 2 === 0
-                                    ? "bg-white dark:bg-transparent"
-                                    : "bg-gray-50 dark:bg-gray-900/40";
+                                    ? "bg-[color:var(--ds-surface-card)]"
+                                    : "bg-[color:var(--ds-surface-muted)]";
                                 return (
-                                  <tr key={item.key} className={`${rowClass} border-b last:border-b-0 dark:border-gray-800`}>
+                                  <tr
+                                    key={item.key}
+                                    className={`${rowClass} border-b border-[color:var(--ds-border-subtle)] last:border-b-0`}
+                                  >
                                     <td className="px-2 py-1">
                                       <label className="flex items-center gap-1">
                                         <input
@@ -2975,13 +2986,13 @@ export default function DataImporter({
                                       </label>
                                     </td>
                                     <td className="px-2 py-1">
-                                      <div className="font-medium text-gray-900 dark:text-gray-100">{item.label}</div>
-                                      <div className="text-[10px] uppercase text-gray-400">{item.key}</div>
+                                      <div className="font-medium text-[color:var(--ds-text-primary)]">{item.label}</div>
+                                      <div className="text-[10px] uppercase text-[color:var(--ds-text-muted)]">{item.key}</div>
                                     </td>
                                     <td className="px-2 py-1">{item.sourceLabel}</td>
                                     <td className="px-2 py-1">
                                       <div>{item.timestampDisplay || "Không xác định"}</div>
-                                      <div className="text-[10px] text-gray-400">{item.timestampLabel}</div>
+                                      <div className="text-[10px] text-[color:var(--ds-text-muted)]">{item.timestampLabel}</div>
                                     </td>
                                     <td className="px-2 py-1">{item.staff || <span className="text-gray-400">(trống)</span>}</td>
                                     <td className="px-2 py-1">{item.team || <span className="text-gray-400">(trống)</span>}</td>
@@ -2991,13 +3002,16 @@ export default function DataImporter({
                                       {selectedFields.length > 0 ? (
                                         <div className="space-y-0.5">
                                           {selectedFields.map((fieldLabel) => (
-                                            <span key={`${item.key}-${fieldLabel}`} className="block rounded bg-emerald-100 px-2 py-0.5 text-[10px] font-medium text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-200">
+                                            <span
+                                              key={`${item.key}-${fieldLabel}`}
+                                              className="block rounded bg-emerald-100 px-2 py-0.5 text-[10px] font-medium text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-200"
+                                            >
                                               {fieldLabel}
                                             </span>
                                           ))}
                                         </div>
                                       ) : (
-                                        <span className="text-gray-400">(không)</span>
+                                        <span className="text-[color:var(--ds-text-muted)]">(không)</span>
                                       )}
                                     </td>
                                     <td className="px-2 py-1 text-right">{item.score.toLocaleString("vi-VN")}</td>
@@ -3014,7 +3028,7 @@ export default function DataImporter({
                               <label key={`${group.rawPrefix}-${field.key}`} className="flex flex-col gap-1">
                                 <span className="text-[11px] font-medium text-gray-500 dark:text-gray-400">{field.label}</span>
                                 <select
-                                  className="rounded border border-gray-300 px-2 py-1 text-sm dark:border-gray-600 dark:bg-gray-900"
+                                  className="rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] px-2 py-1 text-sm"
                                   value={merges[field.key] || keeperKey}
                                   onChange={(e) => handleChangeDuplicateMerge(group.rawPrefix, field.key, e.target.value)}
                                   disabled={resolution === "review"}
@@ -3032,7 +3046,7 @@ export default function DataImporter({
                             <label className="flex flex-col gap-1">
                               <span className="font-semibold text-gray-600 dark:text-gray-300">Hành động cho nhóm</span>
                               <select
-                                className="rounded border border-gray-300 px-2 py-1 text-sm dark:border-gray-600 dark:bg-gray-900"
+                                className="rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] px-2 py-1 text-sm"
                                 value={resolution}
                                 onChange={(e) => handleChangeDuplicateResolution(group.rawPrefix, e.target.value)}
                               >
@@ -3044,7 +3058,7 @@ export default function DataImporter({
                               <label className="flex flex-col gap-1">
                                 <span className="text-[11px] font-medium text-gray-500 dark:text-gray-400">Ghi chú (tùy chọn)</span>
                                 <textarea
-                                  className="min-h-[60px] rounded border border-gray-300 px-2 py-1 text-sm dark:border-gray-600 dark:bg-gray-900"
+                                  className="min-h-[60px] rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] px-2 py-1 text-sm"
                                   value={note}
                                   onChange={(e) => handleChangeDuplicateNote(group.rawPrefix, e.target.value)}
                                   placeholder="Ví dụ: Cần đối chiếu KPI với phòng chứng từ"
@@ -3061,8 +3075,8 @@ export default function DataImporter({
                 </div>
               </ScrollArea>
             ) : (
-              <div className="rounded border border-gray-200 bg-white p-4 text-center text-sm text-gray-500 dark:border-gray-700 dark:bg-gray-900/40 dark:text-gray-300">
-                <p className="text-sm text-gray-500 dark:text-gray-400">Không tìm thấy nhóm trùng để rà soát.</p>
+              <div className="rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] p-4 text-center text-sm text-[color:var(--ds-text-muted)]">
+                <p className="text-sm text-[color:var(--ds-text-muted)]">Không tìm thấy nhóm trùng để rà soát.</p>
               </div>
             )}
             <label className="flex items-start gap-2 text-sm text-gray-700 dark:text-gray-200">
@@ -3079,7 +3093,7 @@ export default function DataImporter({
             <button
               type="button"
               onClick={handleCloseDuplicateReview}
-              className="rounded border px-3 py-1 text-sm text-gray-600 hover:bg-gray-100 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
+              className="rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] px-3 py-1 text-sm text-[color:var(--ds-text-secondary)] hover:bg-[color:var(--ds-surface-muted)]"
             >
               Hủy
             </button>
@@ -3107,7 +3121,7 @@ export default function DataImporter({
       )}
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
         {summaryCards.map((card) => (
-          <div key={card.label} className="rounded border bg-white p-3 shadow-sm">
+          <div key={card.label} className={`${CARD_SURFACE_CLASS} p-3`}>
             <div className="text-xs uppercase tracking-wide text-gray-500">{card.label}</div>
             <div className="mt-1 text-2xl font-semibold text-gray-900">{card.value?.toLocaleString?.("vi-VN") ?? card.value}</div>
           </div>
@@ -3145,7 +3159,7 @@ export default function DataImporter({
               {updatedPreview.map((entry) => (
                 <span
                   key={`${entry.so_tk}_${entry.nhanh || entry.branch || 'main'}`}
-                  className="rounded bg-white px-2 py-0.5 text-emerald-700 shadow-sm"
+                  className="rounded bg-[color:var(--ds-surface-card)] px-2 py-0.5 text-emerald-700 shadow-sm"
                 >
                   {formatDeclarationLabel(entry)}
                 </span>
@@ -3364,7 +3378,10 @@ export default function DataImporter({
                       </thead>
                       <tbody>
                         {previewRows.map((row) => (
-                          <tr key={`${row.so_tk}_${row.nhanh || ""}`} className="odd:bg-white even:bg-emerald-50/40">
+                          <tr
+                            key={`${row.so_tk}_${row.nhanh || ""}`}
+                            className="odd:bg-[color:var(--ds-surface-card)] even:bg-[color:var(--ds-surface-muted)]"
+                          >
                             <td className="px-2 py-1">{row.so_tk}</td>
                             <td className="px-2 py-1">{formatDisplayDate(row.date)}</td>
                             <td className="px-2 py-1">{row.mst}</td>
@@ -3392,7 +3409,7 @@ export default function DataImporter({
           )}
         </CollapsibleCard>
       ) : (
-        <section className="rounded border bg-white p-4 shadow-sm">
+        <section className={`${CARD_SURFACE_CLASS} p-4`}>
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
               <h2 className="text-base font-semibold text-gray-900">Đồng bộ ECUS</h2>
@@ -3614,7 +3631,7 @@ export default function DataImporter({
                   </thead>
                   <tbody>
                     {coMismatchPreview.map((item) => (
-                      <tr key={item.key} className="odd:bg-white even:bg-amber-50/40">
+                      <tr key={item.key} className="odd:bg-[color:var(--ds-surface-card)] even:bg-[color:var(--ds-surface-muted)]">
                         <td className="px-2 py-1">{formatDeclarationLabel(item)}</td>
                         <td className="px-2 py-1 text-center">{item.stored?.has_co ? "Có" : "Không"} ({item.stored?.co_line_count ?? 0})</td>
                         <td className="px-2 py-1 text-center">{item.remote?.has_co ? "Có" : "Không"} ({item.remote?.co_line_count ?? 0})</td>
@@ -3632,7 +3649,7 @@ export default function DataImporter({
       </CollapsibleCard>
 
 
-<section className="rounded border bg-white p-4 shadow-sm">
+<section className={`${CARD_SURFACE_CLASS} p-4`}>
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
             <h2 className="text-base font-semibold text-gray-900">Cảnh báo tờ khai thiếu thông tin</h2>
@@ -3659,7 +3676,10 @@ export default function DataImporter({
               </thead>
               <tbody>
                 {outstandingAlerts.map((alert) => (
-                  <tr key={alert.key} className="odd:bg-white even:bg-gray-50">
+                  <tr
+                    key={alert.key}
+                    className="odd:bg-[color:var(--ds-surface-card)] even:bg-[color:var(--ds-surface-muted)]"
+                  >
                     <td className="px-2 py-1">{alert.so_tk}</td>
                     <td className="px-2 py-1">{alert.mst}</td>
                     <td className="px-2 py-1">{alert.company}</td>
@@ -3690,7 +3710,7 @@ export default function DataImporter({
           <button
             type="button"
             onClick={() => fileRef.current?.click()}
-            className="px-3 py-1.5 rounded border bg-white shadow-sm hover:bg-gray-50"
+            className="px-3 py-1.5 rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] shadow-sm hover:bg-[color:var(--ds-surface-muted)]"
           >
             Chọn file XLSX
           </button>
@@ -4073,7 +4093,10 @@ export default function DataImporter({
             const rowEditable = isRowEditable(r);
             const rowReadOnly = isReadOnlyForEdits || !rowEditable;
             return (
-              <tr key={`${rowKey}_${i}`} className="odd:bg-white even:bg-gray-50">
+              <tr
+                key={`${rowKey}_${i}`}
+                className="odd:bg-[color:var(--ds-surface-card)] even:bg-[color:var(--ds-surface-muted)]"
+              >
                 {selectionEnabled && (
                   <td className="px-2 py-1">
                     <input

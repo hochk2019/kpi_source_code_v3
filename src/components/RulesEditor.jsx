@@ -26,6 +26,7 @@ import {
   exportRuleCollection,
   restoreRuleCollection,
   getRulesHistory,
+  fetchRulesHistoryFromServer,
 } from "@/lib/rules.js";
 import { getData } from "@/lib/store.js";
 import { cn } from "@/lib/utils.js";
@@ -455,7 +456,10 @@ export default function RulesEditor({ canEdit = true, currentUser = null }) {
   const [rule, setRule] = useState(() => loadRules(collection.activeId));
   const [applyNow, setApplyNow] = useState(false);
   const [dirty, setDirty] = useState(false);
-  const [historyEntries, setHistoryEntries] = useState(() => getRulesHistory());
+  const [historyEntries, setHistoryEntries] = useState([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState('');
+  const [historyReloadToken, setHistoryReloadToken] = useState(0);
   const [expandedHistoryId, setExpandedHistoryId] = useState(null);
 
   useEffect(() => {
@@ -472,6 +476,42 @@ export default function RulesEditor({ canEdit = true, currentUser = null }) {
   }, [version, activeTab]);
 
   const isReadOnly = !canEdit;
+
+  useEffect(() => {
+    let cancelled = false;
+    const controller = new AbortController();
+    setHistoryLoading(true);
+    fetchRulesHistoryFromServer({ signal: controller.signal })
+      .then((entries) => {
+        if (cancelled) return;
+        const list = Array.isArray(entries) && entries.length > 0 ? entries : getRulesHistory();
+        setHistoryEntries(list);
+        setHistoryError('');
+        setExpandedHistoryId(null);
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        const fallback = getRulesHistory();
+        setHistoryEntries(fallback);
+        if (!controller.signal.aborted) {
+          setHistoryError(error?.message || 'Không thể tải lịch sử quy tắc KPI từ máy chủ.');
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setHistoryLoading(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, [historyReloadToken, version]);
+
+  const handleHistoryRefresh = useCallback(() => {
+    setExpandedHistoryId(null);
+    setHistoryReloadToken((token) => token + 1);
+  }, []);
 
   const data = useMemo(() => getData(), []);
   const testList = useMemo(() => {
@@ -1225,19 +1265,25 @@ export default function RulesEditor({ canEdit = true, currentUser = null }) {
             </div>
           </div>
 
-          <div className="space-y-2 rounded border border-gray-200 bg-white p-3">
+          <div className="space-y-2 rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] p-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <h3 className="text-sm font-semibold text-gray-700">Lịch sử cập nhật điểm KPI</h3>
-              <button
-                type="button"
-                onClick={() => {
-                  setHistoryEntries(getRulesHistory());
-                  setExpandedHistoryId(null);
-                }}
-                className="rounded border border-gray-200 px-3 py-1 text-xs text-gray-600 hover:bg-gray-50"
-              >
-                Làm mới
-              </button>
+              <div className="flex flex-wrap items-center gap-2">
+                {historyError && !historyLoading && (
+                  <span className="text-xs text-red-500">{historyError}</span>
+                )}
+                {historyLoading && (
+                  <span className="text-xs text-[color:var(--ds-text-muted)]">Đang tải…</span>
+                )}
+                <button
+                  type="button"
+                  onClick={handleHistoryRefresh}
+                  disabled={historyLoading}
+                  className="rounded border border-[color:var(--ds-border-subtle)] px-3 py-1 text-xs text-[color:var(--ds-text-secondary)] hover:bg-[color:var(--ds-surface-muted)] disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {historyLoading ? 'Đang tải…' : 'Làm mới'}
+                </button>
+              </div>
             </div>
             {historyEntries.length === 0 ? (
               <p className="text-xs text-gray-500">Chưa có ghi nhận lịch sử nào.</p>

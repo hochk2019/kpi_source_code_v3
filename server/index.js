@@ -7540,6 +7540,70 @@ app.put('/api/ai/config', (req, res) => {
   }
 });
 
+app.post('/api/ai/providers/test', async (req, res) => {
+  const { denied } = requireAiAssistManage(req, res);
+  if (denied) {
+    return;
+  }
+  try {
+    const rawProvider = req.body?.provider;
+    if (!rawProvider || typeof rawProvider !== 'object') {
+      res.status(400).json({ ok: false, error: 'Thiếu thông tin nhà cung cấp.' });
+      return;
+    }
+    const config = getAiConfig();
+    const baseProvider = config?.providers?.find((entry) => entry?.id === rawProvider.id) || {};
+    const fallbackId = `${rawProvider.id || rawProvider.idBase || baseProvider.id || rawProvider.type || 'provider'}-test`;
+    const normalized =
+      normalizeAiProviderEntry({ ...baseProvider, ...rawProvider, id: fallbackId }, baseProvider) || null;
+    if (!normalized) {
+      res.status(400).json({ ok: false, error: 'Không thể chuẩn hóa dữ liệu nhà cung cấp.' });
+      return;
+    }
+    if (!normalized.type) {
+      res.status(400).json({ ok: false, error: 'Thiếu loại nhà cung cấp (type).' });
+      return;
+    }
+    if (!normalized.apiKey) {
+      const envKey = normalized.apiKeyEnv ? process.env[normalized.apiKeyEnv] : null;
+      if (envKey) {
+        normalized.apiKey = envKey;
+      }
+    }
+    if (!normalized.apiKey) {
+      res.status(400).json({ ok: false, error: 'Vui lòng nhập khóa API trước khi kiểm thử.' });
+      return;
+    }
+    const promptInput = `${req.body?.prompt || 'Ping'}`.trim().slice(0, 280);
+    const messages = [
+      {
+        role: 'system',
+        content:
+          'Bạn đang trong chế độ kiểm thử kết nối API. Hãy trả lời thật ngắn gọn (tối đa 30 ký tự) để xác nhận đã nhận được tín hiệu.',
+      },
+      { role: 'user', content: promptInput || 'Ping' },
+    ];
+    const timeoutMs = toPositiveInt(req.body?.timeoutMs, DEFAULT_AI_CONFIG.timeoutMs) || 15000;
+    const result = await dispatchAiChat(
+      { ...normalized, enabled: true },
+      {
+        messages,
+        temperature: Math.min(Math.max(toFiniteNumber(normalized.temperature, 0.2), 0), 0.6),
+        maxTokens: Math.min(toPositiveInt(normalized.maxTokens, DEFAULT_AI_CONFIG.maxTokens) || 128, 256),
+      },
+      { signal: buildAbortSignal(timeoutMs) },
+    );
+    res.json({
+      ok: true,
+      provider: { id: normalized.id, label: normalized.label, type: normalized.type },
+      message: truncateText(result?.message || '', 320),
+      usage: result?.usage || null,
+    });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err?.message || 'Không thể kiểm thử nhà cung cấp AI.' });
+  }
+});
+
 app.delete('/api/ai/cache', (req, res) => {
   const { denied, context } = requireAiAssistManage(req, res);
   if (denied) {
