@@ -853,6 +853,27 @@ export async function initializeDatabase({ dbFile = DB_FILE } = {}) {
   database.exec(
     'CREATE INDEX IF NOT EXISTS idx_auth_sessions_username ON auth_sessions(username)'
   );
+  database.exec(
+    'CREATE TABLE IF NOT EXISTS export_audit (\n' +
+      '  id INTEGER PRIMARY KEY AUTOINCREMENT,\n' +
+      '  created_at TEXT NOT NULL,\n' +
+      '  issued_at TEXT,\n' +
+      '  username TEXT NOT NULL,\n' +
+      '  display_name TEXT,\n' +
+      '  role TEXT,\n' +
+      '  report_kind TEXT NOT NULL,\n' +
+      '  filename TEXT,\n' +
+      '  signature TEXT,\n' +
+      '  short_signature TEXT,\n' +
+      '  filter_summary TEXT,\n' +
+      '  filters TEXT,\n' +
+      '  ip_address TEXT,\n' +
+      '  request_id TEXT,\n' +
+      '  user_agent TEXT\n' +
+      ')'
+  );
+  database.exec('CREATE INDEX IF NOT EXISTS idx_export_audit_created_at ON export_audit(created_at)');
+  database.exec('CREATE INDEX IF NOT EXISTS idx_export_audit_username ON export_audit(username)');
 
   let seedData = { ...DEFAULT_STORAGE };
   try {
@@ -3290,6 +3311,7 @@ export function resetDatabaseForTests() {
 
   db.exec('DELETE FROM kv_store');
   db.exec('DELETE FROM auth_sessions');
+  db.exec('DELETE FROM export_audit');
   const insertMany = db.transaction((entries) => {
     const stmt = db.prepare(
       'INSERT INTO kv_store (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value'
@@ -3443,6 +3465,98 @@ function pushAuditLog(entry) {
   const logs = getJSONValue('audit_logs_v1', []);
   logs.unshift(payload);
   setJSONValue('audit_logs_v1', logs.slice(0, 200));
+  return payload;
+}
+
+function toNullableString(value, { maxLength = 2048, trim = true } = {}) {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  const text = `${value}`;
+  const normalized = trim ? text.trim() : text;
+  if (!normalized) {
+    return null;
+  }
+  const asNfc = normalized.normalize('NFC');
+  if (asNfc.length > maxLength) {
+    return asNfc.slice(0, maxLength);
+  }
+  return asNfc;
+}
+
+function stringifyFiltersForAudit(filters) {
+  if (filters === null || filters === undefined) {
+    return null;
+  }
+  if (typeof filters === 'string') {
+    return toNullableString(filters, { maxLength: 4096, trim: true });
+  }
+  try {
+    const json = JSON.stringify(filters);
+    return toNullableString(json, { maxLength: 4096, trim: true });
+  } catch {
+    return null;
+  }
+}
+
+function recordReportExportAudit(entry = {}) {
+  const createdAt = new Date();
+  const roleValue = entry?.role ? normalizeRoleKey(entry.role) : null;
+  const payload = {
+    created_at: createdAt.toISOString(),
+    issued_at: entry?.issuedAt ? toNullableString(entry.issuedAt, { maxLength: 64 }) : null,
+    username: toNullableString(entry?.username, { maxLength: 128 }) || 'unknown',
+    display_name: toNullableString(entry?.displayName, { maxLength: 256 }),
+    role: toNullableString(roleValue, { maxLength: 64 }),
+    report_kind: toNullableString(entry?.kind, { maxLength: 128 }) || 'unknown',
+    filename: toNullableString(entry?.filename, { maxLength: 512 }),
+    signature: toNullableString(entry?.signature, { maxLength: 128 }),
+    short_signature: toNullableString(entry?.shortSignature, { maxLength: 64 }),
+    filter_summary: toNullableString(entry?.filterSummary, { maxLength: 1024, trim: false }),
+    filters: stringifyFiltersForAudit(entry?.filters),
+    ip_address: toNullableString(entry?.ipAddress, { maxLength: 128 }),
+    request_id: toNullableString(entry?.requestId, { maxLength: 128 }),
+    user_agent: toNullableString(entry?.userAgent, { maxLength: 512, trim: false }),
+  };
+
+  try {
+    db.prepare(
+      `INSERT INTO export_audit (
+        created_at,
+        issued_at,
+        username,
+        display_name,
+        role,
+        report_kind,
+        filename,
+        signature,
+        short_signature,
+        filter_summary,
+        filters,
+        ip_address,
+        request_id,
+        user_agent
+      ) VALUES (
+        @created_at,
+        @issued_at,
+        @username,
+        @display_name,
+        @role,
+        @report_kind,
+        @filename,
+        @signature,
+        @short_signature,
+        @filter_summary,
+        @filters,
+        @ip_address,
+        @request_id,
+        @user_agent
+      )`
+    ).run(payload);
+  } catch (err) {
+    console.error('Không thể ghi lịch sử xuất báo cáo', err);
+  }
+
   return payload;
 }
 
@@ -8887,6 +9001,16 @@ app.post('/api/reports/export', async (req, res) => {
     res.send(buffer);
 
     const actor = context.account?.username || 'unknown';
+    const requestUserAgent = Array.isArray(req.headers['user-agent'])
+      ? req.headers['user-agent'][0]
+      : req.headers['user-agent'] || '';
+    const issuedAtIso =
+      watermark?.issuedAt instanceof Date && !Number.isNaN(watermark.issuedAt.getTime())
+        ? watermark.issuedAt.toISOString()
+        : watermark?.issuedAt
+        ? `${watermark.issuedAt}`
+        : new Date().toISOString();
+
     pushAuditLog({
       actor,
       action: 'reports.export',
@@ -8896,12 +9020,28 @@ app.post('/api/reports/export', async (req, res) => {
         filename,
         signature: signature || null,
         shortSignature: watermark?.shortSignature || null,
-        issuedAt: watermark?.issuedAt ? watermark.issuedAt.toISOString() : new Date().toISOString(),
+        issuedAt: issuedAtIso,
         filterSummary: watermark?.filterSummary || null,
         filters: watermark?.filters || null,
         ip: ipAddress || null,
         requestId: watermark?.requestId || requestId,
       },
+    });
+
+    recordReportExportAudit({
+      username: actor,
+      displayName: context.account?.name,
+      role: context.account?.role,
+      kind,
+      filename,
+      signature,
+      shortSignature: watermark?.shortSignature,
+      filterSummary: watermark?.filterSummary,
+      filters: watermark?.filters ?? payload,
+      ipAddress: ipAddress || null,
+      requestId: watermark?.requestId || requestId,
+      userAgent: requestUserAgent,
+      issuedAt: issuedAtIso,
     });
   } catch (err) {
     console.error('Không thể xuất báo cáo', err);

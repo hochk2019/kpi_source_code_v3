@@ -1763,6 +1763,9 @@ describe('Report export API', () => {
       .send({ kind: 'staff', payload: {} });
     expect(res.status).toBe(401);
     expect(res.body.ok).toBe(false);
+
+    const auditCount = getDb().prepare('SELECT COUNT(*) AS total FROM export_audit').get();
+    expect(auditCount.total).toBe(0);
   });
 
   it('từ chối khi tài khoản không có quyền báo cáo', async () => {
@@ -1788,6 +1791,9 @@ describe('Report export API', () => {
 
     expect(exportRes.status).toBe(403);
     expect(exportRes.body.ok).toBe(false);
+
+    const auditCount = getDb().prepare('SELECT COUNT(*) AS total FROM export_audit').get();
+    expect(auditCount.total).toBe(0);
 
     const cleanup = await admin.delete('/api/auth/accounts/noperm');
     expect(cleanup.status).toBe(200);
@@ -1832,6 +1838,20 @@ describe('Report export API', () => {
     expect(res.headers['content-disposition']).toMatch(/bao-cao-kpi-nhan-vien/);
     expect(Buffer.isBuffer(res.body)).toBe(true);
     expect(res.body.byteLength).toBeGreaterThan(0);
+
+    const rows = getDb()
+      .prepare('SELECT * FROM export_audit ORDER BY id DESC')
+      .all();
+    expect(rows).toHaveLength(1);
+    const [entry] = rows;
+    expect(entry.username).toBe('admin');
+    expect(entry.report_kind).toBe('staff');
+    expect(entry.signature).toBeTruthy();
+    expect(entry.short_signature).toBeTruthy();
+    expect(entry.request_id).toBeTruthy();
+    expect(entry.filters).toBeTruthy();
+    const storedFilters = JSON.parse(entry.filters);
+    expect(storedFilters).toMatchObject(payload);
   });
 
   it('tái sử dụng cache khi xuất cùng tham số', async () => {

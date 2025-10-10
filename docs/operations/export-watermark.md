@@ -21,7 +21,8 @@
 ## 3. Nhật ký tải báo cáo
 
 - Mỗi lần xuất, backend ghi log vào audit trail với action `reports.export` cùng metadata: người xuất, loại báo cáo, chữ ký, IP, bộ lọc.
-- Nhật ký được lưu tối đa 200 bản ghi gần nhất (`audit_logs_v1`). Khi cần mở rộng lưu trữ, có thể đồng bộ thêm sang bảng `export_audit` trong SQL Server nội bộ.
+- Đồng thời hệ thống lưu bản ghi chi tiết vào bảng `export_audit` trong SQLite (tự tạo khi khởi động) với các cột: `created_at`, `issued_at`, `username`, `display_name`, `role`, `report_kind`, `filename`, `signature`, `short_signature`, `filter_summary`, `filters`, `ip_address`, `request_id`, `user_agent`.
+- Khi cần mở rộng lưu trữ hoặc đồng bộ sang hạ tầng khác (ví dụ SQL Server trung tâm), có thể trích xuất bảng `export_audit` định kỳ (bằng `sqlite3` hoặc script PowerShell) rồi nhập vào kho dữ liệu tập trung.
 
 ## 4. Quy trình kiểm tra rò rỉ
 
