@@ -597,12 +597,6 @@ export default function DataImporter({
   const [upsert11, setUpsert11] = useState(true);            // Upsert theo 11 số đầu (nếu có dùng merge cục bộ)
   const [autoAssignStaff, setAutoAssignStaff] = useState(true); // Tự gán nhân viên theo MST nếu trống
 
-  useEffect(() => {
-    if (!canOverwriteData && overwrite) {
-      setOverwrite(false);
-    }
-  }, [canOverwriteData, overwrite]);
-
   const actor = currentUser?.username || "guest";
   const isReadOnlyForEdits = !canEdit;
   const canReviewAlerts = canEdit || canManageAlerts;
@@ -618,6 +612,12 @@ export default function DataImporter({
   const assignedTeamKey = normalizeName(assignedTeam);
   const canUploadFiles = canEdit && !(isTeamLead || isStaffRole);
   const canOverwriteData = canUploadFiles;
+
+  useEffect(() => {
+    if (!canOverwriteData && overwrite) {
+      setOverwrite(false);
+    }
+  }, [canOverwriteData, overwrite]);
   const editingRestrictionMessage = useMemo(() => {
     if (!canEdit) return "";
     if (isManagerRole) return "";
@@ -661,6 +661,50 @@ export default function DataImporter({
       return true;
     },
     [assignedTeamKey, canEdit, isManagerRole, isStaffRole, isTeamLead, memberTeamMap, staffNameKey]
+  );
+  const keyOfRow = useCallback((row) => {
+    const soTk = (row?.so_tk || "").toString();
+    const nhanh = (row?.nhanh || "").toString();
+    return `${soTk}_${nhanh}`;
+  }, []);
+  const filterEditableKeys = useCallback(
+    (keys) => {
+      if (!Array.isArray(keys) || keys.length === 0) {
+        return { allowed: [], blocked: 0 };
+      }
+      const target = new Set(keys);
+      const allowed = [];
+      let blocked = 0;
+      for (const row of rawRows) {
+        const key = keyOfRow(row);
+        if (!target.has(key)) continue;
+        if (isRowEditable(row)) {
+          allowed.push(key);
+        } else {
+          blocked += 1;
+        }
+      }
+      return { allowed, blocked };
+    },
+    [isRowEditable, keyOfRow, rawRows]
+  );
+  const ensureEditableKeys = useCallback(
+    (keys, actionLabel = "thao tác") => {
+      const { allowed, blocked } = filterEditableKeys(keys);
+      if (!allowed.length) {
+        if (blocked > 0 && editingRestrictionMessage) {
+          alert(editingRestrictionMessage);
+        } else if (keys?.length) {
+          alert("Không tìm thấy tờ khai phù hợp để xử lý.");
+        }
+        return null;
+      }
+      if (blocked > 0 && editingRestrictionMessage) {
+        alert(`Đã bỏ qua ${blocked} tờ khai không thuộc phạm vi của bạn khi ${actionLabel}.`);
+      }
+      return allowed;
+    },
+    [editingRestrictionMessage, filterEditableKeys]
   );
   const [syncConfig, setSyncConfig] = useState(() => ({ ...DEFAULT_SYNC_CONFIG }));
   const [syncForm, setSyncForm] = useState(() => ({
@@ -1804,53 +1848,6 @@ export default function DataImporter({
       return count;
     }, 0);
   }, [rawRows, coFilterMode, coFilterActive, coThreshold]);
-
-  const keyOfRow = useCallback((row) => {
-    const soTk = (row?.so_tk || "").toString();
-    const nhanh = (row?.nhanh || "").toString();
-    return `${soTk}_${nhanh}`;
-  }, []);
-
-  const filterEditableKeys = useCallback(
-    (keys) => {
-      if (!Array.isArray(keys) || keys.length === 0) {
-        return { allowed: [], blocked: 0 };
-      }
-      const target = new Set(keys);
-      const allowed = [];
-      let blocked = 0;
-      for (const row of rawRows) {
-        const key = keyOfRow(row);
-        if (!target.has(key)) continue;
-        if (isRowEditable(row)) {
-          allowed.push(key);
-        } else {
-          blocked += 1;
-        }
-      }
-      return { allowed, blocked };
-    },
-    [isRowEditable, keyOfRow, rawRows]
-  );
-
-  const ensureEditableKeys = useCallback(
-    (keys, actionLabel = "thao tác") => {
-      const { allowed, blocked } = filterEditableKeys(keys);
-      if (!allowed.length) {
-        if (blocked > 0 && editingRestrictionMessage) {
-          alert(editingRestrictionMessage);
-        } else if (keys?.length) {
-          alert("Không tìm thấy tờ khai phù hợp để xử lý.");
-        }
-        return null;
-      }
-      if (blocked > 0 && editingRestrictionMessage) {
-        alert(`Đã bỏ qua ${blocked} tờ khai không thuộc phạm vi của bạn khi ${actionLabel}.`);
-      }
-      return allowed;
-    },
-    [editingRestrictionMessage, filterEditableKeys]
-  );
 
   const duplicate11Summary = useMemo(() => {
     const counts = new Map();
