@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import clsx from 'clsx';
 import { fetchWithAuth } from '@/auth/localAuth.js';
 import { fetchNotificationHistory, subscribeNotificationStream } from '@/lib/notificationClient.js';
+import useAsyncRequest from '@/hooks/useAsyncRequest.js';
 
 function formatDate(value) {
   if (!value) return 'Không xác định';
@@ -37,76 +38,79 @@ const metricPalette = [
 ];
 
 export default function DataHealthDashboard({ currentUser }) {
-  const [summary, setSummary] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
   const [liveNotifications, setLiveNotifications] = useState([]);
   const [historyNotifications, setHistoryNotifications] = useState([]);
   const [policyConfig, setPolicyConfig] = useState(null);
   const [policyForm, setPolicyForm] = useState(null);
   const [policyState, setPolicyState] = useState(null);
   const [policyStats, setPolicyStats] = useState(null);
-  const [policyLoading, setPolicyLoading] = useState(false);
   const [policySaving, setPolicySaving] = useState(false);
   const [policyError, setPolicyError] = useState('');
-
-  const loadSummary = useCallback(async () => {
-    setLoading(true);
-    setError('');
-    try {
-      const response = await fetchWithAuth('/api/data-health/summary', { cache: 'no-store' });
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
-      const payload = await response.json();
-      if (payload?.ok === false) {
-        throw new Error(payload.error || 'Không thể tải sức khỏe dữ liệu');
-      }
-      setSummary(payload.summary || null);
-      if (Array.isArray(payload.summary?.notifications)) {
-        setHistoryNotifications(payload.summary.notifications);
-      }
-    } catch (err) {
-      console.error('Không thể tải sức khỏe dữ liệu', err);
-      setError(err?.message || 'Không thể tải sức khỏe dữ liệu');
-    } finally {
-      setLoading(false);
+  const summaryTask = useCallback(async ({ signal }) => {
+    const response = await fetchWithAuth('/api/data-health/summary', { cache: 'no-store', signal });
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
     }
+    const payload = await response.json();
+    if (payload?.ok === false) {
+      throw new Error(payload.error || 'Không thể tải sức khỏe dữ liệu');
+    }
+    return payload.summary || null;
   }, []);
 
-  useEffect(() => {
-    loadSummary();
-    const interval = setInterval(loadSummary, 60000);
-    return () => clearInterval(interval);
-  }, [loadSummary]);
+  const {
+    data: summary,
+    loading: summaryLoading,
+    error: summaryError,
+    execute: reloadSummary,
+  } = useAsyncRequest(summaryTask, {
+    initialData: null,
+    onSuccess: (result) => {
+      if (Array.isArray(result?.notifications)) {
+        setHistoryNotifications(result.notifications);
+      }
+    },
+  });
 
-  const loadPolicy = useCallback(async () => {
-    setPolicyLoading(true);
-    setPolicyError('');
-    try {
-      const response = await fetchWithAuth('/api/duplicate-policy', { cache: 'no-store' });
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
-      const payload = await response.json();
-      if (payload?.ok === false) {
-        throw new Error(payload.error || 'Không thể tải chính sách trùng 11 số');
-      }
-      setPolicyConfig(payload.config || null);
-      setPolicyForm(payload.config ? { ...payload.config } : null);
-      setPolicyState(payload.state || null);
-      setPolicyStats(payload.summary || null);
-    } catch (err) {
+  useEffect(() => {
+    reloadSummary();
+    const interval = setInterval(reloadSummary, 60000);
+    return () => clearInterval(interval);
+  }, [reloadSummary]);
+
+  const policyTask = useCallback(async ({ signal }) => {
+    const response = await fetchWithAuth('/api/duplicate-policy', { cache: 'no-store', signal });
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+    const payload = await response.json();
+    if (payload?.ok === false) {
+      throw new Error(payload.error || 'Không thể tải chính sách trùng 11 số');
+    }
+    return {
+      config: payload.config || null,
+      state: payload.state || null,
+      summary: payload.summary || null,
+    };
+  }, []);
+
+  const { execute: reloadPolicy, loading: policyLoading } = useAsyncRequest(policyTask, {
+    onSuccess: ({ config, state, summary: stats }) => {
+      setPolicyConfig(config || null);
+      setPolicyForm(config ? { ...config } : null);
+      setPolicyState(state || null);
+      setPolicyStats(stats || null);
+      setPolicyError('');
+    },
+    onError: (err) => {
       console.error('Không thể tải chính sách trùng 11 số', err);
       setPolicyError(err?.message || 'Không thể tải chính sách trùng 11 số');
-    } finally {
-      setPolicyLoading(false);
-    }
-  }, []);
+    },
+  });
 
   useEffect(() => {
-    loadPolicy();
-  }, [loadPolicy]);
+    reloadPolicy();
+  }, [reloadPolicy]);
 
   useEffect(() => {
     let cancelled = false;
@@ -263,14 +267,14 @@ export default function DataHealthDashboard({ currentUser }) {
       setPolicyForm(data.config ? { ...data.config } : null);
       setPolicyState(data.state || null);
       setPolicyStats(data.summary || null);
-      await loadSummary();
+      await reloadSummary();
     } catch (err) {
       console.error('Không thể cập nhật chính sách trùng 11 số', err);
       setPolicyError(err?.message || 'Không thể cập nhật chính sách trùng 11 số');
     } finally {
       setPolicySaving(false);
     }
-  }, [policyForm, loadSummary]);
+  }, [policyForm, reloadSummary]);
 
   const handleUnlockSource = useCallback(
     async (source) => {
@@ -294,7 +298,7 @@ export default function DataHealthDashboard({ currentUser }) {
         setPolicyForm(data.config ? { ...data.config } : null);
         setPolicyState(data.state || null);
         setPolicyStats(data.summary || null);
-        await loadSummary();
+        await reloadSummary();
       } catch (err) {
         console.error('Không thể mở khóa nguồn dữ liệu', err);
         setPolicyError(err?.message || 'Không thể mở khóa nguồn dữ liệu');
@@ -302,7 +306,7 @@ export default function DataHealthDashboard({ currentUser }) {
         setPolicySaving(false);
       }
     },
-    [loadSummary]
+    [reloadSummary]
   );
 
   const handleLockSource = useCallback(
@@ -335,7 +339,7 @@ export default function DataHealthDashboard({ currentUser }) {
         setPolicyForm(data.config ? { ...data.config } : null);
         setPolicyState(data.state || null);
         setPolicyStats(data.summary || null);
-        await loadSummary();
+        await reloadSummary();
       } catch (err) {
         console.error('Không thể khóa nguồn dữ liệu', err);
         setPolicyError(err?.message || 'Không thể khóa nguồn dữ liệu');
@@ -343,7 +347,7 @@ export default function DataHealthDashboard({ currentUser }) {
         setPolicySaving(false);
       }
     },
-    [loadSummary]
+    [reloadSummary]
   );
 
   const combinedNotifications = useMemo(() => {
@@ -372,16 +376,16 @@ export default function DataHealthDashboard({ currentUser }) {
           <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
-              onClick={loadSummary}
+              onClick={reloadSummary}
               className="rounded border border-gray-300 px-3 py-1 text-sm text-gray-700 transition hover:bg-gray-100 dark:border-slate-600 dark:text-gray-200 dark:hover:bg-slate-800"
             >
-              {loading ? 'Đang tải…' : 'Làm mới'}
+              {summaryLoading ? 'Đang tải…' : 'Làm mới'}
             </button>
           </div>
         </div>
-        {error && (
+        {summaryError && (
           <div className="rounded border border-red-200 bg-red-50 p-2 text-sm text-red-700 dark:border-red-500/60 dark:bg-red-500/10 dark:text-red-200">
-            {error}
+            {summaryError}
           </div>
         )}
       </header>

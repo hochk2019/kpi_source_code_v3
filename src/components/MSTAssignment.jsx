@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import * as XLSX from "xlsx";
 import { getMSTHistoryEntries, getMSTMap, upsertMSTRows } from "@/lib/store.js";
 import useTooltipTitles from "@/hooks/useTooltipTitles.js";
+import usePagination from "@/hooks/usePagination.js";
 
 /** Utils */
 const normalize = (s = "") =>
@@ -95,7 +96,7 @@ const tidyMST = (v) => {
   return s;
 };
 
-const pageSize = 50;
+const DEFAULT_PAGE_SIZE = 50;
 
 const HISTORY_FIELD_LABELS = {
   person_import: "Người phụ trách Nhập",
@@ -197,7 +198,6 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
   const [rows, setRows] = useState([]); // toàn bộ
   const [search, setSearch] = useState("");
   const [applyFrom, setApplyFrom] = useState(""); // yyyy-mm-dd
-  const [page, setPage] = useState(1);
   const rootRef = useRef(null);
   const fileRef = useRef();
   const [selectedFileName, setSelectedFileName] = useState("");
@@ -385,7 +385,17 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
     );
   }, [rows, search]);
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const {
+    page,
+    pageCount: totalPages,
+    currentPageItems: pageRows,
+    setPage,
+    nextPage,
+    previousPage,
+  } = usePagination(filtered, {
+    initialPage: 1,
+    initialPageSize: DEFAULT_PAGE_SIZE,
+  });
 
   useTooltipTitles(rootRef, [
     rows,
@@ -396,11 +406,6 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
     selectedFileName,
     historyFilter,
   ]);
-  const pageRows = filtered.slice((page - 1) * pageSize, page * pageSize);
-
-  useEffect(() => {
-    if (page > totalPages) setPage(1);
-  }, [totalPages, page]);
 
   const totalHistoryCount = historyEntries.length;
   const filteredHistoryCount = filteredHistoryEntries.length;
@@ -917,7 +922,7 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
         <div className="flex items-center gap-2">
           <button
             disabled={page <= 1}
-            onClick={() => setPage((p) => Math.max(1, p - 1))}
+            onClick={previousPage}
             className={`px-3 py-1 rounded border ${
               page <= 1 ? "opacity-50 cursor-not-allowed" : ""
             }`}
@@ -929,7 +934,7 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
           </span>
           <button
             disabled={page >= totalPages}
-            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+            onClick={nextPage}
             className={`px-3 py-1 rounded border ${
               page >= totalPages ? "opacity-50 cursor-not-allowed" : ""
             }`}
