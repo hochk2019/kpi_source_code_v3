@@ -2,7 +2,7 @@
 
 ## 1. Kiến trúc & chất lượng mã nguồn
 - Chuẩn hoá các hook và tiện ích dùng chung (ví dụ `useAsyncRequest`, `usePagination`) để giảm lặp lại logic trong các trang báo cáo.
-- Tách riêng cấu hình nhà cung cấp AI trong `server/index.js` thành các module nhỏ (`providers/deepseek.js`, `providers/qwen.js`...), giúp dễ dàng bảo trì và mở rộng.
+- ✅ Tách riêng cấu hình nhà cung cấp AI trong `server/index.js` thành các module nhỏ (`providers/deepseek.js`, `providers/qwen.js`...), giúp dễ dàng bảo trì và mở rộng.
 - Bổ sung lớp mapping dữ liệu giữa SQL Server 2008 R2 và các mô-đun báo cáo để đảm bảo tương thích Unicode, tránh lỗi cắt chuỗi tiếng Việt.
 - Áp dụng kiểm tra lint và định dạng tự động trên CI (ESLint + Prettier) kèm quy tắc dành riêng cho môi trường Windows (dấu xuống dòng CRLF) nhằm giảm xung đột khi triển khai nội bộ.
 - Viết thêm bộ test E2E tối thiểu cho các luồng trọng yếu (nhập tờ khai, đồng bộ ECUS, xuất Excel) bằng Playwright ở chế độ headless để bắt sớm lỗi giao diện.

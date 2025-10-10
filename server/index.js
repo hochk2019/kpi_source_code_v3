@@ -10,6 +10,7 @@ import sql from 'mssql';
 import bcrypt from 'bcryptjs';
 import crypto from 'node:crypto';
 import { generateReport } from './reportExport.js';
+import { buildDefaultAiProviders } from './aiProviders/index.js';
 import { DEFAULT_RULES as SHARED_DEFAULT_RULES } from '../src/shared/defaultRules.js';
 import { getRulesSeed, persistRulesSnapshot, loadRulesSnapshot, listRulesHistory } from './rulesPersistence.js';
 import { deriveCOStatus, parseCoLineCount, setPreferentialCodeConfig } from '../src/shared/co.js';
@@ -690,34 +691,13 @@ const DEFAULT_CO_DISCREPANCY_STATE = Object.freeze({
 
 const AI_CACHE_LIMIT = 50;
 
-function createDefaultAiConfig() {
-  const azureEndpoint = (process.env.AZURE_OPENAI_ENDPOINT || '').trim();
-  const azureDeployment = (process.env.AZURE_OPENAI_DEPLOYMENT || 'gpt-4o-mini').trim() || 'gpt-4o-mini';
-  const azureVersion = (process.env.AZURE_OPENAI_API_VERSION || '2024-08-01-preview').trim() || '2024-08-01-preview';
-  const ollamaEndpoint = (process.env.OLLAMA_ENDPOINT || 'http://localhost:11434').trim() || 'http://localhost:11434';
-  const ollamaModel = (process.env.OLLAMA_MODEL || 'llama3.1:8b').trim() || 'llama3.1:8b';
-  const googleEndpoint =
-    (process.env.GOOGLE_AI_STUDIO_ENDPOINT || 'https://generativelanguage.googleapis.com').trim() ||
-    'https://generativelanguage.googleapis.com';
-  const googleModel = (process.env.GOOGLE_AI_STUDIO_MODEL || 'gemini-1.5-flash').trim() || 'gemini-1.5-flash';
-  const deepseekEndpoint = (process.env.DEEPSEEK_ENDPOINT || 'https://api.deepseek.com/v1').trim() ||
-    'https://api.deepseek.com/v1';
-  const deepseekModel = (process.env.DEEPSEEK_MODEL || 'deepseek-chat').trim() || 'deepseek-chat';
-  const qwenEndpoint = (process.env.QWEN_ENDPOINT || 'https://dashscope.aliyuncs.com/compatible-mode/v1').trim() ||
-    'https://dashscope.aliyuncs.com/compatible-mode/v1';
-  const qwenModel = (process.env.QWEN_MODEL || 'qwen-plus').trim() || 'qwen-plus';
-  const baiduEndpoint =
-    (process.env.BAIDU_QIANFAN_ENDPOINT ||
-      'https://aip.baidubce.com/rpc/2.0/ai_custom/v1/wenxinworkshop/chat/completions')
-      .trim() || 'https://aip.baidubce.com/rpc/2.0/ai_custom/v1/wenxinworkshop/chat/completions';
-  const baiduModel = (process.env.BAIDU_QIANFAN_MODEL || 'ernie-speed-128k').trim() || 'ernie-speed-128k';
-  const zaiEndpoint = (process.env.ZAI_ENDPOINT || 'https://api.z-ai.com/v1').trim() || 'https://api.z-ai.com/v1';
-  const zaiModel = (process.env.ZAI_MODEL || 'zai-chat-pro').trim() || 'zai-chat-pro';
+function createDefaultAiConfig(env = process.env) {
+  const { providers, defaultProviderId, fallbackProviderId } = buildDefaultAiProviders(env);
   return {
     version: 1,
     enabled: true,
-    defaultProvider: 'azure-openai',
-    fallbackProvider: 'ollama-local',
+    defaultProvider: defaultProviderId,
+    fallbackProvider: fallbackProviderId,
     temperature: 0.2,
     maxTokens: 800,
     maxInputLength: 4000,
@@ -729,107 +709,7 @@ function createDefaultAiConfig() {
       ttlMinutes: 72 * 60,
       maxEntries: AI_CACHE_LIMIT,
     },
-    providers: [
-      {
-        id: 'azure-openai',
-        type: 'azure',
-        label: 'Azure OpenAI GPT-4o mini',
-        endpoint: azureEndpoint,
-        deployment: azureDeployment,
-        apiVersion: azureVersion,
-        apiKeyEnv: 'AZURE_OPENAI_KEY',
-        maxTokens: 4096,
-        temperature: 0.2,
-        enabled: true,
-      },
-      {
-        id: 'ollama-local',
-        type: 'ollama',
-        label: 'Ollama cục bộ (llama3.1:8b)',
-        endpoint: ollamaEndpoint,
-        model: ollamaModel,
-        temperature: 0.1,
-        enabled: false,
-      },
-      {
-        id: 'google-ai-studio',
-        type: 'google-ai-studio',
-        label: 'Google AI Studio (Gemini 1.5 Flash)',
-        endpoint: googleEndpoint,
-        model: googleModel,
-        apiKeyEnv: 'GOOGLE_AI_STUDIO_API_KEY',
-        temperature: 0.3,
-        maxTokens: 1024,
-        enabled: false,
-      },
-      {
-        id: 'openai-gpt4o',
-        type: 'openai',
-        label: 'OpenAI GPT-4o mini',
-        endpoint: 'https://api.openai.com/v1',
-        model: 'gpt-4o-mini',
-        apiKeyEnv: 'OPENAI_API_KEY',
-        temperature: 0.2,
-        maxTokens: 1024,
-        enabled: false,
-      },
-      {
-        id: 'anthropic-claude',
-        type: 'anthropic',
-        label: 'Anthropic Claude 3.5 Sonnet',
-        endpoint: 'https://api.anthropic.com',
-        model: 'claude-3-5-sonnet-20241022',
-        apiKeyEnv: 'ANTHROPIC_API_KEY',
-        apiVersion: '2023-06-01',
-        temperature: 0.2,
-        maxTokens: 1024,
-        enabled: false,
-      },
-      {
-        id: 'deepseek-chat',
-        type: 'deepseek',
-        label: 'DeepSeek Chat (V3)',
-        endpoint: deepseekEndpoint,
-        model: deepseekModel,
-        apiKeyEnv: 'DEEPSEEK_API_KEY',
-        temperature: 0.2,
-        maxTokens: 2048,
-        enabled: false,
-      },
-      {
-        id: 'qwen-plus',
-        type: 'qwen',
-        label: 'Alibaba Qwen Plus',
-        endpoint: qwenEndpoint,
-        model: qwenModel,
-        apiKeyEnv: 'QWEN_API_KEY',
-        temperature: 0.2,
-        maxTokens: 2048,
-        enabled: false,
-      },
-      {
-        id: 'baidu-ernie',
-        type: 'baidu',
-        label: 'Baidu Qianfan ERNIE Speed',
-        endpoint: baiduEndpoint,
-        model: baiduModel,
-        apiKeyEnv: 'BAIDU_QIANFAN_ACCESS_TOKEN',
-        temperature: 0.2,
-        maxTokens: 1024,
-        enabled: false,
-      },
-      {
-        id: 'zai-chat',
-        type: 'zai',
-        label: 'Z.AI Chat Pro',
-        endpoint: zaiEndpoint,
-        model: zaiModel,
-        apiKeyEnv: 'ZAI_API_KEY',
-        temperature: 0.2,
-        maxTokens: 2048,
-        enabled: false,
-      },
-    ],
+    providers,
     updatedAt: null,
     updatedBy: null,
   };
