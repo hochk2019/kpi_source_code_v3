@@ -2345,7 +2345,7 @@ export default function DataImporter({
   // Đọc file XLSX
   function handleFileChange(e) {
     if (isReadOnlyForEdits) {
-      alert("Bạn đang ở chế độ chỉ xem — hãy đăng nhập để import dữ liệu.`);
+      alert("Bạn đang ở chế độ chỉ xem — hãy đăng nhập để import dữ liệu.");
       return;
     }
     if (!canUploadFiles) {
@@ -3080,7 +3080,7 @@ export default function DataImporter({
       return;
     }
     if (mode !== "preview") {
-      alert("Hãy chọn file XLSX để import.`);
+      alert("Hãy chọn file XLSX để import.");
       return;
     }
     if (rawRows.length === 0) {
