@@ -489,7 +489,7 @@ export default function DataHealthDashboard({ currentUser }) {
           <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={loadPolicy}
+              onClick={reloadPolicy}
               className="rounded border border-gray-300 px-3 py-1 text-xs text-gray-700 transition hover:bg-gray-100 dark:border-slate-600 dark:text-gray-200 dark:hover:bg-slate-800"
               disabled={policyLoading || policySaving}
             >
