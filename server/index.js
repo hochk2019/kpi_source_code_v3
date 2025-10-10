@@ -700,6 +700,19 @@ function createDefaultAiConfig() {
     (process.env.GOOGLE_AI_STUDIO_ENDPOINT || 'https://generativelanguage.googleapis.com').trim() ||
     'https://generativelanguage.googleapis.com';
   const googleModel = (process.env.GOOGLE_AI_STUDIO_MODEL || 'gemini-1.5-flash').trim() || 'gemini-1.5-flash';
+  const deepseekEndpoint = (process.env.DEEPSEEK_ENDPOINT || 'https://api.deepseek.com/v1').trim() ||
+    'https://api.deepseek.com/v1';
+  const deepseekModel = (process.env.DEEPSEEK_MODEL || 'deepseek-chat').trim() || 'deepseek-chat';
+  const qwenEndpoint = (process.env.QWEN_ENDPOINT || 'https://dashscope.aliyuncs.com/compatible-mode/v1').trim() ||
+    'https://dashscope.aliyuncs.com/compatible-mode/v1';
+  const qwenModel = (process.env.QWEN_MODEL || 'qwen-plus').trim() || 'qwen-plus';
+  const baiduEndpoint =
+    (process.env.BAIDU_QIANFAN_ENDPOINT ||
+      'https://aip.baidubce.com/rpc/2.0/ai_custom/v1/wenxinworkshop/chat/completions')
+      .trim() || 'https://aip.baidubce.com/rpc/2.0/ai_custom/v1/wenxinworkshop/chat/completions';
+  const baiduModel = (process.env.BAIDU_QIANFAN_MODEL || 'ernie-speed-128k').trim() || 'ernie-speed-128k';
+  const zaiEndpoint = (process.env.ZAI_ENDPOINT || 'https://api.z-ai.com/v1').trim() || 'https://api.z-ai.com/v1';
+  const zaiModel = (process.env.ZAI_MODEL || 'zai-chat-pro').trim() || 'zai-chat-pro';
   return {
     version: 1,
     enabled: true,
@@ -770,6 +783,50 @@ function createDefaultAiConfig() {
         apiVersion: '2023-06-01',
         temperature: 0.2,
         maxTokens: 1024,
+        enabled: false,
+      },
+      {
+        id: 'deepseek-chat',
+        type: 'deepseek',
+        label: 'DeepSeek Chat (V3)',
+        endpoint: deepseekEndpoint,
+        model: deepseekModel,
+        apiKeyEnv: 'DEEPSEEK_API_KEY',
+        temperature: 0.2,
+        maxTokens: 2048,
+        enabled: false,
+      },
+      {
+        id: 'qwen-plus',
+        type: 'qwen',
+        label: 'Alibaba Qwen Plus',
+        endpoint: qwenEndpoint,
+        model: qwenModel,
+        apiKeyEnv: 'QWEN_API_KEY',
+        temperature: 0.2,
+        maxTokens: 2048,
+        enabled: false,
+      },
+      {
+        id: 'baidu-ernie',
+        type: 'baidu',
+        label: 'Baidu Qianfan ERNIE Speed',
+        endpoint: baiduEndpoint,
+        model: baiduModel,
+        apiKeyEnv: 'BAIDU_QIANFAN_ACCESS_TOKEN',
+        temperature: 0.2,
+        maxTokens: 1024,
+        enabled: false,
+      },
+      {
+        id: 'zai-chat',
+        type: 'zai',
+        label: 'Z.AI Chat Pro',
+        endpoint: zaiEndpoint,
+        model: zaiModel,
+        apiKeyEnv: 'ZAI_API_KEY',
+        temperature: 0.2,
+        maxTokens: 2048,
         enabled: false,
       },
     ],
@@ -2333,6 +2390,196 @@ async function callOpenAiChat(provider, payload, { signal } = {}) {
   };
 }
 
+async function callDeepseekChat(provider, payload, { signal } = {}) {
+  const endpoint = `${provider.endpoint || 'https://api.deepseek.com/v1'}`.trim() || 'https://api.deepseek.com/v1';
+  const model = `${provider.model || 'deepseek-chat'}`.trim() || 'deepseek-chat';
+  const apiKeyEnv = `${provider.apiKeyEnv || 'DEEPSEEK_API_KEY'}`.trim() || 'DEEPSEEK_API_KEY';
+  const apiKey = provider.apiKey || process.env[apiKeyEnv];
+  if (!apiKey) {
+    throw new Error(`Thiếu khóa API ${apiKeyEnv} cho DeepSeek.`);
+  }
+  const baseUrl = endpoint.replace(/\/+$/, '');
+  const url = `${baseUrl}/chat/completions`;
+  const body = {
+    model,
+    messages: payload.messages,
+    temperature: toFiniteNumber(
+      payload.temperature,
+      provider.temperature ?? DEFAULT_AI_CONFIG.temperature
+    ),
+    max_tokens: toPositiveInt(
+      payload.maxTokens,
+      provider.maxTokens ?? DEFAULT_AI_CONFIG.maxTokens
+    ),
+  };
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify(body),
+    signal,
+  });
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`DeepSeek trả về ${response.status}: ${truncateText(errorText, 200)}`);
+  }
+  const data = await response.json();
+  const choice = Array.isArray(data?.choices) ? data.choices[0] : null;
+  const message = choice?.message?.content || data?.output || '';
+  return {
+    message,
+    usage: data?.usage ?? null,
+  };
+}
+
+async function callQwenChat(provider, payload, { signal } = {}) {
+  const endpoint = `${provider.endpoint || 'https://dashscope.aliyuncs.com/compatible-mode/v1'}`.trim() ||
+    'https://dashscope.aliyuncs.com/compatible-mode/v1';
+  const model = `${provider.model || 'qwen-plus'}`.trim() || 'qwen-plus';
+  const apiKeyEnv = `${provider.apiKeyEnv || 'QWEN_API_KEY'}`.trim() || 'QWEN_API_KEY';
+  const apiKey = provider.apiKey || process.env[apiKeyEnv];
+  if (!apiKey) {
+    throw new Error(`Thiếu khóa API ${apiKeyEnv} cho Qwen.`);
+  }
+  const baseUrl = endpoint.replace(/\/+$/, '');
+  const url = `${baseUrl}/chat/completions`;
+  const body = {
+    model,
+    messages: payload.messages,
+    temperature: toFiniteNumber(
+      payload.temperature,
+      provider.temperature ?? DEFAULT_AI_CONFIG.temperature
+    ),
+    max_tokens: toPositiveInt(
+      payload.maxTokens,
+      provider.maxTokens ?? DEFAULT_AI_CONFIG.maxTokens
+    ),
+  };
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify(body),
+    signal,
+  });
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Qwen trả về ${response.status}: ${truncateText(errorText, 200)}`);
+  }
+  const data = await response.json();
+  const choice = Array.isArray(data?.choices) ? data.choices[0] : null;
+  const message = choice?.message?.content || data?.output_text || '';
+  return {
+    message,
+    usage: data?.usage ?? null,
+  };
+}
+
+async function callBaiduErnieChat(provider, payload, { signal } = {}) {
+  const endpoint = `${
+    provider.endpoint ||
+    'https://aip.baidubce.com/rpc/2.0/ai_custom/v1/wenxinworkshop/chat/completions'
+  }`.trim() || 'https://aip.baidubce.com/rpc/2.0/ai_custom/v1/wenxinworkshop/chat/completions';
+  const model = `${provider.model || 'ernie-speed-128k'}`.trim() || 'ernie-speed-128k';
+  const apiKeyEnv = `${provider.apiKeyEnv || 'BAIDU_QIANFAN_ACCESS_TOKEN'}`.trim() ||
+    'BAIDU_QIANFAN_ACCESS_TOKEN';
+  const accessToken = provider.apiKey || process.env[apiKeyEnv];
+  if (!accessToken) {
+    throw new Error(`Thiếu access token ${apiKeyEnv} cho Baidu Qianfan.`);
+  }
+  const hasQuery = endpoint.includes('?');
+  const url = `${endpoint}${hasQuery ? '&' : '?'}access_token=${encodeURIComponent(accessToken)}`;
+  const body = {
+    messages: payload.messages,
+    temperature: toFiniteNumber(
+      payload.temperature,
+      provider.temperature ?? DEFAULT_AI_CONFIG.temperature
+    ),
+    max_output_tokens: toPositiveInt(
+      payload.maxTokens,
+      provider.maxTokens ?? DEFAULT_AI_CONFIG.maxTokens
+    ),
+    stream: false,
+    model,
+  };
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+    signal,
+  });
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Baidu Qianfan trả về ${response.status}: ${truncateText(errorText, 200)}`);
+  }
+  const data = await response.json();
+  const message = `${data?.result || data?.output || ''}`.trim();
+  const usage = data?.usage
+    ? {
+        prompt_tokens: toNonNegativeInt(data.usage.prompt_tokens, 0),
+        completion_tokens: toNonNegativeInt(data.usage.completion_tokens, 0),
+        total_tokens: toNonNegativeInt(
+          data.usage.total_tokens,
+          toNonNegativeInt(data.usage.prompt_tokens, 0) + toNonNegativeInt(data.usage.completion_tokens, 0)
+        ),
+      }
+    : null;
+  return {
+    message,
+    usage,
+  };
+}
+
+async function callZaiChat(provider, payload, { signal } = {}) {
+  const endpoint = `${provider.endpoint || 'https://api.z-ai.com/v1'}`.trim() || 'https://api.z-ai.com/v1';
+  const model = `${provider.model || 'zai-chat-pro'}`.trim() || 'zai-chat-pro';
+  const apiKeyEnv = `${provider.apiKeyEnv || 'ZAI_API_KEY'}`.trim() || 'ZAI_API_KEY';
+  const apiKey = provider.apiKey || process.env[apiKeyEnv];
+  if (!apiKey) {
+    throw new Error(`Thiếu khóa API ${apiKeyEnv} cho Z.AI.`);
+  }
+  const baseUrl = endpoint.replace(/\/+$/, '');
+  const url = `${baseUrl}/chat/completions`;
+  const body = {
+    model,
+    messages: payload.messages,
+    temperature: toFiniteNumber(
+      payload.temperature,
+      provider.temperature ?? DEFAULT_AI_CONFIG.temperature
+    ),
+    max_tokens: toPositiveInt(
+      payload.maxTokens,
+      provider.maxTokens ?? DEFAULT_AI_CONFIG.maxTokens
+    ),
+  };
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify(body),
+    signal,
+  });
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Z.AI trả về ${response.status}: ${truncateText(errorText, 200)}`);
+  }
+  const data = await response.json();
+  const choice = Array.isArray(data?.choices) ? data.choices[0] : null;
+  const message = choice?.message?.content || data?.output || '';
+  return {
+    message,
+    usage: data?.usage ?? null,
+  };
+}
+
 async function callOllamaChat(provider, payload, { signal } = {}) {
   const endpoint = `${provider.endpoint || 'http://localhost:11434'}`.trim() || 'http://localhost:11434';
   const model = `${provider.model || 'llama3.1:8b'}`.trim() || 'llama3.1:8b';
@@ -2581,6 +2828,18 @@ async function dispatchAiChat(provider, payload, { signal } = {}) {
   }
   if (type === 'google-ai-studio' || type === 'google' || type === 'gemini') {
     return callGoogleAiStudioChat(provider, payload, { signal });
+  }
+  if (type === 'deepseek' || type === 'deepseek-chat') {
+    return callDeepseekChat(provider, payload, { signal });
+  }
+  if (type === 'qwen' || type === 'dashscope' || type === 'ali-qwen') {
+    return callQwenChat(provider, payload, { signal });
+  }
+  if (type === 'baidu' || type === 'ernie' || type === 'qianfan' || type === 'baidu-ernie') {
+    return callBaiduErnieChat(provider, payload, { signal });
+  }
+  if (type === 'zai' || type === 'z.ai' || type === 'zaichat') {
+    return callZaiChat(provider, payload, { signal });
   }
   throw new Error(`Nhà cung cấp AI ${provider.id} chưa được hỗ trợ.`);
 }

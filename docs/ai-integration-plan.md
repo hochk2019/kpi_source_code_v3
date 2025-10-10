@@ -25,6 +25,10 @@ Frontend → /api/ai/chat → Server proxy → Nhà cung cấp AI
 | --- | --- | --- | --- |
 | `azure-openai` | Azure OpenAI (GPT-4o mini / GPT-4o) | Đặt biến môi trường `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_DEPLOYMENT`, `AZURE_OPENAI_KEY`, `AZURE_OPENAI_API_VERSION`. Server sẽ build URL theo chuẩn Azure. | Ưu tiên mô hình GPT-4o mini; tự động cắt ngắn prompt còn tối đa 4096 ký tự, bật cache với TTL 3 ngày. |
 | `google-ai-studio` | Google AI Studio (Gemini 1.5 Flash) | Tạo API key trong Google Cloud, đặt biến `GOOGLE_AI_STUDIO_API_KEY` (có thể tùy chọn `GOOGLE_AI_STUDIO_ENDPOINT`, `GOOGLE_AI_STUDIO_MODEL`). | Chi phí linh hoạt theo usage của Gemini; response mặc định dạng text/plain và trả về usageMetadata để tính token. |
+| `deepseek-chat` | DeepSeek API (OpenAI-compatible) | Tạo key tại https://platform.deepseek.com/, đặt `DEEPSEEK_API_KEY`, tùy chọn `DEEPSEEK_ENDPOINT`, `DEEPSEEK_MODEL`. | Mô hình DeepSeek-V3 giá rẻ, trả về usage theo chuẩn OpenAI giúp tính toán chi phí dễ dàng. |
+| `qwen-plus` | Alibaba Qwen (DashScope compatible mode) | Tạo key DashScope, đặt `QWEN_API_KEY`, có thể chỉnh `QWEN_ENDPOINT`, `QWEN_MODEL`. | Endpoint tương thích OpenAI nên dễ tái sử dụng caching và giới hạn token hiện hữu. |
+| `baidu-ernie` | Baidu Qianfan ERNIE | Lấy access token từ Qianfan, đặt `BAIDU_QIANFAN_ACCESS_TOKEN`, cấu hình `BAIDU_QIANFAN_ENDPOINT` nếu đổi cluster. | Phù hợp triển khai nội địa Trung Quốc; response kèm usage cho phép kiểm soát ngân sách. |
+| `zai-chat` | Z.AI (OpenAI-compatible) | Lấy khóa từ Z.AI, đặt `ZAI_API_KEY`, tùy chọn `ZAI_ENDPOINT`, `ZAI_MODEL`. | Có thể dùng làm phương án dự phòng, tương thích cơ chế cache hiện tại. |
 | `ollama-local` | Ollama self-host (ví dụ `llama3.1:8b`) | Cài đặt Ollama trên máy Windows/WSL và expose REST API (`http://localhost:11434`). Điền `endpoint` vào config. | Chi phí ~0, thích hợp xử lý yêu cầu dài nhưng trả lời chậm hơn. Cache giúp tránh lặp. |
 | `custom` | REST API khác | Có thể khai báo endpoint và header tùy chỉnh trong `providers` của config. | Tùy ý; nên bật `truncate` và `cache`. |
 
