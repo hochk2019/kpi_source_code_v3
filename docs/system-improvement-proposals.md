@@ -11,7 +11,7 @@
 ## 2. Giao diện & trải nghiệm người dùng
 
 - ✅ Thiết lập thư viện theme hỗ trợ "chế độ tối" và các biến CSS cho thương hiệu (đã bổ sung preset Golden/Ocean/Forest, lưu lựa chọn người dùng và tự đồng bộ màu accent trên toàn giao diện) để thao tác nhanh hơn khi cần re-branding.
-- Bổ sung chỉ báo trạng thái kết nối ECUS trực tiếp trên dashboard (màu sắc + thời gian cập nhật) để nhân viên nhận biết ngay khi đồng bộ bị gián đoạn.
+- ✅ Bổ sung chỉ báo trạng thái kết nối ECUS trực tiếp trên dashboard (màu sắc + thời gian cập nhật) để nhân viên nhận biết ngay khi đồng bộ bị gián đoạn.
 - Gộp các bộ lọc thường dùng (khoảng ngày, C/O, đội xử lý) thành bộ preset có thể lưu theo người dùng, đồng bộ với `localStorage` và server để dùng trên nhiều máy.
 - Thêm chế độ so sánh hai bản ghi tờ khai khi phát hiện trùng (diff viewer) giúp trưởng nhóm xác nhận nhanh dữ liệu cần ghi đè.
 - Hoàn thiện thông báo toast tiếng Việt chuẩn hoá dấu câu, nhấn mạnh kết quả thành công/thất bại để giảm hiểu nhầm khi thao tác nhanh.

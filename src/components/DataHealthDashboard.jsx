@@ -30,6 +30,50 @@ function formatDateOnly(value) {
   }
 }
 
+function formatRelativeTime(value) {
+  if (!value) return 'Không xác định';
+  try {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+      return 'Không xác định';
+    }
+    const now = Date.now();
+    const diffMs = now - date.getTime();
+    const diffMinutes = Math.floor(diffMs / 60000);
+    if (diffMinutes < 1) {
+      return 'Vừa cập nhật';
+    }
+    if (diffMinutes < 60) {
+      return `${diffMinutes} phút trước`;
+    }
+    const diffHours = Math.floor(diffMinutes / 60);
+    if (diffHours < 24) {
+      const minutes = diffMinutes % 60;
+      if (minutes === 0) {
+        return `${diffHours} giờ trước`;
+      }
+      return `${diffHours} giờ ${minutes} phút trước`;
+    }
+    const diffDays = Math.floor(diffHours / 24);
+    return `${diffDays} ngày trước`;
+  } catch {
+    return 'Không xác định';
+  }
+}
+
+let numberFormatter;
+function formatNumber(value) {
+  if (typeof value !== 'number') return value ?? '—';
+  try {
+    if (!numberFormatter) {
+      numberFormatter = new Intl.NumberFormat('vi-VN');
+    }
+    return numberFormatter.format(value);
+  } catch {
+    return value;
+  }
+}
+
 const metricPalette = [
   'bg-emerald-500/10 text-emerald-700 border border-emerald-400/60',
   'bg-amber-500/10 text-amber-700 border border-amber-400/60',
@@ -40,7 +84,7 @@ const metricPalette = [
 export default function DataHealthDashboard({ currentUser }) {
   const [liveNotifications, setLiveNotifications] = useState([]);
   const [historyNotifications, setHistoryNotifications] = useState([]);
-  const [policyConfig, setPolicyConfig] = useState(null);
+  const [, setPolicyConfig] = useState(null);
   const [policyForm, setPolicyForm] = useState(null);
   const [policyState, setPolicyState] = useState(null);
   const [policyStats, setPolicyStats] = useState(null);
@@ -144,6 +188,77 @@ export default function DataHealthDashboard({ currentUser }) {
   const duplicateGroups = summary?.duplicates?.groups || [];
   const alertEntries = summary?.alerts?.recent || [];
   const sqlTimeouts = summary?.sqlServer?.timeoutEvents || [];
+  const operatorName = useMemo(() => {
+    if (!currentUser) return '';
+    return currentUser.fullName || currentUser.username || '';
+  }, [currentUser]);
+
+  const syncIndicator = useMemo(() => {
+    const syncInfo = summary?.sync || {};
+    const statusText = syncInfo.lastStatus || 'Chưa có thống kê';
+    const lastRun = syncInfo.lastRunAt ? new Date(syncInfo.lastRunAt) : null;
+    const lastSummary = syncInfo.lastSummary || {};
+    const diffMinutes = lastRun ? (Date.now() - lastRun.getTime()) / 60000 : null;
+
+    let tone = 'idle';
+    if (statusText?.toLowerCase().startsWith('error')) {
+      tone = 'critical';
+    } else if (diffMinutes !== null) {
+      if (diffMinutes > 180) {
+        tone = 'critical';
+      } else if (diffMinutes > 90) {
+        tone = 'warning';
+      } else {
+        tone = 'good';
+      }
+    }
+
+    const toneClasses = {
+      good: {
+        container:
+          'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-500/40 dark:bg-emerald-500/10 dark:text-emerald-200',
+        dot: 'bg-emerald-500 dark:bg-emerald-300',
+      },
+      warning: {
+        container:
+          'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-200',
+        dot: 'bg-amber-500 dark:bg-amber-300',
+      },
+      critical: {
+        container:
+          'border-red-200 bg-red-50 text-red-800 dark:border-red-500/40 dark:bg-red-500/10 dark:text-red-200',
+        dot: 'bg-red-500 dark:bg-red-300',
+      },
+      idle: {
+        container:
+          'border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-600 dark:bg-slate-800/80 dark:text-slate-200',
+        dot: 'bg-slate-400 dark:bg-slate-500',
+      },
+    };
+
+    const classes = toneClasses[tone] || toneClasses.idle;
+    const lastRunLabel = lastRun ? formatDate(lastRun) : 'Chưa có';
+    const relative = lastRun ? formatRelativeTime(lastRun) : 'Không xác định';
+    const rowsFetched = formatNumber(lastSummary.rowsFetched);
+    const rowsInserted = formatNumber(lastSummary.rowsInserted);
+    const rowsUpdated = formatNumber(lastSummary.rowsUpdated);
+
+    let overview = 'Chưa có dữ liệu đồng bộ từ ECUS.';
+    if (typeof lastSummary.rowsFetched === 'number') {
+      overview = `Tải ${rowsFetched} dòng • Thêm ${rowsInserted || 0} • Cập nhật ${rowsUpdated || 0}`;
+    } else if (lastRun) {
+      overview = `Trạng thái lần chạy gần nhất: ${statusText}`;
+    }
+
+    return {
+      tone,
+      classes,
+      statusText,
+      overview,
+      lastRunLabel,
+      relative,
+    };
+  }, [summary]);
 
   const metrics = useMemo(() => {
     const totals = summary?.totals || {};
@@ -389,6 +504,27 @@ export default function DataHealthDashboard({ currentUser }) {
           </div>
         )}
       </header>
+
+      <section
+        className={clsx(
+          'flex flex-col gap-2 rounded border p-4 text-sm shadow-sm transition md:flex-row md:items-center md:justify-between',
+          syncIndicator.classes.container
+        )}
+      >
+        <div>
+          <div className="flex items-center gap-2 text-sm font-semibold">
+            <span className={clsx('h-2.5 w-2.5 rounded-full', syncIndicator.classes.dot)} />
+            <span>Trạng thái kết nối ECUS</span>
+          </div>
+          <p className="mt-1 text-xs opacity-90">{syncIndicator.overview}</p>
+        </div>
+        <div className="text-xs text-right opacity-80 md:text-left">
+          <div>Lần chạy gần nhất: {syncIndicator.lastRunLabel}</div>
+          <div>{syncIndicator.relative}</div>
+          <div>Trạng thái: {syncIndicator.statusText}</div>
+          {operatorName ? <div>Người trực: {operatorName}</div> : null}
+        </div>
+      </section>
 
       <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         {metrics.map((metric, index) => (
