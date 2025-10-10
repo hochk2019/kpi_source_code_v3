@@ -21,7 +21,7 @@
 - ✅ Dựng cron Windows Task Scheduler chạy script PowerShell 7 kiểm tra dịch vụ đồng bộ mỗi 15 phút, ghi log vào Event Viewer để dễ truy vết.
 - ✅ Tích hợp cảnh báo email/Teams khi đồng bộ ECUS thất bại trên 3 lần liên tiếp hoặc khi độ trễ dữ liệu > 60 phút.
 - ✅ Xuất bản dashboard giám sát (Grafana hoặc Power BI) đọc trực tiếp từ log để theo dõi số lượng tờ khai, số lỗi import, thời gian phản hồi API AI.
-- Chuẩn hoá quy trình backup SQL Server 2008 R2 (full hằng ngày, diff mỗi 6h) và kiểm tra khôi phục định kỳ trên môi trường dự phòng.
+- 📌 **Đang làm rõ**: Chuẩn hoá quy trình backup SQL Server 2008 R2 (full hằng ngày, diff mỗi 6h) và kiểm tra khôi phục định kỳ trên môi trường dự phòng. Hệ thống KPI lưu dữ liệu vận hành bằng SQLite, chỉ kết nối đọc/đồng bộ từ CSDL ECUS5VNACCS trên SQL Server 2008 R2; vì vậy hạng mục này tập trung vào việc phối hợp với đội vận hành ECUS để chuẩn hoá lịch backup và bài kiểm tra khôi phục cho máy chủ ECUS, đồng thời ghi nhận rõ phạm vi ảnh hưởng tới tiến trình đồng bộ của ứng dụng KPI.
 
 ## 4. Bảo mật & xuất Excel
 
