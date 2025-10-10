@@ -20,6 +20,7 @@ import {
   aggregateByCompany,
 } from "@/lib/reports.js";
 import { seedSampleDeclarations } from "@/shared/sampleDeclarations.js";
+import { toAdjustmentTotalsArray } from "../../shared/kpiAdjustments.js";
 import {
   ResponsiveContainer,
   LineChart,
@@ -68,6 +69,7 @@ const SORT_OPTIONS = [
 ];
 
 const REPORT_PREFS_STORAGE_KEY = "kpi_report_viewer_prefs_v1";
+const EXPORT_COLUMN_KEYS = ["items", "licenses", "co", "coLines", "licenseCodes"];
 const QUICK_RANGE_VALUES = new Set([
   ...QUICK_RANGE_OPTIONS.map((option) => option.value),
   "custom",
@@ -145,6 +147,19 @@ function saveReportPreferences(prefs) {
   } catch (err) {
     console.warn("Không thể lưu bộ lọc báo cáo vào localStorage", err);
   }
+}
+
+function sanitizeColumnVisibility(input = {}) {
+  if (!input || typeof input !== "object") {
+    return {};
+  }
+  const result = {};
+  for (const key of EXPORT_COLUMN_KEYS) {
+    if (input[key] === false) {
+      result[key] = false;
+    }
+  }
+  return result;
 }
 
 function getCompanyRowLabel(row = {}) {
@@ -569,6 +584,35 @@ function AdjustmentDigestCard({ report }) {
     { label: "Đã từ chối", value: formatInt(report.rejectedCount || 0), tone: "text-rose-500" },
   ];
 
+  const totals = report.totalsByCategory || {};
+  const categoryToneMap = {
+    support: "text-emerald-600",
+    cancel: "text-rose-500",
+    correction: "text-amber-600",
+    tax: "text-sky-600",
+    teamwork: "text-indigo-600",
+    coworker_attitude: "text-purple-600",
+    customer_attitude: "text-fuchsia-600",
+    discipline: "text-amber-700",
+  };
+  const categories = toAdjustmentTotalsArray(totals);
+
+  const formatOptionalDecimal = (value) => {
+    const num = Number(value);
+    if (!Number.isFinite(num) || num === 0) {
+      return "—";
+    }
+    return formatDecimal(num);
+  };
+
+  const formatOptionalInt = (value) => {
+    const num = Number(value);
+    if (!Number.isFinite(num) || num === 0) {
+      return "—";
+    }
+    return formatInt(num);
+  };
+
   return (
     <section className="ds-card space-y-4 p-4">
       <div className="space-y-1">
@@ -590,6 +634,28 @@ function AdjustmentDigestCard({ report }) {
           </li>
         ))}
       </ul>
+      <div className="pt-2">
+        <h4 className="text-sm font-semibold text-gray-900">Phân bổ theo hạng mục</h4>
+        <ul className="mt-2 space-y-2">
+          {categories.map((item) => {
+            const tone = categoryToneMap[item.key] || "text-slate-600";
+            return (
+              <li
+                key={item.key}
+                className="rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-600 dark:border-slate-700 dark:bg-slate-900/40"
+              >
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="font-medium text-gray-900 dark:text-gray-100">{item.label}</span>
+                  <span className={`font-semibold ${tone}`}>{formatOptionalDecimal(item.points)}</span>
+                </div>
+                <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  Số lượt: <span className="font-semibold text-gray-700 dark:text-gray-200">{formatOptionalInt(item.quantity)}</span>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
     </section>
   );
 }
@@ -1108,13 +1174,18 @@ export default function ReportViewer({ canExport = true }) {
   const [teamSortKey, setTeamSortKey] = useState(() => sanitizeSortKey(storedPrefs.teamSortKey));
   const [version, setVersion] = useState(0);
   const [exporting, setExporting] = useState(false);
+  const storedColumnPrefs = useMemo(
+    () => sanitizeColumnVisibility(storedPrefs.columns),
+    [storedPrefs]
+  );
   const [columnVisibility, setColumnVisibility] = useState(() => ({
-    items: true,
-    licenses: true,
-    co: true,
-    coLines: true,
-    licenseCodes: true,
+    items: storedColumnPrefs.items === false ? false : true,
+    licenses: storedColumnPrefs.licenses === false ? false : true,
+    co: storedColumnPrefs.co === false ? false : true,
+    coLines: storedColumnPrefs.coLines === false ? false : true,
+    licenseCodes: storedColumnPrefs.licenseCodes === false ? false : true,
   }));
+  const exportColumns = useMemo(() => sanitizeColumnVisibility(columnVisibility), [columnVisibility]);
   const prefsSnapshotRef = useRef("");
 
   const handleToggleColumnVisibility = (key) => {
@@ -1135,6 +1206,7 @@ export default function ReportViewer({ canExport = true }) {
       staffSortKey,
       teamSortKey,
       topStaffMetric,
+      columns: exportColumns,
     };
     const snapshot = JSON.stringify(payload);
     if (prefsSnapshotRef.current === snapshot) {
@@ -1152,6 +1224,7 @@ export default function ReportViewer({ canExport = true }) {
     staffSortKey,
     teamSortKey,
     topStaffMetric,
+    exportColumns,
   ]);
 
   const handleSeedSamples = () => {
@@ -1291,6 +1364,11 @@ export default function ReportViewer({ canExport = true }) {
 
   const adjustmentsReport = useMemo(() => {
     const base = report.adjustments || {};
+    const totalsRaw = base.totalsByCategory || base.totals || {};
+    const normalizeTotals = (entry) => ({
+      points: Number(entry?.points || 0),
+      quantity: Number(entry?.quantity || 0),
+    });
     return {
       list: Array.isArray(base.list) ? base.list : [],
       applied: Array.isArray(base.applied) ? base.applied : [],
@@ -1299,6 +1377,12 @@ export default function ReportViewer({ canExport = true }) {
       approvedCount: Number(base.approvedCount || 0),
       rejectedCount: Number(base.rejectedCount || 0),
       appliedCount: Number(base.appliedCount || 0),
+      totalsByCategory: {
+        support: normalizeTotals(totalsRaw.support),
+        cancel: normalizeTotals(totalsRaw.cancel),
+        correction: normalizeTotals(totalsRaw.correction),
+        tax: normalizeTotals(totalsRaw.tax),
+      },
     };
   }, [report.adjustments]);
 
@@ -1448,6 +1532,7 @@ export default function ReportViewer({ canExport = true }) {
         summary,
         range: report.range,
         rules: report.rules,
+        columns: exportColumns,
       })
     );
   };
@@ -1459,6 +1544,7 @@ export default function ReportViewer({ canExport = true }) {
         staff: staffEntry,
         range: report.range,
         rules: report.rules,
+        columns: exportColumns,
       })
     );
   };
@@ -1471,6 +1557,7 @@ export default function ReportViewer({ canExport = true }) {
         summary,
         range: report.range,
         rules: report.rules,
+        columns: exportColumns,
       })
     );
   };
@@ -1482,6 +1569,7 @@ export default function ReportViewer({ canExport = true }) {
         team: teamEntry,
         range: report.range,
         rules: report.rules,
+        columns: exportColumns,
       })
     );
   };

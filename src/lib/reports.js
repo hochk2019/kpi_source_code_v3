@@ -6,6 +6,11 @@ import {
   isExportDecl,
   KPI_ADJUSTMENT_CATEGORY_CONFIG,
 } from "@/lib/store.js";
+import {
+  addAdjustmentTotals,
+  cloneAdjustmentTotals,
+  createAdjustmentTotals,
+} from "../../shared/kpiAdjustments.js";
 import { computeKPI, DEFAULT_RULES } from "@/lib/rules.js";
 import { formatDisplayDate } from "@/shared/format.js";
 
@@ -153,6 +158,42 @@ function createStats() {
     coLines: 0,
     licenseCodes: new Set(),
   };
+}
+
+function ensureStaffAdjustmentEntry(map, key, name, teamName) {
+  if (!key) return null;
+  if (!map.has(key)) {
+    map.set(key, {
+      key,
+      name: name || 'Chưa gán',
+      teamNames: new Set(),
+      totals: createAdjustmentTotals(),
+    });
+  }
+  const entry = map.get(key);
+  if (name && !entry.name) {
+    entry.name = name;
+  }
+  if (teamName) {
+    entry.teamNames.add(teamName);
+  }
+  return entry;
+}
+
+function ensureTeamAdjustmentEntry(map, key, name) {
+  if (!key) return null;
+  if (!map.has(key)) {
+    map.set(key, {
+      key,
+      name: name || 'Chưa gán tổ đội',
+      totals: createAdjustmentTotals(),
+    });
+  }
+  const entry = map.get(key);
+  if (name && !entry.name) {
+    entry.name = name;
+  }
+  return entry;
 }
 
 function accumulate(stats, row) {
@@ -413,6 +454,9 @@ export function buildReportData(rowsInput, { roster, rules, from, to, adjustment
     approvedCount: 0,
     rejectedCount: 0,
     appliedCount: 0,
+    totalsByCategory: createAdjustmentTotals(),
+    byStaff: new Map(),
+    byTeam: new Map(),
   };
 
   for (const raw of rows) {
@@ -451,12 +495,19 @@ export function buildReportData(rowsInput, { roster, rules, from, to, adjustment
       companyKeys.add(companyKey);
     }
 
-    const licenseCodes = Array.isArray(sanitized.licenseCodes)
+    const sourceCodes = Array.isArray(sanitized.licenseSourceCodes)
+      ? sanitized.licenseSourceCodes.map((code) => normalizeStr(code).toUpperCase()).filter(Boolean)
+      : [];
+    const includedCodesRaw = Array.isArray(sanitized.licenseCodes)
       ? sanitized.licenseCodes.map((code) => normalizeStr(code).toUpperCase()).filter(Boolean)
       : [];
     const excludedCodes = Array.isArray(sanitized.licenseExcludedCodes)
       ? sanitized.licenseExcludedCodes.map((code) => normalizeStr(code).toUpperCase()).filter(Boolean)
       : [];
+    const excludedSet = new Set(excludedCodes);
+    const licenseCodes = (includedCodesRaw.length ? includedCodesRaw : sourceCodes)
+      .filter((code) => !excludedSet.has(code))
+      .filter((code, index, arr) => arr.indexOf(code) === index);
     const hasCO = Boolean(sanitized.has_co || (Array.isArray(sanitized.co_codes) && sanitized.co_codes.length));
     const coLineCount = Number(sanitized.co_line_count || 0) || 0;
 
@@ -478,6 +529,7 @@ export function buildReportData(rowsInput, { roster, rules, from, to, adjustment
       coLabel: hasCO ? (coLineCount > 0 ? `${coLineCount}` : "Có") : "Không",
       licenseCodes,
       licenseExcludedCodes: excludedCodes,
+      licenseSourceCodes: sourceCodes,
     };
 
     preparedRows.push(detailRow);
@@ -538,6 +590,7 @@ export function buildReportData(rowsInput, { roster, rules, from, to, adjustment
       const memberEntry = ensureTeamMember(teamEntry, staffEntry.key, staffEntry.name);
 
       const totalPoints = Number(adj.totalPoints || 0);
+      const quantityValue = Number(adj.quantity || 0);
       const detailRow = {
         date: candidateDateStr,
         displayDate: `${month}`,
@@ -579,6 +632,21 @@ export function buildReportData(rowsInput, { roster, rules, from, to, adjustment
       memberEntry.stats.kpi += totalPoints;
       summaryStats.kpi += totalPoints;
 
+      addAdjustmentTotals(adjustmentMeta.totalsByCategory, adj.category, totalPoints, quantityValue);
+      const staffSummary = ensureStaffAdjustmentEntry(
+        adjustmentMeta.byStaff,
+        staffEntry.key,
+        staffEntry.name,
+        teamEntry.name
+      );
+      if (staffSummary) {
+        addAdjustmentTotals(staffSummary.totals, adj.category, totalPoints, quantityValue);
+      }
+      const teamSummary = ensureTeamAdjustmentEntry(adjustmentMeta.byTeam, teamEntry.key, teamEntry.name);
+      if (teamSummary) {
+        addAdjustmentTotals(teamSummary.totals, adj.category, totalPoints, quantityValue);
+      }
+
       adjustmentMeta.totalPoints += totalPoints;
       adjustmentMeta.appliedCount += 1;
       adjustmentMeta.applied.push({ ...detailRow, staffKey: staffEntry.key });
@@ -612,6 +680,7 @@ export function buildReportData(rowsInput, { roster, rules, from, to, adjustment
       if (a.date !== b.date) return b.date.localeCompare(a.date);
       return a.so_tk.localeCompare(b.so_tk, undefined, { numeric: true, sensitivity: "base" });
     });
+    const adjustmentEntry = adjustmentMeta.byStaff.get(entry.key);
     return {
       key: entry.key,
       name: entry.name,
@@ -621,6 +690,7 @@ export function buildReportData(rowsInput, { roster, rules, from, to, adjustment
         : "Chưa gán tổ đội",
       stats: finalizeStats(entry.stats),
       rows: sorted,
+      adjustmentSummary: cloneAdjustmentTotals(adjustmentEntry?.totals),
     };
   }).sort((a, b) => {
     if ((b.stats.kpi || 0) !== (a.stats.kpi || 0)) {
@@ -639,6 +709,7 @@ export function buildReportData(rowsInput, { roster, rules, from, to, adjustment
       if (a.date !== b.date) return b.date.localeCompare(a.date);
       return a.so_tk.localeCompare(b.so_tk, undefined, { numeric: true, sensitivity: "base" });
     });
+    const adjustmentEntry = adjustmentMeta.byTeam.get(entry.key);
     const members = Array.from(entry.members.values()).map((member) => ({
       key: member.key,
       name: member.name,
@@ -664,6 +735,7 @@ export function buildReportData(rowsInput, { roster, rules, from, to, adjustment
       rows: sortedRows,
       members,
       memberNames: members.map((m) => m.name),
+      adjustmentSummary: cloneAdjustmentTotals(adjustmentEntry?.totals),
     };
   }).sort((a, b) => {
     if ((b.stats.kpi || 0) !== (a.stats.kpi || 0)) {
@@ -678,6 +750,7 @@ export function buildReportData(rowsInput, { roster, rules, from, to, adjustment
   const teamKeys = teamList.map((t) => t.key).join("|");
 
   const summaryFinal = finalizeStats(summaryStats);
+  summaryFinal.adjustmentTotals = cloneAdjustmentTotals(adjustmentMeta.totalsByCategory);
   const summaryLicenseList = summaryFinal.licenseCodes || [];
   const summaryLicenseSummary = summaryLicenseList.join(", ");
 
@@ -766,6 +839,23 @@ export function buildReportData(rowsInput, { roster, rules, from, to, adjustment
       };
     }
   }
+
+  const staffAdjustmentSummaries = Array.from(adjustmentMeta.byStaff.values()).map((entry) => ({
+    key: entry.key,
+    name: entry.name,
+    teams: Array.from(entry.teamNames || []),
+    totals: cloneAdjustmentTotals(entry.totals),
+  }));
+  const teamAdjustmentSummaries = Array.from(adjustmentMeta.byTeam.values()).map((entry) => ({
+    key: entry.key,
+    name: entry.name,
+    totals: cloneAdjustmentTotals(entry.totals),
+  }));
+  adjustmentMeta.staffSummaries = staffAdjustmentSummaries;
+  adjustmentMeta.teamSummaries = teamAdjustmentSummaries;
+  adjustmentMeta.totalsByCategory = cloneAdjustmentTotals(adjustmentMeta.totalsByCategory);
+  delete adjustmentMeta.byStaff;
+  delete adjustmentMeta.byTeam;
 
   return {
     rows: sortedRows,

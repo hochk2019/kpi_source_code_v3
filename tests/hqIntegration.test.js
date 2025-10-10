@@ -110,7 +110,8 @@ describe('Tích hợp dữ liệu Đại lý HQ & import', () => {
       licenses: 2,
       so_luong_gp: 2,
     });
-    expect(mapped.licenseCodes).toEqual(['ZN02', 'GP01', 'GP02']);
+    expect(mapped.licenseCodes).toEqual(['GP01', 'GP02']);
+    expect(mapped.licenseSourceCodes).toEqual(['ZN02', 'GP01', 'GP02']);
   });
 
   it('saveDeclRows tự gắn công ty và đại lý theo bảng Đại lý HQ hiện hành', () => {

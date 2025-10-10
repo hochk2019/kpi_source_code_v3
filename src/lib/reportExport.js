@@ -98,22 +98,22 @@ async function requestExport(kind, payload, fallbackFilename) {
   triggerDownload(blob, filename);
 }
 
-export async function exportStaffReport({ staff, range, rules }) {
+export async function exportStaffReport({ staff, range, rules, columns }) {
   const fallback = `bao-cao-kpi-nhan-vien-${(staff?.name || "chua-gan").replace(/\s+/g, "-")}.xlsx`;
-  await requestExport("staff", { staff, range, rules }, fallback.toLowerCase());
+  await requestExport("staff", { staff, range, rules, columns }, fallback.toLowerCase());
 }
 
-export async function exportTeamReport({ team, range, rules }) {
+export async function exportTeamReport({ team, range, rules, columns }) {
   const fallback = `bao-cao-kpi-to-doi-${(team?.name || "chua-gan").replace(/\s+/g, "-")}.xlsx`;
-  await requestExport("team", { team, range, rules }, fallback.toLowerCase());
+  await requestExport("team", { team, range, rules, columns }, fallback.toLowerCase());
 }
 
-export async function exportAllStaffReport({ staffList, summary, range, rules }) {
-  await requestExport("allStaff", { staffList, summary, range, rules }, "bao-cao-kpi-nhan-vien-tong-hop.xlsx");
+export async function exportAllStaffReport({ staffList, summary, range, rules, columns }) {
+  await requestExport("allStaff", { staffList, summary, range, rules, columns }, "bao-cao-kpi-nhan-vien-tong-hop.xlsx");
 }
 
-export async function exportAllTeamReport({ teamList, summary, range, rules }) {
-  await requestExport("allTeam", { teamList, summary, range, rules }, "bao-cao-kpi-to-doi-tong-hop.xlsx");
+export async function exportAllTeamReport({ teamList, summary, range, rules, columns }) {
+  await requestExport("allTeam", { teamList, summary, range, rules, columns }, "bao-cao-kpi-to-doi-tong-hop.xlsx");
 }
 
 export default {

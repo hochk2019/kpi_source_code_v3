@@ -13,6 +13,7 @@ import {
   mapHQAgenciesByMST,
   normalizeStr,
   normalizeDeclarationNumber,
+  normalizeName,
 } from "@/lib/store.js";
 import { mapRow, detectDateOrder } from "@/lib/importer.js";
 import { loadRules, computeKPI, extractLicenseCodesFromRowObj } from "@/lib/rules.js";
@@ -21,6 +22,13 @@ import { deriveCOStatus, coLabel, coLineCount } from "@/shared/co.js";
 import { formatDisplayDate, formatDateRangeLabel } from "@/shared/format.js";
 import { fetchWithAuth } from "@/auth/localAuth.js";
 import useTooltipTitles from "@/hooks/useTooltipTitles.js";
+import {
+  normalizeRoleKey,
+  TEAM_LEAD_ROLE,
+  MANAGER_ROLE,
+  ADMIN_ROLE,
+  DEFAULT_ROLE,
+} from "@/shared/accountRoles.js";
 import {
   Dialog,
   DialogContent,
@@ -155,6 +163,10 @@ const DATE_RANGE_PRESETS = Object.freeze([
     },
   },
 ]);
+
+const CARD_SURFACE_CLASS = "rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] shadow-sm";
+const ZEBRA_TABLE_BODY_CLASS =
+  "[&_tbody_tr:nth-child(odd)]:bg-[color:var(--ds-surface-card)] [&_tbody_tr:nth-child(even)]:bg-[color:var(--ds-surface-muted)]";
 
 async function extractErrorMessage(response, fallbackMessage) {
   if (!response || typeof response !== "object") {
@@ -585,9 +597,71 @@ export default function DataImporter({
   const [upsert11, setUpsert11] = useState(true);            // Upsert theo 11 số đầu (nếu có dùng merge cục bộ)
   const [autoAssignStaff, setAutoAssignStaff] = useState(true); // Tự gán nhân viên theo MST nếu trống
 
+  useEffect(() => {
+    if (!canOverwriteData && overwrite) {
+      setOverwrite(false);
+    }
+  }, [canOverwriteData, overwrite]);
+
   const actor = currentUser?.username || "guest";
   const isReadOnlyForEdits = !canEdit;
   const canReviewAlerts = canEdit || canManageAlerts;
+  const normalizedRole = normalizeRoleKey(currentUser?.role);
+  const isTeamLead = normalizedRole === TEAM_LEAD_ROLE;
+  const isStaffRole = normalizedRole === DEFAULT_ROLE;
+  const isManagerRole = normalizedRole === MANAGER_ROLE || normalizedRole === ADMIN_ROLE;
+  const rosterSnapshot = useMemo(() => getTeamRoster(), [currentUser]);
+  const memberTeamMap = useMemo(() => mapMemberNamesToTeams(rosterSnapshot), [rosterSnapshot]);
+  const staffDisplayName = normalizeStr(currentUser?.name || currentUser?.username || "");
+  const staffNameKey = normalizeName(staffDisplayName);
+  const assignedTeam = staffNameKey ? memberTeamMap.get(staffNameKey)?.team || "" : "";
+  const assignedTeamKey = normalizeName(assignedTeam);
+  const canUploadFiles = canEdit && !(isTeamLead || isStaffRole);
+  const canOverwriteData = canUploadFiles;
+  const editingRestrictionMessage = useMemo(() => {
+    if (!canEdit) return "";
+    if (isManagerRole) return "";
+    if (isTeamLead) {
+      return assignedTeam
+        ? `Bạn chỉ có thể chỉnh sửa tờ khai thuộc tổ ${assignedTeam}.`
+        : "Bạn chỉ có thể chỉnh sửa tờ khai thuộc tổ đội do mình phụ trách.";
+    }
+    if (isStaffRole) {
+      return "Bạn chỉ có thể chỉnh sửa tờ khai đã gán cho tên của bạn.";
+    }
+    return "";
+  }, [assignedTeam, canEdit, isManagerRole, isStaffRole, isTeamLead]);
+  const blockedEditNoticeRef = useRef(new Set());
+  useEffect(() => {
+    blockedEditNoticeRef.current.clear();
+  }, [normalizedRole, assignedTeamKey, staffNameKey]);
+  const isRowEditable = useCallback(
+    (row) => {
+      if (!canEdit) return false;
+      if (!row || typeof row !== "object") return false;
+      if (isManagerRole) return true;
+      const rowStaffKey = normalizeName(row?.nhan_vien);
+      if (isTeamLead) {
+        if (!assignedTeamKey) return false;
+        const rowTeamKey = normalizeName(row?.team);
+        if (rowTeamKey && rowTeamKey === assignedTeamKey) {
+          return true;
+        }
+        if (rowStaffKey) {
+          const rosterEntry = memberTeamMap.get(rowStaffKey);
+          if (rosterEntry && normalizeName(rosterEntry.team) === assignedTeamKey) {
+            return true;
+          }
+        }
+        return false;
+      }
+      if (isStaffRole) {
+        return rowStaffKey && rowStaffKey === staffNameKey;
+      }
+      return true;
+    },
+    [assignedTeamKey, canEdit, isManagerRole, isStaffRole, isTeamLead, memberTeamMap, staffNameKey]
+  );
   const [syncConfig, setSyncConfig] = useState(() => ({ ...DEFAULT_SYNC_CONFIG }));
   const [syncForm, setSyncForm] = useState(() => ({
     enabled: DEFAULT_SYNC_CONFIG.enabled,
@@ -1456,7 +1530,11 @@ export default function DataImporter({
       alert("Chưa chọn tờ khai để đánh dấu.");
       return;
     }
-    const updated = markDeclRowsReviewed(selectedKeys, { actor });
+    const allowedKeys = ensureEditableKeys(selectedKeys, "đánh dấu rà soát");
+    if (!allowedKeys) {
+      return;
+    }
+    const updated = markDeclRowsReviewed(allowedKeys, { actor });
     if (updated === 0) {
       alert("Các tờ khai đã được đánh dấu hoặc không tìm thấy.");
     }
@@ -1464,7 +1542,7 @@ export default function DataImporter({
       await fetchWithAuth("/api/import/alerts/review", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ keys: selectedKeys, actor }),
+        body: JSON.stringify({ keys: allowedKeys, actor }),
         credentials: "include",
       });
     } catch (err) {
@@ -1474,7 +1552,15 @@ export default function DataImporter({
     setHasUnsaved(false);
     loadSavedRows({ bypassConfirm: true });
     fetchAlerts();
-  }, [actor, canReviewAlerts, fetchAlerts, loadSavedRows, mode, selectedKeys]);
+  }, [
+    actor,
+    canReviewAlerts,
+    ensureEditableKeys,
+    fetchAlerts,
+    loadSavedRows,
+    mode,
+    selectedKeys,
+  ]);
 
   const summaryStats = useMemo(() => {
     if (!Array.isArray(rawRows) || rawRows.length === 0 || mode !== "saved") {
@@ -1635,6 +1721,10 @@ export default function DataImporter({
       alert("Bạn đang ở chế độ chỉ xem — hãy đăng nhập để import dữ liệu.");
       return;
     }
+    if (!canUploadFiles) {
+      alert("Tài khoản của bạn không được phép import XLSX. Vui lòng liên hệ quản trị viên nếu cần cấp quyền.");
+      return;
+    }
     if (hasUnsaved && mode === "saved") {
       const proceed = window.confirm(
         "Bạn có các thay đổi chưa lưu. Chọn file mới sẽ làm mất các chỉnh sửa đó. Bạn có chắc chắn muốn tiếp tục?"
@@ -1720,6 +1810,47 @@ export default function DataImporter({
     const nhanh = (row?.nhanh || "").toString();
     return `${soTk}_${nhanh}`;
   }, []);
+
+  const filterEditableKeys = useCallback(
+    (keys) => {
+      if (!Array.isArray(keys) || keys.length === 0) {
+        return { allowed: [], blocked: 0 };
+      }
+      const target = new Set(keys);
+      const allowed = [];
+      let blocked = 0;
+      for (const row of rawRows) {
+        const key = keyOfRow(row);
+        if (!target.has(key)) continue;
+        if (isRowEditable(row)) {
+          allowed.push(key);
+        } else {
+          blocked += 1;
+        }
+      }
+      return { allowed, blocked };
+    },
+    [isRowEditable, keyOfRow, rawRows]
+  );
+
+  const ensureEditableKeys = useCallback(
+    (keys, actionLabel = "thao tác") => {
+      const { allowed, blocked } = filterEditableKeys(keys);
+      if (!allowed.length) {
+        if (blocked > 0 && editingRestrictionMessage) {
+          alert(editingRestrictionMessage);
+        } else if (keys?.length) {
+          alert("Không tìm thấy tờ khai phù hợp để xử lý.");
+        }
+        return null;
+      }
+      if (blocked > 0 && editingRestrictionMessage) {
+        alert(`Đã bỏ qua ${blocked} tờ khai không thuộc phạm vi của bạn khi ${actionLabel}.`);
+      }
+      return allowed;
+    },
+    [editingRestrictionMessage, filterEditableKeys]
+  );
 
   const duplicate11Summary = useMemo(() => {
     const counts = new Map();
@@ -1988,6 +2119,13 @@ export default function DataImporter({
       const pos = prev.findIndex(row => keyOfRow(row) === rowKey);
       if (pos === -1) return prev;
       const current = prev[pos];
+      if (!isRowEditable(current)) {
+        if (editingRestrictionMessage && !blockedEditNoticeRef.current.has(rowKey)) {
+          blockedEditNoticeRef.current.add(rowKey);
+          alert(editingRestrictionMessage);
+        }
+        return prev;
+      }
       const updates = updater(current);
       if (!updates || typeof updates !== "object") return prev;
 
@@ -2029,7 +2167,15 @@ export default function DataImporter({
     if (didChange && mode === "saved") {
       setHasUnsaved(true);
     }
-  }, [isReadOnlyForEdits, keyOfRow, rules, mode]);
+  }, [
+    blockedEditNoticeRef,
+    editingRestrictionMessage,
+    isReadOnlyForEdits,
+    isRowEditable,
+    keyOfRow,
+    mode,
+    rules,
+  ]);
 
   const onChangeCell = useCallback((rowKey, field, value, transform) => {
     applyEdit(rowKey, (row) => {
@@ -2039,23 +2185,49 @@ export default function DataImporter({
     });
   }, [applyEdit]);
 
-  const handleToggleSelect = useCallback((row) => {
-    const key = keyOfRow(row);
-    setSelectedKeys(prev => {
-      if (prev.includes(key)) {
-        return prev.filter(k => k !== key);
+  const handleToggleSelect = useCallback(
+    (row) => {
+      if (isReadOnlyForEdits) {
+        return;
       }
-      return [...prev, key];
-    });
-  }, [keyOfRow]);
+      if (!isRowEditable(row)) {
+        if (editingRestrictionMessage) {
+          alert(editingRestrictionMessage);
+        }
+        return;
+      }
+      const key = keyOfRow(row);
+      setSelectedKeys((prev) => {
+        if (prev.includes(key)) {
+          return prev.filter((k) => k !== key);
+        }
+        return [...prev, key];
+      });
+    },
+    [editingRestrictionMessage, isReadOnlyForEdits, isRowEditable, keyOfRow]
+  );
 
   const handleClearSelection = useCallback(() => {
     setSelectedKeys([]);
   }, []);
 
-  const deleteRowsByKeys = useCallback((keys) => {
+  const deleteRowsByKeys = useCallback((keys, { alreadyFiltered = false } = {}) => {
     if (!Array.isArray(keys) || keys.length === 0) return;
-    const keySet = new Set(keys);
+    let allowedKeys = keys;
+    if (!alreadyFiltered) {
+      const { allowed, blocked } = filterEditableKeys(keys);
+      if (!allowed.length) {
+        if (blocked > 0 && editingRestrictionMessage) {
+          alert(editingRestrictionMessage);
+        }
+        return;
+      }
+      if (blocked > 0 && editingRestrictionMessage) {
+        alert(`Đã bỏ qua ${blocked} tờ khai không thuộc phạm vi của bạn khi xóa.`);
+      }
+      allowedKeys = allowed;
+    }
+    const keySet = new Set(allowedKeys);
     const remaining = rawRows.filter(row => !keySet.has(keyOfRow(row)));
     const removedCount = rawRows.length - remaining.length;
     if (removedCount <= 0) return;
@@ -2068,7 +2240,15 @@ export default function DataImporter({
     setHasUnsaved(false);
     loadSavedRows();
     fetchAlerts();
-  }, [actor, fetchAlerts, keyOfRow, loadSavedRows, rawRows]);
+  }, [
+    actor,
+    editingRestrictionMessage,
+    fetchAlerts,
+    filterEditableKeys,
+    keyOfRow,
+    loadSavedRows,
+    rawRows,
+  ]);
 
   const handleDeleteSelected = useCallback(() => {
     if (isReadOnlyForEdits) {
@@ -2083,11 +2263,21 @@ export default function DataImporter({
       alert("Chưa chọn tờ khai để xóa.");
       return;
     }
-    if (!window.confirm(`Bạn chắc chắn muốn xóa ${selectedKeys.length} tờ khai đã chọn?`)) {
+    const allowedKeys = ensureEditableKeys(selectedKeys, "xóa");
+    if (!allowedKeys) {
       return;
     }
-    deleteRowsByKeys(selectedKeys);
-  }, [deleteRowsByKeys, isReadOnlyForEdits, mode, selectedKeys]);
+    if (!window.confirm(`Bạn chắc chắn muốn xóa ${allowedKeys.length} tờ khai đã chọn?`)) {
+      return;
+    }
+    deleteRowsByKeys(allowedKeys, { alreadyFiltered: true });
+  }, [
+    deleteRowsByKeys,
+    ensureEditableKeys,
+    isReadOnlyForEdits,
+    mode,
+    selectedKeys,
+  ]);
 
   const handleDeleteSingle = useCallback((row) => {
     if (isReadOnlyForEdits) {
@@ -2098,13 +2288,30 @@ export default function DataImporter({
       alert("Chỉ có thể xóa khi đang xem dữ liệu đã lưu.");
       return;
     }
+    if (!isRowEditable(row)) {
+      if (editingRestrictionMessage) {
+        alert(editingRestrictionMessage);
+      }
+      return;
+    }
     if (!window.confirm("Xóa tờ khai này?")) return;
-    deleteRowsByKeys([keyOfRow(row)]);
-  }, [deleteRowsByKeys, isReadOnlyForEdits, keyOfRow, mode]);
+    deleteRowsByKeys([keyOfRow(row)], { alreadyFiltered: true });
+  }, [
+    deleteRowsByKeys,
+    editingRestrictionMessage,
+    isReadOnlyForEdits,
+    isRowEditable,
+    keyOfRow,
+    mode,
+  ]);
 
   function handleImport() {
     if (isReadOnlyForEdits) {
       alert("Bạn không có quyền import dữ liệu. Đăng nhập bằng tài khoản được cấp quyền để tiếp tục.");
+      return;
+    }
+    if (!canUploadFiles) {
+      alert("Tài khoản của bạn không được phép import XLSX. Vui lòng liên hệ quản trị viên nếu cần cấp quyền.");
       return;
     }
     if (mode !== "preview") {
@@ -2120,8 +2327,9 @@ export default function DataImporter({
       ? rawRows.map(r => ({ ...r, so_tk: (r.so_tk || "").toString().slice(0, 11) }))
       : rawRows;
 
+    const effectiveOverwrite = canOverwriteData ? overwrite : false;
     const count = saveDeclRows(rows, {
-      overwrite,
+      overwrite: effectiveOverwrite,
       actor,
       detail: `Import từ ${selectedFile || "file XLSX"}`,
     });
@@ -2290,13 +2498,22 @@ export default function DataImporter({
     const auditGroups = [];
     let deleteGroups = 0;
     let reviewGroups = 0;
+    let blockedGroups = 0;
 
     for (const group of duplicate11Details) {
       const plan = duplicate11Plan[group.rawPrefix];
       const items = Array.isArray(group.items) ? group.items : [];
       if (!items.length) continue;
-      const availableKeys = new Set(items.map((item) => item.key));
-      const fallbackKeeper = group.keeperKey || items[0].key;
+      const allowedItems = items.filter((item) => {
+        const original = rowMap.get(item.key);
+        return original && isRowEditable(original);
+      });
+      if (!allowedItems.length) {
+        blockedGroups += 1;
+        continue;
+      }
+      const availableKeys = new Set(allowedItems.map((item) => item.key));
+      const fallbackKeeper = group.keeperKey || allowedItems[0].key;
       const keeperKey = plan?.keeperKey && availableKeys.has(plan.keeperKey)
         ? plan.keeperKey
         : fallbackKeeper;
@@ -2304,7 +2521,7 @@ export default function DataImporter({
       if (plan?.resolution === "review") {
         reviewGroups += 1;
         const note = (plan?.note || "").trim();
-        for (const item of items) {
+        for (const item of allowedItems) {
           const original = rowMap.get(item.key) || {};
           updates.set(item.key, {
             ...original,
@@ -2319,7 +2536,7 @@ export default function DataImporter({
           label: group.prefix,
           resolution: "review",
           note,
-          keys: items.map((item) => item.key),
+          keys: allowedItems.map((item) => item.key),
         });
         continue;
       }
@@ -2339,7 +2556,7 @@ export default function DataImporter({
       updates.set(keeperKey, keeperRow);
 
       const removedKeys = [];
-      for (const item of items) {
+      for (const item of allowedItems) {
         if (item.key === keeperKey) continue;
         removalSet.add(item.key);
         removedKeys.push(item.key);
@@ -2360,6 +2577,9 @@ export default function DataImporter({
       alert("Không có thay đổi nào được áp dụng.");
       handleCloseDuplicateReview();
       return;
+    }
+    if (blockedGroups > 0 && editingRestrictionMessage) {
+      alert(`Đã bỏ qua ${blockedGroups} nhóm trùng không thuộc phạm vi phụ trách của bạn.`);
     }
 
     const nextRows = sortDeclRows(
@@ -2403,22 +2623,38 @@ export default function DataImporter({
     duplicate11Plan,
     fetchAlerts,
     handleCloseDuplicateReview,
+    editingRestrictionMessage,
+    isRowEditable,
     keyOfRow,
     loadSavedRows,
     rawRows,
   ]);
 
-  const applyLicenseExclusionForKeys = useCallback((targetKeys) => {
-    if (mode !== "saved") {
-      return { ok: false, reason: "mode" };
-    }
-    if (!Array.isArray(targetKeys) || targetKeys.length === 0) {
-      return { ok: false, reason: "empty" };
-    }
-    const keySet = new Set(targetKeys);
-    if (keySet.size === 0) {
-      return { ok: false, reason: "empty" };
-    }
+  const applyLicenseExclusionForKeys = useCallback(
+    (targetKeys, { alreadyFiltered = false } = {}) => {
+      if (mode !== "saved") {
+        return { ok: false, reason: "mode", blocked: 0 };
+      }
+      if (!Array.isArray(targetKeys) || targetKeys.length === 0) {
+        return { ok: false, reason: "empty", blocked: 0 };
+      }
+      let workingKeys = targetKeys;
+      let blockedCount = 0;
+      if (!alreadyFiltered) {
+        const { allowed, blocked } = filterEditableKeys(targetKeys);
+        if (!allowed.length) {
+          return { ok: false, reason: blocked ? "restricted" : "empty", blocked };
+        }
+        blockedCount = blocked;
+        if (blocked > 0 && editingRestrictionMessage) {
+          alert(`Đã bỏ qua ${blocked} tờ khai không thuộc phạm vi của bạn khi đối chiếu giấy phép.`);
+        }
+        workingKeys = allowed;
+      }
+      const keySet = new Set(workingKeys);
+      if (keySet.size === 0) {
+        return { ok: false, reason: "empty", blocked: blockedCount };
+      }
     let changed = 0;
     let matchedCount = 0;
     const nextRows = rawRows.map((row) => {
@@ -2484,19 +2720,33 @@ export default function DataImporter({
       return { ok: false, reason: "missing" };
     }
     if (changed === 0) {
-      return { ok: false, reason: "unchanged", matchedCount };
+      return { ok: false, reason: "unchanged", matchedCount, blocked: blockedCount };
     }
     setRawRows(nextRows);
     setHasUnsaved(true);
-    return { ok: true, changed, matchedCount };
-  }, [mode, rawRows, keyOfRow, getLicenseExcludeSetForRow, rules]);
+      return { ok: true, changed, matchedCount, blocked: blockedCount };
+    },
+    [
+      editingRestrictionMessage,
+      filterEditableKeys,
+      getLicenseExcludeSetForRow,
+      keyOfRow,
+      mode,
+      rawRows,
+      rules,
+    ]
+  );
 
   const handleApplyLicenseExclusion = useCallback(() => {
     if (selectedKeys.length === 0) {
       alert("Hãy chọn ít nhất một tờ khai để đối chiếu giấy phép.");
       return;
     }
-    const result = applyLicenseExclusionForKeys(selectedKeys);
+    const allowedKeys = ensureEditableKeys(selectedKeys, "đối chiếu giấy phép");
+    if (!allowedKeys) {
+      return;
+    }
+    const result = applyLicenseExclusionForKeys(allowedKeys, { alreadyFiltered: true });
     if (!result?.ok) {
       if (result?.reason === "mode") {
         alert("Chỉ có thể điều chỉnh giấy phép khi đang xem dữ liệu đã lưu.");
@@ -2514,7 +2764,7 @@ export default function DataImporter({
       return;
     }
     alert(`Đã cập nhật loại trừ giấy phép cho ${result.changed}/${result.matchedCount} tờ khai đã chọn.`);
-  }, [selectedKeys, applyLicenseExclusionForKeys]);
+  }, [applyLicenseExclusionForKeys, ensureEditableKeys, selectedKeys]);
 
   const handleAutoApplyLicenseExclusion = useCallback(() => {
     if (!canEdit) {
@@ -2529,7 +2779,11 @@ export default function DataImporter({
       alert("Không có tờ khai nào khớp với bộ lọc hiện tại để đối chiếu.");
       return;
     }
-    const result = applyLicenseExclusionForKeys(filteredKeys);
+    const allowedKeys = ensureEditableKeys(filteredKeys, "đối chiếu giấy phép tự động");
+    if (!allowedKeys) {
+      return;
+    }
+    const result = applyLicenseExclusionForKeys(allowedKeys, { alreadyFiltered: true });
     if (!result?.ok) {
       if (result?.reason === "unchanged") {
         alert("Tất cả tờ khai trong bộ lọc hiện tại đã loại trừ giấy phép đầy đủ.");
@@ -2543,7 +2797,7 @@ export default function DataImporter({
       return;
     }
     alert(`Đã tự động cập nhật loại trừ giấy phép cho ${result.changed}/${result.matchedCount} tờ khai đang hiển thị.`);
-  }, [applyLicenseExclusionForKeys, canEdit, filteredKeys, mode]);
+  }, [applyLicenseExclusionForKeys, canEdit, ensureEditableKeys, filteredKeys, mode]);
 
   const handleExportSelected = useCallback(() => {
     if (selectedKeys.length === 0) {
@@ -2587,7 +2841,8 @@ export default function DataImporter({
     success: "border border-emerald-200 bg-emerald-50 text-emerald-700",
     warning: "border border-amber-200 bg-amber-50 text-amber-700",
     danger: "border border-red-200 bg-red-50 text-red-700",
-    muted: "border border-gray-200 bg-gray-100 text-gray-600",
+    muted:
+      "border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-muted)] text-[color:var(--ds-text-muted)]",
   };
 
   const resolveStatusMeta = (status, fallback, kind = "database") => {
@@ -2668,7 +2923,10 @@ export default function DataImporter({
                       usageMap.get(selected)?.push(field.label);
                     }
                     return (
-                      <div key={`${group.rawPrefix || group.prefix}-${group.total}`} className="rounded border border-gray-200 bg-white p-3 shadow-sm dark:border-gray-700 dark:bg-gray-900/40">
+                      <div
+                        key={`${group.rawPrefix || group.prefix}-${group.total}`}
+                        className="rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] p-3 shadow-sm"
+                      >
                         <div className="flex flex-col gap-1 md:flex-row md:items-start md:justify-between">
                           <div>
                             <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">{group.prefix}</h3>
@@ -2688,7 +2946,7 @@ export default function DataImporter({
                         </div>
                         <div className="mt-3 overflow-x-auto">
                           <table className="min-w-full text-xs">
-                            <thead className="bg-gray-50 text-gray-600 dark:bg-gray-900/40 dark:text-gray-300">
+                            <thead className="bg-[color:var(--ds-surface-muted)] text-[color:var(--ds-text-secondary)]">
                               <tr>
                                 <th className="px-2 py-1 text-left">Giữ</th>
                                 <th className="px-2 py-1 text-left">Số tờ khai</th>
@@ -2709,10 +2967,13 @@ export default function DataImporter({
                                 const rowClass = isKeeper
                                   ? "bg-emerald-50 text-emerald-900 dark:bg-emerald-900/20 dark:text-emerald-100"
                                   : index % 2 === 0
-                                    ? "bg-white dark:bg-transparent"
-                                    : "bg-gray-50 dark:bg-gray-900/40";
+                                    ? "bg-[color:var(--ds-surface-card)]"
+                                    : "bg-[color:var(--ds-surface-muted)]";
                                 return (
-                                  <tr key={item.key} className={`${rowClass} border-b last:border-b-0 dark:border-gray-800`}>
+                                  <tr
+                                    key={item.key}
+                                    className={`${rowClass} border-b border-[color:var(--ds-border-subtle)] last:border-b-0`}
+                                  >
                                     <td className="px-2 py-1">
                                       <label className="flex items-center gap-1">
                                         <input
@@ -2725,13 +2986,13 @@ export default function DataImporter({
                                       </label>
                                     </td>
                                     <td className="px-2 py-1">
-                                      <div className="font-medium text-gray-900 dark:text-gray-100">{item.label}</div>
-                                      <div className="text-[10px] uppercase text-gray-400">{item.key}</div>
+                                      <div className="font-medium text-[color:var(--ds-text-primary)]">{item.label}</div>
+                                      <div className="text-[10px] uppercase text-[color:var(--ds-text-muted)]">{item.key}</div>
                                     </td>
                                     <td className="px-2 py-1">{item.sourceLabel}</td>
                                     <td className="px-2 py-1">
                                       <div>{item.timestampDisplay || "Không xác định"}</div>
-                                      <div className="text-[10px] text-gray-400">{item.timestampLabel}</div>
+                                      <div className="text-[10px] text-[color:var(--ds-text-muted)]">{item.timestampLabel}</div>
                                     </td>
                                     <td className="px-2 py-1">{item.staff || <span className="text-gray-400">(trống)</span>}</td>
                                     <td className="px-2 py-1">{item.team || <span className="text-gray-400">(trống)</span>}</td>
@@ -2741,13 +3002,16 @@ export default function DataImporter({
                                       {selectedFields.length > 0 ? (
                                         <div className="space-y-0.5">
                                           {selectedFields.map((fieldLabel) => (
-                                            <span key={`${item.key}-${fieldLabel}`} className="block rounded bg-emerald-100 px-2 py-0.5 text-[10px] font-medium text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-200">
+                                            <span
+                                              key={`${item.key}-${fieldLabel}`}
+                                              className="block rounded bg-emerald-100 px-2 py-0.5 text-[10px] font-medium text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-200"
+                                            >
                                               {fieldLabel}
                                             </span>
                                           ))}
                                         </div>
                                       ) : (
-                                        <span className="text-gray-400">(không)</span>
+                                        <span className="text-[color:var(--ds-text-muted)]">(không)</span>
                                       )}
                                     </td>
                                     <td className="px-2 py-1 text-right">{item.score.toLocaleString("vi-VN")}</td>
@@ -2764,7 +3028,7 @@ export default function DataImporter({
                               <label key={`${group.rawPrefix}-${field.key}`} className="flex flex-col gap-1">
                                 <span className="text-[11px] font-medium text-gray-500 dark:text-gray-400">{field.label}</span>
                                 <select
-                                  className="rounded border border-gray-300 px-2 py-1 text-sm dark:border-gray-600 dark:bg-gray-900"
+                                  className="rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] px-2 py-1 text-sm"
                                   value={merges[field.key] || keeperKey}
                                   onChange={(e) => handleChangeDuplicateMerge(group.rawPrefix, field.key, e.target.value)}
                                   disabled={resolution === "review"}
@@ -2782,7 +3046,7 @@ export default function DataImporter({
                             <label className="flex flex-col gap-1">
                               <span className="font-semibold text-gray-600 dark:text-gray-300">Hành động cho nhóm</span>
                               <select
-                                className="rounded border border-gray-300 px-2 py-1 text-sm dark:border-gray-600 dark:bg-gray-900"
+                                className="rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] px-2 py-1 text-sm"
                                 value={resolution}
                                 onChange={(e) => handleChangeDuplicateResolution(group.rawPrefix, e.target.value)}
                               >
@@ -2794,7 +3058,7 @@ export default function DataImporter({
                               <label className="flex flex-col gap-1">
                                 <span className="text-[11px] font-medium text-gray-500 dark:text-gray-400">Ghi chú (tùy chọn)</span>
                                 <textarea
-                                  className="min-h-[60px] rounded border border-gray-300 px-2 py-1 text-sm dark:border-gray-600 dark:bg-gray-900"
+                                  className="min-h-[60px] rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] px-2 py-1 text-sm"
                                   value={note}
                                   onChange={(e) => handleChangeDuplicateNote(group.rawPrefix, e.target.value)}
                                   placeholder="Ví dụ: Cần đối chiếu KPI với phòng chứng từ"
@@ -2811,8 +3075,8 @@ export default function DataImporter({
                 </div>
               </ScrollArea>
             ) : (
-              <div className="rounded border border-gray-200 bg-white p-4 text-center text-sm text-gray-500 dark:border-gray-700 dark:bg-gray-900/40 dark:text-gray-300">
-                <p className="text-sm text-gray-500 dark:text-gray-400">Không tìm thấy nhóm trùng để rà soát.</p>
+              <div className="rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] p-4 text-center text-sm text-[color:var(--ds-text-muted)]">
+                <p className="text-sm text-[color:var(--ds-text-muted)]">Không tìm thấy nhóm trùng để rà soát.</p>
               </div>
             )}
             <label className="flex items-start gap-2 text-sm text-gray-700 dark:text-gray-200">
@@ -2829,7 +3093,7 @@ export default function DataImporter({
             <button
               type="button"
               onClick={handleCloseDuplicateReview}
-              className="rounded border px-3 py-1 text-sm text-gray-600 hover:bg-gray-100 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800"
+              className="rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] px-3 py-1 text-sm text-[color:var(--ds-text-secondary)] hover:bg-[color:var(--ds-surface-muted)]"
             >
               Hủy
             </button>
@@ -2844,7 +3108,7 @@ export default function DataImporter({
           </DialogFooter>
         </DialogContent>
       </Dialog>
-      <div ref={rootRef} className="space-y-3">
+      <div ref={rootRef} className="import-data-view space-y-3">
       {isReadOnlyForEdits && !canManageAlerts && (
         <div className="rounded border border-amber-300 bg-amber-50 text-amber-700 p-3 text-sm">
           Bạn đang ở chế độ chỉ xem. Đăng nhập bằng tài khoản được cấp quyền để import, chỉnh sửa và lưu dữ liệu tờ khai.
@@ -2857,7 +3121,7 @@ export default function DataImporter({
       )}
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
         {summaryCards.map((card) => (
-          <div key={card.label} className="rounded border bg-white p-3 shadow-sm">
+          <div key={card.label} className={`${CARD_SURFACE_CLASS} p-3`}>
             <div className="text-xs uppercase tracking-wide text-gray-500">{card.label}</div>
             <div className="mt-1 text-2xl font-semibold text-gray-900">{card.value?.toLocaleString?.("vi-VN") ?? card.value}</div>
           </div>
@@ -2895,7 +3159,7 @@ export default function DataImporter({
               {updatedPreview.map((entry) => (
                 <span
                   key={`${entry.so_tk}_${entry.nhanh || entry.branch || 'main'}`}
-                  className="rounded bg-white px-2 py-0.5 text-emerald-700 shadow-sm"
+                  className="rounded bg-[color:var(--ds-surface-card)] px-2 py-0.5 text-emerald-700 shadow-sm"
                 >
                   {formatDeclarationLabel(entry)}
                 </span>
@@ -3114,7 +3378,10 @@ export default function DataImporter({
                       </thead>
                       <tbody>
                         {previewRows.map((row) => (
-                          <tr key={`${row.so_tk}_${row.nhanh || ""}`} className="odd:bg-white even:bg-emerald-50/40">
+                          <tr
+                            key={`${row.so_tk}_${row.nhanh || ""}`}
+                            className="odd:bg-[color:var(--ds-surface-card)] even:bg-[color:var(--ds-surface-muted)]"
+                          >
                             <td className="px-2 py-1">{row.so_tk}</td>
                             <td className="px-2 py-1">{formatDisplayDate(row.date)}</td>
                             <td className="px-2 py-1">{row.mst}</td>
@@ -3142,7 +3409,7 @@ export default function DataImporter({
           )}
         </CollapsibleCard>
       ) : (
-        <section className="rounded border bg-white p-4 shadow-sm">
+        <section className={`${CARD_SURFACE_CLASS} p-4`}>
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
               <h2 className="text-base font-semibold text-gray-900">Đồng bộ ECUS</h2>
@@ -3364,7 +3631,7 @@ export default function DataImporter({
                   </thead>
                   <tbody>
                     {coMismatchPreview.map((item) => (
-                      <tr key={item.key} className="odd:bg-white even:bg-amber-50/40">
+                      <tr key={item.key} className="odd:bg-[color:var(--ds-surface-card)] even:bg-[color:var(--ds-surface-muted)]">
                         <td className="px-2 py-1">{formatDeclarationLabel(item)}</td>
                         <td className="px-2 py-1 text-center">{item.stored?.has_co ? "Có" : "Không"} ({item.stored?.co_line_count ?? 0})</td>
                         <td className="px-2 py-1 text-center">{item.remote?.has_co ? "Có" : "Không"} ({item.remote?.co_line_count ?? 0})</td>
@@ -3382,7 +3649,7 @@ export default function DataImporter({
       </CollapsibleCard>
 
 
-<section className="rounded border bg-white p-4 shadow-sm">
+<section className={`${CARD_SURFACE_CLASS} p-4`}>
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
             <h2 className="text-base font-semibold text-gray-900">Cảnh báo tờ khai thiếu thông tin</h2>
@@ -3409,7 +3676,10 @@ export default function DataImporter({
               </thead>
               <tbody>
                 {outstandingAlerts.map((alert) => (
-                  <tr key={alert.key} className="odd:bg-white even:bg-gray-50">
+                  <tr
+                    key={alert.key}
+                    className="odd:bg-[color:var(--ds-surface-card)] even:bg-[color:var(--ds-surface-muted)]"
+                  >
                     <td className="px-2 py-1">{alert.so_tk}</td>
                     <td className="px-2 py-1">{alert.mst}</td>
                     <td className="px-2 py-1">{alert.company}</td>
@@ -3440,7 +3710,7 @@ export default function DataImporter({
           <button
             type="button"
             onClick={() => fileRef.current?.click()}
-            className="px-3 py-1.5 rounded border bg-white shadow-sm hover:bg-gray-50"
+            className="px-3 py-1.5 rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] shadow-sm hover:bg-[color:var(--ds-surface-muted)]"
           >
             Chọn file XLSX
           </button>
@@ -3820,14 +4090,20 @@ export default function DataImporter({
           <tbody>
           {pageRows.map((r, i) => {
             const rowKey = keyOfRow(r);
+            const rowEditable = isRowEditable(r);
+            const rowReadOnly = isReadOnlyForEdits || !rowEditable;
             return (
-              <tr key={`${rowKey}_${i}`} className="odd:bg-white even:bg-gray-50">
+              <tr
+                key={`${rowKey}_${i}`}
+                className="odd:bg-[color:var(--ds-surface-card)] even:bg-[color:var(--ds-surface-muted)]"
+              >
                 {selectionEnabled && (
                   <td className="px-2 py-1">
                     <input
                       type="checkbox"
                       checked={selectedKeys.includes(rowKey)}
                       onChange={() => handleToggleSelect(r)}
+                      disabled={rowReadOnly}
                     />
                   </td>
                 )}
@@ -3854,6 +4130,9 @@ export default function DataImporter({
                     )}
                     {r.duplicate_review_pending && (
                       <span className="rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-medium text-red-700">Chờ rà soát</span>
+                    )}
+                    {rowReadOnly && (
+                      <span className="rounded bg-gray-200 px-1.5 py-0.5 text-[10px] font-medium text-gray-600">Chỉ xem</span>
                     )}
                   </div>
                 </td>
@@ -3886,7 +4165,7 @@ export default function DataImporter({
                   <span>{r.muc_hang ?? ""}</span>
                 </td>
                 <td className="px-2 py-1">
-                  {isReadOnlyForEdits ? (
+                  {rowReadOnly ? (
                     <span>{r.nhan_vien || ""}</span>
                   ) : (
                     <input
@@ -3897,7 +4176,7 @@ export default function DataImporter({
                   )}
                 </td>
                 <td className="px-2 py-1">
-                  {isReadOnlyForEdits ? (
+                  {rowReadOnly ? (
                     <span>{r.team || ""}</span>
                   ) : (
                     <input
@@ -3908,7 +4187,7 @@ export default function DataImporter({
                   )}
                 </td>
                 <td className="px-2 py-1">
-                  {isReadOnlyForEdits ? (
+                  {rowReadOnly ? (
                     <span>{r.agency || r.dai_ly || ""}</span>
                   ) : (
                     <input
@@ -3935,7 +4214,7 @@ export default function DataImporter({
                   })()}
                 </td>
                 <td className="px-2 py-1">
-                  {isReadOnlyForEdits ? (
+                  {rowReadOnly ? (
                     <span>{r.licenses ?? r.so_luong_gp ?? ""}</span>
                   ) : (
                     <input
@@ -3969,7 +4248,7 @@ export default function DataImporter({
                     return kpi.toFixed(1);
                   })()}
                 </td>
-                {deleteEnabled && (
+                {deleteEnabled && rowEditable && (
                   <td className="px-2 py-1">
                     <button
                       type="button"

@@ -10,6 +10,7 @@ import {
   updateAiConfig,
   saveAiHistory,
   clearAiHistory,
+  testAiProvider,
 } from '@/lib/aiClient.js';
 
 function formatDateTime(value) {
@@ -92,6 +93,10 @@ function createDraftFromConfig(config) {
           model: provider.model || '',
           temperature: provider.temperature ?? '',
           maxTokens: provider.maxTokens ?? '',
+          apiKey: '',
+          apiKeyPreview: provider.apiKeyPreview || '',
+          hasStoredKey: provider.hasApiKey || false,
+          clearStoredKey: false,
         }))
       : [],
   };
@@ -129,19 +134,29 @@ function prepareConfigPayload(draft) {
       maxEntries: parseNumberInput(draft.caching?.maxEntries),
     },
     providers: Array.isArray(draft.providers)
-      ? draft.providers.map((provider) => ({
-          id: provider.id,
-          type: provider.type,
-          label: provider.label,
-          enabled: provider.enabled !== false,
-          endpoint: provider.endpoint || undefined,
-          deployment: provider.deployment || undefined,
-          apiVersion: provider.apiVersion || undefined,
-          apiKeyEnv: provider.apiKeyEnv || undefined,
-          model: provider.model || undefined,
-          temperature: parseNumberInput(provider.temperature),
-          maxTokens: parseNumberInput(provider.maxTokens),
-        }))
+      ? draft.providers.map((provider) => {
+          const entry = {
+            id: provider.id,
+            type: provider.type,
+            label: provider.label,
+            enabled: provider.enabled !== false,
+            endpoint: provider.endpoint || undefined,
+            deployment: provider.deployment || undefined,
+            apiVersion: provider.apiVersion || undefined,
+            apiKeyEnv: provider.apiKeyEnv || undefined,
+            model: provider.model || undefined,
+            temperature: parseNumberInput(provider.temperature),
+            maxTokens: parseNumberInput(provider.maxTokens),
+          };
+          const keyInput = typeof provider.apiKey === 'string' ? provider.apiKey.trim() : '';
+          if (provider.clearStoredKey) {
+            entry.clearStoredKey = true;
+            entry.apiKey = '';
+          } else if (keyInput) {
+            entry.apiKey = keyInput;
+          }
+          return entry;
+        })
       : [],
   };
 }
@@ -156,6 +171,63 @@ const MAX_HISTORY_SCOPE_LENGTH = 120;
 const MAX_HISTORY_PROVIDER_LENGTH = 120;
 const LOCAL_HISTORY_KEY = 'ai_chat_history_guest_v1';
 const LOCAL_HISTORY_USER_PREFIX = 'ai_chat_history_user_';
+
+const AI_PROVIDER_PRESETS = [
+  {
+    key: 'openai-gpt4o',
+    label: 'OpenAI GPT-4o mini',
+    idBase: 'openai-gpt4o',
+    type: 'openai',
+    endpoint: 'https://api.openai.com/v1',
+    model: 'gpt-4o-mini',
+    apiKeyEnv: 'OPENAI_API_KEY',
+    temperature: 0.2,
+    maxTokens: 1024,
+  },
+  {
+    key: 'anthropic-claude',
+    label: 'Anthropic Claude 3.5 Sonnet',
+    idBase: 'anthropic-claude',
+    type: 'anthropic',
+    endpoint: 'https://api.anthropic.com',
+    model: 'claude-3-5-sonnet-20241022',
+    apiKeyEnv: 'ANTHROPIC_API_KEY',
+    apiVersion: '2023-06-01',
+    temperature: 0.2,
+    maxTokens: 1024,
+  },
+  {
+    key: 'google-gemini',
+    label: 'Google AI Studio Gemini',
+    idBase: 'google-ai-studio',
+    type: 'google-ai-studio',
+    endpoint: 'https://generativelanguage.googleapis.com',
+    model: 'gemini-1.5-flash',
+    apiKeyEnv: 'GOOGLE_AI_STUDIO_API_KEY',
+    temperature: 0.3,
+    maxTokens: 1024,
+  },
+  {
+    key: 'azure-custom',
+    label: 'Azure OpenAI (tùy chỉnh)',
+    idBase: 'azure-openai',
+    type: 'azure',
+    endpoint: '',
+    deployment: '',
+    apiVersion: '2024-08-01-preview',
+    apiKeyEnv: 'AZURE_OPENAI_KEY',
+    temperature: 0.2,
+    maxTokens: 2048,
+  },
+  {
+    key: 'custom',
+    label: 'Nhà cung cấp tùy chỉnh',
+    idBase: 'custom-provider',
+    type: 'custom',
+    endpoint: '',
+    model: '',
+  },
+];
 
 const ASSISTANT_MODES = [
   {
@@ -390,6 +462,10 @@ export default function AiAssistant({ currentUser }) {
   const [configSaving, setConfigSaving] = useState(false);
   const [configError, setConfigError] = useState('');
   const [clearCacheLoading, setClearCacheLoading] = useState(false);
+  const [newProviderPreset, setNewProviderPreset] = useState(
+    AI_PROVIDER_PRESETS[0]?.key || 'custom'
+  );
+  const [providerTests, setProviderTests] = useState({});
 
   const [messages, setMessages] = useState([]);
   const [prompt, setPrompt] = useState('');
@@ -718,7 +794,133 @@ export default function AiAssistant({ currentUser }) {
       providers[index] = { ...providers[index], ...patch };
       return { ...prev, providers };
     });
+    setProviderTests((prev) => {
+      if (!prev || !prev[providerId]) {
+        return prev;
+      }
+      const next = { ...prev };
+      next[providerId] = {
+        ...prev[providerId],
+        status: 'stale',
+      };
+      return next;
+    });
   };
+
+  const handleAddProvider = useCallback(
+    (presetKey) => {
+      setDraft((prev) => {
+        if (!prev) {
+          return prev;
+        }
+        const providers = Array.isArray(prev.providers) ? prev.providers.slice() : [];
+        const preset = AI_PROVIDER_PRESETS.find((item) => item.key === presetKey) || AI_PROVIDER_PRESETS[AI_PROVIDER_PRESETS.length - 1];
+        const baseId = (preset?.idBase || 'provider').trim() || 'provider';
+        const used = new Set(providers.map((item) => item.id));
+        let candidate = baseId;
+        let counter = 1;
+        while (used.has(candidate)) {
+          candidate = `${baseId}-${counter++}`;
+        }
+        const nextProvider = {
+          id: candidate,
+          type: preset?.type || 'custom',
+          label: preset?.label || `Nhà cung cấp ${providers.length + 1}`,
+          enabled: true,
+          endpoint: preset?.endpoint || '',
+          deployment: preset?.deployment || '',
+          apiVersion: preset?.apiVersion || '',
+          apiKeyEnv: preset?.apiKeyEnv || '',
+          model: preset?.model || '',
+          temperature: preset?.temperature ?? '',
+          maxTokens: preset?.maxTokens ?? '',
+          apiKey: '',
+          apiKeyPreview: '',
+          hasStoredKey: false,
+          clearStoredKey: false,
+        };
+        return { ...prev, providers: [...providers, nextProvider] };
+      });
+    },
+    []
+  );
+
+  const handleRemoveProvider = useCallback((providerId) => {
+    setDraft((prev) => {
+      if (!prev) {
+        return prev;
+      }
+      const providers = Array.isArray(prev.providers)
+        ? prev.providers.filter((provider) => provider.id !== providerId)
+        : [];
+      const nextDefault = prev.defaultProvider === providerId ? providers[0]?.id || '' : prev.defaultProvider;
+      const nextFallback = prev.fallbackProvider === providerId ? '' : prev.fallbackProvider;
+      return {
+        ...prev,
+        providers,
+        defaultProvider: nextDefault,
+        fallbackProvider: nextFallback,
+      };
+    });
+    setProviderTests((prev) => {
+      if (!prev || !prev[providerId]) {
+        return prev;
+      }
+      const next = { ...prev };
+      delete next[providerId];
+      return next;
+    });
+  }, []);
+
+  const handleTestProvider = useCallback(
+    async (providerId) => {
+      if (!draft) {
+        toast.error('Chưa có cấu hình để kiểm tra.');
+        return;
+      }
+      const providers = Array.isArray(draft.providers) ? draft.providers : [];
+      const provider = providers.find((entry) => entry.id === providerId);
+      if (!provider) {
+        toast.error('Không tìm thấy nhà cung cấp tương ứng.');
+        return;
+      }
+      const payload = { ...provider };
+      if (payload.apiKey !== undefined && payload.apiKey !== null) {
+        payload.apiKey = `${payload.apiKey}`.trim();
+      }
+      delete payload.apiKeyPreview;
+      delete payload.hasStoredKey;
+      setProviderTests((prev) => ({
+        ...prev,
+        [providerId]: { status: 'testing', startedAt: new Date().toISOString() },
+      }));
+      try {
+        const result = await testAiProvider(payload);
+        setProviderTests((prev) => ({
+          ...prev,
+          [providerId]: {
+            status: 'success',
+            message: result?.message || 'Đã phản hồi',
+            usage: result?.usage || null,
+            checkedAt: new Date().toISOString(),
+          },
+        }));
+        toast.success('Đã kiểm tra kết nối thành công.');
+      } catch (error) {
+        const errorMessage = error?.message || 'Không thể kiểm thử nhà cung cấp AI.';
+        setProviderTests((prev) => ({
+          ...prev,
+          [providerId]: {
+            status: 'error',
+            error: errorMessage,
+            checkedAt: new Date().toISOString(),
+          },
+        }));
+        toast.error(errorMessage);
+      }
+    },
+    [draft],
+  );
 
   const handleConfigReset = () => {
     setDraft(createDraftFromConfig(config));
@@ -1251,8 +1453,64 @@ export default function AiAssistant({ currentUser }) {
 
                 <div className="space-y-4">
                   <h3 className="text-sm font-semibold text-gray-700">Nhà cung cấp</h3>
-                  {draft.providers.map((provider) => (
-                    <div key={provider.id} className="rounded border border-gray-100 bg-gray-50 p-4">
+                  <div className="rounded border border-dashed border-amber-200 bg-white/60 p-3">
+                    <div className="flex flex-wrap items-end gap-3">
+                      <label className="flex flex-col text-xs font-medium text-gray-700">
+                        <span>Preset nhà cung cấp</span>
+                        <select
+                          value={newProviderPreset}
+                          onChange={(event) => setNewProviderPreset(event.target.value)}
+                          className="mt-1 rounded border border-gray-200 px-3 py-1 text-sm text-gray-800 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
+                        >
+                          {AI_PROVIDER_PRESETS.map((preset) => (
+                            <option key={preset.key} value={preset.key}>
+                              {preset.label}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => handleAddProvider(newProviderPreset)}
+                        className="rounded bg-amber-500 px-3 py-1.5 text-xs font-semibold text-white shadow hover:bg-amber-600"
+                      >
+                        Thêm nhà cung cấp
+                      </button>
+                      <p className="text-xs text-gray-500">
+                        Có thể khai báo nhiều nhà cung cấp để chuyển đổi nhanh theo tình huống vận hành.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="space-y-1 text-xs text-gray-500">
+                    <p>
+                      Lưu ý: điền khóa API trực tiếp nếu chưa thiết lập biến môi trường tương ứng trên máy chủ.
+                    </p>
+                    <ul className="list-disc space-y-0.5 pl-4 text-[color:var(--ds-text-muted)]">
+                      <li>
+                        Google AI Studio: endpoint mặc định <code className="font-mono">https://generativelanguage.googleapis.com</code>,
+                        model đề xuất <code className="font-mono">gemini-1.5-flash</code>, khóa có dạng <code className="font-mono">AIza...</code>.
+                      </li>
+                      <li>
+                        OpenAI: endpoint <code className="font-mono">https://api.openai.com/v1</code>, model ví dụ <code className="font-mono">gpt-4o-mini</code>,
+                        khóa mang tiền tố <code className="font-mono">sk-</code>.
+                      </li>
+                      <li>
+                        Anthropic Claude: endpoint <code className="font-mono">https://api.anthropic.com</code>, version <code className="font-mono">2023-06-01</code>,
+                        khóa bắt đầu bằng <code className="font-mono">sk-ant-</code>.
+                      </li>
+                      <li>
+                        Azure OpenAI: điền Deployment name và API Version (ví dụ <code className="font-mono">2024-08-01-preview</code>),
+                        endpoint dạng <code className="font-mono">https://&lt;tên-dịch-vụ&gt;.openai.azure.com</code>.
+                      </li>
+                    </ul>
+                  </div>
+                  {draft.providers.map((provider) => {
+                    const testState = providerTests[provider.id] || null;
+                    return (
+                      <div
+                        key={provider.id}
+                        className="rounded border border-gray-100 bg-gray-50 p-4"
+                      >
                       <div className="flex flex-wrap items-center justify-between gap-2">
                         <div>
                           <p className="text-sm font-semibold text-gray-800">{provider.label || provider.id}</p>
@@ -1267,6 +1525,13 @@ export default function AiAssistant({ currentUser }) {
                           />
                           Kích hoạt
                         </label>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveProvider(provider.id)}
+                          className="text-xs font-medium text-red-600 hover:underline"
+                        >
+                          Xóa
+                        </button>
                       </div>
                       <div className="mt-3 grid gap-3 md:grid-cols-2">
                         <label className="flex flex-col gap-1 text-sm">
@@ -1337,9 +1602,83 @@ export default function AiAssistant({ currentUser }) {
                             className="rounded border border-gray-200 px-3 py-2 text-sm text-gray-800 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
                           />
                         </label>
+                        <label className="flex flex-col gap-1 text-sm md:col-span-2">
+                          <span>API Key trực tiếp</span>
+                          <input
+                            type="password"
+                            value={provider.apiKey || ''}
+                            onChange={(event) =>
+                              handleProviderChange(provider.id, {
+                                apiKey: event.target.value,
+                                clearStoredKey: false,
+                              })
+                            }
+                            placeholder={
+                              provider.hasStoredKey && provider.apiKeyPreview
+                                ? `Đang lưu: •••${provider.apiKeyPreview}`
+                                : 'Ví dụ: AIza..., sk-..., hoặc để trống nếu dùng biến môi trường'
+                            }
+                            className="rounded border border-gray-200 px-3 py-2 text-sm text-gray-800 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
+                          />
+                          <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-gray-500">
+                            <span>
+                              Để trống nếu dùng biến môi trường {provider.apiKeyEnv || '(chưa đặt)'}.
+                            </span>
+                            {provider.hasStoredKey && (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  handleProviderChange(provider.id, {
+                                    apiKey: '',
+                                    clearStoredKey: true,
+                                    hasStoredKey: false,
+                                    apiKeyPreview: '',
+                                  })
+                                }
+                                className="text-red-600 hover:underline"
+                              >
+                                Xóa khóa đã lưu
+                              </button>
+                            )}
+                          </div>
+                        </label>
+                        <div className="md:col-span-2">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => handleTestProvider(provider.id)}
+                              className="rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] px-3 py-1 text-xs font-medium text-[color:var(--ds-text-secondary)] shadow-sm transition hover:bg-[color:var(--ds-surface-muted)]"
+                            >
+                              Kiểm tra khóa API
+                            </button>
+                            {testState?.status === 'testing' && (
+                              <span className="text-xs text-[color:var(--ds-text-muted)]">Đang kiểm tra…</span>
+                            )}
+                            {testState?.status === 'stale' && (
+                              <span className="text-xs text-amber-600">
+                                Đã thay đổi cấu hình, cần kiểm tra lại.
+                              </span>
+                            )}
+                            {testState?.status === 'success' && (
+                              <span className="text-xs text-emerald-600">
+                                Thành công: {testState.message || 'Đã phản hồi'}
+                              </span>
+                            )}
+                            {testState?.status === 'error' && (
+                              <span className="text-xs text-red-500">Lỗi: {testState.error}</span>
+                            )}
+                          </div>
+                          {testState?.usage && (
+                            <p className="mt-1 text-[10px] text-[color:var(--ds-text-muted)]">
+                              {formatUsage(testState.usage)}
+                              {testState?.checkedAt && ` • ${new Date(testState.checkedAt).toLocaleString('vi-VN')}`}
+                            </p>
+                          )}
+                        </div>
                       </div>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
 
                 <div className="flex justify-end gap-2">

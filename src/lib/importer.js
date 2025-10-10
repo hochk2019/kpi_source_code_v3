@@ -298,7 +298,7 @@ export function mapRow(row, opts = {}) {
     dai_ly: agency,
     licenses,
     so_luong_gp: licenses,
-    licenseCodes: uniqueCodes,
+    licenseCodes: effectiveCodes,
     licenseSourceCodes: uniqueCodes,
     licenseExcludedCodes: excludedCodes,
     co_line_count,

@@ -268,6 +268,38 @@
     background-color: var(--ds-text-inverse) !important;
     color: var(--ds-text-primary) !important;
   }
+  .bg-emerald-50 {
+    background-color: color-mix(in srgb, #059669 15%, var(--ds-surface-card)) !important;
+    color: color-mix(in srgb, #065f46 85%, var(--ds-text-primary)) !important;
+  }
+  .bg-emerald-100 {
+    background-color: color-mix(in srgb, #059669 22%, var(--ds-surface-card)) !important;
+    color: color-mix(in srgb, #064e3b 82%, var(--ds-text-primary)) !important;
+  }
+  .bg-amber-50 {
+    background-color: color-mix(in srgb, #f59e0b 18%, var(--ds-surface-card)) !important;
+    color: color-mix(in srgb, #b45309 78%, var(--ds-text-primary)) !important;
+  }
+  .bg-amber-100 {
+    background-color: color-mix(in srgb, #f59e0b 26%, var(--ds-surface-card)) !important;
+    color: color-mix(in srgb, #92400e 78%, var(--ds-text-primary)) !important;
+  }
+  .bg-blue-50 {
+    background-color: color-mix(in srgb, #1d4ed8 14%, var(--ds-surface-card)) !important;
+    color: color-mix(in srgb, #1e3a8a 80%, var(--ds-text-primary)) !important;
+  }
+  .bg-sky-50 {
+    background-color: color-mix(in srgb, #0ea5e9 16%, var(--ds-surface-card)) !important;
+    color: color-mix(in srgb, #0369a1 78%, var(--ds-text-primary)) !important;
+  }
+  .bg-red-50 {
+    background-color: color-mix(in srgb, #ef4444 16%, var(--ds-surface-card)) !important;
+    color: color-mix(in srgb, #b91c1c 80%, var(--ds-text-primary)) !important;
+  }
+  .bg-red-100 {
+    background-color: color-mix(in srgb, #ef4444 24%, var(--ds-surface-card)) !important;
+    color: color-mix(in srgb, #991b1b 78%, var(--ds-text-primary)) !important;
+  }
   .text-gray-900,
   .text-gray-800 {
     color: var(--ds-text-primary) !important;
@@ -282,10 +314,70 @@
   .text-gray-400 {
     color: var(--ds-text-muted-soft) !important;
   }
+  .import-data-view,
+  .hq-agency-view {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    color: var(--ds-text-primary);
+  }
+  .import-data-view > *,
+  .hq-agency-view > *,
+  .import-data-view .bg-white,
+  .hq-agency-view .bg-white {
+    background-color: var(--ds-surface-card) !important;
+    color: var(--ds-text-primary) !important;
+  }
+  [data-theme='high-contrast'] .import-data-view .bg-white,
+  [data-theme='high-contrast'] .hq-agency-view .bg-white {
+    background-color: color-mix(in srgb, var(--ds-surface-card) 92%, var(--ds-border-strong) 8%) !important;
+  }
+  .import-data-view .border,
+  .hq-agency-view .border {
+    border-color: var(--ds-border-subtle) !important;
+  }
+  .import-data-view table,
+  .hq-agency-view table {
+    background-color: var(--ds-surface-card) !important;
+  }
+  .import-data-view thead,
+  .hq-agency-view thead {
+    background: color-mix(in srgb, var(--ds-surface-muted) 75%, transparent) !important;
+    color: var(--ds-text-secondary) !important;
+  }
+  [data-theme='high-contrast'] .import-data-view thead,
+  [data-theme='high-contrast'] .hq-agency-view thead {
+    background: color-mix(in srgb, var(--ds-surface-muted) 55%, var(--ds-border-strong) 45%) !important;
+    color: var(--ds-text-primary) !important;
+  }
+  .import-data-view tbody tr:nth-child(odd),
+  .hq-agency-view tbody tr:nth-child(odd) {
+    background: color-mix(in srgb, var(--ds-surface-raised) 65%, transparent) !important;
+  }
+  .dark .import-data-view tbody tr:nth-child(odd),
+  .dark .hq-agency-view tbody tr:nth-child(odd),
+  [data-theme='high-contrast'] .import-data-view tbody tr:nth-child(odd),
+  [data-theme='high-contrast'] .hq-agency-view tbody tr:nth-child(odd) {
+    background: color-mix(in srgb, var(--ds-surface-muted) 55%, transparent) !important;
+  }
   .border-gray-200,
   .border-gray-300,
   .border-gray-400 {
     border-color: var(--ds-border-subtle) !important;
+  }
+  .border-emerald-200,
+  .border-emerald-300 {
+    border-color: color-mix(in srgb, #059669 45%, var(--ds-border-subtle)) !important;
+  }
+  .border-blue-300,
+  .border-sky-200 {
+    border-color: color-mix(in srgb, #1d4ed8 45%, var(--ds-border-subtle)) !important;
+  }
+  .border-amber-300 {
+    border-color: color-mix(in srgb, #f59e0b 48%, var(--ds-border-subtle)) !important;
+  }
+  .border-red-300 {
+    border-color: color-mix(in srgb, #ef4444 48%, var(--ds-border-subtle)) !important;
   }
   .shadow-sm {
     box-shadow: var(--ds-shadow-soft) !important;

@@ -15,6 +15,8 @@ import { refreshHQHistoryCache } from "@/lib/hqHistoryClient.js";
 
 const PAGE_SIZE = 50;
 
+const CARD_SURFACE_CLASS = "rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] shadow-sm";
+
 const headerAliases = {
   mst: ["mst", "mã số thuế", "ma so thue", "mst (vat)"],
   company: ["công ty", "cong ty", "company", "doanh nghiệp", "ten doanh nghiep"],
@@ -328,7 +330,7 @@ export default function HQAgencyManager({ canEdit = true, currentUser = null }) 
   }, [actor, isReadOnly, refreshHistory, rows]);
 
   return (
-    <section className="space-y-4">
+    <section className="hq-agency-view space-y-4">
       <header className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h2 className="text-lg font-semibold text-gray-900">Danh sách Đại lý Hải quan hợp tác</h2>
@@ -429,7 +431,7 @@ export default function HQAgencyManager({ canEdit = true, currentUser = null }) 
 
       <div className="overflow-auto rounded border">
         <table className="min-w-full text-sm">
-          <thead className="bg-gray-50">
+          <thead className="bg-[color:var(--ds-surface-muted)]">
             <tr>
               <th className="w-16 px-2 py-1 text-left">STT</th>
               <th className="px-2 py-1 text-left">Mã số thuế</th>
@@ -458,7 +460,7 @@ export default function HQAgencyManager({ canEdit = true, currentUser = null }) 
                 : "Xem lịch sử chỉnh sửa đại lý HQ cho MST này";
               return (
                 <React.Fragment key={`${row.mst}_${idx}`}>
-                  <tr className="odd:bg-white even:bg-gray-50">
+                  <tr className="odd:bg-[color:var(--ds-surface-card)] even:bg-[color:var(--ds-surface-muted)]">
                   <td className="px-2 py-1">{globalIndex}</td>
                   <td className="px-2 py-1">
                     {isReadOnly ? (
@@ -503,7 +505,7 @@ export default function HQAgencyManager({ canEdit = true, currentUser = null }) 
                       <button
                         type="button"
                         onClick={() => toggleHistory(row.mst)}
-                        className="rounded border px-2 py-1 text-xs text-gray-700 transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50"
+                        className="rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] px-2 py-1 text-xs text-[color:var(--ds-text-secondary)] transition hover:bg-[color:var(--ds-surface-muted)] disabled:cursor-not-allowed disabled:opacity-50"
                         disabled={historyButtonDisabled}
                         title={historyButtonTitle}
                       >
@@ -538,7 +540,7 @@ export default function HQAgencyManager({ canEdit = true, currentUser = null }) 
                             return (
                               <div
                                 key={entry.id}
-                                className="rounded border border-slate-200 bg-white p-2 shadow-sm"
+                                className={`${CARD_SURFACE_CLASS} p-2`}
                               >
                                 <div className="flex flex-wrap items-center justify-between gap-2 text-slate-500">
                                   <span className="font-medium text-slate-700">{fieldLabel}</span>

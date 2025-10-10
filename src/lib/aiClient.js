@@ -53,6 +53,22 @@ export async function clearAiCache({ signal } = {}) {
   return true;
 }
 
+export async function testAiProvider(provider, { signal } = {}) {
+  const payload = { provider };
+  const response = await fetchWithAuth('/api/ai/providers/test', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+    signal,
+  });
+  const data = await parseJsonResponse(response, 'Không thể kiểm thử kết nối AI.');
+  return {
+    provider: data.provider || null,
+    message: data.message || '',
+    usage: data.usage || null,
+  };
+}
+
 export async function requestAiCompletion(payload, { signal } = {}) {
   const body = {
     scope: payload?.scope || 'general',

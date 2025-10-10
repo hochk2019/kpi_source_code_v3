@@ -167,3 +167,43 @@ export function getRulesSeed(defaultValue) {
 
 export const RULES_SNAPSHOT_FILE = RULES_FILE;
 export const RULES_HISTORY_DIR = HISTORY_DIR;
+
+export function listRulesHistory(limit = 20) {
+  let entries = [];
+  try {
+    entries = fs
+      .readdirSync(HISTORY_DIR)
+      .filter((name) => name.endsWith('.json'))
+      .map((name) => {
+        const fullPath = path.resolve(HISTORY_DIR, name);
+        const stats = fs.statSync(fullPath);
+        return { name, fullPath, mtime: stats.mtimeMs };
+      })
+      .sort((a, b) => b.mtime - a.mtime);
+  } catch (err) {
+    if (err?.code === 'ENOENT') {
+      return [];
+    }
+    console.warn('Không thể đọc thư mục lịch sử quy tắc KPI', err);
+    return [];
+  }
+  const limited = Number.isFinite(limit) && limit > 0 ? entries.slice(0, limit) : entries;
+  const results = [];
+  for (const entry of limited) {
+    try {
+      const raw = fs.readFileSync(entry.fullPath, 'utf8');
+      const parsed = safeParse(raw) || {};
+      results.push({
+        savedAt: parsed.savedAt || new Date(entry.mtime).toISOString(),
+        actor: parsed.actor || 'system',
+        source: parsed.source || 'unknown',
+        rules: parsed.rules || null,
+        id: parsed.rules?.id || null,
+        name: parsed.rules?.name || null,
+      });
+    } catch (err) {
+      console.warn('Không thể đọc file lịch sử quy tắc', entry.fullPath, err);
+    }
+  }
+  return results;
+}

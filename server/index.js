@@ -11,7 +11,7 @@ import bcrypt from 'bcryptjs';
 import crypto from 'node:crypto';
 import { generateReport } from './reportExport.js';
 import { DEFAULT_RULES as SHARED_DEFAULT_RULES } from '../src/shared/defaultRules.js';
-import { getRulesSeed, persistRulesSnapshot, loadRulesSnapshot } from './rulesPersistence.js';
+import { getRulesSeed, persistRulesSnapshot, loadRulesSnapshot, listRulesHistory } from './rulesPersistence.js';
 import { deriveCOStatus, parseCoLineCount, setPreferentialCodeConfig } from '../src/shared/co.js';
 import {
   ADMIN_ROLE,
@@ -749,6 +749,29 @@ function createDefaultAiConfig() {
         maxTokens: 1024,
         enabled: false,
       },
+      {
+        id: 'openai-gpt4o',
+        type: 'openai',
+        label: 'OpenAI GPT-4o mini',
+        endpoint: 'https://api.openai.com/v1',
+        model: 'gpt-4o-mini',
+        apiKeyEnv: 'OPENAI_API_KEY',
+        temperature: 0.2,
+        maxTokens: 1024,
+        enabled: false,
+      },
+      {
+        id: 'anthropic-claude',
+        type: 'anthropic',
+        label: 'Anthropic Claude 3.5 Sonnet',
+        endpoint: 'https://api.anthropic.com',
+        model: 'claude-3-5-sonnet-20241022',
+        apiKeyEnv: 'ANTHROPIC_API_KEY',
+        apiVersion: '2023-06-01',
+        temperature: 0.2,
+        maxTokens: 1024,
+        enabled: false,
+      },
     ],
     updatedAt: null,
     updatedBy: null,
@@ -1481,6 +1504,20 @@ function requireAiAssistManage(req, res) {
   return { context, denied: false };
 }
 
+function requireRulesManage(req, res) {
+  const context = getSessionContext(req);
+  if (!context) {
+    res.status(401).json({ ok: false, error: 'Vui lòng đăng nhập để quản lý quy tắc KPI.' });
+    return { context: null, denied: true };
+  }
+  const account = context.account || {};
+  if (account.permissions?.rulesEdit !== true && account.permissions?.accountManage !== true) {
+    res.status(403).json({ ok: false, error: 'Tài khoản hiện không có quyền chỉnh sửa quy tắc KPI.' });
+    return { context, denied: true };
+  }
+  return { context, denied: false };
+}
+
 function requireFeedbackReview(req, res) {
   const context = getSessionContext(req);
   if (!context) {
@@ -1491,6 +1528,20 @@ function requireFeedbackReview(req, res) {
   const role = normalizeRoleKey(account.role);
   if (!(isAdminRole(role) || role === MANAGER_ROLE)) {
     res.status(403).json({ ok: false, error: 'Chỉ quản trị viên hoặc trưởng bộ phận mới xem được phản hồi người dùng.' });
+    return { context, denied: true };
+  }
+  return { context, denied: false };
+}
+
+function requireNotificationAccess(req, res) {
+  const context = getSessionContext(req);
+  if (!context) {
+    res.status(401).json({ ok: false, error: 'Vui lòng đăng nhập để xem thông báo hệ thống.' });
+    return { context: null, denied: true };
+  }
+  const account = context.account || {};
+  if (account.permissions && account.permissions.notificationView === false) {
+    res.status(403).json({ ok: false, error: 'Tài khoản hiện không được phép xem thông báo hệ thống.' });
     return { context, denied: true };
   }
   return { context, denied: false };
@@ -1803,6 +1854,21 @@ function normalizeAiProviderEntry(sourceProvider, baseProvider = {}) {
   } else if (base.maxTokens !== undefined) {
     result.maxTokens = toPositiveInt(base.maxTokens, DEFAULT_AI_CONFIG.maxTokens);
   }
+  const hasApiKeyProp = Object.prototype.hasOwnProperty.call(source, 'apiKey');
+  if (hasApiKeyProp) {
+    const trimmedKey = `${source.apiKey ?? ''}`.trim();
+    if (trimmedKey) {
+      result.apiKey = trimmedKey;
+    } else {
+      delete result.apiKey;
+    }
+  } else if (base.apiKey) {
+    result.apiKey = base.apiKey;
+  }
+  if (source?.clearStoredKey === true) {
+    delete result.apiKey;
+  }
+  delete result.clearStoredKey;
   return result;
 }
 
@@ -1941,6 +2007,33 @@ function buildAiProfile(config) {
     updatedAt: normalized?.updatedAt || null,
     updatedBy: normalized?.updatedBy || null,
   };
+}
+
+function maskProviderSecrets(provider) {
+  if (!provider || typeof provider !== 'object') {
+    return null;
+  }
+  const cloned = { ...provider };
+  if (cloned.apiKey) {
+    const preview = cloned.apiKey.length > 4 ? cloned.apiKey.slice(-4) : cloned.apiKey;
+    cloned.hasApiKey = true;
+    cloned.apiKeyPreview = preview;
+  } else {
+    cloned.hasApiKey = false;
+    cloned.apiKeyPreview = '';
+  }
+  delete cloned.apiKey;
+  delete cloned.clearStoredKey;
+  return cloned;
+}
+
+function buildAiConfigForClient(config) {
+  const normalized = config && typeof config === 'object' ? config : DEFAULT_AI_CONFIG;
+  const cloned = cloneJson(normalized) || {};
+  if (Array.isArray(cloned.providers)) {
+    cloned.providers = cloned.providers.map((provider) => maskProviderSecrets(provider)).filter(Boolean);
+  }
+  return cloned;
 }
 
 function setAiConfig(configUpdate, { actor = 'system' } = {}) {
@@ -2196,6 +2289,50 @@ async function callAzureOpenAiChat(provider, payload, { signal } = {}) {
   };
 }
 
+async function callOpenAiChat(provider, payload, { signal } = {}) {
+  const endpoint = `${provider.endpoint || 'https://api.openai.com/v1'}`.trim() || 'https://api.openai.com/v1';
+  const model = `${provider.model || 'gpt-4o-mini'}`.trim() || 'gpt-4o-mini';
+  const apiKeyEnv = `${provider.apiKeyEnv || 'OPENAI_API_KEY'}`.trim() || 'OPENAI_API_KEY';
+  const apiKey = provider.apiKey || process.env[apiKeyEnv];
+  if (!apiKey) {
+    throw new Error(`Thiếu khóa API ${apiKeyEnv} cho OpenAI.`);
+  }
+  const baseUrl = endpoint.replace(/\/+$/, '');
+  const url = `${baseUrl}/chat/completions`;
+  const body = {
+    model,
+    messages: payload.messages,
+    temperature: toFiniteNumber(
+      payload.temperature,
+      provider.temperature ?? DEFAULT_AI_CONFIG.temperature
+    ),
+    max_tokens: toPositiveInt(
+      payload.maxTokens,
+      provider.maxTokens ?? DEFAULT_AI_CONFIG.maxTokens
+    ),
+  };
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify(body),
+    signal,
+  });
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`OpenAI trả về ${response.status}: ${truncateText(errorText, 200)}`);
+  }
+  const data = await response.json();
+  const choice = Array.isArray(data?.choices) ? data.choices[0] : null;
+  const message = choice?.message?.content || '';
+  return {
+    message,
+    usage: data?.usage ?? null,
+  };
+}
+
 async function callOllamaChat(provider, payload, { signal } = {}) {
   const endpoint = `${provider.endpoint || 'http://localhost:11434'}`.trim() || 'http://localhost:11434';
   const model = `${provider.model || 'llama3.1:8b'}`.trim() || 'llama3.1:8b';
@@ -2339,13 +2476,108 @@ async function callGoogleAiStudioChat(provider, payload, { signal } = {}) {
   };
 }
 
+function convertMessagesToAnthropicPayload(messages = []) {
+  const normalized = Array.isArray(messages) ? messages : [];
+  const conversation = [];
+  const systemParts = [];
+  for (const entry of normalized) {
+    if (!entry || typeof entry !== 'object') continue;
+    const text = `${entry.content ?? ''}`.trim();
+    if (!text) continue;
+    const role = `${entry.role || 'user'}`.trim().toLowerCase();
+    if (role === 'system') {
+      systemParts.push(text);
+      continue;
+    }
+    const content = [{ type: 'text', text }];
+    if (role === 'assistant') {
+      conversation.push({ role: 'assistant', content });
+      continue;
+    }
+    conversation.push({ role: 'user', content });
+  }
+  if (conversation.length === 0) {
+    conversation.push({ role: 'user', content: [{ type: 'text', text: 'Xin chào' }] });
+  }
+  const system = systemParts.length ? systemParts.join('\n\n') : undefined;
+  return { system, messages: conversation };
+}
+
+async function callAnthropicChat(provider, payload, { signal } = {}) {
+  const endpoint = `${provider.endpoint || 'https://api.anthropic.com'}`.trim() || 'https://api.anthropic.com';
+  const model = `${provider.model || 'claude-3-5-sonnet-20241022'}`.trim() || 'claude-3-5-sonnet-20241022';
+  const apiKeyEnv = `${provider.apiKeyEnv || 'ANTHROPIC_API_KEY'}`.trim() || 'ANTHROPIC_API_KEY';
+  const apiVersion = `${provider.apiVersion || '2023-06-01'}`.trim() || '2023-06-01';
+  const apiKey = provider.apiKey || process.env[apiKeyEnv];
+  if (!apiKey) {
+    throw new Error(`Thiếu khóa API ${apiKeyEnv} cho Anthropic.`);
+  }
+  const baseUrl = endpoint.replace(/\/+$/, '');
+  const url = `${baseUrl}/v1/messages`;
+  const { system, messages } = convertMessagesToAnthropicPayload(payload.messages);
+  const body = {
+    model,
+    max_tokens: toPositiveInt(
+      payload.maxTokens,
+      provider.maxTokens ?? DEFAULT_AI_CONFIG.maxTokens
+    ),
+    temperature: toFiniteNumber(
+      payload.temperature,
+      provider.temperature ?? DEFAULT_AI_CONFIG.temperature
+    ),
+    messages,
+  };
+  if (system) {
+    body.system = system;
+  }
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': apiVersion,
+    },
+    body: JSON.stringify(body),
+    signal,
+  });
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Anthropic trả về ${response.status}: ${truncateText(errorText, 200)}`);
+  }
+  const data = await response.json();
+  const parts = Array.isArray(data?.content) ? data.content : [];
+  const message = parts
+    .map((part) => `${part?.text ?? ''}`.trim())
+    .filter((text) => text)
+    .join('\n')
+    .trim();
+  const usage = data?.usage
+    ? {
+        prompt_tokens: data.usage.input_tokens,
+        completion_tokens: data.usage.output_tokens,
+        total_tokens:
+          toNonNegativeInt(data.usage.input_tokens, 0) + toNonNegativeInt(data.usage.output_tokens, 0),
+      }
+    : null;
+  return {
+    message,
+    usage,
+  };
+}
+
 async function dispatchAiChat(provider, payload, { signal } = {}) {
   const type = `${provider.type || ''}`.trim().toLowerCase();
   if (type === 'azure' || type === 'azure-openai') {
     return callAzureOpenAiChat(provider, payload, { signal });
   }
+  if (type === 'openai' || type === 'openai-chat') {
+    return callOpenAiChat(provider, payload, { signal });
+  }
   if (type === 'ollama' || type === 'ollama-local') {
     return callOllamaChat(provider, payload, { signal });
+  }
+  if (type === 'anthropic' || type === 'claude') {
+    return callAnthropicChat(provider, payload, { signal });
   }
   if (type === 'google-ai-studio' || type === 'google' || type === 'gemini') {
     return callGoogleAiStudioChat(provider, payload, { signal });
@@ -6827,6 +7059,10 @@ app.post('/api/feedback', async (req, res) => {
 });
 
 app.get('/api/notifications', (req, res) => {
+  const { denied } = requireNotificationAccess(req, res);
+  if (denied) {
+    return;
+  }
   try {
     const limitRaw = Number.parseInt(req.query?.limit ?? '50', 10);
     const events = listNotifications({ limit: Number.isFinite(limitRaw) ? limitRaw : 50 });
@@ -6837,6 +7073,13 @@ app.get('/api/notifications', (req, res) => {
 });
 
 app.get('/api/notifications/stream', (req, res) => {
+  const { denied } = requireNotificationAccess(req, res);
+  if (denied) {
+    if (!res.headersSent) {
+      res.end();
+    }
+    return;
+  }
   registerSseClient(res);
 });
 
@@ -7269,6 +7512,7 @@ app.get('/api/ai/config', (req, res) => {
   }
   try {
     const config = getAiConfig();
+    const safeConfig = buildAiConfigForClient(config);
     const cachingEnabled = config?.caching?.enabled !== false;
     const ttlMinutes = cachingEnabled
       ? toPositiveInt(config?.caching?.ttlMinutes, DEFAULT_AI_CONFIG.caching.ttlMinutes)
@@ -7276,9 +7520,23 @@ app.get('/api/ai/config', (req, res) => {
     const maxEntries = toPositiveInt(config?.caching?.maxEntries, AI_CACHE_LIMIT);
     const ttlMs = cachingEnabled && ttlMinutes ? ttlMinutes * 60 * 1000 : 0;
     const { cache } = cachingEnabled ? pruneAiCache(ttlMs, maxEntries) : { cache: cloneJson(DEFAULT_AI_USAGE_CACHE) };
-    res.json({ ok: true, config, cacheSummary: summarizeAiCacheEntries(cache.entries) });
+    res.json({ ok: true, config: safeConfig, cacheSummary: summarizeAiCacheEntries(cache.entries) });
   } catch (err) {
     res.status(500).json({ ok: false, error: err?.message || 'Không thể tải cấu hình AI' });
+  }
+});
+
+app.get('/api/rules/history', (req, res) => {
+  const { denied } = requireRulesManage(req, res);
+  if (denied) {
+    return;
+  }
+  try {
+    const history = listRulesHistory(25);
+    res.json({ ok: true, history });
+  } catch (err) {
+    console.error('Không thể tải lịch sử quy tắc KPI', err);
+    res.status(500).json({ ok: false, error: 'Không thể tải lịch sử quy tắc KPI' });
   }
 });
 
@@ -7291,6 +7549,7 @@ app.put('/api/ai/config', (req, res) => {
     const actor = context?.account?.username || resolveActor(req);
     const payload = req.body?.config ?? req.body ?? {};
     const next = setAiConfig(payload, { actor });
+    const safeConfig = buildAiConfigForClient(next);
     const cachingEnabled = next?.caching?.enabled !== false;
     const ttlMinutes = cachingEnabled
       ? toPositiveInt(next?.caching?.ttlMinutes, DEFAULT_AI_CONFIG.caching.ttlMinutes)
@@ -7300,9 +7559,73 @@ app.put('/api/ai/config', (req, res) => {
     if (cachingEnabled) {
       pruneAiCache(ttlMs, maxEntries);
     }
-    res.json({ ok: true, config: next });
+    res.json({ ok: true, config: safeConfig });
   } catch (err) {
     res.status(400).json({ ok: false, error: err?.message || 'Không thể cập nhật cấu hình AI' });
+  }
+});
+
+app.post('/api/ai/providers/test', async (req, res) => {
+  const { denied } = requireAiAssistManage(req, res);
+  if (denied) {
+    return;
+  }
+  try {
+    const rawProvider = req.body?.provider;
+    if (!rawProvider || typeof rawProvider !== 'object') {
+      res.status(400).json({ ok: false, error: 'Thiếu thông tin nhà cung cấp.' });
+      return;
+    }
+    const config = getAiConfig();
+    const baseProvider = config?.providers?.find((entry) => entry?.id === rawProvider.id) || {};
+    const fallbackId = `${rawProvider.id || rawProvider.idBase || baseProvider.id || rawProvider.type || 'provider'}-test`;
+    const normalized =
+      normalizeAiProviderEntry({ ...baseProvider, ...rawProvider, id: fallbackId }, baseProvider) || null;
+    if (!normalized) {
+      res.status(400).json({ ok: false, error: 'Không thể chuẩn hóa dữ liệu nhà cung cấp.' });
+      return;
+    }
+    if (!normalized.type) {
+      res.status(400).json({ ok: false, error: 'Thiếu loại nhà cung cấp (type).' });
+      return;
+    }
+    if (!normalized.apiKey) {
+      const envKey = normalized.apiKeyEnv ? process.env[normalized.apiKeyEnv] : null;
+      if (envKey) {
+        normalized.apiKey = envKey;
+      }
+    }
+    if (!normalized.apiKey) {
+      res.status(400).json({ ok: false, error: 'Vui lòng nhập khóa API trước khi kiểm thử.' });
+      return;
+    }
+    const promptInput = `${req.body?.prompt || 'Ping'}`.trim().slice(0, 280);
+    const messages = [
+      {
+        role: 'system',
+        content:
+          'Bạn đang trong chế độ kiểm thử kết nối API. Hãy trả lời thật ngắn gọn (tối đa 30 ký tự) để xác nhận đã nhận được tín hiệu.',
+      },
+      { role: 'user', content: promptInput || 'Ping' },
+    ];
+    const timeoutMs = toPositiveInt(req.body?.timeoutMs, DEFAULT_AI_CONFIG.timeoutMs) || 15000;
+    const result = await dispatchAiChat(
+      { ...normalized, enabled: true },
+      {
+        messages,
+        temperature: Math.min(Math.max(toFiniteNumber(normalized.temperature, 0.2), 0), 0.6),
+        maxTokens: Math.min(toPositiveInt(normalized.maxTokens, DEFAULT_AI_CONFIG.maxTokens) || 128, 256),
+      },
+      { signal: buildAbortSignal(timeoutMs) },
+    );
+    res.json({
+      ok: true,
+      provider: { id: normalized.id, label: normalized.label, type: normalized.type },
+      message: truncateText(result?.message || '', 320),
+      usage: result?.usage || null,
+    });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err?.message || 'Không thể kiểm thử nhà cung cấp AI.' });
   }
 });
 

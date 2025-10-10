@@ -646,6 +646,33 @@ describe('API xác thực & bootstrap', () => {
   });
 });
 
+describe('API thông báo hệ thống', () => {
+  beforeEach(() => {
+    resetDb();
+  });
+
+  it('từ chối truy cập lịch sử thông báo khi chưa đăng nhập', async () => {
+    const res = await request(app).get('/api/notifications');
+    expect(res.status).toBe(401);
+    expect(res.body?.ok).toBe(false);
+  });
+
+  it('cho phép người dùng đã đăng nhập xem thông báo', async () => {
+    const agent = request.agent(app);
+    const loginRes = await agent.post('/api/auth/login').send({ username: 'admin', password: 'admin123' });
+    expect(loginRes.status).toBe(200);
+    const res = await agent.get('/api/notifications');
+    expect(res.status).toBe(200);
+    expect(res.body?.ok).toBe(true);
+    expect(Array.isArray(res.body?.events)).toBe(true);
+  });
+
+  it('từ chối mở stream SSE khi chưa đăng nhập', async () => {
+    const res = await request(app).get('/api/notifications/stream');
+    expect(res.status).toBe(401);
+  });
+});
+
 describe('Đồng bộ tài khoản với SQL Server', () => {
   beforeEach(() => {
     resetDb();
