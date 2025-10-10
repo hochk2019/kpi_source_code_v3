@@ -11,6 +11,7 @@ import bcrypt from 'bcryptjs';
 import crypto from 'node:crypto';
 import { generateReport } from './reportExport.js';
 import { buildDefaultAiProviders } from './aiProviders/index.js';
+import { normalizeSqlUnicodeRecord } from './ecus/sqlUnicode.js';
 import { DEFAULT_RULES as SHARED_DEFAULT_RULES } from '../src/shared/defaultRules.js';
 import { getRulesSeed, persistRulesSnapshot, loadRulesSnapshot, listRulesHistory } from './rulesPersistence.js';
 import { deriveCOStatus, parseCoLineCount, setPreferentialCodeConfig } from '../src/shared/co.js';
@@ -6023,8 +6024,9 @@ function readRecordValue(record, lookup, candidate) {
 
 function mapEcusRow(record, config, context) {
   if (!record || typeof record !== 'object') return null;
+  const normalizedRecord = normalizeSqlUnicodeRecord(record);
   const columnMap = config.columnMap || {};
-  const keyLookup = buildRecordKeyLookup(record);
+  const keyLookup = buildRecordKeyLookup(normalizedRecord);
   const getField = (name) => {
     const rawCandidates = [];
     const mapped = columnMap[name];
@@ -6043,7 +6045,7 @@ function mapEcusRow(record, config, context) {
       const keyLower = String(candidate).toLowerCase();
       if (seen.has(keyLower)) continue;
       seen.add(keyLower);
-      const value = readRecordValue(record, keyLookup, candidate);
+      const value = readRecordValue(normalizedRecord, keyLookup, candidate);
       if (value !== undefined) {
         return value;
       }
@@ -6196,7 +6198,7 @@ function mapEcusRow(record, config, context) {
     licenseCodes,
   };
   const normalizedBase = normalizeDeclarationRow(base) || base;
-  return deriveCOStatus(record, normalizedBase);
+  return deriveCOStatus(normalizedRecord, normalizedBase);
 }
 
 function isEqualValue(a, b) {
