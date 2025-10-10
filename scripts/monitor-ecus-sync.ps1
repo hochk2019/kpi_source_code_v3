@@ -19,6 +19,9 @@ param(
     [Parameter(ValueFromPipelineByPropertyName = $true)]
     [string]$FallbackLogPath = (Join-Path $PSScriptRoot 'monitor-ecus-sync.log'),
 
+    [Parameter(ValueFromPipelineByPropertyName = $true)]
+    [string]$JsonLogPath = (Join-Path $PSScriptRoot 'monitor-ecus-sync.jsonl'),
+
     [switch]$SkipEventLog
 )
 
@@ -27,6 +30,24 @@ try {
     [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 } catch {
     # Bỏ qua nếu không thể thiết lập encoding
+}
+
+function Write-MonitorJson {
+    param(
+        [Parameter(Mandatory = $true)]
+        [hashtable]$Payload
+    )
+
+    if (-not $JsonLogPath) {
+        return
+    }
+
+    try {
+        $jsonLine = $Payload | ConvertTo-Json -Depth 6 -Compress
+        Add-Content -Path $JsonLogPath -Value $jsonLine
+    } catch {
+        Write-Warning "Không thể ghi log JSON: $($_.Exception.Message)"
+    }
 }
 
 function Write-MonitorLog {
@@ -85,6 +106,12 @@ try {
     if (-not $payload.ok) {
         $message = "API trả về trạng thái lỗi: $($payload.error)"
         Write-MonitorLog -Level Error -Message $message -EventId 1202
+        Write-MonitorJson -Payload ([ordered]@{
+            timestamp = (Get-Date).ToString('o')
+            severity  = 'error'
+            status    = 'api_error'
+            error     = $payload.error
+        })
         exit 1
     }
 
@@ -112,13 +139,57 @@ try {
     if ($sync.rowsUpdated -ne $null) { $details += "Bản ghi cập nhật: $($sync.rowsUpdated)" }
     if ($database.server) { $details += "SQL Server: $($database.server)" }
     if ($database.state) { $details += "Trạng thái SQL: $($database.state)" }
+    $alertState = $snapshot.alertState
+    if ($alertState) {
+        if ($alertState.consecutiveErrors -gt 0) {
+            $details += "Lỗi liên tiếp: $($alertState.consecutiveErrors)"
+        }
+        if ($alertState.lastAlertDeliveredAt) {
+            $details += "Cảnh báo gần nhất: $($alertState.lastAlertDeliveredAt)"
+        }
+        $dispatch = $snapshot.alertDispatch
+        if ($dispatch -and $dispatch.triggered -and $dispatch.triggered.Count -gt 0) {
+            $details += "Cảnh báo mới gửi: $($dispatch.triggered -join ', ')"
+        }
+    }
     if ($issues) { $details += "Cảnh báo: $issues" }
 
     $message = if ($details.Count -gt 0) { $details -join " | " } else { 'Không có dữ liệu chi tiết.' }
     Write-MonitorLog -Level $entryType -Message $message -EventId 1204
+
+    Write-MonitorJson -Payload ([ordered]@{
+            timestamp = (Get-Date).ToString('o')
+            severity  = $severity
+            status    = $sync.lastStatus
+            staleMinutes = $sync.staleMinutes
+            lastRunAt = $sync.lastRunAt
+            rowsFetched = $sync.rowsFetched
+            rowsInserted = $sync.rowsInserted
+            rowsUpdated = $sync.rowsUpdated
+            rowsSkipped = $sync.rowsSkipped
+            totalStored = $sync.totalStored
+            issues    = $snapshot.issues
+            alert     = if ($alertState) {
+                [ordered]@{
+                    consecutiveErrors      = $alertState.consecutiveErrors
+                    lastSuccessAt           = $alertState.lastSuccessAt
+                    lastFailureAlertAt      = $alertState.lastFailureAlertAt
+                    lastStaleAlertAt        = $alertState.lastStaleAlertAt
+                    lastAlertDeliveredAt    = $alertState.lastAlertDeliveredAt
+                    triggered               = $snapshot.alertDispatch.triggered
+                }
+            } else { $null }
+            database = $database
+        })
     exit 0
 } catch {
     $errorMessage = "Lỗi khi kiểm tra trạng thái đồng bộ ECUS: $($_.Exception.Message)"
     Write-MonitorLog -Level Error -Message $errorMessage -EventId 1299
+    Write-MonitorJson -Payload ([ordered]@{
+            timestamp = (Get-Date).ToString('o')
+            severity  = 'error'
+            status    = 'exception'
+            error     = $_.Exception.Message
+        })
     exit 1
 }

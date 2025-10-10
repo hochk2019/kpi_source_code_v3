@@ -12,6 +12,7 @@ import crypto from 'node:crypto';
 import { generateReport } from './reportExport.js';
 import { buildDefaultAiProviders } from './aiProviders/index.js';
 import { normalizeSqlUnicodeRecord } from './ecus/sqlUnicode.js';
+import { deliverAlertNotification, hasAlertTargets } from './alerts/delivery.js';
 import { DEFAULT_RULES as SHARED_DEFAULT_RULES } from '../src/shared/defaultRules.js';
 import { getRulesSeed, persistRulesSnapshot, loadRulesSnapshot, listRulesHistory } from './rulesPersistence.js';
 import { deriveCOStatus, parseCoLineCount, setPreferentialCodeConfig } from '../src/shared/co.js';
@@ -254,8 +255,8 @@ const DEFAULT_ECUS_SYNC_CONFIG = {
     "    AND LEFT(UPPER(LTRIM(RTRIM(CAST(h2.TS_XNK_MA_BT AS nvarchar(10))))), 3) NOT IN ('B01', 'B02', 'B03', 'B30')",
     ') AS co_counts',
     'WHERE lp.Ngay_DK >= @from AND lp.Ngay_DK < DATEADD(DAY, 1, @to)',
-    'ORDER BY lp.Ngay_DK, so_tk',
-  ].join('\n'),
+  'ORDER BY lp.Ngay_DK, so_tk',
+].join('\n'),
   columnMap: {
     so_tk: 'so_tk',
     date: 'ngay_dang_ky',
@@ -745,6 +746,18 @@ const FILTER_PRESET_SCOPE_DEFAULT = 'data-importer';
 const KNOWN_FILTER_PRESET_SCOPES = new Set([FILTER_PRESET_SCOPE_DEFAULT, 'report-viewer']);
 const FILTER_PRESET_MAX_PER_SCOPE = 20;
 
+const ECUS_MONITOR_HISTORY_KEY = 'ecus_monitor_history_v1';
+const DEFAULT_ECUS_MONITOR_HISTORY = Object.freeze({
+  version: 1,
+  entries: [],
+  updatedAt: null,
+});
+
+const DEFAULT_ECUS_MONITOR_HISTORY_OPTIONS = Object.freeze({
+  maxEntries: 7 * 24 * 4, // 7 ngày với chu kỳ 15 phút
+  dedupeMinutes: 5,
+});
+
 const DEFAULT_STORAGE = {
   decl_rows_v1: '[]',
   mst_rows_v2: '[]',
@@ -805,6 +818,7 @@ const DEFAULT_STORAGE = {
   duplicate_policy_state_v1: JSON.stringify(DEFAULT_DUPLICATE_POLICY_STATE),
   co_discrepancy_state_v1: JSON.stringify(DEFAULT_CO_DISCREPANCY_STATE),
   filter_presets_v1: JSON.stringify({ version: 1, users: {} }),
+  [ECUS_MONITOR_HISTORY_KEY]: JSON.stringify(DEFAULT_ECUS_MONITOR_HISTORY),
   [AI_CONFIG_KEY]: JSON.stringify(DEFAULT_AI_CONFIG),
   [AI_CACHE_KEY]: JSON.stringify(DEFAULT_AI_USAGE_CACHE),
 };
@@ -2873,6 +2887,32 @@ async function callOllamaChat(provider, payload, { signal } = {}) {
   };
 }
 
+const DEFAULT_ECUS_MONITOR_ALERT_OPTIONS = Object.freeze({
+  failureThreshold: 3,
+  failureCooldownMinutes: 120,
+  staleThresholdMinutes: 60,
+  staleCooldownMinutes: 60,
+  dashboardUrl: '',
+});
+
+const ECUS_MONITOR_ALERT_STATE_KEY = 'ecus_monitor_alert_state_v1';
+const DEFAULT_ECUS_MONITOR_ALERT_STATE = Object.freeze({
+  consecutiveErrors: 0,
+  lastErrorAt: null,
+  lastErrorMessage: null,
+  lastErrorMeta: null,
+  lastSuccessAt: null,
+  lastFailureAlertAt: null,
+  lastFailureAlertAttemptAt: null,
+  lastStaleAlertAt: null,
+  lastStaleAlertAttemptAt: null,
+  lastAlertAttemptAt: null,
+  lastAlertDeliveredAt: null,
+  lastDeliveredChannels: [],
+  lastAlertSummary: null,
+});
+
+
 function convertMessagesToGooglePayload(messages = []) {
   const normalized = Array.isArray(messages) ? messages : [];
   const contents = [];
@@ -4280,6 +4320,586 @@ function saveEcusConfig(config, { preservePassword = false } = {}) {
 }
 
 
+function getEcusMonitorAlertOptions() {
+  const failureThreshold = Math.max(
+    1,
+    toPositiveInt(
+      process.env.ECUS_ALERT_FAILURE_THRESHOLD || process.env.KPI_ALERT_FAILURE_THRESHOLD,
+      DEFAULT_ECUS_MONITOR_ALERT_OPTIONS.failureThreshold
+    ) || DEFAULT_ECUS_MONITOR_ALERT_OPTIONS.failureThreshold
+  );
+  const failureCooldownMinutes = Math.max(
+    5,
+    toPositiveInt(
+      process.env.ECUS_ALERT_FAILURE_COOLDOWN_MINUTES || process.env.KPI_ALERT_FAILURE_COOLDOWN_MINUTES,
+      DEFAULT_ECUS_MONITOR_ALERT_OPTIONS.failureCooldownMinutes
+    ) || DEFAULT_ECUS_MONITOR_ALERT_OPTIONS.failureCooldownMinutes
+  );
+  const staleThresholdMinutes = Math.max(
+    1,
+    toPositiveInt(
+      process.env.ECUS_ALERT_STALE_THRESHOLD_MINUTES || process.env.KPI_ALERT_STALE_THRESHOLD_MINUTES,
+      DEFAULT_ECUS_MONITOR_ALERT_OPTIONS.staleThresholdMinutes
+    ) || DEFAULT_ECUS_MONITOR_ALERT_OPTIONS.staleThresholdMinutes
+  );
+  const staleCooldownMinutes = Math.max(
+    5,
+    toPositiveInt(
+      process.env.ECUS_ALERT_STALE_COOLDOWN_MINUTES || process.env.KPI_ALERT_STALE_COOLDOWN_MINUTES,
+      DEFAULT_ECUS_MONITOR_ALERT_OPTIONS.staleCooldownMinutes
+    ) || DEFAULT_ECUS_MONITOR_ALERT_OPTIONS.staleCooldownMinutes
+  );
+  const dashboardUrl =
+    (process.env.ECUS_ALERT_DASHBOARD_URL || process.env.KPI_ALERT_DASHBOARD_URL || '').trim() ||
+    DEFAULT_ECUS_MONITOR_ALERT_OPTIONS.dashboardUrl;
+
+  return {
+    failureThreshold,
+    failureCooldownMinutes,
+    staleThresholdMinutes,
+    staleCooldownMinutes,
+    dashboardUrl,
+  };
+}
+
+function normalizeIsoTimestamp(value) {
+  if (!value) {
+    return new Date().toISOString();
+  }
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return value.toISOString();
+  }
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    const date = new Date(value);
+    if (!Number.isNaN(date.getTime())) {
+      return date.toISOString();
+    }
+  }
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return new Date().toISOString();
+    }
+    const parsed = new Date(trimmed);
+    if (!Number.isNaN(parsed.getTime())) {
+      return parsed.toISOString();
+    }
+    return trimmed;
+  }
+  const fallback = new Date(value);
+  if (!Number.isNaN(fallback.getTime())) {
+    return fallback.toISOString();
+  }
+  return new Date().toISOString();
+}
+
+function getEcusMonitorAlertState() {
+  const stored = getJSONValue(ECUS_MONITOR_ALERT_STATE_KEY, DEFAULT_ECUS_MONITOR_ALERT_STATE) || {};
+  const merged = { ...DEFAULT_ECUS_MONITOR_ALERT_STATE, ...stored };
+  merged.consecutiveErrors = toNonNegativeInt(merged.consecutiveErrors, 0);
+  merged.lastDeliveredChannels = Array.isArray(merged.lastDeliveredChannels)
+    ? merged.lastDeliveredChannels
+        .map((channel) => `${channel}`.trim())
+        .filter((channel) => channel.length > 0)
+        .slice(-5)
+    : [];
+  if (merged.lastAlertSummary && typeof merged.lastAlertSummary === 'object') {
+    merged.lastAlertSummary = { ...merged.lastAlertSummary };
+  } else {
+    merged.lastAlertSummary = null;
+  }
+  return merged;
+}
+
+function saveEcusMonitorAlertState(patch, { actor = 'system', source = 'ecus-monitor-alerts' } = {}) {
+  const current = getEcusMonitorAlertState();
+  const next = { ...current, ...(patch || {}) };
+  next.consecutiveErrors = toNonNegativeInt(next.consecutiveErrors, 0);
+  next.lastDeliveredChannels = Array.isArray(next.lastDeliveredChannels)
+    ? next.lastDeliveredChannels
+        .map((channel) => `${channel}`.trim())
+        .filter((channel) => channel.length > 0)
+        .slice(-5)
+    : [];
+  if (next.lastAlertSummary && typeof next.lastAlertSummary === 'object') {
+    next.lastAlertSummary = { ...next.lastAlertSummary };
+  } else {
+    next.lastAlertSummary = null;
+  }
+  setJSONValue(ECUS_MONITOR_ALERT_STATE_KEY, next, { actor, source });
+  return next;
+}
+
+function recordEcusMonitorSyncSuccess({ runAt, actor = 'system' } = {}) {
+  const normalizedAt = normalizeIsoTimestamp(runAt);
+  saveEcusMonitorAlertState(
+    {
+      consecutiveErrors: 0,
+      lastSuccessAt: normalizedAt,
+      lastErrorMessage: null,
+      lastErrorMeta: null,
+    },
+    { actor, source: 'ecus-monitor-success' }
+  );
+}
+
+function recordEcusMonitorSyncFailure(error, { actor = 'system', reason = 'unknown' } = {}) {
+  const state = getEcusMonitorAlertState();
+  const consecutiveErrors = Math.min(999, (state.consecutiveErrors || 0) + 1);
+  const messageSource = error?.message || error || 'Đồng bộ ECUS thất bại';
+  const message = `${messageSource}`.trim().slice(0, 500) || 'Đồng bộ ECUS thất bại';
+  const sanitizedActor = `${actor || 'system'}`.trim().slice(0, 64) || 'system';
+  const sanitizedReason = `${reason || 'unknown'}`.trim().slice(0, 64) || 'unknown';
+  saveEcusMonitorAlertState(
+    {
+      consecutiveErrors,
+      lastErrorAt: normalizeIsoTimestamp(new Date()),
+      lastErrorMessage: message,
+      lastErrorMeta: { actor: sanitizedActor, reason: sanitizedReason },
+    },
+    { actor: sanitizedActor, source: 'ecus-monitor-error' }
+  );
+}
+
+function toNullableNumber(value) {
+  if (value === null || value === undefined || value === '') {
+    return null;
+  }
+  const num = Number(value);
+  if (Number.isFinite(num)) {
+    return num;
+  }
+  return null;
+}
+
+function sanitizeMonitorHistoryEntry(entry) {
+  if (!entry || typeof entry !== 'object') {
+    return null;
+  }
+  const capturedAtRaw = entry.capturedAt || entry.timestamp || entry.generatedAt;
+  const capturedAt = normalizeIsoTimestamp(capturedAtRaw || new Date());
+  const issues = Array.isArray(entry.issues)
+    ? entry.issues
+        .map((issue) => `${issue}`.trim())
+        .filter((issue) => issue.length > 0)
+        .slice(0, 10)
+    : [];
+  const triggeredAlerts = Array.isArray(entry.triggeredAlerts)
+    ? entry.triggeredAlerts
+        .map((trigger) => `${trigger}`.trim())
+        .filter((trigger) => trigger.length > 0)
+        .slice(0, 5)
+    : [];
+
+  return {
+    version: 1,
+    capturedAt,
+    severity: `${entry.severity || 'normal'}`.trim() || 'normal',
+    syncStatus: entry.syncStatus ? `${entry.syncStatus}`.trim() : null,
+    staleMinutes: toNullableNumber(entry.staleMinutes),
+    rowsFetched: toNullableNumber(entry.rowsFetched),
+    rowsInserted: toNullableNumber(entry.rowsInserted),
+    rowsUpdated: toNullableNumber(entry.rowsUpdated),
+    rowsSkipped: toNullableNumber(entry.rowsSkipped),
+    totalStored: toNullableNumber(entry.totalStored),
+    durationMs: toNullableNumber(entry.durationMs),
+    runAt: entry.runAt ? normalizeIsoTimestamp(entry.runAt) : null,
+    consecutiveErrors: toNonNegativeInt(entry.consecutiveErrors, 0),
+    lastErrorMessage: entry.lastErrorMessage ? `${entry.lastErrorMessage}`.trim().slice(0, 500) : null,
+    lastSuccessAt: entry.lastSuccessAt ? normalizeIsoTimestamp(entry.lastSuccessAt) : null,
+    lastFailureAlertAt: entry.lastFailureAlertAt ? normalizeIsoTimestamp(entry.lastFailureAlertAt) : null,
+    lastStaleAlertAt: entry.lastStaleAlertAt ? normalizeIsoTimestamp(entry.lastStaleAlertAt) : null,
+    lastAlertDeliveredAt: entry.lastAlertDeliveredAt ? normalizeIsoTimestamp(entry.lastAlertDeliveredAt) : null,
+    databaseState: entry.databaseState ? `${entry.databaseState}`.trim().slice(0, 120) : null,
+    databaseLatencyMs: toNullableNumber(entry.databaseLatencyMs),
+    issues,
+    triggeredAlerts,
+    actor: entry.actor ? `${entry.actor}`.trim().slice(0, 80) : null,
+  };
+}
+
+function getEcusMonitorHistory() {
+  const stored = getJSONValue(ECUS_MONITOR_HISTORY_KEY, DEFAULT_ECUS_MONITOR_HISTORY) || {};
+  const entries = Array.isArray(stored.entries) ? stored.entries : [];
+  return {
+    version: 1,
+    entries: entries
+      .map((entry) => sanitizeMonitorHistoryEntry(entry))
+      .filter((entry) => entry !== null),
+    updatedAt: stored.updatedAt ? normalizeIsoTimestamp(stored.updatedAt) : null,
+  };
+}
+
+function saveEcusMonitorHistory(state, { actor = 'system', source = 'ecus-monitor-history' } = {}) {
+  const payload = {
+    version: 1,
+    entries: Array.isArray(state.entries) ? state.entries.slice(0) : [],
+    updatedAt: state.updatedAt ? normalizeIsoTimestamp(state.updatedAt) : new Date().toISOString(),
+  };
+  setJSONValue(ECUS_MONITOR_HISTORY_KEY, payload, { actor, source });
+  return payload;
+}
+
+function clearEcusMonitorHistory({ actor = 'system', source = 'ecus-monitor-history-reset' } = {}) {
+  return saveEcusMonitorHistory(
+    {
+      version: 1,
+      entries: [],
+      updatedAt: new Date().toISOString(),
+    },
+    { actor, source }
+  );
+}
+
+function appendEcusMonitorHistory(snapshot, { actor = 'system', source = 'ecus-monitor-history' } = {}) {
+  if (!snapshot || typeof snapshot !== 'object') {
+    return null;
+  }
+  const history = getEcusMonitorHistory();
+  const options = DEFAULT_ECUS_MONITOR_HISTORY_OPTIONS;
+  const maxEntries = Math.max(1, toPositiveInt(options.maxEntries, 7 * 24 * 4) || 7 * 24 * 4);
+  const dedupeMinutes = Math.max(0, toPositiveInt(options.dedupeMinutes, 5) || 0);
+
+  const alertState = snapshot.alertState || {};
+  const syncState = snapshot.sync || {};
+  const database = snapshot.database || {};
+  const entry = sanitizeMonitorHistoryEntry({
+    capturedAt: snapshot.generatedAt || new Date().toISOString(),
+    severity: snapshot.severity || 'normal',
+    syncStatus: syncState.lastStatus || null,
+    staleMinutes: syncState.staleMinutes,
+    rowsFetched: syncState.rowsFetched ?? syncState.lastSummary?.rowsFetched,
+    rowsInserted: syncState.rowsInserted ?? syncState.lastSummary?.rowsInserted,
+    rowsUpdated: syncState.rowsUpdated ?? syncState.lastSummary?.rowsUpdated,
+    rowsSkipped: syncState.rowsSkipped ?? syncState.lastSummary?.rowsSkipped,
+    totalStored: syncState.totalStored ?? syncState.lastSummary?.totalStored,
+    runAt: syncState.lastRunAt || null,
+    durationMs: syncState.durationMs ?? syncState.lastSummary?.durationMs,
+    consecutiveErrors: alertState.consecutiveErrors,
+    lastErrorMessage: alertState.lastErrorMessage,
+    lastSuccessAt: alertState.lastSuccessAt,
+    lastFailureAlertAt: alertState.lastFailureAlertAt,
+    lastStaleAlertAt: alertState.lastStaleAlertAt,
+    lastAlertDeliveredAt: alertState.lastAlertDeliveredAt,
+    databaseState: database.state || (database.ok === false ? 'error' : 'ok'),
+    databaseLatencyMs: database.latencyMs ?? database.durationMs,
+    issues: snapshot.issues || [],
+    triggeredAlerts: snapshot.alertDispatch?.triggered || [],
+    actor,
+  });
+
+  if (!entry) {
+    return null;
+  }
+
+  const entries = Array.isArray(history.entries) ? history.entries.slice(0) : [];
+  const dedupeMs = dedupeMinutes * 60000;
+  const lastEntry = entries[entries.length - 1] || null;
+  if (lastEntry && dedupeMs > 0) {
+    const lastTime = Date.parse(lastEntry.capturedAt);
+    const currentTime = Date.parse(entry.capturedAt);
+    if (Number.isFinite(lastTime) && Number.isFinite(currentTime) && currentTime - lastTime <= dedupeMs) {
+      const comparableKeys = ['severity', 'syncStatus', 'staleMinutes', 'consecutiveErrors'];
+      const isEquivalent = comparableKeys.every((key) => {
+        const previousValue = lastEntry[key] ?? null;
+        const currentValue = entry[key] ?? null;
+        return previousValue === currentValue;
+      });
+      if (isEquivalent) {
+        entries[entries.length - 1] = { ...entry };
+      } else {
+        entries.push(entry);
+      }
+    } else {
+      entries.push(entry);
+    }
+  } else {
+    entries.push(entry);
+  }
+
+  const limitedEntries = entries.slice(-maxEntries);
+  const saved = saveEcusMonitorHistory(
+    {
+      version: 1,
+      entries: limitedEntries,
+      updatedAt: entry.capturedAt,
+    },
+    { actor, source }
+  );
+
+  return {
+    entry,
+    totalEntries: saved.entries.length,
+  };
+}
+
+function summarizeMonitorHistory(entries, { windowMinutes, staleThresholdMinutes } = {}) {
+  const now = Date.now();
+  const windowMs = Number.isFinite(windowMinutes) ? windowMinutes * 60000 : null;
+  const cutoff = windowMs ? now - windowMs : null;
+  const filtered = Array.isArray(entries)
+    ? entries.filter((entry) => {
+        if (!entry || typeof entry !== 'object') return false;
+        const ts = Date.parse(entry.capturedAt);
+        if (!Number.isFinite(ts)) {
+          return false;
+        }
+        if (cutoff !== null && ts < cutoff) {
+          return false;
+        }
+        return true;
+      })
+    : [];
+
+  if (filtered.length === 0) {
+    return {
+      from: cutoff ? new Date(cutoff).toISOString() : null,
+      to: new Date(now).toISOString(),
+      sampleCount: 0,
+      successCount: 0,
+      warningCount: 0,
+      errorCount: 0,
+      averageStaleMinutes: null,
+      maxStaleMinutes: null,
+      minStaleMinutes: null,
+      staleBreaches: 0,
+      consecutiveErrorMax: 0,
+      lastSuccessAt: null,
+      lastWarningAt: null,
+      lastErrorAt: null,
+    };
+  }
+
+  let successCount = 0;
+  let warningCount = 0;
+  let errorCount = 0;
+  let staleSum = 0;
+  let staleSamples = 0;
+  let maxStale = null;
+  let minStale = null;
+  let staleBreaches = 0;
+  let consecutiveErrorMax = 0;
+  let currentConsecutiveError = 0;
+  let lastSuccessAt = null;
+  let lastWarningAt = null;
+  let lastErrorAt = null;
+
+  const normalizedThreshold = Number.isFinite(staleThresholdMinutes)
+    ? Math.max(0, staleThresholdMinutes)
+    : DEFAULT_ECUS_MONITOR_ALERT_OPTIONS.staleThresholdMinutes;
+
+  for (const entry of filtered) {
+    const severity = `${entry.severity || ''}`.toLowerCase();
+    const status = `${entry.syncStatus || ''}`.toLowerCase();
+    const timestamp = Date.parse(entry.capturedAt);
+    if (status.startsWith('error') || severity === 'critical') {
+      errorCount += 1;
+      currentConsecutiveError += 1;
+      if (!lastErrorAt || timestamp > Date.parse(lastErrorAt)) {
+        lastErrorAt = entry.runAt || entry.capturedAt;
+      }
+    } else if (severity === 'warning' || status.includes('warning')) {
+      warningCount += 1;
+      currentConsecutiveError = 0;
+      if (!lastWarningAt || timestamp > Date.parse(lastWarningAt)) {
+        lastWarningAt = entry.runAt || entry.capturedAt;
+      }
+    } else {
+      successCount += 1;
+      currentConsecutiveError = 0;
+      if (!lastSuccessAt || timestamp > Date.parse(lastSuccessAt)) {
+        lastSuccessAt = entry.runAt || entry.capturedAt;
+      }
+    }
+    if (currentConsecutiveError > consecutiveErrorMax) {
+      consecutiveErrorMax = currentConsecutiveError;
+    }
+
+    if (entry.staleMinutes !== null && entry.staleMinutes !== undefined) {
+      const staleValue = Number(entry.staleMinutes);
+      if (Number.isFinite(staleValue)) {
+        staleSum += staleValue;
+        staleSamples += 1;
+        maxStale = maxStale === null ? staleValue : Math.max(maxStale, staleValue);
+        minStale = minStale === null ? staleValue : Math.min(minStale, staleValue);
+        if (staleValue >= normalizedThreshold) {
+          staleBreaches += 1;
+        }
+      }
+    }
+  }
+
+  const averageStaleMinutes = staleSamples > 0 ? Number((staleSum / staleSamples).toFixed(2)) : null;
+
+  return {
+    from: cutoff ? new Date(cutoff).toISOString() : null,
+    to: new Date(now).toISOString(),
+    sampleCount: filtered.length,
+    successCount,
+    warningCount,
+    errorCount,
+    averageStaleMinutes,
+    maxStaleMinutes: maxStale,
+    minStaleMinutes: minStale,
+    staleBreaches,
+    consecutiveErrorMax,
+    lastSuccessAt,
+    lastWarningAt,
+    lastErrorAt,
+  };
+}
+
+function buildEcusMonitorMetrics({ history } = {}) {
+  const effectiveHistory = history || getEcusMonitorHistory();
+  const entries = Array.isArray(effectiveHistory.entries) ? effectiveHistory.entries : [];
+  const thresholds = getEcusMonitorAlertOptions();
+  const windowConfigs = [
+    { key: '24h', minutes: 24 * 60 },
+    { key: '7d', minutes: 7 * 24 * 60 },
+    { key: '30d', minutes: 30 * 24 * 60 },
+  ];
+  const windows = {};
+  for (const config of windowConfigs) {
+    windows[config.key] = summarizeMonitorHistory(entries, {
+      windowMinutes: config.minutes,
+      staleThresholdMinutes: thresholds.staleThresholdMinutes,
+    });
+  }
+
+  windows.all = summarizeMonitorHistory(entries, {
+    windowMinutes: null,
+    staleThresholdMinutes: thresholds.staleThresholdMinutes,
+  });
+
+  const latest = entries.length ? entries[entries.length - 1] : null;
+
+  return {
+    generatedAt: new Date().toISOString(),
+    totals: {
+      entries: entries.length,
+    },
+    latest,
+    windows,
+    thresholds,
+  };
+}
+
+function buildEcusMonitorSeries(entries, { thresholds } = {}) {
+  const list = Array.isArray(entries) ? entries : [];
+  const latencySeries = [];
+  const statusSeries = [];
+  const consecutiveSeries = [];
+  const rowsInsertedSeries = [];
+  const rowsUpdatedSeries = [];
+  const rowsFetchedSeries = [];
+
+  const statusMap = {
+    success: 1,
+    normal: 1,
+    warning: 0.5,
+    error: 0,
+    critical: 0,
+  };
+
+  for (const entry of list) {
+    const timestamp = Date.parse(entry.capturedAt);
+    if (!Number.isFinite(timestamp)) {
+      continue;
+    }
+    if (entry.staleMinutes !== null && entry.staleMinutes !== undefined) {
+      const value = Number(entry.staleMinutes);
+      if (Number.isFinite(value)) {
+        latencySeries.push([value, timestamp]);
+      }
+    }
+    const severity = `${entry.severity || ''}`.toLowerCase();
+    const status = `${entry.syncStatus || ''}`.toLowerCase();
+    const statusKey = status.startsWith('error')
+      ? 'error'
+      : severity === 'critical'
+      ? 'critical'
+      : severity === 'warning' || status.includes('warning')
+      ? 'warning'
+      : 'success';
+    statusSeries.push([statusMap[statusKey] ?? 0, timestamp]);
+
+    const consecutive = Number(entry.consecutiveErrors);
+    if (Number.isFinite(consecutive)) {
+      consecutiveSeries.push([consecutive, timestamp]);
+    }
+
+    const rowsInserted = toNullableNumber(entry.rowsInserted);
+    if (rowsInserted !== null) {
+      rowsInsertedSeries.push([rowsInserted, timestamp]);
+    }
+
+    const rowsUpdated = toNullableNumber(entry.rowsUpdated);
+    if (rowsUpdated !== null) {
+      rowsUpdatedSeries.push([rowsUpdated, timestamp]);
+    }
+
+    const rowsFetched = toNullableNumber(entry.rowsFetched);
+    if (rowsFetched !== null) {
+      rowsFetchedSeries.push([rowsFetched, timestamp]);
+    }
+  }
+
+  const result = [];
+  if (latencySeries.length) {
+    result.push({
+      name: 'ecus_sync_stale_minutes',
+      unit: 'minutes',
+      thresholds: {
+        warning: thresholds?.staleThresholdMinutes || DEFAULT_ECUS_MONITOR_ALERT_OPTIONS.staleThresholdMinutes,
+      },
+      datapoints: latencySeries,
+    });
+  }
+  if (statusSeries.length) {
+    result.push({
+      name: 'ecus_sync_status',
+      unit: 'ratio',
+      legend: {
+        success: 1,
+        warning: 0.5,
+        error: 0,
+      },
+      datapoints: statusSeries,
+    });
+  }
+  if (consecutiveSeries.length) {
+    result.push({
+      name: 'ecus_sync_consecutive_errors',
+      unit: 'count',
+      datapoints: consecutiveSeries,
+    });
+  }
+  if (rowsInsertedSeries.length) {
+    result.push({
+      name: 'ecus_sync_rows_inserted',
+      unit: 'rows',
+      datapoints: rowsInsertedSeries,
+    });
+  }
+  if (rowsUpdatedSeries.length) {
+    result.push({
+      name: 'ecus_sync_rows_updated',
+      unit: 'rows',
+      datapoints: rowsUpdatedSeries,
+    });
+  }
+  if (rowsFetchedSeries.length) {
+    result.push({
+      name: 'ecus_sync_rows_fetched',
+      unit: 'rows',
+      datapoints: rowsFetchedSeries,
+    });
+  }
+
+  return result;
+}
+
+
 function formatEcusConfigForClient(config) {
   const source = config || getEcusConfig();
   const connection = { ...source.connection };
@@ -5351,6 +5971,196 @@ function buildDataHealthSummary() {
   };
 }
 
+function formatAlertTimestamp(input) {
+  if (!input) {
+    return 'Chưa xác định';
+  }
+  try {
+    const date = new Date(input);
+    if (Number.isNaN(date.getTime())) {
+      return 'Không xác định';
+    }
+    const timezone = (process.env.KPI_TIMEZONE || 'Asia/Ho_Chi_Minh').trim() || 'Asia/Ho_Chi_Minh';
+    return new Intl.DateTimeFormat('vi-VN', {
+      dateStyle: 'short',
+      timeStyle: 'short',
+      hour12: false,
+      timeZone: timezone,
+    }).format(date);
+  } catch {
+    return `${input}`;
+  }
+}
+
+function shouldThrottleAlert(lastIso, cooldownMinutes, now = Date.now()) {
+  if (!lastIso) {
+    return false;
+  }
+  const ts = new Date(lastIso).getTime();
+  if (!Number.isFinite(ts)) {
+    return false;
+  }
+  const cooldownMs = Math.max(1, Number(cooldownMinutes) || 0) * 60000;
+  return now - ts < cooldownMs;
+}
+
+async function dispatchEcusMonitorAlerts(snapshot) {
+  if (!snapshot || typeof snapshot !== 'object') {
+    return { triggered: [] };
+  }
+  if (!hasAlertTargets()) {
+    return { triggered: [] };
+  }
+  const options = getEcusMonitorAlertOptions();
+  const state = getEcusMonitorAlertState();
+  const now = Date.now();
+  const nowIso = new Date(now).toISOString();
+  const triggers = [];
+
+  if (options.failureThreshold > 0 && state.consecutiveErrors >= options.failureThreshold) {
+    const lastAttempt = state.lastFailureAlertAttemptAt || state.lastFailureAlertAt;
+    if (!shouldThrottleAlert(lastAttempt, options.failureCooldownMinutes, now)) {
+      const message = `Đồng bộ ECUS đã thất bại ${state.consecutiveErrors} lần liên tiếp (gần nhất lúc ${formatAlertTimestamp(
+        state.lastErrorAt
+      )}).`;
+      triggers.push({ type: 'failure', severity: 'critical', message });
+    }
+  }
+
+  const staleMinutes = Number.isFinite(snapshot?.sync?.staleMinutes) ? snapshot.sync.staleMinutes : null;
+  if (staleMinutes !== null && staleMinutes > options.staleThresholdMinutes) {
+    const lastAttempt = state.lastStaleAlertAttemptAt || state.lastStaleAlertAt;
+    if (!shouldThrottleAlert(lastAttempt, options.staleCooldownMinutes, now)) {
+      const message = `Dữ liệu ECUS đã trễ ${staleMinutes} phút (ngưỡng cảnh báo ${options.staleThresholdMinutes} phút).`;
+      const severity =
+        staleMinutes >= Math.max(options.staleThresholdMinutes * 2, 180) || snapshot.severity === 'critical'
+          ? 'critical'
+          : 'warning';
+      triggers.push({ type: 'stale', severity, message });
+    }
+  }
+
+  if (!triggers.length) {
+    return { triggered: [] };
+  }
+
+  const severity = triggers.some((trigger) => trigger.severity === 'critical' || snapshot.severity === 'critical')
+    ? 'critical'
+    : triggers.some((trigger) => trigger.severity === 'warning')
+      ? 'warning'
+      : 'info';
+
+  const subjectDetails = [];
+  if (triggers.some((trigger) => trigger.type === 'failure')) {
+    subjectDetails.push(`${state.consecutiveErrors} lần lỗi liên tiếp`);
+  }
+  if (triggers.some((trigger) => trigger.type === 'stale') && staleMinutes !== null) {
+    subjectDetails.push(`Độ trễ ${staleMinutes} phút`);
+  }
+  const subjectSuffix = subjectDetails.length ? `: ${subjectDetails.join(' & ')}` : '';
+  const subject = `[KPI] Cảnh báo đồng bộ ECUS${subjectSuffix}`;
+
+  const introLines = ['Hệ thống phát hiện sự cố giám sát đồng bộ ECUS.'];
+  for (const trigger of triggers) {
+    introLines.push(trigger.message);
+  }
+  introLines.push('Vui lòng kiểm tra tác vụ đồng bộ ECUS, kết nối SQL Server và chạy lại khi cần.');
+  const text = introLines.join('\n');
+
+  const issueSet = new Set();
+  const combinedIssues = Array.isArray(snapshot.issues) ? snapshot.issues : [];
+  for (const issue of combinedIssues) {
+    if (!issue) continue;
+    const normalized = `${issue}`.trim();
+    if (normalized) {
+      issueSet.add(normalized);
+    }
+  }
+  for (const trigger of triggers) {
+    const normalized = `${trigger.message}`.trim();
+    if (normalized) {
+      issueSet.add(normalized);
+    }
+  }
+  if (state.lastErrorMessage) {
+    issueSet.add(`Lỗi gần nhất: ${state.lastErrorMessage}`);
+  }
+  const issues = Array.from(issueSet);
+
+  const facts = [
+    {
+      name: 'Lần chạy gần nhất',
+      value: snapshot?.sync?.lastRunAt ? formatAlertTimestamp(snapshot.sync.lastRunAt) : 'Chưa có',
+    },
+    {
+      name: 'Độ trễ hiện tại',
+      value: staleMinutes !== null ? `${staleMinutes} phút` : 'Không xác định',
+    },
+    {
+      name: 'Lỗi liên tiếp',
+      value: `${state.consecutiveErrors}`,
+    },
+  ];
+  if (state.lastSuccessAt) {
+    facts.push({ name: 'Lần thành công gần nhất', value: formatAlertTimestamp(state.lastSuccessAt) });
+  }
+  const sqlState = snapshot?.database?.ok === false
+    ? snapshot.database?.state || 'Lỗi kết nối'
+    : snapshot?.database?.state || 'Ổn định';
+  facts.push({ name: 'SQL Server', value: sqlState });
+
+  const result = await deliverAlertNotification({
+    subject,
+    text,
+    severity,
+    issues,
+    facts,
+    link: options.dashboardUrl || null,
+  });
+
+  const updatePatch = {
+    lastAlertAttemptAt: nowIso,
+  };
+  if (triggers.some((trigger) => trigger.type === 'failure')) {
+    updatePatch.lastFailureAlertAttemptAt = nowIso;
+  }
+  if (triggers.some((trigger) => trigger.type === 'stale')) {
+    updatePatch.lastStaleAlertAttemptAt = nowIso;
+  }
+
+  if (result.successes.length) {
+    updatePatch.lastDeliveredChannels = result.successes;
+    updatePatch.lastAlertDeliveredAt = nowIso;
+    updatePatch.lastAlertSummary = {
+      subject,
+      severity,
+      triggered: triggers.map((trigger) => trigger.type),
+      deliveredVia: result.successes,
+      issues: issues.slice(0, 10),
+    };
+    if (triggers.some((trigger) => trigger.type === 'failure')) {
+      updatePatch.lastFailureAlertAt = nowIso;
+    }
+    if (triggers.some((trigger) => trigger.type === 'stale')) {
+      updatePatch.lastStaleAlertAt = nowIso;
+    }
+  }
+
+  saveEcusMonitorAlertState(updatePatch, { actor: 'system', source: 'ecus-monitor-alerts-dispatch' });
+
+  if (result.failures.length) {
+    for (const failure of result.failures) {
+      console.error(`Không thể gửi cảnh báo ECUS qua ${failure.target}`, failure.error);
+    }
+  }
+
+  return {
+    triggered: triggers.map((trigger) => trigger.type),
+    severity,
+    delivered: result.successes,
+  };
+}
+
 async function buildEcusSyncMonitorSnapshot() {
   const [database, config] = await Promise.all([
     checkSqlServerHealth().catch((error) => ({
@@ -5410,7 +6220,7 @@ async function buildEcusSyncMonitorSnapshot() {
     severity = 'normal';
   }
 
-  return {
+  const snapshot = {
     generatedAt: new Date().toISOString(),
     severity,
     issues,
@@ -5429,6 +6239,49 @@ async function buildEcusSyncMonitorSnapshot() {
     },
     database,
   };
+
+  try {
+    const dispatchResult = await dispatchEcusMonitorAlerts(snapshot);
+    if (dispatchResult && typeof dispatchResult === 'object') {
+      snapshot.alertDispatch = dispatchResult;
+    }
+  } catch (err) {
+    console.error('Không thể gửi cảnh báo giám sát ECUS', err);
+  }
+
+  const alertState = getEcusMonitorAlertState();
+  snapshot.alertState = {
+    consecutiveErrors: alertState.consecutiveErrors,
+    lastErrorAt: alertState.lastErrorAt,
+    lastErrorMessage: alertState.lastErrorMessage,
+    lastErrorMeta: alertState.lastErrorMeta || null,
+    lastSuccessAt: alertState.lastSuccessAt,
+    lastFailureAlertAt: alertState.lastFailureAlertAt || null,
+    lastFailureAlertAttemptAt: alertState.lastFailureAlertAttemptAt || null,
+    lastStaleAlertAt: alertState.lastStaleAlertAt || null,
+    lastStaleAlertAttemptAt: alertState.lastStaleAlertAttemptAt || null,
+    lastAlertAttemptAt: alertState.lastAlertAttemptAt || null,
+    lastAlertDeliveredAt: alertState.lastAlertDeliveredAt || null,
+    lastDeliveredChannels: alertState.lastDeliveredChannels,
+    lastAlertSummary: alertState.lastAlertSummary,
+  };
+
+  try {
+    const historyResult = appendEcusMonitorHistory(snapshot, {
+      actor: 'system',
+      source: 'ecus-monitor-snapshot',
+    });
+    if (historyResult && historyResult.entry) {
+      snapshot.history = {
+        recordedAt: historyResult.entry.capturedAt,
+        totalEntries: historyResult.totalEntries,
+      };
+    }
+  } catch (err) {
+    console.error('Không thể lưu lịch sử giám sát ECUS', err);
+  }
+
+  return snapshot;
 }
 
 function buildSqlConnectionConfig(config) {
@@ -7112,6 +7965,8 @@ async function runEcusSync({ from, to, actor = 'system', reason = 'manual' } = {
     },
   });
 
+  recordEcusMonitorSyncSuccess({ runAt: runAtIso, actor });
+
   return {
     config: nextConfig,
     fetched: totalFetched,
@@ -7137,6 +7992,7 @@ async function runEcusSyncWithErrorHandling(params) {
     if (isSqlTimeoutError(err)) {
       recordSqlTimeout({ message: err?.message, context: { actor: params?.actor, reason: params?.reason } });
     }
+    recordEcusMonitorSyncFailure(err, { actor: params?.actor, reason: params?.reason });
     saveEcusConfig({
       lastRun: new Date().toISOString(),
       lastStatus: `error: ${err.message}`,
@@ -7424,7 +8280,16 @@ function logServerAddresses(port, host) {
   }
 }
 
-export { runEcusSyncWithErrorHandling, getEcusConfig };
+export {
+  runEcusSyncWithErrorHandling,
+  getEcusConfig,
+  buildEcusSyncMonitorSnapshot,
+  getEcusMonitorHistory,
+  appendEcusMonitorHistory,
+  clearEcusMonitorHistory,
+  buildEcusMonitorMetrics,
+  buildEcusMonitorSeries,
+};
 
 
 app.use(cors({ origin: true, credentials: true }));
@@ -7454,6 +8319,41 @@ app.get('/api/internal/monitor/ecus-sync', async (req, res) => {
   } catch (err) {
     console.error('Không thể tạo snapshot giám sát ECUS', err);
     res.status(500).json({ ok: false, error: err?.message || 'Không thể tổng hợp trạng thái đồng bộ ECUS.' });
+  }
+});
+
+app.get('/api/internal/monitor/ecus-sync/metrics', async (req, res) => {
+  if (!monitorAccessToken) {
+    res.status(503).json({ ok: false, error: 'Chưa cấu hình MONITOR_ACCESS_TOKEN trên máy chủ.' });
+    return;
+  }
+
+  const providedToken = String(req.get('x-monitor-token') || req.query.token || '').trim();
+  if (!providedToken || providedToken !== monitorAccessToken) {
+    res.status(403).json({ ok: false, error: 'Token xác thực không hợp lệ.' });
+    return;
+  }
+
+  try {
+    const history = getEcusMonitorHistory();
+    const metrics = buildEcusMonitorMetrics({ history });
+    const limit = toPositiveInt(req.query?.limit, 288) || 288;
+    const boundedLimit = Math.max(1, Math.min(limit, history.entries.length || limit));
+    const entries = history.entries.slice(-boundedLimit);
+    const series = buildEcusMonitorSeries(entries, { thresholds: metrics.thresholds });
+
+    metrics.history = {
+      totalEntries: history.entries.length,
+      returnedEntries: entries.length,
+      updatedAt: history.updatedAt,
+      entries,
+    };
+    metrics.series = series;
+
+    res.json({ ok: true, metrics });
+  } catch (err) {
+    console.error('Không thể tổng hợp dữ liệu dashboard giám sát ECUS', err);
+    res.status(500).json({ ok: false, error: 'Không thể tổng hợp dữ liệu dashboard giám sát ECUS.' });
   }
 });
 

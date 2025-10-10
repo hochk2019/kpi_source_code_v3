@@ -19,8 +19,8 @@
 ## 3. Vận hành & giám sát
 
 - ✅ Dựng cron Windows Task Scheduler chạy script PowerShell 7 kiểm tra dịch vụ đồng bộ mỗi 15 phút, ghi log vào Event Viewer để dễ truy vết.
-- Tích hợp cảnh báo email/Teams khi đồng bộ ECUS thất bại trên 3 lần liên tiếp hoặc khi độ trễ dữ liệu > 60 phút.
-- Xuất bản dashboard giám sát (Grafana hoặc Power BI) đọc trực tiếp từ log để theo dõi số lượng tờ khai, số lỗi import, thời gian phản hồi API AI.
+- ✅ Tích hợp cảnh báo email/Teams khi đồng bộ ECUS thất bại trên 3 lần liên tiếp hoặc khi độ trễ dữ liệu > 60 phút.
+- ✅ Xuất bản dashboard giám sát (Grafana hoặc Power BI) đọc trực tiếp từ log để theo dõi số lượng tờ khai, số lỗi import, thời gian phản hồi API AI.
 - Chuẩn hoá quy trình backup SQL Server 2008 R2 (full hằng ngày, diff mỗi 6h) và kiểm tra khôi phục định kỳ trên môi trường dự phòng.
 
 ## 4. Bảo mật & xuất Excel
