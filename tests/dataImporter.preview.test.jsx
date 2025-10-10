@@ -108,6 +108,11 @@ describe('DataImporter preview UI', () => {
           })
         );
       }
+      if (url.startsWith('/api/filter-presets')) {
+        return Promise.resolve(
+          createJsonResponse({ ok: true, scope: 'data-importer', presets: [] })
+        );
+      }
       if (url === '/api/import/alerts') {
         return Promise.resolve(
           createJsonResponse({

@@ -739,6 +739,12 @@ const DEFAULT_DUPLICATE_POLICY_STATE = Object.freeze({
   lockedSources: {},
 });
 
+const FILTER_PRESETS_KEY = 'filter_presets_v1';
+const FILTER_PRESET_VERSION = 1;
+const FILTER_PRESET_SCOPE_DEFAULT = 'data-importer';
+const KNOWN_FILTER_PRESET_SCOPES = new Set([FILTER_PRESET_SCOPE_DEFAULT, 'report-viewer']);
+const FILTER_PRESET_MAX_PER_SCOPE = 20;
+
 const DEFAULT_STORAGE = {
   decl_rows_v1: '[]',
   mst_rows_v2: '[]',
@@ -798,6 +804,7 @@ const DEFAULT_STORAGE = {
   duplicate_policy_config_v1: JSON.stringify(DEFAULT_DUPLICATE_POLICY_CONFIG),
   duplicate_policy_state_v1: JSON.stringify(DEFAULT_DUPLICATE_POLICY_STATE),
   co_discrepancy_state_v1: JSON.stringify(DEFAULT_CO_DISCREPANCY_STATE),
+  filter_presets_v1: JSON.stringify({ version: 1, users: {} }),
   [AI_CONFIG_KEY]: JSON.stringify(DEFAULT_AI_CONFIG),
   [AI_CACHE_KEY]: JSON.stringify(DEFAULT_AI_USAGE_CACHE),
 };
@@ -1682,6 +1689,371 @@ function cloneJson(value) {
     return value;
   }
   return JSON.parse(JSON.stringify(value));
+}
+
+function sanitizePresetTimestamp(value, fallbackIso) {
+  const fallback = fallbackIso || new Date().toISOString();
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return value.toISOString();
+  }
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    const date = new Date(value);
+    if (!Number.isNaN(date.getTime())) {
+      return date.toISOString();
+    }
+  }
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (trimmed) {
+      const date = new Date(trimmed);
+      if (!Number.isNaN(date.getTime())) {
+        return date.toISOString();
+      }
+    }
+  }
+  return fallback;
+}
+
+function sanitizePresetName(name) {
+  const fallback = 'Bộ lọc đã lưu';
+  if (typeof name !== 'string') {
+    return fallback;
+  }
+  const normalized = name.trim().replace(/\s+/gu, ' ');
+  if (!normalized) {
+    return fallback;
+  }
+  return normalized.slice(0, 80);
+}
+
+function sanitizeFilterPresetScope(scope) {
+  if (typeof scope !== 'string') {
+    return FILTER_PRESET_SCOPE_DEFAULT;
+  }
+  const normalized = scope.trim().toLowerCase();
+  if (!normalized) {
+    return FILTER_PRESET_SCOPE_DEFAULT;
+  }
+  if (KNOWN_FILTER_PRESET_SCOPES.has(normalized)) {
+    return normalized;
+  }
+  if (/^[a-z0-9._-]{1,40}$/iu.test(normalized)) {
+    return normalized;
+  }
+  return FILTER_PRESET_SCOPE_DEFAULT;
+}
+
+function sanitizePresetDateValue(value) {
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return '';
+    }
+    if (/^\d{4}-\d{2}-\d{2}$/u.test(trimmed)) {
+      return trimmed;
+    }
+    if (/^\d{2}\/\d{2}\/\d{4}$/u.test(trimmed)) {
+      return trimmed;
+    }
+    return trimmed.slice(0, 32);
+  }
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    const date = new Date(value);
+    if (!Number.isNaN(date.getTime())) {
+      const iso = date.toISOString().slice(0, 10);
+      return iso;
+    }
+  }
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return value.toISOString().slice(0, 10);
+  }
+  return '';
+}
+
+function sanitizePresetFilters(input) {
+  if (!input || typeof input !== 'object') {
+    return {};
+  }
+  const result = {};
+  if (typeof input.query === 'string' && input.query.trim()) {
+    result.query = input.query.trim().slice(0, 160);
+  }
+  if (input.range && typeof input.range === 'object') {
+    const from = sanitizePresetDateValue(input.range.from);
+    const to = sanitizePresetDateValue(input.range.to);
+    if (from || to) {
+      result.range = { from, to };
+    }
+  }
+  if (typeof input.datePreset === 'string' && input.datePreset.trim()) {
+    result.datePreset = input.datePreset.trim().slice(0, 40);
+  }
+  if (typeof input.coFilterMode === 'string' && input.coFilterMode.trim()) {
+    result.coFilterMode = input.coFilterMode.trim().slice(0, 40);
+  }
+  const coFilterMinRaw = input.coFilterMin;
+  if (coFilterMinRaw !== undefined && coFilterMinRaw !== null) {
+    const parsed = Number(coFilterMinRaw);
+    if (Number.isFinite(parsed)) {
+      result.coFilterMin = Math.max(0, Math.round(parsed));
+    }
+  }
+  if (typeof input.filterNoStaff === 'boolean') {
+    result.filterNoStaff = input.filterNoStaff;
+  }
+  if (typeof input.filterNoTeam === 'boolean') {
+    result.filterNoTeam = input.filterNoTeam;
+  }
+  if (typeof input.filterDuplicate11 === 'boolean') {
+    result.filterDuplicate11 = input.filterDuplicate11;
+  }
+  if (typeof input.team === 'string' && input.team.trim()) {
+    result.team = input.team.trim().slice(0, 80);
+  }
+  if (Array.isArray(input.teams)) {
+    const teams = Array.from(
+      new Set(
+        input.teams
+          .map((entry) => (typeof entry === 'string' ? entry.trim() : ''))
+          .filter((entry) => entry)
+      )
+    ).slice(0, 10);
+    if (teams.length > 0) {
+      result.teams = teams;
+    }
+  }
+  return result;
+}
+
+function sanitizeFilterPresetRecord(entry, { now } = {}) {
+  if (!entry || typeof entry !== 'object') {
+    return null;
+  }
+  const current = now || new Date().toISOString();
+  const id = typeof entry.id === 'string' && entry.id.trim() ? entry.id.trim() : crypto.randomUUID();
+  const scope = sanitizeFilterPresetScope(entry.scope);
+  const filters = sanitizePresetFilters(entry.filters);
+  if (Object.keys(filters).length === 0) {
+    return null;
+  }
+  const name = sanitizePresetName(entry.name);
+  const createdAt = sanitizePresetTimestamp(entry.createdAt, current);
+  const updatedAtBase = sanitizePresetTimestamp(entry.updatedAt, createdAt);
+  const updatedAt = updatedAtBase < createdAt ? createdAt : updatedAtBase;
+  return { id, scope, name, filters, createdAt, updatedAt };
+}
+
+function getPresetTime(value) {
+  if (!value) {
+    return 0;
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return 0;
+  }
+  return date.getTime();
+}
+
+function sortPresetsByUpdatedAt(list = []) {
+  return [...list].sort((a = {}, b = {}) => getPresetTime(b.updatedAt || b.createdAt) - getPresetTime(a.updatedAt || a.createdAt));
+}
+
+function rebuildPresetCollection(existing = [], options = {}) {
+  const { upsert = null, removeId = null } = options || {};
+  const groups = new Map();
+  for (const item of existing) {
+    if (!item || typeof item !== 'object') {
+      continue;
+    }
+    if (removeId && item.id === removeId) {
+      continue;
+    }
+    const scopeKey = item.scope || FILTER_PRESET_SCOPE_DEFAULT;
+    if (upsert && upsert.id === item.id) {
+      continue;
+    }
+    const list = groups.get(scopeKey) || [];
+    list.push(item);
+    groups.set(scopeKey, list);
+  }
+  if (upsert) {
+    const scopeKey = upsert.scope || FILTER_PRESET_SCOPE_DEFAULT;
+    const list = groups.get(scopeKey) || [];
+    list.unshift(upsert);
+    groups.set(scopeKey, list);
+  }
+  const combined = [];
+  for (const list of groups.values()) {
+    const sorted = sortPresetsByUpdatedAt(list);
+    combined.push(...sorted.slice(0, FILTER_PRESET_MAX_PER_SCOPE));
+  }
+  return sortPresetsByUpdatedAt(combined);
+}
+
+function normalizeFilterPresetList(list = []) {
+  if (!Array.isArray(list)) {
+    return [];
+  }
+  const normalized = [];
+  const seen = new Set();
+  const now = new Date().toISOString();
+  for (const entry of list) {
+    const preset = sanitizeFilterPresetRecord(entry, { now });
+    if (!preset) {
+      continue;
+    }
+    const key = `${preset.scope}:${preset.id}`;
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    normalized.push(preset);
+  }
+  return rebuildPresetCollection(normalized);
+}
+
+function loadFilterPresetState(username) {
+  const storeRaw =
+    getJSONValue(FILTER_PRESETS_KEY, { version: FILTER_PRESET_VERSION, users: {} }) || {};
+  const store = {
+    version: FILTER_PRESET_VERSION,
+    users: {},
+  };
+  if (storeRaw && typeof storeRaw === 'object') {
+    const users = storeRaw.users && typeof storeRaw.users === 'object' ? storeRaw.users : {};
+    store.users = { ...users };
+  }
+  const userKey = `${username || ''}`.trim().toLowerCase();
+  if (!userKey) {
+    return { store, userKey: '', entry: { presets: [], updatedAt: null } };
+  }
+  const entry = store.users[userKey];
+  const presets = normalizeFilterPresetList(entry?.presets || []);
+  const updatedAt = presets[0]?.updatedAt
+    || (entry?.updatedAt ? sanitizePresetTimestamp(entry.updatedAt) : null);
+  return { store, userKey, entry: { presets, updatedAt } };
+}
+
+function listFilterPresetsForUser(username, { scope } = {}) {
+  const normalizedScope = scope ? sanitizeFilterPresetScope(scope) : null;
+  const { entry } = loadFilterPresetState(username);
+  const list = normalizedScope
+    ? entry.presets.filter((item) => item.scope === normalizedScope)
+    : entry.presets;
+  return {
+    presets: sortPresetsByUpdatedAt(list),
+    updatedAt: entry.updatedAt || null,
+  };
+}
+
+function createFilterPresetForUser(username, payload = {}, { actor = 'system' } = {}) {
+  const { store, userKey, entry } = loadFilterPresetState(username);
+  if (!userKey) {
+    const error = new Error('Thiếu thông tin tài khoản để lưu bộ lọc.');
+    error.code = 'INVALID_USER';
+    throw error;
+  }
+  const filters = sanitizePresetFilters(payload.filters);
+  if (Object.keys(filters).length === 0) {
+    const error = new Error('Không có điều kiện lọc hợp lệ để lưu.');
+    error.code = 'INVALID_FILTERS';
+    throw error;
+  }
+  const scope = sanitizeFilterPresetScope(payload.scope);
+  const name = sanitizePresetName(payload.name);
+  const now = new Date().toISOString();
+  const preset = {
+    id: crypto.randomUUID(),
+    scope,
+    name,
+    filters,
+    createdAt: now,
+    updatedAt: now,
+  };
+  const nextPresets = rebuildPresetCollection(entry.presets, { upsert: preset });
+  const updatedAt = nextPresets[0]?.updatedAt || now;
+  store.users[userKey] = { presets: nextPresets, updatedAt };
+  setJSONValue(FILTER_PRESETS_KEY, store, { actor, source: 'filter-presets-upsert' });
+  return { preset, presets: nextPresets, updatedAt };
+}
+
+function updateFilterPresetForUser(username, presetId, payload = {}, { actor = 'system' } = {}) {
+  const id = `${presetId || ''}`.trim();
+  if (!id) {
+    const error = new Error('Thiếu mã bộ lọc cần cập nhật.');
+    error.code = 'INVALID_ID';
+    throw error;
+  }
+  const { store, userKey, entry } = loadFilterPresetState(username);
+  if (!userKey) {
+    const error = new Error('Thiếu thông tin tài khoản để cập nhật bộ lọc.');
+    error.code = 'INVALID_USER';
+    throw error;
+  }
+  const existing = entry.presets.find((item) => item.id === id);
+  if (!existing) {
+    const error = new Error('Không tìm thấy bộ lọc đã lưu tương ứng.');
+    error.code = 'NOT_FOUND';
+    throw error;
+  }
+  const filters =
+    Object.prototype.hasOwnProperty.call(payload, 'filters')
+      ? sanitizePresetFilters(payload.filters)
+      : existing.filters;
+  if (Object.keys(filters).length === 0) {
+    const error = new Error('Không có điều kiện lọc hợp lệ để lưu.');
+    error.code = 'INVALID_FILTERS';
+    throw error;
+  }
+  const name =
+    Object.prototype.hasOwnProperty.call(payload, 'name')
+      ? sanitizePresetName(payload.name)
+      : existing.name;
+  const now = new Date().toISOString();
+  const preset = {
+    ...existing,
+    name,
+    filters,
+    updatedAt: now,
+  };
+  const nextPresets = rebuildPresetCollection(entry.presets, { upsert: preset });
+  const updatedAt = nextPresets[0]?.updatedAt || now;
+  store.users[userKey] = { presets: nextPresets, updatedAt };
+  setJSONValue(FILTER_PRESETS_KEY, store, { actor, source: 'filter-presets-upsert' });
+  return { preset, presets: nextPresets, updatedAt };
+}
+
+function deleteFilterPresetForUser(username, presetId, { actor = 'system' } = {}) {
+  const id = `${presetId || ''}`.trim();
+  if (!id) {
+    const error = new Error('Thiếu mã bộ lọc cần xoá.');
+    error.code = 'INVALID_ID';
+    throw error;
+  }
+  const { store, userKey, entry } = loadFilterPresetState(username);
+  if (!userKey) {
+    const error = new Error('Thiếu thông tin tài khoản để xoá bộ lọc.');
+    error.code = 'INVALID_USER';
+    throw error;
+  }
+  const existing = entry.presets.find((item) => item.id === id);
+  if (!existing) {
+    const error = new Error('Không tìm thấy bộ lọc đã lưu tương ứng.');
+    error.code = 'NOT_FOUND';
+    throw error;
+  }
+  const nextPresets = rebuildPresetCollection(entry.presets, { removeId: id });
+  if (nextPresets.length === 0) {
+    const nextStore = { ...store.users };
+    delete nextStore[userKey];
+    store.users = nextStore;
+    setJSONValue(FILTER_PRESETS_KEY, store, { actor, source: 'filter-presets-delete' });
+    return { deleted: id, presets: [], updatedAt: null, removed: existing };
+  }
+  const updatedAt = nextPresets[0]?.updatedAt || new Date().toISOString();
+  store.users[userKey] = { presets: nextPresets, updatedAt };
+  setJSONValue(FILTER_PRESETS_KEY, store, { actor, source: 'filter-presets-delete' });
+  return { deleted: id, presets: nextPresets, updatedAt, removed: existing };
 }
 
 function toFiniteNumber(value, fallback) {
@@ -6980,6 +7352,124 @@ app.use(express.json({ limit: '5mb' }));
 
 app.get('/api/health', (req, res) => {
   res.json({ ok: true });
+});
+
+app.get('/api/filter-presets', (req, res) => {
+  const context = getSessionContext(req);
+  if (!context) {
+    res.status(401).json({ ok: false, error: 'Bạn cần đăng nhập để sử dụng bộ lọc đã lưu.' });
+    return;
+  }
+  try {
+    const scope = sanitizeFilterPresetScope(req.query?.scope);
+    const { presets, updatedAt } = listFilterPresetsForUser(context.account.username, { scope });
+    res.json({ ok: true, scope, presets, updatedAt });
+  } catch (err) {
+    console.error('Không thể tải bộ lọc đã lưu', err);
+    res.status(500).json({ ok: false, error: 'Không thể tải bộ lọc đã lưu.' });
+  }
+});
+
+app.post('/api/filter-presets', (req, res) => {
+  const context = getSessionContext(req);
+  if (!context) {
+    res.status(401).json({ ok: false, error: 'Bạn cần đăng nhập để lưu bộ lọc.' });
+    return;
+  }
+  try {
+    const result = createFilterPresetForUser(context.account.username, req.body || {}, {
+      actor: context.account.username,
+    });
+    pushAuditLog({
+      actor: context.account.username,
+      action: 'filter.preset.create',
+      detail: `Tạo bộ lọc "${result.preset.name}" (scope ${result.preset.scope})`,
+    });
+    res.status(201).json({ ok: true, preset: result.preset, updatedAt: result.updatedAt });
+  } catch (err) {
+    console.error('Không thể lưu bộ lọc đã lưu', err);
+    if (err?.code === 'INVALID_FILTERS') {
+      res.status(400).json({ ok: false, error: 'Không có điều kiện lọc hợp lệ để lưu.' });
+      return;
+    }
+    if (err?.code === 'INVALID_USER') {
+      res.status(400).json({ ok: false, error: 'Thiếu thông tin tài khoản để lưu bộ lọc.' });
+      return;
+    }
+    res.status(500).json({ ok: false, error: 'Không thể lưu bộ lọc đã lưu.' });
+  }
+});
+
+app.put('/api/filter-presets/:presetId', (req, res) => {
+  const context = getSessionContext(req);
+  if (!context) {
+    res.status(401).json({ ok: false, error: 'Bạn cần đăng nhập để cập nhật bộ lọc.' });
+    return;
+  }
+  try {
+    const result = updateFilterPresetForUser(context.account.username, req.params.presetId, req.body || {}, {
+      actor: context.account.username,
+    });
+    pushAuditLog({
+      actor: context.account.username,
+      action: 'filter.preset.update',
+      detail: `Cập nhật bộ lọc "${result.preset.name}"`,
+    });
+    res.json({ ok: true, preset: result.preset, updatedAt: result.updatedAt });
+  } catch (err) {
+    console.error('Không thể cập nhật bộ lọc đã lưu', err);
+    if (err?.code === 'INVALID_ID') {
+      res.status(400).json({ ok: false, error: 'Thiếu mã bộ lọc cần cập nhật.' });
+      return;
+    }
+    if (err?.code === 'INVALID_FILTERS') {
+      res.status(400).json({ ok: false, error: 'Không có điều kiện lọc hợp lệ để lưu.' });
+      return;
+    }
+    if (err?.code === 'NOT_FOUND') {
+      res.status(404).json({ ok: false, error: 'Không tìm thấy bộ lọc đã lưu tương ứng.' });
+      return;
+    }
+    if (err?.code === 'INVALID_USER') {
+      res.status(400).json({ ok: false, error: 'Thiếu thông tin tài khoản để cập nhật bộ lọc.' });
+      return;
+    }
+    res.status(500).json({ ok: false, error: 'Không thể cập nhật bộ lọc đã lưu.' });
+  }
+});
+
+app.delete('/api/filter-presets/:presetId', (req, res) => {
+  const context = getSessionContext(req);
+  if (!context) {
+    res.status(401).json({ ok: false, error: 'Bạn cần đăng nhập để xoá bộ lọc.' });
+    return;
+  }
+  try {
+    const result = deleteFilterPresetForUser(context.account.username, req.params.presetId, {
+      actor: context.account.username,
+    });
+    pushAuditLog({
+      actor: context.account.username,
+      action: 'filter.preset.delete',
+      detail: `Xoá bộ lọc "${result.removed?.name || req.params.presetId}"`,
+    });
+    res.json({ ok: true, deleted: result.deleted, updatedAt: result.updatedAt });
+  } catch (err) {
+    console.error('Không thể xoá bộ lọc đã lưu', err);
+    if (err?.code === 'INVALID_ID') {
+      res.status(400).json({ ok: false, error: 'Thiếu mã bộ lọc cần xoá.' });
+      return;
+    }
+    if (err?.code === 'NOT_FOUND') {
+      res.status(404).json({ ok: false, error: 'Không tìm thấy bộ lọc đã lưu tương ứng.' });
+      return;
+    }
+    if (err?.code === 'INVALID_USER') {
+      res.status(400).json({ ok: false, error: 'Thiếu thông tin tài khoản để xoá bộ lọc.' });
+      return;
+    }
+    res.status(500).json({ ok: false, error: 'Không thể xoá bộ lọc đã lưu.' });
+  }
 });
 
 app.get('/api/data-health/summary', (req, res) => {
