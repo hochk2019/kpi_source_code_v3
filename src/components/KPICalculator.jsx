@@ -13,6 +13,7 @@ const ExportAuditReport = React.lazy(() => import('./ExportAuditReport.jsx'));
 const HQAgencyManager = React.lazy(() => import('./HQAgencyManager.jsx'));
 const AiAssistant = React.lazy(() => import('./AiAssistant.jsx'));
 const DataHealthDashboard = React.lazy(() => import('./DataHealthDashboard.jsx'));
+const ExportAuditReport = React.lazy(() => import('./ExportAuditReport.jsx'));
 
 const TabPanel = ({ children }) => (
   <Suspense fallback={<div className="p-4 text-sm text-gray-500">Đang tải nội dung...</div>}>
@@ -44,6 +45,7 @@ const KPICalculator = ({ auth, activeTab = 'reports', onTabChange }) => {
     }
     if (canViewAudit) {
       base.add('audit');
+      base.add('export-audit');
     }
     return base;
   }, [canManageAccounts, canUseAi, canViewAudit]);
@@ -116,9 +118,14 @@ const KPICalculator = ({ auth, activeTab = 'reports', onTabChange }) => {
             </TabsTrigger>
           )}
           {canViewAudit && (
-            <TabsTrigger value="audit" data-tooltip="Xem nhật ký thao tác hệ thống">
-              Nhật ký
-            </TabsTrigger>
+            <>
+              <TabsTrigger value="audit" data-tooltip="Xem nhật ký thao tác hệ thống">
+                Nhật ký
+              </TabsTrigger>
+              <TabsTrigger value="export-audit" data-tooltip="Tra cứu lịch sử tải báo cáo Excel">
+                Lịch sử export
+              </TabsTrigger>
+            </>
           )}
         </TabsList>
 
@@ -202,6 +209,14 @@ const KPICalculator = ({ auth, activeTab = 'reports', onTabChange }) => {
                   <ExportAuditReport currentUser={effectiveAuth} />
                 </div>
               </div>
+            </TabPanel>
+          </TabsContent>
+        )}
+
+        {canViewAudit && (
+          <TabsContent value="export-audit">
+            <TabPanel>
+              <ExportAuditReport currentUser={effectiveAuth} />
             </TabPanel>
           </TabsContent>
         )}

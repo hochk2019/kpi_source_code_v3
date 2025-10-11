@@ -3,6 +3,7 @@ import cors from 'cors';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import fs from 'node:fs/promises';
+import https from 'node:https';
 import process from 'node:process';
 import Database from 'better-sqlite3';
 import cron from 'node-cron';
@@ -10,6 +11,11 @@ import sql from 'mssql';
 import bcrypt from 'bcryptjs';
 import crypto from 'node:crypto';
 import { generateReport } from './reportExport.js';
+import { buildDefaultAiProviders } from './aiProviders/index.js';
+import { normalizeSqlUnicodeRecord } from './ecus/sqlUnicode.js';
+import { getSecureSqlCredentials } from './ecus/secureCredentials.js';
+import { deliverAlertNotification, hasAlertTargets } from './alerts/delivery.js';
+import { loadAiHttpsConfig } from './https/aiHttpsConfig.js';
 import { DEFAULT_RULES as SHARED_DEFAULT_RULES } from '../src/shared/defaultRules.js';
 import { getRulesSeed, persistRulesSnapshot, loadRulesSnapshot, listRulesHistory } from './rulesPersistence.js';
 import { deriveCOStatus, parseCoLineCount, setPreferentialCodeConfig } from '../src/shared/co.js';
@@ -252,8 +258,8 @@ const DEFAULT_ECUS_SYNC_CONFIG = {
     "    AND LEFT(UPPER(LTRIM(RTRIM(CAST(h2.TS_XNK_MA_BT AS nvarchar(10))))), 3) NOT IN ('B01', 'B02', 'B03', 'B30')",
     ') AS co_counts',
     'WHERE lp.Ngay_DK >= @from AND lp.Ngay_DK < DATEADD(DAY, 1, @to)',
-    'ORDER BY lp.Ngay_DK, so_tk',
-  ].join('\n'),
+  'ORDER BY lp.Ngay_DK, so_tk',
+].join('\n'),
   columnMap: {
     so_tk: 'so_tk',
     date: 'ngay_dang_ky',
@@ -690,21 +696,13 @@ const DEFAULT_CO_DISCREPANCY_STATE = Object.freeze({
 
 const AI_CACHE_LIMIT = 50;
 
-function createDefaultAiConfig() {
-  const azureEndpoint = (process.env.AZURE_OPENAI_ENDPOINT || '').trim();
-  const azureDeployment = (process.env.AZURE_OPENAI_DEPLOYMENT || 'gpt-4o-mini').trim() || 'gpt-4o-mini';
-  const azureVersion = (process.env.AZURE_OPENAI_API_VERSION || '2024-08-01-preview').trim() || '2024-08-01-preview';
-  const ollamaEndpoint = (process.env.OLLAMA_ENDPOINT || 'http://localhost:11434').trim() || 'http://localhost:11434';
-  const ollamaModel = (process.env.OLLAMA_MODEL || 'llama3.1:8b').trim() || 'llama3.1:8b';
-  const googleEndpoint =
-    (process.env.GOOGLE_AI_STUDIO_ENDPOINT || 'https://generativelanguage.googleapis.com').trim() ||
-    'https://generativelanguage.googleapis.com';
-  const googleModel = (process.env.GOOGLE_AI_STUDIO_MODEL || 'gemini-1.5-flash').trim() || 'gemini-1.5-flash';
+function createDefaultAiConfig(env = process.env) {
+  const { providers, defaultProviderId, fallbackProviderId } = buildDefaultAiProviders(env);
   return {
     version: 1,
     enabled: true,
-    defaultProvider: 'azure-openai',
-    fallbackProvider: 'ollama-local',
+    defaultProvider: defaultProviderId,
+    fallbackProvider: fallbackProviderId,
     temperature: 0.2,
     maxTokens: 800,
     maxInputLength: 4000,
@@ -716,63 +714,7 @@ function createDefaultAiConfig() {
       ttlMinutes: 72 * 60,
       maxEntries: AI_CACHE_LIMIT,
     },
-    providers: [
-      {
-        id: 'azure-openai',
-        type: 'azure',
-        label: 'Azure OpenAI GPT-4o mini',
-        endpoint: azureEndpoint,
-        deployment: azureDeployment,
-        apiVersion: azureVersion,
-        apiKeyEnv: 'AZURE_OPENAI_KEY',
-        maxTokens: 4096,
-        temperature: 0.2,
-        enabled: true,
-      },
-      {
-        id: 'ollama-local',
-        type: 'ollama',
-        label: 'Ollama cục bộ (llama3.1:8b)',
-        endpoint: ollamaEndpoint,
-        model: ollamaModel,
-        temperature: 0.1,
-        enabled: false,
-      },
-      {
-        id: 'google-ai-studio',
-        type: 'google-ai-studio',
-        label: 'Google AI Studio (Gemini 1.5 Flash)',
-        endpoint: googleEndpoint,
-        model: googleModel,
-        apiKeyEnv: 'GOOGLE_AI_STUDIO_API_KEY',
-        temperature: 0.3,
-        maxTokens: 1024,
-        enabled: false,
-      },
-      {
-        id: 'openai-gpt4o',
-        type: 'openai',
-        label: 'OpenAI GPT-4o mini',
-        endpoint: 'https://api.openai.com/v1',
-        model: 'gpt-4o-mini',
-        apiKeyEnv: 'OPENAI_API_KEY',
-        temperature: 0.2,
-        maxTokens: 1024,
-        enabled: false,
-      },
-      {
-        id: 'anthropic-claude',
-        type: 'anthropic',
-        label: 'Anthropic Claude 3.5 Sonnet',
-        endpoint: 'https://api.anthropic.com',
-        model: 'claude-3-5-sonnet-20241022',
-        apiKeyEnv: 'ANTHROPIC_API_KEY',
-        apiVersion: '2023-06-01',
-        temperature: 0.2,
-        maxTokens: 1024,
-        enabled: false,
-      },
-    ],
+    providers,
     updatedAt: null,
     updatedBy: null,
   };
@@ -799,6 +741,28 @@ const DEFAULT_DUPLICATE_POLICY_STATE = Object.freeze({
   lastEvaluatedAt: null,
   notifiedGroups: {},
   lockedSources: {},
+});
+
+const FILTER_PRESETS_KEY = 'filter_presets_v1';
+const FILTER_PRESET_VERSION = 1;
+const FILTER_PRESET_SCOPE_DEFAULT = 'data-importer';
+const KNOWN_FILTER_PRESET_SCOPES = new Set([FILTER_PRESET_SCOPE_DEFAULT, 'report-viewer']);
+const FILTER_PRESET_MAX_PER_SCOPE = 20;
+
+const EXPORT_AUDIT_DEFAULT_LIMIT = 50;
+const EXPORT_AUDIT_MAX_LIMIT = 200;
+const EXPORT_AUDIT_MAX_RANGE_DAYS = 60;
+
+const ECUS_MONITOR_HISTORY_KEY = 'ecus_monitor_history_v1';
+const DEFAULT_ECUS_MONITOR_HISTORY = Object.freeze({
+  version: 1,
+  entries: [],
+  updatedAt: null,
+});
+
+const DEFAULT_ECUS_MONITOR_HISTORY_OPTIONS = Object.freeze({
+  maxEntries: 7 * 24 * 4, // 7 ngày với chu kỳ 15 phút
+  dedupeMinutes: 5,
 });
 
 const DEFAULT_STORAGE = {
@@ -860,6 +824,8 @@ const DEFAULT_STORAGE = {
   duplicate_policy_config_v1: JSON.stringify(DEFAULT_DUPLICATE_POLICY_CONFIG),
   duplicate_policy_state_v1: JSON.stringify(DEFAULT_DUPLICATE_POLICY_STATE),
   co_discrepancy_state_v1: JSON.stringify(DEFAULT_CO_DISCREPANCY_STATE),
+  filter_presets_v1: JSON.stringify({ version: 1, users: {} }),
+  [ECUS_MONITOR_HISTORY_KEY]: JSON.stringify(DEFAULT_ECUS_MONITOR_HISTORY),
   [AI_CONFIG_KEY]: JSON.stringify(DEFAULT_AI_CONFIG),
   [AI_CACHE_KEY]: JSON.stringify(DEFAULT_AI_USAGE_CACHE),
 };
@@ -893,6 +859,27 @@ export async function initializeDatabase({ dbFile = DB_FILE } = {}) {
   database.exec(
     'CREATE INDEX IF NOT EXISTS idx_auth_sessions_username ON auth_sessions(username)'
   );
+  database.exec(
+    'CREATE TABLE IF NOT EXISTS export_audit (\n' +
+      '  id INTEGER PRIMARY KEY AUTOINCREMENT,\n' +
+      '  created_at TEXT NOT NULL,\n' +
+      '  issued_at TEXT,\n' +
+      '  username TEXT NOT NULL,\n' +
+      '  display_name TEXT,\n' +
+      '  role TEXT,\n' +
+      '  report_kind TEXT NOT NULL,\n' +
+      '  filename TEXT,\n' +
+      '  signature TEXT,\n' +
+      '  short_signature TEXT,\n' +
+      '  filter_summary TEXT,\n' +
+      '  filters TEXT,\n' +
+      '  ip_address TEXT,\n' +
+      '  request_id TEXT,\n' +
+      '  user_agent TEXT\n' +
+      ')'
+  );
+  database.exec('CREATE INDEX IF NOT EXISTS idx_export_audit_created_at ON export_audit(created_at)');
+  database.exec('CREATE INDEX IF NOT EXISTS idx_export_audit_username ON export_audit(username)');
 
   let seedData = { ...DEFAULT_STORAGE };
   try {
@@ -1476,6 +1463,20 @@ function requireAuditView(req, res) {
   return { context, denied: false };
 }
 
+function requireExportAuditView(req, res) {
+  const context = getSessionContext(req);
+  if (!context) {
+    res.status(401).json({ ok: false, error: 'Bạn cần đăng nhập để xem lịch sử export.' });
+    return { context: null, denied: true };
+  }
+  const account = context.account || {};
+  if (!(account.permissions?.auditView || account.permissions?.accountManage)) {
+    res.status(403).json({ ok: false, error: 'Tài khoản hiện không có quyền xem lịch sử export.' });
+    return { context, denied: true };
+  }
+  return { context, denied: false };
+}
+
 function requireAiAssistUsage(req, res) {
   const context = getSessionContext(req);
   if (!context) {
@@ -1744,6 +1745,371 @@ function cloneJson(value) {
     return value;
   }
   return JSON.parse(JSON.stringify(value));
+}
+
+function sanitizePresetTimestamp(value, fallbackIso) {
+  const fallback = fallbackIso || new Date().toISOString();
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return value.toISOString();
+  }
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    const date = new Date(value);
+    if (!Number.isNaN(date.getTime())) {
+      return date.toISOString();
+    }
+  }
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (trimmed) {
+      const date = new Date(trimmed);
+      if (!Number.isNaN(date.getTime())) {
+        return date.toISOString();
+      }
+    }
+  }
+  return fallback;
+}
+
+function sanitizePresetName(name) {
+  const fallback = 'Bộ lọc đã lưu';
+  if (typeof name !== 'string') {
+    return fallback;
+  }
+  const normalized = name.trim().replace(/\s+/gu, ' ');
+  if (!normalized) {
+    return fallback;
+  }
+  return normalized.slice(0, 80);
+}
+
+function sanitizeFilterPresetScope(scope) {
+  if (typeof scope !== 'string') {
+    return FILTER_PRESET_SCOPE_DEFAULT;
+  }
+  const normalized = scope.trim().toLowerCase();
+  if (!normalized) {
+    return FILTER_PRESET_SCOPE_DEFAULT;
+  }
+  if (KNOWN_FILTER_PRESET_SCOPES.has(normalized)) {
+    return normalized;
+  }
+  if (/^[a-z0-9._-]{1,40}$/iu.test(normalized)) {
+    return normalized;
+  }
+  return FILTER_PRESET_SCOPE_DEFAULT;
+}
+
+function sanitizePresetDateValue(value) {
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return '';
+    }
+    if (/^\d{4}-\d{2}-\d{2}$/u.test(trimmed)) {
+      return trimmed;
+    }
+    if (/^\d{2}\/\d{2}\/\d{4}$/u.test(trimmed)) {
+      return trimmed;
+    }
+    return trimmed.slice(0, 32);
+  }
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    const date = new Date(value);
+    if (!Number.isNaN(date.getTime())) {
+      const iso = date.toISOString().slice(0, 10);
+      return iso;
+    }
+  }
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return value.toISOString().slice(0, 10);
+  }
+  return '';
+}
+
+function sanitizePresetFilters(input) {
+  if (!input || typeof input !== 'object') {
+    return {};
+  }
+  const result = {};
+  if (typeof input.query === 'string' && input.query.trim()) {
+    result.query = input.query.trim().slice(0, 160);
+  }
+  if (input.range && typeof input.range === 'object') {
+    const from = sanitizePresetDateValue(input.range.from);
+    const to = sanitizePresetDateValue(input.range.to);
+    if (from || to) {
+      result.range = { from, to };
+    }
+  }
+  if (typeof input.datePreset === 'string' && input.datePreset.trim()) {
+    result.datePreset = input.datePreset.trim().slice(0, 40);
+  }
+  if (typeof input.coFilterMode === 'string' && input.coFilterMode.trim()) {
+    result.coFilterMode = input.coFilterMode.trim().slice(0, 40);
+  }
+  const coFilterMinRaw = input.coFilterMin;
+  if (coFilterMinRaw !== undefined && coFilterMinRaw !== null) {
+    const parsed = Number(coFilterMinRaw);
+    if (Number.isFinite(parsed)) {
+      result.coFilterMin = Math.max(0, Math.round(parsed));
+    }
+  }
+  if (typeof input.filterNoStaff === 'boolean') {
+    result.filterNoStaff = input.filterNoStaff;
+  }
+  if (typeof input.filterNoTeam === 'boolean') {
+    result.filterNoTeam = input.filterNoTeam;
+  }
+  if (typeof input.filterDuplicate11 === 'boolean') {
+    result.filterDuplicate11 = input.filterDuplicate11;
+  }
+  if (typeof input.team === 'string' && input.team.trim()) {
+    result.team = input.team.trim().slice(0, 80);
+  }
+  if (Array.isArray(input.teams)) {
+    const teams = Array.from(
+      new Set(
+        input.teams
+          .map((entry) => (typeof entry === 'string' ? entry.trim() : ''))
+          .filter((entry) => entry)
+      )
+    ).slice(0, 10);
+    if (teams.length > 0) {
+      result.teams = teams;
+    }
+  }
+  return result;
+}
+
+function sanitizeFilterPresetRecord(entry, { now } = {}) {
+  if (!entry || typeof entry !== 'object') {
+    return null;
+  }
+  const current = now || new Date().toISOString();
+  const id = typeof entry.id === 'string' && entry.id.trim() ? entry.id.trim() : crypto.randomUUID();
+  const scope = sanitizeFilterPresetScope(entry.scope);
+  const filters = sanitizePresetFilters(entry.filters);
+  if (Object.keys(filters).length === 0) {
+    return null;
+  }
+  const name = sanitizePresetName(entry.name);
+  const createdAt = sanitizePresetTimestamp(entry.createdAt, current);
+  const updatedAtBase = sanitizePresetTimestamp(entry.updatedAt, createdAt);
+  const updatedAt = updatedAtBase < createdAt ? createdAt : updatedAtBase;
+  return { id, scope, name, filters, createdAt, updatedAt };
+}
+
+function getPresetTime(value) {
+  if (!value) {
+    return 0;
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return 0;
+  }
+  return date.getTime();
+}
+
+function sortPresetsByUpdatedAt(list = []) {
+  return [...list].sort((a = {}, b = {}) => getPresetTime(b.updatedAt || b.createdAt) - getPresetTime(a.updatedAt || a.createdAt));
+}
+
+function rebuildPresetCollection(existing = [], options = {}) {
+  const { upsert = null, removeId = null } = options || {};
+  const groups = new Map();
+  for (const item of existing) {
+    if (!item || typeof item !== 'object') {
+      continue;
+    }
+    if (removeId && item.id === removeId) {
+      continue;
+    }
+    const scopeKey = item.scope || FILTER_PRESET_SCOPE_DEFAULT;
+    if (upsert && upsert.id === item.id) {
+      continue;
+    }
+    const list = groups.get(scopeKey) || [];
+    list.push(item);
+    groups.set(scopeKey, list);
+  }
+  if (upsert) {
+    const scopeKey = upsert.scope || FILTER_PRESET_SCOPE_DEFAULT;
+    const list = groups.get(scopeKey) || [];
+    list.unshift(upsert);
+    groups.set(scopeKey, list);
+  }
+  const combined = [];
+  for (const list of groups.values()) {
+    const sorted = sortPresetsByUpdatedAt(list);
+    combined.push(...sorted.slice(0, FILTER_PRESET_MAX_PER_SCOPE));
+  }
+  return sortPresetsByUpdatedAt(combined);
+}
+
+function normalizeFilterPresetList(list = []) {
+  if (!Array.isArray(list)) {
+    return [];
+  }
+  const normalized = [];
+  const seen = new Set();
+  const now = new Date().toISOString();
+  for (const entry of list) {
+    const preset = sanitizeFilterPresetRecord(entry, { now });
+    if (!preset) {
+      continue;
+    }
+    const key = `${preset.scope}:${preset.id}`;
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    normalized.push(preset);
+  }
+  return rebuildPresetCollection(normalized);
+}
+
+function loadFilterPresetState(username) {
+  const storeRaw =
+    getJSONValue(FILTER_PRESETS_KEY, { version: FILTER_PRESET_VERSION, users: {} }) || {};
+  const store = {
+    version: FILTER_PRESET_VERSION,
+    users: {},
+  };
+  if (storeRaw && typeof storeRaw === 'object') {
+    const users = storeRaw.users && typeof storeRaw.users === 'object' ? storeRaw.users : {};
+    store.users = { ...users };
+  }
+  const userKey = `${username || ''}`.trim().toLowerCase();
+  if (!userKey) {
+    return { store, userKey: '', entry: { presets: [], updatedAt: null } };
+  }
+  const entry = store.users[userKey];
+  const presets = normalizeFilterPresetList(entry?.presets || []);
+  const updatedAt = presets[0]?.updatedAt
+    || (entry?.updatedAt ? sanitizePresetTimestamp(entry.updatedAt) : null);
+  return { store, userKey, entry: { presets, updatedAt } };
+}
+
+function listFilterPresetsForUser(username, { scope } = {}) {
+  const normalizedScope = scope ? sanitizeFilterPresetScope(scope) : null;
+  const { entry } = loadFilterPresetState(username);
+  const list = normalizedScope
+    ? entry.presets.filter((item) => item.scope === normalizedScope)
+    : entry.presets;
+  return {
+    presets: sortPresetsByUpdatedAt(list),
+    updatedAt: entry.updatedAt || null,
+  };
+}
+
+function createFilterPresetForUser(username, payload = {}, { actor = 'system' } = {}) {
+  const { store, userKey, entry } = loadFilterPresetState(username);
+  if (!userKey) {
+    const error = new Error('Thiếu thông tin tài khoản để lưu bộ lọc.');
+    error.code = 'INVALID_USER';
+    throw error;
+  }
+  const filters = sanitizePresetFilters(payload.filters);
+  if (Object.keys(filters).length === 0) {
+    const error = new Error('Không có điều kiện lọc hợp lệ để lưu.');
+    error.code = 'INVALID_FILTERS';
+    throw error;
+  }
+  const scope = sanitizeFilterPresetScope(payload.scope);
+  const name = sanitizePresetName(payload.name);
+  const now = new Date().toISOString();
+  const preset = {
+    id: crypto.randomUUID(),
+    scope,
+    name,
+    filters,
+    createdAt: now,
+    updatedAt: now,
+  };
+  const nextPresets = rebuildPresetCollection(entry.presets, { upsert: preset });
+  const updatedAt = nextPresets[0]?.updatedAt || now;
+  store.users[userKey] = { presets: nextPresets, updatedAt };
+  setJSONValue(FILTER_PRESETS_KEY, store, { actor, source: 'filter-presets-upsert' });
+  return { preset, presets: nextPresets, updatedAt };
+}
+
+function updateFilterPresetForUser(username, presetId, payload = {}, { actor = 'system' } = {}) {
+  const id = `${presetId || ''}`.trim();
+  if (!id) {
+    const error = new Error('Thiếu mã bộ lọc cần cập nhật.');
+    error.code = 'INVALID_ID';
+    throw error;
+  }
+  const { store, userKey, entry } = loadFilterPresetState(username);
+  if (!userKey) {
+    const error = new Error('Thiếu thông tin tài khoản để cập nhật bộ lọc.');
+    error.code = 'INVALID_USER';
+    throw error;
+  }
+  const existing = entry.presets.find((item) => item.id === id);
+  if (!existing) {
+    const error = new Error('Không tìm thấy bộ lọc đã lưu tương ứng.');
+    error.code = 'NOT_FOUND';
+    throw error;
+  }
+  const filters =
+    Object.prototype.hasOwnProperty.call(payload, 'filters')
+      ? sanitizePresetFilters(payload.filters)
+      : existing.filters;
+  if (Object.keys(filters).length === 0) {
+    const error = new Error('Không có điều kiện lọc hợp lệ để lưu.');
+    error.code = 'INVALID_FILTERS';
+    throw error;
+  }
+  const name =
+    Object.prototype.hasOwnProperty.call(payload, 'name')
+      ? sanitizePresetName(payload.name)
+      : existing.name;
+  const now = new Date().toISOString();
+  const preset = {
+    ...existing,
+    name,
+    filters,
+    updatedAt: now,
+  };
+  const nextPresets = rebuildPresetCollection(entry.presets, { upsert: preset });
+  const updatedAt = nextPresets[0]?.updatedAt || now;
+  store.users[userKey] = { presets: nextPresets, updatedAt };
+  setJSONValue(FILTER_PRESETS_KEY, store, { actor, source: 'filter-presets-upsert' });
+  return { preset, presets: nextPresets, updatedAt };
+}
+
+function deleteFilterPresetForUser(username, presetId, { actor = 'system' } = {}) {
+  const id = `${presetId || ''}`.trim();
+  if (!id) {
+    const error = new Error('Thiếu mã bộ lọc cần xoá.');
+    error.code = 'INVALID_ID';
+    throw error;
+  }
+  const { store, userKey, entry } = loadFilterPresetState(username);
+  if (!userKey) {
+    const error = new Error('Thiếu thông tin tài khoản để xoá bộ lọc.');
+    error.code = 'INVALID_USER';
+    throw error;
+  }
+  const existing = entry.presets.find((item) => item.id === id);
+  if (!existing) {
+    const error = new Error('Không tìm thấy bộ lọc đã lưu tương ứng.');
+    error.code = 'NOT_FOUND';
+    throw error;
+  }
+  const nextPresets = rebuildPresetCollection(entry.presets, { removeId: id });
+  if (nextPresets.length === 0) {
+    const nextStore = { ...store.users };
+    delete nextStore[userKey];
+    store.users = nextStore;
+    setJSONValue(FILTER_PRESETS_KEY, store, { actor, source: 'filter-presets-delete' });
+    return { deleted: id, presets: [], updatedAt: null, removed: existing };
+  }
+  const updatedAt = nextPresets[0]?.updatedAt || new Date().toISOString();
+  store.users[userKey] = { presets: nextPresets, updatedAt };
+  setJSONValue(FILTER_PRESETS_KEY, store, { actor, source: 'filter-presets-delete' });
+  return { deleted: id, presets: nextPresets, updatedAt, removed: existing };
 }
 
 function toFiniteNumber(value, fallback) {
@@ -2333,6 +2699,196 @@ async function callOpenAiChat(provider, payload, { signal } = {}) {
   };
 }
 
+async function callDeepseekChat(provider, payload, { signal } = {}) {
+  const endpoint = `${provider.endpoint || 'https://api.deepseek.com/v1'}`.trim() || 'https://api.deepseek.com/v1';
+  const model = `${provider.model || 'deepseek-chat'}`.trim() || 'deepseek-chat';
+  const apiKeyEnv = `${provider.apiKeyEnv || 'DEEPSEEK_API_KEY'}`.trim() || 'DEEPSEEK_API_KEY';
+  const apiKey = provider.apiKey || process.env[apiKeyEnv];
+  if (!apiKey) {
+    throw new Error(`Thiếu khóa API ${apiKeyEnv} cho DeepSeek.`);
+  }
+  const baseUrl = endpoint.replace(/\/+$/, '');
+  const url = `${baseUrl}/chat/completions`;
+  const body = {
+    model,
+    messages: payload.messages,
+    temperature: toFiniteNumber(
+      payload.temperature,
+      provider.temperature ?? DEFAULT_AI_CONFIG.temperature
+    ),
+    max_tokens: toPositiveInt(
+      payload.maxTokens,
+      provider.maxTokens ?? DEFAULT_AI_CONFIG.maxTokens
+    ),
+  };
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify(body),
+    signal,
+  });
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`DeepSeek trả về ${response.status}: ${truncateText(errorText, 200)}`);
+  }
+  const data = await response.json();
+  const choice = Array.isArray(data?.choices) ? data.choices[0] : null;
+  const message = choice?.message?.content || data?.output || '';
+  return {
+    message,
+    usage: data?.usage ?? null,
+  };
+}
+
+async function callQwenChat(provider, payload, { signal } = {}) {
+  const endpoint = `${provider.endpoint || 'https://dashscope.aliyuncs.com/compatible-mode/v1'}`.trim() ||
+    'https://dashscope.aliyuncs.com/compatible-mode/v1';
+  const model = `${provider.model || 'qwen-plus'}`.trim() || 'qwen-plus';
+  const apiKeyEnv = `${provider.apiKeyEnv || 'QWEN_API_KEY'}`.trim() || 'QWEN_API_KEY';
+  const apiKey = provider.apiKey || process.env[apiKeyEnv];
+  if (!apiKey) {
+    throw new Error(`Thiếu khóa API ${apiKeyEnv} cho Qwen.`);
+  }
+  const baseUrl = endpoint.replace(/\/+$/, '');
+  const url = `${baseUrl}/chat/completions`;
+  const body = {
+    model,
+    messages: payload.messages,
+    temperature: toFiniteNumber(
+      payload.temperature,
+      provider.temperature ?? DEFAULT_AI_CONFIG.temperature
+    ),
+    max_tokens: toPositiveInt(
+      payload.maxTokens,
+      provider.maxTokens ?? DEFAULT_AI_CONFIG.maxTokens
+    ),
+  };
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify(body),
+    signal,
+  });
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Qwen trả về ${response.status}: ${truncateText(errorText, 200)}`);
+  }
+  const data = await response.json();
+  const choice = Array.isArray(data?.choices) ? data.choices[0] : null;
+  const message = choice?.message?.content || data?.output_text || '';
+  return {
+    message,
+    usage: data?.usage ?? null,
+  };
+}
+
+async function callBaiduErnieChat(provider, payload, { signal } = {}) {
+  const endpoint = `${
+    provider.endpoint ||
+    'https://aip.baidubce.com/rpc/2.0/ai_custom/v1/wenxinworkshop/chat/completions'
+  }`.trim() || 'https://aip.baidubce.com/rpc/2.0/ai_custom/v1/wenxinworkshop/chat/completions';
+  const model = `${provider.model || 'ernie-speed-128k'}`.trim() || 'ernie-speed-128k';
+  const apiKeyEnv = `${provider.apiKeyEnv || 'BAIDU_QIANFAN_ACCESS_TOKEN'}`.trim() ||
+    'BAIDU_QIANFAN_ACCESS_TOKEN';
+  const accessToken = provider.apiKey || process.env[apiKeyEnv];
+  if (!accessToken) {
+    throw new Error(`Thiếu access token ${apiKeyEnv} cho Baidu Qianfan.`);
+  }
+  const hasQuery = endpoint.includes('?');
+  const url = `${endpoint}${hasQuery ? '&' : '?'}access_token=${encodeURIComponent(accessToken)}`;
+  const body = {
+    messages: payload.messages,
+    temperature: toFiniteNumber(
+      payload.temperature,
+      provider.temperature ?? DEFAULT_AI_CONFIG.temperature
+    ),
+    max_output_tokens: toPositiveInt(
+      payload.maxTokens,
+      provider.maxTokens ?? DEFAULT_AI_CONFIG.maxTokens
+    ),
+    stream: false,
+    model,
+  };
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+    signal,
+  });
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Baidu Qianfan trả về ${response.status}: ${truncateText(errorText, 200)}`);
+  }
+  const data = await response.json();
+  const message = `${data?.result || data?.output || ''}`.trim();
+  const usage = data?.usage
+    ? {
+        prompt_tokens: toNonNegativeInt(data.usage.prompt_tokens, 0),
+        completion_tokens: toNonNegativeInt(data.usage.completion_tokens, 0),
+        total_tokens: toNonNegativeInt(
+          data.usage.total_tokens,
+          toNonNegativeInt(data.usage.prompt_tokens, 0) + toNonNegativeInt(data.usage.completion_tokens, 0)
+        ),
+      }
+    : null;
+  return {
+    message,
+    usage,
+  };
+}
+
+async function callZaiChat(provider, payload, { signal } = {}) {
+  const endpoint = `${provider.endpoint || 'https://api.z-ai.com/v1'}`.trim() || 'https://api.z-ai.com/v1';
+  const model = `${provider.model || 'zai-chat-pro'}`.trim() || 'zai-chat-pro';
+  const apiKeyEnv = `${provider.apiKeyEnv || 'ZAI_API_KEY'}`.trim() || 'ZAI_API_KEY';
+  const apiKey = provider.apiKey || process.env[apiKeyEnv];
+  if (!apiKey) {
+    throw new Error(`Thiếu khóa API ${apiKeyEnv} cho Z.AI.`);
+  }
+  const baseUrl = endpoint.replace(/\/+$/, '');
+  const url = `${baseUrl}/chat/completions`;
+  const body = {
+    model,
+    messages: payload.messages,
+    temperature: toFiniteNumber(
+      payload.temperature,
+      provider.temperature ?? DEFAULT_AI_CONFIG.temperature
+    ),
+    max_tokens: toPositiveInt(
+      payload.maxTokens,
+      provider.maxTokens ?? DEFAULT_AI_CONFIG.maxTokens
+    ),
+  };
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify(body),
+    signal,
+  });
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Z.AI trả về ${response.status}: ${truncateText(errorText, 200)}`);
+  }
+  const data = await response.json();
+  const choice = Array.isArray(data?.choices) ? data.choices[0] : null;
+  const message = choice?.message?.content || data?.output || '';
+  return {
+    message,
+    usage: data?.usage ?? null,
+  };
+}
+
 async function callOllamaChat(provider, payload, { signal } = {}) {
   const endpoint = `${provider.endpoint || 'http://localhost:11434'}`.trim() || 'http://localhost:11434';
   const model = `${provider.model || 'llama3.1:8b'}`.trim() || 'llama3.1:8b';
@@ -2372,6 +2928,32 @@ async function callOllamaChat(provider, payload, { signal } = {}) {
     },
   };
 }
+
+const DEFAULT_ECUS_MONITOR_ALERT_OPTIONS = Object.freeze({
+  failureThreshold: 3,
+  failureCooldownMinutes: 120,
+  staleThresholdMinutes: 60,
+  staleCooldownMinutes: 60,
+  dashboardUrl: '',
+});
+
+const ECUS_MONITOR_ALERT_STATE_KEY = 'ecus_monitor_alert_state_v1';
+const DEFAULT_ECUS_MONITOR_ALERT_STATE = Object.freeze({
+  consecutiveErrors: 0,
+  lastErrorAt: null,
+  lastErrorMessage: null,
+  lastErrorMeta: null,
+  lastSuccessAt: null,
+  lastFailureAlertAt: null,
+  lastFailureAlertAttemptAt: null,
+  lastStaleAlertAt: null,
+  lastStaleAlertAttemptAt: null,
+  lastAlertAttemptAt: null,
+  lastAlertDeliveredAt: null,
+  lastDeliveredChannels: [],
+  lastAlertSummary: null,
+});
+
 
 function convertMessagesToGooglePayload(messages = []) {
   const normalized = Array.isArray(messages) ? messages : [];
@@ -2582,6 +3164,18 @@ async function dispatchAiChat(provider, payload, { signal } = {}) {
   if (type === 'google-ai-studio' || type === 'google' || type === 'gemini') {
     return callGoogleAiStudioChat(provider, payload, { signal });
   }
+  if (type === 'deepseek' || type === 'deepseek-chat') {
+    return callDeepseekChat(provider, payload, { signal });
+  }
+  if (type === 'qwen' || type === 'dashscope' || type === 'ali-qwen') {
+    return callQwenChat(provider, payload, { signal });
+  }
+  if (type === 'baidu' || type === 'ernie' || type === 'qianfan' || type === 'baidu-ernie') {
+    return callBaiduErnieChat(provider, payload, { signal });
+  }
+  if (type === 'zai' || type === 'z.ai' || type === 'zaichat') {
+    return callZaiChat(provider, payload, { signal });
+  }
   throw new Error(`Nhà cung cấp AI ${provider.id} chưa được hỗ trợ.`);
 }
 
@@ -2737,6 +3331,7 @@ export function resetDatabaseForTests() {
 
   db.exec('DELETE FROM kv_store');
   db.exec('DELETE FROM auth_sessions');
+  db.exec('DELETE FROM export_audit');
   const insertMany = db.transaction((entries) => {
     const stmt = db.prepare(
       'INSERT INTO kv_store (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value'
@@ -2867,6 +3462,44 @@ function toISODate(value, { preferMonthFirst = false } = {}) {
   return '';
 }
 
+function parseDateFilterParam(value, { endOfDay = false } = {}) {
+  const raw = Array.isArray(value) ? value[0] : value;
+  const normalized = normalizeStr(raw);
+  if (!normalized) {
+    return null;
+  }
+  const iso = toISODate(normalized);
+  if (!iso) {
+    return null;
+  }
+  const date = new Date(`${iso}T00:00:00`);
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+  if (endOfDay) {
+    date.setHours(23, 59, 59, 999);
+  }
+  return date.toISOString();
+}
+
+function clampPositiveInt(value, { min = 1, max = Number.MAX_SAFE_INTEGER, fallback = 1 } = {}) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) {
+    return fallback;
+  }
+  const normalized = Math.trunc(numeric);
+  if (Number.isNaN(normalized)) {
+    return fallback;
+  }
+  if (normalized < min) {
+    return min;
+  }
+  if (normalized > max) {
+    return max;
+  }
+  return normalized;
+}
+
 function isExportDecl(soTk, loaiHinh) {
   const number = (soTk ?? '').toString().replace(/\D/g, '');
   if (/^30\d{10}$/.test(number)) return true;
@@ -2890,6 +3523,98 @@ function pushAuditLog(entry) {
   const logs = getJSONValue('audit_logs_v1', []);
   logs.unshift(payload);
   setJSONValue('audit_logs_v1', logs.slice(0, 200));
+  return payload;
+}
+
+function toNullableString(value, { maxLength = 2048, trim = true } = {}) {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  const text = `${value}`;
+  const normalized = trim ? text.trim() : text;
+  if (!normalized) {
+    return null;
+  }
+  const asNfc = normalized.normalize('NFC');
+  if (asNfc.length > maxLength) {
+    return asNfc.slice(0, maxLength);
+  }
+  return asNfc;
+}
+
+function stringifyFiltersForAudit(filters) {
+  if (filters === null || filters === undefined) {
+    return null;
+  }
+  if (typeof filters === 'string') {
+    return toNullableString(filters, { maxLength: 4096, trim: true });
+  }
+  try {
+    const json = JSON.stringify(filters);
+    return toNullableString(json, { maxLength: 4096, trim: true });
+  } catch {
+    return null;
+  }
+}
+
+function recordReportExportAudit(entry = {}) {
+  const createdAt = new Date();
+  const roleValue = entry?.role ? normalizeRoleKey(entry.role) : null;
+  const payload = {
+    created_at: createdAt.toISOString(),
+    issued_at: entry?.issuedAt ? toNullableString(entry.issuedAt, { maxLength: 64 }) : null,
+    username: toNullableString(entry?.username, { maxLength: 128 }) || 'unknown',
+    display_name: toNullableString(entry?.displayName, { maxLength: 256 }),
+    role: toNullableString(roleValue, { maxLength: 64 }),
+    report_kind: toNullableString(entry?.kind, { maxLength: 128 }) || 'unknown',
+    filename: toNullableString(entry?.filename, { maxLength: 512 }),
+    signature: toNullableString(entry?.signature, { maxLength: 128 }),
+    short_signature: toNullableString(entry?.shortSignature, { maxLength: 64 }),
+    filter_summary: toNullableString(entry?.filterSummary, { maxLength: 1024, trim: false }),
+    filters: stringifyFiltersForAudit(entry?.filters),
+    ip_address: toNullableString(entry?.ipAddress, { maxLength: 128 }),
+    request_id: toNullableString(entry?.requestId, { maxLength: 128 }),
+    user_agent: toNullableString(entry?.userAgent, { maxLength: 512, trim: false }),
+  };
+
+  try {
+    db.prepare(
+      `INSERT INTO export_audit (
+        created_at,
+        issued_at,
+        username,
+        display_name,
+        role,
+        report_kind,
+        filename,
+        signature,
+        short_signature,
+        filter_summary,
+        filters,
+        ip_address,
+        request_id,
+        user_agent
+      ) VALUES (
+        @created_at,
+        @issued_at,
+        @username,
+        @display_name,
+        @role,
+        @report_kind,
+        @filename,
+        @signature,
+        @short_signature,
+        @filter_summary,
+        @filters,
+        @ip_address,
+        @request_id,
+        @user_agent
+      )`
+    ).run(payload);
+  } catch (err) {
+    console.error('Không thể ghi lịch sử xuất báo cáo', err);
+  }
+
   return payload;
 }
 
@@ -3765,6 +4490,586 @@ function saveEcusConfig(config, { preservePassword = false } = {}) {
 
   setJSONValue('ecus_sync_config_v1', nextConfig);
   return nextConfig;
+}
+
+
+function getEcusMonitorAlertOptions() {
+  const failureThreshold = Math.max(
+    1,
+    toPositiveInt(
+      process.env.ECUS_ALERT_FAILURE_THRESHOLD || process.env.KPI_ALERT_FAILURE_THRESHOLD,
+      DEFAULT_ECUS_MONITOR_ALERT_OPTIONS.failureThreshold
+    ) || DEFAULT_ECUS_MONITOR_ALERT_OPTIONS.failureThreshold
+  );
+  const failureCooldownMinutes = Math.max(
+    5,
+    toPositiveInt(
+      process.env.ECUS_ALERT_FAILURE_COOLDOWN_MINUTES || process.env.KPI_ALERT_FAILURE_COOLDOWN_MINUTES,
+      DEFAULT_ECUS_MONITOR_ALERT_OPTIONS.failureCooldownMinutes
+    ) || DEFAULT_ECUS_MONITOR_ALERT_OPTIONS.failureCooldownMinutes
+  );
+  const staleThresholdMinutes = Math.max(
+    1,
+    toPositiveInt(
+      process.env.ECUS_ALERT_STALE_THRESHOLD_MINUTES || process.env.KPI_ALERT_STALE_THRESHOLD_MINUTES,
+      DEFAULT_ECUS_MONITOR_ALERT_OPTIONS.staleThresholdMinutes
+    ) || DEFAULT_ECUS_MONITOR_ALERT_OPTIONS.staleThresholdMinutes
+  );
+  const staleCooldownMinutes = Math.max(
+    5,
+    toPositiveInt(
+      process.env.ECUS_ALERT_STALE_COOLDOWN_MINUTES || process.env.KPI_ALERT_STALE_COOLDOWN_MINUTES,
+      DEFAULT_ECUS_MONITOR_ALERT_OPTIONS.staleCooldownMinutes
+    ) || DEFAULT_ECUS_MONITOR_ALERT_OPTIONS.staleCooldownMinutes
+  );
+  const dashboardUrl =
+    (process.env.ECUS_ALERT_DASHBOARD_URL || process.env.KPI_ALERT_DASHBOARD_URL || '').trim() ||
+    DEFAULT_ECUS_MONITOR_ALERT_OPTIONS.dashboardUrl;
+
+  return {
+    failureThreshold,
+    failureCooldownMinutes,
+    staleThresholdMinutes,
+    staleCooldownMinutes,
+    dashboardUrl,
+  };
+}
+
+function normalizeIsoTimestamp(value) {
+  if (!value) {
+    return new Date().toISOString();
+  }
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return value.toISOString();
+  }
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    const date = new Date(value);
+    if (!Number.isNaN(date.getTime())) {
+      return date.toISOString();
+    }
+  }
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return new Date().toISOString();
+    }
+    const parsed = new Date(trimmed);
+    if (!Number.isNaN(parsed.getTime())) {
+      return parsed.toISOString();
+    }
+    return trimmed;
+  }
+  const fallback = new Date(value);
+  if (!Number.isNaN(fallback.getTime())) {
+    return fallback.toISOString();
+  }
+  return new Date().toISOString();
+}
+
+function getEcusMonitorAlertState() {
+  const stored = getJSONValue(ECUS_MONITOR_ALERT_STATE_KEY, DEFAULT_ECUS_MONITOR_ALERT_STATE) || {};
+  const merged = { ...DEFAULT_ECUS_MONITOR_ALERT_STATE, ...stored };
+  merged.consecutiveErrors = toNonNegativeInt(merged.consecutiveErrors, 0);
+  merged.lastDeliveredChannels = Array.isArray(merged.lastDeliveredChannels)
+    ? merged.lastDeliveredChannels
+        .map((channel) => `${channel}`.trim())
+        .filter((channel) => channel.length > 0)
+        .slice(-5)
+    : [];
+  if (merged.lastAlertSummary && typeof merged.lastAlertSummary === 'object') {
+    merged.lastAlertSummary = { ...merged.lastAlertSummary };
+  } else {
+    merged.lastAlertSummary = null;
+  }
+  return merged;
+}
+
+function saveEcusMonitorAlertState(patch, { actor = 'system', source = 'ecus-monitor-alerts' } = {}) {
+  const current = getEcusMonitorAlertState();
+  const next = { ...current, ...(patch || {}) };
+  next.consecutiveErrors = toNonNegativeInt(next.consecutiveErrors, 0);
+  next.lastDeliveredChannels = Array.isArray(next.lastDeliveredChannels)
+    ? next.lastDeliveredChannels
+        .map((channel) => `${channel}`.trim())
+        .filter((channel) => channel.length > 0)
+        .slice(-5)
+    : [];
+  if (next.lastAlertSummary && typeof next.lastAlertSummary === 'object') {
+    next.lastAlertSummary = { ...next.lastAlertSummary };
+  } else {
+    next.lastAlertSummary = null;
+  }
+  setJSONValue(ECUS_MONITOR_ALERT_STATE_KEY, next, { actor, source });
+  return next;
+}
+
+function recordEcusMonitorSyncSuccess({ runAt, actor = 'system' } = {}) {
+  const normalizedAt = normalizeIsoTimestamp(runAt);
+  saveEcusMonitorAlertState(
+    {
+      consecutiveErrors: 0,
+      lastSuccessAt: normalizedAt,
+      lastErrorMessage: null,
+      lastErrorMeta: null,
+    },
+    { actor, source: 'ecus-monitor-success' }
+  );
+}
+
+function recordEcusMonitorSyncFailure(error, { actor = 'system', reason = 'unknown' } = {}) {
+  const state = getEcusMonitorAlertState();
+  const consecutiveErrors = Math.min(999, (state.consecutiveErrors || 0) + 1);
+  const messageSource = error?.message || error || 'Đồng bộ ECUS thất bại';
+  const message = `${messageSource}`.trim().slice(0, 500) || 'Đồng bộ ECUS thất bại';
+  const sanitizedActor = `${actor || 'system'}`.trim().slice(0, 64) || 'system';
+  const sanitizedReason = `${reason || 'unknown'}`.trim().slice(0, 64) || 'unknown';
+  saveEcusMonitorAlertState(
+    {
+      consecutiveErrors,
+      lastErrorAt: normalizeIsoTimestamp(new Date()),
+      lastErrorMessage: message,
+      lastErrorMeta: { actor: sanitizedActor, reason: sanitizedReason },
+    },
+    { actor: sanitizedActor, source: 'ecus-monitor-error' }
+  );
+}
+
+function toNullableNumber(value) {
+  if (value === null || value === undefined || value === '') {
+    return null;
+  }
+  const num = Number(value);
+  if (Number.isFinite(num)) {
+    return num;
+  }
+  return null;
+}
+
+function sanitizeMonitorHistoryEntry(entry) {
+  if (!entry || typeof entry !== 'object') {
+    return null;
+  }
+  const capturedAtRaw = entry.capturedAt || entry.timestamp || entry.generatedAt;
+  const capturedAt = normalizeIsoTimestamp(capturedAtRaw || new Date());
+  const issues = Array.isArray(entry.issues)
+    ? entry.issues
+        .map((issue) => `${issue}`.trim())
+        .filter((issue) => issue.length > 0)
+        .slice(0, 10)
+    : [];
+  const triggeredAlerts = Array.isArray(entry.triggeredAlerts)
+    ? entry.triggeredAlerts
+        .map((trigger) => `${trigger}`.trim())
+        .filter((trigger) => trigger.length > 0)
+        .slice(0, 5)
+    : [];
+
+  return {
+    version: 1,
+    capturedAt,
+    severity: `${entry.severity || 'normal'}`.trim() || 'normal',
+    syncStatus: entry.syncStatus ? `${entry.syncStatus}`.trim() : null,
+    staleMinutes: toNullableNumber(entry.staleMinutes),
+    rowsFetched: toNullableNumber(entry.rowsFetched),
+    rowsInserted: toNullableNumber(entry.rowsInserted),
+    rowsUpdated: toNullableNumber(entry.rowsUpdated),
+    rowsSkipped: toNullableNumber(entry.rowsSkipped),
+    totalStored: toNullableNumber(entry.totalStored),
+    durationMs: toNullableNumber(entry.durationMs),
+    runAt: entry.runAt ? normalizeIsoTimestamp(entry.runAt) : null,
+    consecutiveErrors: toNonNegativeInt(entry.consecutiveErrors, 0),
+    lastErrorMessage: entry.lastErrorMessage ? `${entry.lastErrorMessage}`.trim().slice(0, 500) : null,
+    lastSuccessAt: entry.lastSuccessAt ? normalizeIsoTimestamp(entry.lastSuccessAt) : null,
+    lastFailureAlertAt: entry.lastFailureAlertAt ? normalizeIsoTimestamp(entry.lastFailureAlertAt) : null,
+    lastStaleAlertAt: entry.lastStaleAlertAt ? normalizeIsoTimestamp(entry.lastStaleAlertAt) : null,
+    lastAlertDeliveredAt: entry.lastAlertDeliveredAt ? normalizeIsoTimestamp(entry.lastAlertDeliveredAt) : null,
+    databaseState: entry.databaseState ? `${entry.databaseState}`.trim().slice(0, 120) : null,
+    databaseLatencyMs: toNullableNumber(entry.databaseLatencyMs),
+    issues,
+    triggeredAlerts,
+    actor: entry.actor ? `${entry.actor}`.trim().slice(0, 80) : null,
+  };
+}
+
+function getEcusMonitorHistory() {
+  const stored = getJSONValue(ECUS_MONITOR_HISTORY_KEY, DEFAULT_ECUS_MONITOR_HISTORY) || {};
+  const entries = Array.isArray(stored.entries) ? stored.entries : [];
+  return {
+    version: 1,
+    entries: entries
+      .map((entry) => sanitizeMonitorHistoryEntry(entry))
+      .filter((entry) => entry !== null),
+    updatedAt: stored.updatedAt ? normalizeIsoTimestamp(stored.updatedAt) : null,
+  };
+}
+
+function saveEcusMonitorHistory(state, { actor = 'system', source = 'ecus-monitor-history' } = {}) {
+  const payload = {
+    version: 1,
+    entries: Array.isArray(state.entries) ? state.entries.slice(0) : [],
+    updatedAt: state.updatedAt ? normalizeIsoTimestamp(state.updatedAt) : new Date().toISOString(),
+  };
+  setJSONValue(ECUS_MONITOR_HISTORY_KEY, payload, { actor, source });
+  return payload;
+}
+
+function clearEcusMonitorHistory({ actor = 'system', source = 'ecus-monitor-history-reset' } = {}) {
+  return saveEcusMonitorHistory(
+    {
+      version: 1,
+      entries: [],
+      updatedAt: new Date().toISOString(),
+    },
+    { actor, source }
+  );
+}
+
+function appendEcusMonitorHistory(snapshot, { actor = 'system', source = 'ecus-monitor-history' } = {}) {
+  if (!snapshot || typeof snapshot !== 'object') {
+    return null;
+  }
+  const history = getEcusMonitorHistory();
+  const options = DEFAULT_ECUS_MONITOR_HISTORY_OPTIONS;
+  const maxEntries = Math.max(1, toPositiveInt(options.maxEntries, 7 * 24 * 4) || 7 * 24 * 4);
+  const dedupeMinutes = Math.max(0, toPositiveInt(options.dedupeMinutes, 5) || 0);
+
+  const alertState = snapshot.alertState || {};
+  const syncState = snapshot.sync || {};
+  const database = snapshot.database || {};
+  const entry = sanitizeMonitorHistoryEntry({
+    capturedAt: snapshot.generatedAt || new Date().toISOString(),
+    severity: snapshot.severity || 'normal',
+    syncStatus: syncState.lastStatus || null,
+    staleMinutes: syncState.staleMinutes,
+    rowsFetched: syncState.rowsFetched ?? syncState.lastSummary?.rowsFetched,
+    rowsInserted: syncState.rowsInserted ?? syncState.lastSummary?.rowsInserted,
+    rowsUpdated: syncState.rowsUpdated ?? syncState.lastSummary?.rowsUpdated,
+    rowsSkipped: syncState.rowsSkipped ?? syncState.lastSummary?.rowsSkipped,
+    totalStored: syncState.totalStored ?? syncState.lastSummary?.totalStored,
+    runAt: syncState.lastRunAt || null,
+    durationMs: syncState.durationMs ?? syncState.lastSummary?.durationMs,
+    consecutiveErrors: alertState.consecutiveErrors,
+    lastErrorMessage: alertState.lastErrorMessage,
+    lastSuccessAt: alertState.lastSuccessAt,
+    lastFailureAlertAt: alertState.lastFailureAlertAt,
+    lastStaleAlertAt: alertState.lastStaleAlertAt,
+    lastAlertDeliveredAt: alertState.lastAlertDeliveredAt,
+    databaseState: database.state || (database.ok === false ? 'error' : 'ok'),
+    databaseLatencyMs: database.latencyMs ?? database.durationMs,
+    issues: snapshot.issues || [],
+    triggeredAlerts: snapshot.alertDispatch?.triggered || [],
+    actor,
+  });
+
+  if (!entry) {
+    return null;
+  }
+
+  const entries = Array.isArray(history.entries) ? history.entries.slice(0) : [];
+  const dedupeMs = dedupeMinutes * 60000;
+  const lastEntry = entries[entries.length - 1] || null;
+  if (lastEntry && dedupeMs > 0) {
+    const lastTime = Date.parse(lastEntry.capturedAt);
+    const currentTime = Date.parse(entry.capturedAt);
+    if (Number.isFinite(lastTime) && Number.isFinite(currentTime) && currentTime - lastTime <= dedupeMs) {
+      const comparableKeys = ['severity', 'syncStatus', 'staleMinutes', 'consecutiveErrors'];
+      const isEquivalent = comparableKeys.every((key) => {
+        const previousValue = lastEntry[key] ?? null;
+        const currentValue = entry[key] ?? null;
+        return previousValue === currentValue;
+      });
+      if (isEquivalent) {
+        entries[entries.length - 1] = { ...entry };
+      } else {
+        entries.push(entry);
+      }
+    } else {
+      entries.push(entry);
+    }
+  } else {
+    entries.push(entry);
+  }
+
+  const limitedEntries = entries.slice(-maxEntries);
+  const saved = saveEcusMonitorHistory(
+    {
+      version: 1,
+      entries: limitedEntries,
+      updatedAt: entry.capturedAt,
+    },
+    { actor, source }
+  );
+
+  return {
+    entry,
+    totalEntries: saved.entries.length,
+  };
+}
+
+function summarizeMonitorHistory(entries, { windowMinutes, staleThresholdMinutes } = {}) {
+  const now = Date.now();
+  const windowMs = Number.isFinite(windowMinutes) ? windowMinutes * 60000 : null;
+  const cutoff = windowMs ? now - windowMs : null;
+  const filtered = Array.isArray(entries)
+    ? entries.filter((entry) => {
+        if (!entry || typeof entry !== 'object') return false;
+        const ts = Date.parse(entry.capturedAt);
+        if (!Number.isFinite(ts)) {
+          return false;
+        }
+        if (cutoff !== null && ts < cutoff) {
+          return false;
+        }
+        return true;
+      })
+    : [];
+
+  if (filtered.length === 0) {
+    return {
+      from: cutoff ? new Date(cutoff).toISOString() : null,
+      to: new Date(now).toISOString(),
+      sampleCount: 0,
+      successCount: 0,
+      warningCount: 0,
+      errorCount: 0,
+      averageStaleMinutes: null,
+      maxStaleMinutes: null,
+      minStaleMinutes: null,
+      staleBreaches: 0,
+      consecutiveErrorMax: 0,
+      lastSuccessAt: null,
+      lastWarningAt: null,
+      lastErrorAt: null,
+    };
+  }
+
+  let successCount = 0;
+  let warningCount = 0;
+  let errorCount = 0;
+  let staleSum = 0;
+  let staleSamples = 0;
+  let maxStale = null;
+  let minStale = null;
+  let staleBreaches = 0;
+  let consecutiveErrorMax = 0;
+  let currentConsecutiveError = 0;
+  let lastSuccessAt = null;
+  let lastWarningAt = null;
+  let lastErrorAt = null;
+
+  const normalizedThreshold = Number.isFinite(staleThresholdMinutes)
+    ? Math.max(0, staleThresholdMinutes)
+    : DEFAULT_ECUS_MONITOR_ALERT_OPTIONS.staleThresholdMinutes;
+
+  for (const entry of filtered) {
+    const severity = `${entry.severity || ''}`.toLowerCase();
+    const status = `${entry.syncStatus || ''}`.toLowerCase();
+    const timestamp = Date.parse(entry.capturedAt);
+    if (status.startsWith('error') || severity === 'critical') {
+      errorCount += 1;
+      currentConsecutiveError += 1;
+      if (!lastErrorAt || timestamp > Date.parse(lastErrorAt)) {
+        lastErrorAt = entry.runAt || entry.capturedAt;
+      }
+    } else if (severity === 'warning' || status.includes('warning')) {
+      warningCount += 1;
+      currentConsecutiveError = 0;
+      if (!lastWarningAt || timestamp > Date.parse(lastWarningAt)) {
+        lastWarningAt = entry.runAt || entry.capturedAt;
+      }
+    } else {
+      successCount += 1;
+      currentConsecutiveError = 0;
+      if (!lastSuccessAt || timestamp > Date.parse(lastSuccessAt)) {
+        lastSuccessAt = entry.runAt || entry.capturedAt;
+      }
+    }
+    if (currentConsecutiveError > consecutiveErrorMax) {
+      consecutiveErrorMax = currentConsecutiveError;
+    }
+
+    if (entry.staleMinutes !== null && entry.staleMinutes !== undefined) {
+      const staleValue = Number(entry.staleMinutes);
+      if (Number.isFinite(staleValue)) {
+        staleSum += staleValue;
+        staleSamples += 1;
+        maxStale = maxStale === null ? staleValue : Math.max(maxStale, staleValue);
+        minStale = minStale === null ? staleValue : Math.min(minStale, staleValue);
+        if (staleValue >= normalizedThreshold) {
+          staleBreaches += 1;
+        }
+      }
+    }
+  }
+
+  const averageStaleMinutes = staleSamples > 0 ? Number((staleSum / staleSamples).toFixed(2)) : null;
+
+  return {
+    from: cutoff ? new Date(cutoff).toISOString() : null,
+    to: new Date(now).toISOString(),
+    sampleCount: filtered.length,
+    successCount,
+    warningCount,
+    errorCount,
+    averageStaleMinutes,
+    maxStaleMinutes: maxStale,
+    minStaleMinutes: minStale,
+    staleBreaches,
+    consecutiveErrorMax,
+    lastSuccessAt,
+    lastWarningAt,
+    lastErrorAt,
+  };
+}
+
+function buildEcusMonitorMetrics({ history } = {}) {
+  const effectiveHistory = history || getEcusMonitorHistory();
+  const entries = Array.isArray(effectiveHistory.entries) ? effectiveHistory.entries : [];
+  const thresholds = getEcusMonitorAlertOptions();
+  const windowConfigs = [
+    { key: '24h', minutes: 24 * 60 },
+    { key: '7d', minutes: 7 * 24 * 60 },
+    { key: '30d', minutes: 30 * 24 * 60 },
+  ];
+  const windows = {};
+  for (const config of windowConfigs) {
+    windows[config.key] = summarizeMonitorHistory(entries, {
+      windowMinutes: config.minutes,
+      staleThresholdMinutes: thresholds.staleThresholdMinutes,
+    });
+  }
+
+  windows.all = summarizeMonitorHistory(entries, {
+    windowMinutes: null,
+    staleThresholdMinutes: thresholds.staleThresholdMinutes,
+  });
+
+  const latest = entries.length ? entries[entries.length - 1] : null;
+
+  return {
+    generatedAt: new Date().toISOString(),
+    totals: {
+      entries: entries.length,
+    },
+    latest,
+    windows,
+    thresholds,
+  };
+}
+
+function buildEcusMonitorSeries(entries, { thresholds } = {}) {
+  const list = Array.isArray(entries) ? entries : [];
+  const latencySeries = [];
+  const statusSeries = [];
+  const consecutiveSeries = [];
+  const rowsInsertedSeries = [];
+  const rowsUpdatedSeries = [];
+  const rowsFetchedSeries = [];
+
+  const statusMap = {
+    success: 1,
+    normal: 1,
+    warning: 0.5,
+    error: 0,
+    critical: 0,
+  };
+
+  for (const entry of list) {
+    const timestamp = Date.parse(entry.capturedAt);
+    if (!Number.isFinite(timestamp)) {
+      continue;
+    }
+    if (entry.staleMinutes !== null && entry.staleMinutes !== undefined) {
+      const value = Number(entry.staleMinutes);
+      if (Number.isFinite(value)) {
+        latencySeries.push([value, timestamp]);
+      }
+    }
+    const severity = `${entry.severity || ''}`.toLowerCase();
+    const status = `${entry.syncStatus || ''}`.toLowerCase();
+    const statusKey = status.startsWith('error')
+      ? 'error'
+      : severity === 'critical'
+      ? 'critical'
+      : severity === 'warning' || status.includes('warning')
+      ? 'warning'
+      : 'success';
+    statusSeries.push([statusMap[statusKey] ?? 0, timestamp]);
+
+    const consecutive = Number(entry.consecutiveErrors);
+    if (Number.isFinite(consecutive)) {
+      consecutiveSeries.push([consecutive, timestamp]);
+    }
+
+    const rowsInserted = toNullableNumber(entry.rowsInserted);
+    if (rowsInserted !== null) {
+      rowsInsertedSeries.push([rowsInserted, timestamp]);
+    }
+
+    const rowsUpdated = toNullableNumber(entry.rowsUpdated);
+    if (rowsUpdated !== null) {
+      rowsUpdatedSeries.push([rowsUpdated, timestamp]);
+    }
+
+    const rowsFetched = toNullableNumber(entry.rowsFetched);
+    if (rowsFetched !== null) {
+      rowsFetchedSeries.push([rowsFetched, timestamp]);
+    }
+  }
+
+  const result = [];
+  if (latencySeries.length) {
+    result.push({
+      name: 'ecus_sync_stale_minutes',
+      unit: 'minutes',
+      thresholds: {
+        warning: thresholds?.staleThresholdMinutes || DEFAULT_ECUS_MONITOR_ALERT_OPTIONS.staleThresholdMinutes,
+      },
+      datapoints: latencySeries,
+    });
+  }
+  if (statusSeries.length) {
+    result.push({
+      name: 'ecus_sync_status',
+      unit: 'ratio',
+      legend: {
+        success: 1,
+        warning: 0.5,
+        error: 0,
+      },
+      datapoints: statusSeries,
+    });
+  }
+  if (consecutiveSeries.length) {
+    result.push({
+      name: 'ecus_sync_consecutive_errors',
+      unit: 'count',
+      datapoints: consecutiveSeries,
+    });
+  }
+  if (rowsInsertedSeries.length) {
+    result.push({
+      name: 'ecus_sync_rows_inserted',
+      unit: 'rows',
+      datapoints: rowsInsertedSeries,
+    });
+  }
+  if (rowsUpdatedSeries.length) {
+    result.push({
+      name: 'ecus_sync_rows_updated',
+      unit: 'rows',
+      datapoints: rowsUpdatedSeries,
+    });
+  }
+  if (rowsFetchedSeries.length) {
+    result.push({
+      name: 'ecus_sync_rows_fetched',
+      unit: 'rows',
+      datapoints: rowsFetchedSeries,
+    });
+  }
+
+  return result;
 }
 
 
@@ -4839,6 +6144,319 @@ function buildDataHealthSummary() {
   };
 }
 
+function formatAlertTimestamp(input) {
+  if (!input) {
+    return 'Chưa xác định';
+  }
+  try {
+    const date = new Date(input);
+    if (Number.isNaN(date.getTime())) {
+      return 'Không xác định';
+    }
+    const timezone = (process.env.KPI_TIMEZONE || 'Asia/Ho_Chi_Minh').trim() || 'Asia/Ho_Chi_Minh';
+    return new Intl.DateTimeFormat('vi-VN', {
+      dateStyle: 'short',
+      timeStyle: 'short',
+      hour12: false,
+      timeZone: timezone,
+    }).format(date);
+  } catch {
+    return `${input}`;
+  }
+}
+
+function shouldThrottleAlert(lastIso, cooldownMinutes, now = Date.now()) {
+  if (!lastIso) {
+    return false;
+  }
+  const ts = new Date(lastIso).getTime();
+  if (!Number.isFinite(ts)) {
+    return false;
+  }
+  const cooldownMs = Math.max(1, Number(cooldownMinutes) || 0) * 60000;
+  return now - ts < cooldownMs;
+}
+
+async function dispatchEcusMonitorAlerts(snapshot) {
+  if (!snapshot || typeof snapshot !== 'object') {
+    return { triggered: [] };
+  }
+  if (!hasAlertTargets()) {
+    return { triggered: [] };
+  }
+  const options = getEcusMonitorAlertOptions();
+  const state = getEcusMonitorAlertState();
+  const now = Date.now();
+  const nowIso = new Date(now).toISOString();
+  const triggers = [];
+
+  if (options.failureThreshold > 0 && state.consecutiveErrors >= options.failureThreshold) {
+    const lastAttempt = state.lastFailureAlertAttemptAt || state.lastFailureAlertAt;
+    if (!shouldThrottleAlert(lastAttempt, options.failureCooldownMinutes, now)) {
+      const message = `Đồng bộ ECUS đã thất bại ${state.consecutiveErrors} lần liên tiếp (gần nhất lúc ${formatAlertTimestamp(
+        state.lastErrorAt
+      )}).`;
+      triggers.push({ type: 'failure', severity: 'critical', message });
+    }
+  }
+
+  const staleMinutes = Number.isFinite(snapshot?.sync?.staleMinutes) ? snapshot.sync.staleMinutes : null;
+  if (staleMinutes !== null && staleMinutes > options.staleThresholdMinutes) {
+    const lastAttempt = state.lastStaleAlertAttemptAt || state.lastStaleAlertAt;
+    if (!shouldThrottleAlert(lastAttempt, options.staleCooldownMinutes, now)) {
+      const message = `Dữ liệu ECUS đã trễ ${staleMinutes} phút (ngưỡng cảnh báo ${options.staleThresholdMinutes} phút).`;
+      const severity =
+        staleMinutes >= Math.max(options.staleThresholdMinutes * 2, 180) || snapshot.severity === 'critical'
+          ? 'critical'
+          : 'warning';
+      triggers.push({ type: 'stale', severity, message });
+    }
+  }
+
+  if (!triggers.length) {
+    return { triggered: [] };
+  }
+
+  const severity = triggers.some((trigger) => trigger.severity === 'critical' || snapshot.severity === 'critical')
+    ? 'critical'
+    : triggers.some((trigger) => trigger.severity === 'warning')
+      ? 'warning'
+      : 'info';
+
+  const subjectDetails = [];
+  if (triggers.some((trigger) => trigger.type === 'failure')) {
+    subjectDetails.push(`${state.consecutiveErrors} lần lỗi liên tiếp`);
+  }
+  if (triggers.some((trigger) => trigger.type === 'stale') && staleMinutes !== null) {
+    subjectDetails.push(`Độ trễ ${staleMinutes} phút`);
+  }
+  const subjectSuffix = subjectDetails.length ? `: ${subjectDetails.join(' & ')}` : '';
+  const subject = `[KPI] Cảnh báo đồng bộ ECUS${subjectSuffix}`;
+
+  const introLines = ['Hệ thống phát hiện sự cố giám sát đồng bộ ECUS.'];
+  for (const trigger of triggers) {
+    introLines.push(trigger.message);
+  }
+  introLines.push('Vui lòng kiểm tra tác vụ đồng bộ ECUS, kết nối SQL Server và chạy lại khi cần.');
+  const text = introLines.join('\n');
+
+  const issueSet = new Set();
+  const combinedIssues = Array.isArray(snapshot.issues) ? snapshot.issues : [];
+  for (const issue of combinedIssues) {
+    if (!issue) continue;
+    const normalized = `${issue}`.trim();
+    if (normalized) {
+      issueSet.add(normalized);
+    }
+  }
+  for (const trigger of triggers) {
+    const normalized = `${trigger.message}`.trim();
+    if (normalized) {
+      issueSet.add(normalized);
+    }
+  }
+  if (state.lastErrorMessage) {
+    issueSet.add(`Lỗi gần nhất: ${state.lastErrorMessage}`);
+  }
+  const issues = Array.from(issueSet);
+
+  const facts = [
+    {
+      name: 'Lần chạy gần nhất',
+      value: snapshot?.sync?.lastRunAt ? formatAlertTimestamp(snapshot.sync.lastRunAt) : 'Chưa có',
+    },
+    {
+      name: 'Độ trễ hiện tại',
+      value: staleMinutes !== null ? `${staleMinutes} phút` : 'Không xác định',
+    },
+    {
+      name: 'Lỗi liên tiếp',
+      value: `${state.consecutiveErrors}`,
+    },
+  ];
+  if (state.lastSuccessAt) {
+    facts.push({ name: 'Lần thành công gần nhất', value: formatAlertTimestamp(state.lastSuccessAt) });
+  }
+  const sqlState = snapshot?.database?.ok === false
+    ? snapshot.database?.state || 'Lỗi kết nối'
+    : snapshot?.database?.state || 'Ổn định';
+  facts.push({ name: 'SQL Server', value: sqlState });
+
+  const result = await deliverAlertNotification({
+    subject,
+    text,
+    severity,
+    issues,
+    facts,
+    link: options.dashboardUrl || null,
+  });
+
+  const updatePatch = {
+    lastAlertAttemptAt: nowIso,
+  };
+  if (triggers.some((trigger) => trigger.type === 'failure')) {
+    updatePatch.lastFailureAlertAttemptAt = nowIso;
+  }
+  if (triggers.some((trigger) => trigger.type === 'stale')) {
+    updatePatch.lastStaleAlertAttemptAt = nowIso;
+  }
+
+  if (result.successes.length) {
+    updatePatch.lastDeliveredChannels = result.successes;
+    updatePatch.lastAlertDeliveredAt = nowIso;
+    updatePatch.lastAlertSummary = {
+      subject,
+      severity,
+      triggered: triggers.map((trigger) => trigger.type),
+      deliveredVia: result.successes,
+      issues: issues.slice(0, 10),
+    };
+    if (triggers.some((trigger) => trigger.type === 'failure')) {
+      updatePatch.lastFailureAlertAt = nowIso;
+    }
+    if (triggers.some((trigger) => trigger.type === 'stale')) {
+      updatePatch.lastStaleAlertAt = nowIso;
+    }
+  }
+
+  saveEcusMonitorAlertState(updatePatch, { actor: 'system', source: 'ecus-monitor-alerts-dispatch' });
+
+  if (result.failures.length) {
+    for (const failure of result.failures) {
+      console.error(`Không thể gửi cảnh báo ECUS qua ${failure.target}`, failure.error);
+    }
+  }
+
+  return {
+    triggered: triggers.map((trigger) => trigger.type),
+    severity,
+    delivered: result.successes,
+  };
+}
+
+async function buildEcusSyncMonitorSnapshot() {
+  const [database, config] = await Promise.all([
+    checkSqlServerHealth().catch((error) => ({
+      ok: false,
+      state: 'error',
+      message: error?.message || 'Không thể kiểm tra SQL Server',
+      checkedAt: new Date().toISOString(),
+    })),
+    Promise.resolve(getEcusConfig()),
+  ]);
+
+  const lastSummary = config?.lastSummary || {};
+  const lastRunAt = lastSummary.runAt || config?.lastRun || null;
+  const lastStatus = config?.lastStatus || lastSummary.status || null;
+  const now = Date.now();
+  const lastRunDate = lastRunAt ? new Date(lastRunAt) : null;
+  const staleMinutes =
+    lastRunDate && Number.isFinite(lastRunDate.getTime())
+      ? Math.max(0, Math.round((now - lastRunDate.getTime()) / 60000))
+      : null;
+
+  const severityThreshold = {
+    warning: 90,
+    critical: 180,
+  };
+
+  const issues = [];
+  let severity = 'normal';
+
+  if (!database?.ok) {
+    severity = 'critical';
+    issues.push(
+      database?.message ||
+        'Không thể kết nối SQL Server ECUS. Vui lòng kiểm tra cấu hình hoặc trạng thái dịch vụ.',
+    );
+  }
+
+  if (typeof lastStatus === 'string' && lastStatus.toLowerCase().startsWith('error')) {
+    severity = 'critical';
+    issues.push('Lần đồng bộ gần nhất kết thúc với trạng thái lỗi.');
+  }
+
+  if (staleMinutes === null) {
+    severity = severity === 'critical' ? 'critical' : 'warning';
+    issues.push('Chưa có thống kê lần đồng bộ gần nhất.');
+  } else if (staleMinutes > severityThreshold.critical) {
+    severity = 'critical';
+    issues.push(`Lần đồng bộ gần nhất đã cách đây ${staleMinutes} phút (vượt ngưỡng ${severityThreshold.critical} phút).`);
+  } else if (staleMinutes > severityThreshold.warning && severity !== 'critical') {
+    severity = 'warning';
+    issues.push(
+      `Lần đồng bộ gần nhất đã cách đây ${staleMinutes} phút (vượt ngưỡng ${severityThreshold.warning} phút cảnh báo).`,
+    );
+  }
+
+  if (!issues.length && severity !== 'critical') {
+    severity = 'normal';
+  }
+
+  const snapshot = {
+    generatedAt: new Date().toISOString(),
+    severity,
+    issues,
+    thresholds: severityThreshold,
+    sync: {
+      lastRunAt,
+      lastStatus,
+      staleMinutes,
+      rowsFetched: lastSummary.rowsFetched ?? null,
+      rowsInserted: lastSummary.rowsInserted ?? null,
+      rowsUpdated: lastSummary.rowsUpdated ?? null,
+      rowsSkipped: lastSummary.rowsSkipped ?? null,
+      totalStored: lastSummary.totalStored ?? null,
+      range: lastSummary.range || null,
+      alerts: lastSummary.alerts || null,
+    },
+    database,
+  };
+
+  try {
+    const dispatchResult = await dispatchEcusMonitorAlerts(snapshot);
+    if (dispatchResult && typeof dispatchResult === 'object') {
+      snapshot.alertDispatch = dispatchResult;
+    }
+  } catch (err) {
+    console.error('Không thể gửi cảnh báo giám sát ECUS', err);
+  }
+
+  const alertState = getEcusMonitorAlertState();
+  snapshot.alertState = {
+    consecutiveErrors: alertState.consecutiveErrors,
+    lastErrorAt: alertState.lastErrorAt,
+    lastErrorMessage: alertState.lastErrorMessage,
+    lastErrorMeta: alertState.lastErrorMeta || null,
+    lastSuccessAt: alertState.lastSuccessAt,
+    lastFailureAlertAt: alertState.lastFailureAlertAt || null,
+    lastFailureAlertAttemptAt: alertState.lastFailureAlertAttemptAt || null,
+    lastStaleAlertAt: alertState.lastStaleAlertAt || null,
+    lastStaleAlertAttemptAt: alertState.lastStaleAlertAttemptAt || null,
+    lastAlertAttemptAt: alertState.lastAlertAttemptAt || null,
+    lastAlertDeliveredAt: alertState.lastAlertDeliveredAt || null,
+    lastDeliveredChannels: alertState.lastDeliveredChannels,
+    lastAlertSummary: alertState.lastAlertSummary,
+  };
+
+  try {
+    const historyResult = appendEcusMonitorHistory(snapshot, {
+      actor: 'system',
+      source: 'ecus-monitor-snapshot',
+    });
+    if (historyResult && historyResult.entry) {
+      snapshot.history = {
+        recordedAt: historyResult.entry.capturedAt,
+        totalEntries: historyResult.totalEntries,
+      };
+    }
+  } catch (err) {
+    console.error('Không thể lưu lịch sử giám sát ECUS', err);
+  }
+
+  return snapshot;
+}
+
 function buildSqlConnectionConfig(config) {
   const connection = config?.connection || {};
   const poolOptions = connection.pool && typeof connection.pool === 'object' ? connection.pool : undefined;
@@ -4846,11 +6464,16 @@ function buildSqlConnectionConfig(config) {
     const num = Number(value);
     return Number.isFinite(num) && num >= 0 ? num : undefined;
   };
+  const secureCredentials = getSecureSqlCredentials();
+  const server = `${connection.server || secureCredentials.server || ''}`.trim();
+  const database = `${connection.database || secureCredentials.database || ''}`.trim();
+  const user = `${connection.user || secureCredentials.user || ''}`.trim();
+  const password = connection.password || secureCredentials.password || '';
   return {
-    server: connection.server || process.env.ECUS_SQL_SERVER || '',
-    database: connection.database || process.env.ECUS_SQL_DATABASE || '',
-    user: connection.user || process.env.ECUS_SQL_USER || '',
-    password: connection.password || process.env.ECUS_SQL_PASSWORD || '',
+    server,
+    database,
+    user,
+    password,
     options: {
       encrypt: false,
       trustServerCertificate: true,
@@ -5884,8 +7507,9 @@ function readRecordValue(record, lookup, candidate) {
 
 function mapEcusRow(record, config, context) {
   if (!record || typeof record !== 'object') return null;
+  const normalizedRecord = normalizeSqlUnicodeRecord(record);
   const columnMap = config.columnMap || {};
-  const keyLookup = buildRecordKeyLookup(record);
+  const keyLookup = buildRecordKeyLookup(normalizedRecord);
   const getField = (name) => {
     const rawCandidates = [];
     const mapped = columnMap[name];
@@ -5904,7 +7528,7 @@ function mapEcusRow(record, config, context) {
       const keyLower = String(candidate).toLowerCase();
       if (seen.has(keyLower)) continue;
       seen.add(keyLower);
-      const value = readRecordValue(record, keyLookup, candidate);
+      const value = readRecordValue(normalizedRecord, keyLookup, candidate);
       if (value !== undefined) {
         return value;
       }
@@ -6057,7 +7681,7 @@ function mapEcusRow(record, config, context) {
     licenseCodes,
   };
   const normalizedBase = normalizeDeclarationRow(base) || base;
-  return deriveCOStatus(record, normalizedBase);
+  return deriveCOStatus(normalizedRecord, normalizedBase);
 }
 
 function isEqualValue(a, b) {
@@ -6519,6 +8143,8 @@ async function runEcusSync({ from, to, actor = 'system', reason = 'manual' } = {
     },
   });
 
+  recordEcusMonitorSyncSuccess({ runAt: runAtIso, actor });
+
   return {
     config: nextConfig,
     fetched: totalFetched,
@@ -6544,6 +8170,7 @@ async function runEcusSyncWithErrorHandling(params) {
     if (isSqlTimeoutError(err)) {
       recordSqlTimeout({ message: err?.message, context: { actor: params?.actor, reason: params?.reason } });
     }
+    recordEcusMonitorSyncFailure(err, { actor: params?.actor, reason: params?.reason });
     saveEcusConfig({
       lastRun: new Date().toISOString(),
       lastStatus: `error: ${err.message}`,
@@ -6831,7 +8458,25 @@ function logServerAddresses(port, host) {
   }
 }
 
-export { runEcusSyncWithErrorHandling, getEcusConfig };
+function logAiHttpsAddresses({ port, host, certPath }) {
+  const normalizedHost = host || '127.0.0.1';
+  const displayHost = normalizedHost === '0.0.0.0' || normalizedHost === '::' ? 'localhost' : normalizedHost;
+  console.log(`[AI HTTPS] Đang phục vụ endpoint AI qua https://${displayHost}:${port}`);
+  if (certPath) {
+    console.log(`[AI HTTPS] Sử dụng chứng chỉ: ${certPath}`);
+  }
+}
+
+export {
+  runEcusSyncWithErrorHandling,
+  getEcusConfig,
+  buildEcusSyncMonitorSnapshot,
+  getEcusMonitorHistory,
+  appendEcusMonitorHistory,
+  clearEcusMonitorHistory,
+  buildEcusMonitorMetrics,
+  buildEcusMonitorSeries,
+};
 
 
 app.use(cors({ origin: true, credentials: true }));
@@ -6839,6 +8484,182 @@ app.use(express.json({ limit: '5mb' }));
 
 app.get('/api/health', (req, res) => {
   res.json({ ok: true });
+});
+
+const monitorAccessToken = (process.env.MONITOR_ACCESS_TOKEN || '').trim();
+
+app.get('/api/internal/monitor/ecus-sync', async (req, res) => {
+  if (!monitorAccessToken) {
+    res.status(503).json({ ok: false, error: 'Chưa cấu hình MONITOR_ACCESS_TOKEN trên máy chủ.' });
+    return;
+  }
+
+  const providedToken = String(req.get('x-monitor-token') || req.query.token || '').trim();
+  if (!providedToken || providedToken !== monitorAccessToken) {
+    res.status(403).json({ ok: false, error: 'Token xác thực không hợp lệ.' });
+    return;
+  }
+
+  try {
+    const snapshot = await buildEcusSyncMonitorSnapshot();
+    res.json({ ok: true, snapshot });
+  } catch (err) {
+    console.error('Không thể tạo snapshot giám sát ECUS', err);
+    res.status(500).json({ ok: false, error: err?.message || 'Không thể tổng hợp trạng thái đồng bộ ECUS.' });
+  }
+});
+
+app.get('/api/internal/monitor/ecus-sync/metrics', async (req, res) => {
+  if (!monitorAccessToken) {
+    res.status(503).json({ ok: false, error: 'Chưa cấu hình MONITOR_ACCESS_TOKEN trên máy chủ.' });
+    return;
+  }
+
+  const providedToken = String(req.get('x-monitor-token') || req.query.token || '').trim();
+  if (!providedToken || providedToken !== monitorAccessToken) {
+    res.status(403).json({ ok: false, error: 'Token xác thực không hợp lệ.' });
+    return;
+  }
+
+  try {
+    const history = getEcusMonitorHistory();
+    const metrics = buildEcusMonitorMetrics({ history });
+    const limit = toPositiveInt(req.query?.limit, 288) || 288;
+    const boundedLimit = Math.max(1, Math.min(limit, history.entries.length || limit));
+    const entries = history.entries.slice(-boundedLimit);
+    const series = buildEcusMonitorSeries(entries, { thresholds: metrics.thresholds });
+
+    metrics.history = {
+      totalEntries: history.entries.length,
+      returnedEntries: entries.length,
+      updatedAt: history.updatedAt,
+      entries,
+    };
+    metrics.series = series;
+
+    res.json({ ok: true, metrics });
+  } catch (err) {
+    console.error('Không thể tổng hợp dữ liệu dashboard giám sát ECUS', err);
+    res.status(500).json({ ok: false, error: 'Không thể tổng hợp dữ liệu dashboard giám sát ECUS.' });
+  }
+});
+
+app.get('/api/filter-presets', (req, res) => {
+  const context = getSessionContext(req);
+  if (!context) {
+    res.status(401).json({ ok: false, error: 'Bạn cần đăng nhập để sử dụng bộ lọc đã lưu.' });
+    return;
+  }
+  try {
+    const scope = sanitizeFilterPresetScope(req.query?.scope);
+    const { presets, updatedAt } = listFilterPresetsForUser(context.account.username, { scope });
+    res.json({ ok: true, scope, presets, updatedAt });
+  } catch (err) {
+    console.error('Không thể tải bộ lọc đã lưu', err);
+    res.status(500).json({ ok: false, error: 'Không thể tải bộ lọc đã lưu.' });
+  }
+});
+
+app.post('/api/filter-presets', (req, res) => {
+  const context = getSessionContext(req);
+  if (!context) {
+    res.status(401).json({ ok: false, error: 'Bạn cần đăng nhập để lưu bộ lọc.' });
+    return;
+  }
+  try {
+    const result = createFilterPresetForUser(context.account.username, req.body || {}, {
+      actor: context.account.username,
+    });
+    pushAuditLog({
+      actor: context.account.username,
+      action: 'filter.preset.create',
+      detail: `Tạo bộ lọc "${result.preset.name}" (scope ${result.preset.scope})`,
+    });
+    res.status(201).json({ ok: true, preset: result.preset, updatedAt: result.updatedAt });
+  } catch (err) {
+    console.error('Không thể lưu bộ lọc đã lưu', err);
+    if (err?.code === 'INVALID_FILTERS') {
+      res.status(400).json({ ok: false, error: 'Không có điều kiện lọc hợp lệ để lưu.' });
+      return;
+    }
+    if (err?.code === 'INVALID_USER') {
+      res.status(400).json({ ok: false, error: 'Thiếu thông tin tài khoản để lưu bộ lọc.' });
+      return;
+    }
+    res.status(500).json({ ok: false, error: 'Không thể lưu bộ lọc đã lưu.' });
+  }
+});
+
+app.put('/api/filter-presets/:presetId', (req, res) => {
+  const context = getSessionContext(req);
+  if (!context) {
+    res.status(401).json({ ok: false, error: 'Bạn cần đăng nhập để cập nhật bộ lọc.' });
+    return;
+  }
+  try {
+    const result = updateFilterPresetForUser(context.account.username, req.params.presetId, req.body || {}, {
+      actor: context.account.username,
+    });
+    pushAuditLog({
+      actor: context.account.username,
+      action: 'filter.preset.update',
+      detail: `Cập nhật bộ lọc "${result.preset.name}"`,
+    });
+    res.json({ ok: true, preset: result.preset, updatedAt: result.updatedAt });
+  } catch (err) {
+    console.error('Không thể cập nhật bộ lọc đã lưu', err);
+    if (err?.code === 'INVALID_ID') {
+      res.status(400).json({ ok: false, error: 'Thiếu mã bộ lọc cần cập nhật.' });
+      return;
+    }
+    if (err?.code === 'INVALID_FILTERS') {
+      res.status(400).json({ ok: false, error: 'Không có điều kiện lọc hợp lệ để lưu.' });
+      return;
+    }
+    if (err?.code === 'NOT_FOUND') {
+      res.status(404).json({ ok: false, error: 'Không tìm thấy bộ lọc đã lưu tương ứng.' });
+      return;
+    }
+    if (err?.code === 'INVALID_USER') {
+      res.status(400).json({ ok: false, error: 'Thiếu thông tin tài khoản để cập nhật bộ lọc.' });
+      return;
+    }
+    res.status(500).json({ ok: false, error: 'Không thể cập nhật bộ lọc đã lưu.' });
+  }
+});
+
+app.delete('/api/filter-presets/:presetId', (req, res) => {
+  const context = getSessionContext(req);
+  if (!context) {
+    res.status(401).json({ ok: false, error: 'Bạn cần đăng nhập để xoá bộ lọc.' });
+    return;
+  }
+  try {
+    const result = deleteFilterPresetForUser(context.account.username, req.params.presetId, {
+      actor: context.account.username,
+    });
+    pushAuditLog({
+      actor: context.account.username,
+      action: 'filter.preset.delete',
+      detail: `Xoá bộ lọc "${result.removed?.name || req.params.presetId}"`,
+    });
+    res.json({ ok: true, deleted: result.deleted, updatedAt: result.updatedAt });
+  } catch (err) {
+    console.error('Không thể xoá bộ lọc đã lưu', err);
+    if (err?.code === 'INVALID_ID') {
+      res.status(400).json({ ok: false, error: 'Thiếu mã bộ lọc cần xoá.' });
+      return;
+    }
+    if (err?.code === 'NOT_FOUND') {
+      res.status(404).json({ ok: false, error: 'Không tìm thấy bộ lọc đã lưu tương ứng.' });
+      return;
+    }
+    if (err?.code === 'INVALID_USER') {
+      res.status(400).json({ ok: false, error: 'Thiếu thông tin tài khoản để xoá bộ lọc.' });
+      return;
+    }
+    res.status(500).json({ ok: false, error: 'Không thể xoá bộ lọc đã lưu.' });
+  }
 });
 
 app.get('/api/data-health/summary', (req, res) => {
@@ -7215,15 +9036,245 @@ app.post('/api/reports/export', async (req, res) => {
     }
 
     const payload = req.body?.payload && typeof req.body.payload === 'object' ? req.body.payload : {};
-    const { buffer, filename } = await generateReport(kind, payload);
+    const ipHeader = req.headers['x-forwarded-for'];
+    const ipAddress = Array.isArray(ipHeader) ? ipHeader[0] : ipHeader || req.ip || '';
+    const requestId = crypto.randomUUID();
+    const { buffer, filename, signature, watermark } = await generateReport(kind, payload, {
+      watermark: {
+        actor: context.account?.username,
+        actorName: context.account?.name,
+        kind,
+        filters: payload,
+        ipAddress,
+        requestId,
+      },
+    });
+
+    if (signature) {
+      res.setHeader('X-KPI-Export-Signature', signature);
+    }
+    if (watermark?.shortSignature) {
+      res.setHeader('X-KPI-Export-Code', watermark.shortSignature);
+    }
+    if (watermark?.formattedIssuedAt) {
+      res.setHeader('X-KPI-Export-Issued-At', watermark.formattedIssuedAt);
+    }
+    if (watermark?.requestId) {
+      res.setHeader('X-KPI-Export-Request', watermark.requestId);
+    }
 
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     setAttachmentHeaders(res, filename);
     res.send(buffer);
+
+    const actor = context.account?.username || 'unknown';
+    const requestUserAgent = Array.isArray(req.headers['user-agent'])
+      ? req.headers['user-agent'][0]
+      : req.headers['user-agent'] || '';
+    const issuedAtIso =
+      watermark?.issuedAt instanceof Date && !Number.isNaN(watermark.issuedAt.getTime())
+        ? watermark.issuedAt.toISOString()
+        : watermark?.issuedAt
+        ? `${watermark.issuedAt}`
+        : new Date().toISOString();
+
+    pushAuditLog({
+      actor,
+      action: 'reports.export',
+      detail: `Xuất báo cáo ${kind}`,
+      meta: {
+        kind,
+        filename,
+        signature: signature || null,
+        shortSignature: watermark?.shortSignature || null,
+        issuedAt: issuedAtIso,
+        filterSummary: watermark?.filterSummary || null,
+        filters: watermark?.filters || null,
+        ip: ipAddress || null,
+        requestId: watermark?.requestId || requestId,
+      },
+    });
+
+    recordReportExportAudit({
+      username: actor,
+      displayName: context.account?.name,
+      role: context.account?.role,
+      kind,
+      filename,
+      signature,
+      shortSignature: watermark?.shortSignature,
+      filterSummary: watermark?.filterSummary,
+      filters: watermark?.filters ?? payload,
+      ipAddress: ipAddress || null,
+      requestId: watermark?.requestId || requestId,
+      userAgent: requestUserAgent,
+      issuedAt: issuedAtIso,
+    });
   } catch (err) {
     console.error('Không thể xuất báo cáo', err);
     const status = err?.message && /không hợp lệ/i.test(err.message) ? 400 : 500;
     res.status(status).json({ ok: false, error: err?.message || 'Không thể xuất báo cáo' });
+  }
+});
+
+app.get('/api/reports/export/audit', (req, res) => {
+  const { context, denied } = requireExportAuditView(req, res);
+  if (denied) {
+    return;
+  }
+
+  const rawFrom = Array.isArray(req.query.from) ? req.query.from[0] : req.query.from;
+  const rawTo = Array.isArray(req.query.to) ? req.query.to[0] : req.query.to;
+  const fromIso = parseDateFilterParam(rawFrom);
+  const toIso = parseDateFilterParam(rawTo, { endOfDay: true });
+
+  if (fromIso && toIso) {
+    const fromDate = new Date(fromIso);
+    const toDate = new Date(toIso);
+    if (toDate.getTime() < fromDate.getTime()) {
+      res.status(400).json({ ok: false, error: 'Khoảng thời gian không hợp lệ: Ngày bắt đầu lớn hơn ngày kết thúc.' });
+      return;
+    }
+    const diffMs = toDate.getTime() - fromDate.getTime();
+    const maxRangeMs = EXPORT_AUDIT_MAX_RANGE_DAYS * 24 * 60 * 60 * 1000;
+    if (diffMs > maxRangeMs) {
+      res.status(400).json({
+        ok: false,
+        error: `Vui lòng giới hạn khoảng thời gian tra cứu trong ${EXPORT_AUDIT_MAX_RANGE_DAYS} ngày.`,
+      });
+      return;
+    }
+  }
+
+  const rawLimit = Array.isArray(req.query.limit) ? req.query.limit[0] : req.query.limit;
+  const rawPage = Array.isArray(req.query.page) ? req.query.page[0] : req.query.page;
+  const limit = clampPositiveInt(rawLimit, {
+    min: 10,
+    max: EXPORT_AUDIT_MAX_LIMIT,
+    fallback: EXPORT_AUDIT_DEFAULT_LIMIT,
+  });
+  const page = clampPositiveInt(rawPage, { min: 1, max: 1000, fallback: 1 });
+  const offset = (page - 1) * limit;
+
+  const rawKind = normalizeStr(Array.isArray(req.query.kind) ? req.query.kind[0] : req.query.kind).toLowerCase();
+  const kind = rawKind && rawKind !== 'all' ? rawKind : '';
+  const rawSearch = normalizeStr(Array.isArray(req.query.search) ? req.query.search[0] : req.query.search);
+  const search = rawSearch ? rawSearch.toLowerCase() : '';
+
+  const baseParams = {};
+  const conditions = [];
+
+  if (fromIso) {
+    baseParams.from = fromIso;
+    conditions.push('datetime(created_at) >= datetime(@from)');
+  }
+  if (toIso) {
+    baseParams.to = toIso;
+    conditions.push('datetime(created_at) <= datetime(@to)');
+  }
+  if (kind) {
+    baseParams.kind = kind;
+    conditions.push('LOWER(report_kind) = @kind');
+  }
+  if (search) {
+    baseParams.search = `%${search}%`;
+    const searchClauses = [
+      'LOWER(username) LIKE @search',
+      'LOWER(display_name) LIKE @search',
+      'LOWER(report_kind) LIKE @search',
+      'LOWER(signature) LIKE @search',
+      'LOWER(short_signature) LIKE @search',
+      'LOWER(ip_address) LIKE @search',
+      'LOWER(request_id) LIKE @search',
+    ];
+    conditions.push(`(${searchClauses.join(' OR ')})`);
+  }
+
+  const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+  const listParams = { ...baseParams, limit, offset };
+
+  try {
+    const rows = db
+      .prepare(
+        `SELECT * FROM export_audit ${whereClause} ORDER BY datetime(created_at) DESC LIMIT @limit OFFSET @offset`
+      )
+      .all(listParams);
+
+    const totalRow = db
+      .prepare(`SELECT COUNT(*) AS total FROM export_audit ${whereClause}`)
+      .get(baseParams);
+    const total = Number(totalRow?.total || 0);
+
+    const summaryByKind = db
+      .prepare(
+        `SELECT report_kind AS kind, COUNT(*) AS total FROM export_audit ${whereClause} GROUP BY report_kind ORDER BY total DESC`
+      )
+      .all(baseParams)
+      .map((item) => ({ kind: item.kind, total: Number(item.total) || 0 }));
+
+    const summaryTopUsers = db
+      .prepare(
+        `SELECT username, display_name, role, COUNT(*) AS total FROM export_audit ${whereClause} GROUP BY username, display_name, role ORDER BY total DESC LIMIT 5`
+      )
+      .all(baseParams)
+      .map((item) => ({
+        username: item.username,
+        displayName: item.display_name,
+        role: item.role,
+        total: Number(item.total) || 0,
+      }));
+
+    const availableKinds = db
+      .prepare('SELECT DISTINCT report_kind FROM export_audit ORDER BY report_kind COLLATE NOCASE')
+      .all()
+      .map((row) => row.report_kind)
+      .filter(Boolean);
+
+    const entries = rows.map((row) => ({
+      id: row.id,
+      createdAt: row.created_at,
+      issuedAt: row.issued_at,
+      username: row.username,
+      displayName: row.display_name,
+      role: row.role,
+      reportKind: row.report_kind,
+      filename: row.filename,
+      signature: row.signature,
+      shortSignature: row.short_signature,
+      filterSummary: row.filter_summary,
+      filters: safeParse(row.filters, null),
+      ipAddress: row.ip_address,
+      requestId: row.request_id,
+      userAgent: row.user_agent,
+    }));
+
+    const pageCount = Math.max(1, Math.ceil(total / limit));
+    const latestCreatedAt = entries.length ? entries[0].createdAt : null;
+
+    res.json({
+      ok: true,
+      entries,
+      total,
+      page,
+      pageSize: limit,
+      pageCount,
+      summary: {
+        total,
+        latestCreatedAt,
+        byKind: summaryByKind,
+        topUsers: summaryTopUsers,
+      },
+      filters: {
+        from: fromIso ? fromIso.slice(0, 10) : '',
+        to: toIso ? toIso.slice(0, 10) : '',
+        kind: kind || 'all',
+        search: rawSearch || '',
+      },
+      availableKinds,
+    });
+  } catch (err) {
+    console.error('Không thể tải lịch sử export', err);
+    res.status(500).json({ ok: false, error: err?.message || 'Không thể tải lịch sử export' });
   }
 });
 
@@ -7940,6 +9991,53 @@ app.get('*', async (req, res, next) => {
 });
 
 let httpServer = null;
+let aiHttpsServer = null;
+
+function startAiHttpsServerIfConfigured() {
+  if (aiHttpsServer) {
+    return aiHttpsServer;
+  }
+  const config = loadAiHttpsConfig({ env: process.env });
+  if (!config.enabled) {
+    const requested = `${process.env.KPI_AI_HTTPS_ENABLED || ''}`.trim();
+    if (requested) {
+      console.warn(
+        'Bỏ qua HTTPS nội bộ cho AI vì thiếu cấu hình chứng chỉ: %s',
+        config.reason || 'Không rõ nguyên nhân'
+      );
+    }
+    return null;
+  }
+
+  try {
+    aiHttpsServer = https.createServer(config.tlsOptions, (req, res) => {
+      if (!req.url || !req.url.startsWith('/api/ai')) {
+        res.writeHead(404, { 'content-type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ ok: false, error: 'Đường dẫn không được phục vụ qua kênh HTTPS nội bộ.' }));
+        return;
+      }
+      app(req, res);
+    });
+    aiHttpsServer.listen(config.port, config.host, () => {
+      logAiHttpsAddresses({ port: config.port, host: config.host, certPath: config.certPath });
+    });
+    aiHttpsServer.on('error', (err) => {
+      console.error('Không thể khởi chạy HTTPS nội bộ cho AI', err);
+    });
+  } catch (err) {
+    aiHttpsServer = null;
+    console.error('Lỗi thiết lập HTTPS nội bộ cho AI', err);
+  }
+
+  return aiHttpsServer;
+}
+
+function stopAiHttpsServer() {
+  if (aiHttpsServer) {
+    aiHttpsServer.close();
+    aiHttpsServer = null;
+  }
+}
 
 export function startServer(port = PORT) {
   if (httpServer) {
@@ -7948,6 +10046,7 @@ export function startServer(port = PORT) {
   httpServer = app.listen(port, HOST, () => {
     logServerAddresses(port, HOST);
   });
+  startAiHttpsServerIfConfigured();
   return httpServer;
 }
 
@@ -7956,6 +10055,7 @@ export function stopServer() {
     httpServer.close();
     httpServer = null;
   }
+  stopAiHttpsServer();
 }
 
 export function getDatabaseHandle() {

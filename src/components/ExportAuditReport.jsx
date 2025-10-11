@@ -1,407 +1,396 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { toast } from 'sonner';
+import useAsyncRequest from '@/hooks/useAsyncRequest.js';
 import { fetchWithAuth } from '@/auth/localAuth.js';
+import { toast } from '@/shared/toast.js';
+import { formatDateTime } from '@/shared/format.js';
+import { ROLE_LABELS, normalizeRoleKey } from '@/shared/accountRoles.js';
 
-const KIND_OPTIONS = [
-  { value: 'all', label: 'Tất cả hành động' },
-  { value: 'account', label: 'Quản trị tài khoản' },
-  { value: 'data', label: 'Dữ liệu & sao lưu' },
-  { value: 'import', label: 'Import & đồng bộ' },
-  { value: 'security', label: 'Bảo mật & phân quyền' },
-];
+const DEFAULT_RANGE_DAYS = 7;
+const DEFAULT_PAGE_SIZE = 50;
+const PAGE_SIZE_OPTIONS = [25, 50, 100];
 
-function toDateInputValue(date) {
+const EMPTY_RESPONSE = Object.freeze({
+  entries: [],
+  total: 0,
+  page: 1,
+  pageSize: DEFAULT_PAGE_SIZE,
+  pageCount: 1,
+  summary: { total: 0, latestCreatedAt: null, byKind: [], topUsers: [] },
+  filters: { from: '', to: '', kind: 'all', search: '' },
+  availableKinds: [],
+});
+
+function toDateInputString(date) {
   if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
     return '';
   }
-  const copy = new Date(date.getTime());
-  copy.setHours(0, 0, 0, 0);
-  copy.setMinutes(copy.getMinutes() - copy.getTimezoneOffset());
-  return copy.toISOString().slice(0, 10);
+  return date.toISOString().slice(0, 10);
 }
 
-function subtractDays(date, days) {
-  if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
-    return new Date();
+function buildDefaultRange() {
+  const today = new Date();
+  const fromDate = new Date(today);
+  fromDate.setDate(fromDate.getDate() - (DEFAULT_RANGE_DAYS - 1));
+  return {
+    from: toDateInputString(fromDate),
+    to: toDateInputString(today),
+  };
+}
+
+function resolveRoleLabel(role) {
+  const key = normalizeRoleKey(role);
+  return ROLE_LABELS[key] || role || '—';
+}
+
+function formatFilters(filters) {
+  if (!filters || typeof filters !== 'object') {
+    return '';
   }
-  const copy = new Date(date.getTime());
-  copy.setDate(copy.getDate() - days);
-  return copy;
-}
-
-function formatDateTime(value) {
-  if (!value) return '';
   try {
-    return new Date(value).toLocaleString('vi-VN', { hour12: false });
+    return JSON.stringify(filters, null, 2);
   } catch {
-    return value;
+    return '';
   }
 }
 
-function buildQuery(filters, page, pageSize) {
-  const params = new URLSearchParams();
-  if (filters.from) params.set('from', filters.from);
-  if (filters.to) params.set('to', filters.to);
-  if (filters.kind && filters.kind !== 'all') params.set('kind', filters.kind);
-  if (filters.search) params.set('search', filters.search.trim());
-  if (page && page > 1) params.set('page', String(page));
-  if (pageSize && pageSize > 0) params.set('pageSize', String(pageSize));
-  return params.toString();
-}
-
-function normalizeSummary(summary) {
-  if (!summary || typeof summary !== 'object') {
-    return null;
-  }
-  const topUsers = Array.isArray(summary.topUsers)
-    ? summary.topUsers
-        .map((entry) => ({
-          actor: entry?.actor || 'system',
-          count: Number.isFinite(entry?.count) ? entry.count : 0,
-        }))
-        .filter((entry) => entry.actor)
-    : [];
-  const byKind = Array.isArray(summary.byKind)
-    ? summary.byKind
-        .map((entry) => ({
-          kind: entry?.kind || 'khác',
-          count: Number.isFinite(entry?.count) ? entry.count : 0,
-        }))
-        .filter((entry) => entry.kind)
-    : [];
-  const total = Number.isFinite(summary.total) ? summary.total : null;
-  return { total, topUsers, byKind };
-}
-
-export default function ExportAuditReport({ pageSize = 20 } = {}) {
-  const defaultRange = useMemo(() => {
-    const now = new Date();
-    return {
-      from: toDateInputValue(subtractDays(now, 6)),
-      to: toDateInputValue(now),
-    };
-  }, []);
-
-  const [draft, setDraft] = useState(() => ({
-    from: defaultRange.from,
-    to: defaultRange.to,
-    kind: 'all',
-    search: '',
-  }));
-  const [filters, setFilters] = useState(() => ({ ...draft }));
+export default function ExportAuditReport() {
+  const defaultRange = useMemo(() => buildDefaultRange(), []);
+  const [formState, setFormState] = useState(() => ({ ...defaultRange, search: '', kind: 'all' }));
+  const [filters, setFilters] = useState(() => ({ ...defaultRange, search: '', kind: 'all' }));
   const [page, setPage] = useState(1);
-  const [entries, setEntries] = useState([]);
-  const [summary, setSummary] = useState(null);
-  const [meta, setMeta] = useState({ page: 1, total: 0, pageSize, hasNext: false, hasPrev: false, pageCount: null });
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
 
-  useEffect(() => {
-    setDraft((prev) => ({ ...prev, ...filters }));
-  }, [filters]);
+  const { data, loading, error, execute } = useAsyncRequest(
+    async ({ signal }, params) => {
+      const query = new URLSearchParams();
+      query.set('limit', params.limit);
+      query.set('page', params.page);
+      if (params.from) query.set('from', params.from);
+      if (params.to) query.set('to', params.to);
+      if (params.kind && params.kind !== 'all') query.set('kind', params.kind);
+      if (params.search) query.set('search', params.search);
 
-  useEffect(() => {
-    let cancelled = false;
-    const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
-
-    const load = async () => {
-      setLoading(true);
-      setError('');
-      const query = buildQuery(filters, page, pageSize);
-      const url = `/api/admin/audit/report${query ? `?${query}` : ''}`;
+      const response = await fetchWithAuth(`/api/reports/export/audit?${query.toString()}`, { signal });
+      let payload = null;
       try {
-        const response = await fetchWithAuth(url, { cache: 'no-store', signal: controller?.signal });
-        if (!response.ok) {
-          throw new Error(response.statusText || `HTTP ${response.status}`);
-        }
-        const payload = await response.json();
-        if (payload?.ok === false) {
-          throw new Error(payload.error || 'Không thể tải báo cáo audit.');
-        }
-        if (cancelled) return;
-        setEntries(Array.isArray(payload?.entries) ? payload.entries : []);
-        setSummary(normalizeSummary(payload?.summary));
-        const metaInfo = payload?.meta || {};
-        setMeta({
-          page: Number.isFinite(metaInfo.page) ? metaInfo.page : page,
-          total: Number.isFinite(metaInfo.total) ? metaInfo.total : (payload?.entries?.length ?? 0),
-          pageSize: Number.isFinite(metaInfo.pageSize) ? metaInfo.pageSize : pageSize,
-          hasNext: Boolean(metaInfo.hasNext),
-          hasPrev: Boolean(metaInfo.hasPrev),
-          pageCount: Number.isFinite(metaInfo.pageCount) ? metaInfo.pageCount : null,
-        });
-      } catch (err) {
-        if (cancelled) return;
-        const message = err?.message || 'Không thể tải báo cáo audit.';
-        setError(message);
-        toast.error(message);
-        setEntries([]);
-        setSummary(null);
-        setMeta((prev) => ({ ...prev, page }));
-      } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
+        payload = await response.json();
+      } catch {
+        payload = null;
       }
-    };
-
-    load();
-
-    return () => {
-      cancelled = true;
-      controller?.abort();
-    };
-  }, [filters, page, pageSize]);
-
-  const totalPages = useMemo(() => {
-    if (meta.pageCount && meta.pageCount > 0) {
-      return meta.pageCount;
+      if (!response.ok || !payload || payload.ok === false) {
+        const message = payload?.error || `Không thể tải lịch sử export (HTTP ${response.status}).`;
+        throw new Error(message);
+      }
+      return payload;
+    },
+    {
+      initialData: EMPTY_RESPONSE,
+      onError: (err) => {
+        toast.error(err?.message || 'Không thể tải lịch sử export.');
+      },
     }
-    const size = Number.isFinite(meta.pageSize) && meta.pageSize > 0 ? meta.pageSize : pageSize;
-    if (!size || size <= 0) return null;
-    if (meta.total && meta.total > 0) {
-      return Math.max(1, Math.ceil(meta.total / size));
+  );
+
+  const auditData = data || EMPTY_RESPONSE;
+  const entries = Array.isArray(auditData.entries) ? auditData.entries : [];
+  const summary = auditData.summary || EMPTY_RESPONSE.summary;
+  const availableKinds = useMemo(() => {
+    const kindSet = new Set(['all']);
+    if (Array.isArray(auditData.availableKinds)) {
+      for (const kind of auditData.availableKinds) {
+        if (kind) kindSet.add(kind);
+      }
     }
-    if (entries.length > 0 && !meta.total) {
-      return meta.page;
+    if (filters.kind && filters.kind !== 'all') {
+      kindSet.add(filters.kind);
     }
-    return null;
-  }, [entries.length, meta.page, meta.pageCount, meta.pageSize, meta.total, pageSize]);
+    return Array.from(kindSet);
+  }, [auditData.availableKinds, filters.kind]);
+
+  const totalPages = auditData.pageCount || Math.max(1, Math.ceil((auditData.total || 0) / pageSize));
+
+  useEffect(() => {
+    execute({
+      limit: pageSize,
+      page,
+      from: filters.from,
+      to: filters.to,
+      kind: filters.kind,
+      search: filters.search,
+    });
+  }, [execute, filters.from, filters.to, filters.kind, filters.search, page, pageSize]);
+
+  useEffect(() => {
+    if (!loading && totalPages > 0 && page > totalPages) {
+      setPage(totalPages);
+    }
+  }, [loading, page, totalPages]);
+
+  const handleFormChange = (field) => (event) => {
+    const value = event?.target?.value ?? '';
+    setFormState((prev) => ({ ...prev, [field]: value }));
+  };
 
   const handleSubmit = (event) => {
     event.preventDefault();
-    setFilters({
-      from: draft.from || '',
-      to: draft.to || '',
-      kind: draft.kind || 'all',
-      search: draft.search?.trim() || '',
-    });
+    setFilters({ ...formState });
     setPage(1);
   };
 
   const handleReset = () => {
-    const next = { from: defaultRange.from, to: defaultRange.to, kind: 'all', search: '' };
-    setDraft(next);
+    const nextRange = buildDefaultRange();
+    const next = { ...nextRange, search: '', kind: 'all' };
+    setFormState(next);
     setFilters(next);
     setPage(1);
   };
 
-  const handlePageChange = (direction) => {
-    setPage((current) => {
-      if (direction === 'prev') {
-        return current > 1 ? current - 1 : 1;
-      }
-      if (direction === 'next') {
-        return current + 1;
-      }
-      if (Number.isFinite(direction) && direction > 0) {
-        return direction;
-      }
-      return current;
-    });
+  const handlePrevious = () => {
+    setPage((prev) => Math.max(1, prev - 1));
   };
 
-  const effectiveTotal = meta.total ?? entries.length ?? 0;
+  const handleNext = () => {
+    setPage((prev) => Math.min(totalPages, prev + 1));
+  };
+
+  const renderSummaryList = (items, emptyLabel) => {
+    if (!Array.isArray(items) || items.length === 0) {
+      return <p className="text-sm text-gray-500 dark:text-gray-400">{emptyLabel}</p>;
+    }
+    return (
+      <ul className="space-y-1 text-sm text-gray-700 dark:text-gray-300">
+        {items.map((item) => (
+          <li key={`${item.kind || item.username}`} className="flex items-center justify-between">
+            <span className="truncate pr-2">{item.kind || item.displayName || item.username}</span>
+            <span className="font-semibold text-amber-600 dark:text-amber-300">{item.total.toLocaleString('vi-VN')}</span>
+          </li>
+        ))}
+      </ul>
+    );
+  };
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h2 className="text-xl font-semibold text-gray-800">Báo cáo nhật ký hệ thống</h2>
-          <p className="text-sm text-gray-500">
-            Xuất thống kê thao tác theo khoảng thời gian, loại hành động và từ khóa tìm kiếm.
+      <section className="rounded-lg border border-amber-200 bg-white p-4 shadow-sm dark:border-amber-500/40 dark:bg-slate-900">
+        <header className="mb-4">
+          <h2 className="text-lg font-semibold text-amber-700 dark:text-amber-300">Tra cứu lịch sử export</h2>
+          <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+            Lọc theo khoảng ngày, loại báo cáo hoặc từ khóa (tài khoản, mã xác thực, địa chỉ IP) để hỗ trợ tra soát việc tải file Excel có watermark.
           </p>
-        </div>
-        <div className="text-sm text-gray-600">
-          Tổng số bản ghi:{' '}
-          <span className="font-semibold text-gray-900" data-testid="audit-total-count">
-            {effectiveTotal.toLocaleString('vi-VN')}
-          </span>
-        </div>
-      </div>
-
-      <form
-        className="flex flex-wrap items-end gap-4 rounded border border-gray-200 bg-white p-4 shadow-sm"
-        onSubmit={handleSubmit}
-        aria-label="Bộ lọc báo cáo audit"
-      >
-        <div className="flex flex-col gap-1">
-          <label className="text-xs font-semibold uppercase text-gray-500" htmlFor="audit-from">
-            Từ ngày
-          </label>
-          <input
-            id="audit-from"
-            name="from"
-            type="date"
-            className="w-44 rounded border px-3 py-2 text-sm"
-            value={draft.from}
-            onChange={(event) => setDraft((prev) => ({ ...prev, from: event.target.value }))}
-          />
-        </div>
-        <div className="flex flex-col gap-1">
-          <label className="text-xs font-semibold uppercase text-gray-500" htmlFor="audit-to">
-            Đến ngày
-          </label>
-          <input
-            id="audit-to"
-            name="to"
-            type="date"
-            className="w-44 rounded border px-3 py-2 text-sm"
-            value={draft.to}
-            onChange={(event) => setDraft((prev) => ({ ...prev, to: event.target.value }))}
-          />
-        </div>
-        <div className="flex flex-col gap-1">
-          <label className="text-xs font-semibold uppercase text-gray-500" htmlFor="audit-kind">
-            Nhóm hành động
-          </label>
-          <select
-            id="audit-kind"
-            name="kind"
-            className="w-48 rounded border px-3 py-2 text-sm"
-            value={draft.kind}
-            onChange={(event) => setDraft((prev) => ({ ...prev, kind: event.target.value }))}
-          >
-            {KIND_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="flex flex-1 flex-col gap-1 min-w-[12rem]">
-          <label className="text-xs font-semibold uppercase text-gray-500" htmlFor="audit-search">
-            Từ khóa
-          </label>
-          <input
-            id="audit-search"
-            name="search"
-            type="search"
-            placeholder="Nhập người dùng, hành động hoặc chi tiết"
-            className="rounded border px-3 py-2 text-sm"
-            value={draft.search}
-            onChange={(event) => setDraft((prev) => ({ ...prev, search: event.target.value }))}
-          />
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            type="submit"
-            className="rounded bg-black px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-gray-800"
-          >
-            Áp dụng
-          </button>
-          <button
-            type="button"
-            onClick={handleReset}
-            className="rounded border border-gray-300 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
-          >
-            Mặc định 7 ngày
-          </button>
-        </div>
-      </form>
-
-      {error && (
-        <div className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-700" role="alert">
-          Không thể tải dữ liệu: {error}
-        </div>
-      )}
-
-      <div className="space-y-4" aria-live="polite">
-        {loading && (
-          <div className="text-sm text-gray-500" data-testid="audit-loading">
-            Đang tải dữ liệu báo cáo...
+        </header>
+        <form onSubmit={handleSubmit} className="grid gap-4 md:grid-cols-5">
+          <div className="flex flex-col">
+            <label className="text-sm font-medium text-gray-700 dark:text-gray-200">Từ ngày</label>
+            <input
+              type="date"
+              value={formState.from}
+              onChange={handleFormChange('from')}
+              className="mt-1 rounded border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500 dark:border-slate-700 dark:bg-slate-800 dark:text-gray-100"
+            />
           </div>
-        )}
-
-        {!loading && entries.length === 0 && !error && (
-          <div className="rounded border border-dashed border-gray-300 bg-gray-50 p-6 text-center text-sm text-gray-500">
-            Không có bản ghi phù hợp với bộ lọc hiện tại.
+          <div className="flex flex-col">
+            <label className="text-sm font-medium text-gray-700 dark:text-gray-200">Đến ngày</label>
+            <input
+              type="date"
+              value={formState.to}
+              onChange={handleFormChange('to')}
+              className="mt-1 rounded border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500 dark:border-slate-700 dark:bg-slate-800 dark:text-gray-100"
+            />
           </div>
-        )}
-
-        {summary && (
-          <div className="grid gap-4 md:grid-cols-2" aria-label="Tóm tắt báo cáo audit">
-            <section className="rounded border bg-white p-4 shadow-sm" aria-label="Top người dùng">
-              <h3 className="text-sm font-semibold text-gray-700">Top người dùng</h3>
-              <ul className="mt-2 space-y-1 text-sm text-gray-600">
-                {summary.topUsers.length === 0 && <li>Chưa có thống kê.</li>}
-                {summary.topUsers.map((entry) => (
-                  <li key={entry.actor} className="flex items-center justify-between">
-                    <span className="font-medium text-gray-800">{entry.actor}</span>
-                    <span>{entry.count.toLocaleString('vi-VN')} thao tác</span>
-                  </li>
-                ))}
-              </ul>
-            </section>
-            <section className="rounded border bg-white p-4 shadow-sm" aria-label="Thống kê theo nhóm hành động">
-              <h3 className="text-sm font-semibold text-gray-700">Thống kê theo nhóm hành động</h3>
-              <ul className="mt-2 space-y-1 text-sm text-gray-600">
-                {summary.byKind.length === 0 && <li>Chưa có thống kê.</li>}
-                {summary.byKind.map((entry) => (
-                  <li key={entry.kind} className="flex items-center justify-between">
-                    <span className="font-medium text-gray-800">{entry.kind}</span>
-                    <span>{entry.count.toLocaleString('vi-VN')} lần</span>
-                  </li>
-                ))}
-              </ul>
-            </section>
+          <div className="flex flex-col">
+            <label className="text-sm font-medium text-gray-700 dark:text-gray-200">Loại báo cáo</label>
+            <select
+              value={formState.kind}
+              onChange={handleFormChange('kind')}
+              className="mt-1 rounded border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500 dark:border-slate-700 dark:bg-slate-800 dark:text-gray-100"
+            >
+              {availableKinds.map((kind) => (
+                <option key={kind} value={kind}>
+                  {kind === 'all' ? 'Tất cả' : kind}
+                </option>
+              ))}
+            </select>
           </div>
-        )}
-
-        {entries.length > 0 && (
-          <div className="overflow-x-auto rounded border bg-white shadow-sm">
-            <table className="min-w-full divide-y text-sm">
-              <thead className="bg-gray-50 text-left text-xs font-semibold uppercase text-gray-500">
-                <tr>
-                  <th className="px-3 py-2">Thời gian</th>
-                  <th className="px-3 py-2">Người dùng</th>
-                  <th className="px-3 py-2">Hành động</th>
-                  <th className="px-3 py-2">Chi tiết</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y">
-                {entries.map((entry) => (
-                  <tr key={entry.id || `${entry.ts}-${entry.actor}-${entry.action}`} className="odd:bg-white even:bg-gray-50">
-                    <td className="whitespace-nowrap px-3 py-2">{formatDateTime(entry.ts)}</td>
-                    <td className="px-3 py-2">{entry.actor || 'system'}</td>
-                    <td className="px-3 py-2">{entry.action || 'unknown'}</td>
-                    <td className="px-3 py-2 whitespace-pre-wrap text-gray-700">{entry.detail || ''}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="flex flex-col md:col-span-2">
+            <label className="text-sm font-medium text-gray-700 dark:text-gray-200">Từ khóa</label>
+            <input
+              type="text"
+              placeholder="Tài khoản, mã xác thực, IP..."
+              value={formState.search}
+              onChange={handleFormChange('search')}
+              className="mt-1 rounded border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500 dark:border-slate-700 dark:bg-slate-800 dark:text-gray-100"
+            />
           </div>
-        )}
+          <div className="flex flex-wrap items-end gap-2 md:col-span-5">
+            <button
+              type="submit"
+              className="rounded bg-amber-500 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-amber-600 disabled:cursor-not-allowed disabled:bg-amber-300"
+              disabled={loading}
+            >
+              Áp dụng bộ lọc
+            </button>
+            <button
+              type="button"
+              onClick={handleReset}
+              className="rounded border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-100 dark:border-slate-600 dark:text-gray-200 dark:hover:bg-slate-800"
+            >
+              Đặt lại mặc định
+            </button>
+            {error && (
+              <span className="text-sm text-red-600 dark:text-red-400">{error}</span>
+            )}
+          </div>
+        </form>
+      </section>
 
-        <div className="flex flex-wrap items-center justify-between gap-3 text-sm text-gray-600">
+      <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+        <div className="grid gap-4 md:grid-cols-3">
           <div>
-            Trang <span className="font-semibold text-gray-800">{meta.page}</span>
-            {totalPages ? (
-              <span>
-                {' '}của <span className="font-semibold text-gray-800">{totalPages}</span>
-              </span>
-            ) : null}
+            <h3 className="text-sm font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Tổng lượt tải</h3>
+            <p className="mt-1 text-2xl font-semibold text-amber-600 dark:text-amber-300">
+              {summary.total.toLocaleString('vi-VN')}
+            </p>
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              Mới nhất: {summary.latestCreatedAt ? formatDateTime(summary.latestCreatedAt, { withSeconds: true }) : '—'}
+            </p>
           </div>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => handlePageChange('prev')}
-              disabled={loading || meta.page <= 1 || !meta.hasPrev}
-              className="rounded border border-gray-300 px-3 py-1 text-sm text-gray-700 disabled:opacity-50"
-            >
-              Trang trước
-            </button>
-            <button
-              type="button"
-              onClick={() => handlePageChange('next')}
-              disabled={loading || (!meta.hasNext && (!totalPages || meta.page >= totalPages))}
-              className="rounded border border-gray-300 px-3 py-1 text-sm text-gray-700 disabled:opacity-50"
-            >
-              Trang tiếp
-            </button>
+          <div>
+            <h3 className="text-sm font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Theo loại báo cáo</h3>
+            {renderSummaryList(summary.byKind, 'Chưa có dữ liệu trong khoảng đã chọn.')}
+          </div>
+          <div>
+            <h3 className="text-sm font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Top tài khoản tải</h3>
+            {renderSummaryList(
+              (summary.topUsers || []).map((item) => ({
+                kind: `${item.displayName || item.username} (${resolveRoleLabel(item.role)})`,
+                total: item.total,
+              })),
+              'Chưa ghi nhận tài khoản nào trong khoảng đã chọn.'
+            )}
           </div>
         </div>
-      </div>
+      </section>
+
+      <section className="rounded-lg border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900">
+        <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3 dark:border-slate-700">
+          <div>
+            <h3 className="text-base font-semibold text-gray-800 dark:text-gray-100">Danh sách lịch sử export</h3>
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              Hiển thị {entries.length.toLocaleString('vi-VN')} / {auditData.total.toLocaleString('vi-VN')} lượt tải.
+            </p>
+          </div>
+          {loading && <span className="text-sm text-amber-600 dark:text-amber-300">Đang tải dữ liệu...</span>}
+        </div>
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-slate-200 text-sm dark:divide-slate-700">
+            <thead className="bg-slate-50 dark:bg-slate-800">
+              <tr>
+                <th className="px-4 py-2 text-left font-semibold text-gray-600 dark:text-gray-300">Thời gian tải</th>
+                <th className="px-4 py-2 text-left font-semibold text-gray-600 dark:text-gray-300">Báo cáo</th>
+                <th className="px-4 py-2 text-left font-semibold text-gray-600 dark:text-gray-300">Người tải</th>
+                <th className="px-4 py-2 text-left font-semibold text-gray-600 dark:text-gray-300">Mã xác thực</th>
+                <th className="px-4 py-2 text-left font-semibold text-gray-600 dark:text-gray-300">IP & thiết bị</th>
+                <th className="px-4 py-2 text-left font-semibold text-gray-600 dark:text-gray-300">Bộ lọc</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
+              {entries.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="px-4 py-6 text-center text-sm text-gray-500 dark:text-gray-400">
+                    Không có bản ghi nào trong khoảng thời gian đã chọn.
+                  </td>
+                </tr>
+              ) : (
+                entries.map((entry) => (
+                  <tr key={`${entry.id}-${entry.requestId || entry.signature}`} className="bg-white odd:bg-slate-50 dark:bg-slate-900 dark:odd:bg-slate-800/70">
+                    <td className="align-top px-4 py-3">
+                      <div className="font-medium text-gray-800 dark:text-gray-100">
+                        {formatDateTime(entry.createdAt, { withSeconds: true }) || '—'}
+                      </div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">
+                        Phát hành: {formatDateTime(entry.issuedAt, { withSeconds: true }) || '—'}
+                      </div>
+                    </td>
+                    <td className="align-top px-4 py-3">
+                      <div className="font-medium text-gray-800 dark:text-gray-100">{entry.reportKind || '—'}</div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">{entry.filename || 'Không rõ tên file'}</div>
+                    </td>
+                    <td className="align-top px-4 py-3">
+                      <div className="font-medium text-gray-800 dark:text-gray-100">{entry.displayName || entry.username || 'Không rõ'}</div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">
+                        {entry.username || '—'} • {resolveRoleLabel(entry.role)}
+                      </div>
+                    </td>
+                    <td className="align-top px-4 py-3">
+                      <div className="font-mono text-sm text-amber-600 dark:text-amber-300">{entry.shortSignature || '—'}</div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400 break-all">{entry.signature || '—'}</div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">Yêu cầu: {entry.requestId || '—'}</div>
+                    </td>
+                    <td className="align-top px-4 py-3">
+                      <div className="text-sm text-gray-700 dark:text-gray-200">{entry.ipAddress || '—'}</div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400 break-all">{entry.userAgent || '—'}</div>
+                    </td>
+                    <td className="align-top px-4 py-3">
+                      <div className="text-sm text-gray-700 dark:text-gray-200">{entry.filterSummary || '—'}</div>
+                      {entry.filters ? (
+                        <details className="mt-2 text-xs text-amber-600 dark:text-amber-300">
+                          <summary className="cursor-pointer select-none font-medium">Xem chi tiết</summary>
+                          <pre className="mt-1 max-h-48 overflow-auto rounded bg-slate-900/90 p-2 text-[11px] leading-relaxed text-amber-100">
+                            {formatFilters(entry.filters)}
+                          </pre>
+                        </details>
+                      ) : null}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+        <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 px-4 py-3 text-sm dark:border-slate-700">
+          <div className="text-gray-600 dark:text-gray-300">
+            Trang {page.toLocaleString('vi-VN')} / {totalPages.toLocaleString('vi-VN')}
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <label className="flex items-center gap-2 text-gray-600 dark:text-gray-300">
+              <span>Hiển thị</span>
+              <select
+                value={pageSize}
+                onChange={(event) => {
+                  const value = Number(event.target.value) || DEFAULT_PAGE_SIZE;
+                  setPageSize(value);
+                  setPage(1);
+                }}
+                className="rounded border border-gray-300 px-2 py-1 text-sm focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500 dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100"
+              >
+                {PAGE_SIZE_OPTIONS.map((size) => (
+                  <option key={size} value={size}>
+                    {size} / trang
+                  </option>
+                ))}
+              </select>
+            </label>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handlePrevious}
+                disabled={page <= 1}
+                className="rounded border border-gray-300 px-3 py-1 text-sm font-medium text-gray-700 transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:text-gray-400 dark:border-slate-600 dark:text-gray-200 dark:hover:bg-slate-800"
+              >
+                Trang trước
+              </button>
+              <button
+                type="button"
+                onClick={handleNext}
+                disabled={page >= totalPages}
+                className="rounded border border-gray-300 px-3 py-1 text-sm font-medium text-gray-700 transition hover:bg-gray-100 disabled:cursor-not-allowed disabled:text-gray-400 dark:border-slate-600 dark:text-gray-200 dark:hover:bg-slate-800"
+              >
+                Trang tiếp
+              </button>
+            </div>
+          </div>
+        </footer>
+      </section>
     </div>
   );
 }

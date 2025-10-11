@@ -6,6 +6,18 @@ import { setItem as sharedSetItem, clearStorageCache } from '@/lib/storageClient
 import { DECL_KEY } from '@/lib/store.js';
 import * as auth from '@/auth/localAuth.js';
 
+vi.mock('@/shared/toast.js', () => ({
+  toast: {
+    error: vi.fn(),
+    success: vi.fn(),
+    warning: vi.fn(),
+    info: vi.fn(),
+    promise: vi.fn(),
+    custom: vi.fn(),
+    dismiss: vi.fn(),
+  },
+}));
+
 const createJsonResponse = (payload, status = 200) => ({
   ok: status >= 200 && status < 300,
   status,
@@ -106,6 +118,11 @@ describe('DataImporter preview UI', () => {
             backend: { ok: true, state: 'online', checkedAt: new Date().toISOString() },
             database: { ok: true, state: 'ready', checkedAt: new Date().toISOString() },
           })
+        );
+      }
+      if (url.startsWith('/api/filter-presets')) {
+        return Promise.resolve(
+          createJsonResponse({ ok: true, scope: 'data-importer', presets: [] })
         );
       }
       if (url === '/api/import/alerts') {

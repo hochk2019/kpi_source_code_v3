@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   applyBaseTokens,
   applyThemePalette,
@@ -7,13 +7,15 @@ import {
   sanitizeThemeName,
   THEME_STORAGE_KEY,
 } from './themeTokens.js';
-
-const ThemeContext = createContext({
-  theme: 'system',
-  resolvedTheme: 'light',
-  setTheme: () => {},
-  getChartPalette: () => [],
-});
+import {
+  applyBrandTokens,
+  DEFAULT_BRAND,
+  getBrandOptions,
+  loadStoredBrand,
+  sanitizeBrandName,
+  BRAND_STORAGE_KEY,
+} from './brandTokens.js';
+import { ThemeContext } from './themeContext.js';
 
 function getSystemPreference() {
   if (typeof window === 'undefined' || !window.matchMedia) {
@@ -24,8 +26,11 @@ function getSystemPreference() {
 
 export function ThemeProvider({ children, defaultTheme = 'system' }) {
   const storedTheme = typeof window !== 'undefined' ? loadStoredTheme() : null;
+  const storedBrand = typeof window !== 'undefined' ? loadStoredBrand() : null;
   const [theme, setThemeState] = useState(() => storedTheme ?? sanitizeThemeName(defaultTheme));
   const [systemTheme, setSystemTheme] = useState(() => getSystemPreference());
+  const [brand, setBrandState] = useState(() => storedBrand ?? DEFAULT_BRAND);
+  const brandOptions = useMemo(() => getBrandOptions(), []);
 
   const resolvedTheme = theme === 'system' ? systemTheme : theme;
   const isDarkLike = resolvedTheme === 'dark' || resolvedTheme === 'high-contrast';
@@ -48,6 +53,12 @@ export function ThemeProvider({ children, defaultTheme = 'system' }) {
   }, [resolvedTheme, isDarkLike]);
 
   useEffect(() => {
+    const root = document.documentElement;
+    if (!root) return;
+    applyBrandTokens(brand, resolvedTheme, root);
+  }, [brand, resolvedTheme]);
+
+  useEffect(() => {
     if (typeof window === 'undefined' || !window.matchMedia) return;
     const media = window.matchMedia('(prefers-color-scheme: dark)');
     const handler = (event) => {
@@ -67,19 +78,28 @@ export function ThemeProvider({ children, defaultTheme = 'system' }) {
     }
   }, [theme]);
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      window.localStorage.setItem(BRAND_STORAGE_KEY, brand);
+    } catch (error) {
+      console.warn('Không thể lưu lựa chọn màu thương hiệu vào localStorage', error);
+    }
+  }, [brand]);
+
   const value = useMemo(
     () => ({
       theme,
       resolvedTheme,
+      brand,
+      brandOptions,
       setTheme: (next) => setThemeState(sanitizeThemeName(next, 'system')),
+      setBrand: (next) => setBrandState(sanitizeBrandName(next, DEFAULT_BRAND)),
       getChartPalette,
     }),
-    [theme, resolvedTheme],
+    [theme, resolvedTheme, brand, brandOptions],
   );
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 }
 
-export function useTheme() {
-  return useContext(ThemeContext);
-}

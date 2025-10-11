@@ -1,0 +1,109 @@
+import { useCallback, useEffect, useRef, useState } from 'react';
+
+/**
+ * Hook chuẩn hóa luồng gọi API bất đồng bộ với trạng thái loading/error thống nhất.
+ * @param {(context: { signal: AbortSignal }, ...args: any[]) => Promise<any>} task
+ * @param {{
+ *   initialData?: any,
+ *   immediate?: boolean,
+ *   initialArgs?: any[],
+ *   onSuccess?: (result: any) => void,
+ *   onError?: (error: unknown) => void,
+ *   throwOnError?: boolean,
+ * }} [options]
+ */
+export default function useAsyncRequest(task, options = {}) {
+  const {
+    initialData = null,
+    immediate = false,
+    initialArgs = [],
+    onSuccess,
+    onError,
+    throwOnError = false,
+  } = options;
+
+  const mountedRef = useRef(true);
+  const abortRef = useRef(null);
+
+  const [data, setData] = useState(initialData);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const execute = useCallback(
+    async (...args) => {
+      if (typeof task !== 'function') {
+        console.warn('useAsyncRequest: task không hợp lệ');
+        return undefined;
+      }
+
+      abortRef.current?.abort();
+      const controller = new AbortController();
+      abortRef.current = controller;
+
+      if (mountedRef.current) {
+        setLoading(true);
+        setError('');
+      }
+
+      try {
+        const result = await task({ signal: controller.signal }, ...args);
+        if (!mountedRef.current) return result;
+
+        setData(result);
+        setError('');
+        onSuccess?.(result);
+        return result;
+      } catch (err) {
+        if (err?.name === 'AbortError') {
+          return undefined;
+        }
+        const message = err?.message || 'Đã xảy ra lỗi không xác định';
+        if (mountedRef.current) {
+          setError(message);
+        }
+        onError?.(err);
+        if (throwOnError) {
+          throw err;
+        }
+        return undefined;
+      } finally {
+        if (mountedRef.current) {
+          setLoading(false);
+        }
+        if (abortRef.current === controller) {
+          abortRef.current = null;
+        }
+      }
+    },
+    [task, onSuccess, onError, throwOnError]
+  );
+
+  useEffect(() => {
+    if (immediate) {
+      execute(...initialArgs);
+    }
+    return () => {
+      mountedRef.current = false;
+      abortRef.current?.abort();
+      abortRef.current = null;
+    };
+  }, [execute, immediate, initialArgs]);
+
+  const reset = useCallback(() => {
+    abortRef.current?.abort();
+    abortRef.current = null;
+    if (!mountedRef.current) return;
+    setLoading(false);
+    setError('');
+    setData(initialData);
+  }, [initialData]);
+
+  return {
+    data,
+    setData,
+    loading,
+    error,
+    execute,
+    reset,
+  };
+}

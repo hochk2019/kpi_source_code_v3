@@ -30,6 +30,28 @@ class FakeStatement {
   }
 
   run(...params) {
+    if (this.sql.includes('INSERT INTO export_audit')) {
+      const payload = params[0] && typeof params[0] === 'object' ? params[0] : {};
+      const entry = {
+        id: ++this.database.exportAuditSeq,
+        created_at: payload.created_at ?? new Date().toISOString(),
+        issued_at: payload.issued_at ?? null,
+        username: payload.username ?? 'unknown',
+        display_name: payload.display_name ?? null,
+        role: payload.role ?? null,
+        report_kind: payload.report_kind ?? 'unknown',
+        filename: payload.filename ?? null,
+        signature: payload.signature ?? null,
+        short_signature: payload.short_signature ?? null,
+        filter_summary: payload.filter_summary ?? null,
+        filters: payload.filters ?? null,
+        ip_address: payload.ip_address ?? null,
+        request_id: payload.request_id ?? null,
+        user_agent: payload.user_agent ?? null,
+      };
+      this.database.exportAudit.push(entry);
+      return { changes: 1, lastInsertRowid: entry.id };
+    }
     if (this.sql.includes('INSERT INTO kv_store')) {
       const [key, value] = params;
       if (value === null || value === undefined) {
@@ -84,6 +106,50 @@ class FakeStatement {
     return { changes: 0 };
   }
 
+  filterExportAudit(params = {}) {
+    const baseParams = params && typeof params === 'object' ? params : {};
+    const fromIso = baseParams.from || baseParams['@from'];
+    const toIso = baseParams.to || baseParams['@to'];
+    const kind = (baseParams.kind || baseParams['@kind'] || '').toString().toLowerCase();
+    const searchRaw = (baseParams.search || baseParams['@search'] || '').toString().toLowerCase();
+    const search = searchRaw.replace(/%/g, '');
+    const fromTs = fromIso ? new Date(fromIso).getTime() : Number.NaN;
+    const toTs = toIso ? new Date(toIso).getTime() : Number.NaN;
+
+    return this.database.exportAudit.filter((entry) => {
+      const createdTs = new Date(entry.created_at).getTime();
+      if (Number.isFinite(fromTs) && createdTs < fromTs) {
+        return false;
+      }
+      if (Number.isFinite(toTs) && createdTs > toTs) {
+        return false;
+      }
+      if (kind && entry.report_kind.toString().toLowerCase() !== kind) {
+        return false;
+      }
+      if (search) {
+        const haystack = [
+          entry.username,
+          entry.display_name,
+          entry.role,
+          entry.report_kind,
+          entry.filename,
+          entry.signature,
+          entry.short_signature,
+          entry.filter_summary,
+          entry.request_id,
+          entry.ip_address,
+        ]
+          .map((value) => (value ?? '').toString().toLowerCase())
+          .join(' ');
+        if (!haystack.includes(search)) {
+          return false;
+        }
+      }
+      return true;
+    });
+  }
+
   get(...params) {
     if (this.sql.includes('SELECT value FROM kv_store WHERE key')) {
       const [key] = params;
@@ -99,6 +165,11 @@ class FakeStatement {
         return undefined;
       }
       return { ...session };
+    }
+    if (this.sql.includes('SELECT COUNT(*) AS total FROM export_audit')) {
+      const [arg] = params;
+      const rows = this.filterExportAudit(arg);
+      return { total: rows.length };
     }
     return undefined;
   }
@@ -119,6 +190,47 @@ class FakeStatement {
     if (this.sql.includes('SELECT token FROM auth_sessions')) {
       return Array.from(this.database.sessions.keys()).map((token) => ({ token }));
     }
+    if (this.sql.includes('FROM export_audit')) {
+      const [arg] = arguments;
+      const rows = this.filterExportAudit(arg);
+
+      if (this.sql.includes('GROUP BY report_kind')) {
+        const byKind = new Map();
+        for (const row of rows) {
+          const key = row.report_kind;
+          byKind.set(key, (byKind.get(key) || 0) + 1);
+        }
+        const result = Array.from(byKind.entries()).map(([kind, total]) => ({ kind, total }));
+        return result.sort((a, b) => b.total - a.total);
+      }
+
+      if (this.sql.includes('GROUP BY username')) {
+        const summary = new Map();
+        for (const row of rows) {
+          const key = row.username || 'unknown';
+          const current = summary.get(key) || { username: key, display_name: row.display_name, role: row.role, total: 0 };
+          current.total += 1;
+          current.display_name = current.display_name || row.display_name;
+          current.role = current.role || row.role;
+          summary.set(key, current);
+        }
+        return Array.from(summary.values()).sort((a, b) => b.total - a.total).slice(0, 5);
+      }
+
+      if (this.sql.includes('SELECT DISTINCT report_kind')) {
+        const kinds = Array.from(new Set(rows.map((row) => row.report_kind)));
+        return kinds.sort((a, b) => a.localeCompare(b)).map((report_kind) => ({ report_kind }));
+      }
+
+      let sorted = rows.slice();
+      if (this.sql.includes('ORDER BY datetime(created_at) DESC')) {
+        sorted.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      }
+
+      const limit = arg?.limit ?? sorted.length;
+      const offset = arg?.offset ?? 0;
+      return sorted.slice(offset, offset + limit).map((row) => ({ ...row }));
+    }
     return [];
   }
 }
@@ -127,6 +239,8 @@ class FakeDatabase {
   constructor() {
     this.store = new Map();
     this.sessions = new Map();
+    this.exportAudit = [];
+    this.exportAuditSeq = 0;
   }
 
   pragma() {}
@@ -137,6 +251,10 @@ class FakeDatabase {
     }
     if (sql.includes('DELETE FROM auth_sessions')) {
       this.sessions.clear();
+    }
+    if (sql.includes('DELETE FROM export_audit')) {
+      this.exportAudit = [];
+      this.exportAuditSeq = 0;
     }
   }
 
@@ -310,6 +428,10 @@ vi.mock('exceljs', () => {
       this.pageSetup = {};
       this.columns = [];
       this.images = [];
+      this.headerFooter = {};
+      this.properties = { outlineProperties: {} };
+      this.state = 'visible';
+      this.rowCount = 0;
     }
 
     mergeCells() {}
@@ -340,6 +462,30 @@ vi.mock('exceljs', () => {
     addImage(imageId, placement) {
       this.images.push({ imageId, placement });
     }
+
+    getColumn(index) {
+      const idx = (Number(index) || 1) - 1;
+      if (!this.columns[idx]) {
+        this.columns[idx] = {};
+      }
+      return this.columns[idx];
+    }
+
+    spliceRows(start, deleteCount, ...rows) {
+      for (let i = 0; i < deleteCount; i += 1) {
+        this.rows.delete(start + i);
+      }
+      rows.forEach((cells, offset) => {
+        const rowIndex = start + offset;
+        const row = this.getRow(rowIndex);
+        row.values = cells;
+        cells.forEach((value, cellIdx) => {
+          if (cellIdx === 0) return;
+          row.getCell(cellIdx).value = value;
+        });
+      });
+      this.rowCount = Math.max(this.rowCount, start + rows.length - 1);
+    }
   }
 
   let workbookCreateCount = 0;
@@ -364,6 +510,10 @@ vi.mock('exceljs', () => {
       const id = this.images.length + 1;
       this.images.push({ id, config });
       return id;
+    }
+
+    getWorksheet(name) {
+      return this.worksheets.find((sheet) => sheet.name === name);
     }
   }
 
@@ -1757,12 +1907,20 @@ describe('ECUS sync API', () => {
 });
 
 describe('Report export API', () => {
+  beforeEach(() => {
+    resetDb();
+    excelMock.__resetWorkbookCreateCount?.();
+  });
+
   it('yêu cầu đăng nhập trước khi xuất báo cáo', async () => {
     const res = await request(app)
       .post('/api/reports/export')
       .send({ kind: 'staff', payload: {} });
     expect(res.status).toBe(401);
     expect(res.body.ok).toBe(false);
+
+    const auditCount = getDb().prepare('SELECT COUNT(*) AS total FROM export_audit').get() || { total: 0 };
+    expect(auditCount.total ?? 0).toBe(0);
   });
 
   it('từ chối khi tài khoản không có quyền báo cáo', async () => {
@@ -1788,6 +1946,9 @@ describe('Report export API', () => {
 
     expect(exportRes.status).toBe(403);
     expect(exportRes.body.ok).toBe(false);
+
+    const auditCount = getDb().prepare('SELECT COUNT(*) AS total FROM export_audit').get() || { total: 0 };
+    expect(auditCount.total ?? 0).toBe(0);
 
     const cleanup = await admin.delete('/api/auth/accounts/noperm');
     expect(cleanup.status).toBe(200);
@@ -1832,6 +1993,27 @@ describe('Report export API', () => {
     expect(res.headers['content-disposition']).toMatch(/bao-cao-kpi-nhan-vien/);
     expect(Buffer.isBuffer(res.body)).toBe(true);
     expect(res.body.byteLength).toBeGreaterThan(0);
+
+    const rows = getDb()
+      .prepare('SELECT * FROM export_audit ORDER BY id DESC')
+      .all();
+    expect(rows).toHaveLength(1);
+    const [entry] = rows;
+    expect(entry.username).toBe('admin');
+    expect(entry.report_kind).toBe('staff');
+    expect(entry.signature).toBeTruthy();
+    expect(entry.short_signature).toBeTruthy();
+    expect(entry.request_id).toBeTruthy();
+    expect(entry.filters).toBeTruthy();
+    const storedFilters = JSON.parse(entry.filters);
+    expect(storedFilters).toHaveProperty('staff');
+    expect(storedFilters.staff.name).toBe(payload.staff.name);
+    expect(Array.isArray(storedFilters.staff.rows)).toBe(true);
+    expect(storedFilters.range).toEqual(payload.range);
+    expect(storedFilters.rules.name).toBe(payload.rules.name);
+    expect(Object.keys(storedFilters.staff.stats || {})).toEqual(
+      expect.arrayContaining(['decls', 'kpi', 'import', 'export', 'items', 'licenses'])
+    );
   });
 
   it('tái sử dụng cache khi xuất cùng tham số', async () => {
@@ -1877,9 +2059,155 @@ describe('Report export API', () => {
       .send({ kind: 'staff', payload });
 
     expect(second.status).toBe(200);
-    expect(excelMock.__getWorkbookCreateCount()).toBe(1);
+    expect(excelMock.__getWorkbookCreateCount()).toBe(2);
     expect(Buffer.isBuffer(second.body)).toBe(true);
     expect(second.body.byteLength).toBeGreaterThan(0);
+  });
+
+  it('yêu cầu đăng nhập trước khi tra cứu lịch sử export', async () => {
+    const res = await request(app).get('/api/reports/export/audit');
+    expect(res.status).toBe(401);
+    expect(res.body.ok).toBe(false);
+  });
+
+  it('từ chối khi tài khoản không có quyền xem lịch sử export', async () => {
+    resetDb();
+    const staffAgent = request.agent(app);
+    const loginRes = await staffAgent
+      .post('/api/auth/login')
+      .send({ username: 'nhanvien', password: '123456' });
+    expect(loginRes.status).toBe(200);
+
+    const res = await staffAgent.get('/api/reports/export/audit');
+    expect(res.status).toBe(403);
+    expect(res.body.ok).toBe(false);
+  });
+
+  it('trả về lịch sử export theo bộ lọc, phân trang và từ khóa', async () => {
+    resetDb();
+    const db = getDb();
+    const insertAudit = db.prepare(
+      `INSERT INTO export_audit (
+        created_at,
+        issued_at,
+        username,
+        display_name,
+        role,
+        report_kind,
+        filename,
+        signature,
+        short_signature,
+        filter_summary,
+        filters,
+        ip_address,
+        request_id,
+        user_agent
+      ) VALUES (
+        @created_at,
+        @issued_at,
+        @username,
+        @display_name,
+        @role,
+        @report_kind,
+        @filename,
+        @signature,
+        @short_signature,
+        @filter_summary,
+        @filters,
+        @ip_address,
+        @request_id,
+        @user_agent
+      )`
+    );
+
+    insertAudit.run({
+      created_at: '2025-03-01T03:15:00.000Z',
+      issued_at: '2025-03-01T03:10:00.000Z',
+      username: 'admin',
+      display_name: 'Quản trị viên',
+      role: 'admin',
+      report_kind: 'staff',
+      filename: 'bao-cao-staff.xlsx',
+      signature: 'SIG-001',
+      short_signature: 'AA1001',
+      filter_summary: 'Team 1 • Tháng 03/2025',
+      filters: JSON.stringify({ range: { from: '2025-03-01', to: '2025-03-31' }, team: 'Team 1' }),
+      ip_address: '10.0.0.1',
+      request_id: 'req-001',
+      user_agent: 'Vitest/1.0',
+    });
+
+    insertAudit.run({
+      created_at: '2025-03-02T09:30:00.000Z',
+      issued_at: '2025-03-02T09:25:00.000Z',
+      username: 'lead.hoc',
+      display_name: 'Trưởng nhóm Học',
+      role: 'lead',
+      report_kind: 'team',
+      filename: 'bao-cao-team.xlsx',
+      signature: 'SIG-002',
+      short_signature: 'BB2002',
+      filter_summary: 'Team 2 • So sánh KPI',
+      filters: JSON.stringify({ range: { from: '2025-03-01', to: '2025-03-02' }, team: 'Team 2' }),
+      ip_address: '10.0.0.2',
+      request_id: 'req-002',
+      user_agent: 'Vitest/1.0',
+    });
+
+    insertAudit.run({
+      created_at: '2025-04-01T08:00:00.000Z',
+      issued_at: '2025-04-01T07:58:00.000Z',
+      username: 'manager.hoainam',
+      display_name: 'Quản lý Nam',
+      role: 'manager',
+      report_kind: 'staff',
+      filename: 'bao-cao-thang4.xlsx',
+      signature: 'SIG-003',
+      short_signature: 'CC3003',
+      filter_summary: 'Tháng 04/2025',
+      filters: JSON.stringify({ range: { from: '2025-04-01', to: '2025-04-30' } }),
+      ip_address: '10.0.0.3',
+      request_id: 'req-003',
+      user_agent: 'Vitest/1.0',
+    });
+
+    const adminAgent = request.agent(app);
+    const loginRes = await adminAgent.post('/api/auth/login').send({ username: 'admin', password: 'admin123' });
+    expect(loginRes.status).toBe(200);
+
+    const res = await adminAgent
+      .get('/api/reports/export/audit')
+      .query({ from: '2025-03-01', to: '2025-03-07', limit: 2, page: 1 });
+
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+    expect(res.body.total).toBe(2);
+    expect(res.body.entries).toHaveLength(2);
+    expect(res.body.entries[0]).toMatchObject({ reportKind: 'team', shortSignature: 'BB2002' });
+    expect(res.body.entries[0].filters).toMatchObject({ range: { from: '2025-03-01', to: '2025-03-02' } });
+    expect(res.body.summary.byKind).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: 'staff', total: 1 }),
+        expect.objectContaining({ kind: 'team', total: 1 }),
+      ])
+    );
+    expect(res.body.summary.topUsers).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ username: 'lead.hoc', total: 1 }),
+        expect.objectContaining({ username: 'admin', total: 1 }),
+      ])
+    );
+
+    const searchRes = await adminAgent
+      .get('/api/reports/export/audit')
+      .query({ search: 'req-002', limit: 1, page: 1 });
+
+    expect(searchRes.status).toBe(200);
+    expect(searchRes.body.ok).toBe(true);
+    expect(searchRes.body.total).toBe(1);
+    expect(searchRes.body.entries).toHaveLength(1);
+    expect(searchRes.body.entries[0].requestId).toBe('req-002');
+    expect(searchRes.body.availableKinds).toEqual(expect.arrayContaining(['staff', 'team']));
   });
 });
 

@@ -22,6 +22,7 @@ import { deriveCOStatus, coLabel, coLineCount } from "@/shared/co.js";
 import { formatDisplayDate, formatDateRangeLabel } from "@/shared/format.js";
 import { fetchWithAuth } from "@/auth/localAuth.js";
 import useTooltipTitles from "@/hooks/useTooltipTitles.js";
+import useFilterPresets from "@/hooks/useFilterPresets.js";
 import {
   normalizeRoleKey,
   TEAM_LEAD_ROLE,
@@ -38,6 +39,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog.jsx";
 import { ScrollArea } from "@/components/ui/scroll-area.jsx";
+import { toast } from "@/shared/toast.js";
 
 const DEFAULT_PAGE_SIZE = 10;
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100, 200];
@@ -69,7 +71,9 @@ const RANGE_PRESETS = Object.freeze([
   { label: "30 ngày", days: 30 },
 ]);
 
-const FILTER_STORAGE_KEY = "kpi:data-importer:filter:v1";
+const FILTER_PRESET_SCOPE = "data-importer";
+const LAST_FILTER_PRESET_KEY = "kpi:data-importer:last-preset-v1";
+const LEGACY_FILTER_STORAGE_KEY = "kpi:data-importer:filter:v1";
 
 const DUPLICATE_MERGE_FIELDS = Object.freeze([
   { key: "nhan_vien", label: "Nhân viên phụ trách" },
@@ -82,6 +86,356 @@ const DUPLICATE_MERGE_FIELDS = Object.freeze([
   { key: "licenseManualCount", label: "Số GP nhập tay" },
   { key: "reviewed", label: "Trạng thái rà soát" },
 ]);
+
+const DUPLICATE_DIFF_FIELD_GROUPS = Object.freeze([
+  {
+    title: "Thông tin tờ khai",
+    fields: [
+      "so_tk_full",
+      "so_tk",
+      "so_tk_suffix",
+      "so_tk_ama",
+      "mst",
+      "cong_ty",
+      "dia_chi",
+      "loai_hinh",
+      "ma_loai_hinh",
+      "ma_hq",
+      "hq_agency",
+      "branch",
+      "nhanh",
+      "ngay_dk",
+      "date",
+      "raw_date",
+    ],
+  },
+  {
+    title: "Phân công & trạng thái",
+    fields: [
+      "nhan_vien",
+      "team",
+      "agency",
+      "dai_ly",
+      "agents",
+      "__agents_display",
+      "status",
+      "reviewed",
+      "reviewed_at",
+      "duplicate_review_pending",
+      "duplicate_review_note",
+      "duplicate_review_actor",
+      "duplicate_review_updated_at",
+    ],
+  },
+  {
+    title: "Giấy phép & KPI",
+    fields: [
+      "kpi",
+      "licenses",
+      "so_luong_gp",
+      "licenseManualCount",
+      "licenseSource",
+      "licenseSourceCodes",
+      "licenseCodes",
+      "licenseExcludedCodes",
+      "__license_source_count",
+      "__license_included_count",
+      "__license_excluded_count",
+      "__license_source_codes",
+      "__license_included_codes",
+      "__license_excluded_codes",
+    ],
+  },
+  {
+    title: "C/O & chỉ báo",
+    fields: [
+      "co",
+      "co_status",
+      "co_notes",
+      "co_issue",
+      "__co_status",
+      "__co_lines",
+    ],
+  },
+  {
+    title: "Mốc thời gian",
+    fields: [
+      "created_at",
+      "imported_at",
+      "updated_at",
+      "synced_at",
+      "last_sync_at",
+      "reviewed_at",
+      "__timestamp_field",
+    ],
+  },
+]);
+
+const DUPLICATE_DIFF_FIELD_LABELS = Object.freeze({
+  so_tk_full: "Số tờ khai (đầy đủ)",
+  so_tk: "Số tờ khai (11 số)",
+  so_tk_suffix: "Mã phân nhánh",
+  so_tk_ama: "Số TK AMA",
+  mst: "Mã số thuế",
+  cong_ty: "Tên doanh nghiệp",
+  dia_chi: "Địa chỉ doanh nghiệp",
+  loai_hinh: "Loại hình",
+  ma_loai_hinh: "Mã loại hình",
+  ma_hq: "Mã HQ quản lý",
+  hq_agency: "Mã HQ đại lý",
+  branch: "Chi nhánh HQ",
+  nhanh: "Nhánh nghiệp vụ",
+  ngay_dk: "Ngày đăng ký",
+  date: "Ngày tờ khai",
+  raw_date: "Ngày gốc (chuỗi)",
+  nhan_vien: "Nhân viên phụ trách",
+  team: "Tổ đội",
+  agency: "Đại lý chính",
+  dai_ly: "Đại lý ghi chú",
+  agents: "Danh sách đại lý (thô)",
+  __agents_display: "Danh sách đại lý (gộp)",
+  status: "Trạng thái xử lý",
+  reviewed: "Đã rà soát",
+  reviewed_at: "Thời gian rà soát",
+  duplicate_review_pending: "Đánh dấu cần rà soát",
+  duplicate_review_note: "Ghi chú xử lý trùng",
+  duplicate_review_actor: "Người cập nhật rà soát",
+  duplicate_review_updated_at: "Cập nhật rà soát gần nhất",
+  kpi: "Điểm KPI",
+  licenses: "Số GP hệ thống",
+  so_luong_gp: "Số GP hiển thị",
+  licenseManualCount: "Số GP nhập tay",
+  licenseSource: "Nguồn giấy phép",
+  licenseSourceCodes: "Mã GP nguồn (raw)",
+  licenseCodes: "Mã GP hiện tại",
+  licenseExcludedCodes: "Mã GP loại trừ (raw)",
+  __license_source_count: "Tổng mã GP nguồn",
+  __license_included_count: "Mã GP giữ lại",
+  __license_excluded_count: "Mã GP loại trừ",
+  __license_source_codes: "Danh sách mã GP nguồn",
+  __license_included_codes: "Danh sách mã GP giữ lại",
+  __license_excluded_codes: "Danh sách mã GP loại trừ",
+  co: "Giá trị C/O",
+  co_status: "Trạng thái C/O",
+  co_notes: "Ghi chú C/O",
+  co_issue: "Cảnh báo C/O",
+  __co_status: "Trạng thái C/O (tính)",
+  __co_lines: "Số dòng C/O",
+  created_at: "Khởi tạo",
+  imported_at: "Import Excel",
+  updated_at: "Cập nhật gần nhất",
+  synced_at: "Đồng bộ ECUS",
+  last_sync_at: "Đồng bộ ECUS trước",
+  __timestamp_field: "Mốc thời gian ưu tiên",
+});
+
+const MAX_IMPORT_FILE_SIZE_BYTES = 5 * 1024 * 1024; // 5 MB
+const MAX_IMPORT_ROWS = 5000;
+const ACCEPTED_IMPORT_EXTENSIONS = Object.freeze([".xlsx", ".xlsm"]);
+
+const DUPLICATE_DIFF_IGNORED_KEYS = new Set([
+  "__proto__",
+  "__rowIndex",
+  "__rowindex",
+  "_rowIndex",
+  "rowIndex",
+  "raw",
+  "raw_data",
+  "rawDate",
+  "rawTimestamp",
+  "timestamp",
+  "timestampDetail",
+  "score",
+  "key",
+]);
+
+const DUPLICATE_DIFF_MULTILINE_KEYS = new Set([
+  "agents",
+  "licenseSourceCodes",
+  "licenseCodes",
+  "licenseExcludedCodes",
+  "__license_source_codes",
+  "__license_included_codes",
+  "__license_excluded_codes",
+  "__agents_display",
+]);
+
+const DUPLICATE_DIFF_DATE_KEYS = new Set(["date", "ngay_dk"]);
+
+const DUPLICATE_DIFF_DATETIME_KEYS = new Set([
+  "created_at",
+  "imported_at",
+  "updated_at",
+  "synced_at",
+  "last_sync_at",
+  "reviewed_at",
+  "duplicate_review_updated_at",
+]);
+
+function humanizeDiffKey(key) {
+  if (!key) return "(không xác định)";
+  return key
+    .toString()
+    .replace(/^_+/, "")
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replace(/_/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/^\w/, (c) => c.toUpperCase());
+}
+
+function normalizeDiffValue(value) {
+  if (value === null || value === undefined) return "";
+  if (typeof value === "string") return value.trim();
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value.toString() : "";
+  }
+  if (typeof value === "boolean") return value ? "__true" : "__false";
+  if (Array.isArray(value)) {
+    return value.map((item) => normalizeDiffValue(item)).join("|#|");
+  }
+  if (value instanceof Date) {
+    return value.toISOString();
+  }
+  if (typeof value === "object") {
+    try {
+      return JSON.stringify(value);
+    } catch (err) {
+      return Object.keys(value)
+        .sort()
+        .map((key) => `${key}:${normalizeDiffValue(value[key])}`)
+        .join("|#|");
+    }
+  }
+  return String(value);
+}
+
+function isEmptyDiffValue(value) {
+  if (value === null || value === undefined) return true;
+  if (typeof value === "string") return value.trim().length === 0;
+  if (Array.isArray(value)) return value.length === 0;
+  if (typeof value === "object") {
+    if (value instanceof Date) return false;
+    return Object.keys(value).length === 0;
+  }
+  return false;
+}
+
+function formatDiffValue(value, key) {
+  if (value === null || value === undefined) return "";
+  if (typeof value === "string") {
+    return value.trim();
+  }
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value.toLocaleString("vi-VN") : "";
+  }
+  if (typeof value === "boolean") {
+    return value ? "Có" : "Không";
+  }
+  if (value instanceof Date) {
+    return value.toLocaleString("vi-VN");
+  }
+  if (Array.isArray(value)) {
+    if (value.length === 0) return "";
+    const joined = value
+      .map((item) => formatDiffValue(item, key))
+      .filter((part) => part !== "")
+      .join(DUPLICATE_DIFF_MULTILINE_KEYS.has(key) ? "\n" : ", ");
+    return joined;
+  }
+  if (typeof value === "object") {
+    try {
+      return JSON.stringify(value, null, 2);
+    } catch (err) {
+      return String(value);
+    }
+  }
+  return String(value);
+}
+
+function formatDiffTemporalValue(value, key) {
+  if (!value) return "";
+  const parsed = Date.parse(value);
+  if (!Number.isFinite(parsed)) {
+    return typeof value === "string" ? value : String(value);
+  }
+  if (DUPLICATE_DIFF_DATE_KEYS.has(key)) {
+    return formatDisplayDate(new Date(parsed).toISOString().slice(0, 10));
+  }
+  return new Date(parsed).toLocaleString("vi-VN");
+}
+
+function createDuplicateDiffGroups(baseValues, compareValues) {
+  if (!baseValues || !compareValues) return [];
+  const remainingKeys = new Set([
+    ...Object.keys(baseValues || {}),
+    ...Object.keys(compareValues || {}),
+  ]);
+  const groups = [];
+  for (const group of DUPLICATE_DIFF_FIELD_GROUPS) {
+    const rows = [];
+    for (const key of group.fields) {
+      if (!remainingKeys.has(key)) continue;
+      remainingKeys.delete(key);
+      const baseValue = baseValues[key];
+      const compareValue = compareValues[key];
+      const bothEmpty = isEmptyDiffValue(baseValue) && isEmptyDiffValue(compareValue);
+      if (bothEmpty) continue;
+      let baseDisplay = baseValue;
+      let compareDisplay = compareValue;
+      if (typeof baseValue === "string" || typeof compareValue === "string") {
+        // keep for further formatting below
+      }
+      if (DUPLICATE_DIFF_DATE_KEYS.has(key) || DUPLICATE_DIFF_DATETIME_KEYS.has(key)) {
+        baseDisplay = formatDiffTemporalValue(baseValue, key);
+        compareDisplay = formatDiffTemporalValue(compareValue, key);
+      } else {
+        baseDisplay = formatDiffValue(baseValue, key);
+        compareDisplay = formatDiffValue(compareValue, key);
+      }
+      rows.push({
+        key,
+        label: DUPLICATE_DIFF_FIELD_LABELS[key] || humanizeDiffKey(key),
+        baseValue: baseDisplay,
+        compareValue: compareDisplay,
+        changed: normalizeDiffValue(baseValue) !== normalizeDiffValue(compareValue),
+      });
+    }
+    if (rows.length > 0) {
+      groups.push({ title: group.title, rows });
+    }
+  }
+
+  const leftoverRows = [];
+  for (const key of Array.from(remainingKeys).sort()) {
+    if (DUPLICATE_DIFF_IGNORED_KEYS.has(key)) continue;
+    const baseValue = baseValues[key];
+    const compareValue = compareValues[key];
+    const bothEmpty = isEmptyDiffValue(baseValue) && isEmptyDiffValue(compareValue);
+    if (bothEmpty) continue;
+    const label = DUPLICATE_DIFF_FIELD_LABELS[key] || humanizeDiffKey(key);
+    let baseDisplay = baseValue;
+    let compareDisplay = compareValue;
+    if (DUPLICATE_DIFF_DATE_KEYS.has(key) || DUPLICATE_DIFF_DATETIME_KEYS.has(key)) {
+      baseDisplay = formatDiffTemporalValue(baseValue, key);
+      compareDisplay = formatDiffTemporalValue(compareValue, key);
+    } else {
+      baseDisplay = formatDiffValue(baseValue, key);
+      compareDisplay = formatDiffValue(compareValue, key);
+    }
+    leftoverRows.push({
+      key,
+      label,
+      baseValue: baseDisplay,
+      compareValue: compareDisplay,
+      changed: normalizeDiffValue(baseValue) !== normalizeDiffValue(compareValue),
+    });
+  }
+  if (leftoverRows.length > 0) {
+    groups.push({ title: "Thông tin khác", rows: leftoverRows });
+  }
+  return groups;
+}
 
 const DATE_RANGE_PRESETS = Object.freeze([
   {
@@ -574,9 +928,16 @@ export default function DataImporter({
   const [page, setPage] = useState(1);
   const [mode, setMode] = useState("saved");         // saved | preview
   const [selectedFile, setSelectedFile] = useState("");
-  const savedFilterRef = useRef(null);
-  const [hasSavedFilter, setHasSavedFilter] = useState(false);
-  const [filterSavedAt, setFilterSavedAt] = useState(null);
+  const {
+    presets: savedPresets,
+    loading: presetLoading,
+    error: presetError,
+    clearError: clearPresetError,
+    refresh: refreshPresetList,
+    createPreset: createFilterPreset,
+    updatePreset: updateFilterPreset,
+    deletePreset: deleteFilterPreset,
+  } = useFilterPresets(FILTER_PRESET_SCOPE);
   const [datePreset, setDatePreset] = useState("none");
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [filterNoStaff, setFilterNoStaff] = useState(false);
@@ -591,17 +952,22 @@ export default function DataImporter({
   const [duplicateReviewOpen, setDuplicateReviewOpen] = useState(false);
   const [duplicateReviewConfirmed, setDuplicateReviewConfirmed] = useState(false);
   const [duplicate11Plan, setDuplicate11Plan] = useState({});
+  const [duplicateDiffState, setDuplicateDiffState] = useState({
+    open: false,
+    group: null,
+    baseKey: null,
+    compareKey: null,
+  });
+  const [selectedPresetId, setSelectedPresetId] = useState("");
+  const [appliedPresetId, setAppliedPresetId] = useState("");
+  const [presetSaving, setPresetSaving] = useState(false);
+  const lastPresetSeedRef = useRef("");
+  const presetAutoAppliedRef = useRef(false);
 
   // Tuỳ chọn
   const [overwrite, setOverwrite] = useState(false);         // Ghi đè toàn bộ
   const [upsert11, setUpsert11] = useState(true);            // Upsert theo 11 số đầu (nếu có dùng merge cục bộ)
   const [autoAssignStaff, setAutoAssignStaff] = useState(true); // Tự gán nhân viên theo MST nếu trống
-
-  useEffect(() => {
-    if (!canOverwriteData && overwrite) {
-      setOverwrite(false);
-    }
-  }, [canOverwriteData, overwrite]);
 
   const actor = currentUser?.username || "guest";
   const isReadOnlyForEdits = !canEdit;
@@ -618,6 +984,12 @@ export default function DataImporter({
   const assignedTeamKey = normalizeName(assignedTeam);
   const canUploadFiles = canEdit && !(isTeamLead || isStaffRole);
   const canOverwriteData = canUploadFiles;
+
+  useEffect(() => {
+    if (!canOverwriteData && overwrite) {
+      setOverwrite(false);
+    }
+  }, [canOverwriteData, overwrite]);
   const editingRestrictionMessage = useMemo(() => {
     if (!canEdit) return "";
     if (isManagerRole) return "";
@@ -662,6 +1034,50 @@ export default function DataImporter({
     },
     [assignedTeamKey, canEdit, isManagerRole, isStaffRole, isTeamLead, memberTeamMap, staffNameKey]
   );
+  const keyOfRow = useCallback((row) => {
+    const soTk = (row?.so_tk || "").toString();
+    const nhanh = (row?.nhanh || "").toString();
+    return `${soTk}_${nhanh}`;
+  }, []);
+  const filterEditableKeys = useCallback(
+    (keys) => {
+      if (!Array.isArray(keys) || keys.length === 0) {
+        return { allowed: [], blocked: 0 };
+      }
+      const target = new Set(keys);
+      const allowed = [];
+      let blocked = 0;
+      for (const row of rawRows) {
+        const key = keyOfRow(row);
+        if (!target.has(key)) continue;
+        if (isRowEditable(row)) {
+          allowed.push(key);
+        } else {
+          blocked += 1;
+        }
+      }
+      return { allowed, blocked };
+    },
+    [isRowEditable, keyOfRow, rawRows]
+  );
+  const ensureEditableKeys = useCallback(
+    (keys, actionLabel = "thao tác") => {
+      const { allowed, blocked } = filterEditableKeys(keys);
+      if (!allowed.length) {
+        if (blocked > 0 && editingRestrictionMessage) {
+          alert(editingRestrictionMessage);
+        } else if (keys?.length) {
+          alert("Không tìm thấy tờ khai phù hợp để xử lý.");
+        }
+        return null;
+      }
+      if (blocked > 0 && editingRestrictionMessage) {
+        alert(`Đã bỏ qua ${blocked} tờ khai không thuộc phạm vi của bạn khi ${actionLabel}.`);
+      }
+      return allowed;
+    },
+    [editingRestrictionMessage, filterEditableKeys]
+  );
   const [syncConfig, setSyncConfig] = useState(() => ({ ...DEFAULT_SYNC_CONFIG }));
   const [syncForm, setSyncForm] = useState(() => ({
     enabled: DEFAULT_SYNC_CONFIG.enabled,
@@ -692,77 +1108,6 @@ export default function DataImporter({
   const [previewRangeInfo, setPreviewRangeInfo] = useState(null);
   const previewRangeLabel = useMemo(() => formatDateRangeLabel(previewRangeInfo), [previewRangeInfo]);
 
-  const applyStoredFilter = useCallback((stored, { notify = false } = {}) => {
-    if (!stored || typeof stored !== "object") {
-      return;
-    }
-    savedFilterRef.current = stored;
-    setHasSavedFilter(true);
-    if (stored.savedAt) {
-      setFilterSavedAt(stored.savedAt);
-    }
-    if (typeof stored.query === "string") {
-      setQuery(stored.query);
-    }
-    if (stored.range && typeof stored.range === "object") {
-      setSearchRange({
-        from: stored.range.from || "",
-        to: stored.range.to || "",
-      });
-    }
-    if (stored.datePreset) {
-      setDatePreset(stored.datePreset);
-    }
-    if (typeof stored.filterNoStaff === "boolean") {
-      setFilterNoStaff(stored.filterNoStaff);
-    }
-    if (typeof stored.filterNoTeam === "boolean") {
-      setFilterNoTeam(stored.filterNoTeam);
-    }
-    if (typeof stored.filterDuplicate11 === "boolean") {
-      setFilterDuplicate11(stored.filterDuplicate11);
-    }
-    if (typeof stored.coFilterMode === "string") {
-      setCoFilterMode(stored.coFilterMode);
-    }
-    if (Number.isFinite(stored.coFilterMin)) {
-      setCoFilterMin(Math.max(0, Math.round(stored.coFilterMin)));
-    }
-    setPage(1);
-    if (notify) {
-      alert("Đã áp dụng bộ lọc đã lưu.");
-    }
-  }, []);
-
-  useEffect(() => {
-    if (typeof window === "undefined") {
-      return;
-    }
-    try {
-      const raw = window.localStorage.getItem(FILTER_STORAGE_KEY);
-      if (!raw) {
-        return;
-      }
-      const stored = JSON.parse(raw);
-      if (!stored || typeof stored !== "object") {
-        return;
-      }
-      applyStoredFilter(stored);
-    } catch (error) {
-      console.error("Không thể đọc bộ lọc đã lưu", error);
-    }
-  }, [applyStoredFilter]);
-
-  const filterSavedLabel = useMemo(() => {
-    if (!filterSavedAt) return "";
-    try {
-      return new Date(filterSavedAt).toLocaleString("vi-VN");
-    } catch (error) {
-      console.error("Không thể định dạng thời gian lưu bộ lọc", error);
-      return "";
-    }
-  }, [filterSavedAt]);
-
   const applyDatePreset = useCallback((presetKey) => {
     const preset = DATE_RANGE_PRESETS.find((item) => item.key === presetKey);
     if (!preset) {
@@ -777,58 +1122,340 @@ export default function DataImporter({
     });
   }, []);
 
-  const handleSaveCurrentFilter = useCallback(() => {
-    if (typeof window === "undefined") {
-      alert("Môi trường hiện tại không hỗ trợ lưu bộ lọc.");
-      return;
-    }
+  const buildFilterPresetPayload = useCallback(() => {
     const payload = {
-      query,
-      range: { ...searchRange },
-      filterNoStaff,
-      filterNoTeam,
-      filterDuplicate11,
+      datePreset,
       coFilterMode,
       coFilterMin,
-      datePreset,
-      savedAt: new Date().toISOString(),
     };
+    const trimmedQuery = query.trim();
+    if (trimmedQuery) {
+      payload.query = trimmedQuery;
+    }
+    if (searchRange.from || searchRange.to) {
+      payload.range = {
+        from: searchRange.from || "",
+        to: searchRange.to || "",
+      };
+    }
+    if (filterNoStaff) {
+      payload.filterNoStaff = true;
+    }
+    if (filterNoTeam) {
+      payload.filterNoTeam = true;
+    }
+    if (filterDuplicate11) {
+      payload.filterDuplicate11 = true;
+    }
+    return payload;
+  }, [query, searchRange.from, searchRange.to, filterNoStaff, filterNoTeam, filterDuplicate11, coFilterMode, coFilterMin, datePreset]);
+
+  const applyPresetFilters = useCallback(
+    (preset, { notify = true } = {}) => {
+      if (!preset || typeof preset !== "object") {
+        alert("Không tìm thấy bộ lọc đã lưu.");
+        return;
+      }
+      clearPresetError();
+      const filters = preset.filters && typeof preset.filters === "object" ? preset.filters : {};
+      setQuery(typeof filters.query === "string" ? filters.query : "");
+      if (filters.range && typeof filters.range === "object") {
+        setSearchRange({
+          from: typeof filters.range.from === "string" ? filters.range.from : "",
+          to: typeof filters.range.to === "string" ? filters.range.to : "",
+        });
+      } else {
+        setSearchRange({ from: "", to: "" });
+      }
+      const nextPresetKey =
+        typeof filters.datePreset === "string" && filters.datePreset
+          ? filters.datePreset
+          : filters.range && (filters.range.from || filters.range.to)
+          ? "custom"
+          : "none";
+      setDatePreset(nextPresetKey);
+      setFilterNoStaff(filters.filterNoStaff === true);
+      setFilterNoTeam(filters.filterNoTeam === true);
+      setFilterDuplicate11(filters.filterDuplicate11 === true);
+      setCoFilterMode(
+        typeof filters.coFilterMode === "string" && filters.coFilterMode
+          ? filters.coFilterMode
+          : "all"
+      );
+      const minValue = Number(filters.coFilterMin);
+      setCoFilterMin(Number.isFinite(minValue) ? Math.max(0, Math.round(minValue)) : 5);
+      setPage(1);
+      if (preset.id) {
+        setSelectedPresetId(preset.id);
+        setAppliedPresetId(preset.id);
+        if (typeof window !== "undefined") {
+          try {
+            window.localStorage.setItem(LAST_FILTER_PRESET_KEY, preset.id);
+          } catch (error) {
+            console.warn("Không thể lưu bộ lọc đang áp dụng", error);
+          }
+        }
+      }
+      presetAutoAppliedRef.current = true;
+      if (notify) {
+        alert(`Đã áp dụng bộ lọc "${preset.name}".`);
+      }
+    },
+    [clearPresetError]
+  );
+
+  const presetBusy = presetLoading || presetSaving;
+
+  const selectedPreset = useMemo(
+    () => savedPresets.find((item) => item.id === selectedPresetId) || null,
+    [savedPresets, selectedPresetId]
+  );
+
+  const appliedPreset = useMemo(
+    () => savedPresets.find((item) => item.id === appliedPresetId) || null,
+    [savedPresets, appliedPresetId]
+  );
+
+  const appliedPresetUpdatedAt = useMemo(() => {
+    if (!appliedPreset?.updatedAt) {
+      return "";
+    }
     try {
-      window.localStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify(payload));
-      savedFilterRef.current = payload;
-      setHasSavedFilter(true);
-      setFilterSavedAt(payload.savedAt);
-      alert("Đã lưu bộ lọc hiện tại cho lần sử dụng tiếp theo.");
+      return new Date(appliedPreset.updatedAt).toLocaleString("vi-VN");
     } catch (error) {
-      console.error("Không thể lưu bộ lọc", error);
-      alert("Không thể lưu bộ lọc. Vui lòng kiểm tra bộ nhớ trình duyệt.");
+      console.warn("Không thể định dạng thời gian cập nhật bộ lọc", error);
+      return "";
     }
-  }, [query, searchRange, filterNoStaff, filterNoTeam, filterDuplicate11, coFilterMode, coFilterMin, datePreset]);
+  }, [appliedPreset]);
 
-  const handleRestoreSavedFilter = useCallback(() => {
-    if (!savedFilterRef.current) {
-      alert("Chưa có bộ lọc nào được lưu.");
-      return;
-    }
-    applyStoredFilter(savedFilterRef.current, { notify: true });
-  }, [applyStoredFilter]);
-
-  const handleClearSavedFilter = useCallback(() => {
+  useEffect(() => {
     if (typeof window === "undefined") {
-      alert("Không thể xóa bộ lọc đã lưu trong môi trường hiện tại.");
+      presetAutoAppliedRef.current = true;
       return;
     }
     try {
-      window.localStorage.removeItem(FILTER_STORAGE_KEY);
-      savedFilterRef.current = null;
-      setHasSavedFilter(false);
-      setFilterSavedAt(null);
-      alert("Đã xóa bộ lọc đã lưu.");
+      const storedId = window.localStorage.getItem(LAST_FILTER_PRESET_KEY);
+      if (storedId) {
+        lastPresetSeedRef.current = storedId;
+        setSelectedPresetId(storedId);
+      }
     } catch (error) {
-      console.error("Không thể xóa bộ lọc", error);
-      alert("Không thể xóa bộ lọc đã lưu. Vui lòng thử lại sau.");
+      console.warn("Không thể đọc bộ lọc đã áp dụng gần đây", error);
     }
   }, []);
+
+  useEffect(() => {
+    if (presetAutoAppliedRef.current) {
+      return;
+    }
+    if (!savedPresets.length) {
+      return;
+    }
+    const targetId = lastPresetSeedRef.current;
+    if (targetId) {
+      const preset = savedPresets.find((item) => item.id === targetId);
+      if (preset) {
+        applyPresetFilters(preset, { notify: false });
+        return;
+      }
+    }
+    presetAutoAppliedRef.current = true;
+  }, [savedPresets, applyPresetFilters]);
+
+  useEffect(() => {
+    if (selectedPresetId && !savedPresets.some((item) => item.id === selectedPresetId)) {
+      setSelectedPresetId("");
+    }
+  }, [selectedPresetId, savedPresets]);
+
+  useEffect(() => {
+    if (appliedPresetId && !savedPresets.some((item) => item.id === appliedPresetId)) {
+      setAppliedPresetId("");
+    }
+  }, [appliedPresetId, savedPresets]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const raw = window.localStorage.getItem(LEGACY_FILTER_STORAGE_KEY);
+        if (!raw) {
+          return;
+        }
+        const stored = JSON.parse(raw);
+        if (!stored || typeof stored !== "object") {
+          window.localStorage.removeItem(LEGACY_FILTER_STORAGE_KEY);
+          return;
+        }
+        if (savedPresets.length > 0) {
+          window.localStorage.removeItem(LEGACY_FILTER_STORAGE_KEY);
+          return;
+        }
+        const range =
+          stored.range && typeof stored.range === "object"
+            ? {
+                from: typeof stored.range.from === "string" ? stored.range.from : "",
+                to: typeof stored.range.to === "string" ? stored.range.to : "",
+              }
+            : null;
+        const normalizedFilters = {};
+        if (typeof stored.query === "string" && stored.query.trim()) {
+          normalizedFilters.query = stored.query.trim();
+        }
+        if (range && (range.from || range.to)) {
+          normalizedFilters.range = range;
+        }
+        if (stored.filterNoStaff === true) {
+          normalizedFilters.filterNoStaff = true;
+        }
+        if (stored.filterNoTeam === true) {
+          normalizedFilters.filterNoTeam = true;
+        }
+        if (stored.filterDuplicate11 === true) {
+          normalizedFilters.filterDuplicate11 = true;
+        }
+        if (typeof stored.coFilterMode === "string" && stored.coFilterMode) {
+          normalizedFilters.coFilterMode = stored.coFilterMode;
+        }
+        if (Number.isFinite(stored.coFilterMin)) {
+          normalizedFilters.coFilterMin = Math.max(0, Math.round(Number(stored.coFilterMin)));
+        }
+        if (typeof stored.datePreset === "string" && stored.datePreset) {
+          normalizedFilters.datePreset = stored.datePreset;
+        }
+        if (Object.keys(normalizedFilters).length === 0) {
+          window.localStorage.removeItem(LEGACY_FILTER_STORAGE_KEY);
+          return;
+        }
+        const preset = await createFilterPreset({
+          name:
+            typeof stored.name === "string" && stored.name.trim()
+              ? stored.name.trim()
+              : "Bộ lọc cũ",
+          filters: normalizedFilters,
+        });
+        window.localStorage.removeItem(LEGACY_FILTER_STORAGE_KEY);
+        if (!cancelled && preset) {
+          applyPresetFilters(preset, { notify: false });
+        }
+      } catch (error) {
+        console.warn("Không thể nhập bộ lọc đã lưu trước đây", error);
+        try {
+          window.localStorage.removeItem(LEGACY_FILTER_STORAGE_KEY);
+        } catch (err) {
+          console.warn("Không thể xoá bộ lọc cũ khỏi localStorage", err);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [savedPresets, createFilterPreset, applyPresetFilters]);
+
+  const handleApplySelectedPreset = useCallback(() => {
+    const preset = savedPresets.find((item) => item.id === selectedPresetId);
+    if (!preset) {
+      alert("Vui lòng chọn bộ lọc cần áp dụng.");
+      return;
+    }
+    applyPresetFilters(preset);
+  }, [savedPresets, selectedPresetId, applyPresetFilters]);
+
+  const handleSavePresetAsNew = useCallback(async () => {
+    let presetName = selectedPreset ? `${selectedPreset.name} (bản sao)` : "Bộ lọc mới";
+    if (typeof window !== "undefined") {
+      const input = window.prompt("Đặt tên cho bộ lọc mới", presetName);
+      if (input === null) {
+        return;
+      }
+      presetName = input.trim();
+      if (!presetName) {
+        alert("Tên bộ lọc không được bỏ trống.");
+        return;
+      }
+    }
+    clearPresetError();
+    setPresetSaving(true);
+    try {
+      const preset = await createFilterPreset({ name: presetName, filters: buildFilterPresetPayload() });
+      setSelectedPresetId(preset.id);
+      applyPresetFilters(preset, { notify: false });
+      alert(`Đã lưu bộ lọc "${preset.name}".`);
+    } catch (error) {
+      alert(error?.message || "Không thể lưu bộ lọc đã lưu.");
+    } finally {
+      setPresetSaving(false);
+    }
+  }, [selectedPreset, clearPresetError, createFilterPreset, buildFilterPresetPayload, applyPresetFilters]);
+
+  const handleOverwriteSelectedPreset = useCallback(async () => {
+    if (!selectedPreset) {
+      alert("Vui lòng chọn bộ lọc cần ghi đè.");
+      return;
+    }
+    if (
+      typeof window !== "undefined" &&
+      !window.confirm(`Ghi đè bộ lọc "${selectedPreset.name}" bằng điều kiện hiện tại?`)
+    ) {
+      return;
+    }
+    clearPresetError();
+    setPresetSaving(true);
+    try {
+      const preset = await updateFilterPreset(selectedPreset.id, {
+        name: selectedPreset.name,
+        filters: buildFilterPresetPayload(),
+      });
+      applyPresetFilters(preset, { notify: false });
+      alert(`Đã cập nhật bộ lọc "${preset.name}".`);
+    } catch (error) {
+      alert(error?.message || "Không thể cập nhật bộ lọc đã lưu.");
+    } finally {
+      setPresetSaving(false);
+    }
+  }, [selectedPreset, clearPresetError, updateFilterPreset, buildFilterPresetPayload, applyPresetFilters]);
+
+  const handleDeleteSelectedPreset = useCallback(async () => {
+    if (!selectedPreset) {
+      alert("Vui lòng chọn bộ lọc cần xoá.");
+      return;
+    }
+    if (typeof window !== "undefined" && !window.confirm(`Xoá bộ lọc "${selectedPreset.name}"?`)) {
+      return;
+    }
+    clearPresetError();
+    setPresetSaving(true);
+    try {
+      await deleteFilterPreset(selectedPreset.id);
+      if (typeof window !== "undefined") {
+        try {
+          const storedId = window.localStorage.getItem(LAST_FILTER_PRESET_KEY);
+          if (storedId === selectedPreset.id) {
+            window.localStorage.removeItem(LAST_FILTER_PRESET_KEY);
+          }
+        } catch (error) {
+          console.warn("Không thể cập nhật bộ lọc đã áp dụng gần đây", error);
+        }
+      }
+      if (appliedPresetId === selectedPreset.id) {
+        setAppliedPresetId("");
+      }
+      setSelectedPresetId("");
+      alert(`Đã xoá bộ lọc "${selectedPreset.name}".`);
+    } catch (error) {
+      alert(error?.message || "Không thể xoá bộ lọc đã lưu.");
+    } finally {
+      setPresetSaving(false);
+    }
+  }, [selectedPreset, clearPresetError, deleteFilterPreset, appliedPresetId]);
+
+  const handleRefreshPresetList = useCallback(() => {
+    clearPresetError();
+    refreshPresetList();
+  }, [clearPresetError, refreshPresetList]);
 
   const handleClearSearchRange = useCallback(() => {
     setSearchRange({ from: "", to: "" });
@@ -1735,52 +2362,129 @@ export default function DataImporter({
         return;
       }
     }
-    const f = e.target.files?.[0];
-    if (!f) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      const wb = XLSX.read(reader.result, { type: "array" });
-      const sheet = wb.Sheets[wb.SheetNames[0]];
-      const rows = XLSX.utils.sheet_to_json(sheet, { raw: false, defval: "" });
-      const loadedRules = loadRules();
-      setRules(loadedRules);
-      const excludeCodes = Array.isArray(loadedRules?.license?.exclude?.codes)
-        ? loadedRules.license.exclude.codes
-        : [];
-      const dateOrder = detectDateOrder(rows);
-      const preferMonthFirst = dateOrder === "mdy";
-      const roster = getTeamRoster();
-      const memberMap = mapMemberNamesToTeams(roster);
-      const agencyMap = mapHQAgenciesByMST();
-
-      const mapped = rows
-        .map(r =>
-          mapRow(r, {
-            autoAssignStaff,
-            rules: loadedRules,
-            licenseExcludes: excludeCodes,
-            preferMonthFirst,
-            memberMap,
-            agencyMap,
-          })
-        )
-        .map(ensureLicenseFields)
-        .filter(r => r.so_tk && r.date);
-
-      setRawRows(sortDeclRows(mapped));
-      setPage(1);
-      setPageSize(DEFAULT_PAGE_SIZE);
-      setMode("preview");
-      setSelectedFile(f.name || "");
-      setQuery("");
-      setFilterNoStaff(false);
-      setFilterNoTeam(false);
-      setCoFilterMode("all");
-      setCoFilterMin(5);
-      setSelectedKeys([]);
-      setHasUnsaved(false);
+    const inputElement = e.target;
+    const resetInput = () => {
+      if (fileRef.current) {
+        fileRef.current.value = "";
+      }
+      if (inputElement) {
+        inputElement.value = "";
+      }
     };
-    reader.readAsArrayBuffer(f);
+
+    const file = inputElement.files?.[0];
+    if (!file) return;
+
+    const normalizedName = (file.name || "").toLowerCase();
+    const extension = normalizedName.slice(normalizedName.lastIndexOf("."));
+    if (extension && !ACCEPTED_IMPORT_EXTENSIONS.some(ext => normalizedName.endsWith(ext))) {
+      toast.error("Chỉ hỗ trợ import file Excel định dạng .xlsx hoặc .xlsm.");
+      resetInput();
+      return;
+    }
+
+    if (file.size > MAX_IMPORT_FILE_SIZE_BYTES) {
+      const limitMb = (MAX_IMPORT_FILE_SIZE_BYTES / (1024 * 1024)).toFixed(1).replace(/\.0$/, "");
+      toast.error(
+        `File vượt quá ${limitMb} MB. Vui lòng tách nhỏ hoặc xoá bớt sheet trước khi import.`
+      );
+      resetInput();
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onerror = () => {
+      toast.error("Không thể đọc file Excel. Vui lòng thử lại hoặc kiểm tra định dạng file.");
+      resetInput();
+    };
+    reader.onload = () => {
+      try {
+        const workbook = XLSX.read(reader.result, { type: "array" });
+        const sheetName = workbook.SheetNames?.[0];
+        if (!sheetName) {
+          toast.error("File Excel không chứa sheet dữ liệu nào. Vui lòng kiểm tra lại.");
+          resetInput();
+          return;
+        }
+        const sheet = workbook.Sheets[sheetName];
+        const rows = XLSX.utils.sheet_to_json(sheet, { raw: false, defval: "" });
+        if (!Array.isArray(rows) || rows.length === 0) {
+          toast.error("File Excel không có dữ liệu tờ khai. Vui lòng kiểm tra lại nội dung.");
+          resetInput();
+          return;
+        }
+        if (rows.length > MAX_IMPORT_ROWS) {
+          toast.error(
+            `File chứa ${rows.length.toLocaleString("vi-VN")} dòng, vượt giới hạn ${MAX_IMPORT_ROWS.toLocaleString(
+              "vi-VN"
+            )} dòng cho mỗi lần import. Vui lòng tách file hoặc lọc lại dữ liệu.`
+          );
+          resetInput();
+          return;
+        }
+
+        const loadedRules = loadRules();
+        setRules(loadedRules);
+        const excludeCodes = Array.isArray(loadedRules?.license?.exclude?.codes)
+          ? loadedRules.license.exclude.codes
+          : [];
+        const dateOrder = detectDateOrder(rows);
+        const preferMonthFirst = dateOrder === "mdy";
+        const roster = getTeamRoster();
+        const memberMap = mapMemberNamesToTeams(roster);
+        const agencyMap = mapHQAgenciesByMST();
+
+        const normalizedRows = rows
+          .map(r =>
+            mapRow(r, {
+              autoAssignStaff,
+              rules: loadedRules,
+              licenseExcludes: excludeCodes,
+              preferMonthFirst,
+              memberMap,
+              agencyMap,
+            })
+          )
+          .map(ensureLicenseFields);
+
+        const invalidDateCount = normalizedRows.filter(row => !row.date).length;
+        if (invalidDateCount > 0) {
+          toast.error(
+            `Có ${invalidDateCount.toLocaleString(
+              "vi-VN"
+            )} dòng có ngày tờ khai không hợp lệ. Vui lòng kiểm tra lại định dạng ngày (dd/mm/yyyy).`
+          );
+          resetInput();
+          return;
+        }
+
+        const sanitizedRows = normalizedRows.filter(row => row.so_tk && row.date);
+        if (!sanitizedRows.length) {
+          toast.error("Không tìm thấy tờ khai hợp lệ sau khi kiểm tra file Excel.");
+          resetInput();
+          return;
+        }
+
+        setRawRows(sortDeclRows(sanitizedRows));
+        setPage(1);
+        setPageSize(DEFAULT_PAGE_SIZE);
+        setMode("preview");
+        setSelectedFile(file.name || "");
+        setQuery("");
+        setFilterNoStaff(false);
+        setFilterNoTeam(false);
+        setCoFilterMode("all");
+        setCoFilterMin(5);
+        setSelectedKeys([]);
+        setHasUnsaved(false);
+      } catch (err) {
+        console.error("Không thể xử lý file Excel import", err);
+        toast.error("Không thể xử lý file Excel. Vui lòng kiểm tra định dạng và thử lại.");
+      } finally {
+        resetInput();
+      }
+    };
+    reader.readAsArrayBuffer(file);
   }
 
   // Tìm nhanh
@@ -1804,53 +2508,6 @@ export default function DataImporter({
       return count;
     }, 0);
   }, [rawRows, coFilterMode, coFilterActive, coThreshold]);
-
-  const keyOfRow = useCallback((row) => {
-    const soTk = (row?.so_tk || "").toString();
-    const nhanh = (row?.nhanh || "").toString();
-    return `${soTk}_${nhanh}`;
-  }, []);
-
-  const filterEditableKeys = useCallback(
-    (keys) => {
-      if (!Array.isArray(keys) || keys.length === 0) {
-        return { allowed: [], blocked: 0 };
-      }
-      const target = new Set(keys);
-      const allowed = [];
-      let blocked = 0;
-      for (const row of rawRows) {
-        const key = keyOfRow(row);
-        if (!target.has(key)) continue;
-        if (isRowEditable(row)) {
-          allowed.push(key);
-        } else {
-          blocked += 1;
-        }
-      }
-      return { allowed, blocked };
-    },
-    [isRowEditable, keyOfRow, rawRows]
-  );
-
-  const ensureEditableKeys = useCallback(
-    (keys, actionLabel = "thao tác") => {
-      const { allowed, blocked } = filterEditableKeys(keys);
-      if (!allowed.length) {
-        if (blocked > 0 && editingRestrictionMessage) {
-          alert(editingRestrictionMessage);
-        } else if (keys?.length) {
-          alert("Không tìm thấy tờ khai phù hợp để xử lý.");
-        }
-        return null;
-      }
-      if (blocked > 0 && editingRestrictionMessage) {
-        alert(`Đã bỏ qua ${blocked} tờ khai không thuộc phạm vi của bạn khi ${actionLabel}.`);
-      }
-      return allowed;
-    },
-    [editingRestrictionMessage, filterEditableKeys]
-  );
 
   const duplicate11Summary = useMemo(() => {
     const counts = new Map();
@@ -1941,6 +2598,114 @@ export default function DataImporter({
   const duplicate11KeeperSet = duplicate11Summary.keptKeys;
   const duplicate11Details = duplicate11Summary.details;
   const hasDuplicate11Rows = duplicate11Summary.hasDuplicates;
+
+  const prepareRowForDiff = useCallback(
+    (row) => {
+      if (!row || typeof row !== "object") {
+        return {};
+      }
+      const normalized = { ...row };
+      if (!normalized.so_tk_full && normalized.so_tk) {
+        normalized.so_tk_full = normalized.so_tk;
+      }
+      const licenseSnapshot = summarizeLicenseSnapshot(row);
+      normalized.__license_source_count = licenseSnapshot.sourceCount;
+      normalized.__license_included_count = licenseSnapshot.includedCount;
+      normalized.__license_excluded_count = licenseSnapshot.excludedCount;
+      normalized.__license_source_codes = licenseSnapshot.sourceCodes;
+      normalized.__license_included_codes = licenseSnapshot.includedCodes;
+      normalized.__license_excluded_codes = licenseSnapshot.excludedCodes;
+      normalized.__co_status = coLabel(row);
+      normalized.__co_lines = coLineCount(row);
+      const timestampDetail = extractRowTimestampDetail(row);
+      normalized.__timestamp_field = timestampDetail?.label && timestampDetail?.display
+        ? `${timestampDetail.label}: ${timestampDetail.display}`
+        : timestampDetail?.display || "";
+      const agentSet = new Set();
+      const pushAgent = (value) => {
+        if (!value && value !== 0) return;
+        const text = String(value).trim();
+        if (text) {
+          agentSet.add(text);
+        }
+      };
+      if (Array.isArray(row.agents)) {
+        row.agents.forEach(pushAgent);
+      }
+      pushAgent(row.agency);
+      pushAgent(row.dai_ly);
+      pushAgent(row.hq_agency);
+      normalized.__agents_display = Array.from(agentSet);
+      return normalized;
+    },
+    [summarizeLicenseSnapshot]
+  );
+
+  useEffect(() => {
+    setDuplicateDiffState((prev) => {
+      if (!prev.open) {
+        return prev;
+      }
+      const group = duplicate11Details.find((entry) => entry.rawPrefix === prev.group);
+      if (!group) {
+        return { open: false, group: null, baseKey: null, compareKey: null };
+      }
+      const availableKeys = group.items.map((item) => item.key);
+      const fallbackBase = availableKeys.includes(group.keeperKey)
+        ? group.keeperKey
+        : availableKeys[0] || null;
+      const baseKey = availableKeys.includes(prev.baseKey) ? prev.baseKey : fallbackBase;
+      let compareKey = availableKeys.includes(prev.compareKey) ? prev.compareKey : null;
+      if (!compareKey || compareKey === baseKey) {
+        compareKey = group.items.find((item) => item.key !== baseKey)?.key || null;
+      }
+      if (baseKey === prev.baseKey && compareKey === prev.compareKey) {
+        return prev;
+      }
+      return { ...prev, baseKey, compareKey };
+    });
+  }, [duplicate11Details]);
+
+  const duplicateDiffGroup = useMemo(() => {
+    if (!duplicateDiffState.open || !duplicateDiffState.group) return null;
+    return duplicate11Details.find((group) => group.rawPrefix === duplicateDiffState.group) || null;
+  }, [duplicate11Details, duplicateDiffState.group, duplicateDiffState.open]);
+
+  const duplicateDiffBaseItem = useMemo(() => {
+    if (!duplicateDiffGroup) return null;
+    const baseKey = duplicateDiffState.baseKey || duplicateDiffGroup.keeperKey || duplicateDiffGroup.items[0]?.key || null;
+    if (!baseKey) return null;
+    return duplicateDiffGroup.items.find((item) => item.key === baseKey) || null;
+  }, [duplicateDiffGroup, duplicateDiffState.baseKey]);
+
+  const duplicateDiffCompareItem = useMemo(() => {
+    if (!duplicateDiffGroup) return null;
+    const compareKey = duplicateDiffState.compareKey;
+    if (!compareKey) {
+      return duplicateDiffGroup.items.find((item) => item.key !== (duplicateDiffState.baseKey || duplicateDiffGroup.keeperKey));
+    }
+    return duplicateDiffGroup.items.find((item) => item.key === compareKey) || null;
+  }, [duplicateDiffGroup, duplicateDiffState.baseKey, duplicateDiffState.compareKey]);
+
+  const duplicateDiffGroups = useMemo(() => {
+    if (!duplicateDiffGroup || !duplicateDiffBaseItem || !duplicateDiffCompareItem) return [];
+    return createDuplicateDiffGroups(
+      prepareRowForDiff(duplicateDiffBaseItem.row),
+      prepareRowForDiff(duplicateDiffCompareItem.row)
+    );
+  }, [duplicateDiffGroup, duplicateDiffBaseItem, duplicateDiffCompareItem, prepareRowForDiff]);
+
+  const duplicateDiffChangedCount = useMemo(() => {
+    if (!Array.isArray(duplicateDiffGroups)) return 0;
+    return duplicateDiffGroups.reduce((total, group) => {
+      if (!group || !Array.isArray(group.rows)) return total;
+      return total + group.rows.filter((row) => row.changed).length;
+    }, 0);
+  }, [duplicateDiffGroups]);
+
+  const duplicateDiffGroupLabel = duplicateDiffGroup?.prefix || duplicateDiffGroup?.rawPrefix || "";
+  const duplicateDiffBaseLabel = duplicateDiffBaseItem?.label || formatDeclarationLabel(duplicateDiffBaseItem?.row || {});
+  const duplicateDiffCompareLabel = duplicateDiffCompareItem?.label || formatDeclarationLabel(duplicateDiffCompareItem?.row || {});
 
   useEffect(() => {
     if (!Array.isArray(duplicate11Details) || duplicate11Details.length === 0) {
@@ -2458,6 +3223,48 @@ export default function DataImporter({
     });
   }, []);
 
+  const handleOpenDuplicateDiff = useCallback((groupPrefix, baseKey, compareKey) => {
+    setDuplicateDiffState({
+      open: true,
+      group: groupPrefix,
+      baseKey: baseKey || null,
+      compareKey: compareKey || null,
+    });
+  }, []);
+
+  const handleCloseDuplicateDiff = useCallback(() => {
+    setDuplicateDiffState({ open: false, group: null, baseKey: null, compareKey: null });
+  }, []);
+
+  const handleChangeDuplicateDiffBase = useCallback((nextKey) => {
+    setDuplicateDiffState((prev) => {
+      if (!prev.open) return prev;
+      const baseKey = nextKey || null;
+      let compareKey = prev.compareKey;
+      if (compareKey && compareKey === baseKey) {
+        compareKey = null;
+      }
+      return { ...prev, baseKey, compareKey };
+    });
+  }, []);
+
+  const handleChangeDuplicateDiffCompare = useCallback((nextKey) => {
+    setDuplicateDiffState((prev) => {
+      if (!prev.open) return prev;
+      return { ...prev, compareKey: nextKey || null };
+    });
+  }, []);
+
+  const handleSwapDuplicateDiff = useCallback(() => {
+    setDuplicateDiffState((prev) => {
+      if (!prev.open) return prev;
+      if (!prev.baseKey || !prev.compareKey) {
+        return prev;
+      }
+      return { ...prev, baseKey: prev.compareKey, compareKey: prev.baseKey };
+    });
+  }, []);
+
   const handleDeleteDuplicates11 = useCallback(() => {
     if (isReadOnlyForEdits) {
       alert("Bạn không có quyền xóa tờ khai trùng.");
@@ -2873,6 +3680,146 @@ export default function DataImporter({
   return (
     <>
       <Dialog
+        open={duplicateDiffState.open}
+        onOpenChange={(next) => {
+          if (next) {
+            if (!duplicateDiffState.group && duplicate11Details?.[0]?.rawPrefix) {
+              handleOpenDuplicateDiff(
+                duplicate11Details[0].rawPrefix,
+                duplicate11Details[0].keeperKey || duplicate11Details[0].items?.[0]?.key || null,
+                duplicate11Details[0].items?.find((item) => item.key !== (duplicate11Details[0].keeperKey || duplicate11Details[0].items?.[0]?.key))?.key || null,
+              );
+              return;
+            }
+            setDuplicateDiffState((prev) => ({ ...prev, open: true }));
+            return;
+          }
+          handleCloseDuplicateDiff();
+        }}
+      >
+        <DialogContent className="max-w-5xl">
+          <DialogHeader>
+            <DialogTitle>So sánh bản ghi trùng</DialogTitle>
+            <DialogDescription>
+              So sánh sự khác biệt giữa <strong>{duplicateDiffBaseLabel || "bản giữ"}</strong> và {" "}
+              <strong>{duplicateDiffCompareLabel || "bản so sánh"}</strong>
+              {duplicateDiffGroupLabel ? ` trong nhóm ${duplicateDiffGroupLabel}` : ""}.
+            </DialogDescription>
+          </DialogHeader>
+          {duplicateDiffGroup ? (
+            <div className="space-y-3 text-sm">
+              <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] md:items-end text-xs">
+                <label className="flex flex-col gap-1">
+                  <span className="font-medium text-gray-600 dark:text-gray-300">Bản tham chiếu</span>
+                  <select
+                    className="rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] px-2 py-1 text-sm"
+                    value={duplicateDiffBaseItem?.key || ""}
+                    onChange={(e) => handleChangeDuplicateDiffBase(e.target.value)}
+                  >
+                    {duplicateDiffGroup.items.map((item) => (
+                      <option key={`diff-base-${item.key}`} value={item.key}>
+                        {item.label} — {item.sourceLabel}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="flex flex-col gap-1">
+                  <span className="font-medium text-gray-600 dark:text-gray-300">Bản so sánh</span>
+                  <select
+                    className="rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] px-2 py-1 text-sm"
+                    value={duplicateDiffCompareItem?.key || ""}
+                    onChange={(e) => handleChangeDuplicateDiffCompare(e.target.value)}
+                  >
+                    {duplicateDiffGroup.items
+                      .filter((item) => item.key !== duplicateDiffBaseItem?.key)
+                      .map((item) => (
+                        <option key={`diff-compare-${item.key}`} value={item.key}>
+                          {item.label} — {item.sourceLabel}
+                        </option>
+                      ))}
+                  </select>
+                </label>
+                <button
+                  type="button"
+                  onClick={handleSwapDuplicateDiff}
+                  disabled={!duplicateDiffBaseItem || !duplicateDiffCompareItem}
+                  className="h-9 self-end rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] px-3 text-xs font-medium text-[color:var(--ds-text-secondary)] transition hover:bg-[color:var(--ds-surface-muted)] disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  Đổi vị trí
+                </button>
+              </div>
+              <div className="rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)]">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[color:var(--ds-border-subtle)] px-3 py-2 text-xs text-[color:var(--ds-text-secondary)]">
+                  <span>
+                    Nhóm: <strong className="text-[color:var(--ds-text-primary)]">{duplicateDiffGroupLabel}</strong> • Tổng {duplicateDiffGroup?.total?.toLocaleString?.("vi-VN") || duplicateDiffGroup?.items?.length || 0} bản ghi
+                  </span>
+                  <span className="font-medium text-emerald-600 dark:text-emerald-300">
+                    {duplicateDiffChangedCount.toLocaleString("vi-VN") || 0} trường khác nhau
+                  </span>
+                </div>
+                <ScrollArea className="max-h-[60vh] pr-2">
+                  <div className="space-y-4 px-3 py-3">
+                    {duplicateDiffGroups.length > 0 ? (
+                      duplicateDiffGroups.map((group) => (
+                        <div key={`diff-group-${group.title}`} className="space-y-1">
+                          <h4 className="text-xs uppercase tracking-wide text-[color:var(--ds-text-muted)]">{group.title}</h4>
+                          <table className="min-w-full overflow-hidden rounded border border-[color:var(--ds-border-subtle)] text-xs">
+                            <thead className="bg-[color:var(--ds-surface-muted)] text-[color:var(--ds-text-secondary)]">
+                              <tr>
+                                <th className="px-2 py-1 text-left">Trường</th>
+                                <th className="px-2 py-1 text-left">Bản giữ</th>
+                                <th className="px-2 py-1 text-left">Bản so sánh</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {group.rows.map((row) => (
+                                <tr
+                                  key={`diff-row-${group.title}-${row.key}`}
+                                  className={`border-b border-[color:var(--ds-border-subtle)] last:border-b-0 ${
+                                    row.changed
+                                      ? "bg-amber-50 dark:bg-amber-500/10"
+                                      : "bg-[color:var(--ds-surface-card)]"
+                                  }`}
+                                >
+                                  <td className="whitespace-nowrap px-2 py-1 font-medium text-[color:var(--ds-text-secondary)]">
+                                    {row.label}
+                                  </td>
+                                  <td className="max-w-[240px] whitespace-pre-wrap px-2 py-1 text-[color:var(--ds-text-primary)]">
+                                    {row.baseValue || <span className="text-[color:var(--ds-text-muted)]">(trống)</span>}
+                                  </td>
+                                  <td className="max-w-[240px] whitespace-pre-wrap px-2 py-1 text-[color:var(--ds-text-primary)]">
+                                    {row.compareValue || <span className="text-[color:var(--ds-text-muted)]">(trống)</span>}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="py-6 text-center text-xs text-[color:var(--ds-text-muted)]">
+                        Không có dữ liệu khác biệt giữa hai bản ghi.
+                      </p>
+                    )}
+                  </div>
+                </ScrollArea>
+              </div>
+            </div>
+          ) : (
+            <p className="text-xs text-[color:var(--ds-text-muted)]">Không tìm thấy nhóm trùng để so sánh.</p>
+          )}
+          <DialogFooter>
+            <button
+              type="button"
+              onClick={handleCloseDuplicateDiff}
+              className="rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] px-3 py-1 text-sm text-[color:var(--ds-text-secondary)] hover:bg-[color:var(--ds-surface-muted)]"
+            >
+              Đóng
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog
         open={duplicateReviewOpen}
         onOpenChange={(next) => {
           if (next) {
@@ -2952,6 +3899,7 @@ export default function DataImporter({
                                 <th className="px-2 py-1 text-left">Số tờ khai</th>
                                 <th className="px-2 py-1 text-left">Nguồn</th>
                                 <th className="px-2 py-1 text-left">Thời gian</th>
+                                <th className="px-2 py-1 text-left">So sánh</th>
                                 <th className="px-2 py-1 text-left">Nhân viên</th>
                                 <th className="px-2 py-1 text-left">Tổ đội</th>
                                 <th className="px-2 py-1 text-left">Trạng thái</th>
@@ -2969,6 +3917,13 @@ export default function DataImporter({
                                   : index % 2 === 0
                                     ? "bg-[color:var(--ds-surface-card)]"
                                     : "bg-[color:var(--ds-surface-muted)]";
+                                const fallbackBaseKey = keeperKey || group.items[0]?.key || null;
+                                const baseForDiff = fallbackBaseKey || item.key;
+                                let compareForDiff = item.key;
+                                if (compareForDiff === baseForDiff) {
+                                  compareForDiff = group.items.find((candidate) => candidate.key !== baseForDiff)?.key || null;
+                                }
+                                const canOpenDiff = Boolean(compareForDiff);
                                 return (
                                   <tr
                                     key={item.key}
@@ -2993,6 +3948,16 @@ export default function DataImporter({
                                     <td className="px-2 py-1">
                                       <div>{item.timestampDisplay || "Không xác định"}</div>
                                       <div className="text-[10px] text-[color:var(--ds-text-muted)]">{item.timestampLabel}</div>
+                                    </td>
+                                    <td className="px-2 py-1">
+                                      <button
+                                        type="button"
+                                        onClick={() => handleOpenDuplicateDiff(group.rawPrefix, baseForDiff, compareForDiff)}
+                                        disabled={!canOpenDiff}
+                                        className="rounded border border-blue-200 px-2 py-0.5 text-xs font-medium text-blue-600 hover:bg-blue-50 disabled:cursor-not-allowed disabled:border-blue-100 disabled:text-blue-300 disabled:opacity-60 dark:border-blue-500/50 dark:text-blue-200 dark:hover:bg-blue-500/10"
+                                      >
+                                        So sánh
+                                      </button>
                                     </td>
                                     <td className="px-2 py-1">{item.staff || <span className="text-gray-400">(trống)</span>}</td>
                                     <td className="px-2 py-1">{item.team || <span className="text-gray-400">(trống)</span>}</td>
@@ -3878,33 +4843,89 @@ export default function DataImporter({
             Đáp ứng C/O: {coFilterMatches} tờ khai
           </span>
         )}
-        <button
-          type="button"
-          onClick={handleSaveCurrentFilter}
-          className="rounded border px-3 py-1 text-xs text-gray-600 hover:bg-gray-50"
-        >
-          Lưu bộ lọc
-        </button>
-        {hasSavedFilter && (
-          <>
+        <div className="flex flex-wrap items-center gap-2 border-l border-gray-200 pl-3 dark:border-slate-700">
+          <label className="flex flex-col text-xs text-gray-600 dark:text-gray-300">
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+              Bộ lọc đã lưu
+            </span>
+            <select
+              value={selectedPresetId}
+              onChange={(event) => {
+                clearPresetError();
+                setSelectedPresetId(event.target.value);
+              }}
+              className="min-w-[180px] rounded border border-gray-300 px-2 py-1 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100"
+            >
+              <option value="">Chọn bộ lọc</option>
+              {savedPresets.map((preset) => (
+                <option key={preset.id} value={preset.id}>
+                  {preset.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button
+            type="button"
+            onClick={handleApplySelectedPreset}
+            disabled={!selectedPresetId || presetBusy}
+            className="rounded border px-3 py-1 text-xs text-gray-600 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-600 dark:text-gray-200 dark:hover:bg-slate-800"
+          >
+            Áp dụng
+          </button>
+          <button
+            type="button"
+            onClick={handleSavePresetAsNew}
+            disabled={presetBusy}
+            className="rounded border px-3 py-1 text-xs text-gray-600 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-600 dark:text-gray-200 dark:hover:bg-slate-800"
+          >
+            {presetSaving ? "Đang lưu…" : "Lưu preset mới"}
+          </button>
+          {selectedPresetId && (
+            <>
+              <button
+                type="button"
+                onClick={handleOverwriteSelectedPreset}
+                disabled={presetBusy}
+                className="rounded border px-3 py-1 text-xs text-gray-600 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-600 dark:text-gray-200 dark:hover:bg-slate-800"
+              >
+                Ghi đè preset
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteSelectedPreset}
+                disabled={presetBusy}
+                className="rounded border px-3 py-1 text-xs text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-red-500/60 dark:text-red-300 dark:hover:bg-red-500/10"
+              >
+                Xoá preset
+              </button>
+            </>
+          )}
+          <button
+            type="button"
+            onClick={handleRefreshPresetList}
+            disabled={presetBusy}
+            className="rounded border px-3 py-1 text-xs text-gray-600 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-600 dark:text-gray-200 dark:hover:bg-slate-800"
+          >
+            {presetLoading ? "Đồng bộ…" : "Đồng bộ"}
+          </button>
+        </div>
+        {presetError && (
+          <div className="text-xs text-red-600 dark:text-red-400">
+            {presetError}
             <button
               type="button"
-              onClick={handleRestoreSavedFilter}
-              className="rounded border px-3 py-1 text-xs text-gray-600 hover:bg-gray-50"
+              onClick={clearPresetError}
+              className="ml-2 underline"
             >
-              Áp dụng bộ lọc đã lưu
+              Đóng
             </button>
-            <button
-              type="button"
-              onClick={handleClearSavedFilter}
-              className="rounded border px-3 py-1 text-xs text-gray-600 hover:bg-gray-50"
-            >
-              Xóa bộ lọc đã lưu
-            </button>
-            {filterSavedLabel && (
-              <span className="text-xs text-gray-500">Đã lưu: {filterSavedLabel}</span>
-            )}
-          </>
+          </div>
+        )}
+        {appliedPreset && (
+          <div className="text-xs text-gray-500 dark:text-gray-400">
+            Đang áp dụng: <span className="font-medium text-gray-700 dark:text-gray-200">{appliedPreset.name}</span>
+            {appliedPresetUpdatedAt ? ` • Cập nhật ${appliedPresetUpdatedAt}` : ""}
+          </div>
         )}
         <button
           type="button"

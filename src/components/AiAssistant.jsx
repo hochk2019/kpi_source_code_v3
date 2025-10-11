@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import clsx from 'clsx';
-import { toast } from 'sonner';
+import { toast } from '@/shared/toast';
 import {
   clearAiCache,
   fetchAiConfig,
@@ -216,6 +216,50 @@ const AI_PROVIDER_PRESETS = [
     deployment: '',
     apiVersion: '2024-08-01-preview',
     apiKeyEnv: 'AZURE_OPENAI_KEY',
+    temperature: 0.2,
+    maxTokens: 2048,
+  },
+  {
+    key: 'deepseek',
+    label: 'DeepSeek Chat',
+    idBase: 'deepseek-chat',
+    type: 'deepseek',
+    endpoint: 'https://api.deepseek.com/v1',
+    model: 'deepseek-chat',
+    apiKeyEnv: 'DEEPSEEK_API_KEY',
+    temperature: 0.2,
+    maxTokens: 2048,
+  },
+  {
+    key: 'qwen',
+    label: 'Alibaba Qwen',
+    idBase: 'qwen-plus',
+    type: 'qwen',
+    endpoint: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+    model: 'qwen-plus',
+    apiKeyEnv: 'QWEN_API_KEY',
+    temperature: 0.2,
+    maxTokens: 2048,
+  },
+  {
+    key: 'baidu',
+    label: 'Baidu Qianfan ERNIE',
+    idBase: 'baidu-ernie',
+    type: 'baidu',
+    endpoint: 'https://aip.baidubce.com/rpc/2.0/ai_custom/v1/wenxinworkshop/chat/completions',
+    model: 'ernie-speed-128k',
+    apiKeyEnv: 'BAIDU_QIANFAN_ACCESS_TOKEN',
+    temperature: 0.2,
+    maxTokens: 1024,
+  },
+  {
+    key: 'zai',
+    label: 'Z.AI Chat',
+    idBase: 'zai-chat',
+    type: 'zai',
+    endpoint: 'https://api.z-ai.com/v1',
+    model: 'zai-chat-pro',
+    apiKeyEnv: 'ZAI_API_KEY',
     temperature: 0.2,
     maxTokens: 2048,
   },

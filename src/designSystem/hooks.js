@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { getChartPalette as readPalette } from './themeTokens.js';
-import { useTheme } from './ThemeProvider.jsx';
+import { useTheme } from './useTheme.js';
 
 export function useChartPalette() {
   const { resolvedTheme, getChartPalette } = useTheme();
