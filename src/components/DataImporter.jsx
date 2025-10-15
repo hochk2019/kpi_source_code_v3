@@ -1025,10 +1025,21 @@ export default function DataImporter({
         : "Bạn chỉ có thể chỉnh sửa tờ khai thuộc tổ đội do mình phụ trách.";
     }
     if (isStaffRole) {
+      if (assignedTeam) {
+        return `Bạn chỉ có thể chỉnh sửa tờ khai thuộc tổ ${assignedTeam}.`;
+      }
       return "Bạn chỉ có thể chỉnh sửa tờ khai đã gán cho tên của bạn.";
     }
     return "";
   }, [assignedTeam, canEdit, isManagerRole, isStaffRole, isTeamLead]);
+  const teamChangeRestrictionMessage = useMemo(() => {
+    if (!canEdit) return "";
+    if (!isStaffRole) return "";
+    if (!assignedTeam) {
+      return "Bạn không thể gán tờ khai sang tổ đội khác.";
+    }
+    return `Bạn chỉ được gán tổ đội ${assignedTeam}.`;
+  }, [assignedTeam, canEdit, isStaffRole]);
   const blockedEditNoticeRef = useRef(new Set());
   useEffect(() => {
     blockedEditNoticeRef.current.clear();
@@ -1039,9 +1050,9 @@ export default function DataImporter({
       if (!row || typeof row !== "object") return false;
       if (isManagerRole) return true;
       const rowStaffKey = normalizeName(row?.nhan_vien);
+      const rowTeamKey = normalizeName(row?.team);
       if (isTeamLead) {
         if (!assignedTeamKey) return false;
-        const rowTeamKey = normalizeName(row?.team);
         if (rowTeamKey && rowTeamKey === assignedTeamKey) {
           return true;
         }
@@ -1054,11 +1065,48 @@ export default function DataImporter({
         return false;
       }
       if (isStaffRole) {
-        return rowStaffKey && rowStaffKey === staffNameKey;
+        if (!assignedTeamKey) {
+          return rowStaffKey && rowStaffKey === staffNameKey;
+        }
+        if (!rowTeamKey) {
+          if (!rowStaffKey) return true;
+          return rowStaffKey === staffNameKey;
+        }
+        return rowTeamKey === assignedTeamKey;
       }
       return true;
     },
-    [assignedTeamKey, canEdit, isManagerRole, isStaffRole, isTeamLead, memberTeamMap, staffNameKey]
+    [
+      assignedTeamKey,
+      canEdit,
+      isManagerRole,
+      isStaffRole,
+      isTeamLead,
+      memberTeamMap,
+      staffNameKey,
+    ]
+  );
+  const sanitizeRowUpdates = useCallback(
+    (row, updates) => {
+      if (!updates || typeof updates !== "object") return updates;
+      if (!isStaffRole) return updates;
+      if (!Object.prototype.hasOwnProperty.call(updates, "team")) {
+        return updates;
+      }
+      const nextTeamRaw = updates.team ?? "";
+      const nextTeamKey = normalizeName(nextTeamRaw);
+      if (!assignedTeamKey) {
+        return updates;
+      }
+      if (nextTeamKey && nextTeamKey !== assignedTeamKey) {
+        if (teamChangeRestrictionMessage) {
+          alert(teamChangeRestrictionMessage);
+        }
+        return null;
+      }
+      return updates;
+    },
+    [assignedTeamKey, isStaffRole, teamChangeRestrictionMessage]
   );
   const keyOfRow = useCallback((row) => {
     const soTk = (row?.so_tk || "").toString();
@@ -2937,7 +2985,7 @@ const selectedReviewedCount = useMemo(() => {
         }
         return prev;
       }
-      const updates = updater(current);
+      const updates = sanitizeRowUpdates(current, updater(current));
       if (!updates || typeof updates !== "object") return prev;
 
       let changed = false;
@@ -2986,6 +3034,7 @@ const selectedReviewedCount = useMemo(() => {
     keyOfRow,
     mode,
     rules,
+    sanitizeRowUpdates,
   ]);
 
   const onChangeCell = useCallback((rowKey, field, value, transform) => {
