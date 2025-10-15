@@ -37,6 +37,11 @@ import {
   getKpiAdjustments,
   KPI_ADJUSTMENT_SETTINGS_KEY,
   KPI_ADJUSTMENTS_KEY,
+  getReportSchedules,
+  saveReportSchedule,
+  deleteReportSchedule,
+  calculateNextReportScheduleRun,
+  REPORT_SCHEDULE_KEY,
 } from '@/lib/store.js';
 import { clearStorageCache, getItem as sharedGetItem, setItem as sharedSetItem } from '@/lib/storageClient.js';
 import * as auth from '@/auth/localAuth.js';
@@ -76,6 +81,101 @@ describe('toISODate', () => {
   it('normalises ISO strings with swapped month/day segments', () => {
     expect(toISODate('2024-31-08')).toBe('2024-08-31');
     expect(toISODate('2024-08-01T12:00:00')).toBe('2024-08-01');
+  });
+});
+
+describe('report schedules', () => {
+  it('calculates next run for weekly schedules from a reference date', () => {
+    const reference = new Date('2024-09-02T07:00:00.000Z'); // Thứ hai
+    const nextRunIso = calculateNextReportScheduleRun(
+      {
+        frequency: 'weekly',
+        dayOfWeek: 3,
+        time: '09:30',
+      },
+      { fromDate: reference }
+    );
+    expect(typeof nextRunIso).toBe('string');
+    const runDate = new Date(nextRunIso || 0);
+    expect(runDate.getTime()).toBeGreaterThan(reference.getTime());
+    // Thứ tư (3) trong chuẩn 0=Chủ nhật.
+    expect(runDate.getDay()).toBe(3);
+    expect(runDate.getHours()).toBe(9);
+    expect(runDate.getMinutes()).toBe(30);
+  });
+
+  it('tính đúng lịch chạy tháng khi ngày vượt quá cuối tháng', () => {
+    const reference = new Date('2024-01-31T10:00:00.000Z');
+    const nextRunIso = calculateNextReportScheduleRun(
+      {
+        frequency: 'monthly',
+        dayOfMonth: 31,
+        time: '06:45',
+      },
+      { fromDate: reference }
+    );
+    expect(typeof nextRunIso).toBe('string');
+    const runDate = new Date(nextRunIso || 0);
+    expect(runDate.getFullYear()).toBe(2024);
+    expect(runDate.getMonth()).toBe(1); // Tháng 2 (0-index)
+    expect(runDate.getDate()).toBe(29); // Năm nhuận
+    expect(runDate.getHours()).toBe(6);
+    expect(runDate.getMinutes()).toBe(45);
+  });
+
+  it('trả về null khi lịch bị tắt', () => {
+    const result = calculateNextReportScheduleRun({
+      frequency: 'weekly',
+      dayOfWeek: 2,
+      time: '08:00',
+      active: false,
+    });
+    expect(result).toBeNull();
+
+    const saved = saveReportSchedule({
+      name: 'Tắt tạm thời',
+      frequency: 'weekly',
+      dayOfWeek: 2,
+      time: '08:00',
+      active: false,
+      recipients: 'boss@example.com',
+    });
+    expect(saved.active).toBe(false);
+    expect(saved.nextRun).toBe('');
+  });
+
+  it('saves and normalises schedule entries with recipients & formats', () => {
+    const saved = saveReportSchedule({
+      name: 'Báo cáo tuần',
+      recipients: 'boss@example.com, support@example.com ',
+      frequency: 'monthly',
+      dayOfMonth: 5,
+      time: '08:15',
+      formats: ['excel', 'pdf', 'pdf'],
+    });
+    expect(saved.id).toBeTruthy();
+    expect(saved.recipients).toEqual(['boss@example.com', 'support@example.com']);
+    expect(saved.formats).toEqual(['excel', 'pdf']);
+    expect(typeof saved.nextRun).toBe('string');
+
+    const stored = getReportSchedules();
+    expect(stored).toHaveLength(1);
+    expect(stored[0].name).toBe('Báo cáo tuần');
+    expect(sharedGetItem(REPORT_SCHEDULE_KEY)).toBeTruthy();
+  });
+
+  it('deletes schedule entries by id', () => {
+    const entry = saveReportSchedule({
+      name: 'Tạm thời',
+      recipients: 'kpi@example.com',
+      frequency: 'weekly',
+      dayOfWeek: 1,
+      time: '07:00',
+    });
+    expect(getReportSchedules()).toHaveLength(1);
+    const removed = deleteReportSchedule(entry.id);
+    expect(removed).toBe(true);
+    expect(getReportSchedules()).toHaveLength(0);
   });
 });
 

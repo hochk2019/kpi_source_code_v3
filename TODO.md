@@ -53,10 +53,10 @@
 - [x] Tai cau truc UI tab nham dong bo phong cach thiet ke moi.
 
 ## 6. Bao cao KPI
-- [ ] Phan "Diem KPI +/- bo sung": them tuy chon so muc moi trang (5/10/20).
-- [ ] Thiet ke lai UI Bao cao tong hop & chi tiet (gom nut, don gian hoa, phan nhom).
-- [ ] Xet them tinh nang lap lich gui Bao cao (Excel/PDF) qua email theo tuan/thang.
-- [ ] Ho tro export, preview KPI theo rule moi (tu muc simulate o muc 4).
+- [x] Phan "Diem KPI +/- bo sung": them tuy chon so muc moi trang (5/10/20).
+- [x] Thiet ke lai UI Bao cao tong hop & chi tiet (gom nut, don gian hoa, phan nhom).
+- [x] Xet them tinh nang lap lich gui Bao cao (Excel/PDF) qua email theo tuan/thang.
+- [x] Ho tro export, preview KPI theo rule moi (tu muc simulate o muc 4).
 
 ## 7. Suc khoe du lieu
 - [ ] An tab doi voi Nhan vien/Truong nhom; chi show Admin & Quan ly.
