@@ -26,10 +26,10 @@
 - [x] Tai cau truc giao dien tab Gan MST theo huong hien dai; tai su dung component chung.
 
 ## 3. Dai ly Hai quan
-- [ ] Bo sung filter theo dai ly va trang thai cap nhat.
-- [ ] Luu lich su thay doi dai ly (truoc/sau, nguoi sua, thoi gian) va hien thi khi mo.
-- [ ] Auto-complete danh sach dai ly (go ky tu -> goi y, hoac chon tu dropdown).
-- [ ] Them nut cap nhat tung dong; chi ghi cac dong thuc su thay doi.
+- [x] Bo sung filter theo dai ly va trang thai cap nhat.
+- [x] Luu lich su thay doi dai ly (truoc/sau, nguoi sua, thoi gian) va hien thi khi mo.
+- [x] Auto-complete danh sach dai ly (go ky tu -> goi y, hoac chon tu dropdown).
+- [x] Them nut cap nhat tung dong; chi ghi cac dong thuc su thay doi.
 
 ## 4. Quy tac KPI
 - [ ] Auto-complete ma dai ly HQ trong toan bo form.

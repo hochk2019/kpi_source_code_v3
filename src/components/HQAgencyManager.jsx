@@ -3,6 +3,8 @@ import * as XLSX from "xlsx";
 import {
   getHQAgencies,
   upsertHQAgencies,
+  saveHQAgencyRow,
+  deleteHQAgencyRow,
   normalizeMST,
   normalizeStr,
   getDeclRows,
@@ -16,6 +18,15 @@ import { refreshHQHistoryCache } from "@/lib/hqHistoryClient.js";
 const PAGE_SIZE = 50;
 
 const CARD_SURFACE_CLASS = "rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] shadow-sm";
+const RECENT_UPDATE_WINDOW = 30 * 24 * 60 * 60 * 1000; // 30 ngày
+const STATUS_FILTER_OPTIONS = [
+  { value: "all", label: "Tất cả trạng thái" },
+  { value: "pending", label: "Chưa lưu" },
+  { value: "missing", label: "Chưa gán đại lý" },
+  { value: "recent", label: "Cập nhật 30 ngày gần đây" },
+  { value: "noHistory", label: "Chưa từng cập nhật" },
+];
+const AGENCY_SUGGESTION_DATALIST = "hq-agency-suggestions";
 
 const headerAliases = {
   mst: ["mst", "mã số thuế", "ma so thue", "mst (vat)"],
@@ -43,47 +54,128 @@ function pickCell(row, key) {
   return "";
 }
 
-function mergeRows(current, incoming) {
-  const byMst = new Map();
-
-  const normalizeRow = (row) => {
-    const mst = normalizeMST(row?.mst);
-    if (!mst) return null;
-    const company = normalizeStr(row?.company ?? "");
-    const agents = parseAgencyList(row?.agents ?? row?.agent);
-    return {
-      mst,
-      company,
-      agents,
-      agent: formatAgencyList(agents),
-    };
+function sanitizeRowModel(row) {
+  const mst = normalizeMST(row?.mst);
+  const company = normalizeStr(row?.company ?? "");
+  const agents = parseAgencyList(row?.agents ?? row?.agent);
+  return {
+    mst,
+    company,
+    agents,
+    agent: formatAgencyList(agents),
   };
+}
+
+function cloneDraft(row) {
+  return {
+    ...row,
+    agents: Array.isArray(row?.agents) ? row.agents.slice() : [],
+  };
+}
+
+function createDraftFromStore(row) {
+  const sanitized = sanitizeRowModel(row || {});
+  return {
+    mst: sanitized.mst,
+    company: sanitized.company,
+    agents: sanitized.agents,
+    agent: sanitized.agent,
+    _originalMst: sanitized.mst,
+    _isNew: false,
+  };
+}
+
+function createEmptyDraft() {
+  return {
+    mst: "",
+    company: "",
+    agents: [],
+    agent: "",
+    _originalMst: "",
+    _isNew: true,
+  };
+}
+
+function readDraftsFromStore() {
+  return getHQAgencies().map(createDraftFromStore);
+}
+
+function mergeRows(current, incoming) {
+  const preservedDrafts = [];
+  const draftsByMst = new Map();
 
   for (const row of current) {
-    const normalized = normalizeRow(row);
-    if (!normalized) continue;
-    byMst.set(normalized.mst, normalized);
+    const sanitized = sanitizeRowModel(row || {});
+    const key = sanitized.mst || row?._originalMst || "";
+    if (!key) {
+      preservedDrafts.push(cloneDraft(row));
+      continue;
+    }
+    draftsByMst.set(key, cloneDraft({
+      ...row,
+      mst: sanitized.mst,
+      company: sanitized.company,
+      agents: sanitized.agents,
+      agent: sanitized.agent,
+    }));
   }
 
   for (const row of incoming) {
-    const normalized = normalizeRow(row);
-    if (!normalized) continue;
-    const prev = byMst.get(normalized.mst) || { mst: normalized.mst, company: "", agents: [] };
-    const mergedAgents = Array.from(new Set([...(prev.agents || []), ...normalized.agents]));
-    const company = normalized.company || prev.company || "";
-    byMst.set(normalized.mst, {
+    const normalized = sanitizeRowModel(row);
+    if (!normalized.mst) continue;
+    const existing = draftsByMst.get(normalized.mst);
+    const combinedAgents = Array.from(new Set([...(existing?.agents ?? []), ...normalized.agents]));
+    const company = normalized.company || existing?.company || "";
+    draftsByMst.set(normalized.mst, {
       mst: normalized.mst,
       company,
-      agents: mergedAgents,
-      agent: formatAgencyList(mergedAgents),
+      agents: combinedAgents,
+      agent: formatAgencyList(combinedAgents),
+      _originalMst: existing?._originalMst ?? "",
+      _isNew: existing?._isNew ?? !existing,
     });
   }
 
-  return Array.from(byMst.values()).sort((a, b) => {
+  const merged = [...preservedDrafts, ...Array.from(draftsByMst.values())];
+  merged.sort((a, b) => {
     const cmpCompany = (a.company || "").localeCompare(b.company || "", "vi", { sensitivity: "base" });
     if (cmpCompany !== 0) return cmpCompany;
     return (a.mst || "").localeCompare(b.mst || "");
   });
+  return merged;
+}
+
+function computeRowState(row, baselineMap, historyMap, now = Date.now()) {
+  const draft = row || {};
+  const normalizedDraft = sanitizeRowModel(draft);
+  const baselineRow = draft._originalMst ? baselineMap.get(draft._originalMst) : null;
+  const normalizedBaseline = baselineRow ? sanitizeRowModel(baselineRow) : null;
+
+  const hasChanges = normalizedBaseline
+    ? normalizedDraft.mst !== normalizedBaseline.mst
+      || normalizedDraft.company !== normalizedBaseline.company
+      || normalizedDraft.agent !== normalizedBaseline.agent
+    : Boolean(normalizedDraft.mst || normalizedDraft.company || normalizedDraft.agent);
+
+  const lookupKey = normalizedDraft.mst || normalizeMST(draft._originalMst);
+  const historyList = lookupKey ? historyMap.get(lookupKey) || [] : [];
+  const lastTimestamp = historyList.length
+    ? new Date(historyList[0].timestamp).getTime()
+    : 0;
+  const isRecent = lastTimestamp && !Number.isNaN(lastTimestamp) && now - lastTimestamp <= RECENT_UPDATE_WINDOW;
+  const hasHistory = historyList.length > 0;
+  const hasAgents = normalizedDraft.agents.length > 0;
+
+  return {
+    draft: normalizedDraft,
+    baseline: normalizedBaseline,
+    hasChanges,
+    hasAgents,
+    hasHistory,
+    isRecent,
+    lastTimestamp,
+    isNew: !normalizedBaseline,
+  };
 }
 
 function suggestCompanyByMST(mst) {
@@ -124,8 +216,16 @@ function formatHistoryTimestamp(value) {
 }
 
 export default function HQAgencyManager({ canEdit = true, currentUser = null }) {
-  const [rows, setRows] = useState(() => getHQAgencies());
+  const initialDraftsRef = useRef(null);
+  if (initialDraftsRef.current === null) {
+    initialDraftsRef.current = readDraftsFromStore();
+  }
+
+  const [baseline, setBaseline] = useState(() => initialDraftsRef.current.map(cloneDraft));
+  const [rows, setRows] = useState(() => initialDraftsRef.current.map(cloneDraft));
   const [search, setSearch] = useState("");
+  const [agencyFilter, setAgencyFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
   const [page, setPage] = useState(1);
   const [dirty, setDirty] = useState(false);
   const [selectedFile, setSelectedFile] = useState("");
@@ -135,6 +235,57 @@ export default function HQAgencyManager({ canEdit = true, currentUser = null }) 
 
   const actor = currentUser?.username || "guest";
   const isReadOnly = !canEdit;
+
+  const baselineMap = useMemo(() => {
+    const map = new Map();
+    for (const row of baseline) {
+      if (!row?._originalMst) continue;
+      map.set(row._originalMst, row);
+    }
+    return map;
+  }, [baseline]);
+
+  const computeRowDirty = useCallback((row) => {
+    if (!row) return false;
+    const normalizedDraft = sanitizeRowModel(row);
+    const baselineRow = row._originalMst ? baselineMap.get(row._originalMst) : null;
+    const normalizedBaseline = baselineRow ? sanitizeRowModel(baselineRow) : null;
+    if (!normalizedBaseline) {
+      return Boolean(normalizedDraft.mst || normalizedDraft.company || normalizedDraft.agent);
+    }
+    return (
+      normalizedDraft.mst !== normalizedBaseline.mst
+      || normalizedDraft.company !== normalizedBaseline.company
+      || normalizedDraft.agent !== normalizedBaseline.agent
+    );
+  }, [baselineMap]);
+
+  const computeHasDirty = useCallback((list) => {
+    return Array.isArray(list) && list.some(item => computeRowDirty(item));
+  }, [computeRowDirty]);
+
+  const updateRows = useCallback((updater) => {
+    setRows(prev => {
+      const base = Array.isArray(prev) ? prev : [];
+      const next = typeof updater === "function" ? updater(base.slice()) : updater;
+      if (!Array.isArray(next)) {
+        return base;
+      }
+      setDirty(computeHasDirty(next));
+      return next;
+    });
+  }, [computeHasDirty]);
+
+  const loadFromStore = useCallback(() => {
+    const sanitized = readDraftsFromStore();
+    const baselineDrafts = sanitized.map(cloneDraft);
+    const workingDrafts = sanitized.map(cloneDraft);
+    initialDraftsRef.current = sanitized;
+    setBaseline(baselineDrafts);
+    setRows(workingDrafts);
+    setDirty(false);
+    setPage(1);
+  }, []);
 
   const refreshHistory = useCallback(async () => {
     try {
@@ -162,6 +313,24 @@ export default function HQAgencyManager({ canEdit = true, currentUser = null }) 
     return map;
   }, [historyEntries]);
 
+  const agencyOptions = useMemo(() => {
+    const values = new Map();
+    const collect = (list) => {
+      for (const row of list || []) {
+        for (const agent of row?.agents || []) {
+          const label = normalizeStr(agent);
+          if (!label) continue;
+          if (!values.has(label)) {
+            values.set(label, agent);
+          }
+        }
+      }
+    };
+    collect(baseline);
+    collect(rows);
+    return Array.from(values.values()).sort((a, b) => a.localeCompare(b, "vi", { sensitivity: "base" }));
+  }, [baseline, rows]);
+
   const toggleHistory = useCallback((mst) => {
     const key = normalizeMST(mst);
     if (!key) return;
@@ -170,14 +339,40 @@ export default function HQAgencyManager({ canEdit = true, currentUser = null }) 
 
   const filtered = useMemo(() => {
     const q = normalizeStr(search).toLowerCase();
-    if (!q) return rows;
+    const agencyQuery = normalizeStr(agencyFilter).toLowerCase();
+    const now = Date.now();
     return rows.filter(row => {
-      const mst = (row.mst || "").toLowerCase();
-      const company = (row.company || "").toLowerCase();
-      const agent = (row.agent || "").toLowerCase();
-      return mst.includes(q) || company.includes(q) || agent.includes(q);
+      const state = computeRowState(row, baselineMap, historyMap, now);
+      const mstText = (row.mst || "").toLowerCase();
+      const companyText = (row.company || "").toLowerCase();
+      const agentText = (row.agent || "").toLowerCase();
+
+      if (q && !mstText.includes(q) && !companyText.includes(q) && !agentText.includes(q)) {
+        return false;
+      }
+
+      if (agencyQuery) {
+        const hasAgencyMatch = state.draft.agents.some(agent => agent.toLowerCase().includes(agencyQuery));
+        if (!hasAgencyMatch) {
+          return false;
+        }
+      }
+
+      if (statusFilter === "pending" && !state.hasChanges) {
+        return false;
+      }
+      if (statusFilter === "missing" && state.hasAgents) {
+        return false;
+      }
+      if (statusFilter === "recent" && !state.isRecent) {
+        return false;
+      }
+      if (statusFilter === "noHistory" && state.hasHistory) {
+        return false;
+      }
+      return true;
     });
-  }, [rows, search]);
+  }, [rows, search, agencyFilter, statusFilter, baselineMap, historyMap]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
@@ -194,9 +389,10 @@ export default function HQAgencyManager({ canEdit = true, currentUser = null }) 
   }, [refreshHistory]);
 
   const handleChangeField = useCallback((index, field, value) => {
-    setRows(prev => {
+    updateRows(prev => {
+      if (index < 0 || index >= prev.length) return prev;
       const next = prev.slice();
-      const current = { mst: "", company: "", agent: "", agents: [], ...(next[index] || {}) };
+      const current = cloneDraft(next[index] ?? createEmptyDraft());
       if (field === "mst") {
         const nextMst = normalizeMST(value);
         current.mst = nextMst;
@@ -215,37 +411,81 @@ export default function HQAgencyManager({ canEdit = true, currentUser = null }) 
       } else {
         current[field] = normalizeStr(value);
       }
+      if (!current._originalMst) {
+        current._isNew = true;
+      }
       next[index] = current;
       return next;
     });
-    setDirty(true);
-  }, []);
+  }, [updateRows]);
+
+  const handleQuickAddAgent = useCallback((index, agentName) => {
+    const sanitizedAgent = normalizeStr(agentName);
+    if (!sanitizedAgent) return;
+    updateRows(prev => {
+      if (index < 0 || index >= prev.length) return prev;
+      const next = prev.slice();
+      const current = cloneDraft(next[index] ?? createEmptyDraft());
+      const existingSet = new Set((current.agents || []).map(item => normalizeStr(item)));
+      if (existingSet.has(sanitizedAgent)) {
+        return prev;
+      }
+      const agents = [...(current.agents || []), sanitizedAgent];
+      current.agents = agents;
+      current.agent = formatAgencyList(agents);
+      if (!current._originalMst) {
+        current._isNew = true;
+      }
+      next[index] = current;
+      return next;
+    });
+  }, [updateRows]);
 
   const handleAddRow = useCallback(() => {
-    setRows(prev => [{ mst: "", company: "", agent: "", agents: [] }, ...prev]);
-    setDirty(true);
+    updateRows(prev => [createEmptyDraft(), ...(Array.isArray(prev) ? prev : [])]);
     setPage(1);
-  }, []);
+  }, [updateRows]);
 
-  const handleDelete = useCallback((index) => {
-    setRows(prev => {
+  const handleDelete = useCallback(async (index) => {
+    const row = rows[index];
+    if (!row) return;
+
+    if (!row._isNew && row._originalMst) {
+      if (!window.confirm(`Bạn chắc chắn muốn xóa cấu hình đại lý cho MST ${row._originalMst}?`)) {
+        return;
+      }
+      try {
+        deleteHQAgencyRow(row._originalMst, {
+          actor,
+          detail: `Xóa đại lý HQ từ giao diện (${row._originalMst})`,
+        });
+        loadFromStore();
+        await refreshHistory();
+        alert(`Đã xóa cấu hình đại lý cho MST ${row._originalMst}.`);
+      } catch (err) {
+        console.error("Không thể xóa đại lý HQ", err);
+        alert("Không thể xóa đại lý HQ. Vui lòng thử lại.");
+      }
+      return;
+    }
+
+    updateRows(prev => {
+      if (!Array.isArray(prev)) return prev;
       const next = prev.slice();
       next.splice(index, 1);
       return next;
     });
-    setDirty(true);
-  }, []);
+  }, [rows, actor, loadFromStore, refreshHistory, updateRows]);
 
   const handleReload = useCallback(async () => {
     if (dirty && !window.confirm("Bạn có thay đổi chưa lưu. Bạn có chắc muốn bỏ qua và tải lại dữ liệu?")) {
       return;
     }
-    setRows(getHQAgencies());
-    setDirty(false);
+    loadFromStore();
     setSelectedFile("");
     if (fileRef.current) fileRef.current.value = "";
     await refreshHistory();
-  }, [dirty, refreshHistory]);
+  }, [dirty, loadFromStore, refreshHistory]);
 
   const handleImport = useCallback(async () => {
     if (isReadOnly) {
@@ -280,8 +520,7 @@ export default function HQAgencyManager({ canEdit = true, currentUser = null }) 
         alert("Không tìm thấy dữ liệu hợp lệ trong file.");
         return;
       }
-      setRows(prev => mergeRows(prev, mapped));
-      setDirty(true);
+      updateRows(prev => mergeRows(prev, mapped));
       setPage(1);
       alert(`Đã đọc ${mapped.length} dòng từ file. Bấm Lưu để ghi vào hệ thống.`);
     } catch (err) {
@@ -291,7 +530,7 @@ export default function HQAgencyManager({ canEdit = true, currentUser = null }) 
       if (fileRef.current) fileRef.current.value = "";
       setSelectedFile("");
     }
-  }, [isReadOnly]);
+  }, [isReadOnly, updateRows]);
 
   const handleFilePick = useCallback((event) => {
     const file = event.target.files?.[0];
@@ -305,29 +544,82 @@ export default function HQAgencyManager({ canEdit = true, currentUser = null }) 
     }
     const sanitized = rows
       .map(row => {
-        const mst = normalizeMST(row?.mst);
-        if (!mst) return null;
-        let company = normalizeStr(row?.company);
+        const normalized = sanitizeRowModel(row);
+        if (!normalized.mst) return null;
+        let company = normalized.company;
         if (!company) {
-          const suggestion = suggestCompanyByMST(mst);
+          const suggestion = suggestCompanyByMST(normalized.mst);
           if (suggestion) {
             company = suggestion;
           }
         }
-        const agents = parseAgencyList(row?.agents ?? row?.agent);
-        return { mst, company, agents };
+        return {
+          mst: normalized.mst,
+          company,
+          agents: normalized.agents,
+        };
       })
       .filter(Boolean);
-    upsertHQAgencies(sanitized, {
-      actor,
-      detail: "Cập nhật danh sách Đại lý HQ từ giao diện",
-    });
-    setRows(getHQAgencies());
-    await refreshHistory();
-    setDirty(false);
-    setSelectedFile("");
-    alert("Đã lưu cấu hình Đại lý HQ.");
-  }, [actor, isReadOnly, refreshHistory, rows]);
+    if (!sanitized.length) {
+      alert("Không có dòng hợp lệ để lưu. Vui lòng kiểm tra lại dữ liệu.");
+      return;
+    }
+    try {
+      upsertHQAgencies(sanitized, {
+        actor,
+        detail: "Cập nhật danh sách Đại lý HQ từ giao diện",
+      });
+      loadFromStore();
+      await refreshHistory();
+      setSelectedFile("");
+      if (fileRef.current) fileRef.current.value = "";
+      alert("Đã lưu cấu hình Đại lý HQ.");
+    } catch (err) {
+      console.error("Không thể lưu cấu hình Đại lý HQ", err);
+      alert("Không thể lưu cấu hình Đại lý HQ. Vui lòng thử lại.");
+    }
+  }, [actor, isReadOnly, rows, loadFromStore, refreshHistory]);
+
+  const handleSaveRow = useCallback(async (index) => {
+    const row = rows[index];
+    if (!row) return;
+    if (isReadOnly) {
+      alert("Bạn không có quyền lưu đại lý HQ.");
+      return;
+    }
+    const normalized = sanitizeRowModel(row);
+    if (!normalized.mst) {
+      alert("Vui lòng nhập mã số thuế trước khi lưu.");
+      return;
+    }
+    try {
+      saveHQAgencyRow(
+        {
+          mst: normalized.mst,
+          company: normalized.company,
+          agents: normalized.agents,
+        },
+        {
+          actor,
+          previousMst: row._originalMst,
+          detail: `Cập nhật đại lý HQ từ bảng (${normalized.mst})`,
+        },
+      );
+      loadFromStore();
+      await refreshHistory();
+      alert(`Đã lưu đại lý HQ cho MST ${normalized.mst}.`);
+    } catch (err) {
+      console.error("Không thể lưu đại lý HQ", err);
+      alert("Không thể lưu đại lý HQ. Vui lòng thử lại.");
+    }
+  }, [rows, isReadOnly, actor, loadFromStore, refreshHistory]);
+
+  const handleResetFilters = useCallback(() => {
+    setAgencyFilter("");
+    setStatusFilter("all");
+    setSearch("");
+    setPage(1);
+  }, []);
 
   return (
     <section className="hq-agency-view space-y-4">
@@ -404,13 +696,43 @@ export default function HQAgencyManager({ canEdit = true, currentUser = null }) 
             Thêm dòng mới
           </button>
         )}
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ml-auto flex flex-wrap items-center gap-2">
+          <select
+            className="rounded border px-2 py-1 text-sm text-gray-700"
+            value={agencyFilter}
+            onChange={e => { setAgencyFilter(e.target.value); setPage(1); }}
+          >
+            <option value="">Tất cả đại lý</option>
+            {agencyOptions.map(option => (
+              <option key={option} value={option}>
+                {option}
+              </option>
+            ))}
+          </select>
+          <select
+            className="rounded border px-2 py-1 text-sm text-gray-700"
+            value={statusFilter}
+            onChange={e => { setStatusFilter(e.target.value); setPage(1); }}
+          >
+            {STATUS_FILTER_OPTIONS.map(option => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
           <input
             className="w-64 rounded border px-2 py-1"
             placeholder="Tìm theo MST, Công ty hoặc Đại lý"
             value={search}
             onChange={e => { setSearch(e.target.value); setPage(1); }}
           />
+          <button
+            type="button"
+            onClick={handleResetFilters}
+            className="rounded border px-2 py-1 text-sm text-gray-600"
+          >
+            Xóa lọc
+          </button>
           <span className="text-sm text-gray-500">{filtered.length} dòng • Trang {safePage}/{totalPages}</span>
           <button
             type="button"
@@ -451,80 +773,146 @@ export default function HQAgencyManager({ canEdit = true, currentUser = null }) 
             {pageRows.map((row, idx) => {
               const rowIndex = rows.indexOf(row);
               const globalIndex = (safePage - 1) * PAGE_SIZE + idx + 1;
-              const historyForRow = historyMap.get(row.mst) ?? [];
-              const isHistoryOpen = openHistory.includes(row.mst);
+              const state = computeRowState(row, baselineMap, historyMap);
+              const historyKey = state.draft.mst || normalizeMST(row._originalMst);
+              const historyForRow = historyKey ? historyMap.get(historyKey) ?? [] : [];
+              const isHistoryOpen = historyKey ? openHistory.includes(historyKey) : false;
               const historyEntriesToShow = historyForRow.slice(0, 10);
-              const historyButtonDisabled = historyForRow.length === 0;
+              const historyButtonDisabled = !historyKey || historyForRow.length === 0;
               const historyButtonTitle = historyButtonDisabled
                 ? "Chưa có lịch sử cho MST này"
                 : "Xem lịch sử chỉnh sửa đại lý HQ cho MST này";
+              const latestTimestamp = historyForRow[0]?.timestamp ?? null;
+              const canCommitRow = !isReadOnly && state.draft.mst && state.hasChanges;
+              const rowKey = `${historyKey || "row"}_${idx}`;
+              const statusBadges = [];
+              if (state.isNew && state.hasChanges) {
+                statusBadges.push({ label: "Mới", className: "bg-purple-100 text-purple-700" });
+              }
+              if (state.hasChanges) {
+                statusBadges.push({ label: "Chưa lưu", className: "bg-amber-100 text-amber-700" });
+              }
+              if (!state.hasChanges && !state.hasAgents) {
+                statusBadges.push({ label: "Chưa gán đại lý", className: "bg-slate-200 text-slate-600" });
+              }
+              if (!state.hasChanges && state.isRecent) {
+                statusBadges.push({ label: "Cập nhật gần đây", className: "bg-emerald-100 text-emerald-700", title: latestTimestamp ? `Cập nhật lúc ${formatHistoryTimestamp(latestTimestamp)}` : undefined });
+              }
+              if (!state.hasChanges && !state.isRecent && state.hasHistory) {
+                statusBadges.push({ label: "Đã có lịch sử", className: "bg-blue-100 text-blue-700" });
+              }
+              if (!state.draft.mst) {
+                statusBadges.push({ label: "Chưa nhập MST", className: "bg-red-100 text-red-600" });
+              }
               return (
-                <React.Fragment key={`${row.mst}_${idx}`}>
+                <React.Fragment key={rowKey}>
                   <tr className="odd:bg-[color:var(--ds-surface-card)] even:bg-[color:var(--ds-surface-muted)]">
-                  <td className="px-2 py-1">{globalIndex}</td>
-                  <td className="px-2 py-1">
-                    {isReadOnly ? (
-                      <span>{row.mst}</span>
-                    ) : (
-                      <input
-                        className="w-40 rounded border px-2 py-1"
-                        value={row.mst}
-                        onChange={e => handleChangeField(rowIndex, "mst", e.target.value)}
-                      />
-                    )}
-                  </td>
-                  <td className="px-2 py-1">
-                    {isReadOnly ? (
-                      <span>{row.company}</span>
-                    ) : (
-                      <input
-                        className="w-64 rounded border px-2 py-1"
-                        value={row.company}
-                        onChange={e => handleChangeField(rowIndex, "company", e.target.value)}
-                      />
-                    )}
-                  </td>
-                  <td className="px-2 py-1 align-top">
-                    <div className="flex flex-wrap items-start gap-2">
+                    <td className="px-2 py-1">{globalIndex}</td>
+                    <td className="px-2 py-1">
                       {isReadOnly ? (
-                        <span>{row.agent}</span>
+                        <span>{row.mst}</span>
                       ) : (
                         <input
-                          className="w-56 rounded border px-2 py-1"
-                          value={row.agent}
-                          onChange={e => handleChangeField(rowIndex, "agent", e.target.value)}
-                          placeholder="Ví dụ: Đại lý A, Đại lý B"
+                          className="w-40 rounded border px-2 py-1"
+                          value={row.mst}
+                          onChange={e => handleChangeField(rowIndex, "mst", e.target.value)}
                         />
                       )}
-                      <span
-                        className="pt-1 text-xs text-gray-400"
-                        title="Nhập nhiều đại lý và ngăn cách bằng dấu phẩy (,) hoặc xuống dòng khi cần."
-                      >
-                        ⓘ
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => toggleHistory(row.mst)}
-                        className="rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] px-2 py-1 text-xs text-[color:var(--ds-text-secondary)] transition hover:bg-[color:var(--ds-surface-muted)] disabled:cursor-not-allowed disabled:opacity-50"
-                        disabled={historyButtonDisabled}
-                        title={historyButtonTitle}
-                      >
-                        Lịch sử{historyForRow.length > 0 ? ` (${historyForRow.length})` : ""}
-                      </button>
-                    </div>
-                  </td>
-                  {canEdit && (
-                    <td className="px-2 py-1">
-                      <button
-                        type="button"
-                        onClick={() => handleDelete(rowIndex)}
-                        className="rounded bg-red-500 px-2 py-0.5 text-xs text-white"
-                      >
-                        Xóa
-                      </button>
                     </td>
-                  )}
-                </tr>
+                    <td className="px-2 py-1">
+                      {isReadOnly ? (
+                        <span>{row.company}</span>
+                      ) : (
+                        <input
+                          className="w-64 rounded border px-2 py-1"
+                          value={row.company}
+                          onChange={e => handleChangeField(rowIndex, "company", e.target.value)}
+                        />
+                      )}
+                    </td>
+                    <td className="px-2 py-1 align-top">
+                      <div className="flex flex-col gap-2">
+                        <div className="flex flex-wrap items-start gap-2">
+                          {isReadOnly ? (
+                            <span>{row.agent}</span>
+                          ) : (
+                            <input
+                              className="w-56 rounded border px-2 py-1"
+                              value={row.agent}
+                              onChange={e => handleChangeField(rowIndex, "agent", e.target.value)}
+                              placeholder="Ví dụ: Đại lý A, Đại lý B"
+                              list={AGENCY_SUGGESTION_DATALIST}
+                            />
+                          )}
+                          {canEdit && agencyOptions.length > 0 && (
+                            <select
+                              className="rounded border px-2 py-1 text-xs text-gray-600"
+                              value=""
+                              onChange={e => {
+                                handleQuickAddAgent(rowIndex, e.target.value);
+                                e.target.value = "";
+                              }}
+                            >
+                              <option value="">Chọn nhanh đại lý</option>
+                              {agencyOptions.map(option => (
+                                <option key={`${rowKey}-opt-${option}`} value={option}>
+                                  {option}
+                                </option>
+                              ))}
+                            </select>
+                          )}
+                          <span
+                            className="pt-1 text-xs text-gray-400"
+                            title="Nhập nhiều đại lý và ngăn cách bằng dấu phẩy (,) hoặc xuống dòng khi cần."
+                          >
+                            ⓘ
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => historyKey && toggleHistory(historyKey)}
+                            className="rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] px-2 py-1 text-xs text-[color:var(--ds-text-secondary)] transition hover:bg-[color:var(--ds-surface-muted)] disabled:cursor-not-allowed disabled:opacity-50"
+                            disabled={historyButtonDisabled}
+                            title={historyButtonTitle}
+                          >
+                            Lịch sử{historyForRow.length > 0 ? ` (${historyForRow.length})` : ""}
+                          </button>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2 text-xs text-gray-600">
+                          {statusBadges.map(badge => (
+                            <span
+                              key={`${rowKey}-badge-${badge.label}`}
+                              className={`rounded px-2 py-0.5 font-medium ${badge.className}`}
+                              title={badge.title}
+                            >
+                              {badge.label}
+                            </span>
+                          ))}
+                          {canEdit && (
+                            <button
+                              type="button"
+                              onClick={() => handleSaveRow(rowIndex)}
+                              className="rounded bg-emerald-500 px-3 py-0.5 text-xs font-semibold text-white transition hover:bg-emerald-600 disabled:cursor-not-allowed disabled:bg-gray-300"
+                              disabled={!canCommitRow}
+                              title={!state.draft.mst ? "Nhập MST trước khi lưu" : state.hasChanges ? "Lưu các thay đổi của dòng này" : "Không có thay đổi để lưu"}
+                            >
+                              Cập nhật
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </td>
+                    {canEdit && (
+                      <td className="px-2 py-1">
+                        <button
+                          type="button"
+                          onClick={() => handleDelete(rowIndex)}
+                          className="rounded bg-red-500 px-2 py-0.5 text-xs text-white"
+                        >
+                          Xóa
+                        </button>
+                      </td>
+                    )}
+                  </tr>
                   {isHistoryOpen && historyEntriesToShow.length > 0 && (
                     <tr className="bg-slate-50">
                       <td colSpan={canEdit ? 5 : 4} className="px-4 pb-4 pt-2">
@@ -586,6 +974,11 @@ export default function HQAgencyManager({ canEdit = true, currentUser = null }) 
         • Cột "Đại lý HQ" sẽ xuất hiện trong mục Import Data để mọi tờ khai thuộc MST tương ứng được gắn nhãn tự động.<br />
         • Có thể import danh sách từ file Excel gồm các cột MST, Công ty, Đại lý HQ hoặc nhập thủ công từng dòng.
       </p>
+      <datalist id={AGENCY_SUGGESTION_DATALIST}>
+        {agencyOptions.map(agent => (
+          <option key={`suggest-${agent}`} value={agent} />
+        ))}
+      </datalist>
     </section>
   );
 }

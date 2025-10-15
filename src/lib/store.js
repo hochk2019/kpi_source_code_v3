@@ -1587,6 +1587,59 @@ export function upsertHQAgencies(rows, { actor = "system", detail = "" } = {}) {
   return finalRows.length;
 }
 
+export function saveHQAgencyRow(row, { actor = "system", previousMst = "", detail = "" } = {}) {
+  const sanitized = sanitizeAgencyRow(row);
+  if (!sanitized) {
+    throw new Error("Mã số thuế không hợp lệ khi lưu đại lý HQ");
+  }
+
+  const targetMst = sanitized.mst;
+  const prevKey = normalizeMST(previousMst);
+  const current = getHQAgencies();
+  const preserved = [];
+
+  for (const item of current) {
+    if (!item?.mst) continue;
+    if (item.mst === targetMst) continue;
+    if (prevKey && item.mst === prevKey) continue;
+    preserved.push(item);
+  }
+
+  preserved.push({
+    mst: sanitized.mst,
+    company: sanitized.company,
+    agents: sanitized.agents,
+    agent: sanitized.agent,
+  });
+
+  upsertHQAgencies(preserved, {
+    actor,
+    detail: detail || `Cập nhật đại lý HQ cho MST ${targetMst}`,
+  });
+
+  return sanitized;
+}
+
+export function deleteHQAgencyRow(mst, { actor = "system", detail = "" } = {}) {
+  const target = normalizeMST(mst);
+  if (!target) {
+    return 0;
+  }
+
+  const current = getHQAgencies();
+  const next = current.filter((row) => row?.mst !== target);
+  if (next.length === current.length) {
+    return 0;
+  }
+
+  upsertHQAgencies(next, {
+    actor,
+    detail: detail || `Xóa đại lý HQ cho MST ${target}`,
+  });
+
+  return 1;
+}
+
 
 export function applyAgenciesToDeclRows(rows, agencyMapParam = null) {
   const list = Array.isArray(rows) ? rows : [];
@@ -2982,7 +3035,7 @@ export default {
   getMSTRowsRaw, getMSTMap, getMSTFor, upsertMSTRows,
   getDeclRows, saveDeclRows, markDeclRowsReviewed, unmarkDeclRowsReviewed, sortDeclRows, getRecentDeclRows,
   getDeclHistoryForRow,
-  getHQAgencies, mapHQAgenciesByMST, upsertHQAgencies, applyAgenciesToDeclRows,
+  getHQAgencies, mapHQAgenciesByMST, upsertHQAgencies, saveHQAgencyRow, deleteHQAgencyRow, applyAgenciesToDeclRows,
   parseAgencyList, formatAgencyList, getHQHistoryEntries, getHQHistoryForMST,
   getTeamRoster, setTeamRoster, subscribeTeamRoster, mapMemberNamesToTeams, applyTeamRosterToMST,
   getData, setData,
