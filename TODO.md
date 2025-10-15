@@ -1,62 +1,94 @@
-# TODO
+# Ke hoach nang cap KPI v4.0
 
-## Giai đoạn 1 – Hoàn thiện các lỗi tồn đọng và tính năng đã phát triển dở dang
+## 1. Import Data
+- [ ] Tu dong ghi nhan doanh nghiep/MST moi vao tab `Gan MST` (danh dau trang thai "chua gan nhan vien").
+- [ ] Mo quyen chinh sua cho tai khoan Nhan vien tren tat ca to khai thuoc team minh; chan thao tac tren team khac.
+- [ ] Ho tro nhan tieu de cot `Ngay DK` (ngoai `date`) khi import Excel.
+- [ ] Thay truong nhap text bang selector co goi y:
+  - [ ] Chon nhan vien -> tu dong dien to doi.
+  - [ ] Chon to doi -> chi hien nhan vien thuoc to do.
+- [ ] Them nut `Cap nhat` cho tung dong da sua; chi ghi xuong storage cac truong changed.
+- [ ] Ghi nhat ky chinh sua (truoc/sau, nguoi sua, thoi gian) va cho phep thu gon/mo rong theo dong.
+- [ ] Cho phep admin cau hinh danh sach cot (hien/an), ap dung toan he thong.
+- [ ] An tuy chon "Ghi de toan bo du lieu" voi tai khoan khong phai admin; them popup canh bao khi admin kich hoat.
+- [ ] Ghi log import chi tiet (file, dong loi, doanh nghiep moi, so dong insert/update/skip).
+- [ ] Them buoc preview/validate truoc khi commit vao CSDL (hien cac dong loi, dong se chen moi).
+- [ ] Ho tro quick search, luu bo loc ua thich (theo MST, ten cong ty, trang thai).
+- [ ] Freeze cot quan trong (so to khai, MST, ngay) va tuy chon view bang/card.
+- [ ] Thiet ke lai UI Import Data theo phong cach don gian, dong nhat voi cac tab khac.
 
-- [x] Rà soát lại tất cả các form nhập ở tab **Import Data** và **Gán MST** để đảm bảo tooltip hiển thị thống nhất, không chồng chéo.
-- [x] Cập nhật lại các bài test backend/frontend bị vô hiệu hóa để chạy thành công sau khi sửa cấu hình `package.json` hoặc thiết lập script thay thế.
-- [x] Khắc phục cảnh báo "Cannot update a component (App) while rendering..." trong `tests/e2e.login-import.test.jsx` bằng cách di chuyển thao tác `setState` ra ngoài luồng render.
-- [x] Giảm/ẩn log "Không thể đồng bộ dữ liệu..." trong `tests/storageClient.test.js` để giữ kết quả test sạch.
-- [x] Hoàn thiện UI cho "Cấu hình mã ưu đãi C/O" và "Đối soát C/O" (đồng bộ với API mới, xử lý lỗi HTTP 500).
+## 2. Gan MST
+- [ ] Kich hoat loc theo khoang thoi gian va thao tac; tu dong apply khi thay doi filter.
+- [ ] Khi import/dong bo, day doanh nghiep/MST moi len dau danh sach de admin/QL gan nhanh.
+- [ ] Input nhan vien co typeahead + dropdown keo cuon; ho tro phim tat chon nhanh.
+- [ ] Them nut `Cap nhat` tren moi dong sua doi; chi ghi xuong storage cac truong thay doi.
+- [ ] Bo sung quick search, luu bo loc (theo nhan vien, thao tac).
+- [ ] Tai cau truc giao dien tab Gan MST theo huong hien dai; tai su dung component chung.
 
-## Giai đoạn 2 – Các yêu cầu còn lại của phiên bản 3.0
+## 3. Dai ly Hai quan
+- [ ] Bo sung filter theo dai ly va trang thai cap nhat.
+- [ ] Luu lich su thay doi dai ly (truoc/sau, nguoi sua, thoi gian) va hien thi khi mo.
+- [ ] Auto-complete danh sach dai ly (go ky tu -> goi y, hoac chon tu dropdown).
+- [ ] Them nut cap nhat tung dong; chi ghi cac dong thuc su thay doi.
 
-### Import Data & Đồng bộ ECUS
-- [x] Bổ sung cơ chế đồng bộ và hiển thị cột "Số TK AMA" sau khi có thuật toán xác định tờ khai sửa.
-- [x] Thêm bộ lọc khoảng thời gian nâng cao (hỗ trợ preset và lưu bộ lọc) cùng nút đối chiếu loại trừ KPI tự động.
-- [x] Cho phép export Excel danh sách tờ khai đã chọn với cấu trúc header mới (bao gồm giấy phép bị loại trừ).
+## 4. Quy tac KPI
+- [ ] Auto-complete ma dai ly HQ trong toan bo form.
+- [ ] Auto-complete & multi-select ma giay phep (phan diem giay phep, loai tru theo dai ly).
+- [ ] Mac dinh thu gon muc "Lich su cap nhat diem KPI".
+- [ ] De xuat giao dien moi (gan gon, giu du chan dung thong tin), trinh bay, sau do trien khai.
+- [ ] Cho phep tinh toan KPI "thu" theo rule moi (simulate) truoc khi ap dung that.
+- [ ] Luu version rule, ho tro rollback nhanh neu can.
 
-### Tab "Gán MST"
-- [x] Lưu lịch sử chỉnh sửa người phụ trách vào bảng riêng trong SQL Server và đồng bộ hai chiều khi restore dữ liệu.
-- [x] Hoàn thiện giao diện lịch sử (filter theo ngày/thao tác, tooltip ngắn gọn khi hover).
+## 5. Diem KPI +/- Them
+- [ ] Bo sung cac hang muc moi (co diem mac dinh va cho phep chinh):
+  - [ ] Loai bo "Di lam muon".
+  - [ ] "Ho tro xin giay phep": chon ma giay phep; ZB02=2 diem, ZB03/khac=1.5 (chinh duoc).
+  - [ ] "Ho tro khac": che do diem co dinh (mac dinh 10) hoac linh hoat (0.1 * so luong).
+  - [ ] "Sua to khai bo sung C/O": so luong * 1.5 (chinh duoc).
+  - [ ] Chinh "Ho tro thong quan" -> luong xanh (0.1), luong vang + do (0.25).
+- [ ] Admin/QL duoc cai dat, luu diem mac dinh hang muc.
+- [ ] Hien cac hang muc moi trong Bao cao KPI va file export.
+- [ ] Popup xem chi tiet truoc khi duyet (ghi chu, tham chieu to khai/quyet dinh).
+- [ ] Popup huong dan nhap lieu (mo/dong) cho tab nay.
+- [ ] Tai cau truc UI tab nham dong bo phong cach thiet ke moi.
 
-### Tab "Đại Lý HQ"
-- [x] Lưu lịch sử thêm/sửa/xóa đại lý vào hệ thống log, cung cấp API truy vấn lịch sử để client hiển thị.
-- [x] Viết tài liệu hướng dẫn nhập nhiều đại lý, giải thích chuẩn format phân tách bằng dấu phẩy.
+## 6. Bao cao KPI
+- [ ] Phan "Diem KPI +/- bo sung": them tuy chon so muc moi trang (5/10/20).
+- [ ] Thiet ke lai UI Bao cao tong hop & chi tiet (gom nut, don gian hoa, phan nhom).
+- [ ] Xet them tinh nang lap lich gui Bao cao (Excel/PDF) qua email theo tuan/thang.
+- [ ] Ho tro export, preview KPI theo rule moi (tu muc simulate o muc 4).
 
-### Khu vực "Quản Lý Tổ Đội"
-- [x] Thêm tooltip/nút ẩn hiện lịch sử thay đổi team và mã số thuế.
-- [x] Đề xuất & xây dựng tính năng phân bổ KPI theo chỉ tiêu tháng/quý cho từng tổ đội (bao gồm biểu đồ tiến độ).
+## 7. Suc khoe du lieu
+- [ ] An tab doi voi Nhan vien/Truong nhom; chi show Admin & Quan ly.
+- [ ] Hien thi trang thai backup gan nhat (thoi gian, duong dan).
+- [ ] Canh bao khi qua han backup hoac khi dung luong DB vuot nguong.
+- [ ] Lich backup dinh ky; log ket qua (thanh cong/that bai) trong nhat ky.
+- [ ] Kiem tra dinh ky ket noi SQL Server, dung luong database, dung luong o dia.
 
-### "Quy tắc KPI"
-- [x] Thiết kế cơ chế lưu trữ quy tắc bền vững (ví dụ: lưu trong SQL hoặc file cấu hình) để không bị mất khi `pnpm build`.
-- [x] Thay input nhập tay danh sách mã bằng component chọn đa lựa chọn/auto-complete từ dữ liệu đồng bộ.
+## 8. Tai khoan
+- [ ] Khi tao tai khoan moi: chon nhan vien tu du lieu KPI (auto-complete).
+- [ ] Sua lai nut "Xoa" de thuc su xoa tai khoan (co xac nhan).
+- [ ] Gioi han quyen "Doi chieu KPI tu dong" cho Quan ly/Admin.
+- [ ] Ghi log chi tiet moi lan thay doi quyen, reset mat khau.
 
-### Tab mới "Điểm KPI +/- Thêm"
-- [x] Thiết kế schema cơ sở dữ liệu cho các hạng mục cộng/trừ KPI (hỗ trợ lịch sử, duyệt, phân quyền nhập liệu).
-- [x] Xây dựng giao diện nhập liệu cho từng hạng mục (hỗ trợ chọn tờ khai từ hệ thống hoặc nhập thủ công).
-- [x] Đồng bộ dữ liệu với tab "Báo Cáo KPI" để phản ánh điểm cộng/trừ theo tháng.
+## 9. Nhat ky
+- [ ] Bo sung thao tac sao luu va phuc hoi co so du lieu truc tiep trong giao dien; ghi log chi tiet.
+- [ ] Cho phep loc su kien theo loai (import, gan MST, KPI rules, backup...).
+- [ ] Ghi chu chi tiet cho thao tac quan trong (nguoi thuc hien, noi dung, ket qua).
+- [ ] Cung cap nut tai log theo khoang thoi gian.
 
-### Tab "Báo Cáo KPI"
-- [x] Tái cấu trúc giao diện và file Excel export để hiển thị đầy đủ các hạng mục KPI mới.
-- [x] Bổ sung số lượng C/O, cột/tooltip hiển thị danh sách mã giấy phép, và khả năng tùy chọn ẩn/hiện cột khi in báo cáo.
-- [x] Áp dụng template mới (ảnh 1, ảnh 2, logo ảnh 3) cho file Excel export.
+## 10. Tu dong hoa & kiem thu
+- [ ] Xay dung test tu dong cho cac quy trinh chinh (import, gán MST, doi chieu giay phep, KPI rules, points, phan quyen).
+- [ ] Thiet lap lint/test chay truoc commit/CI.
+- [ ] Bo sung script kiem tra ket noi SQL, dung luong storage, tinh trang backup (co the ket hop `pnpm healthcheck`). 
+- [ ] Cap nhat README/huong dan sau moi nhom tinh nang hoan thanh.
+- [ ] Schedule job (hoac script) kiem tra/ canh bao khi dong bo ECUS gap loi (email/slack).
 
-### Tab "Tài Khoản"
-- [x] Tự động tạo tài khoản cho nhân viên (Học, Phương, Tuấn – quyền trưởng nhóm) và quản lý (Hoàng Kim Hòa, Thúy Hà, Hoài Nam) với phân quyền tương ứng.
-- [x] Xây dựng quy trình sync quyền với SQL Server để đảm bảo khởi tạo tài khoản không ảnh hưởng dữ liệu hiện hữu.
-
-### Cải tiến chung
-- [x] Hiển thị tooltip mô tả ngắn khi hover vào mọi nút thao tác trong toàn hệ thống.
-- [x] Nghiên cứu phương án tích hợp AI (API phân tích dữ liệu/chatbot) tiết kiệm token.
-- [x] Thay favicon/tab logo bằng logo mới do khách hàng cung cấp (nhúng Base64 để tránh cảnh báo tệp nhị phân).
-- [x] Chuẩn hóa lại document hướng dẫn triển khai trên Windows 11 Pro + SQL Server 2008 R2 + PowerShell 7.
-
-## Giai đoạn 3 – Kiểm thử và triển khai
-
-- [x] Viết test E2E cho các luồng chính đã nâng cấp (Import, Gán MST, Đại Lý HQ, Báo Cáo KPI, Tài Khoản).
-- [x] Chạy toàn bộ test (`pnpm test`, `pnpm lint`, build production) trên môi trường Windows 11 tương tự khách hàng (đã chạy thử trong container Linux, còn tồn tại lỗi lint cần xử lý trước khi đóng hạng mục, hiện đã tự động hóa bằng script `scripts/run-all-checks.ps1`).
-- [x] Chuẩn bị checklist triển khai, kế hoạch rollback, và hướng dẫn sử dụng tính năng mới cho người dùng cuối (xem `docs/deployment-checklist-v3.md`).
-
-- [x] Dọn gọn repo (xóa file dist/, _tmp_get_config.mjs, .vs/ sau khi hoàn thành) để review gọn.
-
+## 11. UI/UX chung
+- [ ] Xay dung thu vien component chung cho bang, selector, popup, badge.
+- [ ] Dong bo phong cach (font, mau, border, spacing) giua cac tab.
+- [ ] Ho tro quick search va luu filter (Import Data, Gan MST, Bao cao).
+- [ ] Hien badge trang thai to khai (moi import, cho gan, da ra soat, can xem lai).
+- [ ] Xem xet layout linh hoat (bang/luoi) voi che do freeze cot.
+- [ ] Toi uu tra cuu: go ky tu la loc (client-side) nhung ho tro server-side khi du lieu lon.
 
