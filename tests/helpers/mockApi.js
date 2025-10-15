@@ -69,6 +69,22 @@ export function installMockApi(overrides = {}) {
         account.role = nextRole;
         account.name = String(body?.name ?? account.name ?? username).trim();
         account.permissions = normalizePermissions(body?.permissions ?? account.permissions, account.role);
+        if (Object.prototype.hasOwnProperty.call(body, 'memberId')) {
+          const memberId = typeof body.memberId === 'string' ? body.memberId.trim() : '';
+          account.memberId = memberId || null;
+        }
+        if (Object.prototype.hasOwnProperty.call(body, 'memberName')) {
+          const memberName = typeof body.memberName === 'string' ? body.memberName.trim() : '';
+          account.memberName = memberName || null;
+        }
+        if (Object.prototype.hasOwnProperty.call(body, 'teamId')) {
+          const teamId = typeof body.teamId === 'string' ? body.teamId.trim() : '';
+          account.teamId = teamId || null;
+        }
+        if (Object.prototype.hasOwnProperty.call(body, 'teamName')) {
+          const teamName = typeof body.teamName === 'string' ? body.teamName.trim() : '';
+          account.teamName = teamName || null;
+        }
         if (state.currentUser?.username === account.username) {
           state.currentUser = account;
         }
@@ -114,6 +130,10 @@ export function installMockApi(overrides = {}) {
         role,
         name: String(body?.name || username).trim(),
         permissions: normalizePermissions(body?.permissions, role),
+        memberId: typeof body?.memberId === 'string' && body.memberId.trim() ? body.memberId.trim() : null,
+        memberName: typeof body?.memberName === 'string' && body.memberName.trim() ? body.memberName.trim() : null,
+        teamId: typeof body?.teamId === 'string' && body.teamId.trim() ? body.teamId.trim() : null,
+        teamName: typeof body?.teamName === 'string' && body.teamName.trim() ? body.teamName.trim() : null,
       };
       state.accounts.push(account);
       state.passwords.set(username, password);

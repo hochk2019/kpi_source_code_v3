@@ -66,10 +66,10 @@
 - [x] Kiem tra dinh ky ket noi SQL Server, dung luong database, dung luong o dia.
 
 ## 8. Tai khoan
-- [ ] Khi tao tai khoan moi: chon nhan vien tu du lieu KPI (auto-complete).
-- [ ] Sua lai nut "Xoa" de thuc su xoa tai khoan (co xac nhan).
-- [ ] Gioi han quyen "Doi chieu KPI tu dong" cho Quan ly/Admin.
-- [ ] Ghi log chi tiet moi lan thay doi quyen, reset mat khau.
+- [x] Khi tao tai khoan moi: chon nhan vien tu du lieu KPI (auto-complete).
+- [x] Sua lai nut "Xoa" de thuc su xoa tai khoan (co xac nhan).
+- [x] Gioi han quyen "Doi chieu KPI tu dong" cho Quan ly/Admin.
+- [x] Ghi log chi tiet moi lan thay doi quyen, reset mat khau.
 
 ## 9. Nhat ky
 - [ ] Bo sung thao tac sao luu va phuc hoi co so du lieu truc tiep trong giao dien; ghi log chi tiet.

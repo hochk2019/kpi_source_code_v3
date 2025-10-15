@@ -1475,6 +1475,7 @@ export default function DataImporter({
   const isStaffRole = normalizedRole === DEFAULT_ROLE;
   const isAdminRole = normalizedRole === ADMIN_ROLE;
   const isManagerRole = normalizedRole === MANAGER_ROLE || normalizedRole === ADMIN_ROLE;
+  const canAutoReconcile = isManagerRole;
   const rosterSnapshot = useMemo(() => getTeamRoster(), [currentUser]);
   const rosterTeams = useMemo(() => buildRosterTeams(rosterSnapshot), [rosterSnapshot]);
   const normalizedQuickMST = useMemo(() => normalizeStr(quickMST), [quickMST]);
@@ -5105,6 +5106,10 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
       alert("Bạn không có quyền chỉnh sửa dữ liệu tờ khai.");
       return;
     }
+    if (!canAutoReconcile) {
+      alert("Chỉ Quản lý hoặc Quản trị viên mới được phép đối chiếu KPI tự động.");
+      return;
+    }
     if (mode !== "saved") {
       alert("Hãy chuyển sang chế độ dữ liệu đã lưu để đối chiếu tự động.");
       return;
@@ -5131,7 +5136,7 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
       return;
     }
     alert(`Đã tự động cập nhật loại trừ giấy phép cho ${result.changed}/${result.matchedCount} tờ khai đang hiển thị.`);
-  }, [applyLicenseExclusionForKeys, canEdit, ensureEditableKeys, filteredKeys, mode]);
+  }, [applyLicenseExclusionForKeys, canAutoReconcile, canEdit, ensureEditableKeys, filteredKeys, mode]);
 
   const handleExportSelected = useCallback(() => {
     if (selectedKeys.length === 0) {
@@ -6873,10 +6878,14 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
           <button
             type="button"
             onClick={handleAutoApplyLicenseExclusion}
-            disabled={!filteredKeys.length}
-            data-tooltip="Đối chiếu tự động loại trừ giấy phép cho toàn bộ tờ khai đang lọc"
+            disabled={!filteredKeys.length || !canAutoReconcile}
+            data-tooltip={
+              !canAutoReconcile
+                ? "Chỉ Quản lý hoặc Quản trị viên mới được phép đối chiếu KPI tự động"
+                : "Đối chiếu tự động loại trừ giấy phép cho toàn bộ tờ khai đang lọc"
+            }
             className={`rounded border px-3 py-1 text-xs ${
-              filteredKeys.length
+              filteredKeys.length && canAutoReconcile
                 ? "border-emerald-300 bg-emerald-50 text-emerald-700"
                 : "opacity-50 cursor-not-allowed"
             }`}

@@ -24,6 +24,8 @@ import {
   DEFAULT_ROLE,
   TEAM_LEAD_ROLE,
   MANAGER_ROLE,
+  ROLE_LABELS,
+  ACCOUNT_PERMISSION_KEYS,
   getPermissionTemplate as getRolePermissionTemplate,
   normalizeRoleKey,
   mergePermissions,
@@ -583,6 +585,22 @@ const STORAGE_PERMISSION_REQUIREMENTS = Object.freeze({
   kpi_adjustments_v1: 'adjustSubmit',
   [AI_CONFIG_KEY]: 'aiAssistManage',
   [AI_CACHE_KEY]: 'aiAssistManage',
+});
+
+const ACCOUNT_PERMISSION_LABELS = Object.freeze({
+  importEdit: 'Import Data – chỉnh sửa & lưu',
+  mstEdit: 'Gán MST – chỉnh sửa',
+  rulesEdit: 'Quy tắc KPI – chỉnh sửa',
+  teamsEdit: 'Quản lý tổ đội – chỉnh sửa',
+  syncManage: 'Đồng bộ ECUS – cấu hình & chạy tay',
+  reportsExport: 'Báo cáo KPI – xuất file',
+  alertsManage: 'Quản lý cảnh báo tờ khai thiếu thông tin',
+  auditView: 'Xem nhật ký hệ thống',
+  accountManage: 'Quản lý tài khoản',
+  adjustSubmit: 'Điểm KPI +/- thêm – gửi đề xuất',
+  adjustApprove: 'Điểm KPI +/- thêm – duyệt đề xuất',
+  aiAssistUse: 'Trợ lý AI – sử dụng',
+  aiAssistManage: 'Trợ lý AI – cấu hình',
 });
 
 function normalizePermissionsForRole(permissions, role = DEFAULT_ROLE) {
@@ -3441,14 +3459,41 @@ function sortAccountRecords(records) {
   return records.sort((a, b) => a.username.localeCompare(b.username, 'vi', { sensitivity: 'base' }));
 }
 
+function describeRole(role) {
+  const key = normalizeRoleKey(role);
+  return ROLE_LABELS[key] || key || 'không rõ';
+}
+
+function describePermissionChange(key, enabled) {
+  const label = ACCOUNT_PERMISSION_LABELS[key] || key;
+  return `${label}: ${enabled ? 'bật' : 'tắt'}`;
+}
+
+function summarizePermissionChanges(previous = {}, next = {}) {
+  const diffs = [];
+  for (const key of ACCOUNT_PERMISSION_KEYS) {
+    const prevValue = key === 'reportsExport' ? previous?.[key] !== false : previous?.[key] === true;
+    const nextValue = key === 'reportsExport' ? next?.[key] !== false : next?.[key] === true;
+    if (prevValue !== nextValue) {
+      diffs.push({ key, before: prevValue, after: nextValue });
+    }
+  }
+  return diffs;
+}
+
 function sanitizeAccountRecord(record) {
   if (!record) return null;
   const role = normalizeRoleKey(record.role);
+  const name = record.name || record.username;
   return {
     username: record.username,
     role,
-    name: record.name || record.username,
+    name,
     permissions: normalizePermissionsForRole(record.permissions, role),
+    memberId: toNullableString(record.memberId, { maxLength: 160 }),
+    memberName: toNullableString(record.memberName, { maxLength: 255 }),
+    teamId: toNullableString(record.teamId, { maxLength: 160 }),
+    teamName: toNullableString(record.teamName, { maxLength: 255 }),
   };
 }
 
@@ -3462,6 +3507,10 @@ function normalizeAccountRecordForStorage(record) {
     name: (record.name ?? record.username ?? '').toString().trim(),
     permissions: normalizePermissionsForRole(record.permissions, role),
     updatedAt: normalizeAccountUpdatedAt(record.updatedAt),
+    memberId: toNullableString(record.memberId, { maxLength: 160 }),
+    memberName: toNullableString(record.memberName, { maxLength: 255 }),
+    teamId: toNullableString(record.teamId, { maxLength: 160 }),
+    teamName: toNullableString(record.teamName, { maxLength: 255 }),
   };
 }
 
@@ -3511,8 +3560,12 @@ function loadAccountRecords() {
       }
       const permissions = normalizePermissionsForRole(entry?.permissions, role);
       const updatedAt = normalizeAccountUpdatedAt(entry?.updatedAt || entry?.updated_at);
+      const memberId = toNullableString(entry?.memberId ?? entry?.member_id, { maxLength: 160 });
+      const memberName = toNullableString(entry?.memberName ?? entry?.member_name, { maxLength: 255 });
+      const teamId = toNullableString(entry?.teamId ?? entry?.team_id, { maxLength: 160 });
+      const teamName = toNullableString(entry?.teamName ?? entry?.team_name, { maxLength: 255 });
       seen.add(key);
-      records.push({ username, passwordHash, role, name, permissions, updatedAt });
+      records.push({ username, passwordHash, role, name, permissions, updatedAt, memberId, memberName, teamId, teamName });
     }
   }
 
@@ -3878,11 +3931,40 @@ function createAccountRecord(payload, { actor = 'system' } = {}) {
   const role = normalizeRoleKey(payload?.role);
   const name = (payload?.name ?? username).toString().trim();
   const permissions = normalizePermissionsForRole(payload?.permissions, role);
+  const rosterInfo = resolveAccountRosterInfo(payload);
   const passwordHash = bcrypt.hashSync(password, PASSWORD_SALT_ROUNDS);
   const updatedAt = new Date().toISOString();
-  accounts.push({ username, passwordHash, role, name, permissions, updatedAt });
+  accounts.push({
+    username,
+    passwordHash,
+    role,
+    name,
+    permissions,
+    updatedAt,
+    memberId: rosterInfo.memberId,
+    memberName: rosterInfo.memberName,
+    teamId: rosterInfo.teamId,
+    teamName: rosterInfo.teamName,
+  });
   persistAccountRecords(accounts);
-  pushAuditLog({ actor, action: 'account.create', detail: `Tạo tài khoản ${username} (${role})` });
+  const summaryParts = [`vai trò ${describeRole(role)}`];
+  if (rosterInfo.memberId) {
+    summaryParts.push(`gắn nhân viên ${formatRosterLabel(rosterInfo)}`);
+  }
+  const detail = summaryParts.length
+    ? `Tạo tài khoản ${username}: ${summaryParts.join('; ')}`
+    : `Tạo tài khoản ${username}`;
+  pushAuditLog({
+    actor,
+    action: 'account.create',
+    detail,
+    meta: {
+      username,
+      role,
+      permissions,
+      member: rosterInfo,
+    },
+  });
   return sanitizeAccountRecord(accounts.find((record) => record.username === username));
 }
 
@@ -3904,9 +3986,80 @@ function updateAccountRecord(usernameInput, patch, { actor = 'system' } = {}) {
   }
   const name = (patch?.name ?? current.name ?? current.username).toString().trim();
   const permissions = normalizePermissionsForRole(patch?.permissions ?? current.permissions, nextRole);
-  accounts[index] = { ...current, role: nextRole, name, permissions, updatedAt: new Date().toISOString() };
+  const rosterInfo = resolveAccountRosterInfo(patch, current);
+  const updatedAt = new Date().toISOString();
+  accounts[index] = {
+    ...current,
+    role: nextRole,
+    name,
+    permissions,
+    updatedAt,
+    memberId: rosterInfo.memberId,
+    memberName: rosterInfo.memberName,
+    teamId: rosterInfo.teamId,
+    teamName: rosterInfo.teamName,
+  };
   persistAccountRecords(accounts);
-  pushAuditLog({ actor, action: 'account.update', detail: `Cập nhật tài khoản ${username}` });
+
+  const permissionDiffs = summarizePermissionChanges(current.permissions, permissions);
+  const detailParts = [];
+  if (currentRole !== nextRole) {
+    detailParts.push(`vai trò ${describeRole(currentRole)} → ${describeRole(nextRole)}`);
+  }
+  if ((current.name || '') !== name) {
+    const before = current.name ? `"${current.name}"` : 'mặc định';
+    const after = name ? `"${name}"` : 'mặc định';
+    detailParts.push(`tên hiển thị ${before} → ${after}`);
+  }
+  const previousRoster = {
+    memberId: current.memberId ?? null,
+    memberName: current.memberName ?? null,
+    teamId: current.teamId ?? null,
+    teamName: current.teamName ?? null,
+  };
+  const rosterChanged =
+    (previousRoster.memberId || null) !== (rosterInfo.memberId || null) ||
+    (previousRoster.teamId || null) !== (rosterInfo.teamId || null);
+  if (rosterChanged) {
+    detailParts.push(
+      `nhân viên KPI ${formatRosterLabel(previousRoster)} → ${formatRosterLabel(rosterInfo)}`
+    );
+  }
+  if (permissionDiffs.length) {
+    const summaries = permissionDiffs.map((entry) => describePermissionChange(entry.key, entry.after));
+    detailParts.push(`quyền: ${summaries.join(', ')}`);
+  }
+
+  const detail = detailParts.length
+    ? `Cập nhật tài khoản ${username}: ${detailParts.join('; ')}`
+    : `Cập nhật tài khoản ${username}`;
+
+  pushAuditLog({
+    actor,
+    action: 'account.update',
+    detail,
+    meta: {
+      username,
+      previous: {
+        role: currentRole,
+        name: current.name,
+        permissions: current.permissions,
+        member: previousRoster,
+      },
+      current: {
+        role: nextRole,
+        name,
+        permissions,
+        member: rosterInfo,
+      },
+      changes: {
+        role: currentRole !== nextRole,
+        name: (current.name || '') !== name,
+        member: rosterChanged,
+        permissions: permissionDiffs,
+      },
+    },
+  });
   return sanitizeAccountRecord(accounts[index]);
 }
 
@@ -3925,10 +4078,27 @@ function setAccountPasswordRecord(usernameInput, newPasswordInput, { actor = 'sy
     throw new Error('Không tìm thấy tài khoản');
   }
   const passwordHash = bcrypt.hashSync(newPassword, PASSWORD_SALT_ROUNDS);
-  accounts[index] = { ...accounts[index], passwordHash, updatedAt: new Date().toISOString() };
+  const updatedAt = new Date().toISOString();
+  accounts[index] = { ...accounts[index], passwordHash, updatedAt };
   persistAccountRecords(accounts);
   deleteSessionsForUser(username);
-  pushAuditLog({ actor, action: 'account.reset_password', detail: `Đặt lại mật khẩu cho ${username}` });
+  const target = accounts[index];
+  pushAuditLog({
+    actor,
+    action: 'account.reset_password',
+    detail: `Đặt lại mật khẩu cho ${username}`,
+    meta: {
+      username,
+      role: normalizeRoleKey(target.role),
+      performedAt: updatedAt,
+      member: {
+        memberId: target.memberId ?? null,
+        memberName: target.memberName ?? null,
+        teamId: target.teamId ?? null,
+        teamName: target.teamName ?? null,
+      },
+    },
+  });
   return true;
 }
 
@@ -3949,7 +4119,23 @@ function deleteAccountRecord(usernameInput, { actor = 'system' } = {}) {
   accounts.splice(index, 1);
   persistAccountRecords(accounts);
   deleteSessionsForUser(username);
-  pushAuditLog({ actor, action: 'account.delete', detail: `Xóa tài khoản ${username}` });
+  const rosterInfo = {
+    memberId: target.memberId ?? null,
+    memberName: target.memberName ?? null,
+    teamId: target.teamId ?? null,
+    teamName: target.teamName ?? null,
+  };
+  const displayName = target.name && target.name !== username ? ` (${target.name})` : '';
+  pushAuditLog({
+    actor,
+    action: 'account.delete',
+    detail: `Xóa tài khoản ${username}${displayName}`,
+    meta: {
+      username,
+      role: normalizeRoleKey(target.role),
+      member: rosterInfo,
+    },
+  });
   return listAccountsForClient();
 }
 
@@ -4148,6 +4334,84 @@ function getRulesValue() {
 
 function getRosterValue() {
   return getJSONValue('team_roster_v1', { version: 1, teams: [] });
+}
+
+function findRosterMemberById(memberIdInput) {
+  const memberId = toNullableString(memberIdInput, { maxLength: 160 });
+  if (!memberId) {
+    return null;
+  }
+  const roster = getRosterValue();
+  if (!Array.isArray(roster?.teams)) {
+    return null;
+  }
+  for (const team of roster.teams) {
+    if (!team || typeof team !== 'object') continue;
+    const rawTeamId = toNullableString(team.id, { maxLength: 160 });
+    const teamName = toNullableString(team.name, { maxLength: 255 });
+    if (!Array.isArray(team.members)) continue;
+    for (const member of team.members) {
+      if (!member || typeof member !== 'object') continue;
+      const normalizedId = toNullableString(member.id, { maxLength: 160 });
+      if (normalizedId === memberId) {
+        return {
+          memberId,
+          memberName: toNullableString(member.name, { maxLength: 255 }) ?? null,
+          teamId: rawTeamId,
+          teamName,
+        };
+      }
+    }
+  }
+  return null;
+}
+
+function resolveAccountRosterInfo(payload, base = {}) {
+  const baseInfo = {
+    memberId: base?.memberId ?? null,
+    memberName: base?.memberName ?? null,
+    teamId: base?.teamId ?? null,
+    teamName: base?.teamName ?? null,
+  };
+  if (!payload || typeof payload !== 'object') {
+    return baseInfo;
+  }
+  const hasMemberId = Object.prototype.hasOwnProperty.call(payload, 'memberId');
+  const hasMemberName = Object.prototype.hasOwnProperty.call(payload, 'memberName');
+  const hasTeamId = Object.prototype.hasOwnProperty.call(payload, 'teamId');
+  const hasTeamName = Object.prototype.hasOwnProperty.call(payload, 'teamName');
+  if (!hasMemberId && !hasMemberName && !hasTeamId && !hasTeamName) {
+    return baseInfo;
+  }
+
+  const rawMemberId = hasMemberId ? toNullableString(payload.memberId, { maxLength: 160 }) : baseInfo.memberId;
+  if (!rawMemberId) {
+    return { memberId: null, memberName: null, teamId: null, teamName: null };
+  }
+
+  const rosterMatch = findRosterMemberById(rawMemberId);
+  if (rosterMatch) {
+    return rosterMatch;
+  }
+
+  const memberName = hasMemberName ? toNullableString(payload.memberName, { maxLength: 255 }) : baseInfo.memberName;
+  const teamId = hasTeamId ? toNullableString(payload.teamId, { maxLength: 160 }) : baseInfo.teamId;
+  const teamName = hasTeamName ? toNullableString(payload.teamName, { maxLength: 255 }) : baseInfo.teamName;
+
+  return {
+    memberId: rawMemberId,
+    memberName,
+    teamId,
+    teamName,
+  };
+}
+
+function formatRosterLabel(info) {
+  if (!info || !info.memberId) {
+    return 'không gắn nhân viên';
+  }
+  const name = info.memberName || info.memberId;
+  return info.teamName ? `${name} (${info.teamName})` : name;
 }
 
 function getMemberTeamMap() {
@@ -7316,6 +7580,25 @@ async function ensureAccountSyncTable(pool, tableMeta) {
         END
       `;
       await request.query(createSql);
+      const alterSql = `
+        IF COL_LENGTH('${tableMeta.objectId}', 'member_id') IS NULL
+        BEGIN
+          ALTER TABLE ${tableMeta.quoted} ADD member_id NVARCHAR(128) NULL;
+        END;
+        IF COL_LENGTH('${tableMeta.objectId}', 'member_name') IS NULL
+        BEGIN
+          ALTER TABLE ${tableMeta.quoted} ADD member_name NVARCHAR(255) NULL;
+        END;
+        IF COL_LENGTH('${tableMeta.objectId}', 'team_id') IS NULL
+        BEGIN
+          ALTER TABLE ${tableMeta.quoted} ADD team_id NVARCHAR(128) NULL;
+        END;
+        IF COL_LENGTH('${tableMeta.objectId}', 'team_name') IS NULL
+        BEGIN
+          ALTER TABLE ${tableMeta.quoted} ADD team_name NVARCHAR(255) NULL;
+        END;
+      `;
+      await request.query(alterSql);
       return true;
     } catch (err) {
       if (isSqlTimeoutError(err)) {
@@ -7354,6 +7637,10 @@ function serializeAccountRecordForSql(record) {
     permissions: normalized.permissions,
     permissionsJson: JSON.stringify(normalized.permissions || {}),
     updatedAt: normalized.updatedAt,
+    memberId: normalized.memberId ?? null,
+    memberName: normalized.memberName ?? null,
+    teamId: normalized.teamId ?? null,
+    teamName: normalized.teamName ?? null,
   };
 }
 
@@ -7383,7 +7670,11 @@ function normalizeSqlAccountRow(row) {
   const permissions = normalizePermissionsForRole(parsedPermissions, role);
   const updatedAtRaw = row.updated_at || row.updatedAt;
   const updatedAt = normalizeAccountUpdatedAt(updatedAtRaw);
-  return { username, passwordHash, role, name, permissions, updatedAt };
+  const memberId = toNullableString(row.member_id ?? row.memberId, { maxLength: 160 });
+  const memberName = toNullableString(row.member_name ?? row.memberName, { maxLength: 255 });
+  const teamId = toNullableString(row.team_id ?? row.teamId, { maxLength: 160 });
+  const teamName = toNullableString(row.team_name ?? row.teamName, { maxLength: 255 });
+  return { username, passwordHash, role, name, permissions, updatedAt, memberId, memberName, teamId, teamName };
 }
 
 async function syncAccountsToSql(records) {
@@ -7407,8 +7698,12 @@ async function syncAccountsToSql(records) {
       const name = escapeSqlLiteral(record.name || record.username, { nvarchar: true });
       const permissions = escapeSqlLiteral(record.permissionsJson || '{}', { nvarchar: true });
       const updatedAt = `CONVERT(DATETIME, ${escapeSqlLiteral(record.updatedAt, { nvarchar: true })}, 126)`;
-      return `INSERT INTO ${config.table.quoted} (username, password_hash, role, name, permissions, updated_at)
-VALUES (${username}, ${passwordHash}, ${role}, ${name}, ${permissions}, ${updatedAt});`;
+      const memberId = escapeSqlLiteral(record.memberId, { nvarchar: true });
+      const memberName = escapeSqlLiteral(record.memberName, { nvarchar: true });
+      const teamId = escapeSqlLiteral(record.teamId, { nvarchar: true });
+      const teamName = escapeSqlLiteral(record.teamName, { nvarchar: true });
+      return `INSERT INTO ${config.table.quoted} (username, password_hash, role, name, permissions, updated_at, member_id, member_name, team_id, team_name)
+VALUES (${username}, ${passwordHash}, ${role}, ${name}, ${permissions}, ${updatedAt}, ${memberId}, ${memberName}, ${teamId}, ${teamName});`;
     });
     const batch = [
       'BEGIN TRY',
@@ -7474,7 +7769,9 @@ async function maybeSyncAccountsFromSql({ force = false } = {}) {
       }
       const result = await pool
         .request()
-        .query(`SELECT username, password_hash, role, name, permissions, updated_at FROM ${config.table.quoted};`);
+        .query(
+          `SELECT username, password_hash, role, name, permissions, updated_at, member_id, member_name, team_id, team_name FROM ${config.table.quoted};`
+        );
       const rows = Array.isArray(result?.recordset) ? result.recordset : [];
       const sqlRecords = rows.map((row) => normalizeSqlAccountRow(row)).filter(Boolean);
       if (!sqlRecords.length) {

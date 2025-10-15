@@ -13,6 +13,17 @@ import {
   DEFAULT_ROLE,
   normalizeRole,
 } from "@/auth/localAuth.js";
+import { getTeamRoster, subscribeTeamRoster, normalizeName, normalizeStr } from "@/lib/store.js";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover.jsx";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command.jsx";
+import { Check, ChevronsUpDown, CircleX } from "lucide-react";
 
 const PERMISSION_LABELS = {
   importEdit: "Import Data – chỉnh sửa & lưu",
@@ -45,6 +56,101 @@ function PermissionCheckbox({ checked, onChange, label, disabled = false }) {
   );
 }
 
+function StaffCombobox({
+  value,
+  onSelect,
+  options,
+  disabled = false,
+  ariaLabel,
+  dataTestId,
+}) {
+  const [open, setOpen] = useState(false);
+
+  const selected = useMemo(() => options.find((option) => option.id === value) || null, [options, value]);
+  const buttonLabel = selected
+    ? `${selected.name}${selected.teamName ? ` – ${selected.teamName}` : ""}`
+    : "Chọn nhân viên từ danh sách KPI";
+
+  const groupedOptions = useMemo(() => {
+    const map = new Map();
+    for (const option of options) {
+      const key = option.teamName || "Không rõ tổ đội";
+      if (!map.has(key)) {
+        map.set(key, []);
+      }
+      map.get(key).push(option);
+    }
+    return Array.from(map.entries()).map(([teamName, members]) => ({
+      key: teamName || "unknown",
+      label: teamName || "Không rõ tổ đội",
+      members,
+    }));
+  }, [options]);
+
+  const handleSelect = (option) => {
+    onSelect?.(option);
+    setOpen(false);
+  };
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className={`${CONTROL_CLASS} flex w-full items-center justify-between gap-2 text-left ${disabled ? "cursor-not-allowed opacity-60" : ""}`}
+          disabled={disabled}
+          aria-haspopup="listbox"
+          aria-expanded={open}
+          aria-label={ariaLabel || buttonLabel}
+          data-testid={dataTestId}
+        >
+          <span className="truncate">{buttonLabel}</span>
+          <ChevronsUpDown className="h-4 w-4 opacity-60" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-[320px] p-0" side="bottom">
+        <Command>
+          <CommandInput placeholder="Tìm theo tên nhân viên hoặc tổ đội…" />
+          <CommandList className="max-h-64 overflow-y-auto">
+            <CommandEmpty>Không tìm thấy nhân viên phù hợp.</CommandEmpty>
+            <CommandGroup heading="Tùy chọn chung">
+              <CommandItem
+                value="__none__"
+                onSelect={() => handleSelect(null)}
+                className="flex items-center gap-2"
+              >
+                <CircleX className="h-4 w-4" />
+                <span className="flex-1">Không gắn nhân viên</span>
+                {!value && <Check className="h-4 w-4" />}
+              </CommandItem>
+            </CommandGroup>
+            {groupedOptions.map((group) => (
+              <CommandGroup key={group.key} heading={group.label}>
+                {group.members.map((member) => (
+                  <CommandItem
+                    key={member.id}
+                    value={`${member.normalizedName} ${member.normalizedTeam} ${member.id}`}
+                    onSelect={() => handleSelect(member)}
+                    className="flex items-center gap-2"
+                  >
+                    <div className="flex flex-1 items-center justify-between gap-2">
+                      <span className="truncate">{member.name}</span>
+                      {member.teamName && (
+                        <span className="text-xs text-[color:var(--ds-text-muted)]">{member.teamName}</span>
+                      )}
+                    </div>
+                    {value === member.id && <Check className="h-4 w-4" />}
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            ))}
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 export default function AccountManager({ currentUser }) {
   const [accounts, setAccounts] = useState(() => listAccounts());
   const [error, setError] = useState("");
@@ -54,8 +160,14 @@ export default function AccountManager({ currentUser }) {
     password: "",
     role: DEFAULT_ROLE,
     permissions: getPermissionTemplate(DEFAULT_ROLE),
+    memberId: "",
+    memberName: "",
+    teamId: "",
+    teamName: "",
   }));
   const [searchTerm, setSearchTerm] = useState("");
+  const [roster, setRoster] = useState(() => getTeamRoster());
+  const [pendingAccounts, setPendingAccounts] = useState(() => new Set());
 
   const currentActor = currentUser?.username || "system";
 
@@ -73,6 +185,51 @@ export default function AccountManager({ currentUser }) {
     refresh().catch(() => {});
   }, [refresh]);
 
+  useEffect(() => {
+    const unsubscribe = subscribeTeamRoster((next) => setRoster(next));
+    return () => {
+      if (typeof unsubscribe === "function") {
+        unsubscribe();
+      }
+    };
+  }, []);
+
+  const staffOptions = useMemo(() => {
+    const teams = Array.isArray(roster?.teams) ? roster.teams : [];
+    const list = [];
+    for (const team of teams) {
+      if (!team || typeof team !== "object") continue;
+      const teamId = typeof team.id === "string" ? team.id : "";
+      const teamName = normalizeStr(team?.name) || "";
+      const members = Array.isArray(team?.members) ? team.members : [];
+      for (const member of members) {
+        if (!member || typeof member !== "object") continue;
+        const id = typeof member.id === "string" ? member.id.trim() : "";
+        const name = normalizeStr(member?.name) || "";
+        if (!id || !name) {
+          continue;
+        }
+        list.push({
+          id,
+          name,
+          teamId: teamId || null,
+          teamName: teamName || null,
+          normalizedName: normalizeName(name),
+          normalizedTeam: normalizeName(teamName || ""),
+        });
+      }
+    }
+    return list.sort((a, b) => a.name.localeCompare(b.name, "vi", { sensitivity: "base" }));
+  }, [roster]);
+
+  const staffLookup = useMemo(() => {
+    const map = new Map();
+    for (const option of staffOptions) {
+      map.set(option.id, option);
+    }
+    return map;
+  }, [staffOptions]);
+
   const permissionList = useMemo(() => PERMISSION_KEYS.map((key) => ({ key, label: PERMISSION_LABELS[key] })), []);
   const filteredAccounts = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
@@ -84,6 +241,12 @@ export default function AccountManager({ currentUser }) {
       const name = String(account.name || "").toLowerCase();
       const role = String(account.role || "").toLowerCase();
       if (username.includes(term) || name.includes(term) || role.includes(term)) {
+        return true;
+      }
+      const memberName = String(account.memberName || "").toLowerCase();
+      const teamName = String(account.teamName || "").toLowerCase();
+      const memberId = String(account.memberId || "").toLowerCase();
+      if (memberName.includes(term) || teamName.includes(term) || memberId.includes(term)) {
         return true;
       }
       const activePermissions = Object.entries(account.permissions || {})
@@ -103,6 +266,10 @@ export default function AccountManager({ currentUser }) {
       password: "",
       role: DEFAULT_ROLE,
       permissions: getPermissionTemplate(DEFAULT_ROLE),
+      memberId: "",
+      memberName: "",
+      teamId: "",
+      teamName: "",
     });
   };
 
@@ -110,7 +277,14 @@ export default function AccountManager({ currentUser }) {
     event.preventDefault();
     setError("");
     try {
-      await createAccount(form, { actor: currentActor });
+      const payload = {
+        ...form,
+        memberId: form.memberId || null,
+        memberName: form.memberName || null,
+        teamId: form.teamId || null,
+        teamName: form.teamName || null,
+      };
+      await createAccount(payload, { actor: currentActor });
       alert("Đã tạo tài khoản mới.");
       resetForm();
       setAccounts(listAccounts());
@@ -128,6 +302,27 @@ export default function AccountManager({ currentUser }) {
     }));
   };
 
+  const handleSelectStaff = useCallback((option) => {
+    if (!option) {
+      setForm((prev) => ({
+        ...prev,
+        memberId: "",
+        memberName: "",
+        teamId: "",
+        teamName: "",
+      }));
+      return;
+    }
+    setForm((prev) => ({
+      ...prev,
+      memberId: option.id,
+      memberName: option.name,
+      teamId: option.teamId || "",
+      teamName: option.teamName || "",
+      name: prev.name ? prev.name : option.name,
+    }));
+  }, []);
+
   const updateFormPermission = (key, value) => {
     setForm((prev) => {
       if (key === "accountManage" && prev.role !== ADMIN_ROLE) {
@@ -139,6 +334,73 @@ export default function AccountManager({ currentUser }) {
       };
     });
   };
+
+  const setAccountPending = useCallback((username, value) => {
+    setPendingAccounts((prev) => {
+      const next = new Set(prev);
+      if (value) {
+        next.add(username);
+      } else {
+        next.delete(username);
+      }
+      return next;
+    });
+  }, []);
+
+  const updateAccountStaff = useCallback(
+    async (account, option) => {
+      if (!account || !account.username) {
+        return;
+      }
+      const username = account.username;
+      const normalize = (value) => (value ?? "").toString().trim();
+      const currentState = {
+        memberId: normalize(account.memberId),
+        memberName: normalize(account.memberName),
+        teamId: normalize(account.teamId),
+        teamName: normalize(account.teamName),
+      };
+      const nextState = option
+        ? {
+            memberId: normalize(option.id),
+            memberName: normalize(option.name),
+            teamId: normalize(option.teamId),
+            teamName: normalize(option.teamName),
+          }
+        : { memberId: "", memberName: "", teamId: "", teamName: "" };
+
+      const unchanged =
+        currentState.memberId === nextState.memberId &&
+        currentState.memberName === nextState.memberName &&
+        currentState.teamId === nextState.teamId &&
+        currentState.teamName === nextState.teamName;
+
+      if (unchanged) {
+        return;
+      }
+
+      setAccountPending(username, true);
+      try {
+        await updateAccount(
+          username,
+          {
+            memberId: nextState.memberId || null,
+            memberName: nextState.memberName || null,
+            teamId: nextState.teamId || null,
+            teamName: nextState.teamName || null,
+          },
+          { actor: currentActor }
+        );
+        setAccounts(listAccounts());
+        alert("Đã cập nhật nhân viên gắn với tài khoản.");
+      } catch (err) {
+        alert(err?.message || "Không thể cập nhật nhân viên");
+      } finally {
+        setAccountPending(username, false);
+      }
+    },
+    [currentActor, setAccountPending]
+  );
 
   const togglePermission = async (username, key, value) => {
     try {
@@ -176,8 +438,33 @@ export default function AccountManager({ currentUser }) {
     }
   };
 
-  const removeAccount = async (username) => {
-    if (!window.confirm(`Xóa tài khoản ${username}?`)) return;
+  const removeAccount = async (account) => {
+    if (!account) return;
+    const username = account.username;
+    const summary = [];
+    if (account.name && account.name !== username) {
+      summary.push(`Họ tên: ${account.name}`);
+    }
+    if (account.memberName) {
+      const staffLabel = account.teamName
+        ? `${account.memberName} (${account.teamName})`
+        : account.memberName;
+      summary.push(`Nhân viên KPI: ${staffLabel}`);
+    }
+    const confirmLines = [
+      `Bạn chuẩn bị xoá tài khoản ${username}.`,
+      summary.length ? `Thông tin: ${summary.join(" • ")}` : null,
+      "Thao tác này sẽ đăng xuất tài khoản khỏi hệ thống và không thể hoàn tác.",
+      "Bạn có chắc chắn muốn tiếp tục?",
+    ].filter(Boolean);
+    if (!window.confirm(confirmLines.join("\n"))) {
+      return;
+    }
+    const typed = window.prompt(`Nhập lại \"${username}\" để xác nhận xoá vĩnh viễn:`) || "";
+    if (typed.trim().toLowerCase() !== username.toLowerCase()) {
+      alert("Chưa xác nhận đúng tên tài khoản, đã hủy thao tác.");
+      return;
+    }
     try {
       await deleteAccount(username, { actor: currentActor });
       setAccounts(listAccounts());
@@ -205,6 +492,27 @@ export default function AccountManager({ currentUser }) {
               placeholder="username"
               required
             />
+          </div>
+          <div className="space-y-2 md:col-span-2">
+            <label className="text-sm font-medium text-[color:var(--ds-text-primary)]">Nhân viên KPI</label>
+            <StaffCombobox
+              value={form.memberId}
+              onSelect={handleSelectStaff}
+              options={staffOptions}
+              disabled={staffOptions.length === 0}
+              ariaLabel="Nhân viên KPI cho tài khoản mới"
+            />
+            {form.memberId ? (
+              <p className="text-xs text-[color:var(--ds-text-muted)]">
+                Sẽ gắn tài khoản với {form.memberName || form.memberId}
+                {form.teamName ? ` • ${form.teamName}` : ""}
+              </p>
+            ) : (
+              <p className="text-xs text-[color:var(--ds-text-muted)]">Tùy chọn: gắn tài khoản với nhân viên trong danh sách KPI.</p>
+            )}
+            {staffOptions.length === 0 && (
+              <p className="text-xs text-amber-600">Chưa có dữ liệu tổ đội. Hãy cập nhật trong mục Quản lý tổ đội trước.</p>
+            )}
           </div>
           <div className="space-y-2">
             <label className="text-sm font-medium text-[color:var(--ds-text-primary)]">Họ tên hiển thị</label>
@@ -306,6 +614,7 @@ export default function AccountManager({ currentUser }) {
               <tr>
                 <th className="px-3 py-2">Tài khoản</th>
                 <th className="px-3 py-2">Họ tên</th>
+                <th className="px-3 py-2">Nhân viên KPI</th>
                 <th className="px-3 py-2">Vai trò</th>
                 <th className="px-3 py-2">Quyền chức năng</th>
                 <th className="px-3 py-2">Hành động</th>
@@ -314,7 +623,7 @@ export default function AccountManager({ currentUser }) {
             <tbody className="divide-y divide-[color:var(--ds-border-subtle)] text-sm text-[color:var(--ds-text-primary)]">
               {visibleAccounts === 0 ? (
                 <tr>
-                  <td className="px-3 py-4 text-center text-[color:var(--ds-text-muted)]" colSpan={5}>
+                  <td className="px-3 py-4 text-center text-[color:var(--ds-text-muted)]" colSpan={6}>
                     {totalAccounts === 0 ? "Chưa có tài khoản nào." : "Không tìm thấy tài khoản phù hợp với từ khóa."}
                   </td>
                 </tr>
@@ -322,7 +631,42 @@ export default function AccountManager({ currentUser }) {
                 filteredAccounts.map((account) => (
                   <tr key={account.username} className="align-top">
                     <td className="px-3 py-3 font-medium text-[color:var(--ds-text-primary)]">{account.username}</td>
-                    <td className="px-3 py-3 text-[color:var(--ds-text-secondary)]">{account.name || "—"}</td>
+                    <td className="px-3 py-3 text-[color:var(--ds-text-secondary)]">
+                      <div>{account.name || "—"}</div>
+                    </td>
+                    <td className="px-3 py-3">
+                      <StaffCombobox
+                        value={account.memberId || ""}
+                        onSelect={(option) => updateAccountStaff(account, option)}
+                        options={staffOptions}
+                        disabled={staffOptions.length === 0 || pendingAccounts.has(account.username)}
+                        ariaLabel={`Nhân viên KPI cho ${account.username}`}
+                        dataTestId={`account-staff-${account.username}`}
+                      />
+                      {staffOptions.length === 0 ? (
+                        <p className="mt-2 text-xs text-amber-600">
+                          Cần cập nhật danh sách tổ đội trước khi gắn nhân viên.
+                        </p>
+                      ) : account.memberId ? (
+                        staffLookup.has(account.memberId) ? (
+                          <p className="mt-2 text-xs text-[color:var(--ds-text-muted)]">
+                            Đang gắn với {account.memberName || account.memberId}
+                            {account.teamName ? ` • ${account.teamName}` : ""}
+                          </p>
+                        ) : (
+                          <p className="mt-2 text-xs text-amber-600">
+                            Nhân viên này không còn trong danh sách KPI. Hãy chọn lại để đồng bộ.
+                          </p>
+                        )
+                      ) : (
+                        <p className="mt-2 text-xs text-[color:var(--ds-text-muted)]">
+                          Chưa gắn nhân viên KPI.
+                        </p>
+                      )}
+                      {pendingAccounts.has(account.username) && (
+                        <p className="mt-2 text-xs text-[color:var(--ds-text-muted)]">Đang cập nhật…</p>
+                      )}
+                    </td>
                     <td className="px-3 py-3">
                       <select
                         className={`w-full max-w-[140px] ${CONTROL_CLASS}`}
@@ -361,7 +705,7 @@ export default function AccountManager({ currentUser }) {
                         </button>
                         <button
                           type="button"
-                          onClick={() => removeAccount(account.username)}
+                          onClick={() => removeAccount(account)}
                           className="rounded border border-red-500 px-3 py-1 text-xs text-red-600 hover:bg-red-500/10"
                           data-tooltip="Xóa tài khoản này khỏi hệ thống"
                         >

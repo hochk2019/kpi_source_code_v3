@@ -796,6 +796,90 @@ describe('API xác thực & bootstrap', () => {
   });
 });
 
+describe('Quản lý tài khoản', () => {
+  beforeEach(() => {
+    resetDb();
+  });
+
+  it('gắn nhân viên KPI khi tạo tài khoản mới', async () => {
+    const db = getDb();
+    const roster = {
+      version: 1,
+      teams: [
+        {
+          id: 'team-kt',
+          name: 'Team Kế toán',
+          members: [
+            { id: 'kt001', name: 'Nguyễn Thu Phương' },
+            { id: 'kt002', name: 'Trần Minh Dũng' },
+          ],
+        },
+      ],
+    };
+    db.prepare(
+      "INSERT INTO kv_store (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value"
+    ).run('team_roster_v1', JSON.stringify(roster));
+
+    const adminAgent = request.agent(app);
+    const loginRes = await adminAgent.post('/api/auth/login').send({ username: 'admin', password: 'admin123' });
+    expect(loginRes.status).toBe(200);
+
+    const createRes = await adminAgent.post('/api/auth/accounts').send({
+      username: 'ketoan.phuong',
+      password: 'Phuong@2025',
+      role: 'staff',
+      memberId: 'kt001',
+    });
+
+    expect(createRes.status).toBe(201);
+    const account = createRes.body?.account;
+    expect(account).toMatchObject({
+      username: 'ketoan.phuong',
+      memberId: 'kt001',
+      memberName: 'Nguyễn Thu Phương',
+      teamName: 'Team Kế toán',
+    });
+
+    const auditRow = db.prepare('SELECT value FROM kv_store WHERE key = ?').get('audit_logs_v1');
+    const logs = JSON.parse(auditRow?.value || '[]');
+    const createLog = logs.find((entry) => entry.action === 'account.create' && entry.detail?.includes('ketoan.phuong'));
+    expect(createLog).toBeTruthy();
+    expect(createLog?.meta?.member).toMatchObject({ memberId: 'kt001', teamName: 'Team Kế toán' });
+  });
+
+  it('ghi log chi tiết khi cập nhật quyền tài khoản', async () => {
+    const adminAgent = request.agent(app);
+    const loginRes = await adminAgent.post('/api/auth/login').send({ username: 'admin', password: 'admin123' });
+    expect(loginRes.status).toBe(200);
+
+    const createRes = await adminAgent.post('/api/auth/accounts').send({
+      username: 'quyen.tester',
+      password: 'Tester@2025',
+      role: 'staff',
+    });
+    expect(createRes.status).toBe(201);
+
+    const patchRes = await adminAgent
+      .patch('/api/auth/accounts/quyen.tester')
+      .send({ permissions: { importEdit: true, auditView: true } });
+    expect(patchRes.status).toBe(200);
+    expect(patchRes.body?.account?.permissions?.importEdit).toBe(true);
+    expect(patchRes.body?.account?.permissions?.auditView).toBe(true);
+
+    const auditRow = getDb().prepare('SELECT value FROM kv_store WHERE key = ?').get('audit_logs_v1');
+    const logs = JSON.parse(auditRow?.value || '[]');
+    const updateLog = logs.find((entry) => entry.action === 'account.update' && entry.detail?.includes('quyen.tester'));
+    expect(updateLog).toBeTruthy();
+    expect(updateLog?.detail).toMatch(/quyền:/i);
+    expect(updateLog?.meta?.changes?.permissions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ key: 'importEdit', after: true }),
+        expect.objectContaining({ key: 'auditView', after: true }),
+      ])
+    );
+  });
+});
+
 describe('API thông báo hệ thống', () => {
   beforeEach(() => {
     resetDb();
