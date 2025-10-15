@@ -8,6 +8,7 @@ import {
   pushImportLog,
   pushAuditLog,
   updateDeclRowFields,
+  getDeclHistoryForRow,
   getTeamRoster,
   mapMemberNamesToTeams,
   markDeclRowsReviewed,
@@ -71,6 +72,18 @@ const EDITABLE_FIELD_KEYS = [
   "so_luong_gp",
   "licenseManualCount",
 ];
+
+const DECL_HISTORY_FIELD_LABELS = Object.freeze({
+  nhan_vien: "Nhân viên",
+  team: "Tổ đội",
+  agency: "Đại lý",
+  dai_ly: "Đại lý",
+  licenses: "Số lượng giấy phép",
+  so_luong_gp: "Số lượng giấy phép",
+  licenseManualCount: "Số lượng giấy phép (thủ công)",
+});
+
+const DECL_HISTORY_ENTRY_LIMIT = 15;
 
 function normalizeComparableValue(value) {
   if (value === null || value === undefined) return "";
@@ -1238,6 +1251,25 @@ function describeRowStatus(row) {
   return "Đủ thông tin";
 }
 
+function formatHistoryTimestamp(timestamp) {
+  if (!timestamp) {
+    return "Không xác định";
+  }
+  const date = new Date(timestamp);
+  if (Number.isNaN(date.getTime())) {
+    return timestamp;
+  }
+  return date.toLocaleString("vi-VN", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: undefined,
+    hour12: false,
+  });
+}
+
 function formatDeclarationLabel(entry) {
   if (!entry || typeof entry !== "object") return "";
   const number = entry.so_tk_full ? String(entry.so_tk_full) : entry.so_tk ? String(entry.so_tk) : "";
@@ -1303,6 +1335,8 @@ export default function DataImporter({
   const [rules, setRules] = useState(() => loadRules());
   const [hasUnsaved, setHasUnsaved] = useState(false);
   const [rowSaveStatus, setRowSaveStatus] = useState({});
+  const [rowHistoryExpanded, setRowHistoryExpanded] = useState({});
+  const [rowHistoryEntries, setRowHistoryEntries] = useState({});
   const [duplicateReviewOpen, setDuplicateReviewOpen] = useState(false);
   const [duplicateReviewConfirmed, setDuplicateReviewConfirmed] = useState(false);
   const [duplicate11Plan, setDuplicate11Plan] = useState({});
@@ -1352,6 +1386,36 @@ export default function DataImporter({
     savedRowSnapshotRef.current = snapshot;
     setBaselineVersion((prev) => prev + 1);
   }, []);
+
+  const refreshRowHistory = useCallback((rowKey) => {
+    const key = typeof rowKey === "string" ? rowKey.trim() : String(rowKey || "").trim();
+    if (!key) {
+      return;
+    }
+    const entries = getDeclHistoryForRow(key, DECL_HISTORY_ENTRY_LIMIT) || [];
+    setRowHistoryEntries((prev) => ({
+      ...prev,
+      [key]: entries,
+    }));
+  }, []);
+
+  const handleToggleHistory = useCallback(
+    (rowKey) => {
+      const key = typeof rowKey === "string" ? rowKey.trim() : String(rowKey || "").trim();
+      if (!key) {
+        return;
+      }
+      setRowHistoryExpanded((prev) => {
+        const nextExpanded = !prev[key];
+        const nextState = { ...prev, [key]: nextExpanded };
+        if (nextExpanded) {
+          refreshRowHistory(key);
+        }
+        return nextState;
+      });
+    },
+    [refreshRowHistory]
+  );
 
   useEffect(() => {
     if (!canOverwriteData && overwrite) {
@@ -2002,6 +2066,8 @@ export default function DataImporter({
     setRawRows(saved);
     updateBaselineSnapshot(saved);
     setRowSaveStatus({});
+    setRowHistoryExpanded({});
+    setRowHistoryEntries({});
     setMode("saved");
     setPage(1);
     setPageSize(DEFAULT_PAGE_SIZE);
@@ -3683,6 +3749,7 @@ const selectedReviewedCount = useMemo(() => {
           ...prev,
           [rowKey]: { saving: false, error: "" },
         }));
+        refreshRowHistory(rowKey);
         toast.success("Đã lưu cập nhật cho tờ khai.");
       } catch (err) {
         console.error("Không thể cập nhật tờ khai", err);
@@ -3694,15 +3761,20 @@ const selectedReviewedCount = useMemo(() => {
         toast.error(fallbackMessage);
       }
     },
-    [actor, isReadOnlyForEdits, keyOfRow, mode, rowDiffMap]
+    [actor, isReadOnlyForEdits, keyOfRow, mode, refreshRowHistory, rowDiffMap]
   );
 
   const selectionEnabled = mode === "saved" && (canEdit || canManageAlerts);
   const updateEnabled = canEdit && mode === "saved";
   const deleteEnabled = canEdit && mode === "saved";
+  const historyEnabled = mode === "saved";
   const baseColumnCount = 13; // bao gồm cột C/O
   const totalColumns =
-    baseColumnCount + (selectionEnabled ? 1 : 0) + (updateEnabled ? 1 : 0) + (deleteEnabled ? 1 : 0);
+    baseColumnCount +
+    (selectionEnabled ? 1 : 0) +
+    (updateEnabled ? 1 : 0) +
+    (deleteEnabled ? 1 : 0) +
+    (historyEnabled ? 1 : 0);
 
   const canImport = !isReadOnlyForEdits && mode === "preview" && rawRows.length > 0;
   const canSave = !isReadOnlyForEdits && mode === "saved" && rawRows.length > 0;
@@ -5892,6 +5964,7 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
               <th className="px-2 py-1 text-left">Trạng thái</th>
               <th className="px-2 py-1 text-left">Số lượng GP</th>
               <th className="px-2 py-1 text-left">KPI</th>
+              {historyEnabled && <th className="px-2 py-1 text-left w-32">Nhật ký</th>}
               {updateEnabled && <th className="px-2 py-1 text-left w-24">Cập nhật</th>}
               {deleteEnabled && <th className="px-2 py-1 text-left w-16">Xóa</th>}
             </tr>
@@ -5901,14 +5974,17 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
             const rowKey = keyOfRow(r);
             const rowEditable = isRowEditable(r);
             const rowReadOnly = isReadOnlyForEdits || !rowEditable;
-            const rowDiff = rowDiffMap.get(rowKey);
-            const hasPendingDiff = !!(rowDiff && Object.keys(rowDiff).length > 0);
-            const canSaveRow = hasPendingDiff && !rowReadOnly;
-            const currentSaveState = rowSaveStatus[rowKey] || { saving: false, error: "" };
-            const { saving: rowSaving, error: rowError } = currentSaveState;
-            return (
+          const rowDiff = rowDiffMap.get(rowKey);
+          const hasPendingDiff = !!(rowDiff && Object.keys(rowDiff).length > 0);
+          const canSaveRow = hasPendingDiff && !rowReadOnly;
+          const currentSaveState = rowSaveStatus[rowKey] || { saving: false, error: "" };
+          const { saving: rowSaving, error: rowError } = currentSaveState;
+          const historyList = rowHistoryEntries[rowKey] || [];
+          const historyExpanded = !!rowHistoryExpanded[rowKey];
+          const historyCount = Array.isArray(historyList) ? historyList.length : 0;
+          return (
+            <React.Fragment key={`${rowKey}_${i}`}>
               <tr
-                key={`${rowKey}_${i}`}
                 className="odd:bg-[color:var(--ds-surface-card)] even:bg-[color:var(--ds-surface-muted)]"
               >
                 {selectionEnabled && (
@@ -6060,6 +6136,22 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
                     return kpi.toFixed(1);
                   })()}
                 </td>
+                {historyEnabled && (
+                  <td className="px-2 py-1">
+                    <button
+                      type="button"
+                      onClick={() => handleToggleHistory(rowKey)}
+                      className={`rounded px-2 py-0.5 text-xs border ${
+                        historyExpanded
+                          ? "border-blue-500 bg-blue-50 text-blue-700"
+                          : "border-gray-300 bg-white text-gray-700 hover:border-blue-400 hover:text-blue-700"
+                      }`}
+                    >
+                      {historyExpanded ? "Thu gọn" : "Nhật ký"}
+                      {historyCount > 0 ? ` (${historyCount})` : ""}
+                    </button>
+                  </td>
+                )}
                 {updateEnabled && (
                   <td className="px-2 py-1">
                     {rowReadOnly ? (
@@ -6099,7 +6191,66 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
                   </td>
                 )}
               </tr>
-            );
+              {historyEnabled && historyExpanded && (
+                <tr className="bg-blue-50/40">
+                  {selectionEnabled && <td className="px-2 py-1" />}
+                  <td
+                    className="px-4 py-3 text-xs text-gray-700"
+                    colSpan={totalColumns - (selectionEnabled ? 1 : 0)}
+                  >
+                    <div className="flex flex-col gap-3">
+                      {historyList.length > 0 ? (
+                        historyList.map((entry) => {
+                          const timestampLabel = formatHistoryTimestamp(entry.ts);
+                          const actorLabel = entry.actor || "system";
+                          return (
+                            <div
+                              key={entry.id}
+                              className="rounded border border-blue-100 bg-white p-2 shadow-sm"
+                            >
+                              <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-gray-500">
+                                <span className="font-medium text-gray-700">{timestampLabel}</span>
+                                <span className="text-gray-500">{`Bởi: ${actorLabel}`}</span>
+                              </div>
+                              <ul className="mt-2 space-y-1">
+                                {entry.changes.map((change, idx) => {
+                                  const label = DECL_HISTORY_FIELD_LABELS[change.field] || humanizeDiffKey(change.field);
+                                  const beforeEmpty = change.before === "" || change.before === null || change.before === undefined;
+                                  const afterEmpty = change.after === "" || change.after === null || change.after === undefined;
+                                  const beforeLabel = beforeEmpty ? "Trống" : change.before;
+                                  const afterLabel = afterEmpty ? "Trống" : change.after;
+                                  const beforeClass = beforeEmpty
+                                    ? "text-gray-400 italic"
+                                    : "text-red-600 line-through decoration-red-400";
+                                  const afterClass = afterEmpty
+                                    ? "text-gray-500 italic"
+                                    : "text-emerald-700 font-medium";
+                                  return (
+                                    <li key={`${entry.id}-${idx}`} className="flex flex-wrap items-start gap-2">
+                                      <span className="min-w-[8rem] shrink-0 text-gray-500">{label}</span>
+                                      <span className="flex flex-wrap items-center gap-1">
+                                        <span className={beforeClass}>{beforeLabel}</span>
+                                        <span className="text-gray-400">→</span>
+                                        <span className={afterClass}>{afterLabel}</span>
+                                      </span>
+                                    </li>
+                                  );
+                                })}
+                              </ul>
+                            </div>
+                          );
+                        })
+                      ) : (
+                        <div className="rounded border border-dashed border-gray-200 bg-white p-4 text-center text-gray-500">
+                          Chưa có nhật ký chỉnh sửa cho tờ khai này.
+                        </div>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              )}
+            </React.Fragment>
+          );
           })}
             {pageRows.length === 0 && (
               <tr>

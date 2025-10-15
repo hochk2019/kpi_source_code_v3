@@ -19,6 +19,7 @@ export const TEAM_KEY = "team_roster_v1"; // danh sách tổ đội & thành vi�
 export const AUDIT_KEY = "audit_logs_v1"; // nhật ký hành động quản trị
 export const HQ_KEY = "hq_agencies_v1"; // cấu hình Đại lý hải quan theo MST
 export const KPI_ADJUSTMENTS_KEY = "kpi_adjustments_v1"; // điểm KPI +/- bổ sung
+export const DECL_HISTORY_KEY = "decl_history_v1"; // lịch sử chỉnh sửa tờ khai
 
 // ===== Helpers =====
 function safeParse(json, fallback) {
@@ -583,6 +584,253 @@ export function getMSTHistoryFor(mst, limit = 20) {
     return filtered;
   }
   return filtered.slice(0, limit);
+}
+
+const DECL_HISTORY_PER_ROW_LIMIT = 20;
+const DECL_HISTORY_MAX_ROWS = 300;
+
+const DECL_HISTORY_FIELD_GROUP = Object.freeze({
+  agency: "agency",
+  dai_ly: "agency",
+  licenses: "licenses",
+  so_luong_gp: "licenses",
+  licenseManualCount: "licenses",
+});
+
+function normalizeDeclHistoryValue(value) {
+  if (value === null || value === undefined) return "";
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => normalizeDeclHistoryValue(item))
+      .filter((part) => typeof part === "string" && part.length > 0)
+      .join(", ");
+  }
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? String(value) : "";
+  }
+  if (typeof value === "boolean") {
+    return value ? "Có" : "Không";
+  }
+  if (typeof value === "object") {
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return "";
+    }
+  }
+  return normalizeStr(value);
+}
+
+function pickDeclLicenseValue(row) {
+  if (!row || typeof row !== "object") return "";
+  const candidates = [row.licenseManualCount, row.licenses, row.so_luong_gp];
+  for (const candidate of candidates) {
+    if (candidate === null || candidate === undefined || candidate === "") {
+      continue;
+    }
+    if (typeof candidate === "number") {
+      if (Number.isFinite(candidate)) {
+        return candidate;
+      }
+      continue;
+    }
+    if (typeof candidate === "string") {
+      const trimmed = candidate.trim();
+      if (!trimmed) {
+        continue;
+      }
+      const parsed = Number(trimmed);
+      if (Number.isFinite(parsed)) {
+        return parsed;
+      }
+      return trimmed;
+    }
+    const parsed = Number(candidate);
+    if (Number.isFinite(parsed)) {
+      return parsed;
+    }
+    return candidate;
+  }
+  return "";
+}
+
+function extractDeclHistoryValue(row, field) {
+  if (!row || typeof row !== "object") return "";
+  switch (field) {
+    case "agency":
+      return row.agency ?? row.dai_ly ?? "";
+    case "licenses":
+      return pickDeclLicenseValue(row);
+    default:
+      return row[field];
+  }
+}
+
+function buildDeclHistoryChanges(current, nextRow, changedFields) {
+  if (!Array.isArray(changedFields) || changedFields.length === 0) {
+    return [];
+  }
+  const groups = new Map();
+  for (const field of changedFields) {
+    const resolved = DECL_HISTORY_FIELD_GROUP[field] || field;
+    if (!resolved || groups.has(resolved)) {
+      continue;
+    }
+    const before = normalizeDeclHistoryValue(extractDeclHistoryValue(current, resolved));
+    const after = normalizeDeclHistoryValue(extractDeclHistoryValue(nextRow, resolved));
+    if (before === after) {
+      continue;
+    }
+    groups.set(resolved, {
+      field: resolved,
+      before,
+      after,
+    });
+  }
+  return Array.from(groups.values());
+}
+
+function normalizeDeclHistoryEntry(rowKey, entry) {
+  if (!entry || typeof entry !== "object") return null;
+  const timestamp = entry.ts || entry.timestamp || new Date().toISOString();
+  const actor = normalizeStr(entry.actor) || "system";
+  const rawChanges = Array.isArray(entry.changes) ? entry.changes : [];
+  const changes = rawChanges
+    .map((change) => {
+      if (!change || typeof change !== "object") return null;
+      const fieldKey = (change.field || change.key || change.name || "").toString().trim();
+      if (!fieldKey) return null;
+      const resolved = DECL_HISTORY_FIELD_GROUP[fieldKey] || fieldKey;
+      const before = normalizeDeclHistoryValue(change.before ?? change.old ?? change.previous ?? "");
+      const after = normalizeDeclHistoryValue(change.after ?? change.new ?? change.next ?? "");
+      if (before === after) return null;
+      return {
+        field: resolved,
+        before,
+        after,
+      };
+    })
+    .filter(Boolean);
+  if (!changes.length) return null;
+  return {
+    id: entry.id || `decl-${rowKey}-${Math.random().toString(36).slice(2, 8)}-${Date.now()}`,
+    ts: new Date(timestamp).toISOString(),
+    actor,
+    changes,
+  };
+}
+
+function sanitizeDeclHistoryStore(rawStore) {
+  const safeRows = {};
+  if (!rawStore || typeof rawStore !== "object") {
+    return { rows: safeRows };
+  }
+  const sourceRows = rawStore.rows && typeof rawStore.rows === "object" && !Array.isArray(rawStore.rows)
+    ? rawStore.rows
+    : {};
+  for (const [key, list] of Object.entries(sourceRows)) {
+    const normalizedKey = normalizeStr(key);
+    if (!normalizedKey) continue;
+    const entries = Array.isArray(list)
+      ? list
+          .map((entry) => normalizeDeclHistoryEntry(normalizedKey, entry))
+          .filter(Boolean)
+      : [];
+    if (entries.length) {
+      safeRows[normalizedKey] = entries.slice(0, DECL_HISTORY_PER_ROW_LIMIT);
+    }
+  }
+  return { rows: safeRows };
+}
+
+function getDeclHistoryStore() {
+  const parsed = safeParse(getItem(DECL_HISTORY_KEY), { rows: {} });
+  return sanitizeDeclHistoryStore(parsed);
+}
+
+function persistDeclHistoryStore(store) {
+  const payload = sanitizeDeclHistoryStore(store);
+  const rows = payload.rows || {};
+  const rowEntries = Object.entries(rows).map(([key, list]) => {
+    const items = Array.isArray(list) ? list.filter(Boolean) : [];
+    if (!items.length) {
+      delete rows[key];
+      return null;
+    }
+    rows[key] = items.slice(0, DECL_HISTORY_PER_ROW_LIMIT);
+    const latestTs = rows[key][0]?.ts || "1970-01-01T00:00:00.000Z";
+    return { key, ts: latestTs };
+  }).filter(Boolean);
+
+  if (rowEntries.length > DECL_HISTORY_MAX_ROWS) {
+    rowEntries.sort((a, b) => new Date(b.ts).getTime() - new Date(a.ts).getTime());
+    const keep = new Set(rowEntries.slice(0, DECL_HISTORY_MAX_ROWS).map((entry) => entry.key));
+    for (const key of Object.keys(rows)) {
+      if (!keep.has(key)) {
+        delete rows[key];
+      }
+    }
+  }
+
+  setItem(DECL_HISTORY_KEY, JSON.stringify({ rows }));
+  return { rows };
+}
+
+function appendDeclHistoryEntry(rowKey, entry) {
+  const key = typeof rowKey === "string" ? rowKey.trim() : String(rowKey || "").trim();
+  if (!key) return null;
+  if (!entry || typeof entry !== "object" || !Array.isArray(entry.changes) || !entry.changes.length) {
+    return null;
+  }
+  const store = getDeclHistoryStore();
+  const actor = normalizeStr(entry.actor) || "system";
+  const timestamp = entry.ts || entry.timestamp || new Date().toISOString();
+  const changes = entry.changes
+    .map((change) => {
+      if (!change || typeof change !== "object") return null;
+      const fieldKey = (change.field || change.key || "").toString().trim();
+      if (!fieldKey) return null;
+      const resolved = DECL_HISTORY_FIELD_GROUP[fieldKey] || fieldKey;
+      const before = normalizeDeclHistoryValue(change.before);
+      const after = normalizeDeclHistoryValue(change.after);
+      if (before === after) return null;
+      return {
+        field: resolved,
+        before,
+        after,
+      };
+    })
+    .filter(Boolean);
+  if (!changes.length) {
+    return null;
+  }
+  const normalizedEntry = {
+    id: entry.id || `decl-${key}-${Math.random().toString(36).slice(2, 8)}-${Date.now()}`,
+    ts: new Date(timestamp).toISOString(),
+    actor,
+    changes,
+  };
+  const existing = Array.isArray(store.rows[key]) ? store.rows[key] : [];
+  const nextList = [normalizedEntry, ...existing].slice(0, DECL_HISTORY_PER_ROW_LIMIT);
+  const nextStore = {
+    rows: {
+      ...store.rows,
+      [key]: nextList,
+    },
+  };
+  persistDeclHistoryStore(nextStore);
+  return normalizedEntry;
+}
+
+export function getDeclHistoryForRow(rowKey, limit = DECL_HISTORY_PER_ROW_LIMIT) {
+  const key = typeof rowKey === "string" ? rowKey.trim() : String(rowKey || "").trim();
+  if (!key) return [];
+  const store = getDeclHistoryStore();
+  const list = Array.isArray(store.rows[key]) ? store.rows[key] : [];
+  if (!Number.isFinite(limit) || limit <= 0) {
+    return list.slice();
+  }
+  return list.slice(0, limit);
 }
 
 /** Lay nguoi phu trach theo MST & ngay hieu luc gan nhat (<= ngay to khai) */
@@ -1390,11 +1638,13 @@ function sanitizePartialDeclUpdates(updates = {}) {
   return safe;
 }
 
-function applyPartialUpdatesToRow(row, updates) {
+function applyPartialUpdatesToRow(row, updates, { sanitized = false } = {}) {
   if (!row || typeof row !== "object") {
     return { changed: false, nextRow: row };
   }
-  const safeUpdates = sanitizePartialDeclUpdates(updates);
+  const safeUpdates = sanitized && updates && typeof updates === "object"
+    ? updates
+    : sanitizePartialDeclUpdates(updates);
   const entries = Object.entries(safeUpdates);
   if (!entries.length) {
     return { changed: false, nextRow: row };
@@ -1489,7 +1739,9 @@ export function updateDeclRowFields(rowKey, updates, { actor = "system", detail 
   }
 
   const current = rows[index] || {};
-  const { changed, nextRow } = applyPartialUpdatesToRow(current, updates);
+  const sanitizedUpdates = sanitizePartialDeclUpdates(updates);
+  const changedFields = Object.keys(sanitizedUpdates);
+  const { changed, nextRow } = applyPartialUpdatesToRow(current, sanitizedUpdates, { sanitized: true });
   if (!changed) {
     return { success: false, reason: "no-change" };
   }
@@ -1500,17 +1752,27 @@ export function updateDeclRowFields(rowKey, updates, { actor = "system", detail 
   const updated = stored[index] || nextRow;
 
   const actorName = normalizeStr(actor) || "system";
-  const changedFields = Object.keys(sanitizePartialDeclUpdates(updates));
   const actionDetail =
     detail && detail.trim().length > 0
       ? detail
       : `Cập nhật ${changedFields.join(", ")} của tờ khai ${current.so_tk || "?"}`;
 
+  const historyChanges = buildDeclHistoryChanges(current, updated, changedFields);
+  const historyEntry = historyChanges.length
+    ? appendDeclHistoryEntry(key, {
+        actor: actorName,
+        ts: new Date().toISOString(),
+        changes: historyChanges,
+      })
+    : null;
+
   pushAuditLog({
     actor: actorName,
     action: "decl.update.partial",
     detail: actionDetail,
-    meta: { key, fields: changedFields },
+    meta: historyEntry
+      ? { key, fields: changedFields, historyEntryId: historyEntry.id }
+      : { key, fields: changedFields },
   });
 
   return { success: true, row: updated };
@@ -2185,11 +2447,12 @@ export function clearAuditLogs({ actor = "system", note = "XÃ³a toÃ n bá»�
 
 // ===== Default export (tuá»³ nÆ¡i dÃ¹ng)
 export default {
-  DECL_KEY, MST_KEY, RULES_KEY, TEAM_KEY, AUDIT_KEY, HQ_KEY, KPI_ADJUSTMENTS_KEY,
+  DECL_KEY, MST_KEY, RULES_KEY, TEAM_KEY, AUDIT_KEY, HQ_KEY, KPI_ADJUSTMENTS_KEY, DECL_HISTORY_KEY,
   normalizeStr, normalizeMST, normalizeDeclarationNumber, toISODate, normalizeName,
   isExportDecl, isExportByNumber, isImportByNumber, isExportByType, isImportByType,
   getMSTRowsRaw, getMSTMap, getMSTFor, upsertMSTRows,
   getDeclRows, saveDeclRows, markDeclRowsReviewed, unmarkDeclRowsReviewed, sortDeclRows, getRecentDeclRows,
+  getDeclHistoryForRow,
   getHQAgencies, mapHQAgenciesByMST, upsertHQAgencies, applyAgenciesToDeclRows,
   parseAgencyList, formatAgencyList, getHQHistoryEntries, getHQHistoryForMST,
   getTeamRoster, setTeamRoster, mapMemberNamesToTeams, applyTeamRosterToMST,

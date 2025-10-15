@@ -21,6 +21,8 @@ import {
   getHQHistoryEntries,
   HQ_HISTORY_KEY,
   unmarkDeclRowsReviewed,
+  updateDeclRowFields,
+  getDeclHistoryForRow,
 } from '@/lib/store.js';
 import { clearStorageCache, getItem as sharedGetItem } from '@/lib/storageClient.js';
 beforeEach(() => {
@@ -189,6 +191,47 @@ describe('saveDeclRows', () => {
     expect(mstRows[0].effective_from).toBe('2024-09-15');
   });
 
+});
+
+
+describe('updateDeclRowFields', () => {
+  it('ghi nhận lịch sử chỉnh sửa khi cập nhật từng dòng', () => {
+    saveDeclRows([
+      { so_tk: '00000000001', nhanh: '', date: '2024-09-01', licenses: 1 },
+    ], { overwrite: true });
+
+    const result = updateDeclRowFields('00000000001_', {
+      nhan_vien: 'Nguyễn Văn A',
+      licenseManualCount: 2,
+    }, { actor: 'tester' });
+
+    expect(result.success).toBe(true);
+    const history = getDeclHistoryForRow('00000000001_', 10);
+    expect(history).toHaveLength(1);
+    const entry = history[0];
+    expect(entry.actor).toBe('tester');
+    expect(entry.changes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ field: 'nhan_vien', before: '', after: 'Nguyễn Văn A' }),
+        expect.objectContaining({ field: 'licenses', before: '1', after: '2' }),
+      ])
+    );
+  });
+
+  it('không thêm lịch sử khi không có thay đổi mới', () => {
+    saveDeclRows([
+      { so_tk: '00000000002', nhanh: '', date: '2024-09-02', nhan_vien: 'Lê Thị B', licenses: 0 },
+    ], { overwrite: true });
+
+    const firstUpdate = updateDeclRowFields('00000000002_', {
+      nhan_vien: 'Lê Thị B',
+    }, { actor: 'tester' });
+    expect(firstUpdate.success).toBe(false);
+    expect(firstUpdate.reason).toBe('no-change');
+
+    const historyAfter = getDeclHistoryForRow('00000000002_', 10);
+    expect(historyAfter).toHaveLength(0);
+  });
 });
 
 
