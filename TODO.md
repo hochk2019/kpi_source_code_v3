@@ -32,12 +32,12 @@
 - [x] Them nut cap nhat tung dong; chi ghi cac dong thuc su thay doi.
 
 ## 4. Quy tac KPI
-- [ ] Auto-complete ma dai ly HQ trong toan bo form.
-- [ ] Auto-complete & multi-select ma giay phep (phan diem giay phep, loai tru theo dai ly).
-- [ ] Mac dinh thu gon muc "Lich su cap nhat diem KPI".
-- [ ] De xuat giao dien moi (gan gon, giu du chan dung thong tin), trinh bay, sau do trien khai.
-- [ ] Cho phep tinh toan KPI "thu" theo rule moi (simulate) truoc khi ap dung that.
-- [ ] Luu version rule, ho tro rollback nhanh neu can.
+- [x] Auto-complete ma dai ly HQ trong toan bo form.
+- [x] Auto-complete & multi-select ma giay phep (phan diem giay phep, loai tru theo dai ly).
+- [x] Mac dinh thu gon muc "Lich su cap nhat diem KPI".
+- [x] De xuat giao dien moi (gan gon, giu du chan dung thong tin), trinh bay, sau do trien khai.
+- [x] Cho phep tinh toan KPI "thu" theo rule moi (simulate) truoc khi ap dung that.
+- [x] Luu version rule, ho tro rollback nhanh neu can.
 
 ## 5. Diem KPI +/- Them
 - [ ] Bo sung cac hang muc moi (co diem mac dinh va cho phep chinh):
