@@ -33,6 +33,7 @@ import { formatDisplayDate, formatDateRangeLabel } from "@/shared/format.js";
 import { fetchWithAuth } from "@/auth/localAuth.js";
 import useTooltipTitles from "@/hooks/useTooltipTitles.js";
 import useFilterPresets from "@/hooks/useFilterPresets.js";
+import useQuickSearchFavorites from "@/hooks/useQuickSearchFavorites.js";
 import { Button } from "@/components/ui/button.jsx";
 import {
   Command,
@@ -118,6 +119,16 @@ const IMPORT_ERROR_REASON_LABELS = Object.freeze({
   unknown: "Không xác định",
 });
 
+const DECL_STATUS_LABELS = Object.freeze({
+  new: "Mới",
+  existing: "Đã có",
+  updated: "Đã cập nhật",
+  locked: "Đang khoá",
+  pending: "Chờ xử lý",
+  reviewing: "Đang rà soát",
+  synced: "Đã đồng bộ",
+});
+
 function normalizeComparableValue(value) {
   if (value === null || value === undefined) return "";
   if (typeof value === "string") return normalizeStr(value);
@@ -131,6 +142,24 @@ function normalizeComparableValue(value) {
     return JSON.stringify(value);
   }
   return JSON.stringify(value);
+}
+
+function normalizeStatusKey(status) {
+  if (status == null) {
+    return "";
+  }
+  return String(status).trim().toLowerCase();
+}
+
+function formatStatusLabel(status) {
+  const key = normalizeStatusKey(status);
+  if (DECL_STATUS_LABELS[key]) {
+    return DECL_STATUS_LABELS[key];
+  }
+  if (!key) {
+    return "Không rõ";
+  }
+  return key.charAt(0).toUpperCase() + key.slice(1);
 }
 
 function collectEditableDiff(baseline, current) {
@@ -1343,6 +1372,9 @@ export default function DataImporter({
   const savedRowSnapshotRef = useRef(new Map());
   const [baselineVersion, setBaselineVersion] = useState(0);
   const [query, setQuery] = useState("");
+  const [quickMST, setQuickMST] = useState("");
+  const [quickCompany, setQuickCompany] = useState("");
+  const [statusFilters, setStatusFilters] = useState([]);
   const [page, setPage] = useState(1);
   const [mode, setMode] = useState("saved");         // saved | preview
   const [selectedFile, setSelectedFile] = useState("");
@@ -1356,6 +1388,11 @@ export default function DataImporter({
     updatePreset: updateFilterPreset,
     deletePreset: deleteFilterPreset,
   } = useFilterPresets(FILTER_PRESET_SCOPE);
+  const {
+    favorites: quickSearchFavorites,
+    addFavorite: addQuickSearchFavorite,
+    removeFavorite: removeQuickSearchFavorite,
+  } = useQuickSearchFavorites();
   const [datePreset, setDatePreset] = useState("none");
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [filterNoStaff, setFilterNoStaff] = useState(false);
@@ -1404,6 +1441,23 @@ export default function DataImporter({
   const isManagerRole = normalizedRole === MANAGER_ROLE || normalizedRole === ADMIN_ROLE;
   const rosterSnapshot = useMemo(() => getTeamRoster(), [currentUser]);
   const rosterTeams = useMemo(() => buildRosterTeams(rosterSnapshot), [rosterSnapshot]);
+  const normalizedQuickMST = useMemo(() => normalizeStr(quickMST), [quickMST]);
+  const normalizedQuickCompany = useMemo(() => normalizeStr(quickCompany), [quickCompany]);
+  const availableStatuses = useMemo(() => {
+    const set = new Set();
+    for (const row of Array.isArray(rawRows) ? rawRows : []) {
+      if (!row || typeof row !== "object") continue;
+      const statusKey = normalizeStatusKey(
+        row.status ?? row.trang_thai ?? row.previewStatus ?? row.importStatus ?? row.state ?? ""
+      );
+      if (statusKey) {
+        set.add(statusKey);
+      }
+    }
+    return Array.from(set).sort((a, b) =>
+      formatStatusLabel(a).localeCompare(formatStatusLabel(b), "vi", { sensitivity: "base" })
+    );
+  }, [rawRows]);
 
   const effectivePreviewRows = useMemo(() => {
     if (!Array.isArray(rawRows) || rawRows.length === 0) {
@@ -1813,6 +1867,14 @@ export default function DataImporter({
     if (trimmedQuery) {
       payload.query = trimmedQuery;
     }
+    const trimmedMST = quickMST.trim();
+    if (trimmedMST) {
+      payload.mst = trimmedMST;
+    }
+    const trimmedCompany = quickCompany.trim();
+    if (trimmedCompany) {
+      payload.company = trimmedCompany;
+    }
     if (searchRange.from || searchRange.to) {
       payload.range = {
         from: searchRange.from || "",
@@ -1828,8 +1890,24 @@ export default function DataImporter({
     if (filterDuplicate11) {
       payload.filterDuplicate11 = true;
     }
+    if (Array.isArray(statusFilters) && statusFilters.length) {
+      payload.status = Array.from(new Set(statusFilters.filter(Boolean)));
+    }
     return payload;
-  }, [query, searchRange.from, searchRange.to, filterNoStaff, filterNoTeam, filterDuplicate11, coFilterMode, coFilterMin, datePreset]);
+  }, [
+    query,
+    quickMST,
+    quickCompany,
+    statusFilters,
+    searchRange.from,
+    searchRange.to,
+    filterNoStaff,
+    filterNoTeam,
+    filterDuplicate11,
+    coFilterMode,
+    coFilterMin,
+    datePreset,
+  ]);
 
   const applyPresetFilters = useCallback(
     (preset, { notify = true } = {}) => {
@@ -1840,6 +1918,8 @@ export default function DataImporter({
       clearPresetError();
       const filters = preset.filters && typeof preset.filters === "object" ? preset.filters : {};
       setQuery(typeof filters.query === "string" ? filters.query : "");
+      setQuickMST(typeof filters.mst === "string" ? filters.mst : "");
+      setQuickCompany(typeof filters.company === "string" ? filters.company : "");
       if (filters.range && typeof filters.range === "object") {
         setSearchRange({
           from: typeof filters.range.from === "string" ? filters.range.from : "",
@@ -1865,6 +1945,20 @@ export default function DataImporter({
       );
       const minValue = Number(filters.coFilterMin);
       setCoFilterMin(Number.isFinite(minValue) ? Math.max(0, Math.round(minValue)) : 5);
+      const presetStatuses = Array.isArray(filters.status)
+        ? filters.status
+        : typeof filters.status === "string"
+        ? filters.status.split(",")
+        : [];
+      setStatusFilters(
+        Array.from(
+          new Set(
+            presetStatuses
+              .map((value) => normalizeStatusKey(value))
+              .filter(Boolean)
+          )
+        )
+      );
       setPage(1);
       if (preset.id) {
         setSelectedPresetId(preset.id);
@@ -1986,6 +2080,12 @@ export default function DataImporter({
         if (typeof stored.query === "string" && stored.query.trim()) {
           normalizedFilters.query = stored.query.trim();
         }
+        if (typeof stored.mst === "string" && stored.mst.trim()) {
+          normalizedFilters.mst = stored.mst.trim();
+        }
+        if (typeof stored.company === "string" && stored.company.trim()) {
+          normalizedFilters.company = stored.company.trim();
+        }
         if (range && (range.from || range.to)) {
           normalizedFilters.range = range;
         }
@@ -2006,6 +2106,22 @@ export default function DataImporter({
         }
         if (typeof stored.datePreset === "string" && stored.datePreset) {
           normalizedFilters.datePreset = stored.datePreset;
+        }
+        if (Array.isArray(stored.status) && stored.status.length) {
+          const list = stored.status
+            .map((value) => normalizeStatusKey(value))
+            .filter(Boolean);
+          if (list.length) {
+            normalizedFilters.status = Array.from(new Set(list));
+          }
+        } else if (typeof stored.status === "string" && stored.status.trim()) {
+          const list = stored.status
+            .split(",")
+            .map((value) => normalizeStatusKey(value))
+            .filter(Boolean);
+          if (list.length) {
+            normalizedFilters.status = Array.from(new Set(list));
+          }
         }
         if (Object.keys(normalizedFilters).length === 0) {
           window.localStorage.removeItem(LEGACY_FILTER_STORAGE_KEY);
@@ -2137,6 +2253,152 @@ export default function DataImporter({
     clearPresetError();
     refreshPresetList();
   }, [clearPresetError, refreshPresetList]);
+
+  const statusFavoriteLabel = useCallback((value) => {
+    if (typeof value !== "string") {
+      return "Không rõ";
+    }
+    const tokens = value
+      .split(",")
+      .map((token) => normalizeStatusKey(token))
+      .filter(Boolean);
+    if (!tokens.length) {
+      return "Không rõ";
+    }
+    return tokens
+      .map((token) => formatStatusLabel(token))
+      .join(", ");
+  }, []);
+
+  const handleApplyMstFavorite = useCallback(
+    (value) => {
+      if (typeof value !== "string") {
+        return;
+      }
+      setQuickMST(value);
+      setPage(1);
+    },
+    [setPage]
+  );
+
+  const handleApplyCompanyFavorite = useCallback(
+    (value) => {
+      if (typeof value !== "string") {
+        return;
+      }
+      setQuickCompany(value);
+      setPage(1);
+    },
+    [setPage]
+  );
+
+  const handleApplyStatusFavorite = useCallback(
+    (value) => {
+      if (typeof value !== "string") {
+        return;
+      }
+      const tokens = value
+        .split(",")
+        .map((token) => normalizeStatusKey(token))
+        .filter(Boolean);
+      setStatusFilters(Array.from(new Set(tokens)));
+      setPage(1);
+    },
+    [setPage]
+  );
+
+  const toggleStatusFilter = useCallback((statusKey, enabled) => {
+    const normalized = normalizeStatusKey(statusKey);
+    if (!normalized) {
+      return;
+    }
+    setStatusFilters((prev) => {
+      const exists = prev.includes(normalized);
+      if (enabled) {
+        if (exists) {
+          return prev;
+        }
+        return [...prev, normalized];
+      }
+      if (!exists) {
+        return prev;
+      }
+      return prev.filter((item) => item !== normalized);
+    });
+  }, []);
+
+  const clearStatusFilters = useCallback(() => {
+    setStatusFilters([]);
+  }, []);
+
+  const handleRemoveMstFavorite = useCallback(
+    (value) => {
+      removeQuickSearchFavorite("mst", value);
+    },
+    [removeQuickSearchFavorite]
+  );
+
+  const handleRemoveCompanyFavorite = useCallback(
+    (value) => {
+      removeQuickSearchFavorite("company", value);
+    },
+    [removeQuickSearchFavorite]
+  );
+
+  const handleRemoveStatusFavorite = useCallback(
+    (value) => {
+      removeQuickSearchFavorite("status", value);
+    },
+    [removeQuickSearchFavorite]
+  );
+
+  const handleSaveMstFavorite = useCallback(() => {
+    const trimmed = quickMST.trim();
+    if (!trimmed) {
+      toast.warning?.("Nhập MST trước khi lưu ưa thích.");
+      return;
+    }
+    const result = addQuickSearchFavorite("mst", trimmed);
+    if (result.ok) {
+      toast.success?.(`Đã lưu MST ${trimmed} vào danh sách tìm kiếm nhanh.`);
+    } else if (result.reason === "duplicate") {
+      toast.info?.("MST này đã có trong danh sách tìm kiếm nhanh.");
+    } else {
+      toast.error?.("Không thể lưu MST ưa thích.");
+    }
+  }, [quickMST, addQuickSearchFavorite]);
+
+  const handleSaveCompanyFavorite = useCallback(() => {
+    const trimmed = quickCompany.trim();
+    if (!trimmed) {
+      toast.warning?.("Nhập tên công ty trước khi lưu ưa thích.");
+      return;
+    }
+    const result = addQuickSearchFavorite("company", trimmed);
+    if (result.ok) {
+      toast.success?.(`Đã lưu "${trimmed}" vào danh sách tìm kiếm nhanh.`);
+    } else if (result.reason === "duplicate") {
+      toast.info?.("Giá trị này đã có trong danh sách tìm kiếm nhanh.");
+    } else {
+      toast.error?.("Không thể lưu tên công ty ưa thích.");
+    }
+  }, [quickCompany, addQuickSearchFavorite]);
+
+  const handleSaveStatusFavorite = useCallback(() => {
+    if (!Array.isArray(statusFilters) || statusFilters.length === 0) {
+      toast.warning?.("Chọn ít nhất một trạng thái trước khi lưu ưa thích.");
+      return;
+    }
+    const rawValue = statusFilters.join(",");
+    const result = addQuickSearchFavorite("status", rawValue);
+    if (result.ok) {
+      toast.success?.("Đã lưu bộ lọc trạng thái vào danh sách tìm kiếm nhanh.");
+    } else if (result.reason === "duplicate") {
+      toast.info?.("Bộ lọc trạng thái này đã tồn tại trong danh sách nhanh.");
+    } else {
+      toast.error?.("Không thể lưu bộ lọc trạng thái ưa thích.");
+    }
+  }, [statusFilters, addQuickSearchFavorite]);
 
   const handleClearSearchRange = useCallback(() => {
     setSearchRange({ from: "", to: "" });
@@ -3469,10 +3731,13 @@ export default function DataImporter({
     const hasText = q.length > 0;
     const fromDate = searchRange.from ? normalizeStr(searchRange.from) : "";
     const toDate = searchRange.to ? normalizeStr(searchRange.to) : "";
+    const statusSet = statusFilters.length ? new Set(statusFilters) : null;
     return rawRows.filter(r => {
       const soTk = (r.so_tk || "").toString().toLowerCase();
-      const mst = (r.mst || "").toString().toLowerCase();
-      const company = (r.cong_ty || "").toString().toLowerCase();
+      const mstRaw = r.mst || r.ma_so_thue || "";
+      const companyRaw = r.cong_ty || r.company || r.ten_cong_ty || r.doanh_nghiep || "";
+      const mstLower = mstRaw.toString().toLowerCase();
+      const companyLower = companyRaw.toString().toLowerCase();
       const agencySearch = [
         r.agency || r.dai_ly || '',
         ...(Array.isArray(r.agents) ? r.agents : []),
@@ -3481,11 +3746,25 @@ export default function DataImporter({
         .toLowerCase();
       if (hasText && !(
         soTk.includes(q) ||
-        mst.includes(q) ||
-        company.includes(q) ||
+        mstLower.includes(q) ||
+        companyLower.includes(q) ||
         agencySearch.includes(q)
       )) {
         return false;
+      }
+      if (normalizedQuickMST && !normalizeStr(mstRaw).includes(normalizedQuickMST)) {
+        return false;
+      }
+      if (normalizedQuickCompany && !normalizeStr(companyRaw).includes(normalizedQuickCompany)) {
+        return false;
+      }
+      if (statusSet) {
+        const rowStatus = normalizeStatusKey(
+          r.status ?? r.trang_thai ?? r.previewStatus ?? r.importStatus ?? r.state ?? ""
+        );
+        if (!statusSet.has(rowStatus)) {
+          return false;
+        }
       }
       if (fromDate || toDate) {
         const rawDate = normalizeStr(r.date || r.raw_date || "").slice(0, 10);
@@ -3526,6 +3805,9 @@ export default function DataImporter({
   }, [
     rawRows,
     query,
+    normalizedQuickMST,
+    normalizedQuickCompany,
+    statusFilters,
     filterNoStaff,
     filterNoTeam,
     filterDuplicate11,
@@ -3550,7 +3832,19 @@ export default function DataImporter({
 
   useEffect(() => {
     setPage(1);
-  }, [pageSize, filterNoStaff, filterNoTeam, filterDuplicate11, coFilterMode, coThreshold, searchRange.from, searchRange.to]);
+  }, [
+    pageSize,
+    filterNoStaff,
+    filterNoTeam,
+    filterDuplicate11,
+    coFilterMode,
+    coThreshold,
+    searchRange.from,
+    searchRange.to,
+    quickMST,
+    quickCompany,
+    statusFilters.join("|")
+  ]);
 
   const filteredKeys = useMemo(() => {
     return Array.from(new Set(filtered.map((row) => keyOfRow(row))));
@@ -6044,130 +6338,300 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
         </div>
       )}
 
-      <div className="flex items-center gap-2 flex-wrap">
-        <input
-          className="border rounded px-2 py-1 w-72"
-          placeholder="Tìm nhanh (Số TK / MST / Công ty / Đại lý)"
-          value={query}
-          onChange={e => { setQuery(e.target.value); setPage(1); }}
-        />
-        <label className="flex items-center gap-1 text-sm" data-tooltip="Chọn nhanh khoảng thời gian theo preset">
-          <span>Khoảng</span>
-          <select
-            className="border rounded px-2 py-1 text-sm"
-            value={datePreset}
-            onChange={(e) => {
-              const value = e.target.value;
-              if (value === "custom") {
-                setDatePreset("custom");
-                return;
-              }
-              applyDatePreset(value);
-            }}
-          >
-            {DATE_RANGE_PRESETS.map((preset) => (
-              <option key={preset.key} value={preset.key}>
-                {preset.label}
-              </option>
-            ))}
-            <option value="custom">Tự chọn</option>
-          </select>
-        </label>
-        <label className="flex items-center gap-1 text-sm" data-tooltip="Lọc từ ngày (theo ngày đăng ký tờ khai)">
-          <span>Từ ngày</span>
+      <div className="flex w-full flex-wrap gap-4">
+        <div className="flex min-w-[260px] flex-1 flex-col gap-2">
           <input
-            type="date"
-            value={searchRange.from}
-            onChange={(e) => {
-              const value = e.target.value;
-              setDatePreset("custom");
-              setSearchRange((prev) => ({ ...prev, from: value }));
-            }}
-            className="border rounded px-2 py-1 text-sm"
+            className="w-full rounded border px-2 py-1"
+            placeholder="Tìm nhanh (Số TK / MST / Công ty / Đại lý)"
+            value={query}
+            onChange={e => { setQuery(e.target.value); setPage(1); }}
           />
-        </label>
-        <label className="flex items-center gap-1 text-sm" data-tooltip="Lọc đến ngày (theo ngày đăng ký tờ khai)">
-          <span>Đến ngày</span>
-          <input
-            type="date"
-            value={searchRange.to}
-            onChange={(e) => {
-              const value = e.target.value;
-              setDatePreset("custom");
-              setSearchRange((prev) => ({ ...prev, to: value }));
-            }}
-            className="border rounded px-2 py-1 text-sm"
-          />
-        </label>
-        {(searchRange.from || searchRange.to) && (
-          <button
-            type="button"
-            onClick={handleClearSearchRange}
-            data-tooltip="Xóa điều kiện lọc theo ngày"
-            className="rounded border px-3 py-1 text-xs text-gray-600 hover:bg-gray-50"
-          >
-            Xóa lọc ngày
-          </button>
-        )}
-        <label className="flex items-center gap-1 text-sm">
-          <input
-            type="checkbox"
-            checked={filterNoStaff}
-            onChange={e => setFilterNoStaff(e.target.checked)}
-          />
-          <span>Chưa gán Nhân viên</span>
-        </label>
-        <label className="flex items-center gap-1 text-sm">
-          <input
-            type="checkbox"
-            checked={filterNoTeam}
-            onChange={e => setFilterNoTeam(e.target.checked)}
-          />
-          <span>Chưa gán Tổ đội</span>
-        </label>
-        <label className="flex items-center gap-1 text-sm">
-          <span>Lọc C/O</span>
-          <select
-            value={coFilterMode}
-            onChange={(e) => setCoFilterMode(e.target.value)}
-            className="border rounded px-2 py-1 text-sm"
-          >
-            {CO_FILTER_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        {coFilterMode === "min" && (
-          <label className="flex items-center gap-1 text-sm">
-            <span>Tối thiểu dòng C/O</span>
+          <div className="flex flex-wrap items-center gap-2">
             <input
-              type="number"
-              min={0}
-              className="w-20 border rounded px-2 py-1 text-sm"
-              value={coFilterMin}
-              onChange={(e) => {
-                const raw = Number(e.target.value);
-                if (!Number.isFinite(raw)) {
-                  setCoFilterMin(0);
-                  return;
-                }
-                if (raw <= 0) {
-                  setCoFilterMin(0);
-                  return;
-                }
-                setCoFilterMin(Math.round(raw));
-              }}
+              className="w-48 flex-1 rounded border px-2 py-1 text-sm"
+              placeholder="Lọc nhanh theo MST"
+              value={quickMST}
+              onChange={(e) => setQuickMST(e.target.value)}
             />
+            {quickMST && (
+              <button
+                type="button"
+                onClick={() => setQuickMST("")}
+                className="rounded border px-2 py-1 text-xs text-gray-500 hover:bg-gray-50"
+              >
+                Xóa MST
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={handleSaveMstFavorite}
+              className="flex items-center gap-1 rounded border px-2 py-1 text-xs text-gray-600 hover:bg-gray-50"
+            >
+              <Plus className="h-3 w-3" /> Lưu MST ưa thích
+            </button>
+          </div>
+          {quickSearchFavorites.mst.length > 0 && (
+            <div className="flex flex-wrap gap-1 text-xs text-gray-600">
+              {quickSearchFavorites.mst.map((item) => (
+                <button
+                  key={item.normalized}
+                  type="button"
+                  onClick={() => handleApplyMstFavorite(item.value)}
+                  className="flex items-center gap-1 rounded border border-blue-200 bg-blue-50 px-2 py-1 text-blue-700 hover:bg-blue-100"
+                >
+                  {item.value}
+                  <CircleX
+                    aria-hidden="true"
+                    className="h-3 w-3"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      handleRemoveMstFavorite(item.value);
+                    }}
+                  />
+                </button>
+              ))}
+            </div>
+          )}
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              className="w-48 flex-1 rounded border px-2 py-1 text-sm"
+              placeholder="Lọc nhanh theo tên công ty"
+              value={quickCompany}
+              onChange={(e) => setQuickCompany(e.target.value)}
+            />
+            {quickCompany && (
+              <button
+                type="button"
+                onClick={() => setQuickCompany("")}
+                className="rounded border px-2 py-1 text-xs text-gray-500 hover:bg-gray-50"
+              >
+                Xóa công ty
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={handleSaveCompanyFavorite}
+              className="flex items-center gap-1 rounded border px-2 py-1 text-xs text-gray-600 hover:bg-gray-50"
+            >
+              <Plus className="h-3 w-3" /> Lưu công ty ưa thích
+            </button>
+          </div>
+          {quickSearchFavorites.company.length > 0 && (
+            <div className="flex flex-wrap gap-1 text-xs text-gray-600">
+              {quickSearchFavorites.company.map((item) => (
+                <button
+                  key={item.normalized}
+                  type="button"
+                  onClick={() => handleApplyCompanyFavorite(item.value)}
+                  className="flex items-center gap-1 rounded border border-emerald-200 bg-emerald-50 px-2 py-1 text-emerald-700 hover:bg-emerald-100"
+                >
+                  {item.value}
+                  <CircleX
+                    aria-hidden="true"
+                    className="h-3 w-3"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      handleRemoveCompanyFavorite(item.value);
+                    }}
+                  />
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <label className="flex items-center gap-1 text-sm" data-tooltip="Chọn nhanh khoảng thời gian theo preset">
+            <span>Khoảng</span>
+            <select
+              className="rounded border px-2 py-1 text-sm"
+              value={datePreset}
+              onChange={(e) => {
+                const value = e.target.value;
+                if (value === "custom") {
+                  setDatePreset("custom");
+                  return;
+                }
+                applyDatePreset(value);
+              }}
+            >
+              {DATE_RANGE_PRESETS.map((preset) => (
+                <option key={preset.key} value={preset.key}>
+                  {preset.label}
+                </option>
+              ))}
+              <option value="custom">Tự chọn</option>
+            </select>
           </label>
-        )}
-        {coFilterActive && (
-          <span className="text-sm px-2 py-1 rounded bg-emerald-50 text-emerald-700">
-            Đáp ứng C/O: {coFilterMatches} tờ khai
-          </span>
-        )}
-        <div className="flex flex-wrap items-center gap-2 border-l border-gray-200 pl-3 dark:border-slate-700">
+          <div className="flex flex-wrap items-center gap-2">
+            <label className="flex items-center gap-1 text-sm" data-tooltip="Lọc từ ngày (theo ngày đăng ký tờ khai)">
+              <span>Từ ngày</span>
+              <input
+                type="date"
+                value={searchRange.from}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setDatePreset("custom");
+                  setSearchRange((prev) => ({ ...prev, from: value }));
+                }}
+                className="rounded border px-2 py-1 text-sm"
+              />
+            </label>
+            <label className="flex items-center gap-1 text-sm" data-tooltip="Lọc đến ngày (theo ngày đăng ký tờ khai)">
+              <span>Đến ngày</span>
+              <input
+                type="date"
+                value={searchRange.to}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setDatePreset("custom");
+                  setSearchRange((prev) => ({ ...prev, to: value }));
+                }}
+                className="rounded border px-2 py-1 text-sm"
+              />
+            </label>
+            {(searchRange.from || searchRange.to) && (
+              <button
+                type="button"
+                onClick={handleClearSearchRange}
+                data-tooltip="Xóa điều kiện lọc theo ngày"
+                className="rounded border px-3 py-1 text-xs text-gray-600 hover:bg-gray-50"
+              >
+                Xóa lọc ngày
+              </button>
+            )}
+          </div>
+          <div className="flex flex-wrap items-center gap-3 text-sm">
+            <label className="flex items-center gap-1">
+              <input
+                type="checkbox"
+                checked={filterNoStaff}
+                onChange={e => setFilterNoStaff(e.target.checked)}
+              />
+              <span>Chưa gán Nhân viên</span>
+            </label>
+            <label className="flex items-center gap-1">
+              <input
+                type="checkbox"
+                checked={filterNoTeam}
+                onChange={e => setFilterNoTeam(e.target.checked)}
+              />
+              <span>Chưa gán Tổ đội</span>
+            </label>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 text-sm">
+            <label className="flex items-center gap-1">
+              <span>Lọc C/O</span>
+              <select
+                value={coFilterMode}
+                onChange={(e) => setCoFilterMode(e.target.value)}
+                className="rounded border px-2 py-1 text-sm"
+              >
+                {CO_FILTER_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {coFilterMode === "min" && (
+              <label className="flex items-center gap-1 text-sm">
+                <span>Tối thiểu dòng C/O</span>
+                <input
+                  type="number"
+                  min={0}
+                  className="w-20 rounded border px-2 py-1 text-sm"
+                  value={coFilterMin}
+                  onChange={(e) => {
+                    const raw = Number(e.target.value);
+                    if (!Number.isFinite(raw) || raw <= 0) {
+                      setCoFilterMin(0);
+                      return;
+                    }
+                    setCoFilterMin(Math.round(raw));
+                  }}
+                />
+              </label>
+            )}
+            {coFilterActive && (
+              <span className="rounded bg-emerald-50 px-2 py-1 text-sm text-emerald-700">
+                Đáp ứng C/O: {coFilterMatches} tờ khai
+              </span>
+            )}
+          </div>
+        </div>
+
+        <div className="flex min-w-[220px] flex-1 flex-col gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-sm font-medium text-gray-600">Trạng thái</span>
+            <button
+              type="button"
+              onClick={handleSaveStatusFavorite}
+              className="flex items-center gap-1 rounded border px-2 py-1 text-xs text-gray-600 hover:bg-gray-50"
+            >
+              <Plus className="h-3 w-3" /> Lưu trạng thái ưa thích
+            </button>
+            {statusFilters.length > 0 && (
+              <button
+                type="button"
+                onClick={clearStatusFilters}
+                className="rounded border px-2 py-1 text-xs text-gray-500 hover:bg-gray-50"
+              >
+                Xóa lọc trạng thái
+              </button>
+            )}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {availableStatuses.length > 0 ? (
+              availableStatuses.map((status) => {
+                const checked = statusFilters.includes(status);
+                return (
+                  <label
+                    key={status || "unknown"}
+                    className={`flex items-center gap-1 rounded border px-2 py-1 text-xs ${
+                      checked
+                        ? "border-violet-300 bg-violet-50 text-violet-700"
+                        : "border-gray-200 text-gray-600"
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={(event) => toggleStatusFilter(status, event.target.checked)}
+                    />
+                    <span>{formatStatusLabel(status)}</span>
+                  </label>
+                );
+              })
+            ) : (
+              <span className="text-xs text-gray-500">Chưa có trạng thái để lọc.</span>
+            )}
+          </div>
+          {quickSearchFavorites.status.length > 0 && (
+            <div className="flex flex-wrap gap-1 text-xs text-gray-600">
+              {quickSearchFavorites.status.map((item) => (
+                <button
+                  key={item.normalized}
+                  type="button"
+                  onClick={() => handleApplyStatusFavorite(item.value)}
+                  className="flex items-center gap-1 rounded border border-purple-200 bg-purple-50 px-2 py-1 text-purple-700 hover:bg-purple-100"
+                >
+                  {statusFavoriteLabel(item.value)}
+                  <CircleX
+                    aria-hidden="true"
+                    className="h-3 w-3"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      handleRemoveStatusFavorite(item.value);
+                    }}
+                  />
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="flex min-w-[240px] flex-1 flex-wrap items-center gap-2 border-l border-gray-200 pl-3 dark:border-slate-700">
           <label className="flex flex-col text-xs text-gray-600 dark:text-gray-300">
             <span className="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
               Bộ lọc đã lưu

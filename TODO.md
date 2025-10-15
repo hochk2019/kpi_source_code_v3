@@ -13,7 +13,7 @@
 - [x] An tuy chon "Ghi de toan bo du lieu" voi tai khoan khong phai admin; them popup canh bao khi admin kich hoat.
 - [x] Ghi log import chi tiet (file, dong loi, doanh nghiep moi, so dong insert/update/skip).
 - [x] Them buoc preview/validate truoc khi commit vao CSDL (hien cac dong loi, dong se chen moi).
-- [ ] Ho tro quick search, luu bo loc ua thich (theo MST, ten cong ty, trang thai).
+- [x] Ho tro quick search, luu bo loc ua thich (theo MST, ten cong ty, trang thai).
 - [ ] Freeze cot quan trong (so to khai, MST, ngay) va tuy chon view bang/card.
 - [ ] Thiet ke lai UI Import Data theo phong cach don gian, dong nhat voi cac tab khac.
 
