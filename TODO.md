@@ -18,9 +18,9 @@
 - [x] Thiet ke lai UI Import Data theo phong cach don gian, dong nhat voi cac tab khac.
 
 ## 2. Gan MST
-- [ ] Kich hoat loc theo khoang thoi gian va thao tac; tu dong apply khi thay doi filter.
-- [ ] Khi import/dong bo, day doanh nghiep/MST moi len dau danh sach de admin/QL gan nhanh.
-- [ ] Input nhan vien co typeahead + dropdown keo cuon; ho tro phim tat chon nhanh.
+- [x] Kich hoat loc theo khoang thoi gian va thao tac; tu dong apply khi thay doi filter.
+- [x] Khi import/dong bo, day doanh nghiep/MST moi len dau danh sach de admin/QL gan nhanh.
+- [x] Input nhan vien co typeahead + dropdown keo cuon; ho tro phim tat chon nhanh.
 - [ ] Them nut `Cap nhat` tren moi dong sua doi; chi ghi xuong storage cac truong thay doi.
 - [ ] Bo sung quick search, luu bo loc (theo nhan vien, thao tac).
 - [ ] Tai cau truc giao dien tab Gan MST theo huong hien dai; tai su dung component chung.

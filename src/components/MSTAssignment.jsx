@@ -5,9 +5,23 @@ import {
   getMSTMap,
   upsertMSTRows,
   MST_ASSIGNMENT_STATUS,
+  getTeamRoster,
+  normalizeStr,
+  normalizeName,
 } from "@/lib/store.js";
 import useTooltipTitles from "@/hooks/useTooltipTitles.js";
 import usePagination from "@/hooks/usePagination.js";
+import { Button } from "@/components/ui/button.jsx";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover.jsx";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command.jsx";
+import { Check, ChevronsUpDown, CircleX, Plus } from "lucide-react";
 
 /** Utils */
 const normalize = (s = "") =>
@@ -18,6 +32,180 @@ const normalize = (s = "") =>
     .replace(/\s+/g, " ")
     .trim()
     .toLowerCase();
+
+const buildRosterTeams = (rosterSnapshot) => {
+  const rawTeams = Array.isArray(rosterSnapshot?.teams) ? rosterSnapshot.teams : [];
+  const teams = [];
+
+  rawTeams.forEach((team, teamIndex) => {
+    const name = normalizeStr(team?.name ?? "");
+    const normalized = normalizeName(name);
+    if (!name || !normalized) return;
+
+    const members = Array.isArray(team?.members) ? team.members : [];
+    const normalizedMembers = members
+      .map((member, memberIndex) => {
+        const memberName = normalizeStr(member?.name ?? "");
+        const memberNormalized = normalizeName(memberName);
+        if (!memberName || !memberNormalized) return null;
+        return {
+          id: member?.id || `${teamIndex}-${memberIndex}`,
+          name: memberName,
+          normalized: memberNormalized,
+        };
+      })
+      .filter(Boolean)
+      .sort((a, b) => a.name.localeCompare(b.name, "vi", { sensitivity: "base" }));
+
+    teams.push({
+      id: team?.id || `${teamIndex}`,
+      name,
+      normalized,
+      members: normalizedMembers,
+    });
+  });
+
+  return teams.sort((a, b) => a.name.localeCompare(b.name, "vi", { sensitivity: "base" }));
+};
+
+function StaffCombobox({
+  value,
+  teamValue,
+  onSelect,
+  teams,
+  disabled = false,
+  placeholder = "Chọn nhân viên",
+}) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+
+  useEffect(() => {
+    if (!open) {
+      setSearch("");
+    }
+  }, [open]);
+
+  const normalizedValue = normalizeStr(value || "");
+  const normalizedKey = normalizeName(normalizedValue);
+  const normalizedTeamValue = normalizeName(normalizeStr(teamValue || ""));
+
+  const staffIndex = useMemo(() => {
+    const result = [];
+    teams.forEach((team) => {
+      team.members.forEach((member) => {
+        result.push({
+          teamId: team.id,
+          teamName: team.name,
+          teamNormalized: team.normalized,
+          memberId: member.id,
+          name: member.name,
+          normalized: member.normalized,
+        });
+      });
+    });
+    return result;
+  }, [teams]);
+
+  const filteredTeams = useMemo(() => {
+    if (normalizedTeamValue) {
+      const matched = teams.filter((team) => team.normalized === normalizedTeamValue);
+      if (matched.length) {
+        return matched;
+      }
+    }
+    return teams;
+  }, [teams, normalizedTeamValue]);
+
+  const searchValue = normalizeStr(search);
+  const searchKey = normalizeName(searchValue);
+  const hasExactStaff = staffIndex.some((entry) => entry.normalized === searchKey);
+  const canCreateCustom = Boolean(searchKey) && !hasExactStaff;
+
+  const handleSelect = (staffName = "", teamName = "", extra = {}) => {
+    onSelect?.({
+      staffName,
+      teamName,
+      isCustom: Boolean(extra.isCustom),
+    });
+    setOpen(false);
+    setSearch("");
+  };
+
+  return (
+    <Popover open={open} onOpenChange={disabled ? undefined : setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          role="combobox"
+          aria-expanded={open}
+          disabled={disabled}
+          className="w-full justify-between px-2 py-1 text-left font-normal"
+        >
+          <span className="truncate">{normalizedValue || placeholder}</span>
+          <ChevronsUpDown className="ml-2 size-3 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-64 p-0" align="start">
+        <Command>
+          <CommandInput
+            placeholder="Tìm nhân viên"
+            value={search}
+            onValueChange={setSearch}
+            autoFocus
+          />
+          <CommandList className="max-h-60 overflow-y-auto">
+            <CommandEmpty>Không có nhân viên phù hợp.</CommandEmpty>
+            {normalizedValue ? (
+              <CommandGroup heading="Tùy chọn">
+                <CommandItem value="__clear__" onSelect={() => handleSelect("", teamValue || "")}>
+                  <CircleX className="mr-2 size-4" />
+                  Bỏ chọn nhân viên
+                </CommandItem>
+              </CommandGroup>
+            ) : null}
+            {canCreateCustom ? (
+              <CommandGroup heading="Thêm mới">
+                <CommandItem
+                  value={searchValue}
+                  onSelect={() =>
+                    handleSelect(searchValue, normalizedTeamValue ? teamValue : "", {
+                      isCustom: true,
+                    })
+                  }
+                >
+                  <Plus className="mr-2 size-4" />
+                  Dùng giá trị "{searchValue}"
+                </CommandItem>
+              </CommandGroup>
+            ) : null}
+            {filteredTeams.map((team) => (
+              <CommandGroup key={team.id} heading={`Tổ: ${team.name}`}>
+                {team.members.map((member) => {
+                  const isSelected =
+                    member.normalized === normalizedKey && team.normalized === normalizedTeamValue;
+                  return (
+                    <CommandItem
+                      key={member.id}
+                      value={`${member.name}`}
+                      onSelect={() => handleSelect(member.name, team.name, { isCustom: false })}
+                    >
+                      <Check
+                        className={`mr-2 size-4 ${isSelected ? "opacity-100" : "opacity-0"}`}
+                      />
+                      <span className="truncate">{member.name}</span>
+                    </CommandItem>
+                  );
+                })}
+              </CommandGroup>
+            ))}
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+}
 
 const STATUS_LABELS = Object.values(MST_ASSIGNMENT_STATUS);
 const STATUS_SELECT_VALUES = ["", ...STATUS_LABELS];
@@ -232,6 +420,23 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
     to: "",
     type: "all",
   });
+  const rosterSnapshot = useMemo(() => getTeamRoster(), []);
+  const rosterTeams = useMemo(() => buildRosterTeams(rosterSnapshot), [rosterSnapshot]);
+  const [recentlyImportedKeys, setRecentlyImportedKeys] = useState(() => new Set());
+  const markRecentlyImported = useCallback((keys = []) => {
+    if (!Array.isArray(keys) || !keys.length) {
+      return;
+    }
+    setRecentlyImportedKeys((prev) => {
+      const next = new Set(prev);
+      keys.forEach((key) => {
+        if (key) {
+          next.add(key);
+        }
+      });
+      return next;
+    });
+  }, []);
   const filteredHistoryEntries = useMemo(() => {
     if (!historyEntries?.length) return [];
     return historyEntries.filter((entry) => {
@@ -253,6 +458,25 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
     () => buildHistoryIndex(filteredHistoryEntries),
     [filteredHistoryEntries]
   );
+  const isHistoryFilterActive = useMemo(
+    () =>
+      Boolean(
+        (historyFilter.from && historyFilter.from.trim()) ||
+          (historyFilter.to && historyFilter.to.trim()) ||
+          (historyFilter.type && historyFilter.type !== "all")
+      ),
+    [historyFilter]
+  );
+  const historyFilteredRowKeys = useMemo(() => {
+    if (!isHistoryFilterActive) return null;
+    const set = new Set();
+    filteredHistoryEntries.forEach((entry) => {
+      if (entry?.rowKey) {
+        set.add(entry.rowKey);
+      }
+    });
+    return set;
+  }, [filteredHistoryEntries, isHistoryFilterActive]);
   const [showAddForm, setShowAddForm] = useState(false);
   const [draft, setDraft] = useState({
     mst: "",
@@ -352,6 +576,7 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
       status: normalizedStatus,
     };
 
+    let createdKey = "";
     setRows((prev) => {
       const current = Array.isArray(prev) ? prev : [];
       const newKey = makeRowKey(newRow);
@@ -365,9 +590,13 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
         next[existingIndex] = { ...next[existingIndex], ...payload };
       } else {
         next.push(payload);
+        createdKey = newKey;
       }
       return sortMSTRows(next);
     });
+    if (createdKey) {
+      markRecentlyImported([createdKey]);
+    }
     setPage(1);
     setShowAddForm(false);
     setAddError("");
@@ -407,15 +636,44 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
 
   /** Filter + phân trang */
   const filtered = useMemo(() => {
-    if (!search) return rows;
-    const q = normalize(search);
-    return rows.filter(
-      (r) =>
-        normalize(r.mst).includes(q) ||
-        normalize(r.company).includes(q) ||
-        normalize(r.status || "").includes(q)
-    );
-  }, [rows, search]);
+    const query = normalize(search || "");
+    const hasQuery = Boolean(query);
+    const base = rows.filter((row) => {
+      if (isHistoryFilterActive) {
+        const key = makeRowKey(row);
+        if (!historyFilteredRowKeys?.has(key)) {
+          return false;
+        }
+      }
+      if (!hasQuery) return true;
+      return (
+        normalize(row.mst).includes(query) ||
+        normalize(row.company).includes(query) ||
+        normalize(row.status || "").includes(query)
+      );
+    });
+
+    const prioritized = [...base].sort((a, b) => {
+      const keyA = makeRowKey(a);
+      const keyB = makeRowKey(b);
+      const aIsNew = recentlyImportedKeys.has(keyA) ? 1 : 0;
+      const bIsNew = recentlyImportedKeys.has(keyB) ? 1 : 0;
+      if (aIsNew !== bIsNew) {
+        return bIsNew - aIsNew;
+      }
+      const byMST = (a.mst || "").localeCompare(b.mst || "");
+      if (byMST !== 0) return byMST;
+      return (a.effective_from || "").localeCompare(b.effective_from || "");
+    });
+
+    return prioritized;
+  }, [
+    rows,
+    search,
+    isHistoryFilterActive,
+    historyFilteredRowKeys,
+    recentlyImportedKeys,
+  ]);
 
   const {
     page,
@@ -429,6 +687,10 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
     initialPageSize: DEFAULT_PAGE_SIZE,
   });
 
+  useEffect(() => {
+    setPage(1);
+  }, [setPage, historyFilter.from, historyFilter.to, historyFilter.type, isHistoryFilterActive]);
+
   useTooltipTitles(rootRef, [
     rows,
     search,
@@ -441,6 +703,7 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
 
   const totalHistoryCount = historyEntries.length;
   const filteredHistoryCount = filteredHistoryEntries.length;
+  const recentlyImportedCount = recentlyImportedKeys.size;
 
   /** Excel import */
   const onImportXLSX = async () => {
@@ -462,6 +725,9 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
         defval: "",
         raw: false,
       });
+
+      const existingKeys = new Set(rows.map((row) => makeRowKey(row)));
+      const newRowKeys = [];
 
       const mapped = json
         .map((r) => {
@@ -493,12 +759,18 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
       }
       for (const r of mapped) {
         const key = makeRowKey(r);
+        const existed = byKey.has(key) || existingKeys.has(key);
         byKey.set(key, { ...byKey.get(key), ...r });
+        if (!existed) {
+          newRowKeys.push(key);
+        }
       }
 
-      setRows(sortMSTRows(Array.from(byKey.values())));
+      const nextRows = sortMSTRows(Array.from(byKey.values()));
+      setRows(nextRows);
       setPage(1);
       alert(`Đọc file thành công: ${mapped.length} dòng. Bấm Lưu để ghi.`);
+      markRecentlyImported(newRowKeys);
     } catch (e) {
       console.error(e);
       alert("Không thể đọc file .xlsx — kiểm tra lại định dạng.");
@@ -531,22 +803,35 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
   const updateRow = (originalRow, patch) => {
     if (isReadOnly) return;
     const targetKey = makeRowKey(originalRow);
+    let updatedKey = "";
+    let didUpdate = false;
     setRows((prev) =>
       sortMSTRows(
         prev.map((r) => {
           if (makeRowKey(r) !== targetKey) return r;
-        const next = { ...r, ...patch };
-        if (patch && Object.prototype.hasOwnProperty.call(patch, "mst")) {
-          next.mst = tidyMST(next.mst);
-        }
-        if (patch && Object.prototype.hasOwnProperty.call(patch, "status")) {
-          next.status = normalizeStatusLabel(next.status);
-        }
+          const next = { ...r, ...patch };
+          if (patch && Object.prototype.hasOwnProperty.call(patch, "mst")) {
+            next.mst = tidyMST(next.mst);
+          }
+          if (patch && Object.prototype.hasOwnProperty.call(patch, "status")) {
+            next.status = normalizeStatusLabel(next.status);
+          }
+          updatedKey = makeRowKey(next);
+          didUpdate = true;
+          return next;
+        })
+      )
+    );
+    if (didUpdate && updatedKey && updatedKey !== targetKey) {
+      setRecentlyImportedKeys((prev) => {
+        if (!prev.has(targetKey)) return prev;
+        const next = new Set(prev);
+        next.delete(targetKey);
+        next.add(updatedKey);
         return next;
-      })
-    )
-  );
-};
+      });
+    }
+  };
 
   const removeRow = (row) => {
     if (isReadOnly) return;
@@ -556,6 +841,12 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
       : row.mst;
     if (!confirm(`Xóa dòng ${label}?`)) return;
     setRows((prev) => prev.filter((r) => makeRowKey(r) !== key));
+    setRecentlyImportedKeys((prev) => {
+      if (!prev.has(key)) return prev;
+      const next = new Set(prev);
+      next.delete(key);
+      return next;
+    });
   };
 
   /** UI */
@@ -717,6 +1008,11 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
               Hiển thị {filteredHistoryCount} / {totalHistoryCount} bản ghi lịch sử.
             </div>
             <div>Áp dụng cho phần lịch sử của từng dòng bên dưới.</div>
+            {isHistoryFilterActive ? (
+              <div className="text-amber-600">
+                * Danh sách MST cũng đang lọc theo điều kiện lịch sử này.
+              </div>
+            ) : null}
           </div>
         </div>
       </div>
@@ -752,24 +1048,46 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
             </label>
             <label className="flex flex-col gap-1 text-sm font-medium text-gray-700">
               Người phụ trách Nhập
-              <input
-                type="text"
+              <StaffCombobox
                 value={draft.person_import}
-                onChange={handleDraftChange("person_import")}
-                className="border rounded px-2 py-1"
-                placeholder="Phụ trách nhập"
-                data-tooltip="Người phụ trách tờ khai nhập khẩu"
+                teamValue={draft.team}
+                teams={rosterTeams}
+                placeholder="Chọn nhân viên nhập"
+                onSelect={({ staffName, teamName, isCustom }) => {
+                  setDraft((prev) => {
+                    const next = { ...prev, person_import: staffName || "" };
+                    if (staffName && teamName && !isCustom) {
+                      const prevTeamKey = normalizeName(normalizeStr(prev.team || ""));
+                      const nextTeamKey = normalizeName(normalizeStr(teamName));
+                      if (!prevTeamKey || prevTeamKey === nextTeamKey) {
+                        next.team = teamName;
+                      }
+                    }
+                    return next;
+                  });
+                }}
               />
             </label>
             <label className="flex flex-col gap-1 text-sm font-medium text-gray-700">
               Người phụ trách Xuất
-              <input
-                type="text"
+              <StaffCombobox
                 value={draft.person_export}
-                onChange={handleDraftChange("person_export")}
-                className="border rounded px-2 py-1"
-                placeholder="Phụ trách xuất"
-                data-tooltip="Người phụ trách tờ khai xuất khẩu"
+                teamValue={draft.team}
+                teams={rosterTeams}
+                placeholder="Chọn nhân viên xuất"
+                onSelect={({ staffName, teamName, isCustom }) => {
+                  setDraft((prev) => {
+                    const next = { ...prev, person_export: staffName || "" };
+                    if (staffName && teamName && !isCustom) {
+                      const prevTeamKey = normalizeName(normalizeStr(prev.team || ""));
+                      const nextTeamKey = normalizeName(normalizeStr(teamName));
+                      if (!prevTeamKey || prevTeamKey === nextTeamKey) {
+                        next.team = teamName;
+                      }
+                    }
+                    return next;
+                  });
+                }}
               />
             </label>
             <label className="flex flex-col gap-1 text-sm font-medium text-gray-700">
@@ -836,8 +1154,18 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
         </form>
       )}
 
-      <div className="text-sm text-gray-500 mb-2">
-        {filtered.length} dòng — Trang {page}/{totalPages}
+      <div className="text-sm text-gray-500 mb-2 flex flex-wrap items-center gap-2">
+        <span>
+          {filtered.length} dòng — Trang {page}/{totalPages}
+        </span>
+        {recentlyImportedCount ? (
+          <span className="inline-flex items-center gap-1 rounded bg-amber-100 px-2 py-0.5 text-amber-700">
+            <span className="text-xs font-semibold uppercase">Ưu tiên</span>
+            <span>
+              {recentlyImportedCount} dòng mới import đang hiển thị đầu danh sách
+            </span>
+          </span>
+        ) : null}
       </div>
 
       <div className="border rounded overflow-hidden">
@@ -868,21 +1196,30 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
                 const exportHistory = rowHistory.person_export || [];
                 const effectiveHistory = rowHistory.effective_from || [];
                 const statusValue = normalizeStatusLabel(r.status);
+                const isNewlyImported = recentlyImportedKeys.has(rowKey);
                 return (
-                  <tr key={rowKey || r.mst} className="border-t">
-                  <td className="p-2">
-                    {isReadOnly ? (
-                      <span>{r.mst}</span>
-                    ) : (
-                      <input
-                        value={r.mst}
-                        onChange={(e) =>
-                          updateRow(r, { mst: tidyMST(e.target.value) })
-                        }
-                        className="border rounded px-2 py-1 w-full"
-                      />
-                    )}
-                  </td>
+                  <tr
+                    key={rowKey || r.mst}
+                    className={`border-t ${isNewlyImported ? "bg-amber-50" : ""}`}
+                  >
+                    <td className="p-2">
+                      {isReadOnly ? (
+                        <span>{r.mst}</span>
+                      ) : (
+                        <input
+                          value={r.mst}
+                          onChange={(e) =>
+                            updateRow(r, { mst: tidyMST(e.target.value) })
+                          }
+                          className="border rounded px-2 py-1 w-full"
+                        />
+                      )}
+                      {isNewlyImported ? (
+                        <span className="ml-2 inline-flex items-center rounded bg-amber-500/10 px-2 py-0.5 text-xs font-semibold uppercase text-amber-700">
+                          Mới import
+                        </span>
+                      ) : null}
+                    </td>
                   <td className="p-2">
                     {isReadOnly ? (
                       <span>{r.company || ""}</span>
@@ -900,12 +1237,26 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
                     {isReadOnly ? (
                       <span>{r.person_import || ""}</span>
                     ) : (
-                      <input
+                      <StaffCombobox
                         value={r.person_import || ""}
-                        onChange={(e) =>
-                          updateRow(r, { person_import: e.target.value })
-                        }
-                        className="border rounded px-2 py-1 w-full"
+                        teamValue={r.team || ""}
+                        teams={rosterTeams}
+                        placeholder="Chọn nhân viên nhập"
+                        onSelect={({ staffName, teamName, isCustom }) => {
+                          const patch = { person_import: staffName || "" };
+                          if (staffName && teamName && !isCustom) {
+                            const currentTeamKey = normalizeName(
+                              normalizeStr(r.team || "")
+                            );
+                            const nextTeamKey = normalizeName(
+                              normalizeStr(teamName)
+                            );
+                            if (!currentTeamKey || currentTeamKey === nextTeamKey) {
+                              patch.team = teamName;
+                            }
+                          }
+                          updateRow(r, patch);
+                        }}
                       />
                     )}
                     <HistoryDetails
@@ -917,12 +1268,26 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
                     {isReadOnly ? (
                       <span>{r.person_export || ""}</span>
                     ) : (
-                      <input
+                      <StaffCombobox
                         value={r.person_export || ""}
-                        onChange={(e) =>
-                          updateRow(r, { person_export: e.target.value })
-                        }
-                        className="border rounded px-2 py-1 w-full"
+                        teamValue={r.team || ""}
+                        teams={rosterTeams}
+                        placeholder="Chọn nhân viên xuất"
+                        onSelect={({ staffName, teamName, isCustom }) => {
+                          const patch = { person_export: staffName || "" };
+                          if (staffName && teamName && !isCustom) {
+                            const currentTeamKey = normalizeName(
+                              normalizeStr(r.team || "")
+                            );
+                            const nextTeamKey = normalizeName(
+                              normalizeStr(teamName)
+                            );
+                            if (!currentTeamKey || currentTeamKey === nextTeamKey) {
+                              patch.team = teamName;
+                            }
+                          }
+                          updateRow(r, patch);
+                        }}
                       />
                     )}
                     <HistoryDetails
