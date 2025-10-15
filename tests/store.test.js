@@ -13,8 +13,10 @@ import {
   normalizeName,
   toISODate,
   upsertMSTRows,
+  saveMSTRow,
   getMSTFor,
   getMSTMap,
+  getMSTHistoryEntries,
   MST_ASSIGNMENT_STATUS,
   HQ_KEY,
   getHQAgencies,
@@ -28,6 +30,7 @@ import {
   saveImportColumnConfig,
   IMPORT_COLUMN_IDS,
   UI_LAYOUT_KEY,
+  subscribeTeamRoster,
 } from '@/lib/store.js';
 import { clearStorageCache, getItem as sharedGetItem } from '@/lib/storageClient.js';
 beforeEach(() => {
@@ -200,6 +203,133 @@ describe('saveDeclRows', () => {
     expect(mstRows[0].effective_from).toBe('2024-09-15');
   });
 
+});
+
+
+describe('saveMSTRow', () => {
+  it('ghi nhận thay đổi khi cập nhật từng dòng', () => {
+    upsertMSTRows(
+      [
+        {
+          mst: '0101234567',
+          company: 'ACME',
+          person_import: 'Trần A',
+          person_export: '',
+          team: '',
+          effective_from: '2024-09-01',
+          status: MST_ASSIGNMENT_STATUS.PENDING,
+        },
+      ],
+      { actor: 'seed' },
+    );
+
+    const originalKey = '0101234567__2024-09-01';
+    const result = saveMSTRow(
+      {
+        mst: '0101234567',
+        company: 'ACME Logistics',
+        person_import: 'Nguyễn Văn A',
+        person_export: '',
+        team: 'Team 1',
+        effective_from: '2024-09-01',
+        status: MST_ASSIGNMENT_STATUS.ASSIGNED,
+      },
+      { originalKey, actor: 'tester' },
+    );
+
+    expect(result.ok).toBe(true);
+    expect(result.previousKey).toBe(originalKey);
+    expect(result.key).toBe(originalKey);
+
+    const map = getMSTMap();
+    expect(map).toHaveLength(1);
+    expect(map[0]).toMatchObject({
+      company: 'ACME Logistics',
+      person_import: 'Nguyễn Văn A',
+      team: 'Team 1',
+      status: MST_ASSIGNMENT_STATUS.ASSIGNED,
+    });
+
+    const history = getMSTHistoryEntries(5);
+    expect(history.some((entry) => entry.field === 'person_import' && entry.to === 'Nguyễn Văn A')).toBe(true);
+
+    const noChange = saveMSTRow(
+      {
+        mst: '0101234567',
+        company: 'ACME Logistics',
+        person_import: 'Nguyễn Văn A',
+        person_export: '',
+        team: 'Team 1',
+        effective_from: '2024-09-01',
+        status: MST_ASSIGNMENT_STATUS.ASSIGNED,
+      },
+      { originalKey, actor: 'tester' },
+    );
+
+    expect(noChange.ok).toBe(false);
+    expect(noChange.reason).toBe('no-change');
+  });
+
+  it('thêm mới MST khi chưa tồn tại', () => {
+    const result = saveMSTRow(
+      {
+        mst: '0200000000',
+        company: 'Beta',
+        person_import: '',
+        person_export: '',
+        team: '',
+        effective_from: '2024-10-01',
+        status: MST_ASSIGNMENT_STATUS.PENDING,
+      },
+      { actor: 'tester' },
+    );
+
+    expect(result.ok).toBe(true);
+    const map = getMSTMap();
+    expect(map.some((row) => row.mst === '0200000000')).toBe(true);
+  });
+
+  it('trả về conflict khi đổi sang khóa đã có', () => {
+    upsertMSTRows(
+      [
+        {
+          mst: '0101234567',
+          company: 'ACME',
+          person_import: '',
+          person_export: '',
+          team: '',
+          effective_from: '2024-09-01',
+          status: MST_ASSIGNMENT_STATUS.PENDING,
+        },
+        {
+          mst: '0200000000',
+          company: 'Beta',
+          person_import: '',
+          person_export: '',
+          team: '',
+          effective_from: '2024-10-01',
+          status: MST_ASSIGNMENT_STATUS.PENDING,
+        },
+      ],
+      { actor: 'seed' },
+    );
+
+    const conflict = saveMSTRow(
+      {
+        mst: '0200000000',
+        company: 'ACME',
+        person_import: '',
+        person_export: '',
+        team: '',
+        effective_from: '2024-10-01',
+        status: MST_ASSIGNMENT_STATUS.PENDING,
+      },
+      { originalKey: '0101234567__2024-09-01', actor: 'tester' },
+    );
+
+    expect(conflict.ok).toBe(false);
+    expect(conflict.reason).toBe('conflict');
+  });
 });
 
 
@@ -555,6 +685,30 @@ describe('team roster helpers', () => {
     });
   });
 });
+
+describe('subscribeTeamRoster', () => {
+  it('phát sự kiện khi danh sách tổ đội thay đổi', () => {
+    const snapshots = [];
+    const unsubscribe = subscribeTeamRoster((snapshot) => {
+      snapshots.push(snapshot);
+    });
+
+    expect(snapshots.length).toBeGreaterThan(0);
+
+    setTeamRoster({
+      teams: [
+        { name: 'Team QA', members: [{ name: 'Lan' }] },
+      ],
+    }, { actor: 'tester' });
+
+    const latest = snapshots[snapshots.length - 1];
+    expect(Array.isArray(latest.teams)).toBe(true);
+    expect(latest.teams.some((team) => team.name === 'Team QA')).toBe(true);
+
+    unsubscribe();
+  });
+});
+
 
 describe('getMSTFor', () => {
   it('chọn dòng có ngày hiệu lực gần nhất nhưng không vượt quá ngày tờ khai', () => {

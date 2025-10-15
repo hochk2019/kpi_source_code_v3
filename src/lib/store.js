@@ -548,6 +548,76 @@ export function upsertMSTRows(rows, { actor = "system", detail = "" } = {}) {
   return sanitized.length;
 }
 
+export function saveMSTRow(rowInput, { originalKey = null, actor = "system", detail = "" } = {}) {
+  const sanitized = sanitizeMSTRow(rowInput);
+  if (!sanitized) {
+    return { ok: false, reason: "invalid" };
+  }
+
+  const previousRows = getMSTMap();
+  const prevMap = new Map(previousRows.map((row) => [makeMSTRowKey(row), row]));
+  const targetKey = originalKey ? String(originalKey) : makeMSTRowKey(rowInput);
+  const previous = targetKey ? prevMap.get(targetKey) : null;
+
+  if (originalKey && !previous) {
+    return { ok: false, reason: "not-found" };
+  }
+
+  const nextKey = makeMSTRowKey(sanitized);
+  if (targetKey && nextKey !== targetKey && prevMap.has(nextKey)) {
+    return { ok: false, reason: "conflict" };
+  }
+
+  if (previous && nextKey === targetKey) {
+    const same =
+      previous.mst === sanitized.mst &&
+      previous.company === sanitized.company &&
+      previous.person_import === sanitized.person_import &&
+      previous.person_export === sanitized.person_export &&
+      previous.team === sanitized.team &&
+      previous.effective_from === sanitized.effective_from &&
+      previous.status === sanitized.status;
+    if (same) {
+      return { ok: false, reason: "no-change", row: previous, key: targetKey };
+    }
+  }
+
+  if (previous && targetKey && prevMap.has(targetKey)) {
+    prevMap.delete(targetKey);
+  }
+  prevMap.set(nextKey, sanitized);
+
+  const nextRows = Array.from(prevMap.values()).sort((a, b) => {
+    const byMST = a.mst.localeCompare(b.mst);
+    if (byMST !== 0) return byMST;
+    return (a.effective_from || "").localeCompare(b.effective_from || "");
+  });
+
+  const changes = diffMSTRows(previousRows, nextRows, actor);
+  if (!changes.length) {
+    return { ok: false, reason: "no-change", row: sanitized, key: nextKey };
+  }
+
+  setItem(MST_KEY, JSON.stringify(nextRows));
+  appendMSTHistoryEntries(changes);
+  pushAuditLog({
+    actor,
+    action: "mst.save-row",
+    detail:
+      detail ||
+      (previous
+        ? `Cập nhật gán MST cho ${sanitized.mst}`
+        : `Thêm mới gán MST ${sanitized.mst}`),
+  });
+
+  return {
+    ok: true,
+    row: sanitized,
+    key: nextKey,
+    previousKey: previous ? targetKey : null,
+  };
+}
+
 function diffMSTRows(prevRows, nextRows, actor) {
   const prevMap = new Map();
   for (const row of Array.isArray(prevRows) ? prevRows : []) {
@@ -1219,6 +1289,30 @@ export function getTeamRoster() {
     setItem(TEAM_KEY, JSON.stringify(sanitized));
   }
   return sanitized;
+}
+
+export function subscribeTeamRoster(listener) {
+  const fn = typeof listener === 'function' ? listener : null;
+  if (!fn) {
+    return () => {};
+  }
+
+  const emit = () => {
+    try {
+      fn(getTeamRoster());
+    } catch (error) {
+      console.error('Không thể cập nhật danh sách tổ đội', error);
+    }
+  };
+
+  const unsubscribe = subscribe(TEAM_KEY, emit);
+  emit();
+
+  return () => {
+    if (typeof unsubscribe === 'function') {
+      unsubscribe();
+    }
+  };
 }
 
 export function setTeamRoster(next, { actor = "system", detail = "" } = {}) {
@@ -2890,11 +2984,12 @@ export default {
   getDeclHistoryForRow,
   getHQAgencies, mapHQAgenciesByMST, upsertHQAgencies, applyAgenciesToDeclRows,
   parseAgencyList, formatAgencyList, getHQHistoryEntries, getHQHistoryForMST,
-  getTeamRoster, setTeamRoster, mapMemberNamesToTeams, applyTeamRosterToMST,
+  getTeamRoster, setTeamRoster, subscribeTeamRoster, mapMemberNamesToTeams, applyTeamRosterToMST,
   getData, setData,
   getRules, setRules, K_RULES,
   pushImportLog,
   pushAuditLog, getAuditLogs, clearAuditLogs,
+  saveMSTRow,
   IMPORT_COLUMN_IDS, getImportColumnConfig, saveImportColumnConfig, subscribeImportColumnConfig,
   UI_LAYOUT_KEY,
   getKpiAdjustments, saveKpiAdjustment, updateKpiAdjustmentStatus, removeKpiAdjustment, mapAdjustmentsByMonth,

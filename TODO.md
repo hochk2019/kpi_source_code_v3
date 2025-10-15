@@ -21,9 +21,9 @@
 - [x] Kich hoat loc theo khoang thoi gian va thao tac; tu dong apply khi thay doi filter.
 - [x] Khi import/dong bo, day doanh nghiep/MST moi len dau danh sach de admin/QL gan nhanh.
 - [x] Input nhan vien co typeahead + dropdown keo cuon; ho tro phim tat chon nhanh.
-- [ ] Them nut `Cap nhat` tren moi dong sua doi; chi ghi xuong storage cac truong thay doi.
-- [ ] Bo sung quick search, luu bo loc (theo nhan vien, thao tac).
-- [ ] Tai cau truc giao dien tab Gan MST theo huong hien dai; tai su dung component chung.
+- [x] Them nut `Cap nhat` tren moi dong sua doi; chi ghi xuong storage cac truong thay doi.
+- [x] Bo sung quick search, luu bo loc (theo nhan vien, thao tac).
+- [x] Tai cau truc giao dien tab Gan MST theo huong hien dai; tai su dung component chung.
 
 ## 3. Dai ly Hai quan
 - [ ] Bo sung filter theo dai ly va trang thai cap nhat.
