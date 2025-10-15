@@ -26,6 +26,15 @@ import { formatDisplayDate, formatDateRangeLabel } from "@/shared/format.js";
 import { fetchWithAuth } from "@/auth/localAuth.js";
 import useTooltipTitles from "@/hooks/useTooltipTitles.js";
 import useFilterPresets from "@/hooks/useFilterPresets.js";
+import { Button } from "@/components/ui/button.jsx";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command.jsx";
 import {
   normalizeRoleKey,
   TEAM_LEAD_ROLE,
@@ -41,8 +50,274 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog.jsx";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover.jsx";
 import { ScrollArea } from "@/components/ui/scroll-area.jsx";
 import { toast } from "@/shared/toast.js";
+import { Check, ChevronsUpDown, CircleX, Plus } from "lucide-react";
+
+function buildRosterTeams(rosterSnapshot) {
+  const rawTeams = Array.isArray(rosterSnapshot?.teams) ? rosterSnapshot.teams : [];
+  const teams = [];
+
+  rawTeams.forEach((team, teamIndex) => {
+    const name = normalizeStr(team?.name);
+    const normalized = normalizeName(name);
+    if (!name || !normalized) {
+      return;
+    }
+
+    const members = Array.isArray(team?.members) ? team.members : [];
+    const normalizedMembers = members
+      .map((member, memberIndex) => {
+        const memberName = normalizeStr(member?.name);
+        const memberNormalized = normalizeName(memberName);
+        if (!memberName || !memberNormalized) {
+          return null;
+        }
+        return {
+          id: member?.id || `${teamIndex}-${memberIndex}`,
+          name: memberName,
+          normalized: memberNormalized,
+        };
+      })
+      .filter(Boolean)
+      .sort((a, b) => a.name.localeCompare(b.name, "vi", { sensitivity: "base" }));
+
+    teams.push({
+      id: team?.id || `${teamIndex}`,
+      name,
+      normalized,
+      members: normalizedMembers,
+    });
+  });
+
+  return teams.sort((a, b) => a.name.localeCompare(b.name, "vi", { sensitivity: "base" }));
+}
+
+function TeamCombobox({ value, onSelect, teams, disabled = false }) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+
+  useEffect(() => {
+    if (!open) {
+      setSearch("");
+    }
+  }, [open]);
+
+  const normalizedValue = normalizeStr(value);
+  const normalizedKey = normalizeName(normalizedValue);
+  const existingKeys = useMemo(() => new Set(teams.map((team) => team.normalized)), [teams]);
+  const searchValue = normalizeStr(search);
+  const searchKey = normalizeName(searchValue);
+  const canCreateCustom = Boolean(searchKey) && !existingKeys.has(searchKey);
+
+  const handleSelect = (teamName) => {
+    onSelect?.({ teamName });
+    setOpen(false);
+    setSearch("");
+  };
+
+  return (
+    <Popover open={open} onOpenChange={disabled ? undefined : setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          role="combobox"
+          aria-expanded={open}
+          disabled={disabled}
+          className="w-28 justify-between px-2 py-0 text-left font-normal"
+        >
+          <span className="truncate">
+            {normalizedValue || "Chọn tổ đội"}
+          </span>
+          <ChevronsUpDown className="ml-2 size-3 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-56 p-0" align="start">
+        <Command>
+          <CommandInput
+            placeholder="Tìm tổ đội"
+            value={search}
+            onValueChange={setSearch}
+            autoFocus
+          />
+          <CommandList className="max-h-60 overflow-y-auto">
+            <CommandEmpty>Không có tổ đội phù hợp.</CommandEmpty>
+            {normalizedValue ? (
+              <CommandGroup heading="Tùy chọn">
+                <CommandItem value="__clear__" onSelect={() => handleSelect("")}>
+                  <CircleX className="mr-2 size-4" />
+                  Bỏ chọn tổ đội
+                </CommandItem>
+              </CommandGroup>
+            ) : null}
+            {canCreateCustom ? (
+              <CommandGroup heading="Thêm mới">
+                <CommandItem value={searchValue} onSelect={() => handleSelect(searchValue)}>
+                  <Plus className="mr-2 size-4" />
+                  Dùng giá trị "{searchValue}"
+                </CommandItem>
+              </CommandGroup>
+            ) : null}
+            <CommandGroup heading="Danh sách tổ đội">
+              {teams.map((team) => {
+                const isSelected = team.normalized === normalizedKey;
+                return (
+                  <CommandItem
+                    key={team.id}
+                    value={`${team.name}`}
+                    onSelect={() => handleSelect(team.name)}
+                  >
+                    <Check
+                      className={`mr-2 size-4 ${isSelected ? "opacity-100" : "opacity-0"}`}
+                    />
+                    <span className="truncate">{team.name}</span>
+                  </CommandItem>
+                );
+              })}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+function StaffCombobox({
+  value,
+  teamValue,
+  onSelect,
+  teams,
+  disabled = false,
+}) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+
+  useEffect(() => {
+    if (!open) {
+      setSearch("");
+    }
+  }, [open]);
+
+  const normalizedValue = normalizeStr(value);
+  const normalizedKey = normalizeName(normalizedValue);
+  const normalizedTeamValue = normalizeName(normalizeStr(teamValue));
+
+  const staffIndex = useMemo(() => {
+    const result = [];
+    teams.forEach((team) => {
+      team.members.forEach((member) => {
+        result.push({
+          teamId: team.id,
+          teamName: team.name,
+          teamNormalized: team.normalized,
+          memberId: member.id,
+          name: member.name,
+          normalized: member.normalized,
+        });
+      });
+    });
+    return result;
+  }, [teams]);
+
+  const filteredTeams = useMemo(() => {
+    if (normalizedTeamValue) {
+      const match = teams.filter((team) => team.normalized === normalizedTeamValue);
+      if (match.length) {
+        return match;
+      }
+    }
+    return teams;
+  }, [teams, normalizedTeamValue]);
+
+  const searchValue = normalizeStr(search);
+  const searchKey = normalizeName(searchValue);
+  const hasExactStaff = staffIndex.some((entry) => entry.normalized === searchKey);
+  const canCreateCustom = Boolean(searchKey) && !hasExactStaff;
+
+  const handleSelect = (staffName, teamName) => {
+    onSelect?.({ staffName, teamName });
+    setOpen(false);
+    setSearch("");
+  };
+
+  return (
+    <Popover open={open} onOpenChange={disabled ? undefined : setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          role="combobox"
+          aria-expanded={open}
+          disabled={disabled}
+          className="w-36 justify-between px-2 py-0 text-left font-normal"
+        >
+          <span className="truncate">
+            {normalizedValue || "Chọn nhân viên"}
+          </span>
+          <ChevronsUpDown className="ml-2 size-3 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-64 p-0" align="start">
+        <Command>
+          <CommandInput
+            placeholder="Tìm nhân viên"
+            value={search}
+            onValueChange={setSearch}
+            autoFocus
+          />
+          <CommandList className="max-h-60 overflow-y-auto">
+            <CommandEmpty>Không có nhân viên phù hợp.</CommandEmpty>
+            {normalizedValue ? (
+              <CommandGroup heading="Tùy chọn">
+                <CommandItem value="__clear__" onSelect={() => handleSelect("", undefined)}>
+                  <CircleX className="mr-2 size-4" />
+                  Bỏ chọn nhân viên
+                </CommandItem>
+              </CommandGroup>
+            ) : null}
+            {canCreateCustom ? (
+              <CommandGroup heading="Thêm mới">
+                <CommandItem value={searchValue} onSelect={() => handleSelect(searchValue, undefined)}>
+                  <Plus className="mr-2 size-4" />
+                  Dùng giá trị "{searchValue}"
+                </CommandItem>
+              </CommandGroup>
+            ) : null}
+            {filteredTeams.map((team) => (
+              <CommandGroup key={team.id} heading={`Tổ: ${team.name}`}>
+                {team.members.map((member) => {
+                  const isSelected = member.normalized === normalizedKey;
+                  return (
+                    <CommandItem
+                      key={member.id}
+                      value={`${member.name} ${team.name}`}
+                      onSelect={() => handleSelect(member.name, team.name)}
+                    >
+                      <Check
+                        className={`mr-2 size-4 ${isSelected ? "opacity-100" : "opacity-0"}`}
+                      />
+                      <span className="flex-1 truncate">{member.name}</span>
+                      <span className="ml-2 text-xs text-muted-foreground">{team.name}</span>
+                    </CommandItem>
+                  );
+                })}
+                {team.members.length === 0 ? (
+                  <div className="px-3 py-2 text-xs text-muted-foreground">
+                    Chưa có nhân viên trong tổ này.
+                  </div>
+                ) : null}
+              </CommandGroup>
+            ))}
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+}
 
 const DEFAULT_PAGE_SIZE = 10;
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100, 200];
@@ -1003,6 +1278,7 @@ export default function DataImporter({
   const isStaffRole = normalizedRole === DEFAULT_ROLE;
   const isManagerRole = normalizedRole === MANAGER_ROLE || normalizedRole === ADMIN_ROLE;
   const rosterSnapshot = useMemo(() => getTeamRoster(), [currentUser]);
+  const rosterTeams = useMemo(() => buildRosterTeams(rosterSnapshot), [rosterSnapshot]);
   const memberTeamMap = useMemo(() => mapMemberNamesToTeams(rosterSnapshot), [rosterSnapshot]);
   const staffDisplayName = normalizeStr(currentUser?.name || currentUser?.username || "");
   const staffNameKey = normalizeName(staffDisplayName);
@@ -3037,13 +3313,53 @@ const selectedReviewedCount = useMemo(() => {
     sanitizeRowUpdates,
   ]);
 
-  const onChangeCell = useCallback((rowKey, field, value, transform) => {
-    applyEdit(rowKey, (row) => {
-      const nextValue = typeof transform === "function" ? transform(value, row) : value;
-      if (nextValue === row[field]) return null;
-      return { [field]: nextValue };
-    });
-  }, [applyEdit]);
+  const handleSelectStaff = useCallback(
+    (rowKey, selection) => {
+      if (!selection) return;
+      const staffName = normalizeStr(selection.staffName);
+      const providedTeam = selection.teamName;
+      applyEdit(rowKey, (row) => {
+        const updates = {};
+        const currentStaff = normalizeStr(row.nhan_vien);
+        if (staffName !== currentStaff) {
+          updates.nhan_vien = staffName;
+        }
+        if (providedTeam !== undefined) {
+          const nextTeam = normalizeStr(providedTeam);
+          const currentTeam = normalizeStr(row.team);
+          if (nextTeam !== currentTeam) {
+            updates.team = nextTeam;
+          }
+        }
+        return Object.keys(updates).length ? updates : null;
+      });
+    },
+    [applyEdit]
+  );
+
+  const handleSelectTeam = useCallback(
+    (rowKey, teamName) => {
+      const safeTeam = normalizeStr(teamName);
+      applyEdit(rowKey, (row) => {
+        const currentTeam = normalizeStr(row.team);
+        const nextTeam = safeTeam;
+        if (nextTeam === currentTeam) {
+          return null;
+        }
+        const updates = { team: nextTeam };
+        const currentStaffInfo = row.nhan_vien ? memberTeamMap.get(normalizeName(row.nhan_vien)) : null;
+        if (
+          row.nhan_vien &&
+          currentStaffInfo &&
+          normalizeName(currentStaffInfo.team) !== normalizeName(nextTeam)
+        ) {
+          updates.nhan_vien = "";
+        }
+        return updates;
+      });
+    },
+    [applyEdit, memberTeamMap]
+  );
 
   const handleToggleSelect = useCallback(
     (row) => {
@@ -5498,10 +5814,11 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
                   {rowReadOnly ? (
                     <span>{r.nhan_vien || ""}</span>
                   ) : (
-                    <input
-                      className="border rounded px-1 py-0.5 w-32"
+                    <StaffCombobox
                       value={r.nhan_vien || ""}
-                      onChange={e => onChangeCell(rowKey, "nhan_vien", e.target.value)}
+                      teamValue={r.team || ""}
+                      teams={rosterTeams}
+                      onSelect={(selection) => handleSelectStaff(rowKey, selection)}
                     />
                   )}
                 </td>
@@ -5509,10 +5826,10 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
                   {rowReadOnly ? (
                     <span>{r.team || ""}</span>
                   ) : (
-                    <input
-                      className="border rounded px-1 py-0.5 w-24"
+                    <TeamCombobox
                       value={r.team || ""}
-                      onChange={e => onChangeCell(rowKey, "team", e.target.value)}
+                      teams={rosterTeams}
+                      onSelect={({ teamName }) => handleSelectTeam(rowKey, teamName)}
                     />
                   )}
                 </td>
