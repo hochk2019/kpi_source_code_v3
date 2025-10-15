@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, afterAll, vi } from 'vitest';
 import {
   saveDeclRows,
   previewDeclRows,
@@ -31,9 +31,36 @@ import {
   IMPORT_COLUMN_IDS,
   UI_LAYOUT_KEY,
   subscribeTeamRoster,
+  getKpiAdjustmentSettings,
+  saveKpiAdjustmentSettings,
+  saveKpiAdjustment,
+  getKpiAdjustments,
+  KPI_ADJUSTMENT_SETTINGS_KEY,
+  KPI_ADJUSTMENTS_KEY,
 } from '@/lib/store.js';
-import { clearStorageCache, getItem as sharedGetItem } from '@/lib/storageClient.js';
+import { clearStorageCache, getItem as sharedGetItem, setItem as sharedSetItem } from '@/lib/storageClient.js';
+import * as auth from '@/auth/localAuth.js';
+
+const defaultFetchImpl = (url, options = {}) => {
+  if ((options.method || 'GET').toUpperCase() === 'GET') {
+    const key = decodeURIComponent(String(url).split('/').pop() || '');
+    const stored = sharedGetItem(key);
+    return Promise.resolve({
+      ok: true,
+      json: () => Promise.resolve(stored != null ? { raw: stored } : { raw: null }),
+    });
+  }
+  return Promise.resolve({ ok: true, json: async () => ({}) });
+};
+
+const fetchSpy = vi.spyOn(auth, 'fetchWithAuth').mockImplementation(defaultFetchImpl);
+
+afterAll(() => {
+  fetchSpy.mockRestore();
+});
+
 beforeEach(() => {
+  fetchSpy.mockImplementation(defaultFetchImpl);
   clearStorageCache();
 });
 
@@ -785,5 +812,127 @@ describe('unmarkDeclRowsReviewed', () => {
     const stored = getDeclRows();
     expect(stored[0].reviewed).toBeUndefined();
     expect(stored[0].reviewed_at).toBeUndefined();
+  });
+});
+
+describe('kpi adjustment settings', () => {
+  let fetchOverride;
+  beforeEach(() => {
+    fetchOverride = fetchSpy.mockImplementation((url) => {
+      const key = decodeURIComponent(String(url).split('/').pop() || '');
+      const stored = sharedGetItem(key);
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve(stored != null ? { raw: stored } : { raw: null }),
+      });
+    });
+    sharedSetItem(KPI_ADJUSTMENT_SETTINGS_KEY, JSON.stringify({}));
+    sharedSetItem(KPI_ADJUSTMENTS_KEY, JSON.stringify([]));
+  });
+
+  afterEach(() => {
+    fetchSpy.mockImplementation(defaultFetchImpl);
+    sharedSetItem(KPI_ADJUSTMENT_SETTINGS_KEY, JSON.stringify({}));
+    sharedSetItem(KPI_ADJUSTMENTS_KEY, JSON.stringify([]));
+  });
+
+  it('chỉ cho phép quản lý cập nhật cấu hình mặc định', () => {
+    expect(() =>
+      saveKpiAdjustmentSettings(
+        { categories: { support_misc: { defaultMode: 'dynamic' } } },
+        { actor: 'tester', permissions: { adjustApprove: false } }
+      )
+    ).toThrow('Bạn không có quyền cấu hình điểm KPI bổ sung');
+  });
+
+  it('lưu và đọc cấu hình hybrid cùng điểm giấy phép tùy chỉnh', () => {
+    const settings = saveKpiAdjustmentSettings(
+      {
+        categories: {
+          support_misc: {
+            defaultMode: 'dynamic',
+            defaultUnit: '9.5',
+            modeUnits: { fixed: '12', dynamic: '0.2' },
+          },
+          license_support: {
+            defaultUnit: '1.2',
+            licensePoints: { ZB03: '2.8', ZB99: '3.5' },
+          },
+        },
+      },
+      { actor: 'admin', permissions: { adjustApprove: true } }
+    );
+
+    expect(settings.categories.support_misc.defaultMode).toBe('dynamic');
+    expect(settings.categories.support_misc.modeUnits.dynamic).toBe(0.2);
+    expect(settings.categories.support_misc.modeUnits.fixed).toBe(12);
+    expect(settings.categories.license_support.licensePoints.ZB03).toBe(2.8);
+    expect(settings.categories.license_support.licensePoints.ZB99).toBe(3.5);
+
+    const raw = JSON.parse(sharedGetItem(KPI_ADJUSTMENT_SETTINGS_KEY) || '{}');
+    expect(raw.updatedBy).toBe('admin');
+    expect(raw.categories.support_misc.defaultMode).toBe('dynamic');
+  });
+
+  it('áp dụng cấu hình mặc định khi tính điểm KPI bổ sung', () => {
+    saveKpiAdjustmentSettings(
+      {
+        categories: {
+          support_misc: {
+            defaultMode: 'dynamic',
+            modeUnits: { fixed: '12', dynamic: '0.2' },
+          },
+          license_support: {
+            licensePoints: { ZB03: '2.8' },
+          },
+        },
+      },
+      { actor: 'admin', permissions: { adjustApprove: true } }
+    );
+
+    sharedSetItem(KPI_ADJUSTMENTS_KEY, JSON.stringify([]));
+
+    const dynamicEntry = saveKpiAdjustment(
+      {
+        category: 'support_misc',
+        month: '2025-01',
+        staffName: 'An',
+        quantity: 5,
+        mode: 'dynamic',
+      },
+      { actor: 'admin', permissions: { adjustApprove: true } }
+    );
+    expect(dynamicEntry.unitPoints).toBe(0.2);
+    expect(dynamicEntry.totalPoints).toBe(1);
+
+    const fixedEntry = saveKpiAdjustment(
+      {
+        category: 'support_misc',
+        month: '2025-01',
+        staffName: 'Bình',
+        mode: 'fixed',
+      },
+      { actor: 'admin', permissions: { adjustApprove: true } }
+    );
+    expect(fixedEntry.unitPoints).toBe(12);
+    expect(fixedEntry.totalPoints).toBe(12);
+    expect(fixedEntry.quantity).toBe(1);
+
+    const licenseEntry = saveKpiAdjustment(
+      {
+        category: 'license_support',
+        month: '2025-01',
+        staffName: 'Chi',
+        licenseCode: 'zb03',
+        quantity: 2,
+      },
+      { actor: 'admin', permissions: { adjustApprove: true } }
+    );
+    expect(licenseEntry.unitPoints).toBe(2.8);
+    expect(licenseEntry.totalPoints).toBe(5.6);
+
+    const adjustments = getKpiAdjustments();
+    expect(adjustments).toHaveLength(3);
+    expect(adjustments[0].category).toBeDefined();
   });
 });

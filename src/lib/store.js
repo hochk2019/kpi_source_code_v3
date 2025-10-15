@@ -19,6 +19,7 @@ export const TEAM_KEY = "team_roster_v1"; // danh sách tổ đội & thành vi�
 export const AUDIT_KEY = "audit_logs_v1"; // nhật ký hành động quản trị
 export const HQ_KEY = "hq_agencies_v1"; // cấu hình Đại lý hải quan theo MST
 export const KPI_ADJUSTMENTS_KEY = "kpi_adjustments_v1"; // điểm KPI +/- bổ sung
+export const KPI_ADJUSTMENT_SETTINGS_KEY = "kpi_adjustment_settings_v1"; // cấu hình mặc định điểm KPI bổ sung
 export const DECL_HISTORY_KEY = "decl_history_v1"; // lịch sử chỉnh sửa tờ khai
 export const UI_LAYOUT_KEY = "ui_layout_config_v1"; // cấu hình bố cục giao diện dùng chung
 
@@ -1798,6 +1799,8 @@ function ensureMSTEntriesForDeclRows(declRows, { actor = 'system', dryRun = fals
 
   for (const row of list) {
     if (!row || typeof row !== 'object') continue;
+    const declKey = getDeclarationKey(row);
+    if (!declKey) continue;
     const mst = extractMSTFromDeclRow(row);
     if (!mst || knownMSTs.has(mst) || seen.has(mst)) continue;
 
@@ -2561,6 +2564,149 @@ export const KPI_ADJUSTMENT_STATUS_SET = new Set(['pending', 'approved', 'reject
 
 const KPI_ADJUSTMENT_HISTORY_LIMIT = 50;
 
+function readAdjustmentSettings() {
+  const raw = safeParse(getItem(KPI_ADJUSTMENT_SETTINGS_KEY), {});
+  if (!raw || typeof raw !== 'object') {
+    return { categories: {}, updatedAt: null, updatedBy: null };
+  }
+  const source = raw.categories && typeof raw.categories === 'object' ? raw.categories : {};
+  const categories = {};
+  for (const [key, value] of Object.entries(source)) {
+    const categoryKey = normalizeAdjustmentCategoryKey(key);
+    if (!categoryKey || !KPI_ADJUSTMENT_CATEGORY_CONFIG[categoryKey]) {
+      continue;
+    }
+    if (!value || typeof value !== 'object') {
+      continue;
+    }
+    categories[categoryKey] = { ...value };
+  }
+  return {
+    categories,
+    updatedAt: typeof raw.updatedAt === 'string' ? raw.updatedAt : null,
+    updatedBy: typeof raw.updatedBy === 'string' ? raw.updatedBy : null,
+  };
+}
+
+function cloneAdjustmentSettings(settings) {
+  const categories = {};
+  if (settings?.categories && typeof settings.categories === 'object') {
+    for (const [key, value] of Object.entries(settings.categories)) {
+      categories[key] = value && typeof value === 'object' ? { ...value } : {};
+    }
+  }
+  return {
+    categories,
+    updatedAt: settings?.updatedAt || null,
+    updatedBy: settings?.updatedBy || null,
+  };
+}
+
+function writeAdjustmentSettings(settings) {
+  const payload = cloneAdjustmentSettings(settings || {});
+  setItem(KPI_ADJUSTMENT_SETTINGS_KEY, JSON.stringify(payload));
+  refreshSharedKeys([KPI_ADJUSTMENT_SETTINGS_KEY]);
+  return payload;
+}
+
+export function getKpiAdjustmentSettings() {
+  return cloneAdjustmentSettings(readAdjustmentSettings());
+}
+
+export function saveKpiAdjustmentSettings(patch, { actor = 'system', permissions = {} } = {}) {
+  if (!permissions.adjustApprove) {
+    throw new Error('Bạn không có quyền cấu hình điểm KPI bổ sung');
+  }
+  const base = readAdjustmentSettings();
+  const categories = { ...base.categories };
+  const patchCategories = patch && typeof patch === 'object' && typeof patch.categories === 'object'
+    ? patch.categories
+    : null;
+  if (patchCategories) {
+    for (const [rawKey, rawValue] of Object.entries(patchCategories)) {
+      const key = normalizeAdjustmentCategoryKey(rawKey);
+      if (!key || !KPI_ADJUSTMENT_CATEGORY_CONFIG[key]) {
+        continue;
+      }
+      const value = rawValue && typeof rawValue === 'object' ? rawValue : {};
+      const current = categories[key] ? { ...categories[key] } : {};
+      if (Object.prototype.hasOwnProperty.call(value, 'defaultUnit')) {
+        const num = Number.parseFloat(value.defaultUnit);
+        if (Number.isFinite(num)) {
+          current.defaultUnit = Math.round(num * 10) / 10;
+        } else if (value.defaultUnit === null) {
+          delete current.defaultUnit;
+        }
+      }
+      if (Object.prototype.hasOwnProperty.call(value, 'defaultMode')) {
+        const modeCandidate = normalizeStr(value.defaultMode).toLowerCase();
+        const allowedModes = new Set((KPI_ADJUSTMENT_CATEGORY_CONFIG[key].modes || []).map((item) => item.value));
+        if (modeCandidate && allowedModes.has(modeCandidate)) {
+          current.defaultMode = modeCandidate;
+        } else if (!modeCandidate) {
+          delete current.defaultMode;
+        }
+      }
+      if (value.modeUnits && typeof value.modeUnits === 'object') {
+        const modeUnits = { ...(current.modeUnits || {}) };
+        for (const [modeKey, rawUnit] of Object.entries(value.modeUnits)) {
+          const normalizedMode = normalizeStr(modeKey).toLowerCase();
+          if (!normalizedMode) continue;
+          const allowedMode = (KPI_ADJUSTMENT_CATEGORY_CONFIG[key].modes || []).find((item) => item.value === normalizedMode);
+          if (!allowedMode) continue;
+          const num = Number.parseFloat(rawUnit);
+          if (Number.isFinite(num)) {
+            modeUnits[normalizedMode] = Math.round(num * 10) / 10;
+          } else if (rawUnit === null) {
+            delete modeUnits[normalizedMode];
+          }
+        }
+        if (Object.keys(modeUnits).length) {
+          current.modeUnits = modeUnits;
+        } else {
+          delete current.modeUnits;
+        }
+      }
+      if (value.licensePoints && typeof value.licensePoints === 'object') {
+        const licensePoints = { ...(current.licensePoints || {}) };
+        for (const [licenseKey, rawUnit] of Object.entries(value.licensePoints)) {
+          const normalizedLicense = normalizeStr(licenseKey).toUpperCase();
+          if (!normalizedLicense) continue;
+          const num = Number.parseFloat(rawUnit);
+          if (Number.isFinite(num)) {
+            licensePoints[normalizedLicense] = Math.round(num * 10) / 10;
+          } else if (rawUnit === null) {
+            delete licensePoints[normalizedLicense];
+          }
+        }
+        if (Object.keys(licensePoints).length) {
+          current.licensePoints = licensePoints;
+        } else {
+          delete current.licensePoints;
+        }
+      }
+      if (Object.keys(current).length) {
+        categories[key] = current;
+      } else {
+        delete categories[key];
+      }
+    }
+  }
+  const next = {
+    categories,
+    updatedAt: new Date().toISOString(),
+    updatedBy: actor,
+  };
+  writeAdjustmentSettings(next);
+  pushAuditLog({
+    actor,
+    action: 'kpi.adjustment.defaults',
+    detail: 'Cập nhật cấu hình điểm KPI bổ sung',
+    meta: { categories: Object.keys(categories) },
+  });
+  return cloneAdjustmentSettings(next);
+}
+
 function normalizeAdjustmentCategory(value) {
   const key = normalizeAdjustmentCategoryKey(value);
   if (key && KPI_ADJUSTMENT_CATEGORY_CONFIG[key]) {
@@ -2652,11 +2798,20 @@ function clampHistory(list) {
   return entries.slice(-KPI_ADJUSTMENT_HISTORY_LIMIT);
 }
 
-function computeAdjustmentTotal({ category, unitPoints, quantity }) {
+function computeAdjustmentTotal({ category, unitPoints, quantity, mode }) {
   const config = KPI_ADJUSTMENT_CATEGORY_CONFIG[category] || { type: 'quantity' };
   const unit = Number.isFinite(unitPoints) ? unitPoints : 0;
   if (config.type === 'fixed' || config.type === 'grade') {
     return Math.round(unit * 10) / 10;
+  }
+  if (config.type === 'hybrid') {
+    const normalizedMode = normalizeStr(mode).toLowerCase();
+    const targetMode = (config.modes || []).find((item) => item.value === normalizedMode) || config.modes?.[0];
+    if (targetMode?.compute === 'fixed') {
+      return Math.round(unit * 10) / 10;
+    }
+    const qtyHybrid = Number.isFinite(quantity) ? quantity : 0;
+    return Math.round(unit * qtyHybrid * 10) / 10;
   }
   const qty = Number.isFinite(quantity) ? quantity : 0;
   return Math.round(unit * qty * 10) / 10;
@@ -2671,16 +2826,100 @@ function normalizeAdjustmentInput(input, { now, actor, current } = {}) {
     return null;
   }
   const config = KPI_ADJUSTMENT_CATEGORY_CONFIG[category];
+  const settings = readAdjustmentSettings();
+  const override = settings.categories?.[category] || {};
   const staffName = normalizeStr(input.staffName ?? input.staff ?? current?.staffName ?? '');
   const teamName = normalizeStr(input.teamName ?? input.team ?? current?.teamName ?? '');
   const month = normalizeAdjustmentMonth(input.month ?? input.period ?? current?.month ?? '');
   if (!month) {
     return null;
   }
-  const gradeValue = Number.parseFloat(input.grade ?? input.value ?? input.unitPoints ?? input.points ?? 0);
-  let unitPoints = Number.parseFloat(input.unitPoints ?? input.basePoint ?? input.pointsPerUnit ?? gradeValue);
+  const gradeSource = input.grade ?? input.value ?? input.unitPoints ?? input.points;
+  const gradeValue =
+    gradeSource !== undefined && gradeSource !== null && gradeSource !== ''
+      ? Number.parseFloat(gradeSource)
+      : Number.NaN;
+  const allowedModes = Array.isArray(config?.modes) ? config.modes.map((item) => item.value).filter(Boolean) : [];
+  let mode = normalizeStr(input.mode ?? input.adjustMode ?? current?.mode ?? override.defaultMode ?? config?.defaultMode ?? '')
+    .toLowerCase();
+  if (allowedModes.length) {
+    if (!allowedModes.includes(mode)) {
+      const fallbackMode = [override.defaultMode, config?.defaultMode, allowedModes[0]].map((candidate) => {
+        const normalized = normalizeStr(candidate).toLowerCase();
+        return allowedModes.includes(normalized) ? normalized : null;
+      }).find(Boolean);
+      mode = fallbackMode || allowedModes[0];
+    }
+  } else {
+    mode = '';
+  }
+
+  let licenseCode = '';
+  if (config?.requiresLicenseCode) {
+    licenseCode = normalizeStr(input.licenseCode ?? input.license ?? current?.licenseCode ?? '');
+    if (licenseCode) {
+      licenseCode = licenseCode.toUpperCase();
+    }
+  }
+
+  const mergedLicensePoints = {};
+  if (config?.licensePoints && typeof config.licensePoints === 'object') {
+    for (const [code, value] of Object.entries(config.licensePoints)) {
+      if (!code) continue;
+      const normalizedCode = code.toString().trim().toUpperCase();
+      if (!normalizedCode) continue;
+      const num = Number.parseFloat(value);
+      if (Number.isFinite(num)) {
+        mergedLicensePoints[normalizedCode] = Math.round(num * 10) / 10;
+      }
+    }
+  }
+  if (override?.licensePoints && typeof override.licensePoints === 'object') {
+    for (const [code, value] of Object.entries(override.licensePoints)) {
+      if (!code) continue;
+      const normalizedCode = code.toString().trim().toUpperCase();
+      if (!normalizedCode) continue;
+      const num = Number.parseFloat(value);
+      if (Number.isFinite(num)) {
+        mergedLicensePoints[normalizedCode] = Math.round(num * 10) / 10;
+      } else if (value === null) {
+        delete mergedLicensePoints[normalizedCode];
+      }
+    }
+  }
+
+  const overrideDefaultUnit = Number.isFinite(Number.parseFloat(override?.defaultUnit))
+    ? Math.round(Number.parseFloat(override.defaultUnit) * 10) / 10
+    : undefined;
+
+  const unitSource = input.unitPoints ?? input.basePoint ?? input.pointsPerUnit;
+  let unitPoints =
+    unitSource !== undefined && unitSource !== null && unitSource !== ''
+      ? Number.parseFloat(unitSource)
+      : Number.NaN;
+  if (!Number.isFinite(unitPoints) && Number.isFinite(gradeValue)) {
+    unitPoints = gradeValue;
+  }
   if (!Number.isFinite(unitPoints)) {
-    unitPoints = Number.isFinite(current?.unitPoints) ? current.unitPoints : config?.defaultUnit ?? 0;
+    if (config?.type === 'hybrid') {
+      const modeConfig = (config.modes || []).find((item) => item.value === mode);
+      const overrideModeUnits = override?.modeUnits && typeof override.modeUnits === 'object' ? override.modeUnits : {};
+      if (overrideModeUnits && Number.isFinite(Number.parseFloat(overrideModeUnits[mode]))) {
+        unitPoints = Math.round(Number.parseFloat(overrideModeUnits[mode]) * 10) / 10;
+      } else if (modeConfig && Number.isFinite(Number.parseFloat(modeConfig.defaultUnit))) {
+        unitPoints = Math.round(Number.parseFloat(modeConfig.defaultUnit) * 10) / 10;
+      } else if (Number.isFinite(overrideDefaultUnit)) {
+        unitPoints = overrideDefaultUnit;
+      } else {
+        unitPoints = Number.isFinite(config?.defaultUnit) ? config.defaultUnit : 0;
+      }
+    } else if (config?.requiresLicenseCode && licenseCode && mergedLicensePoints[licenseCode] != null) {
+      unitPoints = mergedLicensePoints[licenseCode];
+    } else if (Number.isFinite(overrideDefaultUnit)) {
+      unitPoints = overrideDefaultUnit;
+    } else {
+      unitPoints = Number.isFinite(config?.defaultUnit) ? config.defaultUnit : 0;
+    }
   }
   if (config?.type === 'grade' && config.grades?.length) {
     const allowed = config.grades.map((item) => item.value);
@@ -2695,7 +2934,14 @@ function normalizeAdjustmentInput(input, { now, actor, current } = {}) {
   if (config?.type === 'fixed' || config?.type === 'grade') {
     quantity = 1;
   }
-  if (config?.type === 'quantity' && quantity === 0) {
+  if (config?.type === 'hybrid') {
+    const modeConfig = (config.modes || []).find((item) => item.value === mode);
+    if (modeConfig?.compute === 'fixed') {
+      quantity = 1;
+    } else if (quantity === 0) {
+      quantity = 1;
+    }
+  } else if (config?.type === 'quantity' && quantity === 0) {
     quantity = 1;
   }
   const references = normalizeAdjustmentReferences(input.references ?? input.reference ?? current?.references ?? []);
@@ -2707,7 +2953,7 @@ function normalizeAdjustmentInput(input, { now, actor, current } = {}) {
   if (Number.isFinite(totalOverride)) {
     totalPoints = Math.round(totalOverride * 10) / 10;
   } else {
-    totalPoints = computeAdjustmentTotal({ category, unitPoints, quantity });
+    totalPoints = computeAdjustmentTotal({ category, unitPoints, quantity, mode });
   }
   const createdAt = current?.createdAt && !Number.isNaN(new Date(current.createdAt).getTime())
     ? new Date(current.createdAt).toISOString()
@@ -2726,6 +2972,8 @@ function normalizeAdjustmentInput(input, { now, actor, current } = {}) {
     references,
     note,
     status,
+    mode: mode || undefined,
+    licenseCode: licenseCode || undefined,
     createdAt,
     createdBy,
     history,
@@ -2736,7 +2984,7 @@ function normalizeAdjustmentInput(input, { now, actor, current } = {}) {
 function diffAdjustments(prev, next) {
   if (!prev) return null;
   const changes = {};
-  const fields = ['staffName', 'teamName', 'month', 'category', 'quantity', 'unitPoints', 'totalPoints', 'note'];
+  const fields = ['staffName', 'teamName', 'month', 'category', 'quantity', 'unitPoints', 'totalPoints', 'note', 'mode', 'licenseCode'];
   for (const field of fields) {
     if (JSON.stringify(prev[field]) !== JSON.stringify(next[field])) {
       changes[field] = { from: prev[field], to: next[field] };
@@ -3046,4 +3294,5 @@ export default {
   IMPORT_COLUMN_IDS, getImportColumnConfig, saveImportColumnConfig, subscribeImportColumnConfig,
   UI_LAYOUT_KEY,
   getKpiAdjustments, saveKpiAdjustment, updateKpiAdjustmentStatus, removeKpiAdjustment, mapAdjustmentsByMonth,
+  getKpiAdjustmentSettings, saveKpiAdjustmentSettings,
 };

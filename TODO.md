@@ -40,17 +40,17 @@
 - [x] Luu version rule, ho tro rollback nhanh neu can.
 
 ## 5. Diem KPI +/- Them
-- [ ] Bo sung cac hang muc moi (co diem mac dinh va cho phep chinh):
-  - [ ] Loai bo "Di lam muon".
-  - [ ] "Ho tro xin giay phep": chon ma giay phep; ZB02=2 diem, ZB03/khac=1.5 (chinh duoc).
-  - [ ] "Ho tro khac": che do diem co dinh (mac dinh 10) hoac linh hoat (0.1 * so luong).
-  - [ ] "Sua to khai bo sung C/O": so luong * 1.5 (chinh duoc).
-  - [ ] Chinh "Ho tro thong quan" -> luong xanh (0.1), luong vang + do (0.25).
-- [ ] Admin/QL duoc cai dat, luu diem mac dinh hang muc.
-- [ ] Hien cac hang muc moi trong Bao cao KPI va file export.
-- [ ] Popup xem chi tiet truoc khi duyet (ghi chu, tham chieu to khai/quyet dinh).
-- [ ] Popup huong dan nhap lieu (mo/dong) cho tab nay.
-- [ ] Tai cau truc UI tab nham dong bo phong cach thiet ke moi.
+- [x] Bo sung cac hang muc moi (co diem mac dinh va cho phep chinh):
+  - [x] Loai bo "Di lam muon".
+  - [x] "Ho tro xin giay phep": chon ma giay phep; ZB02=2 diem, ZB03/khac=1.5 (chinh duoc).
+  - [x] "Ho tro khac": che do diem co dinh (mac dinh 10) hoac linh hoat (0.1 * so luong).
+  - [x] "Sua to khai bo sung C/O": so luong * 1.5 (chinh duoc).
+  - [x] Chinh "Ho tro thong quan" -> luong xanh (0.1), luong vang + do (0.25).
+- [x] Admin/QL duoc cai dat, luu diem mac dinh hang muc.
+- [x] Hien cac hang muc moi trong Bao cao KPI va file export.
+- [x] Popup xem chi tiet truoc khi duyet (ghi chu, tham chieu to khai/quyet dinh).
+- [x] Popup huong dan nhap lieu (mo/dong) cho tab nay.
+- [x] Tai cau truc UI tab nham dong bo phong cach thiet ke moi.
 
 ## 6. Bao cao KPI
 - [ ] Phan "Diem KPI +/- bo sung": them tuy chon so muc moi trang (5/10/20).

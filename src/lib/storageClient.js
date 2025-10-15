@@ -26,6 +26,7 @@ const SHARED_KEYS = new Set([
   'hq_history_v1',
   'kpi_users_v1',
   'kpi_adjustments_v1',
+  'kpi_adjustment_settings_v1',
   'ui_layout_config_v1',
 ]);
 
