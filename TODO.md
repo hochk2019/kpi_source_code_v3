@@ -3,7 +3,7 @@
 ## 1. Import Data
 - [x] Tu dong ghi nhan doanh nghiep/MST moi vao tab `Gan MST` (danh dau trang thai "chua gan nhan vien").
 - [x] Mo quyen chinh sua cho tai khoan Nhan vien tren tat ca to khai thuoc team minh; chan thao tac tren team khac.
-- [ ] Ho tro nhan tieu de cot `Ngay DK` (ngoai `date`) khi import Excel.
+- [x] Ho tro nhan tieu de cot `Ngay DK` (ngoai `date`) khi import Excel.
 - [ ] Thay truong nhap text bang selector co goi y:
   - [ ] Chon nhan vien -> tu dong dien to doi.
   - [ ] Chon to doi -> chi hien nhan vien thuoc to do.
