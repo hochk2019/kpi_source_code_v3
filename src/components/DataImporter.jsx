@@ -7,6 +7,7 @@ import {
   sortDeclRows,
   pushImportLog,
   pushAuditLog,
+  updateDeclRowFields,
   getTeamRoster,
   mapMemberNamesToTeams,
   markDeclRowsReviewed,
@@ -54,6 +55,55 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { ScrollArea } from "@/components/ui/scroll-area.jsx";
 import { toast } from "@/shared/toast.js";
 import { Check, ChevronsUpDown, CircleX, Plus } from "lucide-react";
+
+function getRowKey(row) {
+  const soTk = (row?.so_tk || "").toString();
+  const nhanh = (row?.nhanh || "").toString();
+  return `${soTk}_${nhanh}`;
+}
+
+const EDITABLE_FIELD_KEYS = [
+  "nhan_vien",
+  "team",
+  "agency",
+  "dai_ly",
+  "licenses",
+  "so_luong_gp",
+  "licenseManualCount",
+];
+
+function normalizeComparableValue(value) {
+  if (value === null || value === undefined) return "";
+  if (typeof value === "string") return normalizeStr(value);
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : "";
+  }
+  if (typeof value === "boolean") {
+    return value ? "1" : "0";
+  }
+  if (Array.isArray(value)) {
+    return JSON.stringify(value);
+  }
+  return JSON.stringify(value);
+}
+
+function collectEditableDiff(baseline, current) {
+  if (!baseline || typeof baseline !== "object") return null;
+  if (!current || typeof current !== "object") return null;
+  const diff = {};
+  for (const field of EDITABLE_FIELD_KEYS) {
+    const baseValue = Object.prototype.hasOwnProperty.call(baseline, field)
+      ? baseline[field]
+      : null;
+    const currentHasField = Object.prototype.hasOwnProperty.call(current, field);
+    const currentValue = currentHasField ? current[field] : null;
+    if (normalizeComparableValue(baseValue) === normalizeComparableValue(currentValue)) {
+      continue;
+    }
+    diff[field] = currentHasField ? currentValue : null;
+  }
+  return Object.keys(diff).length ? diff : null;
+}
 
 function buildRosterTeams(rosterSnapshot) {
   const rawTeams = Array.isArray(rosterSnapshot?.teams) ? rosterSnapshot.teams : [];
@@ -1225,6 +1275,8 @@ export default function DataImporter({
   const rootRef = useRef(null);
   const fileRef = useRef(null);
   const [rawRows, setRawRows] = useState([]);        // dữ liệu xem trước (đã map)
+  const savedRowSnapshotRef = useRef(new Map());
+  const [baselineVersion, setBaselineVersion] = useState(0);
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
   const [mode, setMode] = useState("saved");         // saved | preview
@@ -1250,6 +1302,7 @@ export default function DataImporter({
   const [searchRange, setSearchRange] = useState({ from: "", to: "" });
   const [rules, setRules] = useState(() => loadRules());
   const [hasUnsaved, setHasUnsaved] = useState(false);
+  const [rowSaveStatus, setRowSaveStatus] = useState({});
   const [duplicateReviewOpen, setDuplicateReviewOpen] = useState(false);
   const [duplicateReviewConfirmed, setDuplicateReviewConfirmed] = useState(false);
   const [duplicate11Plan, setDuplicate11Plan] = useState({});
@@ -1286,6 +1339,19 @@ export default function DataImporter({
   const assignedTeamKey = normalizeName(assignedTeam);
   const canUploadFiles = canEdit && !(isTeamLead || isStaffRole);
   const canOverwriteData = canUploadFiles;
+
+  const updateBaselineSnapshot = useCallback((rows) => {
+    const snapshot = new Map();
+    if (Array.isArray(rows)) {
+      for (const row of rows) {
+        const key = getRowKey(row);
+        if (!key) continue;
+        snapshot.set(key, { ...row });
+      }
+    }
+    savedRowSnapshotRef.current = snapshot;
+    setBaselineVersion((prev) => prev + 1);
+  }, []);
 
   useEffect(() => {
     if (!canOverwriteData && overwrite) {
@@ -1384,11 +1450,7 @@ export default function DataImporter({
     },
     [assignedTeamKey, isStaffRole, teamChangeRestrictionMessage]
   );
-  const keyOfRow = useCallback((row) => {
-    const soTk = (row?.so_tk || "").toString();
-    const nhanh = (row?.nhanh || "").toString();
-    return `${soTk}_${nhanh}`;
-  }, []);
+  const keyOfRow = useCallback((row) => getRowKey(row), []);
   const filterEditableKeys = useCallback(
     (keys) => {
       if (!Array.isArray(keys) || keys.length === 0) {
@@ -1938,6 +2000,8 @@ export default function DataImporter({
     setRules(activeRules);
     const saved = sortDeclRows(getDeclRows()).map(ensureLicenseFields).map(ensureCOFields);
     setRawRows(saved);
+    updateBaselineSnapshot(saved);
+    setRowSaveStatus({});
     setMode("saved");
     setPage(1);
     setPageSize(DEFAULT_PAGE_SIZE);
@@ -1952,7 +2016,7 @@ export default function DataImporter({
     setHasUnsaved(false);
     if (fileRef.current) fileRef.current.value = "";
     return true;
-  }, [fileRef, hasUnsaved, mode]);
+  }, [fileRef, hasUnsaved, mode, updateBaselineSnapshot]);
 
   useEffect(() => {
     if (mode !== "saved") return;
@@ -1977,6 +2041,12 @@ export default function DataImporter({
     window.addEventListener("beforeunload", handler);
     return () => window.removeEventListener("beforeunload", handler);
   }, [hasUnsaved]);
+
+  useEffect(() => {
+    if (mode !== "saved") return;
+    const pending = rowDiffMap.size > 0;
+    setHasUnsaved((prev) => (prev === pending ? prev : pending));
+  }, [mode, rowDiffMap]);
 
   const applyConfigToForm = useCallback((config) => {
     const normalizedConfig = {
@@ -3215,11 +3285,30 @@ export default function DataImporter({
     return Array.from(new Set(filtered.map((row) => keyOfRow(row))));
   }, [filtered, keyOfRow]);
 
-const filteredSelected = useMemo(() => {
-  if (!filteredKeys.length) return false;
-  if (!selectedKeys.length) return false;
-  const selectedSet = new Set(selectedKeys);
-  return filteredKeys.every((key) => selectedSet.has(key));
+  const rowDiffMap = useMemo(() => {
+    if (mode !== "saved") {
+      return new Map();
+    }
+    const baseline = savedRowSnapshotRef.current || new Map();
+    const diffMap = new Map();
+    for (const row of rawRows) {
+      const key = keyOfRow(row);
+      if (!key) continue;
+      const baselineRow = baseline.get(key);
+      if (!baselineRow) continue;
+      const diff = collectEditableDiff(baselineRow, row);
+      if (diff) {
+        diffMap.set(key, diff);
+      }
+    }
+    return diffMap;
+  }, [keyOfRow, mode, rawRows, baselineVersion]);
+
+  const filteredSelected = useMemo(() => {
+    if (!filteredKeys.length) return false;
+    if (!selectedKeys.length) return false;
+    const selectedSet = new Set(selectedKeys);
+    return filteredKeys.every((key) => selectedSet.has(key));
 }, [filteredKeys, selectedKeys]);
 
 const selectedReviewedCount = useMemo(() => {
@@ -3540,17 +3629,87 @@ const selectedReviewedCount = useMemo(() => {
     fetchAlerts();
   }
 
+  const handleSaveRowChanges = useCallback(
+    (rowKey) => {
+      if (isReadOnlyForEdits) {
+        alert("Bạn không có quyền lưu chỉnh sửa.");
+        return;
+      }
+      if (mode !== "saved") {
+        alert("Chỉ có thể cập nhật khi đang xem dữ liệu đã lưu.");
+        return;
+      }
+      const diff = rowDiffMap.get(rowKey);
+      if (!diff || Object.keys(diff).length === 0) {
+        toast.info("Không có thay đổi nào cần lưu cho tờ khai này.");
+        return;
+      }
+      setRowSaveStatus((prev) => ({
+        ...prev,
+        [rowKey]: { saving: true, error: "" },
+      }));
+      try {
+        const fieldList = Object.keys(diff);
+        const result = updateDeclRowFields(rowKey, diff, {
+          actor,
+          detail: `Cập nhật thủ công (${fieldList.join(", ")}) qua Import Data`,
+        });
+        if (!result?.success) {
+          const errorMessage =
+            result?.reason === "not-found"
+              ? "Tờ khai đã bị xóa hoặc thay đổi. Vui lòng tải lại dữ liệu."
+              : result?.reason === "no-change"
+              ? "Không có thay đổi mới để lưu."
+              : "Không thể cập nhật tờ khai. Hãy thử lại.";
+          setRowSaveStatus((prev) => ({
+            ...prev,
+            [rowKey]: { saving: false, error: errorMessage },
+          }));
+          toast.error(errorMessage);
+          return;
+        }
+        const normalizedRow = ensureCOFields(ensureLicenseFields(result.row || {}));
+        setRawRows((prev) => {
+          if (!Array.isArray(prev) || prev.length === 0) return prev;
+          const index = prev.findIndex((row) => keyOfRow(row) === rowKey);
+          if (index === -1) return prev;
+          const next = prev.slice();
+          next[index] = { ...prev[index], ...normalizedRow };
+          return next;
+        });
+        savedRowSnapshotRef.current.set(rowKey, { ...normalizedRow });
+        setBaselineVersion((prev) => prev + 1);
+        setRowSaveStatus((prev) => ({
+          ...prev,
+          [rowKey]: { saving: false, error: "" },
+        }));
+        toast.success("Đã lưu cập nhật cho tờ khai.");
+      } catch (err) {
+        console.error("Không thể cập nhật tờ khai", err);
+        const fallbackMessage = "Có lỗi xảy ra khi cập nhật. Vui lòng thử lại.";
+        setRowSaveStatus((prev) => ({
+          ...prev,
+          [rowKey]: { saving: false, error: fallbackMessage },
+        }));
+        toast.error(fallbackMessage);
+      }
+    },
+    [actor, isReadOnlyForEdits, keyOfRow, mode, rowDiffMap]
+  );
+
   const selectionEnabled = mode === "saved" && (canEdit || canManageAlerts);
+  const updateEnabled = canEdit && mode === "saved";
   const deleteEnabled = canEdit && mode === "saved";
   const baseColumnCount = 13; // bao gồm cột C/O
-  const totalColumns = baseColumnCount + (selectionEnabled ? 1 : 0) + (deleteEnabled ? 1 : 0);
+  const totalColumns =
+    baseColumnCount + (selectionEnabled ? 1 : 0) + (updateEnabled ? 1 : 0) + (deleteEnabled ? 1 : 0);
 
   const canImport = !isReadOnlyForEdits && mode === "preview" && rawRows.length > 0;
-const canSave = !isReadOnlyForEdits && mode === "saved" && rawRows.length > 0;
-const canDelete = deleteEnabled && selectedKeys.length > 0;
-const canReview = selectionEnabled && selectedKeys.length > 0 && canReviewAlerts;
-const canUnreview = selectionEnabled && selectedReviewedCount > 0 && canReviewAlerts;
-const canResolveDuplicates11 = deleteEnabled && hasDuplicate11Rows;
+  const canSave = !isReadOnlyForEdits && mode === "saved" && rawRows.length > 0;
+  const canDelete = deleteEnabled && selectedKeys.length > 0;
+  const canReview = selectionEnabled && selectedKeys.length > 0 && canReviewAlerts;
+  const canUnreview = selectionEnabled && selectedReviewedCount > 0 && canReviewAlerts;
+  const canResolveDuplicates11 = deleteEnabled && hasDuplicate11Rows;
   const modeLabel = mode === "preview" ? "Đang xem dữ liệu từ file (chưa lưu)" : "Đang xem dữ liệu đã lưu";
 
   const handleSelectFiltered = useCallback(() => {
@@ -5733,7 +5892,8 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
               <th className="px-2 py-1 text-left">Trạng thái</th>
               <th className="px-2 py-1 text-left">Số lượng GP</th>
               <th className="px-2 py-1 text-left">KPI</th>
-              {canEdit && mode === "saved" && <th className="px-2 py-1 text-left w-16">Xóa</th>}
+              {updateEnabled && <th className="px-2 py-1 text-left w-24">Cập nhật</th>}
+              {deleteEnabled && <th className="px-2 py-1 text-left w-16">Xóa</th>}
             </tr>
           </thead>
           <tbody>
@@ -5741,6 +5901,11 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
             const rowKey = keyOfRow(r);
             const rowEditable = isRowEditable(r);
             const rowReadOnly = isReadOnlyForEdits || !rowEditable;
+            const rowDiff = rowDiffMap.get(rowKey);
+            const hasPendingDiff = !!(rowDiff && Object.keys(rowDiff).length > 0);
+            const canSaveRow = hasPendingDiff && !rowReadOnly;
+            const currentSaveState = rowSaveStatus[rowKey] || { saving: false, error: "" };
+            const { saving: rowSaving, error: rowError } = currentSaveState;
             return (
               <tr
                 key={`${rowKey}_${i}`}
@@ -5895,6 +6060,33 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
                     return kpi.toFixed(1);
                   })()}
                 </td>
+                {updateEnabled && (
+                  <td className="px-2 py-1">
+                    {rowReadOnly ? (
+                      <span className="text-[11px] text-gray-400">Chỉ xem</span>
+                    ) : canSaveRow ? (
+                      <div className="flex flex-col gap-1">
+                        <button
+                          type="button"
+                          onClick={() => handleSaveRowChanges(rowKey)}
+                          disabled={rowSaving}
+                          className={`rounded px-2 py-0.5 text-xs font-medium text-white ${
+                            rowSaving
+                              ? "cursor-not-allowed bg-blue-300"
+                              : "bg-blue-600 hover:bg-blue-700"
+                          }`}
+                        >
+                          {rowSaving ? "Đang lưu…" : "Cập nhật"}
+                        </button>
+                        {rowError ? (
+                          <span className="text-[11px] text-red-600">{rowError}</span>
+                        ) : null}
+                      </div>
+                    ) : (
+                      <span className="text-[11px] text-gray-400">Đã đồng bộ</span>
+                    )}
+                  </td>
+                )}
                 {deleteEnabled && rowEditable && (
                   <td className="px-2 py-1">
                     <button

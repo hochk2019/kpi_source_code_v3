@@ -1322,6 +1322,116 @@ function persistAndAnnotateDeclRows(rows) {
   return normalized;
 }
 
+function sanitizePartialDeclUpdates(updates = {}) {
+  if (!updates || typeof updates !== "object") {
+    return {};
+  }
+  const safe = {};
+  const assign = (key, value) => {
+    safe[key] = value;
+  };
+
+  for (const [field, value] of Object.entries(updates)) {
+    switch (field) {
+      case "nhan_vien": {
+        assign("nhan_vien", normalizeStr(value));
+        break;
+      }
+      case "team": {
+        assign("team", normalizeStr(value));
+        break;
+      }
+      case "agency": {
+        assign("agency", normalizeStr(value));
+        break;
+      }
+      case "dai_ly": {
+        assign("dai_ly", normalizeStr(value));
+        break;
+      }
+      case "licenses":
+      case "so_luong_gp":
+      case "licenseManualCount": {
+        if (value === "" || value === null || value === undefined) {
+          assign("licenses", "");
+          assign("so_luong_gp", "");
+          assign("licenseManualCount", null);
+          break;
+        }
+        const parsed = Number(value);
+        if (Number.isFinite(parsed)) {
+          const normalized = Math.max(0, Math.round(parsed));
+          assign("licenses", normalized);
+          assign("so_luong_gp", normalized);
+          assign("licenseManualCount", normalized);
+        }
+        break;
+      }
+      default: {
+        assign(field, value);
+        break;
+      }
+    }
+  }
+
+  if (
+    Object.prototype.hasOwnProperty.call(safe, "agency") &&
+    !Object.prototype.hasOwnProperty.call(safe, "dai_ly")
+  ) {
+    assign("dai_ly", safe.agency);
+  }
+  if (
+    Object.prototype.hasOwnProperty.call(safe, "dai_ly") &&
+    !Object.prototype.hasOwnProperty.call(safe, "agency")
+  ) {
+    assign("agency", safe.dai_ly);
+  }
+
+  return safe;
+}
+
+function applyPartialUpdatesToRow(row, updates) {
+  if (!row || typeof row !== "object") {
+    return { changed: false, nextRow: row };
+  }
+  const safeUpdates = sanitizePartialDeclUpdates(updates);
+  const entries = Object.entries(safeUpdates);
+  if (!entries.length) {
+    return { changed: false, nextRow: row };
+  }
+  let changed = false;
+  const nextRow = { ...row };
+  for (const [field, value] of entries) {
+    const current = nextRow[field];
+    if (value === null) {
+      if (Object.prototype.hasOwnProperty.call(nextRow, field)) {
+        delete nextRow[field];
+        changed = true;
+      }
+      continue;
+    }
+    if (value === undefined) {
+      continue;
+    }
+    if (field === "licenses" || field === "so_luong_gp") {
+      const normalized = value === "" ? "" : Number(value);
+      if (nextRow[field] !== normalized) {
+        nextRow[field] = normalized;
+        changed = true;
+      }
+      continue;
+    }
+    if (nextRow[field] !== value) {
+      nextRow[field] = value;
+      changed = true;
+    }
+  }
+  if (changed) {
+    nextRow.updatedAt = new Date().toISOString();
+  }
+  return { changed, nextRow };
+}
+
 /**
  * Lưu tờ khai vào kho dùng chung.
  * - overwrite=true: ghi đè toàn bộ danh sách hiện tại.
@@ -1357,6 +1467,53 @@ export function saveDeclRows(newRows, { overwrite = false, actor = "system", det
   ensureMSTEntriesForDeclRows(normalizedIncoming, { actor });
 
   return stored.length;
+}
+
+export function updateDeclRowFields(rowKey, updates, { actor = "system", detail = "" } = {}) {
+  const key = typeof rowKey === "string" ? rowKey.trim() : String(rowKey || "").trim();
+  if (!key) {
+    return { success: false, reason: "invalid-key" };
+  }
+  const rows = getDeclRowsRaw();
+  if (!Array.isArray(rows) || rows.length === 0) {
+    return { success: false, reason: "empty" };
+  }
+  const index = rows.findIndex((row) => {
+    if (!row || typeof row !== "object") return false;
+    const soTk = (row.so_tk ?? "").toString();
+    const nhanh = (row.nhanh ?? "").toString();
+    return `${soTk}_${nhanh}` === key;
+  });
+  if (index === -1) {
+    return { success: false, reason: "not-found" };
+  }
+
+  const current = rows[index] || {};
+  const { changed, nextRow } = applyPartialUpdatesToRow(current, updates);
+  if (!changed) {
+    return { success: false, reason: "no-change" };
+  }
+
+  const nextRows = rows.slice();
+  nextRows[index] = nextRow;
+  const stored = persistAndAnnotateDeclRows(nextRows);
+  const updated = stored[index] || nextRow;
+
+  const actorName = normalizeStr(actor) || "system";
+  const changedFields = Object.keys(sanitizePartialDeclUpdates(updates));
+  const actionDetail =
+    detail && detail.trim().length > 0
+      ? detail
+      : `Cập nhật ${changedFields.join(", ")} của tờ khai ${current.so_tk || "?"}`;
+
+  pushAuditLog({
+    actor: actorName,
+    action: "decl.update.partial",
+    detail: actionDetail,
+    meta: { key, fields: changedFields },
+  });
+
+  return { success: true, row: updated };
 }
 
 export function markDeclRowsReviewed(keys, { actor = "system", note = "Đánh dấu rà soát" } = {}) {

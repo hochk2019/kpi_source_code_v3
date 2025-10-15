@@ -7,7 +7,7 @@
 - [x] Thay truong nhap text bang selector co goi y:
   - [x] Chon nhan vien -> tu dong dien to doi.
   - [x] Chon to doi -> chi hien nhan vien thuoc to do.
-- [ ] Them nut `Cap nhat` cho tung dong da sua; chi ghi xuong storage cac truong changed.
+- [x] Them nut `Cap nhat` cho tung dong da sua; chi ghi xuong storage cac truong changed.
 - [ ] Ghi nhat ky chinh sua (truoc/sau, nguoi sua, thoi gian) va cho phep thu gon/mo rong theo dong.
 - [ ] Cho phep admin cau hinh danh sach cot (hien/an), ap dung toan he thong.
 - [ ] An tuy chon "Ghi de toan bo du lieu" voi tai khoan khong phai admin; them popup canh bao khi admin kich hoat.
