@@ -1416,7 +1416,7 @@ export default function DataImporter({
   }, [columnConfigState]);
   const visibleColumnCount = Math.max(1, totalBaseColumns - columnHiddenSet.size);
   const canUploadFiles = canEdit && !(isTeamLead || isStaffRole);
-  const canOverwriteData = canUploadFiles;
+  const canOverwriteData = isAdminRole && canUploadFiles;
 
   const updateBaselineSnapshot = useCallback((rows) => {
     const snapshot = new Map();
@@ -1466,6 +1466,27 @@ export default function DataImporter({
     setColumnDraftError("");
     setColumnConfigOpen(true);
   }, [columnHiddenSet]);
+
+  const handleOverwriteToggle = useCallback(
+    (nextValue) => {
+      if (!canOverwriteData) {
+        setOverwrite(false);
+        return;
+      }
+      if (nextValue) {
+        const confirmed =
+          typeof window !== "undefined" &&
+          window.confirm(
+            "Cảnh báo: Ghi đè toàn bộ sẽ thay thế dữ liệu hiện có bằng file import. Bạn chắc chắn muốn tiếp tục?"
+          );
+        if (!confirmed) {
+          return;
+        }
+      }
+      setOverwrite(nextValue);
+    },
+    [canOverwriteData]
+  );
 
   const handleToggleColumnDraft = useCallback(
     (columnId) => {
@@ -5738,10 +5759,16 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
             <input type="checkbox" checked={upsert11} onChange={e => setUpsert11(e.target.checked)} />
             <span>Upsert theo 11 số đầu của Số tờ khai</span>
           </label>
-          <label className="flex items-center gap-1">
-            <input type="checkbox" checked={overwrite} onChange={e => setOverwrite(e.target.checked)} />
-            <span>Ghi đè toàn bộ dữ liệu hiện có</span>
-          </label>
+          {canOverwriteData && (
+            <label className="flex items-center gap-1 text-amber-700">
+              <input
+                type="checkbox"
+                checked={overwrite}
+                onChange={(e) => handleOverwriteToggle(e.target.checked)}
+              />
+              <span>Ghi đè toàn bộ dữ liệu hiện có</span>
+            </label>
+          )}
         </div>
       )}
 
