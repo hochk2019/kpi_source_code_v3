@@ -25,11 +25,11 @@ function toHeadersObject(headersList) {
 }
 
 const test = base.extend({
-  apiEvents: async ({}, use) => {
+  apiEvents: async (_args, applyFixture) => {
     const events = { preview: [], run: [], reportExports: [] };
-    await use(events);
+    await applyFixture(events);
   },
-  page: async ({ page, apiEvents }, use) => {
+  page: async ({ page, apiEvents }, applyFixture) => {
     const state = createDefaultAccountsState();
     const handlerMap = new Map();
     const defaults = createDefaultHandlers(state);
@@ -169,7 +169,7 @@ const test = base.extend({
       await route.fulfill({ status: 200, body: JSON.stringify({ ok: true }), headers: { 'content-type': 'application/json' } });
     });
 
-    await use(page);
+    await applyFixture(page);
   },
 });
 

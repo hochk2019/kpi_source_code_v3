@@ -14,6 +14,7 @@ import {
   upsertMSTRows,
   getMSTFor,
   getMSTMap,
+  MST_ASSIGNMENT_STATUS,
   HQ_KEY,
   getHQAgencies,
   upsertHQAgencies,
@@ -157,6 +158,35 @@ describe('saveDeclRows', () => {
       licenses: 1,
       licenseCodes: ['ZK02'],
     });
+  });
+
+  it('tự động thêm MST mới vào bảng gán với trạng thái mặc định', () => {
+    expect(getMSTMap()).toHaveLength(0);
+
+    saveDeclRows(
+      [
+        {
+          so_tk: '00000000001',
+          nhanh: '',
+          date: '2024-09-15',
+          mst: '0109990001',
+          cong_ty: 'Công ty Demo',
+        },
+      ],
+      { overwrite: true, actor: 'tester' }
+    );
+
+    const mstRows = getMSTMap();
+    expect(mstRows).toHaveLength(1);
+    expect(mstRows[0]).toMatchObject({
+      mst: '0109990001',
+      company: 'Công ty Demo',
+      status: MST_ASSIGNMENT_STATUS.PENDING,
+      person_import: '',
+      person_export: '',
+      team: '',
+    });
+    expect(mstRows[0].effective_from).toBe('2024-09-15');
   });
 
 });

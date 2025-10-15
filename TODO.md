@@ -1,7 +1,7 @@
 # Ke hoach nang cap KPI v4.0
 
 ## 1. Import Data
-- [ ] Tu dong ghi nhan doanh nghiep/MST moi vao tab `Gan MST` (danh dau trang thai "chua gan nhan vien").
+- [x] Tu dong ghi nhan doanh nghiep/MST moi vao tab `Gan MST` (danh dau trang thai "chua gan nhan vien").
 - [ ] Mo quyen chinh sua cho tai khoan Nhan vien tren tat ca to khai thuoc team minh; chan thao tac tren team khac.
 - [ ] Ho tro nhan tieu de cot `Ngay DK` (ngoai `date`) khi import Excel.
 - [ ] Thay truong nhap text bang selector co goi y:

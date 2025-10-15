@@ -1,6 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as XLSX from "xlsx";
-import { getMSTHistoryEntries, getMSTMap, upsertMSTRows } from "@/lib/store.js";
+import {
+  getMSTHistoryEntries,
+  getMSTMap,
+  upsertMSTRows,
+  MST_ASSIGNMENT_STATUS,
+} from "@/lib/store.js";
 import useTooltipTitles from "@/hooks/useTooltipTitles.js";
 import usePagination from "@/hooks/usePagination.js";
 
@@ -13,6 +18,17 @@ const normalize = (s = "") =>
     .replace(/\s+/g, " ")
     .trim()
     .toLowerCase();
+
+const STATUS_LABELS = Object.values(MST_ASSIGNMENT_STATUS);
+const STATUS_SELECT_VALUES = ["", ...STATUS_LABELS];
+
+const normalizeStatusLabel = (value) => {
+  const raw = (value ?? "").toString().trim();
+  if (!raw) return "";
+  const normalized = normalize(raw);
+  const matched = STATUS_LABELS.find((label) => normalize(label) === normalized);
+  return matched || raw;
+};
 
 const toISO = (v) => {
   if (!v) return "";
@@ -74,6 +90,13 @@ const headerAliases = {
     "ap dung tu ngay",
     "apply_from",
     "effective from",
+  ],
+  status: [
+    "status",
+    "trạng thái",
+    "trang thai",
+    "ghi chu trang thai",
+    "tinh trang",
   ],
 };
 
@@ -238,6 +261,7 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
     person_export: "",
     team: "",
     effective_from: "",
+    status: "",
   });
   const [addError, setAddError] = useState("");
 
@@ -289,6 +313,7 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
       person_export: "",
       team: "",
       effective_from: applyFrom || "",
+      status: "",
     });
     setAddError("");
     setShowAddForm(true);
@@ -316,6 +341,7 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
     const normalizedExport = String(draft.person_export || "").trim();
     const normalizedTeam = String(draft.team || "").trim();
     const normalizedDate = draft.effective_from || "";
+    const normalizedStatus = normalizeStatusLabel(draft.status);
 
     const newRow = {
       mst,
@@ -323,6 +349,7 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
       person_import: normalizedImport,
       person_export: normalizedExport,
       effective_from: normalizedDate,
+      status: normalizedStatus,
     };
 
     setRows((prev) => {
@@ -331,7 +358,9 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
       const next = [...current];
       const existingIndex = next.findIndex((row) => makeRowKey(row) === newKey);
       const resolvedTeam = normalizedTeam || (existingIndex >= 0 ? next[existingIndex]?.team || "" : "");
-      const payload = { ...newRow, team: resolvedTeam };
+      const resolvedStatus =
+        normalizedStatus || (existingIndex >= 0 ? normalizeStatusLabel(next[existingIndex]?.status) : "");
+      const payload = { ...newRow, team: resolvedTeam, status: resolvedStatus };
       if (existingIndex >= 0) {
         next[existingIndex] = { ...next[existingIndex], ...payload };
       } else {
@@ -359,6 +388,7 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
       "Người phụ trách Xuất": item.person_export || "",
       "Tổ đội": item.team || "",
       "Áp dụng từ ngày": item.effective_from || "",
+      "Trạng thái": item.status || "",
     }));
 
     const worksheet = XLSX.utils.json_to_sheet(data);
@@ -381,7 +411,9 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
     const q = normalize(search);
     return rows.filter(
       (r) =>
-        normalize(r.mst).includes(q) || normalize(r.company).includes(q)
+        normalize(r.mst).includes(q) ||
+        normalize(r.company).includes(q) ||
+        normalize(r.status || "").includes(q)
     );
   }, [rows, search]);
 
@@ -444,6 +476,7 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
             team: String(findCell(r, "team") ?? "").trim(),
             effective_from:
               toISO(findCell(r, "effective_from")) || applyFrom || "",
+            status: normalizeStatusLabel(findCell(r, "status")),
           };
         })
         .filter(Boolean);
@@ -502,15 +535,18 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
       sortMSTRows(
         prev.map((r) => {
           if (makeRowKey(r) !== targetKey) return r;
-          const next = { ...r, ...patch };
-          if (patch && Object.prototype.hasOwnProperty.call(patch, "mst")) {
-            next.mst = tidyMST(next.mst);
-          }
-          return next;
-        })
-      )
-    );
-  };
+        const next = { ...r, ...patch };
+        if (patch && Object.prototype.hasOwnProperty.call(patch, "mst")) {
+          next.mst = tidyMST(next.mst);
+        }
+        if (patch && Object.prototype.hasOwnProperty.call(patch, "status")) {
+          next.status = normalizeStatusLabel(next.status);
+        }
+        return next;
+      })
+    )
+  );
+};
 
   const removeRow = (row) => {
     if (isReadOnly) return;
@@ -748,6 +784,21 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
               />
             </label>
             <label className="flex flex-col gap-1 text-sm font-medium text-gray-700">
+              Trạng thái gán MST
+              <select
+                value={normalizeStatusLabel(draft.status)}
+                onChange={handleDraftChange("status", normalizeStatusLabel)}
+                className="border rounded px-2 py-1"
+                data-tooltip="Theo dõi trạng thái phân công nhân viên"
+              >
+                {STATUS_SELECT_VALUES.map((option) => (
+                  <option key={option || "__blank"} value={option}>
+                    {option || "(Chưa chọn)"}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="flex flex-col gap-1 text-sm font-medium text-gray-700">
               Áp dụng từ ngày
               <input
                 type="date"
@@ -797,6 +848,7 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
               <th className="p-2 text-left">Công ty</th>
               <th className="p-2 text-left w-40">Người phụ trách Nhập</th>
               <th className="p-2 text-left w-40">Người phụ trách Xuất</th>
+              <th className="p-2 text-left w-40">Trạng thái</th>
               <th className="p-2 text-left w-40">Áp dụng từ ngày</th>
               <th className="p-2 w-16">Xóa</th>
             </tr>
@@ -804,7 +856,7 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
           <tbody>
             {pageRows.length === 0 ? (
               <tr>
-                <td className="p-3 text-center text-gray-500" colSpan={6}>
+                <td className="p-3 text-center text-gray-500" colSpan={7}>
                   Chưa có dữ liệu
                 </td>
               </tr>
@@ -815,6 +867,7 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
                 const importHistory = rowHistory.person_import || [];
                 const exportHistory = rowHistory.person_export || [];
                 const effectiveHistory = rowHistory.effective_from || [];
+                const statusValue = normalizeStatusLabel(r.status);
                 return (
                   <tr key={rowKey || r.mst} className="border-t">
                   <td className="p-2">
@@ -876,6 +929,30 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
                       entries={exportHistory}
                       label={HISTORY_FIELD_LABELS.person_export}
                     />
+                  </td>
+                  <td className="p-2">
+                    {isReadOnly ? (
+                      statusValue ? (
+                        <span>{statusValue}</span>
+                      ) : (
+                        <span className="italic text-gray-400">Chưa thiết lập</span>
+                      )
+                    ) : (
+                      <select
+                        value={statusValue}
+                        onChange={(e) =>
+                          updateRow(r, { status: normalizeStatusLabel(e.target.value) })
+                        }
+                        className="border rounded px-2 py-1 w-full"
+                        data-tooltip="Cập nhật trạng thái gán nhân viên"
+                      >
+                        {STATUS_SELECT_VALUES.map((option) => (
+                          <option key={option || "__blank-row"} value={option}>
+                            {option || "(Chưa chọn)"}
+                          </option>
+                        ))}
+                      </select>
+                    )}
                   </td>
                   <td className="p-2">
                     {isReadOnly ? (

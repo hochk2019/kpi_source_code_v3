@@ -45,6 +45,25 @@ export function normalizeName(name) {
   return stripDiacritics(name).toLowerCase();
 }
 
+export const MST_ASSIGNMENT_STATUS = Object.freeze({
+  PENDING: 'Chưa gán nhân viên',
+  ASSIGNED: 'Đã gán nhân viên',
+});
+
+const MST_STATUS_LOOKUP = new Map(
+  Object.values(MST_ASSIGNMENT_STATUS).map((label) => [normalizeName(label), label])
+);
+
+function sanitizeMSTStatus(value) {
+  const raw = normalizeStr(value);
+  if (!raw) return '';
+  const normalizedKey = normalizeName(raw);
+  if (MST_STATUS_LOOKUP.has(normalizedKey)) {
+    return MST_STATUS_LOOKUP.get(normalizedKey);
+  }
+  return raw;
+}
+
 // MST: giá»¯ dáº¡ng chuá»—i sá»‘, bá» má»i kÃ½ tá»± khÃ´ng pháº£i sá»‘
 export function normalizeMST(mst) {
   return (mst ?? "").toString().replace(/\D/g, "");
@@ -360,6 +379,7 @@ function sanitizeMSTRow(row) {
     person_export: normalizeStr(row?.person_export ?? ""),
     team: normalizeStr(row?.team ?? ""),
     effective_from: toISODate(row?.effective_from) || "",
+    status: sanitizeMSTStatus(row?.status ?? ""),
   };
 }
 
@@ -1163,6 +1183,130 @@ export function applyAgenciesToDeclRows(rows, agencyMapParam = null) {
   });
 }
 
+const COMPANY_FIELD_KEYS = new Set([
+  'company',
+  'cong ty',
+  'ten cong ty',
+  'ten doanh nghiep',
+  'doanh nghiep',
+  'customer',
+]);
+
+function extractCompanyNameFromDeclRow(row) {
+  if (!row || typeof row !== 'object') return '';
+  const direct = normalizeStr(row?.company ?? row?.cong_ty ?? row?.customer ?? '');
+  if (direct) return direct;
+
+  for (const [key, value] of Object.entries(row)) {
+    if (value === null || value === undefined || value === '') continue;
+    const normalizedKey = normalizeName(key);
+    if (!COMPANY_FIELD_KEYS.has(normalizedKey)) continue;
+    const strValue = normalizeStr(value);
+    if (strValue) return strValue;
+  }
+
+  return '';
+}
+
+const MST_FIELD_KEYS = new Set(['mst', 'ma so thue', 'ma so thue (mst)', 'tax code']);
+
+function extractMSTFromDeclRow(row) {
+  if (!row || typeof row !== 'object') return '';
+  const direct = normalizeMST(row?.mst);
+  if (direct) return direct;
+
+  for (const [key, value] of Object.entries(row)) {
+    if (value === null || value === undefined || value === '') continue;
+    const normalizedKey = normalizeName(key);
+    if (!MST_FIELD_KEYS.has(normalizedKey)) continue;
+    const candidate = normalizeMST(value);
+    if (candidate) return candidate;
+  }
+
+  return '';
+}
+
+const DATE_FIELD_KEYS = new Set([
+  'date',
+  'ngay',
+  'ngay dk',
+  'ngay dang ky',
+  'ngay dang ky tk',
+  'registration date',
+]);
+
+function extractEffectiveDateFromDeclRow(row) {
+  if (!row || typeof row !== 'object') return '';
+  const candidates = [
+    row?.date,
+    row?.raw_date,
+    row?.ngay,
+    row?.ngay_dk,
+    row?.['Ngày đăng ký'],
+    row?.['Ngay dang ky'],
+    row?.['Ngay DK'],
+    row?.['Ngay dk'],
+  ];
+
+  for (const candidate of candidates) {
+    const iso = toISODate(candidate);
+    if (iso) return iso;
+  }
+
+  for (const [key, value] of Object.entries(row)) {
+    if (value === null || value === undefined || value === '') continue;
+    const normalizedKey = normalizeName(key);
+    if (!DATE_FIELD_KEYS.has(normalizedKey)) continue;
+    const iso = toISODate(value);
+    if (iso) return iso;
+  }
+
+  return '';
+}
+
+function ensureMSTEntriesForDeclRows(declRows, { actor = 'system' } = {}) {
+  const list = Array.isArray(declRows) ? declRows : [];
+  if (!list.length) return;
+
+  const actorName = normalizeStr(actor) || 'system';
+  const existingRows = getMSTMap();
+  const knownMSTs = new Set(existingRows.map((row) => row.mst));
+  const additions = [];
+  const seen = new Set();
+
+  for (const row of list) {
+    if (!row || typeof row !== 'object') continue;
+    const mst = extractMSTFromDeclRow(row);
+    if (!mst || knownMSTs.has(mst) || seen.has(mst)) continue;
+
+    const company = extractCompanyNameFromDeclRow(row);
+    const effective_from = extractEffectiveDateFromDeclRow(row);
+
+    additions.push({
+      mst,
+      company,
+      person_import: '',
+      person_export: '',
+      team: '',
+      effective_from,
+      status: MST_ASSIGNMENT_STATUS.PENDING,
+    });
+    seen.add(mst);
+  }
+
+  if (!additions.length) return;
+
+  const merged = existingRows.concat(additions);
+  const sample = additions.slice(0, 3).map((item) => item.mst).join(', ');
+  const suffix = additions.length > 3 ? '…' : '';
+  const detailSample = sample ? ` (${sample}${suffix})` : '';
+
+  upsertMSTRows(merged, {
+    actor: actorName,
+    detail: `Tự động thêm ${additions.length} MST mới từ dữ liệu tờ khai${detailSample}`,
+  });
+}
+
 function persistAndAnnotateDeclRows(rows) {
   const normalized = writeDeclRows(rows);
   const annotated = applyAgenciesToDeclRows(normalized);
@@ -1194,6 +1338,7 @@ export function saveDeclRows(newRows, { overwrite = false, actor = "system", det
       action: "decl.overwrite",
       detail: detail || `Ghi đè ${stored.length} tờ khai`,
     });
+    ensureMSTEntriesForDeclRows(normalizedIncoming, { actor });
     return stored.length;
   }
 
@@ -1208,6 +1353,8 @@ export function saveDeclRows(newRows, { overwrite = false, actor = "system", det
     action: "decl.merge",
     detail: detail || `Hợp nhất ${normalizedIncoming.length} tờ khai (tổng ${stored.length})`,
   });
+
+  ensureMSTEntriesForDeclRows(normalizedIncoming, { actor });
 
   return stored.length;
 }
