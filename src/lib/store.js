@@ -5,7 +5,7 @@ import {
   KPI_ADJUSTMENT_CATEGORY_CONFIG,
   normalizeAdjustmentCategoryKey,
 } from '../../shared/kpiAdjustments.js';
-import { getItem, setItem, refreshSharedKeys } from './storageClient.js';
+import { getItem, setItem, refreshSharedKeys, subscribe } from './storageClient.js';
 
 export { KPI_ADJUSTMENT_CATEGORY_CONFIG } from '../../shared/kpiAdjustments.js';
 
@@ -20,6 +20,26 @@ export const AUDIT_KEY = "audit_logs_v1"; // nhật ký hành động quản tr�
 export const HQ_KEY = "hq_agencies_v1"; // cấu hình Đại lý hải quan theo MST
 export const KPI_ADJUSTMENTS_KEY = "kpi_adjustments_v1"; // điểm KPI +/- bổ sung
 export const DECL_HISTORY_KEY = "decl_history_v1"; // lịch sử chỉnh sửa tờ khai
+export const UI_LAYOUT_KEY = "ui_layout_config_v1"; // cấu hình bố cục giao diện dùng chung
+
+export const IMPORT_COLUMN_IDS = Object.freeze([
+  "date",
+  "declaration",
+  "mst",
+  "company",
+  "type",
+  "co",
+  "items",
+  "staff",
+  "team",
+  "agency",
+  "status",
+  "licenses",
+  "kpi",
+]);
+
+const IMPORT_COLUMN_ID_SET = new Set(IMPORT_COLUMN_IDS);
+const DEFAULT_IMPORT_COLUMN_CONFIG = Object.freeze({ hidden: [] });
 
 // ===== Helpers =====
 function safeParse(json, fallback) {
@@ -28,6 +48,111 @@ function safeParse(json, fallback) {
 
 function shallowClone(obj) {
   return JSON.parse(JSON.stringify(obj ?? null));
+}
+
+function readUILayoutConfig() {
+  const stored = safeParse(getItem(UI_LAYOUT_KEY), {});
+  return stored && typeof stored === "object" && !Array.isArray(stored) ? { ...stored } : {};
+}
+
+function writeUILayoutConfig(config) {
+  const target = config && typeof config === "object" && !Array.isArray(config) ? config : {};
+  setItem(UI_LAYOUT_KEY, JSON.stringify(target));
+  return target;
+}
+
+function normalizeImportColumnConfig(input) {
+  if (input && typeof input === "object" && !Array.isArray(input)) {
+    const rawHidden = Array.isArray(input.hidden) ? input.hidden : [];
+    const hiddenSet = new Set();
+    for (const key of rawHidden) {
+      if (typeof key !== "string") continue;
+      const trimmed = key.trim();
+      if (!trimmed) continue;
+      if (IMPORT_COLUMN_ID_SET.has(trimmed)) {
+        hiddenSet.add(trimmed);
+      }
+    }
+    return { hidden: Array.from(hiddenSet) };
+  }
+  return { ...DEFAULT_IMPORT_COLUMN_CONFIG };
+}
+
+function isSameColumnConfig(a, b) {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  const hiddenA = Array.isArray(a.hidden) ? a.hidden : [];
+  const hiddenB = Array.isArray(b.hidden) ? b.hidden : [];
+  if (hiddenA.length !== hiddenB.length) {
+    return false;
+  }
+  const setB = new Set(hiddenB);
+  for (const key of hiddenA) {
+    if (!setB.has(key)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+export function getImportColumnConfig() {
+  const layout = readUILayoutConfig();
+  const importData = layout && typeof layout.importData === "object" ? layout.importData : {};
+  const current = normalizeImportColumnConfig(importData.columns);
+  if (current.hidden.length >= IMPORT_COLUMN_IDS.length) {
+    return { hidden: [] };
+  }
+  return current;
+}
+
+export function saveImportColumnConfig({ hidden } = {}, { actor = "system" } = {}) {
+  const layout = readUILayoutConfig();
+  const importSection = layout && typeof layout.importData === "object" ? layout.importData : {};
+  const current = normalizeImportColumnConfig(importSection.columns);
+  const targetHidden = Array.isArray(hidden) ? hidden : current.hidden;
+  const next = normalizeImportColumnConfig({ hidden: targetHidden });
+  if (next.hidden.length >= IMPORT_COLUMN_IDS.length) {
+    return current;
+  }
+  if (isSameColumnConfig(current, next)) {
+    return current;
+  }
+  const nextLayout = {
+    ...layout,
+    importData: {
+      ...importSection,
+      columns: next,
+    },
+  };
+  writeUILayoutConfig(nextLayout);
+  pushAuditLog({
+    actor,
+    action: "import.columns.update",
+    detail: `Cập nhật cột Import Data (${IMPORT_COLUMN_IDS.length - next.hidden.length}/${IMPORT_COLUMN_IDS.length} hiển thị)`,
+    meta: { hidden: next.hidden.slice() },
+  });
+  return next;
+}
+
+export function subscribeImportColumnConfig(listener) {
+  const fn = typeof listener === "function" ? listener : null;
+  if (!fn) {
+    return () => {};
+  }
+  const emit = () => {
+    try {
+      fn(getImportColumnConfig());
+    } catch (err) {
+      console.error("Không thể đọc cấu hình cột Import Data", err);
+    }
+  };
+  const unsubscribe = subscribe(UI_LAYOUT_KEY, emit);
+  emit();
+  return () => {
+    if (typeof unsubscribe === "function") {
+      unsubscribe();
+    }
+  };
 }
 
 // Chuáº©n hoÃ¡ chuá»—i (trim + bá» khoáº£ng tráº¯ng thá»«a)
@@ -2460,5 +2585,7 @@ export default {
   getRules, setRules, K_RULES,
   pushImportLog,
   pushAuditLog, getAuditLogs, clearAuditLogs,
+  IMPORT_COLUMN_IDS, getImportColumnConfig, saveImportColumnConfig, subscribeImportColumnConfig,
+  UI_LAYOUT_KEY,
   getKpiAdjustments, saveKpiAdjustment, updateKpiAdjustmentStatus, removeKpiAdjustment, mapAdjustmentsByMonth,
 };

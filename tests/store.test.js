@@ -23,6 +23,10 @@ import {
   unmarkDeclRowsReviewed,
   updateDeclRowFields,
   getDeclHistoryForRow,
+  getImportColumnConfig,
+  saveImportColumnConfig,
+  IMPORT_COLUMN_IDS,
+  UI_LAYOUT_KEY,
 } from '@/lib/store.js';
 import { clearStorageCache, getItem as sharedGetItem } from '@/lib/storageClient.js';
 beforeEach(() => {
@@ -231,6 +235,43 @@ describe('updateDeclRowFields', () => {
 
     const historyAfter = getDeclHistoryForRow('00000000002_', 10);
     expect(historyAfter).toHaveLength(0);
+  });
+});
+
+
+describe('import column config', () => {
+  it('mặc định không ẩn cột nào khi chưa lưu cấu hình', () => {
+    const config = getImportColumnConfig();
+    expect(Array.isArray(config.hidden)).toBe(true);
+    expect(config.hidden).toHaveLength(0);
+  });
+
+  it('lưu và chuẩn hóa danh sách cột bị ẩn', () => {
+    const sample = [
+      IMPORT_COLUMN_IDS[0],
+      'khong_ton_tai',
+      IMPORT_COLUMN_IDS[0],
+      IMPORT_COLUMN_IDS[1],
+    ];
+
+    const result = saveImportColumnConfig({ hidden: sample }, { actor: 'admin' });
+    expect(result.hidden.sort()).toEqual([IMPORT_COLUMN_IDS[0], IMPORT_COLUMN_IDS[1]].sort());
+
+    const raw = sharedGetItem(UI_LAYOUT_KEY);
+    expect(raw).not.toBeNull();
+    const parsed = JSON.parse(raw || '{}');
+    expect(parsed.importData.columns.hidden.sort()).toEqual([IMPORT_COLUMN_IDS[0], IMPORT_COLUMN_IDS[1]].sort());
+  });
+
+  it('không cho phép ẩn toàn bộ các cột hiển thị', () => {
+    saveImportColumnConfig({ hidden: [IMPORT_COLUMN_IDS[0]] }, { actor: 'admin' });
+
+    const attempt = saveImportColumnConfig({ hidden: [...IMPORT_COLUMN_IDS] }, { actor: 'admin' });
+    expect(attempt.hidden.length).toBeLessThan(IMPORT_COLUMN_IDS.length);
+
+    const raw = sharedGetItem(UI_LAYOUT_KEY);
+    const parsed = JSON.parse(raw || '{}');
+    expect(parsed.importData.columns.hidden.length).toBeLessThan(IMPORT_COLUMN_IDS.length);
   });
 });
 

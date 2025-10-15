@@ -18,6 +18,10 @@ import {
   normalizeDeclarationNumber,
   normalizeName,
   refreshDeclRowsFromServer,
+  IMPORT_COLUMN_IDS,
+  getImportColumnConfig,
+  saveImportColumnConfig,
+  subscribeImportColumnConfig,
 } from "@/lib/store.js";
 import { mapRow, detectDateOrder } from "@/lib/importer.js";
 import { loadRules, computeKPI, extractLicenseCodesFromRowObj } from "@/lib/rules.js";
@@ -84,6 +88,29 @@ const DECL_HISTORY_FIELD_LABELS = Object.freeze({
 });
 
 const DECL_HISTORY_ENTRY_LIMIT = 15;
+
+const IMPORT_TABLE_COLUMN_LABELS = Object.freeze({
+  date: "Ngày",
+  declaration: "Số tờ khai",
+  mst: "MST",
+  company: "Công ty",
+  type: "Loại hình",
+  co: "C/O",
+  items: "Mục hàng",
+  staff: "Nhân viên",
+  team: "Tổ đội",
+  agency: "Đại lý",
+  status: "Trạng thái",
+  licenses: "Số lượng GP",
+  kpi: "KPI",
+});
+
+const IMPORT_TABLE_COLUMNS = Object.freeze(
+  IMPORT_COLUMN_IDS.map((id) => ({
+    id,
+    label: IMPORT_TABLE_COLUMN_LABELS[id] || id,
+  }))
+);
 
 function normalizeComparableValue(value) {
   if (value === null || value === undefined) return "";
@@ -1346,6 +1373,10 @@ export default function DataImporter({
     baseKey: null,
     compareKey: null,
   });
+  const [columnConfigState, setColumnConfigState] = useState(() => getImportColumnConfig());
+  const [columnConfigOpen, setColumnConfigOpen] = useState(false);
+  const [columnDraftHidden, setColumnDraftHidden] = useState(() => new Set());
+  const [columnDraftError, setColumnDraftError] = useState("");
   const [selectedPresetId, setSelectedPresetId] = useState("");
   const [appliedPresetId, setAppliedPresetId] = useState("");
   const [presetSaving, setPresetSaving] = useState(false);
@@ -1363,6 +1394,7 @@ export default function DataImporter({
   const normalizedRole = normalizeRoleKey(currentUser?.role);
   const isTeamLead = normalizedRole === TEAM_LEAD_ROLE;
   const isStaffRole = normalizedRole === DEFAULT_ROLE;
+  const isAdminRole = normalizedRole === ADMIN_ROLE;
   const isManagerRole = normalizedRole === MANAGER_ROLE || normalizedRole === ADMIN_ROLE;
   const rosterSnapshot = useMemo(() => getTeamRoster(), [currentUser]);
   const rosterTeams = useMemo(() => buildRosterTeams(rosterSnapshot), [rosterSnapshot]);
@@ -1371,6 +1403,18 @@ export default function DataImporter({
   const staffNameKey = normalizeName(staffDisplayName);
   const assignedTeam = staffNameKey ? memberTeamMap.get(staffNameKey)?.team || "" : "";
   const assignedTeamKey = normalizeName(assignedTeam);
+  const totalBaseColumns = IMPORT_TABLE_COLUMNS.length;
+  const columnHiddenSet = useMemo(() => {
+    const hiddenList = Array.isArray(columnConfigState?.hidden) ? columnConfigState.hidden : [];
+    const set = new Set();
+    hiddenList.forEach((key) => {
+      if (typeof key === "string" && IMPORT_TABLE_COLUMN_LABELS[key]) {
+        set.add(key);
+      }
+    });
+    return set;
+  }, [columnConfigState]);
+  const visibleColumnCount = Math.max(1, totalBaseColumns - columnHiddenSet.size);
   const canUploadFiles = canEdit && !(isTeamLead || isStaffRole);
   const canOverwriteData = canUploadFiles;
 
@@ -1416,6 +1460,82 @@ export default function DataImporter({
     },
     [refreshRowHistory]
   );
+
+  const handleOpenColumnConfig = useCallback(() => {
+    setColumnDraftHidden(new Set(columnHiddenSet));
+    setColumnDraftError("");
+    setColumnConfigOpen(true);
+  }, [columnHiddenSet]);
+
+  const handleToggleColumnDraft = useCallback(
+    (columnId) => {
+      if (typeof columnId !== "string" || !IMPORT_TABLE_COLUMN_LABELS[columnId]) {
+        return;
+      }
+      setColumnDraftHidden((prev) => {
+        const next = new Set(prev);
+        if (next.has(columnId)) {
+          next.delete(columnId);
+          setColumnDraftError("");
+          return next;
+        }
+        if (totalBaseColumns - next.size <= 1) {
+          setColumnDraftError("Cần giữ lại ít nhất một cột hiển thị.");
+          return next;
+        }
+        next.add(columnId);
+        setColumnDraftError("");
+        return next;
+      });
+    },
+    [totalBaseColumns]
+  );
+
+  const handleApplyColumnConfig = useCallback(() => {
+    const hiddenList = Array.from(columnDraftHidden).filter((key) => IMPORT_TABLE_COLUMN_LABELS[key]);
+    if (hiddenList.length >= totalBaseColumns) {
+      setColumnDraftError("Cần giữ lại ít nhất một cột hiển thị.");
+      return;
+    }
+    const isSame =
+      hiddenList.length === columnHiddenSet.size && hiddenList.every((key) => columnHiddenSet.has(key));
+    if (isSame) {
+      setColumnConfigOpen(false);
+      return;
+    }
+    try {
+      const result = saveImportColumnConfig({ hidden: hiddenList }, { actor });
+      if (result.hidden.length >= totalBaseColumns) {
+        setColumnDraftError("Cần giữ lại ít nhất một cột hiển thị.");
+        return;
+      }
+      setColumnConfigOpen(false);
+      setColumnDraftError("");
+      toast.success("Đã cập nhật cấu hình cột Import Data.");
+    } catch (err) {
+      console.error("Không thể lưu cấu hình cột Import Data", err);
+      setColumnDraftError("Có lỗi xảy ra khi lưu cấu hình. Vui lòng thử lại.");
+    }
+  }, [actor, columnDraftHidden, columnHiddenSet, totalBaseColumns]);
+
+  useEffect(() => {
+    const unsubscribe = subscribeImportColumnConfig((config) => {
+      setColumnConfigState(config);
+    });
+    return () => {
+      if (typeof unsubscribe === "function") {
+        unsubscribe();
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!columnConfigOpen) {
+      return;
+    }
+    setColumnDraftHidden(new Set(columnHiddenSet));
+    setColumnDraftError("");
+  }, [columnConfigOpen, columnHiddenSet]);
 
   useEffect(() => {
     if (!canOverwriteData && overwrite) {
@@ -3768,13 +3888,16 @@ const selectedReviewedCount = useMemo(() => {
   const updateEnabled = canEdit && mode === "saved";
   const deleteEnabled = canEdit && mode === "saved";
   const historyEnabled = mode === "saved";
-  const baseColumnCount = 13; // bao gồm cột C/O
+  const hiddenColumns = columnHiddenSet;
+  const baseColumnCount = visibleColumnCount; // số cột dữ liệu đang hiển thị
   const totalColumns =
     baseColumnCount +
     (selectionEnabled ? 1 : 0) +
     (updateEnabled ? 1 : 0) +
     (deleteEnabled ? 1 : 0) +
     (historyEnabled ? 1 : 0);
+
+  const columnDraftVisibleCount = Math.max(1, totalBaseColumns - columnDraftHidden.size);
 
   const canImport = !isReadOnlyForEdits && mode === "preview" && rawRows.length > 0;
   const canSave = !isReadOnlyForEdits && mode === "saved" && rawRows.length > 0;
@@ -4529,6 +4652,58 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
 
   return (
     <>
+      <Dialog open={columnConfigOpen} onOpenChange={setColumnConfigOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Cấu hình cột Import Data</DialogTitle>
+            <DialogDescription>
+              Chọn các cột dữ liệu cần hiển thị. Thiết lập áp dụng cho toàn bộ hệ thống.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <p className="text-xs text-gray-600">
+              Đang giữ {columnDraftVisibleCount}/{totalBaseColumns} cột hiển thị.
+            </p>
+            <div className="grid gap-2">
+              {IMPORT_TABLE_COLUMNS.map((column) => {
+                const checked = !columnDraftHidden.has(column.id);
+                return (
+                  <label
+                    key={column.id}
+                    className="flex items-center justify-between rounded border px-3 py-2 text-sm"
+                  >
+                    <span>{column.label}</span>
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => handleToggleColumnDraft(column.id)}
+                    />
+                  </label>
+                );
+              })}
+            </div>
+            {columnDraftError ? (
+              <p className="text-xs text-red-600">{columnDraftError}</p>
+            ) : null}
+          </div>
+          <DialogFooter>
+            <button
+              type="button"
+              onClick={() => setColumnConfigOpen(false)}
+              className="rounded border px-3 py-1 text-sm text-gray-600 hover:bg-gray-50"
+            >
+              Hủy
+            </button>
+            <button
+              type="button"
+              onClick={handleApplyColumnConfig}
+              className="rounded bg-blue-600 px-3 py-1 text-sm font-medium text-white hover:bg-blue-700"
+            >
+              Lưu cấu hình
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <Dialog
         open={duplicateDiffState.open}
         onOpenChange={(next) => {
@@ -5854,6 +6029,21 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
         </div>
       </div>
 
+      {isAdminRole && (
+        <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs text-gray-600">
+          <span>
+            Đang hiển thị {visibleColumnCount}/{totalBaseColumns} cột dữ liệu.
+          </span>
+          <button
+            type="button"
+            onClick={handleOpenColumnConfig}
+            className="rounded border px-3 py-1 text-xs text-gray-600 transition hover:bg-gray-50"
+          >
+            Cấu hình cột hiển thị
+          </button>
+        </div>
+      )}
+
       {!query && mode === "saved" && (
         <div className="text-xs text-gray-500">
           Hiển thị tối đa {pageSize} dòng trên một trang. Nhập từ khóa hoặc dùng bộ lọc để tìm thêm tờ khai.
@@ -5951,19 +6141,45 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
           <thead className="bg-gray-50">
             <tr>
               {selectionEnabled && <th className="px-2 py-1 text-left w-10">Chọn</th>}
-              <th className="px-2 py-1 text-left">Ngày</th>
-              <th className="px-2 py-1 text-left">Số tờ khai</th>
-              <th className="px-2 py-1 text-left">MST</th>
-              <th className="px-2 py-1 text-left">Công ty</th>
-              <th className="px-2 py-1 text-left">Loại hình</th>
-              <th className="px-2 py-1 text-left">C/O</th>
-              <th className="px-2 py-1 text-left">Mục hàng</th>
-              <th className="px-2 py-1 text-left">Nhân viên</th>
-              <th className="px-2 py-1 text-left">Tổ đội</th>
-              <th className="px-2 py-1 text-left">Đại lý</th>
-              <th className="px-2 py-1 text-left">Trạng thái</th>
-              <th className="px-2 py-1 text-left">Số lượng GP</th>
-              <th className="px-2 py-1 text-left">KPI</th>
+              {!hiddenColumns.has("date") && (
+                <th className="px-2 py-1 text-left">{IMPORT_TABLE_COLUMN_LABELS.date}</th>
+              )}
+              {!hiddenColumns.has("declaration") && (
+                <th className="px-2 py-1 text-left">{IMPORT_TABLE_COLUMN_LABELS.declaration}</th>
+              )}
+              {!hiddenColumns.has("mst") && (
+                <th className="px-2 py-1 text-left">{IMPORT_TABLE_COLUMN_LABELS.mst}</th>
+              )}
+              {!hiddenColumns.has("company") && (
+                <th className="px-2 py-1 text-left">{IMPORT_TABLE_COLUMN_LABELS.company}</th>
+              )}
+              {!hiddenColumns.has("type") && (
+                <th className="px-2 py-1 text-left">{IMPORT_TABLE_COLUMN_LABELS.type}</th>
+              )}
+              {!hiddenColumns.has("co") && (
+                <th className="px-2 py-1 text-left">{IMPORT_TABLE_COLUMN_LABELS.co}</th>
+              )}
+              {!hiddenColumns.has("items") && (
+                <th className="px-2 py-1 text-left">{IMPORT_TABLE_COLUMN_LABELS.items}</th>
+              )}
+              {!hiddenColumns.has("staff") && (
+                <th className="px-2 py-1 text-left">{IMPORT_TABLE_COLUMN_LABELS.staff}</th>
+              )}
+              {!hiddenColumns.has("team") && (
+                <th className="px-2 py-1 text-left">{IMPORT_TABLE_COLUMN_LABELS.team}</th>
+              )}
+              {!hiddenColumns.has("agency") && (
+                <th className="px-2 py-1 text-left">{IMPORT_TABLE_COLUMN_LABELS.agency}</th>
+              )}
+              {!hiddenColumns.has("status") && (
+                <th className="px-2 py-1 text-left">{IMPORT_TABLE_COLUMN_LABELS.status}</th>
+              )}
+              {!hiddenColumns.has("licenses") && (
+                <th className="px-2 py-1 text-left">{IMPORT_TABLE_COLUMN_LABELS.licenses}</th>
+              )}
+              {!hiddenColumns.has("kpi") && (
+                <th className="px-2 py-1 text-left">{IMPORT_TABLE_COLUMN_LABELS.kpi}</th>
+              )}
               {historyEnabled && <th className="px-2 py-1 text-left w-32">Nhật ký</th>}
               {updateEnabled && <th className="px-2 py-1 text-left w-24">Cập nhật</th>}
               {deleteEnabled && <th className="px-2 py-1 text-left w-16">Xóa</th>}
@@ -5997,145 +6213,171 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
                     />
                   </td>
                 )}
-                <td className="px-2 py-1">
-                  <span title={r.raw_date || ""}>{formatDisplayDate(r.date || r.raw_date || "")}</span>
-                </td>
-                <td className="px-2 py-1">
-                  <div className="flex flex-wrap items-center gap-1">
-                    <span>{r.so_tk_full || r.so_tk || ""}</span>
-                    {r.so_tk_suffix ? (
-                      <span className="text-[10px] uppercase text-gray-400">{r.so_tk_suffix}</span>
-                    ) : null}
-                    {updatedKeySet.has(rowKey) && (
-                      <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700">Cap nhat</span>
+                {!hiddenColumns.has("date") && (
+                  <td className="px-2 py-1">
+                    <span title={r.raw_date || ""}>{formatDisplayDate(r.date || r.raw_date || "")}</span>
+                  </td>
+                )}
+                {!hiddenColumns.has("declaration") && (
+                  <td className="px-2 py-1">
+                    <div className="flex flex-wrap items-center gap-1">
+                      <span>{r.so_tk_full || r.so_tk || ""}</span>
+                      {r.so_tk_suffix ? (
+                        <span className="text-[10px] uppercase text-gray-400">{r.so_tk_suffix}</span>
+                      ) : null}
+                      {updatedKeySet.has(rowKey) && (
+                        <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700">Cap nhat</span>
+                      )}
+                      {coMismatchKeySet.has(rowKey) && (
+                        <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">CO lech</span>
+                      )}
+                      {duplicate11KeeperSet.has(rowKey) && (
+                        <span className="rounded bg-sky-100 px-1.5 py-0.5 text-[10px] font-medium text-sky-700">Giữ mới nhất</span>
+                      )}
+                      {duplicate11DuplicatesSet.has(rowKey) && (
+                        <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">Trùng 11 số</span>
+                      )}
+                      {r.duplicate_review_pending && (
+                        <span className="rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-medium text-red-700">Chờ rà soát</span>
+                      )}
+                      {rowReadOnly && (
+                        <span className="rounded bg-gray-200 px-1.5 py-0.5 text-[10px] font-medium text-gray-600">Chỉ xem</span>
+                      )}
+                    </div>
+                  </td>
+                )}
+                {!hiddenColumns.has("mst") && (
+                  <td className="px-2 py-1">
+                    <span>{r.mst || ""}</span>
+                  </td>
+                )}
+                {!hiddenColumns.has("company") && (
+                  <td className="px-2 py-1">
+                    <span>{r.cong_ty || ""}</span>
+                  </td>
+                )}
+                {!hiddenColumns.has("type") && (
+                  <td className="px-2 py-1">
+                    <span>{r.loai_hinh || ""}</span>
+                  </td>
+                )}
+                {!hiddenColumns.has("co") && (
+                  <td className="px-2 py-1">
+                    {(() => {
+                      const lines = coLineCount(r);
+                      const status = coLabel(r);
+                      const display = lines > 0 ? String(lines) : status;
+                      const hasValue = !!display;
+                      return (
+                        <span className={hasValue ? "text-emerald-600 font-medium" : "text-gray-400"}>
+                          {display || ""}
+                        </span>
+                      );
+                    })()}
+                  </td>
+                )}
+                {!hiddenColumns.has("items") && (
+                  <td className="px-2 py-1">
+                    <span>{r.muc_hang ?? ""}</span>
+                  </td>
+                )}
+                {!hiddenColumns.has("staff") && (
+                  <td className="px-2 py-1">
+                    {rowReadOnly ? (
+                      <span>{r.nhan_vien || ""}</span>
+                    ) : (
+                      <StaffCombobox
+                        value={r.nhan_vien || ""}
+                        teamValue={r.team || ""}
+                        teams={rosterTeams}
+                        onSelect={(selection) => handleSelectStaff(rowKey, selection)}
+                      />
                     )}
-                    {coMismatchKeySet.has(rowKey) && (
-                      <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">CO lech</span>
+                  </td>
+                )}
+                {!hiddenColumns.has("team") && (
+                  <td className="px-2 py-1">
+                    {rowReadOnly ? (
+                      <span>{r.team || ""}</span>
+                    ) : (
+                      <TeamCombobox
+                        value={r.team || ""}
+                        teams={rosterTeams}
+                        onSelect={({ teamName }) => handleSelectTeam(rowKey, teamName)}
+                      />
                     )}
-                    {duplicate11KeeperSet.has(rowKey) && (
-                      <span className="rounded bg-sky-100 px-1.5 py-0.5 text-[10px] font-medium text-sky-700">Giữ mới nhất</span>
+                  </td>
+                )}
+                {!hiddenColumns.has("agency") && (
+                  <td className="px-2 py-1">
+                    {rowReadOnly ? (
+                      <span>{r.agency || r.dai_ly || ""}</span>
+                    ) : (
+                      <input
+                        className="border rounded px-1 py-0.5 w-28"
+                        value={r.agency || r.dai_ly || ""}
+                        onChange={e => applyEdit(rowKey, () => ({ agency: e.target.value, dai_ly: e.target.value }))}
+                      />
                     )}
-                    {duplicate11DuplicatesSet.has(rowKey) && (
-                      <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">Trùng 11 số</span>
+                  </td>
+                )}
+                {!hiddenColumns.has("status") && (
+                  <td className="px-2 py-1">
+                    {(() => {
+                      const hasStaff = !!(r.nhan_vien && r.nhan_vien.toString().trim());
+                      const hasTeam = !!(r.team && r.team.toString().trim());
+                      if (r.reviewed) {
+                        return <span className="text-emerald-700">Đã rà soát</span>;
+                      }
+                      if (!hasStaff || !hasTeam) {
+                        const missing = [];
+                        if (!hasStaff) missing.push("nhân viên");
+                        if (!hasTeam) missing.push("tổ đội");
+                        return <span className="text-amber-600">Thiếu {missing.join(" & ")}</span>;
+                      }
+                      return <span className="text-gray-600">Đủ thông tin</span>;
+                    })()}
+                  </td>
+                )}
+                {!hiddenColumns.has("licenses") && (
+                  <td className="px-2 py-1">
+                    {rowReadOnly ? (
+                      <span>{r.licenses ?? r.so_luong_gp ?? ""}</span>
+                    ) : (
+                      <input
+                        type="number"
+                        min="0"
+                        step="1"
+                        className="border rounded px-1 py-0.5 w-24"
+                        value={r.licenses ?? r.so_luong_gp ?? ""}
+                        onChange={e => {
+                          const input = e.target.value;
+                          if (input === "") {
+                            applyEdit(rowKey, () => ({ licenses: "", so_luong_gp: "", licenseManualCount: null }));
+                            return;
+                          }
+                          const parsed = Number(input);
+                          if (!Number.isFinite(parsed)) return;
+                          const normalized = Math.max(0, Math.round(parsed));
+                          applyEdit(rowKey, () => ({
+                            licenses: normalized,
+                            so_luong_gp: normalized,
+                            licenseManualCount: normalized,
+                          }));
+                        }}
+                      />
                     )}
-                    {r.duplicate_review_pending && (
-                      <span className="rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-medium text-red-700">Chờ rà soát</span>
-                    )}
-                    {rowReadOnly && (
-                      <span className="rounded bg-gray-200 px-1.5 py-0.5 text-[10px] font-medium text-gray-600">Chỉ xem</span>
-                    )}
-                  </div>
-                </td>
-                <td className="px-2 py-1">
-                  <span>{r.mst || ""}</span>
-                </td>
-                <td className="px-2 py-1">
-                  <span>{r.cong_ty || ""}</span>
-                </td>
-                <td className="px-2 py-1">
-                  <span>{r.loai_hinh || ""}</span>
-                </td>
-                <td className="px-2 py-1">
-                  {(() => {
-                    const lines = coLineCount(r);
-                    const status = coLabel(r);
-                    const display = lines > 0 ? String(lines) : status;
-                    const hasValue = !!display;
-                    return (
-                      <span className={hasValue ? "text-emerald-600 font-medium" : "text-gray-400"}>
-                        {display || ""}
-                      </span>
-                    );
-                  })()}
-                </td>
-                <td className="px-2 py-1">
-                  <span>{r.muc_hang ?? ""}</span>
-                </td>
-                <td className="px-2 py-1">
-                  {rowReadOnly ? (
-                    <span>{r.nhan_vien || ""}</span>
-                  ) : (
-                    <StaffCombobox
-                      value={r.nhan_vien || ""}
-                      teamValue={r.team || ""}
-                      teams={rosterTeams}
-                      onSelect={(selection) => handleSelectStaff(rowKey, selection)}
-                    />
-                  )}
-                </td>
-                <td className="px-2 py-1">
-                  {rowReadOnly ? (
-                    <span>{r.team || ""}</span>
-                  ) : (
-                    <TeamCombobox
-                      value={r.team || ""}
-                      teams={rosterTeams}
-                      onSelect={({ teamName }) => handleSelectTeam(rowKey, teamName)}
-                    />
-                  )}
-                </td>
-                <td className="px-2 py-1">
-                  {rowReadOnly ? (
-                    <span>{r.agency || r.dai_ly || ""}</span>
-                  ) : (
-                    <input
-                      className="border rounded px-1 py-0.5 w-28"
-                      value={r.agency || r.dai_ly || ""}
-                      onChange={e => applyEdit(rowKey, () => ({ agency: e.target.value, dai_ly: e.target.value }))}
-                    />
-                  )}
-                </td>
-                <td className="px-2 py-1">
-                  {(() => {
-                    const hasStaff = !!(r.nhan_vien && r.nhan_vien.toString().trim());
-                    const hasTeam = !!(r.team && r.team.toString().trim());
-                    if (r.reviewed) {
-                      return <span className="text-emerald-700">Đã rà soát</span>;
-                    }
-                    if (!hasStaff || !hasTeam) {
-                      const missing = [];
-                      if (!hasStaff) missing.push("nhân viên");
-                      if (!hasTeam) missing.push("tổ đội");
-                      return <span className="text-amber-600">Thiếu {missing.join(" & ")}</span>;
-                    }
-                    return <span className="text-gray-600">Đủ thông tin</span>;
-                  })()}
-                </td>
-                <td className="px-2 py-1">
-                  {rowReadOnly ? (
-                    <span>{r.licenses ?? r.so_luong_gp ?? ""}</span>
-                  ) : (
-                    <input
-                      type="number"
-                      min="0"
-                      step="1"
-                      className="border rounded px-1 py-0.5 w-24"
-                      value={r.licenses ?? r.so_luong_gp ?? ""}
-                      onChange={e => {
-                        const input = e.target.value;
-                        if (input === "") {
-                          applyEdit(rowKey, () => ({ licenses: "", so_luong_gp: "", licenseManualCount: null }));
-                          return;
-                        }
-                        const parsed = Number(input);
-                        if (!Number.isFinite(parsed)) return;
-                        const normalized = Math.max(0, Math.round(parsed));
-                        applyEdit(rowKey, () => ({
-                          licenses: normalized,
-                          so_luong_gp: normalized,
-                          licenseManualCount: normalized,
-                        }));
-                      }}
-                    />
-                  )}
-                </td>
-                <td className="px-2 py-1">
-                  {(() => {
-                    const kpi = computeKPI(r, rules);
-                    if (!Number.isFinite(kpi)) return "-";
-                    return kpi.toFixed(1);
-                  })()}
-                </td>
+                  </td>
+                )}
+                {!hiddenColumns.has("kpi") && (
+                  <td className="px-2 py-1">
+                    {(() => {
+                      const kpi = computeKPI(r, rules);
+                      if (!Number.isFinite(kpi)) return "-";
+                      return kpi.toFixed(1);
+                    })()}
+                  </td>
+                )}
                 {historyEnabled && (
                   <td className="px-2 py-1">
                     <button

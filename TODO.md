@@ -9,7 +9,7 @@
   - [x] Chon to doi -> chi hien nhan vien thuoc to do.
 - [x] Them nut `Cap nhat` cho tung dong da sua; chi ghi xuong storage cac truong changed.
 - [x] Ghi nhat ky chinh sua (truoc/sau, nguoi sua, thoi gian) va cho phep thu gon/mo rong theo dong.
-- [ ] Cho phep admin cau hinh danh sach cot (hien/an), ap dung toan he thong.
+- [x] Cho phep admin cau hinh danh sach cot (hien/an), ap dung toan he thong.
 - [ ] An tuy chon "Ghi de toan bo du lieu" voi tai khoan khong phai admin; them popup canh bao khi admin kich hoat.
 - [ ] Ghi log import chi tiet (file, dong loi, doanh nghiep moi, so dong insert/update/skip).
 - [ ] Them buoc preview/validate truoc khi commit vao CSDL (hien cac dong loi, dong se chen moi).
