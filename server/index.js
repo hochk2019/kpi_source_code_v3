@@ -31,7 +31,7 @@ import {
   mergePermissions,
   isAdminRole,
 } from '../src/shared/accountRoles.js';
-import { translateBackupReason } from '../src/shared/backupMessages.js';
+import { translateBackupReason, translateBackupFailure } from '../src/shared/backupMessages.js';
 import { recordSqlTimeout, getSqlTimeoutEvents, onSqlTimeout } from './sqlMonitor.js';
 import {
   pushNotification,
@@ -467,6 +467,7 @@ const databaseInitState = {
 let dbBackupJob = null;
 let coDiscrepancyJob = null;
 let backupInProgress = false;
+let restoreInProgress = false;
 const backupScheduleMeta = {
   active: false,
   reasons: [],
@@ -1006,9 +1007,11 @@ export async function performDatabaseBackup({
   retention,
   reason = 'manual',
   actor = 'system',
+  note = null,
 } = {}) {
   const logOutcome = (status, meta = {}) => {
     const detailReason = meta.reason || reason || 'không rõ';
+    const { note: metaNote, ...restMeta } = meta ?? {};
     pushAuditLog({
       actor,
       action: 'db.backup',
@@ -1016,7 +1019,9 @@ export async function performDatabaseBackup({
         status === 'success'
           ? `Sao lưu CSDL (${detailReason})`
           : `Sao lưu CSDL thất bại (${detailReason})`,
-      meta: { status, reason: detailReason, ...meta },
+      result: status,
+      note: metaNote ?? note,
+      meta: { status, reason: detailReason, ...restMeta },
     });
   };
 
@@ -1031,6 +1036,10 @@ export async function performDatabaseBackup({
   if (!backupDir || backupDir === ':memory:') {
     logFailure('invalid_backup_dir', { backupDir });
     return { ok: false, reason: 'invalid_backup_dir' };
+  }
+  if (restoreInProgress) {
+    logFailure('restore_in_progress', { dbFile, backupDir });
+    return { ok: false, reason: 'restore_in_progress' };
   }
   const sourceFile = dbFile === ':memory:' ? null : path.resolve(dbFile);
   if (!sourceFile) {
@@ -1103,7 +1112,178 @@ function normalizeBackupAuditEntry(entry) {
   const action = entry.action || 'unknown';
   const detail = entry.detail || '';
   const meta = entry.meta ?? null;
-  return { ts, actor, action, detail, meta };
+  const result = entry.result ?? null;
+  const note = entry.note ?? null;
+  const category = entry.category || inferAuditCategory(action);
+  return { ts, actor, action, detail, meta, result, note, category };
+}
+
+async function listBackupFiles({ backupDir = DB_BACKUP_DIR, limit = 50 } = {}) {
+  if (!backupDir || backupDir === ':memory:') {
+    return [];
+  }
+  const targetDir = path.resolve(backupDir);
+  let entries;
+  try {
+    entries = await fs.readdir(targetDir, { withFileTypes: true });
+  } catch (err) {
+    if (err?.code === 'ENOENT') {
+      return [];
+    }
+    throw err;
+  }
+  const files = [];
+  for (const entry of entries) {
+    if (!entry.isFile()) continue;
+    if (!entry.name.startsWith('storage-') || !entry.name.endsWith('.sqlite')) {
+      continue;
+    }
+    const fullPath = path.join(targetDir, entry.name);
+    try {
+      const stats = await fs.stat(fullPath);
+      files.push({
+        filename: entry.name,
+        path: fullPath,
+        bytes: stats.size,
+        modifiedAt: stats.mtime ? new Date(stats.mtime).toISOString() : null,
+      });
+    } catch {
+      // skip files we can't stat
+    }
+  }
+  files.sort((a, b) => {
+    const aTime = a.modifiedAt ? Date.parse(a.modifiedAt) : 0;
+    const bTime = b.modifiedAt ? Date.parse(b.modifiedAt) : 0;
+    return bTime - aTime;
+  });
+  const sliceLimit = Number.isFinite(limit) && limit > 0 ? Math.min(files.length, Math.trunc(limit)) : files.length;
+  return files.slice(0, sliceLimit).map((file) => ({
+    filename: file.filename,
+    bytes: file.bytes,
+    modifiedAt: file.modifiedAt,
+  }));
+}
+
+async function restoreDatabaseBackup({
+  filename,
+  backupDir = DB_BACKUP_DIR,
+  dbFile = DB_FILE,
+  actor = 'system',
+  note = null,
+} = {}) {
+  const logOutcome = (status, meta = {}) => {
+    const name = meta.filename || filename || 'không xác định';
+    const { note: metaNote, ...restMeta } = meta ?? {};
+    pushAuditLog({
+      actor,
+      action: 'db.restore',
+      detail:
+        status === 'success'
+          ? `Khôi phục CSDL từ ${name}`
+          : `Khôi phục CSDL thất bại (${name})`,
+      result: status,
+      note: metaNote ?? note,
+      meta: { filename: name, ...restMeta },
+    });
+  };
+
+  const safeFilename = typeof filename === 'string' ? filename.trim() : '';
+  if (!safeFilename) {
+    logOutcome('failure', { reason: 'missing_filename' });
+    return { ok: false, reason: 'missing_filename' };
+  }
+  if (!backupDir || backupDir === ':memory:') {
+    logOutcome('failure', { reason: 'invalid_backup_dir' });
+    return { ok: false, reason: 'invalid_backup_dir' };
+  }
+  if (!dbFile || dbFile === ':memory:') {
+    logOutcome('failure', { reason: 'memory_db' });
+    return { ok: false, reason: 'memory_db' };
+  }
+  if (restoreInProgress) {
+    logOutcome('failure', { reason: 'restore_in_progress' });
+    return { ok: false, reason: 'restore_in_progress' };
+  }
+  if (backupInProgress) {
+    logOutcome('failure', { reason: 'backup_in_progress' });
+    return { ok: false, reason: 'backup_in_progress' };
+  }
+
+  const targetDir = path.resolve(backupDir);
+  const resolvedSource = path.resolve(targetDir, path.basename(safeFilename));
+  if (!resolvedSource.startsWith(targetDir)) {
+    logOutcome('failure', { reason: 'invalid_filename', filename: safeFilename });
+    return { ok: false, reason: 'invalid_filename' };
+  }
+
+  let stats;
+  try {
+    stats = await fs.stat(resolvedSource);
+  } catch (err) {
+    logOutcome('failure', { reason: err?.code === 'ENOENT' ? 'missing_file' : 'stat_failed', error: err?.message, filename: safeFilename });
+    return { ok: false, reason: err?.code === 'ENOENT' ? 'missing_file' : 'stat_failed' };
+  }
+
+  const targetFile = path.resolve(dbFile);
+  const tempFile = `${targetFile}.restore-${Date.now()}.tmp`;
+  const backupBeforeRestore = `${targetFile}.pre-restore-${Date.now()}.bak`;
+
+  restoreInProgress = true;
+  const previousDb = db;
+  try {
+    if (previousDb && typeof previousDb.close === 'function') {
+      previousDb.close();
+    }
+    await fs.mkdir(path.dirname(targetFile), { recursive: true });
+    try {
+      await fs.copyFile(targetFile, backupBeforeRestore);
+    } catch (err) {
+      if (err?.code !== 'ENOENT') {
+        console.warn('Không thể tạo bản sao DB hiện tại trước khi restore:', err);
+      }
+    }
+
+    await fs.copyFile(resolvedSource, tempFile);
+    await fs.rename(tempFile, targetFile);
+
+    db = await initializeDatabase({ dbFile: targetFile });
+    refreshDatabaseBackupSchedule();
+    applyCoCodeConfig(getCoCodeConfig());
+    if (typeof refreshCoDiscrepancySchedule === 'function') {
+      refreshCoDiscrepancySchedule();
+    }
+
+    logOutcome('success', {
+      filename: safeFilename,
+      file: resolvedSource,
+      bytes: stats.size,
+      backupBeforeRestore,
+    });
+    console.log(`♻️ Đã khôi phục CSDL từ ${resolvedSource}`);
+    return { ok: true, file: resolvedSource, bytes: stats.size, backupBeforeRestore };
+  } catch (err) {
+    console.error('Không thể khôi phục CSDL:', err);
+    logOutcome('failure', {
+      reason: 'error',
+      error: err?.message || String(err),
+      filename: safeFilename,
+    });
+    try {
+      if (!db || db === previousDb) {
+        db = await initializeDatabase({ dbFile: targetFile });
+      }
+    } catch (reopenErr) {
+      console.error('Không thể mở lại CSDL sau khi restore thất bại:', reopenErr);
+    }
+    return { ok: false, error: err?.message || 'Không thể khôi phục CSDL' };
+  } finally {
+    restoreInProgress = false;
+    try {
+      await fs.rm(tempFile);
+    } catch {
+      // ignore temp cleanup errors
+    }
+  }
 }
 
 function nextBackupRunISO() {
@@ -1491,7 +1671,7 @@ function refreshDatabaseBackupSchedule() {
   }
 }
 
-const db = await initializeDatabase();
+let db = await initializeDatabase();
 refreshDatabaseBackupSchedule();
 applyCoCodeConfig(getCoCodeConfig());
 if (typeof refreshCoDiscrepancySchedule === 'function') {
@@ -3804,12 +3984,41 @@ function isExportDecl(soTk, loaiHinh) {
   return false;
 }
 
+function inferAuditCategory(action) {
+  if (typeof action !== 'string' || !action) {
+    return 'khac';
+  }
+  const normalized = action.trim();
+  const separatorIndex = normalized.indexOf('.');
+  if (separatorIndex <= 0) {
+    return normalized;
+  }
+  return normalized.slice(0, separatorIndex);
+}
+
+function normalizeAuditNote(value) {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  const text = `${value}`.trim();
+  if (!text) {
+    return null;
+  }
+  return text.normalize('NFC');
+}
+
 function pushAuditLog(entry) {
   const payload = {
     ts: new Date().toISOString(),
     actor: entry?.actor || 'system',
     action: entry?.action || 'unknown',
+    category: entry?.category || inferAuditCategory(entry?.action || 'unknown'),
     detail: entry?.detail || '',
+    result:
+      entry?.result === null || entry?.result === undefined
+        ? null
+        : `${entry.result}`.trim() || null,
+    note: normalizeAuditNote(entry?.note),
     meta: entry?.meta ?? null,
   };
   const logs = getJSONValue('audit_logs_v1', []);
@@ -9624,6 +9833,53 @@ app.get('/api/admin/backups/summary', (req, res) => {
   }
 });
 
+app.get('/api/admin/backups/files', async (req, res) => {
+  const { denied } = requireAdminBackupManage(req, res);
+  if (denied) {
+    return;
+  }
+  try {
+    const limitRaw = Number.parseInt(req.query?.limit ?? '50', 10);
+    const limit = Number.isFinite(limitRaw) && limitRaw > 0 ? limitRaw : 50;
+    const files = await listBackupFiles({ limit });
+    res.json({ ok: true, files });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err?.message || 'Không thể tải danh sách bản sao lưu' });
+  }
+});
+
+app.post('/api/admin/backups/run', async (req, res) => {
+  const { context, denied } = requireAdminBackupManage(req, res);
+  if (denied) {
+    return;
+  }
+  try {
+    const body = req.body ?? {};
+    const reasonRaw = typeof body.reason === 'string' ? body.reason.trim() : '';
+    const reason = reasonRaw || 'manual';
+    const note = typeof body.note === 'string' ? body.note : null;
+    const retention = Number.isFinite(body.retention) ? Number(body.retention) : undefined;
+    const result = await performDatabaseBackup({
+      reason,
+      retention,
+      actor: context.account?.username || 'system',
+      note,
+    });
+    if (result?.ok === false) {
+      const message =
+        translateBackupFailure(result.reason) ||
+        translateBackupReason(result.reason) ||
+        'Không thể sao lưu CSDL.';
+      const status = ['in_progress', 'restore_in_progress'].includes(result.reason) ? 409 : 400;
+      res.status(status).json({ ok: false, error: message, reason: result.reason });
+      return;
+    }
+    res.json({ ok: true, result });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err?.message || 'Không thể thực hiện sao lưu ngay' });
+  }
+});
+
 app.post('/api/admin/backups/schedule', (req, res) => {
   const { context, denied } = requireAdminBackupManage(req, res);
   if (denied) {
@@ -9690,6 +9946,109 @@ app.post('/api/admin/backups/schedule', (req, res) => {
     res.json({ ok: true, config, summary });
   } catch (err) {
     res.status(500).json({ ok: false, error: err?.message || 'Không thể cập nhật lịch sao lưu' });
+  }
+});
+
+app.post('/api/admin/backups/restore', async (req, res) => {
+  const { context, denied } = requireAdminBackupManage(req, res);
+  if (denied) {
+    return;
+  }
+  try {
+    const body = req.body ?? {};
+    const filename = typeof body.filename === 'string' ? body.filename : '';
+    const note = typeof body.note === 'string' ? body.note : null;
+    const result = await restoreDatabaseBackup({
+      filename,
+      actor: context.account?.username || 'system',
+      note,
+    });
+    if (result?.ok === false) {
+      const message =
+        translateBackupFailure(result.reason) ||
+        translateBackupReason(result.reason) ||
+        'Không thể khôi phục CSDL.';
+      const conflictReasons = ['restore_in_progress', 'backup_in_progress'];
+      const status = conflictReasons.includes(result.reason)
+        ? 409
+        : result.reason === 'missing_filename'
+        ? 400
+        : 400;
+      res.status(status).json({ ok: false, error: message, reason: result.reason });
+      return;
+    }
+    res.json({ ok: true, result });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err?.message || 'Không thể khôi phục CSDL' });
+  }
+});
+
+app.get('/api/admin/audit/export', (req, res) => {
+  const { denied } = requireAuditView(req, res);
+  if (denied) {
+    return;
+  }
+
+  const fromDate = normalizeRangeDate(req.query?.from);
+  const toDate = normalizeRangeDate(req.query?.to, { isEnd: true });
+  const type = typeof req.query?.type === 'string' ? req.query.type.trim().toLowerCase() : '';
+  const actionFilter = typeof req.query?.action === 'string' ? req.query.action.trim().toLowerCase() : '';
+
+  try {
+    const logs = getJSONValue('audit_logs_v1', []);
+    const filtered = logs.filter((entry) => {
+      if (!entry || typeof entry !== 'object') {
+        return false;
+      }
+      const ts = entry.ts ? Date.parse(entry.ts) : Number.NaN;
+      if (fromDate && Number.isFinite(ts) && ts < fromDate.getTime()) {
+        return false;
+      }
+      if (toDate && Number.isFinite(ts) && ts > toDate.getTime()) {
+        return false;
+      }
+      const category = (entry.category || inferAuditCategory(entry.action || '')).toString().toLowerCase();
+      if (type && category !== type) {
+        return false;
+      }
+      if (actionFilter) {
+        const action = (entry.action || '').toString().toLowerCase();
+        if (!action.includes(actionFilter)) {
+          return false;
+        }
+      }
+      return true;
+    });
+
+    const formatCsvValue = (value) => {
+      if (value === null || value === undefined) {
+        return '""';
+      }
+      const text = `${value}`.replace(/"/g, '""');
+      return `"${text}"`;
+    };
+
+    const rows = [
+      ['Thời gian', 'Loại', 'Hành động', 'Người thực hiện', 'Kết quả', 'Chi tiết', 'Ghi chú', 'Metadata'],
+      ...filtered.map((entry) => [
+        entry.ts || '',
+        entry.category || inferAuditCategory(entry.action || ''),
+        entry.action || '',
+        entry.actor || 'system',
+        entry.result || '',
+        entry.detail || '',
+        entry.note || '',
+        entry.meta ? JSON.stringify(entry.meta) : '',
+      ]),
+    ];
+
+    const csvContent = rows.map((row) => row.map((cell) => formatCsvValue(cell)).join(',')).join('\r\n');
+    const payload = `\ufeff${csvContent}`;
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="audit-log-${Date.now()}.csv"`);
+    res.send(payload);
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err?.message || 'Không thể xuất nhật ký' });
   }
 });
 

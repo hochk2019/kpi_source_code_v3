@@ -1271,6 +1271,100 @@ describe('Backup summary API', () => {
   });
 });
 
+describe('Backup manual API', () => {
+  it('từ chối danh sách file sao lưu khi chưa đăng nhập', async () => {
+    const res = await request(app).get('/api/admin/backups/files');
+    expect(res.status).toBe(401);
+  });
+
+  it('trả về danh sách rỗng khi chưa có bản sao lưu', async () => {
+    const adminAgent = request.agent(app);
+    const loginRes = await adminAgent
+      .post('/api/auth/login')
+      .send({ username: 'admin', password: 'admin123' });
+    expect(loginRes.status).toBe(200);
+
+    const res = await adminAgent.get('/api/admin/backups/files');
+    expect(res.status).toBe(200);
+    expect(res.body?.ok).toBe(true);
+    expect(Array.isArray(res.body.files)).toBe(true);
+    for (const file of res.body.files) {
+      expect(typeof file.filename).toBe('string');
+      expect(typeof file.bytes === 'number' || file.bytes === undefined).toBe(true);
+    }
+  });
+
+  it('không cho phép sao lưu thủ công khi DB chạy memory', async () => {
+    const adminAgent = request.agent(app);
+    const loginRes = await adminAgent
+      .post('/api/auth/login')
+      .send({ username: 'admin', password: 'admin123' });
+    expect(loginRes.status).toBe(200);
+
+    const res = await adminAgent.post('/api/admin/backups/run').send({ note: 'manual-test' });
+    expect(res.status).toBe(400);
+    expect(res.body).toMatchObject({ ok: false, reason: 'memory_db' });
+  });
+
+  it('yêu cầu chọn file khi khôi phục', async () => {
+    const adminAgent = request.agent(app);
+    const loginRes = await adminAgent
+      .post('/api/auth/login')
+      .send({ username: 'admin', password: 'admin123' });
+    expect(loginRes.status).toBe(200);
+
+    const res = await adminAgent.post('/api/admin/backups/restore').send({ note: 'restore-test' });
+    expect(res.status).toBe(400);
+    expect(res.body).toMatchObject({ ok: false, reason: 'missing_filename' });
+  });
+});
+
+describe('Audit export API', () => {
+  it('yêu cầu đăng nhập trước khi tải CSV', async () => {
+    const res = await request(app).get('/api/admin/audit/export');
+    expect(res.status).toBe(401);
+  });
+
+  it('cho phép quản trị viên tải CSV theo khoảng ngày', async () => {
+    const adminAgent = request.agent(app);
+    const loginRes = await adminAgent
+      .post('/api/auth/login')
+      .send({ username: 'admin', password: 'admin123' });
+    expect(loginRes.status).toBe(200);
+
+    const logs = [
+      {
+        ts: '2024-05-10T05:00:00.000Z',
+        actor: 'admin',
+        action: 'db.backup',
+        detail: 'Sao lưu thử nghiệm',
+        result: 'success',
+        category: 'db',
+        note: 'manual snapshot',
+        meta: { status: 'success', reason: 'manual-ui' },
+      },
+      {
+        ts: '2024-04-09T02:00:00.000Z',
+        actor: 'system',
+        action: 'audit.clear',
+        detail: 'Xóa nhật ký',
+        result: 'success',
+        category: 'audit',
+      },
+    ];
+    getDb()
+      .prepare('INSERT OR REPLACE INTO kv_store(key, value) VALUES(?, ?)')
+      .run('audit_logs_v1', JSON.stringify(logs));
+
+    const res = await adminAgent.get('/api/admin/audit/export');
+    expect(res.status).toBe(200);
+    expect(res.headers['content-type']).toContain('text/csv');
+    const lines = res.text.split(/\r?\n/).filter(Boolean);
+    expect(lines.length).toBeGreaterThanOrEqual(1);
+    expect(res.text).toContain('Thời gian');
+  });
+});
+
 describe('ECUS sync API', () => {
   it('trả về cấu hình mặc định', async () => {
     const res = await request(app).get('/api/import/ecus/config');

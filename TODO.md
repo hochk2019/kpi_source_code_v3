@@ -72,10 +72,10 @@
 - [x] Ghi log chi tiet moi lan thay doi quyen, reset mat khau.
 
 ## 9. Nhat ky
-- [ ] Bo sung thao tac sao luu va phuc hoi co so du lieu truc tiep trong giao dien; ghi log chi tiet.
-- [ ] Cho phep loc su kien theo loai (import, gan MST, KPI rules, backup...).
-- [ ] Ghi chu chi tiet cho thao tac quan trong (nguoi thuc hien, noi dung, ket qua).
-- [ ] Cung cap nut tai log theo khoang thoi gian.
+- [x] Bo sung thao tac sao luu va phuc hoi co so du lieu truc tiep trong giao dien; ghi log chi tiet.
+- [x] Cho phep loc su kien theo loai (import, gan MST, KPI rules, backup...).
+- [x] Ghi chu chi tiet cho thao tac quan trong (nguoi thuc hien, noi dung, ket qua).
+- [x] Cung cap nut tai log theo khoang thoi gian.
 
 ## 10. Tu dong hoa & kiem thu
 - [ ] Xay dung test tu dong cho cac quy trinh chinh (import, gán MST, doi chieu giay phep, KPI rules, points, phan quyen).

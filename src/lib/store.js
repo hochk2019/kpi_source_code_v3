@@ -3476,14 +3476,48 @@ export function setRules(v) {
   setItem(RULES_KEY, JSON.stringify(v));
 }
 
-// ===== Nháº­t kÃ½ há»‡ thá»‘ng =====
+// ===== Nhật ký hệ thống =====
 
-export function pushAuditLog({ actor = "system", action = "unknown", detail = "", meta = null } = {}) {
+function inferAuditCategory(action) {
+  if (typeof action !== "string" || !action) {
+    return "khac";
+  }
+  const normalized = action.trim();
+  const separatorIndex = normalized.indexOf(".");
+  if (separatorIndex <= 0) {
+    return normalized;
+  }
+  return normalized.slice(0, separatorIndex);
+}
+
+function normalizeAuditNote(value) {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  const text = `${value}`.trim();
+  if (!text) {
+    return null;
+  }
+  return text.normalize("NFC");
+}
+
+export function pushAuditLog({
+  actor = "system",
+  action = "unknown",
+  detail = "",
+  meta = null,
+  category,
+  result = null,
+  note = null,
+} = {}) {
   const entry = {
     ts: new Date().toISOString(),
     actor,
     action,
+    category: category || inferAuditCategory(action),
     detail,
+    result: result === null || result === undefined ? null : `${result}`.trim() || null,
+    note: normalizeAuditNote(note),
     meta: meta == null ? null : shallowClone(meta),
   };
   const logs = safeParse(getItem(AUDIT_KEY), []);
@@ -3499,12 +3533,15 @@ export function getAuditLogs(limit = 100) {
   return logs.slice(0, limit);
 }
 
-export function clearAuditLogs({ actor = "system", note = "XÃ³a toÃ n bá»™ nháº­t kÃ½" } = {}) {
+export function clearAuditLogs({ actor = "system", note = "Xóa toàn bộ nhật ký" } = {}) {
   const entry = {
     ts: new Date().toISOString(),
     actor,
     action: "audit.clear",
+    category: "audit",
     detail: note,
+    result: "success",
+    note: normalizeAuditNote(note),
     meta: null,
   };
   setItem(AUDIT_KEY, JSON.stringify([entry]));
