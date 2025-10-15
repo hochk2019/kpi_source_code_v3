@@ -22,6 +22,7 @@ import {
   getImportColumnConfig,
   saveImportColumnConfig,
   subscribeImportColumnConfig,
+  previewDeclRows,
 } from "@/lib/store.js";
 import { mapRow, detectDateOrder } from "@/lib/importer.js";
 import { loadRules, computeKPI, extractLicenseCodesFromRowObj } from "@/lib/rules.js";
@@ -111,6 +112,11 @@ const IMPORT_TABLE_COLUMNS = Object.freeze(
     label: IMPORT_TABLE_COLUMN_LABELS[id] || id,
   }))
 );
+
+const IMPORT_ERROR_REASON_LABELS = Object.freeze({
+  "missing-key": "Thiếu Số tờ khai hoặc nhánh tờ khai",
+  unknown: "Không xác định",
+});
 
 function normalizeComparableValue(value) {
   if (value === null || value === undefined) return "";
@@ -1398,6 +1404,64 @@ export default function DataImporter({
   const isManagerRole = normalizedRole === MANAGER_ROLE || normalizedRole === ADMIN_ROLE;
   const rosterSnapshot = useMemo(() => getTeamRoster(), [currentUser]);
   const rosterTeams = useMemo(() => buildRosterTeams(rosterSnapshot), [rosterSnapshot]);
+
+  const effectivePreviewRows = useMemo(() => {
+    if (!Array.isArray(rawRows) || rawRows.length === 0) {
+      return [];
+    }
+    if (!upsert11) {
+      return rawRows;
+    }
+    return rawRows.map((row) => {
+      if (!row || typeof row !== "object") {
+        return row;
+      }
+      const truncated = (row.so_tk || "").toString().slice(0, 11);
+      if (!truncated || truncated === row.so_tk) {
+        return row;
+      }
+      return { ...row, so_tk: truncated };
+    });
+  }, [rawRows, upsert11]);
+
+  const importPreview = useMemo(() => {
+    if (mode !== "preview" || effectivePreviewRows.length === 0) {
+      return null;
+    }
+    try {
+      const allowOverwrite = canOverwriteData ? overwrite : false;
+      return previewDeclRows(effectivePreviewRows, { overwrite: allowOverwrite, actor });
+    } catch (error) {
+      console.error("Không thể tính toán kết quả xem trước import", error);
+      return { error };
+    }
+  }, [actor, canOverwriteData, effectivePreviewRows, mode, overwrite]);
+
+  const importPreviewSamples = useMemo(() => {
+    if (!importPreview || importPreview.error) {
+      return { inserted: [], updated: [], locked: [], errors: [] };
+    }
+    return {
+      inserted: Array.isArray(importPreview.samples?.inserted) ? importPreview.samples.inserted : [],
+      updated: Array.isArray(importPreview.samples?.updated) ? importPreview.samples.updated : [],
+      locked: Array.isArray(importPreview.samples?.locked) ? importPreview.samples.locked : [],
+      errors: Array.isArray(importPreview.samples?.errors) ? importPreview.samples.errors : [],
+    };
+  }, [importPreview]);
+
+  const importPreviewStats = useMemo(() => {
+    if (!importPreview || importPreview.error) {
+      return [];
+    }
+    return [
+      { key: "inserted", label: "Dòng sẽ thêm mới", value: importPreview.inserted || 0 },
+      { key: "updated", label: "Dòng sẽ cập nhật", value: importPreview.updated || 0 },
+      { key: "skipped", label: "Giữ nguyên", value: importPreview.skipped || 0 },
+      { key: "locked", label: "Đang bị khóa", value: importPreview.locked || 0 },
+      { key: "invalid", label: "Lỗi dữ liệu", value: importPreview.invalid || 0 },
+      { key: "mst", label: "MST mới", value: importPreview.newBusinessCount || 0 },
+    ];
+  }, [importPreview]);
   const memberTeamMap = useMemo(() => mapMemberNamesToTeams(rosterSnapshot), [rosterSnapshot]);
   const staffDisplayName = normalizeStr(currentUser?.name || currentUser?.username || "");
   const staffNameKey = normalizeName(staffDisplayName);
@@ -3790,14 +3854,29 @@ const selectedReviewedCount = useMemo(() => {
       alert("Hãy chọn file XLSX để import.");
       return;
     }
-    if (rawRows.length === 0) {
+    if (effectivePreviewRows.length === 0) {
       alert("Không có dữ liệu để import");
       return;
     }
-    // Nếu cần upsert theo 11 số đầu → chuẩn hoá so_tk về 11 số đầu
-    const rows = upsert11
-      ? rawRows.map(r => ({ ...r, so_tk: (r.so_tk || "").toString().slice(0, 11) }))
-      : rawRows;
+    if (importPreview?.invalid > 0) {
+      const proceed = window.confirm(
+        `Có ${importPreview.invalid.toLocaleString(
+          "vi-VN",
+        )} dòng lỗi sẽ bị bỏ qua khi import. Bạn vẫn muốn tiếp tục?`
+      );
+      if (!proceed) {
+        return;
+      }
+    }
+    if ((importPreview?.inserted || 0) === 0 && (importPreview?.updated || 0) === 0) {
+      const proceed = window.confirm(
+        "File không tạo ra tờ khai mới hoặc cập nhật nào. Bạn vẫn muốn tiếp tục import?",
+      );
+      if (!proceed) {
+        return;
+      }
+    }
+    const rows = effectivePreviewRows;
 
     const effectiveOverwrite = canOverwriteData ? overwrite : false;
     const result = saveDeclRows(rows, {
@@ -3955,7 +4034,12 @@ const selectedReviewedCount = useMemo(() => {
 
   const columnDraftVisibleCount = Math.max(1, totalBaseColumns - columnDraftHidden.size);
 
-  const canImport = !isReadOnlyForEdits && mode === "preview" && rawRows.length > 0;
+  const canImport =
+    !isReadOnlyForEdits &&
+    mode === "preview" &&
+    effectivePreviewRows.length > 0 &&
+    importPreview &&
+    !importPreview.error;
   const canSave = !isReadOnlyForEdits && mode === "saved" && rawRows.length > 0;
   const canDelete = deleteEnabled && selectedKeys.length > 0;
   const canReview = selectionEnabled && selectedKeys.length > 0 && canReviewAlerts;
@@ -5783,6 +5867,159 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
         </button>
         <span className="ml-auto text-sm text-gray-600">{modeLabel}</span>
       </div>
+
+      {mode === "preview" && (
+        <div className="mt-3 space-y-3">
+          {importPreview?.error ? (
+            <div className="rounded border border-red-300 bg-red-50 p-3 text-sm text-red-700">
+              Không thể kiểm tra file import. {importPreview.error?.message || "Vui lòng thử lại."}
+            </div>
+          ) : importPreview ? (
+            <div className="rounded border border-[color:var(--ds-border-strong)] bg-[color:var(--ds-surface-card)] p-3 shadow-sm">
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <div>
+                  <h3 className="text-sm font-semibold text-gray-900">Kết quả kiểm tra trước khi import</h3>
+                  <p className="text-xs text-gray-500">
+                    Tổng dòng đọc: {importPreview.totalIncoming.toLocaleString("vi-VN")} • Sau khi ghi: {importPreview.totalAfter.toLocaleString("vi-VN")}
+                  </p>
+                </div>
+                {importPreview.mode === "overwrite" && (
+                  <span className="rounded bg-amber-100 px-2 py-1 text-xs font-semibold uppercase text-amber-700">
+                    Ghi đè toàn bộ
+                  </span>
+                )}
+              </div>
+
+              <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+                {importPreviewStats.map((item) => (
+                  <div key={item.key} className="rounded border bg-gray-50 px-3 py-2">
+                    <div className="text-[11px] uppercase text-gray-500">{item.label}</div>
+                    <div className="text-base font-semibold text-gray-900">{item.value.toLocaleString("vi-VN")}</div>
+                  </div>
+                ))}
+              </div>
+
+              {importPreviewSamples.errors.length > 0 && (
+                <div className="mt-4 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-sm font-semibold text-red-700">
+                      Dòng lỗi sẽ bị bỏ qua ({importPreview.invalid.toLocaleString("vi-VN")})
+                    </h4>
+                    <span className="text-xs text-gray-500">
+                      Hiển thị tối đa {importPreviewSamples.errors.length.toLocaleString("vi-VN")} dòng đầu tiên
+                    </span>
+                  </div>
+                  <div className="max-h-48 overflow-auto rounded border">
+                    <table className="min-w-full text-xs">
+                      <thead className="bg-red-50 text-red-700">
+                        <tr>
+                          <th className="px-2 py-1 text-left">Lý do</th>
+                          <th className="px-2 py-1 text-left">Số tờ khai</th>
+                          <th className="px-2 py-1 text-left">Nhánh</th>
+                          <th className="px-2 py-1 text-left">MST</th>
+                          <th className="px-2 py-1 text-left">Doanh nghiệp</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {importPreviewSamples.errors.map((item, index) => {
+                          const reasonLabel = IMPORT_ERROR_REASON_LABELS[item.reason] || IMPORT_ERROR_REASON_LABELS.unknown;
+                          return (
+                            <tr
+                              key={`${item.reason}-${item.so_tk || index}-${item.nhanh || ""}`}
+                              className="odd:bg-[color:var(--ds-surface-card)] even:bg-[color:var(--ds-surface-muted)]"
+                            >
+                              <td className="px-2 py-1 text-red-600">{reasonLabel}</td>
+                              <td className="px-2 py-1">{item.so_tk || "—"}</td>
+                              <td className="px-2 py-1">{item.nhanh || "—"}</td>
+                              <td className="px-2 py-1">{item.mst || "—"}</td>
+                              <td className="px-2 py-1">{item.company || "—"}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {importPreviewSamples.inserted.length > 0 && (
+                <div className="mt-4 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-sm font-semibold text-emerald-700">
+                      Dòng thêm mới ({importPreview.inserted.toLocaleString("vi-VN")})
+                    </h4>
+                    {importPreview.inserted > importPreviewSamples.inserted.length && (
+                      <span className="text-xs text-gray-500">
+                        +{(importPreview.inserted - importPreviewSamples.inserted.length).toLocaleString("vi-VN")} dòng khác
+                      </span>
+                    )}
+                  </div>
+                  <div className="max-h-60 overflow-auto rounded border">
+                    <table className="min-w-full text-xs">
+                      <thead className="bg-emerald-50 text-emerald-700">
+                        <tr>
+                          <th className="px-2 py-1 text-left">Số tờ khai</th>
+                          <th className="px-2 py-1 text-left">MST</th>
+                          <th className="px-2 py-1 text-left">Công ty</th>
+                          <th className="px-2 py-1 text-left">Ngày đăng ký</th>
+                          <th className="px-2 py-1 text-left">Nhân viên</th>
+                          <th className="px-2 py-1 text-left">Tổ đội</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {importPreviewSamples.inserted.map((row, index) => {
+                          const companyName =
+                            row?.company ||
+                            row?.cong_ty ||
+                            row?.ten_dn ||
+                            row?.ten_doanh_nghiep ||
+                            row?.ten_doanh_nghiep_xnk ||
+                            row?.["Tên doanh nghiệp"] ||
+                            row?.["Doanh nghiệp"] ||
+                            "";
+                          return (
+                            <tr key={`${row.so_tk || index}-${row.nhanh || ""}`} className="odd:bg-[color:var(--ds-surface-card)] even:bg-[color:var(--ds-surface-muted)]">
+                              <td className="px-2 py-1">{formatDeclarationLabel(row)}</td>
+                              <td className="px-2 py-1">{row.mst || row.ma_so_thue || "—"}</td>
+                              <td className="px-2 py-1">{companyName || "—"}</td>
+                              <td className="px-2 py-1">{row.date ? formatDisplayDate(row.date) : "—"}</td>
+                              <td className="px-2 py-1">{row.nhan_vien || ""}</td>
+                              <td className="px-2 py-1">{row.team || ""}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {importPreview.newBusinessCount > 0 && (
+                <div className="mt-4 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-sm font-semibold text-blue-700">
+                      Doanh nghiệp mới ({importPreview.newBusinessCount.toLocaleString("vi-VN")})
+                    </h4>
+                    <span className="text-xs text-gray-500">Thông tin được thêm vào tab Gán MST</span>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {importPreview.newBusinesses.slice(0, 10).map((biz) => (
+                      <span key={biz.mst} className="rounded bg-blue-50 px-2 py-1 text-xs text-blue-700">
+                        {biz.mst} – {biz.company || "Không tên"}
+                      </span>
+                    ))}
+                    {importPreview.newBusinessCount > importPreview.newBusinesses.length && (
+                      <span className="text-xs text-gray-500">
+                        +{(importPreview.newBusinessCount - importPreview.newBusinesses.length).toLocaleString("vi-VN")} MST khác
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : null}
+        </div>
+      )}
 
       {canEdit && (
         <div className="flex flex-wrap items-center gap-2">

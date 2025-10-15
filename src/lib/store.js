@@ -1637,7 +1637,7 @@ function extractEffectiveDateFromDeclRow(row) {
   return '';
 }
 
-function ensureMSTEntriesForDeclRows(declRows, { actor = 'system' } = {}) {
+function ensureMSTEntriesForDeclRows(declRows, { actor = 'system', dryRun = false } = {}) {
   const list = Array.isArray(declRows) ? declRows : [];
   if (!list.length) {
     return { additions: [], total: 0 };
@@ -1673,6 +1673,16 @@ function ensureMSTEntriesForDeclRows(declRows, { actor = 'system' } = {}) {
     return { additions: [], total: 0 };
   }
 
+  const loggedAdditions = additions.map((item) => ({
+    mst: item.mst,
+    company: item.company,
+    effective_from: item.effective_from,
+  }));
+
+  if (dryRun) {
+    return { additions: loggedAdditions, total: additions.length };
+  }
+
   const merged = existingRows.concat(additions);
   const sample = additions.slice(0, 3).map((item) => item.mst).join(', ');
   const suffix = additions.length > 3 ? '…' : '';
@@ -1682,12 +1692,6 @@ function ensureMSTEntriesForDeclRows(declRows, { actor = 'system' } = {}) {
     actor: actorName,
     detail: `Tự động thêm ${additions.length} MST mới từ dữ liệu tờ khai${detailSample}`,
   });
-
-  const loggedAdditions = additions.map((item) => ({
-    mst: item.mst,
-    company: item.company,
-    effective_from: item.effective_from,
-  }));
 
   return { additions: loggedAdditions, total: additions.length };
 }
@@ -1908,10 +1912,167 @@ function normalizeImportErrorRow(row, reason = "unknown") {
   }
   const so_tk = normalizeDeclarationNumber(row.so_tk ?? row.so_tk_full ?? "");
   const nhanh = normalizeStr(row.nhanh ?? row.branch ?? "");
+  const mst = extractMSTFromDeclRow(row) || "";
+  const company = extractCompanyNameFromDeclRow(row) || "";
   return {
     reason,
     so_tk,
     nhanh,
+    mst: mst || undefined,
+    company: company || undefined,
+  };
+}
+
+function computeDeclImportDiff(currentRows, normalizedIncoming, { sampleLimit = 20 } = {}) {
+  const fallbackRows = [];
+  const currentMap = new Map();
+  for (const row of Array.isArray(currentRows) ? currentRows : []) {
+    if (!row || typeof row !== "object") continue;
+    const key = getDeclarationKey(row);
+    if (!key) {
+      fallbackRows.push(row);
+      continue;
+    }
+    if (!currentMap.has(key)) {
+      currentMap.set(key, row);
+    }
+  }
+
+  let inserted = 0;
+  let updated = 0;
+  let skipped = 0;
+  let locked = 0;
+  const insertedDeclarations = [];
+  const updatedDeclarations = [];
+  const lockedDeclarations = [];
+  const errorEntries = [];
+
+  const insertedRows = [];
+  const updatedRows = [];
+  const lockedRows = [];
+
+  for (const row of normalizedIncoming) {
+    const key = getDeclarationKey(row);
+    if (!key) {
+      errorEntries.push(normalizeImportErrorRow(row, "missing-key"));
+      continue;
+    }
+    const existing = currentMap.get(key);
+    if (!existing) {
+      currentMap.set(key, row);
+      inserted += 1;
+      insertedRows.push(row);
+      const entry = buildImportLogEntry(row);
+      if (entry) {
+        insertedDeclarations.push(entry);
+      }
+      continue;
+    }
+
+    const { row: mergedRow, changed, changedFields, locked: isLocked } = mergeDeclRowWithSummary(existing, row);
+    if (isLocked) {
+      locked += 1;
+      lockedRows.push(existing);
+      const entry = buildImportLogEntry(existing);
+      if (entry) {
+        lockedDeclarations.push(entry);
+      }
+      continue;
+    }
+
+    currentMap.set(key, mergedRow);
+    if (changed) {
+      updated += 1;
+      updatedRows.push({ before: existing, after: mergedRow, changedFields });
+      const entry = buildImportLogEntry(mergedRow, changedFields);
+      if (entry) {
+        updatedDeclarations.push(entry);
+      }
+    } else {
+      skipped += 1;
+    }
+  }
+
+  const mergedRows = fallbackRows.concat(Array.from(currentMap.values()));
+
+  return {
+    mergedRows,
+    summary: {
+      inserted,
+      updated,
+      skipped,
+      locked,
+      invalid: errorEntries.length,
+      insertedDeclarations,
+      updatedDeclarations,
+      lockedDeclarations,
+      errors: errorEntries,
+    },
+    samples: {
+      inserted: insertedRows.slice(0, sampleLimit),
+      updated: updatedRows.slice(0, sampleLimit),
+      locked: lockedRows.slice(0, sampleLimit),
+      errors: errorEntries.slice(0, sampleLimit),
+    },
+  };
+}
+
+export function previewDeclRows(newRows, { overwrite = false, actor = "system" } = {}) {
+  const incoming = Array.isArray(newRows) ? newRows : [];
+  const normalizedIncoming = normalizeDeclRows(incoming);
+  const actorName = normalizeStr(actor) || "system";
+  const currentRows = getDeclRowsRaw();
+
+  if (overwrite) {
+    const validRows = normalizedIncoming.filter((row) => !!getDeclarationKey(row));
+    const invalidRows = normalizedIncoming.filter((row) => !getDeclarationKey(row));
+    const mstSummary = ensureMSTEntriesForDeclRows(normalizedIncoming, { actor: actorName, dryRun: true }) || {
+      additions: [],
+      total: 0,
+    };
+
+    return {
+      mode: "overwrite",
+      totalBefore: currentRows.length,
+      totalAfter: validRows.length,
+      totalStored: validRows.length,
+      totalIncoming: normalizedIncoming.length,
+      inserted: validRows.length,
+      updated: 0,
+      skipped: 0,
+      locked: 0,
+      invalid: invalidRows.length,
+      errors: invalidRows.map((row) => normalizeImportErrorRow(row, "missing-key")),
+      insertedDeclarations: validRows.map((row) => buildImportLogEntry(row)).filter(Boolean),
+      updatedDeclarations: [],
+      lockedDeclarations: [],
+      samples: {
+        inserted: validRows.slice(0, 20),
+        updated: [],
+        locked: [],
+        errors: invalidRows.slice(0, 20).map((row) => normalizeImportErrorRow(row, "missing-key")),
+      },
+      newBusinessCount: mstSummary.total || 0,
+      newBusinesses: mstSummary.additions || [],
+    };
+  }
+
+  const { mergedRows, summary, samples } = computeDeclImportDiff(currentRows, normalizedIncoming, { sampleLimit: 20 });
+  const mstSummary = ensureMSTEntriesForDeclRows(normalizedIncoming, { actor: actorName, dryRun: true }) || {
+    additions: [],
+    total: 0,
+  };
+
+  return {
+    mode: "merge",
+    totalBefore: currentRows.length,
+    totalAfter: mergedRows.length,
+    totalStored: mergedRows.length,
+    totalIncoming: normalizedIncoming.length,
+    ...summary,
+    samples,
+    newBusinessCount: mstSummary.total || 0,
+    newBusinesses: mstSummary.additions || [],
   };
 }
 
@@ -1952,69 +2113,7 @@ export function saveDeclRows(newRows, { overwrite = false, actor = "system", det
     };
   }
 
-  const fallbackRows = [];
-  const currentMap = new Map();
-  for (const row of Array.isArray(currentRows) ? currentRows : []) {
-    if (!row || typeof row !== "object") continue;
-    const key = getDeclarationKey(row);
-    if (!key) {
-      fallbackRows.push(row);
-      continue;
-    }
-    if (!currentMap.has(key)) {
-      currentMap.set(key, row);
-    }
-  }
-
-  let inserted = 0;
-  let updated = 0;
-  let skipped = 0;
-  let locked = 0;
-  const insertedDeclarations = [];
-  const updatedDeclarations = [];
-  const lockedDeclarations = [];
-  const errorEntries = [];
-
-  for (const row of normalizedIncoming) {
-    const key = getDeclarationKey(row);
-    if (!key) {
-      errorEntries.push(normalizeImportErrorRow(row, "missing-key"));
-      continue;
-    }
-    const existing = currentMap.get(key);
-    if (!existing) {
-      currentMap.set(key, row);
-      inserted += 1;
-      const entry = buildImportLogEntry(row);
-      if (entry) {
-        insertedDeclarations.push(entry);
-      }
-      continue;
-    }
-
-    const { row: mergedRow, changed, changedFields, locked: isLocked } = mergeDeclRowWithSummary(existing, row);
-    if (isLocked) {
-      locked += 1;
-      const entry = buildImportLogEntry(existing);
-      if (entry) {
-        lockedDeclarations.push(entry);
-      }
-      continue;
-    }
-
-    currentMap.set(key, mergedRow);
-    if (changed) {
-      updated += 1;
-      const entry = buildImportLogEntry(mergedRow, changedFields);
-      if (entry) {
-        updatedDeclarations.push(entry);
-      }
-    } else {
-      skipped += 1;
-    }
-  }
-
-  const mergedRows = fallbackRows.concat(Array.from(currentMap.values()));
+  const { mergedRows, summary } = computeDeclImportDiff(currentRows, normalizedIncoming, { sampleLimit: 0 });
   const stored = persistAndAnnotateDeclRows(mergedRows);
 
   const mstSummary = ensureMSTEntriesForDeclRows(normalizedIncoming, { actor: actorName }) || {
@@ -2022,10 +2121,12 @@ export function saveDeclRows(newRows, { overwrite = false, actor = "system", det
     total: 0,
   };
 
-  const skipLabel = locked > 0 ? `${skipped.toLocaleString("vi-VN")} bỏ qua (khóa ${locked.toLocaleString("vi-VN")})` : `${skipped.toLocaleString("vi-VN")} bỏ qua`;
+  const skipLabel = summary.locked > 0
+    ? `${summary.skipped.toLocaleString("vi-VN")} bỏ qua (khóa ${summary.locked.toLocaleString("vi-VN")})`
+    : `${summary.skipped.toLocaleString("vi-VN")} bỏ qua`;
   const auditDetail = detail && detail.trim()
     ? detail
-    : `Hợp nhất ${normalizedIncoming.length.toLocaleString("vi-VN")} tờ khai (+${inserted.toLocaleString("vi-VN")} / cập nhật ${updated.toLocaleString("vi-VN")} / ${skipLabel} -> tổng ${stored.length.toLocaleString("vi-VN")})`;
+    : `Hợp nhất ${normalizedIncoming.length.toLocaleString("vi-VN")} tờ khai (+${summary.inserted.toLocaleString("vi-VN")} / cập nhật ${summary.updated.toLocaleString("vi-VN")} / ${skipLabel} -> tổng ${stored.length.toLocaleString("vi-VN")})`;
 
   pushAuditLog({
     actor: actorName,
@@ -2039,15 +2140,15 @@ export function saveDeclRows(newRows, { overwrite = false, actor = "system", det
     totalAfter: stored.length,
     totalStored: stored.length,
     totalIncoming: normalizedIncoming.length,
-    inserted,
-    updated,
-    skipped,
-    locked,
-    invalid: errorEntries.length,
-    insertedDeclarations,
-    updatedDeclarations,
-    lockedDeclarations,
-    errors: errorEntries,
+    inserted: summary.inserted,
+    updated: summary.updated,
+    skipped: summary.skipped,
+    locked: summary.locked,
+    invalid: summary.invalid,
+    insertedDeclarations: summary.insertedDeclarations,
+    updatedDeclarations: summary.updatedDeclarations,
+    lockedDeclarations: summary.lockedDeclarations,
+    errors: summary.errors,
     newBusinessCount: mstSummary.total || 0,
     newBusinesses: mstSummary.additions || [],
   };

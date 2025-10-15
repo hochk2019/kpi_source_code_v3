@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import {
   saveDeclRows,
+  previewDeclRows,
   getDeclRows,
   sortDeclRows,
   getRecentDeclRows,
@@ -239,6 +240,55 @@ describe('updateDeclRowFields', () => {
 
     const historyAfter = getDeclHistoryForRow('00000000002_', 10);
     expect(historyAfter).toHaveLength(0);
+  });
+});
+
+describe('previewDeclRows', () => {
+  it('tính toán số liệu thêm/cập nhật mà không ghi xuống storage', () => {
+    const baseline = [
+      { so_tk: 'TK001', nhanh: '', date: '2024-01-01', mst: '0101234567', company: 'ACME' },
+    ];
+
+    saveDeclRows(baseline, { overwrite: true });
+
+    const preview = previewDeclRows(
+      [
+        { so_tk: 'TK001', nhanh: '', date: '2024-01-05', mst: '0101234567', company: 'ACME' },
+        { so_tk: 'TK002', nhanh: '', date: '2024-01-06', mst: '0207654321', company: 'Beta' },
+        { nhanh: '', date: '2024-01-07', mst: '0999999999', company: 'Thiếu số' },
+      ],
+      { overwrite: false, actor: 'tester' },
+    );
+
+    expect(preview.mode).toBe('merge');
+    expect(preview.inserted).toBe(1);
+    expect(preview.updated).toBe(1);
+    expect(preview.invalid).toBe(1);
+    expect(preview.errors[0].reason).toBe('missing-key');
+    expect(preview.samples.inserted).toHaveLength(1);
+    expect(preview.samples.errors).toHaveLength(1);
+
+    const stored = getDeclRows();
+    expect(stored).toHaveLength(1);
+    expect(stored[0].date).toBe('2024-01-01');
+  });
+
+  it('chế độ overwrite trả về MST mới nhưng không ghi xuống map MST', () => {
+    const preview = previewDeclRows(
+      [
+        { so_tk: 'TK010', nhanh: '', date: '2024-02-01', mst: '0123456789', company: 'Doanh nghiệp A' },
+        { nhanh: '', date: '2024-02-02', mst: '0111111111', company: 'Thiếu số TK' },
+      ],
+      { overwrite: true, actor: 'tester' },
+    );
+
+    expect(preview.mode).toBe('overwrite');
+    expect(preview.inserted).toBe(1);
+    expect(preview.invalid).toBe(1);
+    expect(preview.newBusinessCount).toBe(1);
+    expect(preview.newBusinesses[0]).toMatchObject({ mst: '0123456789' });
+    expect(getDeclRows()).toHaveLength(0);
+    expect(getMSTMap()).toHaveLength(0);
   });
 });
 
