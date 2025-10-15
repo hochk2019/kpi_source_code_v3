@@ -129,6 +129,20 @@ const DECL_STATUS_LABELS = Object.freeze({
   synced: "Đã đồng bộ",
 });
 
+const FROZEN_COLUMN_KEYS = Object.freeze(["date", "declaration", "mst"]);
+const FROZEN_COLUMN_WIDTHS = Object.freeze({
+  selection: 44,
+  date: 120,
+  declaration: 220,
+  mst: 140,
+});
+
+const VIEW_MODE_STORAGE_KEY = "dataImporter:viewMode";
+const VIEW_MODES = Object.freeze({
+  TABLE: "table",
+  CARD: "card",
+});
+
 function normalizeComparableValue(value) {
   if (value === null || value === undefined) return "";
   if (typeof value === "string") return normalizeStr(value);
@@ -160,6 +174,10 @@ function formatStatusLabel(status) {
     return "Không rõ";
   }
   return key.charAt(0).toUpperCase() + key.slice(1);
+}
+
+function cx(...classes) {
+  return classes.filter(Boolean).join(" ");
 }
 
 function collectEditableDiff(baseline, current) {
@@ -1378,6 +1396,13 @@ export default function DataImporter({
   const [page, setPage] = useState(1);
   const [mode, setMode] = useState("saved");         // saved | preview
   const [selectedFile, setSelectedFile] = useState("");
+  const [viewMode, setViewMode] = useState(() => {
+    if (typeof window === "undefined") {
+      return VIEW_MODES.TABLE;
+    }
+    const stored = window.localStorage?.getItem(VIEW_MODE_STORAGE_KEY);
+    return stored === VIEW_MODES.CARD ? VIEW_MODES.CARD : VIEW_MODES.TABLE;
+  });
   const {
     presets: savedPresets,
     loading: presetLoading,
@@ -1425,6 +1450,17 @@ export default function DataImporter({
   const [presetSaving, setPresetSaving] = useState(false);
   const lastPresetSeedRef = useRef("");
   const presetAutoAppliedRef = useRef(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    try {
+      window.localStorage?.setItem(VIEW_MODE_STORAGE_KEY, viewMode);
+    } catch (error) {
+      console.warn("Không thể lưu chế độ hiển thị Import Data", error);
+    }
+  }, [viewMode]);
 
   // Tuỳ chọn
   const [overwrite, setOverwrite] = useState(false);         // Ghi đè toàn bộ
@@ -4318,6 +4354,89 @@ const selectedReviewedCount = useMemo(() => {
   const deleteEnabled = canEdit && mode === "saved";
   const historyEnabled = mode === "saved";
   const hiddenColumns = columnHiddenSet;
+  const frozenOffsets = useMemo(() => {
+    let offset = 0;
+    const config = {};
+    if (selectionEnabled) {
+      config.selection = { left: offset, width: FROZEN_COLUMN_WIDTHS.selection };
+      offset += FROZEN_COLUMN_WIDTHS.selection;
+    }
+    for (const key of FROZEN_COLUMN_KEYS) {
+      if (hiddenColumns.has(key)) {
+        continue;
+      }
+      const width = FROZEN_COLUMN_WIDTHS[key];
+      if (!width) {
+        continue;
+      }
+      config[key] = { left: offset, width };
+      offset += width;
+    }
+    config.total = offset;
+    return config;
+  }, [hiddenColumns, selectionEnabled]);
+  const getFrozenStyle = useCallback(
+    (key) => {
+      const config = frozenOffsets[key];
+      if (!config) {
+        return undefined;
+      }
+      return {
+        left: `${config.left}px`,
+        minWidth: `${config.width}px`,
+        width: `${config.width}px`,
+        maxWidth: `${config.width}px`,
+      };
+    },
+    [frozenOffsets]
+  );
+  const frozenHeaderClass =
+    "sticky top-0 z-40 bg-gray-50 shadow-[4px_0_8px_rgba(148,163,184,0.18)] dark:bg-slate-900";
+  const frozenCellClass =
+    "sticky z-30 bg-inherit shadow-[4px_0_6px_rgba(148,163,184,0.12)] dark:bg-inherit";
+  const historyIndent = useMemo(() => {
+    const total = Number(frozenOffsets.total || 0);
+    if (selectionEnabled) {
+      return Math.max(0, total - FROZEN_COLUMN_WIDTHS.selection);
+    }
+    return total;
+  }, [frozenOffsets, selectionEnabled]);
+  const buildRowState = useCallback(
+    (row, index = 0) => {
+      const rowKey = keyOfRow(row);
+      const rowEditable = isRowEditable(row);
+      const rowReadOnly = isReadOnlyForEdits || !rowEditable;
+      const rowDiff = rowDiffMap.get(rowKey);
+      const hasPendingDiff = !!(rowDiff && Object.keys(rowDiff).length > 0);
+      const currentSaveState = rowSaveStatus[rowKey] || { saving: false, error: "" };
+      const historyList = rowHistoryEntries[rowKey] || [];
+      const historyExpanded = !!rowHistoryExpanded[rowKey];
+      return {
+        index,
+        row,
+        rowKey,
+        rowEditable,
+        rowReadOnly,
+        rowDiff,
+        hasPendingDiff,
+        canSaveRow: hasPendingDiff && !rowReadOnly,
+        rowSaving: currentSaveState.saving,
+        rowError: currentSaveState.error || "",
+        historyList,
+        historyExpanded,
+        historyCount: Array.isArray(historyList) ? historyList.length : 0,
+      };
+    },
+    [
+      isReadOnlyForEdits,
+      isRowEditable,
+      keyOfRow,
+      rowDiffMap,
+      rowHistoryEntries,
+      rowHistoryExpanded,
+      rowSaveStatus,
+    ]
+  );
   const baseColumnCount = visibleColumnCount; // số cột dữ liệu đang hiển thị
   const totalColumns =
     baseColumnCount +
@@ -6768,7 +6887,31 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
         <div className="opacity-70 text-sm">
           {total} dòng — Trang {safePage}/{maxPage}
         </div>
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ml-auto flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-1 rounded border border-gray-200 bg-white p-0.5 text-xs shadow-sm dark:border-slate-600 dark:bg-slate-800">
+            <button
+              type="button"
+              onClick={() => setViewMode(VIEW_MODES.TABLE)}
+              className={`rounded px-2 py-1 font-medium transition ${
+                viewMode === VIEW_MODES.TABLE
+                  ? "bg-blue-500 text-white shadow"
+                  : "text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-slate-700"
+              }`}
+            >
+              Bảng
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode(VIEW_MODES.CARD)}
+              className={`rounded px-2 py-1 font-medium transition ${
+                viewMode === VIEW_MODES.CARD
+                  ? "bg-blue-500 text-white shadow"
+                  : "text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-slate-700"
+              }`}
+            >
+              Thẻ
+            </button>
+          </div>
           <select
             value={pageSize}
             onChange={e => setPageSize(Number(e.target.value) || DEFAULT_PAGE_SIZE)}
@@ -6899,311 +7042,770 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
         </div>
       )}
 
-      <div className="overflow-x-auto overflow-y-hidden border rounded">
-        <table className="w-full min-w-[1200px] text-sm">
-          <thead className="bg-gray-50">
-            <tr>
-              {selectionEnabled && <th className="px-2 py-1 text-left w-10">Chọn</th>}
+      {viewMode === VIEW_MODES.TABLE ? (
+        <div className="relative overflow-x-auto overflow-y-hidden rounded border bg-white dark:border-slate-700 dark:bg-slate-900/40">
+          <table className="relative w-full min-w-[1200px] table-fixed text-sm">
+            <thead className="bg-gray-50 text-left dark:bg-slate-900">
+              <tr>
+              {selectionEnabled && (
+                <th
+                  className={cx(
+                    "px-2 py-1 font-semibold text-gray-600 dark:text-gray-300",
+                    frozenOffsets.selection ? frozenHeaderClass : ""
+                  )}
+                  style={getFrozenStyle("selection")}
+                >
+                  Chọn
+                </th>
+              )}
               {!hiddenColumns.has("date") && (
-                <th className="px-2 py-1 text-left">{IMPORT_TABLE_COLUMN_LABELS.date}</th>
+                <th
+                  className={cx(
+                    "px-2 py-1 font-semibold text-gray-600 dark:text-gray-300",
+                    frozenOffsets.date ? frozenHeaderClass : ""
+                  )}
+                  style={getFrozenStyle("date")}
+                >
+                  {IMPORT_TABLE_COLUMN_LABELS.date}
+                </th>
               )}
               {!hiddenColumns.has("declaration") && (
-                <th className="px-2 py-1 text-left">{IMPORT_TABLE_COLUMN_LABELS.declaration}</th>
+                <th
+                  className={cx(
+                    "px-2 py-1 font-semibold text-gray-600 dark:text-gray-300",
+                    frozenOffsets.declaration ? frozenHeaderClass : ""
+                  )}
+                  style={getFrozenStyle("declaration")}
+                >
+                  {IMPORT_TABLE_COLUMN_LABELS.declaration}
+                </th>
               )}
               {!hiddenColumns.has("mst") && (
-                <th className="px-2 py-1 text-left">{IMPORT_TABLE_COLUMN_LABELS.mst}</th>
+                <th
+                  className={cx(
+                    "px-2 py-1 font-semibold text-gray-600 dark:text-gray-300",
+                    frozenOffsets.mst ? frozenHeaderClass : ""
+                  )}
+                  style={getFrozenStyle("mst")}
+                >
+                  {IMPORT_TABLE_COLUMN_LABELS.mst}
+                </th>
               )}
               {!hiddenColumns.has("company") && (
-                <th className="px-2 py-1 text-left">{IMPORT_TABLE_COLUMN_LABELS.company}</th>
+                <th className="px-2 py-1 font-semibold text-gray-600 dark:text-gray-300">
+                  {IMPORT_TABLE_COLUMN_LABELS.company}
+                </th>
               )}
               {!hiddenColumns.has("type") && (
-                <th className="px-2 py-1 text-left">{IMPORT_TABLE_COLUMN_LABELS.type}</th>
+                <th className="px-2 py-1 font-semibold text-gray-600 dark:text-gray-300">
+                  {IMPORT_TABLE_COLUMN_LABELS.type}
+                </th>
               )}
               {!hiddenColumns.has("co") && (
-                <th className="px-2 py-1 text-left">{IMPORT_TABLE_COLUMN_LABELS.co}</th>
+                <th className="px-2 py-1 font-semibold text-gray-600 dark:text-gray-300">
+                  {IMPORT_TABLE_COLUMN_LABELS.co}
+                </th>
               )}
               {!hiddenColumns.has("items") && (
-                <th className="px-2 py-1 text-left">{IMPORT_TABLE_COLUMN_LABELS.items}</th>
+                <th className="px-2 py-1 font-semibold text-gray-600 dark:text-gray-300">
+                  {IMPORT_TABLE_COLUMN_LABELS.items}
+                </th>
               )}
               {!hiddenColumns.has("staff") && (
-                <th className="px-2 py-1 text-left">{IMPORT_TABLE_COLUMN_LABELS.staff}</th>
+                <th className="px-2 py-1 font-semibold text-gray-600 dark:text-gray-300">
+                  {IMPORT_TABLE_COLUMN_LABELS.staff}
+                </th>
               )}
               {!hiddenColumns.has("team") && (
-                <th className="px-2 py-1 text-left">{IMPORT_TABLE_COLUMN_LABELS.team}</th>
+                <th className="px-2 py-1 font-semibold text-gray-600 dark:text-gray-300">
+                  {IMPORT_TABLE_COLUMN_LABELS.team}
+                </th>
               )}
               {!hiddenColumns.has("agency") && (
-                <th className="px-2 py-1 text-left">{IMPORT_TABLE_COLUMN_LABELS.agency}</th>
+                <th className="px-2 py-1 font-semibold text-gray-600 dark:text-gray-300">
+                  {IMPORT_TABLE_COLUMN_LABELS.agency}
+                </th>
               )}
               {!hiddenColumns.has("status") && (
-                <th className="px-2 py-1 text-left">{IMPORT_TABLE_COLUMN_LABELS.status}</th>
+                <th className="px-2 py-1 font-semibold text-gray-600 dark:text-gray-300">
+                  {IMPORT_TABLE_COLUMN_LABELS.status}
+                </th>
               )}
               {!hiddenColumns.has("licenses") && (
-                <th className="px-2 py-1 text-left">{IMPORT_TABLE_COLUMN_LABELS.licenses}</th>
+                <th className="px-2 py-1 font-semibold text-gray-600 dark:text-gray-300">
+                  {IMPORT_TABLE_COLUMN_LABELS.licenses}
+                </th>
               )}
               {!hiddenColumns.has("kpi") && (
-                <th className="px-2 py-1 text-left">{IMPORT_TABLE_COLUMN_LABELS.kpi}</th>
+                <th className="px-2 py-1 font-semibold text-gray-600 dark:text-gray-300">
+                  {IMPORT_TABLE_COLUMN_LABELS.kpi}
+                </th>
               )}
-              {historyEnabled && <th className="px-2 py-1 text-left w-32">Nhật ký</th>}
-              {updateEnabled && <th className="px-2 py-1 text-left w-24">Cập nhật</th>}
-              {deleteEnabled && <th className="px-2 py-1 text-left w-16">Xóa</th>}
-            </tr>
+              {historyEnabled && (
+                <th className="px-2 py-1 text-left font-semibold text-gray-600 dark:text-gray-300">Nhật ký</th>
+              )}
+              {updateEnabled && (
+                <th className="px-2 py-1 text-left font-semibold text-gray-600 dark:text-gray-300">Cập nhật</th>
+              )}
+              {deleteEnabled && (
+                <th className="px-2 py-1 text-left font-semibold text-gray-600 dark:text-gray-300">Xóa</th>
+              )}
+              </tr>
           </thead>
           <tbody>
           {pageRows.map((r, i) => {
-            const rowKey = keyOfRow(r);
-            const rowEditable = isRowEditable(r);
-            const rowReadOnly = isReadOnlyForEdits || !rowEditable;
-          const rowDiff = rowDiffMap.get(rowKey);
-          const hasPendingDiff = !!(rowDiff && Object.keys(rowDiff).length > 0);
-          const canSaveRow = hasPendingDiff && !rowReadOnly;
-          const currentSaveState = rowSaveStatus[rowKey] || { saving: false, error: "" };
-          const { saving: rowSaving, error: rowError } = currentSaveState;
-          const historyList = rowHistoryEntries[rowKey] || [];
-          const historyExpanded = !!rowHistoryExpanded[rowKey];
-          const historyCount = Array.isArray(historyList) ? historyList.length : 0;
-          return (
-            <React.Fragment key={`${rowKey}_${i}`}>
-              <tr
-                className="odd:bg-[color:var(--ds-surface-card)] even:bg-[color:var(--ds-surface-muted)]"
-              >
-                {selectionEnabled && (
-                  <td className="px-2 py-1">
-                    <input
-                      type="checkbox"
-                      checked={selectedKeys.includes(rowKey)}
-                      onChange={() => handleToggleSelect(r)}
-                      disabled={rowReadOnly}
-                    />
-                  </td>
+            const state = buildRowState(r, i);
+            const {
+              rowKey,
+              rowReadOnly,
+              rowEditable,
+              canSaveRow,
+              rowSaving,
+              rowError,
+              historyExpanded,
+              historyList,
+              historyCount,
+            } = state;
+            const hasPendingDiff = state.hasPendingDiff;
+            return (
+              <React.Fragment key={`${rowKey}_${i}`}>
+                <tr className="relative odd:bg-[color:var(--ds-surface-card)] even:bg-[color:var(--ds-surface-muted)]">
+                  {selectionEnabled && (
+                    <td
+                      className={cx("px-2 py-1 align-top", frozenOffsets.selection ? frozenCellClass : "")}
+                      style={getFrozenStyle("selection")}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedKeys.includes(rowKey)}
+                        onChange={() => handleToggleSelect(r)}
+                        disabled={rowReadOnly}
+                      />
+                    </td>
+                  )}
+                  {!hiddenColumns.has("date") && (
+                    <td
+                      className={cx(
+                        "px-2 py-1 align-top whitespace-nowrap text-sm text-gray-700 dark:text-gray-200",
+                        frozenOffsets.date ? frozenCellClass : ""
+                      )}
+                      style={getFrozenStyle("date")}
+                    >
+                      <span title={r.raw_date || ""}>{formatDisplayDate(r.date || r.raw_date || "")}</span>
+                    </td>
+                  )}
+                  {!hiddenColumns.has("declaration") && (
+                    <td
+                      className={cx(
+                        "px-2 py-1 align-top",
+                        frozenOffsets.declaration ? frozenCellClass : ""
+                      )}
+                      style={getFrozenStyle("declaration")}
+                    >
+                      <div className="flex flex-wrap items-center gap-1">
+                        <span className="font-medium text-gray-800 dark:text-gray-100">
+                          {r.so_tk_full || r.so_tk || ""}
+                        </span>
+                        {r.so_tk_suffix ? (
+                          <span className="text-[10px] uppercase text-gray-400">{r.so_tk_suffix}</span>
+                        ) : null}
+                        {updatedKeySet.has(rowKey) && (
+                          <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700">
+                            Cập nhật
+                          </span>
+                        )}
+                        {coMismatchKeySet.has(rowKey) && (
+                          <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">
+                            CO lệch
+                          </span>
+                        )}
+                        {duplicate11KeeperSet.has(rowKey) && (
+                          <span className="rounded bg-sky-100 px-1.5 py-0.5 text-[10px] font-medium text-sky-700">
+                            Giữ mới nhất
+                          </span>
+                        )}
+                        {duplicate11DuplicatesSet.has(rowKey) && (
+                          <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">
+                            Trùng 11 số
+                          </span>
+                        )}
+                        {r.duplicate_review_pending && (
+                          <span className="rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-medium text-red-700">
+                            Chờ rà soát
+                          </span>
+                        )}
+                        {rowReadOnly && (
+                          <span className="rounded bg-gray-200 px-1.5 py-0.5 text-[10px] font-medium text-gray-600">
+                            Chỉ xem
+                          </span>
+                        )}
+                        {hasPendingDiff && !rowReadOnly && (
+                          <span className="rounded bg-blue-100 px-1.5 py-0.5 text-[10px] font-medium text-blue-700">
+                            Chưa lưu
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                  )}
+                  {!hiddenColumns.has("mst") && (
+                    <td
+                      className={cx(
+                        "px-2 py-1 align-top text-gray-700 dark:text-gray-200",
+                        frozenOffsets.mst ? frozenCellClass : ""
+                      )}
+                      style={getFrozenStyle("mst")}
+                    >
+                      <span>{r.mst || ""}</span>
+                    </td>
+                  )}
+                  {!hiddenColumns.has("company") && (
+                    <td className="px-2 py-1 align-top">
+                      <span>{r.cong_ty || ""}</span>
+                    </td>
+                  )}
+                  {!hiddenColumns.has("type") && (
+                    <td className="px-2 py-1 align-top">
+                      <span>{r.loai_hinh || ""}</span>
+                    </td>
+                  )}
+                  {!hiddenColumns.has("co") && (
+                    <td className="px-2 py-1 align-top">
+                      {(() => {
+                        const lines = coLineCount(r);
+                        const status = coLabel(r);
+                        const display = lines > 0 ? String(lines) : status;
+                        const hasValue = !!display;
+                        return (
+                          <span className={hasValue ? "text-emerald-600 font-medium" : "text-gray-400"}>
+                            {display || ""}
+                          </span>
+                        );
+                      })()}
+                    </td>
+                  )}
+                  {!hiddenColumns.has("items") && (
+                    <td className="px-2 py-1 align-top">
+                      <span>{r.muc_hang ?? ""}</span>
+                    </td>
+                  )}
+                  {!hiddenColumns.has("staff") && (
+                    <td className="px-2 py-1 align-top">
+                      {rowReadOnly ? (
+                        <span>{r.nhan_vien || ""}</span>
+                      ) : (
+                        <StaffCombobox
+                          value={r.nhan_vien || ""}
+                          teamValue={r.team || ""}
+                          teams={rosterTeams}
+                          onSelect={(selection) => handleSelectStaff(rowKey, selection)}
+                        />
+                      )}
+                    </td>
+                  )}
+                  {!hiddenColumns.has("team") && (
+                    <td className="px-2 py-1 align-top">
+                      {rowReadOnly ? (
+                        <span>{r.team || ""}</span>
+                      ) : (
+                        <TeamCombobox
+                          value={r.team || ""}
+                          teams={rosterTeams}
+                          onSelect={({ teamName }) => handleSelectTeam(rowKey, teamName)}
+                        />
+                      )}
+                    </td>
+                  )}
+                  {!hiddenColumns.has("agency") && (
+                    <td className="px-2 py-1 align-top">
+                      {rowReadOnly ? (
+                        <span>{r.agency || r.dai_ly || ""}</span>
+                      ) : (
+                        <input
+                          className="w-28 rounded border px-1 py-0.5"
+                          value={r.agency || r.dai_ly || ""}
+                          onChange={(e) =>
+                            applyEdit(rowKey, () => ({ agency: e.target.value, dai_ly: e.target.value }))
+                          }
+                        />
+                      )}
+                    </td>
+                  )}
+                  {!hiddenColumns.has("status") && (
+                    <td className="px-2 py-1 align-top">
+                      {(() => {
+                        const hasStaff = !!(r.nhan_vien && r.nhan_vien.toString().trim());
+                        const hasTeam = !!(r.team && r.team.toString().trim());
+                        if (r.reviewed) {
+                          return <span className="text-emerald-700">Đã rà soát</span>;
+                        }
+                        if (!hasStaff || !hasTeam) {
+                          const missing = [];
+                          if (!hasStaff) missing.push("nhân viên");
+                          if (!hasTeam) missing.push("tổ đội");
+                          return <span className="text-amber-600">Thiếu {missing.join(" & ")}</span>;
+                        }
+                        return <span className="text-gray-600">Đủ thông tin</span>;
+                      })()}
+                    </td>
+                  )}
+                  {!hiddenColumns.has("licenses") && (
+                    <td className="px-2 py-1 align-top">
+                      {rowReadOnly ? (
+                        <span>{r.licenses ?? r.so_luong_gp ?? ""}</span>
+                      ) : (
+                        <input
+                          type="number"
+                          min="0"
+                          step="1"
+                          className="w-24 rounded border px-1 py-0.5"
+                          value={r.licenses ?? r.so_luong_gp ?? ""}
+                          onChange={(e) => {
+                            const input = e.target.value;
+                            if (input === "") {
+                              applyEdit(rowKey, () => ({ licenses: "", so_luong_gp: "", licenseManualCount: null }));
+                              return;
+                            }
+                            const parsed = Number(input);
+                            if (!Number.isFinite(parsed)) return;
+                            const normalized = Math.max(0, Math.round(parsed));
+                            applyEdit(rowKey, () => ({
+                              licenses: normalized,
+                              so_luong_gp: normalized,
+                              licenseManualCount: normalized,
+                            }));
+                          }}
+                        />
+                      )}
+                    </td>
+                  )}
+                  {!hiddenColumns.has("kpi") && (
+                    <td className="px-2 py-1 align-top">
+                      {(() => {
+                        const kpi = computeKPI(r, rules);
+                        if (!Number.isFinite(kpi)) return "-";
+                        return kpi.toFixed(1);
+                      })()}
+                    </td>
+                  )}
+                  {historyEnabled && (
+                    <td className="px-2 py-1 align-top">
+                      <button
+                        type="button"
+                        onClick={() => handleToggleHistory(rowKey)}
+                        className={cx(
+                          "rounded px-2 py-0.5 text-xs",
+                          historyExpanded
+                            ? "border border-blue-500 bg-blue-50 text-blue-700"
+                            : "border border-gray-300 bg-white text-gray-700 hover:border-blue-400 hover:text-blue-700"
+                        )}
+                      >
+                        {historyExpanded ? "Thu gọn" : "Nhật ký"}
+                        {historyCount > 0 ? ` (${historyCount})` : ""}
+                      </button>
+                    </td>
+                  )}
+                  {updateEnabled && (
+                    <td className="px-2 py-1 align-top">
+                      {rowReadOnly ? (
+                        <span className="text-[11px] text-gray-400">Chỉ xem</span>
+                      ) : canSaveRow ? (
+                        <div className="flex flex-col gap-1">
+                          <button
+                            type="button"
+                            onClick={() => handleSaveRowChanges(rowKey)}
+                            disabled={rowSaving}
+                            className={cx(
+                              "rounded px-2 py-0.5 text-xs font-medium text-white transition",
+                              rowSaving ? "cursor-not-allowed bg-blue-300" : "bg-blue-600 hover:bg-blue-700"
+                            )}
+                          >
+                            {rowSaving ? "Đang lưu…" : "Cập nhật"}
+                          </button>
+                          {rowError ? <span className="text-[11px] text-red-600">{rowError}</span> : null}
+                        </div>
+                      ) : (
+                        <span className="text-[11px] text-gray-400">Đã đồng bộ</span>
+                      )}
+                    </td>
+                  )}
+                  {deleteEnabled && rowEditable && (
+                    <td className="px-2 py-1 align-top">
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteSingle(r)}
+                        className="rounded bg-red-500 px-2 py-0.5 text-xs text-white hover:bg-red-600"
+                      >
+                        Xóa
+                      </button>
+                    </td>
+                  )}
+                </tr>
+                {historyEnabled && historyExpanded && (
+                  <tr className="bg-blue-50/40">
+                    {selectionEnabled && (
+                      <td
+                        className={cx("px-2 py-1", frozenOffsets.selection ? frozenCellClass : "")}
+                        style={getFrozenStyle("selection")}
+                      />
+                    )}
+                    <td
+                      className="px-4 py-3 text-xs text-gray-700 dark:text-gray-200"
+                      colSpan={totalColumns - (selectionEnabled ? 1 : 0)}
+                      style={historyIndent ? { paddingLeft: `${historyIndent}px` } : undefined}
+                    >
+                      <div className="flex flex-col gap-3">
+                        {historyList.length > 0 ? (
+                          historyList.map((entry) => {
+                            const timestampLabel = formatHistoryTimestamp(entry.ts);
+                            const actorLabel = entry.actor || "system";
+                            return (
+                              <div key={entry.id} className="rounded border border-blue-100 bg-white p-2 shadow-sm">
+                                <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-gray-500">
+                                  <span className="font-medium text-gray-700">{timestampLabel}</span>
+                                  <span className="text-gray-500">{`Bởi: ${actorLabel}`}</span>
+                                </div>
+                                <ul className="mt-2 space-y-1">
+                                  {entry.changes.map((change, idx) => {
+                                    const label =
+                                      DECL_HISTORY_FIELD_LABELS[change.field] || humanizeDiffKey(change.field);
+                                    const beforeEmpty =
+                                      change.before === "" || change.before === null || change.before === undefined;
+                                    const afterEmpty =
+                                      change.after === "" || change.after === null || change.after === undefined;
+                                    const beforeLabel = beforeEmpty ? "Trống" : change.before;
+                                    const afterLabel = afterEmpty ? "Trống" : change.after;
+                                    const beforeClass = beforeEmpty
+                                      ? "text-gray-400 italic"
+                                      : "text-red-600 line-through decoration-red-400";
+                                    const afterClass = afterEmpty
+                                      ? "text-gray-500 italic"
+                                      : "text-emerald-700 font-medium";
+                                    return (
+                                      <li key={`${entry.id}-${idx}`} className="flex flex-wrap items-start gap-2">
+                                        <span className="min-w-[8rem] shrink-0 text-gray-500">{label}</span>
+                                        <span className="flex flex-wrap items-center gap-1">
+                                          <span className={beforeClass}>{beforeLabel}</span>
+                                          <span className="text-gray-400">→</span>
+                                          <span className={afterClass}>{afterLabel}</span>
+                                        </span>
+                                      </li>
+                                    );
+                                  })}
+                                </ul>
+                              </div>
+                            );
+                          })
+                        ) : (
+                          <div className="rounded border border-dashed border-gray-200 bg-white p-4 text-center text-gray-500">
+                            Chưa có nhật ký chỉnh sửa cho tờ khai này.
+                          </div>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
                 )}
-                {!hiddenColumns.has("date") && (
-                  <td className="px-2 py-1">
-                    <span title={r.raw_date || ""}>{formatDisplayDate(r.date || r.raw_date || "")}</span>
-                  </td>
-                )}
-                {!hiddenColumns.has("declaration") && (
-                  <td className="px-2 py-1">
-                    <div className="flex flex-wrap items-center gap-1">
-                      <span>{r.so_tk_full || r.so_tk || ""}</span>
-                      {r.so_tk_suffix ? (
-                        <span className="text-[10px] uppercase text-gray-400">{r.so_tk_suffix}</span>
-                      ) : null}
-                      {updatedKeySet.has(rowKey) && (
-                        <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700">Cap nhat</span>
+              </React.Fragment>
+            );
+          })}
+            {pageRows.length === 0 && (
+              <tr>
+                <td className="px-2 py-4 text-center text-gray-500" colSpan={totalColumns}>
+                  Không có dữ liệu
+                </td>
+              </tr>
+            )}
+          </tbody>
+          </table>
+        </div>
+      ) : (
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {pageRows.length > 0 ? (
+            pageRows.map((r, i) => {
+              const state = buildRowState(r, i);
+              const {
+                rowKey,
+                rowReadOnly,
+                rowEditable,
+                canSaveRow,
+                rowSaving,
+                rowError,
+                historyExpanded,
+                historyList,
+                historyCount,
+              } = state;
+              const hasPendingDiff = state.hasPendingDiff;
+              return (
+                <div
+                  key={`${rowKey}_${i}`}
+                  className="flex flex-col gap-3 rounded border border-gray-200 bg-white p-4 shadow-sm transition hover:shadow-md dark:border-slate-700 dark:bg-slate-900/70"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="space-y-1">
+                      {!hiddenColumns.has("date") && (
+                        <div className="text-xs text-gray-500 dark:text-gray-300">
+                          {formatDisplayDate(r.date || r.raw_date || "")}
+                        </div>
                       )}
-                      {coMismatchKeySet.has(rowKey) && (
-                        <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">CO lech</span>
-                      )}
-                      {duplicate11KeeperSet.has(rowKey) && (
-                        <span className="rounded bg-sky-100 px-1.5 py-0.5 text-[10px] font-medium text-sky-700">Giữ mới nhất</span>
-                      )}
-                      {duplicate11DuplicatesSet.has(rowKey) && (
-                        <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">Trùng 11 số</span>
-                      )}
-                      {r.duplicate_review_pending && (
-                        <span className="rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-medium text-red-700">Chờ rà soát</span>
-                      )}
-                      {rowReadOnly && (
-                        <span className="rounded bg-gray-200 px-1.5 py-0.5 text-[10px] font-medium text-gray-600">Chỉ xem</span>
+                      <div className="flex flex-wrap items-center gap-1 text-sm font-semibold text-gray-800 dark:text-gray-100">
+                        <span>{r.so_tk_full || r.so_tk || ""}</span>
+                        {r.so_tk_suffix ? (
+                          <span className="text-[10px] uppercase text-gray-400">{r.so_tk_suffix}</span>
+                        ) : null}
+                        {hasPendingDiff && !rowReadOnly && (
+                          <span className="rounded bg-blue-100 px-1.5 py-0.5 text-[10px] font-medium text-blue-700">
+                            Chưa lưu
+                          </span>
+                        )}
+                        {r.reviewed && (
+                          <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700">
+                            Đã rà soát
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex flex-wrap gap-1 text-[10px] text-gray-500 dark:text-gray-400">
+                        {updatedKeySet.has(rowKey) && (
+                          <span className="rounded bg-emerald-100 px-1.5 py-0.5 font-medium text-emerald-700">Cập nhật</span>
+                        )}
+                        {coMismatchKeySet.has(rowKey) && (
+                          <span className="rounded bg-amber-100 px-1.5 py-0.5 font-medium text-amber-700">CO lệch</span>
+                        )}
+                        {duplicate11KeeperSet.has(rowKey) && (
+                          <span className="rounded bg-sky-100 px-1.5 py-0.5 font-medium text-sky-700">Giữ mới nhất</span>
+                        )}
+                        {duplicate11DuplicatesSet.has(rowKey) && (
+                          <span className="rounded bg-amber-100 px-1.5 py-0.5 font-medium text-amber-700">Trùng 11 số</span>
+                        )}
+                        {r.duplicate_review_pending && (
+                          <span className="rounded bg-red-100 px-1.5 py-0.5 font-medium text-red-700">Chờ rà soát</span>
+                        )}
+                        {rowReadOnly && (
+                          <span className="rounded bg-gray-200 px-1.5 py-0.5 font-medium text-gray-600">Chỉ xem</span>
+                        )}
+                      </div>
+                      {!hiddenColumns.has("mst") && (
+                        <div className="text-sm text-gray-600 dark:text-gray-200">{r.mst || "Chưa có MST"}</div>
                       )}
                     </div>
-                  </td>
-                )}
-                {!hiddenColumns.has("mst") && (
-                  <td className="px-2 py-1">
-                    <span>{r.mst || ""}</span>
-                  </td>
-                )}
-                {!hiddenColumns.has("company") && (
-                  <td className="px-2 py-1">
-                    <span>{r.cong_ty || ""}</span>
-                  </td>
-                )}
-                {!hiddenColumns.has("type") && (
-                  <td className="px-2 py-1">
-                    <span>{r.loai_hinh || ""}</span>
-                  </td>
-                )}
-                {!hiddenColumns.has("co") && (
-                  <td className="px-2 py-1">
-                    {(() => {
-                      const lines = coLineCount(r);
-                      const status = coLabel(r);
-                      const display = lines > 0 ? String(lines) : status;
-                      const hasValue = !!display;
-                      return (
-                        <span className={hasValue ? "text-emerald-600 font-medium" : "text-gray-400"}>
-                          {display || ""}
-                        </span>
-                      );
-                    })()}
-                  </td>
-                )}
-                {!hiddenColumns.has("items") && (
-                  <td className="px-2 py-1">
-                    <span>{r.muc_hang ?? ""}</span>
-                  </td>
-                )}
-                {!hiddenColumns.has("staff") && (
-                  <td className="px-2 py-1">
-                    {rowReadOnly ? (
-                      <span>{r.nhan_vien || ""}</span>
-                    ) : (
-                      <StaffCombobox
-                        value={r.nhan_vien || ""}
-                        teamValue={r.team || ""}
-                        teams={rosterTeams}
-                        onSelect={(selection) => handleSelectStaff(rowKey, selection)}
-                      />
+                    {selectionEnabled && (
+                      <label className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-300">
+                        <input
+                          type="checkbox"
+                          checked={selectedKeys.includes(rowKey)}
+                          onChange={() => handleToggleSelect(r)}
+                          disabled={rowReadOnly}
+                        />
+                        <span>Chọn</span>
+                      </label>
                     )}
-                  </td>
-                )}
-                {!hiddenColumns.has("team") && (
-                  <td className="px-2 py-1">
-                    {rowReadOnly ? (
-                      <span>{r.team || ""}</span>
-                    ) : (
-                      <TeamCombobox
-                        value={r.team || ""}
-                        teams={rosterTeams}
-                        onSelect={({ teamName }) => handleSelectTeam(rowKey, teamName)}
-                      />
+                  </div>
+                  <div className="grid gap-2 text-sm text-gray-700 dark:text-gray-200 sm:grid-cols-2">
+                    {!hiddenColumns.has("company") && (
+                      <div>
+                        <div className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-300">
+                          Công ty
+                        </div>
+                        <div>{r.cong_ty || "—"}</div>
+                      </div>
                     )}
-                  </td>
-                )}
-                {!hiddenColumns.has("agency") && (
-                  <td className="px-2 py-1">
-                    {rowReadOnly ? (
-                      <span>{r.agency || r.dai_ly || ""}</span>
-                    ) : (
-                      <input
-                        className="border rounded px-1 py-0.5 w-28"
-                        value={r.agency || r.dai_ly || ""}
-                        onChange={e => applyEdit(rowKey, () => ({ agency: e.target.value, dai_ly: e.target.value }))}
-                      />
+                    {!hiddenColumns.has("type") && (
+                      <div>
+                        <div className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-300">
+                          Loại hình
+                        </div>
+                        <div>{r.loai_hinh || "—"}</div>
+                      </div>
                     )}
-                  </td>
-                )}
-                {!hiddenColumns.has("status") && (
-                  <td className="px-2 py-1">
-                    {(() => {
-                      const hasStaff = !!(r.nhan_vien && r.nhan_vien.toString().trim());
-                      const hasTeam = !!(r.team && r.team.toString().trim());
-                      if (r.reviewed) {
-                        return <span className="text-emerald-700">Đã rà soát</span>;
-                      }
-                      if (!hasStaff || !hasTeam) {
-                        const missing = [];
-                        if (!hasStaff) missing.push("nhân viên");
-                        if (!hasTeam) missing.push("tổ đội");
-                        return <span className="text-amber-600">Thiếu {missing.join(" & ")}</span>;
-                      }
-                      return <span className="text-gray-600">Đủ thông tin</span>;
-                    })()}
-                  </td>
-                )}
-                {!hiddenColumns.has("licenses") && (
-                  <td className="px-2 py-1">
-                    {rowReadOnly ? (
-                      <span>{r.licenses ?? r.so_luong_gp ?? ""}</span>
-                    ) : (
-                      <input
-                        type="number"
-                        min="0"
-                        step="1"
-                        className="border rounded px-1 py-0.5 w-24"
-                        value={r.licenses ?? r.so_luong_gp ?? ""}
-                        onChange={e => {
-                          const input = e.target.value;
-                          if (input === "") {
-                            applyEdit(rowKey, () => ({ licenses: "", so_luong_gp: "", licenseManualCount: null }));
-                            return;
+                    {!hiddenColumns.has("items") && (
+                      <div>
+                        <div className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-300">
+                          Mục hàng
+                        </div>
+                        <div>{r.muc_hang ?? "—"}</div>
+                      </div>
+                    )}
+                    {!hiddenColumns.has("co") && (
+                      <div>
+                        <div className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-300">
+                          C/O
+                        </div>
+                        <div className="font-medium text-emerald-600">
+                          {(() => {
+                            const lines = coLineCount(r);
+                            const status = coLabel(r);
+                            return lines > 0 ? String(lines) : status || "—";
+                          })()}
+                        </div>
+                      </div>
+                    )}
+                    {!hiddenColumns.has("staff") && (
+                      <div>
+                        <div className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-300">
+                          Nhân viên
+                        </div>
+                        {rowReadOnly ? (
+                          <div>{r.nhan_vien || "—"}</div>
+                        ) : (
+                          <StaffCombobox
+                            value={r.nhan_vien || ""}
+                            teamValue={r.team || ""}
+                            teams={rosterTeams}
+                            onSelect={(selection) => handleSelectStaff(rowKey, selection)}
+                          />
+                        )}
+                      </div>
+                    )}
+                    {!hiddenColumns.has("team") && (
+                      <div>
+                        <div className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-300">
+                          Tổ đội
+                        </div>
+                        {rowReadOnly ? (
+                          <div>{r.team || "—"}</div>
+                        ) : (
+                          <TeamCombobox
+                            value={r.team || ""}
+                            teams={rosterTeams}
+                            onSelect={({ teamName }) => handleSelectTeam(rowKey, teamName)}
+                          />
+                        )}
+                      </div>
+                    )}
+                    {!hiddenColumns.has("agency") && (
+                      <div>
+                        <div className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-300">
+                          Đại lý
+                        </div>
+                        {rowReadOnly ? (
+                          <div>{r.agency || r.dai_ly || "—"}</div>
+                        ) : (
+                          <input
+                            className="mt-1 w-full rounded border px-2 py-1"
+                            value={r.agency || r.dai_ly || ""}
+                            onChange={(e) =>
+                              applyEdit(rowKey, () => ({ agency: e.target.value, dai_ly: e.target.value }))
+                            }
+                          />
+                        )}
+                      </div>
+                    )}
+                    {!hiddenColumns.has("licenses") && (
+                      <div>
+                        <div className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-300">
+                          Số lượng GP
+                        </div>
+                        {rowReadOnly ? (
+                          <div>{r.licenses ?? r.so_luong_gp ?? "—"}</div>
+                        ) : (
+                          <input
+                            type="number"
+                            min="0"
+                            step="1"
+                            className="mt-1 w-full rounded border px-2 py-1"
+                            value={r.licenses ?? r.so_luong_gp ?? ""}
+                            onChange={(e) => {
+                              const input = e.target.value;
+                              if (input === "") {
+                                applyEdit(rowKey, () => ({ licenses: "", so_luong_gp: "", licenseManualCount: null }));
+                                return;
+                              }
+                              const parsed = Number(input);
+                              if (!Number.isFinite(parsed)) return;
+                              const normalized = Math.max(0, Math.round(parsed));
+                              applyEdit(rowKey, () => ({
+                                licenses: normalized,
+                                so_luong_gp: normalized,
+                                licenseManualCount: normalized,
+                              }));
+                            }}
+                          />
+                        )}
+                      </div>
+                    )}
+                    {!hiddenColumns.has("kpi") && (
+                      <div>
+                        <div className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-300">
+                          KPI
+                        </div>
+                        <div>
+                          {(() => {
+                            const kpi = computeKPI(r, rules);
+                            if (!Number.isFinite(kpi)) return "-";
+                            return kpi.toFixed(1);
+                          })()}
+                        </div>
+                      </div>
+                    )}
+                    {!hiddenColumns.has("status") && (
+                      <div className="sm:col-span-2">
+                        <div className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-300">
+                          Trạng thái
+                        </div>
+                        {(() => {
+                          const hasStaff = !!(r.nhan_vien && r.nhan_vien.toString().trim());
+                          const hasTeam = !!(r.team && r.team.toString().trim());
+                          if (r.reviewed) {
+                            return <div className="text-emerald-600">Đã rà soát</div>;
                           }
-                          const parsed = Number(input);
-                          if (!Number.isFinite(parsed)) return;
-                          const normalized = Math.max(0, Math.round(parsed));
-                          applyEdit(rowKey, () => ({
-                            licenses: normalized,
-                            so_luong_gp: normalized,
-                            licenseManualCount: normalized,
-                          }));
-                        }}
-                      />
+                          if (!hasStaff || !hasTeam) {
+                            const missing = [];
+                            if (!hasStaff) missing.push("nhân viên");
+                            if (!hasTeam) missing.push("tổ đội");
+                            return <div className="text-amber-600">Thiếu {missing.join(" & ")}</div>;
+                          }
+                          return <div className="text-gray-600">Đủ thông tin</div>;
+                        })()}
+                      </div>
                     )}
-                  </td>
-                )}
-                {!hiddenColumns.has("kpi") && (
-                  <td className="px-2 py-1">
-                    {(() => {
-                      const kpi = computeKPI(r, rules);
-                      if (!Number.isFinite(kpi)) return "-";
-                      return kpi.toFixed(1);
-                    })()}
-                  </td>
-                )}
-                {historyEnabled && (
-                  <td className="px-2 py-1">
-                    <button
-                      type="button"
-                      onClick={() => handleToggleHistory(rowKey)}
-                      className={`rounded px-2 py-0.5 text-xs border ${
-                        historyExpanded
-                          ? "border-blue-500 bg-blue-50 text-blue-700"
-                          : "border-gray-300 bg-white text-gray-700 hover:border-blue-400 hover:text-blue-700"
-                      }`}
-                    >
-                      {historyExpanded ? "Thu gọn" : "Nhật ký"}
-                      {historyCount > 0 ? ` (${historyCount})` : ""}
-                    </button>
-                  </td>
-                )}
-                {updateEnabled && (
-                  <td className="px-2 py-1">
-                    {rowReadOnly ? (
-                      <span className="text-[11px] text-gray-400">Chỉ xem</span>
-                    ) : canSaveRow ? (
-                      <div className="flex flex-col gap-1">
-                        <button
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2 text-xs text-gray-600 dark:text-gray-300">
+                    {historyEnabled && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant={historyExpanded ? "secondary" : "outline"}
+                        className="text-xs"
+                        onClick={() => handleToggleHistory(rowKey)}
+                      >
+                        {historyExpanded ? "Thu gọn nhật ký" : "Xem nhật ký"}
+                        {historyCount > 0 ? ` (${historyCount})` : ""}
+                      </Button>
+                    )}
+                    {updateEnabled &&
+                      (rowReadOnly ? (
+                        <span className="text-[11px] text-gray-400">Chỉ xem</span>
+                      ) : canSaveRow ? (
+                        <Button
                           type="button"
+                          size="sm"
+                          className="text-xs"
                           onClick={() => handleSaveRowChanges(rowKey)}
                           disabled={rowSaving}
-                          className={`rounded px-2 py-0.5 text-xs font-medium text-white ${
-                            rowSaving
-                              ? "cursor-not-allowed bg-blue-300"
-                              : "bg-blue-600 hover:bg-blue-700"
-                          }`}
                         >
                           {rowSaving ? "Đang lưu…" : "Cập nhật"}
-                        </button>
-                        {rowError ? (
-                          <span className="text-[11px] text-red-600">{rowError}</span>
-                        ) : null}
-                      </div>
-                    ) : (
-                      <span className="text-[11px] text-gray-400">Đã đồng bộ</span>
+                        </Button>
+                      ) : (
+                        <span className="text-[11px] text-gray-400">Đã đồng bộ</span>
+                      ))}
+                    {deleteEnabled && rowEditable && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="destructive"
+                        className="text-xs"
+                        onClick={() => handleDeleteSingle(r)}
+                      >
+                        Xóa
+                      </Button>
                     )}
-                  </td>
-                )}
-                {deleteEnabled && rowEditable && (
-                  <td className="px-2 py-1">
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteSingle(r)}
-                      className="px-2 py-0.5 rounded bg-red-500 text-white text-xs"
-                    >
-                      Xóa
-                    </button>
-                  </td>
-                )}
-              </tr>
-              {historyEnabled && historyExpanded && (
-                <tr className="bg-blue-50/40">
-                  {selectionEnabled && <td className="px-2 py-1" />}
-                  <td
-                    className="px-4 py-3 text-xs text-gray-700"
-                    colSpan={totalColumns - (selectionEnabled ? 1 : 0)}
-                  >
-                    <div className="flex flex-col gap-3">
+                    {hasPendingDiff && !rowReadOnly && (
+                      <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-medium text-blue-700">
+                        Có chỉnh sửa chờ lưu
+                      </span>
+                    )}
+                    {rowError ? <span className="text-[11px] text-red-600">{rowError}</span> : null}
+                  </div>
+                  {historyEnabled && historyExpanded && (
+                    <div className="space-y-2 rounded border border-blue-100 bg-blue-50/60 p-3 text-xs text-gray-700 dark:border-blue-500/40 dark:bg-slate-900/60 dark:text-gray-200">
                       {historyList.length > 0 ? (
                         historyList.map((entry) => {
                           const timestampLabel = formatHistoryTimestamp(entry.ts);
@@ -7211,17 +7813,20 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
                           return (
                             <div
                               key={entry.id}
-                              className="rounded border border-blue-100 bg-white p-2 shadow-sm"
+                              className="rounded border border-blue-200 bg-white p-2 shadow-sm dark:border-blue-500/30 dark:bg-slate-900/80"
                             >
-                              <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-gray-500">
-                                <span className="font-medium text-gray-700">{timestampLabel}</span>
-                                <span className="text-gray-500">{`Bởi: ${actorLabel}`}</span>
+                              <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-gray-500 dark:text-gray-300">
+                                <span className="font-medium text-gray-700 dark:text-gray-200">{timestampLabel}</span>
+                                <span>{`Bởi: ${actorLabel}`}</span>
                               </div>
                               <ul className="mt-2 space-y-1">
                                 {entry.changes.map((change, idx) => {
-                                  const label = DECL_HISTORY_FIELD_LABELS[change.field] || humanizeDiffKey(change.field);
-                                  const beforeEmpty = change.before === "" || change.before === null || change.before === undefined;
-                                  const afterEmpty = change.after === "" || change.after === null || change.after === undefined;
+                                  const label =
+                                    DECL_HISTORY_FIELD_LABELS[change.field] || humanizeDiffKey(change.field);
+                                  const beforeEmpty =
+                                    change.before === "" || change.before === null || change.before === undefined;
+                                  const afterEmpty =
+                                    change.after === "" || change.after === null || change.after === undefined;
                                   const beforeLabel = beforeEmpty ? "Trống" : change.before;
                                   const afterLabel = afterEmpty ? "Trống" : change.after;
                                   const beforeClass = beforeEmpty
@@ -7232,7 +7837,7 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
                                     : "text-emerald-700 font-medium";
                                   return (
                                     <li key={`${entry.id}-${idx}`} className="flex flex-wrap items-start gap-2">
-                                      <span className="min-w-[8rem] shrink-0 text-gray-500">{label}</span>
+                                      <span className="min-w-[8rem] shrink-0 text-gray-500 dark:text-gray-300">{label}</span>
                                       <span className="flex flex-wrap items-center gap-1">
                                         <span className={beforeClass}>{beforeLabel}</span>
                                         <span className="text-gray-400">→</span>
@@ -7246,27 +7851,22 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
                           );
                         })
                       ) : (
-                        <div className="rounded border border-dashed border-gray-200 bg-white p-4 text-center text-gray-500">
-                          Chưa có nhật ký chỉnh sửa cho tờ khai này.
+                        <div className="rounded border border-dashed border-gray-300 bg-white p-3 text-center text-gray-500 dark:border-slate-700 dark:bg-slate-900/80">
+                          Chưa có nhật ký chỉnh sửa.
                         </div>
                       )}
                     </div>
-                  </td>
-                </tr>
-              )}
-            </React.Fragment>
-          );
-          })}
-            {pageRows.length === 0 && (
-              <tr>
-                <td className="px-2 py-4 text-center text-gray-500" colSpan={totalColumns}>
-                  Không có dữ liệu
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+                  )}
+                </div>
+              );
+            })
+          ) : (
+            <div className="col-span-full rounded border border-dashed border-gray-300 bg-white p-6 text-center text-sm text-gray-500 dark:border-slate-700 dark:bg-slate-900/40 dark:text-gray-300">
+              Không có dữ liệu
+            </div>
+          )}
+        </div>
+      )}
       <p className="text-xs text-gray-500">
         * Số lượng GP được tự động đếm theo các loại giấy phép hợp lệ (đã loại trừ theo mục Quy tắc KPI).
         Bạn có thể điều chỉnh thủ công trước khi lưu để phản ánh thực tế kiểm tra.
