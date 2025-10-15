@@ -69,6 +69,45 @@ export async function testAiProvider(provider, { signal } = {}) {
   };
 }
 
+export async function pingAiConnection(params = {}, { signal } = {}) {
+  const payload = {};
+  if (params.providerId) {
+    payload.providerId = params.providerId;
+  }
+  if (params.prompt) {
+    payload.prompt = params.prompt;
+  }
+  if (params.timeoutMs) {
+    payload.timeoutMs = params.timeoutMs;
+  }
+  const response = await fetchWithAuth('/api/ai/providers/ping', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+    signal,
+  });
+  const data = await parseJsonResponse(response, 'Không thể kiểm tra kết nối trợ lý AI.');
+  return {
+    provider: data.provider || null,
+    message: data.message || '',
+    usage: data.usage || null,
+  };
+}
+
+export async function fetchAiDataSnapshot(params = {}, { signal } = {}) {
+  const query = new URLSearchParams();
+  if (params.from) {
+    query.set('from', params.from);
+  }
+  if (params.to) {
+    query.set('to', params.to);
+  }
+  const endpoint = `/api/ai/data/snapshot${query.size ? `?${query.toString()}` : ''}`;
+  const response = await fetchWithAuth(endpoint, { signal });
+  const data = await parseJsonResponse(response, 'Không thể lấy snapshot dữ liệu AI.');
+  return data.snapshot || null;
+}
+
 export async function requestAiCompletion(payload, { signal } = {}) {
   const body = {
     scope: payload?.scope || 'general',
@@ -123,3 +162,48 @@ export async function clearAiHistory({ signal } = {}) {
   return true;
 }
 
+
+
+export async function fetchAiInsights({ limit, signal } = {}) {
+  const query = new URLSearchParams();
+  if (Number.isFinite(limit) && limit > 0) {
+    query.set('limit', String(Math.floor(limit)));
+  }
+  const endpoint = `/api/ai/insights${query.size ? `?${query.toString()}` : ''}`;
+  const response = await fetchWithAuth(endpoint, { signal });
+  const data = await parseJsonResponse(response, 'Không thể tải insight AI.');
+  return {
+    insights: Array.isArray(data.insights) ? data.insights : [],
+    meta: data.meta || null,
+  };
+}
+
+export async function runAiInsightJob(payload = {}, { signal } = {}) {
+  const body = {};
+  if (payload.range && typeof payload.range === 'object') {
+    body.range = payload.range;
+  }
+  const response = await fetchWithAuth('/api/ai/insights/run', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+    signal,
+  });
+  const data = await parseJsonResponse(response, 'Không thể chạy insight AI.');
+  return data.result || { ok: true };
+}
+
+export async function submitAiInsightFeedback(insightId, payload = {}, { signal } = {}) {
+  const body = {
+    insightId,
+    helpful: payload.helpful,
+    comment: typeof payload.comment === 'string' ? payload.comment : undefined,
+  };
+  const response = await fetchWithAuth('/api/ai/insights/feedback', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+    signal,
+  });
+  return parseJsonResponse(response, 'Không thể lưu phản hồi insight.');
+}

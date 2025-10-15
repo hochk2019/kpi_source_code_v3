@@ -1938,9 +1938,9 @@ export default function ReportViewer({ canExport = true }) {
       <div className="ds-card p-4 print:hidden">
         <div className="flex flex-wrap items-end gap-4">
           <div className="flex flex-col">
-            <label className="text-sm font-medium text-gray-700">Khoảng thời gian</label>
+            <label className="text-sm font-medium text-[color:var(--ds-text-primary)]">Khoảng thời gian</label>
             <select
-              className="mt-1 rounded border px-3 py-2 text-sm"
+              className="mt-1 rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] px-3 py-2 text-sm text-[color:var(--ds-text-primary)] shadow-sm focus:outline-none focus:ring-2 focus:ring-[color:var(--ds-accent-ring)] focus:ring-offset-0"
               value={quickRange}
               onChange={(e) => handleQuickRangeChange(e.target.value)}
             >
@@ -1952,10 +1952,10 @@ export default function ReportViewer({ canExport = true }) {
             </select>
           </div>
           <div className="flex flex-col">
-            <label className="text-sm font-medium text-gray-700">Từ ngày</label>
+            <label className="text-sm font-medium text-[color:var(--ds-text-primary)]">Từ ngày</label>
             <input
               type="date"
-              className="mt-1 rounded border px-3 py-2 text-sm"
+              className="mt-1 rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] px-3 py-2 text-sm text-[color:var(--ds-text-primary)] shadow-sm focus:outline-none focus:ring-2 focus:ring-[color:var(--ds-accent-ring)] focus:ring-offset-0"
               value={from}
               onChange={(e) => {
                 setFrom(e.target.value);
@@ -1964,10 +1964,10 @@ export default function ReportViewer({ canExport = true }) {
             />
           </div>
           <div className="flex flex-col">
-            <label className="text-sm font-medium text-gray-700">Đến ngày</label>
+            <label className="text-sm font-medium text-[color:var(--ds-text-primary)]">Đến ngày</label>
             <input
               type="date"
-              className="mt-1 rounded border px-3 py-2 text-sm"
+              className="mt-1 rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] px-3 py-2 text-sm text-[color:var(--ds-text-primary)] shadow-sm focus:outline-none focus:ring-2 focus:ring-[color:var(--ds-accent-ring)] focus:ring-offset-0"
               value={to}
               onChange={(e) => {
                 setTo(e.target.value);
@@ -2073,12 +2073,12 @@ export default function ReportViewer({ canExport = true }) {
           <div className="ds-card space-y-4 p-4">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <div>
-                <h3 className="text-base font-semibold text-gray-900">Điểm KPI +/- bổ sung</h3>
-                <p className="mt-1 text-sm text-gray-500">
+                <h3 className="text-base font-semibold text-[color:var(--ds-text-primary)]">Điểm KPI +/- bổ sung</h3>
+                <p className="mt-1 text-sm text-[color:var(--ds-text-muted)]">
                   Điểm cộng/trừ được duyệt sẽ được cộng trực tiếp vào KPI tháng tương ứng trong báo cáo.
                 </p>
               </div>
-              <div className="text-sm text-gray-600 text-right">
+              <div className="text-sm text-right text-[color:var(--ds-text-secondary)]">
                 <div>Đã duyệt: {formatInt(adjustmentsReport.approvedCount || 0)} mục</div>
                 <div>Chờ duyệt: {formatInt(adjustmentsReport.pendingCount || 0)} mục</div>
                 {adjustmentsReport.rejectedCount ? (
@@ -2092,19 +2092,19 @@ export default function ReportViewer({ canExport = true }) {
 
             <div className="grid gap-4 lg:grid-cols-3">
               <div className="lg:col-span-2">
-                <h4 className="mb-3 text-sm font-semibold text-gray-800">Chi tiết điểm đã áp dụng</h4>
-                <div className="overflow-auto rounded border">
-                  <table className="min-w-full text-sm">
-                    <thead className="bg-gray-100">
-                      <tr>
-                        <th className="px-3 py-2 text-left">Tháng</th>
-                        <th className="px-3 py-2 text-left">Hạng mục</th>
-                        <th className="px-3 py-2 text-left">Nhân viên</th>
-                        <th className="px-3 py-2 text-left">Tổ đội</th>
+                <h4 className="mb-3 text-sm font-semibold text-[color:var(--ds-text-primary)]">Chi tiết điểm đã áp dụng</h4>
+                <div className="overflow-auto rounded border border-[color:var(--ds-border-subtle)]">
+                  <table className="min-w-full text-sm text-[color:var(--ds-text-primary)]">
+                    <thead className="bg-[color:var(--ds-surface-muted)] text-[color:var(--ds-text-secondary)]">
+                      <tr className="text-left text-xs uppercase">
+                        <th className="px-3 py-2">Tháng</th>
+                        <th className="px-3 py-2">Hạng mục</th>
+                        <th className="px-3 py-2">Nhân viên</th>
+                        <th className="px-3 py-2">Tổ đội</th>
                         <th className="px-3 py-2 text-right">Số lượng × Hệ số</th>
                         <th className="px-3 py-2 text-right">Điểm</th>
-                        <th className="px-3 py-2 text-left">Tham chiếu</th>
-                        <th className="px-3 py-2 text-left">Ghi chú</th>
+                        <th className="px-3 py-2">Tham chiếu</th>
+                        <th className="px-3 py-2">Ghi chú</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -2123,28 +2123,28 @@ export default function ReportViewer({ canExport = true }) {
                           const note = item.adjustment?.note || '';
                           const scoreClass = item.kpi >= 0 ? 'text-emerald-600' : 'text-rose-600';
                           return (
-                            <tr key={key} className="odd:bg-white even:bg-gray-50">
-                              <td className="px-3 py-1.5">{item.displayDate || (item.date ? item.date.slice(0, 7) : '—')}</td>
-                              <td className="px-3 py-1.5">{item.adjustment?.label || item.loai_hinh}</td>
-                              <td className="px-3 py-1.5">{item.nhan_vien || 'Chưa gán'}</td>
-                              <td className="px-3 py-1.5">{item.team || 'Chưa gán tổ đội'}</td>
-                              <td className="px-3 py-1.5 text-right">
+                            <tr key={key} className="border-b border-[color:var(--ds-border-subtle)] odd:bg-[color:var(--ds-surface-card)] even:bg-[color:var(--ds-surface-muted)] last:border-b-0">
+                              <td className="px-3 py-2">{item.displayDate || (item.date ? item.date.slice(0, 7) : '—')}</td>
+                              <td className="px-3 py-2">{item.adjustment?.label || item.loai_hinh}</td>
+                              <td className="px-3 py-2">{item.nhan_vien || 'Chưa gán'}</td>
+                              <td className="px-3 py-2">{item.team || 'Chưa gán tổ đội'}</td>
+                              <td className="px-3 py-2 text-right">
                                 {quantity !== null ? formatDecimal(quantity) : '—'}
                                 {unitPoints !== null ? (
-                                  <span className="ml-1 text-xs text-gray-500">× {formatDecimal(unitPoints)}</span>
+                                  <span className="ml-1 text-xs text-[color:var(--ds-text-muted)]">× {formatDecimal(unitPoints)}</span>
                                 ) : null}
                               </td>
-                              <td className={`px-3 py-1.5 text-right font-semibold ${scoreClass}`}>
+                              <td className={`px-3 py-2 text-right font-semibold ${scoreClass}`}>
                                 {formatDecimal(item.kpi)}
                               </td>
-                              <td className="px-3 py-1.5">{references || '—'}</td>
-                              <td className="px-3 py-1.5">{note || '—'}</td>
+                              <td className="px-3 py-2">{references || '—'}</td>
+                              <td className="px-3 py-2">{note || '—'}</td>
                             </tr>
                           );
                         })
                       ) : (
                         <tr>
-                          <td className="px-3 py-4 text-center text-gray-500" colSpan={8}>
+                          <td className="px-3 py-4 text-center text-[color:var(--ds-text-muted)]" colSpan={8}>
                             Chưa có điểm bổ sung nào được duyệt trong khoảng thời gian này.
                           </td>
                         </tr>
@@ -2155,35 +2155,35 @@ export default function ReportViewer({ canExport = true }) {
               </div>
               <div className="space-y-4">
                 <div>
-                  <h4 className="text-sm font-semibold text-gray-800">Chờ duyệt</h4>
+                  <h4 className="text-sm font-semibold text-[color:var(--ds-text-primary)]">Chờ duyệt</h4>
                   {pendingAdjustments.length ? (
-                    <ul className="mt-2 space-y-2 text-sm text-gray-600">
+                    <ul className="mt-2 space-y-2 text-sm text-[color:var(--ds-text-secondary)]">
                       {pendingAdjustments.map((item) => (
-                        <li key={item.id} className="rounded border border-dashed border-amber-300 bg-amber-50 px-3 py-2">
-                          <div className="font-medium text-gray-900">{item.label || item.category}</div>
+                        <li key={item.id} className="rounded border border-dashed border-amber-400 bg-amber-500/10 px-3 py-2">
+                          <div className="font-medium text-[color:var(--ds-text-primary)]">{item.label || item.category}</div>
                           <div>{item.staffName || 'Chưa gán'} — {item.month}</div>
                           <div>Điểm đề xuất: {formatDecimal(item.totalPoints || 0)}</div>
                         </li>
                       ))}
                     </ul>
                   ) : (
-                    <p className="mt-2 text-sm text-gray-500">Không có yêu cầu đang chờ.</p>
+                    <p className="mt-2 text-sm text-[color:var(--ds-text-muted)]">Không có yêu cầu đang chờ.</p>
                   )}
                 </div>
                 {rejectedAdjustments.length ? (
                   <div>
-                    <h4 className="text-sm font-semibold text-gray-800">Đã từ chối gần đây</h4>
-                    <ul className="mt-2 space-y-2 text-sm text-gray-500">
+                    <h4 className="text-sm font-semibold text-[color:var(--ds-text-primary)]">Đã từ chối gần đây</h4>
+                    <ul className="mt-2 space-y-2 text-sm text-[color:var(--ds-text-secondary)]">
                       {rejectedAdjustments.slice(0, 3).map((item) => (
-                        <li key={item.id} className="rounded border px-3 py-2">
-                          <div className="font-medium text-gray-900">{item.label || item.category}</div>
+                        <li key={item.id} className="rounded border border-rose-400/60 bg-rose-500/10 px-3 py-2">
+                          <div className="font-medium text-[color:var(--ds-text-primary)]">{item.label || item.category}</div>
                           <div>{item.staffName || 'Chưa gán'} — {item.month}</div>
                           <div>Điểm: {formatDecimal(item.totalPoints || 0)}</div>
                         </li>
                       ))}
                     </ul>
                     {rejectedAdjustments.length > 3 ? (
-                      <div className="pt-1 text-xs text-gray-400">
+                      <div className="pt-1 text-xs text-[color:var(--ds-text-muted)]">
                         Còn {rejectedAdjustments.length - 3} mục khác đã bị từ chối.
                       </div>
                     ) : null}
@@ -2204,8 +2204,8 @@ export default function ReportViewer({ canExport = true }) {
               onClick={() => setScope("staff")}
               className={`rounded px-3 py-1.5 ${
                 scope === "staff"
-                  ? "bg-black text-white"
-                  : "border bg-white text-gray-700 hover:bg-gray-50"
+                  ? "bg-[color:var(--ds-text-primary)] text-[color:var(--ds-text-inverse)]"
+                  : "border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] text-[color:var(--ds-text-secondary)] hover:bg-[color:var(--ds-surface-muted)]"
               }`}
             >
               Nhân viên
@@ -2215,8 +2215,8 @@ export default function ReportViewer({ canExport = true }) {
               onClick={() => setScope("team")}
               className={`rounded px-3 py-1.5 ${
                 scope === "team"
-                  ? "bg-black text-white"
-                  : "border bg-white text-gray-700 hover:bg-gray-50"
+                  ? "bg-[color:var(--ds-text-primary)] text-[color:var(--ds-text-inverse)]"
+                  : "border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] text-[color:var(--ds-text-secondary)] hover:bg-[color:var(--ds-surface-muted)]"
               }`}
             >
               Tổ đội
@@ -2225,7 +2225,7 @@ export default function ReportViewer({ canExport = true }) {
 
           {scope === "staff" ? (
             <select
-              className="ml-auto rounded border px-3 py-2 text-sm"
+              className="ml-auto rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] px-3 py-2 text-sm text-[color:var(--ds-text-primary)] shadow-sm focus:outline-none focus:ring-2 focus:ring-[color:var(--ds-accent-ring)] focus:ring-offset-0"
               value={selectedStaff}
               onChange={(e) => setSelectedStaff(e.target.value)}
             >
@@ -2237,7 +2237,7 @@ export default function ReportViewer({ canExport = true }) {
             </select>
           ) : (
             <select
-              className="ml-auto rounded border px-3 py-2 text-sm"
+              className="ml-auto rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] px-3 py-2 text-sm text-[color:var(--ds-text-primary)] shadow-sm focus:outline-none focus:ring-2 focus:ring-[color:var(--ds-accent-ring)] focus:ring-offset-0"
               value={selectedTeam}
               onChange={(e) => setSelectedTeam(e.target.value)}
             >

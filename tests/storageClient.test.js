@@ -6,6 +6,7 @@ let sharedGetItem;
 let clearStorageCacheFn;
 let getSyncStatus;
 let subscribeSyncStatus;
+let refreshSharedKeys;
 
 function createBootstrapResponse(data) {
   return {
@@ -37,6 +38,7 @@ describe('storageClient remote đồng bộ lại khi server lên trễ', () => 
     clearStorageCacheFn = storageModule.clearStorageCache;
     getSyncStatus = storageModule.getSyncStatus;
     subscribeSyncStatus = storageModule.subscribeSyncStatus;
+    refreshSharedKeys = storageModule.refreshSharedKeys;
     clearStorageCacheFn();
   });
 
@@ -352,5 +354,44 @@ describe('storageClient remote đồng bộ lại khi server lên trễ', () => 
       60000,
     );
     expect(afterRetry.retryDelayMs).toBe(expectedAfterRetryDelay);
+  });
+
+  it('lam moi cache voi refreshSharedKeys khi backend tra ve du lieu moi', async () => {
+    const fetchMock = vi.fn(async (input, init) => {
+      const method = (init?.method || 'GET').toUpperCase();
+      const url = typeof input === 'string' ? input : input?.url ?? '';
+      if (url.includes('/api/bootstrap')) {
+        return createBootstrapResponse({ decl_rows_v1: '[]' });
+      }
+      if (url.includes('/api/storage/decl_rows_v1') && method === 'GET') {
+        const rows = [{ so_tk: 'REFRESH-001', nhanh: '', date: '2025-08-11' }];
+        return {
+          ok: true,
+          json: async () => ({
+            ok: true,
+            key: 'decl_rows_v1',
+            value: rows,
+            raw: JSON.stringify(rows),
+          }),
+        };
+      }
+      if (url.includes('/api/storage/') && method === 'PUT') {
+        return { ok: true, json: async () => ({ ok: true }) };
+      }
+      return { ok: true, json: async () => ({ ok: true }) };
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const initial = await initSharedStorage({ baseUrl: '' });
+    expect(initial).toBe(true);
+    expect(sharedGetItem('decl_rows_v1')).toBe('[]');
+
+    const result = await refreshSharedKeys(['decl_rows_v1'], { baseUrl: '' });
+    expect(Array.isArray(result['decl_rows_v1'])).toBe(true);
+    expect(result['decl_rows_v1'][0]).toMatchObject({ so_tk: 'REFRESH-001' });
+
+    const cached = sharedGetItem('decl_rows_v1');
+    expect(JSON.parse(cached)).toEqual([{ so_tk: 'REFRESH-001', nhanh: '', date: '2025-08-11' }]);
+    expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('/api/storage/decl_rows_v1'), expect.objectContaining({ method: 'GET' }));
   });
 });

@@ -1,25 +1,22 @@
 import ExcelJS from 'exceljs';
 import { Buffer } from 'node:buffer';
 import { applyWorkbookWatermark } from './reportWatermark.js';
-import {
-  cloneAdjustmentTotals,
-  createAdjustmentTotals,
-  toAdjustmentTotalsArray,
-} from '../shared/kpiAdjustments.js';
+import { cloneAdjustmentTotals, createAdjustmentTotals, toAdjustmentTotalsArray } from '../shared/kpiAdjustments.js';
+import { computeLicenseSnapshot } from '../shared/licenseSummary.js';
 
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 phút
 const MAX_CACHE_ENTRIES = 20;
 
-const HEADER_LAST_COLUMN = 'N';
-const HEADER_START_ROW = 5;
+const HEADER_LAST_COLUMN = 'M';
+const HEADER_START_ROW = 1;
 
 const reportCache = new Map();
 
-const BRAND_PRIMARY = 'FF1D4ED8';
-const BRAND_PRIMARY_DARK = 'FF0F172A';
-const BRAND_PRIMARY_LIGHT = 'FFEFF4FF';
-const BRAND_BORDER = 'FFCBD5F5';
-const BRAND_TEXT_MUTED = 'FF475569';
+const BRAND_PRIMARY = 'FF2563EB';
+const BRAND_PRIMARY_DARK = 'FF1E3A8A';
+const BRAND_PRIMARY_LIGHT = 'FFEFF6FF';
+const BRAND_BORDER = 'FFA5B4FC';
+const BRAND_TEXT_MUTED = 'FF334155';
 
 function normalizeCacheValue(value) {
   if (value === null || value === undefined) {
@@ -121,6 +118,80 @@ const DEFAULT_COLUMN_VISIBILITY = Object.freeze({
   coLines: true,
   licenseCodes: true,
 });
+
+function applyLicenseSnapshot(row, rules) {
+  if (!row || typeof row !== 'object') {
+    return row;
+  }
+  const snapshot = computeLicenseSnapshot(row, rules);
+  const originalCount = Number(row?.licenses ?? row?.so_luong_gp ?? 0);
+  const normalizedCount = Number.isFinite(snapshot.includedCount)
+    ? snapshot.includedCount
+    : Number.isFinite(originalCount)
+    ? originalCount
+    : snapshot.includedCodes.length;
+  const next = {
+    ...row,
+    licenses: Number.isFinite(normalizedCount) ? normalizedCount : 0,
+    licenseCodes: snapshot.includedCodes,
+    licenseExcludedCodes: snapshot.excludedCodes,
+    licenseSourceCodes: snapshot.sourceCodes,
+  };
+  if (snapshot.manualCount !== null && snapshot.manualCount !== undefined) {
+    next.licenseManualCount = snapshot.manualCount;
+  } else if (Object.prototype.hasOwnProperty.call(next, 'licenseManualCount')) {
+    delete next.licenseManualCount;
+  }
+  return next;
+}
+
+function prepareRowsWithLicense(rows, rules) {
+  if (!Array.isArray(rows)) {
+    return [];
+  }
+  return rows.map((row) => applyLicenseSnapshot(row, rules));
+}
+
+function refreshStatsLicenseFields(statsInput, rows) {
+  const stats = statsInput && typeof statsInput === 'object' ? { ...statsInput } : {};
+  const licenseSet = new Set();
+  let licenseTotal = 0;
+  for (const row of rows) {
+    if (!row) continue;
+    const rowLicenseCount = Number(row.licenses || 0);
+    if (Number.isFinite(rowLicenseCount)) {
+      licenseTotal += rowLicenseCount;
+    }
+    const codes = Array.isArray(row.licenseCodes) ? row.licenseCodes : [];
+    for (const code of codes) {
+      const normalized = normalizeStr(code).toUpperCase();
+      if (normalized) {
+        licenseSet.add(normalized);
+      }
+    }
+  }
+  const licenseCodes = Array.from(licenseSet);
+  stats.licenses = licenseTotal;
+  stats.licenseCodes = licenseCodes;
+  stats.licenseCount = licenseCodes.length;
+  return stats;
+}
+
+function normalizeSection(sectionInput, rules) {
+  if (!sectionInput || typeof sectionInput !== 'object') {
+    return { rows: [], stats: {} };
+  }
+  const rows = prepareRowsWithLicense(sectionInput.rows || [], rules);
+  return {
+    ...sectionInput,
+    rows,
+    stats: refreshStatsLicenseFields(sectionInput.stats, rows),
+  };
+}
+
+function normalizeSummaryStats(summaryInput, rows) {
+  return refreshStatsLicenseFields(summaryInput, rows);
+}
 
 function sanitizeColumnVisibility(columns = {}) {
   const result = { ...DEFAULT_COLUMN_VISIBILITY };
@@ -445,20 +516,20 @@ function configureSheet(sheet) {
   };
   sheet.columns = [
     { key: 'colA', width: 6 },
-    { key: 'colB', width: 28 },
-    { key: 'colC', width: 16 },
-    { key: 'colD', width: 16 },
-    { key: 'colE', width: 16 },
-    { key: 'colF', width: 16 },
-    { key: 'colG', width: 16 },
-    { key: 'colH', width: 16 },
-    { key: 'colI', width: 16 },
-    { key: 'colJ', width: 16 },
-    { key: 'colK', width: 16 },
-    { key: 'colL', width: 16 },
-    { key: 'colM', width: 18 },
-    { key: 'colN', width: 22 },
+    { key: 'colB', width: 26 },
+    { key: 'colC', width: 18 },
+    { key: 'colD', width: 18 },
+    { key: 'colE', width: 18 },
+    { key: 'colF', width: 18 },
+    { key: 'colG', width: 18 },
+    { key: 'colH', width: 18 },
+    { key: 'colI', width: 18 },
+    { key: 'colJ', width: 18 },
+    { key: 'colK', width: 18 },
+    { key: 'colL', width: 18 },
+    { key: 'colM', width: 22 },
   ];
+  sheet.properties.defaultRowHeight = 22;
   for (let rowIndex = 1; rowIndex < HEADER_START_ROW; rowIndex += 1) {
     const row = sheet.getRow(rowIndex);
     if (!row.height || row.height < 24) {
@@ -472,16 +543,20 @@ function applyHeader(sheet, title, subtitleLines = []) {
   sheet.mergeCells(`A${titleRow}:${HEADER_LAST_COLUMN}${titleRow}`);
   const cell = sheet.getCell(titleRow, 1);
   cell.value = title;
-  cell.font = { bold: true, size: 18, color: { argb: 'FFFFFFFF' } };
+  cell.font = { bold: true, size: 20, color: { argb: 'FFFFFFFF' } };
   cell.alignment = { vertical: 'middle', horizontal: 'center' };
   cell.fill = {
-    type: 'pattern',
-    pattern: 'solid',
-    fgColor: { argb: BRAND_PRIMARY_DARK },
+    type: 'gradient',
+    gradient: 'angle',
+    degree: 45,
+    stops: [
+      { position: 0, color: { argb: BRAND_PRIMARY } },
+      { position: 1, color: { argb: BRAND_PRIMARY_DARK } },
+    ],
   };
 
   const titleRowRef = sheet.getRow(titleRow);
-  titleRowRef.height = 30;
+  titleRowRef.height = 36;
 
   subtitleLines.forEach((text, idx) => {
     const rowIndex = titleRow + idx + 1;
@@ -495,11 +570,16 @@ function applyHeader(sheet, title, subtitleLines = []) {
       pattern: 'solid',
       fgColor: { argb: BRAND_PRIMARY_LIGHT },
     };
+    subtitleCell.border = {
+      bottom: { style: 'thin', color: { argb: BRAND_BORDER } },
+    };
     const subtitleRowRef = sheet.getRow(rowIndex);
     subtitleRowRef.height = 22;
   });
 
-  return titleRow + subtitleLines.length + 2;
+  const freezeRow = titleRow + subtitleLines.length + 1;
+  sheet.views = [{ state: 'frozen', ySplit: freezeRow, topLeftCell: `A${freezeRow + 1}` }];
+  return freezeRow + 1;
 }
 
 function addSectionTitle(sheet, rowIndex, title) {
@@ -511,9 +591,10 @@ function addSectionTitle(sheet, rowIndex, title) {
   cell.fill = {
     type: 'pattern',
     pattern: 'solid',
-    fgColor: { argb: BRAND_PRIMARY_LIGHT },
+    fgColor: { argb: 'FFFFFFFF' },
   };
   cell.border = {
+    left: { style: 'thick', color: { argb: BRAND_PRIMARY } },
     bottom: { style: 'thin', color: { argb: BRAND_BORDER } },
   };
 }
@@ -523,7 +604,7 @@ function addTableHeader(sheet, startRow, headers) {
   headers.forEach((text, idx) => {
     const cell = row.getCell(idx + 1);
     cell.value = text;
-    cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+    cell.font = { bold: true, size: 11, color: { argb: 'FFFFFFFF' } };
     cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
     cell.fill = {
       type: 'pattern',
@@ -531,10 +612,10 @@ function addTableHeader(sheet, startRow, headers) {
       fgColor: { argb: BRAND_PRIMARY },
     };
     cell.border = {
-      top: { style: 'thin' },
-      left: { style: 'thin' },
-      bottom: { style: 'thin' },
-      right: { style: 'thin' },
+      top: { style: 'thin', color: { argb: BRAND_PRIMARY_DARK } },
+      left: { style: 'thin', color: { argb: BRAND_PRIMARY_DARK } },
+      bottom: { style: 'thin', color: { argb: BRAND_PRIMARY_DARK } },
+      right: { style: 'thin', color: { argb: BRAND_PRIMARY_DARK } },
     };
   });
   row.height = 24;
@@ -557,14 +638,14 @@ function addDataRows(sheet, startRow, rows) {
         cell.fill = {
           type: 'pattern',
           pattern: 'solid',
-          fgColor: { argb: 'FFF8FAFF' },
+          fgColor: { argb: 'FFF8FAFC' },
         };
       }
       cell.border = {
-        top: { style: 'thin' },
-        left: { style: 'thin' },
-        bottom: { style: 'thin' },
-        right: { style: 'thin' },
+        top: { style: 'thin', color: { argb: BRAND_BORDER } },
+        left: { style: 'thin', color: { argb: BRAND_BORDER } },
+        bottom: { style: 'thin', color: { argb: BRAND_BORDER } },
+        right: { style: 'thin', color: { argb: BRAND_BORDER } },
       };
     });
     row.commit();
@@ -728,14 +809,15 @@ async function finalizeWorkbook(workbook, options = {}) {
 
 export async function generateStaffReport(payload = {}, options = {}) {
   const { staff = {}, range = {}, rules = {}, columns = {} } = payload;
+  const staffData = normalizeSection(staff, rules);
   const columnVisibility = sanitizeColumnVisibility(columns);
   const workbook = new ExcelJS.Workbook();
   const sheet = workbook.addWorksheet('Nhan vien');
   configureSheet(sheet);
 
   const subtitles = [
-    `Nhân viên: ${staff.name || 'Chưa gán'}`,
-    `Tổ đội: ${staff.teamLabel || 'Chưa gán tổ đội'}`,
+    `Nhân viên: ${staffData.name || 'Chưa gán'}`,
+    `Tổ đội: ${staffData.teamLabel || 'Chưa gán tổ đội'}`,
     `Khoảng thời gian: ${formatRangeLabel(range)}`,
     `Quy tắc KPI: ${rules?.name || 'Chưa đặt tên'}`,
     rules?.applyFrom ? `Áp dụng từ ${rules.applyFrom}` : 'Áp dụng ngay',
@@ -746,7 +828,7 @@ export async function generateStaffReport(payload = {}, options = {}) {
   addSectionTitle(sheet, currentRow, '1. Báo cáo tổng quát');
   currentRow += 1;
   addTableHeader(sheet, currentRow, ['STT', 'Chỉ tiêu', 'Giá trị', 'Số lượt', '', '', '', '', '']);
-  currentRow = addDataRows(sheet, currentRow + 1, buildSummaryRows(staff.stats, staff.adjustmentSummary));
+  currentRow = addDataRows(sheet, currentRow + 1, buildSummaryRows(staffData.stats, staffData.adjustmentSummary));
 
   currentRow += 1;
   addSectionTitle(sheet, currentRow, '2. Báo cáo tổng hợp theo Công ty');
@@ -757,7 +839,7 @@ export async function generateStaffReport(payload = {}, options = {}) {
     visibleColumns: columnVisibility,
   });
   addTableHeader(sheet, currentRow, companyHeaders);
-  const companyRows = buildCompanyRows(staff.rows, {
+  const companyRows = buildCompanyRows(staffData.rows, {
     includeStaff: false,
     includeTeam: false,
     visibleColumns: columnVisibility,
@@ -776,7 +858,7 @@ export async function generateStaffReport(payload = {}, options = {}) {
     visibleColumns: columnVisibility,
   });
   addTableHeader(sheet, currentRow, detailHeaders);
-  const detailRows = buildDetailRows(staff.rows, {
+  const detailRows = buildDetailRows(staffData.rows, {
     includeStaff: false,
     includeTeam: false,
     visibleColumns: columnVisibility,
@@ -786,21 +868,22 @@ export async function generateStaffReport(payload = {}, options = {}) {
     : [detailHeaders.map(() => '')];
   addDataRows(sheet, currentRow + 1, detailData);
 
-  const filename = `bao-cao-kpi-nhan-vien-${slugify(staff.name || 'chua-gan')}.xlsx`;
+  const filename = `bao-cao-kpi-nhan-vien-${slugify(staffData.name || 'chua-gan')}.xlsx`;
   const { buffer, watermark, signature } = await finalizeWorkbook(workbook, options);
   return { buffer, filename, watermark, signature };
 }
 
 export async function generateTeamReport(payload = {}, options = {}) {
   const { team = {}, range = {}, rules = {}, columns = {} } = payload;
+  const teamData = normalizeSection(team, rules);
   const columnVisibility = sanitizeColumnVisibility(columns);
   const workbook = new ExcelJS.Workbook();
   const sheet = workbook.addWorksheet('To doi');
   configureSheet(sheet);
 
   const subtitles = [
-    `Tổ đội: ${team.name || 'Chưa gán tổ đội'}`,
-    `Thành viên: ${team.memberNames?.length ? team.memberNames.join(', ') : 'Chưa có'}`,
+    `Tổ đội: ${teamData.name || 'Chưa gán tổ đội'}`,
+    `Thành viên: ${teamData.memberNames?.length ? teamData.memberNames.join(', ') : 'Chưa có'}`,
     `Khoảng thời gian: ${formatRangeLabel(range)}`,
     `Quy tắc KPI: ${rules?.name || 'Chưa đặt tên'}`,
     rules?.applyFrom ? `Áp dụng từ ${rules.applyFrom}` : 'Áp dụng ngay',
@@ -811,7 +894,11 @@ export async function generateTeamReport(payload = {}, options = {}) {
   addSectionTitle(sheet, currentRow, '1. Báo cáo tổng quát');
   currentRow += 1;
   addTableHeader(sheet, currentRow, ['STT', 'Chỉ tiêu', 'Giá trị', 'Số lượt', '', '', '', '', '']);
-  currentRow = addDataRows(sheet, currentRow + 1, buildSummaryRows(team.stats, team.adjustmentSummary));
+  currentRow = addDataRows(
+    sheet,
+    currentRow + 1,
+    buildSummaryRows(teamData.stats, teamData.adjustmentSummary),
+  );
 
   currentRow += 1;
   addSectionTitle(sheet, currentRow, '2. Báo cáo tổng hợp theo Công ty');
@@ -822,7 +909,7 @@ export async function generateTeamReport(payload = {}, options = {}) {
     visibleColumns: columnVisibility,
   });
   addTableHeader(sheet, currentRow, teamCompanyHeaders);
-  const companyRows = buildCompanyRows(team.rows, {
+  const companyRows = buildCompanyRows(teamData.rows, {
     includeStaff: true,
     includeTeam: false,
     visibleColumns: columnVisibility,
@@ -841,7 +928,7 @@ export async function generateTeamReport(payload = {}, options = {}) {
     visibleColumns: columnVisibility,
   });
   addTableHeader(sheet, currentRow, teamDetailHeaders);
-  const teamDetailRows = buildDetailRows(team.rows, {
+  const teamDetailRows = buildDetailRows(teamData.rows, {
     includeStaff: true,
     includeTeam: false,
     visibleColumns: columnVisibility,
@@ -851,13 +938,20 @@ export async function generateTeamReport(payload = {}, options = {}) {
     : [teamDetailHeaders.map(() => '')];
   addDataRows(sheet, currentRow + 1, teamDetailData);
 
-  const filename = `bao-cao-kpi-to-doi-${slugify(team.name || 'chua-gan')}.xlsx`;
+  const filename = `bao-cao-kpi-to-doi-${slugify(teamData.name || 'chua-gan')}.xlsx`;
   const { buffer, watermark, signature } = await finalizeWorkbook(workbook, options);
   return { buffer, filename, watermark, signature };
 }
 
 export async function generateAllStaffReport(payload = {}, options = {}) {
   const { staffList = [], summary = {}, range = {}, rules = {}, columns = {} } = payload;
+  const normalizedStaffList = Array.isArray(staffList)
+    ? staffList.map((item) => normalizeSection(item, rules))
+    : [];
+  const summaryStats = normalizeSummaryStats(
+    summary,
+    normalizedStaffList.flatMap((item) => item.rows || []),
+  );
   const columnVisibility = sanitizeColumnVisibility(columns);
   const workbook = new ExcelJS.Workbook();
   const sheet = workbook.addWorksheet('Tong hop NV');
@@ -874,7 +968,7 @@ export async function generateAllStaffReport(payload = {}, options = {}) {
   addSectionTitle(sheet, currentRow, '1. Tổng quan KPI');
   currentRow += 1;
   addTableHeader(sheet, currentRow, ['STT', 'Chỉ tiêu', 'Giá trị', 'Số lượt', '', '', '', '', '']);
-  currentRow = addDataRows(sheet, currentRow + 1, buildSummaryRows(summary, summary.adjustmentTotals));
+  currentRow = addDataRows(sheet, currentRow + 1, buildSummaryRows(summaryStats, summaryStats.adjustmentTotals));
 
   currentRow += 1;
   addSectionTitle(sheet, currentRow, '2. Thống kê theo Nhân viên');
@@ -904,7 +998,7 @@ export async function generateAllStaffReport(payload = {}, options = {}) {
     staffHeaders.push('Mã giấy phép');
   }
   addTableHeader(sheet, currentRow, staffHeaders);
-  const staffRows = staffList.map((item, idx) => {
+  const staffRows = normalizedStaffList.map((item, idx) => {
     const row = [
       idx + 1,
       item.name,
@@ -946,7 +1040,7 @@ export async function generateAllStaffReport(payload = {}, options = {}) {
   });
   addTableHeader(sheet, currentRow, allStaffCompanyHeaders);
   const companyRows = buildCompanyRows(
-    staffList.flatMap((item) => item.rows || []),
+    normalizedStaffList.flatMap((item) => item.rows || []),
     { includeStaff: true, includeTeam: false, visibleColumns: columnVisibility }
   );
   const allStaffCompanyData = companyRows.length
@@ -960,6 +1054,13 @@ export async function generateAllStaffReport(payload = {}, options = {}) {
 
 export async function generateAllTeamReport(payload = {}, options = {}) {
   const { teamList = [], summary = {}, range = {}, rules = {}, columns = {} } = payload;
+  const normalizedTeamList = Array.isArray(teamList)
+    ? teamList.map((item) => normalizeSection(item, rules))
+    : [];
+  const summaryStats = normalizeSummaryStats(
+    summary,
+    normalizedTeamList.flatMap((item) => item.rows || []),
+  );
   const columnVisibility = sanitizeColumnVisibility(columns);
   const workbook = new ExcelJS.Workbook();
   const sheet = workbook.addWorksheet('Tong hop to doi');
@@ -976,7 +1077,7 @@ export async function generateAllTeamReport(payload = {}, options = {}) {
   addSectionTitle(sheet, currentRow, '1. Tổng quan KPI');
   currentRow += 1;
   addTableHeader(sheet, currentRow, ['STT', 'Chỉ tiêu', 'Giá trị', 'Số lượt', '', '', '', '', '']);
-  currentRow = addDataRows(sheet, currentRow + 1, buildSummaryRows(summary, summary.adjustmentTotals));
+  currentRow = addDataRows(sheet, currentRow + 1, buildSummaryRows(summaryStats, summaryStats.adjustmentTotals));
 
   currentRow += 1;
   addSectionTitle(sheet, currentRow, '2. Thống kê theo Tổ đội');
@@ -1006,7 +1107,7 @@ export async function generateAllTeamReport(payload = {}, options = {}) {
     teamHeaders.push('Mã giấy phép');
   }
   addTableHeader(sheet, currentRow, teamHeaders);
-  const teamRows = teamList.map((item, idx) => {
+  const teamRows = normalizedTeamList.map((item, idx) => {
     const row = [
       idx + 1,
       item.name,
@@ -1048,7 +1149,7 @@ export async function generateAllTeamReport(payload = {}, options = {}) {
   });
   addTableHeader(sheet, currentRow, allTeamCompanyHeaders);
   const companyRows = buildCompanyRows(
-    teamList.flatMap((item) => item.rows || []),
+    normalizedTeamList.flatMap((item) => item.rows || []),
     { includeStaff: true, includeTeam: true, visibleColumns: columnVisibility }
   );
   const allTeamCompanyData = companyRows.length

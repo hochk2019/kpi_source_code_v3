@@ -53,6 +53,11 @@ function translateFailure(reason) {
   return BACKUP_FAILURE_LABELS[reason] || reason;
 }
 
+const CONTROL_CLASS =
+  "rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] px-3 py-2 text-sm text-[color:var(--ds-text-primary)] shadow-sm focus:outline-none focus:ring-2 focus:ring-[color:var(--ds-accent-ring)] focus:ring-offset-0";
+const CONTROL_CLASS_COMPACT =
+  "rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] px-2 py-1.5 text-sm text-[color:var(--ds-text-primary)] shadow-sm focus:outline-none focus:ring-2 focus:ring-[color:var(--ds-accent-ring)] focus:ring-offset-0";
+
 export default function AuditLog({ currentUser }) {
   const [logs, setLogs] = useState(() => getAuditLogs(200));
   const [filter, setFilter] = useState("");
@@ -235,24 +240,24 @@ export default function AuditLog({ currentUser }) {
   })();
 
   return (
-    <div className="space-y-4">
-      <div className="rounded border bg-white p-4 shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-2">
+    <div className="space-y-6">
+      <section className="rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] p-4 shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <div className="text-sm font-semibold uppercase text-gray-600">Lịch sao lưu CSDL</div>
+            <div className="text-sm font-semibold uppercase text-[color:var(--ds-text-muted)]">Lịch sao lưu CSDL</div>
             {schedule?.refreshedAt && (
-              <div className="text-xs text-gray-500">
+              <div className="text-xs text-[color:var(--ds-text-muted)]">
                 Cập nhật: {formatTime(schedule.refreshedAt)}
               </div>
             )}
           </div>
           <div>
             {schedule?.active ? (
-              <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700">
+              <span className="rounded-full bg-emerald-500/15 px-3 py-1 text-xs font-semibold text-emerald-400">
                 Tự động: đang bật
               </span>
             ) : (
-              <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-700">
+              <span className="rounded-full bg-amber-500/15 px-3 py-1 text-xs font-semibold text-amber-400">
                 Tự động: đang tắt
               </span>
             )}
@@ -260,49 +265,53 @@ export default function AuditLog({ currentUser }) {
         </div>
 
         {summaryError ? (
-          <div className="mt-3 rounded border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+          <div className="mt-3 rounded border border-red-400/40 bg-red-500/10 p-3 text-sm text-red-300">
             Không thể tải thông tin sao lưu: {summaryError}
           </div>
         ) : summaryLoading && !summary ? (
-          <div className="mt-3 text-sm text-gray-500">Đang tải thông tin sao lưu...</div>
+          <div className="mt-3 text-sm text-[color:var(--ds-text-muted)]">Đang tải thông tin sao lưu...</div>
         ) : summary ? (
-          <div className="mt-3 space-y-3 text-sm">
-            <div className="grid gap-3 md:grid-cols-2">
+          <div className="mt-4 space-y-4 text-sm text-[color:var(--ds-text-secondary)]">
+            <div className="grid gap-4 md:grid-cols-2">
               <div>
-                <div className="text-xs uppercase text-gray-500">Biểu thức cron</div>
-                <div className="font-mono text-sm">{schedule?.cron || "Chưa cấu hình"}</div>
+                <div className="text-xs uppercase text-[color:var(--ds-text-muted)]">Biểu thức cron</div>
+                <div className="font-mono text-sm text-[color:var(--ds-text-primary)]">
+                  {schedule?.cron || "Chưa cấu hình"}
+                </div>
               </div>
               <div>
-                <div className="text-xs uppercase text-gray-500">Mô tả lịch</div>
-                <div className="text-sm">{schedule?.cronDescription || "Không xác định"}</div>
+                <div className="text-xs uppercase text-[color:var(--ds-text-muted)]">Mô tả lịch</div>
+                <div className="text-sm text-[color:var(--ds-text-primary)]">
+                  {schedule?.cronDescription || "Không xác định"}
+                </div>
               </div>
               <div>
-                <div className="text-xs uppercase text-gray-500">Lần chạy kế tiếp</div>
+                <div className="text-xs uppercase text-[color:var(--ds-text-muted)]">Lần chạy kế tiếp</div>
                 {schedule?.active ? (
-                  <div className="space-y-1 text-sm">
+                  <div className="space-y-1 text-sm text-[color:var(--ds-text-primary)]">
                     <div>{schedule?.nextRunHuman || (schedule?.nextRun ? formatTime(schedule.nextRun) : "Không xác định")}</div>
                     {schedule?.nextRunHuman && schedule?.nextRun && (
-                      <div className="text-xs text-gray-500">{formatTime(schedule.nextRun)}</div>
+                      <div className="text-xs text-[color:var(--ds-text-muted)]">{formatTime(schedule.nextRun)}</div>
                     )}
                   </div>
                 ) : (
-                  <div className="text-sm">Đang tắt tự động</div>
+                  <div className="text-sm text-[color:var(--ds-text-primary)]">Đang tắt tự động</div>
                 )}
               </div>
               <div>
-                <div className="text-xs uppercase text-gray-500">Giữ lại</div>
-                <div className="text-sm">{retentionLabel}</div>
+                <div className="text-xs uppercase text-[color:var(--ds-text-muted)]">Giữ lại</div>
+                <div className="text-sm text-[color:var(--ds-text-primary)]">{retentionLabel}</div>
               </div>
               <div>
-                <div className="text-xs uppercase text-gray-500">Thư mục đích</div>
-                <div className="truncate text-sm" title={schedule?.directory || ""}>
+                <div className="text-xs uppercase text-[color:var(--ds-text-muted)]">Thư mục đích</div>
+                <div className="truncate text-sm text-[color:var(--ds-text-primary)]" title={schedule?.directory || ""}>
                   {schedule?.directory || "Chưa cấu hình"}
                 </div>
               </div>
             </div>
 
             {!schedule?.active && reasons.length > 0 && (
-              <ul className="list-disc space-y-1 pl-5 text-xs text-amber-700">
+              <ul className="list-disc space-y-1 pl-5 text-xs text-amber-300">
                 {reasons.map((code) => (
                   <li key={code}>{BACKUP_REASON_LABELS[code] || code}</li>
                 ))}
@@ -310,35 +319,30 @@ export default function AuditLog({ currentUser }) {
             )}
 
             {canManageBackups && (
-              <form
-                className="space-y-2 rounded border border-gray-200 bg-gray-50 p-3"
-                onSubmit={handleCronSubmit}
-              >
-                <div className="flex flex-col gap-2 md:flex-row md:flex-wrap md:items-end">
+              <form className="space-y-3 rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-muted)] p-3" onSubmit={handleCronSubmit}>
+                <div className="flex flex-col gap-3 md:flex-row md:flex-wrap md:items-end">
                   <div className="flex-1 space-y-1">
-                    <label className="text-xs font-medium text-gray-600" htmlFor="backup-cron-input">
+                    <label className="text-xs font-medium text-[color:var(--ds-text-secondary)]" htmlFor="backup-cron-input">
                       Cập nhật biểu thức cron
                     </label>
                     <input
                       id="backup-cron-input"
-                      className="w-full rounded border px-2 py-1 text-sm font-mono"
+                      className={`${CONTROL_CLASS_COMPACT} font-mono`}
                       value={cronDraft}
                       onChange={(event) => setCronDraft(event.target.value)}
                       placeholder="0 3 * * *"
                       disabled={savingCron}
                     />
-                    <div className="text-xs text-gray-500">
-                      Nhập "never" để tắt tự động sao lưu.
-                    </div>
-                    {cronError && <div className="text-xs text-red-600">{cronError}</div>}
+                    <div className="text-xs text-[color:var(--ds-text-muted)]">Nhập "never" để tắt tự động sao lưu.</div>
+                    {cronError && <div className="text-xs text-red-400">{cronError}</div>}
                   </div>
-                  <div className="w-full space-y-1 md:w-40">
-                    <label className="text-xs font-medium text-gray-600" htmlFor="backup-retention-input">
+                  <div className="flex w-full flex-col gap-1 md:w-44">
+                    <label className="text-xs font-medium text-[color:var(--ds-text-secondary)]" htmlFor="backup-retention-input">
                       Số bản sao lưu giữ lại
                     </label>
                     <input
                       id="backup-retention-input"
-                      className="w-full rounded border px-2 py-1 text-sm"
+                      className={CONTROL_CLASS_COMPACT}
                       type="number"
                       min="0"
                       step="1"
@@ -350,12 +354,12 @@ export default function AuditLog({ currentUser }) {
                       placeholder="14"
                       disabled={savingCron}
                     />
-                    <div className="text-xs text-gray-500">Để trống hoặc nhập 0 để không giới hạn.</div>
-                    {retentionError && <div className="text-xs text-red-600">{retentionError}</div>}
+                    <div className="text-xs text-[color:var(--ds-text-muted)]">Để trống hoặc nhập 0 để không giới hạn.</div>
+                    {retentionError && <div className="text-xs text-red-400">{retentionError}</div>}
                   </div>
                   <button
                     type="submit"
-                    className="self-start rounded bg-black px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                    className="rounded bg-[color:var(--ds-text-primary)] px-4 py-2 text-sm font-semibold text-[color:var(--ds-text-inverse)] transition hover:bg-[color:var(--ds-text-primary)]/80 disabled:cursor-not-allowed disabled:opacity-60"
                     disabled={savingCron}
                   >
                     {savingCron ? "Đang lưu..." : "Lưu biểu thức"}
@@ -366,93 +370,83 @@ export default function AuditLog({ currentUser }) {
 
             <div className="grid gap-3 md:grid-cols-2">
               <div>
-                <div className="text-xs uppercase text-gray-500">Lần sao lưu thành công gần nhất</div>
-                <div className="text-sm">
+                <div className="text-xs uppercase text-[color:var(--ds-text-muted)]">Lần sao lưu thành công gần nhất</div>
+                <div className="text-sm text-[color:var(--ds-text-primary)]">
                   {lastSuccess?.ts
-                    ? [
-                        formatTime(lastSuccess.ts),
-                        lastSuccess.actor || "system",
-                        successExtras,
-                      ]
-                        .filter(Boolean)
-                        .join(" • ")
+                    ? [formatTime(lastSuccess.ts), lastSuccess.actor || "system", successExtras].filter(Boolean).join(" • ")
                     : "Chưa ghi nhận bản sao lưu thành công."}
                 </div>
               </div>
               <div>
-                <div className="text-xs uppercase text-gray-500">Lần sao lưu lỗi gần nhất</div>
-                <div className="text-sm">
+                <div className="text-xs uppercase text-[color:var(--ds-text-muted)]">Lần sao lưu lỗi gần nhất</div>
+                <div className="text-sm text-[color:var(--ds-text-primary)]">
                   {lastFailure?.ts
-                    ? [
-                        formatTime(lastFailure.ts),
-                        lastFailure.actor || "system",
-                        failureExtras,
-                      ]
-                        .filter(Boolean)
-                        .join(" • ")
+                    ? [formatTime(lastFailure.ts), lastFailure.actor || "system", failureExtras].filter(Boolean).join(" • ")
                     : "Chưa ghi nhận lỗi sao lưu."}
                 </div>
               </div>
             </div>
           </div>
         ) : (
-          <div className="mt-3 text-sm text-gray-500">Không có dữ liệu sao lưu.</div>
+          <div className="mt-3 text-sm text-[color:var(--ds-text-muted)]">Không có dữ liệu sao lưu.</div>
         )}
-      </div>
+      </section>
 
-      <div className="flex flex-wrap items-center gap-2">
-        <input
-          className="w-64 rounded border px-3 py-2 text-sm"
-          placeholder="Lọc theo người thực hiện hoặc hành động"
-          value={filter}
-          onChange={(e) => setFilter(e.target.value)}
-        />
-        <button
-          type="button"
-          onClick={refresh}
-          className="rounded border px-3 py-2 text-sm shadow-sm hover:bg-gray-50"
-        >
-          Tải lại
-        </button>
-        <button
-          type="button"
-          onClick={handleClear}
-          className="rounded border border-red-500 px-3 py-2 text-sm text-red-600"
-        >
-          Xóa nhật ký
-        </button>
-      </div>
+      <section className="rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] p-4 shadow-sm space-y-4">
+        <div className="flex flex-wrap items-center gap-3">
+          <input
+            className={`w-full max-w-xs ${CONTROL_CLASS}`}
+            placeholder="Lọc theo người thực hiện hoặc hành động"
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+          />
+          <button
+            type="button"
+            onClick={refresh}
+            className="rounded border border-[color:var(--ds-border-subtle)] px-3 py-2 text-sm text-[color:var(--ds-text-secondary)] shadow-sm transition hover:bg-[color:var(--ds-surface-muted)]"
+          >
+            Tải lại
+          </button>
+          <button
+            type="button"
+            onClick={handleClear}
+            className="rounded border border-red-400 px-3 py-2 text-sm font-semibold text-red-400 transition hover:bg-red-500/10"
+          >
+            Xóa nhật ký
+          </button>
+        </div>
 
-      <div className="overflow-x-auto rounded border bg-white shadow-sm">
-        <table className="min-w-full divide-y text-sm">
-          <thead className="bg-gray-50 text-left text-xs font-semibold uppercase text-gray-500">
-            <tr>
-              <th className="px-3 py-2">Thời gian</th>
-              <th className="px-3 py-2">Người thực hiện</th>
-              <th className="px-3 py-2">Hành động</th>
-              <th className="px-3 py-2">Chi tiết</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y">
-            {filteredLogs.length === 0 ? (
+        <div className="overflow-x-auto rounded border border-[color:var(--ds-border-subtle)]">
+          <table className="min-w-full divide-y divide-[color:var(--ds-border-subtle)] text-sm text-[color:var(--ds-text-primary)]">
+            <thead className="bg-[color:var(--ds-surface-muted)] text-left text-xs font-semibold uppercase text-[color:var(--ds-text-secondary)]">
               <tr>
-                <td className="px-3 py-4 text-center text-gray-500" colSpan={4}>
-                  Không có bản ghi phù hợp.
-                </td>
+                <th className="px-3 py-2">Thời gian</th>
+                <th className="px-3 py-2">Người thực hiện</th>
+                <th className="px-3 py-2">Hành động</th>
+                <th className="px-3 py-2">Chi tiết</th>
               </tr>
-            ) : (
-              filteredLogs.map((entry, index) => (
-                <tr key={`${entry.ts}-${index}`} className="odd:bg-white even:bg-gray-50">
-                  <td className="px-3 py-2 whitespace-nowrap">{formatTime(entry.ts)}</td>
-                  <td className="px-3 py-2">{entry.actor || "system"}</td>
-                  <td className="px-3 py-2">{entry.action}</td>
-                  <td className="px-3 py-2 whitespace-pre-wrap">{entry.detail}</td>
+            </thead>
+            <tbody className="divide-y divide-[color:var(--ds-border-subtle)]">
+              {filteredLogs.length === 0 ? (
+                <tr>
+                  <td className="px-3 py-4 text-center text-[color:var(--ds-text-muted)]" colSpan={4}>
+                    Không có bản ghi phù hợp.
+                  </td>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+              ) : (
+                filteredLogs.map((entry, index) => (
+                  <tr key={`${entry.ts}-${index}`} className={index % 2 === 0 ? "bg-[color:var(--ds-surface-card)]" : "bg-[color:var(--ds-surface-muted)]"}>
+                    <td className="px-3 py-2 whitespace-nowrap">{formatTime(entry.ts)}</td>
+                    <td className="px-3 py-2">{entry.actor || "system"}</td>
+                    <td className="px-3 py-2">{entry.action}</td>
+                    <td className="px-3 py-2 whitespace-pre-wrap text-[color:var(--ds-text-secondary)]">{entry.detail || "—"}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
     </div>
   );
 }

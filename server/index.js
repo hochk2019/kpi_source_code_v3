@@ -1,4 +1,4 @@
-﻿import express from 'express';
+import express from 'express';
 import cors from 'cors';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -195,7 +195,6 @@ const DEFAULT_ECUS_SYNC_CONFIG = {
     '  LTRIM(RTRIM(lp.Ma_LH)) AS loai_hinh,',
     '  LTRIM(RTRIM(lp.Ma_DN)) AS mst,',
     '  LTRIM(RTRIM(lp.TEN_DV)) AS cong_ty,',
-    '  ISNULL(ama_child.so_tk_ama, ama_parent.so_tk_goc) AS so_tk_ama,',
     '  ISNULL(items.muc_hang, 0) AS muc_hang,',
     '  ISNULL(licenses.license_count, 0) AS license_count,',
     "  ISNULL(licenses.license_codes, N'') AS license_codes,",
@@ -239,18 +238,6 @@ const DEFAULT_ECUS_SYNC_CONFIG = {
     '  ) AS codes',
     ') AS licenses',
     'OUTER APPLY (',
-    '  SELECT TOP 1 CAST(child.So_TK AS nvarchar(50)) AS so_tk_ama',
-    '  FROM dbo.DTBLP AS child',
-    '  LEFT JOIN dbo.DTOKHAIMD_VNACCS2 AS child_md2 ON child_md2._DToKhaiMDID = child._DTokhaiMDID',
-    '  WHERE child_md2.DTOKHAIMDID_Parent = lp._DTokhaiMDID',
-    '  ORDER BY child.Ngay_DK DESC, child.So_TK DESC',
-    ') AS ama_child',
-    'OUTER APPLY (',
-    '  SELECT TOP 1 CAST(parent.So_TK AS nvarchar(50)) AS so_tk_goc',
-    '  FROM dbo.DTBLP AS parent',
-    '  WHERE parent._DTokhaiMDID = md2.DTOKHAIMDID_Parent',
-    ') AS ama_parent',
-    'OUTER APPLY (',
     '  SELECT COUNT(*) AS co_count_num',
     '  FROM dbo.DHANGMDDK AS h2',
     '  WHERE h2._DToKhaiMDID = lp._DTokhaiMDID',
@@ -266,7 +253,6 @@ const DEFAULT_ECUS_SYNC_CONFIG = {
     loai_hinh: 'loai_hinh',
     mst: 'mst',
     cong_ty: 'cong_ty',
-    so_tk_ama: 'so_tk_ama',
     num_items: 'muc_hang',
     licenses: 'license_count',
     nhan_vien_import: 'nhan_vien_nhap',
@@ -3388,9 +3374,6 @@ function normalizeDeclarationRow(row) {
     const suffix = normalizedNumber ? originalNumber.slice(normalizedNumber.length) : originalNumber;
     cloned.so_tk_suffix = suffix || '';
   }
-  if (cloned.so_tk_ama !== undefined) {
-    cloned.so_tk_ama = normalizeStr(cloned.so_tk_ama);
-  }
   if (!cloned.nhanh && cloned.branch) {
     cloned.nhanh = cloned.branch;
   }
@@ -3788,9 +3771,11 @@ function pushImportLog(entry, extraMeta = null) {
       meta = null,
       updatedDeclarations = [],
       insertedDeclarations = [],
+      lockedDeclarations = [],
     } = entry;
     const normalizedUpdated = normalizeLogDeclarationList(updatedDeclarations);
     const normalizedInserted = normalizeLogDeclarationList(insertedDeclarations);
+    const normalizedLocked = normalizeLogDeclarationList(lockedDeclarations);
     record = {
       ts: timestamp,
       kind,
@@ -3800,6 +3785,7 @@ function pushImportLog(entry, extraMeta = null) {
       meta: meta && typeof meta === 'object' ? { ...meta } : meta ?? null,
       updatedDeclarations: normalizedUpdated.length ? normalizedUpdated : undefined,
       insertedDeclarations: normalizedInserted.length ? normalizedInserted : undefined,
+      lockedDeclarations: normalizedLocked.length ? normalizedLocked : undefined,
     };
   } else {
     const meta = extraMeta && typeof extraMeta === 'object' ? { ...extraMeta } : null;
@@ -3933,7 +3919,14 @@ function normalizeLicenseCode(value) {
 }
 
 function normalizeAgencyKey(value) {
-  const str = normalizeStr(value);
+  let str = normalizeStr(value);
+  if (!str) return '';
+  let previous = null;
+  while (str && str !== previous) {
+    previous = str;
+    str = str.replace(/^[\s"'([{<]+|[\s"'(){}\]}>]+$/g, '');
+    str = normalizeStr(str);
+  }
   if (!str) return '';
   return str.toUpperCase();
 }
@@ -5287,6 +5280,40 @@ function markDeclarationsReviewed(keys, { actor = 'system' } = {}) {
       severity: 'info',
       title: 'Đánh dấu đã rà soát tờ khai',
       message: `Đã cập nhật trạng thái cho ${updatedCount} tờ khai.`,
+      meta: { actor, count: updatedCount },
+    });
+  }
+  return updatedCount;
+}
+
+function unmarkDeclarationsReviewed(keys, { actor = 'system' } = {}) {
+  if (!Array.isArray(keys) || keys.length === 0) return 0;
+  const keySet = new Set(keys);
+  let updatedCount = 0;
+  const nextRows = getDeclRows().map((row) => {
+    const key = getDeclarationKey(row);
+    if (!keySet.has(key)) return row;
+    if (!row?.reviewed) return row;
+    updatedCount += 1;
+    const next = { ...row };
+    delete next.reviewed;
+    delete next.reviewed_at;
+    delete next.reviewed_by;
+    return next;
+  });
+  if (updatedCount > 0) {
+    writeDeclRows(nextRows);
+    pushAuditLog({
+      actor,
+      action: 'decl.unreview',
+      detail: `Bo danh dau da ra soat ${updatedCount} to khai`,
+      meta: { keys: Array.from(keySet) },
+    });
+    pushNotification({
+      type: 'import.alerts.unreviewed',
+      severity: 'info',
+      title: 'Bo danh dau da ra soat',
+      message: `Da bo khoa ${updatedCount} to khai.`,
       meta: { actor, count: updatedCount },
     });
   }
@@ -7353,15 +7380,6 @@ const COLUMN_ALIASES = Object.freeze({
     'So to khai',
     'Số tờ khai TM',
   ],
-  so_tk_ama: [
-    'so_tk_ama',
-    'So_tk_ama',
-    'soTkAma',
-    'SoTkAma',
-    'SOTK_AMA',
-    'Số TK AMA',
-    'So TK AMA',
-  ],
   date: [
     'ngay_dang_ky',
     'Ngay_dang_ky',
@@ -7546,17 +7564,31 @@ function mapEcusRow(record, config, context) {
   if (!soTk || !dateISO) return null;
 
   const mst = normalizeMST(getField('mst'));
-  const soTkAma = normalizeStr(getField('so_tk_ama'));
   let company = normalizeStr(getField('cong_ty'));
   const loaiHinh = normalizeStr(getField('loai_hinh'));
   const numItemsRaw = getField('num_items');
   const numItems = Number.parseInt(numItemsRaw, 10);
   const licensesRaw = getField('licenses');
   const licenseCodesRaw = getField('license_codes');
-  let licenseCodes = extractNormalizedLicenseCodes(licenseCodesRaw);
-  if (!licenseCodes.length) {
-    licenseCodes = extractNormalizedLicenseCodes(licensesRaw);
+  let licenseSourceCodes = extractNormalizedLicenseCodes(licenseCodesRaw);
+  if (!licenseSourceCodes.length) {
+    licenseSourceCodes = extractNormalizedLicenseCodes(licensesRaw);
   }
+  if (!licenseSourceCodes.length) {
+    const perFieldCodes = [];
+    for (let i = 1; i <= 5; i += 1) {
+      const field = getField(`license_code_${i}`);
+      if (!field) continue;
+      const normalized = normalizeStr(field).toUpperCase();
+      if (normalized) {
+        perFieldCodes.push(normalized);
+      }
+    }
+    if (perFieldCodes.length) {
+      licenseSourceCodes = perFieldCodes;
+    }
+  }
+  const uniqueLicenseSourceCodes = Array.from(new Set(licenseSourceCodes));
 
   const baseExcludeSet =
     context?.licenseExcludeSet instanceof Set ? context.licenseExcludeSet : new Set();
@@ -7575,6 +7607,17 @@ function mapEcusRow(record, config, context) {
       const key = normalizeAgencyKey(part);
       if (key) {
         normalizedAgencyKeys.add(key);
+      }
+    }
+    const parentMatches = String(value)
+      .match(/\(([^)]+)\)/g);
+    if (parentMatches) {
+      for (const segment of parentMatches) {
+        const inner = segment.replace(/^\(|\)$/g, '');
+        const innerKey = normalizeAgencyKey(inner);
+        if (innerKey) {
+          normalizedAgencyKeys.add(innerKey);
+        }
       }
     }
   };
@@ -7626,8 +7669,17 @@ function mapEcusRow(record, config, context) {
   }
 
   let licenseCount;
-  if (licenseCodes.length) {
-    licenseCount = licenseCodes.filter((code) => !effectiveExcludeSet.has(code)).length;
+  let includedLicenseCodes = [];
+  let excludedLicenseCodes = [];
+  if (uniqueLicenseSourceCodes.length) {
+    for (const code of uniqueLicenseSourceCodes) {
+      if (effectiveExcludeSet.has(code)) {
+        excludedLicenseCodes.push(code);
+      } else {
+        includedLicenseCodes.push(code);
+      }
+    }
+    licenseCount = includedLicenseCodes.length;
   } else {
     licenseCount = parseLicenseCount(licensesRaw, effectiveExcludeSet);
   }
@@ -7663,7 +7715,6 @@ function mapEcusRow(record, config, context) {
     so_tk: soTk,
     so_tk_full: soTkRaw,
     so_tk_suffix: soTkRaw.slice(soTk.length),
-    so_tk_ama: soTkAma,
     nhanh,
     mst,
     cong_ty: company,
@@ -7678,7 +7729,9 @@ function mapEcusRow(record, config, context) {
     dai_ly: agency,
     isExport,
     co_line_count: coLineCount,
-    licenseCodes,
+    licenseCodes: includedLicenseCodes,
+    licenseSourceCodes: uniqueLicenseSourceCodes,
+    licenseExcludedCodes: excludedLicenseCodes,
   };
   const normalizedBase = normalizeDeclarationRow(base) || base;
   return deriveCOStatus(normalizedRecord, normalizedBase);
@@ -7720,6 +7773,9 @@ function normalizeValueArray(value) {
 function mergeDeclarationRow(existing, incoming) {
   if (!existing) {
     return { row: incoming, changed: true, changedFields: Object.keys(incoming || {}) };
+  }
+  if (existing?.reviewed && incoming?.__forceReviewedOverride !== true) {
+    return { row: existing, changed: false, changedFields: [], locked: true };
   }
   const merged = { ...existing };
   let changed = false;
@@ -7961,7 +8017,13 @@ async function previewEcusSync(rangeInput, { limit = 50 } = {}) {
   const context = buildEcusSyncContext(config);
   const iterator = fetchEcusDeclarations(range, config);
   const existingRows = getDeclRows();
-  const existingKeys = new Set(existingRows.map((row) => getDeclarationKey(row)));
+  const existingMap = new Map();
+  for (const row of existingRows) {
+    const key = getDeclarationKey(row);
+    if (key) {
+      existingMap.set(key, row);
+    }
+  }
   const normalizedLimit = Number.isFinite(Number(limit)) ? Math.max(0, Math.floor(Number(limit))) : 0;
   const rows = [];
   let totalFetched = 0;
@@ -7972,7 +8034,9 @@ async function previewEcusSync(rangeInput, { limit = 50 } = {}) {
       const mapped = mapEcusRow(raw, config, context);
       if (!mapped) continue;
       const key = getDeclarationKey(mapped);
-      rows.push({ ...mapped, status: existingKeys.has(key) ? 'existing' : 'new' });
+      const existing = key ? existingMap.get(key) : null;
+      const locked = !!existing?.reviewed;
+      rows.push({ ...mapped, status: existing ? 'existing' : 'new', locked });
       if (normalizedLimit > 0 && rows.length >= normalizedLimit) {
         return {
           rows,
@@ -8013,9 +8077,11 @@ async function runEcusSync({ from, to, actor = 'system', reason = 'manual' } = {
   let totalInserted = 0;
   let skippedExisting = 0;
   let updatedExisting = 0;
+  let reviewLocked = 0;
 
   const updatedMap = new Map();
   const insertedMap = new Map();
+  const lockedMap = new Map();
 
   for await (const batch of rawIterator) {
     totalFetched += batch.length;
@@ -8029,7 +8095,24 @@ async function runEcusSync({ from, to, actor = 'system', reason = 'manual' } = {
       }
       if (mergedMap.has(key)) {
         const existing = mergedMap.get(key);
-        const { row: mergedRow, changed, changedFields = [] } = mergeDeclarationRow(existing, row);
+        const {
+          row: mergedRow,
+          changed,
+          changedFields = [],
+          locked,
+        } = mergeDeclarationRow(existing, row);
+        if (locked) {
+          skippedExisting += 1;
+          reviewLocked += 1;
+          if (!lockedMap.has(key)) {
+            lockedMap.set(key, {
+              so_tk: existing.so_tk,
+              so_tk_full: existing.so_tk_full || row.so_tk_full || existing.so_tk,
+              nhanh: normalizeStr(existing.nhanh || existing.branch || ''),
+            });
+          }
+          continue;
+        }
         mergedMap.set(key, mergedRow);
         if (changed) {
           updatedExisting += 1;
@@ -8061,11 +8144,14 @@ async function runEcusSync({ from, to, actor = 'system', reason = 'manual' } = {
   const mergedRows = Array.from(mergedMap.values());
   const storedRows = writeDeclRows(mergedRows);
   const totalStored = storedRows.length;
+  const skipLabel = reviewLocked > 0
+    ? `bo qua ${skippedExisting} (khoa ${reviewLocked})`
+    : `bo qua ${skippedExisting}`;
 
   pushAuditLog({
     actor,
     action: 'decl.merge',
-    detail: `Dong bo ${totalInserted} to khai moi tu ECUS (${range.from || '...'} -> ${range.to || '...'}) [${syncReason}] - cap nhat ${updatedExisting} - bo qua ${skippedExisting} - tong luu: ${totalStored}`,
+    detail: `Dong bo ${totalInserted} to khai moi tu ECUS (${range.from || '...'} -> ${range.to || '...'}) [${syncReason}] - cap nhat ${updatedExisting} - ${skipLabel} - tong luu: ${totalStored}`,
   });
 
   const alertSummary = evaluateDeclarationAlerts({ actor, reason: 'ecus-sync' });
@@ -8077,11 +8163,12 @@ async function runEcusSync({ from, to, actor = 'system', reason = 'manual' } = {
     fields: Array.from(entry.fields),
   }));
   const insertedEntries = Array.from(insertedMap.values());
+  const lockedEntries = Array.from(lockedMap.values());
 
   pushImportLog({
     kind: 'ecus-sync',
     actor,
-    message: `ECUS sync (${syncReason}) +${totalInserted} / cap nhat ${updatedExisting} / bo qua ${skippedExisting} (${range.from || '...'} -> ${range.to || '...'}) - tong luu: ${totalStored}`,
+    message: `ECUS sync (${syncReason}) +${totalInserted} / cap nhat ${updatedExisting} / ${skipLabel} (${range.from || '...'} -> ${range.to || '...'}) - tong luu: ${totalStored}`,
     summary: {
       reason: syncReason,
       range,
@@ -8089,10 +8176,12 @@ async function runEcusSync({ from, to, actor = 'system', reason = 'manual' } = {
       inserted: totalInserted,
       updated: updatedExisting,
       skipped: skippedExisting,
+      locked: reviewLocked,
       stored: totalStored,
     },
     updatedDeclarations: updatedEntries,
     insertedDeclarations: insertedEntries,
+    lockedDeclarations: lockedEntries,
   });
 
   const updatedSummary = updatedEntries.slice(0, 200).map((entry) => ({
@@ -8103,8 +8192,13 @@ async function runEcusSync({ from, to, actor = 'system', reason = 'manual' } = {
     so_tk: entry.so_tk,
     nhanh: entry.nhanh,
   }));
+  const lockedSummary = lockedEntries.slice(0, 200).map((entry) => ({
+    so_tk: entry.so_tk,
+    nhanh: entry.nhanh,
+  }));
   const updatedKeySet = new Set(updatedEntries.map((entry) => `${entry.so_tk}_${entry.nhanh || ''}`));
   const updatedKeys = Array.from(updatedKeySet).slice(0, 400);
+  const lockedKeys = Array.from(lockedMap.keys()).slice(0, 400);
 
   const nextConfig = saveEcusConfig({
     lastRun: runAtIso,
@@ -8115,6 +8209,7 @@ async function runEcusSync({ from, to, actor = 'system', reason = 'manual' } = {
       rowsInserted: totalInserted,
       rowsUpdated: updatedExisting,
       rowsSkipped: skippedExisting,
+      rowsReviewLocked: reviewLocked,
       totalStored,
       existingBefore: existingCount,
       range,
@@ -8122,6 +8217,8 @@ async function runEcusSync({ from, to, actor = 'system', reason = 'manual' } = {
       updatedDeclarations: updatedSummary,
       insertedDeclarations: insertedSummary,
       updatedKeys,
+      lockedDeclarations: lockedSummary,
+      lockedKeys,
     },
   }, { preservePassword: true });
 
@@ -8129,7 +8226,7 @@ async function runEcusSync({ from, to, actor = 'system', reason = 'manual' } = {
     type: 'ecus.sync.completed',
     severity: 'info',
     title: 'Đồng bộ ECUS hoàn tất',
-    message: `+${totalInserted} / cập nhật ${updatedExisting} / bỏ qua ${skippedExisting} (tổng ${totalStored})`,
+    message:  `+${totalInserted} / cap nhat ${updatedExisting} / ${skipLabel} (tong ${totalStored})`, 
     meta: {
       actor,
       reason: syncReason,
@@ -8137,6 +8234,7 @@ async function runEcusSync({ from, to, actor = 'system', reason = 'manual' } = {
       inserted: totalInserted,
       updated: updatedExisting,
       skipped: skippedExisting,
+      locked: reviewLocked,
       stored: totalStored,
       range,
       alerts: alertSummary,
@@ -8151,6 +8249,7 @@ async function runEcusSync({ from, to, actor = 'system', reason = 'manual' } = {
     imported: totalInserted,
     updated: updatedExisting,
     skipped: skippedExisting,
+    reviewLocked,
     storedTotal: totalStored,
     existingBefore: existingCount,
     existingAfter: totalStored,
@@ -8159,6 +8258,7 @@ async function runEcusSync({ from, to, actor = 'system', reason = 'manual' } = {
     runAt: runAtIso,
     updatedDeclarations: updatedSummary,
     insertedDeclarations: insertedSummary,
+    lockedDeclarations: lockedSummary,
   };
 }
 
@@ -9415,6 +9515,30 @@ app.post('/api/auth/password/change', async (req, res) => {
   }
 });
 
+app.get('/api/storage/:key', (req, res) => {
+  const key = req.params.key;
+  if (!key) {
+    res.status(400).json({ ok: false, error: 'Thi?u key' });
+    return;
+  }
+  const { denied } = verifyStoragePermission(req, res, key);
+  if (denied) {
+    return;
+  }
+  try {
+    const raw = getValue(key);
+    if (raw === undefined || raw === null) {
+      res.json({ ok: true, key, value: null, raw: null });
+      return;
+    }
+    const value = safeParse(raw, raw);
+    res.json({ ok: true, key, value, raw });
+  } catch (err) {
+    console.error('Kh�ng th? d?c d? li?u', err);
+    res.status(500).json({ ok: false, error: 'Kh�ng th? d?c d? li?u' });
+  }
+});
+
 app.put('/api/storage/:key', (req, res) => {
   const key = req.params.key;
   if (!key) {
@@ -9975,6 +10099,14 @@ app.post('/api/import/alerts/review', (req, res) => {
   const actor = resolveActor(req);
   const updated = markDeclarationsReviewed(keys, { actor });
   const summary = evaluateDeclarationAlerts({ actor, reason: 'manual-review' });
+  res.json({ ok: true, updated, summary });
+});
+
+app.post('/api/import/alerts/unreview', (req, res) => {
+  const keys = Array.isArray(req.body?.keys) ? req.body.keys : [];
+  const actor = resolveActor(req);
+  const updated = unmarkDeclarationsReviewed(keys, { actor });
+  const summary = evaluateDeclarationAlerts({ actor, reason: 'manual-unreview' });
   res.json({ ok: true, updated, summary });
 });
 

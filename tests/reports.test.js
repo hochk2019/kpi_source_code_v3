@@ -241,4 +241,42 @@ describe('buildReportData', () => {
     expect(report.trend.comparison.current.decls).toBe(1);
     expect(report.trend.comparison.delta.decls).toBe(0);
   });
+
+  it('loại bỏ mã giấy phép bị chặn khỏi thống kê', () => {
+    const rules = JSON.parse(JSON.stringify(DEFAULT_RULES));
+    rules.license = rules.license || {};
+    rules.license.exclude = {
+      codes: ['HDGC', 'ZN02'],
+      agencies: [],
+    };
+
+    const rows = [
+      {
+        date: '2024-08-10',
+        so_tk: '9990000001',
+        loai_hinh: 'E11',
+        num_items: 4,
+        licenses: 3,
+        licenseCodes: ['HDGC', 'ZN02', 'GP01'],
+        licenseSourceCodes: ['HDGC', 'ZN02', 'GP01'],
+        nhan_vien: 'Phuong',
+        team: 'Team 1',
+        mst: '0700123456',
+        cong_ty: 'Cong ty Chan',
+      },
+    ];
+
+    const report = buildReportData(rows, {
+      roster: sampleRoster,
+      rules,
+      from: '2024-08-01',
+      to: '2024-08-31',
+    });
+
+    expect(report.rows).toHaveLength(1);
+    expect(report.rows[0].licenseCodes).toEqual(['GP01']);
+    expect(report.rows[0].licenses).toBe(1);
+    expect(report.summary.licenseCodes).toEqual(['GP01']);
+    expect(report.summary.licenses).toBe(1);
+  });
 });

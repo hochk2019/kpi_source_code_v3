@@ -26,6 +26,7 @@ const SHARED_KEYS = new Set([
   'hq_history_v1',
   'kpi_users_v1',
   'kpi_adjustments_v1',
+  'ui_layout_config_v1',
 ]);
 
 const cache = new Map();
@@ -235,6 +236,48 @@ function queueSync(key, value) {
     return;
   }
   flushPending();
+}
+
+export async function refreshSharedKeys(keys, options = {}) {
+  const targets = Array.isArray(keys) && keys.length ? keys : Array.from(SHARED_KEYS);
+  if (!targets.length) {
+    return {};
+  }
+  const base =
+    normalizeBaseUrl(
+      options.baseUrl ??
+        options.apiBase ??
+        apiBase ??
+        (typeof import.meta !== 'undefined' ? import.meta.env?.VITE_API_BASE : '') ??
+        ''
+    ) || '';
+  const results = {};
+  for (const key of targets) {
+    const url = `${base}/api/storage/${encodeURIComponent(key)}`;
+    const response = await fetchWithAuth(url, { method: 'GET' });
+    if (!response.ok) {
+      const error = new Error(`HTTP ${response.status}`);
+      lastSyncError = error.message;
+      remoteEnabled = false;
+      emitSyncStatus();
+      throw error;
+    }
+    const payload = await response.json();
+    const raw = payload?.raw;
+    if (raw === null || raw === undefined) {
+      cache.delete(key);
+    } else if (typeof raw === 'string') {
+      cache.set(key, raw);
+    } else {
+      cache.set(key, JSON.stringify(raw));
+    }
+    notify(key);
+    results[key] = payload?.value ?? null;
+  }
+  remoteEnabled = true;
+  lastSyncError = null;
+  emitSyncStatus();
+  return results;
 }
 
 export function getItem(key) {

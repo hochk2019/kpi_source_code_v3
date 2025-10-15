@@ -30,9 +30,15 @@ const PERMISSION_LABELS = {
   aiAssistManage: "Trợ lý AI – cấu hình",
 };
 
+const CONTROL_CLASS =
+  "rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] px-3 py-2 text-sm text-[color:var(--ds-text-primary)] shadow-sm focus:outline-none focus:ring-2 focus:ring-[color:var(--ds-accent-ring)] focus:ring-offset-0";
+
 function PermissionCheckbox({ checked, onChange, label, disabled = false }) {
+  const tone = disabled
+    ? "text-[color:var(--ds-text-muted)] opacity-70"
+    : "text-[color:var(--ds-text-secondary)]";
   return (
-    <label className={`flex items-center gap-2 text-sm ${disabled ? "text-gray-400" : "text-gray-700"}`}>
+    <label className={`flex items-center gap-2 text-sm ${tone}`}>
       <input type="checkbox" checked={!!checked} onChange={(e) => onChange(e.target.checked)} disabled={disabled} />
       <span>{label}</span>
     </label>
@@ -49,6 +55,7 @@ export default function AccountManager({ currentUser }) {
     role: DEFAULT_ROLE,
     permissions: getPermissionTemplate(DEFAULT_ROLE),
   }));
+  const [searchTerm, setSearchTerm] = useState("");
 
   const currentActor = currentUser?.username || "system";
 
@@ -67,6 +74,27 @@ export default function AccountManager({ currentUser }) {
   }, [refresh]);
 
   const permissionList = useMemo(() => PERMISSION_KEYS.map((key) => ({ key, label: PERMISSION_LABELS[key] })), []);
+  const filteredAccounts = useMemo(() => {
+    const term = searchTerm.trim().toLowerCase();
+    if (!term) {
+      return accounts;
+    }
+    return accounts.filter((account) => {
+      const username = String(account.username || "").toLowerCase();
+      const name = String(account.name || "").toLowerCase();
+      const role = String(account.role || "").toLowerCase();
+      if (username.includes(term) || name.includes(term) || role.includes(term)) {
+        return true;
+      }
+      const activePermissions = Object.entries(account.permissions || {})
+        .filter(([, value]) => !!value)
+        .map(([key]) => (PERMISSION_LABELS[key] || key).toLowerCase());
+      return activePermissions.some((label) => label.includes(term));
+    });
+  }, [accounts, searchTerm]);
+  const totalAccounts = accounts.length;
+  const visibleAccounts = filteredAccounts.length;
+  const hasSearch = searchTerm.trim().length > 0;
 
   const resetForm = () => {
     setForm({
@@ -160,18 +188,18 @@ export default function AccountManager({ currentUser }) {
 
   return (
     <div className="space-y-6">
-      <div className="rounded border bg-amber-50 p-4 text-sm text-amber-700">
+      <div className="rounded border border-amber-200 bg-amber-50 p-4 text-sm text-amber-700">
         Quản lý tài khoản đăng nhập cho hệ thống KPI. Tạo tài khoản mới và gán quyền cho từng khu vực. Mọi thao tác sẽ được ghi
         lại trong mục Nhật ký.
       </div>
 
-      <section className="rounded border bg-white p-4 shadow-sm">
-        <h2 className="text-lg font-semibold">Tạo tài khoản mới</h2>
+      <section className="rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] p-4 shadow-sm">
+        <h2 className="text-lg font-semibold text-[color:var(--ds-text-primary)]">Tạo tài khoản mới</h2>
         <form className="mt-4 grid gap-4 md:grid-cols-2" onSubmit={handleCreate}>
           <div className="space-y-2">
-            <label className="text-sm font-medium">Tài khoản *</label>
+            <label className="text-sm font-medium text-[color:var(--ds-text-primary)]">Tài khoản *</label>
             <input
-              className="w-full rounded border px-3 py-2 text-sm"
+              className={CONTROL_CLASS}
               value={form.username}
               onChange={(e) => setForm((prev) => ({ ...prev, username: e.target.value }))}
               placeholder="username"
@@ -179,19 +207,19 @@ export default function AccountManager({ currentUser }) {
             />
           </div>
           <div className="space-y-2">
-            <label className="text-sm font-medium">Họ tên hiển thị</label>
+            <label className="text-sm font-medium text-[color:var(--ds-text-primary)]">Họ tên hiển thị</label>
             <input
-              className="w-full rounded border px-3 py-2 text-sm"
+              className={CONTROL_CLASS}
               value={form.name}
               onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
               placeholder="Tên người dùng"
             />
           </div>
           <div className="space-y-2">
-            <label className="text-sm font-medium">Mật khẩu tạm *</label>
+            <label className="text-sm font-medium text-[color:var(--ds-text-primary)]">Mật khẩu tạm *</label>
             <input
               type="password"
-              className="w-full rounded border px-3 py-2 text-sm"
+              className={CONTROL_CLASS}
               value={form.password}
               onChange={(e) => setForm((prev) => ({ ...prev, password: e.target.value }))}
               placeholder="Ít nhất 6 ký tự"
@@ -199,9 +227,9 @@ export default function AccountManager({ currentUser }) {
             />
           </div>
           <div className="space-y-2">
-            <label className="text-sm font-medium">Vai trò</label>
+            <label className="text-sm font-medium text-[color:var(--ds-text-primary)]">Vai trò</label>
             <select
-              className="w-full rounded border px-3 py-2 text-sm"
+              className={CONTROL_CLASS}
               value={form.role}
               onChange={(e) => updateFormRole(e.target.value)}
             >
@@ -213,7 +241,7 @@ export default function AccountManager({ currentUser }) {
             </select>
           </div>
           <div className="md:col-span-2">
-            <div className="text-sm font-medium">Quyền chức năng</div>
+            <div className="text-sm font-medium text-[color:var(--ds-text-primary)]">Quyền chức năng</div>
             <div className="mt-2 grid gap-2 md:grid-cols-2">
               {permissionList.map(({ key, label }) => (
                 <PermissionCheckbox
@@ -240,7 +268,7 @@ export default function AccountManager({ currentUser }) {
             <button
               type="button"
               onClick={resetForm}
-              className="rounded border px-4 py-2 text-sm"
+              className="rounded border border-[color:var(--ds-border-subtle)] px-4 py-2 text-sm text-[color:var(--ds-text-secondary)] hover:bg-[color:var(--ds-surface-muted)]"
               data-tooltip="Xóa nội dung biểu mẫu và nhập lại từ đầu"
             >
               Nhập lại
@@ -249,11 +277,32 @@ export default function AccountManager({ currentUser }) {
         </form>
       </section>
 
-      <section className="rounded border bg-white p-4 shadow-sm">
-        <h2 className="text-lg font-semibold">Danh sách tài khoản</h2>
+      <section className="rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] p-4 shadow-sm">
+        <h2 className="text-lg font-semibold text-[color:var(--ds-text-primary)]">Danh sách tài khoản</h2>
+        <div className="mt-3 flex flex-wrap items-center gap-3">
+          <input
+            type="search"
+            value={searchTerm}
+            onChange={(event) => setSearchTerm(event.target.value)}
+            placeholder="Tìm nhanh theo tài khoản, họ tên, vai trò hoặc quyền…"
+            className={`min-w-[220px] flex-1 ${CONTROL_CLASS}`}
+          />
+          {hasSearch && (
+            <button
+              type="button"
+              onClick={() => setSearchTerm("")}
+              className="rounded border border-[color:var(--ds-border-subtle)] px-3 py-1 text-xs text-[color:var(--ds-text-secondary)] hover:bg-[color:var(--ds-surface-muted)]"
+            >
+              Xóa tìm kiếm
+            </button>
+          )}
+          <span className="text-sm text-[color:var(--ds-text-muted)]">
+            {visibleAccounts}/{totalAccounts} tài khoản
+          </span>
+        </div>
         <div className="mt-4 overflow-x-auto">
-          <table className="min-w-full divide-y">
-            <thead className="bg-gray-50 text-left text-sm font-medium text-gray-600">
+          <table className="min-w-full divide-y divide-[color:var(--ds-border-subtle)]">
+            <thead className="bg-[color:var(--ds-surface-muted)] text-left text-sm font-medium text-[color:var(--ds-text-secondary)]">
               <tr>
                 <th className="px-3 py-2">Tài khoản</th>
                 <th className="px-3 py-2">Họ tên</th>
@@ -262,31 +311,31 @@ export default function AccountManager({ currentUser }) {
                 <th className="px-3 py-2">Hành động</th>
               </tr>
             </thead>
-            <tbody className="divide-y text-sm">
-              {accounts.length === 0 ? (
+            <tbody className="divide-y divide-[color:var(--ds-border-subtle)] text-sm text-[color:var(--ds-text-primary)]">
+              {visibleAccounts === 0 ? (
                 <tr>
-                  <td className="px-3 py-4 text-center text-gray-500" colSpan={5}>
-                    Chưa có tài khoản nào.
+                  <td className="px-3 py-4 text-center text-[color:var(--ds-text-muted)]" colSpan={5}>
+                    {totalAccounts === 0 ? "Chưa có tài khoản nào." : "Không tìm thấy tài khoản phù hợp với từ khóa."}
                   </td>
                 </tr>
               ) : (
-                accounts.map((account) => (
+                filteredAccounts.map((account) => (
                   <tr key={account.username} className="align-top">
-                    <td className="px-3 py-3 font-medium text-gray-900">{account.username}</td>
-                    <td className="px-3 py-3">{account.name}</td>
-                      <td className="px-3 py-3">
-                        <select
-                          className="rounded border px-2 py-1"
-                          value={account.role}
-                          onChange={(e) => changeRole(account.username, e.target.value)}
-                        >
-                          {ROLE_OPTIONS.map((option) => (
-                            <option key={option.value} value={option.value}>
-                              {option.label}
-                            </option>
-                          ))}
-                        </select>
-                      </td>
+                    <td className="px-3 py-3 font-medium text-[color:var(--ds-text-primary)]">{account.username}</td>
+                    <td className="px-3 py-3 text-[color:var(--ds-text-secondary)]">{account.name || "—"}</td>
+                    <td className="px-3 py-3">
+                      <select
+                        className={`w-full max-w-[140px] ${CONTROL_CLASS}`}
+                        value={account.role}
+                        onChange={(e) => changeRole(account.username, e.target.value)}
+                      >
+                        {ROLE_OPTIONS.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
                     <td className="px-3 py-3">
                       <div className="grid gap-2 md:grid-cols-2">
                         {permissionList.map(({ key, label }) => (
@@ -305,7 +354,7 @@ export default function AccountManager({ currentUser }) {
                         <button
                           type="button"
                           onClick={() => resetPassword(account.username)}
-                          className="rounded border px-3 py-1 text-xs"
+                          className="rounded border border-[color:var(--ds-border-subtle)] px-3 py-1 text-xs text-[color:var(--ds-text-secondary)] hover:bg-[color:var(--ds-surface-muted)]"
                           data-tooltip="Đặt lại mật khẩu và yêu cầu người dùng đổi sau khi đăng nhập"
                         >
                           Đặt lại mật khẩu
@@ -313,7 +362,7 @@ export default function AccountManager({ currentUser }) {
                         <button
                           type="button"
                           onClick={() => removeAccount(account.username)}
-                          className="rounded border border-red-500 px-3 py-1 text-xs text-red-600"
+                          className="rounded border border-red-500 px-3 py-1 text-xs text-red-600 hover:bg-red-500/10"
                           data-tooltip="Xóa tài khoản này khỏi hệ thống"
                         >
                           Xóa

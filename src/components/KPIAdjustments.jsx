@@ -350,46 +350,46 @@ export default function KPIAdjustments({ currentUser }) {
 
   return (
     <div className="space-y-6">
-      <div className="rounded-lg border bg-white p-4 shadow-sm">
-        <h2 className="text-lg font-semibold text-gray-900">Tổng quan điểm KPI +/-</h2>
+      <div className="rounded-lg border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] p-4 shadow-sm">
+        <h2 className="text-lg font-semibold text-[color:var(--ds-text-primary)]">Tổng quan điểm KPI +/-</h2>
         <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <div className="rounded border px-3 py-3 text-sm">
-            <div className="text-xs uppercase text-gray-500">Tổng số mục</div>
-            <div className="text-2xl font-semibold text-gray-900">{formatInt(stats.total)}</div>
+          <div className="rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-muted)] px-3 py-3 text-sm">
+            <div className="text-xs uppercase text-[color:var(--ds-text-muted)]">Tổng số mục</div>
+            <div className="text-2xl font-semibold text-[color:var(--ds-text-primary)]">{formatInt(stats.total)}</div>
           </div>
-          <div className="rounded border px-3 py-3 text-sm">
-            <div className="text-xs uppercase text-gray-500">Đã duyệt</div>
+          <div className="rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-muted)] px-3 py-3 text-sm">
+            <div className="text-xs uppercase text-[color:var(--ds-text-muted)]">Đã duyệt</div>
             <div className="text-2xl font-semibold text-emerald-600">{formatInt(stats.approved)}</div>
           </div>
-          <div className="rounded border px-3 py-3 text-sm">
-            <div className="text-xs uppercase text-gray-500">Chờ duyệt</div>
+          <div className="rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-muted)] px-3 py-3 text-sm">
+            <div className="text-xs uppercase text-[color:var(--ds-text-muted)]">Chờ duyệt</div>
             <div className="text-2xl font-semibold text-amber-600">{formatInt(stats.pending)}</div>
           </div>
-          <div className="rounded border px-3 py-3 text-sm">
-            <div className="text-xs uppercase text-gray-500">Điểm đã cộng/trừ</div>
+          <div className="rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-muted)] px-3 py-3 text-sm">
+            <div className="text-xs uppercase text-[color:var(--ds-text-muted)]">Điểm đã cộng/trừ</div>
             <div className="text-2xl font-semibold text-blue-600">{formatDecimal(stats.totalPoints)}</div>
           </div>
         </div>
       </div>
 
-      <div className="rounded-lg border bg-white p-4 shadow-sm">
+      <div className="rounded-lg border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] p-4 shadow-sm">
         <form className="space-y-4" onSubmit={handleSubmit}>
-          <div className="flex flex-wrap items-center gap-3 text-sm text-gray-600">
+          <div className="flex flex-wrap items-center gap-3 text-sm text-[color:var(--ds-text-secondary)]">
             <div className="flex flex-col">
-              <label className="text-sm font-medium text-gray-700">Tháng áp dụng</label>
+              <label className="text-sm font-medium text-[color:var(--ds-text-primary)]">Tháng áp dụng</label>
               <input
                 type="month"
-                className="mt-1 rounded border px-3 py-2 text-sm"
+                className="mt-1 rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] px-3 py-2 text-sm text-[color:var(--ds-text-primary)] shadow-sm focus:outline-none focus:ring-2 focus:ring-[color:var(--ds-accent-ring)] focus:ring-offset-0"
                 value={form.month}
                 onChange={(e) => setForm((prev) => ({ ...prev, month: e.target.value }))}
                 required
               />
             </div>
             <div className="flex flex-col">
-              <label className="text-sm font-medium text-gray-700">Nhân viên</label>
+              <label className="text-sm font-medium text-[color:var(--ds-text-primary)]">Nhân viên</label>
               <input
                 list="kpi-adjust-staff-options"
-                className="mt-1 rounded border px-3 py-2 text-sm"
+                className="mt-1 rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] px-3 py-2 text-sm text-[color:var(--ds-text-primary)] shadow-sm focus:outline-none focus:ring-2 focus:ring-[color:var(--ds-accent-ring)] focus:ring-offset-0"
                 placeholder="Nhập tên nhân viên"
                 value={form.staffName}
                 onChange={(e) => {
@@ -416,10 +416,10 @@ export default function KPIAdjustments({ currentUser }) {
               </datalist>
             </div>
             <div className="flex flex-col">
-              <label className="text-sm font-medium text-gray-700">Tổ đội</label>
+              <label className="text-sm font-medium text-[color:var(--ds-text-primary)]">Tổ đội</label>
               <input
                 list="kpi-adjust-team-options"
-                className="mt-1 rounded border px-3 py-2 text-sm"
+                className="mt-1 rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] px-3 py-2 text-sm text-[color:var(--ds-text-primary)] shadow-sm focus:outline-none focus:ring-2 focus:ring-[color:var(--ds-accent-ring)] focus:ring-offset-0"
                 placeholder="Ví dụ: Team 1"
                 value={form.teamName}
                 onChange={(e) => {
@@ -453,9 +453,9 @@ export default function KPIAdjustments({ currentUser }) {
               </datalist>
             </div>
             <div className="flex flex-col">
-              <label className="text-sm font-medium text-gray-700">Hạng mục</label>
+              <label className="text-sm font-medium text-[color:var(--ds-text-primary)]">Hạng mục</label>
               <select
-                className="mt-1 rounded border px-3 py-2 text-sm"
+                className="mt-1 rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] px-3 py-2 text-sm text-[color:var(--ds-text-primary)] shadow-sm focus:outline-none focus:ring-2 focus:ring-[color:var(--ds-accent-ring)] focus:ring-offset-0"
                 value={form.category}
                 onChange={(e) => handleCategoryChange(e.target.value)}
               >
@@ -468,9 +468,9 @@ export default function KPIAdjustments({ currentUser }) {
             </div>
             {isEditing && canApprove ? (
               <div className="flex flex-col">
-                <label className="text-sm font-medium text-gray-700">Trạng thái</label>
+                <label className="text-sm font-medium text-[color:var(--ds-text-primary)]">Trạng thái</label>
                 <select
-                  className="mt-1 rounded border px-3 py-2 text-sm"
+                  className="mt-1 rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] px-3 py-2 text-sm text-[color:var(--ds-text-primary)] shadow-sm focus:outline-none focus:ring-2 focus:ring-[color:var(--ds-accent-ring)] focus:ring-offset-0"
                   value={form.status}
                   onChange={(e) => setForm((prev) => ({ ...prev, status: e.target.value }))}
                 >
@@ -487,29 +487,29 @@ export default function KPIAdjustments({ currentUser }) {
           <div className="grid gap-4 lg:grid-cols-3">
             <div className="space-y-3 lg:col-span-2">
               <div>
-                <label className="text-sm font-medium text-gray-700">Mô tả / ghi chú</label>
+                <label className="text-sm font-medium text-[color:var(--ds-text-primary)]">Mô tả / ghi chú</label>
                 <textarea
-                  className="mt-1 h-20 w-full rounded border px-3 py-2 text-sm"
+                  className="mt-1 h-20 w-full rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] px-3 py-2 text-sm text-[color:var(--ds-text-primary)] shadow-sm focus:outline-none focus:ring-2 focus:ring-[color:var(--ds-accent-ring)] focus:ring-offset-0"
                   value={form.note}
                   onChange={(e) => setForm((prev) => ({ ...prev, note: e.target.value }))}
                   placeholder="Nhập ghi chú, lý do cộng/trừ điểm..."
                 />
               </div>
               <div>
-                <label className="text-sm font-medium text-gray-700">Tham chiếu tờ khai / quyết định</label>
+                <label className="text-sm font-medium text-[color:var(--ds-text-primary)]">Tham chiếu tờ khai / quyết định</label>
                 <textarea
-                  className="mt-1 h-24 w-full rounded border px-3 py-2 text-sm"
+                  className="mt-1 h-24 w-full rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] px-3 py-2 text-sm text-[color:var(--ds-text-primary)] shadow-sm focus:outline-none focus:ring-2 focus:ring-[color:var(--ds-accent-ring)] focus:ring-offset-0"
                   value={form.referencesInput}
                   onChange={(e) => setForm((prev) => ({ ...prev, referencesInput: e.target.value }))}
                   placeholder="Nhập số tờ khai, mỗi dòng một số hoặc ngăn cách bằng dấu phẩy"
                 />
-                <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-gray-500">
+                <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-[color:var(--ds-text-muted)]">
                   <span>Gợi ý gần đây:</span>
                   {recentDeclarations.slice(0, 5).map((decl) => (
                     <button
                       type="button"
                       key={`${decl.date}-${decl.so_tk}`}
-                      className="rounded border px-2 py-1 hover:bg-gray-100"
+                      className="rounded border border-[color:var(--ds-border-subtle)] px-2 py-1 text-[color:var(--ds-text-secondary)] hover:bg-[color:var(--ds-surface-muted)]"
                       onClick={() =>
                         setForm((prev) => ({
                           ...prev,
@@ -523,7 +523,7 @@ export default function KPIAdjustments({ currentUser }) {
                   ))}
                   <button
                     type="button"
-                    className="rounded border px-2 py-1 hover:bg-gray-100"
+                    className="rounded border border-[color:var(--ds-border-subtle)] px-2 py-1 text-[color:var(--ds-text-secondary)] hover:bg-[color:var(--ds-surface-muted)]"
                     onClick={handleRefreshDeclarations}
                   >
                     Làm mới danh sách
@@ -535,10 +535,10 @@ export default function KPIAdjustments({ currentUser }) {
             <div className="space-y-3">
               {formCategoryConfig.type === "grade" ? (
                 <div>
-                  <label className="text-sm font-medium text-gray-700">Chọn mức đánh giá</label>
-                  <div className="mt-2 grid gap-2">
+                  <label className="text-sm font-medium text-[color:var(--ds-text-primary)]">Chọn mức đánh giá</label>
+                  <div className="mt-2 grid gap-2 text-[color:var(--ds-text-primary)]">
                     {(formCategoryConfig.grades || []).map((grade) => (
-                      <label key={grade.value} className="flex cursor-pointer items-center gap-2 rounded border px-3 py-2 text-sm">
+                      <label key={grade.value} className="flex cursor-pointer items-center gap-2 rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] px-3 py-2 text-sm hover:bg-[color:var(--ds-surface-muted)]">
                         <input
                           type="radio"
                           name="gradeValue"
@@ -560,22 +560,22 @@ export default function KPIAdjustments({ currentUser }) {
               ) : (
                 <div className="grid gap-3 md:grid-cols-2">
                   <div>
-                    <label className="text-sm font-medium text-gray-700">Số lượng</label>
+                    <label className="text-sm font-medium text-[color:var(--ds-text-primary)]">Số lượng</label>
                     <input
                       type="number"
                       min="0"
                       step="1"
-                      className="mt-1 w-full rounded border px-3 py-2 text-sm"
+                      className="mt-1 w-full rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] px-3 py-2 text-sm text-[color:var(--ds-text-primary)] shadow-sm focus:outline-none focus:ring-2 focus:ring-[color:var(--ds-accent-ring)] focus:ring-offset-0"
                       value={form.quantity}
                       onChange={(e) => setForm((prev) => ({ ...prev, quantity: e.target.value }))}
                     />
                   </div>
                   <div>
-                    <label className="text-sm font-medium text-gray-700">Điểm mỗi đơn vị</label>
+                    <label className="text-sm font-medium text-[color:var(--ds-text-primary)]">Điểm mỗi đơn vị</label>
                     <input
                       type="number"
                       step="0.1"
-                      className="mt-1 w-full rounded border px-3 py-2 text-sm"
+                      className="mt-1 w-full rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] px-3 py-2 text-sm text-[color:var(--ds-text-primary)] shadow-sm focus:outline-none focus:ring-2 focus:ring-[color:var(--ds-accent-ring)] focus:ring-offset-0"
                       value={form.unitPoints}
                       onChange={(e) => setForm((prev) => ({ ...prev, unitPoints: e.target.value }))}
                     />
@@ -583,9 +583,9 @@ export default function KPIAdjustments({ currentUser }) {
                 </div>
               )}
 
-              <div className="rounded border bg-gray-50 px-3 py-2 text-sm">
-                <div className="text-xs uppercase text-gray-500">Điểm dự kiến</div>
-                <div className="text-lg font-semibold text-gray-900">
+              <div className="rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-muted)] px-3 py-2 text-sm">
+                <div className="text-xs uppercase text-[color:var(--ds-text-muted)]">Điểm dự kiến</div>
+                <div className="text-lg font-semibold text-[color:var(--ds-text-primary)]">
                   {formCategoryConfig.type === "grade"
                     ? formatDecimal(form.gradeValue ?? form.unitPoints)
                     : formatDecimal((Number(form.quantity || 0) || 0) * (Number(form.unitPoints || 0) || 0))}
@@ -594,7 +594,7 @@ export default function KPIAdjustments({ currentUser }) {
             </div>
           </div>
 
-          {formError ? <div className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{formError}</div> : null}
+          {formError ? <div className="rounded border border-red-300 bg-[color:var(--ds-surface-muted)] px-3 py-2 text-sm text-red-600">{formError}</div> : null}
 
           <div className="flex flex-wrap items-center gap-3">
             <button
@@ -607,7 +607,7 @@ export default function KPIAdjustments({ currentUser }) {
             {isEditing ? (
               <button
                 type="button"
-                className="rounded border px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                className="rounded border border-[color:var(--ds-border-subtle)] px-4 py-2 text-sm text-[color:var(--ds-text-secondary)] hover:bg-[color:var(--ds-surface-muted)]"
                 onClick={resetForm}
               >
                 Hủy chỉnh sửa
@@ -616,14 +616,14 @@ export default function KPIAdjustments({ currentUser }) {
           </div>
 
           {isEditing && historyEntries.length ? (
-            <div className="rounded border bg-gray-50 p-3 text-sm">
-              <div className="font-semibold text-gray-800">Lịch sử cập nhật</div>
+            <div className="rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-muted)] p-3 text-sm">
+              <div className="font-semibold text-[color:var(--ds-text-primary)]">Lịch sử cập nhật</div>
               <ul className="mt-2 space-y-1">
                 {historyEntries.map((entry) => (
                   <li key={entry.id} className="flex items-center justify-between gap-3">
-                    <span className="text-gray-600">{formatDateTime(entry.ts)}</span>
-                    <span className="flex-1 text-gray-800">{entry.actor || "system"}</span>
-                    <span className="text-gray-500">{entry.action || "update"}</span>
+                    <span className="text-[color:var(--ds-text-secondary)]">{formatDateTime(entry.ts)}</span>
+                    <span className="flex-1 text-[color:var(--ds-text-primary)]">{entry.actor || "system"}</span>
+                    <span className="text-[color:var(--ds-text-muted)]">{entry.action || "update"}</span>
                   </li>
                 ))}
               </ul>
@@ -632,21 +632,21 @@ export default function KPIAdjustments({ currentUser }) {
         </form>
       </div>
 
-      <div className="rounded-lg border bg-white p-4 shadow-sm">
-        <div className="flex flex-wrap items-center gap-3 text-sm text-gray-600">
+      <div className="rounded-lg border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] p-4 shadow-sm">
+        <div className="flex flex-wrap items-center gap-3 text-sm text-[color:var(--ds-text-secondary)]">
           <div className="flex flex-col">
-            <label className="text-sm font-medium text-gray-700">Lọc theo tháng</label>
+            <label className="text-sm font-medium text-[color:var(--ds-text-primary)]">Lọc theo tháng</label>
             <input
               type="month"
-              className="mt-1 rounded border px-3 py-2 text-sm"
+              className="mt-1 rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] px-3 py-2 text-sm text-[color:var(--ds-text-primary)] shadow-sm focus:outline-none focus:ring-2 focus:ring-[color:var(--ds-accent-ring)] focus:ring-offset-0"
               value={filterMonth === "all" ? "" : filterMonth}
               onChange={(e) => setFilterMonth(e.target.value || "all")}
             />
           </div>
           <div className="flex flex-col">
-            <label className="text-sm font-medium text-gray-700">Trạng thái</label>
+            <label className="text-sm font-medium text-[color:var(--ds-text-primary)]">Trạng thái</label>
             <select
-              className="mt-1 rounded border px-3 py-2 text-sm"
+              className="mt-1 rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] px-3 py-2 text-sm text-[color:var(--ds-text-primary)] shadow-sm focus:outline-none focus:ring-2 focus:ring-[color:var(--ds-accent-ring)] focus:ring-offset-0"
               value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value)}
             >
@@ -658,27 +658,27 @@ export default function KPIAdjustments({ currentUser }) {
           </div>
         </div>
 
-        <div className="mt-4 overflow-auto rounded border">
+        <div className="mt-4 overflow-auto rounded border border-[color:var(--ds-border-subtle)]">
           <table className="min-w-full text-sm">
-            <thead className="bg-gray-100">
-              <tr>
-                <th className="px-3 py-2 text-left">Tháng</th>
-                <th className="px-3 py-2 text-left">Hạng mục</th>
-                <th className="px-3 py-2 text-left">Nhân viên</th>
-                <th className="px-3 py-2 text-left">Tổ đội</th>
+            <thead className="bg-[color:var(--ds-surface-muted)] text-[color:var(--ds-text-secondary)]">
+              <tr className="text-left text-xs uppercase">
+                <th className="px-3 py-2">Tháng</th>
+                <th className="px-3 py-2">Hạng mục</th>
+                <th className="px-3 py-2">Nhân viên</th>
+                <th className="px-3 py-2">Tổ đội</th>
                 <th className="px-3 py-2 text-right">Điểm</th>
-                <th className="px-3 py-2 text-left">Trạng thái</th>
-                <th className="px-3 py-2 text-left">Cập nhật</th>
-                <th className="px-3 py-2 text-left">Hành động</th>
+                <th className="px-3 py-2">Trạng thái</th>
+                <th className="px-3 py-2">Cập nhật</th>
+                <th className="px-3 py-2">Hành động</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="text-[color:var(--ds-text-primary)]">
               {filteredAdjustments.length ? (
                 filteredAdjustments.map((item) => {
                   const label = KPI_ADJUSTMENT_CATEGORY_CONFIG[item.category]?.label || item.category;
                   const statusLabel = STATUS_LABELS[item.status] || item.status;
                   return (
-                    <tr key={item.id} className="odd:bg-white even:bg-gray-50">
+                    <tr key={item.id} className="odd:bg-[color:var(--ds-surface-card)] even:bg-[color:var(--ds-surface-muted)]">
                       <td className="px-3 py-1.5">{item.month || "—"}</td>
                       <td className="px-3 py-1.5">{label}</td>
                       <td className="px-3 py-1.5">{item.staffName || "Chưa gán"}</td>
@@ -699,12 +699,12 @@ export default function KPIAdjustments({ currentUser }) {
                           {statusLabel}
                         </span>
                       </td>
-                      <td className="px-3 py-1.5 text-gray-500">{formatDateTime(item.updatedAt || item.createdAt)}</td>
+                      <td className="px-3 py-1.5 text-[color:var(--ds-text-secondary)]">{formatDateTime(item.updatedAt || item.createdAt)}</td>
                       <td className="px-3 py-1.5">
                         <div className="flex flex-wrap gap-2">
                           <button
                             type="button"
-                            className="rounded border px-2 py-1 hover:bg-gray-100"
+                            className="rounded border border-[color:var(--ds-border-subtle)] px-2 py-1 text-[color:var(--ds-text-secondary)] hover:bg-[color:var(--ds-surface-muted)]"
                             onClick={() => handleEdit(item)}
                           >
                             Sửa
@@ -714,7 +714,7 @@ export default function KPIAdjustments({ currentUser }) {
                               {item.status !== "approved" ? (
                                 <button
                                   type="button"
-                                  className="rounded border border-emerald-300 px-2 py-1 text-emerald-700 hover:bg-emerald-50"
+                                  className="rounded border border-emerald-400 px-2 py-1 text-emerald-500 hover:bg-emerald-500/10"
                                   onClick={() => handleStatusChange(item, "approved")}
                                 >
                                   Duyệt
@@ -723,7 +723,7 @@ export default function KPIAdjustments({ currentUser }) {
                               {item.status !== "rejected" ? (
                                 <button
                                   type="button"
-                                  className="rounded border border-rose-300 px-2 py-1 text-rose-700 hover:bg-rose-50"
+                                  className="rounded border border-rose-400 px-2 py-1 text-rose-500 hover:bg-rose-500/10"
                                   onClick={() => handleStatusChange(item, "rejected")}
                                 >
                                   Từ chối
@@ -733,7 +733,7 @@ export default function KPIAdjustments({ currentUser }) {
                           ) : null}
                           <button
                             type="button"
-                            className="rounded border border-gray-300 px-2 py-1 text-gray-600 hover:bg-gray-100"
+                            className="rounded border border-red-400/60 px-2 py-1 text-rose-500 hover:bg-rose-500/10"
                             onClick={() => handleDelete(item)}
                           >
                             Xóa
@@ -745,7 +745,7 @@ export default function KPIAdjustments({ currentUser }) {
                 })
               ) : (
                 <tr>
-                  <td className="px-3 py-6 text-center text-gray-500" colSpan={8}>
+                  <td className="px-3 py-6 text-center text-[color:var(--ds-text-muted)]" colSpan={8}>
                     Không có điểm KPI bổ sung nào phù hợp với bộ lọc hiện tại.
                   </td>
                 </tr>

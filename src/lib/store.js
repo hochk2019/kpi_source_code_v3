@@ -5,7 +5,7 @@ import {
   KPI_ADJUSTMENT_CATEGORY_CONFIG,
   normalizeAdjustmentCategoryKey,
 } from '../../shared/kpiAdjustments.js';
-import { getItem, setItem } from './storageClient.js';
+import { getItem, setItem, refreshSharedKeys } from './storageClient.js';
 
 export { KPI_ADJUSTMENT_CATEGORY_CONFIG } from '../../shared/kpiAdjustments.js';
 
@@ -73,9 +73,6 @@ function normalizeDeclarationRow(row) {
     const suffix = normalized ? sourceNumber.slice(normalized.length) : sourceNumber;
     clone.so_tk_suffix = suffix || "";
   }
-  if (clone.so_tk_ama !== undefined) {
-    clone.so_tk_ama = normalizeStr(clone.so_tk_ama);
-  }
   if (!clone.nhanh && clone.branch) {
     clone.nhanh = clone.branch;
   }
@@ -126,12 +123,19 @@ function getDeclarationKey(row) {
   if (!row || typeof row !== "object") return "";
   const soTk = normalizeDeclarationNumber(row.so_tk ?? row.so_tk_full ?? "");
   if (!soTk) return "";
+  const rawFull = normalizeStr(row.so_tk_full ?? "");
+  const derivedSuffix = rawFull && rawFull.startsWith(soTk) ? rawFull.slice(soTk.length) : "";
+  const suffixSource = row.so_tk_suffix ?? derivedSuffix;
+  const suffix = normalizeStr(suffixSource || "");
   const branch = normalizeStr(row.nhanh || row.branch || "");
-  return `${soTk}_${branch}`;
+  return `${soTk}_${suffix}_${branch}`;
 }
 
 function mergeDeclarationRowClient(existing, incoming) {
   if (!existing) return incoming;
+  if (existing?.reviewed) {
+    return existing;
+  }
   const merged = { ...existing };
   const skipFields = new Set([
     'nhan_vien',
@@ -144,6 +148,49 @@ function mergeDeclarationRowClient(existing, incoming) {
     'reviewed',
     'reviewed_at',
   ]);
+
+  const toArray = (value) => {
+    if (Array.isArray(value)) return value;
+    if (value === null || value === undefined || value === '') return [];
+    if (typeof value === 'string') {
+      return value
+        .split(/[\s,;|]+/g)
+        .map((part) => part.trim())
+        .filter(Boolean);
+    }
+    return [];
+  };
+
+  const mergeNormalizedArrayField = (field, value, { uppercase = false } = {}) => {
+    const incomingList = toArray(value)
+      .map((item) => {
+        const normalized = normalizeStr(item || '');
+        return uppercase ? normalized.toUpperCase() : normalized;
+      })
+      .filter(Boolean);
+    if (!incomingList.length) {
+      return;
+    }
+    const currentList = Array.isArray(merged[field]) ? merged[field] : [];
+    const currentNormalized = currentList
+      .map((item) => {
+        const normalized = normalizeStr(item || '');
+        return uppercase ? normalized.toUpperCase() : normalized;
+      })
+      .filter(Boolean);
+    const combined = new Set(currentNormalized);
+    let appended = false;
+    for (const item of incomingList) {
+      if (!combined.has(item)) {
+        combined.add(item);
+        appended = true;
+      }
+    }
+    if (!Array.isArray(merged[field]) || appended) {
+      merged[field] = Array.from(combined);
+    }
+  };
+
   for (const [key, value] of Object.entries(incoming)) {
     if (skipFields.has(key)) continue;
     if (key === 'co_line_count') {
@@ -159,16 +206,17 @@ function mergeDeclarationRowClient(existing, incoming) {
       merged[key] = !!value;
       continue;
     }
-    if (key === 'co_codes' || key === 'licenseCodes' || key === 'licenseSourceCodes' || key === 'licenseExcludedCodes') {
-      merged[key] = Array.isArray(value)
-        ? value
-            .map((item) => normalizeStr(item).toUpperCase())
-            .filter(Boolean)
-        : [];
+    if (key === 'co_codes') {
+      mergeNormalizedArrayField(key, value);
+      continue;
+    }
+    if (key === 'licenseCodes' || key === 'licenseSourceCodes' || key === 'licenseExcludedCodes') {
+      mergeNormalizedArrayField(key, value, { uppercase: true });
       continue;
     }
     merged[key] = value;
   }
+
   const fillIfBlank = (field) => {
     const current = normalizeStr(merged[field] || '');
     const incomingValue = normalizeStr(incoming[field] || '');
@@ -181,15 +229,28 @@ function mergeDeclarationRowClient(existing, incoming) {
   fillIfBlank('agency');
   fillIfBlank('dai_ly');
 
-  const fillNumeric = (field) => {
+  const fillNumeric = (field, { preferMax = false } = {}) => {
     if (!Object.prototype.hasOwnProperty.call(incoming, field)) return;
     const parsed = Number(incoming[field]);
-    if (Number.isFinite(parsed)) {
+    if (!Number.isFinite(parsed)) return;
+    if (!preferMax) {
+      merged[field] = parsed;
+      return;
+    }
+    const current = Number(merged[field]);
+    if (!Number.isFinite(current)) {
+      merged[field] = parsed;
+      return;
+    }
+    if (parsed <= 0 && current > 0) {
+      return;
+    }
+    if (current <= 0 || parsed > current) {
       merged[field] = parsed;
     }
   };
-  fillNumeric('licenses');
-  fillNumeric('so_luong_gp');
+  fillNumeric('licenses', { preferMax: true });
+  fillNumeric('so_luong_gp', { preferMax: true });
   return merged;
 }
 
@@ -563,6 +624,12 @@ function writeDeclRows(rows) {
 }
 
 export function getDeclRows() {
+  const rows = getDeclRowsRaw();
+  return applyAgenciesToDeclRows(rows);
+}
+
+export async function refreshDeclRowsFromServer(options = {}) {
+  await refreshSharedKeys([DECL_KEY], options);
   const rows = getDeclRowsRaw();
   return applyAgenciesToDeclRows(rows);
 }
@@ -1187,6 +1254,46 @@ export function markDeclRowsReviewed(keys, { actor = "system", note = "Đánh d�
   return changed;
 }
 
+export function unmarkDeclRowsReviewed(keys, { actor = "system", note = "Bỏ đánh dấu rà soát" } = {}) {
+  const list = Array.isArray(keys) ? keys.map((key) => String(key || "").trim()).filter(Boolean) : [];
+  if (list.length === 0) {
+    return 0;
+  }
+  const keySet = new Set(list);
+  const actorName = normalizeStr(actor) || "system";
+  const rows = getDeclRowsRaw();
+  let changed = 0;
+  const nextRows = rows.map((row) => {
+    if (!row || typeof row !== "object") return row;
+    const soTk = (row.so_tk ?? "").toString();
+    const nhanh = (row.nhanh ?? "").toString();
+    const key = `${soTk}_${nhanh}`;
+    if (!keySet.has(key)) {
+      return row;
+    }
+    if (!row.reviewed) {
+      return row;
+    }
+    changed += 1;
+    const next = { ...row };
+    delete next.reviewed;
+    delete next.reviewed_at;
+    delete next.reviewed_by;
+    return next;
+  });
+  if (changed === 0) {
+    return 0;
+  }
+  writeDeclRows(nextRows);
+  pushAuditLog({
+    actor: actorName,
+    action: "decl.unreview",
+    detail: `${note} ${changed} tờ khai`,
+    meta: { count: changed },
+  });
+  return changed;
+}
+
 function diffHQAgencyRows(prevRows, nextRows, actor) {
   const prevMap = new Map();
   for (const row of Array.isArray(prevRows) ? prevRows : []) {
@@ -1698,6 +1805,7 @@ export function pushImportLog(entry, extraMeta = null) {
       meta = null,
       updatedDeclarations = [],
       insertedDeclarations = [],
+      lockedDeclarations = [],
     } = entry;
     record = {
       ts: timestamp,
@@ -1708,6 +1816,7 @@ export function pushImportLog(entry, extraMeta = null) {
       meta: meta && typeof meta === 'object' ? { ...meta } : meta ?? null,
       updatedDeclarations: normalizeLogDeclarationList(updatedDeclarations),
       insertedDeclarations: normalizeLogDeclarationList(insertedDeclarations),
+      lockedDeclarations: normalizeLogDeclarationList(lockedDeclarations),
     };
   } else {
     const meta = extraMeta && typeof extraMeta === 'object' ? { ...extraMeta } : null;
@@ -1776,7 +1885,7 @@ export default {
   normalizeStr, normalizeMST, normalizeDeclarationNumber, toISODate, normalizeName,
   isExportDecl, isExportByNumber, isImportByNumber, isExportByType, isImportByType,
   getMSTRowsRaw, getMSTMap, getMSTFor, upsertMSTRows,
-  getDeclRows, saveDeclRows, markDeclRowsReviewed, sortDeclRows, getRecentDeclRows,
+  getDeclRows, saveDeclRows, markDeclRowsReviewed, unmarkDeclRowsReviewed, sortDeclRows, getRecentDeclRows,
   getHQAgencies, mapHQAgenciesByMST, upsertHQAgencies, applyAgenciesToDeclRows,
   parseAgencyList, formatAgencyList, getHQHistoryEntries, getHQHistoryForMST,
   getTeamRoster, setTeamRoster, mapMemberNamesToTeams, applyTeamRosterToMST,

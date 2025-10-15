@@ -1349,6 +1349,7 @@ describe('ECUS sync API', () => {
         imported: 1,
         updated: 0,
         skipped: 0,
+        reviewLocked: 0,
         existingBefore: 0,
         fetched: 1,
         alerts: expect.any(Object),
@@ -1627,8 +1628,12 @@ describe('ECUS sync API', () => {
       licenses: 1,
       so_luong_gp: 1,
     });
-    expect(storedRows[0].licenseCodes).toEqual(
+    expect(storedRows[0].licenseCodes).toEqual(['GP01']);
+    expect(storedRows[0].licenseSourceCodes).toEqual(
       expect.arrayContaining(['GP01', 'ZN02', 'HDGC'])
+    );
+    expect(storedRows[0].licenseExcludedCodes).toEqual(
+      expect.arrayContaining(['ZN02', 'HDGC'])
     );
   });
 
@@ -1710,7 +1715,9 @@ describe('ECUS sync API', () => {
       agency: 'Dai ly HQ 1',
       cong_ty: 'Cong ty SAMJU',
     });
-    expect(storedRows[0].licenseCodes).toEqual(expect.arrayContaining(['AG01', 'GP02']));
+    expect(storedRows[0].licenseCodes).toEqual(['GP02']);
+    expect(storedRows[0].licenseSourceCodes).toEqual(expect.arrayContaining(['AG01', 'GP02']));
+    expect(storedRows[0].licenseExcludedCodes).toEqual(expect.arrayContaining(['AG01']));
   });
 
   it('kiểm tra trạng thái SQL Server thành công khi đã cấu hình', async () => {
@@ -2209,6 +2216,135 @@ describe('Report export API', () => {
     expect(searchRes.body.entries[0].requestId).toBe('req-002');
     expect(searchRes.body.availableKinds).toEqual(expect.arrayContaining(['staff', 'team']));
   });
+  it('khong cap nhat to khai da ra soat va thong ke reviewLocked', async () => {
+    sqlMock.__setMockResult([
+      {
+        So_tk: '888888888888',
+        Ngay_dang_ky: '2025-08-11',
+        MaSoThue: '8888888888',
+        TenDoanhNghiep: 'CONG TY ABC',
+        Loai_hinh: 'E42',
+        muc_hang: 1,
+        NhanVienNhap: 'Tester',
+      },
+    ]);
+
+    const adminAgent = request.agent(app);
+    const loginRes = await adminAgent
+      .post('/api/auth/login')
+      .send({ username: 'admin', password: 'admin123' });
+    expect(loginRes.status).toBe(200);
+
+    const firstRun = await adminAgent
+      .post('/api/import/ecus/run')
+      .send({ from: '2025-08-11', to: '2025-08-12', actor: 'tester' });
+    expect(firstRun.status).toBe(200);
+
+    const reviewedRow = [{
+      so_tk: '888888888888',
+      nhanh: '',
+      date: '2025-08-11',
+      mst: '8888888888',
+      cong_ty: 'CONG TY ABC',
+      loai_hinh: 'E42',
+      nhan_vien: 'Tester',
+      reviewed: true,
+      reviewed_at: '2025-08-12T00:00:00Z',
+    }];
+    getDb()
+      .prepare('INSERT INTO kv_store (key, value) VALUES (?, ?)')
+      .run('decl_rows_v1', JSON.stringify(reviewedRow));
+
+    sqlMock.__setMockResult([
+      {
+        So_tk: '888888888888',
+        Ngay_dang_ky: '2025-08-11',
+        MaSoThue: '8888888888',
+        TenDoanhNghiep: 'CONG TY ABC',
+        Loai_hinh: 'E42',
+        muc_hang: 2,
+        NhanVienNhap: 'Khac',
+      },
+    ]);
+
+    const secondRun = await adminAgent
+      .post('/api/import/ecus/run')
+      .send({ from: '2025-08-11', to: '2025-08-12', actor: 'tester' });
+
+    expect(secondRun.status).toBe(200);
+    expect(secondRun.body.result.imported).toBe(0);
+    expect(secondRun.body.result.updated).toBe(0);
+    expect(secondRun.body.result.reviewLocked).toBe(1);
+
+    const row = getDb()
+      .prepare('SELECT value FROM kv_store WHERE key = ?')
+      .get('decl_rows_v1');
+    const storedRows = JSON.parse(row.value);
+    const target = storedRows.find(
+      (entry) => entry.so_tk === '88888888888' || entry.so_tk_full === '888888888888'
+    );
+    expect(target).toBeDefined();
+    expect(target.reviewed).toBe(true);
+    expect(target.nhan_vien).toBe('Tester');
+  });
+
+});
+
+describe('Storage API', () => {
+  it('yeu cau dang nhap truoc khi doc du lieu kho chia se', async () => {
+    const res = await request(app).get('/api/storage/decl_rows_v1');
+    expect(res.status).toBe(401);
+    expect(res.body.ok).toBe(false);
+  });
+
+  it('tu choi truy cap khi tai khoan khong co quyen importEdit', async () => {
+    const adminAgent = request.agent(app);
+    const adminLogin = await adminAgent
+      .post('/api/auth/login')
+      .send({ username: 'admin', password: 'admin123' });
+    expect(adminLogin.status).toBe(200);
+
+    const downgradeRes = await adminAgent
+      .patch('/api/auth/accounts/nhanvien')
+      .send({ permissions: { importEdit: false } });
+    expect(downgradeRes.status).toBe(200);
+
+    try {
+      const staffAgent = request.agent(app);
+      const loginRes = await staffAgent
+      .post('/api/auth/login')
+      .send({ username: 'nhanvien', password: '123456' });
+      expect(loginRes.status).toBe(200);
+
+      const res = await staffAgent.get('/api/storage/decl_rows_v1');
+      expect(res.status).toBe(403);
+      expect(res.body.ok).toBe(false);
+    } finally {
+      await adminAgent
+        .patch('/api/auth/accounts/nhanvien')
+        .send({ permissions: { importEdit: true } });
+    }
+  });
+
+  it('tra ve gia tri JSON da parse cho key hop le khi co quyen', async () => {
+    const adminAgent = request.agent(app);
+    const loginRes = await adminAgent.post('/api/auth/login').send({ username: 'admin', password: 'admin123' });
+    expect(loginRes.status).toBe(200);
+
+    const sampleRows = [
+      { so_tk: '99999999999', nhanh: '', date: '2025-08-11', mst: '1234567890', cong_ty: 'CONG TY ABC' },
+    ];
+    getDb()
+      .prepare('INSERT INTO kv_store (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value')
+      .run('decl_rows_v1', JSON.stringify(sampleRows));
+
+    const res = await adminAgent.get('/api/storage/decl_rows_v1');
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+    expect(Array.isArray(res.body.value)).toBe(true);
+    expect(res.body.value[0]).toMatchObject({ so_tk: '99999999999', cong_ty: 'CONG TY ABC' });
+    expect(typeof res.body.raw).toBe('string');
+  });
 });
 
 describe('Alert API', () => {
@@ -2245,7 +2381,7 @@ describe('Alert API', () => {
   });
 
   it('cho phép cập nhật cấu hình cảnh báo và đánh dấu đã rà soát', async () => {
-    const configRes = await request(app)
+    const configRes = await adminAgent
       .put('/api/import/alerts/config')
       .send({
         actor: 'tester',
@@ -2254,14 +2390,47 @@ describe('Alert API', () => {
     expect(configRes.status).toBe(200);
     expect(configRes.body.summary.outstanding).toBe(1);
 
-    const alerts = await request(app).get('/api/import/alerts');
+    const alerts = await adminAgent.get('/api/import/alerts');
+    expect(alerts.status).toBe(200);
+    expect(alerts.body.ok).toBe(true);
     const key = alerts.body.alerts[0].key;
 
-    const reviewRes = await request(app)
+    const reviewRes = await adminAgent
       .post('/api/import/alerts/review')
       .send({ actor: 'tester', keys: [key] });
     expect(reviewRes.status).toBe(200);
     expect(reviewRes.body.updated).toBe(1);
     expect(reviewRes.body.summary.outstanding).toBe(0);
   });
+
+  it('bo danh dau ra soat qua API', async () => {
+    const configRes = await adminAgent
+      .put('/api/import/alerts/config')
+      .send({
+        actor: 'tester',
+        config: { thresholdDays: 0, channel: 'audit', enabled: true },
+      });
+    expect(configRes.status).toBe(200);
+
+    const alerts = await adminAgent.get('/api/import/alerts');
+    expect(alerts.body.alerts.length).toBeGreaterThan(0);
+    const key = alerts.body.alerts[0].key;
+
+    const reviewRes = await adminAgent
+      .post('/api/import/alerts/review')
+      .send({ actor: 'tester', keys: [key] });
+
+    expect(reviewRes.status).toBe(200);
+    expect(reviewRes.body.updated).toBe(1);
+
+    const unreviewRes = await adminAgent
+      .post('/api/import/alerts/unreview')
+      .send({ actor: 'tester', keys: [key] });
+
+    expect(unreviewRes.status).toBe(200);
+    expect(unreviewRes.body.updated).toBe(1);
+    expect(unreviewRes.body.summary).toBeDefined();
+    expect(unreviewRes.body.summary.outstanding).toBeGreaterThan(0);
+  });
 });
+

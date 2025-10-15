@@ -461,6 +461,7 @@ export default function RulesEditor({ canEdit = true, currentUser = null }) {
   const [historyError, setHistoryError] = useState('');
   const [historyReloadToken, setHistoryReloadToken] = useState(0);
   const [expandedHistoryId, setExpandedHistoryId] = useState(null);
+  const [historyCollapsed, setHistoryCollapsed] = useState(false);
 
   useEffect(() => {
     const nextCollection = loadRuleSets();
@@ -1269,6 +1270,13 @@ export default function RulesEditor({ canEdit = true, currentUser = null }) {
             <div className="flex flex-wrap items-center justify-between gap-2">
               <h3 className="text-sm font-semibold text-gray-700">Lịch sử cập nhật điểm KPI</h3>
               <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setHistoryCollapsed((prev) => !prev)}
+                  className="rounded border border-[color:var(--ds-border-subtle)] px-3 py-1 text-xs font-medium text-[color:var(--ds-text-secondary)] hover:bg-[color:var(--ds-surface-muted)]"
+                >
+                  {historyCollapsed ? "Mở rộng" : "Thu gọn"}
+                </button>
                 {historyError && !historyLoading && (
                   <span className="text-xs text-red-500">{historyError}</span>
                 )}
@@ -1285,8 +1293,10 @@ export default function RulesEditor({ canEdit = true, currentUser = null }) {
                 </button>
               </div>
             </div>
-            {historyEntries.length === 0 ? (
-              <p className="text-xs text-gray-500">Chưa có ghi nhận lịch sử nào.</p>
+            {historyCollapsed ? (
+              <p className="text-xs text-[color:var(--ds-text-muted)]">Đã thu gọn lịch sử. Nhấn “Mở rộng” để xem chi tiết.</p>
+            ) : historyEntries.length === 0 ? (
+              <p className="text-xs text-[color:var(--ds-text-muted)]">Chưa có ghi nhận lịch sử nào.</p>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">

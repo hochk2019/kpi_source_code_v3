@@ -19,6 +19,7 @@ import {
   upsertHQAgencies,
   getHQHistoryEntries,
   HQ_HISTORY_KEY,
+  unmarkDeclRowsReviewed,
 } from '@/lib/store.js';
 import { clearStorageCache, getItem as sharedGetItem } from '@/lib/storageClient.js';
 beforeEach(() => {
@@ -75,6 +76,23 @@ describe('saveDeclRows', () => {
     ]);
   });
 
+  it('gi? nguyen t? khai khi ph?n nh�nh/du?i s? kh�c nhau', () => {
+    const first = [
+      { so_tk: '10756284616', so_tk_full: '107562846160', nhanh: '', date: '2025-09-05' },
+    ];
+    const second = [
+      { so_tk: '10756284616', so_tk_full: '107562846161', nhanh: '', date: '2025-09-06' },
+    ];
+
+    saveDeclRows(first, { overwrite: true });
+    const total = saveDeclRows(second, { overwrite: false });
+
+    expect(total).toBe(2);
+    const stored = getDeclRows();
+    const fullNumbers = stored.map((row) => row.so_tk_full).sort();
+    expect(fullNumbers).toEqual(['107562846160', '107562846161']);
+  });
+
   it('replaces storage completely when overwrite=true, enabling deletions', () => {
     const baseline = [
       { so_tk: 'TK01', nhanh: 'A', date: '2024-08-01' },
@@ -93,23 +111,54 @@ describe('saveDeclRows', () => {
     expect(stored.find(r => r.so_tk === '00000000003')).toBeUndefined();
   });
 
-  it('chuẩn hóa và lưu trường so_tk_ama khi có dữ liệu', () => {
-    const initial = [
-      { so_tk: '12345678901', nhanh: 'A', date: '2024-09-01', so_tk_ama: '  AMA-001  ' },
-    ];
-
-    saveDeclRows(initial, { overwrite: true });
-    const stored = getDeclRows();
-
-    expect(stored[0].so_tk_ama).toBe('AMA-001');
+  it('keeps reviewed rows unchanged when merging new data', () => {
+    saveDeclRows([
+      { so_tk: '30766075015', nhanh: '', date: '2025-08-11', loai_hinh: 'E42', reviewed: true },
+    ], { overwrite: true });
 
     saveDeclRows([
-      { so_tk: '12345678901', nhanh: 'A', date: '2024-09-02', so_tk_ama: 'AMA-002' },
-    ], { overwrite: false });
+      { so_tk: '30766075015', nhanh: '', date: '2025-08-12', loai_hinh: 'A11' },
+    ]);
 
-    const updated = getDeclRows();
-    expect(updated[0].so_tk_ama).toBe('AMA-002');
+    const stored = getDeclRows();
+    expect(stored).toHaveLength(1);
+    expect(stored[0]).toMatchObject({ loai_hinh: 'E42', reviewed: true });
   });
+
+  it('keeps latest license count when merging duplicates', () => {
+    const latest = [
+      {
+        so_tk: '10757755681',
+        so_tk_full: '107577556811',
+        nhanh: '',
+        date: '2025-09-30',
+        licenses: 1,
+        licenseCodes: ['ZK02'],
+      },
+    ];
+    const older = [
+      {
+        so_tk: '10757755681',
+        so_tk_full: '107577556811',
+        nhanh: '',
+        date: '2025-09-15',
+        licenses: 0,
+        licenseCodes: [],
+      },
+    ];
+
+    saveDeclRows(latest, { overwrite: true });
+    saveDeclRows(older, { overwrite: false });
+
+    const stored = getDeclRows();
+    expect(stored).toHaveLength(1);
+    expect(stored[0]).toMatchObject({
+      so_tk_full: '107577556811',
+      licenses: 1,
+      licenseCodes: ['ZK02'],
+    });
+  });
+
 });
 
 
@@ -400,5 +449,19 @@ describe('getMSTFor', () => {
 
     const picked = getMSTFor('9999999999', '2024-04-15');
     expect(picked?.effective_from).toBe('2024-05-01');
+  });
+});
+
+describe('unmarkDeclRowsReviewed', () => {
+  it('removes reviewed flag and metadata for matched keys', () => {
+    saveDeclRows([
+      { so_tk: '99999999999', nhanh: '', date: '2025-09-01', reviewed: true, reviewed_at: '2025-09-02T00:00:00Z' },
+    ], { overwrite: true });
+
+    const updated = unmarkDeclRowsReviewed(['99999999999_']);
+    expect(updated).toBe(1);
+    const stored = getDeclRows();
+    expect(stored[0].reviewed).toBeUndefined();
+    expect(stored[0].reviewed_at).toBeUndefined();
   });
 });

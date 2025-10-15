@@ -11,7 +11,13 @@ import {
   saveAiHistory,
   clearAiHistory,
   testAiProvider,
+  pingAiConnection,
+  fetchAiDataSnapshot,
+  fetchAiInsights,
+  runAiInsightJob,
+  submitAiInsightFeedback,
 } from '@/lib/aiClient.js';
+import { computeQuickRange } from '@/lib/reports.js';
 
 function formatDateTime(value) {
   if (!value) {
@@ -485,6 +491,18 @@ function getLocalHistoryKey(username) {
   return LOCAL_HISTORY_KEY;
 }
 
+const CONTROL_CLASS =
+  "rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] px-3 py-2 text-sm text-[color:var(--ds-text-primary)] shadow-sm focus:outline-none focus:ring-2 focus:ring-[color:var(--ds-accent-ring)] focus:ring-offset-0";
+const CONTROL_CLASS_COMPACT =
+  "rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] px-3 py-1 text-sm text-[color:var(--ds-text-primary)] shadow-sm focus:outline-none focus:ring-2 focus:ring-[color:var(--ds-accent-ring)] focus:ring-offset-0";
+const SECONDARY_BUTTON_CLASS =
+  "rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] px-3 py-1 text-xs font-medium text-[color:var(--ds-text-secondary)] transition hover:bg-[color:var(--ds-surface-muted)] disabled:cursor-not-allowed disabled:opacity-60";
+const SUMMARY_RANGE_OPTIONS = [
+  { value: 'this_month', label: 'Tháng này' },
+  { value: 'last_month', label: 'Tháng trước' },
+  { value: 'this_quarter', label: 'Quý này' },
+];
+
 export default function AiAssistant({ currentUser }) {
   const permissions = currentUser?.permissions || {};
   const canUse = permissions.aiAssistUse === true || permissions.aiAssistManage === true;
@@ -510,6 +528,23 @@ export default function AiAssistant({ currentUser }) {
     AI_PROVIDER_PRESETS[0]?.key || 'custom'
   );
   const [providerTests, setProviderTests] = useState({});
+  const [pingProviderId, setPingProviderId] = useState('');
+  const [pingPrompt, setPingPrompt] = useState('Ping hệ thống');
+  const [pingState, setPingState] = useState({ status: 'idle' });
+  const [pingLoading, setPingLoading] = useState(false);
+  const [snapshotRange, setSnapshotRange] = useState('this_month');
+  const [snapshotLoading, setSnapshotLoading] = useState(false);
+  const [snapshotError, setSnapshotError] = useState('');
+  const [snapshotData, setSnapshotData] = useState(null);
+  const [summaryLoading, setSummaryLoading] = useState(false);
+  const [summaryError, setSummaryError] = useState('');
+  const [summaryResult, setSummaryResult] = useState(null);
+  const [insights, setInsights] = useState([]);
+  const [insightsMeta, setInsightsMeta] = useState(null);
+  const [insightsLoading, setInsightsLoading] = useState(false);
+  const [insightsError, setInsightsError] = useState('');
+  const [insightRunLoading, setInsightRunLoading] = useState(false);
+  const [feedbackSubmitting, setFeedbackSubmitting] = useState({});
 
   const [messages, setMessages] = useState([]);
   const [prompt, setPrompt] = useState('');
@@ -607,6 +642,25 @@ export default function AiAssistant({ currentUser }) {
     }
   }, [canManage]);
 
+  const loadInsights = useCallback(async () => {
+    if (!canUse) {
+      return;
+    }
+    setInsightsLoading(true);
+    setInsightsError('');
+    try {
+      const { insights: fetchedInsights, meta } = await fetchAiInsights({ limit: 6 });
+      setInsights(Array.isArray(fetchedInsights) ? fetchedInsights : []);
+      setInsightsMeta(meta || null);
+    } catch (err) {
+      const message = err?.message || 'Không thể tải insight AI.';
+      setInsightsError(message);
+      toast.error(message);
+    } finally {
+      setInsightsLoading(false);
+    }
+  }, [canUse]);
+
   useEffect(() => {
     if (canUse) {
       loadProfile();
@@ -614,10 +668,216 @@ export default function AiAssistant({ currentUser }) {
   }, [canUse, loadProfile]);
 
   useEffect(() => {
+    if (canUse) {
+      loadInsights();
+    }
+  }, [canUse, loadInsights]);
+
+  useEffect(() => {
     if (canManage) {
       loadConfig();
     }
   }, [canManage, loadConfig]);
+
+  const numberFormatter = useMemo(() => new Intl.NumberFormat('vi-VN'), []);
+  const kpiFormatter = useMemo(
+    () =>
+      new Intl.NumberFormat('vi-VN', {
+        minimumFractionDigits: 1,
+        maximumFractionDigits: 1,
+      }),
+    []
+  );
+
+  const buildRangeParams = useCallback(() => {
+    const option = SUMMARY_RANGE_OPTIONS.find((item) => item.value === snapshotRange);
+    const range = computeQuickRange(snapshotRange);
+    const params = {};
+    if (range.from) {
+      params.from = range.from;
+    }
+    if (range.to) {
+      params.to = range.to;
+    }
+    return {
+      params,
+      label: option?.label || 'Khoảng đã chọn',
+      range,
+    };
+  }, [snapshotRange]);
+
+  const buildSnapshotSummaryPrompt = useCallback(
+    (snapshot, rangeLabel) => {
+      if (!snapshot || !snapshot.summary) {
+        return 'Không có dữ liệu KPI để tóm tắt.';
+      }
+      const summary = snapshot.summary;
+      const adjustments = snapshot.adjustments?.totals || {};
+      const topStaff = (snapshot.topStaff || [])
+        .slice(0, 3)
+        .map(
+          (item) =>
+            `${item.name || 'Chưa gán'}: ${kpiFormatter.format(item.totalKpi || 0)} điểm (${numberFormatter.format(
+              item.declarations || 0
+            )} tờ khai)`
+        )
+        .join('; ') || 'Không có dữ liệu nhân viên nổi bật';
+      const topTeams = (snapshot.topTeams || [])
+        .slice(0, 3)
+        .map(
+          (item) =>
+            `${item.name || 'Chưa gán tổ đội'}: ${kpiFormatter.format(item.totalKpi || 0)} điểm (${numberFormatter.format(
+              item.declarations || 0
+            )} tờ khai)`
+        )
+        .join('; ') || 'Không có dữ liệu tổ đội nổi bật';
+      const monthlyTrend = (snapshot.trends?.monthly || [])
+        .slice(-3)
+        .map(
+          (item) =>
+            `${item.month}: ${numberFormatter.format(item.declarations || 0)} tờ khai, ${kpiFormatter.format(
+              item.kpi || 0
+            )} điểm`
+        )
+        .join('; ') || 'Chưa có dữ liệu xu hướng';
+      const licenseSamples =
+        (summary.licenseSamples || []).slice(0, 5).join(', ') || 'Không có mã giấy phép tiêu biểu';
+
+      const rangeText =
+        snapshot.range?.from && snapshot.range?.to
+          ? `${snapshot.range.from} → ${snapshot.range.to}`
+          : rangeLabel;
+      const lines = [
+        `Khoảng thời gian phân tích: ${rangeText} (${numberFormatter.format(summary.declarations || 0)} tờ khai)`,
+        `Tổng tờ khai: ${numberFormatter.format(summary.declarations || 0)} (Nhập: ${numberFormatter.format(
+          summary.import || 0
+        )}, Xuất: ${numberFormatter.format(summary.export || 0)})`,
+        `Điểm KPI cộng dồn: ${kpiFormatter.format(summary.kpi || 0)} • Mục hàng: ${numberFormatter.format(
+          summary.items || 0
+        )} • Giấy phép: ${numberFormatter.format(summary.licenses || 0)}`,
+        `Điều chỉnh KPI - Đang chờ: ${numberFormatter.format(adjustments.pending || 0)} (≈ ${kpiFormatter.format(
+          adjustments.pointsPending || 0
+        )} điểm), Đã duyệt: ${numberFormatter.format(adjustments.approved || 0)} (≈ ${kpiFormatter.format(
+          adjustments.pointsApproved || 0
+        )} điểm)`,
+        `Top nhân viên: ${topStaff}`,
+        `Top tổ đội: ${topTeams}`,
+        `Xu hướng 3 kỳ gần nhất: ${monthlyTrend}`,
+        `Mã giấy phép nổi bật: ${licenseSamples}`,
+      ];
+
+      return `Bạn là chuyên gia KPI nội bộ. Hãy tóm tắt dữ liệu dưới đây bằng 4-6 gạch đầu dòng tiếng Việt, nêu rõ điểm mạnh, điểm yếu và rủi ro nếu có. Kết thúc bằng một câu khuyến nghị hành động cụ thể.\nDữ liệu:\n${lines.join(
+        '\n'
+      )}`;
+    },
+    [kpiFormatter, numberFormatter]
+  );
+
+  const handleFetchSnapshot = useCallback(async () => {
+    const { params, label } = buildRangeParams();
+    setSnapshotLoading(true);
+    setSnapshotError('');
+    try {
+      const snapshot = await fetchAiDataSnapshot(params);
+      setSnapshotData(snapshot);
+      if (!snapshot || (snapshot.summary?.declarations ?? 0) === 0) {
+        const message = 'Không tìm thấy dữ liệu KPI trong khoảng đã chọn.';
+        setSnapshotError(message);
+        toast.error(message);
+      } else {
+        toast.success(`Đã lấy snapshot KPI (${label.toLowerCase()}).`);
+      }
+    } catch (err) {
+      const message = err?.message || 'Không thể lấy snapshot dữ liệu.';
+      setSnapshotError(message);
+      toast.error(message);
+    } finally {
+      setSnapshotLoading(false);
+    }
+  }, [buildRangeParams]);
+
+  const handleGenerateSummary = useCallback(async () => {
+    setSummaryError('');
+    setSummaryResult(null);
+    setSummaryLoading(true);
+    try {
+      const { params, label } = buildRangeParams();
+      let snapshot = snapshotData;
+      if (!snapshot) {
+        try {
+          setSnapshotLoading(true);
+          snapshot = await fetchAiDataSnapshot(params);
+          setSnapshotData(snapshot);
+        } finally {
+          setSnapshotLoading(false);
+        }
+      }
+      if (!snapshot || (snapshot.summary?.declarations ?? 0) === 0) {
+        throw new Error('Không có dữ liệu KPI trong khoảng đã chọn để tóm tắt.');
+      }
+      const prompt = buildSnapshotSummaryPrompt(snapshot, label);
+      const result = await requestAiCompletion({
+        scope: 'report_summary',
+        providerId: selectedProviderId || undefined,
+        prompt,
+      });
+      setSummaryResult({
+        text: result.message || '',
+        providerId: result.providerId || selectedProviderId || null,
+        usage: result.usage || null,
+        cached: !!result.cached,
+        generatedAt: new Date().toISOString(),
+        rangeLabel: label,
+      });
+      toast.success(result.cached ? 'Đã lấy tóm tắt KPI từ cache AI.' : 'Đã tạo tóm tắt KPI.');
+    } catch (err) {
+      const message = err?.message || 'Không thể tạo tóm tắt KPI.';
+      setSummaryError(message);
+      toast.error(message);
+    } finally {
+      setSummaryLoading(false);
+    }
+  }, [buildRangeParams, buildSnapshotSummaryPrompt, requestAiCompletion, selectedProviderId, snapshotData]);
+
+  const snapshotPreviewMetrics = useMemo(() => {
+    if (!snapshotData || !snapshotData.summary) {
+      return null;
+    }
+    const summary = snapshotData.summary;
+    const adjustments = snapshotData.adjustments?.totals || {};
+    const topStaff = (snapshotData.topStaff || [])
+      .slice(0, 2)
+      .map(
+        (item) =>
+          `${item.name || 'Chưa gán'} (${kpiFormatter.format(item.totalKpi || 0)} điểm, ${numberFormatter.format(
+            item.declarations || 0
+          )} tờ khai)`
+      )
+      .join(', ') || 'Không có';
+    const topTeams = (snapshotData.topTeams || [])
+      .slice(0, 2)
+      .map(
+        (item) =>
+          `${item.name || 'Chưa gán tổ đội'} (${kpiFormatter.format(item.totalKpi || 0)} điểm, ${numberFormatter.format(
+            item.declarations || 0
+          )} tờ khai)`
+      )
+      .join(', ') || 'Không có';
+
+    return [
+      `Tờ khai: ${numberFormatter.format(summary.declarations || 0)} (Nhập ${numberFormatter.format(
+        summary.import || 0
+      )} / Xuất ${numberFormatter.format(summary.export || 0)})`,
+      `Điểm KPI: ${kpiFormatter.format(summary.kpi || 0)} • Mục hàng: ${numberFormatter.format(
+        summary.items || 0
+      )} • Giấy phép: ${numberFormatter.format(summary.licenses || 0)}`,
+      `Điều chỉnh - Đang chờ: ${numberFormatter.format(adjustments.pending || 0)}, Đã duyệt: ${numberFormatter.format(
+        adjustments.approved || 0
+      )}`,
+      `Top nhân viên: ${topStaff}`,
+      `Top tổ đội: ${topTeams}`,
+    ];
+  }, [kpiFormatter, numberFormatter, snapshotData]);
 
   useEffect(() => {
     if (!canUse) {
@@ -718,6 +978,69 @@ export default function AiAssistant({ currentUser }) {
     }
     return profile.providers.filter((entry) => entry.enabled !== false);
   }, [profile]);
+  const availableProviders = providerOptions;
+  const pingUsageSummary = pingState.usage ? formatUsage(pingState.usage) : null;
+
+  useEffect(() => {
+    if (!availableProviders.length) {
+      if (pingProviderId) {
+        setPingProviderId('');
+      }
+      return;
+    }
+    if (!pingProviderId || !availableProviders.some((provider) => provider.id === pingProviderId)) {
+      const defaultOption = availableProviders.find((provider) => provider.id === profile?.defaultProvider);
+      const nextId = defaultOption?.id || availableProviders[0].id;
+      if (nextId) {
+        setPingProviderId(nextId);
+      }
+    }
+  }, [availableProviders, pingProviderId, profile]);
+
+  const handlePingConnection = useCallback(async () => {
+    if (pingLoading) {
+      return;
+    }
+    if (!availableProviders.length) {
+      const message = 'Chưa có nhà cung cấp nào được cấu hình để kiểm tra.';
+      setPingState({ status: 'error', error: message });
+      toast.error(message);
+      return;
+    }
+    const defaultOption = availableProviders.find((provider) => provider.id === profile?.defaultProvider);
+    const fallbackId = defaultOption?.id || availableProviders[0]?.id || '';
+    const providerId = (pingProviderId || fallbackId || '').trim();
+    if (!providerId) {
+      const message = 'Chưa chọn nhà cung cấp để kiểm tra.';
+      setPingState({ status: 'error', error: message });
+      toast.error(message);
+      return;
+    }
+    const promptText = pingPrompt.trim() || 'Ping';
+    setPingLoading(true);
+    setPingState({ status: 'testing' });
+    try {
+      const result = await pingAiConnection({ providerId, prompt: promptText });
+      setPingState({
+        status: 'success',
+        provider: result?.provider || null,
+        message: result?.message || '',
+        usage: result?.usage || null,
+        timestamp: new Date().toISOString(),
+      });
+      toast.success('Kết nối trợ lý AI hoạt động.');
+    } catch (error) {
+      const message = error?.message || 'Không thể kiểm tra kết nối trợ lý AI.';
+      setPingState({
+        status: 'error',
+        error: message,
+        timestamp: new Date().toISOString(),
+      });
+      toast.error(message);
+    } finally {
+      setPingLoading(false);
+    }
+  }, [availableProviders, pingLoading, pingPrompt, pingProviderId, profile]);
 
   useEffect(() => {
     if (!selectedProviderId && profile?.defaultProvider) {
@@ -997,22 +1320,99 @@ export default function AiAssistant({ currentUser }) {
     }
   };
 
-  const handleClearCache = async () => {
-    if (clearCacheLoading) {
+const handleClearCache = async () => {
+  if (clearCacheLoading) {
+    return;
+  }
+  setClearCacheLoading(true);
+  try {
+    await clearAiCache();
+    toast.success('Đã xóa cache phản hồi AI.');
+    await loadConfig();
+  } catch (err) {
+    const message = err?.message || 'Không thể xóa cache AI.';
+    toast.error(message);
+  } finally {
+    setClearCacheLoading(false);
+  }
+};
+
+const handleRefreshInsights = useCallback(() => {
+  loadInsights();
+}, [loadInsights]);
+
+const handleRunInsightJob = useCallback(async () => {
+  if (insightRunLoading) {
+    return;
+  }
+  setInsightRunLoading(true);
+  try {
+    const result = await runAiInsightJob();
+    if (result?.error) {
+      toast.error(result.error);
+    } else if (result?.skipped && result.reason === 'no_data') {
+      toast.info('Không có dữ liệu KPI mới trong khoảng thời gian mặc định.');
+    } else if (result?.cached) {
+      toast.success('Đã sử dụng insight gần nhất.');
+    } else if (result?.insight) {
+      toast.success('Đã sinh insight KPI mới.');
+    } else {
+      toast.success('Đã chạy insight AI.');
+    }
+    await loadInsights();
+  } catch (err) {
+    const message = err?.message || 'Không thể chạy insight AI.';
+    toast.error(message);
+  } finally {
+    setInsightRunLoading(false);
+  }
+}, [insightRunLoading, loadInsights, runAiInsightJob]);
+
+const handleInsightFeedback = useCallback(
+  async (insightId, helpful) => {
+    if (!insightId) {
       return;
     }
-    setClearCacheLoading(true);
+    setFeedbackSubmitting((prev) => ({ ...prev, [insightId]: true }));
     try {
-      await clearAiCache();
-      toast.success('Đã xóa cache phản hồi AI.');
-      await loadConfig();
+      const response = await submitAiInsightFeedback(insightId, { helpful });
+      const totals = response?.totals || { helpful: 0, notHelpful: 0 };
+      const viewerFeedback = response?.feedback
+        ? {
+            helpful: response.feedback.helpful,
+            comment: response.feedback.comment || null,
+            updatedAt: response.feedback.updatedAt || null,
+          }
+        : { helpful, comment: null, updatedAt: new Date().toISOString() };
+      setInsights((prev) =>
+        prev.map((item) => {
+          if (item.insightId !== insightId) {
+            return item;
+          }
+          return {
+            ...item,
+            feedback: {
+              helpful: totals.helpful ?? 0,
+              notHelpful: totals.notHelpful ?? 0,
+              viewer: viewerFeedback,
+            },
+          };
+        })
+      );
+      toast.success('Đã ghi nhận phản hồi cho insight.');
     } catch (err) {
-      const message = err?.message || 'Không thể xóa cache AI.';
+      const message = err?.message || 'Không thể gửi phản hồi insight.';
       toast.error(message);
     } finally {
-      setClearCacheLoading(false);
+      setFeedbackSubmitting((prev) => {
+        const next = { ...prev };
+        delete next[insightId];
+        return next;
+      });
     }
-  };
+  },
+  [submitAiInsightFeedback, setInsights, setFeedbackSubmitting]
+);
 
   return (
     <div className="space-y-6">
@@ -1025,11 +1425,11 @@ export default function AiAssistant({ currentUser }) {
 
       {canUse && (
         <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">
-          <section className="rounded border border-gray-200 bg-white shadow-sm">
-            <header className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-100 px-4 py-3">
+          <section className="rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] shadow-sm">
+            <header className="flex flex-wrap items-center justify-between gap-2 border-b border-[color:var(--ds-border-subtle)] px-4 py-3">
               <div>
-                <h2 className="text-base font-semibold text-gray-800">Chat với trợ lý AI</h2>
-                <p className="text-xs text-gray-500">
+                <h2 className="text-base font-semibold text-[color:var(--ds-text-primary)]">Chat với trợ lý AI</h2>
+                <p className="text-xs text-[color:var(--ds-text-muted)]">
                   Hỏi về KPI, dữ liệu tờ khai hoặc quy trình nội bộ. Tất cả câu trả lời đều bằng tiếng Việt.
                 </p>
               </div>
@@ -1038,30 +1438,30 @@ export default function AiAssistant({ currentUser }) {
                   type="button"
                   onClick={handleClearHistory}
                   disabled={historyLoading || messages.length === 0}
-                  className="rounded border border-gray-200 px-3 py-1 text-xs text-gray-600 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+                  className={SECONDARY_BUTTON_CLASS}
                 >
                   Xóa hội thoại
                 </button>
                 <button
                   type="button"
                   onClick={loadProfile}
-                  className="rounded border border-gray-200 px-3 py-1 text-xs text-gray-600 hover:bg-gray-50"
+                  className={SECONDARY_BUTTON_CLASS}
                   disabled={profileLoading}
                 >
                   {profileLoading ? 'Đang tải…' : 'Tải lại cấu hình'}
                 </button>
               </div>
             </header>
-            <div className="border-t border-gray-100 bg-gray-50 px-4 py-3">
+            <div className="border-t border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-muted)] px-4 py-3">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <p className="text-sm font-semibold text-gray-800">
+                  <p className="text-sm font-semibold text-[color:var(--ds-text-primary)]">
                     Chế độ hội thoại
                     <span className="ml-2 rounded bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-700">
                       {activeMode?.scope || 'general'}
                     </span>
                   </p>
-                  <p className="text-xs text-gray-500">{activeMode?.description}</p>
+                  <p className="text-xs text-[color:var(--ds-text-muted)]">{activeMode?.description}</p>
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {ASSISTANT_MODES.map((mode) => (
@@ -1073,7 +1473,7 @@ export default function AiAssistant({ currentUser }) {
                         'rounded-full px-3 py-1 text-xs font-medium transition',
                         mode.id === modeId
                           ? 'bg-amber-500 text-white shadow'
-                          : 'border border-gray-300 bg-white text-gray-600 hover:border-amber-400 hover:text-amber-600'
+                          : 'border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] text-[color:var(--ds-text-secondary)] hover:border-amber-400 hover:bg-amber-500/10 hover:text-amber-500'
                       )}
                       aria-pressed={mode.id === modeId}
                     >
@@ -1096,36 +1496,276 @@ export default function AiAssistant({ currentUser }) {
                   ))}
                 </div>
               ) : null}
+              <div className="mt-3 rounded border border-dashed border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)]/60 p-3">
+                <div className="flex flex-wrap items-end gap-2">
+                  <label className="flex flex-col gap-1 text-xs">
+                    <span className="font-medium text-[color:var(--ds-text-primary)]">Nhà cung cấp kiểm thử</span>
+                    <select
+                      value={pingProviderId}
+                      onChange={(event) => setPingProviderId(event.target.value)}
+                      className={clsx('min-w-[200px]', CONTROL_CLASS_COMPACT)}
+                      disabled={availableProviders.length === 0}
+                    >
+                      {availableProviders.length === 0 ? (
+                        <option value="">Chưa có nhà cung cấp</option>
+                      ) : (
+                        availableProviders.map((provider) => (
+                          <option key={provider.id} value={provider.id}>
+                            {provider.label}
+                            {provider.isDefault ? ' • Mặc định' : provider.isFallback ? ' • Dự phòng' : ''}
+                          </option>
+                        ))
+                      )}
+                    </select>
+                  </label>
+                  <label className="flex flex-1 min-w-[200px] flex-col gap-1 text-xs">
+                    <span className="font-medium text-[color:var(--ds-text-primary)]">Thông điệp kiểm thử</span>
+                    <input
+                      type="text"
+                      value={pingPrompt}
+                      onChange={(event) => setPingPrompt(event.target.value)}
+                      className={clsx('flex-1', CONTROL_CLASS_COMPACT)}
+                      placeholder="Ví dụ: Ping hệ thống"
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    onClick={handlePingConnection}
+                    disabled={pingLoading || availableProviders.length === 0}
+                    className="rounded bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white shadow hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {pingLoading ? 'Đang kiểm tra…' : 'Kiểm tra kết nối'}
+                  </button>
+                </div>
+                {pingState.status === 'testing' && (
+                  <p className="mt-2 text-xs text-[color:var(--ds-text-muted)]">Đang kiểm tra kết nối…</p>
+                )}
+                {pingState.status === 'success' && (
+                  <div className="mt-2 text-xs text-emerald-600">
+                    <span>
+                      Đã phản hồi từ {pingState.provider?.label || pingState.provider?.id || 'nhà cung cấp'}:
+                      {' '}
+                      {pingState.message || 'OK'}
+                    </span>
+                    <span className="block text-[10px] text-[color:var(--ds-text-muted)]">
+                      {pingState.timestamp
+                        ? new Date(pingState.timestamp).toLocaleString('vi-VN', { hour12: false })
+                        : ''}
+                      {pingUsageSummary ? ` • ${pingUsageSummary}` : ''}
+                    </span>
+                  </div>
+                )}
+                {pingState.status === 'error' && (
+                  <p className="mt-2 text-xs text-red-500">Lỗi: {pingState.error}</p>
+                )}
+                {availableProviders.length === 0 && (
+                  <p className="mt-2 text-xs text-[color:var(--ds-text-muted)]">
+                    Chưa có nhà cung cấp nào được cấu hình để kiểm thử.
+                  </p>
+                )}
+              </div>
+              <div className="mt-3 space-y-3 rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)]/60 p-3">
+                <div className="flex flex-wrap items-end gap-2">
+                  <label className="flex flex-col gap-1 text-xs text-[color:var(--ds-text-secondary)]">
+                    Khoảng thời gian
+                    <select
+                      value={snapshotRange}
+                      onChange={(event) => setSnapshotRange(event.target.value)}
+                      className={CONTROL_CLASS_COMPACT}
+                    >
+                      {SUMMARY_RANGE_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={handleFetchSnapshot}
+                    disabled={snapshotLoading}
+                    className="rounded border border-[color:var(--ds-border-subtle)] px-3 py-1.5 text-xs font-medium text-[color:var(--ds-text-secondary)] shadow-sm transition hover:bg-[color:var(--ds-surface-muted)] disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {snapshotLoading ? 'Đang tải...' : 'Lấy snapshot'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleGenerateSummary}
+                    disabled={summaryLoading || snapshotLoading}
+                    className="rounded bg-[color:var(--ds-text-primary)] px-3 py-1.5 text-xs font-semibold text-[color:var(--ds-text-inverse)] shadow transition hover:bg-[color:var(--ds-text-primary)]/80 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {summaryLoading ? 'Đang tóm tắt…' : 'Tạo tóm tắt KPI'}
+                  </button>
+                </div>
+                {snapshotLoading && (
+                  <p className="text-xs text-[color:var(--ds-text-muted)]">Đang lấy dữ liệu KPI...</p>
+                )}
+                {snapshotError && <p className="text-xs text-red-400">{snapshotError}</p>}
+                {snapshotPreviewMetrics && !snapshotLoading && (
+                  <ul className="list-disc space-y-1 pl-4 text-xs text-[color:var(--ds-text-secondary)]">
+                    {snapshotPreviewMetrics.map((line) => (
+                      <li key={line}>{line}</li>
+                    ))}
+                  </ul>
+                )}
+                {summaryLoading && (
+                  <p className="text-xs text-[color:var(--ds-text-muted)]">Đang tạo tóm tắt KPI bằng AI...</p>
+                )}
+                {summaryError && <p className="text-xs text-red-400">{summaryError}</p>}
+                {summaryResult && (
+                  <div className="rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-muted)]/70 p-3 text-sm text-[color:var(--ds-text-primary)]">
+                    <div className="mb-2 flex flex-wrap items-center gap-2 text-xs text-[color:var(--ds-text-muted)]">
+                      <span>{summaryResult.rangeLabel}</span>
+                      {summaryResult.providerId ? <span>• Provider: {summaryResult.providerId}</span> : null}
+                      {summaryResult.cached ? <span>• Cache</span> : null}
+                      {summaryResult.usage ? <span>• {formatUsage(summaryResult.usage)}</span> : null}
+                      {summaryResult.generatedAt ? (
+                        <span>
+                          • {new Date(summaryResult.generatedAt).toLocaleString('vi-VN', { hour12: false })}
+                        </span>
+                      ) : null}
+                    </div>
+                    <p className="whitespace-pre-wrap leading-relaxed">{summaryResult.text || 'Không có phản hồi.'}</p>
+                  </div>
+                )}
+              </div>
+            </div>            <div className="mt-3 space-y-3 rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)]/60 p-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <h3 className="text-sm font-semibold text-[color:var(--ds-text-primary)]">Insight AI tự động</h3>
+                  {insightsMeta?.schedule?.nextRun ? (
+                    <p className="text-xs text-[color:var(--ds-text-muted)]">
+                      {`Lần chạy kế tiếp: ${formatDateTime(insightsMeta.schedule.nextRun)}`}
+                    </p>
+                  ) : null}
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleRefreshInsights}
+                    disabled={insightsLoading}
+                    className={SECONDARY_BUTTON_CLASS}
+                  >
+                    {insightsLoading ? 'Đang tải...' : 'Làm mới'}
+                  </button>
+                  {canManage ? (
+                    <button
+                      type="button"
+                      onClick={handleRunInsightJob}
+                      disabled={insightRunLoading || insightsLoading}
+                      className={clsx(SECONDARY_BUTTON_CLASS, 'bg-amber-500 text-white border-amber-500 hover:bg-amber-600')}
+                    >
+                      {insightRunLoading ? 'Đang chạy...' : 'Chạy ngay'}
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+              {insightsError ? (
+                <p className="text-xs text-red-500">{insightsError}</p>
+              ) : null}
+              {insightsLoading ? (
+                <p className="text-sm text-[color:var(--ds-text-muted)]">Đang tải insight AI...</p>
+              ) : insights.length === 0 ? (
+                <p className="text-sm text-[color:var(--ds-text-muted)]">Chưa có insight AI nào.</p>
+              ) : (
+                <div className="space-y-3">
+                  {insights.map((insight) => {
+                    const viewer = insight.feedback?.viewer || null;
+                    const viewerHelpful = viewer?.helpful === true;
+                    const viewerNotHelpful = viewer?.helpful === false;
+                    const saving = !!feedbackSubmitting[insight.insightId];
+                    const rangeLabel = insight.meta?.rangeLabel
+                      || (insight.range ? `${insight.range.from || '---'} → ${insight.range.to || '---'}` : 'Khoảng thời gian không xác định');
+                    return (
+                      <div
+                        key={insight.insightId}
+                        className="rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-muted)]/60 p-3"
+                      >
+                        <div className="flex flex-wrap justify-between gap-2">
+                          <div>
+                            <p className="text-sm font-medium text-[color:var(--ds-text-primary)]">{rangeLabel}</p>
+                            <p className="text-xs text-[color:var(--ds-text-muted)]">
+                              {`Tạo lúc ${formatDateTime(insight.createdAt)} • ${insight.status}`}
+                            </p>
+                          </div>
+                          <div className="text-xs text-[color:var(--ds-text-muted)]">
+                            {`Tokens: ${insight.tokens?.total ?? 0}`}
+                          </div>
+                        </div>
+                        <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-[color:var(--ds-text-primary)]">
+                          {insight.response || 'Không có nội dung.'}
+                        </p>
+                        <div className="mt-3 flex flex-wrap items-center gap-3">
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => handleInsightFeedback(insight.insightId, true)}
+                              disabled={saving}
+                              className={clsx(
+                                CONTROL_CLASS_COMPACT,
+                                viewerHelpful && 'bg-emerald-100 text-emerald-700 border-emerald-300'
+                              )}
+                            >
+                              Hữu ích
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleInsightFeedback(insight.insightId, false)}
+                              disabled={saving}
+                              className={clsx(
+                                CONTROL_CLASS_COMPACT,
+                                viewerNotHelpful && 'bg-rose-100 text-rose-700 border-rose-300'
+                              )}
+                            >
+                              Chưa hữu ích
+                            </button>
+                          </div>
+                          <span className="text-xs text-[color:var(--ds-text-muted)]">
+                            {`${insight.feedback?.helpful ?? 0} hữu ích · ${insight.feedback?.notHelpful ?? 0} chưa hữu ích`}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+              {insightsMeta?.state?.lastRunAt ? (
+                <p className="text-xs text-[color:var(--ds-text-muted)]">
+                  {`Lần chạy gần nhất: ${formatDateTime(insightsMeta.state.lastRunAt)} (trạng thái: ${insightsMeta.state.lastStatus})`}
+                </p>
+              ) : null}
             </div>
+
+
             <form onSubmit={handleSendPrompt} className="space-y-4 px-4 py-4">
               <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,180px)]">
                 <label className="flex flex-col gap-1 text-sm">
-                  <span className="font-medium text-gray-700">Câu hỏi</span>
+                  <span className="font-medium text-[color:var(--ds-text-primary)]">Câu hỏi</span>
                   <textarea
                     value={prompt}
                     onChange={(event) => setPrompt(event.target.value)}
                     rows={4}
-                    className="min-h-[120px] rounded border border-gray-200 px-3 py-2 text-sm text-gray-800 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
+                    className={clsx('min-h-[120px]', CONTROL_CLASS)}
                     placeholder="Ví dụ: Tóm tắt điểm KPI tháng 8 cho nhóm A11"
                   />
                 </label>
                 <div className="flex flex-col gap-3">
                   <label className="flex flex-col gap-1 text-sm">
-                    <span className="font-medium text-gray-700">Phạm vi</span>
+                    <span className="font-medium text-[color:var(--ds-text-primary)]">Phạm vi</span>
                     <input
                       type="text"
                       value={scope}
                       onChange={(event) => setScope(event.target.value)}
-                      className="rounded border border-gray-200 px-3 py-2 text-sm text-gray-800 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
+                      className={CONTROL_CLASS}
                       placeholder="general, ecus, kpi…"
                     />
                   </label>
                   <label className="flex flex-col gap-1 text-sm">
-                    <span className="font-medium text-gray-700">Nhà cung cấp</span>
+                    <span className="font-medium text-[color:var(--ds-text-primary)]">Nhà cung cấp</span>
                     <select
                       value={selectedProviderId || ''}
                       onChange={(event) => setSelectedProviderId(event.target.value)}
-                      className="rounded border border-gray-200 px-3 py-2 text-sm text-gray-800 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
+                      className={CONTROL_CLASS}
                     >
                       <option value="">Tự động (theo cấu hình mặc định)</option>
                       {providerOptions.map((provider) => (
@@ -1139,12 +1779,12 @@ export default function AiAssistant({ currentUser }) {
                 </div>
               </div>
               <label className="flex flex-col gap-1 text-sm">
-                <span className="font-medium text-gray-700">Ngữ cảnh bổ sung (tùy chọn)</span>
+                <span className="font-medium text-[color:var(--ds-text-primary)]">Ngữ cảnh bổ sung (tùy chọn)</span>
                 <textarea
                   value={context}
                   onChange={(event) => setContext(event.target.value)}
                   rows={3}
-                  className="rounded border border-gray-200 px-3 py-2 text-sm text-gray-800 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
+                  className={clsx('min-h-[72px]', CONTROL_CLASS)}
                   placeholder="Thêm số liệu, chính sách hoặc ghi chú hỗ trợ trả lời chính xác"
                 />
               </label>
@@ -1158,17 +1798,17 @@ export default function AiAssistant({ currentUser }) {
                 </button>
               </div>
             </form>
-            <div className="border-t border-gray-100 px-4 py-4">
-              <h3 className="mb-3 text-sm font-semibold text-gray-700">Lịch sử hội thoại</h3>
+            <div className="border-t border-[color:var(--ds-border-subtle)] px-4 py-4">
+              <h3 className="mb-3 text-sm font-semibold text-[color:var(--ds-text-primary)]">Lịch sử hội thoại</h3>
               <div className="mb-3 flex flex-wrap items-center gap-2">
                 <input
                   type="search"
                   value={historyKeyword}
                   onChange={(event) => setHistoryKeyword(event.target.value)}
                   placeholder="Tìm nội dung hoặc scope..."
-                  className="min-w-[180px] flex-1 rounded border border-gray-200 px-3 py-1.5 text-sm focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
+                  className={clsx('min-w-[180px] flex-1', CONTROL_CLASS)}
                 />
-                <span className="text-xs text-gray-500">
+                <span className="text-xs text-[color:var(--ds-text-muted)]">
                   {hasHistoryFilter
                     ? `${filteredMessages.length}/${messages.length} đoạn khớp`
                     : `${messages.length} đoạn hội thoại`}
@@ -1177,7 +1817,7 @@ export default function AiAssistant({ currentUser }) {
                   <button
                     type="button"
                     onClick={() => setHistoryKeyword('')}
-                    className="rounded border border-gray-300 px-2 py-1 text-xs text-gray-600 hover:bg-gray-100"
+                    className={clsx(SECONDARY_BUTTON_CLASS, 'px-2')}
                   >
                     Xóa lọc
                   </button>
@@ -1336,17 +1976,17 @@ export default function AiAssistant({ currentUser }) {
       )}
 
       {canManage && (
-        <section className="rounded border border-gray-200 bg-white shadow-sm">
-          <header className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-100 px-4 py-3">
+        <section className="rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] shadow-sm">
+          <header className="flex flex-wrap items-center justify-between gap-2 border-b border-[color:var(--ds-border-subtle)] px-4 py-3">
             <div>
-              <h2 className="text-base font-semibold text-gray-800">Cấu hình trợ lý AI</h2>
-              <p className="text-xs text-gray-500">Điều chỉnh nhà cung cấp, cache và prompt hệ thống cho toàn bộ tổ chức.</p>
+              <h2 className="text-base font-semibold text-[color:var(--ds-text-primary)]">Cấu hình trợ lý AI</h2>
+              <p className="text-xs text-[color:var(--ds-text-muted)]">Điều chỉnh nhà cung cấp, cache và prompt hệ thống cho toàn bộ tổ chức.</p>
             </div>
             <div className="flex gap-2">
               <button
                 type="button"
                 onClick={loadConfig}
-                className="rounded border border-gray-200 px-3 py-1 text-xs text-gray-600 hover:bg-gray-50"
+                className={SECONDARY_BUTTON_CLASS}
                 disabled={configLoading}
               >
                 {configLoading ? 'Đang tải…' : 'Làm mới'}
@@ -1354,7 +1994,7 @@ export default function AiAssistant({ currentUser }) {
               <button
                 type="button"
                 onClick={handleConfigReset}
-                className="rounded border border-gray-200 px-3 py-1 text-xs text-gray-600 hover:bg-gray-50"
+                className={SECONDARY_BUTTON_CLASS}
                 disabled={configLoading || !draft}
               >
                 Khôi phục
@@ -1363,25 +2003,25 @@ export default function AiAssistant({ currentUser }) {
           </header>
           {configError && <p className="px-4 pt-3 text-xs text-red-600">{configError}</p>}
           <form onSubmit={handleConfigSubmit} className="space-y-6 px-4 py-4">
-            {!draft && configLoading && <p className="text-sm text-gray-500">Đang tải cấu hình…</p>}
+            {!draft && configLoading && <p className="text-sm text-[color:var(--ds-text-muted)]">Đang tải cấu hình…</p>}
             {draft && (
               <>
                 <div className="grid gap-4 md:grid-cols-2">
-                  <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+                  <label className="flex items-center gap-2 text-sm font-medium text-[color:var(--ds-text-primary)]">
                     <input
                       type="checkbox"
                       checked={draft.enabled !== false}
                       onChange={(event) => handleDraftFieldChange('enabled', event.target.checked)}
-                      className="h-4 w-4 rounded border-gray-300 text-amber-500 focus:ring-amber-400"
+                      className="h-4 w-4 rounded border-[color:var(--ds-border-subtle)] text-amber-500 focus:ring-amber-400"
                     />
                     Bật trợ lý AI
                   </label>
                   <label className="flex flex-col gap-1 text-sm">
-                    <span className="font-medium text-gray-700">Nhà cung cấp mặc định</span>
+                    <span className="font-medium text-[color:var(--ds-text-primary)]">Nhà cung cấp mặc định</span>
                     <select
                       value={draft.defaultProvider}
                       onChange={(event) => handleDraftFieldChange('defaultProvider', event.target.value)}
-                      className="rounded border border-gray-200 px-3 py-2 text-sm text-gray-800 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
+                      className={CONTROL_CLASS}
                     >
                       <option value="">-- Chọn nhà cung cấp --</option>
                       {draft.providers.map((provider) => (
@@ -1392,11 +2032,11 @@ export default function AiAssistant({ currentUser }) {
                     </select>
                   </label>
                   <label className="flex flex-col gap-1 text-sm">
-                    <span className="font-medium text-gray-700">Nhà cung cấp dự phòng</span>
+                    <span className="font-medium text-[color:var(--ds-text-primary)]">Nhà cung cấp dự phòng</span>
                     <select
                       value={draft.fallbackProvider || ''}
                       onChange={(event) => handleDraftFieldChange('fallbackProvider', event.target.value)}
-                      className="rounded border border-gray-200 px-3 py-2 text-sm text-gray-800 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
+                      className={CONTROL_CLASS}
                     >
                       <option value="">Không dùng dự phòng</option>
                       {draft.providers.map((provider) => (
@@ -1407,68 +2047,68 @@ export default function AiAssistant({ currentUser }) {
                     </select>
                   </label>
                   <label className="flex flex-col gap-1 text-sm">
-                    <span className="font-medium text-gray-700">Giới hạn token trả lời</span>
+                    <span className="font-medium text-[color:var(--ds-text-primary)]">Giới hạn token trả lời</span>
                     <input
                       type="number"
                       min="1"
                       value={draft.maxTokens}
                       onChange={(event) => handleDraftFieldChange('maxTokens', event.target.value)}
-                      className="rounded border border-gray-200 px-3 py-2 text-sm text-gray-800 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
+                      className={CONTROL_CLASS}
                     />
                   </label>
                   <label className="flex flex-col gap-1 text-sm">
-                    <span className="font-medium text-gray-700">Nhiệt độ (Temperature)</span>
+                    <span className="font-medium text-[color:var(--ds-text-primary)]">Nhiệt độ (Temperature)</span>
                     <input
                       type="number"
                       step="0.1"
                       value={draft.temperature}
                       onChange={(event) => handleDraftFieldChange('temperature', event.target.value)}
-                      className="rounded border border-gray-200 px-3 py-2 text-sm text-gray-800 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
+                      className={CONTROL_CLASS}
                     />
                   </label>
                   <label className="flex flex-col gap-1 text-sm">
-                    <span className="font-medium text-gray-700">Giới hạn độ dài prompt</span>
+                    <span className="font-medium text-[color:var(--ds-text-primary)]">Giới hạn độ dài prompt</span>
                     <input
                       type="number"
                       min="1"
                       value={draft.maxInputLength}
                       onChange={(event) => handleDraftFieldChange('maxInputLength', event.target.value)}
-                      className="rounded border border-gray-200 px-3 py-2 text-sm text-gray-800 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
+                      className={CONTROL_CLASS}
                     />
                   </label>
                   <label className="flex flex-col gap-1 text-sm">
-                    <span className="font-medium text-gray-700">Timeout (ms)</span>
+                    <span className="font-medium text-[color:var(--ds-text-primary)]">Timeout (ms)</span>
                     <input
                       type="number"
                       min="1000"
                       step="500"
                       value={draft.timeoutMs}
                       onChange={(event) => handleDraftFieldChange('timeoutMs', event.target.value)}
-                      className="rounded border border-gray-200 px-3 py-2 text-sm text-gray-800 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
+                      className={CONTROL_CLASS}
                     />
                   </label>
                 </div>
 
                 <label className="flex flex-col gap-1 text-sm">
-                  <span className="font-medium text-gray-700">Prompt hệ thống</span>
+                  <span className="font-medium text-[color:var(--ds-text-primary)]">Prompt hệ thống</span>
                   <textarea
                     value={draft.systemPrompt}
                     onChange={(event) => handleDraftFieldChange('systemPrompt', event.target.value)}
                     rows={3}
-                    className="rounded border border-gray-200 px-3 py-2 text-sm text-gray-800 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
+                    className={clsx('min-h-[96px]', CONTROL_CLASS)}
                     placeholder="Hướng dẫn mặc định cho mọi câu hỏi"
                   />
                 </label>
 
-                <div className="rounded border border-gray-100 bg-gray-50 p-3">
-                  <h3 className="text-sm font-semibold text-gray-700">Cache tiết kiệm token</h3>
+                <div className="rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-muted)] p-3">
+                  <h3 className="text-sm font-semibold text-[color:var(--ds-text-primary)]">Cache tiết kiệm token</h3>
                   <div className="mt-3 grid gap-3 sm:grid-cols-3">
-                    <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+                    <label className="flex items-center gap-2 text-sm font-medium text-[color:var(--ds-text-primary)]">
                       <input
                         type="checkbox"
                         checked={draft.caching?.enabled !== false}
                         onChange={(event) => handleCachingChange('enabled', event.target.checked)}
-                        className="h-4 w-4 rounded border-gray-300 text-amber-500 focus:ring-amber-400"
+                        className="h-4 w-4 rounded border-[color:var(--ds-border-subtle)] text-amber-500 focus:ring-amber-400"
                       />
                       Bật cache
                     </label>
@@ -1479,7 +2119,7 @@ export default function AiAssistant({ currentUser }) {
                         min="1"
                         value={draft.caching?.ttlMinutes}
                         onChange={(event) => handleCachingChange('ttlMinutes', event.target.value)}
-                        className="rounded border border-gray-200 px-3 py-2 text-sm text-gray-800 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
+                        className={CONTROL_CLASS}
                       />
                     </label>
                     <label className="flex flex-col gap-1 text-sm">
@@ -1489,22 +2129,22 @@ export default function AiAssistant({ currentUser }) {
                         min="1"
                         value={draft.caching?.maxEntries}
                         onChange={(event) => handleCachingChange('maxEntries', event.target.value)}
-                        className="rounded border border-gray-200 px-3 py-2 text-sm text-gray-800 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
+                        className={CONTROL_CLASS}
                       />
                     </label>
                   </div>
                 </div>
 
                 <div className="space-y-4">
-                  <h3 className="text-sm font-semibold text-gray-700">Nhà cung cấp</h3>
-                  <div className="rounded border border-dashed border-amber-200 bg-white/60 p-3">
+                  <h3 className="text-sm font-semibold text-[color:var(--ds-text-primary)]">Nhà cung cấp</h3>
+                  <div className="rounded border border-dashed border-amber-300 bg-[color:var(--ds-surface-card)]/70 p-3">
                     <div className="flex flex-wrap items-end gap-3">
-                      <label className="flex flex-col text-xs font-medium text-gray-700">
+                      <label className="flex flex-col text-xs font-medium text-[color:var(--ds-text-primary)]">
                         <span>Preset nhà cung cấp</span>
                         <select
                           value={newProviderPreset}
                           onChange={(event) => setNewProviderPreset(event.target.value)}
-                          className="mt-1 rounded border border-gray-200 px-3 py-1 text-sm text-gray-800 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
+                          className={clsx('mt-1', CONTROL_CLASS_COMPACT)}
                         >
                           {AI_PROVIDER_PRESETS.map((preset) => (
                             <option key={preset.key} value={preset.key}>
@@ -1553,22 +2193,22 @@ export default function AiAssistant({ currentUser }) {
                     return (
                       <div
                         key={provider.id}
-                        className="rounded border border-gray-100 bg-gray-50 p-4"
+                        className="rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-muted)] p-4"
                       >
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <div>
-                          <p className="text-sm font-semibold text-gray-800">{provider.label || provider.id}</p>
-                          <p className="text-xs uppercase tracking-wide text-gray-500">{provider.id}</p>
-                        </div>
-                        <label className="flex items-center gap-2 text-xs font-medium text-gray-700">
-                          <input
-                            type="checkbox"
-                            checked={provider.enabled !== false}
-                            onChange={(event) => handleProviderChange(provider.id, { enabled: event.target.checked })}
-                            className="h-4 w-4 rounded border-gray-300 text-amber-500 focus:ring-amber-400"
-                          />
-                          Kích hoạt
-                        </label>
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div>
+                            <p className="text-sm font-semibold text-[color:var(--ds-text-primary)]">{provider.label || provider.id}</p>
+                            <p className="text-xs uppercase tracking-wide text-[color:var(--ds-text-muted)]">{provider.id}</p>
+                          </div>
+                          <label className="flex items-center gap-2 text-xs font-medium text-[color:var(--ds-text-primary)]">
+                            <input
+                              type="checkbox"
+                              checked={provider.enabled !== false}
+                              onChange={(event) => handleProviderChange(provider.id, { enabled: event.target.checked })}
+                              className="h-4 w-4 rounded border-[color:var(--ds-border-subtle)] text-amber-500 focus:ring-amber-400"
+                            />
+                            Kích hoạt
+                          </label>
                         <button
                           type="button"
                           onClick={() => handleRemoveProvider(provider.id)}
@@ -1584,7 +2224,7 @@ export default function AiAssistant({ currentUser }) {
                             type="text"
                             value={provider.label}
                             onChange={(event) => handleProviderChange(provider.id, { label: event.target.value })}
-                            className="rounded border border-gray-200 px-3 py-2 text-sm text-gray-800 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
+                            className={CONTROL_CLASS}
                           />
                         </label>
                         <label className="flex flex-col gap-1 text-sm">
@@ -1593,7 +2233,7 @@ export default function AiAssistant({ currentUser }) {
                             type="text"
                             value={provider.endpoint}
                             onChange={(event) => handleProviderChange(provider.id, { endpoint: event.target.value })}
-                            className="rounded border border-gray-200 px-3 py-2 text-sm text-gray-800 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
+                            className={CONTROL_CLASS}
                           />
                         </label>
                         <label className="flex flex-col gap-1 text-sm">
@@ -1608,7 +2248,7 @@ export default function AiAssistant({ currentUser }) {
                                 handleProviderChange(provider.id, { model: event.target.value });
                               }
                             }}
-                            className="rounded border border-gray-200 px-3 py-2 text-sm text-gray-800 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
+                            className={CONTROL_CLASS}
                           />
                         </label>
                         <label className="flex flex-col gap-1 text-sm">
@@ -1623,7 +2263,7 @@ export default function AiAssistant({ currentUser }) {
                                 handleProviderChange(provider.id, { apiKeyEnv: event.target.value });
                               }
                             }}
-                            className="rounded border border-gray-200 px-3 py-2 text-sm text-gray-800 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
+                            className={CONTROL_CLASS}
                           />
                         </label>
                         <label className="flex flex-col gap-1 text-sm">
@@ -1633,7 +2273,7 @@ export default function AiAssistant({ currentUser }) {
                             step="0.1"
                             value={provider.temperature}
                             onChange={(event) => handleProviderChange(provider.id, { temperature: event.target.value })}
-                            className="rounded border border-gray-200 px-3 py-2 text-sm text-gray-800 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
+                            className={CONTROL_CLASS}
                           />
                         </label>
                         <label className="flex flex-col gap-1 text-sm">
@@ -1643,7 +2283,7 @@ export default function AiAssistant({ currentUser }) {
                             min="1"
                             value={provider.maxTokens}
                             onChange={(event) => handleProviderChange(provider.id, { maxTokens: event.target.value })}
-                            className="rounded border border-gray-200 px-3 py-2 text-sm text-gray-800 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
+                            className={CONTROL_CLASS}
                           />
                         </label>
                         <label className="flex flex-col gap-1 text-sm md:col-span-2">

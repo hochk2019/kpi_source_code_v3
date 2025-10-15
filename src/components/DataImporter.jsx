@@ -10,13 +10,16 @@ import {
   getTeamRoster,
   mapMemberNamesToTeams,
   markDeclRowsReviewed,
+  unmarkDeclRowsReviewed,
   mapHQAgenciesByMST,
   normalizeStr,
   normalizeDeclarationNumber,
   normalizeName,
+  refreshDeclRowsFromServer,
 } from "@/lib/store.js";
 import { mapRow, detectDateOrder } from "@/lib/importer.js";
 import { loadRules, computeKPI, extractLicenseCodesFromRowObj } from "@/lib/rules.js";
+import { computeLicenseSnapshot } from "../../shared/licenseSummary.js";
 import CollapsibleCard from "./CollapsibleCard.jsx";
 import { deriveCOStatus, coLabel, coLineCount } from "@/shared/co.js";
 import { formatDisplayDate, formatDateRangeLabel } from "@/shared/format.js";
@@ -94,7 +97,6 @@ const DUPLICATE_DIFF_FIELD_GROUPS = Object.freeze([
       "so_tk_full",
       "so_tk",
       "so_tk_suffix",
-      "so_tk_ama",
       "mst",
       "cong_ty",
       "dia_chi",
@@ -175,7 +177,6 @@ const DUPLICATE_DIFF_FIELD_LABELS = Object.freeze({
   so_tk_full: "Số tờ khai (đầy đủ)",
   so_tk: "Số tờ khai (11 số)",
   so_tk_suffix: "Mã phân nhánh",
-  so_tk_ama: "Số TK AMA",
   mst: "Mã số thuế",
   cong_ty: "Tên doanh nghiệp",
   dia_chi: "Địa chỉ doanh nghiệp",
@@ -620,6 +621,19 @@ function normalizeLicenseCode(value) {
   return normalized.toUpperCase();
 }
 
+function normalizeAgencyKey(value) {
+  let normalized = normalizeStr(value);
+  if (!normalized) return "";
+  let previous = null;
+  while (normalized && normalized !== previous) {
+    previous = normalized;
+    normalized = normalized.replace(/^[\s"'([{<]+|[\s"'(){}\]}>]+$/g, "");
+    normalized = normalizeStr(normalized);
+  }
+  if (!normalized) return "";
+  return normalized.toUpperCase();
+}
+
 function parseCodeListInput(text) {
   if (!text) return [];
   return Array.from(
@@ -640,9 +654,21 @@ function joinCodeList(list) {
 function extractAgencyKeys(row) {
   const keys = new Set();
   const addKey = (value) => {
-    const normalized = normalizeLicenseCode(value);
+    if (value === undefined || value === null) return;
+    const normalized = normalizeAgencyKey(value);
     if (normalized) {
       keys.add(normalized);
+    }
+    const parentMatches = String(value)
+      .match(/\(([^)]+)\)/g);
+    if (parentMatches) {
+      parentMatches.forEach((segment) => {
+        const inner = segment.replace(/^\(|\)$/g, "");
+        const normalizedInner = normalizeAgencyKey(inner);
+        if (normalizedInner) {
+          keys.add(normalizedInner);
+        }
+      });
     }
   };
   if (Array.isArray(row?.agents)) {
@@ -650,12 +676,12 @@ function extractAgencyKeys(row) {
       addKey(agent);
     }
   }
-  const raw = row?.agency ?? row?.dai_ly ?? row?.hq_agency ?? '';
+  const raw = row?.agency ?? row?.dai_ly ?? row?.hq_agency ?? "";
   if (Array.isArray(raw)) {
     for (const value of raw) {
       addKey(value);
     }
-  } else if (typeof raw === 'string') {
+  } else if (typeof raw === "string") {
     raw
       .split(/[\n,;|]/g)
       .map((part) => part.trim())
@@ -1471,7 +1497,7 @@ export default function DataImporter({
     const entries = Array.isArray(rules?.license?.exclude?.agencies) ? rules.license.exclude.agencies : [];
     const map = new Map();
     for (const entry of entries) {
-      const agencyKey = normalizeLicenseCode(entry?.agency);
+      const agencyKey = normalizeAgencyKey(entry?.agency);
       if (!agencyKey) continue;
       const codes = Array.isArray(entry?.codes) ? entry.codes.map(normalizeLicenseCode).filter(Boolean) : [];
       if (!codes.length) continue;
@@ -2056,8 +2082,10 @@ export default function DataImporter({
       const payload = await response.json();
       const imported = payload?.result?.imported ?? 0;
       const skipped = payload?.result?.skipped ?? 0;
+      const locked = payload?.result?.reviewLocked ?? 0;
       const skippedNote = skipped > 0 ? `, bỏ qua ${skipped} tờ khai đã có` : '';
-      setSyncMessage(`Đã đồng bộ ${imported} tờ khai mới từ ECUS${skippedNote}.`);
+      const lockedNote = locked > 0 ? `, khóa ${locked} tờ khai đã rà soát` : '';
+      setSyncMessage(`Đã đồng bộ ${imported} tờ khai mới từ ECUS${skippedNote}${lockedNote}.`);
       setPreviewRows([]);
       setPreviewRangeInfo(null);
       setPreviewLimited(false);
@@ -2066,6 +2094,11 @@ export default function DataImporter({
       await fetchSyncStatus();
       await fetchAlerts();
       await fetchCoDiscrepancy();
+      try {
+        await refreshDeclRowsFromServer();
+      } catch (refreshError) {
+        console.error("Không thể tải dữ liệu tờ khai sau đồng bộ", refreshError);
+      }
       loadSavedRows({ bypassConfirm: true });
     } catch (err) {
       console.error("Đồng bộ ECUS thất bại", err);
@@ -2082,6 +2115,7 @@ export default function DataImporter({
     fetchSyncConfig,
     fetchSyncStatus,
     loadSavedRows,
+    refreshDeclRowsFromServer,
     manualRange.from,
     manualRange.to,
   ]);
@@ -2857,12 +2891,24 @@ export default function DataImporter({
     return Array.from(new Set(filtered.map((row) => keyOfRow(row))));
   }, [filtered, keyOfRow]);
 
-  const filteredSelected = useMemo(() => {
-    if (!filteredKeys.length) return false;
-    if (!selectedKeys.length) return false;
-    const selectedSet = new Set(selectedKeys);
-    return filteredKeys.every((key) => selectedSet.has(key));
-  }, [filteredKeys, selectedKeys]);
+const filteredSelected = useMemo(() => {
+  if (!filteredKeys.length) return false;
+  if (!selectedKeys.length) return false;
+  const selectedSet = new Set(selectedKeys);
+  return filteredKeys.every((key) => selectedSet.has(key));
+}, [filteredKeys, selectedKeys]);
+
+const selectedReviewedCount = useMemo(() => {
+  if (!selectedKeys.length) return 0;
+  const keySet = new Set(selectedKeys);
+  let count = 0;
+  for (const row of rawRows) {
+    if (!row || typeof row !== "object") continue;
+    if (!keySet.has(keyOfRow(row))) continue;
+    if (row.reviewed) count += 1;
+  }
+  return count;
+}, [selectedKeys, rawRows, keyOfRow]);
 
   useTooltipTitles(rootRef, [
     rawRows,
@@ -3131,14 +3177,15 @@ export default function DataImporter({
 
   const selectionEnabled = mode === "saved" && (canEdit || canManageAlerts);
   const deleteEnabled = canEdit && mode === "saved";
-  const baseColumnCount = 14; // thêm cột C/O + Số TK AMA
+  const baseColumnCount = 13; // bao gồm cột C/O
   const totalColumns = baseColumnCount + (selectionEnabled ? 1 : 0) + (deleteEnabled ? 1 : 0);
 
   const canImport = !isReadOnlyForEdits && mode === "preview" && rawRows.length > 0;
-  const canSave = !isReadOnlyForEdits && mode === "saved" && rawRows.length > 0;
-  const canDelete = deleteEnabled && selectedKeys.length > 0;
-  const canReview = selectionEnabled && selectedKeys.length > 0 && canReviewAlerts;
-  const canResolveDuplicates11 = deleteEnabled && hasDuplicate11Rows;
+const canSave = !isReadOnlyForEdits && mode === "saved" && rawRows.length > 0;
+const canDelete = deleteEnabled && selectedKeys.length > 0;
+const canReview = selectionEnabled && selectedKeys.length > 0 && canReviewAlerts;
+const canUnreview = selectionEnabled && selectedReviewedCount > 0 && canReviewAlerts;
+const canResolveDuplicates11 = deleteEnabled && hasDuplicate11Rows;
   const modeLabel = mode === "preview" ? "Đang xem dữ liệu từ file (chưa lưu)" : "Đang xem dữ liệu đã lưu";
 
   const handleSelectFiltered = useCallback(() => {
@@ -3462,76 +3509,190 @@ export default function DataImporter({
       if (keySet.size === 0) {
         return { ok: false, reason: "empty", blocked: blockedCount };
       }
-    let changed = 0;
-    let matchedCount = 0;
-    const nextRows = rawRows.map((row) => {
-      const rowKey = keyOfRow(row);
-      if (!keySet.has(rowKey)) {
-        return row;
-      }
-      matchedCount += 1;
-      const excludeSet = getLicenseExcludeSetForRow(row);
-      const normalizedSource = new Set(
-        [
-          ...(Array.isArray(row.licenseSourceCodes) ? row.licenseSourceCodes : []),
-          ...(Array.isArray(row.licenseCodes) ? row.licenseCodes : []),
-          ...(Array.isArray(row.licenseExcludedCodes) ? row.licenseExcludedCodes : []),
-          ...(extractLicenseCodesFromRowObj(row) || []),
-        ].map(normalizeLicenseCode).filter(Boolean)
-      );
-      const effectiveCodes = Array.from(normalizedSource)
-        .filter((code) => !excludeSet.has(code))
-        .sort((a, b) => a.localeCompare(b));
-      const excludedCodes = Array.from(normalizedSource)
-        .filter((code) => excludeSet.has(code))
-        .sort((a, b) => a.localeCompare(b));
-      const currentCodes = Array.isArray(row.licenseCodes)
-        ? row.licenseCodes
-            .map(normalizeLicenseCode)
-            .filter(Boolean)
-            .sort((a, b) => a.localeCompare(b))
-        : Array.from(normalizedSource).sort((a, b) => a.localeCompare(b));
-      const currentExcludedCodes = Array.isArray(row.licenseExcludedCodes)
-        ? row.licenseExcludedCodes
-            .map(normalizeLicenseCode)
-            .filter(Boolean)
-            .sort((a, b) => a.localeCompare(b))
-        : [];
-      const nextLicenseCount = effectiveCodes.length;
-      const currentLicenseCount = Number(row.licenses ?? row.so_luong_gp ?? currentCodes.length ?? 0);
-      if (
-        nextLicenseCount === currentLicenseCount &&
-        arraysEqual(effectiveCodes, currentCodes) &&
-        arraysEqual(excludedCodes, currentExcludedCodes)
-      ) {
-        return row;
-      }
-      changed += 1;
-      const nextRow = {
-        ...row,
-        licenseSourceCodes: Array.from(normalizedSource).sort((a, b) => a.localeCompare(b)),
-        licenseExcludedCodes: excludedCodes,
-        licenseCodes: effectiveCodes,
-        licenses: nextLicenseCount,
-        so_luong_gp: nextLicenseCount,
-        licenseManualCount: nextLicenseCount,
-        updatedAt: new Date().toISOString(),
+
+      const summary = {
+        processedKeys: new Set(),
+        totalSourceCodes: 0,
+        totalExcludedCodes: 0,
+        totalKeptCodes: 0,
+        details: [],
+        globalCodes: new Set(),
+        agencyCodes: new Map(),
+        skippedNoSource: 0,
       };
-      const recalculated = computeKPI(nextRow, rules);
-      if (Number.isFinite(recalculated)) {
-        nextRow.kpi = Math.round(recalculated * 10) / 10;
+
+      let changed = 0;
+      let matchedCount = 0;
+      const nextRows = rawRows.map((row) => {
+        const rowKey = keyOfRow(row);
+        if (!keySet.has(rowKey)) {
+          return row;
+        }
+
+        const excludeSet = getLicenseExcludeSetForRow(row);
+        const normalizedSource = new Set();
+        const addCodes = (list) => {
+          if (!Array.isArray(list)) return;
+          for (const code of list) {
+            const normalized = normalizeLicenseCode(code);
+            if (normalized) {
+              normalizedSource.add(normalized);
+            }
+          }
+        };
+
+        addCodes(row.licenseSourceCodes);
+        addCodes(row.licenseCodes);
+        addCodes(row.licenseExcludedCodes);
+        const extractedCodes = extractLicenseCodesFromRowObj(row) || [];
+        for (const code of extractedCodes) {
+          const normalized = normalizeLicenseCode(code);
+          if (normalized) {
+            normalizedSource.add(normalized);
+          }
+        }
+
+        let fallbackSnapshot = null;
+        if (normalizedSource.size === 0) {
+          fallbackSnapshot = computeLicenseSnapshot(row, rules);
+          const fallbackLists = [
+            fallbackSnapshot?.sourceCodes,
+            fallbackSnapshot?.includedCodes,
+            fallbackSnapshot?.excludedCodes,
+          ];
+          for (const list of fallbackLists) {
+            if (!Array.isArray(list)) continue;
+            for (const code of list) {
+              const normalized = normalizeLicenseCode(code);
+              if (normalized) {
+                normalizedSource.add(normalized);
+              }
+            }
+          }
+        }
+
+        if (normalizedSource.size === 0) {
+          summary.skippedNoSource += 1;
+          summary.details.push({
+            key: rowKey,
+            soTk: row.so_tk,
+            source: [],
+            kept: [],
+            excluded: [],
+            reason: "no_source_codes",
+            manualCount:
+              fallbackSnapshot && Number.isFinite(fallbackSnapshot.manualCount)
+                ? fallbackSnapshot.manualCount
+                : undefined,
+          });
+          return row;
+        }
+
+        const sourceList = Array.from(normalizedSource).sort((a, b) => a.localeCompare(b));
+        const effectiveCodes = sourceList.filter((code) => !excludeSet.has(code));
+        const excludedCodes = sourceList.filter((code) => excludeSet.has(code));
+        const currentCodes = Array.isArray(row.licenseCodes)
+          ? row.licenseCodes.map(normalizeLicenseCode).filter(Boolean).sort((a, b) => a.localeCompare(b))
+          : sourceList;
+        const currentExcludedCodes = Array.isArray(row.licenseExcludedCodes)
+          ? row.licenseExcludedCodes.map(normalizeLicenseCode).filter(Boolean).sort((a, b) => a.localeCompare(b))
+          : [];
+        const nextLicenseCount = effectiveCodes.length;
+        const currentLicenseCount = Number(row.licenses ?? row.so_luong_gp ?? currentCodes.length ?? 0);
+
+        matchedCount += 1;
+        summary.processedKeys.add(rowKey);
+        summary.totalSourceCodes += sourceList.length;
+        summary.totalExcludedCodes += excludedCodes.length;
+        summary.totalKeptCodes += effectiveCodes.length;
+
+        if (sourceList.length > 0) {
+          const agencyKeys = extractAgencyKeys(row);
+          const excludedReasons = excludedCodes.map((code) => {
+            const reasons = [];
+            if (licenseExcludeSet.has(code)) {
+              reasons.push({ type: "global" });
+              summary.globalCodes.add(code);
+            }
+            for (const key of agencyKeys) {
+              const agencySet = licenseAgencyExcludeMap.get(normalizeAgencyKey(key));
+              if (agencySet?.has(code)) {
+                reasons.push({ type: "agency", key: normalizeAgencyKey(key) });
+                const list = summary.agencyCodes.get(normalizeAgencyKey(key)) || new Set();
+                list.add(code);
+                summary.agencyCodes.set(normalizeAgencyKey(key), list);
+              }
+            }
+            if (!reasons.length) {
+              reasons.push({ type: "other" });
+            }
+            return { code, reasons };
+          });
+          summary.details.push({
+            key: rowKey,
+            soTk: row.so_tk,
+            source: sourceList,
+            kept: effectiveCodes,
+            excluded: excludedCodes,
+            excludedReasons,
+          });
+        }
+
+        if (
+          nextLicenseCount === currentLicenseCount &&
+          arraysEqual(effectiveCodes, currentCodes) &&
+          arraysEqual(excludedCodes, currentExcludedCodes)
+        ) {
+          return row;
+        }
+
+        changed += 1;
+        const nextRow = {
+          ...row,
+          licenseSourceCodes: sourceList,
+          licenseExcludedCodes: excludedCodes,
+          licenseCodes: effectiveCodes,
+          licenses: nextLicenseCount,
+          so_luong_gp: nextLicenseCount,
+          licenseManualCount: nextLicenseCount,
+          updatedAt: new Date().toISOString(),
+        };
+        const recalculated = computeKPI(nextRow, rules);
+        if (Number.isFinite(recalculated)) {
+          nextRow.kpi = Math.round(recalculated * 10) / 10;
+        }
+        return nextRow;
+      });
+
+      if (matchedCount === 0) {
+        return { ok: false, reason: "missing" };
       }
-      return nextRow;
-    });
-    if (matchedCount === 0) {
-      return { ok: false, reason: "missing" };
-    }
-    if (changed === 0) {
-      return { ok: false, reason: "unchanged", matchedCount, blocked: blockedCount };
-    }
-    setRawRows(nextRows);
-    setHasUnsaved(true);
-      return { ok: true, changed, matchedCount, blocked: blockedCount };
+      if (changed === 0) {
+        return { ok: false, reason: "unchanged", matchedCount, blocked: blockedCount };
+      }
+
+      setRawRows(nextRows);
+      setHasUnsaved(true);
+
+      return {
+        ok: true,
+        changed,
+        matchedCount,
+        blocked: blockedCount,
+        summary: {
+          totalRows: summary.processedKeys.size,
+          totalSourceCodes: summary.totalSourceCodes,
+          totalExcludedCodes: summary.totalExcludedCodes,
+          totalKeptCodes: summary.totalKeptCodes,
+          details: summary.details,
+          globalCodes: Array.from(summary.globalCodes),
+          agencyCodes: Array.from(summary.agencyCodes.entries()).map(([agency, codes]) => ({
+            agency,
+            codes: Array.from(codes),
+          })),
+          skippedNoSource: summary.skippedNoSource,
+        },
+      };
     },
     [
       editingRestrictionMessage,
@@ -3544,36 +3705,130 @@ export default function DataImporter({
     ]
   );
 
-  const handleApplyLicenseExclusion = useCallback(() => {
-    if (selectedKeys.length === 0) {
-      alert("Hãy chọn ít nhất một tờ khai để đối chiếu giấy phép.");
-      return;
+const formatLicenseExclusionAlert = useCallback(
+  (result) => {
+    if (!result?.summary) {
+      return `Đã cập nhật ${result?.changed ?? 0}/${result?.matchedCount ?? 0} tờ khai.`;
     }
-    const allowedKeys = ensureEditableKeys(selectedKeys, "đối chiếu giấy phép");
-    if (!allowedKeys) {
-      return;
+    const {
+      totalSourceCodes,
+      totalExcludedCodes,
+      totalKeptCodes,
+      globalCodes = [],
+      agencyCodes = [],
+      skippedNoSource = 0,
+    } = result.summary;
+    const lines = [
+      `Đã cập nhật ${result.changed}/${result.matchedCount} tờ khai.`,
+      `Tổng mã gốc: ${totalSourceCodes}, giữ lại: ${totalKeptCodes}, loại trừ: ${totalExcludedCodes}.`,
+    ];
+    if (globalCodes.length) {
+      lines.push(`Mã bị loại theo quy tắc toàn cục: ${Array.from(new Set(globalCodes)).join(", ")}`);
     }
-    const result = applyLicenseExclusionForKeys(allowedKeys, { alreadyFiltered: true });
-    if (!result?.ok) {
-      if (result?.reason === "mode") {
-        alert("Chỉ có thể điều chỉnh giấy phép khi đang xem dữ liệu đã lưu.");
-        return;
-      }
-      if (result?.reason === "unchanged") {
-        alert("Các tờ khai được chọn đã không còn mã giấy phép nằm trong danh sách loại trừ.");
-        return;
-      }
-      if (result?.reason === "missing" || result?.reason === "empty") {
-        alert("Không tìm thấy tờ khai phù hợp để đối chiếu.");
-        return;
-      }
-      alert("Không thể đối chiếu giấy phép cho lựa chọn hiện tại.");
-      return;
+    if (agencyCodes.length) {
+      const agencyDetails = agencyCodes
+        .map(({ agency, codes }) => `${agency}: ${codes.join(", ")}`)
+        .join("; ");
+      lines.push(`Mã bị loại theo đại lý: ${agencyDetails}`);
     }
-    alert(`Đã cập nhật loại trừ giấy phép cho ${result.changed}/${result.matchedCount} tờ khai đã chọn.`);
-  }, [applyLicenseExclusionForKeys, ensureEditableKeys, selectedKeys]);
+    if (skippedNoSource > 0) {
+      lines.push(`Bỏ qua ${skippedNoSource} tờ khai không có mã giấy phép nguồn để đối chiếu.`);
+    }
+    if (totalExcludedCodes === totalSourceCodes && totalSourceCodes > 0) {
+      lines.push(
+        "Lưu ý: các mã của tờ khai này đều nằm trong danh sách loại trừ KPI nên kết quả sau đối chiếu còn 0."
+      );
+    }
+    return lines.join("\n");
+  },
+  []
+);
 
-  const handleAutoApplyLicenseExclusion = useCallback(() => {
+const handleApplyLicenseExclusion = useCallback(() => {
+  if (selectedKeys.length === 0) {
+    alert("Hay chon it nhat mot to khai de doi chieu giay phep.");
+    return;
+  }
+  const allowedKeys = ensureEditableKeys(selectedKeys, "doi chieu giay phep");
+  if (!allowedKeys) {
+    return;
+  }
+  const result = applyLicenseExclusionForKeys(allowedKeys, { alreadyFiltered: true });
+  if (!result?.ok) {
+    if (result?.reason === "mode") {
+      alert("Chi co the dieu chinh giay phep khi dang xem du lieu da luu.");
+      return;
+    }
+    if (result?.reason === "unchanged") {
+      alert("Cac to khai duoc chon da khong con ma giay phep nam trong danh sach loai tru.");
+      return;
+    }
+    if (result?.reason === "missing" || result?.reason === "empty") {
+      alert("Khong tim thay to khai phu hop de doi chieu.");
+      return;
+    }
+    alert("Khong the doi chieu giay phep cho lua chon hien tai.");
+    return;
+  }
+  alert(formatLicenseExclusionAlert(result));
+}, [applyLicenseExclusionForKeys, ensureEditableKeys, formatLicenseExclusionAlert, selectedKeys]);
+
+const handleUnmarkReviewed = useCallback(async () => {
+  if (!canReviewAlerts) {
+    alert("Bạn không có quyền bỏ đánh dấu rà soát các tờ khai.");
+    return;
+  }
+  if (mode !== "saved") {
+    alert("Chỉ bỏ đánh dấu rà soát khi đang xem dữ liệu đã lưu.");
+    return;
+  }
+  if (selectedKeys.length === 0) {
+    alert("Chưa chọn tờ khai để bỏ đánh dấu.");
+    return;
+  }
+  const allowedKeys = ensureEditableKeys(selectedKeys, "bỏ đánh dấu rà soát");
+  if (!allowedKeys) {
+    return;
+  }
+  const keySet = new Set(allowedKeys);
+  const reviewedKeys = rawRows
+    .filter((row) => row && keySet.has(keyOfRow(row)) && row.reviewed)
+    .map((row) => keyOfRow(row));
+  if (reviewedKeys.length === 0) {
+    alert("Các tờ khai đã chọn chưa được đánh dấu rà soát.");
+    return;
+  }
+  const updated = unmarkDeclRowsReviewed(reviewedKeys, { actor });
+  if (updated === 0) {
+    alert("Không tìm thấy tờ khai nào để bỏ đánh dấu.");
+  }
+  try {
+    await fetchWithAuth("/api/import/alerts/unreview", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ keys: reviewedKeys, actor }),
+      credentials: "include",
+    });
+  } catch (err) {
+    console.warn("Không thể đồng bộ trạng thái bỏ rà soát với máy chủ", err);
+  }
+  setSelectedKeys([]);
+  setHasUnsaved(false);
+  loadSavedRows({ bypassConfirm: true });
+  fetchAlerts();
+}, [
+  actor,
+  canReviewAlerts,
+  ensureEditableKeys,
+  fetchAlerts,
+  keyOfRow,
+  loadSavedRows,
+  mode,
+  rawRows,
+  selectedKeys,
+]);
+
+const handleAutoApplyLicenseExclusion = useCallback(() => {
     if (!canEdit) {
       alert("Bạn không có quyền chỉnh sửa dữ liệu tờ khai.");
       return;
@@ -3622,7 +3877,6 @@ export default function DataImporter({
       return {
         Ngày: formatDisplayDate(row.date || row.raw_date || ""),
         "Số tờ khai": row.so_tk_full || row.so_tk || "",
-        "Số TK AMA": row.so_tk_ama || "",
         MST: row.mst || "",
         "Công ty": row.cong_ty || "",
         "Loại hình": row.loai_hinh || "",
@@ -5036,6 +5290,16 @@ export default function DataImporter({
           >
             Đánh dấu đã rà soát
           </button>
+          <button
+            type="button"
+            onClick={handleUnmarkReviewed}
+            disabled={!canUnreview}
+            className={`px-3 py-1 rounded border ${
+              canUnreview ? "bg-orange-50 text-orange-700 border-orange-300" : "opacity-50 cursor-not-allowed"
+            }`}
+          >
+            Bỏ đánh dấu đã rà soát
+          </button>
           {canEdit && (
             <button
               type="button"
@@ -5093,7 +5357,6 @@ export default function DataImporter({
               {selectionEnabled && <th className="px-2 py-1 text-left w-10">Chọn</th>}
               <th className="px-2 py-1 text-left">Ngày</th>
               <th className="px-2 py-1 text-left">Số tờ khai</th>
-              <th className="px-2 py-1 text-left">Số TK AMA</th>
               <th className="px-2 py-1 text-left">MST</th>
               <th className="px-2 py-1 text-left">Công ty</th>
               <th className="px-2 py-1 text-left">Loại hình</th>
@@ -5156,9 +5419,6 @@ export default function DataImporter({
                       <span className="rounded bg-gray-200 px-1.5 py-0.5 text-[10px] font-medium text-gray-600">Chỉ xem</span>
                     )}
                   </div>
-                </td>
-                <td className="px-2 py-1">
-                  <span>{r.so_tk_ama || ""}</span>
                 </td>
                 <td className="px-2 py-1">
                   <span>{r.mst || ""}</span>
@@ -5301,6 +5561,8 @@ export default function DataImporter({
     </>
   );
 }
+
+
 
 
 

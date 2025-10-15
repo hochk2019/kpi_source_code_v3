@@ -6,13 +6,10 @@ import {
   isExportDecl,
   KPI_ADJUSTMENT_CATEGORY_CONFIG,
 } from "@/lib/store.js";
-import {
-  addAdjustmentTotals,
-  cloneAdjustmentTotals,
-  createAdjustmentTotals,
-} from "../../shared/kpiAdjustments.js";
+import { addAdjustmentTotals, cloneAdjustmentTotals, createAdjustmentTotals } from "../../shared/kpiAdjustments.js";
 import { computeKPI, DEFAULT_RULES } from "@/lib/rules.js";
 import { formatDisplayDate } from "@/shared/format.js";
+import { computeLicenseSnapshot } from "../../shared/licenseSummary.js";
 
 const UNASSIGNED_STAFF_KEY = "__unassigned_staff__";
 const UNASSIGNED_TEAM_KEY = "__unassigned_team__";
@@ -469,10 +466,17 @@ export function buildReportData(rowsInput, { roster, rules, from, to, adjustment
     const kpiValue = Math.round(baseKpi * 10) / 10;
     const exportFlag = isExportDecl(sanitized.so_tk, sanitized.loai_hinh);
 
+    const licenseSnapshot = computeLicenseSnapshot(sanitized, effectiveRules);
+    const normalizedLicenseCount = Number.isFinite(licenseSnapshot.includedCount)
+      ? licenseSnapshot.includedCount
+      : Number.isFinite(sanitized.licenses)
+      ? Number(sanitized.licenses)
+      : licenseSnapshot.includedCodes.length;
+
     comparisonRows.push({
       date,
       num_items: sanitized.num_items,
-      licenses: sanitized.licenses,
+      licenses: Number.isFinite(normalizedLicenseCount) ? normalizedLicenseCount : 0,
       kpi: kpiValue,
       isExport: exportFlag,
     });
@@ -495,19 +499,6 @@ export function buildReportData(rowsInput, { roster, rules, from, to, adjustment
       companyKeys.add(companyKey);
     }
 
-    const sourceCodes = Array.isArray(sanitized.licenseSourceCodes)
-      ? sanitized.licenseSourceCodes.map((code) => normalizeStr(code).toUpperCase()).filter(Boolean)
-      : [];
-    const includedCodesRaw = Array.isArray(sanitized.licenseCodes)
-      ? sanitized.licenseCodes.map((code) => normalizeStr(code).toUpperCase()).filter(Boolean)
-      : [];
-    const excludedCodes = Array.isArray(sanitized.licenseExcludedCodes)
-      ? sanitized.licenseExcludedCodes.map((code) => normalizeStr(code).toUpperCase()).filter(Boolean)
-      : [];
-    const excludedSet = new Set(excludedCodes);
-    const licenseCodes = (includedCodesRaw.length ? includedCodesRaw : sourceCodes)
-      .filter((code) => !excludedSet.has(code))
-      .filter((code, index, arr) => arr.indexOf(code) === index);
     const hasCO = Boolean(sanitized.has_co || (Array.isArray(sanitized.co_codes) && sanitized.co_codes.length));
     const coLineCount = Number(sanitized.co_line_count || 0) || 0;
 
@@ -519,7 +510,7 @@ export function buildReportData(rowsInput, { roster, rules, from, to, adjustment
       cong_ty: sanitized.cong_ty,
       loai_hinh: sanitized.loai_hinh,
       num_items: sanitized.num_items,
-      licenses: sanitized.licenses,
+      licenses: Number.isFinite(normalizedLicenseCount) ? normalizedLicenseCount : 0,
       nhan_vien: staffName,
       team: teamEntry.name,
       isExport: exportFlag,
@@ -527,9 +518,10 @@ export function buildReportData(rowsInput, { roster, rules, from, to, adjustment
       hasCO,
       coLineCount,
       coLabel: hasCO ? (coLineCount > 0 ? `${coLineCount}` : "Có") : "Không",
-      licenseCodes,
-      licenseExcludedCodes: excludedCodes,
-      licenseSourceCodes: sourceCodes,
+      licenseCodes: licenseSnapshot.includedCodes,
+      licenseExcludedCodes: licenseSnapshot.excludedCodes,
+      licenseSourceCodes: licenseSnapshot.sourceCodes,
+      licenseManualCount: licenseSnapshot.manualCount ?? sanitized.licenseManualCount ?? null,
     };
 
     preparedRows.push(detailRow);
