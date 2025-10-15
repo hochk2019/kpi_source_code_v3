@@ -3,6 +3,7 @@ import clsx from 'clsx';
 import { fetchWithAuth } from '@/auth/localAuth.js';
 import { fetchNotificationHistory, subscribeNotificationStream } from '@/lib/notificationClient.js';
 import useAsyncRequest from '@/hooks/useAsyncRequest.js';
+import { translateBackupFailure, translateBackupReason } from '@/shared/backupMessages.js';
 
 function formatDate(value) {
   if (!value) return 'Không xác định';
@@ -73,6 +74,64 @@ function formatNumber(value) {
     return value;
   }
 }
+
+function formatBytes(value) {
+  const num = Number(value);
+  if (!Number.isFinite(num) || num <= 0) {
+    return '—';
+  }
+  const units = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
+  let size = num;
+  let unitIndex = 0;
+  while (size >= 1024 && unitIndex < units.length - 1) {
+    size /= 1024;
+    unitIndex += 1;
+  }
+  const digits = size >= 10 || unitIndex === 0 ? 0 : 1;
+  return `${size.toFixed(digits)} ${units[unitIndex]}`;
+}
+
+function formatPercent(value) {
+  const num = Number(value);
+  if (!Number.isFinite(num)) {
+    return '—';
+  }
+  return `${num.toFixed(num >= 100 || num === 0 ? 0 : 1)}%`;
+}
+
+const severityStyles = {
+  good: {
+    container:
+      'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-500/40 dark:bg-emerald-500/10 dark:text-emerald-200',
+    dot: 'bg-emerald-500 dark:bg-emerald-300',
+    badge: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-200',
+  },
+  info: {
+    container:
+      'border-sky-200 bg-sky-50 text-sky-800 dark:border-sky-500/40 dark:bg-sky-500/10 dark:text-sky-200',
+    dot: 'bg-sky-500 dark:bg-sky-300',
+    badge: 'bg-sky-100 text-sky-700 dark:bg-sky-500/20 dark:text-sky-200',
+  },
+  warning: {
+    container:
+      'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-200',
+    dot: 'bg-amber-500 dark:bg-amber-300',
+    badge: 'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-200',
+  },
+  critical: {
+    container:
+      'border-red-200 bg-red-50 text-red-800 dark:border-red-500/40 dark:bg-red-500/10 dark:text-red-200',
+    dot: 'bg-red-500 dark:bg-red-300',
+    badge: 'bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-200',
+  },
+};
+
+const severityLabels = {
+  good: 'Ổn định',
+  info: 'Thông tin',
+  warning: 'Cảnh báo',
+  critical: 'Nguy cấp',
+};
 
 const metricPalette = [
   'bg-emerald-500/10 text-emerald-700 border border-emerald-400/60',
@@ -188,6 +247,13 @@ export default function DataHealthDashboard({ currentUser }) {
   const duplicateGroups = summary?.duplicates?.groups || [];
   const alertEntries = summary?.alerts?.recent || [];
   const sqlTimeouts = summary?.sqlServer?.timeoutEvents || [];
+  const sqlHealth = summary?.sqlServer?.health || null;
+  const storageInfo = summary?.storage || {};
+  const backupSummary = storageInfo.backup || {};
+  const backupHealth = backupSummary.health || {};
+  const databaseStorage = storageInfo.database || {};
+  const diskInfo = storageInfo.disk || {};
+  const storageHealth = storageInfo.health || {};
   const operatorName = useMemo(() => {
     if (!currentUser) return '';
     return currentUser.fullName || currentUser.username || '';
@@ -259,6 +325,88 @@ export default function DataHealthDashboard({ currentUser }) {
       relative,
     };
   }, [summary]);
+
+  const infrastructureAlerts = useMemo(() => {
+    const items = [];
+    const seen = new Set();
+    if (Array.isArray(storageHealth?.issues)) {
+      for (const issue of storageHealth.issues) {
+        if (!issue || !issue.message) continue;
+        const key = issue.code || issue.message;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        items.push({
+          key,
+          severity: issue.severity || 'info',
+          message: issue.message,
+        });
+      }
+    }
+    if (sqlHealth) {
+      if (sqlHealth.ok === false) {
+        const severity = sqlHealth.state === 'timeout' ? 'critical' : 'warning';
+        const key = `sql-${sqlHealth.state || 'error'}`;
+        if (!seen.has(key)) {
+          seen.add(key);
+          items.push({
+            key,
+            severity,
+            message: sqlHealth.message || 'Không thể kết nối SQL Server.',
+          });
+        }
+      } else if (sqlHealth.state === 'not_configured') {
+        const key = 'sql-not-configured';
+        if (!seen.has(key)) {
+          seen.add(key);
+          items.push({
+            key,
+            severity: 'info',
+            message: 'Chưa cấu hình máy chủ hoặc CSDL SQL Server, cần bổ sung để đồng bộ tự động.',
+          });
+        }
+      }
+    }
+    return items;
+  }, [sqlHealth, storageHealth]);
+
+  const sqlHealthIndicator = useMemo(() => {
+    if (!sqlHealth) {
+      return {
+        severity: 'info',
+        title: 'Chưa có thống kê',
+        message: 'Chưa ghi nhận lần kiểm tra kết nối SQL Server nào.',
+      };
+    }
+    if (sqlHealth.ok) {
+      return {
+        severity: 'good',
+        title: 'Kết nối ổn định',
+        message: `Đã kết nối tới ${sqlHealth.server || 'máy chủ'} / ${sqlHealth.database || 'CSDL'}.`,
+        checkedAt: sqlHealth.checkedAt ? formatDate(sqlHealth.checkedAt) : null,
+      };
+    }
+    if (sqlHealth.state === 'not_configured') {
+      return {
+        severity: 'info',
+        title: 'Chưa cấu hình',
+        message: sqlHealth.message || 'Chưa cấu hình thông tin SQL Server trong hệ thống.',
+      };
+    }
+    if (sqlHealth.state === 'timeout') {
+      return {
+        severity: 'critical',
+        title: 'Timeout kết nối',
+        message: sqlHealth.message || 'Kết nối SQL Server bị hết thời gian phản hồi.',
+        checkedAt: sqlHealth.checkedAt ? formatDate(sqlHealth.checkedAt) : null,
+      };
+    }
+    return {
+      severity: 'warning',
+      title: 'Lỗi kết nối',
+      message: sqlHealth.message || 'Không thể kiểm tra SQL Server.',
+      checkedAt: sqlHealth.checkedAt ? formatDate(sqlHealth.checkedAt) : null,
+    };
+  }, [sqlHealth]);
 
   const metrics = useMemo(() => {
     const totals = summary?.totals || {};
@@ -478,6 +626,29 @@ export default function DataHealthDashboard({ currentUser }) {
     return merged.slice(0, 12);
   }, [liveNotifications, historyNotifications]);
 
+  const backupSchedule = backupSummary.schedule || {};
+  const backupSeverity = severityStyles[backupHealth.severity] || severityStyles.info;
+  const backupSeverityLabel = severityLabels[backupHealth.severity] || 'Thông tin';
+  const lastBackupAt = backupSummary.lastSuccess?.ts ? formatDate(backupSummary.lastSuccess.ts) : 'Chưa có';
+  const lastBackupRelative = backupHealth.lastSuccessAt ? formatRelativeTime(backupHealth.lastSuccessAt) : 'Không xác định';
+  const lastBackupFile = backupSummary.lastSuccess?.meta?.file || '—';
+  const lastFailureAt = backupSummary.lastFailure?.ts ? formatDate(backupSummary.lastFailure.ts) : null;
+  const lastFailureReason = backupSummary.lastFailure?.meta?.reason
+    ? translateBackupFailure(backupSummary.lastFailure.meta.reason)
+    : '';
+  const nextBackupRun = backupSchedule.active === false
+    ? 'Đang tắt'
+    : backupSchedule.nextRunHuman || 'Không xác định';
+  const scheduleReasons = Array.isArray(backupSchedule.reasons) ? backupSchedule.reasons : [];
+
+  const databaseSizeLabel = databaseStorage.sizeLabel || formatBytes(databaseStorage.sizeBytes);
+  const databaseUpdatedAt = databaseStorage.lastModifiedAt ? formatDate(databaseStorage.lastModifiedAt) : 'Không rõ';
+  const diskUsedPercent = typeof diskInfo.usedPercent === 'number' ? Math.max(0, Math.min(100, diskInfo.usedPercent)) : null;
+  const diskUsedLabel = diskInfo.usedLabel || formatBytes(diskInfo.usedBytes);
+  const diskFreeLabel = diskInfo.freeLabel || formatBytes(diskInfo.freeBytes);
+  const diskTotalLabel = diskInfo.totalLabel || formatBytes(diskInfo.totalBytes);
+  const diskSeverity = severityStyles[storageHealth.severity] || severityStyles.info;
+
   return (
     <div className="space-y-4">
       <header className="flex flex-col gap-3 rounded border border-gray-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900">
@@ -505,6 +676,29 @@ export default function DataHealthDashboard({ currentUser }) {
         )}
       </header>
 
+      {infrastructureAlerts.length > 0 && (
+        <section className="grid gap-2 md:grid-cols-2">
+          {infrastructureAlerts.map((alert) => {
+            const tone = severityStyles[alert.severity] || severityStyles.info;
+            return (
+              <div
+                key={alert.key}
+                className={clsx(
+                  'rounded border p-3 text-xs shadow-sm transition dark:border-slate-700 dark:bg-slate-900',
+                  tone.container
+                )}
+              >
+                <div className="flex items-center gap-2 text-xs font-semibold">
+                  <span className={clsx('h-2.5 w-2.5 rounded-full', tone.dot)} />
+                  <span>{severityLabels[alert.severity] || 'Thông tin'}</span>
+                </div>
+                <p className="mt-1 leading-relaxed">{alert.message}</p>
+              </div>
+            );
+          })}
+        </section>
+      )}
+
       <section
         className={clsx(
           'flex flex-col gap-2 rounded border p-4 text-sm shadow-sm transition md:flex-row md:items-center md:justify-between',
@@ -523,6 +717,173 @@ export default function DataHealthDashboard({ currentUser }) {
           <div>{syncIndicator.relative}</div>
           <div>Trạng thái: {syncIndicator.statusText}</div>
           {operatorName ? <div>Người trực: {operatorName}</div> : null}
+        </div>
+      </section>
+
+      <section className="grid gap-4 lg:grid-cols-3">
+        <div className="rounded border border-gray-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+          <div className="flex items-center justify-between gap-2">
+            <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">Trạng thái sao lưu CSDL</h3>
+            <span className={clsx('rounded px-2 py-0.5 text-xs font-semibold', backupSeverity.badge)}>
+              {backupSeverityLabel}
+            </span>
+          </div>
+          <dl className="mt-3 space-y-2 text-xs text-gray-600 dark:text-gray-300">
+            <div className="flex items-center justify-between gap-3">
+              <dt className="font-medium">Lần thành công gần nhất</dt>
+              <dd className="text-right text-gray-700 dark:text-gray-100">{lastBackupAt}</dd>
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <dt className="font-medium">Thời gian tương đối</dt>
+              <dd className="text-right text-gray-700 dark:text-gray-100">{lastBackupRelative}</dd>
+            </div>
+            <div>
+              <dt className="font-medium">Đường dẫn lưu</dt>
+              <dd className="mt-1 truncate text-[11px] text-gray-700 dark:text-gray-200">
+                {backupSchedule.directory || '—'}
+              </dd>
+            </div>
+            <div>
+              <dt className="font-medium">Tệp gần nhất</dt>
+              <dd className="mt-1 truncate text-[11px] text-gray-700 dark:text-gray-200">{lastBackupFile}</dd>
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <dt className="font-medium">Lần chạy kế tiếp</dt>
+              <dd className="text-right text-gray-700 dark:text-gray-100">{nextBackupRun}</dd>
+            </div>
+            {lastFailureAt && (
+              <div>
+                <dt className="font-medium text-red-600 dark:text-red-300">Lỗi gần nhất</dt>
+                <dd className="mt-1 text-[11px] text-red-600 dark:text-red-300">
+                  {lastFailureAt}
+                  {lastFailureReason ? ` • ${lastFailureReason}` : ''}
+                </dd>
+              </div>
+            )}
+            {scheduleReasons.length > 0 && (
+              <div>
+                <dt className="font-medium">Ghi chú lịch</dt>
+                <dd className="mt-1 space-y-1 text-[11px]">
+                  {scheduleReasons.map((reason) => (
+                    <div key={reason}>• {translateBackupReason(reason) || reason}</div>
+                  ))}
+                </dd>
+              </div>
+            )}
+          </dl>
+          <div className="mt-3 rounded border border-gray-200 p-2 text-xs dark:border-slate-700 dark:bg-slate-800">
+            <div className="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+              Nhật ký gần đây
+            </div>
+            <div className="mt-2 space-y-2">
+              {(backupSummary.recent || []).slice(0, 4).map((entry) => {
+                const status = entry?.meta?.status || 'unknown';
+                const statusTone =
+                  status === 'success'
+                    ? severityStyles.good
+                    : status === 'failure'
+                    ? severityStyles.critical
+                    : severityStyles.info;
+                return (
+                  <div
+                    key={entry.ts || `${entry.action}_${entry.detail}`}
+                    className={clsx('rounded border px-2 py-1 text-[11px] leading-relaxed', statusTone.container)}
+                  >
+                    <div className="flex items-center justify-between gap-2 font-semibold">
+                      <span>{status === 'success' ? 'Thành công' : status === 'failure' ? 'Thất bại' : 'Khác'}</span>
+                      <span>{formatDate(entry.ts)}</span>
+                    </div>
+                    <div className="mt-1 text-[11px] opacity-80">{entry.detail || '—'}</div>
+                    {entry.meta?.reason && (
+                      <div className="mt-1 text-[11px] opacity-70">
+                        {status === 'failure'
+                          ? translateBackupFailure(entry.meta.reason)
+                          : translateBackupReason(entry.meta.reason)}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+              {(backupSummary.recent || []).length === 0 && (
+                <p className="text-[11px] text-gray-500 dark:text-gray-400">Chưa có nhật ký sao lưu.</p>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded border border-gray-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+          <div className="flex items-center justify-between gap-2">
+            <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">Dung lượng hệ thống</h3>
+            <span className={clsx('rounded px-2 py-0.5 text-xs font-semibold', diskSeverity.badge)}>
+              {severityLabels[storageHealth.severity] || 'Thông tin'}
+            </span>
+          </div>
+          <dl className="mt-3 space-y-2 text-xs text-gray-600 dark:text-gray-300">
+            <div>
+              <dt className="font-medium">Tệp CSDL</dt>
+              <dd className="mt-1 truncate text-[11px] text-gray-700 dark:text-gray-200">{databaseStorage.file || '—'}</dd>
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <dt className="font-medium">Dung lượng</dt>
+              <dd className="text-right text-gray-700 dark:text-gray-100">{databaseSizeLabel}</dd>
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <dt className="font-medium">Cập nhật file</dt>
+              <dd className="text-right text-gray-700 dark:text-gray-100">{databaseUpdatedAt}</dd>
+            </div>
+            {databaseStorage.warningCode === 'memory_db' && (
+              <div className="rounded border border-amber-200 bg-amber-50 p-2 text-[11px] text-amber-700 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-200">
+                Hệ thống đang chạy CSDL ở chế độ bộ nhớ. Hãy cấu hình file thực tế để sao lưu được dữ liệu.
+              </div>
+            )}
+          </dl>
+          <div className="mt-4">
+            <div className="flex items-center justify-between text-[11px] text-gray-500 dark:text-gray-400">
+              <span>Đã dùng: {diskUsedLabel}</span>
+              <span>{diskUsedPercent !== null ? formatPercent(diskUsedPercent) : '—'}</span>
+            </div>
+            <div className="mt-2 h-2 w-full rounded-full bg-gray-200 dark:bg-slate-700">
+              <div
+                className="h-2 rounded-full bg-emerald-500 transition-all dark:bg-emerald-400"
+                style={{ width: `${diskUsedPercent !== null ? Math.min(100, Math.max(0, diskUsedPercent)) : 0}%` }}
+              />
+            </div>
+            <div className="mt-2 flex items-center justify-between text-[11px] text-gray-500 dark:text-gray-400">
+              <span>Còn trống: {diskFreeLabel}</span>
+              <span>Tổng: {diskTotalLabel}</span>
+            </div>
+            {diskInfo.error && (
+              <div className="mt-2 text-[11px] text-amber-700 dark:text-amber-200">
+                {diskInfo.warningCode === 'statfs_not_supported'
+                  ? 'Không thể thống kê dung lượng ổ đĩa trên nền tảng hiện tại.'
+                  : `Lỗi đọc dung lượng ổ đĩa: ${diskInfo.error}`}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="rounded border border-gray-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+          <div className="flex items-center justify-between gap-2">
+            <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">Trạng thái SQL Server</h3>
+            <span className={clsx('rounded px-2 py-0.5 text-xs font-semibold', (severityStyles[sqlHealthIndicator.severity] || severityStyles.info).badge)}>
+              {severityLabels[sqlHealthIndicator.severity] || 'Thông tin'}
+            </span>
+          </div>
+          <div className="mt-3 space-y-2 text-sm text-gray-600 dark:text-gray-300">
+            <div className="text-sm font-semibold text-gray-800 dark:text-gray-100">{sqlHealthIndicator.title}</div>
+            <p className="text-xs leading-relaxed">{sqlHealthIndicator.message}</p>
+            {sqlHealthIndicator.checkedAt && (
+              <div className="text-[11px] text-gray-500 dark:text-gray-400">
+                Kiểm tra gần nhất: {sqlHealthIndicator.checkedAt}
+              </div>
+            )}
+            {sqlHealth?.code && (
+              <div className="text-[11px] text-gray-500 dark:text-gray-400">Mã lỗi: {sqlHealth.code}</div>
+            )}
+            {sqlHealth?.number && (
+              <div className="text-[11px] text-gray-500 dark:text-gray-400">SQL Number: {sqlHealth.number}</div>
+            )}
+          </div>
         </div>
       </section>
 

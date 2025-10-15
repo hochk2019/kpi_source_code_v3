@@ -59,11 +59,11 @@
 - [x] Ho tro export, preview KPI theo rule moi (tu muc simulate o muc 4).
 
 ## 7. Suc khoe du lieu
-- [ ] An tab doi voi Nhan vien/Truong nhom; chi show Admin & Quan ly.
-- [ ] Hien thi trang thai backup gan nhat (thoi gian, duong dan).
-- [ ] Canh bao khi qua han backup hoac khi dung luong DB vuot nguong.
-- [ ] Lich backup dinh ky; log ket qua (thanh cong/that bai) trong nhat ky.
-- [ ] Kiem tra dinh ky ket noi SQL Server, dung luong database, dung luong o dia.
+- [x] An tab doi voi Nhan vien/Truong nhom; chi show Admin & Quan ly.
+- [x] Hien thi trang thai backup gan nhat (thoi gian, duong dan).
+- [x] Canh bao khi qua han backup hoac khi dung luong DB vuot nguong.
+- [x] Lich backup dinh ky; log ket qua (thanh cong/that bai) trong nhat ky.
+- [x] Kiem tra dinh ky ket noi SQL Server, dung luong database, dung luong o dia.
 
 ## 8. Tai khoan
 - [ ] Khi tao tai khoan moi: chon nhan vien tu du lieu KPI (auto-complete).

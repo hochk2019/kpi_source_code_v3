@@ -1,5 +1,6 @@
 import React, { Suspense, useEffect, useMemo, useState } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs.jsx';
+import { ADMIN_ROLE, MANAGER_ROLE, normalizeRoleKey } from '@/shared/accountRoles.js';
 
 const DataImporter = React.lazy(() => import('./DataImporter.jsx'));
 const RulesEditor = React.lazy(() => import('./RulesEditor.jsx'));
@@ -34,8 +35,14 @@ const KPICalculator = ({ auth, activeTab = 'reports', onTabChange }) => {
   const canViewAudit = !!permissions.auditView || canManageAccounts;
   const canUseAi = !!permissions.aiAssistUse || !!permissions.aiAssistManage;
 
+  const roleKey = normalizeRoleKey(effectiveAuth.role);
+  const canViewDataHealth = roleKey === MANAGER_ROLE || roleKey === ADMIN_ROLE;
+
   const allowedTabs = useMemo(() => {
-    const base = new Set(['mst', 'hq', 'import', 'teams', 'rules', 'adjustments', 'reports', 'health']);
+    const base = new Set(['mst', 'hq', 'import', 'teams', 'rules', 'adjustments', 'reports']);
+    if (canViewDataHealth) {
+      base.add('health');
+    }
     if (canUseAi) {
       base.add('ai');
     }
@@ -47,7 +54,7 @@ const KPICalculator = ({ auth, activeTab = 'reports', onTabChange }) => {
       base.add('export-audit');
     }
     return base;
-  }, [canManageAccounts, canUseAi, canViewAudit]);
+  }, [canManageAccounts, canUseAi, canViewAudit, canViewDataHealth]);
 
   const initialTab = useMemo(() => (allowedTabs.has(activeTab) ? activeTab : 'reports'), [activeTab, allowedTabs]);
   const [tabValue, setTabValue] = useState(initialTab);
@@ -103,9 +110,11 @@ const KPICalculator = ({ auth, activeTab = 'reports', onTabChange }) => {
           <TabsTrigger value="reports" data-tooltip="Xem và xuất báo cáo KPI tổng hợp">
             Báo cáo KPI
           </TabsTrigger>
-          <TabsTrigger value="health" data-tooltip="Theo dõi dữ liệu trùng, cảnh báo và trạng thái đồng bộ">
-            Sức khỏe dữ liệu
-          </TabsTrigger>
+          {canViewDataHealth && (
+            <TabsTrigger value="health" data-tooltip="Theo dõi dữ liệu trùng, cảnh báo và trạng thái đồng bộ">
+              Sức khỏe dữ liệu
+            </TabsTrigger>
+          )}
           {canUseAi && (
             <TabsTrigger value="ai" data-tooltip="Trợ lý AI nội bộ hỗ trợ KPI và tờ khai">
               Trợ lý AI
@@ -175,11 +184,13 @@ const KPICalculator = ({ auth, activeTab = 'reports', onTabChange }) => {
           </TabPanel>
         </TabsContent>
 
-        <TabsContent value="health">
-          <TabPanel>
-            <DataHealthDashboard currentUser={effectiveAuth} />
-          </TabPanel>
-        </TabsContent>
+        {canViewDataHealth && (
+          <TabsContent value="health">
+            <TabPanel>
+              <DataHealthDashboard currentUser={effectiveAuth} />
+            </TabPanel>
+          </TabsContent>
+        )}
 
         {canUseAi && (
           <TabsContent value="ai">

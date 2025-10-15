@@ -989,6 +989,53 @@ beforeEach(async () => {
   excelMock.__resetWorkbookCreateCount?.();
 });
 
+describe('Data health summary API', () => {
+  it('trả về trạng thái sao lưu và cảnh báo dung lượng', async () => {
+    const adminAgent = request.agent(app);
+    const loginRes = await adminAgent
+      .post('/api/auth/login')
+      .send({ username: 'admin', password: 'admin123' });
+    expect(loginRes.status).toBe(200);
+
+    const logs = [
+      {
+        ts: '2024-05-12T02:00:00.000Z',
+        actor: 'system',
+        action: 'db.backup',
+        detail: 'Sao lưu định kỳ',
+        meta: { status: 'success', file: 'C:/backups/storage-20240512.sqlite', bytes: 4096 },
+      },
+      {
+        ts: '2024-05-11T02:00:00.000Z',
+        actor: 'system',
+        action: 'db.backup',
+        detail: 'Sao lưu thất bại',
+        meta: { status: 'failure', reason: 'memory_db' },
+      },
+    ];
+    getDb()
+      .prepare('INSERT OR REPLACE INTO kv_store(key, value) VALUES(?, ?)')
+      .run('audit_logs_v1', JSON.stringify(logs));
+    getDb()
+      .prepare('INSERT OR REPLACE INTO kv_store(key, value) VALUES(?, ?)')
+      .run('db_backup_config_v1', JSON.stringify({ cron: '0 1 * * *', retentionCopies: 5 }));
+
+    const res = await adminAgent.get('/api/data-health/summary');
+    expect(res.status).toBe(200);
+    expect(res.body?.ok).toBe(true);
+
+    const storage = res.body.summary?.storage;
+    expect(storage).toBeTruthy();
+    expect(storage.backup?.health?.severity).toBeTruthy();
+    expect(Array.isArray(storage.backup?.recent)).toBe(true);
+    expect(storage.database?.mode).toBe('memory');
+    expect(Array.isArray(storage.health?.issues)).toBe(true);
+    expect(storage.health.issues.length).toBeGreaterThan(0);
+
+    expect(res.body.summary?.sqlServer).toHaveProperty('health');
+  });
+});
+
 describe('Backup summary API', () => {
   it('từ chối khi chưa đăng nhập', async () => {
     const res = await request(app).get('/api/admin/backups/summary');

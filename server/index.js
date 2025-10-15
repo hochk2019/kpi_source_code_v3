@@ -29,6 +29,7 @@ import {
   mergePermissions,
   isAdminRole,
 } from '../src/shared/accountRoles.js';
+import { translateBackupReason } from '../src/shared/backupMessages.js';
 import { recordSqlTimeout, getSqlTimeoutEvents, onSqlTimeout } from './sqlMonitor.js';
 import {
   pushNotification,
@@ -1127,6 +1128,261 @@ function formatNextRunHuman(isoValue) {
   } catch {
     return null;
   }
+}
+
+const SEVERITY_PRIORITY = Object.freeze({
+  good: 0,
+  info: 1,
+  warning: 2,
+  critical: 3,
+});
+
+function escalateSeverity(current, next) {
+  const currentRank = SEVERITY_PRIORITY[current] ?? 0;
+  const nextRank = SEVERITY_PRIORITY[next] ?? 0;
+  return nextRank > currentRank ? next : current;
+}
+
+function parseTimestamp(value) {
+  if (!value) {
+    return null;
+  }
+  try {
+    const ts = Date.parse(value);
+    return Number.isNaN(ts) ? null : ts;
+  } catch {
+    return null;
+  }
+}
+
+function formatBytes(value) {
+  const num = Number(value);
+  if (!Number.isFinite(num) || num < 0) {
+    return null;
+  }
+  if (num === 0) {
+    return '0 B';
+  }
+  const units = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
+  let size = num;
+  let unitIndex = 0;
+  while (size >= 1024 && unitIndex < units.length - 1) {
+    size /= 1024;
+    unitIndex += 1;
+  }
+  const digits = size >= 10 || unitIndex === 0 ? 0 : 1;
+  return `${size.toFixed(digits)} ${units[unitIndex]}`;
+}
+
+async function collectDatabaseStorageDetails() {
+  const databaseInfo = {
+    file: DB_FILE,
+    mode: DB_FILE === ':memory:' ? 'memory' : 'file',
+    sizeBytes: null,
+    sizeLabel: null,
+    lastModifiedAt: null,
+    error: null,
+    warningCode: null,
+  };
+
+  const diskInfo = {
+    path: DB_FILE === ':memory:' ? null : path.dirname(DB_FILE),
+    totalBytes: null,
+    freeBytes: null,
+    usedBytes: null,
+    usedPercent: null,
+    freePercent: null,
+    totalLabel: null,
+    freeLabel: null,
+    usedLabel: null,
+    error: null,
+    warningCode: null,
+  };
+
+  if (databaseInfo.mode === 'memory') {
+    databaseInfo.error = 'CSDL đang chạy ở chế độ bộ nhớ (:memory:).';
+    databaseInfo.warningCode = 'memory_db';
+    return { database: databaseInfo, disk: diskInfo };
+  }
+
+  try {
+    const stats = await fs.stat(DB_FILE);
+    databaseInfo.sizeBytes = stats.size;
+    databaseInfo.sizeLabel = formatBytes(stats.size);
+    databaseInfo.lastModifiedAt = stats.mtime ? new Date(stats.mtime).toISOString() : null;
+  } catch (err) {
+    databaseInfo.error = err?.message || String(err);
+  }
+
+  if (diskInfo.path) {
+    if (typeof fs.statfs === 'function') {
+      try {
+        const fsStats = await fs.statfs(diskInfo.path);
+        const blockSize = Number(fsStats?.bsize || fsStats?.frsize || 0);
+        const totalBlocks = Number(fsStats?.blocks || 0);
+        const freeBlocks = Number(fsStats?.bavail ?? fsStats?.bfree ?? 0);
+        if (Number.isFinite(totalBlocks) && totalBlocks > 0 && Number.isFinite(blockSize) && blockSize > 0) {
+          const totalBytes = totalBlocks * blockSize;
+          const freeBytes = freeBlocks * blockSize;
+          const usedBytes = Math.max(0, totalBytes - freeBytes);
+          const usedPercent = totalBytes > 0 ? (usedBytes / totalBytes) * 100 : null;
+          const freePercent = totalBytes > 0 ? (freeBytes / totalBytes) * 100 : null;
+          diskInfo.totalBytes = totalBytes;
+          diskInfo.freeBytes = freeBytes;
+          diskInfo.usedBytes = usedBytes;
+          diskInfo.usedPercent = Number.isFinite(usedPercent) ? usedPercent : null;
+          diskInfo.freePercent = Number.isFinite(freePercent) ? freePercent : null;
+          diskInfo.totalLabel = formatBytes(totalBytes);
+          diskInfo.freeLabel = formatBytes(freeBytes);
+          diskInfo.usedLabel = formatBytes(usedBytes);
+        }
+      } catch (err) {
+        diskInfo.error = err?.message || String(err);
+        diskInfo.warningCode = 'statfs_error';
+      }
+    } else {
+      diskInfo.error = 'statfs_not_supported';
+      diskInfo.warningCode = 'statfs_not_supported';
+    }
+  }
+
+  return { database: databaseInfo, disk: diskInfo };
+}
+
+function evaluateBackupHealth(summary) {
+  const schedule = summary?.schedule || {};
+  const issues = [];
+  let severity = 'good';
+  const now = Date.now();
+  const lastSuccessTs = parseTimestamp(summary?.lastSuccess?.ts);
+  const lastFailureTs = parseTimestamp(summary?.lastFailure?.ts);
+  const minutesSinceSuccess = lastSuccessTs !== null ? Math.floor((now - lastSuccessTs) / 60000) : null;
+
+  if (!lastSuccessTs) {
+    severity = 'critical';
+    issues.push({
+      severity: 'critical',
+      code: 'backup_missing',
+      message: 'Chưa ghi nhận bản sao lưu thành công nào. Vui lòng kiểm tra tác vụ sao lưu.',
+    });
+  } else if (minutesSinceSuccess >= 72 * 60) {
+    severity = 'critical';
+    const hours = Math.floor(minutesSinceSuccess / 60);
+    issues.push({
+      severity: 'critical',
+      code: 'backup_overdue',
+      message: `Lần sao lưu gần nhất đã cách đây ${hours} giờ. Nên chạy lại sao lưu ngay lập tức.`,
+    });
+  } else if (minutesSinceSuccess >= 36 * 60) {
+    severity = 'warning';
+    const hours = Math.floor(minutesSinceSuccess / 60);
+    issues.push({
+      severity: 'warning',
+      code: 'backup_stale',
+      message: `Đã ${hours} giờ kể từ bản sao lưu gần nhất. Nên kiểm tra lịch sao lưu tự động.`,
+    });
+  }
+
+  if (schedule.active === false) {
+    severity = escalateSeverity(severity, 'warning');
+    issues.push({
+      severity: 'warning',
+      code: 'schedule_inactive',
+      message: 'Lịch sao lưu đang tắt, cần bật lại để đảm bảo an toàn dữ liệu.',
+    });
+  }
+
+  if (Array.isArray(schedule.reasons)) {
+    for (const reason of schedule.reasons) {
+      const description = translateBackupReason(reason);
+      if (!description) continue;
+      const level = reason === 'schedule_error' ? 'critical' : 'warning';
+      severity = escalateSeverity(severity, level);
+      issues.push({ severity: level, code: `schedule_reason_${reason}`, message: description });
+    }
+  }
+
+  if (lastFailureTs && (!lastSuccessTs || lastFailureTs > lastSuccessTs)) {
+    const failureLabel = new Date(lastFailureTs).toLocaleString('vi-VN', { hour12: false });
+    severity = escalateSeverity(severity, 'warning');
+    issues.push({
+      severity: 'warning',
+      code: 'backup_failure_recent',
+      message: `Có lỗi sao lưu gần nhất lúc ${failureLabel}.`,
+    });
+  }
+
+  return {
+    severity,
+    issues,
+    minutesSinceLastSuccess: minutesSinceSuccess,
+    lastSuccessAt: lastSuccessTs ? new Date(lastSuccessTs).toISOString() : null,
+    lastFailureAt: lastFailureTs ? new Date(lastFailureTs).toISOString() : null,
+  };
+}
+
+function evaluateDiskHealth(storage) {
+  const issues = [];
+  let severity = 'good';
+  const databaseInfo = storage?.database || {};
+  const diskInfo = storage?.disk || {};
+
+  if (databaseInfo.warningCode === 'memory_db') {
+    severity = escalateSeverity(severity, 'warning');
+    issues.push({
+      severity: 'warning',
+      code: 'database_memory_mode',
+      message: 'CSDL đang chạy ở chế độ :memory:, hãy cấu hình file .sqlite để có thể sao lưu.',
+    });
+  } else if (databaseInfo.error) {
+    severity = escalateSeverity(severity, 'warning');
+    issues.push({
+      severity: 'warning',
+      code: 'database_stat_error',
+      message: `Không thể đọc thông tin file CSDL: ${databaseInfo.error}`,
+    });
+  }
+
+  if (diskInfo.error) {
+    const level = diskInfo.warningCode === 'statfs_not_supported' ? 'info' : 'warning';
+    severity = escalateSeverity(severity, level);
+    const message =
+      diskInfo.warningCode === 'statfs_not_supported'
+        ? 'Không thể xác định dung lượng ổ đĩa trên hệ điều hành hiện tại.'
+        : `Không thể lấy thông tin dung lượng ổ đĩa: ${diskInfo.error}`;
+    issues.push({ severity: level, code: diskInfo.warningCode || 'disk_stat_error', message });
+  }
+
+  if (typeof diskInfo.usedPercent === 'number') {
+    if (diskInfo.usedPercent >= 95) {
+      severity = escalateSeverity(severity, 'critical');
+      issues.push({
+        severity: 'critical',
+        code: 'disk_usage_critical',
+        message: `Ổ đĩa chứa CSDL đã dùng ${diskInfo.usedPercent.toFixed(1)}% dung lượng.`,
+      });
+    } else if (diskInfo.usedPercent >= 85) {
+      severity = escalateSeverity(severity, 'warning');
+      issues.push({
+        severity: 'warning',
+        code: 'disk_usage_high',
+        message: `Ổ đĩa chứa CSDL đã dùng ${diskInfo.usedPercent.toFixed(1)}% dung lượng.`,
+      });
+    }
+  }
+
+  if (typeof diskInfo.freeBytes === 'number' && diskInfo.freeBytes > 0) {
+    if (diskInfo.freeBytes < 2 * 1024 * 1024 * 1024) {
+      severity = escalateSeverity(severity, 'warning');
+      issues.push({
+        severity: 'warning',
+        code: 'disk_free_low',
+        message: `Dung lượng trống chỉ còn ${formatBytes(diskInfo.freeBytes)}.`,
+      });
+    }
+  }
+
+  return { severity, issues };
 }
 
 function buildBackupSummary({ limit = 10 } = {}) {
@@ -6099,7 +6355,7 @@ function evaluateDuplicatePolicies({
   };
 }
 
-function buildDataHealthSummary() {
+async function buildDataHealthSummary() {
   const rows = getDeclRows();
   const policyConfig = getDuplicatePolicyConfig();
   const policyState = getDuplicatePolicyState();
@@ -6119,6 +6375,27 @@ function buildDataHealthSummary() {
   const alertPayload = buildAlertPayload();
   const ecusConfig = getEcusConfig();
   const sqlTimeouts = getSqlTimeoutEvents().slice(-10).reverse();
+  const [storageDetails, sqlHealth] = await Promise.all([
+    collectDatabaseStorageDetails(),
+    checkSqlServerHealth().catch((error) => ({
+      ok: false,
+      state: 'error',
+      message: error?.message || 'Không thể kiểm tra SQL Server',
+    })),
+  ]);
+  const backupSummary = buildBackupSummary({ limit: 6 });
+  const backupHealth = evaluateBackupHealth(backupSummary);
+  const diskHealth = evaluateDiskHealth(storageDetails);
+  const overallStorageSeverity = escalateSeverity(backupHealth.severity, diskHealth.severity);
+  const storage = {
+    database: storageDetails.database,
+    disk: storageDetails.disk,
+    backup: { ...backupSummary, health: backupHealth },
+    health: {
+      severity: overallStorageSeverity,
+      issues: [...backupHealth.issues, ...diskHealth.issues],
+    },
+  };
   const notifications = listNotifications({ limit: 20 });
   const lockedSourcesList = Object.entries(effectiveState.lockedSources || {}).map(([source, meta]) => ({
     source,
@@ -6166,7 +6443,9 @@ function buildDataHealthSummary() {
     },
     sqlServer: {
       timeoutEvents: sqlTimeouts,
+      health: sqlHealth,
     },
+    storage,
     notifications,
   };
 }
@@ -8762,9 +9041,9 @@ app.delete('/api/filter-presets/:presetId', (req, res) => {
   }
 });
 
-app.get('/api/data-health/summary', (req, res) => {
+app.get('/api/data-health/summary', async (req, res) => {
   try {
-    const summary = buildDataHealthSummary();
+    const summary = await buildDataHealthSummary();
     res.json({ ok: true, summary });
   } catch (err) {
     console.error('Không thể xây dựng báo cáo sức khỏe dữ liệu', err);
