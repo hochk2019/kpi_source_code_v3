@@ -11,7 +11,7 @@
 - [x] Ghi nhat ky chinh sua (truoc/sau, nguoi sua, thoi gian) va cho phep thu gon/mo rong theo dong.
 - [x] Cho phep admin cau hinh danh sach cot (hien/an), ap dung toan he thong.
 - [x] An tuy chon "Ghi de toan bo du lieu" voi tai khoan khong phai admin; them popup canh bao khi admin kich hoat.
-- [ ] Ghi log import chi tiet (file, dong loi, doanh nghiep moi, so dong insert/update/skip).
+- [x] Ghi log import chi tiet (file, dong loi, doanh nghiep moi, so dong insert/update/skip).
 - [ ] Them buoc preview/validate truoc khi commit vao CSDL (hien cac dong loi, dong se chen moi).
 - [ ] Ho tro quick search, luu bo loc ua thich (theo MST, ten cong ty, trang thai).
 - [ ] Freeze cot quan trong (so to khai, MST, ngay) va tuy chon view bang/card.

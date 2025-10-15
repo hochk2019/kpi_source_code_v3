@@ -1639,7 +1639,9 @@ function extractEffectiveDateFromDeclRow(row) {
 
 function ensureMSTEntriesForDeclRows(declRows, { actor = 'system' } = {}) {
   const list = Array.isArray(declRows) ? declRows : [];
-  if (!list.length) return;
+  if (!list.length) {
+    return { additions: [], total: 0 };
+  }
 
   const actorName = normalizeStr(actor) || 'system';
   const existingRows = getMSTMap();
@@ -1667,7 +1669,9 @@ function ensureMSTEntriesForDeclRows(declRows, { actor = 'system' } = {}) {
     seen.add(mst);
   }
 
-  if (!additions.length) return;
+  if (!additions.length) {
+    return { additions: [], total: 0 };
+  }
 
   const merged = existingRows.concat(additions);
   const sample = additions.slice(0, 3).map((item) => item.mst).join(', ');
@@ -1678,6 +1682,14 @@ function ensureMSTEntriesForDeclRows(declRows, { actor = 'system' } = {}) {
     actor: actorName,
     detail: `Tự động thêm ${additions.length} MST mới từ dữ liệu tờ khai${detailSample}`,
   });
+
+  const loggedAdditions = additions.map((item) => ({
+    mst: item.mst,
+    company: item.company,
+    effective_from: item.effective_from,
+  }));
+
+  return { additions: loggedAdditions, total: additions.length };
 }
 
 function persistAndAnnotateDeclRows(rows) {
@@ -1812,36 +1824,233 @@ function applyPartialUpdatesToRow(row, updates, { sanitized = false } = {}) {
  * - overwrite=true: ghi đè toàn bộ danh sách hiện tại.
  * - overwrite=false: hợp nhất theo khoá "so_tk + '_' + (nhanh || '')".
  */
+function isEqualDeclValue(a, b) {
+  if (a === b) return true;
+  if (Array.isArray(a) && Array.isArray(b)) {
+    if (a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i += 1) {
+      if (!isEqualDeclValue(a[i], b[i])) {
+        return false;
+      }
+    }
+    return true;
+  }
+  if (a && b && typeof a === "object" && typeof b === "object") {
+    const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
+    for (const key of keys) {
+      if (!isEqualDeclValue(a[key], b[key])) {
+        return false;
+      }
+    }
+    return true;
+  }
+  if (a === null || a === undefined) {
+    return b === null || b === undefined;
+  }
+  if (b === null || b === undefined) {
+    return false;
+  }
+  return Object.is(a, b);
+}
+
+function mergeDeclRowWithSummary(existing, incoming) {
+  if (!existing) {
+    return {
+      row: incoming,
+      changed: true,
+      changedFields: Object.keys(incoming || {}),
+      locked: false,
+    };
+  }
+  if (existing?.reviewed && incoming?.__forceReviewedOverride !== true) {
+    return { row: existing, changed: false, changedFields: [], locked: true };
+  }
+  const merged = mergeDeclarationRowClient(existing, incoming);
+  const keys = new Set([...Object.keys(existing || {}), ...Object.keys(merged || {})]);
+  const changedFields = [];
+  for (const field of keys) {
+    if (!isEqualDeclValue(existing?.[field], merged?.[field])) {
+      changedFields.push(field);
+    }
+  }
+  return { row: merged, changed: changedFields.length > 0, changedFields, locked: false };
+}
+
+function buildImportLogEntry(row, changedFields = []) {
+  if (!row || typeof row !== "object") return null;
+  const so_tk = normalizeDeclarationNumber(row.so_tk ?? row.so_tk_full ?? "");
+  if (!so_tk) return null;
+  const full = (row.so_tk_full ?? row.so_tk ?? "").toString();
+  const nhanh = normalizeStr(row.nhanh ?? row.branch ?? "");
+  const entry = {
+    so_tk,
+    so_tk_full: full || undefined,
+    nhanh: nhanh || undefined,
+  };
+  if (Array.isArray(changedFields) && changedFields.length) {
+    const unique = Array.from(
+      new Set(
+        changedFields
+          .map((field) => (field == null ? "" : String(field).trim()))
+          .filter(Boolean)
+      )
+    );
+    if (unique.length) {
+      entry.fields = unique;
+    }
+  }
+  return entry;
+}
+
+function normalizeImportErrorRow(row, reason = "unknown") {
+  if (!row || typeof row !== "object") {
+    return { reason };
+  }
+  const so_tk = normalizeDeclarationNumber(row.so_tk ?? row.so_tk_full ?? "");
+  const nhanh = normalizeStr(row.nhanh ?? row.branch ?? "");
+  return {
+    reason,
+    so_tk,
+    nhanh,
+  };
+}
+
 export function saveDeclRows(newRows, { overwrite = false, actor = "system", detail = "" } = {}) {
   const incoming = Array.isArray(newRows) ? newRows : [];
   const normalizedIncoming = normalizeDeclRows(incoming);
+  const actorName = normalizeStr(actor) || "system";
+  const currentRows = getDeclRowsRaw();
 
   if (overwrite) {
     const stored = persistAndAnnotateDeclRows(normalizedIncoming);
     pushAuditLog({
-      actor,
+      actor: actorName,
       action: "decl.overwrite",
       detail: detail || `Ghi đè ${stored.length} tờ khai`,
     });
-    ensureMSTEntriesForDeclRows(normalizedIncoming, { actor });
-    return stored.length;
+    const mstSummary = ensureMSTEntriesForDeclRows(normalizedIncoming, { actor: actorName }) || {
+      additions: [],
+      total: 0,
+    };
+    return {
+      mode: "overwrite",
+      totalBefore: currentRows.length,
+      totalAfter: stored.length,
+      totalStored: stored.length,
+      totalIncoming: normalizedIncoming.length,
+      inserted: stored.length,
+      updated: 0,
+      skipped: 0,
+      locked: 0,
+      invalid: 0,
+      insertedDeclarations: normalizedIncoming.map((row) => buildImportLogEntry(row)).filter(Boolean),
+      updatedDeclarations: [],
+      lockedDeclarations: [],
+      errors: [],
+      newBusinessCount: mstSummary.total || 0,
+      newBusinesses: mstSummary.additions || [],
+    };
   }
 
-  const current = getDeclRowsRaw();
-  const combined = Array.isArray(current)
-    ? current.concat(normalizedIncoming)
-    : normalizedIncoming;
-  const stored = persistAndAnnotateDeclRows(combined);
+  const fallbackRows = [];
+  const currentMap = new Map();
+  for (const row of Array.isArray(currentRows) ? currentRows : []) {
+    if (!row || typeof row !== "object") continue;
+    const key = getDeclarationKey(row);
+    if (!key) {
+      fallbackRows.push(row);
+      continue;
+    }
+    if (!currentMap.has(key)) {
+      currentMap.set(key, row);
+    }
+  }
+
+  let inserted = 0;
+  let updated = 0;
+  let skipped = 0;
+  let locked = 0;
+  const insertedDeclarations = [];
+  const updatedDeclarations = [];
+  const lockedDeclarations = [];
+  const errorEntries = [];
+
+  for (const row of normalizedIncoming) {
+    const key = getDeclarationKey(row);
+    if (!key) {
+      errorEntries.push(normalizeImportErrorRow(row, "missing-key"));
+      continue;
+    }
+    const existing = currentMap.get(key);
+    if (!existing) {
+      currentMap.set(key, row);
+      inserted += 1;
+      const entry = buildImportLogEntry(row);
+      if (entry) {
+        insertedDeclarations.push(entry);
+      }
+      continue;
+    }
+
+    const { row: mergedRow, changed, changedFields, locked: isLocked } = mergeDeclRowWithSummary(existing, row);
+    if (isLocked) {
+      locked += 1;
+      const entry = buildImportLogEntry(existing);
+      if (entry) {
+        lockedDeclarations.push(entry);
+      }
+      continue;
+    }
+
+    currentMap.set(key, mergedRow);
+    if (changed) {
+      updated += 1;
+      const entry = buildImportLogEntry(mergedRow, changedFields);
+      if (entry) {
+        updatedDeclarations.push(entry);
+      }
+    } else {
+      skipped += 1;
+    }
+  }
+
+  const mergedRows = fallbackRows.concat(Array.from(currentMap.values()));
+  const stored = persistAndAnnotateDeclRows(mergedRows);
+
+  const mstSummary = ensureMSTEntriesForDeclRows(normalizedIncoming, { actor: actorName }) || {
+    additions: [],
+    total: 0,
+  };
+
+  const skipLabel = locked > 0 ? `${skipped.toLocaleString("vi-VN")} bỏ qua (khóa ${locked.toLocaleString("vi-VN")})` : `${skipped.toLocaleString("vi-VN")} bỏ qua`;
+  const auditDetail = detail && detail.trim()
+    ? detail
+    : `Hợp nhất ${normalizedIncoming.length.toLocaleString("vi-VN")} tờ khai (+${inserted.toLocaleString("vi-VN")} / cập nhật ${updated.toLocaleString("vi-VN")} / ${skipLabel} -> tổng ${stored.length.toLocaleString("vi-VN")})`;
 
   pushAuditLog({
-    actor,
+    actor: actorName,
     action: "decl.merge",
-    detail: detail || `Hợp nhất ${normalizedIncoming.length} tờ khai (tổng ${stored.length})`,
+    detail: auditDetail,
   });
 
-  ensureMSTEntriesForDeclRows(normalizedIncoming, { actor });
-
-  return stored.length;
+  return {
+    mode: "merge",
+    totalBefore: currentRows.length,
+    totalAfter: stored.length,
+    totalStored: stored.length,
+    totalIncoming: normalizedIncoming.length,
+    inserted,
+    updated,
+    skipped,
+    locked,
+    invalid: errorEntries.length,
+    insertedDeclarations,
+    updatedDeclarations,
+    lockedDeclarations,
+    errors: errorEntries,
+    newBusinessCount: mstSummary.total || 0,
+    newBusinesses: mstSummary.additions || [],
+  };
 }
 
 export function updateDeclRowFields(rowKey, updates, { actor = "system", detail = "" } = {}) {

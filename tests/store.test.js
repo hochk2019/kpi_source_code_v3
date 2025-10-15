@@ -59,9 +59,11 @@ describe('saveDeclRows', () => {
     ];
 
     saveDeclRows(initial, { overwrite: true });
-    const total = saveDeclRows(incoming, { overwrite: false });
+    const summary = saveDeclRows(incoming, { overwrite: false });
 
-    expect(total).toBe(2);
+    expect(summary.totalStored).toBe(2);
+    expect(summary.inserted).toBe(1);
+    expect(summary.updated).toBe(1);
     const stored = getDeclRows();
     expect(stored).toEqual([
       expect.objectContaining({
@@ -92,9 +94,11 @@ describe('saveDeclRows', () => {
     ];
 
     saveDeclRows(first, { overwrite: true });
-    const total = saveDeclRows(second, { overwrite: false });
+    const summary = saveDeclRows(second, { overwrite: false });
 
-    expect(total).toBe(2);
+    expect(summary.totalStored).toBe(2);
+    expect(summary.inserted).toBe(1);
+    expect(summary.updated).toBe(0);
     const stored = getDeclRows();
     const fullNumbers = stored.map((row) => row.so_tk_full).sort();
     expect(fullNumbers).toEqual(['107562846160', '107562846161']);

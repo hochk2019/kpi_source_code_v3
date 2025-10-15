@@ -3800,13 +3800,48 @@ const selectedReviewedCount = useMemo(() => {
       : rawRows;
 
     const effectiveOverwrite = canOverwriteData ? overwrite : false;
-    const count = saveDeclRows(rows, {
+    const result = saveDeclRows(rows, {
       overwrite: effectiveOverwrite,
       actor,
       detail: `Import từ ${selectedFile || "file XLSX"}`,
     });
-    pushImportLog(`Import XLSX: ${rawRows.length} dòng → sau hợp nhất còn ${count}`);
-    alert("Import xong!");
+    const insertedLabel = result.inserted.toLocaleString("vi-VN");
+    const updatedLabel = result.updated.toLocaleString("vi-VN");
+    const skippedLabel = result.skipped.toLocaleString("vi-VN");
+    const lockedLabel = result.locked.toLocaleString("vi-VN");
+    const totalLabel = result.totalStored.toLocaleString("vi-VN");
+    const skippedSummary =
+      result.locked > 0
+        ? `bỏ qua ${skippedLabel} (khóa ${lockedLabel})`
+        : `bỏ qua ${skippedLabel}`;
+    const message = `Import ${selectedFile || "file XLSX"}: +${insertedLabel} / cập nhật ${updatedLabel} / ${skippedSummary} → tổng ${totalLabel}`;
+    pushImportLog({
+      kind: "manual-import",
+      actor,
+      message,
+      summary: {
+        file: selectedFile || "",
+        totalIncoming: result.totalIncoming,
+        inserted: result.inserted,
+        updated: result.updated,
+        skipped: result.skipped,
+        locked: result.locked,
+        invalid: result.invalid,
+        totalStored: result.totalStored,
+        newBusinesses: result.newBusinessCount,
+      },
+      meta: {
+        file: selectedFile || "",
+        errors: Array.isArray(result.errors) ? result.errors : [],
+        newBusinesses: Array.isArray(result.newBusinesses)
+          ? result.newBusinesses.slice(0, 50)
+          : [],
+      },
+      insertedDeclarations: result.insertedDeclarations,
+      updatedDeclarations: result.updatedDeclarations,
+      lockedDeclarations: result.lockedDeclarations,
+    });
+    alert(`Import xong: thêm ${insertedLabel}, cập nhật ${updatedLabel}, ${skippedSummary}.`);
     if (fileRef.current) fileRef.current.value = "";
     loadSavedRows({ bypassConfirm: true });
     fetchAlerts();
@@ -3825,12 +3860,12 @@ const selectedReviewedCount = useMemo(() => {
       alert("Không có dữ liệu để lưu");
       return;
     }
-    const count = saveDeclRows(rawRows, {
+    const result = saveDeclRows(rawRows, {
       overwrite: true,
       actor,
       detail: "Lưu chỉnh sửa tờ khai thủ công",
     });
-    alert(`Đã lưu ${count} bản ghi (ghi đè).`);
+    alert(`Đã lưu ${result.totalStored.toLocaleString("vi-VN")} bản ghi (ghi đè).`);
     setHasUnsaved(false);
     loadSavedRows({ bypassConfirm: true });
     fetchAlerts();
