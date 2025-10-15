@@ -1,12 +1,12 @@
 # Ke hoach nang cap KPI v4.0
 
 ## 1. Import Data
-- [ ] Tu dong ghi nhan doanh nghiep/MST moi vao tab `Gan MST` (danh dau trang thai "chua gan nhan vien").
-- [ ] Mo quyen chinh sua cho tai khoan Nhan vien tren tat ca to khai thuoc team minh; chan thao tac tren team khac.
-- [ ] Ho tro nhan tieu de cot `Ngay DK` (ngoai `date`) khi import Excel.
-- [ ] Thay truong nhap text bang selector co goi y:
-  - [ ] Chon nhan vien -> tu dong dien to doi.
-  - [ ] Chon to doi -> chi hien nhan vien thuoc to do.
+- [x] Tu dong ghi nhan doanh nghiep/MST moi vao tab `Gan MST` (danh dau trang thai "chua gan nhan vien").
+- [x] Mo quyen chinh sua cho tai khoan Nhan vien tren tat ca to khai thuoc team minh; chan thao tac tren team khac.
+- [x] Ho tro nhan tieu de cot `Ngay DK` (ngoai `date`) khi import Excel.
+- [x] Thay truong nhap text bang selector co goi y:
+  - [x] Chon nhan vien -> tu dong dien to doi.
+  - [x] Chon to doi -> chi hien nhan vien thuoc to do.
 - [ ] Them nut `Cap nhat` cho tung dong da sua; chi ghi xuong storage cac truong changed.
 - [ ] Ghi nhat ky chinh sua (truoc/sau, nguoi sua, thoi gian) va cho phep thu gon/mo rong theo dong.
 - [ ] Cho phep admin cau hinh danh sach cot (hien/an), ap dung toan he thong.

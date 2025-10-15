@@ -30,7 +30,7 @@ const NAME_MAP = {
     "Sá»‘ tá» khai TM ",
     "Sá»‘ tá» khai xuáº¥t nháº­p kháº©u",
   ],nhanh: ["NhÃ¡nh", "Nhanh", "branch"],
-  date: ["date", "ngÃ y", "Ngay", "NgÃ y", "NgÃ y Ä‘Äƒng kÃ½", "Ngay dang ky"],
+  date: ["date", "ngày", "Ngay", "Ngày", "Ngày đăng ký", "Ngay dang ky", "Ngay DK", "Ngày ĐK", "Ngay ĐK"],
   ma_hq: ["MÃ£ HQ", "Ma HQ", "MÃ£ hq", "ma_hq"],
   loai_hinh: [
     "Loáº¡i hÃ¬nh",

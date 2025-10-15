@@ -71,6 +71,21 @@ describe('mapRow', () => {
     expect(mapped.num_items).toBe(9);
   });
 
+  it('nhận thêm tiêu đề Ngay DK khi import', () => {
+    const raw = {
+      'So TK': 'TK-ALIAS-02',
+      'Ngay DK': '09/09/2024',
+      'MST': '0102223334',
+      'Cong ty': 'Cong ty Ngay DK',
+      'Loai hinh': 'A12',
+    };
+
+    const mapped = mapRow(raw, { autoAssignStaff: false });
+
+    expect(mapped.date).toBe('2024-09-09');
+    expect(mapped.raw_date).toBe('09/09/2024');
+  });
+
   it('counts eligible license types while respecting excluded codes', () => {
     const raw = {
       'Số tờ khai': 'TK01',
