@@ -89,6 +89,6 @@
 - [x] Dong bo phong cach (font, mau, border, spacing) giua cac tab.
 - [x] Ho tro quick search va luu filter (Import Data, Gan MST, Bao cao).
 - [x] Hien badge trang thai to khai (moi import, cho gan, da ra soat, can xem lai).
-- [ ] Xem xet layout linh hoat (bang/luoi) voi che do freeze cot.
+- [x] Xem xet layout linh hoat (bang/luoi) voi che do freeze cot.
 - [ ] Toi uu tra cuu: go ky tu la loc (client-side) nhung ho tro server-side khi du lieu lon.
 

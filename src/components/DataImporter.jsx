@@ -61,6 +61,7 @@ import {
 } from "@/components/ui/dialog.jsx";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover.jsx";
 import { ScrollArea } from "@/components/ui/scroll-area.jsx";
+import { Switch } from "@/components/ui/switch.jsx";
 import { toast } from "@/shared/toast.js";
 import { Check, ChevronsUpDown, CircleX, Plus } from "lucide-react";
 
@@ -143,6 +144,11 @@ const VIEW_MODES = Object.freeze({
   TABLE: "table",
   CARD: "card",
 });
+const FREEZE_COLUMNS_STORAGE_KEY = "dataImporter:freezeColumns";
+const GRID_COLUMNS_STORAGE_KEY = "dataImporter:gridColumns";
+const CARD_GRID_COLUMN_OPTIONS = Object.freeze([1, 2, 3]);
+const DEFAULT_CARD_GRID_COLUMNS = 2;
+const CARD_GRID_MIN_WIDTH = 320;
 
 function normalizeComparableValue(value) {
   if (value === null || value === undefined) return "";
@@ -1501,6 +1507,7 @@ export default function DataImporter({
 }) {
   const rootRef = useRef(null);
   const fileRef = useRef(null);
+  const [containerWidth, setContainerWidth] = useState(0);
   const [rawRows, setRawRows] = useState([]);        // dữ liệu xem trước (đã map)
   const savedRowSnapshotRef = useRef(new Map());
   const [baselineVersion, setBaselineVersion] = useState(0);
@@ -1517,6 +1524,26 @@ export default function DataImporter({
     }
     const stored = window.localStorage?.getItem(VIEW_MODE_STORAGE_KEY);
     return stored === VIEW_MODES.CARD ? VIEW_MODES.CARD : VIEW_MODES.TABLE;
+  });
+  const [freezeColumnsEnabled, setFreezeColumnsEnabled] = useState(() => {
+    if (typeof window === "undefined") {
+      return true;
+    }
+    const stored = window.localStorage?.getItem(FREEZE_COLUMNS_STORAGE_KEY);
+    if (stored === "0") return false;
+    if (stored === "1") return true;
+    return true;
+  });
+  const [cardGridColumns, setCardGridColumns] = useState(() => {
+    if (typeof window === "undefined") {
+      return DEFAULT_CARD_GRID_COLUMNS;
+    }
+    const stored = window.localStorage?.getItem(GRID_COLUMNS_STORAGE_KEY);
+    const parsed = Number.parseInt(stored || "", 10);
+    if (CARD_GRID_COLUMN_OPTIONS.includes(parsed)) {
+      return parsed;
+    }
+    return DEFAULT_CARD_GRID_COLUMNS;
   });
   const {
     presets: savedPresets,
@@ -1576,6 +1603,69 @@ export default function DataImporter({
       console.warn("Không thể lưu chế độ hiển thị Import Data", error);
     }
   }, [viewMode]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    try {
+      window.localStorage?.setItem(
+        FREEZE_COLUMNS_STORAGE_KEY,
+        freezeColumnsEnabled ? "1" : "0"
+      );
+    } catch (error) {
+      console.warn("Không thể lưu tuỳ chọn giữ cột cố định", error);
+    }
+  }, [freezeColumnsEnabled]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    try {
+      window.localStorage?.setItem(
+        GRID_COLUMNS_STORAGE_KEY,
+        String(
+          CARD_GRID_COLUMN_OPTIONS.includes(cardGridColumns)
+            ? cardGridColumns
+            : DEFAULT_CARD_GRID_COLUMNS
+        )
+      );
+    } catch (error) {
+      console.warn("Không thể lưu số cột dạng thẻ", error);
+    }
+  }, [cardGridColumns]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    let frame = null;
+    const updateWidth = () => {
+      frame = window.requestAnimationFrame(() => {
+        const width = rootRef.current?.offsetWidth ?? window.innerWidth ?? 0;
+        setContainerWidth(width);
+      });
+    };
+    updateWidth();
+    let resizeObserver = null;
+    if (typeof ResizeObserver !== "undefined" && rootRef.current) {
+      resizeObserver = new ResizeObserver(() => updateWidth());
+      resizeObserver.observe(rootRef.current);
+    } else {
+      window.addEventListener("resize", updateWidth);
+    }
+    return () => {
+      if (frame) {
+        window.cancelAnimationFrame(frame);
+      }
+      if (resizeObserver) {
+        resizeObserver.disconnect();
+      } else {
+        window.removeEventListener("resize", updateWidth);
+      }
+    };
+  }, []);
 
   // Tuỳ chọn
   const [overwrite, setOverwrite] = useState(false);         // Ghi đè toàn bộ
@@ -4471,6 +4561,9 @@ const selectedReviewedCount = useMemo(() => {
   const historyEnabled = mode === "saved";
   const hiddenColumns = columnHiddenSet;
   const frozenOffsets = useMemo(() => {
+    if (!freezeColumnsEnabled) {
+      return { total: 0 };
+    }
     let offset = 0;
     const config = {};
     if (selectionEnabled) {
@@ -4490,9 +4583,12 @@ const selectedReviewedCount = useMemo(() => {
     }
     config.total = offset;
     return config;
-  }, [hiddenColumns, selectionEnabled]);
+  }, [freezeColumnsEnabled, hiddenColumns, selectionEnabled]);
   const getFrozenStyle = useCallback(
     (key) => {
+      if (!freezeColumnsEnabled) {
+        return undefined;
+      }
       const config = frozenOffsets[key];
       if (!config) {
         return undefined;
@@ -4504,7 +4600,7 @@ const selectedReviewedCount = useMemo(() => {
         maxWidth: `${config.width}px`,
       };
     },
-    [frozenOffsets]
+    [freezeColumnsEnabled, frozenOffsets]
   );
   const frozenHeaderClass =
     "sticky top-0 z-40 bg-gray-50 shadow-[4px_0_8px_rgba(148,163,184,0.18)] dark:bg-slate-900";
@@ -4516,7 +4612,28 @@ const selectedReviewedCount = useMemo(() => {
       return Math.max(0, total - FROZEN_COLUMN_WIDTHS.selection);
     }
     return total;
-  }, [frozenOffsets, selectionEnabled]);
+  }, [freezeColumnsEnabled, frozenOffsets, selectionEnabled]);
+  const effectiveCardColumns = useMemo(() => {
+    if (CARD_GRID_COLUMN_OPTIONS.includes(cardGridColumns)) {
+      return cardGridColumns;
+    }
+    return DEFAULT_CARD_GRID_COLUMNS;
+  }, [cardGridColumns]);
+  const appliedCardColumns = useMemo(() => {
+    if (containerWidth <= 0) {
+      return effectiveCardColumns;
+    }
+    const maxFit = Math.max(1, Math.floor(containerWidth / CARD_GRID_MIN_WIDTH));
+    return Math.max(1, Math.min(effectiveCardColumns, maxFit));
+  }, [containerWidth, effectiveCardColumns]);
+  const cardGridStyle = useMemo(() => {
+    if (appliedCardColumns <= 1) {
+      return { gridTemplateColumns: "repeat(1, minmax(0, 1fr))" };
+    }
+    return {
+      gridTemplateColumns: `repeat(${appliedCardColumns}, minmax(0, 1fr))`,
+    };
+  }, [appliedCardColumns]);
   const buildRowState = useCallback(
     (row, index = 0) => {
       const rowKey = keyOfRow(row);
@@ -7036,6 +7153,41 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
               Thẻ
             </button>
           </div>
+          {viewMode === VIEW_MODES.TABLE ? (
+            <label
+              className="flex items-center gap-2 rounded border border-gray-200 bg-white px-2 py-1 text-xs text-gray-600 shadow-sm dark:border-slate-600 dark:bg-slate-800 dark:text-gray-200"
+              htmlFor="data-importer-freeze-toggle"
+            >
+              <span>Giữ cột cố định</span>
+              <Switch
+                id="data-importer-freeze-toggle"
+                checked={freezeColumnsEnabled}
+                onCheckedChange={(value) => setFreezeColumnsEnabled(Boolean(value))}
+              />
+            </label>
+          ) : (
+            <label
+              className="flex items-center gap-2 rounded border border-gray-200 bg-white px-2 py-1 text-xs text-gray-600 shadow-sm dark:border-slate-600 dark:bg-slate-800 dark:text-gray-200"
+              title={
+                appliedCardColumns < effectiveCardColumns
+                  ? `Đang hiển thị tối đa ${appliedCardColumns} cột do giới hạn độ rộng`
+                  : undefined
+              }
+            >
+              <span>Bố cục thẻ</span>
+              <select
+                value={effectiveCardColumns}
+                onChange={(event) =>
+                  setCardGridColumns(Number.parseInt(event.target.value, 10) || DEFAULT_CARD_GRID_COLUMNS)
+                }
+                className="rounded border border-gray-300 px-2 py-1 text-xs dark:border-slate-600 dark:bg-slate-900 dark:text-gray-100"
+              >
+                {CARD_GRID_COLUMN_OPTIONS.map((option) => (
+                  <option key={option} value={option}>{`${option} cột`}</option>
+                ))}
+              </select>
+            </label>
+          )}
           <select
             value={pageSize}
             onChange={e => setPageSize(Number(e.target.value) || DEFAULT_PAGE_SIZE)}
@@ -7629,7 +7781,7 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
           </table>
         </div>
       ) : (
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        <div className="grid gap-3" style={cardGridStyle}>
           {pageRows.length > 0 ? (
             pageRows.map((r, i) => {
               const state = buildRowState(r, i);
