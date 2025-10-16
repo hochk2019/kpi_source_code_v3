@@ -1,10 +1,11 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useId, useMemo, useState } from "react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card.jsx";
 import { Button } from "@/components/ui/button.jsx";
 import { Input } from "@/components/ui/input.jsx";
 import { Badge } from "@/components/ui/badge.jsx";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip.jsx";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover.jsx";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs.jsx";
 import {
   Command,
   CommandEmpty,
@@ -25,10 +26,11 @@ import {
   deleteRule,
   exportRuleCollection,
   restoreRuleCollection,
+  restoreRuleVersion,
   getRulesHistory,
   fetchRulesHistoryFromServer,
 } from "@/lib/rules.js";
-import { getData } from "@/lib/store.js";
+import { getData, getHQAgencies, parseAgencyList } from "@/lib/store.js";
 import { cn } from "@/lib/utils.js";
 
 const EMPTY_GROUP_MAP = Object.freeze({});
@@ -134,6 +136,10 @@ function CodeMultiSelect({
   options = [],
   disabled = false,
   placeholder = "Chọn mã loại hình",
+  searchPlaceholder = "Tìm mã loại hình",
+  listHeading = "Mã loại hình đã đồng bộ",
+  emptyLabel = "Không tìm thấy mã phù hợp.",
+  addLabel = "Thêm mã",
 }) {
   const selected = useMemo(() => {
     if (!Array.isArray(value)) {
@@ -224,19 +230,19 @@ function CodeMultiSelect({
             <CommandInput
               value={search}
               onValueChange={setSearch}
-              placeholder="Tìm mã loại hình"
+              placeholder={searchPlaceholder}
             />
             <CommandList className="max-h-64 overflow-y-auto">
-              <CommandEmpty>Không tìm thấy mã phù hợp.</CommandEmpty>
+              <CommandEmpty>{emptyLabel}</CommandEmpty>
               {canAddCustom ? (
                 <CommandGroup heading="Thêm mới">
                   <CommandItem value={search} onSelect={handleAddCustom}>
                     <Plus className="mr-2 size-4" />
-                    Thêm mã "{search.trim().toUpperCase()}"
+                    {addLabel} "{search.trim().toUpperCase()}"
                   </CommandItem>
                 </CommandGroup>
               ) : null}
-              <CommandGroup heading="Mã loại hình đã đồng bộ">
+              <CommandGroup heading={listHeading}>
                 {normalizedOptions.map((item) => {
                   const isSelected = selected.includes(item.value);
                   return (
@@ -300,13 +306,98 @@ function CodeMultiSelect({
   );
 }
 
-function LicensePointTable({ config, onChange, disabled }) {
+function LicenseCodeInput({ value, onChange, options = [], placeholder = "Ví dụ: ZB02", disabled = false }) {
+  const listId = useId();
+  const normalizedOptions = useMemo(() => {
+    return options
+      .map((item) => ({
+        value: String(item?.value || "").trim().toUpperCase(),
+        count: Number.isFinite(item?.count) ? Number(item.count) : 0,
+      }))
+      .filter((item) => item.value);
+  }, [options]);
+
+  return (
+    <>
+      <Input
+        value={value || ""}
+        onChange={(event) => onChange?.(event.target.value.toUpperCase())}
+        placeholder={placeholder}
+        list={listId}
+        disabled={disabled}
+      />
+      <datalist id={listId}>
+        {normalizedOptions.map((item) => (
+          <option
+            key={item.value}
+            value={item.value}
+            label={
+              item.count
+                ? `${item.value} (${item.count.toLocaleString("vi-VN")})`
+                : item.value
+            }
+          />
+        ))}
+      </datalist>
+    </>
+  );
+}
+
+function AgencyInput({ value, onChange, options = [], placeholder = "Ví dụ: G&B", disabled = false }) {
+  const listId = useId();
+  const normalizedOptions = useMemo(() => {
+    const seen = new Set();
+    const list = [];
+    options.forEach((item) => {
+      const valueStr = String(item?.value || item).trim();
+      if (!valueStr || seen.has(valueStr)) return;
+      seen.add(valueStr);
+      list.push({
+        value: valueStr,
+        label: item?.label || valueStr,
+        hint: item?.hint || '',
+      });
+    });
+    return list;
+  }, [options]);
+
+  return (
+    <>
+      <Input
+        value={value || ""}
+        onChange={(event) => onChange?.(event.target.value)}
+        placeholder={placeholder}
+        list={listId}
+        disabled={disabled}
+      />
+      <datalist id={listId}>
+        {normalizedOptions.map((item) => (
+          <option
+            key={item.value}
+            value={item.value}
+            label={item.hint ? `${item.label} – ${item.hint}` : item.label}
+          />
+        ))}
+      </datalist>
+    </>
+  );
+}
+
+function LicensePointTable({ config, onChange, disabled, options = [] }) {
   const entries = Array.isArray(config?.codePoints) ? config.codePoints : [];
 
   const updateEntry = (index, key, value) => {
     const next = entries.map((entry, idx) =>
       idx === index
-        ? { ...entry, [key]: key === "code" ? value.toUpperCase() : value }
+        ? {
+            ...entry,
+            [key]:
+              key === "code"
+                ? String(value || "")
+                    .trim()
+                    .toUpperCase()
+                : value,
+          }
         : entry
     );
     onChange({ ...config, codePoints: next });
@@ -336,11 +427,12 @@ function LicensePointTable({ config, onChange, disabled }) {
           {entries.map((entry, index) => (
             <div key={`${entry.code}-${index}`} className="grid grid-cols-12 gap-2 items-center">
               <div className="col-span-6">
-                <Input
+                <LicenseCodeInput
                   value={entry.code || ""}
-                  disabled={disabled}
-                  onChange={(event) => updateEntry(index, "code", event.target.value)}
+                  onChange={(nextValue) => updateEntry(index, "code", nextValue)}
+                  options={options}
                   placeholder="Ví dụ: ZB02"
+                  disabled={disabled}
                 />
               </div>
               <div className="col-span-4">
@@ -370,7 +462,7 @@ function LicensePointTable({ config, onChange, disabled }) {
   );
 }
 
-function AgencyExcludeEditor({ agencies, onChange, disabled }) {
+function AgencyExcludeEditor({ agencies, onChange, disabled, agencyOptions = [], codeOptions = [] }) {
   const list = Array.isArray(agencies) ? agencies : [];
 
   const updateEntry = (index, key, value) => {
@@ -379,11 +471,15 @@ function AgencyExcludeEditor({ agencies, onChange, disabled }) {
         ? {
             ...entry,
             [key]: key === "codes"
-              ? value
-                  .split(",")
-                  .map((code) => code.trim().toUpperCase())
-                  .filter(Boolean)
-              : value.toUpperCase(),
+              ? Array.isArray(value)
+                ? value
+                    .map((code) => String(code || "").trim().toUpperCase())
+                    .filter(Boolean)
+                : String(value || "")
+                    .split(",")
+                    .map((code) => code.trim().toUpperCase())
+                    .filter(Boolean)
+              : String(value || "").trim(),
           }
         : entry
     );
@@ -412,20 +508,26 @@ function AgencyExcludeEditor({ agencies, onChange, disabled }) {
             <div key={`${entry.agency || "agency"}-${index}`} className="grid gap-2 md:grid-cols-6">
               <div className="md:col-span-2">
                 <label className="text-sm text-gray-600">Tên đại lý</label>
-                <Input
+                <AgencyInput
                   value={entry.agency || ""}
-                  disabled={disabled}
-                  onChange={(event) => updateEntry(index, "agency", event.target.value)}
+                  onChange={(val) => updateEntry(index, "agency", val)}
+                  options={agencyOptions}
                   placeholder="Ví dụ: G&B"
+                  disabled={disabled}
                 />
               </div>
               <div className="md:col-span-3">
-                <label className="text-sm text-gray-600">Mã giấy phép (phẩy)</label>
-                <Input
-                  value={(entry.codes || []).join(",")}
+                <label className="text-sm text-gray-600">Mã giấy phép áp dụng</label>
+                <CodeMultiSelect
+                  value={Array.isArray(entry.codes) ? entry.codes : []}
+                  onChange={(codes) => updateEntry(index, "codes", codes)}
+                  options={codeOptions}
                   disabled={disabled}
-                  onChange={(event) => updateEntry(index, "codes", event.target.value)}
-                  placeholder="Ví dụ: ZB02,ZB03"
+                  placeholder="Chọn mã giấy phép"
+                  searchPlaceholder="Tìm mã giấy phép"
+                  listHeading="Mã giấy phép đã ghi nhận"
+                  emptyLabel="Không tìm thấy mã giấy phép phù hợp."
+                  addLabel="Thêm mã giấy phép"
                 />
               </div>
               <div className="md:col-span-1 flex items-end">
@@ -461,7 +563,15 @@ export default function RulesEditor({ canEdit = true, currentUser = null }) {
   const [historyError, setHistoryError] = useState('');
   const [historyReloadToken, setHistoryReloadToken] = useState(0);
   const [expandedHistoryId, setExpandedHistoryId] = useState(null);
-  const [historyCollapsed, setHistoryCollapsed] = useState(false);
+  const [historyCollapsed, setHistoryCollapsed] = useState(true);
+  const [restoringId, setRestoringId] = useState('');
+  const [configTab, setConfigTab] = useState('groups');
+  const [simResult, setSimResult] = useState(null);
+  const [simError, setSimError] = useState('');
+  const [simRunning, setSimRunning] = useState(false);
+  const manualLicenseListId = useId();
+  const manualAgencyListId = useId();
+  const hqAgencies = useMemo(() => getHQAgencies(), []);
 
   useEffect(() => {
     const nextCollection = loadRuleSets();
@@ -515,6 +625,197 @@ export default function RulesEditor({ canEdit = true, currentUser = null }) {
   }, []);
 
   const data = useMemo(() => getData(), []);
+  const savedSnapshot = useMemo(() => {
+    try {
+      return rule?.id ? loadRules(rule.id) : null;
+    } catch (error) {
+      console.warn('Không thể đọc snapshot bộ quy tắc hiện tại', error);
+      return null;
+    }
+  }, [rule?.id, version]);
+
+  const licenseOptions = useMemo(() => {
+    const counter = new Map();
+    const pushCode = (value, weight = 1) => {
+      const code = String(value || '')
+        .trim()
+        .toUpperCase();
+      if (!code) return;
+      const current = counter.get(code) || { value: code, count: 0 };
+      current.count += weight;
+      counter.set(code, current);
+    };
+
+    const extractCodes = (source) => {
+      if (!source) return [];
+      if (Array.isArray(source)) {
+        return source;
+      }
+      if (typeof source === 'string') {
+        return source
+          .split(/[\s,;|]+/)
+          .map((item) => item.trim())
+          .filter(Boolean);
+      }
+      return [];
+    };
+
+    data.forEach((row) => {
+      const candidates = [
+        row?.licenseCodes,
+        row?.licenseSourceCodes,
+        row?.licenseExcludedCodes,
+        row?.licensesList,
+      ];
+      candidates.forEach((value) => {
+        extractCodes(value).forEach((code) => pushCode(code));
+      });
+    });
+
+    const licenseConfig = rule?.license || {};
+    (licenseConfig.codePoints || []).forEach((entry) => pushCode(entry?.code));
+    (licenseConfig.exclude?.codes || []).forEach((code) => pushCode(code));
+    (licenseConfig.exclude?.agencies || []).forEach((entry) => {
+      (entry?.codes || []).forEach((code) => pushCode(code));
+    });
+
+    return Array.from(counter.values()).sort((a, b) => {
+      if (b.count !== a.count) return b.count - a.count;
+      return a.value.localeCompare(b.value);
+    });
+  }, [data, rule?.license]);
+
+  const agencyOptions = useMemo(() => {
+    const counter = new Map();
+    const record = (value, hint = '') => {
+      const key = String(value || '').trim();
+      if (!key) return;
+      const current = counter.get(key) || { value: key, count: 0, hint: '' };
+      current.count += 1;
+      if (!current.hint && hint) {
+        current.hint = hint;
+      }
+      counter.set(key, current);
+    };
+
+    const recordList = (value, hint = '') => {
+      if (Array.isArray(value)) {
+        value.forEach((item) => record(item, hint));
+        return;
+      }
+      parseAgencyList(value).forEach((item) => record(item, hint));
+    };
+
+    data.forEach((row) => {
+      const hint = row?.company || row?.cong_ty || row?.customer || '';
+      recordList(row?.agency, hint);
+      recordList(row?.dai_ly, hint);
+      recordList(row?.hqAgency, hint);
+      recordList(row?.agent, hint);
+    });
+
+    hqAgencies.forEach((entry) => {
+      const hint = entry?.company || '';
+      record(entry?.agent, hint);
+      recordList(entry?.agents, hint);
+    });
+
+    (rule?.license?.exclude?.agencies || []).forEach((entry) => record(entry?.agency));
+
+    return Array.from(counter.values())
+      .map((item) => ({
+        value: item.value,
+        label: item.value,
+        hint: item.hint,
+        count: item.count,
+      }))
+      .sort((a, b) => {
+        if (b.count !== a.count) return b.count - a.count;
+        return a.value.localeCompare(b.value, 'vi', { sensitivity: 'base' });
+      });
+  }, [data, hqAgencies, rule?.license?.exclude?.agencies]);
+  const currentVersion = Number.isFinite(Number(rule?.version)) ? Number(rule.version) : null;
+  const savedVersion = Number.isFinite(Number(savedSnapshot?.version)) ? Number(savedSnapshot.version) : null;
+  const runSimulation = useCallback(() => {
+    if (!data.length) {
+      setSimError('Không có dữ liệu tờ khai để mô phỏng.');
+      setSimResult(null);
+      return;
+    }
+    setSimRunning(true);
+    setSimError('');
+    try {
+      const dataset = data;
+      const summarize = (targetRule) => {
+        if (!targetRule) return null;
+        let total = 0;
+        for (const row of dataset) {
+          total += computeKPI(row, targetRule);
+        }
+        const average = dataset.length ? total / dataset.length : 0;
+        return {
+          version: Number(targetRule.version) || 0,
+          total,
+          average,
+          count: dataset.length,
+          name: targetRule.name || targetRule.id || 'Bộ quy tắc',
+        };
+      };
+      const preview = summarize(rule);
+      const baseline = savedSnapshot ? summarize(savedSnapshot) : null;
+      setSimResult({
+        preview,
+        baseline,
+        difference:
+          baseline && preview ? preview.total - baseline.total : null,
+      });
+    } catch (error) {
+      console.error('Không thể mô phỏng KPI', error);
+      setSimError(error?.message || 'Không thể mô phỏng KPI với bộ quy tắc hiện tại.');
+      setSimResult(null);
+    } finally {
+      setSimRunning(false);
+    }
+  }, [data, rule, savedSnapshot]);
+
+  const handleRestoreEntry = useCallback(
+    (entry) => {
+      if (isReadOnly) {
+        alert('Bạn không có quyền khôi phục phiên bản quy tắc.');
+        return;
+      }
+      if (!entry?.snapshot) {
+        alert('Phiên bản lịch sử không hợp lệ.');
+        return;
+      }
+      const targetName = entry.snapshot.name || entry.snapshot.id || 'Bộ quy tắc';
+      const targetVersion = entry.snapshot.version || '—';
+      const confirmMessage = `Khôi phục phiên bản ${targetVersion} của ${targetName}?`;
+      if (!window.confirm(confirmMessage)) {
+        return;
+      }
+      try {
+        const identifier = entry.id || entry.snapshot.id || `${entry.updatedAt || ''}`;
+        setRestoringId(identifier);
+        const restored = restoreRuleVersion(entry.snapshot, {
+          actor,
+          setAsDefault: collection.activeId === (entry.snapshot.id || ''),
+        });
+        setVersion((prev) => prev + 1);
+        setApplyNow(false);
+        setDirty(false);
+        setHistoryEntries(getRulesHistory());
+        setExpandedHistoryId(null);
+        toast.success(`Đã khôi phục phiên bản ${restored.version} của ${restored.name}.`);
+      } catch (error) {
+        console.error(error);
+        alert(error?.message || 'Không thể khôi phục phiên bản đã chọn.');
+      } finally {
+        setRestoringId('');
+      }
+    },
+    [actor, collection.activeId, isReadOnly]
+  );
   const testList = useMemo(() => {
     return data.map((row, index) => {
       const soTkRaw = row?.so_tk ?? row?.soToKhai ?? row?.soTK ?? row?.so_to_khai ?? "";
@@ -938,6 +1239,19 @@ export default function RulesEditor({ canEdit = true, currentUser = null }) {
 
           <div className="space-y-3 rounded border p-3">
             <div className="font-semibold">Thông tin chung</div>
+            <div className="flex flex-wrap items-center gap-3 text-xs text-gray-500">
+              <span>
+                Phiên bản đang chỉnh: <strong>{currentVersion !== null ? currentVersion : '—'}</strong>
+              </span>
+              {savedVersion !== null && savedVersion !== currentVersion ? (
+                <span>
+                  Phiên bản đã lưu gần nhất: <strong>{savedVersion}</strong>
+                </span>
+              ) : null}
+              {rule?.updatedAt ? (
+                <span>Cập nhật gần nhất: {formatHistoryTimestamp(rule.updatedAt)}</span>
+              ) : null}
+            </div>
             <div className="grid gap-4 md:grid-cols-2">
               <div>
                 <label className="text-sm text-gray-600">Tên bộ quy tắc</label>
@@ -958,185 +1272,260 @@ export default function RulesEditor({ canEdit = true, currentUser = null }) {
             </div>
           </div>
 
-          <div className="grid gap-6 md:grid-cols-3">
-            {Object.entries(groups).map(([groupKey, groupConfig]) => (
-              <div key={groupKey} className="space-y-3 rounded border p-3">
-                <div className="flex items-center justify-between">
+          <Tabs value={configTab} onValueChange={setConfigTab} className="space-y-4">
+            <TabsList className="grid gap-2 sm:w-auto sm:grid-cols-3">
+              <TabsTrigger value="groups">Nhóm loại hình</TabsTrigger>
+              <TabsTrigger value="license">Giấy phép &amp; loại trừ</TabsTrigger>
+              <TabsTrigger value="bonus">Điểm cộng thêm</TabsTrigger>
+            </TabsList>
+            <TabsContent value="groups">
+              <div className="grid gap-6 md:grid-cols-3">
+                {Object.entries(groups).map(([groupKey, groupConfig]) => (
+                  <div key={groupKey} className="space-y-3 rounded border p-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div className="font-semibold">{groupConfig.title || groupKey}</div>
+                        {groupConfig.description && (
+                          <div className="text-xs text-gray-500">{groupConfig.description}</div>
+                        )}
+                      </div>
+                    </div>
+                    <div>
+                      <label className="text-sm text-gray-600">Mã loại hình</label>
+                      <CodeMultiSelect
+                        value={groupConfig.codes || []}
+                        onChange={(codes) => handleCodesChange(groupKey, codes)}
+                        options={typeOptions}
+                        disabled={isReadOnly}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-sm text-gray-600">Điểm cơ bản mỗi tờ khai</label>
+                      <Num
+                        value={groupConfig.base}
+                        onChange={(val) => handleGroupNumber(groupKey, 'base', val)}
+                        disabled={isReadOnly}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-sm text-gray-600">Điểm cộng theo mỗi mục hàng</label>
+                      <Num
+                        value={groupConfig.perItem}
+                        onChange={(val) => handleGroupNumber(groupKey, 'perItem', val)}
+                        disabled={isReadOnly}
+                      />
+                    </div>
+                    {groupConfig.perItem === 0 && groupConfig.tiers?.length ? (
+                      <div className="rounded border border-dashed p-2">
+                        <div className="text-xs text-gray-500 mb-2">
+                          Nhóm này đang sử dụng cấu hình bậc thay vì điểm theo mục hàng.
+                        </div>
+                        <TierEditor
+                          tiers={groupConfig.tiers}
+                          onChange={(nextTiers) => handleGroupNumber(groupKey, 'tiers', nextTiers)}
+                          disabled={isReadOnly}
+                          title="Các bậc cộng thêm"
+                        />
+                      </div>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            </TabsContent>
+            <TabsContent value="license">
+              <div className="space-y-3 rounded border p-3">
+                <div className="font-semibold">Cấu hình điểm giấy phép</div>
+                <div className="grid gap-4 md:grid-cols-3">
                   <div>
-                    <div className="font-semibold">{groupConfig.title || groupKey}</div>
-                    {groupConfig.description && (
-                      <div className="text-xs text-gray-500">{groupConfig.description}</div>
-                    )}
+                    <label className="text-sm text-gray-600">Điểm mặc định mỗi loại giấy phép</label>
+                    <Num
+                      value={licenseConfig.defaultPoints}
+                      onChange={(val) =>
+                        handleLicenseChange({
+                          ...licenseConfig,
+                          defaultPoints: val,
+                        })
+                      }
+                      disabled={isReadOnly}
+                    />
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="text-sm text-gray-600">Các mã giấy phép bị loại trừ</label>
+                    <CodeMultiSelect
+                      value={licenseConfig.exclude?.codes || []}
+                      onChange={(codes) =>
+                        handleLicenseChange({
+                          ...licenseConfig,
+                          exclude: {
+                            ...licenseConfig.exclude,
+                            codes,
+                            agencies: licenseConfig.exclude?.agencies || [],
+                          },
+                        })
+                      }
+                      options={licenseOptions}
+                      disabled={isReadOnly}
+                      placeholder="Chọn mã giấy phép"
+                      searchPlaceholder="Tìm mã giấy phép"
+                      listHeading="Mã giấy phép đã ghi nhận"
+                      emptyLabel="Không tìm thấy mã giấy phép phù hợp."
+                      addLabel="Thêm mã giấy phép"
+                    />
                   </div>
                 </div>
-                <div>
-                  <label className="text-sm text-gray-600">Mã loại hình</label>
-                  <CodeMultiSelect
-                    value={groupConfig.codes || []}
-                    onChange={(codes) => handleCodesChange(groupKey, codes)}
-                    options={typeOptions}
+                <LicensePointTable
+                  config={licenseConfig}
+                  onChange={(next) => handleLicenseChange(next)}
+                  disabled={isReadOnly}
+                  options={licenseOptions}
+                />
+                <AgencyExcludeEditor
+                  agencies={licenseConfig.exclude?.agencies || []}
+                  onChange={handleAgencyChange}
+                  disabled={isReadOnly}
+                  agencyOptions={agencyOptions}
+                  codeOptions={licenseOptions}
+                />
+              </div>
+            </TabsContent>
+            <TabsContent value="bonus">
+              <div className="space-y-3 rounded border p-3">
+                <div className="font-semibold">Điểm cộng thêm</div>
+                <label className="inline-flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={rule?.bonuses?.co?.enabled ?? false}
+                    onChange={(event) =>
+                      updateRule({
+                        ...rule,
+                        bonuses: {
+                          ...rule.bonuses,
+                          co: {
+                            ...rule.bonuses?.co,
+                            enabled: event.target.checked,
+                          },
+                        },
+                      })
+                    }
                     disabled={isReadOnly}
                   />
-                </div>
-                <div>
-                  <label className="text-sm text-gray-600">Điểm cơ bản mỗi tờ khai</label>
-                  <Num
-                    value={groupConfig.base}
-                    onChange={(val) => handleGroupNumber(groupKey, "base", val)}
-                    disabled={isReadOnly}
-                  />
-                </div>
-                <div>
-                  <label className="text-sm text-gray-600">Điểm cộng theo mỗi mục hàng</label>
-                  <Num
-                    value={groupConfig.perItem}
-                    onChange={(val) => handleGroupNumber(groupKey, "perItem", val)}
-                    disabled={isReadOnly}
-                  />
-                </div>
-                {groupConfig.perItem === 0 && groupConfig.tiers?.length ? (
-                  <div className="rounded border border-dashed p-2">
-                    <div className="text-xs text-gray-500 mb-2">
-                      Nhóm này đang sử dụng cấu hình bậc thay vì điểm theo mục hàng.
-                    </div>
-                    <TierEditor
-                      tiers={groupConfig.tiers}
-                      onChange={(nextTiers) => handleGroupNumber(groupKey, "tiers", nextTiers)}
-                      disabled={isReadOnly}
-                      title="Các bậc cộng thêm"
+                  Cộng điểm khi tờ khai có C/O
+                </label>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div>
+                    <label className="text-sm text-gray-600">Điểm cộng mỗi tờ khai có C/O</label>
+                    <Num
+                      value={rule?.bonuses?.co?.points ?? 0}
+                      onChange={(val) =>
+                        updateRule({
+                          ...rule,
+                          bonuses: {
+                            ...rule.bonuses,
+                            co: {
+                              ...rule.bonuses?.co,
+                              points: val,
+                            },
+                          },
+                        })
+                      }
+                      disabled={isReadOnly || !(rule?.bonuses?.co?.enabled ?? false)}
                     />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-1 text-sm text-gray-600">
+                      <span>Điểm cộng mỗi dòng áp C/O</span>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <button
+                            type="button"
+                            className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-gray-300 text-gray-500 hover:text-gray-700"
+                            aria-label="Giải thích cách tính điểm C/O theo dòng"
+                          >
+                            <InfoIcon className="h-3.5 w-3.5" />
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent className="max-w-xs text-xs leading-relaxed">
+                          Điểm thưởng C/O = số dòng hàng áp C/O × giá trị cấu hình tại đây. Ví dụ: 5 dòng và mỗi dòng 0.05 điểm sẽ được cộng thêm 0.25 điểm.
+                        </TooltipContent>
+                      </Tooltip>
+                    </div>
+                    <Num
+                      value={rule?.bonuses?.co?.perLine ?? 0}
+                      onChange={(val) =>
+                        updateRule({
+                          ...rule,
+                          bonuses: {
+                            ...rule.bonuses,
+                            co: {
+                              ...rule.bonuses?.co,
+                              perLine: val,
+                            },
+                          },
+                        })
+                      }
+                      disabled={isReadOnly || !(rule?.bonuses?.co?.enabled ?? false)}
+                    />
+                    <div className="text-xs text-gray-500 mt-1">
+                      Điểm này nhân với số dòng hàng áp C/O trong tờ khai.
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </TabsContent>
+          </Tabs>
+
+          <div className="space-y-3 rounded border p-3">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <div className="font-semibold">Mô phỏng KPI "Thu"</div>
+                <p className="text-xs text-gray-500">
+                  Ước tính tổng điểm dựa trên {data.length.toLocaleString('vi-VN')} tờ khai đang lưu bằng phiên bản quy tắc hiện tại và bản đã lưu gần nhất.
+                </p>
+              </div>
+              <Button onClick={runSimulation} disabled={simRunning || !data.length} variant="outline">
+                {simRunning ? 'Đang tính…' : 'Chạy mô phỏng'}
+              </Button>
+            </div>
+            {simError ? <p className="text-xs text-red-500">{simError}</p> : null}
+            {simResult ? (
+              <div className="space-y-3 text-sm">
+                <div className="grid gap-3 md:grid-cols-2">
+                  {simResult.preview ? (
+                    <div className="rounded border p-3">
+                      <div className="text-xs uppercase text-gray-500">Phiên bản đang chỉnh</div>
+                      <div className="text-lg font-semibold text-gray-800">
+                        {simResult.preview.total.toFixed(2)} điểm
+                      </div>
+                      <div>Trung bình / tờ khai: {simResult.preview.average.toFixed(2)}</div>
+                      <div>Phiên bản: {simResult.preview.version}</div>
+                    </div>
+                  ) : null}
+                  {simResult.baseline ? (
+                    <div className="rounded border p-3">
+                      <div className="text-xs uppercase text-gray-500">Phiên bản đã lưu</div>
+                      <div className="text-lg font-semibold text-gray-800">
+                        {simResult.baseline.total.toFixed(2)} điểm
+                      </div>
+                      <div>Trung bình / tờ khai: {simResult.baseline.average.toFixed(2)}</div>
+                      <div>Phiên bản: {simResult.baseline.version}</div>
+                    </div>
+                  ) : null}
+                </div>
+                {simResult.difference !== null ? (
+                  <div className="text-xs">
+                    Chênh lệch tổng điểm so với bản đã lưu:{' '}
+                    <span
+                      className={simResult.difference >= 0 ? 'font-semibold text-emerald-600' : 'font-semibold text-red-600'}
+                    >
+                      {simResult.difference >= 0 ? '+' : ''}
+                      {simResult.difference.toFixed(2)}
+                    </span>
                   </div>
                 ) : null}
               </div>
-            ))}
-          </div>
-
-          <div className="space-y-3 rounded border p-3">
-            <div className="font-semibold">Cấu hình điểm giấy phép</div>
-            <div className="grid gap-4 md:grid-cols-3">
-              <div>
-                <label className="text-sm text-gray-600">Điểm mặc định mỗi loại giấy phép</label>
-                <Num
-                  value={licenseConfig.defaultPoints}
-                  onChange={(val) => handleLicenseChange({
-                    ...licenseConfig,
-                    defaultPoints: val,
-                  })}
-                  disabled={isReadOnly}
-                />
-              </div>
-              <div className="md:col-span-2">
-                <label className="text-sm text-gray-600">Các mã giấy phép bị loại trừ (phẩy)</label>
-                <Input
-                  value={(licenseConfig.exclude?.codes || []).join(",")}
-                  onChange={(event) => handleLicenseChange({
-                    ...licenseConfig,
-                    exclude: {
-                      ...licenseConfig.exclude,
-                      codes: event.target.value
-                        .split(",")
-                        .map((code) => code.trim().toUpperCase())
-                        .filter(Boolean),
-                      agencies: licenseConfig.exclude?.agencies || [],
-                    },
-                  })}
-                  disabled={isReadOnly}
-                />
-              </div>
-            </div>
-            <LicensePointTable
-              config={licenseConfig}
-              onChange={(next) => handleLicenseChange(next)}
-              disabled={isReadOnly}
-            />
-            <AgencyExcludeEditor
-              agencies={licenseConfig.exclude?.agencies || []}
-              onChange={handleAgencyChange}
-              disabled={isReadOnly}
-            />
-          </div>
-
-          <div className="space-y-3 rounded border p-3">
-            <div className="font-semibold">Điểm cộng thêm</div>
-            <label className="inline-flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={rule?.bonuses?.co?.enabled ?? false}
-                onChange={(event) =>
-                  updateRule({
-                    ...rule,
-                    bonuses: {
-                      ...rule.bonuses,
-                      co: {
-                        ...rule.bonuses?.co,
-                        enabled: event.target.checked,
-                      },
-                    },
-                  })
-                }
-                disabled={isReadOnly}
-              />
-              Cộng điểm khi tờ khai có C/O
-            </label>
-            <div className="grid gap-4 md:grid-cols-2">
-              <div>
-                <label className="text-sm text-gray-600">Điểm cộng mỗi tờ khai có C/O</label>
-                <Num
-                  value={rule?.bonuses?.co?.points ?? 0}
-                  onChange={(val) =>
-                    updateRule({
-                      ...rule,
-                      bonuses: {
-                        ...rule.bonuses,
-                        co: {
-                          ...rule.bonuses?.co,
-                          points: val,
-                        },
-                      },
-                    })
-                  }
-                  disabled={isReadOnly || !(rule?.bonuses?.co?.enabled ?? false)}
-                />
-              </div>
-              <div>
-                <div className="flex items-center gap-1 text-sm text-gray-600">
-                  <span>Điểm cộng mỗi dòng áp C/O</span>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <button
-                        type="button"
-                        className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-gray-300 text-gray-500 hover:text-gray-700"
-                        aria-label="Giải thích cách tính điểm C/O theo dòng"
-                      >
-                        <InfoIcon className="h-3.5 w-3.5" />
-                      </button>
-                    </TooltipTrigger>
-                    <TooltipContent className="max-w-xs text-xs leading-relaxed">
-                      Điểm thưởng C/O = số dòng hàng áp C/O × giá trị cấu hình tại đây. Ví dụ: 5 dòng và mỗi dòng 0.05 điểm sẽ được cộng thêm 0.25 điểm.
-                    </TooltipContent>
-                  </Tooltip>
-                </div>
-                <Num
-                  value={rule?.bonuses?.co?.perLine ?? 0}
-                  onChange={(val) =>
-                    updateRule({
-                      ...rule,
-                      bonuses: {
-                        ...rule.bonuses,
-                        co: {
-                          ...rule.bonuses?.co,
-                          perLine: val,
-                        },
-                      },
-                    })
-                  }
-                  disabled={isReadOnly || !(rule?.bonuses?.co?.enabled ?? false)}
-                />
-                <div className="text-xs text-gray-500 mt-1">
-                  Điểm này nhân với số dòng hàng áp C/O trong tờ khai.
-                </div>
-              </div>
-            </div>
+            ) : (
+              <p className="text-xs text-gray-500">Chưa có dữ liệu mô phỏng. Nhấn "Chạy mô phỏng" để xem kết quả.</p>
+            )}
           </div>
 
           <div className="space-y-3 rounded border p-3">
@@ -1305,8 +1694,9 @@ export default function RulesEditor({ canEdit = true, currentUser = null }) {
                       <th className="px-2 py-2">Cập nhật</th>
                       <th className="px-2 py-2">Áp dụng từ</th>
                       <th className="px-2 py-2">Tên bộ quy tắc</th>
+                      <th className="px-2 py-2 text-right">Phiên bản</th>
                       <th className="px-2 py-2 text-right">Điểm cơ bản</th>
-                      <th className="px-2 py-2 text-right">Chi tiết</th>
+                      <th className="px-2 py-2 text-right">Thao tác</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1315,26 +1705,45 @@ export default function RulesEditor({ canEdit = true, currentUser = null }) {
                       const basePoints = Number(entry.snapshot?.points?.base);
                       const baseLabel = Number.isFinite(basePoints) ? basePoints.toFixed(1) : '—';
                       const isExpanded = expandedHistoryId === rowId;
+                      const versionValue = Number.isFinite(Number(entry.snapshot?.version))
+                        ? Number(entry.snapshot.version)
+                        : Number.isFinite(Number(entry.version))
+                        ? Number(entry.version)
+                        : null;
+                      const versionLabel = versionValue !== null ? versionValue : '—';
                       return (
                         <React.Fragment key={rowId}>
                           <tr className="border-t border-gray-100">
                             <td className="px-2 py-2 text-xs text-gray-600">{formatHistoryTimestamp(entry.updatedAt)}</td>
                             <td className="px-2 py-2 text-xs text-gray-600">{entry.applyFrom || 'Áp dụng ngay'}</td>
                             <td className="px-2 py-2 text-sm text-gray-700">{entry.name || entry.snapshot?.name || rowId}</td>
+                            <td className="px-2 py-2 text-right text-sm text-gray-700">{versionLabel}</td>
                             <td className="px-2 py-2 text-right text-sm font-medium text-gray-800">{baseLabel}</td>
                             <td className="px-2 py-2 text-right">
-                              <button
-                                type="button"
-                                onClick={() => setExpandedHistoryId(isExpanded ? null : rowId)}
-                                className="text-xs font-medium text-amber-600 hover:underline"
-                              >
-                                {isExpanded ? 'Thu gọn' : 'Xem' }
-                              </button>
+                              <div className="flex items-center justify-end gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => setExpandedHistoryId(isExpanded ? null : rowId)}
+                                  className="text-xs font-medium text-amber-600 hover:underline"
+                                >
+                                  {isExpanded ? 'Thu gọn' : 'Xem'}
+                                </button>
+                                {!isReadOnly ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRestoreEntry(entry)}
+                                    disabled={restoringId === rowId}
+                                    className="text-xs font-medium text-blue-600 hover:underline disabled:cursor-not-allowed disabled:opacity-60"
+                                  >
+                                    {restoringId === rowId ? 'Đang khôi phục…' : 'Khôi phục'}
+                                  </button>
+                                ) : null}
+                              </div>
                             </td>
                           </tr>
                           {isExpanded && (
                             <tr>
-                              <td colSpan={5} className="px-2 pb-4 pt-1">
+                              <td colSpan={6} className="px-2 pb-4 pt-1">
                                 <div className="rounded bg-slate-900 p-3 text-xs text-slate-100">
                                   <div className="mb-2 font-semibold">Chi tiết điểm & cấu hình</div>
                                   <pre className="max-h-52 overflow-auto whitespace-pre-wrap text-xs">
@@ -1366,11 +1775,43 @@ export default function RulesEditor({ canEdit = true, currentUser = null }) {
               </div>
               <div>
                 <label className="text-sm text-gray-600">Mã giấy phép (phẩy)</label>
-                <Input value={manualLicenses} onChange={(event) => setManualLicenses(event.target.value)} />
+                <Input
+                  value={manualLicenses}
+                  onChange={(event) => setManualLicenses(event.target.value)}
+                  list={manualLicenseListId}
+                  placeholder="Ví dụ: ZB02,ZB03"
+                />
+                <datalist id={manualLicenseListId}>
+                  {licenseOptions.map((item) => (
+                    <option
+                      key={`manual-license-${item.value}`}
+                      value={item.value}
+                      label={
+                        item.count
+                          ? `${item.value} (${item.count.toLocaleString("vi-VN")})`
+                          : item.value
+                      }
+                    />
+                  ))}
+                </datalist>
               </div>
               <div>
                 <label className="text-sm text-gray-600">Đại lý HQ</label>
-                <Input value={manualAgency} onChange={(event) => setManualAgency(event.target.value)} />
+                <Input
+                  value={manualAgency}
+                  onChange={(event) => setManualAgency(event.target.value)}
+                  list={manualAgencyListId}
+                  placeholder="Nhập hoặc chọn đại lý"
+                />
+                <datalist id={manualAgencyListId}>
+                  {agencyOptions.map((item) => (
+                    <option
+                      key={`manual-agency-${item.value}`}
+                      value={item.value}
+                      label={item.hint ? `${item.value} – ${item.hint}` : item.value}
+                    />
+                  ))}
+                </datalist>
               </div>
               <div className="flex items-center gap-2 text-sm">
                 <label className="inline-flex items-center gap-2">

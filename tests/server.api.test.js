@@ -796,6 +796,90 @@ describe('API xác thực & bootstrap', () => {
   });
 });
 
+describe('Quản lý tài khoản', () => {
+  beforeEach(() => {
+    resetDb();
+  });
+
+  it('gắn nhân viên KPI khi tạo tài khoản mới', async () => {
+    const db = getDb();
+    const roster = {
+      version: 1,
+      teams: [
+        {
+          id: 'team-kt',
+          name: 'Team Kế toán',
+          members: [
+            { id: 'kt001', name: 'Nguyễn Thu Phương' },
+            { id: 'kt002', name: 'Trần Minh Dũng' },
+          ],
+        },
+      ],
+    };
+    db.prepare(
+      "INSERT INTO kv_store (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value"
+    ).run('team_roster_v1', JSON.stringify(roster));
+
+    const adminAgent = request.agent(app);
+    const loginRes = await adminAgent.post('/api/auth/login').send({ username: 'admin', password: 'admin123' });
+    expect(loginRes.status).toBe(200);
+
+    const createRes = await adminAgent.post('/api/auth/accounts').send({
+      username: 'ketoan.phuong',
+      password: 'Phuong@2025',
+      role: 'staff',
+      memberId: 'kt001',
+    });
+
+    expect(createRes.status).toBe(201);
+    const account = createRes.body?.account;
+    expect(account).toMatchObject({
+      username: 'ketoan.phuong',
+      memberId: 'kt001',
+      memberName: 'Nguyễn Thu Phương',
+      teamName: 'Team Kế toán',
+    });
+
+    const auditRow = db.prepare('SELECT value FROM kv_store WHERE key = ?').get('audit_logs_v1');
+    const logs = JSON.parse(auditRow?.value || '[]');
+    const createLog = logs.find((entry) => entry.action === 'account.create' && entry.detail?.includes('ketoan.phuong'));
+    expect(createLog).toBeTruthy();
+    expect(createLog?.meta?.member).toMatchObject({ memberId: 'kt001', teamName: 'Team Kế toán' });
+  });
+
+  it('ghi log chi tiết khi cập nhật quyền tài khoản', async () => {
+    const adminAgent = request.agent(app);
+    const loginRes = await adminAgent.post('/api/auth/login').send({ username: 'admin', password: 'admin123' });
+    expect(loginRes.status).toBe(200);
+
+    const createRes = await adminAgent.post('/api/auth/accounts').send({
+      username: 'quyen.tester',
+      password: 'Tester@2025',
+      role: 'staff',
+    });
+    expect(createRes.status).toBe(201);
+
+    const patchRes = await adminAgent
+      .patch('/api/auth/accounts/quyen.tester')
+      .send({ permissions: { importEdit: true, auditView: true } });
+    expect(patchRes.status).toBe(200);
+    expect(patchRes.body?.account?.permissions?.importEdit).toBe(true);
+    expect(patchRes.body?.account?.permissions?.auditView).toBe(true);
+
+    const auditRow = getDb().prepare('SELECT value FROM kv_store WHERE key = ?').get('audit_logs_v1');
+    const logs = JSON.parse(auditRow?.value || '[]');
+    const updateLog = logs.find((entry) => entry.action === 'account.update' && entry.detail?.includes('quyen.tester'));
+    expect(updateLog).toBeTruthy();
+    expect(updateLog?.detail).toMatch(/quyền:/i);
+    expect(updateLog?.meta?.changes?.permissions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ key: 'importEdit', after: true }),
+        expect.objectContaining({ key: 'auditView', after: true }),
+      ])
+    );
+  });
+});
+
 describe('API thông báo hệ thống', () => {
   beforeEach(() => {
     resetDb();
@@ -989,6 +1073,53 @@ beforeEach(async () => {
   excelMock.__resetWorkbookCreateCount?.();
 });
 
+describe('Data health summary API', () => {
+  it('trả về trạng thái sao lưu và cảnh báo dung lượng', async () => {
+    const adminAgent = request.agent(app);
+    const loginRes = await adminAgent
+      .post('/api/auth/login')
+      .send({ username: 'admin', password: 'admin123' });
+    expect(loginRes.status).toBe(200);
+
+    const logs = [
+      {
+        ts: '2024-05-12T02:00:00.000Z',
+        actor: 'system',
+        action: 'db.backup',
+        detail: 'Sao lưu định kỳ',
+        meta: { status: 'success', file: 'C:/backups/storage-20240512.sqlite', bytes: 4096 },
+      },
+      {
+        ts: '2024-05-11T02:00:00.000Z',
+        actor: 'system',
+        action: 'db.backup',
+        detail: 'Sao lưu thất bại',
+        meta: { status: 'failure', reason: 'memory_db' },
+      },
+    ];
+    getDb()
+      .prepare('INSERT OR REPLACE INTO kv_store(key, value) VALUES(?, ?)')
+      .run('audit_logs_v1', JSON.stringify(logs));
+    getDb()
+      .prepare('INSERT OR REPLACE INTO kv_store(key, value) VALUES(?, ?)')
+      .run('db_backup_config_v1', JSON.stringify({ cron: '0 1 * * *', retentionCopies: 5 }));
+
+    const res = await adminAgent.get('/api/data-health/summary');
+    expect(res.status).toBe(200);
+    expect(res.body?.ok).toBe(true);
+
+    const storage = res.body.summary?.storage;
+    expect(storage).toBeTruthy();
+    expect(storage.backup?.health?.severity).toBeTruthy();
+    expect(Array.isArray(storage.backup?.recent)).toBe(true);
+    expect(storage.database?.mode).toBe('memory');
+    expect(Array.isArray(storage.health?.issues)).toBe(true);
+    expect(storage.health.issues.length).toBeGreaterThan(0);
+
+    expect(res.body.summary?.sqlServer).toHaveProperty('health');
+  });
+});
+
 describe('Backup summary API', () => {
   it('từ chối khi chưa đăng nhập', async () => {
     const res = await request(app).get('/api/admin/backups/summary');
@@ -1137,6 +1268,100 @@ describe('Backup summary API', () => {
     const res = await adminAgent.post('/api/admin/backups/schedule').send({ cron: 'not-a-cron' });
     expect(res.status).toBe(400);
     expect(res.body.ok).toBe(false);
+  });
+});
+
+describe('Backup manual API', () => {
+  it('từ chối danh sách file sao lưu khi chưa đăng nhập', async () => {
+    const res = await request(app).get('/api/admin/backups/files');
+    expect(res.status).toBe(401);
+  });
+
+  it('trả về danh sách rỗng khi chưa có bản sao lưu', async () => {
+    const adminAgent = request.agent(app);
+    const loginRes = await adminAgent
+      .post('/api/auth/login')
+      .send({ username: 'admin', password: 'admin123' });
+    expect(loginRes.status).toBe(200);
+
+    const res = await adminAgent.get('/api/admin/backups/files');
+    expect(res.status).toBe(200);
+    expect(res.body?.ok).toBe(true);
+    expect(Array.isArray(res.body.files)).toBe(true);
+    for (const file of res.body.files) {
+      expect(typeof file.filename).toBe('string');
+      expect(typeof file.bytes === 'number' || file.bytes === undefined).toBe(true);
+    }
+  });
+
+  it('không cho phép sao lưu thủ công khi DB chạy memory', async () => {
+    const adminAgent = request.agent(app);
+    const loginRes = await adminAgent
+      .post('/api/auth/login')
+      .send({ username: 'admin', password: 'admin123' });
+    expect(loginRes.status).toBe(200);
+
+    const res = await adminAgent.post('/api/admin/backups/run').send({ note: 'manual-test' });
+    expect(res.status).toBe(400);
+    expect(res.body).toMatchObject({ ok: false, reason: 'memory_db' });
+  });
+
+  it('yêu cầu chọn file khi khôi phục', async () => {
+    const adminAgent = request.agent(app);
+    const loginRes = await adminAgent
+      .post('/api/auth/login')
+      .send({ username: 'admin', password: 'admin123' });
+    expect(loginRes.status).toBe(200);
+
+    const res = await adminAgent.post('/api/admin/backups/restore').send({ note: 'restore-test' });
+    expect(res.status).toBe(400);
+    expect(res.body).toMatchObject({ ok: false, reason: 'missing_filename' });
+  });
+});
+
+describe('Audit export API', () => {
+  it('yêu cầu đăng nhập trước khi tải CSV', async () => {
+    const res = await request(app).get('/api/admin/audit/export');
+    expect(res.status).toBe(401);
+  });
+
+  it('cho phép quản trị viên tải CSV theo khoảng ngày', async () => {
+    const adminAgent = request.agent(app);
+    const loginRes = await adminAgent
+      .post('/api/auth/login')
+      .send({ username: 'admin', password: 'admin123' });
+    expect(loginRes.status).toBe(200);
+
+    const logs = [
+      {
+        ts: '2024-05-10T05:00:00.000Z',
+        actor: 'admin',
+        action: 'db.backup',
+        detail: 'Sao lưu thử nghiệm',
+        result: 'success',
+        category: 'db',
+        note: 'manual snapshot',
+        meta: { status: 'success', reason: 'manual-ui' },
+      },
+      {
+        ts: '2024-04-09T02:00:00.000Z',
+        actor: 'system',
+        action: 'audit.clear',
+        detail: 'Xóa nhật ký',
+        result: 'success',
+        category: 'audit',
+      },
+    ];
+    getDb()
+      .prepare('INSERT OR REPLACE INTO kv_store(key, value) VALUES(?, ?)')
+      .run('audit_logs_v1', JSON.stringify(logs));
+
+    const res = await adminAgent.get('/api/admin/audit/export');
+    expect(res.status).toBe(200);
+    expect(res.headers['content-type']).toContain('text/csv');
+    const lines = res.text.split(/\r?\n/).filter(Boolean);
+    expect(lines.length).toBeGreaterThanOrEqual(1);
+    expect(res.text).toContain('Thời gian');
   });
 });
 

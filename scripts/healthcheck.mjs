@@ -53,6 +53,40 @@ try {
     }
   }
 
+  if (typeof serverModule.getDataHealthSnapshot === 'function') {
+    try {
+      const snapshot = await serverModule.getDataHealthSnapshot();
+      if (snapshot?.storage) {
+        const { backup, disk, database, health } = snapshot.storage;
+        if (health?.issues?.length) {
+          console.warn(`⚠️ Cảnh báo storage (${health.severity || 'unknown'}):`);
+          for (const issue of health.issues) {
+            console.warn(`   • ${issue}`);
+          }
+        } else {
+          console.log('✅ Dung lượng lưu trữ ổn định.');
+        }
+        if (backup) {
+          const latest = backup.entries?.[0];
+          if (latest) {
+            console.log(`   • Sao lưu gần nhất: ${latest?.createdAt || 'chưa có'} (${latest?.status || 'không rõ'})`);
+          }
+        }
+        if (database) {
+          console.log(`   • SQLite dung lượng hiện tại: ${database?.sizeLabel || database?.sizeBytes || 'không rõ'}`);
+        }
+        if (disk) {
+          console.log(`   • Ổ đĩa: ${disk?.usedLabel || ''} / ${disk?.totalLabel || ''} (${disk?.percentUsed || 0}% đã dùng)`);
+        }
+      }
+      if (snapshot?.sqlServer?.health && snapshot.sqlServer.health.ok === false) {
+        console.warn('⚠️ SQL Server cảnh báo:', snapshot.sqlServer.health.message || snapshot.sqlServer.health.state);
+      }
+    } catch (err) {
+      console.warn('⚠️ Không thể lấy báo cáo sức khỏe dữ liệu:', err.message);
+    }
+  }
+
   const elapsed = Date.now() - startAt;
   console.log(`Hoàn tất health check sau ${Math.round(elapsed)}ms.`);
   process.exit(0);

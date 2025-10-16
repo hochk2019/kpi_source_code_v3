@@ -5,7 +5,7 @@ import {
   KPI_ADJUSTMENT_CATEGORY_CONFIG,
   normalizeAdjustmentCategoryKey,
 } from '../../shared/kpiAdjustments.js';
-import { getItem, setItem, refreshSharedKeys } from './storageClient.js';
+import { getItem, setItem, refreshSharedKeys, subscribe } from './storageClient.js';
 
 export { KPI_ADJUSTMENT_CATEGORY_CONFIG } from '../../shared/kpiAdjustments.js';
 
@@ -19,6 +19,32 @@ export const TEAM_KEY = "team_roster_v1"; // danh sách tổ đội & thành vi�
 export const AUDIT_KEY = "audit_logs_v1"; // nhật ký hành động quản trị
 export const HQ_KEY = "hq_agencies_v1"; // cấu hình Đại lý hải quan theo MST
 export const KPI_ADJUSTMENTS_KEY = "kpi_adjustments_v1"; // điểm KPI +/- bổ sung
+export const KPI_ADJUSTMENT_SETTINGS_KEY = "kpi_adjustment_settings_v1"; // cấu hình mặc định điểm KPI bổ sung
+export const DECL_HISTORY_KEY = "decl_history_v1"; // lịch sử chỉnh sửa tờ khai
+export const UI_LAYOUT_KEY = "ui_layout_config_v1"; // cấu hình bố cục giao diện dùng chung
+export const REPORT_SCHEDULE_KEY = "kpi_report_schedule_v1"; // lịch gửi báo cáo KPI
+
+export const IMPORT_COLUMN_IDS = Object.freeze([
+  "date",
+  "declaration",
+  "mst",
+  "company",
+  "type",
+  "co",
+  "items",
+  "staff",
+  "team",
+  "agency",
+  "status",
+  "licenses",
+  "kpi",
+]);
+
+const IMPORT_COLUMN_ID_SET = new Set(IMPORT_COLUMN_IDS);
+const DEFAULT_IMPORT_COLUMN_CONFIG = Object.freeze({ hidden: [] });
+
+const VALID_SCHEDULE_FREQUENCIES = new Set(["weekly", "monthly"]);
+const VALID_SCHEDULE_FORMATS = new Set(["excel", "pdf"]);
 
 // ===== Helpers =====
 function safeParse(json, fallback) {
@@ -27,6 +53,111 @@ function safeParse(json, fallback) {
 
 function shallowClone(obj) {
   return JSON.parse(JSON.stringify(obj ?? null));
+}
+
+function readUILayoutConfig() {
+  const stored = safeParse(getItem(UI_LAYOUT_KEY), {});
+  return stored && typeof stored === "object" && !Array.isArray(stored) ? { ...stored } : {};
+}
+
+function writeUILayoutConfig(config) {
+  const target = config && typeof config === "object" && !Array.isArray(config) ? config : {};
+  setItem(UI_LAYOUT_KEY, JSON.stringify(target));
+  return target;
+}
+
+function normalizeImportColumnConfig(input) {
+  if (input && typeof input === "object" && !Array.isArray(input)) {
+    const rawHidden = Array.isArray(input.hidden) ? input.hidden : [];
+    const hiddenSet = new Set();
+    for (const key of rawHidden) {
+      if (typeof key !== "string") continue;
+      const trimmed = key.trim();
+      if (!trimmed) continue;
+      if (IMPORT_COLUMN_ID_SET.has(trimmed)) {
+        hiddenSet.add(trimmed);
+      }
+    }
+    return { hidden: Array.from(hiddenSet) };
+  }
+  return { ...DEFAULT_IMPORT_COLUMN_CONFIG };
+}
+
+function isSameColumnConfig(a, b) {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  const hiddenA = Array.isArray(a.hidden) ? a.hidden : [];
+  const hiddenB = Array.isArray(b.hidden) ? b.hidden : [];
+  if (hiddenA.length !== hiddenB.length) {
+    return false;
+  }
+  const setB = new Set(hiddenB);
+  for (const key of hiddenA) {
+    if (!setB.has(key)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+export function getImportColumnConfig() {
+  const layout = readUILayoutConfig();
+  const importData = layout && typeof layout.importData === "object" ? layout.importData : {};
+  const current = normalizeImportColumnConfig(importData.columns);
+  if (current.hidden.length >= IMPORT_COLUMN_IDS.length) {
+    return { hidden: [] };
+  }
+  return current;
+}
+
+export function saveImportColumnConfig({ hidden } = {}, { actor = "system" } = {}) {
+  const layout = readUILayoutConfig();
+  const importSection = layout && typeof layout.importData === "object" ? layout.importData : {};
+  const current = normalizeImportColumnConfig(importSection.columns);
+  const targetHidden = Array.isArray(hidden) ? hidden : current.hidden;
+  const next = normalizeImportColumnConfig({ hidden: targetHidden });
+  if (next.hidden.length >= IMPORT_COLUMN_IDS.length) {
+    return current;
+  }
+  if (isSameColumnConfig(current, next)) {
+    return current;
+  }
+  const nextLayout = {
+    ...layout,
+    importData: {
+      ...importSection,
+      columns: next,
+    },
+  };
+  writeUILayoutConfig(nextLayout);
+  pushAuditLog({
+    actor,
+    action: "import.columns.update",
+    detail: `Cập nhật cột Import Data (${IMPORT_COLUMN_IDS.length - next.hidden.length}/${IMPORT_COLUMN_IDS.length} hiển thị)`,
+    meta: { hidden: next.hidden.slice() },
+  });
+  return next;
+}
+
+export function subscribeImportColumnConfig(listener) {
+  const fn = typeof listener === "function" ? listener : null;
+  if (!fn) {
+    return () => {};
+  }
+  const emit = () => {
+    try {
+      fn(getImportColumnConfig());
+    } catch (err) {
+      console.error("Không thể đọc cấu hình cột Import Data", err);
+    }
+  };
+  const unsubscribe = subscribe(UI_LAYOUT_KEY, emit);
+  emit();
+  return () => {
+    if (typeof unsubscribe === "function") {
+      unsubscribe();
+    }
+  };
 }
 
 // Chuáº©n hoÃ¡ chuá»—i (trim + bá» khoáº£ng tráº¯ng thá»«a)
@@ -422,6 +553,76 @@ export function upsertMSTRows(rows, { actor = "system", detail = "" } = {}) {
   return sanitized.length;
 }
 
+export function saveMSTRow(rowInput, { originalKey = null, actor = "system", detail = "" } = {}) {
+  const sanitized = sanitizeMSTRow(rowInput);
+  if (!sanitized) {
+    return { ok: false, reason: "invalid" };
+  }
+
+  const previousRows = getMSTMap();
+  const prevMap = new Map(previousRows.map((row) => [makeMSTRowKey(row), row]));
+  const targetKey = originalKey ? String(originalKey) : makeMSTRowKey(rowInput);
+  const previous = targetKey ? prevMap.get(targetKey) : null;
+
+  if (originalKey && !previous) {
+    return { ok: false, reason: "not-found" };
+  }
+
+  const nextKey = makeMSTRowKey(sanitized);
+  if (targetKey && nextKey !== targetKey && prevMap.has(nextKey)) {
+    return { ok: false, reason: "conflict" };
+  }
+
+  if (previous && nextKey === targetKey) {
+    const same =
+      previous.mst === sanitized.mst &&
+      previous.company === sanitized.company &&
+      previous.person_import === sanitized.person_import &&
+      previous.person_export === sanitized.person_export &&
+      previous.team === sanitized.team &&
+      previous.effective_from === sanitized.effective_from &&
+      previous.status === sanitized.status;
+    if (same) {
+      return { ok: false, reason: "no-change", row: previous, key: targetKey };
+    }
+  }
+
+  if (previous && targetKey && prevMap.has(targetKey)) {
+    prevMap.delete(targetKey);
+  }
+  prevMap.set(nextKey, sanitized);
+
+  const nextRows = Array.from(prevMap.values()).sort((a, b) => {
+    const byMST = a.mst.localeCompare(b.mst);
+    if (byMST !== 0) return byMST;
+    return (a.effective_from || "").localeCompare(b.effective_from || "");
+  });
+
+  const changes = diffMSTRows(previousRows, nextRows, actor);
+  if (!changes.length) {
+    return { ok: false, reason: "no-change", row: sanitized, key: nextKey };
+  }
+
+  setItem(MST_KEY, JSON.stringify(nextRows));
+  appendMSTHistoryEntries(changes);
+  pushAuditLog({
+    actor,
+    action: "mst.save-row",
+    detail:
+      detail ||
+      (previous
+        ? `Cập nhật gán MST cho ${sanitized.mst}`
+        : `Thêm mới gán MST ${sanitized.mst}`),
+  });
+
+  return {
+    ok: true,
+    row: sanitized,
+    key: nextKey,
+    previousKey: previous ? targetKey : null,
+  };
+}
+
 function diffMSTRows(prevRows, nextRows, actor) {
   const prevMap = new Map();
   for (const row of Array.isArray(prevRows) ? prevRows : []) {
@@ -583,6 +784,253 @@ export function getMSTHistoryFor(mst, limit = 20) {
     return filtered;
   }
   return filtered.slice(0, limit);
+}
+
+const DECL_HISTORY_PER_ROW_LIMIT = 20;
+const DECL_HISTORY_MAX_ROWS = 300;
+
+const DECL_HISTORY_FIELD_GROUP = Object.freeze({
+  agency: "agency",
+  dai_ly: "agency",
+  licenses: "licenses",
+  so_luong_gp: "licenses",
+  licenseManualCount: "licenses",
+});
+
+function normalizeDeclHistoryValue(value) {
+  if (value === null || value === undefined) return "";
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => normalizeDeclHistoryValue(item))
+      .filter((part) => typeof part === "string" && part.length > 0)
+      .join(", ");
+  }
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? String(value) : "";
+  }
+  if (typeof value === "boolean") {
+    return value ? "Có" : "Không";
+  }
+  if (typeof value === "object") {
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return "";
+    }
+  }
+  return normalizeStr(value);
+}
+
+function pickDeclLicenseValue(row) {
+  if (!row || typeof row !== "object") return "";
+  const candidates = [row.licenseManualCount, row.licenses, row.so_luong_gp];
+  for (const candidate of candidates) {
+    if (candidate === null || candidate === undefined || candidate === "") {
+      continue;
+    }
+    if (typeof candidate === "number") {
+      if (Number.isFinite(candidate)) {
+        return candidate;
+      }
+      continue;
+    }
+    if (typeof candidate === "string") {
+      const trimmed = candidate.trim();
+      if (!trimmed) {
+        continue;
+      }
+      const parsed = Number(trimmed);
+      if (Number.isFinite(parsed)) {
+        return parsed;
+      }
+      return trimmed;
+    }
+    const parsed = Number(candidate);
+    if (Number.isFinite(parsed)) {
+      return parsed;
+    }
+    return candidate;
+  }
+  return "";
+}
+
+function extractDeclHistoryValue(row, field) {
+  if (!row || typeof row !== "object") return "";
+  switch (field) {
+    case "agency":
+      return row.agency ?? row.dai_ly ?? "";
+    case "licenses":
+      return pickDeclLicenseValue(row);
+    default:
+      return row[field];
+  }
+}
+
+function buildDeclHistoryChanges(current, nextRow, changedFields) {
+  if (!Array.isArray(changedFields) || changedFields.length === 0) {
+    return [];
+  }
+  const groups = new Map();
+  for (const field of changedFields) {
+    const resolved = DECL_HISTORY_FIELD_GROUP[field] || field;
+    if (!resolved || groups.has(resolved)) {
+      continue;
+    }
+    const before = normalizeDeclHistoryValue(extractDeclHistoryValue(current, resolved));
+    const after = normalizeDeclHistoryValue(extractDeclHistoryValue(nextRow, resolved));
+    if (before === after) {
+      continue;
+    }
+    groups.set(resolved, {
+      field: resolved,
+      before,
+      after,
+    });
+  }
+  return Array.from(groups.values());
+}
+
+function normalizeDeclHistoryEntry(rowKey, entry) {
+  if (!entry || typeof entry !== "object") return null;
+  const timestamp = entry.ts || entry.timestamp || new Date().toISOString();
+  const actor = normalizeStr(entry.actor) || "system";
+  const rawChanges = Array.isArray(entry.changes) ? entry.changes : [];
+  const changes = rawChanges
+    .map((change) => {
+      if (!change || typeof change !== "object") return null;
+      const fieldKey = (change.field || change.key || change.name || "").toString().trim();
+      if (!fieldKey) return null;
+      const resolved = DECL_HISTORY_FIELD_GROUP[fieldKey] || fieldKey;
+      const before = normalizeDeclHistoryValue(change.before ?? change.old ?? change.previous ?? "");
+      const after = normalizeDeclHistoryValue(change.after ?? change.new ?? change.next ?? "");
+      if (before === after) return null;
+      return {
+        field: resolved,
+        before,
+        after,
+      };
+    })
+    .filter(Boolean);
+  if (!changes.length) return null;
+  return {
+    id: entry.id || `decl-${rowKey}-${Math.random().toString(36).slice(2, 8)}-${Date.now()}`,
+    ts: new Date(timestamp).toISOString(),
+    actor,
+    changes,
+  };
+}
+
+function sanitizeDeclHistoryStore(rawStore) {
+  const safeRows = {};
+  if (!rawStore || typeof rawStore !== "object") {
+    return { rows: safeRows };
+  }
+  const sourceRows = rawStore.rows && typeof rawStore.rows === "object" && !Array.isArray(rawStore.rows)
+    ? rawStore.rows
+    : {};
+  for (const [key, list] of Object.entries(sourceRows)) {
+    const normalizedKey = normalizeStr(key);
+    if (!normalizedKey) continue;
+    const entries = Array.isArray(list)
+      ? list
+          .map((entry) => normalizeDeclHistoryEntry(normalizedKey, entry))
+          .filter(Boolean)
+      : [];
+    if (entries.length) {
+      safeRows[normalizedKey] = entries.slice(0, DECL_HISTORY_PER_ROW_LIMIT);
+    }
+  }
+  return { rows: safeRows };
+}
+
+function getDeclHistoryStore() {
+  const parsed = safeParse(getItem(DECL_HISTORY_KEY), { rows: {} });
+  return sanitizeDeclHistoryStore(parsed);
+}
+
+function persistDeclHistoryStore(store) {
+  const payload = sanitizeDeclHistoryStore(store);
+  const rows = payload.rows || {};
+  const rowEntries = Object.entries(rows).map(([key, list]) => {
+    const items = Array.isArray(list) ? list.filter(Boolean) : [];
+    if (!items.length) {
+      delete rows[key];
+      return null;
+    }
+    rows[key] = items.slice(0, DECL_HISTORY_PER_ROW_LIMIT);
+    const latestTs = rows[key][0]?.ts || "1970-01-01T00:00:00.000Z";
+    return { key, ts: latestTs };
+  }).filter(Boolean);
+
+  if (rowEntries.length > DECL_HISTORY_MAX_ROWS) {
+    rowEntries.sort((a, b) => new Date(b.ts).getTime() - new Date(a.ts).getTime());
+    const keep = new Set(rowEntries.slice(0, DECL_HISTORY_MAX_ROWS).map((entry) => entry.key));
+    for (const key of Object.keys(rows)) {
+      if (!keep.has(key)) {
+        delete rows[key];
+      }
+    }
+  }
+
+  setItem(DECL_HISTORY_KEY, JSON.stringify({ rows }));
+  return { rows };
+}
+
+function appendDeclHistoryEntry(rowKey, entry) {
+  const key = typeof rowKey === "string" ? rowKey.trim() : String(rowKey || "").trim();
+  if (!key) return null;
+  if (!entry || typeof entry !== "object" || !Array.isArray(entry.changes) || !entry.changes.length) {
+    return null;
+  }
+  const store = getDeclHistoryStore();
+  const actor = normalizeStr(entry.actor) || "system";
+  const timestamp = entry.ts || entry.timestamp || new Date().toISOString();
+  const changes = entry.changes
+    .map((change) => {
+      if (!change || typeof change !== "object") return null;
+      const fieldKey = (change.field || change.key || "").toString().trim();
+      if (!fieldKey) return null;
+      const resolved = DECL_HISTORY_FIELD_GROUP[fieldKey] || fieldKey;
+      const before = normalizeDeclHistoryValue(change.before);
+      const after = normalizeDeclHistoryValue(change.after);
+      if (before === after) return null;
+      return {
+        field: resolved,
+        before,
+        after,
+      };
+    })
+    .filter(Boolean);
+  if (!changes.length) {
+    return null;
+  }
+  const normalizedEntry = {
+    id: entry.id || `decl-${key}-${Math.random().toString(36).slice(2, 8)}-${Date.now()}`,
+    ts: new Date(timestamp).toISOString(),
+    actor,
+    changes,
+  };
+  const existing = Array.isArray(store.rows[key]) ? store.rows[key] : [];
+  const nextList = [normalizedEntry, ...existing].slice(0, DECL_HISTORY_PER_ROW_LIMIT);
+  const nextStore = {
+    rows: {
+      ...store.rows,
+      [key]: nextList,
+    },
+  };
+  persistDeclHistoryStore(nextStore);
+  return normalizedEntry;
+}
+
+export function getDeclHistoryForRow(rowKey, limit = DECL_HISTORY_PER_ROW_LIMIT) {
+  const key = typeof rowKey === "string" ? rowKey.trim() : String(rowKey || "").trim();
+  if (!key) return [];
+  const store = getDeclHistoryStore();
+  const list = Array.isArray(store.rows[key]) ? store.rows[key] : [];
+  if (!Number.isFinite(limit) || limit <= 0) {
+    return list.slice();
+  }
+  return list.slice(0, limit);
 }
 
 /** Lay nguoi phu trach theo MST & ngay hieu luc gan nhat (<= ngay to khai) */
@@ -846,6 +1294,30 @@ export function getTeamRoster() {
     setItem(TEAM_KEY, JSON.stringify(sanitized));
   }
   return sanitized;
+}
+
+export function subscribeTeamRoster(listener) {
+  const fn = typeof listener === 'function' ? listener : null;
+  if (!fn) {
+    return () => {};
+  }
+
+  const emit = () => {
+    try {
+      fn(getTeamRoster());
+    } catch (error) {
+      console.error('Không thể cập nhật danh sách tổ đội', error);
+    }
+  };
+
+  const unsubscribe = subscribe(TEAM_KEY, emit);
+  emit();
+
+  return () => {
+    if (typeof unsubscribe === 'function') {
+      unsubscribe();
+    }
+  };
 }
 
 export function setTeamRoster(next, { actor = "system", detail = "" } = {}) {
@@ -1120,6 +1592,59 @@ export function upsertHQAgencies(rows, { actor = "system", detail = "" } = {}) {
   return finalRows.length;
 }
 
+export function saveHQAgencyRow(row, { actor = "system", previousMst = "", detail = "" } = {}) {
+  const sanitized = sanitizeAgencyRow(row);
+  if (!sanitized) {
+    throw new Error("Mã số thuế không hợp lệ khi lưu đại lý HQ");
+  }
+
+  const targetMst = sanitized.mst;
+  const prevKey = normalizeMST(previousMst);
+  const current = getHQAgencies();
+  const preserved = [];
+
+  for (const item of current) {
+    if (!item?.mst) continue;
+    if (item.mst === targetMst) continue;
+    if (prevKey && item.mst === prevKey) continue;
+    preserved.push(item);
+  }
+
+  preserved.push({
+    mst: sanitized.mst,
+    company: sanitized.company,
+    agents: sanitized.agents,
+    agent: sanitized.agent,
+  });
+
+  upsertHQAgencies(preserved, {
+    actor,
+    detail: detail || `Cập nhật đại lý HQ cho MST ${targetMst}`,
+  });
+
+  return sanitized;
+}
+
+export function deleteHQAgencyRow(mst, { actor = "system", detail = "" } = {}) {
+  const target = normalizeMST(mst);
+  if (!target) {
+    return 0;
+  }
+
+  const current = getHQAgencies();
+  const next = current.filter((row) => row?.mst !== target);
+  if (next.length === current.length) {
+    return 0;
+  }
+
+  upsertHQAgencies(next, {
+    actor,
+    detail: detail || `Xóa đại lý HQ cho MST ${target}`,
+  });
+
+  return 1;
+}
+
 
 export function applyAgenciesToDeclRows(rows, agencyMapParam = null) {
   const list = Array.isArray(rows) ? rows : [];
@@ -1264,9 +1789,11 @@ function extractEffectiveDateFromDeclRow(row) {
   return '';
 }
 
-function ensureMSTEntriesForDeclRows(declRows, { actor = 'system' } = {}) {
+function ensureMSTEntriesForDeclRows(declRows, { actor = 'system', dryRun = false } = {}) {
   const list = Array.isArray(declRows) ? declRows : [];
-  if (!list.length) return;
+  if (!list.length) {
+    return { additions: [], total: 0 };
+  }
 
   const actorName = normalizeStr(actor) || 'system';
   const existingRows = getMSTMap();
@@ -1276,6 +1803,8 @@ function ensureMSTEntriesForDeclRows(declRows, { actor = 'system' } = {}) {
 
   for (const row of list) {
     if (!row || typeof row !== 'object') continue;
+    const declKey = getDeclarationKey(row);
+    if (!declKey) continue;
     const mst = extractMSTFromDeclRow(row);
     if (!mst || knownMSTs.has(mst) || seen.has(mst)) continue;
 
@@ -1294,7 +1823,19 @@ function ensureMSTEntriesForDeclRows(declRows, { actor = 'system' } = {}) {
     seen.add(mst);
   }
 
-  if (!additions.length) return;
+  if (!additions.length) {
+    return { additions: [], total: 0 };
+  }
+
+  const loggedAdditions = additions.map((item) => ({
+    mst: item.mst,
+    company: item.company,
+    effective_from: item.effective_from,
+  }));
+
+  if (dryRun) {
+    return { additions: loggedAdditions, total: additions.length };
+  }
 
   const merged = existingRows.concat(additions);
   const sample = additions.slice(0, 3).map((item) => item.mst).join(', ');
@@ -1305,6 +1846,8 @@ function ensureMSTEntriesForDeclRows(declRows, { actor = 'system' } = {}) {
     actor: actorName,
     detail: `Tự động thêm ${additions.length} MST mới từ dữ liệu tờ khai${detailSample}`,
   });
+
+  return { additions: loggedAdditions, total: additions.length };
 }
 
 function persistAndAnnotateDeclRows(rows) {
@@ -1322,41 +1865,506 @@ function persistAndAnnotateDeclRows(rows) {
   return normalized;
 }
 
+function sanitizePartialDeclUpdates(updates = {}) {
+  if (!updates || typeof updates !== "object") {
+    return {};
+  }
+  const safe = {};
+  const assign = (key, value) => {
+    safe[key] = value;
+  };
+
+  for (const [field, value] of Object.entries(updates)) {
+    switch (field) {
+      case "nhan_vien": {
+        assign("nhan_vien", normalizeStr(value));
+        break;
+      }
+      case "team": {
+        assign("team", normalizeStr(value));
+        break;
+      }
+      case "agency": {
+        assign("agency", normalizeStr(value));
+        break;
+      }
+      case "dai_ly": {
+        assign("dai_ly", normalizeStr(value));
+        break;
+      }
+      case "licenses":
+      case "so_luong_gp":
+      case "licenseManualCount": {
+        if (value === "" || value === null || value === undefined) {
+          assign("licenses", "");
+          assign("so_luong_gp", "");
+          assign("licenseManualCount", null);
+          break;
+        }
+        const parsed = Number(value);
+        if (Number.isFinite(parsed)) {
+          const normalized = Math.max(0, Math.round(parsed));
+          assign("licenses", normalized);
+          assign("so_luong_gp", normalized);
+          assign("licenseManualCount", normalized);
+        }
+        break;
+      }
+      default: {
+        assign(field, value);
+        break;
+      }
+    }
+  }
+
+  if (
+    Object.prototype.hasOwnProperty.call(safe, "agency") &&
+    !Object.prototype.hasOwnProperty.call(safe, "dai_ly")
+  ) {
+    assign("dai_ly", safe.agency);
+  }
+  if (
+    Object.prototype.hasOwnProperty.call(safe, "dai_ly") &&
+    !Object.prototype.hasOwnProperty.call(safe, "agency")
+  ) {
+    assign("agency", safe.dai_ly);
+  }
+
+  return safe;
+}
+
+function applyPartialUpdatesToRow(row, updates, { sanitized = false } = {}) {
+  if (!row || typeof row !== "object") {
+    return { changed: false, nextRow: row };
+  }
+  const safeUpdates = sanitized && updates && typeof updates === "object"
+    ? updates
+    : sanitizePartialDeclUpdates(updates);
+  const entries = Object.entries(safeUpdates);
+  if (!entries.length) {
+    return { changed: false, nextRow: row };
+  }
+  let changed = false;
+  const nextRow = { ...row };
+  for (const [field, value] of entries) {
+    const current = nextRow[field];
+    if (value === null) {
+      if (Object.prototype.hasOwnProperty.call(nextRow, field)) {
+        delete nextRow[field];
+        changed = true;
+      }
+      continue;
+    }
+    if (value === undefined) {
+      continue;
+    }
+    if (field === "licenses" || field === "so_luong_gp") {
+      const normalized = value === "" ? "" : Number(value);
+      if (nextRow[field] !== normalized) {
+        nextRow[field] = normalized;
+        changed = true;
+      }
+      continue;
+    }
+    if (nextRow[field] !== value) {
+      nextRow[field] = value;
+      changed = true;
+    }
+  }
+  if (changed) {
+    nextRow.updatedAt = new Date().toISOString();
+  }
+  return { changed, nextRow };
+}
+
 /**
  * Lưu tờ khai vào kho dùng chung.
  * - overwrite=true: ghi đè toàn bộ danh sách hiện tại.
  * - overwrite=false: hợp nhất theo khoá "so_tk + '_' + (nhanh || '')".
  */
+function isEqualDeclValue(a, b) {
+  if (a === b) return true;
+  if (Array.isArray(a) && Array.isArray(b)) {
+    if (a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i += 1) {
+      if (!isEqualDeclValue(a[i], b[i])) {
+        return false;
+      }
+    }
+    return true;
+  }
+  if (a && b && typeof a === "object" && typeof b === "object") {
+    const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
+    for (const key of keys) {
+      if (!isEqualDeclValue(a[key], b[key])) {
+        return false;
+      }
+    }
+    return true;
+  }
+  if (a === null || a === undefined) {
+    return b === null || b === undefined;
+  }
+  if (b === null || b === undefined) {
+    return false;
+  }
+  return Object.is(a, b);
+}
+
+function mergeDeclRowWithSummary(existing, incoming) {
+  if (!existing) {
+    return {
+      row: incoming,
+      changed: true,
+      changedFields: Object.keys(incoming || {}),
+      locked: false,
+    };
+  }
+  if (existing?.reviewed && incoming?.__forceReviewedOverride !== true) {
+    return { row: existing, changed: false, changedFields: [], locked: true };
+  }
+  const merged = mergeDeclarationRowClient(existing, incoming);
+  const keys = new Set([...Object.keys(existing || {}), ...Object.keys(merged || {})]);
+  const changedFields = [];
+  for (const field of keys) {
+    if (!isEqualDeclValue(existing?.[field], merged?.[field])) {
+      changedFields.push(field);
+    }
+  }
+  return { row: merged, changed: changedFields.length > 0, changedFields, locked: false };
+}
+
+function buildImportLogEntry(row, changedFields = []) {
+  if (!row || typeof row !== "object") return null;
+  const so_tk = normalizeDeclarationNumber(row.so_tk ?? row.so_tk_full ?? "");
+  if (!so_tk) return null;
+  const full = (row.so_tk_full ?? row.so_tk ?? "").toString();
+  const nhanh = normalizeStr(row.nhanh ?? row.branch ?? "");
+  const entry = {
+    so_tk,
+    so_tk_full: full || undefined,
+    nhanh: nhanh || undefined,
+  };
+  if (Array.isArray(changedFields) && changedFields.length) {
+    const unique = Array.from(
+      new Set(
+        changedFields
+          .map((field) => (field == null ? "" : String(field).trim()))
+          .filter(Boolean)
+      )
+    );
+    if (unique.length) {
+      entry.fields = unique;
+    }
+  }
+  return entry;
+}
+
+function normalizeImportErrorRow(row, reason = "unknown") {
+  if (!row || typeof row !== "object") {
+    return { reason };
+  }
+  const so_tk = normalizeDeclarationNumber(row.so_tk ?? row.so_tk_full ?? "");
+  const nhanh = normalizeStr(row.nhanh ?? row.branch ?? "");
+  const mst = extractMSTFromDeclRow(row) || "";
+  const company = extractCompanyNameFromDeclRow(row) || "";
+  return {
+    reason,
+    so_tk,
+    nhanh,
+    mst: mst || undefined,
+    company: company || undefined,
+  };
+}
+
+function computeDeclImportDiff(currentRows, normalizedIncoming, { sampleLimit = 20 } = {}) {
+  const fallbackRows = [];
+  const currentMap = new Map();
+  for (const row of Array.isArray(currentRows) ? currentRows : []) {
+    if (!row || typeof row !== "object") continue;
+    const key = getDeclarationKey(row);
+    if (!key) {
+      fallbackRows.push(row);
+      continue;
+    }
+    if (!currentMap.has(key)) {
+      currentMap.set(key, row);
+    }
+  }
+
+  let inserted = 0;
+  let updated = 0;
+  let skipped = 0;
+  let locked = 0;
+  const insertedDeclarations = [];
+  const updatedDeclarations = [];
+  const lockedDeclarations = [];
+  const errorEntries = [];
+
+  const insertedRows = [];
+  const updatedRows = [];
+  const lockedRows = [];
+
+  for (const row of normalizedIncoming) {
+    const key = getDeclarationKey(row);
+    if (!key) {
+      errorEntries.push(normalizeImportErrorRow(row, "missing-key"));
+      continue;
+    }
+    const existing = currentMap.get(key);
+    if (!existing) {
+      currentMap.set(key, row);
+      inserted += 1;
+      insertedRows.push(row);
+      const entry = buildImportLogEntry(row);
+      if (entry) {
+        insertedDeclarations.push(entry);
+      }
+      continue;
+    }
+
+    const { row: mergedRow, changed, changedFields, locked: isLocked } = mergeDeclRowWithSummary(existing, row);
+    if (isLocked) {
+      locked += 1;
+      lockedRows.push(existing);
+      const entry = buildImportLogEntry(existing);
+      if (entry) {
+        lockedDeclarations.push(entry);
+      }
+      continue;
+    }
+
+    currentMap.set(key, mergedRow);
+    if (changed) {
+      updated += 1;
+      updatedRows.push({ before: existing, after: mergedRow, changedFields });
+      const entry = buildImportLogEntry(mergedRow, changedFields);
+      if (entry) {
+        updatedDeclarations.push(entry);
+      }
+    } else {
+      skipped += 1;
+    }
+  }
+
+  const mergedRows = fallbackRows.concat(Array.from(currentMap.values()));
+
+  return {
+    mergedRows,
+    summary: {
+      inserted,
+      updated,
+      skipped,
+      locked,
+      invalid: errorEntries.length,
+      insertedDeclarations,
+      updatedDeclarations,
+      lockedDeclarations,
+      errors: errorEntries,
+    },
+    samples: {
+      inserted: insertedRows.slice(0, sampleLimit),
+      updated: updatedRows.slice(0, sampleLimit),
+      locked: lockedRows.slice(0, sampleLimit),
+      errors: errorEntries.slice(0, sampleLimit),
+    },
+  };
+}
+
+export function previewDeclRows(newRows, { overwrite = false, actor = "system" } = {}) {
+  const incoming = Array.isArray(newRows) ? newRows : [];
+  const normalizedIncoming = normalizeDeclRows(incoming);
+  const actorName = normalizeStr(actor) || "system";
+  const currentRows = getDeclRowsRaw();
+
+  if (overwrite) {
+    const validRows = normalizedIncoming.filter((row) => !!getDeclarationKey(row));
+    const invalidRows = normalizedIncoming.filter((row) => !getDeclarationKey(row));
+    const mstSummary = ensureMSTEntriesForDeclRows(normalizedIncoming, { actor: actorName, dryRun: true }) || {
+      additions: [],
+      total: 0,
+    };
+
+    return {
+      mode: "overwrite",
+      totalBefore: currentRows.length,
+      totalAfter: validRows.length,
+      totalStored: validRows.length,
+      totalIncoming: normalizedIncoming.length,
+      inserted: validRows.length,
+      updated: 0,
+      skipped: 0,
+      locked: 0,
+      invalid: invalidRows.length,
+      errors: invalidRows.map((row) => normalizeImportErrorRow(row, "missing-key")),
+      insertedDeclarations: validRows.map((row) => buildImportLogEntry(row)).filter(Boolean),
+      updatedDeclarations: [],
+      lockedDeclarations: [],
+      samples: {
+        inserted: validRows.slice(0, 20),
+        updated: [],
+        locked: [],
+        errors: invalidRows.slice(0, 20).map((row) => normalizeImportErrorRow(row, "missing-key")),
+      },
+      newBusinessCount: mstSummary.total || 0,
+      newBusinesses: mstSummary.additions || [],
+    };
+  }
+
+  const { mergedRows, summary, samples } = computeDeclImportDiff(currentRows, normalizedIncoming, { sampleLimit: 20 });
+  const mstSummary = ensureMSTEntriesForDeclRows(normalizedIncoming, { actor: actorName, dryRun: true }) || {
+    additions: [],
+    total: 0,
+  };
+
+  return {
+    mode: "merge",
+    totalBefore: currentRows.length,
+    totalAfter: mergedRows.length,
+    totalStored: mergedRows.length,
+    totalIncoming: normalizedIncoming.length,
+    ...summary,
+    samples,
+    newBusinessCount: mstSummary.total || 0,
+    newBusinesses: mstSummary.additions || [],
+  };
+}
+
 export function saveDeclRows(newRows, { overwrite = false, actor = "system", detail = "" } = {}) {
   const incoming = Array.isArray(newRows) ? newRows : [];
   const normalizedIncoming = normalizeDeclRows(incoming);
+  const actorName = normalizeStr(actor) || "system";
+  const currentRows = getDeclRowsRaw();
 
   if (overwrite) {
     const stored = persistAndAnnotateDeclRows(normalizedIncoming);
     pushAuditLog({
-      actor,
+      actor: actorName,
       action: "decl.overwrite",
       detail: detail || `Ghi đè ${stored.length} tờ khai`,
     });
-    ensureMSTEntriesForDeclRows(normalizedIncoming, { actor });
-    return stored.length;
+    const mstSummary = ensureMSTEntriesForDeclRows(normalizedIncoming, { actor: actorName }) || {
+      additions: [],
+      total: 0,
+    };
+    return {
+      mode: "overwrite",
+      totalBefore: currentRows.length,
+      totalAfter: stored.length,
+      totalStored: stored.length,
+      totalIncoming: normalizedIncoming.length,
+      inserted: stored.length,
+      updated: 0,
+      skipped: 0,
+      locked: 0,
+      invalid: 0,
+      insertedDeclarations: normalizedIncoming.map((row) => buildImportLogEntry(row)).filter(Boolean),
+      updatedDeclarations: [],
+      lockedDeclarations: [],
+      errors: [],
+      newBusinessCount: mstSummary.total || 0,
+      newBusinesses: mstSummary.additions || [],
+    };
   }
 
-  const current = getDeclRowsRaw();
-  const combined = Array.isArray(current)
-    ? current.concat(normalizedIncoming)
-    : normalizedIncoming;
-  const stored = persistAndAnnotateDeclRows(combined);
+  const { mergedRows, summary } = computeDeclImportDiff(currentRows, normalizedIncoming, { sampleLimit: 0 });
+  const stored = persistAndAnnotateDeclRows(mergedRows);
+
+  const mstSummary = ensureMSTEntriesForDeclRows(normalizedIncoming, { actor: actorName }) || {
+    additions: [],
+    total: 0,
+  };
+
+  const skipLabel = summary.locked > 0
+    ? `${summary.skipped.toLocaleString("vi-VN")} bỏ qua (khóa ${summary.locked.toLocaleString("vi-VN")})`
+    : `${summary.skipped.toLocaleString("vi-VN")} bỏ qua`;
+  const auditDetail = detail && detail.trim()
+    ? detail
+    : `Hợp nhất ${normalizedIncoming.length.toLocaleString("vi-VN")} tờ khai (+${summary.inserted.toLocaleString("vi-VN")} / cập nhật ${summary.updated.toLocaleString("vi-VN")} / ${skipLabel} -> tổng ${stored.length.toLocaleString("vi-VN")})`;
 
   pushAuditLog({
-    actor,
+    actor: actorName,
     action: "decl.merge",
-    detail: detail || `Hợp nhất ${normalizedIncoming.length} tờ khai (tổng ${stored.length})`,
+    detail: auditDetail,
   });
 
-  ensureMSTEntriesForDeclRows(normalizedIncoming, { actor });
+  return {
+    mode: "merge",
+    totalBefore: currentRows.length,
+    totalAfter: stored.length,
+    totalStored: stored.length,
+    totalIncoming: normalizedIncoming.length,
+    inserted: summary.inserted,
+    updated: summary.updated,
+    skipped: summary.skipped,
+    locked: summary.locked,
+    invalid: summary.invalid,
+    insertedDeclarations: summary.insertedDeclarations,
+    updatedDeclarations: summary.updatedDeclarations,
+    lockedDeclarations: summary.lockedDeclarations,
+    errors: summary.errors,
+    newBusinessCount: mstSummary.total || 0,
+    newBusinesses: mstSummary.additions || [],
+  };
+}
 
-  return stored.length;
+export function updateDeclRowFields(rowKey, updates, { actor = "system", detail = "" } = {}) {
+  const key = typeof rowKey === "string" ? rowKey.trim() : String(rowKey || "").trim();
+  if (!key) {
+    return { success: false, reason: "invalid-key" };
+  }
+  const rows = getDeclRowsRaw();
+  if (!Array.isArray(rows) || rows.length === 0) {
+    return { success: false, reason: "empty" };
+  }
+  const index = rows.findIndex((row) => {
+    if (!row || typeof row !== "object") return false;
+    const soTk = (row.so_tk ?? "").toString();
+    const nhanh = (row.nhanh ?? "").toString();
+    return `${soTk}_${nhanh}` === key;
+  });
+  if (index === -1) {
+    return { success: false, reason: "not-found" };
+  }
+
+  const current = rows[index] || {};
+  const sanitizedUpdates = sanitizePartialDeclUpdates(updates);
+  const changedFields = Object.keys(sanitizedUpdates);
+  const { changed, nextRow } = applyPartialUpdatesToRow(current, sanitizedUpdates, { sanitized: true });
+  if (!changed) {
+    return { success: false, reason: "no-change" };
+  }
+
+  const nextRows = rows.slice();
+  nextRows[index] = nextRow;
+  const stored = persistAndAnnotateDeclRows(nextRows);
+  const updated = stored[index] || nextRow;
+
+  const actorName = normalizeStr(actor) || "system";
+  const actionDetail =
+    detail && detail.trim().length > 0
+      ? detail
+      : `Cập nhật ${changedFields.join(", ")} của tờ khai ${current.so_tk || "?"}`;
+
+  const historyChanges = buildDeclHistoryChanges(current, updated, changedFields);
+  const historyEntry = historyChanges.length
+    ? appendDeclHistoryEntry(key, {
+        actor: actorName,
+        ts: new Date().toISOString(),
+        changes: historyChanges,
+      })
+    : null;
+
+  pushAuditLog({
+    actor: actorName,
+    action: "decl.update.partial",
+    detail: actionDetail,
+    meta: historyEntry
+      ? { key, fields: changedFields, historyEntryId: historyEntry.id }
+      : { key, fields: changedFields },
+  });
+
+  return { success: true, row: updated };
 }
 
 export function markDeclRowsReviewed(keys, { actor = "system", note = "Đánh dấu rà soát" } = {}) {
@@ -1560,6 +2568,149 @@ export const KPI_ADJUSTMENT_STATUS_SET = new Set(['pending', 'approved', 'reject
 
 const KPI_ADJUSTMENT_HISTORY_LIMIT = 50;
 
+function readAdjustmentSettings() {
+  const raw = safeParse(getItem(KPI_ADJUSTMENT_SETTINGS_KEY), {});
+  if (!raw || typeof raw !== 'object') {
+    return { categories: {}, updatedAt: null, updatedBy: null };
+  }
+  const source = raw.categories && typeof raw.categories === 'object' ? raw.categories : {};
+  const categories = {};
+  for (const [key, value] of Object.entries(source)) {
+    const categoryKey = normalizeAdjustmentCategoryKey(key);
+    if (!categoryKey || !KPI_ADJUSTMENT_CATEGORY_CONFIG[categoryKey]) {
+      continue;
+    }
+    if (!value || typeof value !== 'object') {
+      continue;
+    }
+    categories[categoryKey] = { ...value };
+  }
+  return {
+    categories,
+    updatedAt: typeof raw.updatedAt === 'string' ? raw.updatedAt : null,
+    updatedBy: typeof raw.updatedBy === 'string' ? raw.updatedBy : null,
+  };
+}
+
+function cloneAdjustmentSettings(settings) {
+  const categories = {};
+  if (settings?.categories && typeof settings.categories === 'object') {
+    for (const [key, value] of Object.entries(settings.categories)) {
+      categories[key] = value && typeof value === 'object' ? { ...value } : {};
+    }
+  }
+  return {
+    categories,
+    updatedAt: settings?.updatedAt || null,
+    updatedBy: settings?.updatedBy || null,
+  };
+}
+
+function writeAdjustmentSettings(settings) {
+  const payload = cloneAdjustmentSettings(settings || {});
+  setItem(KPI_ADJUSTMENT_SETTINGS_KEY, JSON.stringify(payload));
+  refreshSharedKeys([KPI_ADJUSTMENT_SETTINGS_KEY]);
+  return payload;
+}
+
+export function getKpiAdjustmentSettings() {
+  return cloneAdjustmentSettings(readAdjustmentSettings());
+}
+
+export function saveKpiAdjustmentSettings(patch, { actor = 'system', permissions = {} } = {}) {
+  if (!permissions.adjustApprove) {
+    throw new Error('Bạn không có quyền cấu hình điểm KPI bổ sung');
+  }
+  const base = readAdjustmentSettings();
+  const categories = { ...base.categories };
+  const patchCategories = patch && typeof patch === 'object' && typeof patch.categories === 'object'
+    ? patch.categories
+    : null;
+  if (patchCategories) {
+    for (const [rawKey, rawValue] of Object.entries(patchCategories)) {
+      const key = normalizeAdjustmentCategoryKey(rawKey);
+      if (!key || !KPI_ADJUSTMENT_CATEGORY_CONFIG[key]) {
+        continue;
+      }
+      const value = rawValue && typeof rawValue === 'object' ? rawValue : {};
+      const current = categories[key] ? { ...categories[key] } : {};
+      if (Object.prototype.hasOwnProperty.call(value, 'defaultUnit')) {
+        const num = Number.parseFloat(value.defaultUnit);
+        if (Number.isFinite(num)) {
+          current.defaultUnit = Math.round(num * 10) / 10;
+        } else if (value.defaultUnit === null) {
+          delete current.defaultUnit;
+        }
+      }
+      if (Object.prototype.hasOwnProperty.call(value, 'defaultMode')) {
+        const modeCandidate = normalizeStr(value.defaultMode).toLowerCase();
+        const allowedModes = new Set((KPI_ADJUSTMENT_CATEGORY_CONFIG[key].modes || []).map((item) => item.value));
+        if (modeCandidate && allowedModes.has(modeCandidate)) {
+          current.defaultMode = modeCandidate;
+        } else if (!modeCandidate) {
+          delete current.defaultMode;
+        }
+      }
+      if (value.modeUnits && typeof value.modeUnits === 'object') {
+        const modeUnits = { ...(current.modeUnits || {}) };
+        for (const [modeKey, rawUnit] of Object.entries(value.modeUnits)) {
+          const normalizedMode = normalizeStr(modeKey).toLowerCase();
+          if (!normalizedMode) continue;
+          const allowedMode = (KPI_ADJUSTMENT_CATEGORY_CONFIG[key].modes || []).find((item) => item.value === normalizedMode);
+          if (!allowedMode) continue;
+          const num = Number.parseFloat(rawUnit);
+          if (Number.isFinite(num)) {
+            modeUnits[normalizedMode] = Math.round(num * 10) / 10;
+          } else if (rawUnit === null) {
+            delete modeUnits[normalizedMode];
+          }
+        }
+        if (Object.keys(modeUnits).length) {
+          current.modeUnits = modeUnits;
+        } else {
+          delete current.modeUnits;
+        }
+      }
+      if (value.licensePoints && typeof value.licensePoints === 'object') {
+        const licensePoints = { ...(current.licensePoints || {}) };
+        for (const [licenseKey, rawUnit] of Object.entries(value.licensePoints)) {
+          const normalizedLicense = normalizeStr(licenseKey).toUpperCase();
+          if (!normalizedLicense) continue;
+          const num = Number.parseFloat(rawUnit);
+          if (Number.isFinite(num)) {
+            licensePoints[normalizedLicense] = Math.round(num * 10) / 10;
+          } else if (rawUnit === null) {
+            delete licensePoints[normalizedLicense];
+          }
+        }
+        if (Object.keys(licensePoints).length) {
+          current.licensePoints = licensePoints;
+        } else {
+          delete current.licensePoints;
+        }
+      }
+      if (Object.keys(current).length) {
+        categories[key] = current;
+      } else {
+        delete categories[key];
+      }
+    }
+  }
+  const next = {
+    categories,
+    updatedAt: new Date().toISOString(),
+    updatedBy: actor,
+  };
+  writeAdjustmentSettings(next);
+  pushAuditLog({
+    actor,
+    action: 'kpi.adjustment.defaults',
+    detail: 'Cập nhật cấu hình điểm KPI bổ sung',
+    meta: { categories: Object.keys(categories) },
+  });
+  return cloneAdjustmentSettings(next);
+}
+
 function normalizeAdjustmentCategory(value) {
   const key = normalizeAdjustmentCategoryKey(value);
   if (key && KPI_ADJUSTMENT_CATEGORY_CONFIG[key]) {
@@ -1651,11 +2802,20 @@ function clampHistory(list) {
   return entries.slice(-KPI_ADJUSTMENT_HISTORY_LIMIT);
 }
 
-function computeAdjustmentTotal({ category, unitPoints, quantity }) {
+function computeAdjustmentTotal({ category, unitPoints, quantity, mode }) {
   const config = KPI_ADJUSTMENT_CATEGORY_CONFIG[category] || { type: 'quantity' };
   const unit = Number.isFinite(unitPoints) ? unitPoints : 0;
   if (config.type === 'fixed' || config.type === 'grade') {
     return Math.round(unit * 10) / 10;
+  }
+  if (config.type === 'hybrid') {
+    const normalizedMode = normalizeStr(mode).toLowerCase();
+    const targetMode = (config.modes || []).find((item) => item.value === normalizedMode) || config.modes?.[0];
+    if (targetMode?.compute === 'fixed') {
+      return Math.round(unit * 10) / 10;
+    }
+    const qtyHybrid = Number.isFinite(quantity) ? quantity : 0;
+    return Math.round(unit * qtyHybrid * 10) / 10;
   }
   const qty = Number.isFinite(quantity) ? quantity : 0;
   return Math.round(unit * qty * 10) / 10;
@@ -1670,16 +2830,100 @@ function normalizeAdjustmentInput(input, { now, actor, current } = {}) {
     return null;
   }
   const config = KPI_ADJUSTMENT_CATEGORY_CONFIG[category];
+  const settings = readAdjustmentSettings();
+  const override = settings.categories?.[category] || {};
   const staffName = normalizeStr(input.staffName ?? input.staff ?? current?.staffName ?? '');
   const teamName = normalizeStr(input.teamName ?? input.team ?? current?.teamName ?? '');
   const month = normalizeAdjustmentMonth(input.month ?? input.period ?? current?.month ?? '');
   if (!month) {
     return null;
   }
-  const gradeValue = Number.parseFloat(input.grade ?? input.value ?? input.unitPoints ?? input.points ?? 0);
-  let unitPoints = Number.parseFloat(input.unitPoints ?? input.basePoint ?? input.pointsPerUnit ?? gradeValue);
+  const gradeSource = input.grade ?? input.value ?? input.unitPoints ?? input.points;
+  const gradeValue =
+    gradeSource !== undefined && gradeSource !== null && gradeSource !== ''
+      ? Number.parseFloat(gradeSource)
+      : Number.NaN;
+  const allowedModes = Array.isArray(config?.modes) ? config.modes.map((item) => item.value).filter(Boolean) : [];
+  let mode = normalizeStr(input.mode ?? input.adjustMode ?? current?.mode ?? override.defaultMode ?? config?.defaultMode ?? '')
+    .toLowerCase();
+  if (allowedModes.length) {
+    if (!allowedModes.includes(mode)) {
+      const fallbackMode = [override.defaultMode, config?.defaultMode, allowedModes[0]].map((candidate) => {
+        const normalized = normalizeStr(candidate).toLowerCase();
+        return allowedModes.includes(normalized) ? normalized : null;
+      }).find(Boolean);
+      mode = fallbackMode || allowedModes[0];
+    }
+  } else {
+    mode = '';
+  }
+
+  let licenseCode = '';
+  if (config?.requiresLicenseCode) {
+    licenseCode = normalizeStr(input.licenseCode ?? input.license ?? current?.licenseCode ?? '');
+    if (licenseCode) {
+      licenseCode = licenseCode.toUpperCase();
+    }
+  }
+
+  const mergedLicensePoints = {};
+  if (config?.licensePoints && typeof config.licensePoints === 'object') {
+    for (const [code, value] of Object.entries(config.licensePoints)) {
+      if (!code) continue;
+      const normalizedCode = code.toString().trim().toUpperCase();
+      if (!normalizedCode) continue;
+      const num = Number.parseFloat(value);
+      if (Number.isFinite(num)) {
+        mergedLicensePoints[normalizedCode] = Math.round(num * 10) / 10;
+      }
+    }
+  }
+  if (override?.licensePoints && typeof override.licensePoints === 'object') {
+    for (const [code, value] of Object.entries(override.licensePoints)) {
+      if (!code) continue;
+      const normalizedCode = code.toString().trim().toUpperCase();
+      if (!normalizedCode) continue;
+      const num = Number.parseFloat(value);
+      if (Number.isFinite(num)) {
+        mergedLicensePoints[normalizedCode] = Math.round(num * 10) / 10;
+      } else if (value === null) {
+        delete mergedLicensePoints[normalizedCode];
+      }
+    }
+  }
+
+  const overrideDefaultUnit = Number.isFinite(Number.parseFloat(override?.defaultUnit))
+    ? Math.round(Number.parseFloat(override.defaultUnit) * 10) / 10
+    : undefined;
+
+  const unitSource = input.unitPoints ?? input.basePoint ?? input.pointsPerUnit;
+  let unitPoints =
+    unitSource !== undefined && unitSource !== null && unitSource !== ''
+      ? Number.parseFloat(unitSource)
+      : Number.NaN;
+  if (!Number.isFinite(unitPoints) && Number.isFinite(gradeValue)) {
+    unitPoints = gradeValue;
+  }
   if (!Number.isFinite(unitPoints)) {
-    unitPoints = Number.isFinite(current?.unitPoints) ? current.unitPoints : config?.defaultUnit ?? 0;
+    if (config?.type === 'hybrid') {
+      const modeConfig = (config.modes || []).find((item) => item.value === mode);
+      const overrideModeUnits = override?.modeUnits && typeof override.modeUnits === 'object' ? override.modeUnits : {};
+      if (overrideModeUnits && Number.isFinite(Number.parseFloat(overrideModeUnits[mode]))) {
+        unitPoints = Math.round(Number.parseFloat(overrideModeUnits[mode]) * 10) / 10;
+      } else if (modeConfig && Number.isFinite(Number.parseFloat(modeConfig.defaultUnit))) {
+        unitPoints = Math.round(Number.parseFloat(modeConfig.defaultUnit) * 10) / 10;
+      } else if (Number.isFinite(overrideDefaultUnit)) {
+        unitPoints = overrideDefaultUnit;
+      } else {
+        unitPoints = Number.isFinite(config?.defaultUnit) ? config.defaultUnit : 0;
+      }
+    } else if (config?.requiresLicenseCode && licenseCode && mergedLicensePoints[licenseCode] != null) {
+      unitPoints = mergedLicensePoints[licenseCode];
+    } else if (Number.isFinite(overrideDefaultUnit)) {
+      unitPoints = overrideDefaultUnit;
+    } else {
+      unitPoints = Number.isFinite(config?.defaultUnit) ? config.defaultUnit : 0;
+    }
   }
   if (config?.type === 'grade' && config.grades?.length) {
     const allowed = config.grades.map((item) => item.value);
@@ -1694,7 +2938,14 @@ function normalizeAdjustmentInput(input, { now, actor, current } = {}) {
   if (config?.type === 'fixed' || config?.type === 'grade') {
     quantity = 1;
   }
-  if (config?.type === 'quantity' && quantity === 0) {
+  if (config?.type === 'hybrid') {
+    const modeConfig = (config.modes || []).find((item) => item.value === mode);
+    if (modeConfig?.compute === 'fixed') {
+      quantity = 1;
+    } else if (quantity === 0) {
+      quantity = 1;
+    }
+  } else if (config?.type === 'quantity' && quantity === 0) {
     quantity = 1;
   }
   const references = normalizeAdjustmentReferences(input.references ?? input.reference ?? current?.references ?? []);
@@ -1706,7 +2957,7 @@ function normalizeAdjustmentInput(input, { now, actor, current } = {}) {
   if (Number.isFinite(totalOverride)) {
     totalPoints = Math.round(totalOverride * 10) / 10;
   } else {
-    totalPoints = computeAdjustmentTotal({ category, unitPoints, quantity });
+    totalPoints = computeAdjustmentTotal({ category, unitPoints, quantity, mode });
   }
   const createdAt = current?.createdAt && !Number.isNaN(new Date(current.createdAt).getTime())
     ? new Date(current.createdAt).toISOString()
@@ -1725,6 +2976,8 @@ function normalizeAdjustmentInput(input, { now, actor, current } = {}) {
     references,
     note,
     status,
+    mode: mode || undefined,
+    licenseCode: licenseCode || undefined,
     createdAt,
     createdBy,
     history,
@@ -1735,7 +2988,7 @@ function normalizeAdjustmentInput(input, { now, actor, current } = {}) {
 function diffAdjustments(prev, next) {
   if (!prev) return null;
   const changes = {};
-  const fields = ['staffName', 'teamName', 'month', 'category', 'quantity', 'unitPoints', 'totalPoints', 'note'];
+  const fields = ['staffName', 'teamName', 'month', 'category', 'quantity', 'unitPoints', 'totalPoints', 'note', 'mode', 'licenseCode'];
   for (const field of fields) {
     if (JSON.stringify(prev[field]) !== JSON.stringify(next[field])) {
       changes[field] = { from: prev[field], to: next[field] };
@@ -1980,6 +3233,238 @@ export function pushImportLog(entry, extraMeta = null) {
   setItem(LOG_KEY, JSON.stringify(logs.slice(0, 50)));
 }
 
+function normalizeScheduleTime(value) {
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    const match = trimmed.match(/^(\d{1,2}):(\d{1,2})$/);
+    if (match) {
+      const hours = Math.min(Math.max(parseInt(match[1], 10), 0), 23);
+      const minutes = Math.min(Math.max(parseInt(match[2], 10), 0), 59);
+      return {
+        label: `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`,
+        hour: hours,
+        minute: minutes,
+      };
+    }
+  }
+  return { label: '08:00', hour: 8, minute: 0 };
+}
+
+function clampWeekday(value) {
+  const day = Number.isFinite(Number(value)) ? Number(value) : 1;
+  if (day < 1) return 1;
+  if (day > 7) return 7;
+  return Math.round(day);
+}
+
+function clampMonthDay(value) {
+  const day = Number.isFinite(Number(value)) ? Number(value) : 1;
+  if (day < 1) return 1;
+  if (day > 31) return 31;
+  return Math.round(day);
+}
+
+function normalizeScheduleRecipients(input) {
+  const list = Array.isArray(input)
+    ? input
+    : typeof input === 'string'
+    ? input.split(/[;,]/)
+    : [];
+  const seen = new Set();
+  const result = [];
+  for (const entry of list) {
+    const value = String(entry ?? '')
+      .trim()
+      .replace(/[\r\n]+/g, ' ');
+    if (!value) continue;
+    const key = value.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push(value);
+  }
+  return result;
+}
+
+function normalizeScheduleFormats(input) {
+  const list = Array.isArray(input)
+    ? input
+    : typeof input === 'string'
+    ? input.split(/[;,]/)
+    : [];
+  const seen = new Set();
+  const result = [];
+  for (const entry of list) {
+    const value = String(entry ?? '').trim().toLowerCase();
+    if (!VALID_SCHEDULE_FORMATS.has(value)) continue;
+    if (seen.has(value)) continue;
+    seen.add(value);
+    result.push(value);
+  }
+  if (!result.length) {
+    result.push('excel');
+  }
+  return result;
+}
+
+export function calculateNextReportScheduleRun(schedule, { fromDate = new Date() } = {}) {
+  if (!schedule || typeof schedule !== 'object') {
+    return null;
+  }
+  if (schedule.active === false) {
+    return null;
+  }
+  const frequency = typeof schedule.frequency === 'string' ? schedule.frequency.trim() : '';
+  if (!VALID_SCHEDULE_FREQUENCIES.has(frequency)) {
+    return null;
+  }
+  const base = fromDate instanceof Date ? new Date(fromDate) : new Date();
+  if (Number.isNaN(base.getTime())) {
+    return null;
+  }
+  const timeInfo = normalizeScheduleTime(schedule.time);
+  const candidate = new Date(base.getTime());
+  candidate.setSeconds(0, 0);
+  candidate.setMilliseconds(0);
+  if (frequency === 'weekly') {
+    const targetDay = clampWeekday(schedule.dayOfWeek);
+    const current = candidate.getDay() === 0 ? 7 : candidate.getDay();
+    candidate.setHours(timeInfo.hour, timeInfo.minute, 0, 0);
+    let diff = targetDay - current;
+    if (diff < 0 || (diff === 0 && candidate <= base)) {
+      diff += 7;
+    }
+    candidate.setDate(candidate.getDate() + diff);
+    candidate.setHours(timeInfo.hour, timeInfo.minute, 0, 0);
+    return candidate.toISOString();
+  }
+  if (frequency === 'monthly') {
+    const targetDay = clampMonthDay(schedule.dayOfMonth);
+    const initial = new Date(candidate.getFullYear(), candidate.getMonth(), 1, timeInfo.hour, timeInfo.minute, 0, 0);
+    const daysInMonth = new Date(initial.getFullYear(), initial.getMonth() + 1, 0).getDate();
+    const day = Math.min(targetDay, daysInMonth);
+    initial.setDate(day);
+    if (initial <= base) {
+      initial.setDate(1);
+      initial.setMonth(initial.getMonth() + 1);
+      const nextDays = new Date(initial.getFullYear(), initial.getMonth() + 1, 0).getDate();
+      initial.setDate(Math.min(targetDay, nextDays));
+    }
+    initial.setHours(timeInfo.hour, timeInfo.minute, 0, 0);
+    return initial.toISOString();
+  }
+  return null;
+}
+
+function normalizeReportScheduleEntry(entry, fallback = null) {
+  const base = fallback && typeof fallback === 'object' ? fallback : {};
+  const raw = entry && typeof entry === 'object' ? entry : {};
+  const id = String(raw.id || base.id || `schedule-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
+  const name = String(raw.name ?? base.name ?? 'Báo cáo KPI')
+    .trim()
+    .slice(0, 120) || 'Báo cáo KPI';
+  const rawFrequency = typeof raw.frequency === 'string' ? raw.frequency.trim() : '';
+  const baseFrequency = typeof base.frequency === 'string' ? base.frequency.trim() : '';
+  const frequency = VALID_SCHEDULE_FREQUENCIES.has(rawFrequency)
+    ? rawFrequency
+    : VALID_SCHEDULE_FREQUENCIES.has(baseFrequency)
+    ? baseFrequency
+    : 'weekly';
+  const timeInfo = normalizeScheduleTime(raw.time ?? base.time ?? '08:00');
+  const recipients = normalizeScheduleRecipients(raw.recipients ?? base.recipients ?? []);
+  const formats = normalizeScheduleFormats(raw.formats ?? base.formats ?? []);
+  const active = raw.active ?? base.active ?? true;
+  const lastRun = typeof raw.lastRun === 'string' && raw.lastRun ? raw.lastRun : typeof base.lastRun === 'string' ? base.lastRun : '';
+  let nextRun = typeof raw.nextRun === 'string' && raw.nextRun ? raw.nextRun : typeof base.nextRun === 'string' ? base.nextRun : '';
+
+  const normalized = {
+    id,
+    name,
+    frequency,
+    time: timeInfo.label,
+    dayOfWeek: frequency === 'weekly' ? clampWeekday(raw.dayOfWeek ?? base.dayOfWeek ?? 1) : null,
+    dayOfMonth: frequency === 'monthly' ? clampMonthDay(raw.dayOfMonth ?? base.dayOfMonth ?? 1) : null,
+    recipients,
+    formats,
+    active: Boolean(active),
+    lastRun,
+    nextRun,
+  };
+
+  if (normalized.active) {
+    const upcoming = calculateNextReportScheduleRun(normalized);
+    if (upcoming) {
+      normalized.nextRun = upcoming;
+    }
+  } else {
+    normalized.nextRun = '';
+  }
+
+  return normalized;
+}
+
+function readReportSchedules() {
+  const stored = safeParse(getItem(REPORT_SCHEDULE_KEY), []);
+  return Array.isArray(stored) ? stored.filter(Boolean) : [];
+}
+
+function writeReportSchedules(list) {
+  const payload = Array.isArray(list) ? list : [];
+  setItem(REPORT_SCHEDULE_KEY, JSON.stringify(payload));
+  refreshSharedKeys([REPORT_SCHEDULE_KEY]);
+  return payload;
+}
+
+export function getReportSchedules() {
+  const stored = readReportSchedules();
+  return stored.map((entry) => normalizeReportScheduleEntry(entry));
+}
+
+export function saveReportSchedule(entry, { actor = 'system' } = {}) {
+  const stored = readReportSchedules();
+  const normalizedId = entry && entry.id ? String(entry.id) : '';
+  const index = normalizedId ? stored.findIndex((item) => item?.id === normalizedId) : -1;
+  const base = index >= 0 ? stored[index] : null;
+  const normalized = normalizeReportScheduleEntry(entry, base);
+  if (index >= 0) {
+    stored[index] = normalized;
+  } else {
+    stored.push(normalized);
+  }
+  writeReportSchedules(stored);
+  pushAuditLog({
+    actor,
+    action: 'report.schedule.save',
+    detail: `Cập nhật lịch gửi báo cáo ${normalized.name}`,
+    meta: {
+      scheduleId: normalized.id,
+      frequency: normalized.frequency,
+      formats: normalized.formats,
+      active: normalized.active,
+    },
+  });
+  return normalized;
+}
+
+export function deleteReportSchedule(id, { actor = 'system' } = {}) {
+  const stored = readReportSchedules();
+  const normalizedId = String(id || '').trim();
+  if (!normalizedId) {
+    return false;
+  }
+  const next = stored.filter((item) => item && item.id !== normalizedId);
+  if (next.length === stored.length) {
+    return false;
+  }
+  writeReportSchedules(next);
+  pushAuditLog({
+    actor,
+    action: 'report.schedule.delete',
+    detail: `Xoá lịch gửi báo cáo ${normalizedId}`,
+    meta: { scheduleId: normalizedId },
+  });
+  return true;
+}
+
 // ===== K_RULES (Ä‘á»ƒ RulesEditor khÃ´ng lá»—i khi chÆ°a cÃ³ dá»¯ liá»‡u) =====
 export const K_RULES = (() => {
   return safeParse(getItem(RULES_KEY), createDefaultRuleCollection());
@@ -1991,14 +3476,48 @@ export function setRules(v) {
   setItem(RULES_KEY, JSON.stringify(v));
 }
 
-// ===== Nháº­t kÃ½ há»‡ thá»‘ng =====
+// ===== Nhật ký hệ thống =====
 
-export function pushAuditLog({ actor = "system", action = "unknown", detail = "", meta = null } = {}) {
+function inferAuditCategory(action) {
+  if (typeof action !== "string" || !action) {
+    return "khac";
+  }
+  const normalized = action.trim();
+  const separatorIndex = normalized.indexOf(".");
+  if (separatorIndex <= 0) {
+    return normalized;
+  }
+  return normalized.slice(0, separatorIndex);
+}
+
+function normalizeAuditNote(value) {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  const text = `${value}`.trim();
+  if (!text) {
+    return null;
+  }
+  return text.normalize("NFC");
+}
+
+export function pushAuditLog({
+  actor = "system",
+  action = "unknown",
+  detail = "",
+  meta = null,
+  category,
+  result = null,
+  note = null,
+} = {}) {
   const entry = {
     ts: new Date().toISOString(),
     actor,
     action,
+    category: category || inferAuditCategory(action),
     detail,
+    result: result === null || result === undefined ? null : `${result}`.trim() || null,
+    note: normalizeAuditNote(note),
     meta: meta == null ? null : shallowClone(meta),
   };
   const logs = safeParse(getItem(AUDIT_KEY), []);
@@ -2014,12 +3533,15 @@ export function getAuditLogs(limit = 100) {
   return logs.slice(0, limit);
 }
 
-export function clearAuditLogs({ actor = "system", note = "XÃ³a toÃ n bá»™ nháº­t kÃ½" } = {}) {
+export function clearAuditLogs({ actor = "system", note = "Xóa toàn bộ nhật ký" } = {}) {
   const entry = {
     ts: new Date().toISOString(),
     actor,
     action: "audit.clear",
+    category: "audit",
     detail: note,
+    result: "success",
+    note: normalizeAuditNote(note),
     meta: null,
   };
   setItem(AUDIT_KEY, JSON.stringify([entry]));
@@ -2028,17 +3550,23 @@ export function clearAuditLogs({ actor = "system", note = "XÃ³a toÃ n bá»�
 
 // ===== Default export (tuá»³ nÆ¡i dÃ¹ng)
 export default {
-  DECL_KEY, MST_KEY, RULES_KEY, TEAM_KEY, AUDIT_KEY, HQ_KEY, KPI_ADJUSTMENTS_KEY,
+  DECL_KEY, MST_KEY, RULES_KEY, TEAM_KEY, AUDIT_KEY, HQ_KEY, KPI_ADJUSTMENTS_KEY, DECL_HISTORY_KEY,
   normalizeStr, normalizeMST, normalizeDeclarationNumber, toISODate, normalizeName,
   isExportDecl, isExportByNumber, isImportByNumber, isExportByType, isImportByType,
   getMSTRowsRaw, getMSTMap, getMSTFor, upsertMSTRows,
   getDeclRows, saveDeclRows, markDeclRowsReviewed, unmarkDeclRowsReviewed, sortDeclRows, getRecentDeclRows,
-  getHQAgencies, mapHQAgenciesByMST, upsertHQAgencies, applyAgenciesToDeclRows,
+  getDeclHistoryForRow,
+  getHQAgencies, mapHQAgenciesByMST, upsertHQAgencies, saveHQAgencyRow, deleteHQAgencyRow, applyAgenciesToDeclRows,
   parseAgencyList, formatAgencyList, getHQHistoryEntries, getHQHistoryForMST,
-  getTeamRoster, setTeamRoster, mapMemberNamesToTeams, applyTeamRosterToMST,
+  getTeamRoster, setTeamRoster, subscribeTeamRoster, mapMemberNamesToTeams, applyTeamRosterToMST,
   getData, setData,
   getRules, setRules, K_RULES,
   pushImportLog,
   pushAuditLog, getAuditLogs, clearAuditLogs,
+  saveMSTRow,
+  IMPORT_COLUMN_IDS, getImportColumnConfig, saveImportColumnConfig, subscribeImportColumnConfig,
+  UI_LAYOUT_KEY,
   getKpiAdjustments, saveKpiAdjustment, updateKpiAdjustmentStatus, removeKpiAdjustment, mapAdjustmentsByMonth,
+  getKpiAdjustmentSettings, saveKpiAdjustmentSettings,
+  REPORT_SCHEDULE_KEY, getReportSchedules, saveReportSchedule, deleteReportSchedule, calculateNextReportScheduleRun,
 };

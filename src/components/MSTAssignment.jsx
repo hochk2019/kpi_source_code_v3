@@ -4,10 +4,27 @@ import {
   getMSTHistoryEntries,
   getMSTMap,
   upsertMSTRows,
+  saveMSTRow,
   MST_ASSIGNMENT_STATUS,
+  getTeamRoster,
+  subscribeTeamRoster,
+  normalizeStr,
+  normalizeName,
 } from "@/lib/store.js";
 import useTooltipTitles from "@/hooks/useTooltipTitles.js";
 import usePagination from "@/hooks/usePagination.js";
+import useMSTQuickFilters from "@/hooks/useMSTQuickFilters.js";
+import { Button } from "@/components/ui/button.jsx";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover.jsx";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command.jsx";
+import { Check, ChevronsUpDown, CircleX, Plus } from "lucide-react";
 
 /** Utils */
 const normalize = (s = "") =>
@@ -18,6 +35,180 @@ const normalize = (s = "") =>
     .replace(/\s+/g, " ")
     .trim()
     .toLowerCase();
+
+const buildRosterTeams = (rosterSnapshot) => {
+  const rawTeams = Array.isArray(rosterSnapshot?.teams) ? rosterSnapshot.teams : [];
+  const teams = [];
+
+  rawTeams.forEach((team, teamIndex) => {
+    const name = normalizeStr(team?.name ?? "");
+    const normalized = normalizeName(name);
+    if (!name || !normalized) return;
+
+    const members = Array.isArray(team?.members) ? team.members : [];
+    const normalizedMembers = members
+      .map((member, memberIndex) => {
+        const memberName = normalizeStr(member?.name ?? "");
+        const memberNormalized = normalizeName(memberName);
+        if (!memberName || !memberNormalized) return null;
+        return {
+          id: member?.id || `${teamIndex}-${memberIndex}`,
+          name: memberName,
+          normalized: memberNormalized,
+        };
+      })
+      .filter(Boolean)
+      .sort((a, b) => a.name.localeCompare(b.name, "vi", { sensitivity: "base" }));
+
+    teams.push({
+      id: team?.id || `${teamIndex}`,
+      name,
+      normalized,
+      members: normalizedMembers,
+    });
+  });
+
+  return teams.sort((a, b) => a.name.localeCompare(b.name, "vi", { sensitivity: "base" }));
+};
+
+function StaffCombobox({
+  value,
+  teamValue,
+  onSelect,
+  teams,
+  disabled = false,
+  placeholder = "Chọn nhân viên",
+}) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+
+  useEffect(() => {
+    if (!open) {
+      setSearch("");
+    }
+  }, [open]);
+
+  const normalizedValue = normalizeStr(value || "");
+  const normalizedKey = normalizeName(normalizedValue);
+  const normalizedTeamValue = normalizeName(normalizeStr(teamValue || ""));
+
+  const staffIndex = useMemo(() => {
+    const result = [];
+    teams.forEach((team) => {
+      team.members.forEach((member) => {
+        result.push({
+          teamId: team.id,
+          teamName: team.name,
+          teamNormalized: team.normalized,
+          memberId: member.id,
+          name: member.name,
+          normalized: member.normalized,
+        });
+      });
+    });
+    return result;
+  }, [teams]);
+
+  const filteredTeams = useMemo(() => {
+    if (normalizedTeamValue) {
+      const matched = teams.filter((team) => team.normalized === normalizedTeamValue);
+      if (matched.length) {
+        return matched;
+      }
+    }
+    return teams;
+  }, [teams, normalizedTeamValue]);
+
+  const searchValue = normalizeStr(search);
+  const searchKey = normalizeName(searchValue);
+  const hasExactStaff = staffIndex.some((entry) => entry.normalized === searchKey);
+  const canCreateCustom = Boolean(searchKey) && !hasExactStaff;
+
+  const handleSelect = (staffName = "", teamName = "", extra = {}) => {
+    onSelect?.({
+      staffName,
+      teamName,
+      isCustom: Boolean(extra.isCustom),
+    });
+    setOpen(false);
+    setSearch("");
+  };
+
+  return (
+    <Popover open={open} onOpenChange={disabled ? undefined : setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          role="combobox"
+          aria-expanded={open}
+          disabled={disabled}
+          className="w-full justify-between px-2 py-1 text-left font-normal"
+        >
+          <span className="truncate">{normalizedValue || placeholder}</span>
+          <ChevronsUpDown className="ml-2 size-3 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-64 p-0" align="start">
+        <Command>
+          <CommandInput
+            placeholder="Tìm nhân viên"
+            value={search}
+            onValueChange={setSearch}
+            autoFocus
+          />
+          <CommandList className="max-h-60 overflow-y-auto">
+            <CommandEmpty>Không có nhân viên phù hợp.</CommandEmpty>
+            {normalizedValue ? (
+              <CommandGroup heading="Tùy chọn">
+                <CommandItem value="__clear__" onSelect={() => handleSelect("", teamValue || "")}>
+                  <CircleX className="mr-2 size-4" />
+                  Bỏ chọn nhân viên
+                </CommandItem>
+              </CommandGroup>
+            ) : null}
+            {canCreateCustom ? (
+              <CommandGroup heading="Thêm mới">
+                <CommandItem
+                  value={searchValue}
+                  onSelect={() =>
+                    handleSelect(searchValue, normalizedTeamValue ? teamValue : "", {
+                      isCustom: true,
+                    })
+                  }
+                >
+                  <Plus className="mr-2 size-4" />
+                  Dùng giá trị "{searchValue}"
+                </CommandItem>
+              </CommandGroup>
+            ) : null}
+            {filteredTeams.map((team) => (
+              <CommandGroup key={team.id} heading={`Tổ: ${team.name}`}>
+                {team.members.map((member) => {
+                  const isSelected =
+                    member.normalized === normalizedKey && team.normalized === normalizedTeamValue;
+                  return (
+                    <CommandItem
+                      key={member.id}
+                      value={`${member.name}`}
+                      onSelect={() => handleSelect(member.name, team.name, { isCustom: false })}
+                    >
+                      <Check
+                        className={`mr-2 size-4 ${isSelected ? "opacity-100" : "opacity-0"}`}
+                      />
+                      <span className="truncate">{member.name}</span>
+                    </CommandItem>
+                  );
+                })}
+              </CommandGroup>
+            ))}
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+}
 
 const STATUS_LABELS = Object.values(MST_ASSIGNMENT_STATUS);
 const STATUS_SELECT_VALUES = ["", ...STATUS_LABELS];
@@ -127,6 +318,16 @@ const HISTORY_FIELD_LABELS = {
   effective_from: "Áp dụng từ ngày",
 };
 
+const MST_ROW_FIELDS = [
+  "mst",
+  "company",
+  "person_import",
+  "person_export",
+  "team",
+  "effective_from",
+  "status",
+];
+
 const sortMSTRows = (list = []) => {
   return [...list]
     .filter(Boolean)
@@ -218,8 +419,10 @@ const HistoryDetails = ({ entries = [], label }) => {
 };
 
 export default function MSTAssignment({ canEdit = true, currentUser = null }) {
-  const [rows, setRows] = useState([]); // toàn bộ
+  const [rows, setRows] = useState([]); // toàn bộ (bao gồm metadata)
+  const [originalRows, setOriginalRows] = useState([]);
   const [search, setSearch] = useState("");
+  const [staffFilter, setStaffFilter] = useState("");
   const [applyFrom, setApplyFrom] = useState(""); // yyyy-mm-dd
   const rootRef = useRef(null);
   const fileRef = useRef();
@@ -232,6 +435,33 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
     to: "",
     type: "all",
   });
+  const [rosterSnapshot, setRosterSnapshot] = useState(() => getTeamRoster());
+  const rosterTeams = useMemo(() => buildRosterTeams(rosterSnapshot), [rosterSnapshot]);
+  const [recentlyImportedKeys, setRecentlyImportedKeys] = useState(() => new Set());
+  const markRecentlyImported = useCallback((keys = []) => {
+    if (!Array.isArray(keys) || !keys.length) {
+      return;
+    }
+    setRecentlyImportedKeys((prev) => {
+      const next = new Set(prev);
+      keys.forEach((key) => {
+        if (key) {
+          next.add(key);
+        }
+      });
+      return next;
+    });
+  }, []);
+  useEffect(() => {
+    const unsubscribe = subscribeTeamRoster((next) => {
+      setRosterSnapshot(next);
+    });
+    return () => {
+      if (typeof unsubscribe === "function") {
+        unsubscribe();
+      }
+    };
+  }, []);
   const filteredHistoryEntries = useMemo(() => {
     if (!historyEntries?.length) return [];
     return historyEntries.filter((entry) => {
@@ -253,6 +483,25 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
     () => buildHistoryIndex(filteredHistoryEntries),
     [filteredHistoryEntries]
   );
+  const isHistoryFilterActive = useMemo(
+    () =>
+      Boolean(
+        (historyFilter.from && historyFilter.from.trim()) ||
+          (historyFilter.to && historyFilter.to.trim()) ||
+          (historyFilter.type && historyFilter.type !== "all")
+      ),
+    [historyFilter]
+  );
+  const historyFilteredRowKeys = useMemo(() => {
+    if (!isHistoryFilterActive) return null;
+    const set = new Set();
+    filteredHistoryEntries.forEach((entry) => {
+      if (entry?.rowKey) {
+        set.add(entry.rowKey);
+      }
+    });
+    return set;
+  }, [filteredHistoryEntries, isHistoryFilterActive]);
   const [showAddForm, setShowAddForm] = useState(false);
   const [draft, setDraft] = useState({
     mst: "",
@@ -267,6 +516,231 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
 
   const actor = currentUser?.username || "guest";
   const isReadOnly = !canEdit;
+  const {
+    favorites: quickFavorites,
+    addFavorite: addQuickFavorite,
+    removeFavorite: removeQuickFavorite,
+    clearType: clearQuickFavorite,
+  } = useMSTQuickFilters();
+  const originalMap = useMemo(() => {
+    const map = new Map();
+    originalRows.forEach((row) => {
+      if (!row) return;
+      const key = row.__originalKey || makeRowKey(row);
+      if (key) {
+        map.set(key, row);
+      }
+    });
+    return map;
+  }, [originalRows]);
+  const createRowState = useCallback((row, meta = {}) => {
+    const normalizedStatus = normalizeStatusLabel(row?.status);
+    const mstValue = tidyMST(row?.mst || "");
+    const base = {
+      mst: mstValue,
+      company: String(row?.company || "").trim(),
+      person_import: String(row?.person_import || "").trim(),
+      person_export: String(row?.person_export || "").trim(),
+      team: String(row?.team || "").trim(),
+      effective_from: row?.effective_from || "",
+      status: normalizedStatus,
+    };
+    const originalKey = meta.originalKey ?? (meta.isNew ? null : makeRowKey(base));
+    return {
+      ...base,
+      __originalKey: originalKey,
+      __isNew: Boolean(meta.isNew),
+    };
+  }, []);
+  const getRowDiff = useCallback(
+    (row) => {
+      if (!row) {
+        return { changed: false, sanitized: createRowState({}, { isNew: true }) };
+      }
+      const baseKey = row.__originalKey || "";
+      const sanitized = createRowState(row, {
+        originalKey: baseKey || undefined,
+        isNew: row.__isNew,
+      });
+      const nextKey = makeRowKey(sanitized);
+      const baseline = baseKey ? originalMap.get(baseKey) : null;
+      if (!baseline) {
+        const payload = {};
+        MST_ROW_FIELDS.forEach((field) => {
+          payload[field] = sanitized[field] || "";
+        });
+        return { changed: true, isNew: true, sanitized, patch: payload, keyChanged: true };
+      }
+      const patch = {};
+      MST_ROW_FIELDS.forEach((field) => {
+        const nextValue = sanitized[field] || "";
+        const prevValue = baseline[field] || "";
+        if (field === "effective_from") {
+          if ((nextValue || "") !== (prevValue || "")) {
+            patch[field] = nextValue;
+          }
+          return;
+        }
+        if (field === "status") {
+          if (normalizeStatusLabel(nextValue) !== normalizeStatusLabel(prevValue)) {
+            patch[field] = normalizeStatusLabel(nextValue);
+          }
+          return;
+        }
+        if (field === "mst") {
+          if (tidyMST(nextValue) !== tidyMST(prevValue)) {
+            patch[field] = tidyMST(nextValue);
+          }
+          return;
+        }
+        if (normalizeStr(nextValue) !== normalizeStr(prevValue)) {
+          patch[field] = nextValue;
+        }
+      });
+      const keyChanged = nextKey !== (baseKey || nextKey);
+      const changed = keyChanged || Object.keys(patch).length > 0;
+      return { changed, isNew: false, sanitized, patch, keyChanged, baseline };
+    },
+    [createRowState, originalMap]
+  );
+  const rowHasChanges = useCallback((row) => getRowDiff(row).changed, [getRowDiff]);
+  const commitRow = useCallback(
+    (row) => {
+      if (isReadOnly) {
+        alert("Bạn không có quyền cập nhật dòng này.");
+        return;
+      }
+      const diff = getRowDiff(row);
+      if (!diff.changed) {
+        alert("Không có thay đổi mới để lưu.");
+        return;
+      }
+      const payload = { ...diff.sanitized };
+      delete payload.__originalKey;
+      delete payload.__isNew;
+      try {
+        const result = saveMSTRow(payload, {
+          originalKey: row.__originalKey || null,
+          actor,
+          detail: "Cập nhật gán MST từ tab Gán MST",
+        });
+        if (!result?.ok) {
+          switch (result?.reason) {
+            case "conflict":
+              alert(
+                "MST và ngày áp dụng trùng với dòng khác. Vui lòng đổi ngày áp dụng hoặc kiểm tra dữ liệu hiện có."
+              );
+              break;
+            case "invalid":
+              alert("Dữ liệu chưa hợp lệ, vui lòng kiểm tra lại.");
+              break;
+            case "not-found":
+              alert("Không tìm thấy bản ghi gốc. Hãy tải lại trang trước khi cập nhật.");
+              break;
+            case "no-change":
+              alert("Không có thay đổi mới để lưu.");
+              break;
+            default:
+              alert("Không thể lưu dòng này. Vui lòng thử lại sau.");
+          }
+          return;
+        }
+        const savedRow = createRowState(result.row, {
+          originalKey: result.key,
+          isNew: false,
+        });
+        setRows((prev) => {
+          const current = Array.isArray(prev) ? prev : [];
+          const replaced = current.map((item) => (item === row ? savedRow : item));
+          return sortMSTRows(replaced);
+        });
+        setOriginalRows((prev) => {
+          const baseKey = result.previousKey || row.__originalKey || "";
+          const filtered = (Array.isArray(prev) ? prev : []).filter((item) => {
+            const itemKey = item.__originalKey || makeRowKey(item);
+            return itemKey !== baseKey;
+          });
+          const merged = [...filtered, savedRow];
+          return sortMSTRows(merged);
+        });
+        setRecentlyImportedKeys((prev) => {
+          const next = new Set(prev);
+          const currentKey = makeRowKey(row);
+          if (currentKey && next.has(currentKey)) {
+            next.delete(currentKey);
+          }
+          if (row.__originalKey && next.has(row.__originalKey)) {
+            next.delete(row.__originalKey);
+          }
+          next.add(result.key);
+          return next;
+        });
+        refreshHistory();
+        alert("Đã lưu thay đổi cho dòng này.");
+      } catch (error) {
+        console.error("saveMSTRow error", error);
+        alert("Không thể lưu dòng này. Vui lòng thử lại sau.");
+      }
+    },
+    [actor, createRowState, getRowDiff, isReadOnly, refreshHistory]
+  );
+  const handleStaffFilterSelect = useCallback(
+    ({ staffName }) => {
+      setStaffFilter(staffName || "");
+      setPage(1);
+    },
+    [setPage]
+  );
+  const clearStaffFilter = useCallback(() => {
+    setStaffFilter("");
+    setPage(1);
+  }, [setPage]);
+  const applyStaffFavorite = useCallback(
+    (value) => {
+      setStaffFilter(value || "");
+      setPage(1);
+    },
+    [setPage]
+  );
+  const applyActionFavorite = useCallback(
+    (value) => {
+      if (!value) {
+        updateHistoryFilter({ type: "all" });
+      } else {
+        updateHistoryFilter({ type: value });
+      }
+      setPage(1);
+    },
+    [setPage, updateHistoryFilter]
+  );
+  const handleSaveStaffFavorite = useCallback(() => {
+    if (!staffFilter.trim()) {
+      alert("Nhập hoặc chọn nhân viên trước khi lưu bộ lọc.");
+      return;
+    }
+    const result = addQuickFavorite("staff", staffFilter);
+    if (!result.ok) {
+      if (result.reason === "duplicate") {
+        alert("Bộ lọc này đã nằm trong danh sách ưa thích.");
+      }
+      return;
+    }
+    alert("Đã lưu bộ lọc nhân viên.");
+  }, [addQuickFavorite, staffFilter]);
+  const handleSaveActionFavorite = useCallback(() => {
+    if (!historyFilter.type || historyFilter.type === "all") {
+      alert("Chỉ lưu bộ lọc thao tác khi bạn chọn Thêm mới/Chỉnh sửa/Xóa.");
+      return;
+    }
+    const result = addQuickFavorite("action", historyFilter.type);
+    if (!result.ok) {
+      if (result.reason === "duplicate") {
+        alert("Bộ lọc thao tác đã tồn tại.");
+      }
+      return;
+    }
+    alert("Đã lưu bộ lọc thao tác.");
+  }, [addQuickFavorite, historyFilter.type]);
 
   const refreshHistory = useCallback(() => {
     setHistoryEntries(getMSTHistoryEntries(500));
@@ -284,11 +758,15 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
   useEffect(() => {
     try {
       const cur = getMSTMap() || [];
-      setRows(sortMSTRows(cur));
+      const prepared = sortMSTRows(cur).map((row) =>
+        createRowState(row, { originalKey: makeRowKey(row), isNew: false })
+      );
+      setRows(prepared);
+      setOriginalRows(prepared);
     } catch (e) {
       console.error("getMSTMap error:", e);
     }
-  }, []);
+  }, [createRowState]);
 
   useEffect(() => {
     refreshHistory();
@@ -348,10 +826,12 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
       company: normalizedCompany,
       person_import: normalizedImport,
       person_export: normalizedExport,
+      team: normalizedTeam,
       effective_from: normalizedDate,
       status: normalizedStatus,
     };
 
+    let createdKey = "";
     setRows((prev) => {
       const current = Array.isArray(prev) ? prev : [];
       const newKey = makeRowKey(newRow);
@@ -362,12 +842,20 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
         normalizedStatus || (existingIndex >= 0 ? normalizeStatusLabel(next[existingIndex]?.status) : "");
       const payload = { ...newRow, team: resolvedTeam, status: resolvedStatus };
       if (existingIndex >= 0) {
-        next[existingIndex] = { ...next[existingIndex], ...payload };
+        const originalMeta = next[existingIndex];
+        next[existingIndex] = createRowState({ ...originalMeta, ...payload }, {
+          originalKey: originalMeta.__originalKey,
+          isNew: originalMeta.__isNew,
+        });
       } else {
-        next.push(payload);
+        next.push(createRowState(payload, { isNew: true }));
+        createdKey = newKey;
       }
       return sortMSTRows(next);
     });
+    if (createdKey) {
+      markRecentlyImported([createdKey]);
+    }
     setPage(1);
     setShowAddForm(false);
     setAddError("");
@@ -407,15 +895,56 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
 
   /** Filter + phân trang */
   const filtered = useMemo(() => {
-    if (!search) return rows;
-    const q = normalize(search);
-    return rows.filter(
-      (r) =>
-        normalize(r.mst).includes(q) ||
-        normalize(r.company).includes(q) ||
-        normalize(r.status || "").includes(q)
-    );
-  }, [rows, search]);
+    const query = normalize(search || "");
+    const hasQuery = Boolean(query);
+    const staffQuery = normalize(staffFilter || "");
+    const hasStaffQuery = Boolean(staffQuery);
+    const base = rows.filter((row) => {
+      if (isHistoryFilterActive) {
+        const key = makeRowKey(row);
+        if (!historyFilteredRowKeys?.has(key)) {
+          return false;
+        }
+      }
+      if (hasStaffQuery) {
+        const staffMatched =
+          normalize(row.person_import || "").includes(staffQuery) ||
+          normalize(row.person_export || "").includes(staffQuery) ||
+          normalize(row.team || "").includes(staffQuery);
+        if (!staffMatched) {
+          return false;
+        }
+      }
+      if (!hasQuery) return true;
+      return (
+        normalize(row.mst).includes(query) ||
+        normalize(row.company).includes(query) ||
+        normalize(row.status || "").includes(query)
+      );
+    });
+
+    const prioritized = [...base].sort((a, b) => {
+      const keyA = makeRowKey(a);
+      const keyB = makeRowKey(b);
+      const aIsNew = recentlyImportedKeys.has(keyA) ? 1 : 0;
+      const bIsNew = recentlyImportedKeys.has(keyB) ? 1 : 0;
+      if (aIsNew !== bIsNew) {
+        return bIsNew - aIsNew;
+      }
+      const byMST = (a.mst || "").localeCompare(b.mst || "");
+      if (byMST !== 0) return byMST;
+      return (a.effective_from || "").localeCompare(b.effective_from || "");
+    });
+
+    return prioritized;
+  }, [
+    rows,
+    search,
+    staffFilter,
+    isHistoryFilterActive,
+    historyFilteredRowKeys,
+    recentlyImportedKeys,
+  ]);
 
   const {
     page,
@@ -429,9 +958,14 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
     initialPageSize: DEFAULT_PAGE_SIZE,
   });
 
+  useEffect(() => {
+    setPage(1);
+  }, [setPage, historyFilter.from, historyFilter.to, historyFilter.type, isHistoryFilterActive]);
+
   useTooltipTitles(rootRef, [
     rows,
     search,
+    staffFilter,
     applyFrom,
     page,
     showAddForm,
@@ -441,6 +975,7 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
 
   const totalHistoryCount = historyEntries.length;
   const filteredHistoryCount = filteredHistoryEntries.length;
+  const recentlyImportedCount = recentlyImportedKeys.size;
 
   /** Excel import */
   const onImportXLSX = async () => {
@@ -462,6 +997,8 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
         defval: "",
         raw: false,
       });
+
+      const newRowKeys = [];
 
       const mapped = json
         .map((r) => {
@@ -493,12 +1030,27 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
       }
       for (const r of mapped) {
         const key = makeRowKey(r);
-        byKey.set(key, { ...byKey.get(key), ...r });
+        const previous = byKey.get(key);
+        let nextRow;
+        if (previous) {
+          nextRow = createRowState({ ...previous, ...r }, {
+            originalKey: previous.__originalKey,
+            isNew: previous.__isNew,
+          });
+        } else {
+          nextRow = createRowState(r, { isNew: true });
+        }
+        byKey.set(key, nextRow);
+        if (!previous) {
+          newRowKeys.push(key);
+        }
       }
 
-      setRows(sortMSTRows(Array.from(byKey.values())));
+      const nextRows = sortMSTRows(Array.from(byKey.values()));
+      setRows(nextRows);
       setPage(1);
       alert(`Đọc file thành công: ${mapped.length} dòng. Bấm Lưu để ghi.`);
+      markRecentlyImported(newRowKeys);
     } catch (e) {
       console.error(e);
       alert("Không thể đọc file .xlsx — kiểm tra lại định dạng.");
@@ -520,6 +1072,12 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
         detail: "Cập nhật gán MST từ giao diện",
       });
       refreshHistory();
+      const synced = sortMSTRows(getMSTMap()).map((row) =>
+        createRowState(row, { originalKey: makeRowKey(row), isNew: false })
+      );
+      setRows(synced);
+      setOriginalRows(synced);
+      setRecentlyImportedKeys(new Set());
       alert("Lưu thành công!");
     } catch (e) {
       console.error(e);
@@ -531,22 +1089,37 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
   const updateRow = (originalRow, patch) => {
     if (isReadOnly) return;
     const targetKey = makeRowKey(originalRow);
+    let updatedKey = "";
+    let didUpdate = false;
     setRows((prev) =>
       sortMSTRows(
         prev.map((r) => {
           if (makeRowKey(r) !== targetKey) return r;
-        const next = { ...r, ...patch };
-        if (patch && Object.prototype.hasOwnProperty.call(patch, "mst")) {
-          next.mst = tidyMST(next.mst);
-        }
-        if (patch && Object.prototype.hasOwnProperty.call(patch, "status")) {
-          next.status = normalizeStatusLabel(next.status);
-        }
+          const next = { ...r, ...patch };
+          next.__originalKey = r.__originalKey ?? null;
+          next.__isNew = r.__isNew;
+          if (patch && Object.prototype.hasOwnProperty.call(patch, "mst")) {
+            next.mst = tidyMST(next.mst);
+          }
+          if (patch && Object.prototype.hasOwnProperty.call(patch, "status")) {
+            next.status = normalizeStatusLabel(next.status);
+          }
+          updatedKey = makeRowKey(next);
+          didUpdate = true;
+          return next;
+        })
+      )
+    );
+    if (didUpdate && updatedKey && updatedKey !== targetKey) {
+      setRecentlyImportedKeys((prev) => {
+        if (!prev.has(targetKey)) return prev;
+        const next = new Set(prev);
+        next.delete(targetKey);
+        next.add(updatedKey);
         return next;
-      })
-    )
-  );
-};
+      });
+    }
+  };
 
   const removeRow = (row) => {
     if (isReadOnly) return;
@@ -556,6 +1129,12 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
       : row.mst;
     if (!confirm(`Xóa dòng ${label}?`)) return;
     setRows((prev) => prev.filter((r) => makeRowKey(r) !== key));
+    setRecentlyImportedKeys((prev) => {
+      if (!prev.has(key)) return prev;
+      const next = new Set(prev);
+      next.delete(key);
+      return next;
+    });
   };
 
   /** UI */
@@ -667,6 +1246,69 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
         </div>
       </div>
 
+      <div className="mb-4 rounded border border-gray-200 bg-white p-4 shadow-sm">
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="text-sm font-medium text-gray-700">Lọc theo nhân viên phụ trách</span>
+          <div className="w-64">
+            <StaffCombobox
+              value={staffFilter}
+              teamValue=""
+              onSelect={handleStaffFilterSelect}
+              teams={rosterTeams}
+              placeholder="Chọn nhân viên"
+            />
+          </div>
+          {staffFilter ? (
+            <button
+              type="button"
+              onClick={clearStaffFilter}
+              className="px-2 py-1 rounded border bg-white hover:bg-gray-50"
+            >
+              Xóa lọc
+            </button>
+          ) : null}
+          <button
+            type="button"
+            onClick={handleSaveStaffFavorite}
+            className="px-2 py-1 rounded bg-slate-800 text-white hover:bg-slate-900"
+            disabled={!staffFilter.trim()}
+          >
+            Lưu bộ lọc nhân viên
+          </button>
+        </div>
+        {quickFavorites.staff.length ? (
+          <div className="mt-3">
+            <div className="text-xs font-semibold uppercase text-gray-500 mb-1">
+              Bộ lọc nhanh
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {quickFavorites.staff.map((fav) => (
+                <div
+                  key={`staff-${fav.normalized}`}
+                  className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1 text-sm text-slate-700"
+                >
+                  <button
+                    type="button"
+                    onClick={() => applyStaffFavorite(fav.value)}
+                    className="font-medium hover:text-slate-900"
+                  >
+                    {fav.value}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => removeQuickFavorite("staff", fav.value)}
+                    className="text-xs text-slate-500 hover:text-slate-700"
+                    aria-label={`Xóa ${fav.value}`}
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
+      </div>
+
       <div className="mb-4 rounded border border-sky-200 bg-sky-50 p-4 text-sm text-gray-700">
         <div className="flex flex-wrap items-end gap-3">
           <label className="flex flex-col gap-1">
@@ -711,14 +1353,58 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
           >
             Xóa lọc
           </button>
+          <button
+            type="button"
+            onClick={handleSaveActionFavorite}
+            className="px-3 py-1 rounded border bg-white hover:bg-gray-50"
+            data-tooltip="Lưu nhanh bộ lọc thao tác hiện tại"
+          >
+            Lưu thao tác
+          </button>
           <div className="flex-1" />
           <div className="text-right text-xs text-gray-600">
             <div>
               Hiển thị {filteredHistoryCount} / {totalHistoryCount} bản ghi lịch sử.
             </div>
             <div>Áp dụng cho phần lịch sử của từng dòng bên dưới.</div>
+            {isHistoryFilterActive ? (
+              <div className="text-amber-600">
+                * Danh sách MST cũng đang lọc theo điều kiện lịch sử này.
+              </div>
+            ) : null}
           </div>
         </div>
+        {quickFavorites.action.length ? (
+          <div className="mt-3">
+            <div className="text-xs font-semibold uppercase text-gray-500 mb-1">
+              Thao tác đã lưu
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {quickFavorites.action.map((fav) => (
+                <div
+                  key={`action-${fav.normalized}`}
+                  className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-3 py-1 text-sm text-amber-700"
+                >
+                  <button
+                    type="button"
+                    onClick={() => applyActionFavorite(fav.value)}
+                    className="font-medium hover:text-amber-900"
+                  >
+                    {fav.value}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => removeQuickFavorite("action", fav.value)}
+                    className="text-xs text-amber-600 hover:text-amber-800"
+                    aria-label={`Xóa ${fav.value}`}
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
       </div>
 
       {showAddForm && (
@@ -752,24 +1438,46 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
             </label>
             <label className="flex flex-col gap-1 text-sm font-medium text-gray-700">
               Người phụ trách Nhập
-              <input
-                type="text"
+              <StaffCombobox
                 value={draft.person_import}
-                onChange={handleDraftChange("person_import")}
-                className="border rounded px-2 py-1"
-                placeholder="Phụ trách nhập"
-                data-tooltip="Người phụ trách tờ khai nhập khẩu"
+                teamValue={draft.team}
+                teams={rosterTeams}
+                placeholder="Chọn nhân viên nhập"
+                onSelect={({ staffName, teamName, isCustom }) => {
+                  setDraft((prev) => {
+                    const next = { ...prev, person_import: staffName || "" };
+                    if (staffName && teamName && !isCustom) {
+                      const prevTeamKey = normalizeName(normalizeStr(prev.team || ""));
+                      const nextTeamKey = normalizeName(normalizeStr(teamName));
+                      if (!prevTeamKey || prevTeamKey === nextTeamKey) {
+                        next.team = teamName;
+                      }
+                    }
+                    return next;
+                  });
+                }}
               />
             </label>
             <label className="flex flex-col gap-1 text-sm font-medium text-gray-700">
               Người phụ trách Xuất
-              <input
-                type="text"
+              <StaffCombobox
                 value={draft.person_export}
-                onChange={handleDraftChange("person_export")}
-                className="border rounded px-2 py-1"
-                placeholder="Phụ trách xuất"
-                data-tooltip="Người phụ trách tờ khai xuất khẩu"
+                teamValue={draft.team}
+                teams={rosterTeams}
+                placeholder="Chọn nhân viên xuất"
+                onSelect={({ staffName, teamName, isCustom }) => {
+                  setDraft((prev) => {
+                    const next = { ...prev, person_export: staffName || "" };
+                    if (staffName && teamName && !isCustom) {
+                      const prevTeamKey = normalizeName(normalizeStr(prev.team || ""));
+                      const nextTeamKey = normalizeName(normalizeStr(teamName));
+                      if (!prevTeamKey || prevTeamKey === nextTeamKey) {
+                        next.team = teamName;
+                      }
+                    }
+                    return next;
+                  });
+                }}
               />
             </label>
             <label className="flex flex-col gap-1 text-sm font-medium text-gray-700">
@@ -836,8 +1544,18 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
         </form>
       )}
 
-      <div className="text-sm text-gray-500 mb-2">
-        {filtered.length} dòng — Trang {page}/{totalPages}
+      <div className="text-sm text-gray-500 mb-2 flex flex-wrap items-center gap-2">
+        <span>
+          {filtered.length} dòng — Trang {page}/{totalPages}
+        </span>
+        {recentlyImportedCount ? (
+          <span className="inline-flex items-center gap-1 rounded bg-amber-100 px-2 py-0.5 text-amber-700">
+            <span className="text-xs font-semibold uppercase">Ưu tiên</span>
+            <span>
+              {recentlyImportedCount} dòng mới import đang hiển thị đầu danh sách
+            </span>
+          </span>
+        ) : null}
       </div>
 
       <div className="border rounded overflow-hidden">
@@ -850,7 +1568,7 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
               <th className="p-2 text-left w-40">Người phụ trách Xuất</th>
               <th className="p-2 text-left w-40">Trạng thái</th>
               <th className="p-2 text-left w-40">Áp dụng từ ngày</th>
-              <th className="p-2 w-16">Xóa</th>
+              <th className="p-2 w-32">Hành động</th>
             </tr>
           </thead>
           <tbody>
@@ -868,21 +1586,38 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
                 const exportHistory = rowHistory.person_export || [];
                 const effectiveHistory = rowHistory.effective_from || [];
                 const statusValue = normalizeStatusLabel(r.status);
+                const isNewlyImported = recentlyImportedKeys.has(rowKey);
+                const isDirty = rowHasChanges(r);
+                const updateDisabled = !canEdit || !isDirty;
+                const updateLabel = r.__originalKey ? "Cập nhật" : "Lưu mới";
                 return (
-                  <tr key={rowKey || r.mst} className="border-t">
-                  <td className="p-2">
-                    {isReadOnly ? (
-                      <span>{r.mst}</span>
-                    ) : (
-                      <input
-                        value={r.mst}
-                        onChange={(e) =>
-                          updateRow(r, { mst: tidyMST(e.target.value) })
-                        }
-                        className="border rounded px-2 py-1 w-full"
-                      />
-                    )}
-                  </td>
+                  <tr
+                    key={rowKey || r.mst}
+                    className={`border-t ${isNewlyImported ? "bg-amber-50" : ""}`}
+                  >
+                    <td className="p-2">
+                      {isReadOnly ? (
+                        <span>{r.mst}</span>
+                      ) : (
+                        <input
+                          value={r.mst}
+                          onChange={(e) =>
+                            updateRow(r, { mst: tidyMST(e.target.value) })
+                          }
+                          className="border rounded px-2 py-1 w-full"
+                        />
+                      )}
+                      {isNewlyImported ? (
+                        <span className="ml-2 inline-flex items-center rounded bg-amber-500/10 px-2 py-0.5 text-xs font-semibold uppercase text-amber-700">
+                          Mới import
+                        </span>
+                      ) : null}
+                      {isDirty ? (
+                        <span className="ml-2 inline-flex items-center rounded bg-blue-500/10 px-2 py-0.5 text-xs font-semibold uppercase text-blue-700">
+                          Chưa lưu
+                        </span>
+                      ) : null}
+                    </td>
                   <td className="p-2">
                     {isReadOnly ? (
                       <span>{r.company || ""}</span>
@@ -900,12 +1635,26 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
                     {isReadOnly ? (
                       <span>{r.person_import || ""}</span>
                     ) : (
-                      <input
+                      <StaffCombobox
                         value={r.person_import || ""}
-                        onChange={(e) =>
-                          updateRow(r, { person_import: e.target.value })
-                        }
-                        className="border rounded px-2 py-1 w-full"
+                        teamValue={r.team || ""}
+                        teams={rosterTeams}
+                        placeholder="Chọn nhân viên nhập"
+                        onSelect={({ staffName, teamName, isCustom }) => {
+                          const patch = { person_import: staffName || "" };
+                          if (staffName && teamName && !isCustom) {
+                            const currentTeamKey = normalizeName(
+                              normalizeStr(r.team || "")
+                            );
+                            const nextTeamKey = normalizeName(
+                              normalizeStr(teamName)
+                            );
+                            if (!currentTeamKey || currentTeamKey === nextTeamKey) {
+                              patch.team = teamName;
+                            }
+                          }
+                          updateRow(r, patch);
+                        }}
                       />
                     )}
                     <HistoryDetails
@@ -917,12 +1666,26 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
                     {isReadOnly ? (
                       <span>{r.person_export || ""}</span>
                     ) : (
-                      <input
+                      <StaffCombobox
                         value={r.person_export || ""}
-                        onChange={(e) =>
-                          updateRow(r, { person_export: e.target.value })
-                        }
-                        className="border rounded px-2 py-1 w-full"
+                        teamValue={r.team || ""}
+                        teams={rosterTeams}
+                        placeholder="Chọn nhân viên xuất"
+                        onSelect={({ staffName, teamName, isCustom }) => {
+                          const patch = { person_export: staffName || "" };
+                          if (staffName && teamName && !isCustom) {
+                            const currentTeamKey = normalizeName(
+                              normalizeStr(r.team || "")
+                            );
+                            const nextTeamKey = normalizeName(
+                              normalizeStr(teamName)
+                            );
+                            if (!currentTeamKey || currentTeamKey === nextTeamKey) {
+                              patch.team = teamName;
+                            }
+                          }
+                          updateRow(r, patch);
+                        }}
                       />
                     )}
                     <HistoryDetails
@@ -974,20 +1737,39 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
                   </td>
                   <td className="p-2 text-center">
                     {canEdit ? (
-                      <button
-                        onClick={() => removeRow(r)}
-                        className="px-2 py-1 rounded bg-red-500 text-white"
-                        data-tooltip="Xóa dòng"
-                      >
-                        Xóa
-                      </button>
+                      <div className="flex flex-col gap-2">
+                        <button
+                          type="button"
+                          onClick={() => commitRow(r)}
+                          disabled={updateDisabled}
+                          className={`px-2 py-1 rounded text-white ${
+                            updateDisabled
+                              ? "bg-gray-400 cursor-not-allowed"
+                              : "bg-emerald-600 hover:bg-emerald-700"
+                          }`}
+                          data-tooltip={
+                            updateDisabled
+                              ? "Không có thay đổi mới"
+                              : "Lưu các thay đổi vừa chỉnh"
+                          }
+                        >
+                          {updateLabel}
+                        </button>
+                        <button
+                          onClick={() => removeRow(r)}
+                          className="px-2 py-1 rounded bg-red-500 text-white hover:bg-red-600"
+                          data-tooltip="Xóa dòng"
+                        >
+                          Xóa
+                        </button>
+                      </div>
                     ) : (
                       <span className="text-xs text-gray-400">—</span>
                     )}
                   </td>
-                  </tr>
-                );
-              })
+                </tr>
+              );
+            })
             )}
           </tbody>
         </table>

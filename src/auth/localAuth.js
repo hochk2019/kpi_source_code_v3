@@ -94,7 +94,20 @@ function normalizeUserRecord(record) {
   const role = normalizeRoleKey(record?.role);
   const name = String(record?.name || username).trim();
   const permissions = normalizePermissions(record?.permissions, role);
-  return { username, role, name, permissions };
+  const memberId = typeof record?.memberId === "string" ? record.memberId.trim() : "";
+  const memberName = typeof record?.memberName === "string" ? record.memberName.trim() : "";
+  const teamId = typeof record?.teamId === "string" ? record.teamId.trim() : "";
+  const teamName = typeof record?.teamName === "string" ? record.teamName.trim() : "";
+  return {
+    username,
+    role,
+    name,
+    permissions,
+    memberId: memberId || null,
+    memberName: memberName || null,
+    teamId: teamId || null,
+    teamName: teamName || null,
+  };
 }
 
 function setAccountCache(accounts) {

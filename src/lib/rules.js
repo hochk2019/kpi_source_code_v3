@@ -64,6 +64,7 @@ function createRuleSkeleton() {
   base.name = base.name || 'Bộ quy tắc KPI';
   base.description = base.description || '';
   base.applyFrom = base.applyFrom || '';
+  base.version = Number.isFinite(Number(base.version)) ? Number(base.version) : 0;
   return base;
 }
 
@@ -192,6 +193,13 @@ function normalizeRule(rawRule) {
     applyFrom: normText(input.applyFrom || input.appliedFrom || ''),
     updatedAt: input.updatedAt || skeleton.updatedAt || new Date().toISOString(),
   };
+
+  const baseVersion = Number.isFinite(Number(input.version))
+    ? Number(input.version)
+    : Number.isFinite(Number(skeleton.version))
+    ? Number(skeleton.version)
+    : 0;
+  next.version = Math.max(0, baseVersion);
 
   const baseGroups = skeleton.groups || {};
   const rawGroups = input.groups || {};
@@ -388,6 +396,7 @@ function appendHistory(rule) {
     name: rule.name,
     updatedAt: rule.updatedAt,
     applyFrom: rule.applyFrom,
+    version: Number.isFinite(Number(rule.version)) ? Number(rule.version) : undefined,
     snapshot: clone(rule),
   });
   while (history.length > 20) history.pop();
@@ -410,6 +419,11 @@ export function saveRules(ruleInput, opts = {}) {
   normalizedRule.updatedAt = new Date().toISOString();
 
   const idx = collection.sets.findIndex((entry) => entry.id === normalizedRule.id);
+  const previous = idx >= 0 ? collection.sets[idx] : null;
+  const previousVersion = Number.isFinite(Number(previous?.version)) ? Number(previous.version) : 0;
+  const incomingVersion = Number.isFinite(Number(normalizedRule.version)) ? Number(normalizedRule.version) : previousVersion;
+  normalizedRule.version = Math.max(previousVersion, incomingVersion) + 1;
+
   if (idx >= 0) {
     collection.sets[idx] = normalizedRule;
   } else {
@@ -437,14 +451,44 @@ export function saveRules(ruleInput, opts = {}) {
   pushAuditLog({
     actor,
     action: 'rules.save',
-    detail: `Lưu bộ quy tắc ${normalizedRule.name}`,
+    detail: opts.detail || `Lưu bộ quy tắc ${normalizedRule.name}`,
     meta: {
       ruleId: normalizedRule.id,
       recalcFrom: recalcFrom || '',
+      version: normalizedRule.version,
     },
   });
 
   return clone(normalizedRule);
+}
+
+export function restoreRuleVersion(snapshotInput, opts = {}) {
+  if (!snapshotInput || typeof snapshotInput !== 'object') {
+    throw new Error('Thiếu dữ liệu snapshot cần khôi phục');
+  }
+  const actor = opts.actor || 'system';
+  const normalizedSnapshot = normalizeRule(snapshotInput);
+  const restored = saveRules(
+    { ...normalizedSnapshot, updatedAt: new Date().toISOString() },
+    {
+      actor,
+      ruleId: normalizedSnapshot.id,
+      setAsDefault: opts.setAsDefault,
+      appendHistory: opts.appendHistory !== undefined ? opts.appendHistory : true,
+      detail: opts.detail || `Khôi phục phiên bản ${normalizedSnapshot.version || ''} của ${normalizedSnapshot.name}`,
+    }
+  );
+  pushAuditLog({
+    actor,
+    action: 'rules.rollback',
+    detail: `Khôi phục bộ quy tắc ${restored.name} về phiên bản ${restored.version}`,
+    meta: {
+      ruleId: restored.id,
+      restoredFromVersion: normalizedSnapshot.version || 0,
+      version: restored.version,
+    },
+  });
+  return restored;
 }
 
 export function setDefaultRule(ruleId, { actor = 'system' } = {}) {

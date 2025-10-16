@@ -38,6 +38,7 @@ describe('DataImporter preview UI', () => {
       co: '',
       has_co: false,
       co_line_count: 0,
+      status: 'existing',
     },
     {
       so_tk: 'TK-CO-1',
@@ -50,6 +51,7 @@ describe('DataImporter preview UI', () => {
       co: 'Có',
       has_co: true,
       co_line_count: 1,
+      status: 'new',
     },
     {
       so_tk: 'TK-CO-4',
@@ -62,6 +64,7 @@ describe('DataImporter preview UI', () => {
       co: 'Có',
       has_co: true,
       co_line_count: 4,
+      status: 'existing',
     },
   ];
   const previewRows = [
@@ -248,5 +251,53 @@ describe('DataImporter preview UI', () => {
     await waitFor(() => {
       expect(screen.getByText('Đáp ứng C/O: 1 tờ khai')).toBeInTheDocument();
     });
+  });
+
+  it('hỗ trợ lọc nhanh theo trạng thái và MST ưa thích', async () => {
+    render(
+      <DataImporter
+        canEdit
+        currentUser={{ username: 'viewer', permissions: [] }}
+      />
+    );
+
+    await screen.findByPlaceholderText('Lọc nhanh theo MST');
+
+    const pickMainTable = () => {
+      const allTables = screen.getAllByRole('table');
+      for (const candidate of allTables) {
+        if (within(candidate).queryByRole('columnheader', { name: 'MST' })) {
+          return candidate;
+        }
+      }
+      return null;
+    };
+
+    const table = await waitFor(() => {
+      const main = pickMainTable();
+      if (!main) {
+        throw new Error('Không tìm thấy bảng dữ liệu tờ khai');
+      }
+      return main;
+    });
+
+    const existingCheckbox = screen.getByLabelText('Đã có');
+    await userEvent.click(existingCheckbox);
+
+    await waitFor(() => {
+      expect(within(table).queryByText('0100000001')).not.toBeInTheDocument();
+    });
+    expect(within(table).getByText('0100000000')).toBeInTheDocument();
+
+    await userEvent.click(existingCheckbox);
+
+    const mstInput = screen.getByPlaceholderText('Lọc nhanh theo MST');
+    await userEvent.clear(mstInput);
+    await userEvent.type(mstInput, '0100000001');
+
+    await waitFor(() => {
+      expect(within(table).getByText('0100000001')).toBeInTheDocument();
+    });
+    expect(within(table).queryByText('0100000000')).not.toBeInTheDocument();
   });
 });

@@ -7,6 +7,8 @@ import {
   sortDeclRows,
   pushImportLog,
   pushAuditLog,
+  updateDeclRowFields,
+  getDeclHistoryForRow,
   getTeamRoster,
   mapMemberNamesToTeams,
   markDeclRowsReviewed,
@@ -16,6 +18,11 @@ import {
   normalizeDeclarationNumber,
   normalizeName,
   refreshDeclRowsFromServer,
+  IMPORT_COLUMN_IDS,
+  getImportColumnConfig,
+  saveImportColumnConfig,
+  subscribeImportColumnConfig,
+  previewDeclRows,
 } from "@/lib/store.js";
 import { mapRow, detectDateOrder } from "@/lib/importer.js";
 import { loadRules, computeKPI, extractLicenseCodesFromRowObj } from "@/lib/rules.js";
@@ -26,6 +33,7 @@ import { formatDisplayDate, formatDateRangeLabel } from "@/shared/format.js";
 import { fetchWithAuth } from "@/auth/localAuth.js";
 import useTooltipTitles from "@/hooks/useTooltipTitles.js";
 import useFilterPresets from "@/hooks/useFilterPresets.js";
+import useQuickSearchFavorites from "@/hooks/useQuickSearchFavorites.js";
 import { Button } from "@/components/ui/button.jsx";
 import {
   Command,
@@ -54,6 +62,141 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { ScrollArea } from "@/components/ui/scroll-area.jsx";
 import { toast } from "@/shared/toast.js";
 import { Check, ChevronsUpDown, CircleX, Plus } from "lucide-react";
+
+function getRowKey(row) {
+  const soTk = (row?.so_tk || "").toString();
+  const nhanh = (row?.nhanh || "").toString();
+  return `${soTk}_${nhanh}`;
+}
+
+const EDITABLE_FIELD_KEYS = [
+  "nhan_vien",
+  "team",
+  "agency",
+  "dai_ly",
+  "licenses",
+  "so_luong_gp",
+  "licenseManualCount",
+];
+
+const DECL_HISTORY_FIELD_LABELS = Object.freeze({
+  nhan_vien: "Nhân viên",
+  team: "Tổ đội",
+  agency: "Đại lý",
+  dai_ly: "Đại lý",
+  licenses: "Số lượng giấy phép",
+  so_luong_gp: "Số lượng giấy phép",
+  licenseManualCount: "Số lượng giấy phép (thủ công)",
+});
+
+const DECL_HISTORY_ENTRY_LIMIT = 15;
+
+const IMPORT_TABLE_COLUMN_LABELS = Object.freeze({
+  date: "Ngày",
+  declaration: "Số tờ khai",
+  mst: "MST",
+  company: "Công ty",
+  type: "Loại hình",
+  co: "C/O",
+  items: "Mục hàng",
+  staff: "Nhân viên",
+  team: "Tổ đội",
+  agency: "Đại lý",
+  status: "Trạng thái",
+  licenses: "Số lượng GP",
+  kpi: "KPI",
+});
+
+const IMPORT_TABLE_COLUMNS = Object.freeze(
+  IMPORT_COLUMN_IDS.map((id) => ({
+    id,
+    label: IMPORT_TABLE_COLUMN_LABELS[id] || id,
+  }))
+);
+
+const IMPORT_ERROR_REASON_LABELS = Object.freeze({
+  "missing-key": "Thiếu Số tờ khai hoặc nhánh tờ khai",
+  unknown: "Không xác định",
+});
+
+const DECL_STATUS_LABELS = Object.freeze({
+  new: "Mới",
+  existing: "Đã có",
+  updated: "Đã cập nhật",
+  locked: "Đang khoá",
+  pending: "Chờ xử lý",
+  reviewing: "Đang rà soát",
+  synced: "Đã đồng bộ",
+});
+
+const FROZEN_COLUMN_KEYS = Object.freeze(["date", "declaration", "mst"]);
+const FROZEN_COLUMN_WIDTHS = Object.freeze({
+  selection: 44,
+  date: 120,
+  declaration: 220,
+  mst: 140,
+});
+
+const VIEW_MODE_STORAGE_KEY = "dataImporter:viewMode";
+const VIEW_MODES = Object.freeze({
+  TABLE: "table",
+  CARD: "card",
+});
+
+function normalizeComparableValue(value) {
+  if (value === null || value === undefined) return "";
+  if (typeof value === "string") return normalizeStr(value);
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : "";
+  }
+  if (typeof value === "boolean") {
+    return value ? "1" : "0";
+  }
+  if (Array.isArray(value)) {
+    return JSON.stringify(value);
+  }
+  return JSON.stringify(value);
+}
+
+function normalizeStatusKey(status) {
+  if (status == null) {
+    return "";
+  }
+  return String(status).trim().toLowerCase();
+}
+
+function formatStatusLabel(status) {
+  const key = normalizeStatusKey(status);
+  if (DECL_STATUS_LABELS[key]) {
+    return DECL_STATUS_LABELS[key];
+  }
+  if (!key) {
+    return "Không rõ";
+  }
+  return key.charAt(0).toUpperCase() + key.slice(1);
+}
+
+function cx(...classes) {
+  return classes.filter(Boolean).join(" ");
+}
+
+function collectEditableDiff(baseline, current) {
+  if (!baseline || typeof baseline !== "object") return null;
+  if (!current || typeof current !== "object") return null;
+  const diff = {};
+  for (const field of EDITABLE_FIELD_KEYS) {
+    const baseValue = Object.prototype.hasOwnProperty.call(baseline, field)
+      ? baseline[field]
+      : null;
+    const currentHasField = Object.prototype.hasOwnProperty.call(current, field);
+    const currentValue = currentHasField ? current[field] : null;
+    if (normalizeComparableValue(baseValue) === normalizeComparableValue(currentValue)) {
+      continue;
+    }
+    diff[field] = currentHasField ? currentValue : null;
+  }
+  return Object.keys(diff).length ? diff : null;
+}
 
 function buildRosterTeams(rosterSnapshot) {
   const rawTeams = Array.isArray(rosterSnapshot?.teams) ? rosterSnapshot.teams : [];
@@ -1188,6 +1331,25 @@ function describeRowStatus(row) {
   return "Đủ thông tin";
 }
 
+function formatHistoryTimestamp(timestamp) {
+  if (!timestamp) {
+    return "Không xác định";
+  }
+  const date = new Date(timestamp);
+  if (Number.isNaN(date.getTime())) {
+    return timestamp;
+  }
+  return date.toLocaleString("vi-VN", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: undefined,
+    hour12: false,
+  });
+}
+
 function formatDeclarationLabel(entry) {
   if (!entry || typeof entry !== "object") return "";
   const number = entry.so_tk_full ? String(entry.so_tk_full) : entry.so_tk ? String(entry.so_tk) : "";
@@ -1225,10 +1387,22 @@ export default function DataImporter({
   const rootRef = useRef(null);
   const fileRef = useRef(null);
   const [rawRows, setRawRows] = useState([]);        // dữ liệu xem trước (đã map)
+  const savedRowSnapshotRef = useRef(new Map());
+  const [baselineVersion, setBaselineVersion] = useState(0);
   const [query, setQuery] = useState("");
+  const [quickMST, setQuickMST] = useState("");
+  const [quickCompany, setQuickCompany] = useState("");
+  const [statusFilters, setStatusFilters] = useState([]);
   const [page, setPage] = useState(1);
   const [mode, setMode] = useState("saved");         // saved | preview
   const [selectedFile, setSelectedFile] = useState("");
+  const [viewMode, setViewMode] = useState(() => {
+    if (typeof window === "undefined") {
+      return VIEW_MODES.TABLE;
+    }
+    const stored = window.localStorage?.getItem(VIEW_MODE_STORAGE_KEY);
+    return stored === VIEW_MODES.CARD ? VIEW_MODES.CARD : VIEW_MODES.TABLE;
+  });
   const {
     presets: savedPresets,
     loading: presetLoading,
@@ -1239,6 +1413,11 @@ export default function DataImporter({
     updatePreset: updateFilterPreset,
     deletePreset: deleteFilterPreset,
   } = useFilterPresets(FILTER_PRESET_SCOPE);
+  const {
+    favorites: quickSearchFavorites,
+    addFavorite: addQuickSearchFavorite,
+    removeFavorite: removeQuickSearchFavorite,
+  } = useQuickSearchFavorites();
   const [datePreset, setDatePreset] = useState("none");
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [filterNoStaff, setFilterNoStaff] = useState(false);
@@ -1250,6 +1429,9 @@ export default function DataImporter({
   const [searchRange, setSearchRange] = useState({ from: "", to: "" });
   const [rules, setRules] = useState(() => loadRules());
   const [hasUnsaved, setHasUnsaved] = useState(false);
+  const [rowSaveStatus, setRowSaveStatus] = useState({});
+  const [rowHistoryExpanded, setRowHistoryExpanded] = useState({});
+  const [rowHistoryEntries, setRowHistoryEntries] = useState({});
   const [duplicateReviewOpen, setDuplicateReviewOpen] = useState(false);
   const [duplicateReviewConfirmed, setDuplicateReviewConfirmed] = useState(false);
   const [duplicate11Plan, setDuplicate11Plan] = useState({});
@@ -1259,11 +1441,26 @@ export default function DataImporter({
     baseKey: null,
     compareKey: null,
   });
+  const [columnConfigState, setColumnConfigState] = useState(() => getImportColumnConfig());
+  const [columnConfigOpen, setColumnConfigOpen] = useState(false);
+  const [columnDraftHidden, setColumnDraftHidden] = useState(() => new Set());
+  const [columnDraftError, setColumnDraftError] = useState("");
   const [selectedPresetId, setSelectedPresetId] = useState("");
   const [appliedPresetId, setAppliedPresetId] = useState("");
   const [presetSaving, setPresetSaving] = useState(false);
   const lastPresetSeedRef = useRef("");
   const presetAutoAppliedRef = useRef(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    try {
+      window.localStorage?.setItem(VIEW_MODE_STORAGE_KEY, viewMode);
+    } catch (error) {
+      console.warn("Không thể lưu chế độ hiển thị Import Data", error);
+    }
+  }, [viewMode]);
 
   // Tuỳ chọn
   const [overwrite, setOverwrite] = useState(false);         // Ghi đè toàn bộ
@@ -1276,16 +1473,245 @@ export default function DataImporter({
   const normalizedRole = normalizeRoleKey(currentUser?.role);
   const isTeamLead = normalizedRole === TEAM_LEAD_ROLE;
   const isStaffRole = normalizedRole === DEFAULT_ROLE;
+  const isAdminRole = normalizedRole === ADMIN_ROLE;
   const isManagerRole = normalizedRole === MANAGER_ROLE || normalizedRole === ADMIN_ROLE;
+  const canAutoReconcile = isManagerRole;
   const rosterSnapshot = useMemo(() => getTeamRoster(), [currentUser]);
   const rosterTeams = useMemo(() => buildRosterTeams(rosterSnapshot), [rosterSnapshot]);
+  const normalizedQuickMST = useMemo(() => normalizeStr(quickMST), [quickMST]);
+  const normalizedQuickCompany = useMemo(() => normalizeStr(quickCompany), [quickCompany]);
+  const availableStatuses = useMemo(() => {
+    const set = new Set();
+    for (const row of Array.isArray(rawRows) ? rawRows : []) {
+      if (!row || typeof row !== "object") continue;
+      const statusKey = normalizeStatusKey(
+        row.status ?? row.trang_thai ?? row.previewStatus ?? row.importStatus ?? row.state ?? ""
+      );
+      if (statusKey) {
+        set.add(statusKey);
+      }
+    }
+    return Array.from(set).sort((a, b) =>
+      formatStatusLabel(a).localeCompare(formatStatusLabel(b), "vi", { sensitivity: "base" })
+    );
+  }, [rawRows]);
+
+  const effectivePreviewRows = useMemo(() => {
+    if (!Array.isArray(rawRows) || rawRows.length === 0) {
+      return [];
+    }
+    if (!upsert11) {
+      return rawRows;
+    }
+    return rawRows.map((row) => {
+      if (!row || typeof row !== "object") {
+        return row;
+      }
+      const truncated = (row.so_tk || "").toString().slice(0, 11);
+      if (!truncated || truncated === row.so_tk) {
+        return row;
+      }
+      return { ...row, so_tk: truncated };
+    });
+  }, [rawRows, upsert11]);
+
+  const importPreview = useMemo(() => {
+    if (mode !== "preview" || effectivePreviewRows.length === 0) {
+      return null;
+    }
+    try {
+      const allowOverwrite = canOverwriteData ? overwrite : false;
+      return previewDeclRows(effectivePreviewRows, { overwrite: allowOverwrite, actor });
+    } catch (error) {
+      console.error("Không thể tính toán kết quả xem trước import", error);
+      return { error };
+    }
+  }, [actor, canOverwriteData, effectivePreviewRows, mode, overwrite]);
+
+  const importPreviewSamples = useMemo(() => {
+    if (!importPreview || importPreview.error) {
+      return { inserted: [], updated: [], locked: [], errors: [] };
+    }
+    return {
+      inserted: Array.isArray(importPreview.samples?.inserted) ? importPreview.samples.inserted : [],
+      updated: Array.isArray(importPreview.samples?.updated) ? importPreview.samples.updated : [],
+      locked: Array.isArray(importPreview.samples?.locked) ? importPreview.samples.locked : [],
+      errors: Array.isArray(importPreview.samples?.errors) ? importPreview.samples.errors : [],
+    };
+  }, [importPreview]);
+
+  const importPreviewStats = useMemo(() => {
+    if (!importPreview || importPreview.error) {
+      return [];
+    }
+    return [
+      { key: "inserted", label: "Dòng sẽ thêm mới", value: importPreview.inserted || 0 },
+      { key: "updated", label: "Dòng sẽ cập nhật", value: importPreview.updated || 0 },
+      { key: "skipped", label: "Giữ nguyên", value: importPreview.skipped || 0 },
+      { key: "locked", label: "Đang bị khóa", value: importPreview.locked || 0 },
+      { key: "invalid", label: "Lỗi dữ liệu", value: importPreview.invalid || 0 },
+      { key: "mst", label: "MST mới", value: importPreview.newBusinessCount || 0 },
+    ];
+  }, [importPreview]);
   const memberTeamMap = useMemo(() => mapMemberNamesToTeams(rosterSnapshot), [rosterSnapshot]);
   const staffDisplayName = normalizeStr(currentUser?.name || currentUser?.username || "");
   const staffNameKey = normalizeName(staffDisplayName);
   const assignedTeam = staffNameKey ? memberTeamMap.get(staffNameKey)?.team || "" : "";
   const assignedTeamKey = normalizeName(assignedTeam);
+  const totalBaseColumns = IMPORT_TABLE_COLUMNS.length;
+  const columnHiddenSet = useMemo(() => {
+    const hiddenList = Array.isArray(columnConfigState?.hidden) ? columnConfigState.hidden : [];
+    const set = new Set();
+    hiddenList.forEach((key) => {
+      if (typeof key === "string" && IMPORT_TABLE_COLUMN_LABELS[key]) {
+        set.add(key);
+      }
+    });
+    return set;
+  }, [columnConfigState]);
+  const visibleColumnCount = Math.max(1, totalBaseColumns - columnHiddenSet.size);
   const canUploadFiles = canEdit && !(isTeamLead || isStaffRole);
-  const canOverwriteData = canUploadFiles;
+  const canOverwriteData = isAdminRole && canUploadFiles;
+
+  const updateBaselineSnapshot = useCallback((rows) => {
+    const snapshot = new Map();
+    if (Array.isArray(rows)) {
+      for (const row of rows) {
+        const key = getRowKey(row);
+        if (!key) continue;
+        snapshot.set(key, { ...row });
+      }
+    }
+    savedRowSnapshotRef.current = snapshot;
+    setBaselineVersion((prev) => prev + 1);
+  }, []);
+
+  const refreshRowHistory = useCallback((rowKey) => {
+    const key = typeof rowKey === "string" ? rowKey.trim() : String(rowKey || "").trim();
+    if (!key) {
+      return;
+    }
+    const entries = getDeclHistoryForRow(key, DECL_HISTORY_ENTRY_LIMIT) || [];
+    setRowHistoryEntries((prev) => ({
+      ...prev,
+      [key]: entries,
+    }));
+  }, []);
+
+  const handleToggleHistory = useCallback(
+    (rowKey) => {
+      const key = typeof rowKey === "string" ? rowKey.trim() : String(rowKey || "").trim();
+      if (!key) {
+        return;
+      }
+      setRowHistoryExpanded((prev) => {
+        const nextExpanded = !prev[key];
+        const nextState = { ...prev, [key]: nextExpanded };
+        if (nextExpanded) {
+          refreshRowHistory(key);
+        }
+        return nextState;
+      });
+    },
+    [refreshRowHistory]
+  );
+
+  const handleOpenColumnConfig = useCallback(() => {
+    setColumnDraftHidden(new Set(columnHiddenSet));
+    setColumnDraftError("");
+    setColumnConfigOpen(true);
+  }, [columnHiddenSet]);
+
+  const handleOverwriteToggle = useCallback(
+    (nextValue) => {
+      if (!canOverwriteData) {
+        setOverwrite(false);
+        return;
+      }
+      if (nextValue) {
+        const confirmed =
+          typeof window !== "undefined" &&
+          window.confirm(
+            "Cảnh báo: Ghi đè toàn bộ sẽ thay thế dữ liệu hiện có bằng file import. Bạn chắc chắn muốn tiếp tục?"
+          );
+        if (!confirmed) {
+          return;
+        }
+      }
+      setOverwrite(nextValue);
+    },
+    [canOverwriteData]
+  );
+
+  const handleToggleColumnDraft = useCallback(
+    (columnId) => {
+      if (typeof columnId !== "string" || !IMPORT_TABLE_COLUMN_LABELS[columnId]) {
+        return;
+      }
+      setColumnDraftHidden((prev) => {
+        const next = new Set(prev);
+        if (next.has(columnId)) {
+          next.delete(columnId);
+          setColumnDraftError("");
+          return next;
+        }
+        if (totalBaseColumns - next.size <= 1) {
+          setColumnDraftError("Cần giữ lại ít nhất một cột hiển thị.");
+          return next;
+        }
+        next.add(columnId);
+        setColumnDraftError("");
+        return next;
+      });
+    },
+    [totalBaseColumns]
+  );
+
+  const handleApplyColumnConfig = useCallback(() => {
+    const hiddenList = Array.from(columnDraftHidden).filter((key) => IMPORT_TABLE_COLUMN_LABELS[key]);
+    if (hiddenList.length >= totalBaseColumns) {
+      setColumnDraftError("Cần giữ lại ít nhất một cột hiển thị.");
+      return;
+    }
+    const isSame =
+      hiddenList.length === columnHiddenSet.size && hiddenList.every((key) => columnHiddenSet.has(key));
+    if (isSame) {
+      setColumnConfigOpen(false);
+      return;
+    }
+    try {
+      const result = saveImportColumnConfig({ hidden: hiddenList }, { actor });
+      if (result.hidden.length >= totalBaseColumns) {
+        setColumnDraftError("Cần giữ lại ít nhất một cột hiển thị.");
+        return;
+      }
+      setColumnConfigOpen(false);
+      setColumnDraftError("");
+      toast.success("Đã cập nhật cấu hình cột Import Data.");
+    } catch (err) {
+      console.error("Không thể lưu cấu hình cột Import Data", err);
+      setColumnDraftError("Có lỗi xảy ra khi lưu cấu hình. Vui lòng thử lại.");
+    }
+  }, [actor, columnDraftHidden, columnHiddenSet, totalBaseColumns]);
+
+  useEffect(() => {
+    const unsubscribe = subscribeImportColumnConfig((config) => {
+      setColumnConfigState(config);
+    });
+    return () => {
+      if (typeof unsubscribe === "function") {
+        unsubscribe();
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!columnConfigOpen) {
+      return;
+    }
+    setColumnDraftHidden(new Set(columnHiddenSet));
+    setColumnDraftError("");
+  }, [columnConfigOpen, columnHiddenSet]);
 
   useEffect(() => {
     if (!canOverwriteData && overwrite) {
@@ -1384,11 +1810,7 @@ export default function DataImporter({
     },
     [assignedTeamKey, isStaffRole, teamChangeRestrictionMessage]
   );
-  const keyOfRow = useCallback((row) => {
-    const soTk = (row?.so_tk || "").toString();
-    const nhanh = (row?.nhanh || "").toString();
-    return `${soTk}_${nhanh}`;
-  }, []);
+  const keyOfRow = useCallback((row) => getRowKey(row), []);
   const filterEditableKeys = useCallback(
     (keys) => {
       if (!Array.isArray(keys) || keys.length === 0) {
@@ -1482,6 +1904,14 @@ export default function DataImporter({
     if (trimmedQuery) {
       payload.query = trimmedQuery;
     }
+    const trimmedMST = quickMST.trim();
+    if (trimmedMST) {
+      payload.mst = trimmedMST;
+    }
+    const trimmedCompany = quickCompany.trim();
+    if (trimmedCompany) {
+      payload.company = trimmedCompany;
+    }
     if (searchRange.from || searchRange.to) {
       payload.range = {
         from: searchRange.from || "",
@@ -1497,8 +1927,24 @@ export default function DataImporter({
     if (filterDuplicate11) {
       payload.filterDuplicate11 = true;
     }
+    if (Array.isArray(statusFilters) && statusFilters.length) {
+      payload.status = Array.from(new Set(statusFilters.filter(Boolean)));
+    }
     return payload;
-  }, [query, searchRange.from, searchRange.to, filterNoStaff, filterNoTeam, filterDuplicate11, coFilterMode, coFilterMin, datePreset]);
+  }, [
+    query,
+    quickMST,
+    quickCompany,
+    statusFilters,
+    searchRange.from,
+    searchRange.to,
+    filterNoStaff,
+    filterNoTeam,
+    filterDuplicate11,
+    coFilterMode,
+    coFilterMin,
+    datePreset,
+  ]);
 
   const applyPresetFilters = useCallback(
     (preset, { notify = true } = {}) => {
@@ -1509,6 +1955,8 @@ export default function DataImporter({
       clearPresetError();
       const filters = preset.filters && typeof preset.filters === "object" ? preset.filters : {};
       setQuery(typeof filters.query === "string" ? filters.query : "");
+      setQuickMST(typeof filters.mst === "string" ? filters.mst : "");
+      setQuickCompany(typeof filters.company === "string" ? filters.company : "");
       if (filters.range && typeof filters.range === "object") {
         setSearchRange({
           from: typeof filters.range.from === "string" ? filters.range.from : "",
@@ -1534,6 +1982,20 @@ export default function DataImporter({
       );
       const minValue = Number(filters.coFilterMin);
       setCoFilterMin(Number.isFinite(minValue) ? Math.max(0, Math.round(minValue)) : 5);
+      const presetStatuses = Array.isArray(filters.status)
+        ? filters.status
+        : typeof filters.status === "string"
+        ? filters.status.split(",")
+        : [];
+      setStatusFilters(
+        Array.from(
+          new Set(
+            presetStatuses
+              .map((value) => normalizeStatusKey(value))
+              .filter(Boolean)
+          )
+        )
+      );
       setPage(1);
       if (preset.id) {
         setSelectedPresetId(preset.id);
@@ -1655,6 +2117,12 @@ export default function DataImporter({
         if (typeof stored.query === "string" && stored.query.trim()) {
           normalizedFilters.query = stored.query.trim();
         }
+        if (typeof stored.mst === "string" && stored.mst.trim()) {
+          normalizedFilters.mst = stored.mst.trim();
+        }
+        if (typeof stored.company === "string" && stored.company.trim()) {
+          normalizedFilters.company = stored.company.trim();
+        }
         if (range && (range.from || range.to)) {
           normalizedFilters.range = range;
         }
@@ -1675,6 +2143,22 @@ export default function DataImporter({
         }
         if (typeof stored.datePreset === "string" && stored.datePreset) {
           normalizedFilters.datePreset = stored.datePreset;
+        }
+        if (Array.isArray(stored.status) && stored.status.length) {
+          const list = stored.status
+            .map((value) => normalizeStatusKey(value))
+            .filter(Boolean);
+          if (list.length) {
+            normalizedFilters.status = Array.from(new Set(list));
+          }
+        } else if (typeof stored.status === "string" && stored.status.trim()) {
+          const list = stored.status
+            .split(",")
+            .map((value) => normalizeStatusKey(value))
+            .filter(Boolean);
+          if (list.length) {
+            normalizedFilters.status = Array.from(new Set(list));
+          }
         }
         if (Object.keys(normalizedFilters).length === 0) {
           window.localStorage.removeItem(LEGACY_FILTER_STORAGE_KEY);
@@ -1807,6 +2291,152 @@ export default function DataImporter({
     refreshPresetList();
   }, [clearPresetError, refreshPresetList]);
 
+  const statusFavoriteLabel = useCallback((value) => {
+    if (typeof value !== "string") {
+      return "Không rõ";
+    }
+    const tokens = value
+      .split(",")
+      .map((token) => normalizeStatusKey(token))
+      .filter(Boolean);
+    if (!tokens.length) {
+      return "Không rõ";
+    }
+    return tokens
+      .map((token) => formatStatusLabel(token))
+      .join(", ");
+  }, []);
+
+  const handleApplyMstFavorite = useCallback(
+    (value) => {
+      if (typeof value !== "string") {
+        return;
+      }
+      setQuickMST(value);
+      setPage(1);
+    },
+    [setPage]
+  );
+
+  const handleApplyCompanyFavorite = useCallback(
+    (value) => {
+      if (typeof value !== "string") {
+        return;
+      }
+      setQuickCompany(value);
+      setPage(1);
+    },
+    [setPage]
+  );
+
+  const handleApplyStatusFavorite = useCallback(
+    (value) => {
+      if (typeof value !== "string") {
+        return;
+      }
+      const tokens = value
+        .split(",")
+        .map((token) => normalizeStatusKey(token))
+        .filter(Boolean);
+      setStatusFilters(Array.from(new Set(tokens)));
+      setPage(1);
+    },
+    [setPage]
+  );
+
+  const toggleStatusFilter = useCallback((statusKey, enabled) => {
+    const normalized = normalizeStatusKey(statusKey);
+    if (!normalized) {
+      return;
+    }
+    setStatusFilters((prev) => {
+      const exists = prev.includes(normalized);
+      if (enabled) {
+        if (exists) {
+          return prev;
+        }
+        return [...prev, normalized];
+      }
+      if (!exists) {
+        return prev;
+      }
+      return prev.filter((item) => item !== normalized);
+    });
+  }, []);
+
+  const clearStatusFilters = useCallback(() => {
+    setStatusFilters([]);
+  }, []);
+
+  const handleRemoveMstFavorite = useCallback(
+    (value) => {
+      removeQuickSearchFavorite("mst", value);
+    },
+    [removeQuickSearchFavorite]
+  );
+
+  const handleRemoveCompanyFavorite = useCallback(
+    (value) => {
+      removeQuickSearchFavorite("company", value);
+    },
+    [removeQuickSearchFavorite]
+  );
+
+  const handleRemoveStatusFavorite = useCallback(
+    (value) => {
+      removeQuickSearchFavorite("status", value);
+    },
+    [removeQuickSearchFavorite]
+  );
+
+  const handleSaveMstFavorite = useCallback(() => {
+    const trimmed = quickMST.trim();
+    if (!trimmed) {
+      toast.warning?.("Nhập MST trước khi lưu ưa thích.");
+      return;
+    }
+    const result = addQuickSearchFavorite("mst", trimmed);
+    if (result.ok) {
+      toast.success?.(`Đã lưu MST ${trimmed} vào danh sách tìm kiếm nhanh.`);
+    } else if (result.reason === "duplicate") {
+      toast.info?.("MST này đã có trong danh sách tìm kiếm nhanh.");
+    } else {
+      toast.error?.("Không thể lưu MST ưa thích.");
+    }
+  }, [quickMST, addQuickSearchFavorite]);
+
+  const handleSaveCompanyFavorite = useCallback(() => {
+    const trimmed = quickCompany.trim();
+    if (!trimmed) {
+      toast.warning?.("Nhập tên công ty trước khi lưu ưa thích.");
+      return;
+    }
+    const result = addQuickSearchFavorite("company", trimmed);
+    if (result.ok) {
+      toast.success?.(`Đã lưu "${trimmed}" vào danh sách tìm kiếm nhanh.`);
+    } else if (result.reason === "duplicate") {
+      toast.info?.("Giá trị này đã có trong danh sách tìm kiếm nhanh.");
+    } else {
+      toast.error?.("Không thể lưu tên công ty ưa thích.");
+    }
+  }, [quickCompany, addQuickSearchFavorite]);
+
+  const handleSaveStatusFavorite = useCallback(() => {
+    if (!Array.isArray(statusFilters) || statusFilters.length === 0) {
+      toast.warning?.("Chọn ít nhất một trạng thái trước khi lưu ưa thích.");
+      return;
+    }
+    const rawValue = statusFilters.join(",");
+    const result = addQuickSearchFavorite("status", rawValue);
+    if (result.ok) {
+      toast.success?.("Đã lưu bộ lọc trạng thái vào danh sách tìm kiếm nhanh.");
+    } else if (result.reason === "duplicate") {
+      toast.info?.("Bộ lọc trạng thái này đã tồn tại trong danh sách nhanh.");
+    } else {
+      toast.error?.("Không thể lưu bộ lọc trạng thái ưa thích.");
+    }
+  }, [statusFilters, addQuickSearchFavorite]);
+
   const handleClearSearchRange = useCallback(() => {
     setSearchRange({ from: "", to: "" });
     setDatePreset("none");
@@ -1938,6 +2568,10 @@ export default function DataImporter({
     setRules(activeRules);
     const saved = sortDeclRows(getDeclRows()).map(ensureLicenseFields).map(ensureCOFields);
     setRawRows(saved);
+    updateBaselineSnapshot(saved);
+    setRowSaveStatus({});
+    setRowHistoryExpanded({});
+    setRowHistoryEntries({});
     setMode("saved");
     setPage(1);
     setPageSize(DEFAULT_PAGE_SIZE);
@@ -1952,7 +2586,7 @@ export default function DataImporter({
     setHasUnsaved(false);
     if (fileRef.current) fileRef.current.value = "";
     return true;
-  }, [fileRef, hasUnsaved, mode]);
+  }, [fileRef, hasUnsaved, mode, updateBaselineSnapshot]);
 
   useEffect(() => {
     if (mode !== "saved") return;
@@ -1977,6 +2611,12 @@ export default function DataImporter({
     window.addEventListener("beforeunload", handler);
     return () => window.removeEventListener("beforeunload", handler);
   }, [hasUnsaved]);
+
+  useEffect(() => {
+    if (mode !== "saved") return;
+    const pending = rowDiffMap.size > 0;
+    setHasUnsaved((prev) => (prev === pending ? prev : pending));
+  }, [mode, rowDiffMap]);
 
   const applyConfigToForm = useCallback((config) => {
     const normalizedConfig = {
@@ -3128,10 +3768,13 @@ export default function DataImporter({
     const hasText = q.length > 0;
     const fromDate = searchRange.from ? normalizeStr(searchRange.from) : "";
     const toDate = searchRange.to ? normalizeStr(searchRange.to) : "";
+    const statusSet = statusFilters.length ? new Set(statusFilters) : null;
     return rawRows.filter(r => {
       const soTk = (r.so_tk || "").toString().toLowerCase();
-      const mst = (r.mst || "").toString().toLowerCase();
-      const company = (r.cong_ty || "").toString().toLowerCase();
+      const mstRaw = r.mst || r.ma_so_thue || "";
+      const companyRaw = r.cong_ty || r.company || r.ten_cong_ty || r.doanh_nghiep || "";
+      const mstLower = mstRaw.toString().toLowerCase();
+      const companyLower = companyRaw.toString().toLowerCase();
       const agencySearch = [
         r.agency || r.dai_ly || '',
         ...(Array.isArray(r.agents) ? r.agents : []),
@@ -3140,11 +3783,25 @@ export default function DataImporter({
         .toLowerCase();
       if (hasText && !(
         soTk.includes(q) ||
-        mst.includes(q) ||
-        company.includes(q) ||
+        mstLower.includes(q) ||
+        companyLower.includes(q) ||
         agencySearch.includes(q)
       )) {
         return false;
+      }
+      if (normalizedQuickMST && !normalizeStr(mstRaw).includes(normalizedQuickMST)) {
+        return false;
+      }
+      if (normalizedQuickCompany && !normalizeStr(companyRaw).includes(normalizedQuickCompany)) {
+        return false;
+      }
+      if (statusSet) {
+        const rowStatus = normalizeStatusKey(
+          r.status ?? r.trang_thai ?? r.previewStatus ?? r.importStatus ?? r.state ?? ""
+        );
+        if (!statusSet.has(rowStatus)) {
+          return false;
+        }
       }
       if (fromDate || toDate) {
         const rawDate = normalizeStr(r.date || r.raw_date || "").slice(0, 10);
@@ -3185,6 +3842,9 @@ export default function DataImporter({
   }, [
     rawRows,
     query,
+    normalizedQuickMST,
+    normalizedQuickCompany,
+    statusFilters,
     filterNoStaff,
     filterNoTeam,
     filterDuplicate11,
@@ -3209,17 +3869,48 @@ export default function DataImporter({
 
   useEffect(() => {
     setPage(1);
-  }, [pageSize, filterNoStaff, filterNoTeam, filterDuplicate11, coFilterMode, coThreshold, searchRange.from, searchRange.to]);
+  }, [
+    pageSize,
+    filterNoStaff,
+    filterNoTeam,
+    filterDuplicate11,
+    coFilterMode,
+    coThreshold,
+    searchRange.from,
+    searchRange.to,
+    quickMST,
+    quickCompany,
+    statusFilters.join("|")
+  ]);
 
   const filteredKeys = useMemo(() => {
     return Array.from(new Set(filtered.map((row) => keyOfRow(row))));
   }, [filtered, keyOfRow]);
 
-const filteredSelected = useMemo(() => {
-  if (!filteredKeys.length) return false;
-  if (!selectedKeys.length) return false;
-  const selectedSet = new Set(selectedKeys);
-  return filteredKeys.every((key) => selectedSet.has(key));
+  const rowDiffMap = useMemo(() => {
+    if (mode !== "saved") {
+      return new Map();
+    }
+    const baseline = savedRowSnapshotRef.current || new Map();
+    const diffMap = new Map();
+    for (const row of rawRows) {
+      const key = keyOfRow(row);
+      if (!key) continue;
+      const baselineRow = baseline.get(key);
+      if (!baselineRow) continue;
+      const diff = collectEditableDiff(baselineRow, row);
+      if (diff) {
+        diffMap.set(key, diff);
+      }
+    }
+    return diffMap;
+  }, [keyOfRow, mode, rawRows, baselineVersion]);
+
+  const filteredSelected = useMemo(() => {
+    if (!filteredKeys.length) return false;
+    if (!selectedKeys.length) return false;
+    const selectedSet = new Set(selectedKeys);
+    return filteredKeys.every((key) => selectedSet.has(key));
 }, [filteredKeys, selectedKeys]);
 
 const selectedReviewedCount = useMemo(() => {
@@ -3494,23 +4185,73 @@ const selectedReviewedCount = useMemo(() => {
       alert("Hãy chọn file XLSX để import.");
       return;
     }
-    if (rawRows.length === 0) {
+    if (effectivePreviewRows.length === 0) {
       alert("Không có dữ liệu để import");
       return;
     }
-    // Nếu cần upsert theo 11 số đầu → chuẩn hoá so_tk về 11 số đầu
-    const rows = upsert11
-      ? rawRows.map(r => ({ ...r, so_tk: (r.so_tk || "").toString().slice(0, 11) }))
-      : rawRows;
+    if (importPreview?.invalid > 0) {
+      const proceed = window.confirm(
+        `Có ${importPreview.invalid.toLocaleString(
+          "vi-VN",
+        )} dòng lỗi sẽ bị bỏ qua khi import. Bạn vẫn muốn tiếp tục?`
+      );
+      if (!proceed) {
+        return;
+      }
+    }
+    if ((importPreview?.inserted || 0) === 0 && (importPreview?.updated || 0) === 0) {
+      const proceed = window.confirm(
+        "File không tạo ra tờ khai mới hoặc cập nhật nào. Bạn vẫn muốn tiếp tục import?",
+      );
+      if (!proceed) {
+        return;
+      }
+    }
+    const rows = effectivePreviewRows;
 
     const effectiveOverwrite = canOverwriteData ? overwrite : false;
-    const count = saveDeclRows(rows, {
+    const result = saveDeclRows(rows, {
       overwrite: effectiveOverwrite,
       actor,
       detail: `Import từ ${selectedFile || "file XLSX"}`,
     });
-    pushImportLog(`Import XLSX: ${rawRows.length} dòng → sau hợp nhất còn ${count}`);
-    alert("Import xong!");
+    const insertedLabel = result.inserted.toLocaleString("vi-VN");
+    const updatedLabel = result.updated.toLocaleString("vi-VN");
+    const skippedLabel = result.skipped.toLocaleString("vi-VN");
+    const lockedLabel = result.locked.toLocaleString("vi-VN");
+    const totalLabel = result.totalStored.toLocaleString("vi-VN");
+    const skippedSummary =
+      result.locked > 0
+        ? `bỏ qua ${skippedLabel} (khóa ${lockedLabel})`
+        : `bỏ qua ${skippedLabel}`;
+    const message = `Import ${selectedFile || "file XLSX"}: +${insertedLabel} / cập nhật ${updatedLabel} / ${skippedSummary} → tổng ${totalLabel}`;
+    pushImportLog({
+      kind: "manual-import",
+      actor,
+      message,
+      summary: {
+        file: selectedFile || "",
+        totalIncoming: result.totalIncoming,
+        inserted: result.inserted,
+        updated: result.updated,
+        skipped: result.skipped,
+        locked: result.locked,
+        invalid: result.invalid,
+        totalStored: result.totalStored,
+        newBusinesses: result.newBusinessCount,
+      },
+      meta: {
+        file: selectedFile || "",
+        errors: Array.isArray(result.errors) ? result.errors : [],
+        newBusinesses: Array.isArray(result.newBusinesses)
+          ? result.newBusinesses.slice(0, 50)
+          : [],
+      },
+      insertedDeclarations: result.insertedDeclarations,
+      updatedDeclarations: result.updatedDeclarations,
+      lockedDeclarations: result.lockedDeclarations,
+    });
+    alert(`Import xong: thêm ${insertedLabel}, cập nhật ${updatedLabel}, ${skippedSummary}.`);
     if (fileRef.current) fileRef.current.value = "";
     loadSavedRows({ bypassConfirm: true });
     fetchAlerts();
@@ -3529,28 +4270,195 @@ const selectedReviewedCount = useMemo(() => {
       alert("Không có dữ liệu để lưu");
       return;
     }
-    const count = saveDeclRows(rawRows, {
+    const result = saveDeclRows(rawRows, {
       overwrite: true,
       actor,
       detail: "Lưu chỉnh sửa tờ khai thủ công",
     });
-    alert(`Đã lưu ${count} bản ghi (ghi đè).`);
+    alert(`Đã lưu ${result.totalStored.toLocaleString("vi-VN")} bản ghi (ghi đè).`);
     setHasUnsaved(false);
     loadSavedRows({ bypassConfirm: true });
     fetchAlerts();
   }
 
-  const selectionEnabled = mode === "saved" && (canEdit || canManageAlerts);
-  const deleteEnabled = canEdit && mode === "saved";
-  const baseColumnCount = 13; // bao gồm cột C/O
-  const totalColumns = baseColumnCount + (selectionEnabled ? 1 : 0) + (deleteEnabled ? 1 : 0);
+  const handleSaveRowChanges = useCallback(
+    (rowKey) => {
+      if (isReadOnlyForEdits) {
+        alert("Bạn không có quyền lưu chỉnh sửa.");
+        return;
+      }
+      if (mode !== "saved") {
+        alert("Chỉ có thể cập nhật khi đang xem dữ liệu đã lưu.");
+        return;
+      }
+      const diff = rowDiffMap.get(rowKey);
+      if (!diff || Object.keys(diff).length === 0) {
+        toast.info("Không có thay đổi nào cần lưu cho tờ khai này.");
+        return;
+      }
+      setRowSaveStatus((prev) => ({
+        ...prev,
+        [rowKey]: { saving: true, error: "" },
+      }));
+      try {
+        const fieldList = Object.keys(diff);
+        const result = updateDeclRowFields(rowKey, diff, {
+          actor,
+          detail: `Cập nhật thủ công (${fieldList.join(", ")}) qua Import Data`,
+        });
+        if (!result?.success) {
+          const errorMessage =
+            result?.reason === "not-found"
+              ? "Tờ khai đã bị xóa hoặc thay đổi. Vui lòng tải lại dữ liệu."
+              : result?.reason === "no-change"
+              ? "Không có thay đổi mới để lưu."
+              : "Không thể cập nhật tờ khai. Hãy thử lại.";
+          setRowSaveStatus((prev) => ({
+            ...prev,
+            [rowKey]: { saving: false, error: errorMessage },
+          }));
+          toast.error(errorMessage);
+          return;
+        }
+        const normalizedRow = ensureCOFields(ensureLicenseFields(result.row || {}));
+        setRawRows((prev) => {
+          if (!Array.isArray(prev) || prev.length === 0) return prev;
+          const index = prev.findIndex((row) => keyOfRow(row) === rowKey);
+          if (index === -1) return prev;
+          const next = prev.slice();
+          next[index] = { ...prev[index], ...normalizedRow };
+          return next;
+        });
+        savedRowSnapshotRef.current.set(rowKey, { ...normalizedRow });
+        setBaselineVersion((prev) => prev + 1);
+        setRowSaveStatus((prev) => ({
+          ...prev,
+          [rowKey]: { saving: false, error: "" },
+        }));
+        refreshRowHistory(rowKey);
+        toast.success("Đã lưu cập nhật cho tờ khai.");
+      } catch (err) {
+        console.error("Không thể cập nhật tờ khai", err);
+        const fallbackMessage = "Có lỗi xảy ra khi cập nhật. Vui lòng thử lại.";
+        setRowSaveStatus((prev) => ({
+          ...prev,
+          [rowKey]: { saving: false, error: fallbackMessage },
+        }));
+        toast.error(fallbackMessage);
+      }
+    },
+    [actor, isReadOnlyForEdits, keyOfRow, mode, refreshRowHistory, rowDiffMap]
+  );
 
-  const canImport = !isReadOnlyForEdits && mode === "preview" && rawRows.length > 0;
-const canSave = !isReadOnlyForEdits && mode === "saved" && rawRows.length > 0;
-const canDelete = deleteEnabled && selectedKeys.length > 0;
-const canReview = selectionEnabled && selectedKeys.length > 0 && canReviewAlerts;
-const canUnreview = selectionEnabled && selectedReviewedCount > 0 && canReviewAlerts;
-const canResolveDuplicates11 = deleteEnabled && hasDuplicate11Rows;
+  const selectionEnabled = mode === "saved" && (canEdit || canManageAlerts);
+  const updateEnabled = canEdit && mode === "saved";
+  const deleteEnabled = canEdit && mode === "saved";
+  const historyEnabled = mode === "saved";
+  const hiddenColumns = columnHiddenSet;
+  const frozenOffsets = useMemo(() => {
+    let offset = 0;
+    const config = {};
+    if (selectionEnabled) {
+      config.selection = { left: offset, width: FROZEN_COLUMN_WIDTHS.selection };
+      offset += FROZEN_COLUMN_WIDTHS.selection;
+    }
+    for (const key of FROZEN_COLUMN_KEYS) {
+      if (hiddenColumns.has(key)) {
+        continue;
+      }
+      const width = FROZEN_COLUMN_WIDTHS[key];
+      if (!width) {
+        continue;
+      }
+      config[key] = { left: offset, width };
+      offset += width;
+    }
+    config.total = offset;
+    return config;
+  }, [hiddenColumns, selectionEnabled]);
+  const getFrozenStyle = useCallback(
+    (key) => {
+      const config = frozenOffsets[key];
+      if (!config) {
+        return undefined;
+      }
+      return {
+        left: `${config.left}px`,
+        minWidth: `${config.width}px`,
+        width: `${config.width}px`,
+        maxWidth: `${config.width}px`,
+      };
+    },
+    [frozenOffsets]
+  );
+  const frozenHeaderClass =
+    "sticky top-0 z-40 bg-gray-50 shadow-[4px_0_8px_rgba(148,163,184,0.18)] dark:bg-slate-900";
+  const frozenCellClass =
+    "sticky z-30 bg-inherit shadow-[4px_0_6px_rgba(148,163,184,0.12)] dark:bg-inherit";
+  const historyIndent = useMemo(() => {
+    const total = Number(frozenOffsets.total || 0);
+    if (selectionEnabled) {
+      return Math.max(0, total - FROZEN_COLUMN_WIDTHS.selection);
+    }
+    return total;
+  }, [frozenOffsets, selectionEnabled]);
+  const buildRowState = useCallback(
+    (row, index = 0) => {
+      const rowKey = keyOfRow(row);
+      const rowEditable = isRowEditable(row);
+      const rowReadOnly = isReadOnlyForEdits || !rowEditable;
+      const rowDiff = rowDiffMap.get(rowKey);
+      const hasPendingDiff = !!(rowDiff && Object.keys(rowDiff).length > 0);
+      const currentSaveState = rowSaveStatus[rowKey] || { saving: false, error: "" };
+      const historyList = rowHistoryEntries[rowKey] || [];
+      const historyExpanded = !!rowHistoryExpanded[rowKey];
+      return {
+        index,
+        row,
+        rowKey,
+        rowEditable,
+        rowReadOnly,
+        rowDiff,
+        hasPendingDiff,
+        canSaveRow: hasPendingDiff && !rowReadOnly,
+        rowSaving: currentSaveState.saving,
+        rowError: currentSaveState.error || "",
+        historyList,
+        historyExpanded,
+        historyCount: Array.isArray(historyList) ? historyList.length : 0,
+      };
+    },
+    [
+      isReadOnlyForEdits,
+      isRowEditable,
+      keyOfRow,
+      rowDiffMap,
+      rowHistoryEntries,
+      rowHistoryExpanded,
+      rowSaveStatus,
+    ]
+  );
+  const baseColumnCount = visibleColumnCount; // số cột dữ liệu đang hiển thị
+  const totalColumns =
+    baseColumnCount +
+    (selectionEnabled ? 1 : 0) +
+    (updateEnabled ? 1 : 0) +
+    (deleteEnabled ? 1 : 0) +
+    (historyEnabled ? 1 : 0);
+
+  const columnDraftVisibleCount = Math.max(1, totalBaseColumns - columnDraftHidden.size);
+
+  const canImport =
+    !isReadOnlyForEdits &&
+    mode === "preview" &&
+    effectivePreviewRows.length > 0 &&
+    importPreview &&
+    !importPreview.error;
+  const canSave = !isReadOnlyForEdits && mode === "saved" && rawRows.length > 0;
+  const canDelete = deleteEnabled && selectedKeys.length > 0;
+  const canReview = selectionEnabled && selectedKeys.length > 0 && canReviewAlerts;
+  const canUnreview = selectionEnabled && selectedReviewedCount > 0 && canReviewAlerts;
+  const canResolveDuplicates11 = deleteEnabled && hasDuplicate11Rows;
   const modeLabel = mode === "preview" ? "Đang xem dữ liệu từ file (chưa lưu)" : "Đang xem dữ liệu đã lưu";
 
   const handleSelectFiltered = useCallback(() => {
@@ -4198,6 +5106,10 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
       alert("Bạn không có quyền chỉnh sửa dữ liệu tờ khai.");
       return;
     }
+    if (!canAutoReconcile) {
+      alert("Chỉ Quản lý hoặc Quản trị viên mới được phép đối chiếu KPI tự động.");
+      return;
+    }
     if (mode !== "saved") {
       alert("Hãy chuyển sang chế độ dữ liệu đã lưu để đối chiếu tự động.");
       return;
@@ -4224,7 +5136,7 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
       return;
     }
     alert(`Đã tự động cập nhật loại trừ giấy phép cho ${result.changed}/${result.matchedCount} tờ khai đang hiển thị.`);
-  }, [applyLicenseExclusionForKeys, canEdit, ensureEditableKeys, filteredKeys, mode]);
+  }, [applyLicenseExclusionForKeys, canAutoReconcile, canEdit, ensureEditableKeys, filteredKeys, mode]);
 
   const handleExportSelected = useCallback(() => {
     if (selectedKeys.length === 0) {
@@ -4298,6 +5210,58 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
 
   return (
     <>
+      <Dialog open={columnConfigOpen} onOpenChange={setColumnConfigOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Cấu hình cột Import Data</DialogTitle>
+            <DialogDescription>
+              Chọn các cột dữ liệu cần hiển thị. Thiết lập áp dụng cho toàn bộ hệ thống.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <p className="text-xs text-gray-600">
+              Đang giữ {columnDraftVisibleCount}/{totalBaseColumns} cột hiển thị.
+            </p>
+            <div className="grid gap-2">
+              {IMPORT_TABLE_COLUMNS.map((column) => {
+                const checked = !columnDraftHidden.has(column.id);
+                return (
+                  <label
+                    key={column.id}
+                    className="flex items-center justify-between rounded border px-3 py-2 text-sm"
+                  >
+                    <span>{column.label}</span>
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => handleToggleColumnDraft(column.id)}
+                    />
+                  </label>
+                );
+              })}
+            </div>
+            {columnDraftError ? (
+              <p className="text-xs text-red-600">{columnDraftError}</p>
+            ) : null}
+          </div>
+          <DialogFooter>
+            <button
+              type="button"
+              onClick={() => setColumnConfigOpen(false)}
+              className="rounded border px-3 py-1 text-sm text-gray-600 hover:bg-gray-50"
+            >
+              Hủy
+            </button>
+            <button
+              type="button"
+              onClick={handleApplyColumnConfig}
+              className="rounded bg-blue-600 px-3 py-1 text-sm font-medium text-white hover:bg-blue-700"
+            >
+              Lưu cấu hình
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <Dialog
         open={duplicateDiffState.open}
         onOpenChange={(next) => {
@@ -5322,6 +6286,159 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
         <span className="ml-auto text-sm text-gray-600">{modeLabel}</span>
       </div>
 
+      {mode === "preview" && (
+        <div className="mt-3 space-y-3">
+          {importPreview?.error ? (
+            <div className="rounded border border-red-300 bg-red-50 p-3 text-sm text-red-700">
+              Không thể kiểm tra file import. {importPreview.error?.message || "Vui lòng thử lại."}
+            </div>
+          ) : importPreview ? (
+            <div className="rounded border border-[color:var(--ds-border-strong)] bg-[color:var(--ds-surface-card)] p-3 shadow-sm">
+              <div className="flex flex-wrap items-start justify-between gap-2">
+                <div>
+                  <h3 className="text-sm font-semibold text-gray-900">Kết quả kiểm tra trước khi import</h3>
+                  <p className="text-xs text-gray-500">
+                    Tổng dòng đọc: {importPreview.totalIncoming.toLocaleString("vi-VN")} • Sau khi ghi: {importPreview.totalAfter.toLocaleString("vi-VN")}
+                  </p>
+                </div>
+                {importPreview.mode === "overwrite" && (
+                  <span className="rounded bg-amber-100 px-2 py-1 text-xs font-semibold uppercase text-amber-700">
+                    Ghi đè toàn bộ
+                  </span>
+                )}
+              </div>
+
+              <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+                {importPreviewStats.map((item) => (
+                  <div key={item.key} className="rounded border bg-gray-50 px-3 py-2">
+                    <div className="text-[11px] uppercase text-gray-500">{item.label}</div>
+                    <div className="text-base font-semibold text-gray-900">{item.value.toLocaleString("vi-VN")}</div>
+                  </div>
+                ))}
+              </div>
+
+              {importPreviewSamples.errors.length > 0 && (
+                <div className="mt-4 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-sm font-semibold text-red-700">
+                      Dòng lỗi sẽ bị bỏ qua ({importPreview.invalid.toLocaleString("vi-VN")})
+                    </h4>
+                    <span className="text-xs text-gray-500">
+                      Hiển thị tối đa {importPreviewSamples.errors.length.toLocaleString("vi-VN")} dòng đầu tiên
+                    </span>
+                  </div>
+                  <div className="max-h-48 overflow-auto rounded border">
+                    <table className="min-w-full text-xs">
+                      <thead className="bg-red-50 text-red-700">
+                        <tr>
+                          <th className="px-2 py-1 text-left">Lý do</th>
+                          <th className="px-2 py-1 text-left">Số tờ khai</th>
+                          <th className="px-2 py-1 text-left">Nhánh</th>
+                          <th className="px-2 py-1 text-left">MST</th>
+                          <th className="px-2 py-1 text-left">Doanh nghiệp</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {importPreviewSamples.errors.map((item, index) => {
+                          const reasonLabel = IMPORT_ERROR_REASON_LABELS[item.reason] || IMPORT_ERROR_REASON_LABELS.unknown;
+                          return (
+                            <tr
+                              key={`${item.reason}-${item.so_tk || index}-${item.nhanh || ""}`}
+                              className="odd:bg-[color:var(--ds-surface-card)] even:bg-[color:var(--ds-surface-muted)]"
+                            >
+                              <td className="px-2 py-1 text-red-600">{reasonLabel}</td>
+                              <td className="px-2 py-1">{item.so_tk || "—"}</td>
+                              <td className="px-2 py-1">{item.nhanh || "—"}</td>
+                              <td className="px-2 py-1">{item.mst || "—"}</td>
+                              <td className="px-2 py-1">{item.company || "—"}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {importPreviewSamples.inserted.length > 0 && (
+                <div className="mt-4 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-sm font-semibold text-emerald-700">
+                      Dòng thêm mới ({importPreview.inserted.toLocaleString("vi-VN")})
+                    </h4>
+                    {importPreview.inserted > importPreviewSamples.inserted.length && (
+                      <span className="text-xs text-gray-500">
+                        +{(importPreview.inserted - importPreviewSamples.inserted.length).toLocaleString("vi-VN")} dòng khác
+                      </span>
+                    )}
+                  </div>
+                  <div className="max-h-60 overflow-auto rounded border">
+                    <table className="min-w-full text-xs">
+                      <thead className="bg-emerald-50 text-emerald-700">
+                        <tr>
+                          <th className="px-2 py-1 text-left">Số tờ khai</th>
+                          <th className="px-2 py-1 text-left">MST</th>
+                          <th className="px-2 py-1 text-left">Công ty</th>
+                          <th className="px-2 py-1 text-left">Ngày đăng ký</th>
+                          <th className="px-2 py-1 text-left">Nhân viên</th>
+                          <th className="px-2 py-1 text-left">Tổ đội</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {importPreviewSamples.inserted.map((row, index) => {
+                          const companyName =
+                            row?.company ||
+                            row?.cong_ty ||
+                            row?.ten_dn ||
+                            row?.ten_doanh_nghiep ||
+                            row?.ten_doanh_nghiep_xnk ||
+                            row?.["Tên doanh nghiệp"] ||
+                            row?.["Doanh nghiệp"] ||
+                            "";
+                          return (
+                            <tr key={`${row.so_tk || index}-${row.nhanh || ""}`} className="odd:bg-[color:var(--ds-surface-card)] even:bg-[color:var(--ds-surface-muted)]">
+                              <td className="px-2 py-1">{formatDeclarationLabel(row)}</td>
+                              <td className="px-2 py-1">{row.mst || row.ma_so_thue || "—"}</td>
+                              <td className="px-2 py-1">{companyName || "—"}</td>
+                              <td className="px-2 py-1">{row.date ? formatDisplayDate(row.date) : "—"}</td>
+                              <td className="px-2 py-1">{row.nhan_vien || ""}</td>
+                              <td className="px-2 py-1">{row.team || ""}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {importPreview.newBusinessCount > 0 && (
+                <div className="mt-4 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-sm font-semibold text-blue-700">
+                      Doanh nghiệp mới ({importPreview.newBusinessCount.toLocaleString("vi-VN")})
+                    </h4>
+                    <span className="text-xs text-gray-500">Thông tin được thêm vào tab Gán MST</span>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {importPreview.newBusinesses.slice(0, 10).map((biz) => (
+                      <span key={biz.mst} className="rounded bg-blue-50 px-2 py-1 text-xs text-blue-700">
+                        {biz.mst} – {biz.company || "Không tên"}
+                      </span>
+                    ))}
+                    {importPreview.newBusinessCount > importPreview.newBusinesses.length && (
+                      <span className="text-xs text-gray-500">
+                        +{(importPreview.newBusinessCount - importPreview.newBusinesses.length).toLocaleString("vi-VN")} MST khác
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : null}
+        </div>
+      )}
+
       {canEdit && (
         <div className="flex flex-wrap items-center gap-2">
           <label className="flex items-center gap-1">
@@ -5332,137 +6449,313 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
             <input type="checkbox" checked={upsert11} onChange={e => setUpsert11(e.target.checked)} />
             <span>Upsert theo 11 số đầu của Số tờ khai</span>
           </label>
-          <label className="flex items-center gap-1">
-            <input type="checkbox" checked={overwrite} onChange={e => setOverwrite(e.target.checked)} />
-            <span>Ghi đè toàn bộ dữ liệu hiện có</span>
-          </label>
+          {canOverwriteData && (
+            <label className="flex items-center gap-1 text-amber-700">
+              <input
+                type="checkbox"
+                checked={overwrite}
+                onChange={(e) => handleOverwriteToggle(e.target.checked)}
+              />
+              <span>Ghi đè toàn bộ dữ liệu hiện có</span>
+            </label>
+          )}
         </div>
       )}
 
-      <div className="flex items-center gap-2 flex-wrap">
-        <input
-          className="border rounded px-2 py-1 w-72"
-          placeholder="Tìm nhanh (Số TK / MST / Công ty / Đại lý)"
-          value={query}
-          onChange={e => { setQuery(e.target.value); setPage(1); }}
-        />
-        <label className="flex items-center gap-1 text-sm" data-tooltip="Chọn nhanh khoảng thời gian theo preset">
-          <span>Khoảng</span>
-          <select
-            className="border rounded px-2 py-1 text-sm"
-            value={datePreset}
-            onChange={(e) => {
-              const value = e.target.value;
-              if (value === "custom") {
-                setDatePreset("custom");
-                return;
-              }
-              applyDatePreset(value);
-            }}
-          >
-            {DATE_RANGE_PRESETS.map((preset) => (
-              <option key={preset.key} value={preset.key}>
-                {preset.label}
-              </option>
-            ))}
-            <option value="custom">Tự chọn</option>
-          </select>
-        </label>
-        <label className="flex items-center gap-1 text-sm" data-tooltip="Lọc từ ngày (theo ngày đăng ký tờ khai)">
-          <span>Từ ngày</span>
+      <div className="flex w-full flex-wrap gap-4">
+        <div className="flex min-w-[260px] flex-1 flex-col gap-2">
           <input
-            type="date"
-            value={searchRange.from}
-            onChange={(e) => {
-              const value = e.target.value;
-              setDatePreset("custom");
-              setSearchRange((prev) => ({ ...prev, from: value }));
-            }}
-            className="border rounded px-2 py-1 text-sm"
+            className="w-full rounded border px-2 py-1"
+            placeholder="Tìm nhanh (Số TK / MST / Công ty / Đại lý)"
+            value={query}
+            onChange={e => { setQuery(e.target.value); setPage(1); }}
           />
-        </label>
-        <label className="flex items-center gap-1 text-sm" data-tooltip="Lọc đến ngày (theo ngày đăng ký tờ khai)">
-          <span>Đến ngày</span>
-          <input
-            type="date"
-            value={searchRange.to}
-            onChange={(e) => {
-              const value = e.target.value;
-              setDatePreset("custom");
-              setSearchRange((prev) => ({ ...prev, to: value }));
-            }}
-            className="border rounded px-2 py-1 text-sm"
-          />
-        </label>
-        {(searchRange.from || searchRange.to) && (
-          <button
-            type="button"
-            onClick={handleClearSearchRange}
-            data-tooltip="Xóa điều kiện lọc theo ngày"
-            className="rounded border px-3 py-1 text-xs text-gray-600 hover:bg-gray-50"
-          >
-            Xóa lọc ngày
-          </button>
-        )}
-        <label className="flex items-center gap-1 text-sm">
-          <input
-            type="checkbox"
-            checked={filterNoStaff}
-            onChange={e => setFilterNoStaff(e.target.checked)}
-          />
-          <span>Chưa gán Nhân viên</span>
-        </label>
-        <label className="flex items-center gap-1 text-sm">
-          <input
-            type="checkbox"
-            checked={filterNoTeam}
-            onChange={e => setFilterNoTeam(e.target.checked)}
-          />
-          <span>Chưa gán Tổ đội</span>
-        </label>
-        <label className="flex items-center gap-1 text-sm">
-          <span>Lọc C/O</span>
-          <select
-            value={coFilterMode}
-            onChange={(e) => setCoFilterMode(e.target.value)}
-            className="border rounded px-2 py-1 text-sm"
-          >
-            {CO_FILTER_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        {coFilterMode === "min" && (
-          <label className="flex items-center gap-1 text-sm">
-            <span>Tối thiểu dòng C/O</span>
+          <div className="flex flex-wrap items-center gap-2">
             <input
-              type="number"
-              min={0}
-              className="w-20 border rounded px-2 py-1 text-sm"
-              value={coFilterMin}
-              onChange={(e) => {
-                const raw = Number(e.target.value);
-                if (!Number.isFinite(raw)) {
-                  setCoFilterMin(0);
-                  return;
-                }
-                if (raw <= 0) {
-                  setCoFilterMin(0);
-                  return;
-                }
-                setCoFilterMin(Math.round(raw));
-              }}
+              className="w-48 flex-1 rounded border px-2 py-1 text-sm"
+              placeholder="Lọc nhanh theo MST"
+              value={quickMST}
+              onChange={(e) => setQuickMST(e.target.value)}
             />
+            {quickMST && (
+              <button
+                type="button"
+                onClick={() => setQuickMST("")}
+                className="rounded border px-2 py-1 text-xs text-gray-500 hover:bg-gray-50"
+              >
+                Xóa MST
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={handleSaveMstFavorite}
+              className="flex items-center gap-1 rounded border px-2 py-1 text-xs text-gray-600 hover:bg-gray-50"
+            >
+              <Plus className="h-3 w-3" /> Lưu MST ưa thích
+            </button>
+          </div>
+          {quickSearchFavorites.mst.length > 0 && (
+            <div className="flex flex-wrap gap-1 text-xs text-gray-600">
+              {quickSearchFavorites.mst.map((item) => (
+                <button
+                  key={item.normalized}
+                  type="button"
+                  onClick={() => handleApplyMstFavorite(item.value)}
+                  className="flex items-center gap-1 rounded border border-blue-200 bg-blue-50 px-2 py-1 text-blue-700 hover:bg-blue-100"
+                >
+                  {item.value}
+                  <CircleX
+                    aria-hidden="true"
+                    className="h-3 w-3"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      handleRemoveMstFavorite(item.value);
+                    }}
+                  />
+                </button>
+              ))}
+            </div>
+          )}
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              className="w-48 flex-1 rounded border px-2 py-1 text-sm"
+              placeholder="Lọc nhanh theo tên công ty"
+              value={quickCompany}
+              onChange={(e) => setQuickCompany(e.target.value)}
+            />
+            {quickCompany && (
+              <button
+                type="button"
+                onClick={() => setQuickCompany("")}
+                className="rounded border px-2 py-1 text-xs text-gray-500 hover:bg-gray-50"
+              >
+                Xóa công ty
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={handleSaveCompanyFavorite}
+              className="flex items-center gap-1 rounded border px-2 py-1 text-xs text-gray-600 hover:bg-gray-50"
+            >
+              <Plus className="h-3 w-3" /> Lưu công ty ưa thích
+            </button>
+          </div>
+          {quickSearchFavorites.company.length > 0 && (
+            <div className="flex flex-wrap gap-1 text-xs text-gray-600">
+              {quickSearchFavorites.company.map((item) => (
+                <button
+                  key={item.normalized}
+                  type="button"
+                  onClick={() => handleApplyCompanyFavorite(item.value)}
+                  className="flex items-center gap-1 rounded border border-emerald-200 bg-emerald-50 px-2 py-1 text-emerald-700 hover:bg-emerald-100"
+                >
+                  {item.value}
+                  <CircleX
+                    aria-hidden="true"
+                    className="h-3 w-3"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      handleRemoveCompanyFavorite(item.value);
+                    }}
+                  />
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <label className="flex items-center gap-1 text-sm" data-tooltip="Chọn nhanh khoảng thời gian theo preset">
+            <span>Khoảng</span>
+            <select
+              className="rounded border px-2 py-1 text-sm"
+              value={datePreset}
+              onChange={(e) => {
+                const value = e.target.value;
+                if (value === "custom") {
+                  setDatePreset("custom");
+                  return;
+                }
+                applyDatePreset(value);
+              }}
+            >
+              {DATE_RANGE_PRESETS.map((preset) => (
+                <option key={preset.key} value={preset.key}>
+                  {preset.label}
+                </option>
+              ))}
+              <option value="custom">Tự chọn</option>
+            </select>
           </label>
-        )}
-        {coFilterActive && (
-          <span className="text-sm px-2 py-1 rounded bg-emerald-50 text-emerald-700">
-            Đáp ứng C/O: {coFilterMatches} tờ khai
-          </span>
-        )}
-        <div className="flex flex-wrap items-center gap-2 border-l border-gray-200 pl-3 dark:border-slate-700">
+          <div className="flex flex-wrap items-center gap-2">
+            <label className="flex items-center gap-1 text-sm" data-tooltip="Lọc từ ngày (theo ngày đăng ký tờ khai)">
+              <span>Từ ngày</span>
+              <input
+                type="date"
+                value={searchRange.from}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setDatePreset("custom");
+                  setSearchRange((prev) => ({ ...prev, from: value }));
+                }}
+                className="rounded border px-2 py-1 text-sm"
+              />
+            </label>
+            <label className="flex items-center gap-1 text-sm" data-tooltip="Lọc đến ngày (theo ngày đăng ký tờ khai)">
+              <span>Đến ngày</span>
+              <input
+                type="date"
+                value={searchRange.to}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setDatePreset("custom");
+                  setSearchRange((prev) => ({ ...prev, to: value }));
+                }}
+                className="rounded border px-2 py-1 text-sm"
+              />
+            </label>
+            {(searchRange.from || searchRange.to) && (
+              <button
+                type="button"
+                onClick={handleClearSearchRange}
+                data-tooltip="Xóa điều kiện lọc theo ngày"
+                className="rounded border px-3 py-1 text-xs text-gray-600 hover:bg-gray-50"
+              >
+                Xóa lọc ngày
+              </button>
+            )}
+          </div>
+          <div className="flex flex-wrap items-center gap-3 text-sm">
+            <label className="flex items-center gap-1">
+              <input
+                type="checkbox"
+                checked={filterNoStaff}
+                onChange={e => setFilterNoStaff(e.target.checked)}
+              />
+              <span>Chưa gán Nhân viên</span>
+            </label>
+            <label className="flex items-center gap-1">
+              <input
+                type="checkbox"
+                checked={filterNoTeam}
+                onChange={e => setFilterNoTeam(e.target.checked)}
+              />
+              <span>Chưa gán Tổ đội</span>
+            </label>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 text-sm">
+            <label className="flex items-center gap-1">
+              <span>Lọc C/O</span>
+              <select
+                value={coFilterMode}
+                onChange={(e) => setCoFilterMode(e.target.value)}
+                className="rounded border px-2 py-1 text-sm"
+              >
+                {CO_FILTER_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {coFilterMode === "min" && (
+              <label className="flex items-center gap-1 text-sm">
+                <span>Tối thiểu dòng C/O</span>
+                <input
+                  type="number"
+                  min={0}
+                  className="w-20 rounded border px-2 py-1 text-sm"
+                  value={coFilterMin}
+                  onChange={(e) => {
+                    const raw = Number(e.target.value);
+                    if (!Number.isFinite(raw) || raw <= 0) {
+                      setCoFilterMin(0);
+                      return;
+                    }
+                    setCoFilterMin(Math.round(raw));
+                  }}
+                />
+              </label>
+            )}
+            {coFilterActive && (
+              <span className="rounded bg-emerald-50 px-2 py-1 text-sm text-emerald-700">
+                Đáp ứng C/O: {coFilterMatches} tờ khai
+              </span>
+            )}
+          </div>
+        </div>
+
+        <div className="flex min-w-[220px] flex-1 flex-col gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-sm font-medium text-gray-600">Trạng thái</span>
+            <button
+              type="button"
+              onClick={handleSaveStatusFavorite}
+              className="flex items-center gap-1 rounded border px-2 py-1 text-xs text-gray-600 hover:bg-gray-50"
+            >
+              <Plus className="h-3 w-3" /> Lưu trạng thái ưa thích
+            </button>
+            {statusFilters.length > 0 && (
+              <button
+                type="button"
+                onClick={clearStatusFilters}
+                className="rounded border px-2 py-1 text-xs text-gray-500 hover:bg-gray-50"
+              >
+                Xóa lọc trạng thái
+              </button>
+            )}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {availableStatuses.length > 0 ? (
+              availableStatuses.map((status) => {
+                const checked = statusFilters.includes(status);
+                return (
+                  <label
+                    key={status || "unknown"}
+                    className={`flex items-center gap-1 rounded border px-2 py-1 text-xs ${
+                      checked
+                        ? "border-violet-300 bg-violet-50 text-violet-700"
+                        : "border-gray-200 text-gray-600"
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={(event) => toggleStatusFilter(status, event.target.checked)}
+                    />
+                    <span>{formatStatusLabel(status)}</span>
+                  </label>
+                );
+              })
+            ) : (
+              <span className="text-xs text-gray-500">Chưa có trạng thái để lọc.</span>
+            )}
+          </div>
+          {quickSearchFavorites.status.length > 0 && (
+            <div className="flex flex-wrap gap-1 text-xs text-gray-600">
+              {quickSearchFavorites.status.map((item) => (
+                <button
+                  key={item.normalized}
+                  type="button"
+                  onClick={() => handleApplyStatusFavorite(item.value)}
+                  className="flex items-center gap-1 rounded border border-purple-200 bg-purple-50 px-2 py-1 text-purple-700 hover:bg-purple-100"
+                >
+                  {statusFavoriteLabel(item.value)}
+                  <CircleX
+                    aria-hidden="true"
+                    className="h-3 w-3"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      handleRemoveStatusFavorite(item.value);
+                    }}
+                  />
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="flex min-w-[240px] flex-1 flex-wrap items-center gap-2 border-l border-gray-200 pl-3 dark:border-slate-700">
           <label className="flex flex-col text-xs text-gray-600 dark:text-gray-300">
             <span className="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
               Bộ lọc đã lưu
@@ -5585,10 +6878,14 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
           <button
             type="button"
             onClick={handleAutoApplyLicenseExclusion}
-            disabled={!filteredKeys.length}
-            data-tooltip="Đối chiếu tự động loại trừ giấy phép cho toàn bộ tờ khai đang lọc"
+            disabled={!filteredKeys.length || !canAutoReconcile}
+            data-tooltip={
+              !canAutoReconcile
+                ? "Chỉ Quản lý hoặc Quản trị viên mới được phép đối chiếu KPI tự động"
+                : "Đối chiếu tự động loại trừ giấy phép cho toàn bộ tờ khai đang lọc"
+            }
             className={`rounded border px-3 py-1 text-xs ${
-              filteredKeys.length
+              filteredKeys.length && canAutoReconcile
                 ? "border-emerald-300 bg-emerald-50 text-emerald-700"
                 : "opacity-50 cursor-not-allowed"
             }`}
@@ -5599,7 +6896,31 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
         <div className="opacity-70 text-sm">
           {total} dòng — Trang {safePage}/{maxPage}
         </div>
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ml-auto flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-1 rounded border border-gray-200 bg-white p-0.5 text-xs shadow-sm dark:border-slate-600 dark:bg-slate-800">
+            <button
+              type="button"
+              onClick={() => setViewMode(VIEW_MODES.TABLE)}
+              className={`rounded px-2 py-1 font-medium transition ${
+                viewMode === VIEW_MODES.TABLE
+                  ? "bg-blue-500 text-white shadow"
+                  : "text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-slate-700"
+              }`}
+            >
+              Bảng
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode(VIEW_MODES.CARD)}
+              className={`rounded px-2 py-1 font-medium transition ${
+                viewMode === VIEW_MODES.CARD
+                  ? "bg-blue-500 text-white shadow"
+                  : "text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-slate-700"
+              }`}
+            >
+              Thẻ
+            </button>
+          </div>
           <select
             value={pageSize}
             onChange={e => setPageSize(Number(e.target.value) || DEFAULT_PAGE_SIZE)}
@@ -5622,6 +6943,21 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
           )}
         </div>
       </div>
+
+      {isAdminRole && (
+        <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs text-gray-600">
+          <span>
+            Đang hiển thị {visibleColumnCount}/{totalBaseColumns} cột dữ liệu.
+          </span>
+          <button
+            type="button"
+            onClick={handleOpenColumnConfig}
+            className="rounded border px-3 py-1 text-xs text-gray-600 transition hover:bg-gray-50"
+          >
+            Cấu hình cột hiển thị
+          </button>
+        </div>
+      )}
 
       {!query && mode === "saved" && (
         <div className="text-xs text-gray-500">
@@ -5715,198 +7051,469 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
         </div>
       )}
 
-      <div className="overflow-x-auto overflow-y-hidden border rounded">
-        <table className="w-full min-w-[1200px] text-sm">
-          <thead className="bg-gray-50">
-            <tr>
-              {selectionEnabled && <th className="px-2 py-1 text-left w-10">Chọn</th>}
-              <th className="px-2 py-1 text-left">Ngày</th>
-              <th className="px-2 py-1 text-left">Số tờ khai</th>
-              <th className="px-2 py-1 text-left">MST</th>
-              <th className="px-2 py-1 text-left">Công ty</th>
-              <th className="px-2 py-1 text-left">Loại hình</th>
-              <th className="px-2 py-1 text-left">C/O</th>
-              <th className="px-2 py-1 text-left">Mục hàng</th>
-              <th className="px-2 py-1 text-left">Nhân viên</th>
-              <th className="px-2 py-1 text-left">Tổ đội</th>
-              <th className="px-2 py-1 text-left">Đại lý</th>
-              <th className="px-2 py-1 text-left">Trạng thái</th>
-              <th className="px-2 py-1 text-left">Số lượng GP</th>
-              <th className="px-2 py-1 text-left">KPI</th>
-              {canEdit && mode === "saved" && <th className="px-2 py-1 text-left w-16">Xóa</th>}
-            </tr>
+      {viewMode === VIEW_MODES.TABLE ? (
+        <div className="relative overflow-x-auto overflow-y-hidden rounded border bg-white dark:border-slate-700 dark:bg-slate-900/40">
+          <table className="relative w-full min-w-[1200px] table-fixed text-sm">
+            <thead className="bg-gray-50 text-left dark:bg-slate-900">
+              <tr>
+              {selectionEnabled && (
+                <th
+                  className={cx(
+                    "px-2 py-1 font-semibold text-gray-600 dark:text-gray-300",
+                    frozenOffsets.selection ? frozenHeaderClass : ""
+                  )}
+                  style={getFrozenStyle("selection")}
+                >
+                  Chọn
+                </th>
+              )}
+              {!hiddenColumns.has("date") && (
+                <th
+                  className={cx(
+                    "px-2 py-1 font-semibold text-gray-600 dark:text-gray-300",
+                    frozenOffsets.date ? frozenHeaderClass : ""
+                  )}
+                  style={getFrozenStyle("date")}
+                >
+                  {IMPORT_TABLE_COLUMN_LABELS.date}
+                </th>
+              )}
+              {!hiddenColumns.has("declaration") && (
+                <th
+                  className={cx(
+                    "px-2 py-1 font-semibold text-gray-600 dark:text-gray-300",
+                    frozenOffsets.declaration ? frozenHeaderClass : ""
+                  )}
+                  style={getFrozenStyle("declaration")}
+                >
+                  {IMPORT_TABLE_COLUMN_LABELS.declaration}
+                </th>
+              )}
+              {!hiddenColumns.has("mst") && (
+                <th
+                  className={cx(
+                    "px-2 py-1 font-semibold text-gray-600 dark:text-gray-300",
+                    frozenOffsets.mst ? frozenHeaderClass : ""
+                  )}
+                  style={getFrozenStyle("mst")}
+                >
+                  {IMPORT_TABLE_COLUMN_LABELS.mst}
+                </th>
+              )}
+              {!hiddenColumns.has("company") && (
+                <th className="px-2 py-1 font-semibold text-gray-600 dark:text-gray-300">
+                  {IMPORT_TABLE_COLUMN_LABELS.company}
+                </th>
+              )}
+              {!hiddenColumns.has("type") && (
+                <th className="px-2 py-1 font-semibold text-gray-600 dark:text-gray-300">
+                  {IMPORT_TABLE_COLUMN_LABELS.type}
+                </th>
+              )}
+              {!hiddenColumns.has("co") && (
+                <th className="px-2 py-1 font-semibold text-gray-600 dark:text-gray-300">
+                  {IMPORT_TABLE_COLUMN_LABELS.co}
+                </th>
+              )}
+              {!hiddenColumns.has("items") && (
+                <th className="px-2 py-1 font-semibold text-gray-600 dark:text-gray-300">
+                  {IMPORT_TABLE_COLUMN_LABELS.items}
+                </th>
+              )}
+              {!hiddenColumns.has("staff") && (
+                <th className="px-2 py-1 font-semibold text-gray-600 dark:text-gray-300">
+                  {IMPORT_TABLE_COLUMN_LABELS.staff}
+                </th>
+              )}
+              {!hiddenColumns.has("team") && (
+                <th className="px-2 py-1 font-semibold text-gray-600 dark:text-gray-300">
+                  {IMPORT_TABLE_COLUMN_LABELS.team}
+                </th>
+              )}
+              {!hiddenColumns.has("agency") && (
+                <th className="px-2 py-1 font-semibold text-gray-600 dark:text-gray-300">
+                  {IMPORT_TABLE_COLUMN_LABELS.agency}
+                </th>
+              )}
+              {!hiddenColumns.has("status") && (
+                <th className="px-2 py-1 font-semibold text-gray-600 dark:text-gray-300">
+                  {IMPORT_TABLE_COLUMN_LABELS.status}
+                </th>
+              )}
+              {!hiddenColumns.has("licenses") && (
+                <th className="px-2 py-1 font-semibold text-gray-600 dark:text-gray-300">
+                  {IMPORT_TABLE_COLUMN_LABELS.licenses}
+                </th>
+              )}
+              {!hiddenColumns.has("kpi") && (
+                <th className="px-2 py-1 font-semibold text-gray-600 dark:text-gray-300">
+                  {IMPORT_TABLE_COLUMN_LABELS.kpi}
+                </th>
+              )}
+              {historyEnabled && (
+                <th className="px-2 py-1 text-left font-semibold text-gray-600 dark:text-gray-300">Nhật ký</th>
+              )}
+              {updateEnabled && (
+                <th className="px-2 py-1 text-left font-semibold text-gray-600 dark:text-gray-300">Cập nhật</th>
+              )}
+              {deleteEnabled && (
+                <th className="px-2 py-1 text-left font-semibold text-gray-600 dark:text-gray-300">Xóa</th>
+              )}
+              </tr>
           </thead>
           <tbody>
           {pageRows.map((r, i) => {
-            const rowKey = keyOfRow(r);
-            const rowEditable = isRowEditable(r);
-            const rowReadOnly = isReadOnlyForEdits || !rowEditable;
+            const state = buildRowState(r, i);
+            const {
+              rowKey,
+              rowReadOnly,
+              rowEditable,
+              canSaveRow,
+              rowSaving,
+              rowError,
+              historyExpanded,
+              historyList,
+              historyCount,
+            } = state;
+            const hasPendingDiff = state.hasPendingDiff;
             return (
-              <tr
-                key={`${rowKey}_${i}`}
-                className="odd:bg-[color:var(--ds-surface-card)] even:bg-[color:var(--ds-surface-muted)]"
-              >
-                {selectionEnabled && (
-                  <td className="px-2 py-1">
-                    <input
-                      type="checkbox"
-                      checked={selectedKeys.includes(rowKey)}
-                      onChange={() => handleToggleSelect(r)}
-                      disabled={rowReadOnly}
-                    />
-                  </td>
-                )}
-                <td className="px-2 py-1">
-                  <span title={r.raw_date || ""}>{formatDisplayDate(r.date || r.raw_date || "")}</span>
-                </td>
-                <td className="px-2 py-1">
-                  <div className="flex flex-wrap items-center gap-1">
-                    <span>{r.so_tk_full || r.so_tk || ""}</span>
-                    {r.so_tk_suffix ? (
-                      <span className="text-[10px] uppercase text-gray-400">{r.so_tk_suffix}</span>
-                    ) : null}
-                    {updatedKeySet.has(rowKey) && (
-                      <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700">Cap nhat</span>
-                    )}
-                    {coMismatchKeySet.has(rowKey) && (
-                      <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">CO lech</span>
-                    )}
-                    {duplicate11KeeperSet.has(rowKey) && (
-                      <span className="rounded bg-sky-100 px-1.5 py-0.5 text-[10px] font-medium text-sky-700">Giữ mới nhất</span>
-                    )}
-                    {duplicate11DuplicatesSet.has(rowKey) && (
-                      <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">Trùng 11 số</span>
-                    )}
-                    {r.duplicate_review_pending && (
-                      <span className="rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-medium text-red-700">Chờ rà soát</span>
-                    )}
-                    {rowReadOnly && (
-                      <span className="rounded bg-gray-200 px-1.5 py-0.5 text-[10px] font-medium text-gray-600">Chỉ xem</span>
-                    )}
-                  </div>
-                </td>
-                <td className="px-2 py-1">
-                  <span>{r.mst || ""}</span>
-                </td>
-                <td className="px-2 py-1">
-                  <span>{r.cong_ty || ""}</span>
-                </td>
-                <td className="px-2 py-1">
-                  <span>{r.loai_hinh || ""}</span>
-                </td>
-                <td className="px-2 py-1">
-                  {(() => {
-                    const lines = coLineCount(r);
-                    const status = coLabel(r);
-                    const display = lines > 0 ? String(lines) : status;
-                    const hasValue = !!display;
-                    return (
-                      <span className={hasValue ? "text-emerald-600 font-medium" : "text-gray-400"}>
-                        {display || ""}
-                      </span>
-                    );
-                  })()}
-                </td>
-                <td className="px-2 py-1">
-                  <span>{r.muc_hang ?? ""}</span>
-                </td>
-                <td className="px-2 py-1">
-                  {rowReadOnly ? (
-                    <span>{r.nhan_vien || ""}</span>
-                  ) : (
-                    <StaffCombobox
-                      value={r.nhan_vien || ""}
-                      teamValue={r.team || ""}
-                      teams={rosterTeams}
-                      onSelect={(selection) => handleSelectStaff(rowKey, selection)}
-                    />
-                  )}
-                </td>
-                <td className="px-2 py-1">
-                  {rowReadOnly ? (
-                    <span>{r.team || ""}</span>
-                  ) : (
-                    <TeamCombobox
-                      value={r.team || ""}
-                      teams={rosterTeams}
-                      onSelect={({ teamName }) => handleSelectTeam(rowKey, teamName)}
-                    />
-                  )}
-                </td>
-                <td className="px-2 py-1">
-                  {rowReadOnly ? (
-                    <span>{r.agency || r.dai_ly || ""}</span>
-                  ) : (
-                    <input
-                      className="border rounded px-1 py-0.5 w-28"
-                      value={r.agency || r.dai_ly || ""}
-                      onChange={e => applyEdit(rowKey, () => ({ agency: e.target.value, dai_ly: e.target.value }))}
-                    />
-                  )}
-                </td>
-                <td className="px-2 py-1">
-                  {(() => {
-                    const hasStaff = !!(r.nhan_vien && r.nhan_vien.toString().trim());
-                    const hasTeam = !!(r.team && r.team.toString().trim());
-                    if (r.reviewed) {
-                      return <span className="text-emerald-700">Đã rà soát</span>;
-                    }
-                    if (!hasStaff || !hasTeam) {
-                      const missing = [];
-                      if (!hasStaff) missing.push("nhân viên");
-                      if (!hasTeam) missing.push("tổ đội");
-                      return <span className="text-amber-600">Thiếu {missing.join(" & ")}</span>;
-                    }
-                    return <span className="text-gray-600">Đủ thông tin</span>;
-                  })()}
-                </td>
-                <td className="px-2 py-1">
-                  {rowReadOnly ? (
-                    <span>{r.licenses ?? r.so_luong_gp ?? ""}</span>
-                  ) : (
-                    <input
-                      type="number"
-                      min="0"
-                      step="1"
-                      className="border rounded px-1 py-0.5 w-24"
-                      value={r.licenses ?? r.so_luong_gp ?? ""}
-                      onChange={e => {
-                        const input = e.target.value;
-                        if (input === "") {
-                          applyEdit(rowKey, () => ({ licenses: "", so_luong_gp: "", licenseManualCount: null }));
-                          return;
-                        }
-                        const parsed = Number(input);
-                        if (!Number.isFinite(parsed)) return;
-                        const normalized = Math.max(0, Math.round(parsed));
-                        applyEdit(rowKey, () => ({
-                          licenses: normalized,
-                          so_luong_gp: normalized,
-                          licenseManualCount: normalized,
-                        }));
-                      }}
-                    />
-                  )}
-                </td>
-                <td className="px-2 py-1">
-                  {(() => {
-                    const kpi = computeKPI(r, rules);
-                    if (!Number.isFinite(kpi)) return "-";
-                    return kpi.toFixed(1);
-                  })()}
-                </td>
-                {deleteEnabled && rowEditable && (
-                  <td className="px-2 py-1">
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteSingle(r)}
-                      className="px-2 py-0.5 rounded bg-red-500 text-white text-xs"
+              <React.Fragment key={`${rowKey}_${i}`}>
+                <tr className="relative odd:bg-[color:var(--ds-surface-card)] even:bg-[color:var(--ds-surface-muted)]">
+                  {selectionEnabled && (
+                    <td
+                      className={cx("px-2 py-1 align-top", frozenOffsets.selection ? frozenCellClass : "")}
+                      style={getFrozenStyle("selection")}
                     >
-                      Xóa
-                    </button>
-                  </td>
+                      <input
+                        type="checkbox"
+                        checked={selectedKeys.includes(rowKey)}
+                        onChange={() => handleToggleSelect(r)}
+                        disabled={rowReadOnly}
+                      />
+                    </td>
+                  )}
+                  {!hiddenColumns.has("date") && (
+                    <td
+                      className={cx(
+                        "px-2 py-1 align-top whitespace-nowrap text-sm text-gray-700 dark:text-gray-200",
+                        frozenOffsets.date ? frozenCellClass : ""
+                      )}
+                      style={getFrozenStyle("date")}
+                    >
+                      <span title={r.raw_date || ""}>{formatDisplayDate(r.date || r.raw_date || "")}</span>
+                    </td>
+                  )}
+                  {!hiddenColumns.has("declaration") && (
+                    <td
+                      className={cx(
+                        "px-2 py-1 align-top",
+                        frozenOffsets.declaration ? frozenCellClass : ""
+                      )}
+                      style={getFrozenStyle("declaration")}
+                    >
+                      <div className="flex flex-wrap items-center gap-1">
+                        <span className="font-medium text-gray-800 dark:text-gray-100">
+                          {r.so_tk_full || r.so_tk || ""}
+                        </span>
+                        {r.so_tk_suffix ? (
+                          <span className="text-[10px] uppercase text-gray-400">{r.so_tk_suffix}</span>
+                        ) : null}
+                        {updatedKeySet.has(rowKey) && (
+                          <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700">
+                            Cập nhật
+                          </span>
+                        )}
+                        {coMismatchKeySet.has(rowKey) && (
+                          <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">
+                            CO lệch
+                          </span>
+                        )}
+                        {duplicate11KeeperSet.has(rowKey) && (
+                          <span className="rounded bg-sky-100 px-1.5 py-0.5 text-[10px] font-medium text-sky-700">
+                            Giữ mới nhất
+                          </span>
+                        )}
+                        {duplicate11DuplicatesSet.has(rowKey) && (
+                          <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">
+                            Trùng 11 số
+                          </span>
+                        )}
+                        {r.duplicate_review_pending && (
+                          <span className="rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-medium text-red-700">
+                            Chờ rà soát
+                          </span>
+                        )}
+                        {rowReadOnly && (
+                          <span className="rounded bg-gray-200 px-1.5 py-0.5 text-[10px] font-medium text-gray-600">
+                            Chỉ xem
+                          </span>
+                        )}
+                        {hasPendingDiff && !rowReadOnly && (
+                          <span className="rounded bg-blue-100 px-1.5 py-0.5 text-[10px] font-medium text-blue-700">
+                            Chưa lưu
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                  )}
+                  {!hiddenColumns.has("mst") && (
+                    <td
+                      className={cx(
+                        "px-2 py-1 align-top text-gray-700 dark:text-gray-200",
+                        frozenOffsets.mst ? frozenCellClass : ""
+                      )}
+                      style={getFrozenStyle("mst")}
+                    >
+                      <span>{r.mst || ""}</span>
+                    </td>
+                  )}
+                  {!hiddenColumns.has("company") && (
+                    <td className="px-2 py-1 align-top">
+                      <span>{r.cong_ty || ""}</span>
+                    </td>
+                  )}
+                  {!hiddenColumns.has("type") && (
+                    <td className="px-2 py-1 align-top">
+                      <span>{r.loai_hinh || ""}</span>
+                    </td>
+                  )}
+                  {!hiddenColumns.has("co") && (
+                    <td className="px-2 py-1 align-top">
+                      {(() => {
+                        const lines = coLineCount(r);
+                        const status = coLabel(r);
+                        const display = lines > 0 ? String(lines) : status;
+                        const hasValue = !!display;
+                        return (
+                          <span className={hasValue ? "text-emerald-600 font-medium" : "text-gray-400"}>
+                            {display || ""}
+                          </span>
+                        );
+                      })()}
+                    </td>
+                  )}
+                  {!hiddenColumns.has("items") && (
+                    <td className="px-2 py-1 align-top">
+                      <span>{r.muc_hang ?? ""}</span>
+                    </td>
+                  )}
+                  {!hiddenColumns.has("staff") && (
+                    <td className="px-2 py-1 align-top">
+                      {rowReadOnly ? (
+                        <span>{r.nhan_vien || ""}</span>
+                      ) : (
+                        <StaffCombobox
+                          value={r.nhan_vien || ""}
+                          teamValue={r.team || ""}
+                          teams={rosterTeams}
+                          onSelect={(selection) => handleSelectStaff(rowKey, selection)}
+                        />
+                      )}
+                    </td>
+                  )}
+                  {!hiddenColumns.has("team") && (
+                    <td className="px-2 py-1 align-top">
+                      {rowReadOnly ? (
+                        <span>{r.team || ""}</span>
+                      ) : (
+                        <TeamCombobox
+                          value={r.team || ""}
+                          teams={rosterTeams}
+                          onSelect={({ teamName }) => handleSelectTeam(rowKey, teamName)}
+                        />
+                      )}
+                    </td>
+                  )}
+                  {!hiddenColumns.has("agency") && (
+                    <td className="px-2 py-1 align-top">
+                      {rowReadOnly ? (
+                        <span>{r.agency || r.dai_ly || ""}</span>
+                      ) : (
+                        <input
+                          className="w-28 rounded border px-1 py-0.5"
+                          value={r.agency || r.dai_ly || ""}
+                          onChange={(e) =>
+                            applyEdit(rowKey, () => ({ agency: e.target.value, dai_ly: e.target.value }))
+                          }
+                        />
+                      )}
+                    </td>
+                  )}
+                  {!hiddenColumns.has("status") && (
+                    <td className="px-2 py-1 align-top">
+                      {(() => {
+                        const hasStaff = !!(r.nhan_vien && r.nhan_vien.toString().trim());
+                        const hasTeam = !!(r.team && r.team.toString().trim());
+                        if (r.reviewed) {
+                          return <span className="text-emerald-700">Đã rà soát</span>;
+                        }
+                        if (!hasStaff || !hasTeam) {
+                          const missing = [];
+                          if (!hasStaff) missing.push("nhân viên");
+                          if (!hasTeam) missing.push("tổ đội");
+                          return <span className="text-amber-600">Thiếu {missing.join(" & ")}</span>;
+                        }
+                        return <span className="text-gray-600">Đủ thông tin</span>;
+                      })()}
+                    </td>
+                  )}
+                  {!hiddenColumns.has("licenses") && (
+                    <td className="px-2 py-1 align-top">
+                      {rowReadOnly ? (
+                        <span>{r.licenses ?? r.so_luong_gp ?? ""}</span>
+                      ) : (
+                        <input
+                          type="number"
+                          min="0"
+                          step="1"
+                          className="w-24 rounded border px-1 py-0.5"
+                          value={r.licenses ?? r.so_luong_gp ?? ""}
+                          onChange={(e) => {
+                            const input = e.target.value;
+                            if (input === "") {
+                              applyEdit(rowKey, () => ({ licenses: "", so_luong_gp: "", licenseManualCount: null }));
+                              return;
+                            }
+                            const parsed = Number(input);
+                            if (!Number.isFinite(parsed)) return;
+                            const normalized = Math.max(0, Math.round(parsed));
+                            applyEdit(rowKey, () => ({
+                              licenses: normalized,
+                              so_luong_gp: normalized,
+                              licenseManualCount: normalized,
+                            }));
+                          }}
+                        />
+                      )}
+                    </td>
+                  )}
+                  {!hiddenColumns.has("kpi") && (
+                    <td className="px-2 py-1 align-top">
+                      {(() => {
+                        const kpi = computeKPI(r, rules);
+                        if (!Number.isFinite(kpi)) return "-";
+                        return kpi.toFixed(1);
+                      })()}
+                    </td>
+                  )}
+                  {historyEnabled && (
+                    <td className="px-2 py-1 align-top">
+                      <button
+                        type="button"
+                        onClick={() => handleToggleHistory(rowKey)}
+                        className={cx(
+                          "rounded px-2 py-0.5 text-xs",
+                          historyExpanded
+                            ? "border border-blue-500 bg-blue-50 text-blue-700"
+                            : "border border-gray-300 bg-white text-gray-700 hover:border-blue-400 hover:text-blue-700"
+                        )}
+                      >
+                        {historyExpanded ? "Thu gọn" : "Nhật ký"}
+                        {historyCount > 0 ? ` (${historyCount})` : ""}
+                      </button>
+                    </td>
+                  )}
+                  {updateEnabled && (
+                    <td className="px-2 py-1 align-top">
+                      {rowReadOnly ? (
+                        <span className="text-[11px] text-gray-400">Chỉ xem</span>
+                      ) : canSaveRow ? (
+                        <div className="flex flex-col gap-1">
+                          <button
+                            type="button"
+                            onClick={() => handleSaveRowChanges(rowKey)}
+                            disabled={rowSaving}
+                            className={cx(
+                              "rounded px-2 py-0.5 text-xs font-medium text-white transition",
+                              rowSaving ? "cursor-not-allowed bg-blue-300" : "bg-blue-600 hover:bg-blue-700"
+                            )}
+                          >
+                            {rowSaving ? "Đang lưu…" : "Cập nhật"}
+                          </button>
+                          {rowError ? <span className="text-[11px] text-red-600">{rowError}</span> : null}
+                        </div>
+                      ) : (
+                        <span className="text-[11px] text-gray-400">Đã đồng bộ</span>
+                      )}
+                    </td>
+                  )}
+                  {deleteEnabled && rowEditable && (
+                    <td className="px-2 py-1 align-top">
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteSingle(r)}
+                        className="rounded bg-red-500 px-2 py-0.5 text-xs text-white hover:bg-red-600"
+                      >
+                        Xóa
+                      </button>
+                    </td>
+                  )}
+                </tr>
+                {historyEnabled && historyExpanded && (
+                  <tr className="bg-blue-50/40">
+                    {selectionEnabled && (
+                      <td
+                        className={cx("px-2 py-1", frozenOffsets.selection ? frozenCellClass : "")}
+                        style={getFrozenStyle("selection")}
+                      />
+                    )}
+                    <td
+                      className="px-4 py-3 text-xs text-gray-700 dark:text-gray-200"
+                      colSpan={totalColumns - (selectionEnabled ? 1 : 0)}
+                      style={historyIndent ? { paddingLeft: `${historyIndent}px` } : undefined}
+                    >
+                      <div className="flex flex-col gap-3">
+                        {historyList.length > 0 ? (
+                          historyList.map((entry) => {
+                            const timestampLabel = formatHistoryTimestamp(entry.ts);
+                            const actorLabel = entry.actor || "system";
+                            return (
+                              <div key={entry.id} className="rounded border border-blue-100 bg-white p-2 shadow-sm">
+                                <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-gray-500">
+                                  <span className="font-medium text-gray-700">{timestampLabel}</span>
+                                  <span className="text-gray-500">{`Bởi: ${actorLabel}`}</span>
+                                </div>
+                                <ul className="mt-2 space-y-1">
+                                  {entry.changes.map((change, idx) => {
+                                    const label =
+                                      DECL_HISTORY_FIELD_LABELS[change.field] || humanizeDiffKey(change.field);
+                                    const beforeEmpty =
+                                      change.before === "" || change.before === null || change.before === undefined;
+                                    const afterEmpty =
+                                      change.after === "" || change.after === null || change.after === undefined;
+                                    const beforeLabel = beforeEmpty ? "Trống" : change.before;
+                                    const afterLabel = afterEmpty ? "Trống" : change.after;
+                                    const beforeClass = beforeEmpty
+                                      ? "text-gray-400 italic"
+                                      : "text-red-600 line-through decoration-red-400";
+                                    const afterClass = afterEmpty
+                                      ? "text-gray-500 italic"
+                                      : "text-emerald-700 font-medium";
+                                    return (
+                                      <li key={`${entry.id}-${idx}`} className="flex flex-wrap items-start gap-2">
+                                        <span className="min-w-[8rem] shrink-0 text-gray-500">{label}</span>
+                                        <span className="flex flex-wrap items-center gap-1">
+                                          <span className={beforeClass}>{beforeLabel}</span>
+                                          <span className="text-gray-400">→</span>
+                                          <span className={afterClass}>{afterLabel}</span>
+                                        </span>
+                                      </li>
+                                    );
+                                  })}
+                                </ul>
+                              </div>
+                            );
+                          })
+                        ) : (
+                          <div className="rounded border border-dashed border-gray-200 bg-white p-4 text-center text-gray-500">
+                            Chưa có nhật ký chỉnh sửa cho tờ khai này.
+                          </div>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
                 )}
-              </tr>
+              </React.Fragment>
             );
           })}
             {pageRows.length === 0 && (
@@ -5917,8 +7524,358 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
               </tr>
             )}
           </tbody>
-        </table>
-      </div>
+          </table>
+        </div>
+      ) : (
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {pageRows.length > 0 ? (
+            pageRows.map((r, i) => {
+              const state = buildRowState(r, i);
+              const {
+                rowKey,
+                rowReadOnly,
+                rowEditable,
+                canSaveRow,
+                rowSaving,
+                rowError,
+                historyExpanded,
+                historyList,
+                historyCount,
+              } = state;
+              const hasPendingDiff = state.hasPendingDiff;
+              return (
+                <div
+                  key={`${rowKey}_${i}`}
+                  className="flex flex-col gap-3 rounded border border-gray-200 bg-white p-4 shadow-sm transition hover:shadow-md dark:border-slate-700 dark:bg-slate-900/70"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="space-y-1">
+                      {!hiddenColumns.has("date") && (
+                        <div className="text-xs text-gray-500 dark:text-gray-300">
+                          {formatDisplayDate(r.date || r.raw_date || "")}
+                        </div>
+                      )}
+                      <div className="flex flex-wrap items-center gap-1 text-sm font-semibold text-gray-800 dark:text-gray-100">
+                        <span>{r.so_tk_full || r.so_tk || ""}</span>
+                        {r.so_tk_suffix ? (
+                          <span className="text-[10px] uppercase text-gray-400">{r.so_tk_suffix}</span>
+                        ) : null}
+                        {hasPendingDiff && !rowReadOnly && (
+                          <span className="rounded bg-blue-100 px-1.5 py-0.5 text-[10px] font-medium text-blue-700">
+                            Chưa lưu
+                          </span>
+                        )}
+                        {r.reviewed && (
+                          <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700">
+                            Đã rà soát
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex flex-wrap gap-1 text-[10px] text-gray-500 dark:text-gray-400">
+                        {updatedKeySet.has(rowKey) && (
+                          <span className="rounded bg-emerald-100 px-1.5 py-0.5 font-medium text-emerald-700">Cập nhật</span>
+                        )}
+                        {coMismatchKeySet.has(rowKey) && (
+                          <span className="rounded bg-amber-100 px-1.5 py-0.5 font-medium text-amber-700">CO lệch</span>
+                        )}
+                        {duplicate11KeeperSet.has(rowKey) && (
+                          <span className="rounded bg-sky-100 px-1.5 py-0.5 font-medium text-sky-700">Giữ mới nhất</span>
+                        )}
+                        {duplicate11DuplicatesSet.has(rowKey) && (
+                          <span className="rounded bg-amber-100 px-1.5 py-0.5 font-medium text-amber-700">Trùng 11 số</span>
+                        )}
+                        {r.duplicate_review_pending && (
+                          <span className="rounded bg-red-100 px-1.5 py-0.5 font-medium text-red-700">Chờ rà soát</span>
+                        )}
+                        {rowReadOnly && (
+                          <span className="rounded bg-gray-200 px-1.5 py-0.5 font-medium text-gray-600">Chỉ xem</span>
+                        )}
+                      </div>
+                      {!hiddenColumns.has("mst") && (
+                        <div className="text-sm text-gray-600 dark:text-gray-200">{r.mst || "Chưa có MST"}</div>
+                      )}
+                    </div>
+                    {selectionEnabled && (
+                      <label className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-300">
+                        <input
+                          type="checkbox"
+                          checked={selectedKeys.includes(rowKey)}
+                          onChange={() => handleToggleSelect(r)}
+                          disabled={rowReadOnly}
+                        />
+                        <span>Chọn</span>
+                      </label>
+                    )}
+                  </div>
+                  <div className="grid gap-2 text-sm text-gray-700 dark:text-gray-200 sm:grid-cols-2">
+                    {!hiddenColumns.has("company") && (
+                      <div>
+                        <div className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-300">
+                          Công ty
+                        </div>
+                        <div>{r.cong_ty || "—"}</div>
+                      </div>
+                    )}
+                    {!hiddenColumns.has("type") && (
+                      <div>
+                        <div className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-300">
+                          Loại hình
+                        </div>
+                        <div>{r.loai_hinh || "—"}</div>
+                      </div>
+                    )}
+                    {!hiddenColumns.has("items") && (
+                      <div>
+                        <div className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-300">
+                          Mục hàng
+                        </div>
+                        <div>{r.muc_hang ?? "—"}</div>
+                      </div>
+                    )}
+                    {!hiddenColumns.has("co") && (
+                      <div>
+                        <div className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-300">
+                          C/O
+                        </div>
+                        <div className="font-medium text-emerald-600">
+                          {(() => {
+                            const lines = coLineCount(r);
+                            const status = coLabel(r);
+                            return lines > 0 ? String(lines) : status || "—";
+                          })()}
+                        </div>
+                      </div>
+                    )}
+                    {!hiddenColumns.has("staff") && (
+                      <div>
+                        <div className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-300">
+                          Nhân viên
+                        </div>
+                        {rowReadOnly ? (
+                          <div>{r.nhan_vien || "—"}</div>
+                        ) : (
+                          <StaffCombobox
+                            value={r.nhan_vien || ""}
+                            teamValue={r.team || ""}
+                            teams={rosterTeams}
+                            onSelect={(selection) => handleSelectStaff(rowKey, selection)}
+                          />
+                        )}
+                      </div>
+                    )}
+                    {!hiddenColumns.has("team") && (
+                      <div>
+                        <div className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-300">
+                          Tổ đội
+                        </div>
+                        {rowReadOnly ? (
+                          <div>{r.team || "—"}</div>
+                        ) : (
+                          <TeamCombobox
+                            value={r.team || ""}
+                            teams={rosterTeams}
+                            onSelect={({ teamName }) => handleSelectTeam(rowKey, teamName)}
+                          />
+                        )}
+                      </div>
+                    )}
+                    {!hiddenColumns.has("agency") && (
+                      <div>
+                        <div className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-300">
+                          Đại lý
+                        </div>
+                        {rowReadOnly ? (
+                          <div>{r.agency || r.dai_ly || "—"}</div>
+                        ) : (
+                          <input
+                            className="mt-1 w-full rounded border px-2 py-1"
+                            value={r.agency || r.dai_ly || ""}
+                            onChange={(e) =>
+                              applyEdit(rowKey, () => ({ agency: e.target.value, dai_ly: e.target.value }))
+                            }
+                          />
+                        )}
+                      </div>
+                    )}
+                    {!hiddenColumns.has("licenses") && (
+                      <div>
+                        <div className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-300">
+                          Số lượng GP
+                        </div>
+                        {rowReadOnly ? (
+                          <div>{r.licenses ?? r.so_luong_gp ?? "—"}</div>
+                        ) : (
+                          <input
+                            type="number"
+                            min="0"
+                            step="1"
+                            className="mt-1 w-full rounded border px-2 py-1"
+                            value={r.licenses ?? r.so_luong_gp ?? ""}
+                            onChange={(e) => {
+                              const input = e.target.value;
+                              if (input === "") {
+                                applyEdit(rowKey, () => ({ licenses: "", so_luong_gp: "", licenseManualCount: null }));
+                                return;
+                              }
+                              const parsed = Number(input);
+                              if (!Number.isFinite(parsed)) return;
+                              const normalized = Math.max(0, Math.round(parsed));
+                              applyEdit(rowKey, () => ({
+                                licenses: normalized,
+                                so_luong_gp: normalized,
+                                licenseManualCount: normalized,
+                              }));
+                            }}
+                          />
+                        )}
+                      </div>
+                    )}
+                    {!hiddenColumns.has("kpi") && (
+                      <div>
+                        <div className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-300">
+                          KPI
+                        </div>
+                        <div>
+                          {(() => {
+                            const kpi = computeKPI(r, rules);
+                            if (!Number.isFinite(kpi)) return "-";
+                            return kpi.toFixed(1);
+                          })()}
+                        </div>
+                      </div>
+                    )}
+                    {!hiddenColumns.has("status") && (
+                      <div className="sm:col-span-2">
+                        <div className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-300">
+                          Trạng thái
+                        </div>
+                        {(() => {
+                          const hasStaff = !!(r.nhan_vien && r.nhan_vien.toString().trim());
+                          const hasTeam = !!(r.team && r.team.toString().trim());
+                          if (r.reviewed) {
+                            return <div className="text-emerald-600">Đã rà soát</div>;
+                          }
+                          if (!hasStaff || !hasTeam) {
+                            const missing = [];
+                            if (!hasStaff) missing.push("nhân viên");
+                            if (!hasTeam) missing.push("tổ đội");
+                            return <div className="text-amber-600">Thiếu {missing.join(" & ")}</div>;
+                          }
+                          return <div className="text-gray-600">Đủ thông tin</div>;
+                        })()}
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2 text-xs text-gray-600 dark:text-gray-300">
+                    {historyEnabled && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant={historyExpanded ? "secondary" : "outline"}
+                        className="text-xs"
+                        onClick={() => handleToggleHistory(rowKey)}
+                      >
+                        {historyExpanded ? "Thu gọn nhật ký" : "Xem nhật ký"}
+                        {historyCount > 0 ? ` (${historyCount})` : ""}
+                      </Button>
+                    )}
+                    {updateEnabled &&
+                      (rowReadOnly ? (
+                        <span className="text-[11px] text-gray-400">Chỉ xem</span>
+                      ) : canSaveRow ? (
+                        <Button
+                          type="button"
+                          size="sm"
+                          className="text-xs"
+                          onClick={() => handleSaveRowChanges(rowKey)}
+                          disabled={rowSaving}
+                        >
+                          {rowSaving ? "Đang lưu…" : "Cập nhật"}
+                        </Button>
+                      ) : (
+                        <span className="text-[11px] text-gray-400">Đã đồng bộ</span>
+                      ))}
+                    {deleteEnabled && rowEditable && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="destructive"
+                        className="text-xs"
+                        onClick={() => handleDeleteSingle(r)}
+                      >
+                        Xóa
+                      </Button>
+                    )}
+                    {hasPendingDiff && !rowReadOnly && (
+                      <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-medium text-blue-700">
+                        Có chỉnh sửa chờ lưu
+                      </span>
+                    )}
+                    {rowError ? <span className="text-[11px] text-red-600">{rowError}</span> : null}
+                  </div>
+                  {historyEnabled && historyExpanded && (
+                    <div className="space-y-2 rounded border border-blue-100 bg-blue-50/60 p-3 text-xs text-gray-700 dark:border-blue-500/40 dark:bg-slate-900/60 dark:text-gray-200">
+                      {historyList.length > 0 ? (
+                        historyList.map((entry) => {
+                          const timestampLabel = formatHistoryTimestamp(entry.ts);
+                          const actorLabel = entry.actor || "system";
+                          return (
+                            <div
+                              key={entry.id}
+                              className="rounded border border-blue-200 bg-white p-2 shadow-sm dark:border-blue-500/30 dark:bg-slate-900/80"
+                            >
+                              <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-gray-500 dark:text-gray-300">
+                                <span className="font-medium text-gray-700 dark:text-gray-200">{timestampLabel}</span>
+                                <span>{`Bởi: ${actorLabel}`}</span>
+                              </div>
+                              <ul className="mt-2 space-y-1">
+                                {entry.changes.map((change, idx) => {
+                                  const label =
+                                    DECL_HISTORY_FIELD_LABELS[change.field] || humanizeDiffKey(change.field);
+                                  const beforeEmpty =
+                                    change.before === "" || change.before === null || change.before === undefined;
+                                  const afterEmpty =
+                                    change.after === "" || change.after === null || change.after === undefined;
+                                  const beforeLabel = beforeEmpty ? "Trống" : change.before;
+                                  const afterLabel = afterEmpty ? "Trống" : change.after;
+                                  const beforeClass = beforeEmpty
+                                    ? "text-gray-400 italic"
+                                    : "text-red-600 line-through decoration-red-400";
+                                  const afterClass = afterEmpty
+                                    ? "text-gray-500 italic"
+                                    : "text-emerald-700 font-medium";
+                                  return (
+                                    <li key={`${entry.id}-${idx}`} className="flex flex-wrap items-start gap-2">
+                                      <span className="min-w-[8rem] shrink-0 text-gray-500 dark:text-gray-300">{label}</span>
+                                      <span className="flex flex-wrap items-center gap-1">
+                                        <span className={beforeClass}>{beforeLabel}</span>
+                                        <span className="text-gray-400">→</span>
+                                        <span className={afterClass}>{afterLabel}</span>
+                                      </span>
+                                    </li>
+                                  );
+                                })}
+                              </ul>
+                            </div>
+                          );
+                        })
+                      ) : (
+                        <div className="rounded border border-dashed border-gray-300 bg-white p-3 text-center text-gray-500 dark:border-slate-700 dark:bg-slate-900/80">
+                          Chưa có nhật ký chỉnh sửa.
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })
+          ) : (
+            <div className="col-span-full rounded border border-dashed border-gray-300 bg-white p-6 text-center text-sm text-gray-500 dark:border-slate-700 dark:bg-slate-900/40 dark:text-gray-300">
+              Không có dữ liệu
+            </div>
+          )}
+        </div>
+      )}
       <p className="text-xs text-gray-500">
         * Số lượng GP được tự động đếm theo các loại giấy phép hợp lệ (đã loại trừ theo mục Quy tắc KPI).
         Bạn có thể điều chỉnh thủ công trước khi lưu để phản ánh thực tế kiểm tra.

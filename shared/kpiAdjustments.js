@@ -32,18 +32,61 @@ function humanizeKey(key) {
 
 export const KPI_ADJUSTMENT_CATEGORY_CONFIG = Object.freeze({
   support_fixed: {
-    label: 'Hỗ trợ thông quan (điểm cố định)',
-    type: 'fixed',
-    defaultUnit: 5,
+    label: 'Hỗ trợ thông quan (luồng xanh)',
+    type: 'quantity',
+    defaultUnit: 0.1,
     groupKey: 'support',
     groupLabel: 'Hỗ trợ thông quan',
+    color: 'emerald',
   },
   support_dynamic: {
-    label: 'Hỗ trợ thông quan (hệ số theo số tờ khai)',
+    label: 'Hỗ trợ thông quan (luồng vàng/đỏ)',
     type: 'quantity',
-    defaultUnit: 1,
+    defaultUnit: 0.25,
     groupKey: 'support',
     groupLabel: 'Hỗ trợ thông quan',
+    color: 'amber',
+  },
+  license_support: {
+    label: 'Hỗ trợ xin giấy phép',
+    type: 'quantity',
+    defaultUnit: 1.5,
+    groupKey: 'license_support',
+    groupLabel: 'Hỗ trợ giấy phép',
+    requiresLicenseCode: true,
+    licensePoints: {
+      ZB02: 2,
+      ZB03: 1.5,
+    },
+    licenseOptions: [
+      { value: 'ZB02', label: 'ZB02 – Giấy phép kiểm dịch' },
+      { value: 'ZB03', label: 'ZB03 – Giấy phép chuyên ngành khác' },
+    ],
+  },
+  support_misc: {
+    label: 'Hỗ trợ khác',
+    type: 'hybrid',
+    defaultUnit: 10,
+    defaultMode: 'fixed',
+    modes: [
+      { value: 'fixed', label: 'Điểm cố định', description: 'Áp dụng điểm cố định theo mặc định', compute: 'fixed', defaultUnit: 10 },
+      {
+        value: 'dynamic',
+        label: 'Linh hoạt theo số lượng',
+        description: 'Điểm = hệ số * số lượng (mặc định 0.1)',
+        compute: 'quantity',
+        defaultUnit: 0.1,
+      },
+    ],
+    groupKey: 'support_misc',
+    groupLabel: 'Hỗ trợ khác',
+  },
+  co_correction: {
+    label: 'Sửa tờ khai bổ sung C/O',
+    type: 'quantity',
+    defaultUnit: 1.5,
+    groupKey: 'correction',
+    groupLabel: 'Sửa tờ khai',
   },
   cancel_staff: {
     label: 'Huỷ tờ khai do lỗi nhân viên',
@@ -125,13 +168,6 @@ export const KPI_ADJUSTMENT_CATEGORY_CONFIG = Object.freeze({
       { value: -5, label: 'Yếu (-5)' },
       { value: -10, label: 'Kém (-10)' },
     ],
-  },
-  late: {
-    label: 'Đi làm muộn',
-    type: 'quantity',
-    defaultUnit: -1,
-    groupKey: 'discipline',
-    groupLabel: 'Kỷ luật & Thời gian',
   },
 });
 

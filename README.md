@@ -177,6 +177,15 @@ chụp), thêm tham số `-SkipScreenshots` để bỏ qua bước cuối cùng.
 pwsh ./scripts/run-all-checks.ps1 -SkipScreenshots
 ```
 
+### 3.3. Lint/test tự động trước khi commit & trên CI
+
+- Repo đã bật `simple-git-hooks`: sau mỗi lần `pnpm install` hệ thống tự cấu hình
+  hook `pre-commit` chạy `pnpm lint` và `pnpm test -- --runInBand`. Nếu cần kiểm
+  tra trước khi commit, chạy trực tiếp `pnpm precommit`.
+- Workflow GitHub Actions `frontend-ci.yml` tiếp tục chạy lint/test trên Windows
+  và Ubuntu. Khi muốn kiểm tra sâu hơn (bao gồm build và Playwright), hãy gọi
+  script `pwsh ./scripts/run-all-checks.ps1` ngay trong pipeline hoặc máy cục bộ.
+
 3. Tất cả dữ liệu (tờ khai, gán MST, quy tắc KPI, tài khoản, nhật ký…) được lưu
    trong `server/data/storage.sqlite`. Sao lưu file này định kỳ để tránh mất dữ
    liệu. Bạn có thể xóa `server/data/db.json` sau khi đã nâng cấp nếu không còn
@@ -281,7 +290,9 @@ Server 2008 R2, shell mặc định PowerShell 7).
    pnpm healthcheck
    ```
 
-   `pnpm healthcheck` giúp xác nhận driver SQLite và khả năng kết nối SQL Server.
+   `pnpm healthcheck` giúp xác nhận driver SQLite, kiểm tra dung lượng sao lưu,
+   ổ đĩa và trạng thái SQL Server. Khi phát hiện vấn đề, script hiển thị chi tiết
+   từng cảnh báo để bạn xử lý kịp thời.
 
 3. Khởi chạy môi trường phát triển:
 
@@ -293,6 +304,11 @@ Server 2008 R2, shell mặc định PowerShell 7).
    định:
    - Frontend: http://localhost:5173
    - API backend: http://localhost:5000
+
+   > **Kiểm thử nhanh:** sử dụng `pnpm test tests/automation.flows.test.js` để
+   > chạy bộ test tích hợp các quy trình chính (import tờ khai, gán MST, điểm KPI,
+   > phân quyền). Lệnh `pnpm test` sẽ chạy toàn bộ test suite bao gồm bài kiểm
+   > thử mới này.
 
 ### 7.3. Đồng bộ dữ liệu ECUS5VNACCS
 
@@ -324,6 +340,16 @@ Server 2008 R2, shell mặc định PowerShell 7).
 
 3. Đặt shortcut trong `Task Scheduler` hoặc `shell:startup` để tự khởi động cùng Windows.
 4. Sao lưu thư mục `server/data/` và database SQL Server trước mỗi lần cập nhật.
+
+#### Lập lịch giám sát đồng bộ ECUS
+
+- Dùng script PowerShell `./scripts/schedule-ecus-monitor.ps1` để đăng ký tác vụ
+  chạy `monitor-ecus-sync.ps1` mỗi 5 phút. Script này yêu cầu biến môi trường
+  `MONITOR_ACCESS_TOKEN` (hoặc truyền trực tiếp `-MonitorToken`) trùng với cấu
+  hình backend.
+- Ví dụ: `pwsh ./scripts/schedule-ecus-monitor.ps1 -MonitorToken 'token-bi-mat'`
+  sẽ tạo tác vụ chạy bằng tài khoản SYSTEM và kích hoạt lần đầu ngay lập tức.
+- Khi cần gỡ bỏ tác vụ, chạy lại script với tham số `-Remove`.
 
 ### 7.5. Các lỗi thường gặp trên Windows 11
 

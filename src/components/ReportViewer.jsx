@@ -9,9 +9,14 @@ import {
   mapMemberNamesToTeams,
   getKpiAdjustments,
   KPI_ADJUSTMENTS_KEY,
+  getReportSchedules,
+  saveReportSchedule,
+  deleteReportSchedule,
+  REPORT_SCHEDULE_KEY,
+  calculateNextReportScheduleRun,
 } from "@/lib/store.js";
 import { subscribe as subscribeStorage } from "@/lib/storageClient.js";
-import { loadRules } from "@/lib/rules.js";
+import { loadRules, loadRuleSets } from "@/lib/rules.js";
 import { formatDisplayDate } from "@/shared/format.js";
 import {
   QUICK_RANGE_OPTIONS,
@@ -36,6 +41,7 @@ import {
   Cell,
 } from "recharts";
 import { useChartPalette } from "@/designSystem/hooks.js";
+import { toast } from "@/shared/toast.js";
 
 let reportExporterPromise;
 function loadReportExporterModule() {
@@ -67,6 +73,116 @@ const SORT_OPTIONS = [
   { value: "decls", label: "Số tờ khai" },
   { value: "licenses", label: "Số giấy phép" },
 ];
+
+const ADJUSTMENT_PAGE_SIZE_OPTIONS = [5, 10, 20];
+const DEFAULT_ADJUSTMENT_PAGE_SIZE = 10;
+
+const WEEKDAY_OPTIONS = [
+  { value: 1, label: "Thứ hai" },
+  { value: 2, label: "Thứ ba" },
+  { value: 3, label: "Thứ tư" },
+  { value: 4, label: "Thứ năm" },
+  { value: 5, label: "Thứ sáu" },
+  { value: 6, label: "Thứ bảy" },
+  { value: 7, label: "Chủ nhật" },
+];
+
+const SCHEDULE_FREQUENCY_OPTIONS = [
+  { value: "weekly", label: "Hàng tuần" },
+  { value: "monthly", label: "Hàng tháng" },
+];
+
+const SCHEDULE_FORMAT_OPTIONS = [
+  { value: "excel", label: "Excel" },
+  { value: "pdf", label: "PDF" },
+];
+
+function createScheduleDraft(entry = null) {
+  const raw = entry && typeof entry === "object" ? entry : {};
+  const formats = Array.isArray(raw.formats) && raw.formats.length ? raw.formats : ["excel"];
+  const recipients = Array.isArray(raw.recipients)
+    ? raw.recipients.join(", ")
+    : typeof raw.recipientsInput === "string"
+    ? raw.recipientsInput
+    : "";
+  return {
+    id: raw.id || "",
+    name: raw.name || "",
+    frequency: raw.frequency || "weekly",
+    dayOfWeek: Number.isFinite(Number(raw.dayOfWeek)) ? Number(raw.dayOfWeek) : 1,
+    dayOfMonth: Number.isFinite(Number(raw.dayOfMonth)) ? Number(raw.dayOfMonth) : 1,
+    time: raw.time || "08:00",
+    recipientsInput: recipients,
+    formats,
+    active: raw.active !== false,
+  };
+}
+
+function toSchedulePayload(draft) {
+  return {
+    id: draft.id || undefined,
+    name: draft.name,
+    frequency: draft.frequency,
+    dayOfWeek:
+      draft.frequency === "weekly"
+        ? Number.isFinite(Number(draft.dayOfWeek))
+          ? Number(draft.dayOfWeek)
+          : 1
+        : null,
+    dayOfMonth:
+      draft.frequency === "monthly"
+        ? Number.isFinite(Number(draft.dayOfMonth))
+          ? Number(draft.dayOfMonth)
+          : 1
+        : null,
+    time: draft.time || "08:00",
+    recipients: draft.recipientsInput || "",
+    formats: Array.isArray(draft.formats) && draft.formats.length ? draft.formats : ["excel"],
+    active: Boolean(draft.active),
+  };
+}
+
+function formatScheduleNextRunLabel(isoString) {
+  if (!isoString) {
+    return "Chưa lên lịch";
+  }
+  const date = new Date(isoString);
+  if (Number.isNaN(date.getTime())) {
+    return "Chưa lên lịch";
+  }
+  return date.toLocaleString("vi-VN", {
+    hour12: false,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function describeScheduleFrequency(schedule) {
+  if (!schedule) return "";
+  const timeLabel = schedule.time || "08:00";
+  if (schedule.frequency === "weekly") {
+    const dayOption = WEEKDAY_OPTIONS.find((item) => item.value === Number(schedule.dayOfWeek));
+    const dayLabel = dayOption ? dayOption.label : "tuần";
+    return `Mỗi ${dayLabel.toLowerCase()} lúc ${timeLabel}`;
+  }
+  if (schedule.frequency === "monthly") {
+    const day = Number.isFinite(Number(schedule.dayOfMonth)) ? Number(schedule.dayOfMonth) : 1;
+    return `Ngày ${day} hàng tháng lúc ${timeLabel}`;
+  }
+  return "";
+}
+
+function getSegmentedButtonClass(isActive) {
+  return [
+    "rounded-full px-4 py-1.5 text-xs font-semibold transition-colors",
+    isActive
+      ? "bg-[color:var(--ds-surface-primary)] text-[color:var(--ds-text-primary)] shadow-sm"
+      : "border border-[color:var(--ds-border-subtle)] bg-white text-[color:var(--ds-text-secondary)] hover:text-[color:var(--ds-text-primary)]",
+  ].join(" ");
+}
 
 const REPORT_PREFS_STORAGE_KEY = "kpi_report_viewer_prefs_v1";
 const EXPORT_COLUMN_KEYS = ["items", "licenses", "co", "coLines", "licenseCodes"];
@@ -112,6 +228,21 @@ function sanitizeSelection(value) {
   }
   const normalized = value.trim();
   return normalized || "all";
+}
+
+function sanitizeAdjustmentPageSize(value) {
+  const num = Number(value);
+  if (!Number.isFinite(num)) {
+    return DEFAULT_ADJUSTMENT_PAGE_SIZE;
+  }
+  return ADJUSTMENT_PAGE_SIZE_OPTIONS.includes(num) ? num : DEFAULT_ADJUSTMENT_PAGE_SIZE;
+}
+
+function sanitizeRulePreference(value) {
+  if (typeof value !== "string") {
+    return "";
+  }
+  return value.trim();
 }
 
 function sanitizeDateInput(value, fallback) {
@@ -702,28 +833,20 @@ function StaffDetailCard({ staff, canExport, onExport, exporting, visibleColumns
         </div>
         <div className="flex flex-wrap items-center gap-2 text-sm">
           <span className="font-semibold text-gray-900">Điểm KPI: {formatDecimal(stats.kpi)}</span>
-          <div className="flex gap-2">
+          <div className="flex items-center gap-2 rounded-full bg-[color:var(--ds-surface-muted)] px-2 py-1">
             <button
               type="button"
               onClick={() => setMode("summary")}
-              className={`rounded px-3 py-1.5 text-xs font-semibold ${
-                mode === "summary"
-                  ? "bg-black text-white"
-                  : "border bg-white text-gray-700 hover:bg-gray-50"
-              }`}
+              className={getSegmentedButtonClass(mode === "summary")}
             >
-              Báo cáo tổng hợp
+              Tổng quan
             </button>
             <button
               type="button"
               onClick={() => setMode("detail")}
-              className={`rounded px-3 py-1.5 text-xs font-semibold ${
-                mode === "detail"
-                  ? "bg-black text-white"
-                  : "border bg-white text-gray-700 hover:bg-gray-50"
-              }`}
+              className={getSegmentedButtonClass(mode === "detail")}
             >
-              Báo cáo chi tiết
+              Chi tiết
             </button>
           </div>
           <div className="flex flex-col gap-1 text-right">
@@ -732,10 +855,10 @@ function StaffDetailCard({ staff, canExport, onExport, exporting, visibleColumns
                 type="button"
                 onClick={onExport}
                 disabled={!canExport || exporting}
-                className={`rounded px-3 py-1.5 text-xs font-semibold shadow-sm ${
+                className={`inline-flex items-center justify-center rounded-full border px-3 py-1.5 text-xs font-semibold shadow-sm transition-colors ${
                   canExport && !exporting
-                    ? "bg-black text-white hover:bg-gray-900"
-                    : "bg-gray-200 text-gray-500"
+                    ? 'border-[color:var(--ds-border-strong)] bg-[color:var(--ds-surface-primary)] text-white hover:bg-[color:var(--ds-surface-strong)]'
+                    : 'cursor-not-allowed border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-muted)] text-[color:var(--ds-text-disabled)]'
                 }`}
               >
                 {exporting ? "Đang xuất..." : "Xuất Excel"}
@@ -918,28 +1041,20 @@ function TeamDetailCard({ team, canExport, onExport, exporting, visibleColumns =
         </div>
         <div className="flex flex-wrap items-center gap-2 text-sm">
           <span className="font-semibold text-gray-900">Điểm KPI: {formatDecimal(stats.kpi)}</span>
-          <div className="flex gap-2">
+          <div className="flex items-center gap-2 rounded-full bg-[color:var(--ds-surface-muted)] px-2 py-1">
             <button
               type="button"
               onClick={() => setMode("summary")}
-              className={`rounded px-3 py-1.5 text-xs font-semibold ${
-                mode === "summary"
-                  ? "bg-black text-white"
-                  : "border bg-white text-gray-700 hover:bg-gray-50"
-              }`}
+              className={getSegmentedButtonClass(mode === "summary")}
             >
-              Báo cáo tổng hợp
+              Tổng quan
             </button>
             <button
               type="button"
               onClick={() => setMode("detail")}
-              className={`rounded px-3 py-1.5 text-xs font-semibold ${
-                mode === "detail"
-                  ? "bg-black text-white"
-                  : "border bg-white text-gray-700 hover:bg-gray-50"
-              }`}
+              className={getSegmentedButtonClass(mode === "detail")}
             >
-              Báo cáo chi tiết
+              Chi tiết
             </button>
           </div>
           <div className="flex flex-col gap-1 text-right">
@@ -948,10 +1063,10 @@ function TeamDetailCard({ team, canExport, onExport, exporting, visibleColumns =
                 type="button"
                 onClick={onExport}
                 disabled={!canExport || exporting}
-                className={`rounded px-3 py-1.5 text-xs font-semibold shadow-sm ${
+                className={`inline-flex items-center justify-center rounded-full border px-3 py-1.5 text-xs font-semibold shadow-sm transition-colors ${
                   canExport && !exporting
-                    ? "bg-black text-white hover:bg-gray-900"
-                    : "bg-gray-200 text-gray-500"
+                    ? 'border-[color:var(--ds-border-strong)] bg-[color:var(--ds-surface-primary)] text-white hover:bg-[color:var(--ds-surface-strong)]'
+                    : 'cursor-not-allowed border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-muted)] text-[color:var(--ds-text-disabled)]'
                 }`}
               >
                 {exporting ? "Đang xuất..." : "Xuất Excel"}
@@ -1207,6 +1322,8 @@ export default function ReportViewer({ canExport = true }) {
       teamSortKey,
       topStaffMetric,
       columns: exportColumns,
+      ruleId: selectedRuleId,
+      adjustmentPageSize,
     };
     const snapshot = JSON.stringify(payload);
     if (prefsSnapshotRef.current === snapshot) {
@@ -1225,6 +1342,8 @@ export default function ReportViewer({ canExport = true }) {
     teamSortKey,
     topStaffMetric,
     exportColumns,
+    selectedRuleId,
+    adjustmentPageSize,
   ]);
 
   const handleSeedSamples = () => {
@@ -1237,33 +1356,156 @@ export default function ReportViewer({ canExport = true }) {
     alert(`Đã sinh ${generated.length} tờ khai mẫu.`);
   };
 
-  const [rules, setRulesState] = useState(() => loadRules());
+  const [ruleCollection, setRuleCollection] = useState(() => loadRuleSets());
+  const [selectedRuleId, setSelectedRuleId] = useState(() => sanitizeRulePreference(storedPrefs.ruleId));
+  const [rules, setRulesState] = useState(() =>
+    loadRules(sanitizeRulePreference(storedPrefs.ruleId) || undefined)
+  );
   const [roster, setRoster] = useState(() => getTeamRoster());
   const [mstRows, setMstRows] = useState(() => getMSTMap());
   const [declarations, setDeclarations] = useState(() => sortDeclRows(getDeclRows()));
   const [adjustments, setAdjustments] = useState(() => getKpiAdjustments());
+  const [reportSchedules, setReportSchedules] = useState(() => getReportSchedules());
+  const [scheduleDraft, setScheduleDraft] = useState(() => createScheduleDraft());
+  const [editingScheduleId, setEditingScheduleId] = useState("");
+
+  const [adjustmentPageSize, setAdjustmentPageSize] = useState(() =>
+    sanitizeAdjustmentPageSize(storedPrefs.adjustmentPageSize)
+  );
+  const [adjustmentPage, setAdjustmentPage] = useState(0);
 
   useEffect(() => {
-    setRulesState(loadRules());
+    setRuleCollection(loadRuleSets());
     setRoster(getTeamRoster());
     setMstRows(getMSTMap());
     setDeclarations(sortDeclRows(getDeclRows()));
     setAdjustments(getKpiAdjustments());
+    setReportSchedules(getReportSchedules());
   }, [version]);
 
   useEffect(() => {
-    const unsubscribe = subscribeStorage(KPI_ADJUSTMENTS_KEY, () => {
+    const unsubscribeAdjustments = subscribeStorage(KPI_ADJUSTMENTS_KEY, () => {
       setAdjustments(getKpiAdjustments());
     });
+    const unsubscribeSchedules = subscribeStorage(REPORT_SCHEDULE_KEY, () => {
+      setReportSchedules(getReportSchedules());
+    });
     return () => {
-      unsubscribe();
+      unsubscribeAdjustments();
+      unsubscribeSchedules();
     };
   }, []);
+
+  useEffect(() => {
+    const sets = Array.isArray(ruleCollection?.sets) ? ruleCollection.sets : [];
+    if (!sets.length) {
+      setRulesState(loadRules());
+      return;
+    }
+    const availableIds = new Set(sets.map((item) => item.id));
+    let targetId = selectedRuleId && availableIds.has(selectedRuleId) ? selectedRuleId : "";
+    if (!targetId) {
+      const storedId = sanitizeRulePreference(storedPrefs.ruleId);
+      if (storedId && availableIds.has(storedId)) {
+        targetId = storedId;
+      }
+    }
+    if (!targetId) {
+      const activeId = ruleCollection?.activeId;
+      if (activeId && availableIds.has(activeId)) {
+        targetId = activeId;
+      } else {
+        targetId = sets[0].id;
+      }
+    }
+    if (targetId !== selectedRuleId) {
+      setSelectedRuleId(targetId);
+      return;
+    }
+    setRulesState(loadRules(targetId || undefined));
+  }, [ruleCollection, selectedRuleId, storedPrefs.ruleId]);
 
   const report = useMemo(
     () => buildReportData(declarations, { roster, rules, from, to, adjustments }),
     [declarations, roster, rules, from, to, adjustments]
   );
+
+  const activeRule = useMemo(() => {
+    const sets = Array.isArray(ruleCollection?.sets) ? ruleCollection.sets : [];
+    return sets.find((item) => item.id === ruleCollection?.activeId) || null;
+  }, [ruleCollection]);
+
+  const baselineReport = useMemo(() => {
+    if (!activeRule || !activeRule.id) {
+      return null;
+    }
+    if (rules && activeRule.id === rules.id) {
+      return null;
+    }
+    return buildReportData(declarations, {
+      roster,
+      rules: activeRule,
+      from,
+      to,
+      adjustments,
+    });
+  }, [activeRule, declarations, roster, from, to, adjustments, rules]);
+
+  const ruleComparison = useMemo(() => {
+    if (!baselineReport) {
+      return null;
+    }
+    const currentSummary = report?.summary;
+    const baselineSummary = baselineReport.summary;
+    if (!currentSummary || !baselineSummary) {
+      return null;
+    }
+    return {
+      kpi: (currentSummary.kpi || 0) - (baselineSummary.kpi || 0),
+      decls: (currentSummary.decls || 0) - (baselineSummary.decls || 0),
+      items: (currentSummary.items || 0) - (baselineSummary.items || 0),
+    };
+  }, [baselineReport, report]);
+
+  const ruleOptions = useMemo(() => {
+    const sets = Array.isArray(ruleCollection?.sets) ? ruleCollection.sets : [];
+    return sets.map((set) => {
+      const versionLabel = Number.isFinite(Number(set.version)) ? `v${Number(set.version)}` : "";
+      const activeBadge = ruleCollection?.activeId === set.id ? " • Đang áp dụng" : "";
+      const name = set.name || set.id || "Bộ quy tắc";
+      return {
+        value: set.id,
+        label: `${name} ${versionLabel}`.trim() + activeBadge,
+      };
+    });
+  }, [ruleCollection]);
+
+  const selectedRuleMeta = useMemo(() => {
+    const sets = Array.isArray(ruleCollection?.sets) ? ruleCollection.sets : [];
+    return sets.find((set) => set.id === selectedRuleId) || null;
+  }, [ruleCollection, selectedRuleId]);
+
+  const nextScheduleRun = useMemo(() => {
+    const activeSchedules = (reportSchedules || []).filter((item) => item && item.active);
+    const sorted = activeSchedules
+      .slice()
+      .filter((item) => item.nextRun)
+      .sort((a, b) => {
+        const dateA = new Date(a.nextRun || 0).getTime();
+        const dateB = new Date(b.nextRun || 0).getTime();
+        return dateA - dateB;
+      });
+    return sorted[0] || null;
+  }, [reportSchedules]);
+
+  const ruleDeltaLabel = useMemo(() => {
+    if (!ruleComparison) {
+      return "";
+    }
+    const kpiLabel = `${ruleComparison.kpi >= 0 ? "+" : ""}${formatDecimal(ruleComparison.kpi || 0)} điểm`;
+    const declLabel = `${ruleComparison.decls >= 0 ? "+" : ""}${formatInt(ruleComparison.decls || 0)} tờ khai`;
+    return `${kpiLabel} • ${declLabel}`;
+  }, [ruleComparison]);
 
   const managedCompanyCount = useMemo(() => {
     const teams = Array.isArray(roster?.teams) ? roster.teams : [];
@@ -1357,8 +1599,10 @@ export default function ReportViewer({ canExport = true }) {
   const companyCardSubtitle = teamCountForSubtitle
     ? `Doanh nghiệp do ${teamCountForSubtitle} tổ đội quản lý`
     : "Doanh nghiệp duy nhất trong giai đoạn";
-  const ruleTitle = report.rules?.name || "Chưa đặt tên";
-  const ruleApply = report.rules?.applyFrom
+  const ruleTitle = selectedRuleMeta?.name || report.rules?.name || "Chưa đặt tên";
+  const ruleApply = selectedRuleMeta?.applyFrom
+    ? `Áp dụng từ ${selectedRuleMeta.applyFrom}`
+    : report.rules?.applyFrom
     ? `Áp dụng từ ${report.rules.applyFrom}`
     : "Áp dụng ngay";
 
@@ -1387,6 +1631,19 @@ export default function ReportViewer({ canExport = true }) {
   }, [report.adjustments]);
 
   const appliedAdjustments = adjustmentsReport.applied;
+  const totalAdjustmentPages = Math.max(
+    1,
+    Math.ceil(appliedAdjustments.length / Math.max(adjustmentPageSize, 1))
+  );
+  const currentAdjustmentPage = Math.min(adjustmentPage, totalAdjustmentPages - 1);
+  const paginatedAppliedAdjustments = useMemo(() => {
+    const start = currentAdjustmentPage * adjustmentPageSize;
+    return appliedAdjustments.slice(start, start + adjustmentPageSize);
+  }, [appliedAdjustments, currentAdjustmentPage, adjustmentPageSize]);
+
+  useEffect(() => {
+    setAdjustmentPage(0);
+  }, [adjustmentPageSize, appliedAdjustments.length]);
   const pendingAdjustments = useMemo(
     () => adjustmentsReport.list.filter((item) => item?.status === "pending"),
     [adjustmentsReport.list]
@@ -1499,6 +1756,97 @@ export default function ReportViewer({ canExport = true }) {
     setTo(range.to);
   };
 
+  const handleScheduleFieldChange = (field, value) => {
+    setScheduleDraft((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleToggleScheduleFormat = (format) => {
+    setScheduleDraft((prev) => {
+      const current = Array.isArray(prev.formats) ? [...prev.formats] : [];
+      const index = current.indexOf(format);
+      if (index >= 0) {
+        current.splice(index, 1);
+      } else {
+        current.push(format);
+      }
+      if (!current.length) {
+        current.push(format);
+      }
+      return { ...prev, formats: current };
+    });
+  };
+
+  const handleEditSchedule = (schedule) => {
+    setEditingScheduleId(schedule?.id || "");
+    setScheduleDraft(createScheduleDraft(schedule));
+  };
+
+  const handleResetScheduleForm = () => {
+    setEditingScheduleId("");
+    setScheduleDraft(createScheduleDraft());
+  };
+
+  const handleSaveSchedule = (event) => {
+    event?.preventDefault?.();
+    const payload = toSchedulePayload({ ...scheduleDraft, id: editingScheduleId });
+    if (!payload.name || !payload.name.trim()) {
+      toast.warning?.("Đặt tên cho lịch gửi báo cáo để dễ quản lý.");
+      return;
+    }
+    if (!String(payload.recipients || "").trim()) {
+      toast.warning?.("Nhập danh sách email nhận báo cáo (ngăn cách bởi dấu phẩy hoặc xuống dòng).");
+      return;
+    }
+    try {
+      const saved = saveReportSchedule(payload, { actor: "ui.report" });
+      setReportSchedules(getReportSchedules());
+      setEditingScheduleId(saved.id);
+      setScheduleDraft(createScheduleDraft(saved));
+      toast.success?.("Đã lưu lịch gửi báo cáo KPI.");
+    } catch (error) {
+      console.error(error);
+      toast.error?.(error?.message || "Không thể lưu lịch gửi báo cáo.");
+    }
+  };
+
+  const handleDeleteSchedule = (schedule) => {
+    if (!schedule?.id) return;
+    const confirmed = window.confirm(
+      `Xoá lịch gửi "${schedule.name || "Báo cáo KPI"}"?`
+    );
+    if (!confirmed) {
+      return;
+    }
+    const ok = deleteReportSchedule(schedule.id, { actor: "ui.report" });
+    if (ok) {
+      setReportSchedules(getReportSchedules());
+      if (editingScheduleId === schedule.id) {
+        handleResetScheduleForm();
+      }
+      toast.success?.("Đã xoá lịch gửi báo cáo.");
+    } else {
+      toast.error?.("Không thể xoá lịch gửi báo cáo đã chọn.");
+    }
+  };
+
+  const goToAdjustmentPage = (target) => {
+    setAdjustmentPage((prev) => {
+      const desired = Number.isFinite(Number(target)) ? Number(target) : prev;
+      if (!Number.isFinite(desired)) {
+        return 0;
+      }
+      return Math.min(Math.max(desired, 0), totalAdjustmentPages - 1);
+    });
+  };
+
+  const handleAdjustmentPrev = () => {
+    goToAdjustmentPage(currentAdjustmentPage - 1);
+  };
+
+  const handleAdjustmentNext = () => {
+    goToAdjustmentPage(currentAdjustmentPage + 1);
+  };
+
   const ensureExportPermission = () => {
     if (!canExport) {
       alert("Tài khoản hiện tại không được phép xuất báo cáo.");
@@ -1586,44 +1934,32 @@ export default function ReportViewer({ canExport = true }) {
     if (selectedStaff === "all") {
       return (
         <div className="space-y-6">
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="flex gap-2">
+          <div className="flex flex-wrap items-center gap-4">
+            <div className="flex items-center gap-2 rounded-full bg-[color:var(--ds-surface-muted)] px-2 py-1">
               <button
                 type="button"
                 onClick={() => setStaffViewMode("summary")}
-                className={`rounded px-3 py-1.5 text-xs font-semibold ${
-                  staffViewMode === "summary"
-                    ? "bg-black text-white"
-                    : "border bg-white text-gray-700 hover:bg-gray-50"
-                }`}
+                className={getSegmentedButtonClass(staffViewMode === "summary")}
               >
-                Báo cáo tổng hợp
+                Tổng quan
               </button>
               <button
                 type="button"
                 onClick={() => setStaffViewMode("detail")}
-                className={`rounded px-3 py-1.5 text-xs font-semibold ${
-                  staffViewMode === "detail"
-                    ? "bg-black text-white"
-                    : "border bg-white text-gray-700 hover:bg-gray-50"
-                }`}
+                className={getSegmentedButtonClass(staffViewMode === "detail")}
               >
-                Báo cáo chi tiết
+                Chi tiết
               </button>
             </div>
-            <div className="flex flex-wrap items-center gap-2 text-xs text-gray-600">
-              <span className="font-semibold text-gray-900">Sắp xếp theo:</span>
-              <div className="flex gap-1">
+            <div className="flex flex-wrap items-center gap-2 text-xs text-[color:var(--ds-text-secondary)]">
+              <span className="font-semibold text-[color:var(--ds-text-primary)]">Sắp xếp theo:</span>
+              <div className="flex items-center gap-1">
                 {SORT_OPTIONS.map((option) => (
                   <button
                     key={option.value}
                     type="button"
                     onClick={() => setStaffSortKey(option.value)}
-                    className={`rounded px-2.5 py-1 font-semibold ${
-                      staffSortKey === option.value
-                        ? "bg-black text-white"
-                        : "border bg-white text-gray-700 hover:bg-gray-50"
-                    }`}
+                    className={getSegmentedButtonClass(staffSortKey === option.value)}
                   >
                     {option.label}
                   </button>
@@ -1635,15 +1971,15 @@ export default function ReportViewer({ canExport = true }) {
                 type="button"
                 onClick={handleExportStaffAll}
                 disabled={!canExport || exporting}
-                className={`rounded px-3 py-1.5 text-xs font-semibold shadow-sm ${
+                className={`inline-flex items-center justify-center rounded-full border px-3 py-1.5 text-xs font-semibold shadow-sm transition-colors ${
                   canExport && !exporting
-                    ? "bg-black text-white hover:bg-gray-900"
-                    : "bg-gray-200 text-gray-500"
+                    ? 'border-[color:var(--ds-border-strong)] bg-[color:var(--ds-surface-primary)] text-white hover:bg-[color:var(--ds-surface-strong)]'
+                    : 'cursor-not-allowed border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-muted)] text-[color:var(--ds-text-disabled)]'
                 }`}
               >
                 {exporting ? "Đang xuất..." : "Xuất Excel"}
               </button>
-              <span className="text-[11px] text-gray-400">Nhấn Ctrl+P để in nhanh toàn trang</span>
+              <span className="text-[11px] text-[color:var(--ds-text-muted)]">Nhấn Ctrl+P để in nhanh toàn trang</span>
             </div>
           </div>
 
@@ -1763,44 +2099,32 @@ export default function ReportViewer({ canExport = true }) {
     if (selectedTeam === "all") {
       return (
         <div className="space-y-6">
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="flex gap-2">
+          <div className="flex flex-wrap items-center gap-4">
+            <div className="flex items-center gap-2 rounded-full bg-[color:var(--ds-surface-muted)] px-2 py-1">
               <button
                 type="button"
                 onClick={() => setTeamViewMode("summary")}
-                className={`rounded px-3 py-1.5 text-xs font-semibold ${
-                  teamViewMode === "summary"
-                    ? "bg-black text-white"
-                    : "border bg-white text-gray-700 hover:bg-gray-50"
-                }`}
+                className={getSegmentedButtonClass(teamViewMode === "summary")}
               >
-                Báo cáo tổng hợp
+                Tổng quan
               </button>
               <button
                 type="button"
                 onClick={() => setTeamViewMode("detail")}
-                className={`rounded px-3 py-1.5 text-xs font-semibold ${
-                  teamViewMode === "detail"
-                    ? "bg-black text-white"
-                    : "border bg-white text-gray-700 hover:bg-gray-50"
-                }`}
+                className={getSegmentedButtonClass(teamViewMode === "detail")}
               >
-                Báo cáo chi tiết
+                Chi tiết
               </button>
             </div>
-            <div className="flex flex-wrap items-center gap-2 text-xs text-gray-600">
-              <span className="font-semibold text-gray-900">Sắp xếp theo:</span>
-              <div className="flex gap-1">
+            <div className="flex flex-wrap items-center gap-2 text-xs text-[color:var(--ds-text-secondary)]">
+              <span className="font-semibold text-[color:var(--ds-text-primary)]">Sắp xếp theo:</span>
+              <div className="flex items-center gap-1">
                 {SORT_OPTIONS.map((option) => (
                   <button
                     key={option.value}
                     type="button"
                     onClick={() => setTeamSortKey(option.value)}
-                    className={`rounded px-2.5 py-1 font-semibold ${
-                      teamSortKey === option.value
-                        ? "bg-black text-white"
-                        : "border bg-white text-gray-700 hover:bg-gray-50"
-                    }`}
+                    className={getSegmentedButtonClass(teamSortKey === option.value)}
                   >
                     {option.label}
                   </button>
@@ -1812,15 +2136,15 @@ export default function ReportViewer({ canExport = true }) {
                 type="button"
                 onClick={handleExportTeamAll}
                 disabled={!canExport || exporting}
-                className={`rounded px-3 py-1.5 text-xs font-semibold shadow-sm ${
+                className={`inline-flex items-center justify-center rounded-full border px-3 py-1.5 text-xs font-semibold shadow-sm transition-colors ${
                   canExport && !exporting
-                    ? "bg-black text-white hover:bg-gray-900"
-                    : "bg-gray-200 text-gray-500"
+                    ? 'border-[color:var(--ds-border-strong)] bg-[color:var(--ds-surface-primary)] text-white hover:bg-[color:var(--ds-surface-strong)]'
+                    : 'cursor-not-allowed border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-muted)] text-[color:var(--ds-text-disabled)]'
                 }`}
               >
                 {exporting ? "Đang xuất..." : "Xuất Excel"}
               </button>
-              <span className="text-[11px] text-gray-400">Nhấn Ctrl+P để in nhanh toàn trang</span>
+              <span className="text-[11px] text-[color:var(--ds-text-muted)]">Nhấn Ctrl+P để in nhanh toàn trang</span>
             </div>
           </div>
 
@@ -1993,22 +2317,276 @@ export default function ReportViewer({ canExport = true }) {
           </div>
         </div>
 
-        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-subtle bg-gray-50 px-3 py-3 text-sm text-gray-600 dark:bg-slate-900/40">
-          <div>
-            <div className="text-xs uppercase text-gray-500">Quy tắc KPI</div>
-            <div className="text-base font-semibold text-gray-900">{ruleTitle}</div>
-            <div className="text-xs text-gray-500">{ruleApply}</div>
-          </div>
-          <div className="text-right">
-            {report.range.from || report.range.to ? (
-              <div>
-                Khoảng: {report.range.from || "…"} → {report.range.to || "…"}
+        <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+          <div className="space-y-2 rounded-xl border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-muted)] p-3">
+            <label
+              htmlFor="report-rule-select"
+              className="text-xs font-semibold uppercase tracking-wide text-[color:var(--ds-text-secondary)]"
+            >
+              Bộ quy tắc KPI
+            </label>
+            <select
+              id="report-rule-select"
+              value={selectedRuleId}
+              onChange={(event) => setSelectedRuleId(event.target.value)}
+              className="w-full rounded border border-[color:var(--ds-border-subtle)] bg-white px-3 py-2 text-sm text-[color:var(--ds-text-primary)] shadow-sm focus:border-[color:var(--ds-border-strong)] focus:outline-none"
+            >
+              {ruleOptions.length ? (
+                ruleOptions.map((option) => (
+                  <option key={option.value || "__default"} value={option.value}>
+                    {option.label}
+                  </option>
+                ))
+              ) : (
+                <option value="">Chưa có bộ quy tắc</option>
+              )}
+            </select>
+            <div className="text-xs text-[color:var(--ds-text-secondary)]">
+              Phiên bản: {selectedRuleMeta?.version != null ? `v${selectedRuleMeta.version}` : "—"}
+            </div>
+            {ruleComparison ? (
+              <div className="rounded-lg border border-dashed border-emerald-400 bg-emerald-500/10 p-2 text-xs text-emerald-700">
+                Chênh lệch so với bộ đang áp dụng: {ruleDeltaLabel}
               </div>
             ) : (
-              <div>Khoảng: Tất cả dữ liệu</div>
+              <div className="text-xs text-[color:var(--ds-text-secondary)]">
+                {ruleCollection?.activeId === (selectedRuleMeta?.id || "")
+                  ? "Đang xem đúng bộ quy tắc đang áp dụng."
+                  : `Bộ đang áp dụng: ${activeRule?.name || "—"}`}
+              </div>
             )}
-            <div>{summary.decls} tờ khai hợp lệ</div>
           </div>
+          <div className="rounded-xl border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] p-3 text-sm text-[color:var(--ds-text-secondary)]">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs uppercase text-[color:var(--ds-text-muted)]">Thông tin báo cáo</span>
+              {nextScheduleRun ? (
+                <span className="text-xs font-medium text-emerald-600">
+                  Lịch gửi tiếp theo: {formatScheduleNextRunLabel(nextScheduleRun.nextRun)}
+                </span>
+              ) : (
+                <span className="text-xs text-[color:var(--ds-text-muted)]">Chưa thiết lập lịch gửi</span>
+              )}
+            </div>
+            <div className="mt-2 text-base font-semibold text-[color:var(--ds-text-primary)]">
+              {formatInt(summary.decls)} tờ khai hợp lệ
+            </div>
+            <div className="mt-1 text-xs text-[color:var(--ds-text-secondary)]">
+              Khoảng: {report.range.from || "…"} → {report.range.to || "…"}
+            </div>
+            <div className="mt-1 text-xs text-[color:var(--ds-text-secondary)]">{ruleApply}</div>
+          </div>
+        </div>
+      </div>
+
+      <div className="ds-card space-y-4 p-4 print:hidden">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h3 className="text-base font-semibold text-[color:var(--ds-text-primary)]">
+              Lập lịch gửi báo cáo KPI
+            </h3>
+            <p className="text-sm text-[color:var(--ds-text-secondary)]">
+              Thiết lập gửi tự động file Excel/PDF theo tuần hoặc tháng tới danh sách email mong muốn.
+            </p>
+          </div>
+          <div className="text-xs text-[color:var(--ds-text-muted)]">
+            {nextScheduleRun
+              ? `Lịch sắp chạy: ${formatScheduleNextRunLabel(nextScheduleRun.nextRun)}`
+              : "Chưa có lịch chạy tự động"}
+          </div>
+        </div>
+
+        <form
+          className="grid gap-3 md:grid-cols-2 xl:grid-cols-4"
+          onSubmit={handleSaveSchedule}
+        >
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-semibold uppercase text-[color:var(--ds-text-secondary)]" htmlFor="schedule-name">
+              Tên lịch gửi
+            </label>
+            <input
+              id="schedule-name"
+              type="text"
+              value={scheduleDraft.name}
+              onChange={(event) => handleScheduleFieldChange("name", event.target.value)}
+              placeholder="Báo cáo KPI tuần"
+              className="rounded border border-[color:var(--ds-border-subtle)] bg-white px-3 py-2 text-sm text-[color:var(--ds-text-primary)] shadow-sm focus:border-[color:var(--ds-border-strong)] focus:outline-none"
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-semibold uppercase text-[color:var(--ds-text-secondary)]" htmlFor="schedule-recipients">
+              Email nhận (phân tách bằng dấu phẩy)
+            </label>
+            <textarea
+              id="schedule-recipients"
+              rows={2}
+              value={scheduleDraft.recipientsInput}
+              onChange={(event) => handleScheduleFieldChange("recipientsInput", event.target.value)}
+              placeholder="ceo@company.vn, kpi@company.vn"
+              className="min-h-[60px] rounded border border-[color:var(--ds-border-subtle)] bg-white px-3 py-2 text-sm text-[color:var(--ds-text-primary)] shadow-sm focus:border-[color:var(--ds-border-strong)] focus:outline-none"
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-semibold uppercase text-[color:var(--ds-text-secondary)]" htmlFor="schedule-frequency">
+              Chu kỳ gửi
+            </label>
+            <select
+              id="schedule-frequency"
+              value={scheduleDraft.frequency}
+              onChange={(event) => handleScheduleFieldChange("frequency", event.target.value)}
+              className="rounded border border-[color:var(--ds-border-subtle)] bg-white px-3 py-2 text-sm text-[color:var(--ds-text-primary)] shadow-sm focus:border-[color:var(--ds-border-strong)] focus:outline-none"
+            >
+              {SCHEDULE_FREQUENCY_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+            {scheduleDraft.frequency === "weekly" ? (
+              <select
+                value={scheduleDraft.dayOfWeek}
+                onChange={(event) => handleScheduleFieldChange("dayOfWeek", Number(event.target.value))}
+                className="rounded border border-[color:var(--ds-border-subtle)] bg-white px-3 py-2 text-sm text-[color:var(--ds-text-primary)] shadow-sm focus:border-[color:var(--ds-border-strong)] focus:outline-none"
+              >
+                {WEEKDAY_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <div className="flex items-center gap-2">
+                <input
+                  type="number"
+                  min={1}
+                  max={31}
+                  value={scheduleDraft.dayOfMonth}
+                  onChange={(event) => handleScheduleFieldChange("dayOfMonth", Number(event.target.value))}
+                  className="w-20 rounded border border-[color:var(--ds-border-subtle)] bg-white px-2 py-2 text-sm text-[color:var(--ds-text-primary)] focus:border-[color:var(--ds-border-strong)] focus:outline-none"
+                />
+                <span className="text-xs text-[color:var(--ds-text-secondary)]">Ngày trong tháng</span>
+              </div>
+            )}
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-semibold uppercase text-[color:var(--ds-text-secondary)]" htmlFor="schedule-time">
+              Thời gian gửi
+            </label>
+            <input
+              id="schedule-time"
+              type="time"
+              value={scheduleDraft.time}
+              onChange={(event) => handleScheduleFieldChange("time", event.target.value)}
+              className="rounded border border-[color:var(--ds-border-subtle)] bg-white px-3 py-2 text-sm text-[color:var(--ds-text-primary)] shadow-sm focus:border-[color:var(--ds-border-strong)] focus:outline-none"
+            />
+            <div className="flex flex-wrap items-center gap-3 pt-1 text-xs text-[color:var(--ds-text-secondary)]">
+              {SCHEDULE_FORMAT_OPTIONS.map((option) => {
+                const checked = Array.isArray(scheduleDraft.formats)
+                  ? scheduleDraft.formats.includes(option.value)
+                  : option.value === "excel";
+                return (
+                  <label key={option.value} className="inline-flex items-center gap-1">
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => handleToggleScheduleFormat(option.value)}
+                    />
+                    <span>{option.label}</span>
+                  </label>
+                );
+              })}
+            </div>
+            <label className="mt-1 inline-flex items-center gap-2 text-xs text-[color:var(--ds-text-secondary)]">
+              <input
+                type="checkbox"
+                checked={Boolean(scheduleDraft.active)}
+                onChange={(event) => handleScheduleFieldChange("active", event.target.checked)}
+              />
+              Kích hoạt lịch gửi này
+            </label>
+          </div>
+          <div className="md:col-span-2 xl:col-span-4 flex flex-wrap items-center justify-end gap-2 pt-2">
+            {editingScheduleId ? (
+              <button
+                type="button"
+                onClick={handleResetScheduleForm}
+                className="rounded border border-[color:var(--ds-border-subtle)] px-3 py-2 text-sm font-semibold text-[color:var(--ds-text-secondary)] transition-colors hover:border-[color:var(--ds-border-strong)]"
+              >
+                Huỷ chỉnh sửa
+              </button>
+            ) : null}
+            <button
+              type="submit"
+              className="rounded bg-[color:var(--ds-surface-primary)] px-3 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-[color:var(--ds-surface-strong)]"
+            >
+              {editingScheduleId ? "Cập nhật lịch gửi" : "Thêm lịch gửi"}
+            </button>
+          </div>
+        </form>
+
+        <div className="border-t border-[color:var(--ds-border-subtle)] pt-4">
+          {reportSchedules.length ? (
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              {reportSchedules.map((schedule) => {
+                const nextLabel = formatScheduleNextRunLabel(
+                  schedule.nextRun || calculateNextReportScheduleRun(schedule) || ""
+                );
+                const formatLabel = Array.isArray(schedule.formats)
+                  ? schedule.formats.map((item) => item.toUpperCase()).join(", ")
+                  : "EXCEL";
+                return (
+                  <div
+                    key={schedule.id}
+                    className="rounded-lg border border-[color:var(--ds-border-subtle)] bg-white p-3 text-sm text-[color:var(--ds-text-secondary)] shadow-sm"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <div className="text-sm font-semibold text-[color:var(--ds-text-primary)]">
+                          {schedule.name || "Lịch gửi"}
+                        </div>
+                        <div className="text-xs text-[color:var(--ds-text-muted)]">
+                          {describeScheduleFrequency(schedule)}
+                        </div>
+                      </div>
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
+                          schedule.active
+                            ? 'bg-emerald-500/10 text-emerald-600'
+                            : 'bg-gray-200 text-gray-500'
+                        }`}
+                      >
+                        {schedule.active ? 'Đang bật' : 'Tạm tắt'}
+                      </span>
+                    </div>
+                    <div className="mt-2 text-xs text-[color:var(--ds-text-secondary)]">
+                      <div>Lần tiếp theo: {nextLabel}</div>
+                      <div>Định dạng: {formatLabel}</div>
+                      <div>Email: {(schedule.recipients || []).join(", ") || '—'}</div>
+                    </div>
+                    <div className="mt-3 flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleEditSchedule(schedule)}
+                        className="rounded border border-[color:var(--ds-border-subtle)] px-2 py-1 text-xs font-semibold text-[color:var(--ds-text-secondary)] transition-colors hover:border-[color:var(--ds-border-strong)]"
+                      >
+                        Chỉnh sửa
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteSchedule(schedule)}
+                        className="rounded border border-rose-200 px-2 py-1 text-xs font-semibold text-rose-600 transition-colors hover:border-rose-400 hover:text-rose-700"
+                      >
+                        Xoá
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="text-sm text-[color:var(--ds-text-muted)]">
+              Chưa có lịch gửi báo cáo. Hãy thêm mới để tự động gửi KPI cho lãnh đạo.
+            </p>
+          )}
         </div>
       </div>
 
@@ -2108,8 +2686,8 @@ export default function ReportViewer({ canExport = true }) {
                       </tr>
                     </thead>
                     <tbody>
-                      {appliedAdjustments.length ? (
-                        appliedAdjustments.map((item) => {
+                      {paginatedAppliedAdjustments.length ? (
+                        paginatedAppliedAdjustments.map((item) => {
                           const key = item.adjustment?.id || `${item.date}-${item.nhan_vien || ''}`;
                           const quantity = Number.isFinite(Number(item.adjustment?.quantity))
                             ? Number(item.adjustment.quantity)
@@ -2151,6 +2729,58 @@ export default function ReportViewer({ canExport = true }) {
                       )}
                     </tbody>
                   </table>
+                </div>
+                <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-xs text-[color:var(--ds-text-secondary)]">
+                  <div className="flex items-center gap-2">
+                    <label className="text-[color:var(--ds-text-muted)]" htmlFor="adjustment-page-size">
+                      Số mục mỗi trang
+                    </label>
+                    <select
+                      id="adjustment-page-size"
+                      value={adjustmentPageSize}
+                      onChange={(event) =>
+                        setAdjustmentPageSize(sanitizeAdjustmentPageSize(event.target.value))
+                      }
+                      className="rounded border border-[color:var(--ds-border-subtle)] bg-white px-2 py-1 text-sm focus:border-[color:var(--ds-border-strong)] focus:outline-none"
+                    >
+                      {ADJUSTMENT_PAGE_SIZE_OPTIONS.map((size) => (
+                        <option key={size} value={size}>
+                          {size}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span>
+                      Trang {totalAdjustmentPages ? currentAdjustmentPage + 1 : 0}/{totalAdjustmentPages}
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={handleAdjustmentPrev}
+                        disabled={currentAdjustmentPage === 0}
+                        className={`rounded border px-2 py-1 font-semibold transition-colors ${
+                          currentAdjustmentPage === 0
+                            ? 'cursor-not-allowed border-[color:var(--ds-border-subtle)] text-[color:var(--ds-text-disabled)]'
+                            : 'border-[color:var(--ds-border-subtle)] text-[color:var(--ds-text-secondary)] hover:border-[color:var(--ds-border-strong)] hover:text-[color:var(--ds-text-primary)]'
+                        }`}
+                      >
+                        Trước
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleAdjustmentNext}
+                        disabled={currentAdjustmentPage >= totalAdjustmentPages - 1}
+                        className={`rounded border px-2 py-1 font-semibold transition-colors ${
+                          currentAdjustmentPage >= totalAdjustmentPages - 1
+                            ? 'cursor-not-allowed border-[color:var(--ds-border-subtle)] text-[color:var(--ds-text-disabled)]'
+                            : 'border-[color:var(--ds-border-subtle)] text-[color:var(--ds-text-secondary)] hover:border-[color:var(--ds-border-strong)] hover:text-[color:var(--ds-text-primary)]'
+                        }`}
+                      >
+                        Sau
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
               <div className="space-y-4">

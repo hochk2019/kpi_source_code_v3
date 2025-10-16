@@ -24,11 +24,14 @@ import {
   DEFAULT_ROLE,
   TEAM_LEAD_ROLE,
   MANAGER_ROLE,
+  ROLE_LABELS,
+  ACCOUNT_PERMISSION_KEYS,
   getPermissionTemplate as getRolePermissionTemplate,
   normalizeRoleKey,
   mergePermissions,
   isAdminRole,
 } from '../src/shared/accountRoles.js';
+import { translateBackupReason, translateBackupFailure } from '../src/shared/backupMessages.js';
 import { recordSqlTimeout, getSqlTimeoutEvents, onSqlTimeout } from './sqlMonitor.js';
 import {
   pushNotification,
@@ -464,6 +467,7 @@ const databaseInitState = {
 let dbBackupJob = null;
 let coDiscrepancyJob = null;
 let backupInProgress = false;
+let restoreInProgress = false;
 const backupScheduleMeta = {
   active: false,
   reasons: [],
@@ -582,6 +586,22 @@ const STORAGE_PERMISSION_REQUIREMENTS = Object.freeze({
   kpi_adjustments_v1: 'adjustSubmit',
   [AI_CONFIG_KEY]: 'aiAssistManage',
   [AI_CACHE_KEY]: 'aiAssistManage',
+});
+
+const ACCOUNT_PERMISSION_LABELS = Object.freeze({
+  importEdit: 'Import Data – chỉnh sửa & lưu',
+  mstEdit: 'Gán MST – chỉnh sửa',
+  rulesEdit: 'Quy tắc KPI – chỉnh sửa',
+  teamsEdit: 'Quản lý tổ đội – chỉnh sửa',
+  syncManage: 'Đồng bộ ECUS – cấu hình & chạy tay',
+  reportsExport: 'Báo cáo KPI – xuất file',
+  alertsManage: 'Quản lý cảnh báo tờ khai thiếu thông tin',
+  auditView: 'Xem nhật ký hệ thống',
+  accountManage: 'Quản lý tài khoản',
+  adjustSubmit: 'Điểm KPI +/- thêm – gửi đề xuất',
+  adjustApprove: 'Điểm KPI +/- thêm – duyệt đề xuất',
+  aiAssistUse: 'Trợ lý AI – sử dụng',
+  aiAssistManage: 'Trợ lý AI – cấu hình',
 });
 
 function normalizePermissionsForRole(permissions, role = DEFAULT_ROLE) {
@@ -987,9 +1007,11 @@ export async function performDatabaseBackup({
   retention,
   reason = 'manual',
   actor = 'system',
+  note = null,
 } = {}) {
   const logOutcome = (status, meta = {}) => {
     const detailReason = meta.reason || reason || 'không rõ';
+    const { note: metaNote, ...restMeta } = meta ?? {};
     pushAuditLog({
       actor,
       action: 'db.backup',
@@ -997,7 +1019,9 @@ export async function performDatabaseBackup({
         status === 'success'
           ? `Sao lưu CSDL (${detailReason})`
           : `Sao lưu CSDL thất bại (${detailReason})`,
-      meta: { status, reason: detailReason, ...meta },
+      result: status,
+      note: metaNote ?? note,
+      meta: { status, reason: detailReason, ...restMeta },
     });
   };
 
@@ -1012,6 +1036,10 @@ export async function performDatabaseBackup({
   if (!backupDir || backupDir === ':memory:') {
     logFailure('invalid_backup_dir', { backupDir });
     return { ok: false, reason: 'invalid_backup_dir' };
+  }
+  if (restoreInProgress) {
+    logFailure('restore_in_progress', { dbFile, backupDir });
+    return { ok: false, reason: 'restore_in_progress' };
   }
   const sourceFile = dbFile === ':memory:' ? null : path.resolve(dbFile);
   if (!sourceFile) {
@@ -1084,7 +1112,178 @@ function normalizeBackupAuditEntry(entry) {
   const action = entry.action || 'unknown';
   const detail = entry.detail || '';
   const meta = entry.meta ?? null;
-  return { ts, actor, action, detail, meta };
+  const result = entry.result ?? null;
+  const note = entry.note ?? null;
+  const category = entry.category || inferAuditCategory(action);
+  return { ts, actor, action, detail, meta, result, note, category };
+}
+
+async function listBackupFiles({ backupDir = DB_BACKUP_DIR, limit = 50 } = {}) {
+  if (!backupDir || backupDir === ':memory:') {
+    return [];
+  }
+  const targetDir = path.resolve(backupDir);
+  let entries;
+  try {
+    entries = await fs.readdir(targetDir, { withFileTypes: true });
+  } catch (err) {
+    if (err?.code === 'ENOENT') {
+      return [];
+    }
+    throw err;
+  }
+  const files = [];
+  for (const entry of entries) {
+    if (!entry.isFile()) continue;
+    if (!entry.name.startsWith('storage-') || !entry.name.endsWith('.sqlite')) {
+      continue;
+    }
+    const fullPath = path.join(targetDir, entry.name);
+    try {
+      const stats = await fs.stat(fullPath);
+      files.push({
+        filename: entry.name,
+        path: fullPath,
+        bytes: stats.size,
+        modifiedAt: stats.mtime ? new Date(stats.mtime).toISOString() : null,
+      });
+    } catch {
+      // skip files we can't stat
+    }
+  }
+  files.sort((a, b) => {
+    const aTime = a.modifiedAt ? Date.parse(a.modifiedAt) : 0;
+    const bTime = b.modifiedAt ? Date.parse(b.modifiedAt) : 0;
+    return bTime - aTime;
+  });
+  const sliceLimit = Number.isFinite(limit) && limit > 0 ? Math.min(files.length, Math.trunc(limit)) : files.length;
+  return files.slice(0, sliceLimit).map((file) => ({
+    filename: file.filename,
+    bytes: file.bytes,
+    modifiedAt: file.modifiedAt,
+  }));
+}
+
+async function restoreDatabaseBackup({
+  filename,
+  backupDir = DB_BACKUP_DIR,
+  dbFile = DB_FILE,
+  actor = 'system',
+  note = null,
+} = {}) {
+  const logOutcome = (status, meta = {}) => {
+    const name = meta.filename || filename || 'không xác định';
+    const { note: metaNote, ...restMeta } = meta ?? {};
+    pushAuditLog({
+      actor,
+      action: 'db.restore',
+      detail:
+        status === 'success'
+          ? `Khôi phục CSDL từ ${name}`
+          : `Khôi phục CSDL thất bại (${name})`,
+      result: status,
+      note: metaNote ?? note,
+      meta: { filename: name, ...restMeta },
+    });
+  };
+
+  const safeFilename = typeof filename === 'string' ? filename.trim() : '';
+  if (!safeFilename) {
+    logOutcome('failure', { reason: 'missing_filename' });
+    return { ok: false, reason: 'missing_filename' };
+  }
+  if (!backupDir || backupDir === ':memory:') {
+    logOutcome('failure', { reason: 'invalid_backup_dir' });
+    return { ok: false, reason: 'invalid_backup_dir' };
+  }
+  if (!dbFile || dbFile === ':memory:') {
+    logOutcome('failure', { reason: 'memory_db' });
+    return { ok: false, reason: 'memory_db' };
+  }
+  if (restoreInProgress) {
+    logOutcome('failure', { reason: 'restore_in_progress' });
+    return { ok: false, reason: 'restore_in_progress' };
+  }
+  if (backupInProgress) {
+    logOutcome('failure', { reason: 'backup_in_progress' });
+    return { ok: false, reason: 'backup_in_progress' };
+  }
+
+  const targetDir = path.resolve(backupDir);
+  const resolvedSource = path.resolve(targetDir, path.basename(safeFilename));
+  if (!resolvedSource.startsWith(targetDir)) {
+    logOutcome('failure', { reason: 'invalid_filename', filename: safeFilename });
+    return { ok: false, reason: 'invalid_filename' };
+  }
+
+  let stats;
+  try {
+    stats = await fs.stat(resolvedSource);
+  } catch (err) {
+    logOutcome('failure', { reason: err?.code === 'ENOENT' ? 'missing_file' : 'stat_failed', error: err?.message, filename: safeFilename });
+    return { ok: false, reason: err?.code === 'ENOENT' ? 'missing_file' : 'stat_failed' };
+  }
+
+  const targetFile = path.resolve(dbFile);
+  const tempFile = `${targetFile}.restore-${Date.now()}.tmp`;
+  const backupBeforeRestore = `${targetFile}.pre-restore-${Date.now()}.bak`;
+
+  restoreInProgress = true;
+  const previousDb = db;
+  try {
+    if (previousDb && typeof previousDb.close === 'function') {
+      previousDb.close();
+    }
+    await fs.mkdir(path.dirname(targetFile), { recursive: true });
+    try {
+      await fs.copyFile(targetFile, backupBeforeRestore);
+    } catch (err) {
+      if (err?.code !== 'ENOENT') {
+        console.warn('Không thể tạo bản sao DB hiện tại trước khi restore:', err);
+      }
+    }
+
+    await fs.copyFile(resolvedSource, tempFile);
+    await fs.rename(tempFile, targetFile);
+
+    db = await initializeDatabase({ dbFile: targetFile });
+    refreshDatabaseBackupSchedule();
+    applyCoCodeConfig(getCoCodeConfig());
+    if (typeof refreshCoDiscrepancySchedule === 'function') {
+      refreshCoDiscrepancySchedule();
+    }
+
+    logOutcome('success', {
+      filename: safeFilename,
+      file: resolvedSource,
+      bytes: stats.size,
+      backupBeforeRestore,
+    });
+    console.log(`♻️ Đã khôi phục CSDL từ ${resolvedSource}`);
+    return { ok: true, file: resolvedSource, bytes: stats.size, backupBeforeRestore };
+  } catch (err) {
+    console.error('Không thể khôi phục CSDL:', err);
+    logOutcome('failure', {
+      reason: 'error',
+      error: err?.message || String(err),
+      filename: safeFilename,
+    });
+    try {
+      if (!db || db === previousDb) {
+        db = await initializeDatabase({ dbFile: targetFile });
+      }
+    } catch (reopenErr) {
+      console.error('Không thể mở lại CSDL sau khi restore thất bại:', reopenErr);
+    }
+    return { ok: false, error: err?.message || 'Không thể khôi phục CSDL' };
+  } finally {
+    restoreInProgress = false;
+    try {
+      await fs.rm(tempFile);
+    } catch {
+      // ignore temp cleanup errors
+    }
+  }
 }
 
 function nextBackupRunISO() {
@@ -1127,6 +1326,261 @@ function formatNextRunHuman(isoValue) {
   } catch {
     return null;
   }
+}
+
+const SEVERITY_PRIORITY = Object.freeze({
+  good: 0,
+  info: 1,
+  warning: 2,
+  critical: 3,
+});
+
+function escalateSeverity(current, next) {
+  const currentRank = SEVERITY_PRIORITY[current] ?? 0;
+  const nextRank = SEVERITY_PRIORITY[next] ?? 0;
+  return nextRank > currentRank ? next : current;
+}
+
+function parseTimestamp(value) {
+  if (!value) {
+    return null;
+  }
+  try {
+    const ts = Date.parse(value);
+    return Number.isNaN(ts) ? null : ts;
+  } catch {
+    return null;
+  }
+}
+
+function formatBytes(value) {
+  const num = Number(value);
+  if (!Number.isFinite(num) || num < 0) {
+    return null;
+  }
+  if (num === 0) {
+    return '0 B';
+  }
+  const units = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
+  let size = num;
+  let unitIndex = 0;
+  while (size >= 1024 && unitIndex < units.length - 1) {
+    size /= 1024;
+    unitIndex += 1;
+  }
+  const digits = size >= 10 || unitIndex === 0 ? 0 : 1;
+  return `${size.toFixed(digits)} ${units[unitIndex]}`;
+}
+
+async function collectDatabaseStorageDetails() {
+  const databaseInfo = {
+    file: DB_FILE,
+    mode: DB_FILE === ':memory:' ? 'memory' : 'file',
+    sizeBytes: null,
+    sizeLabel: null,
+    lastModifiedAt: null,
+    error: null,
+    warningCode: null,
+  };
+
+  const diskInfo = {
+    path: DB_FILE === ':memory:' ? null : path.dirname(DB_FILE),
+    totalBytes: null,
+    freeBytes: null,
+    usedBytes: null,
+    usedPercent: null,
+    freePercent: null,
+    totalLabel: null,
+    freeLabel: null,
+    usedLabel: null,
+    error: null,
+    warningCode: null,
+  };
+
+  if (databaseInfo.mode === 'memory') {
+    databaseInfo.error = 'CSDL đang chạy ở chế độ bộ nhớ (:memory:).';
+    databaseInfo.warningCode = 'memory_db';
+    return { database: databaseInfo, disk: diskInfo };
+  }
+
+  try {
+    const stats = await fs.stat(DB_FILE);
+    databaseInfo.sizeBytes = stats.size;
+    databaseInfo.sizeLabel = formatBytes(stats.size);
+    databaseInfo.lastModifiedAt = stats.mtime ? new Date(stats.mtime).toISOString() : null;
+  } catch (err) {
+    databaseInfo.error = err?.message || String(err);
+  }
+
+  if (diskInfo.path) {
+    if (typeof fs.statfs === 'function') {
+      try {
+        const fsStats = await fs.statfs(diskInfo.path);
+        const blockSize = Number(fsStats?.bsize || fsStats?.frsize || 0);
+        const totalBlocks = Number(fsStats?.blocks || 0);
+        const freeBlocks = Number(fsStats?.bavail ?? fsStats?.bfree ?? 0);
+        if (Number.isFinite(totalBlocks) && totalBlocks > 0 && Number.isFinite(blockSize) && blockSize > 0) {
+          const totalBytes = totalBlocks * blockSize;
+          const freeBytes = freeBlocks * blockSize;
+          const usedBytes = Math.max(0, totalBytes - freeBytes);
+          const usedPercent = totalBytes > 0 ? (usedBytes / totalBytes) * 100 : null;
+          const freePercent = totalBytes > 0 ? (freeBytes / totalBytes) * 100 : null;
+          diskInfo.totalBytes = totalBytes;
+          diskInfo.freeBytes = freeBytes;
+          diskInfo.usedBytes = usedBytes;
+          diskInfo.usedPercent = Number.isFinite(usedPercent) ? usedPercent : null;
+          diskInfo.freePercent = Number.isFinite(freePercent) ? freePercent : null;
+          diskInfo.totalLabel = formatBytes(totalBytes);
+          diskInfo.freeLabel = formatBytes(freeBytes);
+          diskInfo.usedLabel = formatBytes(usedBytes);
+        }
+      } catch (err) {
+        diskInfo.error = err?.message || String(err);
+        diskInfo.warningCode = 'statfs_error';
+      }
+    } else {
+      diskInfo.error = 'statfs_not_supported';
+      diskInfo.warningCode = 'statfs_not_supported';
+    }
+  }
+
+  return { database: databaseInfo, disk: diskInfo };
+}
+
+function evaluateBackupHealth(summary) {
+  const schedule = summary?.schedule || {};
+  const issues = [];
+  let severity = 'good';
+  const now = Date.now();
+  const lastSuccessTs = parseTimestamp(summary?.lastSuccess?.ts);
+  const lastFailureTs = parseTimestamp(summary?.lastFailure?.ts);
+  const minutesSinceSuccess = lastSuccessTs !== null ? Math.floor((now - lastSuccessTs) / 60000) : null;
+
+  if (!lastSuccessTs) {
+    severity = 'critical';
+    issues.push({
+      severity: 'critical',
+      code: 'backup_missing',
+      message: 'Chưa ghi nhận bản sao lưu thành công nào. Vui lòng kiểm tra tác vụ sao lưu.',
+    });
+  } else if (minutesSinceSuccess >= 72 * 60) {
+    severity = 'critical';
+    const hours = Math.floor(minutesSinceSuccess / 60);
+    issues.push({
+      severity: 'critical',
+      code: 'backup_overdue',
+      message: `Lần sao lưu gần nhất đã cách đây ${hours} giờ. Nên chạy lại sao lưu ngay lập tức.`,
+    });
+  } else if (minutesSinceSuccess >= 36 * 60) {
+    severity = 'warning';
+    const hours = Math.floor(minutesSinceSuccess / 60);
+    issues.push({
+      severity: 'warning',
+      code: 'backup_stale',
+      message: `Đã ${hours} giờ kể từ bản sao lưu gần nhất. Nên kiểm tra lịch sao lưu tự động.`,
+    });
+  }
+
+  if (schedule.active === false) {
+    severity = escalateSeverity(severity, 'warning');
+    issues.push({
+      severity: 'warning',
+      code: 'schedule_inactive',
+      message: 'Lịch sao lưu đang tắt, cần bật lại để đảm bảo an toàn dữ liệu.',
+    });
+  }
+
+  if (Array.isArray(schedule.reasons)) {
+    for (const reason of schedule.reasons) {
+      const description = translateBackupReason(reason);
+      if (!description) continue;
+      const level = reason === 'schedule_error' ? 'critical' : 'warning';
+      severity = escalateSeverity(severity, level);
+      issues.push({ severity: level, code: `schedule_reason_${reason}`, message: description });
+    }
+  }
+
+  if (lastFailureTs && (!lastSuccessTs || lastFailureTs > lastSuccessTs)) {
+    const failureLabel = new Date(lastFailureTs).toLocaleString('vi-VN', { hour12: false });
+    severity = escalateSeverity(severity, 'warning');
+    issues.push({
+      severity: 'warning',
+      code: 'backup_failure_recent',
+      message: `Có lỗi sao lưu gần nhất lúc ${failureLabel}.`,
+    });
+  }
+
+  return {
+    severity,
+    issues,
+    minutesSinceLastSuccess: minutesSinceSuccess,
+    lastSuccessAt: lastSuccessTs ? new Date(lastSuccessTs).toISOString() : null,
+    lastFailureAt: lastFailureTs ? new Date(lastFailureTs).toISOString() : null,
+  };
+}
+
+function evaluateDiskHealth(storage) {
+  const issues = [];
+  let severity = 'good';
+  const databaseInfo = storage?.database || {};
+  const diskInfo = storage?.disk || {};
+
+  if (databaseInfo.warningCode === 'memory_db') {
+    severity = escalateSeverity(severity, 'warning');
+    issues.push({
+      severity: 'warning',
+      code: 'database_memory_mode',
+      message: 'CSDL đang chạy ở chế độ :memory:, hãy cấu hình file .sqlite để có thể sao lưu.',
+    });
+  } else if (databaseInfo.error) {
+    severity = escalateSeverity(severity, 'warning');
+    issues.push({
+      severity: 'warning',
+      code: 'database_stat_error',
+      message: `Không thể đọc thông tin file CSDL: ${databaseInfo.error}`,
+    });
+  }
+
+  if (diskInfo.error) {
+    const level = diskInfo.warningCode === 'statfs_not_supported' ? 'info' : 'warning';
+    severity = escalateSeverity(severity, level);
+    const message =
+      diskInfo.warningCode === 'statfs_not_supported'
+        ? 'Không thể xác định dung lượng ổ đĩa trên hệ điều hành hiện tại.'
+        : `Không thể lấy thông tin dung lượng ổ đĩa: ${diskInfo.error}`;
+    issues.push({ severity: level, code: diskInfo.warningCode || 'disk_stat_error', message });
+  }
+
+  if (typeof diskInfo.usedPercent === 'number') {
+    if (diskInfo.usedPercent >= 95) {
+      severity = escalateSeverity(severity, 'critical');
+      issues.push({
+        severity: 'critical',
+        code: 'disk_usage_critical',
+        message: `Ổ đĩa chứa CSDL đã dùng ${diskInfo.usedPercent.toFixed(1)}% dung lượng.`,
+      });
+    } else if (diskInfo.usedPercent >= 85) {
+      severity = escalateSeverity(severity, 'warning');
+      issues.push({
+        severity: 'warning',
+        code: 'disk_usage_high',
+        message: `Ổ đĩa chứa CSDL đã dùng ${diskInfo.usedPercent.toFixed(1)}% dung lượng.`,
+      });
+    }
+  }
+
+  if (typeof diskInfo.freeBytes === 'number' && diskInfo.freeBytes > 0) {
+    if (diskInfo.freeBytes < 2 * 1024 * 1024 * 1024) {
+      severity = escalateSeverity(severity, 'warning');
+      issues.push({
+        severity: 'warning',
+        code: 'disk_free_low',
+        message: `Dung lượng trống chỉ còn ${formatBytes(diskInfo.freeBytes)}.`,
+      });
+    }
+  }
+
+  return { severity, issues };
 }
 
 function buildBackupSummary({ limit = 10 } = {}) {
@@ -1217,7 +1671,7 @@ function refreshDatabaseBackupSchedule() {
   }
 }
 
-const db = await initializeDatabase();
+let db = await initializeDatabase();
 refreshDatabaseBackupSchedule();
 applyCoCodeConfig(getCoCodeConfig());
 if (typeof refreshCoDiscrepancySchedule === 'function') {
@@ -3185,14 +3639,41 @@ function sortAccountRecords(records) {
   return records.sort((a, b) => a.username.localeCompare(b.username, 'vi', { sensitivity: 'base' }));
 }
 
+function describeRole(role) {
+  const key = normalizeRoleKey(role);
+  return ROLE_LABELS[key] || key || 'không rõ';
+}
+
+function describePermissionChange(key, enabled) {
+  const label = ACCOUNT_PERMISSION_LABELS[key] || key;
+  return `${label}: ${enabled ? 'bật' : 'tắt'}`;
+}
+
+function summarizePermissionChanges(previous = {}, next = {}) {
+  const diffs = [];
+  for (const key of ACCOUNT_PERMISSION_KEYS) {
+    const prevValue = key === 'reportsExport' ? previous?.[key] !== false : previous?.[key] === true;
+    const nextValue = key === 'reportsExport' ? next?.[key] !== false : next?.[key] === true;
+    if (prevValue !== nextValue) {
+      diffs.push({ key, before: prevValue, after: nextValue });
+    }
+  }
+  return diffs;
+}
+
 function sanitizeAccountRecord(record) {
   if (!record) return null;
   const role = normalizeRoleKey(record.role);
+  const name = record.name || record.username;
   return {
     username: record.username,
     role,
-    name: record.name || record.username,
+    name,
     permissions: normalizePermissionsForRole(record.permissions, role),
+    memberId: toNullableString(record.memberId, { maxLength: 160 }),
+    memberName: toNullableString(record.memberName, { maxLength: 255 }),
+    teamId: toNullableString(record.teamId, { maxLength: 160 }),
+    teamName: toNullableString(record.teamName, { maxLength: 255 }),
   };
 }
 
@@ -3206,6 +3687,10 @@ function normalizeAccountRecordForStorage(record) {
     name: (record.name ?? record.username ?? '').toString().trim(),
     permissions: normalizePermissionsForRole(record.permissions, role),
     updatedAt: normalizeAccountUpdatedAt(record.updatedAt),
+    memberId: toNullableString(record.memberId, { maxLength: 160 }),
+    memberName: toNullableString(record.memberName, { maxLength: 255 }),
+    teamId: toNullableString(record.teamId, { maxLength: 160 }),
+    teamName: toNullableString(record.teamName, { maxLength: 255 }),
   };
 }
 
@@ -3255,8 +3740,12 @@ function loadAccountRecords() {
       }
       const permissions = normalizePermissionsForRole(entry?.permissions, role);
       const updatedAt = normalizeAccountUpdatedAt(entry?.updatedAt || entry?.updated_at);
+      const memberId = toNullableString(entry?.memberId ?? entry?.member_id, { maxLength: 160 });
+      const memberName = toNullableString(entry?.memberName ?? entry?.member_name, { maxLength: 255 });
+      const teamId = toNullableString(entry?.teamId ?? entry?.team_id, { maxLength: 160 });
+      const teamName = toNullableString(entry?.teamName ?? entry?.team_name, { maxLength: 255 });
       seen.add(key);
-      records.push({ username, passwordHash, role, name, permissions, updatedAt });
+      records.push({ username, passwordHash, role, name, permissions, updatedAt, memberId, memberName, teamId, teamName });
     }
   }
 
@@ -3495,12 +3984,41 @@ function isExportDecl(soTk, loaiHinh) {
   return false;
 }
 
+function inferAuditCategory(action) {
+  if (typeof action !== 'string' || !action) {
+    return 'khac';
+  }
+  const normalized = action.trim();
+  const separatorIndex = normalized.indexOf('.');
+  if (separatorIndex <= 0) {
+    return normalized;
+  }
+  return normalized.slice(0, separatorIndex);
+}
+
+function normalizeAuditNote(value) {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  const text = `${value}`.trim();
+  if (!text) {
+    return null;
+  }
+  return text.normalize('NFC');
+}
+
 function pushAuditLog(entry) {
   const payload = {
     ts: new Date().toISOString(),
     actor: entry?.actor || 'system',
     action: entry?.action || 'unknown',
+    category: entry?.category || inferAuditCategory(entry?.action || 'unknown'),
     detail: entry?.detail || '',
+    result:
+      entry?.result === null || entry?.result === undefined
+        ? null
+        : `${entry.result}`.trim() || null,
+    note: normalizeAuditNote(entry?.note),
     meta: entry?.meta ?? null,
   };
   const logs = getJSONValue('audit_logs_v1', []);
@@ -3622,11 +4140,40 @@ function createAccountRecord(payload, { actor = 'system' } = {}) {
   const role = normalizeRoleKey(payload?.role);
   const name = (payload?.name ?? username).toString().trim();
   const permissions = normalizePermissionsForRole(payload?.permissions, role);
+  const rosterInfo = resolveAccountRosterInfo(payload);
   const passwordHash = bcrypt.hashSync(password, PASSWORD_SALT_ROUNDS);
   const updatedAt = new Date().toISOString();
-  accounts.push({ username, passwordHash, role, name, permissions, updatedAt });
+  accounts.push({
+    username,
+    passwordHash,
+    role,
+    name,
+    permissions,
+    updatedAt,
+    memberId: rosterInfo.memberId,
+    memberName: rosterInfo.memberName,
+    teamId: rosterInfo.teamId,
+    teamName: rosterInfo.teamName,
+  });
   persistAccountRecords(accounts);
-  pushAuditLog({ actor, action: 'account.create', detail: `Tạo tài khoản ${username} (${role})` });
+  const summaryParts = [`vai trò ${describeRole(role)}`];
+  if (rosterInfo.memberId) {
+    summaryParts.push(`gắn nhân viên ${formatRosterLabel(rosterInfo)}`);
+  }
+  const detail = summaryParts.length
+    ? `Tạo tài khoản ${username}: ${summaryParts.join('; ')}`
+    : `Tạo tài khoản ${username}`;
+  pushAuditLog({
+    actor,
+    action: 'account.create',
+    detail,
+    meta: {
+      username,
+      role,
+      permissions,
+      member: rosterInfo,
+    },
+  });
   return sanitizeAccountRecord(accounts.find((record) => record.username === username));
 }
 
@@ -3648,9 +4195,80 @@ function updateAccountRecord(usernameInput, patch, { actor = 'system' } = {}) {
   }
   const name = (patch?.name ?? current.name ?? current.username).toString().trim();
   const permissions = normalizePermissionsForRole(patch?.permissions ?? current.permissions, nextRole);
-  accounts[index] = { ...current, role: nextRole, name, permissions, updatedAt: new Date().toISOString() };
+  const rosterInfo = resolveAccountRosterInfo(patch, current);
+  const updatedAt = new Date().toISOString();
+  accounts[index] = {
+    ...current,
+    role: nextRole,
+    name,
+    permissions,
+    updatedAt,
+    memberId: rosterInfo.memberId,
+    memberName: rosterInfo.memberName,
+    teamId: rosterInfo.teamId,
+    teamName: rosterInfo.teamName,
+  };
   persistAccountRecords(accounts);
-  pushAuditLog({ actor, action: 'account.update', detail: `Cập nhật tài khoản ${username}` });
+
+  const permissionDiffs = summarizePermissionChanges(current.permissions, permissions);
+  const detailParts = [];
+  if (currentRole !== nextRole) {
+    detailParts.push(`vai trò ${describeRole(currentRole)} → ${describeRole(nextRole)}`);
+  }
+  if ((current.name || '') !== name) {
+    const before = current.name ? `"${current.name}"` : 'mặc định';
+    const after = name ? `"${name}"` : 'mặc định';
+    detailParts.push(`tên hiển thị ${before} → ${after}`);
+  }
+  const previousRoster = {
+    memberId: current.memberId ?? null,
+    memberName: current.memberName ?? null,
+    teamId: current.teamId ?? null,
+    teamName: current.teamName ?? null,
+  };
+  const rosterChanged =
+    (previousRoster.memberId || null) !== (rosterInfo.memberId || null) ||
+    (previousRoster.teamId || null) !== (rosterInfo.teamId || null);
+  if (rosterChanged) {
+    detailParts.push(
+      `nhân viên KPI ${formatRosterLabel(previousRoster)} → ${formatRosterLabel(rosterInfo)}`
+    );
+  }
+  if (permissionDiffs.length) {
+    const summaries = permissionDiffs.map((entry) => describePermissionChange(entry.key, entry.after));
+    detailParts.push(`quyền: ${summaries.join(', ')}`);
+  }
+
+  const detail = detailParts.length
+    ? `Cập nhật tài khoản ${username}: ${detailParts.join('; ')}`
+    : `Cập nhật tài khoản ${username}`;
+
+  pushAuditLog({
+    actor,
+    action: 'account.update',
+    detail,
+    meta: {
+      username,
+      previous: {
+        role: currentRole,
+        name: current.name,
+        permissions: current.permissions,
+        member: previousRoster,
+      },
+      current: {
+        role: nextRole,
+        name,
+        permissions,
+        member: rosterInfo,
+      },
+      changes: {
+        role: currentRole !== nextRole,
+        name: (current.name || '') !== name,
+        member: rosterChanged,
+        permissions: permissionDiffs,
+      },
+    },
+  });
   return sanitizeAccountRecord(accounts[index]);
 }
 
@@ -3669,10 +4287,27 @@ function setAccountPasswordRecord(usernameInput, newPasswordInput, { actor = 'sy
     throw new Error('Không tìm thấy tài khoản');
   }
   const passwordHash = bcrypt.hashSync(newPassword, PASSWORD_SALT_ROUNDS);
-  accounts[index] = { ...accounts[index], passwordHash, updatedAt: new Date().toISOString() };
+  const updatedAt = new Date().toISOString();
+  accounts[index] = { ...accounts[index], passwordHash, updatedAt };
   persistAccountRecords(accounts);
   deleteSessionsForUser(username);
-  pushAuditLog({ actor, action: 'account.reset_password', detail: `Đặt lại mật khẩu cho ${username}` });
+  const target = accounts[index];
+  pushAuditLog({
+    actor,
+    action: 'account.reset_password',
+    detail: `Đặt lại mật khẩu cho ${username}`,
+    meta: {
+      username,
+      role: normalizeRoleKey(target.role),
+      performedAt: updatedAt,
+      member: {
+        memberId: target.memberId ?? null,
+        memberName: target.memberName ?? null,
+        teamId: target.teamId ?? null,
+        teamName: target.teamName ?? null,
+      },
+    },
+  });
   return true;
 }
 
@@ -3693,7 +4328,23 @@ function deleteAccountRecord(usernameInput, { actor = 'system' } = {}) {
   accounts.splice(index, 1);
   persistAccountRecords(accounts);
   deleteSessionsForUser(username);
-  pushAuditLog({ actor, action: 'account.delete', detail: `Xóa tài khoản ${username}` });
+  const rosterInfo = {
+    memberId: target.memberId ?? null,
+    memberName: target.memberName ?? null,
+    teamId: target.teamId ?? null,
+    teamName: target.teamName ?? null,
+  };
+  const displayName = target.name && target.name !== username ? ` (${target.name})` : '';
+  pushAuditLog({
+    actor,
+    action: 'account.delete',
+    detail: `Xóa tài khoản ${username}${displayName}`,
+    meta: {
+      username,
+      role: normalizeRoleKey(target.role),
+      member: rosterInfo,
+    },
+  });
   return listAccountsForClient();
 }
 
@@ -3892,6 +4543,84 @@ function getRulesValue() {
 
 function getRosterValue() {
   return getJSONValue('team_roster_v1', { version: 1, teams: [] });
+}
+
+function findRosterMemberById(memberIdInput) {
+  const memberId = toNullableString(memberIdInput, { maxLength: 160 });
+  if (!memberId) {
+    return null;
+  }
+  const roster = getRosterValue();
+  if (!Array.isArray(roster?.teams)) {
+    return null;
+  }
+  for (const team of roster.teams) {
+    if (!team || typeof team !== 'object') continue;
+    const rawTeamId = toNullableString(team.id, { maxLength: 160 });
+    const teamName = toNullableString(team.name, { maxLength: 255 });
+    if (!Array.isArray(team.members)) continue;
+    for (const member of team.members) {
+      if (!member || typeof member !== 'object') continue;
+      const normalizedId = toNullableString(member.id, { maxLength: 160 });
+      if (normalizedId === memberId) {
+        return {
+          memberId,
+          memberName: toNullableString(member.name, { maxLength: 255 }) ?? null,
+          teamId: rawTeamId,
+          teamName,
+        };
+      }
+    }
+  }
+  return null;
+}
+
+function resolveAccountRosterInfo(payload, base = {}) {
+  const baseInfo = {
+    memberId: base?.memberId ?? null,
+    memberName: base?.memberName ?? null,
+    teamId: base?.teamId ?? null,
+    teamName: base?.teamName ?? null,
+  };
+  if (!payload || typeof payload !== 'object') {
+    return baseInfo;
+  }
+  const hasMemberId = Object.prototype.hasOwnProperty.call(payload, 'memberId');
+  const hasMemberName = Object.prototype.hasOwnProperty.call(payload, 'memberName');
+  const hasTeamId = Object.prototype.hasOwnProperty.call(payload, 'teamId');
+  const hasTeamName = Object.prototype.hasOwnProperty.call(payload, 'teamName');
+  if (!hasMemberId && !hasMemberName && !hasTeamId && !hasTeamName) {
+    return baseInfo;
+  }
+
+  const rawMemberId = hasMemberId ? toNullableString(payload.memberId, { maxLength: 160 }) : baseInfo.memberId;
+  if (!rawMemberId) {
+    return { memberId: null, memberName: null, teamId: null, teamName: null };
+  }
+
+  const rosterMatch = findRosterMemberById(rawMemberId);
+  if (rosterMatch) {
+    return rosterMatch;
+  }
+
+  const memberName = hasMemberName ? toNullableString(payload.memberName, { maxLength: 255 }) : baseInfo.memberName;
+  const teamId = hasTeamId ? toNullableString(payload.teamId, { maxLength: 160 }) : baseInfo.teamId;
+  const teamName = hasTeamName ? toNullableString(payload.teamName, { maxLength: 255 }) : baseInfo.teamName;
+
+  return {
+    memberId: rawMemberId,
+    memberName,
+    teamId,
+    teamName,
+  };
+}
+
+function formatRosterLabel(info) {
+  if (!info || !info.memberId) {
+    return 'không gắn nhân viên';
+  }
+  const name = info.memberName || info.memberId;
+  return info.teamName ? `${name} (${info.teamName})` : name;
 }
 
 function getMemberTeamMap() {
@@ -6099,7 +6828,7 @@ function evaluateDuplicatePolicies({
   };
 }
 
-function buildDataHealthSummary() {
+async function buildDataHealthSummary() {
   const rows = getDeclRows();
   const policyConfig = getDuplicatePolicyConfig();
   const policyState = getDuplicatePolicyState();
@@ -6119,6 +6848,27 @@ function buildDataHealthSummary() {
   const alertPayload = buildAlertPayload();
   const ecusConfig = getEcusConfig();
   const sqlTimeouts = getSqlTimeoutEvents().slice(-10).reverse();
+  const [storageDetails, sqlHealth] = await Promise.all([
+    collectDatabaseStorageDetails(),
+    checkSqlServerHealth().catch((error) => ({
+      ok: false,
+      state: 'error',
+      message: error?.message || 'Không thể kiểm tra SQL Server',
+    })),
+  ]);
+  const backupSummary = buildBackupSummary({ limit: 6 });
+  const backupHealth = evaluateBackupHealth(backupSummary);
+  const diskHealth = evaluateDiskHealth(storageDetails);
+  const overallStorageSeverity = escalateSeverity(backupHealth.severity, diskHealth.severity);
+  const storage = {
+    database: storageDetails.database,
+    disk: storageDetails.disk,
+    backup: { ...backupSummary, health: backupHealth },
+    health: {
+      severity: overallStorageSeverity,
+      issues: [...backupHealth.issues, ...diskHealth.issues],
+    },
+  };
   const notifications = listNotifications({ limit: 20 });
   const lockedSourcesList = Object.entries(effectiveState.lockedSources || {}).map(([source, meta]) => ({
     source,
@@ -6166,9 +6916,15 @@ function buildDataHealthSummary() {
     },
     sqlServer: {
       timeoutEvents: sqlTimeouts,
+      health: sqlHealth,
     },
+    storage,
     notifications,
   };
+}
+
+export async function getDataHealthSnapshot() {
+  return buildDataHealthSummary();
 }
 
 function formatAlertTimestamp(input) {
@@ -7037,6 +7793,25 @@ async function ensureAccountSyncTable(pool, tableMeta) {
         END
       `;
       await request.query(createSql);
+      const alterSql = `
+        IF COL_LENGTH('${tableMeta.objectId}', 'member_id') IS NULL
+        BEGIN
+          ALTER TABLE ${tableMeta.quoted} ADD member_id NVARCHAR(128) NULL;
+        END;
+        IF COL_LENGTH('${tableMeta.objectId}', 'member_name') IS NULL
+        BEGIN
+          ALTER TABLE ${tableMeta.quoted} ADD member_name NVARCHAR(255) NULL;
+        END;
+        IF COL_LENGTH('${tableMeta.objectId}', 'team_id') IS NULL
+        BEGIN
+          ALTER TABLE ${tableMeta.quoted} ADD team_id NVARCHAR(128) NULL;
+        END;
+        IF COL_LENGTH('${tableMeta.objectId}', 'team_name') IS NULL
+        BEGIN
+          ALTER TABLE ${tableMeta.quoted} ADD team_name NVARCHAR(255) NULL;
+        END;
+      `;
+      await request.query(alterSql);
       return true;
     } catch (err) {
       if (isSqlTimeoutError(err)) {
@@ -7075,6 +7850,10 @@ function serializeAccountRecordForSql(record) {
     permissions: normalized.permissions,
     permissionsJson: JSON.stringify(normalized.permissions || {}),
     updatedAt: normalized.updatedAt,
+    memberId: normalized.memberId ?? null,
+    memberName: normalized.memberName ?? null,
+    teamId: normalized.teamId ?? null,
+    teamName: normalized.teamName ?? null,
   };
 }
 
@@ -7104,7 +7883,11 @@ function normalizeSqlAccountRow(row) {
   const permissions = normalizePermissionsForRole(parsedPermissions, role);
   const updatedAtRaw = row.updated_at || row.updatedAt;
   const updatedAt = normalizeAccountUpdatedAt(updatedAtRaw);
-  return { username, passwordHash, role, name, permissions, updatedAt };
+  const memberId = toNullableString(row.member_id ?? row.memberId, { maxLength: 160 });
+  const memberName = toNullableString(row.member_name ?? row.memberName, { maxLength: 255 });
+  const teamId = toNullableString(row.team_id ?? row.teamId, { maxLength: 160 });
+  const teamName = toNullableString(row.team_name ?? row.teamName, { maxLength: 255 });
+  return { username, passwordHash, role, name, permissions, updatedAt, memberId, memberName, teamId, teamName };
 }
 
 async function syncAccountsToSql(records) {
@@ -7128,8 +7911,12 @@ async function syncAccountsToSql(records) {
       const name = escapeSqlLiteral(record.name || record.username, { nvarchar: true });
       const permissions = escapeSqlLiteral(record.permissionsJson || '{}', { nvarchar: true });
       const updatedAt = `CONVERT(DATETIME, ${escapeSqlLiteral(record.updatedAt, { nvarchar: true })}, 126)`;
-      return `INSERT INTO ${config.table.quoted} (username, password_hash, role, name, permissions, updated_at)
-VALUES (${username}, ${passwordHash}, ${role}, ${name}, ${permissions}, ${updatedAt});`;
+      const memberId = escapeSqlLiteral(record.memberId, { nvarchar: true });
+      const memberName = escapeSqlLiteral(record.memberName, { nvarchar: true });
+      const teamId = escapeSqlLiteral(record.teamId, { nvarchar: true });
+      const teamName = escapeSqlLiteral(record.teamName, { nvarchar: true });
+      return `INSERT INTO ${config.table.quoted} (username, password_hash, role, name, permissions, updated_at, member_id, member_name, team_id, team_name)
+VALUES (${username}, ${passwordHash}, ${role}, ${name}, ${permissions}, ${updatedAt}, ${memberId}, ${memberName}, ${teamId}, ${teamName});`;
     });
     const batch = [
       'BEGIN TRY',
@@ -7195,7 +7982,9 @@ async function maybeSyncAccountsFromSql({ force = false } = {}) {
       }
       const result = await pool
         .request()
-        .query(`SELECT username, password_hash, role, name, permissions, updated_at FROM ${config.table.quoted};`);
+        .query(
+          `SELECT username, password_hash, role, name, permissions, updated_at, member_id, member_name, team_id, team_name FROM ${config.table.quoted};`
+        );
       const rows = Array.isArray(result?.recordset) ? result.recordset : [];
       const sqlRecords = rows.map((row) => normalizeSqlAccountRow(row)).filter(Boolean);
       if (!sqlRecords.length) {
@@ -8762,9 +9551,9 @@ app.delete('/api/filter-presets/:presetId', (req, res) => {
   }
 });
 
-app.get('/api/data-health/summary', (req, res) => {
+app.get('/api/data-health/summary', async (req, res) => {
   try {
-    const summary = buildDataHealthSummary();
+    const summary = await buildDataHealthSummary();
     res.json({ ok: true, summary });
   } catch (err) {
     console.error('Không thể xây dựng báo cáo sức khỏe dữ liệu', err);
@@ -9048,6 +9837,53 @@ app.get('/api/admin/backups/summary', (req, res) => {
   }
 });
 
+app.get('/api/admin/backups/files', async (req, res) => {
+  const { denied } = requireAdminBackupManage(req, res);
+  if (denied) {
+    return;
+  }
+  try {
+    const limitRaw = Number.parseInt(req.query?.limit ?? '50', 10);
+    const limit = Number.isFinite(limitRaw) && limitRaw > 0 ? limitRaw : 50;
+    const files = await listBackupFiles({ limit });
+    res.json({ ok: true, files });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err?.message || 'Không thể tải danh sách bản sao lưu' });
+  }
+});
+
+app.post('/api/admin/backups/run', async (req, res) => {
+  const { context, denied } = requireAdminBackupManage(req, res);
+  if (denied) {
+    return;
+  }
+  try {
+    const body = req.body ?? {};
+    const reasonRaw = typeof body.reason === 'string' ? body.reason.trim() : '';
+    const reason = reasonRaw || 'manual';
+    const note = typeof body.note === 'string' ? body.note : null;
+    const retention = Number.isFinite(body.retention) ? Number(body.retention) : undefined;
+    const result = await performDatabaseBackup({
+      reason,
+      retention,
+      actor: context.account?.username || 'system',
+      note,
+    });
+    if (result?.ok === false) {
+      const message =
+        translateBackupFailure(result.reason) ||
+        translateBackupReason(result.reason) ||
+        'Không thể sao lưu CSDL.';
+      const status = ['in_progress', 'restore_in_progress'].includes(result.reason) ? 409 : 400;
+      res.status(status).json({ ok: false, error: message, reason: result.reason });
+      return;
+    }
+    res.json({ ok: true, result });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err?.message || 'Không thể thực hiện sao lưu ngay' });
+  }
+});
+
 app.post('/api/admin/backups/schedule', (req, res) => {
   const { context, denied } = requireAdminBackupManage(req, res);
   if (denied) {
@@ -9114,6 +9950,109 @@ app.post('/api/admin/backups/schedule', (req, res) => {
     res.json({ ok: true, config, summary });
   } catch (err) {
     res.status(500).json({ ok: false, error: err?.message || 'Không thể cập nhật lịch sao lưu' });
+  }
+});
+
+app.post('/api/admin/backups/restore', async (req, res) => {
+  const { context, denied } = requireAdminBackupManage(req, res);
+  if (denied) {
+    return;
+  }
+  try {
+    const body = req.body ?? {};
+    const filename = typeof body.filename === 'string' ? body.filename : '';
+    const note = typeof body.note === 'string' ? body.note : null;
+    const result = await restoreDatabaseBackup({
+      filename,
+      actor: context.account?.username || 'system',
+      note,
+    });
+    if (result?.ok === false) {
+      const message =
+        translateBackupFailure(result.reason) ||
+        translateBackupReason(result.reason) ||
+        'Không thể khôi phục CSDL.';
+      const conflictReasons = ['restore_in_progress', 'backup_in_progress'];
+      const status = conflictReasons.includes(result.reason)
+        ? 409
+        : result.reason === 'missing_filename'
+        ? 400
+        : 400;
+      res.status(status).json({ ok: false, error: message, reason: result.reason });
+      return;
+    }
+    res.json({ ok: true, result });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err?.message || 'Không thể khôi phục CSDL' });
+  }
+});
+
+app.get('/api/admin/audit/export', (req, res) => {
+  const { denied } = requireAuditView(req, res);
+  if (denied) {
+    return;
+  }
+
+  const fromDate = normalizeRangeDate(req.query?.from);
+  const toDate = normalizeRangeDate(req.query?.to, { isEnd: true });
+  const type = typeof req.query?.type === 'string' ? req.query.type.trim().toLowerCase() : '';
+  const actionFilter = typeof req.query?.action === 'string' ? req.query.action.trim().toLowerCase() : '';
+
+  try {
+    const logs = getJSONValue('audit_logs_v1', []);
+    const filtered = logs.filter((entry) => {
+      if (!entry || typeof entry !== 'object') {
+        return false;
+      }
+      const ts = entry.ts ? Date.parse(entry.ts) : Number.NaN;
+      if (fromDate && Number.isFinite(ts) && ts < fromDate.getTime()) {
+        return false;
+      }
+      if (toDate && Number.isFinite(ts) && ts > toDate.getTime()) {
+        return false;
+      }
+      const category = (entry.category || inferAuditCategory(entry.action || '')).toString().toLowerCase();
+      if (type && category !== type) {
+        return false;
+      }
+      if (actionFilter) {
+        const action = (entry.action || '').toString().toLowerCase();
+        if (!action.includes(actionFilter)) {
+          return false;
+        }
+      }
+      return true;
+    });
+
+    const formatCsvValue = (value) => {
+      if (value === null || value === undefined) {
+        return '""';
+      }
+      const text = `${value}`.replace(/"/g, '""');
+      return `"${text}"`;
+    };
+
+    const rows = [
+      ['Thời gian', 'Loại', 'Hành động', 'Người thực hiện', 'Kết quả', 'Chi tiết', 'Ghi chú', 'Metadata'],
+      ...filtered.map((entry) => [
+        entry.ts || '',
+        entry.category || inferAuditCategory(entry.action || ''),
+        entry.action || '',
+        entry.actor || 'system',
+        entry.result || '',
+        entry.detail || '',
+        entry.note || '',
+        entry.meta ? JSON.stringify(entry.meta) : '',
+      ]),
+    ];
+
+    const csvContent = rows.map((row) => row.map((cell) => formatCsvValue(cell)).join(',')).join('\r\n');
+    const payload = `\ufeff${csvContent}`;
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="audit-log-${Date.now()}.csv"`);
+    res.send(payload);
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err?.message || 'Không thể xuất nhật ký' });
   }
 });
 

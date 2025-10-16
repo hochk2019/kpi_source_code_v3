@@ -199,26 +199,190 @@
 }
 
 @layer components {
-  .ds-card {
-    background-color: var(--ds-surface-card);
+  .ds-tab-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    padding: 0.75rem;
+    border-radius: var(--ds-radius-lg);
+    border: 1px solid var(--ds-border-subtle);
+    background: color-mix(in srgb, var(--ds-surface-card) 75%, transparent);
+    box-shadow: var(--ds-shadow-soft);
+  }
+
+  .ds-tab-trigger {
+    border-radius: var(--ds-radius-sm);
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--ds-text-secondary);
+    font-weight: 600;
+    font-size: 0.95rem;
+    padding: 0.5rem 0.9rem;
+    transition: all 0.25s ease;
+  }
+
+  .ds-tab-trigger:hover {
+    background: color-mix(in srgb, var(--ds-surface-muted) 85%, transparent);
     color: var(--ds-text-primary);
+  }
+
+  .ds-tab-trigger[data-state="active"] {
+    background: var(--ds-accent-soft);
+    color: var(--ds-accent-strong);
+    border-color: var(--ds-accent-ring);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--ds-accent-ring) 40%, transparent);
+  }
+
+  .ds-panel {
+    background: var(--ds-surface-card);
     border-radius: var(--ds-radius-lg);
     border: 1px solid var(--ds-border-subtle);
     box-shadow: var(--ds-shadow-soft);
-    transition: background-color 0.35s ease, color 0.35s ease, border-color 0.35s ease, box-shadow 0.35s ease;
+    overflow: hidden;
   }
+
+  .ds-panel__inner {
+    padding: 1.75rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.75rem;
+  }
+
+  .ds-card {
+    background: var(--ds-surface-card);
+    border-radius: var(--ds-radius-md);
+    border: 1px solid var(--ds-border-subtle);
+    box-shadow: var(--ds-shadow-soft);
+    padding: 1.5rem;
+  }
+
+  .ds-card + .ds-card {
+    margin-top: 1.25rem;
+  }
+
   .ds-card:hover {
     box-shadow: var(--ds-shadow-strong);
   }
+
   .ds-card--flat {
     box-shadow: none;
   }
+
   .ds-pill {
-    background-color: var(--ds-surface-muted);
+    background: var(--ds-surface-muted);
     color: var(--ds-text-secondary);
     border-radius: var(--ds-radius-pill);
     padding: 0.25rem 0.75rem;
     border: 1px solid var(--ds-border-subtle);
+  }
+
+  .ds-callout {
+    border-radius: var(--ds-radius-md);
+    padding: 1rem 1.25rem;
+    border: 1px solid transparent;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .ds-callout--info {
+    background: color-mix(in srgb, var(--ds-accent-soft) 60%, white);
+    border-color: color-mix(in srgb, var(--ds-accent-ring) 30%, white);
+    color: var(--ds-accent-strong);
+  }
+
+  .ds-select-trigger {
+    height: 2.5rem;
+    border-radius: var(--ds-radius-sm);
+    border: 1px solid var(--ds-border-subtle);
+    background: var(--ds-surface-card);
+    color: var(--ds-text-primary);
+    font-size: 0.9rem;
+  }
+
+  .ds-select-trigger[data-placeholder] {
+    color: var(--ds-text-muted);
+  }
+
+  .ds-select-content {
+    border-radius: var(--ds-radius-sm);
+    border: 1px solid var(--ds-border-subtle);
+    background: var(--ds-surface-card);
+  }
+
+  .ds-table-wrapper {
+    border-radius: var(--ds-radius-lg);
+    border: 1px solid var(--ds-border-subtle);
+    background: var(--ds-surface-card);
+    box-shadow: var(--ds-shadow-soft);
+    overflow: hidden;
+  }
+
+  .ds-table {
+    min-width: 100%;
+  }
+
+  .ds-table__header {
+    background: color-mix(in srgb, var(--ds-surface-muted) 80%, transparent);
+  }
+
+  .ds-table__head {
+    font-size: 0.85rem;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    color: var(--ds-text-muted);
+    border-bottom: 1px solid var(--ds-border-subtle);
+    background: inherit;
+  }
+
+  .ds-table__body {
+    color: var(--ds-text-primary);
+  }
+
+  .ds-table__cell {
+    font-size: 0.92rem;
+    border-bottom: 1px solid color-mix(in srgb, var(--ds-border-subtle) 80%, transparent);
+  }
+
+  .ds-table__row--zebra {
+    background: color-mix(in srgb, var(--ds-surface-muted) 55%, transparent);
+  }
+
+  .ds-table__empty {
+    color: var(--ds-text-muted);
+    font-size: 0.9rem;
+    padding: 0.25rem 0;
+  }
+
+  .ds-dialog {
+    border-radius: var(--ds-radius-lg);
+    border: 1px solid var(--ds-border-subtle);
+    background: var(--ds-surface-card);
+    box-shadow: var(--ds-shadow-strong);
+    padding: 0;
+  }
+
+  .ds-dialog__header {
+    padding: 1.5rem 1.5rem 0.75rem;
+  }
+
+  .ds-dialog__title {
+    font-size: 1.125rem;
+    font-weight: 700;
+    color: var(--ds-text-primary);
+  }
+
+  .ds-dialog__description {
+    font-size: 0.95rem;
+    color: var(--ds-text-secondary);
+  }
+
+  .ds-dialog__footer {
+    padding: 1rem 1.5rem 1.5rem;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 0.75rem;
   }
 }
 

@@ -3,6 +3,10 @@ import { toast } from "@/shared/toast";
 import { fetchWithAuth } from '@/auth/localAuth.js';
 
 import { getAuditLogs, clearAuditLogs } from "@/lib/store.js";
+import {
+  BACKUP_REASON_LABELS,
+  translateBackupFailure,
+} from '@/shared/backupMessages.js';
 
 function formatTime(value) {
   if (!value) return "";
@@ -14,23 +18,6 @@ function formatTime(value) {
     return value;
   }
 }
-
-const BACKUP_REASON_LABELS = {
-  cron_disabled_env: "Cron tự động đang bị tắt bởi KPI_DISABLE_CRON.",
-  cron_disabled_config: "Biểu thức cron chưa được cấu hình hoặc đặt ở trạng thái 'never'.",
-  memory_db: "CSDL đang chạy ở chế độ :memory: nên không thể sao lưu tự động.",
-  memory_backup_dir: "Thư mục sao lưu hiện không hợp lệ (:memory:).",
-  invalid_cron_expression: "Biểu thức cron sao lưu không hợp lệ.",
-  schedule_error: "Không thể khởi tạo lịch sao lưu tự động, vui lòng kiểm tra log máy chủ.",
-};
-
-const BACKUP_FAILURE_LABELS = {
-  memory_db: "Không thể sao lưu vì CSDL đang chạy ở chế độ bộ nhớ.",
-  invalid_backup_dir: "Thư mục đích sao lưu không hợp lệ.",
-  in_progress: "Đang có phiên sao lưu khác diễn ra.",
-  missing_source: "Không tìm thấy file CSDL nguồn để sao lưu.",
-  error: "Lỗi hệ thống khi thực hiện sao lưu.",
-};
 
 function formatBytes(bytes) {
   const value = Number(bytes);
@@ -48,9 +35,23 @@ function formatBytes(bytes) {
   return `${display} ${units[unitIndex]}`;
 }
 
-function translateFailure(reason) {
-  if (!reason) return "";
-  return BACKUP_FAILURE_LABELS[reason] || reason;
+function inferCategoryFromAction(action) {
+  if (typeof action !== "string" || !action) {
+    return "khac";
+  }
+  const normalized = action.trim();
+  const index = normalized.indexOf(".");
+  if (index <= 0) {
+    return normalized || "khac";
+  }
+  return normalized.slice(0, index);
+}
+
+function normalizeNote(value) {
+  if (value === null || value === undefined) {
+    return "";
+  }
+  return `${value}`.trim();
 }
 
 const CONTROL_CLASS =
@@ -61,6 +62,9 @@ const CONTROL_CLASS_COMPACT =
 export default function AuditLog({ currentUser }) {
   const [logs, setLogs] = useState(() => getAuditLogs(200));
   const [filter, setFilter] = useState("");
+  const [typeFilter, setTypeFilter] = useState("all");
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
   const [summary, setSummary] = useState(null);
   const [summaryError, setSummaryError] = useState("");
   const [summaryLoading, setSummaryLoading] = useState(false);
@@ -69,6 +73,17 @@ export default function AuditLog({ currentUser }) {
   const [savingCron, setSavingCron] = useState(false);
   const [retentionDraft, setRetentionDraft] = useState("");
   const [retentionError, setRetentionError] = useState("");
+  const [backupFiles, setBackupFiles] = useState([]);
+  const [loadingBackups, setLoadingBackups] = useState(false);
+  const [runningBackup, setRunningBackup] = useState(false);
+  const [restoring, setRestoring] = useState(false);
+  const [selectedBackup, setSelectedBackup] = useState("");
+  const [backupNote, setBackupNote] = useState("");
+  const [restoreNote, setRestoreNote] = useState("");
+
+  const canManageBackups = Boolean(
+    currentUser?.role === "admin" && currentUser?.permissions?.accountManage
+  );
 
   const refreshLogs = useCallback(() => {
     setLogs(getAuditLogs(200));
@@ -100,14 +115,51 @@ export default function AuditLog({ currentUser }) {
     }
   }, []);
 
+  const fetchBackupFiles = useCallback(async () => {
+    if (!canManageBackups || typeof fetch !== "function") {
+      return;
+    }
+    setLoadingBackups(true);
+    try {
+      const response = await fetchWithAuth("/api/admin/backups/files", {
+        cache: "no-store",
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || payload?.ok === false) {
+        const message = payload?.error || response.statusText || `HTTP ${response.status}`;
+        toast.error(message || "Không thể tải danh sách bản sao lưu.");
+        return;
+      }
+      const files = Array.isArray(payload?.files) ? payload.files : [];
+      setBackupFiles(files);
+      setSelectedBackup((prev) => {
+        if (prev && files.some((file) => file?.filename === prev)) {
+          return prev;
+        }
+        return files.length > 0 ? files[0].filename : "";
+      });
+    } catch (err) {
+      toast.error(err?.message || "Không thể tải danh sách bản sao lưu.");
+    } finally {
+      setLoadingBackups(false);
+    }
+  }, [canManageBackups]);
+
   const refresh = useCallback(() => {
     refreshLogs();
     void loadSummary();
-  }, [refreshLogs, loadSummary]);
+    void fetchBackupFiles();
+  }, [fetchBackupFiles, loadSummary, refreshLogs]);
 
   useEffect(() => {
     refresh();
   }, [refresh]);
+
+  useEffect(() => {
+    if (canManageBackups) {
+      void fetchBackupFiles();
+    }
+  }, [canManageBackups, fetchBackupFiles]);
 
   const schedule = summary?.schedule;
   useEffect(() => {
@@ -125,17 +177,54 @@ export default function AuditLog({ currentUser }) {
 
   const filteredLogs = useMemo(() => {
     const keyword = filter.trim().toLowerCase();
-    if (!keyword) return logs;
-    return logs.filter((entry) =>
-      [entry.actor, entry.action, entry.detail]
-        .filter(Boolean)
-        .some((text) => text.toLowerCase().includes(keyword))
-    );
-  }, [logs, filter]);
+    const typeValue = (typeFilter || "all").toLowerCase();
+    const fromMs = fromDate ? Date.parse(`${fromDate}T00:00:00`) : Number.NaN;
+    const toMs = toDate ? Date.parse(`${toDate}T23:59:59.999`) : Number.NaN;
 
-  const canManageBackups = Boolean(
-    currentUser?.role === "admin" && currentUser?.permissions?.accountManage
-  );
+    return logs.filter((entry) => {
+      if (!entry || typeof entry !== "object") {
+        return false;
+      }
+      const category = (entry.category || inferCategoryFromAction(entry.action)).toLowerCase();
+      if (typeValue && typeValue !== "all" && category !== typeValue) {
+        return false;
+      }
+      const ts = entry.ts ? Date.parse(entry.ts) : Number.NaN;
+      if (!Number.isNaN(fromMs) && Number.isFinite(fromMs) && Number.isFinite(ts) && ts < fromMs) {
+        return false;
+      }
+      if (!Number.isNaN(toMs) && Number.isFinite(toMs) && Number.isFinite(ts) && ts > toMs) {
+        return false;
+      }
+      if (!keyword) {
+        return true;
+      }
+      const haystack = [
+        entry.actor,
+        entry.action,
+        entry.detail,
+        entry.note,
+        entry.result,
+        category,
+        entry.meta ? JSON.stringify(entry.meta) : "",
+      ]
+        .filter(Boolean)
+        .map((text) => `${text}`.toLowerCase());
+      return haystack.some((text) => text.includes(keyword));
+    });
+  }, [filter, fromDate, logs, toDate, typeFilter]);
+
+  const availableCategories = useMemo(() => {
+    const set = new Set();
+    for (const entry of logs) {
+      if (!entry) continue;
+      const category = (entry.category || inferCategoryFromAction(entry.action)).toLowerCase();
+      if (category) {
+        set.add(category);
+      }
+    }
+    return ["all", ...Array.from(set).sort()];
+  }, [logs]);
 
   const handleCronSubmit = useCallback(
     async (event) => {
@@ -208,6 +297,120 @@ export default function AuditLog({ currentUser }) {
     refresh();
   };
 
+  const handleResetFilters = useCallback(() => {
+    setFilter("");
+    setTypeFilter("all");
+    setFromDate("");
+    setToDate("");
+  }, []);
+
+  const handleDownload = useCallback(async () => {
+    try {
+      const params = new URLSearchParams();
+      if (fromDate) params.set("from", fromDate);
+      if (toDate) params.set("to", toDate);
+      if (typeFilter && typeFilter !== "all") params.set("type", typeFilter);
+      const query = params.toString();
+      const endpoint = query ? `/api/admin/audit/export?${query}` : "/api/admin/audit/export";
+      const response = await fetchWithAuth(endpoint, {
+        headers: { Accept: "text/csv" },
+      });
+      let payload = null;
+      if (!response.ok) {
+        try {
+          payload = await response.json();
+        } catch {
+          payload = null;
+        }
+        const message = payload?.error || response.statusText || `HTTP ${response.status}`;
+        throw new Error(message);
+      }
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `audit-log-${Date.now()}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      toast.success("Đang tải file nhật ký...");
+    } catch (err) {
+      toast.error(err?.message || "Không thể tải file nhật ký.");
+    }
+  }, [fromDate, toDate, typeFilter]);
+
+  const handleBackupNow = useCallback(
+    async (event) => {
+      event.preventDefault();
+      if (!canManageBackups) return;
+      setRunningBackup(true);
+      try {
+        const response = await fetchWithAuth("/api/admin/backups/run", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ reason: "manual-ui", note: backupNote.trim() || null }),
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok || payload?.ok === false) {
+          const message = payload?.error || response.statusText || `HTTP ${response.status}`;
+          throw new Error(message);
+        }
+        toast.success("Đã khởi chạy sao lưu thủ công.");
+        setBackupNote("");
+        await loadSummary();
+        await fetchBackupFiles();
+        refreshLogs();
+      } catch (err) {
+        toast.error(err?.message || "Không thể sao lưu ngay.");
+      } finally {
+        setRunningBackup(false);
+      }
+    },
+    [backupNote, canManageBackups, fetchBackupFiles, loadSummary, refreshLogs]
+  );
+
+  const handleRestoreSubmit = useCallback(
+    async (event) => {
+      event.preventDefault();
+      if (!canManageBackups) return;
+      if (!selectedBackup) {
+        toast.error("Vui lòng chọn file sao lưu cần khôi phục.");
+        return;
+      }
+      if (
+        !window.confirm(
+          "Khôi phục CSDL sẽ ghi đè dữ liệu hiện tại. Bạn có chắc chắn muốn tiếp tục?"
+        )
+      ) {
+        return;
+      }
+      setRestoring(true);
+      try {
+        const response = await fetchWithAuth("/api/admin/backups/restore", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ filename: selectedBackup, note: restoreNote.trim() || null }),
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok || payload?.ok === false) {
+          const message = payload?.error || response.statusText || `HTTP ${response.status}`;
+          throw new Error(message);
+        }
+        toast.success("Khôi phục CSDL thành công. Vui lòng tải lại trang để đồng bộ dữ liệu.");
+        setRestoreNote("");
+        await loadSummary();
+        await fetchBackupFiles();
+        refreshLogs();
+      } catch (err) {
+        toast.error(err?.message || "Không thể khôi phục CSDL.");
+      } finally {
+        setRestoring(false);
+      }
+    },
+    [canManageBackups, fetchBackupFiles, loadSummary, refreshLogs, restoreNote, selectedBackup]
+  );
+
   const lastSuccess = summary?.lastSuccess;
   const lastFailure = summary?.lastFailure;
   const reasons = Array.isArray(schedule?.reasons) ? schedule.reasons : [];
@@ -220,7 +423,7 @@ export default function AuditLog({ currentUser }) {
     .filter(Boolean)
     .join(" • ");
   const failureExtras = [
-    lastFailureMeta.reason ? translateFailure(lastFailureMeta.reason) : "",
+    lastFailureMeta.reason ? translateBackupFailure(lastFailureMeta.reason) : "",
     lastFailureMeta.error && lastFailureMeta.reason !== lastFailureMeta.error
       ? lastFailureMeta.error
       : "",
@@ -368,6 +571,75 @@ export default function AuditLog({ currentUser }) {
               </form>
             )}
 
+            {canManageBackups && (
+              <div className="space-y-3 rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-muted)] p-3">
+                <div className="text-xs uppercase text-[color:var(--ds-text-muted)]">Thao tác thủ công</div>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <form onSubmit={handleBackupNow} className="flex flex-col gap-2">
+                    <label className="text-xs font-medium text-[color:var(--ds-text-secondary)]" htmlFor="backup-note-input">
+                      Ghi chú khi sao lưu
+                    </label>
+                    <textarea
+                      id="backup-note-input"
+                      className={`${CONTROL_CLASS_COMPACT} h-20 resize-none`}
+                      placeholder="Ví dụ: Sao lưu trước khi nâng cấp phiên bản"
+                      value={backupNote}
+                      onChange={(event) => setBackupNote(event.target.value)}
+                      disabled={runningBackup || restoring}
+                    />
+                    <button
+                      type="submit"
+                      className="inline-flex items-center justify-center rounded bg-emerald-500 px-3 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-500/90 disabled:cursor-not-allowed disabled:opacity-60"
+                      disabled={runningBackup || restoring}
+                    >
+                      {runningBackup ? "Đang sao lưu..." : "Sao lưu ngay"}
+                    </button>
+                  </form>
+                  <form onSubmit={handleRestoreSubmit} className="flex flex-col gap-2">
+                    <label className="text-xs font-medium text-[color:var(--ds-text-secondary)]" htmlFor="backup-file-select">
+                      Chọn bản sao lưu để khôi phục
+                    </label>
+                    <select
+                      id="backup-file-select"
+                      className={CONTROL_CLASS_COMPACT}
+                      value={selectedBackup}
+                      onChange={(event) => setSelectedBackup(event.target.value)}
+                      disabled={loadingBackups || restoring || runningBackup || backupFiles.length === 0}
+                    >
+                      {loadingBackups ? (
+                        <option>Đang tải danh sách...</option>
+                      ) : backupFiles.length === 0 ? (
+                        <option>Chưa có bản sao lưu</option>
+                      ) : (
+                        backupFiles.map((file) => (
+                          <option key={file.filename} value={file.filename}>
+                            {file.filename} {file.modifiedAt ? `(${formatTime(file.modifiedAt)})` : ""}
+                          </option>
+                        ))
+                      )}
+                    </select>
+                    <textarea
+                      className={`${CONTROL_CLASS_COMPACT} h-20 resize-none`}
+                      placeholder="Ghi chú cho lần khôi phục (tuỳ chọn)"
+                      value={restoreNote}
+                      onChange={(event) => setRestoreNote(event.target.value)}
+                      disabled={loadingBackups || restoring || runningBackup || backupFiles.length === 0}
+                    />
+                    <button
+                      type="submit"
+                      className="inline-flex items-center justify-center rounded bg-amber-500 px-3 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-amber-500/90 disabled:cursor-not-allowed disabled:opacity-60"
+                      disabled={restoring || runningBackup || loadingBackups || backupFiles.length === 0}
+                    >
+                      {restoring ? "Đang khôi phục..." : "Khôi phục bản sao"}
+                    </button>
+                    <p className="text-xs text-[color:var(--ds-text-muted)]">
+                      Hệ thống sẽ ghi đè dữ liệu hiện tại và ghi nhật ký đầy đủ về thao tác khôi phục.
+                    </p>
+                  </form>
+                </div>
+              </div>
+            )}
+
             <div className="grid gap-3 md:grid-cols-2">
               <div>
                 <div className="text-xs uppercase text-[color:var(--ds-text-muted)]">Lần sao lưu thành công gần nhất</div>
@@ -393,13 +665,51 @@ export default function AuditLog({ currentUser }) {
       </section>
 
       <section className="rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] p-4 shadow-sm space-y-4">
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex w-full flex-wrap items-center gap-3">
           <input
             className={`w-full max-w-xs ${CONTROL_CLASS}`}
-            placeholder="Lọc theo người thực hiện hoặc hành động"
+            placeholder="Tìm theo người thực hiện, hành động hoặc ghi chú"
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
           />
+          <select
+            className={`${CONTROL_CLASS} w-full max-w-[10rem]`}
+            value={typeFilter}
+            onChange={(event) => setTypeFilter(event.target.value)}
+          >
+            {availableCategories.map((category) => (
+              <option key={category} value={category}>
+                {category === "all" ? "Tất cả loại" : category}
+              </option>
+            ))}
+          </select>
+          <input
+            type="date"
+            className={`${CONTROL_CLASS} w-full max-w-[10rem]`}
+            value={fromDate}
+            onChange={(event) => setFromDate(event.target.value)}
+          />
+          <input
+            type="date"
+            className={`${CONTROL_CLASS} w-full max-w-[10rem]`}
+            value={toDate}
+            onChange={(event) => setToDate(event.target.value)}
+          />
+          <button
+            type="button"
+            onClick={handleDownload}
+            className="rounded border border-[color:var(--ds-border-subtle)] px-3 py-2 text-sm font-medium text-[color:var(--ds-text-primary)] shadow-sm transition hover:bg-[color:var(--ds-surface-muted)]"
+          >
+            Tải CSV
+          </button>
+          <button
+            type="button"
+            onClick={handleResetFilters}
+            className="rounded border border-[color:var(--ds-border-subtle)] px-3 py-2 text-sm text-[color:var(--ds-text-secondary)] shadow-sm transition hover:bg-[color:var(--ds-surface-muted)]"
+          >
+            Xóa bộ lọc
+          </button>
+          <span className="flex-1" />
           <button
             type="button"
             onClick={refresh}
@@ -421,25 +731,62 @@ export default function AuditLog({ currentUser }) {
             <thead className="bg-[color:var(--ds-surface-muted)] text-left text-xs font-semibold uppercase text-[color:var(--ds-text-secondary)]">
               <tr>
                 <th className="px-3 py-2">Thời gian</th>
-                <th className="px-3 py-2">Người thực hiện</th>
+                <th className="px-3 py-2">Loại</th>
                 <th className="px-3 py-2">Hành động</th>
-                <th className="px-3 py-2">Chi tiết</th>
+                <th className="px-3 py-2">Người thực hiện</th>
+                <th className="px-3 py-2">Kết quả</th>
+                <th className="px-3 py-2">Nội dung</th>
+                <th className="px-3 py-2">Ghi chú</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[color:var(--ds-border-subtle)]">
               {filteredLogs.length === 0 ? (
                 <tr>
-                  <td className="px-3 py-4 text-center text-[color:var(--ds-text-muted)]" colSpan={4}>
+                  <td className="px-3 py-4 text-center text-[color:var(--ds-text-muted)]" colSpan={7}>
                     Không có bản ghi phù hợp.
                   </td>
                 </tr>
               ) : (
                 filteredLogs.map((entry, index) => (
-                  <tr key={`${entry.ts}-${index}`} className={index % 2 === 0 ? "bg-[color:var(--ds-surface-card)]" : "bg-[color:var(--ds-surface-muted)]"}>
-                    <td className="px-3 py-2 whitespace-nowrap">{formatTime(entry.ts)}</td>
-                    <td className="px-3 py-2">{entry.actor || "system"}</td>
-                    <td className="px-3 py-2">{entry.action}</td>
-                    <td className="px-3 py-2 whitespace-pre-wrap text-[color:var(--ds-text-secondary)]">{entry.detail || "—"}</td>
+                  <tr
+                    key={`${entry.ts}-${index}`}
+                    className={index % 2 === 0 ? "bg-[color:var(--ds-surface-card)]" : "bg-[color:var(--ds-surface-muted)]"}
+                  >
+                    <td className="px-3 py-2 whitespace-nowrap align-top">{formatTime(entry.ts)}</td>
+                    <td className="px-3 py-2 whitespace-nowrap align-top">{(entry.category || inferCategoryFromAction(entry.action)).toUpperCase()}</td>
+                    <td className="px-3 py-2 align-top font-medium text-[color:var(--ds-text-primary)]">{entry.action}</td>
+                    <td className="px-3 py-2 align-top">{entry.actor || "system"}</td>
+                    <td className="px-3 py-2 align-top">
+                      {entry.result ? (
+                        <span
+                          className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                            entry.result === 'success'
+                              ? 'bg-emerald-500/15 text-emerald-300'
+                              : entry.result === 'failure'
+                              ? 'bg-red-500/15 text-red-300'
+                              : 'bg-slate-500/20 text-slate-200'
+                          }`}
+                        >
+                          {entry.result}
+                        </span>
+                      ) : (
+                        <span className="text-[color:var(--ds-text-muted)]">—</span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2 whitespace-pre-wrap align-top text-[color:var(--ds-text-secondary)]">
+                      <div className="space-y-1">
+                        <div>{entry.detail || "—"}</div>
+                        {entry.meta && (
+                          <details className="text-xs">
+                            <summary className="cursor-pointer text-[color:var(--ds-text-muted)]">Metadata</summary>
+                            <pre className="max-h-40 overflow-auto rounded bg-[color:var(--ds-surface-muted)] p-2 text-[color:var(--ds-text-muted)]">
+                              {JSON.stringify(entry.meta, null, 2)}
+                            </pre>
+                          </details>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-3 py-2 align-top text-[color:var(--ds-text-secondary)]">{normalizeNote(entry.note) || "—"}</td>
                   </tr>
                 ))
               )}

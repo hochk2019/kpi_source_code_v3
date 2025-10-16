@@ -26,6 +26,8 @@
     "dev:frontend": "vite",
     "favicon:update": "node scripts/update-favicon.mjs",
     "cert:ai": "pwsh -File ./scripts/create-ai-https-cert.ps1",
+    "precommit": "pnpm lint && pnpm test -- --runInBand",
+    "prepare": "pnpm exec simple-git-hooks",
     "test:screenshot": "pnpm build && pnpm exec playwright test tests/playwright/favicon.spec.js",
     "test:playwright": "pnpm exec playwright test"
   },
@@ -112,7 +114,8 @@
     "tw-animate-css": "^1.2.9",
     "vite": "^6.3.5",
     "vitest": "^2.1.4",
-    "vitest-axe": "^0.1.0"
+    "vitest-axe": "^0.1.0",
+    "simple-git-hooks": "^2.13.1"
   },
   "packageManager": "pnpm@10.4.1+sha512.c753b6c3ad7afa13af388fa6d808035a008e30ea9993f58c6663e2bc5ff21679aa834db094987129aa4d488b86df57f7b634981b2f827cdcacc698cc0cfb88af",
   "pnpm": {
@@ -121,5 +124,8 @@
       "better-sqlite3",
       "esbuild"
     ]
+  },
+  "simple-git-hooks": {
+    "pre-commit": "pnpm precommit"
   }
 }
