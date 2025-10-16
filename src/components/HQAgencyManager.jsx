@@ -14,6 +14,7 @@ import {
   HQ_HISTORY_LIMIT,
 } from "@/lib/store.js";
 import { refreshHQHistoryCache } from "@/lib/hqHistoryClient.js";
+import { FilterSelect, StatusBadge } from "@/components/designSystem/primitives.js";
 
 const PAGE_SIZE = 50;
 
@@ -330,6 +331,11 @@ export default function HQAgencyManager({ canEdit = true, currentUser = null }) 
     collect(rows);
     return Array.from(values.values()).sort((a, b) => a.localeCompare(b, "vi", { sensitivity: "base" }));
   }, [baseline, rows]);
+
+  const agencySelectOptions = useMemo(
+    () => agencyOptions.map((label) => ({ value: label, label })),
+    [agencyOptions]
+  );
 
   const toggleHistory = useCallback((mst) => {
     const key = normalizeMST(mst);
@@ -697,29 +703,27 @@ export default function HQAgencyManager({ canEdit = true, currentUser = null }) 
           </button>
         )}
         <div className="ml-auto flex flex-wrap items-center gap-2">
-          <select
-            className="rounded border px-2 py-1 text-sm text-gray-700"
+          <FilterSelect
             value={agencyFilter}
-            onChange={e => { setAgencyFilter(e.target.value); setPage(1); }}
-          >
-            <option value="">Tất cả đại lý</option>
-            {agencyOptions.map(option => (
-              <option key={option} value={option}>
-                {option}
-              </option>
-            ))}
-          </select>
-          <select
-            className="rounded border px-2 py-1 text-sm text-gray-700"
+            onChange={(value) => {
+              setAgencyFilter(value);
+              setPage(1);
+            }}
+            options={agencySelectOptions}
+            emptyLabel="Tất cả đại lý"
+            placeholder="Lọc theo đại lý"
+            triggerClassName="min-w-[180px]"
+          />
+          <FilterSelect
             value={statusFilter}
-            onChange={e => { setStatusFilter(e.target.value); setPage(1); }}
-          >
-            {STATUS_FILTER_OPTIONS.map(option => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
+            onChange={(value) => {
+              setStatusFilter(value);
+              setPage(1);
+            }}
+            options={STATUS_FILTER_OPTIONS}
+            placeholder="Trạng thái"
+            triggerClassName="min-w-[180px]"
+          />
           <input
             className="w-64 rounded border px-2 py-1"
             placeholder="Tìm theo MST, Công ty hoặc Đại lý"
@@ -787,22 +791,22 @@ export default function HQAgencyManager({ canEdit = true, currentUser = null }) 
               const rowKey = `${historyKey || "row"}_${idx}`;
               const statusBadges = [];
               if (state.isNew && state.hasChanges) {
-                statusBadges.push({ label: "Mới", className: "bg-purple-100 text-purple-700" });
+                statusBadges.push({ label: "Mới", tone: "info" });
               }
               if (state.hasChanges) {
-                statusBadges.push({ label: "Chưa lưu", className: "bg-amber-100 text-amber-700" });
+                statusBadges.push({ label: "Chưa lưu", tone: "warning" });
               }
               if (!state.hasChanges && !state.hasAgents) {
-                statusBadges.push({ label: "Chưa gán đại lý", className: "bg-slate-200 text-slate-600" });
+                statusBadges.push({ label: "Chưa gán đại lý", tone: "neutral" });
               }
               if (!state.hasChanges && state.isRecent) {
-                statusBadges.push({ label: "Cập nhật gần đây", className: "bg-emerald-100 text-emerald-700", title: latestTimestamp ? `Cập nhật lúc ${formatHistoryTimestamp(latestTimestamp)}` : undefined });
+                statusBadges.push({ label: "Cập nhật gần đây", tone: "success", title: latestTimestamp ? `Cập nhật lúc ${formatHistoryTimestamp(latestTimestamp)}` : undefined });
               }
               if (!state.hasChanges && !state.isRecent && state.hasHistory) {
-                statusBadges.push({ label: "Đã có lịch sử", className: "bg-blue-100 text-blue-700" });
+                statusBadges.push({ label: "Đã có lịch sử", tone: "info" });
               }
               if (!state.draft.mst) {
-                statusBadges.push({ label: "Chưa nhập MST", className: "bg-red-100 text-red-600" });
+                statusBadges.push({ label: "Chưa nhập MST", tone: "danger" });
               }
               return (
                 <React.Fragment key={rowKey}>
@@ -878,14 +882,14 @@ export default function HQAgencyManager({ canEdit = true, currentUser = null }) 
                           </button>
                         </div>
                         <div className="flex flex-wrap items-center gap-2 text-xs text-gray-600">
-                          {statusBadges.map(badge => (
-                            <span
+                          {statusBadges.map((badge) => (
+                            <StatusBadge
                               key={`${rowKey}-badge-${badge.label}`}
-                              className={`rounded px-2 py-0.5 font-medium ${badge.className}`}
+                              tone={badge.tone}
                               title={badge.title}
                             >
                               {badge.label}
-                            </span>
+                            </StatusBadge>
                           ))}
                           {canEdit && (
                             <button

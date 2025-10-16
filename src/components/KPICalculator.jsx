@@ -17,9 +17,11 @@ const ExportAuditReport = React.lazy(() => import('./ExportAuditReport.jsx'));
 
 const TabPanel = ({ children }) => (
   <Suspense fallback={<div className="p-4 text-sm text-gray-500">Đang tải nội dung...</div>}>
-    {children}
+    <div className="ds-panel__inner">{children}</div>
   </Suspense>
 );
+
+const TAB_TRIGGER_CLASS = 'ds-tab-trigger';
 
 const KPICalculator = ({ auth, activeTab = 'reports', onTabChange }) => {
   const effectiveAuth = auth || { username: 'guest', role: 'viewer', permissions: {} };
@@ -86,70 +88,118 @@ const KPICalculator = ({ auth, activeTab = 'reports', onTabChange }) => {
   };
 
   return (
-    <div className="mx-auto max-w-6xl">
+    <div className="mx-auto max-w-6xl space-y-6">
       <Tabs value={tabValue} onValueChange={handleTabChange} className="space-y-6">
-        <TabsList className="flex flex-wrap gap-2">
-          <TabsTrigger value="mst" data-tooltip="Quản lý gán MST cho doanh nghiệp và người phụ trách">
+        <TabsList className="ds-tab-list">
+          <TabsTrigger
+            value="mst"
+            data-tooltip="Quản lý gán MST cho doanh nghiệp và người phụ trách"
+            className={TAB_TRIGGER_CLASS}
+          >
             Gán MST
           </TabsTrigger>
-          <TabsTrigger value="hq" data-tooltip="Quản lý danh sách đại lý hải quan hợp tác">
+          <TabsTrigger
+            value="hq"
+            data-tooltip="Quản lý danh sách đại lý hải quan hợp tác"
+            className={TAB_TRIGGER_CLASS}
+          >
             Đại Lý HQ
           </TabsTrigger>
-          <TabsTrigger value="import" data-tooltip="Nhập và đồng bộ dữ liệu tờ khai từ ECUS">
+          <TabsTrigger
+            value="import"
+            data-tooltip="Nhập và đồng bộ dữ liệu tờ khai từ ECUS"
+            className={TAB_TRIGGER_CLASS}
+          >
             Import Data
           </TabsTrigger>
-          <TabsTrigger value="teams" data-tooltip="Thiết lập tổ đội và phân bổ chỉ tiêu">
+          <TabsTrigger
+            value="teams"
+            data-tooltip="Thiết lập tổ đội và phân bổ chỉ tiêu"
+            className={TAB_TRIGGER_CLASS}
+          >
             Quản lý Tổ đội
           </TabsTrigger>
-          <TabsTrigger value="rules" data-tooltip="Cấu hình quy tắc tính điểm KPI">
+          <TabsTrigger
+            value="rules"
+            data-tooltip="Cấu hình quy tắc tính điểm KPI"
+            className={TAB_TRIGGER_CLASS}
+          >
             Quy tắc KPI
           </TabsTrigger>
-          <TabsTrigger value="adjustments" data-tooltip="Cộng/trừ điểm KPI bổ sung theo tháng">
+          <TabsTrigger
+            value="adjustments"
+            data-tooltip="Cộng/trừ điểm KPI bổ sung theo tháng"
+            className={TAB_TRIGGER_CLASS}
+          >
             Điểm KPI +/- Thêm
           </TabsTrigger>
-          <TabsTrigger value="reports" data-tooltip="Xem và xuất báo cáo KPI tổng hợp">
+          <TabsTrigger
+            value="reports"
+            data-tooltip="Xem và xuất báo cáo KPI tổng hợp"
+            className={TAB_TRIGGER_CLASS}
+          >
             Báo cáo KPI
           </TabsTrigger>
           {canViewDataHealth && (
-            <TabsTrigger value="health" data-tooltip="Theo dõi dữ liệu trùng, cảnh báo và trạng thái đồng bộ">
+            <TabsTrigger
+              value="health"
+              data-tooltip="Theo dõi dữ liệu trùng, cảnh báo và trạng thái đồng bộ"
+              className={TAB_TRIGGER_CLASS}
+            >
               Sức khỏe dữ liệu
             </TabsTrigger>
           )}
           {canUseAi && (
-            <TabsTrigger value="ai" data-tooltip="Trợ lý AI nội bộ hỗ trợ KPI và tờ khai">
+            <TabsTrigger
+              value="ai"
+              data-tooltip="Trợ lý AI nội bộ hỗ trợ KPI và tờ khai"
+              className={TAB_TRIGGER_CLASS}
+            >
               Trợ lý AI
             </TabsTrigger>
           )}
           {canManageAccounts && (
-            <TabsTrigger value="accounts" data-tooltip="Quản trị tài khoản đăng nhập hệ thống">
+            <TabsTrigger
+              value="accounts"
+              data-tooltip="Quản trị tài khoản đăng nhập hệ thống"
+              className={TAB_TRIGGER_CLASS}
+            >
               Tài khoản
             </TabsTrigger>
           )}
           {canViewAudit && (
             <>
-              <TabsTrigger value="audit" data-tooltip="Xem nhật ký thao tác hệ thống">
+              <TabsTrigger
+                value="audit"
+                data-tooltip="Xem nhật ký thao tác hệ thống"
+                className={TAB_TRIGGER_CLASS}
+              >
                 Nhật ký
               </TabsTrigger>
-              <TabsTrigger value="export-audit" data-tooltip="Tra cứu lịch sử tải báo cáo Excel">
+              <TabsTrigger
+                value="export-audit"
+                data-tooltip="Tra cứu lịch sử tải báo cáo Excel"
+                className={TAB_TRIGGER_CLASS}
+              >
                 Lịch sử export
               </TabsTrigger>
             </>
           )}
         </TabsList>
 
-        <TabsContent value="mst">
+        <TabsContent value="mst" className="ds-panel">
           <TabPanel>
             <MSTAssignment canEdit={canMstEdit} currentUser={effectiveAuth} />
           </TabPanel>
         </TabsContent>
 
-        <TabsContent value="hq">
+        <TabsContent value="hq" className="ds-panel">
           <TabPanel>
             <HQAgencyManager canEdit={canMstEdit} currentUser={effectiveAuth} />
           </TabPanel>
         </TabsContent>
 
-        <TabsContent value="import">
+        <TabsContent value="import" className="ds-panel">
           <TabPanel>
             <DataImporter
               canEdit={canImportEdit}
@@ -160,32 +210,32 @@ const KPICalculator = ({ auth, activeTab = 'reports', onTabChange }) => {
           </TabPanel>
         </TabsContent>
 
-        <TabsContent value="teams">
+        <TabsContent value="teams" className="ds-panel">
           <TabPanel>
             <TeamManager canEdit={canTeamsEdit} currentUser={effectiveAuth} />
           </TabPanel>
         </TabsContent>
 
-        <TabsContent value="rules">
+        <TabsContent value="rules" className="ds-panel">
           <TabPanel>
             <RulesEditor canEdit={canRulesEdit} currentUser={effectiveAuth} />
           </TabPanel>
         </TabsContent>
 
-        <TabsContent value="adjustments">
+        <TabsContent value="adjustments" className="ds-panel">
           <TabPanel>
             <KPIAdjustments currentUser={effectiveAuth} />
           </TabPanel>
         </TabsContent>
 
-        <TabsContent value="reports">
+        <TabsContent value="reports" className="ds-panel">
           <TabPanel>
             <ReportViewer canExport={canExportReports} currentUser={effectiveAuth} />
           </TabPanel>
         </TabsContent>
 
         {canViewDataHealth && (
-          <TabsContent value="health">
+          <TabsContent value="health" className="ds-panel">
             <TabPanel>
               <DataHealthDashboard currentUser={effectiveAuth} />
             </TabPanel>
@@ -193,7 +243,7 @@ const KPICalculator = ({ auth, activeTab = 'reports', onTabChange }) => {
         )}
 
         {canUseAi && (
-          <TabsContent value="ai">
+          <TabsContent value="ai" className="ds-panel">
             <TabPanel>
               <AiAssistant currentUser={effectiveAuth} />
             </TabPanel>
@@ -201,7 +251,7 @@ const KPICalculator = ({ auth, activeTab = 'reports', onTabChange }) => {
         )}
 
         {canManageAccounts && (
-          <TabsContent value="accounts">
+          <TabsContent value="accounts" className="ds-panel">
             <TabPanel>
               <AccountManager currentUser={effectiveAuth} />
             </TabPanel>
@@ -209,7 +259,7 @@ const KPICalculator = ({ auth, activeTab = 'reports', onTabChange }) => {
         )}
 
         {canViewAudit && (
-          <TabsContent value="audit">
+          <TabsContent value="audit" className="ds-panel">
             <TabPanel>
               <div className="grid gap-6 xl:grid-cols-[5fr,3fr]">
                 <div className="space-y-6">
@@ -224,7 +274,7 @@ const KPICalculator = ({ auth, activeTab = 'reports', onTabChange }) => {
         )}
 
         {canViewAudit && (
-          <TabsContent value="export-audit">
+          <TabsContent value="export-audit" className="ds-panel">
             <TabPanel>
               <ExportAuditReport currentUser={effectiveAuth} />
             </TabPanel>
