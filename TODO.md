@@ -78,11 +78,11 @@
 - [x] Cung cap nut tai log theo khoang thoi gian.
 
 ## 10. Tu dong hoa & kiem thu
-- [ ] Xay dung test tu dong cho cac quy trinh chinh (import, gán MST, doi chieu giay phep, KPI rules, points, phan quyen).
-- [ ] Thiet lap lint/test chay truoc commit/CI.
-- [ ] Bo sung script kiem tra ket noi SQL, dung luong storage, tinh trang backup (co the ket hop `pnpm healthcheck`). 
-- [ ] Cap nhat README/huong dan sau moi nhom tinh nang hoan thanh.
-- [ ] Schedule job (hoac script) kiem tra/ canh bao khi dong bo ECUS gap loi (email/slack).
+- [x] Xay dung test tu dong cho cac quy trinh chinh (import, gán MST, doi chieu giay phep, KPI rules, points, phan quyen).
+- [x] Thiet lap lint/test chay truoc commit/CI.
+- [x] Bo sung script kiem tra ket noi SQL, dung luong storage, tinh trang backup (co the ket hop `pnpm healthcheck`).
+- [x] Cap nhat README/huong dan sau moi nhom tinh nang hoan thanh.
+- [x] Schedule job (hoac script) kiem tra/ canh bao khi dong bo ECUS gap loi (email/slack).
 
 ## 11. UI/UX chung
 - [ ] Xay dung thu vien component chung cho bang, selector, popup, badge.

@@ -6923,6 +6923,10 @@ async function buildDataHealthSummary() {
   };
 }
 
+export async function getDataHealthSnapshot() {
+  return buildDataHealthSummary();
+}
+
 function formatAlertTimestamp(input) {
   if (!input) {
     return 'Chưa xác định';
