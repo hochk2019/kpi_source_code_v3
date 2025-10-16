@@ -29,12 +29,18 @@ import { loadRules, computeKPI, extractLicenseCodesFromRowObj } from "@/lib/rule
 import { computeLicenseSnapshot } from "../../shared/licenseSummary.js";
 import CollapsibleCard from "./CollapsibleCard.jsx";
 import { deriveCOStatus, coLabel, coLineCount } from "@/shared/co.js";
+import {
+  filterDeclRows,
+  normalizeDeclSearchFilters,
+  normalizeStatusKey,
+} from "@/shared/declSearch.js";
 import { formatDisplayDate, formatDateRangeLabel } from "@/shared/format.js";
 import { fetchWithAuth } from "@/auth/localAuth.js";
 import useTooltipTitles from "@/hooks/useTooltipTitles.js";
 import useFilterPresets from "@/hooks/useFilterPresets.js";
 import useQuickSearchFavorites from "@/hooks/useQuickSearchFavorites.js";
 import { Button } from "@/components/ui/button.jsx";
+import { StatusBadge } from "@/components/designSystem/primitives.js";
 import {
   Command,
   CommandEmpty,
@@ -60,6 +66,7 @@ import {
 } from "@/components/ui/dialog.jsx";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover.jsx";
 import { ScrollArea } from "@/components/ui/scroll-area.jsx";
+import { Switch } from "@/components/ui/switch.jsx";
 import { toast } from "@/shared/toast.js";
 import { Check, ChevronsUpDown, CircleX, Plus } from "lucide-react";
 
@@ -142,6 +149,13 @@ const VIEW_MODES = Object.freeze({
   TABLE: "table",
   CARD: "card",
 });
+const FREEZE_COLUMNS_STORAGE_KEY = "dataImporter:freezeColumns";
+const GRID_COLUMNS_STORAGE_KEY = "dataImporter:gridColumns";
+const CARD_GRID_COLUMN_OPTIONS = Object.freeze([1, 2, 3]);
+const DEFAULT_CARD_GRID_COLUMNS = 2;
+const CARD_GRID_MIN_WIDTH = 320;
+const SERVER_SEARCH_THRESHOLD = 5000;
+const SERVER_SEARCH_MAX_PAGE_SIZE = 200;
 
 function normalizeComparableValue(value) {
   if (value === null || value === undefined) return "";
@@ -158,13 +172,6 @@ function normalizeComparableValue(value) {
   return JSON.stringify(value);
 }
 
-function normalizeStatusKey(status) {
-  if (status == null) {
-    return "";
-  }
-  return String(status).trim().toLowerCase();
-}
-
 function formatStatusLabel(status) {
   const key = normalizeStatusKey(status);
   if (DECL_STATUS_LABELS[key]) {
@@ -178,6 +185,120 @@ function formatStatusLabel(status) {
 
 function cx(...classes) {
   return classes.filter(Boolean).join(" ");
+}
+
+const DECLARATION_STATUS_META = Object.freeze({
+  NEW: { key: "new", label: "Mới import", tone: "info" },
+  PENDING_ASSIGNMENT: { key: "pending-assignment", label: "Chờ gán", tone: "warning" },
+  REVIEWED: { key: "reviewed", label: "Đã rà soát", tone: "success" },
+  NEEDS_REVIEW: { key: "needs-review", label: "Cần xem lại", tone: "danger" },
+});
+
+function formatDateTimeLabel(value) {
+  if (!value) return "";
+  try {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+      return "";
+    }
+    return date.toLocaleString("vi-VN");
+  } catch (error) {
+    console.warn("Không thể định dạng thời gian trạng thái tờ khai", error);
+    return "";
+  }
+}
+
+function resolveDeclarationStatus(row) {
+  if (!row || typeof row !== "object") {
+    return { ...DECLARATION_STATUS_META.NEW };
+  }
+
+  const staffValue = (row.nhan_vien ?? row.staff ?? "").toString();
+  const teamValue = (row.team ?? "").toString();
+  const hasStaff = staffValue.trim().length > 0;
+  const hasTeam = teamValue.trim().length > 0;
+
+  if (row.duplicate_review_pending) {
+    const note = normalizeStr(row.duplicate_review_note || "");
+    const actor = normalizeStr(row.duplicate_review_actor || "");
+    const timestamp = formatDateTimeLabel(row.duplicate_review_updated_at);
+    const detailParts = [];
+    if (note) {
+      detailParts.push(note);
+    }
+    if (actor) {
+      detailParts.push(`Bởi ${actor}`);
+    }
+    if (timestamp) {
+      detailParts.push(timestamp);
+    }
+    return {
+      ...DECLARATION_STATUS_META.NEEDS_REVIEW,
+      detail: detailParts.join(" • ") || null,
+    };
+  }
+
+  if (row.reviewed) {
+    const reviewer = normalizeStr(row.reviewed_by || row.duplicate_review_actor || "");
+    const timestamp = formatDateTimeLabel(row.reviewed_at || row.duplicate_review_updated_at);
+    const detailParts = [];
+    if (reviewer) {
+      detailParts.push(`Bởi ${reviewer}`);
+    }
+    if (timestamp) {
+      detailParts.push(timestamp);
+    }
+    return {
+      ...DECLARATION_STATUS_META.REVIEWED,
+      detail: detailParts.join(" • ") || null,
+    };
+  }
+
+  if (!hasStaff || !hasTeam) {
+    const missing = [];
+    if (!hasStaff) {
+      missing.push("nhân viên");
+    }
+    if (!hasTeam) {
+      missing.push("tổ đội");
+    }
+    return {
+      ...DECLARATION_STATUS_META.PENDING_ASSIGNMENT,
+      detail: missing.length ? `Thiếu ${missing.join(" & ")}` : null,
+    };
+  }
+
+  const timestamp = formatDateTimeLabel(
+    row.imported_at || row.created_at || row.synced_at || row.updated_at || row.last_sync_at
+  );
+  return {
+    ...DECLARATION_STATUS_META.NEW,
+    detail: timestamp ? `Cập nhật ${timestamp}` : null,
+  };
+}
+
+function DeclarationStatusDisplay({ row, withDetail = false, size = "md", className }) {
+  const status = resolveDeclarationStatus(row);
+  if (!status) {
+    return null;
+  }
+  const sizeClass =
+    size === "sm"
+      ? "px-2 py-0.5 text-[11px]"
+      : size === "xs"
+        ? "px-1.5 py-0.5 text-[10px]"
+        : "";
+
+  return (
+    <div className={cx("inline-flex flex-col items-start gap-1", className)}>
+      <StatusBadge tone={status.tone} className={sizeClass}>
+        {status.label}
+      </StatusBadge>
+      {withDetail && status.detail ? (
+        <span className="text-[11px] text-gray-500 dark:text-gray-400">{status.detail}</span>
+      ) : null}
+    </div>
+  );
 }
 
 function collectEditableDiff(baseline, current) {
@@ -1315,7 +1436,7 @@ function inferRowSource(row) {
 
 function describeRowStatus(row) {
   if (row?.duplicate_review_pending) {
-    return "Chờ rà soát trùng";
+    return "Cần xem lại trùng";
   }
   const hasStaff = !!(row?.nhan_vien && row.nhan_vien.toString().trim());
   const hasTeam = !!(row?.team && row.team.toString().trim());
@@ -1386,6 +1507,7 @@ export default function DataImporter({
 }) {
   const rootRef = useRef(null);
   const fileRef = useRef(null);
+  const [containerWidth, setContainerWidth] = useState(0);
   const [rawRows, setRawRows] = useState([]);        // dữ liệu xem trước (đã map)
   const savedRowSnapshotRef = useRef(new Map());
   const [baselineVersion, setBaselineVersion] = useState(0);
@@ -1402,6 +1524,26 @@ export default function DataImporter({
     }
     const stored = window.localStorage?.getItem(VIEW_MODE_STORAGE_KEY);
     return stored === VIEW_MODES.CARD ? VIEW_MODES.CARD : VIEW_MODES.TABLE;
+  });
+  const [freezeColumnsEnabled, setFreezeColumnsEnabled] = useState(() => {
+    if (typeof window === "undefined") {
+      return true;
+    }
+    const stored = window.localStorage?.getItem(FREEZE_COLUMNS_STORAGE_KEY);
+    if (stored === "0") return false;
+    if (stored === "1") return true;
+    return true;
+  });
+  const [cardGridColumns, setCardGridColumns] = useState(() => {
+    if (typeof window === "undefined") {
+      return DEFAULT_CARD_GRID_COLUMNS;
+    }
+    const stored = window.localStorage?.getItem(GRID_COLUMNS_STORAGE_KEY);
+    const parsed = Number.parseInt(stored || "", 10);
+    if (CARD_GRID_COLUMN_OPTIONS.includes(parsed)) {
+      return parsed;
+    }
+    return DEFAULT_CARD_GRID_COLUMNS;
   });
   const {
     presets: savedPresets,
@@ -1441,6 +1583,16 @@ export default function DataImporter({
     baseKey: null,
     compareKey: null,
   });
+  const [serverSearchState, setServerSearchState] = useState({
+    rows: [],
+    total: 0,
+    page: 1,
+    pageSize: DEFAULT_PAGE_SIZE,
+    loading: false,
+    error: "",
+    queryKey: "",
+  });
+  const serverSearchAbortRef = useRef(null);
   const [columnConfigState, setColumnConfigState] = useState(() => getImportColumnConfig());
   const [columnConfigOpen, setColumnConfigOpen] = useState(false);
   const [columnDraftHidden, setColumnDraftHidden] = useState(() => new Set());
@@ -1462,6 +1614,69 @@ export default function DataImporter({
     }
   }, [viewMode]);
 
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    try {
+      window.localStorage?.setItem(
+        FREEZE_COLUMNS_STORAGE_KEY,
+        freezeColumnsEnabled ? "1" : "0"
+      );
+    } catch (error) {
+      console.warn("Không thể lưu tuỳ chọn giữ cột cố định", error);
+    }
+  }, [freezeColumnsEnabled]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    try {
+      window.localStorage?.setItem(
+        GRID_COLUMNS_STORAGE_KEY,
+        String(
+          CARD_GRID_COLUMN_OPTIONS.includes(cardGridColumns)
+            ? cardGridColumns
+            : DEFAULT_CARD_GRID_COLUMNS
+        )
+      );
+    } catch (error) {
+      console.warn("Không thể lưu số cột dạng thẻ", error);
+    }
+  }, [cardGridColumns]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    let frame = null;
+    const updateWidth = () => {
+      frame = window.requestAnimationFrame(() => {
+        const width = rootRef.current?.offsetWidth ?? window.innerWidth ?? 0;
+        setContainerWidth(width);
+      });
+    };
+    updateWidth();
+    let resizeObserver = null;
+    if (typeof ResizeObserver !== "undefined" && rootRef.current) {
+      resizeObserver = new ResizeObserver(() => updateWidth());
+      resizeObserver.observe(rootRef.current);
+    } else {
+      window.addEventListener("resize", updateWidth);
+    }
+    return () => {
+      if (frame) {
+        window.cancelAnimationFrame(frame);
+      }
+      if (resizeObserver) {
+        resizeObserver.disconnect();
+      } else {
+        window.removeEventListener("resize", updateWidth);
+      }
+    };
+  }, []);
+
   // Tuỳ chọn
   const [overwrite, setOverwrite] = useState(false);         // Ghi đè toàn bộ
   const [upsert11, setUpsert11] = useState(true);            // Upsert theo 11 số đầu (nếu có dùng merge cục bộ)
@@ -1480,6 +1695,39 @@ export default function DataImporter({
   const rosterTeams = useMemo(() => buildRosterTeams(rosterSnapshot), [rosterSnapshot]);
   const normalizedQuickMST = useMemo(() => normalizeStr(quickMST), [quickMST]);
   const normalizedQuickCompany = useMemo(() => normalizeStr(quickCompany), [quickCompany]);
+  const coThreshold = useMemo(() => Math.max(0, Number(coFilterMin) || 0), [coFilterMin]);
+  const normalizedFilters = useMemo(
+    () =>
+      normalizeDeclSearchFilters({
+        query,
+        mst: normalizedQuickMST,
+        company: normalizedQuickCompany,
+        statuses: statusFilters,
+        range: { from: searchRange.from, to: searchRange.to },
+        noStaff: filterNoStaff,
+        noTeam: filterNoTeam,
+        duplicate: filterDuplicate11,
+        coMode: coFilterMode,
+        coMin: coThreshold,
+      }),
+    [
+      query,
+      normalizedQuickMST,
+      normalizedQuickCompany,
+      statusFilters,
+      searchRange.from,
+      searchRange.to,
+      filterNoStaff,
+      filterNoTeam,
+      filterDuplicate11,
+      coFilterMode,
+      coThreshold,
+    ]
+  );
+  const shouldUseServerSearch = useMemo(
+    () => mode === "saved" && rawRows.length > SERVER_SEARCH_THRESHOLD,
+    [mode, rawRows.length]
+  );
   const availableStatuses = useMemo(() => {
     const set = new Set();
     for (const row of Array.isArray(rawRows) ? rawRows : []) {
@@ -3486,7 +3734,6 @@ export default function DataImporter({
   }
 
   // Tìm nhanh
-  const coThreshold = useMemo(() => Math.max(0, Number(coFilterMin) || 0), [coFilterMin]);
   const coFilterActive = useMemo(() => {
     if (coFilterMode === "has") return true;
     if (coFilterMode === "min") return coThreshold > 0;
@@ -3763,103 +4010,147 @@ export default function DataImporter({
   } = duplicate11PlanStats;
   const duplicate11PlanHasActions = duplicate11PlannedDeleteGroups > 0 || duplicate11PlannedReviewGroups > 0;
 
-  const filtered = useMemo(() => {
-    const q = query.toLowerCase().trim();
-    const hasText = q.length > 0;
-    const fromDate = searchRange.from ? normalizeStr(searchRange.from) : "";
-    const toDate = searchRange.to ? normalizeStr(searchRange.to) : "";
-    const statusSet = statusFilters.length ? new Set(statusFilters) : null;
-    return rawRows.filter(r => {
-      const soTk = (r.so_tk || "").toString().toLowerCase();
-      const mstRaw = r.mst || r.ma_so_thue || "";
-      const companyRaw = r.cong_ty || r.company || r.ten_cong_ty || r.doanh_nghiep || "";
-      const mstLower = mstRaw.toString().toLowerCase();
-      const companyLower = companyRaw.toString().toLowerCase();
-      const agencySearch = [
-        r.agency || r.dai_ly || '',
-        ...(Array.isArray(r.agents) ? r.agents : []),
-      ]
-        .join(' ')
-        .toLowerCase();
-      if (hasText && !(
-        soTk.includes(q) ||
-        mstLower.includes(q) ||
-        companyLower.includes(q) ||
-        agencySearch.includes(q)
-      )) {
-        return false;
+  useEffect(() => {
+    if (!shouldUseServerSearch) {
+      if (serverSearchAbortRef.current) {
+        serverSearchAbortRef.current.abort();
+        serverSearchAbortRef.current = null;
       }
-      if (normalizedQuickMST && !normalizeStr(mstRaw).includes(normalizedQuickMST)) {
-        return false;
-      }
-      if (normalizedQuickCompany && !normalizeStr(companyRaw).includes(normalizedQuickCompany)) {
-        return false;
-      }
-      if (statusSet) {
-        const rowStatus = normalizeStatusKey(
-          r.status ?? r.trang_thai ?? r.previewStatus ?? r.importStatus ?? r.state ?? ""
-        );
-        if (!statusSet.has(rowStatus)) {
-          return false;
+      setServerSearchState((prev) => {
+        if (
+          !prev.loading &&
+          !prev.error &&
+          prev.rows.length === 0 &&
+          prev.total === 0 &&
+          prev.page === 1 &&
+          prev.pageSize === pageSize
+        ) {
+          return prev;
+        }
+        return {
+          rows: [],
+          total: 0,
+          page: 1,
+          pageSize,
+          loading: false,
+          error: "",
+          queryKey: "",
+        };
+      });
+      return;
+    }
+
+    const safePageSize = Math.max(1, Math.min(pageSize, SERVER_SEARCH_MAX_PAGE_SIZE));
+    const params = new URLSearchParams();
+    if (normalizedFilters.query) params.set("q", normalizedFilters.query);
+    if (normalizedFilters.mst) params.set("mst", normalizedFilters.mst);
+    if (normalizedFilters.company) params.set("company", normalizedFilters.company);
+    if (Array.isArray(normalizedFilters.statuses) && normalizedFilters.statuses.length) {
+      params.set("status", normalizedFilters.statuses.join(","));
+    }
+    if (normalizedFilters.range?.from) params.set("from", normalizedFilters.range.from);
+    if (normalizedFilters.range?.to) params.set("to", normalizedFilters.range.to);
+    if (normalizedFilters.noStaff) params.set("noStaff", "1");
+    if (normalizedFilters.noTeam) params.set("noTeam", "1");
+    if (normalizedFilters.duplicate) params.set("duplicate", "1");
+    if (normalizedFilters.coMode && normalizedFilters.coMode !== "all") {
+      params.set("coMode", normalizedFilters.coMode);
+    }
+    if (normalizedFilters.coMode === "min" && Number.isFinite(Number(normalizedFilters.coMin))) {
+      params.set("coMin", String(Math.max(0, Number(normalizedFilters.coMin))));
+    }
+    params.set("page", String(Math.max(1, page)));
+    params.set("pageSize", String(safePageSize));
+    const queryKey = params.toString();
+
+    if (serverSearchAbortRef.current) {
+      serverSearchAbortRef.current.abort();
+    }
+    const controller = new AbortController();
+    serverSearchAbortRef.current = controller;
+
+    setServerSearchState((prev) => ({
+      ...prev,
+      loading: true,
+      error: "",
+      queryKey,
+      pageSize: safePageSize,
+    }));
+
+    (async () => {
+      try {
+        const response = await fetchWithAuth(`/api/import/search?${queryKey}`, {
+          cache: "no-store",
+          signal: controller.signal,
+        });
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+        const data = await response.json();
+        if (serverSearchAbortRef.current !== controller) {
+          return;
+        }
+        const resolvedPageSize = Number.isFinite(Number(data?.pageSize))
+          ? Math.max(1, Math.min(Number(data.pageSize), SERVER_SEARCH_MAX_PAGE_SIZE))
+          : safePageSize;
+        const resolvedPage = Number.isFinite(Number(data?.page)) && Number(data.page) > 0 ? Number(data.page) : 1;
+        const resolvedTotal =
+          Number.isFinite(Number(data?.total)) && Number(data.total) > 0 ? Number(data.total) : 0;
+        const rows = Array.isArray(data?.rows) ? data.rows : [];
+        setServerSearchState({
+          rows,
+          total: resolvedTotal,
+          page: resolvedPage,
+          pageSize: resolvedPageSize,
+          loading: false,
+          error: "",
+          queryKey,
+        });
+        if (resolvedPage !== page) {
+          setPage(resolvedPage);
+        }
+      } catch (error) {
+        if (error?.name === "AbortError") {
+          return;
+        }
+        console.error("Không thể tìm kiếm tờ khai trên máy chủ", error);
+        if (serverSearchAbortRef.current === controller) {
+          setServerSearchState((prev) => ({
+            ...prev,
+            loading: false,
+            error: error?.message || "Không thể tìm kiếm trên máy chủ",
+          }));
         }
       }
-      if (fromDate || toDate) {
-        const rawDate = normalizeStr(r.date || r.raw_date || "").slice(0, 10);
-        if (fromDate && (!rawDate || rawDate < fromDate)) {
-          return false;
-        }
-        if (toDate && (!rawDate || rawDate > toDate)) {
-          return false;
-        }
-      }
-      if (filterNoStaff) {
-        const hasStaff = Boolean((r.nhan_vien || "").toString().trim());
-        if (hasStaff) return false;
-      }
-      if (filterNoTeam) {
-        const hasTeam = Boolean((r.team || "").toString().trim());
-        if (hasTeam) return false;
-      }
-      const lines = coLineCount(r);
-      if (coFilterMode === "has" && lines <= 0) {
-        return false;
-      }
-      if (coFilterMode === "min") {
-        if (coThreshold > 0 && lines < coThreshold) {
-          return false;
-        }
-      }
-      if (filterDuplicate11) {
-        const prefix = extractDuplicatePrefix(r);
-        if (!prefix) return false;
-        const count = duplicate11Summary.counts.get(prefix) || 0;
-        if (count <= 1) {
-          return false;
-        }
-      }
-      return true;
-    });
-  }, [
-    rawRows,
-    query,
-    normalizedQuickMST,
-    normalizedQuickCompany,
-    statusFilters,
-    filterNoStaff,
-    filterNoTeam,
-    filterDuplicate11,
-    duplicate11Summary,
-    coFilterMode,
-    coThreshold,
-    searchRange.from,
-    searchRange.to,
-  ]);
+    })();
+
+    return () => {
+      controller.abort();
+    };
+  }, [shouldUseServerSearch, normalizedFilters, page, pageSize, fetchWithAuth]);
+
+  const clientFiltered = useMemo(() => {
+    if (shouldUseServerSearch) {
+      return [];
+    }
+    const context = normalizedFilters.duplicate
+      ? { duplicateCounts: duplicate11Summary.counts }
+      : undefined;
+    return filterDeclRows(rawRows, normalizedFilters, context);
+  }, [shouldUseServerSearch, rawRows, normalizedFilters, duplicate11Summary]);
 
   // Phân trang
-  const total = filtered.length;
-  const maxPage = Math.max(1, Math.ceil(total / pageSize));
+  const effectivePageSize = shouldUseServerSearch
+    ? serverSearchState.pageSize || pageSize
+    : pageSize;
+  const total = shouldUseServerSearch ? serverSearchState.total : clientFiltered.length;
+  const maxPage = Math.max(1, Math.ceil(total / Math.max(1, effectivePageSize)));
   const safePage = Math.min(page, maxPage);
-  const pageRows = filtered.slice((safePage - 1) * pageSize, safePage * pageSize);
+  const pageRows = shouldUseServerSearch
+    ? Array.isArray(serverSearchState.rows)
+      ? serverSearchState.rows
+      : []
+    : clientFiltered.slice((safePage - 1) * effectivePageSize, safePage * effectivePageSize);
 
   useEffect(() => {
     if (page !== safePage) {
@@ -3880,12 +4171,16 @@ export default function DataImporter({
     searchRange.to,
     quickMST,
     quickCompany,
-    statusFilters.join("|")
+    statusFilters.join("|"),
+    shouldUseServerSearch,
   ]);
 
   const filteredKeys = useMemo(() => {
-    return Array.from(new Set(filtered.map((row) => keyOfRow(row))));
-  }, [filtered, keyOfRow]);
+    if (shouldUseServerSearch) {
+      return Array.from(new Set((pageRows || []).map((row) => keyOfRow(row))));
+    }
+    return Array.from(new Set(clientFiltered.map((row) => keyOfRow(row))));
+  }, [shouldUseServerSearch, pageRows, clientFiltered, keyOfRow]);
 
   const rowDiffMap = useMemo(() => {
     if (mode !== "saved") {
@@ -4356,6 +4651,9 @@ const selectedReviewedCount = useMemo(() => {
   const historyEnabled = mode === "saved";
   const hiddenColumns = columnHiddenSet;
   const frozenOffsets = useMemo(() => {
+    if (!freezeColumnsEnabled) {
+      return { total: 0 };
+    }
     let offset = 0;
     const config = {};
     if (selectionEnabled) {
@@ -4375,9 +4673,12 @@ const selectedReviewedCount = useMemo(() => {
     }
     config.total = offset;
     return config;
-  }, [hiddenColumns, selectionEnabled]);
+  }, [freezeColumnsEnabled, hiddenColumns, selectionEnabled]);
   const getFrozenStyle = useCallback(
     (key) => {
+      if (!freezeColumnsEnabled) {
+        return undefined;
+      }
       const config = frozenOffsets[key];
       if (!config) {
         return undefined;
@@ -4389,7 +4690,7 @@ const selectedReviewedCount = useMemo(() => {
         maxWidth: `${config.width}px`,
       };
     },
-    [frozenOffsets]
+    [freezeColumnsEnabled, frozenOffsets]
   );
   const frozenHeaderClass =
     "sticky top-0 z-40 bg-gray-50 shadow-[4px_0_8px_rgba(148,163,184,0.18)] dark:bg-slate-900";
@@ -4401,7 +4702,28 @@ const selectedReviewedCount = useMemo(() => {
       return Math.max(0, total - FROZEN_COLUMN_WIDTHS.selection);
     }
     return total;
-  }, [frozenOffsets, selectionEnabled]);
+  }, [freezeColumnsEnabled, frozenOffsets, selectionEnabled]);
+  const effectiveCardColumns = useMemo(() => {
+    if (CARD_GRID_COLUMN_OPTIONS.includes(cardGridColumns)) {
+      return cardGridColumns;
+    }
+    return DEFAULT_CARD_GRID_COLUMNS;
+  }, [cardGridColumns]);
+  const appliedCardColumns = useMemo(() => {
+    if (containerWidth <= 0) {
+      return effectiveCardColumns;
+    }
+    const maxFit = Math.max(1, Math.floor(containerWidth / CARD_GRID_MIN_WIDTH));
+    return Math.max(1, Math.min(effectiveCardColumns, maxFit));
+  }, [containerWidth, effectiveCardColumns]);
+  const cardGridStyle = useMemo(() => {
+    if (appliedCardColumns <= 1) {
+      return { gridTemplateColumns: "repeat(1, minmax(0, 1fr))" };
+    }
+    return {
+      gridTemplateColumns: `repeat(${appliedCardColumns}, minmax(0, 1fr))`,
+    };
+  }, [appliedCardColumns]);
   const buildRowState = useCallback(
     (row, index = 0) => {
       const rowKey = keyOfRow(row);
@@ -6893,6 +7215,17 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
             Đối chiếu KPI tự động
           </button>
         )}
+        {shouldUseServerSearch && (
+          <div className="text-xs text-blue-600">
+            Đang lọc trên máy chủ
+            {serverSearchState.loading
+              ? " – đang tải..."
+              : ` • ${serverSearchState.total.toLocaleString("vi-VN")} dòng phù hợp`}
+            {serverSearchState.error && (
+              <span className="ml-2 text-red-600">{serverSearchState.error}</span>
+            )}
+          </div>
+        )}
         <div className="opacity-70 text-sm">
           {total} dòng — Trang {safePage}/{maxPage}
         </div>
@@ -6921,6 +7254,41 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
               Thẻ
             </button>
           </div>
+          {viewMode === VIEW_MODES.TABLE ? (
+            <label
+              className="flex items-center gap-2 rounded border border-gray-200 bg-white px-2 py-1 text-xs text-gray-600 shadow-sm dark:border-slate-600 dark:bg-slate-800 dark:text-gray-200"
+              htmlFor="data-importer-freeze-toggle"
+            >
+              <span>Giữ cột cố định</span>
+              <Switch
+                id="data-importer-freeze-toggle"
+                checked={freezeColumnsEnabled}
+                onCheckedChange={(value) => setFreezeColumnsEnabled(Boolean(value))}
+              />
+            </label>
+          ) : (
+            <label
+              className="flex items-center gap-2 rounded border border-gray-200 bg-white px-2 py-1 text-xs text-gray-600 shadow-sm dark:border-slate-600 dark:bg-slate-800 dark:text-gray-200"
+              title={
+                appliedCardColumns < effectiveCardColumns
+                  ? `Đang hiển thị tối đa ${appliedCardColumns} cột do giới hạn độ rộng`
+                  : undefined
+              }
+            >
+              <span>Bố cục thẻ</span>
+              <select
+                value={effectiveCardColumns}
+                onChange={(event) =>
+                  setCardGridColumns(Number.parseInt(event.target.value, 10) || DEFAULT_CARD_GRID_COLUMNS)
+                }
+                className="rounded border border-gray-300 px-2 py-1 text-xs dark:border-slate-600 dark:bg-slate-900 dark:text-gray-100"
+              >
+                {CARD_GRID_COLUMN_OPTIONS.map((option) => (
+                  <option key={option} value={option}>{`${option} cột`}</option>
+                ))}
+              </select>
+            </label>
+          )}
           <select
             value={pageSize}
             onChange={e => setPageSize(Number(e.target.value) || DEFAULT_PAGE_SIZE)}
@@ -6972,7 +7340,11 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
             type="button"
             onClick={handleSelectFiltered}
             disabled={!filteredKeys.length || filteredSelected}
-            data-tooltip="Chọn toàn bộ tờ khai phù hợp với bộ lọc hiện tại"
+            data-tooltip={
+              shouldUseServerSearch
+                ? "Chỉ chọn các tờ khai trên trang hiện tại khi đang lọc trên máy chủ"
+                : "Chọn toàn bộ tờ khai phù hợp với bộ lọc hiện tại"
+            }
             className={`px-3 py-1 rounded border ${
               filteredKeys.length && !filteredSelected
                 ? "border-blue-300 bg-blue-50 text-blue-700"
@@ -7240,7 +7612,7 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
                         )}
                         {r.duplicate_review_pending && (
                           <span className="rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-medium text-red-700">
-                            Chờ rà soát
+                            Cần xem lại
                           </span>
                         )}
                         {rowReadOnly && (
@@ -7341,20 +7713,7 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
                   )}
                   {!hiddenColumns.has("status") && (
                     <td className="px-2 py-1 align-top">
-                      {(() => {
-                        const hasStaff = !!(r.nhan_vien && r.nhan_vien.toString().trim());
-                        const hasTeam = !!(r.team && r.team.toString().trim());
-                        if (r.reviewed) {
-                          return <span className="text-emerald-700">Đã rà soát</span>;
-                        }
-                        if (!hasStaff || !hasTeam) {
-                          const missing = [];
-                          if (!hasStaff) missing.push("nhân viên");
-                          if (!hasTeam) missing.push("tổ đội");
-                          return <span className="text-amber-600">Thiếu {missing.join(" & ")}</span>;
-                        }
-                        return <span className="text-gray-600">Đủ thông tin</span>;
-                      })()}
+                      <DeclarationStatusDisplay row={r} withDetail size="sm" />
                     </td>
                   )}
                   {!hiddenColumns.has("licenses") && (
@@ -7527,7 +7886,7 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
           </table>
         </div>
       ) : (
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        <div className="grid gap-3" style={cardGridStyle}>
           {pageRows.length > 0 ? (
             pageRows.map((r, i) => {
               const state = buildRowState(r, i);
@@ -7585,7 +7944,7 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
                           <span className="rounded bg-amber-100 px-1.5 py-0.5 font-medium text-amber-700">Trùng 11 số</span>
                         )}
                         {r.duplicate_review_pending && (
-                          <span className="rounded bg-red-100 px-1.5 py-0.5 font-medium text-red-700">Chờ rà soát</span>
+                          <span className="rounded bg-red-100 px-1.5 py-0.5 font-medium text-red-700">Cần xem lại</span>
                         )}
                         {rowReadOnly && (
                           <span className="rounded bg-gray-200 px-1.5 py-0.5 font-medium text-gray-600">Chỉ xem</span>
@@ -7749,20 +8108,7 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
                         <div className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-300">
                           Trạng thái
                         </div>
-                        {(() => {
-                          const hasStaff = !!(r.nhan_vien && r.nhan_vien.toString().trim());
-                          const hasTeam = !!(r.team && r.team.toString().trim());
-                          if (r.reviewed) {
-                            return <div className="text-emerald-600">Đã rà soát</div>;
-                          }
-                          if (!hasStaff || !hasTeam) {
-                            const missing = [];
-                            if (!hasStaff) missing.push("nhân viên");
-                            if (!hasTeam) missing.push("tổ đội");
-                            return <div className="text-amber-600">Thiếu {missing.join(" & ")}</div>;
-                          }
-                          return <div className="text-gray-600">Đủ thông tin</div>;
-                        })()}
+                        <DeclarationStatusDisplay row={r} withDetail size="sm" />
                       </div>
                     )}
                   </div>

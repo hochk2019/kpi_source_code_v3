@@ -19,6 +19,7 @@ import { loadAiHttpsConfig } from './https/aiHttpsConfig.js';
 import { DEFAULT_RULES as SHARED_DEFAULT_RULES } from '../src/shared/defaultRules.js';
 import { getRulesSeed, persistRulesSnapshot, loadRulesSnapshot, listRulesHistory } from './rulesPersistence.js';
 import { deriveCOStatus, parseCoLineCount, setPreferentialCodeConfig } from '../src/shared/co.js';
+import { filterDeclRows, normalizeDeclSearchFilters } from '../src/shared/declSearch.js';
 import {
   ADMIN_ROLE,
   DEFAULT_ROLE,
@@ -758,6 +759,8 @@ const FILTER_PRESET_MAX_PER_SCOPE = 20;
 const EXPORT_AUDIT_DEFAULT_LIMIT = 50;
 const EXPORT_AUDIT_MAX_LIMIT = 200;
 const EXPORT_AUDIT_MAX_RANGE_DAYS = 60;
+const DECL_SEARCH_DEFAULT_PAGE_SIZE = 10;
+const DECL_SEARCH_MAX_PAGE_SIZE = 200;
 
 const ECUS_MONITOR_HISTORY_KEY = 'ecus_monitor_history_v1';
 const DEFAULT_ECUS_MONITOR_HISTORY = Object.freeze({
@@ -10952,6 +10955,41 @@ app.post('/api/import/ecus/run', async (req, res) => {
 app.get('/api/import/alerts', (req, res) => {
   const payload = buildAlertPayload();
   res.json({ ok: true, ...payload });
+});
+
+app.get('/api/import/search', (req, res) => {
+  try {
+    const filters = normalizeDeclSearchFilters(req.query || {});
+    const pageRaw = Array.isArray(req.query?.page) ? req.query.page[0] : req.query?.page;
+    const pageSizeRaw = Array.isArray(req.query?.pageSize) ? req.query.pageSize[0] : req.query?.pageSize;
+    const pageValue = Number(pageRaw);
+    const requestedPageSize = Number(pageSizeRaw);
+    const page = Number.isFinite(pageValue) && pageValue > 0 ? Math.floor(pageValue) : 1;
+    const pageSizeCandidate =
+      Number.isFinite(requestedPageSize) && requestedPageSize > 0
+        ? Math.floor(requestedPageSize)
+        : DECL_SEARCH_DEFAULT_PAGE_SIZE;
+    const pageSize = Math.max(1, Math.min(pageSizeCandidate, DECL_SEARCH_MAX_PAGE_SIZE));
+
+    const rows = getDeclRows();
+    const filtered = filterDeclRows(rows, filters);
+    const total = filtered.length;
+    const maxPage = Math.max(1, Math.ceil(total / pageSize));
+    const safePage = Math.min(page, maxPage);
+    const offset = (safePage - 1) * pageSize;
+    const pageRows = filtered.slice(offset, offset + pageSize);
+
+    res.json({
+      ok: true,
+      total,
+      page: safePage,
+      pageSize,
+      rows: pageRows,
+    });
+  } catch (err) {
+    console.error('Không thể tìm kiếm tờ khai', err);
+    res.status(500).json({ ok: false, error: err?.message || 'Không thể tìm kiếm tờ khai' });
+  }
 });
 
 app.get('/api/import/co-codes', (req, res) => {

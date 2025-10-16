@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   getDeclRows,
   getTeamRoster,
@@ -24,6 +24,8 @@ import {
   buildReportData,
   aggregateByCompany,
 } from "@/lib/reports.js";
+import useFilterPresets from "@/hooks/useFilterPresets.js";
+import useReportQuickSearchFavorites from "@/hooks/useReportQuickSearchFavorites.js";
 import { seedSampleDeclarations } from "@/shared/sampleDeclarations.js";
 import { toAdjustmentTotalsArray } from "../../shared/kpiAdjustments.js";
 import {
@@ -185,6 +187,7 @@ function getSegmentedButtonClass(isActive) {
 }
 
 const REPORT_PREFS_STORAGE_KEY = "kpi_report_viewer_prefs_v1";
+const FILTER_PRESET_SCOPE = "report-viewer";
 const EXPORT_COLUMN_KEYS = ["items", "licenses", "co", "coLines", "licenseCodes"];
 const QUICK_RANGE_VALUES = new Set([
   ...QUICK_RANGE_OPTIONS.map((option) => option.value),
@@ -291,6 +294,13 @@ function sanitizeColumnVisibility(input = {}) {
     }
   }
   return result;
+}
+
+function sanitizeQuickSearchValue(value) {
+  if (typeof value !== "string") {
+    return "";
+  }
+  return normalizeStr(value);
 }
 
 function getCompanyRowLabel(row = {}) {
@@ -1282,6 +1292,7 @@ export default function ReportViewer({ canExport = true }) {
   const [scope, setScope] = useState(() => sanitizeScope(storedPrefs.scope));
   const [selectedStaff, setSelectedStaff] = useState(() => sanitizeSelection(storedPrefs.selectedStaff));
   const [selectedTeam, setSelectedTeam] = useState(() => sanitizeSelection(storedPrefs.selectedTeam));
+  const [quickSearch, setQuickSearch] = useState(() => sanitizeQuickSearchValue(storedPrefs.quickSearch));
   const [staffViewMode, setStaffViewMode] = useState("detail");
   const [teamViewMode, setTeamViewMode] = useState("detail");
   const [topStaffMetric, setTopStaffMetric] = useState(() => sanitizeTopStaffMetric(storedPrefs.topStaffMetric));
@@ -1302,6 +1313,35 @@ export default function ReportViewer({ canExport = true }) {
   }));
   const exportColumns = useMemo(() => sanitizeColumnVisibility(columnVisibility), [columnVisibility]);
   const prefsSnapshotRef = useRef("");
+  const {
+    presets: savedPresets,
+    loading: presetLoading,
+    error: presetError,
+    clearError: clearPresetError,
+    refresh: refreshPresetList,
+    createPreset: createFilterPreset,
+    updatePreset: updateFilterPreset,
+    deletePreset: deleteFilterPreset,
+  } = useFilterPresets(FILTER_PRESET_SCOPE);
+  const {
+    favorites: quickSearchFavorites,
+    addFavorite: addQuickSearchFavorite,
+    removeFavorite: removeQuickSearchFavorite,
+    clearType: clearQuickSearchFavorites,
+  } = useReportQuickSearchFavorites();
+  const [selectedPresetId, setSelectedPresetId] = useState("");
+  const [appliedPresetId, setAppliedPresetId] = useState("");
+  const [presetSaving, setPresetSaving] = useState(false);
+  const presetBusy = presetLoading || presetSaving;
+
+  useEffect(() => {
+    if (selectedPresetId && !savedPresets.some((item) => item.id === selectedPresetId)) {
+      setSelectedPresetId("");
+    }
+    if (appliedPresetId && !savedPresets.some((item) => item.id === appliedPresetId)) {
+      setAppliedPresetId("");
+    }
+  }, [savedPresets, selectedPresetId, appliedPresetId]);
 
   const handleToggleColumnVisibility = (key) => {
     setColumnVisibility((prev) => ({
@@ -1318,6 +1358,7 @@ export default function ReportViewer({ canExport = true }) {
       scope,
       selectedStaff,
       selectedTeam,
+      quickSearch,
       staffSortKey,
       teamSortKey,
       topStaffMetric,
@@ -1338,6 +1379,7 @@ export default function ReportViewer({ canExport = true }) {
     scope,
     selectedStaff,
     selectedTeam,
+    quickSearch,
     staffSortKey,
     teamSortKey,
     topStaffMetric,
@@ -1741,6 +1783,81 @@ export default function ReportViewer({ canExport = true }) {
     );
   }, [report.teams.list]);
 
+  const normalizedQuickSearch = useMemo(() => {
+    const raw = sanitizeQuickSearchValue(quickSearch);
+    if (!raw) {
+      return "";
+    }
+    return normalizeName(raw);
+  }, [quickSearch]);
+  const quickSearchActive = Boolean(normalizedQuickSearch);
+  const currentQuickFavorites = scope === "team" ? quickSearchFavorites.team : quickSearchFavorites.staff;
+  const quickSearchPlaceholder =
+    scope === "team"
+      ? "Tìm nhanh tổ đội / công ty / MST"
+      : "Tìm nhanh nhân viên / tổ đội / công ty";
+
+  const filteredStaffList = useMemo(() => {
+    if (!quickSearchActive) {
+      return sortedStaffList;
+    }
+    return sortedStaffList.filter((item) => {
+      const candidates = [
+        item.name,
+        item.teamLabel,
+        item.key,
+        Array.isArray(item.stats?.licenseCodes) ? item.stats.licenseCodes.join(" ") : "",
+      ];
+      return candidates.some((candidate) => {
+        if (!candidate) return false;
+        return normalizeName(normalizeStr(candidate)).includes(normalizedQuickSearch);
+      });
+    });
+  }, [sortedStaffList, quickSearchActive, normalizedQuickSearch]);
+
+  const filteredTeamList = useMemo(() => {
+    if (!quickSearchActive) {
+      return sortedTeamList;
+    }
+    return sortedTeamList.filter((item) => {
+      const candidates = [
+        item.name,
+        item.key,
+        Array.isArray(item.stats?.licenseCodes) ? item.stats.licenseCodes.join(" ") : "",
+      ];
+      return candidates.some((candidate) => {
+        if (!candidate) return false;
+        return normalizeName(normalizeStr(candidate)).includes(normalizedQuickSearch);
+      });
+    });
+  }, [sortedTeamList, quickSearchActive, normalizedQuickSearch]);
+
+  const filteredCompanySummaryStaff = useMemo(() => {
+    if (!quickSearchActive) {
+      return companySummaryAllStaff;
+    }
+    return companySummaryAllStaff.filter((row) => {
+      const candidates = [row.staff, row.team, row.cong_ty, row.mst];
+      return candidates.some((candidate) => {
+        if (!candidate) return false;
+        return normalizeName(normalizeStr(candidate)).includes(normalizedQuickSearch);
+      });
+    });
+  }, [companySummaryAllStaff, quickSearchActive, normalizedQuickSearch]);
+
+  const filteredCompanySummaryTeam = useMemo(() => {
+    if (!quickSearchActive) {
+      return companySummaryAllTeams;
+    }
+    return companySummaryAllTeams.filter((row) => {
+      const candidates = [row.team, row.cong_ty, row.mst];
+      return candidates.some((candidate) => {
+        if (!candidate) return false;
+        return normalizeName(normalizeStr(candidate)).includes(normalizedQuickSearch);
+      });
+    });
+  }, [companySummaryAllTeams, quickSearchActive, normalizedQuickSearch]);
+
   const activeStaff = selectedStaff !== "all"
     ? report.staff.byKey.get(selectedStaff)
     : null;
@@ -1755,6 +1872,226 @@ export default function ReportViewer({ canExport = true }) {
     setFrom(range.from);
     setTo(range.to);
   };
+
+  const handleSaveQuickSearchFavorite = () => {
+    const value = sanitizeQuickSearchValue(quickSearch);
+    if (!value) {
+      toast.warning("Nhập từ khoá trước khi lưu tìm kiếm nhanh.");
+      return;
+    }
+    const result = addQuickSearchFavorite(scope, value);
+    if (result.ok) {
+      toast.success(
+        scope === "team" ? "Đã lưu tìm kiếm tổ đội ưa thích." : "Đã lưu tìm kiếm nhân viên ưa thích."
+      );
+      return;
+    }
+    if (result.reason === "duplicate") {
+      toast.info("Từ khoá này đã nằm trong danh sách tìm kiếm nhanh.");
+    } else {
+      toast.error("Không thể lưu tìm kiếm nhanh, vui lòng thử lại.");
+    }
+  };
+
+  const handleApplyQuickSearchFavorite = (value) => {
+    setQuickSearch(value);
+  };
+
+  const handleRemoveQuickSearchFavorite = (value) => {
+    const result = removeQuickSearchFavorite(scope, value);
+    if (result.ok) {
+      toast.success("Đã xoá khỏi danh sách tìm kiếm nhanh.");
+    } else {
+      toast.error("Không thể xoá tìm kiếm nhanh đã chọn.");
+    }
+  };
+
+  const handleClearQuickSearchFavorites = () => {
+    if (!currentQuickFavorites.length) {
+      return;
+    }
+    const confirmed = window.confirm("Xoá toàn bộ tìm kiếm nhanh của chế độ hiện tại?");
+    if (!confirmed) {
+      return;
+    }
+    clearQuickSearchFavorites(scope);
+    toast.success("Đã xoá danh sách tìm kiếm nhanh.");
+  };
+
+  const buildFilterPresetPayload = useCallback(
+    () => ({
+      quickRange,
+      from,
+      to,
+      scope,
+      selectedStaff,
+      selectedTeam,
+      quickSearch: sanitizeQuickSearchValue(quickSearch),
+    }),
+    [quickRange, from, to, scope, selectedStaff, selectedTeam, quickSearch]
+  );
+
+  const applyPresetFilters = useCallback(
+    (preset, { notify = true } = {}) => {
+      if (!preset || typeof preset !== "object") {
+        return;
+      }
+      const filters = preset.filters && typeof preset.filters === "object" ? preset.filters : {};
+      const nextQuickRange = sanitizeQuickRange(filters.quickRange);
+      if (nextQuickRange === "custom") {
+        setQuickRange("custom");
+        setFrom(sanitizeDateInput(filters.from, from));
+        setTo(sanitizeDateInput(filters.to, to));
+      } else {
+        setQuickRange(nextQuickRange);
+        const range = computeQuickRange(nextQuickRange);
+        setFrom(range.from);
+        setTo(range.to);
+      }
+      const nextScope = sanitizeScope(filters.scope);
+      setScope(nextScope);
+      setSelectedStaff(sanitizeSelection(filters.selectedStaff));
+      setSelectedTeam(sanitizeSelection(filters.selectedTeam));
+      setQuickSearch(sanitizeQuickSearchValue(filters.quickSearch));
+      if (preset.id) {
+        setSelectedPresetId(preset.id);
+        setAppliedPresetId(preset.id);
+      }
+      if (notify) {
+        toast.success(`Đã áp dụng bộ lọc "${preset.name}".`);
+      }
+    },
+    [from, to]
+  );
+
+  const handleApplyPreset = useCallback(() => {
+    clearPresetError();
+    if (!selectedPresetId) {
+      toast.warning("Hãy chọn bộ lọc trước khi áp dụng.");
+      return;
+    }
+    const preset = savedPresets.find((item) => item.id === selectedPresetId);
+    if (!preset) {
+      toast.error("Không tìm thấy bộ lọc đã chọn.");
+      return;
+    }
+    applyPresetFilters(preset);
+  }, [selectedPresetId, savedPresets, applyPresetFilters, clearPresetError]);
+
+  const handleSavePreset = useCallback(async () => {
+    clearPresetError();
+    let name = window.prompt("Đặt tên cho bộ lọc mới", "Bộ lọc báo cáo");
+    if (name === null) {
+      return;
+    }
+    name = sanitizeQuickSearchValue(name);
+    if (!name) {
+      toast.warning("Tên bộ lọc không được để trống.");
+      return;
+    }
+    setPresetSaving(true);
+    try {
+      const preset = await createFilterPreset({ name, filters: buildFilterPresetPayload() });
+      if (preset) {
+        applyPresetFilters(preset, { notify: false });
+        toast.success(`Đã lưu bộ lọc "${preset.name}".`);
+      }
+    } catch (error) {
+      toast.error(error?.message || "Không thể lưu bộ lọc mới.");
+    } finally {
+      setPresetSaving(false);
+    }
+  }, [
+    clearPresetError,
+    createFilterPreset,
+    buildFilterPresetPayload,
+    applyPresetFilters,
+  ]);
+
+  const handleOverwritePreset = useCallback(async () => {
+    clearPresetError();
+    const targetId = selectedPresetId || appliedPresetId;
+    if (!targetId) {
+      toast.warning("Chọn bộ lọc cần ghi đè trước.");
+      return;
+    }
+    const target = savedPresets.find((item) => item.id === targetId);
+    if (!target) {
+      toast.error("Không tìm thấy bộ lọc để ghi đè.");
+      return;
+    }
+    const confirmed = window.confirm(`Ghi đè bộ lọc "${target.name}" với điều kiện hiện tại?`);
+    if (!confirmed) {
+      return;
+    }
+    setPresetSaving(true);
+    try {
+      const preset = await updateFilterPreset(target.id, {
+        name: target.name,
+        filters: buildFilterPresetPayload(),
+      });
+      applyPresetFilters(preset, { notify: false });
+      toast.success(`Đã cập nhật bộ lọc "${preset.name}".`);
+    } catch (error) {
+      toast.error(error?.message || "Không thể cập nhật bộ lọc.");
+    } finally {
+      setPresetSaving(false);
+    }
+  }, [
+    clearPresetError,
+    selectedPresetId,
+    appliedPresetId,
+    savedPresets,
+    updateFilterPreset,
+    buildFilterPresetPayload,
+    applyPresetFilters,
+  ]);
+
+  const handleDeletePreset = useCallback(async () => {
+    clearPresetError();
+    if (!selectedPresetId) {
+      toast.warning("Chọn bộ lọc trước khi xoá.");
+      return;
+    }
+    const preset = savedPresets.find((item) => item.id === selectedPresetId);
+    if (!preset) {
+      toast.error("Không tìm thấy bộ lọc cần xoá.");
+      return;
+    }
+    const confirmed = window.confirm(`Bạn có chắc chắn muốn xoá bộ lọc "${preset.name}"?`);
+    if (!confirmed) {
+      return;
+    }
+    setPresetSaving(true);
+    try {
+      await deleteFilterPreset(preset.id);
+      toast.success(`Đã xoá bộ lọc "${preset.name}".`);
+      if (appliedPresetId === preset.id) {
+        setAppliedPresetId("");
+      }
+      setSelectedPresetId("");
+    } catch (error) {
+      toast.error(error?.message || "Không thể xoá bộ lọc.");
+    } finally {
+      setPresetSaving(false);
+    }
+  }, [
+    clearPresetError,
+    selectedPresetId,
+    savedPresets,
+    deleteFilterPreset,
+    appliedPresetId,
+  ]);
+
+  const handleRefreshPresets = useCallback(async () => {
+    clearPresetError();
+    try {
+      await refreshPresetList();
+      toast.success("Đã đồng bộ danh sách bộ lọc.");
+    } catch (error) {
+      toast.error(error?.message || "Không thể đồng bộ danh sách bộ lọc.");
+    }
+  }, [clearPresetError, refreshPresetList]);
 
   const handleScheduleFieldChange = (field, value) => {
     setScheduleDraft((prev) => ({ ...prev, [field]: value }));
@@ -1985,7 +2322,7 @@ export default function ReportViewer({ canExport = true }) {
 
           {staffViewMode === "summary" ? (
             <CompanySummaryTable
-              rows={companySummaryAllStaff}
+              rows={filteredCompanySummaryStaff}
               includeStaff
               visibleColumns={columnVisibility}
               sortKey={staffSortKey}
@@ -2019,52 +2356,69 @@ export default function ReportViewer({ canExport = true }) {
                       )}
                   </tr>
                 </thead>
-                <tbody>
-                    {sortedStaffList.map((item, idx) => (
-                      <tr key={item.key} className={idx % 2 === 0 ? "bg-white" : "bg-gray-50"}>
-                        <td className="px-3 py-1.5">{item.name}</td>
-                        <td className="px-3 py-1.5">{item.teamLabel}</td>
-                        <td className="px-3 py-1.5 text-right">{formatInt(item.stats.decls)}</td>
-                        <td className="px-3 py-1.5 text-right">{formatDecimal(item.stats.kpi)}</td>
-                        <td className="px-3 py-1.5 text-right">{formatInt(item.stats.import)}</td>
-                        <td className="px-3 py-1.5 text-right">{formatInt(item.stats.export)}</td>
-                        {columnVisibility.items !== false && (
-                          <td className="px-3 py-1.5 text-right">{formatInt(item.stats.items)}</td>
-                        )}
-                        {columnVisibility.licenses !== false && (
-                          <td className="px-3 py-1.5 text-right">{formatInt(item.stats.licenses)}</td>
-                        )}
-                        {columnVisibility.co !== false && (
-                          <td className="px-3 py-1.5 text-right">{formatInt(item.stats.co)}</td>
-                        )}
-                        {columnVisibility.coLines !== false && (
-                          <td className="px-3 py-1.5 text-right">{formatInt(item.stats.coLines)}</td>
-                        )}
-                        {columnVisibility.licenseCodes !== false && (
-                          <td
-                            className="px-3 py-1.5"
-                            title={(item.stats.licenseCodes || []).join(", ") || "—"}
-                          >
-                            {(item.stats.licenseCodes || []).join(", ") || "—"}
-                          </td>
-                        )}
+                  <tbody>
+                    {filteredStaffList.length ? (
+                      filteredStaffList.map((item, idx) => (
+                        <tr key={item.key} className={idx % 2 === 0 ? "bg-white" : "bg-gray-50"}>
+                          <td className="px-3 py-1.5">{item.name}</td>
+                          <td className="px-3 py-1.5">{item.teamLabel}</td>
+                          <td className="px-3 py-1.5 text-right">{formatInt(item.stats.decls)}</td>
+                          <td className="px-3 py-1.5 text-right">{formatDecimal(item.stats.kpi)}</td>
+                          <td className="px-3 py-1.5 text-right">{formatInt(item.stats.import)}</td>
+                          <td className="px-3 py-1.5 text-right">{formatInt(item.stats.export)}</td>
+                          {columnVisibility.items !== false && (
+                            <td className="px-3 py-1.5 text-right">{formatInt(item.stats.items)}</td>
+                          )}
+                          {columnVisibility.licenses !== false && (
+                            <td className="px-3 py-1.5 text-right">{formatInt(item.stats.licenses)}</td>
+                          )}
+                          {columnVisibility.co !== false && (
+                            <td className="px-3 py-1.5 text-right">{formatInt(item.stats.co)}</td>
+                          )}
+                          {columnVisibility.coLines !== false && (
+                            <td className="px-3 py-1.5 text-right">{formatInt(item.stats.coLines)}</td>
+                          )}
+                          {columnVisibility.licenseCodes !== false && (
+                            <td
+                              className="px-3 py-1.5"
+                              title={(item.stats.licenseCodes || []).join(", ") || "—"}
+                            >
+                              {(item.stats.licenseCodes || []).join(", ") || "—"}
+                            </td>
+                          )}
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td
+                          colSpan={11}
+                          className="px-3 py-4 text-center text-sm text-[color:var(--ds-text-muted)]"
+                        >
+                          Không có nhân viên phù hợp với điều kiện lọc hiện tại.
+                        </td>
                       </tr>
-                    ))}
+                    )}
                   </tbody>
                 </table>
               </div>
 
               <div className="space-y-6">
-                {sortedStaffList.map((item) => (
-                  <StaffDetailCard
-                    key={item.key}
-                    staff={item}
-                    canExport={canExport}
-                    onExport={() => handleExportStaffDetail(item)}
-                    exporting={exporting}
-                    visibleColumns={columnVisibility}
-                  />
-                ))}
+                {filteredStaffList.length ? (
+                  filteredStaffList.map((item) => (
+                    <StaffDetailCard
+                      key={item.key}
+                      staff={item}
+                      canExport={canExport}
+                      onExport={() => handleExportStaffDetail(item)}
+                      exporting={exporting}
+                      visibleColumns={columnVisibility}
+                    />
+                  ))
+                ) : (
+                  <div className="rounded border border-dashed border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-muted)] p-4 text-center text-sm text-[color:var(--ds-text-secondary)]">
+                    Không có nhân viên nào khớp tìm kiếm.
+                  </div>
+                )}
               </div>
             </>
           )}
@@ -2150,7 +2504,7 @@ export default function ReportViewer({ canExport = true }) {
 
           {teamViewMode === "summary" ? (
             <CompanySummaryTable
-              rows={companySummaryAllTeams}
+              rows={filteredCompanySummaryTeam}
               includeStaff
               includeTeam
               visibleColumns={columnVisibility}
@@ -2184,52 +2538,69 @@ export default function ReportViewer({ canExport = true }) {
                       )}
                   </tr>
                 </thead>
-                <tbody>
-                    {sortedTeamList.map((item, idx) => (
-                      <tr key={item.key} className={idx % 2 === 0 ? "bg-white" : "bg-gray-50"}>
-                        <td className="px-3 py-1.5">{item.name}</td>
-                        <td className="px-3 py-1.5 text-right">{formatInt(item.stats.decls)}</td>
-                        <td className="px-3 py-1.5 text-right">{formatDecimal(item.stats.kpi)}</td>
-                        <td className="px-3 py-1.5 text-right">{formatInt(item.stats.import)}</td>
-                        <td className="px-3 py-1.5 text-right">{formatInt(item.stats.export)}</td>
-                        {columnVisibility.items !== false && (
-                          <td className="px-3 py-1.5 text-right">{formatInt(item.stats.items)}</td>
-                        )}
-                        {columnVisibility.licenses !== false && (
-                          <td className="px-3 py-1.5 text-right">{formatInt(item.stats.licenses)}</td>
-                        )}
-                        {columnVisibility.co !== false && (
-                          <td className="px-3 py-1.5 text-right">{formatInt(item.stats.co)}</td>
-                        )}
-                        {columnVisibility.coLines !== false && (
-                          <td className="px-3 py-1.5 text-right">{formatInt(item.stats.coLines)}</td>
-                        )}
-                        {columnVisibility.licenseCodes !== false && (
-                          <td
-                            className="px-3 py-1.5"
-                            title={(item.stats.licenseCodes || []).join(", ") || "—"}
-                          >
-                            {(item.stats.licenseCodes || []).join(", ") || "—"}
-                          </td>
-                        )}
+                  <tbody>
+                    {filteredTeamList.length ? (
+                      filteredTeamList.map((item, idx) => (
+                        <tr key={item.key} className={idx % 2 === 0 ? "bg-white" : "bg-gray-50"}>
+                          <td className="px-3 py-1.5">{item.name}</td>
+                          <td className="px-3 py-1.5 text-right">{formatInt(item.stats.decls)}</td>
+                          <td className="px-3 py-1.5 text-right">{formatDecimal(item.stats.kpi)}</td>
+                          <td className="px-3 py-1.5 text-right">{formatInt(item.stats.import)}</td>
+                          <td className="px-3 py-1.5 text-right">{formatInt(item.stats.export)}</td>
+                          {columnVisibility.items !== false && (
+                            <td className="px-3 py-1.5 text-right">{formatInt(item.stats.items)}</td>
+                          )}
+                          {columnVisibility.licenses !== false && (
+                            <td className="px-3 py-1.5 text-right">{formatInt(item.stats.licenses)}</td>
+                          )}
+                          {columnVisibility.co !== false && (
+                            <td className="px-3 py-1.5 text-right">{formatInt(item.stats.co)}</td>
+                          )}
+                          {columnVisibility.coLines !== false && (
+                            <td className="px-3 py-1.5 text-right">{formatInt(item.stats.coLines)}</td>
+                          )}
+                          {columnVisibility.licenseCodes !== false && (
+                            <td
+                              className="px-3 py-1.5"
+                              title={(item.stats.licenseCodes || []).join(", ") || "—"}
+                            >
+                              {(item.stats.licenseCodes || []).join(", ") || "—"}
+                            </td>
+                          )}
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td
+                          colSpan={10}
+                          className="px-3 py-4 text-center text-sm text-[color:var(--ds-text-muted)]"
+                        >
+                          Không có tổ đội nào phù hợp với điều kiện lọc.
+                        </td>
                       </tr>
-                    ))}
+                    )}
                   </tbody>
                 </table>
               </div>
 
               <div className="space-y-6">
-                {sortedTeamList.map((item) => (
-                  <TeamDetailCard
-                    key={item.key}
-                    team={item}
-                    canExport={canExport}
-                    onExport={() => handleExportTeamDetail(item)}
-                    exporting={exporting}
-                    visibleColumns={columnVisibility}
-                    memberSortKey={teamSortKey}
-                  />
-                ))}
+                {filteredTeamList.length ? (
+                  filteredTeamList.map((item) => (
+                    <TeamDetailCard
+                      key={item.key}
+                      team={item}
+                      canExport={canExport}
+                      onExport={() => handleExportTeamDetail(item)}
+                      exporting={exporting}
+                      visibleColumns={columnVisibility}
+                      memberSortKey={teamSortKey}
+                    />
+                  ))
+                ) : (
+                  <div className="rounded border border-dashed border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-muted)] p-4 text-center text-sm text-[color:var(--ds-text-secondary)]">
+                    Không có tổ đội nào khớp tìm kiếm.
+                  </div>
+                )}
               </div>
             </>
           )}
@@ -2259,7 +2630,7 @@ export default function ReportViewer({ canExport = true }) {
 
   return (
     <div className="space-y-6">
-      <div className="ds-card p-4 print:hidden">
+      <div className="ds-card space-y-4 p-4 print:hidden">
         <div className="flex flex-wrap items-end gap-4">
           <div className="flex flex-col">
             <label className="text-sm font-medium text-[color:var(--ds-text-primary)]">Khoảng thời gian</label>
@@ -2316,8 +2687,170 @@ export default function ReportViewer({ canExport = true }) {
             </button>
           </div>
         </div>
+        <div className="flex flex-wrap gap-4">
+          <div className="min-w-[280px] flex-1 space-y-2">
+            <div className="flex items-center justify-between">
+              <label className="text-sm font-medium text-[color:var(--ds-text-primary)]">
+                Tìm nhanh {scope === "team" ? "tổ đội" : "nhân viên"}
+              </label>
+              {currentQuickFavorites.length ? (
+                <button
+                  type="button"
+                  onClick={handleClearQuickSearchFavorites}
+                  className="text-xs font-semibold text-rose-600 hover:text-rose-700"
+                >
+                  Xoá tất cả
+                </button>
+              ) : null}
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                type="text"
+                value={quickSearch}
+                onChange={(event) => setQuickSearch(event.target.value)}
+                placeholder={quickSearchPlaceholder}
+                className="min-w-[200px] flex-1 rounded border border-[color:var(--ds-border-subtle)] bg-white px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-[color:var(--ds-accent-ring)] focus:ring-offset-0"
+              />
+              {quickSearch ? (
+                <button
+                  type="button"
+                  onClick={() => setQuickSearch("")}
+                  className="rounded border border-[color:var(--ds-border-subtle)] px-3 py-2 text-xs text-[color:var(--ds-text-secondary)] hover:bg-[color:var(--ds-surface-muted)]"
+                >
+                  Xoá
+                </button>
+              ) : null}
+              <button
+                type="button"
+                onClick={handleSaveQuickSearchFavorite}
+                disabled={!sanitizeQuickSearchValue(quickSearch) || presetBusy}
+                className={`rounded px-3 py-2 text-xs font-semibold shadow-sm transition-colors ${
+                  sanitizeQuickSearchValue(quickSearch) && !presetBusy
+                    ? 'bg-[color:var(--ds-surface-primary)] text-white hover:bg-[color:var(--ds-surface-strong)]'
+                    : 'cursor-not-allowed bg-[color:var(--ds-surface-muted)] text-[color:var(--ds-text-disabled)]'
+                }`}
+              >
+                Lưu tìm kiếm
+              </button>
+            </div>
+            {currentQuickFavorites.length ? (
+              <div className="flex flex-wrap gap-2 text-xs text-[color:var(--ds-text-secondary)]">
+                {currentQuickFavorites.map((item) => (
+                  <button
+                    key={`${scope}-${item.normalized}`}
+                    type="button"
+                    onClick={() => handleApplyQuickSearchFavorite(item.value)}
+                    className="inline-flex items-center gap-1 rounded-full border border-[color:var(--ds-border-subtle)] bg-white px-3 py-1.5 hover:bg-[color:var(--ds-surface-muted)]"
+                  >
+                    <span className="font-medium text-[color:var(--ds-text-primary)]">{item.value}</span>
+                    <span
+                      role="presentation"
+                      className="text-[color:var(--ds-text-muted)] hover:text-rose-600"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        handleRemoveQuickSearchFavorite(item.value);
+                      }}
+                    >
+                      ×
+                    </span>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs text-[color:var(--ds-text-muted)]">
+                Chưa có tìm kiếm nhanh đã lưu. Nhập từ khoá rồi bấm "Lưu tìm kiếm" để dùng lại sau.
+              </p>
+            )}
+          </div>
 
-        <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+          <div className="min-w-[300px] flex-1 space-y-2">
+            <label className="text-sm font-medium text-[color:var(--ds-text-primary)]">Bộ lọc đã lưu</label>
+            <div className="flex flex-wrap items-center gap-2">
+              <select
+                value={selectedPresetId}
+                onChange={(event) => {
+                  clearPresetError();
+                  setSelectedPresetId(event.target.value);
+                }}
+                className="min-w-[200px] flex-1 rounded border border-[color:var(--ds-border-subtle)] bg-white px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-[color:var(--ds-accent-ring)] focus:ring-offset-0"
+              >
+                <option value="">Chọn bộ lọc</option>
+                {savedPresets.map((preset) => (
+                  <option key={preset.id} value={preset.id}>
+                    {preset.name}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="button"
+                onClick={handleApplyPreset}
+                disabled={!selectedPresetId || presetBusy}
+                className={`rounded px-3 py-2 text-xs font-semibold shadow-sm transition-colors ${
+                  selectedPresetId && !presetBusy
+                    ? 'bg-[color:var(--ds-surface-primary)] text-white hover:bg-[color:var(--ds-surface-strong)]'
+                    : 'cursor-not-allowed bg-[color:var(--ds-surface-muted)] text-[color:var(--ds-text-disabled)]'
+                }`}
+              >
+                Áp dụng
+              </button>
+            </div>
+            <div className="flex flex-wrap gap-2 text-xs font-semibold">
+              <button
+                type="button"
+                onClick={handleSavePreset}
+                disabled={presetBusy}
+                className={`rounded border px-3 py-2 transition-colors ${
+                  presetBusy
+                    ? 'cursor-not-allowed border-[color:var(--ds-border-subtle)] text-[color:var(--ds-text-disabled)]'
+                    : 'border-[color:var(--ds-border-strong)] text-[color:var(--ds-text-primary)] hover:bg-[color:var(--ds-surface-muted)]'
+                }`}
+              >
+                Lưu bộ lọc mới
+              </button>
+              <button
+                type="button"
+                onClick={handleOverwritePreset}
+                disabled={presetBusy || (!selectedPresetId && !appliedPresetId)}
+                className={`rounded border px-3 py-2 transition-colors ${
+                  !presetBusy && (selectedPresetId || appliedPresetId)
+                    ? 'border-amber-400 text-amber-700 hover:bg-amber-50'
+                    : 'cursor-not-allowed border-[color:var(--ds-border-subtle)] text-[color:var(--ds-text-disabled)]'
+                }`}
+              >
+                Ghi đè bộ lọc
+              </button>
+              <button
+                type="button"
+                onClick={handleDeletePreset}
+                disabled={presetBusy || !selectedPresetId}
+                className={`rounded border px-3 py-2 transition-colors ${
+                  selectedPresetId && !presetBusy
+                    ? 'border-rose-300 text-rose-700 hover:bg-rose-50'
+                    : 'cursor-not-allowed border-[color:var(--ds-border-subtle)] text-[color:var(--ds-text-disabled)]'
+                }`}
+              >
+                Xoá
+              </button>
+              <button
+                type="button"
+                onClick={handleRefreshPresets}
+                disabled={presetBusy}
+                className={`rounded border px-3 py-2 transition-colors ${
+                  !presetBusy
+                    ? 'border-[color:var(--ds-border-subtle)] text-[color:var(--ds-text-primary)] hover:bg-[color:var(--ds-surface-muted)]'
+                    : 'cursor-not-allowed border-[color:var(--ds-border-subtle)] text-[color:var(--ds-text-disabled)]'
+                }`}
+              >
+                {presetLoading ? "Đồng bộ…" : "Đồng bộ"}
+              </button>
+            </div>
+            {presetError ? (
+              <div className="text-xs text-rose-600">{presetError}</div>
+            ) : null}
+          </div>
+        </div>
+
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
           <div className="space-y-2 rounded-xl border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-muted)] p-3">
             <label
               htmlFor="report-rule-select"
