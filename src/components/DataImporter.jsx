@@ -40,7 +40,7 @@ import useTooltipTitles from "@/hooks/useTooltipTitles.js";
 import useFilterPresets from "@/hooks/useFilterPresets.js";
 import useQuickSearchFavorites from "@/hooks/useQuickSearchFavorites.js";
 import { Button } from "@/components/ui/button.jsx";
-import { StatusBadge } from "@/components/designSystem/primitives.js";
+import { StatusBadge } from "@/components/designSystem/primitives.jsx";
 import {
   Command,
   CommandEmpty,

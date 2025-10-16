@@ -25,7 +25,7 @@ import {
   AppDialogFooter,
   AppDialogHeader,
   AppDialogTitle,
-} from "@/components/designSystem/primitives.js";
+} from "@/components/designSystem/primitives.jsx";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover.jsx";
 import {
   Command,

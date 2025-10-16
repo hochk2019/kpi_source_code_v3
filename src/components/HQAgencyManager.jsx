@@ -14,7 +14,7 @@ import {
   HQ_HISTORY_LIMIT,
 } from "@/lib/store.js";
 import { refreshHQHistoryCache } from "@/lib/hqHistoryClient.js";
-import { FilterSelect, StatusBadge } from "@/components/designSystem/primitives.js";
+import { FilterSelect, StatusBadge } from "@/components/designSystem/primitives.jsx";
 
 const PAGE_SIZE = 50;
 
