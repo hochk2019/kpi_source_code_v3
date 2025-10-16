@@ -68,6 +68,43 @@ export function computeDuplicatePrefixCounts(rows) {
   return counts;
 }
 
+function parseBooleanInput(value) {
+  if (value === true) {
+    return true;
+  }
+  if (value === false) {
+    return false;
+  }
+  if (typeof value === "number") {
+    if (!Number.isFinite(value)) {
+      return false;
+    }
+    return value !== 0;
+  }
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (!normalized) {
+      return false;
+    }
+    if (["1", "true", "yes", "y", "on"].includes(normalized)) {
+      return true;
+    }
+    if (["0", "false", "no", "n", "off"].includes(normalized)) {
+      return false;
+    }
+    return false;
+  }
+  if (Array.isArray(value)) {
+    for (const entry of value) {
+      if (parseBooleanInput(entry)) {
+        return true;
+      }
+    }
+    return false;
+  }
+  return false;
+}
+
 function prepareFilters(rawFilters = {}) {
   const normalized = {
     query: typeof rawFilters.query === "string" ? rawFilters.query.trim() : "",
@@ -79,9 +116,15 @@ function prepareFilters(rawFilters = {}) {
       ? rawFilters.status.split(",")
       : [],
     range: rawFilters.range && typeof rawFilters.range === "object" ? rawFilters.range : {},
-    noStaff: rawFilters.noStaff === true || rawFilters.filterNoStaff === true,
-    noTeam: rawFilters.noTeam === true || rawFilters.filterNoTeam === true,
-    duplicate: rawFilters.duplicate === true || rawFilters.filterDuplicate11 === true,
+    noStaff:
+      parseBooleanInput(rawFilters.noStaff) ||
+      parseBooleanInput(rawFilters.filterNoStaff),
+    noTeam:
+      parseBooleanInput(rawFilters.noTeam) ||
+      parseBooleanInput(rawFilters.filterNoTeam),
+    duplicate:
+      parseBooleanInput(rawFilters.duplicate) ||
+      parseBooleanInput(rawFilters.filterDuplicate11),
     coMode: typeof rawFilters.coMode === "string" ? rawFilters.coMode.trim().toLowerCase() : "all",
     coMin: rawFilters.coMin,
   };
