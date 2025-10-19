@@ -7080,7 +7080,7 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
 
       {viewMode === VIEW_MODES.TABLE ? (
         <div className="relative overflow-x-auto overflow-y-hidden rounded border bg-white dark:border-slate-700 dark:bg-slate-900/40">
-          <table className="relative w-full min-w-[1200px] table-fixed text-sm">
+          <table className="relative w-full min-w-[1200px] table-auto text-sm">
             <thead className="bg-gray-50 text-left dark:bg-slate-900">
               <tr>
               {selectionEnabled && (
