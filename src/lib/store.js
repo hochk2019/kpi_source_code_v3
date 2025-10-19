@@ -5,13 +5,14 @@ import {
   KPI_ADJUSTMENT_CATEGORY_CONFIG,
   normalizeAdjustmentCategoryKey,
 } from '../../shared/kpiAdjustments.js';
-import { getItem, setItem, refreshSharedKeys, subscribe } from './storageClient.js';
+import { getItem, setItem, refreshSharedKeys, subscribe, removeItem } from './storageClient.js';
 
 export { KPI_ADJUSTMENT_CATEGORY_CONFIG } from '../../shared/kpiAdjustments.js';
 
 // ===== Keys trong kho chia sáº» =====
 export const DECL_KEY = "decl_rows_v1"; // dữ liệu tờ khai
 export const MST_KEY = "mst_rows_v2"; // gán MST -> nhân viên/team/effective_from
+const LEGACY_MST_KEY = "mst_rows_v1";
 export const MST_HISTORY_KEY = "mst_history_v1"; // lịch sử chỉnh sửa trường quan trọng của MST
 export const HQ_HISTORY_KEY = "hq_history_v1"; // lịch sử chỉnh sửa đại lý HQ theo MST
 export const RULES_KEY = "kpi_rules_v2"; // quy tắc KPI
@@ -257,6 +258,43 @@ function sanitizeMSTStatus(value) {
     return MST_STATUS_LOOKUP.get(normalizedKey);
   }
   return raw;
+}
+
+function inferDefaultMSTStatus(row) {
+  const hasImport = Boolean(normalizeStr(row?.person_import || ''));
+  const hasExport = Boolean(normalizeStr(row?.person_export || ''));
+  if (hasImport && hasExport) {
+    return MST_ASSIGNMENT_STATUS.ASSIGNED;
+  }
+  return MST_ASSIGNMENT_STATUS.PENDING;
+}
+
+function pickFirstValue(source, keys, fallback) {
+  if (!source || typeof source !== 'object') {
+    return fallback;
+  }
+  for (const key of keys) {
+    if (Object.prototype.hasOwnProperty.call(source, key)) {
+      const value = source[key];
+      if (value !== null && value !== undefined) {
+        return value;
+      }
+    }
+  }
+  return fallback;
+}
+
+function compareMSTRows(a, b) {
+  const byMST = a.mst.localeCompare(b.mst);
+  if (byMST !== 0) return byMST;
+  const fromA = a.effective_from || '';
+  const fromB = b.effective_from || '';
+  if (fromA !== fromB) {
+    return fromA.localeCompare(fromB);
+  }
+  const toA = a.effective_to || '9999-12-31';
+  const toB = b.effective_to || '9999-12-31';
+  return toA.localeCompare(toB);
 }
 
 // MST: giá»¯ dáº¡ng chuá»—i sá»‘, bá» má»i kÃ½ tá»± khÃ´ng pháº£i sá»‘
@@ -559,37 +597,179 @@ export function isExportDecl(soTk, loaiHinh) {
 }
 
 // ===== MST map (gan nhan vien theo ngay hieu luc) =====
+let legacyMSTMigrated = false;
+
+function ensureLegacyMSTMigrated() {
+  if (legacyMSTMigrated) {
+    return;
+  }
+  legacyMSTMigrated = true;
+  migrateLegacyMSTRows();
+}
+
 export function getMSTRowsRaw() {
+  ensureLegacyMSTMigrated();
   return safeParse(getItem(MST_KEY), []);
 }
 
-function sanitizeMSTRow(row) {
-  const mst = normalizeMST(row?.mst);
+function sanitizeMSTRow(rowInput) {
+  const row = rowInput && typeof rowInput === 'object' ? rowInput : {};
+  const mst = normalizeMST(
+    pickFirstValue(row, ['mst', 'MST', 'ma_so_thue', 'maSoThue', 'tax_code', 'taxCode'], row?.mst)
+  );
   if (!mst) return null;
 
-  return {
+  const companyRaw = pickFirstValue(row, ['company', 'company_name', 'companyName', 'tenCongTy'], row?.company);
+  const personImportRaw = pickFirstValue(
+    row,
+    [
+      'person_import',
+      'personImport',
+      'nguoi_phu_trach_nhap',
+      'nguoiPhuTrachNhap',
+      'import_person',
+      'importPerson',
+    ],
+    row?.person_import
+  );
+  const personExportRaw = pickFirstValue(
+    row,
+    [
+      'person_export',
+      'personExport',
+      'nguoi_phu_trach_xuat',
+      'nguoiPhuTrachXuat',
+      'export_person',
+      'exportPerson',
+    ],
+    row?.person_export
+  );
+  const teamRaw = pickFirstValue(row, ['team', 'team_name', 'teamName'], row?.team);
+  const effectiveFromRaw = pickFirstValue(
+    row,
+    ['effective_from', 'effectiveFrom', 'from', 'start', 'valid_from'],
+    row?.effective_from
+  );
+  const effectiveToRaw = pickFirstValue(
+    row,
+    ['effective_to', 'effectiveTo', 'to', 'end', 'valid_to'],
+    row?.effective_to
+  );
+  const statusRaw = pickFirstValue(row, ['status', 'trang_thai'], row?.status);
+
+  const sanitized = {
     mst,
-    company: normalizeStr(row?.company ?? ""),
-    person_import: normalizeStr(row?.person_import ?? ""),
-    person_export: normalizeStr(row?.person_export ?? ""),
-    team: normalizeStr(row?.team ?? ""),
-    effective_from: toISODate(row?.effective_from) || "",
-    status: sanitizeMSTStatus(row?.status ?? ""),
+    company: normalizeStr(companyRaw ?? ''),
+    person_import: normalizeStr(personImportRaw ?? ''),
+    person_export: normalizeStr(personExportRaw ?? ''),
+    team: normalizeStr(teamRaw ?? ''),
+    effective_from: toISODate(effectiveFromRaw) || '',
+    effective_to: toISODate(effectiveToRaw) || '',
   };
+
+  const resolvedStatus = sanitizeMSTStatus(statusRaw ?? '');
+  sanitized.status = resolvedStatus || inferDefaultMSTStatus(sanitized);
+
+  return sanitized;
+}
+
+function migrateLegacyMSTRows() {
+  const rawValue = getItem(LEGACY_MST_KEY);
+  if (rawValue === null || rawValue === undefined) {
+    return null;
+  }
+
+  try {
+    const parsed = safeParse(rawValue, null);
+    const legacyRows = Array.isArray(parsed)
+      ? parsed
+      : parsed && typeof parsed === 'object' && Array.isArray(parsed.rows)
+        ? parsed.rows
+        : [];
+    const legacyTotal = Array.isArray(legacyRows) ? legacyRows.length : 0;
+
+    if (!legacyTotal) {
+      removeItem(LEGACY_MST_KEY);
+      pushAuditLog({
+        actor: 'system',
+        action: 'mst.migrate.v1-v2',
+        detail: 'Phát hiện khoá mst_rows_v1 nhưng không có bản ghi hợp lệ để chuyển đổi',
+        meta: { legacyTotal: 0, converted: 0, added: 0 },
+      });
+      return { migrated: 0, total: 0 };
+    }
+
+    const sanitizedLegacy = legacyRows.map((row) => sanitizeMSTRow(row)).filter(Boolean);
+    const convertedCount = sanitizedLegacy.length;
+    const skippedInvalid = legacyTotal - convertedCount;
+
+    if (!convertedCount) {
+      removeItem(LEGACY_MST_KEY);
+      pushAuditLog({
+        actor: 'system',
+        action: 'mst.migrate.v1-v2',
+        detail: `Không thể migrate ${legacyTotal} bản ghi gán MST do dữ liệu không hợp lệ`,
+        meta: { legacyTotal, converted: 0, added: 0, skippedInvalid: legacyTotal },
+        result: 'error',
+      });
+      return { migrated: 0, total: legacyTotal };
+    }
+
+    const currentRaw = safeParse(getItem(MST_KEY), []);
+    const currentSanitized = Array.isArray(currentRaw)
+      ? currentRaw.map((row) => sanitizeMSTRow(row)).filter(Boolean)
+      : [];
+    const currentMap = new Map(currentSanitized.map((row) => [makeMSTRowKey(row), row]));
+
+    let added = 0;
+    for (const row of sanitizedLegacy) {
+      const key = makeMSTRowKey(row);
+      if (currentMap.has(key)) {
+        continue;
+      }
+      currentMap.set(key, row);
+      added += 1;
+    }
+
+    if (added > 0) {
+      const nextRows = Array.from(currentMap.values()).sort(compareMSTRows);
+      setItem(MST_KEY, JSON.stringify(nextRows));
+    }
+
+    removeItem(LEGACY_MST_KEY);
+    pushAuditLog({
+      actor: 'system',
+      action: 'mst.migrate.v1-v2',
+      detail: `Di chuyển ${added}/${legacyTotal} bản ghi gán MST từ khoá cũ sang định dạng giai đoạn mới`,
+      meta: {
+        legacyTotal,
+        converted: convertedCount,
+        added,
+        skippedInvalid,
+        skippedDuplicate: convertedCount - added,
+        totalAfter: currentMap.size,
+      },
+    });
+
+    return { migrated: added, total: legacyTotal };
+  } catch (err) {
+    console.error('Không thể migrate dữ liệu mst_rows_v1 sang mst_rows_v2', err);
+    pushAuditLog({
+      actor: 'system',
+      action: 'mst.migrate.v1-v2',
+      detail: 'Lỗi khi migrate gán MST sang định dạng giai đoạn mới',
+      result: 'error',
+      note: err?.message || 'unknown',
+    });
+    return null;
+  }
 }
 
 /** Lay toan bo bang gan MST, da chuan hoa + sap xep */
 export function getMSTMap() {
   const raw = getMSTRowsRaw();
   const rows = Array.isArray(raw) ? raw : [];
-  return rows
-    .map(sanitizeMSTRow)
-    .filter(Boolean)
-    .sort((a, b) => {
-      const byMST = a.mst.localeCompare(b.mst);
-      if (byMST !== 0) return byMST;
-      return (a.effective_from || "").localeCompare(b.effective_from || "");
-    });
+  return rows.map(sanitizeMSTRow).filter(Boolean).sort(compareMSTRows);
 }
 
 /** Ghi de/bo sung bang gan MST (da chuan hoa du lieu dau vao) */
@@ -599,11 +779,7 @@ export function upsertMSTRows(rows, { actor = "system", detail = "" } = {}) {
   const sanitized = Array.isArray(rows)
     ? rows.map(sanitizeMSTRow).filter(Boolean)
     : [];
-  sanitized.sort((a, b) => {
-    const byMST = a.mst.localeCompare(b.mst);
-    if (byMST !== 0) return byMST;
-    return (a.effective_from || "").localeCompare(b.effective_from || "");
-  });
+  sanitized.sort(compareMSTRows);
   const changes = diffMSTRows(previous, sanitized, actor);
   setItem(MST_KEY, JSON.stringify(sanitized));
   if (changes.length) {
@@ -645,6 +821,7 @@ export function saveMSTRow(rowInput, { originalKey = null, actor = "system", det
       previous.person_export === sanitized.person_export &&
       previous.team === sanitized.team &&
       previous.effective_from === sanitized.effective_from &&
+      previous.effective_to === sanitized.effective_to &&
       previous.status === sanitized.status;
     if (same) {
       return { ok: false, reason: "no-change", row: previous, key: targetKey };
@@ -656,11 +833,7 @@ export function saveMSTRow(rowInput, { originalKey = null, actor = "system", det
   }
   prevMap.set(nextKey, sanitized);
 
-  const nextRows = Array.from(prevMap.values()).sort((a, b) => {
-    const byMST = a.mst.localeCompare(b.mst);
-    if (byMST !== 0) return byMST;
-    return (a.effective_from || "").localeCompare(b.effective_from || "");
-  });
+  const nextRows = Array.from(prevMap.values()).sort(compareMSTRows);
 
   const changes = diffMSTRows(previousRows, nextRows, actor);
   if (!changes.length) {
@@ -700,7 +873,7 @@ function diffMSTRows(prevRows, nextRows, actor) {
 
   const timestamp = new Date().toISOString();
   const actorName = normalizeStr(actor) || "system";
-  const trackedFields = ["person_import", "person_export", "effective_from"];
+  const trackedFields = ["person_import", "person_export", "effective_from", "effective_to"];
   const entries = [];
 
   for (const [key, row] of nextMap) {
@@ -772,7 +945,8 @@ function makeMSTRowKey(row) {
   if (!row) return "";
   const mst = normalizeMST(row.mst);
   const effective = toISODate(row?.effective_from) || "";
-  return `${mst || ""}__${effective}`;
+  const effectiveTo = toISODate(row?.effective_to) || "";
+  return `${mst || ""}__${effective}__${effectiveTo}`;
 }
 
 function createMSTHistoryEntry({ mst, field, from, to, actor, timestamp, rowKey, type }) {
@@ -786,7 +960,7 @@ function createMSTHistoryEntry({ mst, field, from, to, actor, timestamp, rowKey,
     to: normalizeStr(to),
     actor: actor || "system",
     timestamp,
-    rowKey: rowKey || makeMSTRowKey({ mst, effective_from: "" }),
+    rowKey: rowKey || makeMSTRowKey({ mst, effective_from: "", effective_to: "" }),
     type: type || "update",
   };
 }
@@ -822,7 +996,13 @@ export function getMSTHistoryEntries(limit = MST_HISTORY_LIMIT) {
         to: normalizeStr(entry.to),
         actor: normalizeStr(entry.actor) || "system",
         timestamp,
-        rowKey: entry.rowKey || makeMSTRowKey({ mst: entry.mst, effective_from: entry.effective_from || "" }),
+        rowKey:
+          entry.rowKey ||
+          makeMSTRowKey({
+            mst: entry.mst,
+            effective_from: entry.effective_from || "",
+            effective_to: entry.effective_to || "",
+          }),
         type: entry.type || "update",
       };
     })
@@ -1099,22 +1279,57 @@ export function getDeclHistoryForRow(rowKey, limit = DECL_HISTORY_PER_ROW_LIMIT)
 
 /** Lay nguoi phu trach theo MST & ngay hieu luc gan nhat (<= ngay to khai) */
 export function getMSTFor(mst, isoDate) {
-  const rows = getMSTMap().filter(r => normalizeMST(r.mst) === normalizeMST(mst));
+  const rows = getMSTMap().filter((r) => normalizeMST(r.mst) === normalizeMST(mst));
   if (rows.length === 0) return null;
 
-  const dateVal = isoDate ? new Date(isoDate).getTime() : Number.POSITIVE_INFINITY;
+  if (!isoDate) {
+    return rows[rows.length - 1];
+  }
 
-  // Xep theo hieu luc gan nhat va gioi han theo ngay TK
-  const picked = rows
-    .map(r => {
-      const ef = r.effective_from || "0001-01-01";
-      const ts = new Date(ef).getTime();
-      const rank = ts <= dateVal ? (dateVal - ts) : Number.POSITIVE_INFINITY - ts;
-      return { r, rank };
+  const target = new Date(isoDate);
+  const targetTime = Number.isNaN(target.getTime()) ? null : target.getTime();
+  if (targetTime == null) {
+    return rows[rows.length - 1];
+  }
+
+  const resolveTime = (value, fallbackInfinity = false) => {
+    if (!value) {
+      return fallbackInfinity ? Number.POSITIVE_INFINITY : Number.NEGATIVE_INFINITY;
+    }
+    const date = new Date(value);
+    const time = date.getTime();
+    if (Number.isNaN(time)) {
+      return fallbackInfinity ? Number.POSITIVE_INFINITY : Number.NEGATIVE_INFINITY;
+    }
+    return time;
+  };
+
+  const candidates = rows
+    .map((row) => {
+      const from = resolveTime(row.effective_from);
+      const to = resolveTime(row.effective_to, true);
+      const isWithin = targetTime >= from && targetTime <= to;
+      const distance = targetTime - from;
+      return { row, from, to, isWithin, distance };
     })
-    .sort((a,b) => a.rank - b.rank)[0];
+    .sort((a, b) => {
+      if (a.from !== b.from) {
+        return a.from - b.from;
+      }
+      return a.to - b.to;
+    });
 
-  return picked?.r ?? rows[0];
+  const active = candidates.filter((entry) => entry.isWithin);
+  if (active.length) {
+    return active.sort((a, b) => b.from - a.from)[0]?.row ?? rows[0];
+  }
+
+  const before = candidates.filter((entry) => entry.from <= targetTime);
+  if (before.length) {
+    return before.sort((a, b) => b.from - a.from)[0]?.row ?? rows[0];
+  }
+
+  return candidates[0]?.row ?? rows[0];
 }
 
 // ===== DECL rows (tá» khai) =====
@@ -1882,6 +2097,7 @@ function ensureMSTEntriesForDeclRows(declRows, { actor = 'system', dryRun = fals
       person_export: '',
       team: '',
       effective_from,
+      effective_to: '',
       status: MST_ASSIGNMENT_STATUS.PENDING,
     });
     seen.add(mst);

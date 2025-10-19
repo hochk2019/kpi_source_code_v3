@@ -36,6 +36,20 @@ const normalize = (s = "") =>
     .trim()
     .toLowerCase();
 
+const formatISODate = (value) => {
+  if (!value) return "";
+  try {
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) {
+      return value;
+    }
+    return d.toLocaleDateString("vi-VN");
+  } catch (err) {
+    console.warn("formatISODate", err);
+    return value;
+  }
+};
+
 const buildRosterTeams = (rosterSnapshot) => {
   const rawTeams = Array.isArray(rosterSnapshot?.teams) ? rosterSnapshot.teams : [];
   const teams = [];
@@ -215,7 +229,6 @@ function StaffCombobox({
 }
 
 const STATUS_LABELS = Object.values(MST_ASSIGNMENT_STATUS);
-const STATUS_SELECT_VALUES = ["", ...STATUS_LABELS];
 
 const normalizeStatusLabel = (value) => {
   const raw = (value ?? "").toString().trim();
@@ -224,6 +237,49 @@ const normalizeStatusLabel = (value) => {
   const matched = STATUS_LABELS.find((label) => normalize(label) === normalized);
   return matched || raw;
 };
+
+const computeStoredStatus = (row) => {
+  const hasImport = Boolean(normalizeStr(row?.person_import || ""));
+  const hasExport = Boolean(normalizeStr(row?.person_export || ""));
+  if (hasImport && hasExport) {
+    return MST_ASSIGNMENT_STATUS.ASSIGNED;
+  }
+  return MST_ASSIGNMENT_STATUS.PENDING;
+};
+
+const computeStatusDisplay = (row) => {
+  const hasImport = Boolean(normalizeStr(row?.person_import || ""));
+  const hasExport = Boolean(normalizeStr(row?.person_export || ""));
+
+  if (hasImport && hasExport) {
+    return MST_ASSIGNMENT_STATUS.ASSIGNED;
+  }
+
+  if (!hasImport && !hasExport) {
+    return MST_ASSIGNMENT_STATUS.PENDING;
+  }
+
+  if (!hasImport) {
+    return "Thiếu người phụ trách nhập";
+  }
+
+  if (!hasExport) {
+    return "Thiếu người phụ trách xuất";
+  }
+
+  return normalizeStatusLabel(row?.status);
+};
+
+const COLUMN_OPTIONS = [
+  { key: "mst", label: "MST", required: true },
+  { key: "company", label: "Công ty" },
+  { key: "person_import", label: "Người phụ trách Nhập" },
+  { key: "person_export", label: "Người phụ trách Xuất" },
+  { key: "status", label: "Trạng thái" },
+  { key: "effective_from", label: "Áp dụng từ ngày" },
+  { key: "effective_to", label: "Đến hết ngày" },
+  { key: "actions", label: "Hành động" },
+];
 
 const toISO = (v) => {
   if (!v) return "";
@@ -286,6 +342,13 @@ const headerAliases = {
     "apply_from",
     "effective from",
   ],
+  effective_to: [
+    "effective_to",
+    "đến hết ngày",
+    "den het ngay",
+    "apply_to",
+    "effective to",
+  ],
   status: [
     "status",
     "trạng thái",
@@ -320,6 +383,7 @@ const HISTORY_FIELD_LABELS = {
   person_import: "Người phụ trách Nhập",
   person_export: "Người phụ trách Xuất",
   effective_from: "Áp dụng từ ngày",
+  effective_to: "Đến hết ngày",
 };
 
 const MST_ROW_FIELDS = [
@@ -329,6 +393,7 @@ const MST_ROW_FIELDS = [
   "person_export",
   "team",
   "effective_from",
+  "effective_to",
   "status",
 ];
 
@@ -342,13 +407,18 @@ const sortMSTRows = (list = []) => {
       if (byMST !== 0) return byMST;
       const dateA = a?.effective_from || "";
       const dateB = b?.effective_from || "";
-      return dateA.localeCompare(dateB);
+      if (dateA !== dateB) {
+        return dateA.localeCompare(dateB);
+      }
+      const toA = a?.effective_to || "9999-12-31";
+      const toB = b?.effective_to || "9999-12-31";
+      return toA.localeCompare(toB);
     });
 };
 
 const makeRowKey = (row) => {
   if (!row) return "";
-  return `${row.mst || ""}__${row.effective_from || ""}`;
+  return `${row.mst || ""}__${row.effective_from || ""}__${row.effective_to || ""}`;
 };
 
 const buildHistoryIndex = (entries = []) => {
@@ -430,10 +500,14 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
   const [applyFrom, setApplyFrom] = useState(""); // yyyy-mm-dd
   const rootRef = useRef(null);
   const fileRef = useRef();
+  const setPageRef = useRef(() => {});
   const [selectedFileName, setSelectedFileName] = useState("");
   const [historyEntries, setHistoryEntries] = useState(() =>
     getMSTHistoryEntries(500)
   );
+  const refreshHistory = useCallback(() => {
+    setHistoryEntries(getMSTHistoryEntries(500));
+  }, []);
   const [historyFilter, setHistoryFilter] = useState({
     from: "",
     to: "",
@@ -514,8 +588,43 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
     person_export: "",
     team: "",
     effective_from: "",
-    status: "",
+    effective_to: "",
   });
+  const [visibleColumns, setVisibleColumns] = useState(() => {
+    const defaults = {};
+    COLUMN_OPTIONS.forEach((option) => {
+      defaults[option.key] = option.required ? true : true;
+    });
+    return defaults;
+  });
+  const [columnMenuOpen, setColumnMenuOpen] = useState(false);
+  const isColumnVisible = useCallback(
+    (key) => {
+      const option = COLUMN_OPTIONS.find((item) => item.key === key);
+      if (!option) return true;
+      if (option.required) return true;
+      return visibleColumns[key] !== false;
+    },
+    [visibleColumns]
+  );
+  const visibleColumnKeys = useMemo(
+    () => COLUMN_OPTIONS.filter((option) => isColumnVisible(option.key)).map((option) => option.key),
+    [isColumnVisible]
+  );
+  const toggleColumnVisibility = useCallback(
+    (key) => {
+      const option = COLUMN_OPTIONS.find((item) => item.key === key);
+      if (option?.required) {
+        return;
+      }
+      setVisibleColumns((prev) => {
+        const next = { ...prev };
+        next[key] = prev[key] === false ? true : false;
+        return next;
+      });
+    },
+    [setVisibleColumns]
+  );
   const [addError, setAddError] = useState("");
 
   const actor = currentUser?.username || "guest";
@@ -538,7 +647,6 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
     return map;
   }, [originalRows]);
   const createRowState = useCallback((row, meta = {}) => {
-    const normalizedStatus = normalizeStatusLabel(row?.status);
     const mstValue = tidyMST(row?.mst || "");
     const base = {
       mst: mstValue,
@@ -547,8 +655,10 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
       person_export: String(row?.person_export || "").trim(),
       team: String(row?.team || "").trim(),
       effective_from: row?.effective_from || "",
-      status: normalizedStatus,
+      effective_to: row?.effective_to || "",
+      status: "",
     };
+    base.status = computeStoredStatus(base);
     const originalKey = meta.originalKey ?? (meta.isNew ? null : makeRowKey(base));
     return {
       ...base,
@@ -580,6 +690,12 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
         const nextValue = sanitized[field] || "";
         const prevValue = baseline[field] || "";
         if (field === "effective_from") {
+          if ((nextValue || "") !== (prevValue || "")) {
+            patch[field] = nextValue;
+          }
+          return;
+        }
+        if (field === "effective_to") {
           if ((nextValue || "") !== (prevValue || "")) {
             patch[field] = nextValue;
           }
@@ -688,24 +804,21 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
     },
     [actor, createRowState, getRowDiff, isReadOnly, refreshHistory]
   );
-  const handleStaffFilterSelect = useCallback(
-    ({ staffName }) => {
-      setStaffFilter(staffName || "");
-      setPage(1);
-    },
-    [setPage]
-  );
+  const handleStaffFilterSelect = useCallback(({ staffName }) => {
+    setStaffFilter(staffName || "");
+    setPageRef.current(1);
+  }, []);
   const clearStaffFilter = useCallback(() => {
     setStaffFilter("");
-    setPage(1);
-  }, [setPage]);
-  const applyStaffFavorite = useCallback(
-    (value) => {
-      setStaffFilter(value || "");
-      setPage(1);
-    },
-    [setPage]
-  );
+    setPageRef.current(1);
+  }, []);
+  const applyStaffFavorite = useCallback((value) => {
+    setStaffFilter(value || "");
+    setPageRef.current(1);
+  }, []);
+  const updateHistoryFilter = useCallback((patch) => {
+    setHistoryFilter((prev) => ({ ...prev, ...patch }));
+  }, []);
   const applyActionFavorite = useCallback(
     (value) => {
       if (!value) {
@@ -713,9 +826,9 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
       } else {
         updateHistoryFilter({ type: value });
       }
-      setPage(1);
+      setPageRef.current(1);
     },
-    [setPage, updateHistoryFilter]
+    [updateHistoryFilter]
   );
   const handleSaveStaffFavorite = useCallback(() => {
     if (!staffFilter.trim()) {
@@ -745,14 +858,6 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
     }
     alert("Đã lưu bộ lọc thao tác.");
   }, [addQuickFavorite, historyFilter.type]);
-
-  const refreshHistory = useCallback(() => {
-    setHistoryEntries(getMSTHistoryEntries(500));
-  }, []);
-
-  const updateHistoryFilter = (patch) => {
-    setHistoryFilter((prev) => ({ ...prev, ...patch }));
-  };
 
   const resetHistoryFilter = () => {
     setHistoryFilter({ from: "", to: "", type: "all" });
@@ -795,11 +900,55 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
       person_export: "",
       team: "",
       effective_from: applyFrom || "",
-      status: "",
+      effective_to: "",
     });
     setAddError("");
     setShowAddForm(true);
   };
+
+  const computeNextStageStart = useCallback(
+    (row) => {
+      if (!row) {
+        return applyFrom || "";
+      }
+      const base = row.effective_to || row.effective_from || applyFrom || "";
+      if (!base) return "";
+      const date = new Date(base);
+      if (Number.isNaN(date.getTime())) {
+        return base;
+      }
+      date.setDate(date.getDate() + 1);
+      return date.toISOString().slice(0, 10);
+    },
+    [applyFrom]
+  );
+
+  const startNewStageFromRow = useCallback(
+    (row) => {
+      if (isReadOnly) {
+        alert("Bạn không có quyền thêm giai đoạn mới.");
+        return;
+      }
+      const nextStart = computeNextStageStart(row);
+      setDraft({
+        mst: row?.mst || "",
+        company: row?.company || "",
+        person_import: row?.person_import || "",
+        person_export: row?.person_export || "",
+        team: row?.team || "",
+        effective_from: nextStart || "",
+        effective_to: "",
+      });
+      setAddError("");
+      setShowAddForm(true);
+      setTimeout(() => {
+        if (rootRef.current) {
+          rootRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
+      }, 60);
+    },
+    [computeNextStageStart, isReadOnly]
+  );
 
   const handleDraftChange = (field, formatter = (value) => value) => (event) => {
     const raw = event?.target?.value ?? "";
@@ -823,8 +972,11 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
     const normalizedExport = String(draft.person_export || "").trim();
     const normalizedTeam = String(draft.team || "").trim();
     const normalizedDate = draft.effective_from || "";
-    const normalizedStatus = normalizeStatusLabel(draft.status);
-
+    const normalizedEnd = draft.effective_to || "";
+    if (normalizedDate && normalizedEnd && normalizedEnd < normalizedDate) {
+      setAddError("Ngày kết thúc phải sau hoặc bằng ngày bắt đầu.");
+      return;
+    }
     const newRow = {
       mst,
       company: normalizedCompany,
@@ -832,7 +984,11 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
       person_export: normalizedExport,
       team: normalizedTeam,
       effective_from: normalizedDate,
-      status: normalizedStatus,
+      effective_to: normalizedEnd,
+      status: computeStoredStatus({
+        person_import: normalizedImport,
+        person_export: normalizedExport,
+      }),
     };
 
     let createdKey = "";
@@ -842,8 +998,11 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
       const next = [...current];
       const existingIndex = next.findIndex((row) => makeRowKey(row) === newKey);
       const resolvedTeam = normalizedTeam || (existingIndex >= 0 ? next[existingIndex]?.team || "" : "");
-      const resolvedStatus =
-        normalizedStatus || (existingIndex >= 0 ? normalizeStatusLabel(next[existingIndex]?.status) : "");
+      const resolvedStatus = computeStoredStatus({
+        ...newRow,
+        team: resolvedTeam,
+        status: newRow.status,
+      });
       const payload = { ...newRow, team: resolvedTeam, status: resolvedStatus };
       if (existingIndex >= 0) {
         const originalMeta = next[existingIndex];
@@ -860,7 +1019,7 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
     if (createdKey) {
       markRecentlyImported([createdKey]);
     }
-    setPage(1);
+    setPageRef.current(1);
     setShowAddForm(false);
     setAddError("");
     alert("Đã thêm vào danh sách. Bấm Lưu để ghi vào hệ thống.");
@@ -880,7 +1039,8 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
       "Người phụ trách Xuất": item.person_export || "",
       "Tổ đội": item.team || "",
       "Áp dụng từ ngày": item.effective_from || "",
-      "Trạng thái": item.status || "",
+      "Đến hết ngày": item.effective_to || "",
+      "Trạng thái": computeStatusDisplay(item) || item.status || "",
     }));
 
     const worksheet = XLSX.utils.json_to_sheet(data);
@@ -937,7 +1097,9 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
       }
       const byMST = (a.mst || "").localeCompare(b.mst || "");
       if (byMST !== 0) return byMST;
-      return (a.effective_from || "").localeCompare(b.effective_from || "");
+      const fromCompare = (a.effective_from || "").localeCompare(b.effective_from || "");
+      if (fromCompare !== 0) return fromCompare;
+      return (a.effective_to || "9999-12-31").localeCompare(b.effective_to || "9999-12-31");
     });
 
     return prioritized;
@@ -962,9 +1124,35 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
     initialPageSize: DEFAULT_PAGE_SIZE,
   });
 
+  const groupedStages = useMemo(() => {
+    if (!filtered.length) return [];
+    const map = new Map();
+    filtered.forEach((row) => {
+      const key = row.mst || "__unknown";
+      if (!map.has(key)) {
+        map.set(key, {
+          mst: row.mst || "",
+          company: row.company || "",
+          stages: [],
+        });
+      }
+      map.get(key).stages.push(row);
+    });
+    return Array.from(map.values())
+      .map((entry) => ({
+        ...entry,
+        stages: sortMSTRows(entry.stages),
+      }))
+      .sort((a, b) => (a.mst || "").localeCompare(b.mst || ""));
+  }, [filtered]);
+
   useEffect(() => {
-    setPage(1);
-  }, [setPage, historyFilter.from, historyFilter.to, historyFilter.type, isHistoryFilterActive]);
+    setPageRef.current(1);
+  }, [historyFilter.from, historyFilter.to, historyFilter.type, isHistoryFilterActive]);
+
+  useEffect(() => {
+    setPageRef.current = setPage;
+  }, [setPage]);
 
   useTooltipTitles(rootRef, [
     rows,
@@ -1017,6 +1205,7 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
             team: String(findCell(r, "team") ?? "").trim(),
             effective_from:
               toISO(findCell(r, "effective_from")) || applyFrom || "",
+            effective_to: toISO(findCell(r, "effective_to")) || "",
             status: normalizeStatusLabel(findCell(r, "status")),
           };
         })
@@ -1027,12 +1216,25 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
         return;
       }
 
+      const sanitizedMapped = mapped.filter((item) => {
+        if (item.effective_from && item.effective_to && item.effective_to < item.effective_from) {
+          console.warn("Bỏ qua dòng do ngày kết thúc nhỏ hơn ngày bắt đầu", item);
+          return false;
+        }
+        return true;
+      });
+
+      if (!sanitizedMapped.length) {
+        alert("Tất cả dòng trong file bị bỏ qua vì ngày kết thúc nhỏ hơn ngày bắt đầu.");
+        return;
+      }
+
       // Gộp với dữ liệu hiện có theo MST + ngày hiệu lực (ưu tiên dữ liệu mới)
       const byKey = new Map();
       for (const r of rows) {
         byKey.set(makeRowKey(r), { ...r });
       }
-      for (const r of mapped) {
+      for (const r of sanitizedMapped) {
         const key = makeRowKey(r);
         const previous = byKey.get(key);
         let nextRow;
@@ -1052,8 +1254,8 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
 
       const nextRows = sortMSTRows(Array.from(byKey.values()));
       setRows(nextRows);
-      setPage(1);
-      alert(`Đọc file thành công: ${mapped.length} dòng. Bấm Lưu để ghi.`);
+      setPageRef.current(1);
+      alert(`Đọc file thành công: ${sanitizedMapped.length} dòng. Bấm Lưu để ghi.`);
       markRecentlyImported(newRowKeys);
     } catch (e) {
       console.error(e);
@@ -1092,6 +1294,18 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
   /** Thao tác inline */
   const updateRow = (originalRow, patch) => {
     if (isReadOnly) return;
+    const nextFrom =
+      Object.prototype.hasOwnProperty.call(patch || {}, "effective_from")
+        ? patch.effective_from || ""
+        : originalRow.effective_from || "";
+    const nextTo =
+      Object.prototype.hasOwnProperty.call(patch || {}, "effective_to")
+        ? patch.effective_to || ""
+        : originalRow.effective_to || "";
+    if (nextFrom && nextTo && nextTo < nextFrom) {
+      alert("Ngày kết thúc phải sau hoặc bằng ngày bắt đầu.");
+      return;
+    }
     const targetKey = makeRowKey(originalRow);
     let updatedKey = "";
     let didUpdate = false;
@@ -1105,9 +1319,13 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
           if (patch && Object.prototype.hasOwnProperty.call(patch, "mst")) {
             next.mst = tidyMST(next.mst);
           }
-          if (patch && Object.prototype.hasOwnProperty.call(patch, "status")) {
-            next.status = normalizeStatusLabel(next.status);
+          if (patch && Object.prototype.hasOwnProperty.call(patch, "effective_from")) {
+            next.effective_from = patch.effective_from || "";
           }
+          if (patch && Object.prototype.hasOwnProperty.call(patch, "effective_to")) {
+            next.effective_to = patch.effective_to || "";
+          }
+          next.status = computeStoredStatus(next);
           updatedKey = makeRowKey(next);
           didUpdate = true;
           return next;
@@ -1128,9 +1346,10 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
   const removeRow = (row) => {
     if (isReadOnly) return;
     const key = makeRowKey(row);
-    const label = row.effective_from
-      ? `${row.mst} (${row.effective_from})`
-      : row.mst;
+    const fromLabel = row.effective_from ? row.effective_from : "";
+    const toLabel = row.effective_to ? row.effective_to : "";
+    const rangeLabel = fromLabel || toLabel ? `(${fromLabel || "…"} → ${toLabel || "…"})` : "";
+    const label = `${row.mst}${rangeLabel ? ` ${rangeLabel}` : ""}`;
     if (!confirm(`Xóa dòng ${label}?`)) return;
     setRows((prev) => prev.filter((r) => makeRowKey(r) !== key));
     setRecentlyImportedKeys((prev) => {
@@ -1216,7 +1435,7 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
             value={search}
             onChange={(e) => {
               setSearch(e.target.value);
-              setPage(1);
+              setPageRef.current(1);
             }}
             placeholder="Tìm nhanh (MST / Công ty)"
             className="border rounded px-2 py-1 w-64"
@@ -1496,21 +1715,6 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
               />
             </label>
             <label className="flex flex-col gap-1 text-sm font-medium text-gray-700">
-              Trạng thái gán MST
-              <select
-                value={normalizeStatusLabel(draft.status)}
-                onChange={handleDraftChange("status", normalizeStatusLabel)}
-                className="border rounded px-2 py-1"
-                data-tooltip="Theo dõi trạng thái phân công nhân viên"
-              >
-                {STATUS_SELECT_VALUES.map((option) => (
-                  <option key={option || "__blank"} value={option}>
-                    {option || "(Chưa chọn)"}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="flex flex-col gap-1 text-sm font-medium text-gray-700">
               Áp dụng từ ngày
               <input
                 type="date"
@@ -1518,6 +1722,16 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
                 onChange={handleDraftChange("effective_from")}
                 className="border rounded px-2 py-1"
                 data-tooltip="Ngày bắt đầu áp dụng cấu hình"
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-sm font-medium text-gray-700">
+              Đến hết ngày (tuỳ chọn)
+              <input
+                type="date"
+                value={draft.effective_to}
+                onChange={handleDraftChange("effective_to")}
+                className="border rounded px-2 py-1"
+                data-tooltip="Ngày kết thúc hiệu lực. Để trống nếu áp dụng vô thời hạn."
               />
             </label>
           </div>
@@ -1548,41 +1762,96 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
         </form>
       )}
 
-      <div className="text-sm text-gray-500 mb-2 flex flex-wrap items-center gap-2">
-        <span>
-          {filtered.length} dòng — Trang {page}/{totalPages}
-        </span>
-        {recentlyImportedCount ? (
-          <span className="inline-flex items-center gap-1 rounded bg-amber-100 px-2 py-0.5 text-amber-700">
-            <span className="text-xs font-semibold uppercase">Ưu tiên</span>
-            <span>
-              {recentlyImportedCount} dòng mới import đang hiển thị đầu danh sách
-            </span>
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2 text-sm text-gray-500">
+        <div className="flex flex-wrap items-center gap-2">
+          <span>
+            {filtered.length} dòng — Trang {page}/{totalPages}
           </span>
-        ) : null}
+          {recentlyImportedCount ? (
+            <span className="inline-flex items-center gap-1 rounded bg-amber-100 px-2 py-0.5 text-amber-700">
+              <span className="text-xs font-semibold uppercase">Ưu tiên</span>
+              <span>
+                {recentlyImportedCount} dòng mới import đang hiển thị đầu danh sách
+              </span>
+            </span>
+          ) : null}
+        </div>
+        <Popover open={columnMenuOpen} onOpenChange={setColumnMenuOpen}>
+          <PopoverTrigger asChild>
+            <Button type="button" variant="outline" size="sm" className="gap-2">
+              <ChevronsUpDown className="size-4" />
+              Cột hiển thị ({visibleColumnKeys.length})
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-64 p-3" align="end">
+            <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+              Tùy chọn hiển thị
+            </div>
+            <div className="mt-2 flex flex-col gap-2">
+              {COLUMN_OPTIONS.map((option) => {
+                const checked = isColumnVisible(option.key);
+                return (
+                  <label key={option.key} className="flex items-center gap-2 text-sm text-gray-700">
+                    <input
+                      type="checkbox"
+                      className="size-4"
+                      checked={checked}
+                      disabled={option.required}
+                      onChange={() => toggleColumnVisibility(option.key)}
+                    />
+                    <span className="flex-1 truncate">{option.label}</span>
+                    {option.required ? (
+                      <span className="text-xs text-gray-400">Bắt buộc</span>
+                    ) : null}
+                  </label>
+                );
+              })}
+            </div>
+            <p className="mt-3 text-xs text-gray-500">
+              * Kéo thanh trượt ngang của bảng nếu nội dung vượt quá chiều rộng màn hình.
+            </p>
+          </PopoverContent>
+        </Popover>
       </div>
 
-      <div className="border rounded overflow-hidden">
-        <table className="w-full table-auto text-sm">
+      <div className="border rounded overflow-x-auto">
+        <table className="min-w-max table-auto text-sm">
           <thead className="bg-gray-50">
             <tr>
-              <th className="p-2 text-left whitespace-nowrap w-32">MST</th>
-              <th className="p-2 text-left min-w-[18rem]">Công ty</th>
-              <th className="p-2 text-left whitespace-nowrap min-w-[14rem]">
-                Người phụ trách Nhập
-              </th>
-              <th className="p-2 text-left whitespace-nowrap min-w-[14rem]">
-                Người phụ trách Xuất
-              </th>
-              <th className="p-2 text-left whitespace-nowrap w-36">Trạng thái</th>
-              <th className="p-2 text-left whitespace-nowrap w-40">Áp dụng từ ngày</th>
-              <th className="p-2 text-center whitespace-nowrap w-36">Hành động</th>
+              {isColumnVisible("mst") ? (
+                <th className="p-2 text-left whitespace-nowrap w-32">MST</th>
+              ) : null}
+              {isColumnVisible("company") ? (
+                <th className="p-2 text-left min-w-[18rem]">Công ty</th>
+              ) : null}
+              {isColumnVisible("person_import") ? (
+                <th className="p-2 text-left whitespace-nowrap min-w-[14rem]">
+                  Người phụ trách Nhập
+                </th>
+              ) : null}
+              {isColumnVisible("person_export") ? (
+                <th className="p-2 text-left whitespace-nowrap min-w-[14rem]">
+                  Người phụ trách Xuất
+                </th>
+              ) : null}
+              {isColumnVisible("status") ? (
+                <th className="p-2 text-left whitespace-nowrap w-36">Trạng thái</th>
+              ) : null}
+              {isColumnVisible("effective_from") ? (
+                <th className="p-2 text-left whitespace-nowrap w-40">Áp dụng từ ngày</th>
+              ) : null}
+              {isColumnVisible("effective_to") ? (
+                <th className="p-2 text-left whitespace-nowrap w-40">Đến hết ngày</th>
+              ) : null}
+              {isColumnVisible("actions") ? (
+                <th className="p-2 text-center whitespace-nowrap w-36">Hành động</th>
+              ) : null}
             </tr>
           </thead>
           <tbody>
             {pageRows.length === 0 ? (
               <tr>
-                <td className="p-3 text-center text-gray-500" colSpan={7}>
+                <td className="p-3 text-center text-gray-500" colSpan={visibleColumnKeys.length}>
                   Chưa có dữ liệu
                 </td>
               </tr>
@@ -1593,7 +1862,15 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
                 const importHistory = rowHistory.person_import || [];
                 const exportHistory = rowHistory.person_export || [];
                 const effectiveHistory = rowHistory.effective_from || [];
+                const effectiveToHistory = rowHistory.effective_to || [];
                 const statusValue = normalizeStatusLabel(r.status);
+                const statusDisplay = computeStatusDisplay(r);
+                const normalizedStatusDisplay = statusDisplay || "";
+                const isStatusAssigned = normalizedStatusDisplay === MST_ASSIGNMENT_STATUS.ASSIGNED;
+                const isStatusPending =
+                  normalizedStatusDisplay === MST_ASSIGNMENT_STATUS.PENDING ||
+                  normalizedStatusDisplay === normalizeStatusLabel(MST_ASSIGNMENT_STATUS.PENDING);
+                const isStatusWarning = normalizedStatusDisplay.startsWith("Thiếu");
                 const isNewlyImported = recentlyImportedKeys.has(rowKey);
                 const isDirty = rowHasChanges(r);
                 const updateDisabled = !canEdit || !isDirty;
@@ -1603,168 +1880,307 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
                     key={rowKey || r.mst}
                     className={`border-t ${isNewlyImported ? "bg-amber-50" : ""}`}
                   >
-                    <td className="p-2 align-top whitespace-nowrap">
-                      {isReadOnly ? (
-                        <span>{r.mst}</span>
-                      ) : (
-                        <input
-                          value={r.mst}
-                          onChange={(e) =>
-                            updateRow(r, { mst: tidyMST(e.target.value) })
-                          }
-                          className="border rounded px-2 py-1 w-full"
-                        />
-                      )}
-                      {isNewlyImported ? (
-                        <span className="ml-2 inline-flex items-center rounded bg-amber-500/10 px-2 py-0.5 text-xs font-semibold uppercase text-amber-700">
-                          Mới import
-                        </span>
-                      ) : null}
-                      {isDirty ? (
-                        <span className="ml-2 inline-flex items-center rounded bg-blue-500/10 px-2 py-0.5 text-xs font-semibold uppercase text-blue-700">
-                          Chưa lưu
-                        </span>
-                      ) : null}
-                    </td>
-                    <td className="p-2 align-top min-w-[18rem]">
-                      {isReadOnly ? (
-                        <span>{r.company || ""}</span>
-                      ) : (
-                        <input
-                          value={r.company || ""}
-                          onChange={(e) =>
-                            updateRow(r, { company: e.target.value })
-                          }
-                          className="border rounded px-2 py-1 w-full"
-                        />
-                      )}
-                    </td>
-                    <td className="p-2 align-top whitespace-nowrap min-w-[14rem]">
-                      {isReadOnly ? (
-                        <span>{r.person_import || ""}</span>
-                      ) : (
-                        <StaffCombobox
-                          value={r.person_import || ""}
-                          teamValue={r.team || ""}
-                          teams={rosterTeams}
-                          placeholder="Chọn nhân viên nhập"
-                          onSelect={({ staffName, teamName, isCustom }) => {
-                            const patch = { person_import: staffName || "" };
-                            if (teamName && !isCustom) {
-                              patch.team = teamName;
+
+                    {isColumnVisible("mst") ? (
+                      <td className="p-2 align-top whitespace-nowrap">
+                        {isReadOnly ? (
+                          <span>{r.mst}</span>
+                        ) : (
+                          <input
+                            value={r.mst}
+                            onChange={(e) =>
+                              updateRow(r, { mst: tidyMST(e.target.value) })
                             }
-                            updateRow(r, patch);
-                          }}
-                        />
-                      )}
-                      <HistoryDetails
-                        entries={importHistory}
-                        label={HISTORY_FIELD_LABELS.person_import}
-                      />
-                    </td>
-                    <td className="p-2 align-top whitespace-nowrap min-w-[14rem]">
-                      {isReadOnly ? (
-                        <span>{r.person_export || ""}</span>
-                      ) : (
-                        <StaffCombobox
-                          value={r.person_export || ""}
-                          teamValue={r.team || ""}
-                          teams={rosterTeams}
-                          placeholder="Chọn nhân viên xuất"
-                          onSelect={({ staffName, teamName, isCustom }) => {
-                            const patch = { person_export: staffName || "" };
-                            if (teamName && !isCustom) {
-                              patch.team = teamName;
+                            className="border rounded px-2 py-1 w-full"
+                          />
+                        )}
+                        {isNewlyImported ? (
+                          <span className="ml-2 inline-flex items-center rounded bg-amber-500/10 px-2 py-0.5 text-xs font-semibold uppercase text-amber-700">
+                            Mới import
+                          </span>
+                        ) : null}
+                        {isDirty ? (
+                          <span className="ml-2 inline-flex items-center rounded bg-blue-500/10 px-2 py-0.5 text-xs font-semibold uppercase text-blue-700">
+                            Đã chỉnh sửa
+                          </span>
+                        ) : null}
+                      </td>
+                    ) : null}
+                    {isColumnVisible("company") ? (
+                      <td className="p-2 align-top min-w-[18rem]">
+                        {isReadOnly ? (
+                          r.company ? (
+                            <span>{r.company}</span>
+                          ) : (
+                            <span className="italic text-gray-400">(Không tên)</span>
+                          )
+                        ) : (
+                          <input
+                            value={r.company || ""}
+                            onChange={(e) =>
+                              updateRow(r, { company: e.target.value })
                             }
-                            updateRow(r, patch);
-                          }}
+                            className="border rounded px-2 py-1 w-full"
+                            placeholder="Tên công ty"
+                          />
+                        )}
+                      </td>
+                    ) : null}
+                    {isColumnVisible("person_import") ? (
+                      <td className="p-2 align-top whitespace-nowrap min-w-[14rem]">
+                        {isReadOnly ? (
+                          r.person_import ? (
+                            <span>{r.person_import}</span>
+                          ) : (
+                            <span className="italic text-gray-400">(Chưa chọn)</span>
+                          )
+                        ) : (
+                          <StaffCombobox
+                            value={r.person_import || ""}
+                            teamValue={r.team || ""}
+                            teams={rosterTeams}
+                            placeholder="Chọn nhân viên nhập"
+                            onSelect={({ staffName, teamName, isCustom }) => {
+                              const patch = { person_import: staffName || "" };
+                              if (staffName && teamName && !isCustom) {
+                                const prevTeamKey = normalizeName(normalizeStr(r.team || ""));
+                                const nextTeamKey = normalizeName(normalizeStr(teamName));
+                                if (!prevTeamKey || prevTeamKey === nextTeamKey) {
+                                  patch.team = teamName;
+                                }
+                              }
+                              updateRow(r, patch);
+                            }}
+                          />
+                        )}
+                        <HistoryDetails
+                          entries={importHistory}
+                          label={HISTORY_FIELD_LABELS.person_import}
                         />
-                      )}
-                      <HistoryDetails
-                        entries={exportHistory}
-                        label={HISTORY_FIELD_LABELS.person_export}
-                      />
-                    </td>
-                    <td className="p-2 align-top whitespace-nowrap">
-                      {isReadOnly ? (
-                        statusValue ? (
-                          <span>{statusValue}</span>
+                      </td>
+                    ) : null}
+                    {isColumnVisible("person_export") ? (
+                      <td className="p-2 align-top whitespace-nowrap min-w-[14rem]">
+                        {isReadOnly ? (
+                          r.person_export ? (
+                            <span>{r.person_export}</span>
+                          ) : (
+                            <span className="italic text-gray-400">(Chưa chọn)</span>
+                          )
+                        ) : (
+                          <StaffCombobox
+                            value={r.person_export || ""}
+                            teamValue={r.team || ""}
+                            teams={rosterTeams}
+                            placeholder="Chọn nhân viên xuất"
+                            onSelect={({ staffName, teamName, isCustom }) => {
+                              const patch = { person_export: staffName || "" };
+                              if (staffName && teamName && !isCustom) {
+                                const prevTeamKey = normalizeName(normalizeStr(r.team || ""));
+                                const nextTeamKey = normalizeName(normalizeStr(teamName));
+                                if (!prevTeamKey || prevTeamKey === nextTeamKey) {
+                                  patch.team = teamName;
+                                }
+                              }
+                              updateRow(r, patch);
+                            }}
+                          />
+                        )}
+                        <HistoryDetails
+                          entries={exportHistory}
+                          label={HISTORY_FIELD_LABELS.person_export}
+                        />
+                      </td>
+                    ) : null}
+                    {isColumnVisible("status") ? (
+                      <td className="p-2 align-top whitespace-nowrap">
+                        {statusDisplay ? (
+                          <span
+                            className={`inline-flex items-center rounded px-2 py-1 text-xs font-semibold ${
+                              isStatusAssigned
+                                ? "bg-emerald-50 text-emerald-700"
+                                : isStatusWarning
+                                  ? "bg-amber-50 text-amber-700"
+                                  : "bg-slate-100 text-slate-700"
+                            }`}
+                          >
+                            {statusDisplay}
+                          </span>
                         ) : (
                           <span className="italic text-gray-400">Chưa thiết lập</span>
-                        )
-                      ) : (
-                        <select
-                          value={statusValue}
-                          onChange={(e) =>
-                            updateRow(r, { status: normalizeStatusLabel(e.target.value) })
-                          }
-                          className="border rounded px-2 py-1 w-full"
-                          data-tooltip="Cập nhật trạng thái gán nhân viên"
-                        >
-                          {STATUS_SELECT_VALUES.map((option) => (
-                            <option key={option || "__blank-row"} value={option}>
-                              {option || "(Chưa chọn)"}
-                            </option>
-                          ))}
-                        </select>
-                      )}
-                    </td>
-                    <td className="p-2 align-top whitespace-nowrap">
-                      {isReadOnly ? (
-                        <span>{r.effective_from || ""}</span>
-                      ) : (
-                        <input
-                          type="date"
-                          value={r.effective_from || ""}
-                          onChange={(e) =>
-                            updateRow(r, { effective_from: e.target.value })
-                          }
-                          className="border rounded px-2 py-1 w-full"
-                        />
-                      )}
-                      <HistoryDetails
-                        entries={effectiveHistory}
-                        label={HISTORY_FIELD_LABELS.effective_from}
-                      />
-                    </td>
-                    <td className="p-2 align-top text-center whitespace-nowrap">
-                      {canEdit ? (
-                        <div className="flex flex-col gap-2">
-                          <button
-                            type="button"
-                            onClick={() => commitRow(r)}
-                            disabled={updateDisabled}
-                            className={`px-2 py-1 rounded text-white ${
-                              updateDisabled
-                                ? "bg-gray-400 cursor-not-allowed"
-                                : "bg-emerald-600 hover:bg-emerald-700"
-                            }`}
-                            data-tooltip={
-                              updateDisabled
-                                ? "Không có thay đổi mới"
-                                : "Lưu các thay đổi vừa chỉnh"
+                        )}
+                        {!isStatusAssigned && !isStatusWarning && !isStatusPending ? (
+                          <div className="mt-1 text-xs text-gray-500">{statusValue}</div>
+                        ) : null}
+                      </td>
+                    ) : null}
+                    {isColumnVisible("effective_from") ? (
+                      <td className="p-2 align-top whitespace-nowrap">
+                        {isReadOnly ? (
+                          <span>{r.effective_from || ""}</span>
+                        ) : (
+                          <input
+                            type="date"
+                            value={r.effective_from || ""}
+                            onChange={(e) =>
+                              updateRow(r, { effective_from: e.target.value })
                             }
-                          >
-                            {updateLabel}
-                          </button>
-                          <button
-                            onClick={() => removeRow(r)}
-                            className="px-2 py-1 rounded bg-red-500 text-white hover:bg-red-600"
-                            data-tooltip="Xóa dòng"
-                          >
-                            Xóa
-                          </button>
-                        </div>
-                      ) : (
-                        <span className="text-xs text-gray-400">—</span>
-                      )}
-                    </td>
+                            className="border rounded px-2 py-1 w-full"
+                          />
+                        )}
+                        <HistoryDetails
+                          entries={effectiveHistory}
+                          label={HISTORY_FIELD_LABELS.effective_from}
+                        />
+                      </td>
+                    ) : null}
+                    {isColumnVisible("effective_to") ? (
+                      <td className="p-2 align-top whitespace-nowrap">
+                        {isReadOnly ? (
+                          <span>{r.effective_to || ""}</span>
+                        ) : (
+                          <input
+                            type="date"
+                            value={r.effective_to || ""}
+                            onChange={(e) => updateRow(r, { effective_to: e.target.value })}
+                            className="border rounded px-2 py-1 w-full"
+                          />
+                        )}
+                        <HistoryDetails
+                          entries={effectiveToHistory}
+                          label={HISTORY_FIELD_LABELS.effective_to}
+                        />
+                      </td>
+                    ) : null}
+                    {isColumnVisible("actions") ? (
+                      <td className="p-2 align-top text-center whitespace-nowrap">
+                        {canEdit ? (
+                          <div className="flex flex-col gap-2">
+                            <button
+                              type="button"
+                              onClick={() => startNewStageFromRow(r)}
+                              className="px-2 py-1 rounded border bg-white text-gray-700 hover:bg-gray-50"
+                              data-tooltip="Sao chép thông tin hiện tại để thêm giai đoạn kế tiếp"
+                            >
+                              Giai đoạn mới
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => commitRow(r)}
+                              disabled={updateDisabled}
+                              className={`px-2 py-1 rounded text-white ${
+                                updateDisabled
+                                  ? "bg-gray-400 cursor-not-allowed"
+                                  : "bg-emerald-600 hover:bg-emerald-700"
+                              }`}
+                              data-tooltip={
+                                updateDisabled
+                                  ? "Không có thay đổi mới"
+                                  : "Lưu các thay đổi vừa chỉnh"
+                              }
+                            >
+                              {updateLabel}
+                            </button>
+                            <button
+                              onClick={() => removeRow(r)}
+                              className="px-2 py-1 rounded bg-red-500 text-white hover:bg-red-600"
+                              data-tooltip="Xóa dòng"
+                            >
+                              Xóa
+                            </button>
+                          </div>
+                        ) : (
+                          <span className="text-xs text-gray-400">—</span>
+                        )}
+                      </td>
+                    ) : null}
+
                 </tr>
               );
             })
             )}
           </tbody>
         </table>
+      </div>
+
+      <div className="mt-6">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-sm font-semibold text-slate-700">
+            Dòng thời gian giai đoạn (theo bộ lọc)
+          </h2>
+          <span className="text-xs uppercase tracking-wide text-slate-500">
+            {groupedStages.length} MST
+          </span>
+        </div>
+        {groupedStages.length ? (
+          <div className="mt-3 space-y-3">
+            {groupedStages.map((group, groupIndex) => (
+              <div
+                key={group.mst || `group-${groupIndex}`}
+                className="rounded border border-slate-200 bg-slate-50 p-3"
+              >
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <div className="text-sm font-semibold text-slate-800">
+                      {group.mst || "(MST trống)"}
+                    </div>
+                    <div className="text-xs text-slate-500 max-w-2xl truncate">
+                      {group.company || "Chưa cập nhật tên công ty"}
+                    </div>
+                  </div>
+                  <span className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                    {group.stages.length} giai đoạn
+                  </span>
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {group.stages.map((stage, stageIndex) => {
+                    const rangeKey = makeRowKey(stage) || `${group.mst || "stage"}-${stageIndex}`;
+                    const startLabel = stage.effective_from
+                      ? formatISODate(stage.effective_from)
+                      : "Không xác định";
+                    const endLabel = stage.effective_to
+                      ? formatISODate(stage.effective_to)
+                      : "Hiện tại";
+                    const active = !stage.effective_to;
+                    return (
+                      <div
+                        key={rangeKey}
+                        className={`min-w-[14rem] rounded border px-3 py-2 text-xs ${
+                          active
+                            ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                            : "border-slate-200 bg-white text-slate-700"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-semibold">
+                            {startLabel} → {endLabel}
+                          </span>
+                          {active ? (
+                            <span className="rounded bg-emerald-600 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
+                              Đang áp dụng
+                            </span>
+                          ) : null}
+                        </div>
+                        <div className="mt-2 space-y-1 text-slate-600">
+                          <div>
+                            <span className="font-medium text-slate-500">Nhập:</span> {stage.person_import || "—"}
+                          </div>
+                          <div>
+                            <span className="font-medium text-slate-500">Xuất:</span> {stage.person_export || "—"}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="mt-2 text-sm text-slate-500">
+            Không có giai đoạn nào khớp bộ lọc hiện tại.
+          </p>
+        )}
       </div>
 
       {/* Pagination */}
