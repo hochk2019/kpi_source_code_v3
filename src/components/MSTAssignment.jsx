@@ -109,14 +109,18 @@ function StaffCombobox({
     return result;
   }, [teams]);
 
-  const filteredTeams = useMemo(() => {
-    if (normalizedTeamValue) {
-      const matched = teams.filter((team) => team.normalized === normalizedTeamValue);
-      if (matched.length) {
-        return matched;
-      }
+  const orderedTeams = useMemo(() => {
+    if (!teams.length) return [];
+    if (!normalizedTeamValue) return teams;
+
+    const next = [...teams];
+    const index = next.findIndex((team) => team.normalized === normalizedTeamValue);
+    if (index <= 0) {
+      return next;
     }
-    return teams;
+
+    const [currentTeam] = next.splice(index, 1);
+    return [currentTeam, ...next];
   }, [teams, normalizedTeamValue]);
 
   const searchValue = normalizeStr(search);
@@ -183,7 +187,7 @@ function StaffCombobox({
                 </CommandItem>
               </CommandGroup>
             ) : null}
-            {filteredTeams.map((team) => (
+            {orderedTeams.map((team) => (
               <CommandGroup key={team.id} heading={`Tổ: ${team.name}`}>
                 {team.members.map((member) => {
                   const isSelected =
@@ -1559,16 +1563,20 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
       </div>
 
       <div className="border rounded overflow-hidden">
-        <table className="w-full text-sm">
+        <table className="w-full table-auto text-sm">
           <thead className="bg-gray-50">
             <tr>
-              <th className="p-2 text-left w-36">MST</th>
-              <th className="p-2 text-left">Công ty</th>
-              <th className="p-2 text-left w-40">Người phụ trách Nhập</th>
-              <th className="p-2 text-left w-40">Người phụ trách Xuất</th>
-              <th className="p-2 text-left w-40">Trạng thái</th>
-              <th className="p-2 text-left w-40">Áp dụng từ ngày</th>
-              <th className="p-2 w-32">Hành động</th>
+              <th className="p-2 text-left whitespace-nowrap w-32">MST</th>
+              <th className="p-2 text-left min-w-[18rem]">Công ty</th>
+              <th className="p-2 text-left whitespace-nowrap min-w-[14rem]">
+                Người phụ trách Nhập
+              </th>
+              <th className="p-2 text-left whitespace-nowrap min-w-[14rem]">
+                Người phụ trách Xuất
+              </th>
+              <th className="p-2 text-left whitespace-nowrap w-36">Trạng thái</th>
+              <th className="p-2 text-left whitespace-nowrap w-40">Áp dụng từ ngày</th>
+              <th className="p-2 text-center whitespace-nowrap w-36">Hành động</th>
             </tr>
           </thead>
           <tbody>
@@ -1595,7 +1603,7 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
                     key={rowKey || r.mst}
                     className={`border-t ${isNewlyImported ? "bg-amber-50" : ""}`}
                   >
-                    <td className="p-2">
+                    <td className="p-2 align-top whitespace-nowrap">
                       {isReadOnly ? (
                         <span>{r.mst}</span>
                       ) : (
@@ -1618,155 +1626,139 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
                         </span>
                       ) : null}
                     </td>
-                  <td className="p-2">
-                    {isReadOnly ? (
-                      <span>{r.company || ""}</span>
-                    ) : (
-                      <input
-                        value={r.company || ""}
-                        onChange={(e) =>
-                          updateRow(r, { company: e.target.value })
-                        }
-                        className="border rounded px-2 py-1 w-full"
-                      />
-                    )}
-                  </td>
-                  <td className="p-2">
-                    {isReadOnly ? (
-                      <span>{r.person_import || ""}</span>
-                    ) : (
-                      <StaffCombobox
-                        value={r.person_import || ""}
-                        teamValue={r.team || ""}
-                        teams={rosterTeams}
-                        placeholder="Chọn nhân viên nhập"
-                        onSelect={({ staffName, teamName, isCustom }) => {
-                          const patch = { person_import: staffName || "" };
-                          if (staffName && teamName && !isCustom) {
-                            const currentTeamKey = normalizeName(
-                              normalizeStr(r.team || "")
-                            );
-                            const nextTeamKey = normalizeName(
-                              normalizeStr(teamName)
-                            );
-                            if (!currentTeamKey || currentTeamKey === nextTeamKey) {
-                              patch.team = teamName;
-                            }
-                          }
-                          updateRow(r, patch);
-                        }}
-                      />
-                    )}
-                    <HistoryDetails
-                      entries={importHistory}
-                      label={HISTORY_FIELD_LABELS.person_import}
-                    />
-                  </td>
-                  <td className="p-2">
-                    {isReadOnly ? (
-                      <span>{r.person_export || ""}</span>
-                    ) : (
-                      <StaffCombobox
-                        value={r.person_export || ""}
-                        teamValue={r.team || ""}
-                        teams={rosterTeams}
-                        placeholder="Chọn nhân viên xuất"
-                        onSelect={({ staffName, teamName, isCustom }) => {
-                          const patch = { person_export: staffName || "" };
-                          if (staffName && teamName && !isCustom) {
-                            const currentTeamKey = normalizeName(
-                              normalizeStr(r.team || "")
-                            );
-                            const nextTeamKey = normalizeName(
-                              normalizeStr(teamName)
-                            );
-                            if (!currentTeamKey || currentTeamKey === nextTeamKey) {
-                              patch.team = teamName;
-                            }
-                          }
-                          updateRow(r, patch);
-                        }}
-                      />
-                    )}
-                    <HistoryDetails
-                      entries={exportHistory}
-                      label={HISTORY_FIELD_LABELS.person_export}
-                    />
-                  </td>
-                  <td className="p-2">
-                    {isReadOnly ? (
-                      statusValue ? (
-                        <span>{statusValue}</span>
+                    <td className="p-2 align-top min-w-[18rem]">
+                      {isReadOnly ? (
+                        <span>{r.company || ""}</span>
                       ) : (
-                        <span className="italic text-gray-400">Chưa thiết lập</span>
-                      )
-                    ) : (
-                      <select
-                        value={statusValue}
-                        onChange={(e) =>
-                          updateRow(r, { status: normalizeStatusLabel(e.target.value) })
-                        }
-                        className="border rounded px-2 py-1 w-full"
-                        data-tooltip="Cập nhật trạng thái gán nhân viên"
-                      >
-                        {STATUS_SELECT_VALUES.map((option) => (
-                          <option key={option || "__blank-row"} value={option}>
-                            {option || "(Chưa chọn)"}
-                          </option>
-                        ))}
-                      </select>
-                    )}
-                  </td>
-                  <td className="p-2">
-                    {isReadOnly ? (
-                      <span>{r.effective_from || ""}</span>
-                    ) : (
-                      <input
-                        type="date"
-                        value={r.effective_from || ""}
-                        onChange={(e) =>
-                          updateRow(r, { effective_from: e.target.value })
-                        }
-                        className="border rounded px-2 py-1 w-full"
-                      />
-                    )}
-                    <HistoryDetails
-                      entries={effectiveHistory}
-                      label={HISTORY_FIELD_LABELS.effective_from}
-                    />
-                  </td>
-                  <td className="p-2 text-center">
-                    {canEdit ? (
-                      <div className="flex flex-col gap-2">
-                        <button
-                          type="button"
-                          onClick={() => commitRow(r)}
-                          disabled={updateDisabled}
-                          className={`px-2 py-1 rounded text-white ${
-                            updateDisabled
-                              ? "bg-gray-400 cursor-not-allowed"
-                              : "bg-emerald-600 hover:bg-emerald-700"
-                          }`}
-                          data-tooltip={
-                            updateDisabled
-                              ? "Không có thay đổi mới"
-                              : "Lưu các thay đổi vừa chỉnh"
+                        <input
+                          value={r.company || ""}
+                          onChange={(e) =>
+                            updateRow(r, { company: e.target.value })
                           }
+                          className="border rounded px-2 py-1 w-full"
+                        />
+                      )}
+                    </td>
+                    <td className="p-2 align-top whitespace-nowrap min-w-[14rem]">
+                      {isReadOnly ? (
+                        <span>{r.person_import || ""}</span>
+                      ) : (
+                        <StaffCombobox
+                          value={r.person_import || ""}
+                          teamValue={r.team || ""}
+                          teams={rosterTeams}
+                          placeholder="Chọn nhân viên nhập"
+                          onSelect={({ staffName, teamName, isCustom }) => {
+                            const patch = { person_import: staffName || "" };
+                            if (teamName && !isCustom) {
+                              patch.team = teamName;
+                            }
+                            updateRow(r, patch);
+                          }}
+                        />
+                      )}
+                      <HistoryDetails
+                        entries={importHistory}
+                        label={HISTORY_FIELD_LABELS.person_import}
+                      />
+                    </td>
+                    <td className="p-2 align-top whitespace-nowrap min-w-[14rem]">
+                      {isReadOnly ? (
+                        <span>{r.person_export || ""}</span>
+                      ) : (
+                        <StaffCombobox
+                          value={r.person_export || ""}
+                          teamValue={r.team || ""}
+                          teams={rosterTeams}
+                          placeholder="Chọn nhân viên xuất"
+                          onSelect={({ staffName, teamName, isCustom }) => {
+                            const patch = { person_export: staffName || "" };
+                            if (teamName && !isCustom) {
+                              patch.team = teamName;
+                            }
+                            updateRow(r, patch);
+                          }}
+                        />
+                      )}
+                      <HistoryDetails
+                        entries={exportHistory}
+                        label={HISTORY_FIELD_LABELS.person_export}
+                      />
+                    </td>
+                    <td className="p-2 align-top whitespace-nowrap">
+                      {isReadOnly ? (
+                        statusValue ? (
+                          <span>{statusValue}</span>
+                        ) : (
+                          <span className="italic text-gray-400">Chưa thiết lập</span>
+                        )
+                      ) : (
+                        <select
+                          value={statusValue}
+                          onChange={(e) =>
+                            updateRow(r, { status: normalizeStatusLabel(e.target.value) })
+                          }
+                          className="border rounded px-2 py-1 w-full"
+                          data-tooltip="Cập nhật trạng thái gán nhân viên"
                         >
-                          {updateLabel}
-                        </button>
-                        <button
-                          onClick={() => removeRow(r)}
-                          className="px-2 py-1 rounded bg-red-500 text-white hover:bg-red-600"
-                          data-tooltip="Xóa dòng"
-                        >
-                          Xóa
-                        </button>
-                      </div>
-                    ) : (
-                      <span className="text-xs text-gray-400">—</span>
-                    )}
-                  </td>
+                          {STATUS_SELECT_VALUES.map((option) => (
+                            <option key={option || "__blank-row"} value={option}>
+                              {option || "(Chưa chọn)"}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                    </td>
+                    <td className="p-2 align-top whitespace-nowrap">
+                      {isReadOnly ? (
+                        <span>{r.effective_from || ""}</span>
+                      ) : (
+                        <input
+                          type="date"
+                          value={r.effective_from || ""}
+                          onChange={(e) =>
+                            updateRow(r, { effective_from: e.target.value })
+                          }
+                          className="border rounded px-2 py-1 w-full"
+                        />
+                      )}
+                      <HistoryDetails
+                        entries={effectiveHistory}
+                        label={HISTORY_FIELD_LABELS.effective_from}
+                      />
+                    </td>
+                    <td className="p-2 align-top text-center whitespace-nowrap">
+                      {canEdit ? (
+                        <div className="flex flex-col gap-2">
+                          <button
+                            type="button"
+                            onClick={() => commitRow(r)}
+                            disabled={updateDisabled}
+                            className={`px-2 py-1 rounded text-white ${
+                              updateDisabled
+                                ? "bg-gray-400 cursor-not-allowed"
+                                : "bg-emerald-600 hover:bg-emerald-700"
+                            }`}
+                            data-tooltip={
+                              updateDisabled
+                                ? "Không có thay đổi mới"
+                                : "Lưu các thay đổi vừa chỉnh"
+                            }
+                          >
+                            {updateLabel}
+                          </button>
+                          <button
+                            onClick={() => removeRow(r)}
+                            className="px-2 py-1 rounded bg-red-500 text-white hover:bg-red-600"
+                            data-tooltip="Xóa dòng"
+                          >
+                            Xóa
+                          </button>
+                        </div>
+                      ) : (
+                        <span className="text-xs text-gray-400">—</span>
+                      )}
+                    </td>
                 </tr>
               );
             })
