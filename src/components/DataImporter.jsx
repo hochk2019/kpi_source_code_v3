@@ -129,8 +129,8 @@ const FROZEN_COLUMN_KEYS = Object.freeze(["date", "declaration", "mst"]);
 const FROZEN_COLUMN_WIDTHS = Object.freeze({
   selection: 44,
   date: 120,
-  declaration: 220,
-  mst: 140,
+  declaration: 180,
+  mst: 120,
 });
 
 const VIEW_MODE_STORAGE_KEY = "dataImporter:viewMode";
@@ -464,14 +464,19 @@ function StaffCombobox({
     return result;
   }, [teams]);
 
-  const filteredTeams = useMemo(() => {
-    if (normalizedTeamValue) {
-      const match = teams.filter((team) => team.normalized === normalizedTeamValue);
-      if (match.length) {
-        return match;
-      }
+  const orderedTeams = useMemo(() => {
+    if (!Array.isArray(teams) || teams.length === 0) {
+      return [];
     }
-    return teams;
+    if (!normalizedTeamValue) {
+      return teams;
+    }
+    const matchIndex = teams.findIndex((team) => team.normalized === normalizedTeamValue);
+    if (matchIndex === -1) {
+      return teams;
+    }
+    const match = teams[matchIndex];
+    return [match, ...teams.filter((_, index) => index !== matchIndex)];
   }, [teams, normalizedTeamValue]);
 
   const searchValue = normalizeStr(search);
@@ -529,7 +534,7 @@ function StaffCombobox({
                 </CommandItem>
               </CommandGroup>
             ) : null}
-            {filteredTeams.map((team) => (
+            {orderedTeams.map((team) => (
               <CommandGroup key={team.id} heading={`Tổ: ${team.name}`}>
                 {team.members.map((member) => {
                   const isSelected = member.normalized === normalizedKey;
@@ -4115,6 +4120,7 @@ const selectedReviewedCount = useMemo(() => {
     (rowKey, selection) => {
       if (!selection) return;
       const staffName = normalizeStr(selection.staffName);
+      const normalizedStaffKey = normalizeName(staffName);
       const providedTeam = selection.teamName;
       applyEdit(rowKey, (row) => {
         const updates = {};
@@ -4122,17 +4128,26 @@ const selectedReviewedCount = useMemo(() => {
         if (staffName !== currentStaff) {
           updates.nhan_vien = staffName;
         }
-        if (providedTeam !== undefined) {
-          const nextTeam = normalizeStr(providedTeam);
+
+        let nextTeam = providedTeam !== undefined ? normalizeStr(providedTeam) : undefined;
+        if (nextTeam === undefined && normalizedStaffKey) {
+          const mapped = memberTeamMap.get(normalizedStaffKey);
+          if (mapped?.team !== undefined) {
+            nextTeam = normalizeStr(mapped.team);
+          }
+        }
+
+        if (nextTeam !== undefined) {
           const currentTeam = normalizeStr(row.team);
           if (nextTeam !== currentTeam) {
             updates.team = nextTeam;
           }
         }
+
         return Object.keys(updates).length ? updates : null;
       });
     },
-    [applyEdit]
+    [applyEdit, memberTeamMap]
   );
 
   const handleSelectTeam = useCallback(
@@ -7108,7 +7123,7 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
               {!hiddenColumns.has("declaration") && (
                 <th
                   className={cx(
-                    "px-2 py-1 font-semibold text-gray-600 dark:text-gray-300",
+                    "px-2 py-1 font-semibold text-gray-600 dark:text-gray-300 whitespace-nowrap",
                     frozenOffsets.declaration ? frozenHeaderClass : ""
                   )}
                   style={getFrozenStyle("declaration")}
@@ -7119,7 +7134,7 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
               {!hiddenColumns.has("mst") && (
                 <th
                   className={cx(
-                    "px-2 py-1 font-semibold text-gray-600 dark:text-gray-300",
+                    "px-2 py-1 font-semibold text-gray-600 dark:text-gray-300 whitespace-nowrap",
                     frozenOffsets.mst ? frozenHeaderClass : ""
                   )}
                   style={getFrozenStyle("mst")}
@@ -7128,7 +7143,7 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
                 </th>
               )}
               {!hiddenColumns.has("company") && (
-                <th className="px-2 py-1 font-semibold text-gray-600 dark:text-gray-300">
+                <th className="px-2 py-1 font-semibold text-gray-600 dark:text-gray-300 min-w-[18rem]">
                   {IMPORT_TABLE_COLUMN_LABELS.company}
                 </th>
               )}
@@ -7233,7 +7248,7 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
                   {!hiddenColumns.has("declaration") && (
                     <td
                       className={cx(
-                        "px-2 py-1 align-top",
+                        "px-2 py-1 align-top whitespace-nowrap",
                         frozenOffsets.declaration ? frozenCellClass : ""
                       )}
                       style={getFrozenStyle("declaration")}
@@ -7286,7 +7301,7 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
                   {!hiddenColumns.has("mst") && (
                     <td
                       className={cx(
-                        "px-2 py-1 align-top text-gray-700 dark:text-gray-200",
+                        "px-2 py-1 align-top whitespace-nowrap text-gray-700 dark:text-gray-200",
                         frozenOffsets.mst ? frozenCellClass : ""
                       )}
                       style={getFrozenStyle("mst")}
@@ -7295,7 +7310,7 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
                     </td>
                   )}
                   {!hiddenColumns.has("company") && (
-                    <td className="px-2 py-1 align-top">
+                    <td className="px-2 py-1 align-top min-w-[18rem]">
                       <span>{r.cong_ty || ""}</span>
                     </td>
                   )}
