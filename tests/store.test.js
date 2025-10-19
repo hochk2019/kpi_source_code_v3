@@ -18,6 +18,9 @@ import {
   getMSTMap,
   getMSTHistoryEntries,
   MST_ASSIGNMENT_STATUS,
+  MST_KEY,
+  AUDIT_KEY,
+  getAuditLogs,
   HQ_KEY,
   getHQAgencies,
   upsertHQAgencies,
@@ -177,6 +180,92 @@ describe('report schedules', () => {
     const removed = deleteReportSchedule(entry.id);
     expect(removed).toBe(true);
     expect(getReportSchedules()).toHaveLength(0);
+  });
+});
+
+describe('legacy MST migration', () => {
+  const LEGACY_MST_KEY = 'mst_rows_v1';
+
+  beforeEach(() => {
+    sharedSetItem(LEGACY_MST_KEY, null);
+    sharedSetItem(MST_KEY, JSON.stringify([]));
+    sharedSetItem(AUDIT_KEY, JSON.stringify([]));
+  });
+
+  it('migrates dữ liệu mst_rows_v1 và giữ nguyên dòng đã có', () => {
+    sharedSetItem(
+      LEGACY_MST_KEY,
+      JSON.stringify({
+        rows: [
+          {
+            mst: '0101234567',
+            company: 'Công ty Alpha',
+            nguoi_phu_trach_nhap: 'Ngọc Anh',
+            nguoi_phu_trach_xuat: 'Bảo Bình',
+            effective_from: '2024-01-05',
+          },
+          {
+            mst: '0201234567',
+            company: 'Công ty Beta',
+            nguoiPhuTrachNhap: 'Trí',
+            nguoiPhuTrachXuat: 'Minh',
+            effective_from: '2024-02-01',
+          },
+        ],
+      })
+    );
+
+    sharedSetItem(
+      MST_KEY,
+      JSON.stringify([
+        {
+          mst: '0201234567',
+          company: 'Công ty Beta',
+          person_import: 'Trí',
+          person_export: 'Minh',
+          team: 'Team Ocean',
+          effective_from: '2024-02-01',
+          effective_to: '',
+          status: MST_ASSIGNMENT_STATUS.ASSIGNED,
+        },
+      ])
+    );
+
+    const rows = getMSTMap();
+    expect(rows).toHaveLength(2);
+
+    const migrated = rows.find((row) => row.mst === '0101234567');
+    expect(migrated).toMatchObject({
+      mst: '0101234567',
+      company: 'Công ty Alpha',
+      person_import: 'Ngọc Anh',
+      person_export: 'Bảo Bình',
+      team: '',
+      effective_from: '2024-01-05',
+      effective_to: '',
+      status: MST_ASSIGNMENT_STATUS.ASSIGNED,
+    });
+
+    const existing = rows.find((row) => row.mst === '0201234567');
+    expect(existing).toMatchObject({
+      team: 'Team Ocean',
+      status: MST_ASSIGNMENT_STATUS.ASSIGNED,
+      effective_from: '2024-02-01',
+      effective_to: '',
+    });
+
+    expect(sharedGetItem(LEGACY_MST_KEY)).toBeNull();
+
+    const auditLogs = getAuditLogs(5);
+    const migrationLog = auditLogs.find((entry) => entry.action === 'mst.migrate.v1-v2');
+    expect(migrationLog).toBeTruthy();
+    expect(migrationLog.detail).toContain('1/2');
+    expect(migrationLog.meta).toMatchObject({
+      legacyTotal: 2,
+      converted: 2,
+      added: 1,
+      skippedDuplicate: 1,
+    });
   });
 });
 
@@ -351,7 +440,7 @@ describe('saveMSTRow', () => {
       { actor: 'seed' },
     );
 
-    const originalKey = '0101234567__2024-09-01';
+    const originalKey = '0101234567__2024-09-01__';
     const result = saveMSTRow(
       {
         mst: '0101234567',
@@ -452,7 +541,7 @@ describe('saveMSTRow', () => {
         effective_from: '2024-10-01',
         status: MST_ASSIGNMENT_STATUS.PENDING,
       },
-      { originalKey: '0101234567__2024-09-01', actor: 'tester' },
+      { originalKey: '0101234567__2024-09-01__', actor: 'tester' },
     );
 
     expect(conflict.ok).toBe(false);
