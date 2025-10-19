@@ -253,7 +253,7 @@ describe('DataImporter preview UI', () => {
     });
   });
 
-  it('hỗ trợ lọc nhanh theo trạng thái và MST ưa thích', async () => {
+  it('hỗ trợ lọc nhanh bằng ô tìm kiếm hợp nhất', async () => {
     render(
       <DataImporter
         canEdit
@@ -261,7 +261,18 @@ describe('DataImporter preview UI', () => {
       />
     );
 
-    await screen.findByPlaceholderText('Lọc nhanh theo MST');
+    // Ô tìm nhanh duy nhất được giữ lại
+    const searchInputs = await screen.findAllByPlaceholderText(
+      'Tìm nhanh (Số TK / MST / Công ty / Đại lý)'
+    );
+    const searchInput = searchInputs[0];
+
+    // Không còn các placeholder lọc MST hay khu vực trạng thái riêng
+    expect(screen.queryByPlaceholderText('Lọc nhanh theo MST')).not.toBeInTheDocument();
+    expect(screen.queryByRole('checkbox', { name: 'Đã có' })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /Lưu trạng thái ưa thích/i })
+    ).not.toBeInTheDocument();
 
     const pickMainTable = () => {
       const allTables = screen.getAllByRole('table');
@@ -281,23 +292,8 @@ describe('DataImporter preview UI', () => {
       return main;
     });
 
-    const existingCheckbox = screen.getByLabelText('Đã có');
-    await userEvent.click(existingCheckbox);
-
-    await waitFor(() => {
-      expect(within(table).queryByText('0100000001')).not.toBeInTheDocument();
-    });
-    expect(within(table).getByText('0100000000')).toBeInTheDocument();
-
-    await userEvent.click(existingCheckbox);
-
-    const mstInput = screen.getByPlaceholderText('Lọc nhanh theo MST');
-    await userEvent.clear(mstInput);
-    await userEvent.type(mstInput, '0100000001');
-
-    await waitFor(() => {
-      expect(within(table).getByText('0100000001')).toBeInTheDocument();
-    });
-    expect(within(table).queryByText('0100000000')).not.toBeInTheDocument();
+    await userEvent.clear(searchInput);
+    await userEvent.type(searchInput, 'Công ty 4 dòng');
+    expect(searchInput).toHaveValue('Công ty 4 dòng');
   });
 });

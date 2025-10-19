@@ -38,7 +38,6 @@ import { formatDisplayDate, formatDateRangeLabel } from "@/shared/format.js";
 import { fetchWithAuth } from "@/auth/localAuth.js";
 import useTooltipTitles from "@/hooks/useTooltipTitles.js";
 import useFilterPresets from "@/hooks/useFilterPresets.js";
-import useQuickSearchFavorites from "@/hooks/useQuickSearchFavorites.js";
 import { Button } from "@/components/ui/button.jsx";
 import { StatusBadge } from "@/components/designSystem/primitives.jsx";
 import {
@@ -126,16 +125,6 @@ const IMPORT_ERROR_REASON_LABELS = Object.freeze({
   unknown: "Không xác định",
 });
 
-const DECL_STATUS_LABELS = Object.freeze({
-  new: "Mới",
-  existing: "Đã có",
-  updated: "Đã cập nhật",
-  locked: "Đang khoá",
-  pending: "Chờ xử lý",
-  reviewing: "Đang rà soát",
-  synced: "Đã đồng bộ",
-});
-
 const FROZEN_COLUMN_KEYS = Object.freeze(["date", "declaration", "mst"]);
 const FROZEN_COLUMN_WIDTHS = Object.freeze({
   selection: 44,
@@ -170,17 +159,6 @@ function normalizeComparableValue(value) {
     return JSON.stringify(value);
   }
   return JSON.stringify(value);
-}
-
-function formatStatusLabel(status) {
-  const key = normalizeStatusKey(status);
-  if (DECL_STATUS_LABELS[key]) {
-    return DECL_STATUS_LABELS[key];
-  }
-  if (!key) {
-    return "Không rõ";
-  }
-  return key.charAt(0).toUpperCase() + key.slice(1);
 }
 
 function cx(...classes) {
@@ -1555,11 +1533,6 @@ export default function DataImporter({
     updatePreset: updateFilterPreset,
     deletePreset: deleteFilterPreset,
   } = useFilterPresets(FILTER_PRESET_SCOPE);
-  const {
-    favorites: quickSearchFavorites,
-    addFavorite: addQuickSearchFavorite,
-    removeFavorite: removeQuickSearchFavorite,
-  } = useQuickSearchFavorites();
   const [datePreset, setDatePreset] = useState("none");
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [filterNoStaff, setFilterNoStaff] = useState(false);
@@ -1728,22 +1701,6 @@ export default function DataImporter({
     () => mode === "saved" && rawRows.length > SERVER_SEARCH_THRESHOLD,
     [mode, rawRows.length]
   );
-  const availableStatuses = useMemo(() => {
-    const set = new Set();
-    for (const row of Array.isArray(rawRows) ? rawRows : []) {
-      if (!row || typeof row !== "object") continue;
-      const statusKey = normalizeStatusKey(
-        row.status ?? row.trang_thai ?? row.previewStatus ?? row.importStatus ?? row.state ?? ""
-      );
-      if (statusKey) {
-        set.add(statusKey);
-      }
-    }
-    return Array.from(set).sort((a, b) =>
-      formatStatusLabel(a).localeCompare(formatStatusLabel(b), "vi", { sensitivity: "base" })
-    );
-  }, [rawRows]);
-
   const effectivePreviewRows = useMemo(() => {
     if (!Array.isArray(rawRows) || rawRows.length === 0) {
       return [];
@@ -1762,6 +1719,9 @@ export default function DataImporter({
       return { ...row, so_tk: truncated };
     });
   }, [rawRows, upsert11]);
+
+  const canUploadFiles = canEdit && !(isTeamLead || isStaffRole);
+  const canOverwriteData = isAdminRole && canUploadFiles;
 
   const importPreview = useMemo(() => {
     if (mode !== "preview" || effectivePreviewRows.length === 0) {
@@ -1818,8 +1778,6 @@ export default function DataImporter({
     return set;
   }, [columnConfigState]);
   const visibleColumnCount = Math.max(1, totalBaseColumns - columnHiddenSet.size);
-  const canUploadFiles = canEdit && !(isTeamLead || isStaffRole);
-  const canOverwriteData = isAdminRole && canUploadFiles;
 
   const updateBaselineSnapshot = useCallback((rows) => {
     const snapshot = new Map();
@@ -2539,152 +2497,6 @@ export default function DataImporter({
     refreshPresetList();
   }, [clearPresetError, refreshPresetList]);
 
-  const statusFavoriteLabel = useCallback((value) => {
-    if (typeof value !== "string") {
-      return "Không rõ";
-    }
-    const tokens = value
-      .split(",")
-      .map((token) => normalizeStatusKey(token))
-      .filter(Boolean);
-    if (!tokens.length) {
-      return "Không rõ";
-    }
-    return tokens
-      .map((token) => formatStatusLabel(token))
-      .join(", ");
-  }, []);
-
-  const handleApplyMstFavorite = useCallback(
-    (value) => {
-      if (typeof value !== "string") {
-        return;
-      }
-      setQuickMST(value);
-      setPage(1);
-    },
-    [setPage]
-  );
-
-  const handleApplyCompanyFavorite = useCallback(
-    (value) => {
-      if (typeof value !== "string") {
-        return;
-      }
-      setQuickCompany(value);
-      setPage(1);
-    },
-    [setPage]
-  );
-
-  const handleApplyStatusFavorite = useCallback(
-    (value) => {
-      if (typeof value !== "string") {
-        return;
-      }
-      const tokens = value
-        .split(",")
-        .map((token) => normalizeStatusKey(token))
-        .filter(Boolean);
-      setStatusFilters(Array.from(new Set(tokens)));
-      setPage(1);
-    },
-    [setPage]
-  );
-
-  const toggleStatusFilter = useCallback((statusKey, enabled) => {
-    const normalized = normalizeStatusKey(statusKey);
-    if (!normalized) {
-      return;
-    }
-    setStatusFilters((prev) => {
-      const exists = prev.includes(normalized);
-      if (enabled) {
-        if (exists) {
-          return prev;
-        }
-        return [...prev, normalized];
-      }
-      if (!exists) {
-        return prev;
-      }
-      return prev.filter((item) => item !== normalized);
-    });
-  }, []);
-
-  const clearStatusFilters = useCallback(() => {
-    setStatusFilters([]);
-  }, []);
-
-  const handleRemoveMstFavorite = useCallback(
-    (value) => {
-      removeQuickSearchFavorite("mst", value);
-    },
-    [removeQuickSearchFavorite]
-  );
-
-  const handleRemoveCompanyFavorite = useCallback(
-    (value) => {
-      removeQuickSearchFavorite("company", value);
-    },
-    [removeQuickSearchFavorite]
-  );
-
-  const handleRemoveStatusFavorite = useCallback(
-    (value) => {
-      removeQuickSearchFavorite("status", value);
-    },
-    [removeQuickSearchFavorite]
-  );
-
-  const handleSaveMstFavorite = useCallback(() => {
-    const trimmed = quickMST.trim();
-    if (!trimmed) {
-      toast.warning?.("Nhập MST trước khi lưu ưa thích.");
-      return;
-    }
-    const result = addQuickSearchFavorite("mst", trimmed);
-    if (result.ok) {
-      toast.success?.(`Đã lưu MST ${trimmed} vào danh sách tìm kiếm nhanh.`);
-    } else if (result.reason === "duplicate") {
-      toast.info?.("MST này đã có trong danh sách tìm kiếm nhanh.");
-    } else {
-      toast.error?.("Không thể lưu MST ưa thích.");
-    }
-  }, [quickMST, addQuickSearchFavorite]);
-
-  const handleSaveCompanyFavorite = useCallback(() => {
-    const trimmed = quickCompany.trim();
-    if (!trimmed) {
-      toast.warning?.("Nhập tên công ty trước khi lưu ưa thích.");
-      return;
-    }
-    const result = addQuickSearchFavorite("company", trimmed);
-    if (result.ok) {
-      toast.success?.(`Đã lưu "${trimmed}" vào danh sách tìm kiếm nhanh.`);
-    } else if (result.reason === "duplicate") {
-      toast.info?.("Giá trị này đã có trong danh sách tìm kiếm nhanh.");
-    } else {
-      toast.error?.("Không thể lưu tên công ty ưa thích.");
-    }
-  }, [quickCompany, addQuickSearchFavorite]);
-
-  const handleSaveStatusFavorite = useCallback(() => {
-    if (!Array.isArray(statusFilters) || statusFilters.length === 0) {
-      toast.warning?.("Chọn ít nhất một trạng thái trước khi lưu ưa thích.");
-      return;
-    }
-    const rawValue = statusFilters.join(",");
-    const result = addQuickSearchFavorite("status", rawValue);
-    if (result.ok) {
-      toast.success?.("Đã lưu bộ lọc trạng thái vào danh sách tìm kiếm nhanh.");
-    } else if (result.reason === "duplicate") {
-      toast.info?.("Bộ lọc trạng thái này đã tồn tại trong danh sách nhanh.");
-    } else {
-      toast.error?.("Không thể lưu bộ lọc trạng thái ưa thích.");
-    }
-  }, [statusFilters, addQuickSearchFavorite]);
-
   const handleClearSearchRange = useCallback(() => {
     setSearchRange({ from: "", to: "" });
     setDatePreset("none");
@@ -2859,12 +2671,6 @@ export default function DataImporter({
     window.addEventListener("beforeunload", handler);
     return () => window.removeEventListener("beforeunload", handler);
   }, [hasUnsaved]);
-
-  useEffect(() => {
-    if (mode !== "saved") return;
-    const pending = rowDiffMap.size > 0;
-    setHasUnsaved((prev) => (prev === pending ? prev : pending));
-  }, [mode, rowDiffMap]);
 
   const applyConfigToForm = useCallback((config) => {
     const normalizedConfig = {
@@ -4200,6 +4006,12 @@ export default function DataImporter({
     }
     return diffMap;
   }, [keyOfRow, mode, rawRows, baselineVersion]);
+
+  useEffect(() => {
+    if (mode !== "saved") return;
+    const pending = rowDiffMap.size > 0;
+    setHasUnsaved((prev) => (prev === pending ? prev : pending));
+  }, [mode, rowDiffMap]);
 
   const filteredSelected = useMemo(() => {
     if (!filteredKeys.length) return false;
@@ -6792,98 +6604,9 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
             value={query}
             onChange={e => { setQuery(e.target.value); setPage(1); }}
           />
-          <div className="flex flex-wrap items-center gap-2">
-            <input
-              className="w-48 flex-1 rounded border px-2 py-1 text-sm"
-              placeholder="Lọc nhanh theo MST"
-              value={quickMST}
-              onChange={(e) => setQuickMST(e.target.value)}
-            />
-            {quickMST && (
-              <button
-                type="button"
-                onClick={() => setQuickMST("")}
-                className="rounded border px-2 py-1 text-xs text-gray-500 hover:bg-gray-50"
-              >
-                Xóa MST
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={handleSaveMstFavorite}
-              className="flex items-center gap-1 rounded border px-2 py-1 text-xs text-gray-600 hover:bg-gray-50"
-            >
-              <Plus className="h-3 w-3" /> Lưu MST ưa thích
-            </button>
-          </div>
-          {quickSearchFavorites.mst.length > 0 && (
-            <div className="flex flex-wrap gap-1 text-xs text-gray-600">
-              {quickSearchFavorites.mst.map((item) => (
-                <button
-                  key={item.normalized}
-                  type="button"
-                  onClick={() => handleApplyMstFavorite(item.value)}
-                  className="flex items-center gap-1 rounded border border-blue-200 bg-blue-50 px-2 py-1 text-blue-700 hover:bg-blue-100"
-                >
-                  {item.value}
-                  <CircleX
-                    aria-hidden="true"
-                    className="h-3 w-3"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      handleRemoveMstFavorite(item.value);
-                    }}
-                  />
-                </button>
-              ))}
-            </div>
-          )}
-          <div className="flex flex-wrap items-center gap-2">
-            <input
-              className="w-48 flex-1 rounded border px-2 py-1 text-sm"
-              placeholder="Lọc nhanh theo tên công ty"
-              value={quickCompany}
-              onChange={(e) => setQuickCompany(e.target.value)}
-            />
-            {quickCompany && (
-              <button
-                type="button"
-                onClick={() => setQuickCompany("")}
-                className="rounded border px-2 py-1 text-xs text-gray-500 hover:bg-gray-50"
-              >
-                Xóa công ty
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={handleSaveCompanyFavorite}
-              className="flex items-center gap-1 rounded border px-2 py-1 text-xs text-gray-600 hover:bg-gray-50"
-            >
-              <Plus className="h-3 w-3" /> Lưu công ty ưa thích
-            </button>
-          </div>
-          {quickSearchFavorites.company.length > 0 && (
-            <div className="flex flex-wrap gap-1 text-xs text-gray-600">
-              {quickSearchFavorites.company.map((item) => (
-                <button
-                  key={item.normalized}
-                  type="button"
-                  onClick={() => handleApplyCompanyFavorite(item.value)}
-                  className="flex items-center gap-1 rounded border border-emerald-200 bg-emerald-50 px-2 py-1 text-emerald-700 hover:bg-emerald-100"
-                >
-                  {item.value}
-                  <CircleX
-                    aria-hidden="true"
-                    className="h-3 w-3"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      handleRemoveCompanyFavorite(item.value);
-                    }}
-                  />
-                </button>
-              ))}
-            </div>
-          )}
+          <span className="text-xs text-gray-500">
+            Nhập từ khóa để tìm nhanh theo Số tờ khai, mã số thuế, tên doanh nghiệp hoặc đại lý.
+          </span>
         </div>
 
         <div className="flex flex-col gap-2">
@@ -7007,75 +6730,7 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
           </div>
         </div>
 
-        <div className="flex min-w-[220px] flex-1 flex-col gap-2">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-sm font-medium text-gray-600">Trạng thái</span>
-            <button
-              type="button"
-              onClick={handleSaveStatusFavorite}
-              className="flex items-center gap-1 rounded border px-2 py-1 text-xs text-gray-600 hover:bg-gray-50"
-            >
-              <Plus className="h-3 w-3" /> Lưu trạng thái ưa thích
-            </button>
-            {statusFilters.length > 0 && (
-              <button
-                type="button"
-                onClick={clearStatusFilters}
-                className="rounded border px-2 py-1 text-xs text-gray-500 hover:bg-gray-50"
-              >
-                Xóa lọc trạng thái
-              </button>
-            )}
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {availableStatuses.length > 0 ? (
-              availableStatuses.map((status) => {
-                const checked = statusFilters.includes(status);
-                return (
-                  <label
-                    key={status || "unknown"}
-                    className={`flex items-center gap-1 rounded border px-2 py-1 text-xs ${
-                      checked
-                        ? "border-violet-300 bg-violet-50 text-violet-700"
-                        : "border-gray-200 text-gray-600"
-                    }`}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={checked}
-                      onChange={(event) => toggleStatusFilter(status, event.target.checked)}
-                    />
-                    <span>{formatStatusLabel(status)}</span>
-                  </label>
-                );
-              })
-            ) : (
-              <span className="text-xs text-gray-500">Chưa có trạng thái để lọc.</span>
-            )}
-          </div>
-          {quickSearchFavorites.status.length > 0 && (
-            <div className="flex flex-wrap gap-1 text-xs text-gray-600">
-              {quickSearchFavorites.status.map((item) => (
-                <button
-                  key={item.normalized}
-                  type="button"
-                  onClick={() => handleApplyStatusFavorite(item.value)}
-                  className="flex items-center gap-1 rounded border border-purple-200 bg-purple-50 px-2 py-1 text-purple-700 hover:bg-purple-100"
-                >
-                  {statusFavoriteLabel(item.value)}
-                  <CircleX
-                    aria-hidden="true"
-                    className="h-3 w-3"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      handleRemoveStatusFavorite(item.value);
-                    }}
-                  />
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
+
 
         <div className="flex min-w-[240px] flex-1 flex-wrap items-center gap-2 border-l border-gray-200 pl-3 dark:border-slate-700">
           <label className="flex flex-col text-xs text-gray-600 dark:text-gray-300">
