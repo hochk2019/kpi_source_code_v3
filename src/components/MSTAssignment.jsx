@@ -430,10 +430,14 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
   const [applyFrom, setApplyFrom] = useState(""); // yyyy-mm-dd
   const rootRef = useRef(null);
   const fileRef = useRef();
+  const setPageRef = useRef(() => {});
   const [selectedFileName, setSelectedFileName] = useState("");
   const [historyEntries, setHistoryEntries] = useState(() =>
     getMSTHistoryEntries(500)
   );
+  const refreshHistory = useCallback(() => {
+    setHistoryEntries(getMSTHistoryEntries(500));
+  }, []);
   const [historyFilter, setHistoryFilter] = useState({
     from: "",
     to: "",
@@ -688,24 +692,21 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
     },
     [actor, createRowState, getRowDiff, isReadOnly, refreshHistory]
   );
-  const handleStaffFilterSelect = useCallback(
-    ({ staffName }) => {
-      setStaffFilter(staffName || "");
-      setPage(1);
-    },
-    [setPage]
-  );
+  const handleStaffFilterSelect = useCallback(({ staffName }) => {
+    setStaffFilter(staffName || "");
+    setPageRef.current(1);
+  }, []);
   const clearStaffFilter = useCallback(() => {
     setStaffFilter("");
-    setPage(1);
-  }, [setPage]);
-  const applyStaffFavorite = useCallback(
-    (value) => {
-      setStaffFilter(value || "");
-      setPage(1);
-    },
-    [setPage]
-  );
+    setPageRef.current(1);
+  }, []);
+  const applyStaffFavorite = useCallback((value) => {
+    setStaffFilter(value || "");
+    setPageRef.current(1);
+  }, []);
+  const updateHistoryFilter = useCallback((patch) => {
+    setHistoryFilter((prev) => ({ ...prev, ...patch }));
+  }, []);
   const applyActionFavorite = useCallback(
     (value) => {
       if (!value) {
@@ -713,9 +714,9 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
       } else {
         updateHistoryFilter({ type: value });
       }
-      setPage(1);
+      setPageRef.current(1);
     },
-    [setPage, updateHistoryFilter]
+    [updateHistoryFilter]
   );
   const handleSaveStaffFavorite = useCallback(() => {
     if (!staffFilter.trim()) {
@@ -745,14 +746,6 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
     }
     alert("Đã lưu bộ lọc thao tác.");
   }, [addQuickFavorite, historyFilter.type]);
-
-  const refreshHistory = useCallback(() => {
-    setHistoryEntries(getMSTHistoryEntries(500));
-  }, []);
-
-  const updateHistoryFilter = (patch) => {
-    setHistoryFilter((prev) => ({ ...prev, ...patch }));
-  };
 
   const resetHistoryFilter = () => {
     setHistoryFilter({ from: "", to: "", type: "all" });
@@ -860,7 +853,7 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
     if (createdKey) {
       markRecentlyImported([createdKey]);
     }
-    setPage(1);
+    setPageRef.current(1);
     setShowAddForm(false);
     setAddError("");
     alert("Đã thêm vào danh sách. Bấm Lưu để ghi vào hệ thống.");
@@ -963,8 +956,12 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
   });
 
   useEffect(() => {
-    setPage(1);
-  }, [setPage, historyFilter.from, historyFilter.to, historyFilter.type, isHistoryFilterActive]);
+    setPageRef.current(1);
+  }, [historyFilter.from, historyFilter.to, historyFilter.type, isHistoryFilterActive]);
+
+  useEffect(() => {
+    setPageRef.current = setPage;
+  }, [setPage]);
 
   useTooltipTitles(rootRef, [
     rows,
@@ -1052,7 +1049,7 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
 
       const nextRows = sortMSTRows(Array.from(byKey.values()));
       setRows(nextRows);
-      setPage(1);
+      setPageRef.current(1);
       alert(`Đọc file thành công: ${mapped.length} dòng. Bấm Lưu để ghi.`);
       markRecentlyImported(newRowKeys);
     } catch (e) {
@@ -1216,7 +1213,7 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
             value={search}
             onChange={(e) => {
               setSearch(e.target.value);
-              setPage(1);
+              setPageRef.current(1);
             }}
             placeholder="Tìm nhanh (MST / Công ty)"
             className="border rounded px-2 py-1 w-64"
