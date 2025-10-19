@@ -79,6 +79,9 @@ const SORT_OPTIONS = [
 const ADJUSTMENT_PAGE_SIZE_OPTIONS = [5, 10, 20];
 const DEFAULT_ADJUSTMENT_PAGE_SIZE = 10;
 
+const DETAIL_PAGE_SIZE_OPTIONS = [10, 20, 50, 100, 200];
+const DEFAULT_DETAIL_PAGE_SIZE = 20;
+
 const WEEKDAY_OPTIONS = [
   { value: 1, label: "Thứ hai" },
   { value: 2, label: "Thứ ba" },
@@ -239,6 +242,14 @@ function sanitizeAdjustmentPageSize(value) {
     return DEFAULT_ADJUSTMENT_PAGE_SIZE;
   }
   return ADJUSTMENT_PAGE_SIZE_OPTIONS.includes(num) ? num : DEFAULT_ADJUSTMENT_PAGE_SIZE;
+}
+
+function sanitizeDetailPageSize(value) {
+  const num = Number(value);
+  if (!Number.isFinite(num)) {
+    return DEFAULT_DETAIL_PAGE_SIZE;
+  }
+  return DETAIL_PAGE_SIZE_OPTIONS.includes(num) ? num : DEFAULT_DETAIL_PAGE_SIZE;
 }
 
 function sanitizeRulePreference(value) {
@@ -803,7 +814,7 @@ function AdjustmentDigestCard({ report }) {
 
 function StaffDetailCard({ staff, canExport, onExport, exporting, visibleColumns = {} }) {
   const { stats, rows } = staff;
-  const [mode, setMode] = useState("detail");
+  const [mode, setMode] = useState("summary");
   const aggregated = useMemo(
     () => aggregateByCompany(rows, { includeStaff: false, includeTeam: false }),
     [rows]
@@ -1001,7 +1012,7 @@ function StaffDetailCard({ staff, canExport, onExport, exporting, visibleColumns
 
 function TeamDetailCard({ team, canExport, onExport, exporting, visibleColumns = {}, memberSortKey = "kpi" }) {
   const { stats, members, rows } = team;
-  const [mode, setMode] = useState("detail");
+  const [mode, setMode] = useState("summary");
   const aggregated = useMemo(
     () => aggregateByCompany(rows, { includeStaff: true, includeTeam: false }),
     [rows]
@@ -1293,8 +1304,8 @@ export default function ReportViewer({ canExport = true }) {
   const [selectedStaff, setSelectedStaff] = useState(() => sanitizeSelection(storedPrefs.selectedStaff));
   const [selectedTeam, setSelectedTeam] = useState(() => sanitizeSelection(storedPrefs.selectedTeam));
   const [quickSearch, setQuickSearch] = useState(() => sanitizeQuickSearchValue(storedPrefs.quickSearch));
-  const [staffViewMode, setStaffViewMode] = useState("detail");
-  const [teamViewMode, setTeamViewMode] = useState("detail");
+  const [staffViewMode, setStaffViewMode] = useState("summary");
+  const [teamViewMode, setTeamViewMode] = useState("summary");
   const [topStaffMetric, setTopStaffMetric] = useState(() => sanitizeTopStaffMetric(storedPrefs.topStaffMetric));
   const [staffSortKey, setStaffSortKey] = useState(() => sanitizeSortKey(storedPrefs.staffSortKey));
   const [teamSortKey, setTeamSortKey] = useState(() => sanitizeSortKey(storedPrefs.teamSortKey));
@@ -1377,6 +1388,11 @@ export default function ReportViewer({ canExport = true }) {
     sanitizeAdjustmentPageSize(storedPrefs.adjustmentPageSize)
   );
   const [adjustmentPage, setAdjustmentPage] = useState(0);
+  const [detailPageSize, setDetailPageSize] = useState(() =>
+    sanitizeDetailPageSize(storedPrefs.detailPageSize)
+  );
+  const [staffDetailPage, setStaffDetailPage] = useState(0);
+  const [teamDetailPage, setTeamDetailPage] = useState(0);
 
   useEffect(() => {
     const payload = {
@@ -1393,6 +1409,7 @@ export default function ReportViewer({ canExport = true }) {
       columns: exportColumns,
       ruleId: selectedRuleId,
       adjustmentPageSize,
+      detailPageSize,
     };
     const snapshot = JSON.stringify(payload);
     if (prefsSnapshotRef.current === snapshot) {
@@ -1414,6 +1431,7 @@ export default function ReportViewer({ canExport = true }) {
     exportColumns,
     selectedRuleId,
     adjustmentPageSize,
+    detailPageSize,
   ]);
 
   useEffect(() => {
@@ -1858,6 +1876,44 @@ export default function ReportViewer({ canExport = true }) {
     });
   }, [companySummaryAllTeams, quickSearchActive, normalizedQuickSearch]);
 
+  useEffect(() => {
+    if (selectedStaff !== "all" || staffViewMode !== "detail") {
+      if (staffDetailPage !== 0) {
+        setStaffDetailPage(0);
+      }
+      return;
+    }
+    const totalPages = Math.max(1, Math.ceil(filteredStaffList.length / detailPageSize)) || 1;
+    if (staffDetailPage > totalPages - 1) {
+      setStaffDetailPage(totalPages - 1);
+    }
+  }, [
+    selectedStaff,
+    staffViewMode,
+    filteredStaffList.length,
+    detailPageSize,
+    staffDetailPage,
+  ]);
+
+  useEffect(() => {
+    if (selectedTeam !== "all" || teamViewMode !== "detail") {
+      if (teamDetailPage !== 0) {
+        setTeamDetailPage(0);
+      }
+      return;
+    }
+    const totalPages = Math.max(1, Math.ceil(filteredTeamList.length / detailPageSize)) || 1;
+    if (teamDetailPage > totalPages - 1) {
+      setTeamDetailPage(totalPages - 1);
+    }
+  }, [
+    selectedTeam,
+    teamViewMode,
+    filteredTeamList.length,
+    detailPageSize,
+    teamDetailPage,
+  ]);
+
   const activeStaff = selectedStaff !== "all"
     ? report.staff.byKey.get(selectedStaff)
     : null;
@@ -1916,6 +1972,13 @@ export default function ReportViewer({ canExport = true }) {
     }
     clearQuickSearchFavorites(scope);
     toast.success("Đã xoá danh sách tìm kiếm nhanh.");
+  };
+
+  const handleDetailPageSizeChange = (event) => {
+    const value = sanitizeDetailPageSize(event?.target?.value);
+    setDetailPageSize(value);
+    setStaffDetailPage(0);
+    setTeamDetailPage(0);
   };
 
   const buildFilterPresetPayload = useCallback(
@@ -2269,6 +2332,31 @@ export default function ReportViewer({ canExport = true }) {
     }
 
     if (selectedStaff === "all") {
+      const totalStaffRows = filteredStaffList.length;
+      const staffSliceStart = staffDetailPage * detailPageSize;
+      const staffPageItems = filteredStaffList.slice(
+        staffSliceStart,
+        staffSliceStart + detailPageSize
+      );
+      const staffPageStart = totalStaffRows === 0 ? 0 : staffSliceStart + 1;
+      const staffPageEnd =
+        totalStaffRows === 0
+          ? 0
+          : Math.min(totalStaffRows, staffSliceStart + staffPageItems.length);
+      const staffDetailColumnCount =
+        6 +
+        (columnVisibility.items !== false ? 1 : 0) +
+        (columnVisibility.licenses !== false ? 1 : 0) +
+        (columnVisibility.co !== false ? 1 : 0) +
+        (columnVisibility.coLines !== false ? 1 : 0) +
+        (columnVisibility.licenseCodes !== false ? 1 : 0);
+      const totalStaffPages = totalStaffRows === 0 ? 1 : Math.ceil(totalStaffRows / detailPageSize);
+      const isFirstStaffPage = staffDetailPage === 0;
+      const isLastStaffPage = staffDetailPage >= totalStaffPages - 1;
+      const staffRangeLabel = totalStaffRows
+        ? `${formatInt(staffPageStart)}–${formatInt(staffPageEnd)} / ${formatInt(totalStaffRows)}`
+        : "0 / 0";
+
       return (
         <div className="space-y-6">
           <div className="flex flex-wrap items-center gap-4">
@@ -2354,11 +2442,11 @@ export default function ReportViewer({ canExport = true }) {
                       {columnVisibility.licenseCodes !== false && (
                         <th className="px-3 py-2 text-left">Mã giấy phép</th>
                       )}
-                  </tr>
-                </thead>
+                    </tr>
+                  </thead>
                   <tbody>
-                    {filteredStaffList.length ? (
-                      filteredStaffList.map((item, idx) => (
+                    {totalStaffRows ? (
+                      staffPageItems.map((item, idx) => (
                         <tr key={item.key} className={idx % 2 === 0 ? "bg-white" : "bg-gray-50"}>
                           <td className="px-3 py-1.5">{item.name}</td>
                           <td className="px-3 py-1.5">{item.teamLabel}</td>
@@ -2391,7 +2479,7 @@ export default function ReportViewer({ canExport = true }) {
                     ) : (
                       <tr>
                         <td
-                          colSpan={11}
+                          colSpan={staffDetailColumnCount}
                           className="px-3 py-4 text-center text-sm text-[color:var(--ds-text-muted)]"
                         >
                           Không có nhân viên phù hợp với điều kiện lọc hiện tại.
@@ -2402,9 +2490,62 @@ export default function ReportViewer({ canExport = true }) {
                 </table>
               </div>
 
-              <div className="space-y-6">
-                {filteredStaffList.length ? (
-                  filteredStaffList.map((item) => (
+              {totalStaffRows ? (
+                <div className="flex flex-wrap items-center justify-between gap-3 px-1 text-xs text-[color:var(--ds-text-secondary)]">
+                  <div className="flex items-center gap-2">
+                    <span>Hiển thị</span>
+                    <select
+                      value={detailPageSize}
+                      onChange={handleDetailPageSizeChange}
+                      className="rounded border px-2 py-1 text-xs text-[color:var(--ds-text-primary)] focus:border-[color:var(--ds-border-strong)] focus:outline-none"
+                    >
+                      {DETAIL_PAGE_SIZE_OPTIONS.map((option) => (
+                        <option key={option} value={option}>
+                          {option}
+                        </option>
+                      ))}
+                    </select>
+                    <span>dòng/trang</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span>{staffRangeLabel}</span>
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => setStaffDetailPage((prev) => Math.max(prev - 1, 0))}
+                        disabled={isFirstStaffPage}
+                        className={`rounded border px-2 py-1 font-semibold transition-colors ${
+                          isFirstStaffPage
+                            ? 'cursor-not-allowed border-[color:var(--ds-border-subtle)] text-[color:var(--ds-text-disabled)]'
+                            : 'border-[color:var(--ds-border-strong)] text-[color:var(--ds-text-primary)] hover:bg-[color:var(--ds-surface-muted)]'
+                        }`}
+                      >
+                        Trước
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setStaffDetailPage((prev) =>
+                            Math.min(prev + 1, totalStaffPages - 1)
+                          )
+                        }
+                        disabled={isLastStaffPage}
+                        className={`rounded border px-2 py-1 font-semibold transition-colors ${
+                          isLastStaffPage
+                            ? 'cursor-not-allowed border-[color:var(--ds-border-subtle)] text-[color:var(--ds-text-disabled)]'
+                            : 'border-[color:var(--ds-border-strong)] text-[color:var(--ds-text-primary)] hover:bg-[color:var(--ds-surface-muted)]'
+                        }`}
+                      >
+                        Sau
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+
+              {totalStaffRows ? (
+                <div className="space-y-6">
+                  {staffPageItems.map((item) => (
                     <StaffDetailCard
                       key={item.key}
                       staff={item}
@@ -2413,13 +2554,13 @@ export default function ReportViewer({ canExport = true }) {
                       exporting={exporting}
                       visibleColumns={columnVisibility}
                     />
-                  ))
-                ) : (
-                  <div className="rounded border border-dashed border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-muted)] p-4 text-center text-sm text-[color:var(--ds-text-secondary)]">
-                    Không có nhân viên nào khớp tìm kiếm.
-                  </div>
-                )}
-              </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="rounded border border-dashed border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-muted)] p-4 text-center text-sm text-[color:var(--ds-text-secondary)]">
+                  Không có nhân viên nào khớp tìm kiếm.
+                </div>
+              )}
             </>
           )}
         </div>
@@ -2451,6 +2592,26 @@ export default function ReportViewer({ canExport = true }) {
     }
 
     if (selectedTeam === "all") {
+      const totalTeamRows = filteredTeamList.length;
+      const teamSliceStart = teamDetailPage * detailPageSize;
+      const teamPageItems = filteredTeamList.slice(teamSliceStart, teamSliceStart + detailPageSize);
+      const teamPageStart = totalTeamRows === 0 ? 0 : teamSliceStart + 1;
+      const teamPageEnd =
+        totalTeamRows === 0 ? 0 : Math.min(totalTeamRows, teamSliceStart + teamPageItems.length);
+      const teamDetailColumnCount =
+        5 +
+        (columnVisibility.items !== false ? 1 : 0) +
+        (columnVisibility.licenses !== false ? 1 : 0) +
+        (columnVisibility.co !== false ? 1 : 0) +
+        (columnVisibility.coLines !== false ? 1 : 0) +
+        (columnVisibility.licenseCodes !== false ? 1 : 0);
+      const totalTeamPages = totalTeamRows === 0 ? 1 : Math.ceil(totalTeamRows / detailPageSize);
+      const isFirstTeamPage = teamDetailPage === 0;
+      const isLastTeamPage = teamDetailPage >= totalTeamPages - 1;
+      const teamRangeLabel = totalTeamRows
+        ? `${formatInt(teamPageStart)}–${formatInt(teamPageEnd)} / ${formatInt(totalTeamRows)}`
+        : "0 / 0";
+
       return (
         <div className="space-y-6">
           <div className="flex flex-wrap items-center gap-4">
@@ -2536,11 +2697,11 @@ export default function ReportViewer({ canExport = true }) {
                       {columnVisibility.licenseCodes !== false && (
                         <th className="px-3 py-2 text-left">Mã giấy phép</th>
                       )}
-                  </tr>
-                </thead>
+                    </tr>
+                  </thead>
                   <tbody>
-                    {filteredTeamList.length ? (
-                      filteredTeamList.map((item, idx) => (
+                    {totalTeamRows ? (
+                      teamPageItems.map((item, idx) => (
                         <tr key={item.key} className={idx % 2 === 0 ? "bg-white" : "bg-gray-50"}>
                           <td className="px-3 py-1.5">{item.name}</td>
                           <td className="px-3 py-1.5 text-right">{formatInt(item.stats.decls)}</td>
@@ -2572,7 +2733,7 @@ export default function ReportViewer({ canExport = true }) {
                     ) : (
                       <tr>
                         <td
-                          colSpan={10}
+                          colSpan={teamDetailColumnCount}
                           className="px-3 py-4 text-center text-sm text-[color:var(--ds-text-muted)]"
                         >
                           Không có tổ đội nào phù hợp với điều kiện lọc.
@@ -2583,9 +2744,60 @@ export default function ReportViewer({ canExport = true }) {
                 </table>
               </div>
 
-              <div className="space-y-6">
-                {filteredTeamList.length ? (
-                  filteredTeamList.map((item) => (
+              {totalTeamRows ? (
+                <div className="flex flex-wrap items-center justify-between gap-3 px-1 text-xs text-[color:var(--ds-text-secondary)]">
+                  <div className="flex items-center gap-2">
+                    <span>Hiển thị</span>
+                    <select
+                      value={detailPageSize}
+                      onChange={handleDetailPageSizeChange}
+                      className="rounded border px-2 py-1 text-xs text-[color:var(--ds-text-primary)] focus:border-[color:var(--ds-border-strong)] focus:outline-none"
+                    >
+                      {DETAIL_PAGE_SIZE_OPTIONS.map((option) => (
+                        <option key={option} value={option}>
+                          {option}
+                        </option>
+                      ))}
+                    </select>
+                    <span>dòng/trang</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span>{teamRangeLabel}</span>
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => setTeamDetailPage((prev) => Math.max(prev - 1, 0))}
+                        disabled={isFirstTeamPage}
+                        className={`rounded border px-2 py-1 font-semibold transition-colors ${
+                          isFirstTeamPage
+                            ? 'cursor-not-allowed border-[color:var(--ds-border-subtle)] text-[color:var(--ds-text-disabled)]'
+                            : 'border-[color:var(--ds-border-strong)] text-[color:var(--ds-text-primary)] hover:bg-[color:var(--ds-surface-muted)]'
+                        }`}
+                      >
+                        Trước
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setTeamDetailPage((prev) => Math.min(prev + 1, totalTeamPages - 1))
+                        }
+                        disabled={isLastTeamPage}
+                        className={`rounded border px-2 py-1 font-semibold transition-colors ${
+                          isLastTeamPage
+                            ? 'cursor-not-allowed border-[color:var(--ds-border-subtle)] text-[color:var(--ds-text-disabled)]'
+                            : 'border-[color:var(--ds-border-strong)] text-[color:var(--ds-text-primary)] hover:bg-[color:var(--ds-surface-muted)]'
+                        }`}
+                      >
+                        Sau
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+
+              {totalTeamRows ? (
+                <div className="space-y-6">
+                  {teamPageItems.map((item) => (
                     <TeamDetailCard
                       key={item.key}
                       team={item}
@@ -2595,13 +2807,13 @@ export default function ReportViewer({ canExport = true }) {
                       visibleColumns={columnVisibility}
                       memberSortKey={teamSortKey}
                     />
-                  ))
-                ) : (
-                  <div className="rounded border border-dashed border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-muted)] p-4 text-center text-sm text-[color:var(--ds-text-secondary)]">
-                    Không có tổ đội nào khớp tìm kiếm.
-                  </div>
-                )}
-              </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="rounded border border-dashed border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-muted)] p-4 text-center text-sm text-[color:var(--ds-text-secondary)]">
+                  Không có tổ đội nào khớp tìm kiếm.
+                </div>
+              )}
             </>
           )}
         </div>
