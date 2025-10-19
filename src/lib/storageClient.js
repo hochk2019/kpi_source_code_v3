@@ -4,14 +4,28 @@ async function sendWrite(base, key, value) {
   const payload = value === null || value === undefined ? { value: null } : { value };
   const urlBase = base || '';
   const target = `${urlBase}/api/storage/${encodeURIComponent(key)}`;
-  const response = await fetchWithAuth(target, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  });
-  if (!response.ok) {
-    throw new Error(`HTTP ${response.status}`);
+  let response;
+  try {
+    response = await fetchWithAuth(target, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+  } catch (error) {
+    throw new Error(`Không thể gửi dữ liệu đồng bộ: ${error?.message ?? error}`, {
+      cause: error instanceof Error ? error : undefined,
+    });
   }
+  if (!response || typeof response.ok !== 'boolean') {
+    throw new Error('Không nhận được phản hồi hợp lệ từ máy chủ đồng bộ');
+  }
+  if (!response.ok) {
+    const statusText = typeof response.statusText === 'string' && response.statusText.trim()
+      ? ` ${response.statusText.trim()}`
+      : '';
+    throw new Error(`HTTP ${response.status}${statusText}`);
+  }
+  return response;
 }
 
 const SHARED_KEYS = new Set([
