@@ -36,6 +36,20 @@ const normalize = (s = "") =>
     .trim()
     .toLowerCase();
 
+const formatISODate = (value) => {
+  if (!value) return "";
+  try {
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) {
+      return value;
+    }
+    return d.toLocaleDateString("vi-VN");
+  } catch (err) {
+    console.warn("formatISODate", err);
+    return value;
+  }
+};
+
 const buildRosterTeams = (rosterSnapshot) => {
   const rawTeams = Array.isArray(rosterSnapshot?.teams) ? rosterSnapshot.teams : [];
   const teams = [];
@@ -263,6 +277,7 @@ const COLUMN_OPTIONS = [
   { key: "person_export", label: "Người phụ trách Xuất" },
   { key: "status", label: "Trạng thái" },
   { key: "effective_from", label: "Áp dụng từ ngày" },
+  { key: "effective_to", label: "Đến hết ngày" },
   { key: "actions", label: "Hành động" },
 ];
 
@@ -327,6 +342,13 @@ const headerAliases = {
     "apply_from",
     "effective from",
   ],
+  effective_to: [
+    "effective_to",
+    "đến hết ngày",
+    "den het ngay",
+    "apply_to",
+    "effective to",
+  ],
   status: [
     "status",
     "trạng thái",
@@ -361,6 +383,7 @@ const HISTORY_FIELD_LABELS = {
   person_import: "Người phụ trách Nhập",
   person_export: "Người phụ trách Xuất",
   effective_from: "Áp dụng từ ngày",
+  effective_to: "Đến hết ngày",
 };
 
 const MST_ROW_FIELDS = [
@@ -370,6 +393,7 @@ const MST_ROW_FIELDS = [
   "person_export",
   "team",
   "effective_from",
+  "effective_to",
   "status",
 ];
 
@@ -383,13 +407,18 @@ const sortMSTRows = (list = []) => {
       if (byMST !== 0) return byMST;
       const dateA = a?.effective_from || "";
       const dateB = b?.effective_from || "";
-      return dateA.localeCompare(dateB);
+      if (dateA !== dateB) {
+        return dateA.localeCompare(dateB);
+      }
+      const toA = a?.effective_to || "9999-12-31";
+      const toB = b?.effective_to || "9999-12-31";
+      return toA.localeCompare(toB);
     });
 };
 
 const makeRowKey = (row) => {
   if (!row) return "";
-  return `${row.mst || ""}__${row.effective_from || ""}`;
+  return `${row.mst || ""}__${row.effective_from || ""}__${row.effective_to || ""}`;
 };
 
 const buildHistoryIndex = (entries = []) => {
@@ -559,6 +588,7 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
     person_export: "",
     team: "",
     effective_from: "",
+    effective_to: "",
   });
   const [visibleColumns, setVisibleColumns] = useState(() => {
     const defaults = {};
@@ -625,6 +655,7 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
       person_export: String(row?.person_export || "").trim(),
       team: String(row?.team || "").trim(),
       effective_from: row?.effective_from || "",
+      effective_to: row?.effective_to || "",
       status: "",
     };
     base.status = computeStoredStatus(base);
@@ -659,6 +690,12 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
         const nextValue = sanitized[field] || "";
         const prevValue = baseline[field] || "";
         if (field === "effective_from") {
+          if ((nextValue || "") !== (prevValue || "")) {
+            patch[field] = nextValue;
+          }
+          return;
+        }
+        if (field === "effective_to") {
           if ((nextValue || "") !== (prevValue || "")) {
             patch[field] = nextValue;
           }
@@ -863,10 +900,55 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
       person_export: "",
       team: "",
       effective_from: applyFrom || "",
+      effective_to: "",
     });
     setAddError("");
     setShowAddForm(true);
   };
+
+  const computeNextStageStart = useCallback(
+    (row) => {
+      if (!row) {
+        return applyFrom || "";
+      }
+      const base = row.effective_to || row.effective_from || applyFrom || "";
+      if (!base) return "";
+      const date = new Date(base);
+      if (Number.isNaN(date.getTime())) {
+        return base;
+      }
+      date.setDate(date.getDate() + 1);
+      return date.toISOString().slice(0, 10);
+    },
+    [applyFrom]
+  );
+
+  const startNewStageFromRow = useCallback(
+    (row) => {
+      if (isReadOnly) {
+        alert("Bạn không có quyền thêm giai đoạn mới.");
+        return;
+      }
+      const nextStart = computeNextStageStart(row);
+      setDraft({
+        mst: row?.mst || "",
+        company: row?.company || "",
+        person_import: row?.person_import || "",
+        person_export: row?.person_export || "",
+        team: row?.team || "",
+        effective_from: nextStart || "",
+        effective_to: "",
+      });
+      setAddError("");
+      setShowAddForm(true);
+      setTimeout(() => {
+        if (rootRef.current) {
+          rootRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
+      }, 60);
+    },
+    [computeNextStageStart, isReadOnly]
+  );
 
   const handleDraftChange = (field, formatter = (value) => value) => (event) => {
     const raw = event?.target?.value ?? "";
@@ -890,6 +972,11 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
     const normalizedExport = String(draft.person_export || "").trim();
     const normalizedTeam = String(draft.team || "").trim();
     const normalizedDate = draft.effective_from || "";
+    const normalizedEnd = draft.effective_to || "";
+    if (normalizedDate && normalizedEnd && normalizedEnd < normalizedDate) {
+      setAddError("Ngày kết thúc phải sau hoặc bằng ngày bắt đầu.");
+      return;
+    }
     const newRow = {
       mst,
       company: normalizedCompany,
@@ -897,6 +984,7 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
       person_export: normalizedExport,
       team: normalizedTeam,
       effective_from: normalizedDate,
+      effective_to: normalizedEnd,
       status: computeStoredStatus({
         person_import: normalizedImport,
         person_export: normalizedExport,
@@ -951,6 +1039,7 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
       "Người phụ trách Xuất": item.person_export || "",
       "Tổ đội": item.team || "",
       "Áp dụng từ ngày": item.effective_from || "",
+      "Đến hết ngày": item.effective_to || "",
       "Trạng thái": computeStatusDisplay(item) || item.status || "",
     }));
 
@@ -1008,7 +1097,9 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
       }
       const byMST = (a.mst || "").localeCompare(b.mst || "");
       if (byMST !== 0) return byMST;
-      return (a.effective_from || "").localeCompare(b.effective_from || "");
+      const fromCompare = (a.effective_from || "").localeCompare(b.effective_from || "");
+      if (fromCompare !== 0) return fromCompare;
+      return (a.effective_to || "9999-12-31").localeCompare(b.effective_to || "9999-12-31");
     });
 
     return prioritized;
@@ -1032,6 +1123,28 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
     initialPage: 1,
     initialPageSize: DEFAULT_PAGE_SIZE,
   });
+
+  const groupedStages = useMemo(() => {
+    if (!filtered.length) return [];
+    const map = new Map();
+    filtered.forEach((row) => {
+      const key = row.mst || "__unknown";
+      if (!map.has(key)) {
+        map.set(key, {
+          mst: row.mst || "",
+          company: row.company || "",
+          stages: [],
+        });
+      }
+      map.get(key).stages.push(row);
+    });
+    return Array.from(map.values())
+      .map((entry) => ({
+        ...entry,
+        stages: sortMSTRows(entry.stages),
+      }))
+      .sort((a, b) => (a.mst || "").localeCompare(b.mst || ""));
+  }, [filtered]);
 
   useEffect(() => {
     setPageRef.current(1);
@@ -1092,6 +1205,7 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
             team: String(findCell(r, "team") ?? "").trim(),
             effective_from:
               toISO(findCell(r, "effective_from")) || applyFrom || "",
+            effective_to: toISO(findCell(r, "effective_to")) || "",
             status: normalizeStatusLabel(findCell(r, "status")),
           };
         })
@@ -1102,12 +1216,25 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
         return;
       }
 
+      const sanitizedMapped = mapped.filter((item) => {
+        if (item.effective_from && item.effective_to && item.effective_to < item.effective_from) {
+          console.warn("Bỏ qua dòng do ngày kết thúc nhỏ hơn ngày bắt đầu", item);
+          return false;
+        }
+        return true;
+      });
+
+      if (!sanitizedMapped.length) {
+        alert("Tất cả dòng trong file bị bỏ qua vì ngày kết thúc nhỏ hơn ngày bắt đầu.");
+        return;
+      }
+
       // Gộp với dữ liệu hiện có theo MST + ngày hiệu lực (ưu tiên dữ liệu mới)
       const byKey = new Map();
       for (const r of rows) {
         byKey.set(makeRowKey(r), { ...r });
       }
-      for (const r of mapped) {
+      for (const r of sanitizedMapped) {
         const key = makeRowKey(r);
         const previous = byKey.get(key);
         let nextRow;
@@ -1128,7 +1255,7 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
       const nextRows = sortMSTRows(Array.from(byKey.values()));
       setRows(nextRows);
       setPageRef.current(1);
-      alert(`Đọc file thành công: ${mapped.length} dòng. Bấm Lưu để ghi.`);
+      alert(`Đọc file thành công: ${sanitizedMapped.length} dòng. Bấm Lưu để ghi.`);
       markRecentlyImported(newRowKeys);
     } catch (e) {
       console.error(e);
@@ -1167,6 +1294,18 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
   /** Thao tác inline */
   const updateRow = (originalRow, patch) => {
     if (isReadOnly) return;
+    const nextFrom =
+      Object.prototype.hasOwnProperty.call(patch || {}, "effective_from")
+        ? patch.effective_from || ""
+        : originalRow.effective_from || "";
+    const nextTo =
+      Object.prototype.hasOwnProperty.call(patch || {}, "effective_to")
+        ? patch.effective_to || ""
+        : originalRow.effective_to || "";
+    if (nextFrom && nextTo && nextTo < nextFrom) {
+      alert("Ngày kết thúc phải sau hoặc bằng ngày bắt đầu.");
+      return;
+    }
     const targetKey = makeRowKey(originalRow);
     let updatedKey = "";
     let didUpdate = false;
@@ -1179,6 +1318,12 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
           next.__isNew = r.__isNew;
           if (patch && Object.prototype.hasOwnProperty.call(patch, "mst")) {
             next.mst = tidyMST(next.mst);
+          }
+          if (patch && Object.prototype.hasOwnProperty.call(patch, "effective_from")) {
+            next.effective_from = patch.effective_from || "";
+          }
+          if (patch && Object.prototype.hasOwnProperty.call(patch, "effective_to")) {
+            next.effective_to = patch.effective_to || "";
           }
           next.status = computeStoredStatus(next);
           updatedKey = makeRowKey(next);
@@ -1201,9 +1346,10 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
   const removeRow = (row) => {
     if (isReadOnly) return;
     const key = makeRowKey(row);
-    const label = row.effective_from
-      ? `${row.mst} (${row.effective_from})`
-      : row.mst;
+    const fromLabel = row.effective_from ? row.effective_from : "";
+    const toLabel = row.effective_to ? row.effective_to : "";
+    const rangeLabel = fromLabel || toLabel ? `(${fromLabel || "…"} → ${toLabel || "…"})` : "";
+    const label = `${row.mst}${rangeLabel ? ` ${rangeLabel}` : ""}`;
     if (!confirm(`Xóa dòng ${label}?`)) return;
     setRows((prev) => prev.filter((r) => makeRowKey(r) !== key));
     setRecentlyImportedKeys((prev) => {
@@ -1578,6 +1724,16 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
                 data-tooltip="Ngày bắt đầu áp dụng cấu hình"
               />
             </label>
+            <label className="flex flex-col gap-1 text-sm font-medium text-gray-700">
+              Đến hết ngày (tuỳ chọn)
+              <input
+                type="date"
+                value={draft.effective_to}
+                onChange={handleDraftChange("effective_to")}
+                className="border rounded px-2 py-1"
+                data-tooltip="Ngày kết thúc hiệu lực. Để trống nếu áp dụng vô thời hạn."
+              />
+            </label>
           </div>
           {addError && <p className="mt-2 text-sm text-red-600">{addError}</p>}
           <div className="mt-4 flex flex-wrap items-center gap-2">
@@ -1684,6 +1840,9 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
               {isColumnVisible("effective_from") ? (
                 <th className="p-2 text-left whitespace-nowrap w-40">Áp dụng từ ngày</th>
               ) : null}
+              {isColumnVisible("effective_to") ? (
+                <th className="p-2 text-left whitespace-nowrap w-40">Đến hết ngày</th>
+              ) : null}
               {isColumnVisible("actions") ? (
                 <th className="p-2 text-center whitespace-nowrap w-36">Hành động</th>
               ) : null}
@@ -1703,6 +1862,7 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
                 const importHistory = rowHistory.person_import || [];
                 const exportHistory = rowHistory.person_export || [];
                 const effectiveHistory = rowHistory.effective_from || [];
+                const effectiveToHistory = rowHistory.effective_to || [];
                 const statusValue = normalizeStatusLabel(r.status);
                 const statusDisplay = computeStatusDisplay(r);
                 const normalizedStatusDisplay = statusDisplay || "";
@@ -1874,10 +2034,36 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
                         />
                       </td>
                     ) : null}
+                    {isColumnVisible("effective_to") ? (
+                      <td className="p-2 align-top whitespace-nowrap">
+                        {isReadOnly ? (
+                          <span>{r.effective_to || ""}</span>
+                        ) : (
+                          <input
+                            type="date"
+                            value={r.effective_to || ""}
+                            onChange={(e) => updateRow(r, { effective_to: e.target.value })}
+                            className="border rounded px-2 py-1 w-full"
+                          />
+                        )}
+                        <HistoryDetails
+                          entries={effectiveToHistory}
+                          label={HISTORY_FIELD_LABELS.effective_to}
+                        />
+                      </td>
+                    ) : null}
                     {isColumnVisible("actions") ? (
                       <td className="p-2 align-top text-center whitespace-nowrap">
                         {canEdit ? (
                           <div className="flex flex-col gap-2">
+                            <button
+                              type="button"
+                              onClick={() => startNewStageFromRow(r)}
+                              className="px-2 py-1 rounded border bg-white text-gray-700 hover:bg-gray-50"
+                              data-tooltip="Sao chép thông tin hiện tại để thêm giai đoạn kế tiếp"
+                            >
+                              Giai đoạn mới
+                            </button>
                             <button
                               type="button"
                               onClick={() => commitRow(r)}
@@ -1915,6 +2101,86 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
             )}
           </tbody>
         </table>
+      </div>
+
+      <div className="mt-6">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-sm font-semibold text-slate-700">
+            Dòng thời gian giai đoạn (theo bộ lọc)
+          </h2>
+          <span className="text-xs uppercase tracking-wide text-slate-500">
+            {groupedStages.length} MST
+          </span>
+        </div>
+        {groupedStages.length ? (
+          <div className="mt-3 space-y-3">
+            {groupedStages.map((group, groupIndex) => (
+              <div
+                key={group.mst || `group-${groupIndex}`}
+                className="rounded border border-slate-200 bg-slate-50 p-3"
+              >
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <div className="text-sm font-semibold text-slate-800">
+                      {group.mst || "(MST trống)"}
+                    </div>
+                    <div className="text-xs text-slate-500 max-w-2xl truncate">
+                      {group.company || "Chưa cập nhật tên công ty"}
+                    </div>
+                  </div>
+                  <span className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                    {group.stages.length} giai đoạn
+                  </span>
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {group.stages.map((stage, stageIndex) => {
+                    const rangeKey = makeRowKey(stage) || `${group.mst || "stage"}-${stageIndex}`;
+                    const startLabel = stage.effective_from
+                      ? formatISODate(stage.effective_from)
+                      : "Không xác định";
+                    const endLabel = stage.effective_to
+                      ? formatISODate(stage.effective_to)
+                      : "Hiện tại";
+                    const active = !stage.effective_to;
+                    return (
+                      <div
+                        key={rangeKey}
+                        className={`min-w-[14rem] rounded border px-3 py-2 text-xs ${
+                          active
+                            ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                            : "border-slate-200 bg-white text-slate-700"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-semibold">
+                            {startLabel} → {endLabel}
+                          </span>
+                          {active ? (
+                            <span className="rounded bg-emerald-600 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
+                              Đang áp dụng
+                            </span>
+                          ) : null}
+                        </div>
+                        <div className="mt-2 space-y-1 text-slate-600">
+                          <div>
+                            <span className="font-medium text-slate-500">Nhập:</span> {stage.person_import || "—"}
+                          </div>
+                          <div>
+                            <span className="font-medium text-slate-500">Xuất:</span> {stage.person_export || "—"}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="mt-2 text-sm text-slate-500">
+            Không có giai đoạn nào khớp bộ lọc hiện tại.
+          </p>
+        )}
       </div>
 
       {/* Pagination */}

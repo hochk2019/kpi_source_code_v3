@@ -574,6 +574,7 @@ function sanitizeMSTRow(row) {
     person_export: normalizeStr(row?.person_export ?? ""),
     team: normalizeStr(row?.team ?? ""),
     effective_from: toISODate(row?.effective_from) || "",
+    effective_to: toISODate(row?.effective_to) || "",
     status: sanitizeMSTStatus(row?.status ?? ""),
   };
 }
@@ -588,7 +589,14 @@ export function getMSTMap() {
     .sort((a, b) => {
       const byMST = a.mst.localeCompare(b.mst);
       if (byMST !== 0) return byMST;
-      return (a.effective_from || "").localeCompare(b.effective_from || "");
+      const fromA = a.effective_from || "";
+      const fromB = b.effective_from || "";
+      if (fromA !== fromB) {
+        return fromA.localeCompare(fromB);
+      }
+      const toA = a.effective_to || "9999-12-31";
+      const toB = b.effective_to || "9999-12-31";
+      return toA.localeCompare(toB);
     });
 }
 
@@ -602,7 +610,14 @@ export function upsertMSTRows(rows, { actor = "system", detail = "" } = {}) {
   sanitized.sort((a, b) => {
     const byMST = a.mst.localeCompare(b.mst);
     if (byMST !== 0) return byMST;
-    return (a.effective_from || "").localeCompare(b.effective_from || "");
+    const fromA = a.effective_from || "";
+    const fromB = b.effective_from || "";
+    if (fromA !== fromB) {
+      return fromA.localeCompare(fromB);
+    }
+    const toA = a.effective_to || "9999-12-31";
+    const toB = b.effective_to || "9999-12-31";
+    return toA.localeCompare(toB);
   });
   const changes = diffMSTRows(previous, sanitized, actor);
   setItem(MST_KEY, JSON.stringify(sanitized));
@@ -645,6 +660,7 @@ export function saveMSTRow(rowInput, { originalKey = null, actor = "system", det
       previous.person_export === sanitized.person_export &&
       previous.team === sanitized.team &&
       previous.effective_from === sanitized.effective_from &&
+      previous.effective_to === sanitized.effective_to &&
       previous.status === sanitized.status;
     if (same) {
       return { ok: false, reason: "no-change", row: previous, key: targetKey };
@@ -659,7 +675,14 @@ export function saveMSTRow(rowInput, { originalKey = null, actor = "system", det
   const nextRows = Array.from(prevMap.values()).sort((a, b) => {
     const byMST = a.mst.localeCompare(b.mst);
     if (byMST !== 0) return byMST;
-    return (a.effective_from || "").localeCompare(b.effective_from || "");
+    const fromA = a.effective_from || "";
+    const fromB = b.effective_from || "";
+    if (fromA !== fromB) {
+      return fromA.localeCompare(fromB);
+    }
+    const toA = a.effective_to || "9999-12-31";
+    const toB = b.effective_to || "9999-12-31";
+    return toA.localeCompare(toB);
   });
 
   const changes = diffMSTRows(previousRows, nextRows, actor);
@@ -700,7 +723,7 @@ function diffMSTRows(prevRows, nextRows, actor) {
 
   const timestamp = new Date().toISOString();
   const actorName = normalizeStr(actor) || "system";
-  const trackedFields = ["person_import", "person_export", "effective_from"];
+  const trackedFields = ["person_import", "person_export", "effective_from", "effective_to"];
   const entries = [];
 
   for (const [key, row] of nextMap) {
@@ -772,7 +795,8 @@ function makeMSTRowKey(row) {
   if (!row) return "";
   const mst = normalizeMST(row.mst);
   const effective = toISODate(row?.effective_from) || "";
-  return `${mst || ""}__${effective}`;
+  const effectiveTo = toISODate(row?.effective_to) || "";
+  return `${mst || ""}__${effective}__${effectiveTo}`;
 }
 
 function createMSTHistoryEntry({ mst, field, from, to, actor, timestamp, rowKey, type }) {
@@ -786,7 +810,7 @@ function createMSTHistoryEntry({ mst, field, from, to, actor, timestamp, rowKey,
     to: normalizeStr(to),
     actor: actor || "system",
     timestamp,
-    rowKey: rowKey || makeMSTRowKey({ mst, effective_from: "" }),
+    rowKey: rowKey || makeMSTRowKey({ mst, effective_from: "", effective_to: "" }),
     type: type || "update",
   };
 }
@@ -822,7 +846,13 @@ export function getMSTHistoryEntries(limit = MST_HISTORY_LIMIT) {
         to: normalizeStr(entry.to),
         actor: normalizeStr(entry.actor) || "system",
         timestamp,
-        rowKey: entry.rowKey || makeMSTRowKey({ mst: entry.mst, effective_from: entry.effective_from || "" }),
+        rowKey:
+          entry.rowKey ||
+          makeMSTRowKey({
+            mst: entry.mst,
+            effective_from: entry.effective_from || "",
+            effective_to: entry.effective_to || "",
+          }),
         type: entry.type || "update",
       };
     })
@@ -1099,22 +1129,57 @@ export function getDeclHistoryForRow(rowKey, limit = DECL_HISTORY_PER_ROW_LIMIT)
 
 /** Lay nguoi phu trach theo MST & ngay hieu luc gan nhat (<= ngay to khai) */
 export function getMSTFor(mst, isoDate) {
-  const rows = getMSTMap().filter(r => normalizeMST(r.mst) === normalizeMST(mst));
+  const rows = getMSTMap().filter((r) => normalizeMST(r.mst) === normalizeMST(mst));
   if (rows.length === 0) return null;
 
-  const dateVal = isoDate ? new Date(isoDate).getTime() : Number.POSITIVE_INFINITY;
+  if (!isoDate) {
+    return rows[rows.length - 1];
+  }
 
-  // Xep theo hieu luc gan nhat va gioi han theo ngay TK
-  const picked = rows
-    .map(r => {
-      const ef = r.effective_from || "0001-01-01";
-      const ts = new Date(ef).getTime();
-      const rank = ts <= dateVal ? (dateVal - ts) : Number.POSITIVE_INFINITY - ts;
-      return { r, rank };
+  const target = new Date(isoDate);
+  const targetTime = Number.isNaN(target.getTime()) ? null : target.getTime();
+  if (targetTime == null) {
+    return rows[rows.length - 1];
+  }
+
+  const resolveTime = (value, fallbackInfinity = false) => {
+    if (!value) {
+      return fallbackInfinity ? Number.POSITIVE_INFINITY : Number.NEGATIVE_INFINITY;
+    }
+    const date = new Date(value);
+    const time = date.getTime();
+    if (Number.isNaN(time)) {
+      return fallbackInfinity ? Number.POSITIVE_INFINITY : Number.NEGATIVE_INFINITY;
+    }
+    return time;
+  };
+
+  const candidates = rows
+    .map((row) => {
+      const from = resolveTime(row.effective_from);
+      const to = resolveTime(row.effective_to, true);
+      const isWithin = targetTime >= from && targetTime <= to;
+      const distance = targetTime - from;
+      return { row, from, to, isWithin, distance };
     })
-    .sort((a,b) => a.rank - b.rank)[0];
+    .sort((a, b) => {
+      if (a.from !== b.from) {
+        return a.from - b.from;
+      }
+      return a.to - b.to;
+    });
 
-  return picked?.r ?? rows[0];
+  const active = candidates.filter((entry) => entry.isWithin);
+  if (active.length) {
+    return active.sort((a, b) => b.from - a.from)[0]?.row ?? rows[0];
+  }
+
+  const before = candidates.filter((entry) => entry.from <= targetTime);
+  if (before.length) {
+    return before.sort((a, b) => b.from - a.from)[0]?.row ?? rows[0];
+  }
+
+  return candidates[0]?.row ?? rows[0];
 }
 
 // ===== DECL rows (tá» khai) =====
@@ -1882,6 +1947,7 @@ function ensureMSTEntriesForDeclRows(declRows, { actor = 'system', dryRun = fals
       person_export: '',
       team: '',
       effective_from,
+      effective_to: '',
       status: MST_ASSIGNMENT_STATUS.PENDING,
     });
     seen.add(mst);
