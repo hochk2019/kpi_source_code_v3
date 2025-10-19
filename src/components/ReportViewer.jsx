@@ -1350,6 +1350,34 @@ export default function ReportViewer({ canExport = true }) {
     }));
   };
 
+  const handleSeedSamples = () => {
+    const confirmed = window.confirm(
+      "Tạo dữ liệu mẫu sẽ ghi đè các tờ khai hiện có bằng 100 dòng thử nghiệm tháng 8-9. Bạn có chắc chắn muốn tiếp tục?"
+    );
+    if (!confirmed) return;
+    const generated = seedSampleDeclarations({ actor: "ui-sample", count: 100 });
+    setVersion((value) => value + 1);
+    alert(`Đã sinh ${generated.length} tờ khai mẫu.`);
+  };
+
+  const [ruleCollection, setRuleCollection] = useState(() => loadRuleSets());
+  const [selectedRuleId, setSelectedRuleId] = useState(() => sanitizeRulePreference(storedPrefs.ruleId));
+  const [rules, setRulesState] = useState(() =>
+    loadRules(sanitizeRulePreference(storedPrefs.ruleId) || undefined)
+  );
+  const [roster, setRoster] = useState(() => getTeamRoster());
+  const [mstRows, setMstRows] = useState(() => getMSTMap());
+  const [declarations, setDeclarations] = useState(() => sortDeclRows(getDeclRows()));
+  const [adjustments, setAdjustments] = useState(() => getKpiAdjustments());
+  const [reportSchedules, setReportSchedules] = useState(() => getReportSchedules());
+  const [scheduleDraft, setScheduleDraft] = useState(() => createScheduleDraft());
+  const [editingScheduleId, setEditingScheduleId] = useState("");
+
+  const [adjustmentPageSize, setAdjustmentPageSize] = useState(() =>
+    sanitizeAdjustmentPageSize(storedPrefs.adjustmentPageSize)
+  );
+  const [adjustmentPage, setAdjustmentPage] = useState(0);
+
   useEffect(() => {
     const payload = {
       quickRange,
@@ -1387,34 +1415,6 @@ export default function ReportViewer({ canExport = true }) {
     selectedRuleId,
     adjustmentPageSize,
   ]);
-
-  const handleSeedSamples = () => {
-    const confirmed = window.confirm(
-      "Tạo dữ liệu mẫu sẽ ghi đè các tờ khai hiện có bằng 100 dòng thử nghiệm tháng 8-9. Bạn có chắc chắn muốn tiếp tục?"
-    );
-    if (!confirmed) return;
-    const generated = seedSampleDeclarations({ actor: "ui-sample", count: 100 });
-    setVersion((value) => value + 1);
-    alert(`Đã sinh ${generated.length} tờ khai mẫu.`);
-  };
-
-  const [ruleCollection, setRuleCollection] = useState(() => loadRuleSets());
-  const [selectedRuleId, setSelectedRuleId] = useState(() => sanitizeRulePreference(storedPrefs.ruleId));
-  const [rules, setRulesState] = useState(() =>
-    loadRules(sanitizeRulePreference(storedPrefs.ruleId) || undefined)
-  );
-  const [roster, setRoster] = useState(() => getTeamRoster());
-  const [mstRows, setMstRows] = useState(() => getMSTMap());
-  const [declarations, setDeclarations] = useState(() => sortDeclRows(getDeclRows()));
-  const [adjustments, setAdjustments] = useState(() => getKpiAdjustments());
-  const [reportSchedules, setReportSchedules] = useState(() => getReportSchedules());
-  const [scheduleDraft, setScheduleDraft] = useState(() => createScheduleDraft());
-  const [editingScheduleId, setEditingScheduleId] = useState("");
-
-  const [adjustmentPageSize, setAdjustmentPageSize] = useState(() =>
-    sanitizeAdjustmentPageSize(storedPrefs.adjustmentPageSize)
-  );
-  const [adjustmentPage, setAdjustmentPage] = useState(0);
 
   useEffect(() => {
     setRuleCollection(loadRuleSets());
