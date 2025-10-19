@@ -1,5 +1,16 @@
 import { fetchWithAuth } from '@/auth/localAuth.js';
 
+function formatHttpError(response) {
+  if (!response || typeof response.status !== 'number') {
+    return 'Phản hồi HTTP không hợp lệ';
+  }
+  const statusText =
+    typeof response.statusText === 'string' && response.statusText.trim()
+      ? response.statusText.trim()
+      : '';
+  return statusText ? `HTTP ${response.status} ${statusText}` : `HTTP ${response.status}`;
+}
+
 async function sendWrite(base, key, value) {
   const payload = value === null || value === undefined ? { value: null } : { value };
   const urlBase = base || '';
@@ -20,10 +31,7 @@ async function sendWrite(base, key, value) {
     throw new Error('Không nhận được phản hồi hợp lệ từ máy chủ đồng bộ');
   }
   if (!response.ok) {
-    const statusText = typeof response.statusText === 'string' && response.statusText.trim()
-      ? ` ${response.statusText.trim()}`
-      : '';
-    throw new Error(`HTTP ${response.status}${statusText}`);
+    throw new Error(formatHttpError(response));
   }
   return response;
 }
@@ -210,13 +218,30 @@ async function bootstrapFromServer(baseUrl) {
   apiBase = normalizedBase;
   bootstrapPromise = (async () => {
     try {
-      const response = await fetchWithAuth(`${normalizedBase}/api/bootstrap`, {
-        cache: 'no-store',
-      });
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
+      let response;
+      try {
+        response = await fetchWithAuth(`${normalizedBase}/api/bootstrap`, {
+          cache: 'no-store',
+        });
+      } catch (error) {
+        throw new Error(`Không thể tải bootstrap đồng bộ: ${error?.message ?? error}`, {
+          cause: error instanceof Error ? error : undefined,
+        });
       }
-      const payload = await response.json();
+      if (!response || typeof response.ok !== 'boolean') {
+        throw new Error('Không nhận được phản hồi hợp lệ từ máy chủ đồng bộ');
+      }
+      if (!response.ok) {
+        throw new Error(formatHttpError(response));
+      }
+      let payload;
+      try {
+        payload = await response.json();
+      } catch (error) {
+        throw new Error('Không thể phân tích phản hồi JSON từ máy chủ đồng bộ', {
+          cause: error instanceof Error ? error : undefined,
+        });
+      }
       applyRemoteSnapshot(payload?.data);
       remoteEnabled = true;
       lastSyncError = null;
@@ -271,15 +296,40 @@ export async function refreshSharedKeys(keys, options = {}) {
   const results = {};
   for (const key of targets) {
     const url = `${base}/api/storage/${encodeURIComponent(key)}`;
-    const response = await fetchWithAuth(url, { method: 'GET' });
-    if (!response.ok) {
-      const error = new Error(`HTTP ${response.status}`);
-      lastSyncError = error.message;
+    let response;
+    try {
+      response = await fetchWithAuth(url, { method: 'GET' });
+    } catch (error) {
+      const message = `Không thể tải khóa đồng bộ "${key}": ${error?.message ?? error}`;
+      lastSyncError = message;
       remoteEnabled = false;
       emitSyncStatus();
-      throw error;
+      throw new Error(message, { cause: error instanceof Error ? error : undefined });
     }
-    const payload = await response.json();
+    if (!response || typeof response.ok !== 'boolean') {
+      const message = 'Không nhận được phản hồi hợp lệ từ máy chủ đồng bộ';
+      lastSyncError = message;
+      remoteEnabled = false;
+      emitSyncStatus();
+      throw new Error(message);
+    }
+    if (!response.ok) {
+      const message = formatHttpError(response);
+      lastSyncError = message;
+      remoteEnabled = false;
+      emitSyncStatus();
+      throw new Error(message);
+    }
+    let payload;
+    try {
+      payload = await response.json();
+    } catch (error) {
+      const message = `Không thể phân tích phản hồi JSON cho khóa đồng bộ "${key}"`;
+      lastSyncError = message;
+      remoteEnabled = false;
+      emitSyncStatus();
+      throw new Error(message, { cause: error instanceof Error ? error : undefined });
+    }
     const raw = payload?.raw;
     if (raw === null || raw === undefined) {
       cache.delete(key);

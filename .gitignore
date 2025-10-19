@@ -1,6 +1,7 @@
 node_modules/
 dist/
 .DS_Store
+node-compile-cache/
 server/data/*.sqlite
 server/data/*.sqlite-shm
 server/data/*.sqlite-wal
