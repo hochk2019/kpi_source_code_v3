@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   getDeclRows,
   getTeamRoster,
@@ -24,10 +24,9 @@ import {
   buildReportData,
   aggregateByCompany,
 } from "@/lib/reports.js";
-import useFilterPresets from "@/hooks/useFilterPresets.js";
-import useReportQuickSearchFavorites from "@/hooks/useReportQuickSearchFavorites.js";
 import { seedSampleDeclarations } from "@/shared/sampleDeclarations.js";
 import { toAdjustmentTotalsArray } from "../../shared/kpiAdjustments.js";
+import { isAdminRole } from "@/shared/accountRoles.js";
 import {
   ResponsiveContainer,
   LineChart,
@@ -190,7 +189,6 @@ function getSegmentedButtonClass(isActive) {
 }
 
 const REPORT_PREFS_STORAGE_KEY = "kpi_report_viewer_prefs_v1";
-const FILTER_PRESET_SCOPE = "report-viewer";
 const EXPORT_COLUMN_KEYS = ["items", "licenses", "co", "coLines", "licenseCodes"];
 const QUICK_RANGE_VALUES = new Set([
   ...QUICK_RANGE_OPTIONS.map((option) => option.value),
@@ -305,13 +303,6 @@ function sanitizeColumnVisibility(input = {}) {
     }
   }
   return result;
-}
-
-function sanitizeQuickSearchValue(value) {
-  if (typeof value !== "string") {
-    return "";
-  }
-  return normalizeStr(value);
 }
 
 function getCompanyRowLabel(row = {}) {
@@ -1284,7 +1275,7 @@ function TeamDetailCard({ team, canExport, onExport, exporting, visibleColumns =
   );
 }
 
-export default function ReportViewer({ canExport = true }) {
+export default function ReportViewer({ canExport = true, currentUser = null }) {
   const storedPrefs = useMemo(() => loadReportPreferences(), []);
   const initialQuickRange = sanitizeQuickRange(storedPrefs.quickRange);
   const quickRangeBase = initialQuickRange === "custom" ? "this_month" : initialQuickRange;
@@ -1303,7 +1294,6 @@ export default function ReportViewer({ canExport = true }) {
   const [scope, setScope] = useState(() => sanitizeScope(storedPrefs.scope));
   const [selectedStaff, setSelectedStaff] = useState(() => sanitizeSelection(storedPrefs.selectedStaff));
   const [selectedTeam, setSelectedTeam] = useState(() => sanitizeSelection(storedPrefs.selectedTeam));
-  const [quickSearch, setQuickSearch] = useState(() => sanitizeQuickSearchValue(storedPrefs.quickSearch));
   const [staffViewMode, setStaffViewMode] = useState("summary");
   const [teamViewMode, setTeamViewMode] = useState("summary");
   const [topStaffMetric, setTopStaffMetric] = useState(() => sanitizeTopStaffMetric(storedPrefs.topStaffMetric));
@@ -1324,35 +1314,8 @@ export default function ReportViewer({ canExport = true }) {
   }));
   const exportColumns = useMemo(() => sanitizeColumnVisibility(columnVisibility), [columnVisibility]);
   const prefsSnapshotRef = useRef("");
-  const {
-    presets: savedPresets,
-    loading: presetLoading,
-    error: presetError,
-    clearError: clearPresetError,
-    refresh: refreshPresetList,
-    createPreset: createFilterPreset,
-    updatePreset: updateFilterPreset,
-    deletePreset: deleteFilterPreset,
-  } = useFilterPresets(FILTER_PRESET_SCOPE);
-  const {
-    favorites: quickSearchFavorites,
-    addFavorite: addQuickSearchFavorite,
-    removeFavorite: removeQuickSearchFavorite,
-    clearType: clearQuickSearchFavorites,
-  } = useReportQuickSearchFavorites();
-  const [selectedPresetId, setSelectedPresetId] = useState("");
-  const [appliedPresetId, setAppliedPresetId] = useState("");
-  const [presetSaving, setPresetSaving] = useState(false);
-  const presetBusy = presetLoading || presetSaving;
-
-  useEffect(() => {
-    if (selectedPresetId && !savedPresets.some((item) => item.id === selectedPresetId)) {
-      setSelectedPresetId("");
-    }
-    if (appliedPresetId && !savedPresets.some((item) => item.id === appliedPresetId)) {
-      setAppliedPresetId("");
-    }
-  }, [savedPresets, selectedPresetId, appliedPresetId]);
+  const [scheduleCollapsed, setScheduleCollapsed] = useState(() => storedPrefs.scheduleCollapsed === true);
+  const isAdmin = isAdminRole(currentUser?.role);
 
   const handleToggleColumnVisibility = (key) => {
     setColumnVisibility((prev) => ({
@@ -1402,7 +1365,6 @@ export default function ReportViewer({ canExport = true }) {
       scope,
       selectedStaff,
       selectedTeam,
-      quickSearch,
       staffSortKey,
       teamSortKey,
       topStaffMetric,
@@ -1410,6 +1372,7 @@ export default function ReportViewer({ canExport = true }) {
       ruleId: selectedRuleId,
       adjustmentPageSize,
       detailPageSize,
+      scheduleCollapsed,
     };
     const snapshot = JSON.stringify(payload);
     if (prefsSnapshotRef.current === snapshot) {
@@ -1424,7 +1387,6 @@ export default function ReportViewer({ canExport = true }) {
     scope,
     selectedStaff,
     selectedTeam,
-    quickSearch,
     staffSortKey,
     teamSortKey,
     topStaffMetric,
@@ -1432,6 +1394,7 @@ export default function ReportViewer({ canExport = true }) {
     selectedRuleId,
     adjustmentPageSize,
     detailPageSize,
+    scheduleCollapsed,
   ]);
 
   useEffect(() => {
@@ -1801,80 +1764,10 @@ export default function ReportViewer({ canExport = true }) {
     );
   }, [report.teams.list]);
 
-  const normalizedQuickSearch = useMemo(() => {
-    const raw = sanitizeQuickSearchValue(quickSearch);
-    if (!raw) {
-      return "";
-    }
-    return normalizeName(raw);
-  }, [quickSearch]);
-  const quickSearchActive = Boolean(normalizedQuickSearch);
-  const currentQuickFavorites = scope === "team" ? quickSearchFavorites.team : quickSearchFavorites.staff;
-  const quickSearchPlaceholder =
-    scope === "team"
-      ? "Tìm nhanh tổ đội / công ty / MST"
-      : "Tìm nhanh nhân viên / tổ đội / công ty";
-
-  const filteredStaffList = useMemo(() => {
-    if (!quickSearchActive) {
-      return sortedStaffList;
-    }
-    return sortedStaffList.filter((item) => {
-      const candidates = [
-        item.name,
-        item.teamLabel,
-        item.key,
-        Array.isArray(item.stats?.licenseCodes) ? item.stats.licenseCodes.join(" ") : "",
-      ];
-      return candidates.some((candidate) => {
-        if (!candidate) return false;
-        return normalizeName(normalizeStr(candidate)).includes(normalizedQuickSearch);
-      });
-    });
-  }, [sortedStaffList, quickSearchActive, normalizedQuickSearch]);
-
-  const filteredTeamList = useMemo(() => {
-    if (!quickSearchActive) {
-      return sortedTeamList;
-    }
-    return sortedTeamList.filter((item) => {
-      const candidates = [
-        item.name,
-        item.key,
-        Array.isArray(item.stats?.licenseCodes) ? item.stats.licenseCodes.join(" ") : "",
-      ];
-      return candidates.some((candidate) => {
-        if (!candidate) return false;
-        return normalizeName(normalizeStr(candidate)).includes(normalizedQuickSearch);
-      });
-    });
-  }, [sortedTeamList, quickSearchActive, normalizedQuickSearch]);
-
-  const filteredCompanySummaryStaff = useMemo(() => {
-    if (!quickSearchActive) {
-      return companySummaryAllStaff;
-    }
-    return companySummaryAllStaff.filter((row) => {
-      const candidates = [row.staff, row.team, row.cong_ty, row.mst];
-      return candidates.some((candidate) => {
-        if (!candidate) return false;
-        return normalizeName(normalizeStr(candidate)).includes(normalizedQuickSearch);
-      });
-    });
-  }, [companySummaryAllStaff, quickSearchActive, normalizedQuickSearch]);
-
-  const filteredCompanySummaryTeam = useMemo(() => {
-    if (!quickSearchActive) {
-      return companySummaryAllTeams;
-    }
-    return companySummaryAllTeams.filter((row) => {
-      const candidates = [row.team, row.cong_ty, row.mst];
-      return candidates.some((candidate) => {
-        if (!candidate) return false;
-        return normalizeName(normalizeStr(candidate)).includes(normalizedQuickSearch);
-      });
-    });
-  }, [companySummaryAllTeams, quickSearchActive, normalizedQuickSearch]);
+  const filteredStaffList = sortedStaffList;
+  const filteredTeamList = sortedTeamList;
+  const filteredCompanySummaryStaff = companySummaryAllStaff;
+  const filteredCompanySummaryTeam = companySummaryAllTeams;
 
   useEffect(() => {
     if (selectedStaff !== "all" || staffViewMode !== "detail") {
@@ -1929,232 +1822,12 @@ export default function ReportViewer({ canExport = true }) {
     setTo(range.to);
   };
 
-  const handleSaveQuickSearchFavorite = () => {
-    const value = sanitizeQuickSearchValue(quickSearch);
-    if (!value) {
-      toast.warning("Nhập từ khoá trước khi lưu tìm kiếm nhanh.");
-      return;
-    }
-    const result = addQuickSearchFavorite(scope, value);
-    if (result.ok) {
-      toast.success(
-        scope === "team" ? "Đã lưu tìm kiếm tổ đội ưa thích." : "Đã lưu tìm kiếm nhân viên ưa thích."
-      );
-      return;
-    }
-    if (result.reason === "duplicate") {
-      toast.info("Từ khoá này đã nằm trong danh sách tìm kiếm nhanh.");
-    } else {
-      toast.error("Không thể lưu tìm kiếm nhanh, vui lòng thử lại.");
-    }
-  };
-
-  const handleApplyQuickSearchFavorite = (value) => {
-    setQuickSearch(value);
-  };
-
-  const handleRemoveQuickSearchFavorite = (value) => {
-    const result = removeQuickSearchFavorite(scope, value);
-    if (result.ok) {
-      toast.success("Đã xoá khỏi danh sách tìm kiếm nhanh.");
-    } else {
-      toast.error("Không thể xoá tìm kiếm nhanh đã chọn.");
-    }
-  };
-
-  const handleClearQuickSearchFavorites = () => {
-    if (!currentQuickFavorites.length) {
-      return;
-    }
-    const confirmed = window.confirm("Xoá toàn bộ tìm kiếm nhanh của chế độ hiện tại?");
-    if (!confirmed) {
-      return;
-    }
-    clearQuickSearchFavorites(scope);
-    toast.success("Đã xoá danh sách tìm kiếm nhanh.");
-  };
-
   const handleDetailPageSizeChange = (event) => {
     const value = sanitizeDetailPageSize(event?.target?.value);
     setDetailPageSize(value);
     setStaffDetailPage(0);
     setTeamDetailPage(0);
   };
-
-  const buildFilterPresetPayload = useCallback(
-    () => ({
-      quickRange,
-      from,
-      to,
-      scope,
-      selectedStaff,
-      selectedTeam,
-      quickSearch: sanitizeQuickSearchValue(quickSearch),
-    }),
-    [quickRange, from, to, scope, selectedStaff, selectedTeam, quickSearch]
-  );
-
-  const applyPresetFilters = useCallback(
-    (preset, { notify = true } = {}) => {
-      if (!preset || typeof preset !== "object") {
-        return;
-      }
-      const filters = preset.filters && typeof preset.filters === "object" ? preset.filters : {};
-      const nextQuickRange = sanitizeQuickRange(filters.quickRange);
-      if (nextQuickRange === "custom") {
-        setQuickRange("custom");
-        setFrom(sanitizeDateInput(filters.from, from));
-        setTo(sanitizeDateInput(filters.to, to));
-      } else {
-        setQuickRange(nextQuickRange);
-        const range = computeQuickRange(nextQuickRange);
-        setFrom(range.from);
-        setTo(range.to);
-      }
-      const nextScope = sanitizeScope(filters.scope);
-      setScope(nextScope);
-      setSelectedStaff(sanitizeSelection(filters.selectedStaff));
-      setSelectedTeam(sanitizeSelection(filters.selectedTeam));
-      setQuickSearch(sanitizeQuickSearchValue(filters.quickSearch));
-      if (preset.id) {
-        setSelectedPresetId(preset.id);
-        setAppliedPresetId(preset.id);
-      }
-      if (notify) {
-        toast.success(`Đã áp dụng bộ lọc "${preset.name}".`);
-      }
-    },
-    [from, to]
-  );
-
-  const handleApplyPreset = useCallback(() => {
-    clearPresetError();
-    if (!selectedPresetId) {
-      toast.warning("Hãy chọn bộ lọc trước khi áp dụng.");
-      return;
-    }
-    const preset = savedPresets.find((item) => item.id === selectedPresetId);
-    if (!preset) {
-      toast.error("Không tìm thấy bộ lọc đã chọn.");
-      return;
-    }
-    applyPresetFilters(preset);
-  }, [selectedPresetId, savedPresets, applyPresetFilters, clearPresetError]);
-
-  const handleSavePreset = useCallback(async () => {
-    clearPresetError();
-    let name = window.prompt("Đặt tên cho bộ lọc mới", "Bộ lọc báo cáo");
-    if (name === null) {
-      return;
-    }
-    name = sanitizeQuickSearchValue(name);
-    if (!name) {
-      toast.warning("Tên bộ lọc không được để trống.");
-      return;
-    }
-    setPresetSaving(true);
-    try {
-      const preset = await createFilterPreset({ name, filters: buildFilterPresetPayload() });
-      if (preset) {
-        applyPresetFilters(preset, { notify: false });
-        toast.success(`Đã lưu bộ lọc "${preset.name}".`);
-      }
-    } catch (error) {
-      toast.error(error?.message || "Không thể lưu bộ lọc mới.");
-    } finally {
-      setPresetSaving(false);
-    }
-  }, [
-    clearPresetError,
-    createFilterPreset,
-    buildFilterPresetPayload,
-    applyPresetFilters,
-  ]);
-
-  const handleOverwritePreset = useCallback(async () => {
-    clearPresetError();
-    const targetId = selectedPresetId || appliedPresetId;
-    if (!targetId) {
-      toast.warning("Chọn bộ lọc cần ghi đè trước.");
-      return;
-    }
-    const target = savedPresets.find((item) => item.id === targetId);
-    if (!target) {
-      toast.error("Không tìm thấy bộ lọc để ghi đè.");
-      return;
-    }
-    const confirmed = window.confirm(`Ghi đè bộ lọc "${target.name}" với điều kiện hiện tại?`);
-    if (!confirmed) {
-      return;
-    }
-    setPresetSaving(true);
-    try {
-      const preset = await updateFilterPreset(target.id, {
-        name: target.name,
-        filters: buildFilterPresetPayload(),
-      });
-      applyPresetFilters(preset, { notify: false });
-      toast.success(`Đã cập nhật bộ lọc "${preset.name}".`);
-    } catch (error) {
-      toast.error(error?.message || "Không thể cập nhật bộ lọc.");
-    } finally {
-      setPresetSaving(false);
-    }
-  }, [
-    clearPresetError,
-    selectedPresetId,
-    appliedPresetId,
-    savedPresets,
-    updateFilterPreset,
-    buildFilterPresetPayload,
-    applyPresetFilters,
-  ]);
-
-  const handleDeletePreset = useCallback(async () => {
-    clearPresetError();
-    if (!selectedPresetId) {
-      toast.warning("Chọn bộ lọc trước khi xoá.");
-      return;
-    }
-    const preset = savedPresets.find((item) => item.id === selectedPresetId);
-    if (!preset) {
-      toast.error("Không tìm thấy bộ lọc cần xoá.");
-      return;
-    }
-    const confirmed = window.confirm(`Bạn có chắc chắn muốn xoá bộ lọc "${preset.name}"?`);
-    if (!confirmed) {
-      return;
-    }
-    setPresetSaving(true);
-    try {
-      await deleteFilterPreset(preset.id);
-      toast.success(`Đã xoá bộ lọc "${preset.name}".`);
-      if (appliedPresetId === preset.id) {
-        setAppliedPresetId("");
-      }
-      setSelectedPresetId("");
-    } catch (error) {
-      toast.error(error?.message || "Không thể xoá bộ lọc.");
-    } finally {
-      setPresetSaving(false);
-    }
-  }, [
-    clearPresetError,
-    selectedPresetId,
-    savedPresets,
-    deleteFilterPreset,
-    appliedPresetId,
-  ]);
-
-  const handleRefreshPresets = useCallback(async () => {
-    clearPresetError();
-    try {
-      await refreshPresetList();
-      toast.success("Đã đồng bộ danh sách bộ lọc.");
-    } catch (error) {
-      toast.error(error?.message || "Không thể đồng bộ danh sách bộ lọc.");
-    }
-  }, [clearPresetError, refreshPresetList]);
 
   const handleScheduleFieldChange = (field, value) => {
     setScheduleDraft((prev) => ({ ...prev, [field]: value }));
@@ -2899,168 +2572,7 @@ export default function ReportViewer({ canExport = true }) {
             </button>
           </div>
         </div>
-        <div className="flex flex-wrap gap-4">
-          <div className="min-w-[280px] flex-1 space-y-2">
-            <div className="flex items-center justify-between">
-              <label className="text-sm font-medium text-[color:var(--ds-text-primary)]">
-                Tìm nhanh {scope === "team" ? "tổ đội" : "nhân viên"}
-              </label>
-              {currentQuickFavorites.length ? (
-                <button
-                  type="button"
-                  onClick={handleClearQuickSearchFavorites}
-                  className="text-xs font-semibold text-rose-600 hover:text-rose-700"
-                >
-                  Xoá tất cả
-                </button>
-              ) : null}
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <input
-                type="text"
-                value={quickSearch}
-                onChange={(event) => setQuickSearch(event.target.value)}
-                placeholder={quickSearchPlaceholder}
-                className="min-w-[200px] flex-1 rounded border border-[color:var(--ds-border-subtle)] bg-white px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-[color:var(--ds-accent-ring)] focus:ring-offset-0"
-              />
-              {quickSearch ? (
-                <button
-                  type="button"
-                  onClick={() => setQuickSearch("")}
-                  className="rounded border border-[color:var(--ds-border-subtle)] px-3 py-2 text-xs text-[color:var(--ds-text-secondary)] hover:bg-[color:var(--ds-surface-muted)]"
-                >
-                  Xoá
-                </button>
-              ) : null}
-              <button
-                type="button"
-                onClick={handleSaveQuickSearchFavorite}
-                disabled={!sanitizeQuickSearchValue(quickSearch) || presetBusy}
-                className={`rounded px-3 py-2 text-xs font-semibold shadow-sm transition-colors ${
-                  sanitizeQuickSearchValue(quickSearch) && !presetBusy
-                    ? 'bg-[color:var(--ds-surface-primary)] text-white hover:bg-[color:var(--ds-surface-strong)]'
-                    : 'cursor-not-allowed bg-[color:var(--ds-surface-muted)] text-[color:var(--ds-text-disabled)]'
-                }`}
-              >
-                Lưu tìm kiếm
-              </button>
-            </div>
-            {currentQuickFavorites.length ? (
-              <div className="flex flex-wrap gap-2 text-xs text-[color:var(--ds-text-secondary)]">
-                {currentQuickFavorites.map((item) => (
-                  <button
-                    key={`${scope}-${item.normalized}`}
-                    type="button"
-                    onClick={() => handleApplyQuickSearchFavorite(item.value)}
-                    className="inline-flex items-center gap-1 rounded-full border border-[color:var(--ds-border-subtle)] bg-white px-3 py-1.5 hover:bg-[color:var(--ds-surface-muted)]"
-                  >
-                    <span className="font-medium text-[color:var(--ds-text-primary)]">{item.value}</span>
-                    <span
-                      role="presentation"
-                      className="text-[color:var(--ds-text-muted)] hover:text-rose-600"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        handleRemoveQuickSearchFavorite(item.value);
-                      }}
-                    >
-                      ×
-                    </span>
-                  </button>
-                ))}
-              </div>
-            ) : (
-              <p className="text-xs text-[color:var(--ds-text-muted)]">
-                Chưa có tìm kiếm nhanh đã lưu. Nhập từ khoá rồi bấm "Lưu tìm kiếm" để dùng lại sau.
-              </p>
-            )}
-          </div>
 
-          <div className="min-w-[300px] flex-1 space-y-2">
-            <label className="text-sm font-medium text-[color:var(--ds-text-primary)]">Bộ lọc đã lưu</label>
-            <div className="flex flex-wrap items-center gap-2">
-              <select
-                value={selectedPresetId}
-                onChange={(event) => {
-                  clearPresetError();
-                  setSelectedPresetId(event.target.value);
-                }}
-                className="min-w-[200px] flex-1 rounded border border-[color:var(--ds-border-subtle)] bg-white px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-[color:var(--ds-accent-ring)] focus:ring-offset-0"
-              >
-                <option value="">Chọn bộ lọc</option>
-                {savedPresets.map((preset) => (
-                  <option key={preset.id} value={preset.id}>
-                    {preset.name}
-                  </option>
-                ))}
-              </select>
-              <button
-                type="button"
-                onClick={handleApplyPreset}
-                disabled={!selectedPresetId || presetBusy}
-                className={`rounded px-3 py-2 text-xs font-semibold shadow-sm transition-colors ${
-                  selectedPresetId && !presetBusy
-                    ? 'bg-[color:var(--ds-surface-primary)] text-white hover:bg-[color:var(--ds-surface-strong)]'
-                    : 'cursor-not-allowed bg-[color:var(--ds-surface-muted)] text-[color:var(--ds-text-disabled)]'
-                }`}
-              >
-                Áp dụng
-              </button>
-            </div>
-            <div className="flex flex-wrap gap-2 text-xs font-semibold">
-              <button
-                type="button"
-                onClick={handleSavePreset}
-                disabled={presetBusy}
-                className={`rounded border px-3 py-2 transition-colors ${
-                  presetBusy
-                    ? 'cursor-not-allowed border-[color:var(--ds-border-subtle)] text-[color:var(--ds-text-disabled)]'
-                    : 'border-[color:var(--ds-border-strong)] text-[color:var(--ds-text-primary)] hover:bg-[color:var(--ds-surface-muted)]'
-                }`}
-              >
-                Lưu bộ lọc mới
-              </button>
-              <button
-                type="button"
-                onClick={handleOverwritePreset}
-                disabled={presetBusy || (!selectedPresetId && !appliedPresetId)}
-                className={`rounded border px-3 py-2 transition-colors ${
-                  !presetBusy && (selectedPresetId || appliedPresetId)
-                    ? 'border-amber-400 text-amber-700 hover:bg-amber-50'
-                    : 'cursor-not-allowed border-[color:var(--ds-border-subtle)] text-[color:var(--ds-text-disabled)]'
-                }`}
-              >
-                Ghi đè bộ lọc
-              </button>
-              <button
-                type="button"
-                onClick={handleDeletePreset}
-                disabled={presetBusy || !selectedPresetId}
-                className={`rounded border px-3 py-2 transition-colors ${
-                  selectedPresetId && !presetBusy
-                    ? 'border-rose-300 text-rose-700 hover:bg-rose-50'
-                    : 'cursor-not-allowed border-[color:var(--ds-border-subtle)] text-[color:var(--ds-text-disabled)]'
-                }`}
-              >
-                Xoá
-              </button>
-              <button
-                type="button"
-                onClick={handleRefreshPresets}
-                disabled={presetBusy}
-                className={`rounded border px-3 py-2 transition-colors ${
-                  !presetBusy
-                    ? 'border-[color:var(--ds-border-subtle)] text-[color:var(--ds-text-primary)] hover:bg-[color:var(--ds-surface-muted)]'
-                    : 'cursor-not-allowed border-[color:var(--ds-border-subtle)] text-[color:var(--ds-text-disabled)]'
-                }`}
-              >
-                {presetLoading ? "Đồng bộ…" : "Đồng bộ"}
-              </button>
-            </div>
-            {presetError ? (
-              <div className="text-xs text-rose-600">{presetError}</div>
-            ) : null}
-          </div>
-        </div>
 
         <div className="grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
           <div className="space-y-2 rounded-xl border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-muted)] p-3">
@@ -3123,217 +2635,229 @@ export default function ReportViewer({ canExport = true }) {
         </div>
       </div>
 
-      <div className="ds-card space-y-4 p-4 print:hidden">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h3 className="text-base font-semibold text-[color:var(--ds-text-primary)]">
-              Lập lịch gửi báo cáo KPI
-            </h3>
-            <p className="text-sm text-[color:var(--ds-text-secondary)]">
-              Thiết lập gửi tự động file Excel/PDF theo tuần hoặc tháng tới danh sách email mong muốn.
-            </p>
-          </div>
-          <div className="text-xs text-[color:var(--ds-text-muted)]">
-            {nextScheduleRun
-              ? `Lịch sắp chạy: ${formatScheduleNextRunLabel(nextScheduleRun.nextRun)}`
-              : "Chưa có lịch chạy tự động"}
-          </div>
-        </div>
-
-        <form
-          className="grid gap-3 md:grid-cols-2 xl:grid-cols-4"
-          onSubmit={handleSaveSchedule}
-        >
-          <div className="flex flex-col gap-1">
-            <label className="text-xs font-semibold uppercase text-[color:var(--ds-text-secondary)]" htmlFor="schedule-name">
-              Tên lịch gửi
-            </label>
-            <input
-              id="schedule-name"
-              type="text"
-              value={scheduleDraft.name}
-              onChange={(event) => handleScheduleFieldChange("name", event.target.value)}
-              placeholder="Báo cáo KPI tuần"
-              className="rounded border border-[color:var(--ds-border-subtle)] bg-white px-3 py-2 text-sm text-[color:var(--ds-text-primary)] shadow-sm focus:border-[color:var(--ds-border-strong)] focus:outline-none"
-            />
-          </div>
-          <div className="flex flex-col gap-1">
-            <label className="text-xs font-semibold uppercase text-[color:var(--ds-text-secondary)]" htmlFor="schedule-recipients">
-              Email nhận (phân tách bằng dấu phẩy)
-            </label>
-            <textarea
-              id="schedule-recipients"
-              rows={2}
-              value={scheduleDraft.recipientsInput}
-              onChange={(event) => handleScheduleFieldChange("recipientsInput", event.target.value)}
-              placeholder="ceo@company.vn, kpi@company.vn"
-              className="min-h-[60px] rounded border border-[color:var(--ds-border-subtle)] bg-white px-3 py-2 text-sm text-[color:var(--ds-text-primary)] shadow-sm focus:border-[color:var(--ds-border-strong)] focus:outline-none"
-            />
-          </div>
-          <div className="flex flex-col gap-1">
-            <label className="text-xs font-semibold uppercase text-[color:var(--ds-text-secondary)]" htmlFor="schedule-frequency">
-              Chu kỳ gửi
-            </label>
-            <select
-              id="schedule-frequency"
-              value={scheduleDraft.frequency}
-              onChange={(event) => handleScheduleFieldChange("frequency", event.target.value)}
-              className="rounded border border-[color:var(--ds-border-subtle)] bg-white px-3 py-2 text-sm text-[color:var(--ds-text-primary)] shadow-sm focus:border-[color:var(--ds-border-strong)] focus:outline-none"
-            >
-              {SCHEDULE_FREQUENCY_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-            {scheduleDraft.frequency === "weekly" ? (
-              <select
-                value={scheduleDraft.dayOfWeek}
-                onChange={(event) => handleScheduleFieldChange("dayOfWeek", Number(event.target.value))}
-                className="rounded border border-[color:var(--ds-border-subtle)] bg-white px-3 py-2 text-sm text-[color:var(--ds-text-primary)] shadow-sm focus:border-[color:var(--ds-border-strong)] focus:outline-none"
-              >
-                {WEEKDAY_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            ) : (
-              <div className="flex items-center gap-2">
-                <input
-                  type="number"
-                  min={1}
-                  max={31}
-                  value={scheduleDraft.dayOfMonth}
-                  onChange={(event) => handleScheduleFieldChange("dayOfMonth", Number(event.target.value))}
-                  className="w-20 rounded border border-[color:var(--ds-border-subtle)] bg-white px-2 py-2 text-sm text-[color:var(--ds-text-primary)] focus:border-[color:var(--ds-border-strong)] focus:outline-none"
-                />
-                <span className="text-xs text-[color:var(--ds-text-secondary)]">Ngày trong tháng</span>
-              </div>
-            )}
-          </div>
-          <div className="flex flex-col gap-1">
-            <label className="text-xs font-semibold uppercase text-[color:var(--ds-text-secondary)]" htmlFor="schedule-time">
-              Thời gian gửi
-            </label>
-            <input
-              id="schedule-time"
-              type="time"
-              value={scheduleDraft.time}
-              onChange={(event) => handleScheduleFieldChange("time", event.target.value)}
-              className="rounded border border-[color:var(--ds-border-subtle)] bg-white px-3 py-2 text-sm text-[color:var(--ds-text-primary)] shadow-sm focus:border-[color:var(--ds-border-strong)] focus:outline-none"
-            />
-            <div className="flex flex-wrap items-center gap-3 pt-1 text-xs text-[color:var(--ds-text-secondary)]">
-              {SCHEDULE_FORMAT_OPTIONS.map((option) => {
-                const checked = Array.isArray(scheduleDraft.formats)
-                  ? scheduleDraft.formats.includes(option.value)
-                  : option.value === "excel";
-                return (
-                  <label key={option.value} className="inline-flex items-center gap-1">
-                    <input
-                      type="checkbox"
-                      checked={checked}
-                      onChange={() => handleToggleScheduleFormat(option.value)}
-                    />
-                    <span>{option.label}</span>
-                  </label>
-                );
-              })}
+      {isAdmin ? (
+        <div className="ds-card space-y-4 p-4 print:hidden">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h3 className="text-base font-semibold text-[color:var(--ds-text-primary)]">
+                Lập lịch gửi báo cáo KPI
+              </h3>
+              <p className="text-sm text-[color:var(--ds-text-secondary)]">
+                Thiết lập gửi tự động file Excel/PDF theo tuần hoặc tháng tới danh sách email mong muốn.
+              </p>
             </div>
-            <label className="mt-1 inline-flex items-center gap-2 text-xs text-[color:var(--ds-text-secondary)]">
-              <input
-                type="checkbox"
-                checked={Boolean(scheduleDraft.active)}
-                onChange={(event) => handleScheduleFieldChange("active", event.target.checked)}
-              />
-              Kích hoạt lịch gửi này
-            </label>
-          </div>
-          <div className="md:col-span-2 xl:col-span-4 flex flex-wrap items-center justify-end gap-2 pt-2">
-            {editingScheduleId ? (
+            <div className="flex items-center gap-3 text-xs text-[color:var(--ds-text-muted)]">
+              <span>
+                {nextScheduleRun
+                  ? `Lịch sắp chạy: ${formatScheduleNextRunLabel(nextScheduleRun.nextRun)}`
+                  : "Chưa có lịch chạy tự động"}
+              </span>
               <button
                 type="button"
-                onClick={handleResetScheduleForm}
-                className="rounded border border-[color:var(--ds-border-subtle)] px-3 py-2 text-sm font-semibold text-[color:var(--ds-text-secondary)] transition-colors hover:border-[color:var(--ds-border-strong)]"
+                onClick={() => setScheduleCollapsed((value) => !value)}
+                className="inline-flex items-center gap-1 rounded border border-[color:var(--ds-border-subtle)] px-2 py-1 font-semibold text-[color:var(--ds-text-secondary)] transition-colors hover:border-[color:var(--ds-border-strong)] hover:text-[color:var(--ds-text-primary)]"
               >
-                Huỷ chỉnh sửa
+                {scheduleCollapsed ? "Mở rộng" : "Thu gọn"}
               </button>
-            ) : null}
-            <button
-              type="submit"
-              className="rounded bg-[color:var(--ds-surface-primary)] px-3 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-[color:var(--ds-surface-strong)]"
-            >
-              {editingScheduleId ? "Cập nhật lịch gửi" : "Thêm lịch gửi"}
-            </button>
-          </div>
-        </form>
-
-        <div className="border-t border-[color:var(--ds-border-subtle)] pt-4">
-          {reportSchedules.length ? (
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-              {reportSchedules.map((schedule) => {
-                const nextLabel = formatScheduleNextRunLabel(
-                  schedule.nextRun || calculateNextReportScheduleRun(schedule) || ""
-                );
-                const formatLabel = Array.isArray(schedule.formats)
-                  ? schedule.formats.map((item) => item.toUpperCase()).join(", ")
-                  : "EXCEL";
-                return (
-                  <div
-                    key={schedule.id}
-                    className="rounded-lg border border-[color:var(--ds-border-subtle)] bg-white p-3 text-sm text-[color:var(--ds-text-secondary)] shadow-sm"
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <div className="text-sm font-semibold text-[color:var(--ds-text-primary)]">
-                          {schedule.name || "Lịch gửi"}
-                        </div>
-                        <div className="text-xs text-[color:var(--ds-text-muted)]">
-                          {describeScheduleFrequency(schedule)}
-                        </div>
-                      </div>
-                      <span
-                        className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
-                          schedule.active
-                            ? 'bg-emerald-500/10 text-emerald-600'
-                            : 'bg-gray-200 text-gray-500'
-                        }`}
-                      >
-                        {schedule.active ? 'Đang bật' : 'Tạm tắt'}
-                      </span>
-                    </div>
-                    <div className="mt-2 text-xs text-[color:var(--ds-text-secondary)]">
-                      <div>Lần tiếp theo: {nextLabel}</div>
-                      <div>Định dạng: {formatLabel}</div>
-                      <div>Email: {(schedule.recipients || []).join(", ") || '—'}</div>
-                    </div>
-                    <div className="mt-3 flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => handleEditSchedule(schedule)}
-                        className="rounded border border-[color:var(--ds-border-subtle)] px-2 py-1 text-xs font-semibold text-[color:var(--ds-text-secondary)] transition-colors hover:border-[color:var(--ds-border-strong)]"
-                      >
-                        Chỉnh sửa
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteSchedule(schedule)}
-                        className="rounded border border-rose-200 px-2 py-1 text-xs font-semibold text-rose-600 transition-colors hover:border-rose-400 hover:text-rose-700"
-                      >
-                        Xoá
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
             </div>
-          ) : (
-            <p className="text-sm text-[color:var(--ds-text-muted)]">
-              Chưa có lịch gửi báo cáo. Hãy thêm mới để tự động gửi KPI cho lãnh đạo.
-            </p>
-          )}
+          </div>
+
+          {!scheduleCollapsed ? (
+            <>
+              <form className="grid gap-3 md:grid-cols-2 xl:grid-cols-4" onSubmit={handleSaveSchedule}>
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-semibold uppercase text-[color:var(--ds-text-secondary)]" htmlFor="schedule-name">
+                    Tên lịch gửi
+                  </label>
+                  <input
+                    id="schedule-name"
+                    type="text"
+                    value={scheduleDraft.name}
+                    onChange={(event) => handleScheduleFieldChange("name", event.target.value)}
+                    placeholder="Báo cáo KPI tuần"
+                    className="rounded border border-[color:var(--ds-border-subtle)] bg-white px-3 py-2 text-sm text-[color:var(--ds-text-primary)] shadow-sm focus:border-[color:var(--ds-border-strong)] focus:outline-none"
+                  />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-semibold uppercase text-[color:var(--ds-text-secondary)]" htmlFor="schedule-recipients">
+                    Email nhận (phân tách bằng dấu phẩy)
+                  </label>
+                  <textarea
+                    id="schedule-recipients"
+                    rows={2}
+                    value={scheduleDraft.recipientsInput}
+                    onChange={(event) => handleScheduleFieldChange("recipientsInput", event.target.value)}
+                    placeholder="ceo@company.vn, kpi@company.vn"
+                    className="min-h-[60px] rounded border border-[color:var(--ds-border-subtle)] bg-white px-3 py-2 text-sm text-[color:var(--ds-text-primary)] shadow-sm focus:border-[color:var(--ds-border-strong)] focus:outline-none"
+                  />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-semibold uppercase text-[color:var(--ds-text-secondary)]" htmlFor="schedule-frequency">
+                    Chu kỳ gửi
+                  </label>
+                  <select
+                    id="schedule-frequency"
+                    value={scheduleDraft.frequency}
+                    onChange={(event) => handleScheduleFieldChange("frequency", event.target.value)}
+                    className="rounded border border-[color:var(--ds-border-subtle)] bg-white px-3 py-2 text-sm text-[color:var(--ds-text-primary)] shadow-sm focus:border-[color:var(--ds-border-strong)] focus:outline-none"
+                  >
+                    {SCHEDULE_FREQUENCY_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                  {scheduleDraft.frequency === "weekly" ? (
+                    <select
+                      value={scheduleDraft.dayOfWeek}
+                      onChange={(event) => handleScheduleFieldChange("dayOfWeek", Number(event.target.value))}
+                      className="rounded border border-[color:var(--ds-border-subtle)] bg-white px-3 py-2 text-sm text-[color:var(--ds-text-primary)] shadow-sm focus:border-[color:var(--ds-border-strong)] focus:outline-none"
+                    >
+                      {WEEKDAY_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        min={1}
+                        max={31}
+                        value={scheduleDraft.dayOfMonth}
+                        onChange={(event) => handleScheduleFieldChange("dayOfMonth", Number(event.target.value))}
+                        className="w-20 rounded border border-[color:var(--ds-border-subtle)] bg-white px-2 py-2 text-sm text-[color:var(--ds-text-primary)] focus:border-[color:var(--ds-border-strong)] focus:outline-none"
+                      />
+                      <span className="text-xs text-[color:var(--ds-text-secondary)]">Ngày trong tháng</span>
+                    </div>
+                  )}
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-semibold uppercase text-[color:var(--ds-text-secondary)]" htmlFor="schedule-time">
+                    Thời gian gửi
+                  </label>
+                  <input
+                    id="schedule-time"
+                    type="time"
+                    value={scheduleDraft.time}
+                    onChange={(event) => handleScheduleFieldChange("time", event.target.value)}
+                    className="rounded border border-[color:var(--ds-border-subtle)] bg-white px-3 py-2 text-sm text-[color:var(--ds-text-primary)] shadow-sm focus:border-[color:var(--ds-border-strong)] focus:outline-none"
+                  />
+                  <div className="flex flex-wrap items-center gap-3 pt-1 text-xs text-[color:var(--ds-text-secondary)]">
+                    {SCHEDULE_FORMAT_OPTIONS.map((option) => {
+                      const checked = Array.isArray(scheduleDraft.formats)
+                        ? scheduleDraft.formats.includes(option.value)
+                        : option.value === "excel";
+                      return (
+                        <label key={option.value} className="inline-flex items-center gap-1">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => handleToggleScheduleFormat(option.value)}
+                          />
+                          <span>{option.label}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                  <label className="mt-1 inline-flex items-center gap-2 text-xs text-[color:var(--ds-text-secondary)]">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(scheduleDraft.active)}
+                      onChange={(event) => handleScheduleFieldChange("active", event.target.checked)}
+                    />
+                    Kích hoạt lịch gửi này
+                  </label>
+                </div>
+                <div className="md:col-span-2 xl:col-span-4 flex flex-wrap items-center justify-end gap-2 pt-2">
+                  {editingScheduleId ? (
+                    <button
+                      type="button"
+                      onClick={handleResetScheduleForm}
+                      className="rounded border border-[color:var(--ds-border-subtle)] px-3 py-2 text-sm font-semibold text-[color:var(--ds-text-secondary)] transition-colors hover:border-[color:var(--ds-border-strong)]"
+                    >
+                      Huỷ chỉnh sửa
+                    </button>
+                  ) : null}
+                  <button
+                    type="submit"
+                    className="rounded bg-[color:var(--ds-surface-primary)] px-3 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-[color:var(--ds-surface-strong)]"
+                  >
+                    {editingScheduleId ? "Cập nhật lịch gửi" : "Thêm lịch gửi"}
+                  </button>
+                </div>
+              </form>
+
+              <div className="border-t border-[color:var(--ds-border-subtle)] pt-4">
+                {reportSchedules.length ? (
+                  <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                    {reportSchedules.map((schedule) => {
+                      const nextLabel = formatScheduleNextRunLabel(
+                        schedule.nextRun || calculateNextReportScheduleRun(schedule) || ""
+                      );
+                      const formatLabel = Array.isArray(schedule.formats)
+                        ? schedule.formats.map((item) => item.toUpperCase()).join(", ")
+                        : "EXCEL";
+                      return (
+                        <div
+                          key={schedule.id}
+                          className="rounded-lg border border-[color:var(--ds-border-subtle)] bg-white p-3 text-sm text-[color:var(--ds-text-secondary)] shadow-sm"
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div>
+                              <div className="text-sm font-semibold text-[color:var(--ds-text-primary)]">
+                                {schedule.name || "Lịch gửi"}
+                              </div>
+                              <div className="text-xs text-[color:var(--ds-text-muted)]">
+                                {describeScheduleFrequency(schedule)}
+                              </div>
+                            </div>
+                            <span
+                              className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
+                                schedule.active
+                                  ? 'bg-emerald-500/10 text-emerald-600'
+                                  : 'bg-gray-200 text-gray-500'
+                              }`}
+                            >
+                              {schedule.active ? 'Đang bật' : 'Tạm tắt'}
+                            </span>
+                          </div>
+                          <div className="mt-2 text-xs text-[color:var(--ds-text-secondary)]">
+                            <div>Lần tiếp theo: {nextLabel}</div>
+                            <div>Định dạng: {formatLabel}</div>
+                            <div>Email: {(schedule.recipients || []).join(", ") || '—'}</div>
+                          </div>
+                          <div className="mt-3 flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => handleEditSchedule(schedule)}
+                              className="rounded border border-[color:var(--ds-border-subtle)] px-2 py-1 text-xs font-semibold text-[color:var(--ds-text-secondary)] transition-colors hover:border-[color:var(--ds-border-strong)]"
+                            >
+                              Chỉnh sửa
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteSchedule(schedule)}
+                              className="rounded border border-rose-200 px-2 py-1 text-xs font-semibold text-rose-600 transition-colors hover:border-rose-400 hover:text-rose-700"
+                            >
+                              Xoá
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="text-sm text-[color:var(--ds-text-muted)]">
+                    Chưa có lịch gửi báo cáo. Hãy thêm mới để tự động gửi KPI cho lãnh đạo.
+                  </p>
+                )}
+              </div>
+            </>
+          ) : null}
         </div>
-      </div>
+      ) : null}
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
         <div className="space-y-6">
