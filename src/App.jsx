@@ -12,6 +12,7 @@ import ThemeToggle from './components/ThemeToggle.jsx';
 import NotificationCenter from './components/NotificationCenter.jsx';
 import CommandCenter from './components/CommandCenter.jsx';
 import { subscribeCommand } from './lib/commandBus.js';
+import { isAdminRole } from './shared/accountRoles.js';
 
 export default function App() {
   const [auth, setAuth] = useState(null);
@@ -72,6 +73,7 @@ export default function App() {
 
   const viewer = getViewerAuth();
   const effectiveAuth = auth || viewer;
+  const isAdmin = isAdminRole(effectiveAuth?.role);
 
   const syncDetail = useMemo(() => {
     if (!syncStatus?.waitingForBackend) {
@@ -200,7 +202,7 @@ export default function App() {
         </div>
       </header>
 
-      {syncStatus?.waitingForBackend && (
+      {syncStatus?.waitingForBackend && isAdmin && (
         <div className="border-b border-amber-200 bg-amber-50 dark:border-amber-400/40 dark:bg-amber-500/15">
           <div className="mx-auto flex max-w-6xl flex-col gap-1 px-4 py-3 text-sm text-amber-800 dark:text-amber-200 sm:flex-row sm:items-center sm:justify-between">
             <div className="font-medium">

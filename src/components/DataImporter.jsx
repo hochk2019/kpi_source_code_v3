@@ -19,6 +19,8 @@ import {
   normalizeName,
   refreshDeclRowsFromServer,
   IMPORT_COLUMN_IDS,
+  IMPORT_AUX_COLUMN_IDS,
+  IMPORT_SENSITIVE_COLUMNS,
   getImportColumnConfig,
   saveImportColumnConfig,
   subscribeImportColumnConfig,
@@ -38,7 +40,6 @@ import { formatDisplayDate, formatDateRangeLabel } from "@/shared/format.js";
 import { fetchWithAuth } from "@/auth/localAuth.js";
 import useTooltipTitles from "@/hooks/useTooltipTitles.js";
 import useFilterPresets from "@/hooks/useFilterPresets.js";
-import useQuickSearchFavorites from "@/hooks/useQuickSearchFavorites.js";
 import { Button } from "@/components/ui/button.jsx";
 import { StatusBadge } from "@/components/designSystem/primitives.jsx";
 import {
@@ -121,27 +122,40 @@ const IMPORT_TABLE_COLUMNS = Object.freeze(
   }))
 );
 
+const AUX_COLUMN_LABELS = Object.freeze({
+  history: "Nhật ký",
+  update: "Cập nhật",
+});
+
+const AUX_COLUMN_OPTIONS = Object.freeze(
+  Object.entries(AUX_COLUMN_LABELS).map(([id, label]) => ({ id, label }))
+);
+
+const COLUMN_CONFIG_OPTIONS = Object.freeze([
+  ...IMPORT_TABLE_COLUMNS,
+  ...AUX_COLUMN_OPTIONS,
+]);
+
+const SENSITIVE_COLUMN_SET = new Set(IMPORT_SENSITIVE_COLUMNS);
+
+function isConfigColumnKey(key) {
+  if (typeof key !== "string") return false;
+  if (IMPORT_TABLE_COLUMN_LABELS[key]) return true;
+  if (AUX_COLUMN_LABELS[key]) return true;
+  return false;
+}
+
 const IMPORT_ERROR_REASON_LABELS = Object.freeze({
   "missing-key": "Thiếu Số tờ khai hoặc nhánh tờ khai",
   unknown: "Không xác định",
-});
-
-const DECL_STATUS_LABELS = Object.freeze({
-  new: "Mới",
-  existing: "Đã có",
-  updated: "Đã cập nhật",
-  locked: "Đang khoá",
-  pending: "Chờ xử lý",
-  reviewing: "Đang rà soát",
-  synced: "Đã đồng bộ",
 });
 
 const FROZEN_COLUMN_KEYS = Object.freeze(["date", "declaration", "mst"]);
 const FROZEN_COLUMN_WIDTHS = Object.freeze({
   selection: 44,
   date: 120,
-  declaration: 220,
-  mst: 140,
+  declaration: 180,
+  mst: 120,
 });
 
 const VIEW_MODE_STORAGE_KEY = "dataImporter:viewMode";
@@ -170,17 +184,6 @@ function normalizeComparableValue(value) {
     return JSON.stringify(value);
   }
   return JSON.stringify(value);
-}
-
-function formatStatusLabel(status) {
-  const key = normalizeStatusKey(status);
-  if (DECL_STATUS_LABELS[key]) {
-    return DECL_STATUS_LABELS[key];
-  }
-  if (!key) {
-    return "Không rõ";
-  }
-  return key.charAt(0).toUpperCase() + key.slice(1);
 }
 
 function cx(...classes) {
@@ -486,14 +489,19 @@ function StaffCombobox({
     return result;
   }, [teams]);
 
-  const filteredTeams = useMemo(() => {
-    if (normalizedTeamValue) {
-      const match = teams.filter((team) => team.normalized === normalizedTeamValue);
-      if (match.length) {
-        return match;
-      }
+  const orderedTeams = useMemo(() => {
+    if (!Array.isArray(teams) || teams.length === 0) {
+      return [];
     }
-    return teams;
+    if (!normalizedTeamValue) {
+      return teams;
+    }
+    const matchIndex = teams.findIndex((team) => team.normalized === normalizedTeamValue);
+    if (matchIndex === -1) {
+      return teams;
+    }
+    const match = teams[matchIndex];
+    return [match, ...teams.filter((_, index) => index !== matchIndex)];
   }, [teams, normalizedTeamValue]);
 
   const searchValue = normalizeStr(search);
@@ -551,7 +559,7 @@ function StaffCombobox({
                 </CommandItem>
               </CommandGroup>
             ) : null}
-            {filteredTeams.map((team) => (
+            {orderedTeams.map((team) => (
               <CommandGroup key={team.id} heading={`Tổ: ${team.name}`}>
                 {team.members.map((member) => {
                   const isSelected = member.normalized === normalizedKey;
@@ -1555,11 +1563,6 @@ export default function DataImporter({
     updatePreset: updateFilterPreset,
     deletePreset: deleteFilterPreset,
   } = useFilterPresets(FILTER_PRESET_SCOPE);
-  const {
-    favorites: quickSearchFavorites,
-    addFavorite: addQuickSearchFavorite,
-    removeFavorite: removeQuickSearchFavorite,
-  } = useQuickSearchFavorites();
   const [datePreset, setDatePreset] = useState("none");
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [filterNoStaff, setFilterNoStaff] = useState(false);
@@ -1728,22 +1731,6 @@ export default function DataImporter({
     () => mode === "saved" && rawRows.length > SERVER_SEARCH_THRESHOLD,
     [mode, rawRows.length]
   );
-  const availableStatuses = useMemo(() => {
-    const set = new Set();
-    for (const row of Array.isArray(rawRows) ? rawRows : []) {
-      if (!row || typeof row !== "object") continue;
-      const statusKey = normalizeStatusKey(
-        row.status ?? row.trang_thai ?? row.previewStatus ?? row.importStatus ?? row.state ?? ""
-      );
-      if (statusKey) {
-        set.add(statusKey);
-      }
-    }
-    return Array.from(set).sort((a, b) =>
-      formatStatusLabel(a).localeCompare(formatStatusLabel(b), "vi", { sensitivity: "base" })
-    );
-  }, [rawRows]);
-
   const effectivePreviewRows = useMemo(() => {
     if (!Array.isArray(rawRows) || rawRows.length === 0) {
       return [];
@@ -1762,6 +1749,9 @@ export default function DataImporter({
       return { ...row, so_tk: truncated };
     });
   }, [rawRows, upsert11]);
+
+  const canUploadFiles = canEdit && !(isTeamLead || isStaffRole);
+  const canOverwriteData = isAdminRole && canUploadFiles;
 
   const importPreview = useMemo(() => {
     if (mode !== "preview" || effectivePreviewRows.length === 0) {
@@ -1807,19 +1797,30 @@ export default function DataImporter({
   const assignedTeam = staffNameKey ? memberTeamMap.get(staffNameKey)?.team || "" : "";
   const assignedTeamKey = normalizeName(assignedTeam);
   const totalBaseColumns = IMPORT_TABLE_COLUMNS.length;
+  const totalConfigColumns = totalBaseColumns + IMPORT_AUX_COLUMN_IDS.length;
   const columnHiddenSet = useMemo(() => {
     const hiddenList = Array.isArray(columnConfigState?.hidden) ? columnConfigState.hidden : [];
     const set = new Set();
     hiddenList.forEach((key) => {
-      if (typeof key === "string" && IMPORT_TABLE_COLUMN_LABELS[key]) {
-        set.add(key);
+      if (typeof key !== "string") return;
+      const trimmed = key.trim();
+      if (!trimmed) return;
+      if (IMPORT_TABLE_COLUMN_LABELS[trimmed] || AUX_COLUMN_LABELS[trimmed]) {
+        set.add(trimmed);
       }
     });
     return set;
   }, [columnConfigState]);
-  const visibleColumnCount = Math.max(1, totalBaseColumns - columnHiddenSet.size);
-  const canUploadFiles = canEdit && !(isTeamLead || isStaffRole);
-  const canOverwriteData = isAdminRole && canUploadFiles;
+  const hiddenBaseColumnCount = useMemo(() => {
+    let count = 0;
+    columnHiddenSet.forEach((key) => {
+      if (IMPORT_TABLE_COLUMN_LABELS[key]) {
+        count += 1;
+      }
+    });
+    return count;
+  }, [columnHiddenSet]);
+  const visibleColumnCount = Math.max(1, totalBaseColumns - hiddenBaseColumnCount);
 
   const updateBaselineSnapshot = useCallback((rows) => {
     const snapshot = new Map();
@@ -1891,34 +1892,55 @@ export default function DataImporter({
     [canOverwriteData]
   );
 
+  const countHiddenBaseColumns = useCallback((set) => {
+    let count = 0;
+    for (const key of set) {
+      if (IMPORT_TABLE_COLUMN_LABELS[key]) {
+        count += 1;
+      }
+    }
+    return count;
+  }, []);
+
   const handleToggleColumnDraft = useCallback(
     (columnId) => {
-      if (typeof columnId !== "string" || !IMPORT_TABLE_COLUMN_LABELS[columnId]) {
+      if (!isConfigColumnKey(columnId)) {
+        return;
+      }
+      if (!isAdminRole && SENSITIVE_COLUMN_SET.has(columnId)) {
+        toast.info("Chỉ tài khoản admin mới được thay đổi hiển thị của mục này.");
         return;
       }
       setColumnDraftHidden((prev) => {
         const next = new Set(prev);
-        if (next.has(columnId)) {
+        const alreadyHidden = next.has(columnId);
+        if (alreadyHidden) {
           next.delete(columnId);
           setColumnDraftError("");
           return next;
         }
-        if (totalBaseColumns - next.size <= 1) {
-          setColumnDraftError("Cần giữ lại ít nhất một cột hiển thị.");
+        next.add(columnId);
+        const hiddenBaseAfter = countHiddenBaseColumns(next);
+        if (hiddenBaseAfter >= totalBaseColumns) {
+          next.delete(columnId);
+          setColumnDraftError("Cần giữ lại ít nhất một cột dữ liệu hiển thị.");
           return next;
         }
-        next.add(columnId);
         setColumnDraftError("");
         return next;
       });
     },
-    [totalBaseColumns]
+    [countHiddenBaseColumns, isAdminRole, totalBaseColumns]
   );
 
   const handleApplyColumnConfig = useCallback(() => {
-    const hiddenList = Array.from(columnDraftHidden).filter((key) => IMPORT_TABLE_COLUMN_LABELS[key]);
-    if (hiddenList.length >= totalBaseColumns) {
-      setColumnDraftError("Cần giữ lại ít nhất một cột hiển thị.");
+    const hiddenList = Array.from(columnDraftHidden).filter((key) => isConfigColumnKey(key));
+    const hiddenBaseCount = hiddenList.reduce(
+      (count, key) => (IMPORT_TABLE_COLUMN_LABELS[key] ? count + 1 : count),
+      0
+    );
+    if (hiddenBaseCount >= totalBaseColumns) {
+      setColumnDraftError("Cần giữ lại ít nhất một cột dữ liệu hiển thị.");
       return;
     }
     const isSame =
@@ -1929,8 +1951,9 @@ export default function DataImporter({
     }
     try {
       const result = saveImportColumnConfig({ hidden: hiddenList }, { actor });
-      if (result.hidden.length >= totalBaseColumns) {
-        setColumnDraftError("Cần giữ lại ít nhất một cột hiển thị.");
+      const resultHiddenBase = result.hidden.filter((key) => IMPORT_TABLE_COLUMN_LABELS[key]).length;
+      if (resultHiddenBase >= totalBaseColumns) {
+        setColumnDraftError("Cần giữ lại ít nhất một cột dữ liệu hiển thị.");
         return;
       }
       setColumnConfigOpen(false);
@@ -2539,152 +2562,6 @@ export default function DataImporter({
     refreshPresetList();
   }, [clearPresetError, refreshPresetList]);
 
-  const statusFavoriteLabel = useCallback((value) => {
-    if (typeof value !== "string") {
-      return "Không rõ";
-    }
-    const tokens = value
-      .split(",")
-      .map((token) => normalizeStatusKey(token))
-      .filter(Boolean);
-    if (!tokens.length) {
-      return "Không rõ";
-    }
-    return tokens
-      .map((token) => formatStatusLabel(token))
-      .join(", ");
-  }, []);
-
-  const handleApplyMstFavorite = useCallback(
-    (value) => {
-      if (typeof value !== "string") {
-        return;
-      }
-      setQuickMST(value);
-      setPage(1);
-    },
-    [setPage]
-  );
-
-  const handleApplyCompanyFavorite = useCallback(
-    (value) => {
-      if (typeof value !== "string") {
-        return;
-      }
-      setQuickCompany(value);
-      setPage(1);
-    },
-    [setPage]
-  );
-
-  const handleApplyStatusFavorite = useCallback(
-    (value) => {
-      if (typeof value !== "string") {
-        return;
-      }
-      const tokens = value
-        .split(",")
-        .map((token) => normalizeStatusKey(token))
-        .filter(Boolean);
-      setStatusFilters(Array.from(new Set(tokens)));
-      setPage(1);
-    },
-    [setPage]
-  );
-
-  const toggleStatusFilter = useCallback((statusKey, enabled) => {
-    const normalized = normalizeStatusKey(statusKey);
-    if (!normalized) {
-      return;
-    }
-    setStatusFilters((prev) => {
-      const exists = prev.includes(normalized);
-      if (enabled) {
-        if (exists) {
-          return prev;
-        }
-        return [...prev, normalized];
-      }
-      if (!exists) {
-        return prev;
-      }
-      return prev.filter((item) => item !== normalized);
-    });
-  }, []);
-
-  const clearStatusFilters = useCallback(() => {
-    setStatusFilters([]);
-  }, []);
-
-  const handleRemoveMstFavorite = useCallback(
-    (value) => {
-      removeQuickSearchFavorite("mst", value);
-    },
-    [removeQuickSearchFavorite]
-  );
-
-  const handleRemoveCompanyFavorite = useCallback(
-    (value) => {
-      removeQuickSearchFavorite("company", value);
-    },
-    [removeQuickSearchFavorite]
-  );
-
-  const handleRemoveStatusFavorite = useCallback(
-    (value) => {
-      removeQuickSearchFavorite("status", value);
-    },
-    [removeQuickSearchFavorite]
-  );
-
-  const handleSaveMstFavorite = useCallback(() => {
-    const trimmed = quickMST.trim();
-    if (!trimmed) {
-      toast.warning?.("Nhập MST trước khi lưu ưa thích.");
-      return;
-    }
-    const result = addQuickSearchFavorite("mst", trimmed);
-    if (result.ok) {
-      toast.success?.(`Đã lưu MST ${trimmed} vào danh sách tìm kiếm nhanh.`);
-    } else if (result.reason === "duplicate") {
-      toast.info?.("MST này đã có trong danh sách tìm kiếm nhanh.");
-    } else {
-      toast.error?.("Không thể lưu MST ưa thích.");
-    }
-  }, [quickMST, addQuickSearchFavorite]);
-
-  const handleSaveCompanyFavorite = useCallback(() => {
-    const trimmed = quickCompany.trim();
-    if (!trimmed) {
-      toast.warning?.("Nhập tên công ty trước khi lưu ưa thích.");
-      return;
-    }
-    const result = addQuickSearchFavorite("company", trimmed);
-    if (result.ok) {
-      toast.success?.(`Đã lưu "${trimmed}" vào danh sách tìm kiếm nhanh.`);
-    } else if (result.reason === "duplicate") {
-      toast.info?.("Giá trị này đã có trong danh sách tìm kiếm nhanh.");
-    } else {
-      toast.error?.("Không thể lưu tên công ty ưa thích.");
-    }
-  }, [quickCompany, addQuickSearchFavorite]);
-
-  const handleSaveStatusFavorite = useCallback(() => {
-    if (!Array.isArray(statusFilters) || statusFilters.length === 0) {
-      toast.warning?.("Chọn ít nhất một trạng thái trước khi lưu ưa thích.");
-      return;
-    }
-    const rawValue = statusFilters.join(",");
-    const result = addQuickSearchFavorite("status", rawValue);
-    if (result.ok) {
-      toast.success?.("Đã lưu bộ lọc trạng thái vào danh sách tìm kiếm nhanh.");
-    } else if (result.reason === "duplicate") {
-      toast.info?.("Bộ lọc trạng thái này đã tồn tại trong danh sách nhanh.");
-    } else {
-      toast.error?.("Không thể lưu bộ lọc trạng thái ưa thích.");
-    }
-  }, [statusFilters, addQuickSearchFavorite]);
-
   const handleClearSearchRange = useCallback(() => {
     setSearchRange({ from: "", to: "" });
     setDatePreset("none");
@@ -2859,12 +2736,6 @@ export default function DataImporter({
     window.addEventListener("beforeunload", handler);
     return () => window.removeEventListener("beforeunload", handler);
   }, [hasUnsaved]);
-
-  useEffect(() => {
-    if (mode !== "saved") return;
-    const pending = rowDiffMap.size > 0;
-    setHasUnsaved((prev) => (prev === pending ? prev : pending));
-  }, [mode, rowDiffMap]);
 
   const applyConfigToForm = useCallback((config) => {
     const normalizedConfig = {
@@ -4201,6 +4072,12 @@ export default function DataImporter({
     return diffMap;
   }, [keyOfRow, mode, rawRows, baselineVersion]);
 
+  useEffect(() => {
+    if (mode !== "saved") return;
+    const pending = rowDiffMap.size > 0;
+    setHasUnsaved((prev) => (prev === pending ? prev : pending));
+  }, [mode, rowDiffMap]);
+
   const filteredSelected = useMemo(() => {
     if (!filteredKeys.length) return false;
     if (!selectedKeys.length) return false;
@@ -4303,6 +4180,7 @@ const selectedReviewedCount = useMemo(() => {
     (rowKey, selection) => {
       if (!selection) return;
       const staffName = normalizeStr(selection.staffName);
+      const normalizedStaffKey = normalizeName(staffName);
       const providedTeam = selection.teamName;
       applyEdit(rowKey, (row) => {
         const updates = {};
@@ -4310,17 +4188,26 @@ const selectedReviewedCount = useMemo(() => {
         if (staffName !== currentStaff) {
           updates.nhan_vien = staffName;
         }
-        if (providedTeam !== undefined) {
-          const nextTeam = normalizeStr(providedTeam);
+
+        let nextTeam = providedTeam !== undefined ? normalizeStr(providedTeam) : undefined;
+        if (nextTeam === undefined && normalizedStaffKey) {
+          const mapped = memberTeamMap.get(normalizedStaffKey);
+          if (mapped?.team !== undefined) {
+            nextTeam = normalizeStr(mapped.team);
+          }
+        }
+
+        if (nextTeam !== undefined) {
           const currentTeam = normalizeStr(row.team);
           if (nextTeam !== currentTeam) {
             updates.team = nextTeam;
           }
         }
+
         return Object.keys(updates).length ? updates : null;
       });
     },
-    [applyEdit]
+    [applyEdit, memberTeamMap]
   );
 
   const handleSelectTeam = useCallback(
@@ -4646,9 +4533,9 @@ const selectedReviewedCount = useMemo(() => {
   );
 
   const selectionEnabled = mode === "saved" && (canEdit || canManageAlerts);
-  const updateEnabled = canEdit && mode === "saved";
+  const updateEnabled = canEdit && mode === "saved" && !columnHiddenSet.has("update");
   const deleteEnabled = canEdit && mode === "saved";
-  const historyEnabled = mode === "saved";
+  const historyEnabled = mode === "saved" && !columnHiddenSet.has("history");
   const hiddenColumns = columnHiddenSet;
   const frozenOffsets = useMemo(() => {
     if (!freezeColumnsEnabled) {
@@ -4768,7 +4655,10 @@ const selectedReviewedCount = useMemo(() => {
     (deleteEnabled ? 1 : 0) +
     (historyEnabled ? 1 : 0);
 
-  const columnDraftVisibleCount = Math.max(1, totalBaseColumns - columnDraftHidden.size);
+  const columnDraftVisibleCount = Math.max(
+    1,
+    totalConfigColumns - Math.min(columnDraftHidden.size, totalConfigColumns)
+  );
 
   const canImport =
     !isReadOnlyForEdits &&
@@ -5542,21 +5432,32 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
           </DialogHeader>
           <div className="space-y-3">
             <p className="text-xs text-gray-600">
-              Đang giữ {columnDraftVisibleCount}/{totalBaseColumns} cột hiển thị.
+              Đang giữ {columnDraftVisibleCount}/{totalConfigColumns} mục hiển thị (bao gồm cột dữ liệu và thao tác).
             </p>
             <div className="grid gap-2">
-              {IMPORT_TABLE_COLUMNS.map((column) => {
+              {COLUMN_CONFIG_OPTIONS.map((column) => {
                 const checked = !columnDraftHidden.has(column.id);
+                const isSensitive = SENSITIVE_COLUMN_SET.has(column.id);
+                const disabled = isSensitive && !isAdminRole;
                 return (
                   <label
                     key={column.id}
-                    className="flex items-center justify-between rounded border px-3 py-2 text-sm"
+                    className={cx(
+                      "flex items-center justify-between rounded border px-3 py-2 text-sm",
+                      disabled ? "cursor-not-allowed opacity-60" : ""
+                    )}
                   >
-                    <span>{column.label}</span>
+                    <span className="flex flex-col">
+                      <span>{column.label}</span>
+                      {isSensitive ? (
+                        <span className="text-[11px] text-gray-500">Chỉ admin có thể bật/tắt.</span>
+                      ) : null}
+                    </span>
                     <input
                       type="checkbox"
                       checked={checked}
                       onChange={() => handleToggleColumnDraft(column.id)}
+                      disabled={disabled}
                     />
                   </label>
                 );
@@ -5998,7 +5899,7 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
         ))}
       </div>
 
-      {showUpdatedBanner && (
+      {showUpdatedBanner && isAdminRole && (
         <div className="rounded border border-emerald-300 bg-emerald-50 p-3 text-sm text-emerald-900">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
@@ -6042,7 +5943,7 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
         </div>
       )}
 
-      {canManageSync ? (
+      {isAdminRole && (canManageSync ? (
         <CollapsibleCard
           id="auto-sync"
           title="Đồng bộ tự động từ ECUS5VNACCS"
@@ -6318,179 +6219,256 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
             {lastSyncSummaryCard}
           </div>
         </section>
-      )}
+      ))}
 
-      <CollapsibleCard
-        id="co-code-config"
-        title="Cấu hình mã ưu đãi C/O"
-        description="Quản lý danh sách mã ưu đãi để hệ thống đánh giá C/O chính xác."
-        actions={
-          <div className="flex gap-2">
+      {isAdminRole && (
+        <>
+          <CollapsibleCard
+            id="co-code-config"
+            title="Cấu hình mã ưu đãi C/O"
+            description="Quản lý danh sách mã ưu đãi để hệ thống đánh giá C/O chính xác."
+            actions={
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={handleRefreshCoCodeConfig}
+                  className="rounded border px-3 py-1 text-sm"
+                  disabled={coCodeLoading}
+                  data-tooltip="Tải lại cấu hình mã ưu đãi C/O"
+                >
+                  {coCodeLoading ? "Đang tải..." : "Làm mới"}
+                </button>
+              </div>
+            }
+            bodyClassName="space-y-3"
+          >
+          {coCodeError && <div className="text-sm text-red-600">{coCodeError}</div>}
+          {coCodeMessage && <div className="text-sm text-emerald-600">{coCodeMessage}</div>}
+          <div className="grid gap-3 md:grid-cols-2">
+            <div>
+              <label className="flex items-center justify-between text-sm font-medium text-gray-700">
+                <span>Whitelist ưu tiên</span>
+                <span className="text-xs text-gray-400">Mỗi dòng một mã (để trống nếu không dùng)</span>
+              </label>
+              <textarea
+                value={coCodeForm.whitelist}
+                onChange={(e) => setCoCodeForm((prev) => ({ ...prev, whitelist: e.target.value }))}
+                className="mt-1 h-32 w-full resize-y rounded border px-3 py-2 text-sm"
+                placeholder="VD: CA3"
+                disabled={coCodeLoading || coCodeSaving || !canManageSync}
+              />
+            </div>
+            <div>
+              <label className="flex items-center justify-between text-sm font-medium text-gray-700">
+                <span>Blacklist không C/O</span>
+                <span className="text-xs text-gray-400">Mỗi dòng một mã</span>
+              </label>
+              <textarea
+                value={coCodeForm.blacklist}
+                onChange={(e) => setCoCodeForm((prev) => ({ ...prev, blacklist: e.target.value }))}
+                className="mt-1 h-32 w-full resize-y rounded border px-3 py-2 text-sm"
+                placeholder="VD: B01"
+                disabled={coCodeLoading || coCodeSaving || !canManageSync}
+              />
+            </div>
+          </div>
+          <p className="text-xs text-gray-500">
+            Nếu whitelist để trống, hệ thống sẽ sử dụng blacklist để loại bỏ các mã không được xem là C/O.
+          </p>
+          <div className="flex flex-wrap gap-2">
             <button
               type="button"
-              onClick={handleRefreshCoCodeConfig}
-              className="rounded border px-3 py-1 text-sm"
-              disabled={coCodeLoading}
-              data-tooltip="Tải lại cấu hình mã ưu đãi C/O"
-            >
-              {coCodeLoading ? "Đang tải..." : "Làm mới"}
-            </button>
-          </div>
-        }
-        bodyClassName="space-y-3"
-      >
-        {coCodeError && <div className="text-sm text-red-600">{coCodeError}</div>}
-        {coCodeMessage && <div className="text-sm text-emerald-600">{coCodeMessage}</div>}
-        <div className="grid gap-3 md:grid-cols-2">
-          <div>
-            <label className="flex items-center justify-between text-sm font-medium text-gray-700">
-              <span>Whitelist ưu tiên</span>
-              <span className="text-xs text-gray-400">Mỗi dòng một mã (để trống nếu không dùng)</span>
-            </label>
-            <textarea
-              value={coCodeForm.whitelist}
-              onChange={(e) => setCoCodeForm((prev) => ({ ...prev, whitelist: e.target.value }))}
-              className="mt-1 h-32 w-full resize-y rounded border px-3 py-2 text-sm"
-              placeholder="VD: CA3"
-              disabled={coCodeLoading || coCodeSaving || !canManageSync}
-            />
-          </div>
-          <div>
-            <label className="flex items-center justify-between text-sm font-medium text-gray-700">
-              <span>Blacklist không C/O</span>
-              <span className="text-xs text-gray-400">Mỗi dòng một mã</span>
-            </label>
-            <textarea
-              value={coCodeForm.blacklist}
-              onChange={(e) => setCoCodeForm((prev) => ({ ...prev, blacklist: e.target.value }))}
-              className="mt-1 h-32 w-full resize-y rounded border px-3 py-2 text-sm"
-              placeholder="VD: B01"
-              disabled={coCodeLoading || coCodeSaving || !canManageSync}
-            />
-          </div>
-        </div>
-        <p className="text-xs text-gray-500">Nếu whitelist để trống, hệ thống sẽ sử dụng blacklist để loại bỏ các mã không được xem là C/O.</p>
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={handleSaveCoCodeConfig}
-            className="rounded bg-emerald-600 px-3 py-1 text-xs font-medium text-white disabled:opacity-50"
-            disabled={coCodeSaving || coCodeLoading || !canManageSync}
-            data-tooltip="Lưu danh sách mã ưu đãi"
-          >
-            {coCodeSaving ? "Đang lưu..." : "Lưu cấu hình"}
-          </button>
-          <button
-            type="button"
-            onClick={handleResetCoCodeForm}
-            className="rounded border px-3 py-1 text-xs text-gray-600 hover:bg-gray-50"
-            disabled={coCodeLoading || coCodeSaving}
-            data-tooltip="Khôi phục cấu hình mã ưu đãi"
-          >
-            Khôi phục
-          </button>
-        </div>
-        <div className="text-xs text-gray-400">{coCodeUpdatedLabel}</div>
-      </CollapsibleCard>
-
-      <CollapsibleCard
-        id="co-discrepancy"
-        title="Đối soát C/O"
-        description="Theo dõi chênh lệch giữa dữ liệu hệ thống và ECUS để xử lý kịp thời."
-        actions={
-          <div className="flex flex-wrap items-center gap-2">
-            <input
-              type="date"
-              className="rounded border px-2 py-1 text-xs"
-              value={coDiscrepancyRange.from}
-              onChange={(e) => setCoDiscrepancyRange((prev) => ({ ...prev, from: e.target.value }))}
-              data-tooltip="Ngày bắt đầu đối soát"
-            />
-            <span className="text-xs text-gray-500">→</span>
-            <input
-              type="date"
-              className="rounded border px-2 py-1 text-xs"
-              value={coDiscrepancyRange.to}
-              onChange={(e) => setCoDiscrepancyRange((prev) => ({ ...prev, to: e.target.value }))}
-              data-tooltip="Ngày kết thúc đối soát"
-            />
-            <button
-              type="button"
-              onClick={handleRunCoDiscrepancy}
+              onClick={handleSaveCoCodeConfig}
               className="rounded bg-emerald-600 px-3 py-1 text-xs font-medium text-white disabled:opacity-50"
-              disabled={coDiscrepancyRunning || coDiscrepancyLoading || !canManageSync}
-              data-tooltip="Chạy đối chiếu C/O với dữ liệu ECUS"
+              disabled={coCodeSaving || coCodeLoading || !canManageSync}
+              data-tooltip="Lưu danh sách mã ưu đãi"
             >
-              {coDiscrepancyRunning ? "Đang chạy..." : "Chạy kiểm tra"}
+              {coCodeSaving ? "Đang lưu..." : "Lưu cấu hình"}
             </button>
             <button
               type="button"
-              onClick={handleRefreshCoDiscrepancy}
-              className="rounded border px-3 py-1 text-xs"
-              disabled={coDiscrepancyLoading}
-              data-tooltip="Làm mới kết quả đối soát"
+              onClick={handleResetCoCodeForm}
+              className="rounded border px-3 py-1 text-xs text-gray-600 hover:bg-gray-50"
+              disabled={coCodeLoading || coCodeSaving}
+              data-tooltip="Khôi phục cấu hình mã ưu đãi"
             >
-              {coDiscrepancyLoading ? "Đang tải..." : "Làm mới"}
+              Khôi phục
             </button>
           </div>
-        }
-        bodyClassName="space-y-3"
-      >
-        {coDiscrepancyError && <div className="text-sm text-red-600">{coDiscrepancyError}</div>}
-        {coDiscrepancyMessage && <div className="text-sm text-emerald-600">{coDiscrepancyMessage}</div>}
-        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
-          <div className="rounded border bg-gray-50 px-3 py-2">
-            <div className="text-xs uppercase text-gray-500">Trạng thái</div>
-            <div className="text-sm font-semibold text-gray-900">{coDiscrepancyStatusLabel}</div>
-          </div>
-          <div className="rounded border bg-gray-50 px-3 py-2">
-            <div className="text-xs uppercase text-gray-500">Lần chạy gần nhất</div>
-            <div className="text-sm font-semibold text-gray-900">{coDiscrepancyLastRunLabel}</div>
-          </div>
-          <div className="rounded border bg-gray-50 px-3 py-2">
-            <div className="text-xs uppercase text-gray-500">Chênh lệch</div>
-            <div className="text-sm font-semibold text-gray-900">{coMismatchCount.toLocaleString("vi-VN")}</div>
-          </div>
-          <div className="rounded border bg-gray-50 px-3 py-2">
-            <div className="text-xs uppercase text-gray-500">Tổng đã kiểm</div>
-            <div className="text-sm font-semibold text-gray-900">{coCheckedCount.toLocaleString("vi-VN")}</div>
-          </div>
-        </div>
-        <div className="mt-3 grid gap-3 md:grid-cols-2">
-          <div className="space-y-2">
-            <label className="flex items-center gap-2 text-sm">
-              <input type="checkbox" checked={coDiscrepancyForm.enabled} onChange={(e) => setCoDiscrepancyForm((prev) => ({ ...prev, enabled: e.target.checked }))} disabled={!canManageSync} />
-              <span>Bật đối soát tự động</span>
-            </label>
-            <div className="grid gap-2 md:grid-cols-2">
-              <label className="text-xs font-medium text-gray-600">Cron tự động<input className="mt-1 w-full rounded border px-2 py-1 text-sm" value={coDiscrepancyForm.cron} onChange={(e) => setCoDiscrepancyForm((prev) => ({ ...prev, cron: e.target.value }))} disabled={!canManageSync} placeholder="30 4 * * *" /></label>
-              <label className="text-xs font-medium text-gray-600">Số ngày lấy mẫu<input type="number" min={1} className="mt-1 w-full rounded border px-2 py-1 text-sm" value={coDiscrepancyForm.rangeDays} onChange={(e) => setCoDiscrepancyForm((prev) => ({ ...prev, rangeDays: e.target.value }))} disabled={!canManageSync} /></label>
-              <label className="text-xs font-medium text-gray-600">Ngưỡng cảnh báo<input type="number" min={1} className="mt-1 w-full rounded border px-2 py-1 text-sm" value={coDiscrepancyForm.threshold} onChange={(e) => setCoDiscrepancyForm((prev) => ({ ...prev, threshold: e.target.value }))} disabled={!canManageSync} /></label>
-              <label className="text-xs font-medium text-gray-600">Giới hạn mẫu<input type="number" min={0} className="mt-1 w-full rounded border px-2 py-1 text-sm" value={coDiscrepancyForm.sampleLimit} onChange={(e) => setCoDiscrepancyForm((prev) => ({ ...prev, sampleLimit: e.target.value }))} disabled={!canManageSync} /></label>
+          <div className="text-xs text-gray-400">{coCodeUpdatedLabel}</div>
+          </CollapsibleCard>
+
+          <CollapsibleCard
+            id="co-discrepancy"
+            title="Đối soát C/O"
+            description="Theo dõi chênh lệch giữa dữ liệu hệ thống và ECUS để xử lý kịp thời."
+            actions={
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  type="date"
+                  className="rounded border px-2 py-1 text-xs"
+                  value={coDiscrepancyRange.from}
+                  onChange={(e) => setCoDiscrepancyRange((prev) => ({ ...prev, from: e.target.value }))}
+                  data-tooltip="Ngày bắt đầu đối soát"
+                />
+                <span className="text-xs text-gray-500">→</span>
+                <input
+                  type="date"
+                  className="rounded border px-2 py-1 text-xs"
+                  value={coDiscrepancyRange.to}
+                  onChange={(e) => setCoDiscrepancyRange((prev) => ({ ...prev, to: e.target.value }))}
+                  data-tooltip="Ngày kết thúc đối soát"
+                />
+                <button
+                  type="button"
+                  onClick={handleRunCoDiscrepancy}
+                  className="rounded bg-emerald-600 px-3 py-1 text-xs font-medium text-white disabled:opacity-50"
+                  disabled={coDiscrepancyRunning || coDiscrepancyLoading || !canManageSync}
+                  data-tooltip="Chạy đối chiếu C/O với dữ liệu ECUS"
+                >
+                  {coDiscrepancyRunning ? "Đang chạy..." : "Chạy kiểm tra"}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleRefreshCoDiscrepancy}
+                  className="rounded border px-3 py-1 text-xs"
+                  disabled={coDiscrepancyLoading}
+                  data-tooltip="Làm mới kết quả đối soát"
+                >
+                  {coDiscrepancyLoading ? "Đang tải..." : "Làm mới"}
+                </button>
+              </div>
+            }
+            bodyClassName="space-y-3"
+          >
+          {coDiscrepancyError && <div className="text-sm text-red-600">{coDiscrepancyError}</div>}
+          {coDiscrepancyMessage && <div className="text-sm text-emerald-600">{coDiscrepancyMessage}</div>}
+          <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+            <div className="rounded border bg-gray-50 px-3 py-2">
+              <div className="text-xs uppercase text-gray-500">Trạng thái</div>
+              <div className="text-sm font-semibold text-gray-900">{coDiscrepancyStatusLabel}</div>
             </div>
-            <div className="flex flex-wrap gap-2">
-              <button type="button" onClick={handleSaveCoDiscrepancyConfig} className="rounded bg-emerald-600 px-3 py-1 text-xs font-medium text-white disabled:opacity-50" disabled={coDiscrepancySaving || !canManageSync}>
-                {coDiscrepancySaving ? "Đang lưu..." : "Lưu cấu hình"}
-              </button>
-              <button type="button" onClick={handleResetCoDiscrepancyForm} className="rounded border px-3 py-1 text-xs text-gray-600 hover:bg-gray-50" disabled={coDiscrepancySaving}>
-                Khôi phục
-              </button>
+            <div className="rounded border bg-gray-50 px-3 py-2">
+              <div className="text-xs uppercase text-gray-500">Lần chạy gần nhất</div>
+              <div className="text-sm font-semibold text-gray-900">{coDiscrepancyLastRunLabel}</div>
             </div>
-            <div className="text-xs text-gray-500">
-              {coDiscrepancyRangeLabel ? `Khoảng lần chạy gần nhất: ${coDiscrepancyRangeLabel}` : "Chưa có kết quả đối soát."}
-              {coMismatchLimited ? " (Đã cắt bớt danh sách do vượt giới hạn mẫu)" : ""}
+            <div className="rounded border bg-gray-50 px-3 py-2">
+              <div className="text-xs uppercase text-gray-500">Chênh lệch</div>
+              <div className="text-sm font-semibold text-gray-900">{coMismatchCount.toLocaleString("vi-VN")}</div>
+            </div>
+            <div className="rounded border bg-gray-50 px-3 py-2">
+              <div className="text-xs uppercase text-gray-500">Tổng đã kiểm</div>
+              <div className="text-sm font-semibold text-gray-900">{coCheckedCount.toLocaleString("vi-VN")}</div>
             </div>
           </div>
-          <div className="space-y-2">
-            <div className="flex items-center justify-between text-xs">
-              <span>Chênh lệch gợi ý ({coMismatchPreview.length} / {coMismatchCount.toLocaleString("vi-VN")})</span>
-              <button type="button" onClick={handleSelectCoMismatches} className="rounded border px-2 py-0.5 text-[11px] text-amber-700 hover:bg-amber-50" disabled={!coMismatchKeySet.size}>
-                Chọn trên bảng
-              </button>
+          <div className="mt-3 grid gap-3 md:grid-cols-2">
+            <div className="space-y-2">
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={coDiscrepancyForm.enabled}
+                  onChange={(e) =>
+                    setCoDiscrepancyForm((prev) => ({ ...prev, enabled: e.target.checked }))
+                  }
+                  disabled={!canManageSync}
+                />
+                <span>Bật đối soát tự động</span>
+              </label>
+              <div className="grid gap-2 md:grid-cols-2">
+                <label className="text-xs font-medium text-gray-600">
+                  Cron tự động
+                  <input
+                    className="mt-1 w-full rounded border px-2 py-1 text-sm"
+                    value={coDiscrepancyForm.cron}
+                    onChange={(e) =>
+                      setCoDiscrepancyForm((prev) => ({ ...prev, cron: e.target.value }))
+                    }
+                    disabled={!canManageSync}
+                    placeholder="30 4 * * *"
+                  />
+                </label>
+                <label className="text-xs font-medium text-gray-600">
+                  Số ngày lấy mẫu
+                  <input
+                    type="number"
+                    min={1}
+                    className="mt-1 w-full rounded border px-2 py-1 text-sm"
+                    value={coDiscrepancyForm.rangeDays}
+                    onChange={(e) =>
+                      setCoDiscrepancyForm((prev) => ({ ...prev, rangeDays: e.target.value }))
+                    }
+                    disabled={!canManageSync}
+                  />
+                </label>
+                <label className="text-xs font-medium text-gray-600">
+                  Ngưỡng cảnh báo
+                  <input
+                    type="number"
+                    min={1}
+                    className="mt-1 w-full rounded border px-2 py-1 text-sm"
+                    value={coDiscrepancyForm.threshold}
+                    onChange={(e) =>
+                      setCoDiscrepancyForm((prev) => ({ ...prev, threshold: e.target.value }))
+                    }
+                    disabled={!canManageSync}
+                  />
+                </label>
+                <label className="text-xs font-medium text-gray-600">
+                  Giới hạn mẫu
+                  <input
+                    type="number"
+                    min={0}
+                    className="mt-1 w-full rounded border px-2 py-1 text-sm"
+                    value={coDiscrepancyForm.sampleLimit}
+                    onChange={(e) =>
+                      setCoDiscrepancyForm((prev) => ({ ...prev, sampleLimit: e.target.value }))
+                    }
+                    disabled={!canManageSync}
+                  />
+                </label>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={handleSaveCoDiscrepancyConfig}
+                  className="rounded bg-emerald-600 px-3 py-1 text-xs font-medium text-white disabled:opacity-50"
+                  disabled={coDiscrepancySaving || !canManageSync}
+                >
+                  {coDiscrepancySaving ? "Đang lưu..." : "Lưu cấu hình"}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleResetCoDiscrepancyForm}
+                  className="rounded border px-3 py-1 text-xs text-gray-600 hover:bg-gray-50"
+                  disabled={coDiscrepancySaving}
+                >
+                  Khôi phục
+                </button>
+              </div>
+              <div className="text-xs text-gray-500">
+                {coDiscrepancyRangeLabel
+                  ? `Khoảng lần chạy gần nhất: ${coDiscrepancyRangeLabel}`
+                  : "Chưa có kết quả đối soát."}
+                {coMismatchLimited ? " (Đã cắt bớt danh sách do vượt giới hạn mẫu)" : ""}
+              </div>
             </div>
-            <div className="overflow-auto rounded border">
-              {coMismatchPreview.length ? (
-                <table className="min-w-full text-xs">
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-xs">
+                <span>
+                  Chênh lệch gợi ý ({coMismatchPreview.length} / {coMismatchCount.toLocaleString("vi-VN")})
+                </span>
+                <button
+                  type="button"
+                  onClick={handleSelectCoMismatches}
+                  className="rounded border px-2 py-0.5 text-[11px] text-amber-700 hover:bg-amber-50"
+                  disabled={!coMismatchKeySet.size}
+                >
+                  Chọn trên bảng
+                </button>
+              </div>
+              <div className="overflow-auto rounded border">
+                {coMismatchPreview.length ? (
+                  <table className="min-w-full text-xs">
                   <thead className="bg-amber-50 text-amber-800">
                     <tr>
                       <th className="px-2 py-1 text-left">Tờ khai</th>
@@ -6516,10 +6494,11 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
             </div>
           </div>
         </div>
-      </CollapsibleCard>
+          </CollapsibleCard>
+        </>
+      )}
 
-
-<section className={`${CARD_SURFACE_CLASS} p-4`}>
+      <section className={`${CARD_SURFACE_CLASS} p-4`}>
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
             <h2 className="text-base font-semibold text-gray-900">Cảnh báo tờ khai thiếu thông tin</h2>
@@ -6788,102 +6767,13 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
         <div className="flex min-w-[260px] flex-1 flex-col gap-2">
           <input
             className="w-full rounded border px-2 py-1"
-            placeholder="Tìm nhanh (Số TK / MST / Công ty / Đại lý)"
+            placeholder="Tìm nhanh (Số TK / MST / Công ty / Nhân viên / Tổ đội)"
             value={query}
             onChange={e => { setQuery(e.target.value); setPage(1); }}
           />
-          <div className="flex flex-wrap items-center gap-2">
-            <input
-              className="w-48 flex-1 rounded border px-2 py-1 text-sm"
-              placeholder="Lọc nhanh theo MST"
-              value={quickMST}
-              onChange={(e) => setQuickMST(e.target.value)}
-            />
-            {quickMST && (
-              <button
-                type="button"
-                onClick={() => setQuickMST("")}
-                className="rounded border px-2 py-1 text-xs text-gray-500 hover:bg-gray-50"
-              >
-                Xóa MST
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={handleSaveMstFavorite}
-              className="flex items-center gap-1 rounded border px-2 py-1 text-xs text-gray-600 hover:bg-gray-50"
-            >
-              <Plus className="h-3 w-3" /> Lưu MST ưa thích
-            </button>
-          </div>
-          {quickSearchFavorites.mst.length > 0 && (
-            <div className="flex flex-wrap gap-1 text-xs text-gray-600">
-              {quickSearchFavorites.mst.map((item) => (
-                <button
-                  key={item.normalized}
-                  type="button"
-                  onClick={() => handleApplyMstFavorite(item.value)}
-                  className="flex items-center gap-1 rounded border border-blue-200 bg-blue-50 px-2 py-1 text-blue-700 hover:bg-blue-100"
-                >
-                  {item.value}
-                  <CircleX
-                    aria-hidden="true"
-                    className="h-3 w-3"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      handleRemoveMstFavorite(item.value);
-                    }}
-                  />
-                </button>
-              ))}
-            </div>
-          )}
-          <div className="flex flex-wrap items-center gap-2">
-            <input
-              className="w-48 flex-1 rounded border px-2 py-1 text-sm"
-              placeholder="Lọc nhanh theo tên công ty"
-              value={quickCompany}
-              onChange={(e) => setQuickCompany(e.target.value)}
-            />
-            {quickCompany && (
-              <button
-                type="button"
-                onClick={() => setQuickCompany("")}
-                className="rounded border px-2 py-1 text-xs text-gray-500 hover:bg-gray-50"
-              >
-                Xóa công ty
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={handleSaveCompanyFavorite}
-              className="flex items-center gap-1 rounded border px-2 py-1 text-xs text-gray-600 hover:bg-gray-50"
-            >
-              <Plus className="h-3 w-3" /> Lưu công ty ưa thích
-            </button>
-          </div>
-          {quickSearchFavorites.company.length > 0 && (
-            <div className="flex flex-wrap gap-1 text-xs text-gray-600">
-              {quickSearchFavorites.company.map((item) => (
-                <button
-                  key={item.normalized}
-                  type="button"
-                  onClick={() => handleApplyCompanyFavorite(item.value)}
-                  className="flex items-center gap-1 rounded border border-emerald-200 bg-emerald-50 px-2 py-1 text-emerald-700 hover:bg-emerald-100"
-                >
-                  {item.value}
-                  <CircleX
-                    aria-hidden="true"
-                    className="h-3 w-3"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      handleRemoveCompanyFavorite(item.value);
-                    }}
-                  />
-                </button>
-              ))}
-            </div>
-          )}
+          <span className="text-xs text-gray-500">
+            Nhập từ khóa để tìm nhanh theo Số tờ khai, mã số thuế, tên doanh nghiệp, nhân viên hoặc tổ đội phụ trách.
+          </span>
         </div>
 
         <div className="flex flex-col gap-2">
@@ -7007,75 +6897,7 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
           </div>
         </div>
 
-        <div className="flex min-w-[220px] flex-1 flex-col gap-2">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-sm font-medium text-gray-600">Trạng thái</span>
-            <button
-              type="button"
-              onClick={handleSaveStatusFavorite}
-              className="flex items-center gap-1 rounded border px-2 py-1 text-xs text-gray-600 hover:bg-gray-50"
-            >
-              <Plus className="h-3 w-3" /> Lưu trạng thái ưa thích
-            </button>
-            {statusFilters.length > 0 && (
-              <button
-                type="button"
-                onClick={clearStatusFilters}
-                className="rounded border px-2 py-1 text-xs text-gray-500 hover:bg-gray-50"
-              >
-                Xóa lọc trạng thái
-              </button>
-            )}
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {availableStatuses.length > 0 ? (
-              availableStatuses.map((status) => {
-                const checked = statusFilters.includes(status);
-                return (
-                  <label
-                    key={status || "unknown"}
-                    className={`flex items-center gap-1 rounded border px-2 py-1 text-xs ${
-                      checked
-                        ? "border-violet-300 bg-violet-50 text-violet-700"
-                        : "border-gray-200 text-gray-600"
-                    }`}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={checked}
-                      onChange={(event) => toggleStatusFilter(status, event.target.checked)}
-                    />
-                    <span>{formatStatusLabel(status)}</span>
-                  </label>
-                );
-              })
-            ) : (
-              <span className="text-xs text-gray-500">Chưa có trạng thái để lọc.</span>
-            )}
-          </div>
-          {quickSearchFavorites.status.length > 0 && (
-            <div className="flex flex-wrap gap-1 text-xs text-gray-600">
-              {quickSearchFavorites.status.map((item) => (
-                <button
-                  key={item.normalized}
-                  type="button"
-                  onClick={() => handleApplyStatusFavorite(item.value)}
-                  className="flex items-center gap-1 rounded border border-purple-200 bg-purple-50 px-2 py-1 text-purple-700 hover:bg-purple-100"
-                >
-                  {statusFavoriteLabel(item.value)}
-                  <CircleX
-                    aria-hidden="true"
-                    className="h-3 w-3"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      handleRemoveStatusFavorite(item.value);
-                    }}
-                  />
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
+
 
         <div className="flex min-w-[240px] flex-1 flex-wrap items-center gap-2 border-l border-gray-200 pl-3 dark:border-slate-700">
           <label className="flex flex-col text-xs text-gray-600 dark:text-gray-300">
@@ -7312,20 +7134,18 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
         </div>
       </div>
 
-      {isAdminRole && (
-        <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs text-gray-600">
-          <span>
-            Đang hiển thị {visibleColumnCount}/{totalBaseColumns} cột dữ liệu.
-          </span>
-          <button
-            type="button"
-            onClick={handleOpenColumnConfig}
-            className="rounded border px-3 py-1 text-xs text-gray-600 transition hover:bg-gray-50"
-          >
-            Cấu hình cột hiển thị
-          </button>
-        </div>
-      )}
+      <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs text-gray-600">
+        <span>
+          Đang hiển thị {visibleColumnCount}/{totalBaseColumns} cột dữ liệu.
+        </span>
+        <button
+          type="button"
+          onClick={handleOpenColumnConfig}
+          className="rounded border px-3 py-1 text-xs text-gray-600 transition hover:bg-gray-50"
+        >
+          Cấu hình cột hiển thị
+        </button>
+      </div>
 
       {!query && mode === "saved" && (
         <div className="text-xs text-gray-500">
@@ -7425,7 +7245,7 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
 
       {viewMode === VIEW_MODES.TABLE ? (
         <div className="relative overflow-x-auto overflow-y-hidden rounded border bg-white dark:border-slate-700 dark:bg-slate-900/40">
-          <table className="relative w-full min-w-[1200px] table-fixed text-sm">
+          <table className="relative w-full min-w-[1200px] table-auto text-sm">
             <thead className="bg-gray-50 text-left dark:bg-slate-900">
               <tr>
               {selectionEnabled && (
@@ -7453,7 +7273,7 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
               {!hiddenColumns.has("declaration") && (
                 <th
                   className={cx(
-                    "px-2 py-1 font-semibold text-gray-600 dark:text-gray-300",
+                    "px-2 py-1 font-semibold text-gray-600 dark:text-gray-300 whitespace-nowrap",
                     frozenOffsets.declaration ? frozenHeaderClass : ""
                   )}
                   style={getFrozenStyle("declaration")}
@@ -7464,7 +7284,7 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
               {!hiddenColumns.has("mst") && (
                 <th
                   className={cx(
-                    "px-2 py-1 font-semibold text-gray-600 dark:text-gray-300",
+                    "px-2 py-1 font-semibold text-gray-600 dark:text-gray-300 whitespace-nowrap",
                     frozenOffsets.mst ? frozenHeaderClass : ""
                   )}
                   style={getFrozenStyle("mst")}
@@ -7473,7 +7293,7 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
                 </th>
               )}
               {!hiddenColumns.has("company") && (
-                <th className="px-2 py-1 font-semibold text-gray-600 dark:text-gray-300">
+                <th className="px-2 py-1 font-semibold text-gray-600 dark:text-gray-300 min-w-[18rem]">
                   {IMPORT_TABLE_COLUMN_LABELS.company}
                 </th>
               )}
@@ -7578,7 +7398,7 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
                   {!hiddenColumns.has("declaration") && (
                     <td
                       className={cx(
-                        "px-2 py-1 align-top",
+                        "px-2 py-1 align-top whitespace-nowrap",
                         frozenOffsets.declaration ? frozenCellClass : ""
                       )}
                       style={getFrozenStyle("declaration")}
@@ -7631,7 +7451,7 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
                   {!hiddenColumns.has("mst") && (
                     <td
                       className={cx(
-                        "px-2 py-1 align-top text-gray-700 dark:text-gray-200",
+                        "px-2 py-1 align-top whitespace-nowrap text-gray-700 dark:text-gray-200",
                         frozenOffsets.mst ? frozenCellClass : ""
                       )}
                       style={getFrozenStyle("mst")}
@@ -7640,7 +7460,7 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
                     </td>
                   )}
                   {!hiddenColumns.has("company") && (
-                    <td className="px-2 py-1 align-top">
+                    <td className="px-2 py-1 align-top min-w-[18rem]">
                       <span>{r.cong_ty || ""}</span>
                     </td>
                   )}

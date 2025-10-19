@@ -40,8 +40,21 @@ export const IMPORT_COLUMN_IDS = Object.freeze([
   "kpi",
 ]);
 
-const IMPORT_COLUMN_ID_SET = new Set(IMPORT_COLUMN_IDS);
-const DEFAULT_IMPORT_COLUMN_CONFIG = Object.freeze({ hidden: [] });
+export const IMPORT_AUX_COLUMN_IDS = Object.freeze(["history", "update"]);
+export const IMPORT_SENSITIVE_COLUMNS = Object.freeze(["status", "history", "update"]);
+
+const IMPORT_CONFIG_COLUMN_IDS = Object.freeze([
+  ...IMPORT_COLUMN_IDS,
+  ...IMPORT_AUX_COLUMN_IDS,
+]);
+
+const BASE_IMPORT_COLUMN_ID_SET = new Set(IMPORT_COLUMN_IDS);
+const IMPORT_COLUMN_ID_SET = new Set(IMPORT_CONFIG_COLUMN_IDS);
+const DEFAULT_IMPORT_COLUMN_VERSION = 2;
+const DEFAULT_IMPORT_COLUMN_CONFIG = Object.freeze({
+  hidden: [...new Set([...IMPORT_AUX_COLUMN_IDS, "status"])],
+  version: DEFAULT_IMPORT_COLUMN_VERSION,
+});
 
 const VALID_SCHEDULE_FREQUENCIES = new Set(["weekly", "monthly"]);
 const VALID_SCHEDULE_FORMATS = new Set(["excel", "pdf"]);
@@ -67,20 +80,60 @@ function writeUILayoutConfig(config) {
 }
 
 function normalizeImportColumnConfig(input) {
-  if (input && typeof input === "object" && !Array.isArray(input)) {
-    const rawHidden = Array.isArray(input.hidden) ? input.hidden : [];
-    const hiddenSet = new Set();
-    for (const key of rawHidden) {
-      if (typeof key !== "string") continue;
-      const trimmed = key.trim();
-      if (!trimmed) continue;
-      if (IMPORT_COLUMN_ID_SET.has(trimmed)) {
-        hiddenSet.add(trimmed);
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    return {
+      hidden: DEFAULT_IMPORT_COLUMN_CONFIG.hidden.slice(),
+      version: DEFAULT_IMPORT_COLUMN_CONFIG.version,
+    };
+  }
+
+  const rawHidden = Array.isArray(input.hidden) ? input.hidden : [];
+  const seen = new Set();
+  const sanitized = [];
+  let baseHiddenCount = 0;
+
+  for (const key of rawHidden) {
+    if (typeof key !== "string") continue;
+    const trimmed = key.trim();
+    if (!trimmed || !IMPORT_COLUMN_ID_SET.has(trimmed) || seen.has(trimmed)) {
+      continue;
+    }
+    sanitized.push(trimmed);
+    seen.add(trimmed);
+    if (BASE_IMPORT_COLUMN_ID_SET.has(trimmed)) {
+      baseHiddenCount += 1;
+    }
+  }
+
+  let version = Number.isFinite(input.version) ? Number(input.version) : 1;
+
+  if (version < DEFAULT_IMPORT_COLUMN_VERSION) {
+    for (const key of DEFAULT_IMPORT_COLUMN_CONFIG.hidden) {
+      if (!seen.has(key) && IMPORT_COLUMN_ID_SET.has(key)) {
+        sanitized.push(key);
+        seen.add(key);
+        if (BASE_IMPORT_COLUMN_ID_SET.has(key)) {
+          baseHiddenCount += 1;
+        }
       }
     }
-    return { hidden: Array.from(hiddenSet) };
+    version = DEFAULT_IMPORT_COLUMN_VERSION;
   }
-  return { ...DEFAULT_IMPORT_COLUMN_CONFIG };
+
+  if (baseHiddenCount >= IMPORT_COLUMN_IDS.length) {
+    const fallbackHidden = DEFAULT_IMPORT_COLUMN_CONFIG.hidden.filter((key) =>
+      IMPORT_COLUMN_ID_SET.has(key),
+    );
+    return {
+      hidden: fallbackHidden,
+      version: DEFAULT_IMPORT_COLUMN_VERSION,
+    };
+  }
+
+  return {
+    hidden: sanitized,
+    version: Math.max(version, DEFAULT_IMPORT_COLUMN_VERSION),
+  };
 }
 
 function isSameColumnConfig(a, b) {
@@ -97,15 +150,21 @@ function isSameColumnConfig(a, b) {
       return false;
     }
   }
-  return true;
+  const versionA = Number.isFinite(a.version) ? Number(a.version) : 0;
+  const versionB = Number.isFinite(b.version) ? Number(b.version) : 0;
+  return versionA === versionB;
 }
 
 export function getImportColumnConfig() {
   const layout = readUILayoutConfig();
   const importData = layout && typeof layout.importData === "object" ? layout.importData : {};
   const current = normalizeImportColumnConfig(importData.columns);
-  if (current.hidden.length >= IMPORT_COLUMN_IDS.length) {
-    return { hidden: [] };
+  const hiddenBaseCount = current.hidden.filter((key) => BASE_IMPORT_COLUMN_ID_SET.has(key)).length;
+  if (hiddenBaseCount >= IMPORT_COLUMN_IDS.length) {
+    return {
+      hidden: DEFAULT_IMPORT_COLUMN_CONFIG.hidden.slice(),
+      version: DEFAULT_IMPORT_COLUMN_CONFIG.version,
+    };
   }
   return current;
 }
@@ -115,8 +174,12 @@ export function saveImportColumnConfig({ hidden } = {}, { actor = "system" } = {
   const importSection = layout && typeof layout.importData === "object" ? layout.importData : {};
   const current = normalizeImportColumnConfig(importSection.columns);
   const targetHidden = Array.isArray(hidden) ? hidden : current.hidden;
-  const next = normalizeImportColumnConfig({ hidden: targetHidden });
-  if (next.hidden.length >= IMPORT_COLUMN_IDS.length) {
+  const next = normalizeImportColumnConfig({
+    hidden: targetHidden,
+    version: DEFAULT_IMPORT_COLUMN_VERSION,
+  });
+  const hiddenBaseCount = next.hidden.filter((key) => BASE_IMPORT_COLUMN_ID_SET.has(key)).length;
+  if (hiddenBaseCount >= IMPORT_COLUMN_IDS.length) {
     return current;
   }
   if (isSameColumnConfig(current, next)) {
@@ -130,11 +193,12 @@ export function saveImportColumnConfig({ hidden } = {}, { actor = "system" } = {
     },
   };
   writeUILayoutConfig(nextLayout);
+  const visibleBaseColumns = IMPORT_COLUMN_IDS.length - hiddenBaseCount;
   pushAuditLog({
     actor,
     action: "import.columns.update",
-    detail: `Cập nhật cột Import Data (${IMPORT_COLUMN_IDS.length - next.hidden.length}/${IMPORT_COLUMN_IDS.length} hiển thị)`,
-    meta: { hidden: next.hidden.slice() },
+    detail: `Cập nhật cột Import Data (${visibleBaseColumns}/${IMPORT_COLUMN_IDS.length} cột dữ liệu hiển thị)`,
+    meta: { hidden: next.hidden.slice(), version: next.version },
   });
   return next;
 }
@@ -3564,7 +3628,8 @@ export default {
   pushImportLog,
   pushAuditLog, getAuditLogs, clearAuditLogs,
   saveMSTRow,
-  IMPORT_COLUMN_IDS, getImportColumnConfig, saveImportColumnConfig, subscribeImportColumnConfig,
+  IMPORT_COLUMN_IDS, IMPORT_AUX_COLUMN_IDS, IMPORT_SENSITIVE_COLUMNS,
+  getImportColumnConfig, saveImportColumnConfig, subscribeImportColumnConfig,
   UI_LAYOUT_KEY,
   getKpiAdjustments, saveKpiAdjustment, updateKpiAdjustmentStatus, removeKpiAdjustment, mapAdjustmentsByMonth,
   getKpiAdjustmentSettings, saveKpiAdjustmentSettings,
