@@ -163,7 +163,7 @@ describe('DataImporter preview UI', () => {
       <DataImporter
         canEdit
         canManageSync
-        currentUser={{ username: 'admin', permissions: ['syncManage'] }}
+        currentUser={{ username: 'admin', permissions: ['syncManage'], role: 'admin' }}
       />
     );
 
@@ -263,7 +263,7 @@ describe('DataImporter preview UI', () => {
 
     // Ô tìm nhanh duy nhất được giữ lại
     const searchInputs = await screen.findAllByPlaceholderText(
-      'Tìm nhanh (Số TK / MST / Công ty / Đại lý)'
+      'Tìm nhanh (Số TK / MST / Công ty / Nhân viên / Tổ đội)'
     );
     const searchInput = searchInputs[0];
 

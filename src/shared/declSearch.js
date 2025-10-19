@@ -196,12 +196,16 @@ export function filterDeclRows(rows, rawFilters = {}, context = {}) {
       const soTkFull = (row.so_tk_full ?? "").toString().toLowerCase();
       const mstRaw = (row.mst ?? row.ma_so_thue ?? "").toString().toLowerCase();
       const companyRaw = (row.cong_ty ?? row.company ?? row.ten_cong_ty ?? row.doanh_nghiep ?? "").toString().toLowerCase();
+      const staffRaw = (row.nhan_vien ?? row.staff ?? "").toString().toLowerCase();
+      const teamRaw = (row.team ?? row.to_doi ?? row.bo_phan ?? "").toString().toLowerCase();
       const agencySearch = buildAgencySearchString(row);
       if (
         !soTk.includes(filters.queryLower) &&
         !soTkFull.includes(filters.queryLower) &&
         !mstRaw.includes(filters.queryLower) &&
         !companyRaw.includes(filters.queryLower) &&
+        !staffRaw.includes(filters.queryLower) &&
+        !teamRaw.includes(filters.queryLower) &&
         !agencySearch.includes(filters.queryLower)
       ) {
         continue;

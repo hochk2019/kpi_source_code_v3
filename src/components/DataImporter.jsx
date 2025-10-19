@@ -5825,7 +5825,7 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
         ))}
       </div>
 
-      {showUpdatedBanner && (
+      {showUpdatedBanner && isAdminRole && (
         <div className="rounded border border-emerald-300 bg-emerald-50 p-3 text-sm text-emerald-900">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
@@ -5869,7 +5869,7 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
         </div>
       )}
 
-      {canManageSync ? (
+      {isAdminRole && (canManageSync ? (
         <CollapsibleCard
           id="auto-sync"
           title="Đồng bộ tự động từ ECUS5VNACCS"
@@ -6145,179 +6145,256 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
             {lastSyncSummaryCard}
           </div>
         </section>
-      )}
+      ))}
 
-      <CollapsibleCard
-        id="co-code-config"
-        title="Cấu hình mã ưu đãi C/O"
-        description="Quản lý danh sách mã ưu đãi để hệ thống đánh giá C/O chính xác."
-        actions={
-          <div className="flex gap-2">
+      {isAdminRole && (
+        <>
+          <CollapsibleCard
+            id="co-code-config"
+            title="Cấu hình mã ưu đãi C/O"
+            description="Quản lý danh sách mã ưu đãi để hệ thống đánh giá C/O chính xác."
+            actions={
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={handleRefreshCoCodeConfig}
+                  className="rounded border px-3 py-1 text-sm"
+                  disabled={coCodeLoading}
+                  data-tooltip="Tải lại cấu hình mã ưu đãi C/O"
+                >
+                  {coCodeLoading ? "Đang tải..." : "Làm mới"}
+                </button>
+              </div>
+            }
+            bodyClassName="space-y-3"
+          >
+          {coCodeError && <div className="text-sm text-red-600">{coCodeError}</div>}
+          {coCodeMessage && <div className="text-sm text-emerald-600">{coCodeMessage}</div>}
+          <div className="grid gap-3 md:grid-cols-2">
+            <div>
+              <label className="flex items-center justify-between text-sm font-medium text-gray-700">
+                <span>Whitelist ưu tiên</span>
+                <span className="text-xs text-gray-400">Mỗi dòng một mã (để trống nếu không dùng)</span>
+              </label>
+              <textarea
+                value={coCodeForm.whitelist}
+                onChange={(e) => setCoCodeForm((prev) => ({ ...prev, whitelist: e.target.value }))}
+                className="mt-1 h-32 w-full resize-y rounded border px-3 py-2 text-sm"
+                placeholder="VD: CA3"
+                disabled={coCodeLoading || coCodeSaving || !canManageSync}
+              />
+            </div>
+            <div>
+              <label className="flex items-center justify-between text-sm font-medium text-gray-700">
+                <span>Blacklist không C/O</span>
+                <span className="text-xs text-gray-400">Mỗi dòng một mã</span>
+              </label>
+              <textarea
+                value={coCodeForm.blacklist}
+                onChange={(e) => setCoCodeForm((prev) => ({ ...prev, blacklist: e.target.value }))}
+                className="mt-1 h-32 w-full resize-y rounded border px-3 py-2 text-sm"
+                placeholder="VD: B01"
+                disabled={coCodeLoading || coCodeSaving || !canManageSync}
+              />
+            </div>
+          </div>
+          <p className="text-xs text-gray-500">
+            Nếu whitelist để trống, hệ thống sẽ sử dụng blacklist để loại bỏ các mã không được xem là C/O.
+          </p>
+          <div className="flex flex-wrap gap-2">
             <button
               type="button"
-              onClick={handleRefreshCoCodeConfig}
-              className="rounded border px-3 py-1 text-sm"
-              disabled={coCodeLoading}
-              data-tooltip="Tải lại cấu hình mã ưu đãi C/O"
-            >
-              {coCodeLoading ? "Đang tải..." : "Làm mới"}
-            </button>
-          </div>
-        }
-        bodyClassName="space-y-3"
-      >
-        {coCodeError && <div className="text-sm text-red-600">{coCodeError}</div>}
-        {coCodeMessage && <div className="text-sm text-emerald-600">{coCodeMessage}</div>}
-        <div className="grid gap-3 md:grid-cols-2">
-          <div>
-            <label className="flex items-center justify-between text-sm font-medium text-gray-700">
-              <span>Whitelist ưu tiên</span>
-              <span className="text-xs text-gray-400">Mỗi dòng một mã (để trống nếu không dùng)</span>
-            </label>
-            <textarea
-              value={coCodeForm.whitelist}
-              onChange={(e) => setCoCodeForm((prev) => ({ ...prev, whitelist: e.target.value }))}
-              className="mt-1 h-32 w-full resize-y rounded border px-3 py-2 text-sm"
-              placeholder="VD: CA3"
-              disabled={coCodeLoading || coCodeSaving || !canManageSync}
-            />
-          </div>
-          <div>
-            <label className="flex items-center justify-between text-sm font-medium text-gray-700">
-              <span>Blacklist không C/O</span>
-              <span className="text-xs text-gray-400">Mỗi dòng một mã</span>
-            </label>
-            <textarea
-              value={coCodeForm.blacklist}
-              onChange={(e) => setCoCodeForm((prev) => ({ ...prev, blacklist: e.target.value }))}
-              className="mt-1 h-32 w-full resize-y rounded border px-3 py-2 text-sm"
-              placeholder="VD: B01"
-              disabled={coCodeLoading || coCodeSaving || !canManageSync}
-            />
-          </div>
-        </div>
-        <p className="text-xs text-gray-500">Nếu whitelist để trống, hệ thống sẽ sử dụng blacklist để loại bỏ các mã không được xem là C/O.</p>
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={handleSaveCoCodeConfig}
-            className="rounded bg-emerald-600 px-3 py-1 text-xs font-medium text-white disabled:opacity-50"
-            disabled={coCodeSaving || coCodeLoading || !canManageSync}
-            data-tooltip="Lưu danh sách mã ưu đãi"
-          >
-            {coCodeSaving ? "Đang lưu..." : "Lưu cấu hình"}
-          </button>
-          <button
-            type="button"
-            onClick={handleResetCoCodeForm}
-            className="rounded border px-3 py-1 text-xs text-gray-600 hover:bg-gray-50"
-            disabled={coCodeLoading || coCodeSaving}
-            data-tooltip="Khôi phục cấu hình mã ưu đãi"
-          >
-            Khôi phục
-          </button>
-        </div>
-        <div className="text-xs text-gray-400">{coCodeUpdatedLabel}</div>
-      </CollapsibleCard>
-
-      <CollapsibleCard
-        id="co-discrepancy"
-        title="Đối soát C/O"
-        description="Theo dõi chênh lệch giữa dữ liệu hệ thống và ECUS để xử lý kịp thời."
-        actions={
-          <div className="flex flex-wrap items-center gap-2">
-            <input
-              type="date"
-              className="rounded border px-2 py-1 text-xs"
-              value={coDiscrepancyRange.from}
-              onChange={(e) => setCoDiscrepancyRange((prev) => ({ ...prev, from: e.target.value }))}
-              data-tooltip="Ngày bắt đầu đối soát"
-            />
-            <span className="text-xs text-gray-500">→</span>
-            <input
-              type="date"
-              className="rounded border px-2 py-1 text-xs"
-              value={coDiscrepancyRange.to}
-              onChange={(e) => setCoDiscrepancyRange((prev) => ({ ...prev, to: e.target.value }))}
-              data-tooltip="Ngày kết thúc đối soát"
-            />
-            <button
-              type="button"
-              onClick={handleRunCoDiscrepancy}
+              onClick={handleSaveCoCodeConfig}
               className="rounded bg-emerald-600 px-3 py-1 text-xs font-medium text-white disabled:opacity-50"
-              disabled={coDiscrepancyRunning || coDiscrepancyLoading || !canManageSync}
-              data-tooltip="Chạy đối chiếu C/O với dữ liệu ECUS"
+              disabled={coCodeSaving || coCodeLoading || !canManageSync}
+              data-tooltip="Lưu danh sách mã ưu đãi"
             >
-              {coDiscrepancyRunning ? "Đang chạy..." : "Chạy kiểm tra"}
+              {coCodeSaving ? "Đang lưu..." : "Lưu cấu hình"}
             </button>
             <button
               type="button"
-              onClick={handleRefreshCoDiscrepancy}
-              className="rounded border px-3 py-1 text-xs"
-              disabled={coDiscrepancyLoading}
-              data-tooltip="Làm mới kết quả đối soát"
+              onClick={handleResetCoCodeForm}
+              className="rounded border px-3 py-1 text-xs text-gray-600 hover:bg-gray-50"
+              disabled={coCodeLoading || coCodeSaving}
+              data-tooltip="Khôi phục cấu hình mã ưu đãi"
             >
-              {coDiscrepancyLoading ? "Đang tải..." : "Làm mới"}
+              Khôi phục
             </button>
           </div>
-        }
-        bodyClassName="space-y-3"
-      >
-        {coDiscrepancyError && <div className="text-sm text-red-600">{coDiscrepancyError}</div>}
-        {coDiscrepancyMessage && <div className="text-sm text-emerald-600">{coDiscrepancyMessage}</div>}
-        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
-          <div className="rounded border bg-gray-50 px-3 py-2">
-            <div className="text-xs uppercase text-gray-500">Trạng thái</div>
-            <div className="text-sm font-semibold text-gray-900">{coDiscrepancyStatusLabel}</div>
-          </div>
-          <div className="rounded border bg-gray-50 px-3 py-2">
-            <div className="text-xs uppercase text-gray-500">Lần chạy gần nhất</div>
-            <div className="text-sm font-semibold text-gray-900">{coDiscrepancyLastRunLabel}</div>
-          </div>
-          <div className="rounded border bg-gray-50 px-3 py-2">
-            <div className="text-xs uppercase text-gray-500">Chênh lệch</div>
-            <div className="text-sm font-semibold text-gray-900">{coMismatchCount.toLocaleString("vi-VN")}</div>
-          </div>
-          <div className="rounded border bg-gray-50 px-3 py-2">
-            <div className="text-xs uppercase text-gray-500">Tổng đã kiểm</div>
-            <div className="text-sm font-semibold text-gray-900">{coCheckedCount.toLocaleString("vi-VN")}</div>
-          </div>
-        </div>
-        <div className="mt-3 grid gap-3 md:grid-cols-2">
-          <div className="space-y-2">
-            <label className="flex items-center gap-2 text-sm">
-              <input type="checkbox" checked={coDiscrepancyForm.enabled} onChange={(e) => setCoDiscrepancyForm((prev) => ({ ...prev, enabled: e.target.checked }))} disabled={!canManageSync} />
-              <span>Bật đối soát tự động</span>
-            </label>
-            <div className="grid gap-2 md:grid-cols-2">
-              <label className="text-xs font-medium text-gray-600">Cron tự động<input className="mt-1 w-full rounded border px-2 py-1 text-sm" value={coDiscrepancyForm.cron} onChange={(e) => setCoDiscrepancyForm((prev) => ({ ...prev, cron: e.target.value }))} disabled={!canManageSync} placeholder="30 4 * * *" /></label>
-              <label className="text-xs font-medium text-gray-600">Số ngày lấy mẫu<input type="number" min={1} className="mt-1 w-full rounded border px-2 py-1 text-sm" value={coDiscrepancyForm.rangeDays} onChange={(e) => setCoDiscrepancyForm((prev) => ({ ...prev, rangeDays: e.target.value }))} disabled={!canManageSync} /></label>
-              <label className="text-xs font-medium text-gray-600">Ngưỡng cảnh báo<input type="number" min={1} className="mt-1 w-full rounded border px-2 py-1 text-sm" value={coDiscrepancyForm.threshold} onChange={(e) => setCoDiscrepancyForm((prev) => ({ ...prev, threshold: e.target.value }))} disabled={!canManageSync} /></label>
-              <label className="text-xs font-medium text-gray-600">Giới hạn mẫu<input type="number" min={0} className="mt-1 w-full rounded border px-2 py-1 text-sm" value={coDiscrepancyForm.sampleLimit} onChange={(e) => setCoDiscrepancyForm((prev) => ({ ...prev, sampleLimit: e.target.value }))} disabled={!canManageSync} /></label>
+          <div className="text-xs text-gray-400">{coCodeUpdatedLabel}</div>
+          </CollapsibleCard>
+
+          <CollapsibleCard
+            id="co-discrepancy"
+            title="Đối soát C/O"
+            description="Theo dõi chênh lệch giữa dữ liệu hệ thống và ECUS để xử lý kịp thời."
+            actions={
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  type="date"
+                  className="rounded border px-2 py-1 text-xs"
+                  value={coDiscrepancyRange.from}
+                  onChange={(e) => setCoDiscrepancyRange((prev) => ({ ...prev, from: e.target.value }))}
+                  data-tooltip="Ngày bắt đầu đối soát"
+                />
+                <span className="text-xs text-gray-500">→</span>
+                <input
+                  type="date"
+                  className="rounded border px-2 py-1 text-xs"
+                  value={coDiscrepancyRange.to}
+                  onChange={(e) => setCoDiscrepancyRange((prev) => ({ ...prev, to: e.target.value }))}
+                  data-tooltip="Ngày kết thúc đối soát"
+                />
+                <button
+                  type="button"
+                  onClick={handleRunCoDiscrepancy}
+                  className="rounded bg-emerald-600 px-3 py-1 text-xs font-medium text-white disabled:opacity-50"
+                  disabled={coDiscrepancyRunning || coDiscrepancyLoading || !canManageSync}
+                  data-tooltip="Chạy đối chiếu C/O với dữ liệu ECUS"
+                >
+                  {coDiscrepancyRunning ? "Đang chạy..." : "Chạy kiểm tra"}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleRefreshCoDiscrepancy}
+                  className="rounded border px-3 py-1 text-xs"
+                  disabled={coDiscrepancyLoading}
+                  data-tooltip="Làm mới kết quả đối soát"
+                >
+                  {coDiscrepancyLoading ? "Đang tải..." : "Làm mới"}
+                </button>
+              </div>
+            }
+            bodyClassName="space-y-3"
+          >
+          {coDiscrepancyError && <div className="text-sm text-red-600">{coDiscrepancyError}</div>}
+          {coDiscrepancyMessage && <div className="text-sm text-emerald-600">{coDiscrepancyMessage}</div>}
+          <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+            <div className="rounded border bg-gray-50 px-3 py-2">
+              <div className="text-xs uppercase text-gray-500">Trạng thái</div>
+              <div className="text-sm font-semibold text-gray-900">{coDiscrepancyStatusLabel}</div>
             </div>
-            <div className="flex flex-wrap gap-2">
-              <button type="button" onClick={handleSaveCoDiscrepancyConfig} className="rounded bg-emerald-600 px-3 py-1 text-xs font-medium text-white disabled:opacity-50" disabled={coDiscrepancySaving || !canManageSync}>
-                {coDiscrepancySaving ? "Đang lưu..." : "Lưu cấu hình"}
-              </button>
-              <button type="button" onClick={handleResetCoDiscrepancyForm} className="rounded border px-3 py-1 text-xs text-gray-600 hover:bg-gray-50" disabled={coDiscrepancySaving}>
-                Khôi phục
-              </button>
+            <div className="rounded border bg-gray-50 px-3 py-2">
+              <div className="text-xs uppercase text-gray-500">Lần chạy gần nhất</div>
+              <div className="text-sm font-semibold text-gray-900">{coDiscrepancyLastRunLabel}</div>
             </div>
-            <div className="text-xs text-gray-500">
-              {coDiscrepancyRangeLabel ? `Khoảng lần chạy gần nhất: ${coDiscrepancyRangeLabel}` : "Chưa có kết quả đối soát."}
-              {coMismatchLimited ? " (Đã cắt bớt danh sách do vượt giới hạn mẫu)" : ""}
+            <div className="rounded border bg-gray-50 px-3 py-2">
+              <div className="text-xs uppercase text-gray-500">Chênh lệch</div>
+              <div className="text-sm font-semibold text-gray-900">{coMismatchCount.toLocaleString("vi-VN")}</div>
+            </div>
+            <div className="rounded border bg-gray-50 px-3 py-2">
+              <div className="text-xs uppercase text-gray-500">Tổng đã kiểm</div>
+              <div className="text-sm font-semibold text-gray-900">{coCheckedCount.toLocaleString("vi-VN")}</div>
             </div>
           </div>
-          <div className="space-y-2">
-            <div className="flex items-center justify-between text-xs">
-              <span>Chênh lệch gợi ý ({coMismatchPreview.length} / {coMismatchCount.toLocaleString("vi-VN")})</span>
-              <button type="button" onClick={handleSelectCoMismatches} className="rounded border px-2 py-0.5 text-[11px] text-amber-700 hover:bg-amber-50" disabled={!coMismatchKeySet.size}>
-                Chọn trên bảng
-              </button>
+          <div className="mt-3 grid gap-3 md:grid-cols-2">
+            <div className="space-y-2">
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={coDiscrepancyForm.enabled}
+                  onChange={(e) =>
+                    setCoDiscrepancyForm((prev) => ({ ...prev, enabled: e.target.checked }))
+                  }
+                  disabled={!canManageSync}
+                />
+                <span>Bật đối soát tự động</span>
+              </label>
+              <div className="grid gap-2 md:grid-cols-2">
+                <label className="text-xs font-medium text-gray-600">
+                  Cron tự động
+                  <input
+                    className="mt-1 w-full rounded border px-2 py-1 text-sm"
+                    value={coDiscrepancyForm.cron}
+                    onChange={(e) =>
+                      setCoDiscrepancyForm((prev) => ({ ...prev, cron: e.target.value }))
+                    }
+                    disabled={!canManageSync}
+                    placeholder="30 4 * * *"
+                  />
+                </label>
+                <label className="text-xs font-medium text-gray-600">
+                  Số ngày lấy mẫu
+                  <input
+                    type="number"
+                    min={1}
+                    className="mt-1 w-full rounded border px-2 py-1 text-sm"
+                    value={coDiscrepancyForm.rangeDays}
+                    onChange={(e) =>
+                      setCoDiscrepancyForm((prev) => ({ ...prev, rangeDays: e.target.value }))
+                    }
+                    disabled={!canManageSync}
+                  />
+                </label>
+                <label className="text-xs font-medium text-gray-600">
+                  Ngưỡng cảnh báo
+                  <input
+                    type="number"
+                    min={1}
+                    className="mt-1 w-full rounded border px-2 py-1 text-sm"
+                    value={coDiscrepancyForm.threshold}
+                    onChange={(e) =>
+                      setCoDiscrepancyForm((prev) => ({ ...prev, threshold: e.target.value }))
+                    }
+                    disabled={!canManageSync}
+                  />
+                </label>
+                <label className="text-xs font-medium text-gray-600">
+                  Giới hạn mẫu
+                  <input
+                    type="number"
+                    min={0}
+                    className="mt-1 w-full rounded border px-2 py-1 text-sm"
+                    value={coDiscrepancyForm.sampleLimit}
+                    onChange={(e) =>
+                      setCoDiscrepancyForm((prev) => ({ ...prev, sampleLimit: e.target.value }))
+                    }
+                    disabled={!canManageSync}
+                  />
+                </label>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={handleSaveCoDiscrepancyConfig}
+                  className="rounded bg-emerald-600 px-3 py-1 text-xs font-medium text-white disabled:opacity-50"
+                  disabled={coDiscrepancySaving || !canManageSync}
+                >
+                  {coDiscrepancySaving ? "Đang lưu..." : "Lưu cấu hình"}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleResetCoDiscrepancyForm}
+                  className="rounded border px-3 py-1 text-xs text-gray-600 hover:bg-gray-50"
+                  disabled={coDiscrepancySaving}
+                >
+                  Khôi phục
+                </button>
+              </div>
+              <div className="text-xs text-gray-500">
+                {coDiscrepancyRangeLabel
+                  ? `Khoảng lần chạy gần nhất: ${coDiscrepancyRangeLabel}`
+                  : "Chưa có kết quả đối soát."}
+                {coMismatchLimited ? " (Đã cắt bớt danh sách do vượt giới hạn mẫu)" : ""}
+              </div>
             </div>
-            <div className="overflow-auto rounded border">
-              {coMismatchPreview.length ? (
-                <table className="min-w-full text-xs">
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-xs">
+                <span>
+                  Chênh lệch gợi ý ({coMismatchPreview.length} / {coMismatchCount.toLocaleString("vi-VN")})
+                </span>
+                <button
+                  type="button"
+                  onClick={handleSelectCoMismatches}
+                  className="rounded border px-2 py-0.5 text-[11px] text-amber-700 hover:bg-amber-50"
+                  disabled={!coMismatchKeySet.size}
+                >
+                  Chọn trên bảng
+                </button>
+              </div>
+              <div className="overflow-auto rounded border">
+                {coMismatchPreview.length ? (
+                  <table className="min-w-full text-xs">
                   <thead className="bg-amber-50 text-amber-800">
                     <tr>
                       <th className="px-2 py-1 text-left">Tờ khai</th>
@@ -6343,10 +6420,11 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
             </div>
           </div>
         </div>
-      </CollapsibleCard>
+          </CollapsibleCard>
+        </>
+      )}
 
-
-<section className={`${CARD_SURFACE_CLASS} p-4`}>
+      <section className={`${CARD_SURFACE_CLASS} p-4`}>
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
             <h2 className="text-base font-semibold text-gray-900">Cảnh báo tờ khai thiếu thông tin</h2>
@@ -6615,12 +6693,12 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
         <div className="flex min-w-[260px] flex-1 flex-col gap-2">
           <input
             className="w-full rounded border px-2 py-1"
-            placeholder="Tìm nhanh (Số TK / MST / Công ty / Đại lý)"
+            placeholder="Tìm nhanh (Số TK / MST / Công ty / Nhân viên / Tổ đội)"
             value={query}
             onChange={e => { setQuery(e.target.value); setPage(1); }}
           />
           <span className="text-xs text-gray-500">
-            Nhập từ khóa để tìm nhanh theo Số tờ khai, mã số thuế, tên doanh nghiệp hoặc đại lý.
+            Nhập từ khóa để tìm nhanh theo Số tờ khai, mã số thuế, tên doanh nghiệp, nhân viên hoặc tổ đội phụ trách.
           </span>
         </div>
 
@@ -6982,20 +7060,18 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
         </div>
       </div>
 
-      {isAdminRole && (
-        <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs text-gray-600">
-          <span>
-            Đang hiển thị {visibleColumnCount}/{totalBaseColumns} cột dữ liệu.
-          </span>
-          <button
-            type="button"
-            onClick={handleOpenColumnConfig}
-            className="rounded border px-3 py-1 text-xs text-gray-600 transition hover:bg-gray-50"
-          >
-            Cấu hình cột hiển thị
-          </button>
-        </div>
-      )}
+      <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs text-gray-600">
+        <span>
+          Đang hiển thị {visibleColumnCount}/{totalBaseColumns} cột dữ liệu.
+        </span>
+        <button
+          type="button"
+          onClick={handleOpenColumnConfig}
+          className="rounded border px-3 py-1 text-xs text-gray-600 transition hover:bg-gray-50"
+        >
+          Cấu hình cột hiển thị
+        </button>
+      </div>
 
       {!query && mode === "saved" && (
         <div className="text-xs text-gray-500">
