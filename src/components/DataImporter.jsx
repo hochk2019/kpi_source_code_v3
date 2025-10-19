@@ -19,6 +19,8 @@ import {
   normalizeName,
   refreshDeclRowsFromServer,
   IMPORT_COLUMN_IDS,
+  IMPORT_AUX_COLUMN_IDS,
+  IMPORT_SENSITIVE_COLUMNS,
   getImportColumnConfig,
   saveImportColumnConfig,
   subscribeImportColumnConfig,
@@ -119,6 +121,29 @@ const IMPORT_TABLE_COLUMNS = Object.freeze(
     label: IMPORT_TABLE_COLUMN_LABELS[id] || id,
   }))
 );
+
+const AUX_COLUMN_LABELS = Object.freeze({
+  history: "Nhật ký",
+  update: "Cập nhật",
+});
+
+const AUX_COLUMN_OPTIONS = Object.freeze(
+  Object.entries(AUX_COLUMN_LABELS).map(([id, label]) => ({ id, label }))
+);
+
+const COLUMN_CONFIG_OPTIONS = Object.freeze([
+  ...IMPORT_TABLE_COLUMNS,
+  ...AUX_COLUMN_OPTIONS,
+]);
+
+const SENSITIVE_COLUMN_SET = new Set(IMPORT_SENSITIVE_COLUMNS);
+
+function isConfigColumnKey(key) {
+  if (typeof key !== "string") return false;
+  if (IMPORT_TABLE_COLUMN_LABELS[key]) return true;
+  if (AUX_COLUMN_LABELS[key]) return true;
+  return false;
+}
 
 const IMPORT_ERROR_REASON_LABELS = Object.freeze({
   "missing-key": "Thiếu Số tờ khai hoặc nhánh tờ khai",
@@ -1772,17 +1797,30 @@ export default function DataImporter({
   const assignedTeam = staffNameKey ? memberTeamMap.get(staffNameKey)?.team || "" : "";
   const assignedTeamKey = normalizeName(assignedTeam);
   const totalBaseColumns = IMPORT_TABLE_COLUMNS.length;
+  const totalConfigColumns = totalBaseColumns + IMPORT_AUX_COLUMN_IDS.length;
   const columnHiddenSet = useMemo(() => {
     const hiddenList = Array.isArray(columnConfigState?.hidden) ? columnConfigState.hidden : [];
     const set = new Set();
     hiddenList.forEach((key) => {
-      if (typeof key === "string" && IMPORT_TABLE_COLUMN_LABELS[key]) {
-        set.add(key);
+      if (typeof key !== "string") return;
+      const trimmed = key.trim();
+      if (!trimmed) return;
+      if (IMPORT_TABLE_COLUMN_LABELS[trimmed] || AUX_COLUMN_LABELS[trimmed]) {
+        set.add(trimmed);
       }
     });
     return set;
   }, [columnConfigState]);
-  const visibleColumnCount = Math.max(1, totalBaseColumns - columnHiddenSet.size);
+  const hiddenBaseColumnCount = useMemo(() => {
+    let count = 0;
+    columnHiddenSet.forEach((key) => {
+      if (IMPORT_TABLE_COLUMN_LABELS[key]) {
+        count += 1;
+      }
+    });
+    return count;
+  }, [columnHiddenSet]);
+  const visibleColumnCount = Math.max(1, totalBaseColumns - hiddenBaseColumnCount);
 
   const updateBaselineSnapshot = useCallback((rows) => {
     const snapshot = new Map();
@@ -1854,34 +1892,55 @@ export default function DataImporter({
     [canOverwriteData]
   );
 
+  const countHiddenBaseColumns = useCallback((set) => {
+    let count = 0;
+    for (const key of set) {
+      if (IMPORT_TABLE_COLUMN_LABELS[key]) {
+        count += 1;
+      }
+    }
+    return count;
+  }, []);
+
   const handleToggleColumnDraft = useCallback(
     (columnId) => {
-      if (typeof columnId !== "string" || !IMPORT_TABLE_COLUMN_LABELS[columnId]) {
+      if (!isConfigColumnKey(columnId)) {
+        return;
+      }
+      if (!isAdminRole && SENSITIVE_COLUMN_SET.has(columnId)) {
+        toast.info("Chỉ tài khoản admin mới được thay đổi hiển thị của mục này.");
         return;
       }
       setColumnDraftHidden((prev) => {
         const next = new Set(prev);
-        if (next.has(columnId)) {
+        const alreadyHidden = next.has(columnId);
+        if (alreadyHidden) {
           next.delete(columnId);
           setColumnDraftError("");
           return next;
         }
-        if (totalBaseColumns - next.size <= 1) {
-          setColumnDraftError("Cần giữ lại ít nhất một cột hiển thị.");
+        next.add(columnId);
+        const hiddenBaseAfter = countHiddenBaseColumns(next);
+        if (hiddenBaseAfter >= totalBaseColumns) {
+          next.delete(columnId);
+          setColumnDraftError("Cần giữ lại ít nhất một cột dữ liệu hiển thị.");
           return next;
         }
-        next.add(columnId);
         setColumnDraftError("");
         return next;
       });
     },
-    [totalBaseColumns]
+    [countHiddenBaseColumns, isAdminRole, totalBaseColumns]
   );
 
   const handleApplyColumnConfig = useCallback(() => {
-    const hiddenList = Array.from(columnDraftHidden).filter((key) => IMPORT_TABLE_COLUMN_LABELS[key]);
-    if (hiddenList.length >= totalBaseColumns) {
-      setColumnDraftError("Cần giữ lại ít nhất một cột hiển thị.");
+    const hiddenList = Array.from(columnDraftHidden).filter((key) => isConfigColumnKey(key));
+    const hiddenBaseCount = hiddenList.reduce(
+      (count, key) => (IMPORT_TABLE_COLUMN_LABELS[key] ? count + 1 : count),
+      0
+    );
+    if (hiddenBaseCount >= totalBaseColumns) {
+      setColumnDraftError("Cần giữ lại ít nhất một cột dữ liệu hiển thị.");
       return;
     }
     const isSame =
@@ -1892,8 +1951,9 @@ export default function DataImporter({
     }
     try {
       const result = saveImportColumnConfig({ hidden: hiddenList }, { actor });
-      if (result.hidden.length >= totalBaseColumns) {
-        setColumnDraftError("Cần giữ lại ít nhất một cột hiển thị.");
+      const resultHiddenBase = result.hidden.filter((key) => IMPORT_TABLE_COLUMN_LABELS[key]).length;
+      if (resultHiddenBase >= totalBaseColumns) {
+        setColumnDraftError("Cần giữ lại ít nhất một cột dữ liệu hiển thị.");
         return;
       }
       setColumnConfigOpen(false);
@@ -4473,9 +4533,9 @@ const selectedReviewedCount = useMemo(() => {
   );
 
   const selectionEnabled = mode === "saved" && (canEdit || canManageAlerts);
-  const updateEnabled = canEdit && mode === "saved";
+  const updateEnabled = canEdit && mode === "saved" && !columnHiddenSet.has("update");
   const deleteEnabled = canEdit && mode === "saved";
-  const historyEnabled = mode === "saved";
+  const historyEnabled = mode === "saved" && !columnHiddenSet.has("history");
   const hiddenColumns = columnHiddenSet;
   const frozenOffsets = useMemo(() => {
     if (!freezeColumnsEnabled) {
@@ -4595,7 +4655,10 @@ const selectedReviewedCount = useMemo(() => {
     (deleteEnabled ? 1 : 0) +
     (historyEnabled ? 1 : 0);
 
-  const columnDraftVisibleCount = Math.max(1, totalBaseColumns - columnDraftHidden.size);
+  const columnDraftVisibleCount = Math.max(
+    1,
+    totalConfigColumns - Math.min(columnDraftHidden.size, totalConfigColumns)
+  );
 
   const canImport =
     !isReadOnlyForEdits &&
@@ -5369,21 +5432,32 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
           </DialogHeader>
           <div className="space-y-3">
             <p className="text-xs text-gray-600">
-              Đang giữ {columnDraftVisibleCount}/{totalBaseColumns} cột hiển thị.
+              Đang giữ {columnDraftVisibleCount}/{totalConfigColumns} mục hiển thị (bao gồm cột dữ liệu và thao tác).
             </p>
             <div className="grid gap-2">
-              {IMPORT_TABLE_COLUMNS.map((column) => {
+              {COLUMN_CONFIG_OPTIONS.map((column) => {
                 const checked = !columnDraftHidden.has(column.id);
+                const isSensitive = SENSITIVE_COLUMN_SET.has(column.id);
+                const disabled = isSensitive && !isAdminRole;
                 return (
                   <label
                     key={column.id}
-                    className="flex items-center justify-between rounded border px-3 py-2 text-sm"
+                    className={cx(
+                      "flex items-center justify-between rounded border px-3 py-2 text-sm",
+                      disabled ? "cursor-not-allowed opacity-60" : ""
+                    )}
                   >
-                    <span>{column.label}</span>
+                    <span className="flex flex-col">
+                      <span>{column.label}</span>
+                      {isSensitive ? (
+                        <span className="text-[11px] text-gray-500">Chỉ admin có thể bật/tắt.</span>
+                      ) : null}
+                    </span>
                     <input
                       type="checkbox"
                       checked={checked}
                       onChange={() => handleToggleColumnDraft(column.id)}
+                      disabled={disabled}
                     />
                   </label>
                 );

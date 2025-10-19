@@ -29,6 +29,7 @@ import {
   getImportColumnConfig,
   saveImportColumnConfig,
   IMPORT_COLUMN_IDS,
+  IMPORT_SENSITIVE_COLUMNS,
   UI_LAYOUT_KEY,
   subscribeTeamRoster,
   getKpiAdjustmentSettings,
@@ -551,38 +552,60 @@ describe('previewDeclRows', () => {
 
 
 describe('import column config', () => {
-  it('mặc định không ẩn cột nào khi chưa lưu cấu hình', () => {
+  it('mặc định ẩn các cột nhạy cảm khi chưa lưu cấu hình', () => {
     const config = getImportColumnConfig();
+    const expected = [...IMPORT_SENSITIVE_COLUMNS].sort();
     expect(Array.isArray(config.hidden)).toBe(true);
-    expect(config.hidden).toHaveLength(0);
+    expect(config.hidden.slice().sort()).toEqual(expected);
+    expect(config.version).toBeGreaterThanOrEqual(2);
   });
 
-  it('lưu và chuẩn hóa danh sách cột bị ẩn', () => {
+  it('tự động bổ sung cột nhạy cảm cho cấu hình cũ không có version', () => {
+    sharedSetItem(
+      UI_LAYOUT_KEY,
+      JSON.stringify({ importData: { columns: { hidden: [IMPORT_COLUMN_IDS[0]] } } })
+    );
+
+    const config = getImportColumnConfig();
+    const expected = [...new Set([...IMPORT_SENSITIVE_COLUMNS, IMPORT_COLUMN_IDS[0]])].sort();
+    expect(config.hidden.slice().sort()).toEqual(expected);
+    expect(config.version).toBeGreaterThanOrEqual(2);
+  });
+
+  it('lưu và chuẩn hóa danh sách cột bị ẩn, chấp nhận cả thao tác phụ trợ', () => {
     const sample = [
       IMPORT_COLUMN_IDS[0],
       'khong_ton_tai',
       IMPORT_COLUMN_IDS[0],
       IMPORT_COLUMN_IDS[1],
+      'history',
+      'update',
+      'status',
     ];
 
     const result = saveImportColumnConfig({ hidden: sample }, { actor: 'admin' });
-    expect(result.hidden.sort()).toEqual([IMPORT_COLUMN_IDS[0], IMPORT_COLUMN_IDS[1]].sort());
+    const expected = [...new Set([IMPORT_COLUMN_IDS[0], IMPORT_COLUMN_IDS[1], 'history', 'update', 'status'])].sort();
+    expect(result.hidden.slice().sort()).toEqual(expected);
+    expect(result.version).toBeGreaterThanOrEqual(2);
 
     const raw = sharedGetItem(UI_LAYOUT_KEY);
     expect(raw).not.toBeNull();
     const parsed = JSON.parse(raw || '{}');
-    expect(parsed.importData.columns.hidden.sort()).toEqual([IMPORT_COLUMN_IDS[0], IMPORT_COLUMN_IDS[1]].sort());
+    expect(parsed.importData.columns.hidden.slice().sort()).toEqual(expected);
+    expect(parsed.importData.columns.version).toBeGreaterThanOrEqual(2);
   });
 
-  it('không cho phép ẩn toàn bộ các cột hiển thị', () => {
-    saveImportColumnConfig({ hidden: [IMPORT_COLUMN_IDS[0]] }, { actor: 'admin' });
-
-    const attempt = saveImportColumnConfig({ hidden: [...IMPORT_COLUMN_IDS] }, { actor: 'admin' });
-    expect(attempt.hidden.length).toBeLessThan(IMPORT_COLUMN_IDS.length);
+  it('không cho phép ẩn toàn bộ các cột dữ liệu chính', () => {
+    const attempt = saveImportColumnConfig({ hidden: [...IMPORT_COLUMN_IDS, 'history', 'update'] }, { actor: 'admin' });
+    const attemptBaseHidden = attempt.hidden.filter((key) => IMPORT_COLUMN_IDS.includes(key));
+    expect(attemptBaseHidden.length).toBeLessThan(IMPORT_COLUMN_IDS.length);
 
     const raw = sharedGetItem(UI_LAYOUT_KEY);
     const parsed = JSON.parse(raw || '{}');
-    expect(parsed.importData.columns.hidden.length).toBeLessThan(IMPORT_COLUMN_IDS.length);
+    const hiddenBase = Array.isArray(parsed.importData?.columns?.hidden)
+      ? parsed.importData.columns.hidden.filter((key) => IMPORT_COLUMN_IDS.includes(key))
+      : [];
+    expect(hiddenBase.length).toBeLessThan(IMPORT_COLUMN_IDS.length);
   });
 });
 
