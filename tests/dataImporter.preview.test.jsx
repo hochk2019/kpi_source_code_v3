@@ -92,10 +92,17 @@ describe('DataImporter preview UI', () => {
 
   beforeEach(() => {
     window.confirm = vi.fn(() => true);
-    clearStorageCache();
-    sharedSetItem(DECL_KEY, JSON.stringify(savedRows));
     fetchMock = vi.fn((input) => {
       const url = typeof input === 'string' ? input : input?.url || '';
+      if (url.startsWith('/api/storage/')) {
+        const key = decodeURIComponent(url.split('/').pop() || '');
+        if (key === DECL_KEY) {
+          return Promise.resolve(
+            createJsonResponse({ ok: true, key, raw: JSON.stringify(savedRows), value: savedRows })
+          );
+        }
+        return Promise.resolve(createJsonResponse({ ok: true, key, raw: null, value: null }));
+      }
       if (url === '/api/import/ecus/config') {
         return Promise.resolve(
           createJsonResponse({
@@ -110,6 +117,8 @@ describe('DataImporter preview UI', () => {
               rangeDays: 1,
               preferMonthFirst: false,
               connection: { server: 'Server', database: 'ECUS5VNACCS', user: 'sa', hasPassword: true, password: '' },
+              includeTaxCodes: [],
+              excludeTaxCodes: [],
             },
           })
         );
@@ -152,6 +161,8 @@ describe('DataImporter preview UI', () => {
       return Promise.resolve(createJsonResponse({ ok: true }));
     });
     vi.spyOn(auth, 'fetchWithAuth').mockImplementation(fetchMock);
+    clearStorageCache();
+    sharedSetItem(DECL_KEY, JSON.stringify(savedRows));
   });
 
   afterEach(() => {
@@ -167,9 +178,12 @@ describe('DataImporter preview UI', () => {
       />
     );
 
-    await screen.findByText('Đồng bộ tự động từ ECUS5VNACCS');
+    const [autoSyncHeading] = await screen.findAllByText('Đồng bộ tự động từ ECUS5VNACCS');
+    expect(autoSyncHeading).toBeInTheDocument();
+    const autoSyncSection = autoSyncHeading.closest('section');
+    expect(autoSyncSection).toBeTruthy();
 
-    const previewButton = await screen.findByRole('button', { name: 'Xem trước dữ liệu' });
+    const previewButton = within(autoSyncSection).getByRole('button', { name: 'Xem trước dữ liệu' });
     await userEvent.click(previewButton);
 
     expect(screen.getByText('CÔNG TY MỚI')).toBeInTheDocument();
@@ -183,6 +197,49 @@ describe('DataImporter preview UI', () => {
     expect(body.limit).toBe(100);
     expect(body.from).toBeUndefined();
     expect(body.to).toBeUndefined();
+    expect(body.includeTaxCodes).toEqual([]);
+    expect(body.excludeTaxCodes).toEqual([]);
+  });
+
+  it('cho phép cấu hình danh sách MST lọc đồng bộ và gửi kèm khi gọi API', async () => {
+    render(
+      <DataImporter
+        canEdit
+        canManageSync
+        currentUser={{ username: 'admin', permissions: ['syncManage'], role: 'admin' }}
+      />
+    );
+
+    const [autoSyncHeading] = await screen.findAllByText('Đồng bộ tự động từ ECUS5VNACCS');
+    expect(autoSyncHeading).toBeInTheDocument();
+    const autoSyncSection = autoSyncHeading.closest('section');
+    expect(autoSyncSection).toBeTruthy();
+
+    const includeTextarea = within(autoSyncSection).getByLabelText('Chỉ đồng bộ các MST');
+    const excludeTextarea = within(autoSyncSection).getByLabelText('Danh sách MST loại trừ');
+
+    await userEvent.clear(includeTextarea);
+    await userEvent.type(includeTextarea, '0100109106;\n  0100109107 ');
+    await userEvent.clear(excludeTextarea);
+    await userEvent.type(excludeTextarea, '0100109108;0100109109');
+
+    const previewButton = within(autoSyncSection).getByRole('button', { name: 'Xem trước dữ liệu' });
+    await userEvent.click(previewButton);
+
+    const previewCall = fetchMock.mock.calls.find(([url]) => url === '/api/import/ecus/preview');
+    expect(previewCall).toBeTruthy();
+    const body = JSON.parse(previewCall[1]?.body || '{}');
+    expect(body.includeTaxCodes).toEqual(['0100109106', '0100109107']);
+    expect(body.excludeTaxCodes).toEqual(['0100109108', '0100109109']);
+
+    const runButton = within(autoSyncSection).getByRole('button', { name: 'Đồng bộ ngay' });
+    await userEvent.click(runButton);
+
+    const runCall = fetchMock.mock.calls.find(([url]) => url === '/api/import/ecus/run');
+    expect(runCall).toBeTruthy();
+    const runBody = JSON.parse(runCall[1]?.body || '{}');
+    expect(runBody.includeTaxCodes).toEqual(['0100109106', '0100109107']);
+    expect(runBody.excludeTaxCodes).toEqual(['0100109108', '0100109109']);
   });
 
   it('lọc danh sách tờ khai theo số dòng C/O', async () => {
