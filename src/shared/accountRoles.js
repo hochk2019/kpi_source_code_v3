@@ -12,6 +12,8 @@ export const ACCOUNT_PERMISSION_KEYS = Object.freeze([
   'adjustApprove',
   'aiAssistUse',
   'aiAssistManage',
+  'dataHealthView',
+  'dataHealthManage',
 ]);
 
 export const DEFAULT_ROLE = 'staff';
@@ -34,6 +36,8 @@ const ROLE_PERMISSION_TEMPLATES = Object.freeze({
     adjustApprove: false,
     aiAssistUse: true,
     aiAssistManage: false,
+    dataHealthView: false,
+    dataHealthManage: false,
   }),
   [TEAM_LEAD_ROLE]: Object.freeze({
     importEdit: true,
@@ -49,6 +53,8 @@ const ROLE_PERMISSION_TEMPLATES = Object.freeze({
     adjustApprove: true,
     aiAssistUse: true,
     aiAssistManage: false,
+    dataHealthView: true,
+    dataHealthManage: false,
   }),
   [MANAGER_ROLE]: Object.freeze({
     importEdit: true,
@@ -64,6 +70,8 @@ const ROLE_PERMISSION_TEMPLATES = Object.freeze({
     adjustApprove: true,
     aiAssistUse: true,
     aiAssistManage: true,
+    dataHealthView: true,
+    dataHealthManage: true,
   }),
   [ADMIN_ROLE]: Object.freeze({
     importEdit: true,
@@ -79,6 +87,8 @@ const ROLE_PERMISSION_TEMPLATES = Object.freeze({
     adjustApprove: true,
     aiAssistUse: true,
     aiAssistManage: true,
+    dataHealthView: true,
+    dataHealthManage: true,
   }),
 });
 

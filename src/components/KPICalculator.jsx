@@ -1,6 +1,5 @@
 import React, { Suspense, useEffect, useMemo, useState } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs.jsx';
-import { ADMIN_ROLE, MANAGER_ROLE, normalizeRoleKey } from '@/shared/accountRoles.js';
 
 const DataImporter = React.lazy(() => import('./DataImporter.jsx'));
 const RulesEditor = React.lazy(() => import('./RulesEditor.jsx'));
@@ -36,9 +35,8 @@ const KPICalculator = ({ auth, activeTab = 'reports', onTabChange }) => {
   const canManageAlerts = !!permissions.alertsManage;
   const canViewAudit = !!permissions.auditView || canManageAccounts;
   const canUseAi = !!permissions.aiAssistUse || !!permissions.aiAssistManage;
-
-  const roleKey = normalizeRoleKey(effectiveAuth.role);
-  const canViewDataHealth = roleKey === MANAGER_ROLE || roleKey === ADMIN_ROLE;
+  const canManageDataHealth = !!permissions.dataHealthManage;
+  const canViewDataHealth = !!permissions.dataHealthView || canManageDataHealth;
 
   const allowedTabs = useMemo(() => {
     const base = new Set(['mst', 'hq', 'import', 'teams', 'rules', 'adjustments', 'reports']);
@@ -235,11 +233,11 @@ const KPICalculator = ({ auth, activeTab = 'reports', onTabChange }) => {
         </TabsContent>
 
         {canViewDataHealth && (
-          <TabsContent value="health" className="ds-panel">
-            <TabPanel>
-              <DataHealthDashboard currentUser={effectiveAuth} />
-            </TabPanel>
-          </TabsContent>
+        <TabsContent value="health" className="ds-panel">
+          <TabPanel>
+              <DataHealthDashboard currentUser={effectiveAuth} canManage={canManageDataHealth} />
+          </TabPanel>
+        </TabsContent>
         )}
 
         {canUseAi && (

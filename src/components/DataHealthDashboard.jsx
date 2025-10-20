@@ -140,7 +140,13 @@ const metricPalette = [
   'bg-fuchsia-500/10 text-fuchsia-700 border border-fuchsia-400/60',
 ];
 
-export default function DataHealthDashboard({ currentUser }) {
+const policyInputClass =
+  'w-full rounded border border-gray-300 px-2 py-1 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400 dark:disabled:bg-slate-800/50 dark:disabled:text-slate-500';
+
+const policyCheckboxClass =
+  'h-4 w-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500 dark:border-slate-600 dark:bg-slate-800 disabled:cursor-not-allowed disabled:border-gray-300 disabled:bg-gray-100';
+
+export default function DataHealthDashboard({ currentUser, canManage = false }) {
   const [liveNotifications, setLiveNotifications] = useState([]);
   const [historyNotifications, setHistoryNotifications] = useState([]);
   const [, setPolicyConfig] = useState(null);
@@ -149,6 +155,7 @@ export default function DataHealthDashboard({ currentUser }) {
   const [policyStats, setPolicyStats] = useState(null);
   const [policySaving, setPolicySaving] = useState(false);
   const [policyError, setPolicyError] = useState('');
+  const canEditPolicy = Boolean(canManage);
   const summaryTask = useCallback(async ({ signal }) => {
     const response = await fetchWithAuth('/api/data-health/summary', { cache: 'no-store', signal });
     if (!response.ok) {
@@ -210,6 +217,9 @@ export default function DataHealthDashboard({ currentUser }) {
       setPolicyError(err?.message || 'Không thể tải chính sách trùng 11 số');
     },
   });
+
+  const policyInputsDisabled = !canEditPolicy || policySaving || policyLoading;
+  const policyActionsDisabled = !canEditPolicy || policySaving;
 
   useEffect(() => {
     reloadPolicy();
@@ -478,6 +488,10 @@ export default function DataHealthDashboard({ currentUser }) {
   }, [summary, policyStats]);
 
   const handleSavePolicy = useCallback(async () => {
+    if (!canEditPolicy) {
+      alert('Tài khoản hiện không có quyền cấu hình sức khỏe dữ liệu.');
+      return;
+    }
     if (!policyForm) {
       alert('Chưa có dữ liệu cấu hình chính sách để lưu.');
       return;
@@ -537,10 +551,14 @@ export default function DataHealthDashboard({ currentUser }) {
     } finally {
       setPolicySaving(false);
     }
-  }, [policyForm, reloadSummary]);
+  }, [canEditPolicy, policyForm, reloadSummary]);
 
   const handleUnlockSource = useCallback(
     async (source) => {
+      if (!canEditPolicy) {
+        alert('Tài khoản hiện không có quyền chỉnh sửa chính sách dữ liệu.');
+        return;
+      }
       if (!source) return;
       setPolicySaving(true);
       setPolicyError('');
@@ -569,11 +587,15 @@ export default function DataHealthDashboard({ currentUser }) {
         setPolicySaving(false);
       }
     },
-    [reloadSummary]
+    [canEditPolicy, reloadSummary]
   );
 
   const handleLockSource = useCallback(
     async (source) => {
+      if (!canEditPolicy) {
+        alert('Tài khoản hiện không có quyền chỉnh sửa chính sách dữ liệu.');
+        return;
+      }
       if (!source) return;
       let reason = 'Khóa tạm thời để rà soát dữ liệu trùng';
       if (typeof window !== 'undefined') {
@@ -610,7 +632,7 @@ export default function DataHealthDashboard({ currentUser }) {
         setPolicySaving(false);
       }
     },
-    [reloadSummary]
+    [canEditPolicy, reloadSummary]
   );
 
   const combinedNotifications = useMemo(() => {
@@ -982,6 +1004,11 @@ export default function DataHealthDashboard({ currentUser }) {
             <p className="text-xs text-gray-500 dark:text-gray-400">
               Tinh chỉnh ngưỡng cảnh báo, trạng thái khóa nguồn và theo dõi lần đánh giá gần nhất.
             </p>
+            {!canEditPolicy && (
+              <p className="mt-1 text-xs font-semibold text-amber-600 dark:text-amber-300">
+                Tài khoản hiện chỉ có quyền xem cấu hình, không thể chỉnh sửa thông số.
+              </p>
+            )}
           </div>
           <div className="flex items-center gap-2">
             <button
@@ -996,7 +1023,7 @@ export default function DataHealthDashboard({ currentUser }) {
               type="button"
               onClick={handleSavePolicy}
               className="rounded bg-emerald-600 px-3 py-1 text-xs font-medium text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
-              disabled={policySaving}
+              disabled={policyActionsDisabled}
             >
               {policySaving ? 'Đang lưu…' : 'Lưu cấu hình'}
             </button>
@@ -1020,63 +1047,73 @@ export default function DataHealthDashboard({ currentUser }) {
                     const raw = event.target.value;
                     setPolicyForm((prev) => ({ ...(prev || {}), autoNotifyAfterDays: raw === '' ? '' : Number(raw) }));
                   }}
-                  className="w-full rounded border border-gray-300 px-2 py-1 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100"
+                  disabled={policyInputsDisabled}
+                  readOnly={!canEditPolicy}
+                  className={policyInputClass}
                 />
               </label>
               <label className="space-y-1 text-xs font-medium text-gray-600 dark:text-gray-300">
-                Thời gian chờ nhắc lại (giờ)
+                Thời gian chờ giữa các lần nhắc (giờ)
                 <input
                   type="number"
-                  min="1"
+                  min="0"
                   value={policyForm?.notifyCooldownHours ?? ''}
                   onChange={(event) => {
                     const raw = event.target.value;
                     setPolicyForm((prev) => ({ ...(prev || {}), notifyCooldownHours: raw === '' ? '' : Number(raw) }));
                   }}
-                  className="w-full rounded border border-gray-300 px-2 py-1 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100"
+                  disabled={policyInputsDisabled}
+                  readOnly={!canEditPolicy}
+                  className={policyInputClass}
                 />
               </label>
               <label className="space-y-1 text-xs font-medium text-gray-600 dark:text-gray-300">
-                Khoảng đánh giá (ngày)
+                Cửa sổ đánh giá (ngày)
                 <input
                   type="number"
-                  min="1"
+                  min="0"
                   value={policyForm?.evaluationWindowDays ?? ''}
                   onChange={(event) => {
                     const raw = event.target.value;
                     setPolicyForm((prev) => ({ ...(prev || {}), evaluationWindowDays: raw === '' ? '' : Number(raw) }));
                   }}
-                  className="w-full rounded border border-gray-300 px-2 py-1 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100"
+                  disabled={policyInputsDisabled}
+                  readOnly={!canEditPolicy}
+                  className={policyInputClass}
                 />
               </label>
               <label className="space-y-1 text-xs font-medium text-gray-600 dark:text-gray-300">
-                Số nhóm trùng để khóa nguồn
+                Tự khóa sau số nhóm trùng
                 <input
                   type="number"
-                  min="1"
+                  min="0"
                   value={policyForm?.autoLockAfterGroups ?? ''}
                   onChange={(event) => {
                     const raw = event.target.value;
                     setPolicyForm((prev) => ({ ...(prev || {}), autoLockAfterGroups: raw === '' ? '' : Number(raw) }));
                   }}
-                  className="w-full rounded border border-gray-300 px-2 py-1 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100"
+                  disabled={policyInputsDisabled}
+                  readOnly={!canEditPolicy}
+                  className={policyInputClass}
                 />
               </label>
               <label className="space-y-1 text-xs font-medium text-gray-600 dark:text-gray-300">
-                Kích thước nhóm tối thiểu
+                Số bản ghi tối thiểu để khóa
                 <input
                   type="number"
-                  min="1"
+                  min="0"
                   value={policyForm?.minGroupSizeForLock ?? ''}
                   onChange={(event) => {
                     const raw = event.target.value;
                     setPolicyForm((prev) => ({ ...(prev || {}), minGroupSizeForLock: raw === '' ? '' : Number(raw) }));
                   }}
-                  className="w-full rounded border border-gray-300 px-2 py-1 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100"
+                  disabled={policyInputsDisabled}
+                  readOnly={!canEditPolicy}
+                  className={policyInputClass}
                 />
               </label>
               <label className="space-y-1 text-xs font-medium text-gray-600 dark:text-gray-300">
-                Ngày tự mở khóa
+                Tự mở khóa sau (ngày)
                 <input
                   type="number"
                   min="0"
@@ -1085,7 +1122,9 @@ export default function DataHealthDashboard({ currentUser }) {
                     const raw = event.target.value;
                     setPolicyForm((prev) => ({ ...(prev || {}), autoUnlockAfterDays: raw === '' ? '' : Number(raw) }));
                   }}
-                  className="w-full rounded border border-gray-300 px-2 py-1 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100"
+                  disabled={policyInputsDisabled}
+                  readOnly={!canEditPolicy}
+                  className={policyInputClass}
                 />
               </label>
             </div>
@@ -1097,7 +1136,8 @@ export default function DataHealthDashboard({ currentUser }) {
                   const checked = event.target.checked;
                   setPolicyForm((prev) => ({ ...(prev || {}), autoLockEnabled: checked }));
                 }}
-                className="h-4 w-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500 dark:border-slate-600 dark:bg-slate-800"
+                disabled={policyInputsDisabled}
+                className={policyCheckboxClass}
               />
               Bật chế độ khóa nguồn tự động khi vượt ngưỡng
             </label>
@@ -1144,7 +1184,7 @@ export default function DataHealthDashboard({ currentUser }) {
                                 type="button"
                                 onClick={() => handleUnlockSource(item.source)}
                                 className="rounded border border-emerald-500 px-2 py-1 text-[11px] text-emerald-600 hover:bg-emerald-50 dark:border-emerald-400 dark:text-emerald-300 dark:hover:bg-emerald-400/10"
-                                disabled={policySaving}
+                                disabled={policyActionsDisabled}
                               >
                                 Mở khóa
                               </button>
@@ -1153,7 +1193,7 @@ export default function DataHealthDashboard({ currentUser }) {
                                 type="button"
                                 onClick={() => handleLockSource(item.source)}
                                 className="rounded border border-amber-500 px-2 py-1 text-[11px] text-amber-600 hover:bg-amber-50 dark:border-amber-400 dark:text-amber-300 dark:hover:bg-amber-400/10"
-                                disabled={policySaving}
+                                disabled={policyActionsDisabled}
                               >
                                 Khóa nguồn
                               </button>
@@ -1189,7 +1229,7 @@ export default function DataHealthDashboard({ currentUser }) {
                           type="button"
                           className="rounded border border-amber-600 px-2 py-0.5 text-[11px] text-amber-700 hover:bg-amber-100 dark:border-amber-400 dark:text-amber-200 dark:hover:bg-amber-400/20"
                           onClick={() => handleUnlockSource(item.source)}
-                          disabled={policySaving}
+                          disabled={policyActionsDisabled}
                         >
                           Mở khóa
                         </button>
