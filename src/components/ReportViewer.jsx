@@ -489,14 +489,68 @@ function CompanySummaryTable({
   );
 }
 
+const TOP_STAFF_LIMIT_BREAKPOINTS = [
+  { minHeight: 1280, limit: 12 },
+  { minHeight: 1100, limit: 11 },
+  { minHeight: 980, limit: 10 },
+  { minHeight: 900, limit: 9 },
+  { minHeight: 820, limit: 8 },
+  { minHeight: 740, limit: 7 },
+];
+
+function computeResponsiveTopStaffLimit(viewportHeight) {
+  if (!Number.isFinite(viewportHeight) || viewportHeight <= 0) {
+    return 5;
+  }
+
+  for (const breakpoint of TOP_STAFF_LIMIT_BREAKPOINTS) {
+    if (viewportHeight >= breakpoint.minHeight) {
+      return breakpoint.limit;
+    }
+  }
+
+  return 5;
+}
+
 function TopStaffWidget({ metric = "kpi", onMetricChange, kpiData = [], declData = [], palette = DEFAULT_CHART_COLORS }) {
-  const hasKpiData = kpiData.length > 0;
-  const hasDeclData = declData.length > 0;
+  const [visibleCount, setVisibleCount] = useState(() =>
+    computeResponsiveTopStaffLimit(typeof window !== "undefined" ? window.innerHeight : Number.NaN)
+  );
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return undefined;
+    }
+
+    const handleResize = () => {
+      const next = computeResponsiveTopStaffLimit(window.innerHeight);
+      setVisibleCount((prev) => (prev === next ? prev : next));
+    };
+
+    handleResize();
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  const displayedKpiData = useMemo(() => kpiData.slice(0, Math.max(visibleCount, 1)), [kpiData, visibleCount]);
+  const displayedDeclData = useMemo(
+    () => declData.slice(0, Math.max(visibleCount, 1)),
+    [declData, visibleCount]
+  );
+
+  const hasKpiData = displayedKpiData.length > 0;
+  const hasDeclData = displayedDeclData.length > 0;
   const hasData = metric === "kpi" ? hasKpiData : hasDeclData;
 
-  const maxKPI = hasKpiData ? Math.max(...kpiData.map((item) => item.stats.kpi || 0), 1) : 1;
-  const totalDecls = hasDeclData ? declData.reduce((sum, item) => sum + (item.decls || 0), 0) : 0;
+  const maxKPI = hasKpiData ? Math.max(...displayedKpiData.map((item) => item.stats.kpi || 0), 1) : 1;
+  const totalDecls = hasDeclData
+    ? displayedDeclData.reduce((sum, item) => sum + (item.decls || 0), 0)
+    : 0;
   const colors = Array.isArray(palette) && palette.length ? palette : DEFAULT_CHART_COLORS;
+  const totalKpiEntries = kpiData.length;
+  const totalDeclEntries = declData.length;
+  const totalEntries = metric === "kpi" ? totalKpiEntries : totalDeclEntries;
+  const visibleEntries = metric === "kpi" ? displayedKpiData.length : displayedDeclData.length;
 
   const renderEmptyState = (
     <p className="mt-3 text-sm text-gray-500">Chưa có dữ liệu hợp lệ trong giai đoạn này.</p>
@@ -506,7 +560,7 @@ function TopStaffWidget({ metric = "kpi", onMetricChange, kpiData = [], declData
     <section className="ds-card space-y-4 p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 className="text-base font-semibold text-gray-900">
-          Top 5 nhân viên theo {metric === "kpi" ? "điểm KPI" : "số tờ khai"}
+          Top nhân viên theo {metric === "kpi" ? "điểm KPI" : "số tờ khai"}
         </h3>
         <div className="flex gap-2 text-xs font-semibold">
           <button
@@ -534,7 +588,7 @@ function TopStaffWidget({ metric = "kpi", onMetricChange, kpiData = [], declData
         renderEmptyState
       ) : metric === "kpi" ? (
         <div className="mt-4 space-y-4">
-          {kpiData.map((item, idx) => {
+          {displayedKpiData.map((item, idx) => {
             const ratio = Math.max(0, Math.min(100, (item.stats.kpi / maxKPI) * 100));
             const color = colors[idx % colors.length];
             return (
@@ -558,11 +612,14 @@ function TopStaffWidget({ metric = "kpi", onMetricChange, kpiData = [], declData
           })}
         </div>
       ) : (
-        <div className="mt-4 h-64 w-full">
+        <div
+          className="mt-4 w-full"
+          style={{ height: Math.max(220, visibleEntries * 44) }}
+        >
           <ResponsiveContainer width="100%" height="100%">
             <BarChart
               layout="vertical"
-              data={declData}
+              data={displayedDeclData}
               margin={{ top: 10, right: 30, left: 0, bottom: 0 }}
               barCategoryGap="20%"
             >
@@ -580,7 +637,7 @@ function TopStaffWidget({ metric = "kpi", onMetricChange, kpiData = [], declData
                 }}
               />
               <Bar dataKey="decls" name="Tờ khai" radius={[0, 4, 4, 0]}>
-                {declData.map((item, idx) => (
+                {displayedDeclData.map((item, idx) => (
                   <Cell key={item.key || item.name || idx} fill={colors[idx % colors.length]} />
                 ))}
                 <LabelList dataKey="decls" position="right" formatter={(value) => formatInt(value)} />
@@ -590,6 +647,12 @@ function TopStaffWidget({ metric = "kpi", onMetricChange, kpiData = [], declData
           <div className="mt-2 text-xs text-gray-500">Tổng: {formatInt(totalDecls)} tờ khai</div>
         </div>
       )}
+
+      {totalEntries > visibleEntries ? (
+        <p className="text-xs text-gray-400">
+          Đang hiển thị {visibleEntries}/{totalEntries} nhân viên. Mở rộng chiều cao cửa sổ để xem thêm.
+        </p>
+      ) : null}
     </section>
   );
 }
@@ -1766,7 +1829,7 @@ export default function ReportViewer({ canExport = true, currentUser = null }) {
   );
 
   const topStaffByKpi = useMemo(() => {
-    return sortStatsCollection(report.staff.list, "kpi", (item) => item.name || "").slice(0, 5);
+    return sortStatsCollection(report.staff.list, "kpi", (item) => item.name || "");
   }, [report.staff.list]);
 
   const topStaffByDecls = useMemo(() => {
@@ -1782,8 +1845,7 @@ export default function ReportViewer({ canExport = true, currentUser = null }) {
           team: teamLabel,
         };
       })
-      .filter((item) => item.decls > 0)
-      .slice(0, 5);
+      .filter((item) => item.decls > 0);
   }, [report.staff.list]);
 
   const teamPieData = useMemo(() => {
