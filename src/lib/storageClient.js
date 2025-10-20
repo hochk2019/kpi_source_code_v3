@@ -369,6 +369,34 @@ export function removeItem(key) {
   queueSync(key, null);
 }
 
+export async function waitForSharedWrites(options = {}) {
+  const timeoutMs = Number.isFinite(options.timeoutMs) && options.timeoutMs > 0 ? options.timeoutMs : 2000;
+  const start = Date.now();
+  let backoffMs = 20;
+  while (pendingWrites.size > 0) {
+    const promise = flushPending();
+    if (promise) {
+      try {
+        await promise;
+      } catch (err) {
+        console.warn('Không thể hoàn tất đồng bộ dữ liệu chia sẻ', err);
+      }
+    }
+    if (pendingWrites.size === 0) {
+      break;
+    }
+    if (!remoteEnabled) {
+      break;
+    }
+    if (Date.now() - start >= timeoutMs) {
+      break;
+    }
+    await new Promise((resolve) => setTimeout(resolve, backoffMs));
+    backoffMs = Math.min(backoffMs * 2, 200);
+  }
+  return pendingWrites.size === 0;
+}
+
 export function subscribe(key, listener) {
   const fn = typeof listener === 'function' ? listener : null;
   if (!fn) return () => {};
