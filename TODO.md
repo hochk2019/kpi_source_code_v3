@@ -21,17 +21,17 @@
 ## Giai đoạn 2 – API snapshot KPI dành cho AI (ưu tiên Backend)
 
 ### Backend
-- [ ] Xây dựng service `buildAiKpiSnapshot` tái sử dụng logic `buildReportData`, `fetchEcusDeclarations` và các bộ lọc MST, cho phép lấy dữ liệu theo khoảng ngày.
-- [ ] Tạo endpoint `GET /api/ai/data/snapshot` nhận tham số `from`/`to`, kiểm soát phân trang và chuẩn hóa chuỗi Unicode để tương thích SQL Server 2008 R2.
-- [ ] Tích hợp cơ chế cache (ví dụ TTL 15 phút theo cặp `from/to`) để giảm tải truy vấn.
-- [ ] Viết test tích hợp (mock SQL Server) xác nhận endpoint trả về đủ các phần: `summary`, `topStaff`, `topTeams`, `trend`, `rawDeclarations` tối thiểu.
+- [x] Xây dựng service `buildAiKpiSnapshot` tái sử dụng logic `buildReportData`, `fetchEcusDeclarations` và các bộ lọc MST, cho phép lấy dữ liệu theo khoảng ngày.
+- [x] Tạo endpoint `GET /api/ai/data/snapshot` nhận tham số `from`/`to`, kiểm soát phân trang và chuẩn hóa chuỗi Unicode để tương thích SQL Server 2008 R2.
+- [x] Tích hợp cơ chế cache (ví dụ TTL 15 phút theo cặp `from/to`) để giảm tải truy vấn.
+- [x] Viết test tích hợp (mock SQL Server) xác nhận endpoint trả về đủ các phần: `summary`, `topStaff`, `topTeams`, `trend`, `rawDeclarations` tối thiểu.
 
 ### UI
-- [ ] Kết nối lại các nút “Lấy snapshot KPI” và “Tạo tóm tắt” để sử dụng endpoint mới; hiển thị trạng thái tải và thông báo lỗi thân thiện khi snapshot chưa sẵn sàng.
-- [ ] Lưu snapshot vào local cache của client để tránh gọi lặp lại trong cùng phiên làm việc.
+- [x] Kết nối lại các nút “Lấy snapshot KPI” và “Tạo tóm tắt” để sử dụng endpoint mới; hiển thị trạng thái tải và thông báo lỗi thân thiện khi snapshot chưa sẵn sàng.
+- [x] Lưu snapshot vào local cache của client để tránh gọi lặp lại trong cùng phiên làm việc. (Cache session 5 phút, tối đa 6 snapshot.)
 
 ### Vận hành & Tài liệu
-- [ ] Cập nhật tài liệu nội bộ mô tả cấu trúc dữ liệu snapshot và cách kiểm tra log khi gặp lỗi SQL.
+- [x] Cập nhật tài liệu nội bộ mô tả cấu trúc dữ liệu snapshot và cách kiểm tra log khi gặp lỗi SQL.
 
 ## Giai đoạn 3 – Insight & Tóm tắt tự động
 

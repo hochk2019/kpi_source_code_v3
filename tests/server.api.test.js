@@ -938,6 +938,11 @@ describe('Đồng bộ tài khoản với SQL Server', () => {
 });
 
 describe('AI assistant API', () => {
+  beforeEach(() => {
+    resetDb();
+    sqlMock.__resetMock();
+  });
+
   it('từ chối khi chưa đăng nhập', async () => {
     const res = await request(app).get('/api/ai/profile');
     expect(res.status).toBe(401);
@@ -984,6 +989,118 @@ describe('AI assistant API', () => {
       expect(found).not.toHaveProperty('endpoint');
       expect(found).not.toHaveProperty('apiKeyEnv');
     }
+  });
+
+  it('tạo snapshot KPI và trả về cấu trúc tóm tắt', async () => {
+    const admin = request.agent(app);
+    const adminLogin = await admin.post('/api/auth/login').send({ username: 'admin', password: 'admin123' });
+    expect(adminLogin.status).toBe(200);
+
+    const configRes = await admin.put('/api/import/ecus/config').send({
+      config: {
+        batchSize: 0,
+        connection: {
+          server: 'MRHOC\\ECUSSQL2008',
+          database: 'ECUS5VNACCS',
+          user: 'sa',
+          password: '123456',
+        },
+      },
+    });
+    expect(configRes.status).toBe(200);
+
+    const staff = request.agent(app);
+    const staffLogin = await staff.post('/api/auth/login').send({ username: 'nhanvien', password: '123456' });
+    expect(staffLogin.status).toBe(200);
+
+    sqlMock.__setMockResult([
+      {
+        So_tk: '100000000000',
+        Ngay_dang_ky: '2025-08-01',
+        MaSoThue: '0100109106',
+        Ten_doanh_nghiep: 'Công ty A',
+        Loai_hinh: 'A11',
+        nhan_vien: 'Nguyễn Văn A',
+        team: 'Tổ 1',
+        so_luong_mh: 5,
+        ma_gp: 'ZB03',
+      },
+      {
+        So_tk: '200000000000',
+        Ngay_dang_ky: '2025-08-01',
+        MaSoThue: '0100109107',
+        Ten_doanh_nghiep: 'Công ty B',
+        Loai_hinh: 'B11',
+        nhan_vien: 'Nguyễn Văn B',
+        team: 'Tổ 2',
+        so_luong_mh: 3,
+        ma_gp: '',
+      },
+    ]);
+
+    const res = await staff.get('/api/ai/data/snapshot').query({ from: '2025-08-01', to: '2025-08-02' });
+    expect(res.status).toBe(200);
+    expect(res.body?.ok).toBe(true);
+    expect(res.body?.cached).toBe(false);
+    const snapshot = res.body?.snapshot;
+    expect(snapshot).toBeTruthy();
+    expect(snapshot.summary?.declarations).toBe(2);
+    expect(snapshot.summary?.licenseSamples).toBeInstanceOf(Array);
+    expect(Array.isArray(snapshot.topStaff)).toBe(true);
+    expect(Array.isArray(snapshot.topTeams)).toBe(true);
+    expect(Array.isArray(snapshot.trends?.monthly)).toBe(true);
+    expect(Array.isArray(snapshot.rawDeclarations)).toBe(true);
+    expect(snapshot.filters?.includeTaxCodes).toEqual([]);
+    expect(snapshot.source?.server).toBe('MRHOC\\ECUSSQL2008');
+  });
+
+  it('tái sử dụng cache snapshot khi gọi cùng tham số', async () => {
+    const admin = request.agent(app);
+    const adminLogin = await admin.post('/api/auth/login').send({ username: 'admin', password: 'admin123' });
+    expect(adminLogin.status).toBe(200);
+
+    await admin.put('/api/import/ecus/config').send({
+      config: {
+        batchSize: 0,
+        connection: {
+          server: 'MRHOC\\ECUSSQL2008',
+          database: 'ECUS5VNACCS',
+          user: 'sa',
+          password: '123456',
+        },
+      },
+    });
+
+    const staff = request.agent(app);
+    const staffLogin = await staff.post('/api/auth/login').send({ username: 'nhanvien', password: '123456' });
+    expect(staffLogin.status).toBe(200);
+
+    sqlMock.__setMockResult([
+      {
+        So_tk: '100000000000',
+        Ngay_dang_ky: '2025-08-01',
+        MaSoThue: '0100109106',
+        Ten_doanh_nghiep: 'Công ty A',
+        Loai_hinh: 'A11',
+        nhan_vien: 'Nguyễn Văn A',
+        team: 'Tổ 1',
+        so_luong_mh: 4,
+      },
+    ]);
+
+    const firstRes = await staff.get('/api/ai/data/snapshot').query({ from: '2025-08-01', to: '2025-08-02' });
+    expect(firstRes.status).toBe(200);
+    expect(firstRes.body?.cached).toBe(false);
+    const firstRequests = sqlMock.__getState().requests.length;
+    expect(firstRequests).toBeGreaterThan(0);
+
+    sqlMock.__setMockResult([]);
+
+    const secondRes = await staff.get('/api/ai/data/snapshot').query({ from: '2025-08-01', to: '2025-08-02' });
+    expect(secondRes.status).toBe(200);
+    expect(secondRes.body?.cached).toBe(true);
+    expect(sqlMock.__getState().requests.length).toBe(firstRequests);
+    expect(secondRes.body?.snapshot?.summary?.declarations).toBe(1);
   });
 
   it('cho phép cấu hình nhà cung cấp và trả lời qua Ollama mock với cache', async () => {

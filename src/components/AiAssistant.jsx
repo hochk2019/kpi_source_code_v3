@@ -19,6 +19,130 @@ import {
 } from '@/lib/aiClient.js';
 import { computeQuickRange } from '@/lib/reports.js';
 
+const SNAPSHOT_CACHE_STORAGE_KEY = 'aiSnapshotCache.v1';
+const SNAPSHOT_CACHE_VERSION = 1;
+const SNAPSHOT_CACHE_TTL_MS = 5 * 60 * 1000;
+const SNAPSHOT_CACHE_MAX_ENTRIES = 6;
+
+function getSnapshotCacheStorage() {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+  try {
+    return window.sessionStorage || null;
+  } catch {
+    return null;
+  }
+}
+
+function readLocalSnapshotCache() {
+  const storage = getSnapshotCacheStorage();
+  if (!storage) {
+    return { version: SNAPSHOT_CACHE_VERSION, entries: [] };
+  }
+  try {
+    const raw = storage.getItem(SNAPSHOT_CACHE_STORAGE_KEY);
+    if (!raw) {
+      return { version: SNAPSHOT_CACHE_VERSION, entries: [] };
+    }
+    const parsed = JSON.parse(raw);
+    const entries = Array.isArray(parsed?.entries) ? parsed.entries : [];
+    return { version: SNAPSHOT_CACHE_VERSION, entries };
+  } catch {
+    return { version: SNAPSHOT_CACHE_VERSION, entries: [] };
+  }
+}
+
+function writeLocalSnapshotCache(cache) {
+  const storage = getSnapshotCacheStorage();
+  if (!storage) {
+    return;
+  }
+  try {
+    storage.setItem(SNAPSHOT_CACHE_STORAGE_KEY, JSON.stringify(cache));
+  } catch {
+    // bỏ qua lỗi ghi bộ nhớ phiên
+  }
+}
+
+function pruneLocalSnapshotCache(now = Date.now()) {
+  const cache = readLocalSnapshotCache();
+  const entries = [];
+  for (const entry of cache.entries) {
+    if (!entry || typeof entry !== 'object') {
+      continue;
+    }
+    const key = typeof entry.key === 'string' ? entry.key : '';
+    if (!key) {
+      continue;
+    }
+    const cachedAt = Number(entry.cachedAt);
+    if (!Number.isFinite(cachedAt)) {
+      continue;
+    }
+    if (SNAPSHOT_CACHE_TTL_MS > 0 && now - cachedAt > SNAPSHOT_CACHE_TTL_MS) {
+      continue;
+    }
+    if (!entry.snapshot || typeof entry.snapshot !== 'object') {
+      continue;
+    }
+    entries.push({ key, cachedAt, snapshot: entry.snapshot });
+  }
+  entries.sort((a, b) => b.cachedAt - a.cachedAt);
+  if (entries.length > SNAPSHOT_CACHE_MAX_ENTRIES) {
+    entries.length = SNAPSHOT_CACHE_MAX_ENTRIES;
+  }
+  if (entries.length !== cache.entries.length) {
+    writeLocalSnapshotCache({ version: SNAPSHOT_CACHE_VERSION, entries });
+  }
+  return { version: SNAPSHOT_CACHE_VERSION, entries };
+}
+
+function getLocalSnapshotCacheEntry(cacheKey, now = Date.now()) {
+  if (!cacheKey) {
+    return null;
+  }
+  const cache = pruneLocalSnapshotCache(now);
+  const entry = cache.entries.find((item) => item.key === cacheKey);
+  if (!entry) {
+    return null;
+  }
+  try {
+    return {
+      key: entry.key,
+      cachedAt: entry.cachedAt,
+      snapshot: JSON.parse(JSON.stringify(entry.snapshot)),
+    };
+  } catch {
+    return null;
+  }
+}
+
+function storeLocalSnapshotCacheEntry(cacheKey, snapshot, now = Date.now()) {
+  if (!cacheKey || !snapshot || typeof snapshot !== 'object') {
+    return;
+  }
+  let serialized = null;
+  try {
+    serialized = JSON.parse(JSON.stringify(snapshot));
+  } catch {
+    return;
+  }
+  const cache = pruneLocalSnapshotCache(now);
+  const entries = cache.entries.filter((entry) => entry.key !== cacheKey);
+  entries.unshift({ key: cacheKey, cachedAt: now, snapshot: serialized });
+  if (entries.length > SNAPSHOT_CACHE_MAX_ENTRIES) {
+    entries.length = SNAPSHOT_CACHE_MAX_ENTRIES;
+  }
+  writeLocalSnapshotCache({ version: SNAPSHOT_CACHE_VERSION, entries });
+}
+
+function buildSnapshotCacheKey(params = {}) {
+  const from = typeof params.from === 'string' ? params.from : '';
+  const to = typeof params.to === 'string' ? params.to : '';
+  return `${from}|${to}`;
+}
+
 function formatDateTime(value) {
   if (!value) {
     return 'Chưa có';
@@ -837,28 +961,43 @@ export default function AiAssistant({ currentUser }) {
     [kpiFormatter, numberFormatter]
   );
 
-  const handleFetchSnapshot = useCallback(async () => {
-    const { params, label } = buildRangeParams();
-    setSnapshotLoading(true);
-    setSnapshotError('');
-    try {
-      const snapshot = await fetchAiDataSnapshot(params);
-      setSnapshotData(snapshot);
-      if (!snapshot || (snapshot.summary?.declarations ?? 0) === 0) {
-        const message = 'Không tìm thấy dữ liệu KPI trong khoảng đã chọn.';
+  const handleFetchSnapshot = useCallback(
+    async ({ force = false } = {}) => {
+      const { params, label } = buildRangeParams();
+      const cacheKey = buildSnapshotCacheKey(params);
+      if (!force) {
+        const cached = getLocalSnapshotCacheEntry(cacheKey);
+        if (cached?.snapshot) {
+          setSnapshotData(cached.snapshot);
+          setSnapshotError('');
+          toast.success('Đã dùng snapshot KPI đã lưu tạm trong phiên.');
+          return;
+        }
+      }
+
+      setSnapshotLoading(true);
+      setSnapshotError('');
+      try {
+        const snapshot = await fetchAiDataSnapshot(params);
+        setSnapshotData(snapshot);
+        if (!snapshot || (snapshot.summary?.declarations ?? 0) === 0) {
+          const message = 'Không tìm thấy dữ liệu KPI trong khoảng đã chọn.';
+          setSnapshotError(message);
+          toast.error(message);
+        } else {
+          storeLocalSnapshotCacheEntry(cacheKey, snapshot);
+          toast.success(`Đã lấy snapshot KPI (${label.toLowerCase()}).`);
+        }
+      } catch (err) {
+        const message = err?.message || 'Không thể lấy snapshot dữ liệu.';
         setSnapshotError(message);
         toast.error(message);
-      } else {
-        toast.success(`Đã lấy snapshot KPI (${label.toLowerCase()}).`);
+      } finally {
+        setSnapshotLoading(false);
       }
-    } catch (err) {
-      const message = err?.message || 'Không thể lấy snapshot dữ liệu.';
-      setSnapshotError(message);
-      toast.error(message);
-    } finally {
-      setSnapshotLoading(false);
-    }
-  }, [buildRangeParams]);
+    },
+    [buildRangeParams]
+  );
 
   const handleGenerateSummary = useCallback(async () => {
     setSummaryError('');
@@ -866,14 +1005,22 @@ export default function AiAssistant({ currentUser }) {
     setSummaryLoading(true);
     try {
       const { params, label } = buildRangeParams();
+      const cacheKey = buildSnapshotCacheKey(params);
       let snapshot = snapshotData;
       if (!snapshot) {
-        try {
-          setSnapshotLoading(true);
-          snapshot = await fetchAiDataSnapshot(params);
+        const cached = getLocalSnapshotCacheEntry(cacheKey);
+        if (cached?.snapshot) {
+          snapshot = cached.snapshot;
           setSnapshotData(snapshot);
-        } finally {
-          setSnapshotLoading(false);
+        } else {
+          try {
+            setSnapshotLoading(true);
+            snapshot = await fetchAiDataSnapshot(params);
+            setSnapshotData(snapshot);
+            storeLocalSnapshotCacheEntry(cacheKey, snapshot);
+          } finally {
+            setSnapshotLoading(false);
+          }
         }
       }
       if (!snapshot || (snapshot.summary?.declarations ?? 0) === 0) {
@@ -1702,9 +1849,10 @@ const handleInsightFeedback = useCallback(
                   </label>
                   <button
                     type="button"
-                    onClick={handleFetchSnapshot}
+                    onClick={(event) => handleFetchSnapshot({ force: event?.shiftKey })}
                     disabled={snapshotLoading}
                     className="rounded border border-[color:var(--ds-border-subtle)] px-3 py-1.5 text-xs font-medium text-[color:var(--ds-text-secondary)] shadow-sm transition hover:bg-[color:var(--ds-surface-muted)] disabled:cursor-not-allowed disabled:opacity-60"
+                    title="Nhấn Shift khi bấm để buộc tải lại từ máy chủ"
                   >
                     {snapshotLoading ? 'Đang tải...' : 'Lấy snapshot'}
                   </button>

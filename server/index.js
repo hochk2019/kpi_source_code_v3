@@ -13,6 +13,7 @@ import sql from 'mssql';
 import bcrypt from 'bcryptjs';
 import crypto from 'node:crypto';
 import { generateReport } from './reportExport.js';
+import { buildReportData } from '../src/lib/reports.js';
 import { buildDefaultAiProviders } from './aiProviders/index.js';
 import { normalizeSqlUnicodeRecord } from './ecus/sqlUnicode.js';
 import { getSecureSqlCredentials } from './ecus/secureCredentials.js';
@@ -739,6 +740,14 @@ const DEFAULT_AI_USAGE_CACHE = Object.freeze({
   entries: [],
 });
 
+const AI_SNAPSHOT_CACHE_KEY = 'ai_snapshot_cache_v1';
+const AI_SNAPSHOT_CACHE_TTL_MS = 15 * 60 * 1000;
+const AI_SNAPSHOT_CACHE_LIMIT = 8;
+const DEFAULT_AI_SNAPSHOT_CACHE = Object.freeze({
+  version: 1,
+  entries: [],
+});
+
 const DEFAULT_DUPLICATE_POLICY_CONFIG = Object.freeze({
   autoNotifyAfterDays: 7,
   notifyCooldownHours: 24,
@@ -842,6 +851,7 @@ const DEFAULT_STORAGE = {
   [ECUS_MONITOR_HISTORY_KEY]: JSON.stringify(DEFAULT_ECUS_MONITOR_HISTORY),
   [AI_CONFIG_KEY]: JSON.stringify(DEFAULT_AI_CONFIG),
   [AI_CACHE_KEY]: JSON.stringify(DEFAULT_AI_USAGE_CACHE),
+  [AI_SNAPSHOT_CACHE_KEY]: JSON.stringify(DEFAULT_AI_SNAPSHOT_CACHE),
 };
 
 function normalizeValue(value) {
@@ -3092,6 +3102,136 @@ function storeAiCacheEntry(entry, { actor = 'system', ttlMs, maxEntries = AI_CAC
   const result = { version: 1, entries: nextEntries };
   setJSONValue(AI_CACHE_KEY, result, { actor, source: 'ai-cache-store' });
   return normalized;
+}
+
+function normalizeSnapshotRange(range = {}) {
+  const from = `${range?.from || ''}`.trim();
+  const to = `${range?.to || ''}`.trim();
+  return { from, to };
+}
+
+function normalizeSnapshotFilters(filters = {}) {
+  return {
+    includeTaxCodes: normalizeEcusTaxCodeList(filters?.includeTaxCodes ?? filters?.include ?? []),
+    excludeTaxCodes: normalizeEcusTaxCodeList(filters?.excludeTaxCodes ?? filters?.exclude ?? []),
+  };
+}
+
+function pruneAiSnapshotCache({
+  ttlMs = AI_SNAPSHOT_CACHE_TTL_MS,
+  maxEntries = AI_SNAPSHOT_CACHE_LIMIT,
+  actor = 'system',
+} = {}) {
+  const raw = getJSONValue(AI_SNAPSHOT_CACHE_KEY, DEFAULT_AI_SNAPSHOT_CACHE) || {};
+  const entries = Array.isArray(raw?.entries) ? raw.entries : [];
+  const now = Date.now();
+  const normalizedTtl = Number.isFinite(ttlMs) && ttlMs > 0 ? Math.floor(ttlMs) : 0;
+  const normalizedLimit = Number.isFinite(maxEntries) && maxEntries > 0 ? Math.floor(maxEntries) : AI_SNAPSHOT_CACHE_LIMIT;
+  const cleaned = [];
+  for (const entry of entries) {
+    if (!entry || typeof entry !== 'object') {
+      continue;
+    }
+    const key = `${entry.key || ''}`.trim();
+    if (!key) {
+      continue;
+    }
+    const cachedAtIso = entry.cachedAt && !Number.isNaN(Date.parse(entry.cachedAt))
+      ? new Date(entry.cachedAt).toISOString()
+      : new Date().toISOString();
+    const cachedTs = Date.parse(cachedAtIso);
+    if (normalizedTtl > 0 && (!Number.isFinite(cachedTs) || cachedTs + normalizedTtl < now)) {
+      continue;
+    }
+    const range = normalizeSnapshotRange(entry.range || {});
+    const filters = normalizeSnapshotFilters(entry.filters || {});
+    cleaned.push({
+      key,
+      cachedAt: cachedAtIso,
+      range,
+      filters,
+      snapshot: entry.snapshot && typeof entry.snapshot === 'object' ? entry.snapshot : null,
+    });
+  }
+  cleaned.sort((a, b) => new Date(b.cachedAt).getTime() - new Date(a.cachedAt).getTime());
+  const limited = normalizedLimit > 0 ? cleaned.slice(0, normalizedLimit) : cleaned;
+  const result = { version: 1, entries: limited };
+  const previous = JSON.stringify(entries);
+  const nextSerialized = JSON.stringify(limited);
+  if (previous !== nextSerialized) {
+    setJSONValue(AI_SNAPSHOT_CACHE_KEY, result, { actor, source: 'ai-snapshot-prune' });
+  }
+  return { cache: result, mutated: previous !== nextSerialized };
+}
+
+function storeAiSnapshotCacheEntry(entry, {
+  actor = 'system',
+  ttlMs = AI_SNAPSHOT_CACHE_TTL_MS,
+  maxEntries = AI_SNAPSHOT_CACHE_LIMIT,
+} = {}) {
+  const key = `${entry?.key || ''}`.trim();
+  if (!key) {
+    throw new Error('Thiếu khoá cache snapshot AI.');
+  }
+  const cachedAtIso = entry?.cachedAt && !Number.isNaN(Date.parse(entry.cachedAt))
+    ? new Date(entry.cachedAt).toISOString()
+    : new Date().toISOString();
+  const range = normalizeSnapshotRange(entry?.range || {});
+  const filters = normalizeSnapshotFilters(entry?.filters || {});
+  const snapshot = entry?.snapshot && typeof entry.snapshot === 'object' ? cloneJson(entry.snapshot) : null;
+  const { cache } = pruneAiSnapshotCache({ ttlMs, maxEntries, actor });
+  const entries = cache.entries.filter((item) => item?.key !== key);
+  entries.unshift({ key, cachedAt: cachedAtIso, range, filters, snapshot });
+  const normalizedLimit = Number.isFinite(maxEntries) && maxEntries > 0 ? Math.floor(maxEntries) : AI_SNAPSHOT_CACHE_LIMIT;
+  const limited = normalizedLimit > 0 ? entries.slice(0, normalizedLimit) : entries;
+  const result = { version: 1, entries: limited };
+  setJSONValue(AI_SNAPSHOT_CACHE_KEY, result, { actor, source: 'ai-snapshot-store' });
+  return { key, cachedAt: cachedAtIso, range, filters, snapshot };
+}
+
+function getAiSnapshotCacheEntry(key, {
+  ttlMs = AI_SNAPSHOT_CACHE_TTL_MS,
+  maxEntries = AI_SNAPSHOT_CACHE_LIMIT,
+} = {}) {
+  if (!key) {
+    return null;
+  }
+  const { cache } = pruneAiSnapshotCache({ ttlMs, maxEntries });
+  const entry = cache.entries.find((item) => item?.key === key);
+  if (!entry) {
+    return null;
+  }
+  return {
+    key: entry.key,
+    cachedAt: entry.cachedAt,
+    range: { ...entry.range },
+    filters: {
+      includeTaxCodes: Array.from(entry.filters?.includeTaxCodes || []),
+      excludeTaxCodes: Array.from(entry.filters?.excludeTaxCodes || []),
+    },
+    snapshot: entry.snapshot && typeof entry.snapshot === 'object' ? cloneJson(entry.snapshot) : null,
+  };
+}
+
+function computeAiSnapshotCacheKey({ range, includeTaxCodes = [], excludeTaxCodes = [], config = {} } = {}) {
+  const normalizedRange = normalizeSnapshotRange(range || {});
+  const includeList = normalizeEcusTaxCodeList(includeTaxCodes);
+  const excludeList = normalizeEcusTaxCodeList(excludeTaxCodes);
+  const queryText = `${config?.query || ''}`.trim();
+  const queryHash = crypto.createHash('sha1').update(queryText).digest('hex');
+  const signature = {
+    from: normalizedRange.from,
+    to: normalizedRange.to,
+    include: includeList,
+    exclude: excludeList,
+    server: normalizeStr(config?.connection?.server || ''),
+    database: normalizeStr(config?.connection?.database || ''),
+    preferMonthFirst: !!config?.preferMonthFirst,
+    query: queryHash,
+  };
+  const hash = crypto.createHash('sha1');
+  hash.update(JSON.stringify(signature));
+  return hash.digest('hex');
 }
 
 function normalizeEcusTaxCodeList(input) {
@@ -9489,6 +9629,224 @@ async function runEcusSyncWithErrorHandling(params) {
   }
 }
 
+async function buildAiKpiSnapshot(rangeInput = {}, {
+  useCache = true,
+  includeTaxCodes = null,
+  excludeTaxCodes = null,
+  actor = 'system',
+} = {}) {
+  const config = getEcusConfig();
+  const connectionConfig = buildSqlConnectionConfig(config);
+  if (!connectionConfig.server || !connectionConfig.database) {
+    const error = new Error('Chưa cấu hình kết nối SQL Server để lấy snapshot KPI.');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const range = computeRangeWindow(config, rangeInput || {});
+  const includeList = includeTaxCodes === null
+    ? Array.isArray(config.includeTaxCodes)
+      ? config.includeTaxCodes
+      : []
+    : normalizeEcusTaxCodeList(includeTaxCodes);
+  const excludeList = excludeTaxCodes === null
+    ? Array.isArray(config.excludeTaxCodes)
+      ? config.excludeTaxCodes
+      : []
+    : normalizeEcusTaxCodeList(excludeTaxCodes);
+
+  const cacheKey = computeAiSnapshotCacheKey({
+    range,
+    includeTaxCodes: includeList,
+    excludeTaxCodes: excludeList,
+    config,
+  });
+  const cacheTtl = AI_SNAPSHOT_CACHE_TTL_MS;
+  if (useCache !== false) {
+    const cached = getAiSnapshotCacheEntry(cacheKey, { ttlMs: cacheTtl, maxEntries: AI_SNAPSHOT_CACHE_LIMIT });
+    if (cached?.snapshot) {
+      return { snapshot: cached.snapshot, cached: true, cacheKey };
+    }
+  }
+
+  const includeSet = new Set(includeList);
+  const excludeSet = new Set(excludeList);
+  const context = buildEcusSyncContext({ ...config, includeTaxCodes: includeList, excludeTaxCodes: excludeList });
+  const iterator = fetchEcusDeclarations(range, config, {
+    includeTaxCodesSet: includeSet,
+    excludeTaxCodesSet: excludeSet,
+  });
+
+  const mappedRows = [];
+  let totalFetched = 0;
+  try {
+    for await (const batch of iterator) {
+      totalFetched += batch.length;
+      for (const raw of batch) {
+        const mapped = mapEcusRow(raw, config, context);
+        if (!mapped) continue;
+        if (shouldSkipByMst(mapped, includeSet, excludeSet)) {
+          continue;
+        }
+        mappedRows.push(mapped);
+      }
+    }
+  } catch (err) {
+    if (isSqlTimeoutError(err)) {
+      recordSqlTimeout({ message: err?.message, context: { actor, reason: 'ai-snapshot' } });
+      const timeoutError = new Error('Kết nối SQL Server bị quá thời gian khi lấy snapshot KPI.');
+      timeoutError.statusCode = 504;
+      throw timeoutError;
+    }
+    throw err;
+  }
+
+  const roster = getRosterValue();
+  const rules = getRulesValue();
+  const adjustments = getJSONValue('kpi_adjustments_v1', []);
+  const report = buildReportData(mappedRows, {
+    roster,
+    rules,
+    from: range.from,
+    to: range.to,
+    adjustments: Array.isArray(adjustments) ? adjustments : [],
+  });
+
+  const summarySource = report?.summary || {};
+  const summary = {
+    declarations: Number(summarySource.decls || 0),
+    decls: Number(summarySource.decls || 0),
+    import: Number(summarySource.import || 0),
+    export: Number(summarySource.export || 0),
+    items: Number(summarySource.items || 0),
+    licenses: Number(summarySource.licenses || 0),
+    companyCount: Number(summarySource.companyCount || 0),
+    kpi: Number(summarySource.kpi || 0),
+    co: Number(summarySource.co || 0),
+    coLines: Number(summarySource.coLines || 0),
+    licenseSummary: summarySource.licenseSummary || '—',
+    licenseSamples: Array.isArray(summarySource.licenseCodes)
+      ? summarySource.licenseCodes.slice(0, 12)
+      : [],
+    adjustmentTotals: cloneJson(summarySource.adjustmentTotals || {}),
+  };
+
+  const staffList = Array.isArray(report?.staff?.list) ? report.staff.list : [];
+  const topStaff = staffList.slice(0, 10).map((entry) => ({
+    key: entry.key,
+    name: entry.name,
+    declarations: Number(entry?.stats?.decls || 0),
+    totalKpi: Number(entry?.stats?.kpi || 0),
+    items: Number(entry?.stats?.items || 0),
+    teams: Array.isArray(entry?.teamNames) ? entry.teamNames : [],
+    adjustmentSummary: cloneJson(entry?.adjustmentSummary || {}),
+  }));
+
+  const teams = Array.isArray(report?.teams?.list) ? report.teams.list : [];
+  const topTeams = teams.slice(0, 10).map((team) => ({
+    key: team.key,
+    name: team.name,
+    declarations: Number(team?.stats?.decls || 0),
+    totalKpi: Number(team?.stats?.kpi || 0),
+    members: Array.isArray(team?.members)
+      ? team.members.slice(0, 5).map((member) => ({
+          key: member.key,
+          name: member.name,
+          declarations: Number(member?.stats?.decls || 0),
+          totalKpi: Number(member?.stats?.kpi || 0),
+        }))
+      : [],
+    adjustmentSummary: cloneJson(team?.adjustmentSummary || {}),
+  }));
+
+  const trendSeries = Array.isArray(report?.trend?.series) ? report.trend.series : [];
+  const monthlyTrend = trendSeries.map((item) => ({
+    month: item.period || '',
+    period: item.period || '',
+    declarations: Number(item.decls || item.declarations || 0),
+    items: Number(item.items || 0),
+    licenses: Number(item.licenses || 0),
+    kpi: Number(item.kpi || 0),
+  }));
+  const teamTrendSeries = Array.isArray(report?.trend?.teamSeries)
+    ? cloneJson(report.trend.teamSeries)
+    : [];
+  const comparisonTrend = report?.trend?.comparison ? cloneJson(report.trend.comparison) : null;
+
+  const adjustmentsMeta = report?.adjustments || {};
+  const adjustmentsSummary = {
+    totals: {
+      pending: Number(adjustmentsMeta.pendingCount || 0),
+      approved: Number(adjustmentsMeta.approvedCount || 0),
+      rejected: Number(adjustmentsMeta.rejectedCount || 0),
+      applied: Number(adjustmentsMeta.appliedCount || 0),
+      totalPoints: Number(adjustmentsMeta.totalPoints || 0),
+    },
+    totalsByCategory: cloneJson(adjustmentsMeta.totalsByCategory || {}),
+    staffSummaries: cloneJson(adjustmentsMeta.staffSummaries || []),
+    teamSummaries: cloneJson(adjustmentsMeta.teamSummaries || []),
+    sample: Array.isArray(adjustmentsMeta.list) ? adjustmentsMeta.list.slice(0, 20) : [],
+  };
+
+  const rawDeclarations = Array.isArray(report?.rows)
+    ? report.rows
+        .filter((row) => !row?.isAdjustment)
+        .slice(0, 50)
+        .map((row) => ({
+          date: row.date || '',
+          so_tk: row.so_tk || '',
+          mst: row.mst || '',
+          cong_ty: row.cong_ty || '',
+          loai_hinh: row.loai_hinh || '',
+          nhan_vien: row.nhan_vien || '',
+          team: row.team || '',
+          kpi: Number(row.kpi || 0),
+          num_items: Number(row.num_items || 0),
+          licenses: Number(row.licenses || 0),
+          isExport: !!row.isExport,
+          hasCO: !!row.hasCO,
+          licenseCodes: Array.isArray(row.licenseCodes) ? row.licenseCodes.slice(0, 10) : [],
+        }))
+    : [];
+
+  const snapshot = {
+    generatedAt: new Date().toISOString(),
+    range: { from: range.from || '', to: range.to || '' },
+    filters: { includeTaxCodes: includeList, excludeTaxCodes: excludeList },
+    source: {
+      server: connectionConfig.server,
+      database: connectionConfig.database,
+    },
+    summary,
+    totals: {
+      rowsFetched: totalFetched,
+      declarations: mappedRows.length,
+    },
+    topStaff,
+    topTeams,
+    trends: {
+      monthly: monthlyTrend,
+      teamSeries: teamTrendSeries,
+      comparison: comparisonTrend,
+    },
+    adjustments: adjustmentsSummary,
+    rawDeclarations,
+  };
+
+  storeAiSnapshotCacheEntry(
+    {
+      key: cacheKey,
+      cachedAt: snapshot.generatedAt,
+      range: snapshot.range,
+      filters: snapshot.filters,
+      snapshot,
+    },
+    { actor, ttlMs: cacheTtl, maxEntries: AI_SNAPSHOT_CACHE_LIMIT }
+  );
+
+  return { snapshot, cached: false, cacheKey };
+}
+
 function isSqlTimeoutError(err) {
   if (!err) return false;
   const message = String(err?.message || err).toLowerCase();
@@ -10959,6 +11317,26 @@ app.delete('/api/storage/:key', (req, res) => {
   } catch (err) {
     console.error('Lỗi xóa dữ liệu', err);
     res.status(500).json({ ok: false, error: 'Không thể xóa dữ liệu' });
+  }
+});
+
+app.get('/api/ai/data/snapshot', async (req, res) => {
+  const { context, denied } = requireAiAssistUsage(req, res);
+  if (denied) {
+    return;
+  }
+  const actor = context?.account?.username || resolveActor(req);
+  const from = Array.isArray(req.query?.from) ? req.query.from[0] : req.query?.from;
+  const to = Array.isArray(req.query?.to) ? req.query.to[0] : req.query?.to;
+  try {
+    const { snapshot, cached, cacheKey } = await buildAiKpiSnapshot(
+      { from, to },
+      { actor }
+    );
+    res.json({ ok: true, snapshot, cached, cacheKey });
+  } catch (err) {
+    const status = Number.isInteger(err?.statusCode) ? err.statusCode : 500;
+    res.status(status).json({ ok: false, error: err?.message || 'Không thể lấy snapshot KPI.' });
   }
 });
 
