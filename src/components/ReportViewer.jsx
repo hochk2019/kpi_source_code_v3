@@ -108,6 +108,9 @@ const DEFAULT_ADJUSTMENT_PAGE_SIZE = 10;
 const DETAIL_PAGE_SIZE_OPTIONS = [10, 20, 50, 100, 200];
 const DEFAULT_DETAIL_PAGE_SIZE = 20;
 
+const TOP_STAFF_VISIBLE_COUNT_OPTIONS = [5, 7, 8, 9, 10, 12, 15];
+const TOP_STAFF_VISIBLE_COUNT_SET = new Set(TOP_STAFF_VISIBLE_COUNT_OPTIONS);
+
 const WEEKDAY_OPTIONS = [
   { value: 1, label: "Thứ hai" },
   { value: 2, label: "Thứ ba" },
@@ -251,6 +254,18 @@ function sanitizeScope(value) {
 
 function sanitizeTopStaffMetric(value) {
   return value === "decls" ? "decls" : "kpi";
+}
+
+function sanitizeTopStaffVisibleCount(value) {
+  if (value === "auto") {
+    return "auto";
+  }
+  const num = Number(value);
+  if (!Number.isFinite(num)) {
+    return "auto";
+  }
+  const rounded = Math.round(num);
+  return TOP_STAFF_VISIBLE_COUNT_SET.has(rounded) ? rounded : "auto";
 }
 
 function sanitizeSelection(value) {
@@ -512,8 +527,16 @@ function computeResponsiveTopStaffLimit(viewportHeight) {
   return 5;
 }
 
-function TopStaffWidget({ metric = "kpi", onMetricChange, kpiData = [], declData = [], palette = DEFAULT_CHART_COLORS }) {
-  const [visibleCount, setVisibleCount] = useState(() =>
+function TopStaffWidget({
+  metric = "kpi",
+  onMetricChange,
+  kpiData = [],
+  declData = [],
+  palette = DEFAULT_CHART_COLORS,
+  visibleCountPreference = "auto",
+  onVisibleCountPreferenceChange,
+}) {
+  const [autoVisibleCount, setAutoVisibleCount] = useState(() =>
     computeResponsiveTopStaffLimit(typeof window !== "undefined" ? window.innerHeight : Number.NaN)
   );
 
@@ -524,13 +547,27 @@ function TopStaffWidget({ metric = "kpi", onMetricChange, kpiData = [], declData
 
     const handleResize = () => {
       const next = computeResponsiveTopStaffLimit(window.innerHeight);
-      setVisibleCount((prev) => (prev === next ? prev : next));
+      setAutoVisibleCount((prev) => (prev === next ? prev : next));
     };
 
     handleResize();
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, []);
+
+  const resolvedPreference = useMemo(() => {
+    if (visibleCountPreference === "auto") {
+      return "auto";
+    }
+    const num = Number(visibleCountPreference);
+    if (!Number.isFinite(num)) {
+      return "auto";
+    }
+    return Math.max(1, Math.round(num));
+  }, [visibleCountPreference]);
+
+  const effectiveVisibleCount = resolvedPreference === "auto" ? autoVisibleCount : resolvedPreference;
+  const visibleCount = Math.max(1, Number.isFinite(effectiveVisibleCount) ? effectiveVisibleCount : autoVisibleCount || 5);
 
   const displayedKpiData = useMemo(() => kpiData.slice(0, Math.max(visibleCount, 1)), [kpiData, visibleCount]);
   const displayedDeclData = useMemo(
@@ -552,35 +589,76 @@ function TopStaffWidget({ metric = "kpi", onMetricChange, kpiData = [], declData
   const totalEntries = metric === "kpi" ? totalKpiEntries : totalDeclEntries;
   const visibleEntries = metric === "kpi" ? displayedKpiData.length : displayedDeclData.length;
 
+  const handleVisibleCountChange = (event) => {
+    const value = event?.target?.value;
+    if (value === "auto") {
+      onVisibleCountPreferenceChange?.("auto");
+      return;
+    }
+    const num = Number(value);
+    if (!Number.isFinite(num)) {
+      return;
+    }
+    const rounded = Math.round(num);
+    if (!TOP_STAFF_VISIBLE_COUNT_SET.has(rounded)) {
+      return;
+    }
+    onVisibleCountPreferenceChange?.(rounded);
+  };
+
+  const selectValue = resolvedPreference === "auto" ? "auto" : String(resolvedPreference);
+
+  const preferenceDescription =
+    resolvedPreference === "auto"
+      ? "Tự động theo chiều cao màn hình"
+      : `${resolvedPreference} nhân viên (cố định)`;
+
   const renderEmptyState = (
     <p className="mt-3 text-sm text-gray-500">Chưa có dữ liệu hợp lệ trong giai đoạn này.</p>
   );
 
   return (
     <section className="ds-card space-y-4 p-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <h3 className="text-base font-semibold text-gray-900">
           Top nhân viên theo {metric === "kpi" ? "điểm KPI" : "số tờ khai"}
         </h3>
-        <div className="flex gap-2 text-xs font-semibold">
-          <button
-            type="button"
-            onClick={() => onMetricChange?.("kpi")}
-            className={`rounded px-3 py-1.5 ${
-              metric === "kpi" ? "bg-black text-white" : "border bg-white text-gray-700 hover:bg-gray-50"
-            }`}
-          >
-            Điểm KPI
-          </button>
-          <button
-            type="button"
-            onClick={() => onMetricChange?.("decls")}
-            className={`rounded px-3 py-1.5 ${
-              metric === "decls" ? "bg-black text-white" : "border bg-white text-gray-700 hover:bg-gray-50"
-            }`}
-          >
-            Số tờ khai
-          </button>
+        <div className="flex flex-wrap items-center gap-3">
+          <label className="flex items-center gap-2 text-xs text-gray-600">
+            Hiển thị
+            <select
+              className="rounded border border-gray-300 bg-white px-2 py-1 text-xs font-medium text-gray-700 shadow-sm transition focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              value={selectValue}
+              onChange={handleVisibleCountChange}
+            >
+              <option value="auto">Tự động</option>
+              {TOP_STAFF_VISIBLE_COUNT_OPTIONS.map((option) => (
+                <option key={option} value={option}>
+                  {option} nhân viên
+                </option>
+              ))}
+            </select>
+          </label>
+          <div className="flex gap-2 text-xs font-semibold">
+            <button
+              type="button"
+              onClick={() => onMetricChange?.("kpi")}
+              className={`rounded px-3 py-1.5 ${
+                metric === "kpi" ? "bg-black text-white" : "border bg-white text-gray-700 hover:bg-gray-50"
+              }`}
+            >
+              Điểm KPI
+            </button>
+            <button
+              type="button"
+              onClick={() => onMetricChange?.("decls")}
+              className={`rounded px-3 py-1.5 ${
+                metric === "decls" ? "bg-black text-white" : "border bg-white text-gray-700 hover:bg-gray-50"
+              }`}
+            >
+              Số tờ khai
+            </button>
+          </div>
         </div>
       </div>
 
@@ -650,9 +728,11 @@ function TopStaffWidget({ metric = "kpi", onMetricChange, kpiData = [], declData
 
       {totalEntries > visibleEntries ? (
         <p className="text-xs text-gray-400">
-          Đang hiển thị {visibleEntries}/{totalEntries} nhân viên. Mở rộng chiều cao cửa sổ để xem thêm.
+          Đang hiển thị {visibleEntries}/{totalEntries} nhân viên. {preferenceDescription}
         </p>
-      ) : null}
+      ) : (
+        <p className="text-xs text-gray-400">{preferenceDescription}</p>
+      )}
     </section>
   );
 }
@@ -1440,6 +1520,9 @@ export default function ReportViewer({ canExport = true, currentUser = null }) {
   const [topStaffMetric, setTopStaffMetric] = useState(() => sanitizeTopStaffMetric(storedPrefs.topStaffMetric));
   const [staffSortKey, setStaffSortKey] = useState(() => sanitizeSortKey(storedPrefs.staffSortKey));
   const [teamSortKey, setTeamSortKey] = useState(() => sanitizeSortKey(storedPrefs.teamSortKey));
+  const [topStaffVisibleCount, setTopStaffVisibleCount] = useState(() =>
+    sanitizeTopStaffVisibleCount(storedPrefs.topStaffVisibleCount)
+  );
   const [version, setVersion] = useState(0);
   const [exporting, setExporting] = useState(false);
   const storedColumnPrefs = useMemo(
@@ -1509,6 +1592,7 @@ export default function ReportViewer({ canExport = true, currentUser = null }) {
       staffSortKey,
       teamSortKey,
       topStaffMetric,
+      topStaffVisibleCount,
       columns: exportColumns,
       ruleId: selectedRuleId,
       adjustmentPageSize,
@@ -1531,6 +1615,7 @@ export default function ReportViewer({ canExport = true, currentUser = null }) {
     staffSortKey,
     teamSortKey,
     topStaffMetric,
+    topStaffVisibleCount,
     exportColumns,
     selectedRuleId,
     adjustmentPageSize,
@@ -3063,6 +3148,8 @@ export default function ReportViewer({ canExport = true, currentUser = null }) {
             kpiData={topStaffByKpi}
             declData={topStaffByDecls}
             palette={chartPalette}
+            visibleCountPreference={topStaffVisibleCount}
+            onVisibleCountPreferenceChange={setTopStaffVisibleCount}
           />
         </div>
 
