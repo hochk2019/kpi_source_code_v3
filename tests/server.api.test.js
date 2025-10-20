@@ -1056,6 +1056,245 @@ describe('AI assistant API', () => {
       fetchSpy.mockRestore();
     }
   });
+
+  it('cho phép kiểm thử Ollama cục bộ mà không cần API key', async () => {
+    const admin = request.agent(app);
+    const loginRes = await admin.post('/api/auth/login').send({ username: 'admin', password: 'admin123' });
+    expect(loginRes.status).toBe(200);
+
+    const updateRes = await admin.put('/api/ai/config').send({
+      config: {
+        defaultProvider: 'ollama-local',
+        fallbackProvider: 'azure-openai',
+        providers: [
+          { id: 'ollama-local', type: 'ollama', enabled: true, endpoint: 'http://ollama.test', model: 'llama3.1:8b' },
+        ],
+      },
+    });
+    expect(updateRes.status).toBe(200);
+
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
+      if (typeof url === 'string' && url.includes('ollama.test')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            message: { content: 'Pong từ kiểm thử Ollama' },
+            prompt_eval_count: 10,
+            eval_count: 4,
+          }),
+          text: async () => 'ok',
+        };
+      }
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ ok: true }),
+        text: async () => 'ok',
+      };
+    });
+
+    try {
+      const res = await admin.post('/api/ai/providers/test').send({
+        provider: {
+          id: 'ollama-local',
+          type: 'ollama',
+          endpoint: 'http://ollama.test',
+          model: 'llama3.1:8b',
+        },
+        prompt: 'kiểm thử ollama nội bộ',
+      });
+      expect(res.status).toBe(200);
+      expect(res.body?.ok).toBe(true);
+      expect(res.body?.provider?.id).toContain('ollama-local');
+      expect(res.body?.message).toContain('Pong');
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+
+  it('ghi log lỗi khi kiểm thử Ollama thất bại', async () => {
+    const admin = request.agent(app);
+    const loginRes = await admin.post('/api/auth/login').send({ username: 'admin', password: 'admin123' });
+    expect(loginRes.status).toBe(200);
+
+    const updateRes = await admin.put('/api/ai/config').send({
+      config: {
+        providers: [
+          { id: 'ollama-local', type: 'ollama', enabled: true, endpoint: 'http://ollama.test', model: 'llama3.1:8b' },
+        ],
+      },
+    });
+    expect(updateRes.status).toBe(200);
+
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
+      if (typeof url === 'string' && url.includes('ollama.test')) {
+        return {
+          ok: false,
+          status: 503,
+          text: async () => 'service unavailable',
+        };
+      }
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ ok: true }),
+        text: async () => 'ok',
+      };
+    });
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    try {
+      const res = await admin.post('/api/ai/providers/test').send({
+        provider: {
+          id: 'ollama-local',
+          type: 'ollama',
+          endpoint: 'http://ollama.test',
+          model: 'llama3.1:8b',
+        },
+        prompt: 'kiểm thử ollama thất bại',
+      });
+      expect(res.status).toBe(400);
+      expect(res.body?.ok).toBe(false);
+      expect(res.body?.error).toContain('503');
+      expect(errorSpy).toHaveBeenCalledWith(
+        'Kiểm thử nhà cung cấp AI thất bại',
+        expect.objectContaining({
+          providerId: expect.stringContaining('ollama-local'),
+          error: expect.stringContaining('503'),
+        }),
+      );
+    } finally {
+      fetchSpy.mockRestore();
+      errorSpy.mockRestore();
+    }
+  });
+
+  it('tự động thử lại khi gọi Ollama lần đầu thất bại', async () => {
+    const admin = request.agent(app);
+    const adminLogin = await admin.post('/api/auth/login').send({ username: 'admin', password: 'admin123' });
+    expect(adminLogin.status).toBe(200);
+
+    const updateRes = await admin.put('/api/ai/config').send({
+      config: {
+        enabled: true,
+        defaultProvider: 'ollama-local',
+        providers: [
+          { id: 'ollama-local', type: 'ollama', enabled: true, endpoint: 'http://ollama.test', model: 'llama3.1:8b' },
+        ],
+        caching: { enabled: true, ttlMinutes: 5, maxEntries: 5 },
+      },
+    });
+    expect(updateRes.status).toBe(200);
+
+    const staff = request.agent(app);
+    const staffLogin = await staff.post('/api/auth/login').send({ username: 'nhanvien', password: '123456' });
+    expect(staffLogin.status).toBe(200);
+
+    let attempts = 0;
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
+      if (typeof url === 'string' && url.includes('ollama.test')) {
+        attempts += 1;
+        if (attempts === 1) {
+          throw new Error('ECONNREFUSED');
+        }
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            message: { content: 'Phản hồi sau lần retry' },
+            prompt_eval_count: 15,
+            eval_count: 6,
+          }),
+          text: async () => 'ok',
+        };
+      }
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ ok: true }),
+        text: async () => 'ok',
+      };
+    });
+
+    try {
+      const res = await staff.post('/api/ai/chat').send({
+        prompt: 'Kiểm tra retry Ollama',
+        scope: 'retry',
+        providerId: 'ollama-local',
+      });
+      expect(res.status).toBe(200);
+      expect(res.body?.ok).toBe(true);
+      expect(res.body?.message).toContain('retry');
+      expect(attempts).toBe(2);
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+
+  it('dùng cache nội bộ của Ollama ngay cả khi cache chung tắt', async () => {
+    const admin = request.agent(app);
+    const adminLogin = await admin.post('/api/auth/login').send({ username: 'admin', password: 'admin123' });
+    expect(adminLogin.status).toBe(200);
+
+    const updateRes = await admin.put('/api/ai/config').send({
+      config: {
+        enabled: true,
+        defaultProvider: 'ollama-local',
+        providers: [
+          { id: 'ollama-local', type: 'ollama', enabled: true, endpoint: 'http://ollama.test', model: 'llama3.1:8b' },
+        ],
+        caching: { enabled: false },
+      },
+    });
+    expect(updateRes.status).toBe(200);
+
+    const staff = request.agent(app);
+    const staffLogin = await staff.post('/api/auth/login').send({ username: 'nhanvien', password: '123456' });
+    expect(staffLogin.status).toBe(200);
+
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
+      if (typeof url === 'string' && url.includes('ollama.test')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            message: { content: 'Nội dung cache nội bộ' },
+            prompt_eval_count: 8,
+            eval_count: 3,
+          }),
+          text: async () => 'ok',
+        };
+      }
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ ok: true }),
+        text: async () => 'ok',
+      };
+    });
+
+    const payload = { prompt: 'Cache nội bộ Ollama', scope: 'local-cache', providerId: 'ollama-local' };
+
+    try {
+      const first = await staff.post('/api/ai/chat').send(payload);
+      expect(first.status).toBe(200);
+      expect(first.body?.ok).toBe(true);
+      expect(first.body.cached).toBe(false);
+      expect(first.body.message).toContain('Nội dung cache nội bộ');
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+
+      const second = await staff.post('/api/ai/chat').send(payload);
+      expect(second.status).toBe(200);
+      expect(second.body?.ok).toBe(true);
+      expect(second.body.cached).toBe(false);
+      expect(second.body.message).toContain('Nội dung cache nội bộ');
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
 });
 
 afterAll(() => {
@@ -1525,6 +1764,70 @@ describe('ECUS sync API', () => {
     expect(statuses).toContain('new');
     const newRow = res.body.preview.rows.find((row) => row.status === 'new');
     expect(newRow?.co_line_count).toBe(1);
+  });
+
+  it('áp dụng bộ lọc MST khi xem trước và chạy đồng bộ', async () => {
+    resetDb();
+    sqlMock.__resetMock();
+    const adminAgent = request.agent(app);
+    const loginRes = await adminAgent
+      .post('/api/auth/login')
+      .send({ username: 'admin', password: 'admin123' });
+    expect(loginRes.status).toBe(200);
+
+    await adminAgent.put('/api/import/ecus/config').send({
+      config: {
+        batchSize: 0,
+        includeTaxCodes: [],
+        excludeTaxCodes: [],
+        connection: {
+          server: 'MRHOC\\ECUSSQL2008',
+          database: 'ECUS5VNACCS',
+          user: 'sa',
+          password: '123456',
+        },
+      },
+    });
+
+    sqlMock.__setMockResult([
+      { So_tk: '100000000000', Ngay_dang_ky: '2025-08-01', MaSoThue: '0100109106', Ten_doanh_nghiep: 'DN 010', Loai_hinh: 'A11' },
+      { So_tk: '200000000000', Ngay_dang_ky: '2025-08-01', MaSoThue: '0100109107', Ten_doanh_nghiep: 'DN 011', Loai_hinh: 'A12' },
+      { So_tk: '300000000000', Ngay_dang_ky: '2025-08-01', MaSoThue: '0100109108', Ten_doanh_nghiep: 'DN 012', Loai_hinh: 'A31' },
+    ]);
+
+    const previewRes = await adminAgent.post('/api/import/ecus/preview').send({
+      from: '2025-08-01',
+      to: '2025-08-02',
+      includeTaxCodes: ['0100109106', '0100109107'],
+      excludeTaxCodes: ['0100109107'],
+    });
+
+    expect(previewRes.status).toBe(200);
+    expect(previewRes.body.preview.rows).toHaveLength(1);
+    expect(previewRes.body.preview.rows[0]).toMatchObject({ mst: '0100109106' });
+
+    sqlMock.__setMockResult([
+      { So_tk: '100000000000', Ngay_dang_ky: '2025-08-01', MaSoThue: '0100109106', Ten_doanh_nghiep: 'DN 010', Loai_hinh: 'A11' },
+      { So_tk: '200000000000', Ngay_dang_ky: '2025-08-01', MaSoThue: '0100109107', Ten_doanh_nghiep: 'DN 011', Loai_hinh: 'A12' },
+      { So_tk: '300000000000', Ngay_dang_ky: '2025-08-01', MaSoThue: '0100109108', Ten_doanh_nghiep: 'DN 012', Loai_hinh: 'A31' },
+    ]);
+
+    const runRes = await adminAgent.post('/api/import/ecus/run').send({
+      from: '2025-08-01',
+      to: '2025-08-02',
+      includeTaxCodes: ['0100109106', '0100109107'],
+      excludeTaxCodes: ['0100109107'],
+    });
+
+    expect(runRes.status).toBe(200);
+    expect(runRes.body.result.imported).toBe(1);
+    expect(runRes.body.result.includeTaxCodes).toEqual(['0100109106', '0100109107']);
+    expect(runRes.body.result.excludeTaxCodes).toEqual(['0100109107']);
+    const storedRows = JSON.parse(
+      getDb().prepare('SELECT value FROM kv_store WHERE key = ?').get('decl_rows_v1')?.value || '[]'
+    );
+    expect(storedRows).toHaveLength(1);
+    expect(storedRows[0]).toMatchObject({ mst: '0100109106' });
   });
 
   it('lưu cấu hình và chạy đồng bộ thành công', async () => {

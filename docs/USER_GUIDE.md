@@ -27,6 +27,7 @@ Hệ thống được triển khai cho Công ty TNHH Tiếp Vận Hoàng Kim (Go
 - Bảng dữ liệu đã bổ sung cột **C/O**. Hệ thống tự động ghi "Có" khi phát hiện tờ khai có mã biểu thuế khác các mã không ưu đãi (B01, B03, B30) dựa trên dữ liệu ECUS/XML/Excel, đồng thời cộng điểm KPI theo Rule v2 khi quy tắc bật.
 - Nếu màn hình hiển thị chật, bảng cho phép kéo ngang (horizontal scroll) để quan sát đủ cột.
 - Khu vực **Đồng bộ ECUS** hiển thị trạng thái backend và kết nối SQL Server. Nút **Kiểm tra kết nối** sẽ gọi API `/api/import/ecus/status` để thông báo cần khởi động dịch vụ trước khi đồng bộ thủ công.
+- Khi cấu hình đồng bộ, quản trị viên có thể giới hạn doanh nghiệp cần lấy dữ liệu bằng hai ô **“Chỉ đồng bộ các MST”** và **“Danh sách MST loại trừ”**. Nhập nhiều MST bằng cách phân tách dấu `;` hoặc xuống dòng, hệ thống sẽ tự chuẩn hóa và loại bỏ bản sao. Nếu danh sách “chỉ đồng bộ” có giá trị, hệ thống chỉ lấy đúng các MST đó; các MST trong danh sách loại trừ sẽ luôn bị bỏ qua. Khi bộ lọc hoạt động, thông báo kết quả và bảng xem trước sẽ kèm ghi chú để tránh nhầm lẫn.
 
 ### 2.2 Đại Lý HQ
 

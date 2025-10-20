@@ -188,6 +188,8 @@ const DEFAULT_ECUS_SYNC_CONFIG = {
   rangeDays: 1,
   preferMonthFirst: false,
   batchSize: 500,
+  includeTaxCodes: [],
+  excludeTaxCodes: [],
   connection: {
     server: 'Server',
     database: 'ECUS5VNACCS',
@@ -3092,6 +3094,21 @@ function storeAiCacheEntry(entry, { actor = 'system', ttlMs, maxEntries = AI_CAC
   return normalized;
 }
 
+function normalizeEcusTaxCodeList(input) {
+  if (!input && input !== 0) {
+    return [];
+  }
+  const values = Array.isArray(input) ? input : `${input}`.split(/[;\n\r,]+/u);
+  const set = new Set();
+  for (const value of values) {
+    const normalized = normalizeMST(value);
+    if (normalized) {
+      set.add(normalized);
+    }
+  }
+  return Array.from(set).sort();
+}
+
 function clearAiCache({ actor = 'system' } = {}) {
   setJSONValue(AI_CACHE_KEY, cloneJson(DEFAULT_AI_USAGE_CACHE), { actor, source: 'ai-cache-clear' });
   pushAuditLog({ actor, action: 'ai.cache.clear', detail: 'Xóa cache trợ lý AI' });
@@ -3478,6 +3495,75 @@ async function callZaiChat(provider, payload, { signal } = {}) {
   };
 }
 
+const OLLAMA_CACHE_DEFAULT_TTL_MS = 30 * 1000;
+const OLLAMA_CACHE_DEFAULT_LIMIT = 25;
+const OLLAMA_DEFAULT_RETRY_ATTEMPTS = 2;
+const OLLAMA_DEFAULT_RETRY_DELAY_MS = 250;
+const ollamaTransientCache = new Map();
+
+function computeOllamaCacheKey(provider, payload) {
+  const hasher = crypto.createHash('sha1');
+  hasher.update(`${provider.endpoint || ''}`);
+  hasher.update('|');
+  hasher.update(`${provider.model || ''}`);
+  hasher.update('|');
+  const messages = Array.isArray(payload?.messages) ? payload.messages : [];
+  const normalizedMessages = messages.map((entry) => ({
+    role: `${entry?.role || ''}`,
+    content: `${entry?.content || ''}`,
+  }));
+  hasher.update(JSON.stringify(normalizedMessages));
+  hasher.update('|');
+  hasher.update(`${payload?.temperature ?? ''}`);
+  hasher.update('|');
+  hasher.update(`${payload?.maxTokens ?? ''}`);
+  return hasher.digest('hex');
+}
+
+function pruneOllamaCache(now = Date.now(), limit = OLLAMA_CACHE_DEFAULT_LIMIT) {
+  for (const [key, entry] of ollamaTransientCache.entries()) {
+    if (!entry || typeof entry !== 'object') {
+      ollamaTransientCache.delete(key);
+      continue;
+    }
+    if (now - entry.timestamp > entry.ttlMs) {
+      ollamaTransientCache.delete(key);
+    }
+  }
+  while (ollamaTransientCache.size > Math.max(1, limit)) {
+    const oldestKey = ollamaTransientCache.keys().next().value;
+    if (!oldestKey) break;
+    ollamaTransientCache.delete(oldestKey);
+  }
+}
+
+function readOllamaCache(cacheKey, now = Date.now()) {
+  if (!cacheKey || !ollamaTransientCache.has(cacheKey)) {
+    return null;
+  }
+  const entry = ollamaTransientCache.get(cacheKey);
+  if (!entry || now - entry.timestamp > entry.ttlMs) {
+    ollamaTransientCache.delete(cacheKey);
+    return null;
+  }
+  return cloneJson(entry.result);
+}
+
+function writeOllamaCache(cacheKey, result, { ttlMs, limit }) {
+  if (!cacheKey) {
+    return;
+  }
+  const now = Date.now();
+  const normalizedTtl = Math.max(500, Number.isFinite(ttlMs) ? Number(ttlMs) : OLLAMA_CACHE_DEFAULT_TTL_MS);
+  const normalizedLimit = Math.max(1, Number.isFinite(limit) ? Number(limit) : OLLAMA_CACHE_DEFAULT_LIMIT);
+  ollamaTransientCache.set(cacheKey, {
+    result: cloneJson(result),
+    timestamp: now,
+    ttlMs: normalizedTtl,
+  });
+  pruneOllamaCache(now, normalizedLimit);
+}
+
 async function callOllamaChat(provider, payload, { signal } = {}) {
   const endpoint = `${provider.endpoint || 'http://localhost:11434'}`.trim() || 'http://localhost:11434';
   const model = `${provider.model || 'llama3.1:8b'}`.trim() || 'llama3.1:8b';
@@ -3490,32 +3576,74 @@ async function callOllamaChat(provider, payload, { signal } = {}) {
       num_predict: payload.maxTokens ?? provider.maxTokens ?? DEFAULT_AI_CONFIG.maxTokens,
     },
   };
-  const response = await fetch(`${endpoint.replace(/\/?$/, '')}/api/chat`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-    signal,
-  });
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Ollama trả về ${response.status}: ${truncateText(errorText, 200)}`);
+  const ttlMs = toPositiveInt(provider.cacheTtlMs, OLLAMA_CACHE_DEFAULT_TTL_MS);
+  const cacheLimit = toPositiveInt(provider.cacheLimit, OLLAMA_CACHE_DEFAULT_LIMIT);
+  const cacheKey = computeOllamaCacheKey(provider, payload);
+  pruneOllamaCache(Date.now(), cacheLimit);
+  const cached = readOllamaCache(cacheKey);
+  if (cached) {
+    return cached;
   }
-  const data = await response.json();
-  let message = '';
-  if (typeof data?.message?.content === 'string') {
-    message = data.message.content;
-  } else if (Array.isArray(data?.message)) {
-    message = data.message.map((part) => part?.content || '').join('\n').trim();
+  const attempts = Math.max(1, toPositiveInt(provider.retryAttempts, OLLAMA_DEFAULT_RETRY_ATTEMPTS));
+  const retryDelayMs = toPositiveInt(provider.retryDelayMs, OLLAMA_DEFAULT_RETRY_DELAY_MS);
+  let lastError;
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    if (signal?.aborted) {
+      const abortError = new Error('Yêu cầu Ollama đã bị hủy.');
+      abortError.name = 'AbortError';
+      throw abortError;
+    }
+    try {
+      const response = await fetch(`${endpoint.replace(/\/?$/, '')}/api/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+        signal,
+      });
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Ollama trả về ${response.status}: ${truncateText(errorText, 200)}`);
+      }
+      const data = await response.json();
+      let message = '';
+      if (typeof data?.message?.content === 'string') {
+        message = data.message.content;
+      } else if (Array.isArray(data?.message)) {
+        message = data.message.map((part) => part?.content || '').join('\n').trim();
+      }
+      const result = {
+        message,
+        usage: {
+          prompt_tokens: data?.prompt_eval_count,
+          completion_tokens: data?.eval_count,
+          total_tokens:
+            (toNonNegativeInt(data?.prompt_eval_count, 0) || 0) +
+            (toNonNegativeInt(data?.eval_count, 0) || 0),
+        },
+      };
+      writeOllamaCache(cacheKey, result, { ttlMs, limit: cacheLimit });
+      return result;
+    } catch (err) {
+      lastError = err;
+      const isLastAttempt = attempt === attempts - 1;
+      if (isLastAttempt) {
+        console.error('Gọi Ollama thất bại', {
+          endpoint,
+          model,
+          error: err?.message || err,
+        });
+        throw err;
+      }
+      console.warn('Thử lại kết nối Ollama', {
+        endpoint,
+        model,
+        attempt: attempt + 1,
+        error: err?.message || err,
+      });
+      await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
+    }
   }
-  return {
-    message,
-    usage: {
-      prompt_tokens: data?.prompt_eval_count,
-      completion_tokens: data?.eval_count,
-      total_tokens:
-        (toNonNegativeInt(data?.prompt_eval_count, 0) || 0) + (toNonNegativeInt(data?.eval_count, 0) || 0),
-    },
-  };
+  throw lastError || new Error('Không thể gọi Ollama.');
 }
 
 const DEFAULT_ECUS_MONITOR_ALERT_OPTIONS = Object.freeze({
@@ -5276,6 +5404,8 @@ function getEcusConfig() {
     ...stored,
     query,
   };
+  const includeTaxCodes = normalizeEcusTaxCodeList(stored?.includeTaxCodes ?? DEFAULT_ECUS_SYNC_CONFIG.includeTaxCodes);
+  const excludeTaxCodes = normalizeEcusTaxCodeList(stored?.excludeTaxCodes ?? DEFAULT_ECUS_SYNC_CONFIG.excludeTaxCodes);
   return {
     ...DEFAULT_ECUS_SYNC_CONFIG,
     ...sanitizedStored,
@@ -5286,6 +5416,8 @@ function getEcusConfig() {
     connection,
     columnMap,
     query,
+    includeTaxCodes,
+    excludeTaxCodes,
   };
 }
 
@@ -5353,6 +5485,16 @@ function saveEcusConfig(config, { preservePassword = false } = {}) {
 
   nextConfig.columnMap = normalizeEcusColumnMap(nextConfig.columnMap);
   nextConfig.query = normalizeEcusQueryInput(nextConfig.query);
+  const includeProvided = config && Object.prototype.hasOwnProperty.call(config, 'includeTaxCodes');
+  const excludeProvided = config && Object.prototype.hasOwnProperty.call(config, 'excludeTaxCodes');
+  const nextInclude = includeProvided
+    ? normalizeEcusTaxCodeList(config.includeTaxCodes)
+    : normalizeEcusTaxCodeList(nextConfig.includeTaxCodes);
+  const nextExclude = excludeProvided
+    ? normalizeEcusTaxCodeList(config.excludeTaxCodes)
+    : normalizeEcusTaxCodeList(nextConfig.excludeTaxCodes);
+  nextConfig.includeTaxCodes = nextInclude;
+  nextConfig.excludeTaxCodes = nextExclude;
 
   delete nextConfig.scheduleMode;
   delete nextConfig.scheduleValue;
@@ -5966,6 +6108,12 @@ function formatEcusConfigForClient(config) {
     ? true
     : connection.hasPassword === true || source.connection?.hasPassword === true;
   connection.password = '';
+  result.includeTaxCodes = Array.isArray(source.includeTaxCodes)
+    ? [...source.includeTaxCodes]
+    : [];
+  result.excludeTaxCodes = Array.isArray(source.excludeTaxCodes)
+    ? [...source.excludeTaxCodes]
+    : [];
   return result;
 }
 
@@ -8801,7 +8949,7 @@ function mergeDeclarationRow(existing, incoming) {
   return { row: merged, changed, changedFields: Array.from(changedFields) };
 }
 
-async function* fetchEcusDeclarations(range, config) {
+async function* fetchEcusDeclarations(range, config, options = {}) {
   const connectionConfig = buildSqlConnectionConfig(config);
   if (!connectionConfig.server || !connectionConfig.database) {
     throw new Error('Chưa cấu hình máy chủ hoặc cơ sở dữ liệu SQL Server');
@@ -8815,6 +8963,30 @@ async function* fetchEcusDeclarations(range, config) {
     return;
   }
   const baseQuery = queryText.replace(/;\s*$/u, '');
+  const includeFilterSet = options?.includeTaxCodesSet instanceof Set
+    ? new Set(Array.from(options.includeTaxCodesSet).map((value) => normalizeMST(value)).filter(Boolean))
+    : new Set();
+  const excludeFilterSet = options?.excludeTaxCodesSet instanceof Set
+    ? new Set(Array.from(options.excludeTaxCodesSet).map((value) => normalizeMST(value)).filter(Boolean))
+    : new Set();
+  const includeFilterList = Array.from(includeFilterSet);
+  const excludeFilterList = Array.from(excludeFilterSet);
+  const applyIncludeInSql = includeFilterList.length > 0 && includeFilterList.length <= 50;
+  const applyExcludeInSql = excludeFilterList.length > 0 && excludeFilterList.length <= 50;
+  let workingQuery = baseQuery;
+  if (applyIncludeInSql || applyExcludeInSql) {
+    const alias = 'filtered_source';
+    const clauses = [];
+    if (applyIncludeInSql) {
+      const placeholders = includeFilterList.map((_, idx) => `@__include${idx}`);
+      clauses.push(`${alias}.mst IN (${placeholders.join(', ')})`);
+    }
+    if (applyExcludeInSql) {
+      const placeholders = excludeFilterList.map((_, idx) => `@__exclude${idx}`);
+      clauses.push(`${alias}.mst NOT IN (${placeholders.join(', ')})`);
+    }
+    workingQuery = `SELECT * FROM (${baseQuery}) AS ${alias} WHERE ${clauses.join(' AND ')}`;
+  }
   const configuredBatchSize = Number(config?.batchSize);
   const defaultBatchSize = Number(DEFAULT_ECUS_SYNC_CONFIG.batchSize);
   const normalizedBatchSize =
@@ -8837,7 +9009,16 @@ async function* fetchEcusDeclarations(range, config) {
     }
   };
 
-  const lowerQuery = baseQuery.toLowerCase();
+  const attachFilterParameters = (request) => {
+    includeFilterList.forEach((mst, idx) => {
+      request.input(`__include${idx}`, sql.NVarChar, mst);
+    });
+    excludeFilterList.forEach((mst, idx) => {
+      request.input(`__exclude${idx}`, sql.NVarChar, mst);
+    });
+  };
+
+  const lowerQuery = workingQuery.toLowerCase();
   const containsOffset = /\boffset\s+\d+/u.test(lowerQuery) || /\bfetch\s+next\s+/u.test(lowerQuery);
   let supportsOffsetFetch = true;
   if (batchSize > 0 && !containsOffset) {
@@ -8850,7 +9031,8 @@ async function* fetchEcusDeclarations(range, config) {
     const request = pool.request();
     request.timeout = requestTimeout;
     attachRangeParameters(request);
-    const result = await request.query(baseQuery);
+    attachFilterParameters(request);
+    const result = await request.query(workingQuery);
     const rows = result?.recordset || [];
     if (rows.length > 0) {
       yield rows;
@@ -8860,8 +9042,8 @@ async function* fetchEcusDeclarations(range, config) {
 
   const hasOrderBy = /order\s+by/u.test(lowerQuery);
   const wrappedQuery = hasOrderBy
-    ? baseQuery
-    : `SELECT * FROM (${baseQuery}) AS base_query ORDER BY (SELECT NULL)`;
+    ? workingQuery
+    : `SELECT * FROM (${workingQuery}) AS base_query ORDER BY (SELECT NULL)`;
   const pagedQuery = `${wrappedQuery} OFFSET @__offset ROWS FETCH NEXT @__limit ROWS ONLY`;
 
   let offset = 0;
@@ -8869,6 +9051,7 @@ async function* fetchEcusDeclarations(range, config) {
     const request = pool.request();
     request.timeout = requestTimeout;
     attachRangeParameters(request);
+    attachFilterParameters(request);
     request.input('__offset', sql.Int, offset);
     request.input('__limit', sql.Int, batchSize);
     const result = await request.query(pagedQuery);
@@ -8946,14 +9129,46 @@ function buildEcusSyncContext(config) {
     hqAgencyMap: mapHqAgenciesByMST(),
     memberTeamMap: getMemberTeamMap(),
     config,
+    includeTaxCodesSet: new Set(Array.isArray(config?.includeTaxCodes) ? config.includeTaxCodes : []),
+    excludeTaxCodesSet: new Set(Array.isArray(config?.excludeTaxCodes) ? config.excludeTaxCodes : []),
   };
 }
 
-async function previewEcusSync(rangeInput, { limit = 50 } = {}) {
+function shouldSkipByMst(row, includeSet, excludeSet) {
+  const mst = normalizeMST(row?.mst);
+  if (includeSet instanceof Set && includeSet.size > 0) {
+    if (!mst || !includeSet.has(mst)) {
+      return true;
+    }
+  }
+  if (excludeSet instanceof Set && excludeSet.size > 0) {
+    if (mst && excludeSet.has(mst)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+async function previewEcusSync(rangeInput, { limit = 50, includeTaxCodes = null, excludeTaxCodes = null } = {}) {
   const config = getEcusConfig();
   const range = computeRangeWindow(config, rangeInput || {});
-  const context = buildEcusSyncContext(config);
-  const iterator = fetchEcusDeclarations(range, config);
+  const includeList = includeTaxCodes === null
+    ? Array.isArray(config.includeTaxCodes)
+      ? config.includeTaxCodes
+      : []
+    : normalizeEcusTaxCodeList(includeTaxCodes);
+  const excludeList = excludeTaxCodes === null
+    ? Array.isArray(config.excludeTaxCodes)
+      ? config.excludeTaxCodes
+      : []
+    : normalizeEcusTaxCodeList(excludeTaxCodes);
+  const includeSet = new Set(includeList);
+  const excludeSet = new Set(excludeList);
+  const context = buildEcusSyncContext({ ...config, includeTaxCodes: includeList, excludeTaxCodes: excludeList });
+  const iterator = fetchEcusDeclarations(range, config, {
+    includeTaxCodesSet: includeSet,
+    excludeTaxCodesSet: excludeSet,
+  });
   const existingRows = getDeclRows();
   const existingMap = new Map();
   for (const row of existingRows) {
@@ -8971,6 +9186,9 @@ async function previewEcusSync(rangeInput, { limit = 50 } = {}) {
     for (const raw of batch) {
       const mapped = mapEcusRow(raw, config, context);
       if (!mapped) continue;
+      if (shouldSkipByMst(mapped, includeSet, excludeSet)) {
+        continue;
+      }
       const key = getDeclarationKey(mapped);
       const existing = key ? existingMap.get(key) : null;
       const locked = !!existing?.reviewed;
@@ -8996,12 +9214,34 @@ async function previewEcusSync(rangeInput, { limit = 50 } = {}) {
   };
 }
 
-async function runEcusSync({ from, to, actor = 'system', reason = 'manual' } = {}) {
+async function runEcusSync({
+  from,
+  to,
+  actor = 'system',
+  reason = 'manual',
+  includeTaxCodes = null,
+  excludeTaxCodes = null,
+} = {}) {
   const config = getEcusConfig();
   const range = computeRangeWindow(config, { from, to });
   const syncReason = reason || 'manual';
-  const rawIterator = fetchEcusDeclarations(range, config);
-  const context = buildEcusSyncContext(config);
+  const includeList = includeTaxCodes === null
+    ? Array.isArray(config.includeTaxCodes)
+      ? config.includeTaxCodes
+      : []
+    : normalizeEcusTaxCodeList(includeTaxCodes);
+  const excludeList = excludeTaxCodes === null
+    ? Array.isArray(config.excludeTaxCodes)
+      ? config.excludeTaxCodes
+      : []
+    : normalizeEcusTaxCodeList(excludeTaxCodes);
+  const includeSet = new Set(includeList);
+  const excludeSet = new Set(excludeList);
+  const rawIterator = fetchEcusDeclarations(range, config, {
+    includeTaxCodesSet: includeSet,
+    excludeTaxCodesSet: excludeSet,
+  });
+  const context = buildEcusSyncContext({ ...config, includeTaxCodes: includeList, excludeTaxCodes: excludeList });
   const runAtIso = new Date().toISOString();
   const existingRows = getDeclRows();
   const existingCount = existingRows.length;
@@ -9027,6 +9267,9 @@ async function runEcusSync({ from, to, actor = 'system', reason = 'manual' } = {
       .map((row) => mapEcusRow(row, config, context))
       .filter((row) => row && row.so_tk && row.date);
     for (const row of mappedBatch) {
+      if (shouldSkipByMst(row, includeSet, excludeSet)) {
+        continue;
+      }
       const key = getDeclarationKey(row);
       if (!key) {
         continue;
@@ -9103,10 +9346,19 @@ async function runEcusSync({ from, to, actor = 'system', reason = 'manual' } = {
   const insertedEntries = Array.from(insertedMap.values());
   const lockedEntries = Array.from(lockedMap.values());
 
+  const filterNoticeParts = [];
+  if (includeSet.size > 0) {
+    filterNoticeParts.push(`chỉ MST: ${Array.from(includeSet).join(', ')}`);
+  }
+  if (excludeSet.size > 0) {
+    filterNoticeParts.push(`loại trừ MST: ${Array.from(excludeSet).join(', ')}`);
+  }
+  const filterSummary = filterNoticeParts.length ? ` | lọc ${filterNoticeParts.join('; ')}` : '';
+
   pushImportLog({
     kind: 'ecus-sync',
     actor,
-    message: `ECUS sync (${syncReason}) +${totalInserted} / cap nhat ${updatedExisting} / ${skipLabel} (${range.from || '...'} -> ${range.to || '...'}) - tong luu: ${totalStored}`,
+    message: `ECUS sync (${syncReason}) +${totalInserted} / cap nhat ${updatedExisting} / ${skipLabel} (${range.from || '...'} -> ${range.to || '...'}) - tong luu: ${totalStored}${filterSummary}`,
     summary: {
       reason: syncReason,
       range,
@@ -9116,6 +9368,8 @@ async function runEcusSync({ from, to, actor = 'system', reason = 'manual' } = {
       skipped: skippedExisting,
       locked: reviewLocked,
       stored: totalStored,
+      includeTaxCodes: Array.from(includeSet),
+      excludeTaxCodes: Array.from(excludeSet),
     },
     updatedDeclarations: updatedEntries,
     insertedDeclarations: insertedEntries,
@@ -9157,6 +9411,8 @@ async function runEcusSync({ from, to, actor = 'system', reason = 'manual' } = {
       updatedKeys,
       lockedDeclarations: lockedSummary,
       lockedKeys,
+      includeTaxCodes: Array.from(includeSet),
+      excludeTaxCodes: Array.from(excludeSet),
     },
   }, { preservePassword: true });
 
@@ -9164,7 +9420,7 @@ async function runEcusSync({ from, to, actor = 'system', reason = 'manual' } = {
     type: 'ecus.sync.completed',
     severity: 'info',
     title: 'Đồng bộ ECUS hoàn tất',
-    message:  `+${totalInserted} / cap nhat ${updatedExisting} / ${skipLabel} (tong ${totalStored})`, 
+    message:  `+${totalInserted} / cap nhat ${updatedExisting} / ${skipLabel} (tong ${totalStored})`,
     meta: {
       actor,
       reason: syncReason,
@@ -9176,6 +9432,8 @@ async function runEcusSync({ from, to, actor = 'system', reason = 'manual' } = {
       stored: totalStored,
       range,
       alerts: alertSummary,
+      includeTaxCodes: Array.from(includeSet),
+      excludeTaxCodes: Array.from(excludeSet),
     },
   });
 
@@ -9197,6 +9455,8 @@ async function runEcusSync({ from, to, actor = 'system', reason = 'manual' } = {
     updatedDeclarations: updatedSummary,
     insertedDeclarations: insertedSummary,
     lockedDeclarations: lockedSummary,
+    includeTaxCodes: Array.from(includeSet),
+    excludeTaxCodes: Array.from(excludeSet),
   };
 }
 
@@ -9507,7 +9767,11 @@ function logAiHttpsAddresses({ port, host, certPath }) {
 
 export {
   runEcusSyncWithErrorHandling,
+  previewEcusSync,
+  runEcusSync,
   getEcusConfig,
+  saveEcusConfig,
+  formatEcusConfigForClient,
   buildEcusSyncMonitorSnapshot,
   getEcusMonitorHistory,
   appendEcusMonitorHistory,
@@ -10833,8 +11097,9 @@ app.post('/api/ai/providers/test', async (req, res) => {
   if (denied) {
     return;
   }
+  const rawProvider = req.body?.provider;
+  let normalized = null;
   try {
-    const rawProvider = req.body?.provider;
     if (!rawProvider || typeof rawProvider !== 'object') {
       res.status(400).json({ ok: false, error: 'Thiếu thông tin nhà cung cấp.' });
       return;
@@ -10842,8 +11107,7 @@ app.post('/api/ai/providers/test', async (req, res) => {
     const config = getAiConfig();
     const baseProvider = config?.providers?.find((entry) => entry?.id === rawProvider.id) || {};
     const fallbackId = `${rawProvider.id || rawProvider.idBase || baseProvider.id || rawProvider.type || 'provider'}-test`;
-    const normalized =
-      normalizeAiProviderEntry({ ...baseProvider, ...rawProvider, id: fallbackId }, baseProvider) || null;
+    normalized = normalizeAiProviderEntry({ ...baseProvider, ...rawProvider, id: fallbackId }, baseProvider) || null;
     if (!normalized) {
       res.status(400).json({ ok: false, error: 'Không thể chuẩn hóa dữ liệu nhà cung cấp.' });
       return;
@@ -10852,13 +11116,15 @@ app.post('/api/ai/providers/test', async (req, res) => {
       res.status(400).json({ ok: false, error: 'Thiếu loại nhà cung cấp (type).' });
       return;
     }
+    const providerType = `${normalized.type}`.trim().toLowerCase();
+    const isOllamaProvider = providerType === 'ollama' || providerType === 'ollama-local';
     if (!normalized.apiKey) {
       const envKey = normalized.apiKeyEnv ? process.env[normalized.apiKeyEnv] : null;
       if (envKey) {
         normalized.apiKey = envKey;
       }
     }
-    if (!normalized.apiKey) {
+    if (!normalized.apiKey && !isOllamaProvider) {
       res.status(400).json({ ok: false, error: 'Vui lòng nhập khóa API trước khi kiểm thử.' });
       return;
     }
@@ -10888,6 +11154,11 @@ app.post('/api/ai/providers/test', async (req, res) => {
       usage: result?.usage || null,
     });
   } catch (err) {
+    console.error('Kiểm thử nhà cung cấp AI thất bại', {
+      providerId: normalized?.id || rawProvider?.id || 'unknown',
+      type: normalized?.type || rawProvider?.type || 'unknown',
+      error: err?.message || err,
+    });
     res.status(400).json({ ok: false, error: err?.message || 'Không thể kiểm thử nhà cung cấp AI.' });
   }
 });
@@ -11067,8 +11338,11 @@ app.post('/api/import/ecus/preview', async (req, res) => {
     return;
   }
   try {
-    const { from, to, limit } = req.body || {};
-    const preview = await previewEcusSync({ from, to }, { limit });
+    const { from, to, limit, includeTaxCodes, excludeTaxCodes } = req.body || {};
+    const preview = await previewEcusSync(
+      { from, to },
+      { limit, includeTaxCodes, excludeTaxCodes }
+    );
     res.json({
       ok: true,
       preview: {
@@ -11090,8 +11364,15 @@ app.post('/api/import/ecus/run', async (req, res) => {
   }
   try {
     const actor = resolveActor(req);
-    const { from, to } = req.body || {};
-    const result = await runEcusSyncWithErrorHandling({ from, to, actor, reason: 'manual' });
+    const { from, to, includeTaxCodes, excludeTaxCodes } = req.body || {};
+    const result = await runEcusSyncWithErrorHandling({
+      from,
+      to,
+      includeTaxCodes,
+      excludeTaxCodes,
+      actor,
+      reason: 'manual',
+    });
     res.json({ ok: true, result: { ...result, config: formatEcusConfigForClient(result.config) } });
   } catch (err) {
     res.status(500).json({ ok: false, error: err?.message || 'Không thể đồng bộ ECUS' });

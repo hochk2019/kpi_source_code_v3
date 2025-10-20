@@ -22,8 +22,8 @@ export function buildDefaultAiProviders(env = process.env) {
   ];
 
   return {
-    defaultProviderId: 'azure-openai',
-    fallbackProviderId: 'ollama-local',
+    defaultProviderId: 'ollama-local',
+    fallbackProviderId: 'azure-openai',
     providers,
   };
 }
