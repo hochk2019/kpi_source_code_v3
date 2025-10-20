@@ -3,6 +3,8 @@ import cors from 'cors';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import fs from 'node:fs/promises';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import https from 'node:https';
 import process from 'node:process';
 import Database from 'better-sqlite3';
@@ -48,6 +50,7 @@ const moduleUrl = typeof import.meta !== 'undefined' ? import.meta.url || '' : '
 const __dirname = moduleUrl.startsWith('file:')
   ? fileURLToPath(new URL('.', moduleUrl))
   : path.resolve(process.cwd(), 'server');
+const execFileAsync = promisify(execFile);
 function resolveDbFile(value) {
   if (!value) {
     return path.resolve(__dirname, 'data/storage.sqlite');
@@ -1384,6 +1387,8 @@ async function collectDatabaseStorageDetails() {
     lastModifiedAt: null,
     error: null,
     warningCode: null,
+    sqliteStats: null,
+    sqliteStatsError: null,
   };
 
   const diskInfo = {
@@ -1398,6 +1403,7 @@ async function collectDatabaseStorageDetails() {
     usedLabel: null,
     error: null,
     warningCode: null,
+    method: null,
   };
 
   if (databaseInfo.mode === 'memory') {
@@ -1415,35 +1421,175 @@ async function collectDatabaseStorageDetails() {
     databaseInfo.error = err?.message || String(err);
   }
 
+  try {
+    if (db && typeof db.pragma === 'function') {
+      const pageSize = Number(db.pragma('page_size', { simple: true }));
+      const pageCount = Number(db.pragma('page_count', { simple: true }));
+      const freelistCount = Number(db.pragma('freelist_count', { simple: true }));
+      if (Number.isFinite(pageSize) && Number.isFinite(pageCount) && pageCount >= 0) {
+        const freePages = Number.isFinite(freelistCount) && freelistCount > 0 ? freelistCount : 0;
+        const usedPages = Math.max(0, pageCount - freePages);
+        const usedBytes = usedPages * pageSize;
+        const freeBytes = freePages * pageSize;
+        databaseInfo.sqliteStats = {
+          pageSizeBytes: pageSize,
+          pageCount,
+          freelistCount: freePages,
+          usedBytes,
+          freeBytes,
+          usedPercent: pageCount > 0 ? (usedPages / pageCount) * 100 : null,
+          freePercent: pageCount > 0 ? (freePages / pageCount) * 100 : null,
+        };
+      }
+    }
+  } catch (err) {
+    databaseInfo.sqliteStatsError = err?.message || String(err);
+  }
+
+  const assignDiskMetrics = (metrics, { method, warningCode = null, error = null } = {}) => {
+    if (!metrics) {
+      return;
+    }
+    const { totalBytes, freeBytes, usedBytes } = metrics;
+    if (Number.isFinite(totalBytes) && totalBytes > 0) {
+      diskInfo.totalBytes = totalBytes;
+      diskInfo.totalLabel = formatBytes(totalBytes);
+    }
+    if (Number.isFinite(freeBytes) && freeBytes >= 0) {
+      diskInfo.freeBytes = freeBytes;
+      diskInfo.freeLabel = formatBytes(freeBytes);
+    }
+    if (Number.isFinite(usedBytes) && usedBytes >= 0) {
+      diskInfo.usedBytes = usedBytes;
+      diskInfo.usedLabel = formatBytes(usedBytes);
+    }
+    if (Number.isFinite(totalBytes) && totalBytes > 0) {
+      diskInfo.usedPercent = Number.isFinite(usedBytes) ? (usedBytes / totalBytes) * 100 : null;
+      diskInfo.freePercent = Number.isFinite(freeBytes) ? (freeBytes / totalBytes) * 100 : null;
+    }
+    diskInfo.method = method || null;
+    diskInfo.warningCode = warningCode || null;
+    diskInfo.error = error || null;
+  };
+
+  const readDiskUsageWithStatfs = async (targetPath) => {
+    if (typeof fs.statfs !== 'function') {
+      return null;
+    }
+    const fsStats = await fs.statfs(targetPath);
+    const blockSize = Number(fsStats?.bsize || fsStats?.frsize || 0);
+    const totalBlocks = Number(fsStats?.blocks || 0);
+    const freeBlocks = Number(fsStats?.bavail ?? fsStats?.bfree ?? 0);
+    if (!Number.isFinite(totalBlocks) || totalBlocks <= 0 || !Number.isFinite(blockSize) || blockSize <= 0) {
+      return null;
+    }
+    const totalBytes = totalBlocks * blockSize;
+    const freeBytes = Math.max(0, freeBlocks * blockSize);
+    const usedBytes = Math.max(0, totalBytes - freeBytes);
+    return { totalBytes, freeBytes, usedBytes };
+  };
+
+  const readDiskUsageWithDf = async (targetPath) => {
+    const result = await execFileAsync('df', ['-Pk', targetPath], { timeout: 5000 });
+    const output = result.stdout?.toString()?.trim();
+    if (!output) {
+      throw new Error('Không nhận được phản hồi từ lệnh df');
+    }
+    const lines = output.split(/\r?\n/);
+    const dataLine = lines[lines.length - 1];
+    if (!dataLine) {
+      throw new Error('Không thể phân tích kết quả df');
+    }
+    const parts = dataLine.trim().split(/\s+/);
+    if (parts.length < 4) {
+      throw new Error('Thiếu thông tin dung lượng từ df');
+    }
+    const totalBytes = Number(parts[1]) * 1024;
+    const usedBytes = Number(parts[2]) * 1024;
+    const freeBytes = Number(parts[3]) * 1024;
+    if (!Number.isFinite(totalBytes) || totalBytes <= 0) {
+      throw new Error('Kết quả df không hợp lệ');
+    }
+    return {
+      totalBytes,
+      usedBytes: Number.isFinite(usedBytes) && usedBytes >= 0 ? usedBytes : Math.max(0, totalBytes - freeBytes),
+      freeBytes: Number.isFinite(freeBytes) && freeBytes >= 0 ? freeBytes : Math.max(0, totalBytes - usedBytes),
+    };
+  };
+
+  const readDiskUsageWithPowerShell = async (targetPath) => {
+    const parsed = path.win32.parse(path.resolve(targetPath));
+    const driveName = parsed.root?.replace(/[:\\/]/g, '') || null;
+    if (!driveName) {
+      throw new Error('Không xác định được ổ đĩa Windows');
+    }
+    const psArgs = [
+      '-NoProfile',
+      '-Command',
+      `Get-PSDrive -Name '${driveName}' | Select-Object @{Name="Total";Expression={$_.Used + $_.Free}},Used,Free | ConvertTo-Json -Compress`,
+    ];
+    const result = await execFileAsync('powershell.exe', psArgs, { windowsHide: true, timeout: 5000 });
+    const raw = result.stdout?.toString()?.trim();
+    if (!raw) {
+      throw new Error('PowerShell không trả về dữ liệu');
+    }
+    const parsedJson = JSON.parse(raw);
+    const totalBytes = Number(parsedJson?.Total ?? parsedJson?.total ?? 0);
+    const usedBytes = Number(parsedJson?.Used ?? parsedJson?.used ?? 0);
+    const freeBytes = Number(parsedJson?.Free ?? parsedJson?.free ?? 0);
+    if (!Number.isFinite(totalBytes) || totalBytes <= 0) {
+      throw new Error('PowerShell trả về dữ liệu ổ đĩa không hợp lệ');
+    }
+    return {
+      totalBytes,
+      usedBytes: Number.isFinite(usedBytes) && usedBytes >= 0 ? usedBytes : Math.max(0, totalBytes - freeBytes),
+      freeBytes: Number.isFinite(freeBytes) && freeBytes >= 0 ? freeBytes : Math.max(0, totalBytes - usedBytes),
+    };
+  };
+
   if (diskInfo.path) {
-    if (typeof fs.statfs === 'function') {
+    let metrics = null;
+    let warningCode = null;
+    let error = null;
+    if (!metrics) {
       try {
-        const fsStats = await fs.statfs(diskInfo.path);
-        const blockSize = Number(fsStats?.bsize || fsStats?.frsize || 0);
-        const totalBlocks = Number(fsStats?.blocks || 0);
-        const freeBlocks = Number(fsStats?.bavail ?? fsStats?.bfree ?? 0);
-        if (Number.isFinite(totalBlocks) && totalBlocks > 0 && Number.isFinite(blockSize) && blockSize > 0) {
-          const totalBytes = totalBlocks * blockSize;
-          const freeBytes = freeBlocks * blockSize;
-          const usedBytes = Math.max(0, totalBytes - freeBytes);
-          const usedPercent = totalBytes > 0 ? (usedBytes / totalBytes) * 100 : null;
-          const freePercent = totalBytes > 0 ? (freeBytes / totalBytes) * 100 : null;
-          diskInfo.totalBytes = totalBytes;
-          diskInfo.freeBytes = freeBytes;
-          diskInfo.usedBytes = usedBytes;
-          diskInfo.usedPercent = Number.isFinite(usedPercent) ? usedPercent : null;
-          diskInfo.freePercent = Number.isFinite(freePercent) ? freePercent : null;
-          diskInfo.totalLabel = formatBytes(totalBytes);
-          diskInfo.freeLabel = formatBytes(freeBytes);
-          diskInfo.usedLabel = formatBytes(usedBytes);
+        metrics = await readDiskUsageWithStatfs(diskInfo.path);
+        if (metrics) {
+          assignDiskMetrics(metrics, { method: 'statfs' });
         }
       } catch (err) {
-        diskInfo.error = err?.message || String(err);
-        diskInfo.warningCode = 'statfs_error';
+        warningCode = 'statfs_error';
+        error = err?.message || String(err);
       }
-    } else {
-      diskInfo.error = 'statfs_not_supported';
-      diskInfo.warningCode = 'statfs_not_supported';
+    }
+    if (!metrics && process.platform === 'win32') {
+      try {
+        metrics = await readDiskUsageWithPowerShell(diskInfo.path);
+        if (metrics) {
+          assignDiskMetrics(metrics, { method: 'powershell' });
+        }
+      } catch (err) {
+        warningCode = 'windows_ps_error';
+        error = err?.message || String(err);
+      }
+    }
+    if (!metrics && process.platform !== 'win32') {
+      try {
+        metrics = await readDiskUsageWithDf(diskInfo.path);
+        if (metrics) {
+          assignDiskMetrics(metrics, { method: 'df' });
+        }
+      } catch (err) {
+        warningCode = 'disk_command_error';
+        error = err?.message || String(err);
+      }
+    }
+    if (!metrics) {
+      diskInfo.warningCode = warningCode || 'statfs_not_supported';
+      diskInfo.error = error || 'Không thể xác định dung lượng ổ đĩa từ hệ thống.';
+      if (diskInfo.warningCode === 'statfs_not_supported') {
+        diskInfo.error = 'statfs_not_supported';
+      }
     }
   }
 

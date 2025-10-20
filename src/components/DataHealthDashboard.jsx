@@ -146,6 +146,32 @@ const policyInputClass =
 const policyCheckboxClass =
   'h-4 w-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500 dark:border-slate-600 dark:bg-slate-800 disabled:cursor-not-allowed disabled:border-gray-300 disabled:bg-gray-100';
 
+function describeDiskWarning(info) {
+  if (!info) return '';
+  if (info.warningCode === 'statfs_not_supported') {
+    return 'Không thể thống kê dung lượng ổ đĩa trên nền tảng hiện tại.';
+  }
+  if (info.warningCode === 'windows_ps_error') {
+    return info.error
+      ? `Không thể đọc dung lượng ổ đĩa từ PowerShell: ${info.error}`
+      : 'PowerShell không trả về dung lượng ổ đĩa.';
+  }
+  if (info.warningCode === 'disk_command_error') {
+    return info.error
+      ? `Không thể chạy lệnh kiểm tra dung lượng ổ đĩa: ${info.error}`
+      : 'Không thể chạy lệnh kiểm tra dung lượng ổ đĩa.';
+  }
+  if (info.warningCode === 'statfs_error') {
+    return info.error
+      ? `Không thể lấy thông tin dung lượng ổ đĩa: ${info.error}`
+      : 'Không thể lấy thông tin dung lượng ổ đĩa từ hệ điều hành.';
+  }
+  if (info.error && info.error !== 'statfs_not_supported') {
+    return `Lỗi đọc dung lượng ổ đĩa: ${info.error}`;
+  }
+  return '';
+}
+
 export default function DataHealthDashboard({ currentUser, canManage = false }) {
   const [liveNotifications, setLiveNotifications] = useState([]);
   const [historyNotifications, setHistoryNotifications] = useState([]);
@@ -665,11 +691,23 @@ export default function DataHealthDashboard({ currentUser, canManage = false }) 
 
   const databaseSizeLabel = databaseStorage.sizeLabel || formatBytes(databaseStorage.sizeBytes);
   const databaseUpdatedAt = databaseStorage.lastModifiedAt ? formatDate(databaseStorage.lastModifiedAt) : 'Không rõ';
+  const sqliteStats = databaseStorage.sqliteStats || {};
+  const sqliteStatsAvailable = typeof sqliteStats.pageCount === 'number' && sqliteStats.pageCount >= 0;
+  const sqliteTotalPages = sqliteStatsAvailable ? sqliteStats.pageCount : null;
+  const sqliteFreePages = sqliteStatsAvailable ? sqliteStats.freelistCount ?? 0 : null;
+  const sqliteUsedPages = sqliteStatsAvailable && sqliteTotalPages !== null ? Math.max(0, sqliteTotalPages - (sqliteFreePages ?? 0)) : null;
+  const sqlitePageSizeLabel = Number.isFinite(sqliteStats.pageSizeBytes) ? formatBytes(sqliteStats.pageSizeBytes) : '—';
+  const sqliteUsedLabel = Number.isFinite(sqliteStats.usedBytes) ? formatBytes(sqliteStats.usedBytes) : '—';
+  const sqliteHasFreeBytes = Number.isFinite(sqliteStats.freeBytes);
+  const sqliteFreeLabel = sqliteHasFreeBytes ? formatBytes(sqliteStats.freeBytes) : '—';
+  const sqliteUsedPercentLabel = Number.isFinite(sqliteStats.usedPercent) ? formatPercent(sqliteStats.usedPercent) : null;
+  const sqliteFreePercentLabel = Number.isFinite(sqliteStats.freePercent) ? formatPercent(sqliteStats.freePercent) : null;
   const diskUsedPercent = typeof diskInfo.usedPercent === 'number' ? Math.max(0, Math.min(100, diskInfo.usedPercent)) : null;
   const diskUsedLabel = diskInfo.usedLabel || formatBytes(diskInfo.usedBytes);
   const diskFreeLabel = diskInfo.freeLabel || formatBytes(diskInfo.freeBytes);
   const diskTotalLabel = diskInfo.totalLabel || formatBytes(diskInfo.totalBytes);
   const diskSeverity = severityStyles[storageHealth.severity] || severityStyles.info;
+  const diskWarningMessage = describeDiskWarning(diskInfo);
 
   return (
     <div className="space-y-4">
@@ -853,9 +891,41 @@ export default function DataHealthDashboard({ currentUser, canManage = false }) 
               <dt className="font-medium">Cập nhật file</dt>
               <dd className="text-right text-gray-700 dark:text-gray-100">{databaseUpdatedAt}</dd>
             </div>
+            {sqliteStatsAvailable && (
+              <>
+                <div className="flex items-center justify-between gap-3">
+                  <dt className="font-medium">Trang sử dụng</dt>
+                  <dd className="text-right text-gray-700 dark:text-gray-100">
+                    {sqliteUsedPages ?? '—'} / {sqliteTotalPages ?? '—'}
+                    {sqliteUsedPercentLabel ? ` • ${sqliteUsedPercentLabel}` : ''}
+                  </dd>
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <dt className="font-medium">Trang trống</dt>
+                  <dd className="text-right text-gray-700 dark:text-gray-100">
+                    {sqliteFreePages ?? 0}
+                    {sqliteFreePercentLabel ? ` • ${sqliteFreePercentLabel}` : ''}
+                    {sqliteHasFreeBytes ? ` (${sqliteFreeLabel})` : ''}
+                  </dd>
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <dt className="font-medium">Kích thước trang</dt>
+                  <dd className="text-right text-gray-700 dark:text-gray-100">{sqlitePageSizeLabel}</dd>
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <dt className="font-medium">Dung lượng thực dùng</dt>
+                  <dd className="text-right text-gray-700 dark:text-gray-100">{sqliteUsedLabel}</dd>
+                </div>
+              </>
+            )}
             {databaseStorage.warningCode === 'memory_db' && (
               <div className="rounded border border-amber-200 bg-amber-50 p-2 text-[11px] text-amber-700 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-200">
                 Hệ thống đang chạy CSDL ở chế độ bộ nhớ. Hãy cấu hình file thực tế để sao lưu được dữ liệu.
+              </div>
+            )}
+            {databaseStorage.sqliteStatsError && (
+              <div className="rounded border border-amber-200 bg-amber-50 p-2 text-[11px] text-amber-700 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-200">
+                Không thể thống kê trang dữ liệu SQLite: {databaseStorage.sqliteStatsError}
               </div>
             )}
           </dl>
@@ -874,12 +944,13 @@ export default function DataHealthDashboard({ currentUser, canManage = false }) 
               <span>Còn trống: {diskFreeLabel}</span>
               <span>Tổng: {diskTotalLabel}</span>
             </div>
-            {diskInfo.error && (
-              <div className="mt-2 text-[11px] text-amber-700 dark:text-amber-200">
-                {diskInfo.warningCode === 'statfs_not_supported'
-                  ? 'Không thể thống kê dung lượng ổ đĩa trên nền tảng hiện tại.'
-                  : `Lỗi đọc dung lượng ổ đĩa: ${diskInfo.error}`}
+            {diskInfo.method && (
+              <div className="mt-2 text-[11px] text-gray-500 dark:text-gray-400">
+                Nguồn số liệu: {diskInfo.method === 'statfs' ? 'Hệ điều hành (statfs)' : diskInfo.method === 'df' ? 'Lệnh df' : 'PowerShell'}
               </div>
+            )}
+            {diskWarningMessage && (
+              <div className="mt-2 text-[11px] text-amber-700 dark:text-amber-200">{diskWarningMessage}</div>
             )}
           </div>
         </div>
