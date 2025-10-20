@@ -98,7 +98,14 @@ function createEmptyDraft() {
 }
 
 function readDraftsFromStore() {
-  return getHQAgencies().map(createDraftFromStore);
+  try {
+    const rows = getHQAgencies();
+    const drafts = Array.isArray(rows) ? rows.map(createDraftFromStore) : [];
+    return { drafts, error: null };
+  } catch (err) {
+    console.error("Không thể đọc danh sách Đại lý HQ", err);
+    return { drafts: [], error: err instanceof Error ? err : new Error(String(err)) };
+  }
 }
 
 function mergeRows(current, incoming) {
@@ -218,12 +225,17 @@ function formatHistoryTimestamp(value) {
 
 export default function HQAgencyManager({ canEdit = true, currentUser = null }) {
   const initialDraftsRef = useRef(null);
+  const initialErrorRef = useRef(null);
   if (initialDraftsRef.current === null) {
-    initialDraftsRef.current = readDraftsFromStore();
+    const { drafts, error } = readDraftsFromStore();
+    initialDraftsRef.current = drafts;
+    initialErrorRef.current = error;
   }
 
-  const [baseline, setBaseline] = useState(() => initialDraftsRef.current.map(cloneDraft));
-  const [rows, setRows] = useState(() => initialDraftsRef.current.map(cloneDraft));
+  const initialDrafts = Array.isArray(initialDraftsRef.current) ? initialDraftsRef.current : [];
+
+  const [baseline, setBaseline] = useState(() => initialDrafts.map(cloneDraft));
+  const [rows, setRows] = useState(() => initialDrafts.map(cloneDraft));
   const [search, setSearch] = useState("");
   const [agencyFilter, setAgencyFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -232,6 +244,7 @@ export default function HQAgencyManager({ canEdit = true, currentUser = null }) 
   const [selectedFile, setSelectedFile] = useState("");
   const [historyStamp, setHistoryStamp] = useState(() => Date.now());
   const [openHistory, setOpenHistory] = useState([]);
+  const [loadError, setLoadError] = useState(() => (initialErrorRef.current ? "Không thể tải danh sách Đại lý HQ. Vui lòng thử lại." : null));
   const fileRef = useRef(null);
 
   const actor = currentUser?.username || "guest";
@@ -278,14 +291,15 @@ export default function HQAgencyManager({ canEdit = true, currentUser = null }) 
   }, [computeHasDirty]);
 
   const loadFromStore = useCallback(() => {
-    const sanitized = readDraftsFromStore();
-    const baselineDrafts = sanitized.map(cloneDraft);
-    const workingDrafts = sanitized.map(cloneDraft);
-    initialDraftsRef.current = sanitized;
+    const { drafts, error } = readDraftsFromStore();
+    const baselineDrafts = drafts.map(cloneDraft);
+    const workingDrafts = drafts.map(cloneDraft);
+    initialDraftsRef.current = drafts;
     setBaseline(baselineDrafts);
     setRows(workingDrafts);
     setDirty(false);
     setPage(1);
+    setLoadError(error ? "Không thể tải danh sách Đại lý HQ. Vui lòng thử lại." : null);
   }, []);
 
   const refreshHistory = useCallback(async () => {
@@ -660,6 +674,12 @@ export default function HQAgencyManager({ canEdit = true, currentUser = null }) 
       {isReadOnly && (
         <div className="rounded border border-amber-300 bg-amber-50 p-3 text-sm text-amber-700">
           Bạn đang ở chế độ chỉ xem. Đăng nhập bằng tài khoản quản trị để thêm hoặc chỉnh sửa danh sách Đại lý HQ.
+        </div>
+      )}
+
+      {loadError && (
+        <div className="rounded border border-red-300 bg-red-50 p-3 text-sm text-red-700">
+          {loadError}
         </div>
       )}
 

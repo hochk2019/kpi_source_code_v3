@@ -179,7 +179,7 @@ function StaffCombobox({
   const selected = useMemo(() => options.find((option) => option.id === value) || null, [options, value]);
   const buttonLabel = selected
     ? `${selected.name}${selected.teamName ? ` – ${selected.teamName}` : ""}`
-    : "Chọn nhân viên từ danh sách KPI";
+    : "Chọn nhân viên";
 
   const groupedOptions = useMemo(() => {
     const map = new Map();
@@ -680,7 +680,7 @@ export default function AccountManager({ currentUser }) {
       {
         key: "staff",
         label: "Nhân viên KPI",
-        width: "280px",
+        width: "220px",
         cell: (account) => {
           const rosterMissing = staffOptions.length === 0;
           const inRoster = account.memberId ? staffLookup.get(account.memberId) : null;
