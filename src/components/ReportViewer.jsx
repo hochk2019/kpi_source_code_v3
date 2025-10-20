@@ -804,7 +804,7 @@ function AdjustmentDigestCard({ report }) {
 }
 
 function StaffDetailCard({ staff, canExport, onExport, exporting, visibleColumns = {} }) {
-  const { stats, rows } = staff;
+  const { stats, rows, adjustmentSummary } = staff;
   const [mode, setMode] = useState("summary");
   const aggregated = useMemo(
     () => aggregateByCompany(rows, { includeStaff: false, includeTeam: false }),
@@ -816,6 +816,34 @@ function StaffDetailCard({ staff, canExport, onExport, exporting, visibleColumns
   const showCoLines = visibleColumns.coLines !== false;
   const showLicenseCodes = visibleColumns.licenseCodes !== false;
   const licenseSummary = (stats.licenseCodes || []).join(", ");
+  const adjustmentTotals = useMemo(
+    () => toAdjustmentTotalsArray(adjustmentSummary || {}),
+    [adjustmentSummary]
+  );
+  const totalAdjustmentPoints = useMemo(
+    () =>
+      adjustmentTotals.reduce((sum, item) => {
+        const value = Number(item?.points || 0);
+        return Number.isFinite(value) ? sum + value : sum;
+      }, 0),
+    [adjustmentTotals]
+  );
+  const totalAdjustmentEntries = useMemo(
+    () => rows.filter((row) => row?.isAdjustment).length,
+    [rows]
+  );
+  const adjustmentTooltip = useMemo(() => {
+    const lines = adjustmentTotals
+      .filter((item) => Number(item?.points))
+      .map((item) => `${item.label}: ${formatDecimal(item.points)}`);
+    if (!lines.length) {
+      return "Chưa có điều chỉnh";
+    }
+    return lines.join("\n");
+  }, [adjustmentTotals]);
+  const adjustmentSubtitle = totalAdjustmentEntries
+    ? `${formatInt(totalAdjustmentEntries)} lượt cộng/trừ`
+    : "Chưa có điều chỉnh";
   const infoLineParts = [
     `${formatInt(stats.decls)} tờ khai`,
     `Nhập: ${formatInt(stats.import)} • Xuất: ${formatInt(stats.export)}`,
@@ -881,7 +909,7 @@ function StaffDetailCard({ staff, canExport, onExport, exporting, visibleColumns
         </div>
       </header>
 
-      <div className="grid gap-2 text-sm sm:grid-cols-4 lg:grid-cols-6">
+      <div className="grid gap-2 text-sm sm:grid-cols-4 lg:grid-cols-7">
         <div className="rounded border bg-gray-50 px-3 py-2">
           <div className="text-xs uppercase text-gray-500">Mục hàng</div>
           <div className="text-base font-semibold text-gray-900">{formatInt(stats.items)}</div>
@@ -919,6 +947,11 @@ function StaffDetailCard({ staff, canExport, onExport, exporting, visibleColumns
             </div>
           </div>
         ) : null}
+        <div className="rounded border bg-gray-50 px-3 py-2" title={adjustmentTooltip}>
+          <div className="text-xs uppercase text-gray-500">Điểm KPI +/-</div>
+          <div className="text-base font-semibold text-gray-900">{formatDecimal(totalAdjustmentPoints)}</div>
+          <div className="mt-1 text-[11px] text-gray-500">{adjustmentSubtitle}</div>
+        </div>
       </div>
 
       {mode === "summary" ? (
@@ -1002,7 +1035,7 @@ function StaffDetailCard({ staff, canExport, onExport, exporting, visibleColumns
 }
 
 function TeamDetailCard({ team, canExport, onExport, exporting, visibleColumns = {}, memberSortKey = "kpi" }) {
-  const { stats, members, rows } = team;
+  const { stats, members, rows, adjustmentSummary } = team;
   const [mode, setMode] = useState("summary");
   const aggregated = useMemo(
     () => aggregateByCompany(rows, { includeStaff: true, includeTeam: false }),
@@ -1014,6 +1047,34 @@ function TeamDetailCard({ team, canExport, onExport, exporting, visibleColumns =
   const showCoLines = visibleColumns.coLines !== false;
   const showLicenseCodes = visibleColumns.licenseCodes !== false;
   const licenseSummary = (stats.licenseCodes || []).join(", ");
+  const adjustmentTotals = useMemo(
+    () => toAdjustmentTotalsArray(adjustmentSummary || {}),
+    [adjustmentSummary]
+  );
+  const totalAdjustmentPoints = useMemo(
+    () =>
+      adjustmentTotals.reduce((sum, item) => {
+        const value = Number(item?.points || 0);
+        return Number.isFinite(value) ? sum + value : sum;
+      }, 0),
+    [adjustmentTotals]
+  );
+  const totalAdjustmentEntries = useMemo(
+    () => rows.filter((row) => row?.isAdjustment).length,
+    [rows]
+  );
+  const adjustmentTooltip = useMemo(() => {
+    const lines = adjustmentTotals
+      .filter((item) => Number(item?.points))
+      .map((item) => `${item.label}: ${formatDecimal(item.points)}`);
+    if (!lines.length) {
+      return "Chưa có điều chỉnh";
+    }
+    return lines.join("\n");
+  }, [adjustmentTotals]);
+  const adjustmentSubtitle = totalAdjustmentEntries
+    ? `${formatInt(totalAdjustmentEntries)} lượt cộng/trừ`
+    : "Chưa có điều chỉnh";
   const infoLineParts = [
     `${formatInt(stats.decls)} tờ khai`,
     `Nhập: ${formatInt(stats.import)} • Xuất: ${formatInt(stats.export)}`,
@@ -1089,7 +1150,7 @@ function TeamDetailCard({ team, canExport, onExport, exporting, visibleColumns =
         </div>
       </header>
 
-      <div className="grid gap-2 text-sm sm:grid-cols-4 lg:grid-cols-6">
+      <div className="grid gap-2 text-sm sm:grid-cols-4 lg:grid-cols-7">
         <div className="rounded border bg-gray-50 px-3 py-2">
           <div className="text-xs uppercase text-gray-500">Mục hàng</div>
           <div className="text-base font-semibold text-gray-900">{formatInt(stats.items)}</div>
@@ -1127,6 +1188,11 @@ function TeamDetailCard({ team, canExport, onExport, exporting, visibleColumns =
             </div>
           </div>
         ) : null}
+        <div className="rounded border bg-gray-50 px-3 py-2" title={adjustmentTooltip}>
+          <div className="text-xs uppercase text-gray-500">Điểm KPI +/-</div>
+          <div className="text-base font-semibold text-gray-900">{formatDecimal(totalAdjustmentPoints)}</div>
+          <div className="mt-1 text-[11px] text-gray-500">{adjustmentSubtitle}</div>
+        </div>
       </div>
 
       {mode === "summary" ? (
