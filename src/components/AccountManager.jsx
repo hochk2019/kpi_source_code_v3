@@ -37,33 +37,131 @@ import {
 } from "@/components/ui/command.jsx";
 import { Check, ChevronsUpDown, CircleX } from "lucide-react";
 
-const PERMISSION_LABELS = {
-  importEdit: "Import Data – chỉnh sửa & lưu",
-  mstEdit: "Gán MST – chỉnh sửa",
-  rulesEdit: "Quy tắc KPI – chỉnh sửa",
-  teamsEdit: "Quản lý tổ đội – chỉnh sửa",
-  syncManage: "Đồng bộ ECUS – cấu hình & chạy tay",
-  reportsExport: "Báo cáo KPI – xuất file",
-  alertsManage: "Quản lý cảnh báo tờ khai thiếu thông tin",
-  auditView: "Xem nhật ký hệ thống",
-  accountManage: "Quản lý tài khoản",
-  adjustSubmit: "Điểm KPI +/- thêm – gửi đề xuất",
-  adjustApprove: "Điểm KPI +/- thêm – duyệt đề xuất",
-  aiAssistUse: "Trợ lý AI – sử dụng",
-  aiAssistManage: "Trợ lý AI – cấu hình",
-};
+const PERMISSION_DETAILS = Object.freeze({
+  importEdit: {
+    label: "Import Data – chỉnh sửa & lưu",
+    description: "Cho phép nhập file ECUS, hợp nhất và ghi dữ liệu vào kho KPI.",
+    category: "Nhập liệu & đồng bộ",
+  },
+  mstEdit: {
+    label: "Gán MST – chỉnh sửa",
+    description: "Cập nhật mã số thuế, phân công nhân viên và đại lý hải quan phụ trách.",
+    category: "Tổ chức & đối tác",
+  },
+  rulesEdit: {
+    label: "Quy tắc KPI – chỉnh sửa",
+    description: "Thay đổi công thức, trọng số và điều kiện tính điểm KPI.",
+    category: "Cấu hình & kiểm soát",
+  },
+  teamsEdit: {
+    label: "Quản lý tổ đội – chỉnh sửa",
+    description: "Điều chỉnh cơ cấu tổ đội, phân bổ nhân viên và chỉ tiêu.",
+    category: "Tổ chức & đối tác",
+  },
+  syncManage: {
+    label: "Đồng bộ ECUS – cấu hình & chạy tay",
+    description: "Thiết lập lịch đồng bộ và chạy đồng bộ ECUS thủ công khi cần.",
+    category: "Nhập liệu & đồng bộ",
+  },
+  reportsExport: {
+    label: "Báo cáo KPI – xuất file",
+    description: "Tải báo cáo KPI ra Excel và tải nhanh biểu đồ tổng hợp.",
+    category: "Báo cáo & giám sát",
+  },
+  alertsManage: {
+    label: "Quản lý cảnh báo thiếu thông tin",
+    description: "Xử lý cảnh báo tờ khai thiếu dữ liệu, ghi nhận trạng thái hoàn tất.",
+    category: "Giám sát dữ liệu",
+  },
+  auditView: {
+    label: "Xem nhật ký hệ thống",
+    description: "Tra cứu lịch sử thao tác và truy vết hoạt động người dùng.",
+    category: "Báo cáo & giám sát",
+  },
+  accountManage: {
+    label: "Quản lý tài khoản",
+    description: "Tạo, khóa, đặt lại mật khẩu và phân quyền người dùng.",
+    category: "Quản trị hệ thống",
+  },
+  adjustSubmit: {
+    label: "Điểm KPI +/- thêm – gửi đề xuất",
+    description: "Tạo phiếu cộng/trừ điểm KPI bổ sung cho từng nhân viên.",
+    category: "Điều chỉnh KPI",
+  },
+  adjustApprove: {
+    label: "Điểm KPI +/- thêm – duyệt đề xuất",
+    description: "Phê duyệt hoặc từ chối các phiếu điều chỉnh KPI bổ sung.",
+    category: "Điều chỉnh KPI",
+  },
+  aiAssistUse: {
+    label: "Trợ lý AI – sử dụng",
+    description: "Trao đổi với trợ lý AI nội bộ và xem lịch sử hội thoại.",
+    category: "Trợ lý AI",
+  },
+  aiAssistManage: {
+    label: "Trợ lý AI – cấu hình",
+    description: "Quản lý nguồn tri thức, prompt và quyền truy cập trợ lý AI.",
+    category: "Trợ lý AI",
+  },
+  dataHealthView: {
+    label: "Sức khỏe dữ liệu – xem dashboard",
+    description: "Theo dõi dữ liệu trùng, cảnh báo và chất lượng đồng bộ.",
+    category: "Giám sát dữ liệu",
+  },
+  dataHealthManage: {
+    label: "Sức khỏe dữ liệu – cấu hình & khóa nguồn",
+    description: "Chỉnh ngưỡng cảnh báo, khóa/mở khóa nguồn và lưu chính sách.",
+    category: "Giám sát dữ liệu",
+  },
+});
+
+const PERMISSION_CATEGORY_ORDER = Object.freeze([
+  "Nhập liệu & đồng bộ",
+  "Tổ chức & đối tác",
+  "Giám sát dữ liệu",
+  "Cấu hình & kiểm soát",
+  "Báo cáo & giám sát",
+  "Điều chỉnh KPI",
+  "Trợ lý AI",
+  "Quản trị hệ thống",
+  "Khác",
+]);
 
 const CONTROL_CLASS =
   "rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] px-3 py-2 text-sm text-[color:var(--ds-text-primary)] shadow-sm focus:outline-none focus:ring-2 focus:ring-[color:var(--ds-accent-ring)] focus:ring-offset-0";
 
-function PermissionCheckbox({ checked, onChange, label, disabled = false }) {
-  const tone = disabled
-    ? "text-[color:var(--ds-text-muted)] opacity-70"
-    : "text-[color:var(--ds-text-secondary)]";
+function PermissionCheckbox({
+  checked,
+  onChange,
+  label,
+  description,
+  disabled = false,
+  compact = false,
+}) {
+  const baseClass = [
+    "flex min-h-[48px] gap-3 rounded-lg border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-subtle)]/60 px-3 py-2 transition",
+    disabled
+      ? "cursor-not-allowed opacity-60"
+      : "hover:border-[color:var(--ds-accent)] hover:bg-[color:var(--ds-surface-card)]",
+  ].join(" ");
+  const labelClass = compact
+    ? "text-sm font-medium leading-snug text-[color:var(--ds-text-primary)]"
+    : "text-sm font-semibold leading-snug text-[color:var(--ds-text-primary)]";
   return (
-    <label className={`flex items-center gap-2 text-sm ${tone}`}>
-      <input type="checkbox" checked={!!checked} onChange={(e) => onChange(e.target.checked)} disabled={disabled} />
-      <span>{label}</span>
+    <label className={baseClass} title={label}>
+      <input
+        type="checkbox"
+        checked={!!checked}
+        onChange={(event) => onChange(event.target.checked)}
+        disabled={disabled}
+        className="mt-1 h-4 w-4 shrink-0 accent-[color:var(--ds-accent)]"
+      />
+      <span className="flex min-w-0 flex-col">
+        <span className={labelClass}>{label}</span>
+        {!compact && description && (
+          <span className="text-xs leading-4 text-[color:var(--ds-text-secondary)]">{description}</span>
+        )}
+      </span>
     </label>
   );
 }
@@ -81,7 +179,7 @@ function StaffCombobox({
   const selected = useMemo(() => options.find((option) => option.id === value) || null, [options, value]);
   const buttonLabel = selected
     ? `${selected.name}${selected.teamName ? ` – ${selected.teamName}` : ""}`
-    : "Chọn nhân viên từ danh sách KPI";
+    : "Chọn nhân viên";
 
   const groupedOptions = useMemo(() => {
     const map = new Map();
@@ -247,7 +345,52 @@ export default function AccountManager({ currentUser }) {
     return map;
   }, [staffOptions]);
 
-  const permissionList = useMemo(() => PERMISSION_KEYS.map((key) => ({ key, label: PERMISSION_LABELS[key] })), []);
+  const permissionDefinitions = useMemo(() => {
+    const items = PERMISSION_KEYS.map((key) => {
+      const details = PERMISSION_DETAILS[key] || {};
+      return {
+        key,
+        label: details.label || key,
+        description: details.description || "",
+        category: details.category || "Khác",
+      };
+    });
+    const getCategoryOrder = (category) => {
+      const index = PERMISSION_CATEGORY_ORDER.indexOf(category);
+      return index === -1 ? PERMISSION_CATEGORY_ORDER.length : index;
+    };
+    return items.sort((a, b) => {
+      const categoryDiff = getCategoryOrder(a.category) - getCategoryOrder(b.category);
+      if (categoryDiff !== 0) {
+        return categoryDiff;
+      }
+      return a.label.localeCompare(b.label, "vi", { sensitivity: "base" });
+    });
+  }, []);
+
+  const permissionLookup = useMemo(() => {
+    const map = new Map();
+    for (const definition of permissionDefinitions) {
+      map.set(definition.key, definition);
+    }
+    return map;
+  }, [permissionDefinitions]);
+
+  const permissionSections = useMemo(() => {
+    const groups = new Map();
+    for (const definition of permissionDefinitions) {
+      const key = definition.category || "Khác";
+      if (!groups.has(key)) {
+        groups.set(key, []);
+      }
+      groups.get(key).push(definition);
+    }
+    return Array.from(groups.entries()).map(([category, items]) => ({
+      id: category,
+      title: category,
+      items,
+    }));
+  }, [permissionDefinitions]);
   const filteredAccounts = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
     if (!term) {
@@ -268,10 +411,17 @@ export default function AccountManager({ currentUser }) {
       }
       const activePermissions = Object.entries(account.permissions || {})
         .filter(([, value]) => !!value)
-        .map(([key]) => (PERMISSION_LABELS[key] || key).toLowerCase());
+        .flatMap(([key]) => {
+          const definition = permissionLookup.get(key);
+          if (!definition) {
+            return [String(key).toLowerCase()];
+          }
+          const texts = [definition.label, definition.description].filter(Boolean);
+          return texts.map((text) => text.toLowerCase());
+        });
       return activePermissions.some((label) => label.includes(term));
     });
-  }, [accounts, searchTerm]);
+  }, [accounts, permissionLookup, searchTerm]);
   const totalAccounts = accounts.length;
   const visibleAccounts = filteredAccounts.length;
   const hasSearch = searchTerm.trim().length > 0;
@@ -530,7 +680,7 @@ export default function AccountManager({ currentUser }) {
       {
         key: "staff",
         label: "Nhân viên KPI",
-        width: "280px",
+        width: "220px",
         cell: (account) => {
           const rosterMissing = staffOptions.length === 0;
           const inRoster = account.memberId ? staffLookup.get(account.memberId) : null;
@@ -583,14 +733,16 @@ export default function AccountManager({ currentUser }) {
         key: "permissions",
         label: "Quyền chức năng",
         cell: (account) => (
-          <div className="grid gap-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {permissionList.map(({ key, label }) => (
+          <div className="grid gap-2 [grid-template-columns:repeat(auto-fit,minmax(220px,1fr))]">
+            {permissionDefinitions.map((definition) => (
               <PermissionCheckbox
-                key={`${account.username}-${key}`}
-                label={label}
-                checked={account.permissions?.[key]}
-                onChange={(value) => togglePermission(account.username, key, value)}
-                disabled={key === "accountManage" && account.role !== ADMIN_ROLE}
+                key={`${account.username}-${definition.key}`}
+                label={definition.label}
+                description={definition.description}
+                compact
+                checked={account.permissions?.[definition.key]}
+                onChange={(value) => togglePermission(account.username, definition.key, value)}
+                disabled={definition.key === "accountManage" && account.role !== ADMIN_ROLE}
               />
             ))}
           </div>
@@ -620,7 +772,17 @@ export default function AccountManager({ currentUser }) {
         ),
       },
     ],
-    [changeRole, openDeleteDialog, pendingAccounts, permissionList, resetPassword, staffLookup, staffOptions, togglePermission, updateAccountStaff]
+    [
+      changeRole,
+      openDeleteDialog,
+      pendingAccounts,
+      permissionDefinitions,
+      resetPassword,
+      staffLookup,
+      staffOptions,
+      togglePermission,
+      updateAccountStaff,
+    ]
   );
 
   const renderAccountsEmpty = useCallback(() => {
@@ -713,17 +875,32 @@ export default function AccountManager({ currentUser }) {
               triggerClassName="w-full"
             />
           </div>
-          <div className="md:col-span-2 space-y-2">
-            <div className="text-sm font-medium text-[color:var(--ds-text-primary)]">Quyền chức năng</div>
-            <div className="grid gap-2 md:grid-cols-2">
-              {permissionList.map(({ key, label }) => (
-                <PermissionCheckbox
-                  key={key}
-                  label={label}
-                  checked={form.permissions[key]}
-                  onChange={(value) => updateFormPermission(key, value)}
-                  disabled={key === "accountManage" && form.role !== ADMIN_ROLE}
-                />
+          <div className="md:col-span-2 space-y-4">
+            <div>
+              <div className="text-sm font-medium text-[color:var(--ds-text-primary)]">Quyền chức năng</div>
+              <p className="text-xs text-[color:var(--ds-text-muted)]">
+                Chọn quyền tương ứng cho tài khoản. Những quyền bị làm mờ thuộc nhóm chỉ dành cho quản trị viên.
+              </p>
+            </div>
+            <div className="space-y-4">
+              {permissionSections.map((section) => (
+                <div key={section.id} className="space-y-3">
+                  <div className="text-xs font-semibold uppercase tracking-wide text-[color:var(--ds-text-secondary)]">
+                    {section.title}
+                  </div>
+                  <div className="grid gap-2 [grid-template-columns:repeat(auto-fit,minmax(240px,1fr))]">
+                    {section.items.map((item) => (
+                      <PermissionCheckbox
+                        key={item.key}
+                        label={item.label}
+                        description={item.description}
+                        checked={form.permissions[item.key]}
+                        onChange={(value) => updateFormPermission(item.key, value)}
+                        disabled={item.key === "accountManage" && form.role !== ADMIN_ROLE}
+                      />
+                    ))}
+                  </div>
+                </div>
               ))}
             </div>
           </div>

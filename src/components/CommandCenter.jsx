@@ -74,6 +74,8 @@ function normalizePermissions(currentUser) {
     canManageSync: !!permissions.syncManage,
     canManageAlerts: !!permissions.alertsManage,
     canUseAi: !!permissions.aiAssistUse || !!permissions.aiAssistManage,
+    canViewDataHealth: !!permissions.dataHealthView || !!permissions.dataHealthManage,
+    canManageDataHealth: !!permissions.dataHealthManage,
   };
 }
 
@@ -119,6 +121,7 @@ function buildCommands({
       icon: ListChecks,
       keywords: ['suc khoe', 'du lieu', 'trung lap', 'canh bao'],
       run: () => emitCommand('navigate:tab', { tab: 'health' }),
+      hidden: !perms.canViewDataHealth,
     },
     {
       id: 'navigate:teams',

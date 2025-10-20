@@ -65,9 +65,36 @@ function formatDecimal(value) {
   });
 }
 
+function formatOptionalDecimal(value) {
+  const num = Number(value);
+  if (!Number.isFinite(num) || Math.abs(num) < 0.0001) {
+    return "—";
+  }
+  return formatDecimal(num);
+}
+
+function formatOptionalInt(value) {
+  const num = Number(value);
+  if (!Number.isFinite(num) || num === 0) {
+    return "—";
+  }
+  return formatInt(num);
+}
+
 const DEFAULT_CHART_COLORS = ["#2563eb", "#22c55e", "#f97316", "#a855f7", "#14b8a6"];
 
 const METRIC_SORT_KEYS = ["kpi", "decls", "licenses"];
+
+const ADJUSTMENT_CATEGORY_TONE_MAP = {
+  support: "text-emerald-600",
+  cancel: "text-rose-500",
+  correction: "text-amber-600",
+  tax: "text-sky-600",
+  teamwork: "text-indigo-600",
+  coworker_attitude: "text-purple-600",
+  customer_attitude: "text-fuchsia-600",
+  discipline: "text-amber-700",
+};
 
 const SORT_OPTIONS = [
   { value: "kpi", label: "Điểm KPI" },
@@ -80,6 +107,9 @@ const DEFAULT_ADJUSTMENT_PAGE_SIZE = 10;
 
 const DETAIL_PAGE_SIZE_OPTIONS = [10, 20, 50, 100, 200];
 const DEFAULT_DETAIL_PAGE_SIZE = 20;
+
+const TOP_STAFF_VISIBLE_COUNT_OPTIONS = [5, 7, 8, 9, 10, 12, 15];
+const TOP_STAFF_VISIBLE_COUNT_SET = new Set(TOP_STAFF_VISIBLE_COUNT_OPTIONS);
 
 const WEEKDAY_OPTIONS = [
   { value: 1, label: "Thứ hai" },
@@ -224,6 +254,18 @@ function sanitizeScope(value) {
 
 function sanitizeTopStaffMetric(value) {
   return value === "decls" ? "decls" : "kpi";
+}
+
+function sanitizeTopStaffVisibleCount(value) {
+  if (value === "auto") {
+    return "auto";
+  }
+  const num = Number(value);
+  if (!Number.isFinite(num)) {
+    return "auto";
+  }
+  const rounded = Math.round(num);
+  return TOP_STAFF_VISIBLE_COUNT_SET.has(rounded) ? rounded : "auto";
 }
 
 function sanitizeSelection(value) {
@@ -462,14 +504,114 @@ function CompanySummaryTable({
   );
 }
 
-function TopStaffWidget({ metric = "kpi", onMetricChange, kpiData = [], declData = [], palette = DEFAULT_CHART_COLORS }) {
-  const hasKpiData = kpiData.length > 0;
-  const hasDeclData = declData.length > 0;
+const TOP_STAFF_LIMIT_BREAKPOINTS = [
+  { minHeight: 1280, limit: 12 },
+  { minHeight: 1100, limit: 11 },
+  { minHeight: 980, limit: 10 },
+  { minHeight: 900, limit: 9 },
+  { minHeight: 820, limit: 8 },
+  { minHeight: 740, limit: 7 },
+];
+
+function computeResponsiveTopStaffLimit(viewportHeight) {
+  if (!Number.isFinite(viewportHeight) || viewportHeight <= 0) {
+    return 5;
+  }
+
+  for (const breakpoint of TOP_STAFF_LIMIT_BREAKPOINTS) {
+    if (viewportHeight >= breakpoint.minHeight) {
+      return breakpoint.limit;
+    }
+  }
+
+  return 5;
+}
+
+function TopStaffWidget({
+  metric = "kpi",
+  onMetricChange,
+  kpiData = [],
+  declData = [],
+  palette = DEFAULT_CHART_COLORS,
+  visibleCountPreference = "auto",
+  onVisibleCountPreferenceChange,
+}) {
+  const [autoVisibleCount, setAutoVisibleCount] = useState(() =>
+    computeResponsiveTopStaffLimit(typeof window !== "undefined" ? window.innerHeight : Number.NaN)
+  );
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return undefined;
+    }
+
+    const handleResize = () => {
+      const next = computeResponsiveTopStaffLimit(window.innerHeight);
+      setAutoVisibleCount((prev) => (prev === next ? prev : next));
+    };
+
+    handleResize();
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  const resolvedPreference = useMemo(() => {
+    if (visibleCountPreference === "auto") {
+      return "auto";
+    }
+    const num = Number(visibleCountPreference);
+    if (!Number.isFinite(num)) {
+      return "auto";
+    }
+    return Math.max(1, Math.round(num));
+  }, [visibleCountPreference]);
+
+  const effectiveVisibleCount = resolvedPreference === "auto" ? autoVisibleCount : resolvedPreference;
+  const visibleCount = Math.max(1, Number.isFinite(effectiveVisibleCount) ? effectiveVisibleCount : autoVisibleCount || 5);
+
+  const displayedKpiData = useMemo(() => kpiData.slice(0, Math.max(visibleCount, 1)), [kpiData, visibleCount]);
+  const displayedDeclData = useMemo(
+    () => declData.slice(0, Math.max(visibleCount, 1)),
+    [declData, visibleCount]
+  );
+
+  const hasKpiData = displayedKpiData.length > 0;
+  const hasDeclData = displayedDeclData.length > 0;
   const hasData = metric === "kpi" ? hasKpiData : hasDeclData;
 
-  const maxKPI = hasKpiData ? Math.max(...kpiData.map((item) => item.stats.kpi || 0), 1) : 1;
-  const totalDecls = hasDeclData ? declData.reduce((sum, item) => sum + (item.decls || 0), 0) : 0;
+  const maxKPI = hasKpiData ? Math.max(...displayedKpiData.map((item) => item.stats.kpi || 0), 1) : 1;
+  const totalDecls = hasDeclData
+    ? displayedDeclData.reduce((sum, item) => sum + (item.decls || 0), 0)
+    : 0;
   const colors = Array.isArray(palette) && palette.length ? palette : DEFAULT_CHART_COLORS;
+  const totalKpiEntries = kpiData.length;
+  const totalDeclEntries = declData.length;
+  const totalEntries = metric === "kpi" ? totalKpiEntries : totalDeclEntries;
+  const visibleEntries = metric === "kpi" ? displayedKpiData.length : displayedDeclData.length;
+
+  const handleVisibleCountChange = (event) => {
+    const value = event?.target?.value;
+    if (value === "auto") {
+      onVisibleCountPreferenceChange?.("auto");
+      return;
+    }
+    const num = Number(value);
+    if (!Number.isFinite(num)) {
+      return;
+    }
+    const rounded = Math.round(num);
+    if (!TOP_STAFF_VISIBLE_COUNT_SET.has(rounded)) {
+      return;
+    }
+    onVisibleCountPreferenceChange?.(rounded);
+  };
+
+  const selectValue = resolvedPreference === "auto" ? "auto" : String(resolvedPreference);
+
+  const preferenceDescription =
+    resolvedPreference === "auto"
+      ? "Tự động theo chiều cao màn hình"
+      : `${resolvedPreference} nhân viên (cố định)`;
 
   const renderEmptyState = (
     <p className="mt-3 text-sm text-gray-500">Chưa có dữ liệu hợp lệ trong giai đoạn này.</p>
@@ -477,29 +619,46 @@ function TopStaffWidget({ metric = "kpi", onMetricChange, kpiData = [], declData
 
   return (
     <section className="ds-card space-y-4 p-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <h3 className="text-base font-semibold text-gray-900">
-          Top 5 nhân viên theo {metric === "kpi" ? "điểm KPI" : "số tờ khai"}
+          Top nhân viên theo {metric === "kpi" ? "điểm KPI" : "số tờ khai"}
         </h3>
-        <div className="flex gap-2 text-xs font-semibold">
-          <button
-            type="button"
-            onClick={() => onMetricChange?.("kpi")}
-            className={`rounded px-3 py-1.5 ${
-              metric === "kpi" ? "bg-black text-white" : "border bg-white text-gray-700 hover:bg-gray-50"
-            }`}
-          >
-            Điểm KPI
-          </button>
-          <button
-            type="button"
-            onClick={() => onMetricChange?.("decls")}
-            className={`rounded px-3 py-1.5 ${
-              metric === "decls" ? "bg-black text-white" : "border bg-white text-gray-700 hover:bg-gray-50"
-            }`}
-          >
-            Số tờ khai
-          </button>
+        <div className="flex flex-wrap items-center gap-3">
+          <label className="flex items-center gap-2 text-xs text-gray-600">
+            Hiển thị
+            <select
+              className="rounded border border-gray-300 bg-white px-2 py-1 text-xs font-medium text-gray-700 shadow-sm transition focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              value={selectValue}
+              onChange={handleVisibleCountChange}
+            >
+              <option value="auto">Tự động</option>
+              {TOP_STAFF_VISIBLE_COUNT_OPTIONS.map((option) => (
+                <option key={option} value={option}>
+                  {option} nhân viên
+                </option>
+              ))}
+            </select>
+          </label>
+          <div className="flex gap-2 text-xs font-semibold">
+            <button
+              type="button"
+              onClick={() => onMetricChange?.("kpi")}
+              className={`rounded px-3 py-1.5 ${
+                metric === "kpi" ? "bg-black text-white" : "border bg-white text-gray-700 hover:bg-gray-50"
+              }`}
+            >
+              Điểm KPI
+            </button>
+            <button
+              type="button"
+              onClick={() => onMetricChange?.("decls")}
+              className={`rounded px-3 py-1.5 ${
+                metric === "decls" ? "bg-black text-white" : "border bg-white text-gray-700 hover:bg-gray-50"
+              }`}
+            >
+              Số tờ khai
+            </button>
+          </div>
         </div>
       </div>
 
@@ -507,7 +666,7 @@ function TopStaffWidget({ metric = "kpi", onMetricChange, kpiData = [], declData
         renderEmptyState
       ) : metric === "kpi" ? (
         <div className="mt-4 space-y-4">
-          {kpiData.map((item, idx) => {
+          {displayedKpiData.map((item, idx) => {
             const ratio = Math.max(0, Math.min(100, (item.stats.kpi / maxKPI) * 100));
             const color = colors[idx % colors.length];
             return (
@@ -531,11 +690,14 @@ function TopStaffWidget({ metric = "kpi", onMetricChange, kpiData = [], declData
           })}
         </div>
       ) : (
-        <div className="mt-4 h-64 w-full">
+        <div
+          className="mt-4 w-full"
+          style={{ height: Math.max(220, visibleEntries * 44) }}
+        >
           <ResponsiveContainer width="100%" height="100%">
             <BarChart
               layout="vertical"
-              data={declData}
+              data={displayedDeclData}
               margin={{ top: 10, right: 30, left: 0, bottom: 0 }}
               barCategoryGap="20%"
             >
@@ -553,7 +715,7 @@ function TopStaffWidget({ metric = "kpi", onMetricChange, kpiData = [], declData
                 }}
               />
               <Bar dataKey="decls" name="Tờ khai" radius={[0, 4, 4, 0]}>
-                {declData.map((item, idx) => (
+                {displayedDeclData.map((item, idx) => (
                   <Cell key={item.key || item.name || idx} fill={colors[idx % colors.length]} />
                 ))}
                 <LabelList dataKey="decls" position="right" formatter={(value) => formatInt(value)} />
@@ -562,6 +724,14 @@ function TopStaffWidget({ metric = "kpi", onMetricChange, kpiData = [], declData
           </ResponsiveContainer>
           <div className="mt-2 text-xs text-gray-500">Tổng: {formatInt(totalDecls)} tờ khai</div>
         </div>
+      )}
+
+      {totalEntries > visibleEntries ? (
+        <p className="text-xs text-gray-400">
+          Đang hiển thị {visibleEntries}/{totalEntries} nhân viên. {preferenceDescription}
+        </p>
+      ) : (
+        <p className="text-xs text-gray-400">{preferenceDescription}</p>
       )}
     </section>
   );
@@ -718,93 +888,8 @@ function SummaryCard({ title, value, subtitle }) {
   );
 }
 
-function AdjustmentDigestCard({ report }) {
-  const totalPoints = formatDecimal(report.totalPoints || 0);
-  const appliedCount = formatInt(report.approvedCount || report.appliedCount || 0);
-  const stats = [
-    { label: "Đã duyệt", value: formatInt(report.approvedCount || 0), tone: "text-emerald-600" },
-    { label: "Chờ duyệt", value: formatInt(report.pendingCount || 0), tone: "text-amber-600" },
-    { label: "Đã từ chối", value: formatInt(report.rejectedCount || 0), tone: "text-rose-500" },
-  ];
-
-  const totals = report.totalsByCategory || {};
-  const categoryToneMap = {
-    support: "text-emerald-600",
-    cancel: "text-rose-500",
-    correction: "text-amber-600",
-    tax: "text-sky-600",
-    teamwork: "text-indigo-600",
-    coworker_attitude: "text-purple-600",
-    customer_attitude: "text-fuchsia-600",
-    discipline: "text-amber-700",
-  };
-  const categories = toAdjustmentTotalsArray(totals);
-
-  const formatOptionalDecimal = (value) => {
-    const num = Number(value);
-    if (!Number.isFinite(num) || num === 0) {
-      return "—";
-    }
-    return formatDecimal(num);
-  };
-
-  const formatOptionalInt = (value) => {
-    const num = Number(value);
-    if (!Number.isFinite(num) || num === 0) {
-      return "—";
-    }
-    return formatInt(num);
-  };
-
-  return (
-    <section className="ds-card space-y-4 p-4">
-      <div className="space-y-1">
-        <h3 className="text-base font-semibold text-gray-900">Điểm KPI +/- bổ sung</h3>
-        <p className="text-sm text-gray-500">
-          Tự động cộng/trừ vào KPI tổng khi trạng thái được duyệt.
-        </p>
-      </div>
-      <div className="rounded-xl border border-subtle bg-gray-50 px-4 py-3 dark:bg-slate-900/40">
-        <div className="text-xs uppercase tracking-wide text-gray-500">Điểm đã áp dụng</div>
-        <div className="mt-1 text-3xl font-semibold text-emerald-600">{totalPoints}</div>
-        <div className="text-xs text-gray-500">Từ {appliedCount} lượt xử lý thành công</div>
-      </div>
-      <ul className="space-y-1 text-sm text-gray-600">
-        {stats.map((item) => (
-          <li key={item.label} className="flex items-center justify-between">
-            <span>{item.label}</span>
-            <span className={`font-semibold ${item.tone}`}>{item.value}</span>
-          </li>
-        ))}
-      </ul>
-      <div className="pt-2">
-        <h4 className="text-sm font-semibold text-gray-900">Phân bổ theo hạng mục</h4>
-        <ul className="mt-2 space-y-2">
-          {categories.map((item) => {
-            const tone = categoryToneMap[item.key] || "text-slate-600";
-            return (
-              <li
-                key={item.key}
-                className="rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-600 dark:border-slate-700 dark:bg-slate-900/40"
-              >
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <span className="font-medium text-gray-900 dark:text-gray-100">{item.label}</span>
-                  <span className={`font-semibold ${tone}`}>{formatOptionalDecimal(item.points)}</span>
-                </div>
-                <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                  Số lượt: <span className="font-semibold text-gray-700 dark:text-gray-200">{formatOptionalInt(item.quantity)}</span>
-                </div>
-              </li>
-            );
-          })}
-        </ul>
-      </div>
-    </section>
-  );
-}
-
 function StaffDetailCard({ staff, canExport, onExport, exporting, visibleColumns = {} }) {
-  const { stats, rows } = staff;
+  const { stats, rows, adjustmentSummary } = staff;
   const [mode, setMode] = useState("summary");
   const aggregated = useMemo(
     () => aggregateByCompany(rows, { includeStaff: false, includeTeam: false }),
@@ -816,6 +901,69 @@ function StaffDetailCard({ staff, canExport, onExport, exporting, visibleColumns
   const showCoLines = visibleColumns.coLines !== false;
   const showLicenseCodes = visibleColumns.licenseCodes !== false;
   const licenseSummary = (stats.licenseCodes || []).join(", ");
+  const adjustmentTotals = useMemo(
+    () => toAdjustmentTotalsArray(adjustmentSummary || {}),
+    [adjustmentSummary]
+  );
+  const totalAdjustmentPoints = useMemo(
+    () =>
+      adjustmentTotals.reduce((sum, item) => {
+        const value = Number(item?.points || 0);
+        return Number.isFinite(value) ? sum + value : sum;
+      }, 0),
+    [adjustmentTotals]
+  );
+  const totalAdjustmentEntries = useMemo(
+    () => rows.filter((row) => row?.isAdjustment).length,
+    [rows]
+  );
+  const adjustmentBreakdown = useMemo(() => {
+    let positive = 0;
+    let negative = 0;
+    let neutral = 0;
+    for (const row of rows) {
+      if (!row?.isAdjustment) continue;
+      const value = Number(row?.kpi || 0);
+      if (!Number.isFinite(value) || Math.abs(value) < 0.0001) {
+        neutral += 1;
+        continue;
+      }
+      if (value > 0) {
+        positive += 1;
+      } else {
+        negative += 1;
+      }
+    }
+    return { positive, negative, neutral };
+  }, [rows]);
+  const adjustmentTooltip = useMemo(() => {
+    const lines = adjustmentTotals
+      .filter((item) => Number(item?.points))
+      .map((item) => `${item.label}: ${formatDecimal(item.points)}`);
+    if (!lines.length) {
+      return "Chưa có điều chỉnh";
+    }
+    return lines.join("\n");
+  }, [adjustmentTotals]);
+  const adjustmentSubtitle = useMemo(() => {
+    if (!totalAdjustmentEntries) {
+      return "Chưa có điều chỉnh";
+    }
+    const segments = [];
+    if (adjustmentBreakdown.positive) {
+      segments.push(`${formatInt(adjustmentBreakdown.positive)} lượt cộng`);
+    }
+    if (adjustmentBreakdown.negative) {
+      segments.push(`${formatInt(adjustmentBreakdown.negative)} lượt trừ`);
+    }
+    if (adjustmentBreakdown.neutral) {
+      segments.push(`${formatInt(adjustmentBreakdown.neutral)} lượt 0 điểm`);
+    }
+    if (!segments.length) {
+      return `${formatInt(totalAdjustmentEntries)} lượt cộng/trừ`;
+    }
+    return segments.join(" • ");
+  }, [adjustmentBreakdown, totalAdjustmentEntries]);
   const infoLineParts = [
     `${formatInt(stats.decls)} tờ khai`,
     `Nhập: ${formatInt(stats.import)} • Xuất: ${formatInt(stats.export)}`,
@@ -881,7 +1029,7 @@ function StaffDetailCard({ staff, canExport, onExport, exporting, visibleColumns
         </div>
       </header>
 
-      <div className="grid gap-2 text-sm sm:grid-cols-4 lg:grid-cols-6">
+      <div className="grid gap-2 text-sm sm:grid-cols-4 lg:grid-cols-7">
         <div className="rounded border bg-gray-50 px-3 py-2">
           <div className="text-xs uppercase text-gray-500">Mục hàng</div>
           <div className="text-base font-semibold text-gray-900">{formatInt(stats.items)}</div>
@@ -919,6 +1067,11 @@ function StaffDetailCard({ staff, canExport, onExport, exporting, visibleColumns
             </div>
           </div>
         ) : null}
+        <div className="rounded border bg-gray-50 px-3 py-2" title={adjustmentTooltip}>
+          <div className="text-xs uppercase text-gray-500">Điểm KPI +/-</div>
+          <div className="text-base font-semibold text-gray-900">{formatDecimal(totalAdjustmentPoints)}</div>
+          <div className="mt-1 text-[11px] text-gray-500">{adjustmentSubtitle}</div>
+        </div>
       </div>
 
       {mode === "summary" ? (
@@ -1002,7 +1155,7 @@ function StaffDetailCard({ staff, canExport, onExport, exporting, visibleColumns
 }
 
 function TeamDetailCard({ team, canExport, onExport, exporting, visibleColumns = {}, memberSortKey = "kpi" }) {
-  const { stats, members, rows } = team;
+  const { stats, members, rows, adjustmentSummary } = team;
   const [mode, setMode] = useState("summary");
   const aggregated = useMemo(
     () => aggregateByCompany(rows, { includeStaff: true, includeTeam: false }),
@@ -1014,6 +1167,69 @@ function TeamDetailCard({ team, canExport, onExport, exporting, visibleColumns =
   const showCoLines = visibleColumns.coLines !== false;
   const showLicenseCodes = visibleColumns.licenseCodes !== false;
   const licenseSummary = (stats.licenseCodes || []).join(", ");
+  const adjustmentTotals = useMemo(
+    () => toAdjustmentTotalsArray(adjustmentSummary || {}),
+    [adjustmentSummary]
+  );
+  const totalAdjustmentPoints = useMemo(
+    () =>
+      adjustmentTotals.reduce((sum, item) => {
+        const value = Number(item?.points || 0);
+        return Number.isFinite(value) ? sum + value : sum;
+      }, 0),
+    [adjustmentTotals]
+  );
+  const totalAdjustmentEntries = useMemo(
+    () => rows.filter((row) => row?.isAdjustment).length,
+    [rows]
+  );
+  const adjustmentBreakdown = useMemo(() => {
+    let positive = 0;
+    let negative = 0;
+    let neutral = 0;
+    for (const row of rows) {
+      if (!row?.isAdjustment) continue;
+      const value = Number(row?.kpi || 0);
+      if (!Number.isFinite(value) || Math.abs(value) < 0.0001) {
+        neutral += 1;
+        continue;
+      }
+      if (value > 0) {
+        positive += 1;
+      } else {
+        negative += 1;
+      }
+    }
+    return { positive, negative, neutral };
+  }, [rows]);
+  const adjustmentTooltip = useMemo(() => {
+    const lines = adjustmentTotals
+      .filter((item) => Number(item?.points))
+      .map((item) => `${item.label}: ${formatDecimal(item.points)}`);
+    if (!lines.length) {
+      return "Chưa có điều chỉnh";
+    }
+    return lines.join("\n");
+  }, [adjustmentTotals]);
+  const adjustmentSubtitle = useMemo(() => {
+    if (!totalAdjustmentEntries) {
+      return "Chưa có điều chỉnh";
+    }
+    const segments = [];
+    if (adjustmentBreakdown.positive) {
+      segments.push(`${formatInt(adjustmentBreakdown.positive)} lượt cộng`);
+    }
+    if (adjustmentBreakdown.negative) {
+      segments.push(`${formatInt(adjustmentBreakdown.negative)} lượt trừ`);
+    }
+    if (adjustmentBreakdown.neutral) {
+      segments.push(`${formatInt(adjustmentBreakdown.neutral)} lượt 0 điểm`);
+    }
+    if (!segments.length) {
+      return `${formatInt(totalAdjustmentEntries)} lượt cộng/trừ`;
+    }
+    return segments.join(" • ");
+  }, [adjustmentBreakdown, totalAdjustmentEntries]);
   const infoLineParts = [
     `${formatInt(stats.decls)} tờ khai`,
     `Nhập: ${formatInt(stats.import)} • Xuất: ${formatInt(stats.export)}`,
@@ -1089,7 +1305,7 @@ function TeamDetailCard({ team, canExport, onExport, exporting, visibleColumns =
         </div>
       </header>
 
-      <div className="grid gap-2 text-sm sm:grid-cols-4 lg:grid-cols-6">
+      <div className="grid gap-2 text-sm sm:grid-cols-4 lg:grid-cols-7">
         <div className="rounded border bg-gray-50 px-3 py-2">
           <div className="text-xs uppercase text-gray-500">Mục hàng</div>
           <div className="text-base font-semibold text-gray-900">{formatInt(stats.items)}</div>
@@ -1127,6 +1343,11 @@ function TeamDetailCard({ team, canExport, onExport, exporting, visibleColumns =
             </div>
           </div>
         ) : null}
+        <div className="rounded border bg-gray-50 px-3 py-2" title={adjustmentTooltip}>
+          <div className="text-xs uppercase text-gray-500">Điểm KPI +/-</div>
+          <div className="text-base font-semibold text-gray-900">{formatDecimal(totalAdjustmentPoints)}</div>
+          <div className="mt-1 text-[11px] text-gray-500">{adjustmentSubtitle}</div>
+        </div>
       </div>
 
       {mode === "summary" ? (
@@ -1299,6 +1520,9 @@ export default function ReportViewer({ canExport = true, currentUser = null }) {
   const [topStaffMetric, setTopStaffMetric] = useState(() => sanitizeTopStaffMetric(storedPrefs.topStaffMetric));
   const [staffSortKey, setStaffSortKey] = useState(() => sanitizeSortKey(storedPrefs.staffSortKey));
   const [teamSortKey, setTeamSortKey] = useState(() => sanitizeSortKey(storedPrefs.teamSortKey));
+  const [topStaffVisibleCount, setTopStaffVisibleCount] = useState(() =>
+    sanitizeTopStaffVisibleCount(storedPrefs.topStaffVisibleCount)
+  );
   const [version, setVersion] = useState(0);
   const [exporting, setExporting] = useState(false);
   const storedColumnPrefs = useMemo(
@@ -1368,6 +1592,7 @@ export default function ReportViewer({ canExport = true, currentUser = null }) {
       staffSortKey,
       teamSortKey,
       topStaffMetric,
+      topStaffVisibleCount,
       columns: exportColumns,
       ruleId: selectedRuleId,
       adjustmentPageSize,
@@ -1390,6 +1615,7 @@ export default function ReportViewer({ canExport = true, currentUser = null }) {
     staffSortKey,
     teamSortKey,
     topStaffMetric,
+    topStaffVisibleCount,
     exportColumns,
     selectedRuleId,
     adjustmentPageSize,
@@ -1636,6 +1862,10 @@ export default function ReportViewer({ canExport = true, currentUser = null }) {
       points: Number(entry?.points || 0),
       quantity: Number(entry?.quantity || 0),
     });
+    const totalsByCategory = Object.keys(totalsRaw).reduce((acc, key) => {
+      acc[key] = normalizeTotals(totalsRaw[key]);
+      return acc;
+    }, {});
     return {
       list: Array.isArray(base.list) ? base.list : [],
       applied: Array.isArray(base.applied) ? base.applied : [],
@@ -1644,12 +1874,7 @@ export default function ReportViewer({ canExport = true, currentUser = null }) {
       approvedCount: Number(base.approvedCount || 0),
       rejectedCount: Number(base.rejectedCount || 0),
       appliedCount: Number(base.appliedCount || 0),
-      totalsByCategory: {
-        support: normalizeTotals(totalsRaw.support),
-        cancel: normalizeTotals(totalsRaw.cancel),
-        correction: normalizeTotals(totalsRaw.correction),
-        tax: normalizeTotals(totalsRaw.tax),
-      },
+      totalsByCategory,
     };
   }, [report.adjustments]);
 
@@ -1675,9 +1900,21 @@ export default function ReportViewer({ canExport = true, currentUser = null }) {
     () => adjustmentsReport.list.filter((item) => item?.status === "rejected"),
     [adjustmentsReport.list]
   );
+  const adjustmentTotals = useMemo(
+    () => toAdjustmentTotalsArray(adjustmentsReport.totalsByCategory || {}),
+    [adjustmentsReport.totalsByCategory]
+  );
+  const adjustmentStatusStats = useMemo(
+    () => [
+      { label: "Đã duyệt", value: Number(adjustmentsReport.approvedCount || 0), tone: "text-emerald-600" },
+      { label: "Chờ duyệt", value: Number(adjustmentsReport.pendingCount || 0), tone: "text-amber-600" },
+      { label: "Đã từ chối", value: Number(adjustmentsReport.rejectedCount || 0), tone: "text-rose-500" },
+    ],
+    [adjustmentsReport.approvedCount, adjustmentsReport.pendingCount, adjustmentsReport.rejectedCount]
+  );
 
   const topStaffByKpi = useMemo(() => {
-    return sortStatsCollection(report.staff.list, "kpi", (item) => item.name || "").slice(0, 5);
+    return sortStatsCollection(report.staff.list, "kpi", (item) => item.name || "");
   }, [report.staff.list]);
 
   const topStaffByDecls = useMemo(() => {
@@ -1693,8 +1930,7 @@ export default function ReportViewer({ canExport = true, currentUser = null }) {
           team: teamLabel,
         };
       })
-      .filter((item) => item.decls > 0)
-      .slice(0, 5);
+      .filter((item) => item.decls > 0);
   }, [report.staff.list]);
 
   const teamPieData = useMemo(() => {
@@ -2912,8 +3148,9 @@ export default function ReportViewer({ canExport = true, currentUser = null }) {
             kpiData={topStaffByKpi}
             declData={topStaffByDecls}
             palette={chartPalette}
+            visibleCountPreference={topStaffVisibleCount}
+            onVisibleCountPreferenceChange={setTopStaffVisibleCount}
           />
-          <AdjustmentDigestCard report={adjustmentsReport} />
         </div>
 
         <div className="xl:col-span-2">
@@ -3052,42 +3289,89 @@ export default function ReportViewer({ canExport = true, currentUser = null }) {
                   </div>
                 </div>
               </div>
-              <div className="space-y-4">
-                <div>
-                  <h4 className="text-sm font-semibold text-[color:var(--ds-text-primary)]">Chờ duyệt</h4>
-                  {pendingAdjustments.length ? (
+              <div className="space-y-6">
+                <section className="space-y-3 rounded-xl border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-muted)] p-4">
+                  <div className="text-xs uppercase tracking-wide text-[color:var(--ds-text-secondary)]">Điểm đã áp dụng</div>
+                  <div className="text-3xl font-semibold text-emerald-600">
+                    {formatDecimal(adjustmentsReport.totalPoints || 0)}
+                  </div>
+                  <div className="text-xs text-[color:var(--ds-text-secondary)]">
+                    Từ {formatInt(adjustmentsReport.approvedCount || adjustmentsReport.appliedCount || 0)} lượt xử lý thành công
+                  </div>
+                  <ul className="space-y-1 pt-2 text-sm text-[color:var(--ds-text-secondary)]">
+                    {adjustmentStatusStats.map((item) => (
+                      <li key={item.label} className="flex items-center justify-between">
+                        <span>{item.label}</span>
+                        <span className={`font-semibold ${item.tone}`}>{formatInt(item.value)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+
+                <section>
+                  <h4 className="text-sm font-semibold text-[color:var(--ds-text-primary)]">Phân bổ theo hạng mục</h4>
+                  {adjustmentTotals.length ? (
                     <ul className="mt-2 space-y-2 text-sm text-[color:var(--ds-text-secondary)]">
-                      {pendingAdjustments.map((item) => (
-                        <li key={item.id} className="rounded border border-dashed border-amber-400 bg-amber-500/10 px-3 py-2">
-                          <div className="font-medium text-[color:var(--ds-text-primary)]">{item.label || item.category}</div>
-                          <div>{item.staffName || 'Chưa gán'} — {item.month}</div>
-                          <div>Điểm đề xuất: {formatDecimal(item.totalPoints || 0)}</div>
-                        </li>
-                      ))}
+                      {adjustmentTotals.map((item) => {
+                        const tone = ADJUSTMENT_CATEGORY_TONE_MAP[item.key] || "text-slate-600";
+                        return (
+                          <li
+                            key={item.key}
+                            className="rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] px-3 py-2"
+                          >
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <span className="font-medium text-[color:var(--ds-text-primary)]">{item.label}</span>
+                              <span className={`font-semibold ${tone}`}>{formatOptionalDecimal(item.points)}</span>
+                            </div>
+                            <div className="mt-1 text-xs text-[color:var(--ds-text-muted)]">
+                              Số lượt: <span className="font-semibold text-[color:var(--ds-text-primary)]">{formatOptionalInt(item.quantity)}</span>
+                            </div>
+                          </li>
+                        );
+                      })}
                     </ul>
                   ) : (
-                    <p className="mt-2 text-sm text-[color:var(--ds-text-muted)]">Không có yêu cầu đang chờ.</p>
+                    <p className="mt-2 text-sm text-[color:var(--ds-text-muted)]">Chưa có dữ liệu phân bổ.</p>
                   )}
-                </div>
-                {rejectedAdjustments.length ? (
+                </section>
+
+                <section className="space-y-3">
                   <div>
-                    <h4 className="text-sm font-semibold text-[color:var(--ds-text-primary)]">Đã từ chối gần đây</h4>
-                    <ul className="mt-2 space-y-2 text-sm text-[color:var(--ds-text-secondary)]">
-                      {rejectedAdjustments.slice(0, 3).map((item) => (
-                        <li key={item.id} className="rounded border border-rose-400/60 bg-rose-500/10 px-3 py-2">
-                          <div className="font-medium text-[color:var(--ds-text-primary)]">{item.label || item.category}</div>
-                          <div>{item.staffName || 'Chưa gán'} — {item.month}</div>
-                          <div>Điểm: {formatDecimal(item.totalPoints || 0)}</div>
-                        </li>
-                      ))}
-                    </ul>
-                    {rejectedAdjustments.length > 3 ? (
-                      <div className="pt-1 text-xs text-[color:var(--ds-text-muted)]">
-                        Còn {rejectedAdjustments.length - 3} mục khác đã bị từ chối.
-                      </div>
-                    ) : null}
+                    <h4 className="text-sm font-semibold text-[color:var(--ds-text-primary)]">Chờ duyệt</h4>
+                    {pendingAdjustments.length ? (
+                      <ul className="mt-2 space-y-2 text-sm text-[color:var(--ds-text-secondary)]">
+                        {pendingAdjustments.map((item) => (
+                          <li key={item.id} className="rounded border border-dashed border-amber-400 bg-amber-500/10 px-3 py-2">
+                            <div className="font-medium text-[color:var(--ds-text-primary)]">{item.label || item.category}</div>
+                            <div>{item.staffName || 'Chưa gán'} — {item.month}</div>
+                            <div>Điểm đề xuất: {formatDecimal(item.totalPoints || 0)}</div>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="mt-2 text-sm text-[color:var(--ds-text-muted)]">Không có yêu cầu đang chờ.</p>
+                    )}
                   </div>
-                ) : null}
+                  {rejectedAdjustments.length ? (
+                    <div>
+                      <h4 className="text-sm font-semibold text-[color:var(--ds-text-primary)]">Đã từ chối gần đây</h4>
+                      <ul className="mt-2 space-y-2 text-sm text-[color:var(--ds-text-secondary)]">
+                        {rejectedAdjustments.slice(0, 3).map((item) => (
+                          <li key={item.id} className="rounded border border-rose-400/60 bg-rose-500/10 px-3 py-2">
+                            <div className="font-medium text-[color:var(--ds-text-primary)]">{item.label || item.category}</div>
+                            <div>{item.staffName || 'Chưa gán'} — {item.month}</div>
+                            <div>Điểm: {formatDecimal(item.totalPoints || 0)}</div>
+                          </li>
+                        ))}
+                      </ul>
+                      {rejectedAdjustments.length > 3 ? (
+                        <div className="pt-1 text-xs text-[color:var(--ds-text-muted)]">
+                          Còn {rejectedAdjustments.length - 3} mục khác đã bị từ chối.
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </section>
               </div>
             </div>
           </div>

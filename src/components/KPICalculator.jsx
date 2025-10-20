@@ -1,8 +1,7 @@
 import React, { Suspense, useEffect, useMemo, useState } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs.jsx';
-import { ADMIN_ROLE, MANAGER_ROLE, normalizeRoleKey } from '@/shared/accountRoles.js';
 
-const DataImporter = React.lazy(() => import('./DataImporter.jsx'));
+import DataImporter from './DataImporter.jsx';
 const RulesEditor = React.lazy(() => import('./RulesEditor.jsx'));
 const MSTAssignment = React.lazy(() => import('./MSTAssignment.jsx'));
 const TeamManager = React.lazy(() => import('./TeamManager.jsx'));
@@ -10,7 +9,7 @@ const ReportViewer = React.lazy(() => import('./ReportViewer.jsx'));
 const KPIAdjustments = React.lazy(() => import('./KPIAdjustments.jsx'));
 const AccountManager = React.lazy(() => import('./AccountManager.jsx'));
 const AuditLog = React.lazy(() => import('./AuditLog.jsx'));
-const HQAgencyManager = React.lazy(() => import('./HQAgencyManager.jsx'));
+import HQAgencyManager from './HQAgencyManager.jsx';
 const AiAssistant = React.lazy(() => import('./AiAssistant.jsx'));
 const DataHealthDashboard = React.lazy(() => import('./DataHealthDashboard.jsx'));
 const ExportAuditReport = React.lazy(() => import('./ExportAuditReport.jsx'));
@@ -36,9 +35,8 @@ const KPICalculator = ({ auth, activeTab = 'reports', onTabChange }) => {
   const canManageAlerts = !!permissions.alertsManage;
   const canViewAudit = !!permissions.auditView || canManageAccounts;
   const canUseAi = !!permissions.aiAssistUse || !!permissions.aiAssistManage;
-
-  const roleKey = normalizeRoleKey(effectiveAuth.role);
-  const canViewDataHealth = roleKey === MANAGER_ROLE || roleKey === ADMIN_ROLE;
+  const canManageDataHealth = !!permissions.dataHealthManage;
+  const canViewDataHealth = !!permissions.dataHealthView || canManageDataHealth;
 
   const allowedTabs = useMemo(() => {
     const base = new Set(['mst', 'hq', 'import', 'teams', 'rules', 'adjustments', 'reports']);
@@ -235,11 +233,11 @@ const KPICalculator = ({ auth, activeTab = 'reports', onTabChange }) => {
         </TabsContent>
 
         {canViewDataHealth && (
-          <TabsContent value="health" className="ds-panel">
-            <TabPanel>
-              <DataHealthDashboard currentUser={effectiveAuth} />
-            </TabPanel>
-          </TabsContent>
+        <TabsContent value="health" className="ds-panel">
+          <TabPanel>
+              <DataHealthDashboard currentUser={effectiveAuth} canManage={canManageDataHealth} />
+          </TabPanel>
+        </TabsContent>
         )}
 
         {canUseAi && (

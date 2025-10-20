@@ -1,6 +1,89 @@
 import { fetchWithAuth } from '@/auth/localAuth.js';
-import { HQ_HISTORY_KEY } from './store.js';
-import { setItem as setSharedItem } from './storageClient.js';
+import {
+  HQ_HISTORY_KEY,
+  HQ_HISTORY_LIMIT,
+  getHQHistoryEntries,
+  normalizeMST,
+} from './store.js';
+import { setItem as setSharedItem, waitForSharedWrites } from './storageClient.js';
+
+function normalizeHistoryField(value) {
+  if (value === null || value === undefined) {
+    return '';
+  }
+  const str = `${value}`.trim();
+  return str;
+}
+
+function ensureTimestamp(value) {
+  if (!value) {
+    return null;
+  }
+  if (value instanceof Date) {
+    if (Number.isNaN(value.getTime())) {
+      return null;
+    }
+    return value.toISOString();
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+  return date.toISOString();
+}
+
+function buildHistoryId(entry) {
+  const base = normalizeHistoryField(entry?.id);
+  if (base) {
+    return base;
+  }
+  const mst = normalizeMST(entry?.mst);
+  const field = normalizeHistoryField(entry?.field);
+  const type = normalizeHistoryField(entry?.type);
+  const timestamp = ensureTimestamp(entry?.timestamp) || new Date().toISOString();
+  const from = normalizeHistoryField(entry?.from);
+  const to = normalizeHistoryField(entry?.to);
+  return `${mst || 'mst'}:${field}:${type}:${timestamp}:${from}:${to}`;
+}
+
+export function mergeHqHistoryEntries(existing = [], incoming = [], { limit = HQ_HISTORY_LIMIT } = {}) {
+  const byId = new Map();
+  const push = (entry) => {
+    if (!entry || typeof entry !== 'object') {
+      return;
+    }
+    const mst = normalizeMST(entry.mst);
+    if (!mst) {
+      return;
+    }
+    const timestamp = ensureTimestamp(entry.timestamp) || new Date().toISOString();
+    const normalized = {
+      id: buildHistoryId(entry),
+      mst,
+      field: normalizeHistoryField(entry.field) || 'field',
+      from: normalizeHistoryField(entry.from),
+      to: normalizeHistoryField(entry.to),
+      actor: normalizeHistoryField(entry.actor) || 'system',
+      timestamp,
+      type: normalizeHistoryField(entry.type) || 'update',
+    };
+    byId.set(normalized.id, normalized);
+  };
+
+  for (const entry of existing) {
+    push(entry);
+  }
+  for (const entry of incoming) {
+    push(entry);
+  }
+
+  const merged = Array.from(byId.values());
+  merged.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+  if (!Number.isFinite(limit) || limit <= 0) {
+    return merged;
+  }
+  return merged.slice(0, limit);
+}
 
 function normalizeQueryValue(value) {
   if (value === null || value === undefined) {
@@ -57,11 +140,18 @@ export async function fetchHQHistoryEntries(options = {}) {
 }
 
 export async function refreshHQHistoryCache(options = {}) {
-  const { entries } = await fetchHQHistoryEntries(options);
   try {
-    setSharedItem(HQ_HISTORY_KEY, JSON.stringify(entries));
+    await waitForSharedWrites({ timeoutMs: 1500 });
+  } catch (err) {
+    console.warn('Không thể chờ đồng bộ dữ liệu trước khi tải lịch sử Đại lý HQ', err);
+  }
+  const { entries } = await fetchHQHistoryEntries(options);
+  const existing = getHQHistoryEntries(HQ_HISTORY_LIMIT);
+  const merged = mergeHqHistoryEntries(existing, entries, { limit: HQ_HISTORY_LIMIT });
+  try {
+    setSharedItem(HQ_HISTORY_KEY, JSON.stringify(merged));
   } catch (err) {
     console.warn('Không thể cập nhật bộ nhớ chia sẻ lịch sử Đại lý HQ', err);
   }
-  return entries;
+  return merged;
 }

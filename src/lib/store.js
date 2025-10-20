@@ -3118,6 +3118,8 @@ function normalizeAdjustmentInput(input, { now, actor, current } = {}) {
   if (!month) {
     return null;
   }
+  const companyName = normalizeStr(input.companyName ?? input.company ?? current?.companyName ?? '');
+  const taxCode = normalizeMST(input.taxCode ?? input.mst ?? current?.taxCode ?? '');
   const gradeSource = input.grade ?? input.value ?? input.unitPoints ?? input.points;
   const gradeValue =
     gradeSource !== undefined && gradeSource !== null && gradeSource !== ''
@@ -3262,13 +3264,19 @@ function normalizeAdjustmentInput(input, { now, actor, current } = {}) {
     createdBy,
     history,
   };
+  if (taxCode) {
+    payload.taxCode = taxCode;
+  }
+  if (companyName) {
+    payload.companyName = companyName;
+  }
   return payload;
 }
 
 function diffAdjustments(prev, next) {
   if (!prev) return null;
   const changes = {};
-  const fields = ['staffName', 'teamName', 'month', 'category', 'quantity', 'unitPoints', 'totalPoints', 'note', 'mode', 'licenseCode'];
+  const fields = ['staffName', 'teamName', 'month', 'category', 'quantity', 'unitPoints', 'totalPoints', 'note', 'mode', 'licenseCode', 'companyName', 'taxCode'];
   for (const field of fields) {
     if (JSON.stringify(prev[field]) !== JSON.stringify(next[field])) {
       changes[field] = { from: prev[field], to: next[field] };

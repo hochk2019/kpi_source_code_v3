@@ -587,8 +587,8 @@ export function buildReportData(rowsInput, { roster, rules, from, to, adjustment
         date: candidateDateStr,
         displayDate: `${month}`,
         so_tk: `Điểm bổ sung (${label})`,
-        mst: '',
-        cong_ty: '',
+        mst: normalizeStr(adj.taxCode) || '',
+        cong_ty: normalizeStr(adj.companyName) || '',
         loai_hinh: label,
         num_items: 0,
         licenses: 0,
@@ -610,6 +610,8 @@ export function buildReportData(rowsInput, { roster, rules, from, to, adjustment
           unitPoints: adj.unitPoints,
           references: Array.isArray(adj.references) ? adj.references : [],
           note: normalizeStr(adj.note),
+          companyName: normalizeStr(adj.companyName),
+          taxCode: normalizeStr(adj.taxCode),
         },
       };
 

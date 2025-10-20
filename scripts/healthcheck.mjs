@@ -61,22 +61,34 @@ try {
         if (health?.issues?.length) {
           console.warn(`⚠️ Cảnh báo storage (${health.severity || 'unknown'}):`);
           for (const issue of health.issues) {
-            console.warn(`   • ${issue}`);
+            const description = typeof issue === 'string' ? issue : issue?.message || issue?.code || 'Không rõ';
+            console.warn(`   • ${description}`);
           }
         } else {
           console.log('✅ Dung lượng lưu trữ ổn định.');
         }
         if (backup) {
-          const latest = backup.entries?.[0];
+          const latest = backup.recent?.[0];
           if (latest) {
-            console.log(`   • Sao lưu gần nhất: ${latest?.createdAt || 'chưa có'} (${latest?.status || 'không rõ'})`);
+            const status = latest?.meta?.status || latest?.result || 'không rõ';
+            console.log(`   • Sao lưu gần nhất: ${latest?.ts || 'chưa có'} (${status})`);
           }
         }
         if (database) {
           console.log(`   • SQLite dung lượng hiện tại: ${database?.sizeLabel || database?.sizeBytes || 'không rõ'}`);
+          if (database.sqliteStats) {
+            const freePages = database.sqliteStats.freelistCount ?? 0;
+            console.log(
+              `   • Trang dữ liệu: ${database.sqliteStats.pageCount ?? 'không rõ'} (trống ${freePages})`
+            );
+          }
         }
         if (disk) {
-          console.log(`   • Ổ đĩa: ${disk?.usedLabel || ''} / ${disk?.totalLabel || ''} (${disk?.percentUsed || 0}% đã dùng)`);
+          const usedPercent = typeof disk?.usedPercent === 'number' ? disk.usedPercent.toFixed(1) : 'không rõ';
+          console.log(`   • Ổ đĩa: ${disk?.usedLabel || ''} / ${disk?.totalLabel || ''} (${usedPercent}% đã dùng)`);
+          if (disk?.error) {
+            console.warn(`   • Không thể thống kê đầy đủ dung lượng ổ đĩa: ${disk.error}`);
+          }
         }
       }
       if (snapshot?.sqlServer?.health && snapshot.sqlServer.health.ok === false) {

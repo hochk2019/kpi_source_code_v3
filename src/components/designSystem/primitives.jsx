@@ -190,6 +190,20 @@ export function StatusBadge({ tone = "neutral", className, children, icon, ...pr
   );
 }
 
+const EMPTY_OPTION_VALUE = "__ds_select_empty__";
+
+function toInternalSelectValue(raw) {
+  if (raw === null || raw === undefined) {
+    return EMPTY_OPTION_VALUE;
+  }
+  const stringValue = `${raw}`;
+  return stringValue === "" ? EMPTY_OPTION_VALUE : stringValue;
+}
+
+function toExternalSelectValue(internal) {
+  return internal === EMPTY_OPTION_VALUE ? "" : internal;
+}
+
 export function FilterSelect({
   value,
   onChange,
@@ -201,22 +215,35 @@ export function FilterSelect({
   triggerClassName,
   contentClassName,
 }) {
-  const normalizedValue = value ?? "";
+  const internalValue = toInternalSelectValue(value);
   const items = React.useMemo(() => {
+    const base = Array.isArray(options)
+      ? options.map(item => ({
+          ...item,
+          value: toInternalSelectValue(item?.value ?? item?.label ?? ""),
+        }))
+      : [];
     if (emptyLabel) {
-      return [{ value: "", label: emptyLabel }, ...options];
+      return [{ value: EMPTY_OPTION_VALUE, label: emptyLabel }, ...base];
     }
-    return options;
+    return base;
   }, [emptyLabel, options]);
 
+  const handleChange = React.useCallback(
+    (nextValue) => {
+      onChange?.(toExternalSelectValue(nextValue));
+    },
+    [onChange],
+  );
+
   return (
-    <Select value={normalizedValue} onValueChange={onChange} disabled={disabled}>
+    <Select value={internalValue} onValueChange={handleChange} disabled={disabled}>
       <SelectTrigger className={cn("ds-select-trigger", triggerClassName, className)}>
         <SelectValue placeholder={placeholder} />
       </SelectTrigger>
       <SelectContent className={cn("ds-select-content", contentClassName)}>
         {items.map((item) => (
-          <SelectItem key={item.value ?? item.label} value={item.value ?? ""} className="text-sm">
+          <SelectItem key={item.value ?? item.label} value={item.value ?? EMPTY_OPTION_VALUE} className="text-sm">
             {item.label}
           </SelectItem>
         ))}

@@ -140,7 +140,39 @@ const metricPalette = [
   'bg-fuchsia-500/10 text-fuchsia-700 border border-fuchsia-400/60',
 ];
 
-export default function DataHealthDashboard({ currentUser }) {
+const policyInputClass =
+  'w-full rounded border border-gray-300 px-2 py-1 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400 dark:disabled:bg-slate-800/50 dark:disabled:text-slate-500';
+
+const policyCheckboxClass =
+  'h-4 w-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500 dark:border-slate-600 dark:bg-slate-800 disabled:cursor-not-allowed disabled:border-gray-300 disabled:bg-gray-100';
+
+function describeDiskWarning(info) {
+  if (!info) return '';
+  if (info.warningCode === 'statfs_not_supported') {
+    return 'Không thể thống kê dung lượng ổ đĩa trên nền tảng hiện tại.';
+  }
+  if (info.warningCode === 'windows_ps_error') {
+    return info.error
+      ? `Không thể đọc dung lượng ổ đĩa từ PowerShell: ${info.error}`
+      : 'PowerShell không trả về dung lượng ổ đĩa.';
+  }
+  if (info.warningCode === 'disk_command_error') {
+    return info.error
+      ? `Không thể chạy lệnh kiểm tra dung lượng ổ đĩa: ${info.error}`
+      : 'Không thể chạy lệnh kiểm tra dung lượng ổ đĩa.';
+  }
+  if (info.warningCode === 'statfs_error') {
+    return info.error
+      ? `Không thể lấy thông tin dung lượng ổ đĩa: ${info.error}`
+      : 'Không thể lấy thông tin dung lượng ổ đĩa từ hệ điều hành.';
+  }
+  if (info.error && info.error !== 'statfs_not_supported') {
+    return `Lỗi đọc dung lượng ổ đĩa: ${info.error}`;
+  }
+  return '';
+}
+
+export default function DataHealthDashboard({ currentUser, canManage = false }) {
   const [liveNotifications, setLiveNotifications] = useState([]);
   const [historyNotifications, setHistoryNotifications] = useState([]);
   const [, setPolicyConfig] = useState(null);
@@ -149,6 +181,7 @@ export default function DataHealthDashboard({ currentUser }) {
   const [policyStats, setPolicyStats] = useState(null);
   const [policySaving, setPolicySaving] = useState(false);
   const [policyError, setPolicyError] = useState('');
+  const canEditPolicy = Boolean(canManage);
   const summaryTask = useCallback(async ({ signal }) => {
     const response = await fetchWithAuth('/api/data-health/summary', { cache: 'no-store', signal });
     if (!response.ok) {
@@ -210,6 +243,9 @@ export default function DataHealthDashboard({ currentUser }) {
       setPolicyError(err?.message || 'Không thể tải chính sách trùng 11 số');
     },
   });
+
+  const policyInputsDisabled = !canEditPolicy || policySaving || policyLoading;
+  const policyActionsDisabled = !canEditPolicy || policySaving;
 
   useEffect(() => {
     reloadPolicy();
@@ -478,6 +514,10 @@ export default function DataHealthDashboard({ currentUser }) {
   }, [summary, policyStats]);
 
   const handleSavePolicy = useCallback(async () => {
+    if (!canEditPolicy) {
+      alert('Tài khoản hiện không có quyền cấu hình sức khỏe dữ liệu.');
+      return;
+    }
     if (!policyForm) {
       alert('Chưa có dữ liệu cấu hình chính sách để lưu.');
       return;
@@ -537,10 +577,14 @@ export default function DataHealthDashboard({ currentUser }) {
     } finally {
       setPolicySaving(false);
     }
-  }, [policyForm, reloadSummary]);
+  }, [canEditPolicy, policyForm, reloadSummary]);
 
   const handleUnlockSource = useCallback(
     async (source) => {
+      if (!canEditPolicy) {
+        alert('Tài khoản hiện không có quyền chỉnh sửa chính sách dữ liệu.');
+        return;
+      }
       if (!source) return;
       setPolicySaving(true);
       setPolicyError('');
@@ -569,11 +613,15 @@ export default function DataHealthDashboard({ currentUser }) {
         setPolicySaving(false);
       }
     },
-    [reloadSummary]
+    [canEditPolicy, reloadSummary]
   );
 
   const handleLockSource = useCallback(
     async (source) => {
+      if (!canEditPolicy) {
+        alert('Tài khoản hiện không có quyền chỉnh sửa chính sách dữ liệu.');
+        return;
+      }
       if (!source) return;
       let reason = 'Khóa tạm thời để rà soát dữ liệu trùng';
       if (typeof window !== 'undefined') {
@@ -610,7 +658,7 @@ export default function DataHealthDashboard({ currentUser }) {
         setPolicySaving(false);
       }
     },
-    [reloadSummary]
+    [canEditPolicy, reloadSummary]
   );
 
   const combinedNotifications = useMemo(() => {
@@ -643,11 +691,23 @@ export default function DataHealthDashboard({ currentUser }) {
 
   const databaseSizeLabel = databaseStorage.sizeLabel || formatBytes(databaseStorage.sizeBytes);
   const databaseUpdatedAt = databaseStorage.lastModifiedAt ? formatDate(databaseStorage.lastModifiedAt) : 'Không rõ';
+  const sqliteStats = databaseStorage.sqliteStats || {};
+  const sqliteStatsAvailable = typeof sqliteStats.pageCount === 'number' && sqliteStats.pageCount >= 0;
+  const sqliteTotalPages = sqliteStatsAvailable ? sqliteStats.pageCount : null;
+  const sqliteFreePages = sqliteStatsAvailable ? sqliteStats.freelistCount ?? 0 : null;
+  const sqliteUsedPages = sqliteStatsAvailable && sqliteTotalPages !== null ? Math.max(0, sqliteTotalPages - (sqliteFreePages ?? 0)) : null;
+  const sqlitePageSizeLabel = Number.isFinite(sqliteStats.pageSizeBytes) ? formatBytes(sqliteStats.pageSizeBytes) : '—';
+  const sqliteUsedLabel = Number.isFinite(sqliteStats.usedBytes) ? formatBytes(sqliteStats.usedBytes) : '—';
+  const sqliteHasFreeBytes = Number.isFinite(sqliteStats.freeBytes);
+  const sqliteFreeLabel = sqliteHasFreeBytes ? formatBytes(sqliteStats.freeBytes) : '—';
+  const sqliteUsedPercentLabel = Number.isFinite(sqliteStats.usedPercent) ? formatPercent(sqliteStats.usedPercent) : null;
+  const sqliteFreePercentLabel = Number.isFinite(sqliteStats.freePercent) ? formatPercent(sqliteStats.freePercent) : null;
   const diskUsedPercent = typeof diskInfo.usedPercent === 'number' ? Math.max(0, Math.min(100, diskInfo.usedPercent)) : null;
   const diskUsedLabel = diskInfo.usedLabel || formatBytes(diskInfo.usedBytes);
   const diskFreeLabel = diskInfo.freeLabel || formatBytes(diskInfo.freeBytes);
   const diskTotalLabel = diskInfo.totalLabel || formatBytes(diskInfo.totalBytes);
   const diskSeverity = severityStyles[storageHealth.severity] || severityStyles.info;
+  const diskWarningMessage = describeDiskWarning(diskInfo);
 
   return (
     <div className="space-y-4">
@@ -831,9 +891,41 @@ export default function DataHealthDashboard({ currentUser }) {
               <dt className="font-medium">Cập nhật file</dt>
               <dd className="text-right text-gray-700 dark:text-gray-100">{databaseUpdatedAt}</dd>
             </div>
+            {sqliteStatsAvailable && (
+              <>
+                <div className="flex items-center justify-between gap-3">
+                  <dt className="font-medium">Trang sử dụng</dt>
+                  <dd className="text-right text-gray-700 dark:text-gray-100">
+                    {sqliteUsedPages ?? '—'} / {sqliteTotalPages ?? '—'}
+                    {sqliteUsedPercentLabel ? ` • ${sqliteUsedPercentLabel}` : ''}
+                  </dd>
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <dt className="font-medium">Trang trống</dt>
+                  <dd className="text-right text-gray-700 dark:text-gray-100">
+                    {sqliteFreePages ?? 0}
+                    {sqliteFreePercentLabel ? ` • ${sqliteFreePercentLabel}` : ''}
+                    {sqliteHasFreeBytes ? ` (${sqliteFreeLabel})` : ''}
+                  </dd>
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <dt className="font-medium">Kích thước trang</dt>
+                  <dd className="text-right text-gray-700 dark:text-gray-100">{sqlitePageSizeLabel}</dd>
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <dt className="font-medium">Dung lượng thực dùng</dt>
+                  <dd className="text-right text-gray-700 dark:text-gray-100">{sqliteUsedLabel}</dd>
+                </div>
+              </>
+            )}
             {databaseStorage.warningCode === 'memory_db' && (
               <div className="rounded border border-amber-200 bg-amber-50 p-2 text-[11px] text-amber-700 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-200">
                 Hệ thống đang chạy CSDL ở chế độ bộ nhớ. Hãy cấu hình file thực tế để sao lưu được dữ liệu.
+              </div>
+            )}
+            {databaseStorage.sqliteStatsError && (
+              <div className="rounded border border-amber-200 bg-amber-50 p-2 text-[11px] text-amber-700 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-200">
+                Không thể thống kê trang dữ liệu SQLite: {databaseStorage.sqliteStatsError}
               </div>
             )}
           </dl>
@@ -852,12 +944,13 @@ export default function DataHealthDashboard({ currentUser }) {
               <span>Còn trống: {diskFreeLabel}</span>
               <span>Tổng: {diskTotalLabel}</span>
             </div>
-            {diskInfo.error && (
-              <div className="mt-2 text-[11px] text-amber-700 dark:text-amber-200">
-                {diskInfo.warningCode === 'statfs_not_supported'
-                  ? 'Không thể thống kê dung lượng ổ đĩa trên nền tảng hiện tại.'
-                  : `Lỗi đọc dung lượng ổ đĩa: ${diskInfo.error}`}
+            {diskInfo.method && (
+              <div className="mt-2 text-[11px] text-gray-500 dark:text-gray-400">
+                Nguồn số liệu: {diskInfo.method === 'statfs' ? 'Hệ điều hành (statfs)' : diskInfo.method === 'df' ? 'Lệnh df' : 'PowerShell'}
               </div>
+            )}
+            {diskWarningMessage && (
+              <div className="mt-2 text-[11px] text-amber-700 dark:text-amber-200">{diskWarningMessage}</div>
             )}
           </div>
         </div>
@@ -982,6 +1075,11 @@ export default function DataHealthDashboard({ currentUser }) {
             <p className="text-xs text-gray-500 dark:text-gray-400">
               Tinh chỉnh ngưỡng cảnh báo, trạng thái khóa nguồn và theo dõi lần đánh giá gần nhất.
             </p>
+            {!canEditPolicy && (
+              <p className="mt-1 text-xs font-semibold text-amber-600 dark:text-amber-300">
+                Tài khoản hiện chỉ có quyền xem cấu hình, không thể chỉnh sửa thông số.
+              </p>
+            )}
           </div>
           <div className="flex items-center gap-2">
             <button
@@ -996,7 +1094,7 @@ export default function DataHealthDashboard({ currentUser }) {
               type="button"
               onClick={handleSavePolicy}
               className="rounded bg-emerald-600 px-3 py-1 text-xs font-medium text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
-              disabled={policySaving}
+              disabled={policyActionsDisabled}
             >
               {policySaving ? 'Đang lưu…' : 'Lưu cấu hình'}
             </button>
@@ -1020,63 +1118,73 @@ export default function DataHealthDashboard({ currentUser }) {
                     const raw = event.target.value;
                     setPolicyForm((prev) => ({ ...(prev || {}), autoNotifyAfterDays: raw === '' ? '' : Number(raw) }));
                   }}
-                  className="w-full rounded border border-gray-300 px-2 py-1 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100"
+                  disabled={policyInputsDisabled}
+                  readOnly={!canEditPolicy}
+                  className={policyInputClass}
                 />
               </label>
               <label className="space-y-1 text-xs font-medium text-gray-600 dark:text-gray-300">
-                Thời gian chờ nhắc lại (giờ)
+                Thời gian chờ giữa các lần nhắc (giờ)
                 <input
                   type="number"
-                  min="1"
+                  min="0"
                   value={policyForm?.notifyCooldownHours ?? ''}
                   onChange={(event) => {
                     const raw = event.target.value;
                     setPolicyForm((prev) => ({ ...(prev || {}), notifyCooldownHours: raw === '' ? '' : Number(raw) }));
                   }}
-                  className="w-full rounded border border-gray-300 px-2 py-1 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100"
+                  disabled={policyInputsDisabled}
+                  readOnly={!canEditPolicy}
+                  className={policyInputClass}
                 />
               </label>
               <label className="space-y-1 text-xs font-medium text-gray-600 dark:text-gray-300">
-                Khoảng đánh giá (ngày)
+                Cửa sổ đánh giá (ngày)
                 <input
                   type="number"
-                  min="1"
+                  min="0"
                   value={policyForm?.evaluationWindowDays ?? ''}
                   onChange={(event) => {
                     const raw = event.target.value;
                     setPolicyForm((prev) => ({ ...(prev || {}), evaluationWindowDays: raw === '' ? '' : Number(raw) }));
                   }}
-                  className="w-full rounded border border-gray-300 px-2 py-1 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100"
+                  disabled={policyInputsDisabled}
+                  readOnly={!canEditPolicy}
+                  className={policyInputClass}
                 />
               </label>
               <label className="space-y-1 text-xs font-medium text-gray-600 dark:text-gray-300">
-                Số nhóm trùng để khóa nguồn
+                Tự khóa sau số nhóm trùng
                 <input
                   type="number"
-                  min="1"
+                  min="0"
                   value={policyForm?.autoLockAfterGroups ?? ''}
                   onChange={(event) => {
                     const raw = event.target.value;
                     setPolicyForm((prev) => ({ ...(prev || {}), autoLockAfterGroups: raw === '' ? '' : Number(raw) }));
                   }}
-                  className="w-full rounded border border-gray-300 px-2 py-1 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100"
+                  disabled={policyInputsDisabled}
+                  readOnly={!canEditPolicy}
+                  className={policyInputClass}
                 />
               </label>
               <label className="space-y-1 text-xs font-medium text-gray-600 dark:text-gray-300">
-                Kích thước nhóm tối thiểu
+                Số bản ghi tối thiểu để khóa
                 <input
                   type="number"
-                  min="1"
+                  min="0"
                   value={policyForm?.minGroupSizeForLock ?? ''}
                   onChange={(event) => {
                     const raw = event.target.value;
                     setPolicyForm((prev) => ({ ...(prev || {}), minGroupSizeForLock: raw === '' ? '' : Number(raw) }));
                   }}
-                  className="w-full rounded border border-gray-300 px-2 py-1 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100"
+                  disabled={policyInputsDisabled}
+                  readOnly={!canEditPolicy}
+                  className={policyInputClass}
                 />
               </label>
               <label className="space-y-1 text-xs font-medium text-gray-600 dark:text-gray-300">
-                Ngày tự mở khóa
+                Tự mở khóa sau (ngày)
                 <input
                   type="number"
                   min="0"
@@ -1085,7 +1193,9 @@ export default function DataHealthDashboard({ currentUser }) {
                     const raw = event.target.value;
                     setPolicyForm((prev) => ({ ...(prev || {}), autoUnlockAfterDays: raw === '' ? '' : Number(raw) }));
                   }}
-                  className="w-full rounded border border-gray-300 px-2 py-1 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100"
+                  disabled={policyInputsDisabled}
+                  readOnly={!canEditPolicy}
+                  className={policyInputClass}
                 />
               </label>
             </div>
@@ -1097,7 +1207,8 @@ export default function DataHealthDashboard({ currentUser }) {
                   const checked = event.target.checked;
                   setPolicyForm((prev) => ({ ...(prev || {}), autoLockEnabled: checked }));
                 }}
-                className="h-4 w-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500 dark:border-slate-600 dark:bg-slate-800"
+                disabled={policyInputsDisabled}
+                className={policyCheckboxClass}
               />
               Bật chế độ khóa nguồn tự động khi vượt ngưỡng
             </label>
@@ -1144,7 +1255,7 @@ export default function DataHealthDashboard({ currentUser }) {
                                 type="button"
                                 onClick={() => handleUnlockSource(item.source)}
                                 className="rounded border border-emerald-500 px-2 py-1 text-[11px] text-emerald-600 hover:bg-emerald-50 dark:border-emerald-400 dark:text-emerald-300 dark:hover:bg-emerald-400/10"
-                                disabled={policySaving}
+                                disabled={policyActionsDisabled}
                               >
                                 Mở khóa
                               </button>
@@ -1153,7 +1264,7 @@ export default function DataHealthDashboard({ currentUser }) {
                                 type="button"
                                 onClick={() => handleLockSource(item.source)}
                                 className="rounded border border-amber-500 px-2 py-1 text-[11px] text-amber-600 hover:bg-amber-50 dark:border-amber-400 dark:text-amber-300 dark:hover:bg-amber-400/10"
-                                disabled={policySaving}
+                                disabled={policyActionsDisabled}
                               >
                                 Khóa nguồn
                               </button>
@@ -1189,7 +1300,7 @@ export default function DataHealthDashboard({ currentUser }) {
                           type="button"
                           className="rounded border border-amber-600 px-2 py-0.5 text-[11px] text-amber-700 hover:bg-amber-100 dark:border-amber-400 dark:text-amber-200 dark:hover:bg-amber-400/20"
                           onClick={() => handleUnlockSource(item.source)}
-                          disabled={policySaving}
+                          disabled={policyActionsDisabled}
                         >
                           Mở khóa
                         </button>

@@ -98,7 +98,14 @@ function createEmptyDraft() {
 }
 
 function readDraftsFromStore() {
-  return getHQAgencies().map(createDraftFromStore);
+  try {
+    const rows = getHQAgencies();
+    const drafts = Array.isArray(rows) ? rows.map(createDraftFromStore) : [];
+    return { drafts, error: null };
+  } catch (err) {
+    console.error("Không thể đọc danh sách Đại lý HQ", err);
+    return { drafts: [], error: err instanceof Error ? err : new Error(String(err)) };
+  }
 }
 
 function mergeRows(current, incoming) {
@@ -218,12 +225,17 @@ function formatHistoryTimestamp(value) {
 
 export default function HQAgencyManager({ canEdit = true, currentUser = null }) {
   const initialDraftsRef = useRef(null);
+  const initialErrorRef = useRef(null);
   if (initialDraftsRef.current === null) {
-    initialDraftsRef.current = readDraftsFromStore();
+    const { drafts, error } = readDraftsFromStore();
+    initialDraftsRef.current = drafts;
+    initialErrorRef.current = error;
   }
 
-  const [baseline, setBaseline] = useState(() => initialDraftsRef.current.map(cloneDraft));
-  const [rows, setRows] = useState(() => initialDraftsRef.current.map(cloneDraft));
+  const initialDrafts = Array.isArray(initialDraftsRef.current) ? initialDraftsRef.current : [];
+
+  const [baseline, setBaseline] = useState(() => initialDrafts.map(cloneDraft));
+  const [rows, setRows] = useState(() => initialDrafts.map(cloneDraft));
   const [search, setSearch] = useState("");
   const [agencyFilter, setAgencyFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -232,6 +244,7 @@ export default function HQAgencyManager({ canEdit = true, currentUser = null }) 
   const [selectedFile, setSelectedFile] = useState("");
   const [historyStamp, setHistoryStamp] = useState(() => Date.now());
   const [openHistory, setOpenHistory] = useState([]);
+  const [loadError, setLoadError] = useState(() => (initialErrorRef.current ? "Không thể tải danh sách Đại lý HQ. Vui lòng thử lại." : null));
   const fileRef = useRef(null);
 
   const actor = currentUser?.username || "guest";
@@ -278,14 +291,15 @@ export default function HQAgencyManager({ canEdit = true, currentUser = null }) 
   }, [computeHasDirty]);
 
   const loadFromStore = useCallback(() => {
-    const sanitized = readDraftsFromStore();
-    const baselineDrafts = sanitized.map(cloneDraft);
-    const workingDrafts = sanitized.map(cloneDraft);
-    initialDraftsRef.current = sanitized;
+    const { drafts, error } = readDraftsFromStore();
+    const baselineDrafts = drafts.map(cloneDraft);
+    const workingDrafts = drafts.map(cloneDraft);
+    initialDraftsRef.current = drafts;
     setBaseline(baselineDrafts);
     setRows(workingDrafts);
     setDirty(false);
     setPage(1);
+    setLoadError(error ? "Không thể tải danh sách Đại lý HQ. Vui lòng thử lại." : null);
   }, []);
 
   const refreshHistory = useCallback(async () => {
@@ -312,6 +326,54 @@ export default function HQAgencyManager({ canEdit = true, currentUser = null }) 
       list.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
     }
     return map;
+  }, [historyEntries]);
+
+  const historyOverview = useMemo(() => {
+    if (!Array.isArray(historyEntries) || historyEntries.length === 0) {
+      return {
+        total: 0,
+        lastTimestamp: null,
+        lastActor: '',
+        lastMst: '',
+        last24h: 0,
+      };
+    }
+    const total = historyEntries.length;
+    const latest = historyEntries[0];
+    let lastTimestamp = null;
+    let lastActor = '';
+    let lastMst = '';
+    if (latest?.timestamp) {
+      const ts = new Date(latest.timestamp);
+      if (!Number.isNaN(ts.getTime())) {
+        lastTimestamp = ts;
+      }
+    }
+    if (latest?.actor) {
+      lastActor = latest.actor;
+    }
+    if (latest?.mst) {
+      lastMst = latest.mst;
+    }
+    const now = Date.now();
+    const dayAgo = now - 24 * 60 * 60 * 1000;
+    let last24h = 0;
+    for (const entry of historyEntries) {
+      const ts = new Date(entry?.timestamp);
+      if (Number.isNaN(ts.getTime())) continue;
+      if (ts.getTime() >= dayAgo) {
+        last24h += 1;
+      } else {
+        break;
+      }
+    }
+    return {
+      total,
+      lastTimestamp,
+      lastActor,
+      lastMst,
+      last24h,
+    };
   }, [historyEntries]);
 
   const agencyOptions = useMemo(() => {
@@ -662,6 +724,46 @@ export default function HQAgencyManager({ canEdit = true, currentUser = null }) 
           Bạn đang ở chế độ chỉ xem. Đăng nhập bằng tài khoản quản trị để thêm hoặc chỉnh sửa danh sách Đại lý HQ.
         </div>
       )}
+
+      {loadError && (
+        <div className="rounded border border-red-300 bg-red-50 p-3 text-sm text-red-700">
+          {loadError}
+        </div>
+      )}
+
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] px-3 py-2 text-sm text-[color:var(--ds-text-secondary)]">
+        {historyOverview.total === 0 ? (
+          <span>Chưa ghi nhận lịch sử đồng bộ Đại lý HQ.</span>
+        ) : (
+          <>
+            <span>
+              <strong className="font-semibold text-[color:var(--ds-text-primary)]">{historyOverview.total}</strong>{' '}
+              bản ghi lịch sử được lưu.
+            </span>
+            <span>
+              24 giờ qua:{' '}
+              <strong className="font-semibold text-[color:var(--ds-text-primary)]">{historyOverview.last24h}</strong>
+            </span>
+            {historyOverview.lastTimestamp && (
+              <span>
+                Cập nhật gần nhất:{' '}
+                <strong className="font-semibold text-[color:var(--ds-text-primary)]">
+                  {formatHistoryTimestamp(historyOverview.lastTimestamp)}
+                </strong>
+                {historyOverview.lastActor ? ` • ${historyOverview.lastActor}` : ''}
+                {historyOverview.lastMst ? ` • MST ${historyOverview.lastMst}` : ''}
+              </span>
+            )}
+          </>
+        )}
+        <button
+          type="button"
+          onClick={refreshHistory}
+          className="ml-auto rounded border border-[color:var(--ds-border-strong)] px-3 py-1 text-xs font-medium text-[color:var(--ds-text-primary)] hover:bg-[color:var(--ds-surface-muted)]"
+        >
+          Làm mới lịch sử
+        </button>
+      </div>
 
       <div className="flex flex-wrap items-center gap-2">
         <input
