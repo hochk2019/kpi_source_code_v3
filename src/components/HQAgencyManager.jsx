@@ -328,6 +328,54 @@ export default function HQAgencyManager({ canEdit = true, currentUser = null }) 
     return map;
   }, [historyEntries]);
 
+  const historyOverview = useMemo(() => {
+    if (!Array.isArray(historyEntries) || historyEntries.length === 0) {
+      return {
+        total: 0,
+        lastTimestamp: null,
+        lastActor: '',
+        lastMst: '',
+        last24h: 0,
+      };
+    }
+    const total = historyEntries.length;
+    const latest = historyEntries[0];
+    let lastTimestamp = null;
+    let lastActor = '';
+    let lastMst = '';
+    if (latest?.timestamp) {
+      const ts = new Date(latest.timestamp);
+      if (!Number.isNaN(ts.getTime())) {
+        lastTimestamp = ts;
+      }
+    }
+    if (latest?.actor) {
+      lastActor = latest.actor;
+    }
+    if (latest?.mst) {
+      lastMst = latest.mst;
+    }
+    const now = Date.now();
+    const dayAgo = now - 24 * 60 * 60 * 1000;
+    let last24h = 0;
+    for (const entry of historyEntries) {
+      const ts = new Date(entry?.timestamp);
+      if (Number.isNaN(ts.getTime())) continue;
+      if (ts.getTime() >= dayAgo) {
+        last24h += 1;
+      } else {
+        break;
+      }
+    }
+    return {
+      total,
+      lastTimestamp,
+      lastActor,
+      lastMst,
+      last24h,
+    };
+  }, [historyEntries]);
+
   const agencyOptions = useMemo(() => {
     const values = new Map();
     const collect = (list) => {
@@ -682,6 +730,40 @@ export default function HQAgencyManager({ canEdit = true, currentUser = null }) 
           {loadError}
         </div>
       )}
+
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] px-3 py-2 text-sm text-[color:var(--ds-text-secondary)]">
+        {historyOverview.total === 0 ? (
+          <span>Chưa ghi nhận lịch sử đồng bộ Đại lý HQ.</span>
+        ) : (
+          <>
+            <span>
+              <strong className="font-semibold text-[color:var(--ds-text-primary)]">{historyOverview.total}</strong>{' '}
+              bản ghi lịch sử được lưu.
+            </span>
+            <span>
+              24 giờ qua:{' '}
+              <strong className="font-semibold text-[color:var(--ds-text-primary)]">{historyOverview.last24h}</strong>
+            </span>
+            {historyOverview.lastTimestamp && (
+              <span>
+                Cập nhật gần nhất:{' '}
+                <strong className="font-semibold text-[color:var(--ds-text-primary)]">
+                  {formatHistoryTimestamp(historyOverview.lastTimestamp)}
+                </strong>
+                {historyOverview.lastActor ? ` • ${historyOverview.lastActor}` : ''}
+                {historyOverview.lastMst ? ` • MST ${historyOverview.lastMst}` : ''}
+              </span>
+            )}
+          </>
+        )}
+        <button
+          type="button"
+          onClick={refreshHistory}
+          className="ml-auto rounded border border-[color:var(--ds-border-strong)] px-3 py-1 text-xs font-medium text-[color:var(--ds-text-primary)] hover:bg-[color:var(--ds-surface-muted)]"
+        >
+          Làm mới lịch sử
+        </button>
+      </div>
 
       <div className="flex flex-wrap items-center gap-2">
         <input
