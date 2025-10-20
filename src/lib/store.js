@@ -1358,9 +1358,19 @@ function normalizeDeclRows(rows) {
 }
 
 function getDeclRowsRaw() {
-  const stored = safeParse(getItem(DECL_KEY), []);
+  const rawString = getItem(DECL_KEY);
+  const stored = safeParse(rawString, []);
   const normalized = normalizeDeclRows(stored);
-  setItem(DECL_KEY, JSON.stringify(normalized));
+
+  try {
+    const serialized = JSON.stringify(normalized);
+    if (rawString !== serialized) {
+      setItem(DECL_KEY, serialized);
+    }
+  } catch {
+    // Bỏ qua lỗi tuần tự hóa, hàm vẫn trả về dữ liệu đã chuẩn hóa
+  }
+
   return normalized;
 }
 
