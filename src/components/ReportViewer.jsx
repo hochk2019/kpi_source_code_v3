@@ -832,6 +832,25 @@ function StaffDetailCard({ staff, canExport, onExport, exporting, visibleColumns
     () => rows.filter((row) => row?.isAdjustment).length,
     [rows]
   );
+  const adjustmentBreakdown = useMemo(() => {
+    let positive = 0;
+    let negative = 0;
+    let neutral = 0;
+    for (const row of rows) {
+      if (!row?.isAdjustment) continue;
+      const value = Number(row?.kpi || 0);
+      if (!Number.isFinite(value) || Math.abs(value) < 0.0001) {
+        neutral += 1;
+        continue;
+      }
+      if (value > 0) {
+        positive += 1;
+      } else {
+        negative += 1;
+      }
+    }
+    return { positive, negative, neutral };
+  }, [rows]);
   const adjustmentTooltip = useMemo(() => {
     const lines = adjustmentTotals
       .filter((item) => Number(item?.points))
@@ -841,9 +860,25 @@ function StaffDetailCard({ staff, canExport, onExport, exporting, visibleColumns
     }
     return lines.join("\n");
   }, [adjustmentTotals]);
-  const adjustmentSubtitle = totalAdjustmentEntries
-    ? `${formatInt(totalAdjustmentEntries)} lượt cộng/trừ`
-    : "Chưa có điều chỉnh";
+  const adjustmentSubtitle = useMemo(() => {
+    if (!totalAdjustmentEntries) {
+      return "Chưa có điều chỉnh";
+    }
+    const segments = [];
+    if (adjustmentBreakdown.positive) {
+      segments.push(`${formatInt(adjustmentBreakdown.positive)} lượt cộng`);
+    }
+    if (adjustmentBreakdown.negative) {
+      segments.push(`${formatInt(adjustmentBreakdown.negative)} lượt trừ`);
+    }
+    if (adjustmentBreakdown.neutral) {
+      segments.push(`${formatInt(adjustmentBreakdown.neutral)} lượt 0 điểm`);
+    }
+    if (!segments.length) {
+      return `${formatInt(totalAdjustmentEntries)} lượt cộng/trừ`;
+    }
+    return segments.join(" • ");
+  }, [adjustmentBreakdown, totalAdjustmentEntries]);
   const infoLineParts = [
     `${formatInt(stats.decls)} tờ khai`,
     `Nhập: ${formatInt(stats.import)} • Xuất: ${formatInt(stats.export)}`,
@@ -1063,6 +1098,25 @@ function TeamDetailCard({ team, canExport, onExport, exporting, visibleColumns =
     () => rows.filter((row) => row?.isAdjustment).length,
     [rows]
   );
+  const adjustmentBreakdown = useMemo(() => {
+    let positive = 0;
+    let negative = 0;
+    let neutral = 0;
+    for (const row of rows) {
+      if (!row?.isAdjustment) continue;
+      const value = Number(row?.kpi || 0);
+      if (!Number.isFinite(value) || Math.abs(value) < 0.0001) {
+        neutral += 1;
+        continue;
+      }
+      if (value > 0) {
+        positive += 1;
+      } else {
+        negative += 1;
+      }
+    }
+    return { positive, negative, neutral };
+  }, [rows]);
   const adjustmentTooltip = useMemo(() => {
     const lines = adjustmentTotals
       .filter((item) => Number(item?.points))
@@ -1072,9 +1126,25 @@ function TeamDetailCard({ team, canExport, onExport, exporting, visibleColumns =
     }
     return lines.join("\n");
   }, [adjustmentTotals]);
-  const adjustmentSubtitle = totalAdjustmentEntries
-    ? `${formatInt(totalAdjustmentEntries)} lượt cộng/trừ`
-    : "Chưa có điều chỉnh";
+  const adjustmentSubtitle = useMemo(() => {
+    if (!totalAdjustmentEntries) {
+      return "Chưa có điều chỉnh";
+    }
+    const segments = [];
+    if (adjustmentBreakdown.positive) {
+      segments.push(`${formatInt(adjustmentBreakdown.positive)} lượt cộng`);
+    }
+    if (adjustmentBreakdown.negative) {
+      segments.push(`${formatInt(adjustmentBreakdown.negative)} lượt trừ`);
+    }
+    if (adjustmentBreakdown.neutral) {
+      segments.push(`${formatInt(adjustmentBreakdown.neutral)} lượt 0 điểm`);
+    }
+    if (!segments.length) {
+      return `${formatInt(totalAdjustmentEntries)} lượt cộng/trừ`;
+    }
+    return segments.join(" • ");
+  }, [adjustmentBreakdown, totalAdjustmentEntries]);
   const infoLineParts = [
     `${formatInt(stats.decls)} tờ khai`,
     `Nhập: ${formatInt(stats.import)} • Xuất: ${formatInt(stats.export)}`,
