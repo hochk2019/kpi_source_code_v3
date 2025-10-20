@@ -25,6 +25,7 @@ import {
   saveImportColumnConfig,
   subscribeImportColumnConfig,
   previewDeclRows,
+  normalizeMST,
 } from "@/lib/store.js";
 import { mapRow, detectDateOrder } from "@/lib/importer.js";
 import { loadRules, computeKPI, extractLicenseCodesFromRowObj } from "@/lib/rules.js";
@@ -599,11 +600,31 @@ const CO_FILTER_OPTIONS = Object.freeze([
   { value: "min", label: "Tùy chọn số dòng C/O" },
 ]);
 
+function parseMstListInput(value) {
+  if (!value && value !== 0) return [];
+  const tokens = Array.isArray(value) ? value : `${value}`.split(/[;\n\r]+/u);
+  const set = new Set();
+  for (const token of tokens) {
+    const normalized = normalizeMST(token);
+    if (normalized) {
+      set.add(normalized);
+    }
+  }
+  return Array.from(set);
+}
+
+function formatMstListForInput(list) {
+  if (!Array.isArray(list)) return "";
+  return list.filter(Boolean).join("\n");
+}
+
 const DEFAULT_SYNC_CONFIG = Object.freeze({
   enabled: false,
   schedule: "0 * * * *",
   rangeDays: 1,
   preferMonthFirst: false,
+  includeTaxCodes: [],
+  excludeTaxCodes: [],
   connection: {
     server: "",
     database: "",
@@ -2132,6 +2153,8 @@ export default function DataImporter({
     user: DEFAULT_SYNC_CONFIG.connection.user,
     password: "",
     hasPassword: !!DEFAULT_SYNC_CONFIG.connection.hasPassword,
+    includeTaxCodesText: formatMstListForInput(DEFAULT_SYNC_CONFIG.includeTaxCodes),
+    excludeTaxCodesText: formatMstListForInput(DEFAULT_SYNC_CONFIG.excludeTaxCodes),
   }));
   const [syncLoading, setSyncLoading] = useState(false);
   const [syncRunning, setSyncRunning] = useState(false);
@@ -2150,6 +2173,27 @@ export default function DataImporter({
   const [previewError, setPreviewError] = useState("");
   const [previewRangeInfo, setPreviewRangeInfo] = useState(null);
   const previewRangeLabel = useMemo(() => formatDateRangeLabel(previewRangeInfo), [previewRangeInfo]);
+  const activeIncludeTaxCodes = useMemo(
+    () => parseMstListInput(syncForm?.includeTaxCodesText || []),
+    [syncForm?.includeTaxCodesText]
+  );
+  const activeExcludeTaxCodes = useMemo(
+    () => parseMstListInput(syncForm?.excludeTaxCodesText || []),
+    [syncForm?.excludeTaxCodesText]
+  );
+  const mstFilterNotice = useMemo(() => {
+    if (!activeIncludeTaxCodes.length && !activeExcludeTaxCodes.length) {
+      return "";
+    }
+    const parts = [];
+    if (activeIncludeTaxCodes.length) {
+      parts.push(`chỉ MST: ${activeIncludeTaxCodes.join(", ")}`);
+    }
+    if (activeExcludeTaxCodes.length) {
+      parts.push(`loại trừ MST: ${activeExcludeTaxCodes.join(", ")}`);
+    }
+    return parts.length ? `Lọc theo ${parts.join("; ")}` : "";
+  }, [activeExcludeTaxCodes, activeIncludeTaxCodes]);
 
   const applyDatePreset = useCallback((presetKey) => {
     const preset = DATE_RANGE_PRESETS.find((item) => item.key === presetKey);
@@ -2759,6 +2803,8 @@ export default function DataImporter({
       user: normalizedConfig.connection?.user || "",
       password: "",
       hasPassword: !!normalizedConfig.connection?.hasPassword,
+      includeTaxCodesText: formatMstListForInput(normalizedConfig.includeTaxCodes),
+      excludeTaxCodesText: formatMstListForInput(normalizedConfig.excludeTaxCodes),
     });
   }, []);
 
@@ -3090,6 +3136,8 @@ export default function DataImporter({
     setSyncMessage("");
     setSyncError("");
     try {
+      const includeTaxCodes = activeIncludeTaxCodes;
+      const excludeTaxCodes = activeExcludeTaxCodes;
       const payload = {
         config: {
           enabled: !!syncForm.enabled,
@@ -3101,6 +3149,8 @@ export default function DataImporter({
             database: syncForm.database || "",
             user: syncForm.user || "",
           },
+          includeTaxCodes,
+          excludeTaxCodes,
         },
         preservePassword: !syncForm.password && syncForm.hasPassword,
       };
@@ -3130,7 +3180,14 @@ export default function DataImporter({
     } finally {
       setSyncLoading(false);
     }
-  }, [applyConfigToForm, canManageSync, syncConfig, syncForm]);
+  }, [
+    activeExcludeTaxCodes,
+    activeIncludeTaxCodes,
+    applyConfigToForm,
+    canManageSync,
+    syncConfig,
+    syncForm,
+  ]);
 
   const handleRunSync = useCallback(async () => {
     if (!canManageSync) {
@@ -3156,6 +3213,8 @@ export default function DataImporter({
           actor,
           from: manualRange.from || undefined,
           to: manualRange.to || undefined,
+          includeTaxCodes: activeIncludeTaxCodes,
+          excludeTaxCodes: activeExcludeTaxCodes,
         }),
         credentials: "include",
       });
@@ -3168,7 +3227,12 @@ export default function DataImporter({
       const locked = payload?.result?.reviewLocked ?? 0;
       const skippedNote = skipped > 0 ? `, bỏ qua ${skipped} tờ khai đã có` : '';
       const lockedNote = locked > 0 ? `, khóa ${locked} tờ khai đã rà soát` : '';
-      setSyncMessage(`Đã đồng bộ ${imported} tờ khai mới từ ECUS${skippedNote}${lockedNote}.`);
+      const baseMessage = `Đã đồng bộ ${imported} tờ khai mới từ ECUS${skippedNote}${lockedNote}.`;
+      const messageParts = [baseMessage];
+      if (mstFilterNotice) {
+        messageParts.push(`${mstFilterNotice}.`);
+      }
+      setSyncMessage(messageParts.join(" ").replace(/\s+/g, " ").trim());
       setPreviewRows([]);
       setPreviewRangeInfo(null);
       setPreviewLimited(false);
@@ -3192,11 +3256,14 @@ export default function DataImporter({
     }
   }, [
     actor,
+    activeExcludeTaxCodes,
+    activeIncludeTaxCodes,
     canManageSync,
     fetchAlerts,
     fetchCoDiscrepancy,
     fetchSyncConfig,
     fetchSyncStatus,
+    mstFilterNotice,
     loadSavedRows,
     refreshDeclRowsFromServer,
     manualRange.from,
@@ -3218,6 +3285,8 @@ export default function DataImporter({
           from: manualRange.from || undefined,
           to: manualRange.to || undefined,
           limit: 100,
+          includeTaxCodes: activeIncludeTaxCodes,
+          excludeTaxCodes: activeExcludeTaxCodes,
         }),
         credentials: "include",
       });
@@ -3230,7 +3299,8 @@ export default function DataImporter({
       setPreviewLimited(!!payload?.preview?.limited);
       setPreviewRangeInfo(payload?.preview?.range || null);
       if (!rows.length) {
-        setPreviewError("Không tìm thấy tờ khai mới trong khoảng thời gian đã chọn.");
+        const baseMessage = "Không tìm thấy tờ khai mới trong khoảng thời gian đã chọn.";
+        setPreviewError(mstFilterNotice ? `${baseMessage} (${mstFilterNotice}).` : baseMessage);
       }
     } catch (err) {
       console.error("Không thể xem trước dữ liệu ECUS", err);
@@ -3241,7 +3311,14 @@ export default function DataImporter({
     } finally {
       setPreviewLoading(false);
     }
-  }, [canManageSync, manualRange.from, manualRange.to]);
+  }, [
+    activeExcludeTaxCodes,
+    activeIncludeTaxCodes,
+    canManageSync,
+    manualRange.from,
+    manualRange.to,
+    mstFilterNotice,
+  ]);
 
   const handleManualRangeChange = useCallback((field, value) => {
     setManualRange((prev) => ({ ...prev, [field]: value }));
@@ -6075,6 +6152,48 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
                   />
                 </div>
               </div>
+              <div className="grid gap-3 md:grid-cols-2">
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-gray-600" htmlFor="sync-include-mst">
+                    Chỉ đồng bộ các MST
+                  </label>
+                  <textarea
+                    id="sync-include-mst"
+                    className="h-24 w-full rounded border px-2 py-1 text-sm"
+                    value={syncForm.includeTaxCodesText}
+                    onChange={(e) =>
+                      setSyncForm((prev) => ({
+                        ...prev,
+                        includeTaxCodesText: e.target.value,
+                      }))
+                    }
+                    placeholder="0100109106; 0312345678"
+                  />
+                  <p className="text-xs text-gray-500">
+                    Nhập nhiều MST cần đồng bộ, phân tách bằng dấu chấm phẩy (;) hoặc xuống dòng. Để trống để đồng bộ tất cả.
+                  </p>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-medium text-gray-600" htmlFor="sync-exclude-mst">
+                    Danh sách MST loại trừ
+                  </label>
+                  <textarea
+                    id="sync-exclude-mst"
+                    className="h-24 w-full rounded border px-2 py-1 text-sm"
+                    value={syncForm.excludeTaxCodesText}
+                    onChange={(e) =>
+                      setSyncForm((prev) => ({
+                        ...prev,
+                        excludeTaxCodesText: e.target.value,
+                      }))
+                    }
+                    placeholder="0401234567\n0109999999"
+                  />
+                  <p className="text-xs text-gray-500">
+                    Các MST nằm trong danh sách này sẽ bị bỏ qua khi đồng bộ. Hỗ trợ nhập theo dòng hoặc dấu chấm phẩy.
+                  </p>
+                </div>
+              </div>
               <div className="flex flex-wrap items-center gap-2">
                 <span className="text-xs uppercase tracking-wide text-gray-500">Khoảng thời gian chạy tay</span>
                 <div className="flex flex-wrap items-center gap-1">
@@ -6123,6 +6242,11 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
                   {syncRunning ? "Đang đồng bộ..." : "Đồng bộ ngay"}
                 </button>
               </div>
+              {mstFilterNotice && (
+                <div className="text-xs text-amber-600">
+                  Đang bật bộ lọc MST: {mstFilterNotice}.
+                </div>
+              )}
               {previewRangeInfo && (
                 <div className="text-xs text-gray-500">
                   Khoảng xem trước: {previewRangeLabel || "..."}

@@ -1527,6 +1527,70 @@ describe('ECUS sync API', () => {
     expect(newRow?.co_line_count).toBe(1);
   });
 
+  it('áp dụng bộ lọc MST khi xem trước và chạy đồng bộ', async () => {
+    resetDb();
+    sqlMock.__resetMock();
+    const adminAgent = request.agent(app);
+    const loginRes = await adminAgent
+      .post('/api/auth/login')
+      .send({ username: 'admin', password: 'admin123' });
+    expect(loginRes.status).toBe(200);
+
+    await adminAgent.put('/api/import/ecus/config').send({
+      config: {
+        batchSize: 0,
+        includeTaxCodes: [],
+        excludeTaxCodes: [],
+        connection: {
+          server: 'MRHOC\\ECUSSQL2008',
+          database: 'ECUS5VNACCS',
+          user: 'sa',
+          password: '123456',
+        },
+      },
+    });
+
+    sqlMock.__setMockResult([
+      { So_tk: '100000000000', Ngay_dang_ky: '2025-08-01', MaSoThue: '0100109106', Ten_doanh_nghiep: 'DN 010', Loai_hinh: 'A11' },
+      { So_tk: '200000000000', Ngay_dang_ky: '2025-08-01', MaSoThue: '0100109107', Ten_doanh_nghiep: 'DN 011', Loai_hinh: 'A12' },
+      { So_tk: '300000000000', Ngay_dang_ky: '2025-08-01', MaSoThue: '0100109108', Ten_doanh_nghiep: 'DN 012', Loai_hinh: 'A31' },
+    ]);
+
+    const previewRes = await adminAgent.post('/api/import/ecus/preview').send({
+      from: '2025-08-01',
+      to: '2025-08-02',
+      includeTaxCodes: ['0100109106', '0100109107'],
+      excludeTaxCodes: ['0100109107'],
+    });
+
+    expect(previewRes.status).toBe(200);
+    expect(previewRes.body.preview.rows).toHaveLength(1);
+    expect(previewRes.body.preview.rows[0]).toMatchObject({ mst: '0100109106' });
+
+    sqlMock.__setMockResult([
+      { So_tk: '100000000000', Ngay_dang_ky: '2025-08-01', MaSoThue: '0100109106', Ten_doanh_nghiep: 'DN 010', Loai_hinh: 'A11' },
+      { So_tk: '200000000000', Ngay_dang_ky: '2025-08-01', MaSoThue: '0100109107', Ten_doanh_nghiep: 'DN 011', Loai_hinh: 'A12' },
+      { So_tk: '300000000000', Ngay_dang_ky: '2025-08-01', MaSoThue: '0100109108', Ten_doanh_nghiep: 'DN 012', Loai_hinh: 'A31' },
+    ]);
+
+    const runRes = await adminAgent.post('/api/import/ecus/run').send({
+      from: '2025-08-01',
+      to: '2025-08-02',
+      includeTaxCodes: ['0100109106', '0100109107'],
+      excludeTaxCodes: ['0100109107'],
+    });
+
+    expect(runRes.status).toBe(200);
+    expect(runRes.body.result.imported).toBe(1);
+    expect(runRes.body.result.includeTaxCodes).toEqual(['0100109106', '0100109107']);
+    expect(runRes.body.result.excludeTaxCodes).toEqual(['0100109107']);
+    const storedRows = JSON.parse(
+      getDb().prepare('SELECT value FROM kv_store WHERE key = ?').get('decl_rows_v1')?.value || '[]'
+    );
+    expect(storedRows).toHaveLength(1);
+    expect(storedRows[0]).toMatchObject({ mst: '0100109106' });
+  });
+
   it('lưu cấu hình và chạy đồng bộ thành công', async () => {
     const adminAgent = request.agent(app);
     const loginRes = await adminAgent.post('/api/auth/login').send({ username: 'admin', password: 'admin123' });
