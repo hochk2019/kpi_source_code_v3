@@ -68,6 +68,69 @@ function resolveProviderLabel(profile, config, providerId) {
   return providerId;
 }
 
+function resolveProviderDetails(profile, config, providerId) {
+  if (!providerId) {
+    return null;
+  }
+  const fromProfile = profile?.providers?.find((entry) => entry.id === providerId);
+  if (fromProfile) {
+    return fromProfile;
+  }
+  const fromConfig = config?.providers?.find((entry) => entry.id === providerId);
+  if (fromConfig) {
+    return fromConfig;
+  }
+  return null;
+}
+
+function isOllamaProvider(provider) {
+  if (!provider) {
+    return false;
+  }
+  const type = `${provider.type || ''}`.toLowerCase();
+  const id = `${provider.id || ''}`.toLowerCase();
+  if (type.includes('ollama')) {
+    return true;
+  }
+  return id.includes('ollama');
+}
+
+function resolveProviderHealth(testState) {
+  if (!testState) {
+    return {
+      label: 'Chưa kiểm tra',
+      className: 'border border-gray-200 bg-gray-100 text-gray-700',
+    };
+  }
+  switch (testState.status) {
+    case 'success':
+      return {
+        label: 'Trực tuyến',
+        className: 'border border-emerald-200 bg-emerald-100 text-emerald-700',
+      };
+    case 'error':
+      return {
+        label: 'Ngoại tuyến',
+        className: 'border border-red-200 bg-red-100 text-red-700',
+      };
+    case 'testing':
+      return {
+        label: 'Đang kiểm tra…',
+        className: 'border border-amber-200 bg-amber-100 text-amber-700',
+      };
+    case 'stale':
+      return {
+        label: 'Cần kiểm tra lại',
+        className: 'border border-amber-200 bg-amber-50 text-amber-700',
+      };
+    default:
+      return {
+        label: 'Không rõ',
+        className: 'border border-gray-200 bg-gray-100 text-gray-700',
+      };
+  }
+}
+
 function createDraftFromConfig(config) {
   if (!config || typeof config !== 'object') {
     return null;
@@ -563,6 +626,7 @@ export default function AiAssistant({ currentUser }) {
   const historyLoadErrorShownRef = useRef(false);
   const historyPersistErrorShownRef = useRef(false);
   const lastSavedSnapshotRef = useRef(JSON.stringify([]));
+  const autoHealthCheckedRef = useRef(new Set());
 
   const appendMessage = useCallback((entry) => {
     const sanitized = sanitizeHistoryMessage(entry);
@@ -979,6 +1043,21 @@ export default function AiAssistant({ currentUser }) {
     return profile.providers.filter((entry) => entry.enabled !== false);
   }, [profile]);
   const availableProviders = providerOptions;
+  const profileDefaultProvider = useMemo(
+    () => resolveProviderDetails(profile, config, profile?.defaultProvider),
+    [profile, config]
+  );
+  const draftDefaultProvider = useMemo(() => {
+    if (!draft || !draft.defaultProvider) {
+      return null;
+    }
+    const providers = Array.isArray(draft.providers) ? draft.providers : [];
+    const inDraft = providers.find((entry) => entry.id === draft.defaultProvider);
+    if (inDraft) {
+      return inDraft;
+    }
+    return resolveProviderDetails(profile, config, draft.defaultProvider);
+  }, [draft, profile, config]);
   const pingUsageSummary = pingState.usage ? formatUsage(pingState.usage) : null;
 
   useEffect(() => {
@@ -1240,7 +1319,7 @@ export default function AiAssistant({ currentUser }) {
   }, []);
 
   const handleTestProvider = useCallback(
-    async (providerId) => {
+    async (providerId, { silentSuccess = false } = {}) => {
       if (!draft) {
         toast.error('Chưa có cấu hình để kiểm tra.');
         return;
@@ -1272,7 +1351,9 @@ export default function AiAssistant({ currentUser }) {
             checkedAt: new Date().toISOString(),
           },
         }));
-        toast.success('Đã kiểm tra kết nối thành công.');
+        if (!silentSuccess) {
+          toast.success('Đã kiểm tra kết nối thành công.');
+        }
       } catch (error) {
         const errorMessage = error?.message || 'Không thể kiểm thử nhà cung cấp AI.';
         setProviderTests((prev) => ({
@@ -1288,6 +1369,39 @@ export default function AiAssistant({ currentUser }) {
     },
     [draft],
   );
+
+  useEffect(() => {
+    if (!draft) {
+      return;
+    }
+    const providers = Array.isArray(draft.providers) ? draft.providers : [];
+    const activeIds = new Set();
+    providers.forEach((provider) => {
+      if (!provider?.id) {
+        return;
+      }
+      if (provider.enabled === false) {
+        autoHealthCheckedRef.current.delete(provider.id);
+        return;
+      }
+      if (!isOllamaProvider(provider)) {
+        return;
+      }
+      activeIds.add(provider.id);
+      if (autoHealthCheckedRef.current.has(provider.id)) {
+        return;
+      }
+      autoHealthCheckedRef.current.add(provider.id);
+      handleTestProvider(provider.id, { silentSuccess: true }).catch((error) => {
+        console.error('Kiểm tra nhà cung cấp Ollama thất bại', error);
+      });
+    });
+    for (const key of Array.from(autoHealthCheckedRef.current)) {
+      if (!activeIds.has(key)) {
+        autoHealthCheckedRef.current.delete(key);
+      }
+    }
+  }, [draft, handleTestProvider]);
 
   const handleConfigReset = () => {
     setDraft(createDraftFromConfig(config));
@@ -1432,6 +1546,12 @@ const handleInsightFeedback = useCallback(
                 <p className="text-xs text-[color:var(--ds-text-muted)]">
                   Hỏi về KPI, dữ liệu tờ khai hoặc quy trình nội bộ. Tất cả câu trả lời đều bằng tiếng Việt.
                 </p>
+                {isOllamaProvider(profileDefaultProvider) && (
+                  <p className="mt-1 flex items-center gap-2 text-[11px] font-medium text-emerald-600">
+                    <span className="inline-block h-2 w-2 rounded-full bg-emerald-500" aria-hidden="true" />
+                    Dữ liệu câu hỏi được xử lý hoàn toàn nội bộ qua Ollama cục bộ.
+                  </p>
+                )}
               </div>
               <div className="flex gap-2">
                 <button
@@ -2027,9 +2147,24 @@ const handleInsightFeedback = useCallback(
                       {draft.providers.map((provider) => (
                         <option key={provider.id} value={provider.id}>
                           {provider.label || provider.id}
+                          {isOllamaProvider(provider) ? ' • Nội bộ (đề xuất)' : ''}
                         </option>
                       ))}
                     </select>
+                    {isOllamaProvider(draftDefaultProvider) ? (
+                      <p className="text-xs text-emerald-600">
+                        Đang sử dụng mô hình Ollama nội bộ — dữ liệu hỏi đáp sẽ được giữ trong mạng doanh nghiệp.
+                      </p>
+                    ) : (
+                      <p className="text-xs text-[color:var(--ds-text-muted)]">
+                        Khuyến nghị chọn "Ollama cục bộ" để đảm bảo dữ liệu không rời khỏi hệ thống.
+                      </p>
+                    )}
+                    {draft?.defaultProvider && providerTests[draft.defaultProvider]?.status === 'error' && (
+                      <p className="text-xs text-red-600">
+                        Không thể kết nối nhà cung cấp mặc định, vui lòng kiểm tra lại dịch vụ Ollama hoặc chọn nhà cung cấp khác.
+                      </p>
+                    )}
                   </label>
                   <label className="flex flex-col gap-1 text-sm">
                     <span className="font-medium text-[color:var(--ds-text-primary)]">Nhà cung cấp dự phòng</span>
@@ -2042,6 +2177,7 @@ const handleInsightFeedback = useCallback(
                       {draft.providers.map((provider) => (
                         <option key={provider.id} value={provider.id}>
                           {provider.label || provider.id}
+                          {isOllamaProvider(provider) ? ' • Nội bộ' : ''}
                         </option>
                       ))}
                     </select>
@@ -2190,14 +2326,32 @@ const handleInsightFeedback = useCallback(
                   </div>
                   {draft.providers.map((provider) => {
                     const testState = providerTests[provider.id] || null;
+                    const healthMeta = resolveProviderHealth(testState);
                     return (
                       <div
                         key={provider.id}
                         className="rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-muted)] p-4"
                       >
                         <div className="flex flex-wrap items-center justify-between gap-2">
-                          <div>
-                            <p className="text-sm font-semibold text-[color:var(--ds-text-primary)]">{provider.label || provider.id}</p>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <p className="text-sm font-semibold text-[color:var(--ds-text-primary)]">
+                                {provider.label || provider.id}
+                              </p>
+                              {isOllamaProvider(provider) && (
+                                <span className="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-medium text-emerald-700">
+                                  Nội bộ (Ollama)
+                                </span>
+                              )}
+                              <span
+                                className={clsx(
+                                  'inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium',
+                                  healthMeta.className
+                                )}
+                              >
+                                {healthMeta.label}
+                              </span>
+                            </div>
                             <p className="text-xs uppercase tracking-wide text-[color:var(--ds-text-muted)]">{provider.id}</p>
                           </div>
                           <label className="flex items-center gap-2 text-xs font-medium text-[color:var(--ds-text-primary)]">

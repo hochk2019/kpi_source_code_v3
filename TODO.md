@@ -11,12 +11,12 @@
 - [x] Viết test tích hợp xác nhận `/api/ai/chat` gọi đúng provider Ollama khi được cấu hình.
 
 ### UI / Cấu hình
-- [ ] Cập nhật trang cấu hình AI cho phép chọn Ollama làm mặc định, hiển thị trạng thái health-check và cảnh báo nếu dịch vụ ngoại tuyến.
-- [ ] Điều chỉnh thông điệp trong giao diện Trợ lý AI để nhắc người dùng rằng dữ liệu sẽ được xử lý hoàn toàn nội bộ khi dùng Ollama.
+- [x] Cập nhật trang cấu hình AI cho phép chọn Ollama làm mặc định, hiển thị trạng thái health-check và cảnh báo nếu dịch vụ ngoại tuyến.
+- [x] Điều chỉnh thông điệp trong giao diện Trợ lý AI để nhắc người dùng rằng dữ liệu sẽ được xử lý hoàn toàn nội bộ khi dùng Ollama.
 
 ### Vận hành & Tài liệu
-- [ ] Thu thập yêu cầu hạ tầng (port, tài nguyên RAM/VRAM, tài khoản dịch vụ) phục vụ triển khai Ollama trên máy chủ nội bộ.
-- [ ] Ghi chú tạm thời về việc sẽ bổ sung hướng dẫn cài đặt Ollama trên Windows 11 sau khi hoàn tất Giai đoạn 2 (backend + UI sẵn sàng).
+- [x] Thu thập yêu cầu hạ tầng (port, tài nguyên RAM/VRAM, tài khoản dịch vụ) phục vụ triển khai Ollama trên máy chủ nội bộ. (Xem thêm `docs/operations/ollama-internal-requirements.md`)
+- [x] Ghi chú tạm thời về việc sẽ bổ sung hướng dẫn cài đặt Ollama trên Windows 11 sau khi hoàn tất Giai đoạn 2 (backend + UI sẵn sàng).
 
 ## Giai đoạn 2 – API snapshot KPI dành cho AI (ưu tiên Backend)
 
