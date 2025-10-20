@@ -65,9 +65,36 @@ function formatDecimal(value) {
   });
 }
 
+function formatOptionalDecimal(value) {
+  const num = Number(value);
+  if (!Number.isFinite(num) || Math.abs(num) < 0.0001) {
+    return "—";
+  }
+  return formatDecimal(num);
+}
+
+function formatOptionalInt(value) {
+  const num = Number(value);
+  if (!Number.isFinite(num) || num === 0) {
+    return "—";
+  }
+  return formatInt(num);
+}
+
 const DEFAULT_CHART_COLORS = ["#2563eb", "#22c55e", "#f97316", "#a855f7", "#14b8a6"];
 
 const METRIC_SORT_KEYS = ["kpi", "decls", "licenses"];
+
+const ADJUSTMENT_CATEGORY_TONE_MAP = {
+  support: "text-emerald-600",
+  cancel: "text-rose-500",
+  correction: "text-amber-600",
+  tax: "text-sky-600",
+  teamwork: "text-indigo-600",
+  coworker_attitude: "text-purple-600",
+  customer_attitude: "text-fuchsia-600",
+  discipline: "text-amber-700",
+};
 
 const SORT_OPTIONS = [
   { value: "kpi", label: "Điểm KPI" },
@@ -715,91 +742,6 @@ function SummaryCard({ title, value, subtitle }) {
       <div className="mt-1 text-2xl font-semibold text-gray-900">{value}</div>
       {subtitle ? <div className="mt-1 text-xs text-gray-500">{subtitle}</div> : null}
     </div>
-  );
-}
-
-function AdjustmentDigestCard({ report }) {
-  const totalPoints = formatDecimal(report.totalPoints || 0);
-  const appliedCount = formatInt(report.approvedCount || report.appliedCount || 0);
-  const stats = [
-    { label: "Đã duyệt", value: formatInt(report.approvedCount || 0), tone: "text-emerald-600" },
-    { label: "Chờ duyệt", value: formatInt(report.pendingCount || 0), tone: "text-amber-600" },
-    { label: "Đã từ chối", value: formatInt(report.rejectedCount || 0), tone: "text-rose-500" },
-  ];
-
-  const totals = report.totalsByCategory || {};
-  const categoryToneMap = {
-    support: "text-emerald-600",
-    cancel: "text-rose-500",
-    correction: "text-amber-600",
-    tax: "text-sky-600",
-    teamwork: "text-indigo-600",
-    coworker_attitude: "text-purple-600",
-    customer_attitude: "text-fuchsia-600",
-    discipline: "text-amber-700",
-  };
-  const categories = toAdjustmentTotalsArray(totals);
-
-  const formatOptionalDecimal = (value) => {
-    const num = Number(value);
-    if (!Number.isFinite(num) || num === 0) {
-      return "—";
-    }
-    return formatDecimal(num);
-  };
-
-  const formatOptionalInt = (value) => {
-    const num = Number(value);
-    if (!Number.isFinite(num) || num === 0) {
-      return "—";
-    }
-    return formatInt(num);
-  };
-
-  return (
-    <section className="ds-card space-y-4 p-4">
-      <div className="space-y-1">
-        <h3 className="text-base font-semibold text-gray-900">Điểm KPI +/- bổ sung</h3>
-        <p className="text-sm text-gray-500">
-          Tự động cộng/trừ vào KPI tổng khi trạng thái được duyệt.
-        </p>
-      </div>
-      <div className="rounded-xl border border-subtle bg-gray-50 px-4 py-3 dark:bg-slate-900/40">
-        <div className="text-xs uppercase tracking-wide text-gray-500">Điểm đã áp dụng</div>
-        <div className="mt-1 text-3xl font-semibold text-emerald-600">{totalPoints}</div>
-        <div className="text-xs text-gray-500">Từ {appliedCount} lượt xử lý thành công</div>
-      </div>
-      <ul className="space-y-1 text-sm text-gray-600">
-        {stats.map((item) => (
-          <li key={item.label} className="flex items-center justify-between">
-            <span>{item.label}</span>
-            <span className={`font-semibold ${item.tone}`}>{item.value}</span>
-          </li>
-        ))}
-      </ul>
-      <div className="pt-2">
-        <h4 className="text-sm font-semibold text-gray-900">Phân bổ theo hạng mục</h4>
-        <ul className="mt-2 space-y-2">
-          {categories.map((item) => {
-            const tone = categoryToneMap[item.key] || "text-slate-600";
-            return (
-              <li
-                key={item.key}
-                className="rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-600 dark:border-slate-700 dark:bg-slate-900/40"
-              >
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <span className="font-medium text-gray-900 dark:text-gray-100">{item.label}</span>
-                  <span className={`font-semibold ${tone}`}>{formatOptionalDecimal(item.points)}</span>
-                </div>
-                <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                  Số lượt: <span className="font-semibold text-gray-700 dark:text-gray-200">{formatOptionalInt(item.quantity)}</span>
-                </div>
-              </li>
-            );
-          })}
-        </ul>
-      </div>
-    </section>
   );
 }
 
@@ -1772,6 +1714,10 @@ export default function ReportViewer({ canExport = true, currentUser = null }) {
       points: Number(entry?.points || 0),
       quantity: Number(entry?.quantity || 0),
     });
+    const totalsByCategory = Object.keys(totalsRaw).reduce((acc, key) => {
+      acc[key] = normalizeTotals(totalsRaw[key]);
+      return acc;
+    }, {});
     return {
       list: Array.isArray(base.list) ? base.list : [],
       applied: Array.isArray(base.applied) ? base.applied : [],
@@ -1780,12 +1726,7 @@ export default function ReportViewer({ canExport = true, currentUser = null }) {
       approvedCount: Number(base.approvedCount || 0),
       rejectedCount: Number(base.rejectedCount || 0),
       appliedCount: Number(base.appliedCount || 0),
-      totalsByCategory: {
-        support: normalizeTotals(totalsRaw.support),
-        cancel: normalizeTotals(totalsRaw.cancel),
-        correction: normalizeTotals(totalsRaw.correction),
-        tax: normalizeTotals(totalsRaw.tax),
-      },
+      totalsByCategory,
     };
   }, [report.adjustments]);
 
@@ -1810,6 +1751,18 @@ export default function ReportViewer({ canExport = true, currentUser = null }) {
   const rejectedAdjustments = useMemo(
     () => adjustmentsReport.list.filter((item) => item?.status === "rejected"),
     [adjustmentsReport.list]
+  );
+  const adjustmentTotals = useMemo(
+    () => toAdjustmentTotalsArray(adjustmentsReport.totalsByCategory || {}),
+    [adjustmentsReport.totalsByCategory]
+  );
+  const adjustmentStatusStats = useMemo(
+    () => [
+      { label: "Đã duyệt", value: Number(adjustmentsReport.approvedCount || 0), tone: "text-emerald-600" },
+      { label: "Chờ duyệt", value: Number(adjustmentsReport.pendingCount || 0), tone: "text-amber-600" },
+      { label: "Đã từ chối", value: Number(adjustmentsReport.rejectedCount || 0), tone: "text-rose-500" },
+    ],
+    [adjustmentsReport.approvedCount, adjustmentsReport.pendingCount, adjustmentsReport.rejectedCount]
   );
 
   const topStaffByKpi = useMemo(() => {
@@ -3049,7 +3002,6 @@ export default function ReportViewer({ canExport = true, currentUser = null }) {
             declData={topStaffByDecls}
             palette={chartPalette}
           />
-          <AdjustmentDigestCard report={adjustmentsReport} />
         </div>
 
         <div className="xl:col-span-2">
@@ -3188,42 +3140,89 @@ export default function ReportViewer({ canExport = true, currentUser = null }) {
                   </div>
                 </div>
               </div>
-              <div className="space-y-4">
-                <div>
-                  <h4 className="text-sm font-semibold text-[color:var(--ds-text-primary)]">Chờ duyệt</h4>
-                  {pendingAdjustments.length ? (
+              <div className="space-y-6">
+                <section className="space-y-3 rounded-xl border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-muted)] p-4">
+                  <div className="text-xs uppercase tracking-wide text-[color:var(--ds-text-secondary)]">Điểm đã áp dụng</div>
+                  <div className="text-3xl font-semibold text-emerald-600">
+                    {formatDecimal(adjustmentsReport.totalPoints || 0)}
+                  </div>
+                  <div className="text-xs text-[color:var(--ds-text-secondary)]">
+                    Từ {formatInt(adjustmentsReport.approvedCount || adjustmentsReport.appliedCount || 0)} lượt xử lý thành công
+                  </div>
+                  <ul className="space-y-1 pt-2 text-sm text-[color:var(--ds-text-secondary)]">
+                    {adjustmentStatusStats.map((item) => (
+                      <li key={item.label} className="flex items-center justify-between">
+                        <span>{item.label}</span>
+                        <span className={`font-semibold ${item.tone}`}>{formatInt(item.value)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+
+                <section>
+                  <h4 className="text-sm font-semibold text-[color:var(--ds-text-primary)]">Phân bổ theo hạng mục</h4>
+                  {adjustmentTotals.length ? (
                     <ul className="mt-2 space-y-2 text-sm text-[color:var(--ds-text-secondary)]">
-                      {pendingAdjustments.map((item) => (
-                        <li key={item.id} className="rounded border border-dashed border-amber-400 bg-amber-500/10 px-3 py-2">
-                          <div className="font-medium text-[color:var(--ds-text-primary)]">{item.label || item.category}</div>
-                          <div>{item.staffName || 'Chưa gán'} — {item.month}</div>
-                          <div>Điểm đề xuất: {formatDecimal(item.totalPoints || 0)}</div>
-                        </li>
-                      ))}
+                      {adjustmentTotals.map((item) => {
+                        const tone = ADJUSTMENT_CATEGORY_TONE_MAP[item.key] || "text-slate-600";
+                        return (
+                          <li
+                            key={item.key}
+                            className="rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] px-3 py-2"
+                          >
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <span className="font-medium text-[color:var(--ds-text-primary)]">{item.label}</span>
+                              <span className={`font-semibold ${tone}`}>{formatOptionalDecimal(item.points)}</span>
+                            </div>
+                            <div className="mt-1 text-xs text-[color:var(--ds-text-muted)]">
+                              Số lượt: <span className="font-semibold text-[color:var(--ds-text-primary)]">{formatOptionalInt(item.quantity)}</span>
+                            </div>
+                          </li>
+                        );
+                      })}
                     </ul>
                   ) : (
-                    <p className="mt-2 text-sm text-[color:var(--ds-text-muted)]">Không có yêu cầu đang chờ.</p>
+                    <p className="mt-2 text-sm text-[color:var(--ds-text-muted)]">Chưa có dữ liệu phân bổ.</p>
                   )}
-                </div>
-                {rejectedAdjustments.length ? (
+                </section>
+
+                <section className="space-y-3">
                   <div>
-                    <h4 className="text-sm font-semibold text-[color:var(--ds-text-primary)]">Đã từ chối gần đây</h4>
-                    <ul className="mt-2 space-y-2 text-sm text-[color:var(--ds-text-secondary)]">
-                      {rejectedAdjustments.slice(0, 3).map((item) => (
-                        <li key={item.id} className="rounded border border-rose-400/60 bg-rose-500/10 px-3 py-2">
-                          <div className="font-medium text-[color:var(--ds-text-primary)]">{item.label || item.category}</div>
-                          <div>{item.staffName || 'Chưa gán'} — {item.month}</div>
-                          <div>Điểm: {formatDecimal(item.totalPoints || 0)}</div>
-                        </li>
-                      ))}
-                    </ul>
-                    {rejectedAdjustments.length > 3 ? (
-                      <div className="pt-1 text-xs text-[color:var(--ds-text-muted)]">
-                        Còn {rejectedAdjustments.length - 3} mục khác đã bị từ chối.
-                      </div>
-                    ) : null}
+                    <h4 className="text-sm font-semibold text-[color:var(--ds-text-primary)]">Chờ duyệt</h4>
+                    {pendingAdjustments.length ? (
+                      <ul className="mt-2 space-y-2 text-sm text-[color:var(--ds-text-secondary)]">
+                        {pendingAdjustments.map((item) => (
+                          <li key={item.id} className="rounded border border-dashed border-amber-400 bg-amber-500/10 px-3 py-2">
+                            <div className="font-medium text-[color:var(--ds-text-primary)]">{item.label || item.category}</div>
+                            <div>{item.staffName || 'Chưa gán'} — {item.month}</div>
+                            <div>Điểm đề xuất: {formatDecimal(item.totalPoints || 0)}</div>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="mt-2 text-sm text-[color:var(--ds-text-muted)]">Không có yêu cầu đang chờ.</p>
+                    )}
                   </div>
-                ) : null}
+                  {rejectedAdjustments.length ? (
+                    <div>
+                      <h4 className="text-sm font-semibold text-[color:var(--ds-text-primary)]">Đã từ chối gần đây</h4>
+                      <ul className="mt-2 space-y-2 text-sm text-[color:var(--ds-text-secondary)]">
+                        {rejectedAdjustments.slice(0, 3).map((item) => (
+                          <li key={item.id} className="rounded border border-rose-400/60 bg-rose-500/10 px-3 py-2">
+                            <div className="font-medium text-[color:var(--ds-text-primary)]">{item.label || item.category}</div>
+                            <div>{item.staffName || 'Chưa gán'} — {item.month}</div>
+                            <div>Điểm: {formatDecimal(item.totalPoints || 0)}</div>
+                          </li>
+                        ))}
+                      </ul>
+                      {rejectedAdjustments.length > 3 ? (
+                        <div className="pt-1 text-xs text-[color:var(--ds-text-muted)]">
+                          Còn {rejectedAdjustments.length - 3} mục khác đã bị từ chối.
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </section>
               </div>
             </div>
           </div>
