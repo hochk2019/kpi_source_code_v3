@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   getKpiAdjustments,
   saveKpiAdjustment,
@@ -13,7 +13,12 @@ import {
   getTeamRoster,
   getDeclRows,
   sortDeclRows,
+  getMSTMap,
   normalizeStr,
+  normalizeMST,
+  normalizeName,
+  DECL_KEY,
+  MST_KEY,
 } from "@/lib/store.js";
 import { subscribe as subscribeStorage } from "@/lib/storageClient.js";
 import { Button } from "@/components/ui/button.jsx";
@@ -41,6 +46,8 @@ const FORM_FIELD_IDS = Object.freeze({
   staff: "kpi-adjust-staff",
   team: "kpi-adjust-team",
   category: "kpi-adjust-category",
+  company: "kpi-adjust-company",
+  taxCode: "kpi-adjust-taxcode",
   license: "kpi-adjust-license",
   status: "kpi-adjust-status",
   note: "kpi-adjust-note",
@@ -52,6 +59,173 @@ const FORM_FIELD_IDS = Object.freeze({
   filterStatus: "kpi-adjust-filter-status",
   decisionNote: "kpi-adjust-decision-note",
 });
+
+const MAX_DECLARATION_SUGGESTIONS = 200;
+const COMPANY_FIELD_KEYS = new Set([
+  "company",
+  "cong ty",
+  "ten cong ty",
+  "ten doanh nghiep",
+  "doanh nghiep",
+  "customer",
+]);
+const MST_FIELD_KEYS = new Set(["mst", "ma so thue", "ma so thue (mst)", "tax code"]);
+
+function extractCompanyFromRow(row) {
+  if (!row || typeof row !== "object") return "";
+  const direct = normalizeStr(row?.company ?? row?.cong_ty ?? row?.customer ?? "");
+  if (direct) return direct;
+  for (const [key, value] of Object.entries(row)) {
+    if (value === null || value === undefined || value === "") continue;
+    const normalizedKey = normalizeName(key);
+    if (!COMPANY_FIELD_KEYS.has(normalizedKey)) continue;
+    const strValue = normalizeStr(value);
+    if (strValue) return strValue;
+  }
+  return "";
+}
+
+function extractMstFromRow(row) {
+  if (!row || typeof row !== "object") return "";
+  const direct = normalizeMST(row?.mst);
+  if (direct) return direct;
+  for (const [key, value] of Object.entries(row)) {
+    if (value === null || value === undefined || value === "") continue;
+    const normalizedKey = normalizeName(key);
+    if (!MST_FIELD_KEYS.has(normalizedKey)) continue;
+    const candidate = normalizeMST(value);
+    if (candidate) return candidate;
+  }
+  return "";
+}
+
+function buildDeclarationSuggestions(limit = MAX_DECLARATION_SUGGESTIONS) {
+  const rows = sortDeclRows(getDeclRows());
+  const suggestions = [];
+  const seenKeys = new Set();
+  const baseTime = Date.now();
+
+  for (let index = 0; index < rows.length && suggestions.length < limit; index += 1) {
+    const row = rows[index];
+    if (!row) continue;
+    const soTk = normalizeStr(row?.so_tk ?? row?.so_tk_full ?? "");
+    if (!soTk) continue;
+    const branch = normalizeStr(row?.nhanh ?? row?.branch ?? "");
+    const key = `${soTk}|${branch}`;
+    if (seenKeys.has(key)) continue;
+    seenKeys.add(key);
+
+    const mst = extractMstFromRow(row);
+    const company = extractCompanyFromRow(row);
+    const parsedTs = row?.date ? Date.parse(row.date) : Number.NaN;
+    const timestamp = Number.isFinite(parsedTs) ? parsedTs : baseTime - index;
+
+    suggestions.push({
+      key,
+      soTk,
+      branch,
+      mst,
+      company,
+      date: row?.date || "",
+      timestamp,
+    });
+  }
+
+  return suggestions;
+}
+
+function buildBusinessDirectory(declarationSuggestions = null) {
+  const byMst = new Map();
+  const byCompany = new Map();
+
+  const registerEntry = (mstValue, companyValue, timestamp = 0) => {
+    const mst = normalizeMST(mstValue || "");
+    const company = normalizeStr(companyValue || "");
+    if (!mst && !company) return;
+
+    if (mst) {
+      if (!byMst.has(mst)) {
+        byMst.set(mst, { mst, company: company || "", lastSeen: timestamp });
+      }
+      const entry = byMst.get(mst);
+      if (company && (!entry.company || timestamp >= entry.lastSeen)) {
+        entry.company = company;
+        entry.lastSeen = timestamp;
+      }
+    }
+
+    if (company) {
+      const companyKey = normalizeName(company);
+      if (!byCompany.has(companyKey)) {
+        byCompany.set(companyKey, {
+          company,
+          normalized: companyKey,
+          msts: new Set(),
+          lastSeen: timestamp,
+        });
+      }
+      const companyEntry = byCompany.get(companyKey);
+      if (timestamp >= companyEntry.lastSeen) {
+        companyEntry.company = company;
+        companyEntry.lastSeen = timestamp;
+      }
+      if (mst) {
+        companyEntry.msts.add(mst);
+        const mstEntry = byMst.get(mst);
+        if (mstEntry && !mstEntry.company) {
+          mstEntry.company = company;
+        }
+      }
+    }
+  };
+
+  const mstRows = getMSTMap();
+  const mstBaseTs = Date.now();
+  mstRows.forEach((row, index) => {
+    if (!row) return;
+    registerEntry(row.mst, row.company, mstBaseTs + index);
+  });
+
+  const declSuggestions = Array.isArray(declarationSuggestions)
+    ? declarationSuggestions
+    : buildDeclarationSuggestions(MAX_DECLARATION_SUGGESTIONS);
+  declSuggestions.forEach((item, index) => {
+    if (!item) return;
+    registerEntry(item.mst, item.company, (item.timestamp ?? 0) - index);
+  });
+
+  const entries = Array.from(byMst.values()).sort((a, b) => {
+    if (a.company && b.company && a.company !== b.company) {
+      return a.company.localeCompare(b.company, "vi", { sensitivity: "base" });
+    }
+    if (a.company && !b.company) return -1;
+    if (!a.company && b.company) return 1;
+    return a.mst.localeCompare(b.mst);
+  });
+
+  const companyDirectory = new Map();
+  for (const [key, value] of byCompany.entries()) {
+    companyDirectory.set(key, {
+      company: value.company,
+      normalized: key,
+      msts: new Set(value.msts),
+      lastSeen: value.lastSeen,
+    });
+  }
+
+  return { entries, byMst, byCompany: companyDirectory };
+}
+
+function formatDateOnly(value) {
+  if (!value) return "";
+  const ts = Date.parse(value);
+  if (!Number.isFinite(ts)) return "";
+  try {
+    return new Date(ts).toLocaleDateString("vi-VN");
+  } catch (err) {
+    return "";
+  }
+}
 
 const normalizeFieldSegment = (value) =>
   String(value ?? "")
@@ -368,6 +542,8 @@ const initialFormState = (month = getCurrentMonth(), settings) => {
     month,
     staffName: "",
     teamName: "",
+    companyName: "",
+    taxCode: "",
     quantity: defaults.quantity,
     unitPoints: defaults.unitPoints,
     gradeValue: defaults.gradeValue,
@@ -384,10 +560,12 @@ export default function KPIAdjustments({ currentUser }) {
   const [settings, setSettings] = useState(() => getKpiAdjustmentSettings());
   const [adjustments, setAdjustments] = useState(() => getKpiAdjustments());
   const [roster, setRoster] = useState(() => getTeamRoster());
-  const [recentDeclarations, setRecentDeclarations] = useState(() => {
-    const rows = sortDeclRows(getDeclRows());
-    return rows.slice(-20).reverse();
+  const [businessData, setBusinessData] = useState(() => {
+    const suggestions = buildDeclarationSuggestions(MAX_DECLARATION_SUGGESTIONS);
+    return { suggestions, directory: buildBusinessDirectory(suggestions) };
   });
+  const declarationSuggestions = businessData.suggestions || [];
+  const businessDirectory = businessData.directory || { entries: [], byMst: new Map(), byCompany: new Map() };
   const [filterMonth, setFilterMonth] = useState(getCurrentMonth());
   const [filterStatus, setFilterStatus] = useState("all");
   const [form, setForm] = useState(() => initialFormState(undefined, settings));
@@ -398,6 +576,169 @@ export default function KPIAdjustments({ currentUser }) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsDraft, setSettingsDraft] = useState({});
   const [settingsError, setSettingsError] = useState("");
+  const [declarationSearch, setDeclarationSearch] = useState("");
+
+  const businessEntries = useMemo(() => businessDirectory.entries || [], [businessDirectory]);
+  const businessByMst = useMemo(
+    () => (businessDirectory.byMst instanceof Map ? businessDirectory.byMst : new Map()),
+    [businessDirectory]
+  );
+  const businessByCompany = useMemo(
+    () => (businessDirectory.byCompany instanceof Map ? businessDirectory.byCompany : new Map()),
+    [businessDirectory]
+  );
+
+  const mstOptions = useMemo(() => {
+    return businessEntries.slice(0, 400).map((entry) => ({
+      value: entry.mst,
+      label: entry.company ? `${entry.mst} — ${entry.company}` : entry.mst,
+    }));
+  }, [businessEntries]);
+
+  const companyOptions = useMemo(() => {
+    const list = Array.from(businessByCompany.values()).map((entry) => {
+      const msts = Array.from(entry.msts || []);
+      return {
+        company: entry.company,
+        msts,
+        label: entry.company,
+        description: msts.length ? `MST: ${msts.join(", ")}` : "Chưa có MST",
+      };
+    });
+    return list
+      .filter((item) => item.company)
+      .sort((a, b) => a.company.localeCompare(b.company, "vi", { sensitivity: "base" }))
+      .slice(0, 400);
+  }, [businessByCompany]);
+
+  const quickDeclarationSuggestions = useMemo(() => declarationSuggestions.slice(0, 5), [declarationSuggestions]);
+
+  const filteredDeclarationResults = useMemo(() => {
+    if (!declarationSuggestions.length) return [];
+    const rawQuery = normalizeStr(declarationSearch);
+    if (!rawQuery) {
+      return declarationSuggestions.slice(0, 8);
+    }
+    const digits = rawQuery.replace(/\D+/g, "");
+    const normalizedQuery = normalizeName(rawQuery);
+    return declarationSuggestions
+      .filter((item) => {
+        if (!item) return false;
+        if (digits) {
+          if ((item.soTk || "").includes(digits)) return true;
+          if (item.mst && item.mst.includes(digits)) return true;
+        }
+        if (normalizedQuery) {
+          if (item.company && normalizeName(item.company).includes(normalizedQuery)) {
+            return true;
+          }
+        }
+        return false;
+      })
+      .slice(0, 10);
+  }, [declarationSearch, declarationSuggestions]);
+
+  const mergeBusinessInfo = useCallback(
+    (draft, info = {}) => {
+      if (!draft) return draft;
+      const next = { ...draft };
+      const incomingMst = info.mst ? normalizeMST(info.mst) : "";
+      const incomingCompany = info.company ? normalizeStr(info.company) : "";
+
+      if (incomingMst) {
+        next.taxCode = incomingMst;
+        const mstEntry = businessByMst.get(incomingMst);
+        if (mstEntry?.company) {
+          next.companyName = mstEntry.company;
+        } else if (incomingCompany) {
+          if (!next.companyName || normalizeName(next.companyName) !== normalizeName(incomingCompany)) {
+            next.companyName = incomingCompany;
+          }
+        }
+      }
+
+      if (incomingCompany) {
+        if (!next.companyName || normalizeName(next.companyName) !== normalizeName(incomingCompany)) {
+          next.companyName = incomingCompany;
+        }
+        const companyKey = normalizeName(incomingCompany);
+        const companyEntry = businessByCompany.get(companyKey);
+        if (companyEntry) {
+          const currentMst = next.taxCode ? normalizeMST(next.taxCode) : "";
+          const hasCurrent = currentMst && companyEntry.msts instanceof Set && companyEntry.msts.has(currentMst);
+          if (!hasCurrent) {
+            const firstMst = companyEntry.msts instanceof Set ? Array.from(companyEntry.msts)[0] : undefined;
+            if (firstMst) {
+              next.taxCode = firstMst;
+              const resolved = businessByMst.get(firstMst);
+              if (resolved?.company) {
+                next.companyName = resolved.company;
+              }
+            }
+          }
+        }
+      }
+
+      return next;
+    },
+    [businessByCompany, businessByMst]
+  );
+
+  const appendReference = useCallback(
+    (referenceValue, metadata = null) => {
+      if (!referenceValue) return;
+      setForm((prev) => {
+        const combined = parseReferences(`${prev.referencesInput}\n${referenceValue}`).join("\n");
+        let next = { ...prev, referencesInput: combined };
+        if (metadata) {
+          next = mergeBusinessInfo(next, metadata);
+        }
+        return next;
+      });
+    },
+    [mergeBusinessInfo]
+  );
+
+  const refreshBusinessData = useCallback(() => {
+    const suggestions = buildDeclarationSuggestions(MAX_DECLARATION_SUGGESTIONS);
+    setBusinessData({ suggestions, directory: buildBusinessDirectory(suggestions) });
+  }, []);
+
+  const handleTaxCodeInput = useCallback(
+    (value) => {
+      const sanitized = normalizeMST(value);
+      setForm((prev) => {
+        const draft = { ...prev, taxCode: sanitized };
+        if (!sanitized) {
+          return draft;
+        }
+        return mergeBusinessInfo(draft, { mst: sanitized });
+      });
+    },
+    [mergeBusinessInfo]
+  );
+
+  const handleCompanyInput = useCallback(
+    (value) => {
+      const trimmed = normalizeStr(value);
+      setForm((prev) => {
+        if (!trimmed) {
+          return { ...prev, companyName: "" };
+        }
+        const draft = { ...prev, companyName: trimmed };
+        return mergeBusinessInfo(draft, { company: trimmed });
+      });
+    },
+    [mergeBusinessInfo]
+  );
+
+  const handleReferencePick = useCallback(
+    (item) => {
+      if (!item) return;
+      appendReference(item.soTk, { mst: item.mst, company: item.company });
+    },
+    [appendReference]
+  );
   const [settingsSaving, setSettingsSaving] = useState(false);
   const [decisionNote, setDecisionNote] = useState("");
   const canSubmit = currentUser?.permissions?.adjustSubmit !== false;
@@ -408,15 +749,24 @@ export default function KPIAdjustments({ currentUser }) {
     const unsubscribe = subscribeStorage(KPI_ADJUSTMENTS_KEY, () => {
       setAdjustments(getKpiAdjustments());
     });
-    return () => unsubscribe();
+    return () => unsubscribe?.();
   }, []);
 
   useEffect(() => {
     const unsubscribe = subscribeStorage(KPI_ADJUSTMENT_SETTINGS_KEY, () => {
       setSettings(getKpiAdjustmentSettings());
     });
-    return () => unsubscribe();
+    return () => unsubscribe?.();
   }, []);
+
+  useEffect(() => {
+    const unsubscribeDecl = subscribeStorage(DECL_KEY, refreshBusinessData);
+    const unsubscribeMst = subscribeStorage(MST_KEY, refreshBusinessData);
+    return () => {
+      unsubscribeDecl?.();
+      unsubscribeMst?.();
+    };
+  }, [refreshBusinessData]);
 
   useEffect(() => {
     setRoster(getTeamRoster());
@@ -475,10 +825,9 @@ export default function KPIAdjustments({ currentUser }) {
       });
   }, [adjustments, filterMonth, filterStatus]);
 
-  const handleRefreshDeclarations = () => {
-    const rows = sortDeclRows(getDeclRows());
-    setRecentDeclarations(rows.slice(-20).reverse());
-  };
+  const handleRefreshDeclarations = useCallback(() => {
+    refreshBusinessData();
+  }, [refreshBusinessData]);
 
   const handleCategoryChange = (value) => {
     const defaults = resolveCategoryDefaults(value, settings);
@@ -682,6 +1031,8 @@ export default function KPIAdjustments({ currentUser }) {
       month: entry.month || getCurrentMonth(),
       staffName: entry.staffName || "",
       teamName: entry.teamName || "",
+      companyName: entry.companyName || "",
+      taxCode: entry.taxCode ? normalizeMST(entry.taxCode) : "",
       quantity: entry.quantity ?? defaults.quantity,
       unitPoints: entry.unitPoints ?? defaults.unitPoints,
       gradeValue: entry.unitPoints ?? defaults.gradeValue,
@@ -771,6 +1122,14 @@ export default function KPIAdjustments({ currentUser }) {
       note: form.note,
       status: canApprove && form.id ? form.status : "pending",
     };
+    const normalizedTaxCode = normalizeMST(form.taxCode);
+    const normalizedCompanyName = normalizeStr(form.companyName);
+    if (normalizedTaxCode) {
+      payload.taxCode = normalizedTaxCode;
+    }
+    if (normalizedCompanyName) {
+      payload.companyName = normalizedCompanyName;
+    }
     if (categoryConfig.type === "grade") {
       payload.quantity = 1;
       payload.unitPoints = Number(form.gradeValue ?? form.unitPoints ?? 0);
@@ -885,6 +1244,14 @@ export default function KPIAdjustments({ currentUser }) {
                 <div>
                   <div className="text-xs font-medium uppercase text-muted-foreground">Trạng thái</div>
                   <div className="mt-1 font-medium text-foreground">{STATUS_LABELS[detailData.status] || detailData.status}</div>
+                </div>
+                <div>
+                  <div className="text-xs font-medium uppercase text-muted-foreground">Công ty</div>
+                  <div className="mt-1 font-medium text-foreground">{detailData.companyName || "—"}</div>
+                </div>
+                <div>
+                  <div className="text-xs font-medium uppercase text-muted-foreground">Mã số thuế</div>
+                  <div className="mt-1 font-medium text-foreground">{detailData.taxCode || "—"}</div>
                 </div>
               </div>
               <div className="grid gap-3 sm:grid-cols-2">
@@ -1234,6 +1601,50 @@ export default function KPIAdjustments({ currentUser }) {
                 </datalist>
               </div>
               <div>
+                <label className="text-sm font-medium text-foreground" htmlFor={FORM_FIELD_IDS.taxCode}>
+                  Mã số thuế
+                </label>
+                <Input
+                  id={FORM_FIELD_IDS.taxCode}
+                  list="kpi-adjust-taxcode-options"
+                  placeholder="Ví dụ: 0312345678"
+                  value={form.taxCode}
+                  onChange={(e) => handleTaxCodeInput(e.target.value)}
+                  className="mt-1"
+                />
+                <datalist id="kpi-adjust-taxcode-options">
+                  {mstOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </datalist>
+                <p className="mt-1 text-xs text-muted-foreground">Chọn MST để tự điền tên công ty tương ứng.</p>
+              </div>
+              <div className="md:col-span-2 xl:col-span-2">
+                <label className="text-sm font-medium text-foreground" htmlFor={FORM_FIELD_IDS.company}>
+                  Công ty
+                </label>
+                <Input
+                  id={FORM_FIELD_IDS.company}
+                  list="kpi-adjust-company-options"
+                  placeholder="Nhập tên công ty hoặc chọn từ danh sách"
+                  value={form.companyName}
+                  onChange={(e) => handleCompanyInput(e.target.value)}
+                  className="mt-1"
+                />
+                <datalist id="kpi-adjust-company-options">
+                  {companyOptions.map((option) => (
+                    <option key={option.company} value={option.company}>
+                      {option.description}
+                    </option>
+                  ))}
+                </datalist>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Khi chọn công ty, hệ thống sẽ gợi ý lại MST nếu chưa chính xác.
+                </p>
+              </div>
+              <div>
                 <label className="text-sm font-medium text-foreground" htmlFor={FORM_FIELD_IDS.category}>
                   Hạng mục
                 </label>
@@ -1320,23 +1731,22 @@ export default function KPIAdjustments({ currentUser }) {
                   />
                   <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                     <span>Gợi ý gần đây:</span>
-                    {recentDeclarations.slice(0, 5).map((decl) => (
-                      <Button
-                        type="button"
-                        key={`${decl.date}-${decl.so_tk}`}
-                        variant="outline"
-                        size="sm"
-                        className="h-7 px-2 text-xs"
-                        onClick={() =>
-                          setForm((prev) => ({
-                            ...prev,
-                            referencesInput: parseReferences(`${prev.referencesInput}\n${decl.so_tk}`).join("\n"),
-                          }))
-                        }
-                      >
-                        {decl.so_tk}
-                      </Button>
-                    ))}
+                    {quickDeclarationSuggestions.length ? (
+                      quickDeclarationSuggestions.map((decl) => (
+                        <Button
+                          type="button"
+                          key={decl.key}
+                          variant="outline"
+                          size="sm"
+                          className="h-7 px-2 text-xs"
+                          onClick={() => handleReferencePick(decl)}
+                        >
+                          {decl.soTk}
+                        </Button>
+                      ))
+                    ) : (
+                      <span className="text-muted-foreground">Không có tờ khai gần đây.</span>
+                    )}
                     <Button
                       type="button"
                       variant="ghost"
@@ -1346,6 +1756,56 @@ export default function KPIAdjustments({ currentUser }) {
                     >
                       Làm mới danh sách
                     </Button>
+                  </div>
+                  <div className="mt-3 space-y-3 rounded-xl border border-dashed border-border/60 p-3">
+                    <div className="text-xs font-semibold uppercase text-muted-foreground">Tra cứu tờ khai</div>
+                    <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
+                      <div>
+                        <Input
+                          value={declarationSearch}
+                          onChange={(e) => setDeclarationSearch(e.target.value)}
+                          placeholder="Tìm theo số tờ khai, MST hoặc tên công ty"
+                        />
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          Chọn kết quả để thêm tham chiếu và tự điền thông tin doanh nghiệp.
+                        </p>
+                      </div>
+                      <div className="max-h-48 space-y-2 overflow-y-auto rounded-md border border-border bg-background/60 p-2 text-xs">
+                        {filteredDeclarationResults.length ? (
+                          filteredDeclarationResults.map((decl) => (
+                            <div
+                              key={decl.key}
+                              className="flex items-start gap-3 rounded-lg border border-border/60 bg-muted/30 p-2"
+                            >
+                              <div className="flex-1">
+                                <div className="font-medium text-foreground">{decl.soTk}</div>
+                                <div className="text-[11px] text-muted-foreground">
+                                  {decl.company || "—"}
+                                  {decl.mst ? ` • MST ${decl.mst}` : ""}
+                                  {decl.branch ? ` • ${decl.branch}` : ""}
+                                  {decl.date ? ` • ${formatDateOnly(decl.date)}` : ""}
+                                </div>
+                              </div>
+                              <Button
+                                type="button"
+                                variant="secondary"
+                                size="sm"
+                                className="h-7 px-2 text-xs"
+                                onClick={() => handleReferencePick(decl)}
+                              >
+                                Thêm
+                              </Button>
+                            </div>
+                          ))
+                        ) : (
+                          <div className="rounded-md bg-muted/40 p-3 text-muted-foreground">
+                            {declarationSearch
+                              ? "Không tìm thấy tờ khai phù hợp."
+                              : "Nhập từ khoá để tra cứu tờ khai."}
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1524,6 +1984,8 @@ export default function KPIAdjustments({ currentUser }) {
                 <tr className="text-left">
                   <th className="px-4 py-2">Tháng</th>
                   <th className="px-4 py-2">Hạng mục</th>
+                  <th className="px-4 py-2">Công ty</th>
+                  <th className="px-4 py-2">Mã số thuế</th>
                   <th className="px-4 py-2">Nhân viên</th>
                   <th className="px-4 py-2">Tổ đội</th>
                   <th className="px-4 py-2 text-right">Điểm</th>
@@ -1567,6 +2029,8 @@ export default function KPIAdjustments({ currentUser }) {
                             </div>
                           </div>
                         </td>
+                        <td className="px-4 py-2 align-top">{item.companyName || "—"}</td>
+                        <td className="px-4 py-2 align-top">{item.taxCode || "—"}</td>
                         <td className="px-4 py-2 align-top">{item.staffName || "Chưa gán"}</td>
                         <td className="px-4 py-2 align-top">{item.teamName || "—"}</td>
                         <td
@@ -1630,7 +2094,7 @@ export default function KPIAdjustments({ currentUser }) {
                   })
                 ) : (
                   <tr>
-                    <td className="px-4 py-6 text-center text-muted-foreground" colSpan={8}>
+                    <td className="px-4 py-6 text-center text-muted-foreground" colSpan={10}>
                       Không có điểm KPI bổ sung nào phù hợp với bộ lọc hiện tại.
                     </td>
                   </tr>
