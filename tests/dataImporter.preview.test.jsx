@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { render, screen, within, waitFor } from '@testing-library/react';
+import { render, screen, within, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import DataImporter from '@/components/DataImporter.jsx';
 import { setItem as sharedSetItem, clearStorageCache } from '@/lib/storageClient.js';
@@ -218,10 +218,12 @@ describe('DataImporter preview UI', () => {
     const includeTextarea = within(autoSyncSection).getByLabelText('Chỉ đồng bộ các MST');
     const excludeTextarea = within(autoSyncSection).getByLabelText('Danh sách MST loại trừ');
 
-    await userEvent.clear(includeTextarea);
-    await userEvent.type(includeTextarea, '0100109106;\n  0100109107 ');
-    await userEvent.clear(excludeTextarea);
-    await userEvent.type(excludeTextarea, '0100109108;0100109109');
+    fireEvent.change(includeTextarea, {
+      target: { value: '0100109106;\n  0100109107 ' },
+    });
+    fireEvent.change(excludeTextarea, {
+      target: { value: '0100109108;0100109109' },
+    });
 
     const previewButton = within(autoSyncSection).getByRole('button', { name: 'Xem trước dữ liệu' });
     await userEvent.click(previewButton);
