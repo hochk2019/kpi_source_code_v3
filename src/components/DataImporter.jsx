@@ -14,6 +14,8 @@ import {
   markDeclRowsReviewed,
   unmarkDeclRowsReviewed,
   mapHQAgenciesByMST,
+  getHQAgencies,
+  parseAgencyList,
   normalizeStr,
   normalizeDeclarationNumber,
   normalizeName,
@@ -585,6 +587,161 @@ function StaffCombobox({
                 ) : null}
               </CommandGroup>
             ))}
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+function AgencyCombobox({
+  value,
+  onSelect,
+  options = [],
+  disabled = false,
+  placeholder = "Chọn đại lý",
+  fullWidth = false,
+}) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+
+  useEffect(() => {
+    if (!open) {
+      setSearch("");
+    }
+  }, [open]);
+
+  const normalizedValue = normalizeStr(value);
+  const normalizedKey = normalizeName(normalizedValue);
+
+  const normalizedOptions = useMemo(() => {
+    const optionMap = new Map();
+    options.forEach((option) => {
+      if (!option && option !== 0) return;
+      const rawValue = normalizeStr(option?.value ?? option);
+      if (!rawValue) return;
+      const label = option?.label ? normalizeStr(option.label) : rawValue;
+      const hint = option?.hint ? normalizeStr(option.hint) : "";
+      const key = normalizeName(rawValue);
+      if (!key) return;
+      const existing = optionMap.get(key);
+      if (existing) {
+        if (hint && existing.hints.length < 3 && !existing.hints.includes(hint)) {
+          existing.hints.push(hint);
+        }
+        return;
+      }
+      optionMap.set(key, {
+        key,
+        value: rawValue,
+        label: label || rawValue,
+        hints: hint ? [hint] : [],
+      });
+    });
+    const list = Array.from(optionMap.values()).map((item) => {
+      const hintText = item.hints.filter(Boolean).join(" • ");
+      return {
+        key: item.key,
+        value: item.value,
+        label: item.label || item.value,
+        hint: hintText,
+        searchText: normalizeName(`${item.value} ${item.label} ${hintText}`),
+      };
+    });
+    list.sort((a, b) => a.label.localeCompare(b.label, "vi", { sensitivity: "base" }));
+    return list;
+  }, [options]);
+
+  const searchValue = normalizeStr(search);
+  const searchKey = normalizeName(searchValue);
+
+  const filteredOptions = useMemo(() => {
+    if (!searchKey) {
+      return normalizedOptions;
+    }
+    return normalizedOptions.filter((item) => item.searchText.includes(searchKey));
+  }, [normalizedOptions, searchKey]);
+
+  const hasExactOption = normalizedOptions.some((item) => item.key === searchKey);
+  const canCreateCustom = Boolean(searchKey) && !hasExactOption;
+
+  const handleSelect = (nextValue) => {
+    const safeValue =
+      nextValue === undefined || nextValue === null ? "" : normalizeStr(nextValue);
+    onSelect?.(safeValue);
+    setOpen(false);
+    setSearch("");
+  };
+
+  return (
+    <Popover open={open} onOpenChange={disabled ? undefined : setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          role="combobox"
+          aria-expanded={open}
+          disabled={disabled}
+          className={cx(
+            fullWidth ? "w-full" : "w-40",
+            "justify-between px-2 py-0 text-left font-normal"
+          )}
+        >
+          <span className="truncate">{normalizedValue || placeholder}</span>
+          <ChevronsUpDown className="ml-2 size-3 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-72 p-0" align="start">
+        <Command>
+          <CommandInput
+            placeholder="Tìm đại lý"
+            value={search}
+            onValueChange={setSearch}
+            autoFocus
+          />
+          <CommandList className="max-h-60 overflow-y-auto">
+            <CommandEmpty>Không có đại lý phù hợp.</CommandEmpty>
+            {normalizedValue ? (
+              <CommandGroup heading="Tùy chọn">
+                <CommandItem value="__clear__" onSelect={() => handleSelect("")}>
+                  <CircleX className="mr-2 size-4" />
+                  Bỏ chọn đại lý
+                </CommandItem>
+              </CommandGroup>
+            ) : null}
+            {canCreateCustom ? (
+              <CommandGroup heading="Thêm mới">
+                <CommandItem value={searchValue} onSelect={() => handleSelect(searchValue)}>
+                  <Plus className="mr-2 size-4" />
+                  Dùng giá trị "{searchValue}"
+                </CommandItem>
+              </CommandGroup>
+            ) : null}
+            {filteredOptions.length ? (
+              <CommandGroup heading="Đại lý">
+                {filteredOptions.map((option) => {
+                  const isSelected = option.key === normalizedKey;
+                  return (
+                    <CommandItem
+                      key={option.key}
+                      value={option.value}
+                      onSelect={() => handleSelect(option.value)}
+                    >
+                      <Check
+                        className={cx("mr-2 size-4", isSelected ? "opacity-100" : "opacity-0")}
+                      />
+                      <div className="flex flex-col">
+                        <span className="truncate">{option.label}</span>
+                        {option.hint ? (
+                          <span className="text-xs text-muted-foreground">{option.hint}</span>
+                        ) : null}
+                      </div>
+                    </CommandItem>
+                  );
+                })}
+              </CommandGroup>
+            ) : null}
           </CommandList>
         </Command>
       </PopoverContent>
@@ -1717,6 +1874,63 @@ export default function DataImporter({
   const canAutoReconcile = isManagerRole;
   const rosterSnapshot = useMemo(() => getTeamRoster(), [currentUser]);
   const rosterTeams = useMemo(() => buildRosterTeams(rosterSnapshot), [rosterSnapshot]);
+  const agencyOptions = useMemo(() => {
+    const optionMap = new Map();
+    const pushOption = (value, hint = "") => {
+      const raw = normalizeStr(value);
+      if (!raw) return;
+      const key = normalizeName(raw);
+      if (!key) return;
+      const normalizedHint = normalizeStr(hint);
+      const existing = optionMap.get(key);
+      if (existing) {
+        if (normalizedHint && existing.hints.length < 3 && !existing.hints.includes(normalizedHint)) {
+          existing.hints.push(normalizedHint);
+        }
+        return;
+      }
+      optionMap.set(key, {
+        value: raw,
+        label: raw,
+        hints: normalizedHint ? [normalizedHint] : [],
+      });
+    };
+
+    const hqRows = getHQAgencies();
+    hqRows.forEach((row) => {
+      if (!row) return;
+      const hintParts = [];
+      if (row.company) hintParts.push(row.company);
+      if (row.mst) hintParts.push(row.mst);
+      const hint = hintParts.filter(Boolean).join(" • ");
+      if (Array.isArray(row.agents) && row.agents.length) {
+        row.agents.forEach((agent) => pushOption(agent, hint));
+      }
+      if (row.agent) {
+        pushOption(row.agent, hint);
+      }
+    });
+
+    rawRows.forEach((row) => {
+      if (!row || typeof row !== "object") return;
+      const directValues = [row.agency, row.dai_ly, row.hq_agency];
+      directValues.forEach((value) => pushOption(value));
+      if (Array.isArray(row.agents)) {
+        row.agents.forEach((value) => pushOption(value));
+      }
+      directValues.forEach((value) => {
+        parseAgencyList(value).forEach((agent) => pushOption(agent));
+      });
+    });
+
+    return Array.from(optionMap.values())
+      .map((item) => ({
+        value: item.value,
+        label: item.label,
+        hint: item.hints.slice(0, 3).join(" • "),
+      }))
+      .sort((a, b) => a.label.localeCompare(b.label, "vi", { sensitivity: "base" }));
+  }, [rawRows, baselineVersion]);
   const normalizedQuickMST = useMemo(() => normalizeStr(quickMST), [quickMST]);
   const normalizedQuickCompany = useMemo(() => normalizeStr(quickCompany), [quickCompany]);
   const coThreshold = useMemo(() => Math.max(0, Number(coFilterMin) || 0), [coFilterMin]);
@@ -4343,6 +4557,25 @@ const selectedReviewedCount = useMemo(() => {
       });
     },
     [applyEdit, memberTeamMap]
+  );
+
+  const handleSelectAgency = useCallback(
+    (rowKey, agencyValue) => {
+      const safeValue = normalizeStr(agencyValue);
+      applyEdit(rowKey, (row) => {
+        const updates = {};
+        const currentAgency = normalizeStr(row.agency);
+        const currentNote = normalizeStr(row.dai_ly);
+        if (currentAgency !== safeValue || row.agency !== safeValue) {
+          updates.agency = safeValue;
+        }
+        if (currentNote !== safeValue || row.dai_ly !== safeValue) {
+          updates.dai_ly = safeValue;
+        }
+        return Object.keys(updates).length ? updates : null;
+      });
+    },
+    [applyEdit]
   );
 
   const handleToggleSelect = useCallback(
@@ -7679,12 +7912,11 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
                       {rowReadOnly ? (
                         <span>{r.agency || r.dai_ly || ""}</span>
                       ) : (
-                        <input
-                          className="w-28 rounded border px-1 py-0.5"
+                        <AgencyCombobox
                           value={r.agency || r.dai_ly || ""}
-                          onChange={(e) =>
-                            applyEdit(rowKey, () => ({ agency: e.target.value, dai_ly: e.target.value }))
-                          }
+                          options={agencyOptions}
+                          onSelect={(nextValue) => handleSelectAgency(rowKey, nextValue)}
+                          disabled={rowSaving}
                         />
                       )}
                     </td>
@@ -8024,13 +8256,15 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
                         {rowReadOnly ? (
                           <div>{r.agency || r.dai_ly || "—"}</div>
                         ) : (
-                          <input
-                            className="mt-1 w-full rounded border px-2 py-1"
-                            value={r.agency || r.dai_ly || ""}
-                            onChange={(e) =>
-                              applyEdit(rowKey, () => ({ agency: e.target.value, dai_ly: e.target.value }))
-                            }
-                          />
+                          <div className="mt-1">
+                            <AgencyCombobox
+                              value={r.agency || r.dai_ly || ""}
+                              options={agencyOptions}
+                              onSelect={(nextValue) => handleSelectAgency(rowKey, nextValue)}
+                              disabled={rowSaving}
+                              fullWidth
+                            />
+                          </div>
                         )}
                       </div>
                     )}
