@@ -3,8 +3,11 @@ import { render, screen, within, waitFor, fireEvent } from '@testing-library/rea
 import userEvent from '@testing-library/user-event';
 import DataImporter from '@/components/DataImporter.jsx';
 import { setItem as sharedSetItem, clearStorageCache } from '@/lib/storageClient.js';
-import { DECL_KEY } from '@/lib/store.js';
+import * as store from '@/lib/store.js';
+import { filterDeclRows, normalizeDeclSearchFilters } from '@/shared/declSearch.js';
 import * as auth from '@/auth/localAuth.js';
+
+const { DECL_KEY } = store;
 
 vi.mock('@/shared/toast.js', () => ({
   toast: {
@@ -26,6 +29,7 @@ const createJsonResponse = (payload, status = 200) => ({
 
 describe('DataImporter preview UI', () => {
   let fetchMock;
+  let currentDeclRows;
   const savedRows = [
     {
       so_tk: 'TK-CO-0',
@@ -92,16 +96,57 @@ describe('DataImporter preview UI', () => {
 
   beforeEach(() => {
     window.confirm = vi.fn(() => true);
-    fetchMock = vi.fn((input) => {
+    currentDeclRows = savedRows;
+    fetchMock = vi.fn((input, init = {}) => {
       const url = typeof input === 'string' ? input : input?.url || '';
       if (url.startsWith('/api/storage/')) {
         const key = decodeURIComponent(url.split('/').pop() || '');
         if (key === DECL_KEY) {
           return Promise.resolve(
-            createJsonResponse({ ok: true, key, raw: JSON.stringify(savedRows), value: savedRows })
+            createJsonResponse({
+              ok: true,
+              key,
+              raw: JSON.stringify(currentDeclRows),
+              value: currentDeclRows,
+            })
           );
         }
         return Promise.resolve(createJsonResponse({ ok: true, key, raw: null, value: null }));
+      }
+      if (url.startsWith('/api/import/search')) {
+        const urlObj = new URL(url, 'http://localhost');
+        const params = urlObj.searchParams;
+        const rawFilters = {};
+        for (const [key, value] of params.entries()) {
+          if (Object.prototype.hasOwnProperty.call(rawFilters, key)) {
+            const existing = rawFilters[key];
+            rawFilters[key] = Array.isArray(existing) ? [...existing, value] : [existing, value];
+          } else {
+            rawFilters[key] = value;
+          }
+        }
+        const filters = normalizeDeclSearchFilters(rawFilters);
+        const sample = Array.isArray(currentDeclRows) ? currentDeclRows.slice(0, 2000) : [];
+        const filtered = filterDeclRows(sample, filters);
+        const DEFAULT_PAGE_SIZE = 10;
+        const MAX_PAGE_SIZE = 200;
+        const requestedPage = Number(params.get('page'));
+        const page = Number.isFinite(requestedPage) && requestedPage > 0 ? Math.floor(requestedPage) : 1;
+        const requestedPageSize = Number(params.get('pageSize'));
+        const sizeCandidate =
+          Number.isFinite(requestedPageSize) && requestedPageSize > 0
+            ? Math.floor(requestedPageSize)
+            : DEFAULT_PAGE_SIZE;
+        const pageSize = Math.max(1, Math.min(sizeCandidate, MAX_PAGE_SIZE));
+        const total = filtered.length;
+        const offset = (page - 1) * pageSize;
+        const rows = filtered.slice(offset, offset + pageSize);
+        if (init?.signal?.aborted) {
+          const abortError = new Error('aborted');
+          abortError.name = 'AbortError';
+          return Promise.reject(abortError);
+        }
+        return Promise.resolve(createJsonResponse({ ok: true, total, page, pageSize, rows }));
       }
       if (url === '/api/import/ecus/config') {
         return Promise.resolve(
@@ -162,7 +207,7 @@ describe('DataImporter preview UI', () => {
     });
     vi.spyOn(auth, 'fetchWithAuth').mockImplementation(fetchMock);
     clearStorageCache();
-    sharedSetItem(DECL_KEY, JSON.stringify(savedRows));
+    sharedSetItem(DECL_KEY, JSON.stringify(currentDeclRows));
   });
 
   afterEach(() => {
@@ -324,7 +369,7 @@ describe('DataImporter preview UI', () => {
     const searchInputs = await screen.findAllByPlaceholderText(
       'Tìm nhanh (Số TK / MST / Công ty / Nhân viên / Tổ đội)'
     );
-    const searchInput = searchInputs[0];
+    const searchInput = searchInputs[searchInputs.length - 1];
 
     // Không còn các placeholder lọc MST hay khu vực trạng thái riêng
     expect(screen.queryByPlaceholderText('Lọc nhanh theo MST')).not.toBeInTheDocument();
@@ -354,5 +399,85 @@ describe('DataImporter preview UI', () => {
     await userEvent.clear(searchInput);
     await userEvent.type(searchInput, 'Công ty 4 dòng');
     expect(searchInput).toHaveValue('Công ty 4 dòng');
+  });
+
+  it('gửi truy vấn tìm nhanh lên API và nhận đúng kết quả lọc', async () => {
+    const user = userEvent.setup();
+    const largeRows = Array.from({ length: 5200 }, (_, index) => ({
+      so_tk: `TK-${(index + 1).toString().padStart(6, '0')}`,
+      so_tk_full: `TK-${(index + 1).toString().padStart(6, '0')}`,
+      date: '2025-07-01',
+      mst: `010${(index + 1).toString().padStart(7, '0')}`,
+      cong_ty: `Doanh nghiệp ${index + 1}`,
+      nhan_vien: index % 2 === 0 ? 'Lan' : 'Hùng',
+      team: index % 3 === 0 ? 'Tổ đội A' : '',
+      status: index % 2 === 0 ? 'existing' : 'new',
+      co_line_count: index % 5,
+      has_co: index % 5 > 0,
+    }));
+    largeRows[5] = {
+      ...largeRows[5],
+      so_tk: 'TK-QUERY-001',
+      so_tk_full: 'TK-QUERY-001',
+      mst: '0101234599',
+      cong_ty: 'Công ty lọc nhanh',
+      nhan_vien: 'Thảo',
+      team: 'Tổ đội tìm kiếm',
+    };
+    const getDeclRowsSpy = vi.spyOn(store, 'getDeclRows').mockReturnValue(largeRows);
+    currentDeclRows = largeRows;
+    clearStorageCache();
+    sharedSetItem(DECL_KEY, JSON.stringify(currentDeclRows));
+    render(
+      <DataImporter
+        canEdit
+        currentUser={{ username: 'viewer', permissions: [] }}
+      />
+    );
+
+    await waitFor(() => {
+      expect(getDeclRowsSpy).toHaveBeenCalled();
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText('5.200')).toBeInTheDocument();
+    });
+
+    const helperTexts = await screen.findAllByText(
+      'Nhập từ khóa để tìm nhanh theo Số tờ khai, mã số thuế, tên doanh nghiệp, nhân viên hoặc tổ đội phụ trách.'
+    );
+    const helperText = helperTexts[helperTexts.length - 1];
+    const searchInput = helperText.previousElementSibling;
+    if (!(searchInput instanceof HTMLInputElement)) {
+      throw new Error('Không tìm thấy ô tìm nhanh chính');
+    }
+    await user.clear(searchInput);
+    await user.type(searchInput, 'lọc nhanh');
+
+    await waitFor(() => {
+      const searchCalls = fetchMock.mock.calls.filter(([url]) => url.startsWith('/api/import/search'));
+      expect(searchCalls.length).toBeGreaterThan(0);
+      const hasQueryCall = searchCalls.some(([url]) => {
+        const parsed = new URL(url, 'http://localhost');
+        return parsed.searchParams.get('query') === 'lọc nhanh';
+      });
+      expect(hasQueryCall).toBe(true);
+    });
+
+    const searchCallEntries = fetchMock.mock.calls
+      .map(([url], index) => ({ url, index }))
+      .filter(({ url }) => url.startsWith('/api/import/search'));
+    const queryCallEntry = searchCallEntries.find(({ url }) => {
+      const parsed = new URL(url, 'http://localhost');
+      return parsed.searchParams.get('query') === 'lọc nhanh';
+    });
+    expect(queryCallEntry).toBeTruthy();
+    const responsePromise = fetchMock.mock.results[queryCallEntry.index]?.value;
+    const response = await responsePromise;
+    const payload = await response.json();
+    expect(Array.isArray(payload.rows)).toBe(true);
+    expect(payload.rows.some((row) => row.cong_ty === 'Công ty lọc nhanh')).toBe(true);
+
+    getDeclRowsSpy.mockRestore();
   });
 });
