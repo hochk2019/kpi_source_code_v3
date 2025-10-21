@@ -7,6 +7,18 @@ import * as store from '@/lib/store.js';
 import { filterDeclRows, normalizeDeclSearchFilters } from '@/shared/declSearch.js';
 import * as auth from '@/auth/localAuth.js';
 
+if (!globalThis.ResizeObserver) {
+  vi.stubGlobal('ResizeObserver', class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  });
+}
+
+if (!Element.prototype.scrollIntoView) {
+  Element.prototype.scrollIntoView = vi.fn();
+}
+
 const { DECL_KEY } = store;
 
 vi.mock('@/shared/toast.js', () => ({
@@ -478,6 +490,90 @@ describe('DataImporter preview UI', () => {
     expect(Array.isArray(payload.rows)).toBe(true);
     expect(payload.rows.some((row) => row.cong_ty === 'Công ty lọc nhanh')).toBe(true);
 
+    getDeclRowsSpy.mockRestore();
+  });
+
+  it('cập nhật ngay nhân viên và tổ đội đang hiển thị khi đổi ở chế độ tìm kiếm máy chủ', async () => {
+    const user = userEvent.setup();
+    const roster = {
+      teams: [
+        {
+          id: 'team-a',
+          name: 'Tổ đội A',
+          members: [
+            { id: 'staff-lan', name: 'Lan' },
+            { id: 'staff-bao', name: 'Bảo' },
+          ],
+        },
+        {
+          id: 'team-b',
+          name: 'Tổ đội B',
+          members: [{ id: 'staff-hung', name: 'Hùng' }],
+        },
+      ],
+    };
+    const targetCompany = 'Doanh nghiệp mục tiêu';
+    const largeRows = Array.from({ length: 5200 }, (_, index) => ({
+      so_tk: `TK-${(index + 1).toString().padStart(6, '0')}`,
+      so_tk_full: `TK-${(index + 1).toString().padStart(6, '0')}`,
+      date: '2025-07-01',
+      nhanh: '',
+      mst: `010${(index + 1).toString().padStart(7, '0')}`,
+      cong_ty: index === 0 ? targetCompany : `Doanh nghiệp ${index + 1}`,
+      nhan_vien: 'Lan',
+      team: 'Tổ đội A',
+      status: 'existing',
+      co_line_count: index % 3,
+      has_co: index % 3 > 0,
+    }));
+    const getDeclRowsSpy = vi.spyOn(store, 'getDeclRows').mockReturnValue(largeRows);
+    const getTeamRosterSpy = vi.spyOn(store, 'getTeamRoster').mockReturnValue(roster);
+    currentDeclRows = largeRows;
+    clearStorageCache();
+    sharedSetItem(DECL_KEY, JSON.stringify(currentDeclRows));
+
+    render(
+      <DataImporter
+        canEdit
+        currentUser={{ username: 'admin', role: 'admin', permissions: ['dataEdit'] }}
+      />
+    );
+
+    await waitFor(() => {
+      expect(getDeclRowsSpy).toHaveBeenCalled();
+    });
+
+    await screen.findByText(targetCompany);
+
+    const resolveRow = () => {
+      const cell = screen.getByText(targetCompany);
+      return cell.closest('tr');
+    };
+
+    const row = await waitFor(() => {
+      const found = resolveRow();
+      if (!found) {
+        throw new Error('Không tìm thấy dòng mục tiêu');
+      }
+      return found;
+    });
+
+    const staffButton = within(row).getByRole('combobox', { name: 'Lan' });
+    await user.click(staffButton);
+
+    const staffOption = await screen.findByRole('option', { name: /Hùng/ });
+    await user.click(staffOption);
+
+    await waitFor(() => {
+      const updatedRow = resolveRow();
+      if (!updatedRow) {
+        throw new Error('Không tìm thấy dòng sau khi đổi nhân viên');
+      }
+      expect(within(updatedRow).getByRole('combobox', { name: 'Hùng' })).toBeInTheDocument();
+      expect(within(updatedRow).getByRole('combobox', { name: 'Tổ đội B' })).toBeInTheDocument();
+    });
+
+    getTeamRosterSpy.mockRestore();
     getDeclRowsSpy.mockRestore();
   });
 });

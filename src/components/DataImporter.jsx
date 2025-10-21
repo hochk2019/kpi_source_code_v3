@@ -4189,6 +4189,9 @@ const selectedReviewedCount = useMemo(() => {
     if (isReadOnlyForEdits) return;
     let didChange = false;
     let pendingSelectionUpdater = null;
+    let updatedRowSnapshot = null;
+    let updatedOldKey = null;
+    let updatedNewKey = null;
     setRawRows(prev => {
       if (!Array.isArray(prev) || prev.length === 0) return prev;
       const pos = prev.findIndex(row => keyOfRow(row) === rowKey);
@@ -4225,6 +4228,9 @@ const selectedReviewedCount = useMemo(() => {
 
       const oldKey = keyOfRow(current);
       const newKey = keyOfRow(nextRow);
+      updatedRowSnapshot = nextRow;
+      updatedOldKey = oldKey;
+      updatedNewKey = newKey;
       if (oldKey !== newKey) {
         pendingSelectionUpdater = (keys) => {
           if (!Array.isArray(keys) || keys.length === 0) return keys;
@@ -4240,6 +4246,32 @@ const selectedReviewedCount = useMemo(() => {
       setSelectedKeys(pendingSelectionUpdater);
     }
     if (didChange && mode === "saved") {
+      if (shouldUseServerSearch && updatedRowSnapshot) {
+        const matchKeys = new Set(
+          [rowKey, updatedOldKey, updatedNewKey].filter((value) => typeof value === "string" && value)
+        );
+        setServerSearchState((prev) => {
+          if (!Array.isArray(prev.rows) || prev.rows.length === 0) {
+            return prev;
+          }
+          let changed = false;
+          const rows = prev.rows.map((row) => {
+            const key = keyOfRow(row);
+            if (!matchKeys.has(key)) {
+              return row;
+            }
+            changed = true;
+            return { ...row, ...updatedRowSnapshot };
+          });
+          if (!changed) {
+            return prev;
+          }
+          return {
+            ...prev,
+            rows,
+          };
+        });
+      }
       setHasUnsaved(true);
     }
   }, [
@@ -4250,6 +4282,8 @@ const selectedReviewedCount = useMemo(() => {
     keyOfRow,
     mode,
     rules,
+    setServerSearchState,
+    shouldUseServerSearch,
     sanitizeRowUpdates,
   ]);
 
