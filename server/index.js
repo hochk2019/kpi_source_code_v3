@@ -10138,7 +10138,14 @@ async function* fetchEcusDeclarations(range, config, options = {}) {
       const placeholders = excludeFilterList.map((_, idx) => `@__exclude${idx}`);
       clauses.push(`${alias}.mst NOT IN (${placeholders.join(', ')})`);
     }
-    workingQuery = `SELECT * FROM (${baseQuery}) AS ${alias} WHERE ${clauses.join(' AND ')}`;
+    let innerQuery = baseQuery.trim();
+    if (innerQuery.endsWith(';')) {
+      innerQuery = innerQuery.slice(0, -1);
+    }
+    if (!/^select\s+top\s+\d+/iu.test(innerQuery)) {
+      innerQuery = innerQuery.replace(/^select\s+/iu, 'SELECT TOP 100 PERCENT ');
+    }
+    workingQuery = `SELECT * FROM (${innerQuery}) AS ${alias} WHERE ${clauses.join(' AND ')}`;
   }
   const configuredBatchSize = Number(config?.batchSize);
   const defaultBatchSize = Number(DEFAULT_ECUS_SYNC_CONFIG.batchSize);
