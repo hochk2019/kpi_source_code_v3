@@ -3990,7 +3990,7 @@ export default function DataImporter({
 
     const safePageSize = Math.max(1, Math.min(pageSize, SERVER_SEARCH_MAX_PAGE_SIZE));
     const params = new URLSearchParams();
-    if (normalizedFilters.query) params.set("q", normalizedFilters.query);
+    if (normalizedFilters.query) params.set("query", normalizedFilters.query);
     if (normalizedFilters.mst) params.set("mst", normalizedFilters.mst);
     if (normalizedFilters.company) params.set("company", normalizedFilters.company);
     if (Array.isArray(normalizedFilters.statuses) && normalizedFilters.statuses.length) {

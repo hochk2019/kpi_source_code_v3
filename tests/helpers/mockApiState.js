@@ -1,3 +1,6 @@
+import { getDeclRows } from '../../src/lib/store.js';
+import { filterDeclRows, normalizeDeclSearchFilters } from '../../src/shared/declSearch.js';
+
 export function jsonResponse(payload, status = 200) {
   return {
     ok: status >= 200 && status < 300,
@@ -82,6 +85,43 @@ function normalizePermissions(permissions, role) {
 
 export function createDefaultHandlers(state) {
   return {
+    'GET /api/import/search': ({ url }) => {
+      let params;
+      try {
+        params = new URL(url, 'http://localhost').searchParams;
+      } catch {
+        params = new URLSearchParams();
+      }
+      const rawFilters = {};
+      for (const [key, value] of params.entries()) {
+        if (rawFilters[key]) {
+          const existing = rawFilters[key];
+          rawFilters[key] = Array.isArray(existing) ? [...existing, value] : [existing, value];
+        } else {
+          rawFilters[key] = value;
+        }
+      }
+      const filters = normalizeDeclSearchFilters(rawFilters);
+      const allRows = getDeclRows();
+      const sample = Array.isArray(allRows) ? allRows.slice(0, 2000) : [];
+      const rows = filterDeclRows(sample, filters);
+      const DEFAULT_PAGE_SIZE = 10;
+      const MAX_PAGE_SIZE = 200;
+      const requestedPage = Number(params.get('page'));
+      const requestedPageSize = Number(params.get('pageSize'));
+      const pageSizeCandidate =
+        Number.isFinite(requestedPageSize) && requestedPageSize > 0
+          ? Math.floor(requestedPageSize)
+          : DEFAULT_PAGE_SIZE;
+      const pageSize = Math.max(1, Math.min(pageSizeCandidate, MAX_PAGE_SIZE));
+      const total = rows.length;
+      const page = Number.isFinite(requestedPage) && requestedPage > 0 ? Math.floor(requestedPage) : 1;
+      const maxPage = Math.max(1, Math.ceil(total / pageSize));
+      const safePage = Math.min(page, maxPage);
+      const offset = (safePage - 1) * pageSize;
+      const pagedRows = rows.slice(offset, offset + pageSize);
+      return jsonResponse({ ok: true, total, page: safePage, pageSize, rows: pagedRows });
+    },
     'GET /api/import/ecus/config': () =>
       jsonResponse({
         ok: true,
