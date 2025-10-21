@@ -14,8 +14,11 @@ import {
   pingAiConnection,
   fetchAiDataSnapshot,
   fetchAiInsights,
+  fetchAiSnapshotHistory,
+  fetchAiSnapshotHistoryEntry,
   runAiInsightJob,
   submitAiInsightFeedback,
+  updateAiInsightSettings,
 } from '@/lib/aiClient.js';
 import { computeQuickRange } from '@/lib/reports.js';
 
@@ -732,6 +735,12 @@ export default function AiAssistant({ currentUser }) {
   const [insightsError, setInsightsError] = useState('');
   const [insightRunLoading, setInsightRunLoading] = useState(false);
   const [feedbackSubmitting, setFeedbackSubmitting] = useState({});
+  const [snapshotHistory, setSnapshotHistory] = useState([]);
+  const [snapshotHistoryLoading, setSnapshotHistoryLoading] = useState(false);
+  const [snapshotHistoryError, setSnapshotHistoryError] = useState('');
+  const [selectedHistoryEntry, setSelectedHistoryEntry] = useState(null);
+  const [notifyOnAnomaly, setNotifyOnAnomaly] = useState(false);
+  const [notifySaving, setNotifySaving] = useState(false);
 
   const [messages, setMessages] = useState([]);
   const [prompt, setPrompt] = useState('');
@@ -837,9 +846,15 @@ export default function AiAssistant({ currentUser }) {
     setInsightsLoading(true);
     setInsightsError('');
     try {
-      const { insights: fetchedInsights, meta } = await fetchAiInsights({ limit: 6 });
+      const { insights: fetchedInsights, meta } = await fetchAiInsights({ limit: 6, historyLimit: 6 });
       setInsights(Array.isArray(fetchedInsights) ? fetchedInsights : []);
       setInsightsMeta(meta || null);
+      if (meta?.history?.entries) {
+        setSnapshotHistory(meta.history.entries);
+      }
+      if (meta?.settings) {
+        setNotifyOnAnomaly(meta.settings.notifyOnAnomaly === true);
+      }
     } catch (err) {
       const message = err?.message || 'Không thể tải insight AI.';
       setInsightsError(message);
@@ -848,6 +863,96 @@ export default function AiAssistant({ currentUser }) {
       setInsightsLoading(false);
     }
   }, [canUse]);
+
+  const loadSnapshotHistory = useCallback(
+    async (limit = 6) => {
+      if (!canUse) {
+        return;
+      }
+      setSnapshotHistoryLoading(true);
+      setSnapshotHistoryError('');
+      try {
+        const entries = await fetchAiSnapshotHistory({ limit });
+        setSnapshotHistory(entries);
+        setSelectedHistoryEntry((prev) => {
+          if (!prev) {
+            return prev;
+          }
+          const match = entries.find((item) => item.id === prev.id);
+          return match || null;
+        });
+      } catch (err) {
+        const message = err?.message || 'Không thể tải lịch sử snapshot KPI.';
+        setSnapshotHistoryError(message);
+        toast.error(message);
+      } finally {
+        setSnapshotHistoryLoading(false);
+      }
+    },
+    [canUse]
+  );
+
+  const handleToggleNotify = useCallback(async () => {
+    if (!canManage) {
+      return;
+    }
+    const nextValue = !notifyOnAnomaly;
+    setNotifySaving(true);
+    try {
+      const settings = await updateAiInsightSettings({ notifyOnAnomaly: nextValue });
+      setNotifyOnAnomaly(settings?.notifyOnAnomaly === true);
+      toast.success(
+        settings?.notifyOnAnomaly === true
+          ? 'Đã bật thông báo khi insight cảnh báo bất thường.'
+          : 'Đã tắt thông báo insight bất thường.'
+      );
+    } catch (err) {
+      const message = err?.message || 'Không thể cập nhật tuỳ chọn insight bất thường.';
+      toast.error(message);
+    } finally {
+      setNotifySaving(false);
+    }
+  }, [canManage, notifyOnAnomaly]);
+
+  const handleViewHistoryEntry = useCallback(
+    async (entryId) => {
+      if (!entryId) {
+        return;
+      }
+      const existing = snapshotHistory.find((item) => item.id === entryId);
+      if (existing && existing.snapshot) {
+        setSelectedHistoryEntry(existing);
+        return;
+      }
+      try {
+        setSnapshotHistoryLoading(true);
+        const fetched = await fetchAiSnapshotHistoryEntry(entryId);
+        if (fetched) {
+          setSnapshotHistory((prev) => {
+            const next = Array.isArray(prev) ? prev.slice() : [];
+            const index = next.findIndex((item) => item.id === fetched.id);
+            if (index !== -1) {
+              next[index] = fetched;
+            } else {
+              next.unshift(fetched);
+            }
+            return next;
+          });
+          setSelectedHistoryEntry(fetched);
+        }
+      } catch (err) {
+        const message = err?.message || 'Không thể tải snapshot KPI đã lưu.';
+        toast.error(message);
+      } finally {
+        setSnapshotHistoryLoading(false);
+      }
+    },
+    [snapshotHistory]
+  );
+
+  const handleCloseHistoryEntry = useCallback(() => {
+    setSelectedHistoryEntry(null);
+  }, []);
 
   useEffect(() => {
     if (canUse) {
@@ -1089,6 +1194,54 @@ export default function AiAssistant({ currentUser }) {
       `Top tổ đội: ${topTeams}`,
     ];
   }, [kpiFormatter, numberFormatter, snapshotData]);
+
+  const selectedHistoryMetrics = useMemo(() => {
+    if (!selectedHistoryEntry?.snapshot?.summary) {
+      return [];
+    }
+    const snapshot = selectedHistoryEntry.snapshot;
+    const summary = snapshot.summary;
+    const adjustments = snapshot.adjustments?.totals || {};
+    const lines = [];
+    lines.push(
+      `Tổng tờ khai: ${numberFormatter.format(summary.declarations || 0)} (Nhập ${numberFormatter.format(
+        summary.import || 0
+      )} / Xuất ${numberFormatter.format(summary.export || 0)})`
+    );
+    lines.push(`Điểm KPI: ${kpiFormatter.format(summary.kpi || 0)}`);
+    lines.push(
+      `Điều chỉnh KPI: ${numberFormatter.format(adjustments.approved || 0)} duyệt · ${numberFormatter.format(
+        adjustments.pending || 0
+      )} chờ · ${numberFormatter.format(adjustments.rejected || 0)} từ chối (tổng ảnh hưởng ${kpiFormatter.format(
+        adjustments.totalPoints || 0
+      )})`
+    );
+    const topStaffLine = (snapshot.topStaff || [])
+      .slice(0, 3)
+      .map(
+        (item) =>
+          `${item.name || 'Chưa gán'} (${numberFormatter.format(item.declarations || 0)} tờ khai, ${kpiFormatter.format(
+            item.totalKpi || 0
+          )} KPI)`
+      )
+      .join('; ');
+    if (topStaffLine) {
+      lines.push(`Nhân sự nổi bật: ${topStaffLine}`);
+    }
+    const topTeamsLine = (snapshot.topTeams || [])
+      .slice(0, 3)
+      .map(
+        (item) =>
+          `${item.name || 'Chưa gán tổ'} (${numberFormatter.format(item.declarations || 0)} tờ khai, ${kpiFormatter.format(
+            item.totalKpi || 0
+          )} KPI)`
+      )
+      .join('; ');
+    if (topTeamsLine) {
+      lines.push(`Tổ đội nổi bật: ${topTeamsLine}`);
+    }
+    return lines;
+  }, [kpiFormatter, numberFormatter, selectedHistoryEntry]);
 
   useEffect(() => {
     if (!canUse) {
@@ -1897,7 +2050,8 @@ const handleInsightFeedback = useCallback(
                   </div>
                 )}
               </div>
-            </div>            <div className="mt-3 space-y-3 rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)]/60 p-3">
+            </div>
+            <div className="mt-3 space-y-3 rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)]/60 p-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
                   <h3 className="text-sm font-semibold text-[color:var(--ds-text-primary)]">Insight AI tự động</h3>
@@ -1928,9 +2082,23 @@ const handleInsightFeedback = useCallback(
                   ) : null}
                 </div>
               </div>
-              {insightsError ? (
-                <p className="text-xs text-red-500">{insightsError}</p>
+              {canManage ? (
+                <div className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={notifyOnAnomaly}
+                      onChange={handleToggleNotify}
+                      disabled={notifySaving}
+                    />
+                    <span>Nhận thông báo khi insight cảnh báo bất thường</span>
+                  </label>
+                  {notifySaving ? (
+                    <p className="mt-1 text-[11px] text-amber-600">Đang lưu tuỳ chọn…</p>
+                  ) : null}
+                </div>
               ) : null}
+              {insightsError ? <p className="text-xs text-red-500">{insightsError}</p> : null}
               {insightsLoading ? (
                 <p className="text-sm text-[color:var(--ds-text-muted)]">Đang tải insight AI...</p>
               ) : insights.length === 0 ? (
@@ -1997,6 +2165,109 @@ const handleInsightFeedback = useCallback(
                   })}
                 </div>
               )}
+              <div className="border-t border-dashed border-[color:var(--ds-border-subtle)] pt-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <h4 className="text-xs font-semibold uppercase tracking-wide text-[color:var(--ds-text-secondary)]">
+                    Lịch sử snapshot KPI
+                  </h4>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => loadSnapshotHistory(6)}
+                      disabled={snapshotHistoryLoading}
+                      className={SECONDARY_BUTTON_CLASS}
+                    >
+                      {snapshotHistoryLoading ? 'Đang tải...' : 'Tải lại'}
+                    </button>
+                    {selectedHistoryEntry ? (
+                      <button type="button" onClick={handleCloseHistoryEntry} className={SECONDARY_BUTTON_CLASS}>
+                        Thu gọn
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+                {snapshotHistoryError ? (
+                  <p className="mt-1 text-xs text-red-500">{snapshotHistoryError}</p>
+                ) : null}
+                {snapshotHistoryLoading && snapshotHistory.length === 0 ? (
+                  <p className="text-xs text-[color:var(--ds-text-muted)]">Đang tải lịch sử snapshot...</p>
+                ) : snapshotHistory.length === 0 ? (
+                  <p className="text-xs text-[color:var(--ds-text-muted)]">Chưa có snapshot nào được lưu.</p>
+                ) : (
+                  <ul className="mt-2 space-y-2">
+                    {snapshotHistory.map((entry) => {
+                      const selected = selectedHistoryEntry?.id === entry.id;
+                      return (
+                        <li
+                          key={entry.id}
+                          className={clsx(
+                            'rounded border px-3 py-2 text-xs transition',
+                            selected
+                              ? 'border-amber-400 bg-amber-50'
+                              : 'border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)]'
+                          )}
+                        >
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <div>
+                              <p className="font-medium text-[color:var(--ds-text-primary)]">
+                                {entry.range?.from && entry.range?.to
+                                  ? `${entry.range.from} → ${entry.range.to}`
+                                  : 'Khoảng thời gian không xác định'}
+                              </p>
+                              <p className="text-[11px] text-[color:var(--ds-text-muted)]">
+                                {`Tạo lúc ${formatDateTime(entry.generatedAt)}`}
+                                {entry.rulesVersion ? ` • Quy tắc ${entry.rulesVersion}` : ''}
+                                {entry.rosterVersion ? ` • Roster ${entry.rosterVersion}` : ''}
+                                {entry.source ? ` • ${entry.source === 'cron' ? 'Tự động' : 'Thủ công'}` : ''}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              {entry.insightId ? (
+                                <span className="text-[11px] text-[color:var(--ds-text-muted)]">Insight: {entry.insightId}</span>
+                              ) : null}
+                              <button
+                                type="button"
+                                onClick={() => handleViewHistoryEntry(entry.id)}
+                                className={SECONDARY_BUTTON_CLASS}
+                              >
+                                {selected ? 'Đang xem' : 'Xem snapshot'}
+                              </button>
+                            </div>
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </div>
+              {selectedHistoryEntry ? (
+                <div className="rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-muted)]/60 p-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <p className="text-sm font-semibold text-[color:var(--ds-text-primary)]">
+                        {selectedHistoryEntry.range?.from && selectedHistoryEntry.range?.to
+                          ? `${selectedHistoryEntry.range.from} → ${selectedHistoryEntry.range.to}`
+                          : 'Khoảng thời gian không xác định'}
+                      </p>
+                      <p className="text-xs text-[color:var(--ds-text-muted)]">
+                        {`Snapshot lúc ${formatDateTime(selectedHistoryEntry.generatedAt)}`}
+                      </p>
+                    </div>
+                    <button type="button" onClick={handleCloseHistoryEntry} className={SECONDARY_BUTTON_CLASS}>
+                      Đóng
+                    </button>
+                  </div>
+                  {selectedHistoryMetrics.length ? (
+                    <ul className="mt-2 list-disc space-y-1 pl-4 text-xs text-[color:var(--ds-text-secondary)]">
+                      {selectedHistoryMetrics.map((line) => (
+                        <li key={line}>{line}</li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="mt-2 text-xs text-[color:var(--ds-text-muted)]">Không có dữ liệu tóm tắt.</p>
+                  )}
+                </div>
+              ) : null}
               {insightsMeta?.state?.lastRunAt ? (
                 <p className="text-xs text-[color:var(--ds-text-muted)]">
                   {`Lần chạy gần nhất: ${formatDateTime(insightsMeta.state.lastRunAt)} (trạng thái: ${insightsMeta.state.lastStatus})`}

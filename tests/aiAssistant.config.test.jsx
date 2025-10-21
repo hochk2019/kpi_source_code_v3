@@ -81,8 +81,23 @@ describe('AiAssistant – cấu hình Ollama nội bộ', () => {
           cacheSummary: [],
         }),
       'GET /api/ai/history': () => jsonResponse({ ok: true, messages: [] }),
-      'GET /api/ai/insights': () => jsonResponse({ ok: true, insights: [], meta: null }),
+      'GET /api/ai/insights': () =>
+        jsonResponse({
+          ok: true,
+          insights: [],
+          meta: {
+            state: { lastRunAt: null, lastStatus: 'never', lastError: null, lastProviderId: null },
+            schedule: { nextRun: null },
+            settings: { notifyOnAnomaly: false },
+            history: { entries: [], limit: 6 },
+          },
+        }),
       'GET /api/ai/data/snapshot': () => jsonResponse({ ok: true, snapshot: null }),
+      'GET /api/ai/data/snapshot/history': () => jsonResponse({ ok: true, entries: [] }),
+      'PUT /api/ai/insights/settings': ({ init }) => {
+        const body = JSON.parse(init?.body ?? '{}');
+        return jsonResponse({ ok: true, settings: body.settings || { notifyOnAnomaly: false } });
+      },
       'POST /api/ai/providers/test': () =>
         jsonResponse({
           ok: true,
@@ -135,6 +150,22 @@ describe('AiAssistant – cấu hình Ollama nội bộ', () => {
 
   it('hiển thị insight và gửi phản hồi hữu ích', async () => {
     const feedbackSpy = vi.fn();
+    const notifySpy = vi.fn();
+    const historyEntry = {
+      id: 'hist-1',
+      generatedAt: '2025-08-02T08:00:00.000Z',
+      range: { from: '2025-08-01', to: '2025-08-02' },
+      rulesVersion: 'v1',
+      rosterVersion: '2025.07',
+      totals: { rowsFetched: 12, declarations: 12 },
+      summary: { declarations: 12, import: 7, export: 5, kpi: 180, items: 0, licenses: 0 },
+      snapshot: {
+        summary: { declarations: 12, import: 7, export: 5, kpi: 180, items: 0, licenses: 0 },
+        adjustments: { totals: { approved: 1, pending: 0, rejected: 0, totalPoints: 12 } },
+        topStaff: [],
+        topTeams: [],
+      },
+    };
     installMockApi({
       'GET /api/ai/insights': () =>
         jsonResponse({
@@ -155,8 +186,11 @@ describe('AiAssistant – cấu hình Ollama nội bộ', () => {
           meta: {
             state: { lastRunAt: '2025-08-03T07:00:00.000Z', lastStatus: 'success', lastError: null, lastProviderId: 'ollama-local' },
             schedule: { nextRun: null },
+            settings: { notifyOnAnomaly: true },
+            history: { entries: [historyEntry], limit: 6 },
           },
         }),
+      'GET /api/ai/data/snapshot/history': () => jsonResponse({ ok: true, entries: [historyEntry] }),
       'POST /api/ai/insights/feedback': ({ init }) => {
         const body = JSON.parse(init?.body ?? '{}');
         expect(body.insightId).toBe('ins-test');
@@ -167,6 +201,11 @@ describe('AiAssistant – cấu hình Ollama nội bộ', () => {
           totals: { helpful: 1, notHelpful: 0 },
           feedback: { helpful: true, comment: null, updatedAt: '2025-08-03T07:10:00.000Z' },
         });
+      },
+      'PUT /api/ai/insights/settings': ({ init }) => {
+        const body = JSON.parse(init?.body ?? '{}');
+        notifySpy(body?.settings?.notifyOnAnomaly);
+        return jsonResponse({ ok: true, settings: { notifyOnAnomaly: !!body?.settings?.notifyOnAnomaly } });
       },
     });
 
@@ -187,5 +226,17 @@ describe('AiAssistant – cấu hình Ollama nội bộ', () => {
     await waitFor(() =>
       expect(screen.getByText('1 hữu ích · 0 chưa hữu ích')).toBeInTheDocument()
     );
+
+    const historyHeadings = await screen.findAllByText('Lịch sử snapshot KPI');
+    expect(historyHeadings.length).toBeGreaterThanOrEqual(1);
+    const historyRangeLabels = await screen.findAllByText('2025-08-01 → 2025-08-02');
+    expect(historyRangeLabels.length).toBeGreaterThanOrEqual(1);
+
+    const toggles = await screen.findAllByLabelText('Nhận thông báo khi insight cảnh báo bất thường');
+    expect(toggles.length).toBeGreaterThanOrEqual(1);
+    expect(toggles.some((node) => node.checked)).toBe(true);
+    const toggle = toggles.find((node) => node.checked) ?? toggles[0];
+    fireEvent.click(toggle);
+    await waitFor(() => expect(notifySpy).toHaveBeenCalledWith(false));
   });
 });

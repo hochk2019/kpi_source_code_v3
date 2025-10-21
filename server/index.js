@@ -747,10 +747,18 @@ const DEFAULT_AI_SNAPSHOT_CACHE = Object.freeze({
   version: 1,
   entries: [],
 });
+const AI_SNAPSHOT_HISTORY_KEY = 'ai_snapshot_history_v1';
+const AI_SNAPSHOT_HISTORY_MAX_ENTRIES = 180;
+const DEFAULT_AI_SNAPSHOT_HISTORY = Object.freeze({
+  version: 1,
+  entries: [],
+});
 
 const AI_INSIGHTS_KEY = 'ai_insights_v1';
 const AI_INSIGHT_MAX_ENTRIES = 30;
 const AI_INSIGHT_FEEDBACK_COMMENT_LIMIT = 400;
+const AI_INSIGHT_DEFAULT_CRON = '30 7 * * *';
+
 const DEFAULT_AI_INSIGHTS = Object.freeze({
   version: 1,
   entries: [],
@@ -763,6 +771,9 @@ const DEFAULT_AI_INSIGHTS = Object.freeze({
   schedule: {
     cron: null,
     nextRun: null,
+  },
+  settings: {
+    notifyOnAnomaly: false,
   },
 });
 
@@ -870,6 +881,7 @@ const DEFAULT_STORAGE = {
   [AI_CONFIG_KEY]: JSON.stringify(DEFAULT_AI_CONFIG),
   [AI_CACHE_KEY]: JSON.stringify(DEFAULT_AI_USAGE_CACHE),
   [AI_SNAPSHOT_CACHE_KEY]: JSON.stringify(DEFAULT_AI_SNAPSHOT_CACHE),
+  [AI_SNAPSHOT_HISTORY_KEY]: JSON.stringify(DEFAULT_AI_SNAPSHOT_HISTORY),
   [AI_INSIGHTS_KEY]: JSON.stringify(DEFAULT_AI_INSIGHTS),
 };
 
@@ -3232,6 +3244,126 @@ function getAiSnapshotCacheEntry(key, {
   };
 }
 
+function normalizeAiSnapshotHistoryEntry(entry) {
+  if (!entry || typeof entry !== 'object') {
+    return null;
+  }
+  const id = typeof entry.id === 'string' && entry.id.trim() ? entry.id.trim() : crypto.randomUUID();
+  const generatedAtIso = entry.generatedAt && !Number.isNaN(Date.parse(entry.generatedAt))
+    ? new Date(entry.generatedAt).toISOString()
+    : new Date().toISOString();
+  const cacheKey = toNullableString(entry.cacheKey, { maxLength: 128 }) || null;
+  const range = normalizeSnapshotRange(entry.range || {});
+  const filters = normalizeSnapshotFilters(entry.filters || {});
+  const snapshot = entry.snapshot && typeof entry.snapshot === 'object' ? cloneJson(entry.snapshot) : null;
+  const summary = snapshot?.summary && typeof snapshot.summary === 'object'
+    ? cloneJson(snapshot.summary)
+    : entry.summary && typeof entry.summary === 'object'
+      ? cloneJson(entry.summary)
+      : null;
+  const totals = snapshot?.totals && typeof snapshot.totals === 'object'
+    ? cloneJson(snapshot.totals)
+    : entry.totals && typeof entry.totals === 'object'
+      ? cloneJson(entry.totals)
+      : null;
+  const rulesVersion =
+    toNullableString(entry.rulesVersion ?? snapshot?.meta?.rulesVersion ?? entry.meta?.rulesVersion, {
+      maxLength: 64,
+    }) || null;
+  const rosterVersion =
+    toNullableString(entry.rosterVersion ?? snapshot?.meta?.rosterVersion ?? entry.meta?.rosterVersion, {
+      maxLength: 64,
+    }) || null;
+  const source = toNullableString(entry.source, { maxLength: 64 }) || null;
+  const insightId = toNullableString(entry.insightId, { maxLength: 160 }) || null;
+  return {
+    id,
+    generatedAt: generatedAtIso,
+    cacheKey,
+    range,
+    filters,
+    rulesVersion,
+    rosterVersion,
+    source,
+    insightId,
+    summary,
+    totals,
+    snapshot,
+  };
+}
+
+function getAiSnapshotHistoryInternal() {
+  const raw = getJSONValue(AI_SNAPSHOT_HISTORY_KEY, DEFAULT_AI_SNAPSHOT_HISTORY) || {};
+  const entries = Array.isArray(raw.entries) ? raw.entries : [];
+  const normalized = [];
+  for (const entry of entries) {
+    const normalizedEntry = normalizeAiSnapshotHistoryEntry(entry);
+    if (normalizedEntry) {
+      normalized.push(normalizedEntry);
+    }
+  }
+  normalized.sort((a, b) => new Date(b.generatedAt).getTime() - new Date(a.generatedAt).getTime());
+  const limited = AI_SNAPSHOT_HISTORY_MAX_ENTRIES > 0
+    ? normalized.slice(0, AI_SNAPSHOT_HISTORY_MAX_ENTRIES)
+    : normalized;
+  return { version: raw.version || DEFAULT_AI_SNAPSHOT_HISTORY.version, entries: limited };
+}
+
+function setAiSnapshotHistory(entries, { actor = 'system', source = 'ai-snapshot-history' } = {}) {
+  const normalized = [];
+  for (const entry of entries) {
+    const normalizedEntry = normalizeAiSnapshotHistoryEntry(entry);
+    if (normalizedEntry) {
+      normalized.push(normalizedEntry);
+    }
+  }
+  normalized.sort((a, b) => new Date(b.generatedAt).getTime() - new Date(a.generatedAt).getTime());
+  const limited = AI_SNAPSHOT_HISTORY_MAX_ENTRIES > 0
+    ? normalized.slice(0, AI_SNAPSHOT_HISTORY_MAX_ENTRIES)
+    : normalized;
+  const payload = { version: DEFAULT_AI_SNAPSHOT_HISTORY.version, entries: limited };
+  setJSONValue(AI_SNAPSHOT_HISTORY_KEY, payload, { actor, source });
+  return payload;
+}
+
+function recordAiSnapshotHistoryEntry(snapshotEntry, {
+  actor = 'system',
+  source = 'unknown',
+  insightId = null,
+} = {}) {
+  if (!snapshotEntry || typeof snapshotEntry !== 'object') {
+    return null;
+  }
+  const history = getAiSnapshotHistoryInternal();
+  const normalizedEntry = normalizeAiSnapshotHistoryEntry({
+    ...snapshotEntry,
+    source,
+    insightId,
+  });
+  if (!normalizedEntry) {
+    return null;
+  }
+  const nextEntries = history.entries.filter((entry) => entry.id !== normalizedEntry.id && entry.cacheKey !== normalizedEntry.cacheKey);
+  nextEntries.unshift(normalizedEntry);
+  const saved = setAiSnapshotHistory(nextEntries, { actor, source: 'ai-snapshot-history' });
+  return saved.entries[0] || normalizedEntry;
+}
+
+function listAiSnapshotHistory(limit = 12) {
+  const history = getAiSnapshotHistoryInternal();
+  const normalizedLimit = Number.isFinite(limit) && limit > 0 ? Math.floor(limit) : history.entries.length;
+  return normalizedLimit > 0 ? history.entries.slice(0, normalizedLimit) : history.entries.slice();
+}
+
+function getAiSnapshotHistoryEntry(id) {
+  const normalizedId = typeof id === 'string' ? id.trim() : '';
+  if (!normalizedId) {
+    return null;
+  }
+  const history = getAiSnapshotHistoryInternal();
+  return history.entries.find((entry) => entry.id === normalizedId) || null;
+}
+
 function createAiInsightId() {
   return `ins-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
@@ -3528,6 +3660,43 @@ function buildAiInsightPromptData(snapshot, previousSnapshot) {
   };
 }
 
+function isAiInsightAnomalous(meta = {}, snapshot = null) {
+  const metrics = Array.isArray(meta?.metrics) ? meta.metrics : [];
+  for (const metric of metrics) {
+    const previous = Number(metric?.previous ?? 0);
+    const deltaPercent = Number(metric?.deltaPercent ?? 0);
+    const deltaValue = Number(metric?.delta ?? 0);
+    if (Number.isFinite(previous) && previous > 0 && Number.isFinite(deltaPercent) && deltaPercent <= -25) {
+      return true;
+    }
+    if (metric?.key === 'kpi' && Number.isFinite(deltaValue) && deltaValue <= -80) {
+      return true;
+    }
+  }
+
+  const highlights = meta?.highlights || {};
+  const adjustments = highlights.adjustments || {};
+  if (Number.isFinite(Number(adjustments.pending)) && Number(adjustments.pending) >= 15) {
+    return true;
+  }
+  if (Number.isFinite(Number(adjustments.rejected)) && Number(adjustments.rejected) >= 5) {
+    return true;
+  }
+  const mstDropped = Array.isArray(highlights.mstDropped) ? highlights.mstDropped : [];
+  if (mstDropped.length >= 5) {
+    return true;
+  }
+
+  const summary = snapshot?.summary || {};
+  if (Number.isFinite(Number(summary.declarations)) && Number(summary.declarations) >= 60) {
+    const averageKpi = Number(summary.kpi ?? 0) / Math.max(1, Number(summary.declarations));
+    if (Number.isFinite(averageKpi) && averageKpi < 0.4) {
+      return true;
+    }
+  }
+  return false;
+}
+
 function normalizeAiInsightFeedback(feedback) {
   if (!feedback || typeof feedback !== 'object') {
     return { totals: { helpful: 0, notHelpful: 0 }, items: {} };
@@ -3591,6 +3760,13 @@ function normalizeAiInsightEntry(entry) {
   };
 }
 
+function normalizeAiInsightsSettings(settings) {
+  const raw = settings && typeof settings === 'object' ? settings : {};
+  return {
+    notifyOnAnomaly: raw.notifyOnAnomaly === true,
+  };
+}
+
 function getAiInsightsStore() {
   const raw = getJSONValue(AI_INSIGHTS_KEY, DEFAULT_AI_INSIGHTS) || {};
   const entries = [];
@@ -3617,11 +3793,13 @@ function getAiInsightsStore() {
     cron: typeof scheduleRaw.cron === 'string' ? scheduleRaw.cron : null,
     nextRun: typeof scheduleRaw.nextRun === 'string' ? scheduleRaw.nextRun : null,
   };
+  const settings = normalizeAiInsightsSettings(raw.settings);
   return {
     version: raw.version || DEFAULT_AI_INSIGHTS.version,
     entries: limited,
     state,
     schedule,
+    settings,
   };
 }
 
@@ -3639,6 +3817,7 @@ function setAiInsightsStore(store, options = {}) {
       cron: store?.schedule?.cron || null,
       nextRun: store?.schedule?.nextRun || null,
     },
+    settings: normalizeAiInsightsSettings(store?.settings),
   };
   setJSONValue(AI_INSIGHTS_KEY, payload, options);
 }
@@ -3692,6 +3871,10 @@ async function runAiInsightGeneration(rangeInput = {}, { actor = 'system', provi
     throw error;
   }
   const store = getAiInsightsStore();
+  const notifyOnAnomaly = store?.settings?.notifyOnAnomaly === true;
+  const normalizedActor = typeof actor === 'string' ? actor : 'system';
+  const isAutomatedActor = normalizedActor.startsWith('cron');
+  const historySource = isAutomatedActor ? 'cron' : 'manual';
   const nowIso = new Date().toISOString();
   let snapshotResult;
   try {
@@ -3798,6 +3981,17 @@ async function runAiInsightGeneration(rangeInput = {}, { actor = 'system', provi
   }
 
   const usage = normalizeAiUsage(result?.usage, promptData.prompt, result?.message);
+  const anomalyDetected = isAiInsightAnomalous(promptData.meta || {}, snapshot);
+  const entryMeta = {
+    ...(promptData.meta || {}),
+    previousRange,
+    snapshotCached: !!snapshotResult.cached,
+    anomaly: anomalyDetected,
+  };
+  if (notifyOnAnomaly && anomalyDetected && isAutomatedActor) {
+    entryMeta.anomalyNotifiedAt = nowIso;
+  }
+
   const entry = normalizeAiInsightEntry({
     id: createAiInsightId(),
     createdAt: nowIso,
@@ -3811,11 +4005,7 @@ async function runAiInsightGeneration(rangeInput = {}, { actor = 'system', provi
     snapshotCacheKey: snapshotResult.cacheKey || null,
     snapshotGeneratedAt: snapshot.generatedAt || null,
     signature,
-    meta: {
-      ...(promptData.meta || {}),
-      previousRange,
-      snapshotCached: !!snapshotResult.cached,
-    },
+    meta: entryMeta,
     feedback: { totals: { helpful: 0, notHelpful: 0 }, items: {} },
   });
 
@@ -3830,8 +4020,46 @@ async function runAiInsightGeneration(rangeInput = {}, { actor = 'system', provi
       lastProviderId: provider.id,
     },
     schedule: store.schedule || cloneJson(DEFAULT_AI_INSIGHTS.schedule),
+    settings: store.settings || cloneJson(DEFAULT_AI_INSIGHTS.settings),
   };
   setAiInsightsStore(nextStore, { actor, source: 'ai-insight-store' });
+
+  recordAiSnapshotHistoryEntry(
+    {
+      id: entry.id,
+      generatedAt: snapshot.generatedAt || nowIso,
+      cacheKey: snapshotResult.cacheKey || null,
+      range: snapshot.range || {},
+      filters: snapshot.filters || {},
+      rulesVersion: snapshot.meta?.rulesVersion || null,
+      rosterVersion: snapshot.meta?.rosterVersion || null,
+      summary: snapshot.summary || null,
+      totals: snapshot.totals || null,
+      snapshot,
+    },
+    { actor, source: historySource, insightId: entry.id }
+  );
+
+  const shouldNotify = notifyOnAnomaly && anomalyDetected && isAutomatedActor;
+  if (shouldNotify) {
+    const firstLine = `${entry.response || ''}`
+      .split(/\n+/u)
+      .map((line) => line.trim())
+      .find((line) => line);
+    const message = firstLine ? truncateText(firstLine, 180) : 'Insight KPI cảnh báo bất thường.';
+    pushNotification({
+      type: 'ai.insight.anomaly',
+      severity: 'warning',
+      title: 'Insight KPI cảnh báo',
+      message,
+      meta: {
+        insightId: entry.id,
+        providerId: entry.providerId,
+        range: entry.range,
+        createdAt: entry.createdAt,
+      },
+    });
+  }
 
   pushAuditLog({
     actor,
@@ -3895,6 +4123,7 @@ function submitAiInsightFeedback(insightId, username, payload = {}, { actor = 's
       entries,
       state: store.state,
       schedule: store.schedule,
+      settings: store.settings,
     },
     { actor, source: 'ai-insight-feedback' }
   );
@@ -3950,6 +4179,19 @@ function normalizeEcusTaxCodeList(input) {
     }
   }
   return Array.from(set).sort();
+}
+
+function resolveVersionLabel(...candidates) {
+  for (const candidate of candidates) {
+    if (candidate === null || candidate === undefined) {
+      continue;
+    }
+    const normalized = toNullableString(candidate, { maxLength: 64 });
+    if (normalized) {
+      return normalized;
+    }
+  }
+  return null;
 }
 
 function clearAiCache({ actor = 'system' } = {}) {
@@ -10407,6 +10649,12 @@ async function buildAiKpiSnapshot(rangeInput = {}, {
   const roster = getRosterValue();
   const rules = getRulesValue();
   const adjustments = getJSONValue('kpi_adjustments_v1', []);
+  const rulesVersion = resolveVersionLabel(
+    rules?.meta?.version,
+    rules?.version,
+    Number.isFinite(rules?.meta?.revision) ? `rev-${rules.meta.revision}` : null
+  );
+  const rosterVersion = resolveVersionLabel(roster?.meta?.version, roster?.version);
   const report = buildReportData(mappedRows, {
     roster,
     rules,
@@ -10520,6 +10768,10 @@ async function buildAiKpiSnapshot(rangeInput = {}, {
       server: connectionConfig.server,
       database: connectionConfig.database,
     },
+    meta: {
+      rulesVersion,
+      rosterVersion,
+    },
     summary,
     totals: {
       rowsFetched: totalFetched,
@@ -10560,6 +10812,7 @@ function isSqlTimeoutError(err) {
 }
 
 let scheduledSync = null;
+let aiInsightJob = null;
 
 function refreshEcusSchedule() {
   if (process.env.KPI_DISABLE_CRON === '1') {
@@ -10604,6 +10857,149 @@ function refreshEcusSchedule() {
   } catch (err) {
     console.error('Không thể thiết lập lịch đồng bộ ECUS:', err);
   }
+}
+
+function computeNextAiInsightRun() {
+  if (!aiInsightJob || typeof aiInsightJob.nextDates !== 'function') {
+    return null;
+  }
+  try {
+    const next = aiInsightJob.nextDates();
+    if (!next) {
+      return null;
+    }
+    if (typeof next.toJSDate === 'function') {
+      const jsDate = next.toJSDate();
+      if (jsDate instanceof Date && !Number.isNaN(jsDate.getTime())) {
+        return jsDate.toISOString();
+      }
+    }
+    if (typeof next.toDate === 'function') {
+      const jsDate = next.toDate();
+      if (jsDate instanceof Date && !Number.isNaN(jsDate.getTime())) {
+        return jsDate.toISOString();
+      }
+    }
+    const fallback = new Date(next);
+    if (!Number.isNaN(fallback.getTime())) {
+      return fallback.toISOString();
+    }
+  } catch (err) {
+    console.warn('Không thể tính lần chạy insight KPI kế tiếp', err);
+  }
+  return null;
+}
+
+function updateAiInsightScheduleState(nextSchedule = {}, { actor = 'system' } = {}) {
+  const store = getAiInsightsStore();
+  const schedule = {
+    cron:
+      nextSchedule.cron !== undefined && nextSchedule.cron !== null
+        ? nextSchedule.cron
+        : store.schedule?.cron || null,
+    nextRun:
+      nextSchedule.nextRun !== undefined
+        ? nextSchedule.nextRun
+        : store.schedule?.nextRun || null,
+  };
+  setAiInsightsStore(
+    {
+      version: store.version || DEFAULT_AI_INSIGHTS.version,
+      entries: store.entries,
+      state: store.state,
+      schedule,
+      settings: store.settings,
+    },
+    { actor, source: 'ai-insight-schedule' }
+  );
+}
+
+async function executeScheduledAiInsight({ actor = 'cron:ai-insight' } = {}) {
+  try {
+    await runAiInsightGeneration({}, { actor, useCache: false });
+  } catch (err) {
+    console.error('Chạy insight KPI định kỳ thất bại', err);
+  } finally {
+    const nextRun = computeNextAiInsightRun();
+    updateAiInsightScheduleState({ nextRun }, { actor });
+  }
+}
+
+function refreshAiInsightSchedule({ actor = 'system' } = {}) {
+  const cronDisabled = process.env.KPI_DISABLE_CRON === '1';
+  if (cronDisabled) {
+    if (aiInsightJob) {
+      try {
+        aiInsightJob.stop();
+      } catch (err) {
+        console.warn('Không thể dừng lịch insight AI hiện tại', err);
+      }
+      aiInsightJob = null;
+    }
+    updateAiInsightScheduleState({ nextRun: null }, { actor });
+    return;
+  }
+
+  const store = getAiInsightsStore();
+  const envCron = normalizeCronExpression(process.env.AI_INSIGHT_CRON);
+  const storedCron = normalizeCronExpression(store.schedule?.cron);
+  const cronExpr = normalizeCronExpression(envCron || storedCron || AI_INSIGHT_DEFAULT_CRON);
+
+  if (!cronExpr || cronExpr.toLowerCase() === 'never') {
+    if (aiInsightJob) {
+      try {
+        aiInsightJob.stop();
+      } catch (err) {
+        console.warn('Không thể dừng lịch insight AI hiện tại', err);
+      }
+      aiInsightJob = null;
+    }
+    updateAiInsightScheduleState({ cron: cronExpr || null, nextRun: null }, { actor });
+    return;
+  }
+
+  if (typeof cron.validate === 'function' && !cron.validate(cronExpr)) {
+    console.warn('Biểu thức cron insight AI không hợp lệ:', cronExpr);
+    if (aiInsightJob) {
+      try {
+        aiInsightJob.stop();
+      } catch (err) {
+        console.warn('Không thể dừng lịch insight AI hiện tại', err);
+      }
+      aiInsightJob = null;
+    }
+    updateAiInsightScheduleState({ cron: cronExpr, nextRun: null }, { actor });
+    return;
+  }
+
+  if (aiInsightJob) {
+    try {
+      aiInsightJob.stop();
+    } catch (err) {
+      console.warn('Không thể dừng lịch insight AI hiện tại', err);
+    }
+    aiInsightJob = null;
+  }
+
+  try {
+    aiInsightJob = cron.schedule(
+      cronExpr,
+      () => {
+        executeScheduledAiInsight({ actor: 'cron:ai-insight' }).catch(() => {});
+      },
+      {
+        timezone: process.env.CRON_TZ || 'Asia/Ho_Chi_Minh',
+      }
+    );
+  } catch (err) {
+    console.error('Không thể thiết lập lịch insight AI tự động', err);
+    aiInsightJob = null;
+    updateAiInsightScheduleState({ cron: cronExpr, nextRun: null }, { actor });
+    return;
+  }
+
+  const nextRun = computeNextAiInsightRun();
+  updateAiInsightScheduleState({ cron: cronExpr, nextRun }, { actor });
 }
 
 async function runCoDiscrepancyCheck({ actor = 'system', reason = 'auto', range = null } = {}) {
@@ -12043,6 +12439,30 @@ app.get('/api/ai/data/snapshot', async (req, res) => {
   }
 });
 
+app.get('/api/ai/data/snapshot/history', (req, res) => {
+  const { denied } = requireAiAssistUsage(req, res);
+  if (denied) {
+    return;
+  }
+  const limitRaw = Array.isArray(req.query?.limit) ? req.query.limit[0] : req.query?.limit;
+  const limit = toPositiveInt(limitRaw, 12) || 12;
+  const entries = listAiSnapshotHistory(limit);
+  res.json({ ok: true, entries });
+});
+
+app.get('/api/ai/data/snapshot/history/:id', (req, res) => {
+  const { denied } = requireAiAssistUsage(req, res);
+  if (denied) {
+    return;
+  }
+  const entry = getAiSnapshotHistoryEntry(req.params.id);
+  if (!entry) {
+    res.status(404).json({ ok: false, error: 'Không tìm thấy snapshot yêu cầu.' });
+    return;
+  }
+  res.json({ ok: true, entry });
+});
+
 app.get('/api/ai/insights', (req, res) => {
   const { context, denied } = requireAiAssistUsage(req, res);
   if (denied) {
@@ -12051,16 +12471,24 @@ app.get('/api/ai/insights', (req, res) => {
   const username = context?.account?.username || resolveActor(req);
   const limitRaw = Array.isArray(req.query?.limit) ? req.query.limit[0] : req.query?.limit;
   const limit = toPositiveInt(limitRaw, AI_INSIGHT_MAX_ENTRIES) || AI_INSIGHT_MAX_ENTRIES;
+  const historyLimitRaw = Array.isArray(req.query?.historyLimit) ? req.query.historyLimit[0] : req.query?.historyLimit;
+  const historyLimit = toPositiveInt(historyLimitRaw, 6) || 6;
   const store = getAiInsightsStore();
   const entries = Array.isArray(store.entries) ? store.entries : [];
   const limited = limit > 0 ? entries.slice(0, limit) : entries;
   const insights = limited.map((entry) => sanitizeAiInsightForClient(entry, { username })).filter(Boolean);
+  const historyEntries = listAiSnapshotHistory(historyLimit);
   res.json({
     ok: true,
     insights,
     meta: {
       state: store.state,
       schedule: store.schedule,
+      settings: store.settings,
+      history: {
+        entries: historyEntries,
+        limit: historyLimit,
+      },
     },
   });
 });
@@ -12114,6 +12542,38 @@ app.post('/api/ai/insights/feedback', (req, res) => {
   } catch (err) {
     res.status(400).json({ ok: false, error: err?.message || 'Không thể gửi phản hồi insight.' });
   }
+});
+
+app.put('/api/ai/insights/settings', (req, res) => {
+  const { context, denied } = requireAiAssistManage(req, res);
+  if (denied) {
+    return;
+  }
+  const actor = context?.account?.username || resolveActor(req);
+  const store = getAiInsightsStore();
+  const currentSettings = store.settings || normalizeAiInsightsSettings();
+  const payload = req.body?.settings ?? req.body ?? {};
+  const nextSettings = normalizeAiInsightsSettings(payload);
+  setAiInsightsStore(
+    {
+      version: store.version || DEFAULT_AI_INSIGHTS.version,
+      entries: store.entries,
+      state: store.state,
+      schedule: store.schedule,
+      settings: nextSettings,
+    },
+    { actor, source: 'ai-insight-settings' }
+  );
+  if (currentSettings.notifyOnAnomaly !== nextSettings.notifyOnAnomaly) {
+    pushAuditLog({
+      actor,
+      action: 'ai.insight.settings',
+      detail: nextSettings.notifyOnAnomaly
+        ? 'Bật thông báo khi insight cảnh báo bất thường'
+        : 'Tắt thông báo insight bất thường',
+    });
+  }
+  res.json({ ok: true, settings: nextSettings });
 });
 
 app.get('/api/ai/history', (req, res) => {
@@ -12669,6 +13129,7 @@ app.post('/api/import/alerts/unreview', (req, res) => {
 });
 
 refreshEcusSchedule();
+refreshAiInsightSchedule();
 
 app.use(express.static(DIST_DIR));
 app.get('*', async (req, res, next) => {

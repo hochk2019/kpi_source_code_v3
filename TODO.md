@@ -51,16 +51,16 @@
 ## Giai đoạn 4 – Tự động hóa & mở rộng (chạy sau khi Backend + UI giai đoạn 1-3 hoàn thành)
 
 ### Backend
-- [ ] Thiết lập job định kỳ (cron) chạy `runAiInsightJob` để tự động sinh insight mỗi ngày và lưu vào kho.
-- [ ] Đồng bộ lịch sử snapshot vào hệ thống lưu trữ lâu dài, kèm đánh dấu phiên bản quy tắc KPI tại thời điểm tạo.
+- [x] Thiết lập job định kỳ (cron) chạy `runAiInsightJob` để tự động sinh insight mỗi ngày và lưu vào kho.
+- [x] Đồng bộ lịch sử snapshot vào hệ thống lưu trữ lâu dài, kèm đánh dấu phiên bản quy tắc KPI tại thời điểm tạo.
 
 ### UI
-- [ ] Thêm trang tổng quan insight định kỳ, cho phép tải lại dữ liệu hoặc xem snapshot gốc.
-- [ ] Cung cấp tùy chọn bật/tắt thông báo khi có insight bất thường mới.
+- [x] Thêm trang tổng quan insight định kỳ, cho phép tải lại dữ liệu hoặc xem snapshot gốc.
+- [x] Cung cấp tùy chọn bật/tắt thông báo khi có insight bất thường mới.
 
 ### Vận hành & Tài liệu
-- [ ] Sau khi backend và UI ổn định, viết hướng dẫn chi tiết cấu hình Ollama local trên Windows 11 (cài đặt dịch vụ, cấp quyền firewall, nạp model, giám sát).
-- [ ] Chuẩn bị checklist chuyển đổi hoặc mở rộng sang nhà cung cấp AI khác nếu cần (Azure, OpenAI, Anthropic…).
+- [x] Sau khi backend và UI ổn định, viết hướng dẫn chi tiết cấu hình Ollama local trên Windows 11 (cài đặt dịch vụ, cấp quyền firewall, nạp model, giám sát).
+- [x] Chuẩn bị checklist chuyển đổi hoặc mở rộng sang nhà cung cấp AI khác nếu cần (Azure, OpenAI, Anthropic…).
 
 ## Ghi chú kiểm thử chung
 - [x] Sau mỗi giai đoạn, chạy lại toàn bộ bộ kiểm thử liên quan (`pnpm exec vitest run tests/server.api.test.js`, `pnpm exec vitest run tests/ai/*.test.js` khi bổ sung) và cập nhật tài liệu nếu có thay đổi.

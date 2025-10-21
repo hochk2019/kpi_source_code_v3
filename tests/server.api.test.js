@@ -1184,6 +1184,21 @@ describe('AI assistant API', () => {
       const insightId = listRes.body.insights[0]?.insightId;
       expect(typeof insightId).toBe('string');
       expect(listRes.body.insights[0]?.feedback?.helpful ?? 0).toBe(0);
+      expect(listRes.body?.meta?.settings?.notifyOnAnomaly).toBe(false);
+      const historyList = listRes.body?.meta?.history?.entries || [];
+      expect(Array.isArray(historyList)).toBe(true);
+      expect(historyList.length).toBeGreaterThan(0);
+      const historyEntryId = historyList[0]?.id;
+      expect(typeof historyEntryId).toBe('string');
+
+      const historyRes = await staff.get('/api/ai/data/snapshot/history');
+      expect(historyRes.status).toBe(200);
+      expect(Array.isArray(historyRes.body?.entries)).toBe(true);
+      expect(historyRes.body.entries.length).toBeGreaterThan(0);
+
+      const singleHistoryRes = await staff.get(`/api/ai/data/snapshot/history/${historyEntryId}`);
+      expect(singleHistoryRes.status).toBe(200);
+      expect(singleHistoryRes.body?.entry?.id).toBe(historyEntryId);
 
       const feedbackRes = await staff.post('/api/ai/insights/feedback').send({
         insightId,
@@ -1197,6 +1212,16 @@ describe('AI assistant API', () => {
       expect(refreshed.status).toBe(200);
       expect(refreshed.body?.insights?.[0]?.feedback?.helpful).toBe(1);
       expect(refreshed.body?.insights?.[0]?.feedback?.viewer?.helpful).toBe(true);
+
+      const toggleRes = await admin
+        .put('/api/ai/insights/settings')
+        .send({ settings: { notifyOnAnomaly: true } });
+      expect(toggleRes.status).toBe(200);
+      expect(toggleRes.body?.settings?.notifyOnAnomaly).toBe(true);
+
+      const afterToggle = await admin.get('/api/ai/insights');
+      expect(afterToggle.status).toBe(200);
+      expect(afterToggle.body?.meta?.settings?.notifyOnAnomaly).toBe(true);
     } finally {
       fetchSpy.mockRestore();
     }
