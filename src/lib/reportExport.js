@@ -1,4 +1,4 @@
-import { fetchWithAuth } from '@/auth/localAuth.js';
+import { fetchWithAuth } from '../auth/localAuth.js';
 function ensureWindow() {
   if (typeof window === "undefined") {
     throw new Error("Tính năng xuất báo cáo chỉ khả dụng trong trình duyệt");

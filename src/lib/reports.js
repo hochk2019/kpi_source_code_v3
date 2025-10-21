@@ -5,10 +5,10 @@ import {
   mapMemberNamesToTeams,
   isExportDecl,
   KPI_ADJUSTMENT_CATEGORY_CONFIG,
-} from "@/lib/store.js";
+} from "./store.js";
 import { addAdjustmentTotals, cloneAdjustmentTotals, createAdjustmentTotals } from "../../shared/kpiAdjustments.js";
-import { computeKPI, DEFAULT_RULES } from "@/lib/rules.js";
-import { formatDisplayDate } from "@/shared/format.js";
+import { computeKPI, DEFAULT_RULES } from "./rules.js";
+import { formatDisplayDate } from "../shared/format.js";
 import { computeLicenseSnapshot } from "../../shared/licenseSummary.js";
 
 const UNASSIGNED_STAFF_KEY = "__unassigned_staff__";

@@ -1,5 +1,5 @@
-import { saveDeclRows, sortDeclRows } from "@/lib/store.js";
-import { computeKPI, loadRules } from "@/lib/rules.js";
+import { saveDeclRows, sortDeclRows } from "../lib/store.js";
+import { computeKPI, loadRules } from "../lib/rules.js";
 
 function pad(number, length = 2) {
   return String(number).padStart(length, "0");

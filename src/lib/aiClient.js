@@ -1,4 +1,4 @@
-import { fetchWithAuth } from '@/auth/localAuth.js';
+import { fetchWithAuth } from '../auth/localAuth.js';
 
 async function parseJsonResponse(response, fallbackMessage = 'Yêu cầu thất bại') {
   let data = null;

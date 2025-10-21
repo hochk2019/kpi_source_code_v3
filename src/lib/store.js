@@ -1,6 +1,6 @@
 // src/lib/store.js
 
-import { createDefaultRuleCollection } from '@/shared/defaultRules.js';
+import { createDefaultRuleCollection } from '../shared/defaultRules.js';
 import {
   KPI_ADJUSTMENT_CATEGORY_CONFIG,
   normalizeAdjustmentCategoryKey,

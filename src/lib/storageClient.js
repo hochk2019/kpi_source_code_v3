@@ -1,4 +1,4 @@
-import { fetchWithAuth } from '@/auth/localAuth.js';
+import { fetchWithAuth } from '../auth/localAuth.js';
 
 function formatHttpError(response) {
   if (!response || typeof response.status !== 'number') {

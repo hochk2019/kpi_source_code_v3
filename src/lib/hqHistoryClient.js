@@ -1,4 +1,4 @@
-import { fetchWithAuth } from '@/auth/localAuth.js';
+import { fetchWithAuth } from '../auth/localAuth.js';
 import {
   HQ_HISTORY_KEY,
   HQ_HISTORY_LIMIT,

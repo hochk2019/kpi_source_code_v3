@@ -6,9 +6,9 @@ import {
   getMSTFor,
   isExportDecl,
   normalizeName,
-} from "@/lib/store.js";
-import { loadRules, countLicenseTypesFromRowObj, extractLicenseCodesFromRowObj } from "@/lib/rules.js";
-import { deriveCOStatus, parseCoLineCount } from "@/shared/co.js";
+} from "./store.js";
+import { loadRules, countLicenseTypesFromRowObj, extractLicenseCodesFromRowObj } from "./rules.js";
+import { deriveCOStatus, parseCoLineCount } from "../shared/co.js";
 
 const normalizeCodeValue = (value) => String(value ?? "").trim().toUpperCase();
 const normalizeLookupKey = (value) =>

@@ -1,4 +1,4 @@
-import { fetchWithAuth } from '@/auth/localAuth.js';
+import { fetchWithAuth } from '../auth/localAuth.js';
 
 const listeners = new Set();
 let eventSource = null;

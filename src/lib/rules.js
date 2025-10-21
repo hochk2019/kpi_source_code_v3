@@ -14,14 +14,14 @@ import {
   pushAuditLog,
 } from './store.js';
 import { getItem as getStorageItem, setItem as setStorageItem } from './storageClient.js';
-import { fetchWithAuth } from '@/auth/localAuth.js';
+import { fetchWithAuth } from '../auth/localAuth.js';
 import {
   DEFAULT_RULES,
   createDefaultRuleCollection,
   createDefaultRuleSetV2,
-} from '@/shared/defaultRules.js';
-import { coLineCount } from '@/shared/co.js';
-export { DEFAULT_RULES } from '@/shared/defaultRules.js';
+} from '../shared/defaultRules.js';
+import { coLineCount } from '../shared/co.js';
+export { DEFAULT_RULES } from '../shared/defaultRules.js';
 
 const KEY_HISTORY = 'kpi_rules_history';
 const LEGACY_KEY_ACTIVE = 'kpi_rules';
