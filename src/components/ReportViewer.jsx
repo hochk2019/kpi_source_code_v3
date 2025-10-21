@@ -890,7 +890,14 @@ function SummaryCard({ title, value, subtitle }) {
   );
 }
 
-function StaffDetailCard({ staff, canExport, onExport, exporting, visibleColumns = {} }) {
+function StaffDetailCard({
+  staff,
+  canExport,
+  onExport,
+  exporting,
+  visibleColumns = {},
+  detailPageSize = DEFAULT_DETAIL_PAGE_SIZE,
+}) {
   const { stats, rows, adjustmentSummary } = staff;
   const [mode, setMode] = useState("summary");
   const aggregated = useMemo(
@@ -984,6 +991,23 @@ function StaffDetailCard({ staff, canExport, onExport, exporting, visibleColumns
     (showCo ? 1 : 0) +
     (showCoLines ? 1 : 0) +
     (showLicenseCodes ? 1 : 0);
+  const normalizedDetailPageSize = Math.max(1, Number(detailPageSize) || DEFAULT_DETAIL_PAGE_SIZE);
+  const detailRowChunks = useMemo(() => {
+    if (!rows.length) {
+      return [];
+    }
+    if (mode !== "detail") {
+      return [rows];
+    }
+    if (rows.length <= normalizedDetailPageSize) {
+      return [rows];
+    }
+    const chunks = [];
+    for (let i = 0; i < rows.length; i += normalizedDetailPageSize) {
+      chunks.push(rows.slice(i, i + normalizedDetailPageSize));
+    }
+    return chunks;
+  }, [rows, mode, normalizedDetailPageSize]);
 
   return (
     <section className="kpi-print-section space-y-3 rounded-lg border bg-white p-4 shadow-sm print:avoid-break">
@@ -1078,78 +1102,92 @@ function StaffDetailCard({ staff, canExport, onExport, exporting, visibleColumns
 
       {mode === "summary" ? (
         <CompanySummaryTable rows={aggregated} visibleColumns={visibleColumns} />
+      ) : detailRowChunks.length === 0 ? (
+        <div className="rounded border border-dashed border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-muted)] p-4 text-center text-sm text-[color:var(--ds-text-secondary)]">
+          Chua co to khai nao trong giai doan duoc chon.
+        </div>
       ) : (
-        <div className="overflow-auto rounded border">
-          <table className="min-w-full text-sm">
-            <thead className="bg-gray-100">
-              <tr>
-                <th className="px-3 py-2 text-left">Ngày</th>
-                <th className="px-3 py-2 text-left">Số tờ khai</th>
-                <th className="px-3 py-2 text-left">Loại hình</th>
-                <th className="px-3 py-2 text-left">Nhập/Xuất</th>
-                {showItems ? <th className="px-3 py-2 text-right">Mục hàng</th> : null}
-                {showLicenses ? <th className="px-3 py-2 text-right">Số GP</th> : null}
-                {showCo ? <th className="px-3 py-2 text-center">C/O</th> : null}
-                {showCoLines ? <th className="px-3 py-2 text-right">Dòng C/O</th> : null}
-                {showLicenseCodes ? <th className="px-3 py-2 text-left">Mã giấy phép</th> : null}
-                <th className="px-3 py-2 text-right">Điểm KPI</th>
-                <th className="px-3 py-2 text-left">MST</th>
-                <th className="px-3 py-2 text-left">Công ty</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row, idx) => {
-                const licenseCodes = Array.isArray(row.licenseCodes) ? row.licenseCodes : [];
-                const excludedCodes = Array.isArray(row.licenseExcludedCodes)
-                  ? row.licenseExcludedCodes
-                  : [];
-                const licenseLabel = licenseCodes.join(", ") || "—";
-                const licenseTooltipParts = [];
-                if (licenseLabel && licenseLabel !== "—") {
-                  licenseTooltipParts.push(`Áp dụng: ${licenseLabel}`);
-                }
-                if (excludedCodes.length) {
-                  licenseTooltipParts.push(`Loại trừ: ${excludedCodes.join(", ")}`);
-                }
-                const licenseTooltip = licenseTooltipParts.join("\n") || "—";
-                return (
-                  <tr key={`${row.so_tk}-${idx}`} className={idx % 2 === 0 ? "bg-white" : "bg-gray-50"}>
-                    <td className="px-3 py-1.5">{row.displayDate || formatDisplayDate(row.date)}</td>
-                    <td className="px-3 py-1.5">{row.so_tk}</td>
-                    <td className="px-3 py-1.5">{row.loai_hinh || ""}</td>
-                    <td className="px-3 py-1.5">{row.isExport ? "Xuất" : "Nhập"}</td>
-                    {showItems ? (
-                      <td className="px-3 py-1.5 text-right">{formatInt(row.num_items)}</td>
-                    ) : null}
-                    {showLicenses ? (
-                      <td className="px-3 py-1.5 text-right">{formatInt(row.licenses)}</td>
-                    ) : null}
-                    {showCo ? (
-                      <td className="px-3 py-1.5 text-center">{row.hasCO ? "Có" : "Không"}</td>
-                    ) : null}
-                    {showCoLines ? (
-                      <td className="px-3 py-1.5 text-right">{formatInt(row.coLineCount || 0)}</td>
-                    ) : null}
-                    {showLicenseCodes ? (
-                      <td className="px-3 py-1.5" title={licenseTooltip}>
-                        {licenseLabel}
-                      </td>
-                    ) : null}
-                    <td className="px-3 py-1.5 text-right">{formatDecimal(row.kpi)}</td>
-                    <td className="px-3 py-1.5">{row.mst || ""}</td>
-                    <td className="px-3 py-1.5">{row.cong_ty || ""}</td>
-                  </tr>
-                );
-              })}
-              {rows.length === 0 ? (
-                <tr>
-                  <td className="px-3 py-6 text-center text-gray-500" colSpan={detailColumnCount}>
-                    Chưa có tờ khai nào trong giai đoạn được chọn.
-                  </td>
-                </tr>
-              ) : null}
-            </tbody>
-          </table>
+        <div className="space-y-4">
+          {detailRowChunks.map((chunkRows, chunkIdx) => {
+            const baseIndex = chunkIdx * normalizedDetailPageSize;
+            const chunkKey = `${staff.key || staff.name || "staff"}-chunk-${chunkIdx}`;
+            return (
+              <div
+                key={chunkKey}
+                className={`kpi-print-chunk space-y-3 ${chunkIdx > 0 ? "border-t border-dashed border-[color:var(--ds-border-subtle)] pt-4 mt-4" : ""}`}
+              >
+                <div className="overflow-auto rounded border">
+                  <table className="min-w-full text-sm">
+                    <thead className="bg-gray-100">
+                      <tr>
+                        <th className="px-3 py-2 text-left">Ngay</th>
+                        <th className="px-3 py-2 text-left">So to khai</th>
+                        <th className="px-3 py-2 text-left">Loai hinh</th>
+                        <th className="px-3 py-2 text-left">Nhap/Xuat</th>
+                        {showItems ? <th className="px-3 py-2 text-right">Muc hang</th> : null}
+                        {showLicenses ? <th className="px-3 py-2 text-right">So GP</th> : null}
+                        {showCo ? <th className="px-3 py-2 text-center">C/O</th> : null}
+                        {showCoLines ? <th className="px-3 py-2 text-right">Dong C/O</th> : null}
+                        {showLicenseCodes ? <th className="px-3 py-2 text-left">Ma giay phep</th> : null}
+                        <th className="px-3 py-2 text-right">Diem KPI</th>
+                        <th className="px-3 py-2 text-left">MST</th>
+                        <th className="px-3 py-2 text-left">Cong ty</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {chunkRows.map((row, idx) => {
+                        const licenseCodes = Array.isArray(row.licenseCodes) ? row.licenseCodes : [];
+                        const excludedCodes = Array.isArray(row.licenseExcludedCodes)
+                          ? row.licenseExcludedCodes
+                          : [];
+                        const licenseLabel = licenseCodes.join(", ") || "";
+                        const licenseTooltipParts = [];
+                        if (licenseLabel) {
+                          licenseTooltipParts.push(`Ap dung: ${licenseLabel}`);
+                        }
+                        if (excludedCodes.length) {
+                          licenseTooltipParts.push(`Loai tru: ${excludedCodes.join(", ")}`);
+                        }
+                        const licenseTooltip = licenseTooltipParts.join("\n") || "";
+                        const globalIndex = baseIndex + idx;
+                        return (
+                          <tr
+                            key={`${row.so_tk}-${globalIndex}`}
+                            className={globalIndex % 2 === 0 ? "bg-white" : "bg-gray-50"}
+                          >
+                            <td className="px-3 py-1.5">{row.displayDate || formatDisplayDate(row.date)}</td>
+                            <td className="px-3 py-1.5">{row.so_tk}</td>
+                            <td className="px-3 py-1.5">{row.loai_hinh || ""}</td>
+                            <td className="px-3 py-1.5">{row.isExport ? "Xuat" : "Nhap"}</td>
+                            {showItems ? (
+                              <td className="px-3 py-1.5 text-right">{formatInt(row.num_items)}</td>
+                            ) : null}
+                            {showLicenses ? (
+                              <td className="px-3 py-1.5 text-right">{formatInt(row.licenses)}</td>
+                            ) : null}
+                            {showCo ? (
+                              <td className="px-3 py-1.5 text-center">{row.hasCO ? "Co" : "Khong"}</td>
+                            ) : null}
+                            {showCoLines ? (
+                              <td className="px-3 py-1.5 text-right">{formatInt(row.coLineCount || 0)}</td>
+                            ) : null}
+                            {showLicenseCodes ? (
+                              <td className="px-3 py-1.5" title={licenseTooltip}>
+                                {licenseLabel}
+                              </td>
+                            ) : null}
+                            <td className="px-3 py-1.5 text-right">{formatDecimal(row.kpi)}</td>
+                            <td className="px-3 py-1.5">{row.mst || ""}</td>
+                            <td className="px-3 py-1.5">{row.cong_ty || ""}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
     </section>
@@ -2522,6 +2560,7 @@ const handleDetailPageSizeCustomInputChange = (event) => {
                       onExport={() => handleExportStaffDetail(item)}
                       exporting={exporting}
                       visibleColumns={columnVisibility}
+                      detailPageSize={detailPageSize}
                     />
                   ))}
                 </div>
@@ -2547,6 +2586,7 @@ const handleDetailPageSizeCustomInputChange = (event) => {
         onExport={() => handleExportStaffDetail(activeStaff)}
         exporting={exporting}
         visibleColumns={columnVisibility}
+        detailPageSize={detailPageSize}
       />
     );
   };
