@@ -748,6 +748,24 @@ const DEFAULT_AI_SNAPSHOT_CACHE = Object.freeze({
   entries: [],
 });
 
+const AI_INSIGHTS_KEY = 'ai_insights_v1';
+const AI_INSIGHT_MAX_ENTRIES = 30;
+const AI_INSIGHT_FEEDBACK_COMMENT_LIMIT = 400;
+const DEFAULT_AI_INSIGHTS = Object.freeze({
+  version: 1,
+  entries: [],
+  state: {
+    lastRunAt: null,
+    lastStatus: 'never',
+    lastError: null,
+    lastProviderId: null,
+  },
+  schedule: {
+    cron: null,
+    nextRun: null,
+  },
+});
+
 const DEFAULT_DUPLICATE_POLICY_CONFIG = Object.freeze({
   autoNotifyAfterDays: 7,
   notifyCooldownHours: 24,
@@ -852,6 +870,7 @@ const DEFAULT_STORAGE = {
   [AI_CONFIG_KEY]: JSON.stringify(DEFAULT_AI_CONFIG),
   [AI_CACHE_KEY]: JSON.stringify(DEFAULT_AI_USAGE_CACHE),
   [AI_SNAPSHOT_CACHE_KEY]: JSON.stringify(DEFAULT_AI_SNAPSHOT_CACHE),
+  [AI_INSIGHTS_KEY]: JSON.stringify(DEFAULT_AI_INSIGHTS),
 };
 
 function normalizeValue(value) {
@@ -3210,6 +3229,690 @@ function getAiSnapshotCacheEntry(key, {
       excludeTaxCodes: Array.from(entry.filters?.excludeTaxCodes || []),
     },
     snapshot: entry.snapshot && typeof entry.snapshot === 'object' ? cloneJson(entry.snapshot) : null,
+  };
+}
+
+function createAiInsightId() {
+  return `ins-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function formatDateOnly(date) {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
+    return '';
+  }
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function formatRangeLabel(range = {}) {
+  const fromDate = normalizeRangeDate(range?.from);
+  const toDate = normalizeRangeDate(range?.to);
+  if (!fromDate && !toDate) {
+    return 'Khoảng thời gian không xác định';
+  }
+  if (fromDate && toDate) {
+    const fromText = formatDateOnly(fromDate);
+    const toText = formatDateOnly(toDate);
+    if (fromText === toText) {
+      return fromText;
+    }
+    return `${fromText || '...'} → ${toText || '...'}`;
+  }
+  if (fromDate) {
+    return `${formatDateOnly(fromDate)} → ...`;
+  }
+  if (toDate) {
+    return `... → ${formatDateOnly(toDate)}`;
+  }
+  return 'Khoảng thời gian không xác định';
+}
+
+function computePreviousRange(range = {}) {
+  const fromDate = normalizeRangeDate(range?.from);
+  const toDate = normalizeRangeDate(range?.to);
+  if (!fromDate || !toDate) {
+    return null;
+  }
+  const dayMs = 24 * 60 * 60 * 1000;
+  const diffDays = Math.max(0, Math.round((toDate.getTime() - fromDate.getTime()) / dayMs));
+  const windowDays = diffDays + 1;
+  const prevTo = new Date(fromDate.getTime() - dayMs);
+  if (Number.isNaN(prevTo.getTime())) {
+    return null;
+  }
+  const prevFrom = new Date(prevTo.getTime() - Math.max(0, windowDays - 1) * dayMs);
+  if (Number.isNaN(prevFrom.getTime())) {
+    return null;
+  }
+  return { from: formatDateOnly(prevFrom), to: formatDateOnly(prevTo) };
+}
+
+function computeAiInsightSignature({ providerId, snapshot, previousSnapshot }) {
+  const hash = crypto.createHash('sha1');
+  hash.update(`${providerId || ''}`);
+  if (snapshot && typeof snapshot === 'object') {
+    hash.update(
+      JSON.stringify({
+        range: snapshot.range || null,
+        summary: snapshot.summary || null,
+        totals: snapshot.totals || null,
+        filters: snapshot.filters || null,
+        topStaff: Array.isArray(snapshot.topStaff)
+          ? snapshot.topStaff.slice(0, 5).map((item) => ({
+              key: item.key,
+              name: item.name,
+              declarations: item.declarations,
+              totalKpi: item.totalKpi,
+            }))
+          : [],
+        topTeams: Array.isArray(snapshot.topTeams)
+          ? snapshot.topTeams.slice(0, 5).map((item) => ({
+              key: item.key,
+              name: item.name,
+              declarations: item.declarations,
+              totalKpi: item.totalKpi,
+            }))
+          : [],
+      })
+    );
+  }
+  if (previousSnapshot && typeof previousSnapshot === 'object') {
+    hash.update(
+      JSON.stringify({
+        range: previousSnapshot.range || null,
+        summary: previousSnapshot.summary || null,
+      })
+    );
+  }
+  return hash.digest('hex');
+}
+
+function extractMstStats(snapshot, previousSnapshot, { limit = 5 } = {}) {
+  const currentCounts = new Map();
+  if (snapshot && Array.isArray(snapshot.rawDeclarations)) {
+    for (const row of snapshot.rawDeclarations) {
+      const mst = normalizeMST(row?.mst);
+      if (!mst) {
+        continue;
+      }
+      currentCounts.set(mst, (currentCounts.get(mst) || 0) + 1);
+    }
+  }
+  const topEntries = Array.from(currentCounts.entries()).sort((a, b) => {
+    if (b[1] !== a[1]) {
+      return b[1] - a[1];
+    }
+    return a[0].localeCompare(b[0], 'vi', { sensitivity: 'base' });
+  });
+  const currentSet = new Set(currentCounts.keys());
+  const previousSet = new Set();
+  if (previousSnapshot && Array.isArray(previousSnapshot.rawDeclarations)) {
+    for (const row of previousSnapshot.rawDeclarations) {
+      const mst = normalizeMST(row?.mst);
+      if (mst) {
+        previousSet.add(mst);
+      }
+    }
+  }
+  const newMsts = Array.from(currentSet).filter((mst) => !previousSet.has(mst));
+  const dropped = Array.from(previousSet).filter((mst) => !currentSet.has(mst));
+  return {
+    top: limit > 0 ? topEntries.slice(0, limit) : topEntries,
+    newMsts: limit > 0 ? newMsts.slice(0, limit) : newMsts,
+    dropped: limit > 0 ? dropped.slice(0, limit) : dropped,
+  };
+}
+
+function buildAiInsightPromptData(snapshot, previousSnapshot) {
+  const rangeLabel = formatRangeLabel(snapshot?.range || {});
+  const previousRangeLabel = previousSnapshot ? formatRangeLabel(previousSnapshot.range || {}) : null;
+  const numberFormatter = new Intl.NumberFormat('vi-VN');
+  const decimalFormatter = new Intl.NumberFormat('vi-VN', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+  const summary = snapshot?.summary || {};
+  const previousSummary = previousSnapshot?.summary || {};
+  const metricsConfig = [
+    { key: 'declarations', label: 'Tổng tờ khai' },
+    { key: 'import', label: 'Tờ khai nhập khẩu' },
+    { key: 'export', label: 'Tờ khai xuất khẩu' },
+    { key: 'kpi', label: 'Điểm KPI' },
+    { key: 'items', label: 'Mục hàng' },
+    { key: 'licenses', label: 'Giấy phép' },
+  ];
+  const metrics = metricsConfig.map(({ key, label }) => {
+    const currentValue = Number(summary?.[key] ?? 0);
+    const previousValue = Number(previousSummary?.[key] ?? 0);
+    const delta = currentValue - previousValue;
+    const deltaPercent = previousValue > 0 ? (delta / previousValue) * 100 : null;
+    return {
+      key,
+      label,
+      current: Number.isFinite(currentValue) ? currentValue : 0,
+      previous: Number.isFinite(previousValue) ? previousValue : 0,
+      delta: Number.isFinite(delta) ? delta : 0,
+      deltaPercent: Number.isFinite(deltaPercent) ? deltaPercent : null,
+    };
+  });
+
+  function formatMetricValue(metric) {
+    if (!Number.isFinite(metric.current)) {
+      return '0';
+    }
+    if (metric.key === 'kpi') {
+      return decimalFormatter.format(metric.current);
+    }
+    return numberFormatter.format(metric.current);
+  }
+
+  function describeMetric(metric) {
+    const base = `${metric.label}: ${formatMetricValue(metric)}`;
+    if (!Number.isFinite(metric.previous) || metric.previous === 0) {
+      if (metric.current === metric.previous) {
+        return `${base} (không đổi so với kỳ trước)`;
+      }
+      if (metric.previous === 0 && metric.current > 0) {
+        return `${base} (tăng từ 0 so với kỳ trước)`;
+      }
+      if (metric.previous === 0 && metric.current === 0) {
+        return `${base} (không có dữ liệu ở cả hai kỳ)`;
+      }
+      return `${base} (kỳ trước ${numberFormatter.format(metric.previous || 0)})`;
+    }
+    if (metric.delta === 0) {
+      return `${base} (không đổi so với kỳ trước)`;
+    }
+    const direction = metric.delta > 0 ? 'tăng' : 'giảm';
+    const magnitude = metric.key === 'kpi'
+      ? decimalFormatter.format(Math.abs(metric.delta))
+      : numberFormatter.format(Math.abs(metric.delta));
+    const percentValue = Number.isFinite(metric.deltaPercent)
+      ? Math.round(metric.deltaPercent * 10) / 10
+      : null;
+    const percentText = percentValue !== null
+      ? `${percentValue >= 0 ? '+' : ''}${decimalFormatter.format(Math.abs(percentValue))}%`
+      : '';
+    return `${base} (${direction} ${magnitude}${percentText ? ` ${percentText}` : ''} so với kỳ trước)`;
+  }
+
+  const metricLines = metrics.map((metric) => describeMetric(metric));
+  const topStaffList = Array.isArray(snapshot?.topStaff) ? snapshot.topStaff.slice(0, 3) : [];
+  const topStaffLine = topStaffList
+    .map((item) =>
+      `${item.name || 'Chưa gán'} (${numberFormatter.format(Number(item.declarations || 0))} tờ khai, ${decimalFormatter.format(
+        Number(item.totalKpi || 0)
+      )} KPI)`
+    )
+    .join('; ');
+  const topTeamsList = Array.isArray(snapshot?.topTeams) ? snapshot.topTeams.slice(0, 3) : [];
+  const topTeamsLine = topTeamsList
+    .map((item) =>
+      `${item.name || 'Chưa gán tổ'} (${numberFormatter.format(Number(item.declarations || 0))} tờ khai, ${decimalFormatter.format(
+        Number(item.totalKpi || 0)
+      )} KPI)`
+    )
+    .join('; ');
+  const adjustmentsTotals = snapshot?.adjustments?.totals || {};
+  const adjustmentsLine = `Điều chỉnh KPI: ${numberFormatter.format(Number(adjustmentsTotals.approved || 0))} duyệt / ${numberFormatter.format(
+    Number(adjustmentsTotals.pending || 0)
+  )} chờ / ${numberFormatter.format(Number(adjustmentsTotals.rejected || 0))} từ chối, tổng điểm ảnh hưởng ${decimalFormatter.format(
+    Number(adjustmentsTotals.totalPoints || 0)
+  )}.`;
+  const mstStats = extractMstStats(snapshot, previousSnapshot, { limit: 5 });
+  const mstTopLine = mstStats.top
+    .map(([mst, count]) => `${mst}: ${numberFormatter.format(count)} tờ khai`)
+    .join('; ');
+  const mstNewLine = mstStats.newMsts.join(', ');
+  const mstDroppedLine = mstStats.dropped.join(', ');
+
+  const lines = [];
+  lines.push(
+    'Bạn là trợ lý phân tích KPI cho bộ phận khai báo hải quan. Hãy tạo tối đa 5 gạch đầu dòng bằng tiếng Việt, tập trung vào xu hướng đáng chú ý và hành động khuyến nghị.'
+  );
+  lines.push(`Khoảng thời gian phân tích: ${rangeLabel}.`);
+  if (previousRangeLabel) {
+    lines.push(`Kỳ so sánh trước: ${previousRangeLabel}.`);
+  }
+  lines.push('Số liệu chính:');
+  for (const line of metricLines) {
+    lines.push(`- ${line}`);
+  }
+  if (topStaffLine) {
+    lines.push(`Nhân sự nổi bật: ${topStaffLine}.`);
+  }
+  if (topTeamsLine) {
+    lines.push(`Tổ đội nổi bật: ${topTeamsLine}.`);
+  }
+  if (mstTopLine) {
+    lines.push(`Mã số thuế phát sinh nhiều: ${mstTopLine}.`);
+  }
+  if (mstNewLine) {
+    lines.push(`Mã số thuế mới xuất hiện: ${mstNewLine}.`);
+  }
+  if (mstDroppedLine) {
+    lines.push(`Mã số thuế giảm mạnh hoặc biến mất: ${mstDroppedLine}.`);
+  }
+  lines.push(adjustmentsLine);
+  lines.push('Hãy nêu rõ xu hướng tăng/giảm, cảnh báo rủi ro và đề xuất hành động ưu tiên.');
+
+  return {
+    prompt: lines.join('\n'),
+    meta: {
+      rangeLabel,
+      previousRangeLabel,
+      metrics,
+      highlights: {
+        topStaff: topStaffList.map((item) => ({
+          key: item.key || null,
+          name: item.name || null,
+          declarations: Number(item.declarations || 0),
+          totalKpi: Number(item.totalKpi || 0),
+        })),
+        topTeams: topTeamsList.map((item) => ({
+          key: item.key || null,
+          name: item.name || null,
+          declarations: Number(item.declarations || 0),
+          totalKpi: Number(item.totalKpi || 0),
+        })),
+        mstTop: mstStats.top.map(([mst, count]) => ({ mst, declarations: count })),
+        mstNew: mstStats.newMsts,
+        mstDropped: mstStats.dropped,
+        adjustments: {
+          pending: Number(adjustmentsTotals.pending || 0),
+          approved: Number(adjustmentsTotals.approved || 0),
+          rejected: Number(adjustmentsTotals.rejected || 0),
+          totalPoints: Number(adjustmentsTotals.totalPoints || 0),
+        },
+      },
+    },
+  };
+}
+
+function normalizeAiInsightFeedback(feedback) {
+  if (!feedback || typeof feedback !== 'object') {
+    return { totals: { helpful: 0, notHelpful: 0 }, items: {} };
+  }
+  const totals = {
+    helpful: toNonNegativeInt(feedback?.totals?.helpful, 0),
+    notHelpful: toNonNegativeInt(feedback?.totals?.notHelpful, 0),
+  };
+  const items = {};
+  const rawItems = feedback.items && typeof feedback.items === 'object' ? feedback.items : {};
+  for (const [username, value] of Object.entries(rawItems)) {
+    const normalizedName = typeof username === 'string' ? username.trim() : '';
+    if (!normalizedName) {
+      continue;
+    }
+    const helpful = value?.helpful === true;
+    const comment =
+      typeof value?.comment === 'string' && value.comment.trim()
+        ? value.comment.trim().slice(0, AI_INSIGHT_FEEDBACK_COMMENT_LIMIT)
+        : null;
+    const updatedAt = value?.updatedAt && !Number.isNaN(Date.parse(value.updatedAt))
+      ? new Date(value.updatedAt).toISOString()
+      : null;
+    items[normalizedName] = { helpful, comment, updatedAt };
+  }
+  if (totals.helpful === 0 && totals.notHelpful === 0) {
+    for (const entry of Object.values(items)) {
+      if (entry.helpful) {
+        totals.helpful += 1;
+      } else {
+        totals.notHelpful += 1;
+      }
+    }
+  }
+  return { totals, items };
+}
+
+function normalizeAiInsightEntry(entry) {
+  if (!entry || typeof entry !== 'object') {
+    return null;
+  }
+  const id = typeof entry.id === 'string' && entry.id.trim() ? entry.id.trim() : createAiInsightId();
+  const createdAt = entry.createdAt && !Number.isNaN(Date.parse(entry.createdAt))
+    ? new Date(entry.createdAt).toISOString()
+    : new Date().toISOString();
+  return {
+    id,
+    createdAt,
+    providerId: typeof entry.providerId === 'string' && entry.providerId.trim() ? entry.providerId.trim() : null,
+    status: typeof entry.status === 'string' ? entry.status : 'success',
+    response: typeof entry.response === 'string' ? entry.response : '',
+    promptPreview: typeof entry.promptPreview === 'string' ? entry.promptPreview : null,
+    tokens: entry.tokens && typeof entry.tokens === 'object' ? entry.tokens : null,
+    range: normalizeSnapshotRange(entry.range || {}),
+    filters: normalizeSnapshotFilters(entry.filters || {}),
+    snapshotCacheKey: typeof entry.snapshotCacheKey === 'string' ? entry.snapshotCacheKey : null,
+    snapshotGeneratedAt: typeof entry.snapshotGeneratedAt === 'string' ? entry.snapshotGeneratedAt : null,
+    signature: typeof entry.signature === 'string' ? entry.signature : null,
+    meta: entry.meta && typeof entry.meta === 'object' ? entry.meta : null,
+    feedback: normalizeAiInsightFeedback(entry.feedback),
+  };
+}
+
+function getAiInsightsStore() {
+  const raw = getJSONValue(AI_INSIGHTS_KEY, DEFAULT_AI_INSIGHTS) || {};
+  const entries = [];
+  if (Array.isArray(raw.entries)) {
+    for (const entry of raw.entries) {
+      const normalized = normalizeAiInsightEntry(entry);
+      if (!normalized) {
+        continue;
+      }
+      entries.push(normalized);
+    }
+  }
+  entries.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  const limited = AI_INSIGHT_MAX_ENTRIES > 0 ? entries.slice(0, AI_INSIGHT_MAX_ENTRIES) : entries;
+  const stateRaw = raw.state && typeof raw.state === 'object' ? raw.state : {};
+  const scheduleRaw = raw.schedule && typeof raw.schedule === 'object' ? raw.schedule : {};
+  const state = {
+    lastRunAt: typeof stateRaw.lastRunAt === 'string' ? stateRaw.lastRunAt : null,
+    lastStatus: typeof stateRaw.lastStatus === 'string' ? stateRaw.lastStatus : 'never',
+    lastError: typeof stateRaw.lastError === 'string' ? stateRaw.lastError : null,
+    lastProviderId: typeof stateRaw.lastProviderId === 'string' ? stateRaw.lastProviderId : null,
+  };
+  const schedule = {
+    cron: typeof scheduleRaw.cron === 'string' ? scheduleRaw.cron : null,
+    nextRun: typeof scheduleRaw.nextRun === 'string' ? scheduleRaw.nextRun : null,
+  };
+  return {
+    version: raw.version || DEFAULT_AI_INSIGHTS.version,
+    entries: limited,
+    state,
+    schedule,
+  };
+}
+
+function setAiInsightsStore(store, options = {}) {
+  const payload = {
+    version: store?.version || DEFAULT_AI_INSIGHTS.version,
+    entries: Array.isArray(store?.entries) ? store.entries.map((entry) => cloneJson(entry)) : [],
+    state: {
+      lastRunAt: store?.state?.lastRunAt || null,
+      lastStatus: store?.state?.lastStatus || 'never',
+      lastError: store?.state?.lastError || null,
+      lastProviderId: store?.state?.lastProviderId || null,
+    },
+    schedule: {
+      cron: store?.schedule?.cron || null,
+      nextRun: store?.schedule?.nextRun || null,
+    },
+  };
+  setJSONValue(AI_INSIGHTS_KEY, payload, options);
+}
+
+function sanitizeAiInsightForClient(entry, { username } = {}) {
+  if (!entry || typeof entry !== 'object') {
+    return null;
+  }
+  const feedback = entry.feedback && typeof entry.feedback === 'object' ? entry.feedback : { totals: { helpful: 0, notHelpful: 0 }, items: {} };
+  const totals = feedback.totals || {};
+  const items = feedback.items || {};
+  const viewerName = typeof username === 'string' ? username.trim() : '';
+  const viewerRaw = viewerName ? items[viewerName] : null;
+  const viewer = viewerRaw
+    ? {
+        helpful: viewerRaw.helpful === true,
+        comment: viewerRaw.comment || null,
+        updatedAt: viewerRaw.updatedAt || null,
+      }
+    : null;
+  return {
+    insightId: entry.id,
+    createdAt: entry.createdAt,
+    providerId: entry.providerId || null,
+    status: entry.status || 'success',
+    response: entry.response || '',
+    range: entry.range || null,
+    meta: entry.meta || null,
+    tokens: entry.tokens || null,
+    filters: entry.filters || null,
+    snapshotCacheKey: entry.snapshotCacheKey || null,
+    feedback: {
+      helpful: toNonNegativeInt(totals.helpful, 0),
+      notHelpful: toNonNegativeInt(totals.notHelpful, 0),
+      viewer,
+    },
+  };
+}
+
+async function runAiInsightGeneration(rangeInput = {}, { actor = 'system', providerId, useCache = true } = {}) {
+  const config = getAiConfig();
+  if (config?.enabled === false) {
+    const error = new Error('Tính năng trợ lý AI đang tạm tắt.');
+    error.statusCode = 503;
+    throw error;
+  }
+  const provider = selectAiProvider(config, providerId);
+  if (!provider) {
+    const error = new Error('Chưa tìm thấy nhà cung cấp AI khả dụng.');
+    error.statusCode = 503;
+    throw error;
+  }
+  const store = getAiInsightsStore();
+  const nowIso = new Date().toISOString();
+  let snapshotResult;
+  try {
+    snapshotResult = await buildAiKpiSnapshot(rangeInput || {}, { actor, useCache });
+  } catch (err) {
+    setAiInsightsStore(
+      {
+        ...store,
+        state: {
+          lastRunAt: nowIso,
+          lastStatus: 'error',
+          lastError: err?.message || 'Không thể lấy snapshot KPI',
+          lastProviderId: null,
+        },
+      },
+      { actor, source: 'ai-insight-state' }
+    );
+    throw err;
+  }
+
+  const snapshot = snapshotResult?.snapshot || null;
+  if (!snapshot || (snapshot.summary?.declarations ?? 0) === 0) {
+    setAiInsightsStore(
+      {
+        ...store,
+        state: {
+          lastRunAt: nowIso,
+          lastStatus: 'skipped:no_data',
+          lastError: null,
+          lastProviderId: null,
+        },
+      },
+      { actor, source: 'ai-insight-state' }
+    );
+    return { skipped: true, reason: 'no_data' };
+  }
+
+  let previousSnapshot = null;
+  const previousRange = computePreviousRange(snapshot.range || {});
+  if (previousRange) {
+    try {
+      const previousResult = await buildAiKpiSnapshot(previousRange, { actor, useCache: true });
+      previousSnapshot = previousResult.snapshot || null;
+    } catch {
+      previousSnapshot = null;
+    }
+  }
+
+  const signature = computeAiInsightSignature({ providerId: provider.id, snapshot, previousSnapshot });
+  const existing = store.entries.find((entry) => entry.signature === signature && entry.providerId === provider.id);
+  if (existing && useCache !== false) {
+    setAiInsightsStore(
+      {
+        ...store,
+        state: {
+          lastRunAt: nowIso,
+          lastStatus: 'cached',
+          lastError: null,
+          lastProviderId: provider.id,
+        },
+      },
+      { actor, source: 'ai-insight-state' }
+    );
+    const sanitized = sanitizeAiInsightForClient(existing, { username: actor });
+    return { cached: true, insight: sanitized, signature, snapshotCached: snapshotResult.cached };
+  }
+
+  const promptData = buildAiInsightPromptData(snapshot, previousSnapshot);
+  const systemPrompt = buildSystemPrompt(
+    config.systemPrompt,
+    'Bạn đang ở chế độ phân tích dữ liệu KPI. Luôn bám sát số liệu đã cho và trả lời bằng tiếng Việt trang trọng.'
+  );
+  const messages = [];
+  if (systemPrompt) {
+    messages.push({ role: 'system', content: systemPrompt });
+  }
+  messages.push({ role: 'user', content: promptData.prompt });
+
+  const signal = buildAbortSignal(Math.min(toPositiveInt(config.timeoutMs, DEFAULT_AI_CONFIG.timeoutMs) || DEFAULT_AI_CONFIG.timeoutMs, 60000));
+  const temperature = toFiniteNumber(provider.temperature, config.temperature);
+  const maxTokens = Math.min(toPositiveInt(provider.maxTokens, config.maxTokens) || DEFAULT_AI_CONFIG.maxTokens, 1024);
+
+  let result;
+  try {
+    result = await dispatchAiChat(
+      provider,
+      { messages, temperature, maxTokens },
+      { signal }
+    );
+  } catch (err) {
+    setAiInsightsStore(
+      {
+        ...store,
+        state: {
+          lastRunAt: nowIso,
+          lastStatus: 'error',
+          lastError: err?.message || 'Không thể gọi mô hình AI',
+          lastProviderId: provider.id,
+        },
+      },
+      { actor, source: 'ai-insight-state' }
+    );
+    throw err;
+  }
+
+  const usage = normalizeAiUsage(result?.usage, promptData.prompt, result?.message);
+  const entry = normalizeAiInsightEntry({
+    id: createAiInsightId(),
+    createdAt: nowIso,
+    providerId: provider.id,
+    status: 'success',
+    response: truncateText(result?.message || '', 6000),
+    promptPreview: truncateText(promptData.prompt || '', 2000),
+    tokens: usage,
+    range: snapshot.range || {},
+    filters: snapshot.filters || {},
+    snapshotCacheKey: snapshotResult.cacheKey || null,
+    snapshotGeneratedAt: snapshot.generatedAt || null,
+    signature,
+    meta: {
+      ...(promptData.meta || {}),
+      previousRange,
+      snapshotCached: !!snapshotResult.cached,
+    },
+    feedback: { totals: { helpful: 0, notHelpful: 0 }, items: {} },
+  });
+
+  const entries = [entry, ...store.entries.filter((item) => item.id !== entry.id)].slice(0, AI_INSIGHT_MAX_ENTRIES);
+  const nextStore = {
+    version: store.version || DEFAULT_AI_INSIGHTS.version,
+    entries,
+    state: {
+      lastRunAt: nowIso,
+      lastStatus: 'success',
+      lastError: null,
+      lastProviderId: provider.id,
+    },
+    schedule: store.schedule || cloneJson(DEFAULT_AI_INSIGHTS.schedule),
+  };
+  setAiInsightsStore(nextStore, { actor, source: 'ai-insight-store' });
+
+  pushAuditLog({
+    actor,
+    action: 'ai.insight.generate',
+    detail: `Sinh insight KPI (${provider.id})`,
+    meta: {
+      range: entry.range,
+      signature,
+      snapshotCacheKey: entry.snapshotCacheKey,
+      highlights: promptData.meta?.highlights || null,
+    },
+  });
+
+  const sanitized = sanitizeAiInsightForClient(entry, { username: actor });
+  return { insight: sanitized, signature, snapshotCached: snapshotResult.cached };
+}
+
+function submitAiInsightFeedback(insightId, username, payload = {}, { actor = 'system' } = {}) {
+  const normalizedId = typeof insightId === 'string' ? insightId.trim() : '';
+  if (!normalizedId) {
+    throw new Error('Thiếu mã insight để phản hồi.');
+  }
+  const normalizedUser = typeof username === 'string' ? username.trim() : '';
+  if (!normalizedUser) {
+    throw new Error('Không xác định được tài khoản gửi phản hồi.');
+  }
+  if (payload.helpful !== true && payload.helpful !== false) {
+    throw new Error('Vui lòng chọn đánh giá hữu ích hoặc chưa hữu ích.');
+  }
+
+  const store = getAiInsightsStore();
+  const entries = store.entries.map((entry) => ({ ...entry, feedback: normalizeAiInsightFeedback(entry.feedback) }));
+  const index = entries.findIndex((entry) => entry.id === normalizedId);
+  if (index === -1) {
+    throw new Error('Không tìm thấy insight để phản hồi.');
+  }
+
+  const comment =
+    typeof payload.comment === 'string' && payload.comment.trim()
+      ? payload.comment.trim().slice(0, AI_INSIGHT_FEEDBACK_COMMENT_LIMIT)
+      : null;
+  const updatedAt = new Date().toISOString();
+  const feedbackItems = { ...entries[index].feedback.items, [normalizedUser]: { helpful: payload.helpful === true, comment, updatedAt } };
+  const totals = { helpful: 0, notHelpful: 0 };
+  for (const value of Object.values(feedbackItems)) {
+    if (value.helpful) {
+      totals.helpful += 1;
+    } else {
+      totals.notHelpful += 1;
+    }
+  }
+
+  entries[index] = {
+    ...entries[index],
+    feedback: { totals, items: feedbackItems },
+  };
+
+  setAiInsightsStore(
+    {
+      version: store.version || DEFAULT_AI_INSIGHTS.version,
+      entries,
+      state: store.state,
+      schedule: store.schedule,
+    },
+    { actor, source: 'ai-insight-feedback' }
+  );
+
+  pushAuditLog({
+    actor,
+    action: 'ai.insight.feedback',
+    detail: `Phản hồi insight ${normalizedId}`,
+    meta: { helpful: payload.helpful === true, comment },
+  });
+
+  return {
+    totals,
+    feedback: {
+      helpful: payload.helpful === true,
+      comment,
+      updatedAt,
+    },
   };
 }
 
@@ -11337,6 +12040,79 @@ app.get('/api/ai/data/snapshot', async (req, res) => {
   } catch (err) {
     const status = Number.isInteger(err?.statusCode) ? err.statusCode : 500;
     res.status(status).json({ ok: false, error: err?.message || 'Không thể lấy snapshot KPI.' });
+  }
+});
+
+app.get('/api/ai/insights', (req, res) => {
+  const { context, denied } = requireAiAssistUsage(req, res);
+  if (denied) {
+    return;
+  }
+  const username = context?.account?.username || resolveActor(req);
+  const limitRaw = Array.isArray(req.query?.limit) ? req.query.limit[0] : req.query?.limit;
+  const limit = toPositiveInt(limitRaw, AI_INSIGHT_MAX_ENTRIES) || AI_INSIGHT_MAX_ENTRIES;
+  const store = getAiInsightsStore();
+  const entries = Array.isArray(store.entries) ? store.entries : [];
+  const limited = limit > 0 ? entries.slice(0, limit) : entries;
+  const insights = limited.map((entry) => sanitizeAiInsightForClient(entry, { username })).filter(Boolean);
+  res.json({
+    ok: true,
+    insights,
+    meta: {
+      state: store.state,
+      schedule: store.schedule,
+    },
+  });
+});
+
+app.post('/api/ai/insights/run', async (req, res) => {
+  const { context, denied } = requireAiAssistManage(req, res);
+  if (denied) {
+    return;
+  }
+  const actor = context?.account?.username || resolveActor(req);
+  const rangeInput = req.body?.range && typeof req.body.range === 'object'
+    ? { from: req.body.range.from, to: req.body.range.to }
+    : {};
+  try {
+    const result = await runAiInsightGeneration(rangeInput, { actor });
+    res.json({ ok: true, result });
+  } catch (err) {
+    const status = Number.isInteger(err?.statusCode) ? err.statusCode : 500;
+    res.status(status).json({ ok: false, error: err?.message || 'Không thể chạy insight AI.' });
+  }
+});
+
+app.post('/api/ai/insights/feedback', (req, res) => {
+  const { context, denied } = requireAiAssistUsage(req, res);
+  if (denied) {
+    return;
+  }
+  const username = context?.account?.username || resolveActor(req);
+  if (!username) {
+    res.status(400).json({ ok: false, error: 'Không xác định được tài khoản hiện tại.' });
+    return;
+  }
+  const insightId = typeof req.body?.insightId === 'string' ? req.body.insightId.trim() : '';
+  if (!insightId) {
+    res.status(400).json({ ok: false, error: 'Thiếu mã insight để phản hồi.' });
+    return;
+  }
+  const helpfulRaw = req.body?.helpful;
+  if (helpfulRaw !== true && helpfulRaw !== false) {
+    res.status(400).json({ ok: false, error: 'Vui lòng chọn đánh giá hữu ích hoặc chưa hữu ích.' });
+    return;
+  }
+  try {
+    const result = submitAiInsightFeedback(
+      insightId,
+      username,
+      { helpful: helpfulRaw, comment: req.body?.comment },
+      { actor: username }
+    );
+    res.json({ ok: true, totals: result.totals, feedback: result.feedback });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err?.message || 'Không thể gửi phản hồi insight.' });
   }
 });
 

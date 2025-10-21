@@ -36,17 +36,17 @@
 ## Giai đoạn 3 – Insight & Tóm tắt tự động
 
 ### Backend
-- [ ] Hiện thực endpoint `/api/ai/insights` sinh insight dựa trên snapshot (so sánh kỳ trước, phát hiện giảm KPI, MST bất thường).
-- [ ] Bổ sung `/api/ai/insights/run` để chạy thủ công và `/api/ai/insights/feedback` để ghi nhận đánh giá người dùng.
-- [ ] Ghi log/audit mỗi khi sinh insight, bao gồm dữ liệu snapshot gốc (ẩn thông tin nhạy cảm nếu cần) và kết quả trả về.
-- [ ] Viết test tích hợp đảm bảo các endpoint trên xử lý đúng dữ liệu mẫu và tôn trọng cấu hình lọc MST.
+- [x] Hiện thực endpoint `/api/ai/insights` sinh insight dựa trên snapshot (so sánh kỳ trước, phát hiện giảm KPI, MST bất thường).
+- [x] Bổ sung `/api/ai/insights/run` để chạy thủ công và `/api/ai/insights/feedback` để ghi nhận đánh giá người dùng.
+- [x] Ghi log/audit mỗi khi sinh insight, bao gồm dữ liệu snapshot gốc (ẩn thông tin nhạy cảm nếu cần) và kết quả trả về.
+- [x] Viết test tích hợp đảm bảo các endpoint trên xử lý đúng dữ liệu mẫu và tôn trọng cấu hình lọc MST.
 
 ### UI
-- [ ] Hoàn thiện luồng “Tạo tóm tắt” sử dụng snapshot thật, hiển thị bản tóm tắt tiếng Việt và cho phép gửi feedback.
-- [ ] Bổ sung màn hình lịch sử insight hiển thị thời gian tạo, mô hình sử dụng, trạng thái phản hồi.
+- [x] Hoàn thiện luồng “Tạo tóm tắt” sử dụng snapshot thật, hiển thị bản tóm tắt tiếng Việt và cho phép gửi feedback.
+- [x] Bổ sung màn hình lịch sử insight hiển thị thời gian tạo, mô hình sử dụng, trạng thái phản hồi.
 
 ### Vận hành & Tài liệu
-- [ ] Cập nhật hướng dẫn người dùng về cách khai thác insight, bao gồm lưu ý quyền truy cập và giới hạn dữ liệu.
+- [x] Cập nhật hướng dẫn người dùng về cách khai thác insight, bao gồm lưu ý quyền truy cập và giới hạn dữ liệu.
 
 ## Giai đoạn 4 – Tự động hóa & mở rộng (chạy sau khi Backend + UI giai đoạn 1-3 hoàn thành)
 
@@ -63,5 +63,5 @@
 - [ ] Chuẩn bị checklist chuyển đổi hoặc mở rộng sang nhà cung cấp AI khác nếu cần (Azure, OpenAI, Anthropic…).
 
 ## Ghi chú kiểm thử chung
-- [ ] Sau mỗi giai đoạn, chạy lại toàn bộ bộ kiểm thử liên quan (`pnpm exec vitest run tests/server.api.test.js`, `pnpm exec vitest run tests/ai/*.test.js` khi bổ sung) và cập nhật tài liệu nếu có thay đổi.
+- [x] Sau mỗi giai đoạn, chạy lại toàn bộ bộ kiểm thử liên quan (`pnpm exec vitest run tests/server.api.test.js`, `pnpm exec vitest run tests/ai/*.test.js` khi bổ sung) và cập nhật tài liệu nếu có thay đổi.
 

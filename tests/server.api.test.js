@@ -1103,6 +1103,105 @@ describe('AI assistant API', () => {
     expect(secondRes.body?.snapshot?.summary?.declarations).toBe(1);
   });
 
+  it('chạy insight AI và cho phép phản hồi kết quả', async () => {
+    const admin = request.agent(app);
+    const adminLogin = await admin.post('/api/auth/login').send({ username: 'admin', password: 'admin123' });
+    expect(adminLogin.status).toBe(200);
+
+    const configRes = await admin.put('/api/import/ecus/config').send({
+      config: {
+        connection: {
+          server: 'MRHOC\\ECUSSQL2008',
+          database: 'ECUS5VNACCS',
+          user: 'sa',
+          password: '123456',
+        },
+      },
+    });
+    expect(configRes.status).toBe(200);
+
+    const staff = request.agent(app);
+    const staffLogin = await staff.post('/api/auth/login').send({ username: 'nhanvien', password: '123456' });
+    expect(staffLogin.status).toBe(200);
+
+    const today = new Date();
+    const todayIso = today.toISOString().slice(0, 10);
+    const yesterdayIso = new Date(today.getTime() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
+    sqlMock.__setMockResult([
+      {
+        So_tk: '100000000000',
+        Ngay_dang_ky: todayIso,
+        MaSoThue: '0100109106',
+        Ten_doanh_nghiep: 'Công ty A',
+        Loai_hinh: 'A11',
+        nhan_vien: 'Nguyễn Văn A',
+        team: 'Tổ 1',
+        so_luong_mh: 5,
+        ma_gp: 'GP01',
+      },
+      {
+        So_tk: '200000000000',
+        Ngay_dang_ky: yesterdayIso,
+        MaSoThue: '0100109107',
+        Ten_doanh_nghiep: 'Công ty B',
+        Loai_hinh: 'B11',
+        nhan_vien: 'Nguyễn Văn B',
+        team: 'Tổ 2',
+        so_luong_mh: 3,
+        ma_gp: 'GP02',
+      },
+    ]);
+
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
+      if (typeof url === 'string' && url.includes('/api/chat')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            message: { content: 'Báo cáo KPI thử nghiệm: hiệu suất tăng.' },
+            prompt_eval_count: 16,
+            eval_count: 8,
+          }),
+          text: async () => 'ok',
+        };
+      }
+      return { ok: true, status: 200, json: async () => ({ ok: true }), text: async () => 'ok' };
+    });
+
+    try {
+      const runRes = await admin.post('/api/ai/insights/run').send({});
+      expect(runRes.status).toBe(200);
+      expect(runRes.body?.ok).toBe(true);
+      expect(runRes.body?.result?.insight?.insightId ?? '').toMatch(/^ins-/);
+      expect(runRes.body?.result?.insight?.feedback?.helpful ?? 0).toBe(0);
+
+      const listRes = await staff.get('/api/ai/insights');
+      expect(listRes.status).toBe(200);
+      expect(listRes.body?.ok).toBe(true);
+      expect(Array.isArray(listRes.body?.insights)).toBe(true);
+      expect(listRes.body.insights.length).toBeGreaterThan(0);
+      const insightId = listRes.body.insights[0]?.insightId;
+      expect(typeof insightId).toBe('string');
+      expect(listRes.body.insights[0]?.feedback?.helpful ?? 0).toBe(0);
+
+      const feedbackRes = await staff.post('/api/ai/insights/feedback').send({
+        insightId,
+        helpful: true,
+      });
+      expect(feedbackRes.status).toBe(200);
+      expect(feedbackRes.body?.ok).toBe(true);
+      expect(feedbackRes.body?.totals?.helpful).toBe(1);
+
+      const refreshed = await staff.get('/api/ai/insights');
+      expect(refreshed.status).toBe(200);
+      expect(refreshed.body?.insights?.[0]?.feedback?.helpful).toBe(1);
+      expect(refreshed.body?.insights?.[0]?.feedback?.viewer?.helpful).toBe(true);
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+
   it('cho phép cấu hình nhà cung cấp và trả lời qua Ollama mock với cache', async () => {
     const admin = request.agent(app);
     const adminLogin = await admin.post('/api/auth/login').send({ username: 'admin', password: 'admin123' });
