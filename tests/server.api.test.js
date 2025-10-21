@@ -1893,6 +1893,100 @@ describe('ECUS sync API', () => {
     expect(res.body.ok).toBe(false);
   });
 
+  it('chuẩn hóa truy vấn dùng COALESCE ngày đăng ký để tránh timeout', async () => {
+    resetDb();
+    sqlMock.__resetMock();
+    const adminAgent = request.agent(app);
+    const loginRes = await adminAgent
+      .post('/api/auth/login')
+      .send({ username: 'admin', password: 'admin123' });
+    expect(loginRes.status).toBe(200);
+
+    const slowQuery = [
+      'SELECT CAST(lp.So_TK AS nvarchar(50)) AS so_tk',
+      'FROM dbo.DTBLP AS lp',
+      'LEFT JOIN dbo.DTOKHAIMD AS md ON md._DToKhaiMDID = lp._DTokhaiMDID',
+      'WHERE COALESCE(lp.Ngay_DK, md.NGAY_DK) >= @from',
+      '  AND COALESCE(lp.Ngay_DK, md.NGAY_DK) < DATEADD(DAY, 1, @to)',
+      '  AND 1 = 1',
+      'ORDER BY lp.Ngay_DK',
+    ].join('\n');
+
+    const saveRes = await adminAgent.put('/api/import/ecus/config').send({
+      config: { query: slowQuery },
+    });
+    expect(saveRes.status).toBe(200);
+    const optimizedQuery = saveRes.body?.config?.query || '';
+    expect(optimizedQuery).toBeTypeOf('string');
+    expect(optimizedQuery).not.toMatch(/COALESCE\s*\(\s*lp\.Ngay_DK/iu);
+    expect(optimizedQuery).toMatch(/lp\.Ngay_DK >= @from/);
+    expect(optimizedQuery).toMatch(/lp\.Ngay_DK < DATEADD\(DAY, 1, @to\)/);
+    expect(optimizedQuery).not.toMatch(/md\.NGAY_DK\s*>=/iu);
+    expect(optimizedQuery).toMatch(/AND 1 = 1/);
+
+    const getRes = await adminAgent.get('/api/import/ecus/config');
+    expect(getRes.status).toBe(200);
+    expect(getRes.body?.config?.query).toBe(optimizedQuery);
+  });
+
+  it('thay thế điều kiện COALESCE khi xem trước dữ liệu ECUS', async () => {
+    resetDb();
+    sqlMock.__resetMock();
+    const slowQuery = [
+      'SELECT CAST(lp.So_TK AS nvarchar(50)) AS so_tk',
+      'FROM dbo.DTBLP AS lp',
+      'LEFT JOIN dbo.DTOKHAIMD AS md ON md._DToKhaiMDID = lp._DTokhaiMDID',
+      'WHERE COALESCE(lp.Ngay_DK, md.NGAY_DK) >= @from',
+      '  AND COALESCE(lp.Ngay_DK, md.NGAY_DK) < DATEADD(DAY, 1, @to)',
+      'ORDER BY lp.Ngay_DK',
+    ].join('\n');
+
+    const configPayload = {
+      enabled: true,
+      batchSize: 0,
+      query: slowQuery,
+      connection: {
+        server: 'Server',
+        database: 'ECUS5VNACCS',
+        user: 'sa',
+        password: '',
+      },
+    };
+
+    getDb()
+      .prepare('INSERT OR REPLACE INTO kv_store(key, value) VALUES(?, ?)')
+      .run('ecus_sync_config_v1', JSON.stringify(configPayload));
+
+    const adminAgent = request.agent(app);
+    const loginRes = await adminAgent
+      .post('/api/auth/login')
+      .send({ username: 'admin', password: 'admin123' });
+    expect(loginRes.status).toBe(200);
+
+    sqlMock.__setMockResult([]);
+
+    const previewRes = await adminAgent
+      .post('/api/import/ecus/preview')
+      .send({ from: '2025-10-01', to: '2025-10-02' });
+
+    const configRes = await adminAgent.get('/api/import/ecus/config');
+    const serverQuery = configRes.body?.config?.query || '';
+    expect(serverQuery).toBeTypeOf('string');
+    expect(serverQuery).not.toMatch(/COALESCE\s*\(\s*lp\.Ngay_DK/iu);
+    expect(serverQuery).toMatch(/lp\.Ngay_DK >= @from/);
+    expect(serverQuery).toMatch(/lp\.Ngay_DK < DATEADD\(DAY, 1, @to\)/);
+    expect(serverQuery).not.toMatch(/md\.NGAY_DK\s*>=/iu);
+
+    expect(previewRes.status).toBe(200);
+    expect(previewRes.body?.ok).toBe(true);
+    const state = sqlMock.__getState();
+    expect(state.lastQuery).toBeTypeOf('string');
+    expect(state.lastQuery).not.toMatch(/COALESCE\s*\(\s*lp\.Ngay_DK/iu);
+    expect(state.lastQuery).toMatch(/lp\.Ngay_DK >= @from/);
+    expect(state.lastQuery).toMatch(/lp\.Ngay_DK < DATEADD\(DAY, 1, @to\)/);
+    expect(state.lastQuery).not.toMatch(/md\.NGAY_DK\s*>=/iu);
+  });
+
   it('trả về trạng thái chưa cấu hình khi thiếu thông tin SQL', async () => {
     const res = await request(app).get('/api/import/ecus/status');
     expect(res.status).toBe(200);

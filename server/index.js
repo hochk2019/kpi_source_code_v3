@@ -153,6 +153,74 @@ const DEFAULT_ECUS_SCHEDULE_PRESET = Object.freeze({
 
 
 const LEGACY_KPI_DECLARATIONS_REGEX = /from\s+kpi_declarations/i;
+const SLOW_ECUS_COALESCE_MARKER = /COALESCE\s*\(\s*lp\.Ngay_DK\s*,\s*md\.NGAY_DK\s*\)/i;
+const SLOW_ECUS_COALESCE_FROM =
+  /COALESCE\s*\(\s*lp\.Ngay_DK\s*,\s*md\.NGAY_DK\s*\)\s*>=\s*@from/i;
+const SLOW_ECUS_COALESCE_TO =
+  /COALESCE\s*\(\s*lp\.Ngay_DK\s*,\s*md\.NGAY_DK\s*\)\s*<\s*DATEADD\s*\(\s*DAY\s*,\s*1\s*,\s*@to\s*\)/i;
+const ECUS_QUERY_SECTION_BOUNDARY =
+  /\b(order\s+by|group\s+by|having|option\b|for\s+xml)\b/i;
+
+function joinSqlSections(base, addition) {
+  if (!addition) {
+    return base;
+  }
+  if (!/\s$/u.test(base) && !/^\s/u.test(addition)) {
+    return `${base}\n${addition}`;
+  }
+  return base + addition;
+}
+
+function optimizeEcusCoalesceRangeFilter(queryText) {
+  if (typeof queryText !== 'string' || !SLOW_ECUS_COALESCE_MARKER.test(queryText)) {
+    return queryText;
+  }
+
+  const fromMatch = SLOW_ECUS_COALESCE_FROM.exec(queryText);
+  if (!fromMatch) {
+    return queryText;
+  }
+
+  const secondSliceStart = fromMatch.index + fromMatch[0].length;
+  const tailAfterFrom = queryText.slice(secondSliceStart);
+  const toMatchInTail = SLOW_ECUS_COALESCE_TO.exec(tailAfterFrom);
+  if (!toMatchInTail) {
+    return queryText;
+  }
+
+  const toMatchIndex = secondSliceStart + toMatchInTail.index;
+  const toMatchEnd = toMatchIndex + toMatchInTail[0].length;
+  const beforeFromSegment = queryText.slice(0, fromMatch.index);
+  const whereMatches = Array.from(beforeFromSegment.matchAll(/where\b/gi));
+  const lastWhereMatch = whereMatches[whereMatches.length - 1];
+  if (!lastWhereMatch) {
+    return queryText;
+  }
+
+  const whereIndex = lastWhereMatch.index;
+  const beforeWhere = queryText.slice(0, whereIndex);
+  const afterRange = queryText.slice(toMatchEnd);
+  let whereTail = '';
+  let trailingSection = '';
+  const boundaryMatch = ECUS_QUERY_SECTION_BOUNDARY.exec(afterRange);
+  if (boundaryMatch) {
+    whereTail = afterRange.slice(0, boundaryMatch.index);
+    trailingSection = afterRange.slice(boundaryMatch.index);
+  } else {
+    whereTail = afterRange;
+  }
+
+  const optimizedRange = [
+    'WHERE',
+    '  lp.Ngay_DK >= @from',
+    '  AND lp.Ngay_DK < DATEADD(DAY, 1, @to)',
+  ].join('\n');
+
+  let rebuilt = beforeWhere + optimizedRange;
+  rebuilt = joinSqlSections(rebuilt, whereTail);
+  rebuilt = joinSqlSections(rebuilt, trailingSection);
+  return rebuilt;
+}
 
 function normalizeEcusQueryInput(value) {
   const text = typeof value === 'string' ? value.trim() : '';
@@ -162,7 +230,7 @@ function normalizeEcusQueryInput(value) {
   if (LEGACY_KPI_DECLARATIONS_REGEX.test(text)) {
     return DEFAULT_ECUS_SYNC_CONFIG.query;
   }
-  return text;
+  return optimizeEcusCoalesceRangeFilter(text);
 }
 
 function normalizeEcusColumnMap(map = {}) {

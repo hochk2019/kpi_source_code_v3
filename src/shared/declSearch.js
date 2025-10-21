@@ -10,6 +10,27 @@ function normalizeWhitespace(value) {
     .trim();
 }
 
+function extractStringInput(...sources) {
+  for (const source of sources) {
+    if (typeof source === "string") {
+      return source;
+    }
+    if (Array.isArray(source)) {
+      for (const entry of source) {
+        if (typeof entry === "string" && entry.trim()) {
+          return entry;
+        }
+      }
+      for (const entry of source) {
+        if (typeof entry === "string") {
+          return entry;
+        }
+      }
+    }
+  }
+  return "";
+}
+
 export function normalizeStatusKey(status) {
   if (status === null || status === undefined) {
     return "";
@@ -106,8 +127,9 @@ function parseBooleanInput(value) {
 }
 
 function prepareFilters(rawFilters = {}) {
+  const queryInput = extractStringInput(rawFilters.query, rawFilters.q);
   const normalized = {
-    query: typeof rawFilters.query === "string" ? rawFilters.query.trim() : "",
+    query: typeof queryInput === "string" ? queryInput.trim() : "",
     mst: typeof rawFilters.mst === "string" ? rawFilters.mst.trim() : "",
     company: typeof rawFilters.company === "string" ? rawFilters.company.trim() : "",
     statuses: Array.isArray(rawFilters.statuses)
