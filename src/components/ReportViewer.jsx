@@ -106,7 +106,7 @@ const SORT_OPTIONS = [
 const ADJUSTMENT_PAGE_SIZE_OPTIONS = [5, 10, 20];
 const DEFAULT_ADJUSTMENT_PAGE_SIZE = 10;
 
-const DETAIL_PAGE_SIZE_OPTIONS = [10, 20, 50, 100, 200];
+const DETAIL_PAGE_SIZE_OPTIONS = [20, 50, 100, 200];
 const DEFAULT_DETAIL_PAGE_SIZE = 20;
 
 const TOP_STAFF_VISIBLE_COUNT_OPTIONS = [5, 7, 8, 9, 10, 12, 15];
@@ -287,10 +287,11 @@ function sanitizeAdjustmentPageSize(value) {
 
 function sanitizeDetailPageSize(value) {
   const num = Number(value);
-  if (!Number.isFinite(num)) {
+  if (!Number.isFinite(num) || num <= 0) {
     return DEFAULT_DETAIL_PAGE_SIZE;
   }
-  return DETAIL_PAGE_SIZE_OPTIONS.includes(num) ? num : DEFAULT_DETAIL_PAGE_SIZE;
+  const normalized = Math.round(num);
+  return Math.max(1, Math.min(normalized, 500));
 }
 
 function sanitizeRulePreference(value) {
@@ -985,7 +986,7 @@ function StaffDetailCard({ staff, canExport, onExport, exporting, visibleColumns
     (showLicenseCodes ? 1 : 0);
 
   return (
-    <section className="space-y-3 rounded-lg border bg-white p-4 shadow-sm print:avoid-break">
+    <section className="kpi-print-section space-y-3 rounded-lg border bg-white p-4 shadow-sm print:avoid-break">
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h3 className="text-lg font-semibold text-gray-900">Nhân viên: {staff.name}</h3>
@@ -1259,7 +1260,7 @@ function TeamDetailCard({ team, canExport, onExport, exporting, visibleColumns =
   const memberNames = members.map((m) => m.name).filter(Boolean);
 
   return (
-    <section className="space-y-3 rounded-lg border bg-white p-4 shadow-sm print:avoid-break">
+    <section className="kpi-print-section space-y-3 rounded-lg border bg-white p-4 shadow-sm print:avoid-break">
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h3 className="text-lg font-semibold text-gray-900">Tổ đội: {team.name}</h3>
@@ -1572,13 +1573,21 @@ export default function ReportViewer({ canExport = true, currentUser = null }) {
   const [scheduleDraft, setScheduleDraft] = useState(() => createScheduleDraft());
   const [editingScheduleId, setEditingScheduleId] = useState("");
 
-  const [adjustmentPageSize, setAdjustmentPageSize] = useState(() =>
-    sanitizeAdjustmentPageSize(storedPrefs.adjustmentPageSize)
-  );
-  const [adjustmentPage, setAdjustmentPage] = useState(0);
-  const [detailPageSize, setDetailPageSize] = useState(() =>
-    sanitizeDetailPageSize(storedPrefs.detailPageSize)
-  );
+const [adjustmentPageSize, setAdjustmentPageSize] = useState(() =>
+  sanitizeAdjustmentPageSize(storedPrefs.adjustmentPageSize)
+);
+const [adjustmentPage, setAdjustmentPage] = useState(0);
+const initialDetailPageSize = useMemo(
+  () => sanitizeDetailPageSize(storedPrefs.detailPageSize),
+  [storedPrefs.detailPageSize]
+);
+const [detailPageSize, setDetailPageSize] = useState(initialDetailPageSize);
+const [detailPageSizeMode, setDetailPageSizeMode] = useState(() =>
+  DETAIL_PAGE_SIZE_OPTIONS.includes(initialDetailPageSize) ? "preset" : "custom"
+);
+const [detailPageSizeCustomInput, setDetailPageSizeCustomInput] = useState(() =>
+  DETAIL_PAGE_SIZE_OPTIONS.includes(initialDetailPageSize) ? "" : String(initialDetailPageSize)
+);
   const [staffDetailPage, setStaffDetailPage] = useState(0);
   const [teamDetailPage, setTeamDetailPage] = useState(0);
 
@@ -2059,12 +2068,51 @@ export default function ReportViewer({ canExport = true, currentUser = null }) {
     setTo(range.to);
   };
 
-  const handleDetailPageSizeChange = (event) => {
-    const value = sanitizeDetailPageSize(event?.target?.value);
-    setDetailPageSize(value);
+const handleDetailPageSizeChange = (event) => {
+  const raw = event?.target?.value;
+  if (raw === "custom") {
+    setDetailPageSizeMode("custom");
+    setDetailPageSizeCustomInput((prev) => {
+      if (prev && Number(prev) > 0) {
+        return prev;
+      }
+      return String(detailPageSize);
+    });
+    return;
+  }
+  const numeric = Number(raw);
+  if (!Number.isFinite(numeric) || numeric <= 0) {
+    return;
+  }
+  const normalized = sanitizeDetailPageSize(numeric);
+  setDetailPageSizeMode("preset");
+  setDetailPageSize(normalized);
+  setDetailPageSizeCustomInput("");
+  setStaffDetailPage(0);
+  setTeamDetailPage(0);
+};
+
+const handleDetailPageSizeCustomInputChange = (event) => {
+  const raw = event?.target?.value ?? "";
+  setDetailPageSizeMode("custom");
+  if (!raw.trim()) {
+    setDetailPageSizeCustomInput("");
+    return;
+  }
+  const numeric = Number(raw);
+  if (!Number.isFinite(numeric) || numeric <= 0) {
+    setDetailPageSizeCustomInput(raw);
+    return;
+  }
+  const normalized = sanitizeDetailPageSize(numeric);
+  const normalizedText = String(normalized);
+  setDetailPageSizeCustomInput(normalizedText);
+  if (normalized !== detailPageSize) {
+    setDetailPageSize(normalized);
     setStaffDetailPage(0);
     setTeamDetailPage(0);
-  };
+  }
+};
 
   const handleScheduleFieldChange = (field, value) => {
     setScheduleDraft((prev) => ({ ...prev, [field]: value }));
@@ -2405,16 +2453,27 @@ export default function ReportViewer({ canExport = true, currentUser = null }) {
                   <div className="flex items-center gap-2">
                     <span>Hiển thị</span>
                     <select
-                      value={detailPageSize}
+                    value={detailPageSizeMode === "custom" ? "custom" : String(detailPageSize)}
                       onChange={handleDetailPageSizeChange}
                       className="rounded border px-2 py-1 text-xs text-[color:var(--ds-text-primary)] focus:border-[color:var(--ds-border-strong)] focus:outline-none"
                     >
-                      {DETAIL_PAGE_SIZE_OPTIONS.map((option) => (
-                        <option key={option} value={option}>
-                          {option}
-                        </option>
-                      ))}
+                    {DETAIL_PAGE_SIZE_OPTIONS.map((option) => (
+                      <option key={option} value={option}>
+                        {option}
+                      </option>
+                    ))}
+                    <option value="custom">Tùy chỉnh...</option>
                     </select>
+                    {detailPageSizeMode === "custom" ? (
+                      <input
+                        type="number"
+                        min="1"
+                        value={detailPageSizeCustomInput}
+                        onChange={handleDetailPageSizeCustomInputChange}
+                        className="w-16 rounded border px-2 py-1 text-xs text-[color:var(--ds-text-primary)] focus:border-[color:var(--ds-border-strong)] focus:outline-none"
+                        aria-label="Số nhân viên mỗi trang"
+                      />
+                    ) : null}
                     <span>dòng/trang</span>
                   </div>
                   <div className="flex items-center gap-2">
@@ -2669,6 +2728,16 @@ export default function ReportViewer({ canExport = true, currentUser = null }) {
                         </option>
                       ))}
                     </select>
+                    {detailPageSizeMode === "custom" ? (
+                      <input
+                        type="number"
+                        min="1"
+                        value={detailPageSizeCustomInput}
+                        onChange={handleDetailPageSizeCustomInputChange}
+                        className="w-16 rounded border px-2 py-1 text-xs text-[color:var(--ds-text-primary)] focus:border-[color:var(--ds-border-strong)] focus:outline-none"
+                        aria-label="Số nhân viên mỗi trang"
+                      />
+                    ) : null}
                     <span>dòng/trang</span>
                   </div>
                   <div className="flex items-center gap-2">
