@@ -164,10 +164,13 @@ export async function clearAiHistory({ signal } = {}) {
 
 
 
-export async function fetchAiInsights({ limit, signal } = {}) {
+export async function fetchAiInsights({ limit, historyLimit, signal } = {}) {
   const query = new URLSearchParams();
   if (Number.isFinite(limit) && limit > 0) {
     query.set('limit', String(Math.floor(limit)));
+  }
+  if (Number.isFinite(historyLimit) && historyLimit > 0) {
+    query.set('historyLimit', String(Math.floor(historyLimit)));
   }
   const endpoint = `/api/ai/insights${query.size ? `?${query.toString()}` : ''}`;
   const response = await fetchWithAuth(endpoint, { signal });
@@ -176,6 +179,36 @@ export async function fetchAiInsights({ limit, signal } = {}) {
     insights: Array.isArray(data.insights) ? data.insights : [],
     meta: data.meta || null,
   };
+}
+
+export async function fetchAiSnapshotHistory({ limit, signal } = {}) {
+  const query = new URLSearchParams();
+  if (Number.isFinite(limit) && limit > 0) {
+    query.set('limit', String(Math.floor(limit)));
+  }
+  const endpoint = `/api/ai/data/snapshot/history${query.size ? `?${query.toString()}` : ''}`;
+  const response = await fetchWithAuth(endpoint, { signal });
+  const data = await parseJsonResponse(response, 'Không thể tải lịch sử snapshot KPI.');
+  return Array.isArray(data.entries) ? data.entries : [];
+}
+
+export async function fetchAiSnapshotHistoryEntry(id, { signal } = {}) {
+  const endpoint = `/api/ai/data/snapshot/history/${encodeURIComponent(id)}`;
+  const response = await fetchWithAuth(endpoint, { signal });
+  const data = await parseJsonResponse(response, 'Không thể tải snapshot KPI đã lưu.');
+  return data.entry || null;
+}
+
+export async function updateAiInsightSettings(settings, { signal } = {}) {
+  const payload = { settings: settings || {} };
+  const response = await fetchWithAuth('/api/ai/insights/settings', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+    signal,
+  });
+  const data = await parseJsonResponse(response, 'Không thể cập nhật tuỳ chọn insight AI.');
+  return data.settings || payload.settings;
 }
 
 export async function runAiInsightJob(payload = {}, { signal } = {}) {

@@ -14,10 +14,137 @@ import {
   pingAiConnection,
   fetchAiDataSnapshot,
   fetchAiInsights,
+  fetchAiSnapshotHistory,
+  fetchAiSnapshotHistoryEntry,
   runAiInsightJob,
   submitAiInsightFeedback,
+  updateAiInsightSettings,
 } from '@/lib/aiClient.js';
 import { computeQuickRange } from '@/lib/reports.js';
+
+const SNAPSHOT_CACHE_STORAGE_KEY = 'aiSnapshotCache.v1';
+const SNAPSHOT_CACHE_VERSION = 1;
+const SNAPSHOT_CACHE_TTL_MS = 5 * 60 * 1000;
+const SNAPSHOT_CACHE_MAX_ENTRIES = 6;
+
+function getSnapshotCacheStorage() {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+  try {
+    return window.sessionStorage || null;
+  } catch {
+    return null;
+  }
+}
+
+function readLocalSnapshotCache() {
+  const storage = getSnapshotCacheStorage();
+  if (!storage) {
+    return { version: SNAPSHOT_CACHE_VERSION, entries: [] };
+  }
+  try {
+    const raw = storage.getItem(SNAPSHOT_CACHE_STORAGE_KEY);
+    if (!raw) {
+      return { version: SNAPSHOT_CACHE_VERSION, entries: [] };
+    }
+    const parsed = JSON.parse(raw);
+    const entries = Array.isArray(parsed?.entries) ? parsed.entries : [];
+    return { version: SNAPSHOT_CACHE_VERSION, entries };
+  } catch {
+    return { version: SNAPSHOT_CACHE_VERSION, entries: [] };
+  }
+}
+
+function writeLocalSnapshotCache(cache) {
+  const storage = getSnapshotCacheStorage();
+  if (!storage) {
+    return;
+  }
+  try {
+    storage.setItem(SNAPSHOT_CACHE_STORAGE_KEY, JSON.stringify(cache));
+  } catch {
+    // bỏ qua lỗi ghi bộ nhớ phiên
+  }
+}
+
+function pruneLocalSnapshotCache(now = Date.now()) {
+  const cache = readLocalSnapshotCache();
+  const entries = [];
+  for (const entry of cache.entries) {
+    if (!entry || typeof entry !== 'object') {
+      continue;
+    }
+    const key = typeof entry.key === 'string' ? entry.key : '';
+    if (!key) {
+      continue;
+    }
+    const cachedAt = Number(entry.cachedAt);
+    if (!Number.isFinite(cachedAt)) {
+      continue;
+    }
+    if (SNAPSHOT_CACHE_TTL_MS > 0 && now - cachedAt > SNAPSHOT_CACHE_TTL_MS) {
+      continue;
+    }
+    if (!entry.snapshot || typeof entry.snapshot !== 'object') {
+      continue;
+    }
+    entries.push({ key, cachedAt, snapshot: entry.snapshot });
+  }
+  entries.sort((a, b) => b.cachedAt - a.cachedAt);
+  if (entries.length > SNAPSHOT_CACHE_MAX_ENTRIES) {
+    entries.length = SNAPSHOT_CACHE_MAX_ENTRIES;
+  }
+  if (entries.length !== cache.entries.length) {
+    writeLocalSnapshotCache({ version: SNAPSHOT_CACHE_VERSION, entries });
+  }
+  return { version: SNAPSHOT_CACHE_VERSION, entries };
+}
+
+function getLocalSnapshotCacheEntry(cacheKey, now = Date.now()) {
+  if (!cacheKey) {
+    return null;
+  }
+  const cache = pruneLocalSnapshotCache(now);
+  const entry = cache.entries.find((item) => item.key === cacheKey);
+  if (!entry) {
+    return null;
+  }
+  try {
+    return {
+      key: entry.key,
+      cachedAt: entry.cachedAt,
+      snapshot: JSON.parse(JSON.stringify(entry.snapshot)),
+    };
+  } catch {
+    return null;
+  }
+}
+
+function storeLocalSnapshotCacheEntry(cacheKey, snapshot, now = Date.now()) {
+  if (!cacheKey || !snapshot || typeof snapshot !== 'object') {
+    return;
+  }
+  let serialized = null;
+  try {
+    serialized = JSON.parse(JSON.stringify(snapshot));
+  } catch {
+    return;
+  }
+  const cache = pruneLocalSnapshotCache(now);
+  const entries = cache.entries.filter((entry) => entry.key !== cacheKey);
+  entries.unshift({ key: cacheKey, cachedAt: now, snapshot: serialized });
+  if (entries.length > SNAPSHOT_CACHE_MAX_ENTRIES) {
+    entries.length = SNAPSHOT_CACHE_MAX_ENTRIES;
+  }
+  writeLocalSnapshotCache({ version: SNAPSHOT_CACHE_VERSION, entries });
+}
+
+function buildSnapshotCacheKey(params = {}) {
+  const from = typeof params.from === 'string' ? params.from : '';
+  const to = typeof params.to === 'string' ? params.to : '';
+  return `${from}|${to}`;
+}
 
 function formatDateTime(value) {
   if (!value) {
@@ -66,6 +193,69 @@ function resolveProviderLabel(profile, config, providerId) {
     return fromConfig.label || fromConfig.id;
   }
   return providerId;
+}
+
+function resolveProviderDetails(profile, config, providerId) {
+  if (!providerId) {
+    return null;
+  }
+  const fromProfile = profile?.providers?.find((entry) => entry.id === providerId);
+  if (fromProfile) {
+    return fromProfile;
+  }
+  const fromConfig = config?.providers?.find((entry) => entry.id === providerId);
+  if (fromConfig) {
+    return fromConfig;
+  }
+  return null;
+}
+
+function isOllamaProvider(provider) {
+  if (!provider) {
+    return false;
+  }
+  const type = `${provider.type || ''}`.toLowerCase();
+  const id = `${provider.id || ''}`.toLowerCase();
+  if (type.includes('ollama')) {
+    return true;
+  }
+  return id.includes('ollama');
+}
+
+function resolveProviderHealth(testState) {
+  if (!testState) {
+    return {
+      label: 'Chưa kiểm tra',
+      className: 'border border-gray-200 bg-gray-100 text-gray-700',
+    };
+  }
+  switch (testState.status) {
+    case 'success':
+      return {
+        label: 'Trực tuyến',
+        className: 'border border-emerald-200 bg-emerald-100 text-emerald-700',
+      };
+    case 'error':
+      return {
+        label: 'Ngoại tuyến',
+        className: 'border border-red-200 bg-red-100 text-red-700',
+      };
+    case 'testing':
+      return {
+        label: 'Đang kiểm tra…',
+        className: 'border border-amber-200 bg-amber-100 text-amber-700',
+      };
+    case 'stale':
+      return {
+        label: 'Cần kiểm tra lại',
+        className: 'border border-amber-200 bg-amber-50 text-amber-700',
+      };
+    default:
+      return {
+        label: 'Không rõ',
+        className: 'border border-gray-200 bg-gray-100 text-gray-700',
+      };
+  }
 }
 
 function createDraftFromConfig(config) {
@@ -545,6 +735,12 @@ export default function AiAssistant({ currentUser }) {
   const [insightsError, setInsightsError] = useState('');
   const [insightRunLoading, setInsightRunLoading] = useState(false);
   const [feedbackSubmitting, setFeedbackSubmitting] = useState({});
+  const [snapshotHistory, setSnapshotHistory] = useState([]);
+  const [snapshotHistoryLoading, setSnapshotHistoryLoading] = useState(false);
+  const [snapshotHistoryError, setSnapshotHistoryError] = useState('');
+  const [selectedHistoryEntry, setSelectedHistoryEntry] = useState(null);
+  const [notifyOnAnomaly, setNotifyOnAnomaly] = useState(false);
+  const [notifySaving, setNotifySaving] = useState(false);
 
   const [messages, setMessages] = useState([]);
   const [prompt, setPrompt] = useState('');
@@ -563,6 +759,7 @@ export default function AiAssistant({ currentUser }) {
   const historyLoadErrorShownRef = useRef(false);
   const historyPersistErrorShownRef = useRef(false);
   const lastSavedSnapshotRef = useRef(JSON.stringify([]));
+  const autoHealthCheckedRef = useRef(new Set());
 
   const appendMessage = useCallback((entry) => {
     const sanitized = sanitizeHistoryMessage(entry);
@@ -649,9 +846,15 @@ export default function AiAssistant({ currentUser }) {
     setInsightsLoading(true);
     setInsightsError('');
     try {
-      const { insights: fetchedInsights, meta } = await fetchAiInsights({ limit: 6 });
+      const { insights: fetchedInsights, meta } = await fetchAiInsights({ limit: 6, historyLimit: 6 });
       setInsights(Array.isArray(fetchedInsights) ? fetchedInsights : []);
       setInsightsMeta(meta || null);
+      if (meta?.history?.entries) {
+        setSnapshotHistory(meta.history.entries);
+      }
+      if (meta?.settings) {
+        setNotifyOnAnomaly(meta.settings.notifyOnAnomaly === true);
+      }
     } catch (err) {
       const message = err?.message || 'Không thể tải insight AI.';
       setInsightsError(message);
@@ -660,6 +863,96 @@ export default function AiAssistant({ currentUser }) {
       setInsightsLoading(false);
     }
   }, [canUse]);
+
+  const loadSnapshotHistory = useCallback(
+    async (limit = 6) => {
+      if (!canUse) {
+        return;
+      }
+      setSnapshotHistoryLoading(true);
+      setSnapshotHistoryError('');
+      try {
+        const entries = await fetchAiSnapshotHistory({ limit });
+        setSnapshotHistory(entries);
+        setSelectedHistoryEntry((prev) => {
+          if (!prev) {
+            return prev;
+          }
+          const match = entries.find((item) => item.id === prev.id);
+          return match || null;
+        });
+      } catch (err) {
+        const message = err?.message || 'Không thể tải lịch sử snapshot KPI.';
+        setSnapshotHistoryError(message);
+        toast.error(message);
+      } finally {
+        setSnapshotHistoryLoading(false);
+      }
+    },
+    [canUse]
+  );
+
+  const handleToggleNotify = useCallback(async () => {
+    if (!canManage) {
+      return;
+    }
+    const nextValue = !notifyOnAnomaly;
+    setNotifySaving(true);
+    try {
+      const settings = await updateAiInsightSettings({ notifyOnAnomaly: nextValue });
+      setNotifyOnAnomaly(settings?.notifyOnAnomaly === true);
+      toast.success(
+        settings?.notifyOnAnomaly === true
+          ? 'Đã bật thông báo khi insight cảnh báo bất thường.'
+          : 'Đã tắt thông báo insight bất thường.'
+      );
+    } catch (err) {
+      const message = err?.message || 'Không thể cập nhật tuỳ chọn insight bất thường.';
+      toast.error(message);
+    } finally {
+      setNotifySaving(false);
+    }
+  }, [canManage, notifyOnAnomaly]);
+
+  const handleViewHistoryEntry = useCallback(
+    async (entryId) => {
+      if (!entryId) {
+        return;
+      }
+      const existing = snapshotHistory.find((item) => item.id === entryId);
+      if (existing && existing.snapshot) {
+        setSelectedHistoryEntry(existing);
+        return;
+      }
+      try {
+        setSnapshotHistoryLoading(true);
+        const fetched = await fetchAiSnapshotHistoryEntry(entryId);
+        if (fetched) {
+          setSnapshotHistory((prev) => {
+            const next = Array.isArray(prev) ? prev.slice() : [];
+            const index = next.findIndex((item) => item.id === fetched.id);
+            if (index !== -1) {
+              next[index] = fetched;
+            } else {
+              next.unshift(fetched);
+            }
+            return next;
+          });
+          setSelectedHistoryEntry(fetched);
+        }
+      } catch (err) {
+        const message = err?.message || 'Không thể tải snapshot KPI đã lưu.';
+        toast.error(message);
+      } finally {
+        setSnapshotHistoryLoading(false);
+      }
+    },
+    [snapshotHistory]
+  );
+
+  const handleCloseHistoryEntry = useCallback(() => {
+    setSelectedHistoryEntry(null);
+  }, []);
 
   useEffect(() => {
     if (canUse) {
@@ -773,28 +1066,43 @@ export default function AiAssistant({ currentUser }) {
     [kpiFormatter, numberFormatter]
   );
 
-  const handleFetchSnapshot = useCallback(async () => {
-    const { params, label } = buildRangeParams();
-    setSnapshotLoading(true);
-    setSnapshotError('');
-    try {
-      const snapshot = await fetchAiDataSnapshot(params);
-      setSnapshotData(snapshot);
-      if (!snapshot || (snapshot.summary?.declarations ?? 0) === 0) {
-        const message = 'Không tìm thấy dữ liệu KPI trong khoảng đã chọn.';
+  const handleFetchSnapshot = useCallback(
+    async ({ force = false } = {}) => {
+      const { params, label } = buildRangeParams();
+      const cacheKey = buildSnapshotCacheKey(params);
+      if (!force) {
+        const cached = getLocalSnapshotCacheEntry(cacheKey);
+        if (cached?.snapshot) {
+          setSnapshotData(cached.snapshot);
+          setSnapshotError('');
+          toast.success('Đã dùng snapshot KPI đã lưu tạm trong phiên.');
+          return;
+        }
+      }
+
+      setSnapshotLoading(true);
+      setSnapshotError('');
+      try {
+        const snapshot = await fetchAiDataSnapshot(params);
+        setSnapshotData(snapshot);
+        if (!snapshot || (snapshot.summary?.declarations ?? 0) === 0) {
+          const message = 'Không tìm thấy dữ liệu KPI trong khoảng đã chọn.';
+          setSnapshotError(message);
+          toast.error(message);
+        } else {
+          storeLocalSnapshotCacheEntry(cacheKey, snapshot);
+          toast.success(`Đã lấy snapshot KPI (${label.toLowerCase()}).`);
+        }
+      } catch (err) {
+        const message = err?.message || 'Không thể lấy snapshot dữ liệu.';
         setSnapshotError(message);
         toast.error(message);
-      } else {
-        toast.success(`Đã lấy snapshot KPI (${label.toLowerCase()}).`);
+      } finally {
+        setSnapshotLoading(false);
       }
-    } catch (err) {
-      const message = err?.message || 'Không thể lấy snapshot dữ liệu.';
-      setSnapshotError(message);
-      toast.error(message);
-    } finally {
-      setSnapshotLoading(false);
-    }
-  }, [buildRangeParams]);
+    },
+    [buildRangeParams]
+  );
 
   const handleGenerateSummary = useCallback(async () => {
     setSummaryError('');
@@ -802,14 +1110,22 @@ export default function AiAssistant({ currentUser }) {
     setSummaryLoading(true);
     try {
       const { params, label } = buildRangeParams();
+      const cacheKey = buildSnapshotCacheKey(params);
       let snapshot = snapshotData;
       if (!snapshot) {
-        try {
-          setSnapshotLoading(true);
-          snapshot = await fetchAiDataSnapshot(params);
+        const cached = getLocalSnapshotCacheEntry(cacheKey);
+        if (cached?.snapshot) {
+          snapshot = cached.snapshot;
           setSnapshotData(snapshot);
-        } finally {
-          setSnapshotLoading(false);
+        } else {
+          try {
+            setSnapshotLoading(true);
+            snapshot = await fetchAiDataSnapshot(params);
+            setSnapshotData(snapshot);
+            storeLocalSnapshotCacheEntry(cacheKey, snapshot);
+          } finally {
+            setSnapshotLoading(false);
+          }
         }
       }
       if (!snapshot || (snapshot.summary?.declarations ?? 0) === 0) {
@@ -878,6 +1194,54 @@ export default function AiAssistant({ currentUser }) {
       `Top tổ đội: ${topTeams}`,
     ];
   }, [kpiFormatter, numberFormatter, snapshotData]);
+
+  const selectedHistoryMetrics = useMemo(() => {
+    if (!selectedHistoryEntry?.snapshot?.summary) {
+      return [];
+    }
+    const snapshot = selectedHistoryEntry.snapshot;
+    const summary = snapshot.summary;
+    const adjustments = snapshot.adjustments?.totals || {};
+    const lines = [];
+    lines.push(
+      `Tổng tờ khai: ${numberFormatter.format(summary.declarations || 0)} (Nhập ${numberFormatter.format(
+        summary.import || 0
+      )} / Xuất ${numberFormatter.format(summary.export || 0)})`
+    );
+    lines.push(`Điểm KPI: ${kpiFormatter.format(summary.kpi || 0)}`);
+    lines.push(
+      `Điều chỉnh KPI: ${numberFormatter.format(adjustments.approved || 0)} duyệt · ${numberFormatter.format(
+        adjustments.pending || 0
+      )} chờ · ${numberFormatter.format(adjustments.rejected || 0)} từ chối (tổng ảnh hưởng ${kpiFormatter.format(
+        adjustments.totalPoints || 0
+      )})`
+    );
+    const topStaffLine = (snapshot.topStaff || [])
+      .slice(0, 3)
+      .map(
+        (item) =>
+          `${item.name || 'Chưa gán'} (${numberFormatter.format(item.declarations || 0)} tờ khai, ${kpiFormatter.format(
+            item.totalKpi || 0
+          )} KPI)`
+      )
+      .join('; ');
+    if (topStaffLine) {
+      lines.push(`Nhân sự nổi bật: ${topStaffLine}`);
+    }
+    const topTeamsLine = (snapshot.topTeams || [])
+      .slice(0, 3)
+      .map(
+        (item) =>
+          `${item.name || 'Chưa gán tổ'} (${numberFormatter.format(item.declarations || 0)} tờ khai, ${kpiFormatter.format(
+            item.totalKpi || 0
+          )} KPI)`
+      )
+      .join('; ');
+    if (topTeamsLine) {
+      lines.push(`Tổ đội nổi bật: ${topTeamsLine}`);
+    }
+    return lines;
+  }, [kpiFormatter, numberFormatter, selectedHistoryEntry]);
 
   useEffect(() => {
     if (!canUse) {
@@ -979,6 +1343,21 @@ export default function AiAssistant({ currentUser }) {
     return profile.providers.filter((entry) => entry.enabled !== false);
   }, [profile]);
   const availableProviders = providerOptions;
+  const profileDefaultProvider = useMemo(
+    () => resolveProviderDetails(profile, config, profile?.defaultProvider),
+    [profile, config]
+  );
+  const draftDefaultProvider = useMemo(() => {
+    if (!draft || !draft.defaultProvider) {
+      return null;
+    }
+    const providers = Array.isArray(draft.providers) ? draft.providers : [];
+    const inDraft = providers.find((entry) => entry.id === draft.defaultProvider);
+    if (inDraft) {
+      return inDraft;
+    }
+    return resolveProviderDetails(profile, config, draft.defaultProvider);
+  }, [draft, profile, config]);
   const pingUsageSummary = pingState.usage ? formatUsage(pingState.usage) : null;
 
   useEffect(() => {
@@ -1240,7 +1619,7 @@ export default function AiAssistant({ currentUser }) {
   }, []);
 
   const handleTestProvider = useCallback(
-    async (providerId) => {
+    async (providerId, { silentSuccess = false } = {}) => {
       if (!draft) {
         toast.error('Chưa có cấu hình để kiểm tra.');
         return;
@@ -1272,7 +1651,9 @@ export default function AiAssistant({ currentUser }) {
             checkedAt: new Date().toISOString(),
           },
         }));
-        toast.success('Đã kiểm tra kết nối thành công.');
+        if (!silentSuccess) {
+          toast.success('Đã kiểm tra kết nối thành công.');
+        }
       } catch (error) {
         const errorMessage = error?.message || 'Không thể kiểm thử nhà cung cấp AI.';
         setProviderTests((prev) => ({
@@ -1288,6 +1669,39 @@ export default function AiAssistant({ currentUser }) {
     },
     [draft],
   );
+
+  useEffect(() => {
+    if (!draft) {
+      return;
+    }
+    const providers = Array.isArray(draft.providers) ? draft.providers : [];
+    const activeIds = new Set();
+    providers.forEach((provider) => {
+      if (!provider?.id) {
+        return;
+      }
+      if (provider.enabled === false) {
+        autoHealthCheckedRef.current.delete(provider.id);
+        return;
+      }
+      if (!isOllamaProvider(provider)) {
+        return;
+      }
+      activeIds.add(provider.id);
+      if (autoHealthCheckedRef.current.has(provider.id)) {
+        return;
+      }
+      autoHealthCheckedRef.current.add(provider.id);
+      handleTestProvider(provider.id, { silentSuccess: true }).catch((error) => {
+        console.error('Kiểm tra nhà cung cấp Ollama thất bại', error);
+      });
+    });
+    for (const key of Array.from(autoHealthCheckedRef.current)) {
+      if (!activeIds.has(key)) {
+        autoHealthCheckedRef.current.delete(key);
+      }
+    }
+  }, [draft, handleTestProvider]);
 
   const handleConfigReset = () => {
     setDraft(createDraftFromConfig(config));
@@ -1432,6 +1846,12 @@ const handleInsightFeedback = useCallback(
                 <p className="text-xs text-[color:var(--ds-text-muted)]">
                   Hỏi về KPI, dữ liệu tờ khai hoặc quy trình nội bộ. Tất cả câu trả lời đều bằng tiếng Việt.
                 </p>
+                {isOllamaProvider(profileDefaultProvider) && (
+                  <p className="mt-1 flex items-center gap-2 text-[11px] font-medium text-emerald-600">
+                    <span className="inline-block h-2 w-2 rounded-full bg-emerald-500" aria-hidden="true" />
+                    Dữ liệu câu hỏi được xử lý hoàn toàn nội bộ qua Ollama cục bộ.
+                  </p>
+                )}
               </div>
               <div className="flex gap-2">
                 <button
@@ -1582,9 +2002,10 @@ const handleInsightFeedback = useCallback(
                   </label>
                   <button
                     type="button"
-                    onClick={handleFetchSnapshot}
+                    onClick={(event) => handleFetchSnapshot({ force: event?.shiftKey })}
                     disabled={snapshotLoading}
                     className="rounded border border-[color:var(--ds-border-subtle)] px-3 py-1.5 text-xs font-medium text-[color:var(--ds-text-secondary)] shadow-sm transition hover:bg-[color:var(--ds-surface-muted)] disabled:cursor-not-allowed disabled:opacity-60"
+                    title="Nhấn Shift khi bấm để buộc tải lại từ máy chủ"
                   >
                     {snapshotLoading ? 'Đang tải...' : 'Lấy snapshot'}
                   </button>
@@ -1629,7 +2050,8 @@ const handleInsightFeedback = useCallback(
                   </div>
                 )}
               </div>
-            </div>            <div className="mt-3 space-y-3 rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)]/60 p-3">
+            </div>
+            <div className="mt-3 space-y-3 rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)]/60 p-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
                   <h3 className="text-sm font-semibold text-[color:var(--ds-text-primary)]">Insight AI tự động</h3>
@@ -1660,9 +2082,23 @@ const handleInsightFeedback = useCallback(
                   ) : null}
                 </div>
               </div>
-              {insightsError ? (
-                <p className="text-xs text-red-500">{insightsError}</p>
+              {canManage ? (
+                <div className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={notifyOnAnomaly}
+                      onChange={handleToggleNotify}
+                      disabled={notifySaving}
+                    />
+                    <span>Nhận thông báo khi insight cảnh báo bất thường</span>
+                  </label>
+                  {notifySaving ? (
+                    <p className="mt-1 text-[11px] text-amber-600">Đang lưu tuỳ chọn…</p>
+                  ) : null}
+                </div>
               ) : null}
+              {insightsError ? <p className="text-xs text-red-500">{insightsError}</p> : null}
               {insightsLoading ? (
                 <p className="text-sm text-[color:var(--ds-text-muted)]">Đang tải insight AI...</p>
               ) : insights.length === 0 ? (
@@ -1729,6 +2165,109 @@ const handleInsightFeedback = useCallback(
                   })}
                 </div>
               )}
+              <div className="border-t border-dashed border-[color:var(--ds-border-subtle)] pt-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <h4 className="text-xs font-semibold uppercase tracking-wide text-[color:var(--ds-text-secondary)]">
+                    Lịch sử snapshot KPI
+                  </h4>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => loadSnapshotHistory(6)}
+                      disabled={snapshotHistoryLoading}
+                      className={SECONDARY_BUTTON_CLASS}
+                    >
+                      {snapshotHistoryLoading ? 'Đang tải...' : 'Tải lại'}
+                    </button>
+                    {selectedHistoryEntry ? (
+                      <button type="button" onClick={handleCloseHistoryEntry} className={SECONDARY_BUTTON_CLASS}>
+                        Thu gọn
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+                {snapshotHistoryError ? (
+                  <p className="mt-1 text-xs text-red-500">{snapshotHistoryError}</p>
+                ) : null}
+                {snapshotHistoryLoading && snapshotHistory.length === 0 ? (
+                  <p className="text-xs text-[color:var(--ds-text-muted)]">Đang tải lịch sử snapshot...</p>
+                ) : snapshotHistory.length === 0 ? (
+                  <p className="text-xs text-[color:var(--ds-text-muted)]">Chưa có snapshot nào được lưu.</p>
+                ) : (
+                  <ul className="mt-2 space-y-2">
+                    {snapshotHistory.map((entry) => {
+                      const selected = selectedHistoryEntry?.id === entry.id;
+                      return (
+                        <li
+                          key={entry.id}
+                          className={clsx(
+                            'rounded border px-3 py-2 text-xs transition',
+                            selected
+                              ? 'border-amber-400 bg-amber-50'
+                              : 'border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)]'
+                          )}
+                        >
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <div>
+                              <p className="font-medium text-[color:var(--ds-text-primary)]">
+                                {entry.range?.from && entry.range?.to
+                                  ? `${entry.range.from} → ${entry.range.to}`
+                                  : 'Khoảng thời gian không xác định'}
+                              </p>
+                              <p className="text-[11px] text-[color:var(--ds-text-muted)]">
+                                {`Tạo lúc ${formatDateTime(entry.generatedAt)}`}
+                                {entry.rulesVersion ? ` • Quy tắc ${entry.rulesVersion}` : ''}
+                                {entry.rosterVersion ? ` • Roster ${entry.rosterVersion}` : ''}
+                                {entry.source ? ` • ${entry.source === 'cron' ? 'Tự động' : 'Thủ công'}` : ''}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              {entry.insightId ? (
+                                <span className="text-[11px] text-[color:var(--ds-text-muted)]">Insight: {entry.insightId}</span>
+                              ) : null}
+                              <button
+                                type="button"
+                                onClick={() => handleViewHistoryEntry(entry.id)}
+                                className={SECONDARY_BUTTON_CLASS}
+                              >
+                                {selected ? 'Đang xem' : 'Xem snapshot'}
+                              </button>
+                            </div>
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </div>
+              {selectedHistoryEntry ? (
+                <div className="rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-muted)]/60 p-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <p className="text-sm font-semibold text-[color:var(--ds-text-primary)]">
+                        {selectedHistoryEntry.range?.from && selectedHistoryEntry.range?.to
+                          ? `${selectedHistoryEntry.range.from} → ${selectedHistoryEntry.range.to}`
+                          : 'Khoảng thời gian không xác định'}
+                      </p>
+                      <p className="text-xs text-[color:var(--ds-text-muted)]">
+                        {`Snapshot lúc ${formatDateTime(selectedHistoryEntry.generatedAt)}`}
+                      </p>
+                    </div>
+                    <button type="button" onClick={handleCloseHistoryEntry} className={SECONDARY_BUTTON_CLASS}>
+                      Đóng
+                    </button>
+                  </div>
+                  {selectedHistoryMetrics.length ? (
+                    <ul className="mt-2 list-disc space-y-1 pl-4 text-xs text-[color:var(--ds-text-secondary)]">
+                      {selectedHistoryMetrics.map((line) => (
+                        <li key={line}>{line}</li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="mt-2 text-xs text-[color:var(--ds-text-muted)]">Không có dữ liệu tóm tắt.</p>
+                  )}
+                </div>
+              ) : null}
               {insightsMeta?.state?.lastRunAt ? (
                 <p className="text-xs text-[color:var(--ds-text-muted)]">
                   {`Lần chạy gần nhất: ${formatDateTime(insightsMeta.state.lastRunAt)} (trạng thái: ${insightsMeta.state.lastStatus})`}
@@ -2027,9 +2566,24 @@ const handleInsightFeedback = useCallback(
                       {draft.providers.map((provider) => (
                         <option key={provider.id} value={provider.id}>
                           {provider.label || provider.id}
+                          {isOllamaProvider(provider) ? ' • Nội bộ (đề xuất)' : ''}
                         </option>
                       ))}
                     </select>
+                    {isOllamaProvider(draftDefaultProvider) ? (
+                      <p className="text-xs text-emerald-600">
+                        Đang sử dụng mô hình Ollama nội bộ — dữ liệu hỏi đáp sẽ được giữ trong mạng doanh nghiệp.
+                      </p>
+                    ) : (
+                      <p className="text-xs text-[color:var(--ds-text-muted)]">
+                        Khuyến nghị chọn "Ollama cục bộ" để đảm bảo dữ liệu không rời khỏi hệ thống.
+                      </p>
+                    )}
+                    {draft?.defaultProvider && providerTests[draft.defaultProvider]?.status === 'error' && (
+                      <p className="text-xs text-red-600">
+                        Không thể kết nối nhà cung cấp mặc định, vui lòng kiểm tra lại dịch vụ Ollama hoặc chọn nhà cung cấp khác.
+                      </p>
+                    )}
                   </label>
                   <label className="flex flex-col gap-1 text-sm">
                     <span className="font-medium text-[color:var(--ds-text-primary)]">Nhà cung cấp dự phòng</span>
@@ -2042,6 +2596,7 @@ const handleInsightFeedback = useCallback(
                       {draft.providers.map((provider) => (
                         <option key={provider.id} value={provider.id}>
                           {provider.label || provider.id}
+                          {isOllamaProvider(provider) ? ' • Nội bộ' : ''}
                         </option>
                       ))}
                     </select>
@@ -2190,14 +2745,32 @@ const handleInsightFeedback = useCallback(
                   </div>
                   {draft.providers.map((provider) => {
                     const testState = providerTests[provider.id] || null;
+                    const healthMeta = resolveProviderHealth(testState);
                     return (
                       <div
                         key={provider.id}
                         className="rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-muted)] p-4"
                       >
                         <div className="flex flex-wrap items-center justify-between gap-2">
-                          <div>
-                            <p className="text-sm font-semibold text-[color:var(--ds-text-primary)]">{provider.label || provider.id}</p>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <p className="text-sm font-semibold text-[color:var(--ds-text-primary)]">
+                                {provider.label || provider.id}
+                              </p>
+                              {isOllamaProvider(provider) && (
+                                <span className="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-medium text-emerald-700">
+                                  Nội bộ (Ollama)
+                                </span>
+                              )}
+                              <span
+                                className={clsx(
+                                  'inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium',
+                                  healthMeta.className
+                                )}
+                              >
+                                {healthMeta.label}
+                              </span>
+                            </div>
                             <p className="text-xs uppercase tracking-wide text-[color:var(--ds-text-muted)]">{provider.id}</p>
                           </div>
                           <label className="flex items-center gap-2 text-xs font-medium text-[color:var(--ds-text-primary)]">

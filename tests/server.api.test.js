@@ -938,6 +938,11 @@ describe('Đồng bộ tài khoản với SQL Server', () => {
 });
 
 describe('AI assistant API', () => {
+  beforeEach(() => {
+    resetDb();
+    sqlMock.__resetMock();
+  });
+
   it('từ chối khi chưa đăng nhập', async () => {
     const res = await request(app).get('/api/ai/profile');
     expect(res.status).toBe(401);
@@ -983,6 +988,242 @@ describe('AI assistant API', () => {
       expect(found).toBeTruthy();
       expect(found).not.toHaveProperty('endpoint');
       expect(found).not.toHaveProperty('apiKeyEnv');
+    }
+  });
+
+  it('tạo snapshot KPI và trả về cấu trúc tóm tắt', async () => {
+    const admin = request.agent(app);
+    const adminLogin = await admin.post('/api/auth/login').send({ username: 'admin', password: 'admin123' });
+    expect(adminLogin.status).toBe(200);
+
+    const configRes = await admin.put('/api/import/ecus/config').send({
+      config: {
+        batchSize: 0,
+        connection: {
+          server: 'MRHOC\\ECUSSQL2008',
+          database: 'ECUS5VNACCS',
+          user: 'sa',
+          password: '123456',
+        },
+      },
+    });
+    expect(configRes.status).toBe(200);
+
+    const staff = request.agent(app);
+    const staffLogin = await staff.post('/api/auth/login').send({ username: 'nhanvien', password: '123456' });
+    expect(staffLogin.status).toBe(200);
+
+    sqlMock.__setMockResult([
+      {
+        So_tk: '100000000000',
+        Ngay_dang_ky: '2025-08-01',
+        MaSoThue: '0100109106',
+        Ten_doanh_nghiep: 'Công ty A',
+        Loai_hinh: 'A11',
+        nhan_vien: 'Nguyễn Văn A',
+        team: 'Tổ 1',
+        so_luong_mh: 5,
+        ma_gp: 'ZB03',
+      },
+      {
+        So_tk: '200000000000',
+        Ngay_dang_ky: '2025-08-01',
+        MaSoThue: '0100109107',
+        Ten_doanh_nghiep: 'Công ty B',
+        Loai_hinh: 'B11',
+        nhan_vien: 'Nguyễn Văn B',
+        team: 'Tổ 2',
+        so_luong_mh: 3,
+        ma_gp: '',
+      },
+    ]);
+
+    const res = await staff.get('/api/ai/data/snapshot').query({ from: '2025-08-01', to: '2025-08-02' });
+    expect(res.status).toBe(200);
+    expect(res.body?.ok).toBe(true);
+    expect(res.body?.cached).toBe(false);
+    const snapshot = res.body?.snapshot;
+    expect(snapshot).toBeTruthy();
+    expect(snapshot.summary?.declarations).toBe(2);
+    expect(snapshot.summary?.licenseSamples).toBeInstanceOf(Array);
+    expect(Array.isArray(snapshot.topStaff)).toBe(true);
+    expect(Array.isArray(snapshot.topTeams)).toBe(true);
+    expect(Array.isArray(snapshot.trends?.monthly)).toBe(true);
+    expect(Array.isArray(snapshot.rawDeclarations)).toBe(true);
+    expect(snapshot.filters?.includeTaxCodes).toEqual([]);
+    expect(snapshot.source?.server).toBe('MRHOC\\ECUSSQL2008');
+  });
+
+  it('tái sử dụng cache snapshot khi gọi cùng tham số', async () => {
+    const admin = request.agent(app);
+    const adminLogin = await admin.post('/api/auth/login').send({ username: 'admin', password: 'admin123' });
+    expect(adminLogin.status).toBe(200);
+
+    await admin.put('/api/import/ecus/config').send({
+      config: {
+        batchSize: 0,
+        connection: {
+          server: 'MRHOC\\ECUSSQL2008',
+          database: 'ECUS5VNACCS',
+          user: 'sa',
+          password: '123456',
+        },
+      },
+    });
+
+    const staff = request.agent(app);
+    const staffLogin = await staff.post('/api/auth/login').send({ username: 'nhanvien', password: '123456' });
+    expect(staffLogin.status).toBe(200);
+
+    sqlMock.__setMockResult([
+      {
+        So_tk: '100000000000',
+        Ngay_dang_ky: '2025-08-01',
+        MaSoThue: '0100109106',
+        Ten_doanh_nghiep: 'Công ty A',
+        Loai_hinh: 'A11',
+        nhan_vien: 'Nguyễn Văn A',
+        team: 'Tổ 1',
+        so_luong_mh: 4,
+      },
+    ]);
+
+    const firstRes = await staff.get('/api/ai/data/snapshot').query({ from: '2025-08-01', to: '2025-08-02' });
+    expect(firstRes.status).toBe(200);
+    expect(firstRes.body?.cached).toBe(false);
+    const firstRequests = sqlMock.__getState().requests.length;
+    expect(firstRequests).toBeGreaterThan(0);
+
+    sqlMock.__setMockResult([]);
+
+    const secondRes = await staff.get('/api/ai/data/snapshot').query({ from: '2025-08-01', to: '2025-08-02' });
+    expect(secondRes.status).toBe(200);
+    expect(secondRes.body?.cached).toBe(true);
+    expect(sqlMock.__getState().requests.length).toBe(firstRequests);
+    expect(secondRes.body?.snapshot?.summary?.declarations).toBe(1);
+  });
+
+  it('chạy insight AI và cho phép phản hồi kết quả', async () => {
+    const admin = request.agent(app);
+    const adminLogin = await admin.post('/api/auth/login').send({ username: 'admin', password: 'admin123' });
+    expect(adminLogin.status).toBe(200);
+
+    const configRes = await admin.put('/api/import/ecus/config').send({
+      config: {
+        connection: {
+          server: 'MRHOC\\ECUSSQL2008',
+          database: 'ECUS5VNACCS',
+          user: 'sa',
+          password: '123456',
+        },
+      },
+    });
+    expect(configRes.status).toBe(200);
+
+    const staff = request.agent(app);
+    const staffLogin = await staff.post('/api/auth/login').send({ username: 'nhanvien', password: '123456' });
+    expect(staffLogin.status).toBe(200);
+
+    const today = new Date();
+    const todayIso = today.toISOString().slice(0, 10);
+    const yesterdayIso = new Date(today.getTime() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
+    sqlMock.__setMockResult([
+      {
+        So_tk: '100000000000',
+        Ngay_dang_ky: todayIso,
+        MaSoThue: '0100109106',
+        Ten_doanh_nghiep: 'Công ty A',
+        Loai_hinh: 'A11',
+        nhan_vien: 'Nguyễn Văn A',
+        team: 'Tổ 1',
+        so_luong_mh: 5,
+        ma_gp: 'GP01',
+      },
+      {
+        So_tk: '200000000000',
+        Ngay_dang_ky: yesterdayIso,
+        MaSoThue: '0100109107',
+        Ten_doanh_nghiep: 'Công ty B',
+        Loai_hinh: 'B11',
+        nhan_vien: 'Nguyễn Văn B',
+        team: 'Tổ 2',
+        so_luong_mh: 3,
+        ma_gp: 'GP02',
+      },
+    ]);
+
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
+      if (typeof url === 'string' && url.includes('/api/chat')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            message: { content: 'Báo cáo KPI thử nghiệm: hiệu suất tăng.' },
+            prompt_eval_count: 16,
+            eval_count: 8,
+          }),
+          text: async () => 'ok',
+        };
+      }
+      return { ok: true, status: 200, json: async () => ({ ok: true }), text: async () => 'ok' };
+    });
+
+    try {
+      const runRes = await admin.post('/api/ai/insights/run').send({});
+      expect(runRes.status).toBe(200);
+      expect(runRes.body?.ok).toBe(true);
+      expect(runRes.body?.result?.insight?.insightId ?? '').toMatch(/^ins-/);
+      expect(runRes.body?.result?.insight?.feedback?.helpful ?? 0).toBe(0);
+
+      const listRes = await staff.get('/api/ai/insights');
+      expect(listRes.status).toBe(200);
+      expect(listRes.body?.ok).toBe(true);
+      expect(Array.isArray(listRes.body?.insights)).toBe(true);
+      expect(listRes.body.insights.length).toBeGreaterThan(0);
+      const insightId = listRes.body.insights[0]?.insightId;
+      expect(typeof insightId).toBe('string');
+      expect(listRes.body.insights[0]?.feedback?.helpful ?? 0).toBe(0);
+      expect(listRes.body?.meta?.settings?.notifyOnAnomaly).toBe(false);
+      const historyList = listRes.body?.meta?.history?.entries || [];
+      expect(Array.isArray(historyList)).toBe(true);
+      expect(historyList.length).toBeGreaterThan(0);
+      const historyEntryId = historyList[0]?.id;
+      expect(typeof historyEntryId).toBe('string');
+
+      const historyRes = await staff.get('/api/ai/data/snapshot/history');
+      expect(historyRes.status).toBe(200);
+      expect(Array.isArray(historyRes.body?.entries)).toBe(true);
+      expect(historyRes.body.entries.length).toBeGreaterThan(0);
+
+      const singleHistoryRes = await staff.get(`/api/ai/data/snapshot/history/${historyEntryId}`);
+      expect(singleHistoryRes.status).toBe(200);
+      expect(singleHistoryRes.body?.entry?.id).toBe(historyEntryId);
+
+      const feedbackRes = await staff.post('/api/ai/insights/feedback').send({
+        insightId,
+        helpful: true,
+      });
+      expect(feedbackRes.status).toBe(200);
+      expect(feedbackRes.body?.ok).toBe(true);
+      expect(feedbackRes.body?.totals?.helpful).toBe(1);
+
+      const refreshed = await staff.get('/api/ai/insights');
+      expect(refreshed.status).toBe(200);
+      expect(refreshed.body?.insights?.[0]?.feedback?.helpful).toBe(1);
+      expect(refreshed.body?.insights?.[0]?.feedback?.viewer?.helpful).toBe(true);
+
+      const toggleRes = await admin
+        .put('/api/ai/insights/settings')
+        .send({ settings: { notifyOnAnomaly: true } });
+      expect(toggleRes.status).toBe(200);
+      expect(toggleRes.body?.settings?.notifyOnAnomaly).toBe(true);
+
+      const afterToggle = await admin.get('/api/ai/insights');
+      expect(afterToggle.status).toBe(200);
+      expect(afterToggle.body?.meta?.settings?.notifyOnAnomaly).toBe(true);
+    } finally {
+      fetchSpy.mockRestore();
     }
   });
 
@@ -1051,6 +1292,245 @@ describe('AI assistant API', () => {
       expect(second.body?.ok).toBe(true);
       expect(second.body.cached).toBe(true);
       expect(second.body.cacheKey).toBeTruthy();
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+
+  it('cho phép kiểm thử Ollama cục bộ mà không cần API key', async () => {
+    const admin = request.agent(app);
+    const loginRes = await admin.post('/api/auth/login').send({ username: 'admin', password: 'admin123' });
+    expect(loginRes.status).toBe(200);
+
+    const updateRes = await admin.put('/api/ai/config').send({
+      config: {
+        defaultProvider: 'ollama-local',
+        fallbackProvider: 'azure-openai',
+        providers: [
+          { id: 'ollama-local', type: 'ollama', enabled: true, endpoint: 'http://ollama.test', model: 'llama3.1:8b' },
+        ],
+      },
+    });
+    expect(updateRes.status).toBe(200);
+
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
+      if (typeof url === 'string' && url.includes('ollama.test')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            message: { content: 'Pong từ kiểm thử Ollama' },
+            prompt_eval_count: 10,
+            eval_count: 4,
+          }),
+          text: async () => 'ok',
+        };
+      }
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ ok: true }),
+        text: async () => 'ok',
+      };
+    });
+
+    try {
+      const res = await admin.post('/api/ai/providers/test').send({
+        provider: {
+          id: 'ollama-local',
+          type: 'ollama',
+          endpoint: 'http://ollama.test',
+          model: 'llama3.1:8b',
+        },
+        prompt: 'kiểm thử ollama nội bộ',
+      });
+      expect(res.status).toBe(200);
+      expect(res.body?.ok).toBe(true);
+      expect(res.body?.provider?.id).toContain('ollama-local');
+      expect(res.body?.message).toContain('Pong');
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+
+  it('ghi log lỗi khi kiểm thử Ollama thất bại', async () => {
+    const admin = request.agent(app);
+    const loginRes = await admin.post('/api/auth/login').send({ username: 'admin', password: 'admin123' });
+    expect(loginRes.status).toBe(200);
+
+    const updateRes = await admin.put('/api/ai/config').send({
+      config: {
+        providers: [
+          { id: 'ollama-local', type: 'ollama', enabled: true, endpoint: 'http://ollama.test', model: 'llama3.1:8b' },
+        ],
+      },
+    });
+    expect(updateRes.status).toBe(200);
+
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
+      if (typeof url === 'string' && url.includes('ollama.test')) {
+        return {
+          ok: false,
+          status: 503,
+          text: async () => 'service unavailable',
+        };
+      }
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ ok: true }),
+        text: async () => 'ok',
+      };
+    });
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    try {
+      const res = await admin.post('/api/ai/providers/test').send({
+        provider: {
+          id: 'ollama-local',
+          type: 'ollama',
+          endpoint: 'http://ollama.test',
+          model: 'llama3.1:8b',
+        },
+        prompt: 'kiểm thử ollama thất bại',
+      });
+      expect(res.status).toBe(400);
+      expect(res.body?.ok).toBe(false);
+      expect(res.body?.error).toContain('503');
+      expect(errorSpy).toHaveBeenCalledWith(
+        'Kiểm thử nhà cung cấp AI thất bại',
+        expect.objectContaining({
+          providerId: expect.stringContaining('ollama-local'),
+          error: expect.stringContaining('503'),
+        }),
+      );
+    } finally {
+      fetchSpy.mockRestore();
+      errorSpy.mockRestore();
+    }
+  });
+
+  it('tự động thử lại khi gọi Ollama lần đầu thất bại', async () => {
+    const admin = request.agent(app);
+    const adminLogin = await admin.post('/api/auth/login').send({ username: 'admin', password: 'admin123' });
+    expect(adminLogin.status).toBe(200);
+
+    const updateRes = await admin.put('/api/ai/config').send({
+      config: {
+        enabled: true,
+        defaultProvider: 'ollama-local',
+        providers: [
+          { id: 'ollama-local', type: 'ollama', enabled: true, endpoint: 'http://ollama.test', model: 'llama3.1:8b' },
+        ],
+        caching: { enabled: true, ttlMinutes: 5, maxEntries: 5 },
+      },
+    });
+    expect(updateRes.status).toBe(200);
+
+    const staff = request.agent(app);
+    const staffLogin = await staff.post('/api/auth/login').send({ username: 'nhanvien', password: '123456' });
+    expect(staffLogin.status).toBe(200);
+
+    let attempts = 0;
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
+      if (typeof url === 'string' && url.includes('ollama.test')) {
+        attempts += 1;
+        if (attempts === 1) {
+          throw new Error('ECONNREFUSED');
+        }
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            message: { content: 'Phản hồi sau lần retry' },
+            prompt_eval_count: 15,
+            eval_count: 6,
+          }),
+          text: async () => 'ok',
+        };
+      }
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ ok: true }),
+        text: async () => 'ok',
+      };
+    });
+
+    try {
+      const res = await staff.post('/api/ai/chat').send({
+        prompt: 'Kiểm tra retry Ollama',
+        scope: 'retry',
+        providerId: 'ollama-local',
+      });
+      expect(res.status).toBe(200);
+      expect(res.body?.ok).toBe(true);
+      expect(res.body?.message).toContain('retry');
+      expect(attempts).toBe(2);
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+
+  it('dùng cache nội bộ của Ollama ngay cả khi cache chung tắt', async () => {
+    const admin = request.agent(app);
+    const adminLogin = await admin.post('/api/auth/login').send({ username: 'admin', password: 'admin123' });
+    expect(adminLogin.status).toBe(200);
+
+    const updateRes = await admin.put('/api/ai/config').send({
+      config: {
+        enabled: true,
+        defaultProvider: 'ollama-local',
+        providers: [
+          { id: 'ollama-local', type: 'ollama', enabled: true, endpoint: 'http://ollama.test', model: 'llama3.1:8b' },
+        ],
+        caching: { enabled: false },
+      },
+    });
+    expect(updateRes.status).toBe(200);
+
+    const staff = request.agent(app);
+    const staffLogin = await staff.post('/api/auth/login').send({ username: 'nhanvien', password: '123456' });
+    expect(staffLogin.status).toBe(200);
+
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
+      if (typeof url === 'string' && url.includes('ollama.test')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            message: { content: 'Nội dung cache nội bộ' },
+            prompt_eval_count: 8,
+            eval_count: 3,
+          }),
+          text: async () => 'ok',
+        };
+      }
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ ok: true }),
+        text: async () => 'ok',
+      };
+    });
+
+    const payload = { prompt: 'Cache nội bộ Ollama', scope: 'local-cache', providerId: 'ollama-local' };
+
+    try {
+      const first = await staff.post('/api/ai/chat').send(payload);
+      expect(first.status).toBe(200);
+      expect(first.body?.ok).toBe(true);
+      expect(first.body.cached).toBe(false);
+      expect(first.body.message).toContain('Nội dung cache nội bộ');
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+
+      const second = await staff.post('/api/ai/chat').send(payload);
+      expect(second.status).toBe(200);
+      expect(second.body?.ok).toBe(true);
+      expect(second.body.cached).toBe(false);
+      expect(second.body.message).toContain('Nội dung cache nội bộ');
       expect(fetchSpy).toHaveBeenCalledTimes(1);
     } finally {
       fetchSpy.mockRestore();
