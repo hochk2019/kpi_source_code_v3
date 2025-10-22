@@ -120,6 +120,22 @@ const VALID_SCHEDULE_FREQUENCIES = new Set(["weekly", "monthly"]);
 
 const VALID_SCHEDULE_FORMATS = new Set(["excel", "pdf"]);
 
+const ADJUSTMENT_POINT_PRECISION = 2;
+
+const ADJUSTMENT_POINT_FACTOR = 10 ** ADJUSTMENT_POINT_PRECISION;
+
+export function roundAdjustmentPoint(value, precision = ADJUSTMENT_POINT_PRECISION) {
+
+  if (!Number.isFinite(value)) return value;
+
+  const factor =
+
+    precision === ADJUSTMENT_POINT_PRECISION ? ADJUSTMENT_POINT_FACTOR : 10 ** precision;
+
+  return Math.round(value * factor) / factor;
+
+}
+
 
 
 // ===== Helpers =====
@@ -5842,7 +5858,7 @@ export function saveKpiAdjustmentSettings(patch, { actor = 'system', permissions
 
         if (Number.isFinite(num)) {
 
-          current.defaultUnit = Math.round(num * 10) / 10;
+          current.defaultUnit = roundAdjustmentPoint(num);
 
         } else if (value.defaultUnit === null) {
 
@@ -5888,7 +5904,7 @@ export function saveKpiAdjustmentSettings(patch, { actor = 'system', permissions
 
           if (Number.isFinite(num)) {
 
-            modeUnits[normalizedMode] = Math.round(num * 10) / 10;
+            modeUnits[normalizedMode] = roundAdjustmentPoint(num);
 
           } else if (rawUnit === null) {
 
@@ -5924,7 +5940,7 @@ export function saveKpiAdjustmentSettings(patch, { actor = 'system', permissions
 
           if (Number.isFinite(num)) {
 
-            licensePoints[normalizedLicense] = Math.round(num * 10) / 10;
+            licensePoints[normalizedLicense] = roundAdjustmentPoint(num);
 
           } else if (rawUnit === null) {
 
@@ -5941,6 +5957,34 @@ export function saveKpiAdjustmentSettings(patch, { actor = 'system', permissions
         } else {
 
           delete current.licensePoints;
+
+        }
+
+      }
+
+      if (
+
+        Object.prototype.hasOwnProperty.call(value, 'extraUnitPoints') &&
+
+        KPI_ADJUSTMENT_CATEGORY_CONFIG[key] &&
+
+        KPI_ADJUSTMENT_CATEGORY_CONFIG[key].extraPointConfig
+
+      ) {
+
+        if (value.extraUnitPoints === null) {
+
+          delete current.extraUnitPoints;
+
+        } else {
+
+          const num = Number.parseFloat(value.extraUnitPoints);
+
+          if (Number.isFinite(num)) {
+
+            current.extraUnitPoints = roundAdjustmentPoint(num);
+
+          }
 
         }
 
@@ -6172,19 +6216,19 @@ function clampHistory(list) {
 
 
 
-function computeAdjustmentTotal({ category, unitPoints, quantity, mode }) {
+function computeAdjustmentTotal({ category, unitPoints, quantity, mode, extraQuantity, extraUnitPoints }) {
 
   const config = KPI_ADJUSTMENT_CATEGORY_CONFIG[category] || { type: 'quantity' };
 
   const unit = Number.isFinite(unitPoints) ? unitPoints : 0;
 
+  let baseTotal = 0;
+
   if (config.type === 'fixed' || config.type === 'grade') {
 
-    return Math.round(unit * 10) / 10;
+    baseTotal = roundAdjustmentPoint(unit);
 
-  }
-
-  if (config.type === 'hybrid') {
+  } else if (config.type === 'hybrid') {
 
     const normalizedMode = normalizeStr(mode).toLowerCase();
 
@@ -6192,19 +6236,45 @@ function computeAdjustmentTotal({ category, unitPoints, quantity, mode }) {
 
     if (targetMode?.compute === 'fixed') {
 
-      return Math.round(unit * 10) / 10;
+      baseTotal = roundAdjustmentPoint(unit);
+
+    } else {
+
+      const qtyHybrid = Number.isFinite(quantity) ? quantity : 0;
+
+      baseTotal = roundAdjustmentPoint(unit * qtyHybrid);
 
     }
 
-    const qtyHybrid = Number.isFinite(quantity) ? quantity : 0;
+  } else {
 
-    return Math.round(unit * qtyHybrid * 10) / 10;
+    const qty = Number.isFinite(quantity) ? quantity : 0;
+
+    baseTotal = roundAdjustmentPoint(unit * qty);
 
   }
 
-  const qty = Number.isFinite(quantity) ? quantity : 0;
+  let bonusTotal = 0;
 
-  return Math.round(unit * qty * 10) / 10;
+  const extraConfig = config.extraPointConfig;
+
+  if (extraConfig) {
+
+    const fallbackExtraUnit = Number.isFinite(extraConfig.defaultUnit)
+
+      ? roundAdjustmentPoint(Number(extraConfig.defaultUnit))
+
+      : 0;
+
+    const resolvedExtraUnit = Number.isFinite(extraUnitPoints) ? extraUnitPoints : fallbackExtraUnit;
+
+    const resolvedExtraQty = Number.isFinite(extraQuantity) ? extraQuantity : 0;
+
+    bonusTotal = roundAdjustmentPoint(resolvedExtraUnit * resolvedExtraQty);
+
+  }
+
+  return roundAdjustmentPoint(baseTotal + bonusTotal);
 
 }
 
@@ -6320,7 +6390,7 @@ function normalizeAdjustmentInput(input, { now, actor, current } = {}) {
 
       if (Number.isFinite(num)) {
 
-        mergedLicensePoints[normalizedCode] = Math.round(num * 10) / 10;
+        mergedLicensePoints[normalizedCode] = roundAdjustmentPoint(num);
 
       }
 
@@ -6342,7 +6412,7 @@ function normalizeAdjustmentInput(input, { now, actor, current } = {}) {
 
       if (Number.isFinite(num)) {
 
-        mergedLicensePoints[normalizedCode] = Math.round(num * 10) / 10;
+        mergedLicensePoints[normalizedCode] = roundAdjustmentPoint(num);
 
       } else if (value === null) {
 
@@ -6358,7 +6428,7 @@ function normalizeAdjustmentInput(input, { now, actor, current } = {}) {
 
   const overrideDefaultUnit = Number.isFinite(Number.parseFloat(override?.defaultUnit))
 
-    ? Math.round(Number.parseFloat(override.defaultUnit) * 10) / 10
+    ? roundAdjustmentPoint(Number.parseFloat(override.defaultUnit))
 
     : undefined;
 
@@ -6390,11 +6460,11 @@ function normalizeAdjustmentInput(input, { now, actor, current } = {}) {
 
       if (overrideModeUnits && Number.isFinite(Number.parseFloat(overrideModeUnits[mode]))) {
 
-        unitPoints = Math.round(Number.parseFloat(overrideModeUnits[mode]) * 10) / 10;
+        unitPoints = roundAdjustmentPoint(Number.parseFloat(overrideModeUnits[mode]));
 
       } else if (modeConfig && Number.isFinite(Number.parseFloat(modeConfig.defaultUnit))) {
 
-        unitPoints = Math.round(Number.parseFloat(modeConfig.defaultUnit) * 10) / 10;
+        unitPoints = roundAdjustmentPoint(Number.parseFloat(modeConfig.defaultUnit));
 
       } else if (Number.isFinite(overrideDefaultUnit)) {
 
@@ -6468,6 +6538,68 @@ function normalizeAdjustmentInput(input, { now, actor, current } = {}) {
 
   }
 
+  let extraQuantity = 0;
+
+  let extraUnitPointsValue = 0;
+
+  const extraConfig = config?.extraPointConfig;
+
+  if (extraConfig) {
+
+    const overrideExtraUnit = Number.isFinite(Number.parseFloat(override?.extraUnitPoints))
+
+      ? roundAdjustmentPoint(Number.parseFloat(override.extraUnitPoints))
+
+      : undefined;
+
+    const defaultExtraUnit = Number.isFinite(Number.parseFloat(extraConfig.defaultUnit))
+
+      ? roundAdjustmentPoint(Number.parseFloat(extraConfig.defaultUnit))
+
+      : 0;
+
+    const extraUnitSource = input.extraUnitPoints ?? input.bonusUnitPoints ?? current?.extraUnitPoints ?? current?.bonusUnitPoints;
+
+    const parsedExtraUnit =
+
+      extraUnitSource !== undefined && extraUnitSource !== null && extraUnitSource !== ''
+
+        ? Number.parseFloat(extraUnitSource)
+
+        : Number.NaN;
+
+    if (Number.isFinite(parsedExtraUnit)) {
+
+      extraUnitPointsValue = roundAdjustmentPoint(parsedExtraUnit);
+
+    } else if (Number.isFinite(overrideExtraUnit)) {
+
+      extraUnitPointsValue = overrideExtraUnit;
+
+    } else {
+
+      extraUnitPointsValue = defaultExtraUnit;
+
+    }
+
+    const extraQuantitySource =
+
+      input.extraQuantity ?? input.bonusQuantity ?? current?.extraQuantity ?? current?.bonusQuantity ?? 0;
+
+    const parsedExtraQuantity = Number.parseFloat(extraQuantitySource);
+
+    if (Number.isFinite(parsedExtraQuantity) && parsedExtraQuantity >= 0) {
+
+      extraQuantity = roundAdjustmentPoint(parsedExtraQuantity);
+
+    } else {
+
+      extraQuantity = 0;
+
+    }
+
+  }
+
   const references = normalizeAdjustmentReferences(input.references ?? input.reference ?? current?.references ?? []);
 
   const note = normalizeStr(input.note ?? input.description ?? current?.note ?? '');
@@ -6482,11 +6614,25 @@ function normalizeAdjustmentInput(input, { now, actor, current } = {}) {
 
   if (Number.isFinite(totalOverride)) {
 
-    totalPoints = Math.round(totalOverride * 10) / 10;
+    totalPoints = roundAdjustmentPoint(totalOverride);
 
   } else {
 
-    totalPoints = computeAdjustmentTotal({ category, unitPoints, quantity, mode });
+    totalPoints = computeAdjustmentTotal({
+
+      category,
+
+      unitPoints,
+
+      quantity,
+
+      mode,
+
+      extraQuantity,
+
+      extraUnitPoints: extraUnitPointsValue,
+
+    });
 
   }
 
@@ -6514,7 +6660,11 @@ function normalizeAdjustmentInput(input, { now, actor, current } = {}) {
 
     quantity,
 
-    unitPoints: Math.round(unitPoints * 10) / 10,
+    unitPoints: roundAdjustmentPoint(unitPoints),
+
+    extraQuantity: extraConfig ? extraQuantity : undefined,
+
+    extraUnitPoints: extraConfig ? extraUnitPointsValue : undefined,
 
     totalPoints,
 
@@ -6560,7 +6710,37 @@ function diffAdjustments(prev, next) {
 
   const changes = {};
 
-  const fields = ['staffName', 'teamName', 'month', 'category', 'quantity', 'unitPoints', 'totalPoints', 'note', 'mode', 'licenseCode', 'companyName', 'taxCode'];
+  const fields = [
+
+    'staffName',
+
+    'teamName',
+
+    'month',
+
+    'category',
+
+    'quantity',
+
+    'unitPoints',
+
+    'extraQuantity',
+
+    'extraUnitPoints',
+
+    'totalPoints',
+
+    'note',
+
+    'mode',
+
+    'licenseCode',
+
+    'companyName',
+
+    'taxCode',
+
+  ];
 
   for (const field of fields) {
 
