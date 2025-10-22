@@ -10548,15 +10548,15 @@ function normalizeDeclarationNumber(input, { length = 11 } = {}) {
 
   }
 
-  const maxLength = Number.isFinite(length) && length > 0 ? length : 11;
+  const minLength = Number.isFinite(length) && length > 0 ? length : 11;
 
-  if (digitsOnly.length >= maxLength) {
+  if (digitsOnly.length < minLength) {
 
-    return digitsOnly.slice(0, maxLength);
+    return digitsOnly.padStart(minLength, '0');
 
   }
 
-  return digitsOnly.padStart(maxLength, '0');
+  return digitsOnly;
 
 }
 

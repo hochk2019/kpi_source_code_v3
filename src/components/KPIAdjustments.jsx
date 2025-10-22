@@ -35,6 +35,7 @@ import {
   normalizeMST,
 
   normalizeName,
+  normalizeDeclarationNumber,
 
   DECL_KEY,
 
@@ -1244,7 +1245,7 @@ export default function KPIAdjustments({ currentUser }) {
 
     const normalizedQuery = normalizeName(rawQuery);
 
-    return declarationSuggestions
+    const primaryResults = declarationSuggestions
 
       .filter((item) => {
 
@@ -1273,6 +1274,84 @@ export default function KPIAdjustments({ currentUser }) {
       })
 
       .slice(0, 10);
+
+    if (digits && primaryResults.length < 10) {
+
+      const seenKeys = new Set(primaryResults.map((item) => item.key));
+
+      const fallback = [];
+
+      const rows = sortDeclRows(getDeclRows());
+
+      for (const row of rows) {
+
+        if (primaryResults.length + fallback.length >= 10) {
+
+          break;
+
+        }
+
+        const soTkDigits = normalizeDeclarationNumber(row?.so_tk_full ?? row?.so_tk ?? "", 1);
+
+        const mstDigits = normalizeMST(row?.mst ?? row?.ma_so_thue ?? row?.taxCode ?? "");
+
+        const hasMatch =
+
+          (soTkDigits && soTkDigits.includes(digits)) ||
+
+          (mstDigits && mstDigits.includes(digits));
+
+        if (!hasMatch) {
+
+          continue;
+
+        }
+
+        const branch = normalizeStr(row?.nhanh ?? row?.branch ?? "");
+
+        const key = `${soTkDigits}|${branch}`;
+
+        if (seenKeys.has(key)) {
+
+          continue;
+
+        }
+
+        seenKeys.add(key);
+
+        fallback.push({
+
+          key,
+
+          soTk: soTkDigits,
+
+          branch,
+
+          mst: mstDigits,
+
+          company: normalizeStr(
+
+            row?.cong_ty ?? row?.company ?? row?.ten_cong_ty ?? row?.doanh_nghiep ?? ""
+
+          ),
+
+          date: row?.date || "",
+
+          timestamp: row?.date ? Date.parse(row.date) || 0 : 0,
+
+        });
+
+      }
+
+      if (fallback.length) {
+
+        return primaryResults.concat(fallback);
+
+      }
+
+    }
+
+    return primaryResults;
 
   }, [declarationSearch, declarationSuggestions]);
 

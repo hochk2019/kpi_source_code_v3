@@ -2470,7 +2470,7 @@ function StaffDetailCard({
 
             <div className="flex items-center gap-2">
 
-              <span>Hi?n th?</span>
+              <span>Hiển thị</span>
 
               <select
 
@@ -2516,7 +2516,7 @@ function StaffDetailCard({
 
               ) : null}
 
-              <span>d�ng/trang</span>
+              <span>dòng/trang</span>
 
             </div>
 
@@ -2552,7 +2552,7 @@ function StaffDetailCard({
 
                 >
 
-                  Tru?c
+                  Trước
 
                 </button>
 

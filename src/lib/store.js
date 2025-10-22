@@ -616,15 +616,15 @@ export function normalizeDeclarationNumber(input, length = 11) {
 
   if (!digits) return "";
 
-  const maxLength = Number.isFinite(length) && length > 0 ? length : 11;
+  const minLength = Number.isFinite(length) && length > 0 ? length : 11;
 
-  if (digits.length >= maxLength) {
+  if (digits.length < minLength) {
 
-    return digits.slice(0, maxLength);
+    return digits.padStart(minLength, "0");
 
   }
 
-  return digits.padStart(maxLength, "0");
+  return digits;
 
 }
 
