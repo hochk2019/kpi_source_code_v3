@@ -11,6 +11,7 @@ import {
   isExportDecl,
 
   KPI_ADJUSTMENT_CATEGORY_CONFIG,
+  roundAdjustmentPoint,
 
 } from "./store.js";
 
@@ -1168,13 +1169,47 @@ export function buildReportData(rowsInput, { roster, rules, from, to, adjustment
 
       const quantityValue = Number(adj.quantity || 0);
 
+      const extraConfig = KPI_ADJUSTMENT_CATEGORY_CONFIG[adj.category]
+
+        ? KPI_ADJUSTMENT_CATEGORY_CONFIG[adj.category].extraPointConfig
+
+        : null;
+
+      const extraQuantity = extraConfig ? Number.parseFloat(adj.extraQuantity ?? 0) || 0 : 0;
+
+      let extraUnitPoints = extraConfig ? Number.parseFloat(adj.extraUnitPoints ?? NaN) : 0;
+
+      if (extraConfig && !Number.isFinite(extraUnitPoints)) {
+
+        extraUnitPoints = Number.isFinite(Number.parseFloat(extraConfig.defaultUnit))
+
+          ? Number.parseFloat(extraConfig.defaultUnit)
+
+          : 0;
+
+      }
+
+      const extraPoints = extraConfig
+
+        ? roundAdjustmentPoint((extraQuantity || 0) * (extraUnitPoints || 0))
+
+        : 0;
+
+      const references = Array.isArray(adj.references)
+
+        ? adj.references.map((ref) => normalizeStr(ref)).filter(Boolean)
+
+        : [];
+
+      const referenceLabel = references.length ? references.join(", ") : label;
+
       const detailRow = {
 
         date: candidateDateStr,
 
         displayDate: `${month}`,
 
-        so_tk: `Điểm bổ sung (${label})`,
+        so_tk: `Điểm bổ sung (${referenceLabel})`,
 
         mst: normalizeStr(adj.taxCode) || '',
 
@@ -1193,6 +1228,8 @@ export function buildReportData(rowsInput, { roster, rules, from, to, adjustment
         isExport: false,
 
         kpi: totalPoints,
+
+        bonusPoints: extraPoints,
 
         hasCO: false,
 
@@ -1217,6 +1254,12 @@ export function buildReportData(rowsInput, { roster, rules, from, to, adjustment
           quantity: adj.quantity,
 
           unitPoints: adj.unitPoints,
+
+          extraQuantity,
+
+          extraUnitPoints,
+
+          extraPoints,
 
           references: Array.isArray(adj.references) ? adj.references : [],
 

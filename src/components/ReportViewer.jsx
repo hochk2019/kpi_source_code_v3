@@ -124,9 +124,9 @@ function formatDecimal(value) {
 
   return num.toLocaleString("vi-VN", {
 
-    minimumFractionDigits: 1,
+    minimumFractionDigits: 2,
 
-    maximumFractionDigits: 1,
+    maximumFractionDigits: 2,
 
   });
 
@@ -2598,11 +2598,37 @@ function StaffDetailCard({
 
 
 
-function TeamDetailCard({ team, canExport, onExport, exporting, visibleColumns = {}, memberSortKey = "kpi" }) {
+function TeamDetailCard({
+
+  team,
+
+  canExport,
+
+  onExport,
+
+  exporting,
+
+  visibleColumns = {},
+
+  memberSortKey = "kpi",
+
+  detailPageSize = DEFAULT_DETAIL_PAGE_SIZE,
+
+  detailPageSizeMode = "preset",
+
+  detailPageSizeCustomInput = "",
+
+  onDetailPageSizeChange,
+
+  onDetailPageSizeCustomInputChange,
+
+}) {
 
   const { stats, members, rows, adjustmentSummary } = team;
 
   const [mode, setMode] = useState("summary");
+
+  const [detailPage, setDetailPage] = useState(0);
 
   const aggregated = useMemo(
 
@@ -2786,21 +2812,99 @@ function TeamDetailCard({ team, canExport, onExport, exporting, visibleColumns =
 
     (showLicenseCodes ? 1 : 0);
 
-  const detailColumnCount =
-
-    8 +
-
-    (showItems ? 1 : 0) +
-
-    (showLicenses ? 1 : 0) +
-
-    (showCo ? 1 : 0) +
-
-    (showCoLines ? 1 : 0) +
-
-    (showLicenseCodes ? 1 : 0);
-
   const memberNames = members.map((m) => m.name).filter(Boolean);
+
+  const normalizedDetailPageSize = Math.max(1, Number(detailPageSize) || DEFAULT_DETAIL_PAGE_SIZE);
+
+  const detailRowChunks = useMemo(() => {
+
+    if (!rows.length) {
+
+      return [];
+
+    }
+
+    if (mode !== "detail") {
+
+      return [rows];
+
+    }
+
+    if (rows.length <= normalizedDetailPageSize) {
+
+      return [rows];
+
+    }
+
+    const chunks = [];
+
+    for (let i = 0; i < rows.length; i += normalizedDetailPageSize) {
+
+      chunks.push(rows.slice(i, i + normalizedDetailPageSize));
+
+    }
+
+    return chunks;
+
+  }, [rows, mode, normalizedDetailPageSize]);
+
+  const detailRowChunksLength = detailRowChunks.length;
+
+  const totalDetailRows = rows.length;
+
+  const totalDetailPages = mode === "detail" ? Math.max(1, detailRowChunksLength || 1) : 1;
+
+  const currentDetailPage = Math.min(detailPage, totalDetailPages - 1);
+
+  const currentDetailChunk = mode === "detail" ? detailRowChunks[currentDetailPage] || [] : rows;
+
+  const detailPageStart =
+
+    totalDetailRows === 0 ? 0 : currentDetailPage * normalizedDetailPageSize + 1;
+
+  const detailPageEnd =
+
+    totalDetailRows === 0 ? 0 : detailPageStart + currentDetailChunk.length - 1;
+
+  const detailRangeLabel = totalDetailRows
+
+    ? `${formatInt(detailPageStart)}-${formatInt(detailPageEnd)} / ${formatInt(totalDetailRows)}`
+
+    : "0 / 0";
+
+  const isFirstDetailPage = currentDetailPage === 0;
+
+  const isLastDetailPage = currentDetailPage >= totalDetailPages - 1;
+
+  useEffect(() => {
+
+    if (mode !== "detail") {
+
+      if (detailPage !== 0) {
+
+        setDetailPage(0);
+
+      }
+
+      return;
+
+    }
+
+    const cappedPage = Math.min(detailPage, Math.max(0, totalDetailPages - 1));
+
+    if (cappedPage !== detailPage) {
+
+      setDetailPage(cappedPage);
+
+    }
+
+  }, [mode, totalDetailPages, detailPage]);
+
+  useEffect(() => {
+
+    setDetailPage(0);
+
+  }, [normalizedDetailPageSize, totalDetailRows, team?.key]);
 
 
 
@@ -3122,153 +3226,317 @@ function TeamDetailCard({ team, canExport, onExport, exporting, visibleColumns =
 
 
 
-          <div className="overflow-auto rounded border">
+          {detailRowChunks.length === 0 ? (
 
-            <table className="min-w-full text-sm">
+            <div className="rounded border border-dashed border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-muted)] p-4 text-center text-sm text-[color:var(--ds-text-secondary)]">
 
-              <thead className="bg-gray-100">
+              Chưa có tờ khai nào trong giai đoạn được chọn.
 
-                <tr>
+            </div>
 
-                  <th className="px-3 py-2 text-left">Ngày</th>
+          ) : (
 
-                  <th className="px-3 py-2 text-left">Số tờ khai</th>
+            <div className="space-y-4">
 
-                  <th className="px-3 py-2 text-left">Nhân viên</th>
+              {detailRowChunks.map((chunkRows, chunkIdx) => {
 
-                  <th className="px-3 py-2 text-left">Loại hình</th>
+                const baseIndex = chunkIdx * normalizedDetailPageSize;
 
-                  <th className="px-3 py-2 text-left">Nhập/Xuất</th>
+                const chunkKey = `${team.key || team.name || "team"}-chunk-${chunkIdx}`;
 
-                  {showItems ? <th className="px-3 py-2 text-right">Mục hàng</th> : null}
+                const chunkVisible = mode !== "detail" || chunkIdx === currentDetailPage;
 
-                  {showLicenses ? <th className="px-3 py-2 text-right">Số GP</th> : null}
+                const chunkClassNames = [
 
-                  {showCo ? <th className="px-3 py-2 text-center">C/O</th> : null}
+                  "kpi-print-chunk",
 
-                  {showCoLines ? <th className="px-3 py-2 text-right">Dòng C/O</th> : null}
+                  "space-y-3",
 
-                  {showLicenseCodes ? <th className="px-3 py-2 text-left">Mã giấy phép</th> : null}
+                  chunkIdx > 0 ? "border-t border-dashed border-[color:var(--ds-border-subtle)] pt-4 mt-4" : "",
 
-                  <th className="px-3 py-2 text-right">Điểm KPI</th>
+                  chunkVisible ? "" : "hidden print:block",
 
-                  <th className="px-3 py-2 text-left">MST</th>
+                ]
 
-                  <th className="px-3 py-2 text-left">Công ty</th>
+                  .filter(Boolean)
 
-                </tr>
+                  .join(" ");
 
-              </thead>
+                return (
 
-              <tbody>
+                  <div key={chunkKey} className={chunkClassNames}>
 
-                {rows.map((row, idx) => {
+                    <div className="overflow-auto rounded border">
 
-                  const licenseCodes = Array.isArray(row.licenseCodes) ? row.licenseCodes : [];
+                      <table className="min-w-full text-sm">
 
-                  const excludedCodes = Array.isArray(row.licenseExcludedCodes)
+                        <thead className="bg-gray-100">
 
-                    ? row.licenseExcludedCodes
+                          <tr>
 
-                    : [];
+                            <th className="px-3 py-2 text-left">Ngày</th>
 
-                  const licenseLabel = licenseCodes.join(", ") || "—";
+                            <th className="px-3 py-2 text-left">Số tờ khai</th>
 
-                  const licenseTooltipParts = [];
+                            <th className="px-3 py-2 text-left">Nhân viên</th>
 
-                  if (licenseLabel && licenseLabel !== "—") {
+                            <th className="px-3 py-2 text-left">Loại hình</th>
 
-                    licenseTooltipParts.push(`Áp dụng: ${licenseLabel}`);
+                            <th className="px-3 py-2 text-left">Nhập/Xuất</th>
 
-                  }
+                            {showItems ? <th className="px-3 py-2 text-right">Mục hàng</th> : null}
 
-                  if (excludedCodes.length) {
+                            {showLicenses ? <th className="px-3 py-2 text-right">Số GP</th> : null}
 
-                    licenseTooltipParts.push(`Loại trừ: ${excludedCodes.join(", ")}`);
+                            {showCo ? <th className="px-3 py-2 text-center">C/O</th> : null}
 
-                  }
+                            {showCoLines ? <th className="px-3 py-2 text-right">Dòng C/O</th> : null}
 
-                  const licenseTooltip = licenseTooltipParts.join("\n") || "—";
+                            {showLicenseCodes ? <th className="px-3 py-2 text-left">Mã giấy phép</th> : null}
 
-                  return (
+                            <th className="px-3 py-2 text-right">Điểm KPI</th>
 
-                    <tr key={`${row.so_tk}-${idx}`} className={idx % 2 === 0 ? "bg-white" : "bg-gray-50"}>
+                            <th className="px-3 py-2 text-left">MST</th>
 
-                      <td className="px-3 py-1.5">{row.displayDate || formatDisplayDate(row.date)}</td>
+                            <th className="px-3 py-2 text-left">Công ty</th>
 
-                      <td className="px-3 py-1.5">{row.so_tk}</td>
+                          </tr>
 
-                      <td className="px-3 py-1.5">{row.nhan_vien || ""}</td>
+                        </thead>
 
-                      <td className="px-3 py-1.5">{row.loai_hinh || ""}</td>
+                        <tbody>
 
-                      <td className="px-3 py-1.5">{row.isExport ? "Xuất" : "Nhập"}</td>
+                          {chunkRows.map((row, idx) => {
 
-                      {showItems ? (
+                            const licenseCodes = Array.isArray(row.licenseCodes) ? row.licenseCodes : [];
 
-                        <td className="px-3 py-1.5 text-right">{formatInt(row.num_items)}</td>
+                            const excludedCodes = Array.isArray(row.licenseExcludedCodes)
 
-                      ) : null}
+                              ? row.licenseExcludedCodes
 
-                      {showLicenses ? (
+                              : [];
 
-                        <td className="px-3 py-1.5 text-right">{formatInt(row.licenses)}</td>
+                            const licenseLabel = licenseCodes.join(", ") || "—";
 
-                      ) : null}
+                            const licenseTooltipParts = [];
 
-                      {showCo ? (
+                            if (licenseLabel && licenseLabel !== "—") {
 
-                        <td className="px-3 py-1.5 text-center">{row.hasCO ? "Có" : "Không"}</td>
+                              licenseTooltipParts.push(`Áp dụng: ${licenseLabel}`);
 
-                      ) : null}
+                            }
 
-                      {showCoLines ? (
+                            if (excludedCodes.length) {
 
-                        <td className="px-3 py-1.5 text-right">{formatInt(row.coLineCount || 0)}</td>
+                              licenseTooltipParts.push(`Loại trừ: ${excludedCodes.join(", ")}`);
 
-                      ) : null}
+                            }
 
-                      {showLicenseCodes ? (
+                            const licenseTooltip = licenseTooltipParts.join("\n") || "—";
 
-                        <td className="px-3 py-1.5" title={licenseTooltip}>
+                            const globalIndex = baseIndex + idx;
 
-                          {licenseLabel}
+                            return (
 
-                        </td>
+                              <tr
 
-                      ) : null}
+                                key={`${row.so_tk}-${globalIndex}`}
 
-                      <td className="px-3 py-1.5 text-right">{formatDecimal(row.kpi)}</td>
+                                className={globalIndex % 2 === 0 ? "bg-white" : "bg-gray-50"}
 
-                      <td className="px-3 py-1.5">{row.mst || ""}</td>
+                              >
 
-                      <td className="px-3 py-1.5">{row.cong_ty || ""}</td>
+                                <td className="px-3 py-1.5">{row.displayDate || formatDisplayDate(row.date)}</td>
 
-                    </tr>
+                                <td className="px-3 py-1.5">{row.so_tk}</td>
 
-                  );
+                                <td className="px-3 py-1.5">{row.nhan_vien || ""}</td>
 
-                })}
+                                <td className="px-3 py-1.5">{row.loai_hinh || ""}</td>
 
-                {rows.length === 0 ? (
+                                <td className="px-3 py-1.5">{row.isExport ? "Xuất" : "Nhập"}</td>
 
-                  <tr>
+                                {showItems ? (
 
-                    <td className="px-3 py-6 text-center text-gray-500" colSpan={detailColumnCount}>
+                                  <td className="px-3 py-1.5 text-right">{formatInt(row.num_items)}</td>
 
-                      Chưa có tờ khai nào trong giai đoạn được chọn.
+                                ) : null}
 
-                    </td>
+                                {showLicenses ? (
 
-                  </tr>
+                                  <td className="px-3 py-1.5 text-right">{formatInt(row.licenses)}</td>
 
-                ) : null}
+                                ) : null}
 
-              </tbody>
+                                {showCo ? (
 
-            </table>
+                                  <td className="px-3 py-1.5 text-center">{row.hasCO ? "Có" : "Không"}</td>
 
-          </div>
+                                ) : null}
+
+                                {showCoLines ? (
+
+                                  <td className="px-3 py-1.5 text-right">{formatInt(row.coLineCount || 0)}</td>
+
+                                ) : null}
+
+                                {showLicenseCodes ? (
+
+                                  <td className="px-3 py-1.5" title={licenseTooltip}>
+
+                                    {licenseLabel}
+
+                                  </td>
+
+                                ) : null}
+
+                                <td className="px-3 py-1.5 text-right">{formatDecimal(row.kpi)}</td>
+
+                                <td className="px-3 py-1.5">{row.mst || ""}</td>
+
+                                <td className="px-3 py-1.5">{row.cong_ty || ""}</td>
+
+                              </tr>
+
+                            );
+
+                          })}
+
+                        </tbody>
+
+                      </table>
+
+                    </div>
+
+                  </div>
+
+                );
+
+              })}
+
+              <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-[color:var(--ds-text-secondary)] print:hidden">
+
+                <div className="flex items-center gap-2">
+
+                  <span>Hiển thị</span>
+
+                  <select
+
+                    value={detailPageSizeMode === "custom" ? "custom" : String(detailPageSize)}
+
+                    onChange={onDetailPageSizeChange}
+
+                    className="rounded border px-2 py-1 text-xs text-[color:var(--ds-text-primary)] focus:border-[color:var(--ds-border-strong)] focus:outline-none"
+
+                  >
+
+                    {DETAIL_PAGE_SIZE_OPTIONS.map((option) => (
+
+                      <option key={option} value={option}>
+
+                        {option}
+
+                      </option>
+
+                    ))}
+
+                    <option value="custom">Tuỳ chỉnh...</option>
+
+                  </select>
+
+                  {detailPageSizeMode === "custom" ? (
+
+                    <input
+
+                      type="number"
+
+                      min="1"
+
+                      value={detailPageSizeCustomInput}
+
+                      onChange={onDetailPageSizeCustomInputChange}
+
+                      className="w-16 rounded border px-2 py-1 text-xs text-[color:var(--ds-text-primary)] focus:border-[color:var(--ds-border-strong)] focus:outline-none"
+
+                      aria-label="Số tờ khai chi tiết mỗi trang"
+
+                    />
+
+                  ) : null}
+
+                  <span>dòng/trang</span>
+
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+
+                  <span>{detailRangeLabel}</span>
+
+                  <span>
+
+                    Trang {totalDetailPages ? currentDetailPage + 1 : 0}/{totalDetailPages}
+
+                  </span>
+
+                  <div className="flex items-center gap-1">
+
+                    <button
+
+                      type="button"
+
+                      onClick={() => setDetailPage((prev) => Math.max(prev - 1, 0))}
+
+                      disabled={isFirstDetailPage}
+
+                      className={`inline-flex items-center justify-center rounded-full border px-2 py-1 font-semibold transition-colors ${
+
+                        isFirstDetailPage
+
+                          ? 'cursor-not-allowed border-[color:var(--ds-border-subtle)] text-[color:var(--ds-text-disabled)]'
+
+                          : 'border-[color:var(--ds-border-strong)] text-[color:var(--ds-text-primary)] hover:bg-[color:var(--ds-surface-muted)]'
+
+                      }`}
+
+                    >
+
+                      Trước
+
+                    </button>
+
+                    <button
+
+                      type="button"
+
+                      onClick={() => setDetailPage((prev) => Math.min(prev + 1, totalDetailPages - 1))}
+
+                      disabled={isLastDetailPage}
+
+                      className={`inline-flex items-center justify-center rounded-full border px-2 py-1 font-semibold transition-colors ${
+
+                        isLastDetailPage
+
+                          ? 'cursor-not-allowed border-[color:var(--ds-border-subtle)] text-[color:var(--ds-text-disabled)]'
+
+                          : 'border-[color:var(--ds-border-strong)] text-[color:var(--ds-text-primary)] hover:bg-[color:var(--ds-surface-muted)]'
+
+                      }`}
+
+                    >
+
+                      Sau
+
+                    </button>
+
+                  </div>
+
+                </div>
+
+              </div>
+
+            </div>
+
+          )}
 
         </>
 
@@ -5876,6 +6144,16 @@ const handleDetailPageSizeCustomInputChange = (event) => {
 
                       memberSortKey={teamSortKey}
 
+                      detailPageSize={detailPageSize}
+
+                      detailPageSizeMode={detailPageSizeMode}
+
+                      detailPageSizeCustomInput={detailPageSizeCustomInput}
+
+                      onDetailPageSizeChange={handleDetailPageSizeChange}
+
+                      onDetailPageSizeCustomInputChange={handleDetailPageSizeCustomInputChange}
+
                     />
 
                   ))}
@@ -5927,6 +6205,16 @@ const handleDetailPageSizeCustomInputChange = (event) => {
         visibleColumns={columnVisibility}
 
         memberSortKey={teamSortKey}
+
+        detailPageSize={detailPageSize}
+
+        detailPageSizeMode={detailPageSizeMode}
+
+        detailPageSizeCustomInput={detailPageSizeCustomInput}
+
+        onDetailPageSizeChange={handleDetailPageSizeChange}
+
+        onDetailPageSizeCustomInputChange={handleDetailPageSizeCustomInputChange}
 
       />
 
@@ -7409,4 +7697,3 @@ const handleDetailPageSizeCustomInputChange = (event) => {
   );
 
 }
-

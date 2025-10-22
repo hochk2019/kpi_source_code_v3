@@ -35,6 +35,8 @@ import {
   normalizeMST,
 
   normalizeName,
+
+  roundAdjustmentPoint,
   normalizeDeclarationNumber,
 
   DECL_KEY,
@@ -112,6 +114,10 @@ const FORM_FIELD_IDS = Object.freeze({
   quantity: "kpi-adjust-quantity",
 
   unit: "kpi-adjust-unit",
+
+  extraQuantity: "kpi-adjust-extra-quantity",
+
+  extraUnit: "kpi-adjust-extra-unit",
 
   filterMonth: "kpi-adjust-filter-month",
 
@@ -501,7 +507,7 @@ function formatDecimal(value) {
 
   return Number.isFinite(num)
 
-    ? num.toLocaleString("vi-VN", { minimumFractionDigits: 1, maximumFractionDigits: 1 })
+    ? num.toLocaleString("vi-VN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
     : "0,0";
 
@@ -627,7 +633,7 @@ function normalizeUnitValue(value) {
 
   const num = Number.parseFloat(value);
 
-  return Number.isFinite(num) ? Math.round(num * 10) / 10 : undefined;
+  return Number.isFinite(num) ? roundAdjustmentPoint(num) : undefined;
 
 }
 
@@ -638,6 +644,20 @@ function resolveCategoryDefaults(category, settings) {
   const config = KPI_ADJUSTMENT_CATEGORY_CONFIG[category] || {};
 
   const overrides = settings?.categories?.[category] || {};
+
+  const extraConfig = config.extraPointConfig;
+
+  const extraOverrideUnit = normalizeUnitValue(overrides.extraUnitPoints);
+
+  const extraDefaultUnit =
+
+    extraConfig && extraConfig.defaultUnit !== undefined
+
+      ? normalizeUnitValue(extraConfig.defaultUnit)
+
+      : undefined;
+
+  const resolvedExtraUnit = extraConfig ? extraOverrideUnit ?? extraDefaultUnit ?? 0 : 0;
 
 
 
@@ -666,6 +686,10 @@ function resolveCategoryDefaults(category, settings) {
       mode: "",
 
       licenseCode: "",
+
+      extraQuantity: 0,
+
+      extraUnitPoints: resolvedExtraUnit,
 
     };
 
@@ -718,6 +742,10 @@ function resolveCategoryDefaults(category, settings) {
       mode,
 
       licenseCode: "",
+
+      extraQuantity: 0,
+
+      extraUnitPoints: resolvedExtraUnit,
 
     };
 
@@ -791,6 +819,10 @@ function resolveCategoryDefaults(category, settings) {
 
       licenseCode,
 
+      extraQuantity: 0,
+
+      extraUnitPoints: resolvedExtraUnit,
+
     };
 
   }
@@ -810,6 +842,10 @@ function resolveCategoryDefaults(category, settings) {
     mode: "",
 
     licenseCode: "",
+
+    extraQuantity: 0,
+
+    extraUnitPoints: resolvedExtraUnit,
 
   };
 
@@ -1043,6 +1079,24 @@ function buildSettingsDraft(settings) {
 
     }
 
+    if (config.extraPointConfig) {
+
+      const extraUnitValue =
+
+        normalizeUnitValue(overrides.extraUnitPoints) ??
+
+        normalizeUnitValue(config.extraPointConfig.defaultUnit) ??
+
+        "";
+
+      const entry = draft[category] || {};
+
+      entry.extraUnitPoints = extraUnitValue === undefined ? "" : extraUnitValue.toString();
+
+      draft[category] = entry;
+
+    }
+
   }
 
   return draft;
@@ -1096,6 +1150,10 @@ const initialFormState = (month = getCurrentMonth(), settings) => {
     unitPoints: defaults.unitPoints,
 
     gradeValue: defaults.gradeValue,
+
+    extraQuantity: defaults.extraQuantity ?? 0,
+
+    extraUnitPoints: defaults.extraUnitPoints ?? 0,
 
     mode: defaults.mode,
 
@@ -1755,6 +1813,10 @@ export default function KPIAdjustments({ currentUser }) {
 
       gradeValue: defaults.gradeValue,
 
+      extraQuantity: defaults.extraQuantity ?? 0,
+
+      extraUnitPoints: defaults.extraUnitPoints ?? 0,
+
       mode: defaults.mode,
 
       licenseCode: defaults.licenseCode || "",
@@ -1889,6 +1951,10 @@ export default function KPIAdjustments({ currentUser }) {
 
         entry.defaultMode = value;
 
+      } else if (path === "extraUnitPoints") {
+
+        entry.extraUnitPoints = value;
+
       } else if (path.startsWith("modeUnits.")) {
 
         const key = path.split(".")[1];
@@ -2012,6 +2078,26 @@ export default function KPIAdjustments({ currentUser }) {
         if (Object.keys(modeUnits).length) {
 
           entryPayload.modeUnits = modeUnits;
+
+        }
+
+      }
+
+      if (config.extraPointConfig && Object.prototype.hasOwnProperty.call(draftEntry, "extraUnitPoints")) {
+
+        if (draftEntry.extraUnitPoints === "") {
+
+          entryPayload.extraUnitPoints = null;
+
+        } else {
+
+          const num = Number.parseFloat(draftEntry.extraUnitPoints);
+
+          if (!Number.isNaN(num)) {
+
+            entryPayload.extraUnitPoints = num;
+
+          }
 
         }
 
@@ -2152,6 +2238,10 @@ export default function KPIAdjustments({ currentUser }) {
       unitPoints: entry.unitPoints ?? defaults.unitPoints,
 
       gradeValue: entry.unitPoints ?? defaults.gradeValue,
+
+      extraQuantity: entry.extraQuantity ?? defaults.extraQuantity ?? 0,
+
+      extraUnitPoints: entry.extraUnitPoints ?? defaults.extraUnitPoints ?? 0,
 
       mode: entry.mode || defaults.mode,
 
@@ -2355,6 +2445,14 @@ export default function KPIAdjustments({ currentUser }) {
 
     }
 
+    if (categoryConfig.extraPointConfig) {
+
+      payload.extraQuantity = Number(form.extraQuantity || 0) || 0;
+
+      payload.extraUnitPoints = Number(form.extraUnitPoints || 0) || 0;
+
+    }
+
     if (categoryConfig.type === "hybrid") {
 
       payload.mode = normalizeStr(form.mode || "").toLowerCase();
@@ -2439,25 +2537,65 @@ export default function KPIAdjustments({ currentUser }) {
 
       : Number.parseFloat(form.unitPoints ?? 0) || 0;
 
+  const computedExtraQuantity = Number.parseFloat(form.extraQuantity ?? 0) || 0;
+
+  const computedExtraUnit = Number.parseFloat(form.extraUnitPoints ?? 0) || 0;
+
   const computedTotal = (() => {
+
+    let baseTotal = 0;
 
     if (formCategoryConfig.type === "grade") {
 
-      return Math.round(computedUnit * 10) / 10;
+      baseTotal = roundAdjustmentPoint(computedUnit);
 
     }
 
     if (formCategoryConfig.type === "hybrid" && isHybridFixed) {
 
-      return Math.round(computedUnit * 10) / 10;
+      baseTotal = roundAdjustmentPoint(computedUnit);
 
     }
 
-    return Math.round((computedQuantity || 0) * computedUnit * 10) / 10;
+    if (baseTotal === 0 && formCategoryConfig.type !== "grade") {
+
+      baseTotal = roundAdjustmentPoint((computedQuantity || 0) * computedUnit);
+
+    }
+
+    const extraTotal = roundAdjustmentPoint(computedExtraQuantity * computedExtraUnit);
+
+    return roundAdjustmentPoint(baseTotal + extraTotal);
 
   })();
 
   const detailData = detailEntry?.entry || null;
+
+  const detailCategoryConfig = detailData ? KPI_ADJUSTMENT_CATEGORY_CONFIG[detailData.category] || {} : {};
+
+  const detailExtraQuantity = detailCategoryConfig.extraPointConfig
+
+    ? Number.parseFloat(detailData?.extraQuantity ?? 0) || 0
+
+    : 0;
+
+  const detailExtraUnit = detailCategoryConfig.extraPointConfig
+
+    ? Number.parseFloat(
+
+        detailData?.extraUnitPoints ??
+
+          (detailCategoryConfig.extraPointConfig?.defaultUnit ?? 0)
+
+      ) || 0
+
+    : 0;
+
+  const detailExtraTotal = detailCategoryConfig.extraPointConfig
+
+    ? roundAdjustmentPoint(detailExtraQuantity * detailExtraUnit)
+
+    : 0;
 
   const detailIntent = detailEntry?.intent || "view";
 
@@ -2614,6 +2752,46 @@ export default function KPIAdjustments({ currentUser }) {
                   <div className="mt-1 font-semibold text-foreground">{formatDecimal(detailData.totalPoints ?? 0)}</div>
 
                 </div>
+
+                {detailCategoryConfig.extraPointConfig ? (
+
+                  <>
+
+                    <div>
+
+                      <div className="text-xs font-medium uppercase text-muted-foreground">
+
+                        {detailCategoryConfig.extraPointConfig.quantityLabel || "Số lượng bổ sung"}
+
+                      </div>
+
+                      <div className="mt-1 font-medium text-foreground">{formatDecimal(detailExtraQuantity)}</div>
+
+                    </div>
+
+                    <div>
+
+                      <div className="text-xs font-medium uppercase text-muted-foreground">
+
+                        {detailCategoryConfig.extraPointConfig.unitLabel || "Điểm bổ sung mỗi đơn vị"}
+
+                      </div>
+
+                      <div className="mt-1 font-medium text-foreground">{formatDecimal(detailExtraUnit)}</div>
+
+                    </div>
+
+                    <div className="sm:col-span-2">
+
+                      <div className="text-xs font-medium uppercase text-muted-foreground">Điểm bổ sung</div>
+
+                      <div className="mt-1 font-medium text-foreground">{formatDecimal(detailExtraTotal)}</div>
+
+                    </div>
+
+                  </>
+
+                ) : null}
 
                 {detailData.licenseCode ? (
 
@@ -2847,6 +3025,8 @@ export default function KPIAdjustments({ currentUser }) {
 
                 const defaultModeId = buildSettingsFieldId(category, "default-mode");
 
+                const extraUnitId = buildSettingsFieldId(category, "extra-unit");
+
                 const licenseKeys = draft.licensePoints ? Object.keys(draft.licensePoints) : [];
 
                 return (
@@ -2890,6 +3070,38 @@ export default function KPIAdjustments({ currentUser }) {
                         />
 
                       </div>
+
+                      {config.extraPointConfig ? (
+
+                        <div>
+
+                          <label className="text-xs font-semibold text-muted-foreground" htmlFor={extraUnitId}>
+
+                            {config.extraPointConfig.unitLabel || "Điểm bổ sung mỗi đơn vị"}
+
+                          </label>
+
+                          <Input
+
+                            id={extraUnitId}
+
+                            type="number"
+
+                            step="0.1"
+
+                            placeholder="-"
+
+                            value={draft.extraUnitPoints ?? ""}
+
+                            onChange={(e) => updateSettingsDraft(category, "extraUnitPoints", e.target.value)}
+
+                            className="mt-1"
+
+                          />
+
+                        </div>
+
+                      ) : null}
 
                       {config.modes ? (
 
@@ -3869,6 +4081,68 @@ export default function KPIAdjustments({ currentUser }) {
 
                     </div>
 
+                  {formCategoryConfig.extraPointConfig ? (
+
+                    <div className="grid gap-3 md:grid-cols-2">
+
+                      <div>
+
+                        <label className="text-sm font-medium text-foreground" htmlFor={FORM_FIELD_IDS.extraQuantity}>
+
+                          {formCategoryConfig.extraPointConfig.quantityLabel || "Số lượng bổ sung"}
+
+                        </label>
+
+                        <Input
+
+                          id={FORM_FIELD_IDS.extraQuantity}
+
+                          type="number"
+
+                          min="0"
+
+                          step="1"
+
+                          value={form.extraQuantity}
+
+                          onChange={(e) => setForm((prev) => ({ ...prev, extraQuantity: e.target.value }))}
+
+                          className="mt-1"
+
+                        />
+
+                      </div>
+
+                      <div>
+
+                        <label className="text-sm font-medium text-foreground" htmlFor={FORM_FIELD_IDS.extraUnit}>
+
+                          {formCategoryConfig.extraPointConfig.unitLabel || "Điểm bổ sung mỗi đơn vị"}
+
+                        </label>
+
+                        <Input
+
+                          id={FORM_FIELD_IDS.extraUnit}
+
+                          type="number"
+
+                          step="0.1"
+
+                          value={form.extraUnitPoints}
+
+                          onChange={(e) => setForm((prev) => ({ ...prev, extraUnitPoints: e.target.value }))}
+
+                          className="mt-1"
+
+                        />
+
+                      </div>
+
+                    </div>
+
+                  ) : null}
+
                   </div>
 
                 )}
@@ -4097,6 +4371,32 @@ export default function KPIAdjustments({ currentUser }) {
 
                     );
 
+                    const extraQuantity =
+
+                      rowConfig.extraPointConfig ? Number.parseFloat(item.extraQuantity ?? 0) || 0 : 0;
+
+                    const extraUnitPoints =
+
+                      rowConfig.extraPointConfig
+
+                        ? Number.parseFloat(
+
+                            item.extraUnitPoints ??
+
+                              (rowConfig.extraPointConfig.defaultUnit ?? 0)
+
+                          ) || 0
+
+                        : 0;
+
+                    const extraTotal =
+
+                      rowConfig.extraPointConfig
+
+                        ? roundAdjustmentPoint(extraQuantity * extraUnitPoints)
+
+                        : 0;
+
                     return (
 
                       <tr key={item.id} className="odd:bg-background even:bg-muted/30">
@@ -4130,6 +4430,16 @@ export default function KPIAdjustments({ currentUser }) {
                               {rowConfig.groupLabel ? (
 
                                 <Badge variant="outline">{rowConfig.groupLabel}</Badge>
+
+                              ) : null}
+
+                              {rowConfig.extraPointConfig && extraQuantity > 0 ? (
+
+                                <Badge variant="outline">
+
+                                  Bổ sung: {formatDecimal(extraQuantity)} x {formatDecimal(extraUnitPoints)} ({formatDecimal(extraTotal)})
+
+                                </Badge>
 
                               ) : null}
 
@@ -4294,4 +4604,5 @@ export default function KPIAdjustments({ currentUser }) {
   );
 
 }
+
 
