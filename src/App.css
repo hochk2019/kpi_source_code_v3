@@ -315,9 +315,24 @@
   }
 
   .ds-callout--info {
-    background: color-mix(in srgb, var(--ds-accent-soft) 60%, white);
-    border-color: color-mix(in srgb, var(--ds-accent-ring) 30%, white);
-    color: var(--ds-accent-strong);
+    --ds-callout-info-bg: color-mix(in srgb, var(--ds-accent-soft) 65%, var(--ds-surface-card));
+    --ds-callout-info-border: color-mix(in srgb, var(--ds-accent-ring) 35%, var(--ds-surface-muted));
+    --ds-callout-info-text: var(--ds-text-primary);
+    background: var(--ds-callout-info-bg);
+    border-color: var(--ds-callout-info-border);
+    color: var(--ds-callout-info-text);
+  }
+
+  .dark .ds-callout--info {
+    --ds-callout-info-bg: color-mix(in srgb, var(--ds-accent-soft) 45%, var(--ds-surface-muted));
+    --ds-callout-info-border: color-mix(in srgb, var(--ds-accent-ring) 48%, var(--ds-surface-muted));
+    --ds-callout-info-text: var(--ds-text-primary);
+  }
+
+  [data-theme='high-contrast'] .ds-callout--info {
+    --ds-callout-info-bg: color-mix(in srgb, var(--ds-accent-soft) 55%, var(--ds-surface-card));
+    --ds-callout-info-border: color-mix(in srgb, var(--ds-accent-ring) 60%, var(--ds-border-strong));
+    --ds-callout-info-text: var(--ds-text-primary);
   }
 
   .ds-select-trigger {
