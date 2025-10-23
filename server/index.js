@@ -1946,6 +1946,7 @@ export async function initializeDatabase({ dbFile = DB_FILE } = {}) {
 
   const database = new Database(targetFile);
 
+
   database.pragma('journal_mode = WAL');
 
   database.exec(
@@ -2005,9 +2006,27 @@ export async function initializeDatabase({ dbFile = DB_FILE } = {}) {
   );
 
   database.exec('CREATE INDEX IF NOT EXISTS idx_export_audit_created_at ON export_audit(created_at)');
-
   database.exec('CREATE INDEX IF NOT EXISTS idx_export_audit_username ON export_audit(username)');
-
+  database.exec(
+    'CREATE TABLE IF NOT EXISTS export_audit_access (\n' +
+      '  id INTEGER PRIMARY KEY AUTOINCREMENT,\n' +
+      '  viewed_at TEXT NOT NULL,\n' +
+      '  username TEXT NOT NULL,\n' +
+      '  display_name TEXT,\n' +
+      '  role TEXT,\n' +
+      '  ip_address TEXT,\n' +
+      '  client_host TEXT,\n' +
+      '  user_agent TEXT,\n' +
+      '  filters TEXT,\n' +
+      '  query TEXT\n' +
+      ')'
+  );
+  database.exec(
+    'CREATE INDEX IF NOT EXISTS idx_export_audit_access_viewed_at ON export_audit_access(viewed_at)'
+  );
+  database.exec(
+    'CREATE INDEX IF NOT EXISTS idx_export_audit_access_username ON export_audit_access(username)'
+  );
 
 
   let seedData = { ...DEFAULT_STORAGE };
@@ -10506,6 +10525,51 @@ function normalizeStr(input) {
 
 }
 
+function normalizeClientIpAddress(input) {
+  if (input === null || input === undefined) {
+    return null;
+  }
+  const text = `${input}`.trim();
+  if (!text) {
+    return null;
+  }
+  const first = text.split(',')[0].trim();
+  if (!first) {
+    return null;
+  }
+  return first.replace(/^::ffff:/i, '') || null;
+}
+
+function resolveClientNetworkMeta(req) {
+  const forwardedFor = Array.isArray(req.headers['x-forwarded-for'])
+    ? req.headers['x-forwarded-for'][0]
+    : req.headers['x-forwarded-for'];
+  const realIpHeader = Array.isArray(req.headers['x-real-ip'])
+    ? req.headers['x-real-ip'][0]
+    : req.headers['x-real-ip'];
+  const ipSources = [forwardedFor, realIpHeader, req.ip, req.socket?.remoteAddress];
+  let ipAddress = null;
+  for (const source of ipSources) {
+    const candidate = normalizeClientIpAddress(source);
+    if (candidate) {
+      ipAddress = candidate;
+      break;
+    }
+  }
+  const clientHostHeader = Array.isArray(req.headers['x-client-hostname'])
+    ? req.headers['x-client-hostname'][0]
+    : req.headers['x-client-hostname'] || req.headers['x-forwarded-host'] || '';
+  const cleanedClientHost = normalizeStr(clientHostHeader || '').split(',')[0].replace(/:\d+$/, '');
+  const rawUserAgent = Array.isArray(req.headers['user-agent'])
+    ? req.headers['user-agent'][0]
+    : req.headers['user-agent'] || '';
+  return {
+    ipAddress,
+    clientHost: cleanedClientHost || null,
+    userAgent: rawUserAgent,
+  };
+}
+
 
 
 function normalizeMST(input) {
@@ -11096,6 +11160,70 @@ function recordReportExportAudit(entry = {}) {
 
   return payload;
 
+}
+
+
+
+function recordExportAuditView(entry = {}) {
+  const createdAt = new Date();
+  const roleValue = entry?.role ? normalizeRoleKey(entry.role) : null;
+
+  let filtersJson = null;
+  if (entry?.filters && typeof entry.filters === 'object') {
+    try {
+      filtersJson = JSON.stringify(entry.filters);
+    } catch {
+      filtersJson = null;
+    }
+  } else if (typeof entry?.filters === 'string') {
+    filtersJson = entry.filters;
+  }
+
+  const payload = {
+    viewed_at: createdAt.toISOString(),
+    username: toNullableString(entry?.username, { maxLength: 128 }) || 'unknown',
+    display_name: toNullableString(entry?.displayName, { maxLength: 256 }),
+    role: toNullableString(roleValue || entry?.role, { maxLength: 64 }),
+    ip_address: toNullableString(entry?.ipAddress, { maxLength: 128 }),
+    client_host: toNullableString(entry?.clientHost, { maxLength: 256 }),
+    user_agent: toNullableString(entry?.userAgent, { maxLength: 512, trim: false }),
+    filters: toNullableString(filtersJson, { maxLength: 2048, trim: false }),
+    query: toNullableString(entry?.query, { maxLength: 1024 }),
+  };
+
+  try {
+    db.prepare(
+      `INSERT INTO export_audit_access (
+        viewed_at,
+        username,
+        display_name,
+        role,
+        ip_address,
+        client_host,
+        user_agent,
+        filters,
+        query
+      ) VALUES (
+        @viewed_at,
+        @username,
+        @display_name,
+        @role,
+        @ip_address,
+        @client_host,
+        @user_agent,
+        @filters,
+        @query
+      )`
+    ).run(payload);
+
+    db.prepare(
+      'DELETE FROM export_audit_access WHERE id NOT IN (SELECT id FROM export_audit_access ORDER BY id DESC LIMIT 2000)'
+    ).run();
+  } catch (err) {
+    console.warn('Khong the ghi nhat ky truy cap lich su export', err);
+  }
+
+  return payload;
 }
 
 
@@ -24215,6 +24343,7 @@ app.get('/api/reports/export/audit', (req, res) => {
 
 
 
+
   const rawFrom = Array.isArray(req.query.from) ? req.query.from[0] : req.query.from;
 
   const rawTo = Array.isArray(req.query.to) ? req.query.to[0] : req.query.to;
@@ -24350,10 +24479,32 @@ app.get('/api/reports/export/audit', (req, res) => {
 
 
   const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
-
   const listParams = { ...baseParams, limit, offset };
 
-
+  const { ipAddress, clientHost, userAgent } = resolveClientNetworkMeta(req);
+  const filtersSnapshot = {
+    from: fromIso || null,
+    to: toIso || null,
+    kind: kind || 'all',
+    search: rawSearch || '',
+    limit,
+    page,
+  };
+  const queryString =
+    typeof req.originalUrl === 'string' && req.originalUrl.includes('?')
+      ? req.originalUrl.slice(req.originalUrl.indexOf('?') + 1)
+      : '';
+  recordExportAuditView({
+    username: context.account?.username,
+    displayName: context.account?.name,
+    role: context.account?.role,
+    ipAddress,
+    clientHost,
+    userAgent,
+    filters: filtersSnapshot,
+    query: queryString,
+    status: 'authorized',
+  });
 
   try {
 
@@ -24466,10 +24617,27 @@ app.get('/api/reports/export/audit', (req, res) => {
 
 
     const pageCount = Math.max(1, Math.ceil(total / limit));
-
     const latestCreatedAt = entries.length ? entries[0].createdAt : null;
-
-
+    const accessRows = db
+      .prepare(
+        'SELECT id, viewed_at, username, display_name, role, ip_address, client_host, user_agent, filters, query FROM export_audit_access ORDER BY datetime(viewed_at) DESC LIMIT 10'
+      )
+      .all();
+    const recentViews = accessRows.map((row) => ({
+      id: row.id,
+      viewedAt: row.viewed_at,
+      username: row.username,
+      displayName: row.display_name,
+      role: row.role,
+      ipAddress: row.ip_address,
+      clientHost: row.client_host,
+      userAgent: row.user_agent,
+      filters: safeParse(row.filters, null),
+      query: row.query,
+    }));
+    const latestView = recentViews.length ? recentViews[0] : null;
+    const totalViewsRow = db.prepare('SELECT COUNT(*) AS total FROM export_audit_access').get();
+    const totalViews = Number(totalViewsRow?.total || 0);
 
     res.json({
 
@@ -24492,8 +24660,10 @@ app.get('/api/reports/export/audit', (req, res) => {
         latestCreatedAt,
 
         byKind: summaryByKind,
-
         topUsers: summaryTopUsers,
+        latestView,
+        recentViews,
+        totalViews,
 
       },
 
