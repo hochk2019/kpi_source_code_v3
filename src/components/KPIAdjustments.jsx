@@ -131,6 +131,18 @@ const FORM_FIELD_IDS = Object.freeze({
 
 const MAX_DECLARATION_SUGGESTIONS = 200;
 
+const GUIDANCE_GROUP_DESCRIPTIONS = Object.freeze({
+  support: "Điểm cộng cho các tình huống hỗ trợ thông quan theo từng luồng.",
+  license_support: "Áp dụng khi hỗ trợ khách hàng xin giấy phép chuyên ngành.",
+  support_misc: "Ghi nhận các hỗ trợ ngoài quy chuẩn với chế độ linh hoạt.",
+  correction: "Theo dõi việc sửa tờ khai để cộng/trừ điểm phù hợp.",
+  cancel: "Quản lý việc huỷ tờ khai và mức điểm ảnh hưởng.",
+  tax: "Điểm điều chỉnh liên quan tới các hồ sơ hoàn thuế.",
+  teamwork: "Đánh giá tinh thần làm việc nhóm của nhân viên.",
+  coworker_attitude: "Ghi nhận thái độ ứng xử với đồng nghiệp trong nội bộ.",
+  customer_attitude: "Theo dõi thái độ với khách hàng và đối tác.",
+});
+
 const COMPANY_FIELD_KEYS = new Set([
 
   "company",
@@ -921,6 +933,301 @@ function resolveLicenseUnit(category, licenseCode, settings) {
 
 
 
+function hasActiveOverrides(overrides) {
+
+  if (!overrides || typeof overrides !== "object") {
+
+    return false;
+
+  }
+
+  for (const value of Object.values(overrides)) {
+
+    if (value === null || value === undefined) {
+
+      continue;
+
+    }
+
+    if (typeof value === "object") {
+
+      if (hasActiveOverrides(value)) {
+
+        return true;
+
+      }
+
+      continue;
+
+    }
+
+    if (typeof value === "number" && Number.isFinite(value)) {
+
+      return true;
+
+    }
+
+    if (normalizeStr(value)) {
+
+      return true;
+
+    }
+
+  }
+
+  return false;
+
+}
+
+
+
+function mergeLicensePoints(config, overrides) {
+
+  if (!config?.requiresLicenseCode) {
+
+    return [];
+
+  }
+
+  const merged = new Map();
+
+  const append = (source) => {
+
+    if (!source || typeof source !== "object") {
+
+      return;
+
+    }
+
+    for (const [code, value] of Object.entries(source)) {
+
+      if (!code) continue;
+
+      const normalized = normalizeStr(code).toUpperCase();
+
+      const unit = normalizeUnitValue(value);
+
+      if (normalized && unit !== undefined) {
+
+        merged.set(normalized, unit);
+
+      }
+
+    }
+
+  };
+
+  append(config.licensePoints);
+
+  append(overrides?.licensePoints);
+
+  return Array.from(merged.entries())
+
+    .map(([code, points]) => ({ code, points }))
+
+    .sort((a, b) => a.code.localeCompare(b.code, "vi", { sensitivity: "base" }));
+
+}
+
+
+
+function buildCalculationInfo(config, defaults) {
+
+  const notes = [];
+
+  let badge = "";
+
+  let description = "Điểm = Số lượng x Điểm mỗi đơn vị.";
+
+  if (config?.type === "hybrid") {
+
+    const modes = Array.isArray(config.modes) ? config.modes : [];
+
+    const modeKey = normalizeStr(defaults?.mode || config.defaultMode || "").toLowerCase();
+
+    const modeConfig = modes.find((item) => normalizeStr(item.value).toLowerCase() === modeKey) || modes[0] || {};
+
+    const label = normalizeStr(modeConfig.label);
+
+    badge = label ? `Chế độ: ${label}` : "Chế độ linh hoạt";
+
+    if (modeConfig.description) {
+
+      description = modeConfig.description;
+
+    } else if (modeConfig.compute === "fixed") {
+
+      description = "Áp dụng điểm cố định cho mỗi lần ghi nhận.";
+
+    } else {
+
+      description = "Điểm = Hệ số x Số lượng theo chế độ linh hoạt.";
+
+    }
+
+  } else if (config?.type === "grade") {
+
+    badge = "Thang điểm";
+
+    description = "Chọn mức đánh giá phù hợp để cộng/trừ điểm tương ứng.";
+
+  } else if (config?.requiresLicenseCode) {
+
+    badge = "Theo mã giấy phép";
+
+    description = "Điền mã giấy phép hợp lệ, hệ thống áp dụng điểm tương ứng nhân với số lượng.";
+
+  }
+
+  if (config?.extraPointConfig) {
+
+    const quantityLabel = config.extraPointConfig.quantityLabel || "số lượng bổ sung";
+
+    notes.push(`Có thể nhập ${quantityLabel} để cộng thêm điểm.`);
+
+  }
+
+  if (typeof defaults?.unitPoints === "number" && Number.isFinite(defaults.unitPoints) && defaults.unitPoints < 0) {
+
+    notes.push("Giá trị âm thể hiện mức trừ điểm KPI.");
+
+  }
+
+  return { badge, description, notes };
+
+}
+
+
+
+function buildGuidanceGroups(settings) {
+
+  const groups = new Map();
+
+  Object.entries(KPI_ADJUSTMENT_CATEGORY_CONFIG).forEach(([categoryKey, config], index) => {
+
+    const groupKey = config.groupKey || categoryKey;
+
+    if (!groups.has(groupKey)) {
+
+      groups.set(groupKey, {
+
+        key: groupKey,
+
+        label: config.groupLabel || config.label || "Khác",
+
+        description: GUIDANCE_GROUP_DESCRIPTIONS[groupKey] || "",
+
+        order: index,
+
+        items: [],
+
+      });
+
+    }
+
+    const groupEntry = groups.get(groupKey);
+
+    const defaults = resolveCategoryDefaults(categoryKey, settings);
+
+    const overrides = settings?.categories?.[categoryKey] || {};
+
+    const licensePoints = mergeLicensePoints(config, overrides);
+
+    const calcInfo = buildCalculationInfo(config, defaults);
+
+    const hasOverride = hasActiveOverrides(overrides);
+
+    const notes = [...calcInfo.notes];
+
+    if (hasOverride) {
+
+      notes.push("Đang áp dụng cấu hình tuỳ chỉnh của đơn vị.");
+
+    }
+
+    const extraUnit = config.extraPointConfig ? defaults.extraUnitPoints ?? 0 : null;
+
+    groupEntry.items.push({
+
+      key: categoryKey,
+
+      label: config.label,
+
+      defaultUnit: defaults.unitPoints,
+
+      extraUnit,
+
+      extraLabel: config.extraPointConfig?.unitLabel || "",
+
+      calculation: calcInfo.description,
+
+      modeLabel: calcInfo.badge,
+
+      notes,
+
+      licensePoints,
+
+      gradeOptions: Array.isArray(config.grades) ? config.grades : [],
+
+      hasOverride,
+
+      order: index,
+
+    });
+
+  });
+
+  return Array.from(groups.values())
+
+    .map((group) => ({
+
+      key: group.key,
+
+      label: group.label,
+
+      description: group.description,
+
+      order: group.order,
+
+      items: group.items
+
+        .sort((a, b) => a.order - b.order)
+
+        .map((item) => ({
+
+          key: item.key,
+
+          label: item.label,
+
+          defaultUnit: item.defaultUnit,
+
+          extraUnit: item.extraUnit,
+
+          extraLabel: item.extraLabel,
+
+          calculation: item.calculation,
+
+          modeLabel: item.modeLabel,
+
+
+          notes: item.notes,
+
+          licensePoints: item.licensePoints,
+
+          gradeOptions: item.gradeOptions,
+
+          hasOverride: item.hasOverride,
+
+        })),
+
+    }))
+
+    .sort((a, b) => a.order - b.order);
+
+}
+
+
+
 function buildSettingsDraft(settings) {
 
   const draft = {};
@@ -1284,6 +1591,10 @@ export default function KPIAdjustments({ currentUser }) {
 
 
   const quickDeclarationSuggestions = useMemo(() => declarationSuggestions.slice(0, 5), [declarationSuggestions]);
+
+
+
+  const guidanceGroups = useMemo(() => buildGuidanceGroups(settings), [settings]);
 
 
 
@@ -2937,65 +3248,281 @@ export default function KPIAdjustments({ currentUser }) {
 
 
 
-      <Dialog open={guidanceOpen} onOpenChange={setGuidanceOpen}>
+        <Dialog open={guidanceOpen} onOpenChange={setGuidanceOpen}>
 
-        <DialogContent className="max-w-xl">
+          <DialogContent className="max-w-3xl">
 
-          <DialogHeader>
+            <DialogHeader>
 
-            <DialogTitle>Hướng dẫn nhập điểm KPI +/-</DialogTitle>
+              <DialogTitle>Hướng dẫn nhập điểm KPI +/-</DialogTitle>
 
-            <DialogDescription>Những điểm mới khi ghi nhận điểm cộng/trừ bổ sung.</DialogDescription>
+              <DialogDescription>
 
-          </DialogHeader>
+                Tham khảo điểm mặc định, điểm bổ sung và cách tính cho từng nhóm hạng mục theo cấu hình hiện tại.
 
-          <div className="space-y-3 text-sm text-foreground">
+              </DialogDescription>
 
-            <p>
+            </DialogHeader>
 
-              • Hạng mục "Đi làm muộn" đã được loại bỏ. Thay vào đó, bổ sung các mục "Hỗ trợ xin giấy phép", "Hỗ trợ khác" và
+            {guidanceGroups.length ? (
 
-              "Sửa tờ khai bổ sung C/O" với cách tính điểm riêng.
+              <div className="space-y-4 text-sm text-foreground">
 
-            </p>
+                {guidanceGroups.map((group) => (
 
-            <p>
+                  <section key={group.key} className="rounded-xl border border-border bg-muted/30 p-4 shadow-sm">
 
-              • "Hỗ trợ thông quan" được tách thành luồng xanh (0.1 điểm) và luồng vàng/đỏ (0.25 điểm) để phản ánh đúng mức độ
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
 
-              hỗ trợ.
+                      <div>
 
-            </p>
+                        <h3 className="text-base font-semibold text-foreground">{group.label}</h3>
 
-            <p>
+                        {group.description ? (
 
-              • Với "Hỗ trợ khác", chọn chế độ điểm cố định hoặc linh hoạt theo số lượng (0.1 điểm/đơn vị) tuỳ tình huống.
+                          <p className="mt-1 text-xs text-muted-foreground">{group.description}</p>
 
-            </p>
+                        ) : null}
 
-            <p>
+                      </div>
 
-              • Khi chọn "Hỗ trợ xin giấy phép", hệ thống gợi ý điểm theo mã (ZB02 = 2 điểm, ZB03/khác = 1.5 điểm) và có thể điều
+                    </div>
 
-              chỉnh trong phần cấu hình.
+                    <div className="mt-3 overflow-x-auto">
 
-            </p>
+                      <table
 
-          </div>
+                        aria-label={`Hướng dẫn: ${group.label}`}
 
-          <DialogFooter>
+                        className="min-w-full divide-y divide-border text-sm"
 
-            <Button type="button" onClick={() => setGuidanceOpen(false)}>
+                      >
 
-              Đã rõ
+                        <thead className="bg-muted/50 text-xs uppercase tracking-wide text-muted-foreground">
 
-            </Button>
+                          <tr>
 
-          </DialogFooter>
+                            <th className="whitespace-nowrap px-3 py-2 text-left font-medium">Hạng mục</th>
 
-        </DialogContent>
+                            <th className="whitespace-nowrap px-3 py-2 text-right font-medium">Điểm mặc định</th>
 
-      </Dialog>
+                            <th className="whitespace-nowrap px-3 py-2 text-right font-medium">Điểm bổ sung</th>
+
+                            <th className="whitespace-nowrap px-3 py-2 text-left font-medium">Cách tính &amp; ghi chú</th>
+
+                          </tr>
+
+                        </thead>
+
+                        <tbody className="divide-y divide-border bg-background/80">
+
+                          {group.items.map((item) => (
+
+                            <tr key={item.key} className="align-top">
+
+                              <td className="px-3 py-3">
+
+                                <div className="flex flex-wrap items-center gap-2">
+
+                                  <span className="font-medium text-foreground">{item.label}</span>
+
+                                  {item.hasOverride ? (
+
+                                    <Badge variant="outline" className="text-xs font-normal">
+
+                                      Tuỳ chỉnh
+
+                                    </Badge>
+
+                                  ) : null}
+
+                                </div>
+
+                              </td>
+
+                              <td className="px-3 py-3 text-right">
+
+                                {Number.isFinite(item.defaultUnit) ? (
+
+                                  <span className="font-medium text-foreground">{formatDecimal(item.defaultUnit)}</span>
+
+                                ) : (
+
+                                  <span className="text-muted-foreground">—</span>
+
+                                )}
+
+                              </td>
+
+                              <td className="px-3 py-3 text-right">
+
+                                {item.extraUnit !== null ? (
+
+                                  <div className="space-y-1 text-right">
+
+                                    <span className="font-medium text-foreground">{formatDecimal(item.extraUnit)}</span>
+
+                                    {item.extraLabel ? (
+
+                                      <span className="block text-[11px] text-muted-foreground">{item.extraLabel}</span>
+
+                                    ) : null}
+
+                                  </div>
+
+                                ) : (
+
+                                  <span className="text-muted-foreground">Không áp dụng</span>
+
+                                )}
+
+                              </td>
+
+                              <td className="px-3 py-3">
+
+                                <div className="space-y-2">
+
+                                  {item.modeLabel ? (
+
+                                    <Badge variant="secondary" className="w-fit text-xs font-medium">
+
+                                      {item.modeLabel}
+
+                                    </Badge>
+
+                                  ) : null}
+
+                                  <p className="text-sm leading-snug text-muted-foreground">{item.calculation}</p>
+
+                                  {item.licensePoints.length ? (
+
+                                    <div className="text-xs text-muted-foreground">
+
+                                      <div className="font-medium text-foreground/80">Mã &amp; điểm:</div>
+
+                                      <ul className="mt-1 space-y-1">
+
+                                        {item.licensePoints.map((license) => (
+
+                                          <li key={`${item.key}-${license.code}`} className="flex flex-wrap items-center gap-1">
+
+                                            <span className="font-semibold text-foreground">{license.code}</span>
+
+                                            <span className="text-muted-foreground">– {formatDecimal(license.points)} điểm</span>
+
+                                          </li>
+
+                                        ))}
+
+                                      </ul>
+
+                                    </div>
+
+                                  ) : null}
+
+                                  {item.gradeOptions.length ? (
+
+                                    <div className="text-xs text-muted-foreground">
+
+                                      <div className="font-medium text-foreground/80">Các mức đánh giá:</div>
+
+                                      <ul className="mt-1 space-y-1">
+
+                                        {item.gradeOptions.map((grade) => (
+
+                                          <li key={`${item.key}-grade-${grade.value}`}>{grade.label}</li>
+
+                                        ))}
+
+                                      </ul>
+
+                                    </div>
+
+                                  ) : null}
+
+                                  {item.notes.length ? (
+
+                                    <ul className="space-y-1 text-xs text-muted-foreground">
+
+                                      {item.notes.map((note, index) => (
+
+                                        <li key={`${item.key}-note-${index}`}>{note}</li>
+
+                                      ))}
+
+                                    </ul>
+
+                                  ) : null}
+
+                                </div>
+
+                              </td>
+
+                            </tr>
+
+                          ))}
+
+                        </tbody>
+
+                      </table>
+
+                    </div>
+
+                  </section>
+
+                ))}
+
+              </div>
+
+            ) : (
+
+              <p className="text-sm text-muted-foreground">
+
+                Chưa có thông tin cấu hình khả dụng. Vui lòng mở phần cấu hình để kiểm tra lại.
+
+              </p>
+
+            )}
+
+            <DialogFooter className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+
+              <Button
+
+                type="button"
+
+                variant="link"
+
+                className="h-auto px-0 text-sm"
+
+                onClick={() => {
+
+                  setGuidanceOpen(false);
+
+                  openSettingsDialog();
+
+                }}
+
+              >
+
+                Mở phần cấu hình
+
+              </Button>
+
+              <div className="flex w-full justify-end gap-2 sm:w-auto">
+
+                <Button type="button" onClick={() => setGuidanceOpen(false)}>
+
+                  Đã rõ
+
+                </Button>
+
+              </div>
+
+            </DialogFooter>
+
+          </DialogContent>
+
+        </Dialog>
 
 
 
