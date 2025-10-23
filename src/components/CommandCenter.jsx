@@ -134,6 +134,8 @@ function normalizePermissions(currentUser) {
 
     canImportEdit: !!permissions.importEdit,
 
+    canImportUpload: !!permissions.importUpload,
+
     canMstEdit: !!permissions.mstEdit,
 
     canRulesEdit: !!permissions.rulesEdit,

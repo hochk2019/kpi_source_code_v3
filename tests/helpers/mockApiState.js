@@ -26,6 +26,8 @@ export function createDefaultAccountsState() {
 
     importEdit: true,
 
+    importUpload: true,
+
     mstEdit: true,
 
     rulesEdit: true,
@@ -47,6 +49,8 @@ export function createDefaultAccountsState() {
   const staffPermissions = {
 
     importEdit: true,
+
+    importUpload: false,
 
     mstEdit: false,
 
@@ -94,6 +98,8 @@ function normalizePermissions(permissions, role) {
 
     importEdit: true,
 
+    importUpload: true,
+
     mstEdit: true,
 
     rulesEdit: true,
@@ -115,6 +121,8 @@ function normalizePermissions(permissions, role) {
   const staffDefaults = {
 
     importEdit: false,
+
+    importUpload: false,
 
     mstEdit: false,
 

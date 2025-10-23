@@ -86,3 +86,35 @@ describe('accountRoles – quyền trợ lý AI', () => {
 
 
 
+describe('accountRoles – quyền import upload', () => {
+
+  it('khai báo khóa importUpload trong ACCOUNT_PERMISSION_KEYS', () => {
+
+    expect(ACCOUNT_PERMISSION_KEYS).toContain('importUpload');
+
+  });
+
+
+
+  it('mẫu quyền mặc định không cấp phép upload cho nhân viên và trưởng nhóm', () => {
+
+    expect(getPermissionTemplate(DEFAULT_ROLE).importUpload).toBe(false);
+
+    expect(getPermissionTemplate(TEAM_LEAD_ROLE).importUpload).toBe(false);
+
+  });
+
+
+
+  it('quản lý và quản trị viên được cấp phép upload import', () => {
+
+    expect(getPermissionTemplate(MANAGER_ROLE).importUpload).toBe(true);
+
+    expect(getPermissionTemplate(ADMIN_ROLE).importUpload).toBe(true);
+
+  });
+
+});
+
+
+

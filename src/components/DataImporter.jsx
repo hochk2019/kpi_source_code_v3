@@ -3376,11 +3376,15 @@ export default function DataImporter({
 
   canEdit = true,
 
+  canImportUpload = false,
+
   currentUser = null,
 
   canManageSync = false,
 
   canManageAlerts = false,
+
+  allowAdminUploadOverride = true,
 
 }) {
 
@@ -3972,7 +3976,7 @@ export default function DataImporter({
 
 
 
-  const canUploadFiles = canEdit && !(isTeamLead || isStaffRole);
+  const canUploadFiles = canImportUpload || (allowAdminUploadOverride && isAdminRole);
 
   const canOverwriteData = isAdminRole && canUploadFiles;
 
@@ -7506,17 +7510,21 @@ export default function DataImporter({
 
   function handleFileChange(e) {
 
-    if (isReadOnlyForEdits) {
+    if (!canUploadFiles) {
 
-      alert("Bạn đang ở chế độ chỉ xem — hãy đăng nhập để import dữ liệu.");
+      alert(
+
+        "Tài khoản của bạn chưa được cấp quyền \"Import Data – tải file\". Vui lòng liên hệ quản trị viên để mở quyền tải file import."
+
+      );
 
       return;
 
     }
 
-    if (!canUploadFiles) {
+    if (isReadOnlyForEdits) {
 
-      alert("Tài khoản của bạn không được phép import XLSX. Vui lòng liên hệ quản trị viên nếu cần cấp quyền.");
+      alert("Bạn đang ở chế độ chỉ xem — hãy đăng nhập để import dữ liệu.");
 
       return;
 
@@ -9400,17 +9408,21 @@ const selectedReviewedCount = useMemo(() => {
 
   function handleImport() {
 
-    if (isReadOnlyForEdits) {
+    if (!canUploadFiles) {
 
-      alert("Bạn không có quyền import dữ liệu. Đăng nhập bằng tài khoản được cấp quyền để tiếp tục.");
+      alert(
+
+        "Tài khoản của bạn chưa được cấp quyền \"Import Data – tải file\". Vui lòng liên hệ quản trị viên để mở quyền tải file import."
+
+      );
 
       return;
 
     }
 
-    if (!canUploadFiles) {
+    if (isReadOnlyForEdits) {
 
-      alert("Tài khoản của bạn không được phép import XLSX. Vui lòng liên hệ quản trị viên nếu cần cấp quyền.");
+      alert("Bạn không có quyền import dữ liệu. Đăng nhập bằng tài khoản được cấp quyền để tiếp tục.");
 
       return;
 

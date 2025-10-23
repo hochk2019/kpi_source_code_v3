@@ -88,6 +88,16 @@ const PERMISSION_DETAILS = Object.freeze({
 
   },
 
+  importUpload: {
+
+    label: "Import Data – tải file",
+
+    description: "Cho phép tải file Excel tờ khai lên hệ thống để xem trước và chuẩn bị import.",
+
+    category: "Nhập liệu & đồng bộ",
+
+  },
+
   mstEdit: {
 
     label: "Gán MST – chỉnh sửa",
