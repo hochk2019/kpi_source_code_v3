@@ -588,6 +588,10 @@ export default function AccountManager({ currentUser }) {
 
   const [isDeleting, setIsDeleting] = useState(false);
 
+  const [permissionDialogOpen, setPermissionDialogOpen] = useState(false);
+
+  const [permissionAccountUsername, setPermissionAccountUsername] = useState(null);
+
 
 
   const currentActor = currentUser?.username || "system";
@@ -1050,6 +1054,46 @@ export default function AccountManager({ currentUser }) {
 
 
 
+  const permissionAccount = useMemo(() => {
+
+    if (!permissionAccountUsername) {
+
+      return null;
+
+    }
+
+    return accounts.find((account) => account.username === permissionAccountUsername) || null;
+
+  }, [accounts, permissionAccountUsername]);
+
+
+
+  const openPermissionDialog = useCallback((account) => {
+
+    if (!account || !account.username) {
+
+      return;
+
+    }
+
+    setPermissionAccountUsername(account.username);
+
+    setPermissionDialogOpen(true);
+
+  }, []);
+
+
+
+  const closePermissionDialog = useCallback(() => {
+
+    setPermissionDialogOpen(false);
+
+    setPermissionAccountUsername(null);
+
+  }, []);
+
+
+
   const updateAccountStaff = useCallback(
 
     async (account, option) => {
@@ -1486,38 +1530,61 @@ export default function AccountManager({ currentUser }) {
 
         label: "Quyền chức năng",
 
-        cell: (account) => (
+        cell: (account) => {
 
-          <div className="grid gap-2 [grid-template-columns:repeat(auto-fit,minmax(220px,1fr))]">
+          const totalPermissions = permissionDefinitions.length;
 
-            {permissionDefinitions.map((definition) => (
+          const enabledCount = permissionDefinitions.reduce((count, definition) => {
 
-              <PermissionCheckbox
+            return account.permissions?.[definition.key] ? count + 1 : count;
 
-                key={`${account.username}-${definition.key}`}
+          }, 0);
 
-                label={definition.label}
+          const summary =
 
-                description={definition.description}
+            totalPermissions === 0
 
-                compact
+              ? "Chưa cấu hình quyền"
 
-                checked={account.permissions?.[definition.key]}
+              : enabledCount === 0
 
-                onChange={(value) => togglePermission(account.username, definition.key, value)}
+                ? "Chưa cấp quyền nào"
 
-                disabled={definition.key === "accountManage" && account.role !== ADMIN_ROLE}
+                : `${enabledCount}/${totalPermissions} quyền được cấp`;
 
-              />
+          const isPending = pendingAccounts.has(account.username);
 
-            ))}
+          return (
 
-          </div>
+            <div className="space-y-2">
 
-        ),
+              <button
+
+                type="button"
+
+                onClick={() => openPermissionDialog(account)}
+
+                className="inline-flex w-full items-center justify-center rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] px-3 py-1 text-xs font-semibold text-[color:var(--ds-text-primary)] shadow-sm transition hover:bg-[color:var(--ds-surface-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ds-accent-ring)] focus-visible:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-60"
+
+                disabled={isPending}
+
+              >
+
+                Danh sách quyền
+
+              </button>
+
+              <p className="text-xs text-[color:var(--ds-text-muted)]">{summary}</p>
+
+              {isPending && <StatusBadge tone="info">Đang lưu thay đổi…</StatusBadge>}
+
+            </div>
+
+          );
+
+        },
 
       },
-
       {
 
         key: "actions",
@@ -1572,6 +1639,8 @@ export default function AccountManager({ currentUser }) {
 
       openDeleteDialog,
 
+      openPermissionDialog,
+
       pendingAccounts,
 
       permissionDefinitions,
@@ -1581,8 +1650,6 @@ export default function AccountManager({ currentUser }) {
       staffLookup,
 
       staffOptions,
-
-      togglePermission,
 
       updateAccountStaff,
 
@@ -1941,6 +2008,134 @@ export default function AccountManager({ currentUser }) {
         />
 
       </section>
+
+
+
+      <AppDialog
+
+        open={permissionDialogOpen}
+
+        onOpenChange={(open) => (open ? setPermissionDialogOpen(true) : closePermissionDialog())}
+
+      >
+
+        <AppDialogContent size="xl">
+
+          <AppDialogHeader>
+
+            <AppDialogTitle>Quản lý quyền</AppDialogTitle>
+
+            <AppDialogDescription>
+
+              {permissionAccount
+
+                ? `Điều chỉnh quyền truy cập cho tài khoản ${permissionAccount.username}.`
+
+                : "Chọn tài khoản để điều chỉnh quyền."}
+
+            </AppDialogDescription>
+
+          </AppDialogHeader>
+
+          <div className="space-y-4 px-6 pb-4 pt-2">
+
+            {permissionAccount ? (
+
+              <>
+
+                <div className="rounded-lg border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-subtle)] px-4 py-3 text-sm text-[color:var(--ds-text-secondary)]">
+
+                  <p className="font-semibold text-[color:var(--ds-text-primary)]">{permissionAccount.username}</p>
+
+                  {permissionAccount.name && permissionAccount.name !== permissionAccount.username ? (
+
+                    <p className="text-xs text-[color:var(--ds-text-muted)]">{permissionAccount.name}</p>
+
+                  ) : null}
+
+                  {permissionAccount.teamName ? (
+
+                    <p className="text-xs text-[color:var(--ds-text-muted)]">{permissionAccount.teamName}</p>
+
+                  ) : null}
+
+                </div>
+
+                {pendingAccounts.has(permissionAccount.username) ? (
+
+                  <StatusBadge tone="info">Đang lưu thay đổi…</StatusBadge>
+
+                ) : null}
+
+                <div className="grid gap-2 [grid-template-columns:repeat(auto-fit,minmax(240px,1fr))]">
+
+                  {permissionDefinitions.map((definition) => (
+
+                    <PermissionCheckbox
+
+                      key={`${permissionAccount.username}-${definition.key}`}
+
+                      label={definition.label}
+
+                      description={definition.description}
+
+                      checked={permissionAccount.permissions?.[definition.key]}
+
+                      onChange={(value) =>
+
+                        togglePermission(permissionAccount.username, definition.key, value)
+
+                      }
+
+                      disabled={
+
+                        pendingAccounts.has(permissionAccount.username) ||
+
+                        (definition.key === "accountManage" && permissionAccount.role !== ADMIN_ROLE)
+
+                      }
+
+                    />
+
+                  ))}
+
+                </div>
+
+              </>
+
+            ) : (
+
+              <p className="text-sm text-[color:var(--ds-text-muted)]">Không tìm thấy thông tin tài khoản đã chọn.</p>
+
+            )}
+
+          </div>
+
+          <AppDialogFooter>
+
+            <AppDialogClose asChild>
+
+              <button
+
+                type="button"
+
+                onClick={closePermissionDialog}
+
+                className="inline-flex items-center justify-center rounded border border-[color:var(--ds-border-subtle)] px-4 py-2 text-sm font-medium text-[color:var(--ds-text-primary)] hover:bg-[color:var(--ds-surface-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ds-accent-ring)] focus-visible:ring-offset-0"
+
+              >
+
+                Đóng
+
+              </button>
+
+            </AppDialogClose>
+
+          </AppDialogFooter>
+
+        </AppDialogContent>
+
+      </AppDialog>
 
 
 
