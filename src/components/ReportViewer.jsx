@@ -2160,7 +2160,7 @@ function StaffDetailCard({
 
                   canExport && !exporting
 
-                    ? 'border-[color:var(--ds-border-strong)] bg-[color:var(--ds-surface-primary)] text-white hover:bg-[color:var(--ds-surface-strong)]'
+                    ? 'border-[color:var(--ds-border-strong)] bg-[color:var(--ds-accent)] text-[color:var(--ds-text-inverse)] hover:bg-[color:var(--ds-accent-strong)]'
 
                     : 'cursor-not-allowed border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-muted)] text-[color:var(--ds-text-disabled)]'
 
@@ -2980,7 +2980,7 @@ function TeamDetailCard({
 
                   canExport && !exporting
 
-                    ? 'border-[color:var(--ds-border-strong)] bg-[color:var(--ds-surface-primary)] text-white hover:bg-[color:var(--ds-surface-strong)]'
+                    ? 'border-[color:var(--ds-border-strong)] bg-[color:var(--ds-accent)] text-[color:var(--ds-text-inverse)] hover:bg-[color:var(--ds-accent-strong)]'
 
                     : 'cursor-not-allowed border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-muted)] text-[color:var(--ds-text-disabled)]'
 
@@ -5266,7 +5266,7 @@ const handleDetailPageSizeCustomInputChange = (event) => {
 
                   canExport && !exporting
 
-                    ? 'border-[color:var(--ds-border-strong)] bg-[color:var(--ds-surface-primary)] text-white hover:bg-[color:var(--ds-surface-strong)]'
+                    ? 'border-[color:var(--ds-border-strong)] bg-[color:var(--ds-accent)] text-[color:var(--ds-text-inverse)] hover:bg-[color:var(--ds-accent-strong)]'
 
                     : 'cursor-not-allowed border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-muted)] text-[color:var(--ds-text-disabled)]'
 
@@ -5818,7 +5818,7 @@ const handleDetailPageSizeCustomInputChange = (event) => {
 
                   canExport && !exporting
 
-                    ? 'border-[color:var(--ds-border-strong)] bg-[color:var(--ds-surface-primary)] text-white hover:bg-[color:var(--ds-surface-strong)]'
+                    ? 'border-[color:var(--ds-border-strong)] bg-[color:var(--ds-accent)] text-[color:var(--ds-text-inverse)] hover:bg-[color:var(--ds-accent-strong)]'
 
                     : 'cursor-not-allowed border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-muted)] text-[color:var(--ds-text-disabled)]'
 
