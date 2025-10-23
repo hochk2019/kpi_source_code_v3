@@ -76,6 +76,22 @@ Object.defineProperty(globalThis, 'localStorage', {
 
 });
 
+if (typeof globalThis.ResizeObserver === 'undefined') {
+
+  class ResizeObserverMock {
+
+    observe() {}
+
+    unobserve() {}
+
+    disconnect() {}
+
+  }
+
+  globalThis.ResizeObserver = ResizeObserverMock;
+
+}
+
 
 
 if (typeof HTMLCanvasElement !== 'undefined') {

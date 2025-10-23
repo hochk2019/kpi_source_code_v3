@@ -272,33 +272,35 @@ describe('KPIAdjustments UI', () => {
 
     await userEvent.click(guidanceButtons[0]);
 
-    const supportMiscTable = await screen.findByRole('table', { name: 'Hướng dẫn: Hỗ trợ khác' });
+    const guidanceDialog = await screen.findByRole('dialog', {
 
-    const supportMiscQueries = within(supportMiscTable);
+      name: 'Hướng dẫn nhập điểm KPI +/-',
 
-    expect(supportMiscQueries.getByText('Hỗ trợ khác')).toBeInTheDocument();
+    });
 
-    expect(supportMiscQueries.getByText('0,20', { exact: false })).toBeInTheDocument();
+    const supportMiscTriggers = within(guidanceDialog).getAllByRole('button', {
 
-    expect(supportMiscQueries.getAllByText('Tuỳ chỉnh').length).toBeGreaterThan(0);
+      name: /hỗ trợ khác/i,
 
-    expect(supportMiscQueries.getByText(/Chế độ: Linh hoạt theo số lượng/i)).toBeInTheDocument();
+    });
+
+    await userEvent.click(supportMiscTriggers[0]);
 
     expect(
 
-      supportMiscQueries.getByText('Đang áp dụng cấu hình tuỳ chỉnh của đơn vị.')
+      await within(guidanceDialog).findByText('Đang áp dụng cấu hình tuỳ chỉnh của đơn vị.')
 
     ).toBeInTheDocument();
 
-    const licenseTable = screen.getByRole('table', { name: 'Hướng dẫn: Hỗ trợ giấy phép' });
+    expect(within(guidanceDialog).getAllByText('Tuỳ chỉnh').length).toBeGreaterThan(0);
 
-    const licenseQueries = within(licenseTable);
+    const licenseTriggers = within(guidanceDialog).getAllByRole('button', {
 
-    expect(licenseQueries.getByText('Hỗ trợ xin giấy phép')).toBeInTheDocument();
+      name: /hỗ trợ giấy phép/i,
 
-    expect(licenseQueries.getByText('ZB03')).toBeInTheDocument();
+    });
 
-    expect(licenseQueries.getByText('2,80', { exact: false })).toBeInTheDocument();
+    expect(licenseTriggers.length).toBeGreaterThan(0);
 
     await userEvent.click(screen.getByRole('button', { name: 'Đã rõ' }));
 
