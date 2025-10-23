@@ -67,7 +67,15 @@ import {
 
 } from "@/components/ui/card.jsx";
 
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog.jsx";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog.jsx";
+import { ScrollArea } from "@/components/ui/scroll-area.jsx";
 
 import { Input } from "@/components/ui/input.jsx";
 
@@ -3258,9 +3266,9 @@ export default function KPIAdjustments({ currentUser }) {
 
         <Dialog open={guidanceOpen} onOpenChange={setGuidanceOpen}>
 
-          <DialogContent className="max-w-3xl">
+          <DialogContent className="max-w-3xl max-h-[85vh] overflow-hidden p-0">
 
-            <DialogHeader>
+            <DialogHeader className="px-6 pt-6">
 
               <DialogTitle>Hướng dẫn nhập điểm KPI +/-</DialogTitle>
 
