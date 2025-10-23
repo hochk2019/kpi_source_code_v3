@@ -6280,7 +6280,7 @@ function computeAdjustmentTotal({ category, unitPoints, quantity, mode, extraQua
 
 
 
-function normalizeAdjustmentInput(input, { now, actor, current } = {}) {
+function normalizeAdjustmentInput(input, { now, actor, current, permissions = {} } = {}) {
 
   if (!input || typeof input !== 'object') {
 
@@ -6301,6 +6301,8 @@ function normalizeAdjustmentInput(input, { now, actor, current } = {}) {
   const settings = readAdjustmentSettings();
 
   const override = settings.categories?.[category] || {};
+
+  const allowManualOverride = permissions?.adjustOverridePoints === true || category === 'support_misc';
 
   const staffName = normalizeStr(input.staffName ?? input.staff ?? current?.staffName ?? '');
 
@@ -6432,9 +6434,13 @@ function normalizeAdjustmentInput(input, { now, actor, current } = {}) {
 
     : undefined;
 
+  const preservedUnit = Number.isFinite(Number.parseFloat(current?.unitPoints))
 
+    ? roundAdjustmentPoint(Number.parseFloat(current.unitPoints))
 
-  const unitSource = input.unitPoints ?? input.basePoint ?? input.pointsPerUnit;
+    : undefined;
+
+  const unitSource = allowManualOverride ? input.unitPoints ?? input.basePoint ?? input.pointsPerUnit : undefined;
 
   let unitPoints =
 
@@ -6444,7 +6450,9 @@ function normalizeAdjustmentInput(input, { now, actor, current } = {}) {
 
       : Number.NaN;
 
-  if (!Number.isFinite(unitPoints) && Number.isFinite(gradeValue)) {
+  const canAdoptGradeValue = config?.type === 'grade' || allowManualOverride;
+
+  if (!Number.isFinite(unitPoints) && canAdoptGradeValue && Number.isFinite(gradeValue)) {
 
     unitPoints = gradeValue;
 
@@ -6452,7 +6460,11 @@ function normalizeAdjustmentInput(input, { now, actor, current } = {}) {
 
   if (!Number.isFinite(unitPoints)) {
 
-    if (config?.type === 'hybrid') {
+    if (!allowManualOverride && Number.isFinite(preservedUnit)) {
+
+      unitPoints = preservedUnit;
+
+    } else if (config?.type === 'hybrid') {
 
       const modeConfig = (config.modes || []).find((item) => item.value === mode);
 
@@ -6558,7 +6570,19 @@ function normalizeAdjustmentInput(input, { now, actor, current } = {}) {
 
       : 0;
 
-    const extraUnitSource = input.extraUnitPoints ?? input.bonusUnitPoints ?? current?.extraUnitPoints ?? current?.bonusUnitPoints;
+    const preservedExtraUnit = Number.isFinite(Number.parseFloat(current?.extraUnitPoints))
+
+      ? roundAdjustmentPoint(Number.parseFloat(current.extraUnitPoints))
+
+      : undefined;
+
+    const extraUnitSource =
+
+      allowManualOverride
+
+        ? input.extraUnitPoints ?? input.bonusUnitPoints ?? current?.extraUnitPoints ?? current?.bonusUnitPoints
+
+        : undefined;
 
     const parsedExtraUnit =
 
@@ -6571,6 +6595,10 @@ function normalizeAdjustmentInput(input, { now, actor, current } = {}) {
     if (Number.isFinite(parsedExtraUnit)) {
 
       extraUnitPointsValue = roundAdjustmentPoint(parsedExtraUnit);
+
+    } else if (!allowManualOverride && Number.isFinite(preservedExtraUnit)) {
+
+      extraUnitPointsValue = preservedExtraUnit;
 
     } else if (Number.isFinite(overrideExtraUnit)) {
 
@@ -6772,7 +6800,14 @@ function getAllAdjustments() {
 
   return entries
 
-    .map((item) => normalizeAdjustmentInput(item, { now: new Date(), actor: 'system', current: item }))
+    .map((item) =>
+      normalizeAdjustmentInput(item, {
+        now: new Date(),
+        actor: 'system',
+        current: item,
+        permissions: { adjustOverridePoints: true },
+      })
+    )
 
     .filter(Boolean)
 
@@ -6831,6 +6866,8 @@ export function saveKpiAdjustment(entry, { actor = 'system', permissions = {} } 
     actor,
 
     current,
+
+    permissions,
 
   });
 

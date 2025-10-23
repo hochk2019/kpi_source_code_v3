@@ -2296,5 +2296,85 @@ describe('kpi adjustment settings', () => {
 
   });
 
+  it('chuẩn hoá điểm mỗi đơn vị theo quyền override', () => {
+
+    saveKpiAdjustmentSettings(
+
+      {
+
+        categories: {
+
+          license_support: { licensePoints: { ZB03: '2.8' } },
+
+          support_misc: { modeUnits: { dynamic: '0.2', fixed: '12' } },
+
+        },
+
+      },
+
+      { actor: 'admin', permissions: { adjustApprove: true } }
+
+    );
+
+    sharedSetItem(KPI_ADJUSTMENTS_KEY, JSON.stringify([]));
+
+    const unauthorized = saveKpiAdjustment(
+
+      {
+
+        category: 'license_support',
+
+        month: '2025-02',
+
+        staffName: 'An',
+
+        quantity: 3,
+
+        licenseCode: 'zb03',
+
+        unitPoints: 99,
+
+        extraUnitPoints: 7,
+
+      },
+
+      { actor: 'staff', permissions: { adjustSubmit: true } }
+
+    );
+
+    expect(unauthorized.unitPoints).toBe(2.8);
+
+    expect(unauthorized.totalPoints).toBeCloseTo(8.4, 5);
+
+    expect(unauthorized.extraUnitPoints).toBeUndefined();
+
+    const allowed = saveKpiAdjustment(
+
+      {
+
+        category: 'support_misc',
+
+        month: '2025-02',
+
+        staffName: 'Bình',
+
+        mode: 'dynamic',
+
+        quantity: 2,
+
+        unitPoints: 1.5,
+
+      },
+
+      { actor: 'staff', permissions: { adjustSubmit: true } }
+
+    );
+
+    expect(allowed.unitPoints).toBe(1.5);
+
+    expect(allowed.totalPoints).toBeCloseTo(3, 5);
+
+  });
+
 });
 

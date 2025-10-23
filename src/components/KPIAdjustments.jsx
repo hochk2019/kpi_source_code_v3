@@ -1625,6 +1625,8 @@ export default function KPIAdjustments({ currentUser }) {
 
   const canApprove = !!currentUser?.permissions?.adjustApprove;
 
+  const canOverridePoints = currentUser?.permissions?.adjustOverridePoints === true;
+
   const actor = currentUser?.username || currentUser?.name || "ui";
 
 
@@ -2540,6 +2542,8 @@ export default function KPIAdjustments({ currentUser }) {
   const computedExtraQuantity = Number.parseFloat(form.extraQuantity ?? 0) || 0;
 
   const computedExtraUnit = Number.parseFloat(form.extraUnitPoints ?? 0) || 0;
+
+  const allowManualPointOverride = canOverridePoints || form.category === "support_misc";
 
   const computedTotal = (() => {
 
@@ -4071,9 +4075,24 @@ export default function KPIAdjustments({ currentUser }) {
 
                           value={form.unitPoints}
 
-                          onChange={(e) => setForm((prev) => ({ ...prev, unitPoints: e.target.value }))}
+                          onChange={(e) =>
+                            setForm((prev) => {
+                              if (!allowManualPointOverride) {
+                                return prev;
+                              }
+                              return { ...prev, unitPoints: e.target.value };
+                            })
+                          }
 
-                          className="mt-1"
+                          readOnly={!allowManualPointOverride}
+
+                          aria-readonly={!allowManualPointOverride}
+
+                          className={cn(
+                            "mt-1",
+
+                            !allowManualPointOverride && "bg-muted/40 text-muted-foreground"
+                          )}
 
                         />
 
@@ -4131,9 +4150,24 @@ export default function KPIAdjustments({ currentUser }) {
 
                           value={form.extraUnitPoints}
 
-                          onChange={(e) => setForm((prev) => ({ ...prev, extraUnitPoints: e.target.value }))}
+                          onChange={(e) =>
+                            setForm((prev) => {
+                              if (!allowManualPointOverride) {
+                                return prev;
+                              }
+                              return { ...prev, extraUnitPoints: e.target.value };
+                            })
+                          }
 
-                          className="mt-1"
+                          readOnly={!allowManualPointOverride}
+
+                          aria-readonly={!allowManualPointOverride}
+
+                          className={cn(
+                            "mt-1",
+
+                            !allowManualPointOverride && "bg-muted/40 text-muted-foreground"
+                          )}
 
                         />
 

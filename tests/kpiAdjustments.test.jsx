@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { render, screen, waitFor, within, fireEvent } from '@testing-library/react';
 
 import userEvent from '@testing-library/user-event';
 
@@ -181,6 +181,66 @@ describe('KPIAdjustments UI', () => {
     const unitInput = screen.getByLabelText('Điểm mỗi đơn vị');
 
     expect(unitInput).toHaveValue(2.8);
+
+  });
+
+  it('không cho phép nhân viên chỉnh sửa điểm chuẩn khi thiếu quyền override', async () => {
+
+    render(
+
+      <KPIAdjustments currentUser={{ username: 'staff', permissions: { adjustSubmit: true } }} />
+
+    );
+
+    await screen.findAllByText('Thêm điểm KPI +/-');
+
+    const categorySelect = screen.getByLabelText('Hạng mục');
+
+    await userEvent.selectOptions(categorySelect, 'license_support');
+
+    const licenseInput = screen.getByLabelText('Mã giấy phép');
+
+    await userEvent.clear(licenseInput);
+
+    await userEvent.type(licenseInput, 'ZB03');
+
+    const unitInput = await screen.findByLabelText('Điểm mỗi đơn vị');
+
+    await waitFor(() => expect(unitInput).toHaveValue(2.8));
+
+    expect(unitInput).toHaveAttribute('readonly');
+
+    fireEvent.change(unitInput, { target: { value: '9' } });
+
+    await waitFor(() => expect(unitInput).toHaveValue(2.8));
+
+
+  });
+
+  it('cho phép chỉnh sửa điểm support_misc dù không có quyền override', async () => {
+
+    render(
+
+      <KPIAdjustments currentUser={{ username: 'staff', permissions: { adjustSubmit: true } }} />
+
+    );
+
+    await screen.findAllByText('Thêm điểm KPI +/-');
+
+    const categorySelect = screen.getByLabelText('Hạng mục');
+
+    await userEvent.selectOptions(categorySelect, 'support_misc');
+
+    const unitInput = screen.getByLabelText('Điểm mỗi đơn vị');
+
+    expect(unitInput).not.toHaveAttribute('readonly');
+
+    await userEvent.clear(unitInput);
+
+    await userEvent.type(unitInput, '0.5');
+
+    await waitFor(() => expect(unitInput).toHaveValue(0.5));
+
 
   });
 
