@@ -52,7 +52,7 @@ import {
 
 } from "@/components/ui/command.jsx";
 
-import { Check, ChevronsUpDown, CircleX, Plus } from "lucide-react";
+import { Check, ChevronsUpDown, CircleX, Plus, LogIn, LogOut } from "lucide-react";
 
 
 
@@ -1075,6 +1075,110 @@ export function CompanyNameCell({ value, isReadOnly, onChange, placeholder = "T�
       data-company-wrap={shouldWrap ? 'wrapped' : 'single'}
       style={{ wordBreak: 'break-word' }}
     />
+  );
+}
+
+const PERSON_HEADER_CONFIG = {
+  person_import: {
+    icon: LogIn,
+    labelLines: ["Phụ trách", "Nhập"],
+    tooltip: "Người phụ trách Nhập",
+  },
+  person_export: {
+    icon: LogOut,
+    labelLines: ["Phụ trách", "Xuất"],
+    tooltip: "Người phụ trách Xuất",
+  },
+};
+
+export function PersonColumnHeader({ columnKey }) {
+  const config = PERSON_HEADER_CONFIG[columnKey];
+  if (!config) {
+    return null;
+  }
+
+  const { icon: Icon, labelLines, tooltip } = config;
+
+  return (
+    <div
+      className="flex items-start gap-1.5"
+      title={tooltip}
+      data-tooltip={tooltip}
+      data-column={columnKey}
+    >
+      <Icon className="mt-0.5 size-4 shrink-0 text-gray-500" aria-hidden="true" />
+      <span className="flex flex-col text-left font-medium leading-tight text-gray-700">
+        {labelLines.map((line) => (
+          <span key={line}>{line}</span>
+        ))}
+        <span className="sr-only">{tooltip}</span>
+      </span>
+    </div>
+  );
+}
+
+export function AssigneeCell({
+  value = "",
+  placeholder,
+  isReadOnly,
+  teams = [],
+  teamValue = "",
+  onSelect,
+  historyEntries = [],
+  historyLabel,
+  showTeamHint = false,
+}) {
+  const safeValue = value == null ? "" : value.toString();
+  const trimmedValue = safeValue.trim();
+  const normalizedTeam = teamValue == null ? "" : teamValue.toString().trim();
+  const hasTeamHint = showTeamHint && normalizedTeam;
+
+  const displayNode = isReadOnly ? (
+    trimmedValue ? (
+      <span
+        className="whitespace-normal break-words text-gray-900 leading-snug"
+        style={{
+          display: "-webkit-box",
+          WebkitLineClamp: 2,
+          WebkitBoxOrient: "vertical",
+          overflow: "hidden",
+        }}
+        title={trimmedValue}
+        data-assignee-state="filled"
+      >
+        {trimmedValue}
+      </span>
+    ) : (
+      <span className="italic text-gray-400" data-assignee-state="empty">
+        (Chưa chọn)
+      </span>
+    )
+  ) : (
+    <StaffCombobox
+      value={safeValue}
+      teamValue={teamValue || ""}
+      teams={teams}
+      placeholder={placeholder}
+      onSelect={onSelect}
+    />
+  );
+
+  return (
+    <div className="flex flex-col">
+      <div className="flex flex-col gap-1">
+        {displayNode}
+        {hasTeamHint ? (
+          <span
+            className="text-xs text-gray-500"
+            title={`Tổ phụ trách: ${normalizedTeam}`}
+            data-team-hint="true"
+          >
+            Tổ: {normalizedTeam}
+          </span>
+        ) : null}
+      </div>
+      <HistoryDetails entries={historyEntries} label={historyLabel} />
+    </div>
   );
 }
 
@@ -3744,9 +3848,9 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
 
               {isColumnVisible("person_import") ? (
 
-                <th className="p-2 text-left whitespace-nowrap min-w-[14rem]">
+                <th className="p-2 text-left align-bottom min-w-[12.5rem]">
 
-                  Người phụ trách Nhập
+                  <PersonColumnHeader columnKey="person_import" />
 
                 </th>
 
@@ -3754,9 +3858,9 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
 
               {isColumnVisible("person_export") ? (
 
-                <th className="p-2 text-left whitespace-nowrap min-w-[14rem]">
+                <th className="p-2 text-left align-bottom min-w-[12.5rem]">
 
-                  Người phụ trách Xuất
+                  <PersonColumnHeader columnKey="person_export" />
 
                 </th>
 
@@ -3920,135 +4024,103 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
 
                     {isColumnVisible("person_import") ? (
 
-                      <td className="p-2 align-top whitespace-nowrap min-w-[14rem]">
+                      <td className="p-2 align-top min-w-[12.5rem] max-w-[18rem]">
 
-                        {isReadOnly ? (
+                        <AssigneeCell
 
-                          r.person_import ? (
+                          value={r.person_import || ""}
 
-                            <span>{r.person_import}</span>
+                          placeholder="Chọn nhân viên nhập"
 
-                          ) : (
+                          isReadOnly={isReadOnly}
 
-                            <span className="italic text-gray-400">(Chưa chọn)</span>
+                          teams={rosterTeams}
 
-                          )
+                          teamValue={r.team || ""}
 
-                        ) : (
+                          onSelect={({ staffName, teamName, isCustom }) => {
 
-                          <StaffCombobox
+                            const patch = { person_import: staffName || "" };
 
-                            value={r.person_import || ""}
+                            if (staffName && teamName && !isCustom) {
 
-                            teamValue={r.team || ""}
+                              const prevTeamKey = normalizeName(normalizeStr(r.team || ""));
 
-                            teams={rosterTeams}
+                              const nextTeamKey = normalizeName(normalizeStr(teamName));
 
-                            placeholder="Chọn nhân viên nhập"
+                              if (!prevTeamKey || prevTeamKey === nextTeamKey) {
 
-                            onSelect={({ staffName, teamName, isCustom }) => {
-
-                              const patch = { person_import: staffName || "" };
-
-                              if (staffName && teamName && !isCustom) {
-
-                                const prevTeamKey = normalizeName(normalizeStr(r.team || ""));
-
-                                const nextTeamKey = normalizeName(normalizeStr(teamName));
-
-                                if (!prevTeamKey || prevTeamKey === nextTeamKey) {
-
-                                  patch.team = teamName;
-
-                                }
+                                patch.team = teamName;
 
                               }
 
-                              updateRow(r, patch);
+                            }
 
-                            }}
+                            updateRow(r, patch);
 
-                          />
+                          }}
 
-                        )}
+                          historyEntries={importHistory}
 
-                        <HistoryDetails
+                          historyLabel={HISTORY_FIELD_LABELS.person_import}
 
-                          entries={importHistory}
-
-                          label={HISTORY_FIELD_LABELS.person_import}
+                          showTeamHint
 
                         />
 
                       </td>
 
                     ) : null}
+
 
                     {isColumnVisible("person_export") ? (
 
-                      <td className="p-2 align-top whitespace-nowrap min-w-[14rem]">
+                      <td className="p-2 align-top min-w-[12.5rem] max-w-[18rem]">
 
-                        {isReadOnly ? (
+                        <AssigneeCell
 
-                          r.person_export ? (
+                          value={r.person_export || ""}
 
-                            <span>{r.person_export}</span>
+                          placeholder="Chọn nhân viên xuất"
 
-                          ) : (
+                          isReadOnly={isReadOnly}
 
-                            <span className="italic text-gray-400">(Chưa chọn)</span>
+                          teams={rosterTeams}
 
-                          )
+                          teamValue={r.team || ""}
 
-                        ) : (
+                          onSelect={({ staffName, teamName, isCustom }) => {
 
-                          <StaffCombobox
+                            const patch = { person_export: staffName || "" };
 
-                            value={r.person_export || ""}
+                            if (staffName && teamName && !isCustom) {
 
-                            teamValue={r.team || ""}
+                              const prevTeamKey = normalizeName(normalizeStr(r.team || ""));
 
-                            teams={rosterTeams}
+                              const nextTeamKey = normalizeName(normalizeStr(teamName));
 
-                            placeholder="Chọn nhân viên xuất"
+                              if (!prevTeamKey || prevTeamKey === nextTeamKey) {
 
-                            onSelect={({ staffName, teamName, isCustom }) => {
-
-                              const patch = { person_export: staffName || "" };
-
-                              if (staffName && teamName && !isCustom) {
-
-                                const prevTeamKey = normalizeName(normalizeStr(r.team || ""));
-
-                                const nextTeamKey = normalizeName(normalizeStr(teamName));
-
-                                if (!prevTeamKey || prevTeamKey === nextTeamKey) {
-
-                                  patch.team = teamName;
-
-                                }
+                                patch.team = teamName;
 
                               }
 
-                              updateRow(r, patch);
+                            }
 
-                            }}
+                            updateRow(r, patch);
 
-                          />
+                          }}
 
-                        )}
+                          historyEntries={exportHistory}
 
-                        <HistoryDetails
-
-                          entries={exportHistory}
-
-                          label={HISTORY_FIELD_LABELS.person_export}
+                          historyLabel={HISTORY_FIELD_LABELS.person_export}
 
                         />
 
                       </td>
 
                     ) : null}
+
 
                     {isColumnVisible("status") ? (
 

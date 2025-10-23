@@ -23,9 +23,9 @@
 - [x] Kiểm thử hiển thị và chỉnh sửa tên công ty trên Windows 11, bảo đảm Unicode tiếng Việt hiển thị chính xác. _(ChatGPT – 2025-10-23)_
 
 ### 2. Thu gọn cột "Người phụ trách Nhập" và "Người phụ trách Xuất"
-- [ ] Điều chỉnh tiêu đề cột (viết tắt hoặc kết hợp icon + tooltip) nhằm giảm chiều ngang.
-- [ ] Cho phép nội dung tên nhân sự xuống dòng, dùng bố cục `flex` hoặc `grid` để hiển thị gọn gàng trong 2 dòng.
-- [ ] Xác nhận component chọn nhân sự (combobox) tương thích kích thước mới, popover không bị tràn.
+- [x] Điều chỉnh tiêu đề cột (viết tắt hoặc kết hợp icon + tooltip) nhằm giảm chiều ngang. _(ChatGPT – 2025-10-23)_
+- [x] Cho phép nội dung tên nhân sự xuống dòng, dùng bố cục `flex` hoặc `grid` để hiển thị gọn gàng trong 2 dòng. _(ChatGPT – 2025-10-23)_
+- [x] Xác nhận component chọn nhân sự (combobox) tương thích kích thước mới, popover không bị tràn. _(ChatGPT – 2025-10-23)_
 
 ### 3. Tùy chọn số dòng mỗi trang
 - [ ] Đặt mặc định 15 dòng/MST trong phân trang và thêm lựa chọn 30, 50, 100 dòng.
