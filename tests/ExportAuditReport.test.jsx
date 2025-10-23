@@ -66,16 +66,25 @@ const BASE_ENTRY = {
 
 
 
+const BASE_ACCESS_VIEW = {
+  id: 'access-1',
+  viewedAt: '2024-09-10T03:15:00.000Z',
+  username: 'admin',
+  displayName: 'Admin Tester',
+  role: 'admin',
+  ipAddress: '192.168.1.11',
+  clientHost: 'DESKTOP-01',
+  filters: { from: '2024-09-01', to: '2024-09-10', kind: 'all', search: '', limit: 50, page: 1 },
+};
+
 const BASE_SUMMARY = {
-
   total: 1,
-
   latestCreatedAt: BASE_ENTRY.createdAt,
-
   byKind: [{ kind: 'report.monthly', total: 1 }],
-
   topUsers: [{ username: 'admin', displayName: 'Admin Tester', role: 'admin', total: 1 }],
-
+  latestView: { ...BASE_ACCESS_VIEW },
+  recentViews: [BASE_ACCESS_VIEW],
+  totalViews: 3,
 };
 
 
@@ -130,20 +139,20 @@ function buildPayload(overrides = {}) {
 
   };
 
+  const summaryOverrides = overrides.summary ?? {};
   return {
-
     ...defaults,
-
     ...overrides,
-
     entries: overrides.entries ?? defaults.entries,
-
-    summary: { ...defaults.summary, ...overrides.summary },
-
+    summary: {
+      ...defaults.summary,
+      ...summaryOverrides,
+      latestView: summaryOverrides.latestView ?? defaults.summary.latestView,
+      recentViews: summaryOverrides.recentViews ?? defaults.summary.recentViews,
+      totalViews: summaryOverrides.totalViews ?? defaults.summary.totalViews,
+    },
     filters: { ...defaults.filters, ...overrides.filters },
-
     availableKinds: overrides.availableKinds ?? defaults.availableKinds,
-
   };
 
 }
@@ -246,9 +255,27 @@ describe('ExportAuditReport', () => {
 
   });
 
+  it('hiển thị nhật ký truy cập gần nhất', async () => {
+    const emptySummary = {
+      ...BASE_SUMMARY,
+      latestView: null,
+      recentViews: [],
+      totalViews: 0,
+    };
+
+    fetchWithAuth.mockImplementationOnce(() => resolveResponse({ summary: emptySummary }));
+
+    render(<ExportAuditReport />);
+
+    await waitFor(() => expect(fetchWithAuth).toHaveBeenCalled());
+
+    expect(screen.getByText('Lượt truy cập tab')).toBeInTheDocument();
+    expect(screen.getByText('Lượt truy cập gần đây')).toBeInTheDocument();
+
+    expect(await screen.findByText('Chưa ghi nhận lượt truy cập nào.')).toBeInTheDocument();
+  });
+
+
+
+
 });
-
-
-
-
-

@@ -32,7 +32,7 @@ const EMPTY_RESPONSE = Object.freeze({
 
   pageCount: 1,
 
-  summary: { total: 0, latestCreatedAt: null, byKind: [], topUsers: [] },
+  summary: { total: 0, latestCreatedAt: null, byKind: [], topUsers: [], latestView: null, recentViews: [], totalViews: 0 },
 
   filters: { from: '', to: '', kind: 'all', search: '' },
 
@@ -104,6 +104,36 @@ function formatFilters(filters) {
 
   }
 
+}
+
+function summarizeAccessFilters(filters) {
+  if (!filters || typeof filters !== 'object') {
+    return '';
+  }
+  try {
+    const parts = [];
+    if (filters.from) {
+      parts.push(`Từ ${filters.from}`);
+    }
+    if (filters.to) {
+      parts.push(`Đến ${filters.to}`);
+    }
+    if (filters.kind && filters.kind !== 'all') {
+      parts.push(`Loại: ${filters.kind}`);
+    }
+    if (filters.search) {
+      parts.push(`Từ khóa: ${filters.search}`);
+    }
+    if (Number.isFinite(filters.page)) {
+      parts.push(`Trang ${filters.page}`);
+    }
+    if (Number.isFinite(filters.limit)) {
+      parts.push(`Giới hạn ${filters.limit}`);
+    }
+    return parts.join(' | ');
+  } catch {
+    return '';
+  }
 }
 
 
@@ -189,6 +219,9 @@ export default function ExportAuditReport() {
   const entries = Array.isArray(auditData.entries) ? auditData.entries : [];
 
   const summary = auditData.summary || EMPTY_RESPONSE.summary;
+  const latestView = summary?.latestView || null;
+  const recentAccesses = Array.isArray(summary?.recentViews) ? summary.recentViews.slice(0, 5) : [];
+  const totalViews = Number.isFinite(Number(summary?.totalViews)) ? Number(summary.totalViews) : 0;
 
   const availableKinds = useMemo(() => {
 
@@ -490,7 +523,7 @@ export default function ExportAuditReport() {
 
       <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900">
 
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
 
           <div>
 
@@ -510,6 +543,37 @@ export default function ExportAuditReport() {
 
           </div>
 
+          <div>
+
+            <h3 className="text-sm font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Lượt truy cập tab</h3>
+
+            <p className="mt-1 text-2xl font-semibold text-amber-600 dark:text-amber-300">
+
+              {totalViews.toLocaleString('vi-VN')}
+
+            </p>
+
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+
+              Gần nhất: {latestView?.viewedAt ? formatDateTime(latestView.viewedAt, { withSeconds: true }) : '—'}
+
+            </p>
+
+            <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+
+              <div>Tài khoản: {latestView?.displayName || latestView?.username || 'Chưa xác định'}</div>
+
+              <div>
+
+                IP: {latestView?.ipAddress || '-'}
+
+                {latestView?.clientHost ? ' (' + latestView.clientHost + ')' : ''}
+
+              </div>
+
+            </div>
+
+          </div>
           <div>
 
             <h3 className="text-sm font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Theo loại báo cáo</h3>
@@ -543,6 +607,74 @@ export default function ExportAuditReport() {
       </section>
 
 
+
+
+
+      <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+
+        <header className="mb-3">
+
+          <h3 className="text-base font-semibold text-gray-800 dark:text-gray-100">Lượt truy cập gần đây</h3>
+
+          <p className="text-sm text-gray-500 dark:text-gray-400">
+
+            Theo dõi thời điểm mở tab lịch sử export cùng địa chỉ IP hoặc máy trạm.
+
+          </p>
+
+        </header>
+
+        {recentAccesses.length === 0 ? (
+
+          <p className="text-sm text-gray-500 dark:text-gray-400">Chưa ghi nhận lượt truy cập nào.</p>
+
+        ) : (
+
+          <ul className="divide-y divide-slate-200 text-sm dark:divide-slate-700">
+
+            {recentAccesses.map((item) => (
+
+              <li key={`${item.id}-${item.viewedAt}`} className="py-2">
+
+                <div className="flex flex-wrap items-baseline justify-between gap-2">
+
+                  <span className="font-medium text-gray-800 dark:text-gray-100">
+
+                    {formatDateTime(item.viewedAt, { withSeconds: true }) || '—'}
+
+                  </span>
+
+                  <span className="font-mono text-xs text-amber-600 dark:text-amber-300">{item.ipAddress || '—'}</span>
+
+                </div>
+
+                <div className="mt-1 text-xs text-gray-600 dark:text-gray-300">
+
+                  Tài khoản: {item.displayName || item.username || 'Chưa xác định'} ({resolveRoleLabel(item.role)})
+
+                </div>
+
+                {item.clientHost ? (
+
+                  <div className="text-xs text-gray-500 dark:text-gray-400">Máy: {item.clientHost}</div>
+
+                ) : null}
+
+                <div className="text-xs text-gray-500 dark:text-gray-400">
+
+                  Bộ lọc: {summarizeAccessFilters(item.filters) || '—'}
+
+                </div>
+
+              </li>
+
+            ))}
+
+          </ul>
+
+        )}
+
+      </section>
 
       <section className="rounded-lg border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-900">
 
@@ -789,4 +921,3 @@ export default function ExportAuditReport() {
   );
 
 }
-
