@@ -54,6 +54,8 @@ import {
 
 } from "@/components/designSystem/primitives.jsx";
 
+import { ScrollArea } from "@/components/ui/scroll-area.jsx";
+
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover.jsx";
 
 import {
@@ -72,7 +74,7 @@ import {
 
 } from "@/components/ui/command.jsx";
 
-import { Check, ChevronsUpDown, CircleX } from "lucide-react";
+import { Check, ChevronsUpDown, CircleX, ChevronDown } from "lucide-react";
 
 
 
@@ -279,6 +281,20 @@ const PERMISSION_CATEGORY_ORDER = Object.freeze([
 const CONTROL_CLASS =
 
   "rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] px-3 py-2 text-sm text-[color:var(--ds-text-primary)] shadow-sm focus:outline-none focus:ring-2 focus:ring-[color:var(--ds-accent-ring)] focus:ring-offset-0";
+
+const GROUP_TOGGLE_BUTTON_CLASS =
+
+  "inline-flex items-center gap-1 rounded border border-transparent px-2 py-1 text-xs font-medium text-[color:var(--ds-text-secondary)] transition hover:border-[color:var(--ds-border-subtle)] hover:bg-[color:var(--ds-surface-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ds-accent-ring)] focus-visible:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-60";
+
+function buildPermissionGroupId(category, scope) {
+
+  const base = normalizeName(category || "nhóm");
+
+  const slug = base.replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+
+  return `${scope}-${slug || "nhom"}`;
+
+}
 
 
 
@@ -775,38 +791,74 @@ export default function AccountManager({ currentUser }) {
     return map;
 
   }, [permissionDefinitions]);
-
-
-
-  const permissionSections = useMemo(() => {
-
+  const groupedPermissions = useMemo(() => {
     const groups = new Map();
-
     for (const definition of permissionDefinitions) {
-
-      const key = definition.category || "Khác";
-
-      if (!groups.has(key)) {
-
-        groups.set(key, []);
-
+      const category = definition.category || "Khác";
+      if (!groups.has(category)) {
+        groups.set(category, []);
       }
-
-      groups.get(key).push(definition);
-
+      groups.get(category).push(definition);
     }
-
-    return Array.from(groups.entries()).map(([category, items]) => ({
-
-      id: category,
-
-      title: category,
-
-      items,
-
-    }));
-
+    const getCategoryOrder = (category) => {
+      const index = PERMISSION_CATEGORY_ORDER.indexOf(category);
+      return index === -1 ? PERMISSION_CATEGORY_ORDER.length : index;
+    };
+    return Array.from(groups.entries())
+      .sort((a, b) => getCategoryOrder(a[0]) - getCategoryOrder(b[0]))
+      .map(([category, items]) => ({
+        category,
+        items: items
+          .slice()
+          .sort((a, b) => a.label.localeCompare(b.label, "vi", { sensitivity: "base" })),
+      }));
   }, [permissionDefinitions]);
+
+  const [collapsedPermissionGroups, setCollapsedPermissionGroups] = useState(() => new Set());
+
+  useEffect(() => {
+    const allowedCategories = new Set(groupedPermissions.map((group) => group.category));
+    setCollapsedPermissionGroups((previous) => {
+      let changed = false;
+      const next = new Set();
+      for (const category of previous) {
+        if (allowedCategories.has(category)) {
+          next.add(category);
+        } else {
+          changed = true;
+        }
+      }
+      if (!changed && next.size === previous.size) {
+        return previous;
+      }
+      return next;
+    });
+  }, [groupedPermissions]);
+
+  const togglePermissionGroup = useCallback((category) => {
+    setCollapsedPermissionGroups((previous) => {
+      const next = new Set(previous);
+      if (next.has(category)) {
+        next.delete(category);
+      } else {
+        next.add(category);
+      }
+      return next;
+    });
+  }, []);
+
+  const collapseAllPermissionGroups = useCallback(() => {
+    setCollapsedPermissionGroups(() => new Set(groupedPermissions.map((group) => group.category)));
+  }, [groupedPermissions]);
+
+  const expandAllPermissionGroups = useCallback(() => {
+    setCollapsedPermissionGroups(() => new Set());
+  }, []);
+
+  const totalPermissionGroups = groupedPermissions.length;
+  const collapsedGroupCount = collapsedPermissionGroups.size;
+  const allPermissionGroupsCollapsed = totalPermissionGroups > 0 && collapsedGroupCount === totalPermissionGroups;
+  const noPermissionGroupCollapsed = collapsedGroupCount === 0;
 
   const filteredAccounts = useMemo(() => {
 
@@ -1066,7 +1118,8 @@ export default function AccountManager({ currentUser }) {
 
   }, [accounts, permissionAccountUsername]);
 
-
+  const permissionAccountPending =
+    permissionAccount?.username ? pendingAccounts.has(permissionAccount.username) : false;
 
   const openPermissionDialog = useCallback((account) => {
 
@@ -1841,57 +1894,169 @@ export default function AccountManager({ currentUser }) {
 
           <div className="md:col-span-2 space-y-4">
 
-            <div>
+            <div className="flex flex-wrap items-end justify-between gap-3">
 
-              <div className="text-sm font-medium text-[color:var(--ds-text-primary)]">Quyền chức năng</div>
+              <div>
 
-              <p className="text-xs text-[color:var(--ds-text-muted)]">
+                <div className="text-sm font-medium text-[color:var(--ds-text-primary)]">Quyền chức năng</div>
 
-                Chọn quyền tương ứng cho tài khoản. Những quyền bị làm mờ thuộc nhóm chỉ dành cho quản trị viên.
+                <p className="text-xs text-[color:var(--ds-text-muted)]">
 
-              </p>
+                  Chọn quyền tương ứng cho tài khoản. Những quyền bị làm mờ thuộc nhóm chỉ dành cho quản trị viên.
+
+                </p>
+
+              </div>
+
+              {groupedPermissions.length > 0 ? (
+
+                <div className="flex items-center gap-2 text-xs text-[color:var(--ds-text-muted)]">
+
+                  <button
+
+                    type="button"
+
+                    onClick={collapseAllPermissionGroups}
+
+                    className={GROUP_TOGGLE_BUTTON_CLASS}
+
+                    disabled={allPermissionGroupsCollapsed}
+
+                  >
+
+                    Thu gọn tất cả
+
+                  </button>
+
+                  <button
+
+                    type="button"
+
+                    onClick={expandAllPermissionGroups}
+
+                    className={GROUP_TOGGLE_BUTTON_CLASS}
+
+                    disabled={noPermissionGroupCollapsed}
+
+                  >
+
+                    Mở rộng tất cả
+
+                  </button>
+
+                </div>
+
+              ) : null}
 
             </div>
 
             <div className="space-y-4">
 
-              {permissionSections.map((section) => (
+              {groupedPermissions.map((group) => {
 
-                <div key={section.id} className="space-y-3">
+                const enabledCount = group.items.reduce(
 
-                  <div className="text-xs font-semibold uppercase tracking-wide text-[color:var(--ds-text-secondary)]">
+                  (count, item) => (form.permissions[item.key] ? count + 1 : count),
 
-                    {section.title}
+                  0
+
+                );
+
+                const isCollapsed = collapsedPermissionGroups.has(group.category);
+
+                const contentId = buildPermissionGroupId(group.category, "account-create");
+
+                return (
+
+                  <div key={group.category} className="space-y-3">
+
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+
+                      <h3 className="text-xs font-semibold uppercase tracking-wide text-[color:var(--ds-text-secondary)]">
+
+                        {group.category}
+
+                      </h3>
+
+                      <div className="flex items-center gap-2 text-xs text-[color:var(--ds-text-muted)]">
+
+                        <span>
+
+                          {enabledCount}/{group.items.length} quyền
+
+                        </span>
+
+                        <button
+
+                          type="button"
+
+                          onClick={() => togglePermissionGroup(group.category)}
+
+                          className={GROUP_TOGGLE_BUTTON_CLASS}
+
+                          aria-expanded={!isCollapsed}
+
+                          aria-controls={contentId}
+
+                        >
+
+                          <ChevronDown
+
+                            className={`h-3.5 w-3.5 transition-transform ${isCollapsed ? "-rotate-90" : ""}`}
+
+                            aria-hidden="true"
+
+                          />
+
+                          <span>{isCollapsed ? "Mở rộng" : "Thu gọn"}</span>
+
+                        </button>
+
+                      </div>
+
+                    </div>
+
+                    <div
+
+                      id={contentId}
+
+                      className={`grid gap-2 [grid-template-columns:repeat(auto-fit,minmax(240px,1fr))] ${
+
+                        isCollapsed ? "hidden" : ""
+
+                      }`}
+
+                      aria-hidden={isCollapsed}
+
+                    >
+
+                      {group.items.map((item) => (
+
+                        <PermissionCheckbox
+
+                          key={item.key}
+
+                          label={item.label}
+
+                          description={item.description}
+
+                          checked={form.permissions[item.key]}
+
+                          onChange={(value) => updateFormPermission(item.key, value)}
+
+                          disabled={item.key === "accountManage" && form.role !== ADMIN_ROLE}
+
+                        />
+
+                      ))}
+
+                    </div>
 
                   </div>
 
-                  <div className="grid gap-2 [grid-template-columns:repeat(auto-fit,minmax(240px,1fr))]">
+                );
 
-                    {section.items.map((item) => (
-
-                      <PermissionCheckbox
-
-                        key={item.key}
-
-                        label={item.label}
-
-                        description={item.description}
-
-                        checked={form.permissions[item.key]}
-
-                        onChange={(value) => updateFormPermission(item.key, value)}
-
-                        disabled={item.key === "accountManage" && form.role !== ADMIN_ROLE}
-
-                      />
-
-                    ))}
-
-                  </div>
-
-                </div>
-
-              ))}
+              })}
 
             </div>
 
@@ -2019,7 +2184,7 @@ export default function AccountManager({ currentUser }) {
 
       >
 
-        <AppDialogContent size="xl">
+        <AppDialogContent size="xl" className="max-h-[80vh] flex flex-col">
 
           <AppDialogHeader>
 
@@ -2028,88 +2193,218 @@ export default function AccountManager({ currentUser }) {
             <AppDialogDescription>
 
               {permissionAccount
-
                 ? `Điều chỉnh quyền truy cập cho tài khoản ${permissionAccount.username}.`
-
                 : "Chọn tài khoản để điều chỉnh quyền."}
 
             </AppDialogDescription>
 
           </AppDialogHeader>
 
-          <div className="space-y-4 px-6 pb-4 pt-2">
+          <ScrollArea className="flex-1 min-h-0 px-6 pb-4 pt-2">
 
-            {permissionAccount ? (
+            <div className="space-y-4">
 
-              <>
+              {permissionAccount ? (
 
-                <div className="rounded-lg border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-subtle)] px-4 py-3 text-sm text-[color:var(--ds-text-secondary)]">
+                <>
 
-                  <p className="font-semibold text-[color:var(--ds-text-primary)]">{permissionAccount.username}</p>
+                  <div className="rounded-lg border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-subtle)] px-4 py-3 text-sm text-[color:var(--ds-text-secondary)]">
 
-                  {permissionAccount.name && permissionAccount.name !== permissionAccount.username ? (
+                    <p className="font-semibold text-[color:var(--ds-text-primary)]">{permissionAccount.username}</p>
 
-                    <p className="text-xs text-[color:var(--ds-text-muted)]">{permissionAccount.name}</p>
+                    {permissionAccount.name && permissionAccount.name !== permissionAccount.username ? (
+
+                      <p className="text-xs text-[color:var(--ds-text-muted)]">{permissionAccount.name}</p>
+
+                    ) : null}
+
+                    {permissionAccount.teamName ? (
+
+                      <p className="text-xs text-[color:var(--ds-text-muted)]">{permissionAccount.teamName}</p>
+
+                    ) : null}
+
+                  </div>
+
+                  {permissionAccountPending ? (
+
+                    <StatusBadge tone="info">Đang lưu thay đổi…</StatusBadge>
 
                   ) : null}
 
-                  {permissionAccount.teamName ? (
+                  {groupedPermissions.length > 0 ? (
 
-                    <p className="text-xs text-[color:var(--ds-text-muted)]">{permissionAccount.teamName}</p>
+                    <div className="flex flex-wrap items-center justify-end gap-2 text-xs text-[color:var(--ds-text-muted)]">
+
+                      <button
+
+                        type="button"
+
+                        onClick={collapseAllPermissionGroups}
+
+                        className={GROUP_TOGGLE_BUTTON_CLASS}
+
+                        disabled={allPermissionGroupsCollapsed}
+
+                      >
+
+                        Thu gọn tất cả
+
+                      </button>
+
+                      <button
+
+                        type="button"
+
+                        onClick={expandAllPermissionGroups}
+
+                        className={GROUP_TOGGLE_BUTTON_CLASS}
+
+                        disabled={noPermissionGroupCollapsed}
+
+                      >
+
+                        Mở rộng tất cả
+
+                      </button>
+
+                    </div>
 
                   ) : null}
 
-                </div>
+                  {groupedPermissions.map((group) => {
 
-                {pendingAccounts.has(permissionAccount.username) ? (
+                    const enabledCount = group.items.reduce(
 
-                  <StatusBadge tone="info">Đang lưu thay đổi…</StatusBadge>
+                      (count, item) => (permissionAccount.permissions?.[item.key] ? count + 1 : count),
 
-                ) : null}
+                      0
 
-                <div className="grid gap-2 [grid-template-columns:repeat(auto-fit,minmax(240px,1fr))]">
+                    );
 
-                  {permissionDefinitions.map((definition) => (
+                    const isCollapsed = collapsedPermissionGroups.has(group.category);
 
-                    <PermissionCheckbox
+                    const contentId = buildPermissionGroupId(group.category, "permission-dialog");
 
-                      key={`${permissionAccount.username}-${definition.key}`}
+                    return (
 
-                      label={definition.label}
+                      <div
 
-                      description={definition.description}
+                        key={`${permissionAccount.username}-${group.category}`}
 
-                      checked={permissionAccount.permissions?.[definition.key]}
+                        className="space-y-3"
 
-                      onChange={(value) =>
+                      >
 
-                        togglePermission(permissionAccount.username, definition.key, value)
+                        <div className="flex flex-wrap items-center justify-between gap-2">
 
-                      }
+                          <h3 className="text-sm font-semibold text-[color:var(--ds-text-primary)]">
 
-                      disabled={
+                            {group.category}
 
-                        pendingAccounts.has(permissionAccount.username) ||
+                          </h3>
 
-                        (definition.key === "accountManage" && permissionAccount.role !== ADMIN_ROLE)
+                          <div className="flex items-center gap-2 text-xs text-[color:var(--ds-text-muted)]">
 
-                      }
+                            <span>
 
-                    />
+                              {enabledCount}/{group.items.length} quyền đang bật
 
-                  ))}
+                            </span>
 
-                </div>
+                            <button
 
-              </>
+                              type="button"
 
-            ) : (
+                              onClick={() => togglePermissionGroup(group.category)}
 
-              <p className="text-sm text-[color:var(--ds-text-muted)]">Không tìm thấy thông tin tài khoản đã chọn.</p>
+                              className={GROUP_TOGGLE_BUTTON_CLASS}
 
-            )}
+                              aria-expanded={!isCollapsed}
 
-          </div>
+                              aria-controls={contentId}
+
+                            >
+
+                              <ChevronDown
+
+                                className={`h-3.5 w-3.5 transition-transform ${isCollapsed ? "-rotate-90" : ""}`}
+
+                                aria-hidden="true"
+
+                              />
+
+                              <span>{isCollapsed ? "Mở rộng" : "Thu gọn"}</span>
+
+                            </button>
+
+                          </div>
+
+                        </div>
+
+                        <div
+
+                          id={contentId}
+
+                          className={`grid gap-2 [grid-template-columns:repeat(auto-fit,minmax(240px,1fr))] ${
+
+                            isCollapsed ? "hidden" : ""
+
+                          }`}
+
+                          aria-hidden={isCollapsed}
+
+                        >
+
+                          {group.items.map((definition) => (
+
+                            <PermissionCheckbox
+
+                              key={`${permissionAccount.username}-${definition.key}`}
+
+                              label={definition.label}
+
+                              description={definition.description}
+
+                              checked={permissionAccount.permissions?.[definition.key]}
+
+                              onChange={(value) =>
+
+                                togglePermission(permissionAccount.username, definition.key, value)
+
+                              }
+
+                              disabled={
+
+                                permissionAccountPending ||
+
+                                (definition.key === "accountManage" && permissionAccount.role !== ADMIN_ROLE)
+
+                              }
+
+                            />
+
+                          ))}
+
+                        </div>
+
+                      </div>
+
+                    );
+
+                  })}
+
+                </>
+
+              ) : (
+
+                <p className="text-sm text-[color:var(--ds-text-muted)]">Không tìm thấy thông tin tài khoản đã chọn.</p>
+
+              )}
+
+            </div>
+
+          </ScrollArea>
 
           <AppDialogFooter>
 

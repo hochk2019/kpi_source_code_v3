@@ -19,7 +19,8 @@ jobs:
       - name: Setup pnpm
         uses: pnpm/action-setup@v2
         with:
-          version: 8
+          version: 10.4.1
+          run_install: false
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -27,8 +28,8 @@ jobs:
           node-version: "18"
           cache: "pnpm"
 
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+      - name: Cài đặt dependencies (bao gồm @eslint/js, vitest)
+        run: pnpm install --frozen-lockfile --prod=false
 
       - name: Run lint
         run: pnpm lint
@@ -46,7 +47,8 @@ jobs:
       - name: Setup pnpm
         uses: pnpm/action-setup@v2
         with:
-          version: 8
+          version: 10.4.1
+          run_install: false
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -54,8 +56,8 @@ jobs:
           node-version: "18"
           cache: "pnpm"
 
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+      - name: Cài đặt dependencies (bao gồm @eslint/js, vitest)
+        run: pnpm install --frozen-lockfile --prod=false
 
       - name: Run tests
         run: pnpm test -- --runInBand
