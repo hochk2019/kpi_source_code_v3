@@ -28,6 +28,14 @@ process.env.ECUS_SQL_SERVER = 'MOCK-SERVER';
 
 
 
+const skipExternalTests = ['1', 'true', 'yes'].includes(
+  String(process.env.KPI_SKIP_EXTERNAL_TESTS || '').toLowerCase()
+);
+
+const describeExternal = skipExternalTests ? describe.skip : describe;
+
+
+
 const mockState = {
 
   result: [],
@@ -1174,6 +1182,8 @@ describe('API xác thực & bootstrap', () => {
 
     expect(teamLead?.permissions?.accountManage).toBe(false);
 
+    expect(teamLead?.permissions?.importUpload).toBe(false);
+
     const manager = accounts.find((account) => account.username === 'manager.hoangkimhoa');
 
     expect(manager).toMatchObject({ role: 'manager' });
@@ -1181,6 +1191,8 @@ describe('API xác thực & bootstrap', () => {
     expect(manager?.permissions?.rulesEdit).toBe(true);
 
     expect(manager?.permissions?.accountManage).toBe(false);
+
+    expect(manager?.permissions?.importUpload).toBe(true);
 
     for (const account of accounts) {
 
@@ -1213,6 +1225,8 @@ describe('API xác thực & bootstrap', () => {
         permissions: JSON.stringify({
 
           importEdit: false,
+
+          importUpload: false,
 
           mstEdit: true,
 
@@ -1251,6 +1265,8 @@ describe('API xác thực & bootstrap', () => {
     expect(admin?.permissions?.mstEdit).toBe(true);
 
     expect(admin?.permissions?.importEdit).toBe(false);
+
+    expect(admin?.permissions?.importUpload).toBe(false);
 
 
 
@@ -1724,11 +1740,13 @@ describe('Quản lý tài khoản', () => {
 
       .patch('/api/auth/accounts/quyen.tester')
 
-      .send({ permissions: { importEdit: true, auditView: true } });
+      .send({ permissions: { importEdit: true, importUpload: true, auditView: true } });
 
     expect(patchRes.status).toBe(200);
 
     expect(patchRes.body?.account?.permissions?.importEdit).toBe(true);
+
+    expect(patchRes.body?.account?.permissions?.importUpload).toBe(true);
 
     expect(patchRes.body?.account?.permissions?.auditView).toBe(true);
 
@@ -1749,6 +1767,8 @@ describe('Quản lý tài khoản', () => {
       expect.arrayContaining([
 
         expect.objectContaining({ key: 'importEdit', after: true }),
+
+        expect.objectContaining({ key: 'importUpload', after: true }),
 
         expect.objectContaining({ key: 'auditView', after: true }),
 
@@ -1816,7 +1836,7 @@ describe('API thông báo hệ thống', () => {
 
 
 
-describe('Đồng bộ tài khoản với SQL Server', () => {
+describeExternal('Đồng bộ tài khoản với SQL Server', () => {
 
   beforeEach(() => {
 
@@ -1876,7 +1896,7 @@ describe('Đồng bộ tài khoản với SQL Server', () => {
 
 
 
-describe('AI assistant API', () => {
+describeExternal('AI assistant API', () => {
 
   beforeEach(() => {
 
@@ -3692,7 +3712,7 @@ describe('Audit export API', () => {
 
 
 
-describe('ECUS sync API', () => {
+describeExternal('ECUS sync API', () => {
 
   it('trả về cấu hình mặc định', async () => {
 
@@ -6340,7 +6360,7 @@ describe('Storage API', () => {
 
       .patch('/api/auth/accounts/nhanvien')
 
-      .send({ permissions: { importEdit: false } });
+      .send({ permissions: { importEdit: false, importUpload: false } });
 
     expect(downgradeRes.status).toBe(200);
 
@@ -6372,7 +6392,7 @@ describe('Storage API', () => {
 
         .patch('/api/auth/accounts/nhanvien')
 
-        .send({ permissions: { importEdit: true } });
+        .send({ permissions: { importEdit: true, importUpload: true } });
 
     }
 

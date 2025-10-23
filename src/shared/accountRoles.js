@@ -2,6 +2,8 @@ export const ACCOUNT_PERMISSION_KEYS = Object.freeze([
 
   'importEdit',
 
+  'importUpload',
+
   'mstEdit',
 
   'rulesEdit',
@@ -52,6 +54,8 @@ const ROLE_PERMISSION_TEMPLATES = Object.freeze({
 
     importEdit: false,
 
+    importUpload: false,
+
     mstEdit: false,
 
     rulesEdit: false,
@@ -87,6 +91,8 @@ const ROLE_PERMISSION_TEMPLATES = Object.freeze({
   [TEAM_LEAD_ROLE]: Object.freeze({
 
     importEdit: true,
+
+    importUpload: false,
 
     mstEdit: true,
 
@@ -124,6 +130,8 @@ const ROLE_PERMISSION_TEMPLATES = Object.freeze({
 
     importEdit: true,
 
+    importUpload: true,
+
     mstEdit: true,
 
     rulesEdit: true,
@@ -159,6 +167,8 @@ const ROLE_PERMISSION_TEMPLATES = Object.freeze({
   [ADMIN_ROLE]: Object.freeze({
 
     importEdit: true,
+
+    importUpload: true,
 
     mstEdit: true,
 

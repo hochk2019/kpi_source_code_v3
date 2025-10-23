@@ -3376,11 +3376,15 @@ export default function DataImporter({
 
   canEdit = true,
 
+  canImportUpload = false,
+
   currentUser = null,
 
   canManageSync = false,
 
   canManageAlerts = false,
+
+  allowAdminUploadOverride = true,
 
 }) {
 
@@ -3972,7 +3976,7 @@ export default function DataImporter({
 
 
 
-  const canUploadFiles = canEdit && !(isTeamLead || isStaffRole);
+  const canUploadFiles = canImportUpload || (allowAdminUploadOverride && isAdminRole);
 
   const canOverwriteData = isAdminRole && canUploadFiles;
 
@@ -7506,17 +7510,21 @@ export default function DataImporter({
 
   function handleFileChange(e) {
 
-    if (isReadOnlyForEdits) {
+    if (!canUploadFiles) {
 
-      alert("Bạn đang ở chế độ chỉ xem — hãy đăng nhập để import dữ liệu.");
+      alert(
+
+        "Tài khoản của bạn chưa được cấp quyền \"Import Data – tải file\". Vui lòng liên hệ quản trị viên để mở quyền tải file import."
+
+      );
 
       return;
 
     }
 
-    if (!canUploadFiles) {
+    if (isReadOnlyForEdits) {
 
-      alert("Tài khoản của bạn không được phép import XLSX. Vui lòng liên hệ quản trị viên nếu cần cấp quyền.");
+      alert("Bạn đang ở chế độ chỉ xem — hãy đăng nhập để import dữ liệu.");
 
       return;
 
@@ -9400,17 +9408,21 @@ const selectedReviewedCount = useMemo(() => {
 
   function handleImport() {
 
-    if (isReadOnlyForEdits) {
+    if (!canUploadFiles) {
 
-      alert("Bạn không có quyền import dữ liệu. Đăng nhập bằng tài khoản được cấp quyền để tiếp tục.");
+      alert(
+
+        "Tài khoản của bạn chưa được cấp quyền \"Import Data – tải file\". Vui lòng liên hệ quản trị viên để mở quyền tải file import."
+
+      );
 
       return;
 
     }
 
-    if (!canUploadFiles) {
+    if (isReadOnlyForEdits) {
 
-      alert("Tài khoản của bạn không được phép import XLSX. Vui lòng liên hệ quản trị viên nếu cần cấp quyền.");
+      alert("Bạn không có quyền import dữ liệu. Đăng nhập bằng tài khoản được cấp quyền để tiếp tục.");
 
       return;
 
@@ -12449,28 +12461,26 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
       </Dialog>
 
       <div ref={rootRef} className="import-data-view space-y-3">
+        {!canUploadFiles && (
+          <div className="rounded border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-500/50 dark:bg-amber-500/10 dark:text-amber-100">
+            <div className="font-semibold">Bạn chưa được cấp quyền tải file Import Data.</div>
+            <p className="mt-1 text-xs text-amber-700 dark:text-amber-200">
+              Liên hệ quản lý hoặc quản trị viên để bật quyền <strong>Import Data – tải file</strong>. Nếu cần xử lý gấp, hãy gửi file cho quản trị viên để họ hỗ trợ import thay.
+            </p>
+          </div>
+        )}
+        {isReadOnlyForEdits && !canManageAlerts && (
+          <div className="rounded border border-amber-300 bg-amber-50 p-3 text-sm text-amber-700 dark:border-amber-500/50 dark:bg-amber-500/10 dark:text-amber-100">
+            Bạn đang ở chế độ chỉ xem. Đăng nhập bằng tài khoản được cấp quyền để import, chỉnh sửa và lưu dữ liệu tờ khai.
+          </div>
+        )}
+        {isReadOnlyForEdits && canManageAlerts && (
+          <div className="rounded border border-blue-300 bg-blue-50 p-3 text-sm text-blue-700 dark:border-blue-500/50 dark:bg-blue-500/10 dark:text-blue-200">
+            Bạn có thể rà soát và đánh dấu các tờ khai thiếu thông tin nhưng không thể chỉnh sửa dữ liệu tờ khai.
+          </div>
+        )}
 
-      {isReadOnlyForEdits && !canManageAlerts && (
-
-        <div className="rounded border border-amber-300 bg-amber-50 text-amber-700 p-3 text-sm">
-
-          Bạn đang ở chế độ chỉ xem. Đăng nhập bằng tài khoản được cấp quyền để import, chỉnh sửa và lưu dữ liệu tờ khai.
-
-        </div>
-
-      )}
-
-      {isReadOnlyForEdits && canManageAlerts && (
-
-        <div className="rounded border border-blue-300 bg-blue-50 p-3 text-sm text-blue-700">
-
-          Bạn có thể rà soát và đánh dấu các tờ khai thiếu thông tin nhưng không thể chỉnh sửa dữ liệu tờ khai.
-
-        </div>
-
-      )}
-
-      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
 
         {summaryCards.map((card) => (
 

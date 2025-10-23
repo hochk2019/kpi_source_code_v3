@@ -54,6 +54,8 @@ const KPICalculator = ({ auth, activeTab = 'reports', onTabChange }) => {
 
   const canImportEdit = !!permissions.importEdit;
 
+  const canImportUpload = !!permissions.importUpload;
+
   const canMstEdit = !!permissions.mstEdit;
 
   const canRulesEdit = !!permissions.rulesEdit;
@@ -403,6 +405,8 @@ const KPICalculator = ({ auth, activeTab = 'reports', onTabChange }) => {
             <DataImporter
 
               canEdit={canImportEdit}
+
+              canImportUpload={canImportUpload}
 
               currentUser={effectiveAuth}
 

@@ -1182,7 +1182,7 @@ const DEFAULT_ACCOUNT_SEED = [
 
     name: 'Nhân viên',
 
-    permissions: mergePermissions(DEFAULT_ROLE, { importEdit: true }),
+    permissions: mergePermissions(DEFAULT_ROLE, { importEdit: true, importUpload: true }),
 
   },
 
@@ -1331,6 +1331,8 @@ const STORAGE_PERMISSION_REQUIREMENTS = Object.freeze({
 const ACCOUNT_PERMISSION_LABELS = Object.freeze({
 
   importEdit: 'Import Data – chỉnh sửa & lưu',
+
+  importUpload: 'Import Data – tải file',
 
   mstEdit: 'Gán MST – chỉnh sửa',
 
