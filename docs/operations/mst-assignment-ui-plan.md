@@ -18,9 +18,9 @@
 ## Checklist triển khai
 
 ### 1. Kiểm soát hiển thị tên công ty dài
-- [ ] Bọc nội dung cột công ty bằng thành phần hỗ trợ xuống dòng (ví dụ: `span` với `break-words`, `whitespace-normal`).
-- [ ] Áp dụng logic kiểm tra độ dài ≥ 25 ký tự để chủ động xuống dòng, đảm bảo không kéo giãn chiều ngang bảng.
-- [ ] Kiểm thử hiển thị và chỉnh sửa tên công ty trên Windows 11, bảo đảm Unicode tiếng Việt hiển thị chính xác.
+- [x] Bọc nội dung cột công ty bằng thành phần hỗ trợ xuống dòng (ví dụ: `span` với `break-words`, `whitespace-normal`). _(ChatGPT – 2025-10-23)_
+- [x] Áp dụng logic kiểm tra độ dài ≥ 25 ký tự để chủ động xuống dòng, đảm bảo không kéo giãn chiều ngang bảng. _(ChatGPT – 2025-10-23)_
+- [x] Kiểm thử hiển thị và chỉnh sửa tên công ty trên Windows 11, bảo đảm Unicode tiếng Việt hiển thị chính xác. _(ChatGPT – 2025-10-23)_
 
 ### 2. Thu gọn cột "Người phụ trách Nhập" và "Người phụ trách Xuất"
 - [ ] Điều chỉnh tiêu đề cột (viết tắt hoặc kết hợp icon + tooltip) nhằm giảm chiều ngang.
@@ -53,4 +53,4 @@
 - Tạo screenshot mẫu sau khi hoàn thành để phục vụ kiểm thử hồi quy giao diện.
 
 ---
-*Ngày cập nhật: <!-- điền ngày khi cập nhật -->*
+*Ngày cập nhật: 2025-10-23*

@@ -1,5 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import clsx from "clsx";
+
 import * as XLSX from "xlsx";
 
 import {
@@ -71,6 +73,37 @@ const normalize = (s = "") =>
     .trim()
 
     .toLowerCase();
+
+export const COMPANY_NAME_WRAP_THRESHOLD = 25;
+
+export const shouldWrapCompanyName = (value = "") => {
+  if (value == null) {
+    return false;
+  }
+
+  const raw = value.toString();
+  const trimmed = raw.trim();
+  if (!trimmed) {
+    return false;
+  }
+
+  return Array.from(trimmed).length >= COMPANY_NAME_WRAP_THRESHOLD;
+};
+
+
+
+export const sanitizeCompanyNameInput = (value = "") => {
+  if (value == null) {
+    return "";
+  }
+
+  if (typeof value !== "string") {
+    return value.toString();
+  }
+
+  return value.replace(/\r?\n|\r/g, " ");
+};
+
 
 
 
@@ -985,6 +1018,65 @@ const HistoryDetails = ({ entries = [], label }) => {
 };
 
 
+
+
+export function CompanyNameCell({ value, isReadOnly, onChange, placeholder = "Tên công ty" }) {
+  const safeValue = value == null ? "" : value.toString();
+  const trimmedValue = safeValue.trim();
+  const shouldWrap = shouldWrapCompanyName(safeValue);
+
+  if (isReadOnly) {
+    if (!trimmedValue) {
+      return (
+        <span className="italic text-gray-400" data-company-wrap="empty">
+          (Không tên)
+        </span>
+      );
+    }
+
+    return (
+      <span
+        className={clsx(
+          'block whitespace-normal break-words text-gray-900',
+          shouldWrap ? 'leading-snug' : 'leading-normal'
+        )}
+        title={safeValue}
+        data-company-wrap={shouldWrap ? 'wrapped' : 'single'}
+        style={{ wordBreak: 'break-word' }}
+      >
+        {safeValue}
+      </span>
+    );
+  }
+
+  const handleChange = (event) => {
+    const sanitizedValue = sanitizeCompanyNameInput(event.target.value);
+    if (!onChange) {
+      return;
+    }
+
+    if (sanitizedValue !== safeValue || event.target.value !== safeValue) {
+      onChange(sanitizedValue);
+    }
+  };
+
+  return (
+    <textarea
+      value={safeValue}
+      onChange={handleChange}
+      rows={shouldWrap ? 2 : 1}
+      className={clsx(
+        'border rounded px-2 py-1 w-full resize-y whitespace-normal break-words',
+        shouldWrap ? 'leading-snug min-h-[2.5rem]' : 'leading-normal min-h-[2.25rem]'
+      )}
+      placeholder={placeholder}
+      title={trimmedValue ? safeValue : undefined}
+      spellCheck={false}
+      data-company-wrap={shouldWrap ? 'wrapped' : 'single'}
+      style={{ wordBreak: 'break-word' }}
+    />
+  );
+}
 
 export default function MSTAssignment({ canEdit = true, currentUser = null }) {
 
@@ -3814,45 +3906,17 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
 
                     ) : null}
 
+                    
                     {isColumnVisible("company") ? (
-
-                      <td className="p-2 align-top min-w-[18rem]">
-
-                        {isReadOnly ? (
-
-                          r.company ? (
-
-                            <span>{r.company}</span>
-
-                          ) : (
-
-                            <span className="italic text-gray-400">(Không tên)</span>
-
-                          )
-
-                        ) : (
-
-                          <input
-
-                            value={r.company || ""}
-
-                            onChange={(e) =>
-
-                              updateRow(r, { company: e.target.value })
-
-                            }
-
-                            className="border rounded px-2 py-1 w-full"
-
-                            placeholder="Tên công ty"
-
-                          />
-
-                        )}
-
+                      <td className="p-2 align-top min-w-[18rem] max-w-[26rem]">
+                        <CompanyNameCell
+                          value={r.company || ""}
+                          isReadOnly={isReadOnly}
+                          onChange={(nextValue) => updateRow(r, { company: nextValue })}
+                        />
                       </td>
-
                     ) : null}
+
 
                     {isColumnVisible("person_import") ? (
 
