@@ -28,6 +28,14 @@ process.env.ECUS_SQL_SERVER = 'MOCK-SERVER';
 
 
 
+const skipExternalTests = ['1', 'true', 'yes'].includes(
+  String(process.env.KPI_SKIP_EXTERNAL_TESTS || '').toLowerCase()
+);
+
+const describeExternal = skipExternalTests ? describe.skip : describe;
+
+
+
 const mockState = {
 
   result: [],
@@ -1828,7 +1836,7 @@ describe('API thông báo hệ thống', () => {
 
 
 
-describe('Đồng bộ tài khoản với SQL Server', () => {
+describeExternal('Đồng bộ tài khoản với SQL Server', () => {
 
   beforeEach(() => {
 
@@ -1888,7 +1896,7 @@ describe('Đồng bộ tài khoản với SQL Server', () => {
 
 
 
-describe('AI assistant API', () => {
+describeExternal('AI assistant API', () => {
 
   beforeEach(() => {
 
@@ -3704,7 +3712,7 @@ describe('Audit export API', () => {
 
 
 
-describe('ECUS sync API', () => {
+describeExternal('ECUS sync API', () => {
 
   it('trả về cấu hình mặc định', async () => {
 
