@@ -6770,7 +6770,7 @@ const handleDetailPageSizeCustomInputChange = (event) => {
 
                     type="submit"
 
-                    className="rounded bg-[color:var(--ds-surface-primary)] px-3 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-[color:var(--ds-surface-strong)]"
+                    className="rounded bg-[color:var(--ds-accent)] px-3 py-2 text-sm font-semibold text-[color:var(--ds-text-inverse)] shadow-sm transition-colors hover:bg-[color:var(--ds-accent-strong)]"
 
                   >
 
