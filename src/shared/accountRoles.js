@@ -22,6 +22,8 @@ export const ACCOUNT_PERMISSION_KEYS = Object.freeze([
 
   'adjustApprove',
 
+  'adjustOverridePoints',
+
   'aiAssistUse',
 
   'aiAssistManage',
@@ -70,6 +72,8 @@ const ROLE_PERMISSION_TEMPLATES = Object.freeze({
 
     adjustApprove: false,
 
+    adjustOverridePoints: false,
+
     aiAssistUse: true,
 
     aiAssistManage: false,
@@ -103,6 +107,8 @@ const ROLE_PERMISSION_TEMPLATES = Object.freeze({
     adjustSubmit: true,
 
     adjustApprove: true,
+
+    adjustOverridePoints: false,
 
     aiAssistUse: true,
 
@@ -138,6 +144,8 @@ const ROLE_PERMISSION_TEMPLATES = Object.freeze({
 
     adjustApprove: true,
 
+    adjustOverridePoints: true,
+
     aiAssistUse: true,
 
     aiAssistManage: true,
@@ -171,6 +179,8 @@ const ROLE_PERMISSION_TEMPLATES = Object.freeze({
     adjustSubmit: true,
 
     adjustApprove: true,
+
+    adjustOverridePoints: true,
 
     aiAssistUse: true,
 

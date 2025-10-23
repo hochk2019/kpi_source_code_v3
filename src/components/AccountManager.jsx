@@ -188,6 +188,16 @@ const PERMISSION_DETAILS = Object.freeze({
 
   },
 
+  adjustOverridePoints: {
+
+    label: "Điểm KPI +/- thêm – ghi đè điểm chuẩn",
+
+    description: "Cho phép sửa điểm chuẩn mỗi đơn vị/điểm bổ sung thay vì dùng cấu hình mặc định (trừ hạng mục đặc biệt).",
+
+    category: "Điều chỉnh KPI",
+
+  },
+
   aiAssistUse: {
 
     label: "Trợ lý AI – sử dụng",
