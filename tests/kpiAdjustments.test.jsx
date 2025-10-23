@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
-import { render, screen, waitFor, within, fireEvent } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 
 import userEvent from '@testing-library/user-event';
 
@@ -114,7 +114,67 @@ describe('KPIAdjustments UI', () => {
 
   afterEach(() => {
 
+    cleanup();
+
     vi.restoreAllMocks();
+
+  });
+
+
+
+  it('tự động điền tên nhân viên và tổ đội theo tài khoản hiện tại', async () => {
+
+    render(
+
+      <KPIAdjustments
+
+        currentUser={{
+
+          username: 'binh.staff',
+
+          memberName: 'Bình',
+
+          teamName: '',
+
+          permissions: { adjustSubmit: true },
+
+        }}
+
+      />
+
+    );
+
+
+    const staffInput = await screen.findByLabelText('Nhân viên');
+
+    expect(staffInput).toHaveValue('Bình');
+
+
+    const teamInput = screen.getByLabelText('Tổ đội');
+
+    expect(teamInput).toHaveValue('Team 1');
+
+  });
+
+
+
+  it('giữ trống trường nhân viên khi tài khoản chưa gán nhân viên', async () => {
+
+    render(
+
+      <KPIAdjustments currentUser={{ username: 'khach', permissions: { adjustSubmit: true } }} />
+
+    );
+
+
+    const staffInput = await screen.findByLabelText('Nhân viên');
+
+    expect(staffInput).toHaveValue('');
+
+
+    const teamInput = screen.getByLabelText('Tổ đội');
+
+    expect(teamInput).toHaveValue('');
 
   });
 

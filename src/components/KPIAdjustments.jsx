@@ -23,6 +23,7 @@ import {
   saveKpiAdjustmentSettings,
 
   getTeamRoster,
+  mapMemberNamesToTeams,
 
   getDeclRows,
 
@@ -1444,9 +1445,61 @@ function formatDateTime(value) {
 
 
 
-const initialFormState = (month = getCurrentMonth(), settings) => {
+function resolveStaffDefaults(user, roster) {
 
-  const defaults = resolveCategoryDefaults("support_fixed", settings);
+  const staffName = normalizeStr(user?.memberName || "");
+
+  if (!staffName) {
+
+    return { staffName: "", teamName: "" };
+
+  }
+
+
+  let teamName = normalizeStr(user?.teamName || "");
+
+  if (!teamName) {
+
+    try {
+
+      const memberMap = mapMemberNamesToTeams(roster);
+
+      const normalizedKey = normalizeName(staffName);
+
+      if (normalizedKey && memberMap instanceof Map) {
+
+        const matched = memberMap.get(normalizedKey);
+
+        if (matched?.team) {
+
+          teamName = normalizeStr(matched.team);
+
+        }
+
+      }
+
+    } catch (error) {
+
+      console.warn("Khong the lay thong tin to doi mac dinh cho nhan vien", error);
+
+    }
+
+  }
+
+
+  return { staffName, teamName };
+
+}
+
+
+
+const initialFormState = (month = getCurrentMonth(), settings, presets = {}) => {
+
+  const categoryDefaults = resolveCategoryDefaults("support_fixed", settings);
+
+  const presetStaff = normalizeStr(presets.staffName || "");
+
+  const presetTeam = normalizeStr(presets.teamName || "");
 
   return {
 
@@ -1456,27 +1509,27 @@ const initialFormState = (month = getCurrentMonth(), settings) => {
 
     month,
 
-    staffName: "",
+    staffName: presetStaff,
 
-    teamName: "",
+    teamName: presetTeam,
 
     companyName: "",
 
     taxCode: "",
 
-    quantity: defaults.quantity,
+    quantity: categoryDefaults.quantity,
 
-    unitPoints: defaults.unitPoints,
+    unitPoints: categoryDefaults.unitPoints,
 
-    gradeValue: defaults.gradeValue,
+    gradeValue: categoryDefaults.gradeValue,
 
-    extraQuantity: defaults.extraQuantity ?? 0,
+    extraQuantity: categoryDefaults.extraQuantity ?? 0,
 
-    extraUnitPoints: defaults.extraUnitPoints ?? 0,
+    extraUnitPoints: categoryDefaults.extraUnitPoints ?? 0,
 
-    mode: defaults.mode,
+    mode: categoryDefaults.mode,
 
-    licenseCode: defaults.licenseCode || "",
+    licenseCode: categoryDefaults.licenseCode || "",
 
     note: "",
 
@@ -1516,7 +1569,9 @@ export default function KPIAdjustments({ currentUser }) {
 
   const [filterStatus, setFilterStatus] = useState("all");
 
-  const [form, setForm] = useState(() => initialFormState(undefined, settings));
+  const [form, setForm] = useState(() =>
+    initialFormState(undefined, settings, resolveStaffDefaults(currentUser, getTeamRoster()))
+  );
 
   const [isEditing, setIsEditing] = useState(false);
 
@@ -1534,7 +1589,9 @@ export default function KPIAdjustments({ currentUser }) {
 
   const [declarationSearch, setDeclarationSearch] = useState("");
 
+  const staffDefaults = useMemo(() => resolveStaffDefaults(currentUser, roster), [currentUser, roster]);
 
+  const { staffName: defaultStaffName, teamName: defaultTeamName } = staffDefaults;
 
   const businessEntries = useMemo(() => businessDirectory.entries || [], [businessDirectory]);
 
@@ -2017,6 +2074,61 @@ export default function KPIAdjustments({ currentUser }) {
     }
 
   }, [detailEntry]);
+
+
+
+  useEffect(() => {
+
+    if (isEditing) {
+
+      return;
+
+    }
+
+
+    const hasDefaultStaff = normalizeStr(defaultStaffName);
+
+    const hasDefaultTeam = normalizeStr(defaultTeamName);
+
+
+    if (!hasDefaultStaff && !hasDefaultTeam) {
+
+      return;
+
+    }
+
+
+    setForm((prev) => {
+
+      const currentStaff = normalizeStr(prev.staffName);
+
+      const currentTeam = normalizeStr(prev.teamName);
+
+      let updated = false;
+
+      const next = { ...prev };
+
+      if (hasDefaultStaff && !currentStaff) {
+
+        next.staffName = defaultStaffName;
+
+        updated = true;
+
+      }
+
+      if (hasDefaultTeam && !currentTeam) {
+
+        next.teamName = defaultTeamName;
+
+        updated = true;
+
+      }
+
+      return updated ? next : prev;
+
+    });
+
+  }, [defaultStaffName, defaultTeamName, isEditing]);
 
 
 
@@ -2592,7 +2704,19 @@ export default function KPIAdjustments({ currentUser }) {
 
   const resetForm = () => {
 
-    setForm(initialFormState(filterMonth && filterMonth !== "all" ? filterMonth : getCurrentMonth(), settings));
+    setForm(
+
+      initialFormState(
+
+        filterMonth && filterMonth !== "all" ? filterMonth : getCurrentMonth(),
+
+        settings,
+
+        staffDefaults,
+
+      ),
+
+    );
 
     setIsEditing(false);
 
