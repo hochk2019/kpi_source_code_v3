@@ -272,7 +272,33 @@ describe('KPIAdjustments UI', () => {
 
     await userEvent.click(guidanceButtons[0]);
 
-    await screen.findByText('Hạng mục "Đi làm muộn" đã được loại bỏ.', { exact: false });
+    const supportMiscTable = await screen.findByRole('table', { name: 'Hướng dẫn: Hỗ trợ khác' });
+
+    const supportMiscQueries = within(supportMiscTable);
+
+    expect(supportMiscQueries.getByText('Hỗ trợ khác')).toBeInTheDocument();
+
+    expect(supportMiscQueries.getByText('0,20', { exact: false })).toBeInTheDocument();
+
+    expect(supportMiscQueries.getAllByText('Tuỳ chỉnh').length).toBeGreaterThan(0);
+
+    expect(supportMiscQueries.getByText(/Chế độ: Linh hoạt theo số lượng/i)).toBeInTheDocument();
+
+    expect(
+
+      supportMiscQueries.getByText('Đang áp dụng cấu hình tuỳ chỉnh của đơn vị.')
+
+    ).toBeInTheDocument();
+
+    const licenseTable = screen.getByRole('table', { name: 'Hướng dẫn: Hỗ trợ giấy phép' });
+
+    const licenseQueries = within(licenseTable);
+
+    expect(licenseQueries.getByText('Hỗ trợ xin giấy phép')).toBeInTheDocument();
+
+    expect(licenseQueries.getByText('ZB03')).toBeInTheDocument();
+
+    expect(licenseQueries.getByText('2,80', { exact: false })).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole('button', { name: 'Đã rõ' }));
 
