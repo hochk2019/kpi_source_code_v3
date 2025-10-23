@@ -258,5 +258,42 @@ describe('AccountManager – gắn nhân viên KPI', () => {
 
   });
 
+
+
+
+  it('hiển thị vùng cuộn và hai nút điều hướng trong hộp thoại danh sách quyền', async () => {
+    const user = userEvent.setup();
+    render(<AccountManager currentUser={{ username: 'admin' }} />);
+  
+    const tables = await screen.findAllByRole('table');
+    expect(tables.length).toBeGreaterThan(0);
+    const table = tables[0];
+    const dataRows = within(table)
+      .getAllByRole('row')
+      .slice(1);
+    const permissionRow = dataRows.find((row) =>
+      within(row).queryByRole('button', { name: 'Danh sách quyền' }),
+    );
+    const targetRow = permissionRow ?? dataRows[0];
+    expect(targetRow).toBeTruthy();
+  
+    const openButton = within(targetRow).getByRole('button', {
+      name: 'Danh sách quyền',
+    });
+    await user.click(openButton);
+  
+    const dialog = await screen.findByRole('dialog', { name: 'Quản lý quyền' });
+    const scrollAreaRoot = dialog.querySelector('[data-slot="scroll-area"]');
+    const viewport = dialog.querySelector('[data-slot="scroll-area-viewport"]');
+    const scrollDownButton = within(dialog).getByRole('button', { name: 'Cuộn xuống cuối' });
+    const scrollUpButton = within(dialog).getByRole('button', { name: 'Cuộn lên đầu' });
+  
+    expect(scrollAreaRoot).toBeTruthy();
+    expect(viewport).toBeTruthy();
+    expect(scrollDownButton).toBeDisabled();
+    expect(scrollUpButton).toBeDisabled();
+  
+  });
+
 });
 
