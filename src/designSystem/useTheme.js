@@ -1,12 +1,7 @@
-import { useContext } from 'react';
+import { useContext } from "react";
 
-import { ThemeContext } from './themeContext.js';
-
-
+import { ThemeContext } from "./themeContext.js";
 
 export function useTheme() {
-
   return useContext(ThemeContext);
-
 }
-

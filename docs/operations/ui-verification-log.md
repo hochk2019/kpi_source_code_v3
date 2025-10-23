@@ -10,7 +10,7 @@ Trong phiên kiểm tra này, chúng tôi đã đăng nhập bằng tài khoản
 2. **Trình nhập dữ liệu** – thể hiện bộ lọc lưu sẵn, hộp thoại so sánh bản ghi trùng (diff viewer) và toast thông báo chuẩn hóa Unicode.
 3. **Lịch sử export** – trình bày bảng tra soát `export_audit` với bộ lọc thời gian, chi tiết watermark và chữ ký SHA-256.
 
-> *Ảnh chụp chi tiết được đính kèm trong báo cáo tự động của bot (không lưu trực tiếp vào repository để tránh tăng dung lượng không cần thiết).* 
+> _Ảnh chụp chi tiết được đính kèm trong báo cáo tự động của bot (không lưu trực tiếp vào repository để tránh tăng dung lượng không cần thiết)._
 
 ## Hành động bổ sung
 

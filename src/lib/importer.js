@@ -1,33 +1,24 @@
 import {
-
   normalizeStr,
-
   normalizeMST,
-
   normalizeDeclarationNumber,
-
   toISODate,
-
   getMSTFor,
-
   isExportDecl,
-
   normalizeName,
-
 } from "./store.js";
 
 import { loadRules, countLicenseTypesFromRowObj, extractLicenseCodesFromRowObj } from "./rules.js";
 
 import { deriveCOStatus, parseCoLineCount } from "../shared/co.js";
 
-
-
-const normalizeCodeValue = (value) => String(value ?? "").trim().toUpperCase();
+const normalizeCodeValue = (value) =>
+  String(value ?? "")
+    .trim()
+    .toUpperCase();
 
 const normalizeLookupKey = (value) =>
-
   String(value ?? "")
-
     .normalize("NFD")
 
     .replace(/[\u0300-\u036f]/g, "")
@@ -40,12 +31,8 @@ const normalizeLookupKey = (value) =>
 
     .trim();
 
-
-
 const NAME_MAP = {
-
   so_tk: [
-
     "Sá»‘ TK",
 
     "Sá»‘ tá» khai",
@@ -59,15 +46,24 @@ const NAME_MAP = {
     "Sá»‘ tá» khai TM ",
 
     "Sá»‘ tá» khai xuáº¥t nháº­p kháº©u",
+  ],
+  nhanh: ["NhÃ¡nh", "Nhanh", "branch"],
 
-  ],nhanh: ["NhÃ¡nh", "Nhanh", "branch"],
-
-  date: ["date", "ngày", "Ngay", "Ngày", "Ngày đăng ký", "Ngay dang ky", "Ngay DK", "Ngày ĐK", "Ngay ĐK"],
+  date: [
+    "date",
+    "ngày",
+    "Ngay",
+    "Ngày",
+    "Ngày đăng ký",
+    "Ngay dang ky",
+    "Ngay DK",
+    "Ngày ĐK",
+    "Ngay ĐK",
+  ],
 
   ma_hq: ["MÃ£ HQ", "Ma HQ", "MÃ£ hq", "ma_hq"],
 
   loai_hinh: [
-
     "Loáº¡i hÃ¬nh",
 
     "Loai hinh",
@@ -83,7 +79,6 @@ const NAME_MAP = {
     "MA_LH",
 
     "ma_lh",
-
   ],
 
   so_hoa_don: ["Sá»‘ hÃ³a Ä‘Æ¡n TM", "So hoa don TM", "Sá»‘ hoÃ¡ Ä‘Æ¡n TM"],
@@ -101,7 +96,6 @@ const NAME_MAP = {
   phan_luong: ["PhÃ¢n luá»“ng", "Phan luong"],
 
   muc_hang: [
-
     "Má»¥c hÃ ng",
 
     "Muc hang",
@@ -115,7 +109,6 @@ const NAME_MAP = {
     "TotalItems",
 
     "totalitems",
-
   ],
 
   mst: ["MST", "mst", "MÃ£ sá»‘ thuáº¿", "Ma so thue"],
@@ -125,7 +118,6 @@ const NAME_MAP = {
   agency: ["Äáº¡i lÃ½", "Äáº¡i lÃ½ HQ", "Dai ly", "Dai ly HQ", "Agency"],
 
   co_line_count: [
-
     "DÃ²ng hÃ ng Ã¡p C/O",
 
     "Dong hang ap C/O",
@@ -163,19 +155,12 @@ const NAME_MAP = {
     "Sá»‘ dÃ²ng Ã¡p C/O",
 
     "So dong ap C/O",
-
   ],
-
 };
 
-
-
 function pick(row, keys) {
-
   for (const k of keys) {
-
     if (Object.prototype.hasOwnProperty.call(row, k)) return row[k];
-
   }
 
   if (!row || typeof row !== "object") return "";
@@ -183,78 +168,55 @@ function pick(row, keys) {
   const lookup = new Map();
 
   for (const actualKey of Object.keys(row)) {
-
     const normalized = normalizeLookupKey(actualKey);
 
     if (!normalized || lookup.has(normalized)) continue;
 
     lookup.set(normalized, actualKey);
-
   }
 
   for (const candidate of keys) {
-
     const normalizedCandidate = normalizeLookupKey(candidate);
 
     const actual = lookup.get(normalizedCandidate);
 
     if (actual !== undefined) {
-
       return row[actual];
-
     }
-
   }
 
   return "";
-
 }
 
-
-
 export function detectDateOrder(rows) {
-
   let monthFirst = 0;
 
   let dayFirst = 0;
 
   for (const row of Array.isArray(rows) ? rows : []) {
-
     if (!row || typeof row !== "object") continue;
 
     const raw = normalizeStr(pick(row, NAME_MAP.date));
 
     if (!raw) continue;
 
-
-
     const isoLike = raw.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:[ T].*)?$/);
 
     if (isoLike) {
-
       const monthVal = Number.parseInt(isoLike[2], 10);
 
       const dayVal = Number.parseInt(isoLike[3], 10);
 
       if (monthVal > 12 && dayVal >= 1 && dayVal <= 12) {
-
         dayFirst += 1;
-
       } else if (dayVal > 12 && monthVal >= 1 && monthVal <= 12) {
-
         monthFirst += 1;
-
       } else if (dayVal > 12 && monthVal > 12) {
-
         monthFirst += 1;
-
       }
 
       continue;
-
     }
-
-
 
     const slashLike = raw.match(/^(\d{1,2})[./-](\d{1,2})[./-](\d{2,4})(?:[ T].*)?$/);
 
@@ -265,33 +227,20 @@ export function detectDateOrder(rows) {
     const second = Number.parseInt(slashLike[2], 10);
 
     if (first > 12 && second <= 12) {
-
       dayFirst += 1;
-
     } else if (second > 12 && first <= 12) {
-
       monthFirst += 1;
-
     }
-
   }
-
-
 
   if (monthFirst > dayFirst) return "mdy";
 
   if (dayFirst > monthFirst) return "dmy";
 
   return "dmy";
-
 }
 
-
-
 export function mapRow(row, opts = {}) {
-
-
-
   const so_tk_full = normalizeStr(pick(row, NAME_MAP.so_tk));
 
   const so_tk = normalizeDeclarationNumber(so_tk_full);
@@ -328,8 +277,6 @@ export function mapRow(row, opts = {}) {
 
   let agency = normalizeStr(pick(row, NAME_MAP.agency));
 
-
-
   let nhan_vien = normalizeStr(row["nhan_vien"] || row["NhÃ¢n viÃªn"] || "");
 
   let team = normalizeStr(row["team"] || row["Tá»• Ä‘á»™i"] || "");
@@ -341,35 +288,24 @@ export function mapRow(row, opts = {}) {
   const ruleLicenseConfig = opts.rules?.license || null;
 
   const licenseExcludeRaw = Array.isArray(opts.licenseExcludes)
-
     ? opts.licenseExcludes
-
-    : (ruleLicenseConfig?.exclude?.codes
-
-        || loadRules()?.license?.exclude?.codes
-
-        || []);
+    : ruleLicenseConfig?.exclude?.codes || loadRules()?.license?.exclude?.codes || [];
 
   const excludeSet = new Set(
-
     licenseExcludeRaw
 
       .map(normalizeCodeValue)
 
-      .filter(Boolean)
-
+      .filter(Boolean),
   );
 
   const agencyExcludeMap = new Map();
 
   const ruleAgencyExclude = Array.isArray(ruleLicenseConfig?.exclude?.agencies)
-
     ? ruleLicenseConfig.exclude.agencies
-
     : [];
 
   for (const entry of ruleAgencyExclude) {
-
     if (!entry) continue;
 
     const agencyKey = normalizeCodeValue(entry.agency);
@@ -385,19 +321,20 @@ export function mapRow(row, opts = {}) {
     if (!codes.length) continue;
 
     agencyExcludeMap.set(agencyKey, new Set(codes));
-
   }
 
   const rawLicenseCodes = extractLicenseCodesFromRowObj(row)
-
-    .map((code) => String(code || '').trim().toUpperCase())
+    .map((code) =>
+      String(code || "")
+        .trim()
+        .toUpperCase(),
+    )
 
     .filter(Boolean);
 
   const uniqueCodes = Array.from(new Set(rawLicenseCodes));
 
   const coLineCandidates = [
-
     NAME_MAP.co_line_count ? pick(row, NAME_MAP.co_line_count) : "",
 
     row.co_line_count,
@@ -407,29 +344,21 @@ export function mapRow(row, opts = {}) {
     row.co_lines,
 
     row.coLines,
-
   ];
 
   let co_line_count = 0;
 
   for (const candidate of coLineCandidates) {
-
     const parsed = parseCoLineCount(candidate);
 
     if (parsed > 0) {
-
       co_line_count = parsed;
 
       break;
-
     }
-
   }
 
-
-
   if (autoAssignStaff) {
-
     const isExport = isExportDecl(so_tk, loai_hinh);
 
     const m = getMSTFor(mst, dateISO) || {};
@@ -437,87 +366,52 @@ export function mapRow(row, opts = {}) {
     if (!nhan_vien) nhan_vien = isExport ? m.person_export || "" : m.person_import || "";
 
     if (!team) team = m.team || "";
-
   }
 
-
-
   if (nhan_vien && opts.memberMap instanceof Map) {
-
     const info = opts.memberMap.get(normalizeName(nhan_vien));
 
     if (info?.team) {
-
       if (!team || normalizeName(team) !== normalizeName(info.team)) {
-
         team = info.team;
-
       }
-
     }
-
   }
 
-
-
   if (agencyMap && mst) {
-
     const info = agencyMap.get(mst);
 
     if (info) {
-
       if (!agency) {
-
         agency = info.agent || "";
-
       }
 
       if (info.company && normalizeStr(cong_ty) !== info.company) {
-
         cong_ty = info.company;
-
       }
-
     }
-
   }
-
-
 
   if (!so_tk || !dateISO) {
-
     return null;
-
   }
-
-
 
   const agencyKeyNormalized = normalizeCodeValue(agency);
 
-  const combinedExcludeSet = agencyKeyNormalized && agencyExcludeMap.has(agencyKeyNormalized)
-
-    ? new Set([...excludeSet, ...agencyExcludeMap.get(agencyKeyNormalized)])
-
-    : excludeSet;
-
-
+  const combinedExcludeSet =
+    agencyKeyNormalized && agencyExcludeMap.has(agencyKeyNormalized)
+      ? new Set([...excludeSet, ...agencyExcludeMap.get(agencyKeyNormalized)])
+      : excludeSet;
 
   const excludedCodes = uniqueCodes.filter((code) => combinedExcludeSet.has(code));
 
   const effectiveCodes = uniqueCodes.filter((code) => !combinedExcludeSet.has(code));
 
-
-
   const licenses = uniqueCodes.length
-
     ? effectiveCodes.length
-
     : countLicenseTypesFromRowObj(row, Array.from(combinedExcludeSet));
 
-
-
   const base = {
-
     date: dateISO,
 
     raw_date: normalizeStr(rawDate),
@@ -581,10 +475,7 @@ export function mapRow(row, opts = {}) {
     licenseExcludedCodes: excludedCodes,
 
     co_line_count,
-
   };
 
   return deriveCOStatus(row, base);
-
 }
-

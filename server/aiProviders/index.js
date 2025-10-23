@@ -1,27 +1,23 @@
-import { createAnthropicProvider } from './anthropic.js';
+import { createAnthropicProvider } from "./anthropic.js";
 
-import { createAzureProvider } from './azure.js';
+import { createAzureProvider } from "./azure.js";
 
-import { createBaiduProvider } from './baidu.js';
+import { createBaiduProvider } from "./baidu.js";
 
-import { createDeepseekProvider } from './deepseek.js';
+import { createDeepseekProvider } from "./deepseek.js";
 
-import { createGoogleAiStudioProvider } from './googleAiStudio.js';
+import { createGoogleAiStudioProvider } from "./googleAiStudio.js";
 
-import { createOllamaProvider } from './ollama.js';
+import { createOllamaProvider } from "./ollama.js";
 
-import { createOpenAiProvider } from './openai.js';
+import { createOpenAiProvider } from "./openai.js";
 
-import { createQwenProvider } from './qwen.js';
+import { createQwenProvider } from "./qwen.js";
 
-import { createZaiProvider } from './zai.js';
-
-
+import { createZaiProvider } from "./zai.js";
 
 export function buildDefaultAiProviders(env = process.env) {
-
   const providers = [
-
     createAzureProvider(env),
 
     createOllamaProvider(env),
@@ -39,20 +35,13 @@ export function buildDefaultAiProviders(env = process.env) {
     createBaiduProvider(env),
 
     createZaiProvider(env),
-
   ];
 
-
-
   return {
+    defaultProviderId: "ollama-local",
 
-    defaultProviderId: 'ollama-local',
-
-    fallbackProviderId: 'azure-openai',
+    fallbackProviderId: "azure-openai",
 
     providers,
-
   };
-
 }
-

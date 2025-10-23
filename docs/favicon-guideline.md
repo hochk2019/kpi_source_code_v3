@@ -3,6 +3,7 @@
 Để tránh thông báo "Tệp nhị phân không được hỗ trợ" khi tạo Pull Request, favicon được nhúng trực tiếp dưới dạng chuỗi Base64 trong `index.html`.
 
 ## Cập nhật favicon mới
+
 1. Chuẩn bị file SVG logo mới (ưu tiên kích thước 200x200).
 2. Chạy script tự động:
    ```bash
@@ -12,6 +13,7 @@
 3. Commit thay đổi và chạy lại `pnpm lint` để đảm bảo file HTML không lỗi định dạng.
 
 ## Kiểm thử nhanh
+
 - Chạy `pnpm dev` và mở trình duyệt để xác nhận favicon mới hiển thị.
 - Nếu favicon không cập nhật, hãy xóa cache trình duyệt hoặc đổi tên query string `?v=<timestamp>` cho thẻ `<link>`.
 - Sau khi build (`pnpm build`), chạy `pnpm test:screenshot` để Playwright khởi động chế độ preview, xác thực chuỗi Base64 và tạo ảnh chụp màn hình phục vụ báo cáo.

@@ -16,11 +16,11 @@ Tài liệu này mô tả kiến trúc Giai đoạn 3 – Insight & Tóm tắt t
 
 ## API liên quan
 
-| Endpoint | Phương thức | Quyền | Ghi chú |
-| --- | --- | --- | --- |
-| `/api/ai/insights` | GET | `aiAssistUse` | Trả về danh sách insight mới nhất kèm meta `state`/`schedule`. Tham số `limit` (mặc định 30) giúp giới hạn bản ghi. |
-| `/api/ai/insights/run` | POST | `aiAssistManage` | Chạy job insight thủ công. Body tùy chọn `{ range: { from, to } }`. Trả về `{ insight, cached, skipped }` để UI hiển thị toast tương ứng. |
-| `/api/ai/insights/feedback` | POST | `aiAssistUse` | Body `{ insightId, helpful, comment? }`. Cập nhật tổng lượt hữu ích/chưa hữu ích và phản hồi của chính người dùng. |
+| Endpoint                    | Phương thức | Quyền            | Ghi chú                                                                                                                                   |
+| --------------------------- | ----------- | ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `/api/ai/insights`          | GET         | `aiAssistUse`    | Trả về danh sách insight mới nhất kèm meta `state`/`schedule`. Tham số `limit` (mặc định 30) giúp giới hạn bản ghi.                       |
+| `/api/ai/insights/run`      | POST        | `aiAssistManage` | Chạy job insight thủ công. Body tùy chọn `{ range: { from, to } }`. Trả về `{ insight, cached, skipped }` để UI hiển thị toast tương ứng. |
+| `/api/ai/insights/feedback` | POST        | `aiAssistUse`    | Body `{ insightId, helpful, comment? }`. Cập nhật tổng lượt hữu ích/chưa hữu ích và phản hồi của chính người dùng.                        |
 
 ## Kiểm thử
 

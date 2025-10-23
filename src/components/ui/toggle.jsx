@@ -1,17 +1,12 @@
-import * as React from "react"
+import * as React from "react";
 
-import * as TogglePrimitive from "@radix-ui/react-toggle"
+import * as TogglePrimitive from "@radix-ui/react-toggle";
 
+import { cn } from "@/lib/utils";
 
-
-import { cn } from "@/lib/utils"
-
-import { toggleVariants } from "./toggle-variants.js"
-
-
+import { toggleVariants } from "./toggle-variants.js";
 
 function Toggle({
-
   className,
 
   variant,
@@ -19,24 +14,14 @@ function Toggle({
   size,
 
   ...props
-
 }) {
-
   return (
-
     <TogglePrimitive.Root
-
       data-slot="toggle"
-
       className={cn(toggleVariants({ variant, size, className }))}
-
-      {...props} />
-
+      {...props}
+    />
   );
-
 }
 
-
-
-export { Toggle }
-
+export { Toggle };

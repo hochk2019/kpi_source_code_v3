@@ -4,8 +4,8 @@ Tài liệu này mô tả quy trình từng bước để triển khai dịch v�
 
 ## 1. Chuẩn bị môi trường
 
-1. **Cập nhật Windows**: vào *Settings → Windows Update* và cài toàn bộ bản vá mới nhất.
-2. **Cài đặt PowerShell 7** (nếu chưa có): tải từ [https://aka.ms/powershell-release?tag=stable](https://aka.ms/powershell-release?tag=stable) và đánh dấu tùy chọn *Add to PATH*.
+1. **Cập nhật Windows**: vào _Settings → Windows Update_ và cài toàn bộ bản vá mới nhất.
+2. **Cài đặt PowerShell 7** (nếu chưa có): tải từ [https://aka.ms/powershell-release?tag=stable](https://aka.ms/powershell-release?tag=stable) và đánh dấu tùy chọn _Add to PATH_.
 3. **Cài đặt Visual C++ Redistributable 2015–2022**: cần thiết cho thư viện CUDA/Metal. Tải tại <https://aka.ms/vs/17/release/vc_redist.x64.exe> và cài đặt.
 4. **Chuẩn bị tài nguyên**:
    - RAM tối thiểu 16 GB.
@@ -27,11 +27,11 @@ Tài liệu này mô tả quy trình từng bước để triển khai dịch v�
 
 ## 3. Tạo tài khoản dịch vụ chuyên biệt
 
-1. Mở *Computer Management → Local Users and Groups → Users*.
+1. Mở _Computer Management → Local Users and Groups → Users_.
 2. Tạo người dùng mới, ví dụ `svcOllama`. Đặt mật khẩu mạnh, bỏ chọn “User must change password at next logon”.
 3. Thêm tài khoản `svcOllama` vào nhóm **Users** (không cần quyền admin).
 4. Gán quyền “Log on as a service” cho `svcOllama`:
-   - Mở *Local Security Policy → Local Policies → User Rights Assignment*.
+   - Mở _Local Security Policy → Local Policies → User Rights Assignment_.
    - Chỉnh mục **Log on as a service** và thêm `svcOllama`.
 5. Cấp quyền đọc/ghi thư mục `D:\ollama` (hoặc thư mục chứa model) cho `svcOllama`.
 
@@ -43,6 +43,7 @@ Tài liệu này mô tả quy trình từng bước để triển khai dịch v�
    Stop-Service -Name Ollama
    ```
 3. Đăng ký lại dịch vụ dùng tài khoản `svcOllama` và cấu hình đường dẫn dữ liệu:
+
    ```powershell
    $svcAccount = 'MAYCHU\\svcOllama'
    $svcPassword = Read-Host 'Nhập mật khẩu svcOllama' -AsSecureString
@@ -51,7 +52,9 @@ Tài liệu này mô tả quy trình từng bước để triển khai dịch v�
    sc.exe config Ollama obj= $svcAccount password= (ConvertFrom-SecureString $svcPassword -AsPlainText)
    sc.exe config Ollama binPath= '"C:\\Program Files\\Ollama\\ollama.exe" serve ' + $ollamaArgs
    ```
+
    > Lưu ý: thay `MAYCHU` bằng hostname thực tế.
+
 4. Đặt dịch vụ tự khởi động cùng Windows và khởi chạy lại:
    ```powershell
    Set-Service -Name Ollama -StartupType Automatic
@@ -100,12 +103,12 @@ Tài liệu này mô tả quy trình từng bước để triển khai dịch v�
 
 ## 8. Giám sát và xử lý sự cố
 
-| Tình huống | Cách xử lý |
-| --- | --- |
-| Không truy cập được port 11434 | Kiểm tra firewall, chắc chắn dịch vụ chạy và `--host` bind đúng IP. |
-| Dịch vụ tự dừng sau vài phút | Kiểm tra `Event Viewer → Windows Logs → Application` để xem lỗi. Thường do thiếu RAM hoặc quyền thư mục. |
-| Trả về lỗi `connection reset` | Kiểm tra phiên bản Ollama, cập nhật bản mới nhất và giảm `OLLAMA_MAX_INPUT_TOKENS` trong backend. |
-| Model tải chậm | Đảm bảo có đủ băng thông, hoặc tải model sẵn và sao chép thủ công vào thư mục `store`. |
+| Tình huống                     | Cách xử lý                                                                                               |
+| ------------------------------ | -------------------------------------------------------------------------------------------------------- |
+| Không truy cập được port 11434 | Kiểm tra firewall, chắc chắn dịch vụ chạy và `--host` bind đúng IP.                                      |
+| Dịch vụ tự dừng sau vài phút   | Kiểm tra `Event Viewer → Windows Logs → Application` để xem lỗi. Thường do thiếu RAM hoặc quyền thư mục. |
+| Trả về lỗi `connection reset`  | Kiểm tra phiên bản Ollama, cập nhật bản mới nhất và giảm `OLLAMA_MAX_INPUT_TOKENS` trong backend.        |
+| Model tải chậm                 | Đảm bảo có đủ băng thông, hoặc tải model sẵn và sao chép thủ công vào thư mục `store`.                   |
 
 ## 9. Sao lưu và cập nhật định kỳ
 

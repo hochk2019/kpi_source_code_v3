@@ -53,7 +53,7 @@ Tài liệu này mô tả cấu trúc dữ liệu trả về từ API `GET /api/
       "totalKpi": 82,
       "items": 140,
       "teams": ["Team 1"],
-      "adjustmentSummary": {"approved": 3}
+      "adjustmentSummary": { "approved": 3 }
     }
   ],
   "topTeams": [
@@ -62,22 +62,20 @@ Tài liệu này mô tả cấu trúc dữ liệu trả về từ API `GET /api/
       "name": "Team Xuất khẩu",
       "declarations": 62,
       "totalKpi": 151,
-      "members": [
-        {"key": "NV001", "name": "Nguyễn Văn A", "declarations": 35, "totalKpi": 82}
-      ],
-      "adjustmentSummary": {"pending": 1}
+      "members": [{ "key": "NV001", "name": "Nguyễn Văn A", "declarations": 35, "totalKpi": 82 }],
+      "adjustmentSummary": { "pending": 1 }
     }
   ],
   "trends": {
     "monthly": [
-      {"month": "2024-06", "declarations": 110, "items": 430, "licenses": 12, "kpi": 280}
+      { "month": "2024-06", "declarations": 110, "items": 430, "licenses": 12, "kpi": 280 }
     ],
     "teamSeries": [],
     "comparison": null
   },
   "adjustments": {
-    "totals": {"pending": 2, "approved": 5, "rejected": 0, "applied": 5, "totalPoints": 12},
-    "totalsByCategory": {"Tăng điểm": 4},
+    "totals": { "pending": 2, "approved": 5, "rejected": 0, "applied": 5, "totalPoints": 12 },
+    "totalsByCategory": { "Tăng điểm": 4 },
     "staffSummaries": [],
     "teamSummaries": [],
     "sample": []
@@ -106,10 +104,10 @@ Tài liệu này mô tả cấu trúc dữ liệu trả về từ API `GET /api/
 
 ## 3. TTL cache và key
 
-| Thành phần          | TTL          | Số lượng tối đa | Ghi chú |
-|--------------------|--------------|-----------------|--------|
-| Cache server (`storeAiSnapshotCacheEntry`) | 15 phút | 40 mục | Key gồm: khoảng ngày, MST include/exclude, thông tin máy chủ. |
-| Cache frontend (`sessionStorage`) | 5 phút | 6 mục | Key giống backend, lưu trong `sessionStorage` để tự xóa khi đóng tab. |
+| Thành phần                                 | TTL     | Số lượng tối đa | Ghi chú                                                               |
+| ------------------------------------------ | ------- | --------------- | --------------------------------------------------------------------- |
+| Cache server (`storeAiSnapshotCacheEntry`) | 15 phút | 40 mục          | Key gồm: khoảng ngày, MST include/exclude, thông tin máy chủ.         |
+| Cache frontend (`sessionStorage`)          | 5 phút  | 6 mục           | Key giống backend, lưu trong `sessionStorage` để tự xóa khi đóng tab. |
 
 Khi cần cưỡng bức tải lại, người dùng giữ phím **Shift** trong lúc bấm nút **Lấy snapshot KPI**. Frontend sẽ bỏ qua cache local và yêu cầu backend lấy dữ liệu mới.
 
@@ -135,6 +133,6 @@ Khi cần cưỡng bức tải lại, người dùng giữ phím **Shift** trong
 ## 7. Kế hoạch mở rộng
 
 Sau khi snapshot ổn định, có thể dùng dữ liệu này để:
+
 - Sinh insight tự động (Giai đoạn 3) bằng cách so sánh `trends` và `adjustments` giữa các khoảng thời gian.
 - Tích hợp với dashboard KPI nhằm hiển thị lại mẫu `rawDeclarations` khi người dùng muốn truy ngược dữ liệu gốc.
-

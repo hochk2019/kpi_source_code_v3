@@ -1,32 +1,25 @@
-import { createProviderConfig } from './utils.js';
-
-
+import { createProviderConfig } from "./utils.js";
 
 export function createAnthropicProvider() {
-
   return createProviderConfig({
+    id: "anthropic-claude",
 
-    id: 'anthropic-claude',
+    type: "anthropic",
 
-    type: 'anthropic',
+    label: "Anthropic Claude 3.5 Sonnet",
 
-    label: 'Anthropic Claude 3.5 Sonnet',
+    endpoint: "https://api.anthropic.com",
 
-    endpoint: 'https://api.anthropic.com',
+    model: "claude-3-5-sonnet-20241022",
 
-    model: 'claude-3-5-sonnet-20241022',
+    apiKeyEnv: "ANTHROPIC_API_KEY",
 
-    apiKeyEnv: 'ANTHROPIC_API_KEY',
-
-    apiVersion: '2023-06-01',
+    apiVersion: "2023-06-01",
 
     temperature: 0.2,
 
     maxTokens: 1024,
 
     enabled: false,
-
   });
-
 }
-

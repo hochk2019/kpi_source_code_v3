@@ -1,40 +1,29 @@
-import { createProviderConfig, readEnv } from './utils.js';
-
-
+import { createProviderConfig, readEnv } from "./utils.js";
 
 export function createAzureProvider(env = process.env) {
-
   return createProviderConfig(
-
     {
+      id: "azure-openai",
 
-      id: 'azure-openai',
+      type: "azure",
 
-      type: 'azure',
+      label: "Azure OpenAI GPT-4o mini",
 
-      label: 'Azure OpenAI GPT-4o mini',
-
-      apiKeyEnv: 'AZURE_OPENAI_KEY',
+      apiKeyEnv: "AZURE_OPENAI_KEY",
 
       maxTokens: 4096,
 
       temperature: 0.2,
 
       enabled: true,
-
     },
 
     {
+      endpoint: readEnv(env, "AZURE_OPENAI_ENDPOINT", ""),
 
-      endpoint: readEnv(env, 'AZURE_OPENAI_ENDPOINT', ''),
+      deployment: readEnv(env, "AZURE_OPENAI_DEPLOYMENT", "gpt-4o-mini"),
 
-      deployment: readEnv(env, 'AZURE_OPENAI_DEPLOYMENT', 'gpt-4o-mini'),
-
-      apiVersion: readEnv(env, 'AZURE_OPENAI_API_VERSION', '2024-08-01-preview'),
-
+      apiVersion: readEnv(env, "AZURE_OPENAI_API_VERSION", "2024-08-01-preview"),
     },
-
   );
-
 }
-

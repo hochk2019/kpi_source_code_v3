@@ -4,13 +4,13 @@ Tài liệu này hỗ trợ đội vận hành khi cần chuyển Trợ lý AI t
 
 ## 1. Đánh giá nhu cầu
 
-- [ ] Xác định lý do chuyển đổi (hiệu suất, chi phí, tính năng, yêu cầu mô hình).  
+- [ ] Xác định lý do chuyển đổi (hiệu suất, chi phí, tính năng, yêu cầu mô hình).
 - [ ] Đánh giá loại dữ liệu sẽ gửi tới provider mới và kiểm tra ràng buộc bảo mật của khách hàng.
 - [ ] Thống nhất phạm vi thử nghiệm (QA, Staging, Production) và thời gian cắt chuyển.
 
 ## 2. Chuẩn bị thông tin xác thực
 
-- [ ] Tạo hoặc yêu cầu API key/credential từ nhà cung cấp mới.  
+- [ ] Tạo hoặc yêu cầu API key/credential từ nhà cung cấp mới.
 - [ ] Ghi nhận endpoint, vùng (region), tên mô hình, giới hạn token, chi phí.
 - [ ] Lưu credential vào kho bí mật an toàn (Vault, Password Manager) và chia sẻ cho tối thiểu 2 quản trị viên.
 
@@ -41,14 +41,14 @@ Tài liệu này hỗ trợ đội vận hành khi cần chuyển Trợ lý AI t
 
 ## 6. Kiểm thử chức năng
 
-- [ ] Chạy `pnpm exec vitest run tests/server.api.test.js --testNamePattern="AI provider"` (hoặc kịch bản liên quan).  
+- [ ] Chạy `pnpm exec vitest run tests/server.api.test.js --testNamePattern="AI provider"` (hoặc kịch bản liên quan).
 - [ ] Thực hiện ít nhất 3 câu hỏi trong giao diện Trợ lý AI: chat thường, tóm tắt KPI, chạy insight.
 - [ ] Kiểm tra trường hợp lỗi (ví dụ cố tình dùng model không tồn tại) và xác nhận UI hiển thị thông báo đúng tiếng Việt.
 
 ## 7. Chuyển đổi chính thức
 
 - [ ] Thông báo thời gian chuyển cho người dùng nội bộ.
-- [ ] Thực hiện chuyển cấu hình trong khung thời gian đã hẹn.  
+- [ ] Thực hiện chuyển cấu hình trong khung thời gian đã hẹn.
 - [ ] Giám sát log 15–30 phút sau khi chuyển để phát hiện lỗi sớm.
 
 ## 8. Sau chuyển đổi

@@ -57,13 +57,13 @@ Máy chủ Node.js đã tích hợp chức năng gửi cảnh báo tự động 
 
 Khai báo các biến môi trường sau để kích hoạt cảnh báo:
 
-| Nhóm | Biến môi trường | Ghi chú |
-| --- | --- | --- |
-| SMTP | `ECUS_ALERT_SMTP_HOST`, `ECUS_ALERT_SMTP_PORT`, `ECUS_ALERT_SMTP_USER`, `ECUS_ALERT_SMTP_PASSWORD`, `ECUS_ALERT_SMTP_SECURE` | Thông số máy chủ gửi mail (Port mặc định 587, đặt `SECURE=1` nếu dùng SSL 465). |
-| Email | `ECUS_ALERT_EMAIL_FROM`, `ECUS_ALERT_EMAIL_TO` | Địa chỉ người gửi và danh sách người nhận (ngăn cách bởi dấu phẩy hoặc chấm phẩy). Có thể thêm `ECUS_ALERT_EMAIL_CC`, `ECUS_ALERT_EMAIL_BCC`. |
-| Teams | `ECUS_ALERT_TEAMS_WEBHOOK_URL` | URL webhook incoming của Microsoft Teams. |
-| Ngưỡng | `ECUS_ALERT_FAILURE_THRESHOLD`, `ECUS_ALERT_FAILURE_COOLDOWN_MINUTES`, `ECUS_ALERT_STALE_THRESHOLD_MINUTES`, `ECUS_ALERT_STALE_COOLDOWN_MINUTES` | Điều chỉnh số lần lỗi liên tiếp, khoảng thời gian nhắc lại và ngưỡng độ trễ (phút). |
-| Liên kết dashboard | `ECUS_ALERT_DASHBOARD_URL` | Đường dẫn nhanh tới Data Health Dashboard (tùy chọn). |
+| Nhóm               | Biến môi trường                                                                                                                                  | Ghi chú                                                                                                                                       |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| SMTP               | `ECUS_ALERT_SMTP_HOST`, `ECUS_ALERT_SMTP_PORT`, `ECUS_ALERT_SMTP_USER`, `ECUS_ALERT_SMTP_PASSWORD`, `ECUS_ALERT_SMTP_SECURE`                     | Thông số máy chủ gửi mail (Port mặc định 587, đặt `SECURE=1` nếu dùng SSL 465).                                                               |
+| Email              | `ECUS_ALERT_EMAIL_FROM`, `ECUS_ALERT_EMAIL_TO`                                                                                                   | Địa chỉ người gửi và danh sách người nhận (ngăn cách bởi dấu phẩy hoặc chấm phẩy). Có thể thêm `ECUS_ALERT_EMAIL_CC`, `ECUS_ALERT_EMAIL_BCC`. |
+| Teams              | `ECUS_ALERT_TEAMS_WEBHOOK_URL`                                                                                                                   | URL webhook incoming của Microsoft Teams.                                                                                                     |
+| Ngưỡng             | `ECUS_ALERT_FAILURE_THRESHOLD`, `ECUS_ALERT_FAILURE_COOLDOWN_MINUTES`, `ECUS_ALERT_STALE_THRESHOLD_MINUTES`, `ECUS_ALERT_STALE_COOLDOWN_MINUTES` | Điều chỉnh số lần lỗi liên tiếp, khoảng thời gian nhắc lại và ngưỡng độ trễ (phút).                                                           |
+| Liên kết dashboard | `ECUS_ALERT_DASHBOARD_URL`                                                                                                                       | Đường dẫn nhanh tới Data Health Dashboard (tùy chọn).                                                                                         |
 
 > **Lưu ý:** Nếu biến môi trường không được đặt hoặc danh sách người nhận để trống thì hệ thống sẽ không gửi cảnh báo.
 

@@ -18,11 +18,11 @@ cùng đội vận hành ECUS để đảm bảo tính sẵn sàng của nguồn
 
 ## 2. Lịch sao lưu chuẩn
 
-| Loại sao lưu | Thời điểm | Mô tả |
-|--------------|-----------|-------|
-| Full         | 01:00 hằng ngày | Sao lưu đầy đủ toàn bộ database `ECUS5VNACCS` vào thư mục `D:\Backups\Full` (hoặc thư mục đã thoả thuận). |
-| Differential | Mỗi 6 giờ (07:00, 13:00, 19:00, 01:00+1) | Sao lưu chênh lệch vào `D:\Backups\Diff`. |
-| Transaction log | 30 phút/lần (tuỳ chọn) | Áp dụng nếu cần rút ngắn mất dữ liệu tiềm ẩn; lưu ở `D:\Backups\Log`. |
+| Loại sao lưu    | Thời điểm                                | Mô tả                                                                                                     |
+| --------------- | ---------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| Full            | 01:00 hằng ngày                          | Sao lưu đầy đủ toàn bộ database `ECUS5VNACCS` vào thư mục `D:\Backups\Full` (hoặc thư mục đã thoả thuận). |
+| Differential    | Mỗi 6 giờ (07:00, 13:00, 19:00, 01:00+1) | Sao lưu chênh lệch vào `D:\Backups\Diff`.                                                                 |
+| Transaction log | 30 phút/lần (tuỳ chọn)                   | Áp dụng nếu cần rút ngắn mất dữ liệu tiềm ẩn; lưu ở `D:\Backups\Log`.                                     |
 
 ### Tác vụ mẫu sử dụng `sqlcmd`
 

@@ -1,6 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-
-
+import { useCallback, useEffect, useRef, useState } from "react";
 
 /**
 
@@ -27,9 +25,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
  */
 
 export default function useAsyncRequest(task, options = {}) {
-
   const {
-
     initialData = null,
 
     immediate = false,
@@ -41,38 +37,25 @@ export default function useAsyncRequest(task, options = {}) {
     onError,
 
     throwOnError = false,
-
   } = options;
-
-
 
   const mountedRef = useRef(true);
 
   const abortRef = useRef(null);
 
-
-
   const [data, setData] = useState(initialData);
 
   const [loading, setLoading] = useState(false);
 
-  const [error, setError] = useState('');
-
-
+  const [error, setError] = useState("");
 
   const execute = useCallback(
-
     async (...args) => {
-
-      if (typeof task !== 'function') {
-
-        console.warn('useAsyncRequest: task không hợp lệ');
+      if (typeof task !== "function") {
+        console.warn("useAsyncRequest: task không hợp lệ");
 
         return undefined;
-
       }
-
-
 
       abortRef.current?.abort();
 
@@ -80,108 +63,71 @@ export default function useAsyncRequest(task, options = {}) {
 
       abortRef.current = controller;
 
-
-
       if (mountedRef.current) {
-
         setLoading(true);
 
-        setError('');
-
+        setError("");
       }
 
-
-
       try {
-
         const result = await task({ signal: controller.signal }, ...args);
 
         if (!mountedRef.current) return result;
 
-
-
         setData(result);
 
-        setError('');
+        setError("");
 
         onSuccess?.(result);
 
         return result;
-
       } catch (err) {
-
-        if (err?.name === 'AbortError') {
-
+        if (err?.name === "AbortError") {
           return undefined;
-
         }
 
-        const message = err?.message || 'Đã xảy ra lỗi không xác định';
+        const message = err?.message || "Đã xảy ra lỗi không xác định";
 
         if (mountedRef.current) {
-
           setError(message);
-
         }
 
         onError?.(err);
 
         if (throwOnError) {
-
           throw err;
-
         }
 
         return undefined;
-
       } finally {
-
         if (mountedRef.current) {
-
           setLoading(false);
-
         }
 
         if (abortRef.current === controller) {
-
           abortRef.current = null;
-
         }
-
       }
-
     },
 
-    [task, onSuccess, onError, throwOnError]
-
+    [task, onSuccess, onError, throwOnError],
   );
 
-
-
   useEffect(() => {
-
     if (immediate) {
-
       execute(...initialArgs);
-
     }
 
     return () => {
-
       mountedRef.current = false;
 
       abortRef.current?.abort();
 
       abortRef.current = null;
-
     };
-
   }, [execute, immediate, initialArgs]);
 
-
-
   const reset = useCallback(() => {
-
     abortRef.current?.abort();
 
     abortRef.current = null;
@@ -190,16 +136,12 @@ export default function useAsyncRequest(task, options = {}) {
 
     setLoading(false);
 
-    setError('');
+    setError("");
 
     setData(initialData);
-
   }, [initialData]);
 
-
-
   return {
-
     data,
 
     setData,
@@ -211,8 +153,5 @@ export default function useAsyncRequest(task, options = {}) {
     execute,
 
     reset,
-
   };
-
 }
-

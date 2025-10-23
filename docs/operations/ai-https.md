@@ -12,21 +12,18 @@ Tài liệu này mô tả cách tạo chứng chỉ tự ký và cấu hình bac
    ```
 
    Tham số:
-
    - `-DnsName`: tên máy chủ nội bộ sẽ truy cập (ví dụ `localhost`, `kpi-internal.local` hoặc IP tĩnh).
    - `-OutDir`: thư mục lưu private key/certificate. Mặc định script ghi vào `config/` cùng source code.
    - `-ValidDays`: số ngày hiệu lực (mặc định 730 ngày).
    - `-Password`: mật khẩu bảo vệ file `.pfx` dự phòng.
 
 3. Script sẽ tạo bốn file:
-
    - `config/ai-https.key`: private key định dạng PEM.
    - `config/ai-https.crt`: chứng chỉ máy chủ.
    - `config/ai-https.ca.pem`: file CA (cùng nội dung với `.crt` vì là self-signed) để import vào các máy trạm.
    - `config/ai-https.pfx`: bản sao dự phòng cho trường hợp cần import lại chứng chỉ vào Windows.
 
 4. Cài đặt chứng chỉ CA cho các máy trạm nội bộ:
-
    - Mở file `ai-https.ca.pem`, chọn **Install Certificate**.
    - Import vào **Trusted Root Certification Authorities** ở scope **Local Machine**.
 
@@ -34,14 +31,14 @@ Tài liệu này mô tả cách tạo chứng chỉ tự ký và cấu hình bac
 
 Backend tự động bật kênh HTTPS khi tìm thấy file `ai-https.key` và `ai-https.crt` trong thư mục `config/`. Có thể tinh chỉnh thêm bằng các biến môi trường:
 
-| Biến | Ý nghĩa | Giá trị mẫu |
-| --- | --- | --- |
-| `KPI_AI_HTTPS_ENABLED` | Ép bật/tắt HTTPS nội bộ (mặc định tự bật nếu có đủ file) | `1` |
-| `KPI_AI_HTTPS_PORT` | Cổng HTTPS nội bộ (mặc định `5443`) | `5443` |
-| `KPI_AI_HTTPS_HOST` | Địa chỉ bind (mặc định `127.0.0.1`) | `0.0.0.0` |
-| `KPI_AI_HTTPS_KEY_PATH` | Đường dẫn private key | `C:\KPI\config\ai-https.key` |
-| `KPI_AI_HTTPS_CERT_PATH` | Đường dẫn certificate | `C:\KPI\config\ai-https.crt` |
-| `KPI_AI_HTTPS_CA_PATH` | (Tùy chọn) CA bundle để xác thực client | `C:\KPI\config\ai-https.ca.pem` |
+| Biến                     | Ý nghĩa                                                  | Giá trị mẫu                     |
+| ------------------------ | -------------------------------------------------------- | ------------------------------- |
+| `KPI_AI_HTTPS_ENABLED`   | Ép bật/tắt HTTPS nội bộ (mặc định tự bật nếu có đủ file) | `1`                             |
+| `KPI_AI_HTTPS_PORT`      | Cổng HTTPS nội bộ (mặc định `5443`)                      | `5443`                          |
+| `KPI_AI_HTTPS_HOST`      | Địa chỉ bind (mặc định `127.0.0.1`)                      | `0.0.0.0`                       |
+| `KPI_AI_HTTPS_KEY_PATH`  | Đường dẫn private key                                    | `C:\KPI\config\ai-https.key`    |
+| `KPI_AI_HTTPS_CERT_PATH` | Đường dẫn certificate                                    | `C:\KPI\config\ai-https.crt`    |
+| `KPI_AI_HTTPS_CA_PATH`   | (Tùy chọn) CA bundle để xác thực client                  | `C:\KPI\config\ai-https.ca.pem` |
 
 > **Lưu ý:** Khi bật cờ `KPI_AI_HTTPS_ENABLED=1` nhưng thiếu file key/cert, backend sẽ ghi log cảnh báo và giữ nguyên chế độ HTTP.
 
@@ -71,10 +68,9 @@ Backend tự động bật kênh HTTPS khi tìm thấy file `ai-https.key` và `
 
 ## 5. Khắc phục sự cố
 
-| Vấn đề | Cách xử lý |
-| --- | --- |
-| Log cảnh báo `Thiếu file key/cert` | Kiểm tra `config/ai-https.key` và `.crt` có tồn tại, quyền đọc đúng. |
-| Không thể bind cổng 5443 | Đổi `KPI_AI_HTTPS_PORT`, kiểm tra firewall Windows. |
-| Trình duyệt cảnh báo chứng chỉ không tin cậy | Đảm bảo đã import `ai-https.ca.pem` vào Trusted Root trên máy trạm. |
-| Script tạo chứng chỉ lỗi `GetRSAPrivateKey` | Chạy PowerShell 7 với quyền admin, đảm bảo không có group policy chặn xuất private key. |
-
+| Vấn đề                                       | Cách xử lý                                                                              |
+| -------------------------------------------- | --------------------------------------------------------------------------------------- |
+| Log cảnh báo `Thiếu file key/cert`           | Kiểm tra `config/ai-https.key` và `.crt` có tồn tại, quyền đọc đúng.                    |
+| Không thể bind cổng 5443                     | Đổi `KPI_AI_HTTPS_PORT`, kiểm tra firewall Windows.                                     |
+| Trình duyệt cảnh báo chứng chỉ không tin cậy | Đảm bảo đã import `ai-https.ca.pem` vào Trusted Root trên máy trạm.                     |
+| Script tạo chứng chỉ lỗi `GetRSAPrivateKey`  | Chạy PowerShell 7 với quyền admin, đảm bảo không có group policy chặn xuất private key. |

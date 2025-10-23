@@ -43,17 +43,17 @@ Hệ thống KPI tự động hỗ trợ các alias sau khi đọc bản ghi t�
 các cột trong XML (hoặc view SQL) khớp với một trong các tên dưới đây thì không
 cần cấu hình thêm `columnMap`:
 
-| Trường KPI      | Các tên cột được nhận diện |
-|-----------------|----------------------------|
-| `so_tk`         | `so_tk`, `So_tk`, `SoTK`, `sotk` |
-| `date`          | `ngay_dang_ky`, `Ngay_dang_ky`, `ngay_dk`, `NgayDK`, `NgayLapToKhai` |
-| `mst`           | `mst`, `MST`, `ma_so_thue`, `MaSoThue` |
-| `cong_ty`       | `cong_ty`, `ten_dn`, `TenDoanhNghiep`, `doanh_nghiep` |
-| `loai_hinh`     | `loai_hinh`, `Loai_hinh`, `ma_loai_hinh`, `MA_LH`, `ma_lh` |
-| `num_items`     | `muc_hang`, `so_muc`, `so_luong_mh`, `TotalItems`, `totalitems` |
-| `licenses`      | `licenses`, `ds_gp`, `ds_giay_phep`, `DanhSachGiayPhep`, `ma_gp`, các mảng con chứa mã GP |
-| `nhan_vien_nhap`| `nhan_vien_nhap`, `NhanVienNhap`, `NVNhap` |
-| `nhan_vien_xuat`| `nhan_vien_xuat`, `NhanVienXuat`, `NVXuat` |
+| Trường KPI       | Các tên cột được nhận diện                                                                |
+| ---------------- | ----------------------------------------------------------------------------------------- |
+| `so_tk`          | `so_tk`, `So_tk`, `SoTK`, `sotk`                                                          |
+| `date`           | `ngay_dang_ky`, `Ngay_dang_ky`, `ngay_dk`, `NgayDK`, `NgayLapToKhai`                      |
+| `mst`            | `mst`, `MST`, `ma_so_thue`, `MaSoThue`                                                    |
+| `cong_ty`        | `cong_ty`, `ten_dn`, `TenDoanhNghiep`, `doanh_nghiep`                                     |
+| `loai_hinh`      | `loai_hinh`, `Loai_hinh`, `ma_loai_hinh`, `MA_LH`, `ma_lh`                                |
+| `num_items`      | `muc_hang`, `so_muc`, `so_luong_mh`, `TotalItems`, `totalitems`                           |
+| `licenses`       | `licenses`, `ds_gp`, `ds_giay_phep`, `DanhSachGiayPhep`, `ma_gp`, các mảng con chứa mã GP |
+| `nhan_vien_nhap` | `nhan_vien_nhap`, `NhanVienNhap`, `NVNhap`                                                |
+| `nhan_vien_xuat` | `nhan_vien_xuat`, `NhanVienXuat`, `NVXuat`                                                |
 
 Nếu tên cột khác hoàn toàn, hãy điền rõ vào `columnMap` trong cấu hình ECUS,
 ví dụ:

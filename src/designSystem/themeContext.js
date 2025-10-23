@@ -1,14 +1,11 @@
-import { createContext } from 'react';
+import { createContext } from "react";
 
-import { DEFAULT_BRAND } from './brandTokens.js';
-
-
+import { DEFAULT_BRAND } from "./brandTokens.js";
 
 export const ThemeContext = createContext({
+  theme: "system",
 
-  theme: 'system',
-
-  resolvedTheme: 'light',
+  resolvedTheme: "light",
 
   brand: DEFAULT_BRAND,
 
@@ -19,6 +16,4 @@ export const ThemeContext = createContext({
   brandOptions: [],
 
   getChartPalette: () => [],
-
 });
-

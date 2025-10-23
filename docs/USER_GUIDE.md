@@ -19,10 +19,10 @@ Hệ thống được triển khai cho Công ty TNHH Tiếp Vận Hoàng Kim (Go
 
 ### 2.1 Import Data
 
-| Chế độ | Quyền hạn |
-| --- | --- |
-| Khách (không đăng nhập) | Xem dữ liệu đã lưu theo từng trang (20 dòng), tra cứu bằng ô "Tìm nhanh" (Số TK / MST / Công ty / Đại lý) và các bộ lọc thiếu Nhân viên/Tổ đội. Không thể import file, chỉnh sửa hay lưu dữ liệu. |
-| Có quyền `Import Data` | Chọn file `.xlsx`, cấu hình ghi đè hoặc hợp nhất, tự động gán nhân viên/tổ đội, chỉnh sửa các cột Nhân viên – Tổ đội – Số lượng GP – Đại lý, đánh dấu đã rà soát, xóa dòng và lưu lại. Mọi thao tác được ghi vào nhật ký. |
+| Chế độ                  | Quyền hạn                                                                                                                                                                                                                 |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Khách (không đăng nhập) | Xem dữ liệu đã lưu theo từng trang (20 dòng), tra cứu bằng ô "Tìm nhanh" (Số TK / MST / Công ty / Đại lý) và các bộ lọc thiếu Nhân viên/Tổ đội. Không thể import file, chỉnh sửa hay lưu dữ liệu.                         |
+| Có quyền `Import Data`  | Chọn file `.xlsx`, cấu hình ghi đè hoặc hợp nhất, tự động gán nhân viên/tổ đội, chỉnh sửa các cột Nhân viên – Tổ đội – Số lượng GP – Đại lý, đánh dấu đã rà soát, xóa dòng và lưu lại. Mọi thao tác được ghi vào nhật ký. |
 
 - Bảng dữ liệu đã bổ sung cột **C/O**. Hệ thống tự động ghi "Có" khi phát hiện tờ khai có mã biểu thuế khác các mã không ưu đãi (B01, B03, B30) dựa trên dữ liệu ECUS/XML/Excel, đồng thời cộng điểm KPI theo Rule v2 khi quy tắc bật.
 - Nếu màn hình hiển thị chật, bảng cho phép kéo ngang (horizontal scroll) để quan sát đủ cột.
@@ -31,9 +31,9 @@ Hệ thống được triển khai cho Công ty TNHH Tiếp Vận Hoàng Kim (Go
 
 ### 2.2 Đại Lý HQ
 
-| Chế độ | Quyền hạn |
-| --- | --- |
-| Khách | Tìm kiếm và xem danh sách MST – doanh nghiệp – Đại lý hải quan đã cấu hình. |
+| Chế độ             | Quyền hạn                                                                                                                                                              |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Khách              | Tìm kiếm và xem danh sách MST – doanh nghiệp – Đại lý hải quan đã cấu hình.                                                                                            |
 | Có quyền `Gán MST` | Import danh sách từ Excel hoặc nhập thủ công, chỉnh sửa/thêm/xóa dòng và lưu. Khi lưu hệ thống tự đồng bộ tên công ty & đại lý sang bảng MST và các tờ khai liên quan. |
 
 - Khi nhập MST mới, chỉ cần điền cột **Mã số thuế**, hệ thống sẽ tự đề xuất tên công ty theo dữ liệu tờ khai đã có (nếu tìm thấy). Người dùng chỉ việc chọn Đại lý HQ tương ứng và lưu lại.
@@ -47,23 +47,23 @@ Hệ thống được triển khai cho Công ty TNHH Tiếp Vận Hoàng Kim (Go
 
 ### 2.3 Gán MST
 
-| Chế độ | Quyền hạn |
-| --- | --- |
-| Khách | Xem và tìm kiếm danh sách công ty theo MST, không chỉnh sửa. |
+| Chế độ             | Quyền hạn                                                                                                                                            |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Khách              | Xem và tìm kiếm danh sách công ty theo MST, không chỉnh sửa.                                                                                         |
 | Có quyền `Gán MST` | Import bảng gán MST từ Excel, chỉnh sửa trực tiếp (MST, công ty, người phụ trách, tổ đội, ngày hiệu lực) và lưu. Khi lưu hệ thống ghi log hành động. |
 
 ### 2.4 Quản lý Tổ đội
 
-| Chế độ | Quyền hạn |
-| --- | --- |
-| Khách | Xem danh sách tổ đội, thành viên, doanh nghiệp được gán và lịch sử MST của từng người. Không thể thêm/xóa/điều chuyển. |
+| Chế độ                    | Quyền hạn                                                                                                                                      |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| Khách                     | Xem danh sách tổ đội, thành viên, doanh nghiệp được gán và lịch sử MST của từng người. Không thể thêm/xóa/điều chuyển.                         |
 | Có quyền `Quản lý tổ đội` | Thêm thành viên, đổi tên, điều chuyển giữa các team, xóa thành viên, lưu tổ đội và đồng bộ tự động sang bảng MST. Mỗi lần lưu ghi lại nhật ký. |
 
 ### 2.5 Quy tắc KPI
 
-| Chế độ | Quyền hạn |
-| --- | --- |
-| Khách | Các trường cấu hình bị khóa, vẫn có thể dùng khu vực **Test nhanh** để kiểm tra điểm KPI của tờ khai đã lưu hoặc nhập tay. |
+| Chế độ                 | Quyền hạn                                                                                                                                                             |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Khách                  | Các trường cấu hình bị khóa, vẫn có thể dùng khu vực **Test nhanh** để kiểm tra điểm KPI của tờ khai đã lưu hoặc nhập tay.                                            |
 | Có quyền `Quy tắc KPI` | Chỉnh sửa quy tắc (nhóm loại hình, bậc cộng, giấy phép, điểm cộng C/O), lưu phiên bản mới, xuất/import JSON, khôi phục mặc định. Lưu quy tắc sẽ ghi nhận vào nhật ký. |
 
 - Quy tắc mặc định đã chuyển sang **Rules v2** với tuỳ chọn cộng điểm C/O. Có thể bật/tắt và chỉnh mức điểm cộng trong giao diện Quy tắc KPI.
@@ -74,13 +74,13 @@ Hệ thống được triển khai cho Công ty TNHH Tiếp Vận Hoàng Kim (Go
 - Nút **Xuất Excel** và **In / Xuất PDF** chỉ khả dụng khi quyền `Báo cáo KPI – xuất file` được bật (mặc định bật cho khách và quản trị viên).
 - Khu vực mặc định khi mở ứng dụng (F5) hiển thị báo cáo để minh bạch số liệu mới nhất.
 
-### 2.7 Quản lý tài khoản *(chỉ hiển thị khi tài khoản có quyền `Quản lý tài khoản`)*
+### 2.7 Quản lý tài khoản _(chỉ hiển thị khi tài khoản có quyền `Quản lý tài khoản`)_
 
 - **Tạo tài khoản**: nhập username, họ tên hiển thị, mật khẩu tạm, chọn vai trò và bật/tắt các quyền cụ thể.
 - **Danh sách tài khoản**: chỉnh quyền bằng checkbox, đổi vai trò, đặt lại mật khẩu hoặc xóa tài khoản. Không thể xóa quản trị viên cuối cùng.
 - Tất cả thao tác đều được ghi vào nhật ký.
 
-### 2.8 Nhật ký hệ thống *(chỉ hiển thị khi có quyền `Quản lý tài khoản`)*
+### 2.8 Nhật ký hệ thống _(chỉ hiển thị khi có quyền `Quản lý tài khoản`)_
 
 - Theo dõi mọi hành động quan trọng (đăng nhập, import dữ liệu, chỉnh sửa quy tắc, cập nhật MST, quản lý tổ đội, thao tác tài khoản...).
 - Có thể lọc theo từ khóa, tải lại hoặc xóa toàn bộ nhật ký. Khi xóa, hệ thống lưu lại bản ghi “audit.clear” để kiểm soát.
@@ -129,6 +129,7 @@ Hệ thống được triển khai cho Công ty TNHH Tiếp Vận Hoàng Kim (Go
   - Bật/tắt chế độ khởi động cùng Windows (tạo Scheduled Task chạy `kpi-control-gui.ps1 -AutoStart`).
   - Ghi log theo thời gian thực ở khung dưới cùng để tiện theo dõi.
 - Chạy script bằng PowerShell (Run with PowerShell). Khi đổi port trong giao diện, hệ thống sẽ tự khởi động lại server với port mới.
+
 ---
 
 Chúc bạn quản lý và theo dõi KPI hiệu quả! Nếu cần mở rộng thêm tính năng hoặc quyền chi tiết hơn, hãy cập nhật cấu hình trong tab **Tài khoản** hoặc liên hệ nhóm phát triển để được hỗ trợ.
