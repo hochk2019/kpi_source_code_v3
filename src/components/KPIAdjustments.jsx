@@ -65,7 +65,15 @@ import {
 
 } from "@/components/ui/card.jsx";
 
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog.jsx";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog.jsx";
+import { ScrollArea } from "@/components/ui/scroll-area.jsx";
 
 import { Input } from "@/components/ui/input.jsx";
 
@@ -3254,9 +3262,9 @@ export default function KPIAdjustments({ currentUser }) {
 
         <Dialog open={guidanceOpen} onOpenChange={setGuidanceOpen}>
 
-          <DialogContent className="max-w-3xl">
+          <DialogContent className="max-w-3xl max-h-[85vh] overflow-hidden p-0">
 
-            <DialogHeader>
+            <DialogHeader className="px-6 pt-6">
 
               <DialogTitle>Hướng dẫn nhập điểm KPI +/-</DialogTitle>
 
@@ -3267,228 +3275,230 @@ export default function KPIAdjustments({ currentUser }) {
               </DialogDescription>
 
             </DialogHeader>
-
-            {guidanceGroups.length ? (
-
-              <div className="space-y-4 text-sm text-foreground">
-
-                {guidanceGroups.map((group) => (
-
-                  <section key={group.key} className="rounded-xl border border-border bg-muted/30 p-4 shadow-sm">
-
-                    <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-
-                      <div>
-
-                        <h3 className="text-base font-semibold text-foreground">{group.label}</h3>
-
-                        {group.description ? (
-
-                          <p className="mt-1 text-xs text-muted-foreground">{group.description}</p>
-
-                        ) : null}
-
+            <ScrollArea className="max-h-[calc(85vh-8rem)] px-6 py-4 pb-6">
+  
+              {guidanceGroups.length ? (
+  
+                <div className="space-y-4 text-sm text-foreground">
+  
+                  {guidanceGroups.map((group) => (
+  
+                    <section key={group.key} className="rounded-xl border border-border bg-muted/30 p-4 shadow-sm">
+  
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+  
+                        <div>
+  
+                          <h3 className="text-base font-semibold text-foreground">{group.label}</h3>
+  
+                          {group.description ? (
+  
+                            <p className="mt-1 text-xs text-muted-foreground">{group.description}</p>
+  
+                          ) : null}
+  
+                        </div>
+  
                       </div>
-
-                    </div>
-
-                    <div className="mt-3 overflow-x-auto">
-
-                      <table
-
-                        aria-label={`Hướng dẫn: ${group.label}`}
-
-                        className="min-w-full divide-y divide-border text-sm"
-
-                      >
-
-                        <thead className="bg-muted/50 text-xs uppercase tracking-wide text-muted-foreground">
-
-                          <tr>
-
-                            <th className="whitespace-nowrap px-3 py-2 text-left font-medium">Hạng mục</th>
-
-                            <th className="whitespace-nowrap px-3 py-2 text-right font-medium">Điểm mặc định</th>
-
-                            <th className="whitespace-nowrap px-3 py-2 text-right font-medium">Điểm bổ sung</th>
-
-                            <th className="whitespace-nowrap px-3 py-2 text-left font-medium">Cách tính &amp; ghi chú</th>
-
-                          </tr>
-
-                        </thead>
-
-                        <tbody className="divide-y divide-border bg-background/80">
-
-                          {group.items.map((item) => (
-
-                            <tr key={item.key} className="align-top">
-
-                              <td className="px-3 py-3">
-
-                                <div className="flex flex-wrap items-center gap-2">
-
-                                  <span className="font-medium text-foreground">{item.label}</span>
-
-                                  {item.hasOverride ? (
-
-                                    <Badge variant="outline" className="text-xs font-normal">
-
-                                      Tuỳ chỉnh
-
-                                    </Badge>
-
-                                  ) : null}
-
-                                </div>
-
-                              </td>
-
-                              <td className="px-3 py-3 text-right">
-
-                                {Number.isFinite(item.defaultUnit) ? (
-
-                                  <span className="font-medium text-foreground">{formatDecimal(item.defaultUnit)}</span>
-
-                                ) : (
-
-                                  <span className="text-muted-foreground">—</span>
-
-                                )}
-
-                              </td>
-
-                              <td className="px-3 py-3 text-right">
-
-                                {item.extraUnit !== null ? (
-
-                                  <div className="space-y-1 text-right">
-
-                                    <span className="font-medium text-foreground">{formatDecimal(item.extraUnit)}</span>
-
-                                    {item.extraLabel ? (
-
-                                      <span className="block text-[11px] text-muted-foreground">{item.extraLabel}</span>
-
-                                    ) : null}
-
-                                  </div>
-
-                                ) : (
-
-                                  <span className="text-muted-foreground">Không áp dụng</span>
-
-                                )}
-
-                              </td>
-
-                              <td className="px-3 py-3">
-
-                                <div className="space-y-2">
-
-                                  {item.modeLabel ? (
-
-                                    <Badge variant="secondary" className="w-fit text-xs font-medium">
-
-                                      {item.modeLabel}
-
-                                    </Badge>
-
-                                  ) : null}
-
-                                  <p className="text-sm leading-snug text-muted-foreground">{item.calculation}</p>
-
-                                  {item.licensePoints.length ? (
-
-                                    <div className="text-xs text-muted-foreground">
-
-                                      <div className="font-medium text-foreground/80">Mã &amp; điểm:</div>
-
-                                      <ul className="mt-1 space-y-1">
-
-                                        {item.licensePoints.map((license) => (
-
-                                          <li key={`${item.key}-${license.code}`} className="flex flex-wrap items-center gap-1">
-
-                                            <span className="font-semibold text-foreground">{license.code}</span>
-
-                                            <span className="text-muted-foreground">– {formatDecimal(license.points)} điểm</span>
-
-                                          </li>
-
-                                        ))}
-
-                                      </ul>
-
-                                    </div>
-
-                                  ) : null}
-
-                                  {item.gradeOptions.length ? (
-
-                                    <div className="text-xs text-muted-foreground">
-
-                                      <div className="font-medium text-foreground/80">Các mức đánh giá:</div>
-
-                                      <ul className="mt-1 space-y-1">
-
-                                        {item.gradeOptions.map((grade) => (
-
-                                          <li key={`${item.key}-grade-${grade.value}`}>{grade.label}</li>
-
-                                        ))}
-
-                                      </ul>
-
-                                    </div>
-
-                                  ) : null}
-
-                                  {item.notes.length ? (
-
-                                    <ul className="space-y-1 text-xs text-muted-foreground">
-
-                                      {item.notes.map((note, index) => (
-
-                                        <li key={`${item.key}-note-${index}`}>{note}</li>
-
-                                      ))}
-
-                                    </ul>
-
-                                  ) : null}
-
-                                </div>
-
-                              </td>
-
+  
+                      <div className="mt-3 overflow-x-auto">
+  
+                        <table
+  
+                          aria-label={`Hướng dẫn: ${group.label}`}
+  
+                          className="min-w-full divide-y divide-border text-sm"
+  
+                        >
+  
+                          <thead className="bg-muted/50 text-xs uppercase tracking-wide text-muted-foreground">
+  
+                            <tr>
+  
+                              <th className="whitespace-nowrap px-3 py-2 text-left font-medium">Hạng mục</th>
+  
+                              <th className="whitespace-nowrap px-3 py-2 text-right font-medium">Điểm mặc định</th>
+  
+                              <th className="whitespace-nowrap px-3 py-2 text-right font-medium">Điểm bổ sung</th>
+  
+                              <th className="whitespace-nowrap px-3 py-2 text-left font-medium">Cách tính &amp; ghi chú</th>
+  
                             </tr>
-
-                          ))}
-
-                        </tbody>
-
-                      </table>
-
-                    </div>
-
-                  </section>
-
-                ))}
-
-              </div>
-
-            ) : (
-
-              <p className="text-sm text-muted-foreground">
-
-                Chưa có thông tin cấu hình khả dụng. Vui lòng mở phần cấu hình để kiểm tra lại.
-
-              </p>
-
-            )}
-
-            <DialogFooter className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+  
+                          </thead>
+  
+                          <tbody className="divide-y divide-border bg-background/80">
+  
+                            {group.items.map((item) => (
+  
+                              <tr key={item.key} className="align-top">
+  
+                                <td className="px-3 py-3">
+  
+                                  <div className="flex flex-wrap items-center gap-2">
+  
+                                    <span className="font-medium text-foreground">{item.label}</span>
+  
+                                    {item.hasOverride ? (
+  
+                                      <Badge variant="outline" className="text-xs font-normal">
+  
+                                        Tuỳ chỉnh
+  
+                                      </Badge>
+  
+                                    ) : null}
+  
+                                  </div>
+  
+                                </td>
+  
+                                <td className="px-3 py-3 text-right">
+  
+                                  {Number.isFinite(item.defaultUnit) ? (
+  
+                                    <span className="font-medium text-foreground">{formatDecimal(item.defaultUnit)}</span>
+  
+                                  ) : (
+  
+                                    <span className="text-muted-foreground">—</span>
+  
+                                  )}
+  
+                                </td>
+  
+                                <td className="px-3 py-3 text-right">
+  
+                                  {item.extraUnit !== null ? (
+  
+                                    <div className="space-y-1 text-right">
+  
+                                      <span className="font-medium text-foreground">{formatDecimal(item.extraUnit)}</span>
+  
+                                      {item.extraLabel ? (
+  
+                                        <span className="block text-[11px] text-muted-foreground">{item.extraLabel}</span>
+  
+                                      ) : null}
+  
+                                    </div>
+  
+                                  ) : (
+  
+                                    <span className="text-muted-foreground">Không áp dụng</span>
+  
+                                  )}
+  
+                                </td>
+  
+                                <td className="px-3 py-3">
+  
+                                  <div className="space-y-2">
+  
+                                    {item.modeLabel ? (
+  
+                                      <Badge variant="secondary" className="w-fit text-xs font-medium">
+  
+                                        {item.modeLabel}
+  
+                                      </Badge>
+  
+                                    ) : null}
+  
+                                    <p className="text-sm leading-snug text-muted-foreground">{item.calculation}</p>
+  
+                                    {item.licensePoints.length ? (
+  
+                                      <div className="text-xs text-muted-foreground">
+  
+                                        <div className="font-medium text-foreground/80">Mã &amp; điểm:</div>
+  
+                                        <ul className="mt-1 space-y-1">
+  
+                                          {item.licensePoints.map((license) => (
+  
+                                            <li key={`${item.key}-${license.code}`} className="flex flex-wrap items-center gap-1">
+  
+                                              <span className="font-semibold text-foreground">{license.code}</span>
+  
+                                              <span className="text-muted-foreground">– {formatDecimal(license.points)} điểm</span>
+  
+                                            </li>
+  
+                                          ))}
+  
+                                        </ul>
+  
+                                      </div>
+  
+                                    ) : null}
+  
+                                    {item.gradeOptions.length ? (
+  
+                                      <div className="text-xs text-muted-foreground">
+  
+                                        <div className="font-medium text-foreground/80">Các mức đánh giá:</div>
+  
+                                        <ul className="mt-1 space-y-1">
+  
+                                          {item.gradeOptions.map((grade) => (
+  
+                                            <li key={`${item.key}-grade-${grade.value}`}>{grade.label}</li>
+  
+                                          ))}
+  
+                                        </ul>
+  
+                                      </div>
+  
+                                    ) : null}
+  
+                                    {item.notes.length ? (
+  
+                                      <ul className="space-y-1 text-xs text-muted-foreground">
+  
+                                        {item.notes.map((note, index) => (
+  
+                                          <li key={`${item.key}-note-${index}`}>{note}</li>
+  
+                                        ))}
+  
+                                      </ul>
+  
+                                    ) : null}
+  
+                                  </div>
+  
+                                </td>
+  
+                              </tr>
+  
+                            ))}
+  
+                          </tbody>
+  
+                        </table>
+  
+                      </div>
+  
+                    </section>
+  
+                  ))}
+  
+                </div>
+  
+              ) : (
+  
+                <p className="text-sm text-muted-foreground">
+  
+                  Chưa có thông tin cấu hình khả dụng. Vui lòng mở phần cấu hình để kiểm tra lại.
+  
+                </p>
+  
+              )}
+  
+            </ScrollArea>
+            <DialogFooter className="flex flex-col gap-3 px-6 pb-6 pt-4 sm:flex-row sm:items-center sm:justify-between">
 
               <Button
 
