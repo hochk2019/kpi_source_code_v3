@@ -51,6 +51,8 @@ import { Button } from "@/components/ui/button.jsx";
 
 import { Badge } from "@/components/ui/badge.jsx";
 
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion.jsx";
+
 import {
 
   Card,
@@ -72,6 +74,8 @@ import { Input } from "@/components/ui/input.jsx";
 import { Textarea } from "@/components/ui/textarea.jsx";
 
 import { cn } from "@/lib/utils.js";
+
+import { Calculator, Hash, Medal, NotebookPen, PlusCircle, Sparkles } from "lucide-react";
 
 
 
@@ -3270,213 +3274,165 @@ export default function KPIAdjustments({ currentUser }) {
 
             {guidanceGroups.length ? (
 
-              <div className="space-y-4 text-sm text-foreground">
-
-                {guidanceGroups.map((group) => (
-
-                  <section key={group.key} className="rounded-xl border border-border bg-muted/30 p-4 shadow-sm">
-
-                    <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-
-                      <div>
-
-                        <h3 className="text-base font-semibold text-foreground">{group.label}</h3>
-
-                        {group.description ? (
-
-                          <p className="mt-1 text-xs text-muted-foreground">{group.description}</p>
-
-                        ) : null}
-
-                      </div>
-
-                    </div>
-
-                    <div className="mt-3 overflow-x-auto">
-
-                      <table
-
-                        aria-label={`Hướng dẫn: ${group.label}`}
-
-                        className="min-w-full divide-y divide-border text-sm"
-
-                      >
-
-                        <thead className="bg-muted/50 text-xs uppercase tracking-wide text-muted-foreground">
-
-                          <tr>
-
-                            <th className="whitespace-nowrap px-3 py-2 text-left font-medium">Hạng mục</th>
-
-                            <th className="whitespace-nowrap px-3 py-2 text-right font-medium">Điểm mặc định</th>
-
-                            <th className="whitespace-nowrap px-3 py-2 text-right font-medium">Điểm bổ sung</th>
-
-                            <th className="whitespace-nowrap px-3 py-2 text-left font-medium">Cách tính &amp; ghi chú</th>
-
-                          </tr>
-
-                        </thead>
-
-                        <tbody className="divide-y divide-border bg-background/80">
-
+              <Accordion type="multiple" className="space-y-3 text-foreground">
+                {guidanceGroups.map((group) => {
+                  const totalDefaultPoints = group.items.reduce(
+                    (sum, item) => (Number.isFinite(item.defaultUnit) ? sum + item.defaultUnit : sum),
+                    0,
+                  );
+                  const hasDefaultPoints = group.items.some((item) => Number.isFinite(item.defaultUnit));
+                  const activeDefaultCount = group.items.reduce(
+                    (count, item) => (Number.isFinite(item.defaultUnit) ? count + 1 : count),
+                    0,
+                  );
+                  return (
+                    <AccordionItem
+                      key={group.key}
+                      value={group.key}
+                      className="rounded-xl border border-border/70 bg-muted/20 px-1 py-1 shadow-sm transition-colors [&[data-state=open]]:border-border [&[data-state=open]]:bg-background"
+                    >
+                      <AccordionTrigger className="flex-col gap-3 px-3 text-left text-sm sm:flex-row sm:items-center sm:justify-between sm:px-4">
+                        <div className="flex flex-1 flex-col gap-2">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-base font-semibold text-foreground">{group.label}</span>
+                            <Badge variant="outline" className="border-border/70 bg-background/60 text-xs font-medium">
+                              {group.items.length} hạng mục
+                            </Badge>
+                          </div>
+                          {group.description ? (
+                            <p className="text-xs text-muted-foreground">{group.description}</p>
+                          ) : null}
+                        </div>
+                        <div className="flex flex-col items-start gap-2 text-xs font-medium text-muted-foreground sm:items-end">
+                          <span className="flex items-center gap-1 rounded-full border border-primary/40 bg-primary/10 px-3 py-1 text-primary">
+                            <Calculator className="size-4" aria-hidden="true" />
+                            {hasDefaultPoints ? `Tổng điểm chuẩn: ${formatDecimal(totalDefaultPoints)}` : "Chưa có điểm chuẩn"}
+                          </span>
+                          <span className="flex items-center gap-1">
+                            <Sparkles className="size-4" aria-hidden="true" />
+                            {`${activeDefaultCount}/${group.items.length} hạng mục có điểm mặc định`}
+                          </span>
+                        </div>
+                      </AccordionTrigger>
+                      <AccordionContent className="px-2 text-sm text-foreground sm:px-4">
+                        <div className="max-h-[55vh] space-y-4 overflow-y-auto pr-1">
                           {group.items.map((item) => (
-
-                            <tr key={item.key} className="align-top">
-
-                              <td className="px-3 py-3">
-
-                                <div className="flex flex-wrap items-center gap-2">
-
-                                  <span className="font-medium text-foreground">{item.label}</span>
-
-                                  {item.hasOverride ? (
-
-                                    <Badge variant="outline" className="text-xs font-normal">
-
-                                      Tuỳ chỉnh
-
-                                    </Badge>
-
-                                  ) : null}
-
-                                </div>
-
-                              </td>
-
-                              <td className="px-3 py-3 text-right">
-
-                                {Number.isFinite(item.defaultUnit) ? (
-
-                                  <span className="font-medium text-foreground">{formatDecimal(item.defaultUnit)}</span>
-
-                                ) : (
-
-                                  <span className="text-muted-foreground">—</span>
-
-                                )}
-
-                              </td>
-
-                              <td className="px-3 py-3 text-right">
-
-                                {item.extraUnit !== null ? (
-
-                                  <div className="space-y-1 text-right">
-
-                                    <span className="font-medium text-foreground">{formatDecimal(item.extraUnit)}</span>
-
-                                    {item.extraLabel ? (
-
-                                      <span className="block text-[11px] text-muted-foreground">{item.extraLabel}</span>
-
+                            <article
+                              key={item.key}
+                              className="rounded-lg border border-border/70 bg-background/80 shadow-sm transition hover:border-border"
+                            >
+                              <div className="flex flex-col gap-4 p-4 lg:flex-row">
+                                <div className="flex flex-col gap-3 lg:w-[32%]">
+                                  <div className="flex flex-wrap items-center justify-between gap-2">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                      <span className="text-sm font-semibold text-foreground">{item.label}</span>
+                                      {item.hasOverride ? (
+                                        <Badge variant="outline" className="border-primary/40 bg-primary/10 text-xs font-medium text-primary">
+                                          Tuỳ chỉnh
+                                        </Badge>
+                                      ) : null}
+                                    </div>
+                                    {item.modeLabel ? (
+                                      <Badge variant="secondary" className="flex items-center gap-1 text-xs font-medium">
+                                        {item.modeLabel}
+                                      </Badge>
                                     ) : null}
-
                                   </div>
-
-                                ) : (
-
-                                  <span className="text-muted-foreground">Không áp dụng</span>
-
-                                )}
-
-                              </td>
-
-                              <td className="px-3 py-3">
-
-                                <div className="space-y-2">
-
-                                  {item.modeLabel ? (
-
-                                    <Badge variant="secondary" className="w-fit text-xs font-medium">
-
-                                      {item.modeLabel}
-
-                                    </Badge>
-
-                                  ) : null}
-
-                                  <p className="text-sm leading-snug text-muted-foreground">{item.calculation}</p>
-
-                                  {item.licensePoints.length ? (
-
-                                    <div className="text-xs text-muted-foreground">
-
-                                      <div className="font-medium text-foreground/80">Mã &amp; điểm:</div>
-
-                                      <ul className="mt-1 space-y-1">
-
-                                        {item.licensePoints.map((license) => (
-
-                                          <li key={`${item.key}-${license.code}`} className="flex flex-wrap items-center gap-1">
-
-                                            <span className="font-semibold text-foreground">{license.code}</span>
-
-                                            <span className="text-muted-foreground">– {formatDecimal(license.points)} điểm</span>
-
-                                          </li>
-
-                                        ))}
-
-                                      </ul>
-
+                                  <div className="grid gap-3">
+                                    <div className="rounded-md border border-border/60 bg-muted/20 px-3 py-2">
+                                      <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                                        <Sparkles className="size-4" aria-hidden="true" />
+                                        <span>Điểm mặc định</span>
+                                      </div>
+                                      <div className="mt-1 text-lg font-semibold text-foreground">
+                                        {Number.isFinite(item.defaultUnit) ? (
+                                          formatDecimal(item.defaultUnit)
+                                        ) : (
+                                          <span className="text-sm font-normal text-muted-foreground">Không xác định</span>
+                                        )}
+                                      </div>
                                     </div>
-
-                                  ) : null}
-
-                                  {item.gradeOptions.length ? (
-
-                                    <div className="text-xs text-muted-foreground">
-
-                                      <div className="font-medium text-foreground/80">Các mức đánh giá:</div>
-
-                                      <ul className="mt-1 space-y-1">
-
-                                        {item.gradeOptions.map((grade) => (
-
-                                          <li key={`${item.key}-grade-${grade.value}`}>{grade.label}</li>
-
-                                        ))}
-
-                                      </ul>
-
+                                    <div className="rounded-md border border-border/60 bg-muted/20 px-3 py-2">
+                                      <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                                        <PlusCircle className="size-4" aria-hidden="true" />
+                                        <span>Điểm bổ sung</span>
+                                      </div>
+                                      {item.extraUnit !== null ? (
+                                        <div className="mt-1 space-y-1">
+                                          <div className="text-lg font-semibold text-foreground">{formatDecimal(item.extraUnit)}</div>
+                                          {item.extraLabel ? (
+                                            <p className="text-xs text-muted-foreground">{item.extraLabel}</p>
+                                          ) : null}
+                                        </div>
+                                      ) : (
+                                        <p className="mt-1 text-sm text-muted-foreground">Không áp dụng</p>
+                                      )}
                                     </div>
-
-                                  ) : null}
-
-                                  {item.notes.length ? (
-
-                                    <ul className="space-y-1 text-xs text-muted-foreground">
-
-                                      {item.notes.map((note, index) => (
-
-                                        <li key={`${item.key}-note-${index}`}>{note}</li>
-
-                                      ))}
-
-                                    </ul>
-
-                                  ) : null}
-
+                                  </div>
                                 </div>
-
-                              </td>
-
-                            </tr>
-
+                                <div className="flex-1 space-y-4">
+                                  <section className="rounded-md border border-dashed border-border/60 bg-muted/10 px-3 py-2">
+                                    <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                                      <Calculator className="size-4" aria-hidden="true" />
+                                      <span>Cách tính</span>
+                                    </div>
+                                    <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{item.calculation}</p>
+                                  </section>
+                                  {item.licensePoints.length ? (
+                                    <section className="rounded-md border border-dashed border-border/60 bg-muted/10 px-3 py-2">
+                                      <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                                        <Hash className="size-4" aria-hidden="true" />
+                                        <span>Mã &amp; điểm</span>
+                                      </div>
+                                      <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                                        {item.licensePoints.map((license) => (
+                                          <div
+                                            key={`${item.key}-${license.code}`}
+                                            className="flex items-center justify-between gap-3 rounded-md border border-border/60 bg-background/70 px-3 py-2 text-xs"
+                                          >
+                                            <span className="font-semibold text-foreground">{license.code}</span>
+                                            <span className="text-muted-foreground">{formatDecimal(license.points)} điểm</span>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </section>
+                                  ) : null}
+                                  {item.gradeOptions.length ? (
+                                    <section className="rounded-md border border-dashed border-border/60 bg-muted/10 px-3 py-2">
+                                      <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                                        <Medal className="size-4" aria-hidden="true" />
+                                        <span>Các mức đánh giá</span>
+                                      </div>
+                                      <ul className="mt-2 grid gap-1 text-sm text-muted-foreground sm:grid-cols-2">
+                                        {item.gradeOptions.map((grade) => (
+                                          <li key={`${item.key}-grade-${grade.value}`}>{grade.label}</li>
+                                        ))}
+                                      </ul>
+                                    </section>
+                                  ) : null}
+                                  {item.notes.length ? (
+                                    <section className="rounded-md border border-dashed border-border/60 bg-muted/10 px-3 py-2">
+                                      <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                                        <NotebookPen className="size-4" aria-hidden="true" />
+                                        <span>Ghi chú</span>
+                                      </div>
+                                      <ul className="mt-2 list-inside list-disc space-y-1 text-sm leading-relaxed text-muted-foreground">
+                                        {item.notes.map((note, index) => (
+                                          <li key={`${item.key}-note-${index}`}>{note}</li>
+                                        ))}
+                                      </ul>
+                                    </section>
+                                  ) : null}
+                                </div>
+                              </div>
+                            </article>
                           ))}
-
-                        </tbody>
-
-                      </table>
-
-                    </div>
-
-                  </section>
-
-                ))}
-
-              </div>
+                        </div>
+                      </AccordionContent>
+                    </AccordionItem>
+                  );
+                })}
+              </Accordion>
 
             ) : (
 
