@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
 
@@ -607,6 +607,12 @@ export default function AccountManager({ currentUser }) {
   const [permissionDialogOpen, setPermissionDialogOpen] = useState(false);
 
   const [permissionAccountUsername, setPermissionAccountUsername] = useState(null);
+  const permissionScrollRootRef = useRef(null);
+  const permissionScrollViewportRef = useRef(null);
+  const [permissionScrollState, setPermissionScrollState] = useState({
+    canScrollUp: false,
+    canScrollDown: false,
+  });
 
 
 
@@ -859,6 +865,80 @@ export default function AccountManager({ currentUser }) {
   const collapsedGroupCount = collapsedPermissionGroups.size;
   const allPermissionGroupsCollapsed = totalPermissionGroups > 0 && collapsedGroupCount === totalPermissionGroups;
   const noPermissionGroupCollapsed = collapsedGroupCount === 0;
+
+
+  const getPermissionViewport = useCallback(() => {
+    if (permissionScrollViewportRef.current instanceof HTMLElement) {
+      return permissionScrollViewportRef.current;
+    }
+    if (permissionScrollRootRef.current) {
+      const viewport = permissionScrollRootRef.current.querySelector('[data-slot="scroll-area-viewport"]');
+      if (viewport instanceof HTMLElement) {
+        return viewport;
+      }
+    }
+    return null;
+  }, []);
+
+  const scrollPermissionsToTop = useCallback(() => {
+    const viewport = getPermissionViewport();
+    if (!viewport) return;
+    viewport.scrollTo({ top: 0, behavior: 'smooth' });
+  }, [getPermissionViewport]);
+
+  const scrollPermissionsToBottom = useCallback(() => {
+    const viewport = getPermissionViewport();
+    if (!viewport) return;
+    viewport.scrollTo({ top: viewport.scrollHeight, behavior: 'smooth' });
+  }, [getPermissionViewport]);
+
+  useEffect(() => {
+    if (!permissionDialogOpen) {
+      setPermissionScrollState({ canScrollUp: false, canScrollDown: false });
+      return;
+    }
+    const viewport = getPermissionViewport();
+    if (!viewport) {
+      setPermissionScrollState({ canScrollUp: false, canScrollDown: false });
+      return;
+    }
+    const updateScrollState = () => {
+      const maxOffset = viewport.scrollHeight - viewport.clientHeight;
+      const top = viewport.scrollTop;
+      setPermissionScrollState({
+        canScrollUp: top > 16,
+        canScrollDown: top < maxOffset - 16,
+      });
+    };
+    updateScrollState();
+    const handleScroll = () => updateScrollState();
+    viewport.addEventListener('scroll', handleScroll);
+    let resizeObserver = null;
+    if (typeof ResizeObserver === 'function') {
+      resizeObserver = new ResizeObserver(updateScrollState);
+      resizeObserver.observe(viewport);
+      const content = viewport.firstElementChild;
+      if (content instanceof Element) {
+        resizeObserver.observe(content);
+      }
+    }
+    const raf = typeof requestAnimationFrame === 'function' ? requestAnimationFrame(updateScrollState) : null;
+    return () => {
+      viewport.removeEventListener('scroll', handleScroll);
+      if (resizeObserver) {
+        resizeObserver.disconnect();
+      }
+      if (raf != null) {
+        cancelAnimationFrame(raf);
+      }
+    };
+  }, [
+    permissionDialogOpen,
+    getPermissionViewport,
+    permissionAccountUsername,
+    groupedPermissions,
+    collapsedPermissionGroups,
+]);
 
   const filteredAccounts = useMemo(() => {
 
@@ -1120,6 +1200,7 @@ export default function AccountManager({ currentUser }) {
 
   const permissionAccountPending =
     permissionAccount?.username ? pendingAccounts.has(permissionAccount.username) : false;
+  const { canScrollUp, canScrollDown } = permissionScrollState;
 
   const openPermissionDialog = useCallback((account) => {
 
@@ -2184,9 +2265,12 @@ export default function AccountManager({ currentUser }) {
 
       >
 
-        <AppDialogContent size="xl" className="max-h-[80vh] flex flex-col">
+        <AppDialogContent
+          size="xl"
+          className="flex max-h-[85vh] flex-col overflow-hidden"
+        >
 
-          <AppDialogHeader>
+          <AppDialogHeader className="px-6 pb-3 pt-6">
 
             <AppDialogTitle>Quản lý quyền</AppDialogTitle>
 
@@ -2200,7 +2284,12 @@ export default function AccountManager({ currentUser }) {
 
           </AppDialogHeader>
 
-          <ScrollArea className="flex-1 min-h-0 px-6 pb-4 pt-2">
+          <ScrollArea
+            ref={permissionScrollRootRef}
+            viewportRef={permissionScrollViewportRef}
+            type="always"
+            className="flex-1 min-h-0 px-6 pb-6 pt-2"
+          >
 
             <div className="space-y-4">
 
@@ -2406,7 +2495,23 @@ export default function AccountManager({ currentUser }) {
 
           </ScrollArea>
 
-          <AppDialogFooter>
+          <AppDialogFooter className="flex flex-wrap items-center justify-end gap-2 px-6 pb-6 pt-4">
+            <button
+              type="button"
+              onClick={scrollPermissionsToTop}
+              className={GROUP_TOGGLE_BUTTON_CLASS}
+              disabled={!canScrollUp}
+            >
+              Cuộn lên đầu
+            </button>
+            <button
+              type="button"
+              onClick={scrollPermissionsToBottom}
+              className={GROUP_TOGGLE_BUTTON_CLASS}
+              disabled={!canScrollDown}
+            >
+              Cuộn xuống cuối
+            </button>
 
             <AppDialogClose asChild>
 

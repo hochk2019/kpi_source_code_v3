@@ -12,21 +12,39 @@ import { cn } from "@/lib/utils"
 
 
 
-function ScrollArea({
+const ScrollArea = React.forwardRef(function ScrollArea(
 
-  className,
+  {
 
-  children,
+    className,
 
-  ...props
+    children,
 
-}) {
+    viewportRef,
+
+    ...props
+
+  },
+
+  ref,
+
+) {
 
   return (
 
-    <ScrollAreaPrimitive.Root data-slot="scroll-area" className={cn("relative", className)} {...props}>
+    <ScrollAreaPrimitive.Root
+
+      ref={ref}
+
+      data-slot="scroll-area"
+
+      className={cn("relative", className)}
+
+      {...props}>
 
       <ScrollAreaPrimitive.Viewport
+
+        ref={viewportRef}
 
         data-slot="scroll-area-viewport"
 
@@ -44,7 +62,7 @@ function ScrollArea({
 
   );
 
-}
+})
 
 
 
@@ -95,6 +113,10 @@ function ScrollBar({
   );
 
 }
+
+
+
+ScrollArea.displayName = "ScrollArea"
 
 
 
