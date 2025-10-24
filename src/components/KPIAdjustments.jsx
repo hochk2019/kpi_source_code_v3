@@ -3399,16 +3399,16 @@ export default function KPIAdjustments({ currentUser }) {
 
           <DialogContent
             className={cn(
-              "max-w-3xl max-h-[calc(100vh-2rem)] p-0 sm:max-h-[85vh]",
+              "max-w-3xl overflow-hidden p-0 sm:max-h-[85vh]",
               guidanceFullscreen &&
-                "h-[calc(100vh-2rem)] max-w-[min(1200px,calc(100vw-2rem))] sm:max-h-[calc(100vh-2rem)] sm:w-[min(1200px,calc(100vw-2rem))]",
+                "h-[calc(100vh-2rem)] max-h-[calc(100vh-2rem)] max-w-[min(1200px,calc(100vw-2rem))] sm:w-[min(1200px,calc(100vw-2rem))]",
             )}
           >
 
             <div
               className={cn(
-                "grid max-h-[calc(100vh-2rem)] grid-rows-[auto,1fr,auto] overflow-hidden sm:max-h-[85vh]",
-                guidanceFullscreen && "h-full max-h-none sm:max-h-none",
+                "grid h-full grid-rows-[auto,1fr,auto]",
+                guidanceFullscreen ? "sm:max-h-none" : "sm:max-h-[85vh]",
               )}
             >
 
@@ -3458,7 +3458,10 @@ export default function KPIAdjustments({ currentUser }) {
               {guidanceGroups.length ? (
 
                 <ScrollArea
-                  className={cn("h-full px-6 pb-6", guidanceFullscreen && "pb-8")}
+                  className={cn(
+                    "px-6",
+                    guidanceFullscreen ? "h-full pb-8" : "max-h-[55vh] pb-6",
+                  )}
                 >
 
                   <div className="space-y-3 text-foreground">
