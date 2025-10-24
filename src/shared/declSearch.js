@@ -300,6 +300,13 @@ function prepareFilters(rawFilters = {}) {
 
     coMin: rawFilters.coMin,
 
+    includeDeleted: parseBooleanInput(
+      rawFilters.includeDeleted ??
+        rawFilters.showDeleted ??
+        rawFilters.withDeleted ??
+        rawFilters.include_deleted
+    ),
+
   };
 
 
@@ -392,6 +399,8 @@ export function normalizeDeclSearchFilters(rawFilters = {}) {
 
     coMin: normalized.coMinValue,
 
+    includeDeleted: normalized.includeDeleted,
+
   };
 
 }
@@ -426,6 +435,12 @@ export function filterDeclRows(rows, rawFilters = {}, context = {}) {
 
     }
 
+
+    if (!filters.includeDeleted && row.deleted_at) {
+
+      continue;
+
+    }
 
 
     if (filters.queryLower) {
