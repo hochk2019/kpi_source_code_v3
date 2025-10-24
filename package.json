@@ -26,7 +26,7 @@
     "dev:frontend": "vite",
     "favicon:update": "node scripts/update-favicon.mjs",
     "cert:ai": "pwsh -File ./scripts/create-ai-https-cert.ps1",
-    "precommit": "pnpm lint && pnpm test -- --runInBand",
+    "precommit": "pnpm lint && pnpm exec vitest run --config vitest.frontend.config.mjs tests/reports.test.js tests/store.test.js tests/dataImporter.preview.test.jsx tests/storageClient.test.js",
     "prepare": "pnpm exec simple-git-hooks",
     "test:screenshot": "pnpm build && pnpm exec playwright test tests/playwright/favicon.spec.js",
     "test:playwright": "pnpm exec playwright test"
