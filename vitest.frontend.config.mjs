@@ -7,6 +7,12 @@ export default mergeConfig(
   defineConfig({
     test: {
       include: ['tests/**/*.test.jsx', 'tests/**/*.test.js', 'tests/**/*.test.tsx'],
+      exclude: [
+        'tests/server.*.test.js',
+        'tests/check-server.test.mjs',
+        'tests/e2e.*.test.jsx',
+        'tests/automation.flows.test.js',
+      ],
       environment: 'jsdom',
       environmentMatchGlobs: [],
       setupFiles: ['./vitest.setup.js'],
