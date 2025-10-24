@@ -52,4 +52,22 @@ describe("CompanyNameCell", () => {
     fireEvent.change(input, { target: { value: "Tên công ty\nMới" } });
     expect(handleChange).toHaveBeenCalledWith("Tên công ty Mới");
   });
+
+  it("tự động mở rộng chiều cao textarea theo nội dung", () => {
+    const handleChange = vi.fn();
+    render(<CompanyNameCell value="" isReadOnly={false} onChange={handleChange} />);
+    const input = screen.getByRole("textbox");
+    Object.defineProperty(input, "scrollHeight", {
+      configurable: true,
+      get: () => 120,
+    });
+
+    fireEvent.change(input, {
+      target: {
+        value: "Công ty cổ phần vận tải và giao nhận quốc tế siêu dài",
+      },
+    });
+
+    expect(input.style.height).toBe("120px");
+  });
 });

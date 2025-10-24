@@ -602,6 +602,24 @@ const COLUMN_OPTIONS = [
 
 ];
 
+const createDefaultVisibleColumns = () => {
+
+  const defaults = {};
+
+  COLUMN_OPTIONS.forEach((option) => {
+
+    defaults[option.key] = true;
+
+  });
+
+  return defaults;
+
+};
+
+export const DEFAULT_VISIBLE_COLUMNS = Object.freeze(createDefaultVisibleColumns());
+
+export const COLUMN_VISIBILITY_STORAGE_PREFIX = "mstAssignment.visibleColumns";
+
 
 
 export const COLUMN_WIDTH_STORAGE_KEY = "mstAssignment.columnWidths";
@@ -797,6 +815,157 @@ export function writeStoredColumnWidths(storage, widths) {
   } catch (error) {
 
     console.warn("writeStoredColumnWidths", error);
+
+    return false;
+
+  }
+
+}
+
+
+
+
+const normalizeActorKey = (username) => {
+
+  if (!username) {
+
+    return "guest";
+
+  }
+
+  const value = username.toString().trim();
+
+  return value || "guest";
+
+};
+
+
+
+const getColumnVisibilityStorageKey = (username) =>
+
+  `${COLUMN_VISIBILITY_STORAGE_PREFIX}:${normalizeActorKey(username)}`;
+
+
+
+export function sanitizeColumnVisibility(raw, fallback = DEFAULT_VISIBLE_COLUMNS) {
+
+  const result = {};
+
+  COLUMN_OPTIONS.forEach((option) => {
+
+    if (option.required) {
+
+      result[option.key] = true;
+
+      return;
+
+    }
+
+    const fallbackValue = fallback?.[option.key] !== false;
+
+    let value = raw?.[option.key];
+
+    if (typeof value === "string") {
+
+      const trimmed = value.trim().toLowerCase();
+
+      if (["false", "0", "off", "no"].includes(trimmed)) {
+
+        value = false;
+
+      } else if (["true", "1", "on", "yes"].includes(trimmed)) {
+
+        value = true;
+
+      }
+
+    }
+
+    if (typeof value !== "boolean") {
+
+      value = value === 0 ? false : fallbackValue;
+
+    }
+
+    result[option.key] = value;
+
+  });
+
+  return result;
+
+}
+
+
+
+export function readStoredColumnVisibility(
+
+  storage,
+
+  username,
+
+  fallback = DEFAULT_VISIBLE_COLUMNS
+
+) {
+
+  const defaults = sanitizeColumnVisibility(fallback);
+
+  if (!storage) {
+
+    return defaults;
+
+  }
+
+  try {
+
+    const key = getColumnVisibilityStorageKey(username);
+
+    const raw = storage.getItem(key);
+
+    if (!raw) {
+
+      return defaults;
+
+    }
+
+    const parsed = JSON.parse(raw);
+
+    const sanitized = sanitizeColumnVisibility(parsed, defaults);
+
+    return { ...defaults, ...sanitized };
+
+  } catch (error) {
+
+    console.warn("readStoredColumnVisibility", error);
+
+    return defaults;
+
+  }
+
+}
+
+
+
+export function writeStoredColumnVisibility(storage, username, visibility) {
+
+  if (!storage) {
+
+    return false;
+
+  }
+
+  try {
+
+    const key = getColumnVisibilityStorageKey(username);
+
+    const sanitized = sanitizeColumnVisibility(visibility);
+
+    storage.setItem(key, JSON.stringify(sanitized));
+
+    return true;
+
+  } catch (error) {
+
+    console.warn("writeStoredColumnVisibility", error);
 
     return false;
 
@@ -1439,6 +1608,30 @@ export function CompanyNameCell({ value, isReadOnly, onChange, placeholder = "TÃ
   const safeValue = value == null ? "" : value.toString();
   const trimmedValue = safeValue.trim();
   const shouldWrap = shouldWrapCompanyName(safeValue);
+  const textareaRef = useRef(null);
+
+  const adjustTextareaHeight = useCallback(
+    (element, nextValue) => {
+      const target = element || textareaRef.current;
+      if (!target) {
+        return;
+      }
+
+      const measuredValue = nextValue ?? safeValue;
+      const wrapCandidate = shouldWrapCompanyName(measuredValue);
+      const baseMinHeight = wrapCandidate ? 40 : 36;
+
+      target.style.minHeight = `${baseMinHeight}px`;
+      target.style.height = "auto";
+      const nextHeight = Math.max(target.scrollHeight, baseMinHeight);
+      target.style.height = `${nextHeight}px`;
+    },
+    [safeValue]
+  );
+
+  useEffect(() => {
+    adjustTextareaHeight();
+  }, [safeValue, adjustTextareaHeight]);
 
   if (isReadOnly) {
     if (!trimmedValue) {
@@ -1466,6 +1659,7 @@ export function CompanyNameCell({ value, isReadOnly, onChange, placeholder = "TÃ
 
   const handleChange = (event) => {
     const sanitizedValue = sanitizeCompanyNameInput(event.target.value);
+    adjustTextareaHeight(event.target, sanitizedValue);
     if (!onChange) {
       return;
     }
@@ -1477,9 +1671,9 @@ export function CompanyNameCell({ value, isReadOnly, onChange, placeholder = "TÃ
 
   return (
     <textarea
+      ref={textareaRef}
       value={safeValue}
       onChange={handleChange}
-      rows={shouldWrap ? 2 : 1}
       className={clsx(
         'border rounded px-2 py-1 w-full resize-y whitespace-normal break-words',
         shouldWrap ? 'leading-snug min-h-[2.5rem]' : 'leading-normal min-h-[2.25rem]'
@@ -1963,7 +2157,19 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
 
   });
 
-  const canUseLocalStorage = typeof window !== "undefined" && typeof window.localStorage !== "undefined";
+  const canUseLocalStorage =
+
+    typeof window !== "undefined" && typeof window.localStorage !== "undefined";
+
+  const actor = currentUser?.username || "guest";
+
+  const defaultVisibleColumns = useMemo(
+
+    () => sanitizeColumnVisibility(DEFAULT_VISIBLE_COLUMNS),
+
+    []
+
+  );
 
   const [columnWidths, setColumnWidths] = useState(() => {
 
@@ -2227,17 +2433,71 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
 
   const [visibleColumns, setVisibleColumns] = useState(() => {
 
-    const defaults = {};
+    if (!canUseLocalStorage) {
 
-    COLUMN_OPTIONS.forEach((option) => {
+      return defaultVisibleColumns;
 
-      defaults[option.key] = option.required ? true : true;
+    }
+
+    return readStoredColumnVisibility(
+
+      window.localStorage,
+
+      actor,
+
+      defaultVisibleColumns
+
+    );
+
+  });
+
+  useEffect(() => {
+
+    if (!canUseLocalStorage) {
+
+      setVisibleColumns(defaultVisibleColumns);
+
+      return;
+
+    }
+
+    const storedVisibility = readStoredColumnVisibility(
+
+      window.localStorage,
+
+      actor,
+
+      defaultVisibleColumns
+
+    );
+
+    setVisibleColumns((prev) => {
+
+      const allKeys = new Set([
+
+        ...Object.keys(prev || {}),
+
+        ...Object.keys(storedVisibility || {}),
+
+      ]);
+
+      const isSame = Array.from(allKeys).every(
+
+        (key) => prev?.[key] === storedVisibility?.[key]
+
+      );
+
+      if (isSame) {
+
+        return prev;
+
+      }
+
+      return storedVisibility;
 
     });
 
-    return defaults;
-
-  });
+  }, [actor, canUseLocalStorage, defaultVisibleColumns]);
 
   const [columnMenuOpen, setColumnMenuOpen] = useState(false);
 
@@ -2267,39 +2527,41 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
 
   );
 
-  const toggleColumnVisibility = useCallback(
+    const toggleColumnVisibility = useCallback(
 
-    (key) => {
+      (key) => {
 
-      const option = COLUMN_OPTIONS.find((item) => item.key === key);
+        const option = COLUMN_OPTIONS.find((item) => item.key === key);
 
-      if (option?.required) {
+        if (option?.required) {
 
-        return;
+          return;
 
-      }
+        }
 
-      setVisibleColumns((prev) => {
+        setVisibleColumns((prev) => {
 
-        const next = { ...prev };
+          const next = { ...prev };
 
-        next[key] = prev[key] === false ? true : false;
+          next[key] = prev[key] === false ? true : false;
 
-        return next;
+          if (canUseLocalStorage) {
 
-      });
+            writeStoredColumnVisibility(window.localStorage, actor, next);
 
-    },
+          }
 
-    [setVisibleColumns]
+          return next;
 
-  );
+        });
 
-  const [addError, setAddError] = useState("");
+      },
 
+      [setVisibleColumns, canUseLocalStorage, actor]
 
+    );
 
-  const actor = currentUser?.username || "guest";
+    const [addError, setAddError] = useState("");
 
   const isReadOnly = !canEdit;
 
@@ -3430,7 +3692,11 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
 
 
 
-  const totalHistoryCount = historyEntries.length;
+  const totalHistoryCount = Array.isArray(historyEntries)
+
+    ? historyEntries.length
+
+    : 0;
 
   const filteredHistoryCount = filteredHistoryEntries.length;
 
