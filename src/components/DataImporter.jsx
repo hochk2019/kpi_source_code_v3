@@ -16006,7 +16006,7 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
 
                       className={cx(
 
-                        "px-2 py-1 align-top whitespace-nowrap",
+                        "px-2 py-1 align-top",
 
                         frozenOffsets.declaration ? frozenCellClass : ""
 
@@ -16018,7 +16018,7 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
 
                       <div className="flex flex-wrap items-center gap-1">
 
-                        <span className="font-medium text-gray-800 dark:text-gray-100">
+                        <span className="font-medium text-gray-800 dark:text-gray-100 whitespace-nowrap">
 
                           {r.so_tk_full || r.so_tk || ""}
 
@@ -16092,9 +16092,13 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
 
                         {rowReadOnly && (
 
-                          <span className="rounded bg-gray-200 px-1.5 py-0.5 text-[10px] font-medium text-gray-600">
+                          <span className="basis-full text-xs text-gray-500 leading-snug">
 
-                            {readOnlyLabel}
+                            <span className="rounded bg-gray-200 px-1.5 py-0.5 text-[10px] font-medium text-gray-600">
+
+                              {readOnlyLabel}
+
+                            </span>
 
                           </span>
 
@@ -16678,6 +16682,8 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
 
                 rowReviewLocked,
 
+                rowDeleted,
+
                 rowEditable,
 
                 canSaveRow,
@@ -16696,11 +16702,17 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
 
               const hasPendingDiff = state.hasPendingDiff;
 
-              const readOnlyLabel = rowReviewLocked
+              const readOnlyLabel = rowDeleted
+
+                ? rowReadOnlyReason || "Đã xóa mềm"
+
+                : rowReviewLocked
 
                 ? "Khóa rà soát"
 
                 : rowReadOnlyReason || "Chỉ xem";
+
+              const readOnlyStatus = rowDeleted ? "Không thể cập nhật" : "Chỉ xem";
 
               return (
 
