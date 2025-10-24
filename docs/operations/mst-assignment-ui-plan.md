@@ -52,11 +52,32 @@
 > **Ghi chú 6.2**: Tiếp tục duy trì danh sách đề xuất cải tiến, ưu tiên nghiên cứu bộ lọc nhanh theo trạng thái giai đoạn và preset bộ lọc người phụ trách.
 
 ## Đề xuất cải tiến bổ sung
-- Khảo sát thêm nhu cầu lọc nâng cao (theo trạng thái/tên phụ trách) để giảm thao tác tìm kiếm.
-- Cân nhắc lưu bộ cấu hình giao diện (chiều rộng cột, số dòng, bộ lọc) theo tài khoản người dùng trên server để đồng bộ đa thiết bị.
-- Thêm preset lọc nhanh theo trạng thái giai đoạn (ví dụ: "Chờ bổ sung", "Hoàn tất") kết hợp badge màu để hỗ trợ kiểm soát tiến độ.
-- Nghiên cứu cơ chế đồng bộ bộ lọc/tùy chỉnh giao diện MST giữa trình duyệt và ứng dụng desktop PowerShell để giảm thao tác cấu hình lặp lại.
-- Tạo screenshot mẫu sau khi hoàn thành để phục vụ kiểm thử hồi quy giao diện.
+1. **Thiết kế bộ lọc nâng cao đa điều kiện**
+   - Hỗ trợ kết hợp nhiều tiêu chí (trạng thái giai đoạn, người phụ trách, ngày cập nhật gần nhất).
+   - Cung cấp giao diện cấu hình dạng "builder" với các toán tử phổ biến (=, chứa, khác) và đảm bảo xử lý Unicode ổn định trên Windows 11 Pro.
+   - Ghi nhớ tổ hợp bộ lọc thường dùng bằng `localStorage` và đồng bộ với server qua API để sử dụng trên PowerShell 7.
+
+2. **Đồng bộ cấu hình giao diện theo tài khoản người dùng**
+   - Lưu chiều rộng cột, số dòng mặc định, preset lọc vào bảng cấu hình trên SQL Server 2008 R2 (schema `dbo.UserUiSettings`).
+   - Sử dụng job đồng bộ định kỳ (5 phút) giữa web app và ứng dụng desktop ECUS5VNACCS để tránh mất tùy chỉnh khi đổi thiết bị.
+   - Bổ sung migration và tài liệu hướng dẫn triển khai cho đội vận hành.
+
+3. **Preset lọc nhanh gắn badge trạng thái**
+   - Cung cấp tối thiểu 4 preset: "Chờ bổ sung", "Chờ phản hồi", "Đang xử lý", "Hoàn tất" với badge màu phù hợp (amber, blue, teal, green).
+   - Cho phép quản trị viên cập nhật danh sách preset qua cấu hình JSON để không phải rebuild ứng dụng.
+   - Gắn thông tin preset vào tooltip của từng badge để người dùng mới nắm rõ tiêu chí.
+
+4. **Tích hợp đồng bộ giữa trình duyệt và PowerShell**
+   - Xây dựng module PowerShell 7 đọc/ghi cấu hình chung thông qua REST API.
+   - Bảo đảm serialization UTF-8 để giữ nguyên dấu tiếng Việt.
+   - Viết bộ kiểm thử tự động xác nhận dữ liệu đồng bộ chính xác sau khi chuyển đổi môi trường.
+
+5. **Bộ tư liệu kiểm thử và truyền thông nội bộ**
+   - Tạo thư viện screenshot chuẩn (trước/sau) phục vụ regression test và đào tạo người dùng.
+   - Viết checklist kiểm thử UI tập trung vào các màn hình có text dài, đảm bảo không bị cắt chữ.
+   - Cập nhật wiki nội bộ với hướng dẫn áp dụng preset và khôi phục cấu hình mặc định.
+
+_Trạng thái: ĐÃ HOÀN THÀNH – ChatGPT, 2025-10-24_
 
 ---
 *Ngày cập nhật: 2025-10-24*
