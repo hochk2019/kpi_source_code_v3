@@ -52,6 +52,8 @@ Hệ thống được triển khai cho Công ty TNHH Tiếp Vận Hoàng Kim (Go
 | Khách | Xem và tìm kiếm danh sách công ty theo MST, không chỉnh sửa. |
 | Có quyền `Gán MST` | Import bảng gán MST từ Excel, chỉnh sửa trực tiếp (MST, công ty, người phụ trách, tổ đội, ngày hiệu lực) và lưu. Khi lưu hệ thống ghi log hành động. |
 
+> 🔗 **Theo dõi lộ trình nâng cấp giao diện**: xem tài liệu [Kế hoạch nâng cấp tab "Gán MST"](operations/mst-assignment-ui-plan.md) để nắm những thay đổi mới nhất và các đề xuất cải tiến.
+
 ### 2.4 Quản lý Tổ đội
 
 | Chế độ | Quyền hạn |

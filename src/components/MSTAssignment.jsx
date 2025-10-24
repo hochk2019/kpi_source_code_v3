@@ -1,5 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import clsx from "clsx";
+
 import * as XLSX from "xlsx";
 
 import {
@@ -31,6 +33,13 @@ import usePagination from "@/hooks/usePagination.js";
 import useMSTQuickFilters from "@/hooks/useMSTQuickFilters.js";
 
 import { Button } from "@/components/ui/button.jsx";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog.jsx";
 
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover.jsx";
 
@@ -50,7 +59,7 @@ import {
 
 } from "@/components/ui/command.jsx";
 
-import { Check, ChevronsUpDown, CircleX, Plus } from "lucide-react";
+import { Check, ChevronsUpDown, CircleX, Plus, LogIn, LogOut } from "lucide-react";
 
 
 
@@ -71,6 +80,37 @@ const normalize = (s = "") =>
     .trim()
 
     .toLowerCase();
+
+export const COMPANY_NAME_WRAP_THRESHOLD = 25;
+
+export const shouldWrapCompanyName = (value = "") => {
+  if (value == null) {
+    return false;
+  }
+
+  const raw = value.toString();
+  const trimmed = raw.trim();
+  if (!trimmed) {
+    return false;
+  }
+
+  return Array.from(trimmed).length >= COMPANY_NAME_WRAP_THRESHOLD;
+};
+
+
+
+export const sanitizeCompanyNameInput = (value = "") => {
+  if (value == null) {
+    return "";
+  }
+
+  if (typeof value !== "string") {
+    return value.toString();
+  }
+
+  return value.replace(/\r?\n|\r/g, " ");
+};
+
 
 
 
@@ -564,6 +604,212 @@ const COLUMN_OPTIONS = [
 
 
 
+export const COLUMN_WIDTH_STORAGE_KEY = "mstAssignment.columnWidths";
+
+
+
+export const DEFAULT_COLUMN_WIDTHS = Object.freeze({
+
+  mst: 136,
+
+  company: 320,
+
+  person_import: 224,
+
+  person_export: 224,
+
+  status: 180,
+
+  effective_from: 188,
+
+  effective_to: 188,
+
+  actions: 168,
+
+});
+
+
+
+export const COLUMN_MIN_WIDTH = 120;
+
+
+
+export const COLUMN_MIN_WIDTHS = Object.freeze({
+
+  mst: 120,
+
+  company: 240,
+
+  person_import: 180,
+
+  person_export: 180,
+
+  status: 150,
+
+  effective_from: 160,
+
+  effective_to: 160,
+
+  actions: 150,
+
+});
+
+
+
+export const COLUMN_MAX_WIDTH = 640;
+
+
+
+const getColumnFallbackWidth = (key, fallback = DEFAULT_COLUMN_WIDTHS) => {
+
+  const width = fallback?.[key];
+
+  if (Number.isFinite(width)) {
+
+    return width;
+
+  }
+
+  const defaultWidth = DEFAULT_COLUMN_WIDTHS[key];
+
+  if (Number.isFinite(defaultWidth)) {
+
+    return defaultWidth;
+
+  }
+
+  return Math.max(COLUMN_MIN_WIDTHS[key] ?? COLUMN_MIN_WIDTH, COLUMN_MIN_WIDTH);
+
+};
+
+
+
+export function sanitizeColumnWidths(raw, fallback = DEFAULT_COLUMN_WIDTHS) {
+
+  const result = {};
+
+  COLUMN_OPTIONS.forEach((option) => {
+
+    const { key } = option;
+
+    const baseWidth = getColumnFallbackWidth(key, fallback);
+
+    const minWidth = COLUMN_MIN_WIDTHS[key] ?? COLUMN_MIN_WIDTH;
+
+    const maxWidth = COLUMN_MAX_WIDTH;
+
+
+
+    let width = raw?.[key];
+
+    if (typeof width === "string" && width.trim() !== "") {
+
+      width = Number.parseFloat(width);
+
+    }
+
+    if (!Number.isFinite(width)) {
+
+      width = baseWidth;
+
+    }
+
+    width = Math.round(width);
+
+    if (!Number.isFinite(width) || width <= 0) {
+
+      width = baseWidth;
+
+    }
+
+    if (width < minWidth) {
+
+      width = minWidth;
+
+    }
+
+    if (Number.isFinite(maxWidth) && width > maxWidth) {
+
+      width = maxWidth;
+
+    }
+
+    result[key] = width;
+
+  });
+
+  return result;
+
+}
+
+
+
+export function readStoredColumnWidths(storage, fallback = DEFAULT_COLUMN_WIDTHS) {
+
+  if (!storage) {
+
+    return sanitizeColumnWidths({}, fallback);
+
+  }
+
+  try {
+
+    const raw = storage.getItem(COLUMN_WIDTH_STORAGE_KEY);
+
+    if (!raw) {
+
+      return sanitizeColumnWidths({}, fallback);
+
+    }
+
+    const parsed = JSON.parse(raw);
+
+    return sanitizeColumnWidths(parsed, fallback);
+
+  } catch (error) {
+
+    console.warn("readStoredColumnWidths", error);
+
+    return sanitizeColumnWidths({}, fallback);
+
+  }
+
+}
+
+
+
+export function writeStoredColumnWidths(storage, widths) {
+
+  if (!storage) {
+
+    return false;
+
+  }
+
+  try {
+
+    const sanitized = sanitizeColumnWidths(widths);
+
+    storage.setItem(COLUMN_WIDTH_STORAGE_KEY, JSON.stringify(sanitized));
+
+    return true;
+
+  } catch (error) {
+
+    console.warn("writeStoredColumnWidths", error);
+
+    return false;
+
+  }
+
+}
+
+
+
+const getColumnLabel = (key) => COLUMN_OPTIONS.find((option) => option.key === key)?.label || key;
+
+
+
 const toISO = (v) => {
 
   if (!v) return "";
@@ -756,7 +1002,43 @@ const tidyMST = (v) => {
 
 
 
-const DEFAULT_PAGE_SIZE = 50;
+export const MIN_PAGE_SIZE = 10;
+
+const DEFAULT_PAGE_SIZE = 15;
+
+export const PAGE_SIZE_OPTIONS = [15, 30, 50, 100];
+
+export const PAGE_SIZE_STORAGE_KEY = "mstAssignment.pageSize";
+
+export const normalizePageSize = (value, minValue = MIN_PAGE_SIZE) => {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) {
+    return minValue;
+  }
+  const normalized = Math.trunc(numeric);
+  if (normalized < minValue) {
+    return minValue;
+  }
+  return normalized;
+};
+
+export const readStoredPageSize = (
+  storage,
+  fallback = DEFAULT_PAGE_SIZE,
+  minValue = MIN_PAGE_SIZE
+) => {
+  if (!storage) return normalizePageSize(fallback, minValue);
+  try {
+    const raw = storage.getItem(PAGE_SIZE_STORAGE_KEY);
+    if (raw == null || raw === "") {
+      return normalizePageSize(fallback, minValue);
+    }
+    return normalizePageSize(raw, minValue);
+  } catch (err) {
+    console.warn("readStoredPageSize", err);
+    return normalizePageSize(fallback, minValue);
+  }
+};
 
 
 
@@ -985,6 +1267,498 @@ const HistoryDetails = ({ entries = [], label }) => {
 };
 
 
+const StageTimelinePreview = ({ stages = [], onViewFull }) => {
+  const safeStages = Array.isArray(stages) ? stages : [];
+  const limitedStages = safeStages.slice(0, 3);
+  const canViewFull = typeof onViewFull === "function" && safeStages.length > 0;
+
+  return (
+    <details className="mt-2 text-xs text-slate-600">
+      <summary className="flex cursor-pointer items-center gap-2 text-blue-600 hover:text-blue-800">
+        <span>Lịch sử giai đoạn</span>
+        <span className="rounded bg-slate-200 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-600">
+          {safeStages.length}
+        </span>
+      </summary>
+      {safeStages.length ? (
+        <>
+          <ul className="mt-1 space-y-1">
+            {limitedStages.map((stage, index) => {
+              const stageKey =
+                makeRowKey(stage) ||
+                `${stage?.mst || "stage"}-${stage?.effective_from || ""}-${stage?.effective_to || index}`;
+              const startLabel = stage?.effective_from
+                ? formatISODate(stage.effective_from)
+                : "Không xác định";
+              const endLabel = stage?.effective_to ? formatISODate(stage.effective_to) : "Hiện tại";
+              const active = !stage?.effective_to;
+              return (
+                <li
+                  key={stageKey}
+                  className="rounded border border-slate-200 bg-white px-2 py-1"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-semibold text-slate-700">
+                      {startLabel} → {endLabel}
+                    </span>
+                    {active ? (
+                      <span className="rounded bg-emerald-600 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
+                        Hiện hành
+                      </span>
+                    ) : null}
+                  </div>
+                  <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-slate-500">
+                    <span>Nhập: {stage?.person_import || "—"}</span>
+                    <span>Xuất: {stage?.person_export || "—"}</span>
+                    {stage?.status ? <span>Trạng thái: {stage.status}</span> : null}
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+          {safeStages.length > limitedStages.length ? (
+            <p className="mt-1 text-[11px] text-slate-500">
+              … và {safeStages.length - limitedStages.length} giai đoạn khác
+            </p>
+          ) : null}
+          {canViewFull ? (
+            <button
+              type="button"
+              className="mt-2 inline-flex items-center text-[11px] font-semibold text-blue-600 hover:text-blue-800"
+              onClick={onViewFull}
+            >
+              Xem toàn màn hình
+            </button>
+          ) : null}
+        </>
+      ) : (
+        <p className="mt-1 italic text-slate-400">Chưa có dữ liệu giai đoạn.</p>
+      )}
+    </details>
+  );
+};
+
+
+const StageTimelineGroups = ({ groups = [] }) => {
+  const safeGroups = Array.isArray(groups) ? groups : [];
+
+  if (!safeGroups.length) {
+    return (
+      <p className="text-sm text-slate-500">
+        Không có giai đoạn nào khớp bộ lọc hiện tại.
+      </p>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      {safeGroups.map((group, groupIndex) => {
+        const stageList = Array.isArray(group?.stages) ? group.stages : [];
+        const groupKey = group?.mst || `group-${groupIndex}`;
+        return (
+          <div
+            key={groupKey}
+            className="rounded border border-slate-200 bg-slate-50 p-3"
+          >
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <div className="text-sm font-semibold text-slate-800">
+                  {group?.mst || "(MST trống)"}
+                </div>
+                <div className="max-w-2xl truncate text-xs text-slate-500">
+                  {group?.company || "Chưa cập nhật tên công ty"}
+                </div>
+              </div>
+              <span className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                {stageList.length} giai đoạn
+              </span>
+            </div>
+            {stageList.length ? (
+              <div className="mt-3 flex flex-wrap gap-2">
+                {stageList.map((stage, stageIndex) => {
+                  const stageKey =
+                    makeRowKey(stage) ||
+                    `${group?.mst || "stage"}-${stage?.effective_from || ""}-${stage?.effective_to || stageIndex}`;
+                  const startLabel = stage?.effective_from
+                    ? formatISODate(stage.effective_from)
+                    : "Không xác định";
+                  const endLabel = stage?.effective_to
+                    ? formatISODate(stage.effective_to)
+                    : "Hiện tại";
+                  const active = !stage?.effective_to;
+                  return (
+                    <div
+                      key={stageKey}
+                      className={`min-w-[14rem] rounded border px-3 py-2 text-xs ${
+                        active
+                          ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                          : "border-slate-200 bg-white text-slate-700"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-semibold">
+                          {startLabel} → {endLabel}
+                        </span>
+                        {active ? (
+                          <span className="rounded bg-emerald-600 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
+                            Đang áp dụng
+                          </span>
+                        ) : null}
+                      </div>
+                      <div className="mt-2 space-y-1 text-slate-600">
+                        <div>
+                          <span className="font-medium text-slate-500">Nhập:</span> {stage?.person_import || "—"}
+                        </div>
+                        <div>
+                          <span className="font-medium text-slate-500">Xuất:</span> {stage?.person_export || "—"}
+                        </div>
+                        {stage?.status ? (
+                          <div>
+                            <span className="font-medium text-slate-500">Trạng thái:</span> {stage.status}
+                          </div>
+                        ) : null}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="mt-2 text-xs italic text-slate-500">Chưa có dữ liệu giai đoạn.</p>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
+
+
+
+export function CompanyNameCell({ value, isReadOnly, onChange, placeholder = "Tên công ty" }) {
+  const safeValue = value == null ? "" : value.toString();
+  const trimmedValue = safeValue.trim();
+  const shouldWrap = shouldWrapCompanyName(safeValue);
+
+  if (isReadOnly) {
+    if (!trimmedValue) {
+      return (
+        <span className="italic text-gray-400" data-company-wrap="empty">
+          (Không tên)
+        </span>
+      );
+    }
+
+    return (
+      <span
+        className={clsx(
+          'block whitespace-normal break-words text-gray-900',
+          shouldWrap ? 'leading-snug' : 'leading-normal'
+        )}
+        title={safeValue}
+        data-company-wrap={shouldWrap ? 'wrapped' : 'single'}
+        style={{ wordBreak: 'break-word' }}
+      >
+        {safeValue}
+      </span>
+    );
+  }
+
+  const handleChange = (event) => {
+    const sanitizedValue = sanitizeCompanyNameInput(event.target.value);
+    if (!onChange) {
+      return;
+    }
+
+    if (sanitizedValue !== safeValue || event.target.value !== safeValue) {
+      onChange(sanitizedValue);
+    }
+  };
+
+  return (
+    <textarea
+      value={safeValue}
+      onChange={handleChange}
+      rows={shouldWrap ? 2 : 1}
+      className={clsx(
+        'border rounded px-2 py-1 w-full resize-y whitespace-normal break-words',
+        shouldWrap ? 'leading-snug min-h-[2.5rem]' : 'leading-normal min-h-[2.25rem]'
+      )}
+      placeholder={placeholder}
+      title={trimmedValue ? safeValue : undefined}
+      spellCheck={false}
+      data-company-wrap={shouldWrap ? 'wrapped' : 'single'}
+      style={{ wordBreak: 'break-word' }}
+    />
+  );
+}
+
+const PERSON_HEADER_CONFIG = {
+  person_import: {
+    icon: LogIn,
+    labelLines: ["Phụ trách", "Nhập"],
+    tooltip: "Người phụ trách Nhập",
+  },
+  person_export: {
+    icon: LogOut,
+    labelLines: ["Phụ trách", "Xuất"],
+    tooltip: "Người phụ trách Xuất",
+  },
+};
+
+export function PersonColumnHeader({ columnKey }) {
+  const config = PERSON_HEADER_CONFIG[columnKey];
+  if (!config) {
+    return null;
+  }
+
+  const { icon: Icon, labelLines, tooltip } = config;
+
+  return (
+    <div
+      className="flex items-start gap-1.5"
+      title={tooltip}
+      data-tooltip={tooltip}
+      data-column={columnKey}
+    >
+      <Icon className="mt-0.5 size-4 shrink-0 text-gray-500" aria-hidden="true" />
+      <span className="flex flex-col text-left font-medium leading-tight text-gray-700">
+        {labelLines.map((line) => (
+          <span key={line}>{line}</span>
+        ))}
+        <span className="sr-only">{tooltip}</span>
+      </span>
+    </div>
+  );
+}
+
+function ColumnResizeHandle({ columnKey, onResizeStart }) {
+
+  const label = getColumnLabel(columnKey);
+
+  const handleMouseDown = (event) => {
+
+    if (typeof onResizeStart === "function") {
+
+      onResizeStart(columnKey, event);
+
+    }
+
+  };
+
+  return (
+
+    <span
+
+      role="separator"
+
+      aria-orientation="vertical"
+
+      aria-label={`Điều chỉnh chiều rộng cột ${label}`}
+
+      title={`Kéo để điều chỉnh chiều rộng cột ${label}`}
+
+      data-resize-handle={columnKey}
+
+      className="absolute inset-y-0 right-0 flex w-3 cursor-col-resize select-none items-center justify-center"
+
+      onMouseDown={handleMouseDown}
+
+    >
+
+      <span className="pointer-events-none h-full w-px bg-amber-500/50 opacity-0 transition-opacity duration-150 group-hover:opacity-100" />
+
+    </span>
+
+  );
+
+}
+
+export function AssigneeCell({
+  value = "",
+  placeholder,
+  isReadOnly,
+  teams = [],
+  teamValue = "",
+  onSelect,
+  historyEntries = [],
+  historyLabel,
+  showTeamHint = false,
+}) {
+  const safeValue = value == null ? "" : value.toString();
+  const trimmedValue = safeValue.trim();
+  const normalizedTeam = teamValue == null ? "" : teamValue.toString().trim();
+  const hasTeamHint = showTeamHint && normalizedTeam;
+
+  const displayNode = isReadOnly ? (
+    trimmedValue ? (
+      <span
+        className="whitespace-normal break-words text-gray-900 leading-snug"
+        style={{
+          display: "-webkit-box",
+          WebkitLineClamp: 2,
+          WebkitBoxOrient: "vertical",
+          overflow: "hidden",
+        }}
+        title={trimmedValue}
+        data-assignee-state="filled"
+      >
+        {trimmedValue}
+      </span>
+    ) : (
+      <span className="italic text-gray-400" data-assignee-state="empty">
+        (Chưa chọn)
+      </span>
+    )
+  ) : (
+    <StaffCombobox
+      value={safeValue}
+      teamValue={teamValue || ""}
+      teams={teams}
+      placeholder={placeholder}
+      onSelect={onSelect}
+    />
+  );
+
+  return (
+    <div className="flex flex-col">
+      <div className="flex flex-col gap-1">
+        {displayNode}
+        {hasTeamHint ? (
+          <span
+            className="text-xs text-gray-500"
+            title={`Tổ phụ trách: ${normalizedTeam}`}
+            data-team-hint="true"
+          >
+            Tổ: {normalizedTeam}
+          </span>
+        ) : null}
+      </div>
+      <HistoryDetails entries={historyEntries} label={historyLabel} />
+    </div>
+  );
+}
+
+export function PageSizeControl({
+  value,
+  onChange,
+  options = PAGE_SIZE_OPTIONS,
+  minValue = MIN_PAGE_SIZE,
+  selectId = "mst-assignment-page-size",
+}) {
+  const hasPredefinedOption = options.includes(value);
+  const [customValue, setCustomValue] = useState(() => String(Math.max(minValue, value || minValue)));
+  const [selectedOption, setSelectedOption] = useState(() =>
+    hasPredefinedOption ? String(value) : "custom"
+  );
+  const previousValueRef = useRef(value);
+
+  useEffect(() => {
+    if (previousValueRef.current === value) {
+      return;
+    }
+    previousValueRef.current = value;
+    const nextHasOption = options.includes(value);
+    const nextOption = nextHasOption ? String(value) : "custom";
+    setSelectedOption(nextOption);
+    if (!nextHasOption) {
+      setCustomValue(String(Math.max(minValue, value || minValue)));
+    }
+  }, [minValue, options, value]);
+
+  const handleSelectChange = useCallback(
+    (event) => {
+      const next = event.target.value;
+      if (next === "custom") {
+        setSelectedOption("custom");
+        setCustomValue(String(Math.max(minValue, value || minValue)));
+        return;
+      }
+      setSelectedOption(next);
+      const numeric = Number(next);
+      if (Number.isFinite(numeric)) {
+        onChange(normalizePageSize(numeric, minValue));
+      }
+    },
+    [minValue, onChange, value]
+  );
+
+  const handleCustomChange = useCallback((event) => {
+    const next = event.target.value;
+    if (/^\d*$/.test(next)) {
+      setCustomValue(next);
+    }
+  }, []);
+
+  const applyCustomValue = useCallback(() => {
+    if (customValue === "") {
+      const fallback = Math.max(minValue, value || minValue);
+      setCustomValue(String(fallback));
+      onChange(fallback);
+      return;
+    }
+    const normalized = normalizePageSize(customValue, minValue);
+    setCustomValue(String(normalized));
+    onChange(normalized);
+  }, [customValue, minValue, onChange, value]);
+
+  const handleCustomBlur = useCallback(() => {
+    applyCustomValue();
+  }, [applyCustomValue]);
+
+  const handleCustomKeyDown = useCallback(
+    (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        applyCustomValue();
+      }
+    },
+    [applyCustomValue]
+  );
+
+  return (
+    <div className="flex flex-wrap items-center gap-2 text-sm text-gray-600">
+      <label htmlFor={selectId} className="font-medium text-gray-700">
+        Số dòng mỗi trang
+      </label>
+      <select
+        id={selectId}
+        className="rounded border px-2 py-1"
+        value={selectedOption}
+        onChange={handleSelectChange}
+      >
+        {options.map((option) => (
+          <option key={option} value={option}>
+            {option} dòng
+          </option>
+        ))}
+        <option value="custom">Tùy chỉnh…</option>
+      </select>
+      {selectedOption === "custom" ? (
+        <div className="flex items-center gap-2">
+          <label htmlFor={`${selectId}-custom`} className="sr-only">
+            Nhập số dòng tùy chỉnh
+          </label>
+          <input
+            id={`${selectId}-custom`}
+            type="text"
+            inputMode="numeric"
+            pattern="[0-9]*"
+            className="w-20 rounded border px-2 py-1 text-right"
+            value={customValue}
+            onChange={handleCustomChange}
+            onBlur={handleCustomBlur}
+            onKeyDown={handleCustomKeyDown}
+            aria-describedby={`${selectId}-hint`}
+          />
+          <span id={`${selectId}-hint`} className="text-xs text-gray-500">
+            Tối thiểu {minValue} dòng
+          </span>
+        </div>
+      ) : null}
+    </div>
+  );
+}
 
 export default function MSTAssignment({ canEdit = true, currentUser = null }) {
 
@@ -997,6 +1771,13 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
   const [staffFilter, setStaffFilter] = useState("");
 
   const [applyFrom, setApplyFrom] = useState(""); // yyyy-mm-dd
+
+  const [initialPageSize] = useState(() => {
+    if (typeof window === "undefined") {
+      return DEFAULT_PAGE_SIZE;
+    }
+    return readStoredPageSize(window.localStorage, DEFAULT_PAGE_SIZE, MIN_PAGE_SIZE);
+  });
 
   const rootRef = useRef(null);
 
@@ -1181,6 +1962,268 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
     effective_to: "",
 
   });
+
+  const canUseLocalStorage = typeof window !== "undefined" && typeof window.localStorage !== "undefined";
+
+  const [columnWidths, setColumnWidths] = useState(() => {
+
+    if (!canUseLocalStorage) {
+
+      return sanitizeColumnWidths(DEFAULT_COLUMN_WIDTHS);
+
+    }
+
+    return readStoredColumnWidths(window.localStorage, DEFAULT_COLUMN_WIDTHS);
+
+  });
+
+  const columnWidthsRef = useRef(columnWidths);
+
+  useEffect(() => {
+
+    columnWidthsRef.current = columnWidths;
+
+  }, [columnWidths]);
+
+  const pendingColumnWidthsRef = useRef(columnWidths);
+
+  const persistColumnWidthsTimeoutRef = useRef(null);
+
+  const schedulePersistColumnWidths = useCallback(
+
+    (nextWidths) => {
+
+      if (!canUseLocalStorage) {
+
+        return;
+
+      }
+
+      pendingColumnWidthsRef.current = nextWidths;
+
+      if (persistColumnWidthsTimeoutRef.current) {
+
+        clearTimeout(persistColumnWidthsTimeoutRef.current);
+
+      }
+
+      persistColumnWidthsTimeoutRef.current = setTimeout(() => {
+
+        writeStoredColumnWidths(window.localStorage, pendingColumnWidthsRef.current);
+
+        persistColumnWidthsTimeoutRef.current = null;
+
+      }, 280);
+
+    },
+
+    [canUseLocalStorage]
+
+  );
+
+  useEffect(() => {
+
+    schedulePersistColumnWidths(columnWidths);
+
+  }, [columnWidths, schedulePersistColumnWidths]);
+
+  useEffect(() => {
+
+    return () => {
+
+      if (persistColumnWidthsTimeoutRef.current) {
+
+        clearTimeout(persistColumnWidthsTimeoutRef.current);
+
+      }
+
+      if (typeof document !== "undefined" && document.body) {
+
+        document.body.style.removeProperty("user-select");
+
+        document.body.style.removeProperty("cursor");
+
+      }
+
+    };
+
+  }, []);
+
+  const columnResizeStateRef = useRef({ key: null, startX: 0, startWidth: 0 });
+
+  const handleColumnResizeStart = useCallback(
+
+    (key, event) => {
+
+      if (event.button !== 0) {
+
+        return;
+
+      }
+
+      event.preventDefault();
+
+      event.stopPropagation();
+
+      const currentWidths = columnWidthsRef.current || {};
+
+      const startWidth = currentWidths[key] ?? getColumnFallbackWidth(key);
+
+      columnResizeStateRef.current = {
+
+        key,
+
+        startX: event.clientX,
+
+        startWidth,
+
+      };
+
+      if (typeof document !== "undefined" && document.body) {
+
+        document.body.style.userSelect = "none";
+
+        document.body.style.cursor = "col-resize";
+
+      }
+
+    },
+
+    []
+
+  );
+
+  const handleColumnResizeMove = useCallback((event) => {
+
+    const state = columnResizeStateRef.current;
+
+    if (!state?.key) {
+
+      return;
+
+    }
+
+    const delta = event.clientX - state.startX;
+
+    const proposed = state.startWidth + delta;
+
+    const minWidth = COLUMN_MIN_WIDTHS[state.key] ?? COLUMN_MIN_WIDTH;
+
+    const maxWidth = COLUMN_MAX_WIDTH;
+
+    const nextWidth = Math.min(maxWidth, Math.max(minWidth, Math.round(proposed)));
+
+    setColumnWidths((prev) => {
+
+      const current = prev?.[state.key];
+
+      if (current === nextWidth) {
+
+        return prev;
+
+      }
+
+      return { ...prev, [state.key]: nextWidth };
+
+    });
+
+  }, []);
+
+  useEffect(() => {
+
+    if (typeof window === "undefined") {
+
+      return undefined;
+
+    }
+
+    const handleMove = (event) => {
+
+      if (!columnResizeStateRef.current?.key) {
+
+        return;
+
+      }
+
+      handleColumnResizeMove(event);
+
+    };
+
+    const handleUp = (event) => {
+
+      if (!columnResizeStateRef.current?.key) {
+
+        return;
+
+      }
+
+      handleColumnResizeMove(event);
+
+      columnResizeStateRef.current = { key: null, startX: 0, startWidth: 0 };
+
+      if (typeof document !== "undefined" && document.body) {
+
+        document.body.style.removeProperty("user-select");
+
+        document.body.style.removeProperty("cursor");
+
+      }
+
+    };
+
+    window.addEventListener("mousemove", handleMove);
+
+    window.addEventListener("mouseup", handleUp);
+
+    return () => {
+
+      window.removeEventListener("mousemove", handleMove);
+
+      window.removeEventListener("mouseup", handleUp);
+
+    };
+
+  }, [handleColumnResizeMove]);
+
+  const handleResetColumnWidths = useCallback(() => {
+
+    const defaults = sanitizeColumnWidths(DEFAULT_COLUMN_WIDTHS);
+
+    setColumnWidths(defaults);
+
+  }, []);
+
+  const columnStyleMap = useMemo(() => {
+
+    const map = {};
+
+    COLUMN_OPTIONS.forEach((option) => {
+
+      const key = option.key;
+
+      const stored = columnWidths?.[key];
+
+      const minWidth = COLUMN_MIN_WIDTHS[key] ?? COLUMN_MIN_WIDTH;
+
+      const fallbackWidth = getColumnFallbackWidth(key);
+
+      const resolved = Math.max(minWidth, Number.isFinite(stored) ? stored : fallbackWidth);
+
+      map[key] = {
+
+        width: `${resolved}px`,
+
+        minWidth: `${minWidth}px`,
+
+        maxWidth: `${Math.max(resolved, minWidth)}px`,
+
+      };
+
+    });
+
+    return map;
+
+  }, [columnWidths]);
 
   const [visibleColumns, setVisibleColumns] = useState(() => {
 
@@ -2227,70 +3270,105 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
 
 
   const {
-
     page,
-
+    pageSize,
     pageCount: totalPages,
-
     currentPageItems: pageRows,
-
     setPage,
-
+    setPageSize,
     nextPage,
-
     previousPage,
-
   } = usePagination(filtered, {
-
     initialPage: 1,
-
-    initialPageSize: DEFAULT_PAGE_SIZE,
-
+    initialPageSize,
+    minPageSize: MIN_PAGE_SIZE,
   });
 
 
 
   const groupedStages = useMemo(() => {
-
     if (!filtered.length) return [];
-
     const map = new Map();
-
     filtered.forEach((row) => {
-
       const key = row.mst || "__unknown";
-
       if (!map.has(key)) {
-
         map.set(key, {
-
           mst: row.mst || "",
-
           company: row.company || "",
-
           stages: [],
-
         });
-
       }
-
       map.get(key).stages.push(row);
-
     });
-
     return Array.from(map.values())
-
       .map((entry) => ({
-
         ...entry,
-
         stages: sortMSTRows(entry.stages),
-
       }))
-
       .sort((a, b) => (a.mst || "").localeCompare(b.mst || ""));
-
   }, [filtered]);
+
+  const timelineGroupsByMST = useMemo(() => {
+    const map = new Map();
+    groupedStages.forEach((group) => {
+      const key = group?.mst || "__unknown";
+      if (!map.has(key)) {
+        map.set(key, group);
+      }
+    });
+    return map;
+  }, [groupedStages]);
+
+  const [timelineDialogState, setTimelineDialogState] = useState({
+    open: false,
+    groups: [],
+    title: "",
+    subtitle: "",
+  });
+
+  const showTimelineDialog = useCallback(({ title, subtitle, groups }) => {
+    const normalizedGroups = Array.isArray(groups) ? groups.filter(Boolean) : [];
+    if (!normalizedGroups.length) {
+      setTimelineDialogState((prev) => ({ ...prev, open: false }));
+      return;
+    }
+    setTimelineDialogState({
+      open: true,
+      groups: normalizedGroups,
+      title: title || "Dòng thời gian giai đoạn",
+      subtitle: subtitle || "",
+    });
+  }, []);
+
+  const handleTimelineDialogOpenChange = useCallback((nextOpen) => {
+    setTimelineDialogState((prev) => ({ ...prev, open: nextOpen }));
+  }, []);
+
+  const handleOpenTimelineGroup = useCallback(
+    (group) => {
+      if (!group) return;
+      const safeGroup = {
+        mst: group?.mst || "",
+        company: group?.company || "",
+        stages: Array.isArray(group?.stages) ? group.stages : [],
+      };
+      showTimelineDialog({
+        title: `Dòng thời gian — ${safeGroup.mst || "(MST trống)"}`,
+        subtitle: safeGroup.company ? `Công ty: ${safeGroup.company}` : "",
+        groups: [safeGroup],
+      });
+    },
+    [showTimelineDialog]
+  );
+
+  const handleOpenAllTimelines = useCallback(() => {
+    if (!groupedStages.length) return;
+    showTimelineDialog({
+      title: "Dòng thời gian giai đoạn",
+      subtitle: `${groupedStages.length} MST khớp bộ lọc hiện tại`,
+      groups: groupedStages,
+    });
+  }, [groupedStages, showTimelineDialog]);
 
 
 
@@ -2322,6 +3400,8 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
 
     page,
 
+    pageSize,
+
     showAddForm,
 
     selectedFileName,
@@ -2329,6 +3409,24 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
     historyFilter,
 
   ]);
+
+
+
+  useEffect(() => {
+
+    if (typeof window === "undefined") return;
+
+    try {
+
+      window.localStorage.setItem(PAGE_SIZE_STORAGE_KEY, String(pageSize));
+
+    } catch (err) {
+
+      console.warn("persistPageSize", err);
+
+    }
+
+  }, [pageSize]);
 
 
 
@@ -3616,9 +4714,27 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
 
             </div>
 
+            <Button
+
+              type="button"
+
+              variant="ghost"
+
+              size="sm"
+
+              className="mt-3 justify-start text-amber-700 hover:text-amber-800"
+
+              onClick={handleResetColumnWidths}
+
+            >
+
+              Đặt lại chiều rộng
+
+            </Button>
+
             <p className="mt-3 text-xs text-gray-500">
 
-              * Kéo thanh trượt ngang của bảng nếu nội dung vượt quá chiều rộng màn hình.
+              * Kéo tay cầm bên phải tiêu đề cột để điều chỉnh chiều rộng. Nếu nội dung vượt màn hình, hãy cuộn ngang bảng.
 
             </p>
 
@@ -3640,21 +4756,87 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
 
               {isColumnVisible("mst") ? (
 
-                <th className="p-2 text-left whitespace-nowrap w-32">MST</th>
+                <th
+
+                  className="group relative p-2 text-left whitespace-nowrap align-bottom"
+
+                  data-column-key="mst"
+
+                  style={columnStyleMap.mst}
+
+                  scope="col"
+
+                >
+
+                  <div className="pr-4 font-semibold">MST</div>
+
+                  <ColumnResizeHandle
+
+                    columnKey="mst"
+
+                    onResizeStart={handleColumnResizeStart}
+
+                  />
+
+                </th>
 
               ) : null}
 
               {isColumnVisible("company") ? (
 
-                <th className="p-2 text-left min-w-[18rem]">Công ty</th>
+                <th
+
+                  className="group relative p-2 text-left align-bottom"
+
+                  data-column-key="company"
+
+                  style={columnStyleMap.company}
+
+                  scope="col"
+
+                >
+
+                  <div className="pr-4 font-semibold">Công ty</div>
+
+                  <ColumnResizeHandle
+
+                    columnKey="company"
+
+                    onResizeStart={handleColumnResizeStart}
+
+                  />
+
+                </th>
 
               ) : null}
 
               {isColumnVisible("person_import") ? (
 
-                <th className="p-2 text-left whitespace-nowrap min-w-[14rem]">
+                <th
 
-                  Người phụ trách Nhập
+                  className="group relative p-2 text-left align-bottom"
+
+                  data-column-key="person_import"
+
+                  style={columnStyleMap.person_import}
+
+                  scope="col"
+
+                >
+
+                  <div className="pr-4">
+
+                    <PersonColumnHeader columnKey="person_import" />
+
+                  </div>
+
+                  <ColumnResizeHandle
+
+                    columnKey="person_import"
+
+                    onResizeStart={handleColumnResizeStart}
+
+                  />
 
                 </th>
 
@@ -3662,9 +4844,31 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
 
               {isColumnVisible("person_export") ? (
 
-                <th className="p-2 text-left whitespace-nowrap min-w-[14rem]">
+                <th
 
-                  Người phụ trách Xuất
+                  className="group relative p-2 text-left align-bottom"
+
+                  data-column-key="person_export"
+
+                  style={columnStyleMap.person_export}
+
+                  scope="col"
+
+                >
+
+                  <div className="pr-4">
+
+                    <PersonColumnHeader columnKey="person_export" />
+
+                  </div>
+
+                  <ColumnResizeHandle
+
+                    columnKey="person_export"
+
+                    onResizeStart={handleColumnResizeStart}
+
+                  />
 
                 </th>
 
@@ -3672,25 +4876,113 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
 
               {isColumnVisible("status") ? (
 
-                <th className="p-2 text-left whitespace-nowrap w-36">Trạng thái</th>
+                <th
+
+                  className="group relative p-2 text-left whitespace-nowrap align-bottom"
+
+                  data-column-key="status"
+
+                  style={columnStyleMap.status}
+
+                  scope="col"
+
+                >
+
+                  <div className="pr-4 font-semibold">Trạng thái</div>
+
+                  <ColumnResizeHandle
+
+                    columnKey="status"
+
+                    onResizeStart={handleColumnResizeStart}
+
+                  />
+
+                </th>
 
               ) : null}
 
               {isColumnVisible("effective_from") ? (
 
-                <th className="p-2 text-left whitespace-nowrap w-40">Áp dụng từ ngày</th>
+                <th
+
+                  className="group relative p-2 text-left whitespace-nowrap align-bottom"
+
+                  data-column-key="effective_from"
+
+                  style={columnStyleMap.effective_from}
+
+                  scope="col"
+
+                >
+
+                  <div className="pr-4 font-semibold">Áp dụng từ ngày</div>
+
+                  <ColumnResizeHandle
+
+                    columnKey="effective_from"
+
+                    onResizeStart={handleColumnResizeStart}
+
+                  />
+
+                </th>
 
               ) : null}
 
               {isColumnVisible("effective_to") ? (
 
-                <th className="p-2 text-left whitespace-nowrap w-40">Đến hết ngày</th>
+                <th
+
+                  className="group relative p-2 text-left whitespace-nowrap align-bottom"
+
+                  data-column-key="effective_to"
+
+                  style={columnStyleMap.effective_to}
+
+                  scope="col"
+
+                >
+
+                  <div className="pr-4 font-semibold">Đến hết ngày</div>
+
+                  <ColumnResizeHandle
+
+                    columnKey="effective_to"
+
+                    onResizeStart={handleColumnResizeStart}
+
+                  />
+
+                </th>
 
               ) : null}
 
               {isColumnVisible("actions") ? (
 
-                <th className="p-2 text-center whitespace-nowrap w-36">Hành động</th>
+                <th
+
+                  className="group relative p-2 text-center whitespace-nowrap align-bottom"
+
+                  data-column-key="actions"
+
+                  style={columnStyleMap.actions}
+
+                  scope="col"
+
+                >
+
+                  <div className="pr-4 font-semibold text-center">Hành động</div>
+
+                  <ColumnResizeHandle
+
+                    columnKey="actions"
+
+                    onResizeStart={handleColumnResizeStart}
+
+                  />
+
+                </th>
 
               ) : null}
 
@@ -3752,6 +5044,29 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
 
                 const updateLabel = r.__originalKey ? "Cập nhật" : "Lưu mới";
 
+                const timelineGroup = timelineGroupsByMST.get(r.mst || "__unknown");
+
+                const timelineStages = Array.isArray(timelineGroup?.stages)
+                  ? timelineGroup.stages
+                  : [];
+
+                const timelineCompany = timelineGroup?.company || r.company || "";
+
+                const timelineMST = timelineGroup?.mst || r.mst || "";
+
+                const timelineGroupWithFallback =
+                  timelineGroup || {
+                    mst: timelineMST,
+                    company: timelineCompany,
+                    stages: timelineStages,
+                  };
+
+                const actionsColumnVisible = isColumnVisible("actions");
+
+                const statusColumnVisible = isColumnVisible("status");
+
+                const showTimelineInStatus = statusColumnVisible && !actionsColumnVisible;
+
                 return (
 
                   <tr
@@ -3766,7 +5081,15 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
 
                     {isColumnVisible("mst") ? (
 
-                      <td className="p-2 align-top whitespace-nowrap">
+                      <td
+
+                        className="p-2 align-top whitespace-nowrap"
+
+                        style={columnStyleMap.mst}
+
+                        data-column-key="mst"
+
+                      >
 
                         {isReadOnly ? (
 
@@ -3814,171 +5137,130 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
 
                     ) : null}
 
+                    
                     {isColumnVisible("company") ? (
-
-                      <td className="p-2 align-top min-w-[18rem]">
-
-                        {isReadOnly ? (
-
-                          r.company ? (
-
-                            <span>{r.company}</span>
-
-                          ) : (
-
-                            <span className="italic text-gray-400">(Không tên)</span>
-
-                          )
-
-                        ) : (
-
-                          <input
-
-                            value={r.company || ""}
-
-                            onChange={(e) =>
-
-                              updateRow(r, { company: e.target.value })
-
-                            }
-
-                            className="border rounded px-2 py-1 w-full"
-
-                            placeholder="Tên công ty"
-
-                          />
-
-                        )}
-
+                      <td
+                        className="p-2 align-top"
+                        style={columnStyleMap.company}
+                        data-column-key="company"
+                      >
+                        <CompanyNameCell
+                          value={r.company || ""}
+                          isReadOnly={isReadOnly}
+                          onChange={(nextValue) => updateRow(r, { company: nextValue })}
+                        />
                       </td>
-
                     ) : null}
+
 
                     {isColumnVisible("person_import") ? (
 
-                      <td className="p-2 align-top whitespace-nowrap min-w-[14rem]">
+                      <td
 
-                        {isReadOnly ? (
+                        className="p-2 align-top"
 
-                          r.person_import ? (
+                        style={columnStyleMap.person_import}
 
-                            <span>{r.person_import}</span>
+                        data-column-key="person_import"
 
-                          ) : (
+                      >
 
-                            <span className="italic text-gray-400">(Chưa chọn)</span>
+                        <AssigneeCell
 
-                          )
+                          value={r.person_import || ""}
 
-                        ) : (
+                          placeholder="Chọn nhân viên nhập"
 
-                          <StaffCombobox
+                          isReadOnly={isReadOnly}
 
-                            value={r.person_import || ""}
+                          teams={rosterTeams}
 
-                            teamValue={r.team || ""}
+                          teamValue={r.team || ""}
 
-                            teams={rosterTeams}
+                          onSelect={({ staffName, teamName, isCustom }) => {
 
-                            placeholder="Chọn nhân viên nhập"
+                            const patch = { person_import: staffName || "" };
 
-                            onSelect={({ staffName, teamName, isCustom }) => {
+                            if (staffName && teamName && !isCustom) {
 
-                              const patch = { person_import: staffName || "" };
+                              const prevTeamKey = normalizeName(normalizeStr(r.team || ""));
 
-                              if (staffName && teamName && !isCustom) {
+                              const nextTeamKey = normalizeName(normalizeStr(teamName));
 
-                                const prevTeamKey = normalizeName(normalizeStr(r.team || ""));
+                              if (!prevTeamKey || prevTeamKey === nextTeamKey) {
 
-                                const nextTeamKey = normalizeName(normalizeStr(teamName));
-
-                                if (!prevTeamKey || prevTeamKey === nextTeamKey) {
-
-                                  patch.team = teamName;
-
-                                }
+                                patch.team = teamName;
 
                               }
 
-                              updateRow(r, patch);
+                            }
 
-                            }}
+                            updateRow(r, patch);
 
-                          />
+                          }}
 
-                        )}
+                          historyEntries={importHistory}
 
-                        <HistoryDetails
+                          historyLabel={HISTORY_FIELD_LABELS.person_import}
 
-                          entries={importHistory}
-
-                          label={HISTORY_FIELD_LABELS.person_import}
+                          showTeamHint
 
                         />
 
                       </td>
 
                     ) : null}
+
 
                     {isColumnVisible("person_export") ? (
 
-                      <td className="p-2 align-top whitespace-nowrap min-w-[14rem]">
+                      <td
 
-                        {isReadOnly ? (
+                        className="p-2 align-top"
 
-                          r.person_export ? (
+                        style={columnStyleMap.person_export}
 
-                            <span>{r.person_export}</span>
+                        data-column-key="person_export"
 
-                          ) : (
+                      >
 
-                            <span className="italic text-gray-400">(Chưa chọn)</span>
+                        <AssigneeCell
 
-                          )
+                          value={r.person_export || ""}
 
-                        ) : (
+                          placeholder="Chọn nhân viên xuất"
 
-                          <StaffCombobox
+                          isReadOnly={isReadOnly}
 
-                            value={r.person_export || ""}
+                          teams={rosterTeams}
 
-                            teamValue={r.team || ""}
+                          teamValue={r.team || ""}
 
-                            teams={rosterTeams}
+                          onSelect={({ staffName, teamName, isCustom }) => {
 
-                            placeholder="Chọn nhân viên xuất"
+                            const patch = { person_export: staffName || "" };
 
-                            onSelect={({ staffName, teamName, isCustom }) => {
+                            if (staffName && teamName && !isCustom) {
 
-                              const patch = { person_export: staffName || "" };
+                              const prevTeamKey = normalizeName(normalizeStr(r.team || ""));
 
-                              if (staffName && teamName && !isCustom) {
+                              const nextTeamKey = normalizeName(normalizeStr(teamName));
 
-                                const prevTeamKey = normalizeName(normalizeStr(r.team || ""));
+                              if (!prevTeamKey || prevTeamKey === nextTeamKey) {
 
-                                const nextTeamKey = normalizeName(normalizeStr(teamName));
-
-                                if (!prevTeamKey || prevTeamKey === nextTeamKey) {
-
-                                  patch.team = teamName;
-
-                                }
+                                patch.team = teamName;
 
                               }
 
-                              updateRow(r, patch);
+                            }
 
-                            }}
+                            updateRow(r, patch);
 
-                          />
+                          }}
 
-                        )}
+                          historyEntries={exportHistory}
 
-                        <HistoryDetails
-
-                          entries={exportHistory}
-
-                          label={HISTORY_FIELD_LABELS.person_export}
+                          historyLabel={HISTORY_FIELD_LABELS.person_export}
 
                         />
 
@@ -3986,9 +5268,18 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
 
                     ) : null}
 
-                    {isColumnVisible("status") ? (
 
-                      <td className="p-2 align-top whitespace-nowrap">
+                    {statusColumnVisible ? (
+
+                      <td
+
+                        className="p-2 align-top whitespace-nowrap"
+
+                        style={columnStyleMap.status}
+
+                        data-column-key="status"
+
+                      >
 
                         {statusDisplay ? (
 
@@ -4026,13 +5317,41 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
 
                         ) : null}
 
+                        {showTimelineInStatus ? (
+
+                          <StageTimelinePreview
+
+                            stages={timelineStages}
+
+                            onViewFull={
+
+                              timelineStages.length
+
+                                ? () => handleOpenTimelineGroup(timelineGroupWithFallback)
+
+                                : undefined
+
+                            }
+
+                          />
+
+                        ) : null}
+
                       </td>
 
                     ) : null}
 
                     {isColumnVisible("effective_from") ? (
 
-                      <td className="p-2 align-top whitespace-nowrap">
+                      <td
+
+                        className="p-2 align-top whitespace-nowrap"
+
+                        style={columnStyleMap.effective_from}
+
+                        data-column-key="effective_from"
+
+                      >
 
                         {isReadOnly ? (
 
@@ -4072,7 +5391,15 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
 
                     {isColumnVisible("effective_to") ? (
 
-                      <td className="p-2 align-top whitespace-nowrap">
+                      <td
+
+                        className="p-2 align-top whitespace-nowrap"
+
+                        style={columnStyleMap.effective_to}
+
+                        data-column-key="effective_to"
+
+                      >
 
                         {isReadOnly ? (
 
@@ -4106,85 +5433,113 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
 
                     ) : null}
 
-                    {isColumnVisible("actions") ? (
+                    {actionsColumnVisible ? (
 
-                      <td className="p-2 align-top text-center whitespace-nowrap">
+                      <td
 
-                        {canEdit ? (
+                        className="p-2 align-top text-center whitespace-nowrap"
 
-                          <div className="flex flex-col gap-2">
+                        style={columnStyleMap.actions}
 
-                            <button
+                        data-column-key="actions"
 
-                              type="button"
+                      >
 
-                              onClick={() => startNewStageFromRow(r)}
+                        <div className="flex flex-col gap-3">
 
-                              className="px-2 py-1 rounded border bg-white text-gray-700 hover:bg-gray-50"
+                          {canEdit ? (
 
-                              data-tooltip="Sao chép thông tin hiện tại để thêm giai đoạn kế tiếp"
+                            <div className="flex flex-col gap-2">
 
-                            >
+                              <button
 
-                              Giai đoạn mới
+                                type="button"
 
-                            </button>
+                                onClick={() => startNewStageFromRow(r)}
 
-                            <button
+                                className="px-2 py-1 rounded border bg-white text-gray-700 hover:bg-gray-50"
 
-                              type="button"
+                                data-tooltip="Sao chép thông tin hiện tại để thêm giai đoạn kế tiếp"
 
-                              onClick={() => commitRow(r)}
+                              >
 
-                              disabled={updateDisabled}
+                                Giai đoạn mới
 
-                              className={`px-2 py-1 rounded text-white ${
+                              </button>
 
-                                updateDisabled
+                              <button
 
-                                  ? "bg-gray-400 cursor-not-allowed"
+                                type="button"
 
-                                  : "bg-emerald-600 hover:bg-emerald-700"
+                                onClick={() => commitRow(r)}
 
-                              }`}
+                                disabled={updateDisabled}
 
-                              data-tooltip={
+                                className={`px-2 py-1 rounded text-white ${
 
-                                updateDisabled
+                                  updateDisabled
 
-                                  ? "Không có thay đổi mới"
+                                    ? "bg-gray-400 cursor-not-allowed"
 
-                                  : "Lưu các thay đổi vừa chỉnh"
+                                    : "bg-emerald-600 hover:bg-emerald-700"
 
-                              }
+                                }`}
 
-                            >
+                                data-tooltip={
 
-                              {updateLabel}
+                                  updateDisabled
 
-                            </button>
+                                    ? "Không có thay đổi mới"
 
-                            <button
+                                    : "Lưu các thay đổi vừa chỉnh"
 
-                              onClick={() => removeRow(r)}
+                                }
 
-                              className="px-2 py-1 rounded bg-red-500 text-white hover:bg-red-600"
+                              >
 
-                              data-tooltip="Xóa dòng"
+                                {updateLabel}
 
-                            >
+                              </button>
 
-                              Xóa
+                              <button
 
-                            </button>
+                                onClick={() => removeRow(r)}
 
-                          </div>
+                                className="px-2 py-1 rounded bg-red-500 text-white hover:bg-red-600"
 
-                        ) : (
+                                data-tooltip="Xóa dòng"
 
-                          <span className="text-xs text-gray-400">—</span>
+                              >
 
-                        )}
+                                Xóa
+
+                              </button>
+
+                            </div>
+
+                          ) : (
+
+                            <span className="text-xs text-gray-400">—</span>
+
+                          )}
+
+                          <StageTimelinePreview
+
+                            stages={timelineStages}
+
+                            onViewFull={
+
+                              timelineStages.length
+
+                                ? () => handleOpenTimelineGroup(timelineGroupWithFallback)
+
+                                : undefined
+
+                            }
+
+                          />
+
+                        </div>
 
                       </td>
 
@@ -4208,171 +5563,53 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
 
 
 
-      <div className="mt-6">
+      <div className="mt-6 rounded border border-slate-200 bg-slate-50 px-3 py-2">
 
         <div className="flex flex-wrap items-center justify-between gap-2">
 
-          <h2 className="text-sm font-semibold text-slate-700">
+          <div>
 
-            Dòng thời gian giai đoạn (theo bộ lọc)
+            <h2 className="text-sm font-semibold text-slate-700">
 
-          </h2>
+              Dòng thời gian giai đoạn
 
-          <span className="text-xs uppercase tracking-wide text-slate-500">
+            </h2>
 
-            {groupedStages.length} MST
+            <p className="text-xs text-slate-500">
 
-          </span>
+              Xem tổng hợp theo bộ lọc hiện tại.
 
-        </div>
-
-        {groupedStages.length ? (
-
-          <div className="mt-3 space-y-3">
-
-            {groupedStages.map((group, groupIndex) => (
-
-              <div
-
-                key={group.mst || `group-${groupIndex}`}
-
-                className="rounded border border-slate-200 bg-slate-50 p-3"
-
-              >
-
-                <div className="flex flex-wrap items-center justify-between gap-2">
-
-                  <div>
-
-                    <div className="text-sm font-semibold text-slate-800">
-
-                      {group.mst || "(MST trống)"}
-
-                    </div>
-
-                    <div className="text-xs text-slate-500 max-w-2xl truncate">
-
-                      {group.company || "Chưa cập nhật tên công ty"}
-
-                    </div>
-
-                  </div>
-
-                  <span className="text-xs font-medium uppercase tracking-wide text-slate-500">
-
-                    {group.stages.length} giai đoạn
-
-                  </span>
-
-                </div>
-
-                <div className="mt-3 flex flex-wrap gap-2">
-
-                  {group.stages.map((stage, stageIndex) => {
-
-                    const rangeKey = makeRowKey(stage) || `${group.mst || "stage"}-${stageIndex}`;
-
-                    const startLabel = stage.effective_from
-
-                      ? formatISODate(stage.effective_from)
-
-                      : "Không xác định";
-
-                    const endLabel = stage.effective_to
-
-                      ? formatISODate(stage.effective_to)
-
-                      : "Hiện tại";
-
-                    const active = !stage.effective_to;
-
-                    return (
-
-                      <div
-
-                        key={rangeKey}
-
-                        className={`min-w-[14rem] rounded border px-3 py-2 text-xs ${
-
-                          active
-
-                            ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-
-                            : "border-slate-200 bg-white text-slate-700"
-
-                        }`}
-
-                      >
-
-                        <div className="flex items-center justify-between gap-2">
-
-                          <span className="font-semibold">
-
-                            {startLabel} → {endLabel}
-
-                          </span>
-
-                          {active ? (
-
-                            <span className="rounded bg-emerald-600 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
-
-                              Đang áp dụng
-
-                            </span>
-
-                          ) : null}
-
-                        </div>
-
-                        <div className="mt-2 space-y-1 text-slate-600">
-
-                          <div>
-
-                            <span className="font-medium text-slate-500">Nhập:</span> {stage.person_import || "—"}
-
-                          </div>
-
-                          <div>
-
-                            <span className="font-medium text-slate-500">Xuất:</span> {stage.person_export || "—"}
-
-                          </div>
-
-                        </div>
-
-                      </div>
-
-                    );
-
-                  })}
-
-                </div>
-
-              </div>
-
-            ))}
+            </p>
 
           </div>
 
-        ) : (
+          <Button
 
-          <p className="mt-2 text-sm text-slate-500">
+            type="button"
 
-            Không có giai đoạn nào khớp bộ lọc hiện tại.
+            variant="outline"
 
-          </p>
+            size="sm"
 
-        )}
+            onClick={handleOpenAllTimelines}
+
+            disabled={!groupedStages.length}
+
+          >
+
+            Mở tổng hợp ({groupedStages.length})
+
+          </Button>
+
+        </div>
 
       </div>
 
-
-
       {/* Pagination */}
 
-      <div className="flex items-center justify-between mt-3">
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
 
-        <div />
+        <PageSizeControl value={pageSize} onChange={setPageSize} />
 
         <div className="flex items-center gap-2">
 
@@ -4420,9 +5657,39 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
 
         </div>
 
-        <div />
-
       </div>
+
+      <Dialog
+
+        open={timelineDialogState.open}
+
+        onOpenChange={handleTimelineDialogOpenChange}
+
+      >
+
+        <DialogContent className="max-w-3xl max-h-[80vh] overflow-hidden">
+
+          <DialogHeader>
+
+            <DialogTitle>{timelineDialogState.title || "Dòng thời gian giai đoạn"}</DialogTitle>
+
+            {timelineDialogState.subtitle ? (
+
+              <DialogDescription>{timelineDialogState.subtitle}</DialogDescription>
+
+            ) : null}
+
+          </DialogHeader>
+
+          <div className="max-h-[60vh] overflow-auto pr-1">
+
+            <StageTimelineGroups groups={timelineDialogState.groups} />
+
+          </div>
+
+        </DialogContent>
+
+      </Dialog>
 
     </div>
 
