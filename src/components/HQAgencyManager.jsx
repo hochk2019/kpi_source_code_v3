@@ -57,6 +57,38 @@ const STATUS_FILTER_OPTIONS = [
 ];
 
 const AGENCY_SUGGESTION_DATALIST = "hq-agency-suggestions";
+const COLUMN_WIDTH_STORAGE_KEY = "hqAgency.table.columnWidths";
+const MIN_COLUMN_WIDTHS = {
+  index: 72,
+  mst: 180,
+  company: 240,
+  agency: 280,
+  actions: 96,
+};
+const MAX_COLUMN_WIDTHS = {
+  index: 160,
+  mst: 360,
+  company: 640,
+  agency: 720,
+  actions: 240,
+};
+const DEFAULT_COLUMN_WIDTHS = {
+  index: 80,
+  mst: 220,
+  company: 320,
+  agency: 360,
+  actions: 112,
+};
+
+function clampColumnWidth(key, value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) {
+    return DEFAULT_COLUMN_WIDTHS[key] ?? MIN_COLUMN_WIDTHS[key] ?? 120;
+  }
+  const min = MIN_COLUMN_WIDTHS[key] ?? 60;
+  const max = MAX_COLUMN_WIDTHS[key] ?? 720;
+  return Math.min(Math.max(numeric, min), max);
+}
 
 
 
@@ -470,6 +502,9 @@ export default function HQAgencyManager({ canEdit = true, currentUser = null }) 
 
 
 
+  const [columnWidths, setColumnWidths] = useState(DEFAULT_COLUMN_WIDTHS);
+  const resizeCleanupRef = useRef(null);
+
   const [baseline, setBaseline] = useState(() => initialDrafts.map(cloneDraft));
 
   const [rows, setRows] = useState(() => initialDrafts.map(cloneDraft));
@@ -494,11 +529,112 @@ export default function HQAgencyManager({ canEdit = true, currentUser = null }) 
 
   const fileRef = useRef(null);
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const raw = window.localStorage.getItem(COLUMN_WIDTH_STORAGE_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed !== "object") return;
+      const next = { ...DEFAULT_COLUMN_WIDTHS };
+      let hasCustomWidth = false;
+      for (const key of Object.keys(next)) {
+        if (Object.prototype.hasOwnProperty.call(parsed, key)) {
+          const clamped = clampColumnWidth(key, parsed[key]);
+          next[key] = clamped;
+          if (clamped !== DEFAULT_COLUMN_WIDTHS[key]) {
+            hasCustomWidth = true;
+          }
+        }
+      }
+      if (hasCustomWidth) {
+        setColumnWidths(next);
+      }
+    } catch (err) {
+      console.warn("Không thể đọc cấu hình độ rộng cột Đại lý HQ", err);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      window.localStorage.setItem(COLUMN_WIDTH_STORAGE_KEY, JSON.stringify(columnWidths));
+    } catch (err) {
+      console.warn("Không thể lưu cấu hình độ rộng cột Đại lý HQ", err);
+    }
+  }, [columnWidths]);
+
+  useEffect(() => () => {
+    if (typeof window === "undefined") return;
+    if (typeof resizeCleanupRef.current === "function") {
+      resizeCleanupRef.current();
+    }
+  }, []);
+
 
 
   const actor = currentUser?.username || "guest";
 
   const isReadOnly = !canEdit;
+
+
+
+  const handleResizeStart = useCallback((key, event) => {
+    if (typeof window === "undefined") return;
+    if (!event || typeof event.clientX !== "number") return;
+    event.preventDefault();
+    if (typeof resizeCleanupRef.current === "function") {
+      resizeCleanupRef.current();
+    }
+    const startX = event.clientX;
+    const baseWidth = columnWidths[key] ?? DEFAULT_COLUMN_WIDTHS[key] ?? MIN_COLUMN_WIDTHS[key] ?? 120;
+    const body = typeof document !== "undefined" ? document.body : null;
+    const previousUserSelect = body?.style.userSelect ?? "";
+    const previousCursor = body?.style.cursor ?? "";
+    if (body) {
+      body.style.userSelect = "none";
+      body.style.cursor = "col-resize";
+    }
+    const onMouseMove = (moveEvent) => {
+      const delta = (moveEvent?.clientX ?? startX) - startX;
+      const nextWidth = clampColumnWidth(key, baseWidth + delta);
+      setColumnWidths(prev => {
+        if (prev[key] === nextWidth) return prev;
+        return { ...prev, [key]: nextWidth };
+      });
+    };
+    const onMouseUp = () => {
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseUp);
+      if (body) {
+        body.style.userSelect = previousUserSelect;
+        body.style.cursor = previousCursor;
+      }
+      resizeCleanupRef.current = null;
+    };
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onMouseUp);
+    resizeCleanupRef.current = onMouseUp;
+  }, [columnWidths]);
+
+  const getColumnStyle = useCallback((key) => {
+    const width = columnWidths[key] ?? DEFAULT_COLUMN_WIDTHS[key] ?? MIN_COLUMN_WIDTHS[key] ?? 120;
+    const minWidth = MIN_COLUMN_WIDTHS[key] ?? 60;
+    return {
+      width: `${Math.round(width)}px`,
+      minWidth: `${Math.round(minWidth)}px`,
+    };
+  }, [columnWidths]);
+
+  const renderResizeHandle = useCallback((key) => (
+    <span
+      aria-hidden="true"
+      onMouseDown={(event) => handleResizeStart(key, event)}
+      className="absolute right-0 top-0 flex h-full w-2 cursor-col-resize select-none items-center justify-center"
+    >
+      <span className="pointer-events-none h-3/4 w-[1px] rounded bg-slate-400 opacity-25 transition-opacity group-hover:opacity-80" />
+    </span>
+  ), [handleResizeStart]);
 
 
 
@@ -1724,29 +1860,53 @@ export default function HQAgencyManager({ canEdit = true, currentUser = null }) 
 
             <tr>
 
-              <th className="w-16 px-2 py-1 text-left">STT</th>
-
-              <th className="px-2 py-1 text-left">Mã số thuế</th>
-
-              <th className="px-2 py-1 text-left">Công ty</th>
-
-              <th className="px-2 py-1 text-left">Đại lý HQ
-
-                <span
-
-                  className="ml-1 text-xs text-gray-400"
-
-                  title="Nhập nhiều đại lý và ngăn cách bằng dấu phẩy (,) hoặc xuống dòng khi cần."
-
-                >
-
-                  ⓘ
-
-                </span>
-
+              <th
+                className="group relative px-2 py-1 pr-4 text-left"
+                style={getColumnStyle("index")}
+              >
+                STT
+                {renderResizeHandle("index")}
               </th>
 
-              {canEdit && <th className="w-16 px-2 py-1 text-left">Xóa</th>}
+              <th
+                className="group relative px-2 py-1 pr-4 text-left"
+                style={getColumnStyle("mst")}
+              >
+                Mã số thuế
+                {renderResizeHandle("mst")}
+              </th>
+
+              <th
+                className="group relative px-2 py-1 pr-4 text-left"
+                style={getColumnStyle("company")}
+              >
+                Công ty
+                {renderResizeHandle("company")}
+              </th>
+
+              <th
+                className="group relative px-2 py-1 pr-5 text-left"
+                style={getColumnStyle("agency")}
+              >
+                Đại lý HQ
+                <span
+                  className="ml-1 text-xs text-gray-400"
+                  title="Nhập nhiều đại lý và ngăn cách bằng dấu phẩy (,) hoặc xuống dòng khi cần."
+                >
+                  ⓘ
+                </span>
+                {renderResizeHandle("agency")}
+              </th>
+
+              {canEdit && (
+                <th
+                  className="group relative px-2 py-1 pr-4 text-left"
+                  style={getColumnStyle("actions")}
+                >
+                  Xóa
+                  {renderResizeHandle("actions")}
+                </th>
+              )}
 
             </tr>
 
@@ -1828,19 +1988,21 @@ export default function HQAgencyManager({ canEdit = true, currentUser = null }) 
 
                   <tr className="odd:bg-[color:var(--ds-surface-card)] even:bg-[color:var(--ds-surface-muted)]">
 
-                    <td className="px-2 py-1">{globalIndex}</td>
+                    <td className="px-2 py-1" style={getColumnStyle("index")}>
+                      <div className="min-h-[24px]">{globalIndex}</div>
+                    </td>
 
-                    <td className="px-2 py-1">
+                    <td className="px-2 py-1" style={getColumnStyle("mst")}>
 
                       {isReadOnly ? (
 
-                        <span>{row.mst}</span>
+                        <span className="block whitespace-nowrap">{row.mst}</span>
 
                       ) : (
 
                         <input
 
-                          className="w-40 rounded border px-2 py-1"
+                          className="w-full min-w-0 rounded border px-2 py-1"
 
                           value={row.mst}
 
@@ -1852,17 +2014,23 @@ export default function HQAgencyManager({ canEdit = true, currentUser = null }) 
 
                     </td>
 
-                    <td className="px-2 py-1">
+                    <td className="px-2 py-1" style={getColumnStyle("company")}>
 
                       {isReadOnly ? (
 
-                        <span>{row.company}</span>
+                        <span
+                          className={row.company && row.company.length >= 25
+                            ? "block whitespace-pre-wrap break-words leading-relaxed"
+                            : "block whitespace-normal"}
+                        >
+                          {row.company}
+                        </span>
 
                       ) : (
 
                         <input
 
-                          className="w-64 rounded border px-2 py-1"
+                          className="w-full min-w-0 rounded border px-2 py-1"
 
                           value={row.company}
 
@@ -1874,7 +2042,7 @@ export default function HQAgencyManager({ canEdit = true, currentUser = null }) 
 
                     </td>
 
-                    <td className="px-2 py-1 align-top">
+                    <td className="px-2 py-1 align-top" style={getColumnStyle("agency")}>
 
                       <div className="flex flex-col gap-2">
 
@@ -1882,13 +2050,13 @@ export default function HQAgencyManager({ canEdit = true, currentUser = null }) 
 
                           {isReadOnly ? (
 
-                            <span>{row.agent}</span>
+                            <span className="block whitespace-pre-wrap break-words leading-relaxed">{row.agent}</span>
 
                           ) : (
 
                             <input
 
-                              className="w-56 rounded border px-2 py-1"
+                              className="w-full min-w-0 rounded border px-2 py-1"
 
                               value={row.agent}
 
@@ -2018,7 +2186,7 @@ export default function HQAgencyManager({ canEdit = true, currentUser = null }) 
 
                     {canEdit && (
 
-                      <td className="px-2 py-1">
+                      <td className="px-2 py-1" style={getColumnStyle("actions")}>
 
                         <button
 
@@ -2026,7 +2194,7 @@ export default function HQAgencyManager({ canEdit = true, currentUser = null }) 
 
                           onClick={() => handleDelete(rowIndex)}
 
-                          className="rounded bg-red-500 px-2 py-0.5 text-xs text-white"
+                          className="inline-flex w-full items-center justify-center rounded bg-red-500 px-2 py-0.5 text-xs text-white"
 
                         >
 
