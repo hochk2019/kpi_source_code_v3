@@ -62,6 +62,44 @@ describe('computeQuickRange', () => {
 
   });
 
+  it('bỏ qua các tờ khai đã bị xóa mềm', () => {
+    const rows = [
+      {
+        date: '2024-08-05',
+        so_tk: '10234567890',
+        loai_hinh: 'E11',
+        num_items: 6,
+        licenses: 1,
+        nhan_vien: 'Phương',
+        team: 'Team 1',
+        mst: '0101234567',
+        cong_ty: 'Công ty A',
+      },
+      {
+        date: '2024-08-06',
+        so_tk: '20234567890',
+        loai_hinh: 'B11',
+        num_items: 9,
+        licenses: 0,
+        nhan_vien: 'Tuấn',
+        team: 'Team 2',
+        mst: '0201234567',
+        cong_ty: 'Công ty B',
+        deleted_at: '2024-08-07T00:00:00.000Z',
+      },
+    ];
+
+    const report = buildReportData(rows, {
+      roster: sampleRoster,
+      rules: DEFAULT_RULES,
+      from: '2024-08-01',
+      to: '2024-08-31',
+    });
+
+    expect(report.rows).toHaveLength(1);
+    expect(report.summary.decls).toBe(1);
+    expect(report.rows[0].so_tk).toBe('10234567890');
+  });
 });
 
 

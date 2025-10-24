@@ -916,6 +916,24 @@ export function buildReportData(rowsInput, { roster, rules, from, to, adjustment
 
 
   for (const raw of rows) {
+    const deletedAtValues = [
+      raw?.deleted_at,
+      raw?.deletedAt,
+      raw?.deleted_at_tm,
+      raw?.deletedAtTm,
+      raw?.deleted,
+      raw?.deletedFlag,
+      raw?.isDeleted,
+    ];
+
+    const isSoftDeleted = deletedAtValues.some((value) => {
+      if (value === undefined || value === null) return false;
+      if (typeof value === "boolean") return value;
+      if (typeof value === "number") return value !== 0;
+      return normalizeStr(value) !== "";
+    });
+
+    if (isSoftDeleted) continue;
 
     const sanitized = sanitizeRow(raw, preferMonthFirst);
 
