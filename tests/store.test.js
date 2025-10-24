@@ -716,6 +716,110 @@ describe('saveDeclRows', () => {
 
 
 
+  it('không cập nhật tờ khai đã rà soát khi thiếu quyền override', () => {
+
+    saveDeclRows([
+
+      {
+
+        so_tk: '55555555555',
+
+        nhanh: '',
+
+        date: '2025-01-01',
+
+        loai_hinh: 'A11',
+
+        reviewed: true,
+
+        reviewed_at: '2025-01-02T00:00:00Z',
+
+      },
+
+    ], { overwrite: true });
+
+
+
+    const summary = saveDeclRows([
+
+      {
+
+        so_tk: '55555555555',
+
+        nhanh: '',
+
+        date: '2025-01-01',
+
+        loai_hinh: 'B33',
+
+      },
+
+    ], { overwrite: false });
+
+
+
+    expect(summary.locked).toBe(1);
+
+    const stored = getDeclRows();
+
+    expect(stored[0]).toMatchObject({ loai_hinh: 'A11' });
+
+  });
+
+
+
+  it('cho phép override tờ khai đã rà soát khi bật cờ allowReviewedOverride', () => {
+
+    saveDeclRows([
+
+      {
+
+        so_tk: '66666666666',
+
+        nhanh: '',
+
+        date: '2025-02-01',
+
+        loai_hinh: 'C12',
+
+        reviewed: true,
+
+        reviewed_at: '2025-02-02T00:00:00Z',
+
+      },
+
+    ], { overwrite: true });
+
+
+
+    const summary = saveDeclRows([
+
+      {
+
+        so_tk: '66666666666',
+
+        nhanh: '',
+
+        date: '2025-02-01',
+
+        loai_hinh: 'B33',
+
+      },
+
+    ], { overwrite: false, allowReviewedOverride: true });
+
+
+
+    expect(summary.locked).toBe(0);
+
+    const stored = getDeclRows();
+
+    expect(stored[0]).toMatchObject({ loai_hinh: 'B33' });
+
+  });
+
+
+
   it('keeps latest license count when merging duplicates', () => {
 
     const latest = [
@@ -1175,6 +1279,56 @@ describe('updateDeclRowFields', () => {
     const historyAfter = getDeclHistoryForRow('00000000002_', 10);
 
     expect(historyAfter).toHaveLength(0);
+
+  });
+
+
+
+  it('từ chối cập nhật tờ khai đã rà soát khi không override', () => {
+
+    saveDeclRows([
+
+      {
+
+        so_tk: '00000000003',
+
+        nhanh: '',
+
+        date: '2024-09-03',
+
+        loai_hinh: 'A11',
+
+        reviewed: true,
+
+        reviewed_at: '2024-09-04T00:00:00Z',
+
+      },
+
+    ], { overwrite: true, actor: 'seed' });
+
+
+
+    const blocked = updateDeclRowFields('00000000003_', {
+
+      loai_hinh: 'B11',
+
+    }, { actor: 'tester' });
+
+    expect(blocked.success).toBe(false);
+
+    expect(blocked.reason).toBe('review-locked');
+
+
+
+    const override = updateDeclRowFields('00000000003_', {
+
+      loai_hinh: 'B11',
+
+    }, { actor: 'admin', allowReviewedOverride: true });
+
+    expect(override.success).toBe(true);
+
+    expect(override.row?.loai_hinh).toBe('B11');
 
   });
 

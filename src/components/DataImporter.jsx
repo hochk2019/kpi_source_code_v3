@@ -3750,6 +3750,18 @@ export default function DataImporter({
 
   const canAutoReconcile = isManagerRole;
 
+  const reviewLockMessage =
+
+    "Tờ khai đã được rà soát. Chỉ quản trị viên mới có thể chỉnh sửa hoặc xóa.";
+
+  const isRowReviewLocked = useCallback(
+
+    (row) => !!(row && typeof row === "object" && row.reviewed) && !isAdminRole,
+
+    [isAdminRole]
+
+  );
+
   const rosterSnapshot = useMemo(() => getTeamRoster(), [currentUser]);
 
   const rosterTeams = useMemo(() => buildRosterTeams(rosterSnapshot), [rosterSnapshot]);
@@ -4518,6 +4530,8 @@ export default function DataImporter({
 
       if (!row || typeof row !== "object") return false;
 
+      if (isRowReviewLocked(row)) return false;
+
       if (isManagerRole) return true;
 
       const rowStaffKey = normalizeName(row?.nhan_vien);
@@ -4581,6 +4595,8 @@ export default function DataImporter({
       canEdit,
 
       isManagerRole,
+
+      isRowReviewLocked,
 
       isStaffRole,
 
@@ -4646,7 +4662,7 @@ export default function DataImporter({
 
       if (!Array.isArray(keys) || keys.length === 0) {
 
-        return { allowed: [], blocked: 0 };
+        return { allowed: [], blocked: 0, reviewLocked: 0, reviewLockedKeys: [] };
 
       }
 
@@ -4655,6 +4671,10 @@ export default function DataImporter({
       const allowed = [];
 
       let blocked = 0;
+
+      let reviewLocked = 0;
+
+      const reviewLockedKeys = [];
 
       for (const row of rawRows) {
 
@@ -4670,15 +4690,23 @@ export default function DataImporter({
 
           blocked += 1;
 
+          if (isRowReviewLocked(row)) {
+
+            reviewLocked += 1;
+
+            reviewLockedKeys.push(key);
+
+          }
+
         }
 
       }
 
-      return { allowed, blocked };
+      return { allowed, blocked, reviewLocked, reviewLockedKeys };
 
     },
 
-    [isRowEditable, keyOfRow, rawRows]
+    [isRowEditable, isRowReviewLocked, keyOfRow, rawRows]
 
   );
 
@@ -4686,11 +4714,19 @@ export default function DataImporter({
 
     (keys, actionLabel = "thao tác") => {
 
-      const { allowed, blocked } = filterEditableKeys(keys);
+      const { allowed, blocked, reviewLocked } = filterEditableKeys(keys);
 
       if (!allowed.length) {
 
-        if (blocked > 0 && editingRestrictionMessage) {
+        if (reviewLocked > 0) {
+
+          alert(
+
+            `Không thể ${actionLabel} ${reviewLocked.toLocaleString("vi-VN")} tờ khai đã được rà soát. ${reviewLockMessage}`
+
+          );
+
+        } else if (blocked > 0 && editingRestrictionMessage) {
 
           alert(editingRestrictionMessage);
 
@@ -4704,7 +4740,15 @@ export default function DataImporter({
 
       }
 
-      if (blocked > 0 && editingRestrictionMessage) {
+      if (reviewLocked > 0) {
+
+        alert(
+
+          `Đã bỏ qua ${reviewLocked.toLocaleString("vi-VN")} tờ khai đã được rà soát (không thể ${actionLabel}).`
+
+        );
+
+      } else if (blocked > 0 && editingRestrictionMessage) {
 
         alert(`Đã bỏ qua ${blocked} tờ khai không thuộc phạm vi của bạn khi ${actionLabel}.`);
 
@@ -4714,7 +4758,7 @@ export default function DataImporter({
 
     },
 
-    [editingRestrictionMessage, filterEditableKeys]
+    [editingRestrictionMessage, filterEditableKeys, reviewLockMessage]
 
   );
 
@@ -9178,7 +9222,11 @@ const selectedReviewedCount = useMemo(() => {
 
       if (!isRowEditable(row)) {
 
-        if (editingRestrictionMessage) {
+        if (isRowReviewLocked(row)) {
+
+          toast.warning(reviewLockMessage);
+
+        } else if (editingRestrictionMessage) {
 
           alert(editingRestrictionMessage);
 
@@ -9204,7 +9252,21 @@ const selectedReviewedCount = useMemo(() => {
 
     },
 
-    [editingRestrictionMessage, isReadOnlyForEdits, isRowEditable, keyOfRow]
+    [
+
+      editingRestrictionMessage,
+
+      isReadOnlyForEdits,
+
+      isRowEditable,
+
+      isRowReviewLocked,
+
+      keyOfRow,
+
+      reviewLockMessage,
+
+    ]
 
   );
 
@@ -9226,11 +9288,31 @@ const selectedReviewedCount = useMemo(() => {
 
     if (!alreadyFiltered) {
 
-      const { allowed, blocked } = filterEditableKeys(keys);
+      const { allowed, blocked, reviewLocked, reviewLockedKeys } = filterEditableKeys(keys);
 
       if (!allowed.length) {
 
-        if (blocked > 0 && editingRestrictionMessage) {
+        if (reviewLocked > 0) {
+
+          alert(
+
+            `Không thể xóa ${reviewLocked.toLocaleString("vi-VN")} tờ khai đã được rà soát. ${reviewLockMessage}`
+
+          );
+
+          pushAuditLog({
+
+            actor,
+
+            action: "decl.delete.blocked",
+
+            detail: `Chặn xóa ${reviewLocked.toLocaleString("vi-VN")} tờ khai do review lock`,
+
+            meta: { keys: reviewLockedKeys, reason: "review lock" },
+
+          });
+
+        } else if (blocked > 0 && editingRestrictionMessage) {
 
           alert(editingRestrictionMessage);
 
@@ -9240,7 +9322,27 @@ const selectedReviewedCount = useMemo(() => {
 
       }
 
-      if (blocked > 0 && editingRestrictionMessage) {
+      if (reviewLocked > 0) {
+
+        alert(
+
+          `Đã bỏ qua ${reviewLocked.toLocaleString("vi-VN")} tờ khai đã được rà soát (không thể xóa).`
+
+        );
+
+        pushAuditLog({
+
+          actor,
+
+          action: "decl.delete.partial-blocked",
+
+          detail: `Bỏ qua ${reviewLocked.toLocaleString("vi-VN")} tờ khai khi xóa do review lock`,
+
+          meta: { keys: reviewLockedKeys, reason: "review lock" },
+
+        });
+
+      } else if (blocked > 0 && editingRestrictionMessage) {
 
         alert(`Đã bỏ qua ${blocked} tờ khai không thuộc phạm vi của bạn khi xóa.`);
 
@@ -9266,6 +9368,8 @@ const selectedReviewedCount = useMemo(() => {
 
       detail: `Xóa ${removedCount} tờ khai từ giao diện Import Data`,
 
+      allowReviewedOverride: isAdminRole,
+
     });
 
     alert(`Đã xóa ${removedCount} tờ khai.`);
@@ -9286,11 +9390,15 @@ const selectedReviewedCount = useMemo(() => {
 
     filterEditableKeys,
 
+    isAdminRole,
+
     keyOfRow,
 
     loadSavedRows,
 
     rawRows,
+
+    reviewLockMessage,
 
   ]);
 
@@ -9494,6 +9602,8 @@ const selectedReviewedCount = useMemo(() => {
 
       detail: `Import từ ${selectedFile || "file XLSX"}`,
 
+      allowReviewedOverride: isAdminRole,
+
     });
 
     const insertedLabel = result.inserted.toLocaleString("vi-VN");
@@ -9614,6 +9724,8 @@ const selectedReviewedCount = useMemo(() => {
 
       detail: "Lưu chỉnh sửa tờ khai thủ công",
 
+      allowReviewedOverride: isAdminRole,
+
     });
 
     alert(`Đã lưu ${result.totalStored.toLocaleString("vi-VN")} bản ghi (ghi đè).`);
@@ -9676,21 +9788,29 @@ const selectedReviewedCount = useMemo(() => {
 
           detail: `Cập nhật thủ công (${fieldList.join(", ")}) qua Import Data`,
 
+          allowReviewedOverride: isAdminRole,
+
         });
 
         if (!result?.success) {
 
-          const errorMessage =
+          const reason = result?.reason;
 
-            result?.reason === "not-found"
+          const isReviewLockedReason = reason === "review-locked";
 
-              ? "Tờ khai đã bị xóa hoặc thay đổi. Vui lòng tải lại dữ liệu."
+          const errorMessage = isReviewLockedReason
 
-              : result?.reason === "no-change"
+            ? reviewLockMessage
 
-              ? "Không có thay đổi mới để lưu."
+            : reason === "not-found"
 
-              : "Không thể cập nhật tờ khai. Hãy thử lại.";
+            ? "Tờ khai đã bị xóa hoặc thay đổi. Vui lòng tải lại dữ liệu."
+
+            : reason === "no-change"
+
+            ? "Không có thay đổi mới để lưu."
+
+            : "Không thể cập nhật tờ khai. Hãy thử lại.";
 
           setRowSaveStatus((prev) => ({
 
@@ -9700,7 +9820,15 @@ const selectedReviewedCount = useMemo(() => {
 
           }));
 
-          toast.error(errorMessage);
+          if (isReviewLockedReason) {
+
+            toast.warning(errorMessage);
+
+          } else {
+
+            toast.error(errorMessage);
+
+          }
 
           return;
 
@@ -9760,7 +9888,25 @@ const selectedReviewedCount = useMemo(() => {
 
     },
 
-    [actor, isReadOnlyForEdits, keyOfRow, mode, refreshRowHistory, rowDiffMap]
+    [
+
+      actor,
+
+      isAdminRole,
+
+      isReadOnlyForEdits,
+
+      keyOfRow,
+
+      mode,
+
+      refreshRowHistory,
+
+      reviewLockMessage,
+
+      rowDiffMap,
+
+    ]
 
   );
 
@@ -9934,6 +10080,22 @@ const selectedReviewedCount = useMemo(() => {
 
       const rowReadOnly = isReadOnlyForEdits || !rowEditable;
 
+      const rowReviewLocked = isRowReviewLocked(row);
+
+      const rowReadOnlyReason = rowReviewLocked
+
+        ? reviewLockMessage
+
+        : rowReadOnly && editingRestrictionMessage
+
+        ? editingRestrictionMessage
+
+        : rowReadOnly && isReadOnlyForEdits
+
+        ? "Chỉ xem"
+
+        : "";
+
       const rowDiff = rowDiffMap.get(rowKey);
 
       const hasPendingDiff = !!(rowDiff && Object.keys(rowDiff).length > 0);
@@ -9955,6 +10117,10 @@ const selectedReviewedCount = useMemo(() => {
         rowEditable,
 
         rowReadOnly,
+
+        rowReviewLocked,
+
+        rowReadOnlyReason,
 
         rowDiff,
 
@@ -9978,11 +10144,17 @@ const selectedReviewedCount = useMemo(() => {
 
     [
 
+      editingRestrictionMessage,
+
       isReadOnlyForEdits,
 
       isRowEditable,
 
+      isRowReviewLocked,
+
       keyOfRow,
+
+      reviewLockMessage,
 
       rowDiffMap,
 
@@ -10585,6 +10757,8 @@ const selectedReviewedCount = useMemo(() => {
       actor,
 
       detail,
+
+      allowReviewedOverride: isAdminRole,
 
     });
 
@@ -15512,6 +15686,10 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
 
               rowReadOnly,
 
+              rowReadOnlyReason,
+
+              rowReviewLocked,
+
               rowEditable,
 
               canSaveRow,
@@ -15529,6 +15707,12 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
             } = state;
 
             const hasPendingDiff = state.hasPendingDiff;
+
+            const readOnlyLabel = rowReviewLocked
+
+              ? "Khóa rà soát"
+
+              : rowReadOnlyReason || "Chỉ xem";
 
             return (
 
@@ -15668,7 +15852,7 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
 
                           <span className="rounded bg-gray-200 px-1.5 py-0.5 text-[10px] font-medium text-gray-600">
 
-                            Chỉ xem
+                            {readOnlyLabel}
 
                           </span>
 
@@ -15982,7 +16166,7 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
 
                       {rowReadOnly ? (
 
-                        <span className="text-[11px] text-gray-400">Chỉ xem</span>
+                        <span className="text-[11px] text-gray-400">{rowReadOnlyReason || readOnlyLabel}</span>
 
                       ) : canSaveRow ? (
 
@@ -16218,6 +16402,10 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
 
                 rowReadOnly,
 
+                rowReadOnlyReason,
+
+                rowReviewLocked,
+
                 rowEditable,
 
                 canSaveRow,
@@ -16235,6 +16423,12 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
               } = state;
 
               const hasPendingDiff = state.hasPendingDiff;
+
+              const readOnlyLabel = rowReviewLocked
+
+                ? "Khóa rà soát"
+
+                : rowReadOnlyReason || "Chỉ xem";
 
               return (
 
@@ -16326,7 +16520,7 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
 
                         {rowReadOnly && (
 
-                          <span className="rounded bg-gray-200 px-1.5 py-0.5 font-medium text-gray-600">Chỉ xem</span>
+                          <span className="rounded bg-gray-200 px-1.5 py-0.5 font-medium text-gray-600">{readOnlyLabel}</span>
 
                         )}
 
@@ -16690,7 +16884,7 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
 
                       (rowReadOnly ? (
 
-                        <span className="text-[11px] text-gray-400">Chỉ xem</span>
+                        <span className="text-[11px] text-gray-400">{rowReadOnlyReason || readOnlyLabel}</span>
 
                       ) : canSaveRow ? (
 

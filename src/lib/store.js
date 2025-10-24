@@ -651,6 +651,9 @@ function normalizeDeclarationRow(row) {
   if (!row || typeof row !== "object") return null;
 
   const clone = { ...row };
+  if (Object.prototype.hasOwnProperty.call(clone, "__forceReviewedOverride")) {
+    delete clone.__forceReviewedOverride;
+  }
 
   const sourceNumber = (row.so_tk_full ?? row.so_tk ?? "").toString();
 
@@ -788,7 +791,7 @@ function mergeDeclarationRowClient(existing, incoming) {
 
   if (!existing) return incoming;
 
-  if (existing?.reviewed) {
+  if (existing?.reviewed && incoming?.__forceReviewedOverride !== true) {
 
     return existing;
 
@@ -1023,6 +1026,12 @@ function mergeDeclarationRowClient(existing, incoming) {
   fillNumeric('licenses', { preferMax: true });
 
   fillNumeric('so_luong_gp', { preferMax: true });
+
+  if (Object.prototype.hasOwnProperty.call(merged, '__forceReviewedOverride')) {
+
+    delete merged.__forceReviewedOverride;
+
+  }
 
   return merged;
 
@@ -5044,11 +5053,17 @@ export function previewDeclRows(newRows, { overwrite = false, actor = "system" }
 
 
 
-export function saveDeclRows(newRows, { overwrite = false, actor = "system", detail = "" } = {}) {
+export function saveDeclRows(
+  newRows,
+  { overwrite = false, actor = "system", detail = "", allowReviewedOverride = false } = {}
+) {
 
   const incoming = Array.isArray(newRows) ? newRows : [];
 
-  const normalizedIncoming = normalizeDeclRows(incoming);
+  const normalizedIncomingBase = normalizeDeclRows(incoming);
+  const normalizedIncoming = allowReviewedOverride
+    ? normalizedIncomingBase.map((row) => ({ ...row, __forceReviewedOverride: true }))
+    : normalizedIncomingBase;
 
   const actorName = normalizeStr(actor) || "system";
 
@@ -5200,7 +5215,11 @@ export function saveDeclRows(newRows, { overwrite = false, actor = "system", det
 
 
 
-export function updateDeclRowFields(rowKey, updates, { actor = "system", detail = "" } = {}) {
+export function updateDeclRowFields(
+  rowKey,
+  updates,
+  { actor = "system", detail = "", allowReviewedOverride = false } = {}
+) {
 
   const key = typeof rowKey === "string" ? rowKey.trim() : String(rowKey || "").trim();
 
@@ -5243,6 +5262,38 @@ export function updateDeclRowFields(rowKey, updates, { actor = "system", detail 
   const sanitizedUpdates = sanitizePartialDeclUpdates(updates);
 
   const changedFields = Object.keys(sanitizedUpdates);
+
+  if (changedFields.length === 0) {
+
+    return { success: false, reason: "no-change" };
+
+  }
+
+  if (current?.reviewed && !allowReviewedOverride) {
+
+    const actorName = normalizeStr(actor) || "system";
+
+    const actionDetail = detail && detail.trim().length > 0
+
+      ? detail
+
+      : `Chặn cập nhật tờ khai ${current.so_tk || "?"} do đã rà soát`;
+
+    pushAuditLog({
+
+      actor: actorName,
+
+      action: "decl.update.blocked",
+
+      detail: actionDetail,
+
+      meta: { key, fields: changedFields, reason: "review lock" },
+
+    });
+
+    return { success: false, reason: "review-locked" };
+
+  }
 
   const { changed, nextRow } = applyPartialUpdatesToRow(current, sanitizedUpdates, { sanitized: true });
 
