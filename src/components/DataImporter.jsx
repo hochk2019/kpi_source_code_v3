@@ -326,6 +326,90 @@ const FROZEN_COLUMN_WIDTHS = Object.freeze({
 
 });
 
+const MIN_COLUMN_WIDTH = 80;
+
+const VALID_COLUMN_WIDTH_KEYS = new Set([
+
+  ...Object.keys(IMPORT_TABLE_COLUMN_LABELS),
+
+  ...Object.keys(AUX_COLUMN_LABELS),
+
+]);
+
+function clampColumnWidth(value) {
+
+  const numeric = Number(value);
+
+  if (!Number.isFinite(numeric)) {
+
+    return MIN_COLUMN_WIDTH;
+
+  }
+
+  return Math.max(MIN_COLUMN_WIDTH, Math.round(numeric));
+
+}
+
+function sanitizeColumnWidths(input) {
+
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+
+    return {};
+
+  }
+
+  const result = {};
+
+  for (const [key, value] of Object.entries(input)) {
+
+    if (!VALID_COLUMN_WIDTH_KEYS.has(key)) {
+
+      continue;
+
+    }
+
+    const numeric = Number(value);
+
+    if (!Number.isFinite(numeric)) {
+
+      continue;
+
+    }
+
+    result[key] = clampColumnWidth(numeric);
+
+  }
+
+  return result;
+
+}
+
+function areWidthMapsEqual(a = {}, b = {}) {
+
+  const keysA = Object.keys(a);
+
+  const keysB = Object.keys(b);
+
+  if (keysA.length !== keysB.length) {
+
+    return false;
+
+  }
+
+  for (const key of keysA) {
+
+    if (a[key] !== b[key]) {
+
+      return false;
+
+    }
+
+  }
+
+  return true;
+
+}
+
 
 
 const VIEW_MODE_STORAGE_KEY = "dataImporter:viewMode";
@@ -3560,7 +3644,15 @@ export default function DataImporter({
 
   const serverSearchAbortRef = useRef(null);
 
-  const [columnConfigState, setColumnConfigState] = useState(() => getImportColumnConfig());
+  const initialColumnConfig = useMemo(() => getImportColumnConfig(), []);
+
+  const [columnConfigState, setColumnConfigState] = useState(initialColumnConfig);
+
+  const [columnWidths, setColumnWidths] = useState(() =>
+
+    sanitizeColumnWidths(initialColumnConfig?.widths)
+
+  );
 
   const [columnConfigOpen, setColumnConfigOpen] = useState(false);
 
@@ -3577,6 +3669,218 @@ export default function DataImporter({
   const lastPresetSeedRef = useRef("");
 
   const presetAutoAppliedRef = useRef(false);
+
+  const actor = currentUser?.username || "guest";
+
+  const columnWidthsRef = useRef(columnWidths);
+
+  const headerRefs = useRef(new Map());
+
+  const activeResizeRef = useRef(null);
+
+  useEffect(() => {
+
+    columnWidthsRef.current = columnWidths;
+
+  }, [columnWidths]);
+
+  useEffect(() => {
+
+    const sanitized = sanitizeColumnWidths(columnConfigState?.widths);
+
+    setColumnWidths((prev) => {
+
+      if (areWidthMapsEqual(prev, sanitized)) {
+
+        return prev;
+
+      }
+
+      return sanitized;
+
+    });
+
+  }, [columnConfigState]);
+
+  const registerHeaderRef = useCallback((key, node) => {
+
+    const map = headerRefs.current;
+
+    if (!map) {
+
+      return;
+
+    }
+
+    if (node) {
+
+      map.set(key, node);
+
+    } else {
+
+      map.delete(key);
+
+    }
+
+  }, []);
+
+  useEffect(() => () => {
+
+    const active = activeResizeRef.current;
+
+    if (active) {
+
+      window.removeEventListener("mousemove", active.move);
+
+      window.removeEventListener("mouseup", active.up);
+
+      activeResizeRef.current = null;
+
+    }
+
+  }, []);
+
+  const handleColumnResizeStart = useCallback(
+
+    (event, key) => {
+
+      if (!VALID_COLUMN_WIDTH_KEYS.has(key)) {
+
+        return;
+
+      }
+
+      event.preventDefault();
+
+      event.stopPropagation();
+
+      const active = activeResizeRef.current;
+
+      if (active) {
+
+        window.removeEventListener("mousemove", active.move);
+
+        window.removeEventListener("mouseup", active.up);
+
+      }
+
+      const headerEl = headerRefs.current.get(key) || null;
+
+      const storedWidth = columnWidthsRef.current?.[key];
+
+      const fallbackWidth = headerEl ? headerEl.getBoundingClientRect().width : 0;
+
+      const baseWidth = clampColumnWidth(
+
+        Number.isFinite(storedWidth) && storedWidth > 0
+
+          ? storedWidth
+
+          : fallbackWidth || FROZEN_COLUMN_WIDTHS[key] || MIN_COLUMN_WIDTH
+
+      );
+
+      const startX = event.clientX ?? 0;
+
+      const resizeState = { key, startX, startWidth: baseWidth };
+
+      const handleMove = (moveEvent) => {
+
+        const delta = (moveEvent.clientX ?? resizeState.startX) - resizeState.startX;
+
+        const nextWidth = clampColumnWidth(resizeState.startWidth + delta);
+
+        setColumnWidths((prev) => {
+
+          const currentWidth = prev[key];
+
+          if (currentWidth === nextWidth) {
+
+            return prev;
+
+          }
+
+          return { ...prev, [key]: nextWidth };
+
+        });
+
+      };
+
+      const handleUp = (upEvent) => {
+
+        window.removeEventListener("mousemove", handleMove);
+
+        window.removeEventListener("mouseup", handleUp);
+
+        activeResizeRef.current = null;
+
+        const delta = (upEvent.clientX ?? resizeState.startX) - resizeState.startX;
+
+        const finalWidth = clampColumnWidth(resizeState.startWidth + delta);
+
+        const merged = { ...columnWidthsRef.current, [key]: finalWidth };
+
+        const sanitized = sanitizeColumnWidths(merged);
+
+        columnWidthsRef.current = sanitized;
+
+        setColumnWidths(sanitized);
+
+        try {
+
+          saveImportColumnConfig({ widths: sanitized }, { actor });
+
+        } catch (error) {
+
+          console.error("Không thể lưu chiều rộng cột Import Data", error);
+
+          toast.error("Không thể lưu chiều rộng cột. Vui lòng thử lại.");
+
+        }
+
+      };
+
+      activeResizeRef.current = { move: handleMove, up: handleUp };
+
+      window.addEventListener("mousemove", handleMove);
+
+      window.addEventListener("mouseup", handleUp);
+
+    },
+
+    [actor]
+
+  );
+
+  const renderResizeHandle = useCallback(
+
+    (key) => {
+
+      if (!VALID_COLUMN_WIDTH_KEYS.has(key)) {
+
+        return null;
+
+      }
+
+      return (
+
+        <span
+
+          role="presentation"
+
+          className="absolute right-0 top-0 h-full w-2 cursor-col-resize select-none bg-transparent transition-colors hover:bg-blue-500/10"
+
+          onMouseDown={(event) => handleColumnResizeStart(event, key)}
+
+        />
+
+      );
+
+    },
+
+    [handleColumnResizeStart]
+
+  );
 
 
 
@@ -3736,9 +4040,6 @@ export default function DataImporter({
 
   const [autoAssignStaff, setAutoAssignStaff] = useState(true); // Tự gán nhân viên theo MST nếu trống
 
-
-
-  const actor = currentUser?.username || "guest";
 
   const isReadOnlyForEdits = !canEdit;
 
@@ -4389,11 +4690,15 @@ export default function DataImporter({
 
     }
 
+    const sanitizedWidths = sanitizeColumnWidths(columnWidthsRef.current);
+
+    const widthChanged = !areWidthMapsEqual(sanitizedWidths, columnConfigState?.widths || {});
+
     const isSame =
 
       hiddenList.length === columnHiddenSet.size && hiddenList.every((key) => columnHiddenSet.has(key));
 
-    if (isSame) {
+    if (isSame && !widthChanged) {
 
       setColumnConfigOpen(false);
 
@@ -4403,7 +4708,7 @@ export default function DataImporter({
 
     try {
 
-      const result = saveImportColumnConfig({ hidden: hiddenList }, { actor });
+      const result = saveImportColumnConfig({ hidden: hiddenList, widths: sanitizedWidths }, { actor });
 
       const resultHiddenBase = result.hidden.filter((key) => IMPORT_TABLE_COLUMN_LABELS[key]).length;
 
@@ -4419,6 +4724,10 @@ export default function DataImporter({
 
       setColumnDraftError("");
 
+      setColumnWidths(sanitizedWidths);
+
+      columnWidthsRef.current = sanitizedWidths;
+
       toast.success("Đã cập nhật cấu hình cột Import Data.");
 
     } catch (err) {
@@ -4429,7 +4738,35 @@ export default function DataImporter({
 
     }
 
-  }, [actor, columnDraftHidden, columnHiddenSet, totalBaseColumns]);
+  }, [actor, columnConfigState, columnDraftHidden, columnHiddenSet, totalBaseColumns]);
+
+  const handleResetColumnConfig = useCallback(() => {
+
+    const defaultHidden = [...new Set([...IMPORT_AUX_COLUMN_IDS, "status"])];
+
+    try {
+
+      saveImportColumnConfig({ hidden: defaultHidden, widths: {} }, { actor });
+
+      setColumnDraftHidden(new Set(defaultHidden));
+
+      setColumnDraftError("");
+
+      setColumnWidths({});
+
+      columnWidthsRef.current = {};
+
+      toast.success("Đã khôi phục cấu hình cột Import Data mặc định.");
+
+    } catch (error) {
+
+      console.error("Không thể khôi phục cấu hình cột Import Data", error);
+
+      toast.error("Không thể khôi phục cấu hình cột. Vui lòng thử lại.");
+
+    }
+
+  }, [actor]);
 
 
 
@@ -7581,7 +7918,7 @@ export default function DataImporter({
 
       alert(
 
-        "Tài khoản của bạn chưa được cấp quyền \"Import Data – tải file\". Vui lòng liên hệ quản trị viên để mở quyền tải file import."
+        'Tài khoản của bạn chưa được cấp quyền "Import Data – tải file". Vui lòng liên hệ quản trị viên để mở quyền tải file import.'
 
       );
 
@@ -9693,7 +10030,7 @@ const selectedReviewedCount = useMemo(() => {
 
       alert(
 
-        "Tài khoản của bạn chưa được cấp quyền \"Import Data – tải file\". Vui lòng liên hệ quản trị viên để mở quyền tải file import."
+        'Tài khoản của bạn chưa được cấp quyền "Import Data – tải file". Vui lòng liên hệ quản trị viên để mở quyền tải file import.'
 
       );
 
@@ -10095,6 +10432,60 @@ const selectedReviewedCount = useMemo(() => {
 
   const hiddenColumns = columnHiddenSet;
 
+  const resolveColumnWidth = useCallback(
+
+    (key) => {
+
+      const stored = columnWidths?.[key];
+
+      if (Number.isFinite(stored) && stored > 0) {
+
+        return clampColumnWidth(stored);
+
+      }
+
+      const fallback = FROZEN_COLUMN_WIDTHS[key];
+
+      if (Number.isFinite(fallback)) {
+
+        return fallback;
+
+      }
+
+      return undefined;
+
+    },
+
+    [columnWidths]
+
+  );
+
+  const getColumnStyle = useCallback(
+
+    (key) => {
+
+      const width = resolveColumnWidth(key);
+
+      if (!width) {
+
+        return undefined;
+
+      }
+
+      return {
+
+        minWidth: `${width}px`,
+
+        width: `${width}px`,
+
+      };
+
+    },
+
+    [resolveColumnWidth]
+
+  );
+
   const frozenOffsets = useMemo(() => {
 
     if (!freezeColumnsEnabled) {
@@ -10123,7 +10514,7 @@ const selectedReviewedCount = useMemo(() => {
 
       }
 
-      const width = FROZEN_COLUMN_WIDTHS[key];
+      const width = resolveColumnWidth(key);
 
       if (!width) {
 
@@ -10141,7 +10532,7 @@ const selectedReviewedCount = useMemo(() => {
 
     return config;
 
-  }, [freezeColumnsEnabled, hiddenColumns, selectionEnabled]);
+  }, [freezeColumnsEnabled, hiddenColumns, resolveColumnWidth, selectionEnabled]);
 
   const getFrozenStyle = useCallback(
 
@@ -10193,13 +10584,15 @@ const selectedReviewedCount = useMemo(() => {
 
     if (selectionEnabled) {
 
-      return Math.max(0, total - FROZEN_COLUMN_WIDTHS.selection);
+      const selectionWidth = resolveColumnWidth("selection") ?? FROZEN_COLUMN_WIDTHS.selection;
+
+      return Math.max(0, total - selectionWidth);
 
     }
 
     return total;
 
-  }, [freezeColumnsEnabled, frozenOffsets, selectionEnabled]);
+  }, [freezeColumnsEnabled, frozenOffsets, resolveColumnWidth, selectionEnabled]);
 
   const effectiveCardColumns = useMemo(() => {
 
@@ -12006,6 +12399,20 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
           </div>
 
           <DialogFooter>
+
+            <button
+
+              type="button"
+
+              onClick={handleResetColumnConfig}
+
+              className="mr-auto rounded border px-3 py-1 text-sm text-gray-600 hover:bg-gray-50"
+
+            >
+
+              Đặt lại mặc định
+
+            </button>
 
             <button
 
@@ -15687,17 +16094,17 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
 
                   className={cx(
 
-                    "px-2 py-1 font-semibold text-gray-600 dark:text-gray-300",
+                    "relative px-2 py-1 font-semibold text-gray-600 dark:text-gray-300",
 
                     frozenOffsets.selection ? frozenHeaderClass : ""
 
                   )}
 
-                  style={getFrozenStyle("selection")}
+                  style={getFrozenStyle("selection") || getColumnStyle("selection")}
 
                 >
 
-                  Chọn
+                  <div className="flex items-center justify-between gap-2 pr-2">Chọn</div>
 
                 </th>
 
@@ -15707,19 +16114,27 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
 
                 <th
 
+                  ref={(node) => registerHeaderRef("date", node)}
+
                   className={cx(
 
-                    "px-2 py-1 font-semibold text-gray-600 dark:text-gray-300",
+                    "relative px-2 py-1 font-semibold text-gray-600 dark:text-gray-300",
 
                     frozenOffsets.date ? frozenHeaderClass : ""
 
                   )}
 
-                  style={getFrozenStyle("date")}
+                  style={getFrozenStyle("date") || getColumnStyle("date")}
 
                 >
 
-                  {IMPORT_TABLE_COLUMN_LABELS.date}
+                  <div className="flex items-center justify-between gap-2 pr-3">
+
+                    <span>{IMPORT_TABLE_COLUMN_LABELS.date}</span>
+
+                  </div>
+
+                  {renderResizeHandle("date")}
 
                 </th>
 
@@ -15729,19 +16144,27 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
 
                 <th
 
+                  ref={(node) => registerHeaderRef("declaration", node)}
+
                   className={cx(
 
-                    "px-2 py-1 font-semibold text-gray-600 dark:text-gray-300 whitespace-nowrap",
+                    "relative px-2 py-1 font-semibold text-gray-600 dark:text-gray-300 whitespace-nowrap",
 
                     frozenOffsets.declaration ? frozenHeaderClass : ""
 
                   )}
 
-                  style={getFrozenStyle("declaration")}
+                  style={getFrozenStyle("declaration") || getColumnStyle("declaration")}
 
                 >
 
-                  {IMPORT_TABLE_COLUMN_LABELS.declaration}
+                  <div className="flex items-center justify-between gap-2 pr-3">
+
+                    <span>{IMPORT_TABLE_COLUMN_LABELS.declaration}</span>
+
+                  </div>
+
+                  {renderResizeHandle("declaration")}
 
                 </th>
 
@@ -15751,19 +16174,27 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
 
                 <th
 
+                  ref={(node) => registerHeaderRef("mst", node)}
+
                   className={cx(
 
-                    "px-2 py-1 font-semibold text-gray-600 dark:text-gray-300 whitespace-nowrap",
+                    "relative px-2 py-1 font-semibold text-gray-600 dark:text-gray-300 whitespace-nowrap",
 
                     frozenOffsets.mst ? frozenHeaderClass : ""
 
                   )}
 
-                  style={getFrozenStyle("mst")}
+                  style={getFrozenStyle("mst") || getColumnStyle("mst")}
 
                 >
 
-                  {IMPORT_TABLE_COLUMN_LABELS.mst}
+                  <div className="flex items-center justify-between gap-2 pr-3">
+
+                    <span>{IMPORT_TABLE_COLUMN_LABELS.mst}</span>
+
+                  </div>
+
+                  {renderResizeHandle("mst")}
 
                 </th>
 
@@ -15771,9 +16202,23 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
 
               {!hiddenColumns.has("company") && (
 
-                <th className="px-2 py-1 font-semibold text-gray-600 dark:text-gray-300 min-w-[18rem]">
+                <th
 
-                  {IMPORT_TABLE_COLUMN_LABELS.company}
+                  ref={(node) => registerHeaderRef("company", node)}
+
+                  className="relative px-2 py-1 font-semibold text-gray-600 dark:text-gray-300"
+
+                  style={getColumnStyle("company")}
+
+                >
+
+                  <div className="flex items-center justify-between gap-2 pr-3">
+
+                    <span>{IMPORT_TABLE_COLUMN_LABELS.company}</span>
+
+                  </div>
+
+                  {renderResizeHandle("company")}
 
                 </th>
 
@@ -15781,9 +16226,23 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
 
               {!hiddenColumns.has("type") && (
 
-                <th className="px-2 py-1 font-semibold text-gray-600 dark:text-gray-300">
+                <th
 
-                  {IMPORT_TABLE_COLUMN_LABELS.type}
+                  ref={(node) => registerHeaderRef("type", node)}
+
+                  className="relative px-2 py-1 font-semibold text-gray-600 dark:text-gray-300"
+
+                  style={getColumnStyle("type")}
+
+                >
+
+                  <div className="flex items-center justify-between gap-2 pr-3">
+
+                    <span>{IMPORT_TABLE_COLUMN_LABELS.type}</span>
+
+                  </div>
+
+                  {renderResizeHandle("type")}
 
                 </th>
 
@@ -15791,9 +16250,23 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
 
               {!hiddenColumns.has("co") && (
 
-                <th className="px-2 py-1 font-semibold text-gray-600 dark:text-gray-300">
+                <th
 
-                  {IMPORT_TABLE_COLUMN_LABELS.co}
+                  ref={(node) => registerHeaderRef("co", node)}
+
+                  className="relative px-2 py-1 font-semibold text-gray-600 dark:text-gray-300"
+
+                  style={getColumnStyle("co")}
+
+                >
+
+                  <div className="flex items-center justify-between gap-2 pr-3">
+
+                    <span>{IMPORT_TABLE_COLUMN_LABELS.co}</span>
+
+                  </div>
+
+                  {renderResizeHandle("co")}
 
                 </th>
 
@@ -15801,9 +16274,23 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
 
               {!hiddenColumns.has("items") && (
 
-                <th className="px-2 py-1 font-semibold text-gray-600 dark:text-gray-300">
+                <th
 
-                  {IMPORT_TABLE_COLUMN_LABELS.items}
+                  ref={(node) => registerHeaderRef("items", node)}
+
+                  className="relative px-2 py-1 font-semibold text-gray-600 dark:text-gray-300"
+
+                  style={getColumnStyle("items")}
+
+                >
+
+                  <div className="flex items-center justify-between gap-2 pr-3">
+
+                    <span>{IMPORT_TABLE_COLUMN_LABELS.items}</span>
+
+                  </div>
+
+                  {renderResizeHandle("items")}
 
                 </th>
 
@@ -15811,9 +16298,23 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
 
               {!hiddenColumns.has("staff") && (
 
-                <th className="px-2 py-1 font-semibold text-gray-600 dark:text-gray-300">
+                <th
 
-                  {IMPORT_TABLE_COLUMN_LABELS.staff}
+                  ref={(node) => registerHeaderRef("staff", node)}
+
+                  className="relative px-2 py-1 font-semibold text-gray-600 dark:text-gray-300"
+
+                  style={getColumnStyle("staff")}
+
+                >
+
+                  <div className="flex items-center justify-between gap-2 pr-3">
+
+                    <span>{IMPORT_TABLE_COLUMN_LABELS.staff}</span>
+
+                  </div>
+
+                  {renderResizeHandle("staff")}
 
                 </th>
 
@@ -15821,9 +16322,23 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
 
               {!hiddenColumns.has("team") && (
 
-                <th className="px-2 py-1 font-semibold text-gray-600 dark:text-gray-300">
+                <th
 
-                  {IMPORT_TABLE_COLUMN_LABELS.team}
+                  ref={(node) => registerHeaderRef("team", node)}
+
+                  className="relative px-2 py-1 font-semibold text-gray-600 dark:text-gray-300"
+
+                  style={getColumnStyle("team")}
+
+                >
+
+                  <div className="flex items-center justify-between gap-2 pr-3">
+
+                    <span>{IMPORT_TABLE_COLUMN_LABELS.team}</span>
+
+                  </div>
+
+                  {renderResizeHandle("team")}
 
                 </th>
 
@@ -15831,9 +16346,23 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
 
               {!hiddenColumns.has("agency") && (
 
-                <th className="px-2 py-1 font-semibold text-gray-600 dark:text-gray-300">
+                <th
 
-                  {IMPORT_TABLE_COLUMN_LABELS.agency}
+                  ref={(node) => registerHeaderRef("agency", node)}
+
+                  className="relative px-2 py-1 font-semibold text-gray-600 dark:text-gray-300"
+
+                  style={getColumnStyle("agency")}
+
+                >
+
+                  <div className="flex items-center justify-between gap-2 pr-3">
+
+                    <span>{IMPORT_TABLE_COLUMN_LABELS.agency}</span>
+
+                  </div>
+
+                  {renderResizeHandle("agency")}
 
                 </th>
 
@@ -15841,9 +16370,23 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
 
               {!hiddenColumns.has("status") && (
 
-                <th className="px-2 py-1 font-semibold text-gray-600 dark:text-gray-300">
+                <th
 
-                  {IMPORT_TABLE_COLUMN_LABELS.status}
+                  ref={(node) => registerHeaderRef("status", node)}
+
+                  className="relative px-2 py-1 font-semibold text-gray-600 dark:text-gray-300"
+
+                  style={getColumnStyle("status")}
+
+                >
+
+                  <div className="flex items-center justify-between gap-2 pr-3">
+
+                    <span>{IMPORT_TABLE_COLUMN_LABELS.status}</span>
+
+                  </div>
+
+                  {renderResizeHandle("status")}
 
                 </th>
 
@@ -15851,9 +16394,23 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
 
               {!hiddenColumns.has("licenses") && (
 
-                <th className="px-2 py-1 font-semibold text-gray-600 dark:text-gray-300">
+                <th
 
-                  {IMPORT_TABLE_COLUMN_LABELS.licenses}
+                  ref={(node) => registerHeaderRef("licenses", node)}
+
+                  className="relative px-2 py-1 font-semibold text-gray-600 dark:text-gray-300"
+
+                  style={getColumnStyle("licenses")}
+
+                >
+
+                  <div className="flex items-center justify-between gap-2 pr-3">
+
+                    <span>{IMPORT_TABLE_COLUMN_LABELS.licenses}</span>
+
+                  </div>
+
+                  {renderResizeHandle("licenses")}
 
                 </th>
 
@@ -15861,9 +16418,23 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
 
               {!hiddenColumns.has("kpi") && (
 
-                <th className="px-2 py-1 font-semibold text-gray-600 dark:text-gray-300">
+                <th
 
-                  {IMPORT_TABLE_COLUMN_LABELS.kpi}
+                  ref={(node) => registerHeaderRef("kpi", node)}
+
+                  className="relative px-2 py-1 font-semibold text-gray-600 dark:text-gray-300"
+
+                  style={getColumnStyle("kpi")}
+
+                >
+
+                  <div className="flex items-center justify-between gap-2 pr-3">
+
+                    <span>{IMPORT_TABLE_COLUMN_LABELS.kpi}</span>
+
+                  </div>
+
+                  {renderResizeHandle("kpi")}
 
                 </th>
 
@@ -15871,13 +16442,49 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
 
               {historyEnabled && (
 
-                <th className="px-2 py-1 text-left font-semibold text-gray-600 dark:text-gray-300">Nhật ký</th>
+                <th
+
+                  ref={(node) => registerHeaderRef("history", node)}
+
+                  className="relative px-2 py-1 text-left font-semibold text-gray-600 dark:text-gray-300"
+
+                  style={getColumnStyle("history")}
+
+                >
+
+                  <div className="flex items-center justify-between gap-2 pr-3">
+
+                    <span>Nhật ký</span>
+
+                  </div>
+
+                  {renderResizeHandle("history")}
+
+                </th>
 
               )}
 
               {updateEnabled && (
 
-                <th className="px-2 py-1 text-left font-semibold text-gray-600 dark:text-gray-300">Cập nhật</th>
+                <th
+
+                  ref={(node) => registerHeaderRef("update", node)}
+
+                  className="relative px-2 py-1 text-left font-semibold text-gray-600 dark:text-gray-300"
+
+                  style={getColumnStyle("update")}
+
+                >
+
+                  <div className="flex items-center justify-between gap-2 pr-3">
+
+                    <span>Cập nhật</span>
+
+                  </div>
+
+                  {renderResizeHandle("update")}
+
+                </th>
 
               )}
 
@@ -15940,6 +16547,7 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
               ? "Khóa rà soát"
 
               : rowReadOnlyReason || "Chỉ xem";
+            const readOnlyStatus = rowDeleted ? "Không thể cập nhật" : "Chỉ xem";
 
             const deletedTimestampLabel = rowDeletedAt ? formatHistoryTimestamp(rowDeletedAt) : "";
 
@@ -15957,7 +16565,7 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
 
                       className={cx("px-2 py-1 align-top", frozenOffsets.selection ? frozenCellClass : "")}
 
-                      style={getFrozenStyle("selection")}
+                      style={getFrozenStyle("selection") || getColumnStyle("selection")}
 
                     >
 
@@ -15989,7 +16597,7 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
 
                       )}
 
-                      style={getFrozenStyle("date")}
+                      style={getFrozenStyle("date") || getColumnStyle("date")}
 
                     >
 
@@ -16005,19 +16613,19 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
 
                       className={cx(
 
-                        "px-2 py-1 align-top whitespace-nowrap",
+                        "px-2 py-1 align-top",
 
                         frozenOffsets.declaration ? frozenCellClass : ""
 
                       )}
 
-                      style={getFrozenStyle("declaration")}
+                      style={getFrozenStyle("declaration") || getColumnStyle("declaration")}
 
                     >
 
                       <div className="flex flex-wrap items-center gap-1">
 
-                        <span className="font-medium text-gray-800 dark:text-gray-100">
+                        <span className="font-medium text-gray-800 dark:text-gray-100 whitespace-nowrap">
 
                           {r.so_tk_full || r.so_tk || ""}
 
@@ -16091,9 +16699,13 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
 
                         {rowReadOnly && (
 
-                          <span className="rounded bg-gray-200 px-1.5 py-0.5 text-[10px] font-medium text-gray-600">
+                          <span className="basis-full text-xs text-gray-500 leading-snug">
 
-                            {readOnlyLabel}
+                            <span className="rounded bg-gray-200 px-1.5 py-0.5 text-[10px] font-medium text-gray-600">
+
+                              {readOnlyLabel}
+
+                            </span>
 
                           </span>
 
@@ -16127,7 +16739,7 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
 
                       )}
 
-                      style={getFrozenStyle("mst")}
+                      style={getFrozenStyle("mst") || getColumnStyle("mst")}
 
                     >
 
@@ -16139,7 +16751,13 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
 
                   {!hiddenColumns.has("company") && (
 
-                    <td className="px-2 py-1 align-top min-w-[18rem]">
+                    <td
+
+                      className="px-2 py-1 align-top"
+
+                      style={getColumnStyle("company")}
+
+                    >
 
                       <span>{r.cong_ty || ""}</span>
 
@@ -16149,7 +16767,13 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
 
                   {!hiddenColumns.has("type") && (
 
-                    <td className="px-2 py-1 align-top">
+                    <td
+
+                      className="px-2 py-1 align-top"
+
+                      style={getColumnStyle("type")}
+
+                    >
 
                       <span>{r.loai_hinh || ""}</span>
 
@@ -16159,7 +16783,13 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
 
                   {!hiddenColumns.has("co") && (
 
-                    <td className="px-2 py-1 align-top">
+                    <td
+
+                      className="px-2 py-1 align-top"
+
+                      style={getColumnStyle("co")}
+
+                    >
 
                       {(() => {
 
@@ -16189,7 +16819,13 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
 
                   {!hiddenColumns.has("items") && (
 
-                    <td className="px-2 py-1 align-top">
+                    <td
+
+                      className="px-2 py-1 align-top"
+
+                      style={getColumnStyle("items")}
+
+                    >
 
                       <span>{r.muc_hang ?? ""}</span>
 
@@ -16199,7 +16835,13 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
 
                   {!hiddenColumns.has("staff") && (
 
-                    <td className="px-2 py-1 align-top">
+                    <td
+
+                      className="px-2 py-1 align-top"
+
+                      style={getColumnStyle("staff")}
+
+                    >
 
                       {rowReadOnly ? (
 
@@ -16227,7 +16869,13 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
 
                   {!hiddenColumns.has("team") && (
 
-                    <td className="px-2 py-1 align-top">
+                    <td
+
+                      className="px-2 py-1 align-top"
+
+                      style={getColumnStyle("team")}
+
+                    >
 
                       {rowReadOnly ? (
 
@@ -16253,7 +16901,13 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
 
                   {!hiddenColumns.has("agency") && (
 
-                    <td className="px-2 py-1 align-top">
+                    <td
+
+                      className="px-2 py-1 align-top"
+
+                      style={getColumnStyle("agency")}
+
+                    >
 
                       {rowReadOnly ? (
 
@@ -16281,7 +16935,13 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
 
                   {!hiddenColumns.has("status") && (
 
-                    <td className="px-2 py-1 align-top">
+                    <td
+
+                      className="px-2 py-1 align-top"
+
+                      style={getColumnStyle("status")}
+
+                    >
 
                       <DeclarationStatusDisplay row={r} withDetail size="sm" />
 
@@ -16291,7 +16951,13 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
 
                   {!hiddenColumns.has("licenses") && (
 
-                    <td className="px-2 py-1 align-top">
+                    <td
+
+                      className="px-2 py-1 align-top"
+
+                      style={getColumnStyle("licenses")}
+
+                    >
 
                       {rowReadOnly ? (
 
@@ -16351,7 +17017,13 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
 
                   {!hiddenColumns.has("kpi") && (
 
-                    <td className="px-2 py-1 align-top">
+                    <td
+
+                      className="px-2 py-1 align-top"
+
+                      style={getColumnStyle("kpi")}
+
+                    >
 
                       {(() => {
 
@@ -16369,7 +17041,13 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
 
                   {historyEnabled && (
 
-                    <td className="px-2 py-1 align-top">
+                    <td
+
+                      className="px-2 py-1 align-top"
+
+                      style={getColumnStyle("history")}
+
+                    >
 
                       <button
 
@@ -16403,12 +17081,18 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
 
                   {updateEnabled && (
 
-                    <td className="px-2 py-1 align-top">
+                    <td
+
+                      className="px-2 py-1 align-top"
+
+                      style={getColumnStyle("update")}
+
+                    >
 
                       {rowReadOnly ? (
-
-                        <span className="text-[11px] text-gray-400">{rowReadOnlyReason || readOnlyLabel}</span>
-
+                        <span className="text-[11px] text-gray-400" title={readOnlyLabel || undefined}>
+                          {readOnlyStatus}
+                        </span>
                       ) : canSaveRow ? (
 
                         <div className="flex flex-col gap-1">
@@ -16513,7 +17197,7 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
 
                         className={cx("px-2 py-1", frozenOffsets.selection ? frozenCellClass : "")}
 
-                        style={getFrozenStyle("selection")}
+                        style={getFrozenStyle("selection") || getColumnStyle("selection")}
 
                       />
 
@@ -16677,6 +17361,8 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
 
                 rowReviewLocked,
 
+                rowDeleted,
+
                 rowEditable,
 
                 canSaveRow,
@@ -16695,11 +17381,17 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
 
               const hasPendingDiff = state.hasPendingDiff;
 
-              const readOnlyLabel = rowReviewLocked
+              const readOnlyLabel = rowDeleted
+
+                ? rowReadOnlyReason || "Đã xóa mềm"
+
+                : rowReviewLocked
 
                 ? "Khóa rà soát"
 
                 : rowReadOnlyReason || "Chỉ xem";
+
+              const readOnlyStatus = rowDeleted ? "Không thể cập nhật" : "Chỉ xem";
 
               return (
 
@@ -17152,11 +17844,10 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
                     )}
 
                     {updateEnabled &&
-
                       (rowReadOnly ? (
-
-                        <span className="text-[11px] text-gray-400">{rowReadOnlyReason || readOnlyLabel}</span>
-
+                        <span className="text-[11px] text-gray-400" title={readOnlyLabel || undefined}>
+                          {readOnlyStatus}
+                        </span>
                       ) : canSaveRow ? (
 
                         <Button
