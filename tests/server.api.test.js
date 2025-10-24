@@ -10,6 +10,10 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vites
 
 import request from 'supertest';
 
+import { AUDIT_KEY, saveDeclRows, markDeclRowsReviewed, updateDeclRowFields, getAuditLogs } from '../src/lib/store.js';
+
+import { clearStorageCache, setItem } from '../src/lib/storageClient.js';
+
 import { resetSqlMonitor, getSqlTimeoutEvents } from '../server/sqlMonitor.js';
 
 
@@ -6320,6 +6324,44 @@ describe('Report export API', () => {
 
     expect(target.nhan_vien).toBe('Tester');
 
+  });
+
+  it('trả về review-locked khi cập nhật tờ khai đã rà soát', () => {
+
+    clearStorageCache();
+
+    saveDeclRows(
+      [
+        {
+          so_tk: '00000007001',
+          nhanh: '',
+          date: '2025-08-15',
+          mst: '0107777333',
+          cong_ty: 'Công ty Khoá Rà Soát',
+          loai_hinh: 'A11',
+          nhan_vien: 'Nhân viên',
+        },
+      ],
+      { overwrite: true, actor: 'review-lock-test' }
+    );
+
+    const key = '00000007001_';
+    const marked = markDeclRowsReviewed([key], { actor: 'review-lock-test' });
+    expect(marked).toBe(1);
+
+    const result = updateDeclRowFields(key, { mst: '0100000000' }, { actor: 'nhanvien' });
+
+    expect(result.success).toBe(false);
+    expect(result.reason).toBe('review-locked');
+
+    const logs = getAuditLogs(1);
+    expect(logs[0]).toMatchObject({
+      action: 'decl.update.blocked',
+      detail: expect.stringContaining('Chặn cập nhật tờ khai 00000007001'),
+    });
+
+    saveDeclRows([], { overwrite: true, actor: 'review-lock-cleanup' });
+    setItem(AUDIT_KEY, '[]');
   });
 
 

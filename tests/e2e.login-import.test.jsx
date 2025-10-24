@@ -1,6 +1,6 @@
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 
 import userEvent from '@testing-library/user-event';
 
@@ -48,7 +48,7 @@ import * as XLSX from 'xlsx';
 
 import App from '@/App.jsx';
 
-import { getDeclRows } from '@/lib/store.js';
+import { getDeclRows, saveDeclRows } from '@/lib/store.js';
 
 import { installMockApi } from './helpers/mockApi.js';
 
@@ -236,6 +236,77 @@ describe('Luồng đăng nhập và import thực tế', () => {
 
     expect(fetchMock).toHaveBeenCalled();
 
+  });
+
+  it('khóa tờ khai đã rà soát đối với tài khoản nhân viên', async () => {
+
+    saveDeclRows(
+      [
+        {
+          so_tk: '00000007001',
+          so_tk_full: 'TK-LOCK-001',
+          nhanh: '',
+          date: '2025-08-15',
+          raw_date: '15/08/2025',
+          mst: '0107777333',
+          cong_ty: 'Công ty Khoá Rà Soát',
+          loai_hinh: 'A11',
+          nhan_vien: 'Nhân viên',
+          team: 'Team 1',
+        },
+      ],
+      { overwrite: true, actor: 'test-seed' }
+    );
+
+    const user = userEvent.setup();
+
+    render(<App />);
+
+    await user.click(screen.getByRole('button', { name: /đăng nhập quản trị/i }));
+    await user.type(await screen.findByPlaceholderText('admin'), 'nhanvien');
+    await user.type(await screen.findByPlaceholderText(/•/), '123456');
+    await user.click(screen.getByRole('button', { name: /^đăng nhập$/i }));
+
+    await waitFor(() => expect(screen.getByText(/Xin chào, /i)).toBeInTheDocument());
+
+    const importTab = await screen.findByRole('tab', { name: /Import Data/i }, { timeout: 5000 });
+    await user.click(importTab);
+
+    await waitFor(() => expect(screen.getByText('TK-LOCK-001')).toBeInTheDocument());
+
+    const rowLabel = screen.getByText('TK-LOCK-001');
+    const rowElement = rowLabel.closest('tr');
+    expect(rowElement).not.toBeNull();
+
+    const rowScope = within(rowElement);
+    const selectBox = rowScope.getByRole('checkbox');
+    expect(selectBox).not.toBeDisabled();
+
+    const deleteButton = rowScope.getByRole('button', { name: 'Đánh dấu xóa' });
+    expect(deleteButton).toBeEnabled();
+
+    await user.click(selectBox);
+
+    const reviewButton = screen.getByRole('button', { name: 'Đánh dấu đã rà soát' });
+    await user.click(reviewButton);
+
+    await waitFor(() => {
+      const lockedRow = screen.getByText('TK-LOCK-001').closest('tr');
+      expect(lockedRow).not.toBeNull();
+      const lockedScope = within(lockedRow);
+      expect(lockedScope.getByText('Khóa rà soát')).toBeInTheDocument();
+      const lockedCheckbox = lockedScope.getByRole('checkbox');
+      expect(lockedCheckbox).toBeDisabled();
+      expect(lockedScope.queryByRole('button', { name: 'Đánh dấu xóa' })).toBeNull();
+    });
+
+    const saveButton = screen.getByRole('button', { name: 'Lưu chỉnh sửa' });
+    expect(saveButton).toBeDisabled();
+
+    const reviewCall = fetchMock.mock.calls.find(([url]) => url === '/api/import/alerts/review');
+    expect(reviewCall).toBeTruthy();
+    const body = JSON.parse(reviewCall[1]?.body || '{}');
+    expect(body.keys).toEqual(['00000007001_']);
   });
 
 });
