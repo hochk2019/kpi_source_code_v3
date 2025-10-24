@@ -33,6 +33,13 @@ import usePagination from "@/hooks/usePagination.js";
 import useMSTQuickFilters from "@/hooks/useMSTQuickFilters.js";
 
 import { Button } from "@/components/ui/button.jsx";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog.jsx";
 
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover.jsx";
 
@@ -1257,6 +1264,172 @@ const HistoryDetails = ({ entries = [], label }) => {
 
   );
 
+};
+
+
+const StageTimelinePreview = ({ stages = [], onViewFull }) => {
+  const safeStages = Array.isArray(stages) ? stages : [];
+  const limitedStages = safeStages.slice(0, 3);
+  const canViewFull = typeof onViewFull === "function" && safeStages.length > 0;
+
+  return (
+    <details className="mt-2 text-xs text-slate-600">
+      <summary className="flex cursor-pointer items-center gap-2 text-blue-600 hover:text-blue-800">
+        <span>Lịch sử giai đoạn</span>
+        <span className="rounded bg-slate-200 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-600">
+          {safeStages.length}
+        </span>
+      </summary>
+      {safeStages.length ? (
+        <>
+          <ul className="mt-1 space-y-1">
+            {limitedStages.map((stage, index) => {
+              const stageKey =
+                makeRowKey(stage) ||
+                `${stage?.mst || "stage"}-${stage?.effective_from || ""}-${stage?.effective_to || index}`;
+              const startLabel = stage?.effective_from
+                ? formatISODate(stage.effective_from)
+                : "Không xác định";
+              const endLabel = stage?.effective_to ? formatISODate(stage.effective_to) : "Hiện tại";
+              const active = !stage?.effective_to;
+              return (
+                <li
+                  key={stageKey}
+                  className="rounded border border-slate-200 bg-white px-2 py-1"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-semibold text-slate-700">
+                      {startLabel} → {endLabel}
+                    </span>
+                    {active ? (
+                      <span className="rounded bg-emerald-600 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
+                        Hiện hành
+                      </span>
+                    ) : null}
+                  </div>
+                  <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-slate-500">
+                    <span>Nhập: {stage?.person_import || "—"}</span>
+                    <span>Xuất: {stage?.person_export || "—"}</span>
+                    {stage?.status ? <span>Trạng thái: {stage.status}</span> : null}
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+          {safeStages.length > limitedStages.length ? (
+            <p className="mt-1 text-[11px] text-slate-500">
+              … và {safeStages.length - limitedStages.length} giai đoạn khác
+            </p>
+          ) : null}
+          {canViewFull ? (
+            <button
+              type="button"
+              className="mt-2 inline-flex items-center text-[11px] font-semibold text-blue-600 hover:text-blue-800"
+              onClick={onViewFull}
+            >
+              Xem toàn màn hình
+            </button>
+          ) : null}
+        </>
+      ) : (
+        <p className="mt-1 italic text-slate-400">Chưa có dữ liệu giai đoạn.</p>
+      )}
+    </details>
+  );
+};
+
+
+const StageTimelineGroups = ({ groups = [] }) => {
+  const safeGroups = Array.isArray(groups) ? groups : [];
+
+  if (!safeGroups.length) {
+    return (
+      <p className="text-sm text-slate-500">
+        Không có giai đoạn nào khớp bộ lọc hiện tại.
+      </p>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      {safeGroups.map((group, groupIndex) => {
+        const stageList = Array.isArray(group?.stages) ? group.stages : [];
+        const groupKey = group?.mst || `group-${groupIndex}`;
+        return (
+          <div
+            key={groupKey}
+            className="rounded border border-slate-200 bg-slate-50 p-3"
+          >
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <div className="text-sm font-semibold text-slate-800">
+                  {group?.mst || "(MST trống)"}
+                </div>
+                <div className="max-w-2xl truncate text-xs text-slate-500">
+                  {group?.company || "Chưa cập nhật tên công ty"}
+                </div>
+              </div>
+              <span className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                {stageList.length} giai đoạn
+              </span>
+            </div>
+            {stageList.length ? (
+              <div className="mt-3 flex flex-wrap gap-2">
+                {stageList.map((stage, stageIndex) => {
+                  const stageKey =
+                    makeRowKey(stage) ||
+                    `${group?.mst || "stage"}-${stage?.effective_from || ""}-${stage?.effective_to || stageIndex}`;
+                  const startLabel = stage?.effective_from
+                    ? formatISODate(stage.effective_from)
+                    : "Không xác định";
+                  const endLabel = stage?.effective_to
+                    ? formatISODate(stage.effective_to)
+                    : "Hiện tại";
+                  const active = !stage?.effective_to;
+                  return (
+                    <div
+                      key={stageKey}
+                      className={`min-w-[14rem] rounded border px-3 py-2 text-xs ${
+                        active
+                          ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                          : "border-slate-200 bg-white text-slate-700"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-semibold">
+                          {startLabel} → {endLabel}
+                        </span>
+                        {active ? (
+                          <span className="rounded bg-emerald-600 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
+                            Đang áp dụng
+                          </span>
+                        ) : null}
+                      </div>
+                      <div className="mt-2 space-y-1 text-slate-600">
+                        <div>
+                          <span className="font-medium text-slate-500">Nhập:</span> {stage?.person_import || "—"}
+                        </div>
+                        <div>
+                          <span className="font-medium text-slate-500">Xuất:</span> {stage?.person_export || "—"}
+                        </div>
+                        {stage?.status ? (
+                          <div>
+                            <span className="font-medium text-slate-500">Trạng thái:</span> {stage.status}
+                          </div>
+                        ) : null}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="mt-2 text-xs italic text-slate-500">Chưa có dữ liệu giai đoạn.</p>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
 };
 
 
@@ -3114,46 +3287,88 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
 
 
   const groupedStages = useMemo(() => {
-
     if (!filtered.length) return [];
-
     const map = new Map();
-
     filtered.forEach((row) => {
-
       const key = row.mst || "__unknown";
-
       if (!map.has(key)) {
-
         map.set(key, {
-
           mst: row.mst || "",
-
           company: row.company || "",
-
           stages: [],
-
         });
-
       }
-
       map.get(key).stages.push(row);
-
     });
-
     return Array.from(map.values())
-
       .map((entry) => ({
-
         ...entry,
-
         stages: sortMSTRows(entry.stages),
-
       }))
-
       .sort((a, b) => (a.mst || "").localeCompare(b.mst || ""));
-
   }, [filtered]);
+
+  const timelineGroupsByMST = useMemo(() => {
+    const map = new Map();
+    groupedStages.forEach((group) => {
+      const key = group?.mst || "__unknown";
+      if (!map.has(key)) {
+        map.set(key, group);
+      }
+    });
+    return map;
+  }, [groupedStages]);
+
+  const [timelineDialogState, setTimelineDialogState] = useState({
+    open: false,
+    groups: [],
+    title: "",
+    subtitle: "",
+  });
+
+  const showTimelineDialog = useCallback(({ title, subtitle, groups }) => {
+    const normalizedGroups = Array.isArray(groups) ? groups.filter(Boolean) : [];
+    if (!normalizedGroups.length) {
+      setTimelineDialogState((prev) => ({ ...prev, open: false }));
+      return;
+    }
+    setTimelineDialogState({
+      open: true,
+      groups: normalizedGroups,
+      title: title || "Dòng thời gian giai đoạn",
+      subtitle: subtitle || "",
+    });
+  }, []);
+
+  const handleTimelineDialogOpenChange = useCallback((nextOpen) => {
+    setTimelineDialogState((prev) => ({ ...prev, open: nextOpen }));
+  }, []);
+
+  const handleOpenTimelineGroup = useCallback(
+    (group) => {
+      if (!group) return;
+      const safeGroup = {
+        mst: group?.mst || "",
+        company: group?.company || "",
+        stages: Array.isArray(group?.stages) ? group.stages : [],
+      };
+      showTimelineDialog({
+        title: `Dòng thời gian — ${safeGroup.mst || "(MST trống)"}`,
+        subtitle: safeGroup.company ? `Công ty: ${safeGroup.company}` : "",
+        groups: [safeGroup],
+      });
+    },
+    [showTimelineDialog]
+  );
+
+  const handleOpenAllTimelines = useCallback(() => {
+    if (!groupedStages.length) return;
+    showTimelineDialog({
+      title: "Dòng thời gian giai đoạn",
+      subtitle: `${groupedStages.length} MST khớp bộ lọc hiện tại`,
+      groups: groupedStages,
+    });
+  }, [groupedStages, showTimelineDialog]);
 
 
 
@@ -4829,6 +5044,29 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
 
                 const updateLabel = r.__originalKey ? "Cập nhật" : "Lưu mới";
 
+                const timelineGroup = timelineGroupsByMST.get(r.mst || "__unknown");
+
+                const timelineStages = Array.isArray(timelineGroup?.stages)
+                  ? timelineGroup.stages
+                  : [];
+
+                const timelineCompany = timelineGroup?.company || r.company || "";
+
+                const timelineMST = timelineGroup?.mst || r.mst || "";
+
+                const timelineGroupWithFallback =
+                  timelineGroup || {
+                    mst: timelineMST,
+                    company: timelineCompany,
+                    stages: timelineStages,
+                  };
+
+                const actionsColumnVisible = isColumnVisible("actions");
+
+                const statusColumnVisible = isColumnVisible("status");
+
+                const showTimelineInStatus = statusColumnVisible && !actionsColumnVisible;
+
                 return (
 
                   <tr
@@ -5031,7 +5269,7 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
                     ) : null}
 
 
-                    {isColumnVisible("status") ? (
+                    {statusColumnVisible ? (
 
                       <td
 
@@ -5076,6 +5314,26 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
                         {!isStatusAssigned && !isStatusWarning && !isStatusPending ? (
 
                           <div className="mt-1 text-xs text-gray-500">{statusValue}</div>
+
+                        ) : null}
+
+                        {showTimelineInStatus ? (
+
+                          <StageTimelinePreview
+
+                            stages={timelineStages}
+
+                            onViewFull={
+
+                              timelineStages.length
+
+                                ? () => handleOpenTimelineGroup(timelineGroupWithFallback)
+
+                                : undefined
+
+                            }
+
+                          />
 
                         ) : null}
 
@@ -5175,7 +5433,7 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
 
                     ) : null}
 
-                    {isColumnVisible("actions") ? (
+                    {actionsColumnVisible ? (
 
                       <td
 
@@ -5187,81 +5445,101 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
 
                       >
 
-                        {canEdit ? (
+                        <div className="flex flex-col gap-3">
 
-                          <div className="flex flex-col gap-2">
+                          {canEdit ? (
 
-                            <button
+                            <div className="flex flex-col gap-2">
 
-                              type="button"
+                              <button
 
-                              onClick={() => startNewStageFromRow(r)}
+                                type="button"
 
-                              className="px-2 py-1 rounded border bg-white text-gray-700 hover:bg-gray-50"
+                                onClick={() => startNewStageFromRow(r)}
 
-                              data-tooltip="Sao chép thông tin hiện tại để thêm giai đoạn kế tiếp"
+                                className="px-2 py-1 rounded border bg-white text-gray-700 hover:bg-gray-50"
 
-                            >
+                                data-tooltip="Sao chép thông tin hiện tại để thêm giai đoạn kế tiếp"
 
-                              Giai đoạn mới
+                              >
 
-                            </button>
+                                Giai đoạn mới
 
-                            <button
+                              </button>
 
-                              type="button"
+                              <button
 
-                              onClick={() => commitRow(r)}
+                                type="button"
 
-                              disabled={updateDisabled}
+                                onClick={() => commitRow(r)}
 
-                              className={`px-2 py-1 rounded text-white ${
+                                disabled={updateDisabled}
 
-                                updateDisabled
+                                className={`px-2 py-1 rounded text-white ${
 
-                                  ? "bg-gray-400 cursor-not-allowed"
+                                  updateDisabled
 
-                                  : "bg-emerald-600 hover:bg-emerald-700"
+                                    ? "bg-gray-400 cursor-not-allowed"
 
-                              }`}
+                                    : "bg-emerald-600 hover:bg-emerald-700"
 
-                              data-tooltip={
+                                }`}
 
-                                updateDisabled
+                                data-tooltip={
 
-                                  ? "Không có thay đổi mới"
+                                  updateDisabled
 
-                                  : "Lưu các thay đổi vừa chỉnh"
+                                    ? "Không có thay đổi mới"
 
-                              }
+                                    : "Lưu các thay đổi vừa chỉnh"
 
-                            >
+                                }
 
-                              {updateLabel}
+                              >
 
-                            </button>
+                                {updateLabel}
 
-                            <button
+                              </button>
 
-                              onClick={() => removeRow(r)}
+                              <button
 
-                              className="px-2 py-1 rounded bg-red-500 text-white hover:bg-red-600"
+                                onClick={() => removeRow(r)}
 
-                              data-tooltip="Xóa dòng"
+                                className="px-2 py-1 rounded bg-red-500 text-white hover:bg-red-600"
 
-                            >
+                                data-tooltip="Xóa dòng"
 
-                              Xóa
+                              >
 
-                            </button>
+                                Xóa
 
-                          </div>
+                              </button>
 
-                        ) : (
+                            </div>
 
-                          <span className="text-xs text-gray-400">—</span>
+                          ) : (
 
-                        )}
+                            <span className="text-xs text-gray-400">—</span>
+
+                          )}
+
+                          <StageTimelinePreview
+
+                            stages={timelineStages}
+
+                            onViewFull={
+
+                              timelineStages.length
+
+                                ? () => handleOpenTimelineGroup(timelineGroupWithFallback)
+
+                                : undefined
+
+                            }
+
+                          />
+
+                        </div>
 
                       </td>
 
@@ -5285,165 +5563,47 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
 
 
 
-      <div className="mt-6">
+      <div className="mt-6 rounded border border-slate-200 bg-slate-50 px-3 py-2">
 
         <div className="flex flex-wrap items-center justify-between gap-2">
 
-          <h2 className="text-sm font-semibold text-slate-700">
+          <div>
 
-            Dòng thời gian giai đoạn (theo bộ lọc)
+            <h2 className="text-sm font-semibold text-slate-700">
 
-          </h2>
+              Dòng thời gian giai đoạn
 
-          <span className="text-xs uppercase tracking-wide text-slate-500">
+            </h2>
 
-            {groupedStages.length} MST
+            <p className="text-xs text-slate-500">
 
-          </span>
+              Xem tổng hợp theo bộ lọc hiện tại.
 
-        </div>
-
-        {groupedStages.length ? (
-
-          <div className="mt-3 space-y-3">
-
-            {groupedStages.map((group, groupIndex) => (
-
-              <div
-
-                key={group.mst || `group-${groupIndex}`}
-
-                className="rounded border border-slate-200 bg-slate-50 p-3"
-
-              >
-
-                <div className="flex flex-wrap items-center justify-between gap-2">
-
-                  <div>
-
-                    <div className="text-sm font-semibold text-slate-800">
-
-                      {group.mst || "(MST trống)"}
-
-                    </div>
-
-                    <div className="text-xs text-slate-500 max-w-2xl truncate">
-
-                      {group.company || "Chưa cập nhật tên công ty"}
-
-                    </div>
-
-                  </div>
-
-                  <span className="text-xs font-medium uppercase tracking-wide text-slate-500">
-
-                    {group.stages.length} giai đoạn
-
-                  </span>
-
-                </div>
-
-                <div className="mt-3 flex flex-wrap gap-2">
-
-                  {group.stages.map((stage, stageIndex) => {
-
-                    const rangeKey = makeRowKey(stage) || `${group.mst || "stage"}-${stageIndex}`;
-
-                    const startLabel = stage.effective_from
-
-                      ? formatISODate(stage.effective_from)
-
-                      : "Không xác định";
-
-                    const endLabel = stage.effective_to
-
-                      ? formatISODate(stage.effective_to)
-
-                      : "Hiện tại";
-
-                    const active = !stage.effective_to;
-
-                    return (
-
-                      <div
-
-                        key={rangeKey}
-
-                        className={`min-w-[14rem] rounded border px-3 py-2 text-xs ${
-
-                          active
-
-                            ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-
-                            : "border-slate-200 bg-white text-slate-700"
-
-                        }`}
-
-                      >
-
-                        <div className="flex items-center justify-between gap-2">
-
-                          <span className="font-semibold">
-
-                            {startLabel} → {endLabel}
-
-                          </span>
-
-                          {active ? (
-
-                            <span className="rounded bg-emerald-600 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
-
-                              Đang áp dụng
-
-                            </span>
-
-                          ) : null}
-
-                        </div>
-
-                        <div className="mt-2 space-y-1 text-slate-600">
-
-                          <div>
-
-                            <span className="font-medium text-slate-500">Nhập:</span> {stage.person_import || "—"}
-
-                          </div>
-
-                          <div>
-
-                            <span className="font-medium text-slate-500">Xuất:</span> {stage.person_export || "—"}
-
-                          </div>
-
-                        </div>
-
-                      </div>
-
-                    );
-
-                  })}
-
-                </div>
-
-              </div>
-
-            ))}
+            </p>
 
           </div>
 
-        ) : (
+          <Button
 
-          <p className="mt-2 text-sm text-slate-500">
+            type="button"
 
-            Không có giai đoạn nào khớp bộ lọc hiện tại.
+            variant="outline"
 
-          </p>
+            size="sm"
 
-        )}
+            onClick={handleOpenAllTimelines}
+
+            disabled={!groupedStages.length}
+
+          >
+
+            Mở tổng hợp ({groupedStages.length})
+
+          </Button>
+
+        </div>
 
       </div>
-
-
 
       {/* Pagination */}
 
@@ -5498,6 +5658,38 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
         </div>
 
       </div>
+
+      <Dialog
+
+        open={timelineDialogState.open}
+
+        onOpenChange={handleTimelineDialogOpenChange}
+
+      >
+
+        <DialogContent className="max-w-3xl max-h-[80vh] overflow-hidden">
+
+          <DialogHeader>
+
+            <DialogTitle>{timelineDialogState.title || "Dòng thời gian giai đoạn"}</DialogTitle>
+
+            {timelineDialogState.subtitle ? (
+
+              <DialogDescription>{timelineDialogState.subtitle}</DialogDescription>
+
+            ) : null}
+
+          </DialogHeader>
+
+          <div className="max-h-[60vh] overflow-auto pr-1">
+
+            <StageTimelineGroups groups={timelineDialogState.groups} />
+
+          </div>
+
+        </DialogContent>
+
+      </Dialog>
 
     </div>
 

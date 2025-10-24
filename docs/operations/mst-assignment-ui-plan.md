@@ -38,9 +38,9 @@
 - [x] Cung cấp nút "Đặt lại chiều rộng" để đưa cấu hình về mặc định; kiểm thử khôi phục sau khi tải lại trang. _(ChatGPT – 2025-10-23)_
 
 ### 5. Tái cấu trúc "Dòng thời gian giai đoạn"
-- [ ] Gom dữ liệu timeline theo từng hàng công ty và hiển thị dạng accordion/popup ngay trong cột trạng thái hoặc hành động.
-- [ ] Loại bỏ khối timeline dài phía dưới hoặc chuyển thành chế độ mở rộng khi người dùng yêu cầu.
-- [ ] Đảm bảo tùy chọn xem chi tiết đầy đủ vẫn khả dụng (ví dụ: modal toàn màn hình) và cập nhật kiểm thử liên quan.
+- [x] Gom dữ liệu timeline theo từng hàng công ty và hiển thị dạng accordion/popup ngay trong cột trạng thái hoặc hành động. _(ChatGPT – 2025-10-24)_
+- [x] Loại bỏ khối timeline dài phía dưới hoặc chuyển thành chế độ mở rộng khi người dùng yêu cầu. _(ChatGPT – 2025-10-24)_
+- [x] Đảm bảo tùy chọn xem chi tiết đầy đủ vẫn khả dụng (ví dụ: modal toàn màn hình) và cập nhật kiểm thử liên quan. _(ChatGPT – 2025-10-24)_
 
 ### 6. Theo dõi và cập nhật tài liệu
 - [ ] Duy trì file kế hoạch này, đánh dấu `[x]` sau khi hoàn tất từng hạng mục và ghi chú người thực hiện + ngày.
@@ -53,4 +53,4 @@
 - Tạo screenshot mẫu sau khi hoàn thành để phục vụ kiểm thử hồi quy giao diện.
 
 ---
-*Ngày cập nhật: 2025-10-23*
+*Ngày cập nhật: 2025-10-24*
