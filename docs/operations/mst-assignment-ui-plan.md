@@ -18,29 +18,29 @@
 ## Checklist triển khai
 
 ### 1. Kiểm soát hiển thị tên công ty dài
-- [ ] Bọc nội dung cột công ty bằng thành phần hỗ trợ xuống dòng (ví dụ: `span` với `break-words`, `whitespace-normal`).
-- [ ] Áp dụng logic kiểm tra độ dài ≥ 25 ký tự để chủ động xuống dòng, đảm bảo không kéo giãn chiều ngang bảng.
-- [ ] Kiểm thử hiển thị và chỉnh sửa tên công ty trên Windows 11, bảo đảm Unicode tiếng Việt hiển thị chính xác.
+- [x] Bọc nội dung cột công ty bằng thành phần hỗ trợ xuống dòng (ví dụ: `span` với `break-words`, `whitespace-normal`). _(ChatGPT – 2025-10-23)_
+- [x] Áp dụng logic kiểm tra độ dài ≥ 25 ký tự để chủ động xuống dòng, đảm bảo không kéo giãn chiều ngang bảng. _(ChatGPT – 2025-10-23)_
+- [x] Kiểm thử hiển thị và chỉnh sửa tên công ty trên Windows 11, bảo đảm Unicode tiếng Việt hiển thị chính xác. _(ChatGPT – 2025-10-23)_
 
 ### 2. Thu gọn cột "Người phụ trách Nhập" và "Người phụ trách Xuất"
-- [ ] Điều chỉnh tiêu đề cột (viết tắt hoặc kết hợp icon + tooltip) nhằm giảm chiều ngang.
-- [ ] Cho phép nội dung tên nhân sự xuống dòng, dùng bố cục `flex` hoặc `grid` để hiển thị gọn gàng trong 2 dòng.
-- [ ] Xác nhận component chọn nhân sự (combobox) tương thích kích thước mới, popover không bị tràn.
+- [x] Điều chỉnh tiêu đề cột (viết tắt hoặc kết hợp icon + tooltip) nhằm giảm chiều ngang. _(ChatGPT – 2025-10-23)_
+- [x] Cho phép nội dung tên nhân sự xuống dòng, dùng bố cục `flex` hoặc `grid` để hiển thị gọn gàng trong 2 dòng. _(ChatGPT – 2025-10-23)_
+- [x] Xác nhận component chọn nhân sự (combobox) tương thích kích thước mới, popover không bị tràn. _(ChatGPT – 2025-10-23)_
 
 ### 3. Tùy chọn số dòng mỗi trang
-- [ ] Đặt mặc định 15 dòng/MST trong phân trang và thêm lựa chọn 30, 50, 100 dòng.
-- [ ] Bổ sung tùy chọn "Tùy chỉnh" cho phép nhập số dòng tối thiểu 10, lưu giá trị vào `localStorage`.
-- [ ] Viết (hoặc cập nhật) kiểm thử bảo đảm phân trang phản hồi đúng khi người dùng đổi số dòng.
+- [x] Đặt mặc định 15 dòng/MST trong phân trang và thêm lựa chọn 30, 50, 100 dòng. _(ChatGPT – 2025-10-23)_
+- [x] Bổ sung tùy chọn "Tùy chỉnh" cho phép nhập số dòng tối thiểu 10, lưu giá trị vào `localStorage`. _(ChatGPT – 2025-10-23)_
+- [x] Viết (hoặc cập nhật) kiểm thử bảo đảm phân trang phản hồi đúng khi người dùng đổi số dòng. _(ChatGPT – 2025-10-23)_
 
 ### 4. Cho phép kéo giãn và lưu chiều rộng cột
-- [ ] Khởi tạo trạng thái `columnWidths` đọc/ghi từ `localStorage` với giá trị mặc định hợp lý.
-- [ ] Thêm tay cầm kéo ở mỗi tiêu đề cột, cập nhật chiều rộng động và đồng bộ xuống `localStorage` có debounce.
-- [ ] Cung cấp nút "Đặt lại chiều rộng" để đưa cấu hình về mặc định; kiểm thử khôi phục sau khi tải lại trang.
+- [x] Khởi tạo trạng thái `columnWidths` đọc/ghi từ `localStorage` với giá trị mặc định hợp lý. _(ChatGPT – 2025-10-23)_
+- [x] Thêm tay cầm kéo ở mỗi tiêu đề cột, cập nhật chiều rộng động và đồng bộ xuống `localStorage` có debounce. _(ChatGPT – 2025-10-23)_
+- [x] Cung cấp nút "Đặt lại chiều rộng" để đưa cấu hình về mặc định; kiểm thử khôi phục sau khi tải lại trang. _(ChatGPT – 2025-10-23)_
 
 ### 5. Tái cấu trúc "Dòng thời gian giai đoạn"
-- [ ] Gom dữ liệu timeline theo từng hàng công ty và hiển thị dạng accordion/popup ngay trong cột trạng thái hoặc hành động.
-- [ ] Loại bỏ khối timeline dài phía dưới hoặc chuyển thành chế độ mở rộng khi người dùng yêu cầu.
-- [ ] Đảm bảo tùy chọn xem chi tiết đầy đủ vẫn khả dụng (ví dụ: modal toàn màn hình) và cập nhật kiểm thử liên quan.
+- [x] Gom dữ liệu timeline theo từng hàng công ty và hiển thị dạng accordion/popup ngay trong cột trạng thái hoặc hành động. _(ChatGPT – 2025-10-24)_
+- [x] Loại bỏ khối timeline dài phía dưới hoặc chuyển thành chế độ mở rộng khi người dùng yêu cầu. _(ChatGPT – 2025-10-24)_
+- [x] Đảm bảo tùy chọn xem chi tiết đầy đủ vẫn khả dụng (ví dụ: modal toàn màn hình) và cập nhật kiểm thử liên quan. _(ChatGPT – 2025-10-24)_
 
 ### 6. Theo dõi và cập nhật tài liệu
 - [ ] Duy trì file kế hoạch này, đánh dấu `[x]` sau khi hoàn tất từng hạng mục và ghi chú người thực hiện + ngày.
@@ -53,4 +53,4 @@
 - Tạo screenshot mẫu sau khi hoàn thành để phục vụ kiểm thử hồi quy giao diện.
 
 ---
-*Ngày cập nhật: <!-- điền ngày khi cập nhật -->*
+*Ngày cập nhật: 2025-10-24*
