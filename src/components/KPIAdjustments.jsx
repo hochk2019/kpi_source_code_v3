@@ -3390,9 +3390,9 @@ export default function KPIAdjustments({ currentUser }) {
 
         <Dialog open={guidanceOpen} onOpenChange={setGuidanceOpen}>
 
-          <DialogContent className="max-w-3xl max-h-[85vh] overflow-hidden p-0">
+          <DialogContent className="max-w-3xl max-h-[calc(100vh-2rem)] p-0 sm:max-h-[85vh]">
 
-            <div className="flex max-h-[85vh] flex-col">
+            <div className="grid max-h-[calc(100vh-2rem)] grid-rows-[auto,1fr,auto] overflow-hidden sm:max-h-[85vh]">
 
               <DialogHeader className="px-6 pb-4 pt-6">
 
@@ -3408,7 +3408,7 @@ export default function KPIAdjustments({ currentUser }) {
 
               {guidanceGroups.length ? (
 
-                <ScrollArea className="flex-1 px-6 pb-6">
+                <ScrollArea className="h-full px-6 pb-6">
 
                   <div className="space-y-3 text-foreground">
 
