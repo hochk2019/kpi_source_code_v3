@@ -15940,6 +15940,7 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
               ? "Khóa rà soát"
 
               : rowReadOnlyReason || "Chỉ xem";
+            const readOnlyStatus = rowDeleted ? "Không thể cập nhật" : "Chỉ xem";
 
             const deletedTimestampLabel = rowDeletedAt ? formatHistoryTimestamp(rowDeletedAt) : "";
 
@@ -16406,9 +16407,9 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
                     <td className="px-2 py-1 align-top">
 
                       {rowReadOnly ? (
-
-                        <span className="text-[11px] text-gray-400">{rowReadOnlyReason || readOnlyLabel}</span>
-
+                        <span className="text-[11px] text-gray-400" title={readOnlyLabel || undefined}>
+                          {readOnlyStatus}
+                        </span>
                       ) : canSaveRow ? (
 
                         <div className="flex flex-col gap-1">
@@ -17152,11 +17153,10 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
                     )}
 
                     {updateEnabled &&
-
                       (rowReadOnly ? (
-
-                        <span className="text-[11px] text-gray-400">{rowReadOnlyReason || readOnlyLabel}</span>
-
+                        <span className="text-[11px] text-gray-400" title={readOnlyLabel || undefined}>
+                          {readOnlyStatus}
+                        </span>
                       ) : canSaveRow ? (
 
                         <Button
