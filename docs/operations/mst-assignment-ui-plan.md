@@ -33,9 +33,9 @@
 - [x] Viết (hoặc cập nhật) kiểm thử bảo đảm phân trang phản hồi đúng khi người dùng đổi số dòng. _(ChatGPT – 2025-10-23)_
 
 ### 4. Cho phép kéo giãn và lưu chiều rộng cột
-- [ ] Khởi tạo trạng thái `columnWidths` đọc/ghi từ `localStorage` với giá trị mặc định hợp lý.
-- [ ] Thêm tay cầm kéo ở mỗi tiêu đề cột, cập nhật chiều rộng động và đồng bộ xuống `localStorage` có debounce.
-- [ ] Cung cấp nút "Đặt lại chiều rộng" để đưa cấu hình về mặc định; kiểm thử khôi phục sau khi tải lại trang.
+- [x] Khởi tạo trạng thái `columnWidths` đọc/ghi từ `localStorage` với giá trị mặc định hợp lý. _(ChatGPT – 2025-10-23)_
+- [x] Thêm tay cầm kéo ở mỗi tiêu đề cột, cập nhật chiều rộng động và đồng bộ xuống `localStorage` có debounce. _(ChatGPT – 2025-10-23)_
+- [x] Cung cấp nút "Đặt lại chiều rộng" để đưa cấu hình về mặc định; kiểm thử khôi phục sau khi tải lại trang. _(ChatGPT – 2025-10-23)_
 
 ### 5. Tái cấu trúc "Dòng thời gian giai đoạn"
 - [ ] Gom dữ liệu timeline theo từng hàng công ty và hiển thị dạng accordion/popup ngay trong cột trạng thái hoặc hành động.
