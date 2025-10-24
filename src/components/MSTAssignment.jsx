@@ -789,7 +789,43 @@ const tidyMST = (v) => {
 
 
 
-const DEFAULT_PAGE_SIZE = 50;
+export const MIN_PAGE_SIZE = 10;
+
+const DEFAULT_PAGE_SIZE = 15;
+
+export const PAGE_SIZE_OPTIONS = [15, 30, 50, 100];
+
+export const PAGE_SIZE_STORAGE_KEY = "mstAssignment.pageSize";
+
+export const normalizePageSize = (value, minValue = MIN_PAGE_SIZE) => {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) {
+    return minValue;
+  }
+  const normalized = Math.trunc(numeric);
+  if (normalized < minValue) {
+    return minValue;
+  }
+  return normalized;
+};
+
+export const readStoredPageSize = (
+  storage,
+  fallback = DEFAULT_PAGE_SIZE,
+  minValue = MIN_PAGE_SIZE
+) => {
+  if (!storage) return normalizePageSize(fallback, minValue);
+  try {
+    const raw = storage.getItem(PAGE_SIZE_STORAGE_KEY);
+    if (raw == null || raw === "") {
+      return normalizePageSize(fallback, minValue);
+    }
+    return normalizePageSize(raw, minValue);
+  } catch (err) {
+    console.warn("readStoredPageSize", err);
+    return normalizePageSize(fallback, minValue);
+  }
+};
 
 
 
@@ -1182,6 +1218,127 @@ export function AssigneeCell({
   );
 }
 
+export function PageSizeControl({
+  value,
+  onChange,
+  options = PAGE_SIZE_OPTIONS,
+  minValue = MIN_PAGE_SIZE,
+  selectId = "mst-assignment-page-size",
+}) {
+  const hasPredefinedOption = options.includes(value);
+  const [customValue, setCustomValue] = useState(() => String(Math.max(minValue, value || minValue)));
+  const [selectedOption, setSelectedOption] = useState(() =>
+    hasPredefinedOption ? String(value) : "custom"
+  );
+  const previousValueRef = useRef(value);
+
+  useEffect(() => {
+    if (previousValueRef.current === value) {
+      return;
+    }
+    previousValueRef.current = value;
+    const nextHasOption = options.includes(value);
+    const nextOption = nextHasOption ? String(value) : "custom";
+    setSelectedOption(nextOption);
+    if (!nextHasOption) {
+      setCustomValue(String(Math.max(minValue, value || minValue)));
+    }
+  }, [minValue, options, value]);
+
+  const handleSelectChange = useCallback(
+    (event) => {
+      const next = event.target.value;
+      if (next === "custom") {
+        setSelectedOption("custom");
+        setCustomValue(String(Math.max(minValue, value || minValue)));
+        return;
+      }
+      setSelectedOption(next);
+      const numeric = Number(next);
+      if (Number.isFinite(numeric)) {
+        onChange(normalizePageSize(numeric, minValue));
+      }
+    },
+    [minValue, onChange, value]
+  );
+
+  const handleCustomChange = useCallback((event) => {
+    const next = event.target.value;
+    if (/^\d*$/.test(next)) {
+      setCustomValue(next);
+    }
+  }, []);
+
+  const applyCustomValue = useCallback(() => {
+    if (customValue === "") {
+      const fallback = Math.max(minValue, value || minValue);
+      setCustomValue(String(fallback));
+      onChange(fallback);
+      return;
+    }
+    const normalized = normalizePageSize(customValue, minValue);
+    setCustomValue(String(normalized));
+    onChange(normalized);
+  }, [customValue, minValue, onChange, value]);
+
+  const handleCustomBlur = useCallback(() => {
+    applyCustomValue();
+  }, [applyCustomValue]);
+
+  const handleCustomKeyDown = useCallback(
+    (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        applyCustomValue();
+      }
+    },
+    [applyCustomValue]
+  );
+
+  return (
+    <div className="flex flex-wrap items-center gap-2 text-sm text-gray-600">
+      <label htmlFor={selectId} className="font-medium text-gray-700">
+        Số dòng mỗi trang
+      </label>
+      <select
+        id={selectId}
+        className="rounded border px-2 py-1"
+        value={selectedOption}
+        onChange={handleSelectChange}
+      >
+        {options.map((option) => (
+          <option key={option} value={option}>
+            {option} dòng
+          </option>
+        ))}
+        <option value="custom">Tùy chỉnh…</option>
+      </select>
+      {selectedOption === "custom" ? (
+        <div className="flex items-center gap-2">
+          <label htmlFor={`${selectId}-custom`} className="sr-only">
+            Nhập số dòng tùy chỉnh
+          </label>
+          <input
+            id={`${selectId}-custom`}
+            type="text"
+            inputMode="numeric"
+            pattern="[0-9]*"
+            className="w-20 rounded border px-2 py-1 text-right"
+            value={customValue}
+            onChange={handleCustomChange}
+            onBlur={handleCustomBlur}
+            onKeyDown={handleCustomKeyDown}
+            aria-describedby={`${selectId}-hint`}
+          />
+          <span id={`${selectId}-hint`} className="text-xs text-gray-500">
+            Tối thiểu {minValue} dòng
+          </span>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export default function MSTAssignment({ canEdit = true, currentUser = null }) {
 
   const [rows, setRows] = useState([]); // toàn bộ (bao gồm metadata)
@@ -1193,6 +1350,13 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
   const [staffFilter, setStaffFilter] = useState("");
 
   const [applyFrom, setApplyFrom] = useState(""); // yyyy-mm-dd
+
+  const [initialPageSize] = useState(() => {
+    if (typeof window === "undefined") {
+      return DEFAULT_PAGE_SIZE;
+    }
+    return readStoredPageSize(window.localStorage, DEFAULT_PAGE_SIZE, MIN_PAGE_SIZE);
+  });
 
   const rootRef = useRef(null);
 
@@ -2423,25 +2587,18 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
 
 
   const {
-
     page,
-
+    pageSize,
     pageCount: totalPages,
-
     currentPageItems: pageRows,
-
     setPage,
-
+    setPageSize,
     nextPage,
-
     previousPage,
-
   } = usePagination(filtered, {
-
     initialPage: 1,
-
-    initialPageSize: DEFAULT_PAGE_SIZE,
-
+    initialPageSize,
+    minPageSize: MIN_PAGE_SIZE,
   });
 
 
@@ -2518,6 +2675,8 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
 
     page,
 
+    pageSize,
+
     showAddForm,
 
     selectedFileName,
@@ -2525,6 +2684,24 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
     historyFilter,
 
   ]);
+
+
+
+  useEffect(() => {
+
+    if (typeof window === "undefined") return;
+
+    try {
+
+      window.localStorage.setItem(PAGE_SIZE_STORAGE_KEY, String(pageSize));
+
+    } catch (err) {
+
+      console.warn("persistPageSize", err);
+
+    }
+
+  }, [pageSize]);
 
 
 
@@ -4506,9 +4683,9 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
 
       {/* Pagination */}
 
-      <div className="flex items-center justify-between mt-3">
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
 
-        <div />
+        <PageSizeControl value={pageSize} onChange={setPageSize} />
 
         <div className="flex items-center gap-2">
 
@@ -4555,8 +4732,6 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
           </button>
 
         </div>
-
-        <div />
 
       </div>
 

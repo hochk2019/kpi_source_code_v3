@@ -28,9 +28,9 @@
 - [x] Xác nhận component chọn nhân sự (combobox) tương thích kích thước mới, popover không bị tràn. _(ChatGPT – 2025-10-23)_
 
 ### 3. Tùy chọn số dòng mỗi trang
-- [ ] Đặt mặc định 15 dòng/MST trong phân trang và thêm lựa chọn 30, 50, 100 dòng.
-- [ ] Bổ sung tùy chọn "Tùy chỉnh" cho phép nhập số dòng tối thiểu 10, lưu giá trị vào `localStorage`.
-- [ ] Viết (hoặc cập nhật) kiểm thử bảo đảm phân trang phản hồi đúng khi người dùng đổi số dòng.
+- [x] Đặt mặc định 15 dòng/MST trong phân trang và thêm lựa chọn 30, 50, 100 dòng. _(ChatGPT – 2025-10-23)_
+- [x] Bổ sung tùy chọn "Tùy chỉnh" cho phép nhập số dòng tối thiểu 10, lưu giá trị vào `localStorage`. _(ChatGPT – 2025-10-23)_
+- [x] Viết (hoặc cập nhật) kiểm thử bảo đảm phân trang phản hồi đúng khi người dùng đổi số dòng. _(ChatGPT – 2025-10-23)_
 
 ### 4. Cho phép kéo giãn và lưu chiều rộng cột
 - [ ] Khởi tạo trạng thái `columnWidths` đọc/ghi từ `localStorage` với giá trị mặc định hợp lý.
