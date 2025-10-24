@@ -112,7 +112,11 @@ const DEFAULT_IMPORT_COLUMN_CONFIG = Object.freeze({
 
   version: DEFAULT_IMPORT_COLUMN_VERSION,
 
+  widths: Object.freeze({}),
+
 });
+
+const MIN_IMPORT_COLUMN_WIDTH = 80;
 
 
 
@@ -178,6 +182,42 @@ function writeUILayoutConfig(config) {
 
 
 
+function normalizeColumnWidths(input) {
+
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+
+    return {};
+
+  }
+
+  const result = {};
+
+  for (const [key, value] of Object.entries(input)) {
+
+    if (typeof key !== "string" || !IMPORT_COLUMN_ID_SET.has(key)) {
+
+      continue;
+
+    }
+
+    const numeric = Number(value);
+
+    if (!Number.isFinite(numeric)) {
+
+      continue;
+
+    }
+
+    const clamped = Math.max(MIN_IMPORT_COLUMN_WIDTH, Math.round(numeric));
+
+    result[key] = clamped;
+
+  }
+
+  return result;
+
+}
+
 function normalizeImportColumnConfig(input) {
 
   if (!input || typeof input !== "object" || Array.isArray(input)) {
@@ -187,6 +227,8 @@ function normalizeImportColumnConfig(input) {
       hidden: DEFAULT_IMPORT_COLUMN_CONFIG.hidden.slice(),
 
       version: DEFAULT_IMPORT_COLUMN_CONFIG.version,
+
+      widths: {},
 
     };
 
@@ -274,6 +316,8 @@ function normalizeImportColumnConfig(input) {
 
       version: DEFAULT_IMPORT_COLUMN_VERSION,
 
+      widths: normalizeColumnWidths(input.widths),
+
     };
 
   }
@@ -285,6 +329,8 @@ function normalizeImportColumnConfig(input) {
     hidden: sanitized,
 
     version: Math.max(version, DEFAULT_IMPORT_COLUMN_VERSION),
+
+    widths: normalizeColumnWidths(input.widths),
 
   };
 
@@ -324,7 +370,59 @@ function isSameColumnConfig(a, b) {
 
   const versionB = Number.isFinite(b.version) ? Number(b.version) : 0;
 
-  return versionA === versionB;
+  if (versionA !== versionB) {
+
+    return false;
+
+  }
+
+  const widthsA = a.widths && typeof a.widths === "object" && !Array.isArray(a.widths) ? a.widths : {};
+
+  const widthsB = b.widths && typeof b.widths === "object" && !Array.isArray(b.widths) ? b.widths : {};
+
+  const keysA = Object.keys(widthsA);
+
+  const keysB = Object.keys(widthsB);
+
+  if (keysA.length !== keysB.length) {
+
+    return false;
+
+  }
+
+  for (const key of keysA) {
+
+    if (!keysB.includes(key)) {
+
+      return false;
+
+    }
+
+    const valueA = Number(widthsA[key]);
+
+    const valueB = Number(widthsB[key]);
+
+    if (!Number.isFinite(valueA) || !Number.isFinite(valueB)) {
+
+      if (valueA === valueB) {
+
+        continue;
+
+      }
+
+      return false;
+
+    }
+
+    if (valueA !== valueB) {
+
+      return false;
+
+    }
+
+  }
+
+  return true;
 
 }
 
@@ -348,6 +446,8 @@ export function getImportColumnConfig() {
 
       version: DEFAULT_IMPORT_COLUMN_CONFIG.version,
 
+      widths: {},
+
     };
 
   }
@@ -358,7 +458,7 @@ export function getImportColumnConfig() {
 
 
 
-export function saveImportColumnConfig({ hidden } = {}, { actor = "system" } = {}) {
+export function saveImportColumnConfig({ hidden, widths } = {}, { actor = "system" } = {}) {
 
   const layout = readUILayoutConfig();
 
@@ -368,11 +468,17 @@ export function saveImportColumnConfig({ hidden } = {}, { actor = "system" } = {
 
   const targetHidden = Array.isArray(hidden) ? hidden : current.hidden;
 
+  const targetWidths =
+
+    widths && typeof widths === "object" && !Array.isArray(widths) ? widths : current.widths;
+
   const next = normalizeImportColumnConfig({
 
     hidden: targetHidden,
 
     version: DEFAULT_IMPORT_COLUMN_VERSION,
+
+    widths: targetWidths,
 
   });
 
@@ -416,7 +522,15 @@ export function saveImportColumnConfig({ hidden } = {}, { actor = "system" } = {
 
     detail: `Cập nhật cột Import Data (${visibleBaseColumns}/${IMPORT_COLUMN_IDS.length} cột dữ liệu hiển thị)`,
 
-    meta: { hidden: next.hidden.slice(), version: next.version },
+    meta: {
+
+      hidden: next.hidden.slice(),
+
+      version: next.version,
+
+      widths: { ...next.widths },
+
+    },
 
   });
 

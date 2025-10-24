@@ -1450,6 +1450,8 @@ describe('import column config', () => {
 
     expect(config.version).toBeGreaterThanOrEqual(2);
 
+    expect(config.widths).toEqual({});
+
   });
 
 
@@ -1473,6 +1475,8 @@ describe('import column config', () => {
     expect(config.hidden.slice().sort()).toEqual(expected);
 
     expect(config.version).toBeGreaterThanOrEqual(2);
+
+    expect(config.widths).toEqual({});
 
   });
 
@@ -1508,6 +1512,8 @@ describe('import column config', () => {
 
     expect(result.version).toBeGreaterThanOrEqual(2);
 
+    expect(result.widths).toEqual({});
+
 
 
     const raw = sharedGetItem(UI_LAYOUT_KEY);
@@ -1519,6 +1525,36 @@ describe('import column config', () => {
     expect(parsed.importData.columns.hidden.slice().sort()).toEqual(expected);
 
     expect(parsed.importData.columns.version).toBeGreaterThanOrEqual(2);
+
+    expect(parsed.importData.columns.widths).toEqual({});
+
+  });
+
+  it('ghi nhớ chiều rộng cột tuỳ chỉnh và loại bỏ dữ liệu không hợp lệ', () => {
+
+    const result = saveImportColumnConfig(
+
+      { widths: { date: 150.6, declaration: 60, khong_hop_le: 200 } },
+
+      { actor: 'admin' }
+
+    );
+
+    expect(result.widths.date).toBe(151);
+
+    expect(result.widths.declaration).toBeGreaterThanOrEqual(80);
+
+    expect(result.widths.declaration).toBe(80);
+
+    expect(result.widths.khong_hop_le).toBeUndefined();
+
+    const persisted = getImportColumnConfig();
+
+    expect(persisted.widths.date).toBe(151);
+
+    expect(persisted.widths.declaration).toBe(80);
+
+    expect(persisted.widths.khong_hop_le).toBeUndefined();
 
   });
 
