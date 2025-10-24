@@ -1432,27 +1432,35 @@ function TopStaffWidget({
 
           </ResponsiveContainer>
 
-          <div className="mt-2 text-xs text-gray-500">Tổng: {formatInt(totalDecls)} tờ khai</div>
-
         </div>
 
       )}
 
 
 
-      {totalEntries > visibleEntries ? (
+      <div className="mt-3 space-y-1 text-xs leading-relaxed">
 
-        <p className="text-xs text-gray-400">
+        {metric !== "kpi" && hasDeclData ? (
 
-          Đang hiển thị {visibleEntries}/{totalEntries} nhân viên. {preferenceDescription}
+          <p className="text-gray-500">Tổng: {formatInt(totalDecls)} tờ khai</p>
 
-        </p>
+        ) : null}
 
-      ) : (
+        {totalEntries > visibleEntries ? (
 
-        <p className="text-xs text-gray-400">{preferenceDescription}</p>
+          <p className="text-gray-400">
 
-      )}
+            Đang hiển thị {visibleEntries}/{totalEntries} nhân viên. {preferenceDescription}
+
+          </p>
+
+        ) : (
+
+          <p className="text-gray-400">{preferenceDescription}</p>
+
+        )}
+
+      </div>
 
     </section>
 
