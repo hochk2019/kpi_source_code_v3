@@ -2267,7 +2267,7 @@ export default function AccountManager({ currentUser }) {
 
         <AppDialogContent
           size="xl"
-          className="flex max-h-[85vh] flex-col overflow-hidden"
+          className="flex max-h-[calc(100vh-2rem)] flex-col overflow-hidden sm:max-h-[85vh]"
         >
 
           <AppDialogHeader className="px-6 pb-3 pt-6">
@@ -2288,7 +2288,7 @@ export default function AccountManager({ currentUser }) {
             ref={permissionScrollRootRef}
             viewportRef={permissionScrollViewportRef}
             type="always"
-            className="flex-1 min-h-0 px-6 pb-6 pt-2"
+            className="flex-1 min-h-0 px-6 pb-6 pt-2 [--scrollbar-size:0.625rem]"
           >
 
             <div className="space-y-4">
