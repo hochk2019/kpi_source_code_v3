@@ -158,6 +158,104 @@ function resolveBackupDir(value) {
 
 
 
+function buildErrorDetails(error, { maxDepth = 3 } = {}) {
+
+  const segments = [];
+
+
+  const pushSegment = (value) => {
+
+    if (value === null || value === undefined) {
+
+      return;
+
+    }
+
+    const text = `${value}`.trim();
+
+    if (!text) {
+
+      return;
+
+    }
+
+    if (!segments.includes(text)) {
+
+      segments.push(text);
+
+    }
+
+  };
+
+
+  const collectFrom = (value) => {
+
+    if (!value || typeof value !== 'object') {
+
+      pushSegment(value);
+
+      return;
+
+    }
+
+    pushSegment(value.message);
+
+    pushSegment(value.code);
+
+    pushSegment(value.errno);
+
+    pushSegment(value.syscall);
+
+    pushSegment(value.hostname || value.address);
+
+    pushSegment(value.type);
+
+    pushSegment(value.reason);
+
+  };
+
+
+  let current = error;
+
+  let depth = 0;
+
+  while (current && depth <= maxDepth) {
+
+    collectFrom(current);
+
+    if (typeof current?.cause === 'string') {
+
+      pushSegment(current.cause);
+
+      break;
+
+    }
+
+    if (!current.cause || typeof current.cause !== 'object' || current.cause === current) {
+
+      break;
+
+    }
+
+    current = current.cause;
+
+    depth += 1;
+
+  }
+
+
+  if (!segments.length) {
+
+    return 'Không rõ lỗi.';
+
+  }
+
+
+  return segments.join(' – ');
+
+}
+
+
 function normalizeRangeDate(value, { isEnd = false } = {}) {
 
   if (value === null || value === undefined) {
@@ -25859,17 +25957,21 @@ app.post('/api/ai/providers/test', async (req, res) => {
 
   } catch (err) {
 
+    const errorDetail = buildErrorDetails(err);
+
     console.error('Kiểm thử nhà cung cấp AI thất bại', {
 
       providerId: normalized?.id || rawProvider?.id || 'unknown',
 
       type: normalized?.type || rawProvider?.type || 'unknown',
 
-      error: err?.message || err,
+      error: errorDetail,
+
+      cause: err?.cause || null,
 
     });
 
-    res.status(400).json({ ok: false, error: err?.message || 'Không thể kiểm thử nhà cung cấp AI.' });
+    res.status(400).json({ ok: false, error: errorDetail });
 
   }
 
