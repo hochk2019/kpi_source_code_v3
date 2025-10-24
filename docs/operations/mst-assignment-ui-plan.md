@@ -43,13 +43,19 @@
 - [x] Đảm bảo tùy chọn xem chi tiết đầy đủ vẫn khả dụng (ví dụ: modal toàn màn hình) và cập nhật kiểm thử liên quan. _(ChatGPT – 2025-10-24)_
 
 ### 6. Theo dõi và cập nhật tài liệu
-- [ ] Duy trì file kế hoạch này, đánh dấu `[x]` sau khi hoàn tất từng hạng mục và ghi chú người thực hiện + ngày.
-- [ ] Liên kết kế hoạch vào các tài liệu vận hành liên quan (ví dụ `docs/USER_GUIDE.md`) nếu cần.
-- [ ] Định kỳ rà soát để bổ sung đề xuất cải tiến UI/UX hoặc tối ưu kỹ thuật mới.
+- [x] Duy trì file kế hoạch này, đánh dấu `[x]` sau khi hoàn tất từng hạng mục và ghi chú người thực hiện + ngày. _(ChatGPT – 2025-10-24)_
+- [x] Liên kết kế hoạch vào các tài liệu vận hành liên quan (ví dụ `docs/USER_GUIDE.md`) nếu cần. _(ChatGPT – 2025-10-24)_
+- [x] Định kỳ rà soát để bổ sung đề xuất cải tiến UI/UX hoặc tối ưu kỹ thuật mới. _(ChatGPT – 2025-10-24)_
+
+> **Ghi chú 6.1**: Đã thêm liên kết đến tài liệu này trong mục "Gán MST" của `docs/USER_GUIDE.md` để đội vận hành theo dõi dễ dàng.
+>
+> **Ghi chú 6.2**: Tiếp tục duy trì danh sách đề xuất cải tiến, ưu tiên nghiên cứu bộ lọc nhanh theo trạng thái giai đoạn và preset bộ lọc người phụ trách.
 
 ## Đề xuất cải tiến bổ sung
 - Khảo sát thêm nhu cầu lọc nâng cao (theo trạng thái/tên phụ trách) để giảm thao tác tìm kiếm.
 - Cân nhắc lưu bộ cấu hình giao diện (chiều rộng cột, số dòng, bộ lọc) theo tài khoản người dùng trên server để đồng bộ đa thiết bị.
+- Thêm preset lọc nhanh theo trạng thái giai đoạn (ví dụ: "Chờ bổ sung", "Hoàn tất") kết hợp badge màu để hỗ trợ kiểm soát tiến độ.
+- Nghiên cứu cơ chế đồng bộ bộ lọc/tùy chỉnh giao diện MST giữa trình duyệt và ứng dụng desktop PowerShell để giảm thao tác cấu hình lặp lại.
 - Tạo screenshot mẫu sau khi hoàn thành để phục vụ kiểm thử hồi quy giao diện.
 
 ---
