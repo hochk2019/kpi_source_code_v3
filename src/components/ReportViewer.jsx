@@ -3,56 +3,38 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import "../print.css";
 
 import {
-
   getDeclRows,
-
   getTeamRoster,
-
   sortDeclRows,
-
   getMSTMap,
-
   normalizeName,
-
   normalizeStr,
-
   mapMemberNamesToTeams,
-
   getKpiAdjustments,
-
   KPI_ADJUSTMENTS_KEY,
-
   getReportSchedules,
-
   saveReportSchedule,
-
   deleteReportSchedule,
-
   REPORT_SCHEDULE_KEY,
-
   calculateNextReportScheduleRun,
-
+  DECL_KEY,
+  MST_KEY,
+  RULES_KEY,
+  TEAM_KEY,
 } from "@/lib/store.js";
 
-import { subscribe as subscribeStorage } from "@/lib/storageClient.js";
+import { refreshSharedKeys, subscribe as subscribeStorage } from "@/lib/storageClient.js";
 
 import { loadRules, loadRuleSets } from "@/lib/rules.js";
 
 import { formatDisplayDate } from "@/shared/format.js";
 
 import {
-
   QUICK_RANGE_OPTIONS,
-
   computeQuickRange,
-
   buildReportData,
-
   aggregateByCompany,
-
 } from "@/lib/reports.js";
-
-import { seedSampleDeclarations } from "@/shared/sampleDeclarations.js";
 
 import { toAdjustmentTotalsArray } from "../../shared/kpiAdjustments.js";
 
@@ -3606,6 +3588,8 @@ export default function ReportViewer({ canExport = true, currentUser = null }) {
 
   const [version, setVersion] = useState(0);
 
+  const [reloading, setReloading] = useState(false);
+
   const [exporting, setExporting] = useState(false);
 
   const storedColumnPrefs = useMemo(
@@ -3654,22 +3638,28 @@ export default function ReportViewer({ canExport = true, currentUser = null }) {
 
 
 
-  const handleSeedSamples = () => {
-
-    const confirmed = window.confirm(
-
-      "Tạo dữ liệu mẫu sẽ ghi đè các tờ khai hiện có bằng 100 dòng thử nghiệm tháng 8-9. Bạn có chắc chắn muốn tiếp tục?"
-
-    );
-
-    if (!confirmed) return;
-
-    const generated = seedSampleDeclarations({ actor: "ui-sample", count: 100 });
-
-    setVersion((value) => value + 1);
-
-    alert(`Đã sinh ${generated.length} tờ khai mẫu.`);
-
+  const handleReloadData = async () => {
+    if (reloading) {
+      return;
+    }
+    setReloading(true);
+    try {
+      await refreshSharedKeys([
+        DECL_KEY,
+        MST_KEY,
+        RULES_KEY,
+        TEAM_KEY,
+        KPI_ADJUSTMENTS_KEY,
+        REPORT_SCHEDULE_KEY,
+      ]);
+      setVersion((value) => value + 1);
+      toast.success?.("Đã tải lại dữ liệu báo cáo KPI mới nhất.");
+    } catch (error) {
+      console.error("Không thể tải lại dữ liệu báo cáo KPI", error);
+      toast.error?.(error?.message || "Không thể tải lại dữ liệu báo cáo. Vui lòng thử lại.");
+    } finally {
+      setReloading(false);
+    }
   };
 
 
@@ -6322,27 +6312,15 @@ const handleDetailPageSizeCustomInputChange = (event) => {
 
               type="button"
 
-              onClick={() => setVersion((v) => v + 1)}
+              onClick={handleReloadData}
 
-              className="rounded border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm transition hover:bg-gray-50"
+              disabled={reloading}
 
-            >
-
-              Tải lại dữ liệu
-
-            </button>
-
-            <button
-
-              type="button"
-
-              onClick={handleSeedSamples}
-
-              className="rounded border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-700 shadow-sm transition hover:bg-blue-100 dark:border-blue-500/40 dark:bg-blue-500/15 dark:text-blue-200"
+              className="rounded border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
 
             >
 
-              Sinh dữ liệu mẫu (100 dòng)
+              {reloading ? "Đang tải..." : "Tải lại dữ liệu"}
 
             </button>
 

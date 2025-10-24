@@ -84,7 +84,7 @@ import { Textarea } from "@/components/ui/textarea.jsx";
 
 import { cn } from "@/lib/utils.js";
 
-import { Calculator, Hash, Medal, NotebookPen, PlusCircle, Sparkles } from "lucide-react";
+import { Calculator, Hash, Medal, NotebookPen, PlusCircle, Sparkles, Maximize2, Minimize2 } from "lucide-react";
 
 
 
@@ -1582,12 +1582,19 @@ export default function KPIAdjustments({ currentUser }) {
   const [guidanceOpen, setGuidanceOpen] = useState(false);
 
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [guidanceFullscreen, setGuidanceFullscreen] = useState(false);
 
   const [settingsDraft, setSettingsDraft] = useState({});
 
   const [settingsError, setSettingsError] = useState("");
 
   const [declarationSearch, setDeclarationSearch] = useState("");
+
+  useEffect(() => {
+    if (!guidanceOpen) {
+      setGuidanceFullscreen(false);
+    }
+  }, [guidanceOpen]);
 
   const staffDefaults = useMemo(() => resolveStaffDefaults(currentUser, roster), [currentUser, roster]);
 
@@ -3390,25 +3397,69 @@ export default function KPIAdjustments({ currentUser }) {
 
         <Dialog open={guidanceOpen} onOpenChange={setGuidanceOpen}>
 
-          <DialogContent className="max-w-3xl max-h-[85vh] overflow-hidden p-0">
+          <DialogContent
+            className={cn(
+              "max-w-3xl max-h-[calc(100vh-2rem)] p-0 sm:max-h-[85vh]",
+              guidanceFullscreen &&
+                "h-[calc(100vh-2rem)] max-w-[min(1200px,calc(100vw-2rem))] sm:max-h-[calc(100vh-2rem)] sm:w-[min(1200px,calc(100vw-2rem))]",
+            )}
+          >
 
-            <div className="flex max-h-[85vh] flex-col">
+            <div
+              className={cn(
+                "grid max-h-[calc(100vh-2rem)] grid-rows-[auto,1fr,auto] overflow-hidden sm:max-h-[85vh]",
+                guidanceFullscreen && "h-full max-h-none sm:max-h-none",
+              )}
+            >
 
               <DialogHeader className="px-6 pb-4 pt-6">
 
-                <DialogTitle>Hướng dẫn nhập điểm KPI +/-</DialogTitle>
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
 
-                <DialogDescription>
+                  <div className="space-y-2">
 
-                  Tham khảo điểm mặc định, điểm bổ sung và cách tính cho từng nhóm hạng mục theo cấu hình hiện tại.
+                    <DialogTitle>Hướng dẫn nhập điểm KPI +/-</DialogTitle>
 
-                </DialogDescription>
+                    <DialogDescription>
+
+                      Tham khảo điểm mặc định, điểm bổ sung và cách tính cho từng nhóm hạng mục theo cấu hình hiện tại.
+
+                    </DialogDescription>
+
+                  </div>
+
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setGuidanceFullscreen((current) => !current)}
+                    className="shrink-0"
+                    aria-pressed={guidanceFullscreen}
+                  >
+
+                    {guidanceFullscreen ? (
+                      <>
+                        <Minimize2 className="mr-2 size-4" aria-hidden="true" />
+                        Thu nhỏ
+                      </>
+                    ) : (
+                      <>
+                        <Maximize2 className="mr-2 size-4" aria-hidden="true" />
+                        Mở toàn màn hình
+                      </>
+                    )}
+
+                  </Button>
+
+                </div>
 
               </DialogHeader>
 
               {guidanceGroups.length ? (
 
-                <ScrollArea className="flex-1 px-6 pb-6">
+                <ScrollArea
+                  className={cn("h-full px-6 pb-6", guidanceFullscreen && "pb-8")}
+                >
 
                   <div className="space-y-3 text-foreground">
 
