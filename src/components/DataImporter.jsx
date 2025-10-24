@@ -10,6 +10,10 @@ import {
 
   saveDeclRows,
 
+  softDeleteDeclRows,
+
+  restoreDeclRows,
+
   sortDeclRows,
 
   pushImportLog,
@@ -3396,6 +3400,8 @@ export default function DataImporter({
 
   const [rawRows, setRawRows] = useState([]);        // dữ liệu xem trước (đã map)
 
+  const [showDeletedRows, setShowDeletedRows] = useState(false);
+
   const savedRowSnapshotRef = useRef(new Map());
 
   const [baselineVersion, setBaselineVersion] = useState(0);
@@ -3884,6 +3890,11 @@ export default function DataImporter({
 
   const normalizedQuickCompany = useMemo(() => normalizeStr(quickCompany), [quickCompany]);
 
+  const deletedRowCount = useMemo(
+    () => rawRows.reduce((count, row) => (row && row.deleted_at ? count + 1 : count), 0),
+    [rawRows]
+  );
+
   const coThreshold = useMemo(() => Math.max(0, Number(coFilterMin) || 0), [coFilterMin]);
 
   const normalizedFilters = useMemo(
@@ -3912,6 +3923,8 @@ export default function DataImporter({
 
         coMin: coThreshold,
 
+        includeDeleted: showDeletedRows,
+
       }),
 
     [
@@ -3937,6 +3950,8 @@ export default function DataImporter({
       coFilterMode,
 
       coThreshold,
+
+      showDeletedRows,
 
     ]
 
@@ -4529,6 +4544,8 @@ export default function DataImporter({
       if (!canEdit) return false;
 
       if (!row || typeof row !== "object") return false;
+
+      if (row.deleted_at) return false;
 
       if (isRowReviewLocked(row)) return false;
 
@@ -7252,6 +7269,8 @@ export default function DataImporter({
 
     }
 
+    let totalCount = 0;
+
     let missingStaff = 0;
 
     let missingTeam = 0;
@@ -7261,6 +7280,10 @@ export default function DataImporter({
     for (const row of rawRows) {
 
       if (!row) continue;
+
+      if (!showDeletedRows && row.deleted_at) continue;
+
+      totalCount += 1;
 
       const hasStaff = !!(row.nhan_vien && row.nhan_vien.toString().trim());
 
@@ -7274,9 +7297,9 @@ export default function DataImporter({
 
     }
 
-    return { total: rawRows.length, missingStaff, missingTeam, reviewed };
+    return { total: totalCount, missingStaff, missingTeam, reviewed };
 
-  }, [mode, rawRows]);
+  }, [mode, rawRows, showDeletedRows]);
 
 
 
@@ -8484,6 +8507,8 @@ export default function DataImporter({
 
     if (normalizedFilters.duplicate) params.set("duplicate", "1");
 
+    if (normalizedFilters.includeDeleted) params.set("includeDeleted", "1");
+
     if (normalizedFilters.coMode && normalizedFilters.coMode !== "all") {
 
       params.set("coMode", normalizedFilters.coMode);
@@ -8724,8 +8749,47 @@ export default function DataImporter({
 
     shouldUseServerSearch,
 
+    showDeletedRows,
+
   ]);
 
+
+
+  useEffect(() => {
+
+    if (showDeletedRows) {
+
+      return;
+
+    }
+
+    setSelectedKeys((prev) => {
+
+      if (!Array.isArray(prev) || prev.length === 0) {
+
+        return prev;
+
+      }
+
+      const activeKeys = new Set(
+
+        rawRows
+
+          .filter((row) => row && !row.deleted_at)
+
+          .map((row) => keyOfRow(row))
+
+          .filter(Boolean)
+
+      );
+
+      const next = prev.filter((key) => activeKeys.has(key));
+
+      return next.length === prev.length ? prev : next;
+
+    });
+
+  }, [showDeletedRows, rawRows, keyOfRow, setSelectedKeys]);
 
 
   const filteredKeys = useMemo(() => {
@@ -9264,6 +9328,8 @@ const selectedReviewedCount = useMemo(() => {
 
       keyOfRow,
 
+      normalizeStr,
+
       reviewLockMessage,
 
     ]
@@ -9296,7 +9362,7 @@ const selectedReviewedCount = useMemo(() => {
 
           alert(
 
-            `Không thể xóa ${reviewLocked.toLocaleString("vi-VN")} tờ khai đã được rà soát. ${reviewLockMessage}`
+            `Không thể đánh dấu xóa ${reviewLocked.toLocaleString("vi-VN")} tờ khai đã được rà soát. ${reviewLockMessage}`
 
           );
 
@@ -9306,7 +9372,7 @@ const selectedReviewedCount = useMemo(() => {
 
             action: "decl.delete.blocked",
 
-            detail: `Chặn xóa ${reviewLocked.toLocaleString("vi-VN")} tờ khai do review lock`,
+            detail: `Chặn đánh dấu xóa ${reviewLocked.toLocaleString("vi-VN")} tờ khai do review lock`,
 
             meta: { keys: reviewLockedKeys, reason: "review lock" },
 
@@ -9326,7 +9392,7 @@ const selectedReviewedCount = useMemo(() => {
 
         alert(
 
-          `Đã bỏ qua ${reviewLocked.toLocaleString("vi-VN")} tờ khai đã được rà soát (không thể xóa).`
+          `Đã bỏ qua ${reviewLocked.toLocaleString("vi-VN")} tờ khai đã được rà soát (không thể đánh dấu xóa).`
 
         );
 
@@ -9336,7 +9402,7 @@ const selectedReviewedCount = useMemo(() => {
 
           action: "decl.delete.partial-blocked",
 
-          detail: `Bỏ qua ${reviewLocked.toLocaleString("vi-VN")} tờ khai khi xóa do review lock`,
+          detail: `Bỏ qua ${reviewLocked.toLocaleString("vi-VN")} tờ khai khi đánh dấu xóa do review lock`,
 
           meta: { keys: reviewLockedKeys, reason: "review lock" },
 
@@ -9344,7 +9410,7 @@ const selectedReviewedCount = useMemo(() => {
 
       } else if (blocked > 0 && editingRestrictionMessage) {
 
-        alert(`Đã bỏ qua ${blocked} tờ khai không thuộc phạm vi của bạn khi xóa.`);
+        alert(`Đã bỏ qua ${blocked} tờ khai không thuộc phạm vi của bạn khi đánh dấu xóa.`);
 
       }
 
@@ -9352,33 +9418,47 @@ const selectedReviewedCount = useMemo(() => {
 
     }
 
-    const keySet = new Set(allowedKeys);
-
-    const remaining = rawRows.filter(row => !keySet.has(keyOfRow(row)));
-
-    const removedCount = rawRows.length - remaining.length;
-
-    if (removedCount <= 0) return;
-
-    saveDeclRows(remaining, {
-
-      overwrite: true,
+    const result = softDeleteDeclRows(allowedKeys, {
 
       actor,
 
-      detail: `Xóa ${removedCount} tờ khai từ giao diện Import Data`,
-
-      allowReviewedOverride: isAdminRole,
-
     });
 
-    alert(`Đã xóa ${removedCount} tờ khai.`);
+    const parts = [];
 
-    setHasUnsaved(false);
+    if (result.deleted > 0) {
 
-    loadSavedRows();
+      parts.push(`Đã đánh dấu xóa ${result.deleted.toLocaleString("vi-VN")} tờ khai.`);
 
-    fetchAlerts();
+    }
+
+    if (result.alreadyDeleted > 0) {
+
+      parts.push(`Bỏ qua ${result.alreadyDeleted.toLocaleString("vi-VN")} tờ khai đã bị xóa trước đó.`);
+
+    }
+
+    if (result.missing > 0) {
+
+      parts.push(`Không tìm thấy ${result.missing.toLocaleString("vi-VN")} tờ khai trong dữ liệu hiện tại.`);
+
+    }
+
+    if (parts.length > 0) {
+
+      alert(parts.join("\n"));
+
+    }
+
+    if (result.deleted > 0) {
+
+      setHasUnsaved(false);
+
+      loadSavedRows();
+
+      fetchAlerts();
+
+    }
 
   }, [
 
@@ -9390,15 +9470,13 @@ const selectedReviewedCount = useMemo(() => {
 
     filterEditableKeys,
 
-    isAdminRole,
-
-    keyOfRow,
-
     loadSavedRows,
 
-    rawRows,
-
     reviewLockMessage,
+
+    setHasUnsaved,
+
+    softDeleteDeclRows,
 
   ]);
 
@@ -9408,7 +9486,7 @@ const selectedReviewedCount = useMemo(() => {
 
     if (isReadOnlyForEdits) {
 
-      alert("Bạn không có quyền xóa tờ khai.");
+      alert("Bạn không có quyền đánh dấu xóa tờ khai.");
 
       return;
 
@@ -9416,7 +9494,7 @@ const selectedReviewedCount = useMemo(() => {
 
     if (mode !== "saved") {
 
-      alert("Chỉ có thể xóa khi đang xem dữ liệu đã lưu.");
+      alert("Chỉ có thể đánh dấu xóa khi đang xem dữ liệu đã lưu.");
 
       return;
 
@@ -9424,13 +9502,13 @@ const selectedReviewedCount = useMemo(() => {
 
     if (selectedKeys.length === 0) {
 
-      alert("Chưa chọn tờ khai để xóa.");
+      alert("Chưa chọn tờ khai để đánh dấu xóa.");
 
       return;
 
     }
 
-    const allowedKeys = ensureEditableKeys(selectedKeys, "xóa");
+    const allowedKeys = ensureEditableKeys(selectedKeys, "đánh dấu xóa");
 
     if (!allowedKeys) {
 
@@ -9438,7 +9516,7 @@ const selectedReviewedCount = useMemo(() => {
 
     }
 
-    if (!window.confirm(`Bạn chắc chắn muốn xóa ${allowedKeys.length} tờ khai đã chọn?`)) {
+    if (!window.confirm(`Bạn chắc chắn muốn đánh dấu xóa ${allowedKeys.length} tờ khai đã chọn?`)) {
 
       return;
 
@@ -9466,7 +9544,7 @@ const selectedReviewedCount = useMemo(() => {
 
     if (isReadOnlyForEdits) {
 
-      alert("Bạn không có quyền xóa tờ khai.");
+      alert("Bạn không có quyền đánh dấu xóa tờ khai.");
 
       return;
 
@@ -9474,7 +9552,7 @@ const selectedReviewedCount = useMemo(() => {
 
     if (mode !== "saved") {
 
-      alert("Chỉ có thể xóa khi đang xem dữ liệu đã lưu.");
+      alert("Chỉ có thể đánh dấu xóa khi đang xem dữ liệu đã lưu.");
 
       return;
 
@@ -9492,7 +9570,7 @@ const selectedReviewedCount = useMemo(() => {
 
     }
 
-    if (!window.confirm("Xóa tờ khai này?")) return;
+    if (!window.confirm("Đánh dấu xóa tờ khai này?")) return;
 
     deleteRowsByKeys([keyOfRow(row)], { alreadyFiltered: true });
 
@@ -9509,6 +9587,101 @@ const selectedReviewedCount = useMemo(() => {
     keyOfRow,
 
     mode,
+
+  ]);
+
+
+  const handleRestoreSingle = useCallback((row) => {
+
+    if (isReadOnlyForEdits) {
+
+      alert("Bạn không có quyền khôi phục tờ khai.");
+
+      return;
+
+    }
+
+    if (mode !== "saved") {
+
+      alert("Chỉ có thể khôi phục khi đang xem dữ liệu đã lưu.");
+
+      return;
+
+    }
+
+    if (!row) {
+
+      return;
+
+    }
+
+    const key = keyOfRow(row);
+
+    const result = restoreDeclRows([key], {
+
+      actor,
+
+      detail: "Khôi phục tờ khai bị xóa mềm từ giao diện Import Data",
+
+    });
+
+    if (result.restored > 0) {
+
+      alert("Đã khôi phục 1 tờ khai.");
+
+      setHasUnsaved(false);
+
+      loadSavedRows();
+
+      fetchAlerts();
+
+      return;
+
+    }
+
+    if (result.skipped > 0) {
+
+      alert("Tờ khai đã ở trạng thái hoạt động.");
+
+      return;
+
+    }
+
+    if (Array.isArray(result.failedKeys) && result.failedKeys.length > 0) {
+
+      const reason = result.failedKeys[0]?.reason;
+
+      if (reason === "review-locked") {
+
+        alert(`Không thể khôi phục tờ khai do đã bị khóa rà soát. ${reviewLockMessage}`);
+
+      } else {
+
+        alert("Không thể khôi phục tờ khai. Vui lòng thử lại.");
+
+      }
+
+    }
+
+  }, [
+
+    actor,
+
+    fetchAlerts,
+
+    keyOfRow,
+
+    loadSavedRows,
+
+    mode,
+
+    restoreDeclRows,
+
+    reviewLockMessage,
+
+    setHasUnsaved,
+
+    isReadOnlyForEdits,
 
   ]);
 
@@ -10076,13 +10249,27 @@ const selectedReviewedCount = useMemo(() => {
 
       const rowKey = keyOfRow(row);
 
-      const rowEditable = isRowEditable(row);
+      const rowReviewLocked = isRowReviewLocked(row);
+
+      const rowDeleted = !!(row && row.deleted_at);
+
+      const rowDeletedAt = rowDeleted ? row.deleted_at : null;
+
+      const rowDeletedBy = rowDeleted ? normalizeStr(row.deleted_by || "") : "";
+
+      const rowEditable = !rowDeleted && isRowEditable(row);
 
       const rowReadOnly = isReadOnlyForEdits || !rowEditable;
 
-      const rowReviewLocked = isRowReviewLocked(row);
+      const rowReadOnlyReason = rowDeleted
 
-      const rowReadOnlyReason = rowReviewLocked
+        ? rowDeletedBy
+
+          ? `Đã xóa bởi ${rowDeletedBy}`
+
+          : "Đã xóa mềm"
+
+        : rowReviewLocked
 
         ? reviewLockMessage
 
@@ -10120,6 +10307,12 @@ const selectedReviewedCount = useMemo(() => {
 
         rowReviewLocked,
 
+        rowDeleted,
+
+        rowDeletedAt,
+
+        rowDeletedBy,
+
         rowReadOnlyReason,
 
         rowDiff,
@@ -10153,6 +10346,8 @@ const selectedReviewedCount = useMemo(() => {
       isRowReviewLocked,
 
       keyOfRow,
+
+      normalizeStr,
 
       reviewLockMessage,
 
@@ -10472,7 +10667,7 @@ const selectedReviewedCount = useMemo(() => {
 
     if (isReadOnlyForEdits) {
 
-      alert("Bạn không có quyền xóa tờ khai trùng.");
+      alert("Bạn không có quyền đánh dấu xóa tờ khai trùng.");
 
       return;
 
@@ -10480,7 +10675,7 @@ const selectedReviewedCount = useMemo(() => {
 
     if (mode !== "saved") {
 
-      alert("Chỉ có thể xóa tờ khai trùng khi đang xem dữ liệu đã lưu.");
+      alert("Chỉ có thể đánh dấu xóa tờ khai trùng khi đang xem dữ liệu đã lưu.");
 
       return;
 
@@ -15208,6 +15403,28 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
 
           </select>
 
+          <button
+
+            type="button"
+
+            onClick={() => setShowDeletedRows((prev) => !prev)}
+
+            className="rounded border border-gray-200 bg-white px-2 py-1 text-xs text-gray-600 shadow-sm transition hover:bg-gray-100 dark:border-slate-600 dark:bg-slate-800 dark:text-gray-200 dark:hover:bg-slate-700"
+
+          >
+
+            {showDeletedRows
+
+              ? "Ẩn bản ghi đã xóa"
+
+              : deletedRowCount > 0
+
+              ? `Hiện bản ghi đã xóa (${deletedRowCount.toLocaleString("vi-VN")})`
+
+              : "Hiện bản ghi đã xóa"}
+
+          </button>
+
           <button onClick={() => setPage(p => Math.max(1, p - 1))} className="px-2 py-1 border rounded">« Trước</button>
 
           <button onClick={() => setPage(p => Math.min(maxPage, p + 1))} className="px-2 py-1 border rounded">Sau »</button>
@@ -15372,7 +15589,7 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
 
             >
 
-              Xóa các tờ khai đã chọn
+              Đánh dấu xóa các tờ khai đã chọn
 
             </button>
 
@@ -15666,7 +15883,7 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
 
               {deleteEnabled && (
 
-                <th className="px-2 py-1 text-left font-semibold text-gray-600 dark:text-gray-300">Xóa</th>
+                <th className="px-2 py-1 text-left font-semibold text-gray-600 dark:text-gray-300">Xóa / Khôi phục</th>
 
               )}
 
@@ -15690,6 +15907,12 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
 
               rowReviewLocked,
 
+              rowDeleted,
+
+              rowDeletedAt,
+
+              rowDeletedBy,
+
               rowEditable,
 
               canSaveRow,
@@ -15708,17 +15931,25 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
 
             const hasPendingDiff = state.hasPendingDiff;
 
-            const readOnlyLabel = rowReviewLocked
+            const readOnlyLabel = rowDeleted
+
+              ? rowReadOnlyReason || "Đã xóa mềm"
+
+              : rowReviewLocked
 
               ? "Khóa rà soát"
 
               : rowReadOnlyReason || "Chỉ xem";
 
+            const deletedTimestampLabel = rowDeletedAt ? formatHistoryTimestamp(rowDeletedAt) : "";
+
             return (
 
               <React.Fragment key={`${rowKey}_${i}`}>
 
-                <tr className="relative odd:bg-[color:var(--ds-surface-card)] even:bg-[color:var(--ds-surface-muted)]">
+                <tr
+                  className={cx("relative odd:bg-[color:var(--ds-surface-card)] even:bg-[color:var(--ds-surface-muted)]", rowDeleted ? "opacity-70" : "")}
+                >
 
                   {selectionEnabled && (
 
@@ -15843,6 +16074,16 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
                           <span className="rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-medium text-red-700">
 
                             Cần xem lại
+
+                          </span>
+
+                        )}
+
+                        {rowDeleted && (
+
+                          <span className="rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-medium text-red-700">
+
+                            Đã xóa mềm
 
                           </span>
 
@@ -16208,23 +16449,53 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
 
                   )}
 
-                  {deleteEnabled && rowEditable && (
+                  {deleteEnabled && (rowEditable || rowDeleted) && (
 
                     <td className="px-2 py-1 align-top">
 
-                      <button
+                      {rowDeleted ? (
 
-                        type="button"
+                        <div className="flex flex-col gap-1">
 
-                        onClick={() => handleDeleteSingle(r)}
+                          <button
 
-                        className="rounded bg-red-500 px-2 py-0.5 text-xs text-white hover:bg-red-600"
+                            type="button"
 
-                      >
+                            onClick={() => handleRestoreSingle(r)}
 
-                        Xóa
+                            className="rounded bg-emerald-500 px-2 py-0.5 text-xs text-white hover:bg-emerald-600"
 
-                      </button>
+                          >
+
+                            Khôi phục
+
+                          </button>
+
+                          <span className="text-[11px] text-gray-500">
+
+                            {`Đã xóa${rowDeletedBy ? ` bởi ${rowDeletedBy}` : ""}${deletedTimestampLabel ? ` lúc ${deletedTimestampLabel}` : ""}`}
+
+                          </span>
+
+                        </div>
+
+                      ) : (
+
+                        <button
+
+                          type="button"
+
+                          onClick={() => handleDeleteSingle(r)}
+
+                          className="rounded bg-red-500 px-2 py-0.5 text-xs text-white hover:bg-red-600"
+
+                        >
+
+                          Đánh dấu xóa
+
+                        </button>
+
+                      )}
 
                     </td>
 

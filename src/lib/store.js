@@ -785,6 +785,18 @@ function getDeclarationKey(row) {
 
 }
 
+function getDeclRowSimpleKey(row) {
+
+  if (!row || typeof row !== "object") return "";
+
+  const soTk = (row.so_tk ?? "").toString();
+
+  const nhanh = (row.nhanh ?? "").toString();
+
+  return `${soTk}_${nhanh}`.trim();
+
+}
+
 
 
 function mergeDeclarationRowClient(existing, incoming) {
@@ -1030,6 +1042,46 @@ function mergeDeclarationRowClient(existing, incoming) {
   if (Object.prototype.hasOwnProperty.call(merged, '__forceReviewedOverride')) {
 
     delete merged.__forceReviewedOverride;
+
+  }
+
+  if (incoming && Object.prototype.hasOwnProperty.call(incoming, 'deleted_at')) {
+
+    const value = incoming.deleted_at;
+
+    if (value === null || value === undefined || value === '') {
+
+      delete merged.deleted_at;
+
+    } else {
+
+      merged.deleted_at = value;
+
+    }
+
+  } else if (!incoming?.deleted_at) {
+
+    delete merged.deleted_at;
+
+  }
+
+  if (incoming && Object.prototype.hasOwnProperty.call(incoming, 'deleted_by')) {
+
+    const value = incoming.deleted_by;
+
+    if (value === null || value === undefined || value === '') {
+
+      delete merged.deleted_by;
+
+    } else {
+
+      merged.deleted_by = value;
+
+    }
+
+  } else if (!merged.deleted_at) {
+
+    delete merged.deleted_by;
 
   }
 
@@ -5367,7 +5419,129 @@ export function updateDeclRowFields(
 
 }
 
+export function softDeleteDeclRows(keys, { actor = "system", detail = "" } = {}) {
+  const list = Array.isArray(keys) ? keys.map((key) => String(key || "").trim()).filter(Boolean) : [];
+  if (list.length === 0) {
+    return { deleted: 0, alreadyDeleted: 0, missing: 0, keys: [], alreadyDeletedKeys: [], missingKeys: list };
+  }
 
+  const actorName = normalizeStr(actor) || "system";
+  const timestamp = new Date().toISOString();
+  const rows = getDeclRowsRaw();
+  const keySet = new Set(list);
+  const seenKeys = new Set();
+  const deletedKeys = [];
+  const alreadyDeletedKeys = [];
+  let deleted = 0;
+  let alreadyDeleted = 0;
+
+  const nextRows = rows.map((row) => {
+    if (!row || typeof row !== "object") {
+      return row;
+    }
+    const key = getDeclRowSimpleKey(row);
+    if (!keySet.has(key)) {
+      return row;
+    }
+    seenKeys.add(key);
+    if (row.deleted_at) {
+      alreadyDeleted += 1;
+      alreadyDeletedKeys.push(key);
+      return row;
+    }
+    deleted += 1;
+    deletedKeys.push(key);
+    return {
+      ...row,
+      deleted_at: timestamp,
+      deleted_by: actorName,
+    };
+  });
+
+  const missingKeys = list.filter((key) => !seenKeys.has(key));
+
+  if (deleted > 0) {
+    persistAndAnnotateDeclRows(nextRows);
+    const actionDetail = detail && detail.trim().length > 0
+      ? detail
+      : `Đánh dấu xóa ${deleted.toLocaleString("vi-VN")} tờ khai từ giao diện Import Data`;
+    pushAuditLog({
+      actor: actorName,
+      action: "decl.delete.soft",
+      detail: actionDetail,
+      meta: { count: deleted, keys: deletedKeys.slice() },
+    });
+    pushImportLog({
+      actor: actorName,
+      kind: "warn",
+      message: actionDetail,
+      meta: { count: deleted, keys: deletedKeys.slice() },
+    });
+  }
+
+  return {
+    deleted,
+    alreadyDeleted,
+    missing: missingKeys.length,
+    keys: deletedKeys,
+    alreadyDeletedKeys,
+    missingKeys,
+  };
+}
+
+export function restoreDeclRows(keys, { actor = "system", detail = "" } = {}) {
+  const list = Array.isArray(keys) ? keys.map((key) => String(key || "").trim()).filter(Boolean) : [];
+  if (list.length === 0) {
+    return { restored: 0, skipped: 0, failed: 0, restoredKeys: [], skippedKeys: [], failedKeys: [] };
+  }
+
+  const actorName = normalizeStr(actor) || "system";
+  const baseDetail = detail && detail.trim().length > 0
+    ? detail.trim()
+    : "Khôi phục trạng thái xóa mềm từ giao diện Import Data";
+  const restoredKeys = [];
+  const skippedKeys = [];
+  const failed = [];
+
+  for (const key of list) {
+    const result = updateDeclRowFields(
+      key,
+      { deleted_at: null, deleted_by: null },
+      { actor: actorName, detail: baseDetail, allowReviewedOverride: true }
+    );
+
+    if (result.success) {
+      restoredKeys.push(key);
+    } else if (result.reason === "no-change") {
+      skippedKeys.push(key);
+    } else {
+      failed.push({ key, reason: result.reason });
+    }
+  }
+
+  const restored = restoredKeys.length;
+
+  if (restored > 0) {
+    const message = baseDetail.includes("Khôi phục")
+      ? `${baseDetail} (${restored.toLocaleString("vi-VN")} tờ khai)`
+      : `${baseDetail} - khôi phục ${restored.toLocaleString("vi-VN")} tờ khai`;
+    pushImportLog({
+      actor: actorName,
+      kind: "info",
+      message,
+      meta: { count: restored, keys: restoredKeys.slice() },
+    });
+  }
+
+  return {
+    restored,
+    skipped: skippedKeys.length,
+    failed: failed.length,
+    restoredKeys,
+    skippedKeys,
+    failedKeys: failed,
+  };
+}
 
 export function markDeclRowsReviewed(keys, { actor = "system", note = "Đánh dấu rà soát" } = {}) {
 
@@ -7960,7 +8134,7 @@ export default {
 
   getMSTRowsRaw, getMSTMap, getMSTFor, upsertMSTRows,
 
-  getDeclRows, saveDeclRows, markDeclRowsReviewed, unmarkDeclRowsReviewed, sortDeclRows, getRecentDeclRows,
+  getDeclRows, saveDeclRows, softDeleteDeclRows, restoreDeclRows, markDeclRowsReviewed, unmarkDeclRowsReviewed, sortDeclRows, getRecentDeclRows,
 
   getDeclHistoryForRow,
 
