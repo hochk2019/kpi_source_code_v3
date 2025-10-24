@@ -10,6 +10,10 @@ import {
 
   saveDeclRows,
 
+  softDeleteDeclRows,
+
+  restoreDeclRows,
+
   sortDeclRows,
 
   pushImportLog,
@@ -3396,6 +3400,8 @@ export default function DataImporter({
 
   const [rawRows, setRawRows] = useState([]);        // dữ liệu xem trước (đã map)
 
+  const [showDeletedRows, setShowDeletedRows] = useState(false);
+
   const savedRowSnapshotRef = useRef(new Map());
 
   const [baselineVersion, setBaselineVersion] = useState(0);
@@ -3750,6 +3756,18 @@ export default function DataImporter({
 
   const canAutoReconcile = isManagerRole;
 
+  const reviewLockMessage =
+
+    "Tờ khai đã được rà soát. Chỉ quản trị viên mới có thể chỉnh sửa hoặc xóa.";
+
+  const isRowReviewLocked = useCallback(
+
+    (row) => !!(row && typeof row === "object" && row.reviewed) && !isAdminRole,
+
+    [isAdminRole]
+
+  );
+
   const rosterSnapshot = useMemo(() => getTeamRoster(), [currentUser]);
 
   const rosterTeams = useMemo(() => buildRosterTeams(rosterSnapshot), [rosterSnapshot]);
@@ -3872,6 +3890,11 @@ export default function DataImporter({
 
   const normalizedQuickCompany = useMemo(() => normalizeStr(quickCompany), [quickCompany]);
 
+  const deletedRowCount = useMemo(
+    () => rawRows.reduce((count, row) => (row && row.deleted_at ? count + 1 : count), 0),
+    [rawRows]
+  );
+
   const coThreshold = useMemo(() => Math.max(0, Number(coFilterMin) || 0), [coFilterMin]);
 
   const normalizedFilters = useMemo(
@@ -3900,6 +3923,8 @@ export default function DataImporter({
 
         coMin: coThreshold,
 
+        includeDeleted: showDeletedRows,
+
       }),
 
     [
@@ -3925,6 +3950,8 @@ export default function DataImporter({
       coFilterMode,
 
       coThreshold,
+
+      showDeletedRows,
 
     ]
 
@@ -4518,6 +4545,10 @@ export default function DataImporter({
 
       if (!row || typeof row !== "object") return false;
 
+      if (row.deleted_at) return false;
+
+      if (isRowReviewLocked(row)) return false;
+
       if (isManagerRole) return true;
 
       const rowStaffKey = normalizeName(row?.nhan_vien);
@@ -4581,6 +4612,8 @@ export default function DataImporter({
       canEdit,
 
       isManagerRole,
+
+      isRowReviewLocked,
 
       isStaffRole,
 
@@ -4646,7 +4679,7 @@ export default function DataImporter({
 
       if (!Array.isArray(keys) || keys.length === 0) {
 
-        return { allowed: [], blocked: 0 };
+        return { allowed: [], blocked: 0, reviewLocked: 0, reviewLockedKeys: [] };
 
       }
 
@@ -4655,6 +4688,10 @@ export default function DataImporter({
       const allowed = [];
 
       let blocked = 0;
+
+      let reviewLocked = 0;
+
+      const reviewLockedKeys = [];
 
       for (const row of rawRows) {
 
@@ -4670,15 +4707,23 @@ export default function DataImporter({
 
           blocked += 1;
 
+          if (isRowReviewLocked(row)) {
+
+            reviewLocked += 1;
+
+            reviewLockedKeys.push(key);
+
+          }
+
         }
 
       }
 
-      return { allowed, blocked };
+      return { allowed, blocked, reviewLocked, reviewLockedKeys };
 
     },
 
-    [isRowEditable, keyOfRow, rawRows]
+    [isRowEditable, isRowReviewLocked, keyOfRow, rawRows]
 
   );
 
@@ -4686,11 +4731,19 @@ export default function DataImporter({
 
     (keys, actionLabel = "thao tác") => {
 
-      const { allowed, blocked } = filterEditableKeys(keys);
+      const { allowed, blocked, reviewLocked } = filterEditableKeys(keys);
 
       if (!allowed.length) {
 
-        if (blocked > 0 && editingRestrictionMessage) {
+        if (reviewLocked > 0) {
+
+          alert(
+
+            `Không thể ${actionLabel} ${reviewLocked.toLocaleString("vi-VN")} tờ khai đã được rà soát. ${reviewLockMessage}`
+
+          );
+
+        } else if (blocked > 0 && editingRestrictionMessage) {
 
           alert(editingRestrictionMessage);
 
@@ -4704,7 +4757,15 @@ export default function DataImporter({
 
       }
 
-      if (blocked > 0 && editingRestrictionMessage) {
+      if (reviewLocked > 0) {
+
+        alert(
+
+          `Đã bỏ qua ${reviewLocked.toLocaleString("vi-VN")} tờ khai đã được rà soát (không thể ${actionLabel}).`
+
+        );
+
+      } else if (blocked > 0 && editingRestrictionMessage) {
 
         alert(`Đã bỏ qua ${blocked} tờ khai không thuộc phạm vi của bạn khi ${actionLabel}.`);
 
@@ -4714,7 +4775,7 @@ export default function DataImporter({
 
     },
 
-    [editingRestrictionMessage, filterEditableKeys]
+    [editingRestrictionMessage, filterEditableKeys, reviewLockMessage]
 
   );
 
@@ -7208,6 +7269,8 @@ export default function DataImporter({
 
     }
 
+    let totalCount = 0;
+
     let missingStaff = 0;
 
     let missingTeam = 0;
@@ -7217,6 +7280,10 @@ export default function DataImporter({
     for (const row of rawRows) {
 
       if (!row) continue;
+
+      if (!showDeletedRows && row.deleted_at) continue;
+
+      totalCount += 1;
 
       const hasStaff = !!(row.nhan_vien && row.nhan_vien.toString().trim());
 
@@ -7230,9 +7297,9 @@ export default function DataImporter({
 
     }
 
-    return { total: rawRows.length, missingStaff, missingTeam, reviewed };
+    return { total: totalCount, missingStaff, missingTeam, reviewed };
 
-  }, [mode, rawRows]);
+  }, [mode, rawRows, showDeletedRows]);
 
 
 
@@ -8440,6 +8507,8 @@ export default function DataImporter({
 
     if (normalizedFilters.duplicate) params.set("duplicate", "1");
 
+    if (normalizedFilters.includeDeleted) params.set("includeDeleted", "1");
+
     if (normalizedFilters.coMode && normalizedFilters.coMode !== "all") {
 
       params.set("coMode", normalizedFilters.coMode);
@@ -8680,8 +8749,47 @@ export default function DataImporter({
 
     shouldUseServerSearch,
 
+    showDeletedRows,
+
   ]);
 
+
+
+  useEffect(() => {
+
+    if (showDeletedRows) {
+
+      return;
+
+    }
+
+    setSelectedKeys((prev) => {
+
+      if (!Array.isArray(prev) || prev.length === 0) {
+
+        return prev;
+
+      }
+
+      const activeKeys = new Set(
+
+        rawRows
+
+          .filter((row) => row && !row.deleted_at)
+
+          .map((row) => keyOfRow(row))
+
+          .filter(Boolean)
+
+      );
+
+      const next = prev.filter((key) => activeKeys.has(key));
+
+      return next.length === prev.length ? prev : next;
+
+    });
+
+  }, [showDeletedRows, rawRows, keyOfRow, setSelectedKeys]);
 
 
   const filteredKeys = useMemo(() => {
@@ -9178,7 +9286,11 @@ const selectedReviewedCount = useMemo(() => {
 
       if (!isRowEditable(row)) {
 
-        if (editingRestrictionMessage) {
+        if (isRowReviewLocked(row)) {
+
+          toast.warning(reviewLockMessage);
+
+        } else if (editingRestrictionMessage) {
 
           alert(editingRestrictionMessage);
 
@@ -9204,7 +9316,23 @@ const selectedReviewedCount = useMemo(() => {
 
     },
 
-    [editingRestrictionMessage, isReadOnlyForEdits, isRowEditable, keyOfRow]
+    [
+
+      editingRestrictionMessage,
+
+      isReadOnlyForEdits,
+
+      isRowEditable,
+
+      isRowReviewLocked,
+
+      keyOfRow,
+
+      normalizeStr,
+
+      reviewLockMessage,
+
+    ]
 
   );
 
@@ -9226,11 +9354,31 @@ const selectedReviewedCount = useMemo(() => {
 
     if (!alreadyFiltered) {
 
-      const { allowed, blocked } = filterEditableKeys(keys);
+      const { allowed, blocked, reviewLocked, reviewLockedKeys } = filterEditableKeys(keys);
 
       if (!allowed.length) {
 
-        if (blocked > 0 && editingRestrictionMessage) {
+        if (reviewLocked > 0) {
+
+          alert(
+
+            `Không thể đánh dấu xóa ${reviewLocked.toLocaleString("vi-VN")} tờ khai đã được rà soát. ${reviewLockMessage}`
+
+          );
+
+          pushAuditLog({
+
+            actor,
+
+            action: "decl.delete.blocked",
+
+            detail: `Chặn đánh dấu xóa ${reviewLocked.toLocaleString("vi-VN")} tờ khai do review lock`,
+
+            meta: { keys: reviewLockedKeys, reason: "review lock" },
+
+          });
+
+        } else if (blocked > 0 && editingRestrictionMessage) {
 
           alert(editingRestrictionMessage);
 
@@ -9240,9 +9388,29 @@ const selectedReviewedCount = useMemo(() => {
 
       }
 
-      if (blocked > 0 && editingRestrictionMessage) {
+      if (reviewLocked > 0) {
 
-        alert(`Đã bỏ qua ${blocked} tờ khai không thuộc phạm vi của bạn khi xóa.`);
+        alert(
+
+          `Đã bỏ qua ${reviewLocked.toLocaleString("vi-VN")} tờ khai đã được rà soát (không thể đánh dấu xóa).`
+
+        );
+
+        pushAuditLog({
+
+          actor,
+
+          action: "decl.delete.partial-blocked",
+
+          detail: `Bỏ qua ${reviewLocked.toLocaleString("vi-VN")} tờ khai khi đánh dấu xóa do review lock`,
+
+          meta: { keys: reviewLockedKeys, reason: "review lock" },
+
+        });
+
+      } else if (blocked > 0 && editingRestrictionMessage) {
+
+        alert(`Đã bỏ qua ${blocked} tờ khai không thuộc phạm vi của bạn khi đánh dấu xóa.`);
 
       }
 
@@ -9250,31 +9418,47 @@ const selectedReviewedCount = useMemo(() => {
 
     }
 
-    const keySet = new Set(allowedKeys);
-
-    const remaining = rawRows.filter(row => !keySet.has(keyOfRow(row)));
-
-    const removedCount = rawRows.length - remaining.length;
-
-    if (removedCount <= 0) return;
-
-    saveDeclRows(remaining, {
-
-      overwrite: true,
+    const result = softDeleteDeclRows(allowedKeys, {
 
       actor,
 
-      detail: `Xóa ${removedCount} tờ khai từ giao diện Import Data`,
-
     });
 
-    alert(`Đã xóa ${removedCount} tờ khai.`);
+    const parts = [];
 
-    setHasUnsaved(false);
+    if (result.deleted > 0) {
 
-    loadSavedRows();
+      parts.push(`Đã đánh dấu xóa ${result.deleted.toLocaleString("vi-VN")} tờ khai.`);
 
-    fetchAlerts();
+    }
+
+    if (result.alreadyDeleted > 0) {
+
+      parts.push(`Bỏ qua ${result.alreadyDeleted.toLocaleString("vi-VN")} tờ khai đã bị xóa trước đó.`);
+
+    }
+
+    if (result.missing > 0) {
+
+      parts.push(`Không tìm thấy ${result.missing.toLocaleString("vi-VN")} tờ khai trong dữ liệu hiện tại.`);
+
+    }
+
+    if (parts.length > 0) {
+
+      alert(parts.join("\n"));
+
+    }
+
+    if (result.deleted > 0) {
+
+      setHasUnsaved(false);
+
+      loadSavedRows();
+
+      fetchAlerts();
+
+    }
 
   }, [
 
@@ -9286,11 +9470,13 @@ const selectedReviewedCount = useMemo(() => {
 
     filterEditableKeys,
 
-    keyOfRow,
-
     loadSavedRows,
 
-    rawRows,
+    reviewLockMessage,
+
+    setHasUnsaved,
+
+    softDeleteDeclRows,
 
   ]);
 
@@ -9300,7 +9486,7 @@ const selectedReviewedCount = useMemo(() => {
 
     if (isReadOnlyForEdits) {
 
-      alert("Bạn không có quyền xóa tờ khai.");
+      alert("Bạn không có quyền đánh dấu xóa tờ khai.");
 
       return;
 
@@ -9308,7 +9494,7 @@ const selectedReviewedCount = useMemo(() => {
 
     if (mode !== "saved") {
 
-      alert("Chỉ có thể xóa khi đang xem dữ liệu đã lưu.");
+      alert("Chỉ có thể đánh dấu xóa khi đang xem dữ liệu đã lưu.");
 
       return;
 
@@ -9316,13 +9502,13 @@ const selectedReviewedCount = useMemo(() => {
 
     if (selectedKeys.length === 0) {
 
-      alert("Chưa chọn tờ khai để xóa.");
+      alert("Chưa chọn tờ khai để đánh dấu xóa.");
 
       return;
 
     }
 
-    const allowedKeys = ensureEditableKeys(selectedKeys, "xóa");
+    const allowedKeys = ensureEditableKeys(selectedKeys, "đánh dấu xóa");
 
     if (!allowedKeys) {
 
@@ -9330,7 +9516,7 @@ const selectedReviewedCount = useMemo(() => {
 
     }
 
-    if (!window.confirm(`Bạn chắc chắn muốn xóa ${allowedKeys.length} tờ khai đã chọn?`)) {
+    if (!window.confirm(`Bạn chắc chắn muốn đánh dấu xóa ${allowedKeys.length} tờ khai đã chọn?`)) {
 
       return;
 
@@ -9358,7 +9544,7 @@ const selectedReviewedCount = useMemo(() => {
 
     if (isReadOnlyForEdits) {
 
-      alert("Bạn không có quyền xóa tờ khai.");
+      alert("Bạn không có quyền đánh dấu xóa tờ khai.");
 
       return;
 
@@ -9366,7 +9552,7 @@ const selectedReviewedCount = useMemo(() => {
 
     if (mode !== "saved") {
 
-      alert("Chỉ có thể xóa khi đang xem dữ liệu đã lưu.");
+      alert("Chỉ có thể đánh dấu xóa khi đang xem dữ liệu đã lưu.");
 
       return;
 
@@ -9384,7 +9570,7 @@ const selectedReviewedCount = useMemo(() => {
 
     }
 
-    if (!window.confirm("Xóa tờ khai này?")) return;
+    if (!window.confirm("Đánh dấu xóa tờ khai này?")) return;
 
     deleteRowsByKeys([keyOfRow(row)], { alreadyFiltered: true });
 
@@ -9401,6 +9587,101 @@ const selectedReviewedCount = useMemo(() => {
     keyOfRow,
 
     mode,
+
+  ]);
+
+
+  const handleRestoreSingle = useCallback((row) => {
+
+    if (isReadOnlyForEdits) {
+
+      alert("Bạn không có quyền khôi phục tờ khai.");
+
+      return;
+
+    }
+
+    if (mode !== "saved") {
+
+      alert("Chỉ có thể khôi phục khi đang xem dữ liệu đã lưu.");
+
+      return;
+
+    }
+
+    if (!row) {
+
+      return;
+
+    }
+
+    const key = keyOfRow(row);
+
+    const result = restoreDeclRows([key], {
+
+      actor,
+
+      detail: "Khôi phục tờ khai bị xóa mềm từ giao diện Import Data",
+
+    });
+
+    if (result.restored > 0) {
+
+      alert("Đã khôi phục 1 tờ khai.");
+
+      setHasUnsaved(false);
+
+      loadSavedRows();
+
+      fetchAlerts();
+
+      return;
+
+    }
+
+    if (result.skipped > 0) {
+
+      alert("Tờ khai đã ở trạng thái hoạt động.");
+
+      return;
+
+    }
+
+    if (Array.isArray(result.failedKeys) && result.failedKeys.length > 0) {
+
+      const reason = result.failedKeys[0]?.reason;
+
+      if (reason === "review-locked") {
+
+        alert(`Không thể khôi phục tờ khai do đã bị khóa rà soát. ${reviewLockMessage}`);
+
+      } else {
+
+        alert("Không thể khôi phục tờ khai. Vui lòng thử lại.");
+
+      }
+
+    }
+
+  }, [
+
+    actor,
+
+    fetchAlerts,
+
+    keyOfRow,
+
+    loadSavedRows,
+
+    mode,
+
+    restoreDeclRows,
+
+    reviewLockMessage,
+
+    setHasUnsaved,
+
+    isReadOnlyForEdits,
 
   ]);
 
@@ -9493,6 +9774,8 @@ const selectedReviewedCount = useMemo(() => {
       actor,
 
       detail: `Import từ ${selectedFile || "file XLSX"}`,
+
+      allowReviewedOverride: isAdminRole,
 
     });
 
@@ -9614,6 +9897,8 @@ const selectedReviewedCount = useMemo(() => {
 
       detail: "Lưu chỉnh sửa tờ khai thủ công",
 
+      allowReviewedOverride: isAdminRole,
+
     });
 
     alert(`Đã lưu ${result.totalStored.toLocaleString("vi-VN")} bản ghi (ghi đè).`);
@@ -9676,21 +9961,29 @@ const selectedReviewedCount = useMemo(() => {
 
           detail: `Cập nhật thủ công (${fieldList.join(", ")}) qua Import Data`,
 
+          allowReviewedOverride: isAdminRole,
+
         });
 
         if (!result?.success) {
 
-          const errorMessage =
+          const reason = result?.reason;
 
-            result?.reason === "not-found"
+          const isReviewLockedReason = reason === "review-locked";
 
-              ? "Tờ khai đã bị xóa hoặc thay đổi. Vui lòng tải lại dữ liệu."
+          const errorMessage = isReviewLockedReason
 
-              : result?.reason === "no-change"
+            ? reviewLockMessage
 
-              ? "Không có thay đổi mới để lưu."
+            : reason === "not-found"
 
-              : "Không thể cập nhật tờ khai. Hãy thử lại.";
+            ? "Tờ khai đã bị xóa hoặc thay đổi. Vui lòng tải lại dữ liệu."
+
+            : reason === "no-change"
+
+            ? "Không có thay đổi mới để lưu."
+
+            : "Không thể cập nhật tờ khai. Hãy thử lại.";
 
           setRowSaveStatus((prev) => ({
 
@@ -9700,7 +9993,15 @@ const selectedReviewedCount = useMemo(() => {
 
           }));
 
-          toast.error(errorMessage);
+          if (isReviewLockedReason) {
+
+            toast.warning(errorMessage);
+
+          } else {
+
+            toast.error(errorMessage);
+
+          }
 
           return;
 
@@ -9760,7 +10061,25 @@ const selectedReviewedCount = useMemo(() => {
 
     },
 
-    [actor, isReadOnlyForEdits, keyOfRow, mode, refreshRowHistory, rowDiffMap]
+    [
+
+      actor,
+
+      isAdminRole,
+
+      isReadOnlyForEdits,
+
+      keyOfRow,
+
+      mode,
+
+      refreshRowHistory,
+
+      reviewLockMessage,
+
+      rowDiffMap,
+
+    ]
 
   );
 
@@ -9930,9 +10249,39 @@ const selectedReviewedCount = useMemo(() => {
 
       const rowKey = keyOfRow(row);
 
-      const rowEditable = isRowEditable(row);
+      const rowReviewLocked = isRowReviewLocked(row);
+
+      const rowDeleted = !!(row && row.deleted_at);
+
+      const rowDeletedAt = rowDeleted ? row.deleted_at : null;
+
+      const rowDeletedBy = rowDeleted ? normalizeStr(row.deleted_by || "") : "";
+
+      const rowEditable = !rowDeleted && isRowEditable(row);
 
       const rowReadOnly = isReadOnlyForEdits || !rowEditable;
+
+      const rowReadOnlyReason = rowDeleted
+
+        ? rowDeletedBy
+
+          ? `Đã xóa bởi ${rowDeletedBy}`
+
+          : "Đã xóa mềm"
+
+        : rowReviewLocked
+
+        ? reviewLockMessage
+
+        : rowReadOnly && editingRestrictionMessage
+
+        ? editingRestrictionMessage
+
+        : rowReadOnly && isReadOnlyForEdits
+
+        ? "Chỉ xem"
+
+        : "";
 
       const rowDiff = rowDiffMap.get(rowKey);
 
@@ -9956,6 +10305,16 @@ const selectedReviewedCount = useMemo(() => {
 
         rowReadOnly,
 
+        rowReviewLocked,
+
+        rowDeleted,
+
+        rowDeletedAt,
+
+        rowDeletedBy,
+
+        rowReadOnlyReason,
+
         rowDiff,
 
         hasPendingDiff,
@@ -9978,11 +10337,19 @@ const selectedReviewedCount = useMemo(() => {
 
     [
 
+      editingRestrictionMessage,
+
       isReadOnlyForEdits,
 
       isRowEditable,
 
+      isRowReviewLocked,
+
       keyOfRow,
+
+      normalizeStr,
+
+      reviewLockMessage,
 
       rowDiffMap,
 
@@ -10300,7 +10667,7 @@ const selectedReviewedCount = useMemo(() => {
 
     if (isReadOnlyForEdits) {
 
-      alert("Bạn không có quyền xóa tờ khai trùng.");
+      alert("Bạn không có quyền đánh dấu xóa tờ khai trùng.");
 
       return;
 
@@ -10308,7 +10675,7 @@ const selectedReviewedCount = useMemo(() => {
 
     if (mode !== "saved") {
 
-      alert("Chỉ có thể xóa tờ khai trùng khi đang xem dữ liệu đã lưu.");
+      alert("Chỉ có thể đánh dấu xóa tờ khai trùng khi đang xem dữ liệu đã lưu.");
 
       return;
 
@@ -10585,6 +10952,8 @@ const selectedReviewedCount = useMemo(() => {
       actor,
 
       detail,
+
+      allowReviewedOverride: isAdminRole,
 
     });
 
@@ -15034,6 +15403,28 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
 
           </select>
 
+          <button
+
+            type="button"
+
+            onClick={() => setShowDeletedRows((prev) => !prev)}
+
+            className="rounded border border-gray-200 bg-white px-2 py-1 text-xs text-gray-600 shadow-sm transition hover:bg-gray-100 dark:border-slate-600 dark:bg-slate-800 dark:text-gray-200 dark:hover:bg-slate-700"
+
+          >
+
+            {showDeletedRows
+
+              ? "Ẩn bản ghi đã xóa"
+
+              : deletedRowCount > 0
+
+              ? `Hiện bản ghi đã xóa (${deletedRowCount.toLocaleString("vi-VN")})`
+
+              : "Hiện bản ghi đã xóa"}
+
+          </button>
+
           <button onClick={() => setPage(p => Math.max(1, p - 1))} className="px-2 py-1 border rounded">« Trước</button>
 
           <button onClick={() => setPage(p => Math.min(maxPage, p + 1))} className="px-2 py-1 border rounded">Sau »</button>
@@ -15198,7 +15589,7 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
 
             >
 
-              Xóa các tờ khai đã chọn
+              Đánh dấu xóa các tờ khai đã chọn
 
             </button>
 
@@ -15492,7 +15883,7 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
 
               {deleteEnabled && (
 
-                <th className="px-2 py-1 text-left font-semibold text-gray-600 dark:text-gray-300">Xóa</th>
+                <th className="px-2 py-1 text-left font-semibold text-gray-600 dark:text-gray-300">Xóa / Khôi phục</th>
 
               )}
 
@@ -15512,6 +15903,16 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
 
               rowReadOnly,
 
+              rowReadOnlyReason,
+
+              rowReviewLocked,
+
+              rowDeleted,
+
+              rowDeletedAt,
+
+              rowDeletedBy,
+
               rowEditable,
 
               canSaveRow,
@@ -15530,11 +15931,25 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
 
             const hasPendingDiff = state.hasPendingDiff;
 
+            const readOnlyLabel = rowDeleted
+
+              ? rowReadOnlyReason || "Đã xóa mềm"
+
+              : rowReviewLocked
+
+              ? "Khóa rà soát"
+
+              : rowReadOnlyReason || "Chỉ xem";
+
+            const deletedTimestampLabel = rowDeletedAt ? formatHistoryTimestamp(rowDeletedAt) : "";
+
             return (
 
               <React.Fragment key={`${rowKey}_${i}`}>
 
-                <tr className="relative odd:bg-[color:var(--ds-surface-card)] even:bg-[color:var(--ds-surface-muted)]">
+                <tr
+                  className={cx("relative odd:bg-[color:var(--ds-surface-card)] even:bg-[color:var(--ds-surface-muted)]", rowDeleted ? "opacity-70" : "")}
+                >
 
                   {selectionEnabled && (
 
@@ -15664,11 +16079,21 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
 
                         )}
 
+                        {rowDeleted && (
+
+                          <span className="rounded bg-red-100 px-1.5 py-0.5 text-[10px] font-medium text-red-700">
+
+                            Đã xóa mềm
+
+                          </span>
+
+                        )}
+
                         {rowReadOnly && (
 
                           <span className="rounded bg-gray-200 px-1.5 py-0.5 text-[10px] font-medium text-gray-600">
 
-                            Chỉ xem
+                            {readOnlyLabel}
 
                           </span>
 
@@ -15982,7 +16407,7 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
 
                       {rowReadOnly ? (
 
-                        <span className="text-[11px] text-gray-400">Chỉ xem</span>
+                        <span className="text-[11px] text-gray-400">{rowReadOnlyReason || readOnlyLabel}</span>
 
                       ) : canSaveRow ? (
 
@@ -16024,23 +16449,53 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
 
                   )}
 
-                  {deleteEnabled && rowEditable && (
+                  {deleteEnabled && (rowEditable || rowDeleted) && (
 
                     <td className="px-2 py-1 align-top">
 
-                      <button
+                      {rowDeleted ? (
 
-                        type="button"
+                        <div className="flex flex-col gap-1">
 
-                        onClick={() => handleDeleteSingle(r)}
+                          <button
 
-                        className="rounded bg-red-500 px-2 py-0.5 text-xs text-white hover:bg-red-600"
+                            type="button"
 
-                      >
+                            onClick={() => handleRestoreSingle(r)}
 
-                        Xóa
+                            className="rounded bg-emerald-500 px-2 py-0.5 text-xs text-white hover:bg-emerald-600"
 
-                      </button>
+                          >
+
+                            Khôi phục
+
+                          </button>
+
+                          <span className="text-[11px] text-gray-500">
+
+                            {`Đã xóa${rowDeletedBy ? ` bởi ${rowDeletedBy}` : ""}${deletedTimestampLabel ? ` lúc ${deletedTimestampLabel}` : ""}`}
+
+                          </span>
+
+                        </div>
+
+                      ) : (
+
+                        <button
+
+                          type="button"
+
+                          onClick={() => handleDeleteSingle(r)}
+
+                          className="rounded bg-red-500 px-2 py-0.5 text-xs text-white hover:bg-red-600"
+
+                        >
+
+                          Đánh dấu xóa
+
+                        </button>
+
+                      )}
 
                     </td>
 
@@ -16218,6 +16673,10 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
 
                 rowReadOnly,
 
+                rowReadOnlyReason,
+
+                rowReviewLocked,
+
                 rowEditable,
 
                 canSaveRow,
@@ -16235,6 +16694,12 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
               } = state;
 
               const hasPendingDiff = state.hasPendingDiff;
+
+              const readOnlyLabel = rowReviewLocked
+
+                ? "Khóa rà soát"
+
+                : rowReadOnlyReason || "Chỉ xem";
 
               return (
 
@@ -16326,7 +16791,7 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
 
                         {rowReadOnly && (
 
-                          <span className="rounded bg-gray-200 px-1.5 py-0.5 font-medium text-gray-600">Chỉ xem</span>
+                          <span className="rounded bg-gray-200 px-1.5 py-0.5 font-medium text-gray-600">{readOnlyLabel}</span>
 
                         )}
 
@@ -16690,7 +17155,7 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
 
                       (rowReadOnly ? (
 
-                        <span className="text-[11px] text-gray-400">Chỉ xem</span>
+                        <span className="text-[11px] text-gray-400">{rowReadOnlyReason || readOnlyLabel}</span>
 
                       ) : canSaveRow ? (
 
