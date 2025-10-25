@@ -1597,6 +1597,8 @@ const DEFAULT_PAGE_SIZE = 10;
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100, 200];
 
+const PAGE_SIZE_STORAGE_KEY = "kpi:data-importer:page-size-v1";
+
 const CO_FILTER_OPTIONS = Object.freeze([
 
   { value: "all", label: "Tất cả C/O" },
@@ -3585,7 +3587,31 @@ export default function DataImporter({
 
   const [datePreset, setDatePreset] = useState("none");
 
-  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
+  const initialPageSize = useMemo(() => {
+    if (typeof window === "undefined") {
+      return DEFAULT_PAGE_SIZE;
+    }
+    const stored = window.localStorage?.getItem(PAGE_SIZE_STORAGE_KEY);
+    const parsed = Number.parseInt(stored || "", 10);
+    if (Number.isFinite(parsed) && parsed >= 1) {
+      return Math.min(parsed, SERVER_SEARCH_MAX_PAGE_SIZE);
+    }
+    return DEFAULT_PAGE_SIZE;
+  }, []);
+
+  const [pageSize, setPageSize] = useState(initialPageSize);
+  const [pageSizeMode, setPageSizeMode] = useState(() =>
+    PAGE_SIZE_OPTIONS.includes(initialPageSize) ? "preset" : "custom"
+  );
+  const [pageSizeCustomInput, setPageSizeCustomInput] = useState(() =>
+    PAGE_SIZE_OPTIONS.includes(initialPageSize) ? "" : String(initialPageSize)
+  );
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      window.localStorage?.setItem(PAGE_SIZE_STORAGE_KEY, String(pageSize));
+    }
+  }, [pageSize]);
 
   const [filterNoStaff, setFilterNoStaff] = useState(false);
 
@@ -4597,6 +4623,96 @@ export default function DataImporter({
     setColumnConfigOpen(true);
 
   }, [columnHiddenSet]);
+
+
+
+  const handlePageSizeSelectChange = useCallback(
+
+    (event) => {
+
+      const { value } = event.target;
+
+      if (value === "custom") {
+
+        setPageSizeMode("custom");
+
+        setPageSizeCustomInput((prev) => (prev ? prev : String(pageSize)));
+
+        setPage(1);
+
+        return;
+
+      }
+
+
+
+      const numeric = Number.parseInt(value || "", 10);
+
+      if (!Number.isFinite(numeric)) {
+
+        setPageSizeMode("preset");
+
+        setPageSizeCustomInput("");
+
+        setPage(1);
+
+        setPageSize(DEFAULT_PAGE_SIZE);
+
+        return;
+
+      }
+
+
+
+      setPageSizeMode("preset");
+
+      setPageSizeCustomInput("");
+
+      setPage(1);
+
+      setPageSize(numeric);
+
+    },
+
+    [pageSize, setPage]
+
+  );
+
+
+
+  const handlePageSizeCustomInputChange = useCallback(
+
+    (event) => {
+
+      const { value } = event.target;
+
+      setPageSizeCustomInput(value);
+
+      const numeric = Number.parseInt(value || "", 10);
+
+      if (!Number.isFinite(numeric)) {
+
+        return;
+
+      }
+
+      const clamped = Math.max(1, Math.min(numeric, SERVER_SEARCH_MAX_PAGE_SIZE));
+
+      setPage(1);
+
+      setPageSize(clamped);
+
+      if (clamped !== numeric) {
+
+        setPageSizeCustomInput(String(clamped));
+
+      }
+
+    },
+
+    [setPage]
+
+  );
 
 
 
@@ -6371,8 +6487,6 @@ export default function DataImporter({
     setMode("saved");
 
     setPage(1);
-
-    setPageSize(DEFAULT_PAGE_SIZE);
 
     setQuery("");
 
@@ -8217,8 +8331,6 @@ export default function DataImporter({
         setRawRows(sortDeclRows(sanitizedRows));
 
         setPage(1);
-
-        setPageSize(DEFAULT_PAGE_SIZE);
 
         setMode("preview");
 
@@ -15846,23 +15958,49 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
 
           )}
 
-          <select
+          <div className="flex items-center gap-2">
 
-            value={pageSize}
+            <select
 
-            onChange={e => setPageSize(Number(e.target.value) || DEFAULT_PAGE_SIZE)}
+              value={pageSizeMode === "custom" ? "custom" : String(pageSize)}
 
-            className="border rounded px-2 py-1 text-sm"
+              onChange={handlePageSizeSelectChange}
 
-          >
+              className="border rounded px-2 py-1 text-sm"
 
-            {PAGE_SIZE_OPTIONS.map(size => (
+            >
 
-              <option key={size} value={size}>{size}/trang</option>
+              {PAGE_SIZE_OPTIONS.map((size) => (
 
-            ))}
+                <option key={size} value={size}>{size}/trang</option>
 
-          </select>
+              ))}
+
+              <option value="custom">Tùy chọn...</option>
+
+            </select>
+
+            {pageSizeMode === "custom" ? (
+
+              <input
+
+                type="number"
+
+                min={1}
+
+                value={pageSizeCustomInput}
+
+                onChange={handlePageSizeCustomInputChange}
+
+                className="w-20 border rounded px-2 py-1 text-sm"
+
+                aria-label="Số dòng mỗi trang tùy chọn"
+
+              />
+
+            ) : null}
+
+          </div>
 
           <button
 
