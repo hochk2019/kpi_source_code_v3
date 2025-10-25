@@ -368,7 +368,25 @@ function normalizeRangeDate(value, { isEnd = false } = {}) {
 
 export const DB_FILE = resolveDbFile(process.env.KPI_DB_FILE);
 
-export const DB_BACKUP_DIR = resolveBackupDir(process.env.KPI_DB_BACKUP_DIR);
+export let DB_BACKUP_DIR = resolveBackupDir(process.env.KPI_DB_BACKUP_DIR);
+const DEFAULT_DB_BACKUP_DIR = DB_BACKUP_DIR;
+
+function updateBackupDirectory(value) {
+  if (!value) {
+    DB_BACKUP_DIR = DEFAULT_DB_BACKUP_DIR;
+    return DB_BACKUP_DIR;
+  }
+  if (value === ':memory:') {
+    DB_BACKUP_DIR = ':memory:';
+    return DB_BACKUP_DIR;
+  }
+  DB_BACKUP_DIR = resolveBackupDir(value);
+  return DB_BACKUP_DIR;
+}
+
+export function getBackupDirectory() {
+  return DB_BACKUP_DIR;
+}
 
 const LEGACY_JSON = path.resolve(__dirname, 'data/db.json');
 
@@ -1572,11 +1590,113 @@ function normalizeRetentionCopies(value) {
 
 
 
+function sanitizeStoredBackupDirectory(value) {
+
+  if (typeof value !== 'string') {
+
+    return null;
+
+  }
+
+  const trimmed = value.trim();
+
+  if (!trimmed) {
+
+    return null;
+
+  }
+
+  if (trimmed.includes('\0')) {
+
+    return null;
+
+  }
+
+  if (trimmed === ':memory:') {
+
+    return null;
+
+  }
+
+  return trimmed;
+
+}
+
+
+
+function normalizeBackupDirectoryInput(value) {
+
+  if (value === null || value === undefined) {
+
+    return { raw: null, resolved: null, reason: null };
+
+  }
+
+  if (typeof value !== 'string') {
+
+    return { raw: null, resolved: null, reason: 'invalid_type' };
+
+  }
+
+  const trimmed = value.trim();
+
+  if (!trimmed) {
+
+    return { raw: null, resolved: null, reason: null };
+
+  }
+
+  if (trimmed.includes('\0')) {
+
+    return { raw: null, resolved: null, reason: 'invalid_characters' };
+
+  }
+
+  if (trimmed === ':memory:') {
+
+    return { raw: null, resolved: null, reason: 'memory_not_supported' };
+
+  }
+
+  return { raw: trimmed, resolved: resolveBackupDir(trimmed), reason: null };
+
+}
+
+
+
+function describeBackupDirectoryError(reason) {
+
+  switch (reason) {
+
+    case 'invalid_characters':
+
+      return 'Đường dẫn sao lưu chứa ký tự không hợp lệ.';
+
+    case 'memory_not_supported':
+
+      return 'Không thể sử dụng giá trị ":memory:" cho thư mục sao lưu.';
+
+    case 'invalid_type':
+
+      return 'Thư mục sao lưu không hợp lệ.';
+
+    default:
+
+      return 'Thư mục sao lưu không hợp lệ.';
+
+  }
+
+}
+
+
+
 const DEFAULT_BACKUP_CONFIG = {
 
   cron: DEFAULT_BACKUP_CRON,
 
   retentionCopies: normalizeRetentionCopies(DB_BACKUP_RETENTION) ?? 14,
+
+  directory: DEFAULT_DB_BACKUP_DIR,
 
 };
 
@@ -2393,7 +2513,7 @@ export async function performDatabaseBackup({
 
   dbFile = DB_FILE,
 
-  backupDir = DB_BACKUP_DIR,
+  backupDir = getBackupDirectory(),
 
   retention,
 
@@ -2623,7 +2743,7 @@ function normalizeBackupAuditEntry(entry) {
 
 
 
-async function listBackupFiles({ backupDir = DB_BACKUP_DIR, limit = 50 } = {}) {
+async function listBackupFiles({ backupDir = getBackupDirectory(), limit = 50 } = {}) {
 
   if (!backupDir || backupDir === ':memory:') {
 
@@ -2719,7 +2839,7 @@ async function restoreDatabaseBackup({
 
   filename,
 
-  backupDir = DB_BACKUP_DIR,
+  backupDir = getBackupDirectory(),
 
   dbFile = DB_FILE,
 
@@ -3891,7 +4011,9 @@ function buildBackupSummary({ limit = 10 } = {}) {
 
       retentionCopies: retention,
 
-      directory: DB_BACKUP_DIR,
+      directory: config.directory,
+
+      directoryRaw: config.directoryRaw,
 
       active: backupScheduleMeta.active,
 
@@ -3961,7 +4083,9 @@ function refreshDatabaseBackupSchedule() {
 
   }
 
-  if (DB_FILE === ':memory:' || DB_BACKUP_DIR === ':memory:') {
+  const backupDir = getBackupDirectory();
+
+  if (DB_FILE === ':memory:' || backupDir === ':memory:') {
 
     if (DB_FILE === ':memory:') {
 
@@ -3969,7 +4093,7 @@ function refreshDatabaseBackupSchedule() {
 
     }
 
-    if (DB_BACKUP_DIR === ':memory:') {
+    if (backupDir === ':memory:') {
 
       backupScheduleMeta.reasons.push('memory_backup_dir');
 
@@ -13833,11 +13957,31 @@ function getBackupConfig() {
 
   }
 
+  let directoryRaw;
+
+  if (Object.prototype.hasOwnProperty.call(stored, 'directory')) {
+
+    directoryRaw = sanitizeStoredBackupDirectory(stored.directory);
+
+  } else {
+
+    directoryRaw = sanitizeStoredBackupDirectory(DEFAULT_BACKUP_CONFIG.directory);
+
+  }
+
+  const resolvedDirectory = directoryRaw ? resolveBackupDir(directoryRaw) : DEFAULT_DB_BACKUP_DIR;
+
+  updateBackupDirectory(resolvedDirectory);
+
   return {
 
     cron: cronValue,
 
     retentionCopies: retention,
+
+    directory: resolvedDirectory,
+
+    directoryRaw,
 
   };
 
@@ -13903,7 +14047,51 @@ function saveBackupConfig(config) {
 
 
 
-  setJSONValue('db_backup_config_v1', { cron: nextCron, retentionCopies: nextRetention });
+  let nextDirectory;
+
+  if (config && Object.prototype.hasOwnProperty.call(config, 'directory')) {
+
+    if (config.directory === null) {
+
+      nextDirectory = null;
+
+    } else {
+
+      nextDirectory = sanitizeStoredBackupDirectory(config.directory);
+
+      if (!nextDirectory) {
+
+        nextDirectory = null;
+
+      }
+
+    }
+
+  } else if (Object.prototype.hasOwnProperty.call(stored, 'directory')) {
+
+    nextDirectory = sanitizeStoredBackupDirectory(stored.directory);
+
+    if (!nextDirectory) {
+
+      nextDirectory = null;
+
+    }
+
+  } else {
+
+    nextDirectory = sanitizeStoredBackupDirectory(DEFAULT_BACKUP_CONFIG.directory);
+
+    if (!nextDirectory) {
+
+      nextDirectory = null;
+
+    }
+
+  }
+
+
+
+  setJSONValue('db_backup_config_v1', { cron: nextCron, retentionCopies: nextRetention, directory: nextDirectory });
 
   return getBackupConfig();
 
@@ -24566,6 +24754,44 @@ app.post('/api/admin/backups/run', async (req, res) => {
 
     const retention = Number.isFinite(body.retention) ? Number(body.retention) : undefined;
 
+    const hasDirectoryField = Object.prototype.hasOwnProperty.call(body, 'directory');
+
+    let backupDirOverride;
+
+    if (hasDirectoryField) {
+
+      const directoryResult = normalizeBackupDirectoryInput(body.directory);
+
+      if (directoryResult.reason) {
+
+        res
+
+          .status(400)
+
+          .json({
+
+            ok: false,
+
+            error: describeBackupDirectoryError(directoryResult.reason),
+
+            field: 'directory',
+
+            reason: directoryResult.reason,
+
+          });
+
+        return;
+
+      }
+
+      const updatedConfig = saveBackupConfig({ directory: directoryResult.raw });
+
+      refreshDatabaseBackupSchedule();
+
+      backupDirOverride = updatedConfig.directory;
+
+    }
+
     const result = await performDatabaseBackup({
 
       reason,
@@ -24575,6 +24801,8 @@ app.post('/api/admin/backups/run', async (req, res) => {
       actor: context.account?.username || 'system',
 
       note,
+
+      backupDir: backupDirOverride ?? getBackupDirectory(),
 
     });
 
@@ -24710,11 +24938,57 @@ app.post('/api/admin/backups/schedule', (req, res) => {
 
 
 
-    const config = saveBackupConfig(
+    const hasDirectoryField = Object.prototype.hasOwnProperty.call(body, 'directory');
 
-      hasRetentionField ? { cron: cronExpr, retentionCopies: retentionValue } : { cron: cronExpr }
+    let directoryValue;
 
-    );
+    if (hasDirectoryField) {
+
+      const directoryResult = normalizeBackupDirectoryInput(body.directory);
+
+      if (directoryResult.reason) {
+
+        res
+
+          .status(400)
+
+          .json({
+
+            ok: false,
+
+            error: describeBackupDirectoryError(directoryResult.reason),
+
+            field: 'directory',
+
+            reason: directoryResult.reason,
+
+          });
+
+        return;
+
+      }
+
+      directoryValue = directoryResult.raw;
+
+    }
+
+
+
+    const configPayload = { cron: cronExpr };
+
+    if (hasRetentionField) {
+
+      configPayload.retentionCopies = retentionValue;
+
+    }
+
+    if (hasDirectoryField) {
+
+      configPayload.directory = directoryValue;
+
+    }
+
+    const config = saveBackupConfig(configPayload);
 
     refreshDatabaseBackupSchedule();
 
@@ -24728,7 +25002,15 @@ app.post('/api/admin/backups/schedule', (req, res) => {
 
       detail: 'Cập nhật lịch sao lưu CSDL',
 
-      meta: { cron: cronExpr, retentionCopies: config.retentionCopies },
+      meta: {
+
+        cron: cronExpr,
+
+        retentionCopies: config.retentionCopies,
+
+        directory: config.directory,
+
+      },
 
     });
 
