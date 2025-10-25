@@ -152,6 +152,86 @@ describe('Luồng quản trị – Gán MST', () => {
 
   });
 
+  it('lọc danh sách theo trạng thái nhân viên từ bộ lọc lịch sử', async () => {
+
+    const user = userEvent.setup();
+
+    sharedSetItem(
+
+      MST_KEY,
+
+      JSON.stringify([
+
+        {
+
+          mst: '0101010101',
+
+          company: 'Công ty Đã Gán',
+
+          person_import: 'Ngọc Trâm',
+
+          person_export: 'Anh Khoa',
+
+          team: 'Tổ A',
+
+          effective_from: '2024-01-01',
+
+        },
+
+        {
+
+          mst: '0202020202',
+
+          company: 'Công ty Chưa Gán',
+
+          person_import: '',
+
+          person_export: '',
+
+          team: '',
+
+          effective_from: '2024-01-01',
+
+        },
+
+      ]),
+
+    );
+
+    render(<MSTAssignment canEdit currentUser={{ username: 'admin' }} />);
+
+    await waitFor(() => {
+
+      expect(screen.getByText('Công ty Đã Gán')).toBeInTheDocument();
+
+      expect(screen.getByText('Công ty Chưa Gán')).toBeInTheDocument();
+
+    });
+
+    const typeSelect = screen.getByLabelText('Thao tác / Trạng thái');
+
+    await user.selectOptions(typeSelect, 'status:assigned');
+
+    await waitFor(() => {
+
+      expect(screen.getByText('Công ty Đã Gán')).toBeInTheDocument();
+
+      expect(screen.queryByText('Công ty Chưa Gán')).not.toBeInTheDocument();
+
+    });
+
+    await user.selectOptions(typeSelect, 'status:pending');
+
+    await waitFor(() => {
+
+      expect(screen.getByText('Công ty Chưa Gán')).toBeInTheDocument();
+
+      expect(screen.queryByText('Công ty Đã Gán')).not.toBeInTheDocument();
+
+    });
+
+  });
+
 });
 
 
