@@ -644,6 +644,102 @@ class MockConnectionPool {
 
 
 
+class MockTransaction {
+
+  constructor(pool) {
+
+    this.pool = pool;
+
+    this.active = false;
+
+  }
+
+
+
+  async begin() {
+
+    this.active = true;
+
+  }
+
+
+
+  async commit() {
+
+    this.active = false;
+
+  }
+
+
+
+  async rollback() {
+
+    this.active = false;
+
+  }
+
+}
+
+
+
+class MockPreparedStatement {
+
+  constructor(transaction) {
+
+    this.transaction = transaction;
+
+    this.inputs = {};
+
+    this.prepared = false;
+
+  }
+
+
+
+  input(name, _type) {
+
+    this.inputs[name] = true;
+
+    return this;
+
+  }
+
+
+
+  async prepare(_sql) {
+
+    this.prepared = true;
+
+  }
+
+
+
+  async execute(parameters) {
+
+    mockState.requests.push({
+
+      type: 'prepared-execute',
+
+      params: parameters,
+
+    });
+
+    return { rowsAffected: [1] };
+
+  }
+
+
+
+  async unprepare() {
+
+    this.prepared = false;
+
+  }
+
+}
+
+
+
 const DateTimeToken = Symbol.for('mssql.DateTime');
 
 
@@ -708,6 +804,12 @@ vi.mock('mssql', () => ({
 
     DateTime: DateTimeToken,
 
+    Request: MockRequest,
+
+    Transaction: MockTransaction,
+
+    PreparedStatement: MockPreparedStatement,
+
     __setMockResult(rows) {
 
       mockState.result = Array.isArray(rows) ? rows : [];
@@ -735,6 +837,12 @@ vi.mock('mssql', () => ({
   ConnectionPool: MockConnectionPool,
 
   DateTime: DateTimeToken,
+
+  Request: MockRequest,
+
+  Transaction: MockTransaction,
+
+  PreparedStatement: MockPreparedStatement,
 
   __setMockResult(rows) {
 
@@ -4351,6 +4459,116 @@ describeExternal('ECUS sync API', () => {
     expect(storedRows).toHaveLength(1);
 
     expect(storedRows[0]).toMatchObject({ mst: '0100109106' });
+
+  });
+
+
+
+  it('tự động bổ sung MST mới vào bảng gán sau khi đồng bộ ECUS', async () => {
+
+    resetDb();
+
+    sqlMock.__resetMock();
+
+    const adminAgent = request.agent(app);
+
+    const loginRes = await adminAgent
+
+      .post('/api/auth/login')
+
+      .send({ username: 'admin', password: 'admin123' });
+
+    expect(loginRes.status).toBe(200);
+
+
+
+    await adminAgent.put('/api/import/ecus/config').send({
+
+      config: {
+
+        batchSize: 0,
+
+        includeTaxCodes: [],
+
+        excludeTaxCodes: [],
+
+        connection: {
+
+          server: 'MRHOC\\ECUSSQL2008',
+
+          database: 'ECUS5VNACCS',
+
+          user: 'sa',
+
+          password: '123456',
+
+        },
+
+      },
+
+    });
+
+
+
+    sqlMock.__setMockResult([
+
+      {
+
+        So_tk: '900000000001',
+
+        Ngay_dang_ky: '2025-08-01',
+
+        MaSoThue: '0100109109',
+
+        Ten_doanh_nghiep: 'DN 013',
+
+        Loai_hinh: 'A11',
+
+      },
+
+    ]);
+
+
+
+    const runRes = await adminAgent.post('/api/import/ecus/run').send({
+
+      from: '2025-08-01',
+
+      to: '2025-08-02',
+
+    });
+
+
+
+    expect(runRes.status).toBe(200);
+
+    expect(runRes.body.result.imported).toBe(1);
+
+
+
+    const mstRes = await adminAgent.get('/api/storage/mst_rows_v2');
+
+    expect(mstRes.status).toBe(200);
+
+    const mstRows = Array.isArray(mstRes.body.value) ? mstRes.body.value : [];
+
+    expect(mstRows.length).toBeGreaterThan(0);
+
+    const entry = mstRows.find((row) => row?.mst === '0100109109');
+
+    expect(entry).toBeTruthy();
+
+    expect(entry).toMatchObject({
+
+      mst: '0100109109',
+
+      company: 'DN 013',
+
+      status: 'Chưa gán nhân viên',
+
+    });
+
+    expect(entry.effective_from).toBe('2025-08-01');
 
   });
 

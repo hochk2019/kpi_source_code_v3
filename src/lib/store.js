@@ -746,11 +746,17 @@ export function normalizeDeclarationNumber(input, length = 11) {
 
   if (!digits) return "";
 
-  const minLength = Number.isFinite(length) && length > 0 ? length : 11;
+  const targetLength = Number.isFinite(length) && length > 0 ? Math.floor(length) : 11;
 
-  if (digits.length < minLength) {
+  if (digits.length < targetLength) {
 
-    return digits.padStart(minLength, "0");
+    return digits.padStart(targetLength, "0");
+
+  }
+
+  if (digits.length > targetLength) {
+
+    return digits.slice(0, targetLength);
 
   }
 
