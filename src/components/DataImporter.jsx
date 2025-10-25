@@ -65,6 +65,11 @@ import {
 } from "@/lib/store.js";
 
 import { mapRow, detectDateOrder } from "@/lib/importer.js";
+import {
+  getSyncStatus,
+  subscribeSyncStatus,
+  STORAGE_LIMIT_ERROR_MESSAGE,
+} from "@/lib/storageClient.js";
 
 import { loadRules, computeKPI, extractLicenseCodesFromRowObj } from "@/lib/rules.js";
 
@@ -3647,6 +3652,55 @@ export default function DataImporter({
   const initialColumnConfig = useMemo(() => getImportColumnConfig(), []);
 
   const [columnConfigState, setColumnConfigState] = useState(initialColumnConfig);
+  const lastSyncToastMessageRef = useRef("");
+
+  useEffect(() => {
+
+    if (typeof window === "undefined") {
+
+      return undefined;
+
+    }
+
+    const initialStatus = getSyncStatus();
+
+    const initialError = initialStatus?.lastError;
+
+    if (initialError === STORAGE_LIMIT_ERROR_MESSAGE) {
+
+      lastSyncToastMessageRef.current = initialError;
+
+      toast.error(initialError);
+
+    }
+
+    const unsubscribe = subscribeSyncStatus((status) => {
+
+      const message = status?.lastError;
+
+      if (message === STORAGE_LIMIT_ERROR_MESSAGE && message !== lastSyncToastMessageRef.current) {
+
+        lastSyncToastMessageRef.current = message;
+
+        toast.error(message);
+
+      } else if (!message && lastSyncToastMessageRef.current) {
+
+        lastSyncToastMessageRef.current = "";
+
+      }
+
+    });
+
+    return () => {
+
+      lastSyncToastMessageRef.current = "";
+
+      unsubscribe?.();
+
+    };
+
+  }, []);
 
   const [columnWidths, setColumnWidths] = useState(() =>
 
