@@ -83,6 +83,13 @@ const normalize = (s = "") =>
 
 export const COMPANY_NAME_WRAP_THRESHOLD = 25;
 
+const HISTORY_ACTION_TYPES = new Set(["create", "update", "delete"]);
+
+const STATUS_FILTER_MAP = new Map([
+  ["status:assigned", MST_ASSIGNMENT_STATUS.ASSIGNED],
+  ["status:pending", MST_ASSIGNMENT_STATUS.PENDING],
+]);
+
 export const shouldWrapCompanyName = (value = "") => {
   if (value == null) {
     return false;
@@ -2061,6 +2068,8 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
 
     if (!historyEntries?.length) return [];
 
+    const shouldFilterByActionType = HISTORY_ACTION_TYPES.has(historyFilter.type);
+
     return historyEntries.filter((entry) => {
 
       if (!entry) return false;
@@ -2079,7 +2088,7 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
 
       }
 
-      if (historyFilter.type !== "all" && entry.type !== historyFilter.type) {
+      if (shouldFilterByActionType && entry.type !== historyFilter.type) {
 
         return false;
 
@@ -2121,6 +2130,12 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
 
     if (!isHistoryFilterActive) return null;
 
+    if (!HISTORY_ACTION_TYPES.has(historyFilter.type)) {
+
+      return null;
+
+    }
+
     const set = new Set();
 
     filteredHistoryEntries.forEach((entry) => {
@@ -2135,7 +2150,15 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
 
     return set;
 
-  }, [filteredHistoryEntries, isHistoryFilterActive]);
+  }, [filteredHistoryEntries, historyFilter.type, isHistoryFilterActive]);
+
+  const activeStatusFilter = useMemo(() => {
+
+    if (!isHistoryFilterActive) return null;
+
+    return STATUS_FILTER_MAP.get(historyFilter.type) || null;
+
+  }, [historyFilter.type, isHistoryFilterActive]);
 
   const [showAddForm, setShowAddForm] = useState(false);
 
@@ -2999,7 +3022,7 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
 
     if (!historyFilter.type || historyFilter.type === "all") {
 
-      alert("Chỉ lưu bộ lọc thao tác khi bạn chọn Thêm mới/Chỉnh sửa/Xóa.");
+      alert("Chỉ lưu bộ lọc khi bạn chọn thao tác hoặc trạng thái cụ thể.");
 
       return;
 
@@ -3011,7 +3034,17 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
 
       if (result.reason === "duplicate") {
 
-        alert("Bộ lọc thao tác đã tồn tại.");
+        const duplicateMessage = HISTORY_ACTION_TYPES.has(historyFilter.type)
+
+          ? "Bộ lọc thao tác đã tồn tại."
+
+          : STATUS_FILTER_MAP.has(historyFilter.type)
+
+            ? "Bộ lọc trạng thái đã tồn tại."
+
+            : "Bộ lọc đã tồn tại.";
+
+        alert(duplicateMessage);
 
       }
 
@@ -3019,7 +3052,17 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
 
     }
 
-    alert("Đã lưu bộ lọc thao tác.");
+    const successMessage = HISTORY_ACTION_TYPES.has(historyFilter.type)
+
+      ? "Đã lưu bộ lọc thao tác."
+
+      : STATUS_FILTER_MAP.has(historyFilter.type)
+
+        ? "Đã lưu bộ lọc trạng thái nhân viên."
+
+        : "Đã lưu bộ lọc.";
+
+    alert(successMessage);
 
   }, [addQuickFavorite, historyFilter.type]);
 
@@ -3435,11 +3478,45 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
 
     const base = rows.filter((row) => {
 
-      if (isHistoryFilterActive) {
+      if (historyFilteredRowKeys) {
 
         const key = makeRowKey(row);
 
-        if (!historyFilteredRowKeys?.has(key)) {
+        if (!historyFilteredRowKeys.has(key)) {
+
+          return false;
+
+        }
+
+      }
+
+      if (activeStatusFilter) {
+
+        const hasImport = Boolean(normalizeStr(row.person_import || ""));
+
+        const hasExport = Boolean(normalizeStr(row.person_export || ""));
+
+        if (
+
+          activeStatusFilter === MST_ASSIGNMENT_STATUS.ASSIGNED &&
+
+          (!hasImport || !hasExport)
+
+        ) {
+
+          return false;
+
+        }
+
+        if (
+
+          activeStatusFilter === MST_ASSIGNMENT_STATUS.PENDING &&
+
+          hasImport &&
+
+          hasExport
+
+        ) {
 
           return false;
 
@@ -3521,9 +3598,9 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
 
     staffFilter,
 
-    isHistoryFilterActive,
-
     historyFilteredRowKeys,
+
+    activeStatusFilter,
 
     recentlyImportedKeys,
 
@@ -4476,7 +4553,7 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
 
           <label className="flex flex-col gap-1">
 
-            <span className="font-medium">Thao tác</span>
+            <span className="font-medium">Thao tác / Trạng thái</span>
 
             <select
 
@@ -4486,7 +4563,7 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
 
               className="border rounded px-2 py-1"
 
-              data-tooltip="Lọc theo thao tác thêm/sửa/xóa"
+              data-tooltip="Lọc theo thao tác (thêm/sửa/xóa) hoặc trạng thái phân công nhân viên"
 
             >
 
@@ -4497,6 +4574,10 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
               <option value="update">Chỉnh sửa</option>
 
               <option value="delete">Xóa</option>
+
+              <option value="status:assigned">Đã gán nhân viên</option>
+
+              <option value="status:pending">Chưa gán nhân viên</option>
 
             </select>
 
@@ -4526,11 +4607,11 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
 
             className="px-3 py-1 rounded border bg-white hover:bg-gray-50"
 
-            data-tooltip="Lưu nhanh bộ lọc thao tác hiện tại"
+            data-tooltip="Lưu nhanh bộ lọc thao tác hoặc trạng thái hiện tại"
 
           >
 
-            Lưu thao tác
+            Lưu thao tác/Trạng thái
 
           </button>
 
@@ -4566,7 +4647,7 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
 
             <div className="text-xs font-semibold uppercase text-gray-500 mb-1">
 
-              Thao tác đã lưu
+              Bộ lọc thao tác/trạng thái đã lưu
 
             </div>
 
