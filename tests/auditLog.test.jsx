@@ -28,6 +28,8 @@ const SUCCESS_SUMMARY = {
 
     directory: '/var/backups/kpi',
 
+    directoryRaw: '/var/backups/kpi',
+
     active: false,
 
     reasons: ['cron_disabled_env'],
@@ -196,6 +198,8 @@ describe('AuditLog', () => {
 
     };
 
+    const newDirectory = 'D\\\\Custom\\\\KPI';
+
     const updateResponse = {
 
       ok: true,
@@ -204,7 +208,7 @@ describe('AuditLog', () => {
 
         ok: true,
 
-        config: { cron: '*/30 * * * *', retentionCopies: 7 },
+        config: { cron: '*/30 * * * *', retentionCopies: 7, directory: newDirectory, directoryRaw: newDirectory },
 
         summary: {
 
@@ -222,6 +226,10 @@ describe('AuditLog', () => {
 
             reasons: [],
 
+            directory: newDirectory,
+
+            directoryRaw: newDirectory,
+
           },
 
         },
@@ -230,7 +238,35 @@ describe('AuditLog', () => {
 
     };
 
-    fetchSpy.mockResolvedValueOnce(summaryResponse).mockResolvedValueOnce(updateResponse);
+    fetchSpy.mockImplementation((url, init) => {
+
+      if (url === '/api/admin/backups/summary') {
+
+        return Promise.resolve(summaryResponse);
+
+      }
+
+      if (url === '/api/admin/backups/files') {
+
+        return Promise.resolve({
+
+          ok: true,
+
+          json: async () => ({ ok: true, files: [] }),
+
+        });
+
+      }
+
+      if (url === '/api/admin/backups/schedule') {
+
+        return Promise.resolve(updateResponse);
+
+      }
+
+      return Promise.reject(new Error(`Unexpected fetch: ${url}`));
+
+    });
 
 
 
@@ -266,31 +302,53 @@ describe('AuditLog', () => {
 
     fireEvent.change(cronInput, { target: { value: '*/30 * * * *' } });
 
-    const retentionInput = await screen.findByLabelText((label) => label.toLowerCase().includes('sao l'));
+    const retentionInput = await screen.findByLabelText('Số bản sao lưu giữ lại');
 
     fireEvent.change(retentionInput, { target: { value: '7' } });
+
+    const [directoryInput, manualDirectoryInput] = await screen.findAllByLabelText((label) =>
+
+      label.toLowerCase().includes('thư mục sao lưu')
+
+    );
+
+    await waitFor(() => {
+
+      expect(directoryInput).toHaveValue('/var/backups/kpi');
+
+    });
+
+    fireEvent.change(directoryInput, { target: { value: newDirectory } });
+
+    await waitFor(() => {
+
+      expect(directoryInput).toHaveValue(newDirectory);
+
+    });
 
     fireEvent.submit(cronInput.closest('form'));
 
 
 
-    await waitFor(() => {
+    const scheduleCall = fetchSpy.mock.calls.find(([, init]) => init?.method === 'POST');
 
-      expect(fetchSpy).toHaveBeenCalledTimes(2);
+    expect(scheduleCall).toBeDefined();
 
-    });
+    const [, scheduleInit] = scheduleCall ?? [];
 
-
-
-    const [, scheduleInit] = fetchSpy.mock.calls[1];
-
-    expect(scheduleInit.method).toBe('POST');
-
-    expect(JSON.parse(scheduleInit.body)).toEqual({ cron: '*/30 * * * *', retentionCopies: 7 });
+    expect(JSON.parse(scheduleInit.body)).toEqual({ cron: '*/30 * * * *', retentionCopies: 7, directory: newDirectory });
 
     expect(screen.getByDisplayValue('*/30 * * * *')).toBeInTheDocument();
 
     expect(screen.getByDisplayValue('7')).toBeInTheDocument();
+
+    await waitFor(() => {
+
+      expect(directoryInput).toHaveValue(newDirectory);
+
+      expect(manualDirectoryInput).toHaveValue(newDirectory);
+
+    });
 
   });
 

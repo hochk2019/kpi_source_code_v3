@@ -148,6 +148,10 @@ export default function AuditLog({ currentUser }) {
 
   const [retentionError, setRetentionError] = useState("");
 
+  const [directoryDraft, setDirectoryDraft] = useState("");
+
+  const [directoryError, setDirectoryError] = useState("");
+
   const [backupFiles, setBackupFiles] = useState([]);
 
   const [loadingBackups, setLoadingBackups] = useState(false);
@@ -159,6 +163,10 @@ export default function AuditLog({ currentUser }) {
   const [selectedBackup, setSelectedBackup] = useState("");
 
   const [backupNote, setBackupNote] = useState("");
+
+  const [manualDirectory, setManualDirectory] = useState("");
+
+  const [manualDirectoryError, setManualDirectoryError] = useState("");
 
   const [restoreNote, setRestoreNote] = useState("");
 
@@ -346,6 +354,28 @@ export default function AuditLog({ currentUser }) {
 
       }
 
+      const rawDirectory = schedule.directoryRaw || "";
+
+      const effectiveDirectory = rawDirectory || schedule.directory || "";
+
+      setDirectoryDraft(rawDirectory || effectiveDirectory);
+
+      setManualDirectory(schedule.directory || "");
+
+      setDirectoryError("");
+
+      setManualDirectoryError("");
+
+    } else {
+
+      setDirectoryDraft("");
+
+      setManualDirectory("");
+
+      setDirectoryError("");
+
+      setManualDirectoryError("");
+
     }
 
   }, [schedule]);
@@ -496,7 +526,11 @@ export default function AuditLog({ currentUser }) {
 
       setRetentionError("");
 
+      setDirectoryError("");
+
       try {
+
+        const directoryPayload = directoryDraft.trim();
 
         const response = await fetchWithAuth("/api/admin/backups/schedule", {
 
@@ -504,7 +538,15 @@ export default function AuditLog({ currentUser }) {
 
           headers: { "Content-Type": "application/json" },
 
-          body: JSON.stringify({ cron: value, retentionCopies: retentionValueRaw ? retentionPayload : null }),
+          body: JSON.stringify({
+
+            cron: value,
+
+            retentionCopies: retentionValueRaw ? retentionPayload : null,
+
+            directory: directoryPayload,
+
+          }),
 
         });
 
@@ -519,6 +561,12 @@ export default function AuditLog({ currentUser }) {
           if (payload?.field === "retentionCopies") {
 
             setRetentionError(message);
+
+          }
+
+          if (payload?.field === "directory") {
+
+            setDirectoryError(message);
 
           }
 
@@ -550,6 +598,20 @@ export default function AuditLog({ currentUser }) {
 
         }
 
+        if (payload?.config) {
+
+          const nextDirectoryRaw = payload.config.directoryRaw || "";
+
+          const nextDirectoryEffective = nextDirectoryRaw || payload.config.directory || "";
+
+          setDirectoryDraft(nextDirectoryRaw || nextDirectoryEffective);
+
+          setManualDirectory(payload.config.directory || "");
+
+          setManualDirectoryError("");
+
+        }
+
         if (payload?.summary) {
 
           setSummary(payload.summary);
@@ -578,7 +640,7 @@ export default function AuditLog({ currentUser }) {
 
     },
 
-    [canManageBackups, cronDraft, loadSummary, retentionDraft]
+    [canManageBackups, cronDraft, directoryDraft, loadSummary, retentionDraft]
 
   );
 
@@ -692,7 +754,11 @@ export default function AuditLog({ currentUser }) {
 
       setRunningBackup(true);
 
+      setManualDirectoryError("");
+
       try {
+
+        const directoryValue = manualDirectory.trim();
 
         const response = await fetchWithAuth("/api/admin/backups/run", {
 
@@ -700,7 +766,15 @@ export default function AuditLog({ currentUser }) {
 
           headers: { "Content-Type": "application/json" },
 
-          body: JSON.stringify({ reason: "manual-ui", note: backupNote.trim() || null }),
+          body: JSON.stringify({
+
+            reason: "manual-ui",
+
+            note: backupNote.trim() || null,
+
+            directory: directoryValue,
+
+          }),
 
         });
 
@@ -710,6 +784,12 @@ export default function AuditLog({ currentUser }) {
 
           const message = payload?.error || response.statusText || `HTTP ${response.status}`;
 
+          if (payload?.field === "directory") {
+
+            setManualDirectoryError(message);
+
+          }
+
           throw new Error(message);
 
         }
@@ -717,6 +797,8 @@ export default function AuditLog({ currentUser }) {
         toast.success("Đã khởi chạy sao lưu thủ công.");
 
         setBackupNote("");
+
+        setManualDirectory(directoryValue);
 
         await loadSummary();
 
@@ -736,7 +818,7 @@ export default function AuditLog({ currentUser }) {
 
     },
 
-    [backupNote, canManageBackups, fetchBackupFiles, loadSummary, refreshLogs]
+    [backupNote, canManageBackups, fetchBackupFiles, loadSummary, manualDirectory, refreshLogs]
 
   );
 
@@ -1122,11 +1204,51 @@ export default function AuditLog({ currentUser }) {
 
                   </div>
 
+                  <div className="flex w-full flex-col gap-1 md:flex-1">
+
+                    <label className="text-xs font-medium text-[color:var(--ds-text-secondary)]" htmlFor="backup-directory-input">
+
+                      Thư mục sao lưu
+
+                    </label>
+
+                    <input
+
+                      id="backup-directory-input"
+
+                      className={`${CONTROL_CLASS_COMPACT} font-mono`}
+
+                      value={directoryDraft}
+
+                      onChange={(event) => {
+
+                        setDirectoryDraft(event.target.value);
+
+                        setDirectoryError("");
+
+                      }}
+
+                      placeholder="D:\\SaoLuu\\KPI"
+
+                      disabled={savingCron}
+
+                    />
+
+                    <div className="text-xs text-[color:var(--ds-text-muted)]">
+
+                      Đường dẫn tuyệt đối hoặc tương đối sẽ được dùng cho cả sao lưu tự động và thủ công.
+
+                    </div>
+
+                    {directoryError && <div className="text-xs text-red-400">{directoryError}</div>}
+
+                  </div>
+
                   <button
 
                     type="submit"
 
-                    className="rounded bg-[color:var(--ds-text-primary)] px-4 py-2 text-sm font-semibold text-[color:var(--ds-text-inverse)] transition hover:bg-[color:var(--ds-text-primary)]/80 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="rounded bg-[color:var(--ds-text-primary)] px-4 py-2 text-sm font-semibold text-[color:var(--ds-text-inverse)] transition hover:bg-[color:var(--ds-text-primary)]/80 disabled:cursor-not-allowed disabled:opacity-60 md:self-end"
 
                     disabled={savingCron}
 
@@ -1175,6 +1297,42 @@ export default function AuditLog({ currentUser }) {
                       disabled={runningBackup || restoring}
 
                     />
+
+                    <label className="text-xs font-medium text-[color:var(--ds-text-secondary)]" htmlFor="backup-directory-manual">
+
+                      Thư mục sao lưu
+
+                    </label>
+
+                    <input
+
+                      id="backup-directory-manual"
+
+                      className={`${CONTROL_CLASS_COMPACT} font-mono`}
+
+                      value={manualDirectory}
+
+                      onChange={(event) => {
+
+                        setManualDirectory(event.target.value);
+
+                        setManualDirectoryError("");
+
+                      }}
+
+                      placeholder={directoryDraft || "D\\SaoLuu\\KPI"}
+
+                      disabled={runningBackup || restoring}
+
+                    />
+
+                    <div className="text-xs text-[color:var(--ds-text-muted)]">
+
+                      Đường dẫn sẽ được nhớ lại cho các lần sao lưu tiếp theo.
+
+                    </div>
+
+                    {manualDirectoryError && <div className="text-xs text-red-400">{manualDirectoryError}</div>}
 
                     <button
 

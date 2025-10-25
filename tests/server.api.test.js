@@ -4,6 +4,8 @@
 
 import process from 'node:process';
 
+import path from 'node:path';
+
 import { Buffer } from 'node:buffer';
 
 import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest';
@@ -3552,6 +3554,10 @@ describe('Backup summary API', () => {
 
     expect(res.body.config).toMatchObject({ cron: '*/30 * * * *', retentionCopies: 5 });
 
+    expect(typeof res.body.config.directory).toBe('string');
+
+    expect(res.body.config.directoryRaw).toBe(res.body.config.directory);
+
     expect(res.body.summary.schedule).toMatchObject({
 
       cron: '*/30 * * * *',
@@ -3559,6 +3565,8 @@ describe('Backup summary API', () => {
       cronDescription: 'Mỗi 30 phút',
 
       retentionCopies: 5,
+
+      directory: res.body.config.directory,
 
     });
 
@@ -3574,7 +3582,7 @@ describe('Backup summary API', () => {
 
       action: 'db.backup_schedule.update',
 
-      meta: expect.objectContaining({ cron: '*/30 * * * *', retentionCopies: 5 }),
+      meta: expect.objectContaining({ cron: '*/30 * * * *', retentionCopies: 5, directory: res.body.config.directory }),
 
     });
 
@@ -3605,6 +3613,78 @@ describe('Backup summary API', () => {
     expect(res.status).toBe(400);
 
     expect(res.body).toMatchObject({ ok: false, field: 'retentionCopies' });
+
+  });
+
+
+
+  it('trả lỗi khi thư mục sao lưu không hợp lệ', async () => {
+
+    const adminAgent = request.agent(app);
+
+    const loginRes = await adminAgent
+
+      .post('/api/auth/login')
+
+      .send({ username: 'admin', password: 'admin123' });
+
+    expect(loginRes.status).toBe(200);
+
+
+
+    const res = await adminAgent
+
+      .post('/api/admin/backups/schedule')
+
+      .send({ cron: '*/15 * * * *', directory: ':memory:' });
+
+    expect(res.status).toBe(400);
+
+    expect(res.body).toMatchObject({ ok: false, field: 'directory' });
+
+  });
+
+
+
+  it('cho phép cập nhật thư mục sao lưu tùy chỉnh', async () => {
+
+    const adminAgent = request.agent(app);
+
+    const loginRes = await adminAgent
+
+      .post('/api/auth/login')
+
+      .send({ username: 'admin', password: 'admin123' });
+
+    expect(loginRes.status).toBe(200);
+
+
+
+    const res = await adminAgent
+
+      .post('/api/admin/backups/schedule')
+
+      .send({ cron: '0 2 * * *', directory: 'custom-backups' });
+
+    expect(res.status).toBe(200);
+
+    expect(res.body.ok).toBe(true);
+
+    const expectedDir = path.resolve(__dirname, '../server/custom-backups');
+
+    expect(res.body.config).toMatchObject({
+
+      cron: '0 2 * * *',
+
+      retentionCopies: res.body.config.retentionCopies,
+
+      directory: expectedDir,
+
+      directoryRaw: 'custom-backups',
+
+    });
+
+    expect(res.body.summary.schedule.directory).toBe(expectedDir);
 
   });
 
