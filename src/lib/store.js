@@ -12,7 +12,15 @@ import {
 
 } from '../../shared/kpiAdjustments.js';
 
-import { getItem, setItem, refreshSharedKeys, subscribe, removeItem } from './storageClient.js';
+import {
+  getItem,
+  setItem,
+  refreshSharedKeys,
+  subscribe,
+  removeItem,
+  patchDeclRows,
+  updateCachedItem,
+} from './storageClient.js';
 
 
 
@@ -5387,6 +5395,182 @@ export function saveDeclRows(
 
 
 
+export async function saveDeclRowDiffs(
+  deltas,
+  { actor = "system", detail = "", allowReviewedOverride = false } = {}
+) {
+  const list = Array.isArray(deltas) ? deltas : [];
+  const total = list.length;
+
+  const rows = getDeclRowsRaw();
+  const totalStored = Array.isArray(rows) ? rows.length : 0;
+
+  if (!total || !Array.isArray(rows) || rows.length === 0) {
+    return {
+      success: false,
+      total,
+      updated: 0,
+      locked: 0,
+      missing: total,
+      noChange: 0,
+      invalid: 0,
+      totalStored,
+      lockedKeys: [],
+      missingKeys: list.map((item) => (item && typeof item.key === "string" ? item.key : "")),
+      noChangeKeys: [],
+      invalidKeys: [],
+    };
+  }
+
+  const actorName = normalizeStr(actor) || "system";
+  const indexByKey = new Map();
+  rows.forEach((row, idx) => {
+    const key = getDeclRowSimpleKey(row);
+    if (key) {
+      indexByKey.set(key, idx);
+    }
+  });
+
+  const lockedKeys = [];
+  const missingKeys = [];
+  const noChangeKeys = [];
+  const invalidKeys = [];
+  const changeRecords = [];
+
+  for (const entry of list) {
+    const key = typeof entry?.key === "string" ? entry.key.trim() : String(entry?.key || "").trim();
+    if (!key) {
+      invalidKeys.push("");
+      continue;
+    }
+    const updates = entry && typeof entry === "object" ? entry.updates : null;
+    const sanitizedUpdates = sanitizePartialDeclUpdates(updates);
+    const changedFields = Object.keys(sanitizedUpdates);
+    if (changedFields.length === 0) {
+      noChangeKeys.push(key);
+      continue;
+    }
+    const index = indexByKey.has(key) ? indexByKey.get(key) : -1;
+    if (typeof index !== "number" || index < 0) {
+      missingKeys.push(key);
+      continue;
+    }
+    const current = rows[index] || {};
+    if (current?.reviewed && !allowReviewedOverride) {
+      lockedKeys.push(key);
+      const actionDetail = detail && detail.trim().length > 0
+        ? detail
+        : `Chặn cập nhật tờ khai ${current.so_tk || "?"} do đã rà soát`;
+      pushAuditLog({
+        actor: actorName,
+        action: "decl.update.blocked",
+        detail: actionDetail,
+        meta: { key, fields: changedFields, reason: "review lock" },
+      });
+      continue;
+    }
+    const { changed, nextRow } = applyPartialUpdatesToRow(current, sanitizedUpdates, {
+      sanitized: true,
+    });
+    if (!changed) {
+      noChangeKeys.push(key);
+      continue;
+    }
+    changeRecords.push({
+      key,
+      index,
+      updates: sanitizedUpdates,
+      changedFields,
+      previous: current,
+      nextRow,
+    });
+  }
+
+  if (!changeRecords.length) {
+    return {
+      success: false,
+      total,
+      updated: 0,
+      locked: lockedKeys.length,
+      missing: missingKeys.length,
+      noChange: noChangeKeys.length,
+      invalid: invalidKeys.length,
+      totalStored,
+      lockedKeys,
+      missingKeys,
+      noChangeKeys,
+      invalidKeys,
+    };
+  }
+
+  const nextRows = rows.slice();
+  for (const record of changeRecords) {
+    nextRows[record.index] = record.nextRow;
+  }
+
+  const annotatedRows = applyAgenciesToDeclRows(nextRows);
+
+  const patchPayload = [];
+  const historyQueue = [];
+
+  for (const record of changeRecords) {
+    const finalRow = annotatedRows[record.index] || record.nextRow;
+    patchPayload.push({ key: record.key, updates: record.updates, row: finalRow });
+    const historyChanges = buildDeclHistoryChanges(record.previous, finalRow, record.changedFields);
+    if (historyChanges.length) {
+      historyQueue.push({ key: record.key, changes: historyChanges });
+    }
+  }
+
+  const summaryDetail = detail && detail.trim().length > 0
+    ? detail.trim()
+    : `Cập nhật ${changeRecords.length.toLocaleString("vi-VN")} tờ khai (patch)`;
+
+  await patchDeclRows(patchPayload, {
+    actor: actorName,
+    detail: summaryDetail,
+  });
+
+  for (const entry of historyQueue) {
+    appendDeclHistoryEntry(entry.key, {
+      actor: actorName,
+      ts: new Date().toISOString(),
+      changes: entry.changes,
+    });
+  }
+
+  updateCachedItem(DECL_KEY, JSON.stringify(annotatedRows));
+
+  pushAuditLog({
+    actor: actorName,
+    action: "decl.patch",
+    detail: summaryDetail,
+    meta: {
+      total,
+      updated: changeRecords.length,
+      locked: lockedKeys.length,
+      missing: missingKeys.length,
+    },
+  });
+
+  return {
+    success: true,
+    total,
+    updated: changeRecords.length,
+    locked: lockedKeys.length,
+    missing: missingKeys.length,
+    noChange: noChangeKeys.length,
+    invalid: invalidKeys.length,
+    totalStored: annotatedRows.length,
+    lockedKeys,
+    missingKeys,
+    noChangeKeys,
+    invalidKeys,
+  };
+}
+
+
+
 export function updateDeclRowFields(
   rowKey,
   updates,
@@ -8254,7 +8438,7 @@ export default {
 
   getMSTRowsRaw, getMSTMap, getMSTFor, upsertMSTRows,
 
-  getDeclRows, saveDeclRows, softDeleteDeclRows, restoreDeclRows, markDeclRowsReviewed, unmarkDeclRowsReviewed, sortDeclRows, getRecentDeclRows,
+  getDeclRows, saveDeclRows, saveDeclRowDiffs, softDeleteDeclRows, restoreDeclRows, markDeclRowsReviewed, unmarkDeclRowsReviewed, sortDeclRows, getRecentDeclRows,
 
   getDeclHistoryForRow,
 

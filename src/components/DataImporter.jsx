@@ -10,6 +10,8 @@ import {
 
   saveDeclRows,
 
+  saveDeclRowDiffs,
+
   softDeleteDeclRows,
 
   restoreDeclRows,
@@ -10366,7 +10368,7 @@ const selectedReviewedCount = useMemo(() => {
 
 
 
-  function handleSaveAll() {
+  async function handleSaveAll() {
 
     if (isReadOnlyForEdits) {
 
@@ -10384,33 +10386,103 @@ const selectedReviewedCount = useMemo(() => {
 
     }
 
-    if (rawRows.length === 0) {
+    const pendingUpdates = [];
 
-      alert("Không có dữ liệu để lưu");
+    rowDiffMap.forEach((diff, key) => {
+
+      if (!diff || typeof diff !== "object") {
+
+        return;
+
+      }
+
+      const fields = Object.keys(diff);
+
+      if (fields.length === 0) {
+
+        return;
+
+      }
+
+      pendingUpdates.push({ key, updates: diff });
+
+    });
+
+    if (pendingUpdates.length === 0) {
+
+      alert("Không có thay đổi nào cần lưu.");
 
       return;
 
     }
 
-    const result = saveDeclRows(rawRows, {
+    try {
 
-      overwrite: true,
+      const result = await saveDeclRowDiffs(pendingUpdates, {
 
-      actor,
+        actor,
 
-      detail: "Lưu chỉnh sửa tờ khai thủ công",
+        detail: "Lưu chỉnh sửa tờ khai thủ công",
 
-      allowReviewedOverride: isAdminRole,
+        allowReviewedOverride: isAdminRole,
 
-    });
+      });
 
-    alert(`Đã lưu ${result.totalStored.toLocaleString("vi-VN")} bản ghi (ghi đè).`);
+      const parts = [];
 
-    setHasUnsaved(false);
+      if (result.updated > 0) {
 
-    loadSavedRows({ bypassConfirm: true });
+        parts.push(`Đã cập nhật ${result.updated.toLocaleString("vi-VN")} tờ khai.`);
 
-    fetchAlerts();
+      } else {
+
+        parts.push("Không có tờ khai nào được cập nhật.");
+
+      }
+
+      if (result.locked > 0) {
+
+        parts.push(`${result.locked.toLocaleString("vi-VN")} tờ khai bị khoá rà soát.`);
+
+      }
+
+      if (result.missing > 0) {
+
+        parts.push(`${result.missing.toLocaleString("vi-VN")} tờ khai không tìm thấy.`);
+
+      }
+
+      if (result.noChange > 0) {
+
+        parts.push(`${result.noChange.toLocaleString("vi-VN")} tờ khai không có thay đổi mới.`);
+
+      }
+
+      if (result.invalid > 0) {
+
+        parts.push(`${result.invalid.toLocaleString("vi-VN")} bản ghi không hợp lệ.`);
+
+      }
+
+      alert(parts.join(" "));
+
+      if (result.success && result.updated > 0) {
+
+        setHasUnsaved(false);
+
+        loadSavedRows({ bypassConfirm: true });
+
+        fetchAlerts();
+
+      }
+
+    } catch (err) {
+
+      console.error("Không thể lưu cập nhật hàng loạt", err);
+
+      toast.error(err?.message || "Không thể lưu cập nhật hàng loạt. Vui lòng thử lại.");
+
+    }
 
   }
 
