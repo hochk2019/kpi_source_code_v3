@@ -792,3 +792,103 @@ describe('storageClient remote đồng bộ lại khi server lên trễ', () => 
 
 });
 
+describe('storageClient giới hạn dung lượng khi backend trả về 413', () => {
+
+  let setSharedItem;
+
+  let waitSharedWrites;
+
+  let getStatus;
+
+  let refreshKeys;
+
+  let clearCache;
+
+  let storageLimitMessage;
+
+  beforeEach(async () => {
+
+    vi.resetModules();
+
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const storageModule = await import('@/lib/storageClient.js');
+
+    setSharedItem = storageModule.setItem;
+
+    waitSharedWrites = storageModule.waitForSharedWrites;
+
+    getStatus = storageModule.getSyncStatus;
+
+    refreshKeys = storageModule.refreshSharedKeys;
+
+    clearCache = storageModule.clearStorageCache;
+
+    storageLimitMessage = storageModule.STORAGE_LIMIT_ERROR_MESSAGE;
+
+    clearCache();
+
+    global.fetch = vi.fn();
+
+  });
+
+  afterEach(() => {
+
+    vi.restoreAllMocks();
+
+    vi.unstubAllGlobals();
+
+    clearCache?.();
+
+  });
+
+  it('ghi nhận trạng thái lỗi dung lượng để giao diện hiển thị', async () => {
+
+    global.fetch.mockImplementation(async (url, options = {}) => {
+
+      const method = (options.method || 'GET').toUpperCase();
+
+      if (method === 'GET') {
+
+        return {
+
+          ok: true,
+
+          status: 200,
+
+          json: async () => ({ data: {} }),
+
+        };
+
+      }
+
+      return {
+
+        ok: false,
+
+        status: 413,
+
+        statusText: 'Payload Too Large',
+
+      };
+
+    });
+
+    await refreshKeys(['decl_rows_v1']);
+
+    setSharedItem('decl_rows_v1', 'test-data');
+
+    await waitSharedWrites({ timeoutMs: 50 });
+
+    await Promise.resolve();
+
+    const status = getStatus();
+
+    expect(status.lastError).toBe(storageLimitMessage);
+
+    expect(status.waitingForBackend).toBe(true);
+
+  });
+
+});
+

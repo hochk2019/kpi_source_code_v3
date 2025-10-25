@@ -23766,7 +23766,15 @@ export {
 
 app.use(cors({ origin: true, credentials: true }));
 
-app.use(express.json({ limit: '5mb' }));
+const maxJsonBodyLimit = (() => {
+  const rawLimit = (process.env.MAX_JSON_BODY || '').trim();
+  if (!rawLimit) {
+    return '32mb';
+  }
+  return rawLimit;
+})();
+
+app.use(express.json({ limit: maxJsonBodyLimit }));
 
 
 

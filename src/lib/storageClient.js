@@ -1,5 +1,8 @@
 import { fetchWithAuth } from '../auth/localAuth.js';
 
+export const STORAGE_LIMIT_ERROR_MESSAGE =
+  'Dung lượng dữ liệu vượt quá giới hạn máy chủ đồng bộ. Vui lòng chia nhỏ dữ liệu hoặc liên hệ quản trị viên để nâng giới hạn.';
+
 
 
 function formatHttpError(response) {
@@ -7,6 +10,12 @@ function formatHttpError(response) {
   if (!response || typeof response.status !== 'number') {
 
     return 'Phản hồi HTTP không hợp lệ';
+
+  }
+
+  if (response.status === 413) {
+
+    return STORAGE_LIMIT_ERROR_MESSAGE;
 
   }
 
