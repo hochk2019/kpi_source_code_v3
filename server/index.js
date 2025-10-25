@@ -26210,6 +26210,148 @@ app.put('/api/storage/:key', (req, res) => {
 
 
 
+function getDeclRowSimpleKey(row) {
+
+  if (!row || typeof row !== 'object') {
+
+    return '';
+
+  }
+
+  const soTk = (row.so_tk ?? '').toString();
+
+  const nhanh = (row.nhanh ?? '').toString();
+
+  return `${soTk}_${nhanh}`.trim();
+
+}
+
+
+
+app.patch('/api/storage/:key', (req, res) => {
+
+  const key = req.params.key;
+
+  if (!key) {
+
+    res.status(400).json({ ok: false, error: 'Thiếu key' });
+
+    return;
+
+  }
+
+  if (key !== 'decl_rows_v1') {
+
+    res.status(405).json({ ok: false, error: 'Khoá này chưa hỗ trợ PATCH' });
+
+    return;
+
+  }
+
+  const { updates } = req.body || {};
+
+  if (!Array.isArray(updates) || updates.length === 0) {
+
+    res.status(400).json({ ok: false, error: 'Không có dữ liệu cập nhật' });
+
+    return;
+
+  }
+
+  const { context, denied } = verifyStoragePermission(req, res, key);
+
+  if (denied) {
+
+    return;
+
+  }
+
+  const actor = context?.account?.username || resolveActor(req);
+
+  try {
+
+    const rawValue = getValue(key) ?? '[]';
+
+    const rows = safeParse(rawValue, []);
+
+    if (!Array.isArray(rows)) {
+
+      res.status(500).json({ ok: false, error: 'Dữ liệu hiện tại không hợp lệ' });
+
+      return;
+
+    }
+
+    const indexByKey = new Map();
+
+    rows.forEach((row, idx) => {
+
+      const rowKey = getDeclRowSimpleKey(row);
+
+      if (rowKey) {
+
+        indexByKey.set(rowKey, idx);
+
+      }
+
+    });
+
+    let updated = 0;
+
+    for (const entry of updates) {
+
+      const rowKey = typeof entry?.key === 'string' ? entry.key.trim() : '';
+
+      const nextRow = entry && typeof entry.row === 'object' && entry.row !== null ? entry.row : null;
+
+      if (!rowKey || !nextRow) {
+
+        continue;
+
+      }
+
+      const index = indexByKey.has(rowKey) ? indexByKey.get(rowKey) : -1;
+
+      if (typeof index !== 'number' || index < 0) {
+
+        continue;
+
+      }
+
+      rows[index] = nextRow;
+
+      updated += 1;
+
+    }
+
+    if (!updated) {
+
+      res.json({ ok: true, updated: 0, totalStored: rows.length });
+
+      return;
+
+    }
+
+    const serialized = JSON.stringify(rows);
+
+    upsertValue(key, serialized, { actor, source: 'api-patch' });
+
+    evaluateDeclarationAlerts({ actor, reason: 'storage-patch' });
+
+    res.json({ ok: true, updated, totalStored: rows.length });
+
+  } catch (err) {
+
+    console.error('Lỗi cập nhật từng phần kho chia sẻ', err);
+
+    res.status(500).json({ ok: false, error: 'Không thể cập nhật dữ liệu' });
+
+  }
+
+});
+
+
+
 app.delete('/api/storage/:key', (req, res) => {
 
   const key = req.params.key;

@@ -83,6 +83,112 @@ async function sendWrite(base, key, value) {
 
 
 
+export async function patchDeclRows(updates, options = {}) {
+
+  const list = Array.isArray(updates) ? updates : [];
+
+  if (list.length === 0) {
+
+    return { ok: true, updated: 0 };
+
+  }
+
+  const base =
+
+    normalizeBaseUrl(
+
+      options.baseUrl ??
+
+        options.apiBase ??
+
+        apiBase ??
+
+        (typeof import.meta !== 'undefined' ? import.meta.env?.VITE_API_BASE : '') ??
+
+        ''
+
+    ) || '';
+
+  const target = `${base}/api/storage/${encodeURIComponent('decl_rows_v1')}`;
+
+  const payload = {
+
+    updates: list,
+
+  };
+
+  if (options && typeof options.actor === 'string') {
+
+    payload.actor = options.actor;
+
+  }
+
+  if (options && typeof options.detail === 'string') {
+
+    payload.detail = options.detail;
+
+  }
+
+  let response;
+
+  try {
+
+    response = await fetchWithAuth(target, {
+
+      method: 'PATCH',
+
+      headers: { 'Content-Type': 'application/json' },
+
+      body: JSON.stringify(payload),
+
+    });
+
+  } catch (error) {
+
+    throw new Error(`Không thể gửi bản vá dữ liệu: ${error?.message ?? error}`, {
+
+      cause: error instanceof Error ? error : undefined,
+
+    });
+
+  }
+
+  if (!response || typeof response.ok !== 'boolean') {
+
+    throw new Error('Không nhận được phản hồi hợp lệ từ máy chủ đồng bộ');
+
+  }
+
+  if (!response.ok) {
+
+    throw new Error(formatHttpError(response));
+
+  }
+
+  let data = null;
+
+  try {
+
+    data = await response.json();
+
+  } catch {
+
+    data = null;
+
+  }
+
+  remoteEnabled = true;
+
+  lastSyncError = null;
+
+  emitSyncStatus();
+
+  return data && typeof data === 'object' ? data : { ok: true };
+
+}
+
+
+
 const SHARED_KEYS = new Set([
 
   'decl_rows_v1',
@@ -708,6 +814,36 @@ export async function refreshSharedKeys(keys, options = {}) {
 export function getItem(key) {
 
   return cache.has(key) ? cache.get(key) : null;
+
+}
+
+
+
+export function updateCachedItem(key, value) {
+
+  if (!key) {
+
+    return null;
+
+  }
+
+  if (value === null || value === undefined) {
+
+    cache.delete(key);
+
+    notify(key);
+
+    return null;
+
+  }
+
+  const stringValue = typeof value === 'string' ? value : JSON.stringify(value);
+
+  cache.set(key, stringValue);
+
+  notify(key);
+
+  return stringValue;
 
 }
 
