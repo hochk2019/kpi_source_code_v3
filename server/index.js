@@ -1872,6 +1872,38 @@ const DEFAULT_ECUS_MONITOR_HISTORY_OPTIONS = Object.freeze({
 
 
 
+const MST_ASSIGNMENT_STATUS = Object.freeze({
+  PENDING: 'Chưa gán nhân viên',
+  ASSIGNED: 'Đã gán nhân viên',
+});
+
+const MST_STATUS_LOOKUP = new Map(
+  Object.values(MST_ASSIGNMENT_STATUS).map((label) => [normalizeName(label), label])
+);
+
+const COMPANY_FIELD_KEYS = new Set([
+  'company',
+  'cong ty',
+  'ten cong ty',
+  'ten doanh nghiep',
+  'doanh nghiep',
+  'customer',
+]);
+
+const MST_FIELD_KEYS = new Set(['mst', 'ma so thue', 'ma so thue (mst)', 'tax code']);
+
+const DATE_FIELD_KEYS = new Set([
+  'date',
+  'ngay',
+  'ngay dk',
+  'ngay dang ky',
+  'ngay dang ky tk',
+  'registration date',
+]);
+
+const MST_HISTORY_LIMIT = 500;
+const MST_HISTORY_KEY = 'mst_history_v1';
+
 const DEFAULT_STORAGE = {
 
   decl_rows_v1: '[]',
@@ -10712,11 +10744,17 @@ function normalizeDeclarationNumber(input, { length = 11 } = {}) {
 
   }
 
-  const minLength = Number.isFinite(length) && length > 0 ? length : 11;
+  const targetLength = Number.isFinite(length) && length > 0 ? Math.floor(length) : 11;
 
-  if (digitsOnly.length < minLength) {
+  if (digitsOnly.length < targetLength) {
 
-    return digitsOnly.padStart(minLength, '0');
+    return digitsOnly.padStart(targetLength, '0');
+
+  }
+
+  if (digitsOnly.length > targetLength) {
+
+    return digitsOnly.slice(0, targetLength);
 
   }
 
@@ -12995,41 +13033,719 @@ function buildLicenseExcludeContext(rules) {
 
 
 
-function getMSTRows() {
+function getMSTRowsRaw() {
 
   const rows = getJSONValue('mst_rows_v2', []);
 
-  if (!Array.isArray(rows)) return [];
+  return Array.isArray(rows) ? rows : [];
 
-  return rows
+}
 
-    .map((row) => ({
 
-      mst: normalizeMST(row?.mst),
 
-      company: normalizeStr(row?.company || ''),
+function sanitizeMSTRow(rowInput) {
 
-      person_import: normalizeStr(row?.person_import || ''),
+  const row = rowInput && typeof rowInput === 'object' ? rowInput : {};
 
-      person_export: normalizeStr(row?.person_export || ''),
+  const mst = normalizeMST(row?.mst);
 
-      team: normalizeStr(row?.team || ''),
+  if (!mst) return null;
 
-      effective_from: toISODate(row?.effective_from || ''),
 
-    }))
 
-    .filter((row) => row.mst)
+  const companyRaw = pickFirstValue(row, ['company', 'company_name', 'companyName', 'tenCongTy'], row?.company);
+
+  const personImportRaw = pickFirstValue(
+
+    row,
+
+    [
+
+      'person_import',
+
+      'personImport',
+
+      'nguoi_phu_trach_nhap',
+
+      'nguoiPhuTrachNhap',
+
+      'import_person',
+
+      'importPerson',
+
+    ],
+
+    row?.person_import
+
+  );
+
+  const personExportRaw = pickFirstValue(
+
+    row,
+
+    [
+
+      'person_export',
+
+      'personExport',
+
+      'nguoi_phu_trach_xuat',
+
+      'nguoiPhuTrachXuat',
+
+      'export_person',
+
+      'exportPerson',
+
+    ],
+
+    row?.person_export
+
+  );
+
+  const teamRaw = pickFirstValue(row, ['team', 'team_name', 'teamName'], row?.team);
+
+  const effectiveFromRaw = pickFirstValue(
+
+    row,
+
+    ['effective_from', 'effectiveFrom', 'from', 'start', 'valid_from'],
+
+    row?.effective_from
+
+  );
+
+  const effectiveToRaw = pickFirstValue(
+
+    row,
+
+    ['effective_to', 'effectiveTo', 'to', 'end', 'valid_to'],
+
+    row?.effective_to
+
+  );
+
+  const statusRaw = pickFirstValue(
+
+    row,
+
+    ['status', 'trang_thai', 'trangThai', 'state'],
+
+    row?.status
+
+  );
+
+
+
+  const sanitized = {
+
+    mst,
+
+    company: normalizeStr(companyRaw ?? ''),
+
+    person_import: normalizeStr(personImportRaw ?? ''),
+
+    person_export: normalizeStr(personExportRaw ?? ''),
+
+    team: normalizeStr(teamRaw ?? ''),
+
+    effective_from: toISODate(effectiveFromRaw) || '',
+
+    effective_to: toISODate(effectiveToRaw) || '',
+
+  };
+
+
+
+  const resolvedStatus = sanitizeMSTStatus(statusRaw ?? '');
+
+  sanitized.status = resolvedStatus || inferDefaultMSTStatus(sanitized);
+
+
+
+  return sanitized;
+
+}
+
+
+
+function getMSTRows() {
+
+  return getMSTRowsRaw().map(sanitizeMSTRow).filter(Boolean).sort(compareMSTRows);
+
+}
+
+
+
+function pickFirstValue(source, keys, fallback) {
+
+  if (!source || typeof source !== 'object') {
+
+    return fallback;
+
+  }
+
+  for (const key of Array.isArray(keys) ? keys : []) {
+
+    if (key in source && source[key] !== undefined) {
+
+      return source[key];
+
+    }
+
+  }
+
+  return fallback;
+
+}
+
+
+
+function sanitizeMSTStatus(value) {
+
+  const raw = normalizeStr(value);
+
+  if (!raw) return '';
+
+  const normalizedKey = normalizeName(raw);
+
+  if (MST_STATUS_LOOKUP.has(normalizedKey)) {
+
+    return MST_STATUS_LOOKUP.get(normalizedKey);
+
+  }
+
+  return raw;
+
+}
+
+
+
+function inferDefaultMSTStatus(row) {
+
+  const hasImport = Boolean(normalizeStr(row?.person_import || ''));
+
+  const hasExport = Boolean(normalizeStr(row?.person_export || ''));
+
+  if (hasImport || hasExport) {
+
+    return MST_ASSIGNMENT_STATUS.ASSIGNED;
+
+  }
+
+  return MST_ASSIGNMENT_STATUS.PENDING;
+
+}
+
+
+
+function compareMSTRows(a, b) {
+
+  if (!a && !b) return 0;
+
+  if (!a) return 1;
+
+  if (!b) return -1;
+
+  const byMST = a.mst.localeCompare(b.mst);
+
+  if (byMST !== 0) return byMST;
+
+  const fromA = a.effective_from || '';
+
+  const fromB = b.effective_from || '';
+
+  if (fromA !== fromB) {
+
+    return fromA.localeCompare(fromB);
+
+  }
+
+  const toA = a.effective_to || '9999-12-31';
+
+  const toB = b.effective_to || '9999-12-31';
+
+  return toA.localeCompare(toB);
+
+}
+
+
+
+function makeMSTRowKey(row) {
+
+  if (!row) return '';
+
+  const mst = normalizeMST(row.mst);
+
+  const effective = toISODate(row?.effective_from) || '';
+
+  const effectiveTo = toISODate(row?.effective_to) || '';
+
+  return `${mst || ''}__${effective}__${effectiveTo}`;
+
+}
+
+
+
+function createMSTHistoryEntry({ mst, field, from, to, actor, timestamp, rowKey, type }) {
+
+  return {
+
+    id: `mst-${rowKey || mst}-${field}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+
+    mst: normalizeMST(mst),
+
+    field,
+
+    from: normalizeStr(from),
+
+    to: normalizeStr(to),
+
+    actor: normalizeStr(actor) || 'system',
+
+    timestamp,
+
+    rowKey: rowKey || makeMSTRowKey({ mst, effective_from: '', effective_to: '' }),
+
+    type: type || 'update',
+
+  };
+
+}
+
+
+
+function diffMSTRows(prevRows, nextRows, actor) {
+
+  const prevMap = new Map();
+
+  for (const row of Array.isArray(prevRows) ? prevRows : []) {
+
+    prevMap.set(makeMSTRowKey(row), row);
+
+  }
+
+  const nextMap = new Map();
+
+  for (const row of Array.isArray(nextRows) ? nextRows : []) {
+
+    nextMap.set(makeMSTRowKey(row), row);
+
+  }
+
+  const timestamp = new Date().toISOString();
+
+  const actorName = normalizeStr(actor) || 'system';
+
+  const trackedFields = ['person_import', 'person_export', 'effective_from', 'effective_to'];
+
+  const entries = [];
+
+  for (const [key, row] of nextMap) {
+
+    const prev = prevMap.get(key);
+
+    if (!prev) {
+
+      for (const field of trackedFields) {
+
+        const value = normalizeStr(row?.[field]);
+
+        if (value) {
+
+          entries.push(
+
+            createMSTHistoryEntry({
+
+              mst: row.mst,
+
+              field,
+
+              from: '',
+
+              to: value,
+
+              actor: actorName,
+
+              timestamp,
+
+              rowKey: key,
+
+              type: 'create',
+
+            })
+
+          );
+
+        }
+
+      }
+
+      continue;
+
+    }
+
+    for (const field of trackedFields) {
+
+      const prevValue = normalizeStr(prev?.[field]);
+
+      const nextValue = normalizeStr(row?.[field]);
+
+      if (prevValue === nextValue) continue;
+
+      entries.push(
+
+        createMSTHistoryEntry({
+
+          mst: row.mst,
+
+          field,
+
+          from: prevValue,
+
+          to: nextValue,
+
+          actor: actorName,
+
+          timestamp,
+
+          rowKey: key,
+
+          type: 'update',
+
+        })
+
+      );
+
+    }
+
+  }
+
+  for (const [key, row] of prevMap) {
+
+    if (nextMap.has(key)) continue;
+
+    for (const field of trackedFields) {
+
+      const prevValue = normalizeStr(row?.[field]);
+
+      if (!prevValue) continue;
+
+      entries.push(
+
+        createMSTHistoryEntry({
+
+          mst: row.mst,
+
+          field,
+
+          from: prevValue,
+
+          to: '',
+
+          actor: actorName,
+
+          timestamp,
+
+          rowKey: key,
+
+          type: 'delete',
+
+        })
+
+      );
+
+    }
+
+  }
+
+  return entries;
+
+}
+
+
+
+function appendMSTHistoryEntries(entries) {
+
+  if (!Array.isArray(entries) || !entries.length) {
+
+    return;
+
+  }
+
+  const existing = getJSONValue(MST_HISTORY_KEY, []);
+
+  const merged = [...entries, ...(Array.isArray(existing) ? existing : [])]
+
+    .filter(Boolean)
 
     .sort((a, b) => {
 
-      const byMst = a.mst.localeCompare(b.mst);
+      const timeA = new Date(a?.timestamp || 0).getTime();
 
-      if (byMst !== 0) return byMst;
+      const timeB = new Date(b?.timestamp || 0).getTime();
 
-      return (a.effective_from || '').localeCompare(b.effective_from || '');
+      return timeB - timeA;
+
+    })
+
+    .slice(0, MST_HISTORY_LIMIT);
+
+  setJSONValue(MST_HISTORY_KEY, merged, { skipMstHistorySync: true });
+
+  if (process.env.VITEST === 'true' || process.env.NODE_ENV === 'test') {
+
+    return;
+
+  }
+
+  if (resolveMstHistorySqlConfig()) {
+
+    scheduleMstHistorySqlSyncFromJson(JSON.stringify(merged));
+
+  }
+
+}
+
+
+
+function upsertMSTRows(rows, { actor = 'system', detail = '' } = {}) {
+
+  const previous = getMSTRows();
+
+  const sanitized = Array.isArray(rows) ? rows.map(sanitizeMSTRow).filter(Boolean) : [];
+
+  sanitized.sort(compareMSTRows);
+
+  const changes = diffMSTRows(previous, sanitized, actor);
+
+  setJSONValue('mst_rows_v2', sanitized);
+
+  if (changes.length) {
+
+    appendMSTHistoryEntries(changes);
+
+  }
+
+  pushAuditLog({
+
+    actor,
+
+    action: 'mst.save',
+
+    detail: detail || `Cập nhật ${sanitized.length} dòng gán MST`,
+
+  });
+
+  return sanitized.length;
+
+}
+
+
+
+function extractCompanyNameFromDeclRow(row) {
+
+  if (!row || typeof row !== 'object') return '';
+
+  const direct = normalizeStr(row?.company ?? row?.cong_ty ?? row?.customer ?? '');
+
+  if (direct) return direct;
+
+  for (const [key, value] of Object.entries(row)) {
+
+    if (value === null || value === undefined || value === '') continue;
+
+    const normalizedKey = normalizeName(key);
+
+    if (!COMPANY_FIELD_KEYS.has(normalizedKey)) continue;
+
+    const strValue = normalizeStr(value);
+
+    if (strValue) return strValue;
+
+  }
+
+  return '';
+
+}
+
+
+
+function extractMSTFromDeclRow(row) {
+
+  if (!row || typeof row !== 'object') return '';
+
+  const direct = normalizeMST(row?.mst);
+
+  if (direct) return direct;
+
+  for (const [key, value] of Object.entries(row)) {
+
+    if (value === null || value === undefined || value === '') continue;
+
+    const normalizedKey = normalizeName(key);
+
+    if (!MST_FIELD_KEYS.has(normalizedKey)) continue;
+
+    const candidate = normalizeMST(value);
+
+    if (candidate) return candidate;
+
+  }
+
+  return '';
+
+}
+
+
+
+function extractEffectiveDateFromDeclRow(row) {
+
+  if (!row || typeof row !== 'object') return '';
+
+  const candidates = [
+
+    row?.date,
+
+    row?.raw_date,
+
+    row?.ngay,
+
+    row?.ngay_dk,
+
+    row?.['Ngày đăng ký'],
+
+    row?.['Ngay dang ky'],
+
+    row?.['Ngay DK'],
+
+    row?.['Ngay dk'],
+
+  ];
+
+  for (const candidate of candidates) {
+
+    const iso = toISODate(candidate);
+
+    if (iso) return iso;
+
+  }
+
+  for (const [key, value] of Object.entries(row)) {
+
+    if (value === null || value === undefined || value === '') continue;
+
+    const normalizedKey = normalizeName(key);
+
+    if (!DATE_FIELD_KEYS.has(normalizedKey)) continue;
+
+    const iso = toISODate(value);
+
+    if (iso) return iso;
+
+  }
+
+  return '';
+
+}
+
+
+
+function ensureMSTEntriesForDeclRows(declRows, { actor = 'system', dryRun = false } = {}) {
+
+  const list = Array.isArray(declRows) ? declRows : [];
+
+  if (!list.length) {
+
+    return { additions: [], total: 0 };
+
+  }
+
+  const actorName = normalizeStr(actor) || 'system';
+
+  const existingRows = getMSTRows();
+
+  const knownMSTs = new Set(existingRows.map((row) => row.mst));
+
+  const additions = [];
+
+  const seen = new Set();
+
+  for (const row of list) {
+
+    if (!row || typeof row !== 'object') continue;
+
+    const mst = extractMSTFromDeclRow(row);
+
+    if (!mst || knownMSTs.has(mst) || seen.has(mst)) continue;
+
+    const company = extractCompanyNameFromDeclRow(row);
+
+    const effective_from = extractEffectiveDateFromDeclRow(row);
+
+    additions.push({
+
+      mst,
+
+      company,
+
+      person_import: '',
+
+      person_export: '',
+
+      team: '',
+
+      effective_from,
+
+      effective_to: '',
+
+      status: MST_ASSIGNMENT_STATUS.PENDING,
 
     });
+
+    seen.add(mst);
+
+  }
+
+  if (!additions.length) {
+
+    return { additions: [], total: 0 };
+
+  }
+
+  const loggedAdditions = additions.map((item) => ({
+
+    mst: item.mst,
+
+    company: item.company,
+
+    effective_from: item.effective_from,
+
+  }));
+
+  if (dryRun) {
+
+    return { additions: loggedAdditions, total: additions.length };
+
+  }
+
+  const merged = getMSTRowsRaw().concat(additions);
+
+  const sample = additions.slice(0, 3).map((item) => item.mst).join(', ');
+
+  const suffix = additions.length > 3 ? '…' : '';
+
+  const detailSample = sample ? ` (${sample}${suffix})` : '';
+
+  upsertMSTRows(merged, {
+
+    actor: actorName,
+
+    detail: `Tự động thêm ${additions.length} MST mới từ dữ liệu tờ khai${detailSample}`,
+
+  });
+
+  return { additions: loggedAdditions, total: additions.length };
 
 }
 
@@ -21197,6 +21913,8 @@ async function runEcusSync({
 
   const storedRows = writeDeclRows(mergedRows);
 
+  const mstSummary = ensureMSTEntriesForDeclRows(storedRows, { actor });
+
   const totalStored = storedRows.length;
 
   const skipLabel = reviewLocked > 0
@@ -21265,7 +21983,7 @@ async function runEcusSync({
 
     actor,
 
-    message: `ECUS sync (${syncReason}) +${totalInserted} / cap nhat ${updatedExisting} / ${skipLabel} (${range.from || '...'} -> ${range.to || '...'}) - tong luu: ${totalStored}${filterSummary}`,
+    message: `ECUS sync (${syncReason}) +${totalInserted} / cap nhat ${updatedExisting} / ${skipLabel} (${range.from || '...'} -> ${range.to || '...'}) - tong luu: ${totalStored} - MST moi: ${mstSummary.total}${filterSummary}`,
 
     summary: {
 
@@ -21284,6 +22002,8 @@ async function runEcusSync({
       locked: reviewLocked,
 
       stored: totalStored,
+
+      mstAdditions: mstSummary.total,
 
       includeTaxCodes: Array.from(includeSet),
 
@@ -21354,6 +22074,7 @@ async function runEcusSync({
       rowsReviewLocked: reviewLocked,
 
       totalStored,
+      mstAdditions: mstSummary.total,
 
       existingBefore: existingCount,
 
