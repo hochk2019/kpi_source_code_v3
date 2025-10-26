@@ -1,0 +1,15 @@
+.kpi-print-section {
+  page-break-after: always;
+}
+
+.kpi-print-section:last-child {
+  page-break-after: auto;
+}
+
+.kpi-print-chunk {
+  page-break-after: always;
+}
+
+.kpi-print-chunk:last-child {
+  page-break-after: auto;
+}

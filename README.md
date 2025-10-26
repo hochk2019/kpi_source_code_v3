@@ -155,6 +155,37 @@ Server đặt cookie phiên `kpi_session` dựa trên biến môi trường `KPI
 > `pnpm healthcheck` sau khi cài đặt trên Windows để kiểm tra nhanh tình trạng
 > môi trường trước khi triển khai.
 
+### 3.2. Script PowerShell kiểm thử toàn diện
+
+Để đảm bảo quy trình kiểm thử thống nhất trên Windows 11 Pro + PowerShell 7,
+chúng tôi cung cấp `scripts/run-all-checks.ps1`. Script sẽ:
+
+1. Kiểm tra phiên bản PowerShell/pnpm và tạo thư mục `.logs` lưu toàn bộ output.
+2. Chạy lần lượt `pnpm install --frozen-lockfile`, `pnpm lint`, `pnpm test`,
+   `pnpm build` và `pnpm test:screenshot`.
+3. Tự dừng ngay khi có bước thất bại, trả về mã lỗi khác 0 để dễ dàng tích hợp
+   vào quy trình CI/CD hoặc chạy thủ công.
+
+```powershell
+pwsh ./scripts/run-all-checks.ps1
+```
+
+Khi môi trường chưa sẵn sàng cho Playwright (thiếu trình duyệt, không cần ảnh
+chụp), thêm tham số `-SkipScreenshots` để bỏ qua bước cuối cùng.
+
+```powershell
+pwsh ./scripts/run-all-checks.ps1 -SkipScreenshots
+```
+
+### 3.3. Lint/test tự động trước khi commit & trên CI
+
+- Repo đã bật `simple-git-hooks`: sau mỗi lần `pnpm install` hệ thống tự cấu hình
+  hook `pre-commit` chạy `pnpm lint` và `pnpm test -- --runInBand`. Nếu cần kiểm
+  tra trước khi commit, chạy trực tiếp `pnpm precommit`.
+- Workflow GitHub Actions `frontend-ci.yml` tiếp tục chạy lint/test trên Windows
+  và Ubuntu. Khi muốn kiểm tra sâu hơn (bao gồm build và Playwright), hãy gọi
+  script `pwsh ./scripts/run-all-checks.ps1` ngay trong pipeline hoặc máy cục bộ.
+
 3. Tất cả dữ liệu (tờ khai, gán MST, quy tắc KPI, tài khoản, nhật ký…) được lưu
    trong `server/data/storage.sqlite`. Sao lưu file này định kỳ để tránh mất dữ
    liệu. Bạn có thể xóa `server/data/db.json` sau khi đã nâng cấp nếu không còn
@@ -172,25 +203,238 @@ Thông báo "Dữ liệu mới đang tạm lưu cục bộ vì backend chưa s�
 4. Xác minh biến môi trường `VITE_API_BASE` mà frontend đang sử dụng trỏ đúng tới địa chỉ backend.
 - Nếu gặp lỗi `Cannot find module .../server/index.js`, hãy kiểm tra lại thư mục `server` (đặc biệt file `index.js`) có còn tồn tại hay không. Sao lưu và tải lại dự án nếu thiếu thư mục, sau đó quay lại [bước cài đặt](#1-cài-đặt) để chạy lại `pnpm install` và `pnpm db:init` trước khi khởi động backend.
 
-Sau khi hoàn tất các bước trên, thông báo cảnh báo sẽ tự biến mất khi frontend đồng bộ thành công. Bạn cũng có thể tham khảo thêm phần [Kiểm thử](#6-kiểm-thử) để chạy `pnpm healthcheck` hỗ trợ tự chẩn đoán hệ thống.
+Sau khi hoàn tất các bước trên, thông báo cảnh báo sẽ tự biến mất khi frontend đồng bộ thành công. Bạn cũng có thể tham khảo thêm phần [Kiểm thử](#7-kiểm-thử) để chạy `pnpm healthcheck` hỗ trợ tự chẩn đoán hệ thống.
 
 ## 5. Tài khoản mặc định
 
-- `admin / admin123` – toàn quyền.
+- `admin / admin123` – quản trị viên toàn quyền.
+- `manager.hoangkimhoa / Hoa@2024`, `manager.thuyha / ThuyHa@2024`, `manager.hoainam / Nam@2024` – nhóm quản lý có đầy đủ quyền cấu hình (trừ quản lý tài khoản).
+- `lead.hoc / Hoc@2024`, `lead.phuong / Phuong@2024`, `lead.tuan / Tuan@2024` – trưởng nhóm phụ trách nhập liệu, MST và cảnh báo.
 - `nhanvien / 123456` – tài khoản mẫu với quyền hạn chế.
 
 Bạn có thể tạo thêm tài khoản và phân quyền trong tab **Tài khoản** của giao
 diện. Mọi thao tác chỉnh sửa đều ghi lại trong tab **Nhật ký**.
 
-## 6. Kiểm thử
+## 6. Trợ lý AI tiết kiệm token
+
+Từ phiên bản 3.0, backend bổ sung các route `/api/ai/...` cho phép cấu hình và
+sử dụng trợ lý AI nội bộ mà không phụ thuộc vào máy khác. Tính năng này mặc định
+đã bật với các thiết lập tiết kiệm token, đồng thời hỗ trợ chuyển đổi nhà cung
+cấp linh hoạt:
+
+| Route | Mô tả | Quyền yêu cầu |
+| ----- | ----- | ------------- |
+| `GET /api/ai/profile` | Trả về trạng thái rút gọn để người dùng biết nhà cung cấp đang bật, cache, TTL. | `aiAssistUse` |
+| `GET /api/ai/config` | Đọc cấu hình AI hiện tại, trả về cả danh sách cache gần nhất. | `aiAssistManage` |
+| `PUT /api/ai/config` | Cập nhật endpoint, prompt hệ thống, giới hạn token, TTL cache. | `aiAssistManage` |
+| `DELETE /api/ai/cache` | Xóa toàn bộ cache để ép gọi lại mô hình. | `aiAssistManage` |
+| `POST /api/ai/chat` | Gọi trợ lý AI với câu hỏi tiếng Việt, tự động dùng cache nếu có. | `aiAssistUse` |
+
+## 7. Hướng dẫn triển khai trên Windows 11 Pro + SQL Server 2008 R2 + PowerShell 7
+
+Tài liệu này tổng hợp các bước chuẩn hóa để chạy hệ thống đúng với môi trường
+khách hàng (máy trạm Windows 11 Pro, kết nối cơ sở dữ liệu ECUS5VNACCS trên SQL
+Server 2008 R2, shell mặc định PowerShell 7).
+
+### 7.1. Chuẩn bị môi trường
+
+1. **Cài đặt phần mềm bắt buộc**
+   - [Node.js 18 LTS](https://nodejs.org/) bản dành cho Windows (kèm theo `npm`).
+   - [pnpm](https://pnpm.io/installation) thông qua PowerShell:
+
+     ```powershell
+     iwr https://get.pnpm.io/install.ps1 -useb | iex
+     ```
+
+   - **PowerShell 7** (nếu máy chưa có) từ Microsoft Store hoặc MSI chính thức.
+   - **Visual Studio Build Tools 2019 trở lên** với workload "Desktop development with C++" để biên dịch `better-sqlite3`.
+   - **ODBC Driver 17 for SQL Server** (hoặc driver tương thích với SQL Server 2008 R2) để kết nối ECUS.
+
+2. **Thiết lập biến môi trường** (chạy trong PowerShell 7 với quyền admin):
+
+   ```powershell
+   [System.Environment]::SetEnvironmentVariable('KPI_LISTEN_HOST', '0.0.0.0', 'Machine')
+   [System.Environment]::SetEnvironmentVariable('ECUS_SQL_SERVER', 'TEN_MAY_CHU_SQL', 'Machine')
+   [System.Environment]::SetEnvironmentVariable('ECUS_SQL_DATABASE', 'ECUS5VNACCS', 'Machine')
+   [System.Environment]::SetEnvironmentVariable('ECUS_SQL_USER', 'ten_dang_nhap', 'Machine')
+   [System.Environment]::SetEnvironmentVariable('ECUS_SQL_PASSWORD', 'mat_khau', 'Machine')
+   ```
+
+   Có thể thay `'Machine'` bằng `'User'` nếu chỉ áp dụng cho người dùng hiện tại. Sau
+   khi đặt biến, hãy mở cửa sổ PowerShell mới trước khi chạy dự án.
+
+3. **Kiểm tra kết nối SQL Server 2008 R2**:
+
+   ```powershell
+   Test-NetConnection -ComputerName TEN_MAY_CHU_SQL -Port 1433
+   ```
+
+   Nếu kết quả `TcpTestSucceeded` là `False`, hãy kiểm tra firewall và đảm bảo SQL
+   Server bật chế độ "SQL Server and Windows Authentication". Bạn cũng nên mở SQL
+   Server Configuration Manager để bật TCP/IP.
+
+### 7.2. Thiết lập mã nguồn
+
+1. Mở PowerShell 7 **Run as Administrator** và clone repo:
+
+   ```powershell
+   git clone https://example.com/kpi_source_code_v3.git
+   cd kpi_source_code_v3
+   ```
+
+2. Cài đặt phụ thuộc:
+
+   ```powershell
+   pnpm install
+   pnpm db:init
+   pnpm healthcheck
+   ```
+
+   `pnpm healthcheck` giúp xác nhận driver SQLite, kiểm tra dung lượng sao lưu,
+   ổ đĩa và trạng thái SQL Server. Khi phát hiện vấn đề, script hiển thị chi tiết
+   từng cảnh báo để bạn xử lý kịp thời.
+
+3. Khởi chạy môi trường phát triển:
+
+   ```powershell
+   pnpm dev
+   ```
+
+   Cửa sổ PowerShell sẽ hiển thị log backend và frontend. Địa chỉ truy cập mặc
+   định:
+   - Frontend: http://localhost:5173
+   - API backend: http://localhost:5000
+
+   > **Kiểm thử nhanh:** sử dụng `pnpm test tests/automation.flows.test.js` để
+   > chạy bộ test tích hợp các quy trình chính (import tờ khai, gán MST, điểm KPI,
+   > phân quyền). Lệnh `pnpm test` sẽ chạy toàn bộ test suite bao gồm bài kiểm
+   > thử mới này.
+
+### 7.3. Đồng bộ dữ liệu ECUS5VNACCS
+
+1. Đảm bảo tài khoản ECUS có quyền đọc bảng tờ khai (`dbo.HoSoHaiQuan` hoặc tên
+   tương ứng) và các view liên quan.
+2. Mở file cấu hình `config/ecus.json` (nếu có) hoặc sử dụng UI trong tab **Import
+   Data** để nhập lại thông tin kết nối. Ứng dụng sẽ ưu tiên biến môi trường nếu có.
+3. Trong PowerShell, dùng script kiểm tra thử kết nối:
+
+   ```powershell
+   pnpm sql:ping
+   ```
+
+   Script sẽ báo thành công/ thất bại và gợi ý điều chỉnh timeout (`ECUS_SQL_REQUEST_TIMEOUT`).
+
+### 7.4. Quy trình build & triển khai nội bộ
+
+1. Build frontend:
+
+   ```powershell
+   pnpm build
+   ```
+
+2. Khởi động backend production (có thể tạo shortcut `.ps1` chạy cùng lúc):
+
+   ```powershell
+   pnpm start
+   ```
+
+3. Đặt shortcut trong `Task Scheduler` hoặc `shell:startup` để tự khởi động cùng Windows.
+4. Sao lưu thư mục `server/data/` và database SQL Server trước mỗi lần cập nhật.
+
+#### Lập lịch giám sát đồng bộ ECUS
+
+- Dùng script PowerShell `./scripts/schedule-ecus-monitor.ps1` để đăng ký tác vụ
+  chạy `monitor-ecus-sync.ps1` mỗi 5 phút. Script này yêu cầu biến môi trường
+  `MONITOR_ACCESS_TOKEN` (hoặc truyền trực tiếp `-MonitorToken`) trùng với cấu
+  hình backend.
+- Ví dụ: `pwsh ./scripts/schedule-ecus-monitor.ps1 -MonitorToken 'token-bi-mat'`
+  sẽ tạo tác vụ chạy bằng tài khoản SYSTEM và kích hoạt lần đầu ngay lập tức.
+- Khi cần gỡ bỏ tác vụ, chạy lại script với tham số `-Remove`.
+
+### 7.5. Các lỗi thường gặp trên Windows 11
+
+- **Lỗi `better-sqlite3.node` thiếu**: chạy `pnpm rebuild better-sqlite3` trong PowerShell 7 (Run as Administrator).
+- **Không kết nối được SQL Server**: kiểm tra lại driver ODBC, bật port 1433 và đảm bảo người dùng có quyền `db_datareader`.
+- **PowerShell Execution Policy**: nếu script `.ps1` bị chặn, dùng `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`.
+
+> Ghi chú: toàn bộ lệnh PowerShell ở trên tương thích với Windows Terminal. Nếu cần chạy trong PowerShell 5.1, hãy đảm bảo đã cài module
+> `Invoke-WebRequest` cập nhật và sử dụng encoding UTF-8 khi chỉnh sửa file cấu hình để tránh lỗi Unicode.
+
+Giao diện **Trợ lý AI** (tab mới trong dashboard) cho phép:
+
+- Người dùng có quyền `aiAssistUse` trò chuyện trực tiếp, đính kèm ngữ cảnh và chọn nhà cung cấp nếu cần.
+- Quản trị viên cấu hình prompt hệ thống, chuyển đổi giữa Azure OpenAI / Google AI Studio / Ollama, điều chỉnh TTL cache và xem cache gần nhất.
+
+### 6.1. Biến môi trường hỗ trợ Azure OpenAI, Google AI Studio & Ollama
+
+```env
+# Azure OpenAI (gợi ý dùng GPT-4o mini để tối ưu chi phí)
+AZURE_OPENAI_ENDPOINT=https://<tên-resource>.openai.azure.com
+AZURE_OPENAI_DEPLOYMENT=gpt-4o-mini
+AZURE_OPENAI_KEY=<mã khóa bí mật>
+AZURE_OPENAI_API_VERSION=2024-08-01-preview
+
+# Google AI Studio (Gemini, yêu cầu bật API Generative Language)
+GOOGLE_AI_STUDIO_API_KEY=<api key của dự án Google>
+# Tuỳ chọn: ghi đè endpoint và model nếu không dùng mặc định
+# GOOGLE_AI_STUDIO_ENDPOINT=https://generativelanguage.googleapis.com
+# GOOGLE_AI_STUDIO_MODEL=gemini-1.5-flash
+
+# Tuỳ chọn: Ollama nội bộ (Windows 11 có thể chạy qua WSL)
+OLLAMA_ENDPOINT=http://localhost:11434
+OLLAMA_MODEL=llama3.1:8b
+```
+
+Nếu không đặt biến môi trường, server vẫn tạo cấu hình mặc định và cho phép quản
+trị viên chỉnh sửa trong runtime bằng API kể trên.
+
+### 6.2. Cơ chế tiết kiệm token
+
+- Prompt và ngữ cảnh luôn được cắt xuống tối đa 4000 ký tự trước khi gửi.
+- Cache lưu trong SQLite (`kv_store`) với TTL mặc định 72 giờ và tối đa 50 mục.
+- Khi cache trùng khớp hash (provider + scope + prompt + ngữ cảnh), backend trả
+  lời ngay mà không gọi ra ngoài.
+- Usage (số token prompt/completion) được trả về để admin theo dõi ngân sách.
+
+### 6.3. Ví dụ gọi thử
+
+```bash
+curl -X POST \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <token đăng nhập>" \
+  http://localhost:5000/api/ai/chat \
+  -d '{
+    "scope": "bao-cao",
+    "prompt": "Tóm tắt điểm KPI cộng/trừ của tháng 8 cho phòng khai báo",
+    "context": "Tháng 8 có 4 nhân viên được cộng thêm điểm hỗ trợ thông quan."
+  }'
+```
+
+Nếu server trả về `{ "cached": true }`, nghĩa là câu hỏi tương tự đã được xử lý
+trong 72 giờ gần nhất nên không phát sinh chi phí token.
+
+### Đồng bộ quyền tài khoản với SQL Server
+
+- Backend tự động lấy và đẩy dữ liệu bảng `[dbo].[KPI_USER_ROLES]` (có thể đổi tên qua biến môi trường `KPI_ACCOUNT_SYNC_TABLE`) nhằm tránh ghi đè quyền đã cấu hình trên hệ thống kế thừa.
+- Khi thao tác với tài khoản, trường `updatedAt` sẽ được cập nhật và xuất hiện trong bản ghi SQLite để so sánh với cột `updated_at` trên SQL Server, bảo đảm bản ghi mới nhất luôn được ưu tiên.
+- Trước khi kích hoạt đồng bộ, hãy cấu hình `ECUS_SQL_SERVER` bằng tên máy chủ thật. Nếu để nguyên giá trị mặc định `Server`, ứng dụng sẽ bỏ qua việc kết nối để tránh phát sinh lỗi khi môi trường chưa sẵn sàng.
+- Bảng đồng bộ yêu cầu tối thiểu các cột `username`, `password_hash`, `role`, `name`, `permissions` (chuỗi JSON) và `updated_at` kiểu `DATETIME`.
+
+## 8. Kiểm thử
 
 ```bash
 pnpm lint
-pnpm test --run
+pnpm test -- --runInBand
 ```
 
-Các bài test sử dụng Vitest (môi trường `jsdom`) và không phụ thuộc vào máy chủ
-API, vì vậy có thể chạy độc lập.
+Các bài test sử dụng Vitest (môi trường `jsdom`) và khởi động mock backend
+ngay trong tiến trình kiểm thử, vì vậy không cần chạy server riêng.
+
+> **Mẹo cho môi trường chưa sẵn SQL Server/Ollama:** đặt biến môi trường
+> `KPI_SKIP_EXTERNAL_TESTS=1` trước khi gọi `pnpm test` (hoặc `pnpm precommit`).
+> Khi đó các nhóm kiểm thử tích hợp phụ thuộc SQL Server hoặc Ollama sẽ được
+> `skip`, giúp rút ngắn thời gian chạy trên máy trạm nhưng vẫn giữ nguyên phạm vi
+> kiểm thử đầy đủ trên CI.
 
 ### Kiểm thử API backend
 
@@ -199,7 +443,7 @@ integration test dùng `supertest`. Các test này tự động tạo cơ sở d
 SQLite trong bộ nhớ (`:memory:`) và mô phỏng kết nối SQL Server, giúp phát hiện
 lỗi kết nối hoặc mapping dữ liệu ngay trên CI.
 
-## 7. Công cụ hỗ trợ dữ liệu ECUS
+## 9. Công cụ hỗ trợ dữ liệu ECUS
 
 Các tác vụ CLI mới giúp kiểm thử/khảo sát dữ liệu ECUS khi chưa kết nối được
 SQL Server thật:
@@ -214,9 +458,20 @@ Bạn có thể dùng dữ liệu mock để chạy thử `/api/import/ecus/run`
 kết nối tới SQL Server, hoặc dùng lệnh `inspect` để xác định rõ tên cột trước
 khi viết câu truy vấn đồng bộ.
 
-## 8. Kế hoạch triển khai chi tiết cho Windows 11 & phân quyền
+## 10. Kế hoạch triển khai chi tiết cho Windows 11 & phân quyền
 
 Trước khi mở rộng triển khai cho toàn bộ đội ngũ, vui lòng tham khảo tài liệu
 [docs/windows11-permission-plan.md](docs/windows11-permission-plan.md) để nắm
 rõ kiến trúc, ma trận quyền và lộ trình kiểm thử hồi quy nhằm tránh phát sinh
 sai lệch dữ liệu khi vận hành trên Windows 11.
+
+Trong quá trình tạo Pull Request nếu gặp thông báo "Tệp nhị phân không được hỗ trợ" đối với file ảnh template, tham khảo thêm
+[docs/troubleshooting-pr-binary.md](docs/troubleshooting-pr-binary.md) để hiểu nguyên nhân và hướng xử lý.
+
+## 11. Định hướng giao diện & tính năng tương lai
+
+Để đáp ứng yêu cầu hiện đại hóa, gom gộp chức năng và bổ sung cơ chế chuyển đổi giao diện sáng/tối, vui lòng tham khảo tài liệu [Đề xuất cải tiến giao diện và tính năng nâng cao](docs/de-xuat-giao-dien-hien-dai.md). Tài liệu này tổng hợp lộ trình triển khai, bao gồm xây dựng design system, trung tâm điều phối dữ liệu, theme Light/Dark và nâng cấp trải nghiệm chatbot AI.
+
+- ✅ *Giai đoạn 1* – Hoàn tất nền tảng design system và theme Light/Dark cho toàn bộ dashboard KPI.
+- ✅ *Giai đoạn 2* – Trung tâm điều phối dữ liệu với quick action, chỉ báo sức khỏe dữ liệu và bộ lọc yêu thích đã sẵn sàng sử dụng trong module Import Data.
+- ✅ *Giai đoạn 3* – Hoàn thiện trợ lý AI đa chế độ, trung tâm thông báo real-time và tab "Sức khỏe dữ liệu" để giám sát chất lượng vận hành.

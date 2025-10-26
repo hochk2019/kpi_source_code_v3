@@ -7,16 +7,20 @@ on:
     branches: ["main"]
 
 jobs:
-  lint-and-test:
-    runs-on: ubuntu-latest
+  lint-and-format-windows:
+    runs-on: windows-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Enable Windows-friendly line endings
+        run: git config core.autocrlf true
+
       - name: Setup pnpm
         uses: pnpm/action-setup@v2
         with:
-          version: 8
+          version: 10.4.1
+          run_install: false
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -24,11 +28,36 @@ jobs:
           node-version: "18"
           cache: "pnpm"
 
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+      - name: Cài đặt dependencies (bao gồm @eslint/js, vitest)
+        run: pnpm install --frozen-lockfile --prod=false
 
       - name: Run lint
         run: pnpm lint
+
+      - name: Check formatting (CRLF)
+        run: pnpm format:check
+
+  test-ubuntu:
+    runs-on: ubuntu-latest
+    needs: lint-and-format-windows
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 10.4.1
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "18"
+          cache: "pnpm"
+
+      - name: Cài đặt dependencies (bao gồm @eslint/js, vitest)
+        run: pnpm install --frozen-lockfile --prod=false
 
       - name: Run tests
         run: pnpm test -- --runInBand
