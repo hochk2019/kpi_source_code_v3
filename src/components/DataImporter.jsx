@@ -5,65 +5,36 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import * as XLSX from "xlsx";
 
 import {
-
   getDeclRows,
-
   saveDeclRows,
-
   saveDeclRowDiffs,
-
   softDeleteDeclRows,
-
+  hardDeleteDeclRows,
   restoreDeclRows,
-
   sortDeclRows,
-
   pushImportLog,
-
   pushAuditLog,
-
   updateDeclRowFields,
-
   getDeclHistoryForRow,
-
   getTeamRoster,
-
   mapMemberNamesToTeams,
-
   markDeclRowsReviewed,
-
   unmarkDeclRowsReviewed,
-
   mapHQAgenciesByMST,
-
   getHQAgencies,
-
   parseAgencyList,
-
   normalizeStr,
-
   normalizeDeclarationNumber,
-
   normalizeName,
-
   refreshDeclRowsFromServer,
-
   IMPORT_COLUMN_IDS,
-
   IMPORT_AUX_COLUMN_IDS,
-
   IMPORT_SENSITIVE_COLUMNS,
-
   getImportColumnConfig,
-
   saveImportColumnConfig,
-
   subscribeImportColumnConfig,
-
   previewDeclRows,
-
   normalizeMST,
-
 } from "@/lib/store.js";
 
 import { mapRow, detectDateOrder } from "@/lib/importer.js";
@@ -5242,6 +5213,46 @@ export default function DataImporter({
 
   );
 
+  const canHardDeleteRow = useCallback(
+    (row) => {
+      if (!row || typeof row !== "object") return false;
+      if (!row.deleted_at) {
+        return isRowEditable(row);
+      }
+      const restoredLike = { ...row };
+      delete restoredLike.deleted_at;
+      delete restoredLike.deleted_by;
+      return isRowEditable(restoredLike);
+    },
+    [isRowEditable]
+  );
+  const filterHardDeleteKeys = useCallback(
+    (keys) => {
+      if (!Array.isArray(keys) || keys.length === 0) {
+        return { allowed: [], blocked: 0, reviewLocked: 0, reviewLockedKeys: [] };
+      }
+      const target = new Set(keys);
+      const allowed = [];
+      let blocked = 0;
+      let reviewLocked = 0;
+      const reviewLockedKeys = [];
+      for (const row of rawRows) {
+        const key = keyOfRow(row);
+        if (!target.has(key)) continue;
+        if (canHardDeleteRow(row)) {
+          allowed.push(key);
+        } else {
+          blocked += 1;
+          if (isRowReviewLocked(row)) {
+            reviewLocked += 1;
+            reviewLockedKeys.push(key);
+          }
+        }
+      }
+      return { allowed, blocked, reviewLocked, reviewLockedKeys };
+    },
+    [canHardDeleteRow, isRowReviewLocked, keyOfRow, rawRows]
+  );
   const ensureEditableKeys = useCallback(
 
     (keys, actionLabel = "thao tác") => {
@@ -5294,6 +5305,32 @@ export default function DataImporter({
 
   );
 
+  const ensureHardDeleteKeys = useCallback(
+    (keys, actionLabel = "xóa vĩnh viễn") => {
+      const { allowed, blocked, reviewLocked } = filterHardDeleteKeys(keys);
+      if (!allowed.length) {
+        if (reviewLocked > 0) {
+          alert(
+            `Không thể ${actionLabel} ${reviewLocked.toLocaleString("vi-VN")} tờ khai đã được rà soát. ${reviewLockMessage}`
+          );
+        } else if (blocked > 0 && editingRestrictionMessage) {
+          alert(editingRestrictionMessage);
+        } else if (keys?.length) {
+          alert("Không tìm thấy tờ khai phù hợp để xử lý.");
+        }
+        return null;
+      }
+      if (reviewLocked > 0) {
+        alert(
+          `Đã bỏ qua ${reviewLocked.toLocaleString("vi-VN")} tờ khai đã được rà soát (không thể ${actionLabel}).`
+        );
+      } else if (blocked > 0 && editingRestrictionMessage) {
+        alert(`Đã bỏ qua ${blocked} tờ khai không thuộc phạm vi của bạn khi ${actionLabel}.`);
+      }
+      return allowed;
+    },
+    [editingRestrictionMessage, filterHardDeleteKeys, reviewLockMessage]
+  );
   const [syncConfig, setSyncConfig] = useState(() => ({ ...DEFAULT_SYNC_CONFIG }));
 
   const [syncForm, setSyncForm] = useState(() => ({
@@ -9991,6 +10028,140 @@ const selectedReviewedCount = useMemo(() => {
 
   ]);
 
+  const hardDeleteRowsByKeys = useCallback((keys, { alreadyFiltered = false } = {}) => {
+
+    if (!Array.isArray(keys) || keys.length === 0) return;
+
+    let allowedKeys = keys;
+
+    if (!alreadyFiltered) {
+
+      const { allowed, blocked, reviewLocked, reviewLockedKeys } = filterHardDeleteKeys(keys);
+
+      if (!allowed.length) {
+
+        if (reviewLocked > 0) {
+
+          alert(
+
+            `Không thể xóa vĩnh viễn ${reviewLocked.toLocaleString("vi-VN")} tờ khai đã được rà soát. ${reviewLockMessage}`
+
+          );
+
+          pushAuditLog({
+
+            actor,
+
+            action: "decl.delete.hard.blocked",
+
+            detail: `Chặn xóa vĩnh viễn ${reviewLocked.toLocaleString("vi-VN")} tờ khai do review lock`,
+
+            meta: { keys: reviewLockedKeys, reason: "review lock" },
+
+          });
+
+        } else if (blocked > 0 && editingRestrictionMessage) {
+
+          alert(editingRestrictionMessage);
+
+        }
+
+        return;
+
+      }
+
+      if (reviewLocked > 0) {
+
+        alert(
+
+          `Đã bỏ qua ${reviewLocked.toLocaleString("vi-VN")} tờ khai đã được rà soát (không thể xóa vĩnh viễn).`
+
+        );
+
+        pushAuditLog({
+
+          actor,
+
+          action: "decl.delete.hard.partial-blocked",
+
+          detail: `Bỏ qua ${reviewLocked.toLocaleString("vi-VN")} tờ khai khi xóa vĩnh viễn do review lock`,
+
+          meta: { keys: reviewLockedKeys, reason: "review lock" },
+
+        });
+
+      } else if (blocked > 0 && editingRestrictionMessage) {
+
+        alert(`Đã bỏ qua ${blocked} tờ khai không thuộc phạm vi của bạn khi xóa vĩnh viễn.`);
+
+      }
+
+      allowedKeys = allowed;
+
+    }
+
+    const result = hardDeleteDeclRows(allowedKeys, {
+
+      actor,
+
+    });
+
+    const parts = [];
+
+    if (result.removed > 0) {
+
+      parts.push(`Đã xóa vĩnh viễn ${result.removed.toLocaleString("vi-VN")} tờ khai.`);
+
+    }
+
+    if (result.missing > 0) {
+
+      parts.push(`Không tìm thấy ${result.missing.toLocaleString("vi-VN")} tờ khai trong dữ liệu hiện tại.`);
+
+    }
+
+    if (parts.length > 0) {
+
+      alert(parts.join("\n"));
+
+    }
+
+    if (result.removed > 0) {
+
+      const removedSet = new Set(result.keys);
+
+      setHasUnsaved(false);
+
+      setSelectedKeys((prev) => prev.filter((key) => !removedSet.has(key)));
+
+      loadSavedRows();
+
+      fetchAlerts();
+
+    }
+
+  }, [
+
+    actor,
+
+    editingRestrictionMessage,
+
+    fetchAlerts,
+
+    filterHardDeleteKeys,
+
+    hardDeleteDeclRows,
+
+    loadSavedRows,
+
+    reviewLockMessage,
+
+    setHasUnsaved,
+
+    setSelectedKeys,
+
+  ]);
+
 
 
   const handleDeleteSelected = useCallback(() => {
@@ -10049,6 +10220,70 @@ const selectedReviewedCount = useMemo(() => {
 
   ]);
 
+  const handleHardDeleteSelected = useCallback(() => {
+
+    if (isReadOnlyForEdits) {
+
+      alert("Bạn không có quyền xóa vĩnh viễn tờ khai.");
+
+      return;
+
+    }
+
+    if (mode !== "saved") {
+
+      alert("Chỉ có thể xóa vĩnh viễn khi đang xem dữ liệu đã lưu.");
+
+      return;
+
+    }
+
+    if (selectedKeys.length === 0) {
+
+      alert("Chưa chọn tờ khai để xóa vĩnh viễn.");
+
+      return;
+
+    }
+
+    const allowedKeys = ensureHardDeleteKeys(selectedKeys, "xóa vĩnh viễn");
+
+    if (!allowedKeys) {
+
+      return;
+
+    }
+
+    if (
+
+      !window.confirm(
+
+        `Bạn chắc chắn muốn xóa vĩnh viễn ${allowedKeys.length.toLocaleString("vi-VN")} tờ khai đã chọn? Hành động không thể khôi phục.`
+
+      )
+
+    ) {
+
+      return;
+
+    }
+
+    hardDeleteRowsByKeys(allowedKeys, { alreadyFiltered: true });
+
+  }, [
+
+    ensureHardDeleteKeys,
+
+    hardDeleteRowsByKeys,
+
+    isReadOnlyForEdits,
+
+    mode,
+
+    selectedKeys,
+
+  ]);
+
 
 
   const handleDeleteSingle = useCallback((row) => {
@@ -10094,6 +10329,62 @@ const selectedReviewedCount = useMemo(() => {
     isReadOnlyForEdits,
 
     isRowEditable,
+
+    keyOfRow,
+
+    mode,
+
+  ]);
+
+
+
+  const handleHardDeleteSingle = useCallback((row) => {
+
+    if (isReadOnlyForEdits) {
+
+      alert("Bạn không có quyền xóa vĩnh viễn tờ khai.");
+
+      return;
+
+    }
+
+    if (mode !== "saved") {
+
+      alert("Chỉ có thể xóa vĩnh viễn khi đang xem dữ liệu đã lưu.");
+
+      return;
+
+    }
+
+    if (!row) {
+
+      return;
+
+    }
+
+    const allowedKeys = ensureHardDeleteKeys([keyOfRow(row)], "xóa vĩnh viễn");
+
+    if (!allowedKeys) {
+
+      return;
+
+    }
+
+    if (!window.confirm("Bạn chắc chắn muốn xóa vĩnh viễn tờ khai này? Hành động không thể khôi phục.")) {
+
+      return;
+
+    }
+
+    hardDeleteRowsByKeys(allowedKeys, { alreadyFiltered: true });
+
+  }, [
+
+    ensureHardDeleteKeys,
+
+    hardDeleteRowsByKeys,
+
+    isReadOnlyForEdits,
 
     keyOfRow,
 
@@ -16250,25 +16541,53 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
 
           {canEdit && (
 
-            <button
+            <>
 
-              type="button"
+              <button
 
-              onClick={handleDeleteSelected}
+                type="button"
 
-              disabled={!canDelete}
+                onClick={handleDeleteSelected}
 
-              className={`px-3 py-1 rounded border ${
+                disabled={!canDelete}
 
-                canDelete ? "bg-red-50 text-red-600 border-red-300" : "opacity-50 cursor-not-allowed"
+                className={`px-3 py-1 rounded border ${
 
-              }`}
+                  canDelete ? "bg-red-50 text-red-600 border-red-300" : "opacity-50 cursor-not-allowed"
 
-            >
+                }`}
 
-              Đánh dấu xóa các tờ khai đã chọn
+              >
 
-            </button>
+                Đánh dấu xóa các tờ khai đã chọn
+
+              </button>
+
+              <button
+
+                type="button"
+
+                onClick={handleHardDeleteSelected}
+
+                disabled={!canDelete}
+
+                className={`px-3 py-1 rounded border ${
+
+                  canDelete
+
+                    ? "bg-red-200 text-red-700 border-red-400 hover:bg-red-300"
+
+                    : "opacity-50 cursor-not-allowed"
+
+                }`}
+
+              >
+
+                Xóa vĩnh viễn các tờ khai đã chọn
+
+              </button>
+
+            </>
 
           )}
 
@@ -17425,6 +17744,20 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
 
                           </button>
 
+                          <button
+
+                            type="button"
+
+                            onClick={() => handleHardDeleteSingle(r)}
+
+                            className="rounded bg-red-500 px-2 py-0.5 text-xs text-white hover:bg-red-600"
+
+                          >
+
+                            Xóa vĩnh viễn
+
+                          </button>
+
                           <span className="text-[11px] text-gray-500">
 
                             {`Đã xóa${rowDeletedBy ? ` bởi ${rowDeletedBy}` : ""}${deletedTimestampLabel ? ` lúc ${deletedTimestampLabel}` : ""}`}
@@ -17435,19 +17768,37 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
 
                       ) : (
 
-                        <button
+                        <div className="flex flex-col gap-1">
 
-                          type="button"
+                          <button
 
-                          onClick={() => handleDeleteSingle(r)}
+                            type="button"
 
-                          className="rounded bg-red-500 px-2 py-0.5 text-xs text-white hover:bg-red-600"
+                            onClick={() => handleDeleteSingle(r)}
 
-                        >
+                            className="rounded bg-red-500 px-2 py-0.5 text-xs text-white hover:bg-red-600"
 
-                          Đánh dấu xóa
+                          >
 
-                        </button>
+                            Đánh dấu xóa
+
+                          </button>
+
+                          <button
+
+                            type="button"
+
+                            onClick={() => handleHardDeleteSingle(r)}
+
+                            className="rounded bg-red-700 px-2 py-0.5 text-xs text-white hover:bg-red-800"
+
+                          >
+
+                            Xóa vĩnh viễn
+
+                          </button>
+
+                        </div>
 
                       )}
 

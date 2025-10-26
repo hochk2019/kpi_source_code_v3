@@ -1156,3 +1156,252 @@ describe('DataImporter preview UI', () => {
 
 });
 
+
+
+describe('DataImporter saved data actions', () => {
+
+  const savedDeclRows = [
+
+    {
+
+      so_tk: 'TK-HARD-1',
+
+      nhanh: '01',
+
+      date: '2025-07-01',
+
+      mst: '0100100001',
+
+      cong_ty: 'Công ty A',
+
+      status: 'existing',
+
+    },
+
+    {
+
+      so_tk: 'TK-HARD-2',
+
+      nhanh: '01',
+
+      date: '2025-07-02',
+
+      mst: '0100100002',
+
+      cong_ty: 'Công ty B',
+
+      status: 'existing',
+
+    },
+
+  ];
+
+  let alertMock;
+
+  let fetchMock;
+
+
+
+  beforeEach(() => {
+
+    window.confirm = vi.fn(() => true);
+
+    alertMock = vi.spyOn(window, 'alert').mockImplementation(() => {});
+
+    fetchMock = vi.fn((input) => {
+
+      const url = typeof input === 'string' ? input : input?.url || '';
+
+      if (url === '/api/import/alerts') {
+
+        return Promise.resolve(
+
+          createJsonResponse({
+
+            ok: true,
+
+            alerts: [],
+
+            summary: { outstanding: 0, totalTracked: 0, lastEvaluatedAt: null },
+
+          })
+
+        );
+
+      }
+
+      if (url.startsWith('/api/filter-presets')) {
+
+        return Promise.resolve(createJsonResponse({ ok: true, scope: 'data-importer', presets: [] }));
+
+      }
+
+      return Promise.resolve(createJsonResponse({ ok: true }));
+
+    });
+
+    vi.spyOn(auth, 'fetchWithAuth').mockImplementation(fetchMock);
+
+    clearStorageCache();
+
+    sharedSetItem(DECL_KEY, JSON.stringify(savedDeclRows));
+
+    sharedSetItem(store.AUDIT_KEY, JSON.stringify([]));
+
+    sharedSetItem('import_logs_v1', JSON.stringify([]));
+
+  });
+
+
+
+  afterEach(() => {
+
+    alertMock.mockRestore();
+
+    vi.restoreAllMocks();
+
+  });
+
+
+
+  it('hiển thị nút xóa vĩnh viễn và loại bỏ hoàn toàn tờ khai', async () => {
+
+    render(
+
+      <DataImporter
+
+        canEdit
+
+        currentUser={{ username: 'deleter', permissions: [], role: 'admin' }}
+
+      />
+
+    );
+
+    await screen.findAllByRole('table');
+
+    const targetRow = await screen.findByText('Công ty B');
+
+    const rowScope = targetRow.closest('tr');
+
+    expect(rowScope).toBeTruthy();
+
+    const hardDeleteButton = within(rowScope).getByRole('button', { name: 'Xóa vĩnh viễn' });
+
+    await userEvent.click(hardDeleteButton);
+
+    expect(window.confirm).toHaveBeenCalled();
+
+    await waitFor(() => {
+
+      expect(screen.queryByText('Công ty B')).not.toBeInTheDocument();
+
+    });
+
+    expect(store.getDeclRows()).toHaveLength(1);
+
+    expect(alertMock).toHaveBeenCalledWith(expect.stringContaining('Đã xóa vĩnh viễn 1 tờ khai'));
+
+  });
+
+
+
+  it('giữ nguyên luồng xóa mềm và khôi phục sau khi thêm xóa vĩnh viễn', async () => {
+
+    render(
+
+      <DataImporter
+
+        canEdit
+
+        currentUser={{ username: 'operator', permissions: [], role: 'admin' }}
+
+      />
+
+    );
+
+    await screen.findAllByRole('table');
+
+    const initialRow = await screen.findByText('Công ty B');
+
+    expect(initialRow).toBeInTheDocument();
+
+    const initialRowScope = initialRow.closest('tr');
+
+    expect(initialRowScope).toBeTruthy();
+
+
+    const tableElement = initialRowScope.closest('table');
+
+    expect(tableElement).toBeTruthy();
+
+    const softDeleteButton = within(initialRowScope).getByRole('button', { name: 'Đánh dấu xóa' });
+
+    await userEvent.click(softDeleteButton);
+
+    expect(alertMock).toHaveBeenCalledWith(expect.stringContaining('Đã đánh dấu xóa 1 tờ khai'));
+
+    alertMock.mockClear();
+
+    let toggleDeleted;
+    let ancestor = tableElement?.parentElement ?? null;
+
+    while (ancestor && !toggleDeleted) {
+      const candidates = within(ancestor).queryAllByRole('button', {
+        name: /Hiện bản ghi đã xóa/,
+      });
+
+      if (candidates.length > 0) {
+        [toggleDeleted] = candidates;
+        break;
+      }
+
+      ancestor = ancestor.parentElement;
+    }
+
+    expect(toggleDeleted).toBeTruthy();
+
+    await userEvent.click(toggleDeleted);
+
+    await waitFor(() => {
+      expect(
+        within(ancestor ?? document.body).getAllByRole('button', {
+          name: /Ẩn bản ghi đã xóa/,
+        })
+      ).not.toHaveLength(0);
+    });
+
+    const restoredRowLabel = await within(tableElement).findByText('Công ty B');
+
+    const restoredRowScope = restoredRowLabel.closest('tr');
+
+    expect(restoredRowScope).toBeTruthy();
+
+    const restoreButton = within(restoredRowScope).getByRole('button', { name: 'Khôi phục' });
+
+    const hardDeleteButton = within(restoredRowScope).getByRole('button', { name: 'Xóa vĩnh viễn' });
+
+    expect(hardDeleteButton).toBeInTheDocument();
+
+    await userEvent.click(restoreButton);
+
+    await waitFor(() => {
+
+      expect(alertMock).toHaveBeenCalledWith('Đã khôi phục 1 tờ khai.');
+
+    });
+
+    const resetRow = await screen.findByText('Công ty B');
+
+    const resetRowScope = resetRow.closest('tr');
+
+    expect(resetRowScope).toBeTruthy();
+
+    const deleteButtonAgain = within(resetRowScope).getByRole('button', { name: 'Đánh dấu xóa' });
+
+    expect(deleteButtonAgain).toBeInTheDocument();
+
+  });
+
+});
+

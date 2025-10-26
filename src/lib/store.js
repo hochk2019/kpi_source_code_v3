@@ -5886,6 +5886,63 @@ export function softDeleteDeclRows(keys, { actor = "system", detail = "" } = {})
   };
 }
 
+export function hardDeleteDeclRows(keys, { actor = "system", detail = "" } = {}) {
+  const list = Array.isArray(keys) ? keys.map((key) => String(key || "").trim()).filter(Boolean) : [];
+  if (list.length === 0) {
+    return { removed: 0, missing: 0, keys: [], missingKeys: list };
+  }
+
+  const actorName = normalizeStr(actor) || "system";
+  const rows = getDeclRowsRaw();
+  const keySet = new Set(list);
+  const seenKeys = new Set();
+  const removedKeys = [];
+
+  const nextRows = [];
+  for (const row of rows) {
+    if (!row || typeof row !== "object") {
+      nextRows.push(row);
+      continue;
+    }
+    const key = getDeclRowSimpleKey(row);
+    if (!keySet.has(key)) {
+      nextRows.push(row);
+      continue;
+    }
+    seenKeys.add(key);
+    removedKeys.push(key);
+  }
+
+  const removed = removedKeys.length;
+  const missingKeys = list.filter((key) => !seenKeys.has(key));
+
+  if (removed > 0) {
+    persistAndAnnotateDeclRows(nextRows);
+    const actionDetail = detail && detail.trim().length > 0
+      ? detail
+      : `Xóa vĩnh viễn ${removed.toLocaleString("vi-VN")} tờ khai từ giao diện Import Data`;
+    pushAuditLog({
+      actor: actorName,
+      action: "decl.delete.hard",
+      detail: actionDetail,
+      meta: { count: removed, keys: removedKeys.slice() },
+    });
+    pushImportLog({
+      actor: actorName,
+      kind: "error",
+      message: actionDetail,
+      meta: { count: removed, keys: removedKeys.slice() },
+    });
+  }
+
+  return {
+    removed,
+    missing: missingKeys.length,
+    keys: removedKeys,
+    missingKeys,
+  };
+}
+
 export function restoreDeclRows(keys, { actor = "system", detail = "" } = {}) {
   const list = Array.isArray(keys) ? keys.map((key) => String(key || "").trim()).filter(Boolean) : [];
   if (list.length === 0) {
@@ -8531,7 +8588,7 @@ export default {
 
   getMSTRowsRaw, getMSTMap, getMSTFor, upsertMSTRows,
 
-  getDeclRows, saveDeclRows, saveDeclRowDiffs, softDeleteDeclRows, restoreDeclRows, markDeclRowsReviewed, unmarkDeclRowsReviewed, sortDeclRows, getRecentDeclRows,
+  getDeclRows, saveDeclRows, saveDeclRowDiffs, softDeleteDeclRows, hardDeleteDeclRows, restoreDeclRows, markDeclRowsReviewed, unmarkDeclRowsReviewed, sortDeclRows, getRecentDeclRows,
 
   getDeclHistoryForRow,
 
