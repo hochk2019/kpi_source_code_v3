@@ -189,6 +189,12 @@ const EDITABLE_FIELD_KEYS = [
 
   "licenseManualCount",
 
+  "licenseCodes",
+
+  "licenseSourceCodes",
+
+  "licenseExcludedCodes",
+
 ];
 
 
