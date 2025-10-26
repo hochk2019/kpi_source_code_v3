@@ -888,6 +888,156 @@ describe('saveDeclRows', () => {
 
 
 
+  it('làm mới số giấy phép hiển thị khi mã hợp lệ thay đổi', () => {
+
+    const existing = [
+
+      {
+
+        so_tk: '00000000001',
+
+        nhanh: '',
+
+        date: '2025-01-01',
+
+        licenseCodes: ['ZK01', 'ZK02'],
+
+        licenseExcludedCodes: [],
+
+        licenseManualCount: 2,
+
+        licenses: 2,
+
+        so_luong_gp: 2,
+
+      },
+
+    ];
+
+
+
+    const incoming = [
+
+      {
+
+        so_tk: '00000000001',
+
+        nhanh: '',
+
+        date: '2025-01-01',
+
+        licenseCodes: ['zk01', '  zk03  '],
+
+        licenseExcludedCodes: ['zk03'],
+
+      },
+
+    ];
+
+
+
+    saveDeclRows(existing, { overwrite: true });
+
+    const summary = saveDeclRows(incoming, { overwrite: false });
+
+
+
+    expect(summary.updated).toBe(1);
+
+    const stored = getDeclRows();
+
+    expect(stored).toHaveLength(1);
+
+    expect(stored[0]).toMatchObject({
+
+      licenseCodes: ['ZK01', 'ZK03'],
+
+      licenseExcludedCodes: ['ZK03'],
+
+      licenses: 1,
+
+      so_luong_gp: 1,
+
+    });
+
+    expect(stored[0].licenseManualCount).toBeUndefined();
+
+  });
+
+
+
+  it('áp dụng số GP nhập tay mới khi dữ liệu đến đáng tin cậy', () => {
+
+    const baseline = [
+
+      {
+
+        so_tk: '00000000002',
+
+        nhanh: '',
+
+        date: '2025-01-02',
+
+        licenseCodes: ['ZK05'],
+
+        licenses: 1,
+
+        so_luong_gp: 1,
+
+      },
+
+    ];
+
+
+
+    const incoming = [
+
+      {
+
+        so_tk: '00000000002',
+
+        nhanh: '',
+
+        date: '2025-01-02',
+
+        licenseCodes: ['ZK05'],
+
+        licenseManualCount: 3,
+
+      },
+
+    ];
+
+
+
+    saveDeclRows(baseline, { overwrite: true });
+
+    const summary = saveDeclRows(incoming, { overwrite: false });
+
+
+
+    expect(summary.updated).toBe(1);
+
+    const stored = getDeclRows();
+
+    expect(stored).toHaveLength(1);
+
+    expect(stored[0]).toMatchObject({
+
+      licenseCodes: ['ZK05'],
+
+      licenseManualCount: 3,
+
+      licenses: 3,
+
+      so_luong_gp: 3,
+
+    });
+
+  });
+
+
+
   it('tự động thêm MST mới vào bảng gán với trạng thái mặc định', () => {
 
     expect(getMSTMap()).toHaveLength(0);
