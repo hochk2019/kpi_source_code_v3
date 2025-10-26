@@ -939,6 +939,71 @@ function mergeDeclarationRowClient(existing, incoming) {
 
   const merged = { ...existing };
 
+  const sanitizeManualCount = (value) => {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed) || parsed < 0) {
+      return null;
+    }
+    return Math.max(0, Math.round(parsed));
+  };
+  const normalizeLicenseList = (value) => {
+    if (!Array.isArray(value)) {
+      return [];
+    }
+    const seen = new Set();
+    const normalized = [];
+    for (const item of value) {
+      const text = normalizeStr(item || "");
+      if (!text) continue;
+      const upper = text.toUpperCase();
+      if (!upper || seen.has(upper)) continue;
+      seen.add(upper);
+      normalized.push(upper);
+    }
+    return normalized;
+  };
+  const areLicenseSetsEqual = (a, b) => {
+    if (a.length !== b.length) {
+      return false;
+    }
+    const lookup = new Set(a);
+    if (lookup.size !== b.length) {
+      return false;
+    }
+    for (const value of b) {
+      if (!lookup.has(value)) {
+        return false;
+      }
+    }
+    return true;
+  };
+  const computeLicenseCountFromLists = (codes, excluded, manualOverride) => {
+    if (manualOverride !== null && manualOverride !== undefined) {
+      return manualOverride;
+    }
+    if (!codes.length) {
+      return 0;
+    }
+    const excludeSet = new Set(excluded);
+    let count = 0;
+    for (const code of codes) {
+      if (!excludeSet.has(code)) {
+        count += 1;
+      }
+    }
+    return count;
+  };
+  const previousLicenseCodes = normalizeLicenseList(existing?.licenseCodes);
+  const previousExcludedCodes = normalizeLicenseList(existing?.licenseExcludedCodes);
+  const previousAutoLicenseCount = computeLicenseCountFromLists(
+    previousLicenseCodes,
+    previousExcludedCodes,
+    null
+  );
+  const existingManualSanitized = sanitizeManualCount(existing?.licenseManualCount);
+  const existingHasManualOverride =
+    existingManualSanitized !== null && existingManualSanitized !== previousAutoLicenseCount;
+
   const skipFields = new Set([
 
     'nhan_vien',
@@ -1123,49 +1188,77 @@ function mergeDeclarationRowClient(existing, incoming) {
 
 
 
-  const fillNumeric = (field, { preferMax = false } = {}) => {
+  const nextLicenseCodes = normalizeLicenseList(merged.licenseCodes);
 
-    if (!Object.prototype.hasOwnProperty.call(incoming, field)) return;
+  const nextExcludedCodes = normalizeLicenseList(merged.licenseExcludedCodes);
 
-    const parsed = Number(incoming[field]);
+  const listsChanged =
 
-    if (!Number.isFinite(parsed)) return;
+    !areLicenseSetsEqual(previousLicenseCodes, nextLicenseCodes) ||
 
-    if (!preferMax) {
+    !areLicenseSetsEqual(previousExcludedCodes, nextExcludedCodes);
 
-      merged[field] = parsed;
+  const incomingManualSanitized = sanitizeManualCount(incoming?.licenseManualCount);
 
-      return;
+  let manualOverrideValue = null;
 
-    }
+  let manualOverrideChanged = false;
 
-    const current = Number(merged[field]);
+  if (existingHasManualOverride) {
 
-    if (!Number.isFinite(current)) {
+    manualOverrideValue = existingManualSanitized;
 
-      merged[field] = parsed;
+  } else if (incomingManualSanitized !== null) {
 
-      return;
+    manualOverrideValue = incomingManualSanitized;
 
-    }
+    manualOverrideChanged = true;
 
-    if (parsed <= 0 && current > 0) {
+  } else {
 
-      return;
+    manualOverrideValue = null;
 
-    }
+    if (existingManualSanitized !== null) {
 
-    if (current <= 0 || parsed > current) {
-
-      merged[field] = parsed;
+      manualOverrideChanged = true;
 
     }
 
-  };
+  }
 
-  fillNumeric('licenses', { preferMax: true });
+  if (manualOverrideValue !== null) {
 
-  fillNumeric('so_luong_gp', { preferMax: true });
+    merged.licenseManualCount = manualOverrideValue;
+
+  } else {
+
+    delete merged.licenseManualCount;
+
+  }
+
+  const shouldRefreshLicenses = listsChanged || manualOverrideChanged;
+
+  if (shouldRefreshLicenses) {
+
+    merged.licenseCodes = nextLicenseCodes;
+
+    merged.licenseExcludedCodes = nextExcludedCodes;
+
+    const refreshedCount = computeLicenseCountFromLists(
+
+      nextLicenseCodes,
+
+      nextExcludedCodes,
+
+      manualOverrideValue
+
+    );
+
+    merged.licenses = refreshedCount;
+
+    merged.so_luong_gp = refreshedCount;
+
+  }
 
   if (Object.prototype.hasOwnProperty.call(merged, '__forceReviewedOverride')) {
 
