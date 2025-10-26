@@ -8,6 +8,10 @@ import {
 
   getDeclRows,
 
+  DECL_KEY,
+
+  hardDeleteDeclRows,
+
   sortDeclRows,
 
   getRecentDeclRows,
@@ -2009,6 +2013,102 @@ describe('hq agency helpers', () => {
     expect(historyAfterDelete[0].type).toBe('delete');
 
     expect(historyAfterDelete[0].mst).toBe('0101234567');
+
+  });
+
+});
+
+
+
+describe('hardDeleteDeclRows', () => {
+
+  const IMPORT_LOG_KEY = 'import_logs_v1';
+
+  beforeEach(() => {
+
+    clearStorageCache();
+
+    sharedSetItem(AUDIT_KEY, JSON.stringify([]));
+
+    sharedSetItem(IMPORT_LOG_KEY, JSON.stringify([]));
+
+  });
+
+
+
+  it('xóa vĩnh viễn tờ khai và ghi log cảnh báo', () => {
+
+    const rows = [
+
+      { so_tk: '00000001001', nhanh: '01', mst: '0100000001', cong_ty: 'Công ty Một' },
+
+      { so_tk: '00000001002', nhanh: '01', mst: '0100000002', cong_ty: 'Công ty Hai' },
+
+    ];
+
+    sharedSetItem(DECL_KEY, JSON.stringify(rows));
+
+    const result = hardDeleteDeclRows(['00000001001_01'], { actor: 'tester' });
+
+    expect(result.removed).toBe(1);
+
+    expect(result.missing).toBe(0);
+
+    expect(result.keys).toEqual(['00000001001_01']);
+
+    const stored = JSON.parse(sharedGetItem(DECL_KEY));
+
+    expect(stored).toHaveLength(1);
+
+    expect(stored[0].so_tk).toBe('00000001002');
+
+    const auditLogs = JSON.parse(sharedGetItem(AUDIT_KEY));
+
+    expect(auditLogs[0]).toMatchObject({ action: 'decl.delete.hard', actor: 'tester' });
+
+    expect(auditLogs[0].meta).toMatchObject({ count: 1, keys: ['00000001001_01'] });
+
+    const importLogs = JSON.parse(sharedGetItem(IMPORT_LOG_KEY));
+
+    expect(importLogs[0]).toMatchObject({ kind: 'error', actor: 'tester' });
+
+    expect(importLogs[0].meta).toMatchObject({ count: 1, keys: ['00000001001_01'] });
+
+  });
+
+
+
+  it('trả về missing khi tờ khai không tồn tại và giữ nguyên dữ liệu', () => {
+
+    const rows = [
+
+      { so_tk: '00000002001', nhanh: '01', mst: '0100000001' },
+
+    ];
+
+    sharedSetItem(DECL_KEY, JSON.stringify(rows));
+
+    const result = hardDeleteDeclRows(['00000009999_00'], { actor: 'tester' });
+
+    expect(result.removed).toBe(0);
+
+    expect(result.missing).toBe(1);
+
+    expect(result.keys).toHaveLength(0);
+
+    const stored = JSON.parse(sharedGetItem(DECL_KEY));
+
+    expect(stored).toHaveLength(1);
+
+    expect(stored[0].so_tk).toBe('00000002001');
+
+    const auditLogs = JSON.parse(sharedGetItem(AUDIT_KEY));
+
+    expect(auditLogs).toHaveLength(0);
+
+    const importLogs = JSON.parse(sharedGetItem(IMPORT_LOG_KEY));
+
+    expect(importLogs).toHaveLength(0);
 
   });
 
