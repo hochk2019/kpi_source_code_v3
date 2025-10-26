@@ -6401,7 +6401,7 @@ function buildAiProviderSummary(provider, { defaultProviderId, fallbackProviderI
 
     isDefault: id === defaultProviderId,
 
-    isFallback: fallbackProviderId ? id === fallbackProviderId : false,
+    isFallback: Boolean(fallbackProviderId) && id === fallbackProviderId,
 
   };
 
