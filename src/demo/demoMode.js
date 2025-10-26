@@ -717,6 +717,7 @@ export async function enableDemoMode() {
       if (url.includes('/api/ai/chat')) return createResponse(responses.aiChat)
 
       if (url.includes('/api/ai/providers/test')) return createResponse(responses.aiProviderTest)
+      if (url.includes('/api/ai/providers/ping')) return createResponse(responses.aiProviderTest)
 
       if (url.includes('/api/storage/')) return createResponse(responses.storageOk)
 
