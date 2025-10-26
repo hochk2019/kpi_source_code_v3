@@ -438,6 +438,42 @@ const ECUS_QUERY_SECTION_BOUNDARY =
 
   /\b(order\s+by|group\s+by|having|option\b|for\s+xml)\b/i;
 
+const LEGACY_ECUS_RANGE_FROM = /lp\.Ngay_DK\s*>=\s*@from/giu;
+
+const LEGACY_ECUS_RANGE_TO =
+
+  /lp\.Ngay_DK\s*<\s*DATEADD\s*\(\s*DAY\s*,\s*1\s*,\s*@to\s*\)/giu;
+
+
+
+function upgradeLegacyEcusRangeFilter(queryText) {
+
+  if (typeof queryText !== 'string' || !queryText.trim()) {
+
+    return queryText;
+
+  }
+
+  let upgraded = queryText.replace(
+
+    LEGACY_ECUS_RANGE_FROM,
+
+    'COALESCE(lp.Ngay_DK, md.NGAY_DK) >= @from'
+
+  );
+
+  upgraded = upgraded.replace(
+
+    LEGACY_ECUS_RANGE_TO,
+
+    'COALESCE(lp.Ngay_DK, md.NGAY_DK) < DATEADD(DAY, 1, @to)'
+
+  );
+
+  return upgraded;
+
+}
+
 
 
 function joinSqlSections(base, addition) {
@@ -542,9 +578,9 @@ function optimizeEcusCoalesceRangeFilter(queryText) {
 
     'WHERE',
 
-    '  lp.Ngay_DK >= @from',
+    '  COALESCE(lp.Ngay_DK, md.NGAY_DK) >= @from',
 
-    '  AND lp.Ngay_DK < DATEADD(DAY, 1, @to)',
+    '  AND COALESCE(lp.Ngay_DK, md.NGAY_DK) < DATEADD(DAY, 1, @to)',
 
   ].join('\n');
 
@@ -578,7 +614,9 @@ function normalizeEcusQueryInput(value) {
 
   }
 
-  return optimizeEcusCoalesceRangeFilter(text);
+  const upgraded = upgradeLegacyEcusRangeFilter(text);
+
+  return optimizeEcusCoalesceRangeFilter(upgraded);
 
 }
 
@@ -762,7 +800,9 @@ const DEFAULT_ECUS_SYNC_CONFIG = {
 
     ') AS co_counts',
 
-    'WHERE lp.Ngay_DK >= @from AND lp.Ngay_DK < DATEADD(DAY, 1, @to)',
+    'WHERE',
+    '  COALESCE(lp.Ngay_DK, md.NGAY_DK) >= @from',
+    '  AND COALESCE(lp.Ngay_DK, md.NGAY_DK) < DATEADD(DAY, 1, @to)',
 
   'ORDER BY lp.Ngay_DK, so_tk',
 
