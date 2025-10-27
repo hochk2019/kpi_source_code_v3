@@ -4881,6 +4881,12 @@ export default function KPIAdjustments({ currentUser }) {
 
                         </span>
 
+                        <p className="mt-1 text-xs text-muted-foreground">
+
+                          Giá trị được tính bằng Số lượng bổ sung nhân với Điểm bổ sung mỗi đơn vị.
+
+                        </p>
+
                       </div>
 
                     </div>
