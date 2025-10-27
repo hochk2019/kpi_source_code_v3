@@ -13140,11 +13140,13 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
 
                 data-testid="deleted-list-table"
 
+                type="always"
+
               >
 
                 <div className="mt-4 rounded border">
 
-                  <table className={`min-w-full overflow-hidden rounded text-sm ${ZEBRA_TABLE_BODY_CLASS}`}>
+                  <table className={`min-w-full text-sm ${ZEBRA_TABLE_BODY_CLASS}`}>
 
                     <thead className="bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-500">
 
