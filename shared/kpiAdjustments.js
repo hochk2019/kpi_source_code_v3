@@ -260,6 +260,16 @@ export const KPI_ADJUSTMENT_CATEGORY_CONFIG = Object.freeze({
 
     groupLabel: 'Hoàn thuế',
 
+    extraPointConfig: {
+
+      quantityLabel: 'Số tờ khai bổ sung',
+
+      unitLabel: 'Điểm bổ sung mỗi tờ khai',
+
+      defaultUnit: 0.25,
+
+    },
+
   },
 
   teamwork: {

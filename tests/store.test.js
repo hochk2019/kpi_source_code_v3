@@ -2874,6 +2874,50 @@ describe('kpi adjustment settings', () => {
 
   });
 
+  it('tính tổng điểm bao gồm điểm bổ sung cho hoàn thuế', () => {
+
+    sharedSetItem(KPI_ADJUSTMENTS_KEY, JSON.stringify([]));
+
+    const defaults = getKpiAdjustmentSettings();
+
+    expect(defaults.categories.tax_refund_customer.extraUnitPoints).toBe(0.25);
+
+    const entry = saveKpiAdjustment(
+
+      {
+
+        category: 'tax_refund_customer',
+
+        month: '2025-03',
+
+        staffName: 'Dũng',
+
+        quantity: 3,
+
+        extraQuantity: 2,
+
+      },
+
+      { actor: 'admin', permissions: { adjustApprove: true } }
+
+    );
+
+    expect(entry.unitPoints).toBe(2);
+
+    expect(entry.extraUnitPoints).toBe(0.25);
+
+    expect(entry.extraQuantity).toBe(2);
+
+    expect(entry.totalPoints).toBe(6.5);
+
+    const [stored] = getKpiAdjustments();
+
+    expect(stored.totalPoints).toBe(6.5);
+
+    expect(stored.extraUnitPoints).toBe(0.25);
+
+  });
+
   it('chuẩn hoá điểm mỗi đơn vị theo quyền override', () => {
 
     saveKpiAdjustmentSettings(
