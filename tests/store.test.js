@@ -12,6 +12,8 @@ import {
 
   hardDeleteDeclRows,
 
+  softDeleteDeclRows,
+
   sortDeclRows,
 
   getRecentDeclRows,
@@ -47,6 +49,12 @@ import {
   AUDIT_KEY,
 
   getAuditLogs,
+
+  DECL_DELETED_LOG_KEY,
+
+  DECL_DELETED_LOG_LIMIT,
+
+  getDeletedDeclLog,
 
   HQ_KEY,
 
@@ -2892,3 +2900,117 @@ describe('kpi adjustment settings', () => {
 
 });
 
+
+describe('deleted declaration log', () => {
+  afterEach(() => {
+    sharedSetItem(DECL_KEY, JSON.stringify([]));
+    sharedSetItem(DECL_DELETED_LOG_KEY, JSON.stringify([]));
+  });
+
+  it('ghi nhật ký khi xóa mềm và xóa cứng', () => {
+    saveDeclRows(
+      [
+        { so_tk: '10000000001', nhanh: '01', mst: '0100100010', ten_dn: 'Công ty Ánh Dương' },
+        { so_tk: '10000000002', nhanh: '02', mst: '0100100020', ten_dn: 'Công ty Bình Minh' },
+      ],
+      { overwrite: true },
+    );
+
+    const softResult = softDeleteDeclRows(['10000000001_01'], { actor: 'thu.ky' });
+    expect(softResult.deleted).toBe(1);
+
+    const softLog = getDeletedDeclLog();
+    expect(softLog).toHaveLength(1);
+    expect(softLog[0]).toMatchObject({
+      so_tk: '10000000001',
+      type: 'soft',
+      deleted_by: 'thu.ky',
+      nhanh: '01',
+      mst: '0100100010',
+      company: 'Công ty Ánh Dương',
+    });
+
+    const hardResult = hardDeleteDeclRows(['10000000002_02'], { actor: 'quan.ly' });
+    expect(hardResult.removed).toBe(1);
+
+    const hardLog = getDeletedDeclLog({ type: 'hard' });
+    expect(hardLog).toHaveLength(1);
+    expect(hardLog[0]).toMatchObject({
+      so_tk: '10000000002',
+      type: 'hard',
+      deleted_by: 'quan.ly',
+    });
+  });
+
+  it('giới hạn số bản ghi và giữ bản mới nhất ở đầu', () => {
+    const limit = DECL_DELETED_LOG_LIMIT;
+    const existing = Array.from({ length: limit }, (_, index) => ({
+      so_tk: String(index + 1).padStart(11, '0'),
+      nhanh: '00',
+      mst: `MST-${index + 1}`,
+      company: `Doanh nghiệp ${index + 1}`,
+      type: index % 2 === 0 ? 'soft' : 'hard',
+      deleted_at: `2024-05-${String((index % 28) + 1).padStart(2, '0')}T08:00:00.000Z`,
+      deleted_by: 'system',
+    }));
+
+    sharedSetItem(DECL_DELETED_LOG_KEY, JSON.stringify(existing));
+
+    saveDeclRows(
+      [{ so_tk: '90000000001', nhanh: '01', mst: '0999999999', ten_dn: 'Công ty Giới Hạn' }],
+      { overwrite: true },
+    );
+
+    softDeleteDeclRows(['90000000001_01'], { actor: 'tester' });
+
+    const stored = JSON.parse(sharedGetItem(DECL_DELETED_LOG_KEY) || '[]');
+    expect(stored).toHaveLength(limit);
+    expect(stored[0].so_tk).toBe('90000000001');
+
+    const droppedSoTk = String(limit).padStart(11, '0');
+    expect(stored.some((entry) => entry.so_tk === droppedSoTk)).toBe(false);
+  });
+
+  it('lọc theo khoảng thời gian và loại xóa', () => {
+    sharedSetItem(
+      DECL_DELETED_LOG_KEY,
+      JSON.stringify([
+        {
+          so_tk: '10000000010',
+          nhanh: '01',
+          mst: '0101',
+          company: 'Doanh nghiệp A',
+          type: 'soft',
+          deleted_at: '2024-05-10T09:00:00.000Z',
+          deleted_by: 'alpha',
+        },
+        {
+          so_tk: '10000000011',
+          nhanh: '02',
+          mst: '0102',
+          company: 'Doanh nghiệp B',
+          type: 'hard',
+          deleted_at: '2024-06-05T10:15:00.000Z',
+          deleted_by: 'beta',
+        },
+        {
+          so_tk: '10000000012',
+          nhanh: '03',
+          mst: '0103',
+          company: 'Doanh nghiệp C',
+          type: 'hard',
+          deleted_at: '2024-07-01T11:00:00.000Z',
+          deleted_by: 'beta',
+        },
+      ]),
+    );
+
+    const hardJune = getDeletedDeclLog({ from: '2024-06-01', to: '2024-06-30', type: 'hard' });
+    expect(hardJune).toHaveLength(1);
+    expect(hardJune[0].so_tk).toBe('10000000011');
+
+    const softOnly = getDeletedDeclLog({ type: 'soft' });
+    expect(softOnly).toHaveLength(1);
+    expect(softOnly[0].so_tk).toBe('10000000010');
+  });
+});

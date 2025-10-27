@@ -112,6 +112,8 @@ function normalizeDateInput(value) {
 
 }
 
+export { normalizeDateInput };
+
 
 
 function buildAgencySearchString(row) {
