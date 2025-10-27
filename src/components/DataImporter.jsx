@@ -62,7 +62,7 @@ import {
 
 } from "@/shared/declSearch.js";
 
-import { formatDisplayDate, formatDateRangeLabel } from "@/shared/format.js";
+import { formatDisplayDate, formatDateRangeLabel, formatDateTime } from "@/shared/format.js";
 
 import { fetchWithAuth } from "@/auth/localAuth.js";
 
@@ -3472,6 +3472,18 @@ export default function DataImporter({
 
   const [showDeletedRows, setShowDeletedRows] = useState(false);
 
+  const [deletedDialogOpen, setDeletedDialogOpen] = useState(false);
+
+  const [hardDeletedRows, setHardDeletedRows] = useState([]);
+
+  const [hardDeletedLoading, setHardDeletedLoading] = useState(false);
+
+  const [hardDeletedError, setHardDeletedError] = useState("");
+
+  const [hardDeletedRangeKey, setHardDeletedRangeKey] = useState(null);
+
+  const hardDeletedAbortRef = useRef(null);
+
   const savedRowSnapshotRef = useRef(new Map());
 
   const [baselineVersion, setBaselineVersion] = useState(0);
@@ -4104,6 +4116,8 @@ export default function DataImporter({
 
   const canReviewAlerts = canEdit || canManageAlerts;
 
+  const canViewSavedRows = canEdit || canManageAlerts || canManageSync || canImportUpload;
+
   const normalizedRole = normalizeRoleKey(currentUser?.role);
 
   const isTeamLead = normalizedRole === TEAM_LEAD_ROLE;
@@ -4257,65 +4271,53 @@ export default function DataImporter({
 
   const coThreshold = useMemo(() => Math.max(0, Number(coFilterMin) || 0), [coFilterMin]);
 
-  const normalizedFilters = useMemo(
-
-    () =>
-
-      normalizeDeclSearchFilters({
-
-        query,
-
-        mst: normalizedQuickMST,
-
-        company: normalizedQuickCompany,
-
-        statuses: statusFilters,
-
-        range: { from: searchRange.from, to: searchRange.to },
-
-        noStaff: filterNoStaff,
-
-        noTeam: filterNoTeam,
-
-        duplicate: filterDuplicate11,
-
-        coMode: coFilterMode,
-
-        coMin: coThreshold,
-
-        includeDeleted: showDeletedRows,
-
-      }),
-
-    [
-
+  const baseFilterInputs = useMemo(
+    () => ({
       query,
-
+      mst: normalizedQuickMST,
+      company: normalizedQuickCompany,
+      statuses: statusFilters,
+      range: { from: searchRange.from, to: searchRange.to },
+      noStaff: filterNoStaff,
+      noTeam: filterNoTeam,
+      duplicate: filterDuplicate11,
+      coMode: coFilterMode,
+      coMin: coThreshold,
+    }),
+    [
+      query,
       normalizedQuickMST,
-
       normalizedQuickCompany,
-
       statusFilters,
-
       searchRange.from,
-
       searchRange.to,
-
       filterNoStaff,
-
       filterNoTeam,
-
       filterDuplicate11,
-
       coFilterMode,
-
       coThreshold,
-
-      showDeletedRows,
-
     ]
-
   );
+
+  const normalizedFilters = useMemo(
+    () =>
+      normalizeDeclSearchFilters({
+        ...baseFilterInputs,
+        includeDeleted: showDeletedRows,
+      }),
+    [baseFilterInputs, showDeletedRows]
+  );
+
+  const softDeletedRows = useMemo(() => {
+    if (!Array.isArray(rawRows) || rawRows.length === 0) {
+      return [];
+    }
+    const filtered = filterDeclRows(rawRows, {
+      ...baseFilterInputs,
+      includeDeleted: true,
+    });
+    return filtered.filter((row) => row && row.deleted_at);
+  }, [rawRows, baseFilterInputs]);
 
   const shouldUseServerSearch = useMemo(
 
@@ -4324,6 +4326,121 @@ export default function DataImporter({
     [mode, rawRows.length]
 
   );
+
+  const fetchHardDeletedRows = useCallback(
+    async ({ from, to, rangeKey }) => {
+      if (hardDeletedAbortRef.current) {
+        hardDeletedAbortRef.current.abort();
+      }
+      const controller = new AbortController();
+      hardDeletedAbortRef.current = controller;
+      setHardDeletedLoading(true);
+      setHardDeletedError("");
+      try {
+        const params = new URLSearchParams();
+        params.set("type", "hard");
+        if (from) params.set("from", from);
+        if (to) params.set("to", to);
+        const queryString = params.toString();
+        const target = `/api/import/deleted-declarations${queryString ? `?${queryString}` : ""}`;
+        const response = await fetchWithAuth(target, {
+          cache: "no-store",
+          credentials: "include",
+          signal: controller.signal,
+        });
+        if (!response.ok) {
+          const message = await extractErrorMessage(
+            response,
+            "Không thể tải danh sách tờ khai đã xóa vĩnh viễn."
+          );
+          throw new Error(message);
+        }
+        let payload = null;
+        try {
+          payload = await response.json();
+        } catch {
+          payload = null;
+        }
+        const rows = Array.isArray(payload?.rows)
+          ? payload.rows
+          : Array.isArray(payload?.data)
+            ? payload.data
+            : [];
+        setHardDeletedRows(rows);
+        setHardDeletedRangeKey(rangeKey);
+      } catch (error) {
+        if (controller.signal.aborted) {
+          return;
+        }
+        console.error("Không thể tải danh sách tờ khai đã xóa vĩnh viễn", error);
+        setHardDeletedError(error?.message || "Không thể tải danh sách tờ khai đã xóa vĩnh viễn.");
+        setHardDeletedRows([]);
+        setHardDeletedRangeKey(rangeKey);
+      } finally {
+        if (hardDeletedAbortRef.current === controller) {
+          hardDeletedAbortRef.current = null;
+        }
+        setHardDeletedLoading(false);
+      }
+    },
+    [fetchWithAuth]
+  );
+
+  useEffect(() => {
+    if (!deletedDialogOpen) {
+      return;
+    }
+    const rangeKey = `${searchRange.from || ""}|${searchRange.to || ""}`;
+    if (rangeKey === hardDeletedRangeKey && (hardDeletedRows.length > 0 || hardDeletedError)) {
+      return;
+    }
+    fetchHardDeletedRows({
+      from: searchRange.from || "",
+      to: searchRange.to || "",
+      rangeKey,
+    });
+  }, [
+    deletedDialogOpen,
+    searchRange.from,
+    searchRange.to,
+    hardDeletedRangeKey,
+    hardDeletedRows.length,
+    hardDeletedError,
+    fetchHardDeletedRows,
+  ]);
+
+  useEffect(
+    () => () => {
+      if (hardDeletedAbortRef.current) {
+        hardDeletedAbortRef.current.abort();
+      }
+    },
+    []
+  );
+
+  const handleDeletedDialogOpenChange = useCallback(
+    (nextOpen) => {
+      if (!nextOpen && hardDeletedAbortRef.current) {
+        hardDeletedAbortRef.current.abort();
+        hardDeletedAbortRef.current = null;
+        setHardDeletedLoading(false);
+      }
+      setDeletedDialogOpen(nextOpen);
+    },
+    []
+  );
+
+  const handleHardDeletedRetry = useCallback(() => {
+    if (hardDeletedLoading) {
+      return;
+    }
+    const rangeKey = `${searchRange.from || ""}|${searchRange.to || ""}`;
+    fetchHardDeletedRows({
+      from: searchRange.from || "",
+      to: searchRange.to || "",
+      rangeKey,
+    });
+  }, [fetchHardDeletedRows, hardDeletedLoading, searchRange.from, searchRange.to]);
 
   const effectivePreviewRows = useMemo(() => {
 
@@ -5158,6 +5275,97 @@ export default function DataImporter({
   );
 
   const keyOfRow = useCallback((row) => getRowKey(row), []);
+
+  const filteredHardDeletedRows = useMemo(() => {
+    if (!Array.isArray(hardDeletedRows) || hardDeletedRows.length === 0) {
+      return [];
+    }
+    const filtered = filterDeclRows(hardDeletedRows, {
+      ...baseFilterInputs,
+      includeDeleted: true,
+    });
+    return filtered.filter(
+      (row) => row && (row.deleted_at || row.deletedAt || row.deleted_at_tm || row.deletedAtTm)
+    );
+  }, [hardDeletedRows, baseFilterInputs]);
+
+  const deletedEntries = useMemo(() => {
+    const entries = [];
+    const pushEntry = (row, type, fallbackIndex) => {
+      if (!row || typeof row !== "object") {
+        return;
+      }
+      const deletedRaw =
+        row.deleted_at || row.deletedAt || row.deleted_at_tm || row.deletedAtTm || row.deletedTimestamp;
+      let deletedTimestamp = Number.NaN;
+      let deletedAtLabel = "";
+      if (deletedRaw) {
+        try {
+          const date = new Date(deletedRaw);
+          if (!Number.isNaN(date.getTime())) {
+            deletedTimestamp = date.getTime();
+            deletedAtLabel = formatDateTime(date, { withSeconds: true }) || date.toLocaleString("vi-VN");
+          } else {
+            deletedAtLabel = `${deletedRaw}`;
+          }
+        } catch {
+          deletedAtLabel = `${deletedRaw}`;
+        }
+      }
+      const declarationNumber =
+        row.so_tk_full || row.so_tk || row.number || row.declaration_number || row.declarationNumber || "";
+      const branch = row.nhanh || row.branch || "";
+      const mst = row.mst || row.ma_so_thue || row.tax_code || "";
+      const company =
+        row.cong_ty || row.company || row.ten_cong_ty || row.doanh_nghiep || row.enterprise || "";
+      const rawDate = row.date || row.raw_date || "";
+      const deletedByRaw = row.deleted_by || row.deletedBy || row.actor || row.deleted_user || "";
+      const deletedByLabel = deletedByRaw ? deletedByRaw : "Không rõ";
+      const entryKey =
+        type === "soft"
+          ? `soft:${keyOfRow(row)}`
+          : `hard:${row.key || row.id || declarationNumber || fallbackIndex}`;
+      entries.push({
+        key: entryKey,
+        type,
+        typeLabel: type === "soft" ? "Đã xóa tạm thời" : "Đã xóa vĩnh viễn",
+        tone: type === "soft" ? "warning" : "danger",
+        soTk: declarationNumber,
+        branch,
+        mst,
+        company,
+        dateLabel: formatDisplayDate(rawDate),
+        deletedAtLabel,
+        deletedByLabel,
+        deletedTimestamp,
+      });
+    };
+    softDeletedRows.forEach((row, index) => {
+      pushEntry(row, "soft", index);
+    });
+    filteredHardDeletedRows.forEach((row, index) => {
+      pushEntry(row, "hard", index);
+    });
+    return entries.sort((a, b) => {
+      const tsA = Number.isFinite(a.deletedTimestamp) ? a.deletedTimestamp : 0;
+      const tsB = Number.isFinite(b.deletedTimestamp) ? b.deletedTimestamp : 0;
+      if (tsA === tsB) {
+        return (a.key || "").localeCompare(b.key || "");
+      }
+      return tsB - tsA;
+    });
+  }, [filteredHardDeletedRows, keyOfRow, softDeletedRows]);
+
+  const softDeletedCount = softDeletedRows.length;
+
+  const hardDeletedCount = filteredHardDeletedRows.length;
+
+  const deletedTotalCount = deletedEntries.length;
+
+  const deletedRangeLabel = useMemo(() => {
+    const label = formatDateRangeLabel({ from: searchRange.from || "", to: searchRange.to || "" });
+    return label || "Không giới hạn";
+  }, [searchRange.from, searchRange.to]);
 
   const filterEditableKeys = useCallback(
 
@@ -12843,6 +13051,170 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
 
     <>
 
+      <Dialog open={deletedDialogOpen} onOpenChange={handleDeletedDialogOpenChange}>
+
+        <DialogContent className="max-w-5xl">
+
+          <DialogHeader>
+
+            <DialogTitle>Danh sách tờ khai đã xóa</DialogTitle>
+
+            <DialogDescription>
+
+              Danh sách hiển thị các tờ khai đã bị xóa tạm thời và xóa vĩnh viễn dựa trên bộ lọc hiện tại.
+
+            </DialogDescription>
+
+          </DialogHeader>
+
+          <div className="mt-2 text-sm text-gray-600">
+
+            Khoảng thời gian: {deletedRangeLabel}
+
+          </div>
+
+          <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
+
+            <span className="font-medium text-gray-700">
+
+              Tổng số: {deletedTotalCount.toLocaleString("vi-VN")}
+
+            </span>
+
+            <StatusBadge tone="warning">
+
+              Xóa tạm thời: {softDeletedCount.toLocaleString("vi-VN")}
+
+            </StatusBadge>
+
+            <StatusBadge tone="danger">
+
+              Xóa vĩnh viễn: {hardDeletedCount.toLocaleString("vi-VN")}
+
+            </StatusBadge>
+
+            {hardDeletedLoading ? (
+
+              <span className="text-xs text-gray-500">Đang tải danh sách xóa vĩnh viễn...</span>
+
+            ) : null}
+
+          </div>
+
+          {hardDeletedError ? (
+
+            <div className="mt-3 rounded border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+
+              <p>{hardDeletedError}</p>
+
+              <button
+
+                type="button"
+
+                className="mt-2 inline-flex items-center rounded border border-red-200 bg-white px-3 py-1 text-xs font-medium text-red-700 hover:bg-red-50"
+
+                onClick={handleHardDeletedRetry}
+
+                disabled={hardDeletedLoading}
+
+              >
+
+                Thử tải lại
+
+              </button>
+
+            </div>
+
+          ) : null}
+
+          {deletedEntries.length > 0 ? (
+
+            <ScrollArea className="mt-4 max-h-[60vh] rounded border" data-testid="deleted-list-table">
+
+              <table className={`min-w-full text-sm ${ZEBRA_TABLE_BODY_CLASS}`}>
+
+                <thead className="bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-500">
+
+                  <tr>
+
+                    <th className="px-3 py-2">Số tờ khai</th>
+
+                    <th className="px-3 py-2">Nhánh</th>
+
+                    <th className="px-3 py-2">MST</th>
+
+                    <th className="px-3 py-2">Công ty</th>
+
+                    <th className="px-3 py-2">Loại xóa</th>
+
+                    <th className="px-3 py-2">Ngày tờ khai</th>
+
+                    <th className="px-3 py-2">Thời điểm xóa</th>
+
+                    <th className="px-3 py-2">Người xóa</th>
+
+                  </tr>
+
+                </thead>
+
+                <tbody>
+
+                  {deletedEntries.map((entry) => (
+
+                    <tr key={entry.key} className="border-b border-gray-100 last:border-b-0">
+
+                      <td className="whitespace-nowrap px-3 py-2 font-medium text-gray-900">
+
+                        {entry.soTk || "Không rõ"}
+
+                      </td>
+
+                      <td className="whitespace-nowrap px-3 py-2 text-gray-700">{entry.branch || "-"}</td>
+
+                      <td className="whitespace-nowrap px-3 py-2 text-gray-700">{entry.mst || "-"}</td>
+
+                      <td className="px-3 py-2 text-gray-700">{entry.company || "-"}</td>
+
+                      <td className="whitespace-nowrap px-3 py-2">
+
+                        <StatusBadge tone={entry.tone}>{entry.typeLabel}</StatusBadge>
+
+                      </td>
+
+                      <td className="whitespace-nowrap px-3 py-2 text-gray-700">{entry.dateLabel || "-"}</td>
+
+                      <td className="whitespace-nowrap px-3 py-2 text-gray-700">{entry.deletedAtLabel || "-"}</td>
+
+                      <td className="whitespace-nowrap px-3 py-2 text-gray-700">{entry.deletedByLabel}</td>
+
+                    </tr>
+
+                  ))}
+
+                </tbody>
+
+              </table>
+
+            </ScrollArea>
+
+          ) : (
+
+            <p className="mt-4 text-sm text-gray-500">
+
+              {hardDeletedLoading
+
+                ? "Đang tải dữ liệu tờ khai đã xóa..."
+
+                : "Không có tờ khai nào phù hợp với điều kiện lọc hiện tại."}
+
+            </p>
+
+          )}
+
+        </DialogContent>
+
+      </Dialog>
+
       <Dialog open={columnConfigOpen} onOpenChange={setColumnConfigOpen}>
 
         <DialogContent className="max-w-md">
@@ -15272,6 +15644,26 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
           Hiển thị dữ liệu đã lưu
 
         </button>
+
+        {canViewSavedRows && (
+
+          <button
+
+            type="button"
+
+            onClick={() => setDeletedDialogOpen(true)}
+
+            className="px-3 py-1.5 rounded border"
+
+            data-testid="deleted-list-trigger"
+
+          >
+
+            Danh sách tờ khai đã xóa
+
+          </button>
+
+        )}
 
         <span className="ml-auto text-sm text-gray-600">{modeLabel}</span>
 

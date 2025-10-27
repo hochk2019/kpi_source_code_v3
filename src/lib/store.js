@@ -1052,7 +1052,7 @@ function mergeDeclarationRowClient(existing, incoming) {
 
 
 
-  const mergeNormalizedArrayField = (field, value, { uppercase = false } = {}) => {
+  const mergeNormalizedArrayField = (field, value, { uppercase = false, replace = false } = {}) => {
 
     const incomingList = toArray(value)
 
@@ -1067,6 +1067,14 @@ function mergeDeclarationRowClient(existing, incoming) {
       .filter(Boolean);
 
     if (!incomingList.length) {
+
+      return;
+
+    }
+
+    if (replace) {
+
+      merged[field] = Array.from(new Set(incomingList));
 
       return;
 
@@ -1150,7 +1158,15 @@ function mergeDeclarationRowClient(existing, incoming) {
 
     }
 
-    if (key === 'licenseCodes' || key === 'licenseSourceCodes' || key === 'licenseExcludedCodes') {
+    if (key === 'licenseCodes' || key === 'licenseExcludedCodes') {
+
+      mergeNormalizedArrayField(key, value, { uppercase: true, replace: true });
+
+      continue;
+
+    }
+
+    if (key === 'licenseSourceCodes') {
 
       mergeNormalizedArrayField(key, value, { uppercase: true });
 

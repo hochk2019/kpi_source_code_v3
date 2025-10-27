@@ -83,6 +83,7 @@ const createJsonResponse = (payload, status = 200) => ({
 describe('DataImporter preview UI', () => {
 
   let fetchMock;
+  let fetchSpy;
 
   let currentDeclRows;
 
@@ -166,6 +167,66 @@ describe('DataImporter preview UI', () => {
 
     },
 
+    {
+
+      so_tk: 'TK-CO-DELETED-SOFT',
+
+      date: '2025-07-02',
+
+      nhanh: 'HN',
+
+      mst: '0100000999',
+
+      cong_ty: 'Công ty đã xóa mềm',
+
+      loai_hinh: 'A11',
+
+      muc_hang: 2,
+
+      co: '',
+
+      has_co: false,
+
+      co_line_count: 0,
+
+      status: 'existing',
+
+      deleted_at: '2025-07-04T08:30:00.000Z',
+
+      deleted_by: 'manager',
+
+    },
+
+    {
+
+      so_tk: 'TK-CO-DELETED-OLD',
+
+      date: '2025-06-20',
+
+      nhanh: 'HP',
+
+      mst: '0100000888',
+
+      cong_ty: 'Công ty xóa mềm cũ',
+
+      loai_hinh: 'A12',
+
+      muc_hang: 1,
+
+      co: '',
+
+      has_co: false,
+
+      co_line_count: 0,
+
+      status: 'existing',
+
+      deleted_at: '2025-06-25T08:30:00.000Z',
+
+      deleted_by: 'manager',
+
+    },
+
   ];
 
   const previewRows = [
@@ -207,6 +268,50 @@ describe('DataImporter preview UI', () => {
       status: 'existing',
 
       co_line_count: 0,
+
+    },
+
+  ];
+
+  const hardDeletedRows = [
+
+    {
+
+      so_tk: 'TK-HARD-RECENT',
+
+      date: '2025-07-02',
+
+      nhanh: 'HCM',
+
+      mst: '0200000666',
+
+      cong_ty: 'Công ty xóa cứng',
+
+      status: 'existing',
+
+      deleted_at: '2025-07-06T09:15:00.000Z',
+
+      deleted_by: 'admin',
+
+    },
+
+    {
+
+      so_tk: 'TK-HARD-LATE',
+
+      date: '2025-07-15',
+
+      nhanh: 'DN',
+
+      mst: '0300000777',
+
+      cong_ty: 'Công ty xóa cứng muộn',
+
+      status: 'existing',
+
+      deleted_at: '2025-07-20T08:00:00.000Z',
+
+      deleted_by: 'admin',
 
     },
 
@@ -319,6 +424,12 @@ describe('DataImporter preview UI', () => {
         }
 
         return Promise.resolve(createJsonResponse({ ok: true, total, page, pageSize, rows }));
+
+      }
+
+      if (url.startsWith('/api/import/deleted-declarations')) {
+
+        return Promise.resolve(createJsonResponse({ ok: true, rows: hardDeletedRows }));
 
       }
 
@@ -436,7 +547,7 @@ describe('DataImporter preview UI', () => {
 
     });
 
-    vi.spyOn(auth, 'fetchWithAuth').mockImplementation(fetchMock);
+    fetchSpy = vi.spyOn(auth, 'fetchWithAuth').mockImplementation(fetchMock);
 
     clearStorageCache();
 
@@ -448,7 +559,10 @@ describe('DataImporter preview UI', () => {
 
   afterEach(() => {
 
-    vi.restoreAllMocks();
+    if (fetchSpy) {
+      fetchSpy.mockRestore();
+      fetchSpy = null;
+    }
 
   });
 
@@ -599,6 +713,80 @@ describe('DataImporter preview UI', () => {
     expect(runBody.includeTaxCodes).toEqual(['0100109106', '0100109107']);
 
     expect(runBody.excludeTaxCodes).toEqual(['0100109108', '0100109109']);
+
+  });
+
+
+
+  it('hiển thị danh sách tờ khai đã xóa và lọc theo ngày', async () => {
+
+    render(
+
+      <DataImporter
+
+        canEdit
+
+        currentUser={{ username: 'manager', permissions: ['importEdit'], role: 'manager' }}
+
+      />
+
+    );
+
+    const [fromInput] = await screen.findAllByLabelText('Từ ngày');
+
+    fireEvent.change(fromInput, { target: { value: '2025-07-02' } });
+
+    const [toInput] = screen.getAllByLabelText('Đến ngày');
+
+    fireEvent.change(toInput, { target: { value: '2025-07-02' } });
+
+    const deletedButtons = await screen.findAllByTestId('deleted-list-trigger');
+
+    await userEvent.click(deletedButtons[0]);
+
+    const deletedDialog = await screen.findByRole('dialog', { name: 'Danh sách tờ khai đã xóa' });
+
+    expect(deletedDialog).toBeInTheDocument();
+
+    await waitFor(() => {
+
+      expect(within(deletedDialog).getByText('TK-CO-DELETED-SOFT')).toBeInTheDocument();
+
+    });
+
+    expect(within(deletedDialog).queryByText('TK-CO-DELETED-OLD')).not.toBeInTheDocument();
+
+    expect(within(deletedDialog).getByText('TK-HARD-RECENT')).toBeInTheDocument();
+
+    expect(within(deletedDialog).queryByText('TK-HARD-LATE')).not.toBeInTheDocument();
+
+    expect(within(deletedDialog).getByText('Xóa tạm thời: 1', { exact: false })).toBeInTheDocument();
+
+    expect(within(deletedDialog).getByText('Xóa vĩnh viễn: 1', { exact: false })).toBeInTheDocument();
+
+    const deletedCall = fetchMock.mock.calls.find(([url]) =>
+
+      url.startsWith('/api/import/deleted-declarations')
+
+    );
+
+    expect(deletedCall?.[0]).toContain('from=2025-07-02');
+
+    expect(deletedCall?.[0]).toContain('to=2025-07-02');
+
+    fireEvent.keyDown(document, { key: 'Escape', code: 'Escape' });
+
+    fireEvent.keyUp(document, { key: 'Escape', code: 'Escape' });
+
+    await waitFor(() =>
+
+      expect(screen.queryByRole('dialog', { name: 'Danh sách tờ khai đã xóa' })).not.toBeInTheDocument()
+
+    );
+
+    const clearDateButton = screen.getByRole('button', { name: 'Xóa lọc ngày' });
+
+    await userEvent.click(clearDateButton);
 
   });
 
