@@ -13053,163 +13053,180 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
 
       <Dialog open={deletedDialogOpen} onOpenChange={handleDeletedDialogOpenChange}>
 
-        <DialogContent className="max-w-5xl">
+        <DialogContent className="w-[min(90vw,900px)] max-h-[85vh] overflow-hidden p-0">
+          <div className="flex h-full flex-col">
 
-          <DialogHeader>
+            <div className="px-6 pt-6">
 
-            <DialogTitle>Danh sách tờ khai đã xóa</DialogTitle>
+              <DialogHeader>
 
-            <DialogDescription>
+                <DialogTitle>Danh sách tờ khai đã xóa</DialogTitle>
 
-              Danh sách hiển thị các tờ khai đã bị xóa tạm thời và xóa vĩnh viễn dựa trên bộ lọc hiện tại.
+                <DialogDescription>
 
-            </DialogDescription>
+                  Danh sách hiển thị các tờ khai đã bị xóa tạm thời và xóa vĩnh viễn dựa trên bộ lọc hiện tại.
 
-          </DialogHeader>
+                </DialogDescription>
 
-          <div className="mt-2 text-sm text-gray-600">
+              </DialogHeader>
 
-            Khoảng thời gian: {deletedRangeLabel}
+              <div className="mt-2 text-sm text-gray-600">
 
-          </div>
+                Khoảng thời gian: {deletedRangeLabel}
 
-          <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
+              </div>
 
-            <span className="font-medium text-gray-700">
+              <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
 
-              Tổng số: {deletedTotalCount.toLocaleString("vi-VN")}
+                <span className="font-medium text-gray-700">
 
-            </span>
+                  Tổng số: {deletedTotalCount.toLocaleString("vi-VN")}
 
-            <StatusBadge tone="warning">
+                </span>
 
-              Xóa tạm thời: {softDeletedCount.toLocaleString("vi-VN")}
+                <StatusBadge tone="warning">
 
-            </StatusBadge>
+                  Xóa tạm thời: {softDeletedCount.toLocaleString("vi-VN")}
 
-            <StatusBadge tone="danger">
+                </StatusBadge>
 
-              Xóa vĩnh viễn: {hardDeletedCount.toLocaleString("vi-VN")}
+                <StatusBadge tone="danger">
 
-            </StatusBadge>
+                  Xóa vĩnh viễn: {hardDeletedCount.toLocaleString("vi-VN")}
 
-            {hardDeletedLoading ? (
+                </StatusBadge>
 
-              <span className="text-xs text-gray-500">Đang tải danh sách xóa vĩnh viễn...</span>
+                {hardDeletedLoading ? (
 
-            ) : null}
+                  <span className="text-xs text-gray-500">Đang tải danh sách xóa vĩnh viễn...</span>
 
-          </div>
+                ) : null}
 
-          {hardDeletedError ? (
+              </div>
 
-            <div className="mt-3 rounded border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+              {hardDeletedError ? (
 
-              <p>{hardDeletedError}</p>
+                <div className="mt-3 rounded border border-red-200 bg-red-50 p-3 text-sm text-red-700">
 
-              <button
+                  <p>{hardDeletedError}</p>
 
-                type="button"
+                  <button
 
-                className="mt-2 inline-flex items-center rounded border border-red-200 bg-white px-3 py-1 text-xs font-medium text-red-700 hover:bg-red-50"
+                    type="button"
 
-                onClick={handleHardDeletedRetry}
+                    className="mt-2 inline-flex items-center rounded border border-red-200 bg-white px-3 py-1 text-xs font-medium text-red-700 hover:bg-red-50"
 
-                disabled={hardDeletedLoading}
+                    onClick={handleHardDeletedRetry}
 
-              >
+                    disabled={hardDeletedLoading}
 
-                Thử tải lại
+                  >
 
-              </button>
+                    Thử tải lại
+
+                  </button>
+
+                </div>
+
+              ) : null}
 
             </div>
 
-          ) : null}
+            {deletedEntries.length > 0 ? (
 
-          {deletedEntries.length > 0 ? (
+              <ScrollArea
 
-            <ScrollArea className="mt-4 max-h-[60vh] rounded border" data-testid="deleted-list-table">
+                className="flex-1 px-6 pb-6 overflow-hidden"
 
-              <table className={`min-w-full text-sm ${ZEBRA_TABLE_BODY_CLASS}`}>
+                data-testid="deleted-list-table"
 
-                <thead className="bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-500">
+              >
 
-                  <tr>
+                <div className="mt-4 h-full overflow-auto rounded border">
 
-                    <th className="px-3 py-2">Số tờ khai</th>
+                  <table className={`min-w-full text-sm ${ZEBRA_TABLE_BODY_CLASS}`}>
 
-                    <th className="px-3 py-2">Nhánh</th>
+                    <thead className="bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-500">
 
-                    <th className="px-3 py-2">MST</th>
+                      <tr>
 
-                    <th className="px-3 py-2">Công ty</th>
+                        <th className="px-3 py-2">Số tờ khai</th>
 
-                    <th className="px-3 py-2">Loại xóa</th>
+                        <th className="px-3 py-2">Nhánh</th>
 
-                    <th className="px-3 py-2">Ngày tờ khai</th>
+                        <th className="px-3 py-2">MST</th>
 
-                    <th className="px-3 py-2">Thời điểm xóa</th>
+                        <th className="px-3 py-2">Công ty</th>
 
-                    <th className="px-3 py-2">Người xóa</th>
+                        <th className="px-3 py-2">Loại xóa</th>
 
-                  </tr>
+                        <th className="px-3 py-2">Ngày tờ khai</th>
 
-                </thead>
+                        <th className="px-3 py-2">Thời điểm xóa</th>
 
-                <tbody>
+                        <th className="px-3 py-2">Người xóa</th>
 
-                  {deletedEntries.map((entry) => (
+                      </tr>
 
-                    <tr key={entry.key} className="border-b border-gray-100 last:border-b-0">
+                    </thead>
 
-                      <td className="whitespace-nowrap px-3 py-2 font-medium text-gray-900">
+                    <tbody>
 
-                        {entry.soTk || "Không rõ"}
+                      {deletedEntries.map((entry) => (
 
-                      </td>
+                        <tr key={entry.key} className="border-b border-gray-100 last:border-b-0">
 
-                      <td className="whitespace-nowrap px-3 py-2 text-gray-700">{entry.branch || "-"}</td>
+                          <td className="whitespace-nowrap px-3 py-2 font-medium text-gray-900">
 
-                      <td className="whitespace-nowrap px-3 py-2 text-gray-700">{entry.mst || "-"}</td>
+                            {entry.soTk || "Không rõ"}
 
-                      <td className="px-3 py-2 text-gray-700">{entry.company || "-"}</td>
+                          </td>
 
-                      <td className="whitespace-nowrap px-3 py-2">
+                          <td className="whitespace-nowrap px-3 py-2 text-gray-700">{entry.branch || "-"}</td>
 
-                        <StatusBadge tone={entry.tone}>{entry.typeLabel}</StatusBadge>
+                          <td className="whitespace-nowrap px-3 py-2 text-gray-700">{entry.mst || "-"}</td>
 
-                      </td>
+                          <td className="px-3 py-2 text-gray-700">{entry.company || "-"}</td>
 
-                      <td className="whitespace-nowrap px-3 py-2 text-gray-700">{entry.dateLabel || "-"}</td>
+                          <td className="whitespace-nowrap px-3 py-2">
 
-                      <td className="whitespace-nowrap px-3 py-2 text-gray-700">{entry.deletedAtLabel || "-"}</td>
+                            <StatusBadge tone={entry.tone}>{entry.typeLabel}</StatusBadge>
 
-                      <td className="whitespace-nowrap px-3 py-2 text-gray-700">{entry.deletedByLabel}</td>
+                          </td>
 
-                    </tr>
+                          <td className="whitespace-nowrap px-3 py-2 text-gray-700">{entry.dateLabel || "-"}</td>
 
-                  ))}
+                          <td className="whitespace-nowrap px-3 py-2 text-gray-700">{entry.deletedAtLabel || "-"}</td>
 
-                </tbody>
+                          <td className="whitespace-nowrap px-3 py-2 text-gray-700">{entry.deletedByLabel}</td>
 
-              </table>
+                        </tr>
 
-            </ScrollArea>
+                      ))}
 
-          ) : (
+                    </tbody>
 
-            <p className="mt-4 text-sm text-gray-500">
+                  </table>
 
-              {hardDeletedLoading
+                </div>
 
-                ? "Đang tải dữ liệu tờ khai đã xóa..."
+              </ScrollArea>
 
-                : "Không có tờ khai nào phù hợp với điều kiện lọc hiện tại."}
+            ) : (
 
-            </p>
+              <p className="mt-4 text-sm text-gray-500">
 
-          )}
+                {hardDeletedLoading
+
+                  ? "Đang tải dữ liệu tờ khai đã xóa..."
+
+                  : "Không có tờ khai nào phù hợp với điều kiện lọc hiện tại."}
+
+              </p>
+
+            )}
+
+          </div>
 
         </DialogContent>
 
