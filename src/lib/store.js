@@ -1415,15 +1415,15 @@ function mergeDeclarationRowClient(existing, incoming) {
 
       .filter(Boolean);
 
-    if (!incomingList.length) {
+    if (replace) {
+
+      merged[field] = Array.from(new Set(incomingList));
 
       return;
 
     }
 
-    if (replace) {
-
-      merged[field] = Array.from(new Set(incomingList));
+    if (!incomingList.length) {
 
       return;
 

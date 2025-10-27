@@ -868,8 +868,6 @@ describe('saveDeclRows', () => {
 
         licenses: 0,
 
-        licenseCodes: [],
-
       },
 
     ];
@@ -973,6 +971,64 @@ describe('saveDeclRows', () => {
     });
 
     expect(stored[0].licenseManualCount).toBeUndefined();
+
+  });
+
+  it('xoá danh sách mã GP loại trừ khi dữ liệu mới rỗng với replace=true', () => {
+
+    const existing = [
+
+      {
+
+        so_tk: '00000000002',
+
+        nhanh: '',
+
+        date: '2025-01-02',
+
+        licenseCodes: ['ZK01'],
+
+        licenseExcludedCodes: ['ZK02'],
+
+      },
+
+    ];
+
+
+
+    const incoming = [
+
+      {
+
+        so_tk: '00000000002',
+
+        nhanh: '',
+
+        date: '2025-01-02',
+
+        licenseCodes: ['ZK01'],
+
+        licenseExcludedCodes: [],
+
+      },
+
+    ];
+
+
+
+    saveDeclRows(existing, { overwrite: true });
+
+    const summary = saveDeclRows(incoming, { overwrite: false });
+
+
+
+    expect(summary.updated).toBe(1);
+
+    const stored = getDeclRows();
+
+    expect(stored).toHaveLength(1);
+
+    expect(stored[0].licenseExcludedCodes).toEqual([]);
 
   });
 
