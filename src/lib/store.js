@@ -3,6 +3,7 @@
 
 
 import { createDefaultRuleCollection } from '../shared/defaultRules.js';
+import { normalizeDateInput } from '../shared/declSearch.js';
 
 import {
 
@@ -53,6 +54,10 @@ export const KPI_ADJUSTMENTS_KEY = "kpi_adjustments_v1"; // điểm KPI +/- bổ
 export const KPI_ADJUSTMENT_SETTINGS_KEY = "kpi_adjustment_settings_v1"; // cấu hình mặc định điểm KPI bổ sung
 
 export const DECL_HISTORY_KEY = "decl_history_v1"; // lịch sử chỉnh sửa tờ khai
+
+export const DECL_DELETED_LOG_KEY = "decl_deleted_log_v1"; // nhật ký xóa tờ khai
+
+export const DECL_DELETED_LOG_LIMIT = 500;
 
 export const UI_LAYOUT_KEY = "ui_layout_config_v1"; // cấu hình bố cục giao diện dùng chung
 
@@ -595,6 +600,350 @@ export function subscribeImportColumnConfig(listener) {
 export function normalizeStr(s) {
 
   return (s ?? "").toString().replace(/\s+/g, " ").trim();
+
+}
+
+
+
+function normalizeDeletedLogString(value) {
+
+  const text = normalizeStr(value);
+
+  if (!text) {
+
+    return "";
+
+  }
+
+  try {
+
+    return text.normalize("NFC");
+
+  } catch {
+
+    return text;
+
+  }
+
+}
+
+
+
+function normalizeDeletedDeclLogEntry(entry, defaults = {}) {
+
+  if (!entry || typeof entry !== "object") {
+
+    return null;
+
+  }
+
+  const soTk = normalizeDeclarationNumber(
+
+    entry.so_tk ?? entry.number ?? defaults.so_tk ?? "",
+
+  );
+
+  if (!soTk) {
+
+    return null;
+
+  }
+
+  const nhanh = normalizeDeletedLogString(
+
+    entry.nhanh ?? entry.branch ?? defaults.nhanh ?? "",
+
+  );
+
+  const mst = normalizeDeletedLogString(
+
+    entry.mst ??
+
+      entry.ma_so_thue ??
+
+      entry.tax_code ??
+
+      entry.ma_so_thue_dn ??
+
+      entry.mst_dn ??
+
+      defaults.mst ??
+
+      "",
+
+  );
+
+  const company = normalizeDeletedLogString(
+
+    entry.company ??
+
+      entry.cong_ty ??
+
+      entry.ten_cong_ty ??
+
+      entry.ten_dn ??
+
+      entry.doanh_nghiep ??
+
+      entry.ten_doanh_nghiep ??
+
+      defaults.company ??
+
+      "",
+
+  );
+
+  const deletedBy = normalizeDeletedLogString(
+
+    entry.deleted_by ?? entry.actor ?? defaults.deleted_by ?? "",
+
+  );
+
+  const typeInput = entry.type ?? defaults.type;
+
+  const type = typeInput === "hard" ? "hard" : "soft";
+
+  const deletedAtSource =
+
+    entry.deleted_at ??
+
+    entry.ts ??
+
+    defaults.deleted_at ??
+
+    defaults.timestamp ??
+
+    "";
+
+  const deletedAt = normalizeStr(deletedAtSource) || new Date().toISOString();
+
+  return {
+
+    so_tk: soTk,
+
+    nhanh: nhanh || null,
+
+    mst: mst || null,
+
+    company: company || null,
+
+    type,
+
+    deleted_at: deletedAt,
+
+    deleted_by: deletedBy || null,
+
+  };
+
+}
+
+
+
+function buildDeletedDeclLogEntryFromRow(row, { actor = "system", type = "soft", timestamp = new Date().toISOString() } = {}) {
+
+  if (!row || typeof row !== "object") {
+
+    return null;
+
+  }
+
+  return normalizeDeletedDeclLogEntry(
+
+    {
+
+      so_tk: row.so_tk ?? row.so_tk_full ?? row.number ?? "",
+
+      nhanh: row.nhanh ?? row.branch ?? row.nhanh_kd ?? row.nhanh_hq ?? "",
+
+      mst:
+
+        row.mst ??
+
+        row.ma_so_thue ??
+
+        row.ma_so_thue_dn ??
+
+        row.mst_dn ??
+
+        row.tax_code ??
+
+        "",
+
+      company:
+
+        row.ten_dn ??
+
+        row.company ??
+
+        row.cong_ty ??
+
+        row.ten_cong_ty ??
+
+        row.doanh_nghiep ??
+
+        row.ten_doanh_nghiep ??
+
+        "",
+
+      deleted_at: timestamp,
+
+      deleted_by: actor,
+
+      type,
+
+    },
+
+    { deleted_at: timestamp, type },
+
+  );
+
+}
+
+
+
+function readDeletedDeclLogRaw() {
+
+  const serialized = getItem(DECL_DELETED_LOG_KEY);
+
+  const parsed = safeParse(serialized, []);
+
+  return {
+
+    entries: Array.isArray(parsed) ? parsed : [],
+
+    serialized: typeof serialized === "string" ? serialized : null,
+
+  };
+
+}
+
+
+
+function writeDeletedDeclLog(entries, previousSerialized = null) {
+
+  const list = Array.isArray(entries) ? entries : [];
+
+  const normalized = [];
+
+  for (const entry of list) {
+
+    if (normalized.length >= DECL_DELETED_LOG_LIMIT) {
+
+      break;
+
+    }
+
+    const sanitized = normalizeDeletedDeclLogEntry(entry);
+
+    if (!sanitized) {
+
+      continue;
+
+    }
+
+    normalized.push(sanitized);
+
+  }
+
+  const serialized = JSON.stringify(normalized);
+
+  if (serialized !== previousSerialized) {
+
+    setItem(DECL_DELETED_LOG_KEY, serialized);
+
+  }
+
+  return normalized;
+
+}
+
+
+
+function appendDeletedDeclLogEntries(entries) {
+
+  const list = Array.isArray(entries) ? entries : [];
+
+  if (list.length === 0) {
+
+    return readDeletedDeclLog();
+
+  }
+
+  const { entries: existing, serialized } = readDeletedDeclLogRaw();
+
+  const combined = [...list, ...existing];
+
+  return writeDeletedDeclLog(combined, serialized);
+
+}
+
+
+
+function readDeletedDeclLog() {
+
+  const { entries, serialized } = readDeletedDeclLogRaw();
+
+  return writeDeletedDeclLog(entries, serialized);
+
+}
+
+
+
+export function getDeletedDeclLog({ from, to, type } = {}) {
+
+  const list = readDeletedDeclLog();
+
+  const normalizedType = type === "hard" ? "hard" : type === "soft" ? "soft" : null;
+
+  const rangeFrom = normalizeDateInput(from);
+
+  const rangeTo = normalizeDateInput(to);
+
+  if (!normalizedType && !rangeFrom && !rangeTo) {
+
+    return list.map((entry) => ({ ...entry }));
+
+  }
+
+  const filtered = [];
+
+  for (const entry of list) {
+
+    if (!entry || typeof entry !== "object") {
+
+      continue;
+
+    }
+
+    if (normalizedType && entry.type !== normalizedType) {
+
+      continue;
+
+    }
+
+    if (rangeFrom || rangeTo) {
+
+      const entryDate = normalizeDateInput(entry.deleted_at ?? entry.ts ?? "");
+
+      if (rangeFrom && (!entryDate || entryDate < rangeFrom)) {
+
+        continue;
+
+      }
+
+      if (rangeTo && (!entryDate || entryDate > rangeTo)) {
+
+        continue;
+
+      }
+
+    }
+
+    filtered.push({ ...entry });
+
+  }
+
+  return filtered;
 
 }
 
@@ -5847,6 +6196,7 @@ export function softDeleteDeclRows(keys, { actor = "system", detail = "" } = {})
   const alreadyDeletedKeys = [];
   let deleted = 0;
   let alreadyDeleted = 0;
+  const logEntries = [];
 
   const nextRows = rows.map((row) => {
     if (!row || typeof row !== "object") {
@@ -5864,6 +6214,14 @@ export function softDeleteDeclRows(keys, { actor = "system", detail = "" } = {})
     }
     deleted += 1;
     deletedKeys.push(key);
+    const logEntry = buildDeletedDeclLogEntryFromRow(row, {
+      actor: actorName,
+      type: "soft",
+      timestamp,
+    });
+    if (logEntry) {
+      logEntries.push(logEntry);
+    }
     return {
       ...row,
       deleted_at: timestamp,
@@ -5874,6 +6232,9 @@ export function softDeleteDeclRows(keys, { actor = "system", detail = "" } = {})
   const missingKeys = list.filter((key) => !seenKeys.has(key));
 
   if (deleted > 0) {
+    if (logEntries.length > 0) {
+      appendDeletedDeclLogEntries(logEntries);
+    }
     persistAndAnnotateDeclRows(nextRows);
     const actionDetail = detail && detail.trim().length > 0
       ? detail
@@ -5909,10 +6270,12 @@ export function hardDeleteDeclRows(keys, { actor = "system", detail = "" } = {})
   }
 
   const actorName = normalizeStr(actor) || "system";
+  const timestamp = new Date().toISOString();
   const rows = getDeclRowsRaw();
   const keySet = new Set(list);
   const seenKeys = new Set();
   const removedKeys = [];
+  const logEntries = [];
 
   const nextRows = [];
   for (const row of rows) {
@@ -5927,12 +6290,23 @@ export function hardDeleteDeclRows(keys, { actor = "system", detail = "" } = {})
     }
     seenKeys.add(key);
     removedKeys.push(key);
+    const logEntry = buildDeletedDeclLogEntryFromRow(row, {
+      actor: actorName,
+      type: "hard",
+      timestamp: normalizeStr(row.deleted_at) || timestamp,
+    });
+    if (logEntry) {
+      logEntries.push(logEntry);
+    }
   }
 
   const removed = removedKeys.length;
   const missingKeys = list.filter((key) => !seenKeys.has(key));
 
   if (removed > 0) {
+    if (logEntries.length > 0) {
+      appendDeletedDeclLogEntries(logEntries);
+    }
     persistAndAnnotateDeclRows(nextRows);
     const actionDetail = detail && detail.trim().length > 0
       ? detail
@@ -8597,6 +8971,7 @@ export function clearAuditLogs({ actor = "system", note = "Xóa toàn bộ nhậ
 export default {
 
   DECL_KEY, MST_KEY, RULES_KEY, TEAM_KEY, AUDIT_KEY, HQ_KEY, KPI_ADJUSTMENTS_KEY, DECL_HISTORY_KEY,
+  DECL_DELETED_LOG_KEY, DECL_DELETED_LOG_LIMIT,
 
   normalizeStr, normalizeMST, normalizeDeclarationNumber, toISODate, normalizeName,
 
@@ -8621,6 +8996,8 @@ export default {
   pushImportLog,
 
   pushAuditLog, getAuditLogs, clearAuditLogs,
+
+  getDeletedDeclLog,
 
   saveMSTRow,
 
