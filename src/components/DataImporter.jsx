@@ -13053,7 +13053,7 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
 
       <Dialog open={deletedDialogOpen} onOpenChange={handleDeletedDialogOpenChange}>
 
-        <DialogContent className="w-[min(96vw,1100px)] max-h-[85vh] overflow-hidden p-0">
+        <DialogContent className="w-full sm:w-[min(96vw,1200px)] max-w-none sm:max-w-[min(96vw,1200px)] max-h-[85vh] overflow-hidden p-0">
           <div className="flex h-full min-h-0 flex-col">
 
             <div className="px-6 pt-6">
