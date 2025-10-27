@@ -2998,6 +2998,8 @@ export default function KPIAdjustments({ currentUser }) {
 
   const computedExtraUnit = Number.parseFloat(form.extraUnitPoints ?? 0) || 0;
 
+  const computedExtraTotal = roundAdjustmentPoint(computedExtraQuantity * computedExtraUnit);
+
   const allowManualPointOverride = canOverridePoints || form.category === "support_misc";
 
   const computedTotal = (() => {
@@ -3022,9 +3024,7 @@ export default function KPIAdjustments({ currentUser }) {
 
     }
 
-    const extraTotal = roundAdjustmentPoint(computedExtraQuantity * computedExtraUnit);
-
-    return roundAdjustmentPoint(baseTotal + extraTotal);
+    return roundAdjustmentPoint(baseTotal + computedExtraTotal);
 
   })();
 
@@ -4701,7 +4701,7 @@ export default function KPIAdjustments({ currentUser }) {
 
                     ) : null}
 
-                    <div className="grid gap-3 md:grid-cols-2">
+                    <div className="grid gap-3 md:grid-cols-3">
 
                       {!isHybridFixed ? (
 
@@ -4871,6 +4871,18 @@ export default function KPIAdjustments({ currentUser }) {
 
                       </div>
 
+                      <div className="flex flex-col">
+
+                        <span className="text-sm font-medium text-foreground">Điểm bổ sung</span>
+
+                        <span aria-live="polite" className="mt-1 text-base font-semibold text-foreground">
+
+                          {formatDecimal(computedExtraTotal)}
+
+                        </span>
+
+                      </div>
+
                     </div>
 
                   ) : null}
@@ -4885,7 +4897,15 @@ export default function KPIAdjustments({ currentUser }) {
 
                   <div className="text-xs font-medium uppercase text-muted-foreground">Điểm dự kiến</div>
 
-                  <div data-testid="kpi-adjust-total-value" className="mt-1 text-lg font-semibold text-foreground">
+                  <div
+
+                    data-testid="kpi-adjust-total-value"
+
+                    className="mt-1 text-lg font-semibold text-foreground"
+
+                    aria-live="polite"
+
+                  >
 
                     {formatDecimal(computedTotal)}
 
