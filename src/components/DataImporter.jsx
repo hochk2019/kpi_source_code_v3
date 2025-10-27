@@ -13054,7 +13054,7 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
       <Dialog open={deletedDialogOpen} onOpenChange={handleDeletedDialogOpenChange}>
 
         <DialogContent className="w-[min(96vw,1100px)] max-h-[85vh] overflow-hidden p-0">
-          <div className="flex h-full flex-col">
+          <div className="flex h-full min-h-0 flex-col">
 
             <div className="px-6 pt-6">
 
@@ -13136,15 +13136,15 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
 
               <ScrollArea
 
-                className="flex-1 px-6 pb-6 overflow-hidden"
+                className="flex-1 min-h-0 px-6 pb-6"
 
                 data-testid="deleted-list-table"
 
               >
 
-                <div className="mt-4 h-full overflow-auto rounded border">
+                <div className="mt-4 rounded border">
 
-                  <table className={`min-w-full text-sm ${ZEBRA_TABLE_BODY_CLASS}`}>
+                  <table className={`min-w-full overflow-hidden rounded text-sm ${ZEBRA_TABLE_BODY_CLASS}`}>
 
                     <thead className="bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-500">
 
@@ -13528,7 +13528,7 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
 
                 </div>
 
-                <ScrollArea className="max-h-[60vh] pr-2">
+                <ScrollArea className="max-h-[60vh] min-h-0 pr-2">
 
                   <div className="space-y-4 px-3 py-3">
 
@@ -13720,7 +13720,7 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
 
             {duplicate11Details?.length ? (
 
-              <ScrollArea className="max-h-[60vh] pr-2">
+              <ScrollArea className="max-h-[60vh] min-h-0 pr-2">
 
                 <div className="space-y-4">
 
