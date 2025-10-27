@@ -3084,6 +3084,142 @@ describeExternal('AI assistant API', () => {
 
 
 
+  it('ping kết nối AI thành công với nhà cung cấp mặc định', async () => {
+
+    const admin = request.agent(app);
+
+    const loginRes = await admin.post('/api/auth/login').send({ username: 'admin', password: 'admin123' });
+
+    expect(loginRes.status).toBe(200);
+
+
+
+    const updateRes = await admin.put('/api/ai/config').send({
+
+      config: {
+
+        defaultProvider: 'ollama-local',
+
+        providers: [
+
+          { id: 'ollama-local', type: 'ollama', enabled: true, endpoint: 'http://ollama.test', model: 'llama3.1:8b' },
+
+        ],
+
+      },
+
+    });
+
+    expect(updateRes.status).toBe(200);
+
+
+
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url) => {
+
+      if (typeof url === 'string' && url.includes('ollama.test')) {
+
+        return {
+
+          ok: true,
+
+          status: 200,
+
+          json: async () => ({
+
+            message: { content: 'Pong từ ping Ollama' },
+
+            prompt_eval_count: 5,
+
+            eval_count: 2,
+
+          }),
+
+          text: async () => 'ok',
+
+        };
+
+      }
+
+      return {
+
+        ok: true,
+
+        status: 200,
+
+        json: async () => ({ ok: true }),
+
+        text: async () => 'ok',
+
+      };
+
+    });
+
+
+
+    try {
+
+      const res = await admin.post('/api/ai/providers/ping').send({ prompt: 'ping kiểm tra' });
+
+      expect(res.status).toBe(200);
+
+      expect(res.body?.ok).toBe(true);
+
+      expect(res.body?.provider?.id).toBe('ollama-local');
+
+      expect(res.body?.message).toContain('Pong');
+
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+
+    } finally {
+
+      fetchSpy.mockRestore();
+
+    }
+
+  });
+
+
+
+  it('trả lỗi khi ping không tìm thấy nhà cung cấp', async () => {
+
+    const admin = request.agent(app);
+
+    const loginRes = await admin.post('/api/auth/login').send({ username: 'admin', password: 'admin123' });
+
+    expect(loginRes.status).toBe(200);
+
+
+
+    const updateRes = await admin.put('/api/ai/config').send({
+
+      config: {
+
+        providers: [
+
+          { id: 'ollama-local', type: 'ollama', enabled: true, endpoint: 'http://ollama.test', model: 'llama3.1:8b' },
+
+        ],
+
+      },
+
+    });
+
+    expect(updateRes.status).toBe(200);
+
+
+
+    const res = await admin.post('/api/ai/providers/ping').send({ providerId: 'khong-ton-tai' });
+
+    expect(res.status).toBe(404);
+
+    expect(res.body?.ok).toBe(false);
+
+    expect(res.body?.error).toContain('Chưa tìm thấy nhà cung cấp');
+
+  });
+
+
+
   it('dùng cache nội bộ của Ollama ngay cả khi cache chung tắt', async () => {
 
     const admin = request.agent(app);

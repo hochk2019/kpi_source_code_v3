@@ -27026,6 +27026,168 @@ app.put('/api/ai/config', (req, res) => {
 
 
 
+function normalizeProviderForDiagnostics(rawProvider, { configProviders = [], fallbackSuffix } = {}) {
+
+  const providerInput = rawProvider && typeof rawProvider === 'object' ? rawProvider : null;
+
+  if (!providerInput) {
+
+    const error = new Error('Thiếu thông tin nhà cung cấp.');
+
+    error.status = 400;
+
+    throw error;
+
+  }
+
+  const providers = Array.isArray(configProviders) ? configProviders : [];
+
+  const baseProvider = providerInput?.id
+
+    ? providers.find((entry) => entry?.id === providerInput.id) || {}
+
+    : {};
+
+  const fallbackBase = `${
+
+    providerInput.id || providerInput.idBase || baseProvider.id || providerInput.type || 'provider'
+
+  }`.trim();
+
+  const suffixInput = fallbackSuffix === undefined ? 'test' : fallbackSuffix;
+
+  const normalizedSuffix = `${suffixInput || ''}`.trim();
+
+  const fallbackId = normalizedSuffix ? `${fallbackBase}-${normalizedSuffix}` : fallbackBase;
+
+  const normalized = normalizeAiProviderEntry(
+
+    { ...baseProvider, ...providerInput, id: fallbackId },
+
+    baseProvider,
+
+  );
+
+  if (!normalized) {
+
+    const error = new Error('Không thể chuẩn hóa dữ liệu nhà cung cấp.');
+
+    error.status = 400;
+
+    throw error;
+
+  }
+
+  if (!normalized.type) {
+
+    const error = new Error('Thiếu loại nhà cung cấp (type).');
+
+    error.status = 400;
+
+    throw error;
+
+  }
+
+  const providerType = `${normalized.type}`.trim().toLowerCase();
+
+  const isOllamaProvider = providerType === 'ollama' || providerType === 'ollama-local';
+
+  if (!normalized.apiKey) {
+
+    const envKey = normalized.apiKeyEnv ? process.env[normalized.apiKeyEnv] : null;
+
+    if (envKey) {
+
+      normalized.apiKey = envKey;
+
+    }
+
+  }
+
+  if (!normalized.apiKey && !isOllamaProvider) {
+
+    const error = new Error('Vui lòng nhập khóa API trước khi kiểm thử.');
+
+    error.status = 400;
+
+    throw error;
+
+  }
+
+  return normalized;
+
+}
+
+
+
+function sanitizeProviderPrompt(rawPrompt) {
+
+  return `${rawPrompt || 'Ping'}`.trim().slice(0, 280);
+
+}
+
+
+
+function buildProviderProbeMessages(promptInput) {
+
+  return [
+
+    {
+
+      role: 'system',
+
+      content:
+
+        'Bạn đang trong chế độ kiểm thử kết nối API. Hãy trả lời thật ngắn gọn (tối đa 30 ký tự) để xác nhận đã nhận được tín hiệu.',
+
+    },
+
+    { role: 'user', content: promptInput || 'Ping' },
+
+  ];
+
+}
+
+
+
+async function runProviderProbe(normalized, { prompt, timeoutMs }) {
+
+  const promptInput = sanitizeProviderPrompt(prompt);
+
+  const messages = buildProviderProbeMessages(promptInput);
+
+  const safeTimeout = toPositiveInt(timeoutMs, DEFAULT_AI_CONFIG.timeoutMs) || 15000;
+
+  const result = await dispatchAiChat(
+
+    { ...normalized, enabled: true },
+
+    {
+
+      messages,
+
+      temperature: Math.min(Math.max(toFiniteNumber(normalized.temperature, 0.2), 0), 0.6),
+
+      maxTokens: Math.min(toPositiveInt(normalized.maxTokens, DEFAULT_AI_CONFIG.maxTokens) || 128, 256),
+
+    },
+
+    { signal: buildAbortSignal(safeTimeout) },
+
+  );
+
+  return {
+
+    message: truncateText(result?.message || '', 320),
+
+    usage: result?.usage || null,
+
+  };
+
+}
+
+
+
 app.post('/api/ai/providers/test', async (req, res) => {
 
   const { denied } = requireAiAssistManage(req, res);
@@ -27036,105 +27198,27 @@ app.post('/api/ai/providers/test', async (req, res) => {
 
   }
 
-  const rawProvider = req.body?.provider;
+  const config = getAiConfig();
 
   let normalized = null;
 
+  const rawProvider = req.body?.provider;
+
   try {
 
-    if (!rawProvider || typeof rawProvider !== 'object') {
+    normalized = normalizeProviderForDiagnostics(rawProvider, {
 
-      res.status(400).json({ ok: false, error: 'Thiếu thông tin nhà cung cấp.' });
+      configProviders: config?.providers,
 
-      return;
+    });
 
-    }
+    const probeResult = await runProviderProbe(normalized, {
 
-    const config = getAiConfig();
+      prompt: req.body?.prompt,
 
-    const baseProvider = config?.providers?.find((entry) => entry?.id === rawProvider.id) || {};
+      timeoutMs: req.body?.timeoutMs,
 
-    const fallbackId = `${rawProvider.id || rawProvider.idBase || baseProvider.id || rawProvider.type || 'provider'}-test`;
-
-    normalized = normalizeAiProviderEntry({ ...baseProvider, ...rawProvider, id: fallbackId }, baseProvider) || null;
-
-    if (!normalized) {
-
-      res.status(400).json({ ok: false, error: 'Không thể chuẩn hóa dữ liệu nhà cung cấp.' });
-
-      return;
-
-    }
-
-    if (!normalized.type) {
-
-      res.status(400).json({ ok: false, error: 'Thiếu loại nhà cung cấp (type).' });
-
-      return;
-
-    }
-
-    const providerType = `${normalized.type}`.trim().toLowerCase();
-
-    const isOllamaProvider = providerType === 'ollama' || providerType === 'ollama-local';
-
-    if (!normalized.apiKey) {
-
-      const envKey = normalized.apiKeyEnv ? process.env[normalized.apiKeyEnv] : null;
-
-      if (envKey) {
-
-        normalized.apiKey = envKey;
-
-      }
-
-    }
-
-    if (!normalized.apiKey && !isOllamaProvider) {
-
-      res.status(400).json({ ok: false, error: 'Vui lòng nhập khóa API trước khi kiểm thử.' });
-
-      return;
-
-    }
-
-    const promptInput = `${req.body?.prompt || 'Ping'}`.trim().slice(0, 280);
-
-    const messages = [
-
-      {
-
-        role: 'system',
-
-        content:
-
-          'Bạn đang trong chế độ kiểm thử kết nối API. Hãy trả lời thật ngắn gọn (tối đa 30 ký tự) để xác nhận đã nhận được tín hiệu.',
-
-      },
-
-      { role: 'user', content: promptInput || 'Ping' },
-
-    ];
-
-    const timeoutMs = toPositiveInt(req.body?.timeoutMs, DEFAULT_AI_CONFIG.timeoutMs) || 15000;
-
-    const result = await dispatchAiChat(
-
-      { ...normalized, enabled: true },
-
-      {
-
-        messages,
-
-        temperature: Math.min(Math.max(toFiniteNumber(normalized.temperature, 0.2), 0), 0.6),
-
-        maxTokens: Math.min(toPositiveInt(normalized.maxTokens, DEFAULT_AI_CONFIG.maxTokens) || 128, 256),
-
-      },
-
-      { signal: buildAbortSignal(timeoutMs) },
-
-    );
+    });
 
     res.json({
 
@@ -27142,9 +27226,9 @@ app.post('/api/ai/providers/test', async (req, res) => {
 
       provider: { id: normalized.id, label: normalized.label, type: normalized.type },
 
-      message: truncateText(result?.message || '', 320),
+      message: probeResult.message,
 
-      usage: result?.usage || null,
+      usage: probeResult.usage,
 
     });
 
@@ -27164,7 +27248,129 @@ app.post('/api/ai/providers/test', async (req, res) => {
 
     });
 
-    res.status(400).json({ ok: false, error: errorDetail });
+    const status = Number.isInteger(err?.statusCode)
+
+      ? err.statusCode
+
+      : Number.isInteger(err?.status)
+
+      ? err.status
+
+      : 400;
+
+    res.status(status >= 400 ? status : 400).json({ ok: false, error: errorDetail });
+
+  }
+
+});
+
+
+
+app.post('/api/ai/providers/ping', async (req, res) => {
+
+  const { denied } = requireAiAssistManage(req, res);
+
+  if (denied) {
+
+    return;
+
+  }
+
+  const config = getAiConfig();
+
+  const providers = Array.isArray(config?.providers) ? config.providers : [];
+
+  const requestedId = `${req.body?.providerId || ''}`.trim();
+
+  let selectedProvider = null;
+
+  let normalized = null;
+
+  try {
+
+    if (requestedId) {
+
+      const matched = providers.find((entry) => entry?.id === requestedId);
+
+      if (!matched || matched.enabled === false) {
+
+        res.status(404).json({ ok: false, error: 'Chưa tìm thấy nhà cung cấp AI khả dụng.' });
+
+        return;
+
+      }
+
+      selectedProvider = matched;
+
+    } else {
+
+      selectedProvider = selectAiProvider(config);
+
+      if (!selectedProvider) {
+
+        res.status(404).json({ ok: false, error: 'Chưa tìm thấy nhà cung cấp AI khả dụng.' });
+
+        return;
+
+      }
+
+    }
+
+    normalized = normalizeProviderForDiagnostics(selectedProvider, {
+
+      configProviders: config?.providers,
+
+      fallbackSuffix: '',
+
+    });
+
+    const probeResult = await runProviderProbe(normalized, {
+
+      prompt: req.body?.prompt,
+
+      timeoutMs: req.body?.timeoutMs,
+
+    });
+
+    res.json({
+
+      ok: true,
+
+      provider: { id: normalized.id, label: normalized.label, type: normalized.type },
+
+      message: probeResult.message,
+
+      usage: probeResult.usage,
+
+    });
+
+  } catch (err) {
+
+    const errorDetail = buildErrorDetails(err);
+
+    console.error('Ping kết nối trợ lý AI thất bại', {
+
+      providerId: normalized?.id || selectedProvider?.id || req.body?.providerId || 'unknown',
+
+      type: normalized?.type || selectedProvider?.type || 'unknown',
+
+      error: errorDetail,
+
+      cause: err?.cause || null,
+
+    });
+
+    const status = Number.isInteger(err?.statusCode)
+
+      ? err.statusCode
+
+      : Number.isInteger(err?.status)
+
+      ? err.status
+
+      : 500;
+
+    res.status(status >= 400 ? status : 500).json({ ok: false, error: errorDetail });
 
   }
 
