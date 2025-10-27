@@ -81,6 +81,7 @@ import { ScrollArea } from "@/components/ui/scroll-area.jsx";
 import { Input } from "@/components/ui/input.jsx";
 
 import { Textarea } from "@/components/ui/textarea.jsx";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip.jsx";
 
 import { cn } from "@/lib/utils.js";
 
@@ -4817,11 +4818,25 @@ export default function KPIAdjustments({ currentUser }) {
 
                       <div>
 
-                        <label className="text-sm font-medium text-foreground" htmlFor={FORM_FIELD_IDS.extraUnit}>
+                        <Tooltip>
 
-                          {formCategoryConfig.extraPointConfig.unitLabel || "Điểm bổ sung mỗi đơn vị"}
+                          <TooltipTrigger asChild>
 
-                        </label>
+                            <label className="text-sm font-medium text-foreground" htmlFor={FORM_FIELD_IDS.extraUnit}>
+
+                              {formCategoryConfig.extraPointConfig.unitLabel || "Điểm bổ sung mỗi đơn vị"}
+
+                            </label>
+
+                          </TooltipTrigger>
+
+                          <TooltipContent sideOffset={8} className="max-w-xs text-xs leading-relaxed">
+
+                            Điểm bổ sung mỗi tờ khai
+
+                          </TooltipContent>
+
+                        </Tooltip>
 
                         <Input
 
