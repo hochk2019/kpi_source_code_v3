@@ -6789,6 +6789,18 @@ const KPI_ADJUSTMENT_HISTORY_LIMIT = 50;
 
 
 
+const KPI_ADJUSTMENT_BUILTIN_DEFAULTS = Object.freeze({
+
+  tax_refund_customer: Object.freeze({
+
+    extraUnitPoints: 0.25,
+
+  }),
+
+});
+
+
+
 function readAdjustmentSettings() {
 
   const raw = safeParse(getItem(KPI_ADJUSTMENT_SETTINGS_KEY), {});
@@ -6820,6 +6832,48 @@ function readAdjustmentSettings() {
     }
 
     categories[categoryKey] = { ...value };
+
+  }
+
+  for (const [key, defaults] of Object.entries(KPI_ADJUSTMENT_BUILTIN_DEFAULTS)) {
+
+    if (!KPI_ADJUSTMENT_CATEGORY_CONFIG[key]) {
+
+      continue;
+
+    }
+
+    const baseCategory = categories[key] ? { ...categories[key] } : {};
+
+    let changed = false;
+
+    for (const [field, defaultValue] of Object.entries(defaults)) {
+
+      if (Object.prototype.hasOwnProperty.call(baseCategory, field)) {
+
+        continue;
+
+      }
+
+      if (typeof defaultValue === 'number') {
+
+        baseCategory[field] = roundAdjustmentPoint(defaultValue);
+
+      } else {
+
+        baseCategory[field] = defaultValue;
+
+      }
+
+      changed = true;
+
+    }
+
+    if (changed || categories[key]) {
+
+      categories[key] = baseCategory;
+
+    }
 
   }
 
