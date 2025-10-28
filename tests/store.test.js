@@ -2998,6 +2998,36 @@ describe('kpi adjustment settings', () => {
 
   });
 
+  it('khong cho phep tao diem KPI khi khong co quyen', () => {
+
+    sharedSetItem(KPI_ADJUSTMENTS_KEY, JSON.stringify([]));
+
+    expect(() =>
+
+      saveKpiAdjustment(
+
+        {
+
+          category: 'support_fixed',
+
+          month: '2025-03',
+
+          staffName: 'Guest',
+
+          quantity: 1,
+
+          unitPoints: 1,
+
+        },
+
+        { actor: 'guest', permissions: { adjustSubmit: false, adjustApprove: false } },
+
+      ),
+
+    ).toThrow('Ban khong co quyen tao diem KPI bo sung');
+
+  });
+
 });
 
 

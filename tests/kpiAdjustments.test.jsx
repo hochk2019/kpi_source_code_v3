@@ -180,6 +180,19 @@ describe('KPIAdjustments UI', () => {
 
 
 
+  it('vô hiệu hóa nút gửi đề xuất khi tài khoản không có quyền', async () => {
+
+    render(<KPIAdjustments currentUser={{ username: 'guest', permissions: { adjustSubmit: false } }} />);
+
+    await screen.findByText('Thêm điểm KPI +/-');
+
+    const submitButton = await screen.findByRole('button', { name: /Thêm điểm KPI/i });
+
+    expect(submitButton).toBeDisabled();
+
+  });
+
+
   it('cho phép chuyển chế độ và cập nhật điểm dự kiến theo cấu hình', async () => {
 
     render(
