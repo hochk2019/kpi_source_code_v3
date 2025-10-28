@@ -7974,6 +7974,15 @@ export function getKpiAdjustments() {
 
 export function saveKpiAdjustment(entry, { actor = 'system', permissions = {} } = {}) {
 
+  const permissionSet = permissions || {};
+
+  const canSubmit = permissionSet.adjustSubmit === true;
+  const canApprove = permissionSet.adjustApprove === true;
+
+  if (!canSubmit && !canApprove) {
+    throw new Error('Ban khong co quyen tao diem KPI bo sung');
+  }
+
   const now = new Date();
 
   const adjustments = getAllAdjustments();

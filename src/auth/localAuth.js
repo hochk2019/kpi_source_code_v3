@@ -384,6 +384,14 @@ function sanitizeUserForSession(user) {
 
   const role = normalizeRoleKey(user.role);
 
+  const memberId = typeof user.memberId === "string" ? user.memberId.trim() : "";
+
+  const memberName = typeof user.memberName === "string" ? user.memberName.trim() : "";
+
+  const teamId = typeof user.teamId === "string" ? user.teamId.trim() : "";
+
+  const teamName = typeof user.teamName === "string" ? user.teamName.trim() : "";
+
   return {
 
     username: user.username,
@@ -393,6 +401,14 @@ function sanitizeUserForSession(user) {
     name: user.name || user.username,
 
     permissions: normalizePermissions(user.permissions, role),
+
+    memberId: memberId || null,
+
+    memberName: memberName || null,
+
+    teamId: teamId || null,
+
+    teamName: teamName || null,
 
   };
 
@@ -446,6 +462,12 @@ function loadUsers() {
 
 export function getViewerAuth() {
 
+  const permissions = getRolePermissionTemplate(DEFAULT_ROLE);
+
+  permissions.adjustSubmit = false;
+  permissions.adjustApprove = false;
+  permissions.adjustOverridePoints = false;
+
   return {
 
     username: "guest",
@@ -454,7 +476,15 @@ export function getViewerAuth() {
 
     name: "Khách",
 
-    permissions: getRolePermissionTemplate(DEFAULT_ROLE),
+    permissions,
+
+    memberId: null,
+
+    memberName: null,
+
+    teamId: null,
+
+    teamName: null,
 
   };
 
