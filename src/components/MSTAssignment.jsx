@@ -1966,7 +1966,7 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
   const [rows, setRows] = useState([]); // toàn bộ (bao gồm metadata)
 
   const [originalRows, setOriginalRows] = useState([]);
-  const [groupByMST, setGroupByMST] = useState(false);
+  const [groupByMST, setGroupByMST] = useState(true);
 
   const [search, setSearch] = useState("");
 
@@ -5509,7 +5509,7 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
 
                       >
 
-                        {isReadOnly ? (
+                        {rowIsReadOnly ? (
 
                           <span>{r.mst}</span>
 
@@ -5771,9 +5771,9 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
 
                       >
 
-                        {isReadOnly ? (
+                        {rowIsReadOnly ? (
 
-                          <span>{r.effective_from || ""}</span>
+                          <span>{r.effective_from || "—"}</span>
 
                         ) : (
 
@@ -5819,9 +5819,9 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
 
                       >
 
-                        {isReadOnly ? (
+                        {rowIsReadOnly ? (
 
-                          <span>{r.effective_to || ""}</span>
+                          <span>{r.effective_to || "Hiện tại"}</span>
 
                         ) : (
 
