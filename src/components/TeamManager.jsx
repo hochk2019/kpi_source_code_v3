@@ -291,73 +291,95 @@ function TeamManager({ canEdit = true, currentUser = null }) {
 
 
   const memberAssignments = useMemo(() => {
-
     const map = new Map();
-
-    const push = (rawName, row, role) => {
-
-      const key = normalizeName(rawName);
-
-      if (!key) return;
-
-      const list = map.get(key) ?? [];
-
-      list.push({
-
-        mst: row.mst,
-
-        company: row.company || "",
-
-        role,
-
-        team: resolveTeamForRow(row),
-
-        person_import: row.person_import || "",
-
-        person_export: row.person_export || "",
-
-        effective_from: row.effective_from || "",
-
-      });
-
-      map.set(key, list);
-
+    const roleOrder = ["Nhập", "Xuất"];
+    const getRoleIndex = (value) => {
+      const index = roleOrder.indexOf(value);
+      return index === -1 ? roleOrder.length : index;
     };
 
+    const getAssignmentKey = (row) => {
+      const mstKey = (row.mst || "").trim();
+      if (mstKey) return mstKey;
+      const companyKey = normalizeStr(row.company);
+      return `${mstKey}-${companyKey}`;
+    };
 
+    const ensureMemberAssignments = (rawName) => {
+      const memberKey = normalizeName(rawName);
+      if (!memberKey) return null;
+      if (!map.has(memberKey)) {
+        map.set(memberKey, new Map());
+      }
+      return { memberKey, assignments: map.get(memberKey) };
+    };
+
+    const mergeAssignment = (rawName, row, role) => {
+      const entry = ensureMemberAssignments(rawName);
+      if (!entry) return;
+
+      const { assignments } = entry;
+      const assignmentKey = getAssignmentKey(row) || `unknown-${assignments.size}`;
+      const resolvedTeam = resolveTeamForRow(row);
+
+      if (!assignments.has(assignmentKey)) {
+        assignments.set(assignmentKey, {
+          mst: row.mst || "",
+          company: row.company || "",
+          roles: new Set([role]),
+          team: resolvedTeam,
+          person_import: row.person_import || "",
+          person_export: row.person_export || "",
+          effective_from: row.effective_from || "",
+        });
+        return;
+      }
+
+      const existing = assignments.get(assignmentKey);
+      existing.roles.add(role);
+      if (!existing.company && row.company) existing.company = row.company;
+      if (!existing.team && resolvedTeam) existing.team = resolvedTeam;
+      if (!existing.person_import && row.person_import)
+        existing.person_import = row.person_import;
+      if (!existing.person_export && row.person_export)
+        existing.person_export = row.person_export;
+      if (!existing.effective_from && row.effective_from)
+        existing.effective_from = row.effective_from;
+    };
 
     for (const row of mstRows) {
-
-      push(row.person_import, row, "Nhập");
-
-      push(row.person_export, row, "Xuất");
-
+      mergeAssignment(row.person_import, row, "Nhập");
+      mergeAssignment(row.person_export, row, "Xuất");
     }
 
-
-
-    for (const list of map.values()) {
-
-      list.sort((a, b) => {
-
-        const cmpCompany = a.company.localeCompare(b.company, "vi", {
-
-          sensitivity: "base",
-
-        });
-
-        if (cmpCompany !== 0) return cmpCompany;
-
-        return a.mst.localeCompare(b.mst);
-
+    for (const [memberKey, assignmentsMap] of Array.from(map.entries())) {
+      const list = Array.from(assignmentsMap.values()).map((item) => {
+        const sortedRoles = Array.from(item.roles).sort(
+          (a, b) => getRoleIndex(a) - getRoleIndex(b)
+        );
+        return {
+          mst: item.mst,
+          company: item.company,
+          role: sortedRoles.join(", "),
+          team: item.team,
+          person_import: item.person_import,
+          person_export: item.person_export,
+          effective_from: item.effective_from,
+        };
       });
 
+      list.sort((a, b) => {
+        const cmpCompany = a.company.localeCompare(b.company, "vi", {
+          sensitivity: "base",
+        });
+        if (cmpCompany !== 0) return cmpCompany;
+        return a.mst.localeCompare(b.mst);
+      });
+
+      map.set(memberKey, list);
     }
 
-
-
     return map;
-
   }, [mstRows, resolveTeamForRow]);
 
 
