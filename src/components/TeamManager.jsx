@@ -291,73 +291,74 @@ function TeamManager({ canEdit = true, currentUser = null }) {
 
 
   const memberAssignments = useMemo(() => {
+    // Map<memberKey, Map<assignmentKey, assignment>>
+    const assignments = new Map();
 
-    const map = new Map();
+    const upsert = (rawName, row, role) => {
+      const memberKey = normalizeName(rawName);
+      if (!memberKey) return;
 
-    const push = (rawName, row, role) => {
+      let inner = assignments.get(memberKey);
+      if (!inner) {
+        inner = new Map();
+        assignments.set(memberKey, inner);
+      }
 
-      const key = normalizeName(rawName);
+      const mstKeyRaw = (row?.mst ?? "").toString().trim();
+      const companyKeyRaw = (row?.company ?? "").toString().trim();
+      // Prefer MST as unique key; fallback to company when MST is missing
+      const entryKey = mstKeyRaw ? `mst:${mstKeyRaw}` : `company:${companyKeyRaw}`;
 
-      if (!key) return;
-
-      const list = map.get(key) ?? [];
-
-      list.push({
-
+      const current = inner.get(entryKey) ?? {
         mst: row.mst,
-
         company: row.company || "",
-
-        role,
-
+        roles: new Set(),
         team: resolveTeamForRow(row),
-
         person_import: row.person_import || "",
-
         person_export: row.person_export || "",
-
         effective_from: row.effective_from || "",
+      };
 
-      });
+      if (role) current.roles.add(role);
 
-      map.set(key, list);
-
+      inner.set(entryKey, current);
     };
 
-
-
     for (const row of mstRows) {
-
-      push(row.person_import, row, "Nhập");
-
-      push(row.person_export, row, "Xuất");
-
+      if (!row) continue;
+      if (row.person_import) upsert(row.person_import, row, "Nhập");
+      if (row.person_export) upsert(row.person_export, row, "Xuất");
     }
 
+    // Convert nested maps to arrays, join roles and sort
+    const result = new Map();
 
-
-    for (const list of map.values()) {
-
-      list.sort((a, b) => {
-
-        const cmpCompany = a.company.localeCompare(b.company, "vi", {
-
-          sensitivity: "base",
-
-        });
-
-        if (cmpCompany !== 0) return cmpCompany;
-
-        return a.mst.localeCompare(b.mst);
-
+    for (const [memberKey, inner] of assignments.entries()) {
+      const list = Array.from(inner.values()).map((item) => {
+        const roles = Array.from(item.roles);
+        // Ensure stable ordering: "Nhập" before "Xuất"
+        roles.sort((a, b) => (a === "Nhập" ? -1 : b === "Nhập" ? 1 : a.localeCompare(b, "vi", { sensitivity: "base" })));
+        return {
+          mst: item.mst,
+          company: item.company,
+          role: roles.join(", "),
+          team: item.team,
+          person_import: item.person_import,
+          person_export: item.person_export,
+          effective_from: item.effective_from,
+        };
       });
 
+      list.sort((a, b) => {
+        const cmpCompany = a.company.localeCompare(b.company, "vi", { sensitivity: "base" });
+        if (cmpCompany !== 0) return cmpCompany;
+        return (a.mst || "").localeCompare(b.mst || "");
+      });
+
+      result.set(memberKey, list);
     }
 
-
-
-    return map;
-
+    return result;
   }, [mstRows, resolveTeamForRow]);
 
 
