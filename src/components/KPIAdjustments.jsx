@@ -2978,14 +2978,20 @@ export default function KPIAdjustments({ currentUser }) {
 
   const modeOptions = Array.isArray(formCategoryConfig.modes) ? formCategoryConfig.modes : [];
 
-  const licenseOptions = (Array.isArray(formCategoryConfig.licenseOptions) ? formCategoryConfig.licenseOptions : []).map((opt) => {
+  const baseLicenseOptions = Array.isArray(formCategoryConfig.licenseOptions)
+    ? formCategoryConfig.licenseOptions
+    : [];
+  let licenseOptions = baseLicenseOptions.map((opt) => {
     if (!opt) return opt;
     const code = String(opt.value || '').toUpperCase();
     let label = opt.label || opt.value;
     if (code === 'ZB02') label = 'ZB02 - Xin cấp phép tiền chất CN';
     else if (code === 'ZB03') label = 'ZB03 - Khai báo hóa chất';
-    return { ...opt, label };
+    return { ...opt, value: code, label };
   });
+  if (!licenseOptions.some((o) => String(o?.value || '').toUpperCase() === 'ZB99')) {
+    licenseOptions = [...licenseOptions, { value: 'ZB99', label: 'ZB99 - Giấy phép khác' }];
+  }
 
   const normalizedMode = normalizeStr(form.mode || "").toLowerCase();
 
@@ -3366,11 +3372,10 @@ export default function KPIAdjustments({ currentUser }) {
                         variant="outline"
                         onClick={() => handleLicenseChange("")}
                         className="px-2 py-1"
-                        data-tooltip="Xóa mã giấy phép"
-                        aria-label="Xóa mã giấy phép"
+                        data-tooltip="X\u00F3a m\u00E3 gi\u1EA5y ph\u00E9p"
+                        aria-label="X\u00F3a m\u00E3 gi\u1EA5y ph\u00E9p"
                       >
-                        Xóa
-                      </Button>
+                        Xo\u00E1</Button>
                     </div>
                   ) : null}
 
@@ -4330,26 +4335,38 @@ export default function KPIAdjustments({ currentUser }) {
                 <div>
 
                   <label className="text-sm font-medium text-foreground" htmlFor={FORM_FIELD_IDS.license}>
-
-                    Mã giấy phép
-
+                    {'M\u00E3 gi\u1EA5y ph\u00E9p'}
                   </label>
 
+                  <div className="mt-1 flex items-center gap-2">
                   <Input
 
                     id={FORM_FIELD_IDS.license}
 
                     list="kpi-adjust-license-options"
 
-                    placeholder="Ví dụ: ZB02"
+                    placeholder={'V\u00ED d\u1EE5: ZB02'}
 
                     value={form.licenseCode}
 
                     onChange={(e) => handleLicenseChange(e.target.value)}
 
-                    className="mt-1"
+                    className="flex-1"
 
                   />
+                    {form.licenseCode ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => handleLicenseChange("")}
+                        className="px-2 py-1"
+                        data-tooltip="X\u00F3a m\u00E3 gi\u1EA5y ph\u00E9p"
+                        aria-label="X\u00F3a m\u00E3 gi\u1EA5y ph\u00E9p"
+                      >
+                        {'X\u00F3a'}
+                      </Button>
+                    ) : null}
+                  </div>
 
                   <datalist id="kpi-adjust-license-options">
 
