@@ -291,76 +291,57 @@ function TeamManager({ canEdit = true, currentUser = null }) {
 
 
   const memberAssignments = useMemo(() => {
-    const map = new Map();
-    const roleOrder = ["Nhập", "Xuất"];
-    const getRoleIndex = (value) => {
-      const index = roleOrder.indexOf(value);
-      return index === -1 ? roleOrder.length : index;
-    };
+    // Map<memberKey, Map<assignmentKey, assignment>>
+    const assignments = new Map();
 
-    const getAssignmentKey = (row) => {
-      const mstKey = (row.mst || "").trim();
-      if (mstKey) return mstKey;
-      const companyKey = normalizeStr(row.company);
-      return `${mstKey}-${companyKey}`;
-    };
-
-    const ensureMemberAssignments = (rawName) => {
+    const upsert = (rawName, row, role) => {
       const memberKey = normalizeName(rawName);
-      if (!memberKey) return null;
-      if (!map.has(memberKey)) {
-        map.set(memberKey, new Map());
-      }
-      return { memberKey, assignments: map.get(memberKey) };
-    };
+      if (!memberKey) return;
 
-    const mergeAssignment = (rawName, row, role) => {
-      const entry = ensureMemberAssignments(rawName);
-      if (!entry) return;
-
-      const { assignments } = entry;
-      const assignmentKey = getAssignmentKey(row) || `unknown-${assignments.size}`;
-      const resolvedTeam = resolveTeamForRow(row);
-
-      if (!assignments.has(assignmentKey)) {
-        assignments.set(assignmentKey, {
-          mst: row.mst || "",
-          company: row.company || "",
-          roles: new Set([role]),
-          team: resolvedTeam,
-          person_import: row.person_import || "",
-          person_export: row.person_export || "",
-          effective_from: row.effective_from || "",
-        });
-        return;
+      let inner = assignments.get(memberKey);
+      if (!inner) {
+        inner = new Map();
+        assignments.set(memberKey, inner);
       }
 
-      const existing = assignments.get(assignmentKey);
-      existing.roles.add(role);
-      if (!existing.company && row.company) existing.company = row.company;
-      if (!existing.team && resolvedTeam) existing.team = resolvedTeam;
-      if (!existing.person_import && row.person_import)
-        existing.person_import = row.person_import;
-      if (!existing.person_export && row.person_export)
-        existing.person_export = row.person_export;
-      if (!existing.effective_from && row.effective_from)
-        existing.effective_from = row.effective_from;
+      const mstKeyRaw = (row?.mst ?? "").toString().trim();
+      const companyKeyRaw = (row?.company ?? "").toString().trim();
+      // Prefer MST as unique key; fallback to company when MST is missing
+      const entryKey = mstKeyRaw ? `mst:${mstKeyRaw}` : `company:${companyKeyRaw}`;
+
+      const current = inner.get(entryKey) ?? {
+        mst: row.mst,
+        company: row.company || "",
+        roles: new Set(),
+        team: resolveTeamForRow(row),
+        person_import: row.person_import || "",
+        person_export: row.person_export || "",
+        effective_from: row.effective_from || "",
+      };
+
+      if (role) current.roles.add(role);
+
+      inner.set(entryKey, current);
     };
 
     for (const row of mstRows) {
-      mergeAssignment(row.person_import, row, "Nhập");
-      mergeAssignment(row.person_export, row, "Xuất");
+      if (!row) continue;
+      if (row.person_import) upsert(row.person_import, row, "Nhập");
+      if (row.person_export) upsert(row.person_export, row, "Xuất");
     }
 
-    for (const [memberKey, assignmentsMap] of Array.from(map.entries())) {
-      const list = Array.from(assignmentsMap.values()).map((item) => {
-        const sortedRoles = Array.from(item.roles).sort(
-          (a, b) => getRoleIndex(a) - getRoleIndex(b)
-        );
+    // Convert nested maps to arrays, join roles and sort
+    const result = new Map();
+
+    for (const [memberKey, inner] of assignments.entries()) {
+      const list = Array.from(inner.values()).map((item) => {
+        const roles = Array.from(item.roles);
+        // Ensure stable ordering: "Nhập" before "Xuất"
+        roles.sort((a, b) => (a === "Nhập" ? -1 : b === "Nhập" ? 1 : a.localeCompare(b, "vi", { sensitivity: "base" })));
         return {
           mst: item.mst,
           company: item.company,
-          role: sortedRoles.join(", "),
+          role: roles.join(", "),
           team: item.team,
           person_import: item.person_import,
           person_export: item.person_export,
@@ -369,17 +350,15 @@ function TeamManager({ canEdit = true, currentUser = null }) {
       });
 
       list.sort((a, b) => {
-        const cmpCompany = a.company.localeCompare(b.company, "vi", {
-          sensitivity: "base",
-        });
+        const cmpCompany = a.company.localeCompare(b.company, "vi", { sensitivity: "base" });
         if (cmpCompany !== 0) return cmpCompany;
-        return a.mst.localeCompare(b.mst);
+        return (a.mst || "").localeCompare(b.mst || "");
       });
 
-      map.set(memberKey, list);
+      result.set(memberKey, list);
     }
 
-    return map;
+    return result;
   }, [mstRows, resolveTeamForRow]);
 
 

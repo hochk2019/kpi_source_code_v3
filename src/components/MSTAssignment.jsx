@@ -1966,6 +1966,7 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
   const [rows, setRows] = useState([]); // toàn bộ (bao gồm metadata)
 
   const [originalRows, setOriginalRows] = useState([]);
+  const [groupByMST, setGroupByMST] = useState(true);
 
   const [search, setSearch] = useState("");
 
@@ -3608,20 +3609,27 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
 
 
 
-  const {
-    page,
-    pageSize,
-    pageCount: totalPages,
-    currentPageItems: pageRows,
-    setPage,
-    setPageSize,
-    nextPage,
-    previousPage,
-  } = usePagination(filtered, {
-    initialPage: 1,
-    initialPageSize,
-    minPageSize: MIN_PAGE_SIZE,
-  });
+  // Precompute grouped stages for aggregated view to avoid temporal dead zone
+  const groupedStages2 = useMemo(() => {
+    if (!filtered.length) return [];
+    const map = new Map();
+    filtered.forEach((row) => {
+      const key = row.mst || "__unknown";
+      if (!map.has(key)) {
+        map.set(key, { mst: row.mst || "", company: row.company || "", stages: [] });
+      }
+      map.get(key).stages.push(row);
+    });
+    return Array.from(map.values())
+      .map((entry) => ({ ...entry, stages: sortMSTRows(entry.stages) }))
+      .sort((a, b) => (a.mst || "").localeCompare(b.mst || ""));
+  }, [filtered]);
+
+  
+
+
+
+
 
 
 
@@ -3646,6 +3654,54 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
       }))
       .sort((a, b) => (a.mst || "").localeCompare(b.mst || ""));
   }, [filtered]);
+
+  // Danh sách hiển thị: theo giai đoạn (mặc định) hoặc gộp theo MST
+  const aggregatedByMST = useMemo(() => {
+    if (!groupByMST) return [];
+    return groupedStages2.map((group) => {
+      const stages = Array.isArray(group?.stages) ? group.stages : [];
+      if (!stages.length) {
+        return {
+          __group: true,
+          mst: group?.mst || "",
+          company: group?.company || "",
+          person_import: "",
+          person_export: "",
+          team: "",
+          effective_from: "",
+          effective_to: "",
+        };
+      }
+      const latest = stages[stages.length - 1];
+      const active = [...stages].reverse().find((s) => !s?.effective_to) || latest;
+      return {
+        ...active,
+        __group: true,
+        mst: group?.mst || active?.mst || "",
+        company: active?.company || group?.company || "",
+      };
+    });
+  }, [groupByMST, groupedStages2]);
+
+  const displayList = useMemo(
+    () => (groupByMST ? aggregatedByMST : filtered),
+    [groupByMST, aggregatedByMST, filtered]
+  );
+
+  const {
+    page,
+    pageSize,
+    pageCount: totalPages,
+    currentPageItems: pageRows,
+    setPage,
+    setPageSize,
+    nextPage,
+    previousPage,
+  } = usePagination(displayList, {
+    initialPage: 1,
+    initialPageSize,
+    minPageSize: MIN_PAGE_SIZE,
+  });
 
   const timelineGroupsByMST = useMemo(() => {
     const map = new Map();
@@ -4302,6 +4358,17 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
 
 
         <div className="flex flex-wrap items-center gap-2">
+          <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+            <input
+              type="checkbox"
+              checked={groupByMST}
+              onChange={(e) => {
+                setGroupByMST(e.target.checked);
+                try { setPage(1); } catch {}
+              }}
+            />
+            Gom theo MST
+          </label>
 
           <input
 
@@ -5387,7 +5454,11 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
 
                 const isDirty = rowHasChanges(r);
 
-                const updateDisabled = !canEdit || !isDirty;
+                const isGroupRow = Boolean(r.__group);
+
+                const rowIsReadOnly = isReadOnly || isGroupRow;
+
+                const updateDisabled = !canEdit || !isDirty || isGroupRow;
 
                 const updateLabel = r.__originalKey ? "Cập nhật" : "Lưu mới";
 
@@ -5438,7 +5509,7 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
 
                       >
 
-                        {isReadOnly ? (
+                        {rowIsReadOnly ? (
 
                           <span>{r.mst}</span>
 
@@ -5493,7 +5564,7 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
                       >
                         <CompanyNameCell
                           value={r.company || ""}
-                          isReadOnly={isReadOnly}
+                          isReadOnly={isReadOnly || Boolean(r.__group)}
                           onChange={(nextValue) => updateRow(r, { company: nextValue })}
                         />
                       </td>
@@ -5518,7 +5589,7 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
 
                           placeholder="Chọn nhân viên nhập"
 
-                          isReadOnly={isReadOnly}
+                          isReadOnly={isReadOnly || Boolean(r.__group)}
 
                           teams={rosterTeams}
 
@@ -5577,7 +5648,7 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
 
                           placeholder="Chọn nhân viên xuất"
 
-                          isReadOnly={isReadOnly}
+                          isReadOnly={isReadOnly || Boolean(r.__group)}
 
                           teams={rosterTeams}
 
@@ -5700,9 +5771,9 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
 
                       >
 
-                        {isReadOnly ? (
+                        {rowIsReadOnly ? (
 
-                          <span>{r.effective_from || ""}</span>
+                          <span>{r.effective_from || "—"}</span>
 
                         ) : (
 
@@ -5748,9 +5819,9 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
 
                       >
 
-                        {isReadOnly ? (
+                        {rowIsReadOnly ? (
 
-                          <span>{r.effective_to || ""}</span>
+                          <span>{r.effective_to || "Hiện tại"}</span>
 
                         ) : (
 
@@ -5794,7 +5865,7 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
 
                         <div className="flex flex-col gap-3">
 
-                          {canEdit ? (
+                          {canEdit && !Boolean(r.__group) ? (
 
                             <div className="flex flex-col gap-2">
 
