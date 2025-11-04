@@ -2978,7 +2978,14 @@ export default function KPIAdjustments({ currentUser }) {
 
   const modeOptions = Array.isArray(formCategoryConfig.modes) ? formCategoryConfig.modes : [];
 
-  const licenseOptions = Array.isArray(formCategoryConfig.licenseOptions) ? formCategoryConfig.licenseOptions : [];
+  const licenseOptions = (Array.isArray(formCategoryConfig.licenseOptions) ? formCategoryConfig.licenseOptions : []).map((opt) => {
+    if (!opt) return opt;
+    const code = String(opt.value || '').toUpperCase();
+    let label = opt.label || opt.value;
+    if (code === 'ZB02') label = 'ZB02 - Xin cấp phép tiền chất CN';
+    else if (code === 'ZB03') label = 'ZB03 - Khai báo hóa chất';
+    return { ...opt, label };
+  });
 
   const normalizedMode = normalizeStr(form.mode || "").toLowerCase();
 
@@ -3351,6 +3358,21 @@ export default function KPIAdjustments({ currentUser }) {
                     placeholder="Ghi chú lý do từ chối..."
 
                   />
+
+                  {form.licenseCode ? (
+                    <div className="mt-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => handleLicenseChange("")}
+                        className="px-2 py-1"
+                        data-tooltip="Xóa mã giấy phép"
+                        aria-label="Xóa mã giấy phép"
+                      >
+                        Xóa
+                      </Button>
+                    </div>
+                  ) : null}
 
                 </div>
 
