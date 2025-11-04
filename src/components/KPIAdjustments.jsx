@@ -3372,11 +3372,10 @@ export default function KPIAdjustments({ currentUser }) {
                         variant="outline"
                         onClick={() => handleLicenseChange("")}
                         className="px-2 py-1"
-                        data-tooltip="Xóa mã giấy phép"
-                        aria-label="Xóa mã giấy phép"
+                        data-tooltip="X\u00F3a m\u00E3 gi\u1EA5y ph\u00E9p"
+                        aria-label="X\u00F3a m\u00E3 gi\u1EA5y ph\u00E9p"
                       >
-                        Xóa
-                      </Button>
+                        Xo\u00E1</Button>
                     </div>
                   ) : null}
 
@@ -4337,7 +4336,7 @@ export default function KPIAdjustments({ currentUser }) {
 
                   <label className="text-sm font-medium text-foreground" htmlFor={FORM_FIELD_IDS.license}>
 
-                    Mã giấy phép
+                    M\u00E3 gi\u1EA5y ph\u00E9p
 
                   </label>
 
@@ -4348,13 +4347,13 @@ export default function KPIAdjustments({ currentUser }) {
 
                     list="kpi-adjust-license-options"
 
-                    placeholder="Ví dụ: ZB02"
+                    placeholder="V\u00ED d\u1EE5: ZB02"
 
                     value={form.licenseCode}
 
                     onChange={(e) => handleLicenseChange(e.target.value)}
 
-                    className="w-auto flex-1"
+                    className="flex-1"
 
                   />
                     {form.licenseCode ? (
@@ -4363,11 +4362,10 @@ export default function KPIAdjustments({ currentUser }) {
                         variant="outline"
                         onClick={() => handleLicenseChange("")}
                         className="px-2 py-1"
-                        data-tooltip="X�a m� gi?y ph�p"
-                        aria-label="X�a m� gi?y ph�p"
+                        data-tooltip="X\u00F3a m\u00E3 gi\u1EA5y ph\u00E9p"
+                        aria-label="X\u00F3a m\u00E3 gi\u1EA5y ph\u00E9p"
                       >
-                        X�a
-                      </Button>
+                        Xo\u00E1</Button>
                     ) : null}
                   </div>
 
