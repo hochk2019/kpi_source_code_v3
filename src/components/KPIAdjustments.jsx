@@ -2978,14 +2978,20 @@ export default function KPIAdjustments({ currentUser }) {
 
   const modeOptions = Array.isArray(formCategoryConfig.modes) ? formCategoryConfig.modes : [];
 
-  const licenseOptions = (Array.isArray(formCategoryConfig.licenseOptions) ? formCategoryConfig.licenseOptions : []).map((opt) => {
+  const baseLicenseOptions = Array.isArray(formCategoryConfig.licenseOptions)
+    ? formCategoryConfig.licenseOptions
+    : [];
+  let licenseOptions = baseLicenseOptions.map((opt) => {
     if (!opt) return opt;
     const code = String(opt.value || '').toUpperCase();
     let label = opt.label || opt.value;
     if (code === 'ZB02') label = 'ZB02 - Xin cấp phép tiền chất CN';
     else if (code === 'ZB03') label = 'ZB03 - Khai báo hóa chất';
-    return { ...opt, label };
+    return { ...opt, value: code, label };
   });
+  if (!licenseOptions.some((o) => String(o?.value || '').toUpperCase() === 'ZB99')) {
+    licenseOptions = [...licenseOptions, { value: 'ZB99', label: 'ZB99 - Giấy phép khác' }];
+  }
 
   const normalizedMode = normalizeStr(form.mode || "").toLowerCase();
 
