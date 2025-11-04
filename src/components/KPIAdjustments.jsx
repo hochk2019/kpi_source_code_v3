@@ -4341,6 +4341,7 @@ export default function KPIAdjustments({ currentUser }) {
 
                   </label>
 
+                  <div className="mt-1 flex items-center gap-2">
                   <Input
 
                     id={FORM_FIELD_IDS.license}
@@ -4353,9 +4354,22 @@ export default function KPIAdjustments({ currentUser }) {
 
                     onChange={(e) => handleLicenseChange(e.target.value)}
 
-                    className="mt-1"
+                    className="w-auto flex-1"
 
                   />
+                    {form.licenseCode ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => handleLicenseChange("")}
+                        className="px-2 py-1"
+                        data-tooltip="X�a m� gi?y ph�p"
+                        aria-label="X�a m� gi?y ph�p"
+                      >
+                        X�a
+                      </Button>
+                    ) : null}
+                  </div>
 
                   <datalist id="kpi-adjust-license-options">
 
