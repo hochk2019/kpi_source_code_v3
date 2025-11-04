@@ -4345,7 +4345,7 @@ export default function KPIAdjustments({ currentUser }) {
 
                     list="kpi-adjust-license-options"
 
-                    placeholder="V\u00ED d\u1EE5: ZB02"
+                    placeholder={'V\u00ED d\u1EE5: ZB02'}
 
                     value={form.licenseCode}
 
