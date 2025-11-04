@@ -4335,9 +4335,7 @@ export default function KPIAdjustments({ currentUser }) {
                 <div>
 
                   <label className="text-sm font-medium text-foreground" htmlFor={FORM_FIELD_IDS.license}>
-
-                    M\u00E3 gi\u1EA5y ph\u00E9p
-
+                    {'M\u00E3 gi\u1EA5y ph\u00E9p'}
                   </label>
 
                   <div className="mt-1 flex items-center gap-2">
@@ -4365,7 +4363,8 @@ export default function KPIAdjustments({ currentUser }) {
                         data-tooltip="X\u00F3a m\u00E3 gi\u1EA5y ph\u00E9p"
                         aria-label="X\u00F3a m\u00E3 gi\u1EA5y ph\u00E9p"
                       >
-                        Xo\u00E1</Button>
+                        {'X\u00F3a'}
+                      </Button>
                     ) : null}
                   </div>
 
