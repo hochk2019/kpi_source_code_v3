@@ -1,8 +1,6 @@
 // src/components/DataImporter.jsx
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-
-import * as XLSX from "xlsx";
+import React, { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   getDeclRows,
@@ -26,7 +24,16 @@ import {
   normalizeStr,
   normalizeDeclarationNumber,
   normalizeName,
-  refreshDeclRowsFromServer,
+  getDeclSyncProgress,
+  subscribeDeclSyncProgress,
+  getDeclSyncQueue,
+  subscribeDeclSyncQueue,
+  enqueueDeclSyncJob,
+  resumeDeclSyncQueue,
+  forceRunDeclSyncJob,
+  getDeclSyncHistory,
+  subscribeDeclSyncHistory,
+  refreshDeclSyncHistory,
   IMPORT_COLUMN_IDS,
   IMPORT_AUX_COLUMN_IDS,
   IMPORT_SENSITIVE_COLUMNS,
@@ -130,6 +137,13 @@ import { toast } from "@/shared/toast.js";
 
 import { Check, ChevronsUpDown, CircleX, Plus } from "lucide-react";
 
+import useXlsxWorker from "@/hooks/useXlsxWorker.js";
+
+const PickerSection = lazy(() => import("./dataImporter/PickerSection.jsx"));
+const PreviewSection = lazy(() => import("./dataImporter/PreviewSection.jsx"));
+const FiltersSection = lazy(() => import("./dataImporter/FiltersSection.jsx"));
+const SyncSection = lazy(() => import("./dataImporter/SyncSection.jsx"));
+
 
 
 function getRowKey(row) {
@@ -191,6 +205,23 @@ const DECL_HISTORY_FIELD_LABELS = Object.freeze({
 
 
 const DECL_HISTORY_ENTRY_LIMIT = 15;
+
+
+
+const DECL_SYNC_STEP_LABELS = Object.freeze({
+  trigger: "Gửi yêu cầu đồng bộ",
+  reading: "Đọc dữ liệu từ ECUS",
+  diff: "Tính toán thay đổi",
+  writing: "Ghi vào kho tờ khai",
+  completed: "Hoàn tất",
+});
+
+const DECL_SYNC_PROGRESS_DOT_CLASSES = Object.freeze({
+  active: "bg-emerald-500 animate-pulse",
+  done: "bg-emerald-400",
+  pending: "bg-gray-300",
+  error: "bg-red-500 animate-pulse",
+});
 
 
 
@@ -3470,6 +3501,8 @@ export default function DataImporter({
 
   const fileRef = useRef(null);
 
+  const { readWorkbook, writeWorkbook } = useXlsxWorker();
+
   const [containerWidth, setContainerWidth] = useState(0);
 
   const [rawRows, setRawRows] = useState([]);        // dữ liệu xem trước (đã map)
@@ -5664,8 +5697,23 @@ export default function DataImporter({
   const [syncRunning, setSyncRunning] = useState(false);
 
   const [syncMessage, setSyncMessage] = useState("");
-
   const [syncError, setSyncError] = useState("");
+
+  const [declSyncProgress, setDeclSyncProgressState] = useState(() => getDeclSyncProgress());
+  const [declSyncQueue, setDeclSyncQueueState] = useState(() => getDeclSyncQueue());
+  const DECL_SYNC_HISTORY_LIMIT = 10;
+  const [declSyncHistory, setDeclSyncHistoryState] = useState(() =>
+    getDeclSyncHistory({ limit: DECL_SYNC_HISTORY_LIMIT })
+  );
+  const lastCompletedSyncRef = useRef(0);
+  const lastFailedSyncRef = useRef(0);
+  const lastProgressStepRef = useRef("trigger");
+  const [precheckResult, setPrecheckResult] = useState(null);
+  const [precheckLoading, setPrecheckLoading] = useState(false);
+  const [precheckError, setPrecheckError] = useState("");
+  const precheckTimestampRef = useRef(null);
+  const [showConflictDetails, setShowConflictDetails] = useState(false);
+  const previousConflictCountRef = useRef(0);
 
   const [manualRange, setManualRange] = useState({ from: "", to: "" });
 
@@ -5734,8 +5782,185 @@ export default function DataImporter({
     return parts.length ? `Lọc theo ${parts.join("; ")}` : "";
 
   }, [activeExcludeTaxCodes, activeIncludeTaxCodes]);
+  const declSyncConflicts = useMemo(
+    () => (Array.isArray(declSyncProgress.conflicts) ? declSyncProgress.conflicts : []),
+    [declSyncProgress.conflicts]
+  );
+  const declSyncConflictCount = useMemo(() => {
+    if (Number.isFinite(declSyncProgress.conflictCount)) {
+      return declSyncProgress.conflictCount;
+    }
+    return declSyncConflicts.length;
+  }, [declSyncConflicts.length, declSyncProgress.conflictCount]);
+  const hasDeclSyncConflicts = declSyncProgress.hasConflicts || declSyncConflicts.length > 0;
+  const precheckSteps = useMemo(
+    () => (Array.isArray(precheckResult?.steps) ? precheckResult.steps : []),
+    [precheckResult]
+  );
+  const lastPrecheckAtLabel = useMemo(() => {
+    const ts = precheckResult?.checkedAt || precheckTimestampRef.current;
+    if (!ts) return "";
+    try {
+      return new Date(ts).toLocaleString("vi-VN", { hour12: false });
+    } catch (error) {
+      console.warn("Không thể định dạng thời gian pre-check", error);
+      return "";
+    }
+  }, [precheckResult]);
+
+  useEffect(() => {
+    setDeclSyncProgressState(getDeclSyncProgress());
+    const unsubscribe = subscribeDeclSyncProgress((snapshot) => {
+      setDeclSyncProgressState(snapshot);
+    });
+    return unsubscribe;
+  }, []);
+
+  useEffect(() => {
+    const snapshot = resumeDeclSyncQueue() || getDeclSyncQueue();
+    setDeclSyncQueueState(snapshot);
+    const unsubscribe = subscribeDeclSyncQueue((queue) => {
+      setDeclSyncQueueState(queue);
+    });
+    return unsubscribe;
+  }, []);
+
+  useEffect(() => {
+    setDeclSyncHistoryState(getDeclSyncHistory({ limit: DECL_SYNC_HISTORY_LIMIT }));
+    const unsubscribe = subscribeDeclSyncHistory((history) => {
+      setDeclSyncHistoryState(Array.isArray(history) ? history.slice(0, DECL_SYNC_HISTORY_LIMIT) : []);
+    }, { limit: DECL_SYNC_HISTORY_LIMIT });
+    return () => {
+      if (typeof unsubscribe === 'function') {
+        unsubscribe();
+      }
+    };
+  }, [DECL_SYNC_HISTORY_LIMIT]);
+
+  useEffect(() => {
+    const stepOrder = ["trigger", "reading", "diff", "writing", "completed"];
+    if (stepOrder.includes(declSyncProgress.step)) {
+      lastProgressStepRef.current = declSyncProgress.step;
+    }
+  }, [declSyncProgress.step]);
+
+  useEffect(() => {
+    const running =
+      declSyncProgress.status === "running" ||
+      declSyncQueue.jobs.some((job) => job.status === "running");
+    setSyncRunning(running);
+  }, [declSyncProgress.status, declSyncQueue]);
+
+  useEffect(() => {
+    if (declSyncProgress.status === "running") {
+      const text = declSyncProgress.message || "Đang đồng bộ ECUS...";
+      setSyncMessage(text);
+      setSyncError("");
+      setShowConflictDetails(false);
+      return;
+    }
+    if (declSyncProgress.status === "success" && declSyncProgress.message) {
+      setSyncMessage(declSyncProgress.message);
+      setSyncError("");
+      return;
+    }
+    if (declSyncProgress.status === "error") {
+      setSyncError(declSyncProgress.message || "Không thể đồng bộ ECUS");
+    }
+  }, [declSyncProgress]);
+
+  useEffect(() => {
+    const count = declSyncConflictCount;
+    if (count > 0 && previousConflictCountRef.current !== count) {
+      setShowConflictDetails(true);
+    }
+    previousConflictCountRef.current = count;
+  }, [declSyncConflictCount]);
+
+  useEffect(() => {
+    const waitingJob = declSyncQueue.jobs
+      .filter((job) => job.status === "pending" && job.lastError)
+      .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))[0];
+    if (
+      waitingJob &&
+      (waitingJob.updatedAt || 0) > lastFailedSyncRef.current &&
+      declSyncProgress.status !== "running"
+    ) {
+      lastFailedSyncRef.current = waitingJob.updatedAt || Date.now();
+      if (waitingJob.message) {
+        setSyncError(waitingJob.message);
+      } else if (waitingJob.lastError) {
+        setSyncError(waitingJob.lastError);
+      }
+    }
+  }, [declSyncQueue, declSyncProgress.status]);
 
 
+
+  const declSyncStepStates = useMemo(() => {
+    const stepOrder = Object.keys(DECL_SYNC_STEP_LABELS);
+    const activeKey = stepOrder.includes(declSyncProgress.step)
+      ? declSyncProgress.step
+      : lastProgressStepRef.current;
+    const activeIndex = stepOrder.indexOf(activeKey);
+    const status = declSyncProgress.status;
+    return stepOrder.map((key, index) => {
+      let state = "pending";
+      if (index < activeIndex || (status === "success" && key === "completed")) {
+        state = "done";
+      } else if (index === activeIndex) {
+        if (status === "error") {
+          state = "error";
+        } else if (status === "success") {
+          state = "done";
+        } else if (status === "running") {
+          state = "active";
+        }
+      }
+      return { key, label: DECL_SYNC_STEP_LABELS[key], state };
+    });
+  }, [declSyncProgress]);
+
+  const declSyncDiffSummary = useMemo(() => {
+    const diff = declSyncProgress.diff;
+    if (!diff || typeof diff !== "object") {
+      return "";
+    }
+    const parts = [];
+    if (Number.isFinite(diff.added) && diff.added > 0) {
+      parts.push(`+${diff.added.toLocaleString("vi-VN")} mới`);
+    }
+    if (Number.isFinite(diff.updated) && diff.updated > 0) {
+      parts.push(`${diff.updated.toLocaleString("vi-VN")} cập nhật`);
+    }
+    if (Number.isFinite(diff.removed) && diff.removed > 0) {
+      parts.push(`-${diff.removed.toLocaleString("vi-VN")} gỡ bỏ`);
+    }
+    if (Number.isFinite(diff.totalAfter)) {
+      parts.push(`Tổng ${diff.totalAfter.toLocaleString("vi-VN")} tờ khai`);
+    }
+    return parts.join(" • " );
+  }, [declSyncProgress.diff]);
+
+  const visibleQueueItems = useMemo(() => {
+    const list = Array.isArray(declSyncQueue.jobs) ? declSyncQueue.jobs.slice() : [];
+    list.sort((a, b) => {
+      const priority = (job) => (job.status === "running" ? 0 : job.status === "pending" ? 1 : 2);
+      const diff = priority(a) - priority(b);
+      if (diff !== 0) return diff;
+      const timeA = Number.isFinite(a.updatedAt) ? a.updatedAt : a.createdAt || 0;
+      const timeB = Number.isFinite(b.updatedAt) ? b.updatedAt : b.createdAt || 0;
+      return timeB - timeA;
+    });
+    return list.slice(0, 5);
+  }, [declSyncQueue]);
+
+  const totalQueueJobs = Array.isArray(declSyncQueue.jobs) ? declSyncQueue.jobs.length : 0;
+
+  const handleForceRunJob = useCallback((jobId) => {
+    if (!jobId) return;
+    forceRunDeclSyncJob(jobId);
+  }, []);
 
   const applyDatePreset = useCallback((presetKey) => {
 
@@ -7579,6 +7804,35 @@ export default function DataImporter({
 
   }, []);
 
+  const handleRefreshHistory = useCallback(() => {
+    refreshDeclSyncHistory({ limit: DECL_SYNC_HISTORY_LIMIT })
+      .catch((error) => {
+        console.warn('Không thể tải lịch sử đồng bộ ECUS', error);
+        toast.error('Không thể tải lịch sử đồng bộ ECUS.');
+      });
+  }, [DECL_SYNC_HISTORY_LIMIT]);
+
+  useEffect(() => {
+    const completedJobs = declSyncQueue.jobs
+      .filter((job) => job.status === "completed" && Number.isFinite(job.completedAt))
+      .sort((a, b) => (b.completedAt || 0) - (a.completedAt || 0));
+    const latest = completedJobs[0];
+    if (latest && latest.completedAt && latest.completedAt > lastCompletedSyncRef.current) {
+      lastCompletedSyncRef.current = latest.completedAt;
+      if (latest.message) {
+        setSyncMessage(latest.message);
+        setSyncError("");
+      }
+      fetchAlerts();
+      fetchSyncStatus();
+      fetchCoDiscrepancy();
+      loadSavedRows({ bypassConfirm: true });
+      refreshDeclSyncHistory({ limit: DECL_SYNC_HISTORY_LIMIT })
+        .catch((error) => console.warn('Không thể cập nhật lịch sử đồng bộ ECUS', error));
+    }
+  }, [declSyncQueue, fetchAlerts, fetchSyncStatus, fetchCoDiscrepancy, loadSavedRows]);
+
+
 
 
   useEffect(() => {
@@ -7723,6 +7977,59 @@ export default function DataImporter({
 
 
 
+  const runPrecheck = useCallback(
+    async ({ silent = false } = {}) => {
+      if (!canManageSync) {
+        if (!silent) {
+          alert("Bạn không có quyền chạy kiểm tra trước đồng bộ.");
+        }
+        return { ok: false, error: "permission-denied" };
+      }
+      setPrecheckLoading(true);
+      if (!silent) {
+        setPrecheckError("");
+      }
+      try {
+        const response = await fetchWithAuth("/api/import/ecus/precheck", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+        });
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+        const payload = await response.json();
+        setPrecheckResult(payload || null);
+        precheckTimestampRef.current = payload?.checkedAt || new Date().toISOString();
+        if (!payload?.ok) {
+          const fallback =
+            (Array.isArray(payload?.steps)
+              ? payload.steps.find((step) => step?.status === "error" || step?.ok === false)?.message
+              : null) || payload?.message || "Có lỗi trong quá trình kiểm tra trước đồng bộ.";
+          if (!silent) {
+            setPrecheckError(fallback);
+          }
+          return { ok: false, error: fallback, result: payload };
+        }
+        if (!silent) {
+          setPrecheckError("");
+        }
+        return { ok: true, result: payload };
+      } catch (error) {
+        console.error("Không thể chạy pre-check ECUS", error);
+        const message = error?.message || "Không thể kiểm tra hệ thống trước khi đồng bộ.";
+        if (!silent) {
+          setPrecheckError(message);
+        }
+        setPrecheckResult(null);
+        return { ok: false, error: message };
+      } finally {
+        setPrecheckLoading(false);
+      }
+    },
+    [canManageSync]
+  );
+
   const handleRunSync = useCallback(async () => {
 
     if (!canManageSync) {
@@ -7749,57 +8056,36 @@ export default function DataImporter({
 
     }
 
-    setSyncRunning(true);
-
-    setSyncMessage("Đang đồng bộ...");
-
     setSyncError("");
 
     try {
 
-      const response = await fetchWithAuth("/api/import/ecus/run", {
+      const precheck = await runPrecheck({ silent: true });
+      if (!precheck?.ok) {
+        const message = precheck?.error || "Kiểm tra hệ thống thất bại, vui lòng xử lý trước khi đồng bộ.";
+        setSyncError(message);
+        return;
+      }
 
-        method: "POST",
+      const job = enqueueDeclSyncJob({
 
-        headers: { "Content-Type": "application/json" },
+        actor,
 
-        body: JSON.stringify({
+        from: manualRange.from || undefined,
 
-          actor,
+        to: manualRange.to || undefined,
 
-          from: manualRange.from || undefined,
+        includeTaxCodes: activeIncludeTaxCodes,
 
-          to: manualRange.to || undefined,
-
-          includeTaxCodes: activeIncludeTaxCodes,
-
-          excludeTaxCodes: activeExcludeTaxCodes,
-
-        }),
-
-        credentials: "include",
+        excludeTaxCodes: activeExcludeTaxCodes,
 
       });
 
-      if (!response.ok) {
+      const baseMessage =
 
-        throw new Error(`HTTP ${response.status}`);
+        job?.message ||
 
-      }
-
-      const payload = await response.json();
-
-      const imported = payload?.result?.imported ?? 0;
-
-      const skipped = payload?.result?.skipped ?? 0;
-
-      const locked = payload?.result?.reviewLocked ?? 0;
-
-      const skippedNote = skipped > 0 ? `, bỏ qua ${skipped} tờ khai đã có` : '';
-
-      const lockedNote = locked > 0 ? `, khóa ${locked} tờ khai đã rà soát` : '';
-
-      const baseMessage = `Đã đồng bộ ${imported} tờ khai mới từ ECUS${skippedNote}${lockedNote}.`;
+        "Đã xếp yêu cầu đồng bộ ECUS vào hàng đợi. Hệ thống sẽ xử lý nền ngay khi có thể.";
 
       const messageParts = [baseMessage];
 
@@ -7819,37 +8105,11 @@ export default function DataImporter({
 
       setPreviewError("");
 
-      await fetchSyncConfig();
-
-      await fetchSyncStatus();
-
-      await fetchAlerts();
-
-      await fetchCoDiscrepancy();
-
-      try {
-
-        await refreshDeclRowsFromServer();
-
-      } catch (refreshError) {
-
-        console.error("Không thể tải dữ liệu tờ khai sau đồng bộ", refreshError);
-
-      }
-
-      loadSavedRows({ bypassConfirm: true });
-
     } catch (err) {
 
-      console.error("Đồng bộ ECUS thất bại", err);
+      console.error("Không thể thêm đồng bộ ECUS vào hàng đợi", err);
 
-      setSyncMessage("");
-
-      setSyncError(err?.message || "Không thể đồng bộ ECUS");
-
-    } finally {
-
-      setSyncRunning(false);
+      setSyncError(err?.message || "Không thể khởi tạo đồng bộ ECUS");
 
     }
 
@@ -7863,23 +8123,13 @@ export default function DataImporter({
 
     canManageSync,
 
-    fetchAlerts,
-
-    fetchCoDiscrepancy,
-
-    fetchSyncConfig,
-
-    fetchSyncStatus,
-
     mstFilterNotice,
-
-    loadSavedRows,
-
-    refreshDeclRowsFromServer,
 
     manualRange.from,
 
     manualRange.to,
+
+    runPrecheck,
 
   ]);
 
@@ -8537,17 +8787,15 @@ export default function DataImporter({
 
     };
 
-    reader.onload = () => {
+    reader.onload = async () => {
 
       try {
 
-        const workbook = XLSX.read(reader.result, { type: "array" });
+        const buffer = reader.result;
 
-        const sheetName = workbook.SheetNames?.[0];
+        if (!(buffer instanceof ArrayBuffer)) {
 
-        if (!sheetName) {
-
-          toast.error("File Excel không chứa sheet dữ liệu nào. Vui lòng kiểm tra lại.");
+          toast.error("Không thể đọc file Excel. Vui lòng thử lại.");
 
           resetInput();
 
@@ -8555,9 +8803,11 @@ export default function DataImporter({
 
         }
 
-        const sheet = workbook.Sheets[sheetName];
+        const { rows } = await readWorkbook(buffer, {
 
-        const rows = XLSX.utils.sheet_to_json(sheet, { raw: false, defval: "" });
+          sheetToJson: { raw: false, defval: "" },
+
+        });
 
         if (!Array.isArray(rows) || rows.length === 0) {
 
@@ -8574,9 +8824,7 @@ export default function DataImporter({
           toast.error(
 
             `File chứa ${rows.length.toLocaleString("vi-VN")} dòng, vượt giới hạn ${MAX_IMPORT_ROWS.toLocaleString(
-
               "vi-VN"
-
             )} dòng cho mỗi lần import. Vui lòng tách file hoặc lọc lại dữ liệu.`
 
           );
@@ -8586,8 +8834,6 @@ export default function DataImporter({
           return;
 
         }
-
-
 
         const loadedRules = loadRules();
 
@@ -8608,8 +8854,6 @@ export default function DataImporter({
         const memberMap = mapMemberNamesToTeams(roster);
 
         const agencyMap = mapHQAgenciesByMST();
-
-
 
         const normalizedRows = rows
 
@@ -8635,8 +8879,6 @@ export default function DataImporter({
 
           .map(ensureLicenseFields);
 
-
-
         const invalidDateCount = normalizedRows.filter(row => !row.date).length;
 
         if (invalidDateCount > 0) {
@@ -8644,9 +8886,7 @@ export default function DataImporter({
           toast.error(
 
             `Có ${invalidDateCount.toLocaleString(
-
               "vi-VN"
-
             )} dòng có ngày tờ khai không hợp lệ. Vui lòng kiểm tra lại định dạng ngày (dd/mm/yyyy).`
 
           );
@@ -8656,8 +8896,6 @@ export default function DataImporter({
           return;
 
         }
-
-
 
         const sanitizedRows = normalizedRows.filter(row => row.so_tk && row.date);
 
@@ -8670,8 +8908,6 @@ export default function DataImporter({
           return;
 
         }
-
-
 
         setRawRows(sortDeclRows(sanitizedRows));
 
@@ -8699,7 +8935,7 @@ export default function DataImporter({
 
         console.error("Không thể xử lý file Excel import", err);
 
-        toast.error("Không thể xử lý file Excel. Vui lòng kiểm tra định dạng và thử lại.");
+        toast.error(err?.message || "Không thể xử lý file Excel. Vui lòng kiểm tra định dạng và thử lại.");
 
       } finally {
 
@@ -12999,7 +13235,7 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
 
 
 
-  const handleExportSelected = useCallback(() => {
+  const handleExportSelected = useCallback(async () => {
 
     if (selectedKeys.length === 0) {
 
@@ -13059,20 +13295,49 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
 
     });
 
-    const worksheet = XLSX.utils.json_to_sheet(data);
-
-    const workbook = XLSX.utils.book_new();
-
-    XLSX.utils.book_append_sheet(workbook, worksheet, "ToKhai");
-
     const timestamp = new Date().toISOString().slice(0, 10);
 
-    XLSX.writeFile(workbook, `tokhai_da_chon_${timestamp}.xlsx`);
+    try {
 
-  }, [selectedKeys, rawRows, keyOfRow, summarizeLicenseSnapshot]);
+      const { arrayBuffer, mimeType, fileName } = await writeWorkbook(data, {
 
+        sheetName: "ToKhai",
 
+        fileName: `tokhai_da_chon_${timestamp}.xlsx`,
 
+      });
+
+      const blob = new Blob([arrayBuffer], {
+
+        type: mimeType || "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+
+      });
+
+      const downloadUrl = URL.createObjectURL(blob);
+
+      const link = document.createElement("a");
+
+      link.href = downloadUrl;
+
+      link.download = fileName || `tokhai_da_chon_${timestamp}.xlsx`;
+
+      document.body.appendChild(link);
+
+      link.click();
+
+      document.body.removeChild(link);
+
+      URL.revokeObjectURL(downloadUrl);
+
+    } catch (error) {
+
+      console.error("Không thể xuất Excel", error);
+
+      toast.error(error?.message || "Không thể xuất file Excel. Vui lòng thử lại.");
+
+    }
+
+  }, [selectedKeys, rawRows, keyOfRow, summarizeLicenseSnapshot, writeWorkbook]);
   const toneClassMap = {
 
     success: "border border-emerald-200 bg-emerald-50 text-emerald-700",
@@ -13136,6 +13401,210 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
     ? new Date(statusInfo.checkedAt).toLocaleString("vi-VN")
 
     : "Chưa kiểm tra";
+
+  const triggerFileDialog = useCallback(() => {
+
+    fileRef.current?.click();
+
+  }, []);
+
+  const openDeletedList = useCallback(() => setDeletedDialogOpen(true), [setDeletedDialogOpen]);
+
+  const pickerContext = useMemo(
+
+    () => ({
+
+      fileInputRef: fileRef,
+
+      onFileChange: handleFileChange,
+
+      isReadOnlyForEdits,
+
+      canEdit,
+
+      onSelectFile: triggerFileDialog,
+
+      selectedFile,
+
+      onImport: handleImport,
+
+      canImport,
+
+      onShowSavedRows: loadSavedRows,
+
+      canViewSavedRows,
+
+      onOpenDeleted: openDeletedList,
+
+      modeLabel,
+
+    }),
+
+    [
+
+      handleFileChange,
+
+      isReadOnlyForEdits,
+
+      canEdit,
+
+      triggerFileDialog,
+
+      selectedFile,
+
+      handleImport,
+
+      canImport,
+
+      loadSavedRows,
+
+      canViewSavedRows,
+
+      openDeletedList,
+
+      modeLabel,
+
+    ]
+
+  );
+
+  const previewContext = useMemo(
+
+    () => ({
+
+      mode,
+
+      importPreview,
+
+      importPreviewStats,
+
+      importPreviewSamples,
+
+      importErrorReasonLabels: IMPORT_ERROR_REASON_LABELS,
+
+      formatDeclarationLabel,
+
+      formatDisplayDate,
+
+    }),
+
+    [mode, importPreview, importPreviewStats, importPreviewSamples]
+
+  );
+
+  const filtersContext = useMemo(
+
+    () => ({
+
+      query,
+
+      setQuery,
+
+      setPage,
+
+      datePreset,
+
+      setDatePreset,
+
+      applyDatePreset,
+
+      searchRange,
+
+      setSearchRange,
+
+      handleClearSearchRange,
+
+      filterNoStaff,
+
+      setFilterNoStaff,
+
+      filterNoTeam,
+
+      setFilterNoTeam,
+
+      coFilterMode,
+
+      setCoFilterMode,
+
+      coFilterMin,
+
+      setCoFilterMin,
+
+      coFilterActive,
+
+      coFilterMatches,
+
+      dateRangePresets: DATE_RANGE_PRESETS,
+
+      coFilterOptions: CO_FILTER_OPTIONS,
+
+    }),
+
+    [
+
+      query,
+
+      setQuery,
+
+      setPage,
+
+      datePreset,
+
+      setDatePreset,
+
+      applyDatePreset,
+
+      searchRange,
+
+      setSearchRange,
+
+      handleClearSearchRange,
+
+      filterNoStaff,
+
+      setFilterNoStaff,
+
+      filterNoTeam,
+
+      setFilterNoTeam,
+
+      coFilterMode,
+
+      setCoFilterMode,
+
+      coFilterMin,
+
+      setCoFilterMin,
+
+      coFilterActive,
+
+      coFilterMatches,
+
+    ]
+
+  );
+
+  const syncContext = useMemo(
+
+    () => ({
+
+      toneClassMap,
+
+      backendMeta,
+
+      databaseMeta,
+
+      statusCheckedLabel,
+
+      statusError,
+
+      lastSyncSummaryCard,
+
+    }),
+
+    [toneClassMap, backendMeta, databaseMeta, statusCheckedLabel, statusError, lastSyncSummaryCard]
+
+  );
 
 
 
@@ -14456,41 +14925,11 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
 
         >
 
-          <div className="space-y-1">
+          <Suspense fallback={null}>
 
-            <div className="flex flex-wrap items-center gap-2 text-xs md:text-sm">
+            <SyncSection context={syncContext} />
 
-              <span className={`rounded px-2 py-1 ${toneClassMap[backendMeta.tone] || toneClassMap.muted}`}>
-
-                Backend: {backendMeta.label}
-
-              </span>
-
-              <span className={`rounded px-2 py-1 ${toneClassMap[databaseMeta.tone] || toneClassMap.muted}`}>
-
-                SQL Server: {databaseMeta.label}
-
-              </span>
-
-            </div>
-
-            <div className="text-xs text-gray-500">Lần kiểm tra: {statusCheckedLabel}</div>
-
-            {(backendMeta.detail || databaseMeta.detail) && (
-
-              <div className="text-xs text-gray-500">
-
-                {[backendMeta.detail, databaseMeta.detail].filter(Boolean).join(" • ")}
-
-              </div>
-
-            )}
-
-            {statusError && <div className="text-xs text-red-600">{statusError}</div>}
-
-            {lastSyncSummaryCard}
-
-          </div>
+          </Suspense>
 
           {syncForm ? (
 
@@ -14810,6 +15249,22 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
 
                   type="button"
 
+                  onClick={() => runPrecheck({ silent: false })}
+
+                  disabled={precheckLoading || syncRunning}
+
+                  className="rounded border border-amber-500 px-3 py-1 text-sm text-amber-700 hover:bg-amber-50 disabled:opacity-50"
+
+                >
+
+                  {precheckLoading ? "Đang kiểm tra..." : "Kiểm tra hệ thống"}
+
+                </button>
+
+                <button
+
+                  type="button"
+
                   onClick={handleRunSync}
 
                   disabled={syncRunning}
@@ -14847,6 +15302,43 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
               )}
 
               {previewError && <div className="text-xs text-red-600">{previewError}</div>}
+              {precheckError && <div className="text-xs text-red-600">{precheckError}</div>}
+              {precheckSteps.length > 0 && (
+                <div className="mt-2 rounded-md border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-amber-700">Kiểm tra trước khi đồng bộ</span>
+                    {lastPrecheckAtLabel && (
+                      <span className="text-[11px] text-amber-600">Lần cuối: {lastPrecheckAtLabel}</span>
+                    )}
+                  </div>
+                  <ul className="mt-1 space-y-1">
+                    {precheckSteps.map((step, index) => {
+                      const ok = step?.ok !== false && step?.status !== "error";
+                      const warning = step?.status === "warning";
+                      const statusClass = ok
+                        ? "text-emerald-700"
+                        : warning
+                        ? "text-amber-700"
+                        : "text-red-600";
+                      const label = step?.label || step?.title || `Hạng mục ${index + 1}`;
+                      const detail = step?.message || step?.detail || step?.note || "";
+                      const statusLabel = ok ? "Đã sẵn sàng" : warning ? "Cảnh báo" : "Lỗi";
+                      return (
+                        <li
+                          key={step?.key || label}
+                          className="flex flex-col gap-0.5 border-b border-amber-100 pb-1 last:border-0 last:pb-0"
+                        >
+                          <div className="flex items-center justify-between gap-3">
+                            <span className="font-medium">{label}</span>
+                            <span className={`${statusClass} text-right`}>{statusLabel}</span>
+                          </div>
+                          {detail && <div className="text-[11px] text-amber-700">{detail}</div>}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              )}
 
               {previewRows.length > 0 && (
 
@@ -14930,6 +15422,359 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
 
                 </div>
 
+              )}
+
+              {declSyncProgress.status !== "idle" && (
+                <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-900">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-semibold text-emerald-700">Tiến trình đồng bộ</span>
+                    <span className="text-[11px] text-emerald-600">
+                      {declSyncProgress.status === "running"
+                        ? "Đang xử lý"
+                        : declSyncProgress.status === "success"
+                        ? "Hoàn tất"
+                        : "Gặp lỗi"}
+                    </span>
+                  </div>
+                  <ol className="mt-2 space-y-1">
+                    {declSyncStepStates.map((step) => (
+                      <li key={step.key} className="flex items-center justify-between">
+                        <span className="flex items-center gap-2">
+                          <span
+                            className={`h-2.5 w-2.5 rounded-full ${
+                              DECL_SYNC_PROGRESS_DOT_CLASSES[step.state] || DECL_SYNC_PROGRESS_DOT_CLASSES.pending
+                            }`}
+                          />
+                          <span>{step.label}</span>
+                        </span>
+                        {step.state === "active" && <span className="text-emerald-600">Đang chạy</span>}
+                        {step.state === "done" && <span className="text-emerald-500">✓</span>}
+                        {step.state === "error" && <span className="text-red-500">Lỗi</span>}
+                      </li>
+                    ))}
+                  </ol>
+                  {declSyncDiffSummary && (
+                    <div className="mt-2 text-xs font-medium text-emerald-700">{declSyncDiffSummary}</div>
+                  )}
+                  {hasDeclSyncConflicts && (
+                    <div className="mt-3 rounded-md border border-amber-300 bg-amber-50 p-3 text-xs text-amber-800">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="text-sm font-semibold text-amber-700">
+                          {declSyncConflictCount.toLocaleString("vi-VN")} tờ khai có xung đột cần rà soát
+                        </span>
+                        <button
+                          type="button"
+                          className="text-[11px] font-medium text-amber-700 underline-offset-2 hover:underline"
+                          onClick={() => setShowConflictDetails((prev) => !prev)}
+                        >
+                          {showConflictDetails ? "Ẩn chi tiết" : "Xem chi tiết"}
+                        </button>
+                      </div>
+                      <p className="mt-1 text-[11px] text-amber-700">
+                        Dữ liệu ECUS mới có thể ghi đè các chỉnh sửa thủ công gần đây. Hãy rà soát và xác nhận trước khi tiếp tục.
+                      </p>
+                      {showConflictDetails && (
+                        <ul className="mt-2 space-y-2">
+                          {declSyncConflicts.slice(0, 10).map((conflict) => {
+                            const lastEditedLabel = conflict.lastManualAt
+                              ? formatDateTime(conflict.lastManualAt)
+                              : "";
+                            return (
+                              <li key={conflict.key} className="rounded border border-amber-200 bg-white/70 p-2">
+                                <div className="flex flex-wrap items-center justify-between gap-2 font-medium">
+                                  <span>
+                                    Tờ khai {conflict.soTk || conflict.key}
+                                    {conflict.nhanh ? ` • Chi cục ${conflict.nhanh}` : ""}
+                                  </span>
+                                  {lastEditedLabel && (
+                                    <span className="text-[11px] text-amber-600">
+                                      Sửa gần nhất: {lastEditedLabel}
+                                      {conflict.lastManualActor ? ` • ${conflict.lastManualActor}` : ""}
+                                    </span>
+                                  )}
+                                </div>
+                                <table className="mt-2 w-full text-[11px] text-amber-900">
+                                  <thead>
+                                    <tr className="text-left text-[10px] uppercase text-amber-600">
+                                      <th className="w-32 px-1 py-0.5">Trường</th>
+                                      <th className="px-1 py-0.5">Giá trị cũ</th>
+                                      <th className="px-1 py-0.5">Giá trị mới</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {conflict.fields.map((field) => (
+                                      <tr key={`${conflict.key}-${field.field}`} className="border-t border-amber-100">
+                                        <td className="px-1 py-0.5 font-medium">{field.label}</td>
+                                        <td className="px-1 py-0.5 text-amber-700">{field.before || "(trống)"}</td>
+                                        <td className="px-1 py-0.5 text-emerald-700">{field.after || "(trống)"}</td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                                {Array.isArray(conflict.history) && conflict.history.length > 0 && (
+                                  <div className="mt-2 text-[11px] text-amber-700">
+                                    <span className="font-medium">Lịch sử gần nhất:</span>
+                                    <ul className="mt-1 space-y-0.5">
+                                      {conflict.history.slice(0, 3).map((entry, index) => (
+                                        <li key={`${conflict.key}-history-${index}`}>
+                                          {formatDateTime(entry.ts)}
+                                          {entry.actor ? ` • ${entry.actor}` : ""}
+                                          {Array.isArray(entry.changes) && entry.changes.length
+                                            ? ` • ${entry.changes.map((change) => change.field).join(", ")}`
+                                            : ""}
+                                        </li>
+                                      ))}
+                                    </ul>
+                                  </div>
+                                )}
+                              </li>
+                            );
+                          })}
+                          {declSyncConflicts.length > 10 && (
+                            <li className="text-[11px] text-amber-600">
+                              Hiển thị 10 tờ khai đầu tiên. Vui lòng xuất báo cáo hoặc xem trong kho dữ liệu để kiểm tra toàn bộ danh
+                              sách.
+                            </li>
+                          )}
+                        </ul>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+              {visibleQueueItems.length > 0 && (
+                <div className="rounded-md border border-gray-200 bg-white p-3 text-xs text-gray-700">
+                  <div className="mb-2 flex items-center justify-between">
+                    <span className="font-semibold text-gray-700">Hàng đợi đồng bộ</span>
+                    <span className="text-[11px] text-gray-500">
+                      {totalQueueJobs.toLocaleString("vi-VN")} phiên
+                    </span>
+                  </div>
+                  <ul className="space-y-2">
+                    {visibleQueueItems.map((job) => {
+                      const statusLabel =
+                        job.status === "running"
+                          ? "Đang chạy"
+                          : job.status === "completed"
+                          ? "Hoàn tất"
+                          : job.step === "waiting-retry"
+                          ? "Chờ thử lại"
+                          : "Đang chờ";
+                      const timestampLabel =
+                        job.status === "completed"
+                          ? formatDateTime(job.completedAt || job.updatedAt || job.createdAt)
+                          : job.status === "pending" && job.step === "waiting-retry"
+                          ? formatDateTime(job.nextRetryAt)
+                          : formatDateTime(job.startedAt || job.updatedAt || job.createdAt);
+                      return (
+                        <li key={job.id} className="rounded border border-gray-100 bg-gray-50 p-2">
+                          <div className="flex items-center justify-between">
+                            <span
+                              className={`text-xs font-medium ${
+                                job.status === "running"
+                                  ? "text-emerald-600"
+                                  : job.status === "pending" && job.step === "waiting-retry"
+                                  ? "text-amber-600"
+                                  : "text-gray-600"
+                              }`}
+                            >
+                              {statusLabel}
+                            </span>
+                            <span className="text-[11px] text-gray-500">{timestampLabel || ""}</span>
+                          </div>
+                          {job.message && (
+                            <div className="mt-1 text-xs text-gray-700">{job.message}</div>
+                          )}
+                          {job.status === "pending" && job.step === "waiting-retry" && (
+                            <button
+                              type="button"
+                              className="mt-1 text-[11px] font-medium text-emerald-600 hover:underline"
+                              onClick={() => handleForceRunJob(job.id)}
+                            >
+                              Thử lại ngay
+                            </button>
+                          )}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              )}
+              {declSyncProgress.status !== "idle" && (
+                <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-900">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-semibold text-emerald-700">Tiến trình đồng bộ</span>
+                    <span className="text-[11px] text-emerald-600">
+                      {declSyncProgress.status === "running"
+                        ? "Đang xử lý"
+                        : declSyncProgress.status === "success"
+                        ? "Hoàn tất"
+                        : "Gặp lỗi"}
+                    </span>
+                  </div>
+                  <ol className="mt-2 space-y-1">
+                    {declSyncStepStates.map((step) => (
+                      <li key={step.key} className="flex items-center justify-between">
+                        <span className="flex items-center gap-2">
+                          <span
+                            className={`h-2.5 w-2.5 rounded-full ${
+                              DECL_SYNC_PROGRESS_DOT_CLASSES[step.state] || DECL_SYNC_PROGRESS_DOT_CLASSES.pending
+                            }`}
+                          />
+                          <span>{step.label}</span>
+                        </span>
+                        {step.state === "active" && <span className="text-emerald-600">Đang chạy</span>}
+                        {step.state === "done" && <span className="text-emerald-500">✓</span>}
+                        {step.state === "error" && <span className="text-red-500">Lỗi</span>}
+                      </li>
+                    ))}
+                  </ol>
+                  {declSyncDiffSummary && (
+                    <div className="mt-2 text-xs font-medium text-emerald-700">{declSyncDiffSummary}</div>
+                  )}
+                  {hasDeclSyncConflicts && (
+                    <div className="mt-3 rounded-md border border-amber-300 bg-amber-50 p-3 text-xs text-amber-800">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="text-sm font-semibold text-amber-700">
+                          {declSyncConflictCount.toLocaleString("vi-VN")} tờ khai có xung đột cần rà soát
+                        </span>
+                        <button
+                          type="button"
+                          className="text-[11px] font-medium text-amber-700 underline-offset-2 hover:underline"
+                          onClick={() => setShowConflictDetails((prev) => !prev)}
+                        >
+                          {showConflictDetails ? "Ẩn chi tiết" : "Xem chi tiết"}
+                        </button>
+                      </div>
+                      <p className="mt-1 text-[11px] text-amber-700">
+                        Dữ liệu ECUS mới có thể ghi đè các chỉnh sửa thủ công gần đây. Hãy rà soát và xác nhận trước khi tiếp tục.
+                      </p>
+                      {showConflictDetails && (
+                        <ul className="mt-2 space-y-2">
+                          {declSyncConflicts.slice(0, 10).map((conflict) => {
+                            const lastEditedLabel = conflict.lastManualAt
+                              ? formatDateTime(conflict.lastManualAt)
+                              : "";
+                            return (
+                              <li key={conflict.key} className="rounded border border-amber-200 bg-white/70 p-2">
+                                <div className="flex flex-wrap items-center justify-between gap-2 font-medium">
+                                  <span>
+                                    Tờ khai {conflict.soTk || conflict.key}
+                                    {conflict.nhanh ? ` • Chi cục ${conflict.nhanh}` : ""}
+                                  </span>
+                                  {lastEditedLabel && (
+                                    <span className="text-[11px] text-amber-600">
+                                      Sửa gần nhất: {lastEditedLabel}
+                                      {conflict.lastManualActor ? ` • ${conflict.lastManualActor}` : ""}
+                                    </span>
+                                  )}
+                                </div>
+                                <table className="mt-2 w-full text-[11px] text-amber-900">
+                                  <thead>
+                                    <tr className="text-left text-[10px] uppercase text-amber-600">
+                                      <th className="w-32 px-1 py-0.5">Trường</th>
+                                      <th className="px-1 py-0.5">Giá trị cũ</th>
+                                      <th className="px-1 py-0.5">Giá trị mới</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {conflict.fields.map((field) => (
+                                      <tr key={`${conflict.key}-${field.field}`} className="border-t border-amber-100">
+                                        <td className="px-1 py-0.5 font-medium">{field.label}</td>
+                                        <td className="px-1 py-0.5 text-amber-700">{field.before || "(trống)"}</td>
+                                        <td className="px-1 py-0.5 text-emerald-700">{field.after || "(trống)"}</td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                                {Array.isArray(conflict.history) && conflict.history.length > 0 && (
+                                  <div className="mt-2 text-[11px] text-amber-700">
+                                    <span className="font-medium">Lịch sử gần nhất:</span>
+                                    <ul className="mt-1 space-y-0.5">
+                                      {conflict.history.slice(0, 3).map((entry, index) => (
+                                        <li key={`${conflict.key}-history-${index}`}>
+                                          {formatDateTime(entry.ts)}
+                                          {entry.actor ? ` • ${entry.actor}` : ""}
+                                          {Array.isArray(entry.changes) && entry.changes.length
+                                            ? ` • ${entry.changes.map((change) => change.field).join(", ")}`
+                                            : ""}
+                                        </li>
+                                      ))}
+                                    </ul>
+                                  </div>
+                                )}
+                              </li>
+                            );
+                          })}
+                          {declSyncConflicts.length > 10 && (
+                            <li className="text-[11px] text-amber-600">
+                              Hiển thị 10 tờ khai đầu tiên. Vui lòng xuất báo cáo hoặc xem trong kho dữ liệu để kiểm tra toàn bộ danh sách.
+                            </li>
+                          )}
+                        </ul>
+                      )}
+                    </div>
+                  )}
+
+                </div>
+              )}
+              {visibleQueueItems.length > 0 && (
+                <div className="rounded-md border border-gray-200 bg-white p-3 text-xs text-gray-700">
+                  <div className="mb-2 flex items-center justify-between">
+                    <span className="font-semibold text-gray-700">Hàng đợi đồng bộ</span>
+                    <span className="text-[11px] text-gray-500">
+                      {totalQueueJobs.toLocaleString("vi-VN")} phiên
+                    </span>
+                  </div>
+                  <ul className="space-y-2">
+                    {visibleQueueItems.map((job) => {
+                      const statusLabel =
+                        job.status === "running"
+                          ? "Đang chạy"
+                          : job.status === "completed"
+                          ? "Hoàn tất"
+                          : job.step === "waiting-retry"
+                          ? "Chờ thử lại"
+                          : "Đang chờ";
+                      const timestampLabel =
+                        job.status === "completed"
+                          ? formatDateTime(job.completedAt || job.updatedAt || job.createdAt)
+                          : job.status === "pending" && job.step === "waiting-retry"
+                          ? formatDateTime(job.nextRetryAt)
+                          : formatDateTime(job.startedAt || job.updatedAt || job.createdAt);
+                      return (
+                        <li key={job.id} className="rounded border border-gray-100 bg-gray-50 p-2">
+                          <div className="flex items-center justify-between">
+                            <span
+                              className={`text-xs font-medium ${
+                                job.status === "running"
+                                  ? "text-emerald-600"
+                                  : job.status === "pending" && job.step === "waiting-retry"
+                                  ? "text-amber-600"
+                                  : "text-gray-600"
+                              }`}
+                            >
+                              {statusLabel}
+                            </span>
+                            <span className="text-[11px] text-gray-500">{timestampLabel || ""}</span>
+                          </div>
+                          {job.message && (
+                            <div className="mt-1 text-xs text-gray-700">{job.message}</div>
+                          )}
+                          {job.status === "pending" && job.step === "waiting-retry" && (
+                            <button
+                              type="button"
+                              className="mt-1 text-[11px] font-medium text-emerald-600 hover:underline"
+                              onClick={() => handleForceRunJob(job.id)}
+                            >
+                              Thử lại ngay
+                            </button>
+                          )}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
               )}
 
               {syncMessage && <div className="text-sm text-emerald-600">{syncMessage}</div>}
@@ -15678,415 +16523,19 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
 
 
 
-      <div className="flex flex-wrap items-center gap-2">
+      <Suspense fallback={null}>
 
-        <input
+        <PickerSection context={pickerContext} />
 
-          type="file"
+      </Suspense>
 
-          data-testid="import-file-input"
 
-          ref={fileRef}
 
-          onChange={handleFileChange}
+      <Suspense fallback={null}>
 
-          accept=".xls,.xlsx"
+        <PreviewSection context={previewContext} />
 
-          className="hidden"
-
-          disabled={isReadOnlyForEdits}
-
-        />
-
-        {canEdit && (
-
-          <button
-
-            type="button"
-
-            onClick={() => fileRef.current?.click()}
-
-            className="px-3 py-1.5 rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] shadow-sm hover:bg-[color:var(--ds-surface-muted)]"
-
-          >
-
-            Chọn file XLSX
-
-          </button>
-
-        )}
-
-        {selectedFile && (
-
-          <span className="text-sm text-gray-600">Đã chọn: {selectedFile}</span>
-
-        )}
-
-        {canEdit && (
-
-          <button
-
-            type="button"
-
-            onClick={handleImport}
-
-            disabled={!canImport}
-
-            className={`px-3 py-1.5 rounded ${canImport ? "bg-black text-white" : "bg-gray-200 text-gray-500 cursor-not-allowed"}`}
-
-          >
-
-            Import XLSX
-
-          </button>
-
-        )}
-
-        <button
-
-          type="button"
-
-          onClick={() => loadSavedRows()}
-
-          className="px-3 py-1.5 rounded border"
-
-        >
-
-          Hiển thị dữ liệu đã lưu
-
-        </button>
-
-        {canViewSavedRows && (
-
-          <button
-
-            type="button"
-
-            onClick={() => setDeletedDialogOpen(true)}
-
-            className="px-3 py-1.5 rounded border"
-
-            data-testid="deleted-list-trigger"
-
-          >
-
-            Danh sách tờ khai đã xóa
-
-          </button>
-
-        )}
-
-        <span className="ml-auto text-sm text-gray-600">{modeLabel}</span>
-
-      </div>
-
-
-
-      {mode === "preview" && (
-
-        <div className="mt-3 space-y-3">
-
-          {importPreview?.error ? (
-
-            <div className="rounded border border-red-300 bg-red-50 p-3 text-sm text-red-700">
-
-              Không thể kiểm tra file import. {importPreview.error?.message || "Vui lòng thử lại."}
-
-            </div>
-
-          ) : importPreview ? (
-
-            <div className="rounded border border-[color:var(--ds-border-strong)] bg-[color:var(--ds-surface-card)] p-3 shadow-sm">
-
-              <div className="flex flex-wrap items-start justify-between gap-2">
-
-                <div>
-
-                  <h3 className="text-sm font-semibold text-gray-900">Kết quả kiểm tra trước khi import</h3>
-
-                  <p className="text-xs text-gray-500">
-
-                    Tổng dòng đọc: {importPreview.totalIncoming.toLocaleString("vi-VN")} • Sau khi ghi: {importPreview.totalAfter.toLocaleString("vi-VN")}
-
-                  </p>
-
-                </div>
-
-                {importPreview.mode === "overwrite" && (
-
-                  <span className="rounded bg-amber-100 px-2 py-1 text-xs font-semibold uppercase text-amber-700">
-
-                    Ghi đè toàn bộ
-
-                  </span>
-
-                )}
-
-              </div>
-
-
-
-              <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-
-                {importPreviewStats.map((item) => (
-
-                  <div key={item.key} className="rounded border bg-gray-50 px-3 py-2">
-
-                    <div className="text-[11px] uppercase text-gray-500">{item.label}</div>
-
-                    <div className="text-base font-semibold text-gray-900">{item.value.toLocaleString("vi-VN")}</div>
-
-                  </div>
-
-                ))}
-
-              </div>
-
-
-
-              {importPreviewSamples.errors.length > 0 && (
-
-                <div className="mt-4 space-y-2">
-
-                  <div className="flex items-center justify-between">
-
-                    <h4 className="text-sm font-semibold text-red-700">
-
-                      Dòng lỗi sẽ bị bỏ qua ({importPreview.invalid.toLocaleString("vi-VN")})
-
-                    </h4>
-
-                    <span className="text-xs text-gray-500">
-
-                      Hiển thị tối đa {importPreviewSamples.errors.length.toLocaleString("vi-VN")} dòng đầu tiên
-
-                    </span>
-
-                  </div>
-
-                  <div className="max-h-48 overflow-auto rounded border">
-
-                    <table className="min-w-full text-xs">
-
-                      <thead className="bg-red-50 text-red-700">
-
-                        <tr>
-
-                          <th className="px-2 py-1 text-left">Lý do</th>
-
-                          <th className="px-2 py-1 text-left">Số tờ khai</th>
-
-                          <th className="px-2 py-1 text-left">Nhánh</th>
-
-                          <th className="px-2 py-1 text-left">MST</th>
-
-                          <th className="px-2 py-1 text-left">Doanh nghiệp</th>
-
-                        </tr>
-
-                      </thead>
-
-                      <tbody>
-
-                        {importPreviewSamples.errors.map((item, index) => {
-
-                          const reasonLabel = IMPORT_ERROR_REASON_LABELS[item.reason] || IMPORT_ERROR_REASON_LABELS.unknown;
-
-                          return (
-
-                            <tr
-
-                              key={`${item.reason}-${item.so_tk || index}-${item.nhanh || ""}`}
-
-                              className="odd:bg-[color:var(--ds-surface-card)] even:bg-[color:var(--ds-surface-muted)]"
-
-                            >
-
-                              <td className="px-2 py-1 text-red-600">{reasonLabel}</td>
-
-                              <td className="px-2 py-1">{item.so_tk || "—"}</td>
-
-                              <td className="px-2 py-1">{item.nhanh || "—"}</td>
-
-                              <td className="px-2 py-1">{item.mst || "—"}</td>
-
-                              <td className="px-2 py-1">{item.company || "—"}</td>
-
-                            </tr>
-
-                          );
-
-                        })}
-
-                      </tbody>
-
-                    </table>
-
-                  </div>
-
-                </div>
-
-              )}
-
-
-
-              {importPreviewSamples.inserted.length > 0 && (
-
-                <div className="mt-4 space-y-2">
-
-                  <div className="flex items-center justify-between">
-
-                    <h4 className="text-sm font-semibold text-emerald-700">
-
-                      Dòng thêm mới ({importPreview.inserted.toLocaleString("vi-VN")})
-
-                    </h4>
-
-                    {importPreview.inserted > importPreviewSamples.inserted.length && (
-
-                      <span className="text-xs text-gray-500">
-
-                        +{(importPreview.inserted - importPreviewSamples.inserted.length).toLocaleString("vi-VN")} dòng khác
-
-                      </span>
-
-                    )}
-
-                  </div>
-
-                  <div className="max-h-60 overflow-auto rounded border">
-
-                    <table className="min-w-full text-xs">
-
-                      <thead className="bg-emerald-50 text-emerald-700">
-
-                        <tr>
-
-                          <th className="px-2 py-1 text-left">Số tờ khai</th>
-
-                          <th className="px-2 py-1 text-left">MST</th>
-
-                          <th className="px-2 py-1 text-left">Công ty</th>
-
-                          <th className="px-2 py-1 text-left">Ngày đăng ký</th>
-
-                          <th className="px-2 py-1 text-left">Nhân viên</th>
-
-                          <th className="px-2 py-1 text-left">Tổ đội</th>
-
-                        </tr>
-
-                      </thead>
-
-                      <tbody>
-
-                        {importPreviewSamples.inserted.map((row, index) => {
-
-                          const companyName =
-
-                            row?.company ||
-
-                            row?.cong_ty ||
-
-                            row?.ten_dn ||
-
-                            row?.ten_doanh_nghiep ||
-
-                            row?.ten_doanh_nghiep_xnk ||
-
-                            row?.["Tên doanh nghiệp"] ||
-
-                            row?.["Doanh nghiệp"] ||
-
-                            "";
-
-                          return (
-
-                            <tr key={`${row.so_tk || index}-${row.nhanh || ""}`} className="odd:bg-[color:var(--ds-surface-card)] even:bg-[color:var(--ds-surface-muted)]">
-
-                              <td className="px-2 py-1">{formatDeclarationLabel(row)}</td>
-
-                              <td className="px-2 py-1">{row.mst || row.ma_so_thue || "—"}</td>
-
-                              <td className="px-2 py-1">{companyName || "—"}</td>
-
-                              <td className="px-2 py-1">{row.date ? formatDisplayDate(row.date) : "—"}</td>
-
-                              <td className="px-2 py-1">{row.nhan_vien || ""}</td>
-
-                              <td className="px-2 py-1">{row.team || ""}</td>
-
-                            </tr>
-
-                          );
-
-                        })}
-
-                      </tbody>
-
-                    </table>
-
-                  </div>
-
-                </div>
-
-              )}
-
-
-
-              {importPreview.newBusinessCount > 0 && (
-
-                <div className="mt-4 space-y-2">
-
-                  <div className="flex items-center justify-between">
-
-                    <h4 className="text-sm font-semibold text-blue-700">
-
-                      Doanh nghiệp mới ({importPreview.newBusinessCount.toLocaleString("vi-VN")})
-
-                    </h4>
-
-                    <span className="text-xs text-gray-500">Thông tin được thêm vào tab Gán MST</span>
-
-                  </div>
-
-                  <div className="flex flex-wrap gap-2">
-
-                    {importPreview.newBusinesses.slice(0, 10).map((biz) => (
-
-                      <span key={biz.mst} className="rounded bg-blue-50 px-2 py-1 text-xs text-blue-700">
-
-                        {biz.mst} – {biz.company || "Không tên"}
-
-                      </span>
-
-                    ))}
-
-                    {importPreview.newBusinessCount > importPreview.newBusinesses.length && (
-
-                      <span className="text-xs text-gray-500">
-
-                        +{(importPreview.newBusinessCount - importPreview.newBusinesses.length).toLocaleString("vi-VN")} MST khác
-
-                      </span>
-
-                    )}
-
-                  </div>
-
-                </div>
-
-              )}
-
-            </div>
-
-          ) : null}
-
-        </div>
-
-      )}
-
-
+      </Suspense>
 
       {canEdit && (
 
@@ -16136,269 +16585,11 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
 
       <div className="flex w-full flex-wrap gap-4">
 
-        <div className="flex min-w-[260px] flex-1 flex-col gap-2">
+        <Suspense fallback={null}>
 
-          <input
+          <FiltersSection context={filtersContext} />
 
-            className="w-full rounded border px-2 py-1"
-
-            placeholder="Tìm nhanh (Số TK / MST / Công ty / Nhân viên / Tổ đội)"
-
-            value={query}
-
-            onChange={e => { setQuery(e.target.value); setPage(1); }}
-
-          />
-
-          <span className="text-xs text-gray-500">
-
-            Nhập từ khóa để tìm nhanh theo Số tờ khai, mã số thuế, tên doanh nghiệp, nhân viên hoặc tổ đội phụ trách.
-
-          </span>
-
-        </div>
-
-
-
-        <div className="flex flex-col gap-2">
-
-          <label className="flex items-center gap-1 text-sm" data-tooltip="Chọn nhanh khoảng thời gian theo preset">
-
-            <span>Khoảng</span>
-
-            <select
-
-              className="rounded border px-2 py-1 text-sm"
-
-              value={datePreset}
-
-              onChange={(e) => {
-
-                const value = e.target.value;
-
-                if (value === "custom") {
-
-                  setDatePreset("custom");
-
-                  return;
-
-                }
-
-                applyDatePreset(value);
-
-              }}
-
-            >
-
-              {DATE_RANGE_PRESETS.map((preset) => (
-
-                <option key={preset.key} value={preset.key}>
-
-                  {preset.label}
-
-                </option>
-
-              ))}
-
-              <option value="custom">Tự chọn</option>
-
-            </select>
-
-          </label>
-
-          <div className="flex flex-wrap items-center gap-2">
-
-            <label className="flex items-center gap-1 text-sm" data-tooltip="Lọc từ ngày (theo ngày đăng ký tờ khai)">
-
-              <span>Từ ngày</span>
-
-              <input
-
-                type="date"
-
-                value={searchRange.from}
-
-                onChange={(e) => {
-
-                  const value = e.target.value;
-
-                  setDatePreset("custom");
-
-                  setSearchRange((prev) => ({ ...prev, from: value }));
-
-                }}
-
-                className="rounded border px-2 py-1 text-sm"
-
-              />
-
-            </label>
-
-            <label className="flex items-center gap-1 text-sm" data-tooltip="Lọc đến ngày (theo ngày đăng ký tờ khai)">
-
-              <span>Đến ngày</span>
-
-              <input
-
-                type="date"
-
-                value={searchRange.to}
-
-                onChange={(e) => {
-
-                  const value = e.target.value;
-
-                  setDatePreset("custom");
-
-                  setSearchRange((prev) => ({ ...prev, to: value }));
-
-                }}
-
-                className="rounded border px-2 py-1 text-sm"
-
-              />
-
-            </label>
-
-            {(searchRange.from || searchRange.to) && (
-
-              <button
-
-                type="button"
-
-                onClick={handleClearSearchRange}
-
-                data-tooltip="Xóa điều kiện lọc theo ngày"
-
-                className="rounded border px-3 py-1 text-xs text-gray-600 hover:bg-gray-50"
-
-              >
-
-                Xóa lọc ngày
-
-              </button>
-
-            )}
-
-          </div>
-
-          <div className="flex flex-wrap items-center gap-3 text-sm">
-
-            <label className="flex items-center gap-1">
-
-              <input
-
-                type="checkbox"
-
-                checked={filterNoStaff}
-
-                onChange={e => setFilterNoStaff(e.target.checked)}
-
-              />
-
-              <span>Chưa gán Nhân viên</span>
-
-            </label>
-
-            <label className="flex items-center gap-1">
-
-              <input
-
-                type="checkbox"
-
-                checked={filterNoTeam}
-
-                onChange={e => setFilterNoTeam(e.target.checked)}
-
-              />
-
-              <span>Chưa gán Tổ đội</span>
-
-            </label>
-
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2 text-sm">
-
-            <label className="flex items-center gap-1">
-
-              <span>Lọc C/O</span>
-
-              <select
-
-                value={coFilterMode}
-
-                onChange={(e) => setCoFilterMode(e.target.value)}
-
-                className="rounded border px-2 py-1 text-sm"
-
-              >
-
-                {CO_FILTER_OPTIONS.map((option) => (
-
-                  <option key={option.value} value={option.value}>
-
-                    {option.label}
-
-                  </option>
-
-                ))}
-
-              </select>
-
-            </label>
-
-            {coFilterMode === "min" && (
-
-              <label className="flex items-center gap-1 text-sm">
-
-                <span>Tối thiểu dòng C/O</span>
-
-                <input
-
-                  type="number"
-
-                  min={0}
-
-                  className="w-20 rounded border px-2 py-1 text-sm"
-
-                  value={coFilterMin}
-
-                  onChange={(e) => {
-
-                    const raw = Number(e.target.value);
-
-                    if (!Number.isFinite(raw) || raw <= 0) {
-
-                      setCoFilterMin(0);
-
-                      return;
-
-                    }
-
-                    setCoFilterMin(Math.round(raw));
-
-                  }}
-
-                />
-
-              </label>
-
-            )}
-
-            {coFilterActive && (
-
-              <span className="rounded bg-emerald-50 px-2 py-1 text-sm text-emerald-700">
-
-                Đáp ứng C/O: {coFilterMatches} tờ khai
-
-              </span>
-
-            )}
-
-          </div>
-
-        </div>
+        </Suspense>
 
 
 

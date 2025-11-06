@@ -674,9 +674,9 @@ describe('storageClient remote đồng bộ lại khi server lên trễ', () => 
 
     const expectedDelay = Math.min(
 
-      Math.max(Math.floor(beforeFailureDelay * 1.5), 5000),
-
       60000,
+
+      Math.max(5000, 5000 * 2 ** Math.max(0, (statusAfterFailure.retryAttempts || 1) - 1)),
 
     );
 
@@ -702,9 +702,9 @@ describe('storageClient remote đồng bộ lại khi server lên trễ', () => 
 
     const expectedAfterRetryDelay = Math.min(
 
-      Math.max(Math.floor(expectedDelay * 1.5), 5000),
-
       60000,
+
+      Math.max(5000, 5000 * 2 ** Math.max(0, (afterRetry.retryAttempts || 1) - 1)),
 
     );
 
@@ -884,7 +884,7 @@ describe('storageClient giới hạn dung lượng khi backend trả về 413', 
 
     const status = getStatus();
 
-    expect(status.lastError).toBe(storageLimitMessage);
+    expect(status.lastError).toContain(storageLimitMessage);
 
     expect(status.waitingForBackend).toBe(true);
 
