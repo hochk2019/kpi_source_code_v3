@@ -5,10 +5,10 @@ This backlog liệt kê các hạng mục cải thiện trải nghiệm người
 ## 1. KPI Adjustments
 
 - [x] Persist filter states (month, status, mine-only, staff) per user using local storage hoặc `UI_LAYOUT_KEY` trong store. (đã lưu cấu hình bộ lọc vào UI_LAYOUT_KEY)
-- [ ] Tách danh sách điều chỉnh sang virtual list / pagination để cải thiện hiệu năng với dataset lớn.
-- [ ] Bổ sung thao tác duyệt hàng loạt (bulk approve/reject) dựa trên quyền `adjustApprove`.
-- [ ] Thêm liên kết nhanh tới tờ khai hoặc MST liên quan để người duyệt tra cứu ngay tại chỗ.
-- [ ] Cho phép quản lý cấu hình điểm mặc định trực tiếp trong UI và phản ánh vào `KPI_ADJUSTMENT_CATEGORY_CONFIG`.
+- [x] Tách danh sách điều chỉnh sang virtual list / pagination để cải thiện hiệu năng với dataset lớn. (đã thêm phân trang linh hoạt 25/50/100/150 dòng và lưu trang hiện tại)
+- [x] Bổ sung thao tác duyệt hàng loạt (bulk approve/reject) dựa trên quyền `adjustApprove`. (đã hỗ trợ chọn nhiều dòng và xử lý duyệt/từ chối đồng thời)
+- [x] Thêm liên kết nhanh tới tờ khai hoặc MST liên quan để người duyệt tra cứu ngay tại chỗ. (đã thêm nút mở nhanh tab Import và tab Gán MST theo tham chiếu)
+- [x] Cho phép quản lý cấu hình điểm mặc định trực tiếp trong UI và phản ánh vào `KPI_ADJUSTMENT_CATEGORY_CONFIG`. (đã bổ sung hộp thoại cấu hình và lưu vào store chia sẻ)
 
 ## 2. ECUS declaration sync
 

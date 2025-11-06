@@ -66,6 +66,8 @@ export const REPORT_SCHEDULE_KEY = "kpi_report_schedule_v1"; // lịch gửi bá
 const KPI_ADJUSTMENT_FILTER_STATUSES = new Set(["all", "approved", "pending", "rejected"]);
 const KPI_ADJUSTMENT_MONTH_PATTERN = /^\d{4}-(0[1-9]|1[0-2])$/;
 const KPI_ADJUSTMENT_ANONYMOUS_USER = "__anonymous__";
+const KPI_ADJUSTMENT_ALLOWED_PAGE_SIZES = Object.freeze([25, 50, 100, 150]);
+const KPI_ADJUSTMENT_DEFAULT_PAGE_SIZE = 25;
 
 
 
@@ -247,6 +249,8 @@ function normalizeKpiAdjustmentFilters(input, options = {}) {
 
     staffKeyAvailable = false,
 
+    fallbackPageSize = KPI_ADJUSTMENT_DEFAULT_PAGE_SIZE,
+
   } = options;
 
   const source = input && typeof input === "object" ? input : {};
@@ -341,6 +345,24 @@ function normalizeKpiAdjustmentFilters(input, options = {}) {
 
   }
 
+  const fallbackPageSizeCandidate = Number.parseInt(fallbackPageSize, 10);
+  const pageSizeCandidate = Number.parseInt(
+    source.pageSize ?? source.page_size ?? source.page,
+    10
+  );
+
+  let pageSize = KPI_ADJUSTMENT_DEFAULT_PAGE_SIZE;
+
+  if (KPI_ADJUSTMENT_ALLOWED_PAGE_SIZES.includes(pageSizeCandidate)) {
+
+    pageSize = pageSizeCandidate;
+
+  } else if (KPI_ADJUSTMENT_ALLOWED_PAGE_SIZES.includes(fallbackPageSizeCandidate)) {
+
+    pageSize = fallbackPageSizeCandidate;
+
+  }
+
   return {
 
     month: monthCandidate,
@@ -350,6 +372,8 @@ function normalizeKpiAdjustmentFilters(input, options = {}) {
     mineOnly,
 
     staff,
+
+    pageSize,
 
   };
 
@@ -389,7 +413,9 @@ export function saveKpiAdjustmentFilterState(identity, updates = {}, options = {
 
     current.mineOnly === next.mineOnly &&
 
-    current.staff === next.staff
+    current.staff === next.staff &&
+
+    current.pageSize === next.pageSize
 
   ) {
 
@@ -8677,6 +8703,130 @@ export function updateKpiAdjustmentStatus(id, status, { actor = 'system', note =
 
 
 
+export function bulkUpdateKpiAdjustmentStatus(
+  ids,
+  status,
+  { actor = 'system', note = '', permissions = {} } = {}
+) {
+
+  if (!Array.isArray(ids) || ids.length === 0) {
+
+    return [];
+
+  }
+
+  const normalizedStatus = normalizeStr(status).toLowerCase();
+
+  if (!KPI_ADJUSTMENT_STATUS_SET.has(normalizedStatus)) {
+
+    throw new Error('Trạng thái điểm KPI bổ sung không hợp lệ');
+
+  }
+
+  if (!permissions.adjustApprove) {
+
+    throw new Error('Bạn không có quyền duyệt điểm KPI bổ sung');
+
+  }
+
+  const uniqueIds = Array.from(new Set(ids.filter((value) => typeof value === 'string' && value)));
+
+  if (!uniqueIds.length) {
+
+    return [];
+
+  }
+
+  const idSet = new Set(uniqueIds);
+  const adjustments = getAllAdjustments();
+  const updatedEntries = [];
+  let changed = false;
+
+  for (let index = 0; index < adjustments.length; index += 1) {
+
+    const entry = adjustments[index];
+
+    if (!entry || !idSet.has(entry.id)) {
+
+      continue;
+
+    }
+
+    if (entry.status === normalizedStatus) {
+
+      continue;
+
+    }
+
+    const next = { ...entry };
+    const stamp = new Date();
+    const iso = stamp.toISOString();
+
+    next.status = normalizedStatus;
+    next.updatedAt = iso;
+    next.updatedBy = actor;
+
+    if (normalizedStatus === 'approved') {
+
+      next.approvedAt = iso;
+      next.approvedBy = actor;
+
+    } else if (normalizedStatus === 'rejected') {
+
+      next.rejectedAt = iso;
+      next.rejectedBy = actor;
+
+    }
+
+    const history = Array.isArray(next.history) ? next.history.slice() : [];
+
+    history.push(
+
+      normalizeAdjustmentHistoryEntry({
+
+        action: `status.${normalizedStatus}`,
+
+        actor,
+
+        detail: note,
+
+      })
+
+    );
+
+    next.history = clampHistory(history);
+    adjustments[index] = next;
+    updatedEntries.push(next);
+    changed = true;
+
+  }
+
+  if (!changed) {
+
+    return [];
+
+  }
+
+  persistAdjustments(adjustments);
+
+  pushAuditLog({
+
+    actor,
+
+    action: 'kpi.adjustment.bulk-status',
+
+    detail: `Cập nhật ${updatedEntries.length} điểm KPI (${normalizedStatus})`,
+
+    meta: { ids: updatedEntries.map((item) => item.id), status: normalizedStatus },
+
+  });
+
+  return updatedEntries;
+
+}
+
+
+
 export function removeKpiAdjustment(id, { actor = 'system', permissions = {} } = {}) {
 
   if (!permissions.adjustApprove && !permissions.adjustSubmit) {
@@ -9566,7 +9716,7 @@ export default {
 
   UI_LAYOUT_KEY,
 
-  getKpiAdjustments, saveKpiAdjustment, updateKpiAdjustmentStatus, removeKpiAdjustment, mapAdjustmentsByMonth,
+  getKpiAdjustments, saveKpiAdjustment, updateKpiAdjustmentStatus, bulkUpdateKpiAdjustmentStatus, removeKpiAdjustment, mapAdjustmentsByMonth,
 
   getKpiAdjustmentSettings, saveKpiAdjustmentSettings,
   getKpiAdjustmentFilterState, saveKpiAdjustmentFilterState,

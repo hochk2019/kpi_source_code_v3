@@ -3460,6 +3460,10 @@ export default function DataImporter({
 
   allowAdminUploadOverride = true,
 
+  quickLookup = null,
+
+  onQuickLookupConsumed = null,
+
 }) {
 
   const rootRef = useRef(null);
@@ -3594,6 +3598,94 @@ export default function DataImporter({
   const [pageSizeMode, setPageSizeMode] = useState(() =>
     PAGE_SIZE_OPTIONS.includes(initialPageSize) ? "preset" : "custom"
   );
+  const quickLookupHandledRef = useRef(null);
+
+  useEffect(() => {
+    if (!quickLookup || typeof quickLookup !== "object") {
+      return;
+    }
+
+    const { type, value, company, timestamp } = quickLookup;
+    const lookupKey =
+      Number.isFinite(timestamp) && timestamp > 0
+        ? timestamp
+        : `${type || ""}|${value || ""}|${company || ""}`;
+    if (quickLookupHandledRef.current === lookupKey) {
+      return;
+    }
+    quickLookupHandledRef.current = lookupKey;
+
+    const lookupType = typeof type === "string" ? type.toLowerCase() : "";
+    const rawValue = typeof value === "string" ? value.trim() : "";
+    const rawCompany = typeof company === "string" ? company.trim() : "";
+    let touched = false;
+    let clearedMst = false;
+    let shouldResetPage = false;
+
+    if (lookupType === "declaration") {
+      if (rawValue && rawValue !== query) {
+        setQuery(rawValue);
+        touched = true;
+      }
+      if (quickMST) {
+        setQuickMST("");
+        clearedMst = true;
+      }
+      if (rawCompany && rawCompany !== quickCompany) {
+        setQuickCompany(rawCompany);
+      }
+      shouldResetPage = Boolean(rawValue || rawCompany);
+    } else if (lookupType === "mst") {
+      const normalizedValue = rawValue ? normalizeMST(rawValue) : "";
+      const mstValue = normalizedValue || rawValue;
+      if (mstValue && mstValue !== quickMST) {
+        setQuickMST(mstValue);
+        touched = true;
+      }
+      if (rawCompany && rawCompany !== quickCompany) {
+        setQuickCompany(rawCompany);
+      }
+      if (rawValue && rawValue !== query) {
+        setQuery(rawValue);
+      }
+      shouldResetPage = Boolean(mstValue || rawCompany);
+    } else if (lookupType === "company") {
+      if (rawCompany && rawCompany !== quickCompany) {
+        setQuickCompany(rawCompany);
+        touched = true;
+      }
+      if (rawCompany && rawCompany !== query) {
+        setQuery(rawCompany);
+      }
+      if (quickMST) {
+        setQuickMST("");
+        clearedMst = true;
+      }
+      shouldResetPage = Boolean(rawCompany);
+    } else {
+      if (rawValue && rawValue !== query) {
+        setQuery(rawValue);
+        touched = true;
+      }
+      if (rawCompany && rawCompany !== quickCompany) {
+        setQuickCompany(rawCompany);
+      }
+      if (quickMST) {
+        setQuickMST("");
+        clearedMst = true;
+      }
+      shouldResetPage = Boolean(rawValue || rawCompany);
+    }
+
+    if (touched || rawCompany || clearedMst || shouldResetPage) {
+      setMode((prev) => (prev === "saved" ? prev : "saved"));
+      setPage(1);
+    }
+
+    if (typeof onQuickLookupConsumed === "function") {
+      onQuickLookupConsumed();
+    }
+  }, [quickLookup, onQuickLookupConsumed, query, quickMST, quickCompany]);
   const [pageSizeCustomInput, setPageSizeCustomInput] = useState(() =>
     PAGE_SIZE_OPTIONS.includes(initialPageSize) ? "" : String(initialPageSize)
   );
