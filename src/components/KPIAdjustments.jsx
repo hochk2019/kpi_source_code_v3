@@ -38,7 +38,6 @@ import {
   normalizeName,
 
   roundAdjustmentPoint,
-  normalizeDeclarationNumber,
 
   DECL_KEY,
 
@@ -81,6 +80,7 @@ import { ScrollArea } from "@/components/ui/scroll-area.jsx";
 import { Input } from "@/components/ui/input.jsx";
 
 import { Textarea } from "@/components/ui/textarea.jsx";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip.jsx";
 
 import { cn } from "@/lib/utils.js";
 
@@ -204,6 +204,16 @@ function extractCompanyFromRow(row) {
 
 
 
+function extractDigits(value) {
+
+  if (value === null || value === undefined) return "";
+
+  return value.toString().replace(/\D+/g, "").trim();
+
+}
+
+
+
 function extractMstFromRow(row) {
 
   if (!row || typeof row !== "object") return "";
@@ -250,13 +260,17 @@ function buildDeclarationSuggestions(limit = MAX_DECLARATION_SUGGESTIONS) {
 
     if (!row) continue;
 
-    const soTk = normalizeStr(row?.so_tk ?? row?.so_tk_full ?? "");
+    const rawNumber = row?.so_tk_full ?? row?.so_tk ?? "";
 
-    if (!soTk) continue;
+    const soTk = normalizeStr(rawNumber);
+
+    const soTkDigits = extractDigits(rawNumber);
+
+    if (!soTk && !soTkDigits) continue;
 
     const branch = normalizeStr(row?.nhanh ?? row?.branch ?? "");
 
-    const key = `${soTk}|${branch}`;
+    const key = `${soTkDigits || soTk}|${branch}`;
 
     if (seenKeys.has(key)) continue;
 
@@ -279,6 +293,8 @@ function buildDeclarationSuggestions(limit = MAX_DECLARATION_SUGGESTIONS) {
       key,
 
       soTk,
+
+      soTkDigits,
 
       branch,
 
@@ -1686,7 +1702,7 @@ export default function KPIAdjustments({ currentUser }) {
 
     }
 
-    const digits = rawQuery.replace(/\D+/g, "");
+    const digits = extractDigits(rawQuery);
 
     const normalizedQuery = normalizeName(rawQuery);
 
@@ -1697,6 +1713,8 @@ export default function KPIAdjustments({ currentUser }) {
         if (!item) return false;
 
         if (digits) {
+
+          if ((item.soTkDigits || "").includes(digits)) return true;
 
           if ((item.soTk || "").includes(digits)) return true;
 
@@ -1736,7 +1754,11 @@ export default function KPIAdjustments({ currentUser }) {
 
         }
 
-        const soTkDigits = normalizeDeclarationNumber(row?.so_tk_full ?? row?.so_tk ?? "", 1);
+        const rawNumber = row?.so_tk_full ?? row?.so_tk ?? "";
+
+        const soTkDigits = extractDigits(rawNumber);
+
+        const soTkValue = normalizeStr(rawNumber);
 
         const mstDigits = normalizeMST(row?.mst ?? row?.ma_so_thue ?? row?.taxCode ?? "");
 
@@ -1754,7 +1776,7 @@ export default function KPIAdjustments({ currentUser }) {
 
         const branch = normalizeStr(row?.nhanh ?? row?.branch ?? "");
 
-        const key = `${soTkDigits}|${branch}`;
+        const key = `${soTkDigits || soTkValue}|${branch}`;
 
         if (seenKeys.has(key)) {
 
@@ -1768,7 +1790,9 @@ export default function KPIAdjustments({ currentUser }) {
 
           key,
 
-          soTk: soTkDigits,
+          soTk: soTkValue,
+
+          soTkDigits,
 
           branch,
 
@@ -2004,6 +2028,9 @@ export default function KPIAdjustments({ currentUser }) {
 
   );
 
+  const [autoApproveSaving, setAutoApproveSaving] = useState(false);
+  const [autoApproveError, setAutoApproveError] = useState("");
+
   const [settingsSaving, setSettingsSaving] = useState(false);
 
   const [decisionNote, setDecisionNote] = useState("");
@@ -2015,6 +2042,51 @@ export default function KPIAdjustments({ currentUser }) {
   const canOverridePoints = currentUser?.permissions?.adjustOverridePoints === true;
 
   const actor = currentUser?.username || currentUser?.name || "ui";
+
+  const autoApproveSettings = settings?.autoApprove || {};
+
+  const autoApproveEnabled = autoApproveSettings.enabled === true;
+
+  const autoApproveUpdatedBy = autoApproveSettings.updatedBy || "";
+
+  const autoApproveUpdatedAt = autoApproveSettings.updatedAt || "";
+
+  const autoApproveNote = autoApproveSettings.note || "";
+
+
+  const autoApproveStatusMessage = useMemo(() => {
+
+    if (autoApproveEnabled) {
+
+      const details = [];
+
+      if (autoApproveUpdatedBy) {
+
+        details.push(`bat boi ${autoApproveUpdatedBy}`);
+
+      }
+
+      if (autoApproveUpdatedAt) {
+
+        details.push(formatDateTime(autoApproveUpdatedAt));
+
+      }
+
+      if (autoApproveNote) {
+
+        details.push(`Ghi chu: ${autoApproveNote}`);
+
+      }
+
+      const suffix = details.length ? ` (${details.join(" · ")})` : "";
+
+      return `Duyet tu dong dang bat${suffix}`;
+
+    }
+
+    return "Duyet tu dong dang tat";
+
+  }, [autoApproveEnabled, autoApproveUpdatedAt, autoApproveUpdatedBy, autoApproveNote]);
 
 
 
@@ -2036,13 +2108,37 @@ export default function KPIAdjustments({ currentUser }) {
 
     const unsubscribe = subscribeStorage(KPI_ADJUSTMENT_SETTINGS_KEY, () => {
 
-      setSettings(getKpiAdjustmentSettings());
+      const latestSettings = getKpiAdjustmentSettings();
+      setSettings((prev) => {
+        const previousAuto = prev?.autoApprove || {};
+        const latestAuto = latestSettings.autoApprove || {};
+        if (
+          latestAuto &&
+          latestAuto.updatedAt === null &&
+          latestAuto.updatedBy === null &&
+          previousAuto.updatedAt
+        ) {
+          return prev;
+        }
+        return latestSettings;
+      });
 
     });
 
     return () => unsubscribe?.();
 
   }, []);
+
+
+  useEffect(() => {
+
+    if (autoApproveError) {
+
+      setAutoApproveError("");
+
+    }
+
+  }, [autoApproveEnabled, autoApproveError]);
 
 
 
@@ -2615,6 +2711,46 @@ export default function KPIAdjustments({ currentUser }) {
 
 
 
+  const handleToggleAutoApprove = () => {
+
+    if (!canApprove || autoApproveSaving) {
+
+      return;
+
+    }
+
+    setAutoApproveError("");
+
+    setAutoApproveSaving(true);
+
+    try {
+
+      const updatedSettings = saveKpiAdjustmentSettings(
+
+        { autoApprove: { enabled: !autoApproveEnabled } },
+
+        { actor, permissions: currentUser?.permissions || {} }
+
+      );
+
+      setSettings(updatedSettings);
+
+    } catch (err) {
+
+      console.error(err);
+
+      setAutoApproveError(err?.message || "Khong the cap nhat duyet tu dong.");
+
+    } finally {
+
+      setAutoApproveSaving(false);
+
+    }
+
+  };
+
+
+
   const closeDetailDialog = () => {
 
     setDetailEntry(null);
@@ -2977,7 +3113,20 @@ export default function KPIAdjustments({ currentUser }) {
 
   const modeOptions = Array.isArray(formCategoryConfig.modes) ? formCategoryConfig.modes : [];
 
-  const licenseOptions = Array.isArray(formCategoryConfig.licenseOptions) ? formCategoryConfig.licenseOptions : [];
+  const baseLicenseOptions = Array.isArray(formCategoryConfig.licenseOptions)
+    ? formCategoryConfig.licenseOptions
+    : [];
+  let licenseOptions = baseLicenseOptions.map((opt) => {
+    if (!opt) return opt;
+    const code = String(opt.value || '').toUpperCase();
+    let label = opt.label || opt.value;
+    if (code === 'ZB02') label = 'ZB02 - Xin cấp phép tiền chất CN';
+    else if (code === 'ZB03') label = 'ZB03 - Khai báo hóa chất';
+    return { ...opt, value: code, label };
+  });
+  if (!licenseOptions.some((o) => String(o?.value || '').toUpperCase() === 'ZB99')) {
+    licenseOptions = [...licenseOptions, { value: 'ZB99', label: 'ZB99 - Giấy phép khác' }];
+  }
 
   const normalizedMode = normalizeStr(form.mode || "").toLowerCase();
 
@@ -2996,6 +3145,8 @@ export default function KPIAdjustments({ currentUser }) {
   const computedExtraQuantity = Number.parseFloat(form.extraQuantity ?? 0) || 0;
 
   const computedExtraUnit = Number.parseFloat(form.extraUnitPoints ?? 0) || 0;
+
+  const computedExtraTotal = roundAdjustmentPoint(computedExtraQuantity * computedExtraUnit);
 
   const allowManualPointOverride = canOverridePoints || form.category === "support_misc";
 
@@ -3021,9 +3172,7 @@ export default function KPIAdjustments({ currentUser }) {
 
     }
 
-    const extraTotal = roundAdjustmentPoint(computedExtraQuantity * computedExtraUnit);
-
-    return roundAdjustmentPoint(baseTotal + extraTotal);
+    return roundAdjustmentPoint(baseTotal + computedExtraTotal);
 
   })();
 
@@ -3350,6 +3499,20 @@ export default function KPIAdjustments({ currentUser }) {
                     placeholder="Ghi chú lý do từ chối..."
 
                   />
+
+                  {form.licenseCode ? (
+                    <div className="mt-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => handleLicenseChange("")}
+                        className="px-2 py-1"
+                        data-tooltip="X\u00F3a m\u00E3 gi\u1EA5y ph\u00E9p"
+                        aria-label="X\u00F3a m\u00E3 gi\u1EA5y ph\u00E9p"
+                      >
+                        Xo\u00E1</Button>
+                    </div>
+                  ) : null}
 
                 </div>
 
@@ -3980,7 +4143,45 @@ export default function KPIAdjustments({ currentUser }) {
 
           </div>
 
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-col items-stretch gap-2 sm:items-end">
+
+            <div className="flex flex-wrap gap-2 sm:justify-end">
+
+              {canApprove ? (
+
+                <Button
+
+                  type="button"
+
+                  variant={autoApproveEnabled ? "default" : "outline"}
+
+                  size="sm"
+
+                  onClick={handleToggleAutoApprove}
+
+                  disabled={autoApproveSaving}
+
+                  aria-pressed={autoApproveEnabled}
+
+                  data-testid="auto-approve-toggle"
+
+                >
+
+                  <Sparkles className="mr-1 h-4 w-4" />
+
+                  {autoApproveSaving
+
+                    ? "Dang cap nhat..."
+
+                    : autoApproveEnabled
+
+                      ? "Tat duyet tu dong"
+
+                      : "Bat duyet tu dong"}
+
+                </Button>
+
+              ) : null}
 
             <Button type="button" variant="ghost" size="sm" onClick={handleRefreshDeclarations}>
 
@@ -4001,6 +4202,15 @@ export default function KPIAdjustments({ currentUser }) {
                 Cấu hình mặc định
 
               </Button>
+            ) : null}
+
+            </div>
+
+            <p className="text-xs text-muted-foreground sm:text-right">{autoApproveStatusMessage}</p>
+
+            {canApprove && autoApproveError ? (
+
+              <p className="text-xs text-destructive sm:text-right">{autoApproveError}</p>
 
             ) : null}
 
@@ -4307,26 +4517,38 @@ export default function KPIAdjustments({ currentUser }) {
                 <div>
 
                   <label className="text-sm font-medium text-foreground" htmlFor={FORM_FIELD_IDS.license}>
-
-                    Mã giấy phép
-
+                    {'M\u00E3 gi\u1EA5y ph\u00E9p'}
                   </label>
 
+                  <div className="mt-1 flex items-center gap-2">
                   <Input
 
                     id={FORM_FIELD_IDS.license}
 
                     list="kpi-adjust-license-options"
 
-                    placeholder="Ví dụ: ZB02"
+                    placeholder={'V\u00ED d\u1EE5: ZB02'}
 
                     value={form.licenseCode}
 
                     onChange={(e) => handleLicenseChange(e.target.value)}
 
-                    className="mt-1"
+                    className="flex-1"
 
                   />
+                    {form.licenseCode ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => handleLicenseChange("")}
+                        className="px-2 py-1"
+                        data-tooltip="X\u00F3a m\u00E3 gi\u1EA5y ph\u00E9p"
+                        aria-label="X\u00F3a m\u00E3 gi\u1EA5y ph\u00E9p"
+                      >
+                        {'X\u00F3a'}
+                      </Button>
+                    ) : null}
+                  </div>
 
                   <datalist id="kpi-adjust-license-options">
 
@@ -4700,7 +4922,7 @@ export default function KPIAdjustments({ currentUser }) {
 
                     ) : null}
 
-                    <div className="grid gap-3 md:grid-cols-2">
+                    <div className="grid gap-3 md:grid-cols-3">
 
                       {!isHybridFixed ? (
 
@@ -4817,11 +5039,25 @@ export default function KPIAdjustments({ currentUser }) {
 
                       <div>
 
-                        <label className="text-sm font-medium text-foreground" htmlFor={FORM_FIELD_IDS.extraUnit}>
+                        <Tooltip>
 
-                          {formCategoryConfig.extraPointConfig.unitLabel || "Điểm bổ sung mỗi đơn vị"}
+                          <TooltipTrigger asChild>
 
-                        </label>
+                            <label className="text-sm font-medium text-foreground" htmlFor={FORM_FIELD_IDS.extraUnit}>
+
+                              {formCategoryConfig.extraPointConfig.unitLabel || "Điểm bổ sung mỗi đơn vị"}
+
+                            </label>
+
+                          </TooltipTrigger>
+
+                          <TooltipContent sideOffset={8} className="max-w-xs text-xs leading-relaxed">
+
+                            Điểm bổ sung mỗi tờ khai
+
+                          </TooltipContent>
+
+                        </Tooltip>
 
                         <Input
 
@@ -4856,6 +5092,24 @@ export default function KPIAdjustments({ currentUser }) {
 
                       </div>
 
+                      <div className="flex flex-col">
+
+                        <span className="text-sm font-medium text-foreground">Điểm bổ sung</span>
+
+                        <span aria-live="polite" className="mt-1 text-base font-semibold text-foreground">
+
+                          {formatDecimal(computedExtraTotal)}
+
+                        </span>
+
+                        <p className="mt-1 text-xs text-muted-foreground">
+
+                          Giá trị được tính bằng Số lượng bổ sung nhân với Điểm bổ sung mỗi đơn vị.
+
+                        </p>
+
+                      </div>
+
                     </div>
 
                   ) : null}
@@ -4870,7 +5124,15 @@ export default function KPIAdjustments({ currentUser }) {
 
                   <div className="text-xs font-medium uppercase text-muted-foreground">Điểm dự kiến</div>
 
-                  <div data-testid="kpi-adjust-total-value" className="mt-1 text-lg font-semibold text-foreground">
+                  <div
+
+                    data-testid="kpi-adjust-total-value"
+
+                    className="mt-1 text-lg font-semibold text-foreground"
+
+                    aria-live="polite"
+
+                  >
 
                     {formatDecimal(computedTotal)}
 
@@ -5321,5 +5583,6 @@ export default function KPIAdjustments({ currentUser }) {
   );
 
 }
+
 
 

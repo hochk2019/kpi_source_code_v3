@@ -67,6 +67,7 @@ describe('KPIAdjustments UI', () => {
         { so_tk: 'TK001', date: '2025-01-01', nhanh: '', cong_ty: 'Công ty A' },
 
         { so_tk: 'TK002', date: '2025-01-02', nhanh: '', cong_ty: 'Công ty B' },
+        { so_tk_full: '307871769240', date: '2025-01-03', nhanh: '', cong_ty: 'Công ty C' },
 
       ])
 
@@ -158,6 +159,85 @@ describe('KPIAdjustments UI', () => {
 
 
 
+  it('quan ly co the bat duyet tu dong', async () => {
+
+    render(
+
+      <KPIAdjustments
+
+        currentUser={{ username: 'manager', permissions: { adjustApprove: true, adjustSubmit: true } }}
+
+      />
+
+    );
+
+
+    expect(await screen.findByText('Duyet tu dong dang tat')).toBeInTheDocument();
+
+
+    const toggle = await screen.findByTestId('auto-approve-toggle');
+
+    expect(toggle).toHaveAttribute('aria-pressed', 'false');
+
+
+    await userEvent.click(toggle);
+
+
+
+    const toggledButton = await screen.findByTestId('auto-approve-toggle');
+    expect(toggledButton).toHaveAttribute('aria-pressed', 'true');
+    expect(toggledButton).toHaveTextContent('Tat duyet tu dong');
+
+
+    expect(screen.getByText(/Duyet tu dong dang bat/i)).toBeInTheDocument();
+
+  });
+
+
+
+  it('tra cuu duoc to khai 12 chu so tu file ECUS va them vao tham chieu', async () => {
+
+    render(
+
+      <KPIAdjustments
+
+        currentUser={{ username: 'staff.ecus', permissions: { adjustSubmit: true } }}
+
+      />
+
+    );
+
+
+
+    const searchInput = await screen.findByPlaceholderText('Tìm theo số tờ khai, MST hoặc tên công ty');
+
+    await userEvent.clear(searchInput);
+
+    await userEvent.type(searchInput, '307871769240');
+
+
+
+    const suggestionText = await screen.findByText('307871769240', { selector: 'div' });
+
+    const suggestionContainer = suggestionText.parentElement?.parentElement;
+
+    expect(suggestionContainer).toBeTruthy();
+
+
+
+    const addButton = within(suggestionContainer).getByRole('button', { name: 'Thêm' });
+
+    await userEvent.click(addButton);
+
+
+
+    const referenceInput = screen.getByLabelText('Tham chiếu tờ khai / quyết định');
+
+    await waitFor(() => expect(referenceInput).toHaveValue('307871769240'));
+
+  });
+
+
   it('giữ trống trường nhân viên khi tài khoản chưa gán nhân viên', async () => {
 
     render(
@@ -178,6 +258,19 @@ describe('KPIAdjustments UI', () => {
 
   });
 
+
+
+  it('vô hiệu hóa nút gửi đề xuất khi tài khoản không có quyền', async () => {
+
+    render(<KPIAdjustments currentUser={{ username: 'guest', permissions: { adjustSubmit: false } }} />);
+
+    await screen.findByText('Thêm điểm KPI +/-');
+
+    const submitButton = await screen.findByRole('button', { name: /Thêm điểm KPI/i });
+
+    expect(submitButton).toBeDisabled();
+
+  });
 
 
   it('cho phép chuyển chế độ và cập nhật điểm dự kiến theo cấu hình', async () => {

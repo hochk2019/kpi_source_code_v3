@@ -3,6 +3,7 @@
 
 
 import { createDefaultRuleCollection } from '../shared/defaultRules.js';
+import { normalizeDateInput } from '../shared/declSearch.js';
 
 import {
 
@@ -53,6 +54,10 @@ export const KPI_ADJUSTMENTS_KEY = "kpi_adjustments_v1"; // điểm KPI +/- bổ
 export const KPI_ADJUSTMENT_SETTINGS_KEY = "kpi_adjustment_settings_v1"; // cấu hình mặc định điểm KPI bổ sung
 
 export const DECL_HISTORY_KEY = "decl_history_v1"; // lịch sử chỉnh sửa tờ khai
+
+export const DECL_DELETED_LOG_KEY = "decl_deleted_log_v1"; // nhật ký xóa tờ khai
+
+export const DECL_DELETED_LOG_LIMIT = 500;
 
 export const UI_LAYOUT_KEY = "ui_layout_config_v1"; // cấu hình bố cục giao diện dùng chung
 
@@ -600,6 +605,350 @@ export function normalizeStr(s) {
 
 
 
+function normalizeDeletedLogString(value) {
+
+  const text = normalizeStr(value);
+
+  if (!text) {
+
+    return "";
+
+  }
+
+  try {
+
+    return text.normalize("NFC");
+
+  } catch {
+
+    return text;
+
+  }
+
+}
+
+
+
+function normalizeDeletedDeclLogEntry(entry, defaults = {}) {
+
+  if (!entry || typeof entry !== "object") {
+
+    return null;
+
+  }
+
+  const soTk = normalizeDeclarationNumber(
+
+    entry.so_tk ?? entry.number ?? defaults.so_tk ?? "",
+
+  );
+
+  if (!soTk) {
+
+    return null;
+
+  }
+
+  const nhanh = normalizeDeletedLogString(
+
+    entry.nhanh ?? entry.branch ?? defaults.nhanh ?? "",
+
+  );
+
+  const mst = normalizeDeletedLogString(
+
+    entry.mst ??
+
+      entry.ma_so_thue ??
+
+      entry.tax_code ??
+
+      entry.ma_so_thue_dn ??
+
+      entry.mst_dn ??
+
+      defaults.mst ??
+
+      "",
+
+  );
+
+  const company = normalizeDeletedLogString(
+
+    entry.company ??
+
+      entry.cong_ty ??
+
+      entry.ten_cong_ty ??
+
+      entry.ten_dn ??
+
+      entry.doanh_nghiep ??
+
+      entry.ten_doanh_nghiep ??
+
+      defaults.company ??
+
+      "",
+
+  );
+
+  const deletedBy = normalizeDeletedLogString(
+
+    entry.deleted_by ?? entry.actor ?? defaults.deleted_by ?? "",
+
+  );
+
+  const typeInput = entry.type ?? defaults.type;
+
+  const type = typeInput === "hard" ? "hard" : "soft";
+
+  const deletedAtSource =
+
+    entry.deleted_at ??
+
+    entry.ts ??
+
+    defaults.deleted_at ??
+
+    defaults.timestamp ??
+
+    "";
+
+  const deletedAt = normalizeStr(deletedAtSource) || new Date().toISOString();
+
+  return {
+
+    so_tk: soTk,
+
+    nhanh: nhanh || null,
+
+    mst: mst || null,
+
+    company: company || null,
+
+    type,
+
+    deleted_at: deletedAt,
+
+    deleted_by: deletedBy || null,
+
+  };
+
+}
+
+
+
+function buildDeletedDeclLogEntryFromRow(row, { actor = "system", type = "soft", timestamp = new Date().toISOString() } = {}) {
+
+  if (!row || typeof row !== "object") {
+
+    return null;
+
+  }
+
+  return normalizeDeletedDeclLogEntry(
+
+    {
+
+      so_tk: row.so_tk ?? row.so_tk_full ?? row.number ?? "",
+
+      nhanh: row.nhanh ?? row.branch ?? row.nhanh_kd ?? row.nhanh_hq ?? "",
+
+      mst:
+
+        row.mst ??
+
+        row.ma_so_thue ??
+
+        row.ma_so_thue_dn ??
+
+        row.mst_dn ??
+
+        row.tax_code ??
+
+        "",
+
+      company:
+
+        row.ten_dn ??
+
+        row.company ??
+
+        row.cong_ty ??
+
+        row.ten_cong_ty ??
+
+        row.doanh_nghiep ??
+
+        row.ten_doanh_nghiep ??
+
+        "",
+
+      deleted_at: timestamp,
+
+      deleted_by: actor,
+
+      type,
+
+    },
+
+    { deleted_at: timestamp, type },
+
+  );
+
+}
+
+
+
+function readDeletedDeclLogRaw() {
+
+  const serialized = getItem(DECL_DELETED_LOG_KEY);
+
+  const parsed = safeParse(serialized, []);
+
+  return {
+
+    entries: Array.isArray(parsed) ? parsed : [],
+
+    serialized: typeof serialized === "string" ? serialized : null,
+
+  };
+
+}
+
+
+
+function writeDeletedDeclLog(entries, previousSerialized = null) {
+
+  const list = Array.isArray(entries) ? entries : [];
+
+  const normalized = [];
+
+  for (const entry of list) {
+
+    if (normalized.length >= DECL_DELETED_LOG_LIMIT) {
+
+      break;
+
+    }
+
+    const sanitized = normalizeDeletedDeclLogEntry(entry);
+
+    if (!sanitized) {
+
+      continue;
+
+    }
+
+    normalized.push(sanitized);
+
+  }
+
+  const serialized = JSON.stringify(normalized);
+
+  if (serialized !== previousSerialized) {
+
+    setItem(DECL_DELETED_LOG_KEY, serialized);
+
+  }
+
+  return normalized;
+
+}
+
+
+
+function appendDeletedDeclLogEntries(entries) {
+
+  const list = Array.isArray(entries) ? entries : [];
+
+  if (list.length === 0) {
+
+    return readDeletedDeclLog();
+
+  }
+
+  const { entries: existing, serialized } = readDeletedDeclLogRaw();
+
+  const combined = [...list, ...existing];
+
+  return writeDeletedDeclLog(combined, serialized);
+
+}
+
+
+
+function readDeletedDeclLog() {
+
+  const { entries, serialized } = readDeletedDeclLogRaw();
+
+  return writeDeletedDeclLog(entries, serialized);
+
+}
+
+
+
+export function getDeletedDeclLog({ from, to, type } = {}) {
+
+  const list = readDeletedDeclLog();
+
+  const normalizedType = type === "hard" ? "hard" : type === "soft" ? "soft" : null;
+
+  const rangeFrom = normalizeDateInput(from);
+
+  const rangeTo = normalizeDateInput(to);
+
+  if (!normalizedType && !rangeFrom && !rangeTo) {
+
+    return list.map((entry) => ({ ...entry }));
+
+  }
+
+  const filtered = [];
+
+  for (const entry of list) {
+
+    if (!entry || typeof entry !== "object") {
+
+      continue;
+
+    }
+
+    if (normalizedType && entry.type !== normalizedType) {
+
+      continue;
+
+    }
+
+    if (rangeFrom || rangeTo) {
+
+      const entryDate = normalizeDateInput(entry.deleted_at ?? entry.ts ?? "");
+
+      if (rangeFrom && (!entryDate || entryDate < rangeFrom)) {
+
+        continue;
+
+      }
+
+      if (rangeTo && (!entryDate || entryDate > rangeTo)) {
+
+        continue;
+
+      }
+
+    }
+
+    filtered.push({ ...entry });
+
+  }
+
+  return filtered;
+
+}
+
+
+
 function stripDiacritics(input) {
 
   return normalizeStr(input)
@@ -1052,7 +1401,7 @@ function mergeDeclarationRowClient(existing, incoming) {
 
 
 
-  const mergeNormalizedArrayField = (field, value, { uppercase = false } = {}) => {
+  const mergeNormalizedArrayField = (field, value, { uppercase = false, replace = false } = {}) => {
 
     const incomingList = toArray(value)
 
@@ -1065,6 +1414,14 @@ function mergeDeclarationRowClient(existing, incoming) {
       })
 
       .filter(Boolean);
+
+    if (replace) {
+
+      merged[field] = Array.from(new Set(incomingList));
+
+      return;
+
+    }
 
     if (!incomingList.length) {
 
@@ -1150,7 +1507,15 @@ function mergeDeclarationRowClient(existing, incoming) {
 
     }
 
-    if (key === 'licenseCodes' || key === 'licenseSourceCodes' || key === 'licenseExcludedCodes') {
+    if (key === 'licenseCodes' || key === 'licenseExcludedCodes') {
+
+      mergeNormalizedArrayField(key, value, { uppercase: true, replace: true });
+
+      continue;
+
+    }
+
+    if (key === 'licenseSourceCodes') {
 
       mergeNormalizedArrayField(key, value, { uppercase: true });
 
@@ -5831,6 +6196,7 @@ export function softDeleteDeclRows(keys, { actor = "system", detail = "" } = {})
   const alreadyDeletedKeys = [];
   let deleted = 0;
   let alreadyDeleted = 0;
+  const logEntries = [];
 
   const nextRows = rows.map((row) => {
     if (!row || typeof row !== "object") {
@@ -5848,6 +6214,14 @@ export function softDeleteDeclRows(keys, { actor = "system", detail = "" } = {})
     }
     deleted += 1;
     deletedKeys.push(key);
+    const logEntry = buildDeletedDeclLogEntryFromRow(row, {
+      actor: actorName,
+      type: "soft",
+      timestamp,
+    });
+    if (logEntry) {
+      logEntries.push(logEntry);
+    }
     return {
       ...row,
       deleted_at: timestamp,
@@ -5858,6 +6232,9 @@ export function softDeleteDeclRows(keys, { actor = "system", detail = "" } = {})
   const missingKeys = list.filter((key) => !seenKeys.has(key));
 
   if (deleted > 0) {
+    if (logEntries.length > 0) {
+      appendDeletedDeclLogEntries(logEntries);
+    }
     persistAndAnnotateDeclRows(nextRows);
     const actionDetail = detail && detail.trim().length > 0
       ? detail
@@ -5893,10 +6270,12 @@ export function hardDeleteDeclRows(keys, { actor = "system", detail = "" } = {})
   }
 
   const actorName = normalizeStr(actor) || "system";
+  const timestamp = new Date().toISOString();
   const rows = getDeclRowsRaw();
   const keySet = new Set(list);
   const seenKeys = new Set();
   const removedKeys = [];
+  const logEntries = [];
 
   const nextRows = [];
   for (const row of rows) {
@@ -5911,12 +6290,23 @@ export function hardDeleteDeclRows(keys, { actor = "system", detail = "" } = {})
     }
     seenKeys.add(key);
     removedKeys.push(key);
+    const logEntry = buildDeletedDeclLogEntryFromRow(row, {
+      actor: actorName,
+      type: "hard",
+      timestamp: normalizeStr(row.deleted_at) || timestamp,
+    });
+    if (logEntry) {
+      logEntries.push(logEntry);
+    }
   }
 
   const removed = removedKeys.length;
   const missingKeys = list.filter((key) => !seenKeys.has(key));
 
   if (removed > 0) {
+    if (logEntries.length > 0) {
+      appendDeletedDeclLogEntries(logEntries);
+    }
     persistAndAnnotateDeclRows(nextRows);
     const actionDetail = detail && detail.trim().length > 0
       ? detail
@@ -6397,6 +6787,87 @@ export const KPI_ADJUSTMENT_STATUS_SET = new Set(['pending', 'approved', 'reject
 
 const KPI_ADJUSTMENT_HISTORY_LIMIT = 50;
 
+const KPI_ADJUSTMENT_AUTO_APPROVE_DEFAULT = Object.freeze({
+  enabled: false,
+  note: null,
+  updatedAt: null,
+  updatedBy: null,
+});
+
+const KPI_ADJUSTMENT_BUILTIN_DEFAULTS = Object.freeze({
+
+  tax_refund_customer: Object.freeze({
+
+    extraUnitPoints: 0.25,
+
+  }),
+
+});
+
+function normalizeAutoApproveSettings(value) {
+
+  const source = value && typeof value === 'object' ? value : {};
+
+  const enabled = source.enabled === true;
+
+  const updatedAt = typeof source.updatedAt === 'string' ? source.updatedAt : null;
+
+  const updatedByRaw = typeof source.updatedBy === 'string' ? source.updatedBy : null;
+
+  const updatedBy = updatedByRaw ? normalizeStr(updatedByRaw) || updatedByRaw.trim() || null : null;
+
+  let note = null;
+
+  if (Object.prototype.hasOwnProperty.call(source, 'note')) {
+
+    if (source.note === null) {
+
+      note = null;
+
+    } else if (typeof source.note === 'string') {
+
+      const normalized = normalizeStr(source.note);
+
+      note = normalized || null;
+
+    }
+
+  }
+
+  return {
+
+    enabled,
+
+    note,
+
+    updatedAt,
+
+    updatedBy,
+
+  };
+
+}
+
+
+
+function cloneAutoApproveSettings(value) {
+
+  const normalized = normalizeAutoApproveSettings(value);
+
+  return {
+
+    enabled: normalized.enabled,
+
+    note: normalized.note,
+
+    updatedAt: normalized.updatedAt,
+
+    updatedBy: normalized.updatedBy,
+
+  };
+
+}
+
 
 
 function readAdjustmentSettings() {
@@ -6405,7 +6876,17 @@ function readAdjustmentSettings() {
 
   if (!raw || typeof raw !== 'object') {
 
-    return { categories: {}, updatedAt: null, updatedBy: null };
+    return {
+
+      categories: {},
+
+      updatedAt: null,
+
+      updatedBy: null,
+
+      autoApprove: { ...KPI_ADJUSTMENT_AUTO_APPROVE_DEFAULT },
+
+    };
 
   }
 
@@ -6433,6 +6914,48 @@ function readAdjustmentSettings() {
 
   }
 
+  for (const [key, defaults] of Object.entries(KPI_ADJUSTMENT_BUILTIN_DEFAULTS)) {
+
+    if (!KPI_ADJUSTMENT_CATEGORY_CONFIG[key]) {
+
+      continue;
+
+    }
+
+    const baseCategory = categories[key] ? { ...categories[key] } : {};
+
+    let changed = false;
+
+    for (const [field, defaultValue] of Object.entries(defaults)) {
+
+      if (Object.prototype.hasOwnProperty.call(baseCategory, field)) {
+
+        continue;
+
+      }
+
+      if (typeof defaultValue === 'number') {
+
+        baseCategory[field] = roundAdjustmentPoint(defaultValue);
+
+      } else {
+
+        baseCategory[field] = defaultValue;
+
+      }
+
+      changed = true;
+
+    }
+
+    if (changed || categories[key]) {
+
+      categories[key] = baseCategory;
+
+    }
+
+  }
+
   return {
 
     categories,
@@ -6440,6 +6963,8 @@ function readAdjustmentSettings() {
     updatedAt: typeof raw.updatedAt === 'string' ? raw.updatedAt : null,
 
     updatedBy: typeof raw.updatedBy === 'string' ? raw.updatedBy : null,
+
+    autoApprove: cloneAutoApproveSettings(raw.autoApprove),
 
   };
 
@@ -6468,6 +6993,8 @@ function cloneAdjustmentSettings(settings) {
     updatedAt: settings?.updatedAt || null,
 
     updatedBy: settings?.updatedBy || null,
+
+    autoApprove: cloneAutoApproveSettings(settings?.autoApprove),
 
   };
 
@@ -6683,11 +7210,56 @@ export function saveKpiAdjustmentSettings(patch, { actor = 'system', permissions
 
   }
 
+  let autoApprove = cloneAutoApproveSettings(base.autoApprove);
+
+  const autoPatch =
+    patch && typeof patch === 'object' && patch.autoApprove && typeof patch.autoApprove === 'object'
+      ? patch.autoApprove
+      : null;
+
+  if (autoPatch) {
+    const nextAuto = { ...autoApprove };
+    let changed = false;
+
+    if (Object.prototype.hasOwnProperty.call(autoPatch, 'enabled')) {
+      const requestedEnabled = autoPatch.enabled === true;
+      if (requestedEnabled !== nextAuto.enabled) {
+        nextAuto.enabled = requestedEnabled;
+        changed = true;
+      }
+    }
+
+    if (Object.prototype.hasOwnProperty.call(autoPatch, 'note')) {
+      let noteValue = nextAuto.note ?? null;
+      if (autoPatch.note === null) {
+        noteValue = null;
+      } else if (typeof autoPatch.note === 'string') {
+        const normalizedNote = normalizeStr(autoPatch.note);
+        noteValue = normalizedNote || null;
+      }
+      if (noteValue !== (nextAuto.note ?? null)) {
+        nextAuto.note = noteValue;
+        changed = true;
+      }
+    }
+
+    if (changed) {
+      const stamp = new Date().toISOString();
+      nextAuto.updatedAt = stamp;
+      nextAuto.updatedBy = actor;
+      autoApprove = nextAuto;
+    }
+  }
+
+  const timestamp = new Date().toISOString();
+
   const next = {
 
     categories,
 
-    updatedAt: new Date().toISOString(),
+    autoApprove,
+
+    updatedAt: timestamp,
 
     updatedBy: actor,
 
@@ -6703,7 +7275,13 @@ export function saveKpiAdjustmentSettings(patch, { actor = 'system', permissions
 
     detail: 'Cập nhật cấu hình điểm KPI bổ sung',
 
-    meta: { categories: Object.keys(categories) },
+    meta: {
+
+      categories: Object.keys(categories),
+
+      autoApprove: autoApprove.enabled,
+
+    },
 
   });
 
@@ -7405,6 +7983,62 @@ function normalizeAdjustmentInput(input, { now, actor, current, permissions = {}
 
   }
 
+  const approvedAtSource = input.approvedAt ?? current?.approvedAt ?? null;
+
+  if (approvedAtSource) {
+
+    const approvedAtDate = new Date(approvedAtSource);
+
+    if (!Number.isNaN(approvedAtDate.getTime())) {
+
+      payload.approvedAt = approvedAtDate.toISOString();
+
+    }
+
+  }
+
+  const approvedBySource = input.approvedBy ?? current?.approvedBy ?? null;
+
+  if (typeof approvedBySource === 'string') {
+
+    const trimmed = approvedBySource.trim();
+
+    if (trimmed) {
+
+      payload.approvedBy = trimmed;
+
+    }
+
+  }
+
+  const rejectedAtSource = input.rejectedAt ?? current?.rejectedAt ?? null;
+
+  if (rejectedAtSource) {
+
+    const rejectedAtDate = new Date(rejectedAtSource);
+
+    if (!Number.isNaN(rejectedAtDate.getTime())) {
+
+      payload.rejectedAt = rejectedAtDate.toISOString();
+
+    }
+
+  }
+
+  const rejectedBySource = input.rejectedBy ?? current?.rejectedBy ?? null;
+
+  if (typeof rejectedBySource === 'string') {
+
+    const trimmed = rejectedBySource.trim();
+
+    if (trimmed) {
+
+      payload.rejectedBy = trimmed;
+
+    }
+
+  }
+
   return payload;
 
 }
@@ -7438,6 +8072,8 @@ function diffAdjustments(prev, next) {
     'totalPoints',
 
     'note',
+
+    'status',
 
     'mode',
 
@@ -7530,7 +8166,22 @@ export function getKpiAdjustments() {
 
 export function saveKpiAdjustment(entry, { actor = 'system', permissions = {} } = {}) {
 
+  const permissionSet = permissions || {};
+
+  const canSubmit = permissionSet.adjustSubmit === true;
+  const canApprove = permissionSet.adjustApprove === true;
+
+  if (!canSubmit && !canApprove) {
+    throw new Error('Ban khong co quyen tao diem KPI bo sung');
+  }
+
   const now = new Date();
+
+  const settingsSnapshot = readAdjustmentSettings();
+
+  const autoApproveConfig = cloneAutoApproveSettings(settingsSnapshot.autoApprove);
+
+  const autoApproveEnabled = autoApproveConfig.enabled === true;
 
   const adjustments = getAllAdjustments();
 
@@ -7572,11 +8223,43 @@ export function saveKpiAdjustment(entry, { actor = 'system', permissions = {} } 
 
   }
 
+  let autoApproved = false;
+
+  if (!current && status === 'pending' && autoApproveEnabled && !canApprove) {
+
+    status = 'approved';
+
+    autoApproved = true;
+
+  }
+
   normalized.status = status;
 
   normalized.updatedAt = now.toISOString();
 
   normalized.updatedBy = actor;
+
+  if (autoApproved) {
+
+    const autoApproveActor = autoApproveConfig.updatedBy || 'auto-approve';
+
+    normalized.approvedAt = now.toISOString();
+
+    normalized.approvedBy = autoApproveActor;
+
+    if ('rejectedAt' in normalized) {
+
+      delete normalized.rejectedAt;
+
+    }
+
+    if ('rejectedBy' in normalized) {
+
+      delete normalized.rejectedBy;
+
+    }
+
+  }
 
   if (!current) {
 
@@ -7606,6 +8289,36 @@ export function saveKpiAdjustment(entry, { actor = 'system', permissions = {} } 
 
   );
 
+  if (autoApproved) {
+
+    const autoApproveActor = autoApproveConfig.updatedBy || 'auto-approve';
+
+    const autoApproveDetail = autoApproveConfig.note
+
+      ? `Duyet tu dong: ${autoApproveConfig.note}`
+
+      : autoApproveConfig.updatedBy
+
+        ? `Duyet tu dong (bat boi ${autoApproveConfig.updatedBy})`
+
+        : 'Duyet tu dong';
+
+    history.push(
+
+      normalizeAdjustmentHistoryEntry({
+
+        action: 'status.approved',
+
+        actor: autoApproveActor,
+
+        detail: autoApproveDetail,
+
+      })
+
+    );
+
+  }
+
   normalized.history = clampHistory(history);
 
   if (existingIndex >= 0) {
@@ -7628,7 +8341,17 @@ export function saveKpiAdjustment(entry, { actor = 'system', permissions = {} } 
 
     detail: `${normalized.staffName || 'Chưa rõ'} - ${normalized.month} (${KPI_ADJUSTMENT_CATEGORY_CONFIG[normalized.category]?.label || normalized.category})`,
 
-    meta: { id: normalized.id, status: normalized.status, totalPoints: normalized.totalPoints },
+    meta: {
+
+      id: normalized.id,
+
+      status: normalized.status,
+
+      totalPoints: normalized.totalPoints,
+
+      autoApproved,
+
+    },
 
   });
 
@@ -8581,6 +9304,7 @@ export function clearAuditLogs({ actor = "system", note = "Xóa toàn bộ nhậ
 export default {
 
   DECL_KEY, MST_KEY, RULES_KEY, TEAM_KEY, AUDIT_KEY, HQ_KEY, KPI_ADJUSTMENTS_KEY, DECL_HISTORY_KEY,
+  DECL_DELETED_LOG_KEY, DECL_DELETED_LOG_LIMIT,
 
   normalizeStr, normalizeMST, normalizeDeclarationNumber, toISODate, normalizeName,
 
@@ -8605,6 +9329,8 @@ export default {
   pushImportLog,
 
   pushAuditLog, getAuditLogs, clearAuditLogs,
+
+  getDeletedDeclLog,
 
   saveMSTRow,
 

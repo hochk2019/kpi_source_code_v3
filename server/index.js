@@ -432,7 +432,7 @@ const SLOW_ECUS_COALESCE_FROM =
 
 const SLOW_ECUS_COALESCE_TO =
 
-  /COALESCE\s*\(\s*lp\.Ngay_DK\s*,\s*md\.NGAY_DK\s*\)\s*<\s*DATEADD\s*\(\s*DAY\s*,\s*1\s*,\s*@to\s*\)/i;
+  /COALESCE\s*\(\s*lp\.Ngay_DK\s*,\s*md\.NGAY_DK\s*\)\s*(?:<\s*DATEADD\s*\(\s*DAY\s*,\s*1\s*,\s*@to\s*\)|<=\s*@to)/i;
 
 const ECUS_QUERY_SECTION_BOUNDARY =
 
@@ -466,7 +466,7 @@ function upgradeLegacyEcusRangeFilter(queryText) {
 
     LEGACY_ECUS_RANGE_TO,
 
-    'COALESCE(lp.Ngay_DK, md.NGAY_DK) < DATEADD(DAY, 1, @to)'
+    'COALESCE(lp.Ngay_DK, md.NGAY_DK) <= @to'
 
   );
 
@@ -580,7 +580,7 @@ function optimizeEcusCoalesceRangeFilter(queryText) {
 
     '  COALESCE(lp.Ngay_DK, md.NGAY_DK) >= @from',
 
-    '  AND COALESCE(lp.Ngay_DK, md.NGAY_DK) < DATEADD(DAY, 1, @to)',
+    '  AND COALESCE(lp.Ngay_DK, md.NGAY_DK) <= @to',
 
   ].join('\n');
 
@@ -616,7 +616,20 @@ function normalizeEcusQueryInput(value) {
 
   const upgraded = upgradeLegacyEcusRangeFilter(text);
 
-  return optimizeEcusCoalesceRangeFilter(upgraded);
+  const optimized = optimizeEcusCoalesceRangeFilter(upgraded);
+
+  const withoutLegacyCompanyFallback = optimized.replace(/,\s*NULLIF\(md\.TEN_DV\s*,\s*''\)/giu, '');
+
+  const withoutDateAddTo = withoutLegacyCompanyFallback.replace(
+    /<\s*DATEADD\s*\(\s*DAY\s*,\s*1\s*,\s*@to\s*\)/giu,
+    '<= @to'
+  );
+
+  if (/COALESCE\s*\(\s*lp\.Ngay_DK\s*,\s*md\.NGAY_DK\s*\)/iu.test(withoutDateAddTo)) {
+    return DEFAULT_ECUS_SYNC_CONFIG.query;
+  }
+
+  return withoutDateAddTo;
 
 }
 
@@ -689,125 +702,85 @@ const DEFAULT_ECUS_SYNC_CONFIG = {
   },
 
   query: [
-
-    'SELECT',
-
-    '  CAST(lp.So_TK AS nvarchar(50)) AS so_tk,',
-
-    '  CAST(lp.Ngay_DK AS date) AS ngay_dang_ky,',
-
-    '  LTRIM(RTRIM(lp.Ma_LH)) AS loai_hinh,',
-
-    '  LTRIM(RTRIM(lp.Ma_DN)) AS mst,',
-
-    '  LTRIM(RTRIM(lp.TEN_DV)) AS cong_ty,',
-
-    '  ISNULL(items.muc_hang, 0) AS muc_hang,',
-
-    '  ISNULL(licenses.license_count, 0) AS license_count,',
-
-    "  ISNULL(licenses.license_codes, N'') AS license_codes,",
-
-    '  ISNULL(co_counts.co_count_num, 0) AS co_count_num',
-
-    'FROM dbo.DTBLP AS lp',
-
-    'LEFT JOIN dbo.DTOKHAIMD AS md ON md._DToKhaiMDID = lp._DTokhaiMDID',
-
-    'LEFT JOIN dbo.DTOKHAIMD_VNACCS2 AS md2 ON md2._DToKhaiMDID = lp._DTokhaiMDID',
-
-    'OUTER APPLY (',
-
-    '  SELECT COUNT(*) AS muc_hang',
-
-    '  FROM dbo.DHANGMDDK AS h',
-
-    '  WHERE h._DToKhaiMDID = lp._DTokhaiMDID',
-
-    ') AS items',
-
-    'OUTER APPLY (',
-
+    'WITH base AS (',
     '  SELECT',
-
-    '    COUNT(*) AS license_count,',
-
-    '    STUFF((',
-
-    "      SELECT ',' + codes2.code",
-
-    '      FROM (',
-
-    '        SELECT DISTINCT LTRIM(RTRIM(code)) AS code',
-
-    '        FROM (',
-
-    '          SELECT md.MA_GP AS code',
-
-    '          UNION ALL SELECT md2.MA_GP2',
-
-    '          UNION ALL SELECT md2.MA_GP3',
-
-    '          UNION ALL SELECT md2.MA_GP4',
-
-    '          UNION ALL SELECT md2.MA_GP5',
-
-    '        ) AS raw_codes2',
-
-    "        WHERE LTRIM(RTRIM(code)) <> ''",
-
-    '      ) AS codes2',
-
-    "      FOR XML PATH(''), TYPE",
-
-    "    ).value('.', 'nvarchar(max)'), 1, 1, '') AS license_codes",
-
-    '  FROM (',
-
-    '    SELECT DISTINCT LTRIM(RTRIM(code)) AS code',
-
-    '    FROM (',
-
-    '      SELECT md.MA_GP AS code',
-
-    '      UNION ALL SELECT md2.MA_GP2',
-
-    '      UNION ALL SELECT md2.MA_GP3',
-
-    '      UNION ALL SELECT md2.MA_GP4',
-
-    '      UNION ALL SELECT md2.MA_GP5',
-
-    '    ) AS raw_codes',
-
-    "    WHERE LTRIM(RTRIM(code)) <> ''",
-
-    '  ) AS codes',
-
-    ') AS licenses',
-
+    '    lp._DTokhaiMDID AS md_id,',
+    '    CAST(lp.So_TK AS nvarchar(50)) AS so_tk,',
+    '    CAST(lp.Ngay_DK AS date) AS ngay_dang_ky,',
+    '    LTRIM(RTRIM(lp.Ma_LH)) AS loai_hinh,',
+    '    LTRIM(RTRIM(lp.Ma_DN)) AS mst,',
+    '    LTRIM(RTRIM(lp.TEN_DV)) AS cong_ty',
+    '  FROM dbo.DTBLP AS lp',
+    '  WHERE lp.Ngay_DK >= @from AND lp.Ngay_DK <= @to',
+    '  UNION ALL',
+    '  SELECT',
+    '    md._DToKhaiMDID AS md_id,',
+    '    CAST(md.SOTK AS nvarchar(50)) AS so_tk,',
+    '    CAST(md.NGAY_DK AS date) AS ngay_dang_ky,',
+    '    LTRIM(RTRIM(md.MA_LH)) AS loai_hinh,',
+    '    LTRIM(RTRIM(md.MA_DV)) AS mst,',
+    "    LTRIM(RTRIM(COALESCE(NULLIF(md.[_Ten_DV_L1], ''), NULLIF(md.[_Ten_DV_L2], ''), NULLIF(md.[_Ten_DV_L3], ''), NULLIF(md.TEN_HQ, ''), md.MA_DV))) AS cong_ty",
+    '  FROM dbo.DTOKHAIMD AS md',
+    '  WHERE md.NGAY_DK >= @from AND md.NGAY_DK <= @to',
+    '    AND NOT EXISTS (SELECT 1 FROM dbo.DTBLP AS lp WHERE lp._DTokhaiMDID = md._DToKhaiMDID)',
+    ')',
+    'SELECT',
+    '  src.so_tk,',
+    '  src.ngay_dang_ky,',
+    '  src.loai_hinh,',
+    '  src.mst,',
+    "  LTRIM(RTRIM(COALESCE(src.cong_ty, NULLIF(md.[_Ten_DV_L1], ''), NULLIF(md.[_Ten_DV_L2], ''), NULLIF(md.[_Ten_DV_L3], ''), NULLIF(md.TEN_HQ, ''), md.MA_DV))) AS cong_ty,",
+    '  ISNULL(items.muc_hang, 0) AS muc_hang,',
+    '  ISNULL(licenses.license_count, 0) AS license_count,',
+    "  ISNULL(licenses.license_codes, N'') AS license_codes,",
+    '  ISNULL(co_counts.co_count_num, 0) AS co_count_num',
+    'FROM base AS src',
+    'LEFT JOIN dbo.DTOKHAIMD AS md ON md._DToKhaiMDID = src.md_id',
+    'LEFT JOIN dbo.DTOKHAIMD_VNACCS2 AS md2 ON md2._DToKhaiMDID = src.md_id',
     'OUTER APPLY (',
-
+    '  SELECT COUNT(*) AS muc_hang',
+    '  FROM dbo.DHANGMDDK AS h',
+    '  WHERE h._DToKhaiMDID = src.md_id',
+    ') AS items',
+    'OUTER APPLY (',
+    '  SELECT',
+    '    COUNT(*) AS license_count,',
+    '    STUFF((',
+    "      SELECT ',' + codes2.code",
+    '      FROM (',
+    '        SELECT DISTINCT LTRIM(RTRIM(code)) AS code',
+    '        FROM (',
+    '          SELECT md.MA_GP AS code',
+    '          UNION ALL SELECT md2.MA_GP2',
+    '          UNION ALL SELECT md2.MA_GP3',
+    '          UNION ALL SELECT md2.MA_GP4',
+    '          UNION ALL SELECT md2.MA_GP5',
+    '        ) AS raw_codes2',
+    "        WHERE LTRIM(RTRIM(code)) <> ''",
+    '      ) AS codes2',
+    "      FOR XML PATH(''), TYPE",
+    "    ).value('.', 'nvarchar(max)'), 1, 1, '') AS license_codes",
+    '  FROM (',
+    '    SELECT DISTINCT LTRIM(RTRIM(code)) AS code',
+    '    FROM (',
+    '      SELECT md.MA_GP AS code',
+    '      UNION ALL SELECT md2.MA_GP2',
+    '      UNION ALL SELECT md2.MA_GP3',
+    '      UNION ALL SELECT md2.MA_GP4',
+    '      UNION ALL SELECT md2.MA_GP5',
+    '    ) AS raw_codes',
+    "    WHERE LTRIM(RTRIM(code)) <> ''",
+    '  ) AS codes',
+    ') AS licenses',
+    'OUTER APPLY (',
     '  SELECT COUNT(*) AS co_count_num',
-
     '  FROM dbo.DHANGMDDK AS h2',
-
-    '  WHERE h2._DToKhaiMDID = lp._DTokhaiMDID',
-
+    '  WHERE h2._DToKhaiMDID = src.md_id',
     "    AND LEFT(UPPER(LTRIM(RTRIM(CAST(h2.TS_XNK_MA_BT AS nvarchar(10))))), 3) LIKE 'B%'",
-
     "    AND LEFT(UPPER(LTRIM(RTRIM(CAST(h2.TS_XNK_MA_BT AS nvarchar(10))))), 3) NOT IN ('B01', 'B02', 'B03', 'B30')",
-
     ') AS co_counts',
-
-    'WHERE',
-    '  COALESCE(lp.Ngay_DK, md.NGAY_DK) >= @from',
-    '  AND COALESCE(lp.Ngay_DK, md.NGAY_DK) < DATEADD(DAY, 1, @to)',
-
-  'ORDER BY lp.Ngay_DK, so_tk',
-
-].join('\n'),
-
+    'ORDER BY src.ngay_dang_ky, src.so_tk'
+  ].join('\n'),
   columnMap: {
 
     so_tk: 'so_tk',

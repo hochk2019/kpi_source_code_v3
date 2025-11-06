@@ -12,6 +12,8 @@ import {
 
   hardDeleteDeclRows,
 
+  softDeleteDeclRows,
+
   sortDeclRows,
 
   getRecentDeclRows,
@@ -47,6 +49,12 @@ import {
   AUDIT_KEY,
 
   getAuditLogs,
+
+  DECL_DELETED_LOG_KEY,
+
+  DECL_DELETED_LOG_LIMIT,
+
+  getDeletedDeclLog,
 
   HQ_KEY,
 
@@ -860,8 +868,6 @@ describe('saveDeclRows', () => {
 
         licenses: 0,
 
-        licenseCodes: [],
-
       },
 
     ];
@@ -965,6 +971,64 @@ describe('saveDeclRows', () => {
     });
 
     expect(stored[0].licenseManualCount).toBeUndefined();
+
+  });
+
+  it('xoá danh sách mã GP loại trừ khi dữ liệu mới rỗng với replace=true', () => {
+
+    const existing = [
+
+      {
+
+        so_tk: '00000000002',
+
+        nhanh: '',
+
+        date: '2025-01-02',
+
+        licenseCodes: ['ZK01'],
+
+        licenseExcludedCodes: ['ZK02'],
+
+      },
+
+    ];
+
+
+
+    const incoming = [
+
+      {
+
+        so_tk: '00000000002',
+
+        nhanh: '',
+
+        date: '2025-01-02',
+
+        licenseCodes: ['ZK01'],
+
+        licenseExcludedCodes: [],
+
+      },
+
+    ];
+
+
+
+    saveDeclRows(existing, { overwrite: true });
+
+    const summary = saveDeclRows(incoming, { overwrite: false });
+
+
+
+    expect(summary.updated).toBe(1);
+
+    const stored = getDeclRows();
+
+    expect(stored).toHaveLength(1);
+
+    expect(stored[0].licenseExcludedCodes).toEqual([]);
 
   });
 
@@ -2810,6 +2874,50 @@ describe('kpi adjustment settings', () => {
 
   });
 
+  it('tính tổng điểm bao gồm điểm bổ sung cho hoàn thuế', () => {
+
+    sharedSetItem(KPI_ADJUSTMENTS_KEY, JSON.stringify([]));
+
+    const defaults = getKpiAdjustmentSettings();
+
+    expect(defaults.categories.tax_refund_customer.extraUnitPoints).toBe(0.25);
+
+    const entry = saveKpiAdjustment(
+
+      {
+
+        category: 'tax_refund_customer',
+
+        month: '2025-03',
+
+        staffName: 'Dũng',
+
+        quantity: 3,
+
+        extraQuantity: 2,
+
+      },
+
+      { actor: 'admin', permissions: { adjustApprove: true } }
+
+    );
+
+    expect(entry.unitPoints).toBe(2);
+
+    expect(entry.extraUnitPoints).toBe(0.25);
+
+    expect(entry.extraQuantity).toBe(2);
+
+    expect(entry.totalPoints).toBe(6.5);
+
+    const [stored] = getKpiAdjustments();
+
+    expect(stored.totalPoints).toBe(6.5);
+
+    expect(stored.extraUnitPoints).toBe(0.25);
+
+  });
+
   it('chuẩn hoá điểm mỗi đơn vị theo quyền override', () => {
 
     saveKpiAdjustmentSettings(
@@ -2890,5 +2998,229 @@ describe('kpi adjustment settings', () => {
 
   });
 
+  it('bat/tat duyet tu dong cap nhat cau hinh', () => {
+
+    const enabled = saveKpiAdjustmentSettings(
+
+      { autoApprove: { enabled: true } },
+
+      { actor: 'admin', permissions: { adjustApprove: true } },
+
+    );
+
+    expect(enabled.autoApprove.enabled).toBe(true);
+
+    expect(enabled.autoApprove.updatedBy).toBe('admin');
+
+    expect(new Date(enabled.autoApprove.updatedAt).getTime()).toBeGreaterThan(0);
+
+    const raw = JSON.parse(sharedGetItem(KPI_ADJUSTMENT_SETTINGS_KEY) || '{}');
+
+    expect(raw.autoApprove.enabled).toBe(true);
+
+    const disabled = saveKpiAdjustmentSettings(
+
+      { autoApprove: { enabled: false } },
+
+      { actor: 'admin', permissions: { adjustApprove: true } },
+
+    );
+
+    expect(disabled.autoApprove.enabled).toBe(false);
+
+    expect(disabled.autoApprove.updatedBy).toBe('admin');
+
+  });
+
+  it('tu dong duyet de xuat khi duyet tu dong dang bat', () => {
+
+    saveKpiAdjustmentSettings(
+
+      { autoApprove: { enabled: true } },
+
+      { actor: 'admin', permissions: { adjustApprove: true } },
+
+    );
+
+    sharedSetItem(KPI_ADJUSTMENTS_KEY, JSON.stringify([]));
+
+    const entry = saveKpiAdjustment(
+
+      {
+
+        category: 'support_misc',
+
+        month: '2025-04',
+
+        staffName: 'Nhan vien A',
+
+        quantity: 1,
+
+      },
+
+      { actor: 'staff', permissions: { adjustSubmit: true } },
+
+    );
+
+    expect(entry.status).toBe('approved');
+
+    expect(entry.approvedBy).toBe('admin');
+
+    expect(new Date(entry.approvedAt).getTime()).toBeGreaterThan(0);
+
+    const [stored] = getKpiAdjustments();
+
+    expect(stored.status).toBe('approved');
+
+    const statusHistory = stored.history?.map((item) => item.action) || [];
+
+    expect(statusHistory).toContain('status.approved');
+
+  });
+
+  it('khong cho phep tao diem KPI khi khong co quyen', () => {
+
+    sharedSetItem(KPI_ADJUSTMENTS_KEY, JSON.stringify([]));
+
+    expect(() =>
+
+      saveKpiAdjustment(
+
+        {
+
+          category: 'support_fixed',
+
+          month: '2025-03',
+
+          staffName: 'Guest',
+
+          quantity: 1,
+
+          unitPoints: 1,
+
+        },
+
+        { actor: 'guest', permissions: { adjustSubmit: false, adjustApprove: false } },
+
+      ),
+
+    ).toThrow('Ban khong co quyen tao diem KPI bo sung');
+
+  });
+
 });
 
+
+describe('deleted declaration log', () => {
+  afterEach(() => {
+    sharedSetItem(DECL_KEY, JSON.stringify([]));
+    sharedSetItem(DECL_DELETED_LOG_KEY, JSON.stringify([]));
+  });
+
+  it('ghi nhật ký khi xóa mềm và xóa cứng', () => {
+    saveDeclRows(
+      [
+        { so_tk: '10000000001', nhanh: '01', mst: '0100100010', ten_dn: 'Công ty Ánh Dương' },
+        { so_tk: '10000000002', nhanh: '02', mst: '0100100020', ten_dn: 'Công ty Bình Minh' },
+      ],
+      { overwrite: true },
+    );
+
+    const softResult = softDeleteDeclRows(['10000000001_01'], { actor: 'thu.ky' });
+    expect(softResult.deleted).toBe(1);
+
+    const softLog = getDeletedDeclLog();
+    expect(softLog).toHaveLength(1);
+    expect(softLog[0]).toMatchObject({
+      so_tk: '10000000001',
+      type: 'soft',
+      deleted_by: 'thu.ky',
+      nhanh: '01',
+      mst: '0100100010',
+      company: 'Công ty Ánh Dương',
+    });
+
+    const hardResult = hardDeleteDeclRows(['10000000002_02'], { actor: 'quan.ly' });
+    expect(hardResult.removed).toBe(1);
+
+    const hardLog = getDeletedDeclLog({ type: 'hard' });
+    expect(hardLog).toHaveLength(1);
+    expect(hardLog[0]).toMatchObject({
+      so_tk: '10000000002',
+      type: 'hard',
+      deleted_by: 'quan.ly',
+    });
+  });
+
+  it('giới hạn số bản ghi và giữ bản mới nhất ở đầu', () => {
+    const limit = DECL_DELETED_LOG_LIMIT;
+    const existing = Array.from({ length: limit }, (_, index) => ({
+      so_tk: String(index + 1).padStart(11, '0'),
+      nhanh: '00',
+      mst: `MST-${index + 1}`,
+      company: `Doanh nghiệp ${index + 1}`,
+      type: index % 2 === 0 ? 'soft' : 'hard',
+      deleted_at: `2024-05-${String((index % 28) + 1).padStart(2, '0')}T08:00:00.000Z`,
+      deleted_by: 'system',
+    }));
+
+    sharedSetItem(DECL_DELETED_LOG_KEY, JSON.stringify(existing));
+
+    saveDeclRows(
+      [{ so_tk: '90000000001', nhanh: '01', mst: '0999999999', ten_dn: 'Công ty Giới Hạn' }],
+      { overwrite: true },
+    );
+
+    softDeleteDeclRows(['90000000001_01'], { actor: 'tester' });
+
+    const stored = JSON.parse(sharedGetItem(DECL_DELETED_LOG_KEY) || '[]');
+    expect(stored).toHaveLength(limit);
+    expect(stored[0].so_tk).toBe('90000000001');
+
+    const droppedSoTk = String(limit).padStart(11, '0');
+    expect(stored.some((entry) => entry.so_tk === droppedSoTk)).toBe(false);
+  });
+
+  it('lọc theo khoảng thời gian và loại xóa', () => {
+    sharedSetItem(
+      DECL_DELETED_LOG_KEY,
+      JSON.stringify([
+        {
+          so_tk: '10000000010',
+          nhanh: '01',
+          mst: '0101',
+          company: 'Doanh nghiệp A',
+          type: 'soft',
+          deleted_at: '2024-05-10T09:00:00.000Z',
+          deleted_by: 'alpha',
+        },
+        {
+          so_tk: '10000000011',
+          nhanh: '02',
+          mst: '0102',
+          company: 'Doanh nghiệp B',
+          type: 'hard',
+          deleted_at: '2024-06-05T10:15:00.000Z',
+          deleted_by: 'beta',
+        },
+        {
+          so_tk: '10000000012',
+          nhanh: '03',
+          mst: '0103',
+          company: 'Doanh nghiệp C',
+          type: 'hard',
+          deleted_at: '2024-07-01T11:00:00.000Z',
+          deleted_by: 'beta',
+        },
+      ]),
+    );
+
+    const hardJune = getDeletedDeclLog({ from: '2024-06-01', to: '2024-06-30', type: 'hard' });
+    expect(hardJune).toHaveLength(1);
+    expect(hardJune[0].so_tk).toBe('10000000011');
+
+    const softOnly = getDeletedDeclLog({ type: 'soft' });
+    expect(softOnly).toHaveLength(1);
+    expect(softOnly[0].so_tk).toBe('10000000010');
+  });
+});
