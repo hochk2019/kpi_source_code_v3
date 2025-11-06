@@ -14,8 +14,8 @@ This backlog liệt kê các hạng mục cải thiện trải nghiệm người
 
 - [x] Hiển thị tiến trình đồng bộ theo từng bước (đọc ECUS, tính toán diff, ghi vào store) với trạng thái rõ ràng khi gọi `refreshDeclRowsFromServer`. (đã thêm `declSyncProgress` trong store và thẻ tiến trình ở DataImporter)
 - [x] Thêm hàng đợi đồng bộ nền để xử lý file lớn, hỗ trợ resume khi mất kết nối hoặc đóng trình duyệt. (đã triển khai `declSyncQueue` + worker, UI hàng đợi và resume trong DataImporter)
-- [ ] Cảnh báo xung đột (vd. tờ khai đã bị chỉnh sửa tại chỗ khác) và cung cấp giao diện so sánh trước khi ghi đè.
-- [ ] Thực hiện pre-check (kiểm tra kết nối DB, quyền truy cập ECUS, dung lượng đĩa) và hiển thị check-list trước khi chạy đồng bộ.
+- [x] Cảnh báo xung đột (vd. tờ khai đã bị chỉnh sửa tại chỗ khác) và cung cấp giao diện so sánh trước khi ghi đè. (đã thêm cảnh báo xung đột, bảng so sánh và lịch sử chỉnh sửa trong DataImporter)
+- [x] Thực hiện pre-check (kiểm tra kết nối DB, quyền truy cập ECUS, dung lượng đĩa) và hiển thị check-list trước khi chạy đồng bộ. (đã triển khai API precheck và checklist hiển thị trong DataImporter)
 - [ ] Bổ sung cơ chế retry tự động với backoff và log thân thiện khi `sendWrite` trả về lỗi.
 - [ ] Lưu lịch sử đồng bộ (ai chạy, thời gian, số bản ghi cập nhật) để hiện trong Notification Center và trang tổng quan.
 

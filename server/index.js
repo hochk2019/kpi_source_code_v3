@@ -3847,7 +3847,7 @@ function evaluateBackupHealth(summary) {
 
 
 
-function evaluateDiskHealth(storage) {
+export function evaluateDiskHealth(storage) {
 
   const issues = [];
 
