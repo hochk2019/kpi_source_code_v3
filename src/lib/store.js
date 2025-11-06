@@ -6787,7 +6787,12 @@ export const KPI_ADJUSTMENT_STATUS_SET = new Set(['pending', 'approved', 'reject
 
 const KPI_ADJUSTMENT_HISTORY_LIMIT = 50;
 
-
+const KPI_ADJUSTMENT_AUTO_APPROVE_DEFAULT = Object.freeze({
+  enabled: false,
+  note: null,
+  updatedAt: null,
+  updatedBy: null,
+});
 
 const KPI_ADJUSTMENT_BUILTIN_DEFAULTS = Object.freeze({
 
@@ -6799,6 +6804,70 @@ const KPI_ADJUSTMENT_BUILTIN_DEFAULTS = Object.freeze({
 
 });
 
+function normalizeAutoApproveSettings(value) {
+
+  const source = value && typeof value === 'object' ? value : {};
+
+  const enabled = source.enabled === true;
+
+  const updatedAt = typeof source.updatedAt === 'string' ? source.updatedAt : null;
+
+  const updatedByRaw = typeof source.updatedBy === 'string' ? source.updatedBy : null;
+
+  const updatedBy = updatedByRaw ? normalizeStr(updatedByRaw) || updatedByRaw.trim() || null : null;
+
+  let note = null;
+
+  if (Object.prototype.hasOwnProperty.call(source, 'note')) {
+
+    if (source.note === null) {
+
+      note = null;
+
+    } else if (typeof source.note === 'string') {
+
+      const normalized = normalizeStr(source.note);
+
+      note = normalized || null;
+
+    }
+
+  }
+
+  return {
+
+    enabled,
+
+    note,
+
+    updatedAt,
+
+    updatedBy,
+
+  };
+
+}
+
+
+
+function cloneAutoApproveSettings(value) {
+
+  const normalized = normalizeAutoApproveSettings(value);
+
+  return {
+
+    enabled: normalized.enabled,
+
+    note: normalized.note,
+
+    updatedAt: normalized.updatedAt,
+
+    updatedBy: normalized.updatedBy,
+
+  };
+
+}
+
 
 
 function readAdjustmentSettings() {
@@ -6807,7 +6876,17 @@ function readAdjustmentSettings() {
 
   if (!raw || typeof raw !== 'object') {
 
-    return { categories: {}, updatedAt: null, updatedBy: null };
+    return {
+
+      categories: {},
+
+      updatedAt: null,
+
+      updatedBy: null,
+
+      autoApprove: { ...KPI_ADJUSTMENT_AUTO_APPROVE_DEFAULT },
+
+    };
 
   }
 
@@ -6885,6 +6964,8 @@ function readAdjustmentSettings() {
 
     updatedBy: typeof raw.updatedBy === 'string' ? raw.updatedBy : null,
 
+    autoApprove: cloneAutoApproveSettings(raw.autoApprove),
+
   };
 
 }
@@ -6912,6 +6993,8 @@ function cloneAdjustmentSettings(settings) {
     updatedAt: settings?.updatedAt || null,
 
     updatedBy: settings?.updatedBy || null,
+
+    autoApprove: cloneAutoApproveSettings(settings?.autoApprove),
 
   };
 
@@ -7127,11 +7210,56 @@ export function saveKpiAdjustmentSettings(patch, { actor = 'system', permissions
 
   }
 
+  let autoApprove = cloneAutoApproveSettings(base.autoApprove);
+
+  const autoPatch =
+    patch && typeof patch === 'object' && patch.autoApprove && typeof patch.autoApprove === 'object'
+      ? patch.autoApprove
+      : null;
+
+  if (autoPatch) {
+    const nextAuto = { ...autoApprove };
+    let changed = false;
+
+    if (Object.prototype.hasOwnProperty.call(autoPatch, 'enabled')) {
+      const requestedEnabled = autoPatch.enabled === true;
+      if (requestedEnabled !== nextAuto.enabled) {
+        nextAuto.enabled = requestedEnabled;
+        changed = true;
+      }
+    }
+
+    if (Object.prototype.hasOwnProperty.call(autoPatch, 'note')) {
+      let noteValue = nextAuto.note ?? null;
+      if (autoPatch.note === null) {
+        noteValue = null;
+      } else if (typeof autoPatch.note === 'string') {
+        const normalizedNote = normalizeStr(autoPatch.note);
+        noteValue = normalizedNote || null;
+      }
+      if (noteValue !== (nextAuto.note ?? null)) {
+        nextAuto.note = noteValue;
+        changed = true;
+      }
+    }
+
+    if (changed) {
+      const stamp = new Date().toISOString();
+      nextAuto.updatedAt = stamp;
+      nextAuto.updatedBy = actor;
+      autoApprove = nextAuto;
+    }
+  }
+
+  const timestamp = new Date().toISOString();
+
   const next = {
 
     categories,
 
-    updatedAt: new Date().toISOString(),
+    autoApprove,
+
+    updatedAt: timestamp,
 
     updatedBy: actor,
 
@@ -7147,7 +7275,13 @@ export function saveKpiAdjustmentSettings(patch, { actor = 'system', permissions
 
     detail: 'Cập nhật cấu hình điểm KPI bổ sung',
 
-    meta: { categories: Object.keys(categories) },
+    meta: {
+
+      categories: Object.keys(categories),
+
+      autoApprove: autoApprove.enabled,
+
+    },
 
   });
 
@@ -7849,6 +7983,62 @@ function normalizeAdjustmentInput(input, { now, actor, current, permissions = {}
 
   }
 
+  const approvedAtSource = input.approvedAt ?? current?.approvedAt ?? null;
+
+  if (approvedAtSource) {
+
+    const approvedAtDate = new Date(approvedAtSource);
+
+    if (!Number.isNaN(approvedAtDate.getTime())) {
+
+      payload.approvedAt = approvedAtDate.toISOString();
+
+    }
+
+  }
+
+  const approvedBySource = input.approvedBy ?? current?.approvedBy ?? null;
+
+  if (typeof approvedBySource === 'string') {
+
+    const trimmed = approvedBySource.trim();
+
+    if (trimmed) {
+
+      payload.approvedBy = trimmed;
+
+    }
+
+  }
+
+  const rejectedAtSource = input.rejectedAt ?? current?.rejectedAt ?? null;
+
+  if (rejectedAtSource) {
+
+    const rejectedAtDate = new Date(rejectedAtSource);
+
+    if (!Number.isNaN(rejectedAtDate.getTime())) {
+
+      payload.rejectedAt = rejectedAtDate.toISOString();
+
+    }
+
+  }
+
+  const rejectedBySource = input.rejectedBy ?? current?.rejectedBy ?? null;
+
+  if (typeof rejectedBySource === 'string') {
+
+    const trimmed = rejectedBySource.trim();
+
+    if (trimmed) {
+
+      payload.rejectedBy = trimmed;
+
+    }
+
+  }
+
   return payload;
 
 }
@@ -7882,6 +8072,8 @@ function diffAdjustments(prev, next) {
     'totalPoints',
 
     'note',
+
+    'status',
 
     'mode',
 
@@ -7985,6 +8177,12 @@ export function saveKpiAdjustment(entry, { actor = 'system', permissions = {} } 
 
   const now = new Date();
 
+  const settingsSnapshot = readAdjustmentSettings();
+
+  const autoApproveConfig = cloneAutoApproveSettings(settingsSnapshot.autoApprove);
+
+  const autoApproveEnabled = autoApproveConfig.enabled === true;
+
   const adjustments = getAllAdjustments();
 
   const existingIndex = entry?.id ? adjustments.findIndex((item) => item.id === entry.id) : -1;
@@ -8025,11 +8223,43 @@ export function saveKpiAdjustment(entry, { actor = 'system', permissions = {} } 
 
   }
 
+  let autoApproved = false;
+
+  if (!current && status === 'pending' && autoApproveEnabled && !canApprove) {
+
+    status = 'approved';
+
+    autoApproved = true;
+
+  }
+
   normalized.status = status;
 
   normalized.updatedAt = now.toISOString();
 
   normalized.updatedBy = actor;
+
+  if (autoApproved) {
+
+    const autoApproveActor = autoApproveConfig.updatedBy || 'auto-approve';
+
+    normalized.approvedAt = now.toISOString();
+
+    normalized.approvedBy = autoApproveActor;
+
+    if ('rejectedAt' in normalized) {
+
+      delete normalized.rejectedAt;
+
+    }
+
+    if ('rejectedBy' in normalized) {
+
+      delete normalized.rejectedBy;
+
+    }
+
+  }
 
   if (!current) {
 
@@ -8059,6 +8289,36 @@ export function saveKpiAdjustment(entry, { actor = 'system', permissions = {} } 
 
   );
 
+  if (autoApproved) {
+
+    const autoApproveActor = autoApproveConfig.updatedBy || 'auto-approve';
+
+    const autoApproveDetail = autoApproveConfig.note
+
+      ? `Duyet tu dong: ${autoApproveConfig.note}`
+
+      : autoApproveConfig.updatedBy
+
+        ? `Duyet tu dong (bat boi ${autoApproveConfig.updatedBy})`
+
+        : 'Duyet tu dong';
+
+    history.push(
+
+      normalizeAdjustmentHistoryEntry({
+
+        action: 'status.approved',
+
+        actor: autoApproveActor,
+
+        detail: autoApproveDetail,
+
+      })
+
+    );
+
+  }
+
   normalized.history = clampHistory(history);
 
   if (existingIndex >= 0) {
@@ -8081,7 +8341,17 @@ export function saveKpiAdjustment(entry, { actor = 'system', permissions = {} } 
 
     detail: `${normalized.staffName || 'Chưa rõ'} - ${normalized.month} (${KPI_ADJUSTMENT_CATEGORY_CONFIG[normalized.category]?.label || normalized.category})`,
 
-    meta: { id: normalized.id, status: normalized.status, totalPoints: normalized.totalPoints },
+    meta: {
+
+      id: normalized.id,
+
+      status: normalized.status,
+
+      totalPoints: normalized.totalPoints,
+
+      autoApproved,
+
+    },
 
   });
 
