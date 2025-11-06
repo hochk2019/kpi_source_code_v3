@@ -1,4 +1,4 @@
-// src/lib/store.js
+﻿// src/lib/store.js
 
 
 
@@ -6798,7 +6798,7 @@ const KPI_ADJUSTMENT_BUILTIN_DEFAULTS = Object.freeze({
 
   tax_refund_customer: Object.freeze({
 
-    extraUnitPoints: 0.25,
+    extraUnitPoints: 0.5,
 
   }),
 
@@ -9347,4 +9347,5 @@ export default {
   REPORT_SCHEDULE_KEY, getReportSchedules, saveReportSchedule, deleteReportSchedule, calculateNextReportScheduleRun,
 
 };
+
 

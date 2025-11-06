@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+﻿import React, { useCallback, useEffect, useMemo, useState } from "react";
 
 import {
 
@@ -78,6 +78,7 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area.jsx";
 
 import { Input } from "@/components/ui/input.jsx";
+import { Switch } from "@/components/ui/switch.jsx";
 
 import { Textarea } from "@/components/ui/textarea.jsx";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip.jsx";
@@ -135,6 +136,10 @@ const FORM_FIELD_IDS = Object.freeze({
   filterMonth: "kpi-adjust-filter-month",
 
   filterStatus: "kpi-adjust-filter-status",
+
+  filterMine: "kpi-adjust-filter-mine",
+
+  filterStaff: "kpi-adjust-filter-staff",
 
   decisionNote: "kpi-adjust-decision-note",
 
@@ -1616,6 +1621,39 @@ export default function KPIAdjustments({ currentUser }) {
 
   const { staffName: defaultStaffName, teamName: defaultTeamName } = staffDefaults;
 
+  const canApprove = !!currentUser?.permissions?.adjustApprove;
+  const canSubmit = currentUser?.permissions?.adjustSubmit !== false;
+  const canOverridePoints = currentUser?.permissions?.adjustOverridePoints === true;
+
+  const userIdentity = normalizeStr(currentUser?.username || currentUser?.memberName || currentUser?.name);
+  const isAuthenticated = !!userIdentity;
+  const currentStaffKey = normalizeName(defaultStaffName);
+
+  const [showMineOnly, setShowMineOnly] = useState(() => Boolean(isAuthenticated && currentStaffKey && !canApprove));
+  const [staffFilter, setStaffFilter] = useState("all");
+  const [filterSignature, setFilterSignature] = useState("");
+
+  useEffect(() => {
+    const signature = `${isAuthenticated ? 1 : 0}:${canApprove ? 1 : 0}:${currentStaffKey || ""}`;
+    if (filterSignature === signature) {
+      return;
+    }
+    setFilterSignature(signature);
+    if (!isAuthenticated || !currentStaffKey) {
+      setShowMineOnly(false);
+      setStaffFilter("all");
+      return;
+    }
+    if (!canApprove) {
+      setShowMineOnly(true);
+      setStaffFilter("all");
+    } else {
+      setStaffFilter("all");
+    }
+  }, [isAuthenticated, canApprove, currentStaffKey, filterSignature]);
+
+  const showMineToggle = isAuthenticated && !!currentStaffKey;
+
   const businessEntries = useMemo(() => businessDirectory.entries || [], [businessDirectory]);
 
   const businessByMst = useMemo(
@@ -2035,12 +2073,6 @@ export default function KPIAdjustments({ currentUser }) {
 
   const [decisionNote, setDecisionNote] = useState("");
 
-  const canSubmit = currentUser?.permissions?.adjustSubmit !== false;
-
-  const canApprove = !!currentUser?.permissions?.adjustApprove;
-
-  const canOverridePoints = currentUser?.permissions?.adjustOverridePoints === true;
-
   const actor = currentUser?.username || currentUser?.name || "ui";
 
   const autoApproveSettings = settings?.autoApprove || {};
@@ -2236,6 +2268,35 @@ export default function KPIAdjustments({ currentUser }) {
 
 
   const staffOptions = useMemo(() => buildStaffOptions(roster), [roster]);
+  const staffFilterOptions = useMemo(() => {
+    const entries = new Map();
+    for (const option of staffOptions) {
+      const key = normalizeName(option?.name);
+      if (key) {
+        entries.set(key, option.name);
+      }
+    }
+    for (const entry of adjustments) {
+      if (!entry) continue;
+      const name = normalizeStr(entry.staffName);
+      const key = normalizeName(name);
+      if (key && name) {
+        entries.set(key, name);
+      }
+    }
+    return Array.from(entries.entries())
+      .map(([value, label]) => ({ value, label }))
+      .sort((a, b) => a.label.localeCompare(b.label, "vi", { sensitivity: "base" }));
+  }, [staffOptions, adjustments]);
+
+  useEffect(() => {
+    if (staffFilter === "all") {
+      return;
+    }
+    if (!staffFilterOptions.some((item) => item.value === staffFilter)) {
+      setStaffFilter("all");
+    }
+  }, [staffFilter, staffFilterOptions]);
 
   const teamOptions = useMemo(() => buildTeamOptions(roster), [roster]);
 
@@ -2289,6 +2350,21 @@ export default function KPIAdjustments({ currentUser }) {
 
 
 
+  const handleMineToggle = useCallback(
+    (checked) => {
+      if (!currentStaffKey) {
+        setShowMineOnly(false);
+        return;
+      }
+      const nextValue = Boolean(checked);
+      setShowMineOnly(nextValue);
+      if (nextValue) {
+        setStaffFilter("all");
+      }
+    },
+    [currentStaffKey, setStaffFilter]
+  );
+
   const filteredAdjustments = useMemo(() => {
 
     return adjustments
@@ -2308,6 +2384,16 @@ export default function KPIAdjustments({ currentUser }) {
           return false;
 
         }
+        const itemStaffKey = normalizeName(item.staffName);
+        if (showMineOnly && currentStaffKey) {
+          if (itemStaffKey !== currentStaffKey) {
+            return false;
+          }
+        } else if (canApprove && staffFilter !== "all") {
+          if (itemStaffKey !== staffFilter) {
+            return false;
+          }
+        }
 
         return true;
 
@@ -2325,7 +2411,7 @@ export default function KPIAdjustments({ currentUser }) {
 
       });
 
-  }, [adjustments, filterMonth, filterStatus]);
+  }, [adjustments, filterMonth, filterStatus, showMineOnly, currentStaffKey, canApprove, staffFilter]);
 
 
 
@@ -5228,7 +5314,7 @@ export default function KPIAdjustments({ currentUser }) {
 
         <CardContent>
 
-          <div className="grid gap-4 text-sm md:grid-cols-3">
+          <div className="grid gap-4 text-sm md:grid-cols-4">
 
             <div>
 
@@ -5285,6 +5371,47 @@ export default function KPIAdjustments({ currentUser }) {
               </select>
 
             </div>
+
+            {showMineToggle ? (
+              <div>
+                <label className="text-sm font-medium text-foreground" htmlFor={FORM_FIELD_IDS.filterMine}>
+                  Chỉ hiển thị điểm bổ sung của tôi
+                </label>
+                <div className="mt-2 flex items-center gap-3">
+                  <Switch
+                    id={FORM_FIELD_IDS.filterMine}
+                    checked={showMineOnly}
+                    onCheckedChange={handleMineToggle}
+                    disabled={!currentStaffKey}
+                  />
+                  <span className="text-xs text-muted-foreground">
+                    {showMineOnly ? "Đang lọc theo chính bạn" : "Đang xem tất cả"}
+                  </span>
+                </div>
+              </div>
+            ) : null}
+
+            {canApprove ? (
+              <div>
+                <label className="text-sm font-medium text-foreground" htmlFor={FORM_FIELD_IDS.filterStaff}>
+                  Lọc theo nhân viên
+                </label>
+                <select
+                  id={FORM_FIELD_IDS.filterStaff}
+                  className={SELECT_FIELD_CLASS}
+                  value={staffFilter}
+                  onChange={(e) => setStaffFilter(e.target.value)}
+                  disabled={showMineOnly || staffFilterOptions.length === 0}
+                >
+                  <option value="all">Tất cả</option>
+                  {staffFilterOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : null}
 
           </div>
 
@@ -5583,6 +5710,7 @@ export default function KPIAdjustments({ currentUser }) {
   );
 
 }
+
 
 
 

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, afterAll, vi } from 'vitest';
+﻿import { describe, it, expect, beforeEach, afterEach, afterAll, vi } from 'vitest';
 
 import {
 
@@ -2880,7 +2880,7 @@ describe('kpi adjustment settings', () => {
 
     const defaults = getKpiAdjustmentSettings();
 
-    expect(defaults.categories.tax_refund_customer.extraUnitPoints).toBe(0.25);
+    expect(defaults.categories.tax_refund_customer.extraUnitPoints).toBe(0.5);
 
     const entry = saveKpiAdjustment(
 
@@ -2904,17 +2904,17 @@ describe('kpi adjustment settings', () => {
 
     expect(entry.unitPoints).toBe(2);
 
-    expect(entry.extraUnitPoints).toBe(0.25);
+    expect(entry.extraUnitPoints).toBe(0.5);
 
     expect(entry.extraQuantity).toBe(2);
 
-    expect(entry.totalPoints).toBe(6.5);
+    expect(entry.totalPoints).toBe(7);
 
     const [stored] = getKpiAdjustments();
 
-    expect(stored.totalPoints).toBe(6.5);
+    expect(stored.totalPoints).toBe(7);
 
-    expect(stored.extraUnitPoints).toBe(0.25);
+    expect(stored.extraUnitPoints).toBe(0.5);
 
   });
 
@@ -3224,3 +3224,4 @@ describe('deleted declaration log', () => {
     expect(softOnly[0].so_tk).toBe('10000000010');
   });
 });
+
