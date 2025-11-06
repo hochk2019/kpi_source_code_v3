@@ -1,4 +1,4 @@
-// shared/kpiAdjustments.js
+﻿// shared/kpiAdjustments.js
 
 // Cấu hình và helper dùng chung cho điểm KPI +/- bổ sung
 
@@ -70,7 +70,7 @@ export const KPI_ADJUSTMENT_CATEGORY_CONFIG = Object.freeze({
 
     type: 'quantity',
 
-    defaultUnit: 0.1,
+    defaultUnit: 0.05,
 
     groupKey: 'support',
 
@@ -134,9 +134,9 @@ export const KPI_ADJUSTMENT_CATEGORY_CONFIG = Object.freeze({
 
     type: 'hybrid',
 
-    defaultUnit: 10,
+    defaultUnit: 0.1,
 
-    defaultMode: 'fixed',
+    defaultMode: 'dynamic',
 
     modes: [
 
@@ -184,7 +184,7 @@ export const KPI_ADJUSTMENT_CATEGORY_CONFIG = Object.freeze({
 
     type: 'quantity',
 
-    defaultUnit: -1,
+    defaultUnit: -1.5,
 
     groupKey: 'cancel',
 
@@ -198,7 +198,7 @@ export const KPI_ADJUSTMENT_CATEGORY_CONFIG = Object.freeze({
 
     type: 'quantity',
 
-    defaultUnit: 1,
+    defaultUnit: 1.5,
 
     groupKey: 'cancel',
 
@@ -212,7 +212,7 @@ export const KPI_ADJUSTMENT_CATEGORY_CONFIG = Object.freeze({
 
     type: 'quantity',
 
-    defaultUnit: -1,
+    defaultUnit: -1.5,
 
     groupKey: 'correction',
 
@@ -226,7 +226,7 @@ export const KPI_ADJUSTMENT_CATEGORY_CONFIG = Object.freeze({
 
     type: 'quantity',
 
-    defaultUnit: 1,
+    defaultUnit: 1.5,
 
     groupKey: 'correction',
 
@@ -240,7 +240,7 @@ export const KPI_ADJUSTMENT_CATEGORY_CONFIG = Object.freeze({
 
     type: 'quantity',
 
-    defaultUnit: -1,
+    defaultUnit: -2,
 
     groupKey: 'tax',
 
@@ -266,7 +266,7 @@ export const KPI_ADJUSTMENT_CATEGORY_CONFIG = Object.freeze({
 
       unitLabel: 'Điểm bổ sung mỗi tờ khai',
 
-      defaultUnit: 0.25,
+      defaultUnit: 0.5,
 
     },
 
@@ -725,4 +725,5 @@ export function listRegisteredAdjustmentGroups() {
   return Array.from(GROUP_REGISTRY.values()).map((entry) => ({ ...entry }));
 
 }
+
 
