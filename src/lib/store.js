@@ -63,6 +63,10 @@ export const UI_LAYOUT_KEY = "ui_layout_config_v1"; // cấu hình bố cục gi
 
 export const REPORT_SCHEDULE_KEY = "kpi_report_schedule_v1"; // lịch gửi báo cáo KPI
 
+const KPI_ADJUSTMENT_FILTER_STATUSES = new Set(["all", "approved", "pending", "rejected"]);
+const KPI_ADJUSTMENT_MONTH_PATTERN = /^\d{4}-(0[1-9]|1[0-2])$/;
+const KPI_ADJUSTMENT_ANONYMOUS_USER = "__anonymous__";
+
 
 
 export const IMPORT_COLUMN_IDS = Object.freeze([
@@ -190,6 +194,228 @@ function writeUILayoutConfig(config) {
   setItem(UI_LAYOUT_KEY, JSON.stringify(target));
 
   return target;
+
+}
+
+
+
+function normalizeKpiAdjustmentUserKey(identity) {
+
+  const normalized = normalizeStr(identity || "");
+
+  return normalized || KPI_ADJUSTMENT_ANONYMOUS_USER;
+
+}
+
+
+
+function readKpiAdjustmentFilterSection() {
+
+  const layout = readUILayoutConfig();
+
+  const kpiSection =
+
+    layout && typeof layout.kpiAdjustments === "object" && !Array.isArray(layout.kpiAdjustments)
+
+      ? { ...layout.kpiAdjustments }
+
+      : {};
+
+  const filters =
+
+    kpiSection && typeof kpiSection.filters === "object" && !Array.isArray(kpiSection.filters)
+
+      ? { ...kpiSection.filters }
+
+      : {};
+
+  return { layout, kpiSection, filters };
+
+}
+
+
+
+function normalizeKpiAdjustmentFilters(input, options = {}) {
+
+  const {
+
+    fallbackMonth = "all",
+
+    fallbackMineOnly = false,
+
+    allowStaffFilter = false,
+
+    staffKeyAvailable = false,
+
+  } = options;
+
+  const source = input && typeof input === "object" ? input : {};
+
+  const fallbackMonthValue =
+
+    typeof fallbackMonth === "string" && KPI_ADJUSTMENT_MONTH_PATTERN.test(fallbackMonth)
+
+      ? fallbackMonth
+
+      : "all";
+
+  const monthCandidate = (() => {
+
+    const raw =
+
+      typeof source.month === "string"
+
+        ? source.month
+
+        : typeof source.filterMonth === "string"
+
+        ? source.filterMonth
+
+        : null;
+
+    if (raw === "all") return "all";
+
+    if (typeof raw === "string" && KPI_ADJUSTMENT_MONTH_PATTERN.test(raw)) {
+
+      return raw;
+
+    }
+
+    return fallbackMonthValue;
+
+  })();
+
+  const rawStatus =
+
+    typeof source.status === "string"
+
+      ? source.status.toLowerCase()
+
+      : typeof source.filterStatus === "string"
+
+      ? source.filterStatus.toLowerCase()
+
+      : "";
+
+  const status = KPI_ADJUSTMENT_FILTER_STATUSES.has(rawStatus) ? rawStatus : "all";
+
+  const mineOnlySource =
+
+    typeof source.mineOnly === "boolean"
+
+      ? source.mineOnly
+
+      : typeof source.filterMine === "boolean"
+
+      ? source.filterMine
+
+      : fallbackMineOnly;
+
+  const mineOnly = Boolean(staffKeyAvailable && mineOnlySource);
+
+  let staff = "all";
+
+  if (allowStaffFilter) {
+
+    const rawStaff =
+
+      typeof source.staff === "string"
+
+        ? source.staff
+
+        : typeof source.filterStaff === "string"
+
+        ? source.filterStaff
+
+        : "";
+
+    const normalizedStaff = normalizeStr(rawStaff);
+
+    staff = normalizedStaff || "all";
+
+  }
+
+  if (mineOnly) {
+
+    staff = "all";
+
+  }
+
+  return {
+
+    month: monthCandidate,
+
+    status,
+
+    mineOnly,
+
+    staff,
+
+  };
+
+}
+
+
+
+export function getKpiAdjustmentFilterState(identity, options = {}) {
+
+  const key = normalizeKpiAdjustmentUserKey(identity);
+
+  const { filters } = readKpiAdjustmentFilterSection();
+
+  const stored = filters[key];
+
+  return normalizeKpiAdjustmentFilters(stored, options);
+
+}
+
+
+
+export function saveKpiAdjustmentFilterState(identity, updates = {}, options = {}) {
+
+  const key = normalizeKpiAdjustmentUserKey(identity);
+
+  const { layout, kpiSection, filters } = readKpiAdjustmentFilterSection();
+
+  const current = normalizeKpiAdjustmentFilters(filters[key], options);
+
+  const next = normalizeKpiAdjustmentFilters({ ...current, ...updates }, options);
+
+  if (
+
+    current.month === next.month &&
+
+    current.status === next.status &&
+
+    current.mineOnly === next.mineOnly &&
+
+    current.staff === next.staff
+
+  ) {
+
+    return next;
+
+  }
+
+  const nextFilters = { ...filters, [key]: next };
+
+  const nextLayout = {
+
+    ...layout,
+
+    kpiAdjustments: {
+
+      ...kpiSection,
+
+      filters: nextFilters,
+
+    },
+
+  };
+
+  writeUILayoutConfig(nextLayout);
+
+  return next;
 
 }
 
@@ -9343,6 +9569,7 @@ export default {
   getKpiAdjustments, saveKpiAdjustment, updateKpiAdjustmentStatus, removeKpiAdjustment, mapAdjustmentsByMonth,
 
   getKpiAdjustmentSettings, saveKpiAdjustmentSettings,
+  getKpiAdjustmentFilterState, saveKpiAdjustmentFilterState,
 
   REPORT_SCHEDULE_KEY, getReportSchedules, saveReportSchedule, deleteReportSchedule, calculateNextReportScheduleRun,
 

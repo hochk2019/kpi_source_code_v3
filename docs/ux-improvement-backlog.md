@@ -4,7 +4,7 @@ This backlog liệt kê các hạng mục cải thiện trải nghiệm người
 
 ## 1. KPI Adjustments
 
-- [ ] Persist filter states (month, status, mine-only, staff) per user using local storage hoặc `UI_LAYOUT_KEY` trong store.
+- [x] Persist filter states (month, status, mine-only, staff) per user using local storage hoặc `UI_LAYOUT_KEY` trong store. (đã lưu cấu hình bộ lọc vào UI_LAYOUT_KEY)
 - [ ] Tách danh sách điều chỉnh sang virtual list / pagination để cải thiện hiệu năng với dataset lớn.
 - [ ] Bổ sung thao tác duyệt hàng loạt (bulk approve/reject) dựa trên quyền `adjustApprove`.
 - [ ] Thêm liên kết nhanh tới tờ khai hoặc MST liên quan để người duyệt tra cứu ngay tại chỗ.

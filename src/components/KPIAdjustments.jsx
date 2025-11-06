@@ -1,4 +1,4 @@
-﻿import React, { useCallback, useEffect, useMemo, useState } from "react";
+﻿import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
 
@@ -21,6 +21,9 @@ import {
   getKpiAdjustmentSettings,
 
   saveKpiAdjustmentSettings,
+
+  getKpiAdjustmentFilterState,
+  saveKpiAdjustmentFilterState,
 
   getTeamRoster,
   mapMemberNamesToTeams,
@@ -1586,7 +1589,9 @@ export default function KPIAdjustments({ currentUser }) {
 
   const businessDirectory = businessData.directory || { entries: [], byMst: new Map(), byCompany: new Map() };
 
-  const [filterMonth, setFilterMonth] = useState(getCurrentMonth());
+  const currentMonthValue = useMemo(() => getCurrentMonth(), []);
+
+  const [filterMonth, setFilterMonth] = useState(currentMonthValue);
 
   const [filterStatus, setFilterStatus] = useState("all");
 
@@ -1601,7 +1606,6 @@ export default function KPIAdjustments({ currentUser }) {
   const [detailEntry, setDetailEntry] = useState(null);
 
   const [guidanceOpen, setGuidanceOpen] = useState(false);
-
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [guidanceFullscreen, setGuidanceFullscreen] = useState(false);
 
@@ -1629,28 +1633,73 @@ export default function KPIAdjustments({ currentUser }) {
   const isAuthenticated = !!userIdentity;
   const currentStaffKey = normalizeName(defaultStaffName);
 
+  const filtersReadyRef = useRef(false);
   const [showMineOnly, setShowMineOnly] = useState(() => Boolean(isAuthenticated && currentStaffKey && !canApprove));
   const [staffFilter, setStaffFilter] = useState("all");
-  const [filterSignature, setFilterSignature] = useState("");
+
+  const fallbackMineOnly = useMemo(
+
+    () => Boolean(isAuthenticated && currentStaffKey && !canApprove),
+
+    [isAuthenticated, currentStaffKey, canApprove]
+
+  );
 
   useEffect(() => {
-    const signature = `${isAuthenticated ? 1 : 0}:${canApprove ? 1 : 0}:${currentStaffKey || ""}`;
-    if (filterSignature === signature) {
+    const staffKeyAvailable = Boolean(currentStaffKey);
+    const options = {
+      fallbackMonth: currentMonthValue,
+      fallbackMineOnly,
+      allowStaffFilter: canApprove,
+      staffKeyAvailable,
+    };
+    const savedFilters = getKpiAdjustmentFilterState(userIdentity, options);
+    filtersReadyRef.current = false;
+    setFilterMonth(savedFilters.month);
+    setFilterStatus(savedFilters.status);
+    setShowMineOnly(savedFilters.mineOnly);
+    setStaffFilter(savedFilters.staff);
+    filtersReadyRef.current = true;
+  }, [
+    userIdentity,
+    canApprove,
+    currentStaffKey,
+    fallbackMineOnly,
+    currentMonthValue,
+  ]);
+
+  useEffect(() => {
+    if (!filtersReadyRef.current) {
       return;
     }
-    setFilterSignature(signature);
-    if (!isAuthenticated || !currentStaffKey) {
-      setShowMineOnly(false);
-      setStaffFilter("all");
-      return;
-    }
-    if (!canApprove) {
-      setShowMineOnly(true);
-      setStaffFilter("all");
-    } else {
-      setStaffFilter("all");
-    }
-  }, [isAuthenticated, canApprove, currentStaffKey, filterSignature]);
+    const staffKeyAvailable = Boolean(currentStaffKey);
+    const options = {
+      fallbackMonth: currentMonthValue,
+      fallbackMineOnly,
+      allowStaffFilter: canApprove,
+      staffKeyAvailable,
+    };
+    saveKpiAdjustmentFilterState(
+      userIdentity,
+      {
+        month: filterMonth,
+        status: filterStatus,
+        mineOnly: showMineOnly,
+        staff: staffFilter,
+      },
+      options
+    );
+  }, [
+    filterMonth,
+    filterStatus,
+    showMineOnly,
+    staffFilter,
+    userIdentity,
+    canApprove,
+    currentStaffKey,
+    fallbackMineOnly,
+    currentMonthValue,
+  ]);
 
   const showMineToggle = isAuthenticated && !!currentStaffKey;
 
