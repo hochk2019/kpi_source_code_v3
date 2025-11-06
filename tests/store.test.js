@@ -2998,6 +2998,86 @@ describe('kpi adjustment settings', () => {
 
   });
 
+  it('bat/tat duyet tu dong cap nhat cau hinh', () => {
+
+    const enabled = saveKpiAdjustmentSettings(
+
+      { autoApprove: { enabled: true } },
+
+      { actor: 'admin', permissions: { adjustApprove: true } },
+
+    );
+
+    expect(enabled.autoApprove.enabled).toBe(true);
+
+    expect(enabled.autoApprove.updatedBy).toBe('admin');
+
+    expect(new Date(enabled.autoApprove.updatedAt).getTime()).toBeGreaterThan(0);
+
+    const raw = JSON.parse(sharedGetItem(KPI_ADJUSTMENT_SETTINGS_KEY) || '{}');
+
+    expect(raw.autoApprove.enabled).toBe(true);
+
+    const disabled = saveKpiAdjustmentSettings(
+
+      { autoApprove: { enabled: false } },
+
+      { actor: 'admin', permissions: { adjustApprove: true } },
+
+    );
+
+    expect(disabled.autoApprove.enabled).toBe(false);
+
+    expect(disabled.autoApprove.updatedBy).toBe('admin');
+
+  });
+
+  it('tu dong duyet de xuat khi duyet tu dong dang bat', () => {
+
+    saveKpiAdjustmentSettings(
+
+      { autoApprove: { enabled: true } },
+
+      { actor: 'admin', permissions: { adjustApprove: true } },
+
+    );
+
+    sharedSetItem(KPI_ADJUSTMENTS_KEY, JSON.stringify([]));
+
+    const entry = saveKpiAdjustment(
+
+      {
+
+        category: 'support_misc',
+
+        month: '2025-04',
+
+        staffName: 'Nhan vien A',
+
+        quantity: 1,
+
+      },
+
+      { actor: 'staff', permissions: { adjustSubmit: true } },
+
+    );
+
+    expect(entry.status).toBe('approved');
+
+    expect(entry.approvedBy).toBe('admin');
+
+    expect(new Date(entry.approvedAt).getTime()).toBeGreaterThan(0);
+
+    const [stored] = getKpiAdjustments();
+
+    expect(stored.status).toBe('approved');
+
+    const statusHistory = stored.history?.map((item) => item.action) || [];
+
+    expect(statusHistory).toContain('status.approved');
+
+  });
+
   it('khong cho phep tao diem KPI khi khong co quyen', () => {
 
     sharedSetItem(KPI_ADJUSTMENTS_KEY, JSON.stringify([]));

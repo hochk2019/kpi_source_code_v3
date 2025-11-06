@@ -539,11 +539,47 @@ function resolveDate(values, preferMonthFirstHint = false) {
 
   const candidates = list.filter((v) => v !== undefined && v !== null);
 
+  const trusted = [];
+
+  const fallback = [];
+
+  const isoPattern = /^\d{4}-\d{2}-\d{2}$/;
+
+  for (const candidate of candidates) {
+
+    if (candidate instanceof Date) {
+
+      trusted.push(candidate);
+
+      continue;
+
+    }
+
+    if (typeof candidate === "string" && isoPattern.test(candidate.trim())) {
+
+      trusted.push(candidate);
+
+      continue;
+
+    }
+
+    fallback.push(candidate);
+
+  }
+
+  for (const candidate of trusted) {
+
+    const normalized = normalizeDateCandidate(candidate, false);
+
+    if (normalized) return normalized;
+
+  }
+
   const orders = preferMonthFirstHint ? [true, false] : [false, true];
 
   for (const prefer of orders) {
 
-    for (const candidate of candidates) {
+    for (const candidate of fallback) {
 
       const normalized = normalizeDateCandidate(candidate, prefer);
 
@@ -565,7 +601,7 @@ function sanitizeRow(row, preferMonthFirst = false) {
 
   const date = resolveDate(
 
-    [row.raw_date, row.rawDate, row.date, row.ngay, row.ngay_dang_ky, row.date_created],
+    [row.date, row.raw_date, row.rawDate, row.ngay, row.ngay_dang_ky, row.date_created],
 
     preferMonthFirst
 

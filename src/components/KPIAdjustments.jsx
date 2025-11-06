@@ -38,7 +38,6 @@ import {
   normalizeName,
 
   roundAdjustmentPoint,
-  normalizeDeclarationNumber,
 
   DECL_KEY,
 
@@ -205,6 +204,16 @@ function extractCompanyFromRow(row) {
 
 
 
+function extractDigits(value) {
+
+  if (value === null || value === undefined) return "";
+
+  return value.toString().replace(/\D+/g, "").trim();
+
+}
+
+
+
 function extractMstFromRow(row) {
 
   if (!row || typeof row !== "object") return "";
@@ -251,13 +260,17 @@ function buildDeclarationSuggestions(limit = MAX_DECLARATION_SUGGESTIONS) {
 
     if (!row) continue;
 
-    const soTk = normalizeStr(row?.so_tk ?? row?.so_tk_full ?? "");
+    const rawNumber = row?.so_tk_full ?? row?.so_tk ?? "";
 
-    if (!soTk) continue;
+    const soTk = normalizeStr(rawNumber);
+
+    const soTkDigits = extractDigits(rawNumber);
+
+    if (!soTk && !soTkDigits) continue;
 
     const branch = normalizeStr(row?.nhanh ?? row?.branch ?? "");
 
-    const key = `${soTk}|${branch}`;
+    const key = `${soTkDigits || soTk}|${branch}`;
 
     if (seenKeys.has(key)) continue;
 
@@ -280,6 +293,8 @@ function buildDeclarationSuggestions(limit = MAX_DECLARATION_SUGGESTIONS) {
       key,
 
       soTk,
+
+      soTkDigits,
 
       branch,
 
@@ -1687,7 +1702,7 @@ export default function KPIAdjustments({ currentUser }) {
 
     }
 
-    const digits = rawQuery.replace(/\D+/g, "");
+    const digits = extractDigits(rawQuery);
 
     const normalizedQuery = normalizeName(rawQuery);
 
@@ -1698,6 +1713,8 @@ export default function KPIAdjustments({ currentUser }) {
         if (!item) return false;
 
         if (digits) {
+
+          if ((item.soTkDigits || "").includes(digits)) return true;
 
           if ((item.soTk || "").includes(digits)) return true;
 
@@ -1737,7 +1754,11 @@ export default function KPIAdjustments({ currentUser }) {
 
         }
 
-        const soTkDigits = normalizeDeclarationNumber(row?.so_tk_full ?? row?.so_tk ?? "", 1);
+        const rawNumber = row?.so_tk_full ?? row?.so_tk ?? "";
+
+        const soTkDigits = extractDigits(rawNumber);
+
+        const soTkValue = normalizeStr(rawNumber);
 
         const mstDigits = normalizeMST(row?.mst ?? row?.ma_so_thue ?? row?.taxCode ?? "");
 
@@ -1755,7 +1776,7 @@ export default function KPIAdjustments({ currentUser }) {
 
         const branch = normalizeStr(row?.nhanh ?? row?.branch ?? "");
 
-        const key = `${soTkDigits}|${branch}`;
+        const key = `${soTkDigits || soTkValue}|${branch}`;
 
         if (seenKeys.has(key)) {
 
@@ -1769,7 +1790,9 @@ export default function KPIAdjustments({ currentUser }) {
 
           key,
 
-          soTk: soTkDigits,
+          soTk: soTkValue,
+
+          soTkDigits,
 
           branch,
 
@@ -2005,6 +2028,9 @@ export default function KPIAdjustments({ currentUser }) {
 
   );
 
+  const [autoApproveSaving, setAutoApproveSaving] = useState(false);
+  const [autoApproveError, setAutoApproveError] = useState("");
+
   const [settingsSaving, setSettingsSaving] = useState(false);
 
   const [decisionNote, setDecisionNote] = useState("");
@@ -2016,6 +2042,51 @@ export default function KPIAdjustments({ currentUser }) {
   const canOverridePoints = currentUser?.permissions?.adjustOverridePoints === true;
 
   const actor = currentUser?.username || currentUser?.name || "ui";
+
+  const autoApproveSettings = settings?.autoApprove || {};
+
+  const autoApproveEnabled = autoApproveSettings.enabled === true;
+
+  const autoApproveUpdatedBy = autoApproveSettings.updatedBy || "";
+
+  const autoApproveUpdatedAt = autoApproveSettings.updatedAt || "";
+
+  const autoApproveNote = autoApproveSettings.note || "";
+
+
+  const autoApproveStatusMessage = useMemo(() => {
+
+    if (autoApproveEnabled) {
+
+      const details = [];
+
+      if (autoApproveUpdatedBy) {
+
+        details.push(`bat boi ${autoApproveUpdatedBy}`);
+
+      }
+
+      if (autoApproveUpdatedAt) {
+
+        details.push(formatDateTime(autoApproveUpdatedAt));
+
+      }
+
+      if (autoApproveNote) {
+
+        details.push(`Ghi chu: ${autoApproveNote}`);
+
+      }
+
+      const suffix = details.length ? ` (${details.join(" · ")})` : "";
+
+      return `Duyet tu dong dang bat${suffix}`;
+
+    }
+
+    return "Duyet tu dong dang tat";
+
+  }, [autoApproveEnabled, autoApproveUpdatedAt, autoApproveUpdatedBy, autoApproveNote]);
 
 
 
@@ -2037,13 +2108,37 @@ export default function KPIAdjustments({ currentUser }) {
 
     const unsubscribe = subscribeStorage(KPI_ADJUSTMENT_SETTINGS_KEY, () => {
 
-      setSettings(getKpiAdjustmentSettings());
+      const latestSettings = getKpiAdjustmentSettings();
+      setSettings((prev) => {
+        const previousAuto = prev?.autoApprove || {};
+        const latestAuto = latestSettings.autoApprove || {};
+        if (
+          latestAuto &&
+          latestAuto.updatedAt === null &&
+          latestAuto.updatedBy === null &&
+          previousAuto.updatedAt
+        ) {
+          return prev;
+        }
+        return latestSettings;
+      });
 
     });
 
     return () => unsubscribe?.();
 
   }, []);
+
+
+  useEffect(() => {
+
+    if (autoApproveError) {
+
+      setAutoApproveError("");
+
+    }
+
+  }, [autoApproveEnabled, autoApproveError]);
 
 
 
@@ -2609,6 +2704,46 @@ export default function KPIAdjustments({ currentUser }) {
     } finally {
 
       setSettingsSaving(false);
+
+    }
+
+  };
+
+
+
+  const handleToggleAutoApprove = () => {
+
+    if (!canApprove || autoApproveSaving) {
+
+      return;
+
+    }
+
+    setAutoApproveError("");
+
+    setAutoApproveSaving(true);
+
+    try {
+
+      const updatedSettings = saveKpiAdjustmentSettings(
+
+        { autoApprove: { enabled: !autoApproveEnabled } },
+
+        { actor, permissions: currentUser?.permissions || {} }
+
+      );
+
+      setSettings(updatedSettings);
+
+    } catch (err) {
+
+      console.error(err);
+
+      setAutoApproveError(err?.message || "Khong the cap nhat duyet tu dong.");
+
+    } finally {
+
+      setAutoApproveSaving(false);
 
     }
 
@@ -4008,7 +4143,45 @@ export default function KPIAdjustments({ currentUser }) {
 
           </div>
 
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-col items-stretch gap-2 sm:items-end">
+
+            <div className="flex flex-wrap gap-2 sm:justify-end">
+
+              {canApprove ? (
+
+                <Button
+
+                  type="button"
+
+                  variant={autoApproveEnabled ? "default" : "outline"}
+
+                  size="sm"
+
+                  onClick={handleToggleAutoApprove}
+
+                  disabled={autoApproveSaving}
+
+                  aria-pressed={autoApproveEnabled}
+
+                  data-testid="auto-approve-toggle"
+
+                >
+
+                  <Sparkles className="mr-1 h-4 w-4" />
+
+                  {autoApproveSaving
+
+                    ? "Dang cap nhat..."
+
+                    : autoApproveEnabled
+
+                      ? "Tat duyet tu dong"
+
+                      : "Bat duyet tu dong"}
+
+                </Button>
+
+              ) : null}
 
             <Button type="button" variant="ghost" size="sm" onClick={handleRefreshDeclarations}>
 
@@ -4029,6 +4202,15 @@ export default function KPIAdjustments({ currentUser }) {
                 Cấu hình mặc định
 
               </Button>
+            ) : null}
+
+            </div>
+
+            <p className="text-xs text-muted-foreground sm:text-right">{autoApproveStatusMessage}</p>
+
+            {canApprove && autoApproveError ? (
+
+              <p className="text-xs text-destructive sm:text-right">{autoApproveError}</p>
 
             ) : null}
 
@@ -5401,5 +5583,6 @@ export default function KPIAdjustments({ currentUser }) {
   );
 
 }
+
 
 

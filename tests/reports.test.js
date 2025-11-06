@@ -344,7 +344,7 @@ describe('buildReportData', () => {
 
       rules: DEFAULT_RULES,
 
-      from: '2024-08-01',
+      from: '2024-01-01',
 
       to: '2024-08-31',
 
@@ -356,12 +356,127 @@ describe('buildReportData', () => {
 
     expect(report.summary.companyCount).toBe(2);
 
-    expect(report.rows.some((row) => row.date === '2024-08-01')).toBe(true);
+    expect(report.rows.some((row) => row.date === '2024-01-08')).toBe(true);
 
     expect(report.rows.some((row) => row.date === '2024-08-13')).toBe(true);
 
   });
 
+
+
+  it('giu nguyen ngay ISO neu raw_date mo ho', () => {
+
+    const rows = [
+
+      {
+
+        date: '2025-08-11',
+
+        raw_date: '11/8/25',
+
+        so_tk: '107432282200',
+
+        loai_hinh: 'E21',
+
+        num_items: 5,
+
+        licenses: 0,
+
+        nhan_vien: 'Hoa',
+
+        team: 'Team 2',
+
+        mst: '2301098786',
+
+        cong_ty: 'Cong ty DXT Vina',
+
+      },
+
+      {
+
+        raw_date: '9/30/2025',
+
+        so_tk: '30234567891',
+
+        loai_hinh: 'E11',
+
+        num_items: 3,
+
+        licenses: 1,
+
+        nhan_vien: 'Phuong',
+
+        team: 'Team 1',
+
+        mst: '0101234567',
+
+        cong_ty: 'Cong ty A',
+
+      },
+
+      {
+
+        raw_date: '9/29/2025',
+
+        so_tk: '30234567892',
+
+        loai_hinh: 'B11',
+
+        num_items: 2,
+
+        licenses: 0,
+
+        nhan_vien: 'Tuan',
+
+        team: 'Team 2',
+
+        mst: '0201234567',
+
+        cong_ty: 'Cong ty B',
+
+      },
+
+      {
+
+        raw_date: '9/28/2025',
+
+        so_tk: '30234567893',
+
+        loai_hinh: 'E31',
+
+        num_items: 4,
+
+        licenses: 0,
+
+        nhan_vien: 'Linh',
+
+        team: 'Team 3',
+
+        mst: '0301234567',
+
+        cong_ty: 'Cong ty C',
+
+      },
+
+    ];
+
+
+    const report = buildReportData(rows, {
+
+      roster: sampleRoster,
+
+      rules: DEFAULT_RULES,
+
+    });
+
+
+    const target = report.rows.find((row) => row.so_tk === '107432282200');
+
+    expect(target?.date).toBe('2025-08-11');
+
+    expect(report.summary.decls).toBe(rows.length);
+
+  });
 
 
   it('hiểu đúng khoảng dd/mm ngay cả khi dữ liệu có sẵn dạng yyyy-mm-dd', () => {
