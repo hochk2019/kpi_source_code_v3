@@ -17,7 +17,7 @@ This backlog liệt kê các hạng mục cải thiện trải nghiệm người
 - [x] Cảnh báo xung đột (vd. tờ khai đã bị chỉnh sửa tại chỗ khác) và cung cấp giao diện so sánh trước khi ghi đè. (đã thêm cảnh báo xung đột, bảng so sánh và lịch sử chỉnh sửa trong DataImporter)
 - [x] Thực hiện pre-check (kiểm tra kết nối DB, quyền truy cập ECUS, dung lượng đĩa) và hiển thị check-list trước khi chạy đồng bộ. (đã triển khai API precheck và checklist hiển thị trong DataImporter)
 - [x] Bổ sung cơ chế retry tự động với backoff và log thân thiện khi `sendWrite` trả về lỗi. (đã thêm retry nhiều lần với thông điệp hướng dẫn người dùng)
-- [ ] Lưu lịch sử đồng bộ (ai chạy, thời gian, số bản ghi cập nhật) để hiện trong Notification Center và trang tổng quan.
+- [x] Lưu lịch sử đồng bộ (ai chạy, thời gian, số bản ghi cập nhật) để hiện trong Notification Center và trang tổng quan. (đã bổ sung lưu trữ trên server, hiển thị ở Notification Center và Data Health Dashboard)
 
 ## 3. Data Importer
 
