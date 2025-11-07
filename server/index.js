@@ -22672,6 +22672,32 @@ async function runEcusSyncWithErrorHandling(params) {
 
     });
 
+    appendDeclSyncHistoryEntry({
+
+      runAt: new Date().toISOString(),
+
+      actor: params?.actor || 'system',
+
+      reason: params?.reason || 'manual',
+
+      status: 'error',
+
+      fetched: 0,
+
+      inserted: 0,
+
+      updated: 0,
+
+      skipped: 0,
+
+      locked: 0,
+
+      stored: 0,
+
+      meta: { error: err?.message || 'Không thể đồng bộ dữ liệu từ ECUS.' },
+
+    }, { actor: params?.actor || 'system', source: 'decl-sync-history' });
+
     throw err;
 
   }
