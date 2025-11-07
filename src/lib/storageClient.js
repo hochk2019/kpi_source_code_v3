@@ -608,76 +608,11 @@ function createSyncSnapshot() {
 
   };
 
-  if (entry?.resolvedAt) {
-
-    record.resolvedAt = normalizeIsoTimestamp(entry.resolvedAt);
-
-  }
-
-  syncErrorLog.unshift(record);
-
-  if (syncErrorLog.length > SYNC_ERROR_LOG_LIMIT) {
-
-    syncErrorLog.length = SYNC_ERROR_LOG_LIMIT;
-
-  }
-
-  return record;
-
-}
-
-
-
-function updateCurrentSyncError(patch = {}) {
-
-  const current = syncErrorLog[0];
-
-  if (!current) {
-
-    return null;
-
-  }
-
-  if (typeof patch.type === 'string') {
-
-    current.type = patch.type;
-
-  }
-
-  if (typeof patch.message === 'string' && patch.message) {
-
-    current.message = patch.message;
-
-  }
-
-  if (Number.isFinite(patch.attempts)) {
-
-    current.attempts = Math.max(0, Math.floor(patch.attempts));
-
-  }
-
-  if (patch.nextRetryAt !== undefined) {
-
-    current.nextRetryAt =
-
-      patch.nextRetryAt === null ? null : normalizeIsoTimestamp(patch.nextRetryAt);
-
-  }
-
-  if (patch.resolvedAt) {
-
-    current.resolvedAt = normalizeIsoTimestamp(patch.resolvedAt);
-
-  }
-
-  return current;
-
 }
 
 
 
 function markSyncRecovered() {
-
   if (retryAttempts > 0) {
 
     updateCurrentSyncError({
@@ -791,7 +726,6 @@ function appendSyncErrorEntry(entry) {
 
 
 function updateCurrentSyncError(patch = {}) {
-
   const current = syncErrorLog[0];
 
   if (!current) {
@@ -833,34 +767,6 @@ function updateCurrentSyncError(patch = {}) {
   }
 
   return current;
-
-}
-
-
-
-function markSyncRecovered() {
-
-  if (retryAttempts > 0) {
-
-    updateCurrentSyncError({
-
-      type: 'resolved',
-
-      resolvedAt: Date.now(),
-
-      nextRetryAt: null,
-
-    });
-
-  }
-
-  retryAttempts = 0;
-
-  lastErrorKey = null;
-
-  lastErrorAt = null;
-
-  nextRetryAt = null;
 
 }
 

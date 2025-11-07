@@ -23,10 +23,10 @@ This backlog liệt kê các hạng mục cải thiện trải nghiệm người
 
 - [x] Chuyển việc đọc/ghi XLSX sang Web Worker để tránh khóa UI trong khi `XLSX.read` chạy. (đã chuyển parse/xuất sang worker chuyên trách)
 - [x] Tách DataImporter thành các module nhỏ (picker, preview, filters, sync) và lazy-load khi cần. (đã tạo các section lazy cho picker/preview/filters/sync)
-- [ ] Lưu/gửi preset bộ lọc và cấu hình cột, cho phép chia sẻ giữa các thành viên trong cùng tổ.
+- [x] Lưu/gửi preset bộ lọc và cấu hình cột, cho phép chia sẻ giữa các thành viên trong cùng tổ. (đã hợp nhất UI lựa chọn phạm vi, API lưu cấu hình tổ và hoàn thiện xử lý quyền)
   - [x] Đồng bộ backend & API filter preset để hỗ trợ chế độ chia sẻ theo tổ (team visibility, metadata chủ sở hữu). (đã chuẩn hoá metadata chủ sở hữu/tổ, cho phép chuyển đổi phạm vi và cập nhật quyền lỗi TEAM_REQUIRED/FORBIDDEN)
   - [x] Cập nhật DataImporter hiển thị/quản lý preset tổ: chọn phạm vi lưu (cá nhân/tổ), hiển thị quyền chỉnh sửa, tự đồng bộ. (đã thêm lựa chọn phạm vi lưu, nhãn quyền chỉnh sửa và đồng bộ trạng thái chia sẻ trực tiếp trong UI)
-  - [ ] Lưu cấu hình cột import theo tổ với quyền chia sẻ, cho phép chọn dùng cấu hình tổ hoặc cá nhân và hiển thị nguồn cấu hình.
+  - [x] Lưu cấu hình cột import theo tổ với quyền chia sẻ, cho phép chọn dùng cấu hình tổ hoặc cá nhân và hiển thị nguồn cấu hình. (đã bổ sung API quản lý cấu hình tổ, lựa chọn phạm vi trong UI và thẻ thông tin cập nhật)
 - [ ] Thiết kế wizard nhiều bước giúp người dùng theo dõi tiến trình import, tránh quá tải thông tin.
 - [ ] Cải thiện feedback khi đồng bộ thất bại: gợi ý hành động cụ thể (thử lại, kiểm tra VPN, báo CNTT).
 

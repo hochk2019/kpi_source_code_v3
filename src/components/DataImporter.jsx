@@ -54,6 +54,7 @@ import {
 import { loadRules, computeKPI, extractLicenseCodesFromRowObj } from "@/lib/rules.js";
 
 import { computeLicenseSnapshot } from "../../shared/licenseSummary.js";
+import { normalizeImportColumnConfig } from "../../shared/importColumns.js";
 
 import CollapsibleCard from "./CollapsibleCard.jsx";
 
@@ -1708,6 +1709,7 @@ const RANGE_PRESETS = Object.freeze([
 const FILTER_PRESET_SCOPE = "data-importer";
 
 const LAST_FILTER_PRESET_KEY = "kpi:data-importer:last-preset-v1";
+const COLUMN_SCOPE_STORAGE_KEY = "kpi:data-importer:column-scope-v1";
 
 const LEGACY_FILTER_STORAGE_KEY = "kpi:data-importer:filter:v1";
 
@@ -3793,7 +3795,33 @@ export default function DataImporter({
 
   const initialColumnConfig = useMemo(() => getImportColumnConfig(), []);
 
+  const [personalColumnConfig, setPersonalColumnConfig] = useState(initialColumnConfig);
+  const [columnConfigScope, setColumnConfigScope] = useState(() => {
+    if (typeof window === "undefined") {
+      return "personal";
+    }
+    try {
+      const stored = window.localStorage?.getItem(COLUMN_SCOPE_STORAGE_KEY);
+      return stored === "team" ? "team" : "personal";
+    } catch {
+      return "personal";
+    }
+  });
   const [columnConfigState, setColumnConfigState] = useState(initialColumnConfig);
+  const [teamColumnConfigInfo, setTeamColumnConfigInfo] = useState({
+    loading: false,
+    available: false,
+    canEdit: false,
+    teamId: null,
+    teamName: "",
+    config: null,
+    updatedAt: null,
+    updatedBy: null,
+    updatedByName: "",
+    owner: null,
+    ownerName: "",
+    error: "",
+  });
   const lastSyncToastMessageRef = useRef("");
 
   useEffect(() => {
@@ -3849,6 +3877,115 @@ export default function DataImporter({
     sanitizeColumnWidths(initialColumnConfig?.widths)
 
   );
+
+
+  const fetchTeamColumnConfig = useCallback(async () => {
+    setTeamColumnConfigInfo((prev) => ({ ...prev, loading: true, error: "" }));
+    try {
+      const response = await fetchWithAuth("/api/import-column-config");
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || !payload?.ok) {
+        const message = payload?.error || "Không thể tải cấu hình cột chia sẻ.";
+        throw new Error(message);
+      }
+      const team = payload.team || {};
+      const normalized = team.config ? normalizeImportColumnConfig(team.config) : null;
+      setTeamColumnConfigInfo({
+        loading: false,
+        available: Boolean(team.available),
+        canEdit: Boolean(team.canEdit),
+        teamId: team.teamId || null,
+        teamName: team.teamName || "",
+        config: normalized,
+        updatedAt: team.updatedAt || null,
+        updatedBy: team.updatedBy || null,
+        updatedByName: team.updatedByName || "",
+        owner: team.owner || null,
+        ownerName: team.ownerName || "",
+        error: "",
+      });
+    } catch (error) {
+      console.error("Không thể tải cấu hình cột chia sẻ", error);
+      setTeamColumnConfigInfo({
+        loading: false,
+        available: false,
+        canEdit: false,
+        teamId: null,
+        teamName: "",
+        config: null,
+        updatedAt: null,
+        updatedBy: null,
+        updatedByName: "",
+        owner: null,
+        ownerName: "",
+        error: error?.message || "Không thể tải cấu hình cột chia sẻ.",
+      });
+    }
+  }, []);
+
+  const handleColumnScopeChange = useCallback((nextScope) => {
+    const normalized = nextScope === "team" ? "team" : "personal";
+    setColumnConfigScope(normalized);
+    if (typeof window !== "undefined") {
+      try {
+        window.localStorage?.setItem(COLUMN_SCOPE_STORAGE_KEY, normalized);
+      } catch (error) {
+        console.warn("Không thể lưu phạm vi cấu hình cột", error);
+      }
+    }
+  }, []);
+
+  const handleSelectPersonalScope = useCallback(() => {
+    handleColumnScopeChange("personal");
+  }, [handleColumnScopeChange]);
+
+  const {
+    available: teamColumnConfigAvailable,
+    error: teamColumnConfigError,
+    loading: teamColumnConfigLoading,
+  } = teamColumnConfigInfo;
+
+  const handleSelectTeamScope = useCallback(() => {
+    if (teamColumnConfigLoading) {
+      toast.info("Đang tải cấu hình cột tổ. Vui lòng chờ.");
+      return;
+    }
+    if (!teamColumnConfigAvailable) {
+      if (teamColumnConfigError) {
+        toast.error(teamColumnConfigError);
+      } else {
+        toast.info("Bạn chưa có cấu hình cột tổ. Sử dụng cấu hình cá nhân.");
+      }
+      return;
+    }
+    handleColumnScopeChange("team");
+    fetchTeamColumnConfig();
+  }, [
+    fetchTeamColumnConfig,
+    handleColumnScopeChange,
+    teamColumnConfigAvailable,
+    teamColumnConfigError,
+    teamColumnConfigLoading,
+  ]);
+
+
+  useEffect(() => {
+    fetchTeamColumnConfig();
+  }, [fetchTeamColumnConfig]);
+
+  useEffect(() => {
+    const targetConfig =
+      columnConfigScope === "team" && teamColumnConfigInfo.available
+        ? teamColumnConfigInfo.config || normalizeImportColumnConfig(null)
+        : personalColumnConfig;
+    setColumnConfigState(targetConfig);
+  }, [columnConfigScope, personalColumnConfig, teamColumnConfigInfo.available, teamColumnConfigInfo.config]);
+
+  useEffect(() => {
+    if (columnConfigScope === "team" && !teamColumnConfigInfo.loading && !teamColumnConfigInfo.available) {
+      handleColumnScopeChange("personal");
+    }
+  }, [columnConfigScope, handleColumnScopeChange, teamColumnConfigInfo.available, teamColumnConfigInfo.loading]);
 
   const [columnConfigOpen, setColumnConfigOpen] = useState(false);
 
@@ -5004,6 +5141,12 @@ export default function DataImporter({
 
 
 
+  const canEditTeamColumns = useMemo(
+    () => teamColumnConfigInfo.available && teamColumnConfigInfo.canEdit,
+    [teamColumnConfigInfo.available, teamColumnConfigInfo.canEdit]
+  );
+  const canEditActiveColumnConfig = columnConfigScope === "team" ? canEditTeamColumns : true;
+
   const countHiddenBaseColumns = useCallback((set) => {
 
     let count = 0;
@@ -5029,6 +5172,14 @@ export default function DataImporter({
     (columnId) => {
 
       if (!isConfigColumnKey(columnId)) {
+
+        return;
+
+      }
+
+      if (!canEditActiveColumnConfig) {
+
+        toast.info("Bạn không có quyền cập nhật cấu hình cột của phạm vi hiện tại.");
 
         return;
 
@@ -5086,7 +5237,7 @@ export default function DataImporter({
 
 
 
-  const handleApplyColumnConfig = useCallback(() => {
+  const handleApplyColumnConfig = useCallback(async () => {
 
     const hiddenList = Array.from(columnDraftHidden).filter((key) => isConfigColumnKey(key));
 
@@ -5122,6 +5273,102 @@ export default function DataImporter({
 
     }
 
+    if (columnConfigScope === "team") {
+
+      if (!teamColumnConfigInfo.available) {
+
+        setColumnDraftError("Bạn cần thuộc một tổ để lưu cấu hình chia sẻ.");
+
+        toast.error("Bạn cần thuộc một tổ để lưu cấu hình chia sẻ.");
+
+        return;
+
+      }
+
+      if (!canEditTeamColumns) {
+
+        toast.info("Bạn không có quyền cập nhật cấu hình cột của tổ.");
+
+        return;
+
+      }
+
+      try {
+
+        const response = await fetchWithAuth("/api/import-column-config/team", {
+
+          method: "PUT",
+
+          headers: { "Content-Type": "application/json" },
+
+          body: JSON.stringify({ hidden: hiddenList, widths: sanitizedWidths }),
+
+        });
+
+        const payload = await response.json().catch(() => ({}));
+
+        if (!response.ok || !payload?.ok) {
+
+          const message = payload?.error || "Không thể lưu cấu hình cột chia sẻ.";
+
+          throw new Error(message);
+
+        }
+
+        const nextTeamConfig = payload.team?.config
+
+          ? normalizeImportColumnConfig(payload.team.config)
+
+          : normalizeImportColumnConfig(null);
+
+        const appliedWidths = sanitizeColumnWidths(nextTeamConfig?.widths);
+
+        setTeamColumnConfigInfo((prev) => ({
+
+          ...prev,
+
+          config: nextTeamConfig,
+
+          updatedAt: payload.team?.updatedAt || null,
+
+          updatedBy: payload.team?.updatedBy || null,
+
+          updatedByName: payload.team?.updatedByName || "",
+
+          owner: payload.team?.owner || null,
+
+          ownerName: payload.team?.ownerName || "",
+
+          canEdit: payload.team?.canEdit ?? prev.canEdit,
+
+          available: payload.team?.available ?? prev.available,
+
+          error: "",
+
+        }));
+
+        setColumnConfigOpen(false);
+
+        setColumnDraftError("");
+
+        setColumnDraftHidden(new Set(nextTeamConfig.hidden));
+
+        columnWidthsRef.current = appliedWidths;
+
+        toast.success("Đã cập nhật cấu hình cột Import Data cho tổ.");
+
+      } catch (error) {
+
+        console.error("Không thể lưu cấu hình cột Import Data tổ", error);
+
+        setColumnDraftError(error?.message || "Có lỗi xảy ra khi lưu cấu hình. Vui lòng thử lại.");
+
+      }
+
+      return;
+
+    }
+
     try {
 
       const result = saveImportColumnConfig({ hidden: hiddenList, widths: sanitizedWidths }, { actor });
@@ -5144,21 +5391,133 @@ export default function DataImporter({
 
       columnWidthsRef.current = sanitizedWidths;
 
+      setColumnDraftHidden(new Set(result.hidden));
+
       toast.success("Đã cập nhật cấu hình cột Import Data.");
 
-    } catch (err) {
+    } catch (error) {
 
-      console.error("Không thể lưu cấu hình cột Import Data", err);
+      console.error("Không thể lưu cấu hình cột Import Data", error);
 
       setColumnDraftError("Có lỗi xảy ra khi lưu cấu hình. Vui lòng thử lại.");
 
     }
 
-  }, [actor, columnConfigState, columnDraftHidden, columnHiddenSet, totalBaseColumns]);
+  }, [
 
-  const handleResetColumnConfig = useCallback(() => {
+    actor,
+
+    canEditTeamColumns,
+
+    columnConfigScope,
+
+    columnConfigState,
+
+    columnDraftHidden,
+
+    columnHiddenSet,
+
+    teamColumnConfigInfo.available,
+
+    totalBaseColumns,
+
+  ]);
+
+  const handleResetColumnConfig = useCallback(async () => {
 
     const defaultHidden = [...new Set([...IMPORT_AUX_COLUMN_IDS, "status"])];
+
+    if (columnConfigScope === "team") {
+
+      if (!teamColumnConfigInfo.available) {
+
+        toast.error("Bạn cần thuộc một tổ để khôi phục cấu hình chia sẻ.");
+
+        return;
+
+      }
+
+      if (!canEditTeamColumns) {
+
+        toast.info("Bạn không có quyền cập nhật cấu hình cột của tổ.");
+
+        return;
+
+      }
+
+      try {
+
+        const response = await fetchWithAuth("/api/import-column-config/team", {
+
+          method: "PUT",
+
+          headers: { "Content-Type": "application/json" },
+
+          body: JSON.stringify({ hidden: defaultHidden, widths: {} }),
+
+        });
+
+        const payload = await response.json().catch(() => ({}));
+
+        if (!response.ok || !payload?.ok) {
+
+          const message = payload?.error || "Không thể lưu cấu hình cột chia sẻ.";
+
+          throw new Error(message);
+
+        }
+
+        const nextTeamConfig = payload.team?.config
+
+          ? normalizeImportColumnConfig(payload.team.config)
+
+          : normalizeImportColumnConfig(null);
+
+        const appliedWidths = sanitizeColumnWidths(nextTeamConfig?.widths);
+
+        setTeamColumnConfigInfo((prev) => ({
+
+          ...prev,
+
+          config: nextTeamConfig,
+
+          updatedAt: payload.team?.updatedAt || null,
+
+          updatedBy: payload.team?.updatedBy || null,
+
+          updatedByName: payload.team?.updatedByName || "",
+
+          owner: payload.team?.owner || null,
+
+          ownerName: payload.team?.ownerName || "",
+
+          canEdit: payload.team?.canEdit ?? prev.canEdit,
+
+          available: payload.team?.available ?? prev.available,
+
+          error: "",
+
+        }));
+
+        setColumnDraftHidden(new Set(nextTeamConfig.hidden));
+
+        setColumnDraftError("");
+
+        columnWidthsRef.current = appliedWidths;
+
+        toast.success("Đã khôi phục cấu hình cột Import Data mặc định cho tổ.");
+
+      } catch (error) {
+
+        console.error("Không thể khôi phục cấu hình cột Import Data tổ", error);
+
+        toast.error(error?.message || "Không thể khôi phục cấu hình cột. Vui lòng thử lại.");
+
+      }
+
+      return;
+
+    }
 
     try {
 
@@ -5182,28 +5541,17 @@ export default function DataImporter({
 
     }
 
-  }, [actor]);
-
-
+  }, [actor, canEditTeamColumns, columnConfigScope, teamColumnConfigInfo.available]);
 
   useEffect(() => {
-
     const unsubscribe = subscribeImportColumnConfig((config) => {
-
-      setColumnConfigState(config);
-
+      setPersonalColumnConfig(config);
     });
-
     return () => {
-
       if (typeof unsubscribe === "function") {
-
         unsubscribe();
-
       }
-
     };
-
   }, []);
 
 
@@ -13956,6 +14304,154 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
 
           <div className="space-y-3">
 
+            <div className="rounded border border-gray-200 bg-gray-50 p-3 text-sm text-gray-700">
+
+              <p className="text-sm font-medium text-gray-800">Phạm vi áp dụng</p>
+
+              <div className="mt-2 space-y-2">
+
+                <label
+
+                  className={cx(
+
+                    "flex items-start gap-2 rounded border px-3 py-2",
+
+                    columnConfigScope === "personal"
+
+                      ? "border-blue-200 bg-white"
+
+                      : "border-transparent bg-transparent hover:border-gray-200"
+
+                  )}
+
+                >
+
+                  <input
+
+                    type="radio"
+
+                    className="mt-1"
+
+                    checked={columnConfigScope === "personal"}
+
+                    onChange={handleSelectPersonalScope}
+
+                  />
+
+                  <span className="flex flex-col">
+
+                    <span>Cấu hình cá nhân</span>
+
+                    <span className="text-[11px] text-gray-500">Chỉ áp dụng cho tài khoản của bạn.</span>
+
+                  </span>
+
+                </label>
+
+                <label
+
+                  className={cx(
+
+                    "flex items-start gap-2 rounded border px-3 py-2",
+
+                    columnConfigScope === "team"
+
+                      ? "border-blue-200 bg-white"
+
+                      : "border-transparent bg-transparent hover:border-gray-200",
+
+                    !teamColumnConfigInfo.available ? "cursor-not-allowed opacity-60" : ""
+
+                  )}
+
+                >
+
+                  <input
+
+                    type="radio"
+
+                    className="mt-1"
+
+                    checked={columnConfigScope === "team"}
+
+                    onChange={handleSelectTeamScope}
+
+                    disabled={!teamColumnConfigInfo.available}
+
+                  />
+
+                  <span className="flex flex-col">
+
+                    <span>
+
+                      Cấu hình tổ
+
+                      {teamColumnConfigInfo.teamName ? ` ${teamColumnConfigInfo.teamName}` : ""}
+
+                    </span>
+
+                    <span className="text-[11px] text-gray-500">
+
+                      {teamColumnConfigInfo.loading
+
+                        ? "Đang tải cấu hình chia sẻ..."
+
+                        : teamColumnConfigInfo.available
+
+                          ? canEditTeamColumns
+
+                            ? "Các thành viên trong tổ sẽ dùng chung cấu hình này."
+
+                            : "Bạn chỉ có thể xem cấu hình do thành viên tổ quản lý."
+
+                          : "Bạn chưa thuộc tổ hoặc chưa có cấu hình chia sẻ."}
+
+                    </span>
+
+                  </span>
+
+                </label>
+
+              </div>
+
+              {teamColumnConfigInfo.error && columnConfigScope === "team" ? (
+
+                <p className="mt-2 text-[11px] text-red-600">{teamColumnConfigInfo.error}</p>
+
+              ) : null}
+
+              {columnConfigScope === "team" && teamColumnConfigInfo.available ? (
+
+                <div className="mt-3 rounded border border-blue-100 bg-white p-2 text-[11px] text-gray-600">
+
+                  <p>
+
+                    {teamColumnConfigInfo.updatedAt
+
+                      ? `Cập nhật lần cuối ${formatDateTime(teamColumnConfigInfo.updatedAt)}`
+
+                      : "Chưa có thông tin cập nhật gần đây."}
+
+                  </p>
+
+                  {teamColumnConfigInfo.updatedByName ? (
+
+                    <p>Người cập nhật: {teamColumnConfigInfo.updatedByName}</p>
+
+                  ) : null}
+
+                  {teamColumnConfigInfo.ownerName ? (
+
+                    <p>Quản lý cấu hình: {teamColumnConfigInfo.ownerName}</p>
+
+                  ) : null}
+
+                </div>
+
+              ) : null}
+
+            </div>
+
             <p className="text-xs text-gray-600">
 
               Đang giữ {columnDraftVisibleCount}/{totalConfigColumns} mục hiển thị (bao gồm cột dữ liệu và thao tác).
@@ -13970,7 +14466,7 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
 
                 const isSensitive = SENSITIVE_COLUMN_SET.has(column.id);
 
-                const disabled = isSensitive && !isAdminRole;
+                const disabled = !canEditActiveColumnConfig || (isSensitive && !isAdminRole);
 
                 return (
 

@@ -71,6 +71,21 @@ import {
   isAdminRole,
 
 } from '../src/shared/accountRoles.js';
+import {
+
+  IMPORT_COLUMN_IDS,
+
+  IMPORT_SENSITIVE_COLUMNS,
+
+  DEFAULT_IMPORT_COLUMN_CONFIG,
+
+  DEFAULT_IMPORT_COLUMN_VERSION,
+
+  normalizeImportColumnConfig,
+
+  BASE_IMPORT_COLUMN_ID_SET,
+
+} from '../shared/importColumns.js';
 
 import { translateBackupReason, translateBackupFailure } from '../src/shared/backupMessages.js';
 
@@ -1966,6 +1981,10 @@ const FILTER_PRESET_SCOPE_DEFAULT = 'data-importer';
 const KNOWN_FILTER_PRESET_SCOPES = new Set([FILTER_PRESET_SCOPE_DEFAULT, 'report-viewer']);
 
 const FILTER_PRESET_MAX_PER_SCOPE = 20;
+
+const IMPORT_COLUMN_CONFIG_KEY = 'import_column_configs_v1';
+
+const IMPORT_COLUMN_CONFIG_VERSION = 1;
 
 
 
@@ -24940,6 +24959,129 @@ app.get('/api/internal/monitor/ecus-sync/metrics', async (req, res) => {
 
 
 
+
+
+function loadImportColumnConfigState(username) {
+  const storeRaw =
+    getJSONValue(IMPORT_COLUMN_CONFIG_KEY, { version: IMPORT_COLUMN_CONFIG_VERSION, teams: {} }) || {};
+  const store = {
+    version: IMPORT_COLUMN_CONFIG_VERSION,
+    teams: {},
+  };
+  if (storeRaw && typeof storeRaw === 'object') {
+    const teams = storeRaw.teams && typeof storeRaw.teams === 'object' ? storeRaw.teams : {};
+    store.teams = { ...teams };
+  }
+  const account = findAccountRecord(username);
+  const userKey = `${username || ''}`.trim().toLowerCase();
+  const teamIdRaw = account?.teamId ? String(account.teamId).trim() : '';
+  const teamKey = sanitizeTeamKey(teamIdRaw);
+  const teamEntryRaw =
+    teamKey && store.teams[teamKey] && typeof store.teams[teamKey] === 'object'
+      ? { ...store.teams[teamKey] }
+      : null;
+  return {
+    store,
+    username,
+    userKey,
+    account,
+    teamKey,
+    teamId: teamEntryRaw?.teamId || teamIdRaw || (teamKey || ''),
+    teamName: teamEntryRaw?.teamName || (account?.teamName ? String(account.teamName).trim() : ''),
+    teamEntry: teamEntryRaw,
+  };
+}
+
+function listImportColumnConfigForUser(username) {
+  const state = loadImportColumnConfigState(username);
+  const { teamKey, teamEntry, teamId, teamName } = state;
+  const available = Boolean(teamKey);
+  const config = teamEntry ? normalizeImportColumnConfig(teamEntry.config) : null;
+  const updatedAt = teamEntry?.updatedAt ? sanitizePresetTimestamp(teamEntry.updatedAt) : null;
+  const updatedBy = sanitizePresetOwnerUsername(teamEntry?.updatedBy || '');
+  const updatedByName =
+    sanitizePresetOwnerName(teamEntry?.updatedByName || '', updatedBy || '') || updatedBy || null;
+  const owner = sanitizePresetOwnerUsername(teamEntry?.owner || '');
+  const ownerName =
+    sanitizePresetOwnerName(teamEntry?.ownerName || '', owner || '') || owner || null;
+  return {
+    ...state,
+    team: {
+      available,
+      teamId: teamId || null,
+      teamName: teamName || null,
+      config,
+      updatedAt,
+      updatedBy: updatedBy || null,
+      updatedByName,
+      owner: owner || null,
+      ownerName,
+    },
+  };
+}
+
+function saveTeamImportColumnConfigForUser(username, payload = {}, { actor = 'system' } = {}) {
+  const state = loadImportColumnConfigState(username);
+  const { store, teamKey, teamId, teamName, teamEntry, account, userKey } = state;
+  if (!teamKey) {
+    const error = new Error('Bạn cần thuộc một tổ để lưu cấu hình cột chia sẻ.');
+    error.code = 'TEAM_REQUIRED';
+    throw error;
+  }
+  const nextConfig = normalizeImportColumnConfig(payload.config || payload);
+  const hiddenBaseCount = nextConfig.hidden.filter((key) => BASE_IMPORT_COLUMN_ID_SET.has(key)).length;
+  if (hiddenBaseCount >= IMPORT_COLUMN_IDS.length) {
+    const error = new Error('Cần giữ lại ít nhất một cột dữ liệu hiển thị.');
+    error.code = 'INVALID_CONFIG';
+    throw error;
+  }
+  const now = new Date().toISOString();
+  const actorUsername = sanitizePresetOwnerUsername(actor || username) || username || userKey;
+  const actorName =
+    sanitizePresetOwnerName(account?.name ? String(account.name).trim() : '', actorUsername) ||
+    actorUsername;
+  const existingOwner = sanitizePresetOwnerUsername(teamEntry?.owner || '') || actorUsername;
+  const existingOwnerName =
+    sanitizePresetOwnerName(teamEntry?.ownerName || '', existingOwner) || actorName;
+  const normalizedTeamId = sanitizeTeamIdValue(teamEntry?.teamId || teamId || teamKey || '');
+  const normalizedTeamName = sanitizePresetOwnerName(teamEntry?.teamName || teamName || '', '');
+  const entry = {
+    teamId: normalizedTeamId || teamKey || null,
+    teamName: normalizedTeamName || null,
+    config: nextConfig,
+    updatedAt: now,
+    updatedBy: actorUsername,
+    updatedByName: actorName,
+    owner: existingOwner || null,
+    ownerName: existingOwnerName || null,
+  };
+  store.teams[teamKey] = entry;
+  store.version = IMPORT_COLUMN_CONFIG_VERSION;
+  setJSONValue(IMPORT_COLUMN_CONFIG_KEY, store, { actor, source: 'import-column-config:upsert' });
+  return {
+    teamKey,
+    teamId: entry.teamId || null,
+    teamName: entry.teamName || null,
+    config: entry.config,
+    updatedAt: entry.updatedAt,
+    updatedBy: entry.updatedBy,
+    updatedByName: entry.updatedByName,
+    owner: entry.owner,
+    ownerName: entry.ownerName,
+  };
+}
+
+function canManageTeamColumnConfig(account) {
+  if (!account) {
+    return false;
+  }
+  const role = normalizeRoleKey(account.role);
+  if (isAdminRole(role) || role === MANAGER_ROLE || role === TEAM_LEAD_ROLE) {
+    return true;
+  }
+  return false;
+}
+
 app.get('/api/filter-presets', (req, res) => {
 
   const context = getSessionContext(req);
@@ -25231,6 +25373,91 @@ app.delete('/api/filter-presets/:presetId', (req, res) => {
 });
 
 
+
+
+
+app.get('/api/import-column-config', (req, res) => {
+  const context = getSessionContext(req);
+  if (!context) {
+    res.status(401).json({ ok: false, error: 'Bạn cần đăng nhập để sử dụng cấu hình cột chia sẻ.' });
+    return;
+  }
+  try {
+    const result = listImportColumnConfigForUser(context.account.username);
+    const team = result.team || {};
+    const canEdit = team.available && canManageTeamColumnConfig(context.account);
+    res.json({
+      ok: true,
+      team: {
+        available: team.available,
+        teamId: team.teamId || null,
+        teamName: team.teamName || null,
+        config: team.config || null,
+        updatedAt: team.updatedAt || null,
+        updatedBy: team.updatedBy || null,
+        updatedByName: team.updatedByName || null,
+        owner: team.owner || null,
+        ownerName: team.ownerName || null,
+        canEdit,
+      },
+    });
+  } catch (err) {
+    console.error('Không thể tải cấu hình cột chia sẻ', err);
+    res.status(500).json({ ok: false, error: 'Không thể tải cấu hình cột chia sẻ.' });
+  }
+});
+
+app.put('/api/import-column-config/team', (req, res) => {
+  const context = getSessionContext(req);
+  if (!context) {
+    res.status(401).json({ ok: false, error: 'Bạn cần đăng nhập để lưu cấu hình cột chia sẻ.' });
+    return;
+  }
+  if (!canManageTeamColumnConfig(context.account)) {
+    res.status(403).json({ ok: false, error: 'Bạn không có quyền cập nhật cấu hình cột của tổ.' });
+    return;
+  }
+  try {
+    const result = saveTeamImportColumnConfigForUser(context.account.username, req.body || {}, {
+      actor: context.account.username,
+    });
+    const visibleBaseColumns =
+      IMPORT_COLUMN_IDS.length - result.config.hidden.filter((key) => BASE_IMPORT_COLUMN_ID_SET.has(key)).length;
+    const totalBaseColumns = IMPORT_COLUMN_IDS.length;
+    const teamLabel = result.teamName ? ` ${result.teamName}` : '';
+    pushAuditLog({
+      actor: context.account.username,
+      action: 'import.columns.team.update',
+      detail: `Cập nhật cấu hình cột Import Data tổ${teamLabel} (${visibleBaseColumns}/${totalBaseColumns} cột dữ liệu hiển thị)`,
+    });
+    res.json({
+      ok: true,
+      team: {
+        available: true,
+        teamId: result.teamId || null,
+        teamName: result.teamName || null,
+        config: result.config,
+        updatedAt: result.updatedAt,
+        updatedBy: result.updatedBy,
+        updatedByName: result.updatedByName,
+        owner: result.owner || null,
+        ownerName: result.ownerName || null,
+        canEdit: true,
+      },
+    });
+  } catch (err) {
+    console.error('Không thể lưu cấu hình cột chia sẻ', err);
+    if (err?.code === 'TEAM_REQUIRED') {
+      res.status(400).json({ ok: false, error: 'Bạn cần thuộc một tổ để lưu cấu hình chia sẻ.' });
+      return;
+    }
+    if (err?.code === 'INVALID_CONFIG') {
+      res.status(400).json({ ok: false, error: 'Cần giữ lại ít nhất một cột dữ liệu hiển thị.' });
+      return;
+    }
+    res.status(500).json({ ok: false, error: 'Không thể lưu cấu hình cột chia sẻ.' });
+  }
+});
 
 app.get('/api/data-health/summary', async (req, res) => {
 
