@@ -27,7 +27,10 @@ This backlog liệt kê các hạng mục cải thiện trải nghiệm người
   - [x] Đồng bộ backend & API filter preset để hỗ trợ chế độ chia sẻ theo tổ (team visibility, metadata chủ sở hữu). (đã chuẩn hoá metadata chủ sở hữu/tổ, cho phép chuyển đổi phạm vi và cập nhật quyền lỗi TEAM_REQUIRED/FORBIDDEN)
   - [x] Cập nhật DataImporter hiển thị/quản lý preset tổ: chọn phạm vi lưu (cá nhân/tổ), hiển thị quyền chỉnh sửa, tự đồng bộ. (đã thêm lựa chọn phạm vi lưu, nhãn quyền chỉnh sửa và đồng bộ trạng thái chia sẻ trực tiếp trong UI)
   - [x] Lưu cấu hình cột import theo tổ với quyền chia sẻ, cho phép chọn dùng cấu hình tổ hoặc cá nhân và hiển thị nguồn cấu hình. (đã bổ sung API quản lý cấu hình tổ, lựa chọn phạm vi trong UI và thẻ thông tin cập nhật)
-- [ ] Thiết kế wizard nhiều bước giúp người dùng theo dõi tiến trình import, tránh quá tải thông tin.
+- [x] Thiết kế wizard nhiều bước giúp người dùng theo dõi tiến trình import, tránh quá tải thông tin. (đã thêm wizard 3 bước tại DataImporter.jsx)
+  - [x] Thiết kế và hiển thị stepper ba bước (Chuẩn bị, Xem trước, Đồng bộ) trên DataImporter. (đã render stepper hướng dẫn ở đầu giao diện)
+  - [x] Gói các khu vực Picker/Preview/Bộ lọc & bảng vào từng bước riêng, chỉ hiển thị bước đang hoạt động. (đã bao điều kiện theo `wizardStep`)
+  - [x] Bổ sung điều hướng Next/Back và tự động chuyển sang bước Xem trước sau khi tải file. (đã thêm điều hướng và auto step khi có dữ liệu preview)
 - [ ] Cải thiện feedback khi đồng bộ thất bại: gợi ý hành động cụ thể (thử lại, kiểm tra VPN, báo CNTT).
 
 ## 4. MST assignment & staffing

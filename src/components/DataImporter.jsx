@@ -158,6 +158,41 @@ function getRowKey(row) {
 }
 
 
+const WIZARD_STEPS = [
+
+  {
+
+    id: "prepare",
+
+    title: "Chuẩn bị dữ liệu",
+
+    description: "Chọn file import hoặc mở dữ liệu đã lưu để bắt đầu.",
+
+  },
+
+  {
+
+    id: "preview",
+
+    title: "Xem trước & kiểm tra",
+
+    description: "Rà soát thống kê, lỗi dữ liệu và mẫu trước khi lưu.",
+
+  },
+
+  {
+
+    id: "finalize",
+
+    title: "Áp dụng & đồng bộ",
+
+    description: "Tinh chỉnh bộ lọc, lưu và đồng bộ dữ liệu vào hệ thống.",
+
+  },
+
+];
+
+
 
 const EDITABLE_FIELD_KEYS = [
 
@@ -3540,6 +3575,9 @@ export default function DataImporter({
   const [mode, setMode] = useState("saved");         // saved | preview
 
   const [selectedFile, setSelectedFile] = useState("");
+  const initialWizardStep = mode === "saved" ? WIZARD_STEPS.length - 1 : 0;
+  const [wizardStep, setWizardStep] = useState(initialWizardStep);
+  const [maxWizardStep, setMaxWizardStep] = useState(initialWizardStep);
 
   const [viewMode, setViewMode] = useState(() => {
 
@@ -4848,6 +4886,65 @@ export default function DataImporter({
     ];
 
   }, [importPreview]);
+
+  const finalWizardStep = WIZARD_STEPS.length - 1;
+  const hasPreviewData = mode === "preview" && effectivePreviewRows.length > 0;
+  const hasSavedData = mode === "saved" && rawRows.length > 0;
+  const hasWorkingData = hasPreviewData || hasSavedData;
+  const previewReady = Boolean(importPreview && !importPreview.error);
+
+  const canProceedFromPrepare = hasWorkingData;
+  const canProceedFromPreview = mode === "saved" || previewReady;
+
+  useEffect(() => {
+    if (!hasWorkingData) {
+      setWizardStep(0);
+      setMaxWizardStep(0);
+      return;
+    }
+    setMaxWizardStep((prev) => Math.max(prev, wizardStep));
+  }, [hasWorkingData, wizardStep]);
+
+  useEffect(() => {
+    if (hasPreviewData) {
+      setMaxWizardStep((prev) => Math.max(prev, 1));
+      setWizardStep(1);
+    }
+  }, [hasPreviewData]);
+
+  useEffect(() => {
+    if (mode === "saved" && hasSavedData && !hasPreviewData && maxWizardStep === 0) {
+      setWizardStep(finalWizardStep);
+      setMaxWizardStep(finalWizardStep);
+    }
+  }, [mode, hasSavedData, hasPreviewData, maxWizardStep, finalWizardStep]);
+
+  const handleNextWizardStep = useCallback(() => {
+    setWizardStep((prev) => {
+      const next = Math.min(prev + 1, finalWizardStep);
+      setMaxWizardStep((prevMax) => Math.max(prevMax, next));
+      return next;
+    });
+  }, [finalWizardStep]);
+
+  const handlePreviousWizardStep = useCallback(() => {
+    setWizardStep((prev) => Math.max(prev - 1, 0));
+  }, []);
+
+  const handleSelectWizardStep = useCallback(
+    (index) => {
+      if (index < 0 || index > finalWizardStep) {
+        return;
+      }
+      if (index > maxWizardStep) {
+        return;
+      }
+      setWizardStep(index);
+      setMaxWizardStep((prevMax) => Math.max(prevMax, index));
+    },
+    [finalWizardStep, maxWizardStep]
+  );
+
 
   const memberTeamMap = useMemo(() => mapMemberNamesToTeams(rosterSnapshot), [rosterSnapshot]);
 
@@ -17162,19 +17259,203 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
 
 
 
-      <Suspense fallback={null}>
+      <section className="mt-6 rounded border border-gray-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-800">
 
-        <PickerSection context={pickerContext} />
+        <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100">Quy trình import</h2>
 
-      </Suspense>
+        <p className="mt-1 text-sm text-gray-600 dark:text-gray-300">
+
+          Thực hiện lần lượt từng bước để tránh bỏ sót thao tác quan trọng.
+
+        </p>
+
+        <ol className="mt-4 flex flex-col gap-2 md:flex-row md:items-stretch md:gap-3">
+
+          {WIZARD_STEPS.map((step, index) => {
+
+            const isCurrent = index === wizardStep;
+
+            const isDone = index < wizardStep;
+
+            const isLocked = index > maxWizardStep;
+
+            return (
+
+              <li key={step.id} className="flex-1">
+
+                <button
+
+                  type="button"
+
+                  onClick={() => handleSelectWizardStep(index)}
+
+                  disabled={isLocked}
+
+                  className={cx(
+
+                    "flex w-full flex-col gap-1 rounded border px-3 py-2 text-left text-sm transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2",
+
+                    isCurrent
+
+                      ? "border-blue-500 bg-blue-50 text-blue-700 focus-visible:outline-blue-500 dark:border-blue-400/80 dark:bg-blue-500/10 dark:text-blue-200"
+
+                      : isDone
+
+                        ? "border-emerald-500 bg-emerald-50 text-emerald-700 focus-visible:outline-emerald-500 dark:border-emerald-500/60 dark:bg-emerald-500/10 dark:text-emerald-100"
+
+                        : "border-gray-200 bg-white text-gray-700 hover:border-blue-200 hover:text-blue-700 focus-visible:outline-blue-500 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-800 dark:text-gray-200 dark:hover:border-slate-500 dark:hover:text-blue-200"
+
+                  )}
+
+                >
+
+                  <span className="flex items-center gap-2 text-sm font-semibold">
+
+                    <span
+
+                      className={cx(
+
+                        "flex size-6 items-center justify-center rounded-full border text-xs",
+
+                        isCurrent
+
+                          ? "border-blue-500 bg-blue-600 text-white dark:border-blue-400 dark:bg-blue-500"
+
+                          : isDone
+
+                            ? "border-emerald-500 bg-emerald-500 text-white dark:border-emerald-400 dark:bg-emerald-500"
+
+                            : "border-gray-300 bg-white text-gray-600 dark:border-slate-600 dark:bg-slate-900 dark:text-gray-200"
+
+                      )}
+
+                    >
+
+                      {isDone ? <Check className="size-4" /> : index + 1}
+
+                    </span>
+
+                    {step.title}
+
+                  </span>
+
+                  <span className="text-xs text-gray-500 dark:text-gray-400">{step.description}</span>
+
+                </button>
+
+              </li>
+
+            );
+
+          })}
+
+        </ol>
+
+      </section>
 
 
 
-      <Suspense fallback={null}>
+      {wizardStep === 0 && (
 
-        <PreviewSection context={previewContext} />
+        <>
 
-      </Suspense>
+          <Suspense fallback={null}>
+
+            <PickerSection context={pickerContext} />
+
+          </Suspense>
+
+          <div className="mt-4 flex items-center justify-end">
+
+            <Button type="button" onClick={handleNextWizardStep} disabled={!canProceedFromPrepare}>
+
+              Tiếp tục
+
+            </Button>
+
+          </div>
+
+        </>
+
+      )}
+
+
+
+      {wizardStep === 1 && (
+
+        <>
+
+          <Suspense fallback={null}>
+
+            <PreviewSection context={previewContext} />
+
+          </Suspense>
+
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
+
+            <Button type="button" variant="outline" onClick={handlePreviousWizardStep}>
+
+              Quay lại
+
+            </Button>
+
+            <Button type="button" onClick={handleNextWizardStep} disabled={!canProceedFromPreview}>
+
+              Tiếp tục
+
+            </Button>
+
+          </div>
+
+        </>
+
+      )}
+
+
+
+      {wizardStep === 2 && (
+
+        <>
+
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+
+            <Button type="button" variant="outline" onClick={handlePreviousWizardStep}>
+
+              Quay lại
+
+            </Button>
+
+            <div className="flex flex-wrap items-center gap-2">
+
+              <span className="text-xs text-gray-500 dark:text-gray-300">
+
+                Bước 3/3: Áp dụng &amp; đồng bộ
+
+              </span>
+
+              {canViewSavedRows ? (
+
+                <button
+
+                  type="button"
+
+                  onClick={openDeletedList}
+
+                  className="rounded border border-gray-200 bg-white px-3 py-1 text-xs text-gray-600 shadow-sm transition hover:bg-gray-50 dark:border-slate-600 dark:bg-slate-800 dark:text-gray-200 dark:hover:bg-slate-700"
+
+                  data-testid="deleted-list-trigger"
+
+                >
+
+                  Danh sách tờ khai đã xóa
+
+                </button>
+
+              ) : null}
+
+            </div>
+
+          </div>
 
       {canEdit && (
 
@@ -20014,6 +20295,10 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
         Bạn có thể điều chỉnh thủ công trước khi lưu để phản ánh thực tế kiểm tra.
 
       </p>
+
+        </>
+
+      )}
 
     </div>
 
