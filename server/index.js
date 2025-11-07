@@ -2036,6 +2036,7 @@ const DATE_FIELD_KEYS = new Set([
 
 const MST_HISTORY_LIMIT = 500;
 const MST_HISTORY_KEY = 'mst_history_v1';
+const DECL_SYNC_HISTORY_KEY = 'decl_sync_history_v1';
 
 const DEFAULT_STORAGE = {
 
@@ -2044,6 +2045,8 @@ const DEFAULT_STORAGE = {
   mst_rows_v2: '[]',
 
   mst_history_v1: '[]',
+
+  decl_sync_history_v1: '[]',
 
   kpi_rules_v2: JSON.stringify(getRulesSeed(SHARED_DEFAULT_RULES)),
 
@@ -3844,7 +3847,7 @@ function evaluateBackupHealth(summary) {
 
 
 
-function evaluateDiskHealth(storage) {
+export function evaluateDiskHealth(storage) {
 
   const issues = [];
 
@@ -5180,6 +5183,94 @@ function cloneJson(value) {
 
   return JSON.parse(JSON.stringify(value));
 
+}
+
+const DECL_SYNC_HISTORY_MAX_ENTRIES = 200;
+
+function normalizeDeclSyncHistoryEntryForServer(entry) {
+  if (!entry || typeof entry !== 'object') {
+    return null;
+  }
+  const nowIso = new Date().toISOString();
+  const runAtSource = entry.runAt ?? entry.completedAt ?? entry.startedAt ?? nowIso;
+  const runAt = sanitizePresetTimestamp(runAtSource, nowIso);
+  const actor = typeof entry.actor === 'string' && entry.actor.trim() ? entry.actor.trim() : 'system';
+  const reason = typeof entry.reason === 'string' && entry.reason.trim() ? entry.reason.trim() : 'manual';
+  const status = typeof entry.status === 'string' && entry.status.trim() ? entry.status.trim() : 'success';
+  const toNumber = (value) => {
+    const num = Number(value);
+    return Number.isFinite(num) ? num : 0;
+  };
+  const fetched = toNumber(entry.fetched ?? entry.rowsFetched);
+  const inserted = toNumber(entry.inserted ?? entry.imported ?? entry.rowsInserted);
+  const updated = toNumber(entry.updated ?? entry.rowsUpdated);
+  const skipped = toNumber(entry.skipped ?? entry.rowsSkipped);
+  const locked = toNumber(entry.locked ?? entry.reviewLocked ?? entry.rowsReviewLocked);
+  const stored = toNumber(entry.stored ?? entry.storedTotal ?? entry.totalStored ?? entry.rowsAfter);
+  const conflictCount = toNumber(entry.conflictCount ?? entry.conflicts);
+  const hasConflicts = entry.hasConflicts === true || conflictCount > 0;
+  const durationMsRaw = Number(entry.durationMs ?? entry.duration);
+  const durationMs = Number.isFinite(durationMsRaw) ? durationMsRaw : null;
+  const jobId = typeof entry.jobId === 'string' && entry.jobId.trim() ? entry.jobId.trim() : null;
+  const rangeSource = entry.range && typeof entry.range === 'object' ? entry.range : {};
+  const from = typeof rangeSource.from === 'string' && rangeSource.from.trim() ? rangeSource.from.trim() : null;
+  const to = typeof rangeSource.to === 'string' && rangeSource.to.trim() ? rangeSource.to.trim() : null;
+  const range = from || to ? { from, to } : null;
+  const meta = entry.meta && typeof entry.meta === 'object' ? cloneJson(entry.meta) : null;
+  const baseId = typeof entry.id === 'string' && entry.id.trim() ? entry.id.trim() : null;
+  const generatedId = baseId || `decl-sync-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  return {
+    id: generatedId,
+    runAt,
+    actor,
+    reason,
+    status,
+    fetched,
+    inserted,
+    updated,
+    skipped,
+    locked,
+    stored,
+    conflictCount,
+    hasConflicts,
+    durationMs,
+    jobId,
+    range,
+    meta,
+  };
+}
+
+function getDeclSyncHistoryEntries() {
+  const stored = getJSONValue(DECL_SYNC_HISTORY_KEY, []);
+  return Array.isArray(stored) ? stored : [];
+}
+
+function appendDeclSyncHistoryEntry(entry, { actor = 'system', source = 'decl-sync-history' } = {}) {
+  const normalized = normalizeDeclSyncHistoryEntryForServer(entry);
+  if (!normalized) {
+    return getDeclSyncHistoryEntries();
+  }
+  const history = getDeclSyncHistoryEntries();
+  const next = [normalized];
+  const seen = new Set([normalized.id]);
+  for (const item of history) {
+    if (!item || typeof item !== 'object') {
+      continue;
+    }
+    const itemId = typeof item.id === 'string' && item.id ? item.id : null;
+    if (itemId && seen.has(itemId)) {
+      continue;
+    }
+    next.push(item);
+    if (itemId) {
+      seen.add(itemId);
+    }
+    if (next.length >= DECL_SYNC_HISTORY_MAX_ENTRIES) {
+      break;
+    }
+  }
+  setJSONValue(DECL_SYNC_HISTORY_KEY, next, { actor, source });
+  return next;
 }
 
 
@@ -22303,9 +22394,55 @@ async function runEcusSync({
 
 
 
-  pushNotification({
+  const finishedAt = Date.now();
 
-    type: 'ecus.sync.completed',
+  appendDeclSyncHistoryEntry({
+
+    runAt: runAtIso,
+
+    actor,
+
+    reason: syncReason,
+
+    status: 'success',
+
+    fetched: totalFetched,
+
+    inserted: totalInserted,
+
+    updated: updatedExisting,
+
+    skipped: skippedExisting,
+
+    locked: reviewLocked,
+
+    stored: totalStored,
+
+    durationMs: Number.isFinite(Date.parse(runAtIso))
+
+      ? Math.max(0, finishedAt - Date.parse(runAtIso))
+
+      : null,
+
+    range: cloneJson(range),
+
+    meta: {
+
+      existingBefore: existingCount,
+
+      existingAfter: totalStored,
+
+      alerts: cloneJson(alertSummary),
+
+      includeTaxCodes: Array.from(includeSet),
+
+      excludeTaxCodes: Array.from(excludeSet),
+
+    },
+
+  }, { actor });
+
+  pushNotification({
 
     severity: 'info',
 
@@ -22440,6 +22577,32 @@ async function runEcusSyncWithErrorHandling(params) {
       meta: { actor: params?.actor || 'system', reason: params?.reason || 'unknown' },
 
     });
+
+    appendDeclSyncHistoryEntry({
+
+      runAt: new Date().toISOString(),
+
+      actor: params?.actor || 'system',
+
+      reason: params?.reason || 'manual',
+
+      status: 'error',
+
+      fetched: 0,
+
+      inserted: 0,
+
+      updated: 0,
+
+      skipped: 0,
+
+      locked: 0,
+
+      stored: 0,
+
+      meta: { error: err?.message || 'Không thể đồng bộ dữ liệu từ ECUS.' },
+
+    }, { actor: params?.actor || 'system', source: 'decl-sync-history' });
 
     throw err;
 
@@ -27655,6 +27818,102 @@ app.get('/api/import/ecus/status', async (req, res) => {
 
 });
 
+
+
+
+app.post('/api/import/ecus/precheck', async (req, res) => {
+  const { denied } = requireAdminSyncManage(req, res);
+  if (denied) {
+    return;
+  }
+  try {
+    const [databaseHealth, storageDetails] = await Promise.all([
+      checkSqlServerHealth().catch((error) => ({
+        ok: false,
+        state: 'error',
+        message: error?.message || 'Không thể kiểm tra SQL Server',
+      })),
+      collectDatabaseStorageDetails().catch((error) => ({ error })),
+    ]);
+    let ecusStep;
+    try {
+      const preview = await previewEcusSync({}, { limit: 1 });
+      ecusStep = {
+        key: 'ecus-access',
+        label: 'Truy vấn dữ liệu ECUS',
+        ok: true,
+        status: 'ok',
+        message:
+          preview?.rows?.length > 0
+            ? `Truy vấn thành công ${preview.rows.length} mẫu dữ liệu.`
+            : 'Kết nối ECUS thành công.',
+        details: {
+          fetched: preview?.totalFetched || 0,
+          range: preview?.range || null,
+        },
+      };
+    } catch (error) {
+      ecusStep = {
+        key: 'ecus-access',
+        label: 'Truy vấn dữ liệu ECUS',
+        ok: false,
+        status: 'error',
+        message: error?.message || 'Không thể truy vấn dữ liệu ECUS.',
+        details: { error: error?.message || null },
+      };
+    }
+    const databaseStep = {
+      key: 'sql-connection',
+      label: 'Kết nối SQL Server',
+      ok: databaseHealth?.ok === true,
+      status:
+        databaseHealth?.ok === true
+          ? 'ok'
+          : databaseHealth?.state === 'timeout'
+          ? 'warning'
+          : 'error',
+      message:
+        databaseHealth?.ok === true
+          ? 'Kết nối SQL Server thành công.'
+          : databaseHealth?.message || 'Không thể kết nối SQL Server.',
+      details: databaseHealth || {},
+    };
+    const diskInfo = storageDetails?.disk || {};
+    const diskHealth = evaluateDiskHealth(storageDetails);
+    let diskStatus = 'ok';
+    if (diskHealth?.severity === 'critical') {
+      diskStatus = 'error';
+    } else if (diskHealth?.severity === 'warning') {
+      diskStatus = 'warning';
+    }
+    const diskIssues = Array.isArray(diskHealth?.issues) ? diskHealth.issues : [];
+    const diskStep = {
+      key: 'disk-usage',
+      label: 'Dung lượng lưu trữ máy chủ KPI',
+      ok: diskStatus === 'ok',
+      status: diskStatus,
+      message:
+        diskIssues.length > 0
+          ? diskIssues[0].message
+          : diskStatus === 'ok'
+          ? 'Dung lượng ổ đĩa trong ngưỡng an toàn.'
+          : 'Không thể đánh giá dung lượng ổ đĩa.',
+      details: {
+        disk: diskInfo,
+        issues: diskIssues,
+      },
+    };
+    const steps = [databaseStep, ecusStep, diskStep];
+    const ok = steps.every((step) => step.ok !== false && step.status !== 'error');
+    res.json({
+      ok,
+      steps,
+      checkedAt: new Date().toISOString(),
+    });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err?.message || 'Không thể kiểm tra hệ thống đồng bộ' });
+  }
+});
 
 
 app.put('/api/import/ecus/config', (req, res) => {

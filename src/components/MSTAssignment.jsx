@@ -1961,7 +1961,12 @@ export function PageSizeControl({
   );
 }
 
-export default function MSTAssignment({ canEdit = true, currentUser = null }) {
+export default function MSTAssignment({
+  canEdit = true,
+  currentUser = null,
+  quickLookup = null,
+  onQuickLookupConsumed = null,
+}) {
 
   const [rows, setRows] = useState([]); // toàn bộ (bao gồm metadata)
 
@@ -1986,6 +1991,7 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
   const fileRef = useRef();
 
   const setPageRef = useRef(() => {});
+  const quickLookupHandledRef = useRef(null);
 
   const [selectedFileName, setSelectedFileName] = useState("");
 
@@ -2014,6 +2020,78 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
   const [rosterSnapshot, setRosterSnapshot] = useState(() => getTeamRoster());
 
   const rosterTeams = useMemo(() => buildRosterTeams(rosterSnapshot), [rosterSnapshot]);
+
+  useEffect(() => {
+    if (!quickLookup || typeof quickLookup !== "object") {
+      return;
+    }
+
+    const { type, value, company, timestamp } = quickLookup;
+    const lookupKey =
+      Number.isFinite(timestamp) && timestamp > 0
+        ? timestamp
+        : `${type || ""}|${value || ""}|${company || ""}`;
+    if (quickLookupHandledRef.current === lookupKey) {
+      return;
+    }
+    quickLookupHandledRef.current = lookupKey;
+
+    const lookupType = typeof type === "string" ? type.toLowerCase() : "";
+    const rawValue = typeof value === "string" ? value.trim() : "";
+    const rawCompany = typeof company === "string" ? company.trim() : "";
+    let nextSearch = search;
+    let shouldUpdateSearch = false;
+    let shouldResetPage = false;
+
+    if (lookupType === "mst") {
+      const sanitized = tidyMST(rawValue);
+      const display = sanitized || rawValue;
+      if (display && display !== search) {
+        nextSearch = display;
+        shouldUpdateSearch = true;
+      } else if (!display && rawCompany && rawCompany !== search) {
+        nextSearch = rawCompany;
+        shouldUpdateSearch = true;
+      }
+      if (!groupByMST) {
+        setGroupByMST(true);
+      }
+      shouldResetPage = Boolean(display || rawCompany);
+    } else if (lookupType === "company") {
+      if (rawCompany && rawCompany !== search) {
+        nextSearch = rawCompany;
+        shouldUpdateSearch = true;
+      }
+      shouldResetPage = Boolean(rawCompany);
+    } else if (rawValue) {
+      if (rawValue !== search) {
+        nextSearch = rawValue;
+        shouldUpdateSearch = true;
+      }
+      shouldResetPage = true;
+    }
+
+    if (shouldUpdateSearch) {
+      setSearch(nextSearch);
+    }
+
+    if (shouldResetPage) {
+      if (staffFilter) {
+        setStaffFilter("");
+      }
+      setPageRef.current(1);
+    }
+
+    if (typeof onQuickLookupConsumed === "function") {
+      onQuickLookupConsumed();
+    }
+  }, [
+    quickLookup,
+    onQuickLookupConsumed,
+    search,
+    staffFilter,
+    groupByMST,
+  ]);
 
   const [recentlyImportedKeys, setRecentlyImportedKeys] = useState(() => new Set());
 
@@ -4359,14 +4437,14 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
 
         <div className="flex flex-wrap items-center gap-2">
           <label className="inline-flex items-center gap-2 text-sm text-gray-700">
-            <input
-              type="checkbox"
-              checked={groupByMST}
-              onChange={(e) => {
-                setGroupByMST(e.target.checked);
-                try { setPage(1); } catch {}
-              }}
-            />
+              <input
+                type="checkbox"
+                checked={groupByMST}
+                onChange={(e) => {
+                  setGroupByMST(e.target.checked);
+                  setPageRef.current(1);
+                }}
+              />
             Gom theo MST
           </label>
 
@@ -5865,7 +5943,7 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
 
                         <div className="flex flex-col gap-3">
 
-                          {canEdit && !Boolean(r.__group) ? (
+                            {canEdit && !r.__group ? (
 
                             <div className="flex flex-col gap-2">
 

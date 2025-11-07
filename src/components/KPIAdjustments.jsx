@@ -1,4 +1,4 @@
-﻿import React, { useCallback, useEffect, useMemo, useState } from "react";
+﻿import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
 
@@ -7,6 +7,8 @@ import {
   saveKpiAdjustment,
 
   updateKpiAdjustmentStatus,
+
+  bulkUpdateKpiAdjustmentStatus,
 
   removeKpiAdjustment,
 
@@ -21,6 +23,9 @@ import {
   getKpiAdjustmentSettings,
 
   saveKpiAdjustmentSettings,
+
+  getKpiAdjustmentFilterState,
+  saveKpiAdjustmentFilterState,
 
   getTeamRoster,
   mapMemberNamesToTeams,
@@ -79,6 +84,7 @@ import { ScrollArea } from "@/components/ui/scroll-area.jsx";
 
 import { Input } from "@/components/ui/input.jsx";
 import { Switch } from "@/components/ui/switch.jsx";
+import { Checkbox } from "@/components/ui/checkbox.jsx";
 
 import { Textarea } from "@/components/ui/textarea.jsx";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip.jsx";
@@ -98,6 +104,11 @@ const STATUS_LABELS = {
   rejected: "Đã từ chối",
 
 };
+
+
+
+const DEFAULT_PAGE_SIZE = 25;
+const PAGE_SIZE_OPTIONS = Object.freeze([25, 50, 100, 150]);
 
 
 
@@ -1566,7 +1577,7 @@ const initialFormState = (month = getCurrentMonth(), settings, presets = {}) => 
 
 
 
-export default function KPIAdjustments({ currentUser }) {
+export default function KPIAdjustments({ currentUser, onRequestImportLookup = null, onRequestMstLookup = null }) {
 
   const [settings, setSettings] = useState(() => getKpiAdjustmentSettings());
 
@@ -1586,9 +1597,17 @@ export default function KPIAdjustments({ currentUser }) {
 
   const businessDirectory = businessData.directory || { entries: [], byMst: new Map(), byCompany: new Map() };
 
-  const [filterMonth, setFilterMonth] = useState(getCurrentMonth());
+  const currentMonthValue = useMemo(() => getCurrentMonth(), []);
+
+  const [filterMonth, setFilterMonth] = useState(currentMonthValue);
 
   const [filterStatus, setFilterStatus] = useState("all");
+
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
+  const [page, setPage] = useState(1);
+  const [selectedIds, setSelectedIds] = useState(() => new Set());
+  const [bulkUpdating, setBulkUpdating] = useState(false);
+  const [bulkError, setBulkError] = useState("");
 
   const [form, setForm] = useState(() =>
     initialFormState(undefined, settings, resolveStaffDefaults(currentUser, getTeamRoster()))
@@ -1601,7 +1620,6 @@ export default function KPIAdjustments({ currentUser }) {
   const [detailEntry, setDetailEntry] = useState(null);
 
   const [guidanceOpen, setGuidanceOpen] = useState(false);
-
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [guidanceFullscreen, setGuidanceFullscreen] = useState(false);
 
@@ -1625,34 +1643,113 @@ export default function KPIAdjustments({ currentUser }) {
   const canSubmit = currentUser?.permissions?.adjustSubmit !== false;
   const canOverridePoints = currentUser?.permissions?.adjustOverridePoints === true;
 
+  const requestImportLookup = useCallback(
+    (payload) => {
+      if (typeof onRequestImportLookup === 'function') {
+        onRequestImportLookup(payload);
+      }
+    },
+    [onRequestImportLookup]
+  );
+
+  const requestMstLookup = useCallback(
+    (payload) => {
+      if (typeof onRequestMstLookup === 'function') {
+        onRequestMstLookup(payload);
+      }
+    },
+    [onRequestMstLookup]
+  );
+
   const userIdentity = normalizeStr(currentUser?.username || currentUser?.memberName || currentUser?.name);
   const isAuthenticated = !!userIdentity;
   const currentStaffKey = normalizeName(defaultStaffName);
 
+  const filtersReadyRef = useRef(false);
   const [showMineOnly, setShowMineOnly] = useState(() => Boolean(isAuthenticated && currentStaffKey && !canApprove));
   const [staffFilter, setStaffFilter] = useState("all");
-  const [filterSignature, setFilterSignature] = useState("");
+
+  const fallbackMineOnly = useMemo(
+
+    () => Boolean(isAuthenticated && currentStaffKey && !canApprove),
+
+    [isAuthenticated, currentStaffKey, canApprove]
+
+  );
 
   useEffect(() => {
-    const signature = `${isAuthenticated ? 1 : 0}:${canApprove ? 1 : 0}:${currentStaffKey || ""}`;
-    if (filterSignature === signature) {
+    const staffKeyAvailable = Boolean(currentStaffKey);
+    const options = {
+      fallbackMonth: currentMonthValue,
+      fallbackMineOnly,
+      allowStaffFilter: canApprove,
+      staffKeyAvailable,
+      fallbackPageSize: DEFAULT_PAGE_SIZE,
+    };
+    const savedFilters = getKpiAdjustmentFilterState(userIdentity, options);
+    filtersReadyRef.current = false;
+    setFilterMonth(savedFilters.month);
+    setFilterStatus(savedFilters.status);
+    setShowMineOnly(savedFilters.mineOnly);
+    setStaffFilter(savedFilters.staff);
+    setPageSize(savedFilters.pageSize);
+    setPage(1);
+    setSelectedIds(new Set());
+    filtersReadyRef.current = true;
+  }, [
+    userIdentity,
+    canApprove,
+    currentStaffKey,
+    fallbackMineOnly,
+    currentMonthValue,
+  ]);
+
+  useEffect(() => {
+    if (!filtersReadyRef.current) {
       return;
     }
-    setFilterSignature(signature);
-    if (!isAuthenticated || !currentStaffKey) {
-      setShowMineOnly(false);
-      setStaffFilter("all");
-      return;
-    }
-    if (!canApprove) {
-      setShowMineOnly(true);
-      setStaffFilter("all");
-    } else {
-      setStaffFilter("all");
-    }
-  }, [isAuthenticated, canApprove, currentStaffKey, filterSignature]);
+    const staffKeyAvailable = Boolean(currentStaffKey);
+    const options = {
+      fallbackMonth: currentMonthValue,
+      fallbackMineOnly,
+      allowStaffFilter: canApprove,
+      staffKeyAvailable,
+      fallbackPageSize: DEFAULT_PAGE_SIZE,
+    };
+    saveKpiAdjustmentFilterState(
+      userIdentity,
+      {
+        month: filterMonth,
+        status: filterStatus,
+        mineOnly: showMineOnly,
+        staff: staffFilter,
+        pageSize,
+      },
+      options
+    );
+  }, [
+    filterMonth,
+    filterStatus,
+    showMineOnly,
+    staffFilter,
+    pageSize,
+    userIdentity,
+    canApprove,
+    currentStaffKey,
+    fallbackMineOnly,
+    currentMonthValue,
+  ]);
 
   const showMineToggle = isAuthenticated && !!currentStaffKey;
+
+  useEffect(() => {
+    setPage(1);
+    setSelectedIds(new Set());
+  }, [filterMonth, filterStatus, showMineOnly, staffFilter]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [pageSize]);
 
   const businessEntries = useMemo(() => businessDirectory.entries || [], [businessDirectory]);
 
@@ -2412,6 +2509,66 @@ export default function KPIAdjustments({ currentUser }) {
       });
 
   }, [adjustments, filterMonth, filterStatus, showMineOnly, currentStaffKey, canApprove, staffFilter]);
+  const totalAdjustments = filteredAdjustments.length;
+  const totalPages = Math.max(1, Math.ceil(totalAdjustments / pageSize));
+  const currentPage = Math.min(Math.max(page, 1), totalPages);
+
+  useEffect(() => {
+    if (page !== currentPage) {
+      setPage(currentPage);
+    }
+  }, [page, currentPage]);
+
+  const paginatedAdjustments = useMemo(() => {
+    const startIndex = (currentPage - 1) * pageSize;
+    const endIndex = startIndex + pageSize;
+    return filteredAdjustments.slice(startIndex, endIndex);
+  }, [filteredAdjustments, pageSize, currentPage]);
+
+  const selectedCount = selectedIds.size;
+  const visibleSelectedCount = useMemo(
+    () => paginatedAdjustments.filter((item) => selectedIds.has(item.id)).length,
+    [paginatedAdjustments, selectedIds]
+  );
+  const allVisibleSelected =
+    paginatedAdjustments.length > 0 && paginatedAdjustments.every((item) => selectedIds.has(item.id));
+  const someVisibleSelected = paginatedAdjustments.some((item) => selectedIds.has(item.id));
+  const masterSelectionState = allVisibleSelected ? true : someVisibleSelected ? 'indeterminate' : false;
+
+  useEffect(() => {
+    if (!selectedIds.size && bulkError) {
+      setBulkError('');
+    }
+  }, [bulkError, selectedIds]);
+
+  useEffect(() => {
+    setSelectedIds((prev) => {
+      if (!prev || prev.size === 0) {
+        return prev;
+      }
+      const allowed = new Set(filteredAdjustments.map((item) => item.id));
+      const next = new Set();
+      prev.forEach((id) => {
+        if (allowed.has(id)) {
+          next.add(id);
+        }
+      });
+      if (next.size === prev.size) {
+        let unchanged = true;
+        prev.forEach((id) => {
+          if (!next.has(id)) {
+            unchanged = false;
+          }
+        });
+        if (unchanged) {
+          return prev;
+        }
+      }
+      return next;
+    });
+  }, [filteredAdjustments]);
+
+
 
 
 
@@ -2845,6 +3002,46 @@ export default function KPIAdjustments({ currentUser }) {
 
 
 
+  const handleRowSelectionChange = useCallback(
+    (id, checked) => {
+      if (!canApprove) {
+        return;
+      }
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        if (checked) {
+          next.add(id);
+        } else {
+          next.delete(id);
+        }
+        return next;
+      });
+    },
+    [canApprove]
+  );
+
+  const handleSelectAllCurrentPage = useCallback(
+    (checked) => {
+      if (!canApprove) {
+        return;
+      }
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        if (checked) {
+          paginatedAdjustments.forEach((item) => next.add(item.id));
+        } else {
+          paginatedAdjustments.forEach((item) => next.delete(item.id));
+        }
+        return next;
+      });
+    },
+    [canApprove, paginatedAdjustments]
+  );
+
+  const clearSelection = useCallback(() => {
+    setSelectedIds(() => new Set());
+  }, []);
+
   const handleDetailConfirm = async () => {
 
     if (!detailEntry?.entry) {
@@ -2876,6 +3073,55 @@ export default function KPIAdjustments({ currentUser }) {
   };
 
 
+
+  const handleBulkStatusChange = useCallback(
+    async (nextStatus) => {
+      if (!canApprove || bulkUpdating) {
+        return;
+      }
+      if (!selectedIds || selectedIds.size === 0) {
+        setBulkError('Vui lòng chọn ít nhất một dòng để cập nhật trạng thái.');
+        return;
+      }
+      const targets = filteredAdjustments.filter(
+        (item) => selectedIds.has(item.id) && item.status !== nextStatus
+      );
+      if (!targets.length) {
+        setBulkError('Các điểm đã chọn đã có trạng thái tương ứng.');
+        return;
+      }
+      let noteValue = '';
+      if (nextStatus === 'rejected' && typeof window !== 'undefined') {
+        const promptValue = window.prompt('Nhập lý do từ chối chung cho các dòng đã chọn (có thể để trống):', '');
+        noteValue = promptValue || '';
+      }
+      setBulkError('');
+      setBulkUpdating(true);
+      try {
+        bulkUpdateKpiAdjustmentStatus(
+          targets.map((item) => item.id),
+          nextStatus,
+          { actor, note: noteValue, permissions: currentUser?.permissions || {} }
+        );
+        setAdjustments(getKpiAdjustments());
+        setSelectedIds(new Set());
+      } catch (error) {
+        console.error(error);
+        setBulkError(error?.message || 'Không thể cập nhật trạng thái hàng loạt.');
+      } finally {
+        setBulkUpdating(false);
+      }
+    },
+    [actor, bulkUpdating, canApprove, currentUser, filteredAdjustments, selectedIds]
+  );
+
+  const handleBulkApprove = useCallback(() => {
+    handleBulkStatusChange('approved');
+  }, [handleBulkStatusChange]);
+
+  const handleBulkReject = useCallback(() => {
+    handleBulkStatusChange('rejected');
+  }, [handleBulkStatusChange]);
 
   const handleEdit = (entry) => {
 
@@ -3265,6 +3511,73 @@ export default function KPIAdjustments({ currentUser }) {
   const detailData = detailEntry?.entry || null;
 
   const detailCategoryConfig = detailData ? KPI_ADJUSTMENT_CATEGORY_CONFIG[detailData.category] || {} : {};
+  const detailReferences = useMemo(() => {
+    if (!detailData) {
+      return [];
+    }
+    if (Array.isArray(detailData.references)) {
+      return detailData.references
+        .map((item) => (typeof item === "string" ? item.trim() : ""))
+        .filter(Boolean);
+    }
+    if (typeof detailData.referencesInput === "string") {
+      return parseReferences(detailData.referencesInput);
+    }
+    return [];
+  }, [detailData]);
+  const normalizedDetailMst = useMemo(
+    () => (detailData ? normalizeMST(detailData.taxCode || detailData.mst || "") : ""),
+    [detailData]
+  );
+  const detailMstInfo = useMemo(() => {
+    if (!normalizedDetailMst) {
+      return null;
+    }
+    const byMst = businessDirectory?.byMst;
+    if (byMst && typeof byMst.get === "function") {
+      return byMst.get(normalizedDetailMst) || null;
+    }
+    return null;
+  }, [businessDirectory, normalizedDetailMst]);
+  const normalizedDetailCompany = useMemo(() => {
+    if (detailData?.companyName) {
+      return normalizeName(detailData.companyName);
+    }
+    if (detailMstInfo?.company) {
+      return normalizeName(detailMstInfo.company);
+    }
+    return "";
+  }, [detailData?.companyName, detailMstInfo?.company]);
+  const relatedDeclarationDetails = useMemo(() => {
+    if (!Array.isArray(declarationSuggestions) || declarationSuggestions.length === 0) {
+      return [];
+    }
+    if (!normalizedDetailMst && !normalizedDetailCompany) {
+      return [];
+    }
+    const seen = new Set();
+    const matches = [];
+    for (const suggestion of declarationSuggestions) {
+      if (!suggestion) continue;
+      const suggestionMst = normalizeMST(suggestion.mst || "");
+      const suggestionCompany = normalizeName(suggestion.company || "");
+      const mstMatched = normalizedDetailMst && suggestionMst && suggestionMst === normalizedDetailMst;
+      const companyMatched = normalizedDetailCompany && suggestionCompany && suggestionCompany === normalizedDetailCompany;
+      if (!mstMatched && !companyMatched) {
+        continue;
+      }
+      const key = suggestion.key || `${suggestionMst || ""}|${suggestion.soTkDigits || suggestion.soTk || ""}`;
+      if (seen.has(key)) {
+        continue;
+      }
+      seen.add(key);
+      matches.push(suggestion);
+      if (matches.length >= 8) {
+        break;
+      }
+    }
+    return matches;
+  }, [declarationSuggestions, normalizedDetailMst, normalizedDetailCompany]);
 
   const detailExtraQuantity = detailCategoryConfig.extraPointConfig
 
@@ -3508,15 +3821,15 @@ export default function KPIAdjustments({ currentUser }) {
 
               </div>
 
-              <div>
+              <div className="space-y-2">
 
                 <div className="text-xs font-medium uppercase text-muted-foreground">Tham chiếu</div>
 
-                {Array.isArray(detailData.references) && detailData.references.length ? (
+                {detailReferences.length ? (
 
-                  <div className="mt-2 flex flex-wrap gap-2">
+                  <div className="flex flex-wrap gap-2">
 
-                    {detailData.references.map((ref) => (
+                    {detailReferences.map((ref) => (
 
                       <Badge key={ref} variant="outline">
 
@@ -3530,9 +3843,165 @@ export default function KPIAdjustments({ currentUser }) {
 
                 ) : (
 
-                  <div className="mt-1 text-muted-foreground">Không có tham chiếu.</div>
+                  <div className="text-muted-foreground">Không có tham chiếu.</div>
 
                 )}
+
+                {detailReferences.length || normalizedDetailMst ? (
+
+                  <div className="space-y-2 rounded-lg border border-border bg-muted/40 p-3 text-xs">
+
+                    <div className="text-[11px] font-semibold uppercase text-muted-foreground">Tra cứu nhanh</div>
+
+                    {detailReferences.length ? (
+
+                      <div className="flex flex-wrap gap-2">
+
+                        {detailReferences.map((ref) => (
+
+                          <Button
+
+                            key={`quick-ref-${ref}`}
+
+                            type="button"
+
+                            size="sm"
+
+                            variant="outline"
+
+                            onClick={() => requestImportLookup({ type: 'declaration', value: ref })}
+
+                          >
+
+                            Tìm tờ khai {ref}
+
+                          </Button>
+
+                        ))}
+
+                      </div>
+
+                    ) : null}
+
+                    {normalizedDetailMst ? (
+
+                      <div className="flex flex-wrap items-center gap-2">
+
+                        <Button
+
+                          type="button"
+
+                          size="sm"
+
+                          variant="outline"
+
+                          onClick={() => requestImportLookup({ type: 'mst', value: normalizedDetailMst })}
+
+                        >
+
+                          Tra cứu trong Import
+
+                        </Button>
+
+                        <Button
+
+                          type="button"
+
+                          size="sm"
+
+                          onClick={() =>
+
+                            requestMstLookup({
+
+                              type: 'mst',
+
+                              value: normalizedDetailMst,
+
+                              company: detailData?.companyName || '',
+
+                            })
+
+                          }
+
+                        >
+
+                          Mở tab Gán MST
+
+                        </Button>
+
+                        <span className="text-muted-foreground">
+
+                          MST: <span className="font-medium text-foreground">{normalizedDetailMst}</span>
+
+                          {detailMstInfo?.company ? ` • ${detailMstInfo.company}` : ''}
+
+                        </span>
+
+                      </div>
+
+                    ) : null}
+
+                    {relatedDeclarationDetails.length ? (
+
+                      <div className="space-y-1">
+
+                        <div className="text-[11px] font-semibold uppercase text-muted-foreground">Gợi ý tờ khai gần đây</div>
+
+                        <ul className="list-disc space-y-1 pl-4 text-muted-foreground">
+
+                          {relatedDeclarationDetails.map((entry) => {
+
+                            const key = entry.key || entry.soTk || entry.soTkDigits || `${entry.mst || ''}-${entry.date || ''}`;
+
+                            const declarationValue = entry.soTk || entry.soTkDigits || '';
+
+                            return (
+
+                              <li key={key}>
+
+                                <button
+
+                                  type="button"
+
+                                  className="font-medium text-foreground underline decoration-dotted transition hover:text-primary"
+
+                                  onClick={() =>
+
+                                    declarationValue
+
+                                      ? requestImportLookup({ type: 'declaration', value: declarationValue })
+
+                                      : undefined
+
+                                  }
+
+                                >
+
+                                  {declarationValue || 'Không rõ số tờ khai'}
+
+                                </button>
+
+                                {entry.mst ? ` • MST ${entry.mst}` : ''}
+
+                                {entry.company ? ` • ${entry.company}` : ''}
+
+                                {entry.date ? ` • ${entry.date}` : ''}
+
+                              </li>
+
+                            );
+
+                          })}
+
+                        </ul>
+
+                      </div>
+
+                    ) : null}
+
+                  </div>
+
+                ) : null}
 
               </div>
 
@@ -5417,6 +5886,52 @@ export default function KPIAdjustments({ currentUser }) {
 
 
 
+          <div className="mt-6 flex flex-wrap items-center justify-between gap-3 text-sm">
+            <div className="flex flex-wrap items-center gap-3">
+              <span className="font-medium text-foreground">
+                Hiển thị {paginatedAdjustments.length.toLocaleString('vi-VN')} / {totalAdjustments.toLocaleString('vi-VN')} điểm
+              </span>
+              <span className="text-xs text-muted-foreground">
+                Trang {currentPage}/{totalPages}{selectedCount ? ` • Đã chọn ${selectedCount.toLocaleString('vi-VN')} (${visibleSelectedCount.toLocaleString('vi-VN')} trên trang)` : ''}
+              </span>
+            </div>
+            {canApprove ? (
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={handleBulkApprove}
+                  disabled={!selectedCount || bulkUpdating}
+                >
+                  Duyệt hàng loạt
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="destructive"
+                  onClick={handleBulkReject}
+                  disabled={!selectedCount || bulkUpdating}
+                >
+                  Từ chối hàng loạt
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={clearSelection}
+                  disabled={!selectedCount}
+                >
+                  Bỏ chọn
+                </Button>
+              </div>
+            ) : null}
+          </div>
+          {bulkError ? (
+            <div className="mt-2 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+              {bulkError}
+            </div>
+          ) : null}
+
           <div className="mt-6 overflow-hidden rounded-xl border border-border">
 
             <table className="min-w-full text-sm">
@@ -5424,6 +5939,23 @@ export default function KPIAdjustments({ currentUser }) {
               <thead className="bg-muted/60 text-xs uppercase text-muted-foreground">
 
                 <tr className="text-left">
+
+                  {canApprove ? (
+                    <th className="w-10 px-4 py-2">
+                      <Checkbox
+                        aria-label="Chọn tất cả điểm trên trang hiện tại"
+                        checked={masterSelectionState}
+                        onCheckedChange={(checked) => {
+                          const nextChecked = checked === true;
+                          if (checked === 'indeterminate') {
+                            handleSelectAllCurrentPage(true);
+                          } else {
+                            handleSelectAllCurrentPage(nextChecked);
+                          }
+                        }}
+                      />
+                    </th>
+                  ) : null}
 
                   <th className="px-4 py-2">Tháng</th>
 
@@ -5453,7 +5985,7 @@ export default function KPIAdjustments({ currentUser }) {
 
                 {filteredAdjustments.length ? (
 
-                  filteredAdjustments.map((item) => {
+                  paginatedAdjustments.map((item) => {
 
                     const label = KPI_ADJUSTMENT_CATEGORY_CONFIG[item.category]?.label || item.category;
 
@@ -5506,6 +6038,16 @@ export default function KPIAdjustments({ currentUser }) {
                     return (
 
                       <tr key={item.id} className="odd:bg-background even:bg-muted/30">
+
+                        {canApprove ? (
+                          <td className="px-4 py-2 align-top">
+                            <Checkbox
+                              aria-label={`Chọn điểm KPI ${item.staffName || ''}`}
+                              checked={selectedIds.has(item.id)}
+                              onCheckedChange={(checked) => handleRowSelectionChange(item.id, checked === true)}
+                            />
+                          </td>
+                        ) : null}
 
                         <td className="px-4 py-2 align-top">{item.month || "—"}</td>
 
@@ -5685,7 +6227,7 @@ export default function KPIAdjustments({ currentUser }) {
 
                   <tr>
 
-                    <td className="px-4 py-6 text-center text-muted-foreground" colSpan={10}>
+                    <td className="px-4 py-6 text-center text-muted-foreground" colSpan={canApprove ? 11 : 10}>
 
                       Không có điểm KPI bổ sung nào phù hợp với bộ lọc hiện tại.
 
@@ -5698,6 +6240,50 @@ export default function KPIAdjustments({ currentUser }) {
               </tbody>
 
             </table>
+
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border/60 px-4 py-3 text-sm">
+              <label className="flex items-center gap-2" htmlFor="kpi-adjust-page-size">
+                <span className="text-xs text-muted-foreground">Số dòng/trang</span>
+                <select
+                  id="kpi-adjust-page-size"
+                  className="h-8 rounded-md border border-input bg-background px-2 text-sm text-foreground shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+                  value={pageSize}
+                  onChange={(event) => {
+                    const next = Number.parseInt(event.target.value, 10);
+                    if (Number.isFinite(next) && PAGE_SIZE_OPTIONS.includes(next)) {
+                      setPageSize(next);
+                    }
+                  }}
+                >
+                  {PAGE_SIZE_OPTIONS.map((size) => (
+                    <option key={size} value={size}>
+                      {size.toLocaleString('vi-VN')}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+                  disabled={currentPage <= 1}
+                >
+                  Trang trước
+                </Button>
+                <span className="text-xs text-muted-foreground">Trang {currentPage} / {totalPages}</span>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
+                  disabled={currentPage >= totalPages}
+                >
+                  Trang sau
+                </Button>
+              </div>
+            </div>
 
           </div>
 

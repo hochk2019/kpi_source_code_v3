@@ -1,4 +1,4 @@
-import React, { Suspense, useEffect, useMemo, useState } from 'react';
+import React, { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs.jsx';
 
@@ -119,6 +119,8 @@ const KPICalculator = ({ auth, activeTab = 'reports', onTabChange }) => {
   const initialTab = useMemo(() => (allowedTabs.has(activeTab) ? activeTab : 'reports'), [activeTab, allowedTabs]);
 
   const [tabValue, setTabValue] = useState(initialTab);
+  const [importQuickLookup, setImportQuickLookup] = useState(null);
+  const [mstQuickLookup, setMstQuickLookup] = useState(null);
 
 
 
@@ -158,21 +160,32 @@ const KPICalculator = ({ auth, activeTab = 'reports', onTabChange }) => {
 
 
 
-  const handleTabChange = (value) => {
+  const handleTabChange = useCallback(
+    (value) => {
+      if (!allowedTabs.has(value)) {
+        return;
+      }
+      setTabValue(value);
+      onTabChange?.(value);
+    },
+    [allowedTabs, onTabChange]
+  );
 
-    if (!allowedTabs.has(value)) {
+  const handleOpenImportLookup = useCallback(
+    (payload) => {
+      setImportQuickLookup(payload ? { ...payload, timestamp: Date.now() } : null);
+      handleTabChange('import');
+    },
+    [handleTabChange]
+  );
 
-      return;
-
-    }
-
-    setTabValue(value);
-
-    onTabChange?.(value);
-
-  };
-
-
+  const handleOpenMstLookup = useCallback(
+    (payload) => {
+      setMstQuickLookup(payload ? { ...payload, timestamp: Date.now() } : null);
+      handleTabChange('mst');
+    },
+    [handleTabChange]
+  );
 
   return (
 
@@ -378,7 +391,12 @@ const KPICalculator = ({ auth, activeTab = 'reports', onTabChange }) => {
 
           <TabPanel>
 
-            <MSTAssignment canEdit={canMstEdit} currentUser={effectiveAuth} />
+            <MSTAssignment
+              canEdit={canMstEdit}
+              currentUser={effectiveAuth}
+              quickLookup={mstQuickLookup}
+              onQuickLookupConsumed={() => setMstQuickLookup(null)}
+            />
 
           </TabPanel>
 
@@ -413,6 +431,10 @@ const KPICalculator = ({ auth, activeTab = 'reports', onTabChange }) => {
               canManageSync={canManageSync}
 
               canManageAlerts={canManageAlerts}
+
+              quickLookup={importQuickLookup}
+
+              onQuickLookupConsumed={() => setImportQuickLookup(null)}
 
             />
 
@@ -450,7 +472,11 @@ const KPICalculator = ({ auth, activeTab = 'reports', onTabChange }) => {
 
           <TabPanel>
 
-            <KPIAdjustments currentUser={effectiveAuth} />
+            <KPIAdjustments
+              currentUser={effectiveAuth}
+              onRequestImportLookup={handleOpenImportLookup}
+              onRequestMstLookup={handleOpenMstLookup}
+            />
 
           </TabPanel>
 

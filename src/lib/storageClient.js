@@ -33,7 +33,127 @@ function formatHttpError(response) {
 
 
 
-async function sendWrite(base, key, value) {
+const WRITE_RETRY_MAX_ATTEMPTS = 3;
+
+const WRITE_RETRY_BASE_DELAY_MS = 1000;
+
+const WRITE_RETRY_BACKOFF = 2;
+
+const WRITE_RETRY_MAX_DELAY_MS = 8000;
+
+
+
+function waitForRetry(ms) {
+
+  if (!Number.isFinite(ms) || ms <= 0) {
+
+    return Promise.resolve();
+
+  }
+
+  return new Promise((resolve) => {
+
+    setTimeout(resolve, ms);
+
+  });
+
+}
+
+
+
+function formatWriteKeyLabel(key) {
+
+  return typeof key === 'string' && key ? `khóa "${key}"` : 'dữ liệu';
+
+}
+
+
+
+function describeSendWriteError(error, response) {
+
+  if (error?.code === 'network') {
+
+    const raw = typeof error?.message === 'string' && error.message
+
+      ? error.message.replace(/^Không thể gửi dữ liệu đồng bộ:\s*/u, '')
+
+      : 'Không thể kết nối máy chủ đồng bộ';
+
+    return { detail: `Không thể kết nối máy chủ đồng bộ${raw ? ` (${raw})` : ''}`, code: 'network' };
+
+  }
+
+  if (error?.code === 'invalid-response') {
+
+    return { detail: 'Máy chủ đồng bộ trả về dữ liệu không hợp lệ.', code: 'invalid-response' };
+
+  }
+
+  if (error?.code === 'http') {
+
+    const status = Number.isFinite(error?.status) ? error.status : response?.status;
+
+    const formatted = formatHttpError(response || error);
+
+    if (status === 413) {
+
+      return { detail: STORAGE_LIMIT_ERROR_MESSAGE, code: 'http-413' };
+
+    }
+
+    if (status >= 500) {
+
+      return {
+
+        detail: `Máy chủ đồng bộ gặp sự cố (${formatted}).`,
+
+        code: 'http-server',
+
+      };
+
+    }
+
+    if (status >= 400) {
+
+      return {
+
+        detail: `Yêu cầu bị máy chủ từ chối (${formatted}).`,
+
+        code: 'http-client',
+
+      };
+
+    }
+
+    return { detail: formatted, code: 'http' };
+
+  }
+
+  const fallback = typeof error?.message === 'string' && error.message
+
+    ? error.message
+
+    : 'Không rõ lỗi đồng bộ';
+
+  return { detail: fallback, code: error?.code ?? 'unknown' };
+
+}
+
+
+
+function buildFriendlyWriteMessage(key, detail, attempts, maxAttempts) {
+
+  const label = formatWriteKeyLabel(key);
+
+  const attemptNote = maxAttempts > 1 ? ` (đã thử ${attempts}/${maxAttempts} lần)` : '';
+
+  return `Không thể đồng bộ ${label} lên máy chủ: ${detail}${attemptNote}. Hệ thống sẽ tự thử lại. Nếu lỗi tiếp diễn, vui lòng kiểm tra kết nối mạng/VPN hoặc liên hệ CNTT.`;
+
+}
+
+
+
+async function sendWrite(base, key, value, options = {}) {
 
   const payload = value === null || value === undefined ? { value: null } : { value };
 
@@ -41,43 +161,160 @@ async function sendWrite(base, key, value) {
 
   const target = `${urlBase}/api/storage/${encodeURIComponent(key)}`;
 
-  let response;
+  const maxAttempts = Number.isFinite(options?.maxAttempts)
 
-  try {
+    ? Math.max(1, Math.floor(options.maxAttempts))
 
-    response = await fetchWithAuth(target, {
+    : WRITE_RETRY_MAX_ATTEMPTS;
 
-      method: 'PUT',
+  const baseDelay = Number.isFinite(options?.baseDelayMs) && options.baseDelayMs > 0
 
-      headers: { 'Content-Type': 'application/json' },
+    ? options.baseDelayMs
 
-      body: JSON.stringify(payload),
+    : WRITE_RETRY_BASE_DELAY_MS;
 
-    });
+  const backoff = Number.isFinite(options?.backoff)
 
-  } catch (error) {
+    ? Math.max(1, options.backoff)
 
-    throw new Error(`Không thể gửi dữ liệu đồng bộ: ${error?.message ?? error}`, {
+    : WRITE_RETRY_BACKOFF;
 
-      cause: error instanceof Error ? error : undefined,
+  const attemptHistory = [];
 
-    });
+  let attempt = 0;
+
+  let lastError = null;
+
+  while (attempt < maxAttempts) {
+
+    attempt += 1;
+
+    try {
+      let response;
+      try {
+        response = await fetchWithAuth(target, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+      } catch (networkError) {
+        const wrapped = new Error(`Không thể gửi dữ liệu đồng bộ: ${networkError?.message ?? networkError}`);
+        wrapped.code = 'network';
+        if (networkError instanceof Error) {
+          wrapped.cause = networkError;
+        }
+        throw wrapped;
+      }
+      if (!response || typeof response.ok !== 'boolean') {
+
+        const invalidError = new Error('Không nhận được phản hồi hợp lệ từ máy chủ đồng bộ');
+
+        invalidError.code = 'invalid-response';
+
+        invalidError.response = response;
+        throw invalidError;
+
+      }
+
+      if (!response.ok) {
+
+        const httpError = new Error(formatHttpError(response));
+
+        httpError.code = 'http';
+
+        httpError.status = response.status;
+
+        httpError.response = response;
+
+        throw httpError;
+
+      }
+
+      return response;
+
+    } catch (error) {
+
+      if (!error?.code && error?.name === 'AbortError') {
+
+        error.code = 'network';
+
+      }
+
+      if (!error?.code && error?.message && /Failed to fetch|NetworkError/i.test(error.message)) {
+
+        error.code = 'network';
+
+      }
+
+      if (error?.code === undefined && !(error instanceof Error)) {
+
+        error.code = 'unknown';
+
+      }
+
+      if (error instanceof Error && error.cause === undefined && lastError instanceof Error) {
+
+        error.cause = lastError;
+
+      }
+
+      const detail = describeSendWriteError(error, error?.response);
+
+      attemptHistory.push({
+
+        attempt,
+
+        code: detail.code,
+
+        message: detail.detail,
+
+      });
+
+      lastError = error instanceof Error ? error : new Error(String(error));
+
+      if (attempt >= maxAttempts) {
+
+        const friendlyMessage = buildFriendlyWriteMessage(key, detail.detail, attempt, maxAttempts);
+
+        const finalError = new Error(friendlyMessage, {
+
+          cause: error instanceof Error ? error : undefined,
+
+        });
+
+        finalError.attempts = attempt;
+
+        finalError.maxAttempts = maxAttempts;
+
+        finalError.friendlyMessage = friendlyMessage;
+
+        finalError.history = attemptHistory;
+
+        finalError.code = detail.code;
+
+        finalError.rawError = error;
+
+        throw finalError;
+
+      }
+
+      const delay = Math.min(
+
+        WRITE_RETRY_MAX_DELAY_MS,
+
+        Math.max(baseDelay, baseDelay * backoff ** (attempt - 1))
+
+      );
+
+      attemptHistory[attemptHistory.length - 1].nextDelayMs = delay;
+
+      await waitForRetry(delay);
+
+    }
 
   }
 
-  if (!response || typeof response.ok !== 'boolean') {
-
-    throw new Error('Không nhận được phản hồi hợp lệ từ máy chủ đồng bộ');
-
-  }
-
-  if (!response.ok) {
-
-    throw new Error(formatHttpError(response));
-
-  }
-
-  return response;
+  return null;
 
 }
 
@@ -199,6 +436,8 @@ const SHARED_KEYS = new Set([
 
   'decl_history_v1',
 
+  'decl_sync_history_v1',
+
   'kpi_rules_v2',
 
   'team_roster_v1',
@@ -247,11 +486,21 @@ const RETRY_MIN_MS = 5000;
 
 const RETRY_MAX_MS = 60000;
 
+const SYNC_ERROR_LOG_LIMIT = 10;
+
 let retryDelayMs = RETRY_MIN_MS;
+
+let retryAttempts = 0;
 
 let lastSyncError = null;
 
+let lastErrorKey = null;
+
+let lastErrorAt = null;
+
 let nextRetryAt = null;
+
+const syncErrorLog = [];
 
 
 
@@ -345,11 +594,181 @@ function createSyncSnapshot() {
 
     lastError: lastSyncError,
 
+    lastErrorKey,
+
+    lastErrorAt,
+
     retryDelayMs,
+
+    retryAttempts,
 
     nextRetryAt,
 
+    errorLog: syncErrorLog.map((entry) => ({ ...entry })),
+
   };
+
+}
+
+
+
+function computeRetryDelayMs(attempt) {
+
+  const safeAttempt = Number.isFinite(attempt) ? Math.max(1, Math.floor(attempt)) : 1;
+
+  const delay = RETRY_MIN_MS * 2 ** (safeAttempt - 1);
+
+  return Math.min(RETRY_MAX_MS, Math.max(RETRY_MIN_MS, delay));
+
+}
+
+
+
+function normalizeIsoTimestamp(value) {
+
+  if (typeof value === 'string' && value) {
+
+    return value;
+
+  }
+
+  if (Number.isFinite(value)) {
+
+    try {
+
+      return new Date(value).toISOString();
+
+    } catch {
+
+      return new Date().toISOString();
+
+    }
+
+  }
+
+  return new Date().toISOString();
+
+}
+
+
+
+function appendSyncErrorEntry(entry) {
+
+  const record = {
+
+    id:
+
+      typeof entry?.id === 'string' && entry.id
+
+        ? entry.id
+
+        : `sync-err-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+
+    type: typeof entry?.type === 'string' ? entry.type : 'error',
+
+    key: typeof entry?.key === 'string' && entry.key ? entry.key : null,
+
+    message: typeof entry?.message === 'string' ? entry.message : '',
+
+    attempts: Number.isFinite(entry?.attempts) ? Math.max(0, Math.floor(entry.attempts)) : 0,
+
+    at: normalizeIsoTimestamp(entry?.at),
+
+    nextRetryAt: entry?.nextRetryAt ? normalizeIsoTimestamp(entry.nextRetryAt) : null,
+
+  };
+
+  if (entry?.resolvedAt) {
+
+    record.resolvedAt = normalizeIsoTimestamp(entry.resolvedAt);
+
+  }
+
+  syncErrorLog.unshift(record);
+
+  if (syncErrorLog.length > SYNC_ERROR_LOG_LIMIT) {
+
+    syncErrorLog.length = SYNC_ERROR_LOG_LIMIT;
+
+  }
+
+  return record;
+
+}
+
+
+
+function updateCurrentSyncError(patch = {}) {
+
+  const current = syncErrorLog[0];
+
+  if (!current) {
+
+    return null;
+
+  }
+
+  if (typeof patch.type === 'string') {
+
+    current.type = patch.type;
+
+  }
+
+  if (typeof patch.message === 'string' && patch.message) {
+
+    current.message = patch.message;
+
+  }
+
+  if (Number.isFinite(patch.attempts)) {
+
+    current.attempts = Math.max(0, Math.floor(patch.attempts));
+
+  }
+
+  if (patch.nextRetryAt !== undefined) {
+
+    current.nextRetryAt =
+
+      patch.nextRetryAt === null ? null : normalizeIsoTimestamp(patch.nextRetryAt);
+
+  }
+
+  if (patch.resolvedAt) {
+
+    current.resolvedAt = normalizeIsoTimestamp(patch.resolvedAt);
+
+  }
+
+  return current;
+
+}
+
+
+
+function markSyncRecovered() {
+
+  if (retryAttempts > 0) {
+
+    updateCurrentSyncError({
+
+      type: 'resolved',
+
+      resolvedAt: Date.now(),
+
+      nextRetryAt: null,
+
+    });
+
+  }
+
+  retryAttempts = 0;
+
+  lastErrorKey = null;
+
+  lastErrorAt = null;
+
+  nextRetryAt = null;
 
 }
 
@@ -421,7 +840,9 @@ function scheduleRetry() {
 
   const base = typeof apiBase === 'string' ? apiBase : '';
 
-  nextRetryAt = Date.now() + retryDelayMs;
+  const delay = Math.max(RETRY_MIN_MS, retryDelayMs || RETRY_MIN_MS);
+
+  nextRetryAt = Date.now() + delay;
 
   emitSyncStatus();
 
@@ -437,21 +858,49 @@ function scheduleRetry() {
 
     if (!ok) {
 
-      retryDelayMs = Math.min(
+      retryAttempts = retryAttempts > 0 ? retryAttempts + 1 : 1;
 
-        Math.max(Math.floor(retryDelayMs * 1.5), RETRY_MIN_MS),
+      retryDelayMs = computeRetryDelayMs(retryAttempts);
 
-        RETRY_MAX_MS,
+      const now = Date.now();
 
-      );
+      const retryAtTs = now + retryDelayMs;
+
+      lastErrorAt = now;
+
+      const updated = updateCurrentSyncError({ attempts: retryAttempts, nextRetryAt: retryAtTs });
+
+      if (!updated) {
+
+        appendSyncErrorEntry({
+
+          key: lastErrorKey,
+
+          message: lastSyncError || 'Không thể kết nối backend',
+
+          attempts: retryAttempts,
+
+          at: lastErrorAt,
+
+          nextRetryAt: retryAtTs,
+
+        });
+
+      }
+
+      nextRetryAt = retryAtTs;
+
+      emitSyncStatus();
 
       scheduleRetry();
+
+      return;
 
     }
 
     emitSyncStatus();
 
-  }, retryDelayMs);
+  }, delay);
 
 }
 
@@ -505,9 +954,59 @@ async function flushPending() {
 
         remoteEnabled = false;
 
-        lastSyncError = err?.message || 'Không thể kết nối backend';
+        const keyLabel = typeof key === 'string' && key ? `"${key}"` : '';
 
-        retryDelayMs = Math.min(Math.max(Math.floor(retryDelayMs * 1.5), RETRY_MIN_MS), RETRY_MAX_MS);
+        const rawMessage = err?.message || 'Không thể kết nối backend';
+
+        const preferredMessage =
+
+          typeof err?.friendlyMessage === 'string' && err.friendlyMessage
+
+            ? err.friendlyMessage
+
+            : null;
+
+        const friendlyMessage = preferredMessage
+
+          || (keyLabel
+
+            ? `Không thể đồng bộ khóa ${keyLabel} lên máy chủ: ${rawMessage}. Hệ thống sẽ tự thử lại.`
+
+            : `Không thể đồng bộ dữ liệu lên máy chủ: ${rawMessage}. Hệ thống sẽ tự thử lại.`);
+
+        lastSyncError = friendlyMessage;
+
+        lastErrorKey = typeof key === 'string' && key ? key : null;
+
+        lastErrorAt = Date.now();
+
+        retryAttempts = retryAttempts > 0 ? retryAttempts + 1 : 1;
+
+        retryDelayMs = computeRetryDelayMs(retryAttempts);
+
+        const retryAtTs = lastErrorAt + retryDelayMs;
+
+        appendSyncErrorEntry({
+
+          key: lastErrorKey,
+
+          message: friendlyMessage,
+
+          attempts:
+
+            Number.isFinite(err?.attempts) && err.attempts > 0
+
+              ? Math.max(retryAttempts, Math.floor(err.attempts))
+
+              : retryAttempts,
+
+          at: lastErrorAt,
+
+          nextRetryAt: retryAtTs,
+
+        });
+
+        nextRetryAt = retryAtTs;
 
         emitSyncStatus();
 
@@ -607,9 +1106,11 @@ async function bootstrapFromServer(baseUrl) {
 
       lastSyncError = null;
 
-      emitSyncStatus();
+      markSyncRecovered();
 
       retryDelayMs = RETRY_MIN_MS;
+
+      emitSyncStatus();
 
       return true;
 
