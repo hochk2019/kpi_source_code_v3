@@ -199,6 +199,8 @@ const SHARED_KEYS = new Set([
 
   'decl_history_v1',
 
+  'decl_sync_history_v1',
+
   'kpi_rules_v2',
 
   'team_roster_v1',
@@ -247,11 +249,21 @@ const RETRY_MIN_MS = 5000;
 
 const RETRY_MAX_MS = 60000;
 
+const SYNC_ERROR_LOG_LIMIT = 10;
+
 let retryDelayMs = RETRY_MIN_MS;
+
+let retryAttempts = 0;
 
 let lastSyncError = null;
 
+let lastErrorKey = null;
+
+let lastErrorAt = null;
+
 let nextRetryAt = null;
+
+const syncErrorLog = [];
 
 
 
@@ -345,11 +357,181 @@ function createSyncSnapshot() {
 
     lastError: lastSyncError,
 
+    lastErrorKey,
+
+    lastErrorAt,
+
     retryDelayMs,
+
+    retryAttempts,
 
     nextRetryAt,
 
+    errorLog: syncErrorLog.map((entry) => ({ ...entry })),
+
   };
+
+}
+
+
+
+function computeRetryDelayMs(attempt) {
+
+  const safeAttempt = Number.isFinite(attempt) ? Math.max(1, Math.floor(attempt)) : 1;
+
+  const delay = RETRY_MIN_MS * 2 ** (safeAttempt - 1);
+
+  return Math.min(RETRY_MAX_MS, Math.max(RETRY_MIN_MS, delay));
+
+}
+
+
+
+function normalizeIsoTimestamp(value) {
+
+  if (typeof value === 'string' && value) {
+
+    return value;
+
+  }
+
+  if (Number.isFinite(value)) {
+
+    try {
+
+      return new Date(value).toISOString();
+
+    } catch {
+
+      return new Date().toISOString();
+
+    }
+
+  }
+
+  return new Date().toISOString();
+
+}
+
+
+
+function appendSyncErrorEntry(entry) {
+
+  const record = {
+
+    id:
+
+      typeof entry?.id === 'string' && entry.id
+
+        ? entry.id
+
+        : `sync-err-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+
+    type: typeof entry?.type === 'string' ? entry.type : 'error',
+
+    key: typeof entry?.key === 'string' && entry.key ? entry.key : null,
+
+    message: typeof entry?.message === 'string' ? entry.message : '',
+
+    attempts: Number.isFinite(entry?.attempts) ? Math.max(0, Math.floor(entry.attempts)) : 0,
+
+    at: normalizeIsoTimestamp(entry?.at),
+
+    nextRetryAt: entry?.nextRetryAt ? normalizeIsoTimestamp(entry.nextRetryAt) : null,
+
+  };
+
+  if (entry?.resolvedAt) {
+
+    record.resolvedAt = normalizeIsoTimestamp(entry.resolvedAt);
+
+  }
+
+  syncErrorLog.unshift(record);
+
+  if (syncErrorLog.length > SYNC_ERROR_LOG_LIMIT) {
+
+    syncErrorLog.length = SYNC_ERROR_LOG_LIMIT;
+
+  }
+
+  return record;
+
+}
+
+
+
+function updateCurrentSyncError(patch = {}) {
+
+  const current = syncErrorLog[0];
+
+  if (!current) {
+
+    return null;
+
+  }
+
+  if (typeof patch.type === 'string') {
+
+    current.type = patch.type;
+
+  }
+
+  if (typeof patch.message === 'string' && patch.message) {
+
+    current.message = patch.message;
+
+  }
+
+  if (Number.isFinite(patch.attempts)) {
+
+    current.attempts = Math.max(0, Math.floor(patch.attempts));
+
+  }
+
+  if (patch.nextRetryAt !== undefined) {
+
+    current.nextRetryAt =
+
+      patch.nextRetryAt === null ? null : normalizeIsoTimestamp(patch.nextRetryAt);
+
+  }
+
+  if (patch.resolvedAt) {
+
+    current.resolvedAt = normalizeIsoTimestamp(patch.resolvedAt);
+
+  }
+
+  return current;
+
+}
+
+
+
+function markSyncRecovered() {
+
+  if (retryAttempts > 0) {
+
+    updateCurrentSyncError({
+
+      type: 'resolved',
+
+      resolvedAt: Date.now(),
+
+      nextRetryAt: null,
+
+    });
+
+  }
+
+  retryAttempts = 0;
+
+  lastErrorKey = null;
+
+  lastErrorAt = null;
+
+  nextRetryAt = null;
 
 }
 
@@ -421,7 +603,9 @@ function scheduleRetry() {
 
   const base = typeof apiBase === 'string' ? apiBase : '';
 
-  nextRetryAt = Date.now() + retryDelayMs;
+  const delay = Math.max(RETRY_MIN_MS, retryDelayMs || RETRY_MIN_MS);
+
+  nextRetryAt = Date.now() + delay;
 
   emitSyncStatus();
 
@@ -437,21 +621,49 @@ function scheduleRetry() {
 
     if (!ok) {
 
-      retryDelayMs = Math.min(
+      retryAttempts = retryAttempts > 0 ? retryAttempts + 1 : 1;
 
-        Math.max(Math.floor(retryDelayMs * 1.5), RETRY_MIN_MS),
+      retryDelayMs = computeRetryDelayMs(retryAttempts);
 
-        RETRY_MAX_MS,
+      const now = Date.now();
 
-      );
+      const retryAtTs = now + retryDelayMs;
+
+      lastErrorAt = now;
+
+      const updated = updateCurrentSyncError({ attempts: retryAttempts, nextRetryAt: retryAtTs });
+
+      if (!updated) {
+
+        appendSyncErrorEntry({
+
+          key: lastErrorKey,
+
+          message: lastSyncError || 'Không thể kết nối backend',
+
+          attempts: retryAttempts,
+
+          at: lastErrorAt,
+
+          nextRetryAt: retryAtTs,
+
+        });
+
+      }
+
+      nextRetryAt = retryAtTs;
+
+      emitSyncStatus();
 
       scheduleRetry();
+
+      return;
 
     }
 
     emitSyncStatus();
 
-  }, retryDelayMs);
+  }, delay);
 
 }
 
@@ -505,9 +717,43 @@ async function flushPending() {
 
         remoteEnabled = false;
 
-        lastSyncError = err?.message || 'Không thể kết nối backend';
+        const keyLabel = typeof key === 'string' && key ? `"${key}"` : '';
 
-        retryDelayMs = Math.min(Math.max(Math.floor(retryDelayMs * 1.5), RETRY_MIN_MS), RETRY_MAX_MS);
+        const rawMessage = err?.message || 'Không thể kết nối backend';
+
+        const friendlyMessage = keyLabel
+
+          ? `Không thể đồng bộ khóa ${keyLabel} lên máy chủ: ${rawMessage}. Hệ thống sẽ tự thử lại.`
+
+          : `Không thể đồng bộ dữ liệu lên máy chủ: ${rawMessage}. Hệ thống sẽ tự thử lại.`;
+
+        lastSyncError = friendlyMessage;
+
+        lastErrorKey = typeof key === 'string' && key ? key : null;
+
+        lastErrorAt = Date.now();
+
+        retryAttempts = retryAttempts > 0 ? retryAttempts + 1 : 1;
+
+        retryDelayMs = computeRetryDelayMs(retryAttempts);
+
+        const retryAtTs = lastErrorAt + retryDelayMs;
+
+        appendSyncErrorEntry({
+
+          key: lastErrorKey,
+
+          message: friendlyMessage,
+
+          attempts: retryAttempts,
+
+          at: lastErrorAt,
+
+          nextRetryAt: retryAtTs,
+
+        });
+
+        nextRetryAt = retryAtTs;
 
         emitSyncStatus();
 
@@ -607,9 +853,11 @@ async function bootstrapFromServer(baseUrl) {
 
       lastSyncError = null;
 
-      emitSyncStatus();
+      markSyncRecovered();
 
       retryDelayMs = RETRY_MIN_MS;
+
+      emitSyncStatus();
 
       return true;
 

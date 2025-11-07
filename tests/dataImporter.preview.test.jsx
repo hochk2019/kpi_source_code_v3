@@ -86,6 +86,11 @@ describe('DataImporter preview UI', () => {
   let fetchSpy;
 
   let currentDeclRows;
+  let getQueueSpy;
+  let subscribeQueueSpy;
+  let enqueueQueueSpy;
+  let resumeQueueSpy;
+  let forceRunQueueSpy;
 
   const savedRows = [
 
@@ -548,6 +553,37 @@ describe('DataImporter preview UI', () => {
     });
 
     fetchSpy = vi.spyOn(auth, 'fetchWithAuth').mockImplementation(fetchMock);
+    const emptyQueue = { version: 1, jobs: [] };
+    getQueueSpy = vi.spyOn(store, 'getDeclSyncQueue').mockReturnValue(emptyQueue);
+    subscribeQueueSpy = vi.spyOn(store, 'subscribeDeclSyncQueue').mockImplementation((listener) => {
+      if (typeof listener === 'function') {
+        listener(emptyQueue);
+      }
+      return () => {};
+    });
+    enqueueQueueSpy = vi.spyOn(store, 'enqueueDeclSyncJob').mockImplementation((payload = {}) => ({
+      id: 'test-decl-sync-job',
+      status: 'completed',
+      step: 'completed',
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      startedAt: Date.now(),
+      completedAt: Date.now(),
+      attempts: 1,
+      nextRetryAt: null,
+      lastError: null,
+      message: 'Đã chạy xong (mock)',
+      payload: {
+        actor: payload.actor || null,
+        from: payload.from || null,
+        to: payload.to || null,
+        includeTaxCodes: Array.isArray(payload.includeTaxCodes) ? [...payload.includeTaxCodes] : [],
+        excludeTaxCodes: Array.isArray(payload.excludeTaxCodes) ? [...payload.excludeTaxCodes] : [],
+      },
+      result: null,
+    }));
+    resumeQueueSpy = vi.spyOn(store, 'resumeDeclSyncQueue').mockReturnValue(emptyQueue);
+    forceRunQueueSpy = vi.spyOn(store, 'forceRunDeclSyncJob').mockImplementation(() => null);
 
     clearStorageCache();
 
@@ -562,6 +598,26 @@ describe('DataImporter preview UI', () => {
     if (fetchSpy) {
       fetchSpy.mockRestore();
       fetchSpy = null;
+    }
+    if (getQueueSpy) {
+      getQueueSpy.mockRestore();
+      getQueueSpy = null;
+    }
+    if (subscribeQueueSpy) {
+      subscribeQueueSpy.mockRestore();
+      subscribeQueueSpy = null;
+    }
+    if (enqueueQueueSpy) {
+      enqueueQueueSpy.mockRestore();
+      enqueueQueueSpy = null;
+    }
+    if (resumeQueueSpy) {
+      resumeQueueSpy.mockRestore();
+      resumeQueueSpy = null;
+    }
+    if (forceRunQueueSpy) {
+      forceRunQueueSpy.mockRestore();
+      forceRunQueueSpy = null;
     }
 
   });
@@ -704,15 +760,13 @@ describe('DataImporter preview UI', () => {
 
 
 
-    const runCall = fetchMock.mock.calls.find(([url]) => url === '/api/import/ecus/run');
+    expect(enqueueQueueSpy).toHaveBeenCalled();
 
-    expect(runCall).toBeTruthy();
+    const runPayload = enqueueQueueSpy.mock.calls.at(-1)?.[0] || {};
 
-    const runBody = JSON.parse(runCall[1]?.body || '{}');
+    expect(runPayload.includeTaxCodes).toEqual(['0100109106', '0100109107']);
 
-    expect(runBody.includeTaxCodes).toEqual(['0100109106', '0100109107']);
-
-    expect(runBody.excludeTaxCodes).toEqual(['0100109108', '0100109109']);
+    expect(runPayload.excludeTaxCodes).toEqual(['0100109108', '0100109109']);
 
   });
 

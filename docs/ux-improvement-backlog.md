@@ -4,25 +4,25 @@ This backlog liệt kê các hạng mục cải thiện trải nghiệm người
 
 ## 1. KPI Adjustments
 
-- [ ] Persist filter states (month, status, mine-only, staff) per user using local storage hoặc `UI_LAYOUT_KEY` trong store.
-- [ ] Tách danh sách điều chỉnh sang virtual list / pagination để cải thiện hiệu năng với dataset lớn.
-- [ ] Bổ sung thao tác duyệt hàng loạt (bulk approve/reject) dựa trên quyền `adjustApprove`.
-- [ ] Thêm liên kết nhanh tới tờ khai hoặc MST liên quan để người duyệt tra cứu ngay tại chỗ.
-- [ ] Cho phép quản lý cấu hình điểm mặc định trực tiếp trong UI và phản ánh vào `KPI_ADJUSTMENT_CATEGORY_CONFIG`.
+- [x] Persist filter states (month, status, mine-only, staff) per user using local storage hoặc `UI_LAYOUT_KEY` trong store. (đã lưu cấu hình bộ lọc vào UI_LAYOUT_KEY)
+- [x] Tách danh sách điều chỉnh sang virtual list / pagination để cải thiện hiệu năng với dataset lớn. (đã thêm phân trang linh hoạt 25/50/100/150 dòng và lưu trang hiện tại)
+- [x] Bổ sung thao tác duyệt hàng loạt (bulk approve/reject) dựa trên quyền `adjustApprove`. (đã hỗ trợ chọn nhiều dòng và xử lý duyệt/từ chối đồng thời)
+- [x] Thêm liên kết nhanh tới tờ khai hoặc MST liên quan để người duyệt tra cứu ngay tại chỗ. (đã thêm nút mở nhanh tab Import và tab Gán MST theo tham chiếu)
+- [x] Cho phép quản lý cấu hình điểm mặc định trực tiếp trong UI và phản ánh vào `KPI_ADJUSTMENT_CATEGORY_CONFIG`. (đã bổ sung hộp thoại cấu hình và lưu vào store chia sẻ)
 
 ## 2. ECUS declaration sync
 
-- [ ] Hiển thị tiến trình đồng bộ theo từng bước (đọc ECUS, tính toán diff, ghi vào store) với trạng thái rõ ràng khi gọi `refreshDeclRowsFromServer`.
-- [ ] Thêm hàng đợi đồng bộ nền để xử lý file lớn, hỗ trợ resume khi mất kết nối hoặc đóng trình duyệt.
-- [ ] Cảnh báo xung đột (vd. tờ khai đã bị chỉnh sửa tại chỗ khác) và cung cấp giao diện so sánh trước khi ghi đè.
-- [ ] Thực hiện pre-check (kiểm tra kết nối DB, quyền truy cập ECUS, dung lượng đĩa) và hiển thị check-list trước khi chạy đồng bộ.
+- [x] Hiển thị tiến trình đồng bộ theo từng bước (đọc ECUS, tính toán diff, ghi vào store) với trạng thái rõ ràng khi gọi `refreshDeclRowsFromServer`. (đã thêm `declSyncProgress` trong store và thẻ tiến trình ở DataImporter)
+- [x] Thêm hàng đợi đồng bộ nền để xử lý file lớn, hỗ trợ resume khi mất kết nối hoặc đóng trình duyệt. (đã triển khai `declSyncQueue` + worker, UI hàng đợi và resume trong DataImporter)
+- [x] Cảnh báo xung đột (vd. tờ khai đã bị chỉnh sửa tại chỗ khác) và cung cấp giao diện so sánh trước khi ghi đè. (đã thêm cảnh báo xung đột, bảng so sánh và lịch sử chỉnh sửa trong DataImporter)
+- [x] Thực hiện pre-check (kiểm tra kết nối DB, quyền truy cập ECUS, dung lượng đĩa) và hiển thị check-list trước khi chạy đồng bộ. (đã triển khai API precheck và checklist hiển thị trong DataImporter)
 - [ ] Bổ sung cơ chế retry tự động với backoff và log thân thiện khi `sendWrite` trả về lỗi.
 - [ ] Lưu lịch sử đồng bộ (ai chạy, thời gian, số bản ghi cập nhật) để hiện trong Notification Center và trang tổng quan.
 
 ## 3. Data Importer
 
-- [ ] Chuyển việc đọc/ghi XLSX sang Web Worker để tránh khóa UI trong khi `XLSX.read` chạy.
-- [ ] Tách DataImporter thành các module nhỏ (picker, preview, filters, sync) và lazy-load khi cần.
+- [x] Chuyển việc đọc/ghi XLSX sang Web Worker để tránh khóa UI trong khi `XLSX.read` chạy. (đã chuyển parse/xuất sang worker chuyên trách)
+- [x] Tách DataImporter thành các module nhỏ (picker, preview, filters, sync) và lazy-load khi cần. (đã tạo các section lazy cho picker/preview/filters/sync)
 - [ ] Lưu/gửi preset bộ lọc và cấu hình cột, cho phép chia sẻ giữa các thành viên trong cùng tổ.
 - [ ] Thiết kế wizard nhiều bước giúp người dùng theo dõi tiến trình import, tránh quá tải thông tin.
 - [ ] Cải thiện feedback khi đồng bộ thất bại: gợi ý hành động cụ thể (thử lại, kiểm tra VPN, báo CNTT).

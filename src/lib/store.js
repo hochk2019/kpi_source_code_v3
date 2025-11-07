@@ -22,6 +22,7 @@ import {
   patchDeclRows,
   updateCachedItem,
 } from './storageClient.js';
+import { fetchWithAuth } from '../auth/localAuth.js';
 
 
 
@@ -58,10 +59,18 @@ export const DECL_HISTORY_KEY = "decl_history_v1"; // lịch sử chỉnh sửa 
 export const DECL_DELETED_LOG_KEY = "decl_deleted_log_v1"; // nhật ký xóa tờ khai
 
 export const DECL_DELETED_LOG_LIMIT = 500;
+export const DECL_SYNC_HISTORY_KEY = "decl_sync_history_v1"; // lịch sử đồng bộ ECUS
+export const DECL_SYNC_QUEUE_KEY = "decl_sync_queue_v1"; // hàng đợi đồng bộ ECUS cục bộ
 
 export const UI_LAYOUT_KEY = "ui_layout_config_v1"; // cấu hình bố cục giao diện dùng chung
 
 export const REPORT_SCHEDULE_KEY = "kpi_report_schedule_v1"; // lịch gửi báo cáo KPI
+
+const KPI_ADJUSTMENT_FILTER_STATUSES = new Set(["all", "approved", "pending", "rejected"]);
+const KPI_ADJUSTMENT_MONTH_PATTERN = /^\d{4}-(0[1-9]|1[0-2])$/;
+const KPI_ADJUSTMENT_ANONYMOUS_USER = "__anonymous__";
+const KPI_ADJUSTMENT_ALLOWED_PAGE_SIZES = Object.freeze([25, 50, 100, 150]);
+const KPI_ADJUSTMENT_DEFAULT_PAGE_SIZE = 25;
 
 
 
@@ -190,6 +199,252 @@ function writeUILayoutConfig(config) {
   setItem(UI_LAYOUT_KEY, JSON.stringify(target));
 
   return target;
+
+}
+
+
+
+function normalizeKpiAdjustmentUserKey(identity) {
+
+  const normalized = normalizeStr(identity || "");
+
+  return normalized || KPI_ADJUSTMENT_ANONYMOUS_USER;
+
+}
+
+
+
+function readKpiAdjustmentFilterSection() {
+
+  const layout = readUILayoutConfig();
+
+  const kpiSection =
+
+    layout && typeof layout.kpiAdjustments === "object" && !Array.isArray(layout.kpiAdjustments)
+
+      ? { ...layout.kpiAdjustments }
+
+      : {};
+
+  const filters =
+
+    kpiSection && typeof kpiSection.filters === "object" && !Array.isArray(kpiSection.filters)
+
+      ? { ...kpiSection.filters }
+
+      : {};
+
+  return { layout, kpiSection, filters };
+
+}
+
+
+
+function normalizeKpiAdjustmentFilters(input, options = {}) {
+
+  const {
+
+    fallbackMonth = "all",
+
+    fallbackMineOnly = false,
+
+    allowStaffFilter = false,
+
+    staffKeyAvailable = false,
+
+    fallbackPageSize = KPI_ADJUSTMENT_DEFAULT_PAGE_SIZE,
+
+  } = options;
+
+  const source = input && typeof input === "object" ? input : {};
+
+  const fallbackMonthValue =
+
+    typeof fallbackMonth === "string" && KPI_ADJUSTMENT_MONTH_PATTERN.test(fallbackMonth)
+
+      ? fallbackMonth
+
+      : "all";
+
+  const monthCandidate = (() => {
+
+    const raw =
+
+      typeof source.month === "string"
+
+        ? source.month
+
+        : typeof source.filterMonth === "string"
+
+        ? source.filterMonth
+
+        : null;
+
+    if (raw === "all") return "all";
+
+    if (typeof raw === "string" && KPI_ADJUSTMENT_MONTH_PATTERN.test(raw)) {
+
+      return raw;
+
+    }
+
+    return fallbackMonthValue;
+
+  })();
+
+  const rawStatus =
+
+    typeof source.status === "string"
+
+      ? source.status.toLowerCase()
+
+      : typeof source.filterStatus === "string"
+
+      ? source.filterStatus.toLowerCase()
+
+      : "";
+
+  const status = KPI_ADJUSTMENT_FILTER_STATUSES.has(rawStatus) ? rawStatus : "all";
+
+  const mineOnlySource =
+
+    typeof source.mineOnly === "boolean"
+
+      ? source.mineOnly
+
+      : typeof source.filterMine === "boolean"
+
+      ? source.filterMine
+
+      : fallbackMineOnly;
+
+  const mineOnly = Boolean(staffKeyAvailable && mineOnlySource);
+
+  let staff = "all";
+
+  if (allowStaffFilter) {
+
+    const rawStaff =
+
+      typeof source.staff === "string"
+
+        ? source.staff
+
+        : typeof source.filterStaff === "string"
+
+        ? source.filterStaff
+
+        : "";
+
+    const normalizedStaff = normalizeStr(rawStaff);
+
+    staff = normalizedStaff || "all";
+
+  }
+
+  if (mineOnly) {
+
+    staff = "all";
+
+  }
+
+  const fallbackPageSizeCandidate = Number.parseInt(fallbackPageSize, 10);
+  const pageSizeCandidate = Number.parseInt(
+    source.pageSize ?? source.page_size ?? source.page,
+    10
+  );
+
+  let pageSize = KPI_ADJUSTMENT_DEFAULT_PAGE_SIZE;
+
+  if (KPI_ADJUSTMENT_ALLOWED_PAGE_SIZES.includes(pageSizeCandidate)) {
+
+    pageSize = pageSizeCandidate;
+
+  } else if (KPI_ADJUSTMENT_ALLOWED_PAGE_SIZES.includes(fallbackPageSizeCandidate)) {
+
+    pageSize = fallbackPageSizeCandidate;
+
+  }
+
+  return {
+
+    month: monthCandidate,
+
+    status,
+
+    mineOnly,
+
+    staff,
+
+    pageSize,
+
+  };
+
+}
+
+
+
+export function getKpiAdjustmentFilterState(identity, options = {}) {
+
+  const key = normalizeKpiAdjustmentUserKey(identity);
+
+  const { filters } = readKpiAdjustmentFilterSection();
+
+  const stored = filters[key];
+
+  return normalizeKpiAdjustmentFilters(stored, options);
+
+}
+
+
+
+export function saveKpiAdjustmentFilterState(identity, updates = {}, options = {}) {
+
+  const key = normalizeKpiAdjustmentUserKey(identity);
+
+  const { layout, kpiSection, filters } = readKpiAdjustmentFilterSection();
+
+  const current = normalizeKpiAdjustmentFilters(filters[key], options);
+
+  const next = normalizeKpiAdjustmentFilters({ ...current, ...updates }, options);
+
+  if (
+
+    current.month === next.month &&
+
+    current.status === next.status &&
+
+    current.mineOnly === next.mineOnly &&
+
+    current.staff === next.staff &&
+
+    current.pageSize === next.pageSize
+
+  ) {
+
+    return next;
+
+  }
+
+  const nextFilters = { ...filters, [key]: next };
+
+  const nextLayout = {
+
+    ...layout,
+
+    kpiAdjustments: {
+
+      ...kpiSection,
+
+      filters: nextFilters,
+
+    },
+
+  };
+
+  writeUILayoutConfig(nextLayout);
+
+  return next;
 
 }
 
@@ -3379,6 +3634,365 @@ function normalizeDeclRows(rows) {
 
 
 
+
+const DECL_SYNC_PROGRESS_DEFAULT = Object.freeze({
+  status: "idle",
+  step: "idle",
+  message: "",
+  startedAt: null,
+  finishedAt: null,
+  rowsBefore: 0,
+  rowsAfter: 0,
+  jobId: null,
+  diff: null,
+  error: null,
+  conflicts: Object.freeze([]),
+  conflictCount: 0,
+  hasConflicts: false,
+});
+
+let declSyncProgressState = { ...DECL_SYNC_PROGRESS_DEFAULT };
+
+const declSyncProgressListeners = new Set();
+
+function cloneDeclSyncProgress(progress) {
+  const base = progress ? { ...progress } : { ...DECL_SYNC_PROGRESS_DEFAULT };
+  base.diff = base.diff && typeof base.diff === "object" ? { ...base.diff } : null;
+  base.conflicts = Array.isArray(base.conflicts) ? base.conflicts.map((entry) => ({ ...entry })) : [];
+  return base;
+}
+
+function notifyDeclSyncProgress() {
+  const snapshot = cloneDeclSyncProgress(declSyncProgressState);
+  for (const listener of declSyncProgressListeners) {
+    try {
+      listener(snapshot);
+    } catch (error) {
+      console.error("Decl sync progress listener error", error);
+    }
+  }
+  return snapshot;
+}
+
+function applyDeclSyncProgressPatch(patch, replace = false) {
+  const base = replace ? { ...DECL_SYNC_PROGRESS_DEFAULT } : { ...declSyncProgressState };
+  const next = {
+    ...base,
+    ...(patch || {}),
+  };
+  if (patch && Object.prototype.hasOwnProperty.call(patch, "diff")) {
+    next.diff = patch.diff && typeof patch.diff === "object" ? { ...patch.diff } : null;
+  } else if (base.diff && typeof base.diff === "object") {
+    next.diff = { ...base.diff };
+  } else {
+    next.diff = null;
+  }
+  if (patch && Object.prototype.hasOwnProperty.call(patch, "conflicts")) {
+    next.conflicts = Array.isArray(patch.conflicts)
+      ? patch.conflicts.map((entry) => ({ ...entry }))
+      : [];
+  } else if (base.conflicts && Array.isArray(base.conflicts)) {
+    next.conflicts = base.conflicts.map((entry) => ({ ...entry }));
+  } else {
+    next.conflicts = [];
+  }
+  if (patch && Object.prototype.hasOwnProperty.call(patch, "conflictCount")) {
+    const count = Number(patch.conflictCount);
+    next.conflictCount = Number.isFinite(count) ? count : 0;
+  } else {
+    const count = Number(base.conflictCount);
+    next.conflictCount = Number.isFinite(count) ? count : 0;
+  }
+  if (patch && Object.prototype.hasOwnProperty.call(patch, "hasConflicts")) {
+    next.hasConflicts = !!patch.hasConflicts;
+  } else {
+    next.hasConflicts = !!base.hasConflicts;
+  }
+  declSyncProgressState = next;
+  return notifyDeclSyncProgress();
+}
+
+export function getDeclSyncProgress() {
+  return cloneDeclSyncProgress(declSyncProgressState);
+}
+
+export function subscribeDeclSyncProgress(listener) {
+  if (typeof listener !== "function") {
+    return () => {};
+  }
+  declSyncProgressListeners.add(listener);
+  return () => {
+    declSyncProgressListeners.delete(listener);
+  };
+}
+
+function canonicalizeDeclRowForDiff(row) {
+  if (!row || typeof row !== "object") {
+    return "";
+  }
+  const normalized = {};
+  const entries = Object.entries(row)
+    .filter(([key, value]) => {
+      if (key === "__forceReviewedOverride") {
+        return false;
+      }
+      return typeof value !== "function";
+    })
+    .sort(([a], [b]) => a.localeCompare(b, "vi"));
+  for (const [key, value] of entries) {
+    normalized[key] = value;
+  }
+  return JSON.stringify(normalized);
+}
+
+function computeDeclRowDiff(previousRows, nextRows) {
+  const diff = {
+    added: 0,
+    updated: 0,
+    removed: 0,
+    totalBefore: Array.isArray(previousRows) ? previousRows.length : 0,
+    totalAfter: Array.isArray(nextRows) ? nextRows.length : 0,
+  };
+
+  const beforeMap = new Map();
+  const beforeExtras = new Map();
+
+  const registerExtra = (target, row) => {
+    const fingerprint = canonicalizeDeclRowForDiff(row);
+    target.set(fingerprint, (target.get(fingerprint) || 0) + 1);
+  };
+
+  for (const row of Array.isArray(previousRows) ? previousRows : []) {
+    if (!row || typeof row !== "object") continue;
+    const key = getDeclarationKey(row);
+    if (key) {
+      beforeMap.set(key, canonicalizeDeclRowForDiff(row));
+    } else {
+      registerExtra(beforeExtras, row);
+    }
+  }
+
+  for (const row of Array.isArray(nextRows) ? nextRows : []) {
+    if (!row || typeof row !== "object") continue;
+    const key = getDeclarationKey(row);
+    if (key) {
+      const snapshot = canonicalizeDeclRowForDiff(row);
+      if (!beforeMap.has(key)) {
+        diff.added += 1;
+      } else {
+        if (beforeMap.get(key) !== snapshot) {
+          diff.updated += 1;
+        }
+        beforeMap.delete(key);
+      }
+    } else {
+      const fingerprint = canonicalizeDeclRowForDiff(row);
+      const count = beforeExtras.get(fingerprint) || 0;
+      if (count > 0) {
+        beforeExtras.set(fingerprint, count - 1);
+      } else {
+        diff.added += 1;
+      }
+    }
+  }
+
+  let removedExtras = 0;
+  for (const value of beforeExtras.values()) {
+    removedExtras += value;
+  }
+  diff.removed = beforeMap.size + removedExtras;
+  return diff;
+}
+
+function parseTimestampToMs(value) {
+  if (!value) return null;
+  try {
+    const ts = Date.parse(value);
+    return Number.isFinite(ts) ? ts : null;
+  } catch {
+    return null;
+  }
+}
+
+const DECL_SYNC_CONFLICT_IGNORED_FIELDS = new Set([
+  "__forceReviewedOverride",
+  "updatedAt",
+]);
+
+const DECL_SYNC_FIELD_LABELS = Object.freeze({
+  agency: "Đại lý",
+  dai_ly: "Đại lý",
+  nhan_vien: "Nhân viên",
+  team: "Tổ đội",
+  licenses: "Số lượng giấy phép",
+  so_luong_gp: "Số lượng giấy phép",
+  licenseManualCount: "Số lượng giấy phép (thủ công)",
+});
+
+function normalizeConflictFieldKey(field) {
+  if (!field) return "";
+  const resolved = DECL_HISTORY_FIELD_GROUP[field] || field;
+  return resolved;
+}
+
+function buildConflictFieldDetail(previous, nextRow, field) {
+  const resolved = normalizeConflictFieldKey(field);
+  const label =
+    DECL_SYNC_FIELD_LABELS[resolved] ||
+    DECL_SYNC_FIELD_LABELS[field] ||
+    resolved;
+  return {
+    field: resolved,
+    label,
+    before: normalizeDeclHistoryValue(extractDeclHistoryValue(previous, resolved)),
+    after: normalizeDeclHistoryValue(extractDeclHistoryValue(nextRow, resolved)),
+  };
+}
+
+export function computeDeclSyncConflicts(previousRows, nextRows, options = {}) {
+  const previousMap = new Map();
+  for (const row of Array.isArray(previousRows) ? previousRows : []) {
+    const key = getDeclarationKey(row);
+    if (!key) continue;
+    previousMap.set(key, row);
+  }
+
+  if (!previousMap.size) {
+    return [];
+  }
+
+  const limit = Number.isFinite(options.limit) && options.limit > 0 ? Math.floor(options.limit) : 50;
+  const historyLimit = Number.isFinite(options.historyLimit) && options.historyLimit > 0 ? Math.floor(options.historyLimit) : 5;
+  const baselineTs = parseTimestampToMs(options.baselineTimestamp);
+  const historyProvider =
+    typeof options.historyProvider === "function" ? options.historyProvider : getDeclHistoryForRow;
+
+  const conflicts = [];
+
+  for (const nextRow of Array.isArray(nextRows) ? nextRows : []) {
+    if (!nextRow || typeof nextRow !== "object") continue;
+    const key = getDeclarationKey(nextRow);
+    if (!key || !previousMap.has(key)) {
+      continue;
+    }
+    const previous = previousMap.get(key) || {};
+    const fieldKeys = new Set([
+      ...Object.keys(previous || {}),
+      ...Object.keys(nextRow || {}),
+    ]);
+    const changedFields = [];
+    for (const field of fieldKeys) {
+      if (DECL_SYNC_CONFLICT_IGNORED_FIELDS.has(field)) continue;
+      if (!isEqualDeclValue(previous?.[field], nextRow?.[field])) {
+        changedFields.push(field);
+      }
+    }
+    if (!changedFields.length) {
+      continue;
+    }
+
+    const resolvedChanged = new Set(changedFields.map((field) => normalizeConflictFieldKey(field)));
+    const historyList = historyProvider ? historyProvider(key, historyLimit) : [];
+    const relevantHistory = [];
+    const manualFields = new Set();
+    let latestManualTs = null;
+    let latestManualActor = null;
+
+    for (const entry of Array.isArray(historyList) ? historyList : []) {
+      if (!entry || typeof entry !== "object" || !Array.isArray(entry.changes)) {
+        continue;
+      }
+      const entryTs = parseTimestampToMs(entry.ts || entry.timestamp);
+      if (baselineTs && Number.isFinite(entryTs) && entryTs < baselineTs) {
+        continue;
+      }
+      const matchedChanges = entry.changes
+        .map((change) => {
+          if (!change || typeof change !== "object") {
+            return null;
+          }
+          const resolvedField = normalizeConflictFieldKey(change.field);
+          if (!resolvedField || !resolvedChanged.has(resolvedField)) {
+            return null;
+          }
+          manualFields.add(resolvedField);
+          return {
+            field: resolvedField,
+            before: change.before,
+            after: change.after,
+          };
+        })
+        .filter(Boolean);
+      if (!matchedChanges.length) {
+        continue;
+      }
+      const normalizedEntry = {
+        actor: entry.actor || "system",
+        ts: entryTs ? new Date(entryTs).toISOString() : entry.ts || null,
+        changes: matchedChanges,
+      };
+      relevantHistory.push(normalizedEntry);
+      if (Number.isFinite(entryTs) && (!latestManualTs || entryTs > latestManualTs)) {
+        latestManualTs = entryTs;
+        latestManualActor = entry.actor || null;
+      }
+    }
+
+    if (!manualFields.size) {
+      continue;
+    }
+
+    const conflictFields = Array.from(manualFields).filter((field) => resolvedChanged.has(field));
+    if (!conflictFields.length) {
+      continue;
+    }
+
+    const details = conflictFields.map((field) => buildConflictFieldDetail(previous, nextRow, field));
+    const conflict = {
+      key,
+      soTk: normalizeDeclarationNumber(nextRow?.so_tk ?? previous?.so_tk ?? ""),
+      nhanh: normalizeStr(nextRow?.nhanh ?? previous?.nhanh ?? ""),
+      fields: details,
+      history: relevantHistory.slice(0, historyLimit),
+      lastManualAt: latestManualTs ? new Date(latestManualTs).toISOString() : null,
+      lastManualActor: latestManualActor,
+    };
+
+    conflicts.push(conflict);
+    if (conflicts.length >= limit) {
+      break;
+    }
+  }
+
+  return conflicts;
+}
+
+function formatDeclSyncDiffSummary(diff) {
+  if (!diff || typeof diff !== "object") {
+    return "Đã cập nhật dữ liệu tờ khai từ ECUS.";
+  }
+  const added = Number.isFinite(diff.added) ? diff.added : 0;
+  const updated = Number.isFinite(diff.updated) ? diff.updated : 0;
+  const removed = Number.isFinite(diff.removed) ? diff.removed : 0;
+  const parts = [];
+  if (added > 0) {
+    parts.push(`${added.toLocaleString("vi-VN")} mới`);
+  }
+  if (updated > 0) {
+    parts.push(`${updated.toLocaleString("vi-VN")} cập nhật`);
+  }
+  if (removed > 0) {
+    parts.push(`${removed.toLocaleString("vi-VN")} gỡ bỏ`);
+  }
+  const base = parts.length
+    ? `Đã cập nhật ${parts.join(", ")}.`
+    : "Không có thay đổi mới từ ECUS.";
+  if (Number.isFinite(diff.totalAfter)) {
+    return `${base} Tổng cộng ${diff.totalAfter.toLocaleString("vi-VN")} tờ khai đang lưu.`;
+  }
+  return base;
+}
+
 function getDeclRowsRaw() {
 
   const rawString = getItem(DECL_KEY);
@@ -3436,16 +4050,795 @@ export function getDeclRows() {
 
 
 export async function refreshDeclRowsFromServer(options = {}) {
+  const previousRows = getDeclRowsRaw();
+  const requestedJobId = typeof options.jobId === "string" ? options.jobId.trim() : "";
+  const jobId = requestedJobId || (declSyncProgressState.jobId && declSyncProgressState.status === "running"
+    ? declSyncProgressState.jobId
+    : null);
+  const startedAt = Number.isFinite(declSyncProgressState.startedAt) && declSyncProgressState.status === "running"
+    ? declSyncProgressState.startedAt
+    : Date.now();
 
-  await refreshSharedKeys([DECL_KEY], options);
+  applyDeclSyncProgressPatch(
+    {
+      status: "running",
+      step: "reading",
+      message: "Đang đọc dữ liệu từ ECUS...",
+      startedAt,
+      finishedAt: null,
+      rowsBefore: Array.isArray(previousRows) ? previousRows.length : 0,
+      rowsAfter: Array.isArray(previousRows) ? previousRows.length : 0,
+      jobId,
+      error: null,
+      diff: null,
+    },
+    true
+  );
 
-  const rows = getDeclRowsRaw();
+  try {
+    await refreshSharedKeys([DECL_KEY, DECL_SYNC_HISTORY_KEY], options);
+    applyDeclSyncProgressPatch({
+      status: "running",
+      step: "diff",
+      message: "Đang tính toán thay đổi...",
+      rowsBefore: Array.isArray(previousRows) ? previousRows.length : 0,
+      jobId,
+    });
 
-  return applyAgenciesToDeclRows(rows);
+    const rows = getDeclRowsRaw();
+    const diff = computeDeclRowDiff(previousRows, rows);
+    const conflicts = computeDeclSyncConflicts(previousRows, rows, {
+      baselineTimestamp: options?.syncMeta?.runAt,
+      historyLimit: 6,
+    });
+    const conflictCount = conflicts.length;
+    const hasConflicts = conflictCount > 0;
 
+    applyDeclSyncProgressPatch({
+      status: "running",
+      step: "writing",
+      message: "Đang ghi vào kho tờ khai...",
+      rowsAfter: Array.isArray(rows) ? rows.length : 0,
+      diff,
+      jobId,
+      conflicts,
+      conflictCount,
+      hasConflicts,
+    });
+
+    const applied = applyAgenciesToDeclRows(rows);
+    const baseSummary = formatDeclSyncDiffSummary(diff);
+    const summary = hasConflicts
+      ? `${baseSummary} Phát hiện ${conflictCount.toLocaleString("vi-VN")} tờ khai có xung đột cần rà soát.`
+      : baseSummary;
+
+    applyDeclSyncProgressPatch({
+      status: "success",
+      step: "completed",
+      message: summary,
+      finishedAt: Date.now(),
+      rowsAfter: Array.isArray(applied) ? applied.length : 0,
+      diff,
+      jobId,
+      conflicts,
+      conflictCount,
+      hasConflicts,
+    });
+
+    return applied;
+  } catch (error) {
+    const message = error?.message || "Không thể tải dữ liệu tờ khai";
+    applyDeclSyncProgressPatch({
+      status: "error",
+      step: "error",
+      message,
+      error: message,
+      finishedAt: Date.now(),
+      jobId,
+    });
+    throw error;
+  }
 }
 
 
+
+
+
+
+// ===== Lịch sử đồng bộ ECUS =====
+
+const DECL_SYNC_HISTORY_DEFAULT_LIMIT = 120;
+
+function normalizeDeclSyncHistoryTimestamp(value) {
+  if (typeof value === 'string' && value.trim()) {
+    const trimmed = value.trim();
+    const ts = Date.parse(trimmed);
+    if (Number.isFinite(ts)) {
+      return new Date(ts).toISOString();
+    }
+    return trimmed;
+  }
+  if (Number.isFinite(value)) {
+    const date = new Date(value);
+    if (!Number.isNaN(date.getTime())) {
+      return date.toISOString();
+    }
+  }
+  return new Date().toISOString();
+}
+
+function normalizeDeclSyncHistoryEntry(entry) {
+  if (!entry || typeof entry !== 'object') {
+    return null;
+  }
+  const id =
+    typeof entry.id === 'string' && entry.id.trim()
+      ? entry.id.trim()
+      : `decl-sync-history-${Date.now().toString(36)}-${Math.random()
+          .toString(36)
+          .slice(2, 8)}`;
+  const runAt = normalizeDeclSyncHistoryTimestamp(
+    entry.runAt ?? entry.ts ?? entry.completedAt ?? entry.startedAt
+  );
+  const actor = typeof entry.actor === 'string' && entry.actor.trim() ? entry.actor.trim() : 'system';
+  const reason = typeof entry.reason === 'string' && entry.reason.trim() ? entry.reason.trim() : 'manual';
+  const status = typeof entry.status === 'string' && entry.status.trim() ? entry.status.trim() : 'success';
+  const toNumber = (value) => {
+    const num = Number(value);
+    return Number.isFinite(num) ? num : 0;
+  };
+  const fetched = toNumber(entry.fetched ?? entry.rowsFetched);
+  const inserted = toNumber(entry.inserted ?? entry.imported ?? entry.rowsInserted);
+  const updated = toNumber(entry.updated ?? entry.rowsUpdated);
+  const skipped = toNumber(entry.skipped ?? entry.rowsSkipped);
+  const locked = toNumber(entry.locked ?? entry.reviewLocked ?? entry.rowsReviewLocked);
+  const stored = toNumber(entry.stored ?? entry.storedTotal ?? entry.totalStored ?? entry.rowsAfter);
+  const durationMsRaw = Number(entry.durationMs ?? entry.duration);
+  const durationMs = Number.isFinite(durationMsRaw) ? durationMsRaw : null;
+  const conflictCountRaw = Number(entry.conflictCount ?? entry.conflicts);
+  const conflictCount = Number.isFinite(conflictCountRaw) ? conflictCountRaw : 0;
+  const hasConflicts = entry.hasConflicts === true || conflictCount > 0;
+  const jobId = typeof entry.jobId === 'string' && entry.jobId.trim() ? entry.jobId.trim() : null;
+  const rangeSource = entry.range && typeof entry.range === 'object' ? entry.range : {};
+  const from = typeof rangeSource.from === 'string' && rangeSource.from.trim() ? rangeSource.from.trim() : null;
+  const to = typeof rangeSource.to === 'string' && rangeSource.to.trim() ? rangeSource.to.trim() : null;
+  const range = from || to ? { from, to } : null;
+  const meta = entry.meta && typeof entry.meta === 'object' ? { ...entry.meta } : null;
+  return {
+    id,
+    runAt,
+    actor,
+    reason,
+    status,
+    fetched,
+    inserted,
+    updated,
+    skipped,
+    locked,
+    stored,
+    conflictCount,
+    hasConflicts,
+    durationMs,
+    jobId,
+    range,
+    meta,
+  };
+}
+
+function cloneDeclSyncHistoryEntry(entry) {
+  if (!entry) {
+    return null;
+  }
+  const clone = { ...entry };
+  if (entry.range && typeof entry.range === 'object') {
+    clone.range = { from: entry.range.from || null, to: entry.range.to || null };
+  }
+  if (entry.meta && typeof entry.meta === 'object') {
+    clone.meta = { ...entry.meta };
+  }
+  return clone;
+}
+
+function normalizeDeclSyncHistoryList() {
+  const raw = safeParse(getItem(DECL_SYNC_HISTORY_KEY), []);
+  const source = Array.isArray(raw) ? raw : [];
+  const normalized = [];
+  const seen = new Set();
+  for (const entry of source) {
+    const normalizedEntry = normalizeDeclSyncHistoryEntry(entry);
+    if (!normalizedEntry || seen.has(normalizedEntry.id)) {
+      continue;
+    }
+    seen.add(normalizedEntry.id);
+    normalized.push(normalizedEntry);
+  }
+  normalized.sort((a, b) => {
+    const aTime = Date.parse(a.runAt || 0);
+    const bTime = Date.parse(b.runAt || 0);
+    if (Number.isFinite(bTime) && Number.isFinite(aTime) && bTime !== aTime) {
+      return bTime - aTime;
+    }
+    if (Number.isFinite(bTime) && !Number.isFinite(aTime)) {
+      return -1;
+    }
+    if (!Number.isFinite(bTime) && Number.isFinite(aTime)) {
+      return 1;
+    }
+    return b.id.localeCompare(a.id);
+  });
+  if (normalized.length > DECL_SYNC_HISTORY_DEFAULT_LIMIT) {
+    return normalized.slice(0, DECL_SYNC_HISTORY_DEFAULT_LIMIT);
+  }
+  return normalized;
+}
+
+export function getDeclSyncHistory(options = {}) {
+  const limit = Number.isFinite(options?.limit) && options.limit > 0 ? Math.floor(options.limit) : null;
+  const entries = normalizeDeclSyncHistoryList();
+  const sliced = limit ? entries.slice(0, limit) : entries;
+  return sliced.map((entry) => cloneDeclSyncHistoryEntry(entry));
+}
+
+export function subscribeDeclSyncHistory(listener, options = {}) {
+  const fn = typeof listener === 'function' ? listener : null;
+  if (!fn) {
+    return () => {};
+  }
+  const limit = Number.isFinite(options?.limit) && options.limit > 0 ? Math.floor(options.limit) : null;
+  const emit = () => {
+    try {
+      fn(getDeclSyncHistory({ limit }));
+    } catch (error) {
+      console.error('Không thể đọc lịch sử đồng bộ ECUS', error);
+    }
+  };
+  const unsubscribe = subscribe(DECL_SYNC_HISTORY_KEY, emit);
+  emit();
+  return () => {
+    if (typeof unsubscribe === 'function') {
+      unsubscribe();
+    }
+  };
+}
+
+export async function refreshDeclSyncHistory(options = {}) {
+  await refreshSharedKeys([DECL_SYNC_HISTORY_KEY], options);
+  return getDeclSyncHistory(options);
+}
+
+
+const DECL_SYNC_QUEUE_VERSION = 1;
+const DECL_SYNC_INITIAL_RETRY_DELAY_MS = 15000;
+const DECL_SYNC_MAX_RETRY_DELAY_MS = 5 * 60 * 1000;
+
+const declSyncQueueListeners = new Set();
+
+function getBrowserStorageSafe() {
+  if (typeof window === "undefined" || !window?.localStorage) {
+    return null;
+  }
+  try {
+    return window.localStorage;
+  } catch {
+    return null;
+  }
+}
+
+function readDeclSyncQueueStorage() {
+  const storage = getBrowserStorageSafe();
+  if (!storage) {
+    return null;
+  }
+  try {
+    const raw = storage.getItem(DECL_SYNC_QUEUE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" ? parsed : null;
+  } catch (error) {
+    console.warn("Không thể đọc hàng đợi đồng bộ ECUS từ localStorage", error);
+    return null;
+  }
+}
+
+function normalizeTaxCodeList(list) {
+  const source = Array.isArray(list) ? list : [];
+  const seen = new Set();
+  const result = [];
+  for (const item of source) {
+    const text = typeof item === "string" ? item.trim() : "";
+    if (!text) continue;
+    const upper = text.toUpperCase();
+    if (seen.has(upper)) continue;
+    seen.add(upper);
+    result.push(upper);
+  }
+  return result;
+}
+
+function normalizeDeclSyncPayload(payload) {
+  const actor = typeof payload?.actor === "string" ? payload.actor.trim() : "";
+  const from = typeof payload?.from === "string" ? payload.from.trim() : "";
+  const to = typeof payload?.to === "string" ? payload.to.trim() : "";
+  return {
+    actor: actor || null,
+    from: from || null,
+    to: to || null,
+    includeTaxCodes: normalizeTaxCodeList(payload?.includeTaxCodes),
+    excludeTaxCodes: normalizeTaxCodeList(payload?.excludeTaxCodes),
+  };
+}
+
+function normalizeDeclSyncQueueJob(job, { resetRunning = false, now = Date.now() } = {}) {
+  const id =
+    typeof job?.id === "string" && job.id.trim()
+      ? job.id.trim()
+      : `decl-sync-${now}-${Math.random().toString(36).slice(2, 8)}`;
+  let status = typeof job?.status === "string" ? job.status.trim() : "pending";
+  if (!["pending", "running", "completed"].includes(status)) {
+    status = "pending";
+  }
+  let step = typeof job?.step === "string" && job.step.trim() ? job.step.trim() : "queued";
+  const createdAt = Number.isFinite(job?.createdAt) ? job.createdAt : now;
+  const updatedAt = Number.isFinite(job?.updatedAt) ? job.updatedAt : createdAt;
+  let startedAt = Number.isFinite(job?.startedAt) ? job.startedAt : null;
+  let completedAt = Number.isFinite(job?.completedAt) ? job.completedAt : null;
+  const attempts = Number.isFinite(job?.attempts) ? Math.max(0, Math.floor(job.attempts)) : 0;
+  let nextRetryAt = Number.isFinite(job?.nextRetryAt) ? job.nextRetryAt : null;
+  let lastError = typeof job?.lastError === "string" ? job.lastError : null;
+  const message = typeof job?.message === "string" ? job.message : "";
+  const payload = normalizeDeclSyncPayload(job?.payload);
+  const result = job?.result && typeof job.result === "object" ? { ...job.result } : null;
+
+  if (resetRunning && status === "running") {
+    status = "pending";
+    step = "resume";
+    nextRetryAt = now;
+    startedAt = null;
+  }
+  if (status === "completed") {
+    nextRetryAt = null;
+    lastError = null;
+    if (!completedAt) {
+      completedAt = now;
+    }
+  } else {
+    completedAt = null;
+  }
+  if (status !== "running") {
+    startedAt = status === "completed" ? startedAt : null;
+  } else if (!startedAt) {
+    startedAt = now;
+  }
+
+  return {
+    id,
+    status,
+    step,
+    createdAt,
+    updatedAt,
+    startedAt,
+    completedAt,
+    attempts,
+    nextRetryAt,
+    lastError,
+    message,
+    payload,
+    result,
+  };
+}
+
+function normalizeDeclSyncQueueState(raw, { resetRunning = false } = {}) {
+  const now = Date.now();
+  const jobs = [];
+  const source = raw && Array.isArray(raw.jobs) ? raw.jobs : [];
+  for (const entry of source) {
+    jobs.push(normalizeDeclSyncQueueJob(entry, { resetRunning, now }));
+  }
+  jobs.sort((a, b) => {
+    if (a.createdAt !== b.createdAt) return a.createdAt - b.createdAt;
+    return a.id.localeCompare(b.id);
+  });
+  return {
+    version: DECL_SYNC_QUEUE_VERSION,
+    jobs,
+  };
+}
+
+function cloneDeclSyncQueueJob(job) {
+  if (!job) return null;
+  return {
+    ...job,
+    payload: {
+      actor: job.payload?.actor || null,
+      from: job.payload?.from || null,
+      to: job.payload?.to || null,
+      includeTaxCodes: Array.isArray(job.payload?.includeTaxCodes) ? [...job.payload.includeTaxCodes] : [],
+      excludeTaxCodes: Array.isArray(job.payload?.excludeTaxCodes) ? [...job.payload.excludeTaxCodes] : [],
+    },
+    result: job.result && typeof job.result === "object" ? { ...job.result } : null,
+  };
+}
+
+function cloneDeclSyncQueueState(state) {
+  return {
+    version: state?.version ?? DECL_SYNC_QUEUE_VERSION,
+    jobs: Array.isArray(state?.jobs) ? state.jobs.map((job) => cloneDeclSyncQueueJob(job)) : [],
+  };
+}
+
+function notifyDeclSyncQueue() {
+  const snapshot = cloneDeclSyncQueueState(declSyncQueueState);
+  for (const listener of declSyncQueueListeners) {
+    try {
+      listener(snapshot);
+    } catch (error) {
+      console.error("Decl sync queue listener error", error);
+    }
+  }
+  return snapshot;
+}
+
+function persistDeclSyncQueueState() {
+  const storage = getBrowserStorageSafe();
+  if (!storage) {
+    return;
+  }
+  try {
+    if (declSyncQueueState.jobs.length > 0) {
+      storage.setItem(DECL_SYNC_QUEUE_KEY, JSON.stringify(declSyncQueueState));
+    } else {
+      storage.removeItem(DECL_SYNC_QUEUE_KEY);
+    }
+  } catch (error) {
+    console.warn("Không thể lưu hàng đợi đồng bộ ECUS vào localStorage", error);
+  }
+}
+
+let declSyncQueueState = normalizeDeclSyncQueueState(readDeclSyncQueueStorage(), { resetRunning: true });
+
+persistDeclSyncQueueState();
+
+function setQueueStateFromJobs(jobs, { resetRunning = false } = {}) {
+  declSyncQueueState = normalizeDeclSyncQueueState({ jobs }, { resetRunning });
+  persistDeclSyncQueueState();
+  return notifyDeclSyncQueue();
+}
+
+function updateDeclSyncQueueJob(jobId, patch = {}) {
+  if (!jobId) return null;
+  const jobs = declSyncQueueState.jobs.map((job) => {
+    if (job.id !== jobId) {
+      return job;
+    }
+    const payloadPatch =
+      patch && Object.prototype.hasOwnProperty.call(patch, "payload")
+        ? (patch.payload && typeof patch.payload === "object" ? patch.payload : {})
+        : null;
+    const resultPatch =
+      patch && Object.prototype.hasOwnProperty.call(patch, "result")
+        ? (patch.result && typeof patch.result === "object" ? patch.result : patch.result)
+        : undefined;
+    const next = {
+      ...job,
+      ...patch,
+      updatedAt: Date.now(),
+    };
+    if (payloadPatch !== null) {
+      next.payload = { ...job.payload, ...payloadPatch };
+    }
+    if (resultPatch !== undefined) {
+      next.result = resultPatch;
+    }
+    return next;
+  });
+  setQueueStateFromJobs(jobs, { resetRunning: false });
+  const refreshed = declSyncQueueState.jobs.find((entry) => entry.id === jobId);
+  return cloneDeclSyncQueueJob(refreshed);
+}
+
+function createDeclSyncQueueJob(payload) {
+  const now = Date.now();
+  return normalizeDeclSyncQueueJob(
+    {
+      id: `decl-sync-${now}-${Math.random().toString(36).slice(2, 8)}`,
+      status: "pending",
+      step: "queued",
+      createdAt: now,
+      updatedAt: now,
+      startedAt: null,
+      completedAt: null,
+      attempts: 0,
+      nextRetryAt: null,
+      lastError: null,
+      message: "Đang chờ xử lý",
+      payload,
+      result: null,
+    },
+    { resetRunning: false, now }
+  );
+}
+
+function pickNextDeclSyncJob() {
+  let candidate = null;
+  for (const job of declSyncQueueState.jobs) {
+    if (job.status !== "pending") continue;
+    if (!candidate) {
+      candidate = job;
+      continue;
+    }
+    const candidateTime = Number.isFinite(candidate.nextRetryAt) ? candidate.nextRetryAt : candidate.createdAt;
+    const jobTime = Number.isFinite(job.nextRetryAt) ? job.nextRetryAt : job.createdAt;
+    if (jobTime < candidateTime) {
+      candidate = job;
+    }
+  }
+  return candidate;
+}
+
+function computeDeclSyncRetryDelay(attempts) {
+  const safeAttempt = Math.max(1, attempts);
+  const delay = DECL_SYNC_INITIAL_RETRY_DELAY_MS * 2 ** (safeAttempt - 1);
+  return Math.min(DECL_SYNC_MAX_RETRY_DELAY_MS, delay);
+}
+
+function formatRetryTime(timestamp) {
+  if (!Number.isFinite(timestamp)) {
+    return "";
+  }
+  try {
+    return new Date(timestamp).toLocaleString("vi-VN", { hour12: false });
+  } catch {
+    return "";
+  }
+}
+
+function buildDeclSyncResultMessage(result) {
+  if (!result || typeof result !== "object") {
+    return "";
+  }
+  const imported = Number.isFinite(result.imported) ? result.imported : 0;
+  const skipped = Number.isFinite(result.skipped) ? result.skipped : 0;
+  const lockedRaw = result.reviewLocked ?? result.locked;
+  const locked = Number.isFinite(lockedRaw) ? lockedRaw : 0;
+  const parts = [];
+  parts.push(`Đã đồng bộ ${imported.toLocaleString("vi-VN")} tờ khai mới từ ECUS`);
+  if (skipped > 0) {
+    parts.push(`bỏ qua ${skipped.toLocaleString("vi-VN")} tờ khai đã tồn tại`);
+  }
+  if (locked > 0) {
+    parts.push(`khóa ${locked.toLocaleString("vi-VN")} tờ khai đã rà soát`);
+  }
+  return parts.join(", ");
+}
+
+function composeDeclSyncSuccessMessage(result, progress) {
+  const parts = [];
+  const resultMessage = buildDeclSyncResultMessage(result);
+  if (resultMessage) {
+    parts.push(`${resultMessage}.`);
+  }
+  if (progress && typeof progress.message === "string" && progress.message) {
+    parts.push(progress.message);
+  }
+  return parts.join(" ").replace(/\s+/g, " ").trim();
+}
+
+async function runDeclSyncJob(jobId) {
+  const current = declSyncQueueState.jobs.find((job) => job.id === jobId);
+  if (!current) {
+    return;
+  }
+  const startedAt = current.startedAt || Date.now();
+  const attemptNumber = (current.attempts || 0) + 1;
+  updateDeclSyncQueueJob(jobId, {
+    status: "running",
+    step: "trigger",
+    startedAt,
+    attempts: attemptNumber,
+    nextRetryAt: null,
+    lastError: null,
+    message: "Đang gửi yêu cầu đồng bộ tới backend...",
+  });
+
+  applyDeclSyncProgressPatch(
+    {
+      status: "running",
+      step: "trigger",
+      message: "Đang gửi yêu cầu đồng bộ ECUS...",
+      startedAt,
+      finishedAt: null,
+      jobId,
+      error: null,
+    },
+    declSyncProgressState.status === "idle"
+  );
+
+  try {
+    const jobSnapshot = declSyncQueueState.jobs.find((job) => job.id === jobId);
+    const payload = jobSnapshot?.payload || {};
+    const body = {
+      actor: payload.actor || undefined,
+      from: payload.from || undefined,
+      to: payload.to || undefined,
+      includeTaxCodes:
+        Array.isArray(payload.includeTaxCodes) && payload.includeTaxCodes.length
+          ? payload.includeTaxCodes
+          : undefined,
+      excludeTaxCodes:
+        Array.isArray(payload.excludeTaxCodes) && payload.excludeTaxCodes.length
+          ? payload.excludeTaxCodes
+          : undefined,
+    };
+    const response = await fetchWithAuth("/api/import/ecus/run", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      credentials: "include",
+    });
+    if (!response || typeof response.ok !== "boolean") {
+      throw new Error("Không nhận được phản hồi hợp lệ từ backend");
+    }
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+    let payloadResult = null;
+    try {
+      payloadResult = await response.json();
+    } catch {
+      payloadResult = null;
+    }
+    const rawResult = payloadResult?.result && typeof payloadResult.result === "object" ? payloadResult.result : {};
+    const syncMeta = {
+      runAt: typeof rawResult.runAt === "string" ? rawResult.runAt : null,
+    };
+    const normalizedResult = {
+      imported: Number.isFinite(rawResult.imported) ? rawResult.imported : 0,
+      skipped: Number.isFinite(rawResult.skipped) ? rawResult.skipped : 0,
+      reviewLocked: Number.isFinite(rawResult.reviewLocked) ? rawResult.reviewLocked : 0,
+    };
+
+    updateDeclSyncQueueJob(jobId, {
+      step: "refresh",
+      message: "Đang cập nhật dữ liệu tờ khai vào bộ nhớ...",
+      result: normalizedResult,
+    });
+
+    await refreshDeclRowsFromServer({ jobId, syncMeta });
+
+    const progressSnapshot = getDeclSyncProgress();
+    const successMessage = composeDeclSyncSuccessMessage(normalizedResult, progressSnapshot);
+
+    updateDeclSyncQueueJob(jobId, {
+      status: "completed",
+      step: "completed",
+      completedAt: Date.now(),
+      lastError: null,
+      nextRetryAt: null,
+      message: successMessage || "Đồng bộ ECUS đã hoàn tất.",
+    });
+  } catch (error) {
+    const message = error?.message || "Không thể đồng bộ ECUS";
+    const attempts = declSyncQueueState.jobs.find((job) => job.id === jobId)?.attempts || 1;
+    const delay = computeDeclSyncRetryDelay(attempts);
+    const nextRetryAt = Date.now() + delay;
+    const retryLabel = formatRetryTime(nextRetryAt);
+    updateDeclSyncQueueJob(jobId, {
+      status: "pending",
+      step: "waiting-retry",
+      nextRetryAt,
+      lastError: message,
+      message: retryLabel ? `${message}. Sẽ thử lại vào ${retryLabel}.` : message,
+    });
+    if (declSyncProgressState.jobId === jobId || declSyncProgressState.status === "running") {
+      applyDeclSyncProgressPatch({
+        status: "error",
+        step: "error",
+        message,
+        error: message,
+        finishedAt: Date.now(),
+        jobId,
+      });
+    }
+  }
+}
+
+let declSyncWorkerRunning = false;
+let declSyncWorkerPromise = null;
+
+function hasPendingDeclSyncJob() {
+  return declSyncQueueState.jobs.some((job) => job.status === "pending");
+}
+
+function ensureDeclSyncWorkerRunning() {
+  if (declSyncWorkerRunning) {
+    return declSyncWorkerPromise;
+  }
+  if (!hasPendingDeclSyncJob()) {
+    return null;
+  }
+  declSyncWorkerRunning = true;
+  declSyncWorkerPromise = (async () => {
+    while (true) {
+      const job = pickNextDeclSyncJob();
+      if (!job) {
+        break;
+      }
+      const now = Date.now();
+      if (Number.isFinite(job.nextRetryAt) && job.nextRetryAt > now) {
+        const waitMs = Math.min(job.nextRetryAt - now, 15000);
+        await new Promise((resolve) => setTimeout(resolve, waitMs));
+        continue;
+      }
+      await runDeclSyncJob(job.id);
+    }
+  })()
+    .catch((error) => {
+      console.error("Decl sync worker error", error);
+    })
+    .finally(() => {
+      declSyncWorkerRunning = false;
+      declSyncWorkerPromise = null;
+      if (hasPendingDeclSyncJob()) {
+        ensureDeclSyncWorkerRunning();
+      }
+    });
+  return declSyncWorkerPromise;
+}
+
+export function getDeclSyncQueue() {
+  return cloneDeclSyncQueueState(declSyncQueueState);
+}
+
+export function subscribeDeclSyncQueue(listener) {
+  if (typeof listener !== "function") {
+    return () => {};
+  }
+  declSyncQueueListeners.add(listener);
+  return () => {
+    declSyncQueueListeners.delete(listener);
+  };
+}
+
+export function enqueueDeclSyncJob(payload = {}) {
+  const job = createDeclSyncQueueJob(payload);
+  const jobs = declSyncQueueState.jobs.concat(job);
+  setQueueStateFromJobs(jobs, { resetRunning: false });
+  const stored = declSyncQueueState.jobs.find((entry) => entry.id === job.id);
+  ensureDeclSyncWorkerRunning();
+  return cloneDeclSyncQueueJob(stored);
+}
+
+export function resumeDeclSyncQueue() {
+  declSyncQueueState = normalizeDeclSyncQueueState(declSyncQueueState, { resetRunning: true });
+  persistDeclSyncQueueState();
+  notifyDeclSyncQueue();
+  ensureDeclSyncWorkerRunning();
+  return getDeclSyncQueue();
+}
+
+export function forceRunDeclSyncJob(jobId) {
+  if (typeof jobId !== "string" || !jobId) {
+    return null;
+  }
+  const existing = declSyncQueueState.jobs.find((entry) => entry.id === jobId);
+  if (!existing) {
+    return null;
+  }
+  updateDeclSyncQueueJob(jobId, {
+    status: "pending",
+    step: "queued",
+    nextRetryAt: Date.now(),
+    lastError: null,
+    message: "Đang xếp lịch chạy lại...",
+  });
+  ensureDeclSyncWorkerRunning();
+  const refreshed = declSyncQueueState.jobs.find((entry) => entry.id === jobId);
+  return cloneDeclSyncQueueJob(refreshed);
+}
+
+if (declSyncQueueState.jobs.some((job) => job.status === "pending")) {
+  ensureDeclSyncWorkerRunning();
+}
 
 export function sortDeclRows(rows) {
 
@@ -8451,6 +9844,130 @@ export function updateKpiAdjustmentStatus(id, status, { actor = 'system', note =
 
 
 
+export function bulkUpdateKpiAdjustmentStatus(
+  ids,
+  status,
+  { actor = 'system', note = '', permissions = {} } = {}
+) {
+
+  if (!Array.isArray(ids) || ids.length === 0) {
+
+    return [];
+
+  }
+
+  const normalizedStatus = normalizeStr(status).toLowerCase();
+
+  if (!KPI_ADJUSTMENT_STATUS_SET.has(normalizedStatus)) {
+
+    throw new Error('Trạng thái điểm KPI bổ sung không hợp lệ');
+
+  }
+
+  if (!permissions.adjustApprove) {
+
+    throw new Error('Bạn không có quyền duyệt điểm KPI bổ sung');
+
+  }
+
+  const uniqueIds = Array.from(new Set(ids.filter((value) => typeof value === 'string' && value)));
+
+  if (!uniqueIds.length) {
+
+    return [];
+
+  }
+
+  const idSet = new Set(uniqueIds);
+  const adjustments = getAllAdjustments();
+  const updatedEntries = [];
+  let changed = false;
+
+  for (let index = 0; index < adjustments.length; index += 1) {
+
+    const entry = adjustments[index];
+
+    if (!entry || !idSet.has(entry.id)) {
+
+      continue;
+
+    }
+
+    if (entry.status === normalizedStatus) {
+
+      continue;
+
+    }
+
+    const next = { ...entry };
+    const stamp = new Date();
+    const iso = stamp.toISOString();
+
+    next.status = normalizedStatus;
+    next.updatedAt = iso;
+    next.updatedBy = actor;
+
+    if (normalizedStatus === 'approved') {
+
+      next.approvedAt = iso;
+      next.approvedBy = actor;
+
+    } else if (normalizedStatus === 'rejected') {
+
+      next.rejectedAt = iso;
+      next.rejectedBy = actor;
+
+    }
+
+    const history = Array.isArray(next.history) ? next.history.slice() : [];
+
+    history.push(
+
+      normalizeAdjustmentHistoryEntry({
+
+        action: `status.${normalizedStatus}`,
+
+        actor,
+
+        detail: note,
+
+      })
+
+    );
+
+    next.history = clampHistory(history);
+    adjustments[index] = next;
+    updatedEntries.push(next);
+    changed = true;
+
+  }
+
+  if (!changed) {
+
+    return [];
+
+  }
+
+  persistAdjustments(adjustments);
+
+  pushAuditLog({
+
+    actor,
+
+    action: 'kpi.adjustment.bulk-status',
+
+    detail: `Cập nhật ${updatedEntries.length} điểm KPI (${normalizedStatus})`,
+
+    meta: { ids: updatedEntries.map((item) => item.id), status: normalizedStatus },
+
+  });
+
+  return updatedEntries;
+
+}
+
+
+
 export function removeKpiAdjustment(id, { actor = 'system', permissions = {} } = {}) {
 
   if (!permissions.adjustApprove && !permissions.adjustSubmit) {
@@ -9304,7 +10821,7 @@ export function clearAuditLogs({ actor = "system", note = "Xóa toàn bộ nhậ
 export default {
 
   DECL_KEY, MST_KEY, RULES_KEY, TEAM_KEY, AUDIT_KEY, HQ_KEY, KPI_ADJUSTMENTS_KEY, DECL_HISTORY_KEY,
-  DECL_DELETED_LOG_KEY, DECL_DELETED_LOG_LIMIT,
+  DECL_DELETED_LOG_KEY, DECL_DELETED_LOG_LIMIT, DECL_SYNC_HISTORY_KEY, DECL_SYNC_QUEUE_KEY,
 
   normalizeStr, normalizeMST, normalizeDeclarationNumber, toISODate, normalizeName,
 
@@ -9315,6 +10832,7 @@ export default {
   getDeclRows, saveDeclRows, saveDeclRowDiffs, softDeleteDeclRows, hardDeleteDeclRows, restoreDeclRows, markDeclRowsReviewed, unmarkDeclRowsReviewed, sortDeclRows, getRecentDeclRows,
 
   getDeclHistoryForRow,
+  getDeclSyncHistory, subscribeDeclSyncHistory, refreshDeclSyncHistory,
 
   getHQAgencies, mapHQAgenciesByMST, upsertHQAgencies, saveHQAgencyRow, deleteHQAgencyRow, applyAgenciesToDeclRows,
 
@@ -9340,9 +10858,10 @@ export default {
 
   UI_LAYOUT_KEY,
 
-  getKpiAdjustments, saveKpiAdjustment, updateKpiAdjustmentStatus, removeKpiAdjustment, mapAdjustmentsByMonth,
+  getKpiAdjustments, saveKpiAdjustment, updateKpiAdjustmentStatus, bulkUpdateKpiAdjustmentStatus, removeKpiAdjustment, mapAdjustmentsByMonth,
 
   getKpiAdjustmentSettings, saveKpiAdjustmentSettings,
+  getKpiAdjustmentFilterState, saveKpiAdjustmentFilterState,
 
   REPORT_SCHEDULE_KEY, getReportSchedules, saveReportSchedule, deleteReportSchedule, calculateNextReportScheduleRun,
 
