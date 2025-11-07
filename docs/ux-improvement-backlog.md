@@ -38,8 +38,14 @@ This backlog liệt kê các hạng mục cải thiện trải nghiệm người
 
 ## 4. MST assignment & staffing
 
-- [ ] Tự động phát hiện MST được gán trùng và đề xuất cách xử lý (giữ, chuyển, tách vai trò).
-- [ ] Thêm timeline lịch sử thay đổi MST với bộ lọc theo hành động (create/update/delete).
+- [x] Tự động phát hiện MST được gán trùng và đề xuất cách xử lý (giữ, chuyển, tách vai trò). (đã thêm panel cảnh báo kèm hành động trực tiếp trong giao diện)
+  - [x] Thu thập và đánh dấu các MST bị gán trùng theo khoảng ngày hiệu lực. (đã gom nhóm chồng lấn bằng `useMemo` trong `MSTAssignment.jsx`)
+  - [x] Hiển thị cảnh báo đề xuất xử lý ngay trong tab Gán MST. (đã bổ sung thẻ cảnh báo đầu trang với danh sách chi tiết từng MST)
+  - [x] Bổ sung thao tác nhanh (giữ dòng ưu tiên, chuyển nhân viên, tách vai trò) để giải quyết chồng lấn. (đã thêm các nút thao tác nhanh để cập nhật dòng ưu tiên và đồng bộ nhân viên)
+- [x] Thêm timeline lịch sử thay đổi MST với bộ lọc theo hành động (create/update/delete). (đã thêm preview + modal timeline áp dụng bộ lọc lịch sử)
+  - [x] Gom nhóm bản ghi lịch sử theo ngày/MST để dựng preview và modal chi tiết. (timeline lấy từ `getMSTHistoryEntries`)
+  - [x] Hiển thị danh sách dọc với badge theo thao tác (create/update/delete) và chi tiết giá trị trước/sau. (sử dụng HistoryTimelineGroups)
+  - [x] Kết nối nút tải lại, giới hạn preview và mở dialog xem toàn bộ khi cần. (áp dụng chung bộ lọc ngày + thao tác hiện có)
 - [ ] Cung cấp chế độ xem rút gọn cho trưởng nhóm với quick filters (assigned/pending, theo nhóm).
 - [ ] Cảnh báo ngay khi nhập tên công ty vượt ngưỡng dài, sai định dạng hoặc chứa ký tự không hợp lệ.
 - [ ] Cho phép export báo cáo phân bổ MST ra CSV/XLSX với metadata (người gán, ngày hiệu lực).

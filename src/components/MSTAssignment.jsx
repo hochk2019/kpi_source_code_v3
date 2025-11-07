@@ -85,6 +85,20 @@ export const COMPANY_NAME_WRAP_THRESHOLD = 25;
 
 const HISTORY_ACTION_TYPES = new Set(["create", "update", "delete"]);
 
+const HISTORY_ACTION_LABELS = {
+  create: "Thêm mới",
+  update: "Chỉnh sửa",
+  delete: "Xóa",
+};
+
+const HISTORY_ACTION_BADGE_CLASSES = {
+  create: "border-emerald-200 bg-emerald-50 text-emerald-700",
+  update: "border-blue-200 bg-blue-50 text-blue-700",
+  delete: "border-red-200 bg-red-50 text-red-600",
+};
+
+const HISTORY_TIMELINE_PREVIEW_LIMIT = 8;
+
 const STATUS_FILTER_MAP = new Map([
   ["status:assigned", MST_ASSIGNMENT_STATUS.ASSIGNED],
   ["status:pending", MST_ASSIGNMENT_STATUS.PENDING],
@@ -584,6 +598,88 @@ const computeStatusDisplay = (row) => {
 
 
   return normalizeStatusLabel(row?.status);
+
+};
+
+
+
+const hasAssignee = (row) =>
+
+  Boolean(normalizeStr(row?.person_import || "") || normalizeStr(row?.person_export || ""));
+
+
+
+const DEFAULT_RANGE_START = "0000-01-01";
+
+const DEFAULT_RANGE_END = "9999-12-31";
+
+
+
+const getRowRange = (row = {}) => {
+
+  const start = row?.effective_from || DEFAULT_RANGE_START;
+
+  const end = row?.effective_to || DEFAULT_RANGE_END;
+
+  return { start, end };
+
+};
+
+
+
+const rangesOverlap = (a, b) => {
+
+  if (!a || !b) return false;
+
+  return a.start <= b.end && b.start <= a.end;
+
+};
+
+
+
+const buildRangeLabel = (row) => {
+
+  const startLabel = row?.effective_from ? formatISODate(row.effective_from) : "Chưa đặt";
+
+  const endLabel = row?.effective_to ? formatISODate(row.effective_to) : "Hiện tại";
+
+  return `${startLabel} → ${endLabel}`;
+
+};
+
+
+
+const formatAssigneeSummary = (row) => {
+
+  const importName = normalizeStr(row?.person_import || "") ? row.person_import : "";
+
+  const exportName = normalizeStr(row?.person_export || "") ? row.person_export : "";
+
+  if (importName && exportName) {
+
+    if (importName === exportName) {
+
+      return `${importName} (Nhập & Xuất)`;
+
+    }
+
+    return `${importName} (Nhập) • ${exportName} (Xuất)`;
+
+  }
+
+  if (importName) {
+
+    return `${importName} (Nhập)`;
+
+  }
+
+  if (exportName) {
+
+    return `${exportName} (Xuất)`;
+
+  }
+
+  return "Chưa gán nhân viên";
 
 };
 
@@ -1334,6 +1430,25 @@ const buildHistoryIndex = (entries = []) => {
 
 
 
+const groupHistoryTimelineEntries = (entries = []) => {
+  const groups = new Map();
+
+  entries.forEach((entry) => {
+    if (!entry) return;
+    const dateKey = (entry.timestamp || "").slice(0, 10) || "";
+    if (!groups.has(dateKey)) {
+      groups.set(dateKey, []);
+    }
+    groups.get(dateKey).push(entry);
+  });
+
+  return Array.from(groups.entries()).map(([date, list]) => ({
+    date,
+    entries: Array.isArray(list) ? list : [],
+  }));
+};
+
+
 const formatHistoryTime = (value) => {
 
   if (!value) return "";
@@ -1440,6 +1555,111 @@ const HistoryDetails = ({ entries = [], label }) => {
 
   );
 
+};
+
+
+
+
+
+const HistoryTimelineGroups = ({ groups = [] }) => {
+  const safeGroups = Array.isArray(groups) ? groups : [];
+
+  if (!safeGroups.length) {
+    return (
+      <p className="text-sm text-slate-500">
+        Không có thay đổi nào khớp bộ lọc hiện tại.
+      </p>
+    );
+  }
+
+  const renderValue = (value) =>
+    value ? (
+      <span className="text-slate-700">{value}</span>
+    ) : (
+      <span className="italic text-slate-400">(trống)</span>
+    );
+
+  return (
+    <div className="space-y-4">
+      {safeGroups.map((group, groupIndex) => {
+        const entries = Array.isArray(group?.entries) ? group.entries : [];
+        const groupKey = group?.date || `history-${groupIndex}`;
+        const dateLabel = group?.date ? formatISODate(group.date) : "";
+        const title = dateLabel || "Không xác định";
+
+        return (
+          <section key={groupKey} className="space-y-2">
+            <header className="flex flex-wrap items-center justify-between gap-2">
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                {title}
+              </h3>
+              <span className="text-[11px] font-medium text-slate-400">
+                {entries.length} thay đổi
+              </span>
+            </header>
+            {entries.length ? (
+              <ol className="relative border-l border-slate-200 pl-4">
+                {entries.map((entry, entryIndex) => {
+                  const key = entry?.id || `${groupKey}-${entryIndex}`;
+                  const actionLabel =
+                    HISTORY_ACTION_LABELS[entry?.type] || entry?.type || "Khác";
+                  const badgeClass =
+                    HISTORY_ACTION_BADGE_CLASSES[entry?.type] ||
+                    "border-slate-200 bg-slate-100 text-slate-600";
+                  const timestampLabel = formatHistoryTime(entry?.timestamp);
+                  const actorName = entry?.actor ? `Bởi ${entry.actor}` : "Bởi hệ thống";
+                  const fieldLabel =
+                    HISTORY_FIELD_LABELS[entry?.field] ||
+                    (entry?.field ? entry.field : "Trường dữ liệu");
+
+                  return (
+                    <li key={key} className="relative mb-6 ml-2 last:mb-0">
+                      <span
+                        className="absolute -left-[9px] top-1.5 inline-flex size-3 rounded-full border border-white bg-slate-400 shadow"
+                        aria-hidden="true"
+                      />
+                      <div className="flex flex-col gap-2 rounded border border-slate-200 bg-white p-3 text-sm text-slate-700">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="font-semibold text-slate-800">
+                            {timestampLabel || "Chưa rõ thời gian"}
+                          </span>
+                          <span
+                            className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${badgeClass}`}
+                          >
+                            {actionLabel}
+                          </span>
+                          <span className="text-xs text-slate-500">{actorName}</span>
+                        </div>
+                        <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-600">
+                          <span>
+                            <span className="text-slate-500">MST:</span> {entry?.mst || "(Không xác định)"}
+                          </span>
+                          {fieldLabel ? (
+                            <span>
+                              <span className="text-slate-500">Trường:</span> {fieldLabel}
+                            </span>
+                          ) : null}
+                        </div>
+                        <div className="flex flex-wrap items-baseline gap-2 text-xs text-slate-600">
+                          <span className="text-slate-500">Từ:</span> {renderValue(entry?.from)}
+                          <span className="text-slate-400">→</span>
+                          <span className="text-slate-500">Đến:</span> {renderValue(entry?.to)}
+                        </div>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ol>
+            ) : (
+              <p className="text-xs italic text-slate-400">
+                Chưa ghi nhận thay đổi trong ngày này.
+              </p>
+            )}
+          </section>
+        );
+      })}
+    </div>
+  );
 };
 
 
@@ -3686,6 +3906,269 @@ export default function MSTAssignment({
   ]);
 
 
+  const duplicateClusters = useMemo(() => {
+
+    if (!rows.length) return [];
+
+    const byMst = new Map();
+
+    rows.forEach((row, index) => {
+
+      if (!row) return;
+
+      const mstKey = row.mst || "";
+
+      if (!mstKey) return;
+
+      if (!byMst.has(mstKey)) {
+
+        byMst.set(mstKey, []);
+
+      }
+
+      byMst.get(mstKey).push({ row, index });
+
+    });
+
+
+
+    const clusters = [];
+
+    byMst.forEach((entries, mst) => {
+
+      const prepared = entries
+
+        .map(({ row, index }) => ({
+
+          row,
+
+          index,
+
+          identity:
+
+            row.__originalKey ||
+
+            makeRowKey(row) ||
+
+            `${mst || "UNKNOWN"}__${index}`,
+
+        }))
+
+        .filter(({ row }) => hasAssignee(row));
+
+      if (prepared.length < 2) return;
+
+      const entryByRow = new Map(prepared.map((entry) => [entry.row, entry]));
+
+      const sortedRows = sortMSTRows(prepared.map((entry) => entry.row));
+
+      const sortedEntries = sortedRows
+
+        .map((row) => entryByRow.get(row))
+
+        .filter(Boolean);
+
+      const overlapping = new Map();
+
+      for (let i = 0; i < sortedEntries.length; i += 1) {
+
+        const entryA = sortedEntries[i];
+
+        const rangeA = getRowRange(entryA.row);
+
+        for (let j = i + 1; j < sortedEntries.length; j += 1) {
+
+          const entryB = sortedEntries[j];
+
+          const rangeB = getRowRange(entryB.row);
+
+          if (rangesOverlap(rangeA, rangeB)) {
+
+            overlapping.set(entryA.identity, entryA);
+
+            overlapping.set(entryB.identity, entryB);
+
+          }
+
+        }
+
+      }
+
+      if (overlapping.size < 2) return;
+
+      const sortedConflictEntries = Array.from(overlapping.values()).sort(
+
+        (entryA, entryB) => {
+
+          const rowA = entryA.row;
+
+          const rowB = entryB.row;
+
+          const filledA =
+
+            (normalizeStr(rowA.person_import || "") ? 1 : 0) +
+
+            (normalizeStr(rowA.person_export || "") ? 1 : 0);
+
+          const filledB =
+
+            (normalizeStr(rowB.person_import || "") ? 1 : 0) +
+
+            (normalizeStr(rowB.person_export || "") ? 1 : 0);
+
+          if (filledA !== filledB) return filledB - filledA;
+
+          const activeA = rowA.effective_to ? 0 : 1;
+
+          const activeB = rowB.effective_to ? 0 : 1;
+
+          if (activeA !== activeB) return activeB - activeA;
+
+          const fromA = rowA.effective_from || DEFAULT_RANGE_START;
+
+          const fromB = rowB.effective_from || DEFAULT_RANGE_START;
+
+          if (fromA !== fromB) return fromB.localeCompare(fromA);
+
+          const toA = rowA.effective_to || DEFAULT_RANGE_END;
+
+          const toB = rowB.effective_to || DEFAULT_RANGE_END;
+
+          return toA.localeCompare(toB);
+
+        }
+
+      );
+
+      const details = sortedConflictEntries.map((entry) => {
+
+        const row = entry.row;
+
+        return {
+
+          key: entry.identity,
+
+          row,
+
+          summary: formatAssigneeSummary(row),
+
+          rangeLabel: buildRangeLabel(row),
+
+          teamLabel: row.team || "",
+
+          hasImport: Boolean(normalizeStr(row.person_import || "")),
+
+          hasExport: Boolean(normalizeStr(row.person_export || "")),
+
+          isActive: !row.effective_to,
+
+        };
+
+      });
+
+      if (!details.length) return;
+
+      const keepDetail = details[0];
+
+      const otherDetails = details.slice(1);
+
+      const companyName =
+
+        keepDetail?.row?.company ||
+
+        details.find((detail) => detail.row.company)?.row.company ||
+
+        "";
+
+      const id = `${mst || "UNKNOWN"}__${details
+
+        .map((detail) => detail.key)
+
+        .join("|")}`;
+
+      const staffSet = new Set();
+
+      details.forEach((detail) => {
+
+        if (detail.hasImport) {
+
+          staffSet.add(detail.row.person_import);
+
+        }
+
+        if (detail.hasExport) {
+
+          staffSet.add(detail.row.person_export);
+
+        }
+
+      });
+
+      const keepMissingImport = !keepDetail?.hasImport;
+
+      const keepMissingExport = !keepDetail?.hasExport;
+
+      const splitOption =
+
+        (keepMissingImport && otherDetails.some((detail) => detail.hasImport)) ||
+
+        (keepMissingExport && otherDetails.some((detail) => detail.hasExport));
+
+      clusters.push({
+
+        id,
+
+        mst,
+
+        company: companyName,
+
+        details,
+
+        keepDetail,
+
+        otherDetails,
+
+        staffList: Array.from(staffSet),
+
+        hasSplitOption: splitOption,
+
+      });
+
+    });
+
+    return clusters;
+
+  }, [rows]);
+
+
+
+  const visibleDuplicateClusters = useMemo(() => {
+
+    if (!duplicateClusters.length) return [];
+
+    if (!filtered.length) return [];
+
+    const visibleSet = new Set(filtered);
+
+    return duplicateClusters.filter((cluster) =>
+
+      cluster.details.some((detail) => visibleSet.has(detail.row))
+
+    );
+
+  }, [duplicateClusters, filtered]);
+
+
+
+  const hiddenDuplicateCount = Math.max(
+
+    duplicateClusters.length - visibleDuplicateClusters.length,
+
+    0
+
+  );
+
+
 
   // Precompute grouped stages for aggregated view to avoid temporal dead zone
   const groupedStages2 = useMemo(() => {
@@ -3912,6 +4395,51 @@ export default function MSTAssignment({
   const filteredHistoryCount = filteredHistoryEntries.length;
 
   const recentlyImportedCount = recentlyImportedKeys.size;
+
+
+  const historyTimelinePreviewEntries = useMemo(
+    () => filteredHistoryEntries.slice(0, HISTORY_TIMELINE_PREVIEW_LIMIT),
+    [filteredHistoryEntries]
+  );
+
+  const historyTimelinePreviewGroups = useMemo(
+    () => groupHistoryTimelineEntries(historyTimelinePreviewEntries),
+    [historyTimelinePreviewEntries]
+  );
+
+  const historyTimelineGroups = useMemo(
+    () => groupHistoryTimelineEntries(filteredHistoryEntries),
+    [filteredHistoryEntries]
+  );
+
+  const historyTimelinePreviewCount = historyTimelinePreviewEntries.length;
+  const canOpenHistoryTimeline = historyTimelineGroups.length > 0;
+
+  const [historyTimelineDialogState, setHistoryTimelineDialogState] = useState({
+    open: false,
+    groups: [],
+    title: "",
+    subtitle: "",
+  });
+
+  const handleHistoryTimelineDialogOpenChange = useCallback((nextOpen) => {
+    setHistoryTimelineDialogState((prev) => ({ ...prev, open: nextOpen }));
+  }, []);
+
+  const handleOpenHistoryTimeline = useCallback(() => {
+    if (!historyTimelineGroups.length) {
+      setHistoryTimelineDialogState((prev) => ({ ...prev, open: false }));
+      return;
+    }
+    setHistoryTimelineDialogState({
+      open: true,
+      groups: historyTimelineGroups,
+      title: "Timeline thay đổi MST",
+      subtitle: `${filteredHistoryCount} thay đổi khớp bộ lọc hiện tại`,
+    });
+  }, [filteredHistoryCount, historyTimelineGroups]);
+
+
 
 
 
@@ -4263,6 +4791,232 @@ export default function MSTAssignment({
 
 
 
+  const handleKeepDuplicate = useCallback(
+
+    (targetRow, duplicates = []) => {
+
+      if (!targetRow) {
+
+        alert("Chọn dòng ưu tiên trước khi giữ.");
+
+        return;
+
+      }
+
+      if (!hasAssignee(targetRow)) {
+
+        alert("Điền nhân viên phụ trách cho dòng ưu tiên trước khi giữ.");
+
+        return;
+
+      }
+
+      const others = duplicates.filter((row) => row && row !== targetRow);
+
+      if (!others.length) {
+
+        alert("Không tìm thấy dòng trùng để xử lý.");
+
+        return;
+
+      }
+
+      others.forEach((row) => {
+
+        const patch = {};
+
+        if (normalizeStr(row.person_import || "")) {
+
+          patch.person_import = "";
+
+        }
+
+        if (normalizeStr(row.person_export || "")) {
+
+          patch.person_export = "";
+
+        }
+
+        if (Object.keys(patch).length) {
+
+          updateRow(row, patch);
+
+        }
+
+      });
+
+      alert(
+
+        "Đã giữ dòng ưu tiên và làm trống nhân viên ở các dòng trùng. Bấm Lưu để hoàn tất."
+
+      );
+
+    },
+
+    [updateRow]
+
+  );
+
+
+
+  const handleTransferDuplicate = useCallback(
+
+    (targetRow, sourceRow) => {
+
+      if (!targetRow || !sourceRow) {
+
+        alert("Chọn dòng nguồn để chuyển nhân viên.");
+
+        return;
+
+      }
+
+      const patch = {};
+
+      if (normalizeStr(sourceRow.person_import || "")) {
+
+        patch.person_import = sourceRow.person_import;
+
+      }
+
+      if (normalizeStr(sourceRow.person_export || "")) {
+
+        patch.person_export = sourceRow.person_export;
+
+      }
+
+      if (!Object.keys(patch).length) {
+
+        alert("Dòng nguồn chưa có nhân viên để chuyển.");
+
+        return;
+
+      }
+
+      updateRow(targetRow, patch);
+
+      const clearPatch = {};
+
+      if (patch.person_import) clearPatch.person_import = "";
+
+      if (patch.person_export) clearPatch.person_export = "";
+
+      if (Object.keys(clearPatch).length) {
+
+        updateRow(sourceRow, clearPatch);
+
+      }
+
+      alert("Đã chuyển nhân viên sang dòng ưu tiên. Bấm Lưu để hoàn tất.");
+
+    },
+
+    [updateRow]
+
+  );
+
+
+
+  const handleSplitDuplicate = useCallback(
+
+    (targetRow, duplicates = []) => {
+
+      if (!targetRow) {
+
+        alert("Chọn dòng ưu tiên để tách vai trò.");
+
+        return;
+
+      }
+
+      const others = duplicates.filter((row) => row && row !== targetRow);
+
+      if (!others.length) {
+
+        alert("Không có dòng khác để tách vai trò.");
+
+        return;
+
+      }
+
+      const importSource = normalizeStr(targetRow.person_import || "")
+
+        ? targetRow
+
+        : others.find((row) => normalizeStr(row.person_import || ""));
+
+      const exportSource = normalizeStr(targetRow.person_export || "")
+
+        ? targetRow
+
+        : others.find((row) => normalizeStr(row.person_export || ""));
+
+      if (!importSource && !exportSource) {
+
+        alert("Không tìm thấy nhân viên nhập hoặc xuất để tách vai trò.");
+
+        return;
+
+      }
+
+      const patch = {};
+
+      if (importSource && normalizeStr(importSource.person_import || "")) {
+
+        patch.person_import = importSource.person_import;
+
+      }
+
+      if (exportSource && normalizeStr(exportSource.person_export || "")) {
+
+        patch.person_export = exportSource.person_export;
+
+      }
+
+      if (!Object.keys(patch).length) {
+
+        alert("Không có dữ liệu nhân viên hợp lệ để tách vai trò.");
+
+        return;
+
+      }
+
+      updateRow(targetRow, patch);
+
+      others.forEach((row) => {
+
+        const nextPatch = {};
+
+        if (importSource === row) {
+
+          nextPatch.person_import = "";
+
+        }
+
+        if (exportSource === row) {
+
+          nextPatch.person_export = "";
+
+        }
+
+        if (Object.keys(nextPatch).length) {
+
+          updateRow(row, nextPatch);
+
+        }
+
+      });
+
+      alert("Đã tách vai trò giữa các dòng trùng. Bấm Lưu để hoàn tất.");
+
+    },
+
+    [updateRow]
+
+  );
+
+
+
   const removeRow = (row) => {
 
     if (isReadOnly) return;
@@ -4312,6 +5066,258 @@ export default function MSTAssignment({
         </div>
 
       )}
+
+      {visibleDuplicateClusters.length ? (
+
+        <div className="mb-4 rounded border border-amber-400 bg-amber-50 p-4 text-amber-900">
+
+          <div className="flex flex-col gap-1">
+
+            <h2 className="text-sm font-semibold">
+
+              Phát hiện {visibleDuplicateClusters.length} MST đang gán trùng nhân viên
+
+            </h2>
+
+            <p className="text-xs text-amber-800">
+
+              Chọn phương án xử lý nhanh bên dưới (giữ dòng ưu tiên, chuyển nhân viên, tách vai trò).
+
+              {hiddenDuplicateCount > 0
+
+                ? ` • ${hiddenDuplicateCount} MST trùng khác đang bị ẩn theo bộ lọc hiện tại.`
+
+                : ""}
+
+            </p>
+
+          </div>
+
+          <div className="mt-3 space-y-3">
+
+            {visibleDuplicateClusters.map((cluster) => {
+
+              const timelineGroup = timelineGroupsByMST.get(cluster.mst || "__unknown");
+
+              const allRows = cluster.details.map((detail) => detail.row);
+
+              return (
+
+                <div
+
+                  key={cluster.id}
+
+                  className="rounded border border-amber-200 bg-white p-3 shadow-sm"
+
+                >
+
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+
+                    <div>
+
+                      <div className="text-sm font-semibold text-amber-900">
+
+                        MST {cluster.mst || "(trống)"}
+
+                      </div>
+
+                      <div className="text-xs text-amber-700">
+
+                        {cluster.company ? `Công ty: ${cluster.company}` : "Chưa có tên công ty"}
+
+                      </div>
+
+                      <div className="mt-1 text-xs text-amber-600">
+
+                        {cluster.details.length} dòng chồng lấn • Ưu tiên: {cluster.keepDetail?.summary || "—"}
+
+                      </div>
+
+                    </div>
+
+                    {timelineGroup ? (
+
+                      <Button
+
+                        type="button"
+
+                        variant="ghost"
+
+                        size="sm"
+
+                        onClick={() => handleOpenTimelineGroup(timelineGroup)}
+
+                      >
+
+                        Xem timeline
+
+                      </Button>
+
+                    ) : null}
+
+                  </div>
+
+                  <div className="mt-2 grid gap-2 text-xs md:grid-cols-2">
+
+                    {cluster.details.map((detail) => (
+
+                      <div
+
+                        key={detail.key}
+
+                        className={`rounded border px-3 py-2 ${
+
+                          detail === cluster.keepDetail
+
+                            ? "border-emerald-300 bg-emerald-50"
+
+                            : "border-slate-200 bg-slate-50"
+
+                        }`}
+
+                      >
+
+                        <div className="flex items-center justify-between gap-2">
+
+                          <span className="font-semibold text-slate-700">
+
+                            {detail.teamLabel || "Chưa có tổ"}
+
+                          </span>
+
+                          {detail === cluster.keepDetail ? (
+
+                            <span className="rounded bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-emerald-700">
+
+                              Ưu tiên
+
+                            </span>
+
+                          ) : null}
+
+                        </div>
+
+                        <div className="mt-1 text-[11px] text-slate-500">
+
+                          {detail.rangeLabel}
+
+                          {detail.isActive ? " • Đang hiệu lực" : ""}
+
+                        </div>
+
+                        <div className="mt-1 text-[11px] text-slate-600">
+
+                          {detail.summary}
+
+                        </div>
+
+                      </div>
+
+                    ))}
+
+                  </div>
+
+                  <div className="mt-3 flex flex-wrap gap-2 text-xs">
+
+                    <Button
+
+                      type="button"
+
+                      size="sm"
+
+                      onClick={() =>
+
+                        handleKeepDuplicate(cluster.keepDetail?.row, allRows)
+
+                      }
+
+                    >
+
+                      Giữ dòng ưu tiên
+
+                    </Button>
+
+                    {cluster.otherDetails.map((detail) => {
+
+                      if (!detail.hasImport && !detail.hasExport) return null;
+
+                      return (
+
+                        <Button
+
+                          key={`${cluster.id}-transfer-${detail.key}`}
+
+                          type="button"
+
+                          size="sm"
+
+                          variant="outline"
+
+                          onClick={() =>
+
+                            handleTransferDuplicate(
+
+                              cluster.keepDetail?.row,
+
+                              detail.row
+
+                            )
+
+                          }
+
+                        >
+
+                          Chuyển từ {detail.summary}
+
+                        </Button>
+
+                      );
+
+                    })}
+
+                    {cluster.hasSplitOption ? (
+
+                      <Button
+
+                        type="button"
+
+                        size="sm"
+
+                        variant="outline"
+
+                        onClick={() =>
+
+                          handleSplitDuplicate(
+
+                            cluster.keepDetail?.row,
+
+                            allRows
+
+                          )
+
+                        }
+
+                      >
+
+                        Tách vai trò
+
+                      </Button>
+
+                    ) : null}
+
+                  </div>
+
+                </div>
+
+              );
+
+            })}
+
+          </div>
+
+        </div>
+
+      ) : null}
 
       <div className="flex flex-wrap items-end gap-2 mb-3">
 
@@ -4848,11 +5854,50 @@ export default function MSTAssignment({
 
         ) : null}
 
+
+</div>
+
+      <div className="mb-4 rounded border border-slate-200 bg-white p-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-semibold text-slate-700">
+              Timeline thay đổi MST
+            </h2>
+            <p className="text-xs text-slate-500">
+              Áp dụng bộ lọc ngày và thao tác ở trên.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={refreshHistory}
+            >
+              Tải lại lịch sử
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              onClick={handleOpenHistoryTimeline}
+              disabled={!canOpenHistoryTimeline}
+            >
+              Xem tất cả ({filteredHistoryCount})
+            </Button>
+          </div>
+        </div>
+        <div className="mt-3">
+          <HistoryTimelineGroups groups={historyTimelinePreviewGroups} />
+        </div>
+        {filteredHistoryCount > historyTimelinePreviewCount ? (
+          <p className="mt-2 text-[11px] text-slate-500">
+            Hiển thị {historyTimelinePreviewCount} / {filteredHistoryCount} thay đổi gần nhất. Sử dụng bộ lọc hoặc bấm "Xem tất cả" để xem đầy đủ.
+          </p>
+        ) : null}
       </div>
 
-
-
       {showAddForm && (
+
 
         <form
 
@@ -6154,6 +7199,44 @@ export default function MSTAssignment({
         </div>
 
       </div>
+
+
+      <Dialog
+
+        open={historyTimelineDialogState.open}
+
+        onOpenChange={handleHistoryTimelineDialogOpenChange}
+
+      >
+
+        <DialogContent className="max-w-3xl max-h-[80vh] overflow-hidden">
+
+          <DialogHeader>
+
+            <DialogTitle>
+
+              {historyTimelineDialogState.title || "Timeline thay đổi MST"}
+
+            </DialogTitle>
+
+            {historyTimelineDialogState.subtitle ? (
+
+              <DialogDescription>{historyTimelineDialogState.subtitle}</DialogDescription>
+
+            ) : null}
+
+          </DialogHeader>
+
+          <div className="max-h-[60vh] overflow-auto pr-1">
+
+            <HistoryTimelineGroups groups={historyTimelineDialogState.groups} />
+
+          </div>
+
+        </DialogContent>
+
+      </Dialog>
+
 
       <Dialog
 
