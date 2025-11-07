@@ -31,7 +31,10 @@ This backlog liệt kê các hạng mục cải thiện trải nghiệm người
   - [x] Thiết kế và hiển thị stepper ba bước (Chuẩn bị, Xem trước, Đồng bộ) trên DataImporter. (đã render stepper hướng dẫn ở đầu giao diện)
   - [x] Gói các khu vực Picker/Preview/Bộ lọc & bảng vào từng bước riêng, chỉ hiển thị bước đang hoạt động. (đã bao điều kiện theo `wizardStep`)
   - [x] Bổ sung điều hướng Next/Back và tự động chuyển sang bước Xem trước sau khi tải file. (đã thêm điều hướng và auto step khi có dữ liệu preview)
-- [ ] Cải thiện feedback khi đồng bộ thất bại: gợi ý hành động cụ thể (thử lại, kiểm tra VPN, báo CNTT).
+- [x] Cải thiện feedback khi đồng bộ thất bại: gợi ý hành động cụ thể (thử lại, kiểm tra VPN, báo CNTT). (đã hiển thị danh sách gợi ý hành động ngay trong DataImporter)
+  - [x] Ánh xạ thông báo lỗi đồng bộ và kết quả pre-check sang thông điệp thân thiện kèm hướng xử lý chi tiết.
+  - [x] Hiển thị danh sách gợi ý (thử lại, kiểm tra VPN, báo CNTT) ngay dưới thông báo lỗi để người dùng biết bước tiếp theo.
+  - [x] Bổ sung gợi ý tương tự cho lỗi từ tiến trình/hàng đợi đồng bộ nhằm hướng dẫn cách xử lý và thời điểm thử lại.
 
 ## 4. MST assignment & staffing
 
