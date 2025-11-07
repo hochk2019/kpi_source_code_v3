@@ -71,6 +71,21 @@ import {
   isAdminRole,
 
 } from '../src/shared/accountRoles.js';
+import {
+
+  IMPORT_COLUMN_IDS,
+
+  IMPORT_SENSITIVE_COLUMNS,
+
+  DEFAULT_IMPORT_COLUMN_CONFIG,
+
+  DEFAULT_IMPORT_COLUMN_VERSION,
+
+  normalizeImportColumnConfig,
+
+  BASE_IMPORT_COLUMN_ID_SET,
+
+} from '../shared/importColumns.js';
 
 import { translateBackupReason, translateBackupFailure } from '../src/shared/backupMessages.js';
 
@@ -1959,13 +1974,17 @@ const DEFAULT_DUPLICATE_POLICY_STATE = Object.freeze({
 
 const FILTER_PRESETS_KEY = 'filter_presets_v1';
 
-const FILTER_PRESET_VERSION = 1;
+const FILTER_PRESET_VERSION = 2;
 
 const FILTER_PRESET_SCOPE_DEFAULT = 'data-importer';
 
 const KNOWN_FILTER_PRESET_SCOPES = new Set([FILTER_PRESET_SCOPE_DEFAULT, 'report-viewer']);
 
 const FILTER_PRESET_MAX_PER_SCOPE = 20;
+
+const IMPORT_COLUMN_CONFIG_KEY = 'import_column_configs_v1';
+
+const IMPORT_COLUMN_CONFIG_VERSION = 1;
 
 
 
@@ -5345,6 +5364,110 @@ function sanitizePresetName(name) {
 
 
 
+function sanitizePresetOwnerUsername(value) {
+
+  if (typeof value !== 'string') {
+
+    return '';
+
+  }
+
+  const normalized = value.trim();
+
+  if (!normalized) {
+
+    return '';
+
+  }
+
+  return normalized.slice(0, 120);
+
+}
+
+
+
+function sanitizePresetOwnerName(value, fallback = '') {
+
+  if (typeof value !== 'string') {
+
+    return fallback;
+
+  }
+
+  const normalized = value.trim().replace(/\s+/gu, ' ');
+
+  if (!normalized) {
+
+    return fallback;
+
+  }
+
+  return normalized.slice(0, 160);
+
+}
+
+
+
+function sanitizePresetVisibility(value) {
+
+  if (typeof value !== 'string') {
+
+    return 'personal';
+
+  }
+
+  const normalized = value.trim().toLowerCase();
+
+  if (normalized === 'team') {
+
+    return 'team';
+
+  }
+
+  return 'personal';
+
+}
+
+
+
+function sanitizeTeamIdValue(value) {
+
+  if (typeof value !== 'string') {
+
+    return '';
+
+  }
+
+  const normalized = value.trim();
+
+  if (!normalized) {
+
+    return '';
+
+  }
+
+  return normalized.slice(0, 160);
+
+}
+
+
+
+function sanitizeTeamKey(value) {
+
+  const normalized = sanitizeTeamIdValue(value);
+
+  if (!normalized) {
+
+    return '';
+
+  }
+
+  return normalized.toLowerCase();
+
+}
+
+
+
 function sanitizeFilterPresetScope(scope) {
 
   if (typeof scope !== 'string') {
@@ -5573,7 +5696,73 @@ function sanitizeFilterPresetRecord(entry, { now } = {}) {
 
   const updatedAt = updatedAtBase < createdAt ? createdAt : updatedAtBase;
 
-  return { id, scope, name, filters, createdAt, updatedAt };
+  const visibility = sanitizePresetVisibility(entry.visibility);
+
+  const ownerUsername = sanitizePresetOwnerUsername(entry.ownerUsername || entry.owner);
+
+  const ownerName = sanitizePresetOwnerName(entry.ownerName || entry.ownerDisplayName || '', ownerUsername);
+
+  const updatedByUsername = sanitizePresetOwnerUsername(entry.updatedBy || entry.updatedByUsername);
+
+  const updatedByName = sanitizePresetOwnerName(
+
+    entry.updatedByName || entry.updatedByDisplayName || '',
+
+    updatedByUsername || ownerName || ownerUsername
+
+  );
+
+  let teamId = null;
+
+  let teamName = null;
+
+  if (visibility === 'team') {
+
+    const rawTeamId = sanitizeTeamIdValue(entry.teamId || entry.team_id || entry.teamKey || '');
+
+    const normalizedTeamKey = sanitizeTeamKey(entry.teamKey || rawTeamId);
+
+    if (!rawTeamId && !normalizedTeamKey) {
+
+      return null;
+
+    }
+
+    teamId = rawTeamId || normalizedTeamKey;
+
+    teamName = sanitizePresetOwnerName(entry.teamName || entry.team_name || '', '');
+
+  }
+
+  return {
+
+    id,
+
+    scope,
+
+    name,
+
+    filters,
+
+    createdAt,
+
+    updatedAt,
+
+    visibility,
+
+    owner: ownerUsername || null,
+
+    ownerName: ownerName || (ownerUsername || null),
+
+    teamId: visibility === 'team' ? teamId || null : null,
+
+    teamName: visibility === 'team' ? teamName || null : null,
+
+    updatedBy: updatedByUsername || (ownerUsername || null),
+
+    updatedByName: updatedByName || ownerName || ownerUsername || null,
+
+  };
 
 }
 
@@ -5721,7 +5910,7 @@ function loadFilterPresetState(username) {
 
   const storeRaw =
 
-    getJSONValue(FILTER_PRESETS_KEY, { version: FILTER_PRESET_VERSION, users: {} }) || {};
+    getJSONValue(FILTER_PRESETS_KEY, { version: FILTER_PRESET_VERSION, users: {}, teams: {} }) || {};
 
   const store = {
 
@@ -5729,33 +5918,205 @@ function loadFilterPresetState(username) {
 
     users: {},
 
+    teams: {},
+
   };
 
   if (storeRaw && typeof storeRaw === 'object') {
 
     const users = storeRaw.users && typeof storeRaw.users === 'object' ? storeRaw.users : {};
 
+    const teams = storeRaw.teams && typeof storeRaw.teams === 'object' ? storeRaw.teams : {};
+
     store.users = { ...users };
 
+    store.teams = { ...teams };
+
   }
+
+  const account = findAccountRecord(username);
+
+  const accountName = account?.name ? String(account.name).trim() : '';
 
   const userKey = `${username || ''}`.trim().toLowerCase();
 
+  const teamIdRaw = account?.teamId ? String(account.teamId).trim() : '';
+
+  const teamKey = sanitizeTeamKey(teamIdRaw);
+
+  const teamName = account?.teamName ? String(account.teamName).trim() : '';
+
   if (!userKey) {
 
-    return { store, userKey: '', entry: { presets: [], updatedAt: null } };
+    return {
+
+      store,
+
+      username: '',
+
+      userKey: '',
+
+      account,
+
+      accountName: '',
+
+      teamKey: '',
+
+      teamId: null,
+
+      teamName: null,
+
+      personal: { presets: [], updatedAt: null },
+
+      team: { presets: [], updatedAt: null, updatedBy: null, updatedByName: null },
+
+    };
 
   }
 
-  const entry = store.users[userKey];
+  const userEntry = store.users[userKey] && typeof store.users[userKey] === 'object' ? store.users[userKey] : {};
 
-  const presets = normalizeFilterPresetList(entry?.presets || []);
+  const personalPresets = normalizeFilterPresetList(userEntry.presets || []);
 
-  const updatedAt = presets[0]?.updatedAt
+  const personalUpdatedAt =
 
-    || (entry?.updatedAt ? sanitizePresetTimestamp(entry.updatedAt) : null);
+    personalPresets[0]?.updatedAt || (userEntry?.updatedAt ? sanitizePresetTimestamp(userEntry.updatedAt) : null);
 
-  return { store, userKey, entry: { presets, updatedAt } };
+  const teamEntryRaw = teamKey && store.teams[teamKey] && typeof store.teams[teamKey] === 'object'
+
+    ? store.teams[teamKey]
+
+    : {};
+
+  const teamPresetsSource = teamKey ? teamEntryRaw.presets || [] : [];
+
+  const teamPresets = teamKey
+
+    ? normalizeFilterPresetList(teamPresetsSource).filter((preset) => preset.visibility === 'team')
+
+    : [];
+
+  const teamUpdatedAt =
+
+    teamPresets[0]?.updatedAt || (teamEntryRaw?.updatedAt ? sanitizePresetTimestamp(teamEntryRaw.updatedAt) : null);
+
+  return {
+
+    store,
+
+    username,
+
+    userKey,
+
+    account,
+
+    accountName: accountName || username || userKey,
+
+    teamKey,
+
+    teamId: teamIdRaw || (teamKey || null),
+
+    teamName: teamEntryRaw?.teamName || teamName || null,
+
+    personal: { presets: personalPresets, updatedAt: personalUpdatedAt },
+
+    team: {
+
+      presets: teamPresets,
+
+      updatedAt: teamUpdatedAt,
+
+      updatedBy: teamEntryRaw?.updatedBy || null,
+
+      updatedByName: teamEntryRaw?.updatedByName || null,
+
+    },
+
+  };
+
+}
+
+
+
+function decoratePresetForUser(preset, context) {
+
+  if (!preset || typeof preset !== 'object') {
+
+    return null;
+
+  }
+
+  const clone = { ...preset };
+
+  const ownerUsernameRaw = sanitizePresetOwnerUsername(clone.owner || clone.ownerUsername || '');
+
+  const ownerKey = ownerUsernameRaw ? ownerUsernameRaw.toLowerCase() : '';
+
+  const effectiveOwnerUsername = ownerUsernameRaw || context.username || '';
+
+  const ownerNameFallback =
+
+    ownerKey && ownerKey === context.userKey
+
+      ? context.account?.name || context.accountName || effectiveOwnerUsername
+
+      : ownerUsernameRaw || context.accountName || effectiveOwnerUsername;
+
+  clone.owner = effectiveOwnerUsername || null;
+
+  clone.ownerUsername = effectiveOwnerUsername || null;
+
+  clone.ownerName =
+
+    sanitizePresetOwnerName(clone.ownerName || clone.ownerDisplayName || '', ownerNameFallback) || ownerNameFallback;
+
+  const visibility = clone.visibility === 'team' ? 'team' : 'personal';
+
+  clone.visibility = visibility;
+
+  if (visibility === 'team') {
+
+    clone.teamId = clone.teamId || context.teamId || context.teamKey || null;
+
+    clone.teamName = clone.teamName || context.teamName || null;
+
+  } else {
+
+    clone.teamId = null;
+
+    clone.teamName = null;
+
+  }
+
+  const updatedByUsernameRaw = sanitizePresetOwnerUsername(clone.updatedBy || '');
+
+  const effectiveUpdatedByUsername = updatedByUsernameRaw || effectiveOwnerUsername || context.username || '';
+
+  clone.updatedBy = effectiveUpdatedByUsername || null;
+
+  const updatedByNameFallback =
+
+    updatedByUsernameRaw && updatedByUsernameRaw.toLowerCase() === ownerKey
+
+      ? clone.ownerName
+
+      : updatedByUsernameRaw || clone.ownerName || context.accountName || effectiveUpdatedByUsername;
+
+  clone.updatedByName =
+
+    sanitizePresetOwnerName(clone.updatedByName || clone.updatedByDisplayName || '', updatedByNameFallback)
+
+      || updatedByNameFallback;
+
+  const isOwner = visibility === 'team' ? ownerKey === context.userKey : true;
+
+  clone.isOwner = isOwner;
+
+  clone.canEdit = visibility === 'team' ? isOwner : true;
+
+  clone.canDelete = clone.canEdit;
+
+  return clone;
 
 }
 
@@ -5765,19 +6126,43 @@ function listFilterPresetsForUser(username, { scope } = {}) {
 
   const normalizedScope = scope ? sanitizeFilterPresetScope(scope) : null;
 
-  const { entry } = loadFilterPresetState(username);
+  const state = loadFilterPresetState(username);
 
-  const list = normalizedScope
+  const combined = [...state.personal.presets, ...state.team.presets];
 
-    ? entry.presets.filter((item) => item.scope === normalizedScope)
+  const filtered = normalizedScope
 
-    : entry.presets;
+    ? combined.filter((item) => item.scope === normalizedScope)
+
+    : combined;
+
+  const decorated = filtered.map((preset) => decoratePresetForUser(preset, state)).filter(Boolean);
+
+  const updatedAtCandidates = [];
+
+  if (state.personal.updatedAt) {
+
+    updatedAtCandidates.push(state.personal.updatedAt);
+
+  }
+
+  if (state.team.updatedAt) {
+
+    updatedAtCandidates.push(state.team.updatedAt);
+
+  }
+
+  const updatedAt = updatedAtCandidates.length
+
+    ? updatedAtCandidates.sort((a, b) => getPresetTime(b) - getPresetTime(a))[0]
+
+    : null;
 
   return {
 
-    presets: sortPresetsByUpdatedAt(list),
+    presets: sortPresetsByUpdatedAt(decorated),
 
-    updatedAt: entry.updatedAt || null,
+    updatedAt,
 
   };
 
@@ -5787,7 +6172,9 @@ function listFilterPresetsForUser(username, { scope } = {}) {
 
 function createFilterPresetForUser(username, payload = {}, { actor = 'system' } = {}) {
 
-  const { store, userKey, entry } = loadFilterPresetState(username);
+  const state = loadFilterPresetState(username);
+
+  const { store, userKey, personal, team, teamKey, teamId, teamName, account } = state;
 
   if (!userKey) {
 
@@ -5811,11 +6198,35 @@ function createFilterPresetForUser(username, payload = {}, { actor = 'system' } 
 
   }
 
+  const visibility = sanitizePresetVisibility(payload.visibility);
+
+  if (visibility === 'team' && !teamKey) {
+
+    const error = new Error('Bạn cần thuộc một tổ để lưu bộ lọc chia sẻ.');
+
+    error.code = 'TEAM_REQUIRED';
+
+    throw error;
+
+  }
+
   const scope = sanitizeFilterPresetScope(payload.scope);
 
   const name = sanitizePresetName(payload.name);
 
   const now = new Date().toISOString();
+
+  const ownerUsername =
+
+    sanitizePresetOwnerUsername(username || state.username || userKey) || username || state.username || userKey;
+
+  const ownerName =
+
+    sanitizePresetOwnerName(account?.name ? String(account.name).trim() : '', ownerUsername || username) ||
+
+    ownerUsername ||
+
+    username;
 
   const preset = {
 
@@ -5831,21 +6242,73 @@ function createFilterPresetForUser(username, payload = {}, { actor = 'system' } 
 
     updatedAt: now,
 
+    visibility,
+
+    owner: ownerUsername || null,
+
+    ownerName: ownerName || (ownerUsername || null),
+
+    updatedBy: ownerUsername || null,
+
+    updatedByName: ownerName || (ownerUsername || null),
+
   };
 
-  const nextPresets = rebuildPresetCollection(entry.presets, { upsert: preset });
+  if (visibility === 'team') {
 
-  const updatedAt = nextPresets[0]?.updatedAt || now;
+    const normalizedTeamId = sanitizeTeamIdValue(teamId || teamKey || '');
 
-  store.users[userKey] = { presets: nextPresets, updatedAt };
+    const normalizedTeamName = sanitizePresetOwnerName(teamName || '', '');
+
+    preset.teamId = normalizedTeamId || teamKey || null;
+
+    preset.teamName = normalizedTeamName || null;
+
+  }
+
+  let nextPresets = [];
+
+  let updatedAt = now;
+
+  if (visibility === 'team') {
+
+    nextPresets = rebuildPresetCollection(team.presets, { upsert: preset });
+
+    updatedAt = nextPresets[0]?.updatedAt || now;
+
+    store.teams[teamKey] = {
+
+      teamId: preset.teamId || teamId || teamKey || null,
+
+      teamName: preset.teamName || teamName || null,
+
+      presets: nextPresets,
+
+      updatedAt,
+
+      updatedBy: ownerUsername || username,
+
+      updatedByName: ownerName || (ownerUsername || username),
+
+    };
+
+  } else {
+
+    nextPresets = rebuildPresetCollection(personal.presets, { upsert: preset });
+
+    updatedAt = nextPresets[0]?.updatedAt || now;
+
+    store.users[userKey] = { presets: nextPresets, updatedAt };
+
+  }
+
+  store.version = FILTER_PRESET_VERSION;
 
   setJSONValue(FILTER_PRESETS_KEY, store, { actor, source: 'filter-presets-upsert' });
 
   return { preset, presets: nextPresets, updatedAt };
 
 }
-
-
 
 function updateFilterPresetForUser(username, presetId, payload = {}, { actor = 'system' } = {}) {
 
@@ -5861,7 +6324,9 @@ function updateFilterPresetForUser(username, presetId, payload = {}, { actor = '
 
   }
 
-  const { store, userKey, entry } = loadFilterPresetState(username);
+  const state = loadFilterPresetState(username);
+
+  const { store, userKey, personal, team, teamKey, teamId, teamName, account } = state;
 
   if (!userKey) {
 
@@ -5873,7 +6338,29 @@ function updateFilterPresetForUser(username, presetId, payload = {}, { actor = '
 
   }
 
-  const existing = entry.presets.find((item) => item.id === id);
+  const personalIndex = personal.presets.findIndex((item) => item.id === id);
+
+  let location = 'personal';
+
+  let existing = null;
+
+  if (personalIndex >= 0) {
+
+    existing = personal.presets[personalIndex];
+
+  } else if (teamKey) {
+
+    const teamIndex = team.presets.findIndex((item) => item.id === id);
+
+    if (teamIndex >= 0) {
+
+      location = 'team';
+
+      existing = team.presets[teamIndex];
+
+    }
+
+  }
 
   if (!existing) {
 
@@ -5911,7 +6398,51 @@ function updateFilterPresetForUser(username, presetId, payload = {}, { actor = '
 
       : existing.name;
 
+  const existingVisibility = existing.visibility === 'team' ? 'team' : 'personal';
+
+  const hasVisibilityPayload = Object.prototype.hasOwnProperty.call(payload, 'visibility');
+
+  const requestedVisibility = hasVisibilityPayload
+
+    ? sanitizePresetVisibility(payload.visibility)
+
+    : existingVisibility;
+
+  if (requestedVisibility === 'team' && !teamKey) {
+
+    const error = new Error('Bạn cần thuộc một tổ để lưu bộ lọc chia sẻ.');
+
+    error.code = 'TEAM_REQUIRED';
+
+    throw error;
+
+  }
+
   const now = new Date().toISOString();
+
+  const ownerUsername =
+
+    sanitizePresetOwnerUsername(existing.owner || username || state.username || userKey) ||
+
+    username ||
+
+    state.username ||
+
+    userKey;
+
+  const actorNameRaw = account?.name ? String(account.name).trim() : '';
+
+  const ownerName =
+
+    sanitizePresetOwnerName(existing.ownerName || actorNameRaw || '', ownerUsername || username) ||
+
+    ownerUsername ||
+
+    username;
+
+  const actorUsername = sanitizePresetOwnerUsername(username) || ownerUsername || username;
+
+  const actorDisplayName = sanitizePresetOwnerName(actorNameRaw, ownerName) || ownerName;
 
   const preset = {
 
@@ -5923,21 +6454,197 @@ function updateFilterPresetForUser(username, presetId, payload = {}, { actor = '
 
     updatedAt: now,
 
+    visibility: requestedVisibility,
+
+    owner: ownerUsername || null,
+
+    ownerUsername: ownerUsername || null,
+
+    ownerName: ownerName || (ownerUsername || null),
+
+    updatedBy: actorUsername || ownerUsername || null,
+
+    updatedByName: actorDisplayName || ownerName || ownerUsername || null,
+
   };
 
-  const nextPresets = rebuildPresetCollection(entry.presets, { upsert: preset });
+  if (location === 'team') {
+
+    const ownerKey = sanitizePresetOwnerUsername(existing.owner || '').toLowerCase();
+
+    if (ownerKey && ownerKey !== userKey) {
+
+      const error = new Error('Bạn không có quyền chỉnh sửa bộ lọc tổ này.');
+
+      error.code = 'FORBIDDEN';
+
+      throw error;
+
+    }
+
+    if (requestedVisibility === 'team') {
+
+      const normalizedTeamId = sanitizeTeamIdValue(existing.teamId || teamId || teamKey || '');
+
+      const normalizedTeamName = sanitizePresetOwnerName(existing.teamName || teamName || '', '');
+
+      preset.teamId = normalizedTeamId || teamKey || null;
+
+      preset.teamName = normalizedTeamName || null;
+
+      const nextTeamPresets = rebuildPresetCollection(team.presets, { upsert: preset });
+
+      const updatedAt = nextTeamPresets[0]?.updatedAt || now;
+
+      store.teams[teamKey] = {
+
+        teamId: preset.teamId || teamId || teamKey || null,
+
+        teamName: preset.teamName || teamName || null,
+
+        presets: nextTeamPresets,
+
+        updatedAt,
+
+        updatedBy: actorUsername || username,
+
+        updatedByName: actorDisplayName || ownerName,
+
+      };
+
+      store.version = FILTER_PRESET_VERSION;
+
+      setJSONValue(FILTER_PRESETS_KEY, store, { actor, source: 'filter-presets-upsert' });
+
+      return { preset, presets: nextTeamPresets, updatedAt };
+
+    }
+
+    const nextTeamPresets = rebuildPresetCollection(team.presets, { removeId: id });
+
+    if (nextTeamPresets.length === 0) {
+
+      const nextTeams = { ...store.teams };
+
+      delete nextTeams[teamKey];
+
+      store.teams = nextTeams;
+
+    } else {
+
+      const updatedAt = nextTeamPresets[0]?.updatedAt || now;
+
+      store.teams[teamKey] = {
+
+        teamId: existing.teamId || teamId || teamKey || null,
+
+        teamName: existing.teamName || teamName || null,
+
+        presets: nextTeamPresets,
+
+        updatedAt,
+
+        updatedBy: actorUsername || username,
+
+        updatedByName: actorDisplayName || ownerName,
+
+      };
+
+    }
+
+    preset.teamId = null;
+
+    preset.teamName = null;
+
+    preset.visibility = 'personal';
+
+    const nextPersonalPresets = rebuildPresetCollection(personal.presets, { upsert: preset });
+
+    const updatedAt = nextPersonalPresets[0]?.updatedAt || now;
+
+    store.users[userKey] = { presets: nextPersonalPresets, updatedAt };
+
+    store.version = FILTER_PRESET_VERSION;
+
+    setJSONValue(FILTER_PRESETS_KEY, store, { actor, source: 'filter-presets-upsert' });
+
+    return { preset, presets: nextPersonalPresets, updatedAt };
+
+  }
+
+  if (requestedVisibility === 'team') {
+
+    const normalizedTeamId = sanitizeTeamIdValue(teamId || teamKey || '');
+
+    const normalizedTeamName = sanitizePresetOwnerName(teamName || '', '');
+
+    preset.teamId = normalizedTeamId || teamKey || null;
+
+    preset.teamName = normalizedTeamName || null;
+
+    const nextPersonalPresets = rebuildPresetCollection(personal.presets, { removeId: id });
+
+    if (nextPersonalPresets.length === 0) {
+
+      const nextUsers = { ...store.users };
+
+      delete nextUsers[userKey];
+
+      store.users = nextUsers;
+
+    } else {
+
+      const personalUpdatedAt = nextPersonalPresets[0]?.updatedAt || now;
+
+      store.users[userKey] = { presets: nextPersonalPresets, updatedAt: personalUpdatedAt };
+
+    }
+
+    const nextTeamPresets = rebuildPresetCollection(team.presets, { upsert: preset });
+
+    const updatedAt = nextTeamPresets[0]?.updatedAt || now;
+
+    store.teams[teamKey] = {
+
+      teamId: preset.teamId || teamId || teamKey || null,
+
+      teamName: preset.teamName || teamName || null,
+
+      presets: nextTeamPresets,
+
+      updatedAt,
+
+      updatedBy: actorUsername || username,
+
+      updatedByName: actorDisplayName || ownerName,
+
+    };
+
+    store.version = FILTER_PRESET_VERSION;
+
+    setJSONValue(FILTER_PRESETS_KEY, store, { actor, source: 'filter-presets-upsert' });
+
+    return { preset, presets: nextTeamPresets, updatedAt };
+
+  }
+
+  preset.teamId = null;
+
+  preset.teamName = null;
+
+  const nextPresets = rebuildPresetCollection(personal.presets, { upsert: preset });
 
   const updatedAt = nextPresets[0]?.updatedAt || now;
 
   store.users[userKey] = { presets: nextPresets, updatedAt };
+
+  store.version = FILTER_PRESET_VERSION;
 
   setJSONValue(FILTER_PRESETS_KEY, store, { actor, source: 'filter-presets-upsert' });
 
   return { preset, presets: nextPresets, updatedAt };
 
 }
-
-
 
 function deleteFilterPresetForUser(username, presetId, { actor = 'system' } = {}) {
 
@@ -5953,7 +6660,9 @@ function deleteFilterPresetForUser(username, presetId, { actor = 'system' } = {}
 
   }
 
-  const { store, userKey, entry } = loadFilterPresetState(username);
+  const state = loadFilterPresetState(username);
+
+  const { store, userKey, personal, team, teamKey, teamId, teamName, account } = state;
 
   if (!userKey) {
 
@@ -5965,7 +6674,29 @@ function deleteFilterPresetForUser(username, presetId, { actor = 'system' } = {}
 
   }
 
-  const existing = entry.presets.find((item) => item.id === id);
+  const personalIndex = personal.presets.findIndex((item) => item.id === id);
+
+  let location = 'personal';
+
+  let existing = null;
+
+  if (personalIndex >= 0) {
+
+    existing = personal.presets[personalIndex];
+
+  } else if (teamKey) {
+
+    const teamIndex = team.presets.findIndex((item) => item.id === id);
+
+    if (teamIndex >= 0) {
+
+      location = 'team';
+
+      existing = team.presets[teamIndex];
+
+    }
+
+  }
 
   if (!existing) {
 
@@ -5977,15 +6708,71 @@ function deleteFilterPresetForUser(username, presetId, { actor = 'system' } = {}
 
   }
 
-  const nextPresets = rebuildPresetCollection(entry.presets, { removeId: id });
+  if (location === 'team') {
+
+    const ownerKey = sanitizePresetOwnerUsername(existing.owner || '').toLowerCase();
+
+    if (ownerKey && ownerKey !== userKey) {
+
+      const error = new Error('Bạn không có quyền xoá bộ lọc tổ này.');
+
+      error.code = 'FORBIDDEN';
+
+      throw error;
+
+    }
+
+    const nextPresets = rebuildPresetCollection(team.presets, { removeId: id });
+
+    if (nextPresets.length === 0) {
+
+      const nextTeams = { ...store.teams };
+
+      delete nextTeams[teamKey];
+
+      store.teams = nextTeams;
+
+      setJSONValue(FILTER_PRESETS_KEY, store, { actor, source: 'filter-presets-delete' });
+
+      return { deleted: id, presets: [], updatedAt: null, removed: existing };
+
+    }
+
+    const ownerName = account?.name ? String(account.name).trim() : username;
+
+    const updatedAt = nextPresets[0]?.updatedAt || new Date().toISOString();
+
+    store.teams[teamKey] = {
+
+      teamId: existing.teamId || teamId || teamKey || null,
+
+      teamName: existing.teamName || teamName || null,
+
+      presets: nextPresets,
+
+      updatedAt,
+
+      updatedBy: username,
+
+      updatedByName: ownerName,
+
+    };
+
+    setJSONValue(FILTER_PRESETS_KEY, store, { actor, source: 'filter-presets-delete' });
+
+    return { deleted: id, presets: nextPresets, updatedAt, removed: existing };
+
+  }
+
+  const nextPresets = rebuildPresetCollection(personal.presets, { removeId: id });
 
   if (nextPresets.length === 0) {
 
-    const nextStore = { ...store.users };
+    const nextUsers = { ...store.users };
 
-    delete nextStore[userKey];
+    delete nextUsers[userKey];
 
-    store.users = nextStore;
+    store.users = nextUsers;
 
     setJSONValue(FILTER_PRESETS_KEY, store, { actor, source: 'filter-presets-delete' });
 
@@ -24172,6 +24959,129 @@ app.get('/api/internal/monitor/ecus-sync/metrics', async (req, res) => {
 
 
 
+
+
+function loadImportColumnConfigState(username) {
+  const storeRaw =
+    getJSONValue(IMPORT_COLUMN_CONFIG_KEY, { version: IMPORT_COLUMN_CONFIG_VERSION, teams: {} }) || {};
+  const store = {
+    version: IMPORT_COLUMN_CONFIG_VERSION,
+    teams: {},
+  };
+  if (storeRaw && typeof storeRaw === 'object') {
+    const teams = storeRaw.teams && typeof storeRaw.teams === 'object' ? storeRaw.teams : {};
+    store.teams = { ...teams };
+  }
+  const account = findAccountRecord(username);
+  const userKey = `${username || ''}`.trim().toLowerCase();
+  const teamIdRaw = account?.teamId ? String(account.teamId).trim() : '';
+  const teamKey = sanitizeTeamKey(teamIdRaw);
+  const teamEntryRaw =
+    teamKey && store.teams[teamKey] && typeof store.teams[teamKey] === 'object'
+      ? { ...store.teams[teamKey] }
+      : null;
+  return {
+    store,
+    username,
+    userKey,
+    account,
+    teamKey,
+    teamId: teamEntryRaw?.teamId || teamIdRaw || (teamKey || ''),
+    teamName: teamEntryRaw?.teamName || (account?.teamName ? String(account.teamName).trim() : ''),
+    teamEntry: teamEntryRaw,
+  };
+}
+
+function listImportColumnConfigForUser(username) {
+  const state = loadImportColumnConfigState(username);
+  const { teamKey, teamEntry, teamId, teamName } = state;
+  const available = Boolean(teamKey);
+  const config = teamEntry ? normalizeImportColumnConfig(teamEntry.config) : null;
+  const updatedAt = teamEntry?.updatedAt ? sanitizePresetTimestamp(teamEntry.updatedAt) : null;
+  const updatedBy = sanitizePresetOwnerUsername(teamEntry?.updatedBy || '');
+  const updatedByName =
+    sanitizePresetOwnerName(teamEntry?.updatedByName || '', updatedBy || '') || updatedBy || null;
+  const owner = sanitizePresetOwnerUsername(teamEntry?.owner || '');
+  const ownerName =
+    sanitizePresetOwnerName(teamEntry?.ownerName || '', owner || '') || owner || null;
+  return {
+    ...state,
+    team: {
+      available,
+      teamId: teamId || null,
+      teamName: teamName || null,
+      config,
+      updatedAt,
+      updatedBy: updatedBy || null,
+      updatedByName,
+      owner: owner || null,
+      ownerName,
+    },
+  };
+}
+
+function saveTeamImportColumnConfigForUser(username, payload = {}, { actor = 'system' } = {}) {
+  const state = loadImportColumnConfigState(username);
+  const { store, teamKey, teamId, teamName, teamEntry, account, userKey } = state;
+  if (!teamKey) {
+    const error = new Error('Bạn cần thuộc một tổ để lưu cấu hình cột chia sẻ.');
+    error.code = 'TEAM_REQUIRED';
+    throw error;
+  }
+  const nextConfig = normalizeImportColumnConfig(payload.config || payload);
+  const hiddenBaseCount = nextConfig.hidden.filter((key) => BASE_IMPORT_COLUMN_ID_SET.has(key)).length;
+  if (hiddenBaseCount >= IMPORT_COLUMN_IDS.length) {
+    const error = new Error('Cần giữ lại ít nhất một cột dữ liệu hiển thị.');
+    error.code = 'INVALID_CONFIG';
+    throw error;
+  }
+  const now = new Date().toISOString();
+  const actorUsername = sanitizePresetOwnerUsername(actor || username) || username || userKey;
+  const actorName =
+    sanitizePresetOwnerName(account?.name ? String(account.name).trim() : '', actorUsername) ||
+    actorUsername;
+  const existingOwner = sanitizePresetOwnerUsername(teamEntry?.owner || '') || actorUsername;
+  const existingOwnerName =
+    sanitizePresetOwnerName(teamEntry?.ownerName || '', existingOwner) || actorName;
+  const normalizedTeamId = sanitizeTeamIdValue(teamEntry?.teamId || teamId || teamKey || '');
+  const normalizedTeamName = sanitizePresetOwnerName(teamEntry?.teamName || teamName || '', '');
+  const entry = {
+    teamId: normalizedTeamId || teamKey || null,
+    teamName: normalizedTeamName || null,
+    config: nextConfig,
+    updatedAt: now,
+    updatedBy: actorUsername,
+    updatedByName: actorName,
+    owner: existingOwner || null,
+    ownerName: existingOwnerName || null,
+  };
+  store.teams[teamKey] = entry;
+  store.version = IMPORT_COLUMN_CONFIG_VERSION;
+  setJSONValue(IMPORT_COLUMN_CONFIG_KEY, store, { actor, source: 'import-column-config:upsert' });
+  return {
+    teamKey,
+    teamId: entry.teamId || null,
+    teamName: entry.teamName || null,
+    config: entry.config,
+    updatedAt: entry.updatedAt,
+    updatedBy: entry.updatedBy,
+    updatedByName: entry.updatedByName,
+    owner: entry.owner,
+    ownerName: entry.ownerName,
+  };
+}
+
+function canManageTeamColumnConfig(account) {
+  if (!account) {
+    return false;
+  }
+  const role = normalizeRoleKey(account.role);
+  if (isAdminRole(role) || role === MANAGER_ROLE || role === TEAM_LEAD_ROLE) {
+    return true;
+  }
+  return false;
+}
+
 app.get('/api/filter-presets', (req, res) => {
 
   const context = getSessionContext(req);
@@ -24224,13 +25134,23 @@ app.post('/api/filter-presets', (req, res) => {
 
     });
 
+    const preset = result.preset;
+
+    const visibilityNote =
+
+      preset.visibility === 'team'
+
+        ? ` (chia sẻ tổ${preset.teamName ? ` ${preset.teamName}` : ''})`
+
+        : '';
+
     pushAuditLog({
 
       actor: context.account.username,
 
       action: 'filter.preset.create',
 
-      detail: `Tạo bộ lọc "${result.preset.name}" (scope ${result.preset.scope})`,
+      detail: `Tạo bộ lọc "${preset.name}"${visibilityNote} (scope ${preset.scope})`,
 
     });
 
@@ -24251,6 +25171,14 @@ app.post('/api/filter-presets', (req, res) => {
     if (err?.code === 'INVALID_USER') {
 
       res.status(400).json({ ok: false, error: 'Thiếu thông tin tài khoản để lưu bộ lọc.' });
+
+      return;
+
+    }
+
+    if (err?.code === 'TEAM_REQUIRED') {
+
+      res.status(400).json({ ok: false, error: 'Bạn cần thuộc một tổ để lưu bộ lọc chia sẻ.' });
 
       return;
 
@@ -24284,13 +25212,23 @@ app.put('/api/filter-presets/:presetId', (req, res) => {
 
     });
 
+    const preset = result.preset;
+
+    const visibilityNote =
+
+      preset.visibility === 'team'
+
+        ? ` (chia sẻ tổ${preset.teamName ? ` ${preset.teamName}` : ''})`
+
+        : '';
+
     pushAuditLog({
 
       actor: context.account.username,
 
       action: 'filter.preset.update',
 
-      detail: `Cập nhật bộ lọc "${result.preset.name}"`,
+      detail: `Cập nhật bộ lọc "${preset.name}"${visibilityNote}`,
 
     });
 
@@ -24332,6 +25270,14 @@ app.put('/api/filter-presets/:presetId', (req, res) => {
 
     }
 
+    if (err?.code === 'FORBIDDEN') {
+
+      res.status(403).json({ ok: false, error: 'Bạn không có quyền chỉnh sửa bộ lọc tổ này.' });
+
+      return;
+
+    }
+
     res.status(500).json({ ok: false, error: 'Không thể cập nhật bộ lọc đã lưu.' });
 
   }
@@ -24360,13 +25306,25 @@ app.delete('/api/filter-presets/:presetId', (req, res) => {
 
     });
 
+    const removed = result.removed || {};
+
+    const presetName = removed.name || req.params.presetId;
+
+    const visibilityNote =
+
+      removed.visibility === 'team'
+
+        ? ` (chia sẻ tổ${removed.teamName ? ` ${removed.teamName}` : ''})`
+
+        : '';
+
     pushAuditLog({
 
       actor: context.account.username,
 
       action: 'filter.preset.delete',
 
-      detail: `Xoá bộ lọc "${result.removed?.name || req.params.presetId}"`,
+      detail: `Xoá bộ lọc "${presetName}"${visibilityNote}`,
 
     });
 
@@ -24400,6 +25358,14 @@ app.delete('/api/filter-presets/:presetId', (req, res) => {
 
     }
 
+    if (err?.code === 'FORBIDDEN') {
+
+      res.status(403).json({ ok: false, error: 'Bạn không có quyền xoá bộ lọc tổ này.' });
+
+      return;
+
+    }
+
     res.status(500).json({ ok: false, error: 'Không thể xoá bộ lọc đã lưu.' });
 
   }
@@ -24407,6 +25373,91 @@ app.delete('/api/filter-presets/:presetId', (req, res) => {
 });
 
 
+
+
+
+app.get('/api/import-column-config', (req, res) => {
+  const context = getSessionContext(req);
+  if (!context) {
+    res.status(401).json({ ok: false, error: 'Bạn cần đăng nhập để sử dụng cấu hình cột chia sẻ.' });
+    return;
+  }
+  try {
+    const result = listImportColumnConfigForUser(context.account.username);
+    const team = result.team || {};
+    const canEdit = team.available && canManageTeamColumnConfig(context.account);
+    res.json({
+      ok: true,
+      team: {
+        available: team.available,
+        teamId: team.teamId || null,
+        teamName: team.teamName || null,
+        config: team.config || null,
+        updatedAt: team.updatedAt || null,
+        updatedBy: team.updatedBy || null,
+        updatedByName: team.updatedByName || null,
+        owner: team.owner || null,
+        ownerName: team.ownerName || null,
+        canEdit,
+      },
+    });
+  } catch (err) {
+    console.error('Không thể tải cấu hình cột chia sẻ', err);
+    res.status(500).json({ ok: false, error: 'Không thể tải cấu hình cột chia sẻ.' });
+  }
+});
+
+app.put('/api/import-column-config/team', (req, res) => {
+  const context = getSessionContext(req);
+  if (!context) {
+    res.status(401).json({ ok: false, error: 'Bạn cần đăng nhập để lưu cấu hình cột chia sẻ.' });
+    return;
+  }
+  if (!canManageTeamColumnConfig(context.account)) {
+    res.status(403).json({ ok: false, error: 'Bạn không có quyền cập nhật cấu hình cột của tổ.' });
+    return;
+  }
+  try {
+    const result = saveTeamImportColumnConfigForUser(context.account.username, req.body || {}, {
+      actor: context.account.username,
+    });
+    const visibleBaseColumns =
+      IMPORT_COLUMN_IDS.length - result.config.hidden.filter((key) => BASE_IMPORT_COLUMN_ID_SET.has(key)).length;
+    const totalBaseColumns = IMPORT_COLUMN_IDS.length;
+    const teamLabel = result.teamName ? ` ${result.teamName}` : '';
+    pushAuditLog({
+      actor: context.account.username,
+      action: 'import.columns.team.update',
+      detail: `Cập nhật cấu hình cột Import Data tổ${teamLabel} (${visibleBaseColumns}/${totalBaseColumns} cột dữ liệu hiển thị)`,
+    });
+    res.json({
+      ok: true,
+      team: {
+        available: true,
+        teamId: result.teamId || null,
+        teamName: result.teamName || null,
+        config: result.config,
+        updatedAt: result.updatedAt,
+        updatedBy: result.updatedBy,
+        updatedByName: result.updatedByName,
+        owner: result.owner || null,
+        ownerName: result.ownerName || null,
+        canEdit: true,
+      },
+    });
+  } catch (err) {
+    console.error('Không thể lưu cấu hình cột chia sẻ', err);
+    if (err?.code === 'TEAM_REQUIRED') {
+      res.status(400).json({ ok: false, error: 'Bạn cần thuộc một tổ để lưu cấu hình chia sẻ.' });
+      return;
+    }
+    if (err?.code === 'INVALID_CONFIG') {
+      res.status(400).json({ ok: false, error: 'Cần giữ lại ít nhất một cột dữ liệu hiển thị.' });
+      return;
+    }
+    res.status(500).json({ ok: false, error: 'Không thể lưu cấu hình cột chia sẻ.' });
+  }
+});
 
 app.get('/api/data-health/summary', async (req, res) => {
 

@@ -54,6 +54,7 @@ import {
 import { loadRules, computeKPI, extractLicenseCodesFromRowObj } from "@/lib/rules.js";
 
 import { computeLicenseSnapshot } from "../../shared/licenseSummary.js";
+import { normalizeImportColumnConfig } from "../../shared/importColumns.js";
 
 import CollapsibleCard from "./CollapsibleCard.jsx";
 
@@ -71,7 +72,7 @@ import {
 
 import { formatDisplayDate, formatDateRangeLabel, formatDateTime } from "@/shared/format.js";
 
-import { fetchWithAuth } from "@/auth/localAuth.js";
+import { fetchWithAuth, getAuth } from "@/auth/localAuth.js";
 
 import useTooltipTitles from "@/hooks/useTooltipTitles.js";
 
@@ -1708,6 +1709,7 @@ const RANGE_PRESETS = Object.freeze([
 const FILTER_PRESET_SCOPE = "data-importer";
 
 const LAST_FILTER_PRESET_KEY = "kpi:data-importer:last-preset-v1";
+const COLUMN_SCOPE_STORAGE_KEY = "kpi:data-importer:column-scope-v1";
 
 const LEGACY_FILTER_STORAGE_KEY = "kpi:data-importer:filter:v1";
 
@@ -3793,7 +3795,33 @@ export default function DataImporter({
 
   const initialColumnConfig = useMemo(() => getImportColumnConfig(), []);
 
+  const [personalColumnConfig, setPersonalColumnConfig] = useState(initialColumnConfig);
+  const [columnConfigScope, setColumnConfigScope] = useState(() => {
+    if (typeof window === "undefined") {
+      return "personal";
+    }
+    try {
+      const stored = window.localStorage?.getItem(COLUMN_SCOPE_STORAGE_KEY);
+      return stored === "team" ? "team" : "personal";
+    } catch {
+      return "personal";
+    }
+  });
   const [columnConfigState, setColumnConfigState] = useState(initialColumnConfig);
+  const [teamColumnConfigInfo, setTeamColumnConfigInfo] = useState({
+    loading: false,
+    available: false,
+    canEdit: false,
+    teamId: null,
+    teamName: "",
+    config: null,
+    updatedAt: null,
+    updatedBy: null,
+    updatedByName: "",
+    owner: null,
+    ownerName: "",
+    error: "",
+  });
   const lastSyncToastMessageRef = useRef("");
 
   useEffect(() => {
@@ -3850,6 +3878,115 @@ export default function DataImporter({
 
   );
 
+
+  const fetchTeamColumnConfig = useCallback(async () => {
+    setTeamColumnConfigInfo((prev) => ({ ...prev, loading: true, error: "" }));
+    try {
+      const response = await fetchWithAuth("/api/import-column-config");
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || !payload?.ok) {
+        const message = payload?.error || "Không thể tải cấu hình cột chia sẻ.";
+        throw new Error(message);
+      }
+      const team = payload.team || {};
+      const normalized = team.config ? normalizeImportColumnConfig(team.config) : null;
+      setTeamColumnConfigInfo({
+        loading: false,
+        available: Boolean(team.available),
+        canEdit: Boolean(team.canEdit),
+        teamId: team.teamId || null,
+        teamName: team.teamName || "",
+        config: normalized,
+        updatedAt: team.updatedAt || null,
+        updatedBy: team.updatedBy || null,
+        updatedByName: team.updatedByName || "",
+        owner: team.owner || null,
+        ownerName: team.ownerName || "",
+        error: "",
+      });
+    } catch (error) {
+      console.error("Không thể tải cấu hình cột chia sẻ", error);
+      setTeamColumnConfigInfo({
+        loading: false,
+        available: false,
+        canEdit: false,
+        teamId: null,
+        teamName: "",
+        config: null,
+        updatedAt: null,
+        updatedBy: null,
+        updatedByName: "",
+        owner: null,
+        ownerName: "",
+        error: error?.message || "Không thể tải cấu hình cột chia sẻ.",
+      });
+    }
+  }, []);
+
+  const handleColumnScopeChange = useCallback((nextScope) => {
+    const normalized = nextScope === "team" ? "team" : "personal";
+    setColumnConfigScope(normalized);
+    if (typeof window !== "undefined") {
+      try {
+        window.localStorage?.setItem(COLUMN_SCOPE_STORAGE_KEY, normalized);
+      } catch (error) {
+        console.warn("Không thể lưu phạm vi cấu hình cột", error);
+      }
+    }
+  }, []);
+
+  const handleSelectPersonalScope = useCallback(() => {
+    handleColumnScopeChange("personal");
+  }, [handleColumnScopeChange]);
+
+  const {
+    available: teamColumnConfigAvailable,
+    error: teamColumnConfigError,
+    loading: teamColumnConfigLoading,
+  } = teamColumnConfigInfo;
+
+  const handleSelectTeamScope = useCallback(() => {
+    if (teamColumnConfigLoading) {
+      toast.info("Đang tải cấu hình cột tổ. Vui lòng chờ.");
+      return;
+    }
+    if (!teamColumnConfigAvailable) {
+      if (teamColumnConfigError) {
+        toast.error(teamColumnConfigError);
+      } else {
+        toast.info("Bạn chưa có cấu hình cột tổ. Sử dụng cấu hình cá nhân.");
+      }
+      return;
+    }
+    handleColumnScopeChange("team");
+    fetchTeamColumnConfig();
+  }, [
+    fetchTeamColumnConfig,
+    handleColumnScopeChange,
+    teamColumnConfigAvailable,
+    teamColumnConfigError,
+    teamColumnConfigLoading,
+  ]);
+
+
+  useEffect(() => {
+    fetchTeamColumnConfig();
+  }, [fetchTeamColumnConfig]);
+
+  useEffect(() => {
+    const targetConfig =
+      columnConfigScope === "team" && teamColumnConfigInfo.available
+        ? teamColumnConfigInfo.config || normalizeImportColumnConfig(null)
+        : personalColumnConfig;
+    setColumnConfigState(targetConfig);
+  }, [columnConfigScope, personalColumnConfig, teamColumnConfigInfo.available, teamColumnConfigInfo.config]);
+
+  useEffect(() => {
+    if (columnConfigScope === "team" && !teamColumnConfigInfo.loading && !teamColumnConfigInfo.available) {
+      handleColumnScopeChange("personal");
+    }
+  }, [columnConfigScope, handleColumnScopeChange, teamColumnConfigInfo.available, teamColumnConfigInfo.loading]);
+
   const [columnConfigOpen, setColumnConfigOpen] = useState(false);
 
   const [columnDraftHidden, setColumnDraftHidden] = useState(() => new Set());
@@ -3861,7 +3998,32 @@ export default function DataImporter({
   const [appliedPresetId, setAppliedPresetId] = useState("");
 
   const [presetSaving, setPresetSaving] = useState(false);
+  const [targetPresetVisibility, setTargetPresetVisibility] = useState("personal");
+  const viewerAuth = useMemo(() => {
+    try {
+      return getAuth() || null;
+    } catch (error) {
+      console.warn("Không thể đọc thông tin đăng nhập hiện tại", error);
+      return null;
+    }
+  }, []);
+  const viewerTeamName = useMemo(() => {
+    if (!viewerAuth?.teamName) {
+      return "";
+    }
+    try {
+      return String(viewerAuth.teamName).trim();
+    } catch (error) {
+      console.warn("Không thể chuẩn hoá tên tổ", error);
+      return "";
+    }
+  }, [viewerAuth]);
+  const canSharePresetWithTeam = useMemo(
+    () => Boolean(viewerAuth?.teamId || viewerTeamName),
+    [viewerAuth, viewerTeamName]
+  );
 
+  const lastSelectedPresetIdRef = useRef(null);
   const lastPresetSeedRef = useRef("");
 
   const presetAutoAppliedRef = useRef(false);
@@ -4979,6 +5141,12 @@ export default function DataImporter({
 
 
 
+  const canEditTeamColumns = useMemo(
+    () => teamColumnConfigInfo.available && teamColumnConfigInfo.canEdit,
+    [teamColumnConfigInfo.available, teamColumnConfigInfo.canEdit]
+  );
+  const canEditActiveColumnConfig = columnConfigScope === "team" ? canEditTeamColumns : true;
+
   const countHiddenBaseColumns = useCallback((set) => {
 
     let count = 0;
@@ -5004,6 +5172,14 @@ export default function DataImporter({
     (columnId) => {
 
       if (!isConfigColumnKey(columnId)) {
+
+        return;
+
+      }
+
+      if (!canEditActiveColumnConfig) {
+
+        toast.info("Bạn không có quyền cập nhật cấu hình cột của phạm vi hiện tại.");
 
         return;
 
@@ -5061,7 +5237,7 @@ export default function DataImporter({
 
 
 
-  const handleApplyColumnConfig = useCallback(() => {
+  const handleApplyColumnConfig = useCallback(async () => {
 
     const hiddenList = Array.from(columnDraftHidden).filter((key) => isConfigColumnKey(key));
 
@@ -5097,6 +5273,102 @@ export default function DataImporter({
 
     }
 
+    if (columnConfigScope === "team") {
+
+      if (!teamColumnConfigInfo.available) {
+
+        setColumnDraftError("Bạn cần thuộc một tổ để lưu cấu hình chia sẻ.");
+
+        toast.error("Bạn cần thuộc một tổ để lưu cấu hình chia sẻ.");
+
+        return;
+
+      }
+
+      if (!canEditTeamColumns) {
+
+        toast.info("Bạn không có quyền cập nhật cấu hình cột của tổ.");
+
+        return;
+
+      }
+
+      try {
+
+        const response = await fetchWithAuth("/api/import-column-config/team", {
+
+          method: "PUT",
+
+          headers: { "Content-Type": "application/json" },
+
+          body: JSON.stringify({ hidden: hiddenList, widths: sanitizedWidths }),
+
+        });
+
+        const payload = await response.json().catch(() => ({}));
+
+        if (!response.ok || !payload?.ok) {
+
+          const message = payload?.error || "Không thể lưu cấu hình cột chia sẻ.";
+
+          throw new Error(message);
+
+        }
+
+        const nextTeamConfig = payload.team?.config
+
+          ? normalizeImportColumnConfig(payload.team.config)
+
+          : normalizeImportColumnConfig(null);
+
+        const appliedWidths = sanitizeColumnWidths(nextTeamConfig?.widths);
+
+        setTeamColumnConfigInfo((prev) => ({
+
+          ...prev,
+
+          config: nextTeamConfig,
+
+          updatedAt: payload.team?.updatedAt || null,
+
+          updatedBy: payload.team?.updatedBy || null,
+
+          updatedByName: payload.team?.updatedByName || "",
+
+          owner: payload.team?.owner || null,
+
+          ownerName: payload.team?.ownerName || "",
+
+          canEdit: payload.team?.canEdit ?? prev.canEdit,
+
+          available: payload.team?.available ?? prev.available,
+
+          error: "",
+
+        }));
+
+        setColumnConfigOpen(false);
+
+        setColumnDraftError("");
+
+        setColumnDraftHidden(new Set(nextTeamConfig.hidden));
+
+        columnWidthsRef.current = appliedWidths;
+
+        toast.success("Đã cập nhật cấu hình cột Import Data cho tổ.");
+
+      } catch (error) {
+
+        console.error("Không thể lưu cấu hình cột Import Data tổ", error);
+
+        setColumnDraftError(error?.message || "Có lỗi xảy ra khi lưu cấu hình. Vui lòng thử lại.");
+
+      }
+
+      return;
+
+    }
+
     try {
 
       const result = saveImportColumnConfig({ hidden: hiddenList, widths: sanitizedWidths }, { actor });
@@ -5119,21 +5391,133 @@ export default function DataImporter({
 
       columnWidthsRef.current = sanitizedWidths;
 
+      setColumnDraftHidden(new Set(result.hidden));
+
       toast.success("Đã cập nhật cấu hình cột Import Data.");
 
-    } catch (err) {
+    } catch (error) {
 
-      console.error("Không thể lưu cấu hình cột Import Data", err);
+      console.error("Không thể lưu cấu hình cột Import Data", error);
 
       setColumnDraftError("Có lỗi xảy ra khi lưu cấu hình. Vui lòng thử lại.");
 
     }
 
-  }, [actor, columnConfigState, columnDraftHidden, columnHiddenSet, totalBaseColumns]);
+  }, [
 
-  const handleResetColumnConfig = useCallback(() => {
+    actor,
+
+    canEditTeamColumns,
+
+    columnConfigScope,
+
+    columnConfigState,
+
+    columnDraftHidden,
+
+    columnHiddenSet,
+
+    teamColumnConfigInfo.available,
+
+    totalBaseColumns,
+
+  ]);
+
+  const handleResetColumnConfig = useCallback(async () => {
 
     const defaultHidden = [...new Set([...IMPORT_AUX_COLUMN_IDS, "status"])];
+
+    if (columnConfigScope === "team") {
+
+      if (!teamColumnConfigInfo.available) {
+
+        toast.error("Bạn cần thuộc một tổ để khôi phục cấu hình chia sẻ.");
+
+        return;
+
+      }
+
+      if (!canEditTeamColumns) {
+
+        toast.info("Bạn không có quyền cập nhật cấu hình cột của tổ.");
+
+        return;
+
+      }
+
+      try {
+
+        const response = await fetchWithAuth("/api/import-column-config/team", {
+
+          method: "PUT",
+
+          headers: { "Content-Type": "application/json" },
+
+          body: JSON.stringify({ hidden: defaultHidden, widths: {} }),
+
+        });
+
+        const payload = await response.json().catch(() => ({}));
+
+        if (!response.ok || !payload?.ok) {
+
+          const message = payload?.error || "Không thể lưu cấu hình cột chia sẻ.";
+
+          throw new Error(message);
+
+        }
+
+        const nextTeamConfig = payload.team?.config
+
+          ? normalizeImportColumnConfig(payload.team.config)
+
+          : normalizeImportColumnConfig(null);
+
+        const appliedWidths = sanitizeColumnWidths(nextTeamConfig?.widths);
+
+        setTeamColumnConfigInfo((prev) => ({
+
+          ...prev,
+
+          config: nextTeamConfig,
+
+          updatedAt: payload.team?.updatedAt || null,
+
+          updatedBy: payload.team?.updatedBy || null,
+
+          updatedByName: payload.team?.updatedByName || "",
+
+          owner: payload.team?.owner || null,
+
+          ownerName: payload.team?.ownerName || "",
+
+          canEdit: payload.team?.canEdit ?? prev.canEdit,
+
+          available: payload.team?.available ?? prev.available,
+
+          error: "",
+
+        }));
+
+        setColumnDraftHidden(new Set(nextTeamConfig.hidden));
+
+        setColumnDraftError("");
+
+        columnWidthsRef.current = appliedWidths;
+
+        toast.success("Đã khôi phục cấu hình cột Import Data mặc định cho tổ.");
+
+      } catch (error) {
+
+        console.error("Không thể khôi phục cấu hình cột Import Data tổ", error);
+
+        toast.error(error?.message || "Không thể khôi phục cấu hình cột. Vui lòng thử lại.");
+
+      }
+
+      return;
+
+    }
 
     try {
 
@@ -5157,28 +5541,17 @@ export default function DataImporter({
 
     }
 
-  }, [actor]);
-
-
+  }, [actor, canEditTeamColumns, columnConfigScope, teamColumnConfigInfo.available]);
 
   useEffect(() => {
-
     const unsubscribe = subscribeImportColumnConfig((config) => {
-
-      setColumnConfigState(config);
-
+      setPersonalColumnConfig(config);
     });
-
     return () => {
-
       if (typeof unsubscribe === "function") {
-
         unsubscribe();
-
       }
-
     };
-
   }, []);
 
 
@@ -6280,6 +6653,34 @@ export default function DataImporter({
 
   }, [appliedPreset]);
 
+  const selectedPresetUpdatedAtLabel = useMemo(() => {
+    if (!selectedPreset?.updatedAt) {
+      return "";
+    }
+    try {
+      return new Date(selectedPreset.updatedAt).toLocaleString("vi-VN");
+    } catch (error) {
+      console.warn("Không thể định dạng thời gian cập nhật bộ lọc", error);
+      return "";
+    }
+  }, [selectedPreset]);
+
+  const selectedPresetScopeLabel = useMemo(() => {
+    if (!selectedPreset) {
+      return "";
+    }
+    if (selectedPreset.visibility === "team") {
+      const fallbackTeam = viewerTeamName ? ` ${viewerTeamName}` : "";
+      const teamLabel = selectedPreset.teamName ? ` ${selectedPreset.teamName}` : fallbackTeam;
+      return `Chia sẻ tổ${teamLabel}`;
+    }
+    return "Cá nhân";
+  }, [selectedPreset, viewerTeamName]);
+
+  const selectedPresetOwnerName = selectedPreset?.ownerName || selectedPreset?.owner || "";
+  const selectedPresetUpdatedByName = selectedPreset?.updatedByName || selectedPreset?.updatedBy || "";
+  const canEditSelectedPreset = selectedPreset?.canEdit !== false;
+  const canDeleteSelectedPreset = selectedPreset?.canDelete !== false;
 
 
   useEffect(() => {
@@ -6360,6 +6761,29 @@ export default function DataImporter({
 
   }, [selectedPresetId, savedPresets]);
 
+  useEffect(() => {
+    const currentId = selectedPreset?.id || null;
+    if (currentId !== lastSelectedPresetIdRef.current) {
+      lastSelectedPresetIdRef.current = currentId;
+      if (selectedPreset) {
+        const baseVisibility = selectedPreset.visibility === "team" ? "team" : "personal";
+        setTargetPresetVisibility(
+          baseVisibility === "team" && !canSharePresetWithTeam ? "personal" : baseVisibility
+        );
+      } else {
+        setTargetPresetVisibility((prev) => {
+          if (prev === "team" && !canSharePresetWithTeam) {
+            return "personal";
+          }
+          return prev;
+        });
+      }
+      return;
+    }
+    if (!selectedPreset && !canSharePresetWithTeam) {
+      setTargetPresetVisibility((prev) => (prev === "team" ? "personal" : prev));
+    }
+  }, [selectedPreset, canSharePresetWithTeam]);
 
 
   useEffect(() => {
@@ -6626,11 +7050,26 @@ export default function DataImporter({
 
     clearPresetError();
 
+    const requestedVisibility =
+      targetPresetVisibility === "team" ? (canSharePresetWithTeam ? "team" : null) : "personal";
+
+    if (!requestedVisibility) {
+
+      alert("Bạn chưa thuộc tổ nào nên không thể lưu bộ lọc chia sẻ.");
+
+      return;
+
+    }
+
     setPresetSaving(true);
 
     try {
 
-      const preset = await createFilterPreset({ name: presetName, filters: buildFilterPresetPayload() });
+      const preset = await createFilterPreset({
+        name: presetName,
+        filters: buildFilterPresetPayload(),
+        visibility: requestedVisibility,
+      });
 
       setSelectedPresetId(preset.id);
 
@@ -6648,7 +7087,15 @@ export default function DataImporter({
 
     }
 
-  }, [selectedPreset, clearPresetError, createFilterPreset, buildFilterPresetPayload, applyPresetFilters]);
+  }, [
+    selectedPreset,
+    clearPresetError,
+    createFilterPreset,
+    buildFilterPresetPayload,
+    applyPresetFilters,
+    targetPresetVisibility,
+    canSharePresetWithTeam,
+  ]);
 
 
 
@@ -6657,6 +7104,14 @@ export default function DataImporter({
     if (!selectedPreset) {
 
       alert("Vui lòng chọn bộ lọc cần ghi đè.");
+
+      return;
+
+    }
+
+    if (!canEditSelectedPreset) {
+
+      alert("Bạn không có quyền chỉnh sửa bộ lọc tổ này.");
 
       return;
 
@@ -6676,6 +7131,17 @@ export default function DataImporter({
 
     clearPresetError();
 
+    const requestedVisibility =
+      targetPresetVisibility === "team" ? (canSharePresetWithTeam ? "team" : null) : "personal";
+
+    if (!requestedVisibility) {
+
+      alert("Bạn chưa thuộc tổ nào nên không thể lưu bộ lọc chia sẻ.");
+
+      return;
+
+    }
+
     setPresetSaving(true);
 
     try {
@@ -6685,6 +7151,8 @@ export default function DataImporter({
         name: selectedPreset.name,
 
         filters: buildFilterPresetPayload(),
+
+        visibility: requestedVisibility,
 
       });
 
@@ -6702,7 +7170,16 @@ export default function DataImporter({
 
     }
 
-  }, [selectedPreset, clearPresetError, updateFilterPreset, buildFilterPresetPayload, applyPresetFilters]);
+  }, [
+    selectedPreset,
+    canEditSelectedPreset,
+    clearPresetError,
+    targetPresetVisibility,
+    canSharePresetWithTeam,
+    updateFilterPreset,
+    buildFilterPresetPayload,
+    applyPresetFilters,
+  ]);
 
 
 
@@ -6711,6 +7188,14 @@ export default function DataImporter({
     if (!selectedPreset) {
 
       alert("Vui lòng chọn bộ lọc cần xoá.");
+
+      return;
+
+    }
+
+    if (!canDeleteSelectedPreset) {
+
+      alert("Bạn không có quyền xoá bộ lọc tổ này.");
 
       return;
 
@@ -6770,7 +7255,13 @@ export default function DataImporter({
 
     }
 
-  }, [selectedPreset, clearPresetError, deleteFilterPreset, appliedPresetId]);
+  }, [
+    selectedPreset,
+    canDeleteSelectedPreset,
+    clearPresetError,
+    deleteFilterPreset,
+    appliedPresetId,
+  ]);
 
 
 
@@ -13813,6 +14304,154 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
 
           <div className="space-y-3">
 
+            <div className="rounded border border-gray-200 bg-gray-50 p-3 text-sm text-gray-700">
+
+              <p className="text-sm font-medium text-gray-800">Phạm vi áp dụng</p>
+
+              <div className="mt-2 space-y-2">
+
+                <label
+
+                  className={cx(
+
+                    "flex items-start gap-2 rounded border px-3 py-2",
+
+                    columnConfigScope === "personal"
+
+                      ? "border-blue-200 bg-white"
+
+                      : "border-transparent bg-transparent hover:border-gray-200"
+
+                  )}
+
+                >
+
+                  <input
+
+                    type="radio"
+
+                    className="mt-1"
+
+                    checked={columnConfigScope === "personal"}
+
+                    onChange={handleSelectPersonalScope}
+
+                  />
+
+                  <span className="flex flex-col">
+
+                    <span>Cấu hình cá nhân</span>
+
+                    <span className="text-[11px] text-gray-500">Chỉ áp dụng cho tài khoản của bạn.</span>
+
+                  </span>
+
+                </label>
+
+                <label
+
+                  className={cx(
+
+                    "flex items-start gap-2 rounded border px-3 py-2",
+
+                    columnConfigScope === "team"
+
+                      ? "border-blue-200 bg-white"
+
+                      : "border-transparent bg-transparent hover:border-gray-200",
+
+                    !teamColumnConfigInfo.available ? "cursor-not-allowed opacity-60" : ""
+
+                  )}
+
+                >
+
+                  <input
+
+                    type="radio"
+
+                    className="mt-1"
+
+                    checked={columnConfigScope === "team"}
+
+                    onChange={handleSelectTeamScope}
+
+                    disabled={!teamColumnConfigInfo.available}
+
+                  />
+
+                  <span className="flex flex-col">
+
+                    <span>
+
+                      Cấu hình tổ
+
+                      {teamColumnConfigInfo.teamName ? ` ${teamColumnConfigInfo.teamName}` : ""}
+
+                    </span>
+
+                    <span className="text-[11px] text-gray-500">
+
+                      {teamColumnConfigInfo.loading
+
+                        ? "Đang tải cấu hình chia sẻ..."
+
+                        : teamColumnConfigInfo.available
+
+                          ? canEditTeamColumns
+
+                            ? "Các thành viên trong tổ sẽ dùng chung cấu hình này."
+
+                            : "Bạn chỉ có thể xem cấu hình do thành viên tổ quản lý."
+
+                          : "Bạn chưa thuộc tổ hoặc chưa có cấu hình chia sẻ."}
+
+                    </span>
+
+                  </span>
+
+                </label>
+
+              </div>
+
+              {teamColumnConfigInfo.error && columnConfigScope === "team" ? (
+
+                <p className="mt-2 text-[11px] text-red-600">{teamColumnConfigInfo.error}</p>
+
+              ) : null}
+
+              {columnConfigScope === "team" && teamColumnConfigInfo.available ? (
+
+                <div className="mt-3 rounded border border-blue-100 bg-white p-2 text-[11px] text-gray-600">
+
+                  <p>
+
+                    {teamColumnConfigInfo.updatedAt
+
+                      ? `Cập nhật lần cuối ${formatDateTime(teamColumnConfigInfo.updatedAt)}`
+
+                      : "Chưa có thông tin cập nhật gần đây."}
+
+                  </p>
+
+                  {teamColumnConfigInfo.updatedByName ? (
+
+                    <p>Người cập nhật: {teamColumnConfigInfo.updatedByName}</p>
+
+                  ) : null}
+
+                  {teamColumnConfigInfo.ownerName ? (
+
+                    <p>Quản lý cấu hình: {teamColumnConfigInfo.ownerName}</p>
+
+                  ) : null}
+
+                </div>
+
+              ) : null}
+
+            </div>
+
             <p className="text-xs text-gray-600">
 
               Đang giữ {columnDraftVisibleCount}/{totalConfigColumns} mục hiển thị (bao gồm cột dữ liệu và thao tác).
@@ -13827,7 +14466,7 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
 
                 const isSensitive = SENSITIVE_COLUMN_SET.has(column.id);
 
-                const disabled = isSensitive && !isAdminRole;
+                const disabled = !canEditActiveColumnConfig || (isSensitive && !isAdminRole);
 
                 return (
 
@@ -16597,136 +17236,153 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
 
 
 
-        <div className="flex min-w-[240px] flex-1 flex-wrap items-center gap-2 border-l border-gray-200 pl-3 dark:border-slate-700">
-
-          <label className="flex flex-col text-xs text-gray-600 dark:text-gray-300">
-
-            <span className="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-
-              Bộ lọc đã lưu
-
-            </span>
-
-            <select
-
-              value={selectedPresetId}
-
-              onChange={(event) => {
-
-                clearPresetError();
-
-                setSelectedPresetId(event.target.value);
-
-              }}
-
-              className="min-w-[180px] rounded border border-gray-300 px-2 py-1 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100"
-
+        <div className="flex min-w-[240px] flex-1 flex-col gap-3 border-l border-gray-200 pl-3 dark:border-slate-700">
+          <div className="flex flex-wrap items-center gap-2">
+            <label className="flex flex-col text-xs text-gray-600 dark:text-gray-300">
+              <span className="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                Bộ lọc đã lưu
+              </span>
+              <select
+                value={selectedPresetId}
+                onChange={(event) => {
+                  clearPresetError();
+                  setSelectedPresetId(event.target.value);
+                }}
+                className="min-w-[180px] rounded border border-gray-300 px-2 py-1 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100"
+              >
+                <option value="">Chọn bộ lọc</option>
+                {savedPresets.map((preset) => {
+                  const visibilityTag = preset.visibility === "team" ? "[Tổ]" : "[Cá nhân]";
+                  const teamTag =
+                    preset.visibility === "team" && preset.teamName ? ` • ${preset.teamName}` : "";
+                  const ownerTag =
+                    preset.visibility === "team" && preset.ownerName ? ` • ${preset.ownerName}` : "";
+                  return (
+                    <option key={preset.id} value={preset.id}>
+                      {`${visibilityTag} ${preset.name}${teamTag}${ownerTag}`}
+                    </option>
+                  );
+                })}
+              </select>
+            </label>
+            <button
+              type="button"
+              onClick={handleApplySelectedPreset}
+              disabled={!selectedPresetId || presetBusy}
+              className="rounded border px-3 py-1 text-xs text-gray-600 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-600 dark:text-gray-200 dark:hover:bg-slate-800"
             >
-
-              <option value="">Chọn bộ lọc</option>
-
-              {savedPresets.map((preset) => (
-
-                <option key={preset.id} value={preset.id}>
-
-                  {preset.name}
-
-                </option>
-
-              ))}
-
-            </select>
-
-          </label>
-
-          <button
-
-            type="button"
-
-            onClick={handleApplySelectedPreset}
-
-            disabled={!selectedPresetId || presetBusy}
-
-            className="rounded border px-3 py-1 text-xs text-gray-600 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-600 dark:text-gray-200 dark:hover:bg-slate-800"
-
-          >
-
-            Áp dụng
-
-          </button>
-
-          <button
-
-            type="button"
-
-            onClick={handleSavePresetAsNew}
-
-            disabled={presetBusy}
-
-            className="rounded border px-3 py-1 text-xs text-gray-600 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-600 dark:text-gray-200 dark:hover:bg-slate-800"
-
-          >
-
-            {presetSaving ? "Đang lưu…" : "Lưu preset mới"}
-
-          </button>
-
-          {selectedPresetId && (
-
-            <>
-
-              <button
-
-                type="button"
-
-                onClick={handleOverwriteSelectedPreset}
-
-                disabled={presetBusy}
-
-                className="rounded border px-3 py-1 text-xs text-gray-600 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-600 dark:text-gray-200 dark:hover:bg-slate-800"
-
+              Áp dụng
+            </button>
+            <button
+              type="button"
+              onClick={handleSavePresetAsNew}
+              disabled={presetBusy}
+              className="rounded border px-3 py-1 text-xs text-gray-600 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-600 dark:text-gray-200 dark:hover:bg-slate-800"
+            >
+              {presetSaving ? "Đang lưu…" : "Lưu preset mới"}
+            </button>
+            {selectedPresetId && (
+              <>
+                <button
+                  type="button"
+                  onClick={handleOverwriteSelectedPreset}
+                  disabled={presetBusy || !canEditSelectedPreset}
+                  title={
+                    !canEditSelectedPreset ? "Bạn không có quyền chỉnh sửa bộ lọc tổ này." : undefined
+                  }
+                  className="rounded border px-3 py-1 text-xs text-gray-600 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-600 dark:text-gray-200 dark:hover:bg-slate-800"
+                >
+                  Ghi đè preset
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDeleteSelectedPreset}
+                  disabled={presetBusy || !canDeleteSelectedPreset}
+                  title={
+                    !canDeleteSelectedPreset ? "Bạn không có quyền xoá bộ lọc tổ này." : undefined
+                  }
+                  className="rounded border px-3 py-1 text-xs text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-red-500/60 dark:text-red-300 dark:hover:bg-red-500/10"
+                >
+                  Xoá preset
+                </button>
+              </>
+            )}
+            <button
+              type="button"
+              onClick={handleRefreshPresetList}
+              disabled={presetBusy}
+              className="rounded border px-3 py-1 text-xs text-gray-600 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-600 dark:text-gray-200 dark:hover:bg-slate-800"
+            >
+              {presetLoading ? "Đồng bộ…" : "Đồng bộ"}
+            </button>
+          </div>
+          <div className="flex flex-col gap-1 text-xs text-gray-600 dark:text-gray-300">
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+              Phạm vi lưu
+            </span>
+            <div className="flex flex-wrap items-center gap-3">
+              <label className="inline-flex items-center gap-1">
+                <input
+                  type="radio"
+                  value="personal"
+                  checked={targetPresetVisibility === "personal"}
+                  onChange={() => setTargetPresetVisibility("personal")}
+                  disabled={presetBusy}
+                />
+                <span>Cá nhân</span>
+              </label>
+              <label
+                className={`inline-flex items-center gap-1 ${canSharePresetWithTeam ? "" : "opacity-60"}`}
+                title={
+                  canSharePresetWithTeam
+                    ? undefined
+                    : "Bạn chưa thuộc tổ nên không thể lưu preset chia sẻ."
+                }
               >
-
-                Ghi đè preset
-
-              </button>
-
-              <button
-
-                type="button"
-
-                onClick={handleDeleteSelectedPreset}
-
-                disabled={presetBusy}
-
-                className="rounded border px-3 py-1 text-xs text-red-600 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-red-500/60 dark:text-red-300 dark:hover:bg-red-500/10"
-
-              >
-
-                Xoá preset
-
-              </button>
-
-            </>
-
+                <input
+                  type="radio"
+                  value="team"
+                  checked={targetPresetVisibility === "team"}
+                  onChange={() => setTargetPresetVisibility("team")}
+                  disabled={!canSharePresetWithTeam || presetBusy}
+                />
+                <span>Chia sẻ tổ{viewerTeamName ? ` (${viewerTeamName})` : ""}</span>
+              </label>
+            </div>
+            {!canSharePresetWithTeam && (
+              <span className="text-[11px] text-gray-400 dark:text-gray-500">
+                Bạn chưa thuộc tổ nào nên chỉ lưu được ở phạm vi cá nhân.
+              </span>
+            )}
+          </div>
+          {selectedPreset && (
+            <div className="rounded border border-gray-200 bg-gray-50 p-2 text-xs text-gray-600 shadow-sm dark:border-slate-700 dark:bg-slate-800/60 dark:text-gray-300">
+              <div>
+                <span className="text-gray-500 dark:text-gray-400">Phạm vi:</span>{" "}
+                <span className="font-medium text-gray-800 dark:text-gray-100">
+                  {selectedPresetScopeLabel || "—"}
+                </span>
+              </div>
+              <div>
+                <span className="text-gray-500 dark:text-gray-400">Người tạo:</span>{" "}
+                <span className="font-medium text-gray-800 dark:text-gray-100">
+                  {selectedPresetOwnerName || "Không rõ"}
+                </span>
+              </div>
+              <div>
+                <span className="text-gray-500 dark:text-gray-400">Cập nhật bởi:</span>{" "}
+                <span className="font-medium text-gray-800 dark:text-gray-100">
+                  {selectedPresetUpdatedByName || "Không rõ"}
+                </span>
+                {selectedPresetUpdatedAtLabel ? ` • ${selectedPresetUpdatedAtLabel}` : ""}
+              </div>
+              {selectedPreset.visibility === "team" && !canEditSelectedPreset && (
+                <div className="text-[11px] text-amber-600 dark:text-amber-400">
+                  Bạn không phải chủ sở hữu nên chỉ có thể áp dụng hoặc lưu bản mới.
+                </div>
+              )}
+            </div>
           )}
-
-          <button
-
-            type="button"
-
-            onClick={handleRefreshPresetList}
-
-            disabled={presetBusy}
-
-            className="rounded border px-3 py-1 text-xs text-gray-600 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-600 dark:text-gray-200 dark:hover:bg-slate-800"
-
-          >
-
-            {presetLoading ? "Đồng bộ…" : "Đồng bộ"}
-
-          </button>
-
         </div>
 
         {presetError && (
