@@ -200,6 +200,76 @@ function formatPercent(value) {
 
 
 
+function formatDurationMs(value) {
+
+  const num = Number(value);
+
+  if (!Number.isFinite(num) || num <= 0) {
+
+    return '—';
+
+  }
+
+  if (num < 1000) {
+
+    return `${Math.round(num)} ms`;
+
+  }
+
+  if (num < 60000) {
+
+    const seconds = num / 1000;
+
+    const fractionDigits = seconds >= 10 ? 0 : 1;
+
+    return `${seconds.toLocaleString('vi-VN', {
+
+      minimumFractionDigits: fractionDigits,
+
+      maximumFractionDigits: fractionDigits,
+
+    })} giây`;
+
+  }
+
+  const hours = Math.floor(num / 3600000);
+
+  const minutes = Math.floor((num % 3600000) / 60000);
+
+  const seconds = Math.round((num % 60000) / 1000);
+
+  const parts = [];
+
+  if (hours > 0) {
+
+    parts.push(`${hours.toLocaleString('vi-VN')} giờ`);
+
+  }
+
+  if (minutes > 0) {
+
+    parts.push(`${minutes.toLocaleString('vi-VN')} phút`);
+
+  }
+
+  if (seconds > 0 && parts.length < 2) {
+
+    parts.push(`${seconds.toLocaleString('vi-VN')} giây`);
+
+  }
+
+  if (parts.length === 0) {
+
+    return `${Math.round(num / 1000).toLocaleString('vi-VN')} giây`;
+
+  }
+
+  return parts.join(' ');
+
+}
+
+
+
 const severityStyles = {
 
   good: {
@@ -247,6 +317,51 @@ const severityStyles = {
     dot: 'bg-red-500 dark:bg-red-300',
 
     badge: 'bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-200',
+
+  },
+
+};
+
+
+const syncStatusStyles = {
+
+  success: {
+
+    label: 'Thành công',
+
+    badge: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-200',
+
+  },
+
+  error: {
+
+    label: 'Thất bại',
+
+    badge: 'bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-200',
+
+  },
+
+  running: {
+
+    label: 'Đang chạy',
+
+    badge: 'bg-sky-100 text-sky-700 dark:bg-sky-500/20 dark:text-sky-200',
+
+  },
+
+  pending: {
+
+    label: 'Chờ xử lý',
+
+    badge: 'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-200',
+
+  },
+
+  default: {
+
+    label: 'Không xác định',
+
+    badge: 'bg-gray-100 text-gray-600 dark:bg-slate-700 dark:text-gray-200',
 
   },
 
@@ -721,6 +836,19 @@ export default function DataHealthDashboard({ currentUser, canManage = false }) 
       relative,
 
     };
+
+  }, [summary]);
+
+
+  const syncHistoryEntries = useMemo(() => {
+
+    if (!summary?.sync || !Array.isArray(summary.sync.history)) {
+
+      return [];
+
+    }
+
+    return summary.sync.history.slice(0, 10);
 
   }, [summary]);
 
@@ -1557,6 +1685,199 @@ export default function DataHealthDashboard({ currentUser, canManage = false }) 
           {operatorName ? <div>Người trực: {operatorName}</div> : null}
 
         </div>
+
+      </section>
+
+
+      <section className="rounded border border-gray-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+
+        <div className="flex flex-wrap items-center justify-between gap-2">
+
+          <div>
+
+            <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">Nhật ký đồng bộ ECUS</h3>
+
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+
+              Theo dõi 10 lần đồng bộ gần nhất cùng số lượng bản ghi được cập nhật.
+
+            </p>
+
+          </div>
+
+          <span className="text-xs text-gray-400 dark:text-gray-500">
+
+            {summaryLoading ? 'Đang tải…' : `${syncHistoryEntries.length} mục`}
+
+          </span>
+
+        </div>
+
+        {syncHistoryEntries.length === 0 ? (
+
+          <p className="mt-3 text-xs text-gray-500 dark:text-gray-400">
+
+            {summaryLoading ? 'Đang tải lịch sử đồng bộ…' : 'Chưa có lịch sử đồng bộ.'}
+
+          </p>
+
+        ) : (
+
+          <div className="mt-3 overflow-x-auto">
+
+            <table className="min-w-full border-collapse text-xs text-gray-700 dark:text-gray-100">
+
+              <thead className="text-[11px] uppercase tracking-wide text-gray-500 dark:text-gray-400">
+
+                <tr>
+
+                  <th className="px-2 py-1 text-left font-semibold">Thời gian</th>
+
+                  <th className="px-2 py-1 text-left font-semibold">Người chạy</th>
+
+                  <th className="px-2 py-1 text-left font-semibold">Kết quả</th>
+
+                  <th className="px-2 py-1 text-right font-semibold">+ Mới</th>
+
+                  <th className="px-2 py-1 text-right font-semibold">Cập nhật</th>
+
+                  <th className="px-2 py-1 text-right font-semibold">Bỏ qua</th>
+
+                  <th className="px-2 py-1 text-right font-semibold">Tổng</th>
+
+                  <th className="px-2 py-1 text-right font-semibold">Thời lượng</th>
+
+                </tr>
+
+              </thead>
+
+              <tbody>
+
+                {syncHistoryEntries.map((entry, index) => {
+
+                  const statusMeta = syncStatusStyles[entry?.status] || syncStatusStyles.default;
+
+                  const key = entry?.id || `${entry?.runAt || 'history'}_${index}`;
+
+                  return (
+
+                    <tr
+
+                      key={key}
+
+                      className="border-b border-gray-100 last:border-b-0 dark:border-slate-700"
+
+                    >
+
+                      <td className="px-2 py-1 align-top whitespace-nowrap">
+
+                        <div className="font-medium text-gray-800 dark:text-gray-100">
+
+                          {formatDate(entry?.runAt)}
+
+                        </div>
+
+                        {entry?.range && (entry.range.from || entry.range.to) ? (
+
+                          <div className="text-[11px] text-gray-500 dark:text-gray-400">
+
+                            {`${entry.range.from || '…'} → ${entry.range.to || '…'}`}
+
+                          </div>
+
+                        ) : null}
+
+                      </td>
+
+                      <td className="px-2 py-1 align-top whitespace-nowrap">
+
+                        {entry?.actor || 'system'}
+
+                      </td>
+
+                      <td className="px-2 py-1 align-top">
+
+                        <span
+
+                          className={clsx(
+
+                            'inline-flex items-center rounded px-2 py-0.5 text-[11px] font-semibold',
+
+                            statusMeta.badge
+
+                          )}
+
+                        >
+
+                          {statusMeta.label}
+
+                        </span>
+
+                        {entry?.hasConflicts ? (
+
+                          <div className="mt-1 text-[11px] text-amber-600 dark:text-amber-300">
+
+                            {`Có ${formatNumber(entry?.conflictCount || 0)} xung đột`}
+
+                          </div>
+
+                        ) : null}
+
+                      </td>
+
+                      <td className="px-2 py-1 align-top text-right font-medium">
+
+                        {formatNumber(entry?.inserted || 0)}
+
+                      </td>
+
+                      <td className="px-2 py-1 align-top text-right font-medium">
+
+                        {formatNumber(entry?.updated || 0)}
+
+                      </td>
+
+                      <td className="px-2 py-1 align-top text-right">
+
+                        <div>{formatNumber(entry?.skipped || 0)}</div>
+
+                        {entry?.locked ? (
+
+                          <div className="text-[11px] text-gray-500 dark:text-gray-400">
+
+                            {`Khóa ${formatNumber(entry.locked)}`}
+
+                          </div>
+
+                        ) : null}
+
+                      </td>
+
+                      <td className="px-2 py-1 align-top text-right font-semibold">
+
+                        {formatNumber(entry?.stored || 0)}
+
+                      </td>
+
+                      <td className="px-2 py-1 align-top text-right">
+
+                        {formatDurationMs(entry?.durationMs)}
+
+                      </td>
+
+                    </tr>
+
+                  );
+
+                })}
+
+              </tbody>
+
+            </table>
+
+          </div>
+
+        )}
 
       </section>
 

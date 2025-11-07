@@ -17793,6 +17793,40 @@ function evaluateDuplicatePolicies({
 
 
 
+function getDeclSyncHistoryForSummary(limit = 10) {
+  const entries = getDeclSyncHistoryEntries();
+  if (!Array.isArray(entries) || entries.length === 0) {
+    return [];
+  }
+  const max = Math.max(1, Math.min(Number(limit) || 10, 50));
+  const toNumber = (value) => {
+    const num = Number(value);
+    return Number.isFinite(num) ? num : 0;
+  };
+  return entries.slice(0, max).map((entry) => {
+    const range = entry?.range && typeof entry.range === 'object'
+      ? { from: entry.range.from || null, to: entry.range.to || null }
+      : null;
+    const durationMsRaw = Number(entry?.durationMs);
+    return {
+      id: typeof entry?.id === 'string' && entry.id ? entry.id : null,
+      runAt: entry?.runAt || null,
+      actor: typeof entry?.actor === 'string' && entry.actor ? entry.actor : 'system',
+      status: typeof entry?.status === 'string' && entry.status ? entry.status : 'success',
+      fetched: toNumber(entry?.fetched),
+      inserted: toNumber(entry?.inserted),
+      updated: toNumber(entry?.updated),
+      skipped: toNumber(entry?.skipped),
+      locked: toNumber(entry?.locked),
+      stored: toNumber(entry?.stored),
+      conflictCount: toNumber(entry?.conflictCount),
+      hasConflicts: entry?.hasConflicts === true || toNumber(entry?.conflictCount) > 0,
+      durationMs: Number.isFinite(durationMsRaw) ? durationMsRaw : null,
+      range,
+    };
+  });
+}
+
 async function buildDataHealthSummary() {
 
   const rows = getDeclRows();
@@ -17962,6 +17996,8 @@ async function buildDataHealthSummary() {
       lastStatus: ecusConfig?.lastStatus || null,
 
       lastSummary: ecusConfig?.lastSummary || null,
+
+      history: getDeclSyncHistoryForSummary(10),
 
     },
 
@@ -22209,11 +22245,17 @@ async function runEcusSync({
 
   const totalStored = storedRows.length;
 
+  const formatCount = (value) => Number(value || 0).toLocaleString('vi-VN');
+
   const skipLabel = reviewLocked > 0
 
-    ? `bo qua ${skippedExisting} (khoa ${reviewLocked})`
+    ? `bỏ qua ${formatCount(skippedExisting)} (khóa ${formatCount(reviewLocked)})`
 
-    : `bo qua ${skippedExisting}`;
+    : `bỏ qua ${formatCount(skippedExisting)}`;
+
+  const insertedLabel = formatCount(totalInserted);
+  const updatedLabel = formatCount(updatedExisting);
+  const storedLabel = formatCount(totalStored);
 
 
 
@@ -22223,7 +22265,7 @@ async function runEcusSync({
 
     action: 'decl.merge',
 
-    detail: `Dong bo ${totalInserted} to khai moi tu ECUS (${range.from || '...'} -> ${range.to || '...'}) [${syncReason}] - cap nhat ${updatedExisting} - ${skipLabel} - tong luu: ${totalStored}`,
+    detail: `Đồng bộ ${insertedLabel} tờ khai mới từ ECUS (${range.from || '...'} -> ${range.to || '...'}) [${syncReason}] - cập nhật ${updatedLabel} - ${skipLabel} - tổng lưu: ${storedLabel}`,
 
   });
 
@@ -22275,7 +22317,7 @@ async function runEcusSync({
 
     actor,
 
-    message: `ECUS sync (${syncReason}) +${totalInserted} / cap nhat ${updatedExisting} / ${skipLabel} (${range.from || '...'} -> ${range.to || '...'}) - tong luu: ${totalStored} - MST moi: ${mstSummary.total}${filterSummary}`,
+    message: `ECUS sync (${syncReason}) +${insertedLabel} / cập nhật ${updatedLabel} / ${skipLabel} (${range.from || '...'} -> ${range.to || '...'}) - tổng lưu: ${storedLabel} - MST mới: ${formatCount(mstSummary.total)}${filterSummary}`,
 
     summary: {
 
@@ -22396,7 +22438,7 @@ async function runEcusSync({
 
   const finishedAt = Date.now();
 
-  appendDeclSyncHistoryEntry({
+  const historyEntries = appendDeclSyncHistoryEntry({
 
     runAt: runAtIso,
 
@@ -22442,13 +22484,17 @@ async function runEcusSync({
 
   }, { actor });
 
+  const latestHistoryEntry = Array.isArray(historyEntries) ? historyEntries[0] : null;
+
+  const actorLabel = actor || 'Hệ thống';
+
   pushNotification({
 
     severity: 'info',
 
     title: 'Đồng bộ ECUS hoàn tất',
 
-    message:  `+${totalInserted} / cap nhat ${updatedExisting} / ${skipLabel} (tong ${totalStored})`,
+    message: `${actorLabel} đã đồng bộ ECUS: +${insertedLabel} mới, cập nhật ${updatedLabel}, ${skipLabel}, tổng lưu ${storedLabel}.`,
 
     meta: {
 
@@ -22475,6 +22521,12 @@ async function runEcusSync({
       includeTaxCodes: Array.from(includeSet),
 
       excludeTaxCodes: Array.from(excludeSet),
+
+      historyId: latestHistoryEntry?.id || null,
+
+      runAt: latestHistoryEntry?.runAt || runAtIso,
+
+      durationMs: latestHistoryEntry?.durationMs ?? null,
 
     },
 
@@ -22564,6 +22616,36 @@ async function runEcusSyncWithErrorHandling(params) {
 
     });
 
+    const historyEntries = appendDeclSyncHistoryEntry({
+
+      runAt: new Date().toISOString(),
+
+      actor: params?.actor || 'system',
+
+      reason: params?.reason || 'manual',
+
+      status: 'error',
+
+      fetched: 0,
+
+      inserted: 0,
+
+      updated: 0,
+
+      skipped: 0,
+
+      locked: 0,
+
+      stored: 0,
+
+      meta: { error: err?.message || 'Không thể đồng bộ dữ liệu từ ECUS.' },
+
+    }, { actor: params?.actor || 'system', source: 'decl-sync-history' });
+
+    const latestHistoryEntry = Array.isArray(historyEntries) ? historyEntries[0] : null;
+
+    const errorActorLabel = params?.actor || 'Hệ thống';
+
     pushNotification({
 
       type: 'ecus.sync.error',
@@ -22572,9 +22654,21 @@ async function runEcusSyncWithErrorHandling(params) {
 
       title: 'Đồng bộ ECUS thất bại',
 
-      message: err?.message || 'Không thể đồng bộ dữ liệu từ ECUS.',
+      message: `${errorActorLabel} gặp lỗi khi đồng bộ ECUS: ${err?.message || 'Không thể đồng bộ dữ liệu từ ECUS.'}`,
 
-      meta: { actor: params?.actor || 'system', reason: params?.reason || 'unknown' },
+      meta: {
+
+        actor: params?.actor || 'system',
+
+        reason: params?.reason || 'unknown',
+
+        historyId: latestHistoryEntry?.id || null,
+
+        runAt: latestHistoryEntry?.runAt || null,
+
+        error: err?.message || 'Không thể đồng bộ dữ liệu từ ECUS.',
+
+      },
 
     });
 

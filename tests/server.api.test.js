@@ -3468,6 +3468,136 @@ describe('Data health summary API', () => {
 
   });
 
+
+  it('trả về lịch sử đồng bộ ECUS gần nhất', async () => {
+
+    const adminAgent = request.agent(app);
+
+    const loginRes = await adminAgent
+
+      .post('/api/auth/login')
+
+      .send({ username: 'admin', password: 'admin123' });
+
+    expect(loginRes.status).toBe(200);
+
+
+    const historyEntries = [
+
+      {
+
+        id: 'sync-002',
+
+        runAt: '2024-05-12T00:00:00.000Z',
+
+        actor: 'admin',
+
+        reason: 'manual',
+
+        status: 'success',
+
+        fetched: 15,
+
+        inserted: 4,
+
+        updated: 3,
+
+        skipped: 2,
+
+        locked: 1,
+
+        stored: 100,
+
+        conflictCount: 1,
+
+        hasConflicts: true,
+
+        durationMs: 1500,
+
+        range: { from: '2024-05-01', to: '2024-05-11' },
+
+      },
+
+      {
+
+        id: 'sync-001',
+
+        runAt: '2024-05-10T00:00:00.000Z',
+
+        actor: 'staff',
+
+        status: 'error',
+
+        inserted: 0,
+
+        updated: 0,
+
+        skipped: 0,
+
+        locked: 0,
+
+        stored: 80,
+
+        durationMs: 0,
+
+      },
+
+    ];
+
+    const putRes = await adminAgent.put('/api/storage/decl_sync_history_v1').send({ value: historyEntries });
+
+    expect(putRes.status).toBe(200);
+
+
+    const storedHistoryRes = await adminAgent.get('/api/storage/decl_sync_history_v1');
+
+    expect(storedHistoryRes.status).toBe(200);
+
+    expect(Array.isArray(storedHistoryRes.body?.value)).toBe(true);
+
+    expect(storedHistoryRes.body.value[0]?.id).toBe('sync-002');
+
+
+    const res = await adminAgent.get('/api/data-health/summary');
+
+    expect(res.status).toBe(200);
+
+    const history = res.body.summary?.sync?.history;
+
+    expect(Array.isArray(history)).toBe(true);
+
+    expect(history.length).toBeGreaterThan(0);
+
+    expect(history[0]).toMatchObject({
+
+      actor: 'admin',
+
+      status: 'success',
+
+      inserted: 4,
+
+      updated: 3,
+
+      skipped: 2,
+
+      locked: 1,
+
+      stored: 100,
+
+      conflictCount: 1,
+
+      hasConflicts: true,
+
+      durationMs: 1500,
+
+    });
+
+    expect(history[0].runAt).toBe('2024-05-12T00:00:00.000Z');
+
+    expect(history[0].range).toMatchObject({ from: '2024-05-01', to: '2024-05-11' });
+
+  });
+
 });
 
 

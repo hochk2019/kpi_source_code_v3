@@ -654,7 +654,11 @@ describe('storageClient remote đồng bộ lại khi server lên trễ', () => 
 
     await Promise.resolve();
 
+    await vi.advanceTimersByTimeAsync(1000);
+
     await Promise.resolve();
+
+    await vi.advanceTimersByTimeAsync(2000);
 
     await Promise.resolve();
 
@@ -682,9 +686,13 @@ describe('storageClient remote đồng bộ lại khi server lên trễ', () => 
 
     expect(statusAfterFailure.retryDelayMs).toBe(expectedDelay);
 
-    expect(storageWrites).toHaveLength(1);
+    expect(storageWrites.length).toBeGreaterThanOrEqual(3);
 
-    expect(setTimeoutSpy).toHaveBeenCalledTimes(1);
+    const timerDelays = setTimeoutSpy.mock.calls.map((call) => call?.[1]);
+
+    const scheduleRetryCalls = timerDelays.filter((delay) => (delay ?? 0) >= statusAfterFailure.retryDelayMs);
+
+    expect(scheduleRetryCalls.length).toBe(1);
 
 
 
@@ -696,7 +704,7 @@ describe('storageClient remote đồng bộ lại khi server lên trễ', () => 
 
 
 
-    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(fetchMock).toHaveBeenCalledTimes(5);
 
     const afterRetry = getSyncStatus();
 
@@ -710,6 +718,90 @@ describe('storageClient remote đồng bộ lại khi server lên trễ', () => 
 
     expect(afterRetry.retryDelayMs).toBe(expectedAfterRetryDelay);
 
+  });
+
+  it('retry sendWrite với backoff khi gặp lỗi mạng tạm thời', async () => {
+    const storageWrites = [];
+    let writeAttempts = 0;
+    const fetchMock = vi.fn(async (input, init) => {
+      const method = (init?.method || 'GET').toUpperCase();
+      const url = typeof input === 'string' ? input : input?.url ?? '';
+      if (url.includes('/api/bootstrap')) {
+        return createBootstrapResponse({ decl_rows_v1: '[]' });
+      }
+      if (url.includes('/api/storage/') && method === 'PUT') {
+        writeAttempts += 1;
+        if (writeAttempts < 3) {
+          throw new Error('offline');
+        }
+        storageWrites.push({ url, body: init?.body });
+        return { ok: true, json: async () => ({ ok: true }) };
+      }
+      return { ok: true, json: async () => ({ ok: true }) };
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const initial = await initSharedStorage({ baseUrl: '' });
+    expect(initial).toBe(true);
+
+    const payload = JSON.stringify([{ so_tk: 'TK-RETRY-SUCCESS' }]);
+    sharedSetItem('decl_rows_v1', payload);
+
+    await Promise.resolve();
+    expect(writeAttempts).toBe(1);
+
+    await vi.advanceTimersByTimeAsync(1000);
+    await Promise.resolve();
+    expect(writeAttempts).toBe(2);
+
+    await vi.advanceTimersByTimeAsync(2000);
+    await Promise.resolve();
+    expect(writeAttempts).toBe(3);
+
+    expect(storageWrites).toHaveLength(1);
+    const saved = JSON.parse(storageWrites[0].body);
+    expect(saved.value).toBe(payload);
+
+    const status = getSyncStatus();
+    expect(status.pendingWrites).toBe(0);
+    expect(status.waitingForBackend).toBe(false);
+  });
+
+  it('ghi log thân thiện khi sendWrite thất bại sau nhiều lần thử', async () => {
+    const fetchMock = vi.fn(async (input, init) => {
+      const method = (init?.method || 'GET').toUpperCase();
+      const url = typeof input === 'string' ? input : input?.url ?? '';
+      if (url.includes('/api/bootstrap')) {
+        return createBootstrapResponse({ decl_rows_v1: '[]' });
+      }
+      if (url.includes('/api/storage/') && method === 'PUT') {
+        return { ok: false, status: 500, statusText: 'Internal Server Error' };
+      }
+      return { ok: true, json: async () => ({ ok: true }) };
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const initial = await initSharedStorage({ baseUrl: '' });
+    expect(initial).toBe(true);
+
+    const payload = JSON.stringify([{ so_tk: 'TK-RETRY-FAIL' }]);
+    sharedSetItem('decl_rows_v1', payload);
+
+    await Promise.resolve();
+    await vi.advanceTimersByTimeAsync(1000);
+    await Promise.resolve();
+    await vi.advanceTimersByTimeAsync(2000);
+    await Promise.resolve();
+
+    const status = getSyncStatus();
+    expect(status.waitingForBackend).toBe(true);
+    expect(status.pendingWrites).toBe(1);
+    expect(status.lastError).toContain('Không thể đồng bộ khóa "decl_rows_v1" lên máy chủ');
+    expect(status.lastError).toContain('Hệ thống sẽ tự thử lại');
+    expect(status.errorLog[0].message).toBe(status.lastError);
+    expect(status.errorLog[0].attempts).toBeGreaterThanOrEqual(3);
+
+    vi.clearAllTimers();
   });
 
 
@@ -812,6 +904,8 @@ describe('storageClient giới hạn dung lượng khi backend trả về 413', 
 
     vi.spyOn(console, 'error').mockImplementation(() => {});
 
+    vi.useFakeTimers();
+
     const storageModule = await import('@/lib/storageClient.js');
 
     setSharedItem = storageModule.setItem;
@@ -839,6 +933,8 @@ describe('storageClient giới hạn dung lượng khi backend trả về 413', 
     vi.unstubAllGlobals();
 
     clearCache?.();
+
+    vi.useRealTimers();
 
   });
 
@@ -878,15 +974,27 @@ describe('storageClient giới hạn dung lượng khi backend trả về 413', 
 
     setSharedItem('decl_rows_v1', 'test-data');
 
-    await waitSharedWrites({ timeoutMs: 50 });
+    const waitPromise = waitSharedWrites({ timeoutMs: 50 });
 
     await Promise.resolve();
+
+    await vi.advanceTimersByTimeAsync(1000);
+
+    await Promise.resolve();
+
+    await vi.advanceTimersByTimeAsync(2000);
+
+    await Promise.resolve();
+
+    await waitPromise;
 
     const status = getStatus();
 
     expect(status.lastError).toContain(storageLimitMessage);
 
     expect(status.waitingForBackend).toBe(true);
+
+    vi.clearAllTimers();
 
   });
 
