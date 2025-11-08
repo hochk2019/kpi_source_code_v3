@@ -46,7 +46,10 @@ This backlog liệt kê các hạng mục cải thiện trải nghiệm người
   - [x] Gom nhóm bản ghi lịch sử theo ngày/MST để dựng preview và modal chi tiết. (timeline lấy từ `getMSTHistoryEntries`)
   - [x] Hiển thị danh sách dọc với badge theo thao tác (create/update/delete) và chi tiết giá trị trước/sau. (sử dụng HistoryTimelineGroups)
   - [x] Kết nối nút tải lại, giới hạn preview và mở dialog xem toàn bộ khi cần. (áp dụng chung bộ lọc ngày + thao tác hiện có)
-- [ ] Cung cấp chế độ xem rút gọn cho trưởng nhóm với quick filters (assigned/pending, theo nhóm).
+- [x] Cung cấp chế độ xem rút gọn cho trưởng nhóm với quick filters (assigned/pending, theo nhóm). (đã thêm toggle chế độ trưởng nhóm với quick filters và tóm tắt trạng thái)
+  - [x] Bổ sung toggle "Chế độ trưởng nhóm" kèm mô tả và thống kê nhanh. (đã render thẻ cảnh báo rút gọn ở đầu trang MSTAssignment)
+  - [x] Hiển thị bộ lọc nhanh trạng thái Assigned/Pending và danh sách tổ đội để chọn nhanh. (đã thêm các nút trạng thái và select tổ dựa trên roster)
+  - [x] Áp dụng bộ lọc vào danh sách chính, thu gọn cột hiển thị cho chế độ này. (đã kết hợp bộ lọc và ẩn cột ngày khi chế độ bật)
 - [ ] Cảnh báo ngay khi nhập tên công ty vượt ngưỡng dài, sai định dạng hoặc chứa ký tự không hợp lệ.
 - [ ] Cho phép export báo cáo phân bổ MST ra CSV/XLSX với metadata (người gán, ngày hiệu lực).
 

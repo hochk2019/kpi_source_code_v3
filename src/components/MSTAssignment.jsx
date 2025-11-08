@@ -104,6 +104,19 @@ const STATUS_FILTER_MAP = new Map([
   ["status:pending", MST_ASSIGNMENT_STATUS.PENDING],
 ]);
 
+const LEAD_VIEW_VISIBLE_COLUMNS = new Set([
+  "mst",
+  "company",
+  "person_import",
+  "person_export",
+  "status",
+  "actions",
+]);
+
+const LEAD_TEAM_ALL = "__all__";
+
+const normalizeTeamKey = (value = "") => normalizeName(normalizeStr(value || ""));
+
 export const shouldWrapCompanyName = (value = "") => {
   if (value == null) {
     return false;
@@ -2181,6 +2194,21 @@ export function PageSizeControl({
   );
 }
 
+const QuickFilterPill = ({ active, children, onClick }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    className={clsx(
+      "rounded-full border px-3 py-1 text-xs font-semibold transition",
+      active
+        ? "border-amber-600 bg-amber-600 text-white shadow-sm"
+        : "border-amber-200 bg-white text-amber-700 hover:border-amber-300 hover:bg-amber-100"
+    )}
+  >
+    {children}
+  </button>
+);
+
 export default function MSTAssignment({
   canEdit = true,
   currentUser = null,
@@ -2240,6 +2268,50 @@ export default function MSTAssignment({
   const [rosterSnapshot, setRosterSnapshot] = useState(() => getTeamRoster());
 
   const rosterTeams = useMemo(() => buildRosterTeams(rosterSnapshot), [rosterSnapshot]);
+  const [leadViewEnabled, setLeadViewEnabled] = useState(false);
+  const [leadStatusQuick, setLeadStatusQuick] = useState("all");
+  const [leadTeamQuick, setLeadTeamQuick] = useState(LEAD_TEAM_ALL);
+
+  const leadStatusFilter = useMemo(() => {
+    if (!leadViewEnabled) {
+      return null;
+    }
+    if (leadStatusQuick === "assigned") {
+      return MST_ASSIGNMENT_STATUS.ASSIGNED;
+    }
+    if (leadStatusQuick === "pending") {
+      return MST_ASSIGNMENT_STATUS.PENDING;
+    }
+    return null;
+  }, [leadStatusQuick, leadViewEnabled]);
+
+  const normalizedLeadTeamFilter = useMemo(() => {
+    if (!leadViewEnabled) {
+      return "";
+    }
+    if (!leadTeamQuick || leadTeamQuick === LEAD_TEAM_ALL) {
+      return "";
+    }
+    return leadTeamQuick;
+  }, [leadTeamQuick, leadViewEnabled]);
+
+  const leadTeamName = useMemo(() => {
+    if (!leadTeamQuick || leadTeamQuick === LEAD_TEAM_ALL) {
+      return "Tất cả tổ";
+    }
+    const matched = rosterTeams.find((team) => team.normalized === leadTeamQuick);
+    return matched?.name || "Tổ đang chọn";
+  }, [leadTeamQuick, rosterTeams]);
+
+  useEffect(() => {
+    if (leadTeamQuick === LEAD_TEAM_ALL) {
+      return;
+    }
+    const exists = rosterTeams.some((team) => team.normalized === leadTeamQuick);
+    if (!exists) {
+      setLeadTeamQuick(LEAD_TEAM_ALL);
+    }
+  }, [leadTeamQuick, rosterTeams]);
 
   useEffect(() => {
     if (!quickLookup || typeof quickLookup !== "object") {
@@ -2833,11 +2905,23 @@ export default function MSTAssignment({
 
       if (option.required) return true;
 
+      if (leadViewEnabled) {
+
+        if (!LEAD_VIEW_VISIBLE_COLUMNS.has(key)) {
+
+          return false;
+
+        }
+
+        return true;
+
+      }
+
       return visibleColumns[key] !== false;
 
     },
 
-    [visibleColumns]
+    [leadViewEnabled, visibleColumns]
 
   );
 
@@ -2894,8 +2978,6 @@ export default function MSTAssignment({
     addFavorite: addQuickFavorite,
 
     removeFavorite: removeQuickFavorite,
-
-    clearType: clearQuickFavorite,
 
   } = useMSTQuickFilters();
 
@@ -3763,6 +3845,68 @@ export default function MSTAssignment({
 
 
 
+  const leadTeamPool = useMemo(() => {
+
+    if (!leadViewEnabled) {
+
+      return rows;
+
+    }
+
+    if (!normalizedLeadTeamFilter) {
+
+      return rows;
+
+    }
+
+    return rows.filter((row) => normalizeTeamKey(row?.team || "") === normalizedLeadTeamFilter);
+
+  }, [leadViewEnabled, normalizedLeadTeamFilter, rows]);
+
+
+
+  const leadSummary = useMemo(() => {
+
+    if (!leadViewEnabled) {
+
+      return { total: 0, assigned: 0, pending: 0 };
+
+    }
+
+    let assigned = 0;
+
+    let pending = 0;
+
+    leadTeamPool.forEach((row) => {
+
+      const status = computeStoredStatus(row);
+
+      if (status === MST_ASSIGNMENT_STATUS.ASSIGNED) {
+
+        assigned += 1;
+
+      } else {
+
+        pending += 1;
+
+      }
+
+    });
+
+    return {
+
+      total: leadTeamPool.length,
+
+      assigned,
+
+      pending,
+
+    };
+
+  }, [leadTeamPool, leadViewEnabled]);
+
+
+
   /** Filter + phân trang */
 
   const filtered = useMemo(() => {
@@ -3789,33 +3933,25 @@ export default function MSTAssignment({
 
       }
 
-      if (activeStatusFilter) {
+      const rowStatus = computeStoredStatus(row);
 
-        const hasImport = Boolean(normalizeStr(row.person_import || ""));
+      if (activeStatusFilter && rowStatus !== activeStatusFilter) {
 
-        const hasExport = Boolean(normalizeStr(row.person_export || ""));
+        return false;
 
-        if (
+      }
 
-          activeStatusFilter === MST_ASSIGNMENT_STATUS.ASSIGNED &&
+      if (leadStatusFilter && rowStatus !== leadStatusFilter) {
 
-          (!hasImport || !hasExport)
+        return false;
 
-        ) {
+      }
 
-          return false;
+      if (leadViewEnabled && normalizedLeadTeamFilter) {
 
-        }
+        const rowTeamKey = normalizeTeamKey(row.team || "");
 
-        if (
-
-          activeStatusFilter === MST_ASSIGNMENT_STATUS.PENDING &&
-
-          hasImport &&
-
-          hasExport
-
-        ) {
+        if (rowTeamKey !== normalizedLeadTeamFilter) {
 
           return false;
 
@@ -3900,6 +4036,12 @@ export default function MSTAssignment({
     historyFilteredRowKeys,
 
     activeStatusFilter,
+
+    leadStatusFilter,
+
+    leadViewEnabled,
+
+    normalizedLeadTeamFilter,
 
     recentlyImportedKeys,
 
@@ -4249,7 +4391,7 @@ export default function MSTAssignment({
     [groupByMST, aggregatedByMST, filtered]
   );
 
-  const {
+  const { 
     page,
     pageSize,
     pageCount: totalPages,
@@ -4263,6 +4405,12 @@ export default function MSTAssignment({
     initialPageSize,
     minPageSize: MIN_PAGE_SIZE,
   });
+
+  useEffect(() => {
+
+    setPage(1);
+
+  }, [leadStatusFilter, leadViewEnabled, normalizedLeadTeamFilter, setPage]);
 
   const timelineGroupsByMST = useMemo(() => {
     const map = new Map();
@@ -4363,6 +4511,12 @@ export default function MSTAssignment({
     selectedFileName,
 
     historyFilter,
+
+    leadViewEnabled,
+
+    leadStatusQuick,
+
+    leadTeamQuick,
 
   ]);
 
@@ -5055,7 +5209,15 @@ export default function MSTAssignment({
 
   return (
 
-    <div ref={rootRef} className="p-6 max-w-6xl mx-auto">
+    <div
+
+      ref={rootRef}
+
+      className="p-6 max-w-6xl mx-auto"
+
+      data-lead-view={leadViewEnabled ? "true" : "false"}
+
+    >
 
       {isReadOnly && (
 
@@ -5318,6 +5480,150 @@ export default function MSTAssignment({
         </div>
 
       ) : null}
+
+      <div className="mb-4 rounded border border-amber-200 bg-amber-50 p-4 text-amber-900 shadow-sm">
+
+        <div className="flex flex-wrap items-start justify-between gap-3">
+
+          <div className="max-w-2xl space-y-1">
+
+            <h2 className="text-sm font-semibold">Chế độ trưởng nhóm</h2>
+
+            <p className="text-xs text-amber-700">
+
+              Bật để xem nhanh trạng thái phân bổ theo tổ cùng bộ lọc gọn nhẹ.
+
+            </p>
+
+            {leadViewEnabled ? (
+
+              <div className="text-xs text-amber-800">
+
+                Tổng: <span className="font-semibold text-amber-900">{leadSummary.total}</span> • Đã gán: <span className="font-semibold text-emerald-700">{leadSummary.assigned}</span> • Chờ gán: <span className="font-semibold text-red-600">{leadSummary.pending}</span>
+
+                {leadTeamQuick !== LEAD_TEAM_ALL ? ` • Tổ đang chọn: ${leadTeamName}` : ""}
+
+              </div>
+
+            ) : null}
+
+          </div>
+
+          <label className="inline-flex items-center gap-2 text-sm font-medium text-amber-800">
+
+            <input
+
+              type="checkbox"
+
+              className="h-4 w-4 rounded border-amber-400 text-amber-600 focus:ring-amber-500"
+
+              checked={leadViewEnabled}
+
+              onChange={(event) => {
+
+                const next = event.target.checked;
+
+                setLeadViewEnabled(next);
+
+                if (!next) {
+
+                  setLeadStatusQuick("all");
+
+                  setLeadTeamQuick(LEAD_TEAM_ALL);
+
+                }
+
+              }}
+
+            />
+
+            Bật chế độ rút gọn
+
+          </label>
+
+        </div>
+
+        {leadViewEnabled ? (
+
+          <div className="mt-3 space-y-3">
+
+            <div className="flex flex-wrap items-center gap-2">
+
+              <span className="text-xs font-semibold uppercase text-amber-700">Trạng thái</span>
+
+              <QuickFilterPill active={leadStatusQuick === "all"} onClick={() => setLeadStatusQuick("all")}>
+
+                Tất cả ({leadSummary.total})
+
+              </QuickFilterPill>
+
+              <QuickFilterPill active={leadStatusQuick === "assigned"} onClick={() => setLeadStatusQuick("assigned")}>
+
+                Đã gán ({leadSummary.assigned})
+
+              </QuickFilterPill>
+
+              <QuickFilterPill active={leadStatusQuick === "pending"} onClick={() => setLeadStatusQuick("pending")}>
+
+                Chờ gán ({leadSummary.pending})
+
+              </QuickFilterPill>
+
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+
+              <span className="text-xs font-semibold uppercase text-amber-700">Tổ đội</span>
+
+              <select
+
+                value={leadTeamQuick}
+
+                onChange={(event) => setLeadTeamQuick(event.target.value || LEAD_TEAM_ALL)}
+
+                className="min-w-[180px] rounded border border-amber-200 bg-white px-2 py-1 text-sm text-amber-900 shadow-sm focus:border-amber-400 focus:outline-none focus:ring-amber-400"
+
+              >
+
+                <option value={LEAD_TEAM_ALL}>Tất cả tổ</option>
+
+                {rosterTeams.map((team) => (
+
+                  <option key={team.id} value={team.normalized}>
+
+                    {team.name}
+
+                  </option>
+
+                ))}
+
+              </select>
+
+              {leadTeamQuick !== LEAD_TEAM_ALL ? (
+
+                <button
+
+                  type="button"
+
+                  className="text-xs font-medium text-amber-600 underline hover:text-amber-800"
+
+                  onClick={() => setLeadTeamQuick(LEAD_TEAM_ALL)}
+
+                >
+
+                  Xóa chọn
+
+                </button>
+
+              ) : null}
+
+            </div>
+
+          </div>
+
+        ) : null}
+
+      </div>
 
       <div className="flex flex-wrap items-end gap-2 mb-3">
 
@@ -6285,7 +6591,19 @@ export default function MSTAssignment({
 
       <div className="border rounded overflow-x-auto">
 
-        <table className="min-w-max table-auto text-sm">
+        <table
+
+          className={clsx(
+
+            "min-w-max table-auto",
+
+            leadViewEnabled ? "text-xs" : "text-sm"
+
+          )}
+
+          data-condensed={leadViewEnabled ? "true" : "false"}
+
+        >
 
           <thead className="bg-gray-50">
 
