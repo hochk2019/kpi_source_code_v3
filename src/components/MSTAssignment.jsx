@@ -59,7 +59,7 @@ import {
 
 } from "@/components/ui/command.jsx";
 
-import { Check, ChevronsUpDown, CircleX, Plus, LogIn, LogOut } from "lucide-react";
+import { Check, ChevronsUpDown, CircleX, Plus, LogIn, LogOut, AlertTriangle } from "lucide-react";
 
 
 
@@ -82,6 +82,10 @@ const normalize = (s = "") =>
     .toLowerCase();
 
 export const COMPANY_NAME_WRAP_THRESHOLD = 25;
+export const COMPANY_NAME_MAX_LENGTH = 120;
+
+const COMPANY_NAME_DISALLOWED_CHAR_REGEX = /[^\p{L}\p{N}\s&.,()'/-]/gu;
+const COMPANY_NAME_REQUIRED_CHAR_PATTERN = /\p{L}/u;
 
 const HISTORY_ACTION_TYPES = new Set(["create", "update", "delete"]);
 
@@ -143,6 +147,58 @@ export const sanitizeCompanyNameInput = (value = "") => {
   }
 
   return value.replace(/\r?\n|\r/g, " ");
+};
+
+export const getCompanyNameValidation = (value = "") => {
+  const safeValue = value == null ? "" : value.toString();
+  const trimmed = safeValue.trim();
+  const characters = Array.from(trimmed);
+  const warnings = [];
+
+  if (!trimmed) {
+    return {
+      value: safeValue,
+      trimmed,
+      characterCount: 0,
+      warnings,
+      hasWarnings: false,
+    };
+  }
+
+  const characterCount = characters.length;
+
+  if (characterCount > COMPANY_NAME_MAX_LENGTH) {
+    warnings.push({
+      type: "length",
+      message: `Tên công ty đang dài ${characterCount} ký tự (tối đa ${COMPANY_NAME_MAX_LENGTH}).`,
+    });
+  }
+
+  const invalidCharacters = trimmed.match(COMPANY_NAME_DISALLOWED_CHAR_REGEX);
+  if (invalidCharacters && invalidCharacters.length > 0) {
+    const uniqueCharacters = Array.from(new Set(invalidCharacters));
+    warnings.push({
+      type: "invalid-characters",
+      message: `Tên công ty chứa ký tự không hợp lệ: ${uniqueCharacters
+        .map((char) => `"${char}"`)
+        .join(", ")}.`,
+    });
+  }
+
+  if (!COMPANY_NAME_REQUIRED_CHAR_PATTERN.test(trimmed)) {
+    warnings.push({
+      type: "format",
+      message: "Tên công ty cần chứa ít nhất một ký tự chữ.",
+    });
+  }
+
+  return {
+    value: safeValue,
+    trimmed,
+    characterCount,
+    warnings,
+    hasWarnings: warnings.length > 0,
+  };
 };
 
 
@@ -1844,11 +1900,36 @@ const StageTimelineGroups = ({ groups = [] }) => {
 
 
 
+const CompanyNameValidationMessages = ({ warnings }) => {
+  if (!warnings || warnings.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="flex flex-col gap-1 text-xs text-amber-700" role="status" aria-live="polite">
+      {warnings.map((warning, index) => (
+        <div
+          key={`${warning.type}-${index}`}
+          className="flex items-start gap-1"
+          data-company-warning-type={warning.type}
+        >
+          <AlertTriangle className="mt-0.5 size-3 shrink-0" aria-hidden="true" />
+          <span>{warning.message}</span>
+        </div>
+      ))}
+    </div>
+  );
+};
+
 export function CompanyNameCell({ value, isReadOnly, onChange, placeholder = "Tên công ty" }) {
   const safeValue = value == null ? "" : value.toString();
   const trimmedValue = safeValue.trim();
   const shouldWrap = shouldWrapCompanyName(safeValue);
   const textareaRef = useRef(null);
+  const { warnings, hasWarnings } = useMemo(
+    () => getCompanyNameValidation(safeValue),
+    [safeValue]
+  );
 
   const adjustTextareaHeight = useCallback(
     (element, nextValue) => {
@@ -1910,20 +1991,27 @@ export function CompanyNameCell({ value, isReadOnly, onChange, placeholder = "T�
   };
 
   return (
-    <textarea
-      ref={textareaRef}
-      value={safeValue}
-      onChange={handleChange}
-      className={clsx(
-        'border rounded px-2 py-1 w-full resize-y whitespace-normal break-words',
-        shouldWrap ? 'leading-snug min-h-[2.5rem]' : 'leading-normal min-h-[2.25rem]'
-      )}
-      placeholder={placeholder}
-      title={trimmedValue ? safeValue : undefined}
-      spellCheck={false}
-      data-company-wrap={shouldWrap ? 'wrapped' : 'single'}
-      style={{ wordBreak: 'break-word' }}
-    />
+    <div className="flex flex-col gap-1">
+      <textarea
+        ref={textareaRef}
+        value={safeValue}
+        onChange={handleChange}
+        className={clsx(
+          'border rounded px-2 py-1 w-full resize-y whitespace-normal break-words focus:outline-none focus:ring-2',
+          shouldWrap ? 'leading-snug min-h-[2.5rem]' : 'leading-normal min-h-[2.25rem]',
+          hasWarnings
+            ? 'border-amber-500/70 focus:border-amber-500 focus:ring-amber-200'
+            : 'border-gray-300 focus:border-blue-500 focus:ring-blue-200'
+        )}
+        placeholder={placeholder}
+        title={trimmedValue ? safeValue : undefined}
+        spellCheck={false}
+        data-company-wrap={shouldWrap ? 'wrapped' : 'single'}
+        aria-invalid={hasWarnings || undefined}
+        style={{ wordBreak: 'break-word' }}
+      />
+      <CompanyNameValidationMessages warnings={warnings} />
+    </div>
   );
 }
 
@@ -2534,22 +2622,18 @@ export default function MSTAssignment({
   const [showAddForm, setShowAddForm] = useState(false);
 
   const [draft, setDraft] = useState({
-
     mst: "",
-
     company: "",
-
     person_import: "",
-
     person_export: "",
-
     team: "",
-
     effective_from: "",
-
     effective_to: "",
-
   });
+  const draftCompanyValidation = useMemo(
+    () => getCompanyNameValidation(draft.company),
+    [draft.company]
+  );
 
   const canUseLocalStorage =
 
@@ -6249,15 +6333,23 @@ export default function MSTAssignment({
 
                 value={draft.company}
 
-                onChange={handleDraftChange("company")}
+                onChange={handleDraftChange("company", sanitizeCompanyNameInput)}
 
-                className="border rounded px-2 py-1"
+                className={clsx(
+                  "border rounded px-2 py-1 focus:outline-none focus:ring-2",
+                  draftCompanyValidation.hasWarnings
+                    ? "border-amber-500/70 focus:border-amber-500 focus:ring-amber-200"
+                    : "border-gray-300 focus:border-blue-500 focus:ring-blue-200"
+                )}
+                aria-invalid={draftCompanyValidation.hasWarnings || undefined}
 
                 placeholder="Tên công ty"
 
                 data-tooltip="Tên doanh nghiệp tương ứng với MST"
 
               />
+
+              <CompanyNameValidationMessages warnings={draftCompanyValidation.warnings} />
 
             </label>
 

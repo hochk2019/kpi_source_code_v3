@@ -50,7 +50,10 @@ This backlog liệt kê các hạng mục cải thiện trải nghiệm người
   - [x] Bổ sung toggle "Chế độ trưởng nhóm" kèm mô tả và thống kê nhanh. (đã render thẻ cảnh báo rút gọn ở đầu trang MSTAssignment)
   - [x] Hiển thị bộ lọc nhanh trạng thái Assigned/Pending và danh sách tổ đội để chọn nhanh. (đã thêm các nút trạng thái và select tổ dựa trên roster)
   - [x] Áp dụng bộ lọc vào danh sách chính, thu gọn cột hiển thị cho chế độ này. (đã kết hợp bộ lọc và ẩn cột ngày khi chế độ bật)
-- [ ] Cảnh báo ngay khi nhập tên công ty vượt ngưỡng dài, sai định dạng hoặc chứa ký tự không hợp lệ.
+- [x] Cảnh báo ngay khi nhập tên công ty vượt ngưỡng dài, sai định dạng hoặc chứa ký tự không hợp lệ. (đã thêm kiểm tra chia sẻ và cảnh báo trực tiếp trong form/bảng)
+  - [x] Chuẩn hóa hàm kiểm tra tên công ty (độ dài, ký tự hợp lệ, ký tự chữ) để tái sử dụng. (đã thêm `getCompanyNameValidation` trong `MSTAssignment.jsx`)
+  - [x] Hiển thị cảnh báo real-time cho trường tên công ty ở form thêm mới. (đã đổi input dùng cảnh báo và border nhấn mạnh)
+  - [x] Cảnh báo ngay trong ô chỉnh sửa tên công ty của bảng gán MST. (đã bọc `CompanyNameCell` hiển thị thông báo và trạng thái `aria-invalid`)
 - [ ] Cho phép export báo cáo phân bổ MST ra CSV/XLSX với metadata (người gán, ngày hiệu lực).
 
 ## 5. Navigation & notifications
