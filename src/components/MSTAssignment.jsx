@@ -673,9 +673,166 @@ const computeStatusDisplay = (row) => {
 
 
 const hasAssignee = (row) =>
-
   Boolean(normalizeStr(row?.person_import || "") || normalizeStr(row?.person_export || ""));
 
+
+const formatDateTimeForExport = (value) => {
+  try {
+    const date = value instanceof Date ? value : new Date(value);
+    if (Number.isNaN(date.getTime())) {
+      return "";
+    }
+    return date.toLocaleString("vi-VN", {
+      dateStyle: "medium",
+      timeStyle: "short",
+    });
+  } catch (error) {
+    console.warn("formatDateTimeForExport", error);
+    return "";
+  }
+};
+
+const summarizeEffectiveRange = (rows = []) => {
+  let minFrom = null;
+  let maxTo = null;
+  let hasOpenEnded = false;
+
+  rows.forEach((row) => {
+    const from = row?.effective_from ? row.effective_from : "";
+    const to = row?.effective_to ? row.effective_to : "";
+
+    if (from) {
+      if (!minFrom || from < minFrom) {
+        minFrom = from;
+      }
+    }
+
+    if (to) {
+      if (!maxTo || to > maxTo) {
+        maxTo = to;
+      }
+    } else if (hasAssignee(row)) {
+      hasOpenEnded = true;
+    }
+  });
+
+  if (!minFrom && !maxTo) {
+    return "Chưa có dữ liệu ngày hiệu lực";
+  }
+
+  const fromLabel = minFrom ? formatISODate(minFrom) : "Chưa đặt";
+  let toLabel = "";
+
+  if (hasOpenEnded) {
+    toLabel = "Hiện tại";
+  } else if (maxTo) {
+    toLabel = formatISODate(maxTo);
+  }
+
+  if (!toLabel) {
+    return fromLabel;
+  }
+
+  return `${fromLabel} → ${toLabel}`;
+};
+
+const summarizeAssignees = (rows = []) => {
+  const assignees = new Set();
+
+  rows.forEach((row) => {
+    const importName = String(row?.person_import || "").trim();
+    const exportName = String(row?.person_export || "").trim();
+
+    if (importName) {
+      assignees.add(importName);
+    }
+
+    if (exportName) {
+      assignees.add(exportName);
+    }
+  });
+
+  if (!assignees.size) {
+    return "Chưa gán nhân sự";
+  }
+
+  const sorted = Array.from(assignees).sort((a, b) =>
+    a.localeCompare(b, "vi", { sensitivity: "base" })
+  );
+
+  if (sorted.length <= 6) {
+    return sorted.join(", ");
+  }
+
+  const preview = sorted.slice(0, 6).join(", ");
+  return `${preview}… (+${sorted.length - 6} người)`;
+};
+
+const buildExportMetadataEntries = ({
+  scopeLabel,
+  totalCount,
+  filteredCount,
+  search,
+  staffFilter,
+  historyFilter,
+  leadViewEnabled,
+  leadTeamName,
+  assigneeSummary,
+  effectiveRange,
+  actorLabel,
+  generatedAt,
+}) => {
+  const entries = [];
+
+  entries.push(["Phạm vi xuất", scopeLabel]);
+  entries.push(["Số dòng", `${filteredCount} / ${totalCount}`]);
+  entries.push(["Thời gian xuất", formatDateTimeForExport(generatedAt)]);
+  entries.push(["Thực hiện bởi", actorLabel || "Không xác định"]);
+
+  entries.push(["Tìm kiếm", search ? search : "(Không)"]);
+  entries.push(["Bộ lọc nhân sự", staffFilter ? staffFilter : "(Không)"]);
+
+  if (leadViewEnabled) {
+    entries.push(["Chế độ trưởng nhóm", leadTeamName || "Đang bật"]);
+  }
+
+  if (historyFilter && typeof historyFilter === "object") {
+    const { from, to, type } = historyFilter;
+    if (from || to || (type && type !== "all")) {
+      entries.push([
+        "Bộ lọc lịch sử",
+        [
+          type && type !== "all" ? `Loại: ${type}` : null,
+          from ? `Từ: ${from}` : null,
+          to ? `Đến: ${to}` : null,
+        ]
+          .filter(Boolean)
+          .join(" • ") || "Đang bật",
+      ]);
+    }
+  }
+
+  entries.push(["Người gán trong danh sách", assigneeSummary]);
+  entries.push(["Khoảng ngày hiệu lực", effectiveRange]);
+
+  return entries;
+};
+
+const downloadBlob = (blob, fileName) => {
+  if (typeof window === "undefined") {
+    console.warn("downloadBlob: window is undefined");
+    return;
+  }
+
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+};
 
 
 const DEFAULT_RANGE_START = "0000-01-01";
@@ -2619,6 +2776,8 @@ export default function MSTAssignment({
 
   }, [historyFilter.type, isHistoryFilterActive]);
 
+  const [exportMenuOpen, setExportMenuOpen] = useState(false);
+
   const [showAddForm, setShowAddForm] = useState(false);
 
   const [draft, setDraft] = useState({
@@ -2640,6 +2799,25 @@ export default function MSTAssignment({
     typeof window !== "undefined" && typeof window.localStorage !== "undefined";
 
   const actor = currentUser?.username || "guest";
+
+  const exportActorLabel = useMemo(() => {
+    const candidates = [
+      currentUser?.name,
+      currentUser?.fullName,
+      currentUser?.displayName,
+      currentUser?.username,
+      actor,
+    ];
+    for (const candidate of candidates) {
+      if (typeof candidate === "string") {
+        const trimmed = candidate.trim();
+        if (trimmed) {
+          return trimmed;
+        }
+      }
+    }
+    return "Không xác định";
+  }, [actor, currentUser]);
 
   const defaultVisibleColumns = useMemo(
 
@@ -3865,69 +4043,97 @@ export default function MSTAssignment({
 
 
 
-  const exportRowsToExcel = (scope = "filtered") => {
-
+  const exportRows = useCallback((scope = "filtered", format = "xlsx") => {
     const source = scope === "all" ? rows : filtered;
-
     if (!source.length) {
-
-      alert("Không có dữ liệu để xuất Excel.");
-
+      alert("Không có dữ liệu để xuất file.");
       return;
-
     }
 
+    const generatedAt = new Date();
+    const totalCount = rows.length;
+    const filteredCount = source.length;
+    const scopeLabel =
+      scope === "all"
+        ? "Toàn bộ danh sách đang quản lý"
+        : "Theo bộ lọc hiện tại";
+
+    const metadataEntries = buildExportMetadataEntries({
+      scopeLabel,
+      totalCount,
+      filteredCount,
+      search: (search || "").trim(),
+      staffFilter: (staffFilter || "").trim(),
+      historyFilter,
+      leadViewEnabled,
+      leadTeamName,
+      assigneeSummary: summarizeAssignees(source),
+      effectiveRange: summarizeEffectiveRange(source),
+      actorLabel: exportActorLabel,
+      generatedAt,
+    });
+
     const data = source.map((item, index) => ({
-
       STT: index + 1,
-
       MST: item.mst,
-
       "Công ty": item.company || "",
-
       "Người phụ trách Nhập": item.person_import || "",
-
       "Người phụ trách Xuất": item.person_export || "",
-
       "Tổ đội": item.team || "",
-
       "Áp dụng từ ngày": item.effective_from || "",
-
       "Đến hết ngày": item.effective_to || "",
-
       "Trạng thái": computeStatusDisplay(item) || item.status || "",
-
     }));
 
+    const timestamp = `${generatedAt.getFullYear()}${String(
+      generatedAt.getMonth() + 1
+    ).padStart(2, "0")}${String(generatedAt.getDate()).padStart(2, "0")}_${String(
+      generatedAt.getHours()
+    ).padStart(2, "0")}${String(generatedAt.getMinutes()).padStart(2, "0")}`;
+    const scopeSuffix = scope === "all" ? "toan-bo" : "loc";
+    const baseName = `gan-mst-${scopeSuffix}-${timestamp}`;
+    const normalizedFormat = format === "csv" ? "csv" : "xlsx";
 
+    if (normalizedFormat === "csv") {
+      try {
+        const worksheet = XLSX.utils.json_to_sheet(data);
+        const csvBody = XLSX.utils.sheet_to_csv(worksheet);
+        const metadataLines = [
+          "# Báo cáo phân bổ MST",
+          ...metadataEntries.map(([label, value]) => `# ${label}: ${value}`),
+          "",
+        ];
+        const csvContent = `${metadataLines.join("\n")}${csvBody}`;
+        const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+        downloadBlob(blob, `${baseName}.csv`);
+      } catch (error) {
+        console.error("Không thể xuất CSV", error);
+        alert("Không thể xuất file CSV. Vui lòng thử lại.");
+      }
+      return;
+    }
 
-    const worksheet = XLSX.utils.json_to_sheet(data);
-
-    const workbook = XLSX.utils.book_new();
-
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Gan MST");
-
-    const now = new Date();
-
-    const timestamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(
-
-      now.getDate()
-
-    ).padStart(2, "0")}_${String(now.getHours()).padStart(2, "0")}${String(now.getMinutes()).padStart(
-
-      2,
-
-      "0"
-
-    )}`;
-
-    const suffix = scope === "all" ? "toan-bo" : "loc";
-
-    XLSX.writeFile(workbook, `gan-mst-${suffix}-${timestamp}.xlsx`);
-
-  };
-
-
+    try {
+      const workbook = XLSX.utils.book_new();
+      const metadataSheet = XLSX.utils.aoa_to_sheet([["Trường", "Giá trị"], ...metadataEntries]);
+      XLSX.utils.book_append_sheet(workbook, metadataSheet, "Thong tin");
+      const dataSheet = XLSX.utils.json_to_sheet(data);
+      XLSX.utils.book_append_sheet(workbook, dataSheet, "Gan MST");
+      XLSX.writeFile(workbook, `${baseName}.xlsx`);
+    } catch (error) {
+      console.error("Không thể xuất Excel", error);
+      alert("Không thể xuất file Excel. Vui lòng thử lại.");
+    }
+  }, [
+    rows,
+    filtered,
+    search,
+    staffFilter,
+    historyFilter,
+    leadViewEnabled,
+    leadTeamName,
+    exportActorLabel,
+  ]);
 
   const leadTeamPool = useMemo(() => {
 
@@ -5866,37 +6072,71 @@ export default function MSTAssignment({
 
           />
 
-          <button
-
-            type="button"
-
-            onClick={() => exportRowsToExcel("filtered")}
-
-            className="px-3 py-1 rounded border bg-white hover:bg-gray-50"
-
-            data-tooltip="Xuất ra Excel các dòng đang hiển thị theo bộ lọc hiện tại"
-
-          >
-
-            Export (lọc)
-
-          </button>
-
-          <button
-
-            type="button"
-
-            onClick={() => exportRowsToExcel("all")}
-
-            className="px-3 py-1 rounded border bg-white hover:bg-gray-50"
-
-            data-tooltip="Xuất ra Excel toàn bộ danh sách đang quản lý"
-
-          >
-
-            Export (tất cả)
-
-          </button>
+          <Popover open={exportMenuOpen} onOpenChange={setExportMenuOpen}>
+            <PopoverTrigger asChild>
+              <button
+                type="button"
+                className="px-3 py-1 rounded border bg-white hover:bg-gray-50"
+                data-tooltip="Xuất CSV/XLSX kèm metadata hiện trạng"
+              >
+                Export
+              </button>
+            </PopoverTrigger>
+            <PopoverContent align="end" className="w-80 space-y-4 p-4">
+              <div>
+                <p className="text-sm font-semibold text-slate-800">Theo bộ lọc ({filtered.length} dòng)</p>
+                <p className="mt-1 text-xs text-slate-500">Bao gồm metadata: người gán, bộ lọc và khoảng ngày hiệu lực.</p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    className="rounded border px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                    onClick={() => {
+                      exportRows("filtered", "xlsx");
+                      setExportMenuOpen(false);
+                    }}
+                  >
+                    Excel (.xlsx)
+                  </button>
+                  <button
+                    type="button"
+                    className="rounded border px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                    onClick={() => {
+                      exportRows("filtered", "csv");
+                      setExportMenuOpen(false);
+                    }}
+                  >
+                    CSV (.csv)
+                  </button>
+                </div>
+              </div>
+              <div className="border-t border-slate-200 pt-3">
+                <p className="text-sm font-semibold text-slate-800">Toàn bộ danh sách ({rows.length} dòng)</p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    className="rounded border px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                    onClick={() => {
+                      exportRows("all", "xlsx");
+                      setExportMenuOpen(false);
+                    }}
+                  >
+                    Excel (.xlsx)
+                  </button>
+                  <button
+                    type="button"
+                    className="rounded border px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                    onClick={() => {
+                      exportRows("all", "csv");
+                      setExportMenuOpen(false);
+                    }}
+                  >
+                    CSV (.csv)
+                  </button>
+                </div>
+              </div>
+              <p className="text-xs text-slate-500">File sẽ bao gồm tóm tắt bộ lọc, người xuất và khoảng ngày hiệu lực.</p>
+            </PopoverContent>
+          </Popover>
 
           {canEdit && (
 
