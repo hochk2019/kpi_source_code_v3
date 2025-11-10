@@ -25,6 +25,7 @@ import NotificationCenter from './components/NotificationCenter.jsx';
 import CommandCenter from './components/CommandCenter.jsx';
 
 import GlobalSearch from './components/GlobalSearch.jsx';
+import ContextHelpHub from './components/ContextHelpHub.jsx';
 
 import { subscribeCommand } from './lib/commandBus.js';
 
@@ -341,6 +342,8 @@ export default function App() {
                 onRequestChangePassword={() => setShowChangePassword(true)}
 
               />
+
+              <ContextHelpHub activeTab={activeTab} />
 
               <NotificationCenter />
 
