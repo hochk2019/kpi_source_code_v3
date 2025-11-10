@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import clsx from 'clsx';
 
@@ -11,6 +11,82 @@ import {
 } from '@/lib/notificationClient.js';
 
 import { subscribeCommand } from '@/lib/commandBus.js';
+
+
+
+function readLastReadAt() {
+
+  if (typeof window === 'undefined') {
+
+    return null;
+
+  }
+
+  try {
+
+    return window.localStorage.getItem('kpi.notifications.lastReadAt');
+
+  } catch {
+
+    return null;
+
+  }
+
+}
+
+
+
+function writeLastReadAt(value) {
+
+  if (typeof window === 'undefined') {
+
+    return;
+
+  }
+
+  try {
+
+    if (value) {
+
+      window.localStorage.setItem('kpi.notifications.lastReadAt', value);
+
+    } else {
+
+      window.localStorage.removeItem('kpi.notifications.lastReadAt');
+
+    }
+
+  } catch {
+
+    // ignore persistence errors
+
+  }
+
+}
+
+
+
+function getEventTimestamp(event) {
+
+  if (!event) {
+
+    return Number.NEGATIVE_INFINITY;
+
+  }
+
+  const raw = event.createdAt || event.created_at || event.timestamp;
+
+  if (!raw) {
+
+    return Number.NEGATIVE_INFINITY;
+
+  }
+
+  const parsed = Date.parse(raw);
+
+  return Number.isFinite(parsed) ? parsed : Number.NEGATIVE_INFINITY;
+
+}
 
 
 
@@ -58,7 +134,7 @@ export default function NotificationCenter({ className }) {
 
   const [events, setEvents] = useState([]);
 
-  const [unreadIds, setUnreadIds] = useState(() => new Set());
+  const [lastReadAt, setLastReadAt] = useState(() => readLastReadAt());
 
   const [open, setOpen] = useState(false);
 
@@ -81,6 +157,18 @@ export default function NotificationCenter({ className }) {
         if (cancelled) return;
 
         setEvents(initial);
+
+        setLastReadAt((prev) => {
+
+          if (prev) {
+
+            return prev;
+
+          }
+
+          return readLastReadAt();
+
+        });
 
       })
 
@@ -124,20 +212,6 @@ export default function NotificationCenter({ className }) {
 
       });
 
-      setUnreadIds((prev) => {
-
-        const next = new Set(prev);
-
-        if (event.id) {
-
-          next.add(event.id);
-
-        }
-
-        return next;
-
-      });
-
     });
 
     return () => {
@@ -149,21 +223,6 @@ export default function NotificationCenter({ className }) {
     };
 
   }, []);
-
-
-
-  useEffect(() => {
-
-    if (!open) {
-
-      return;
-
-    }
-
-    setUnreadIds(new Set());
-
-  }, [open]);
-
 
 
   useEffect(() => {
@@ -214,7 +273,69 @@ export default function NotificationCenter({ className }) {
 
 
 
-  const unreadCount = useMemo(() => unreadIds.size, [unreadIds]);
+  const lastReadTime = useMemo(() => {
+
+    if (!lastReadAt) {
+
+      return Number.NEGATIVE_INFINITY;
+
+    }
+
+    const parsed = Date.parse(lastReadAt);
+
+    return Number.isFinite(parsed) ? parsed : Number.NEGATIVE_INFINITY;
+
+  }, [lastReadAt]);
+
+
+
+  const unreadIds = useMemo(() => {
+
+    const ids = new Set();
+
+    for (const event of events) {
+
+      const timestamp = getEventTimestamp(event);
+
+      if (timestamp > lastReadTime && event?.id) {
+
+        ids.add(event.id);
+
+      }
+
+    }
+
+    return ids;
+
+  }, [events, lastReadTime]);
+
+
+
+  const unreadCount = unreadIds.size;
+
+
+
+  const markAllRead = useCallback(() => {
+
+    const newestTime = events.reduce((max, event) => {
+
+      const timestamp = getEventTimestamp(event);
+
+      return timestamp > max ? timestamp : max;
+
+    }, Number.NEGATIVE_INFINITY);
+
+    const next = Number.isFinite(newestTime) && newestTime > Number.NEGATIVE_INFINITY
+
+      ? new Date(newestTime).toISOString()
+
+      : new Date().toISOString();
+
+    setLastReadAt(next);
+
+    writeLastReadAt(next);
+
+  }, [events]);
 
 
 
@@ -309,83 +430,72 @@ export default function NotificationCenter({ className }) {
       </button>
 
       {open && (
-
         <div className="absolute right-0 z-40 mt-2 w-80 max-w-[90vw] rounded border border-gray-200 bg-white text-sm shadow-xl dark:border-slate-700 dark:bg-slate-900">
-
-          <div className="flex items-center justify-between border-b border-gray-100 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:border-slate-700 dark:text-gray-300">
-
-            <span>Thông báo hệ thống</span>
-
+          <div className="flex items-center justify-between gap-2 border-b border-gray-100 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:border-slate-700 dark:text-gray-300">
+            <span className="flex-1 truncate">Thông báo hệ thống</span>
             <span className="font-normal text-gray-400">{loading ? 'Đang tải…' : `${events.length} mục`}</span>
-
+            <button
+              type="button"
+              onClick={markAllRead}
+              disabled={unreadCount === 0}
+              className={clsx(
+                'rounded border px-2 py-1 text-[11px] font-semibold normal-case transition',
+                unreadCount === 0
+                  ? 'cursor-not-allowed border-transparent text-gray-300'
+                  : 'border-sky-200 text-sky-600 hover:bg-sky-50 dark:border-slate-600 dark:text-sky-300 dark:hover:bg-slate-800'
+              )}
+            >
+              Đánh dấu đã đọc
+            </button>
           </div>
-
-          <div className="max-h-96 overflow-y-auto p-3 space-y-3">
-
+          <div className="max-h-96 overflow-y-auto space-y-3 p-3">
             {events.length === 0 && !loading ? (
-
               <p className="text-xs text-gray-500">Chưa có thông báo nào.</p>
-
             ) : null}
-
             {groupedEvents.map((group) => (
-
               <div key={group.date} className="space-y-2">
-
                 <div className="text-[11px] font-semibold uppercase tracking-wide text-gray-400">
-
                   {group.date === 'khac' ? 'Khác' : new Date(group.date).toLocaleDateString('vi-VN')}
-
                 </div>
-
                 <div className="space-y-2">
-
                   {group.items.map((event) => {
-
+                    const isUnread = event?.id ? unreadIds.has(event.id) : false;
                     const tone = toneClassMap[event?.severity] || toneClassMap.info;
-
                     return (
-
-                      <div key={event.id || `${event.createdAt}_${event.type}`} className={clsx('rounded border px-3 py-2 text-xs leading-relaxed shadow-sm', tone)}>
-
-                        <div className="flex items-start justify-between gap-2 text-[11px] uppercase tracking-wide">
-
-                          <span>{event?.type || 'thông báo'}</span>
-
-                          <span>{formatDate(event?.createdAt)}</span>
-
-                        </div>
-
-                        {event?.title && <div className="mt-1 text-sm font-semibold">{event.title}</div>}
-
-                        {event?.message && <div className="mt-1 whitespace-pre-wrap text-sm">{event.message}</div>}
-
-                        {event?.meta && (
-
-                          <pre className="mt-2 overflow-x-auto rounded bg-black/5 p-2 text-[11px] leading-tight text-gray-600">
-
-                            {JSON.stringify(event.meta, null, 2)}
-
-                          </pre>
-
+                      <div
+                        key={event.id || `${event.createdAt}_${event.type}`}
+                        className={clsx(
+                          'relative rounded border px-3 py-2 text-xs leading-relaxed shadow-sm transition',
+                          tone,
+                          isUnread && 'ring-1 ring-sky-400'
                         )}
-
+                      >
+                        <div className="flex items-start justify-between gap-2 text-[11px] uppercase tracking-wide">
+                          <span className="flex items-center gap-2">
+                            {event?.type || 'thông báo'}
+                            {isUnread ? (
+                              <span className="inline-flex items-center justify-center rounded-full bg-sky-500 px-2 py-0.5 text-[10px] font-semibold uppercase text-white">
+                                Mới
+                              </span>
+                            ) : null}
+                          </span>
+                          <span>{formatDate(event?.createdAt)}</span>
+                        </div>
+                        {event?.title && <div className="mt-1 text-sm font-semibold">{event.title}</div>}
+                        {event?.message && <div className="mt-1 whitespace-pre-wrap text-sm">{event.message}</div>}
+                        {event?.meta && (
+                          <pre className="mt-2 overflow-x-auto rounded bg-black/5 p-2 text-[11px] leading-tight text-gray-600">
+                            {JSON.stringify(event.meta, null, 2)}
+                          </pre>
+                        )}
                       </div>
-
                     );
-
                   })}
-
                 </div>
-
               </div>
-
             ))}
-
           </div>
-
         </div>
-
       )}
 
     </div>
