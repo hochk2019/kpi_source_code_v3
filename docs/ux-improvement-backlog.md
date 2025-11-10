@@ -65,7 +65,7 @@ This backlog liệt kê các hạng mục cải thiện trải nghiệm người
   - [x] Thêm helper đọc/ghi danh sách ghim Command Center qua `UI_LAYOUT_KEY` và chuẩn hoá dữ liệu lưu trữ.
   - [x] Lắng nghe thay đổi từ kho chia sẻ để cập nhật danh sách ghim realtime giữa các tab/thiết bị.
   - [x] Đồng bộ thao tác ghim/bỏ ghim với backend và ghi lại nhật ký audit kèm thông tin người thực hiện.
-- [ ] Thêm ô tìm kiếm toàn cục gợi ý nhanh theo quyền truy cập (module, báo cáo, người dùng).
+- [x] Thêm ô tìm kiếm toàn cục gợi ý nhanh theo quyền truy cập (module, báo cáo, người dùng). (đã thêm GlobalSearch trên header dùng Command Center filter theo quyền)
 - [ ] Hiển thị badge số lượng thông báo chưa đọc và thao tác đánh dấu đã đọc hàng loạt.
 - [ ] Cung cấp hub hướng dẫn nhanh/FAQ theo ngữ cảnh mỗi trang, liên kết tới tài liệu trong thư mục `docs/`.
 
