@@ -71,6 +71,7 @@ This backlog liệt kê các hạng mục cải thiện trải nghiệm người
 
 ## 6. Reporting & automation
 
+- [x] Thống kê top 10 công ty nhiều tờ khai theo từng kỳ báo cáo trong tab "Báo cáo KPI". (đã thêm bảng xếp hạng tương tác kèm bộ chọn kỳ và ghi nhớ trạng thái thu gọn/mở rộng khu vực điểm bổ sung)
 - [ ] Xem trước nội dung báo cáo và lịch chạy kế tiếp ngay trong màn hình lập lịch (`getReportSchedules`).
 - [ ] Tạo dashboard KPI tổng quan với xu hướng tháng, top nhân sự, cảnh báo lệch chuẩn.
 - [ ] Mở rộng kênh gửi báo cáo (email, chat nội bộ) và theo dõi trạng thái giao thành công/thất bại.

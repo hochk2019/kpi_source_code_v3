@@ -148,6 +148,28 @@ function formatOptionalInt(value) {
 
 
 
+function formatPeriodLabel(periodKey) {
+
+  if (typeof periodKey !== "string" || periodKey.length < 7) {
+
+    return periodKey || "Không xác định";
+
+  }
+
+  const [year, month] = periodKey.split("-");
+
+  if (!year || !month) {
+
+    return periodKey;
+
+  }
+
+  return `${month}/${year}`;
+
+}
+
+
+
 const DEFAULT_CHART_COLORS = ["#2563eb", "#22c55e", "#f97316", "#a855f7", "#14b8a6"];
 
 
@@ -573,6 +595,20 @@ function sanitizeDetailPageSize(value) {
 
 
 function sanitizeRulePreference(value) {
+
+  if (typeof value !== "string") {
+
+    return "";
+
+  }
+
+  return value.trim();
+
+}
+
+
+
+function sanitizeTopCompanyPeriod(value) {
 
   if (typeof value !== "string") {
 
@@ -1633,6 +1669,248 @@ function TeamPieWidget({ kpiData, declData, palette = DEFAULT_CHART_COLORS }) {
         />
 
       </div>
+
+    </section>
+
+  );
+
+}
+
+
+
+function TopCompanyLeaderboard({ periods = [], selectedKey, onPeriodChange }) {
+
+  const hasData = Array.isArray(periods) && periods.length > 0;
+
+  const activePeriod = hasData
+
+    ? periods.find((item) => item.key === selectedKey) || periods[0]
+
+    : null;
+
+  const rows = Array.isArray(activePeriod?.topCompanies) ? activePeriod.topCompanies : [];
+
+  const totalDecls = Number(activePeriod?.totalDecls || 0);
+
+  const otherCompanyCount = Math.max(0, Number(activePeriod?.periodCompanyCount || 0) - rows.length);
+
+  const activeKey = activePeriod?.key || "";
+
+  const activeLabel = activePeriod?.label || "";
+
+  const handlePeriodChange = (event) => {
+
+    onPeriodChange?.(event?.target?.value || "");
+
+  };
+
+  return (
+
+    <section className="ds-card space-y-4 p-4">
+
+      <div className="flex flex-wrap items-start justify-between gap-4">
+
+        <div className="space-y-1">
+
+          <h3 className="text-base font-semibold text-[color:var(--ds-text-primary)]">Top 10 công ty theo tờ khai</h3>
+
+          {hasData ? (
+
+            <p className="text-sm text-[color:var(--ds-text-muted)]">
+
+              Thống kê dựa trên dữ liệu tờ khai đã lọc. Chọn kỳ báo cáo để so sánh hiệu suất giữa các doanh nghiệp.
+
+            </p>
+
+          ) : (
+
+            <p className="text-sm text-[color:var(--ds-text-muted)]">
+
+              Chưa có dữ liệu tờ khai trong khoảng thời gian hiện tại.
+
+            </p>
+
+          )}
+
+        </div>
+
+        {hasData ? (
+
+          <div className="flex flex-wrap items-center gap-2">
+
+            <label className="text-xs font-semibold uppercase text-[color:var(--ds-text-secondary)]" htmlFor="top-company-period">
+
+              Kỳ báo cáo
+
+            </label>
+
+            <select
+
+              id="top-company-period"
+
+              value={activeKey}
+
+              onChange={handlePeriodChange}
+
+              className="rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] px-3 py-1.5 text-sm text-[color:var(--ds-text-primary)] shadow-sm focus:outline-none focus:ring-2 focus:ring-[color:var(--ds-accent-ring)] focus:ring-offset-0"
+
+            >
+
+              {periods.map((period) => (
+
+                <option key={period.key} value={period.key}>
+
+                  {period.label}
+
+                </option>
+
+              ))}
+
+            </select>
+
+          </div>
+
+        ) : null}
+
+      </div>
+
+      {!hasData ? (
+
+        <div className="rounded border border-dashed border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-muted)] p-4 text-sm text-[color:var(--ds-text-muted)]">
+
+          Thay đổi khoảng thời gian hoặc kiểm tra dữ liệu import để thấy bảng xếp hạng doanh nghiệp.
+
+        </div>
+
+      ) : (
+
+        <>
+
+          <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-[color:var(--ds-text-secondary)]">
+
+            <div>
+
+              {activeLabel ? `Kỳ ${activeLabel}` : ""}
+
+              {totalDecls > 0 ? ` • Tổng ${formatInt(totalDecls)} tờ khai` : ""}
+
+            </div>
+
+            {otherCompanyCount > 0 ? (
+
+              <div>Còn {otherCompanyCount} công ty khác ngoài Top 10</div>
+
+            ) : null}
+
+          </div>
+
+          <div className="overflow-auto rounded border border-[color:var(--ds-border-subtle)]">
+
+            <table className="min-w-full text-sm text-[color:var(--ds-text-primary)]">
+
+              <thead className="bg-[color:var(--ds-surface-muted)] text-xs uppercase tracking-wide text-[color:var(--ds-text-secondary)]">
+
+                <tr>
+
+                  <th className="px-3 py-2 text-left">#</th>
+
+                  <th className="px-3 py-2 text-left">Doanh nghiệp</th>
+
+                  <th className="px-3 py-2 text-right">Số tờ khai</th>
+
+                  <th className="px-3 py-2">Tỷ trọng</th>
+
+                  <th className="px-3 py-2 text-right">Điểm KPI</th>
+
+                </tr>
+
+              </thead>
+
+              <tbody>
+
+                {rows.length ? (
+
+                  rows.map((row, index) => {
+
+                    const companyLabel = row.cong_ty || row.mst || "Không xác định";
+
+                    const taxLabel = row.mst ? `MST: ${row.mst}` : "Không có MST";
+
+                    const sharePercent = Math.round((Number(row.share || 0) || 0) * 1000) / 10;
+
+                    const widthPercent = Math.max(0, Math.min(100, sharePercent));
+
+                    return (
+
+                      <tr key={`${row.mst || row.cong_ty || "unknown"}-${index}`} className="border-b border-[color:var(--ds-border-subtle)] last:border-b-0">
+
+                        <td className="px-3 py-2 text-sm font-semibold text-[color:var(--ds-text-secondary)]">{index + 1}</td>
+
+                        <td className="px-3 py-2">
+
+                          <div className="font-semibold text-[color:var(--ds-text-primary)]">{companyLabel}</div>
+
+                          <div className="text-xs text-[color:var(--ds-text-muted)]">{taxLabel}</div>
+
+                        </td>
+
+                        <td className="px-3 py-2 text-right font-semibold text-[color:var(--ds-text-primary)]">{formatInt(row.decls)}</td>
+
+                        <td className="px-3 py-2">
+
+                          <div className="flex items-center gap-2">
+
+                            <div className="h-2 flex-1 rounded-full bg-[color:var(--ds-border-subtle)]">
+
+                              <div
+
+                                className="h-2 rounded-full bg-[color:var(--ds-accent-strong)]"
+
+                                style={{ width: `${widthPercent}%` }}
+
+                                aria-hidden="true"
+
+                              />
+
+                            </div>
+
+                            <span className="w-12 text-right text-xs text-[color:var(--ds-text-secondary)]">{sharePercent.toFixed(1)}%</span>
+
+                          </div>
+
+                        </td>
+
+                        <td className="px-3 py-2 text-right font-semibold text-[color:var(--ds-text-secondary)]">{formatDecimal(row.kpi)}</td>
+
+                      </tr>
+
+                    );
+
+                  })
+
+                ) : (
+
+                  <tr>
+
+                    <td className="px-3 py-6 text-center text-sm text-[color:var(--ds-text-muted)]" colSpan={5}>
+
+                      Không có dữ liệu top doanh nghiệp cho kỳ này.
+
+                    </td>
+
+                  </tr>
+
+                )}
+
+              </tbody>
+
+            </table>
+
+          </div>
+
+        </>
+
+      )}
 
     </section>
 
@@ -3628,6 +3906,14 @@ export default function ReportViewer({ canExport = true, currentUser = null }) {
 
   const [scheduleCollapsed, setScheduleCollapsed] = useState(() => storedPrefs.scheduleCollapsed === true);
 
+  const [topCompanyPeriod, setTopCompanyPeriod] = useState(() =>
+
+    sanitizeTopCompanyPeriod(storedPrefs.topCompanyPeriod)
+
+  );
+
+  const [adjustmentExpanded, setAdjustmentExpanded] = useState(() => storedPrefs.adjustmentExpanded === true);
+
   const isAdmin = isAdminRole(currentUser?.role);
 
 
@@ -3758,6 +4044,8 @@ const [detailPageSizeCustomInput, setDetailPageSizeCustomInput] = useState(() =>
 
       topStaffVisibleCount,
 
+      topCompanyPeriod,
+
       columns: exportColumns,
 
       ruleId: selectedRuleId,
@@ -3767,6 +4055,8 @@ const [detailPageSizeCustomInput, setDetailPageSizeCustomInput] = useState(() =>
       detailPageSize,
 
       scheduleCollapsed,
+
+      adjustmentExpanded,
 
     };
 
@@ -3804,6 +4094,8 @@ const [detailPageSizeCustomInput, setDetailPageSizeCustomInput] = useState(() =>
 
     topStaffVisibleCount,
 
+    topCompanyPeriod,
+
     exportColumns,
 
     selectedRuleId,
@@ -3813,6 +4105,8 @@ const [detailPageSizeCustomInput, setDetailPageSizeCustomInput] = useState(() =>
     detailPageSize,
 
     scheduleCollapsed,
+
+    adjustmentExpanded,
 
   ]);
 
@@ -4524,6 +4818,152 @@ const [detailPageSizeCustomInput, setDetailPageSizeCustomInput] = useState(() =>
 
   );
 
+  const companyLeaderboard = useMemo(() => {
+
+    const rows = Array.isArray(report.rows) ? report.rows : [];
+
+    if (!rows.length) {
+
+      return [];
+
+    }
+
+    const periodMap = new Map();
+
+    for (const row of rows) {
+
+      if (!row || row.isAdjustment) {
+
+        continue;
+
+      }
+
+      const date = typeof row.date === "string" ? row.date : "";
+
+      const periodKey = date ? date.slice(0, 7) : "";
+
+      if (!periodKey) {
+
+        continue;
+
+      }
+
+      if (!periodMap.has(periodKey)) {
+
+        periodMap.set(periodKey, new Map());
+
+      }
+
+      const companyMap = periodMap.get(periodKey);
+
+      const mst = row.mst ? String(row.mst) : "";
+
+      const companyName = row.cong_ty ? String(row.cong_ty) : "";
+
+      const hasIdentity = mst || companyName;
+
+      const companyKey = hasIdentity ? `${mst}|${companyName}` : "__unknown__";
+
+      if (!companyMap.has(companyKey)) {
+
+        companyMap.set(companyKey, {
+
+          key: companyKey,
+
+          mst,
+
+          cong_ty: companyName,
+
+          decls: 0,
+
+          kpi: 0,
+
+        });
+
+      }
+
+      const entry = companyMap.get(companyKey);
+
+      entry.decls += 1;
+
+      const numericKpi = Number(row.kpi || 0);
+
+      if (Number.isFinite(numericKpi)) {
+
+        entry.kpi += numericKpi;
+
+      }
+
+    }
+
+    return Array.from(periodMap.entries())
+
+      .map(([periodKey, companyMap]) => {
+
+        const values = Array.from(companyMap.values());
+
+        if (!values.length) {
+
+          return null;
+
+        }
+
+        const totalDecls = values.reduce((sum, item) => sum + Number(item.decls || 0), 0);
+
+        const sorted = values.sort((a, b) => {
+
+          if ((b.decls || 0) !== (a.decls || 0)) {
+
+            return (b.decls || 0) - (a.decls || 0);
+
+          }
+
+          if ((b.kpi || 0) !== (a.kpi || 0)) {
+
+            return (b.kpi || 0) - (a.kpi || 0);
+
+          }
+
+          const labelA = a.cong_ty || a.mst || "";
+
+          const labelB = b.cong_ty || b.mst || "";
+
+          return labelA.localeCompare(labelB, "vi", { sensitivity: "base" });
+
+        });
+
+        const topCompanies = sorted.slice(0, 10).map((item) => ({
+
+          ...item,
+
+          kpi: Math.round((item.kpi || 0) * 10) / 10,
+
+          share: totalDecls > 0 ? Number(item.decls || 0) / totalDecls : 0,
+
+        }));
+
+        return {
+
+          key: periodKey,
+
+          label: formatPeriodLabel(periodKey),
+
+          totalDecls,
+
+          periodCompanyCount: sorted.length,
+
+          topCompanies,
+
+        };
+
+      })
+
+      .filter(Boolean)
+
+      .sort((a, b) => b.key.localeCompare(a.key));
+
+  }, [report.rows]);
+
 
 
   const staffOptions = useMemo(() => {
@@ -4581,6 +5021,36 @@ const [detailPageSizeCustomInput, setDetailPageSizeCustomInput] = useState(() =>
   const filteredCompanySummaryTeam = companySummaryAllTeams;
 
 
+
+  useEffect(() => {
+
+    if (!companyLeaderboard.length) {
+
+      if (topCompanyPeriod) {
+
+        setTopCompanyPeriod("");
+
+      }
+
+      return;
+
+    }
+
+    const exists = companyLeaderboard.some((item) => item.key === topCompanyPeriod);
+
+    if (!exists) {
+
+      const fallbackKey = companyLeaderboard[0]?.key || "";
+
+      if (fallbackKey && fallbackKey !== topCompanyPeriod) {
+
+        setTopCompanyPeriod(fallbackKey);
+
+      }
+
+    }
+
+  }, [companyLeaderboard, topCompanyPeriod]);
 
   useEffect(() => {
 
@@ -6998,6 +7468,16 @@ const handleDetailPageSizeCustomInputChange = (event) => {
 
           <TeamPieWidget kpiData={teamPieData} declData={teamDeclPieData} palette={chartPalette} />
 
+          <TopCompanyLeaderboard
+
+            periods={companyLeaderboard}
+
+            selectedKey={topCompanyPeriod}
+
+            onPeriodChange={setTopCompanyPeriod}
+
+          />
+
         </div>
 
 
@@ -7032,19 +7512,31 @@ const handleDetailPageSizeCustomInputChange = (event) => {
 
             <div className="flex flex-wrap items-start justify-between gap-4">
 
-              <div>
+              <div className="space-y-2">
 
                 <h3 className="text-base font-semibold text-[color:var(--ds-text-primary)]">Điểm KPI +/- bổ sung</h3>
 
-                <p className="mt-1 text-sm text-[color:var(--ds-text-muted)]">
+                {adjustmentExpanded ? (
 
-                  Điểm cộng/trừ được duyệt sẽ được cộng trực tiếp vào KPI tháng tương ứng trong báo cáo.
+                  <p className="text-sm text-[color:var(--ds-text-muted)]">
 
-                </p>
+                    Điểm cộng/trừ được duyệt sẽ được cộng trực tiếp vào KPI tháng tương ứng trong báo cáo.
+
+                  </p>
+
+                ) : (
+
+                  <p className="text-sm text-[color:var(--ds-text-muted)]">
+
+                    Tổng hợp nhanh số điểm cộng/trừ đã áp dụng trong kỳ. Nhấn “Mở rộng” để xem bảng chi tiết và thống kê.
+
+                  </p>
+
+                )}
 
               </div>
 
-              <div className="text-sm text-right text-[color:var(--ds-text-secondary)]">
+              <div className="flex flex-col items-end gap-2 text-sm text-right text-[color:var(--ds-text-secondary)]">
 
                 <div>Đã duyệt: {formatInt(adjustmentsReport.approvedCount || 0)} mục</div>
 
@@ -7062,15 +7554,35 @@ const handleDetailPageSizeCustomInputChange = (event) => {
 
                 </div>
 
+                <button
+
+                  type="button"
+
+                  onClick={() => setAdjustmentExpanded((value) => !value)}
+
+                  aria-expanded={adjustmentExpanded}
+
+                  className="inline-flex items-center gap-2 rounded border border-[color:var(--ds-border-subtle)] px-3 py-1 text-xs font-semibold text-[color:var(--ds-text-secondary)] transition-colors hover:border-[color:var(--ds-border-strong)] hover:text-[color:var(--ds-text-primary)]"
+
+                >
+
+                  {adjustmentExpanded ? "Thu gọn" : "Mở rộng"}
+
+                </button>
+
               </div>
 
             </div>
 
 
 
-            <div className="grid gap-4 lg:grid-cols-3">
+            {adjustmentExpanded ? (
 
-              <div className="lg:col-span-2">
+              <>
+
+                <div className="grid gap-4 lg:grid-cols-3">
+
+                  <div className="lg:col-span-2">
 
                 <h4 className="mb-3 text-sm font-semibold text-[color:var(--ds-text-primary)]">Chi tiết điểm đã áp dụng</h4>
 
@@ -7298,7 +7810,7 @@ const handleDetailPageSizeCustomInputChange = (event) => {
 
               </div>
 
-              <div className="space-y-6">
+                <div className="space-y-6">
 
                 <section className="space-y-3 rounded-xl border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-muted)] p-4">
 
@@ -7466,7 +7978,11 @@ const handleDetailPageSizeCustomInputChange = (event) => {
 
               </div>
 
-            </div>
+              </div>
+
+              </>
+
+            ) : null}
 
           </div>
 
