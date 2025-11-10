@@ -396,6 +396,72 @@ function formatScheduleNextRunLabel(isoString) {
 
 
 
+function formatScheduleCountdown(isoString, now = new Date()) {
+
+  if (!isoString) {
+
+    return "";
+
+  }
+
+  const target = new Date(isoString);
+
+  if (Number.isNaN(target.getTime())) {
+
+    return "";
+
+  }
+
+  const reference = now instanceof Date && !Number.isNaN(now.getTime()) ? now : new Date();
+
+  const diffMs = target.getTime() - reference.getTime();
+
+  if (diffMs <= 0) {
+
+    return "Sắp chạy";
+
+  }
+
+  const minute = 60 * 1000;
+
+  const hour = 60 * minute;
+
+  const day = 24 * hour;
+
+  const week = 7 * day;
+
+  if (diffMs < hour) {
+
+    const minutes = Math.round(diffMs / minute);
+
+    return `Còn ${minutes} phút`;
+
+  }
+
+  if (diffMs < day) {
+
+    const hours = Math.round(diffMs / hour);
+
+    return `Còn ${hours} giờ`;
+
+  }
+
+  if (diffMs < week) {
+
+    const days = Math.round(diffMs / day);
+
+    return `Còn ${days} ngày`;
+
+  }
+
+  const weeks = Math.round(diffMs / week);
+
+  return `Còn ${weeks} tuần`;
+
+}
+
+
+
 function describeScheduleFrequency(schedule) {
 
   if (!schedule) return "";
@@ -4966,6 +5032,244 @@ const [detailPageSizeCustomInput, setDetailPageSizeCustomInput] = useState(() =>
 
 
 
+  const activeLeaderboardPeriod = useMemo(() => {
+
+    if (!companyLeaderboard.length) {
+
+      return null;
+
+    }
+
+    return companyLeaderboard.find((item) => item.key === topCompanyPeriod) || companyLeaderboard[0];
+
+  }, [companyLeaderboard, topCompanyPeriod]);
+
+
+
+  const schedulePreviewMetrics = useMemo(() => {
+
+    const totalDecls = Number(summary?.decls || 0);
+
+    const importDecls = Number(summary?.import || 0);
+
+    const exportDecls = Number(summary?.export || 0);
+
+    const totalKpi = Number(summary?.kpi || 0);
+
+    const companyCount = Number(summary?.companyCount || 0);
+
+    const coCount = Number(summary?.co || 0);
+
+    const licenseCount = Number(summary?.licenses || 0);
+
+    const adjustmentPoints = Number(adjustmentsReport.totalPoints || 0);
+
+    return [
+
+      {
+
+        key: "decls",
+
+        label: "Tờ khai hợp lệ",
+
+        value: formatInt(totalDecls),
+
+        note: `Nhập: ${formatInt(importDecls)} • Xuất: ${formatInt(exportDecls)}`,
+
+      },
+
+      {
+
+        key: "kpi",
+
+        label: "Điểm KPI tổng",
+
+        value: formatDecimal(totalKpi),
+
+        note:
+
+          Math.abs(adjustmentPoints) > 0
+
+            ? `Điều chỉnh: ${formatDecimal(adjustmentPoints)} điểm`
+
+            : "Không có điều chỉnh bổ sung",
+
+      },
+
+      {
+
+        key: "companies",
+
+        label: "Doanh nghiệp được theo dõi",
+
+        value: formatInt(companyCount),
+
+        note: `${formatInt(coCount)} tờ khai C/O • ${formatInt(licenseCount)} giấy phép`,
+
+      },
+
+    ];
+
+  }, [
+
+    summary?.decls,
+
+    summary?.import,
+
+    summary?.export,
+
+    summary?.kpi,
+
+    summary?.companyCount,
+
+    summary?.co,
+
+    summary?.licenses,
+
+    adjustmentsReport.totalPoints,
+
+  ]);
+
+
+
+  const schedulePreviewTopStaff = useMemo(() => {
+
+    return topStaffByKpi.slice(0, 3).map((item, index) => ({
+
+      key: item.key || `${item.name || "staff"}-${index}`,
+
+      name: item.name || "Chưa gán",
+
+      team:
+
+        item.teamLabel && item.teamLabel !== "Chưa gán tổ đội"
+
+          ? item.teamLabel
+
+          : "",
+
+      kpi: formatDecimal(Number(item?.stats?.kpi || 0)),
+
+      decls: formatInt(Number(item?.stats?.decls || 0)),
+
+    }));
+
+  }, [topStaffByKpi]);
+
+
+
+  const schedulePreviewTopTeams = useMemo(() => {
+
+    const sorted = sortStatsCollection(report.teams.list, "kpi", (item) => item.name || "");
+
+    return sorted.slice(0, 3).map((item, index) => ({
+
+      key: item.key || `${item.name || "team"}-${index}`,
+
+      name: item.name || "Chưa gán tổ đội",
+
+      kpi: formatDecimal(Number(item?.stats?.kpi || 0)),
+
+      decls: formatInt(Number(item?.stats?.decls || 0)),
+
+    }));
+
+  }, [report.teams.list]);
+
+
+
+  const schedulePreviewCompanies = useMemo(() => {
+
+    const period = activeLeaderboardPeriod;
+
+    if (!period || !Array.isArray(period.topCompanies)) {
+
+      return [];
+
+    }
+
+    return period.topCompanies.slice(0, 3).map((item, index) => ({
+
+      key: item.key || `${item.mst || item.cong_ty || "company"}-${index}`,
+
+      label: item.cong_ty || item.mst || "Không xác định",
+
+      decls: formatInt(Number(item?.decls || 0)),
+
+      share: Math.round(Number(item?.share || 0) * 1000) / 10,
+
+    }));
+
+  }, [activeLeaderboardPeriod]);
+
+
+
+  const schedulePreviewTimeline = useMemo(() => {
+
+    const now = new Date();
+
+    return reportSchedules
+
+      .map((schedule) => {
+
+        if (!schedule || schedule.active === false) {
+
+          return null;
+
+        }
+
+        const nextRun = schedule.nextRun || calculateNextReportScheduleRun(schedule);
+
+        if (!nextRun) {
+
+          return null;
+
+        }
+
+        const timestamp = Date.parse(nextRun);
+
+        if (Number.isNaN(timestamp)) {
+
+          return null;
+
+        }
+
+        const formats = Array.isArray(schedule.formats) ? schedule.formats : [];
+
+        const recipients = Array.isArray(schedule.recipients) ? schedule.recipients : [];
+
+        return {
+
+          id: schedule.id || `schedule-${timestamp}`,
+
+          name: schedule.name || "Lịch gửi",
+
+          frequencyLabel: describeScheduleFrequency(schedule),
+
+          nextRun,
+
+          nextRunLabel: formatScheduleNextRunLabel(nextRun),
+
+          countdownLabel: formatScheduleCountdown(nextRun, now),
+
+          formatLabel: formats.length ? formats.map((item) => item.toUpperCase()).join(", ") : "EXCEL",
+
+          recipientsLabel: recipients.length ? recipients.join(", ") : "—",
+
+          timestamp,
+
+        };
+
+      })
+
+      .filter(Boolean)
+
+      .sort((a, b) => a.timestamp - b.timestamp);
+
+  }, [reportSchedules]);
+
+
+
   const staffOptions = useMemo(() => {
 
     const base = [
@@ -7367,6 +7671,292 @@ const handleDetailPageSizeCustomInputChange = (event) => {
                   </p>
 
                 )}
+
+              </div>
+
+              <div className="border-t border-[color:var(--ds-border-subtle)] pt-4">
+
+                <div className="flex flex-wrap items-start justify-between gap-3">
+
+                  <div>
+
+                    <h4 className="text-sm font-semibold text-[color:var(--ds-text-primary)]">Xem trước nội dung gửi</h4>
+
+                    <p className="text-xs text-[color:var(--ds-text-muted)]">
+
+                      Dựa trên bộ lọc hiện tại và dữ liệu được áp dụng trong báo cáo.
+
+                    </p>
+
+                  </div>
+
+                  {activeLeaderboardPeriod?.label ? (
+
+                    <span className="text-xs text-[color:var(--ds-text-muted)]">
+
+                      Kỳ top doanh nghiệp: {activeLeaderboardPeriod.label}
+
+                    </span>
+
+                  ) : null}
+
+                </div>
+
+                <div className="mt-3 grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+
+                  <div className="space-y-4 rounded-lg border border-[color:var(--ds-border-subtle)] bg-white p-3 text-sm text-[color:var(--ds-text-secondary)] shadow-sm">
+
+                    <div className="grid gap-3 sm:grid-cols-3">
+
+                      {schedulePreviewMetrics.map((metric) => (
+
+                        <div key={metric.key} className="rounded bg-[color:var(--ds-surface-muted)] p-3">
+
+                          <div className="text-[11px] font-semibold uppercase text-[color:var(--ds-text-muted)]">
+
+                            {metric.label}
+
+                          </div>
+
+                          <div className="mt-1 text-lg font-semibold text-[color:var(--ds-text-primary)]">
+
+                            {metric.value}
+
+                          </div>
+
+                          <div className="mt-1 text-[11px] text-[color:var(--ds-text-secondary)]">{metric.note}</div>
+
+                        </div>
+
+                      ))}
+
+                    </div>
+
+                    <div className="grid gap-4 md:grid-cols-2">
+
+                      <div>
+
+                        <div className="text-[11px] font-semibold uppercase text-[color:var(--ds-text-muted)]">
+
+                          Top nhân sự theo KPI
+
+                        </div>
+
+                        <ul className="mt-2 space-y-1">
+
+                          {schedulePreviewTopStaff.length ? (
+
+                            schedulePreviewTopStaff.map((item) => (
+
+                              <li
+
+                                key={item.key}
+
+                                className="flex items-center justify-between gap-2 rounded px-2 py-1 hover:bg-[color:var(--ds-surface-muted)]"
+
+                              >
+
+                                <span className="truncate text-[color:var(--ds-text-primary)]">
+
+                                  {item.name}
+
+                                  {item.team ? (
+
+                                    <span className="text-[color:var(--ds-text-secondary)]"> • {item.team}</span>
+
+                                  ) : null}
+
+                                </span>
+
+                                <span className="shrink-0 text-[11px] text-[color:var(--ds-text-secondary)]">
+
+                                  {item.kpi} KPI • {item.decls} tờ
+
+                                </span>
+
+                              </li>
+
+                            ))
+
+                          ) : (
+
+                            <li className="text-[color:var(--ds-text-muted)]">Chưa có dữ liệu KPI cho nhân sự.</li>
+
+                          )}
+
+                        </ul>
+
+                      </div>
+
+                      <div>
+
+                        <div className="text-[11px] font-semibold uppercase text-[color:var(--ds-text-muted)]">
+
+                          Top doanh nghiệp theo tờ khai
+
+                        </div>
+
+                        <ul className="mt-2 space-y-1">
+
+                          {schedulePreviewCompanies.length ? (
+
+                            schedulePreviewCompanies.map((item) => (
+
+                              <li
+
+                                key={item.key}
+
+                                className="flex items-center justify-between gap-2 rounded px-2 py-1 hover:bg-[color:var(--ds-surface-muted)]"
+
+                              >
+
+                                <span className="truncate text-[color:var(--ds-text-primary)]">{item.label}</span>
+
+                                <span className="shrink-0 text-[11px] text-[color:var(--ds-text-secondary)]">
+
+                                  {item.decls} tờ • {item.share}% tổng
+
+                                </span>
+
+                              </li>
+
+                            ))
+
+                          ) : (
+
+                            <li className="text-[color:var(--ds-text-muted)]">Chưa có dữ liệu xếp hạng doanh nghiệp.</li>
+
+                          )}
+
+                        </ul>
+
+                      </div>
+
+                    </div>
+
+                    <div>
+
+                      <div className="text-[11px] font-semibold uppercase text-[color:var(--ds-text-muted)]">
+
+                        Tổ đội nổi bật
+
+                      </div>
+
+                      <ul className="mt-2 space-y-1">
+
+                        {schedulePreviewTopTeams.length ? (
+
+                          schedulePreviewTopTeams.map((item) => (
+
+                            <li
+
+                              key={item.key}
+
+                              className="flex items-center justify-between gap-2 rounded px-2 py-1 hover:bg-[color:var(--ds-surface-muted)]"
+
+                            >
+
+                              <span className="truncate text-[color:var(--ds-text-primary)]">{item.name}</span>
+
+                              <span className="shrink-0 text-[11px] text-[color:var(--ds-text-secondary)]">
+
+                                {item.kpi} KPI • {item.decls} tờ
+
+                              </span>
+
+                            </li>
+
+                          ))
+
+                        ) : (
+
+                          <li className="text-[color:var(--ds-text-muted)]">Chưa có dữ liệu tổ đội.</li>
+
+                        )}
+
+                      </ul>
+
+                    </div>
+
+                  </div>
+
+                  <div className="space-y-3 rounded-lg border border-[color:var(--ds-border-subtle)] bg-white p-3 text-sm text-[color:var(--ds-text-secondary)] shadow-sm">
+
+                    <div className="flex items-center justify-between gap-2">
+
+                      <span className="text-sm font-semibold text-[color:var(--ds-text-primary)]">Lịch chạy kế tiếp</span>
+
+                      <span className="text-xs text-[color:var(--ds-text-muted)]">
+
+                        {schedulePreviewTimeline.length
+
+                          ? `${schedulePreviewTimeline.length} lịch đang bật`
+
+                          : "Chưa có lịch hoạt động"}
+
+                      </span>
+
+                    </div>
+
+                    <ul className="space-y-2">
+
+                      {schedulePreviewTimeline.length ? (
+
+                        schedulePreviewTimeline.map((item) => (
+
+                          <li
+
+                            key={item.id}
+
+                            className="rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-muted)] p-2"
+
+                          >
+
+                            <div className="flex items-start justify-between gap-2">
+
+                              <div>
+
+                                <div className="text-sm font-semibold text-[color:var(--ds-text-primary)]">{item.name}</div>
+
+                                <div className="text-[11px] text-[color:var(--ds-text-muted)]">{item.frequencyLabel}</div>
+
+                              </div>
+
+                              <span className="text-[11px] font-medium text-emerald-600">{item.countdownLabel}</span>
+
+                            </div>
+
+                            <div className="mt-1 text-[11px] text-[color:var(--ds-text-secondary)]">
+
+                              Tiếp theo: {item.nextRunLabel}
+
+                            </div>
+
+                            <div className="mt-1 text-[11px] text-[color:var(--ds-text-secondary)]">
+
+                              Định dạng: {item.formatLabel} • Email: {item.recipientsLabel}
+
+                            </div>
+
+                          </li>
+
+                        ))
+
+                      ) : (
+
+                        <li className="rounded border border-dashed border-[color:var(--ds-border-subtle)] p-3 text-xs text-[color:var(--ds-text-muted)]">
+
+                          Thêm lịch gửi để theo dõi thời điểm chạy tiếp theo ngay tại đây.
+
+                        </li>
+
+                      )}
+
+                    </ul>
+
+                  </div>
+
+                </div>
 
               </div>
 
