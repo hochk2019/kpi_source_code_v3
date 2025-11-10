@@ -168,6 +168,190 @@ function writeUILayoutConfig(config) {
 
 
 
+function normalizeCommandCenterPinList(value) {
+
+  if (!Array.isArray(value)) {
+
+    return [];
+
+  }
+
+  const seen = new Set();
+
+  const result = [];
+
+  for (const raw of value) {
+
+    if (typeof raw !== "string") {
+
+      continue;
+
+    }
+
+    const normalized = raw.trim();
+
+    if (!normalized || seen.has(normalized)) {
+
+      continue;
+
+    }
+
+    result.push(normalized);
+
+    seen.add(normalized);
+
+  }
+
+  return result;
+
+}
+
+
+
+function readCommandCenterLayoutSection() {
+
+  const layout = readUILayoutConfig();
+
+  const section =
+
+    layout && typeof layout.commandCenter === "object" && !Array.isArray(layout.commandCenter)
+
+      ? { ...layout.commandCenter }
+
+      : {};
+
+  const pinned = normalizeCommandCenterPinList(section.pinned);
+
+  return { layout, section, pinned };
+
+}
+
+
+
+function areStringArraysEqual(a, b) {
+
+  if (a === b) {
+
+    return true;
+
+  }
+
+  if (!Array.isArray(a) || !Array.isArray(b)) {
+
+    return false;
+
+  }
+
+  if (a.length !== b.length) {
+
+    return false;
+
+  }
+
+  for (let index = 0; index < a.length; index += 1) {
+
+    if (a[index] !== b[index]) {
+
+      return false;
+
+    }
+
+  }
+
+  return true;
+
+}
+
+
+
+export function getCommandCenterPinnedCommands() {
+
+  const { pinned } = readCommandCenterLayoutSection();
+
+  return pinned;
+
+}
+
+
+
+export function saveCommandCenterPinnedCommands(nextPins, { actor = "system" } = {}) {
+
+  const { layout, section, pinned: current } = readCommandCenterLayoutSection();
+
+  const normalized = normalizeCommandCenterPinList(nextPins);
+
+  if (areStringArraysEqual(current, normalized)) {
+
+    return current;
+
+  }
+
+  const nextSection = { ...section, pinned: normalized };
+
+  const nextLayout = { ...layout, commandCenter: nextSection };
+
+  writeUILayoutConfig(nextLayout);
+
+  pushAuditLog({
+
+    actor,
+
+    action: "ui.command-center.pins.update",
+
+    detail: `Cập nhật ${normalized.length} thao tác ghim trong Command Center`,
+
+    meta: { pinned: normalized.slice() },
+
+  });
+
+  return normalized;
+
+}
+
+
+
+export function subscribeCommandCenterPinnedCommands(listener) {
+
+  const fn = typeof listener === "function" ? listener : null;
+
+  if (!fn) {
+
+    return () => {};
+
+  }
+
+  const emit = () => {
+
+    try {
+
+      fn(getCommandCenterPinnedCommands());
+
+    } catch (error) {
+
+      console.error("Không thể đọc danh sách ghim Command Center", error);
+
+    }
+
+  };
+
+  const unsubscribe = subscribe(UI_LAYOUT_KEY, emit);
+
+  emit();
+
+  return () => {
+
+    if (typeof unsubscribe === "function") {
+
+      unsubscribe();
+
+    }
+
+  };
+
+}
+
+
+
 function normalizeKpiAdjustmentUserKey(identity) {
 
   const normalized = normalizeStr(identity || "");
@@ -10573,6 +10757,8 @@ export default {
   IMPORT_COLUMN_IDS, IMPORT_AUX_COLUMN_IDS, IMPORT_SENSITIVE_COLUMNS,
 
   getImportColumnConfig, saveImportColumnConfig, subscribeImportColumnConfig,
+
+  getCommandCenterPinnedCommands, saveCommandCenterPinnedCommands, subscribeCommandCenterPinnedCommands,
 
   UI_LAYOUT_KEY,
 

@@ -47,12 +47,11 @@ import {
 } from 'lucide-react';
 
 import { emitCommand } from '@/lib/commandBus.js';
+import { getCommandCenterPinnedCommands, saveCommandCenterPinnedCommands, subscribeCommandCenterPinnedCommands } from '@/lib/store.js';
 
 import { useTheme } from '@/designSystem/useTheme.js';
 
 
-
-const PIN_STORAGE_KEY = 'kpi_command_center_pins_v1';
 
 const USAGE_STORAGE_KEY = 'kpi_command_center_usage_v1';
 
@@ -698,16 +697,6 @@ function formatResults(commands, pinnedIds, usage, query) {
 
 
 
-function loadPins() {
-
-  const raw = loadJsonFromStorage(PIN_STORAGE_KEY, []);
-
-  return Array.isArray(raw) ? raw.filter((item) => typeof item === 'string') : [];
-
-}
-
-
-
 function loadUsage() {
 
   const raw = loadJsonFromStorage(USAGE_STORAGE_KEY, {});
@@ -738,13 +727,27 @@ export default function CommandCenter({
 
   const [query, setQuery] = useState('');
 
-  const [pinned, setPinned] = useState(() => loadPins());
+  const [pinned, setPinned] = useState(() => getCommandCenterPinnedCommands());
 
   const [usage, setUsage] = useState(() => loadUsage());
 
   const [highlightedIndex, setHighlightedIndex] = useState(0);
 
   const inputRef = useRef(null);
+
+
+
+  useEffect(() => {
+
+    const unsubscribe = subscribeCommandCenterPinnedCommands((nextPins) => {
+
+      setPinned(nextPins);
+
+    });
+
+    return unsubscribe;
+
+  }, []);
 
 
 
@@ -880,6 +883,16 @@ export default function CommandCenter({
 
   const togglePin = (commandId) => {
 
+    if (!commandId) {
+
+      return;
+
+    }
+
+    const actor =
+
+      currentUser?.username || currentUser?.email || currentUser?.id || currentUser?.name || 'guest';
+
     setPinned((prev) => {
 
       const next = prev.includes(commandId)
@@ -888,9 +901,7 @@ export default function CommandCenter({
 
         : [...prev, commandId];
 
-      saveJsonToStorage(PIN_STORAGE_KEY, next);
-
-      return next;
+      return saveCommandCenterPinnedCommands(next, { actor });
 
     });
 

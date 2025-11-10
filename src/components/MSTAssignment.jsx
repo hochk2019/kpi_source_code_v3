@@ -59,7 +59,7 @@ import {
 
 } from "@/components/ui/command.jsx";
 
-import { Check, ChevronsUpDown, CircleX, Plus, LogIn, LogOut } from "lucide-react";
+import { Check, ChevronsUpDown, CircleX, Plus, LogIn, LogOut, AlertTriangle } from "lucide-react";
 
 
 
@@ -82,13 +82,44 @@ const normalize = (s = "") =>
     .toLowerCase();
 
 export const COMPANY_NAME_WRAP_THRESHOLD = 25;
+export const COMPANY_NAME_MAX_LENGTH = 120;
+
+const COMPANY_NAME_DISALLOWED_CHAR_REGEX = /[^\p{L}\p{N}\s&.,()'/-]/gu;
+const COMPANY_NAME_REQUIRED_CHAR_PATTERN = /\p{L}/u;
 
 const HISTORY_ACTION_TYPES = new Set(["create", "update", "delete"]);
+
+const HISTORY_ACTION_LABELS = {
+  create: "Thêm mới",
+  update: "Chỉnh sửa",
+  delete: "Xóa",
+};
+
+const HISTORY_ACTION_BADGE_CLASSES = {
+  create: "border-emerald-200 bg-emerald-50 text-emerald-700",
+  update: "border-blue-200 bg-blue-50 text-blue-700",
+  delete: "border-red-200 bg-red-50 text-red-600",
+};
+
+const HISTORY_TIMELINE_PREVIEW_LIMIT = 8;
 
 const STATUS_FILTER_MAP = new Map([
   ["status:assigned", MST_ASSIGNMENT_STATUS.ASSIGNED],
   ["status:pending", MST_ASSIGNMENT_STATUS.PENDING],
 ]);
+
+const LEAD_VIEW_VISIBLE_COLUMNS = new Set([
+  "mst",
+  "company",
+  "person_import",
+  "person_export",
+  "status",
+  "actions",
+]);
+
+const LEAD_TEAM_ALL = "__all__";
+
+const normalizeTeamKey = (value = "") => normalizeName(normalizeStr(value || ""));
 
 export const shouldWrapCompanyName = (value = "") => {
   if (value == null) {
@@ -116,6 +147,58 @@ export const sanitizeCompanyNameInput = (value = "") => {
   }
 
   return value.replace(/\r?\n|\r/g, " ");
+};
+
+export const getCompanyNameValidation = (value = "") => {
+  const safeValue = value == null ? "" : value.toString();
+  const trimmed = safeValue.trim();
+  const characters = Array.from(trimmed);
+  const warnings = [];
+
+  if (!trimmed) {
+    return {
+      value: safeValue,
+      trimmed,
+      characterCount: 0,
+      warnings,
+      hasWarnings: false,
+    };
+  }
+
+  const characterCount = characters.length;
+
+  if (characterCount > COMPANY_NAME_MAX_LENGTH) {
+    warnings.push({
+      type: "length",
+      message: `Tên công ty đang dài ${characterCount} ký tự (tối đa ${COMPANY_NAME_MAX_LENGTH}).`,
+    });
+  }
+
+  const invalidCharacters = trimmed.match(COMPANY_NAME_DISALLOWED_CHAR_REGEX);
+  if (invalidCharacters && invalidCharacters.length > 0) {
+    const uniqueCharacters = Array.from(new Set(invalidCharacters));
+    warnings.push({
+      type: "invalid-characters",
+      message: `Tên công ty chứa ký tự không hợp lệ: ${uniqueCharacters
+        .map((char) => `"${char}"`)
+        .join(", ")}.`,
+    });
+  }
+
+  if (!COMPANY_NAME_REQUIRED_CHAR_PATTERN.test(trimmed)) {
+    warnings.push({
+      type: "format",
+      message: "Tên công ty cần chứa ít nhất một ký tự chữ.",
+    });
+  }
+
+  return {
+    value: safeValue,
+    trimmed,
+    characterCount,
+    warnings,
+    hasWarnings: warnings.length > 0,
+  };
 };
 
 
@@ -584,6 +667,245 @@ const computeStatusDisplay = (row) => {
 
 
   return normalizeStatusLabel(row?.status);
+
+};
+
+
+
+const hasAssignee = (row) =>
+  Boolean(normalizeStr(row?.person_import || "") || normalizeStr(row?.person_export || ""));
+
+
+const formatDateTimeForExport = (value) => {
+  try {
+    const date = value instanceof Date ? value : new Date(value);
+    if (Number.isNaN(date.getTime())) {
+      return "";
+    }
+    return date.toLocaleString("vi-VN", {
+      dateStyle: "medium",
+      timeStyle: "short",
+    });
+  } catch (error) {
+    console.warn("formatDateTimeForExport", error);
+    return "";
+  }
+};
+
+const summarizeEffectiveRange = (rows = []) => {
+  let minFrom = null;
+  let maxTo = null;
+  let hasOpenEnded = false;
+
+  rows.forEach((row) => {
+    const from = row?.effective_from ? row.effective_from : "";
+    const to = row?.effective_to ? row.effective_to : "";
+
+    if (from) {
+      if (!minFrom || from < minFrom) {
+        minFrom = from;
+      }
+    }
+
+    if (to) {
+      if (!maxTo || to > maxTo) {
+        maxTo = to;
+      }
+    } else if (hasAssignee(row)) {
+      hasOpenEnded = true;
+    }
+  });
+
+  if (!minFrom && !maxTo) {
+    return "Chưa có dữ liệu ngày hiệu lực";
+  }
+
+  const fromLabel = minFrom ? formatISODate(minFrom) : "Chưa đặt";
+  let toLabel = "";
+
+  if (hasOpenEnded) {
+    toLabel = "Hiện tại";
+  } else if (maxTo) {
+    toLabel = formatISODate(maxTo);
+  }
+
+  if (!toLabel) {
+    return fromLabel;
+  }
+
+  return `${fromLabel} → ${toLabel}`;
+};
+
+const summarizeAssignees = (rows = []) => {
+  const assignees = new Set();
+
+  rows.forEach((row) => {
+    const importName = String(row?.person_import || "").trim();
+    const exportName = String(row?.person_export || "").trim();
+
+    if (importName) {
+      assignees.add(importName);
+    }
+
+    if (exportName) {
+      assignees.add(exportName);
+    }
+  });
+
+  if (!assignees.size) {
+    return "Chưa gán nhân sự";
+  }
+
+  const sorted = Array.from(assignees).sort((a, b) =>
+    a.localeCompare(b, "vi", { sensitivity: "base" })
+  );
+
+  if (sorted.length <= 6) {
+    return sorted.join(", ");
+  }
+
+  const preview = sorted.slice(0, 6).join(", ");
+  return `${preview}… (+${sorted.length - 6} người)`;
+};
+
+const buildExportMetadataEntries = ({
+  scopeLabel,
+  totalCount,
+  filteredCount,
+  search,
+  staffFilter,
+  historyFilter,
+  leadViewEnabled,
+  leadTeamName,
+  assigneeSummary,
+  effectiveRange,
+  actorLabel,
+  generatedAt,
+}) => {
+  const entries = [];
+
+  entries.push(["Phạm vi xuất", scopeLabel]);
+  entries.push(["Số dòng", `${filteredCount} / ${totalCount}`]);
+  entries.push(["Thời gian xuất", formatDateTimeForExport(generatedAt)]);
+  entries.push(["Thực hiện bởi", actorLabel || "Không xác định"]);
+
+  entries.push(["Tìm kiếm", search ? search : "(Không)"]);
+  entries.push(["Bộ lọc nhân sự", staffFilter ? staffFilter : "(Không)"]);
+
+  if (leadViewEnabled) {
+    entries.push(["Chế độ trưởng nhóm", leadTeamName || "Đang bật"]);
+  }
+
+  if (historyFilter && typeof historyFilter === "object") {
+    const { from, to, type } = historyFilter;
+    if (from || to || (type && type !== "all")) {
+      entries.push([
+        "Bộ lọc lịch sử",
+        [
+          type && type !== "all" ? `Loại: ${type}` : null,
+          from ? `Từ: ${from}` : null,
+          to ? `Đến: ${to}` : null,
+        ]
+          .filter(Boolean)
+          .join(" • ") || "Đang bật",
+      ]);
+    }
+  }
+
+  entries.push(["Người gán trong danh sách", assigneeSummary]);
+  entries.push(["Khoảng ngày hiệu lực", effectiveRange]);
+
+  return entries;
+};
+
+const downloadBlob = (blob, fileName) => {
+  if (typeof window === "undefined") {
+    console.warn("downloadBlob: window is undefined");
+    return;
+  }
+
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+};
+
+
+const DEFAULT_RANGE_START = "0000-01-01";
+
+const DEFAULT_RANGE_END = "9999-12-31";
+
+
+
+const getRowRange = (row = {}) => {
+
+  const start = row?.effective_from || DEFAULT_RANGE_START;
+
+  const end = row?.effective_to || DEFAULT_RANGE_END;
+
+  return { start, end };
+
+};
+
+
+
+const rangesOverlap = (a, b) => {
+
+  if (!a || !b) return false;
+
+  return a.start <= b.end && b.start <= a.end;
+
+};
+
+
+
+const buildRangeLabel = (row) => {
+
+  const startLabel = row?.effective_from ? formatISODate(row.effective_from) : "Chưa đặt";
+
+  const endLabel = row?.effective_to ? formatISODate(row.effective_to) : "Hiện tại";
+
+  return `${startLabel} → ${endLabel}`;
+
+};
+
+
+
+const formatAssigneeSummary = (row) => {
+
+  const importName = normalizeStr(row?.person_import || "") ? row.person_import : "";
+
+  const exportName = normalizeStr(row?.person_export || "") ? row.person_export : "";
+
+  if (importName && exportName) {
+
+    if (importName === exportName) {
+
+      return `${importName} (Nhập & Xuất)`;
+
+    }
+
+    return `${importName} (Nhập) • ${exportName} (Xuất)`;
+
+  }
+
+  if (importName) {
+
+    return `${importName} (Nhập)`;
+
+  }
+
+  if (exportName) {
+
+    return `${exportName} (Xuất)`;
+
+  }
+
+  return "Chưa gán nhân viên";
 
 };
 
@@ -1334,6 +1656,25 @@ const buildHistoryIndex = (entries = []) => {
 
 
 
+const groupHistoryTimelineEntries = (entries = []) => {
+  const groups = new Map();
+
+  entries.forEach((entry) => {
+    if (!entry) return;
+    const dateKey = (entry.timestamp || "").slice(0, 10) || "";
+    if (!groups.has(dateKey)) {
+      groups.set(dateKey, []);
+    }
+    groups.get(dateKey).push(entry);
+  });
+
+  return Array.from(groups.entries()).map(([date, list]) => ({
+    date,
+    entries: Array.isArray(list) ? list : [],
+  }));
+};
+
+
 const formatHistoryTime = (value) => {
 
   if (!value) return "";
@@ -1440,6 +1781,111 @@ const HistoryDetails = ({ entries = [], label }) => {
 
   );
 
+};
+
+
+
+
+
+const HistoryTimelineGroups = ({ groups = [] }) => {
+  const safeGroups = Array.isArray(groups) ? groups : [];
+
+  if (!safeGroups.length) {
+    return (
+      <p className="text-sm text-slate-500">
+        Không có thay đổi nào khớp bộ lọc hiện tại.
+      </p>
+    );
+  }
+
+  const renderValue = (value) =>
+    value ? (
+      <span className="text-slate-700">{value}</span>
+    ) : (
+      <span className="italic text-slate-400">(trống)</span>
+    );
+
+  return (
+    <div className="space-y-4">
+      {safeGroups.map((group, groupIndex) => {
+        const entries = Array.isArray(group?.entries) ? group.entries : [];
+        const groupKey = group?.date || `history-${groupIndex}`;
+        const dateLabel = group?.date ? formatISODate(group.date) : "";
+        const title = dateLabel || "Không xác định";
+
+        return (
+          <section key={groupKey} className="space-y-2">
+            <header className="flex flex-wrap items-center justify-between gap-2">
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                {title}
+              </h3>
+              <span className="text-[11px] font-medium text-slate-400">
+                {entries.length} thay đổi
+              </span>
+            </header>
+            {entries.length ? (
+              <ol className="relative border-l border-slate-200 pl-4">
+                {entries.map((entry, entryIndex) => {
+                  const key = entry?.id || `${groupKey}-${entryIndex}`;
+                  const actionLabel =
+                    HISTORY_ACTION_LABELS[entry?.type] || entry?.type || "Khác";
+                  const badgeClass =
+                    HISTORY_ACTION_BADGE_CLASSES[entry?.type] ||
+                    "border-slate-200 bg-slate-100 text-slate-600";
+                  const timestampLabel = formatHistoryTime(entry?.timestamp);
+                  const actorName = entry?.actor ? `Bởi ${entry.actor}` : "Bởi hệ thống";
+                  const fieldLabel =
+                    HISTORY_FIELD_LABELS[entry?.field] ||
+                    (entry?.field ? entry.field : "Trường dữ liệu");
+
+                  return (
+                    <li key={key} className="relative mb-6 ml-2 last:mb-0">
+                      <span
+                        className="absolute -left-[9px] top-1.5 inline-flex size-3 rounded-full border border-white bg-slate-400 shadow"
+                        aria-hidden="true"
+                      />
+                      <div className="flex flex-col gap-2 rounded border border-slate-200 bg-white p-3 text-sm text-slate-700">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="font-semibold text-slate-800">
+                            {timestampLabel || "Chưa rõ thời gian"}
+                          </span>
+                          <span
+                            className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${badgeClass}`}
+                          >
+                            {actionLabel}
+                          </span>
+                          <span className="text-xs text-slate-500">{actorName}</span>
+                        </div>
+                        <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-600">
+                          <span>
+                            <span className="text-slate-500">MST:</span> {entry?.mst || "(Không xác định)"}
+                          </span>
+                          {fieldLabel ? (
+                            <span>
+                              <span className="text-slate-500">Trường:</span> {fieldLabel}
+                            </span>
+                          ) : null}
+                        </div>
+                        <div className="flex flex-wrap items-baseline gap-2 text-xs text-slate-600">
+                          <span className="text-slate-500">Từ:</span> {renderValue(entry?.from)}
+                          <span className="text-slate-400">→</span>
+                          <span className="text-slate-500">Đến:</span> {renderValue(entry?.to)}
+                        </div>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ol>
+            ) : (
+              <p className="text-xs italic text-slate-400">
+                Chưa ghi nhận thay đổi trong ngày này.
+              </p>
+            )}
+          </section>
+        );
+      })}
+    </div>
+  );
 };
 
 
@@ -1611,11 +2057,36 @@ const StageTimelineGroups = ({ groups = [] }) => {
 
 
 
+const CompanyNameValidationMessages = ({ warnings }) => {
+  if (!warnings || warnings.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="flex flex-col gap-1 text-xs text-amber-700" role="status" aria-live="polite">
+      {warnings.map((warning, index) => (
+        <div
+          key={`${warning.type}-${index}`}
+          className="flex items-start gap-1"
+          data-company-warning-type={warning.type}
+        >
+          <AlertTriangle className="mt-0.5 size-3 shrink-0" aria-hidden="true" />
+          <span>{warning.message}</span>
+        </div>
+      ))}
+    </div>
+  );
+};
+
 export function CompanyNameCell({ value, isReadOnly, onChange, placeholder = "Tên công ty" }) {
   const safeValue = value == null ? "" : value.toString();
   const trimmedValue = safeValue.trim();
   const shouldWrap = shouldWrapCompanyName(safeValue);
   const textareaRef = useRef(null);
+  const { warnings, hasWarnings } = useMemo(
+    () => getCompanyNameValidation(safeValue),
+    [safeValue]
+  );
 
   const adjustTextareaHeight = useCallback(
     (element, nextValue) => {
@@ -1677,20 +2148,27 @@ export function CompanyNameCell({ value, isReadOnly, onChange, placeholder = "T�
   };
 
   return (
-    <textarea
-      ref={textareaRef}
-      value={safeValue}
-      onChange={handleChange}
-      className={clsx(
-        'border rounded px-2 py-1 w-full resize-y whitespace-normal break-words',
-        shouldWrap ? 'leading-snug min-h-[2.5rem]' : 'leading-normal min-h-[2.25rem]'
-      )}
-      placeholder={placeholder}
-      title={trimmedValue ? safeValue : undefined}
-      spellCheck={false}
-      data-company-wrap={shouldWrap ? 'wrapped' : 'single'}
-      style={{ wordBreak: 'break-word' }}
-    />
+    <div className="flex flex-col gap-1">
+      <textarea
+        ref={textareaRef}
+        value={safeValue}
+        onChange={handleChange}
+        className={clsx(
+          'border rounded px-2 py-1 w-full resize-y whitespace-normal break-words focus:outline-none focus:ring-2',
+          shouldWrap ? 'leading-snug min-h-[2.5rem]' : 'leading-normal min-h-[2.25rem]',
+          hasWarnings
+            ? 'border-amber-500/70 focus:border-amber-500 focus:ring-amber-200'
+            : 'border-gray-300 focus:border-blue-500 focus:ring-blue-200'
+        )}
+        placeholder={placeholder}
+        title={trimmedValue ? safeValue : undefined}
+        spellCheck={false}
+        data-company-wrap={shouldWrap ? 'wrapped' : 'single'}
+        aria-invalid={hasWarnings || undefined}
+        style={{ wordBreak: 'break-word' }}
+      />
+      <CompanyNameValidationMessages warnings={warnings} />
+    </div>
   );
 }
 
@@ -1961,6 +2439,21 @@ export function PageSizeControl({
   );
 }
 
+const QuickFilterPill = ({ active, children, onClick }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    className={clsx(
+      "rounded-full border px-3 py-1 text-xs font-semibold transition",
+      active
+        ? "border-amber-600 bg-amber-600 text-white shadow-sm"
+        : "border-amber-200 bg-white text-amber-700 hover:border-amber-300 hover:bg-amber-100"
+    )}
+  >
+    {children}
+  </button>
+);
+
 export default function MSTAssignment({
   canEdit = true,
   currentUser = null,
@@ -2020,6 +2513,50 @@ export default function MSTAssignment({
   const [rosterSnapshot, setRosterSnapshot] = useState(() => getTeamRoster());
 
   const rosterTeams = useMemo(() => buildRosterTeams(rosterSnapshot), [rosterSnapshot]);
+  const [leadViewEnabled, setLeadViewEnabled] = useState(false);
+  const [leadStatusQuick, setLeadStatusQuick] = useState("all");
+  const [leadTeamQuick, setLeadTeamQuick] = useState(LEAD_TEAM_ALL);
+
+  const leadStatusFilter = useMemo(() => {
+    if (!leadViewEnabled) {
+      return null;
+    }
+    if (leadStatusQuick === "assigned") {
+      return MST_ASSIGNMENT_STATUS.ASSIGNED;
+    }
+    if (leadStatusQuick === "pending") {
+      return MST_ASSIGNMENT_STATUS.PENDING;
+    }
+    return null;
+  }, [leadStatusQuick, leadViewEnabled]);
+
+  const normalizedLeadTeamFilter = useMemo(() => {
+    if (!leadViewEnabled) {
+      return "";
+    }
+    if (!leadTeamQuick || leadTeamQuick === LEAD_TEAM_ALL) {
+      return "";
+    }
+    return leadTeamQuick;
+  }, [leadTeamQuick, leadViewEnabled]);
+
+  const leadTeamName = useMemo(() => {
+    if (!leadTeamQuick || leadTeamQuick === LEAD_TEAM_ALL) {
+      return "Tất cả tổ";
+    }
+    const matched = rosterTeams.find((team) => team.normalized === leadTeamQuick);
+    return matched?.name || "Tổ đang chọn";
+  }, [leadTeamQuick, rosterTeams]);
+
+  useEffect(() => {
+    if (leadTeamQuick === LEAD_TEAM_ALL) {
+      return;
+    }
+    const exists = rosterTeams.some((team) => team.normalized === leadTeamQuick);
+    if (!exists) {
+      setLeadTeamQuick(LEAD_TEAM_ALL);
+    }
+  }, [leadTeamQuick, rosterTeams]);
 
   useEffect(() => {
     if (!quickLookup || typeof quickLookup !== "object") {
@@ -2239,31 +2776,48 @@ export default function MSTAssignment({
 
   }, [historyFilter.type, isHistoryFilterActive]);
 
+  const [exportMenuOpen, setExportMenuOpen] = useState(false);
+
   const [showAddForm, setShowAddForm] = useState(false);
 
   const [draft, setDraft] = useState({
-
     mst: "",
-
     company: "",
-
     person_import: "",
-
     person_export: "",
-
     team: "",
-
     effective_from: "",
-
     effective_to: "",
-
   });
+  const draftCompanyValidation = useMemo(
+    () => getCompanyNameValidation(draft.company),
+    [draft.company]
+  );
 
   const canUseLocalStorage =
 
     typeof window !== "undefined" && typeof window.localStorage !== "undefined";
 
   const actor = currentUser?.username || "guest";
+
+  const exportActorLabel = useMemo(() => {
+    const candidates = [
+      currentUser?.name,
+      currentUser?.fullName,
+      currentUser?.displayName,
+      currentUser?.username,
+      actor,
+    ];
+    for (const candidate of candidates) {
+      if (typeof candidate === "string") {
+        const trimmed = candidate.trim();
+        if (trimmed) {
+          return trimmed;
+        }
+      }
+    }
+    return "Không xác định";
+  }, [actor, currentUser]);
 
   const defaultVisibleColumns = useMemo(
 
@@ -2613,11 +3167,23 @@ export default function MSTAssignment({
 
       if (option.required) return true;
 
+      if (leadViewEnabled) {
+
+        if (!LEAD_VIEW_VISIBLE_COLUMNS.has(key)) {
+
+          return false;
+
+        }
+
+        return true;
+
+      }
+
       return visibleColumns[key] !== false;
 
     },
 
-    [visibleColumns]
+    [leadViewEnabled, visibleColumns]
 
   );
 
@@ -2674,8 +3240,6 @@ export default function MSTAssignment({
     addFavorite: addQuickFavorite,
 
     removeFavorite: removeQuickFavorite,
-
-    clearType: clearQuickFavorite,
 
   } = useMSTQuickFilters();
 
@@ -3479,67 +4043,157 @@ export default function MSTAssignment({
 
 
 
-  const exportRowsToExcel = (scope = "filtered") => {
-
+  const exportRows = useCallback((scope = "filtered", format = "xlsx") => {
     const source = scope === "all" ? rows : filtered;
-
     if (!source.length) {
-
-      alert("Không có dữ liệu để xuất Excel.");
-
+      alert("Không có dữ liệu để xuất file.");
       return;
+    }
+
+    const generatedAt = new Date();
+    const totalCount = rows.length;
+    const filteredCount = source.length;
+    const scopeLabel =
+      scope === "all"
+        ? "Toàn bộ danh sách đang quản lý"
+        : "Theo bộ lọc hiện tại";
+
+    const metadataEntries = buildExportMetadataEntries({
+      scopeLabel,
+      totalCount,
+      filteredCount,
+      search: (search || "").trim(),
+      staffFilter: (staffFilter || "").trim(),
+      historyFilter,
+      leadViewEnabled,
+      leadTeamName,
+      assigneeSummary: summarizeAssignees(source),
+      effectiveRange: summarizeEffectiveRange(source),
+      actorLabel: exportActorLabel,
+      generatedAt,
+    });
+
+    const data = source.map((item, index) => ({
+      STT: index + 1,
+      MST: item.mst,
+      "Công ty": item.company || "",
+      "Người phụ trách Nhập": item.person_import || "",
+      "Người phụ trách Xuất": item.person_export || "",
+      "Tổ đội": item.team || "",
+      "Áp dụng từ ngày": item.effective_from || "",
+      "Đến hết ngày": item.effective_to || "",
+      "Trạng thái": computeStatusDisplay(item) || item.status || "",
+    }));
+
+    const timestamp = `${generatedAt.getFullYear()}${String(
+      generatedAt.getMonth() + 1
+    ).padStart(2, "0")}${String(generatedAt.getDate()).padStart(2, "0")}_${String(
+      generatedAt.getHours()
+    ).padStart(2, "0")}${String(generatedAt.getMinutes()).padStart(2, "0")}`;
+    const scopeSuffix = scope === "all" ? "toan-bo" : "loc";
+    const baseName = `gan-mst-${scopeSuffix}-${timestamp}`;
+    const normalizedFormat = format === "csv" ? "csv" : "xlsx";
+
+    if (normalizedFormat === "csv") {
+      try {
+        const worksheet = XLSX.utils.json_to_sheet(data);
+        const csvBody = XLSX.utils.sheet_to_csv(worksheet);
+        const metadataLines = [
+          "# Báo cáo phân bổ MST",
+          ...metadataEntries.map(([label, value]) => `# ${label}: ${value}`),
+          "",
+        ];
+        const csvContent = `${metadataLines.join("\n")}${csvBody}`;
+        const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+        downloadBlob(blob, `${baseName}.csv`);
+      } catch (error) {
+        console.error("Không thể xuất CSV", error);
+        alert("Không thể xuất file CSV. Vui lòng thử lại.");
+      }
+      return;
+    }
+
+    try {
+      const workbook = XLSX.utils.book_new();
+      const metadataSheet = XLSX.utils.aoa_to_sheet([["Trường", "Giá trị"], ...metadataEntries]);
+      XLSX.utils.book_append_sheet(workbook, metadataSheet, "Thong tin");
+      const dataSheet = XLSX.utils.json_to_sheet(data);
+      XLSX.utils.book_append_sheet(workbook, dataSheet, "Gan MST");
+      XLSX.writeFile(workbook, `${baseName}.xlsx`);
+    } catch (error) {
+      console.error("Không thể xuất Excel", error);
+      alert("Không thể xuất file Excel. Vui lòng thử lại.");
+    }
+  }, [
+    rows,
+    filtered,
+    search,
+    staffFilter,
+    historyFilter,
+    leadViewEnabled,
+    leadTeamName,
+    exportActorLabel,
+  ]);
+
+  const leadTeamPool = useMemo(() => {
+
+    if (!leadViewEnabled) {
+
+      return rows;
 
     }
 
-    const data = source.map((item, index) => ({
+    if (!normalizedLeadTeamFilter) {
 
-      STT: index + 1,
+      return rows;
 
-      MST: item.mst,
+    }
 
-      "Công ty": item.company || "",
+    return rows.filter((row) => normalizeTeamKey(row?.team || "") === normalizedLeadTeamFilter);
 
-      "Người phụ trách Nhập": item.person_import || "",
-
-      "Người phụ trách Xuất": item.person_export || "",
-
-      "Tổ đội": item.team || "",
-
-      "Áp dụng từ ngày": item.effective_from || "",
-
-      "Đến hết ngày": item.effective_to || "",
-
-      "Trạng thái": computeStatusDisplay(item) || item.status || "",
-
-    }));
+  }, [leadViewEnabled, normalizedLeadTeamFilter, rows]);
 
 
 
-    const worksheet = XLSX.utils.json_to_sheet(data);
+  const leadSummary = useMemo(() => {
 
-    const workbook = XLSX.utils.book_new();
+    if (!leadViewEnabled) {
 
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Gan MST");
+      return { total: 0, assigned: 0, pending: 0 };
 
-    const now = new Date();
+    }
 
-    const timestamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(
+    let assigned = 0;
 
-      now.getDate()
+    let pending = 0;
 
-    ).padStart(2, "0")}_${String(now.getHours()).padStart(2, "0")}${String(now.getMinutes()).padStart(
+    leadTeamPool.forEach((row) => {
 
-      2,
+      const status = computeStoredStatus(row);
 
-      "0"
+      if (status === MST_ASSIGNMENT_STATUS.ASSIGNED) {
 
-    )}`;
+        assigned += 1;
 
-    const suffix = scope === "all" ? "toan-bo" : "loc";
+      } else {
 
-    XLSX.writeFile(workbook, `gan-mst-${suffix}-${timestamp}.xlsx`);
+        pending += 1;
 
-  };
+      }
+
+    });
+
+    return {
+
+      total: leadTeamPool.length,
+
+      assigned,
+
+      pending,
+
+    };
+
+  }, [leadTeamPool, leadViewEnabled]);
 
 
 
@@ -3569,33 +4223,25 @@ export default function MSTAssignment({
 
       }
 
-      if (activeStatusFilter) {
+      const rowStatus = computeStoredStatus(row);
 
-        const hasImport = Boolean(normalizeStr(row.person_import || ""));
+      if (activeStatusFilter && rowStatus !== activeStatusFilter) {
 
-        const hasExport = Boolean(normalizeStr(row.person_export || ""));
+        return false;
 
-        if (
+      }
 
-          activeStatusFilter === MST_ASSIGNMENT_STATUS.ASSIGNED &&
+      if (leadStatusFilter && rowStatus !== leadStatusFilter) {
 
-          (!hasImport || !hasExport)
+        return false;
 
-        ) {
+      }
 
-          return false;
+      if (leadViewEnabled && normalizedLeadTeamFilter) {
 
-        }
+        const rowTeamKey = normalizeTeamKey(row.team || "");
 
-        if (
-
-          activeStatusFilter === MST_ASSIGNMENT_STATUS.PENDING &&
-
-          hasImport &&
-
-          hasExport
-
-        ) {
+        if (rowTeamKey !== normalizedLeadTeamFilter) {
 
           return false;
 
@@ -3681,9 +4327,278 @@ export default function MSTAssignment({
 
     activeStatusFilter,
 
+    leadStatusFilter,
+
+    leadViewEnabled,
+
+    normalizedLeadTeamFilter,
+
     recentlyImportedKeys,
 
   ]);
+
+
+  const duplicateClusters = useMemo(() => {
+
+    if (!rows.length) return [];
+
+    const byMst = new Map();
+
+    rows.forEach((row, index) => {
+
+      if (!row) return;
+
+      const mstKey = row.mst || "";
+
+      if (!mstKey) return;
+
+      if (!byMst.has(mstKey)) {
+
+        byMst.set(mstKey, []);
+
+      }
+
+      byMst.get(mstKey).push({ row, index });
+
+    });
+
+
+
+    const clusters = [];
+
+    byMst.forEach((entries, mst) => {
+
+      const prepared = entries
+
+        .map(({ row, index }) => ({
+
+          row,
+
+          index,
+
+          identity:
+
+            row.__originalKey ||
+
+            makeRowKey(row) ||
+
+            `${mst || "UNKNOWN"}__${index}`,
+
+        }))
+
+        .filter(({ row }) => hasAssignee(row));
+
+      if (prepared.length < 2) return;
+
+      const entryByRow = new Map(prepared.map((entry) => [entry.row, entry]));
+
+      const sortedRows = sortMSTRows(prepared.map((entry) => entry.row));
+
+      const sortedEntries = sortedRows
+
+        .map((row) => entryByRow.get(row))
+
+        .filter(Boolean);
+
+      const overlapping = new Map();
+
+      for (let i = 0; i < sortedEntries.length; i += 1) {
+
+        const entryA = sortedEntries[i];
+
+        const rangeA = getRowRange(entryA.row);
+
+        for (let j = i + 1; j < sortedEntries.length; j += 1) {
+
+          const entryB = sortedEntries[j];
+
+          const rangeB = getRowRange(entryB.row);
+
+          if (rangesOverlap(rangeA, rangeB)) {
+
+            overlapping.set(entryA.identity, entryA);
+
+            overlapping.set(entryB.identity, entryB);
+
+          }
+
+        }
+
+      }
+
+      if (overlapping.size < 2) return;
+
+      const sortedConflictEntries = Array.from(overlapping.values()).sort(
+
+        (entryA, entryB) => {
+
+          const rowA = entryA.row;
+
+          const rowB = entryB.row;
+
+          const filledA =
+
+            (normalizeStr(rowA.person_import || "") ? 1 : 0) +
+
+            (normalizeStr(rowA.person_export || "") ? 1 : 0);
+
+          const filledB =
+
+            (normalizeStr(rowB.person_import || "") ? 1 : 0) +
+
+            (normalizeStr(rowB.person_export || "") ? 1 : 0);
+
+          if (filledA !== filledB) return filledB - filledA;
+
+          const activeA = rowA.effective_to ? 0 : 1;
+
+          const activeB = rowB.effective_to ? 0 : 1;
+
+          if (activeA !== activeB) return activeB - activeA;
+
+          const fromA = rowA.effective_from || DEFAULT_RANGE_START;
+
+          const fromB = rowB.effective_from || DEFAULT_RANGE_START;
+
+          if (fromA !== fromB) return fromB.localeCompare(fromA);
+
+          const toA = rowA.effective_to || DEFAULT_RANGE_END;
+
+          const toB = rowB.effective_to || DEFAULT_RANGE_END;
+
+          return toA.localeCompare(toB);
+
+        }
+
+      );
+
+      const details = sortedConflictEntries.map((entry) => {
+
+        const row = entry.row;
+
+        return {
+
+          key: entry.identity,
+
+          row,
+
+          summary: formatAssigneeSummary(row),
+
+          rangeLabel: buildRangeLabel(row),
+
+          teamLabel: row.team || "",
+
+          hasImport: Boolean(normalizeStr(row.person_import || "")),
+
+          hasExport: Boolean(normalizeStr(row.person_export || "")),
+
+          isActive: !row.effective_to,
+
+        };
+
+      });
+
+      if (!details.length) return;
+
+      const keepDetail = details[0];
+
+      const otherDetails = details.slice(1);
+
+      const companyName =
+
+        keepDetail?.row?.company ||
+
+        details.find((detail) => detail.row.company)?.row.company ||
+
+        "";
+
+      const id = `${mst || "UNKNOWN"}__${details
+
+        .map((detail) => detail.key)
+
+        .join("|")}`;
+
+      const staffSet = new Set();
+
+      details.forEach((detail) => {
+
+        if (detail.hasImport) {
+
+          staffSet.add(detail.row.person_import);
+
+        }
+
+        if (detail.hasExport) {
+
+          staffSet.add(detail.row.person_export);
+
+        }
+
+      });
+
+      const keepMissingImport = !keepDetail?.hasImport;
+
+      const keepMissingExport = !keepDetail?.hasExport;
+
+      const splitOption =
+
+        (keepMissingImport && otherDetails.some((detail) => detail.hasImport)) ||
+
+        (keepMissingExport && otherDetails.some((detail) => detail.hasExport));
+
+      clusters.push({
+
+        id,
+
+        mst,
+
+        company: companyName,
+
+        details,
+
+        keepDetail,
+
+        otherDetails,
+
+        staffList: Array.from(staffSet),
+
+        hasSplitOption: splitOption,
+
+      });
+
+    });
+
+    return clusters;
+
+  }, [rows]);
+
+
+
+  const visibleDuplicateClusters = useMemo(() => {
+
+    if (!duplicateClusters.length) return [];
+
+    if (!filtered.length) return [];
+
+    const visibleSet = new Set(filtered);
+
+    return duplicateClusters.filter((cluster) =>
+
+      cluster.details.some((detail) => visibleSet.has(detail.row))
+
+    );
+
+  }, [duplicateClusters, filtered]);
+
+
+
+  const hiddenDuplicateCount = Math.max(
+
+    duplicateClusters.length - visibleDuplicateClusters.length,
+
+    0
+
+  );
 
 
 
@@ -3766,7 +4681,7 @@ export default function MSTAssignment({
     [groupByMST, aggregatedByMST, filtered]
   );
 
-  const {
+  const { 
     page,
     pageSize,
     pageCount: totalPages,
@@ -3780,6 +4695,12 @@ export default function MSTAssignment({
     initialPageSize,
     minPageSize: MIN_PAGE_SIZE,
   });
+
+  useEffect(() => {
+
+    setPage(1);
+
+  }, [leadStatusFilter, leadViewEnabled, normalizedLeadTeamFilter, setPage]);
 
   const timelineGroupsByMST = useMemo(() => {
     const map = new Map();
@@ -3881,6 +4802,12 @@ export default function MSTAssignment({
 
     historyFilter,
 
+    leadViewEnabled,
+
+    leadStatusQuick,
+
+    leadTeamQuick,
+
   ]);
 
 
@@ -3912,6 +4839,51 @@ export default function MSTAssignment({
   const filteredHistoryCount = filteredHistoryEntries.length;
 
   const recentlyImportedCount = recentlyImportedKeys.size;
+
+
+  const historyTimelinePreviewEntries = useMemo(
+    () => filteredHistoryEntries.slice(0, HISTORY_TIMELINE_PREVIEW_LIMIT),
+    [filteredHistoryEntries]
+  );
+
+  const historyTimelinePreviewGroups = useMemo(
+    () => groupHistoryTimelineEntries(historyTimelinePreviewEntries),
+    [historyTimelinePreviewEntries]
+  );
+
+  const historyTimelineGroups = useMemo(
+    () => groupHistoryTimelineEntries(filteredHistoryEntries),
+    [filteredHistoryEntries]
+  );
+
+  const historyTimelinePreviewCount = historyTimelinePreviewEntries.length;
+  const canOpenHistoryTimeline = historyTimelineGroups.length > 0;
+
+  const [historyTimelineDialogState, setHistoryTimelineDialogState] = useState({
+    open: false,
+    groups: [],
+    title: "",
+    subtitle: "",
+  });
+
+  const handleHistoryTimelineDialogOpenChange = useCallback((nextOpen) => {
+    setHistoryTimelineDialogState((prev) => ({ ...prev, open: nextOpen }));
+  }, []);
+
+  const handleOpenHistoryTimeline = useCallback(() => {
+    if (!historyTimelineGroups.length) {
+      setHistoryTimelineDialogState((prev) => ({ ...prev, open: false }));
+      return;
+    }
+    setHistoryTimelineDialogState({
+      open: true,
+      groups: historyTimelineGroups,
+      title: "Timeline thay đổi MST",
+      subtitle: `${filteredHistoryCount} thay đổi khớp bộ lọc hiện tại`,
+    });
+  }, [filteredHistoryCount, historyTimelineGroups]);
+
+
 
 
 
@@ -4263,6 +5235,232 @@ export default function MSTAssignment({
 
 
 
+  const handleKeepDuplicate = useCallback(
+
+    (targetRow, duplicates = []) => {
+
+      if (!targetRow) {
+
+        alert("Chọn dòng ưu tiên trước khi giữ.");
+
+        return;
+
+      }
+
+      if (!hasAssignee(targetRow)) {
+
+        alert("Điền nhân viên phụ trách cho dòng ưu tiên trước khi giữ.");
+
+        return;
+
+      }
+
+      const others = duplicates.filter((row) => row && row !== targetRow);
+
+      if (!others.length) {
+
+        alert("Không tìm thấy dòng trùng để xử lý.");
+
+        return;
+
+      }
+
+      others.forEach((row) => {
+
+        const patch = {};
+
+        if (normalizeStr(row.person_import || "")) {
+
+          patch.person_import = "";
+
+        }
+
+        if (normalizeStr(row.person_export || "")) {
+
+          patch.person_export = "";
+
+        }
+
+        if (Object.keys(patch).length) {
+
+          updateRow(row, patch);
+
+        }
+
+      });
+
+      alert(
+
+        "Đã giữ dòng ưu tiên và làm trống nhân viên ở các dòng trùng. Bấm Lưu để hoàn tất."
+
+      );
+
+    },
+
+    [updateRow]
+
+  );
+
+
+
+  const handleTransferDuplicate = useCallback(
+
+    (targetRow, sourceRow) => {
+
+      if (!targetRow || !sourceRow) {
+
+        alert("Chọn dòng nguồn để chuyển nhân viên.");
+
+        return;
+
+      }
+
+      const patch = {};
+
+      if (normalizeStr(sourceRow.person_import || "")) {
+
+        patch.person_import = sourceRow.person_import;
+
+      }
+
+      if (normalizeStr(sourceRow.person_export || "")) {
+
+        patch.person_export = sourceRow.person_export;
+
+      }
+
+      if (!Object.keys(patch).length) {
+
+        alert("Dòng nguồn chưa có nhân viên để chuyển.");
+
+        return;
+
+      }
+
+      updateRow(targetRow, patch);
+
+      const clearPatch = {};
+
+      if (patch.person_import) clearPatch.person_import = "";
+
+      if (patch.person_export) clearPatch.person_export = "";
+
+      if (Object.keys(clearPatch).length) {
+
+        updateRow(sourceRow, clearPatch);
+
+      }
+
+      alert("Đã chuyển nhân viên sang dòng ưu tiên. Bấm Lưu để hoàn tất.");
+
+    },
+
+    [updateRow]
+
+  );
+
+
+
+  const handleSplitDuplicate = useCallback(
+
+    (targetRow, duplicates = []) => {
+
+      if (!targetRow) {
+
+        alert("Chọn dòng ưu tiên để tách vai trò.");
+
+        return;
+
+      }
+
+      const others = duplicates.filter((row) => row && row !== targetRow);
+
+      if (!others.length) {
+
+        alert("Không có dòng khác để tách vai trò.");
+
+        return;
+
+      }
+
+      const importSource = normalizeStr(targetRow.person_import || "")
+
+        ? targetRow
+
+        : others.find((row) => normalizeStr(row.person_import || ""));
+
+      const exportSource = normalizeStr(targetRow.person_export || "")
+
+        ? targetRow
+
+        : others.find((row) => normalizeStr(row.person_export || ""));
+
+      if (!importSource && !exportSource) {
+
+        alert("Không tìm thấy nhân viên nhập hoặc xuất để tách vai trò.");
+
+        return;
+
+      }
+
+      const patch = {};
+
+      if (importSource && normalizeStr(importSource.person_import || "")) {
+
+        patch.person_import = importSource.person_import;
+
+      }
+
+      if (exportSource && normalizeStr(exportSource.person_export || "")) {
+
+        patch.person_export = exportSource.person_export;
+
+      }
+
+      if (!Object.keys(patch).length) {
+
+        alert("Không có dữ liệu nhân viên hợp lệ để tách vai trò.");
+
+        return;
+
+      }
+
+      updateRow(targetRow, patch);
+
+      others.forEach((row) => {
+
+        const nextPatch = {};
+
+        if (importSource === row) {
+
+          nextPatch.person_import = "";
+
+        }
+
+        if (exportSource === row) {
+
+          nextPatch.person_export = "";
+
+        }
+
+        if (Object.keys(nextPatch).length) {
+
+          updateRow(row, nextPatch);
+
+        }
+
+      });
+
+      alert("Đã tách vai trò giữa các dòng trùng. Bấm Lưu để hoàn tất.");
+
+    },
+
+    [updateRow]
+
+  );
+
+
+
   const removeRow = (row) => {
 
     if (isReadOnly) return;
@@ -4301,7 +5499,15 @@ export default function MSTAssignment({
 
   return (
 
-    <div ref={rootRef} className="p-6 max-w-6xl mx-auto">
+    <div
+
+      ref={rootRef}
+
+      className="p-6 max-w-6xl mx-auto"
+
+      data-lead-view={leadViewEnabled ? "true" : "false"}
+
+    >
 
       {isReadOnly && (
 
@@ -4312,6 +5518,402 @@ export default function MSTAssignment({
         </div>
 
       )}
+
+      {visibleDuplicateClusters.length ? (
+
+        <div className="mb-4 rounded border border-amber-400 bg-amber-50 p-4 text-amber-900">
+
+          <div className="flex flex-col gap-1">
+
+            <h2 className="text-sm font-semibold">
+
+              Phát hiện {visibleDuplicateClusters.length} MST đang gán trùng nhân viên
+
+            </h2>
+
+            <p className="text-xs text-amber-800">
+
+              Chọn phương án xử lý nhanh bên dưới (giữ dòng ưu tiên, chuyển nhân viên, tách vai trò).
+
+              {hiddenDuplicateCount > 0
+
+                ? ` • ${hiddenDuplicateCount} MST trùng khác đang bị ẩn theo bộ lọc hiện tại.`
+
+                : ""}
+
+            </p>
+
+          </div>
+
+          <div className="mt-3 space-y-3">
+
+            {visibleDuplicateClusters.map((cluster) => {
+
+              const timelineGroup = timelineGroupsByMST.get(cluster.mst || "__unknown");
+
+              const allRows = cluster.details.map((detail) => detail.row);
+
+              return (
+
+                <div
+
+                  key={cluster.id}
+
+                  className="rounded border border-amber-200 bg-white p-3 shadow-sm"
+
+                >
+
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+
+                    <div>
+
+                      <div className="text-sm font-semibold text-amber-900">
+
+                        MST {cluster.mst || "(trống)"}
+
+                      </div>
+
+                      <div className="text-xs text-amber-700">
+
+                        {cluster.company ? `Công ty: ${cluster.company}` : "Chưa có tên công ty"}
+
+                      </div>
+
+                      <div className="mt-1 text-xs text-amber-600">
+
+                        {cluster.details.length} dòng chồng lấn • Ưu tiên: {cluster.keepDetail?.summary || "—"}
+
+                      </div>
+
+                    </div>
+
+                    {timelineGroup ? (
+
+                      <Button
+
+                        type="button"
+
+                        variant="ghost"
+
+                        size="sm"
+
+                        onClick={() => handleOpenTimelineGroup(timelineGroup)}
+
+                      >
+
+                        Xem timeline
+
+                      </Button>
+
+                    ) : null}
+
+                  </div>
+
+                  <div className="mt-2 grid gap-2 text-xs md:grid-cols-2">
+
+                    {cluster.details.map((detail) => (
+
+                      <div
+
+                        key={detail.key}
+
+                        className={`rounded border px-3 py-2 ${
+
+                          detail === cluster.keepDetail
+
+                            ? "border-emerald-300 bg-emerald-50"
+
+                            : "border-slate-200 bg-slate-50"
+
+                        }`}
+
+                      >
+
+                        <div className="flex items-center justify-between gap-2">
+
+                          <span className="font-semibold text-slate-700">
+
+                            {detail.teamLabel || "Chưa có tổ"}
+
+                          </span>
+
+                          {detail === cluster.keepDetail ? (
+
+                            <span className="rounded bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-emerald-700">
+
+                              Ưu tiên
+
+                            </span>
+
+                          ) : null}
+
+                        </div>
+
+                        <div className="mt-1 text-[11px] text-slate-500">
+
+                          {detail.rangeLabel}
+
+                          {detail.isActive ? " • Đang hiệu lực" : ""}
+
+                        </div>
+
+                        <div className="mt-1 text-[11px] text-slate-600">
+
+                          {detail.summary}
+
+                        </div>
+
+                      </div>
+
+                    ))}
+
+                  </div>
+
+                  <div className="mt-3 flex flex-wrap gap-2 text-xs">
+
+                    <Button
+
+                      type="button"
+
+                      size="sm"
+
+                      onClick={() =>
+
+                        handleKeepDuplicate(cluster.keepDetail?.row, allRows)
+
+                      }
+
+                    >
+
+                      Giữ dòng ưu tiên
+
+                    </Button>
+
+                    {cluster.otherDetails.map((detail) => {
+
+                      if (!detail.hasImport && !detail.hasExport) return null;
+
+                      return (
+
+                        <Button
+
+                          key={`${cluster.id}-transfer-${detail.key}`}
+
+                          type="button"
+
+                          size="sm"
+
+                          variant="outline"
+
+                          onClick={() =>
+
+                            handleTransferDuplicate(
+
+                              cluster.keepDetail?.row,
+
+                              detail.row
+
+                            )
+
+                          }
+
+                        >
+
+                          Chuyển từ {detail.summary}
+
+                        </Button>
+
+                      );
+
+                    })}
+
+                    {cluster.hasSplitOption ? (
+
+                      <Button
+
+                        type="button"
+
+                        size="sm"
+
+                        variant="outline"
+
+                        onClick={() =>
+
+                          handleSplitDuplicate(
+
+                            cluster.keepDetail?.row,
+
+                            allRows
+
+                          )
+
+                        }
+
+                      >
+
+                        Tách vai trò
+
+                      </Button>
+
+                    ) : null}
+
+                  </div>
+
+                </div>
+
+              );
+
+            })}
+
+          </div>
+
+        </div>
+
+      ) : null}
+
+      <div className="mb-4 rounded border border-amber-200 bg-amber-50 p-4 text-amber-900 shadow-sm">
+
+        <div className="flex flex-wrap items-start justify-between gap-3">
+
+          <div className="max-w-2xl space-y-1">
+
+            <h2 className="text-sm font-semibold">Chế độ trưởng nhóm</h2>
+
+            <p className="text-xs text-amber-700">
+
+              Bật để xem nhanh trạng thái phân bổ theo tổ cùng bộ lọc gọn nhẹ.
+
+            </p>
+
+            {leadViewEnabled ? (
+
+              <div className="text-xs text-amber-800">
+
+                Tổng: <span className="font-semibold text-amber-900">{leadSummary.total}</span> • Đã gán: <span className="font-semibold text-emerald-700">{leadSummary.assigned}</span> • Chờ gán: <span className="font-semibold text-red-600">{leadSummary.pending}</span>
+
+                {leadTeamQuick !== LEAD_TEAM_ALL ? ` • Tổ đang chọn: ${leadTeamName}` : ""}
+
+              </div>
+
+            ) : null}
+
+          </div>
+
+          <label className="inline-flex items-center gap-2 text-sm font-medium text-amber-800">
+
+            <input
+
+              type="checkbox"
+
+              className="h-4 w-4 rounded border-amber-400 text-amber-600 focus:ring-amber-500"
+
+              checked={leadViewEnabled}
+
+              onChange={(event) => {
+
+                const next = event.target.checked;
+
+                setLeadViewEnabled(next);
+
+                if (!next) {
+
+                  setLeadStatusQuick("all");
+
+                  setLeadTeamQuick(LEAD_TEAM_ALL);
+
+                }
+
+              }}
+
+            />
+
+            Bật chế độ rút gọn
+
+          </label>
+
+        </div>
+
+        {leadViewEnabled ? (
+
+          <div className="mt-3 space-y-3">
+
+            <div className="flex flex-wrap items-center gap-2">
+
+              <span className="text-xs font-semibold uppercase text-amber-700">Trạng thái</span>
+
+              <QuickFilterPill active={leadStatusQuick === "all"} onClick={() => setLeadStatusQuick("all")}>
+
+                Tất cả ({leadSummary.total})
+
+              </QuickFilterPill>
+
+              <QuickFilterPill active={leadStatusQuick === "assigned"} onClick={() => setLeadStatusQuick("assigned")}>
+
+                Đã gán ({leadSummary.assigned})
+
+              </QuickFilterPill>
+
+              <QuickFilterPill active={leadStatusQuick === "pending"} onClick={() => setLeadStatusQuick("pending")}>
+
+                Chờ gán ({leadSummary.pending})
+
+              </QuickFilterPill>
+
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+
+              <span className="text-xs font-semibold uppercase text-amber-700">Tổ đội</span>
+
+              <select
+
+                value={leadTeamQuick}
+
+                onChange={(event) => setLeadTeamQuick(event.target.value || LEAD_TEAM_ALL)}
+
+                className="min-w-[180px] rounded border border-amber-200 bg-white px-2 py-1 text-sm text-amber-900 shadow-sm focus:border-amber-400 focus:outline-none focus:ring-amber-400"
+
+              >
+
+                <option value={LEAD_TEAM_ALL}>Tất cả tổ</option>
+
+                {rosterTeams.map((team) => (
+
+                  <option key={team.id} value={team.normalized}>
+
+                    {team.name}
+
+                  </option>
+
+                ))}
+
+              </select>
+
+              {leadTeamQuick !== LEAD_TEAM_ALL ? (
+
+                <button
+
+                  type="button"
+
+                  className="text-xs font-medium text-amber-600 underline hover:text-amber-800"
+
+                  onClick={() => setLeadTeamQuick(LEAD_TEAM_ALL)}
+
+                >
+
+                  Xóa chọn
+
+                </button>
+
+              ) : null}
+
+            </div>
+
+          </div>
+
+        ) : null}
+
+      </div>
 
       <div className="flex flex-wrap items-end gap-2 mb-3">
 
@@ -4470,37 +6072,71 @@ export default function MSTAssignment({
 
           />
 
-          <button
-
-            type="button"
-
-            onClick={() => exportRowsToExcel("filtered")}
-
-            className="px-3 py-1 rounded border bg-white hover:bg-gray-50"
-
-            data-tooltip="Xuất ra Excel các dòng đang hiển thị theo bộ lọc hiện tại"
-
-          >
-
-            Export (lọc)
-
-          </button>
-
-          <button
-
-            type="button"
-
-            onClick={() => exportRowsToExcel("all")}
-
-            className="px-3 py-1 rounded border bg-white hover:bg-gray-50"
-
-            data-tooltip="Xuất ra Excel toàn bộ danh sách đang quản lý"
-
-          >
-
-            Export (tất cả)
-
-          </button>
+          <Popover open={exportMenuOpen} onOpenChange={setExportMenuOpen}>
+            <PopoverTrigger asChild>
+              <button
+                type="button"
+                className="px-3 py-1 rounded border bg-white hover:bg-gray-50"
+                data-tooltip="Xuất CSV/XLSX kèm metadata hiện trạng"
+              >
+                Export
+              </button>
+            </PopoverTrigger>
+            <PopoverContent align="end" className="w-80 space-y-4 p-4">
+              <div>
+                <p className="text-sm font-semibold text-slate-800">Theo bộ lọc ({filtered.length} dòng)</p>
+                <p className="mt-1 text-xs text-slate-500">Bao gồm metadata: người gán, bộ lọc và khoảng ngày hiệu lực.</p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    className="rounded border px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                    onClick={() => {
+                      exportRows("filtered", "xlsx");
+                      setExportMenuOpen(false);
+                    }}
+                  >
+                    Excel (.xlsx)
+                  </button>
+                  <button
+                    type="button"
+                    className="rounded border px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                    onClick={() => {
+                      exportRows("filtered", "csv");
+                      setExportMenuOpen(false);
+                    }}
+                  >
+                    CSV (.csv)
+                  </button>
+                </div>
+              </div>
+              <div className="border-t border-slate-200 pt-3">
+                <p className="text-sm font-semibold text-slate-800">Toàn bộ danh sách ({rows.length} dòng)</p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    className="rounded border px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                    onClick={() => {
+                      exportRows("all", "xlsx");
+                      setExportMenuOpen(false);
+                    }}
+                  >
+                    Excel (.xlsx)
+                  </button>
+                  <button
+                    type="button"
+                    className="rounded border px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                    onClick={() => {
+                      exportRows("all", "csv");
+                      setExportMenuOpen(false);
+                    }}
+                  >
+                    CSV (.csv)
+                  </button>
+                </div>
+              </div>
+              <p className="text-xs text-slate-500">File sẽ bao gồm tóm tắt bộ lọc, người xuất và khoảng ngày hiệu lực.</p>
+            </PopoverContent>
+          </Popover>
 
           {canEdit && (
 
@@ -4848,11 +6484,50 @@ export default function MSTAssignment({
 
         ) : null}
 
+
+</div>
+
+      <div className="mb-4 rounded border border-slate-200 bg-white p-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-semibold text-slate-700">
+              Timeline thay đổi MST
+            </h2>
+            <p className="text-xs text-slate-500">
+              Áp dụng bộ lọc ngày và thao tác ở trên.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={refreshHistory}
+            >
+              Tải lại lịch sử
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              onClick={handleOpenHistoryTimeline}
+              disabled={!canOpenHistoryTimeline}
+            >
+              Xem tất cả ({filteredHistoryCount})
+            </Button>
+          </div>
+        </div>
+        <div className="mt-3">
+          <HistoryTimelineGroups groups={historyTimelinePreviewGroups} />
+        </div>
+        {filteredHistoryCount > historyTimelinePreviewCount ? (
+          <p className="mt-2 text-[11px] text-slate-500">
+            Hiển thị {historyTimelinePreviewCount} / {filteredHistoryCount} thay đổi gần nhất. Sử dụng bộ lọc hoặc bấm "Xem tất cả" để xem đầy đủ.
+          </p>
+        ) : null}
       </div>
 
-
-
       {showAddForm && (
+
 
         <form
 
@@ -4898,15 +6573,23 @@ export default function MSTAssignment({
 
                 value={draft.company}
 
-                onChange={handleDraftChange("company")}
+                onChange={handleDraftChange("company", sanitizeCompanyNameInput)}
 
-                className="border rounded px-2 py-1"
+                className={clsx(
+                  "border rounded px-2 py-1 focus:outline-none focus:ring-2",
+                  draftCompanyValidation.hasWarnings
+                    ? "border-amber-500/70 focus:border-amber-500 focus:ring-amber-200"
+                    : "border-gray-300 focus:border-blue-500 focus:ring-blue-200"
+                )}
+                aria-invalid={draftCompanyValidation.hasWarnings || undefined}
 
                 placeholder="Tên công ty"
 
                 data-tooltip="Tên doanh nghiệp tương ứng với MST"
 
               />
+
+              <CompanyNameValidationMessages warnings={draftCompanyValidation.warnings} />
 
             </label>
 
@@ -5240,7 +6923,19 @@ export default function MSTAssignment({
 
       <div className="border rounded overflow-x-auto">
 
-        <table className="min-w-max table-auto text-sm">
+        <table
+
+          className={clsx(
+
+            "min-w-max table-auto",
+
+            leadViewEnabled ? "text-xs" : "text-sm"
+
+          )}
+
+          data-condensed={leadViewEnabled ? "true" : "false"}
+
+        >
 
           <thead className="bg-gray-50">
 
@@ -6154,6 +7849,44 @@ export default function MSTAssignment({
         </div>
 
       </div>
+
+
+      <Dialog
+
+        open={historyTimelineDialogState.open}
+
+        onOpenChange={handleHistoryTimelineDialogOpenChange}
+
+      >
+
+        <DialogContent className="max-w-3xl max-h-[80vh] overflow-hidden">
+
+          <DialogHeader>
+
+            <DialogTitle>
+
+              {historyTimelineDialogState.title || "Timeline thay đổi MST"}
+
+            </DialogTitle>
+
+            {historyTimelineDialogState.subtitle ? (
+
+              <DialogDescription>{historyTimelineDialogState.subtitle}</DialogDescription>
+
+            ) : null}
+
+          </DialogHeader>
+
+          <div className="max-h-[60vh] overflow-auto pr-1">
+
+            <HistoryTimelineGroups groups={historyTimelineDialogState.groups} />
+
+          </div>
+
+        </DialogContent>
+
+      </Dialog>
+
 
       <Dialog
 

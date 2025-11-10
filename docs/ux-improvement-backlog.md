@@ -27,20 +27,44 @@ This backlog liệt kê các hạng mục cải thiện trải nghiệm người
   - [x] Đồng bộ backend & API filter preset để hỗ trợ chế độ chia sẻ theo tổ (team visibility, metadata chủ sở hữu). (đã chuẩn hoá metadata chủ sở hữu/tổ, cho phép chuyển đổi phạm vi và cập nhật quyền lỗi TEAM_REQUIRED/FORBIDDEN)
   - [x] Cập nhật DataImporter hiển thị/quản lý preset tổ: chọn phạm vi lưu (cá nhân/tổ), hiển thị quyền chỉnh sửa, tự đồng bộ. (đã thêm lựa chọn phạm vi lưu, nhãn quyền chỉnh sửa và đồng bộ trạng thái chia sẻ trực tiếp trong UI)
   - [x] Lưu cấu hình cột import theo tổ với quyền chia sẻ, cho phép chọn dùng cấu hình tổ hoặc cá nhân và hiển thị nguồn cấu hình. (đã bổ sung API quản lý cấu hình tổ, lựa chọn phạm vi trong UI và thẻ thông tin cập nhật)
-- [ ] Thiết kế wizard nhiều bước giúp người dùng theo dõi tiến trình import, tránh quá tải thông tin.
-- [ ] Cải thiện feedback khi đồng bộ thất bại: gợi ý hành động cụ thể (thử lại, kiểm tra VPN, báo CNTT).
+- [x] Thiết kế wizard nhiều bước giúp người dùng theo dõi tiến trình import, tránh quá tải thông tin. (đã thêm wizard 3 bước tại DataImporter.jsx)
+  - [x] Thiết kế và hiển thị stepper ba bước (Chuẩn bị, Xem trước, Đồng bộ) trên DataImporter. (đã render stepper hướng dẫn ở đầu giao diện)
+  - [x] Gói các khu vực Picker/Preview/Bộ lọc & bảng vào từng bước riêng, chỉ hiển thị bước đang hoạt động. (đã bao điều kiện theo `wizardStep`)
+  - [x] Bổ sung điều hướng Next/Back và tự động chuyển sang bước Xem trước sau khi tải file. (đã thêm điều hướng và auto step khi có dữ liệu preview)
+- [x] Cải thiện feedback khi đồng bộ thất bại: gợi ý hành động cụ thể (thử lại, kiểm tra VPN, báo CNTT). (đã hiển thị danh sách gợi ý hành động ngay trong DataImporter)
+  - [x] Ánh xạ thông báo lỗi đồng bộ và kết quả pre-check sang thông điệp thân thiện kèm hướng xử lý chi tiết.
+  - [x] Hiển thị danh sách gợi ý (thử lại, kiểm tra VPN, báo CNTT) ngay dưới thông báo lỗi để người dùng biết bước tiếp theo.
+  - [x] Bổ sung gợi ý tương tự cho lỗi từ tiến trình/hàng đợi đồng bộ nhằm hướng dẫn cách xử lý và thời điểm thử lại.
 
 ## 4. MST assignment & staffing
 
-- [ ] Tự động phát hiện MST được gán trùng và đề xuất cách xử lý (giữ, chuyển, tách vai trò).
-- [ ] Thêm timeline lịch sử thay đổi MST với bộ lọc theo hành động (create/update/delete).
-- [ ] Cung cấp chế độ xem rút gọn cho trưởng nhóm với quick filters (assigned/pending, theo nhóm).
-- [ ] Cảnh báo ngay khi nhập tên công ty vượt ngưỡng dài, sai định dạng hoặc chứa ký tự không hợp lệ.
-- [ ] Cho phép export báo cáo phân bổ MST ra CSV/XLSX với metadata (người gán, ngày hiệu lực).
+- [x] Tự động phát hiện MST được gán trùng và đề xuất cách xử lý (giữ, chuyển, tách vai trò). (đã thêm panel cảnh báo kèm hành động trực tiếp trong giao diện)
+  - [x] Thu thập và đánh dấu các MST bị gán trùng theo khoảng ngày hiệu lực. (đã gom nhóm chồng lấn bằng `useMemo` trong `MSTAssignment.jsx`)
+  - [x] Hiển thị cảnh báo đề xuất xử lý ngay trong tab Gán MST. (đã bổ sung thẻ cảnh báo đầu trang với danh sách chi tiết từng MST)
+  - [x] Bổ sung thao tác nhanh (giữ dòng ưu tiên, chuyển nhân viên, tách vai trò) để giải quyết chồng lấn. (đã thêm các nút thao tác nhanh để cập nhật dòng ưu tiên và đồng bộ nhân viên)
+- [x] Thêm timeline lịch sử thay đổi MST với bộ lọc theo hành động (create/update/delete). (đã thêm preview + modal timeline áp dụng bộ lọc lịch sử)
+  - [x] Gom nhóm bản ghi lịch sử theo ngày/MST để dựng preview và modal chi tiết. (timeline lấy từ `getMSTHistoryEntries`)
+  - [x] Hiển thị danh sách dọc với badge theo thao tác (create/update/delete) và chi tiết giá trị trước/sau. (sử dụng HistoryTimelineGroups)
+  - [x] Kết nối nút tải lại, giới hạn preview và mở dialog xem toàn bộ khi cần. (áp dụng chung bộ lọc ngày + thao tác hiện có)
+- [x] Cung cấp chế độ xem rút gọn cho trưởng nhóm với quick filters (assigned/pending, theo nhóm). (đã thêm toggle chế độ trưởng nhóm với quick filters và tóm tắt trạng thái)
+  - [x] Bổ sung toggle "Chế độ trưởng nhóm" kèm mô tả và thống kê nhanh. (đã render thẻ cảnh báo rút gọn ở đầu trang MSTAssignment)
+  - [x] Hiển thị bộ lọc nhanh trạng thái Assigned/Pending và danh sách tổ đội để chọn nhanh. (đã thêm các nút trạng thái và select tổ dựa trên roster)
+  - [x] Áp dụng bộ lọc vào danh sách chính, thu gọn cột hiển thị cho chế độ này. (đã kết hợp bộ lọc và ẩn cột ngày khi chế độ bật)
+- [x] Cảnh báo ngay khi nhập tên công ty vượt ngưỡng dài, sai định dạng hoặc chứa ký tự không hợp lệ. (đã thêm kiểm tra chia sẻ và cảnh báo trực tiếp trong form/bảng)
+  - [x] Chuẩn hóa hàm kiểm tra tên công ty (độ dài, ký tự hợp lệ, ký tự chữ) để tái sử dụng. (đã thêm `getCompanyNameValidation` trong `MSTAssignment.jsx`)
+  - [x] Hiển thị cảnh báo real-time cho trường tên công ty ở form thêm mới. (đã đổi input dùng cảnh báo và border nhấn mạnh)
+  - [x] Cảnh báo ngay trong ô chỉnh sửa tên công ty của bảng gán MST. (đã bọc `CompanyNameCell` hiển thị thông báo và trạng thái `aria-invalid`)
+- [x] Cho phép export báo cáo phân bổ MST ra CSV/XLSX với metadata (người gán, ngày hiệu lực). (đã thêm menu export đa định dạng và ghi kèm metadata vào file)
+  - [x] Bổ sung menu export cho phép chọn phạm vi lọc/tất cả và định dạng CSV hoặc Excel. (đã dùng popover hiển thị các lựa chọn theo trạng thái bộ lọc hiện tại)
+  - [x] Thu thập metadata (người gán liên quan, khoảng ngày hiệu lực, bộ lọc) và đưa vào file xuất. (đã tổng hợp vào sheet "Thong tin" và header CSV)
+  - [x] Tạo helper xuất file áp dụng metadata và tên file theo phạm vi/định dạng. (đã dùng XLSX cho Excel và Blob cho CSV)
 
 ## 5. Navigation & notifications
 
-- [ ] Đồng bộ danh sách Command Center pin lên backend (dùng API mới lưu vào `UI_LAYOUT_KEY`) để giữ cấu hình giữa các thiết bị.
+- [x] Đồng bộ danh sách Command Center pin lên backend (dùng API mới lưu vào `UI_LAYOUT_KEY`) để giữ cấu hình giữa các thiết bị. (đã chuyển sang dùng store chung và ghi log audit)
+  - [x] Thêm helper đọc/ghi danh sách ghim Command Center qua `UI_LAYOUT_KEY` và chuẩn hoá dữ liệu lưu trữ.
+  - [x] Lắng nghe thay đổi từ kho chia sẻ để cập nhật danh sách ghim realtime giữa các tab/thiết bị.
+  - [x] Đồng bộ thao tác ghim/bỏ ghim với backend và ghi lại nhật ký audit kèm thông tin người thực hiện.
 - [ ] Thêm ô tìm kiếm toàn cục gợi ý nhanh theo quyền truy cập (module, báo cáo, người dùng).
 - [ ] Hiển thị badge số lượng thông báo chưa đọc và thao tác đánh dấu đã đọc hàng loạt.
 - [ ] Cung cấp hub hướng dẫn nhanh/FAQ theo ngữ cảnh mỗi trang, liên kết tới tài liệu trong thư mục `docs/`.
