@@ -10,10 +10,20 @@ Tài liệu này kết hợp ba đề xuất cải tiến giao diện đã thố
 
 ### Nhiệm vụ
 - [ ] Tách JSX trong `src/components/ReportViewer.jsx` (đoạn hiện xử lý thanh điều khiển) thành hai component độc lập: `ReportFilterBar` và `ReportContextToolbar`.
+  - [ ] Xác định chính xác block JSX hiện chịu trách nhiệm cho thanh điều khiển (đoạn ~dòng 8321-8603) và ghi chú phụ thuộc state/props.
+  - [ ] Tạo hai file component mới dưới `src/components/report-viewer/` (hoặc thư mục phù hợp) và chuyển JSX tương ứng sang từng file.
+  - [ ] Cập nhật import trong `ReportViewer.jsx`, đảm bảo props/state được truyền đúng và không xuất hiện circular import.
 - [ ] Bố trí `ReportFilterBar` chỉ gồm bộ lọc thời gian, nút xuất/in (nếu vẫn cần) và trạng thái tổng quan; bỏ hẳn nút reload.
+  - [ ] Loại bỏ callback/nút `onReload` khỏi component và kiểm tra các hook `useEffect` để đảm bảo dữ liệu tự reload.
+  - [ ] Hiển thị một nhãn tóm tắt trạng thái bộ lọc (ví dụ: "Kỳ: 01/2024 - 03/2024") trong thanh này.
 - [ ] Gom lựa chọn template và bộ quy tắc KPI vào `ReportContextToolbar`, bổ sung nhãn mô tả rõ ràng và gộp các hành động phụ (lưu/cập nhật/xoá) vào menu phụ.
+  - [ ] Dùng `Dropdown`/`Menu` từ design system để gom các hành động phụ thay vì hiển thị toàn bộ nút.
+  - [ ] Bảo toàn luồng gọi API hiện có (create/update/delete template) thông qua menu mới.
 - [ ] Hiển thị tình trạng “Đang áp dụng: Template A / Bộ quy tắc B” trong header để người dùng nắm bối cảnh.
+  - [ ] Viết helper định dạng tên template/bộ quy tắc và xử lý fallback khi thiếu dữ liệu.
 - [ ] Chuẩn hoá style (flex row, spacing, typography) để tạo cảm giác hiện đại, đồng bộ với design system.
+  - [ ] Áp dụng token spacing và typography từ `components.json` (nếu có); kiểm tra giao diện ở độ rộng 1280px và 1440px.
+  - [ ] Chạy lại snapshot test (nếu tồn tại) cho khu vực header sau khi refactor.
 
 ## 2. Tổ chức lại khu vực nội dung tổng quan
 
@@ -25,11 +35,25 @@ Tài liệu này kết hợp ba đề xuất cải tiến giao diện đã thố
 
 ### Nhiệm vụ
 - [ ] Tạo container `KpiOverviewSection` bao gồm các component số liệu: `SummaryCard`, `TeamPieWidget`, `TopCompanyLeaderboard`, `TopStaffWidget`, biểu đồ Top 10 công ty theo tờ khai và các widget tổng quan khác.
+  - [ ] Kiểm kê đầy đủ các component tổng quan hiện có trong `ReportViewer.jsx` để tránh bỏ sót.
+  - [ ] Bọc toàn bộ vào một component cha với heading "Tổng quan KPI" và mô tả ngắn.
 - [ ] Thiết lập layout 2 cột (ví dụ 8/4 hoặc grid responsive) để đảm bảo sự cân bằng giữa số liệu và biểu đồ.
+  - [ ] Sử dụng CSS grid hoặc `Stack`/`Grid` từ design system, kiểm tra responsive ở breakpoint tablet (≥1024px) và mobile.
+- [ ] Di chuyển khối **Top 10 công ty theo tờ khai** vào `KpiOverviewSection`.
+  - [ ] Kết nối dữ liệu Top 10 với phần còn lại để chia sẻ bộ lọc chung.
+  - [ ] Đảm bảo tiêu đề/thuyết minh đồng bộ với các widget khác.
 - [ ] Xoá hoặc ngăn render hoàn toàn khối `ReportAutomationPanel` / `Lập lịch gửi báo cáo KPI` khỏi `ReportViewer`.
+  - [ ] Xoá component cũ và các import/state liên quan.
+  - [ ] Đảm bảo không còn route/API nào phụ thuộc khối automation trong tab này; nếu cần, chuyển sang trang cấu hình khác.
 - [ ] Tách logic của khu vực **Điểm KPI +/- bổ sung** thành component riêng có hai chế độ: `overview` (cards gọn, KPI chính) và `detail` (bảng/phân tích chuyên sâu); đặt `overview` làm mặc định.
+  - [ ] Tạo component `KpiAdjustmentPanel` với state điều khiển chế độ.
+  - [ ] Thiết lập lazy load cho phần `detail` nếu dữ liệu lớn.
 - [ ] Thiết kế lại `KpiOverviewSection` để gắn khối **Điểm KPI +/- bổ sung** ở dạng tab phụ (Overview/Detail) hoặc accordion, đảm bảo không chiếm quá nhiều chiều cao khi mới mở trang.
+  - [ ] Kiểm tra accessibility cho cơ chế chuyển tab/accordion.
+  - [ ] Cập nhật documentation nội bộ hướng dẫn sử dụng component mới.
 - [ ] Bổ sung tiêu đề phụ và mô tả ngắn cho từng nhóm trong `KpiOverviewSection` để người dùng hiểu nhanh nội dung.
+  - [ ] Viết copy súc tích cho từng nhóm (ví dụ "Hiệu suất chung", "Điều chỉnh KPI").
+  - [ ] Đảm bảo localization (vi/english) vẫn hoạt động nếu dự án hỗ trợ đa ngôn ngữ.
 
 ## 3. Thiết kế lại khu vực báo cáo theo tổ đội & cá nhân dạng Tab
 
@@ -40,14 +64,32 @@ Tài liệu này kết hợp ba đề xuất cải tiến giao diện đã thố
 
 ### Nhiệm vụ
 - [ ] Thay state toggle `scope` bằng tab cha “Nhân viên” / “Tổ đội”, sử dụng component tab của design system (hoặc tự xây dựng) bảo đảm accessibility.
+  - [ ] Rà soát state/logic hiện dùng cho `scope` và chuẩn hoá lại thành `activeScopeTab`.
+  - [ ] Áp dụng keyboard navigation (ArrowLeft/ArrowRight) nếu tự triển khai tab.
 - [ ] Bên trong mỗi tab cha, tạo hai tab con “Tổng quan” (bảng rút gọn + chỉ số chính) và “Chi tiết” (card theo cá nhân/tổ, biểu đồ chuyên sâu), hiển thị “Tổng quan” mặc định.
+  - [ ] Xác định dữ liệu cần thiết cho từng tab con và tối ưu hoá gọi API (prefetch khi người dùng hover tab?).
+  - [ ] Thiết kế layout riêng cho mobile (stack) vs desktop (song song).
 - [ ] Trích xuất phần bảng + phân trang chung từ `renderStaffSection`/`renderTeamSection` thành component `ReportEntityTable` tái sử dụng.
+  - [ ] Định nghĩa props chung (`columns`, `rows`, `pagination`, `onSort`) và viết test đơn vị cho component mới.
+  - [ ] Cập nhật cả hai khu vực nhân viên/tổ đội sử dụng component này để tránh lặp code.
 - [ ] Di chuyển phần cấu hình hiển thị cột (`COLUMN_VISIBILITY_OPTIONS`) vào popover hoặc slide-over bên phải, tránh chiếm không gian trong thanh tab.
+  - [ ] Chọn component overlay phù hợp (popover/drawer) và đảm bảo đóng mở qua keyboard.
+  - [ ] Lưu trạng thái lựa chọn cột vào store (nếu cần) để tái sử dụng giữa các tab.
 - [ ] Đảm bảo các component chi tiết (ví dụ `StaffDetailCard`, `TeamDetailCard`) nhận dữ liệu từ nguồn chung và hỗ trợ lazy loading khi người dùng mở tab “Chi tiết”.
+  - [ ] Thêm skeleton/loading indicator khi dữ liệu detail đang tải.
+  - [ ] Kiểm tra ảnh hưởng tới performance khi số lượng nhân viên lớn.
 - [ ] Bổ sung breadcrumbs nhỏ hoặc nhãn tiêu đề trong từng tab để người dùng biết mình đang ở tầng nào.
+  - [ ] Hiển thị đường dẫn ví dụ "Báo cáo KPI › Nhân viên › Chi tiết" ngay dưới tiêu đề tab.
+  - [ ] Đảm bảo breadcrumbs ẩn bớt trên mobile để không chiếm chỗ.
 
 ## 4. Theo dõi tiến độ
 - Cập nhật trạng thái checklist trên mỗi nhiệm vụ khi hoàn thành.
 - Ghi chú thêm ngày/thành viên hoàn thành ngay bên cạnh hộp kiểm nếu cần.
 - Khi toàn bộ checklist được đánh dấu, bổ sung mục **Tổng kết** tóm lược cải tiến và kết quả đo lường (nếu có).
+
+### Kiểm thử bắt buộc sau từng mốc
+- [ ] `pnpm lint`
+- [ ] `pnpm exec vitest run --config vitest.frontend.config.mjs tests/reports.test.js`
+- [ ] Thực hiện kiểm thử thủ công luồng lọc thời gian và chuyển tab trong môi trường staging.
+- [ ] Ghi nhận ảnh chụp màn hình (before/after) cho khu vực header, tổng quan và tab Nhân viên/Tổ đội.
 
