@@ -31,6 +31,7 @@ import useTooltipTitles from "@/hooks/useTooltipTitles.js";
 import usePagination from "@/hooks/usePagination.js";
 
 import useMSTQuickFilters from "@/hooks/useMSTQuickFilters.js";
+import useRestoreFocus from "@/hooks/useRestoreFocus.js";
 
 import { Button } from "@/components/ui/button.jsx";
 import {
@@ -2444,11 +2445,12 @@ const QuickFilterPill = ({ active, children, onClick }) => (
     type="button"
     onClick={onClick}
     className={clsx(
-      "rounded-full border px-3 py-1 text-xs font-semibold transition",
+      "rounded-full border px-3 py-1 text-xs font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-500",
       active
         ? "border-amber-600 bg-amber-600 text-white shadow-sm"
-        : "border-amber-200 bg-white text-amber-700 hover:border-amber-300 hover:bg-amber-100"
+        : "border-amber-200 bg-white text-amber-800 hover:border-amber-300 hover:bg-amber-100"
     )}
+    aria-pressed={active}
   >
     {children}
   </button>
@@ -4681,7 +4683,7 @@ export default function MSTAssignment({
     [groupByMST, aggregatedByMST, filtered]
   );
 
-  const { 
+  const {
     page,
     pageSize,
     pageCount: totalPages,
@@ -4695,6 +4697,14 @@ export default function MSTAssignment({
     initialPageSize,
     minPageSize: MIN_PAGE_SIZE,
   });
+
+  const tableStatusMessage = useMemo(() => {
+    const base = `${filtered.length.toLocaleString('vi-VN')} dòng, trang ${page}/${totalPages}.`;
+    if (!recentlyImportedCount) {
+      return base;
+    }
+    return `${base} Có ${recentlyImportedCount.toLocaleString('vi-VN')} dòng mới import đang được ưu tiên.`;
+  }, [filtered.length, page, totalPages, recentlyImportedCount]);
 
   useEffect(() => {
 
@@ -4719,6 +4729,7 @@ export default function MSTAssignment({
     title: "",
     subtitle: "",
   });
+  const timelineDialogContentRef = useRef(null);
 
   const showTimelineDialog = useCallback(({ title, subtitle, groups }) => {
     const normalizedGroups = Array.isArray(groups) ? groups.filter(Boolean) : [];
@@ -4865,10 +4876,14 @@ export default function MSTAssignment({
     title: "",
     subtitle: "",
   });
+  const historyTimelineDialogContentRef = useRef(null);
 
   const handleHistoryTimelineDialogOpenChange = useCallback((nextOpen) => {
     setHistoryTimelineDialogState((prev) => ({ ...prev, open: nextOpen }));
   }, []);
+
+  useRestoreFocus(timelineDialogState.open, { focusTargetRef: timelineDialogContentRef });
+  useRestoreFocus(historyTimelineDialogState.open, { focusTargetRef: historyTimelineDialogContentRef });
 
   const handleOpenHistoryTimeline = useCallback(() => {
     if (!historyTimelineGroups.length) {
@@ -6803,6 +6818,12 @@ export default function MSTAssignment({
 
         <div className="flex flex-wrap items-center gap-2">
 
+          <span className="sr-only" role="status" aria-live="polite">
+
+            {tableStatusMessage}
+
+          </span>
+
           <span>
 
             {filtered.length} dòng — Trang {page}/{totalPages}
@@ -7859,7 +7880,15 @@ export default function MSTAssignment({
 
       >
 
-        <DialogContent className="max-w-3xl max-h-[80vh] overflow-hidden">
+        <DialogContent
+
+          className="max-w-3xl max-h-[80vh] overflow-hidden"
+
+          ref={historyTimelineDialogContentRef}
+
+          tabIndex={-1}
+
+        >
 
           <DialogHeader>
 
@@ -7896,7 +7925,15 @@ export default function MSTAssignment({
 
       >
 
-        <DialogContent className="max-w-3xl max-h-[80vh] overflow-hidden">
+        <DialogContent
+
+          className="max-w-3xl max-h-[80vh] overflow-hidden"
+
+          ref={timelineDialogContentRef}
+
+          tabIndex={-1}
+
+        >
 
           <DialogHeader>
 
