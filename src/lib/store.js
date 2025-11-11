@@ -97,6 +97,7 @@ export const DECL_SYNC_QUEUE_KEY = "decl_sync_queue_v1"; // hàng đợi đồng
 export const UI_LAYOUT_KEY = "ui_layout_config_v1"; // cấu hình bố cục giao diện dùng chung
 
 export const REPORT_SCHEDULE_KEY = "kpi_report_schedule_v1"; // lịch gửi báo cáo KPI
+export const KPI_REPORT_TEMPLATES_KEY = "kpi_report_templates_v1"; // template báo cáo KPI tuỳ biến
 
 const KPI_ADJUSTMENT_FILTER_STATUSES = new Set(["all", "approved", "pending", "rejected"]);
 const KPI_ADJUSTMENT_MONTH_PATTERN = /^\d{4}-(0[1-9]|1[0-2])$/;
@@ -109,6 +110,10 @@ const KPI_ADJUSTMENT_DEFAULT_PAGE_SIZE = 25;
 const VALID_SCHEDULE_FREQUENCIES = new Set(["weekly", "monthly"]);
 
 const VALID_SCHEDULE_FORMATS = new Set(["excel", "pdf"]);
+
+const VALID_SCHEDULE_CHANNELS = new Set(["email", "chat"]);
+
+const VALID_DELIVERY_STATUSES = new Set(["pending", "success", "failed"]);
 
 const ADJUSTMENT_POINT_PRECISION = 2;
 
@@ -8586,6 +8591,396 @@ export function saveKpiAdjustmentSettings(patch, { actor = 'system', permissions
 
 
 
+const REPORT_TEMPLATE_FIELD_KEYS = [
+
+  'quickRange',
+
+  'from',
+
+  'to',
+
+  'scope',
+
+  'selectedStaff',
+
+  'selectedTeam',
+
+  'staffSortKey',
+
+  'teamSortKey',
+
+  'topStaffMetric',
+
+  'topStaffVisibleCount',
+
+  'columns',
+
+  'ruleId',
+
+  'detailPageSize',
+
+  'adjustmentPageSize',
+
+  'staffViewMode',
+
+  'teamViewMode',
+
+  'scheduleCollapsed',
+
+  'adjustmentExpanded',
+
+  'topCompanyPeriod',
+
+];
+
+
+
+const REPORT_TEMPLATE_COLUMN_KEYS = ['items', 'licenses', 'co', 'coLines', 'licenseCodes'];
+
+
+
+function sanitizeReportTemplateName(value) {
+
+  if (typeof value !== 'string') {
+
+    return '';
+
+  }
+
+  const normalized = value.trim();
+
+  if (!normalized) {
+
+    return '';
+
+  }
+
+  return normalized.length > 120 ? normalized.slice(0, 120) : normalized;
+
+}
+
+
+
+function sanitizeReportTemplateActor(value) {
+
+  if (typeof value !== 'string') {
+
+    return '';
+
+  }
+
+  const normalized = value.trim();
+
+  if (!normalized) {
+
+    return '';
+
+  }
+
+  return normalized.length > 120 ? normalized.slice(0, 120) : normalized;
+
+}
+
+
+
+function cloneReportTemplateConfig(input = {}) {
+
+  const source = input && typeof input === 'object' ? input : {};
+
+  const config = {};
+
+  for (const key of REPORT_TEMPLATE_FIELD_KEYS) {
+
+    if (key === 'columns') {
+
+      const columnSource = source.columns && typeof source.columns === 'object' ? source.columns : {};
+
+      const columns = {};
+
+      for (const columnKey of REPORT_TEMPLATE_COLUMN_KEYS) {
+
+        if (columnSource[columnKey] === false) {
+
+          columns[columnKey] = false;
+
+        }
+
+      }
+
+      config.columns = columns;
+
+      continue;
+
+    }
+
+    if (key === 'scheduleCollapsed' || key === 'adjustmentExpanded') {
+
+      config[key] = source[key] === true;
+
+      continue;
+
+    }
+
+    if (key === 'detailPageSize' || key === 'adjustmentPageSize') {
+
+      const num = Number(source[key]);
+
+      config[key] = Number.isFinite(num) ? Math.round(num) : undefined;
+
+      continue;
+
+    }
+
+    config[key] = source[key];
+
+  }
+
+  if (!config.columns) {
+
+    config.columns = {};
+
+  }
+
+  return config;
+
+}
+
+
+
+function cloneReportTemplateEntry(entry) {
+
+  if (!entry || typeof entry !== 'object') {
+
+    return null;
+
+  }
+
+  return {
+
+    id: typeof entry.id === 'string' ? entry.id : `${entry.id || ''}`.trim(),
+
+    name: sanitizeReportTemplateName(entry.name) || 'Template không tên',
+
+    createdAt: typeof entry.createdAt === 'string' ? entry.createdAt : '',
+
+    updatedAt: typeof entry.updatedAt === 'string' ? entry.updatedAt : '',
+
+    createdBy: sanitizeReportTemplateActor(entry.createdBy),
+
+    updatedBy: sanitizeReportTemplateActor(entry.updatedBy),
+
+    config: cloneReportTemplateConfig(entry.config),
+
+  };
+
+}
+
+
+
+function normalizeReportTemplateEntry(entry, base = {}) {
+
+  const now = new Date().toISOString();
+
+  const idCandidate =
+
+    typeof entry?.id === 'string' && entry.id.trim()
+
+      ? entry.id.trim()
+
+      : typeof base?.id === 'string' && base.id.trim()
+
+      ? base.id.trim()
+
+      : `report-template-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+  const nameCandidate = sanitizeReportTemplateName(entry?.name) || sanitizeReportTemplateName(base?.name);
+
+  const config = cloneReportTemplateConfig(entry?.config || base?.config || {});
+
+  const createdAt =
+
+    typeof base?.createdAt === 'string' && base.createdAt
+
+      ? base.createdAt
+
+      : typeof entry?.createdAt === 'string' && entry.createdAt
+
+      ? entry.createdAt
+
+      : now;
+
+  const updatedAt = typeof entry?.updatedAt === 'string' && entry.updatedAt ? entry.updatedAt : now;
+
+  const updatedBy = sanitizeReportTemplateActor(entry?.updatedBy) || sanitizeReportTemplateActor(base?.updatedBy);
+
+  const createdBy =
+
+    sanitizeReportTemplateActor(entry?.createdBy) ||
+
+    sanitizeReportTemplateActor(base?.createdBy) ||
+
+    updatedBy;
+
+  return {
+
+    id: idCandidate,
+
+    name: nameCandidate || 'Template không tên',
+
+    config,
+
+    createdAt,
+
+    updatedAt,
+
+    createdBy,
+
+    updatedBy,
+
+  };
+
+}
+
+
+
+function readReportTemplates() {
+
+  const stored = safeParse(getItem(KPI_REPORT_TEMPLATES_KEY), []);
+
+  return Array.isArray(stored) ? stored.filter(Boolean) : [];
+
+}
+
+
+
+function writeReportTemplates(list) {
+
+  const payload = Array.isArray(list) ? list : [];
+
+  setItem(KPI_REPORT_TEMPLATES_KEY, JSON.stringify(payload));
+
+  refreshSharedKeys([KPI_REPORT_TEMPLATES_KEY]);
+
+  return payload;
+
+}
+
+
+
+export function getReportTemplates() {
+
+  return readReportTemplates()
+
+    .map((entry) => cloneReportTemplateEntry(entry))
+
+    .filter(Boolean);
+
+}
+
+
+
+export function saveReportTemplate(entry, { actor = 'system' } = {}) {
+
+  const stored = readReportTemplates();
+
+  const normalizedId = typeof entry?.id === 'string' ? entry.id : '';
+
+  const index = normalizedId ? stored.findIndex((item) => item?.id === normalizedId) : -1;
+
+  const base = index >= 0 ? stored[index] : null;
+
+  const payload = normalizeReportTemplateEntry(
+
+    {
+
+      ...entry,
+
+      updatedBy: sanitizeReportTemplateActor(entry?.updatedBy || actor),
+
+      createdBy: base?.createdBy || entry?.createdBy || actor,
+
+    },
+
+    base || undefined,
+
+  );
+
+  if (index >= 0) {
+
+    stored[index] = payload;
+
+  } else {
+
+    stored.push(payload);
+
+  }
+
+  writeReportTemplates(stored);
+
+  pushAuditLog({
+
+    actor,
+
+    action: 'report.template.save',
+
+    detail: `Lưu template báo cáo ${payload.name}`,
+
+    meta: {
+
+      templateId: payload.id,
+
+      createdAt: payload.createdAt,
+
+    },
+
+  });
+
+  return cloneReportTemplateEntry(payload);
+
+}
+
+
+
+export function deleteReportTemplate(id, { actor = 'system' } = {}) {
+
+  const stored = readReportTemplates();
+
+  const normalizedId = typeof id === 'string' ? id.trim() : `${id || ''}`.trim();
+
+  if (!normalizedId) {
+
+    return false;
+
+  }
+
+  const next = stored.filter((item) => item && item.id !== normalizedId);
+
+  if (next.length === stored.length) {
+
+    return false;
+
+  }
+
+  writeReportTemplates(next);
+
+  pushAuditLog({
+
+    actor,
+
+    action: 'report.template.delete',
+
+    detail: `Xoá template báo cáo ${normalizedId}`,
+
+    meta: { templateId: normalizedId },
+
+  });
+
+  return true;
+
+}
+
+
+
 function normalizeAdjustmentCategory(value) {
 
   const key = normalizeAdjustmentCategoryKey(value);
@@ -10234,6 +10629,146 @@ function normalizeScheduleFormats(input) {
 
 
 
+function normalizeScheduleChannels(input, { fallback = [] } = {}) {
+
+  const list = Array.isArray(input)
+
+    ? input
+
+    : typeof input === 'string'
+
+    ? input.split(/[;,]/)
+
+    : [];
+
+  const seen = new Set();
+
+  const result = [];
+
+  for (const entry of list) {
+
+    const value = String(entry ?? '')
+
+      .trim()
+
+      .toLowerCase();
+
+    if (!VALID_SCHEDULE_CHANNELS.has(value)) continue;
+
+    if (seen.has(value)) continue;
+
+    seen.add(value);
+
+    result.push(value);
+
+  }
+
+  if (result.length) {
+
+    return result;
+
+  }
+
+  if (Array.isArray(fallback) && fallback.length) {
+
+    const normalizedFallback = fallback.filter((item) => VALID_SCHEDULE_CHANNELS.has(item));
+
+    if (normalizedFallback.length) {
+
+      return normalizedFallback;
+
+    }
+
+  }
+
+  return ['email'];
+
+}
+
+
+
+function normalizeDeliveryHistory(input, channels = []) {
+
+  const list = Array.isArray(input) ? input : [];
+
+  const channelSet = new Set(channels.filter((item) => VALID_SCHEDULE_CHANNELS.has(item)));
+
+  const seenIds = new Set();
+
+  const result = [];
+
+  for (const entry of list) {
+
+    if (!entry || typeof entry !== 'object') continue;
+
+    const rawChannel = typeof entry.channel === 'string' ? entry.channel.trim().toLowerCase() : '';
+
+    if (!VALID_SCHEDULE_CHANNELS.has(rawChannel)) continue;
+
+    if (channelSet.size && !channelSet.has(rawChannel)) continue;
+
+    const statusValue = typeof entry.status === 'string' ? entry.status.trim().toLowerCase() : '';
+
+    const status = VALID_DELIVERY_STATUSES.has(statusValue) ? statusValue : 'pending';
+
+    const timestamp = typeof entry.timestamp === 'string' ? entry.timestamp : '';
+
+    const detail = typeof entry.detail === 'string' ? entry.detail.trim() : '';
+
+    const id = String(entry.id || `${rawChannel}-${timestamp || Date.now()}-${result.length}`);
+
+    if (seenIds.has(id)) continue;
+
+    seenIds.add(id);
+
+    result.push({
+
+      id,
+
+      channel: rawChannel,
+
+      status,
+
+      timestamp,
+
+      detail,
+
+    });
+
+  }
+
+  if (!result.length && channelSet.size) {
+
+    let index = 0;
+
+    for (const channel of channelSet) {
+
+      result.push({
+
+        id: `delivery-${channel}-${index}`,
+
+        channel,
+
+        status: 'pending',
+
+        timestamp: '',
+
+        detail: '',
+
+      });
+
+      index += 1;
+
+    }
+
+  }
+
+  return result.slice(-10);
+
+}
+
+
+
 export function calculateNextReportScheduleRun(schedule, { fromDate = new Date() } = {}) {
 
   if (!schedule || typeof schedule !== 'object') {
@@ -10362,7 +10897,41 @@ function normalizeReportScheduleEntry(entry, fallback = null) {
 
   const timeInfo = normalizeScheduleTime(raw.time ?? base.time ?? '08:00');
 
-  const recipients = normalizeScheduleRecipients(raw.recipients ?? base.recipients ?? []);
+  const emailRecipients = normalizeScheduleRecipients(
+
+    raw.emailRecipients ?? raw.recipients ?? base.emailRecipients ?? base.recipients ?? []
+
+  );
+
+  const chatRecipients = normalizeScheduleRecipients(raw.chatRecipients ?? base.chatRecipients ?? []);
+
+  let channels = normalizeScheduleChannels(raw.channels ?? base.channels ?? [], { fallback: [] });
+
+  if (emailRecipients.length && !channels.includes('email')) {
+
+    channels = channels.concat('email');
+
+  }
+
+  if (chatRecipients.length && !channels.includes('chat')) {
+
+    channels = channels.concat('chat');
+
+  }
+
+  if (!channels.length) {
+
+    channels = ['email'];
+
+  } else {
+
+    const normalizedChannels = normalizeScheduleChannels(channels);
+
+    channels = normalizedChannels.length ? normalizedChannels : ['email'];
+
+  }
+
+  const recipients = emailRecipients;
 
   const formats = normalizeScheduleFormats(raw.formats ?? base.formats ?? []);
 
@@ -10371,6 +10940,8 @@ function normalizeReportScheduleEntry(entry, fallback = null) {
   const lastRun = typeof raw.lastRun === 'string' && raw.lastRun ? raw.lastRun : typeof base.lastRun === 'string' ? base.lastRun : '';
 
   let nextRun = typeof raw.nextRun === 'string' && raw.nextRun ? raw.nextRun : typeof base.nextRun === 'string' ? base.nextRun : '';
+
+  const deliveryHistory = normalizeDeliveryHistory(raw.deliveryHistory ?? base.deliveryHistory ?? [], channels);
 
 
 
@@ -10390,6 +10961,12 @@ function normalizeReportScheduleEntry(entry, fallback = null) {
 
     recipients,
 
+    emailRecipients,
+
+    chatRecipients,
+
+    channels,
+
     formats,
 
     active: Boolean(active),
@@ -10397,6 +10974,8 @@ function normalizeReportScheduleEntry(entry, fallback = null) {
     lastRun,
 
     nextRun,
+
+    deliveryHistory,
 
   };
 
@@ -10499,6 +11078,12 @@ export function saveReportSchedule(entry, { actor = 'system' } = {}) {
       frequency: normalized.frequency,
 
       formats: normalized.formats,
+
+      channels: normalized.channels,
+
+      emailRecipients: normalized.emailRecipients,
+
+      chatRecipients: normalized.chatRecipients,
 
       active: normalized.active,
 
@@ -10766,6 +11351,7 @@ export default {
 
   getKpiAdjustmentSettings, saveKpiAdjustmentSettings,
   getKpiAdjustmentFilterState, saveKpiAdjustmentFilterState,
+  KPI_REPORT_TEMPLATES_KEY, getReportTemplates, saveReportTemplate, deleteReportTemplate,
 
   REPORT_SCHEDULE_KEY, getReportSchedules, saveReportSchedule, deleteReportSchedule, calculateNextReportScheduleRun,
 

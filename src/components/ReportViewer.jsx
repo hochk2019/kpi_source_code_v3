@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 
+import useRenderMetrics from "@/hooks/useRenderMetrics.js";
+
 import "../print.css";
 
 import {
@@ -12,10 +14,14 @@ import {
   mapMemberNamesToTeams,
   getKpiAdjustments,
   KPI_ADJUSTMENTS_KEY,
+  getReportTemplates,
+  saveReportTemplate,
+  deleteReportTemplate,
   getReportSchedules,
   saveReportSchedule,
   deleteReportSchedule,
   REPORT_SCHEDULE_KEY,
+  KPI_REPORT_TEMPLATES_KEY,
   calculateNextReportScheduleRun,
   DECL_KEY,
   MST_KEY,
@@ -148,6 +154,28 @@ function formatOptionalInt(value) {
 
 
 
+function formatPeriodLabel(periodKey) {
+
+  if (typeof periodKey !== "string" || periodKey.length < 7) {
+
+    return periodKey || "Không xác định";
+
+  }
+
+  const [year, month] = periodKey.split("-");
+
+  if (!year || !month) {
+
+    return periodKey;
+
+  }
+
+  return `${month}/${year}`;
+
+}
+
+
+
 const DEFAULT_CHART_COLORS = ["#2563eb", "#22c55e", "#f97316", "#a855f7", "#14b8a6"];
 
 
@@ -173,6 +201,42 @@ const ADJUSTMENT_CATEGORY_TONE_MAP = {
   customer_attitude: "text-fuchsia-600",
 
   discipline: "text-amber-700",
+
+};
+
+const ALERT_TONE_STYLES = {
+
+  danger: {
+
+    badge: "bg-rose-500/10 text-rose-600",
+
+    title: "text-rose-600",
+
+  },
+
+  warning: {
+
+    badge: "bg-amber-500/10 text-amber-600",
+
+    title: "text-amber-600",
+
+  },
+
+  info: {
+
+    badge: "bg-sky-500/10 text-sky-600",
+
+    title: "text-sky-600",
+
+  },
+
+  success: {
+
+    badge: "bg-emerald-500/10 text-emerald-600",
+
+    title: "text-emerald-600",
+
+  },
 
 };
 
@@ -248,13 +312,62 @@ const SCHEDULE_FORMAT_OPTIONS = [
 
 
 
+
+const SCHEDULE_CHANNEL_OPTIONS = [
+
+  { value: "email", label: "Email" },
+
+  { value: "chat", label: "Chat nội bộ" },
+
+];
+
+
+
+const SCHEDULE_CHANNEL_LABELS = {
+
+  email: "Email",
+
+  chat: "Chat nội bộ",
+
+};
+
+
+
+const DELIVERY_STATUS_LABELS = {
+
+  pending: "Đang chờ",
+
+  success: "Thành công",
+
+  failed: "Thất bại",
+
+};
+
+
+
+const DELIVERY_STATUS_BADGE_CLASS = {
+
+  pending: "border border-amber-200 bg-amber-100 text-amber-700",
+
+  success: "border border-emerald-200 bg-emerald-100 text-emerald-700",
+
+  failed: "border border-rose-200 bg-rose-100 text-rose-700",
+
+};
+
+
+
 function createScheduleDraft(entry = null) {
 
   const raw = entry && typeof entry === "object" ? entry : {};
 
   const formats = Array.isArray(raw.formats) && raw.formats.length ? raw.formats : ["excel"];
 
-  const recipients = Array.isArray(raw.recipients)
+  const emailRecipients = Array.isArray(raw.emailRecipients)
+
+    ? raw.emailRecipients.join(", ")
+
+    : Array.isArray(raw.recipients)
 
     ? raw.recipients.join(", ")
 
@@ -263,6 +376,46 @@ function createScheduleDraft(entry = null) {
     ? raw.recipientsInput
 
     : "";
+
+  const chatRecipients = Array.isArray(raw.chatRecipients)
+
+    ? raw.chatRecipients.join(", ")
+
+    : typeof raw.chatRecipientsInput === "string"
+
+    ? raw.chatRecipientsInput
+
+    : "";
+
+  let channels = Array.isArray(raw.channels) && raw.channels.length
+
+    ? raw.channels.filter((item) => item === "email" || item === "chat")
+
+    : [];
+
+  if (!channels.length) {
+
+    if (emailRecipients.trim()) {
+
+      channels.push("email");
+
+    }
+
+    if (chatRecipients.trim()) {
+
+      channels.push("chat");
+
+    }
+
+  }
+
+  if (!channels.length) {
+
+    channels.push("email");
+
+  }
+
+  channels = Array.from(new Set(channels));
 
   return {
 
@@ -278,7 +431,11 @@ function createScheduleDraft(entry = null) {
 
     time: raw.time || "08:00",
 
-    recipientsInput: recipients,
+    recipientsInput: emailRecipients,
+
+    chatRecipientsInput: chatRecipients,
+
+    channels: channels.length ? channels : ["email"],
 
     formats,
 
@@ -328,6 +485,12 @@ function toSchedulePayload(draft) {
 
     recipients: draft.recipientsInput || "",
 
+    emailRecipients: draft.recipientsInput || "",
+
+    chatRecipients: draft.chatRecipientsInput || "",
+
+    channels: Array.isArray(draft.channels) && draft.channels.length ? draft.channels : ["email"],
+
     formats: Array.isArray(draft.formats) && draft.formats.length ? draft.formats : ["excel"],
 
     active: Boolean(draft.active),
@@ -369,6 +532,164 @@ function formatScheduleNextRunLabel(isoString) {
     minute: "2-digit",
 
   });
+
+}
+
+
+
+function formatScheduleCountdown(isoString, now = new Date()) {
+
+  if (!isoString) {
+
+    return "";
+
+  }
+
+  const target = new Date(isoString);
+
+  if (Number.isNaN(target.getTime())) {
+
+    return "";
+
+  }
+
+  const reference = now instanceof Date && !Number.isNaN(now.getTime()) ? now : new Date();
+
+  const diffMs = target.getTime() - reference.getTime();
+
+  if (diffMs <= 0) {
+
+    return "Sắp chạy";
+
+  }
+
+  const minute = 60 * 1000;
+
+  const hour = 60 * minute;
+
+  const day = 24 * hour;
+
+  const week = 7 * day;
+
+  if (diffMs < hour) {
+
+    const minutes = Math.round(diffMs / minute);
+
+    return `Còn ${minutes} phút`;
+
+  }
+
+  if (diffMs < day) {
+
+    const hours = Math.round(diffMs / hour);
+
+    return `Còn ${hours} giờ`;
+
+  }
+
+  if (diffMs < week) {
+
+    const days = Math.round(diffMs / day);
+
+    return `Còn ${days} ngày`;
+
+  }
+
+  const weeks = Math.round(diffMs / week);
+
+  return `Còn ${weeks} tuần`;
+
+}
+
+
+
+function summarizeScheduleChannelStatus(schedule) {
+
+  if (!schedule || typeof schedule !== "object") {
+
+    return {};
+
+  }
+
+  const channels = Array.isArray(schedule.channels)
+
+    ? schedule.channels.filter((item) => item === "email" || item === "chat")
+
+    : [];
+
+  const summary = {};
+
+  for (const channel of channels) {
+
+    summary[channel] = { status: "pending", timestamp: "", detail: "" };
+
+  }
+
+  const history = Array.isArray(schedule.deliveryHistory) ? schedule.deliveryHistory : [];
+
+  for (const entry of history) {
+
+    if (!entry || typeof entry !== "object") {
+
+      continue;
+
+    }
+
+    const channel = typeof entry.channel === "string" ? entry.channel.trim().toLowerCase() : "";
+
+    if (!channels.includes(channel)) {
+
+      continue;
+
+    }
+
+    const status = typeof entry.status === "string" ? entry.status.trim().toLowerCase() : "";
+
+    const normalizedStatus = DELIVERY_STATUS_LABELS[status] ? status : "pending";
+
+    const timestamp = typeof entry.timestamp === "string" ? entry.timestamp : "";
+
+    const detail = typeof entry.detail === "string" ? entry.detail : "";
+
+    const nextTimestamp = timestamp ? Date.parse(timestamp) : Date.now();
+
+    const current = summary[channel];
+
+    const currentTimestamp = current?.timestamp ? Date.parse(current.timestamp) : Number.NaN;
+
+    if (!current || Number.isNaN(currentTimestamp) || nextTimestamp >= currentTimestamp) {
+
+      summary[channel] = { status: normalizedStatus, timestamp, detail };
+
+    }
+
+  }
+
+  return summary;
+
+}
+
+
+
+function getDeliveryStatusLabel(status) {
+
+  return DELIVERY_STATUS_LABELS[status] || DELIVERY_STATUS_LABELS.pending;
+
+}
+
+
+
+function getDeliveryStatusBadgeClass(status) {
+
+  return DELIVERY_STATUS_BADGE_CLASS[status] || DELIVERY_STATUS_BADGE_CLASS.pending;
+
+}
+
+
+
+function formatDeliveryTimestampLabel(timestamp) {
+
+  return timestamp ? formatScheduleNextRunLabel(timestamp) : "Chưa gửi";
 
 }
 
@@ -538,6 +859,20 @@ function sanitizeSelection(value) {
 
 
 
+function sanitizeTemplateId(value) {
+
+  if (typeof value !== "string") {
+
+    return "";
+
+  }
+
+  return value.trim();
+
+}
+
+
+
 function sanitizeAdjustmentPageSize(value) {
 
   const num = Number(value);
@@ -573,6 +908,20 @@ function sanitizeDetailPageSize(value) {
 
 
 function sanitizeRulePreference(value) {
+
+  if (typeof value !== "string") {
+
+    return "";
+
+  }
+
+  return value.trim();
+
+}
+
+
+
+function sanitizeTopCompanyPeriod(value) {
 
   if (typeof value !== "string") {
 
@@ -677,6 +1026,116 @@ function sanitizeColumnVisibility(input = {}) {
   }
 
   return result;
+
+}
+
+
+
+function normalizeTemplateConfig(config = {}) {
+
+  const source = config && typeof config === "object" ? config : {};
+
+  const quickRange = sanitizeQuickRange(source.quickRange);
+
+  const from = typeof source.from === "string" ? source.from.trim() : "";
+
+  const to = typeof source.to === "string" ? source.to.trim() : "";
+
+  const scope = SCOPE_VALUES.has(source.scope) ? source.scope : "staff";
+
+  const selectedStaff = sanitizeSelection(source.selectedStaff);
+
+  const selectedTeam = sanitizeSelection(source.selectedTeam);
+
+  const staffSortKey = sanitizeSortKey(source.staffSortKey);
+
+  const teamSortKey = sanitizeSortKey(source.teamSortKey);
+
+  const topStaffMetric = sanitizeTopStaffMetric(source.topStaffMetric);
+
+  const topStaffVisibleCount = sanitizeTopStaffVisibleCount(source.topStaffVisibleCount);
+
+  const columns = sanitizeColumnVisibility(source.columns);
+
+  const ruleId = sanitizeRulePreference(source.ruleId);
+
+  const detailPageSize = sanitizeDetailPageSize(source.detailPageSize);
+
+  const adjustmentPageSize = sanitizeAdjustmentPageSize(source.adjustmentPageSize);
+
+  const staffViewMode = source.staffViewMode === "detail" ? "detail" : "summary";
+
+  const teamViewMode = source.teamViewMode === "detail" ? "detail" : "summary";
+
+  const scheduleCollapsed = source.scheduleCollapsed === true;
+
+  const adjustmentExpanded = source.adjustmentExpanded === true;
+
+  const topCompanyPeriod = sanitizeTopCompanyPeriod(source.topCompanyPeriod);
+
+  return {
+
+    quickRange,
+
+    from,
+
+    to,
+
+    scope,
+
+    selectedStaff,
+
+    selectedTeam,
+
+    staffSortKey,
+
+    teamSortKey,
+
+    topStaffMetric,
+
+    topStaffVisibleCount,
+
+    columns,
+
+    ruleId,
+
+    detailPageSize,
+
+    adjustmentPageSize,
+
+    staffViewMode,
+
+    teamViewMode,
+
+    scheduleCollapsed,
+
+    adjustmentExpanded,
+
+    topCompanyPeriod,
+
+  };
+
+}
+
+
+
+function deriveColumnVisibilityState(columnsConfig) {
+
+  const columns = sanitizeColumnVisibility(columnsConfig);
+
+  return {
+
+    items: columns.items === false ? false : true,
+
+    licenses: columns.licenses === false ? false : true,
+
+    co: columns.co === false ? false : true,
+
+    coLines: columns.coLines === false ? false : true,
+
+    licenseCodes: columns.licenseCodes === false ? false : true,
+
+  };
 
 }
 
@@ -1642,7 +2101,249 @@ function TeamPieWidget({ kpiData, declData, palette = DEFAULT_CHART_COLORS }) {
 
 
 
-function TrendLineChart({ data, comparison, palette = DEFAULT_CHART_COLORS }) {
+function TopCompanyLeaderboard({ periods = [], selectedKey, onPeriodChange }) {
+
+  const hasData = Array.isArray(periods) && periods.length > 0;
+
+  const activePeriod = hasData
+
+    ? periods.find((item) => item.key === selectedKey) || periods[0]
+
+    : null;
+
+  const rows = Array.isArray(activePeriod?.topCompanies) ? activePeriod.topCompanies : [];
+
+  const totalDecls = Number(activePeriod?.totalDecls || 0);
+
+  const otherCompanyCount = Math.max(0, Number(activePeriod?.periodCompanyCount || 0) - rows.length);
+
+  const activeKey = activePeriod?.key || "";
+
+  const activeLabel = activePeriod?.label || "";
+
+  const handlePeriodChange = (event) => {
+
+    onPeriodChange?.(event?.target?.value || "");
+
+  };
+
+  return (
+
+    <section className="ds-card space-y-4 p-4">
+
+      <div className="flex flex-wrap items-start justify-between gap-4">
+
+        <div className="space-y-1">
+
+          <h3 className="text-base font-semibold text-[color:var(--ds-text-primary)]">Top 10 công ty theo tờ khai</h3>
+
+          {hasData ? (
+
+            <p className="text-sm text-[color:var(--ds-text-muted)]">
+
+              Thống kê dựa trên dữ liệu tờ khai đã lọc. Chọn kỳ báo cáo để so sánh hiệu suất giữa các doanh nghiệp.
+
+            </p>
+
+          ) : (
+
+            <p className="text-sm text-[color:var(--ds-text-muted)]">
+
+              Chưa có dữ liệu tờ khai trong khoảng thời gian hiện tại.
+
+            </p>
+
+          )}
+
+        </div>
+
+        {hasData ? (
+
+          <div className="flex flex-wrap items-center gap-2">
+
+            <label className="text-xs font-semibold uppercase text-[color:var(--ds-text-secondary)]" htmlFor="top-company-period">
+
+              Kỳ báo cáo
+
+            </label>
+
+            <select
+
+              id="top-company-period"
+
+              value={activeKey}
+
+              onChange={handlePeriodChange}
+
+              className="rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] px-3 py-1.5 text-sm text-[color:var(--ds-text-primary)] shadow-sm focus:outline-none focus:ring-2 focus:ring-[color:var(--ds-accent-ring)] focus:ring-offset-0"
+
+            >
+
+              {periods.map((period) => (
+
+                <option key={period.key} value={period.key}>
+
+                  {period.label}
+
+                </option>
+
+              ))}
+
+            </select>
+
+          </div>
+
+        ) : null}
+
+      </div>
+
+      {!hasData ? (
+
+        <div className="rounded border border-dashed border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-muted)] p-4 text-sm text-[color:var(--ds-text-muted)]">
+
+          Thay đổi khoảng thời gian hoặc kiểm tra dữ liệu import để thấy bảng xếp hạng doanh nghiệp.
+
+        </div>
+
+      ) : (
+
+        <>
+
+          <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-[color:var(--ds-text-secondary)]">
+
+            <div>
+
+              {activeLabel ? `Kỳ ${activeLabel}` : ""}
+
+              {totalDecls > 0 ? ` • Tổng ${formatInt(totalDecls)} tờ khai` : ""}
+
+            </div>
+
+            {otherCompanyCount > 0 ? (
+
+              <div>Còn {otherCompanyCount} công ty khác ngoài Top 10</div>
+
+            ) : null}
+
+          </div>
+
+          <div className="overflow-auto rounded border border-[color:var(--ds-border-subtle)]">
+
+            <table className="min-w-full text-sm text-[color:var(--ds-text-primary)]">
+
+              <thead className="bg-[color:var(--ds-surface-muted)] text-xs uppercase tracking-wide text-[color:var(--ds-text-secondary)]">
+
+                <tr>
+
+                  <th className="px-3 py-2 text-left">#</th>
+
+                  <th className="px-3 py-2 text-left">Doanh nghiệp</th>
+
+                  <th className="px-3 py-2 text-right">Số tờ khai</th>
+
+                  <th className="px-3 py-2">Tỷ trọng</th>
+
+                  <th className="px-3 py-2 text-right">Điểm KPI</th>
+
+                </tr>
+
+              </thead>
+
+              <tbody>
+
+                {rows.length ? (
+
+                  rows.map((row, index) => {
+
+                    const companyLabel = row.cong_ty || row.mst || "Không xác định";
+
+                    const taxLabel = row.mst ? `MST: ${row.mst}` : "Không có MST";
+
+                    const sharePercent = Math.round((Number(row.share || 0) || 0) * 1000) / 10;
+
+                    const widthPercent = Math.max(0, Math.min(100, sharePercent));
+
+                    return (
+
+                      <tr key={`${row.mst || row.cong_ty || "unknown"}-${index}`} className="border-b border-[color:var(--ds-border-subtle)] last:border-b-0">
+
+                        <td className="px-3 py-2 text-sm font-semibold text-[color:var(--ds-text-secondary)]">{index + 1}</td>
+
+                        <td className="px-3 py-2">
+
+                          <div className="font-semibold text-[color:var(--ds-text-primary)]">{companyLabel}</div>
+
+                          <div className="text-xs text-[color:var(--ds-text-muted)]">{taxLabel}</div>
+
+                        </td>
+
+                        <td className="px-3 py-2 text-right font-semibold text-[color:var(--ds-text-primary)]">{formatInt(row.decls)}</td>
+
+                        <td className="px-3 py-2">
+
+                          <div className="flex items-center gap-2">
+
+                            <div className="h-2 flex-1 rounded-full bg-[color:var(--ds-border-subtle)]">
+
+                              <div
+
+                                className="h-2 rounded-full bg-[color:var(--ds-accent-strong)]"
+
+                                style={{ width: `${widthPercent}%` }}
+
+                                aria-hidden="true"
+
+                              />
+
+                            </div>
+
+                            <span className="w-12 text-right text-xs text-[color:var(--ds-text-secondary)]">{sharePercent.toFixed(1)}%</span>
+
+                          </div>
+
+                        </td>
+
+                        <td className="px-3 py-2 text-right font-semibold text-[color:var(--ds-text-secondary)]">{formatDecimal(row.kpi)}</td>
+
+                      </tr>
+
+                    );
+
+                  })
+
+                ) : (
+
+                  <tr>
+
+                    <td className="px-3 py-6 text-center text-sm text-[color:var(--ds-text-muted)]" colSpan={5}>
+
+                      Không có dữ liệu top doanh nghiệp cho kỳ này.
+
+                    </td>
+
+                  </tr>
+
+                )}
+
+              </tbody>
+
+            </table>
+
+          </div>
+
+        </>
+
+      )}
+
+    </section>
+
+  );
+
+}
+
+
+
+function TrendLineChart({ data, comparison, palette = DEFAULT_CHART_COLORS, variant = "card" }) {
 
   const colors = Array.isArray(palette) && palette.length ? palette : DEFAULT_CHART_COLORS;
 
@@ -1650,7 +2351,73 @@ function TrendLineChart({ data, comparison, palette = DEFAULT_CHART_COLORS }) {
 
   const declColor = colors[1] ?? DEFAULT_CHART_COLORS[1];
 
+  const deltaKPI = comparison?.delta?.kpi ?? 0;
+
+  const deltaDecls = comparison?.delta?.decls ?? 0;
+
+  const deltaPercent = comparison?.delta?.kpiPercent ?? null;
+
+  const deltaClass =
+
+    deltaKPI > 0 ? "text-emerald-600" : deltaKPI < 0 ? "text-red-600" : "text-[color:var(--ds-text-secondary)]";
+
+  const renderDeltaSummary = () => {
+
+    if (!comparison) {
+
+      return null;
+
+    }
+
+    return (
+
+      <>
+
+        So với kỳ liền trước:
+
+        <span className={`ml-1 font-medium ${deltaClass}`}>
+
+          {deltaKPI > 0 ? "+" : ""}{deltaKPI.toFixed(1)} điểm KPI
+
+        </span>
+
+        {deltaPercent !== null && (
+
+          <span className={`ml-1 ${deltaClass}`}>
+
+            ({deltaPercent > 0 ? "+" : ""}{deltaPercent.toFixed(1)}%)
+
+          </span>
+
+        )}
+
+        <span className="ml-2 text-[color:var(--ds-text-muted)]">
+
+          {deltaDecls > 0 ? "+" : ""}{formatInt(deltaDecls)} tờ khai
+
+        </span>
+
+      </>
+
+    );
+
+  };
+
   if (!data || data.length === 0) {
+
+    if (variant === "inline") {
+
+      return (
+
+        <div className="rounded border border-dashed border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-muted)] p-4 text-sm text-[color:var(--ds-text-muted)]">
+
+          Chưa có dữ liệu để hiển thị biểu đồ xu hướng.
+
+        </div>
+
+      );
+
+    }
 
     return (
 
@@ -1668,13 +2435,61 @@ function TrendLineChart({ data, comparison, palette = DEFAULT_CHART_COLORS }) {
 
 
 
-  const deltaKPI = comparison?.delta?.kpi ?? 0;
+  const chart = (
 
-  const deltaDecls = comparison?.delta?.decls ?? 0;
+    <ResponsiveContainer width="100%" height="100%">
 
-  const deltaPercent = comparison?.delta?.kpiPercent ?? null;
+      <LineChart data={data} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
 
-  const deltaClass = deltaKPI > 0 ? "text-emerald-600" : deltaKPI < 0 ? "text-red-600" : "text-gray-600";
+        <CartesianGrid strokeDasharray="3 3" />
+
+        <XAxis dataKey="period" />
+
+        <YAxis yAxisId="left" stroke={kpiColor} />
+
+        <YAxis yAxisId="right" orientation="right" stroke={declColor} />
+
+        <Tooltip />
+
+        <Legend />
+
+        <Line yAxisId="left" type="monotone" dataKey="kpi" name="Điểm KPI" stroke={kpiColor} strokeWidth={2} />
+
+        <Line yAxisId="right" type="monotone" dataKey="decls" name="Tờ khai" stroke={declColor} strokeWidth={2} />
+
+      </LineChart>
+
+    </ResponsiveContainer>
+
+  );
+
+
+
+  if (variant === "inline") {
+
+    return (
+
+      <div className="space-y-3">
+
+        <div className="flex flex-wrap items-center justify-between gap-2">
+
+          <h4 className="text-sm font-semibold text-[color:var(--ds-text-primary)]">Xu hướng KPI 6 kỳ gần nhất</h4>
+
+          {comparison ? (
+
+            <div className="text-xs text-[color:var(--ds-text-muted)]">{renderDeltaSummary()}</div>
+
+          ) : null}
+
+        </div>
+
+        <div className="h-56 w-full">{chart}</div>
+
+      </div>
+
+    );
+
+  }
 
 
 
@@ -1686,61 +2501,293 @@ function TrendLineChart({ data, comparison, palette = DEFAULT_CHART_COLORS }) {
 
         <h3 className="text-base font-semibold text-gray-900">Xu hướng KPI 6 kỳ gần nhất</h3>
 
-        {comparison && (
-
-          <div className="text-xs text-gray-500">
-
-            So với kỳ liền trước:
-
-            <span className={`ml-1 font-medium ${deltaClass}`}>
-
-              {deltaKPI > 0 ? "+" : ""}{deltaKPI.toFixed(1)} điểm KPI
-
-            </span>
-
-            {deltaPercent !== null && (
-
-              <span className={`ml-1 ${deltaClass}`}>
-
-                ({deltaPercent > 0 ? "+" : ""}{deltaPercent.toFixed(1)}%)
-
-              </span>
-
-            )}
-
-            <span className="ml-2 text-gray-400">• {deltaDecls > 0 ? "+" : ""}{deltaDecls} tờ khai</span>
-
-          </div>
-
-        )}
+        {comparison ? <div className="text-xs text-gray-500">{renderDeltaSummary()}</div> : null}
 
       </div>
 
-      <div className="mt-4 h-64 w-full">
+      <div className="mt-4 h-64 w-full">{chart}</div>
 
-        <ResponsiveContainer width="100%" height="100%">
+    </section>
 
-          <LineChart data={data} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
+  );
 
-            <CartesianGrid strokeDasharray="3 3" />
+}
 
-            <XAxis dataKey="period" />
 
-            <YAxis yAxisId="left" stroke={kpiColor} />
 
-            <YAxis yAxisId="right" orientation="right" stroke={declColor} />
+function KpiOverviewDashboard({
 
-            <Tooltip />
+  summary = {},
 
-            <Legend />
+  adjustmentsTotal = 0,
 
-            <Line yAxisId="left" type="monotone" dataKey="kpi" name="Điểm KPI" stroke={kpiColor} strokeWidth={2} />
+  trendSeries = [],
 
-            <Line yAxisId="right" type="monotone" dataKey="decls" name="Tờ khai" stroke={declColor} strokeWidth={2} />
+  comparison = null,
 
-          </LineChart>
+  topStaff = [],
 
-        </ResponsiveContainer>
+  alerts = [],
+
+  palette = DEFAULT_CHART_COLORS,
+
+}) {
+
+  const totalKpi = Number(summary?.kpi || 0);
+
+  const totalDecls = Number(summary?.decls || 0);
+
+  const importDecls = Number(summary?.import || 0);
+
+  const exportDecls = Number(summary?.export || 0);
+
+  const adjustmentsValue = Number(adjustmentsTotal || 0);
+
+  const staffEntries = Array.isArray(topStaff) ? topStaff.slice(0, 3) : [];
+
+  const alertEntries = Array.isArray(alerts) && alerts.length ? alerts : [];
+
+  const cards = [
+
+    {
+
+      label: "Tổng KPI",
+
+      value: formatDecimal(totalKpi),
+
+      note:
+
+        comparison?.delta?.kpiPercent != null
+
+          ? `So với kỳ trước ${comparison.delta.kpiPercent > 0 ? "tăng" : "giảm"} ${Math.abs(
+
+              comparison.delta.kpiPercent
+
+            ).toFixed(1)}%`
+
+          : "Bao gồm điểm loại hình & giấy phép",
+
+    },
+
+    {
+
+      label: "Tờ khai hợp lệ",
+
+      value: formatInt(totalDecls),
+
+      note: `Nhập ${formatInt(importDecls)} • Xuất ${formatInt(exportDecls)}`,
+
+    },
+
+    {
+
+      label: "Điểm KPI +/- bổ sung",
+
+      value: formatDecimal(adjustmentsValue),
+
+      note:
+
+        adjustmentsValue === 0
+
+          ? "Chưa có điều chỉnh trong kỳ"
+
+          : adjustmentsValue > 0
+
+          ? `Đang cộng ${formatDecimal(adjustmentsValue)} điểm`
+
+          : `Đang trừ ${formatDecimal(Math.abs(adjustmentsValue))} điểm`,
+
+    },
+
+  ];
+
+  return (
+
+    <section className="ds-card space-y-4 p-4">
+
+      <div className="flex flex-wrap items-start justify-between gap-4">
+
+        <div className="space-y-1">
+
+          <h3 className="text-base font-semibold text-[color:var(--ds-text-primary)]">Dashboard KPI tổng quan</h3>
+
+          <p className="text-sm text-[color:var(--ds-text-muted)]">
+
+            Tóm tắt nhanh hiệu suất KPI gần đây cùng cảnh báo các biến động bất thường.
+
+          </p>
+
+        </div>
+
+        <div className="grid gap-3 text-right text-sm sm:auto-cols-max sm:grid-flow-col">
+
+          {cards.map((item) => (
+
+            <div key={item.label} className="space-y-1">
+
+              <div className="text-[11px] font-semibold uppercase tracking-wide text-[color:var(--ds-text-muted)]">
+
+                {item.label}
+
+              </div>
+
+              <div className="text-lg font-semibold text-[color:var(--ds-text-primary)]">{item.value}</div>
+
+              <div className="text-[11px] text-[color:var(--ds-text-secondary)]">{item.note}</div>
+
+            </div>
+
+          ))}
+
+        </div>
+
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+
+        <div className="rounded-lg border border-[color:var(--ds-border-subtle)] bg-white/70 p-4">
+
+          <TrendLineChart variant="inline" data={trendSeries} comparison={comparison} palette={palette} />
+
+        </div>
+
+        <div className="space-y-4">
+
+          <div className="rounded-lg border border-[color:var(--ds-border-subtle)] bg-white/70 p-4">
+
+            <div className="flex items-center justify-between gap-2">
+
+              <span className="text-sm font-semibold text-[color:var(--ds-text-primary)]">Top nhân sự nổi bật</span>
+
+              <span className="text-[11px] uppercase text-[color:var(--ds-text-muted)]">Top 3 KPI</span>
+
+            </div>
+
+            <ul className="mt-2 space-y-2">
+
+              {staffEntries.length ? (
+
+                staffEntries.map((entry, index) => (
+
+                  <li
+
+                    key={entry.key || `${entry.name || "staff"}-${index}`}
+
+                    className="flex items-center justify-between gap-3 rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-muted)] px-3 py-2 text-sm"
+
+                  >
+
+                    <div className="flex items-center gap-3">
+
+                      <span className="text-xs font-semibold text-[color:var(--ds-text-muted)]">#{index + 1}</span>
+
+                      <div>
+
+                        <div className="font-medium text-[color:var(--ds-text-primary)]">{entry.name}</div>
+
+                        <div className="text-[11px] text-[color:var(--ds-text-secondary)]">
+
+                          {entry.team ? entry.team : "Chưa gán tổ đội"}
+
+                        </div>
+
+                      </div>
+
+                    </div>
+
+                    <div className="text-right text-[11px] text-[color:var(--ds-text-secondary)]">
+
+                      <div className="font-semibold text-[color:var(--ds-text-primary)]">{entry.kpiLabel} KPI</div>
+
+                      <div>{entry.declsLabel} tờ khai</div>
+
+                    </div>
+
+                  </li>
+
+                ))
+
+              ) : (
+
+                <li className="rounded border border-dashed border-[color:var(--ds-border-subtle)] p-3 text-sm text-[color:var(--ds-text-muted)]">
+
+                  Chưa có dữ liệu KPI cho nhân sự.
+
+                </li>
+
+              )}
+
+            </ul>
+
+          </div>
+
+          <div className="rounded-lg border border-[color:var(--ds-border-subtle)] bg-white/70 p-4">
+
+            <div className="flex items-center justify-between gap-2">
+
+              <span className="text-sm font-semibold text-[color:var(--ds-text-primary)]">Cảnh báo lệch chuẩn</span>
+
+              <span className="text-[11px] uppercase text-[color:var(--ds-text-muted)]">6 kỳ gần nhất</span>
+
+            </div>
+
+            <ul className="mt-2 space-y-2 text-sm">
+
+              {alertEntries.length ? (
+
+                alertEntries.map((alert) => {
+
+                  const tone = ALERT_TONE_STYLES[alert.tone] || ALERT_TONE_STYLES.info;
+
+                  return (
+
+                    <li
+
+                      key={alert.key}
+
+                      className="space-y-1 rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-muted)] p-3"
+
+                    >
+
+                      <div className="flex items-center justify-between gap-2">
+
+                        <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${tone.badge}`}>
+
+                          {alert.badge || "Lưu ý"}
+
+                        </span>
+
+                        <span className={`text-xs font-medium ${tone.title}`}>{alert.title}</span>
+
+                      </div>
+
+                      {alert.detail ? (
+
+                        <p className="text-[11px] leading-relaxed text-[color:var(--ds-text-secondary)]">{alert.detail}</p>
+
+                      ) : null}
+
+                    </li>
+
+                  );
+
+                })
+
+              ) : (
+
+                <li className="rounded border border-dashed border-[color:var(--ds-border-subtle)] p-3 text-sm text-[color:var(--ds-text-muted)]">
+
+                  KPI biến động trong phạm vi cho phép, chưa có cảnh báo nào.
+
+                </li>
+
+              )}
+
+            </ul>
+
+          </div>
+
+        </div>
 
       </div>
 
@@ -3622,13 +4669,71 @@ export default function ReportViewer({ canExport = true, currentUser = null }) {
 
   }));
 
+  const [reportTemplates, setReportTemplates] = useState(() => getReportTemplates());
+
+  const [activeTemplateId, setActiveTemplateId] = useState(() => sanitizeTemplateId(storedPrefs.templateId));
+
   const exportColumns = useMemo(() => sanitizeColumnVisibility(columnVisibility), [columnVisibility]);
 
   const prefsSnapshotRef = useRef("");
 
   const [scheduleCollapsed, setScheduleCollapsed] = useState(() => storedPrefs.scheduleCollapsed === true);
 
+  const [topCompanyPeriod, setTopCompanyPeriod] = useState(() =>
+
+    sanitizeTopCompanyPeriod(storedPrefs.topCompanyPeriod)
+
+  );
+
+  const [adjustmentExpanded, setAdjustmentExpanded] = useState(() => storedPrefs.adjustmentExpanded === true);
+
+  useRenderMetrics('ReportViewer', () => ({
+    quickRange,
+    scope,
+    staff: selectedStaff || 'all',
+    team: selectedTeam || 'all',
+    staffMode: staffViewMode,
+    teamMode: teamViewMode,
+    exporting,
+    scheduleCollapsed,
+    topCompanyPeriod,
+  }));
+
   const isAdmin = isAdminRole(currentUser?.role);
+
+  const actorLabel = useMemo(() => {
+
+    const candidates = [
+
+      currentUser?.name,
+
+      currentUser?.fullName,
+
+      currentUser?.displayName,
+
+      currentUser?.username,
+
+    ];
+
+    for (const candidate of candidates) {
+
+      if (typeof candidate === "string") {
+
+        const trimmed = candidate.trim();
+
+        if (trimmed) {
+
+          return trimmed;
+
+        }
+
+      }
+
+    }
+
+    return "system";
+
+  }, [currentUser]);
 
 
 
@@ -3658,6 +4763,7 @@ export default function ReportViewer({ canExport = true, currentUser = null }) {
         RULES_KEY,
         TEAM_KEY,
         KPI_ADJUSTMENTS_KEY,
+        KPI_REPORT_TEMPLATES_KEY,
         REPORT_SCHEDULE_KEY,
       ]);
       setVersion((value) => value + 1);
@@ -3728,10 +4834,280 @@ const [detailPageSizeCustomInput, setDetailPageSizeCustomInput] = useState(() =>
 
 );
 
+  const currentTemplateConfig = useMemo(
+
+    () =>
+
+      normalizeTemplateConfig({
+
+        quickRange,
+
+        from,
+
+        to,
+
+        scope,
+
+        selectedStaff,
+
+        selectedTeam,
+
+        staffSortKey,
+
+        teamSortKey,
+
+        topStaffMetric,
+
+        topStaffVisibleCount,
+
+        columns: exportColumns,
+
+        ruleId: selectedRuleId,
+
+        detailPageSize,
+
+        adjustmentPageSize,
+
+        staffViewMode,
+
+        teamViewMode,
+
+        scheduleCollapsed,
+
+        adjustmentExpanded,
+
+        topCompanyPeriod,
+
+      }),
+
+    [
+
+      quickRange,
+
+      from,
+
+      to,
+
+      scope,
+
+      selectedStaff,
+
+      selectedTeam,
+
+      staffSortKey,
+
+      teamSortKey,
+
+      topStaffMetric,
+
+      topStaffVisibleCount,
+
+      exportColumns,
+
+      selectedRuleId,
+
+      detailPageSize,
+
+      adjustmentPageSize,
+
+      staffViewMode,
+
+      teamViewMode,
+
+      scheduleCollapsed,
+
+      adjustmentExpanded,
+
+      topCompanyPeriod,
+
+    ],
+
+  );
+
+  const currentTemplateSignature = useMemo(
+
+    () => JSON.stringify(currentTemplateConfig),
+
+    [currentTemplateConfig],
+
+  );
+
+  const activeTemplate = useMemo(
+
+    () => reportTemplates.find((item) => item.id === activeTemplateId) || null,
+
+    [reportTemplates, activeTemplateId],
+
+  );
+
+  const activeTemplateSignature = useMemo(
+
+    () => (activeTemplate ? JSON.stringify(normalizeTemplateConfig(activeTemplate.config)) : ""),
+
+    [activeTemplate],
+
+  );
+
+  const isTemplateDirty = Boolean(activeTemplate) && activeTemplateSignature !== currentTemplateSignature;
+
   const [staffDetailPage, setStaffDetailPage] = useState(0);
 
   const [teamDetailPage, setTeamDetailPage] = useState(0);
 
+  const applyTemplateConfigToState = (config) => {
+    const normalized = normalizeTemplateConfig(config);
+    if (normalized.quickRange === "custom") {
+      setQuickRange("custom");
+      setFrom(normalized.from || from);
+      setTo(normalized.to || to);
+    } else {
+      setQuickRange(normalized.quickRange);
+      const computed = computeQuickRange(normalized.quickRange);
+      setFrom(computed.from);
+      setTo(computed.to);
+    }
+    setScope(normalized.scope);
+    setSelectedStaff(normalized.selectedStaff);
+    setSelectedTeam(normalized.selectedTeam);
+    setStaffSortKey(normalized.staffSortKey);
+    setTeamSortKey(normalized.teamSortKey);
+    setTopStaffMetric(normalized.topStaffMetric);
+    setTopStaffVisibleCount(normalized.topStaffVisibleCount);
+    setColumnVisibility(deriveColumnVisibilityState(normalized.columns));
+    setSelectedRuleId(normalized.ruleId);
+    setDetailPageSize(normalized.detailPageSize);
+    setAdjustmentPageSize(normalized.adjustmentPageSize);
+    setStaffViewMode(normalized.staffViewMode);
+    setTeamViewMode(normalized.teamViewMode);
+    setScheduleCollapsed(normalized.scheduleCollapsed);
+    setAdjustmentExpanded(normalized.adjustmentExpanded);
+    setTopCompanyPeriod(normalized.topCompanyPeriod);
+    setDetailPageSizeMode(
+      DETAIL_PAGE_SIZE_OPTIONS.includes(normalized.detailPageSize) ? "preset" : "custom",
+    );
+    setDetailPageSizeCustomInput(
+      DETAIL_PAGE_SIZE_OPTIONS.includes(normalized.detailPageSize)
+        ? ""
+        : String(normalized.detailPageSize),
+    );
+    setStaffDetailPage(0);
+    setTeamDetailPage(0);
+    setAdjustmentPage(0);
+  };
+
+  const handleApplyTemplate = (templateId, { silent = false } = {}) => {
+    if (!templateId) {
+      setActiveTemplateId("");
+      return;
+    }
+    const template = reportTemplates.find((item) => item && item.id === templateId);
+    if (!template) {
+      setActiveTemplateId("");
+      toast.error?.("Template báo cáo đã bị xoá hoặc không tồn tại.");
+      return;
+    }
+    applyTemplateConfigToState(template.config);
+    setActiveTemplateId(template.id);
+    if (!silent) {
+      toast.success?.(`Đã áp dụng template "${template.name}".`);
+    }
+  };
+
+  const handleSaveTemplateAsNew = () => {
+    if (typeof window === "undefined") {
+      toast.error?.("Không thể lưu template trong môi trường hiện tại.");
+      return;
+    }
+    const nameInput = window.prompt("Đặt tên template báo cáo", "");
+    if (nameInput === null) {
+      return;
+    }
+    const normalizedName = nameInput.trim();
+    if (!normalizedName) {
+      toast.error?.("Tên template không được để trống.");
+      return;
+    }
+    try {
+      const saved = saveReportTemplate(
+        {
+          name: normalizedName,
+          config: currentTemplateConfig,
+          createdBy: actorLabel,
+          updatedBy: actorLabel,
+        },
+        { actor: actorLabel },
+      );
+      setReportTemplates(getReportTemplates());
+      setActiveTemplateId(saved?.id || "");
+      toast.success?.("Đã lưu template báo cáo mới.");
+    } catch (error) {
+      console.error("Không thể lưu template báo cáo", error);
+      toast.error?.(error?.message || "Không thể lưu template báo cáo.");
+    }
+  };
+
+  const handleOverwriteTemplate = () => {
+    if (!activeTemplate) {
+      return;
+    }
+    if (typeof window === "undefined") {
+      toast.error?.("Không thể cập nhật template trong môi trường hiện tại.");
+      return;
+    }
+    const nameInput = window.prompt("Cập nhật tên template báo cáo", activeTemplate.name || "");
+    if (nameInput === null) {
+      return;
+    }
+    const normalizedName = nameInput.trim();
+    if (!normalizedName) {
+      toast.error?.("Tên template không được để trống.");
+      return;
+    }
+    try {
+      const saved = saveReportTemplate(
+        {
+          id: activeTemplate.id,
+          name: normalizedName,
+          config: currentTemplateConfig,
+          createdBy: activeTemplate.createdBy || actorLabel,
+          updatedBy: actorLabel,
+        },
+        { actor: actorLabel },
+      );
+      setReportTemplates(getReportTemplates());
+      setActiveTemplateId(saved?.id || activeTemplate.id);
+      toast.success?.("Đã cập nhật template báo cáo.");
+    } catch (error) {
+      console.error("Không thể cập nhật template báo cáo", error);
+      toast.error?.(error?.message || "Không thể cập nhật template báo cáo.");
+    }
+  };
+
+  const handleDeleteTemplate = () => {
+    if (!activeTemplate) {
+      return;
+    }
+    if (typeof window !== "undefined") {
+      const confirmed = window.confirm(`Xoá template "${activeTemplate.name}"?`);
+      if (!confirmed) {
+        return;
+      }
+    }
+    const success = deleteReportTemplate(activeTemplate.id, { actor: actorLabel });
+    if (success) {
+      setReportTemplates(getReportTemplates());
+      setActiveTemplateId("");
+      toast.success?.("Đã xoá template báo cáo.");
+    } else {
+      toast.error?.("Không thể xoá template báo cáo.");
+    }
+  };
+
+  const hasTemplates = reportTemplates.length > 0;
+
+  const canOverwriteTemplate = Boolean(activeTemplate) && isTemplateDirty;
+
+  const canDeleteTemplate = Boolean(activeTemplate);
 
 
   useEffect(() => {
@@ -3758,6 +5134,8 @@ const [detailPageSizeCustomInput, setDetailPageSizeCustomInput] = useState(() =>
 
       topStaffVisibleCount,
 
+      topCompanyPeriod,
+
       columns: exportColumns,
 
       ruleId: selectedRuleId,
@@ -3767,6 +5145,10 @@ const [detailPageSizeCustomInput, setDetailPageSizeCustomInput] = useState(() =>
       detailPageSize,
 
       scheduleCollapsed,
+
+      adjustmentExpanded,
+
+      templateId: activeTemplateId,
 
     };
 
@@ -3804,6 +5186,8 @@ const [detailPageSizeCustomInput, setDetailPageSizeCustomInput] = useState(() =>
 
     topStaffVisibleCount,
 
+    topCompanyPeriod,
+
     exportColumns,
 
     selectedRuleId,
@@ -3813,6 +5197,10 @@ const [detailPageSizeCustomInput, setDetailPageSizeCustomInput] = useState(() =>
     detailPageSize,
 
     scheduleCollapsed,
+
+    adjustmentExpanded,
+
+    activeTemplateId,
 
   ]);
 
@@ -3832,6 +5220,8 @@ const [detailPageSizeCustomInput, setDetailPageSizeCustomInput] = useState(() =>
 
     setReportSchedules(getReportSchedules());
 
+    setReportTemplates(getReportTemplates());
+
   }, [version]);
 
 
@@ -3850,15 +5240,43 @@ const [detailPageSizeCustomInput, setDetailPageSizeCustomInput] = useState(() =>
 
     });
 
+    const unsubscribeTemplates = subscribeStorage(KPI_REPORT_TEMPLATES_KEY, () => {
+
+      setReportTemplates(getReportTemplates());
+
+    });
+
     return () => {
 
       unsubscribeAdjustments();
 
       unsubscribeSchedules();
 
+      unsubscribeTemplates();
+
     };
 
   }, []);
+
+
+
+  useEffect(() => {
+
+    if (!activeTemplateId) {
+
+      return;
+
+    }
+
+    const exists = reportTemplates.some((item) => item && item.id === activeTemplateId);
+
+    if (!exists) {
+
+      setActiveTemplateId("");
+
+    }
+
+  }, [activeTemplateId, reportTemplates]);
 
 
 
@@ -4438,6 +5856,42 @@ const [detailPageSizeCustomInput, setDetailPageSizeCustomInput] = useState(() =>
 
 
 
+  const overviewTopStaff = useMemo(() => {
+
+    return topStaffByKpi.slice(0, 3).map((item, index) => {
+
+      const kpiValue = Number(item?.stats?.kpi || 0);
+
+      const declValue = Number(item?.stats?.decls || 0);
+
+      const teamLabel =
+
+        item.teamLabel && item.teamLabel !== "Chưa gán tổ đội" ? item.teamLabel : "";
+
+      return {
+
+        key: item.key || `${item.name || "staff"}-${index}`,
+
+        name: item.name || "Chưa gán",
+
+        team: teamLabel,
+
+        kpi: kpiValue,
+
+        decls: declValue,
+
+        kpiLabel: formatDecimal(kpiValue),
+
+        declsLabel: formatInt(declValue),
+
+      };
+
+    });
+
+  }, [topStaffByKpi]);
+
+
+
   const teamPieData = useMemo(() => {
 
     return report.teams.list.map((item) => ({
@@ -4524,6 +5978,564 @@ const [detailPageSizeCustomInput, setDetailPageSizeCustomInput] = useState(() =>
 
   );
 
+  const companyLeaderboard = useMemo(() => {
+
+    const rows = Array.isArray(report.rows) ? report.rows : [];
+
+    if (!rows.length) {
+
+      return [];
+
+    }
+
+    const periodMap = new Map();
+
+    for (const row of rows) {
+
+      if (!row || row.isAdjustment) {
+
+        continue;
+
+      }
+
+      const date = typeof row.date === "string" ? row.date : "";
+
+      const periodKey = date ? date.slice(0, 7) : "";
+
+      if (!periodKey) {
+
+        continue;
+
+      }
+
+      if (!periodMap.has(periodKey)) {
+
+        periodMap.set(periodKey, new Map());
+
+      }
+
+      const companyMap = periodMap.get(periodKey);
+
+      const mst = row.mst ? String(row.mst) : "";
+
+      const companyName = row.cong_ty ? String(row.cong_ty) : "";
+
+      const hasIdentity = mst || companyName;
+
+      const companyKey = hasIdentity ? `${mst}|${companyName}` : "__unknown__";
+
+      if (!companyMap.has(companyKey)) {
+
+        companyMap.set(companyKey, {
+
+          key: companyKey,
+
+          mst,
+
+          cong_ty: companyName,
+
+          decls: 0,
+
+          kpi: 0,
+
+        });
+
+      }
+
+      const entry = companyMap.get(companyKey);
+
+      entry.decls += 1;
+
+      const numericKpi = Number(row.kpi || 0);
+
+      if (Number.isFinite(numericKpi)) {
+
+        entry.kpi += numericKpi;
+
+      }
+
+    }
+
+    return Array.from(periodMap.entries())
+
+      .map(([periodKey, companyMap]) => {
+
+        const values = Array.from(companyMap.values());
+
+        if (!values.length) {
+
+          return null;
+
+        }
+
+        const totalDecls = values.reduce((sum, item) => sum + Number(item.decls || 0), 0);
+
+        const sorted = values.sort((a, b) => {
+
+          if ((b.decls || 0) !== (a.decls || 0)) {
+
+            return (b.decls || 0) - (a.decls || 0);
+
+          }
+
+          if ((b.kpi || 0) !== (a.kpi || 0)) {
+
+            return (b.kpi || 0) - (a.kpi || 0);
+
+          }
+
+          const labelA = a.cong_ty || a.mst || "";
+
+          const labelB = b.cong_ty || b.mst || "";
+
+          return labelA.localeCompare(labelB, "vi", { sensitivity: "base" });
+
+        });
+
+        const topCompanies = sorted.slice(0, 10).map((item) => ({
+
+          ...item,
+
+          kpi: Math.round((item.kpi || 0) * 10) / 10,
+
+          share: totalDecls > 0 ? Number(item.decls || 0) / totalDecls : 0,
+
+        }));
+
+        return {
+
+          key: periodKey,
+
+          label: formatPeriodLabel(periodKey),
+
+          totalDecls,
+
+          periodCompanyCount: sorted.length,
+
+          topCompanies,
+
+        };
+
+      })
+
+      .filter(Boolean)
+
+      .sort((a, b) => b.key.localeCompare(a.key));
+
+  }, [report.rows]);
+
+
+
+  const activeLeaderboardPeriod = useMemo(() => {
+
+    if (!companyLeaderboard.length) {
+
+      return null;
+
+    }
+
+    return companyLeaderboard.find((item) => item.key === topCompanyPeriod) || companyLeaderboard[0];
+
+  }, [companyLeaderboard, topCompanyPeriod]);
+
+
+
+  const schedulePreviewMetrics = useMemo(() => {
+
+    const totalDecls = Number(summary?.decls || 0);
+
+    const importDecls = Number(summary?.import || 0);
+
+    const exportDecls = Number(summary?.export || 0);
+
+    const totalKpi = Number(summary?.kpi || 0);
+
+    const companyCount = Number(summary?.companyCount || 0);
+
+    const coCount = Number(summary?.co || 0);
+
+    const licenseCount = Number(summary?.licenses || 0);
+
+    const adjustmentPoints = Number(adjustmentsReport.totalPoints || 0);
+
+    return [
+
+      {
+
+        key: "decls",
+
+        label: "Tờ khai hợp lệ",
+
+        value: formatInt(totalDecls),
+
+        note: `Nhập: ${formatInt(importDecls)} • Xuất: ${formatInt(exportDecls)}`,
+
+      },
+
+      {
+
+        key: "kpi",
+
+        label: "Điểm KPI tổng",
+
+        value: formatDecimal(totalKpi),
+
+        note:
+
+          Math.abs(adjustmentPoints) > 0
+
+            ? `Điều chỉnh: ${formatDecimal(adjustmentPoints)} điểm`
+
+            : "Không có điều chỉnh bổ sung",
+
+      },
+
+      {
+
+        key: "companies",
+
+        label: "Doanh nghiệp được theo dõi",
+
+        value: formatInt(companyCount),
+
+        note: `${formatInt(coCount)} tờ khai C/O • ${formatInt(licenseCount)} giấy phép`,
+
+      },
+
+    ];
+
+  }, [
+
+    summary?.decls,
+
+    summary?.import,
+
+    summary?.export,
+
+    summary?.kpi,
+
+    summary?.companyCount,
+
+    summary?.co,
+
+    summary?.licenses,
+
+    adjustmentsReport.totalPoints,
+
+  ]);
+
+
+
+  const schedulePreviewTopStaff = useMemo(() => {
+
+    return topStaffByKpi.slice(0, 3).map((item, index) => ({
+
+      key: item.key || `${item.name || "staff"}-${index}`,
+
+      name: item.name || "Chưa gán",
+
+      team:
+
+        item.teamLabel && item.teamLabel !== "Chưa gán tổ đội"
+
+          ? item.teamLabel
+
+          : "",
+
+      kpi: formatDecimal(Number(item?.stats?.kpi || 0)),
+
+      decls: formatInt(Number(item?.stats?.decls || 0)),
+
+    }));
+
+  }, [topStaffByKpi]);
+
+
+
+  const schedulePreviewTopTeams = useMemo(() => {
+
+    const sorted = sortStatsCollection(report.teams.list, "kpi", (item) => item.name || "");
+
+    return sorted.slice(0, 3).map((item, index) => ({
+
+      key: item.key || `${item.name || "team"}-${index}`,
+
+      name: item.name || "Chưa gán tổ đội",
+
+      kpi: formatDecimal(Number(item?.stats?.kpi || 0)),
+
+      decls: formatInt(Number(item?.stats?.decls || 0)),
+
+    }));
+
+  }, [report.teams.list]);
+
+
+
+  const schedulePreviewCompanies = useMemo(() => {
+
+    const period = activeLeaderboardPeriod;
+
+    if (!period || !Array.isArray(period.topCompanies)) {
+
+      return [];
+
+    }
+
+    return period.topCompanies.slice(0, 3).map((item, index) => ({
+
+      key: item.key || `${item.mst || item.cong_ty || "company"}-${index}`,
+
+      label: item.cong_ty || item.mst || "Không xác định",
+
+      decls: formatInt(Number(item?.decls || 0)),
+
+      share: Math.round(Number(item?.share || 0) * 1000) / 10,
+
+    }));
+
+  }, [activeLeaderboardPeriod]);
+
+
+
+  const overviewAlerts = useMemo(() => {
+
+    const alerts = [];
+
+    const kpiValues = Array.isArray(trendSeries)
+
+      ? trendSeries.map((item) => Number(item?.kpi || 0)).filter((value) => Number.isFinite(value))
+
+      : [];
+
+    if (kpiValues.length >= 3) {
+
+      const average = kpiValues.reduce((sum, value) => sum + value, 0) / kpiValues.length;
+
+      const variance =
+
+        kpiValues.reduce((sum, value) => sum + Math.pow(value - average, 2), 0) / kpiValues.length;
+
+      const stdDev = Math.sqrt(variance);
+
+      const latestValue = kpiValues[kpiValues.length - 1];
+
+      const latestLabel = trendSeries[trendSeries.length - 1]?.period || "gần nhất";
+
+      if (Number.isFinite(stdDev) && stdDev > 0 && latestValue < average - stdDev) {
+
+        alerts.push({
+
+          key: "kpi-std-low",
+
+          tone: "warning",
+
+          badge: "Lưu ý",
+
+          title: `KPI tháng ${latestLabel} thấp hơn mức trung bình`,
+
+          detail: `Đạt ${formatDecimal(latestValue)} so với trung bình ${formatDecimal(average)} (σ ${formatDecimal(stdDev)}).`,
+
+        });
+
+      } else if (Number.isFinite(stdDev) && stdDev > 0 && latestValue > average + stdDev) {
+
+        alerts.push({
+
+          key: "kpi-std-high",
+
+          tone: "info",
+
+          badge: "Thông tin",
+
+          title: `KPI tháng ${latestLabel} vượt chuẩn so với trung bình`,
+
+          detail: `Đạt ${formatDecimal(latestValue)} so với trung bình ${formatDecimal(average)} (σ ${formatDecimal(stdDev)}).`,
+
+        });
+
+      }
+
+    }
+
+    if (trendComparison?.delta?.kpiPercent != null && trendComparison.delta.kpiPercent <= -10) {
+
+      const dropPercent = Math.abs(trendComparison.delta.kpiPercent);
+
+      const dropKpi = trendComparison.delta.kpi ?? 0;
+
+      const dropDecls = Number(trendComparison.delta.decls || 0);
+
+      const declDetail =
+
+        dropDecls === 0
+
+          ? "Số tờ khai giữ nguyên so với kỳ trước."
+
+          : `Số tờ khai ${dropDecls > 0 ? "tăng" : "giảm"} ${formatInt(Math.abs(dropDecls))} tờ.`;
+
+      alerts.push({
+
+        key: "kpi-drop",
+
+        tone: "danger",
+
+        badge: "Cảnh báo",
+
+        title: `Điểm KPI giảm ${dropPercent.toFixed(1)}% so với kỳ trước`,
+
+        detail: `Chênh lệch ${dropKpi > 0 ? "+" : ""}${dropKpi.toFixed(1)} điểm. ${declDetail}`,
+
+      });
+
+    }
+
+    const totalKpi = Number(summary?.kpi || 0);
+
+    const adjustmentAbs = Math.abs(Number(adjustmentsReport.totalPoints || 0));
+
+    if (totalKpi > 0 && adjustmentAbs > 0) {
+
+      const adjustmentRatio = (adjustmentAbs / totalKpi) * 100;
+
+      if (adjustmentRatio >= 25) {
+
+        alerts.push({
+
+          key: "adjustment-share",
+
+          tone: "info",
+
+          badge: "Lưu ý",
+
+          title: "Điểm KPI phụ thuộc nhiều vào điều chỉnh",
+
+          detail: `Điểm cộng/trừ chiếm khoảng ${adjustmentRatio.toFixed(1)}% tổng KPI (${formatDecimal(adjustmentAbs)} điểm).`,
+
+        });
+
+      }
+
+    }
+
+    if (!alerts.length) {
+
+      alerts.push({
+
+        key: "kpi-stable",
+
+        tone: "success",
+
+        badge: "Ổn định",
+
+        title: "Xu hướng KPI ổn định",
+
+        detail: "Không phát hiện biến động vượt chuẩn trong 6 kỳ gần nhất.",
+
+      });
+
+    }
+
+    return alerts;
+
+  }, [trendSeries, trendComparison, summary?.kpi, adjustmentsReport.totalPoints]);
+
+
+
+  const schedulePreviewTimeline = useMemo(() => {
+
+    const now = new Date();
+
+    return reportSchedules
+
+      .map((schedule) => {
+
+        if (!schedule || schedule.active === false) {
+
+          return null;
+
+        }
+
+        const nextRun = schedule.nextRun || calculateNextReportScheduleRun(schedule);
+
+        if (!nextRun) {
+
+          return null;
+
+        }
+
+        const timestamp = Date.parse(nextRun);
+
+        if (Number.isNaN(timestamp)) {
+
+          return null;
+
+        }
+
+        const formats = Array.isArray(schedule.formats) ? schedule.formats : [];
+
+        const emailRecipients = Array.isArray(schedule.emailRecipients)
+
+          ? schedule.emailRecipients
+
+          : Array.isArray(schedule.recipients)
+
+          ? schedule.recipients
+
+          : [];
+
+        const chatRecipients = Array.isArray(schedule.chatRecipients) ? schedule.chatRecipients : [];
+
+        const channels = Array.isArray(schedule.channels)
+
+          ? schedule.channels.filter((item) => item === "email" || item === "chat")
+
+          : [];
+
+        const channelStatuses = summarizeScheduleChannelStatus(schedule);
+
+        return {
+
+          id: schedule.id || `schedule-${timestamp}`,
+
+          name: schedule.name || "Lịch gửi",
+
+          frequencyLabel: describeScheduleFrequency(schedule),
+
+          nextRun,
+
+          nextRunLabel: formatScheduleNextRunLabel(nextRun),
+
+          countdownLabel: formatScheduleCountdown(nextRun, now),
+
+          formatLabel: formats.length ? formats.map((item) => item.toUpperCase()).join(", ") : "EXCEL",
+
+          recipientsLabel: emailRecipients.length ? emailRecipients.join(", ") : "—",
+
+          recipientsByChannel: {
+
+            email: emailRecipients.length ? emailRecipients.join(", ") : "",
+
+            chat: chatRecipients.length ? chatRecipients.join(", ") : "",
+
+          },
+
+          channels,
+
+          channelStatuses,
+
+          timestamp,
+
+        };
+
+      })
+
+      .filter(Boolean)
+
+      .sort((a, b) => a.timestamp - b.timestamp);
+
+  }, [reportSchedules]);
+
 
 
   const staffOptions = useMemo(() => {
@@ -4581,6 +6593,36 @@ const [detailPageSizeCustomInput, setDetailPageSizeCustomInput] = useState(() =>
   const filteredCompanySummaryTeam = companySummaryAllTeams;
 
 
+
+  useEffect(() => {
+
+    if (!companyLeaderboard.length) {
+
+      if (topCompanyPeriod) {
+
+        setTopCompanyPeriod("");
+
+      }
+
+      return;
+
+    }
+
+    const exists = companyLeaderboard.some((item) => item.key === topCompanyPeriod);
+
+    if (!exists) {
+
+      const fallbackKey = companyLeaderboard[0]?.key || "";
+
+      if (fallbackKey && fallbackKey !== topCompanyPeriod) {
+
+        setTopCompanyPeriod(fallbackKey);
+
+      }
+
+    }
+
+  }, [companyLeaderboard, topCompanyPeriod]);
 
   useEffect(() => {
 
@@ -4813,6 +6855,48 @@ const handleDetailPageSizeCustomInputChange = (event) => {
       }
 
       return { ...prev, formats: current };
+
+    });
+
+  };
+
+
+
+  const handleToggleScheduleChannel = (channel) => {
+
+    setScheduleDraft((prev) => {
+
+      const allowed = new Set(SCHEDULE_CHANNEL_OPTIONS.map((item) => item.value));
+
+      const current = Array.isArray(prev.channels)
+
+        ? prev.channels.filter((item) => allowed.has(item))
+
+        : [];
+
+      const index = current.indexOf(channel);
+
+      if (index >= 0) {
+
+        if (current.length > 1) {
+
+          current.splice(index, 1);
+
+        }
+
+      } else {
+
+        current.push(channel);
+
+      }
+
+      if (!current.length) {
+
+        current.push("email");
+
+      }
+
+      return { ...prev, channels: current };
 
     });
 
@@ -6340,6 +8424,66 @@ const handleDetailPageSizeCustomInputChange = (event) => {
 
 
 
+        <div className="flex flex-wrap items-center gap-3 rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-muted)]/60 p-3 text-sm text-[color:var(--ds-text-secondary)]">
+          <div className="flex min-w-[220px] flex-col gap-1">
+            <span className="text-xs font-semibold uppercase text-[color:var(--ds-text-secondary)]">
+              Template báo cáo
+            </span>
+            <select
+              className="rounded border border-[color:var(--ds-border-subtle)] bg-white px-3 py-2 text-sm text-[color:var(--ds-text-primary)] shadow-sm focus:outline-none focus:ring-2 focus:ring-[color:var(--ds-accent-ring)] focus:ring-offset-0"
+              value={activeTemplateId}
+              onChange={(event) => handleApplyTemplate(event.target.value)}
+              disabled={!hasTemplates}
+            >
+              <option value="">Tuỳ chỉnh hiện tại</option>
+              {reportTemplates.map((template) => (
+                <option key={template.id} value={template.id}>
+                  {template.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          {activeTemplate && isTemplateDirty ? (
+            <span className="rounded-full bg-amber-100 px-2 py-1 text-xs font-semibold text-amber-700">
+              Đã chỉnh sửa
+            </span>
+          ) : null}
+          {!hasTemplates ? (
+            <span className="text-xs text-[color:var(--ds-text-muted)]">
+              Chưa có template nào, hãy lưu cấu hình hiện tại.
+            </span>
+          ) : null}
+          <div className="ml-auto flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={handleSaveTemplateAsNew}
+              className="rounded border border-[color:var(--ds-border-subtle)] bg-white px-3 py-2 text-sm font-semibold text-[color:var(--ds-text-primary)] shadow-sm transition hover:border-[color:var(--ds-border-strong)] hover:bg-[color:var(--ds-surface-muted)]"
+            >
+              Lưu template mới
+            </button>
+            <button
+              type="button"
+              onClick={handleOverwriteTemplate}
+              disabled={!canOverwriteTemplate}
+              className={`rounded border px-3 py-2 text-sm font-semibold shadow-sm transition-colors ${
+                canOverwriteTemplate
+                  ? 'border-transparent bg-[color:var(--ds-accent)] text-white hover:bg-[color:var(--ds-accent-strong)]'
+                  : 'border-[color:var(--ds-border-subtle)] bg-white text-[color:var(--ds-text-secondary)] hover:border-[color:var(--ds-border-strong)]'
+              } disabled:cursor-not-allowed disabled:opacity-60`}
+            >
+              Cập nhật template
+            </button>
+            <button
+              type="button"
+              onClick={handleDeleteTemplate}
+              disabled={!canDeleteTemplate}
+              className="rounded border border-transparent px-3 py-2 text-sm font-semibold text-rose-600 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Xoá template
+            </button>
+          </div>
+        </div>
+
         <div className="grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
 
           <div className="space-y-2 rounded-xl border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-muted)] p-3">
@@ -6550,27 +8694,65 @@ const handleDetailPageSizeCustomInputChange = (event) => {
 
                 <div className="flex flex-col gap-1">
 
-                  <label className="text-xs font-semibold uppercase text-[color:var(--ds-text-secondary)]" htmlFor="schedule-recipients">
+                  <span className="text-xs font-semibold uppercase text-[color:var(--ds-text-secondary)]">
 
-                    Email nhận (phân tách bằng dấu phẩy)
+                    Kênh gửi báo cáo
 
-                  </label>
+                  </span>
 
-                  <textarea
+                  <div className="flex flex-wrap gap-2">
 
-                    id="schedule-recipients"
+                    {SCHEDULE_CHANNEL_OPTIONS.map((option) => {
 
-                    rows={2}
+                      const checked = Array.isArray(scheduleDraft.channels)
 
-                    value={scheduleDraft.recipientsInput}
+                        ? scheduleDraft.channels.includes(option.value)
 
-                    onChange={(event) => handleScheduleFieldChange("recipientsInput", event.target.value)}
+                        : option.value === "email";
 
-                    placeholder="ceo@company.vn, kpi@company.vn"
+                      return (
 
-                    className="min-h-[60px] rounded border border-[color:var(--ds-border-subtle)] bg-white px-3 py-2 text-sm text-[color:var(--ds-text-primary)] shadow-sm focus:border-[color:var(--ds-border-strong)] focus:outline-none"
+                        <label
 
-                  />
+                          key={option.value}
+
+                          className={`inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs font-semibold transition ${
+
+                            checked
+
+                              ? 'border-[color:var(--ds-accent)] bg-[color:var(--ds-accent)]/10 text-[color:var(--ds-accent-strong)]'
+
+                              : 'border-[color:var(--ds-border-subtle)] text-[color:var(--ds-text-secondary)] hover:border-[color:var(--ds-border-strong)]'
+
+                          }`}
+
+                        >
+
+                          <input
+
+                            type="checkbox"
+
+                            checked={checked}
+
+                            onChange={() => handleToggleScheduleChannel(option.value)}
+
+                          />
+
+                          <span>{option.label}</span>
+
+                        </label>
+
+                      );
+
+                    })}
+
+                  </div>
+
+                  <p className="text-[11px] text-[color:var(--ds-text-muted)]">
+
+                    Bật kênh phù hợp và nhập danh sách người nhận tương ứng bên dưới.
+
+                  </p>
 
                 </div>
 
@@ -6732,6 +8914,62 @@ const handleDetailPageSizeCustomInputChange = (event) => {
 
                 </div>
 
+                <div className="flex flex-col gap-1 md:col-span-2 xl:col-span-2">
+
+                  <label className="text-xs font-semibold uppercase text-[color:var(--ds-text-secondary)]" htmlFor="schedule-recipients">
+
+                    Email nhận (phân tách bằng dấu phẩy)
+
+                  </label>
+
+                  <textarea
+
+                    id="schedule-recipients"
+
+                    rows={2}
+
+                    value={scheduleDraft.recipientsInput}
+
+                    onChange={(event) => handleScheduleFieldChange("recipientsInput", event.target.value)}
+
+                    placeholder="ceo@company.vn, kpi@company.vn"
+
+                    disabled={!Array.isArray(scheduleDraft.channels) || !scheduleDraft.channels.includes('email')}
+
+                    className="min-h-[60px] rounded border border-[color:var(--ds-border-subtle)] bg-white px-3 py-2 text-sm text-[color:var(--ds-text-primary)] shadow-sm focus:border-[color:var(--ds-border-strong)] focus:outline-none disabled:cursor-not-allowed disabled:bg-[color:var(--ds-surface-muted)] disabled:opacity-70"
+
+                  />
+
+                </div>
+
+                <div className="flex flex-col gap-1 md:col-span-2 xl:col-span-2">
+
+                  <label className="text-xs font-semibold uppercase text-[color:var(--ds-text-secondary)]" htmlFor="schedule-chat">
+
+                    Phòng chat nội bộ (phân tách bằng dấu phẩy)
+
+                  </label>
+
+                  <textarea
+
+                    id="schedule-chat"
+
+                    rows={2}
+
+                    value={scheduleDraft.chatRecipientsInput || ''}
+
+                    onChange={(event) => handleScheduleFieldChange("chatRecipientsInput", event.target.value)}
+
+                    placeholder="#kpi-alerts, nhom.kpi"
+
+                    disabled={!Array.isArray(scheduleDraft.channels) || !scheduleDraft.channels.includes('chat')}
+
+                    className="min-h-[60px] rounded border border-[color:var(--ds-border-subtle)] bg-white px-3 py-2 text-sm text-[color:var(--ds-text-primary)] shadow-sm focus:border-[color:var(--ds-border-strong)] focus:outline-none disabled:cursor-not-allowed disabled:bg-[color:var(--ds-surface-muted)] disabled:opacity-70"
+
+                  />
+
+                </div>
+
                 <div className="md:col-span-2 xl:col-span-4 flex flex-wrap items-center justify-end gap-2 pt-2">
 
                   {editingScheduleId ? (
@@ -6790,6 +9028,34 @@ const handleDetailPageSizeCustomInputChange = (event) => {
 
                         : "EXCEL";
 
+                      const channels = Array.isArray(schedule.channels)
+
+                        ? schedule.channels.filter((item) => item === "email" || item === "chat")
+
+                        : [];
+
+                      const channelStatuses = summarizeScheduleChannelStatus(schedule);
+
+                      const recipientsByChannel = {
+
+                        email: Array.isArray(schedule.emailRecipients)
+
+                          ? schedule.emailRecipients.join(", ")
+
+                          : Array.isArray(schedule.recipients)
+
+                          ? schedule.recipients.join(", ")
+
+                          : "",
+
+                        chat: Array.isArray(schedule.chatRecipients)
+
+                          ? schedule.chatRecipients.join(", ")
+
+                          : "",
+
+                      };
+
                       return (
 
                         <div
@@ -6844,7 +9110,97 @@ const handleDetailPageSizeCustomInputChange = (event) => {
 
                             <div>Định dạng: {formatLabel}</div>
 
-                            <div>Email: {(schedule.recipients || []).join(", ") || '—'}</div>
+                          </div>
+
+                          <div className="mt-2 space-y-1 text-xs text-[color:var(--ds-text-secondary)]">
+
+                            {channels.length ? (
+
+                              channels.map((channel) => {
+
+                                const status = channelStatuses[channel] || {
+
+                                  status: "pending",
+
+                                  timestamp: "",
+
+                                  detail: "",
+
+                                };
+
+                                const label = SCHEDULE_CHANNEL_LABELS[channel] || channel;
+
+                                const recipientsLabel =
+
+                                  channel === "chat"
+
+                                    ? recipientsByChannel.chat
+
+                                    : recipientsByChannel.email;
+
+                                return (
+
+                                  <div
+
+                                    key={channel}
+
+                                    className="rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-muted)] px-2 py-1"
+
+                                  >
+
+                                    <div className="flex flex-wrap items-center gap-2">
+
+                                      <span className="font-semibold text-[color:var(--ds-text-primary)]">{label}</span>
+
+                                      <span
+
+                                        className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${getDeliveryStatusBadgeClass(status.status)}`}
+
+                                      >
+
+                                        <span>{getDeliveryStatusLabel(status.status)}</span>
+
+                                        <span className="text-[9px] opacity-80">
+
+                                          {formatDeliveryTimestampLabel(status.timestamp)}
+
+                                        </span>
+
+                                      </span>
+
+                                    </div>
+
+                                    <div className="mt-1 truncate text-[11px] text-[color:var(--ds-text-secondary)]">
+
+                                      {recipientsLabel || '—'}
+
+                                    </div>
+
+                                    {status.detail ? (
+
+                                      <div className="mt-1 text-[10px] text-[color:var(--ds-text-muted)]">
+
+                                        {status.detail}
+
+                                      </div>
+
+                                    ) : null}
+
+                                  </div>
+
+                                );
+
+                              })
+
+                            ) : (
+
+                              <div className="rounded border border-dashed border-[color:var(--ds-border-subtle)] px-2 py-1 text-[color:var(--ds-text-muted)]">
+
+                                Chưa cấu hình kênh gửi.
+
+                              </div>
+
+                            )}
 
                           </div>
 
@@ -6900,6 +9256,380 @@ const handleDetailPageSizeCustomInputChange = (event) => {
 
               </div>
 
+              <div className="border-t border-[color:var(--ds-border-subtle)] pt-4">
+
+                <div className="flex flex-wrap items-start justify-between gap-3">
+
+                  <div>
+
+                    <h4 className="text-sm font-semibold text-[color:var(--ds-text-primary)]">Xem trước nội dung gửi</h4>
+
+                    <p className="text-xs text-[color:var(--ds-text-muted)]">
+
+                      Dựa trên bộ lọc hiện tại và dữ liệu được áp dụng trong báo cáo.
+
+                    </p>
+
+                  </div>
+
+                  {activeLeaderboardPeriod?.label ? (
+
+                    <span className="text-xs text-[color:var(--ds-text-muted)]">
+
+                      Kỳ top doanh nghiệp: {activeLeaderboardPeriod.label}
+
+                    </span>
+
+                  ) : null}
+
+                </div>
+
+                <div className="mt-3 grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+
+                  <div className="space-y-4 rounded-lg border border-[color:var(--ds-border-subtle)] bg-white p-3 text-sm text-[color:var(--ds-text-secondary)] shadow-sm">
+
+                    <div className="grid gap-3 sm:grid-cols-3">
+
+                      {schedulePreviewMetrics.map((metric) => (
+
+                        <div key={metric.key} className="rounded bg-[color:var(--ds-surface-muted)] p-3">
+
+                          <div className="text-[11px] font-semibold uppercase text-[color:var(--ds-text-muted)]">
+
+                            {metric.label}
+
+                          </div>
+
+                          <div className="mt-1 text-lg font-semibold text-[color:var(--ds-text-primary)]">
+
+                            {metric.value}
+
+                          </div>
+
+                          <div className="mt-1 text-[11px] text-[color:var(--ds-text-secondary)]">{metric.note}</div>
+
+                        </div>
+
+                      ))}
+
+                    </div>
+
+                    <div className="grid gap-4 md:grid-cols-2">
+
+                      <div>
+
+                        <div className="text-[11px] font-semibold uppercase text-[color:var(--ds-text-muted)]">
+
+                          Top nhân sự theo KPI
+
+                        </div>
+
+                        <ul className="mt-2 space-y-1">
+
+                          {schedulePreviewTopStaff.length ? (
+
+                            schedulePreviewTopStaff.map((item) => (
+
+                              <li
+
+                                key={item.key}
+
+                                className="flex items-center justify-between gap-2 rounded px-2 py-1 hover:bg-[color:var(--ds-surface-muted)]"
+
+                              >
+
+                                <span className="truncate text-[color:var(--ds-text-primary)]">
+
+                                  {item.name}
+
+                                  {item.team ? (
+
+                                    <span className="text-[color:var(--ds-text-secondary)]"> • {item.team}</span>
+
+                                  ) : null}
+
+                                </span>
+
+                                <span className="shrink-0 text-[11px] text-[color:var(--ds-text-secondary)]">
+
+                                  {item.kpi} KPI • {item.decls} tờ
+
+                                </span>
+
+                              </li>
+
+                            ))
+
+                          ) : (
+
+                            <li className="text-[color:var(--ds-text-muted)]">Chưa có dữ liệu KPI cho nhân sự.</li>
+
+                          )}
+
+                        </ul>
+
+                      </div>
+
+                      <div>
+
+                        <div className="text-[11px] font-semibold uppercase text-[color:var(--ds-text-muted)]">
+
+                          Top doanh nghiệp theo tờ khai
+
+                        </div>
+
+                        <ul className="mt-2 space-y-1">
+
+                          {schedulePreviewCompanies.length ? (
+
+                            schedulePreviewCompanies.map((item) => (
+
+                              <li
+
+                                key={item.key}
+
+                                className="flex items-center justify-between gap-2 rounded px-2 py-1 hover:bg-[color:var(--ds-surface-muted)]"
+
+                              >
+
+                                <span className="truncate text-[color:var(--ds-text-primary)]">{item.label}</span>
+
+                                <span className="shrink-0 text-[11px] text-[color:var(--ds-text-secondary)]">
+
+                                  {item.decls} tờ • {item.share}% tổng
+
+                                </span>
+
+                              </li>
+
+                            ))
+
+                          ) : (
+
+                            <li className="text-[color:var(--ds-text-muted)]">Chưa có dữ liệu xếp hạng doanh nghiệp.</li>
+
+                          )}
+
+                        </ul>
+
+                      </div>
+
+                    </div>
+
+                    <div>
+
+                      <div className="text-[11px] font-semibold uppercase text-[color:var(--ds-text-muted)]">
+
+                        Tổ đội nổi bật
+
+                      </div>
+
+                      <ul className="mt-2 space-y-1">
+
+                        {schedulePreviewTopTeams.length ? (
+
+                          schedulePreviewTopTeams.map((item) => (
+
+                            <li
+
+                              key={item.key}
+
+                              className="flex items-center justify-between gap-2 rounded px-2 py-1 hover:bg-[color:var(--ds-surface-muted)]"
+
+                            >
+
+                              <span className="truncate text-[color:var(--ds-text-primary)]">{item.name}</span>
+
+                              <span className="shrink-0 text-[11px] text-[color:var(--ds-text-secondary)]">
+
+                                {item.kpi} KPI • {item.decls} tờ
+
+                              </span>
+
+                            </li>
+
+                          ))
+
+                        ) : (
+
+                          <li className="text-[color:var(--ds-text-muted)]">Chưa có dữ liệu tổ đội.</li>
+
+                        )}
+
+                      </ul>
+
+                    </div>
+
+                  </div>
+
+                  <div className="space-y-3 rounded-lg border border-[color:var(--ds-border-subtle)] bg-white p-3 text-sm text-[color:var(--ds-text-secondary)] shadow-sm">
+
+                    <div className="flex items-center justify-between gap-2">
+
+                      <span className="text-sm font-semibold text-[color:var(--ds-text-primary)]">Lịch chạy kế tiếp</span>
+
+                      <span className="text-xs text-[color:var(--ds-text-muted)]">
+
+                        {schedulePreviewTimeline.length
+
+                          ? `${schedulePreviewTimeline.length} lịch đang bật`
+
+                          : "Chưa có lịch hoạt động"}
+
+                      </span>
+
+                    </div>
+
+                    <ul className="space-y-2">
+
+                      {schedulePreviewTimeline.length ? (
+
+                        schedulePreviewTimeline.map((item) => (
+
+                          <li
+
+                            key={item.id}
+
+                            className="rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-muted)] p-2"
+
+                          >
+
+                            <div className="flex items-start justify-between gap-2">
+
+                              <div>
+
+                                <div className="text-sm font-semibold text-[color:var(--ds-text-primary)]">{item.name}</div>
+
+                                <div className="text-[11px] text-[color:var(--ds-text-muted)]">{item.frequencyLabel}</div>
+
+                              </div>
+
+                              <span className="text-[11px] font-medium text-emerald-600">{item.countdownLabel}</span>
+
+                            </div>
+
+                            <div className="mt-1 text-[11px] text-[color:var(--ds-text-secondary)]">
+
+                              Tiếp theo: {item.nextRunLabel}
+
+                            </div>
+
+                            <div className="mt-1 text-[11px] text-[color:var(--ds-text-secondary)]">
+
+                              Định dạng: {item.formatLabel}
+
+                            </div>
+
+                            <div className="mt-1 space-y-1">
+
+                              {item.channels.length ? (
+
+                                item.channels.map((channel) => {
+
+                                  const status = item.channelStatuses[channel] || {
+
+                                    status: "pending",
+
+                                    timestamp: "",
+
+                                    detail: "",
+
+                                  };
+
+                                  const label = SCHEDULE_CHANNEL_LABELS[channel] || channel;
+
+                                  const recipientsLabel =
+
+                                    channel === "chat"
+
+                                      ? item.recipientsByChannel.chat
+
+                                      : item.recipientsByChannel.email;
+
+                                  return (
+
+                                    <div
+
+                                      key={channel}
+
+                                      className="flex flex-col gap-1 rounded border border-[color:var(--ds-border-subtle)] bg-white/70 px-2 py-1 text-[10px]"
+
+                                    >
+
+                                      <div className="flex flex-wrap items-center gap-2">
+
+                                        <span className="font-semibold text-[color:var(--ds-text-primary)]">{label}</span>
+
+                                        <span
+
+                                          className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-semibold ${getDeliveryStatusBadgeClass(status.status)}`}
+
+                                        >
+
+                                          <span>{getDeliveryStatusLabel(status.status)}</span>
+
+                                          <span className="text-[9px] opacity-80">
+
+                                            {formatDeliveryTimestampLabel(status.timestamp)}
+
+                                          </span>
+
+                                        </span>
+
+                                      </div>
+
+                                      <div className="text-[color:var(--ds-text-secondary)]">
+
+                                        {recipientsLabel || '—'}
+
+                                      </div>
+
+                                      {status.detail ? (
+
+                                        <div className="text-[color:var(--ds-text-muted)] opacity-80">{status.detail}</div>
+
+                                      ) : null}
+
+                                    </div>
+
+                                  );
+
+                                })
+
+                              ) : (
+
+                                <div className="rounded border border-dashed border-[color:var(--ds-border-subtle)] px-2 py-1 text-[10px] text-[color:var(--ds-text-muted)]">
+
+                                  Chưa cấu hình kênh.
+
+                                </div>
+
+                              )}
+
+                            </div>
+
+                          </li>
+
+                        ))
+
+                      ) : (
+
+                        <li className="rounded border border-dashed border-[color:var(--ds-border-subtle)] p-3 text-xs text-[color:var(--ds-text-muted)]">
+
+                          Thêm lịch gửi để theo dõi thời điểm chạy tiếp theo ngay tại đây.
+
+                        </li>
+
+                      )}
+
+                    </ul>
+
+                  </div>
+
+                </div>
+
+              </div>
+
             </>
 
           ) : null}
@@ -6913,6 +9643,24 @@ const handleDetailPageSizeCustomInputChange = (event) => {
       <div className="grid gap-6 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
 
         <div className="space-y-6">
+
+          <KpiOverviewDashboard
+
+            summary={summary}
+
+            adjustmentsTotal={adjustmentsReport.totalPoints || 0}
+
+            trendSeries={trendSeries}
+
+            comparison={trendComparison}
+
+            topStaff={overviewTopStaff}
+
+            alerts={overviewAlerts}
+
+            palette={chartPalette}
+
+          />
 
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
 
@@ -6994,9 +9742,17 @@ const handleDetailPageSizeCustomInputChange = (event) => {
 
 
 
-          <TrendLineChart data={trendSeries} comparison={trendComparison} palette={chartPalette} />
-
           <TeamPieWidget kpiData={teamPieData} declData={teamDeclPieData} palette={chartPalette} />
+
+          <TopCompanyLeaderboard
+
+            periods={companyLeaderboard}
+
+            selectedKey={topCompanyPeriod}
+
+            onPeriodChange={setTopCompanyPeriod}
+
+          />
 
         </div>
 
@@ -7032,19 +9788,31 @@ const handleDetailPageSizeCustomInputChange = (event) => {
 
             <div className="flex flex-wrap items-start justify-between gap-4">
 
-              <div>
+              <div className="space-y-2">
 
                 <h3 className="text-base font-semibold text-[color:var(--ds-text-primary)]">Điểm KPI +/- bổ sung</h3>
 
-                <p className="mt-1 text-sm text-[color:var(--ds-text-muted)]">
+                {adjustmentExpanded ? (
 
-                  Điểm cộng/trừ được duyệt sẽ được cộng trực tiếp vào KPI tháng tương ứng trong báo cáo.
+                  <p className="text-sm text-[color:var(--ds-text-muted)]">
 
-                </p>
+                    Điểm cộng/trừ được duyệt sẽ được cộng trực tiếp vào KPI tháng tương ứng trong báo cáo.
+
+                  </p>
+
+                ) : (
+
+                  <p className="text-sm text-[color:var(--ds-text-muted)]">
+
+                    Tổng hợp nhanh số điểm cộng/trừ đã áp dụng trong kỳ. Nhấn “Mở rộng” để xem bảng chi tiết và thống kê.
+
+                  </p>
+
+                )}
 
               </div>
 
-              <div className="text-sm text-right text-[color:var(--ds-text-secondary)]">
+              <div className="flex flex-col items-end gap-2 text-sm text-right text-[color:var(--ds-text-secondary)]">
 
                 <div>Đã duyệt: {formatInt(adjustmentsReport.approvedCount || 0)} mục</div>
 
@@ -7062,15 +9830,35 @@ const handleDetailPageSizeCustomInputChange = (event) => {
 
                 </div>
 
+                <button
+
+                  type="button"
+
+                  onClick={() => setAdjustmentExpanded((value) => !value)}
+
+                  aria-expanded={adjustmentExpanded}
+
+                  className="inline-flex items-center gap-2 rounded border border-[color:var(--ds-border-subtle)] px-3 py-1 text-xs font-semibold text-[color:var(--ds-text-secondary)] transition-colors hover:border-[color:var(--ds-border-strong)] hover:text-[color:var(--ds-text-primary)]"
+
+                >
+
+                  {adjustmentExpanded ? "Thu gọn" : "Mở rộng"}
+
+                </button>
+
               </div>
 
             </div>
 
 
 
-            <div className="grid gap-4 lg:grid-cols-3">
+            {adjustmentExpanded ? (
 
-              <div className="lg:col-span-2">
+              <>
+
+                <div className="grid gap-4 lg:grid-cols-3">
+
+                  <div className="lg:col-span-2">
 
                 <h4 className="mb-3 text-sm font-semibold text-[color:var(--ds-text-primary)]">Chi tiết điểm đã áp dụng</h4>
 
@@ -7298,7 +10086,7 @@ const handleDetailPageSizeCustomInputChange = (event) => {
 
               </div>
 
-              <div className="space-y-6">
+                <div className="space-y-6">
 
                 <section className="space-y-3 rounded-xl border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-muted)] p-4">
 
@@ -7466,7 +10254,11 @@ const handleDetailPageSizeCustomInputChange = (event) => {
 
               </div>
 
-            </div>
+              </div>
+
+              </>
+
+            ) : null}
 
           </div>
 

@@ -77,6 +77,8 @@ import { fetchWithAuth, getAuth } from "@/auth/localAuth.js";
 import useTooltipTitles from "@/hooks/useTooltipTitles.js";
 
 import useFilterPresets from "@/hooks/useFilterPresets.js";
+import useRenderMetrics from "@/hooks/useRenderMetrics.js";
+import useRestoreFocus from "@/hooks/useRestoreFocus.js";
 
 import { Button } from "@/components/ui/button.jsx";
 
@@ -3614,6 +3616,7 @@ export default function DataImporter({
   const [showDeletedRows, setShowDeletedRows] = useState(false);
 
   const [deletedDialogOpen, setDeletedDialogOpen] = useState(false);
+  const deletedDialogContentRef = useRef(null);
 
   const [hardDeletedRows, setHardDeletedRows] = useState([]);
 
@@ -4093,6 +4096,9 @@ export default function DataImporter({
   }, [columnConfigScope, handleColumnScopeChange, teamColumnConfigInfo.available, teamColumnConfigInfo.loading]);
 
   const [columnConfigOpen, setColumnConfigOpen] = useState(false);
+  const columnConfigDialogContentRef = useRef(null);
+
+  useRestoreFocus(columnConfigOpen, { focusTargetRef: columnConfigDialogContentRef });
 
   const [columnDraftHidden, setColumnDraftHidden] = useState(() => new Set());
 
@@ -4801,6 +4807,8 @@ export default function DataImporter({
     fetchHardDeletedRows,
   ]);
 
+  useRestoreFocus(deletedDialogOpen, { focusTargetRef: deletedDialogContentRef });
+
   useEffect(
     () => () => {
       if (hardDeletedAbortRef.current) {
@@ -4959,6 +4967,20 @@ export default function DataImporter({
   const hasSavedData = mode === "saved" && rawRows.length > 0;
   const hasWorkingData = hasPreviewData || hasSavedData;
   const previewReady = Boolean(importPreview && !importPreview.error);
+  const wizardStatusMessage = useMemo(() => {
+    const total = WIZARD_STEPS.length;
+    const safeIndex = Math.min(Math.max(wizardStep, 0), total - 1);
+    const currentStep = WIZARD_STEPS[safeIndex];
+    const stepLabel = currentStep?.title || currentStep?.description || currentStep?.id || "Bước";
+    return `Đang ở bước ${safeIndex + 1} trên ${total}: ${stepLabel}.`;
+  }, [wizardStep]);
+
+  useRenderMetrics("DataImporter", () => ({
+    step: wizardStep,
+    mode,
+    previewRows: effectivePreviewRows.length,
+    savedRows: rawRows.length,
+  }));
 
   const canProceedFromPrepare = hasWorkingData;
   const canProceedFromPreview = mode === "saved" || previewReady;
@@ -4975,7 +4997,7 @@ export default function DataImporter({
   useEffect(() => {
     if (hasPreviewData) {
       setMaxWizardStep((prev) => Math.max(prev, 1));
-      setWizardStep(1);
+      setWizardStep((prev) => (prev < 1 ? 1 : prev));
     }
   }, [hasPreviewData]);
 
@@ -14325,7 +14347,11 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
 
       <Dialog open={deletedDialogOpen} onOpenChange={handleDeletedDialogOpenChange}>
 
-        <DialogContent className="w-full sm:w-[min(96vw,1200px)] max-w-none sm:max-w-[min(96vw,1200px)] max-h-[85vh] overflow-hidden p-0">
+        <DialogContent
+          className="w-full sm:w-[min(96vw,1200px)] max-w-none sm:max-w-[min(96vw,1200px)] max-h-[85vh] overflow-hidden p-0"
+          ref={deletedDialogContentRef}
+          tabIndex={-1}
+        >
           <div className="flex h-full min-h-0 flex-col">
 
             <div className="px-6 pt-6">
@@ -14507,8 +14533,11 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
       </Dialog>
 
       <Dialog open={columnConfigOpen} onOpenChange={setColumnConfigOpen}>
-
-        <DialogContent className="max-w-md">
+        <DialogContent
+          className="max-w-md"
+          ref={columnConfigDialogContentRef}
+          tabIndex={-1}
+        >
 
           <DialogHeader>
 
@@ -17236,62 +17265,46 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
               </div>
 
               <div className="overflow-auto rounded border">
-
                 {coMismatchPreview.length ? (
-
                   <table className="min-w-full text-xs">
-
-                  <thead className="bg-amber-50 text-amber-800">
-
-                    <tr>
-
-                      <th className="px-2 py-1 text-left">Tờ khai</th>
-
-                      <th className="px-2 py-1 text-center">C/O lưu trữ</th>
-
-                      <th className="px-2 py-1 text-center">C/O ECUS</th>
-
-                      <th className="px-2 py-1 text-center">Dòng</th>
-
-                    </tr>
-
-                  </thead>
-
-                  <tbody>
-
-                    {coMismatchPreview.map((item) => (
-
-                      <tr key={item.key} className="odd:bg-[color:var(--ds-surface-card)] even:bg-[color:var(--ds-surface-muted)]">
-
-                        <td className="px-2 py-1">{formatDeclarationLabel(item)}</td>
-
-                        <td className="px-2 py-1 text-center">{item.stored?.has_co ? "Có" : "Không"} ({item.stored?.co_line_count ?? 0})</td>
-
-                        <td className="px-2 py-1 text-center">{item.remote?.has_co ? "Có" : "Không"} ({item.remote?.co_line_count ?? 0})</td>
-
-                        <td className="px-2 py-1 text-center">{item.remote?.co_codes?.length ?? 0}</td>
-
+                    <thead className="bg-amber-50 text-amber-800">
+                      <tr>
+                        <th className="px-2 py-1 text-left">Tờ khai</th>
+                        <th className="px-2 py-1 text-center">C/O lưu trữ</th>
+                        <th className="px-2 py-1 text-center">C/O ECUS</th>
+                        <th className="px-2 py-1 text-center">Dòng</th>
                       </tr>
-
-                    ))}
-
-                  </tbody>
-
-                </table>
-
-              ) : (
-
-                <div className="py-4 text-center text-xs text-gray-500">Chưa phát hiện chênh lệch nào.</div>
-
-              )}
-
+                    </thead>
+                    <tbody>
+                      {coMismatchPreview.map((item) => (
+                        <tr
+                          key={item.key}
+                          className="odd:bg-[color:var(--ds-surface-card)] even:bg-[color:var(--ds-surface-muted)]"
+                        >
+                          <td className="px-2 py-1">{formatDeclarationLabel(item)}</td>
+                          <td className="px-2 py-1 text-center">
+                            {item.stored?.has_co ? "Có" : "Không"} ({item.stored?.co_line_count ?? 0})
+                          </td>
+                          <td className="px-2 py-1 text-center">
+                            {item.remote?.has_co ? "Có" : "Không"} ({item.remote?.co_line_count ?? 0})
+                          </td>
+                          <td className="px-2 py-1 text-center">{item.remote?.co_codes?.length ?? 0}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                ) : (
+                  <div className="py-4 text-center text-xs text-gray-500">Chưa phát hiện chênh lệch nào.</div>
+                )}
+              </div>
             </div>
-
           </div>
+        </CollapsibleCard>
 
-        </div>
-
-          </CollapsibleCard>
+        <p className="text-xs text-gray-500">
+          * Số lượng GP được tự động đếm theo các loại giấy phép hợp lệ (đã loại trừ theo mục Quy tắc KPI).
+          Bạn có thể điều chỉnh thủ công trước khi lưu để phản ánh thực tế kiểm tra.
+        </p>
 
         </>
 
@@ -17403,7 +17416,14 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
 
         </p>
 
-        <ol className="mt-4 flex flex-col gap-2 md:flex-row md:items-stretch md:gap-3">
+        <span className="sr-only" role="status" aria-live="polite">
+          {wizardStatusMessage}
+        </span>
+
+        <ol
+          className="mt-4 flex flex-col gap-2 md:flex-row md:items-stretch md:gap-3"
+          aria-label="Tiến trình import dữ liệu"
+        >
 
           {WIZARD_STEPS.map((step, index) => {
 
@@ -17425,6 +17445,14 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
 
                   disabled={isLocked}
 
+                  aria-current={isCurrent ? "step" : undefined}
+
+                  aria-disabled={isLocked ? "true" : undefined}
+
+                  aria-controls={`data-importer-step-${step.id}`}
+
+                  aria-describedby={`data-importer-step-${step.id}-description`}
+
                   className={cx(
 
                     "flex w-full flex-col gap-1 rounded border px-3 py-2 text-left text-sm transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2",
@@ -17443,7 +17471,13 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
 
                 >
 
-                  <span className="flex items-center gap-2 text-sm font-semibold">
+                  <span
+
+                    id={`data-importer-step-${step.id}-label`}
+
+                    className="flex items-center gap-2 text-sm font-semibold"
+
+                  >
 
                     <span
 
@@ -17473,7 +17507,17 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
 
                   </span>
 
-                  <span className="text-xs text-gray-500 dark:text-gray-400">{step.description}</span>
+                  <span
+
+                    id={`data-importer-step-${step.id}-description`}
+
+                    className="text-xs text-gray-500 dark:text-gray-400"
+
+                  >
+
+                    {step.description}
+
+                  </span>
 
                 </button>
 
@@ -17489,151 +17533,182 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
 
 
 
-      {wizardStep === 0 && (
+      <section
+        id={`data-importer-step-${WIZARD_STEPS[0].id}`}
+        role="region"
+        aria-labelledby={`data-importer-step-${WIZARD_STEPS[0].id}-label`}
+        hidden={wizardStep !== 0}
+      >
 
-        <>
+        {wizardStep === 0 && (
 
-          <Suspense fallback={null}>
+          <>
 
-            <PickerSection context={pickerContext} />
+            <Suspense fallback={null}>
 
-          </Suspense>
+              <PickerSection context={pickerContext} />
 
-          <div className="mt-4 flex items-center justify-end">
+            </Suspense>
 
-            <Button type="button" onClick={handleNextWizardStep} disabled={!canProceedFromPrepare}>
+            <div className="mt-4 flex items-center justify-end">
 
-              Tiếp tục
+              <Button type="button" onClick={handleNextWizardStep} disabled={!canProceedFromPrepare}>
 
-            </Button>
+                Tiếp tục
 
-          </div>
-
-        </>
-
-      )}
-
-
-
-      {wizardStep === 1 && (
-
-        <>
-
-          <Suspense fallback={null}>
-
-            <PreviewSection context={previewContext} />
-
-          </Suspense>
-
-          <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
-
-            <Button type="button" variant="outline" onClick={handlePreviousWizardStep}>
-
-              Quay lại
-
-            </Button>
-
-            <Button type="button" onClick={handleNextWizardStep} disabled={!canProceedFromPreview}>
-
-              Tiếp tục
-
-            </Button>
-
-          </div>
-
-        </>
-
-      )}
-
-
-
-      {wizardStep === 2 && (
-
-        <>
-
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-
-            <Button type="button" variant="outline" onClick={handlePreviousWizardStep}>
-
-              Quay lại
-
-            </Button>
-
-            <div className="flex flex-wrap items-center gap-2">
-
-              <span className="text-xs text-gray-500 dark:text-gray-300">
-
-                Bước 3/3: Áp dụng &amp; đồng bộ
-
-              </span>
-
-              {canViewSavedRows ? (
-
-                <button
-
-                  type="button"
-
-                  onClick={openDeletedList}
-
-                  className="rounded border border-gray-200 bg-white px-3 py-1 text-xs text-gray-600 shadow-sm transition hover:bg-gray-50 dark:border-slate-600 dark:bg-slate-800 dark:text-gray-200 dark:hover:bg-slate-700"
-
-                  data-testid="deleted-list-trigger"
-
-                >
-
-                  Danh sách tờ khai đã xóa
-
-                </button>
-
-              ) : null}
+              </Button>
 
             </div>
 
-          </div>
+          </>
 
-      {canEdit && (
+        )}
 
-        <div className="flex flex-wrap items-center gap-2">
+      </section>
 
-          <label className="flex items-center gap-1">
 
-            <input type="checkbox" checked={autoAssignStaff} onChange={e => setAutoAssignStaff(e.target.checked)} />
 
-            <span>Tự gán nhân viên theo MST nếu trống (ON)</span>
+      <section
+        id={`data-importer-step-${WIZARD_STEPS[1].id}`}
+        role="region"
+        aria-labelledby={`data-importer-step-${WIZARD_STEPS[1].id}-label`}
+        hidden={wizardStep !== 1}
+      >
 
-          </label>
+        {wizardStep === 1 && (
 
-          <label className="flex items-center gap-1">
+          <>
 
-            <input type="checkbox" checked={upsert11} onChange={e => setUpsert11(e.target.checked)} />
+            <Suspense fallback={null}>
 
-            <span>Upsert theo 11 số đầu của Số tờ khai</span>
+              <PreviewSection context={previewContext} />
 
-          </label>
+            </Suspense>
 
-          {canOverwriteData && (
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
 
-            <label className="flex items-center gap-1 text-amber-700">
+              <Button type="button" variant="outline" onClick={handlePreviousWizardStep}>
 
-              <input
+                Quay lại
 
-                type="checkbox"
+              </Button>
 
-                checked={overwrite}
+              <Button type="button" onClick={handleNextWizardStep} disabled={!canProceedFromPreview}>
 
-                onChange={(e) => handleOverwriteToggle(e.target.checked)}
+                Tiếp tục
 
-              />
+              </Button>
 
-              <span>Ghi đè toàn bộ dữ liệu hiện có</span>
+            </div>
 
-            </label>
+          </>
 
-          )}
+        )}
 
-        </div>
+      </section>
 
-      )}
+
+
+      <section
+        id={`data-importer-step-${WIZARD_STEPS[2].id}`}
+        role="region"
+        aria-labelledby={`data-importer-step-${WIZARD_STEPS[2].id}-label`}
+        hidden={wizardStep !== 2}
+      >
+
+        {wizardStep === 2 && (
+
+          <>
+
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+
+              <Button type="button" variant="outline" onClick={handlePreviousWizardStep}>
+
+                Quay lại
+
+              </Button>
+
+              <div className="flex flex-wrap items-center gap-2">
+
+                <span className="text-xs text-gray-500 dark:text-gray-300">
+
+                  Bước 3/3: Áp dụng &amp; đồng bộ
+
+                </span>
+
+                {canViewSavedRows ? (
+
+                  <button
+
+                    type="button"
+
+                    onClick={openDeletedList}
+
+                    className="rounded border border-gray-200 bg-white px-3 py-1 text-xs text-gray-600 shadow-sm transition hover:bg-gray-50 dark:border-slate-600 dark:bg-slate-800 dark:text-gray-200 dark:hover:bg-slate-700"
+
+                    data-testid="deleted-list-trigger"
+
+                  >
+
+                    Danh sách tờ khai đã xóa
+
+                  </button>
+
+                ) : null}
+
+              </div>
+
+            </div>
+
+            {canEdit && (
+
+              <div className="flex flex-wrap items-center gap-2">
+
+                <label className="flex items-center gap-1">
+
+                  <input type="checkbox" checked={autoAssignStaff} onChange={(event) => setAutoAssignStaff(event.target.checked)} />
+
+                  <span>Tự gán nhân viên theo MST nếu trống (ON)</span>
+
+                </label>
+
+                <label className="flex items-center gap-1">
+
+                  <input type="checkbox" checked={upsert11} onChange={(event) => setUpsert11(event.target.checked)} />
+
+                  <span>Upsert theo 11 số đầu của Số tờ khai</span>
+
+                </label>
+
+                {canOverwriteData && (
+
+                  <label className="flex items-center gap-1 text-amber-700">
+
+                    <input
+
+                      type="checkbox"
+
+                      checked={overwrite}
+
+                      onChange={(event) => handleOverwriteToggle(event.target.checked)}
+
+                    />
+
+                    <span>Ghi đè toàn bộ dữ liệu hiện có</span>
+
+                  </label>
+
+                )}
+
+              </div>
+
+            )}
+
+          </>
+
+        )}
+
+        </section>
 
 
 
@@ -20419,18 +20494,6 @@ const handleAutoApplyLicenseExclusion = useCallback(() => {
           )}
 
         </div>
-
-      )}
-
-      <p className="text-xs text-gray-500">
-
-        * Số lượng GP được tự động đếm theo các loại giấy phép hợp lệ (đã loại trừ theo mục Quy tắc KPI).
-
-        Bạn có thể điều chỉnh thủ công trước khi lưu để phản ánh thực tế kiểm tra.
-
-      </p>
-
-        </>
 
       )}
 

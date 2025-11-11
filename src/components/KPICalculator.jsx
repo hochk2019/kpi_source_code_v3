@@ -28,6 +28,8 @@ const DataHealthDashboard = React.lazy(() => import('./DataHealthDashboard.jsx')
 
 const ExportAuditReport = React.lazy(() => import('./ExportAuditReport.jsx'));
 
+import { recordMetric } from '@/lib/perfMonitor.js';
+
 
 
 const TabPanel = ({ children }) => (
@@ -157,6 +159,22 @@ const KPICalculator = ({ auth, activeTab = 'reports', onTabChange }) => {
     import('./ReportViewer.jsx');
 
   }, []);
+
+
+
+  useEffect(() => {
+
+    recordMetric({
+
+      source: 'navigation',
+
+      name: 'tab_change',
+
+      detail: { tab: tabValue },
+
+    });
+
+  }, [tabValue]);
 
 
 

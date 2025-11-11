@@ -51,6 +51,8 @@ import {
 } from "@/lib/store.js";
 
 import { subscribe as subscribeStorage } from "@/lib/storageClient.js";
+import useRenderMetrics from "@/hooks/useRenderMetrics.js";
+import useRestoreFocus from "@/hooks/useRestoreFocus.js";
 
 import { Button } from "@/components/ui/button.jsx";
 
@@ -1622,6 +1624,9 @@ export default function KPIAdjustments({ currentUser, onRequestImportLookup = nu
   const [guidanceOpen, setGuidanceOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [guidanceFullscreen, setGuidanceFullscreen] = useState(false);
+  const detailDialogContentRef = useRef(null);
+  const guidanceDialogContentRef = useRef(null);
+  const settingsDialogContentRef = useRef(null);
 
   const [settingsDraft, setSettingsDraft] = useState({});
 
@@ -1634,6 +1639,10 @@ export default function KPIAdjustments({ currentUser, onRequestImportLookup = nu
       setGuidanceFullscreen(false);
     }
   }, [guidanceOpen]);
+
+  useRestoreFocus(Boolean(detailEntry), { focusTargetRef: detailDialogContentRef });
+  useRestoreFocus(guidanceOpen, { focusTargetRef: guidanceDialogContentRef });
+  useRestoreFocus(settingsOpen, { focusTargetRef: settingsDialogContentRef });
 
   const staffDefaults = useMemo(() => resolveStaffDefaults(currentUser, roster), [currentUser, roster]);
 
@@ -2534,6 +2543,33 @@ export default function KPIAdjustments({ currentUser, onRequestImportLookup = nu
     paginatedAdjustments.length > 0 && paginatedAdjustments.every((item) => selectedIds.has(item.id));
   const someVisibleSelected = paginatedAdjustments.some((item) => selectedIds.has(item.id));
   const masterSelectionState = allVisibleSelected ? true : someVisibleSelected ? 'indeterminate' : false;
+
+  const tableStatusMessage = useMemo(() => {
+    const baseMessage = `Hiển thị ${paginatedAdjustments.length.toLocaleString('vi-VN')} trên tổng số ${totalAdjustments.toLocaleString('vi-VN')} điểm KPI. Trang ${currentPage} trên ${totalPages}.`;
+    if (!selectedCount) {
+      return baseMessage;
+    }
+    const selectionDetails = ` Đã chọn ${selectedCount.toLocaleString('vi-VN')} điểm (${visibleSelectedCount.toLocaleString('vi-VN')} trên trang hiện tại).`;
+    return `${baseMessage}${selectionDetails}`;
+  }, [
+    paginatedAdjustments.length,
+    totalAdjustments,
+    currentPage,
+    totalPages,
+    selectedCount,
+    visibleSelectedCount,
+  ]);
+
+  useRenderMetrics('KPIAdjustments', () => ({
+    month: filterMonth,
+    status: filterStatus,
+    pageSize,
+    currentPage,
+    totalAdjustments,
+    visibleRows: paginatedAdjustments.length,
+    selected: selectedIds.size,
+    mineOnly: showMineOnly,
+  }));
 
   useEffect(() => {
     if (!selectedIds.size && bulkError) {
@@ -3666,8 +3702,12 @@ export default function KPIAdjustments({ currentUser, onRequestImportLookup = nu
 
 
       <Dialog open={!!detailEntry} onOpenChange={(open) => (open ? null : closeDetailDialog())}>
-
-        <DialogContent data-testid="kpi-adjust-detail-dialog" className="max-w-2xl">
+        <DialogContent
+          data-testid="kpi-adjust-detail-dialog"
+          className="max-w-2xl"
+          ref={detailDialogContentRef}
+          tabIndex={-1}
+        >
 
           <DialogHeader>
 
@@ -4114,13 +4154,14 @@ export default function KPIAdjustments({ currentUser, onRequestImportLookup = nu
 
 
         <Dialog open={guidanceOpen} onOpenChange={setGuidanceOpen}>
-
           <DialogContent
             className={cn(
               "max-w-3xl overflow-hidden p-0 sm:max-h-[85vh]",
               guidanceFullscreen &&
                 "h-[calc(100vh-2rem)] max-h-[calc(100vh-2rem)] max-w-[min(1200px,calc(100vw-2rem))] sm:w-[min(1200px,calc(100vw-2rem))]",
             )}
+            ref={guidanceDialogContentRef}
+            tabIndex={-1}
           >
 
             <div
@@ -4405,8 +4446,11 @@ export default function KPIAdjustments({ currentUser, onRequestImportLookup = nu
         </Dialog>
 
       <Dialog open={settingsOpen} onOpenChange={(open) => (open ? setSettingsOpen(true) : closeSettingsDialog())}>
-
-        <DialogContent className="max-w-3xl">
+        <DialogContent
+          className="max-w-3xl"
+          ref={settingsDialogContentRef}
+          tabIndex={-1}
+        >
 
           <DialogHeader>
 
@@ -5888,6 +5932,9 @@ export default function KPIAdjustments({ currentUser, onRequestImportLookup = nu
 
           <div className="mt-6 flex flex-wrap items-center justify-between gap-3 text-sm">
             <div className="flex flex-wrap items-center gap-3">
+              <span className="sr-only" role="status" aria-live="polite">
+                {tableStatusMessage}
+              </span>
               <span className="font-medium text-foreground">
                 Hiển thị {paginatedAdjustments.length.toLocaleString('vi-VN')} / {totalAdjustments.toLocaleString('vi-VN')} điểm
               </span>
