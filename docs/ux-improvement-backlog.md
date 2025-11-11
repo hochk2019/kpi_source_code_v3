@@ -65,24 +65,28 @@ This backlog liệt kê các hạng mục cải thiện trải nghiệm người
   - [x] Thêm helper đọc/ghi danh sách ghim Command Center qua `UI_LAYOUT_KEY` và chuẩn hoá dữ liệu lưu trữ.
   - [x] Lắng nghe thay đổi từ kho chia sẻ để cập nhật danh sách ghim realtime giữa các tab/thiết bị.
   - [x] Đồng bộ thao tác ghim/bỏ ghim với backend và ghi lại nhật ký audit kèm thông tin người thực hiện.
-- [ ] Thêm ô tìm kiếm toàn cục gợi ý nhanh theo quyền truy cập (module, báo cáo, người dùng).
-- [ ] Hiển thị badge số lượng thông báo chưa đọc và thao tác đánh dấu đã đọc hàng loạt.
-- [ ] Cung cấp hub hướng dẫn nhanh/FAQ theo ngữ cảnh mỗi trang, liên kết tới tài liệu trong thư mục `docs/`.
+- [x] Thêm ô tìm kiếm toàn cục gợi ý nhanh theo quyền truy cập (module, báo cáo, người dùng). (đã thêm GlobalSearch trên header dùng Command Center filter theo quyền)
+- [x] Hiển thị badge số lượng thông báo chưa đọc và thao tác đánh dấu đã đọc hàng loạt. (đã thêm badge + nút đánh dấu tất cả đã đọc trong Notification Center và lưu mốc đã đọc vào localStorage)
+- [x] Cung cấp hub hướng dẫn nhanh/FAQ theo ngữ cảnh mỗi trang, liên kết tới tài liệu trong thư mục `docs/`. (đã thêm ContextHelpHub hiển thị tài liệu & FAQ theo tab hiện tại)
 
 ## 6. Reporting & automation
 
-- [ ] Xem trước nội dung báo cáo và lịch chạy kế tiếp ngay trong màn hình lập lịch (`getReportSchedules`).
-- [ ] Tạo dashboard KPI tổng quan với xu hướng tháng, top nhân sự, cảnh báo lệch chuẩn.
-- [ ] Mở rộng kênh gửi báo cáo (email, chat nội bộ) và theo dõi trạng thái giao thành công/thất bại.
-- [ ] Cho phép người dùng tự tạo template báo cáo tùy biến, lưu trữ vào `KPI_ADJUSTMENT_SETTINGS_KEY` hoặc kho riêng.
+- [x] Thống kê top 10 công ty nhiều tờ khai theo từng kỳ báo cáo trong tab "Báo cáo KPI".
+  - [x] Hiển thị bảng xếp hạng tương tác với biểu đồ tỷ trọng, có thể lọc theo kỳ báo cáo và ghi nhớ lựa chọn gần nhất.
+  - [x] Đồng bộ widget với bảng số liệu KPI để người dùng mở chi tiết một công ty chỉ với một cú nhấp.
+  - [x] Thu gọn khu vực "Điểm KPI +/- bổ sung" theo mặc định, cung cấp nút mở rộng/thu gọn và lưu lại trạng thái giữa các lần truy cập.
+- [x] Xem trước nội dung báo cáo và lịch chạy kế tiếp ngay trong màn hình lập lịch (`getReportSchedules`). (đã bổ sung bảng xem trước số liệu + top nhân sự/doanh nghiệp và timeline lịch chạy ngay dưới form lập lịch)
+- [x] Tạo dashboard KPI tổng quan với xu hướng tháng, top nhân sự, cảnh báo lệch chuẩn. (đã bổ sung thẻ Dashboard KPI với biểu đồ xu hướng, top nhân sự nổi bật và cảnh báo lệch chuẩn ngay trong tab "Báo cáo KPI")
+- [x] Mở rộng kênh gửi báo cáo (email, chat nội bộ) và theo dõi trạng thái giao thành công/thất bại. (đã thêm lựa chọn kênh email/chat, lưu người nhận riêng và hiển thị trạng thái giao gần nhất theo từng kênh)
+- [x] Cho phép người dùng tự tạo template báo cáo tùy biến, lưu trữ vào `KPI_ADJUSTMENT_SETTINGS_KEY` hoặc kho riêng. (đã thêm bộ quản lý template lưu vào kho riêng và nút áp dụng/cập nhật trực tiếp trong Báo cáo KPI)
 
 ## 7. Reliability, QA & accessibility
 
-- [ ] Chuẩn hóa xử lý lỗi mạng trong `storageClient.js` (retry queue, rollback, thông báo rõ nghĩa).
-- [ ] Bổ sung đo lường hiệu năng (Web Vitals, log render) và dashboard theo dõi để phát hiện màn hình chậm.
-- [ ] Thực hiện audit accessibility (focus trap, aria-label, contrast) trên các component trọng yếu (`KPIAdjustments`, `DataImporter`, `MSTAssignment`).
-- [ ] Viết thêm test tự động cho các luồng filter và đồng bộ, đảm bảo không regress khi refactor.
-- [ ] Xây dựng checklist QA cuối sprint, liên kết vào `docs/operations/ui-verification-log.md`.
+- [x] Chuẩn hóa xử lý lỗi mạng trong `storageClient.js` (retry queue, rollback, thông báo rõ nghĩa). (đã bổ sung bộ gom lỗi chuẩn hoá message, retry/backoff thống nhất và ghi log trạng thái đồng bộ)
+- [x] Bổ sung đo lường hiệu năng (Web Vitals, log render) và dashboard theo dõi để phát hiện màn hình chậm. (đã tích hợp thu thập Web Vitals, log render chính và bảng điều khiển Performance trong Data Health)
+- [x] Thực hiện audit accessibility (focus trap, aria-label, contrast) trên các component trọng yếu (`KPIAdjustments`, `DataImporter`, `MSTAssignment`). (đã bổ sung hook khôi phục focus, aria-live/aria-pressed và cải thiện tương phản cho các bộ lọc, wizard và dialog)
+- [x] Viết thêm test tự động cho các luồng filter và đồng bộ, đảm bảo không regress khi refactor. (đã bổ sung bộ kiểm thử `kpiAdjustments.filters` và `store.declSync.queue` để xác nhận lưu bộ lọc và hàng đợi đồng bộ ECUS)
+- [x] Xây dựng checklist QA cuối sprint, liên kết vào `docs/operations/ui-verification-log.md`. (đã tạo checklist chi tiết tại `docs/operations/qa-sprint-checklist.md` và tham chiếu từ nhật ký kiểm tra UI)
 
 ## Cách sử dụng
 
