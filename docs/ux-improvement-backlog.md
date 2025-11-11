@@ -75,11 +75,11 @@ This backlog liệt kê các hạng mục cải thiện trải nghiệm người
 - [x] Xem trước nội dung báo cáo và lịch chạy kế tiếp ngay trong màn hình lập lịch (`getReportSchedules`). (đã bổ sung bảng xem trước số liệu + top nhân sự/doanh nghiệp và timeline lịch chạy ngay dưới form lập lịch)
 - [x] Tạo dashboard KPI tổng quan với xu hướng tháng, top nhân sự, cảnh báo lệch chuẩn. (đã bổ sung thẻ Dashboard KPI với biểu đồ xu hướng, top nhân sự nổi bật và cảnh báo lệch chuẩn ngay trong tab "Báo cáo KPI")
 - [x] Mở rộng kênh gửi báo cáo (email, chat nội bộ) và theo dõi trạng thái giao thành công/thất bại. (đã thêm lựa chọn kênh email/chat, lưu người nhận riêng và hiển thị trạng thái giao gần nhất theo từng kênh)
-- [ ] Cho phép người dùng tự tạo template báo cáo tùy biến, lưu trữ vào `KPI_ADJUSTMENT_SETTINGS_KEY` hoặc kho riêng.
+- [x] Cho phép người dùng tự tạo template báo cáo tùy biến, lưu trữ vào `KPI_ADJUSTMENT_SETTINGS_KEY` hoặc kho riêng. (đã thêm bộ quản lý template lưu vào kho riêng và nút áp dụng/cập nhật trực tiếp trong Báo cáo KPI)
 
 ## 7. Reliability, QA & accessibility
 
-- [ ] Chuẩn hóa xử lý lỗi mạng trong `storageClient.js` (retry queue, rollback, thông báo rõ nghĩa).
+- [x] Chuẩn hóa xử lý lỗi mạng trong `storageClient.js` (retry queue, rollback, thông báo rõ nghĩa). (đã bổ sung bộ gom lỗi chuẩn hoá message, retry/backoff thống nhất và ghi log trạng thái đồng bộ)
 - [ ] Bổ sung đo lường hiệu năng (Web Vitals, log render) và dashboard theo dõi để phát hiện màn hình chậm.
 - [ ] Thực hiện audit accessibility (focus trap, aria-label, contrast) trên các component trọng yếu (`KPIAdjustments`, `DataImporter`, `MSTAssignment`).
 - [ ] Viết thêm test tự động cho các luồng filter và đồng bộ, đảm bảo không regress khi refactor.

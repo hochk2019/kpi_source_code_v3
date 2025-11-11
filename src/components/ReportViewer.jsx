@@ -12,10 +12,14 @@ import {
   mapMemberNamesToTeams,
   getKpiAdjustments,
   KPI_ADJUSTMENTS_KEY,
+  getReportTemplates,
+  saveReportTemplate,
+  deleteReportTemplate,
   getReportSchedules,
   saveReportSchedule,
   deleteReportSchedule,
   REPORT_SCHEDULE_KEY,
+  KPI_REPORT_TEMPLATES_KEY,
   calculateNextReportScheduleRun,
   DECL_KEY,
   MST_KEY,
@@ -853,6 +857,20 @@ function sanitizeSelection(value) {
 
 
 
+function sanitizeTemplateId(value) {
+
+  if (typeof value !== "string") {
+
+    return "";
+
+  }
+
+  return value.trim();
+
+}
+
+
+
 function sanitizeAdjustmentPageSize(value) {
 
   const num = Number(value);
@@ -1006,6 +1024,116 @@ function sanitizeColumnVisibility(input = {}) {
   }
 
   return result;
+
+}
+
+
+
+function normalizeTemplateConfig(config = {}) {
+
+  const source = config && typeof config === "object" ? config : {};
+
+  const quickRange = sanitizeQuickRange(source.quickRange);
+
+  const from = typeof source.from === "string" ? source.from.trim() : "";
+
+  const to = typeof source.to === "string" ? source.to.trim() : "";
+
+  const scope = SCOPE_VALUES.has(source.scope) ? source.scope : "staff";
+
+  const selectedStaff = sanitizeSelection(source.selectedStaff);
+
+  const selectedTeam = sanitizeSelection(source.selectedTeam);
+
+  const staffSortKey = sanitizeSortKey(source.staffSortKey);
+
+  const teamSortKey = sanitizeSortKey(source.teamSortKey);
+
+  const topStaffMetric = sanitizeTopStaffMetric(source.topStaffMetric);
+
+  const topStaffVisibleCount = sanitizeTopStaffVisibleCount(source.topStaffVisibleCount);
+
+  const columns = sanitizeColumnVisibility(source.columns);
+
+  const ruleId = sanitizeRulePreference(source.ruleId);
+
+  const detailPageSize = sanitizeDetailPageSize(source.detailPageSize);
+
+  const adjustmentPageSize = sanitizeAdjustmentPageSize(source.adjustmentPageSize);
+
+  const staffViewMode = source.staffViewMode === "detail" ? "detail" : "summary";
+
+  const teamViewMode = source.teamViewMode === "detail" ? "detail" : "summary";
+
+  const scheduleCollapsed = source.scheduleCollapsed === true;
+
+  const adjustmentExpanded = source.adjustmentExpanded === true;
+
+  const topCompanyPeriod = sanitizeTopCompanyPeriod(source.topCompanyPeriod);
+
+  return {
+
+    quickRange,
+
+    from,
+
+    to,
+
+    scope,
+
+    selectedStaff,
+
+    selectedTeam,
+
+    staffSortKey,
+
+    teamSortKey,
+
+    topStaffMetric,
+
+    topStaffVisibleCount,
+
+    columns,
+
+    ruleId,
+
+    detailPageSize,
+
+    adjustmentPageSize,
+
+    staffViewMode,
+
+    teamViewMode,
+
+    scheduleCollapsed,
+
+    adjustmentExpanded,
+
+    topCompanyPeriod,
+
+  };
+
+}
+
+
+
+function deriveColumnVisibilityState(columnsConfig) {
+
+  const columns = sanitizeColumnVisibility(columnsConfig);
+
+  return {
+
+    items: columns.items === false ? false : true,
+
+    licenses: columns.licenses === false ? false : true,
+
+    co: columns.co === false ? false : true,
+
+    coLines: columns.coLines === false ? false : true,
+
+    licenseCodes: columns.licenseCodes === false ? false : true,
+
+  };
 
 }
 
@@ -4539,6 +4667,10 @@ export default function ReportViewer({ canExport = true, currentUser = null }) {
 
   }));
 
+  const [reportTemplates, setReportTemplates] = useState(() => getReportTemplates());
+
+  const [activeTemplateId, setActiveTemplateId] = useState(() => sanitizeTemplateId(storedPrefs.templateId));
+
   const exportColumns = useMemo(() => sanitizeColumnVisibility(columnVisibility), [columnVisibility]);
 
   const prefsSnapshotRef = useRef("");
@@ -4554,6 +4686,40 @@ export default function ReportViewer({ canExport = true, currentUser = null }) {
   const [adjustmentExpanded, setAdjustmentExpanded] = useState(() => storedPrefs.adjustmentExpanded === true);
 
   const isAdmin = isAdminRole(currentUser?.role);
+
+  const actorLabel = useMemo(() => {
+
+    const candidates = [
+
+      currentUser?.name,
+
+      currentUser?.fullName,
+
+      currentUser?.displayName,
+
+      currentUser?.username,
+
+    ];
+
+    for (const candidate of candidates) {
+
+      if (typeof candidate === "string") {
+
+        const trimmed = candidate.trim();
+
+        if (trimmed) {
+
+          return trimmed;
+
+        }
+
+      }
+
+    }
+
+    return "system";
+
+  }, [currentUser]);
 
 
 
@@ -4583,6 +4749,7 @@ export default function ReportViewer({ canExport = true, currentUser = null }) {
         RULES_KEY,
         TEAM_KEY,
         KPI_ADJUSTMENTS_KEY,
+        KPI_REPORT_TEMPLATES_KEY,
         REPORT_SCHEDULE_KEY,
       ]);
       setVersion((value) => value + 1);
@@ -4653,10 +4820,280 @@ const [detailPageSizeCustomInput, setDetailPageSizeCustomInput] = useState(() =>
 
 );
 
+  const currentTemplateConfig = useMemo(
+
+    () =>
+
+      normalizeTemplateConfig({
+
+        quickRange,
+
+        from,
+
+        to,
+
+        scope,
+
+        selectedStaff,
+
+        selectedTeam,
+
+        staffSortKey,
+
+        teamSortKey,
+
+        topStaffMetric,
+
+        topStaffVisibleCount,
+
+        columns: exportColumns,
+
+        ruleId: selectedRuleId,
+
+        detailPageSize,
+
+        adjustmentPageSize,
+
+        staffViewMode,
+
+        teamViewMode,
+
+        scheduleCollapsed,
+
+        adjustmentExpanded,
+
+        topCompanyPeriod,
+
+      }),
+
+    [
+
+      quickRange,
+
+      from,
+
+      to,
+
+      scope,
+
+      selectedStaff,
+
+      selectedTeam,
+
+      staffSortKey,
+
+      teamSortKey,
+
+      topStaffMetric,
+
+      topStaffVisibleCount,
+
+      exportColumns,
+
+      selectedRuleId,
+
+      detailPageSize,
+
+      adjustmentPageSize,
+
+      staffViewMode,
+
+      teamViewMode,
+
+      scheduleCollapsed,
+
+      adjustmentExpanded,
+
+      topCompanyPeriod,
+
+    ],
+
+  );
+
+  const currentTemplateSignature = useMemo(
+
+    () => JSON.stringify(currentTemplateConfig),
+
+    [currentTemplateConfig],
+
+  );
+
+  const activeTemplate = useMemo(
+
+    () => reportTemplates.find((item) => item.id === activeTemplateId) || null,
+
+    [reportTemplates, activeTemplateId],
+
+  );
+
+  const activeTemplateSignature = useMemo(
+
+    () => (activeTemplate ? JSON.stringify(normalizeTemplateConfig(activeTemplate.config)) : ""),
+
+    [activeTemplate],
+
+  );
+
+  const isTemplateDirty = Boolean(activeTemplate) && activeTemplateSignature !== currentTemplateSignature;
+
   const [staffDetailPage, setStaffDetailPage] = useState(0);
 
   const [teamDetailPage, setTeamDetailPage] = useState(0);
 
+  const applyTemplateConfigToState = (config) => {
+    const normalized = normalizeTemplateConfig(config);
+    if (normalized.quickRange === "custom") {
+      setQuickRange("custom");
+      setFrom(normalized.from || from);
+      setTo(normalized.to || to);
+    } else {
+      setQuickRange(normalized.quickRange);
+      const computed = computeQuickRange(normalized.quickRange);
+      setFrom(computed.from);
+      setTo(computed.to);
+    }
+    setScope(normalized.scope);
+    setSelectedStaff(normalized.selectedStaff);
+    setSelectedTeam(normalized.selectedTeam);
+    setStaffSortKey(normalized.staffSortKey);
+    setTeamSortKey(normalized.teamSortKey);
+    setTopStaffMetric(normalized.topStaffMetric);
+    setTopStaffVisibleCount(normalized.topStaffVisibleCount);
+    setColumnVisibility(deriveColumnVisibilityState(normalized.columns));
+    setSelectedRuleId(normalized.ruleId);
+    setDetailPageSize(normalized.detailPageSize);
+    setAdjustmentPageSize(normalized.adjustmentPageSize);
+    setStaffViewMode(normalized.staffViewMode);
+    setTeamViewMode(normalized.teamViewMode);
+    setScheduleCollapsed(normalized.scheduleCollapsed);
+    setAdjustmentExpanded(normalized.adjustmentExpanded);
+    setTopCompanyPeriod(normalized.topCompanyPeriod);
+    setDetailPageSizeMode(
+      DETAIL_PAGE_SIZE_OPTIONS.includes(normalized.detailPageSize) ? "preset" : "custom",
+    );
+    setDetailPageSizeCustomInput(
+      DETAIL_PAGE_SIZE_OPTIONS.includes(normalized.detailPageSize)
+        ? ""
+        : String(normalized.detailPageSize),
+    );
+    setStaffDetailPage(0);
+    setTeamDetailPage(0);
+    setAdjustmentPage(0);
+  };
+
+  const handleApplyTemplate = (templateId, { silent = false } = {}) => {
+    if (!templateId) {
+      setActiveTemplateId("");
+      return;
+    }
+    const template = reportTemplates.find((item) => item && item.id === templateId);
+    if (!template) {
+      setActiveTemplateId("");
+      toast.error?.("Template báo cáo đã bị xoá hoặc không tồn tại.");
+      return;
+    }
+    applyTemplateConfigToState(template.config);
+    setActiveTemplateId(template.id);
+    if (!silent) {
+      toast.success?.(`Đã áp dụng template "${template.name}".`);
+    }
+  };
+
+  const handleSaveTemplateAsNew = () => {
+    if (typeof window === "undefined") {
+      toast.error?.("Không thể lưu template trong môi trường hiện tại.");
+      return;
+    }
+    const nameInput = window.prompt("Đặt tên template báo cáo", "");
+    if (nameInput === null) {
+      return;
+    }
+    const normalizedName = nameInput.trim();
+    if (!normalizedName) {
+      toast.error?.("Tên template không được để trống.");
+      return;
+    }
+    try {
+      const saved = saveReportTemplate(
+        {
+          name: normalizedName,
+          config: currentTemplateConfig,
+          createdBy: actorLabel,
+          updatedBy: actorLabel,
+        },
+        { actor: actorLabel },
+      );
+      setReportTemplates(getReportTemplates());
+      setActiveTemplateId(saved?.id || "");
+      toast.success?.("Đã lưu template báo cáo mới.");
+    } catch (error) {
+      console.error("Không thể lưu template báo cáo", error);
+      toast.error?.(error?.message || "Không thể lưu template báo cáo.");
+    }
+  };
+
+  const handleOverwriteTemplate = () => {
+    if (!activeTemplate) {
+      return;
+    }
+    if (typeof window === "undefined") {
+      toast.error?.("Không thể cập nhật template trong môi trường hiện tại.");
+      return;
+    }
+    const nameInput = window.prompt("Cập nhật tên template báo cáo", activeTemplate.name || "");
+    if (nameInput === null) {
+      return;
+    }
+    const normalizedName = nameInput.trim();
+    if (!normalizedName) {
+      toast.error?.("Tên template không được để trống.");
+      return;
+    }
+    try {
+      const saved = saveReportTemplate(
+        {
+          id: activeTemplate.id,
+          name: normalizedName,
+          config: currentTemplateConfig,
+          createdBy: activeTemplate.createdBy || actorLabel,
+          updatedBy: actorLabel,
+        },
+        { actor: actorLabel },
+      );
+      setReportTemplates(getReportTemplates());
+      setActiveTemplateId(saved?.id || activeTemplate.id);
+      toast.success?.("Đã cập nhật template báo cáo.");
+    } catch (error) {
+      console.error("Không thể cập nhật template báo cáo", error);
+      toast.error?.(error?.message || "Không thể cập nhật template báo cáo.");
+    }
+  };
+
+  const handleDeleteTemplate = () => {
+    if (!activeTemplate) {
+      return;
+    }
+    if (typeof window !== "undefined") {
+      const confirmed = window.confirm(`Xoá template "${activeTemplate.name}"?`);
+      if (!confirmed) {
+        return;
+      }
+    }
+    const success = deleteReportTemplate(activeTemplate.id, { actor: actorLabel });
+    if (success) {
+      setReportTemplates(getReportTemplates());
+      setActiveTemplateId("");
+      toast.success?.("Đã xoá template báo cáo.");
+    } else {
+      toast.error?.("Không thể xoá template báo cáo.");
+    }
+  };
+
+  const hasTemplates = reportTemplates.length > 0;
+
+  const canOverwriteTemplate = Boolean(activeTemplate) && isTemplateDirty;
+
+  const canDeleteTemplate = Boolean(activeTemplate);
 
 
   useEffect(() => {
@@ -4696,6 +5133,8 @@ const [detailPageSizeCustomInput, setDetailPageSizeCustomInput] = useState(() =>
       scheduleCollapsed,
 
       adjustmentExpanded,
+
+      templateId: activeTemplateId,
 
     };
 
@@ -4747,6 +5186,8 @@ const [detailPageSizeCustomInput, setDetailPageSizeCustomInput] = useState(() =>
 
     adjustmentExpanded,
 
+    activeTemplateId,
+
   ]);
 
 
@@ -4764,6 +5205,8 @@ const [detailPageSizeCustomInput, setDetailPageSizeCustomInput] = useState(() =>
     setAdjustments(getKpiAdjustments());
 
     setReportSchedules(getReportSchedules());
+
+    setReportTemplates(getReportTemplates());
 
   }, [version]);
 
@@ -4783,15 +5226,43 @@ const [detailPageSizeCustomInput, setDetailPageSizeCustomInput] = useState(() =>
 
     });
 
+    const unsubscribeTemplates = subscribeStorage(KPI_REPORT_TEMPLATES_KEY, () => {
+
+      setReportTemplates(getReportTemplates());
+
+    });
+
     return () => {
 
       unsubscribeAdjustments();
 
       unsubscribeSchedules();
 
+      unsubscribeTemplates();
+
     };
 
   }, []);
+
+
+
+  useEffect(() => {
+
+    if (!activeTemplateId) {
+
+      return;
+
+    }
+
+    const exists = reportTemplates.some((item) => item && item.id === activeTemplateId);
+
+    if (!exists) {
+
+      setActiveTemplateId("");
+
+    }
+
+  }, [activeTemplateId, reportTemplates]);
 
 
 
@@ -7938,6 +8409,66 @@ const handleDetailPageSizeCustomInputChange = (event) => {
 
 
 
+
+        <div className="flex flex-wrap items-center gap-3 rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-muted)]/60 p-3 text-sm text-[color:var(--ds-text-secondary)]">
+          <div className="flex min-w-[220px] flex-col gap-1">
+            <span className="text-xs font-semibold uppercase text-[color:var(--ds-text-secondary)]">
+              Template báo cáo
+            </span>
+            <select
+              className="rounded border border-[color:var(--ds-border-subtle)] bg-white px-3 py-2 text-sm text-[color:var(--ds-text-primary)] shadow-sm focus:outline-none focus:ring-2 focus:ring-[color:var(--ds-accent-ring)] focus:ring-offset-0"
+              value={activeTemplateId}
+              onChange={(event) => handleApplyTemplate(event.target.value)}
+              disabled={!hasTemplates}
+            >
+              <option value="">Tuỳ chỉnh hiện tại</option>
+              {reportTemplates.map((template) => (
+                <option key={template.id} value={template.id}>
+                  {template.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          {activeTemplate && isTemplateDirty ? (
+            <span className="rounded-full bg-amber-100 px-2 py-1 text-xs font-semibold text-amber-700">
+              Đã chỉnh sửa
+            </span>
+          ) : null}
+          {!hasTemplates ? (
+            <span className="text-xs text-[color:var(--ds-text-muted)]">
+              Chưa có template nào, hãy lưu cấu hình hiện tại.
+            </span>
+          ) : null}
+          <div className="ml-auto flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={handleSaveTemplateAsNew}
+              className="rounded border border-[color:var(--ds-border-subtle)] bg-white px-3 py-2 text-sm font-semibold text-[color:var(--ds-text-primary)] shadow-sm transition hover:border-[color:var(--ds-border-strong)] hover:bg-[color:var(--ds-surface-muted)]"
+            >
+              Lưu template mới
+            </button>
+            <button
+              type="button"
+              onClick={handleOverwriteTemplate}
+              disabled={!canOverwriteTemplate}
+              className={`rounded border px-3 py-2 text-sm font-semibold shadow-sm transition-colors ${
+                canOverwriteTemplate
+                  ? 'border-transparent bg-[color:var(--ds-accent)] text-white hover:bg-[color:var(--ds-accent-strong)]'
+                  : 'border-[color:var(--ds-border-subtle)] bg-white text-[color:var(--ds-text-secondary)] hover:border-[color:var(--ds-border-strong)]'
+              } disabled:cursor-not-allowed disabled:opacity-60`}
+            >
+              Cập nhật template
+            </button>
+            <button
+              type="button"
+              onClick={handleDeleteTemplate}
+              disabled={!canDeleteTemplate}
+              className="rounded border border-transparent px-3 py-2 text-sm font-semibold text-rose-600 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Xoá template
+            </button>
+          </div>
+        </div>
 
         <div className="grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
 

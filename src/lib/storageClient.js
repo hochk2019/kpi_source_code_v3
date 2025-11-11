@@ -153,6 +153,58 @@ function buildFriendlyWriteMessage(key, detail, attempts, maxAttempts) {
 
 
 
+function normalizeSyncError(error) {
+
+  if (!error) {
+
+    return { code: 'unknown' };
+
+  }
+
+  if (error?.code === 'http' && Number.isFinite(error?.status)) {
+
+    if (error.status >= 500) {
+
+      error.code = 'http-server';
+
+    } else if (error.status >= 400) {
+
+      error.code = error.status === 413 ? 'http-413' : 'http-client';
+
+    }
+
+  }
+
+  if (!error?.code && error?.name === 'AbortError') {
+
+    error.code = 'network';
+
+  }
+
+  if (!error?.code && error?.message && /Failed to fetch|NetworkError/i.test(error.message)) {
+
+    error.code = 'network';
+
+  }
+
+  if (error?.code === undefined && !(error instanceof Error)) {
+
+    error.code = 'unknown';
+
+  }
+
+  if (!error.code) {
+
+    error.code = 'unknown';
+
+  }
+
+  return error;
+
+}
+
+
+
 async function sendWrite(base, key, value, options = {}) {
 
   const payload = value === null || value === undefined ? { value: null } : { value };
@@ -234,31 +286,15 @@ async function sendWrite(base, key, value, options = {}) {
 
     } catch (error) {
 
-      if (!error?.code && error?.name === 'AbortError') {
+      const normalizedError = normalizeSyncError(error);
 
-        error.code = 'network';
+      if (normalizedError instanceof Error && normalizedError.cause === undefined && lastError instanceof Error) {
 
-      }
-
-      if (!error?.code && error?.message && /Failed to fetch|NetworkError/i.test(error.message)) {
-
-        error.code = 'network';
+        normalizedError.cause = lastError;
 
       }
 
-      if (error?.code === undefined && !(error instanceof Error)) {
-
-        error.code = 'unknown';
-
-      }
-
-      if (error instanceof Error && error.cause === undefined && lastError instanceof Error) {
-
-        error.cause = lastError;
-
-      }
-
-      const detail = describeSendWriteError(error, error?.response);
+      const detail = describeSendWriteError(normalizedError, normalizedError?.response);
 
       attemptHistory.push({
 
@@ -270,7 +306,7 @@ async function sendWrite(base, key, value, options = {}) {
 
       });
 
-      lastError = error instanceof Error ? error : new Error(String(error));
+      lastError = normalizedError instanceof Error ? normalizedError : new Error(String(normalizedError));
 
       if (attempt >= maxAttempts) {
 
@@ -278,7 +314,7 @@ async function sendWrite(base, key, value, options = {}) {
 
         const finalError = new Error(friendlyMessage, {
 
-          cause: error instanceof Error ? error : undefined,
+          cause: normalizedError instanceof Error ? normalizedError : undefined,
 
         });
 
@@ -292,7 +328,7 @@ async function sendWrite(base, key, value, options = {}) {
 
         finalError.code = detail.code;
 
-        finalError.rawError = error;
+        finalError.rawError = normalizedError;
 
         throw finalError;
 
@@ -501,6 +537,44 @@ let lastErrorAt = null;
 let nextRetryAt = null;
 
 const syncErrorLog = [];
+
+
+
+function clampRetryDelayMs(value) {
+
+  if (!Number.isFinite(value) || value <= 0) {
+
+    return null;
+
+  }
+
+  const ms = Math.floor(value);
+
+  return Math.min(RETRY_MAX_MS, Math.max(RETRY_MIN_MS, ms));
+
+}
+
+
+
+function resolveSyncLogType(code) {
+
+  const normalized = typeof code === 'string' ? code : '';
+
+  if (normalized === 'http-client' || normalized === 'http-413') {
+
+    return 'warning';
+
+  }
+
+  if (normalized === 'network' || normalized === 'http-server' || normalized === 'invalid-response') {
+
+    return 'error';
+
+  }
+
+  return 'error';
+
+}
 
 
 
@@ -772,6 +846,136 @@ function updateCurrentSyncError(patch = {}) {
 
 
 
+function recordSyncFailure({
+
+  key,
+
+  message,
+
+  code,
+
+  attemptsOverride,
+
+  retryDelayOverride,
+
+  scheduleRetry: shouldScheduleRetry = true,
+
+}) {
+
+  const normalizedMessage =
+
+    typeof message === 'string' && message.trim()
+
+      ? message.trim()
+
+      : 'Không thể kết nối backend';
+
+  remoteEnabled = false;
+
+  lastSyncError = normalizedMessage;
+
+  lastErrorKey = typeof key === 'string' && key ? key : null;
+
+  const now = Date.now();
+
+  lastErrorAt = now;
+
+  const attempts = Number.isFinite(attemptsOverride) && attemptsOverride > 0
+
+    ? Math.max(1, Math.floor(attemptsOverride))
+
+    : retryAttempts > 0
+
+      ? retryAttempts + 1
+
+      : 1;
+
+  retryAttempts = attempts;
+
+  const delayOverride = clampRetryDelayMs(retryDelayOverride);
+
+  const delay = shouldScheduleRetry
+
+    ? delayOverride ?? computeRetryDelayMs(attempts)
+
+    : null;
+
+  if (shouldScheduleRetry && delay !== null) {
+
+    retryDelayMs = delay;
+
+    nextRetryAt = now + delay;
+
+  } else if (!shouldScheduleRetry) {
+
+    nextRetryAt = null;
+
+  }
+
+  const logType = resolveSyncLogType(code);
+
+  const nextRetryAtValue = shouldScheduleRetry && delay !== null ? now + delay : null;
+
+  const current = syncErrorLog[0];
+
+  if (current && current.key === lastErrorKey) {
+
+    updateCurrentSyncError({
+
+      type: logType,
+
+      message: normalizedMessage,
+
+      attempts,
+
+      nextRetryAt: nextRetryAtValue,
+
+    });
+
+  } else {
+
+    appendSyncErrorEntry({
+
+      key: lastErrorKey,
+
+      message: normalizedMessage,
+
+      attempts,
+
+      at: now,
+
+      nextRetryAt: nextRetryAtValue,
+
+      type: logType,
+
+    });
+
+  }
+
+  emitSyncStatus();
+
+  if (shouldScheduleRetry) {
+
+    scheduleRetry();
+
+  }
+
+  return {
+
+    attempts,
+
+    delay: delay ?? null,
+
+    nextRetryAt: nextRetryAtValue,
+
+    message: normalizedMessage,
+
+  };
+
+}
+
+
+
 function emitSyncStatus() {
 
   pendingSyncSnapshot = createSyncSnapshot();
@@ -950,17 +1154,17 @@ async function flushPending() {
 
         pendingWrites.set(key, value);
 
-        remoteEnabled = false;
+        const normalizedError = normalizeSyncError(err);
 
         const keyLabel = typeof key === 'string' && key ? `"${key}"` : '';
 
-        const rawMessage = err?.message || 'Không thể kết nối backend';
+        const rawMessage = normalizedError?.message || 'Không thể kết nối backend';
 
         const preferredMessage =
 
-          typeof err?.friendlyMessage === 'string' && err.friendlyMessage
+          typeof normalizedError?.friendlyMessage === 'string' && normalizedError.friendlyMessage
 
-            ? err.friendlyMessage
+            ? normalizedError.friendlyMessage
 
             : null;
 
@@ -972,43 +1176,33 @@ async function flushPending() {
 
             : `Không thể đồng bộ dữ liệu lên máy chủ: ${rawMessage}. Hệ thống sẽ tự thử lại.`);
 
-        lastSyncError = friendlyMessage;
+        const attemptsOverride =
 
-        lastErrorKey = typeof key === 'string' && key ? key : null;
+          Number.isFinite(normalizedError?.attempts) && normalizedError.attempts > 0
 
-        lastErrorAt = Date.now();
+            ? Math.max(1, Math.floor(normalizedError.attempts))
 
-        retryAttempts = retryAttempts > 0 ? retryAttempts + 1 : 1;
+            : undefined;
 
-        retryDelayMs = computeRetryDelayMs(retryAttempts);
+        const retryDelayOverride = Array.isArray(normalizedError?.history) && normalizedError.history.length
 
-        const retryAtTs = lastErrorAt + retryDelayMs;
+          ? normalizedError.history[normalizedError.history.length - 1]?.nextDelayMs
 
-        appendSyncErrorEntry({
+          : undefined;
 
-          key: lastErrorKey,
+        recordSyncFailure({
+
+          key,
 
           message: friendlyMessage,
 
-          attempts:
+          code: normalizedError?.code ?? 'unknown',
 
-            Number.isFinite(err?.attempts) && err.attempts > 0
+          attemptsOverride,
 
-              ? Math.max(retryAttempts, Math.floor(err.attempts))
-
-              : retryAttempts,
-
-          at: lastErrorAt,
-
-          nextRetryAt: retryAtTs,
+          retryDelayOverride,
 
         });
-
-        nextRetryAt = retryAtTs;
-
-        emitSyncStatus();
-
-        scheduleRetry();
 
         break;
 
@@ -1116,11 +1310,23 @@ async function bootstrapFromServer(baseUrl) {
 
       console.warn('Không thể đồng bộ dữ liệu từ máy chủ, sử dụng dữ liệu cục bộ.', err);
 
-      remoteEnabled = false;
+      const normalizedError = normalizeSyncError(err);
 
-      lastSyncError = err?.message || 'Không thể kết nối backend';
+      const baseMessage = normalizedError?.message
 
-      emitSyncStatus();
+        || (err instanceof Error ? err.message : String(err ?? 'Không thể kết nối backend'));
+
+      const friendlyMessage = `${baseMessage}. Sử dụng dữ liệu cục bộ tạm thời, hệ thống sẽ thử đồng bộ lại.`;
+
+      recordSyncFailure({
+
+        key: '__bootstrap__',
+
+        message: friendlyMessage,
+
+        code: normalizedError?.code ?? 'network',
+
+      });
 
       return false;
 
@@ -1216,29 +1422,65 @@ export async function refreshSharedKeys(keys, options = {}) {
 
     } catch (error) {
 
-      const message = `Không thể tải khóa đồng bộ "${key}": ${error?.message ?? error}`;
+      const normalizedError = normalizeSyncError(error);
 
-      lastSyncError = message;
+      const baseMessage =
 
-      remoteEnabled = false;
+        normalizedError?.message
 
-      emitSyncStatus();
+          || (error instanceof Error ? error.message : String(error ?? 'Không rõ lỗi'));
 
-      throw new Error(message, { cause: error instanceof Error ? error : undefined });
+      const friendlyMessage =
+
+        `Không thể tải ${formatWriteKeyLabel(key)} từ máy chủ: ${baseMessage}. Hệ thống sẽ tự thử lại.`;
+
+      recordSyncFailure({
+
+        key,
+
+        message: friendlyMessage,
+
+        code: normalizedError?.code ?? 'network',
+
+      });
+
+      const thrownError = new Error(friendlyMessage, {
+
+        cause: error instanceof Error ? error : undefined,
+
+      });
+
+      if (normalizedError?.code) {
+
+        thrownError.code = normalizedError.code;
+
+      }
+
+      throw thrownError;
 
     }
 
     if (!response || typeof response.ok !== 'boolean') {
 
-      const message = 'Không nhận được phản hồi hợp lệ từ máy chủ đồng bộ';
+      const message = 'Không nhận được phản hồi hợp lệ từ máy chủ đồng bộ.';
 
-      lastSyncError = message;
+      const friendlyMessage = `${message} Hệ thống sẽ tự thử lại.`;
 
-      remoteEnabled = false;
+      recordSyncFailure({
 
-      emitSyncStatus();
+        key,
 
-      throw new Error(message);
+        message: friendlyMessage,
+
+        code: 'invalid-response',
+
+      });
+
+      const invalidResponseError = new Error(friendlyMessage);
+
+      invalidResponseError.code = 'invalid-response';
+
+      throw invalidResponseError;
 
     }
 
@@ -1246,13 +1488,35 @@ export async function refreshSharedKeys(keys, options = {}) {
 
       const message = formatHttpError(response);
 
-      lastSyncError = message;
+      const httpError = normalizeSyncError({
 
-      remoteEnabled = false;
+        code: 'http',
 
-      emitSyncStatus();
+        status: response.status,
 
-      throw new Error(message);
+        message,
+
+      });
+
+      const friendlyMessage = `${message}. Hệ thống sẽ tự thử lại.`;
+
+      recordSyncFailure({
+
+        key,
+
+        message: friendlyMessage,
+
+        code: httpError.code,
+
+      });
+
+      const errorToThrow = new Error(friendlyMessage);
+
+      errorToThrow.code = httpError.code;
+
+      errorToThrow.status = response.status;
+
+      throw errorToThrow;
 
     }
 
@@ -1264,15 +1528,27 @@ export async function refreshSharedKeys(keys, options = {}) {
 
     } catch (error) {
 
-      const message = `Không thể phân tích phản hồi JSON cho khóa đồng bộ "${key}"`;
+      const baseMessage = error instanceof Error ? error.message : String(error ?? 'Không rõ lỗi');
 
-      lastSyncError = message;
+      const friendlyMessage =
 
-      remoteEnabled = false;
+        `Không thể phân tích phản hồi JSON cho ${formatWriteKeyLabel(key)}: ${baseMessage}. Hệ thống sẽ tự thử lại.`;
 
-      emitSyncStatus();
+      recordSyncFailure({
 
-      throw new Error(message, { cause: error instanceof Error ? error : undefined });
+        key,
+
+        message: friendlyMessage,
+
+        code: 'invalid-response',
+
+      });
+
+      throw new Error(friendlyMessage, {
+
+        cause: error instanceof Error ? error : undefined,
+
+      });
 
     }
 
@@ -1301,6 +1577,10 @@ export async function refreshSharedKeys(keys, options = {}) {
   remoteEnabled = true;
 
   lastSyncError = null;
+
+  markSyncRecovered();
+
+  retryDelayMs = RETRY_MIN_MS;
 
   emitSyncStatus();
 
