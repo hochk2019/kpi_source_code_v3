@@ -110,6 +110,10 @@ const VALID_SCHEDULE_FREQUENCIES = new Set(["weekly", "monthly"]);
 
 const VALID_SCHEDULE_FORMATS = new Set(["excel", "pdf"]);
 
+const VALID_SCHEDULE_CHANNELS = new Set(["email", "chat"]);
+
+const VALID_DELIVERY_STATUSES = new Set(["pending", "success", "failed"]);
+
 const ADJUSTMENT_POINT_PRECISION = 2;
 
 const ADJUSTMENT_POINT_FACTOR = 10 ** ADJUSTMENT_POINT_PRECISION;
@@ -10234,6 +10238,146 @@ function normalizeScheduleFormats(input) {
 
 
 
+function normalizeScheduleChannels(input, { fallback = [] } = {}) {
+
+  const list = Array.isArray(input)
+
+    ? input
+
+    : typeof input === 'string'
+
+    ? input.split(/[;,]/)
+
+    : [];
+
+  const seen = new Set();
+
+  const result = [];
+
+  for (const entry of list) {
+
+    const value = String(entry ?? '')
+
+      .trim()
+
+      .toLowerCase();
+
+    if (!VALID_SCHEDULE_CHANNELS.has(value)) continue;
+
+    if (seen.has(value)) continue;
+
+    seen.add(value);
+
+    result.push(value);
+
+  }
+
+  if (result.length) {
+
+    return result;
+
+  }
+
+  if (Array.isArray(fallback) && fallback.length) {
+
+    const normalizedFallback = fallback.filter((item) => VALID_SCHEDULE_CHANNELS.has(item));
+
+    if (normalizedFallback.length) {
+
+      return normalizedFallback;
+
+    }
+
+  }
+
+  return ['email'];
+
+}
+
+
+
+function normalizeDeliveryHistory(input, channels = []) {
+
+  const list = Array.isArray(input) ? input : [];
+
+  const channelSet = new Set(channels.filter((item) => VALID_SCHEDULE_CHANNELS.has(item)));
+
+  const seenIds = new Set();
+
+  const result = [];
+
+  for (const entry of list) {
+
+    if (!entry || typeof entry !== 'object') continue;
+
+    const rawChannel = typeof entry.channel === 'string' ? entry.channel.trim().toLowerCase() : '';
+
+    if (!VALID_SCHEDULE_CHANNELS.has(rawChannel)) continue;
+
+    if (channelSet.size && !channelSet.has(rawChannel)) continue;
+
+    const statusValue = typeof entry.status === 'string' ? entry.status.trim().toLowerCase() : '';
+
+    const status = VALID_DELIVERY_STATUSES.has(statusValue) ? statusValue : 'pending';
+
+    const timestamp = typeof entry.timestamp === 'string' ? entry.timestamp : '';
+
+    const detail = typeof entry.detail === 'string' ? entry.detail.trim() : '';
+
+    const id = String(entry.id || `${rawChannel}-${timestamp || Date.now()}-${result.length}`);
+
+    if (seenIds.has(id)) continue;
+
+    seenIds.add(id);
+
+    result.push({
+
+      id,
+
+      channel: rawChannel,
+
+      status,
+
+      timestamp,
+
+      detail,
+
+    });
+
+  }
+
+  if (!result.length && channelSet.size) {
+
+    let index = 0;
+
+    for (const channel of channelSet) {
+
+      result.push({
+
+        id: `delivery-${channel}-${index}`,
+
+        channel,
+
+        status: 'pending',
+
+        timestamp: '',
+
+        detail: '',
+
+      });
+
+      index += 1;
+
+    }
+
+  }
+
+  return result.slice(-10);
+
+}
+
+
+
 export function calculateNextReportScheduleRun(schedule, { fromDate = new Date() } = {}) {
 
   if (!schedule || typeof schedule !== 'object') {
@@ -10362,7 +10506,41 @@ function normalizeReportScheduleEntry(entry, fallback = null) {
 
   const timeInfo = normalizeScheduleTime(raw.time ?? base.time ?? '08:00');
 
-  const recipients = normalizeScheduleRecipients(raw.recipients ?? base.recipients ?? []);
+  const emailRecipients = normalizeScheduleRecipients(
+
+    raw.emailRecipients ?? raw.recipients ?? base.emailRecipients ?? base.recipients ?? []
+
+  );
+
+  const chatRecipients = normalizeScheduleRecipients(raw.chatRecipients ?? base.chatRecipients ?? []);
+
+  let channels = normalizeScheduleChannels(raw.channels ?? base.channels ?? [], { fallback: [] });
+
+  if (emailRecipients.length && !channels.includes('email')) {
+
+    channels = channels.concat('email');
+
+  }
+
+  if (chatRecipients.length && !channels.includes('chat')) {
+
+    channels = channels.concat('chat');
+
+  }
+
+  if (!channels.length) {
+
+    channels = ['email'];
+
+  } else {
+
+    const normalizedChannels = normalizeScheduleChannels(channels);
+
+    channels = normalizedChannels.length ? normalizedChannels : ['email'];
+
+  }
+
+  const recipients = emailRecipients;
 
   const formats = normalizeScheduleFormats(raw.formats ?? base.formats ?? []);
 
@@ -10371,6 +10549,8 @@ function normalizeReportScheduleEntry(entry, fallback = null) {
   const lastRun = typeof raw.lastRun === 'string' && raw.lastRun ? raw.lastRun : typeof base.lastRun === 'string' ? base.lastRun : '';
 
   let nextRun = typeof raw.nextRun === 'string' && raw.nextRun ? raw.nextRun : typeof base.nextRun === 'string' ? base.nextRun : '';
+
+  const deliveryHistory = normalizeDeliveryHistory(raw.deliveryHistory ?? base.deliveryHistory ?? [], channels);
 
 
 
@@ -10390,6 +10570,12 @@ function normalizeReportScheduleEntry(entry, fallback = null) {
 
     recipients,
 
+    emailRecipients,
+
+    chatRecipients,
+
+    channels,
+
     formats,
 
     active: Boolean(active),
@@ -10397,6 +10583,8 @@ function normalizeReportScheduleEntry(entry, fallback = null) {
     lastRun,
 
     nextRun,
+
+    deliveryHistory,
 
   };
 
@@ -10499,6 +10687,12 @@ export function saveReportSchedule(entry, { actor = 'system' } = {}) {
       frequency: normalized.frequency,
 
       formats: normalized.formats,
+
+      channels: normalized.channels,
+
+      emailRecipients: normalized.emailRecipients,
+
+      chatRecipients: normalized.chatRecipients,
 
       active: normalized.active,
 

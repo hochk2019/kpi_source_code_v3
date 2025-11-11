@@ -306,13 +306,62 @@ const SCHEDULE_FORMAT_OPTIONS = [
 
 
 
+
+const SCHEDULE_CHANNEL_OPTIONS = [
+
+  { value: "email", label: "Email" },
+
+  { value: "chat", label: "Chat nội bộ" },
+
+];
+
+
+
+const SCHEDULE_CHANNEL_LABELS = {
+
+  email: "Email",
+
+  chat: "Chat nội bộ",
+
+};
+
+
+
+const DELIVERY_STATUS_LABELS = {
+
+  pending: "Đang chờ",
+
+  success: "Thành công",
+
+  failed: "Thất bại",
+
+};
+
+
+
+const DELIVERY_STATUS_BADGE_CLASS = {
+
+  pending: "border border-amber-200 bg-amber-100 text-amber-700",
+
+  success: "border border-emerald-200 bg-emerald-100 text-emerald-700",
+
+  failed: "border border-rose-200 bg-rose-100 text-rose-700",
+
+};
+
+
+
 function createScheduleDraft(entry = null) {
 
   const raw = entry && typeof entry === "object" ? entry : {};
 
   const formats = Array.isArray(raw.formats) && raw.formats.length ? raw.formats : ["excel"];
 
-  const recipients = Array.isArray(raw.recipients)
+  const emailRecipients = Array.isArray(raw.emailRecipients)
+
+    ? raw.emailRecipients.join(", ")
+
+    : Array.isArray(raw.recipients)
 
     ? raw.recipients.join(", ")
 
@@ -321,6 +370,46 @@ function createScheduleDraft(entry = null) {
     ? raw.recipientsInput
 
     : "";
+
+  const chatRecipients = Array.isArray(raw.chatRecipients)
+
+    ? raw.chatRecipients.join(", ")
+
+    : typeof raw.chatRecipientsInput === "string"
+
+    ? raw.chatRecipientsInput
+
+    : "";
+
+  let channels = Array.isArray(raw.channels) && raw.channels.length
+
+    ? raw.channels.filter((item) => item === "email" || item === "chat")
+
+    : [];
+
+  if (!channels.length) {
+
+    if (emailRecipients.trim()) {
+
+      channels.push("email");
+
+    }
+
+    if (chatRecipients.trim()) {
+
+      channels.push("chat");
+
+    }
+
+  }
+
+  if (!channels.length) {
+
+    channels.push("email");
+
+  }
+
+  channels = Array.from(new Set(channels));
 
   return {
 
@@ -336,7 +425,11 @@ function createScheduleDraft(entry = null) {
 
     time: raw.time || "08:00",
 
-    recipientsInput: recipients,
+    recipientsInput: emailRecipients,
+
+    chatRecipientsInput: chatRecipients,
+
+    channels: channels.length ? channels : ["email"],
 
     formats,
 
@@ -385,6 +478,12 @@ function toSchedulePayload(draft) {
     time: draft.time || "08:00",
 
     recipients: draft.recipientsInput || "",
+
+    emailRecipients: draft.recipientsInput || "",
+
+    chatRecipients: draft.chatRecipientsInput || "",
+
+    channels: Array.isArray(draft.channels) && draft.channels.length ? draft.channels : ["email"],
 
     formats: Array.isArray(draft.formats) && draft.formats.length ? draft.formats : ["excel"],
 
@@ -493,6 +592,98 @@ function formatScheduleCountdown(isoString, now = new Date()) {
   const weeks = Math.round(diffMs / week);
 
   return `Còn ${weeks} tuần`;
+
+}
+
+
+
+function summarizeScheduleChannelStatus(schedule) {
+
+  if (!schedule || typeof schedule !== "object") {
+
+    return {};
+
+  }
+
+  const channels = Array.isArray(schedule.channels)
+
+    ? schedule.channels.filter((item) => item === "email" || item === "chat")
+
+    : [];
+
+  const summary = {};
+
+  for (const channel of channels) {
+
+    summary[channel] = { status: "pending", timestamp: "", detail: "" };
+
+  }
+
+  const history = Array.isArray(schedule.deliveryHistory) ? schedule.deliveryHistory : [];
+
+  for (const entry of history) {
+
+    if (!entry || typeof entry !== "object") {
+
+      continue;
+
+    }
+
+    const channel = typeof entry.channel === "string" ? entry.channel.trim().toLowerCase() : "";
+
+    if (!channels.includes(channel)) {
+
+      continue;
+
+    }
+
+    const status = typeof entry.status === "string" ? entry.status.trim().toLowerCase() : "";
+
+    const normalizedStatus = DELIVERY_STATUS_LABELS[status] ? status : "pending";
+
+    const timestamp = typeof entry.timestamp === "string" ? entry.timestamp : "";
+
+    const detail = typeof entry.detail === "string" ? entry.detail : "";
+
+    const nextTimestamp = timestamp ? Date.parse(timestamp) : Date.now();
+
+    const current = summary[channel];
+
+    const currentTimestamp = current?.timestamp ? Date.parse(current.timestamp) : Number.NaN;
+
+    if (!current || Number.isNaN(currentTimestamp) || nextTimestamp >= currentTimestamp) {
+
+      summary[channel] = { status: normalizedStatus, timestamp, detail };
+
+    }
+
+  }
+
+  return summary;
+
+}
+
+
+
+function getDeliveryStatusLabel(status) {
+
+  return DELIVERY_STATUS_LABELS[status] || DELIVERY_STATUS_LABELS.pending;
+
+}
+
+
+
+function getDeliveryStatusBadgeClass(status) {
+
+  return DELIVERY_STATUS_BADGE_CLASS[status] || DELIVERY_STATUS_BADGE_CLASS.pending;
+
+}
+
+
+
+function formatDeliveryTimestampLabel(timestamp) {
+
+  return timestamp ? formatScheduleNextRunLabel(timestamp) : "Chưa gửi";
 
 }
 
@@ -5798,7 +5989,25 @@ const [detailPageSizeCustomInput, setDetailPageSizeCustomInput] = useState(() =>
 
         const formats = Array.isArray(schedule.formats) ? schedule.formats : [];
 
-        const recipients = Array.isArray(schedule.recipients) ? schedule.recipients : [];
+        const emailRecipients = Array.isArray(schedule.emailRecipients)
+
+          ? schedule.emailRecipients
+
+          : Array.isArray(schedule.recipients)
+
+          ? schedule.recipients
+
+          : [];
+
+        const chatRecipients = Array.isArray(schedule.chatRecipients) ? schedule.chatRecipients : [];
+
+        const channels = Array.isArray(schedule.channels)
+
+          ? schedule.channels.filter((item) => item === "email" || item === "chat")
+
+          : [];
+
+        const channelStatuses = summarizeScheduleChannelStatus(schedule);
 
         return {
 
@@ -5816,7 +6025,19 @@ const [detailPageSizeCustomInput, setDetailPageSizeCustomInput] = useState(() =>
 
           formatLabel: formats.length ? formats.map((item) => item.toUpperCase()).join(", ") : "EXCEL",
 
-          recipientsLabel: recipients.length ? recipients.join(", ") : "—",
+          recipientsLabel: emailRecipients.length ? emailRecipients.join(", ") : "—",
+
+          recipientsByChannel: {
+
+            email: emailRecipients.length ? emailRecipients.join(", ") : "",
+
+            chat: chatRecipients.length ? chatRecipients.join(", ") : "",
+
+          },
+
+          channels,
+
+          channelStatuses,
 
           timestamp,
 
@@ -6149,6 +6370,48 @@ const handleDetailPageSizeCustomInputChange = (event) => {
       }
 
       return { ...prev, formats: current };
+
+    });
+
+  };
+
+
+
+  const handleToggleScheduleChannel = (channel) => {
+
+    setScheduleDraft((prev) => {
+
+      const allowed = new Set(SCHEDULE_CHANNEL_OPTIONS.map((item) => item.value));
+
+      const current = Array.isArray(prev.channels)
+
+        ? prev.channels.filter((item) => allowed.has(item))
+
+        : [];
+
+      const index = current.indexOf(channel);
+
+      if (index >= 0) {
+
+        if (current.length > 1) {
+
+          current.splice(index, 1);
+
+        }
+
+      } else {
+
+        current.push(channel);
+
+      }
+
+      if (!current.length) {
+
+        current.push("email");
+
+      }
+
+      return { ...prev, channels: current };
 
     });
 
@@ -7886,27 +8149,65 @@ const handleDetailPageSizeCustomInputChange = (event) => {
 
                 <div className="flex flex-col gap-1">
 
-                  <label className="text-xs font-semibold uppercase text-[color:var(--ds-text-secondary)]" htmlFor="schedule-recipients">
+                  <span className="text-xs font-semibold uppercase text-[color:var(--ds-text-secondary)]">
 
-                    Email nhận (phân tách bằng dấu phẩy)
+                    Kênh gửi báo cáo
 
-                  </label>
+                  </span>
 
-                  <textarea
+                  <div className="flex flex-wrap gap-2">
 
-                    id="schedule-recipients"
+                    {SCHEDULE_CHANNEL_OPTIONS.map((option) => {
 
-                    rows={2}
+                      const checked = Array.isArray(scheduleDraft.channels)
 
-                    value={scheduleDraft.recipientsInput}
+                        ? scheduleDraft.channels.includes(option.value)
 
-                    onChange={(event) => handleScheduleFieldChange("recipientsInput", event.target.value)}
+                        : option.value === "email";
 
-                    placeholder="ceo@company.vn, kpi@company.vn"
+                      return (
 
-                    className="min-h-[60px] rounded border border-[color:var(--ds-border-subtle)] bg-white px-3 py-2 text-sm text-[color:var(--ds-text-primary)] shadow-sm focus:border-[color:var(--ds-border-strong)] focus:outline-none"
+                        <label
 
-                  />
+                          key={option.value}
+
+                          className={`inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs font-semibold transition ${
+
+                            checked
+
+                              ? 'border-[color:var(--ds-accent)] bg-[color:var(--ds-accent)]/10 text-[color:var(--ds-accent-strong)]'
+
+                              : 'border-[color:var(--ds-border-subtle)] text-[color:var(--ds-text-secondary)] hover:border-[color:var(--ds-border-strong)]'
+
+                          }`}
+
+                        >
+
+                          <input
+
+                            type="checkbox"
+
+                            checked={checked}
+
+                            onChange={() => handleToggleScheduleChannel(option.value)}
+
+                          />
+
+                          <span>{option.label}</span>
+
+                        </label>
+
+                      );
+
+                    })}
+
+                  </div>
+
+                  <p className="text-[11px] text-[color:var(--ds-text-muted)]">
+
+                    Bật kênh phù hợp và nhập danh sách người nhận tương ứng bên dưới.
+
+                  </p>
 
                 </div>
 
@@ -8068,6 +8369,62 @@ const handleDetailPageSizeCustomInputChange = (event) => {
 
                 </div>
 
+                <div className="flex flex-col gap-1 md:col-span-2 xl:col-span-2">
+
+                  <label className="text-xs font-semibold uppercase text-[color:var(--ds-text-secondary)]" htmlFor="schedule-recipients">
+
+                    Email nhận (phân tách bằng dấu phẩy)
+
+                  </label>
+
+                  <textarea
+
+                    id="schedule-recipients"
+
+                    rows={2}
+
+                    value={scheduleDraft.recipientsInput}
+
+                    onChange={(event) => handleScheduleFieldChange("recipientsInput", event.target.value)}
+
+                    placeholder="ceo@company.vn, kpi@company.vn"
+
+                    disabled={!Array.isArray(scheduleDraft.channels) || !scheduleDraft.channels.includes('email')}
+
+                    className="min-h-[60px] rounded border border-[color:var(--ds-border-subtle)] bg-white px-3 py-2 text-sm text-[color:var(--ds-text-primary)] shadow-sm focus:border-[color:var(--ds-border-strong)] focus:outline-none disabled:cursor-not-allowed disabled:bg-[color:var(--ds-surface-muted)] disabled:opacity-70"
+
+                  />
+
+                </div>
+
+                <div className="flex flex-col gap-1 md:col-span-2 xl:col-span-2">
+
+                  <label className="text-xs font-semibold uppercase text-[color:var(--ds-text-secondary)]" htmlFor="schedule-chat">
+
+                    Phòng chat nội bộ (phân tách bằng dấu phẩy)
+
+                  </label>
+
+                  <textarea
+
+                    id="schedule-chat"
+
+                    rows={2}
+
+                    value={scheduleDraft.chatRecipientsInput || ''}
+
+                    onChange={(event) => handleScheduleFieldChange("chatRecipientsInput", event.target.value)}
+
+                    placeholder="#kpi-alerts, nhom.kpi"
+
+                    disabled={!Array.isArray(scheduleDraft.channels) || !scheduleDraft.channels.includes('chat')}
+
+                    className="min-h-[60px] rounded border border-[color:var(--ds-border-subtle)] bg-white px-3 py-2 text-sm text-[color:var(--ds-text-primary)] shadow-sm focus:border-[color:var(--ds-border-strong)] focus:outline-none disabled:cursor-not-allowed disabled:bg-[color:var(--ds-surface-muted)] disabled:opacity-70"
+
+                  />
+
+                </div>
+
                 <div className="md:col-span-2 xl:col-span-4 flex flex-wrap items-center justify-end gap-2 pt-2">
 
                   {editingScheduleId ? (
@@ -8126,6 +8483,34 @@ const handleDetailPageSizeCustomInputChange = (event) => {
 
                         : "EXCEL";
 
+                      const channels = Array.isArray(schedule.channels)
+
+                        ? schedule.channels.filter((item) => item === "email" || item === "chat")
+
+                        : [];
+
+                      const channelStatuses = summarizeScheduleChannelStatus(schedule);
+
+                      const recipientsByChannel = {
+
+                        email: Array.isArray(schedule.emailRecipients)
+
+                          ? schedule.emailRecipients.join(", ")
+
+                          : Array.isArray(schedule.recipients)
+
+                          ? schedule.recipients.join(", ")
+
+                          : "",
+
+                        chat: Array.isArray(schedule.chatRecipients)
+
+                          ? schedule.chatRecipients.join(", ")
+
+                          : "",
+
+                      };
+
                       return (
 
                         <div
@@ -8180,7 +8565,97 @@ const handleDetailPageSizeCustomInputChange = (event) => {
 
                             <div>Định dạng: {formatLabel}</div>
 
-                            <div>Email: {(schedule.recipients || []).join(", ") || '—'}</div>
+                          </div>
+
+                          <div className="mt-2 space-y-1 text-xs text-[color:var(--ds-text-secondary)]">
+
+                            {channels.length ? (
+
+                              channels.map((channel) => {
+
+                                const status = channelStatuses[channel] || {
+
+                                  status: "pending",
+
+                                  timestamp: "",
+
+                                  detail: "",
+
+                                };
+
+                                const label = SCHEDULE_CHANNEL_LABELS[channel] || channel;
+
+                                const recipientsLabel =
+
+                                  channel === "chat"
+
+                                    ? recipientsByChannel.chat
+
+                                    : recipientsByChannel.email;
+
+                                return (
+
+                                  <div
+
+                                    key={channel}
+
+                                    className="rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-muted)] px-2 py-1"
+
+                                  >
+
+                                    <div className="flex flex-wrap items-center gap-2">
+
+                                      <span className="font-semibold text-[color:var(--ds-text-primary)]">{label}</span>
+
+                                      <span
+
+                                        className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${getDeliveryStatusBadgeClass(status.status)}`}
+
+                                      >
+
+                                        <span>{getDeliveryStatusLabel(status.status)}</span>
+
+                                        <span className="text-[9px] opacity-80">
+
+                                          {formatDeliveryTimestampLabel(status.timestamp)}
+
+                                        </span>
+
+                                      </span>
+
+                                    </div>
+
+                                    <div className="mt-1 truncate text-[11px] text-[color:var(--ds-text-secondary)]">
+
+                                      {recipientsLabel || '—'}
+
+                                    </div>
+
+                                    {status.detail ? (
+
+                                      <div className="mt-1 text-[10px] text-[color:var(--ds-text-muted)]">
+
+                                        {status.detail}
+
+                                      </div>
+
+                                    ) : null}
+
+                                  </div>
+
+                                );
+
+                              })
+
+                            ) : (
+
+                              <div className="rounded border border-dashed border-[color:var(--ds-border-subtle)] px-2 py-1 text-[color:var(--ds-text-muted)]">
+
+                                Chưa cấu hình kênh gửi.
+
+                              </div>
+
+                            )}
 
                           </div>
 
@@ -8496,7 +8971,95 @@ const handleDetailPageSizeCustomInputChange = (event) => {
 
                             <div className="mt-1 text-[11px] text-[color:var(--ds-text-secondary)]">
 
-                              Định dạng: {item.formatLabel} • Email: {item.recipientsLabel}
+                              Định dạng: {item.formatLabel}
+
+                            </div>
+
+                            <div className="mt-1 space-y-1">
+
+                              {item.channels.length ? (
+
+                                item.channels.map((channel) => {
+
+                                  const status = item.channelStatuses[channel] || {
+
+                                    status: "pending",
+
+                                    timestamp: "",
+
+                                    detail: "",
+
+                                  };
+
+                                  const label = SCHEDULE_CHANNEL_LABELS[channel] || channel;
+
+                                  const recipientsLabel =
+
+                                    channel === "chat"
+
+                                      ? item.recipientsByChannel.chat
+
+                                      : item.recipientsByChannel.email;
+
+                                  return (
+
+                                    <div
+
+                                      key={channel}
+
+                                      className="flex flex-col gap-1 rounded border border-[color:var(--ds-border-subtle)] bg-white/70 px-2 py-1 text-[10px]"
+
+                                    >
+
+                                      <div className="flex flex-wrap items-center gap-2">
+
+                                        <span className="font-semibold text-[color:var(--ds-text-primary)]">{label}</span>
+
+                                        <span
+
+                                          className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-semibold ${getDeliveryStatusBadgeClass(status.status)}`}
+
+                                        >
+
+                                          <span>{getDeliveryStatusLabel(status.status)}</span>
+
+                                          <span className="text-[9px] opacity-80">
+
+                                            {formatDeliveryTimestampLabel(status.timestamp)}
+
+                                          </span>
+
+                                        </span>
+
+                                      </div>
+
+                                      <div className="text-[color:var(--ds-text-secondary)]">
+
+                                        {recipientsLabel || '—'}
+
+                                      </div>
+
+                                      {status.detail ? (
+
+                                        <div className="text-[color:var(--ds-text-muted)] opacity-80">{status.detail}</div>
+
+                                      ) : null}
+
+                                    </div>
+
+                                  );
+
+                                })
+
+                              ) : (
+
+                                <div className="rounded border border-dashed border-[color:var(--ds-border-subtle)] px-2 py-1 text-[10px] text-[color:var(--ds-text-muted)]">
+
+                                  Chưa cấu hình kênh.
+
+                                </div>
+
+                              )}
 
                             </div>
 
