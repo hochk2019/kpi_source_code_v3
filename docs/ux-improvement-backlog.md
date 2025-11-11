@@ -65,14 +65,15 @@ This backlog liệt kê các hạng mục cải thiện trải nghiệm người
   - [x] Thêm helper đọc/ghi danh sách ghim Command Center qua `UI_LAYOUT_KEY` và chuẩn hoá dữ liệu lưu trữ.
   - [x] Lắng nghe thay đổi từ kho chia sẻ để cập nhật danh sách ghim realtime giữa các tab/thiết bị.
   - [x] Đồng bộ thao tác ghim/bỏ ghim với backend và ghi lại nhật ký audit kèm thông tin người thực hiện.
-- [ ] Thêm ô tìm kiếm toàn cục gợi ý nhanh theo quyền truy cập (module, báo cáo, người dùng).
-- [ ] Hiển thị badge số lượng thông báo chưa đọc và thao tác đánh dấu đã đọc hàng loạt.
-- [ ] Cung cấp hub hướng dẫn nhanh/FAQ theo ngữ cảnh mỗi trang, liên kết tới tài liệu trong thư mục `docs/`.
+- [x] Thêm ô tìm kiếm toàn cục gợi ý nhanh theo quyền truy cập (module, báo cáo, người dùng). (đã thêm GlobalSearch trên header dùng Command Center filter theo quyền)
+- [x] Hiển thị badge số lượng thông báo chưa đọc và thao tác đánh dấu đã đọc hàng loạt. (đã thêm badge + nút đánh dấu tất cả đã đọc trong Notification Center và lưu mốc đã đọc vào localStorage)
+- [x] Cung cấp hub hướng dẫn nhanh/FAQ theo ngữ cảnh mỗi trang, liên kết tới tài liệu trong thư mục `docs/`. (đã thêm ContextHelpHub hiển thị tài liệu & FAQ theo tab hiện tại)
 
 ## 6. Reporting & automation
 
-- [ ] Xem trước nội dung báo cáo và lịch chạy kế tiếp ngay trong màn hình lập lịch (`getReportSchedules`).
-- [ ] Tạo dashboard KPI tổng quan với xu hướng tháng, top nhân sự, cảnh báo lệch chuẩn.
+- [x] Thống kê top 10 công ty nhiều tờ khai theo từng kỳ báo cáo trong tab "Báo cáo KPI". (đã thêm bảng xếp hạng tương tác kèm bộ chọn kỳ và ghi nhớ trạng thái thu gọn/mở rộng khu vực điểm bổ sung)
+- [x] Xem trước nội dung báo cáo và lịch chạy kế tiếp ngay trong màn hình lập lịch (`getReportSchedules`). (đã bổ sung bảng xem trước số liệu + top nhân sự/doanh nghiệp và timeline lịch chạy ngay dưới form lập lịch)
+- [x] Tạo dashboard KPI tổng quan với xu hướng tháng, top nhân sự, cảnh báo lệch chuẩn. (đã bổ sung thẻ Dashboard KPI với biểu đồ xu hướng, top nhân sự nổi bật và cảnh báo lệch chuẩn ngay trong tab "Báo cáo KPI")
 - [ ] Mở rộng kênh gửi báo cáo (email, chat nội bộ) và theo dõi trạng thái giao thành công/thất bại.
 - [ ] Cho phép người dùng tự tạo template báo cáo tùy biến, lưu trữ vào `KPI_ADJUSTMENT_SETTINGS_KEY` hoặc kho riêng.
 

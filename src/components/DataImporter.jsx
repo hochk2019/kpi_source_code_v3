@@ -4975,7 +4975,7 @@ export default function DataImporter({
   useEffect(() => {
     if (hasPreviewData) {
       setMaxWizardStep((prev) => Math.max(prev, 1));
-      setWizardStep(1);
+      setWizardStep((prev) => (prev < 1 ? 1 : prev));
     }
   }, [hasPreviewData]);
 

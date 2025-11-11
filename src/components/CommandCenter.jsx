@@ -697,6 +697,22 @@ function formatResults(commands, pinnedIds, usage, query) {
 
 
 
+export function buildCommandCenterCommands(options) {
+
+  return buildCommands(options);
+
+}
+
+
+
+export function formatCommandCenterResults(commands, pinnedIds, usage, query) {
+
+  return formatResults(commands, pinnedIds, usage, query);
+
+}
+
+
+
 function loadUsage() {
 
   const raw = loadJsonFromStorage(USAGE_STORAGE_KEY, {});

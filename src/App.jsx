@@ -24,6 +24,9 @@ import NotificationCenter from './components/NotificationCenter.jsx';
 
 import CommandCenter from './components/CommandCenter.jsx';
 
+import GlobalSearch from './components/GlobalSearch.jsx';
+import ContextHelpHub from './components/ContextHelpHub.jsx';
+
 import { subscribeCommand } from './lib/commandBus.js';
 
 import { isAdminRole } from './shared/accountRoles.js';
@@ -296,45 +299,63 @@ export default function App() {
 
           <div className="flex flex-col items-stretch gap-2 text-sm sm:items-end">
 
-          <div className="flex flex-wrap items-center justify-end gap-2 text-right text-gray-600 dark:text-gray-300">
+            <div className="flex w-full flex-col gap-2 text-right text-gray-600 dark:text-gray-300 sm:flex-row sm:items-center sm:justify-end">
 
-            {auth ? (
+              <div className="flex w-full min-w-[240px] flex-1 justify-end sm:w-auto">
 
-              <span>
+                <GlobalSearch
 
-                Xin chào, <b>{auth.name}</b> ({auth.role})
+                  currentUser={effectiveAuth}
 
-              </span>
+                  onRequestLogin={() => setShowLogin(true)}
 
-            ) : (
+                  onRequestLogout={handleLogout}
 
-              <span>Đang xem với quyền hạn giới hạn (khách).</span>
+                  onRequestChangePassword={() => setShowChangePassword(true)}
 
-            )}
+                />
 
-            <CommandCenter
+              </div>
 
-              currentUser={effectiveAuth}
+              {auth ? (
 
-              onRequestLogin={() => setShowLogin(true)}
+                <span>
 
-              onRequestLogout={handleLogout}
+                  Xin chào, <b>{auth.name}</b> ({auth.role})
 
-              onRequestChangePassword={() => setShowChangePassword(true)}
+                </span>
 
-            />
+              ) : (
 
-            <NotificationCenter />
+                <span>Đang xem với quyền hạn giới hạn (khách).</span>
 
-            <Suspense fallback={null}>
+              )}
 
-              <SupportCenter />
+              <CommandCenter
 
-            </Suspense>
+                currentUser={effectiveAuth}
 
-            <ThemeToggle />
+                onRequestLogin={() => setShowLogin(true)}
 
-          </div>
+                onRequestLogout={handleLogout}
+
+                onRequestChangePassword={() => setShowChangePassword(true)}
+
+              />
+
+              <ContextHelpHub activeTab={activeTab} />
+
+              <NotificationCenter />
+
+              <Suspense fallback={null}>
+
+                <SupportCenter />
+
+              </Suspense>
+
+              <ThemeToggle />
+
+            </div>
 
             <div className="flex flex-wrap items-center justify-end gap-2">
 
