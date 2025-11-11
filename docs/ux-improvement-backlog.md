@@ -80,7 +80,7 @@ This backlog liệt kê các hạng mục cải thiện trải nghiệm người
 ## 7. Reliability, QA & accessibility
 
 - [x] Chuẩn hóa xử lý lỗi mạng trong `storageClient.js` (retry queue, rollback, thông báo rõ nghĩa). (đã bổ sung bộ gom lỗi chuẩn hoá message, retry/backoff thống nhất và ghi log trạng thái đồng bộ)
-- [ ] Bổ sung đo lường hiệu năng (Web Vitals, log render) và dashboard theo dõi để phát hiện màn hình chậm.
+- [x] Bổ sung đo lường hiệu năng (Web Vitals, log render) và dashboard theo dõi để phát hiện màn hình chậm. (đã tích hợp thu thập Web Vitals, log render chính và bảng điều khiển Performance trong Data Health)
 - [ ] Thực hiện audit accessibility (focus trap, aria-label, contrast) trên các component trọng yếu (`KPIAdjustments`, `DataImporter`, `MSTAssignment`).
 - [ ] Viết thêm test tự động cho các luồng filter và đồng bộ, đảm bảo không regress khi refactor.
 - [ ] Xây dựng checklist QA cuối sprint, liên kết vào `docs/operations/ui-verification-log.md`.

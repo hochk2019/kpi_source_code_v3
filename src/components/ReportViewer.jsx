@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 
+import useRenderMetrics from "@/hooks/useRenderMetrics.js";
+
 import "../print.css";
 
 import {
@@ -4684,6 +4686,18 @@ export default function ReportViewer({ canExport = true, currentUser = null }) {
   );
 
   const [adjustmentExpanded, setAdjustmentExpanded] = useState(() => storedPrefs.adjustmentExpanded === true);
+
+  useRenderMetrics('ReportViewer', () => ({
+    quickRange,
+    scope,
+    staff: selectedStaff || 'all',
+    team: selectedTeam || 'all',
+    staffMode: staffViewMode,
+    teamMode: teamViewMode,
+    exporting,
+    scheduleCollapsed,
+    topCompanyPeriod,
+  }));
 
   const isAdmin = isAdminRole(currentUser?.role);
 

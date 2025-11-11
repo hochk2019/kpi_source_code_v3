@@ -17,6 +17,7 @@ import './App.css';
 import { getSyncStatus, subscribeSyncStatus } from './lib/storageClient.js';
 
 import useTooltipTitles from './hooks/useTooltipTitles.js';
+import usePerformanceMonitor from './hooks/usePerformanceMonitor.js';
 
 import ThemeToggle from './components/ThemeToggle.jsx';
 
@@ -50,6 +51,8 @@ export default function App() {
 
 
   useTooltipTitles(rootRef, [auth, showLogin, showChangePassword, syncStatus]);
+
+  usePerformanceMonitor();
 
 
 

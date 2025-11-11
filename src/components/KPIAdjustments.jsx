@@ -51,6 +51,7 @@ import {
 } from "@/lib/store.js";
 
 import { subscribe as subscribeStorage } from "@/lib/storageClient.js";
+import useRenderMetrics from "@/hooks/useRenderMetrics.js";
 
 import { Button } from "@/components/ui/button.jsx";
 
@@ -2534,6 +2535,17 @@ export default function KPIAdjustments({ currentUser, onRequestImportLookup = nu
     paginatedAdjustments.length > 0 && paginatedAdjustments.every((item) => selectedIds.has(item.id));
   const someVisibleSelected = paginatedAdjustments.some((item) => selectedIds.has(item.id));
   const masterSelectionState = allVisibleSelected ? true : someVisibleSelected ? 'indeterminate' : false;
+
+  useRenderMetrics('KPIAdjustments', () => ({
+    month: filterMonth,
+    status: filterStatus,
+    pageSize,
+    currentPage,
+    totalAdjustments,
+    visibleRows: paginatedAdjustments.length,
+    selected: selectedIds.size,
+    mineOnly: showMineOnly,
+  }));
 
   useEffect(() => {
     if (!selectedIds.size && bulkError) {

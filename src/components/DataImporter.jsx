@@ -77,6 +77,7 @@ import { fetchWithAuth, getAuth } from "@/auth/localAuth.js";
 import useTooltipTitles from "@/hooks/useTooltipTitles.js";
 
 import useFilterPresets from "@/hooks/useFilterPresets.js";
+import useRenderMetrics from "@/hooks/useRenderMetrics.js";
 
 import { Button } from "@/components/ui/button.jsx";
 
@@ -4959,6 +4960,13 @@ export default function DataImporter({
   const hasSavedData = mode === "saved" && rawRows.length > 0;
   const hasWorkingData = hasPreviewData || hasSavedData;
   const previewReady = Boolean(importPreview && !importPreview.error);
+
+  useRenderMetrics("DataImporter", () => ({
+    step: wizardStep,
+    mode,
+    previewRows: effectivePreviewRows.length,
+    savedRows: rawRows.length,
+  }));
 
   const canProceedFromPrepare = hasWorkingData;
   const canProceedFromPreview = mode === "saved" || previewReady;

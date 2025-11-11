@@ -7,8 +7,10 @@ import { fetchWithAuth } from '@/auth/localAuth.js';
 import { fetchNotificationHistory, subscribeNotificationStream } from '@/lib/notificationClient.js';
 
 import useAsyncRequest from '@/hooks/useAsyncRequest.js';
+import useRenderMetrics from '@/hooks/useRenderMetrics.js';
 
 import { translateBackupFailure, translateBackupReason } from '@/shared/backupMessages.js';
+import PerformanceDashboard from './PerformanceDashboard.jsx';
 
 
 
@@ -1546,7 +1548,11 @@ export default function DataHealthDashboard({ currentUser, canManage = false }) 
 
   const diskWarningMessage = describeDiskWarning(diskInfo);
 
-
+  useRenderMetrics('DataHealthDashboard', () => ({
+    alertCount: infrastructureAlerts.length,
+    diskStatus: storageHealth?.severity,
+    sqlTimeouts: sqlTimeouts.length,
+  }));
 
   return (
 
@@ -1600,7 +1606,7 @@ export default function DataHealthDashboard({ currentUser, canManage = false }) 
 
       </header>
 
-
+      <PerformanceDashboard />
 
       {infrastructureAlerts.length > 0 && (
 
