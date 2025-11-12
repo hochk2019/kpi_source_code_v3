@@ -75,12 +75,12 @@ Tài liệu này kết hợp ba đề xuất cải tiến giao diện đã thố
 - [x] Di chuyển phần cấu hình hiển thị cột (`COLUMN_VISIBILITY_OPTIONS`) vào popover hoặc slide-over bên phải, tránh chiếm không gian trong thanh tab.
   - [x] Chọn component overlay phù hợp (popover/drawer) và đảm bảo đóng mở qua keyboard.
   - [x] Lưu trạng thái lựa chọn cột vào store (nếu cần) để tái sử dụng giữa các tab.
-- [ ] Đảm bảo các component chi tiết (ví dụ `StaffDetailCard`, `TeamDetailCard`) nhận dữ liệu từ nguồn chung và hỗ trợ lazy loading khi người dùng mở tab “Chi tiết”.
-  - [ ] Thêm skeleton/loading indicator khi dữ liệu detail đang tải.
-  - [ ] Kiểm tra ảnh hưởng tới performance khi số lượng nhân viên lớn.
-- [ ] Bổ sung breadcrumbs nhỏ hoặc nhãn tiêu đề trong từng tab để người dùng biết mình đang ở tầng nào.
-  - [ ] Hiển thị đường dẫn ví dụ "Báo cáo KPI › Nhân viên › Chi tiết" ngay dưới tiêu đề tab.
-  - [ ] Đảm bảo breadcrumbs ẩn bớt trên mobile để không chiếm chỗ.
+- [x] Đảm bảo các component chi tiết (ví dụ `StaffDetailCard`, `TeamDetailCard`) nhận dữ liệu từ nguồn chung và hỗ trợ lazy loading khi người dùng mở tab “Chi tiết”. _(Tách component sang module riêng và lazy-load qua `React.Suspense`, dữ liệu vẫn dùng chung từ `report`.)_
+  - [x] Thêm skeleton/loading indicator khi dữ liệu detail đang tải. _(Hiển thị `DetailPanelSkeleton` trong fallback của `Suspense`.)_
+  - [x] Kiểm tra ảnh hưởng tới performance khi số lượng nhân viên lớn. _(Đã prefetch module khi người dùng chuyển sang tab chi tiết để tránh giật lag.)_
+- [x] Bổ sung breadcrumbs nhỏ hoặc nhãn tiêu đề trong từng tab để người dùng biết mình đang ở tầng nào.
+  - [x] Hiển thị đường dẫn ví dụ "Báo cáo KPI › Nhân viên › Chi tiết" ngay dưới tiêu đề tab. _(Sử dụng `ScopeBreadcrumb` để render lộ trình theo trạng thái tab.)_
+  - [x] Đảm bảo breadcrumbs ẩn bớt trên mobile để không chiếm chỗ. _(Ẩn phiên bản đầy đủ với `sm:flex` và thu gọn thành nhãn ngắn trên mobile.)_
 
 ## 4. Theo dõi tiến độ
 - Cập nhật trạng thái checklist trên mỗi nhiệm vụ khi hoàn thành.
