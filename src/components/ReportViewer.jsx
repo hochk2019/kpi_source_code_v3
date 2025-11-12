@@ -23,13 +23,9 @@ import {
   REPORT_SCHEDULE_KEY,
   KPI_REPORT_TEMPLATES_KEY,
   calculateNextReportScheduleRun,
-  DECL_KEY,
-  MST_KEY,
-  RULES_KEY,
-  TEAM_KEY,
 } from "@/lib/store.js";
 
-import { refreshSharedKeys, subscribe as subscribeStorage } from "@/lib/storageClient.js";
+import { subscribe as subscribeStorage } from "@/lib/storageClient.js";
 
 import { loadRules, loadRuleSets } from "@/lib/rules.js";
 
@@ -41,6 +37,9 @@ import {
   buildReportData,
   aggregateByCompany,
 } from "@/lib/reports.js";
+
+import ReportFilterBar from "@/components/report-viewer/ReportFilterBar.jsx";
+import ReportContextToolbar from "@/components/report-viewer/ReportContextToolbar.jsx";
 
 import { toAdjustmentTotalsArray } from "../../shared/kpiAdjustments.js";
 
@@ -4641,10 +4640,6 @@ export default function ReportViewer({ canExport = true, currentUser = null }) {
 
   );
 
-  const [version, setVersion] = useState(0);
-
-  const [reloading, setReloading] = useState(false);
-
   const [exporting, setExporting] = useState(false);
 
   const storedColumnPrefs = useMemo(
@@ -4747,33 +4742,6 @@ export default function ReportViewer({ canExport = true, currentUser = null }) {
 
     }));
 
-  };
-
-
-
-  const handleReloadData = async () => {
-    if (reloading) {
-      return;
-    }
-    setReloading(true);
-    try {
-      await refreshSharedKeys([
-        DECL_KEY,
-        MST_KEY,
-        RULES_KEY,
-        TEAM_KEY,
-        KPI_ADJUSTMENTS_KEY,
-        KPI_REPORT_TEMPLATES_KEY,
-        REPORT_SCHEDULE_KEY,
-      ]);
-      setVersion((value) => value + 1);
-      toast.success?.("Đã tải lại dữ liệu báo cáo KPI mới nhất.");
-    } catch (error) {
-      console.error("Không thể tải lại dữ liệu báo cáo KPI", error);
-      toast.error?.(error?.message || "Không thể tải lại dữ liệu báo cáo. Vui lòng thử lại.");
-    } finally {
-      setReloading(false);
-    }
   };
 
 
@@ -5110,6 +5078,36 @@ const [detailPageSizeCustomInput, setDetailPageSizeCustomInput] = useState(() =>
   const canDeleteTemplate = Boolean(activeTemplate);
 
 
+
+  const templateOptions = useMemo(
+
+    () =>
+
+      reportTemplates
+
+        .filter((item) => item && item.id)
+
+        .map((item) => {
+
+          const idLabel = String(item.id);
+
+          const suffix = idLabel.slice(-4) || idLabel;
+
+          return {
+
+            value: idLabel,
+
+            label: item.name || (suffix ? `Template ${suffix}` : "Template chưa đặt tên"),
+
+          };
+
+        }),
+
+    [reportTemplates],
+
+  );
+
+
   useEffect(() => {
 
     const payload = {
@@ -5222,7 +5220,7 @@ const [detailPageSizeCustomInput, setDetailPageSizeCustomInput] = useState(() =>
 
     setReportTemplates(getReportTemplates());
 
-  }, [version]);
+  }, []);
 
 
 
@@ -5502,6 +5500,76 @@ const [detailPageSizeCustomInput, setDetailPageSizeCustomInput] = useState(() =>
 
 
 
+  const selectedRuleVersion = selectedRuleMeta?.version;
+
+  const selectedRuleApplyFrom = selectedRuleMeta?.applyFrom || "";
+
+  const reportRuleApplyFrom = report.rules?.applyFrom || "";
+
+
+
+  const ruleMetaLabel = useMemo(() => {
+
+    if (selectedRuleVersion != null) {
+
+      return `Phiên bản: v${selectedRuleVersion}`;
+
+    }
+
+    const applyFrom = selectedRuleApplyFrom || reportRuleApplyFrom;
+
+    if (applyFrom) {
+
+      return `Áp dụng từ ${applyFrom}`;
+
+    }
+
+    return "Phiên bản: —";
+
+  }, [reportRuleApplyFrom, selectedRuleApplyFrom, selectedRuleVersion]);
+
+
+
+  const ruleStatusLabel = useMemo(() => {
+
+    if (ruleComparison) {
+
+      return `Chênh lệch so với bộ đang áp dụng: ${ruleDeltaLabel}`;
+
+    }
+
+    if (ruleCollection?.activeId === (selectedRuleMeta?.id || "")) {
+
+      return "Đang xem đúng bộ quy tắc đang áp dụng.";
+
+    }
+
+    return `Bộ đang áp dụng: ${activeRule?.name || "—"}`;
+
+  }, [activeRule?.name, ruleCollection?.activeId, ruleComparison, ruleDeltaLabel, selectedRuleMeta?.id]);
+
+
+
+  const normalizedTemplateName = activeTemplate?.name?.trim()
+
+    ? activeTemplate.name.trim()
+
+    : "Tuỳ chỉnh hiện tại";
+
+  const normalizedRuleName = selectedRuleMeta?.name || activeRule?.name || "Chưa có bộ quy tắc";
+
+
+
+  const appliedContextLabel = useMemo(
+
+    () => `Template: ${normalizedTemplateName} • Bộ quy tắc: ${normalizedRuleName}`,
+
+    [normalizedRuleName, normalizedTemplateName],
+
+  );
+
+
+
   const managedCompanyCount = useMemo(() => {
 
     const teams = Array.isArray(roster?.teams) ? roster.teams : [];
@@ -5685,8 +5753,6 @@ const [detailPageSizeCustomInput, setDetailPageSizeCustomInput] = useState(() =>
     ? `Doanh nghiệp do ${teamCountForSubtitle} tổ đội quản lý`
 
     : "Doanh nghiệp duy nhất trong giai đoạn";
-
-  const ruleTitle = selectedRuleMeta?.name || report.rules?.name || "Chưa đặt tên";
 
   const ruleApply = selectedRuleMeta?.applyFrom
 
@@ -6727,6 +6793,60 @@ const [detailPageSizeCustomInput, setDetailPageSizeCustomInput] = useState(() =>
     setTo(range.to);
 
   };
+
+  const handleFromChange = (value) => {
+
+    setFrom(value);
+
+    setQuickRange("custom");
+
+  };
+
+
+
+  const handleToChange = (value) => {
+
+    setTo(value);
+
+    setQuickRange("custom");
+
+  };
+
+
+
+  const filterSummaryLabel = useMemo(() => {
+
+    const formattedFrom = formatDisplayDate(from);
+
+    const formattedTo = formatDisplayDate(to);
+
+    if (formattedFrom && formattedTo) {
+
+      if (formattedFrom === formattedTo) {
+
+        return `Kỳ: ${formattedFrom}`;
+
+      }
+
+      return `Kỳ: ${formattedFrom} → ${formattedTo}`;
+
+    }
+
+    if (formattedFrom) {
+
+      return `Từ ${formattedFrom}`;
+
+    }
+
+    if (formattedTo) {
+
+      return `Đến ${formattedTo}`;
+
+    }
+
+    return "";
+
+  }, [from, to]);
 
 
 
@@ -8320,285 +8440,85 @@ const handleDetailPageSizeCustomInputChange = (event) => {
 
       <div className="ds-card space-y-4 p-4 print:hidden">
 
-        <div className="flex flex-wrap items-end gap-4">
+        <ReportFilterBar
 
-          <div className="flex flex-col">
+          quickRange={quickRange}
 
-            <label className="text-sm font-medium text-[color:var(--ds-text-primary)]">Khoảng thời gian</label>
+          quickRangeOptions={QUICK_RANGE_OPTIONS}
 
-            <select
+          onQuickRangeChange={handleQuickRangeChange}
 
-              className="mt-1 rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] px-3 py-2 text-sm text-[color:var(--ds-text-primary)] shadow-sm focus:outline-none focus:ring-2 focus:ring-[color:var(--ds-accent-ring)] focus:ring-offset-0"
+          from={from}
 
-              value={quickRange}
+          to={to}
 
-              onChange={(e) => handleQuickRangeChange(e.target.value)}
+          onFromChange={handleFromChange}
 
-            >
+          onToChange={handleToChange}
 
-              {QUICK_RANGE_OPTIONS.map((option) => (
+          summaryLabel={filterSummaryLabel}
 
-                <option key={option.value} value={option.value}>
+        />
 
-                  {option.label}
+        <ReportContextToolbar
 
-                </option>
+          templateOptions={templateOptions}
 
-              ))}
+          activeTemplateId={activeTemplateId}
 
-            </select>
+          onTemplateChange={handleApplyTemplate}
 
-          </div>
+          isTemplateDirty={isTemplateDirty}
 
-          <div className="flex flex-col">
+          hasTemplates={hasTemplates}
 
-            <label className="text-sm font-medium text-[color:var(--ds-text-primary)]">Từ ngày</label>
+          onSaveTemplate={handleSaveTemplateAsNew}
 
-            <input
+          onOverwriteTemplate={handleOverwriteTemplate}
 
-              type="date"
+          onDeleteTemplate={handleDeleteTemplate}
 
-              className="mt-1 rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] px-3 py-2 text-sm text-[color:var(--ds-text-primary)] shadow-sm focus:outline-none focus:ring-2 focus:ring-[color:var(--ds-accent-ring)] focus:ring-offset-0"
+          canOverwriteTemplate={canOverwriteTemplate}
 
-              value={from}
+          canDeleteTemplate={canDeleteTemplate}
 
-              onChange={(e) => {
+          ruleOptions={ruleOptions}
 
-                setFrom(e.target.value);
+          selectedRuleId={selectedRuleId}
 
-                setQuickRange("custom");
+          onRuleChange={setSelectedRuleId}
 
-              }}
+          ruleStatusLabel={ruleStatusLabel}
 
-            />
+          ruleMetaLabel={ruleMetaLabel}
 
-          </div>
+          appliedContextLabel={appliedContextLabel}
 
-          <div className="flex flex-col">
+        />
 
-            <label className="text-sm font-medium text-[color:var(--ds-text-primary)]">Đến ngày</label>
+        <div className="rounded-xl border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] p-4 text-sm text-[color:var(--ds-text-secondary)]">
 
-            <input
+          <div className="flex flex-wrap items-center justify-between gap-2">
 
-              type="date"
+            <span className="text-xs uppercase text-[color:var(--ds-text-muted)]">Thông tin báo cáo</span>
 
-              className="mt-1 rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] px-3 py-2 text-sm text-[color:var(--ds-text-primary)] shadow-sm focus:outline-none focus:ring-2 focus:ring-[color:var(--ds-accent-ring)] focus:ring-offset-0"
-
-              value={to}
-
-              onChange={(e) => {
-
-                setTo(e.target.value);
-
-                setQuickRange("custom");
-
-              }}
-
-            />
+            <span className="text-xs text-[color:var(--ds-text-muted)]">{ruleApply}</span>
 
           </div>
 
-          <div className="ml-auto flex flex-wrap items-center gap-2">
+          <div className="mt-2 text-base font-semibold text-[color:var(--ds-text-primary)]">
 
-            <button
-
-              type="button"
-
-              onClick={handleReloadData}
-
-              disabled={reloading}
-
-              className="rounded border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
-
-            >
-
-              {reloading ? "Đang tải..." : "Tải lại dữ liệu"}
-
-            </button>
+            {formatInt(summary.decls)} tờ khai hợp lệ
 
           </div>
 
-        </div>
+          <div className="mt-1 text-xs text-[color:var(--ds-text-secondary)]">
 
-
-
-
-
-        <div className="flex flex-wrap items-center gap-3 rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-muted)]/60 p-3 text-sm text-[color:var(--ds-text-secondary)]">
-          <div className="flex min-w-[220px] flex-col gap-1">
-            <span className="text-xs font-semibold uppercase text-[color:var(--ds-text-secondary)]">
-              Template báo cáo
-            </span>
-            <select
-              className="rounded border border-[color:var(--ds-border-subtle)] bg-white px-3 py-2 text-sm text-[color:var(--ds-text-primary)] shadow-sm focus:outline-none focus:ring-2 focus:ring-[color:var(--ds-accent-ring)] focus:ring-offset-0"
-              value={activeTemplateId}
-              onChange={(event) => handleApplyTemplate(event.target.value)}
-              disabled={!hasTemplates}
-            >
-              <option value="">Tuỳ chỉnh hiện tại</option>
-              {reportTemplates.map((template) => (
-                <option key={template.id} value={template.id}>
-                  {template.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          {activeTemplate && isTemplateDirty ? (
-            <span className="rounded-full bg-amber-100 px-2 py-1 text-xs font-semibold text-amber-700">
-              Đã chỉnh sửa
-            </span>
-          ) : null}
-          {!hasTemplates ? (
-            <span className="text-xs text-[color:var(--ds-text-muted)]">
-              Chưa có template nào, hãy lưu cấu hình hiện tại.
-            </span>
-          ) : null}
-          <div className="ml-auto flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={handleSaveTemplateAsNew}
-              className="rounded border border-[color:var(--ds-border-subtle)] bg-white px-3 py-2 text-sm font-semibold text-[color:var(--ds-text-primary)] shadow-sm transition hover:border-[color:var(--ds-border-strong)] hover:bg-[color:var(--ds-surface-muted)]"
-            >
-              Lưu template mới
-            </button>
-            <button
-              type="button"
-              onClick={handleOverwriteTemplate}
-              disabled={!canOverwriteTemplate}
-              className={`rounded border px-3 py-2 text-sm font-semibold shadow-sm transition-colors ${
-                canOverwriteTemplate
-                  ? 'border-transparent bg-[color:var(--ds-accent)] text-white hover:bg-[color:var(--ds-accent-strong)]'
-                  : 'border-[color:var(--ds-border-subtle)] bg-white text-[color:var(--ds-text-secondary)] hover:border-[color:var(--ds-border-strong)]'
-              } disabled:cursor-not-allowed disabled:opacity-60`}
-            >
-              Cập nhật template
-            </button>
-            <button
-              type="button"
-              onClick={handleDeleteTemplate}
-              disabled={!canDeleteTemplate}
-              className="rounded border border-transparent px-3 py-2 text-sm font-semibold text-rose-600 transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              Xoá template
-            </button>
-          </div>
-        </div>
-
-        <div className="grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
-
-          <div className="space-y-2 rounded-xl border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-muted)] p-3">
-
-            <label
-
-              htmlFor="report-rule-select"
-
-              className="text-xs font-semibold uppercase tracking-wide text-[color:var(--ds-text-secondary)]"
-
-            >
-
-              Bộ quy tắc KPI
-
-            </label>
-
-            <select
-
-              id="report-rule-select"
-
-              value={selectedRuleId}
-
-              onChange={(event) => setSelectedRuleId(event.target.value)}
-
-              className="w-full rounded border border-[color:var(--ds-border-subtle)] bg-white px-3 py-2 text-sm text-[color:var(--ds-text-primary)] shadow-sm focus:border-[color:var(--ds-border-strong)] focus:outline-none"
-
-            >
-
-              {ruleOptions.length ? (
-
-                ruleOptions.map((option) => (
-
-                  <option key={option.value || "__default"} value={option.value}>
-
-                    {option.label}
-
-                  </option>
-
-                ))
-
-              ) : (
-
-                <option value="">Chưa có bộ quy tắc</option>
-
-              )}
-
-            </select>
-
-            <div className="text-xs text-[color:var(--ds-text-secondary)]">
-
-              Phiên bản: {selectedRuleMeta?.version != null ? `v${selectedRuleMeta.version}` : "—"}
-
-            </div>
-
-            {ruleComparison ? (
-
-              <div className="rounded-lg border border-dashed border-emerald-400 bg-emerald-500/10 p-2 text-xs text-emerald-700">
-
-                Chênh lệch so với bộ đang áp dụng: {ruleDeltaLabel}
-
-              </div>
-
-            ) : (
-
-              <div className="text-xs text-[color:var(--ds-text-secondary)]">
-
-                {ruleCollection?.activeId === (selectedRuleMeta?.id || "")
-
-                  ? "Đang xem đúng bộ quy tắc đang áp dụng."
-
-                  : `Bộ đang áp dụng: ${activeRule?.name || "—"}`}
-
-              </div>
-
-            )}
+            Khoảng: {report.range.from || "…"} → {report.range.to || "…"}
 
           </div>
 
-          <div className="rounded-xl border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] p-3 text-sm text-[color:var(--ds-text-secondary)]">
-
-            <div className="flex items-center justify-between gap-2">
-
-              <span className="text-xs uppercase text-[color:var(--ds-text-muted)]">Thông tin báo cáo</span>
-
-              {nextScheduleRun ? (
-
-                <span className="text-xs font-medium text-emerald-600">
-
-                  Lịch gửi tiếp theo: {formatScheduleNextRunLabel(nextScheduleRun.nextRun)}
-
-                </span>
-
-              ) : (
-
-                <span className="text-xs text-[color:var(--ds-text-muted)]">Chưa thiết lập lịch gửi</span>
-
-              )}
-
-            </div>
-
-            <div className="mt-2 text-base font-semibold text-[color:var(--ds-text-primary)]">
-
-              {formatInt(summary.decls)} tờ khai hợp lệ
-
-            </div>
-
-            <div className="mt-1 text-xs text-[color:var(--ds-text-secondary)]">
-
-              Khoảng: {report.range.from || "…"} → {report.range.to || "…"}
-
-            </div>
-
-            <div className="mt-1 text-xs text-[color:var(--ds-text-secondary)]">{ruleApply}</div>
-
-          </div>
+          <div className="mt-1 text-xs text-[color:var(--ds-text-secondary)]">{appliedContextLabel}</div>
 
         </div>
 

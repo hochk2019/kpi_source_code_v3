@@ -9,18 +9,18 @@ Tài liệu này kết hợp ba đề xuất cải tiến giao diện đã thố
 - Loại bỏ nút **Reload** khỏi giao diện; thay vào đó, dữ liệu được làm tươi tự động sau khi điều chỉnh bộ lọc hoặc qua các hành động khác.
 
 ### Nhiệm vụ
-- [ ] Tách JSX trong `src/components/ReportViewer.jsx` (đoạn hiện xử lý thanh điều khiển) thành hai component độc lập: `ReportFilterBar` và `ReportContextToolbar`.
-  - [ ] Xác định chính xác block JSX hiện chịu trách nhiệm cho thanh điều khiển (đoạn ~dòng 8321-8603) và ghi chú phụ thuộc state/props.
-  - [ ] Tạo hai file component mới dưới `src/components/report-viewer/` (hoặc thư mục phù hợp) và chuyển JSX tương ứng sang từng file.
-  - [ ] Cập nhật import trong `ReportViewer.jsx`, đảm bảo props/state được truyền đúng và không xuất hiện circular import.
-- [ ] Bố trí `ReportFilterBar` chỉ gồm bộ lọc thời gian, nút xuất/in (nếu vẫn cần) và trạng thái tổng quan; bỏ hẳn nút reload.
-  - [ ] Loại bỏ callback/nút `onReload` khỏi component và kiểm tra các hook `useEffect` để đảm bảo dữ liệu tự reload.
-  - [ ] Hiển thị một nhãn tóm tắt trạng thái bộ lọc (ví dụ: "Kỳ: 01/2024 - 03/2024") trong thanh này.
-- [ ] Gom lựa chọn template và bộ quy tắc KPI vào `ReportContextToolbar`, bổ sung nhãn mô tả rõ ràng và gộp các hành động phụ (lưu/cập nhật/xoá) vào menu phụ.
-  - [ ] Dùng `Dropdown`/`Menu` từ design system để gom các hành động phụ thay vì hiển thị toàn bộ nút.
-  - [ ] Bảo toàn luồng gọi API hiện có (create/update/delete template) thông qua menu mới.
-- [ ] Hiển thị tình trạng “Đang áp dụng: Template A / Bộ quy tắc B” trong header để người dùng nắm bối cảnh.
-  - [ ] Viết helper định dạng tên template/bộ quy tắc và xử lý fallback khi thiếu dữ liệu.
+- [x] Tách JSX trong `src/components/ReportViewer.jsx` (đoạn hiện xử lý thanh điều khiển) thành hai component độc lập: `ReportFilterBar` và `ReportContextToolbar`.
+  - [x] Xác định chính xác block JSX hiện chịu trách nhiệm cho thanh điều khiển (đoạn ~dòng 8321-8603) và ghi chú phụ thuộc state/props.
+  - [x] Tạo hai file component mới dưới `src/components/report-viewer/` (hoặc thư mục phù hợp) và chuyển JSX tương ứng sang từng file.
+  - [x] Cập nhật import trong `ReportViewer.jsx`, đảm bảo props/state được truyền đúng và không xuất hiện circular import.
+- [x] Bố trí `ReportFilterBar` chỉ gồm bộ lọc thời gian, nút xuất/in (nếu vẫn cần) và trạng thái tổng quan; bỏ hẳn nút reload.
+  - [x] Loại bỏ callback/nút `onReload` khỏi component và kiểm tra các hook `useEffect` để đảm bảo dữ liệu tự reload.
+  - [x] Hiển thị một nhãn tóm tắt trạng thái bộ lọc (ví dụ: "Kỳ: 01/2024 - 03/2024") trong thanh này.
+- [x] Gom lựa chọn template và bộ quy tắc KPI vào `ReportContextToolbar`, bổ sung nhãn mô tả rõ ràng và gộp các hành động phụ (lưu/cập nhật/xoá) vào menu phụ.
+  - [x] Dùng `Dropdown`/`Menu` từ design system để gom các hành động phụ thay vì hiển thị toàn bộ nút.
+  - [x] Bảo toàn luồng gọi API hiện có (create/update/delete template) thông qua menu mới.
+- [x] Hiển thị tình trạng “Đang áp dụng: Template A / Bộ quy tắc B” trong header để người dùng nắm bối cảnh.
+  - [x] Viết helper định dạng tên template/bộ quy tắc và xử lý fallback khi thiếu dữ liệu.
 - [ ] Chuẩn hoá style (flex row, spacing, typography) để tạo cảm giác hiện đại, đồng bộ với design system.
   - [ ] Áp dụng token spacing và typography từ `components.json` (nếu có); kiểm tra giao diện ở độ rộng 1280px và 1440px.
   - [ ] Chạy lại snapshot test (nếu tồn tại) cho khu vực header sau khi refactor.
