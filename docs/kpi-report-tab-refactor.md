@@ -37,8 +37,8 @@ Tài liệu này kết hợp ba đề xuất cải tiến giao diện đã thố
 - [x] Tạo container `KpiOverviewSection` bao gồm các component số liệu: `SummaryCard`, `TeamPieWidget`, `TopCompanyLeaderboard`, `TopStaffWidget`, biểu đồ Top 10 công ty theo tờ khai và các widget tổng quan khác.
   - [x] Kiểm kê đầy đủ các component tổng quan hiện có trong `ReportViewer.jsx` để tránh bỏ sót.
   - [x] Bọc toàn bộ vào một component cha với heading "Tổng quan KPI" và mô tả ngắn.
-- [ ] Thiết lập layout 2 cột (ví dụ 8/4 hoặc grid responsive) để đảm bảo sự cân bằng giữa số liệu và biểu đồ.
-  - [ ] Sử dụng CSS grid hoặc `Stack`/`Grid` từ design system, kiểm tra responsive ở breakpoint tablet (≥1024px) và mobile.
+- [x] Thiết lập layout 2 cột (ví dụ 8/4 hoặc grid responsive) để đảm bảo sự cân bằng giữa số liệu và biểu đồ.
+  - [x] Sử dụng CSS grid hoặc `Stack`/`Grid` từ design system, kiểm tra responsive ở breakpoint tablet (≥1024px) và mobile.
 - [ ] Di chuyển khối **Top 10 công ty theo tờ khai** vào `KpiOverviewSection`.
   - [ ] Kết nối dữ liệu Top 10 với phần còn lại để chia sẻ bộ lọc chung.
   - [ ] Đảm bảo tiêu đề/thuyết minh đồng bộ với các widget khác.
