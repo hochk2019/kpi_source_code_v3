@@ -36,6 +36,7 @@ import {
 import ReportFilterBar from "@/components/report-viewer/ReportFilterBar.jsx";
 import ReportContextToolbar from "@/components/report-viewer/ReportContextToolbar.jsx";
 import KpiAdjustmentPanel from "@/components/report-viewer/KpiAdjustmentPanel.jsx";
+import ReportEntityTable from "@/components/report-viewer/ReportEntityTable.jsx";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs.jsx";
 
 import { toAdjustmentTotalsArray } from "../../shared/kpiAdjustments.js";
@@ -6406,19 +6407,108 @@ const [detailPageSizeCustomInput, setDetailPageSizeCustomInput] = useState(() =>
       const staffPageStart = totalStaffRows === 0 ? 0 : staffSliceStart + 1;
       const staffPageEnd =
         totalStaffRows === 0 ? 0 : Math.min(totalStaffRows, staffSliceStart + staffPageItems.length);
-      const staffDetailColumnCount =
-        6 +
-        (columnVisibility.items !== false ? 1 : 0) +
-        (columnVisibility.licenses !== false ? 1 : 0) +
-        (columnVisibility.co !== false ? 1 : 0) +
-        (columnVisibility.coLines !== false ? 1 : 0) +
-        (columnVisibility.licenseCodes !== false ? 1 : 0);
       const totalStaffPages = totalStaffRows === 0 ? 1 : Math.ceil(totalStaffRows / detailPageSize);
       const isFirstStaffPage = staffDetailPage === 0;
       const isLastStaffPage = staffDetailPage >= totalStaffPages - 1;
       const staffRangeLabel = totalStaffRows
         ? `${formatInt(staffPageStart)}–${formatInt(staffPageEnd)} / ${formatInt(totalStaffRows)}`
         : "0 / 0";
+
+      const staffDetailColumns = [
+        {
+          key: "name",
+          label: "Nhân viên",
+          align: "left",
+          headerClassName: "text-left",
+          renderCell: (item) => (
+            <button
+              type="button"
+              className="font-medium text-[color:var(--ds-text-primary)] hover:underline"
+              onClick={() => {
+                setSelectedStaff(item.key);
+                setStaffViewMode("detail");
+              }}
+            >
+              {item.name}
+            </button>
+          ),
+        },
+        {
+          key: "team",
+          label: "Tổ đội",
+          align: "left",
+          className: "text-[color:var(--ds-text-secondary)]",
+          renderCell: (item) => item.team || "—",
+        },
+        {
+          key: "decls",
+          label: "Tờ khai",
+          align: "right",
+          renderCell: (item) => formatInt(item.stats.decls),
+        },
+        {
+          key: "kpi",
+          label: "Điểm KPI",
+          align: "right",
+          className: "font-semibold",
+          renderCell: (item) => formatDecimal(item.stats.kpi),
+        },
+        {
+          key: "import",
+          label: "Nhập",
+          align: "right",
+          renderCell: (item) => formatInt(item.stats.import),
+        },
+        {
+          key: "export",
+          label: "Xuất",
+          align: "right",
+          renderCell: (item) => formatInt(item.stats.export),
+        },
+        {
+          key: "items",
+          label: "Mục hàng",
+          align: "right",
+          visible: columnVisibility.items !== false,
+          renderCell: (item) => formatInt(item.stats.items),
+        },
+        {
+          key: "licenses",
+          label: "Số GP",
+          align: "right",
+          visible: columnVisibility.licenses !== false,
+          renderCell: (item) => formatInt(item.stats.licenses),
+        },
+        {
+          key: "co",
+          label: "Tờ khai C/O",
+          align: "right",
+          visible: columnVisibility.co !== false,
+          renderCell: (item) => formatInt(item.stats.co),
+        },
+        {
+          key: "coLines",
+          label: "Dòng C/O",
+          align: "right",
+          visible: columnVisibility.coLines !== false,
+          renderCell: (item) => formatInt(item.stats.coLines),
+        },
+        {
+          key: "licenseCodes",
+          label: "Mã giấy phép",
+          align: "left",
+          visible: columnVisibility.licenseCodes !== false,
+          renderCell: (item) => {
+            const codes = item.stats.licenseCodes || [];
+            const text = codes.length ? codes.join(", ") : "—";
+            return (
+              <span title={text} className="text-[color:var(--ds-text-secondary)]">
+                {text}
+              </span>
+            );
+          },
+        },
+      ];
 
       return (
         <Tabs value={staffViewMode} onValueChange={setStaffViewMode} className="space-y-4">
@@ -6475,141 +6565,29 @@ const [detailPageSizeCustomInput, setDetailPageSizeCustomInput] = useState(() =>
           </TabsContent>
 
           <TabsContent value="detail" className="space-y-4">
-            <div className="overflow-auto rounded border">
-              <table className="min-w-full text-sm">
-                <thead className="bg-gray-100">
-                  <tr>
-                    <th className="px-3 py-2 text-left">Nhân viên</th>
-                    <th className="px-3 py-2 text-left">Tổ đội</th>
-                    <th className="px-3 py-2 text-right">Tờ khai</th>
-                    <th className="px-3 py-2 text-right">Điểm KPI</th>
-                    <th className="px-3 py-2 text-right">Nhập</th>
-                    <th className="px-3 py-2 text-right">Xuất</th>
-                    {columnVisibility.items !== false && (
-                      <th className="px-3 py-2 text-right">Mục hàng</th>
-                    )}
-                    {columnVisibility.licenses !== false && (
-                      <th className="px-3 py-2 text-right">Số GP</th>
-                    )}
-                    {columnVisibility.co !== false && (
-                      <th className="px-3 py-2 text-right">Tờ khai C/O</th>
-                    )}
-                    {columnVisibility.coLines !== false && (
-                      <th className="px-3 py-2 text-right">Dòng C/O</th>
-                    )}
-                    {columnVisibility.licenseCodes !== false && (
-                      <th className="px-3 py-2 text-left">Mã giấy phép</th>
-                    )}
-                  </tr>
-                </thead>
-                <tbody>
-                  {staffPageItems.length ? (
-                    staffPageItems.map((item) => (
-                      <tr key={item.key} className="odd:bg-white even:bg-gray-50">
-                        <td className="px-3 py-1.5 text-left font-medium text-[color:var(--ds-text-primary)]">
-                          <button
-                            type="button"
-                            className="hover:underline"
-                            onClick={() => {
-                              setSelectedStaff(item.key);
-                              setStaffViewMode("detail");
-                            }}
-                          >
-                            {item.name}
-                          </button>
-                        </td>
-                        <td className="px-3 py-1.5 text-left text-[color:var(--ds-text-secondary)]">{item.team || "—"}</td>
-                        <td className="px-3 py-1.5 text-right">{formatInt(item.stats.decls)}</td>
-                        <td className="px-3 py-1.5 text-right font-semibold text-[color:var(--ds-text-primary)]">
-                          {formatDecimal(item.stats.kpi)}
-                        </td>
-                        <td className="px-3 py-1.5 text-right">{formatInt(item.stats.import)}</td>
-                        <td className="px-3 py-1.5 text-right">{formatInt(item.stats.export)}</td>
-                        {columnVisibility.items !== false && (
-                          <td className="px-3 py-1.5 text-right">{formatInt(item.stats.items)}</td>
-                        )}
-                        {columnVisibility.licenses !== false && (
-                          <td className="px-3 py-1.5 text-right">{formatInt(item.stats.licenses)}</td>
-                        )}
-                        {columnVisibility.co !== false && (
-                          <td className="px-3 py-1.5 text-right">{formatInt(item.stats.co)}</td>
-                        )}
-                        {columnVisibility.coLines !== false && (
-                          <td className="px-3 py-1.5 text-right">{formatInt(item.stats.coLines)}</td>
-                        )}
-                        {columnVisibility.licenseCodes !== false && (
-                          <td
-                            className="px-3 py-1.5"
-                            title={(item.stats.licenseCodes || []).join(", ") || "—"}
-                          >
-                            {(item.stats.licenseCodes || []).join(", ") || "—"}
-                          </td>
-                        )}
-                      </tr>
-                    ))
-                  ) : (
-                    <tr>
-                      <td
-                        colSpan={staffDetailColumnCount}
-                        className="px-3 py-4 text-center text-sm text-[color:var(--ds-text-muted)]"
-                      >
-                        Không có nhân viên phù hợp với điều kiện lọc hiện tại.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-
-            {totalStaffRows ? (
-              <div className="flex flex-wrap items-center justify-between gap-3 px-1 text-xs text-[color:var(--ds-text-secondary)]">
-                <div className="flex items-center gap-2">
-                  <span>Hiển thị</span>
-                  <select
-                    value={detailPageSizeMode === "custom" ? "custom" : String(detailPageSize)}
-                    onChange={handleDetailPageSizeChange}
-                    className="rounded border px-2 py-1 text-xs text-[color:var(--ds-text-primary)] focus:border-[color:var(--ds-border-strong)] focus:outline-none"
-                  >
-                    {DETAIL_PAGE_SIZE_OPTIONS.map((option) => (
-                      <option key={option} value={option}>
-                        {option}
-                      </option>
-                    ))}
-                    <option value="custom">Tùy chỉnh...</option>
-                  </select>
-                  {detailPageSizeMode === "custom" ? (
-                    <input
-                      type="number"
-                      min="1"
-                      value={detailPageSizeCustomInput}
-                      onChange={handleDetailPageSizeCustomInputChange}
-                      className="w-16 rounded border px-2 py-1 text-xs text-[color:var(--ds-text-primary)] focus:border-[color:var(--ds-border-strong)] focus:outline-none"
-                    />
-                  ) : null}
-                </div>
-                <div className="flex items-center gap-3">
-                  <span>{staffRangeLabel}</span>
-                  <div className="inline-flex overflow-hidden rounded-full border">
-                    <button
-                      type="button"
-                      onClick={() => setStaffDetailPage((value) => Math.max(0, value - 1))}
-                      disabled={isFirstStaffPage}
-                      className="border-r px-3 py-1 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      Trước
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setStaffDetailPage((value) => Math.min(totalStaffPages - 1, value + 1))}
-                      disabled={isLastStaffPage}
-                      className="px-3 py-1 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      Sau
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ) : null}
+            <ReportEntityTable
+              columns={staffDetailColumns}
+              rows={staffPageItems}
+              emptyMessage="Không có nhân viên phù hợp với điều kiện lọc hiện tại."
+              pagination={
+                totalStaffRows
+                  ? {
+                      totalRows: totalStaffRows,
+                      pageSize: detailPageSize,
+                      pageSizeMode: detailPageSizeMode,
+                      pageSizeOptions: DETAIL_PAGE_SIZE_OPTIONS,
+                      onPageSizeChange: handleDetailPageSizeChange,
+                      customPageSizeValue: detailPageSizeCustomInput,
+                      onCustomPageSizeChange: handleDetailPageSizeCustomInputChange,
+                      rangeLabel: staffRangeLabel,
+                      onPrevPage: () => setStaffDetailPage((value) => Math.max(0, value - 1)),
+                      onNextPage: () => setStaffDetailPage((value) => Math.min(totalStaffPages - 1, value + 1)),
+                      isFirstPage: isFirstStaffPage,
+                      isLastPage: isLastStaffPage,
+                    }
+                  : null
+              }
+            />
           </TabsContent>
         </Tabs>
       );
@@ -6675,19 +6653,101 @@ const [detailPageSizeCustomInput, setDetailPageSizeCustomInput] = useState(() =>
       const teamPageItems = filteredTeamList.slice(teamSliceStart, teamSliceStart + detailPageSize);
       const teamPageStart = totalTeamRows === 0 ? 0 : teamSliceStart + 1;
       const teamPageEnd = totalTeamRows === 0 ? 0 : Math.min(totalTeamRows, teamSliceStart + teamPageItems.length);
-      const teamDetailColumnCount =
-        5 +
-        (columnVisibility.items !== false ? 1 : 0) +
-        (columnVisibility.licenses !== false ? 1 : 0) +
-        (columnVisibility.co !== false ? 1 : 0) +
-        (columnVisibility.coLines !== false ? 1 : 0) +
-        (columnVisibility.licenseCodes !== false ? 1 : 0);
       const totalTeamPages = totalTeamRows === 0 ? 1 : Math.ceil(totalTeamRows / detailPageSize);
       const isFirstTeamPage = teamDetailPage === 0;
       const isLastTeamPage = teamDetailPage >= totalTeamPages - 1;
       const teamRangeLabel = totalTeamRows
         ? `${formatInt(teamPageStart)}–${formatInt(teamPageEnd)} / ${formatInt(totalTeamRows)}`
         : "0 / 0";
+
+      const teamDetailColumns = [
+        {
+          key: "name",
+          label: "Tổ đội",
+          align: "left",
+          headerClassName: "text-left",
+          renderCell: (item) => (
+            <button
+              type="button"
+              className="font-medium text-[color:var(--ds-text-primary)] hover:underline"
+              onClick={() => {
+                setSelectedTeam(item.key);
+                setTeamViewMode("detail");
+              }}
+            >
+              {item.name}
+            </button>
+          ),
+        },
+        {
+          key: "decls",
+          label: "Tờ khai",
+          align: "right",
+          renderCell: (item) => formatInt(item.stats.decls),
+        },
+        {
+          key: "kpi",
+          label: "Điểm KPI",
+          align: "right",
+          className: "font-semibold",
+          renderCell: (item) => formatDecimal(item.stats.kpi),
+        },
+        {
+          key: "import",
+          label: "Nhập",
+          align: "right",
+          renderCell: (item) => formatInt(item.stats.import),
+        },
+        {
+          key: "export",
+          label: "Xuất",
+          align: "right",
+          renderCell: (item) => formatInt(item.stats.export),
+        },
+        {
+          key: "items",
+          label: "Mục hàng",
+          align: "right",
+          visible: columnVisibility.items !== false,
+          renderCell: (item) => formatInt(item.stats.items),
+        },
+        {
+          key: "licenses",
+          label: "Số GP",
+          align: "right",
+          visible: columnVisibility.licenses !== false,
+          renderCell: (item) => formatInt(item.stats.licenses),
+        },
+        {
+          key: "co",
+          label: "Tờ khai C/O",
+          align: "right",
+          visible: columnVisibility.co !== false,
+          renderCell: (item) => formatInt(item.stats.co),
+        },
+        {
+          key: "coLines",
+          label: "Dòng C/O",
+          align: "right",
+          visible: columnVisibility.coLines !== false,
+          renderCell: (item) => formatInt(item.stats.coLines),
+        },
+        {
+          key: "licenseCodes",
+          label: "Mã giấy phép",
+          align: "left",
+          visible: columnVisibility.licenseCodes !== false,
+          renderCell: (item) => {
+            const codes = item.stats.licenseCodes || [];
+            const text = codes.length ? codes.join(", ") : "—";
+            return (
+              <span title={text} className="text-[color:var(--ds-text-secondary)]">
+                {text}
+              </span>
+            );
+          },
+        },
+      ];
 
       return (
         <Tabs value={teamViewMode} onValueChange={setTeamViewMode} className="space-y-4">
@@ -6745,139 +6805,29 @@ const [detailPageSizeCustomInput, setDetailPageSizeCustomInput] = useState(() =>
           </TabsContent>
 
           <TabsContent value="detail" className="space-y-4">
-            <div className="overflow-auto rounded border">
-              <table className="min-w-full text-sm">
-                <thead className="bg-gray-100">
-                  <tr>
-                    <th className="px-3 py-2 text-left">Tổ đội</th>
-                    <th className="px-3 py-2 text-right">Tờ khai</th>
-                    <th className="px-3 py-2 text-right">Điểm KPI</th>
-                    <th className="px-3 py-2 text-right">Nhập</th>
-                    <th className="px-3 py-2 text-right">Xuất</th>
-                    {columnVisibility.items !== false && (
-                      <th className="px-3 py-2 text-right">Mục hàng</th>
-                    )}
-                    {columnVisibility.licenses !== false && (
-                      <th className="px-3 py-2 text-right">Số GP</th>
-                    )}
-                    {columnVisibility.co !== false && (
-                      <th className="px-3 py-2 text-right">Tờ khai C/O</th>
-                    )}
-                    {columnVisibility.coLines !== false && (
-                      <th className="px-3 py-2 text-right">Dòng C/O</th>
-                    )}
-                    {columnVisibility.licenseCodes !== false && (
-                      <th className="px-3 py-2 text-left">Mã giấy phép</th>
-                    )}
-                  </tr>
-                </thead>
-                <tbody>
-                  {teamPageItems.length ? (
-                    teamPageItems.map((item) => (
-                      <tr key={item.key} className="odd:bg-white even:bg-gray-50">
-                        <td className="px-3 py-1.5 text-left font-medium text-[color:var(--ds-text-primary)]">
-                          <button
-                            type="button"
-                            className="hover:underline"
-                            onClick={() => {
-                              setSelectedTeam(item.key);
-                              setTeamViewMode("detail");
-                            }}
-                          >
-                            {item.name}
-                          </button>
-                        </td>
-                        <td className="px-3 py-1.5 text-right">{formatInt(item.stats.decls)}</td>
-                        <td className="px-3 py-1.5 text-right font-semibold text-[color:var(--ds-text-primary)]">
-                          {formatDecimal(item.stats.kpi)}
-                        </td>
-                        <td className="px-3 py-1.5 text-right">{formatInt(item.stats.import)}</td>
-                        <td className="px-3 py-1.5 text-right">{formatInt(item.stats.export)}</td>
-                        {columnVisibility.items !== false && (
-                          <td className="px-3 py-1.5 text-right">{formatInt(item.stats.items)}</td>
-                        )}
-                        {columnVisibility.licenses !== false && (
-                          <td className="px-3 py-1.5 text-right">{formatInt(item.stats.licenses)}</td>
-                        )}
-                        {columnVisibility.co !== false && (
-                          <td className="px-3 py-1.5 text-right">{formatInt(item.stats.co)}</td>
-                        )}
-                        {columnVisibility.coLines !== false && (
-                          <td className="px-3 py-1.5 text-right">{formatInt(item.stats.coLines)}</td>
-                        )}
-                        {columnVisibility.licenseCodes !== false && (
-                          <td
-                            className="px-3 py-1.5"
-                            title={(item.stats.licenseCodes || []).join(", ") || "—"}
-                          >
-                            {(item.stats.licenseCodes || []).join(", ") || "—"}
-                          </td>
-                        )}
-                      </tr>
-                    ))
-                  ) : (
-                    <tr>
-                      <td
-                        colSpan={teamDetailColumnCount}
-                        className="px-3 py-4 text-center text-sm text-[color:var(--ds-text-muted)]"
-                      >
-                        Không có tổ đội phù hợp với điều kiện lọc hiện tại.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-
-            {totalTeamRows ? (
-              <div className="flex flex-wrap items-center justify-between gap-3 px-1 text-xs text-[color:var(--ds-text-secondary)]">
-                <div className="flex items-center gap-2">
-                  <span>Hiển thị</span>
-                  <select
-                    value={detailPageSizeMode === "custom" ? "custom" : String(detailPageSize)}
-                    onChange={handleDetailPageSizeChange}
-                    className="rounded border px-2 py-1 text-xs text-[color:var(--ds-text-primary)] focus:border-[color:var(--ds-border-strong)] focus:outline-none"
-                  >
-                    {DETAIL_PAGE_SIZE_OPTIONS.map((option) => (
-                      <option key={option} value={option}>
-                        {option}
-                      </option>
-                    ))}
-                    <option value="custom">Tùy chỉnh...</option>
-                  </select>
-                  {detailPageSizeMode === "custom" ? (
-                    <input
-                      type="number"
-                      min="1"
-                      value={detailPageSizeCustomInput}
-                      onChange={handleDetailPageSizeCustomInputChange}
-                      className="w-16 rounded border px-2 py-1 text-xs text-[color:var(--ds-text-primary)] focus:border-[color:var(--ds-border-strong)] focus:outline-none"
-                    />
-                  ) : null}
-                </div>
-                <div className="flex items-center gap-3">
-                  <span>{teamRangeLabel}</span>
-                  <div className="inline-flex overflow-hidden rounded-full border">
-                    <button
-                      type="button"
-                      onClick={() => setTeamDetailPage((value) => Math.max(0, value - 1))}
-                      disabled={isFirstTeamPage}
-                      className="border-r px-3 py-1 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      Trước
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setTeamDetailPage((value) => Math.min(totalTeamPages - 1, value + 1))}
-                      disabled={isLastTeamPage}
-                      className="px-3 py-1 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      Sau
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ) : null}
+            <ReportEntityTable
+              columns={teamDetailColumns}
+              rows={teamPageItems}
+              emptyMessage="Không có tổ đội phù hợp với điều kiện lọc hiện tại."
+              pagination={
+                totalTeamRows
+                  ? {
+                      totalRows: totalTeamRows,
+                      pageSize: detailPageSize,
+                      pageSizeMode: detailPageSizeMode,
+                      pageSizeOptions: DETAIL_PAGE_SIZE_OPTIONS,
+                      onPageSizeChange: handleDetailPageSizeChange,
+                      customPageSizeValue: detailPageSizeCustomInput,
+                      onCustomPageSizeChange: handleDetailPageSizeCustomInputChange,
+                      rangeLabel: teamRangeLabel,
+                      onPrevPage: () => setTeamDetailPage((value) => Math.max(0, value - 1)),
+                      onNextPage: () => setTeamDetailPage((value) => Math.min(totalTeamPages - 1, value + 1)),
+                      isFirstPage: isFirstTeamPage,
+                      isLastPage: isLastTeamPage,
+                    }
+                  : null
+              }
+            />
           </TabsContent>
         </Tabs>
       );

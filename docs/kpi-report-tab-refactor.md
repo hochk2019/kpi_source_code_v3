@@ -69,9 +69,9 @@ Tài liệu này kết hợp ba đề xuất cải tiến giao diện đã thố
 - [x] Bên trong mỗi tab cha, tạo hai tab con “Tổng quan” (bảng rút gọn + chỉ số chính) và “Chi tiết” (card theo cá nhân/tổ, biểu đồ chuyên sâu), hiển thị “Tổng quan” mặc định. _Đã tái sử dụng dữ liệu hiện có để không phát sinh thêm API._
   - [x] Xác định dữ liệu cần thiết cho từng tab con và tối ưu hoá gọi API (prefetch khi người dùng hover tab?). _Tổng quan và chi tiết cùng chia sẻ dataset lọc, không cần thêm request._
   - [x] Thiết kế layout riêng cho mobile (stack) vs desktop (song song). _Flex/grid hiện hỗ trợ wrap trên mobile và giữ hàng ngang trên desktop._
-- [ ] Trích xuất phần bảng + phân trang chung từ `renderStaffSection`/`renderTeamSection` thành component `ReportEntityTable` tái sử dụng.
-  - [ ] Định nghĩa props chung (`columns`, `rows`, `pagination`, `onSort`) và viết test đơn vị cho component mới.
-  - [ ] Cập nhật cả hai khu vực nhân viên/tổ đội sử dụng component này để tránh lặp code.
+- [x] Trích xuất phần bảng + phân trang chung từ `renderStaffSection`/`renderTeamSection` thành component `ReportEntityTable` tái sử dụng.
+  - [x] Định nghĩa props chung (`columns`, `rows`, `pagination`, `onSort`) và viết test đơn vị cho component mới.
+  - [x] Cập nhật cả hai khu vực nhân viên/tổ đội sử dụng component này để tránh lặp code.
 - [ ] Di chuyển phần cấu hình hiển thị cột (`COLUMN_VISIBILITY_OPTIONS`) vào popover hoặc slide-over bên phải, tránh chiếm không gian trong thanh tab.
   - [ ] Chọn component overlay phù hợp (popover/drawer) và đảm bảo đóng mở qua keyboard.
   - [ ] Lưu trạng thái lựa chọn cột vào store (nếu cần) để tái sử dụng giữa các tab.
