@@ -38,6 +38,9 @@ import ReportContextToolbar from "@/components/report-viewer/ReportContextToolba
 import KpiAdjustmentPanel from "@/components/report-viewer/KpiAdjustmentPanel.jsx";
 import ReportEntityTable from "@/components/report-viewer/ReportEntityTable.jsx";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs.jsx";
+import { Button } from "@/components/ui/button.jsx";
+import { Checkbox } from "@/components/ui/checkbox.jsx";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover.jsx";
 
 import { toAdjustmentTotalsArray } from "../../shared/kpiAdjustments.js";
 
@@ -72,6 +75,7 @@ import {
 } from "recharts";
 
 import { useChartPalette } from "@/designSystem/hooks.js";
+import { SlidersHorizontal } from "lucide-react";
 
 import { toast } from "@/shared/toast.js";
 
@@ -4335,6 +4339,22 @@ export default function ReportViewer({ canExport = true, currentUser = null }) {
   const [activeTemplateId, setActiveTemplateId] = useState(() => sanitizeTemplateId(storedPrefs.templateId));
 
   const exportColumns = useMemo(() => sanitizeColumnVisibility(columnVisibility), [columnVisibility]);
+  const visibleColumnCount = useMemo(
+    () =>
+      COLUMN_VISIBILITY_OPTIONS.reduce((count, option) => {
+        return columnVisibility[option.key] === false ? count : count + 1;
+      }, 0),
+    [columnVisibility],
+  );
+  const columnVisibilitySummary = useMemo(() => {
+    if (visibleColumnCount === COLUMN_VISIBILITY_OPTIONS.length) {
+      return "Hiển thị tất cả cột";
+    }
+    if (visibleColumnCount === 0) {
+      return "Đang ẩn tất cả cột";
+    }
+    return `Đang hiển thị ${visibleColumnCount}/${COLUMN_VISIBILITY_OPTIONS.length} cột`;
+  }, [visibleColumnCount]);
 
   const prefsSnapshotRef = useRef("");
 
@@ -4395,15 +4415,24 @@ export default function ReportViewer({ canExport = true, currentUser = null }) {
 
 
 
-  const handleToggleColumnVisibility = (key) => {
+  const handleToggleColumnVisibility = (key, nextValue) => {
 
-    setColumnVisibility((prev) => ({
+    setColumnVisibility((prev) => {
 
-      ...prev,
+      const resolved =
+        typeof nextValue === "boolean"
+          ? nextValue
+          : prev[key] === false;
 
-      [key]: prev[key] === false,
+      return {
 
-    }));
+        ...prev,
+
+        [key]: resolved ? true : false,
+
+      };
+
+    });
 
   };
 
@@ -7114,58 +7143,63 @@ const [detailPageSizeCustomInput, setDetailPageSizeCustomInput] = useState(() =>
 
 
 
-          <div className="flex flex-wrap items-center gap-2 text-xs text-gray-600">
-
-            <span className="font-semibold text-gray-900">Cột báo cáo</span>
-
-            {COLUMN_VISIBILITY_OPTIONS.map((option) => {
-
-              const checked = columnVisibility[option.key] !== false;
-
-              return (
-
-                <label
-
-                  key={option.key}
-
-                  className={`flex cursor-pointer items-center gap-1 rounded border px-2 py-1 ${
-
-                    checked ? "bg-black text-white" : "bg-white text-gray-600 hover:bg-gray-50"
-
-                  }`}
-
+          <div className="flex flex-col gap-2 rounded-md border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-subtle)] p-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex min-w-0 flex-col gap-1 text-left">
+              <span className="text-sm font-semibold text-gray-900">Cột báo cáo</span>
+              <span className="text-xs text-gray-500">Ẩn/hiện sẽ được áp dụng cho cả giao diện và bản in.</span>
+            </div>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="ml-auto inline-flex w-full items-center justify-between gap-2 whitespace-nowrap sm:w-auto"
                 >
-
-                  <input
-
-                    type="checkbox"
-
-                    className="h-3 w-3"
-
-                    checked={checked}
-
-                    onChange={() => handleToggleColumnVisibility(option.key)}
-
-                  />
-
-                  <span>{option.label}</span>
-
-                </label>
-
-              );
-
-            })}
-
-            <span className="ml-auto text-[11px] text-gray-400">
-
-              Ẩn/hiện sẽ được áp dụng cho cả giao diện và bản in.
-
-            </span>
-
+                  <span className="flex items-center gap-2">
+                    <SlidersHorizontal className="size-4 text-gray-500" />
+                    <span className="text-sm font-medium text-gray-900">{columnVisibilitySummary}</span>
+                  </span>
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent align="end" className="w-72 space-y-3">
+                <div className="space-y-1">
+                  <div className="text-sm font-semibold text-gray-900">Chọn cột hiển thị</div>
+                  <p className="text-xs text-gray-500">
+                    Bật hoặc tắt các cột báo cáo phù hợp với nhu cầu của bạn.
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  {COLUMN_VISIBILITY_OPTIONS.map((option) => {
+                    const checked = columnVisibility[option.key] !== false;
+                    const checkboxId = `column-toggle-${option.key}`;
+                    return (
+                      <label
+                        key={option.key}
+                        htmlFor={checkboxId}
+                        className="flex items-center justify-between gap-3 rounded-md border border-transparent px-2 py-1.5 text-sm transition hover:border-[color:var(--ds-border-strong)] hover:bg-[color:var(--ds-surface-muted)]"
+                      >
+                        <span className="flex items-center gap-2 text-gray-800">
+                          <Checkbox
+                            id={checkboxId}
+                            checked={checked}
+                            onCheckedChange={(value) =>
+                              handleToggleColumnVisibility(option.key, value === true || value === "indeterminate")
+                            }
+                          />
+                          {option.label}
+                        </span>
+                        <span className="text-xs text-gray-400">{checked ? "Hiển thị" : "Ẩn"}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+                <p className="text-xs text-gray-400">
+                  Thiết lập này áp dụng đồng nhất cho giao diện và bản in báo cáo.
+                </p>
+              </PopoverContent>
+            </Popover>
           </div>
-
-
-
           <TabsContent value="staff" className="space-y-4">
 
             {renderStaffSection()}

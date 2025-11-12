@@ -72,9 +72,9 @@ Tài liệu này kết hợp ba đề xuất cải tiến giao diện đã thố
 - [x] Trích xuất phần bảng + phân trang chung từ `renderStaffSection`/`renderTeamSection` thành component `ReportEntityTable` tái sử dụng.
   - [x] Định nghĩa props chung (`columns`, `rows`, `pagination`, `onSort`) và viết test đơn vị cho component mới.
   - [x] Cập nhật cả hai khu vực nhân viên/tổ đội sử dụng component này để tránh lặp code.
-- [ ] Di chuyển phần cấu hình hiển thị cột (`COLUMN_VISIBILITY_OPTIONS`) vào popover hoặc slide-over bên phải, tránh chiếm không gian trong thanh tab.
-  - [ ] Chọn component overlay phù hợp (popover/drawer) và đảm bảo đóng mở qua keyboard.
-  - [ ] Lưu trạng thái lựa chọn cột vào store (nếu cần) để tái sử dụng giữa các tab.
+- [x] Di chuyển phần cấu hình hiển thị cột (`COLUMN_VISIBILITY_OPTIONS`) vào popover hoặc slide-over bên phải, tránh chiếm không gian trong thanh tab.
+  - [x] Chọn component overlay phù hợp (popover/drawer) và đảm bảo đóng mở qua keyboard.
+  - [x] Lưu trạng thái lựa chọn cột vào store (nếu cần) để tái sử dụng giữa các tab.
 - [ ] Đảm bảo các component chi tiết (ví dụ `StaffDetailCard`, `TeamDetailCard`) nhận dữ liệu từ nguồn chung và hỗ trợ lazy loading khi người dùng mở tab “Chi tiết”.
   - [ ] Thêm skeleton/loading indicator khi dữ liệu detail đang tải.
   - [ ] Kiểm tra ảnh hưởng tới performance khi số lượng nhân viên lớn.
