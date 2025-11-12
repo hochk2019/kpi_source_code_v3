@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import useRenderMetrics from "@/hooks/useRenderMetrics.js";
 
@@ -36,6 +36,7 @@ import {
 import ReportFilterBar from "@/components/report-viewer/ReportFilterBar.jsx";
 import ReportContextToolbar from "@/components/report-viewer/ReportContextToolbar.jsx";
 import KpiAdjustmentPanel from "@/components/report-viewer/KpiAdjustmentPanel.jsx";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs.jsx";
 
 import { toAdjustmentTotalsArray } from "../../shared/kpiAdjustments.js";
 
@@ -4282,7 +4283,7 @@ export default function ReportViewer({ canExport = true, currentUser = null }) {
 
   );
 
-  const [scope, setScope] = useState(() => sanitizeScope(storedPrefs.scope));
+  const [activeScopeTab, setActiveScopeTab] = useState(() => sanitizeScope(storedPrefs.scope));
 
   const [selectedStaff, setSelectedStaff] = useState(() => sanitizeSelection(storedPrefs.selectedStaff));
 
@@ -4346,7 +4347,7 @@ export default function ReportViewer({ canExport = true, currentUser = null }) {
 
   useRenderMetrics('ReportViewer', () => ({
     quickRange,
-    scope,
+    scope: activeScopeTab,
     staff: selectedStaff || 'all',
     team: selectedTeam || 'all',
     staffMode: staffViewMode,
@@ -4404,6 +4405,16 @@ export default function ReportViewer({ canExport = true, currentUser = null }) {
     }));
 
   };
+
+
+
+  const handleScopeTabChange = useCallback((value) => {
+
+    const normalized = sanitizeScope(value);
+
+    setActiveScopeTab(normalized);
+
+  }, []);
 
 
 
@@ -4469,7 +4480,7 @@ const [detailPageSizeCustomInput, setDetailPageSizeCustomInput] = useState(() =>
 
         to,
 
-        scope,
+        scope: activeScopeTab,
 
         selectedStaff,
 
@@ -4509,7 +4520,7 @@ const [detailPageSizeCustomInput, setDetailPageSizeCustomInput] = useState(() =>
 
       to,
 
-      scope,
+      activeScopeTab,
 
       selectedStaff,
 
@@ -4585,7 +4596,7 @@ const [detailPageSizeCustomInput, setDetailPageSizeCustomInput] = useState(() =>
       setFrom(computed.from);
       setTo(computed.to);
     }
-    setScope(normalized.scope);
+    setActiveScopeTab(normalized.scope);
     setSelectedStaff(normalized.selectedStaff);
     setSelectedTeam(normalized.selectedTeam);
     setStaffSortKey(normalized.staffSortKey);
@@ -4768,7 +4779,7 @@ const [detailPageSizeCustomInput, setDetailPageSizeCustomInput] = useState(() =>
 
       to,
 
-      scope,
+      scope: activeScopeTab,
 
       selectedStaff,
 
@@ -4818,7 +4829,7 @@ const [detailPageSizeCustomInput, setDetailPageSizeCustomInput] = useState(() =>
 
     to,
 
-    scope,
+    activeScopeTab,
 
     selectedStaff,
 
@@ -5304,7 +5315,7 @@ const [detailPageSizeCustomInput, setDetailPageSizeCustomInput] = useState(() =>
 
   useEffect(() => {
 
-    if (scope === "staff" && selectedStaff !== "all") {
+    if (activeScopeTab === "staff" && selectedStaff !== "all") {
 
       const exists = report.staff.list.some((item) => item.key === selectedStaff);
 
@@ -5316,13 +5327,13 @@ const [detailPageSizeCustomInput, setDetailPageSizeCustomInput] = useState(() =>
 
     }
 
-  }, [scope, selectedStaff, report.staff.list]);
+  }, [activeScopeTab, selectedStaff, report.staff.list]);
 
 
 
   useEffect(() => {
 
-    if (scope === "team" && selectedTeam !== "all") {
+    if (activeScopeTab === "team" && selectedTeam !== "all") {
 
       const exists = report.teams.list.some((item) => item.key === selectedTeam);
 
@@ -5334,7 +5345,7 @@ const [detailPageSizeCustomInput, setDetailPageSizeCustomInput] = useState(() =>
 
     }
 
-  }, [scope, selectedTeam, report.teams.list]);
+  }, [activeScopeTab, selectedTeam, report.teams.list]);
 
 
 
@@ -5342,7 +5353,7 @@ const [detailPageSizeCustomInput, setDetailPageSizeCustomInput] = useState(() =>
 
     setStaffViewMode("detail");
 
-  }, [selectedStaff, scope]);
+  }, [selectedStaff, activeScopeTab]);
 
 
 
@@ -5350,7 +5361,7 @@ const [detailPageSizeCustomInput, setDetailPageSizeCustomInput] = useState(() =>
 
     setTeamViewMode("detail");
 
-  }, [selectedTeam, scope]);
+  }, [selectedTeam, activeScopeTab]);
 
 
 
@@ -7625,167 +7636,157 @@ const [detailPageSizeCustomInput, setDetailPageSizeCustomInput] = useState(() =>
 
       <div className="ds-card space-y-4 p-4">
 
-        <div className="flex flex-wrap items-center gap-3 text-sm text-gray-600">
+        <Tabs value={activeScopeTab} onValueChange={handleScopeTabChange} className="space-y-4">
 
-          <div className="font-semibold text-gray-900">Chế độ xem</div>
+          <div className="flex flex-wrap items-center gap-3 text-sm text-gray-600">
 
-          <div className="flex gap-2">
+            <div className="flex flex-wrap items-center gap-3">
 
-            <button
+              <div className="font-semibold text-gray-900">Chế độ xem</div>
 
-              type="button"
+              <TabsList className="ds-tab-list h-9 flex-nowrap gap-2">
 
-              onClick={() => setScope("staff")}
+                <TabsTrigger value="staff" className="px-3">
 
-              className={`rounded px-3 py-1.5 ${
+                  Nhân viên
 
-                scope === "staff"
+                </TabsTrigger>
 
-                  ? "bg-[color:var(--ds-text-primary)] text-[color:var(--ds-text-inverse)]"
+                <TabsTrigger value="team" className="px-3">
 
-                  : "border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] text-[color:var(--ds-text-secondary)] hover:bg-[color:var(--ds-surface-muted)]"
+                  Tổ đội
 
-              }`}
+                </TabsTrigger>
 
-            >
+              </TabsList>
 
-              Nhân viên
+            </div>
 
-            </button>
 
-            <button
 
-              type="button"
+            <div className="ml-auto w-full min-w-[200px] basis-full sm:w-auto sm:basis-0">
 
-              onClick={() => setScope("team")}
+              {activeScopeTab === "staff" ? (
 
-              className={`rounded px-3 py-1.5 ${
+                <select
 
-                scope === "team"
+                  className="w-full rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] px-3 py-2 text-sm text-[color:var(--ds-text-primary)] shadow-sm focus:outline-none focus:ring-2 focus:ring-[color:var(--ds-accent-ring)] focus:ring-offset-0"
 
-                  ? "bg-[color:var(--ds-text-primary)] text-[color:var(--ds-text-inverse)]"
+                  value={selectedStaff}
 
-                  : "border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] text-[color:var(--ds-text-secondary)] hover:bg-[color:var(--ds-surface-muted)]"
+                  onChange={(e) => setSelectedStaff(e.target.value)}
 
-              }`}
+                >
 
-            >
+                  {staffOptions.map((opt) => (
 
-              Tổ đội
+                    <option key={opt.value} value={opt.value}>
 
-            </button>
+                      {opt.label}
+
+                    </option>
+
+                  ))}
+
+                </select>
+
+              ) : (
+
+                <select
+
+                  className="w-full rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] px-3 py-2 text-sm text-[color:var(--ds-text-primary)] shadow-sm focus:outline-none focus:ring-2 focus:ring-[color:var(--ds-accent-ring)] focus:ring-offset-0"
+
+                  value={selectedTeam}
+
+                  onChange={(e) => setSelectedTeam(e.target.value)}
+
+                >
+
+                  {teamOptions.map((opt) => (
+
+                    <option key={opt.value} value={opt.value}>
+
+                      {opt.label}
+
+                    </option>
+
+                  ))}
+
+                </select>
+
+              )}
+
+            </div>
 
           </div>
 
 
 
-          {scope === "staff" ? (
+          <div className="flex flex-wrap items-center gap-2 text-xs text-gray-600">
 
-            <select
+            <span className="font-semibold text-gray-900">Cột báo cáo</span>
 
-              className="ml-auto rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] px-3 py-2 text-sm text-[color:var(--ds-text-primary)] shadow-sm focus:outline-none focus:ring-2 focus:ring-[color:var(--ds-accent-ring)] focus:ring-offset-0"
+            {COLUMN_VISIBILITY_OPTIONS.map((option) => {
 
-              value={selectedStaff}
+              const checked = columnVisibility[option.key] !== false;
 
-              onChange={(e) => setSelectedStaff(e.target.value)}
+              return (
 
-            >
+                <label
 
-              {staffOptions.map((opt) => (
+                  key={option.key}
 
-                <option key={opt.value} value={opt.value}>
+                  className={`flex cursor-pointer items-center gap-1 rounded border px-2 py-1 ${
 
-                  {opt.label}
+                    checked ? "bg-black text-white" : "bg-white text-gray-600 hover:bg-gray-50"
 
-                </option>
+                  }`}
 
-              ))}
+                >
 
-            </select>
+                  <input
 
-          ) : (
+                    type="checkbox"
 
-            <select
+                    className="h-3 w-3"
 
-              className="ml-auto rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] px-3 py-2 text-sm text-[color:var(--ds-text-primary)] shadow-sm focus:outline-none focus:ring-2 focus:ring-[color:var(--ds-accent-ring)] focus:ring-offset-0"
+                    checked={checked}
 
-              value={selectedTeam}
+                    onChange={() => handleToggleColumnVisibility(option.key)}
 
-              onChange={(e) => setSelectedTeam(e.target.value)}
+                  />
 
-            >
+                  <span>{option.label}</span>
 
-              {teamOptions.map((opt) => (
+                </label>
 
-                <option key={opt.value} value={opt.value}>
+              );
 
-                  {opt.label}
+            })}
 
-                </option>
+            <span className="ml-auto text-[11px] text-gray-400">
 
-              ))}
+              Ẩn/hiện sẽ được áp dụng cho cả giao diện và bản in.
 
-            </select>
+            </span>
 
-          )}
-
-        </div>
+          </div>
 
 
 
-        <div className="flex flex-wrap items-center gap-2 text-xs text-gray-600">
+          <TabsContent value="staff" className="space-y-4">
 
-          <span className="font-semibold text-gray-900">Cột báo cáo</span>
+            {renderStaffSection()}
 
-          {COLUMN_VISIBILITY_OPTIONS.map((option) => {
+          </TabsContent>
 
-            const checked = columnVisibility[option.key] !== false;
+          <TabsContent value="team" className="space-y-4">
 
-            return (
+            {renderTeamSection()}
 
-              <label
+          </TabsContent>
 
-                key={option.key}
-
-                className={`flex cursor-pointer items-center gap-1 rounded border px-2 py-1 ${
-
-                  checked ? "bg-black text-white" : "bg-white text-gray-600 hover:bg-gray-50"
-
-                }`}
-
-              >
-
-                <input
-
-                  type="checkbox"
-
-                  className="h-3 w-3"
-
-                  checked={checked}
-
-                  onChange={() => handleToggleColumnVisibility(option.key)}
-
-                />
-
-                <span>{option.label}</span>
-
-              </label>
-
-            );
-
-          })}
-
-          <span className="ml-auto text-[11px] text-gray-400">
-
-            Ẩn/hiện sẽ được áp dụng cho cả giao diện và bản in.
-
-          </span>
-
-        </div>
-
-
-
-        <div>{scope === "staff" ? renderStaffSection() : renderTeamSection()}</div>
+        </Tabs>
 
       </div>
 

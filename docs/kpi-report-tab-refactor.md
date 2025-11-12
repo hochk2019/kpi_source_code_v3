@@ -63,9 +63,9 @@ Tài liệu này kết hợp ba đề xuất cải tiến giao diện đã thố
 - Gom các bộ lọc nâng cao, lựa chọn cột vào panel phụ để phần đầu tab gọn gàng.
 
 ### Nhiệm vụ
-- [ ] Thay state toggle `scope` bằng tab cha “Nhân viên” / “Tổ đội”, sử dụng component tab của design system (hoặc tự xây dựng) bảo đảm accessibility.
-  - [ ] Rà soát state/logic hiện dùng cho `scope` và chuẩn hoá lại thành `activeScopeTab`.
-  - [ ] Áp dụng keyboard navigation (ArrowLeft/ArrowRight) nếu tự triển khai tab.
+- [x] Thay state toggle `scope` bằng tab cha “Nhân viên” / “Tổ đội”, sử dụng component tab của design system (hoặc tự xây dựng) bảo đảm accessibility.
+  - [x] Rà soát state/logic hiện dùng cho `scope` và chuẩn hoá lại thành `activeScopeTab`.
+  - [x] Áp dụng keyboard navigation (ArrowLeft/ArrowRight) nếu tự triển khai tab. _(Sử dụng Tabs của design system với hỗ trợ bàn phím mặc định.)_
 - [ ] Bên trong mỗi tab cha, tạo hai tab con “Tổng quan” (bảng rút gọn + chỉ số chính) và “Chi tiết” (card theo cá nhân/tổ, biểu đồ chuyên sâu), hiển thị “Tổng quan” mặc định.
   - [ ] Xác định dữ liệu cần thiết cho từng tab con và tối ưu hoá gọi API (prefetch khi người dùng hover tab?).
   - [ ] Thiết kế layout riêng cho mobile (stack) vs desktop (song song).
