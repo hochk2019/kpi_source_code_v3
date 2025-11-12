@@ -42,18 +42,18 @@ Tài liệu này kết hợp ba đề xuất cải tiến giao diện đã thố
 - [x] Di chuyển khối **Top 10 công ty theo tờ khai** vào `KpiOverviewSection`.
   - [x] Kết nối dữ liệu Top 10 với phần còn lại để chia sẻ bộ lọc chung.
   - [x] Đảm bảo tiêu đề/thuyết minh đồng bộ với các widget khác.
-- [ ] Xoá hoặc ngăn render hoàn toàn khối `ReportAutomationPanel` / `Lập lịch gửi báo cáo KPI` khỏi `ReportViewer`.
-  - [ ] Xoá component cũ và các import/state liên quan.
-  - [ ] Đảm bảo không còn route/API nào phụ thuộc khối automation trong tab này; nếu cần, chuyển sang trang cấu hình khác.
-- [ ] Tách logic của khu vực **Điểm KPI +/- bổ sung** thành component riêng có hai chế độ: `overview` (cards gọn, KPI chính) và `detail` (bảng/phân tích chuyên sâu); đặt `overview` làm mặc định.
-  - [ ] Tạo component `KpiAdjustmentPanel` với state điều khiển chế độ.
-  - [ ] Thiết lập lazy load cho phần `detail` nếu dữ liệu lớn.
-- [ ] Thiết kế lại `KpiOverviewSection` để gắn khối **Điểm KPI +/- bổ sung** ở dạng tab phụ (Overview/Detail) hoặc accordion, đảm bảo không chiếm quá nhiều chiều cao khi mới mở trang.
-  - [ ] Kiểm tra accessibility cho cơ chế chuyển tab/accordion.
-  - [ ] Cập nhật documentation nội bộ hướng dẫn sử dụng component mới.
-- [ ] Bổ sung tiêu đề phụ và mô tả ngắn cho từng nhóm trong `KpiOverviewSection` để người dùng hiểu nhanh nội dung.
-  - [ ] Viết copy súc tích cho từng nhóm (ví dụ "Hiệu suất chung", "Điều chỉnh KPI").
-  - [ ] Đảm bảo localization (vi/english) vẫn hoạt động nếu dự án hỗ trợ đa ngôn ngữ.
+- [x] Xoá hoặc ngăn render hoàn toàn khối `ReportAutomationPanel` / `Lập lịch gửi báo cáo KPI` khỏi `ReportViewer`.
+  - [x] Xoá component cũ và các import/state liên quan.
+  - [x] Đảm bảo không còn route/API nào phụ thuộc khối automation trong tab này; nếu cần, chuyển sang trang cấu hình khác.
+- [x] Tách logic của khu vực **Điểm KPI +/- bổ sung** thành component riêng có hai chế độ: `overview` (cards gọn, KPI chính) và `detail` (bảng/phân tích chuyên sâu); đặt `overview` làm mặc định.
+  - [x] Tạo component `KpiAdjustmentPanel` với state điều khiển chế độ.
+  - [x] Thiết lập lazy load cho phần `detail` nếu dữ liệu lớn.
+- [x] Thiết kế lại `KpiOverviewSection` để gắn khối **Điểm KPI +/- bổ sung** ở dạng tab phụ (Overview/Detail) hoặc accordion, đảm bảo không chiếm quá nhiều chiều cao khi mới mở trang.
+  - [x] Kiểm tra accessibility cho cơ chế chuyển tab/accordion.
+  - [x] Cập nhật documentation nội bộ hướng dẫn sử dụng component mới.
+- [x] Bổ sung tiêu đề phụ và mô tả ngắn cho từng nhóm trong `KpiOverviewSection` để người dùng hiểu nhanh nội dung.
+  - [x] Viết copy súc tích cho từng nhóm (ví dụ "Hiệu suất chung", "Điều chỉnh KPI").
+  - [x] Đảm bảo localization (vi/english) vẫn hoạt động nếu dự án hỗ trợ đa ngôn ngữ.
 
 ## 3. Thiết kế lại khu vực báo cáo theo tổ đội & cá nhân dạng Tab
 

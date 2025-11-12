@@ -17,12 +17,7 @@ import {
   getReportTemplates,
   saveReportTemplate,
   deleteReportTemplate,
-  getReportSchedules,
-  saveReportSchedule,
-  deleteReportSchedule,
-  REPORT_SCHEDULE_KEY,
   KPI_REPORT_TEMPLATES_KEY,
-  calculateNextReportScheduleRun,
 } from "@/lib/store.js";
 
 import { subscribe as subscribeStorage } from "@/lib/storageClient.js";
@@ -40,6 +35,7 @@ import {
 
 import ReportFilterBar from "@/components/report-viewer/ReportFilterBar.jsx";
 import ReportContextToolbar from "@/components/report-viewer/ReportContextToolbar.jsx";
+import KpiAdjustmentPanel from "@/components/report-viewer/KpiAdjustmentPanel.jsx";
 
 import { toAdjustmentTotalsArray } from "../../shared/kpiAdjustments.js";
 
@@ -183,26 +179,6 @@ const METRIC_SORT_KEYS = ["kpi", "decls", "licenses"];
 
 
 
-const ADJUSTMENT_CATEGORY_TONE_MAP = {
-
-  support: "text-emerald-600",
-
-  cancel: "text-rose-500",
-
-  correction: "text-amber-600",
-
-  tax: "text-sky-600",
-
-  teamwork: "text-indigo-600",
-
-  coworker_attitude: "text-purple-600",
-
-  customer_attitude: "text-fuchsia-600",
-
-  discipline: "text-amber-700",
-
-};
-
 const ALERT_TONE_STYLES = {
 
   danger: {
@@ -268,459 +244,6 @@ const DEFAULT_DETAIL_PAGE_SIZE = 20;
 const TOP_STAFF_VISIBLE_COUNT_OPTIONS = [5, 7, 8, 9, 10, 12, 15];
 
 const TOP_STAFF_VISIBLE_COUNT_SET = new Set(TOP_STAFF_VISIBLE_COUNT_OPTIONS);
-
-
-
-const WEEKDAY_OPTIONS = [
-
-  { value: 1, label: "Thứ hai" },
-
-  { value: 2, label: "Thứ ba" },
-
-  { value: 3, label: "Thứ tư" },
-
-  { value: 4, label: "Thứ năm" },
-
-  { value: 5, label: "Thứ sáu" },
-
-  { value: 6, label: "Thứ bảy" },
-
-  { value: 7, label: "Chủ nhật" },
-
-];
-
-
-
-const SCHEDULE_FREQUENCY_OPTIONS = [
-
-  { value: "weekly", label: "Hàng tuần" },
-
-  { value: "monthly", label: "Hàng tháng" },
-
-];
-
-
-
-const SCHEDULE_FORMAT_OPTIONS = [
-
-  { value: "excel", label: "Excel" },
-
-  { value: "pdf", label: "PDF" },
-
-];
-
-
-
-
-const SCHEDULE_CHANNEL_OPTIONS = [
-
-  { value: "email", label: "Email" },
-
-  { value: "chat", label: "Chat nội bộ" },
-
-];
-
-
-
-const SCHEDULE_CHANNEL_LABELS = {
-
-  email: "Email",
-
-  chat: "Chat nội bộ",
-
-};
-
-
-
-const DELIVERY_STATUS_LABELS = {
-
-  pending: "Đang chờ",
-
-  success: "Thành công",
-
-  failed: "Thất bại",
-
-};
-
-
-
-const DELIVERY_STATUS_BADGE_CLASS = {
-
-  pending: "border border-amber-200 bg-amber-100 text-amber-700",
-
-  success: "border border-emerald-200 bg-emerald-100 text-emerald-700",
-
-  failed: "border border-rose-200 bg-rose-100 text-rose-700",
-
-};
-
-
-
-function createScheduleDraft(entry = null) {
-
-  const raw = entry && typeof entry === "object" ? entry : {};
-
-  const formats = Array.isArray(raw.formats) && raw.formats.length ? raw.formats : ["excel"];
-
-  const emailRecipients = Array.isArray(raw.emailRecipients)
-
-    ? raw.emailRecipients.join(", ")
-
-    : Array.isArray(raw.recipients)
-
-    ? raw.recipients.join(", ")
-
-    : typeof raw.recipientsInput === "string"
-
-    ? raw.recipientsInput
-
-    : "";
-
-  const chatRecipients = Array.isArray(raw.chatRecipients)
-
-    ? raw.chatRecipients.join(", ")
-
-    : typeof raw.chatRecipientsInput === "string"
-
-    ? raw.chatRecipientsInput
-
-    : "";
-
-  let channels = Array.isArray(raw.channels) && raw.channels.length
-
-    ? raw.channels.filter((item) => item === "email" || item === "chat")
-
-    : [];
-
-  if (!channels.length) {
-
-    if (emailRecipients.trim()) {
-
-      channels.push("email");
-
-    }
-
-    if (chatRecipients.trim()) {
-
-      channels.push("chat");
-
-    }
-
-  }
-
-  if (!channels.length) {
-
-    channels.push("email");
-
-  }
-
-  channels = Array.from(new Set(channels));
-
-  return {
-
-    id: raw.id || "",
-
-    name: raw.name || "",
-
-    frequency: raw.frequency || "weekly",
-
-    dayOfWeek: Number.isFinite(Number(raw.dayOfWeek)) ? Number(raw.dayOfWeek) : 1,
-
-    dayOfMonth: Number.isFinite(Number(raw.dayOfMonth)) ? Number(raw.dayOfMonth) : 1,
-
-    time: raw.time || "08:00",
-
-    recipientsInput: emailRecipients,
-
-    chatRecipientsInput: chatRecipients,
-
-    channels: channels.length ? channels : ["email"],
-
-    formats,
-
-    active: raw.active !== false,
-
-  };
-
-}
-
-
-
-function toSchedulePayload(draft) {
-
-  return {
-
-    id: draft.id || undefined,
-
-    name: draft.name,
-
-    frequency: draft.frequency,
-
-    dayOfWeek:
-
-      draft.frequency === "weekly"
-
-        ? Number.isFinite(Number(draft.dayOfWeek))
-
-          ? Number(draft.dayOfWeek)
-
-          : 1
-
-        : null,
-
-    dayOfMonth:
-
-      draft.frequency === "monthly"
-
-        ? Number.isFinite(Number(draft.dayOfMonth))
-
-          ? Number(draft.dayOfMonth)
-
-          : 1
-
-        : null,
-
-    time: draft.time || "08:00",
-
-    recipients: draft.recipientsInput || "",
-
-    emailRecipients: draft.recipientsInput || "",
-
-    chatRecipients: draft.chatRecipientsInput || "",
-
-    channels: Array.isArray(draft.channels) && draft.channels.length ? draft.channels : ["email"],
-
-    formats: Array.isArray(draft.formats) && draft.formats.length ? draft.formats : ["excel"],
-
-    active: Boolean(draft.active),
-
-  };
-
-}
-
-
-
-function formatScheduleNextRunLabel(isoString) {
-
-  if (!isoString) {
-
-    return "Chưa lên lịch";
-
-  }
-
-  const date = new Date(isoString);
-
-  if (Number.isNaN(date.getTime())) {
-
-    return "Chưa lên lịch";
-
-  }
-
-  return date.toLocaleString("vi-VN", {
-
-    hour12: false,
-
-    year: "numeric",
-
-    month: "2-digit",
-
-    day: "2-digit",
-
-    hour: "2-digit",
-
-    minute: "2-digit",
-
-  });
-
-}
-
-
-
-function formatScheduleCountdown(isoString, now = new Date()) {
-
-  if (!isoString) {
-
-    return "";
-
-  }
-
-  const target = new Date(isoString);
-
-  if (Number.isNaN(target.getTime())) {
-
-    return "";
-
-  }
-
-  const reference = now instanceof Date && !Number.isNaN(now.getTime()) ? now : new Date();
-
-  const diffMs = target.getTime() - reference.getTime();
-
-  if (diffMs <= 0) {
-
-    return "Sắp chạy";
-
-  }
-
-  const minute = 60 * 1000;
-
-  const hour = 60 * minute;
-
-  const day = 24 * hour;
-
-  const week = 7 * day;
-
-  if (diffMs < hour) {
-
-    const minutes = Math.round(diffMs / minute);
-
-    return `Còn ${minutes} phút`;
-
-  }
-
-  if (diffMs < day) {
-
-    const hours = Math.round(diffMs / hour);
-
-    return `Còn ${hours} giờ`;
-
-  }
-
-  if (diffMs < week) {
-
-    const days = Math.round(diffMs / day);
-
-    return `Còn ${days} ngày`;
-
-  }
-
-  const weeks = Math.round(diffMs / week);
-
-  return `Còn ${weeks} tuần`;
-
-}
-
-
-
-function summarizeScheduleChannelStatus(schedule) {
-
-  if (!schedule || typeof schedule !== "object") {
-
-    return {};
-
-  }
-
-  const channels = Array.isArray(schedule.channels)
-
-    ? schedule.channels.filter((item) => item === "email" || item === "chat")
-
-    : [];
-
-  const summary = {};
-
-  for (const channel of channels) {
-
-    summary[channel] = { status: "pending", timestamp: "", detail: "" };
-
-  }
-
-  const history = Array.isArray(schedule.deliveryHistory) ? schedule.deliveryHistory : [];
-
-  for (const entry of history) {
-
-    if (!entry || typeof entry !== "object") {
-
-      continue;
-
-    }
-
-    const channel = typeof entry.channel === "string" ? entry.channel.trim().toLowerCase() : "";
-
-    if (!channels.includes(channel)) {
-
-      continue;
-
-    }
-
-    const status = typeof entry.status === "string" ? entry.status.trim().toLowerCase() : "";
-
-    const normalizedStatus = DELIVERY_STATUS_LABELS[status] ? status : "pending";
-
-    const timestamp = typeof entry.timestamp === "string" ? entry.timestamp : "";
-
-    const detail = typeof entry.detail === "string" ? entry.detail : "";
-
-    const nextTimestamp = timestamp ? Date.parse(timestamp) : Date.now();
-
-    const current = summary[channel];
-
-    const currentTimestamp = current?.timestamp ? Date.parse(current.timestamp) : Number.NaN;
-
-    if (!current || Number.isNaN(currentTimestamp) || nextTimestamp >= currentTimestamp) {
-
-      summary[channel] = { status: normalizedStatus, timestamp, detail };
-
-    }
-
-  }
-
-  return summary;
-
-}
-
-
-
-function getDeliveryStatusLabel(status) {
-
-  return DELIVERY_STATUS_LABELS[status] || DELIVERY_STATUS_LABELS.pending;
-
-}
-
-
-
-function getDeliveryStatusBadgeClass(status) {
-
-  return DELIVERY_STATUS_BADGE_CLASS[status] || DELIVERY_STATUS_BADGE_CLASS.pending;
-
-}
-
-
-
-function formatDeliveryTimestampLabel(timestamp) {
-
-  return timestamp ? formatScheduleNextRunLabel(timestamp) : "Chưa gửi";
-
-}
-
-
-
-function describeScheduleFrequency(schedule) {
-
-  if (!schedule) return "";
-
-  const timeLabel = schedule.time || "08:00";
-
-  if (schedule.frequency === "weekly") {
-
-    const dayOption = WEEKDAY_OPTIONS.find((item) => item.value === Number(schedule.dayOfWeek));
-
-    const dayLabel = dayOption ? dayOption.label : "tuần";
-
-    return `Mỗi ${dayLabel.toLowerCase()} lúc ${timeLabel}`;
-
-  }
-
-  if (schedule.frequency === "monthly") {
-
-    const day = Number.isFinite(Number(schedule.dayOfMonth)) ? Number(schedule.dayOfMonth) : 1;
-
-    return `Ngày ${day} hàng tháng lúc ${timeLabel}`;
-
-  }
-
-  return "";
-
-}
 
 
 
@@ -1066,8 +589,6 @@ function normalizeTemplateConfig(config = {}) {
 
   const teamViewMode = source.teamViewMode === "detail" ? "detail" : "summary";
 
-  const scheduleCollapsed = source.scheduleCollapsed === true;
-
   const adjustmentExpanded = source.adjustmentExpanded === true;
 
   const topCompanyPeriod = sanitizeTopCompanyPeriod(source.topCompanyPeriod);
@@ -1105,8 +626,6 @@ function normalizeTemplateConfig(config = {}) {
     staffViewMode,
 
     teamViewMode,
-
-    scheduleCollapsed,
 
     adjustmentExpanded,
 
@@ -2373,55 +1892,85 @@ function KpiOverviewSection({
       </header>
       <div className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
         <div className="space-y-6">
-          <KpiOverviewDashboard
-            summary={summary}
-            adjustmentsTotal={Number(adjustmentsReport.totalPoints || 0)}
-            trendSeries={trendSeries}
-            comparison={trendComparison}
-            topStaff={overviewTopStaff}
-            alerts={overviewAlerts}
-            palette={palette}
-          />
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <SummaryCard
-              title="Tổng tờ khai"
-              value={formatInt(summary.decls)}
-              subtitle={`Nhập: ${formatInt(summary.import)} • Xuất: ${formatInt(summary.export)}`}
+          <section className="space-y-3">
+            <header className="space-y-1">
+              <h3 className="text-sm font-semibold uppercase tracking-wide text-[color:var(--ds-text-secondary)]">
+                Diễn biến hiệu suất
+              </h3>
+              <p className="text-xs text-[color:var(--ds-text-muted)]">
+                Xu hướng điểm KPI, tờ khai và cảnh báo nổi bật theo thời gian.
+              </p>
+            </header>
+            <KpiOverviewDashboard
+              summary={summary}
+              adjustmentsTotal={Number(adjustmentsReport.totalPoints || 0)}
+              trendSeries={trendSeries}
+              comparison={trendComparison}
+              topStaff={overviewTopStaff}
+              alerts={overviewAlerts}
+              palette={palette}
             />
-            <SummaryCard
-              title="Tổng điểm KPI"
-              value={formatDecimal(summary.kpi)}
-              subtitle="Bao gồm điểm loại hình và giấy phép"
-            />
-            <SummaryCard
-              title="Điểm KPI +/- bổ sung"
-              value={formatDecimal(adjustmentsReport.totalPoints || 0)}
-              subtitle={`Đã duyệt: ${formatInt(adjustmentsReport.approvedCount || 0)} • Chờ duyệt: ${formatInt(
-                adjustmentsReport.pendingCount || 0,
-              )}`}
-            />
-            <SummaryCard
-              title="Tổng số công ty"
-              value={formatInt(summaryCompanyCardValue)}
-              subtitle={companyCardSubtitle}
-            />
-            <SummaryCard
-              title="Số giấy phép hợp lệ"
-              value={formatInt(summary.licenses)}
-              subtitle={`Đã loại trừ • ${formatInt(summary.licenseCount ?? 0)} mã khác nhau`}
-            />
-            <SummaryCard
-              title="Tờ khai có C/O"
-              value={formatInt(summary.co ?? 0)}
-              subtitle={`Tổng dòng áp C/O: ${formatInt(summary.coLines ?? 0)}`}
-            />
-            <SummaryCard
-              title="Danh sách mã giấy phép"
-              value={formatInt(summary.licenseCount ?? 0)}
-              subtitle={summary.licenseSummary || "—"}
-            />
-          </div>
-          <TeamPieWidget kpiData={teamPieData} declData={teamDeclPieData} palette={palette} />
+          </section>
+          <section className="space-y-3">
+            <header className="space-y-1">
+              <h3 className="text-sm font-semibold uppercase tracking-wide text-[color:var(--ds-text-secondary)]">
+                Chỉ số tổng hợp
+              </h3>
+              <p className="text-xs text-[color:var(--ds-text-muted)]">
+                Tổng hợp nhanh các chỉ số quan trọng nhất của kỳ báo cáo.
+              </p>
+            </header>
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <SummaryCard
+                title="Tổng tờ khai"
+                value={formatInt(summary.decls)}
+                subtitle={`Nhập: ${formatInt(summary.import)} • Xuất: ${formatInt(summary.export)}`}
+              />
+              <SummaryCard
+                title="Tổng điểm KPI"
+                value={formatDecimal(summary.kpi)}
+                subtitle="Bao gồm điểm loại hình và giấy phép"
+              />
+              <SummaryCard
+                title="Điểm KPI +/- bổ sung"
+                value={formatDecimal(adjustmentsReport.totalPoints || 0)}
+                subtitle={`Đã duyệt: ${formatInt(adjustmentsReport.approvedCount || 0)} • Chờ duyệt: ${formatInt(
+                  adjustmentsReport.pendingCount || 0,
+                )}`}
+              />
+              <SummaryCard
+                title="Tổng số công ty"
+                value={formatInt(summaryCompanyCardValue)}
+                subtitle={companyCardSubtitle}
+              />
+              <SummaryCard
+                title="Số giấy phép hợp lệ"
+                value={formatInt(summary.licenses)}
+                subtitle={`Đã loại trừ • ${formatInt(summary.licenseCount ?? 0)} mã khác nhau`}
+              />
+              <SummaryCard
+                title="Tờ khai có C/O"
+                value={formatInt(summary.co ?? 0)}
+                subtitle={`Tổng dòng áp C/O: ${formatInt(summary.coLines ?? 0)}`}
+              />
+              <SummaryCard
+                title="Danh sách mã giấy phép"
+                value={formatInt(summary.licenseCount ?? 0)}
+                subtitle={summary.licenseSummary || "—"}
+              />
+            </div>
+          </section>
+          <section className="space-y-3">
+            <header className="space-y-1">
+              <h3 className="text-sm font-semibold uppercase tracking-wide text-[color:var(--ds-text-secondary)]">
+                Cơ cấu tổ đội
+              </h3>
+              <p className="text-xs text-[color:var(--ds-text-muted)]">
+                Tỷ trọng điểm KPI và số tờ khai giữa các tổ đội trong cùng kỳ báo cáo.
+              </p>
+            </header>
+            <TeamPieWidget kpiData={teamPieData} declData={teamDeclPieData} palette={palette} />
+          </section>
         </div>
         <div className="space-y-3">
           <div className="flex flex-col gap-1">
@@ -4787,8 +4336,6 @@ export default function ReportViewer({ canExport = true, currentUser = null }) {
 
   const prefsSnapshotRef = useRef("");
 
-  const [scheduleCollapsed, setScheduleCollapsed] = useState(() => storedPrefs.scheduleCollapsed === true);
-
   const [topCompanyPeriod, setTopCompanyPeriod] = useState(() =>
 
     sanitizeTopCompanyPeriod(storedPrefs.topCompanyPeriod)
@@ -4805,7 +4352,6 @@ export default function ReportViewer({ canExport = true, currentUser = null }) {
     staffMode: staffViewMode,
     teamMode: teamViewMode,
     exporting,
-    scheduleCollapsed,
     topCompanyPeriod,
   }));
 
@@ -4879,12 +4425,6 @@ export default function ReportViewer({ canExport = true, currentUser = null }) {
 
   const [adjustments, setAdjustments] = useState(() => getKpiAdjustments());
 
-  const [reportSchedules, setReportSchedules] = useState(() => getReportSchedules());
-
-  const [scheduleDraft, setScheduleDraft] = useState(() => createScheduleDraft());
-
-  const [editingScheduleId, setEditingScheduleId] = useState("");
-
 
 
 const [adjustmentPageSize, setAdjustmentPageSize] = useState(() =>
@@ -4955,8 +4495,6 @@ const [detailPageSizeCustomInput, setDetailPageSizeCustomInput] = useState(() =>
 
         teamViewMode,
 
-        scheduleCollapsed,
-
         adjustmentExpanded,
 
         topCompanyPeriod,
@@ -4996,8 +4534,6 @@ const [detailPageSizeCustomInput, setDetailPageSizeCustomInput] = useState(() =>
       staffViewMode,
 
       teamViewMode,
-
-      scheduleCollapsed,
 
       adjustmentExpanded,
 
@@ -5062,7 +4598,6 @@ const [detailPageSizeCustomInput, setDetailPageSizeCustomInput] = useState(() =>
     setAdjustmentPageSize(normalized.adjustmentPageSize);
     setStaffViewMode(normalized.staffViewMode);
     setTeamViewMode(normalized.teamViewMode);
-    setScheduleCollapsed(normalized.scheduleCollapsed);
     setAdjustmentExpanded(normalized.adjustmentExpanded);
     setTopCompanyPeriod(normalized.topCompanyPeriod);
     setDetailPageSizeMode(
@@ -5257,8 +4792,6 @@ const [detailPageSizeCustomInput, setDetailPageSizeCustomInput] = useState(() =>
 
       detailPageSize,
 
-      scheduleCollapsed,
-
       adjustmentExpanded,
 
       templateId: activeTemplateId,
@@ -5309,8 +4842,6 @@ const [detailPageSizeCustomInput, setDetailPageSizeCustomInput] = useState(() =>
 
     detailPageSize,
 
-    scheduleCollapsed,
-
     adjustmentExpanded,
 
     activeTemplateId,
@@ -5331,7 +4862,6 @@ const [detailPageSizeCustomInput, setDetailPageSizeCustomInput] = useState(() =>
 
     setAdjustments(getKpiAdjustments());
 
-    setReportSchedules(getReportSchedules());
 
     setReportTemplates(getReportTemplates());
 
@@ -5347,11 +4877,6 @@ const [detailPageSizeCustomInput, setDetailPageSizeCustomInput] = useState(() =>
 
     });
 
-    const unsubscribeSchedules = subscribeStorage(REPORT_SCHEDULE_KEY, () => {
-
-      setReportSchedules(getReportSchedules());
-
-    });
 
     const unsubscribeTemplates = subscribeStorage(KPI_REPORT_TEMPLATES_KEY, () => {
 
@@ -5363,7 +4888,6 @@ const [detailPageSizeCustomInput, setDetailPageSizeCustomInput] = useState(() =>
 
       unsubscribeAdjustments();
 
-      unsubscribeSchedules();
 
       unsubscribeTemplates();
 
@@ -5571,29 +5095,6 @@ const [detailPageSizeCustomInput, setDetailPageSizeCustomInput] = useState(() =>
 
 
 
-  const nextScheduleRun = useMemo(() => {
-
-    const activeSchedules = (reportSchedules || []).filter((item) => item && item.active);
-
-    const sorted = activeSchedules
-
-      .slice()
-
-      .filter((item) => item.nextRun)
-
-      .sort((a, b) => {
-
-        const dateA = new Date(a.nextRun || 0).getTime();
-
-        const dateB = new Date(b.nextRun || 0).getTime();
-
-        return dateA - dateB;
-
-      });
-
-    return sorted[0] || null;
-
-  }, [reportSchedules]);
 
 
 
@@ -6305,180 +5806,6 @@ const [detailPageSizeCustomInput, setDetailPageSizeCustomInput] = useState(() =>
 
   }, [report.rows]);
 
-
-
-  const activeLeaderboardPeriod = useMemo(() => {
-
-    if (!companyLeaderboard.length) {
-
-      return null;
-
-    }
-
-    return companyLeaderboard.find((item) => item.key === topCompanyPeriod) || companyLeaderboard[0];
-
-  }, [companyLeaderboard, topCompanyPeriod]);
-
-
-
-  const schedulePreviewMetrics = useMemo(() => {
-
-    const totalDecls = Number(summary?.decls || 0);
-
-    const importDecls = Number(summary?.import || 0);
-
-    const exportDecls = Number(summary?.export || 0);
-
-    const totalKpi = Number(summary?.kpi || 0);
-
-    const companyCount = Number(summary?.companyCount || 0);
-
-    const coCount = Number(summary?.co || 0);
-
-    const licenseCount = Number(summary?.licenses || 0);
-
-    const adjustmentPoints = Number(adjustmentsReport.totalPoints || 0);
-
-    return [
-
-      {
-
-        key: "decls",
-
-        label: "Tờ khai hợp lệ",
-
-        value: formatInt(totalDecls),
-
-        note: `Nhập: ${formatInt(importDecls)} • Xuất: ${formatInt(exportDecls)}`,
-
-      },
-
-      {
-
-        key: "kpi",
-
-        label: "Điểm KPI tổng",
-
-        value: formatDecimal(totalKpi),
-
-        note:
-
-          Math.abs(adjustmentPoints) > 0
-
-            ? `Điều chỉnh: ${formatDecimal(adjustmentPoints)} điểm`
-
-            : "Không có điều chỉnh bổ sung",
-
-      },
-
-      {
-
-        key: "companies",
-
-        label: "Doanh nghiệp được theo dõi",
-
-        value: formatInt(companyCount),
-
-        note: `${formatInt(coCount)} tờ khai C/O • ${formatInt(licenseCount)} giấy phép`,
-
-      },
-
-    ];
-
-  }, [
-
-    summary?.decls,
-
-    summary?.import,
-
-    summary?.export,
-
-    summary?.kpi,
-
-    summary?.companyCount,
-
-    summary?.co,
-
-    summary?.licenses,
-
-    adjustmentsReport.totalPoints,
-
-  ]);
-
-
-
-  const schedulePreviewTopStaff = useMemo(() => {
-
-    return topStaffByKpi.slice(0, 3).map((item, index) => ({
-
-      key: item.key || `${item.name || "staff"}-${index}`,
-
-      name: item.name || "Chưa gán",
-
-      team:
-
-        item.teamLabel && item.teamLabel !== "Chưa gán tổ đội"
-
-          ? item.teamLabel
-
-          : "",
-
-      kpi: formatDecimal(Number(item?.stats?.kpi || 0)),
-
-      decls: formatInt(Number(item?.stats?.decls || 0)),
-
-    }));
-
-  }, [topStaffByKpi]);
-
-
-
-  const schedulePreviewTopTeams = useMemo(() => {
-
-    const sorted = sortStatsCollection(report.teams.list, "kpi", (item) => item.name || "");
-
-    return sorted.slice(0, 3).map((item, index) => ({
-
-      key: item.key || `${item.name || "team"}-${index}`,
-
-      name: item.name || "Chưa gán tổ đội",
-
-      kpi: formatDecimal(Number(item?.stats?.kpi || 0)),
-
-      decls: formatInt(Number(item?.stats?.decls || 0)),
-
-    }));
-
-  }, [report.teams.list]);
-
-
-
-  const schedulePreviewCompanies = useMemo(() => {
-
-    const period = activeLeaderboardPeriod;
-
-    if (!period || !Array.isArray(period.topCompanies)) {
-
-      return [];
-
-    }
-
-    return period.topCompanies.slice(0, 3).map((item, index) => ({
-
-      key: item.key || `${item.mst || item.cong_ty || "company"}-${index}`,
-
-      label: item.cong_ty || item.mst || "Không xác định",
-
-      decls: formatInt(Number(item?.decls || 0)),
-
-      share: Math.round(Number(item?.share || 0) * 1000) / 10,
-
-    }));
-
-  }, [activeLeaderboardPeriod]);
-
-
-
   const overviewAlerts = useMemo(() => {
 
     const alerts = [];
@@ -6621,103 +5948,17 @@ const [detailPageSizeCustomInput, setDetailPageSizeCustomInput] = useState(() =>
 
   }, [trendSeries, trendComparison, summary?.kpi, adjustmentsReport.totalPoints]);
 
+  const activeLeaderboardPeriod = useMemo(() => {
 
+    if (!companyLeaderboard.length) {
 
-  const schedulePreviewTimeline = useMemo(() => {
+      return null;
 
-    const now = new Date();
+    }
 
-    return reportSchedules
+    return companyLeaderboard.find((item) => item.key === topCompanyPeriod) || companyLeaderboard[0];
 
-      .map((schedule) => {
-
-        if (!schedule || schedule.active === false) {
-
-          return null;
-
-        }
-
-        const nextRun = schedule.nextRun || calculateNextReportScheduleRun(schedule);
-
-        if (!nextRun) {
-
-          return null;
-
-        }
-
-        const timestamp = Date.parse(nextRun);
-
-        if (Number.isNaN(timestamp)) {
-
-          return null;
-
-        }
-
-        const formats = Array.isArray(schedule.formats) ? schedule.formats : [];
-
-        const emailRecipients = Array.isArray(schedule.emailRecipients)
-
-          ? schedule.emailRecipients
-
-          : Array.isArray(schedule.recipients)
-
-          ? schedule.recipients
-
-          : [];
-
-        const chatRecipients = Array.isArray(schedule.chatRecipients) ? schedule.chatRecipients : [];
-
-        const channels = Array.isArray(schedule.channels)
-
-          ? schedule.channels.filter((item) => item === "email" || item === "chat")
-
-          : [];
-
-        const channelStatuses = summarizeScheduleChannelStatus(schedule);
-
-        return {
-
-          id: schedule.id || `schedule-${timestamp}`,
-
-          name: schedule.name || "Lịch gửi",
-
-          frequencyLabel: describeScheduleFrequency(schedule),
-
-          nextRun,
-
-          nextRunLabel: formatScheduleNextRunLabel(nextRun),
-
-          countdownLabel: formatScheduleCountdown(nextRun, now),
-
-          formatLabel: formats.length ? formats.map((item) => item.toUpperCase()).join(", ") : "EXCEL",
-
-          recipientsLabel: emailRecipients.length ? emailRecipients.join(", ") : "—",
-
-          recipientsByChannel: {
-
-            email: emailRecipients.length ? emailRecipients.join(", ") : "",
-
-            chat: chatRecipients.length ? chatRecipients.join(", ") : "",
-
-          },
-
-          channels,
-
-          channelStatuses,
-
-          timestamp,
-
-        };
-
-      })
-
-      .filter(Boolean)
-
-      .sort((a, b) => a.timestamp - b.timestamp);
-
-  }, [reportSchedules]);
-
-
+  }, [companyLeaderboard, topCompanyPeriod]);
 
   const staffOptions = useMemo(() => {
 
@@ -6733,19 +5974,19 @@ const [detailPageSizeCustomInput, setDetailPageSizeCustomInput] = useState(() =>
 
         value: item.key,
 
-        label: item.teamLabel && item.teamLabel !== "Chưa gán tổ đội"
+        label:
 
-          ? `${item.name} — ${item.teamLabel}`
+          item.teamLabel && item.teamLabel !== "Chưa gán tổ đội"
 
-          : item.name,
+            ? `${item.name} — ${item.teamLabel}`
+
+            : item.name,
 
       }))
 
     );
 
   }, [report.staff.list]);
-
-
 
   const teamOptions = useMemo(() => {
 
@@ -6763,8 +6004,6 @@ const [detailPageSizeCustomInput, setDetailPageSizeCustomInput] = useState(() =>
 
   }, [report.teams.list]);
 
-
-
   const filteredStaffList = sortedStaffList;
 
   const filteredTeamList = sortedTeamList;
@@ -6773,477 +6012,93 @@ const [detailPageSizeCustomInput, setDetailPageSizeCustomInput] = useState(() =>
 
   const filteredCompanySummaryTeam = companySummaryAllTeams;
 
+  const handleDetailPageSizeChange = (event) => {
 
+    const raw = event?.target?.value;
 
-  useEffect(() => {
+    if (raw === "custom") {
 
-    if (!companyLeaderboard.length) {
+      setDetailPageSizeMode("custom");
 
-      if (topCompanyPeriod) {
+      setDetailPageSizeCustomInput((prev) => {
 
-        setTopCompanyPeriod("");
+        if (prev && Number(prev) > 0) {
 
-      }
+          return prev;
 
-      return;
+        }
 
-    }
+        return String(detailPageSize);
 
-    const exists = companyLeaderboard.some((item) => item.key === topCompanyPeriod);
-
-    if (!exists) {
-
-      const fallbackKey = companyLeaderboard[0]?.key || "";
-
-      if (fallbackKey && fallbackKey !== topCompanyPeriod) {
-
-        setTopCompanyPeriod(fallbackKey);
-
-      }
-
-    }
-
-  }, [companyLeaderboard, topCompanyPeriod]);
-
-  useEffect(() => {
-
-    if (selectedStaff !== "all" || staffViewMode !== "detail") {
-
-      if (staffDetailPage !== 0) {
-
-        setStaffDetailPage(0);
-
-      }
+      });
 
       return;
 
     }
 
-    const totalPages = Math.max(1, Math.ceil(filteredStaffList.length / detailPageSize)) || 1;
+    const numeric = Number(raw);
 
-    if (staffDetailPage > totalPages - 1) {
-
-      setStaffDetailPage(totalPages - 1);
-
-    }
-
-  }, [
-
-    selectedStaff,
-
-    staffViewMode,
-
-    filteredStaffList.length,
-
-    detailPageSize,
-
-    staffDetailPage,
-
-  ]);
-
-
-
-  useEffect(() => {
-
-    if (selectedTeam !== "all" || teamViewMode !== "detail") {
-
-      if (teamDetailPage !== 0) {
-
-        setTeamDetailPage(0);
-
-      }
+    if (!Number.isFinite(numeric) || numeric <= 0) {
 
       return;
 
     }
 
-    const totalPages = Math.max(1, Math.ceil(filteredTeamList.length / detailPageSize)) || 1;
+    const normalized = sanitizeDetailPageSize(numeric);
 
-    if (teamDetailPage > totalPages - 1) {
-
-      setTeamDetailPage(totalPages - 1);
-
-    }
-
-  }, [
-
-    selectedTeam,
-
-    teamViewMode,
-
-    filteredTeamList.length,
-
-    detailPageSize,
-
-    teamDetailPage,
-
-  ]);
-
-
-
-  const activeStaff = selectedStaff !== "all"
-
-    ? report.staff.byKey.get(selectedStaff)
-
-    : null;
-
-  const activeTeam = selectedTeam !== "all"
-
-    ? report.teams.byKey.get(selectedTeam)
-
-    : null;
-
-
-
-  const handleQuickRangeChange = (value) => {
-
-    setQuickRange(value);
-
-    if (value === "custom") return;
-
-    const range = computeQuickRange(value);
-
-    setFrom(range.from);
-
-    setTo(range.to);
-
-  };
-
-  const handleFromChange = (value) => {
-
-    setFrom(value);
-
-    setQuickRange("custom");
-
-  };
-
-
-
-  const handleToChange = (value) => {
-
-    setTo(value);
-
-    setQuickRange("custom");
-
-  };
-
-
-
-  const filterSummaryLabel = useMemo(() => {
-
-    const formattedFrom = formatDisplayDate(from);
-
-    const formattedTo = formatDisplayDate(to);
-
-    if (formattedFrom && formattedTo) {
-
-      if (formattedFrom === formattedTo) {
-
-        return `Kỳ: ${formattedFrom}`;
-
-      }
-
-      return `Kỳ: ${formattedFrom} → ${formattedTo}`;
-
-    }
-
-    if (formattedFrom) {
-
-      return `Từ ${formattedFrom}`;
-
-    }
-
-    if (formattedTo) {
-
-      return `Đến ${formattedTo}`;
-
-    }
-
-    return "";
-
-  }, [from, to]);
-
-
-
-const handleDetailPageSizeChange = (event) => {
-
-  const raw = event?.target?.value;
-
-  if (raw === "custom") {
-
-    setDetailPageSizeMode("custom");
-
-    setDetailPageSizeCustomInput((prev) => {
-
-      if (prev && Number(prev) > 0) {
-
-        return prev;
-
-      }
-
-      return String(detailPageSize);
-
-    });
-
-    return;
-
-  }
-
-  const numeric = Number(raw);
-
-  if (!Number.isFinite(numeric) || numeric <= 0) {
-
-    return;
-
-  }
-
-  const normalized = sanitizeDetailPageSize(numeric);
-
-  setDetailPageSizeMode("preset");
-
-  setDetailPageSize(normalized);
-
-  setDetailPageSizeCustomInput("");
-
-  setStaffDetailPage(0);
-
-  setTeamDetailPage(0);
-
-};
-
-
-
-const handleDetailPageSizeCustomInputChange = (event) => {
-
-  const raw = event?.target?.value ?? "";
-
-  setDetailPageSizeMode("custom");
-
-  if (!raw.trim()) {
-
-    setDetailPageSizeCustomInput("");
-
-    return;
-
-  }
-
-  const numeric = Number(raw);
-
-  if (!Number.isFinite(numeric) || numeric <= 0) {
-
-    setDetailPageSizeCustomInput(raw);
-
-    return;
-
-  }
-
-  const normalized = sanitizeDetailPageSize(numeric);
-
-  const normalizedText = String(normalized);
-
-  setDetailPageSizeCustomInput(normalizedText);
-
-  if (normalized !== detailPageSize) {
+    setDetailPageSizeMode("preset");
 
     setDetailPageSize(normalized);
+
+    setDetailPageSizeCustomInput("");
 
     setStaffDetailPage(0);
 
     setTeamDetailPage(0);
 
-  }
-
-};
-
-
-
-  const handleScheduleFieldChange = (field, value) => {
-
-    setScheduleDraft((prev) => ({ ...prev, [field]: value }));
-
   };
 
+  const handleDetailPageSizeCustomInputChange = (event) => {
 
+    const raw = event?.target?.value ?? "";
 
-  const handleToggleScheduleFormat = (format) => {
+    setDetailPageSizeMode("custom");
 
-    setScheduleDraft((prev) => {
+    if (!raw.trim()) {
 
-      const current = Array.isArray(prev.formats) ? [...prev.formats] : [];
-
-      const index = current.indexOf(format);
-
-      if (index >= 0) {
-
-        current.splice(index, 1);
-
-      } else {
-
-        current.push(format);
-
-      }
-
-      if (!current.length) {
-
-        current.push(format);
-
-      }
-
-      return { ...prev, formats: current };
-
-    });
-
-  };
-
-
-
-  const handleToggleScheduleChannel = (channel) => {
-
-    setScheduleDraft((prev) => {
-
-      const allowed = new Set(SCHEDULE_CHANNEL_OPTIONS.map((item) => item.value));
-
-      const current = Array.isArray(prev.channels)
-
-        ? prev.channels.filter((item) => allowed.has(item))
-
-        : [];
-
-      const index = current.indexOf(channel);
-
-      if (index >= 0) {
-
-        if (current.length > 1) {
-
-          current.splice(index, 1);
-
-        }
-
-      } else {
-
-        current.push(channel);
-
-      }
-
-      if (!current.length) {
-
-        current.push("email");
-
-      }
-
-      return { ...prev, channels: current };
-
-    });
-
-  };
-
-
-
-  const handleEditSchedule = (schedule) => {
-
-    setEditingScheduleId(schedule?.id || "");
-
-    setScheduleDraft(createScheduleDraft(schedule));
-
-  };
-
-
-
-  const handleResetScheduleForm = () => {
-
-    setEditingScheduleId("");
-
-    setScheduleDraft(createScheduleDraft());
-
-  };
-
-
-
-  const handleSaveSchedule = (event) => {
-
-    event?.preventDefault?.();
-
-    const payload = toSchedulePayload({ ...scheduleDraft, id: editingScheduleId });
-
-    if (!payload.name || !payload.name.trim()) {
-
-      toast.warning?.("Đặt tên cho lịch gửi báo cáo để dễ quản lý.");
+      setDetailPageSizeCustomInput("");
 
       return;
 
     }
 
-    if (!String(payload.recipients || "").trim()) {
+    const numeric = Number(raw);
 
-      toast.warning?.("Nhập danh sách email nhận báo cáo (ngăn cách bởi dấu phẩy hoặc xuống dòng).");
+    if (!Number.isFinite(numeric) || numeric <= 0) {
 
-      return;
-
-    }
-
-    try {
-
-      const saved = saveReportSchedule(payload, { actor: "ui.report" });
-
-      setReportSchedules(getReportSchedules());
-
-      setEditingScheduleId(saved.id);
-
-      setScheduleDraft(createScheduleDraft(saved));
-
-      toast.success?.("Đã lưu lịch gửi báo cáo KPI.");
-
-    } catch (error) {
-
-      console.error(error);
-
-      toast.error?.(error?.message || "Không thể lưu lịch gửi báo cáo.");
-
-    }
-
-  };
-
-
-
-  const handleDeleteSchedule = (schedule) => {
-
-    if (!schedule?.id) return;
-
-    const confirmed = window.confirm(
-
-      `Xoá lịch gửi "${schedule.name || "Báo cáo KPI"}"?`
-
-    );
-
-    if (!confirmed) {
+      setDetailPageSizeCustomInput(raw);
 
       return;
 
     }
 
-    const ok = deleteReportSchedule(schedule.id, { actor: "ui.report" });
+    const normalized = sanitizeDetailPageSize(numeric);
 
-    if (ok) {
+    const normalizedText = String(normalized);
 
-      setReportSchedules(getReportSchedules());
+    setDetailPageSizeCustomInput(normalizedText);
 
-      if (editingScheduleId === schedule.id) {
+    if (normalized !== detailPageSize) {
 
-        handleResetScheduleForm();
+      setDetailPageSize(normalized);
 
-      }
+      setStaffDetailPage(0);
 
-      toast.success?.("Đã xoá lịch gửi báo cáo.");
-
-    } else {
-
-      toast.error?.("Không thể xoá lịch gửi báo cáo đã chọn.");
+      setTeamDetailPage(0);
 
     }
 
   };
-
-
 
   const goToAdjustmentPage = (target) => {
 
@@ -7263,19 +6118,21 @@ const handleDetailPageSizeCustomInputChange = (event) => {
 
   };
 
-
-
   const handleAdjustmentPrev = () => {
 
     goToAdjustmentPage(currentAdjustmentPage - 1);
 
   };
 
-
-
   const handleAdjustmentNext = () => {
 
     goToAdjustmentPage(currentAdjustmentPage + 1);
+
+  };
+
+  const handleAdjustmentPageSizeChange = (value) => {
+
+    setAdjustmentPageSize(sanitizeAdjustmentPageSize(value));
 
   };
 
@@ -7429,6 +6286,83 @@ const handleDetailPageSizeCustomInputChange = (event) => {
 
   };
 
+
+
+  const activeStaff = selectedStaff !== "all"
+
+    ? report.staff.byKey.get(selectedStaff)
+
+    : null;
+
+  const activeTeam = selectedTeam !== "all"
+
+    ? report.teams.byKey.get(selectedTeam)
+
+    : null;
+
+  const handleQuickRangeChange = (value) => {
+
+    setQuickRange(value);
+
+    if (value === "custom") return;
+
+    const range = computeQuickRange(value);
+
+    setFrom(range.from);
+
+    setTo(range.to);
+
+  };
+
+  const handleFromChange = (value) => {
+
+    setFrom(value);
+
+    setQuickRange("custom");
+
+  };
+
+  const handleToChange = (value) => {
+
+    setTo(value);
+
+    setQuickRange("custom");
+
+  };
+
+  const filterSummaryLabel = useMemo(() => {
+
+    const formattedFrom = formatDisplayDate(from);
+
+    const formattedTo = formatDisplayDate(to);
+
+    if (formattedFrom && formattedTo) {
+
+      if (formattedFrom === formattedTo) {
+
+        return `Kỳ: ${formattedFrom}`;
+
+      }
+
+      return `Kỳ: ${formattedFrom} → ${formattedTo}`;
+
+    }
+
+    if (formattedFrom) {
+
+      return `Từ ${formattedFrom}`;
+
+    }
+
+    if (formattedTo) {
+
+      return `Đến ${formattedTo}`;
+
+    }
+
+    return "";
+
+  }, [from, to]);
 
 
   const renderStaffSection = () => {
@@ -8641,1038 +7575,6 @@ const handleDetailPageSizeCustomInputChange = (event) => {
 
 
 
-      {isAdmin ? (
-
-        <div className="ds-card space-y-4 p-4 print:hidden">
-
-          <div className="flex flex-wrap items-center justify-between gap-3">
-
-            <div>
-
-              <h3 className="text-base font-semibold text-[color:var(--ds-text-primary)]">
-
-                Lập lịch gửi báo cáo KPI
-
-              </h3>
-
-              <p className="text-sm text-[color:var(--ds-text-secondary)]">
-
-                Thiết lập gửi tự động file Excel/PDF theo tuần hoặc tháng tới danh sách email mong muốn.
-
-              </p>
-
-            </div>
-
-            <div className="flex items-center gap-3 text-xs text-[color:var(--ds-text-muted)]">
-
-              <span>
-
-                {nextScheduleRun
-
-                  ? `Lịch sắp chạy: ${formatScheduleNextRunLabel(nextScheduleRun.nextRun)}`
-
-                  : "Chưa có lịch chạy tự động"}
-
-              </span>
-
-              <button
-
-                type="button"
-
-                onClick={() => setScheduleCollapsed((value) => !value)}
-
-                className="inline-flex items-center gap-1 rounded border border-[color:var(--ds-border-subtle)] px-2 py-1 font-semibold text-[color:var(--ds-text-secondary)] transition-colors hover:border-[color:var(--ds-border-strong)] hover:text-[color:var(--ds-text-primary)]"
-
-              >
-
-                {scheduleCollapsed ? "Mở rộng" : "Thu gọn"}
-
-              </button>
-
-            </div>
-
-          </div>
-
-
-
-          {!scheduleCollapsed ? (
-
-            <>
-
-              <form className="grid gap-3 md:grid-cols-2 xl:grid-cols-4" onSubmit={handleSaveSchedule}>
-
-                <div className="flex flex-col gap-1">
-
-                  <label className="text-xs font-semibold uppercase text-[color:var(--ds-text-secondary)]" htmlFor="schedule-name">
-
-                    Tên lịch gửi
-
-                  </label>
-
-                  <input
-
-                    id="schedule-name"
-
-                    type="text"
-
-                    value={scheduleDraft.name}
-
-                    onChange={(event) => handleScheduleFieldChange("name", event.target.value)}
-
-                    placeholder="Báo cáo KPI tuần"
-
-                    className="rounded border border-[color:var(--ds-border-subtle)] bg-white px-3 py-2 text-sm text-[color:var(--ds-text-primary)] shadow-sm focus:border-[color:var(--ds-border-strong)] focus:outline-none"
-
-                  />
-
-                </div>
-
-                <div className="flex flex-col gap-1">
-
-                  <span className="text-xs font-semibold uppercase text-[color:var(--ds-text-secondary)]">
-
-                    Kênh gửi báo cáo
-
-                  </span>
-
-                  <div className="flex flex-wrap gap-2">
-
-                    {SCHEDULE_CHANNEL_OPTIONS.map((option) => {
-
-                      const checked = Array.isArray(scheduleDraft.channels)
-
-                        ? scheduleDraft.channels.includes(option.value)
-
-                        : option.value === "email";
-
-                      return (
-
-                        <label
-
-                          key={option.value}
-
-                          className={`inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs font-semibold transition ${
-
-                            checked
-
-                              ? 'border-[color:var(--ds-accent)] bg-[color:var(--ds-accent)]/10 text-[color:var(--ds-accent-strong)]'
-
-                              : 'border-[color:var(--ds-border-subtle)] text-[color:var(--ds-text-secondary)] hover:border-[color:var(--ds-border-strong)]'
-
-                          }`}
-
-                        >
-
-                          <input
-
-                            type="checkbox"
-
-                            checked={checked}
-
-                            onChange={() => handleToggleScheduleChannel(option.value)}
-
-                          />
-
-                          <span>{option.label}</span>
-
-                        </label>
-
-                      );
-
-                    })}
-
-                  </div>
-
-                  <p className="text-[11px] text-[color:var(--ds-text-muted)]">
-
-                    Bật kênh phù hợp và nhập danh sách người nhận tương ứng bên dưới.
-
-                  </p>
-
-                </div>
-
-                <div className="flex flex-col gap-1">
-
-                  <label className="text-xs font-semibold uppercase text-[color:var(--ds-text-secondary)]" htmlFor="schedule-frequency">
-
-                    Chu kỳ gửi
-
-                  </label>
-
-                  <select
-
-                    id="schedule-frequency"
-
-                    value={scheduleDraft.frequency}
-
-                    onChange={(event) => handleScheduleFieldChange("frequency", event.target.value)}
-
-                    className="rounded border border-[color:var(--ds-border-subtle)] bg-white px-3 py-2 text-sm text-[color:var(--ds-text-primary)] shadow-sm focus:border-[color:var(--ds-border-strong)] focus:outline-none"
-
-                  >
-
-                    {SCHEDULE_FREQUENCY_OPTIONS.map((option) => (
-
-                      <option key={option.value} value={option.value}>
-
-                        {option.label}
-
-                      </option>
-
-                    ))}
-
-                  </select>
-
-                  {scheduleDraft.frequency === "weekly" ? (
-
-                    <select
-
-                      value={scheduleDraft.dayOfWeek}
-
-                      onChange={(event) => handleScheduleFieldChange("dayOfWeek", Number(event.target.value))}
-
-                      className="rounded border border-[color:var(--ds-border-subtle)] bg-white px-3 py-2 text-sm text-[color:var(--ds-text-primary)] shadow-sm focus:border-[color:var(--ds-border-strong)] focus:outline-none"
-
-                    >
-
-                      {WEEKDAY_OPTIONS.map((option) => (
-
-                        <option key={option.value} value={option.value}>
-
-                          {option.label}
-
-                        </option>
-
-                      ))}
-
-                    </select>
-
-                  ) : (
-
-                    <div className="flex items-center gap-2">
-
-                      <input
-
-                        type="number"
-
-                        min={1}
-
-                        max={31}
-
-                        value={scheduleDraft.dayOfMonth}
-
-                        onChange={(event) => handleScheduleFieldChange("dayOfMonth", Number(event.target.value))}
-
-                        className="w-20 rounded border border-[color:var(--ds-border-subtle)] bg-white px-2 py-2 text-sm text-[color:var(--ds-text-primary)] focus:border-[color:var(--ds-border-strong)] focus:outline-none"
-
-                      />
-
-                      <span className="text-xs text-[color:var(--ds-text-secondary)]">Ngày trong tháng</span>
-
-                    </div>
-
-                  )}
-
-                </div>
-
-                <div className="flex flex-col gap-1">
-
-                  <label className="text-xs font-semibold uppercase text-[color:var(--ds-text-secondary)]" htmlFor="schedule-time">
-
-                    Thời gian gửi
-
-                  </label>
-
-                  <input
-
-                    id="schedule-time"
-
-                    type="time"
-
-                    value={scheduleDraft.time}
-
-                    onChange={(event) => handleScheduleFieldChange("time", event.target.value)}
-
-                    className="rounded border border-[color:var(--ds-border-subtle)] bg-white px-3 py-2 text-sm text-[color:var(--ds-text-primary)] shadow-sm focus:border-[color:var(--ds-border-strong)] focus:outline-none"
-
-                  />
-
-                  <div className="flex flex-wrap items-center gap-3 pt-1 text-xs text-[color:var(--ds-text-secondary)]">
-
-                    {SCHEDULE_FORMAT_OPTIONS.map((option) => {
-
-                      const checked = Array.isArray(scheduleDraft.formats)
-
-                        ? scheduleDraft.formats.includes(option.value)
-
-                        : option.value === "excel";
-
-                      return (
-
-                        <label key={option.value} className="inline-flex items-center gap-1">
-
-                          <input
-
-                            type="checkbox"
-
-                            checked={checked}
-
-                            onChange={() => handleToggleScheduleFormat(option.value)}
-
-                          />
-
-                          <span>{option.label}</span>
-
-                        </label>
-
-                      );
-
-                    })}
-
-                  </div>
-
-                  <label className="mt-1 inline-flex items-center gap-2 text-xs text-[color:var(--ds-text-secondary)]">
-
-                    <input
-
-                      type="checkbox"
-
-                      checked={Boolean(scheduleDraft.active)}
-
-                      onChange={(event) => handleScheduleFieldChange("active", event.target.checked)}
-
-                    />
-
-                    Kích hoạt lịch gửi này
-
-                  </label>
-
-                </div>
-
-                <div className="flex flex-col gap-1 md:col-span-2 xl:col-span-2">
-
-                  <label className="text-xs font-semibold uppercase text-[color:var(--ds-text-secondary)]" htmlFor="schedule-recipients">
-
-                    Email nhận (phân tách bằng dấu phẩy)
-
-                  </label>
-
-                  <textarea
-
-                    id="schedule-recipients"
-
-                    rows={2}
-
-                    value={scheduleDraft.recipientsInput}
-
-                    onChange={(event) => handleScheduleFieldChange("recipientsInput", event.target.value)}
-
-                    placeholder="ceo@company.vn, kpi@company.vn"
-
-                    disabled={!Array.isArray(scheduleDraft.channels) || !scheduleDraft.channels.includes('email')}
-
-                    className="min-h-[60px] rounded border border-[color:var(--ds-border-subtle)] bg-white px-3 py-2 text-sm text-[color:var(--ds-text-primary)] shadow-sm focus:border-[color:var(--ds-border-strong)] focus:outline-none disabled:cursor-not-allowed disabled:bg-[color:var(--ds-surface-muted)] disabled:opacity-70"
-
-                  />
-
-                </div>
-
-                <div className="flex flex-col gap-1 md:col-span-2 xl:col-span-2">
-
-                  <label className="text-xs font-semibold uppercase text-[color:var(--ds-text-secondary)]" htmlFor="schedule-chat">
-
-                    Phòng chat nội bộ (phân tách bằng dấu phẩy)
-
-                  </label>
-
-                  <textarea
-
-                    id="schedule-chat"
-
-                    rows={2}
-
-                    value={scheduleDraft.chatRecipientsInput || ''}
-
-                    onChange={(event) => handleScheduleFieldChange("chatRecipientsInput", event.target.value)}
-
-                    placeholder="#kpi-alerts, nhom.kpi"
-
-                    disabled={!Array.isArray(scheduleDraft.channels) || !scheduleDraft.channels.includes('chat')}
-
-                    className="min-h-[60px] rounded border border-[color:var(--ds-border-subtle)] bg-white px-3 py-2 text-sm text-[color:var(--ds-text-primary)] shadow-sm focus:border-[color:var(--ds-border-strong)] focus:outline-none disabled:cursor-not-allowed disabled:bg-[color:var(--ds-surface-muted)] disabled:opacity-70"
-
-                  />
-
-                </div>
-
-                <div className="md:col-span-2 xl:col-span-4 flex flex-wrap items-center justify-end gap-2 pt-2">
-
-                  {editingScheduleId ? (
-
-                    <button
-
-                      type="button"
-
-                      onClick={handleResetScheduleForm}
-
-                      className="rounded border border-[color:var(--ds-border-subtle)] px-3 py-2 text-sm font-semibold text-[color:var(--ds-text-secondary)] transition-colors hover:border-[color:var(--ds-border-strong)]"
-
-                    >
-
-                      Huỷ chỉnh sửa
-
-                    </button>
-
-                  ) : null}
-
-                  <button
-
-                    type="submit"
-
-                    className="rounded bg-[color:var(--ds-accent)] px-3 py-2 text-sm font-semibold text-[color:var(--ds-text-inverse)] shadow-sm transition-colors hover:bg-[color:var(--ds-accent-strong)]"
-
-                  >
-
-                    {editingScheduleId ? "Cập nhật lịch gửi" : "Thêm lịch gửi"}
-
-                  </button>
-
-                </div>
-
-              </form>
-
-
-
-              <div className="border-t border-[color:var(--ds-border-subtle)] pt-4">
-
-                {reportSchedules.length ? (
-
-                  <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-
-                    {reportSchedules.map((schedule) => {
-
-                      const nextLabel = formatScheduleNextRunLabel(
-
-                        schedule.nextRun || calculateNextReportScheduleRun(schedule) || ""
-
-                      );
-
-                      const formatLabel = Array.isArray(schedule.formats)
-
-                        ? schedule.formats.map((item) => item.toUpperCase()).join(", ")
-
-                        : "EXCEL";
-
-                      const channels = Array.isArray(schedule.channels)
-
-                        ? schedule.channels.filter((item) => item === "email" || item === "chat")
-
-                        : [];
-
-                      const channelStatuses = summarizeScheduleChannelStatus(schedule);
-
-                      const recipientsByChannel = {
-
-                        email: Array.isArray(schedule.emailRecipients)
-
-                          ? schedule.emailRecipients.join(", ")
-
-                          : Array.isArray(schedule.recipients)
-
-                          ? schedule.recipients.join(", ")
-
-                          : "",
-
-                        chat: Array.isArray(schedule.chatRecipients)
-
-                          ? schedule.chatRecipients.join(", ")
-
-                          : "",
-
-                      };
-
-                      return (
-
-                        <div
-
-                          key={schedule.id}
-
-                          className="rounded-lg border border-[color:var(--ds-border-subtle)] bg-white p-3 text-sm text-[color:var(--ds-text-secondary)] shadow-sm"
-
-                        >
-
-                          <div className="flex items-start justify-between gap-2">
-
-                            <div>
-
-                              <div className="text-sm font-semibold text-[color:var(--ds-text-primary)]">
-
-                                {schedule.name || "Lịch gửi"}
-
-                              </div>
-
-                              <div className="text-xs text-[color:var(--ds-text-muted)]">
-
-                                {describeScheduleFrequency(schedule)}
-
-                              </div>
-
-                            </div>
-
-                            <span
-
-                              className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
-
-                                schedule.active
-
-                                  ? 'bg-emerald-500/10 text-emerald-600'
-
-                                  : 'bg-gray-200 text-gray-500'
-
-                              }`}
-
-                            >
-
-                              {schedule.active ? 'Đang bật' : 'Tạm tắt'}
-
-                            </span>
-
-                          </div>
-
-                          <div className="mt-2 text-xs text-[color:var(--ds-text-secondary)]">
-
-                            <div>Lần tiếp theo: {nextLabel}</div>
-
-                            <div>Định dạng: {formatLabel}</div>
-
-                          </div>
-
-                          <div className="mt-2 space-y-1 text-xs text-[color:var(--ds-text-secondary)]">
-
-                            {channels.length ? (
-
-                              channels.map((channel) => {
-
-                                const status = channelStatuses[channel] || {
-
-                                  status: "pending",
-
-                                  timestamp: "",
-
-                                  detail: "",
-
-                                };
-
-                                const label = SCHEDULE_CHANNEL_LABELS[channel] || channel;
-
-                                const recipientsLabel =
-
-                                  channel === "chat"
-
-                                    ? recipientsByChannel.chat
-
-                                    : recipientsByChannel.email;
-
-                                return (
-
-                                  <div
-
-                                    key={channel}
-
-                                    className="rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-muted)] px-2 py-1"
-
-                                  >
-
-                                    <div className="flex flex-wrap items-center gap-2">
-
-                                      <span className="font-semibold text-[color:var(--ds-text-primary)]">{label}</span>
-
-                                      <span
-
-                                        className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ${getDeliveryStatusBadgeClass(status.status)}`}
-
-                                      >
-
-                                        <span>{getDeliveryStatusLabel(status.status)}</span>
-
-                                        <span className="text-[9px] opacity-80">
-
-                                          {formatDeliveryTimestampLabel(status.timestamp)}
-
-                                        </span>
-
-                                      </span>
-
-                                    </div>
-
-                                    <div className="mt-1 truncate text-[11px] text-[color:var(--ds-text-secondary)]">
-
-                                      {recipientsLabel || '—'}
-
-                                    </div>
-
-                                    {status.detail ? (
-
-                                      <div className="mt-1 text-[10px] text-[color:var(--ds-text-muted)]">
-
-                                        {status.detail}
-
-                                      </div>
-
-                                    ) : null}
-
-                                  </div>
-
-                                );
-
-                              })
-
-                            ) : (
-
-                              <div className="rounded border border-dashed border-[color:var(--ds-border-subtle)] px-2 py-1 text-[color:var(--ds-text-muted)]">
-
-                                Chưa cấu hình kênh gửi.
-
-                              </div>
-
-                            )}
-
-                          </div>
-
-                          <div className="mt-3 flex items-center gap-2">
-
-                            <button
-
-                              type="button"
-
-                              onClick={() => handleEditSchedule(schedule)}
-
-                              className="rounded border border-[color:var(--ds-border-subtle)] px-2 py-1 text-xs font-semibold text-[color:var(--ds-text-secondary)] transition-colors hover:border-[color:var(--ds-border-strong)]"
-
-                            >
-
-                              Chỉnh sửa
-
-                            </button>
-
-                            <button
-
-                              type="button"
-
-                              onClick={() => handleDeleteSchedule(schedule)}
-
-                              className="rounded border border-rose-200 px-2 py-1 text-xs font-semibold text-rose-600 transition-colors hover:border-rose-400 hover:text-rose-700"
-
-                            >
-
-                              Xoá
-
-                            </button>
-
-                          </div>
-
-                        </div>
-
-                      );
-
-                    })}
-
-                  </div>
-
-                ) : (
-
-                  <p className="text-sm text-[color:var(--ds-text-muted)]">
-
-                    Chưa có lịch gửi báo cáo. Hãy thêm mới để tự động gửi KPI cho lãnh đạo.
-
-                  </p>
-
-                )}
-
-              </div>
-
-              <div className="border-t border-[color:var(--ds-border-subtle)] pt-4">
-
-                <div className="flex flex-wrap items-start justify-between gap-3">
-
-                  <div>
-
-                    <h4 className="text-sm font-semibold text-[color:var(--ds-text-primary)]">Xem trước nội dung gửi</h4>
-
-                    <p className="text-xs text-[color:var(--ds-text-muted)]">
-
-                      Dựa trên bộ lọc hiện tại và dữ liệu được áp dụng trong báo cáo.
-
-                    </p>
-
-                  </div>
-
-                  {activeLeaderboardPeriod?.label ? (
-
-                    <span className="text-xs text-[color:var(--ds-text-muted)]">
-
-                      Kỳ top doanh nghiệp: {activeLeaderboardPeriod.label}
-
-                    </span>
-
-                  ) : null}
-
-                </div>
-
-                <div className="mt-3 grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
-
-                  <div className="space-y-4 rounded-lg border border-[color:var(--ds-border-subtle)] bg-white p-3 text-sm text-[color:var(--ds-text-secondary)] shadow-sm">
-
-                    <div className="grid gap-3 sm:grid-cols-3">
-
-                      {schedulePreviewMetrics.map((metric) => (
-
-                        <div key={metric.key} className="rounded bg-[color:var(--ds-surface-muted)] p-3">
-
-                          <div className="text-[11px] font-semibold uppercase text-[color:var(--ds-text-muted)]">
-
-                            {metric.label}
-
-                          </div>
-
-                          <div className="mt-1 text-lg font-semibold text-[color:var(--ds-text-primary)]">
-
-                            {metric.value}
-
-                          </div>
-
-                          <div className="mt-1 text-[11px] text-[color:var(--ds-text-secondary)]">{metric.note}</div>
-
-                        </div>
-
-                      ))}
-
-                    </div>
-
-                    <div className="grid gap-4 md:grid-cols-2">
-
-                      <div>
-
-                        <div className="text-[11px] font-semibold uppercase text-[color:var(--ds-text-muted)]">
-
-                          Top nhân sự theo KPI
-
-                        </div>
-
-                        <ul className="mt-2 space-y-1">
-
-                          {schedulePreviewTopStaff.length ? (
-
-                            schedulePreviewTopStaff.map((item) => (
-
-                              <li
-
-                                key={item.key}
-
-                                className="flex items-center justify-between gap-2 rounded px-2 py-1 hover:bg-[color:var(--ds-surface-muted)]"
-
-                              >
-
-                                <span className="truncate text-[color:var(--ds-text-primary)]">
-
-                                  {item.name}
-
-                                  {item.team ? (
-
-                                    <span className="text-[color:var(--ds-text-secondary)]"> • {item.team}</span>
-
-                                  ) : null}
-
-                                </span>
-
-                                <span className="shrink-0 text-[11px] text-[color:var(--ds-text-secondary)]">
-
-                                  {item.kpi} KPI • {item.decls} tờ
-
-                                </span>
-
-                              </li>
-
-                            ))
-
-                          ) : (
-
-                            <li className="text-[color:var(--ds-text-muted)]">Chưa có dữ liệu KPI cho nhân sự.</li>
-
-                          )}
-
-                        </ul>
-
-                      </div>
-
-                      <div>
-
-                        <div className="text-[11px] font-semibold uppercase text-[color:var(--ds-text-muted)]">
-
-                          Top doanh nghiệp theo tờ khai
-
-                        </div>
-
-                        <ul className="mt-2 space-y-1">
-
-                          {schedulePreviewCompanies.length ? (
-
-                            schedulePreviewCompanies.map((item) => (
-
-                              <li
-
-                                key={item.key}
-
-                                className="flex items-center justify-between gap-2 rounded px-2 py-1 hover:bg-[color:var(--ds-surface-muted)]"
-
-                              >
-
-                                <span className="truncate text-[color:var(--ds-text-primary)]">{item.label}</span>
-
-                                <span className="shrink-0 text-[11px] text-[color:var(--ds-text-secondary)]">
-
-                                  {item.decls} tờ • {item.share}% tổng
-
-                                </span>
-
-                              </li>
-
-                            ))
-
-                          ) : (
-
-                            <li className="text-[color:var(--ds-text-muted)]">Chưa có dữ liệu xếp hạng doanh nghiệp.</li>
-
-                          )}
-
-                        </ul>
-
-                      </div>
-
-                    </div>
-
-                    <div>
-
-                      <div className="text-[11px] font-semibold uppercase text-[color:var(--ds-text-muted)]">
-
-                        Tổ đội nổi bật
-
-                      </div>
-
-                      <ul className="mt-2 space-y-1">
-
-                        {schedulePreviewTopTeams.length ? (
-
-                          schedulePreviewTopTeams.map((item) => (
-
-                            <li
-
-                              key={item.key}
-
-                              className="flex items-center justify-between gap-2 rounded px-2 py-1 hover:bg-[color:var(--ds-surface-muted)]"
-
-                            >
-
-                              <span className="truncate text-[color:var(--ds-text-primary)]">{item.name}</span>
-
-                              <span className="shrink-0 text-[11px] text-[color:var(--ds-text-secondary)]">
-
-                                {item.kpi} KPI • {item.decls} tờ
-
-                              </span>
-
-                            </li>
-
-                          ))
-
-                        ) : (
-
-                          <li className="text-[color:var(--ds-text-muted)]">Chưa có dữ liệu tổ đội.</li>
-
-                        )}
-
-                      </ul>
-
-                    </div>
-
-                  </div>
-
-                  <div className="space-y-3 rounded-lg border border-[color:var(--ds-border-subtle)] bg-white p-3 text-sm text-[color:var(--ds-text-secondary)] shadow-sm">
-
-                    <div className="flex items-center justify-between gap-2">
-
-                      <span className="text-sm font-semibold text-[color:var(--ds-text-primary)]">Lịch chạy kế tiếp</span>
-
-                      <span className="text-xs text-[color:var(--ds-text-muted)]">
-
-                        {schedulePreviewTimeline.length
-
-                          ? `${schedulePreviewTimeline.length} lịch đang bật`
-
-                          : "Chưa có lịch hoạt động"}
-
-                      </span>
-
-                    </div>
-
-                    <ul className="space-y-2">
-
-                      {schedulePreviewTimeline.length ? (
-
-                        schedulePreviewTimeline.map((item) => (
-
-                          <li
-
-                            key={item.id}
-
-                            className="rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-muted)] p-2"
-
-                          >
-
-                            <div className="flex items-start justify-between gap-2">
-
-                              <div>
-
-                                <div className="text-sm font-semibold text-[color:var(--ds-text-primary)]">{item.name}</div>
-
-                                <div className="text-[11px] text-[color:var(--ds-text-muted)]">{item.frequencyLabel}</div>
-
-                              </div>
-
-                              <span className="text-[11px] font-medium text-emerald-600">{item.countdownLabel}</span>
-
-                            </div>
-
-                            <div className="mt-1 text-[11px] text-[color:var(--ds-text-secondary)]">
-
-                              Tiếp theo: {item.nextRunLabel}
-
-                            </div>
-
-                            <div className="mt-1 text-[11px] text-[color:var(--ds-text-secondary)]">
-
-                              Định dạng: {item.formatLabel}
-
-                            </div>
-
-                            <div className="mt-1 space-y-1">
-
-                              {item.channels.length ? (
-
-                                item.channels.map((channel) => {
-
-                                  const status = item.channelStatuses[channel] || {
-
-                                    status: "pending",
-
-                                    timestamp: "",
-
-                                    detail: "",
-
-                                  };
-
-                                  const label = SCHEDULE_CHANNEL_LABELS[channel] || channel;
-
-                                  const recipientsLabel =
-
-                                    channel === "chat"
-
-                                      ? item.recipientsByChannel.chat
-
-                                      : item.recipientsByChannel.email;
-
-                                  return (
-
-                                    <div
-
-                                      key={channel}
-
-                                      className="flex flex-col gap-1 rounded border border-[color:var(--ds-border-subtle)] bg-white/70 px-2 py-1 text-[10px]"
-
-                                    >
-
-                                      <div className="flex flex-wrap items-center gap-2">
-
-                                        <span className="font-semibold text-[color:var(--ds-text-primary)]">{label}</span>
-
-                                        <span
-
-                                          className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-semibold ${getDeliveryStatusBadgeClass(status.status)}`}
-
-                                        >
-
-                                          <span>{getDeliveryStatusLabel(status.status)}</span>
-
-                                          <span className="text-[9px] opacity-80">
-
-                                            {formatDeliveryTimestampLabel(status.timestamp)}
-
-                                          </span>
-
-                                        </span>
-
-                                      </div>
-
-                                      <div className="text-[color:var(--ds-text-secondary)]">
-
-                                        {recipientsLabel || '—'}
-
-                                      </div>
-
-                                      {status.detail ? (
-
-                                        <div className="text-[color:var(--ds-text-muted)] opacity-80">{status.detail}</div>
-
-                                      ) : null}
-
-                                    </div>
-
-                                  );
-
-                                })
-
-                              ) : (
-
-                                <div className="rounded border border-dashed border-[color:var(--ds-border-subtle)] px-2 py-1 text-[10px] text-[color:var(--ds-text-muted)]">
-
-                                  Chưa cấu hình kênh.
-
-                                </div>
-
-                              )}
-
-                            </div>
-
-                          </li>
-
-                        ))
-
-                      ) : (
-
-                        <li className="rounded border border-dashed border-[color:var(--ds-border-subtle)] p-3 text-xs text-[color:var(--ds-text-muted)]">
-
-                          Thêm lịch gửi để theo dõi thời điểm chạy tiếp theo ngay tại đây.
-
-                        </li>
-
-                      )}
-
-                    </ul>
-
-                  </div>
-
-                </div>
-
-              </div>
-
-            </>
-
-          ) : null}
-
-        </div>
-
-      ) : null}
-
 
 
       <KpiOverviewSection
@@ -9697,484 +7599,26 @@ const handleDetailPageSizeCustomInputChange = (event) => {
         onTopStaffVisibleCountChange={setTopStaffVisibleCount}
         palette={chartPalette}
       >
-        <div className="ds-card space-y-4 p-4">
-
-            <div className="flex flex-wrap items-start justify-between gap-4">
-
-              <div className="space-y-2">
-
-                <h3 className="text-base font-semibold text-[color:var(--ds-text-primary)]">Điểm KPI +/- bổ sung</h3>
-
-                {adjustmentExpanded ? (
-
-                  <p className="text-sm text-[color:var(--ds-text-muted)]">
-
-                    Điểm cộng/trừ được duyệt sẽ được cộng trực tiếp vào KPI tháng tương ứng trong báo cáo.
-
-                  </p>
-
-                ) : (
-
-                  <p className="text-sm text-[color:var(--ds-text-muted)]">
-
-                    Tổng hợp nhanh số điểm cộng/trừ đã áp dụng trong kỳ. Nhấn “Mở rộng” để xem bảng chi tiết và thống kê.
-
-                  </p>
-
-                )}
-
-              </div>
-
-              <div className="flex flex-col items-end gap-2 text-sm text-right text-[color:var(--ds-text-secondary)]">
-
-                <div>Đã duyệt: {formatInt(adjustmentsReport.approvedCount || 0)} mục</div>
-
-                <div>Chờ duyệt: {formatInt(adjustmentsReport.pendingCount || 0)} mục</div>
-
-                {adjustmentsReport.rejectedCount ? (
-
-                  <div>Đã từ chối: {formatInt(adjustmentsReport.rejectedCount || 0)} mục</div>
-
-                ) : null}
-
-                <div className="mt-1 font-semibold text-emerald-600">
-
-                  Điểm đã áp dụng: {formatDecimal(adjustmentsReport.totalPoints || 0)}
-
-                </div>
-
-                <button
-
-                  type="button"
-
-                  onClick={() => setAdjustmentExpanded((value) => !value)}
-
-                  aria-expanded={adjustmentExpanded}
-
-                  className="inline-flex items-center gap-2 rounded border border-[color:var(--ds-border-subtle)] px-3 py-1 text-xs font-semibold text-[color:var(--ds-text-secondary)] transition-colors hover:border-[color:var(--ds-border-strong)] hover:text-[color:var(--ds-text-primary)]"
-
-                >
-
-                  {adjustmentExpanded ? "Thu gọn" : "Mở rộng"}
-
-                </button>
-
-              </div>
-
-            </div>
-
-
-
-            {adjustmentExpanded ? (
-
-              <>
-
-                <div className="grid gap-4 lg:grid-cols-3">
-
-                  <div className="lg:col-span-2">
-
-                <h4 className="mb-3 text-sm font-semibold text-[color:var(--ds-text-primary)]">Chi tiết điểm đã áp dụng</h4>
-
-                <div className="overflow-auto rounded border border-[color:var(--ds-border-subtle)]">
-
-                  <table className="min-w-full text-sm text-[color:var(--ds-text-primary)]">
-
-                    <thead className="bg-[color:var(--ds-surface-muted)] text-[color:var(--ds-text-secondary)]">
-
-                      <tr className="text-left text-xs uppercase">
-
-                        <th className="px-3 py-2">Tháng</th>
-
-                        <th className="px-3 py-2">Hạng mục</th>
-
-                        <th className="px-3 py-2">Nhân viên</th>
-
-                        <th className="px-3 py-2">Tổ đội</th>
-
-                        <th className="px-3 py-2 text-right">Số lượng × Hệ số</th>
-
-                        <th className="px-3 py-2 text-right">Điểm</th>
-
-                        <th className="px-3 py-2">Tham chiếu</th>
-
-                        <th className="px-3 py-2">Ghi chú</th>
-
-                      </tr>
-
-                    </thead>
-
-                    <tbody>
-
-                      {paginatedAppliedAdjustments.length ? (
-
-                        paginatedAppliedAdjustments.map((item) => {
-
-                          const key = item.adjustment?.id || `${item.date}-${item.nhan_vien || ''}`;
-
-                          const quantity = Number.isFinite(Number(item.adjustment?.quantity))
-
-                            ? Number(item.adjustment.quantity)
-
-                            : null;
-
-                          const unitPoints = Number.isFinite(Number(item.adjustment?.unitPoints))
-
-                            ? Number(item.adjustment.unitPoints)
-
-                            : null;
-
-                          const references = Array.isArray(item.adjustment?.references)
-
-                            ? item.adjustment.references.filter(Boolean).join(', ')
-
-                            : '';
-
-                          const note = item.adjustment?.note || '';
-
-                          const scoreClass = item.kpi >= 0 ? 'text-emerald-600' : 'text-rose-600';
-
-                          return (
-
-                            <tr key={key} className="border-b border-[color:var(--ds-border-subtle)] odd:bg-[color:var(--ds-surface-card)] even:bg-[color:var(--ds-surface-muted)] last:border-b-0">
-
-                              <td className="px-3 py-2">{item.displayDate || (item.date ? item.date.slice(0, 7) : '—')}</td>
-
-                              <td className="px-3 py-2">{item.adjustment?.label || item.loai_hinh}</td>
-
-                              <td className="px-3 py-2">{item.nhan_vien || 'Chưa gán'}</td>
-
-                              <td className="px-3 py-2">{item.team || 'Chưa gán tổ đội'}</td>
-
-                              <td className="px-3 py-2 text-right">
-
-                                {quantity !== null ? formatDecimal(quantity) : '—'}
-
-                                {unitPoints !== null ? (
-
-                                  <span className="ml-1 text-xs text-[color:var(--ds-text-muted)]">× {formatDecimal(unitPoints)}</span>
-
-                                ) : null}
-
-                              </td>
-
-                              <td className={`px-3 py-2 text-right font-semibold ${scoreClass}`}>
-
-                                {formatDecimal(item.kpi)}
-
-                              </td>
-
-                              <td className="px-3 py-2">{references || '—'}</td>
-
-                              <td className="px-3 py-2">{note || '—'}</td>
-
-                            </tr>
-
-                          );
-
-                        })
-
-                      ) : (
-
-                        <tr>
-
-                          <td className="px-3 py-4 text-center text-[color:var(--ds-text-muted)]" colSpan={8}>
-
-                            Chưa có điểm bổ sung nào được duyệt trong khoảng thời gian này.
-
-                          </td>
-
-                        </tr>
-
-                      )}
-
-                    </tbody>
-
-                  </table>
-
-                </div>
-
-                <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-xs text-[color:var(--ds-text-secondary)]">
-
-                  <div className="flex items-center gap-2">
-
-                    <label className="text-[color:var(--ds-text-muted)]" htmlFor="adjustment-page-size">
-
-                      Số mục mỗi trang
-
-                    </label>
-
-                    <select
-
-                      id="adjustment-page-size"
-
-                      value={adjustmentPageSize}
-
-                      onChange={(event) =>
-
-                        setAdjustmentPageSize(sanitizeAdjustmentPageSize(event.target.value))
-
-                      }
-
-                      className="rounded border border-[color:var(--ds-border-subtle)] bg-white px-2 py-1 text-sm focus:border-[color:var(--ds-border-strong)] focus:outline-none"
-
-                    >
-
-                      {ADJUSTMENT_PAGE_SIZE_OPTIONS.map((size) => (
-
-                        <option key={size} value={size}>
-
-                          {size}
-
-                        </option>
-
-                      ))}
-
-                    </select>
-
-                  </div>
-
-                  <div className="flex items-center gap-2">
-
-                    <span>
-
-                      Trang {totalAdjustmentPages ? currentAdjustmentPage + 1 : 0}/{totalAdjustmentPages}
-
-                    </span>
-
-                    <div className="flex items-center gap-2">
-
-                      <button
-
-                        type="button"
-
-                        onClick={handleAdjustmentPrev}
-
-                        disabled={currentAdjustmentPage === 0}
-
-                        className={`rounded border px-2 py-1 font-semibold transition-colors ${
-
-                          currentAdjustmentPage === 0
-
-                            ? 'cursor-not-allowed border-[color:var(--ds-border-subtle)] text-[color:var(--ds-text-disabled)]'
-
-                            : 'border-[color:var(--ds-border-subtle)] text-[color:var(--ds-text-secondary)] hover:border-[color:var(--ds-border-strong)] hover:text-[color:var(--ds-text-primary)]'
-
-                        }`}
-
-                      >
-
-                        Trước
-
-                      </button>
-
-                      <button
-
-                        type="button"
-
-                        onClick={handleAdjustmentNext}
-
-                        disabled={currentAdjustmentPage >= totalAdjustmentPages - 1}
-
-                        className={`rounded border px-2 py-1 font-semibold transition-colors ${
-
-                          currentAdjustmentPage >= totalAdjustmentPages - 1
-
-                            ? 'cursor-not-allowed border-[color:var(--ds-border-subtle)] text-[color:var(--ds-text-disabled)]'
-
-                            : 'border-[color:var(--ds-border-subtle)] text-[color:var(--ds-text-secondary)] hover:border-[color:var(--ds-border-strong)] hover:text-[color:var(--ds-text-primary)]'
-
-                        }`}
-
-                      >
-
-                        Sau
-
-                      </button>
-
-                    </div>
-
-                  </div>
-
-                </div>
-
-              </div>
-
-                <div className="space-y-6">
-
-                <section className="space-y-3 rounded-xl border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-muted)] p-4">
-
-                  <div className="text-xs uppercase tracking-wide text-[color:var(--ds-text-secondary)]">Điểm đã áp dụng</div>
-
-                  <div className="text-3xl font-semibold text-emerald-600">
-
-                    {formatDecimal(adjustmentsReport.totalPoints || 0)}
-
-                  </div>
-
-                  <div className="text-xs text-[color:var(--ds-text-secondary)]">
-
-                    Từ {formatInt(adjustmentsReport.approvedCount || adjustmentsReport.appliedCount || 0)} lượt xử lý thành công
-
-                  </div>
-
-                  <ul className="space-y-1 pt-2 text-sm text-[color:var(--ds-text-secondary)]">
-
-                    {adjustmentStatusStats.map((item) => (
-
-                      <li key={item.label} className="flex items-center justify-between">
-
-                        <span>{item.label}</span>
-
-                        <span className={`font-semibold ${item.tone}`}>{formatInt(item.value)}</span>
-
-                      </li>
-
-                    ))}
-
-                  </ul>
-
-                </section>
-
-
-
-                <section>
-
-                  <h4 className="text-sm font-semibold text-[color:var(--ds-text-primary)]">Phân bổ theo hạng mục</h4>
-
-                  {adjustmentTotals.length ? (
-
-                    <ul className="mt-2 space-y-2 text-sm text-[color:var(--ds-text-secondary)]">
-
-                      {adjustmentTotals.map((item) => {
-
-                        const tone = ADJUSTMENT_CATEGORY_TONE_MAP[item.key] || "text-slate-600";
-
-                        return (
-
-                          <li
-
-                            key={item.key}
-
-                            className="rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] px-3 py-2"
-
-                          >
-
-                            <div className="flex flex-wrap items-center justify-between gap-2">
-
-                              <span className="font-medium text-[color:var(--ds-text-primary)]">{item.label}</span>
-
-                              <span className={`font-semibold ${tone}`}>{formatOptionalDecimal(item.points)}</span>
-
-                            </div>
-
-                            <div className="mt-1 text-xs text-[color:var(--ds-text-muted)]">
-
-                              Số lượt: <span className="font-semibold text-[color:var(--ds-text-primary)]">{formatOptionalInt(item.quantity)}</span>
-
-                            </div>
-
-                          </li>
-
-                        );
-
-                      })}
-
-                    </ul>
-
-                  ) : (
-
-                    <p className="mt-2 text-sm text-[color:var(--ds-text-muted)]">Chưa có dữ liệu phân bổ.</p>
-
-                  )}
-
-                </section>
-
-
-
-                <section className="space-y-3">
-
-                  <div>
-
-                    <h4 className="text-sm font-semibold text-[color:var(--ds-text-primary)]">Chờ duyệt</h4>
-
-                    {pendingAdjustments.length ? (
-
-                      <ul className="mt-2 space-y-2 text-sm text-[color:var(--ds-text-secondary)]">
-
-                        {pendingAdjustments.map((item) => (
-
-                          <li key={item.id} className="rounded border border-dashed border-amber-400 bg-amber-500/10 px-3 py-2">
-
-                            <div className="font-medium text-[color:var(--ds-text-primary)]">{item.label || item.category}</div>
-
-                            <div>{item.staffName || 'Chưa gán'} — {item.month}</div>
-
-                            <div>Điểm đề xuất: {formatDecimal(item.totalPoints || 0)}</div>
-
-                          </li>
-
-                        ))}
-
-                      </ul>
-
-                    ) : (
-
-                      <p className="mt-2 text-sm text-[color:var(--ds-text-muted)]">Không có yêu cầu đang chờ.</p>
-
-                    )}
-
-                  </div>
-
-                  {rejectedAdjustments.length ? (
-
-                    <div>
-
-                      <h4 className="text-sm font-semibold text-[color:var(--ds-text-primary)]">Đã từ chối gần đây</h4>
-
-                      <ul className="mt-2 space-y-2 text-sm text-[color:var(--ds-text-secondary)]">
-
-                        {rejectedAdjustments.slice(0, 3).map((item) => (
-
-                          <li key={item.id} className="rounded border border-rose-400/60 bg-rose-500/10 px-3 py-2">
-
-                            <div className="font-medium text-[color:var(--ds-text-primary)]">{item.label || item.category}</div>
-
-                            <div>{item.staffName || 'Chưa gán'} — {item.month}</div>
-
-                            <div>Điểm: {formatDecimal(item.totalPoints || 0)}</div>
-
-                          </li>
-
-                        ))}
-
-                      </ul>
-
-                      {rejectedAdjustments.length > 3 ? (
-
-                        <div className="pt-1 text-xs text-[color:var(--ds-text-muted)]">
-
-                          Còn {rejectedAdjustments.length - 3} mục khác đã bị từ chối.
-
-                        </div>
-
-                      ) : null}
-
-                    </div>
-
-                  ) : null}
-
-                </section>
-
-              </div>
-
-              </div>
-
-              </>
-
-            ) : null}
-
-          </div>
-
+        <KpiAdjustmentPanel
+          adjustmentsReport={adjustmentsReport}
+          paginatedAppliedAdjustments={paginatedAppliedAdjustments}
+          pendingAdjustments={pendingAdjustments}
+          rejectedAdjustments={rejectedAdjustments}
+          adjustmentTotals={adjustmentTotals}
+          adjustmentStatusStats={adjustmentStatusStats}
+          adjustmentPageSize={adjustmentPageSize}
+          onAdjustmentPageSizeChange={handleAdjustmentPageSizeChange}
+          onAdjustmentPrev={handleAdjustmentPrev}
+          onAdjustmentNext={handleAdjustmentNext}
+          currentAdjustmentPage={currentAdjustmentPage}
+          totalAdjustmentPages={totalAdjustmentPages}
+          defaultExpanded={adjustmentExpanded}
+          onModeChange={setAdjustmentExpanded}
+          formatDecimal={formatDecimal}
+          formatInt={formatInt}
+          formatOptionalDecimal={formatOptionalDecimal}
+          formatOptionalInt={formatOptionalInt}
+        />
       </KpiOverviewSection>
 
 
