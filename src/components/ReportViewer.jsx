@@ -2340,6 +2340,111 @@ function TopCompanyLeaderboard({ periods = [], selectedKey, onPeriodChange }) {
 
 }
 
+function KpiOverviewSection({
+  summary,
+  summaryCompanyCardValue,
+  companyCardSubtitle,
+  adjustmentsReport,
+  overviewTopStaff,
+  overviewAlerts,
+  trendSeries,
+  trendComparison,
+  teamPieData,
+  teamDeclPieData,
+  companyLeaderboard,
+  topCompanyPeriod,
+  onTopCompanyPeriodChange,
+  topStaffMetric,
+  onTopStaffMetricChange,
+  topStaffByKpi,
+  topStaffByDecls,
+  topStaffVisibleCount,
+  onTopStaffVisibleCountChange,
+  palette,
+  children,
+}) {
+  return (
+    <section className="space-y-6">
+      <header className="space-y-2">
+        <h2 className="text-lg font-semibold text-[color:var(--ds-text-primary)]">Tổng quan KPI</h2>
+        <p className="text-sm text-[color:var(--ds-text-secondary)]">
+          Theo dõi nhanh các chỉ số trọng yếu, xếp hạng doanh nghiệp và nhân sự nổi bật dựa trên khoảng thời gian đã lọc.
+        </p>
+      </header>
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+        <div className="space-y-6">
+          <KpiOverviewDashboard
+            summary={summary}
+            adjustmentsTotal={Number(adjustmentsReport.totalPoints || 0)}
+            trendSeries={trendSeries}
+            comparison={trendComparison}
+            topStaff={overviewTopStaff}
+            alerts={overviewAlerts}
+            palette={palette}
+          />
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <SummaryCard
+              title="Tổng tờ khai"
+              value={formatInt(summary.decls)}
+              subtitle={`Nhập: ${formatInt(summary.import)} • Xuất: ${formatInt(summary.export)}`}
+            />
+            <SummaryCard
+              title="Tổng điểm KPI"
+              value={formatDecimal(summary.kpi)}
+              subtitle="Bao gồm điểm loại hình và giấy phép"
+            />
+            <SummaryCard
+              title="Điểm KPI +/- bổ sung"
+              value={formatDecimal(adjustmentsReport.totalPoints || 0)}
+              subtitle={`Đã duyệt: ${formatInt(adjustmentsReport.approvedCount || 0)} • Chờ duyệt: ${formatInt(
+                adjustmentsReport.pendingCount || 0,
+              )}`}
+            />
+            <SummaryCard
+              title="Tổng số công ty"
+              value={formatInt(summaryCompanyCardValue)}
+              subtitle={companyCardSubtitle}
+            />
+            <SummaryCard
+              title="Số giấy phép hợp lệ"
+              value={formatInt(summary.licenses)}
+              subtitle={`Đã loại trừ • ${formatInt(summary.licenseCount ?? 0)} mã khác nhau`}
+            />
+            <SummaryCard
+              title="Tờ khai có C/O"
+              value={formatInt(summary.co ?? 0)}
+              subtitle={`Tổng dòng áp C/O: ${formatInt(summary.coLines ?? 0)}`}
+            />
+            <SummaryCard
+              title="Danh sách mã giấy phép"
+              value={formatInt(summary.licenseCount ?? 0)}
+              subtitle={summary.licenseSummary || "—"}
+            />
+          </div>
+          <TeamPieWidget kpiData={teamPieData} declData={teamDeclPieData} palette={palette} />
+          <TopCompanyLeaderboard
+            periods={companyLeaderboard}
+            selectedKey={topCompanyPeriod}
+            onPeriodChange={onTopCompanyPeriodChange}
+          />
+        </div>
+        <div className="space-y-6">
+          <TopStaffWidget
+            metric={topStaffMetric}
+            onMetricChange={onTopStaffMetricChange}
+            kpiData={topStaffByKpi}
+            declData={topStaffByDecls}
+            palette={palette}
+            visibleCountPreference={topStaffVisibleCount}
+            onVisibleCountPreferenceChange={onTopStaffVisibleCountChange}
+          />
+        </div>
+      </div>
+      {children ? <div className="space-y-6">{children}</div> : null}
+    </section>
+  );
+}
+
 
 
 function TrendLineChart({ data, comparison, palette = DEFAULT_CHART_COLORS, variant = "card" }) {
@@ -9560,151 +9665,29 @@ const handleDetailPageSizeCustomInputChange = (event) => {
 
 
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
-
-        <div className="space-y-6">
-
-          <KpiOverviewDashboard
-
-            summary={summary}
-
-            adjustmentsTotal={adjustmentsReport.totalPoints || 0}
-
-            trendSeries={trendSeries}
-
-            comparison={trendComparison}
-
-            topStaff={overviewTopStaff}
-
-            alerts={overviewAlerts}
-
-            palette={chartPalette}
-
-          />
-
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-
-            <SummaryCard
-
-              title="Tổng tờ khai"
-
-              value={formatInt(summary.decls)}
-
-              subtitle={`Nhập: ${formatInt(summary.import)} • Xuất: ${formatInt(summary.export)}`}
-
-            />
-
-            <SummaryCard
-
-              title="Tổng điểm KPI"
-
-              value={formatDecimal(summary.kpi)}
-
-              subtitle="Bao gồm điểm loại hình và giấy phép"
-
-            />
-
-            <SummaryCard
-
-              title="Điểm KPI +/- bổ sung"
-
-              value={formatDecimal(adjustmentsReport.totalPoints || 0)}
-
-              subtitle={`Đã duyệt: ${formatInt(adjustmentsReport.approvedCount || 0)} • Chờ duyệt: ${formatInt(
-
-                adjustmentsReport.pendingCount || 0
-
-              )}`}
-
-            />
-
-            <SummaryCard
-
-              title="Tổng số công ty"
-
-              value={formatInt(summaryCompanyCardValue)}
-
-              subtitle={companyCardSubtitle}
-
-            />
-
-            <SummaryCard
-
-              title="Số giấy phép hợp lệ"
-
-              value={formatInt(summary.licenses)}
-
-              subtitle={`Đã loại trừ • ${formatInt(summary.licenseCount ?? 0)} mã khác nhau`}
-
-            />
-
-            <SummaryCard
-
-              title="Tờ khai có C/O"
-
-              value={formatInt(summary.co ?? 0)}
-
-              subtitle={`Tổng dòng áp C/O: ${formatInt(summary.coLines ?? 0)}`}
-
-            />
-
-            <SummaryCard
-
-              title="Danh sách mã giấy phép"
-
-              value={formatInt(summary.licenseCount ?? 0)}
-
-              subtitle={summary.licenseSummary || "—"}
-
-            />
-
-          </div>
-
-
-
-          <TeamPieWidget kpiData={teamPieData} declData={teamDeclPieData} palette={chartPalette} />
-
-          <TopCompanyLeaderboard
-
-            periods={companyLeaderboard}
-
-            selectedKey={topCompanyPeriod}
-
-            onPeriodChange={setTopCompanyPeriod}
-
-          />
-
-        </div>
-
-
-
-        <div className="space-y-6">
-
-          <TopStaffWidget
-
-            metric={topStaffMetric}
-
-            onMetricChange={setTopStaffMetric}
-
-            kpiData={topStaffByKpi}
-
-            declData={topStaffByDecls}
-
-            palette={chartPalette}
-
-            visibleCountPreference={topStaffVisibleCount}
-
-            onVisibleCountPreferenceChange={setTopStaffVisibleCount}
-
-          />
-
-        </div>
-
-
-
-        <div className="xl:col-span-2">
-
-          <div className="ds-card space-y-4 p-4">
+      <KpiOverviewSection
+        summary={summary}
+        summaryCompanyCardValue={summaryCompanyCardValue}
+        companyCardSubtitle={companyCardSubtitle}
+        adjustmentsReport={adjustmentsReport}
+        overviewTopStaff={overviewTopStaff}
+        overviewAlerts={overviewAlerts}
+        trendSeries={trendSeries}
+        trendComparison={trendComparison}
+        teamPieData={teamPieData}
+        teamDeclPieData={teamDeclPieData}
+        companyLeaderboard={companyLeaderboard}
+        topCompanyPeriod={topCompanyPeriod}
+        onTopCompanyPeriodChange={setTopCompanyPeriod}
+        topStaffMetric={topStaffMetric}
+        onTopStaffMetricChange={setTopStaffMetric}
+        topStaffByKpi={topStaffByKpi}
+        topStaffByDecls={topStaffByDecls}
+        topStaffVisibleCount={topStaffVisibleCount}
+        onTopStaffVisibleCountChange={setTopStaffVisibleCount}
+        palette={chartPalette}
+      >
+        <div className="ds-card space-y-4 p-4">
 
             <div className="flex flex-wrap items-start justify-between gap-4">
 
@@ -10182,9 +10165,7 @@ const handleDetailPageSizeCustomInputChange = (event) => {
 
           </div>
 
-        </div>
-
-      </div>
+      </KpiOverviewSection>
 
 
 
