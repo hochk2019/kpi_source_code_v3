@@ -39,9 +39,9 @@ Tài liệu này kết hợp ba đề xuất cải tiến giao diện đã thố
   - [x] Bọc toàn bộ vào một component cha với heading "Tổng quan KPI" và mô tả ngắn.
 - [x] Thiết lập layout 2 cột (ví dụ 8/4 hoặc grid responsive) để đảm bảo sự cân bằng giữa số liệu và biểu đồ.
   - [x] Sử dụng CSS grid hoặc `Stack`/`Grid` từ design system, kiểm tra responsive ở breakpoint tablet (≥1024px) và mobile.
-- [ ] Di chuyển khối **Top 10 công ty theo tờ khai** vào `KpiOverviewSection`.
-  - [ ] Kết nối dữ liệu Top 10 với phần còn lại để chia sẻ bộ lọc chung.
-  - [ ] Đảm bảo tiêu đề/thuyết minh đồng bộ với các widget khác.
+- [x] Di chuyển khối **Top 10 công ty theo tờ khai** vào `KpiOverviewSection`.
+  - [x] Kết nối dữ liệu Top 10 với phần còn lại để chia sẻ bộ lọc chung.
+  - [x] Đảm bảo tiêu đề/thuyết minh đồng bộ với các widget khác.
 - [ ] Xoá hoặc ngăn render hoàn toàn khối `ReportAutomationPanel` / `Lập lịch gửi báo cáo KPI` khỏi `ReportViewer`.
   - [ ] Xoá component cũ và các import/state liên quan.
   - [ ] Đảm bảo không còn route/API nào phụ thuộc khối automation trong tab này; nếu cần, chuyển sang trang cấu hình khác.

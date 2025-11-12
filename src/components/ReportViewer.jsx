@@ -2422,22 +2422,32 @@ function KpiOverviewSection({
             />
           </div>
           <TeamPieWidget kpiData={teamPieData} declData={teamDeclPieData} palette={palette} />
-          <TopCompanyLeaderboard
-            periods={companyLeaderboard}
-            selectedKey={topCompanyPeriod}
-            onPeriodChange={onTopCompanyPeriodChange}
-          />
         </div>
-        <div className="space-y-6">
-          <TopStaffWidget
-            metric={topStaffMetric}
-            onMetricChange={onTopStaffMetricChange}
-            kpiData={topStaffByKpi}
-            declData={topStaffByDecls}
-            palette={palette}
-            visibleCountPreference={topStaffVisibleCount}
-            onVisibleCountPreferenceChange={onTopStaffVisibleCountChange}
-          />
+        <div className="space-y-3">
+          <div className="flex flex-col gap-1">
+            <h3 className="text-sm font-semibold uppercase tracking-wide text-[color:var(--ds-text-secondary)]">
+              Xếp hạng nổi bật
+            </h3>
+            <p className="text-xs text-[color:var(--ds-text-muted)]">
+              So sánh nhân sự dẫn đầu và Top 10 doanh nghiệp trong cùng bộ lọc.
+            </p>
+          </div>
+          <div className="space-y-6">
+            <TopStaffWidget
+              metric={topStaffMetric}
+              onMetricChange={onTopStaffMetricChange}
+              kpiData={topStaffByKpi}
+              declData={topStaffByDecls}
+              palette={palette}
+              visibleCountPreference={topStaffVisibleCount}
+              onVisibleCountPreferenceChange={onTopStaffVisibleCountChange}
+            />
+            <TopCompanyLeaderboard
+              periods={companyLeaderboard}
+              selectedKey={topCompanyPeriod}
+              onPeriodChange={onTopCompanyPeriodChange}
+            />
+          </div>
         </div>
       </div>
       {children ? <div className="space-y-6">{children}</div> : null}
