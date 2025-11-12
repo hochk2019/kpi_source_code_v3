@@ -5351,16 +5351,30 @@ const [detailPageSizeCustomInput, setDetailPageSizeCustomInput] = useState(() =>
 
   useEffect(() => {
 
-    setStaffViewMode("detail");
+    if (activeScopeTab !== "staff") {
+      return;
+    }
 
+    if (selectedStaff === "all") {
+      setStaffViewMode((mode) => (mode === "summary" ? mode : "summary"));
+    } else {
+      setStaffViewMode("detail");
+    }
   }, [selectedStaff, activeScopeTab]);
 
 
 
   useEffect(() => {
 
-    setTeamViewMode("detail");
+    if (activeScopeTab !== "team") {
+      return;
+    }
 
+    if (selectedTeam === "all") {
+      setTeamViewMode((mode) => (mode === "summary" ? mode : "summary"));
+    } else {
+      setTeamViewMode("detail");
+    }
   }, [selectedTeam, activeScopeTab]);
 
 
@@ -6377,1111 +6391,539 @@ const [detailPageSizeCustomInput, setDetailPageSizeCustomInput] = useState(() =>
 
 
   const renderStaffSection = () => {
-
     if (!summary.decls) {
-
       return (
-
         <div className="rounded border bg-white p-6 text-center text-sm text-gray-500">
-
           Chưa có dữ liệu tờ khai trong khoảng thời gian đã chọn. Vui lòng import dữ liệu hoặc thay đổi bộ lọc.
-
         </div>
-
       );
-
     }
-
-
 
     if (selectedStaff === "all") {
-
       const totalStaffRows = filteredStaffList.length;
-
       const staffSliceStart = staffDetailPage * detailPageSize;
-
-      const staffPageItems = filteredStaffList.slice(
-
-        staffSliceStart,
-
-        staffSliceStart + detailPageSize
-
-      );
-
+      const staffPageItems = filteredStaffList.slice(staffSliceStart, staffSliceStart + detailPageSize);
       const staffPageStart = totalStaffRows === 0 ? 0 : staffSliceStart + 1;
-
       const staffPageEnd =
-
-        totalStaffRows === 0
-
-          ? 0
-
-          : Math.min(totalStaffRows, staffSliceStart + staffPageItems.length);
-
+        totalStaffRows === 0 ? 0 : Math.min(totalStaffRows, staffSliceStart + staffPageItems.length);
       const staffDetailColumnCount =
-
         6 +
-
         (columnVisibility.items !== false ? 1 : 0) +
-
         (columnVisibility.licenses !== false ? 1 : 0) +
-
         (columnVisibility.co !== false ? 1 : 0) +
-
         (columnVisibility.coLines !== false ? 1 : 0) +
-
         (columnVisibility.licenseCodes !== false ? 1 : 0);
-
       const totalStaffPages = totalStaffRows === 0 ? 1 : Math.ceil(totalStaffRows / detailPageSize);
-
       const isFirstStaffPage = staffDetailPage === 0;
-
       const isLastStaffPage = staffDetailPage >= totalStaffPages - 1;
-
       const staffRangeLabel = totalStaffRows
-
         ? `${formatInt(staffPageStart)}–${formatInt(staffPageEnd)} / ${formatInt(totalStaffRows)}`
-
         : "0 / 0";
 
-
-
       return (
-
-        <div className="space-y-6">
-
+        <Tabs value={staffViewMode} onValueChange={setStaffViewMode} className="space-y-4">
           <div className="flex flex-wrap items-center gap-4">
-
-            <div className="flex items-center gap-2 rounded-full bg-[color:var(--ds-surface-muted)] px-2 py-1">
-
-              <button
-
-                type="button"
-
-                onClick={() => setStaffViewMode("summary")}
-
-                className={getSegmentedButtonClass(staffViewMode === "summary")}
-
-              >
-
-                Tổng quan
-
-              </button>
-
-              <button
-
-                type="button"
-
-                onClick={() => setStaffViewMode("detail")}
-
-                className={getSegmentedButtonClass(staffViewMode === "detail")}
-
-              >
-
-                Chi tiết
-
-              </button>
-
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2 text-xs text-[color:var(--ds-text-secondary)]">
-
-              <span className="font-semibold text-[color:var(--ds-text-primary)]">Sắp xếp theo:</span>
-
-              <div className="flex items-center gap-1">
-
-                {SORT_OPTIONS.map((option) => (
-
-                  <button
-
-                    key={option.value}
-
-                    type="button"
-
-                    onClick={() => setStaffSortKey(option.value)}
-
-                    className={getSegmentedButtonClass(staffSortKey === option.value)}
-
-                  >
-
-                    {option.label}
-
-                  </button>
-
-                ))}
-
+            <div className="flex flex-1 flex-col gap-3 lg:flex-row lg:items-center lg:gap-4">
+              <TabsList className="ds-tab-list h-9 flex-nowrap gap-2">
+                <TabsTrigger value="summary" className="px-3">
+                  Tổng quan
+                </TabsTrigger>
+                <TabsTrigger value="detail" className="px-3">
+                  Chi tiết
+                </TabsTrigger>
+              </TabsList>
+              <div className="flex flex-wrap items-center gap-2 text-xs text-[color:var(--ds-text-secondary)]">
+                <span className="font-semibold text-[color:var(--ds-text-primary)]">Sắp xếp theo:</span>
+                <div className="flex items-center gap-1">
+                  {SORT_OPTIONS.map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      onClick={() => setStaffSortKey(option.value)}
+                      className={getSegmentedButtonClass(staffSortKey === option.value)}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
               </div>
-
             </div>
-
-            <div className="ml-auto flex flex-col gap-1 text-right">
-
+            <div className="flex flex-col gap-1 text-right">
               <button
-
                 type="button"
-
                 onClick={handleExportStaffAll}
-
                 disabled={!canExport || exporting}
-
                 className={`inline-flex items-center justify-center rounded-full border px-3 py-1.5 text-xs font-semibold shadow-sm transition-colors ${
-
                   canExport && !exporting
-
                     ? 'border-[color:var(--ds-border-strong)] bg-[color:var(--ds-accent)] text-[color:var(--ds-text-inverse)] hover:bg-[color:var(--ds-accent-strong)]'
-
                     : 'cursor-not-allowed border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-muted)] text-[color:var(--ds-text-disabled)]'
-
                 }`}
-
               >
-
                 {exporting ? "Đang xuất..." : "Xuất Excel"}
-
               </button>
-
               <span className="text-[11px] text-[color:var(--ds-text-muted)]">Nhấn Ctrl+P để in nhanh toàn trang</span>
-
             </div>
-
           </div>
 
-
-
-          {staffViewMode === "summary" ? (
-
+          <TabsContent value="summary" className="space-y-4">
             <CompanySummaryTable
-
               rows={filteredCompanySummaryStaff}
-
               includeStaff
-
               visibleColumns={columnVisibility}
-
               sortKey={staffSortKey}
-
             />
-
-          ) : (
-
-            <>
-
-              <div className="overflow-auto rounded border">
-
-                <table className="min-w-full text-sm">
-
-                  <thead className="bg-gray-100">
-
-                    <tr>
-
-                      <th className="px-3 py-2 text-left">Nhân viên</th>
-
-                      <th className="px-3 py-2 text-left">Tổ đội</th>
-
-                      <th className="px-3 py-2 text-right">Tờ khai</th>
-
-                      <th className="px-3 py-2 text-right">Điểm KPI</th>
-
-                      <th className="px-3 py-2 text-right">Nhập</th>
-
-                      <th className="px-3 py-2 text-right">Xuất</th>
-
-                      {columnVisibility.items !== false && (
-
-                        <th className="px-3 py-2 text-right">Mục hàng</th>
-
-                      )}
-
-                      {columnVisibility.licenses !== false && (
-
-                        <th className="px-3 py-2 text-right">Số GP</th>
-
-                      )}
-
-                      {columnVisibility.co !== false && (
-
-                        <th className="px-3 py-2 text-right">Tờ khai C/O</th>
-
-                      )}
-
-                      {columnVisibility.coLines !== false && (
-
-                        <th className="px-3 py-2 text-right">Dòng C/O</th>
-
-                      )}
-
-                      {columnVisibility.licenseCodes !== false && (
-
-                        <th className="px-3 py-2 text-left">Mã giấy phép</th>
-
-                      )}
-
-                    </tr>
-
-                  </thead>
-
-                  <tbody>
-
-                    {totalStaffRows ? (
-
-                      staffPageItems.map((item, idx) => (
-
-                        <tr key={item.key} className={idx % 2 === 0 ? "bg-white" : "bg-gray-50"}>
-
-                          <td className="px-3 py-1.5">{item.name}</td>
-
-                          <td className="px-3 py-1.5">{item.teamLabel}</td>
-
-                          <td className="px-3 py-1.5 text-right">{formatInt(item.stats.decls)}</td>
-
-                          <td className="px-3 py-1.5 text-right">{formatDecimal(item.stats.kpi)}</td>
-
-                          <td className="px-3 py-1.5 text-right">{formatInt(item.stats.import)}</td>
-
-                          <td className="px-3 py-1.5 text-right">{formatInt(item.stats.export)}</td>
-
-                          {columnVisibility.items !== false && (
-
-                            <td className="px-3 py-1.5 text-right">{formatInt(item.stats.items)}</td>
-
-                          )}
-
-                          {columnVisibility.licenses !== false && (
-
-                            <td className="px-3 py-1.5 text-right">{formatInt(item.stats.licenses)}</td>
-
-                          )}
-
-                          {columnVisibility.co !== false && (
-
-                            <td className="px-3 py-1.5 text-right">{formatInt(item.stats.co)}</td>
-
-                          )}
-
-                          {columnVisibility.coLines !== false && (
-
-                            <td className="px-3 py-1.5 text-right">{formatInt(item.stats.coLines)}</td>
-
-                          )}
-
-                          {columnVisibility.licenseCodes !== false && (
-
-                            <td
-
-                              className="px-3 py-1.5"
-
-                              title={(item.stats.licenseCodes || []).join(", ") || "—"}
-
-                            >
-
-                              {(item.stats.licenseCodes || []).join(", ") || "—"}
-
-                            </td>
-
-                          )}
-
-                        </tr>
-
-                      ))
-
-                    ) : (
-
-                      <tr>
-
-                        <td
-
-                          colSpan={staffDetailColumnCount}
-
-                          className="px-3 py-4 text-center text-sm text-[color:var(--ds-text-muted)]"
-
-                        >
-
-                          Không có nhân viên phù hợp với điều kiện lọc hiện tại.
-
-                        </td>
-
-                      </tr>
-
+          </TabsContent>
+
+          <TabsContent value="detail" className="space-y-4">
+            <div className="overflow-auto rounded border">
+              <table className="min-w-full text-sm">
+                <thead className="bg-gray-100">
+                  <tr>
+                    <th className="px-3 py-2 text-left">Nhân viên</th>
+                    <th className="px-3 py-2 text-left">Tổ đội</th>
+                    <th className="px-3 py-2 text-right">Tờ khai</th>
+                    <th className="px-3 py-2 text-right">Điểm KPI</th>
+                    <th className="px-3 py-2 text-right">Nhập</th>
+                    <th className="px-3 py-2 text-right">Xuất</th>
+                    {columnVisibility.items !== false && (
+                      <th className="px-3 py-2 text-right">Mục hàng</th>
                     )}
+                    {columnVisibility.licenses !== false && (
+                      <th className="px-3 py-2 text-right">Số GP</th>
+                    )}
+                    {columnVisibility.co !== false && (
+                      <th className="px-3 py-2 text-right">Tờ khai C/O</th>
+                    )}
+                    {columnVisibility.coLines !== false && (
+                      <th className="px-3 py-2 text-right">Dòng C/O</th>
+                    )}
+                    {columnVisibility.licenseCodes !== false && (
+                      <th className="px-3 py-2 text-left">Mã giấy phép</th>
+                    )}
+                  </tr>
+                </thead>
+                <tbody>
+                  {staffPageItems.length ? (
+                    staffPageItems.map((item) => (
+                      <tr key={item.key} className="odd:bg-white even:bg-gray-50">
+                        <td className="px-3 py-1.5 text-left font-medium text-[color:var(--ds-text-primary)]">
+                          <button
+                            type="button"
+                            className="hover:underline"
+                            onClick={() => {
+                              setSelectedStaff(item.key);
+                              setStaffViewMode("detail");
+                            }}
+                          >
+                            {item.name}
+                          </button>
+                        </td>
+                        <td className="px-3 py-1.5 text-left text-[color:var(--ds-text-secondary)]">{item.team || "—"}</td>
+                        <td className="px-3 py-1.5 text-right">{formatInt(item.stats.decls)}</td>
+                        <td className="px-3 py-1.5 text-right font-semibold text-[color:var(--ds-text-primary)]">
+                          {formatDecimal(item.stats.kpi)}
+                        </td>
+                        <td className="px-3 py-1.5 text-right">{formatInt(item.stats.import)}</td>
+                        <td className="px-3 py-1.5 text-right">{formatInt(item.stats.export)}</td>
+                        {columnVisibility.items !== false && (
+                          <td className="px-3 py-1.5 text-right">{formatInt(item.stats.items)}</td>
+                        )}
+                        {columnVisibility.licenses !== false && (
+                          <td className="px-3 py-1.5 text-right">{formatInt(item.stats.licenses)}</td>
+                        )}
+                        {columnVisibility.co !== false && (
+                          <td className="px-3 py-1.5 text-right">{formatInt(item.stats.co)}</td>
+                        )}
+                        {columnVisibility.coLines !== false && (
+                          <td className="px-3 py-1.5 text-right">{formatInt(item.stats.coLines)}</td>
+                        )}
+                        {columnVisibility.licenseCodes !== false && (
+                          <td
+                            className="px-3 py-1.5"
+                            title={(item.stats.licenseCodes || []).join(", ") || "—"}
+                          >
+                            {(item.stats.licenseCodes || []).join(", ") || "—"}
+                          </td>
+                        )}
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td
+                        colSpan={staffDetailColumnCount}
+                        className="px-3 py-4 text-center text-sm text-[color:var(--ds-text-muted)]"
+                      >
+                        Không có nhân viên phù hợp với điều kiện lọc hiện tại.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
 
-                  </tbody>
-
-                </table>
-
-              </div>
-
-
-
-              {totalStaffRows ? (
-
-                <div className="flex flex-wrap items-center justify-between gap-3 px-1 text-xs text-[color:var(--ds-text-secondary)]">
-
-                  <div className="flex items-center gap-2">
-
-                    <span>Hiển thị</span>
-
-                    <select
-
+            {totalStaffRows ? (
+              <div className="flex flex-wrap items-center justify-between gap-3 px-1 text-xs text-[color:var(--ds-text-secondary)]">
+                <div className="flex items-center gap-2">
+                  <span>Hiển thị</span>
+                  <select
                     value={detailPageSizeMode === "custom" ? "custom" : String(detailPageSize)}
-
-                      onChange={handleDetailPageSizeChange}
-
-                      className="rounded border px-2 py-1 text-xs text-[color:var(--ds-text-primary)] focus:border-[color:var(--ds-border-strong)] focus:outline-none"
-
-                    >
-
+                    onChange={handleDetailPageSizeChange}
+                    className="rounded border px-2 py-1 text-xs text-[color:var(--ds-text-primary)] focus:border-[color:var(--ds-border-strong)] focus:outline-none"
+                  >
                     {DETAIL_PAGE_SIZE_OPTIONS.map((option) => (
-
                       <option key={option} value={option}>
-
                         {option}
-
                       </option>
-
                     ))}
-
                     <option value="custom">Tùy chỉnh...</option>
-
-                    </select>
-
-                    {detailPageSizeMode === "custom" ? (
-
-                      <input
-
-                        type="number"
-
-                        min="1"
-
-                        value={detailPageSizeCustomInput}
-
-                        onChange={handleDetailPageSizeCustomInputChange}
-
-                        className="w-16 rounded border px-2 py-1 text-xs text-[color:var(--ds-text-primary)] focus:border-[color:var(--ds-border-strong)] focus:outline-none"
-
-                        aria-label="Số nhân viên mỗi trang"
-
-                      />
-
-                    ) : null}
-
-                    <span>dòng/trang</span>
-
-                  </div>
-
-                  <div className="flex items-center gap-2">
-
-                    <span>{staffRangeLabel}</span>
-
-                    <div className="flex items-center gap-1">
-
-                      <button
-
-                        type="button"
-
-                        onClick={() => setStaffDetailPage((prev) => Math.max(prev - 1, 0))}
-
-                        disabled={isFirstStaffPage}
-
-                        className={`rounded border px-2 py-1 font-semibold transition-colors ${
-
-                          isFirstStaffPage
-
-                            ? 'cursor-not-allowed border-[color:var(--ds-border-subtle)] text-[color:var(--ds-text-disabled)]'
-
-                            : 'border-[color:var(--ds-border-strong)] text-[color:var(--ds-text-primary)] hover:bg-[color:var(--ds-surface-muted)]'
-
-                        }`}
-
-                      >
-
-                        Trước
-
-                      </button>
-
-                      <button
-
-                        type="button"
-
-                        onClick={() =>
-
-                          setStaffDetailPage((prev) =>
-
-                            Math.min(prev + 1, totalStaffPages - 1)
-
-                          )
-
-                        }
-
-                        disabled={isLastStaffPage}
-
-                        className={`rounded border px-2 py-1 font-semibold transition-colors ${
-
-                          isLastStaffPage
-
-                            ? 'cursor-not-allowed border-[color:var(--ds-border-subtle)] text-[color:var(--ds-text-disabled)]'
-
-                            : 'border-[color:var(--ds-border-strong)] text-[color:var(--ds-text-primary)] hover:bg-[color:var(--ds-surface-muted)]'
-
-                        }`}
-
-                      >
-
-                        Sau
-
-                      </button>
-
-                    </div>
-
-                  </div>
-
-                </div>
-
-              ) : null}
-
-
-
-              {totalStaffRows ? (
-
-                <div className="space-y-6">
-
-                  {staffPageItems.map((item) => (
-
-                    <StaffDetailCard
-
-                      key={item.key}
-
-                      staff={item}
-
-                      canExport={canExport}
-
-                      onExport={() => handleExportStaffDetail(item)}
-
-                      exporting={exporting}
-
-                      visibleColumns={columnVisibility}
-
-                      detailPageSize={detailPageSize}
-
-                      detailPageSizeMode={detailPageSizeMode}
-
-                      detailPageSizeCustomInput={detailPageSizeCustomInput}
-
-                      onDetailPageSizeChange={handleDetailPageSizeChange}
-
-                      onDetailPageSizeCustomInputChange={handleDetailPageSizeCustomInputChange}
-
+                  </select>
+                  {detailPageSizeMode === "custom" ? (
+                    <input
+                      type="number"
+                      min="1"
+                      value={detailPageSizeCustomInput}
+                      onChange={handleDetailPageSizeCustomInputChange}
+                      className="w-16 rounded border px-2 py-1 text-xs text-[color:var(--ds-text-primary)] focus:border-[color:var(--ds-border-strong)] focus:outline-none"
                     />
-
-                  ))}
-
+                  ) : null}
                 </div>
-
-              ) : (
-
-                <div className="rounded border border-dashed border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-muted)] p-4 text-center text-sm text-[color:var(--ds-text-secondary)]">
-
-                  Không có nhân viên nào khớp tìm kiếm.
-
+                <div className="flex items-center gap-3">
+                  <span>{staffRangeLabel}</span>
+                  <div className="inline-flex overflow-hidden rounded-full border">
+                    <button
+                      type="button"
+                      onClick={() => setStaffDetailPage((value) => Math.max(0, value - 1))}
+                      disabled={isFirstStaffPage}
+                      className="border-r px-3 py-1 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      Trước
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setStaffDetailPage((value) => Math.min(totalStaffPages - 1, value + 1))}
+                      disabled={isLastStaffPage}
+                      className="px-3 py-1 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      Sau
+                    </button>
+                  </div>
                 </div>
-
-              )}
-
-            </>
-
-          )}
-
-        </div>
-
+              </div>
+            ) : null}
+          </TabsContent>
+        </Tabs>
       );
-
     }
-
-
 
     if (!activeStaff) {
-
       return null;
-
     }
 
-
-
     return (
-
-      <StaffDetailCard
-
-        staff={activeStaff}
-
-        canExport={canExport}
-
-        onExport={() => handleExportStaffDetail(activeStaff)}
-
-        exporting={exporting}
-
-        visibleColumns={columnVisibility}
-
-        detailPageSize={detailPageSize}
-
-        detailPageSizeMode={detailPageSizeMode}
-
-        detailPageSizeCustomInput={detailPageSizeCustomInput}
-
-        onDetailPageSizeChange={handleDetailPageSizeChange}
-
-        onDetailPageSizeCustomInputChange={handleDetailPageSizeCustomInputChange}
-
-      />
-
+      <Tabs value={staffViewMode} onValueChange={setStaffViewMode} className="space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <TabsList className="ds-tab-list h-9 flex-nowrap gap-2">
+            <TabsTrigger value="summary" className="px-3" disabled>
+              Tổng quan
+            </TabsTrigger>
+            <TabsTrigger value="detail" className="px-3">
+              Chi tiết
+            </TabsTrigger>
+          </TabsList>
+          <span className="text-xs text-[color:var(--ds-text-muted)]">
+            Chọn “Tất cả nhân viên” để xem bảng tổng quan.
+          </span>
+        </div>
+        <TabsContent value="summary">
+          <div className="rounded border border-dashed border-[color:var(--ds-border-muted)] bg-[color:var(--ds-surface-muted)] p-6 text-center text-sm text-[color:var(--ds-text-muted)]">
+            Chế độ tổng quan chỉ khả dụng khi hiển thị toàn bộ danh sách nhân viên.
+          </div>
+        </TabsContent>
+        <TabsContent value="detail" className="space-y-4">
+          <StaffDetailCard
+            staff={activeStaff}
+            onClose={() => setSelectedStaff("all")}
+            canExport={canExport}
+            onExport={() => handleExportStaffDetail(activeStaff)}
+            exporting={exporting}
+            visibleColumns={columnVisibility}
+            detailPageSize={detailPageSize}
+            detailPageSizeMode={detailPageSizeMode}
+            detailPageSizeCustomInput={detailPageSizeCustomInput}
+            onDetailPageSizeChange={handleDetailPageSizeChange}
+            onDetailPageSizeCustomInputChange={handleDetailPageSizeCustomInputChange}
+          />
+        </TabsContent>
+      </Tabs>
     );
-
   };
 
 
 
   const renderTeamSection = () => {
-
     if (!summary.decls) {
-
       return (
-
         <div className="rounded border bg-white p-6 text-center text-sm text-gray-500">
-
           Chưa có dữ liệu tờ khai trong khoảng thời gian đã chọn. Vui lòng import dữ liệu hoặc thay đổi bộ lọc.
-
         </div>
-
       );
-
     }
-
-
 
     if (selectedTeam === "all") {
-
       const totalTeamRows = filteredTeamList.length;
-
       const teamSliceStart = teamDetailPage * detailPageSize;
-
       const teamPageItems = filteredTeamList.slice(teamSliceStart, teamSliceStart + detailPageSize);
-
       const teamPageStart = totalTeamRows === 0 ? 0 : teamSliceStart + 1;
-
-      const teamPageEnd =
-
-        totalTeamRows === 0 ? 0 : Math.min(totalTeamRows, teamSliceStart + teamPageItems.length);
-
+      const teamPageEnd = totalTeamRows === 0 ? 0 : Math.min(totalTeamRows, teamSliceStart + teamPageItems.length);
       const teamDetailColumnCount =
-
         5 +
-
         (columnVisibility.items !== false ? 1 : 0) +
-
         (columnVisibility.licenses !== false ? 1 : 0) +
-
         (columnVisibility.co !== false ? 1 : 0) +
-
         (columnVisibility.coLines !== false ? 1 : 0) +
-
         (columnVisibility.licenseCodes !== false ? 1 : 0);
-
       const totalTeamPages = totalTeamRows === 0 ? 1 : Math.ceil(totalTeamRows / detailPageSize);
-
       const isFirstTeamPage = teamDetailPage === 0;
-
       const isLastTeamPage = teamDetailPage >= totalTeamPages - 1;
-
       const teamRangeLabel = totalTeamRows
-
         ? `${formatInt(teamPageStart)}–${formatInt(teamPageEnd)} / ${formatInt(totalTeamRows)}`
-
         : "0 / 0";
 
-
-
       return (
-
-        <div className="space-y-6">
-
+        <Tabs value={teamViewMode} onValueChange={setTeamViewMode} className="space-y-4">
           <div className="flex flex-wrap items-center gap-4">
-
-            <div className="flex items-center gap-2 rounded-full bg-[color:var(--ds-surface-muted)] px-2 py-1">
-
-              <button
-
-                type="button"
-
-                onClick={() => setTeamViewMode("summary")}
-
-                className={getSegmentedButtonClass(teamViewMode === "summary")}
-
-              >
-
-                Tổng quan
-
-              </button>
-
-              <button
-
-                type="button"
-
-                onClick={() => setTeamViewMode("detail")}
-
-                className={getSegmentedButtonClass(teamViewMode === "detail")}
-
-              >
-
-                Chi tiết
-
-              </button>
-
-            </div>
-
-            <div className="flex flex-wrap items-center gap-2 text-xs text-[color:var(--ds-text-secondary)]">
-
-              <span className="font-semibold text-[color:var(--ds-text-primary)]">Sắp xếp theo:</span>
-
-              <div className="flex items-center gap-1">
-
-                {SORT_OPTIONS.map((option) => (
-
-                  <button
-
-                    key={option.value}
-
-                    type="button"
-
-                    onClick={() => setTeamSortKey(option.value)}
-
-                    className={getSegmentedButtonClass(teamSortKey === option.value)}
-
-                  >
-
-                    {option.label}
-
-                  </button>
-
-                ))}
-
+            <div className="flex flex-1 flex-col gap-3 lg:flex-row lg:items-center lg:gap-4">
+              <TabsList className="ds-tab-list h-9 flex-nowrap gap-2">
+                <TabsTrigger value="summary" className="px-3">
+                  Tổng quan
+                </TabsTrigger>
+                <TabsTrigger value="detail" className="px-3">
+                  Chi tiết
+                </TabsTrigger>
+              </TabsList>
+              <div className="flex flex-wrap items-center gap-2 text-xs text-[color:var(--ds-text-secondary)]">
+                <span className="font-semibold text-[color:var(--ds-text-primary)]">Sắp xếp theo:</span>
+                <div className="flex items-center gap-1">
+                  {SORT_OPTIONS.map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      onClick={() => setTeamSortKey(option.value)}
+                      className={getSegmentedButtonClass(teamSortKey === option.value)}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
               </div>
-
             </div>
-
-            <div className="ml-auto flex flex-col gap-1 text-right">
-
+            <div className="flex flex-col gap-1 text-right">
               <button
-
                 type="button"
-
                 onClick={handleExportTeamAll}
-
                 disabled={!canExport || exporting}
-
                 className={`inline-flex items-center justify-center rounded-full border px-3 py-1.5 text-xs font-semibold shadow-sm transition-colors ${
-
                   canExport && !exporting
-
                     ? 'border-[color:var(--ds-border-strong)] bg-[color:var(--ds-accent)] text-[color:var(--ds-text-inverse)] hover:bg-[color:var(--ds-accent-strong)]'
-
                     : 'cursor-not-allowed border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-muted)] text-[color:var(--ds-text-disabled)]'
-
                 }`}
-
               >
-
                 {exporting ? "Đang xuất..." : "Xuất Excel"}
-
               </button>
-
               <span className="text-[11px] text-[color:var(--ds-text-muted)]">Nhấn Ctrl+P để in nhanh toàn trang</span>
-
             </div>
-
           </div>
 
-
-
-          {teamViewMode === "summary" ? (
-
+          <TabsContent value="summary" className="space-y-4">
             <CompanySummaryTable
-
               rows={filteredCompanySummaryTeam}
-
               includeStaff
-
               includeTeam
-
               visibleColumns={columnVisibility}
-
               sortKey={teamSortKey}
-
             />
-
-          ) : (
-
-            <>
-
-              <div className="overflow-auto rounded border">
-
-                <table className="min-w-full text-sm">
-
-                  <thead className="bg-gray-100">
-
-                    <tr>
-
-                      <th className="px-3 py-2 text-left">Tổ đội</th>
-
-                      <th className="px-3 py-2 text-right">Tờ khai</th>
-
-                      <th className="px-3 py-2 text-right">Điểm KPI</th>
-
-                      <th className="px-3 py-2 text-right">Nhập</th>
-
-                      <th className="px-3 py-2 text-right">Xuất</th>
-
-                      {columnVisibility.items !== false && (
-
-                        <th className="px-3 py-2 text-right">Mục hàng</th>
-
-                      )}
-
-                      {columnVisibility.licenses !== false && (
-
-                        <th className="px-3 py-2 text-right">Số GP</th>
-
-                      )}
-
-                      {columnVisibility.co !== false && (
-
-                        <th className="px-3 py-2 text-right">Tờ khai C/O</th>
-
-                      )}
-
-                      {columnVisibility.coLines !== false && (
-
-                        <th className="px-3 py-2 text-right">Dòng C/O</th>
-
-                      )}
-
-                      {columnVisibility.licenseCodes !== false && (
-
-                        <th className="px-3 py-2 text-left">Mã giấy phép</th>
-
-                      )}
-
-                    </tr>
-
-                  </thead>
-
-                  <tbody>
-
-                    {totalTeamRows ? (
-
-                      teamPageItems.map((item, idx) => (
-
-                        <tr key={item.key} className={idx % 2 === 0 ? "bg-white" : "bg-gray-50"}>
-
-                          <td className="px-3 py-1.5">{item.name}</td>
-
-                          <td className="px-3 py-1.5 text-right">{formatInt(item.stats.decls)}</td>
-
-                          <td className="px-3 py-1.5 text-right">{formatDecimal(item.stats.kpi)}</td>
-
-                          <td className="px-3 py-1.5 text-right">{formatInt(item.stats.import)}</td>
-
-                          <td className="px-3 py-1.5 text-right">{formatInt(item.stats.export)}</td>
-
-                          {columnVisibility.items !== false && (
-
-                            <td className="px-3 py-1.5 text-right">{formatInt(item.stats.items)}</td>
-
-                          )}
-
-                          {columnVisibility.licenses !== false && (
-
-                            <td className="px-3 py-1.5 text-right">{formatInt(item.stats.licenses)}</td>
-
-                          )}
-
-                          {columnVisibility.co !== false && (
-
-                            <td className="px-3 py-1.5 text-right">{formatInt(item.stats.co)}</td>
-
-                          )}
-
-                          {columnVisibility.coLines !== false && (
-
-                            <td className="px-3 py-1.5 text-right">{formatInt(item.stats.coLines)}</td>
-
-                          )}
-
-                          {columnVisibility.licenseCodes !== false && (
-
-                            <td
-
-                              className="px-3 py-1.5"
-
-                              title={(item.stats.licenseCodes || []).join(", ") || "—"}
-
-                            >
-
-                              {(item.stats.licenseCodes || []).join(", ") || "—"}
-
-                            </td>
-
-                          )}
-
-                        </tr>
-
-                      ))
-
-                    ) : (
-
-                      <tr>
-
-                        <td
-
-                          colSpan={teamDetailColumnCount}
-
-                          className="px-3 py-4 text-center text-sm text-[color:var(--ds-text-muted)]"
-
-                        >
-
-                          Không có tổ đội nào phù hợp với điều kiện lọc.
-
-                        </td>
-
-                      </tr>
-
+          </TabsContent>
+
+          <TabsContent value="detail" className="space-y-4">
+            <div className="overflow-auto rounded border">
+              <table className="min-w-full text-sm">
+                <thead className="bg-gray-100">
+                  <tr>
+                    <th className="px-3 py-2 text-left">Tổ đội</th>
+                    <th className="px-3 py-2 text-right">Tờ khai</th>
+                    <th className="px-3 py-2 text-right">Điểm KPI</th>
+                    <th className="px-3 py-2 text-right">Nhập</th>
+                    <th className="px-3 py-2 text-right">Xuất</th>
+                    {columnVisibility.items !== false && (
+                      <th className="px-3 py-2 text-right">Mục hàng</th>
                     )}
-
-                  </tbody>
-
-                </table>
-
-              </div>
-
-
-
-              {totalTeamRows ? (
-
-                <div className="flex flex-wrap items-center justify-between gap-3 px-1 text-xs text-[color:var(--ds-text-secondary)]">
-
-                  <div className="flex items-center gap-2">
-
-                    <span>Hiển thị</span>
-
-                    <select
-
-                      value={detailPageSize}
-
-                      onChange={handleDetailPageSizeChange}
-
-                      className="rounded border px-2 py-1 text-xs text-[color:var(--ds-text-primary)] focus:border-[color:var(--ds-border-strong)] focus:outline-none"
-
-                    >
-
-                      {DETAIL_PAGE_SIZE_OPTIONS.map((option) => (
-
-                        <option key={option} value={option}>
-
-                          {option}
-
-                        </option>
-
-                      ))}
-
-                    </select>
-
-                    {detailPageSizeMode === "custom" ? (
-
-                      <input
-
-                        type="number"
-
-                        min="1"
-
-                        value={detailPageSizeCustomInput}
-
-                        onChange={handleDetailPageSizeCustomInputChange}
-
-                        className="w-16 rounded border px-2 py-1 text-xs text-[color:var(--ds-text-primary)] focus:border-[color:var(--ds-border-strong)] focus:outline-none"
-
-                        aria-label="Số nhân viên mỗi trang"
-
-                      />
-
-                    ) : null}
-
-                    <span>dòng/trang</span>
-
-                  </div>
-
-                  <div className="flex items-center gap-2">
-
-                    <span>{teamRangeLabel}</span>
-
-                    <div className="flex items-center gap-1">
-
-                      <button
-
-                        type="button"
-
-                        onClick={() => setTeamDetailPage((prev) => Math.max(prev - 1, 0))}
-
-                        disabled={isFirstTeamPage}
-
-                        className={`rounded border px-2 py-1 font-semibold transition-colors ${
-
-                          isFirstTeamPage
-
-                            ? 'cursor-not-allowed border-[color:var(--ds-border-subtle)] text-[color:var(--ds-text-disabled)]'
-
-                            : 'border-[color:var(--ds-border-strong)] text-[color:var(--ds-text-primary)] hover:bg-[color:var(--ds-surface-muted)]'
-
-                        }`}
-
+                    {columnVisibility.licenses !== false && (
+                      <th className="px-3 py-2 text-right">Số GP</th>
+                    )}
+                    {columnVisibility.co !== false && (
+                      <th className="px-3 py-2 text-right">Tờ khai C/O</th>
+                    )}
+                    {columnVisibility.coLines !== false && (
+                      <th className="px-3 py-2 text-right">Dòng C/O</th>
+                    )}
+                    {columnVisibility.licenseCodes !== false && (
+                      <th className="px-3 py-2 text-left">Mã giấy phép</th>
+                    )}
+                  </tr>
+                </thead>
+                <tbody>
+                  {teamPageItems.length ? (
+                    teamPageItems.map((item) => (
+                      <tr key={item.key} className="odd:bg-white even:bg-gray-50">
+                        <td className="px-3 py-1.5 text-left font-medium text-[color:var(--ds-text-primary)]">
+                          <button
+                            type="button"
+                            className="hover:underline"
+                            onClick={() => {
+                              setSelectedTeam(item.key);
+                              setTeamViewMode("detail");
+                            }}
+                          >
+                            {item.name}
+                          </button>
+                        </td>
+                        <td className="px-3 py-1.5 text-right">{formatInt(item.stats.decls)}</td>
+                        <td className="px-3 py-1.5 text-right font-semibold text-[color:var(--ds-text-primary)]">
+                          {formatDecimal(item.stats.kpi)}
+                        </td>
+                        <td className="px-3 py-1.5 text-right">{formatInt(item.stats.import)}</td>
+                        <td className="px-3 py-1.5 text-right">{formatInt(item.stats.export)}</td>
+                        {columnVisibility.items !== false && (
+                          <td className="px-3 py-1.5 text-right">{formatInt(item.stats.items)}</td>
+                        )}
+                        {columnVisibility.licenses !== false && (
+                          <td className="px-3 py-1.5 text-right">{formatInt(item.stats.licenses)}</td>
+                        )}
+                        {columnVisibility.co !== false && (
+                          <td className="px-3 py-1.5 text-right">{formatInt(item.stats.co)}</td>
+                        )}
+                        {columnVisibility.coLines !== false && (
+                          <td className="px-3 py-1.5 text-right">{formatInt(item.stats.coLines)}</td>
+                        )}
+                        {columnVisibility.licenseCodes !== false && (
+                          <td
+                            className="px-3 py-1.5"
+                            title={(item.stats.licenseCodes || []).join(", ") || "—"}
+                          >
+                            {(item.stats.licenseCodes || []).join(", ") || "—"}
+                          </td>
+                        )}
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td
+                        colSpan={teamDetailColumnCount}
+                        className="px-3 py-4 text-center text-sm text-[color:var(--ds-text-muted)]"
                       >
+                        Không có tổ đội phù hợp với điều kiện lọc hiện tại.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
 
-                        Trước
-
-                      </button>
-
-                      <button
-
-                        type="button"
-
-                        onClick={() =>
-
-                          setTeamDetailPage((prev) => Math.min(prev + 1, totalTeamPages - 1))
-
-                        }
-
-                        disabled={isLastTeamPage}
-
-                        className={`rounded border px-2 py-1 font-semibold transition-colors ${
-
-                          isLastTeamPage
-
-                            ? 'cursor-not-allowed border-[color:var(--ds-border-subtle)] text-[color:var(--ds-text-disabled)]'
-
-                            : 'border-[color:var(--ds-border-strong)] text-[color:var(--ds-text-primary)] hover:bg-[color:var(--ds-surface-muted)]'
-
-                        }`}
-
-                      >
-
-                        Sau
-
-                      </button>
-
-                    </div>
-
-                  </div>
-
-                </div>
-
-              ) : null}
-
-
-
-              {totalTeamRows ? (
-
-                <div className="space-y-6">
-
-                  {teamPageItems.map((item) => (
-
-                    <TeamDetailCard
-
-                      key={item.key}
-
-                      team={item}
-
-                      canExport={canExport}
-
-                      onExport={() => handleExportTeamDetail(item)}
-
-                      exporting={exporting}
-
-                      visibleColumns={columnVisibility}
-
-                      memberSortKey={teamSortKey}
-
-                      detailPageSize={detailPageSize}
-
-                      detailPageSizeMode={detailPageSizeMode}
-
-                      detailPageSizeCustomInput={detailPageSizeCustomInput}
-
-                      onDetailPageSizeChange={handleDetailPageSizeChange}
-
-                      onDetailPageSizeCustomInputChange={handleDetailPageSizeCustomInputChange}
-
+            {totalTeamRows ? (
+              <div className="flex flex-wrap items-center justify-between gap-3 px-1 text-xs text-[color:var(--ds-text-secondary)]">
+                <div className="flex items-center gap-2">
+                  <span>Hiển thị</span>
+                  <select
+                    value={detailPageSizeMode === "custom" ? "custom" : String(detailPageSize)}
+                    onChange={handleDetailPageSizeChange}
+                    className="rounded border px-2 py-1 text-xs text-[color:var(--ds-text-primary)] focus:border-[color:var(--ds-border-strong)] focus:outline-none"
+                  >
+                    {DETAIL_PAGE_SIZE_OPTIONS.map((option) => (
+                      <option key={option} value={option}>
+                        {option}
+                      </option>
+                    ))}
+                    <option value="custom">Tùy chỉnh...</option>
+                  </select>
+                  {detailPageSizeMode === "custom" ? (
+                    <input
+                      type="number"
+                      min="1"
+                      value={detailPageSizeCustomInput}
+                      onChange={handleDetailPageSizeCustomInputChange}
+                      className="w-16 rounded border px-2 py-1 text-xs text-[color:var(--ds-text-primary)] focus:border-[color:var(--ds-border-strong)] focus:outline-none"
                     />
-
-                  ))}
-
+                  ) : null}
                 </div>
-
-              ) : (
-
-                <div className="rounded border border-dashed border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-muted)] p-4 text-center text-sm text-[color:var(--ds-text-secondary)]">
-
-                  Không có tổ đội nào khớp tìm kiếm.
-
+                <div className="flex items-center gap-3">
+                  <span>{teamRangeLabel}</span>
+                  <div className="inline-flex overflow-hidden rounded-full border">
+                    <button
+                      type="button"
+                      onClick={() => setTeamDetailPage((value) => Math.max(0, value - 1))}
+                      disabled={isFirstTeamPage}
+                      className="border-r px-3 py-1 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      Trước
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setTeamDetailPage((value) => Math.min(totalTeamPages - 1, value + 1))}
+                      disabled={isLastTeamPage}
+                      className="px-3 py-1 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      Sau
+                    </button>
+                  </div>
                 </div>
-
-              )}
-
-            </>
-
-          )}
-
-        </div>
-
+              </div>
+            ) : null}
+          </TabsContent>
+        </Tabs>
       );
-
     }
-
-
 
     if (!activeTeam) {
-
       return null;
-
     }
 
-
-
     return (
-
-      <TeamDetailCard
-
-        team={activeTeam}
-
-        canExport={canExport}
-
-        onExport={() => handleExportTeamDetail(activeTeam)}
-
-        exporting={exporting}
-
-        visibleColumns={columnVisibility}
-
-        memberSortKey={teamSortKey}
-
-        detailPageSize={detailPageSize}
-
-        detailPageSizeMode={detailPageSizeMode}
-
-        detailPageSizeCustomInput={detailPageSizeCustomInput}
-
-        onDetailPageSizeChange={handleDetailPageSizeChange}
-
-        onDetailPageSizeCustomInputChange={handleDetailPageSizeCustomInputChange}
-
-      />
-
+      <Tabs value={teamViewMode} onValueChange={setTeamViewMode} className="space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <TabsList className="ds-tab-list h-9 flex-nowrap gap-2">
+            <TabsTrigger value="summary" className="px-3" disabled>
+              Tổng quan
+            </TabsTrigger>
+            <TabsTrigger value="detail" className="px-3">
+              Chi tiết
+            </TabsTrigger>
+          </TabsList>
+          <span className="text-xs text-[color:var(--ds-text-muted)]">
+            Chọn “Tất cả tổ đội” để xem bảng tổng quan.
+          </span>
+        </div>
+        <TabsContent value="summary">
+          <div className="rounded border border-dashed border-[color:var(--ds-border-muted)] bg-[color:var(--ds-surface-muted)] p-6 text-center text-sm text-[color:var(--ds-text-muted)]">
+            Chế độ tổng quan chỉ khả dụng khi hiển thị toàn bộ danh sách tổ đội.
+          </div>
+        </TabsContent>
+        <TabsContent value="detail" className="space-y-4">
+          <TeamDetailCard
+            team={activeTeam}
+            canExport={canExport}
+            onExport={() => handleExportTeamDetail(activeTeam)}
+            exporting={exporting}
+            visibleColumns={columnVisibility}
+            memberSortKey={teamSortKey}
+            detailPageSize={detailPageSize}
+            detailPageSizeMode={detailPageSizeMode}
+            detailPageSizeCustomInput={detailPageSizeCustomInput}
+            onDetailPageSizeChange={handleDetailPageSizeChange}
+            onDetailPageSizeCustomInputChange={handleDetailPageSizeCustomInputChange}
+          />
+        </TabsContent>
+      </Tabs>
     );
-
   };
 
 

@@ -66,9 +66,9 @@ Tài liệu này kết hợp ba đề xuất cải tiến giao diện đã thố
 - [x] Thay state toggle `scope` bằng tab cha “Nhân viên” / “Tổ đội”, sử dụng component tab của design system (hoặc tự xây dựng) bảo đảm accessibility.
   - [x] Rà soát state/logic hiện dùng cho `scope` và chuẩn hoá lại thành `activeScopeTab`.
   - [x] Áp dụng keyboard navigation (ArrowLeft/ArrowRight) nếu tự triển khai tab. _(Sử dụng Tabs của design system với hỗ trợ bàn phím mặc định.)_
-- [ ] Bên trong mỗi tab cha, tạo hai tab con “Tổng quan” (bảng rút gọn + chỉ số chính) và “Chi tiết” (card theo cá nhân/tổ, biểu đồ chuyên sâu), hiển thị “Tổng quan” mặc định.
-  - [ ] Xác định dữ liệu cần thiết cho từng tab con và tối ưu hoá gọi API (prefetch khi người dùng hover tab?).
-  - [ ] Thiết kế layout riêng cho mobile (stack) vs desktop (song song).
+- [x] Bên trong mỗi tab cha, tạo hai tab con “Tổng quan” (bảng rút gọn + chỉ số chính) và “Chi tiết” (card theo cá nhân/tổ, biểu đồ chuyên sâu), hiển thị “Tổng quan” mặc định. _Đã tái sử dụng dữ liệu hiện có để không phát sinh thêm API._
+  - [x] Xác định dữ liệu cần thiết cho từng tab con và tối ưu hoá gọi API (prefetch khi người dùng hover tab?). _Tổng quan và chi tiết cùng chia sẻ dataset lọc, không cần thêm request._
+  - [x] Thiết kế layout riêng cho mobile (stack) vs desktop (song song). _Flex/grid hiện hỗ trợ wrap trên mobile và giữ hàng ngang trên desktop._
 - [ ] Trích xuất phần bảng + phân trang chung từ `renderStaffSection`/`renderTeamSection` thành component `ReportEntityTable` tái sử dụng.
   - [ ] Định nghĩa props chung (`columns`, `rows`, `pagination`, `onSort`) và viết test đơn vị cho component mới.
   - [ ] Cập nhật cả hai khu vực nhân viên/tổ đội sử dụng component này để tránh lặp code.
