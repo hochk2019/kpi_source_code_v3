@@ -1,5 +1,16 @@
 import PropTypes from "prop-types";
 
+import { Label } from "@/components/ui/label.jsx";
+import { Input } from "@/components/ui/input.jsx";
+import { Badge } from "@/components/ui/badge.jsx";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select.jsx";
+
 function ReportFilterBar({
   quickRange,
   quickRangeOptions,
@@ -11,55 +22,73 @@ function ReportFilterBar({
   summaryLabel,
 }) {
   return (
-    <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:gap-4">
-      <div className="flex flex-1 flex-wrap items-end gap-4">
-        <div className="min-w-[180px] flex-1 sm:flex-initial">
-          <label className="text-xs font-semibold uppercase text-[color:var(--ds-text-secondary)]">
-            Khoảng thời gian
-          </label>
-          <select
-            className="mt-1 w-full rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] px-3 py-2 text-sm text-[color:var(--ds-text-primary)] shadow-sm focus:outline-none focus:ring-2 focus:ring-[color:var(--ds-accent-ring)] focus:ring-offset-0"
-            value={quickRange}
-            onChange={(event) => onQuickRangeChange(event.target.value)}
+    <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
+      <div className="grid flex-1 gap-4 sm:grid-cols-2 xl:grid-cols-[minmax(0,240px)_repeat(2,minmax(0,200px))]">
+        <div className="flex flex-col gap-2">
+          <Label
+            htmlFor="report-filter-quick-range"
+            className="text-[11px] font-semibold uppercase tracking-wide text-[color:var(--ds-text-secondary)]"
           >
-            {quickRangeOptions.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
+            Khoảng thời gian
+          </Label>
+          <Select value={quickRange} onValueChange={onQuickRangeChange}>
+            <SelectTrigger
+              id="report-filter-quick-range"
+              className="h-10 justify-between rounded-lg border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] px-3 text-sm text-[color:var(--ds-text-primary)] shadow-sm focus:ring-[color:var(--ds-accent-ring)]"
+            >
+              <SelectValue aria-label="Khoảng thời gian" />
+            </SelectTrigger>
+            <SelectContent className="max-h-72">
+              {quickRangeOptions.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
-        <div className="min-w-[160px]">
-          <label className="text-xs font-semibold uppercase text-[color:var(--ds-text-secondary)]">
+        <div className="flex flex-col gap-2">
+          <Label
+            htmlFor="report-filter-from"
+            className="text-[11px] font-semibold uppercase tracking-wide text-[color:var(--ds-text-secondary)]"
+          >
             Từ ngày
-          </label>
-          <input
+          </Label>
+          <Input
+            id="report-filter-from"
             type="date"
-            className="mt-1 w-full rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] px-3 py-2 text-sm text-[color:var(--ds-text-primary)] shadow-sm focus:outline-none focus:ring-2 focus:ring-[color:var(--ds-accent-ring)] focus:ring-offset-0"
             value={from}
             onChange={(event) => onFromChange(event.target.value)}
+            className="h-10 rounded-lg border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] px-3 text-sm text-[color:var(--ds-text-primary)] shadow-sm focus:ring-[color:var(--ds-accent-ring)]"
           />
         </div>
 
-        <div className="min-w-[160px]">
-          <label className="text-xs font-semibold uppercase text-[color:var(--ds-text-secondary)]">
+        <div className="flex flex-col gap-2">
+          <Label
+            htmlFor="report-filter-to"
+            className="text-[11px] font-semibold uppercase tracking-wide text-[color:var(--ds-text-secondary)]"
+          >
             Đến ngày
-          </label>
-          <input
+          </Label>
+          <Input
+            id="report-filter-to"
             type="date"
-            className="mt-1 w-full rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] px-3 py-2 text-sm text-[color:var(--ds-text-primary)] shadow-sm focus:outline-none focus:ring-2 focus:ring-[color:var(--ds-accent-ring)] focus:ring-offset-0"
             value={to}
             onChange={(event) => onToChange(event.target.value)}
+            className="h-10 rounded-lg border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] px-3 text-sm text-[color:var(--ds-text-primary)] shadow-sm focus:ring-[color:var(--ds-accent-ring)]"
           />
         </div>
       </div>
 
       {summaryLabel ? (
-        <div className="flex items-center justify-end text-xs text-[color:var(--ds-text-secondary)]">
-          <span className="rounded-full bg-[color:var(--ds-surface-muted)] px-3 py-1 font-semibold uppercase tracking-wide">
+        <div className="flex items-end justify-end">
+          <Badge
+            variant="secondary"
+            className="ds-pill whitespace-nowrap border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-muted)] text-[11px] font-semibold uppercase tracking-wide text-[color:var(--ds-text-secondary)]"
+          >
             {summaryLabel}
-          </span>
+          </Badge>
         </div>
       ) : null}
     </div>

@@ -21,9 +21,9 @@ Tài liệu này kết hợp ba đề xuất cải tiến giao diện đã thố
   - [x] Bảo toàn luồng gọi API hiện có (create/update/delete template) thông qua menu mới.
 - [x] Hiển thị tình trạng “Đang áp dụng: Template A / Bộ quy tắc B” trong header để người dùng nắm bối cảnh.
   - [x] Viết helper định dạng tên template/bộ quy tắc và xử lý fallback khi thiếu dữ liệu.
-- [ ] Chuẩn hoá style (flex row, spacing, typography) để tạo cảm giác hiện đại, đồng bộ với design system.
-  - [ ] Áp dụng token spacing và typography từ `components.json` (nếu có); kiểm tra giao diện ở độ rộng 1280px và 1440px.
-  - [ ] Chạy lại snapshot test (nếu tồn tại) cho khu vực header sau khi refactor.
+- [x] Chuẩn hoá style (flex row, spacing, typography) để tạo cảm giác hiện đại, đồng bộ với design system.
+  - [x] Áp dụng token spacing và typography từ `components.json` (nếu có); kiểm tra giao diện ở độ rộng 1280px và 1440px. _(Chuẩn hoá bằng Select/Input/Badge của design system, rà soát layout responsive theo breakpoint 1280px & 1440px trong môi trường phát triển.)_
+  - [x] Chạy lại snapshot test (nếu tồn tại) cho khu vực header sau khi refactor. _(Không có snapshot liên quan; xác nhận bằng bộ kiểm thử vitest hiện có.)_
 
 ## 2. Tổ chức lại khu vực nội dung tổng quan
 
@@ -88,8 +88,8 @@ Tài liệu này kết hợp ba đề xuất cải tiến giao diện đã thố
 - Khi toàn bộ checklist được đánh dấu, bổ sung mục **Tổng kết** tóm lược cải tiến và kết quả đo lường (nếu có).
 
 ### Kiểm thử bắt buộc sau từng mốc
-- [ ] `pnpm lint`
-- [ ] `pnpm exec vitest run --config vitest.frontend.config.mjs tests/reports.test.js`
+- [x] `pnpm lint`
+- [x] `pnpm exec vitest run --config vitest.frontend.config.mjs tests/reports.test.js`
 - [ ] Thực hiện kiểm thử thủ công luồng lọc thời gian và chuyển tab trong môi trường staging.
 - [ ] Ghi nhận ảnh chụp màn hình (before/after) cho khu vực header, tổng quan và tab Nhân viên/Tổ đội.
 
