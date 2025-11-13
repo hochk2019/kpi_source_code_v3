@@ -33,8 +33,8 @@ Tài liệu này tổng hợp các đầu việc sẽ lần lượt thực hiệ
 - [ ] Viết test logic để đảm bảo giá trị giới hạn người dùng chọn được áp dụng khi truy vấn dữ liệu.
 
 ## 5. Khu vực "Điểm KPI +/- bổ sung" có nút thu gọn
-- [ ] Thêm nút **Thu gọn / Mở rộng** mặc định trạng thái **mở**.
-- [ ] Lưu lại lựa chọn người dùng (local storage hoặc store người dùng) để lần mở lại giữ trạng thái.
+- [x] Thêm nút **Thu gọn / Mở rộng** mặc định trạng thái **mở**. _(Bổ sung nút `Button` ở phần header `KpiAdjustmentPanel.jsx` để đóng/mở toàn bộ nội dung.)_
+- [x] Lưu lại lựa chọn người dùng (local storage hoặc store người dùng) để lần mở lại giữ trạng thái. _(Lưu trạng thái vào khóa `kpi-report.adjustment-panel.expanded` trong `localStorage` ngay khi người dùng bấm thu gọn/mở rộng.)_
 - [ ] Đảm bảo animation/transition mượt, không ảnh hưởng tới layout tổng thể.
 - [ ] Kiểm tra quyền hiển thị và sự tương tác khi người dùng chỉ đọc.
 - [ ] Bổ sung kiểm thử UI/logic cho hành vi nhớ trạng thái.
