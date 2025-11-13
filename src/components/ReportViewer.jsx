@@ -3642,6 +3642,13 @@ const [detailPageSizeCustomInput, setDetailPageSizeCustomInput] = useState(() =>
 
     : "Áp dụng ngay";
 
+  const reportAdminInfo = {
+    totalDeclsLabel: formatInt(summary.decls),
+    rangeLabel: `Khoảng: ${report.range.from || "…"} → ${report.range.to || "…"}`,
+    contextLabel: appliedContextLabel,
+    ruleApplyLabel: ruleApply,
+  };
+
 
 
   const adjustmentsReport = useMemo(() => {
@@ -5158,89 +5165,73 @@ const [detailPageSizeCustomInput, setDetailPageSizeCustomInput] = useState(() =>
 
     <div className="space-y-6">
 
-      <div className="ds-card space-y-4 p-4 print:hidden">
+      <div className="space-y-4 print:hidden">
 
-        <ReportFilterBar
+        <div className="ds-card p-4">
 
-          quickRange={quickRange}
+          <ReportFilterBar
 
-          quickRangeOptions={QUICK_RANGE_OPTIONS}
+            quickRange={quickRange}
 
-          onQuickRangeChange={handleQuickRangeChange}
+            quickRangeOptions={QUICK_RANGE_OPTIONS}
 
-          from={from}
+            onQuickRangeChange={handleQuickRangeChange}
 
-          to={to}
+            from={from}
 
-          onFromChange={handleFromChange}
+            to={to}
 
-          onToChange={handleToChange}
+            onFromChange={handleFromChange}
 
-          summaryLabel={filterSummaryLabel}
+            onToChange={handleToChange}
 
-        />
+            summaryLabel={filterSummaryLabel}
 
-        <ReportContextToolbar
-
-          templateOptions={templateOptions}
-
-          activeTemplateId={activeTemplateId}
-
-          onTemplateChange={handleApplyTemplate}
-
-          isTemplateDirty={isTemplateDirty}
-
-          hasTemplates={hasTemplates}
-
-          onSaveTemplate={handleSaveTemplateAsNew}
-
-          onOverwriteTemplate={handleOverwriteTemplate}
-
-          onDeleteTemplate={handleDeleteTemplate}
-
-          canOverwriteTemplate={canOverwriteTemplate}
-
-          canDeleteTemplate={canDeleteTemplate}
-
-          ruleOptions={ruleOptions}
-
-          selectedRuleId={selectedRuleId}
-
-          onRuleChange={setSelectedRuleId}
-
-          ruleStatusLabel={ruleStatusLabel}
-
-          ruleMetaLabel={ruleMetaLabel}
-
-          appliedContextLabel={appliedContextLabel}
-
-        />
-
-        <div className="rounded-xl border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] p-4 text-sm text-[color:var(--ds-text-secondary)]">
-
-          <div className="flex flex-wrap items-center justify-between gap-2">
-
-            <span className="text-xs uppercase text-[color:var(--ds-text-muted)]">Thông tin báo cáo</span>
-
-            <span className="text-xs text-[color:var(--ds-text-muted)]">{ruleApply}</span>
-
-          </div>
-
-          <div className="mt-2 text-base font-semibold text-[color:var(--ds-text-primary)]">
-
-            {formatInt(summary.decls)} tờ khai hợp lệ
-
-          </div>
-
-          <div className="mt-1 text-xs text-[color:var(--ds-text-secondary)]">
-
-            Khoảng: {report.range.from || "…"} → {report.range.to || "…"}
-
-          </div>
-
-          <div className="mt-1 text-xs text-[color:var(--ds-text-secondary)]">{appliedContextLabel}</div>
+          />
 
         </div>
+
+        {isAdmin ? (
+
+          <ReportContextToolbar
+
+            templateOptions={templateOptions}
+
+            activeTemplateId={activeTemplateId}
+
+            onTemplateChange={handleApplyTemplate}
+
+            isTemplateDirty={isTemplateDirty}
+
+            hasTemplates={hasTemplates}
+
+            onSaveTemplate={handleSaveTemplateAsNew}
+
+            onOverwriteTemplate={handleOverwriteTemplate}
+
+            onDeleteTemplate={handleDeleteTemplate}
+
+            canOverwriteTemplate={canOverwriteTemplate}
+
+            canDeleteTemplate={canDeleteTemplate}
+
+            ruleOptions={ruleOptions}
+
+            selectedRuleId={selectedRuleId}
+
+            onRuleChange={setSelectedRuleId}
+
+            ruleStatusLabel={ruleStatusLabel}
+
+            ruleMetaLabel={ruleMetaLabel}
+
+            appliedContextLabel={appliedContextLabel}
+
+            reportInfo={reportAdminInfo}
+
+          />
+
+        ) : null}
 
       </div>
 
