@@ -2569,6 +2569,10 @@ export default function ReportViewer({ canExport = true, currentUser = null }) {
   }));
 
   const isAdmin = isAdminRole(currentUser?.role);
+  const adjustmentPermissions = currentUser?.permissions || {};
+  const canSubmitAdjustments = adjustmentPermissions.adjustSubmit !== false;
+  const canApproveAdjustments = adjustmentPermissions.adjustApprove === true;
+  const adjustmentPanelReadOnly = !canSubmitAdjustments && !canApproveAdjustments;
 
   const actorLabel = useMemo(() => {
 
@@ -5285,6 +5289,7 @@ const [detailPageSizeCustomInput, setDetailPageSizeCustomInput] = useState(() =>
           formatInt={formatInt}
           formatOptionalDecimal={formatOptionalDecimal}
           formatOptionalInt={formatOptionalInt}
+          readOnly={adjustmentPanelReadOnly}
         />
       </KpiOverviewSection>
 

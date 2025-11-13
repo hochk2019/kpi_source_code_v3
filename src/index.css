@@ -4,3 +4,37 @@
   .print\:avoid-break { break-inside: avoid; page-break-inside: avoid; }
   .print\:hidden { display: none !important; }
 }
+
+[data-slot="collapsible-content"] {
+  overflow: hidden;
+}
+
+[data-slot="collapsible-content"][data-state="open"] {
+  animation: collapsible-down 220ms ease-out both;
+}
+
+[data-slot="collapsible-content"][data-state="closed"] {
+  animation: collapsible-up 180ms ease-in both;
+}
+
+@keyframes collapsible-down {
+  from {
+    height: 0;
+    opacity: 0;
+  }
+  to {
+    height: var(--radix-collapsible-content-height);
+    opacity: 1;
+  }
+}
+
+@keyframes collapsible-up {
+  from {
+    height: var(--radix-collapsible-content-height);
+    opacity: 1;
+  }
+  to {
+    height: 0;
+    opacity: 0;
+  }
+}

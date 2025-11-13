@@ -35,9 +35,9 @@ Tài liệu này tổng hợp các đầu việc sẽ lần lượt thực hiệ
 ## 5. Khu vực "Điểm KPI +/- bổ sung" có nút thu gọn
 - [x] Thêm nút **Thu gọn / Mở rộng** mặc định trạng thái **mở**. _(Bổ sung nút `Button` ở phần header `KpiAdjustmentPanel.jsx` để đóng/mở toàn bộ nội dung.)_
 - [x] Lưu lại lựa chọn người dùng (local storage hoặc store người dùng) để lần mở lại giữ trạng thái. _(Lưu trạng thái vào khóa `kpi-report.adjustment-panel.expanded` trong `localStorage` ngay khi người dùng bấm thu gọn/mở rộng.)_
-- [ ] Đảm bảo animation/transition mượt, không ảnh hưởng tới layout tổng thể.
-- [ ] Kiểm tra quyền hiển thị và sự tương tác khi người dùng chỉ đọc.
-- [ ] Bổ sung kiểm thử UI/logic cho hành vi nhớ trạng thái.
+- [x] Đảm bảo animation/transition mượt, không ảnh hưởng tới layout tổng thể. _(Bọc panel bằng `Collapsible` của Radix, bật `forceMount` và thêm animation `collapsible-up/down` trong `src/index.css` để nội dung ẩn/hiện với transition chiều cao + opacity mà không làm nhảy layout.)_
+- [x] Kiểm tra quyền hiển thị và sự tương tác khi người dùng chỉ đọc. _(Xác định quyền từ `currentUser.permissions` trong `ReportViewer.jsx`; khi cả `adjustSubmit` và `adjustApprove` đều tắt thì truyền `readOnly` để vô hiệu hóa nút thu gọn và giữ nguyên trạng thái mở mặc định cho tài khoản chỉ xem.)_
+- [x] Bổ sung kiểm thử UI/logic cho hành vi nhớ trạng thái. _(Thêm `tests/kpiAdjustmentPanel.test.jsx` dùng Testing Library kiểm tra việc ghi `localStorage` khi thu gọn/mở rộng và xác nhận nút bị khóa khi `readOnly`.)_
 
 ## 6. Kiểm thử & triển khai
 - [ ] Cập nhật checklist QA/SIT bao phủ các thay đổi trên.

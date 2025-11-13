@@ -1,6 +1,7 @@
-import React, { Suspense, lazy, useEffect, useMemo, useState } from "react";
+import React, { Suspense, lazy, useEffect, useId, useMemo, useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs.jsx";
 import { Button } from "@/components/ui/button.jsx";
+import { Collapsible, CollapsibleContent } from "@/components/ui/collapsible.jsx";
 import { cn } from "@/lib/utils.js";
 
 const AdjustmentDetail = lazy(() => import("./KpiAdjustmentDetail.jsx"));
@@ -60,10 +61,12 @@ export default function KpiAdjustmentPanel({
   formatInt,
   formatOptionalDecimal,
   formatOptionalInt,
+  readOnly = false,
 }) {
   const initialTab = defaultExpanded ? "detail" : "overview";
   const [tabValue, setTabValue] = useState(initialTab);
   const [isExpanded, setIsExpanded] = useState(() => resolveInitialExpanded(true));
+  const collapsibleContentId = useId();
 
   useEffect(() => {
     if (typeof window === "undefined" || !window.localStorage) {
@@ -125,8 +128,9 @@ export default function KpiAdjustmentPanel({
 
   return (
     <section className="ds-card space-y-4 p-4">
-      <Tabs value={tabValue} onValueChange={handleTabChange} className="space-y-4">
-        <div className="flex flex-wrap items-start justify-between gap-4">
+      <Collapsible open={isExpanded} onOpenChange={(next) => !readOnly && setIsExpanded(next)}>
+        <Tabs value={tabValue} onValueChange={handleTabChange} className="space-y-4">
+          <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="space-y-1">
             <h3 className="text-base font-semibold text-[color:var(--ds-text-primary)]">Điểm KPI +/- bổ sung</h3>
             <p className="text-sm text-[color:var(--ds-text-muted)]">
@@ -145,13 +149,20 @@ export default function KpiAdjustmentPanel({
               size="sm"
               onClick={() => setIsExpanded((prev) => !prev)}
               aria-pressed={isExpanded}
+              aria-expanded={isExpanded}
+              aria-controls={collapsibleContentId}
+              disabled={readOnly}
+              title={readOnly ? "Chỉ người có quyền duyệt điều chỉnh mới có thể thu gọn" : undefined}
             >
               {toggleLabel}
             </Button>
           </div>
         </div>
-        {isExpanded ? (
-          <>
+          <CollapsibleContent forceMount asChild>
+            <div
+              id={collapsibleContentId}
+              className="space-y-4 focus:outline-none data-[state=closed]:pointer-events-none data-[state=closed]:select-none"
+            >
             <TabsContent value="overview" className="space-y-4 focus:outline-none">
               <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                 {overviewTotals.map((item) => (
@@ -278,13 +289,13 @@ export default function KpiAdjustmentPanel({
                 />
               </Suspense>
             </TabsContent>
-          </>
-        ) : (
-          <p className="text-sm text-[color:var(--ds-text-muted)]">
+            </div>
+          </CollapsibleContent>
+          <p className={cn("text-sm text-[color:var(--ds-text-muted)]", isExpanded && "hidden")}>
             Khu vực đang được thu gọn. Chọn "Mở rộng" để xem thống kê và bảng chi tiết điểm KPI.
           </p>
-        )}
-      </Tabs>
+        </Tabs>
+      </Collapsible>
     </section>
   );
 }
