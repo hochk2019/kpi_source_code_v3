@@ -64,6 +64,8 @@ const SAMPLE_ADJUSTMENTS = [
   },
 ];
 
+const REPORT_PREFS_STORAGE_KEY = 'kpi_report_viewer_prefs_v1';
+
 const ADMIN_USER = {
   role: 'admin',
   name: 'Quản trị viên',
@@ -80,6 +82,26 @@ function seedReportData() {
   sharedSetItem(DECL_KEY, JSON.stringify(SAMPLE_DECL_ROWS));
   sharedSetItem(RULES_KEY, JSON.stringify(SAMPLE_RULES));
   sharedSetItem(KPI_ADJUSTMENTS_KEY, JSON.stringify(SAMPLE_ADJUSTMENTS));
+}
+
+function createLocalStorageMock(initial = {}) {
+  const store = { ...initial };
+  return {
+    getItem(key) {
+      return Object.prototype.hasOwnProperty.call(store, key) ? store[key] : null;
+    },
+    setItem(key, value) {
+      store[key] = String(value);
+    },
+    removeItem(key) {
+      delete store[key];
+    },
+    clear() {
+      for (const key of Object.keys(store)) {
+        delete store[key];
+      }
+    },
+  };
 }
 
 function withFixedClock(callback) {
@@ -135,6 +157,45 @@ describe('ReportViewer', () => {
       expect(html).not.toContain('Bộ quy tắc KPI');
       expect(html).not.toContain('Rules tháng 8');
       expect(html).toContain('tờ khai hợp lệ');
+    });
+
+  });
+
+  it('cho phép cấu hình số lượng doanh nghiệp hiển thị trong leaderboard top công ty', () => {
+
+    withFixedClock(() => {
+      const companyRows = Array.from({ length: 12 }).map((_, index) => ({
+        date: '2024-08-01',
+        so_tk: `${10000000000 + index}`,
+        loai_hinh: 'E11',
+        num_items: 5,
+        licenses: 1,
+        nhan_vien: 'Nhân viên',
+        team: 'Team 1',
+        mst: `09000000${index}`,
+        cong_ty: `Công ty ${index + 1}`,
+      }));
+      sharedSetItem(DECL_KEY, JSON.stringify(companyRows));
+      sharedSetItem(RULES_KEY, JSON.stringify(SAMPLE_RULES));
+      sharedSetItem(KPI_ADJUSTMENTS_KEY, JSON.stringify(SAMPLE_ADJUSTMENTS));
+      const originalWindow = global.window;
+      global.window = {
+        localStorage: createLocalStorageMock({
+          [REPORT_PREFS_STORAGE_KEY]: JSON.stringify({ topCompanyVisibleCount: 'all' }),
+        }),
+        innerHeight: 900,
+      };
+      try {
+        const html = renderToString(<ReportViewer currentUser={ADMIN_USER} />);
+        expect(html).toContain('Công ty 11');
+        expect(html).toContain('Công ty 12');
+      } finally {
+        if (originalWindow === undefined) {
+          delete global.window;
+        } else {
+          global.window = originalWindow;
+        }
+      }
     });
 
   });
