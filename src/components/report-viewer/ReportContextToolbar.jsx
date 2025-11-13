@@ -1,4 +1,3 @@
-import PropTypes from "prop-types";
 import { Badge } from "@/components/ui/badge.jsx";
 import { Button } from "@/components/ui/button.jsx";
 import { Label } from "@/components/ui/label.jsx";
@@ -16,6 +15,9 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu.jsx";
+
+const CUSTOM_TEMPLATE_VALUE = "__custom_template__";
+const NO_RULE_VALUE = "__no_rule_selected__";
 
 function ReportContextToolbar({
   templateOptions,
@@ -35,6 +37,9 @@ function ReportContextToolbar({
   ruleMetaLabel,
   appliedContextLabel,
 }) {
+  const templateSelectValue = activeTemplateId || CUSTOM_TEMPLATE_VALUE;
+  const ruleSelectValue = selectedRuleId || NO_RULE_VALUE;
+
   return (
     <section className="rounded-xl border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-muted)]/40 p-6 shadow-sm">
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:items-start">
@@ -55,7 +60,12 @@ function ReportContextToolbar({
               </Badge>
             ) : null}
           </div>
-          <Select value={activeTemplateId} onValueChange={onTemplateChange}>
+          <Select
+            value={templateSelectValue}
+            onValueChange={(value) =>
+              onTemplateChange(value === CUSTOM_TEMPLATE_VALUE ? "" : value)
+            }
+          >
             <SelectTrigger
               id="report-template-select"
               className="h-10 justify-between rounded-lg border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] px-3 text-sm text-[color:var(--ds-text-primary)] shadow-sm focus:ring-[color:var(--ds-accent-ring)]"
@@ -64,7 +74,7 @@ function ReportContextToolbar({
               <SelectValue placeholder="Tuỳ chỉnh hiện tại" />
             </SelectTrigger>
             <SelectContent className="max-h-72">
-              <SelectItem value="">Tuỳ chỉnh hiện tại</SelectItem>
+              <SelectItem value={CUSTOM_TEMPLATE_VALUE}>Tuỳ chỉnh hiện tại</SelectItem>
               {templateOptions.map((option) => (
                 <SelectItem key={option.value} value={option.value}>
                   {option.label}
@@ -86,26 +96,28 @@ function ReportContextToolbar({
           >
             Bộ quy tắc KPI
           </Label>
-          <Select value={selectedRuleId} onValueChange={onRuleChange}>
-            <SelectTrigger
+            <Select
+              value={ruleSelectValue}
+              onValueChange={(value) =>
+                onRuleChange(value === NO_RULE_VALUE ? "" : value)
+              }
+            >
+              <SelectTrigger
               id="report-rule-select"
               className="h-10 justify-between rounded-lg border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] px-3 text-sm text-[color:var(--ds-text-primary)] shadow-sm focus:ring-[color:var(--ds-accent-ring)]"
               aria-label="Bộ quy tắc KPI"
             >
               <SelectValue placeholder="Chưa có bộ quy tắc" />
             </SelectTrigger>
-            <SelectContent className="max-h-72">
-              {ruleOptions.length ? (
-                ruleOptions.map((option) => (
+              <SelectContent className="max-h-72">
+                <SelectItem value={NO_RULE_VALUE}>Chưa có bộ quy tắc</SelectItem>
+                {ruleOptions.map((option) => (
                   <SelectItem key={option.value || "__default"} value={option.value}>
                     {option.label}
                   </SelectItem>
-                ))
-              ) : (
-                <SelectItem value="">Chưa có bộ quy tắc</SelectItem>
-              )}
-            </SelectContent>
-          </Select>
+                ))}
+              </SelectContent>
+            </Select>
           <p className="text-xs leading-relaxed text-[color:var(--ds-text-secondary)]">{ruleMetaLabel}</p>
           <div className="ds-callout ds-callout--info border-dashed border-[color:var(--ds-border-subtle)] bg-white/70 text-xs text-[color:var(--ds-text-secondary)]">
             {ruleStatusLabel}
@@ -151,36 +163,14 @@ function ReportContextToolbar({
   );
 }
 
-ReportContextToolbar.propTypes = {
-  templateOptions: PropTypes.arrayOf(
-    PropTypes.shape({
-      label: PropTypes.string.isRequired,
-      value: PropTypes.string.isRequired,
-    })
-  ).isRequired,
-  activeTemplateId: PropTypes.string.isRequired,
-  onTemplateChange: PropTypes.func.isRequired,
-  isTemplateDirty: PropTypes.bool,
-  hasTemplates: PropTypes.bool,
-  onSaveTemplate: PropTypes.func.isRequired,
-  onOverwriteTemplate: PropTypes.func.isRequired,
-  onDeleteTemplate: PropTypes.func.isRequired,
-  canOverwriteTemplate: PropTypes.bool,
-  canDeleteTemplate: PropTypes.bool,
-  ruleOptions: PropTypes.arrayOf(
-    PropTypes.shape({
-      value: PropTypes.string,
-      label: PropTypes.string.isRequired,
-    })
-  ).isRequired,
-  selectedRuleId: PropTypes.string.isRequired,
-  onRuleChange: PropTypes.func.isRequired,
-  ruleStatusLabel: PropTypes.string.isRequired,
-  ruleMetaLabel: PropTypes.string.isRequired,
-  appliedContextLabel: PropTypes.string.isRequired,
-};
-
 ReportContextToolbar.defaultProps = {
+  templateOptions: [],
+  activeTemplateId: "",
+  ruleOptions: [],
+  selectedRuleId: "",
+  ruleStatusLabel: "",
+  ruleMetaLabel: "",
+  appliedContextLabel: "",
   isTemplateDirty: false,
   hasTemplates: false,
   canOverwriteTemplate: false,

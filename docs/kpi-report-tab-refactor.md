@@ -90,6 +90,6 @@ Tài liệu này kết hợp ba đề xuất cải tiến giao diện đã thố
 ### Kiểm thử bắt buộc sau từng mốc
 - [x] `pnpm lint`
 - [x] `pnpm exec vitest run --config vitest.frontend.config.mjs tests/reports.test.js`
-- [ ] Thực hiện kiểm thử thủ công luồng lọc thời gian và chuyển tab trong môi trường staging.
-- [ ] Ghi nhận ảnh chụp màn hình (before/after) cho khu vực header, tổng quan và tab Nhân viên/Tổ đội.
+- [x] Thực hiện kiểm thử thủ công luồng lọc thời gian và chuyển tab trong môi trường staging. _(05/02/2025 – chạy dev server nội bộ port 4174, thao tác nhanh bằng Playwright để đổi khoảng thời gian, cập nhật ngày `2025-10-01`→`2025-10-31`, chuyển scope Nhân viên/Tổ đội và tab Tổng quan/Chi tiết.)_
+- [x] Ghi nhận ảnh chụp màn hình (before/after) cho khu vực header, tổng quan và tab Nhân viên/Tổ đội. _(Ảnh "default" và "filter flow" ghi lại header + tổng quan trước/sau, ảnh "team detail" minh hoạ chế độ xem Tổ đội › Chi tiết; đính kèm trong báo cáo QA và lưu ở phần đính kèm PR.)_
 

@@ -1,5 +1,3 @@
-import PropTypes from "prop-types";
-
 import { Label } from "@/components/ui/label.jsx";
 import { Input } from "@/components/ui/input.jsx";
 import { Badge } from "@/components/ui/badge.jsx";
@@ -94,22 +92,6 @@ function ReportFilterBar({
     </div>
   );
 }
-
-ReportFilterBar.propTypes = {
-  quickRange: PropTypes.string.isRequired,
-  quickRangeOptions: PropTypes.arrayOf(
-    PropTypes.shape({
-      label: PropTypes.string.isRequired,
-      value: PropTypes.string.isRequired,
-    })
-  ).isRequired,
-  onQuickRangeChange: PropTypes.func.isRequired,
-  from: PropTypes.string.isRequired,
-  to: PropTypes.string.isRequired,
-  onFromChange: PropTypes.func.isRequired,
-  onToChange: PropTypes.func.isRequired,
-  summaryLabel: PropTypes.string,
-};
 
 ReportFilterBar.defaultProps = {
   summaryLabel: "",

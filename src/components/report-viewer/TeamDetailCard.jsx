@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 
 import { aggregateByCompany } from "@/lib/reports.js";
 import { formatDisplayDate } from "@/shared/format.js";
-import { toAdjustmentTotalsArray } from "@/shared/kpiAdjustments.js";
+import { toAdjustmentTotalsArray } from "../../shared/kpiAdjustments.js";
 import {
   DEFAULT_DETAIL_PAGE_SIZE,
   DETAIL_PAGE_SIZE_OPTIONS,
