@@ -200,6 +200,10 @@ const TOP_STAFF_VISIBLE_COUNT_OPTIONS = [5, 7, 8, 9, 10, 12, 15];
 
 const TOP_STAFF_VISIBLE_COUNT_SET = new Set(TOP_STAFF_VISIBLE_COUNT_OPTIONS);
 
+const TOP_COMPANY_VISIBLE_COUNT_OPTIONS = [5, 10, 15, 20, 25, 30, 40, 50];
+
+const TOP_COMPANY_VISIBLE_COUNT_SET = new Set(TOP_COMPANY_VISIBLE_COUNT_OPTIONS);
+
 
 
 const REPORT_PREFS_STORAGE_KEY = "kpi_report_viewer_prefs_v1";
@@ -301,6 +305,30 @@ function sanitizeTopStaffVisibleCount(value) {
 }
 
 
+
+
+
+function sanitizeTopCompanyVisibleCount(value) {
+
+  if (value === "all") {
+
+    return "all";
+
+  }
+
+  const num = Number(value);
+
+  if (!Number.isFinite(num)) {
+
+    return 10;
+
+  }
+
+  const rounded = Math.round(num);
+
+  return TOP_COMPANY_VISIBLE_COUNT_SET.has(rounded) ? rounded : 10;
+
+}
 
 function sanitizeSelection(value) {
 
@@ -1470,302 +1498,209 @@ function TeamMetricPieCard({ title, data, valueFormatter, percentLabel, emptyMes
 
 
 
-function TeamPieWidget({ kpiData, declData, palette = DEFAULT_CHART_COLORS }) {
-
+function TeamPieWidget({ kpiData, declData, palette = DEFAULT_CHART_COLORS, variant = "card" }) {
+  const content = (
+    <div className="grid gap-6 lg:grid-cols-2">
+      <TeamMetricPieCard
+        title="Phân bổ KPI theo tổ đội"
+        data={kpiData}
+        valueFormatter={formatDecimal}
+        percentLabel="KPI"
+        emptyMessage="Chưa có dữ liệu KPI cho các tổ đội."
+        palette={palette}
+      />
+      <TeamMetricPieCard
+        title="Phân bổ lượng tờ khai theo tổ đội"
+        data={declData}
+        valueFormatter={formatInt}
+        percentLabel="tờ khai"
+        emptyMessage="Chưa có dữ liệu tờ khai cho các tổ đội."
+        palette={palette}
+      />
+    </div>
+  );
+  if (variant === "inline") {
+    return <div className="space-y-6">{content}</div>;
+  }
   return (
-
     <section className="ds-card space-y-6 p-4">
-
-      <div className="grid gap-6 lg:grid-cols-2">
-
-        <TeamMetricPieCard
-
-          title="Phân bổ KPI theo tổ đội"
-
-          data={kpiData}
-
-          valueFormatter={formatDecimal}
-
-          percentLabel="KPI"
-
-          emptyMessage="Chưa có dữ liệu KPI cho các tổ đội."
-
-          palette={palette}
-
-        />
-
-        <TeamMetricPieCard
-
-          title="Phân bổ lượng tờ khai theo tổ đội"
-
-          data={declData}
-
-          valueFormatter={formatInt}
-
-          percentLabel="tờ khai"
-
-          emptyMessage="Chưa có dữ liệu tờ khai cho các tổ đội."
-
-          palette={palette}
-
-        />
-
-      </div>
-
+      {content}
     </section>
-
   );
-
 }
 
 
-
-function TopCompanyLeaderboard({ periods = [], selectedKey, onPeriodChange }) {
-
+function TopCompanyLeaderboard({
+  periods = [],
+  selectedKey,
+  onPeriodChange,
+  visibleCount = 10,
+  onVisibleCountChange,
+  visibleCountOptions = TOP_COMPANY_VISIBLE_COUNT_OPTIONS,
+}) {
   const hasData = Array.isArray(periods) && periods.length > 0;
-
   const activePeriod = hasData
-
     ? periods.find((item) => item.key === selectedKey) || periods[0]
-
     : null;
-
   const rows = Array.isArray(activePeriod?.topCompanies) ? activePeriod.topCompanies : [];
-
   const totalDecls = Number(activePeriod?.totalDecls || 0);
-
-  const otherCompanyCount = Math.max(0, Number(activePeriod?.periodCompanyCount || 0) - rows.length);
-
-  const activeKey = activePeriod?.key || "";
-
-  const activeLabel = activePeriod?.label || "";
-
+  const totalCompanies = rows.length;
+  const normalizedVisible = visibleCount === 'all' ? totalCompanies : Number(visibleCount) || 10;
+  const limit = visibleCount === 'all' ? totalCompanies : Math.max(1, Math.round(normalizedVisible));
+  const displayRows = rows.slice(0, limit);
+  const otherCompanyCount = Math.max(0, totalCompanies - displayRows.length);
+  const activeKey = activePeriod?.key || '';
   const handlePeriodChange = (event) => {
-
-    onPeriodChange?.(event?.target?.value || "");
-
+    onPeriodChange?.(event?.target?.value || '');
   };
-
+  const handleVisibleCountChange = (event) => {
+    onVisibleCountChange?.(event?.target?.value || '');
+  };
   return (
-
     <section className="ds-card space-y-4 p-4">
-
       <div className="flex flex-wrap items-start justify-between gap-4">
-
         <div className="space-y-1">
-
-          <h3 className="text-base font-semibold text-[color:var(--ds-text-primary)]">Top 10 công ty theo tờ khai</h3>
-
+          <h3 className="text-base font-semibold text-[color:var(--ds-text-primary)]">
+            Xếp hạng doanh nghiệp theo tờ khai
+          </h3>
           {hasData ? (
-
-            <p className="text-sm text-[color:var(--ds-text-muted)]">
-
-              Thống kê dựa trên dữ liệu tờ khai đã lọc. Chọn kỳ báo cáo để so sánh hiệu suất giữa các doanh nghiệp.
-
+            <p className="text-xs text-[color:var(--ds-text-muted)]">
+              {totalCompanies > 0
+                ? `Đang hiển thị ${displayRows.length}/${totalCompanies} công ty`
+                : 'Chưa có dữ liệu top doanh nghiệp cho kỳ này.'}
             </p>
-
           ) : (
-
-            <p className="text-sm text-[color:var(--ds-text-muted)]">
-
-              Chưa có dữ liệu tờ khai trong khoảng thời gian hiện tại.
-
+            <p className="text-xs text-[color:var(--ds-text-muted)]">
+              Chưa có dữ liệu top doanh nghiệp cho kỳ này.
             </p>
-
           )}
-
         </div>
-
         {hasData ? (
-
-          <div className="flex flex-wrap items-center gap-2">
-
-            <label className="text-xs font-semibold uppercase text-[color:var(--ds-text-secondary)]" htmlFor="top-company-period">
-
-              Kỳ báo cáo
-
+          <div className="flex flex-wrap gap-3 text-sm text-[color:var(--ds-text-secondary)]">
+            <label className="flex flex-col gap-1">
+              <span className="text-[11px] uppercase tracking-wide text-[color:var(--ds-text-muted)]">
+                Kỳ dữ liệu
+              </span>
+              <select
+                className="rounded border border-[color:var(--ds-border-subtle)] bg-white/80 px-3 py-1.5 text-sm font-medium text-[color:var(--ds-text-primary)] shadow-sm"
+                value={activeKey}
+                onChange={handlePeriodChange}
+              >
+                {periods.map((item) => (
+                  <option key={item.key} value={item.key}>
+                    {item.label || item.key}
+                  </option>
+                ))}
+              </select>
             </label>
-
-            <select
-
-              id="top-company-period"
-
-              value={activeKey}
-
-              onChange={handlePeriodChange}
-
-              className="rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] px-3 py-1.5 text-sm text-[color:var(--ds-text-primary)] shadow-sm focus:outline-none focus:ring-2 focus:ring-[color:var(--ds-accent-ring)] focus:ring-offset-0"
-
-            >
-
-              {periods.map((period) => (
-
-                <option key={period.key} value={period.key}>
-
-                  {period.label}
-
-                </option>
-
-              ))}
-
-            </select>
-
+            <label className="flex flex-col gap-1">
+              <span className="text-[11px] uppercase tracking-wide text-[color:var(--ds-text-muted)]">
+                Số công ty hiển thị
+              </span>
+              <select
+                className="rounded border border-[color:var(--ds-border-subtle)] bg-white/80 px-3 py-1.5 text-sm font-medium text-[color:var(--ds-text-primary)] shadow-sm"
+                value={String(visibleCount)}
+                onChange={handleVisibleCountChange}
+              >
+                {visibleCountOptions.map((option) => (
+                  <option key={option} value={String(option)}>
+                    {option} công ty
+                  </option>
+                ))}
+                <option value="all">Tất cả</option>
+              </select>
+            </label>
           </div>
-
         ) : null}
-
       </div>
-
-      {!hasData ? (
-
-        <div className="rounded border border-dashed border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-muted)] p-4 text-sm text-[color:var(--ds-text-muted)]">
-
-          Thay đổi khoảng thời gian hoặc kiểm tra dữ liệu import để thấy bảng xếp hạng doanh nghiệp.
-
-        </div>
-
-      ) : (
-
+      {hasData ? (
         <>
-
-          <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-[color:var(--ds-text-secondary)]">
-
-            <div>
-
-              {activeLabel ? `Kỳ ${activeLabel}` : ""}
-
-              {totalDecls > 0 ? ` • Tổng ${formatInt(totalDecls)} tờ khai` : ""}
-
-            </div>
-
-            {otherCompanyCount > 0 ? (
-
-              <div>Còn {otherCompanyCount} công ty khác ngoài Top 10</div>
-
-            ) : null}
-
-          </div>
-
-          <div className="overflow-auto rounded border border-[color:var(--ds-border-subtle)]">
-
-            <table className="min-w-full text-sm text-[color:var(--ds-text-primary)]">
-
-              <thead className="bg-[color:var(--ds-surface-muted)] text-xs uppercase tracking-wide text-[color:var(--ds-text-secondary)]">
-
+          <p className="text-xs text-[color:var(--ds-text-muted)]">
+            Dữ liệu được lấy từ tổng số tờ khai của từng doanh nghiệp trong kỳ. Bạn có thể mở rộng danh sách nếu màn hình còn đủ
+            không gian.
+          </p>
+          <div className="max-h-[30rem] overflow-x-auto overflow-y-auto rounded-lg border border-[color:var(--ds-border-subtle)] bg-white/70 shadow-sm">
+            <table className="min-w-full divide-y divide-[color:var(--ds-border-subtle)] text-sm">
+              <thead className="bg-[color:var(--ds-surface-muted)] text-[color:var(--ds-text-secondary)]">
                 <tr>
-
-                  <th className="px-3 py-2 text-left">#</th>
-
-                  <th className="px-3 py-2 text-left">Doanh nghiệp</th>
-
-                  <th className="px-3 py-2 text-right">Số tờ khai</th>
-
-                  <th className="px-3 py-2">Tỷ trọng</th>
-
-                  <th className="px-3 py-2 text-right">Điểm KPI</th>
-
+                  <th scope="col" className="px-3 py-2 text-left font-medium">
+                    Thứ hạng
+                  </th>
+                  <th scope="col" className="px-3 py-2 text-left font-medium">
+                    Doanh nghiệp
+                  </th>
+                  <th scope="col" className="px-3 py-2 text-left font-medium">
+                    Mã số thuế
+                  </th>
+                  <th scope="col" className="px-3 py-2 text-right font-medium">
+                    Số tờ khai
+                  </th>
+                  <th scope="col" className="px-3 py-2 text-right font-medium">
+                    Điểm KPI
+                  </th>
+                  <th scope="col" className="px-3 py-2 text-right font-medium">
+                    Thị phần
+                  </th>
                 </tr>
-
               </thead>
-
-              <tbody>
-
-                {rows.length ? (
-
-                  rows.map((row, index) => {
-
-                    const companyLabel = row.cong_ty || row.mst || "Không xác định";
-
-                    const taxLabel = row.mst ? `MST: ${row.mst}` : "Không có MST";
-
-                    const sharePercent = Math.round((Number(row.share || 0) || 0) * 1000) / 10;
-
-                    const widthPercent = Math.max(0, Math.min(100, sharePercent));
-
+              <tbody className="divide-y divide-[color:var(--ds-border-subtle)] bg-white">
+                {displayRows.length ? (
+                  displayRows.map((row, index) => {
+                    const sharePercent = totalDecls > 0 ? (Number(row.decls || 0) / totalDecls) * 100 : 0;
+                    const widthPercent = Math.min(100, Math.max(0, sharePercent));
                     return (
-
-                      <tr key={`${row.mst || row.cong_ty || "unknown"}-${index}`} className="border-b border-[color:var(--ds-border-subtle)] last:border-b-0">
-
-                        <td className="px-3 py-2 text-sm font-semibold text-[color:var(--ds-text-secondary)]">{index + 1}</td>
-
-                        <td className="px-3 py-2">
-
-                          <div className="font-semibold text-[color:var(--ds-text-primary)]">{companyLabel}</div>
-
-                          <div className="text-xs text-[color:var(--ds-text-muted)]">{taxLabel}</div>
-
-                        </td>
-
+                      <tr key={`${row.mst || row.cong_ty || 'company'}-${index}`} className="hover:bg-[color:var(--ds-surface-muted)]/60">
+                        <td className="px-3 py-2 text-sm font-semibold text-[color:var(--ds-text-secondary)]">#{index + 1}</td>
+                        <td className="px-3 py-2 font-medium text-[color:var(--ds-text-primary)]">{row.cong_ty || 'Chưa cập nhật'}</td>
+                        <td className="px-3 py-2 text-[color:var(--ds-text-secondary)]">{row.mst || '—'}</td>
                         <td className="px-3 py-2 text-right font-semibold text-[color:var(--ds-text-primary)]">{formatInt(row.decls)}</td>
-
+                        <td className="px-3 py-2 text-right text-[color:var(--ds-text-secondary)]">{formatDecimal(row.kpi)}</td>
                         <td className="px-3 py-2">
-
                           <div className="flex items-center gap-2">
-
                             <div className="h-2 flex-1 rounded-full bg-[color:var(--ds-border-subtle)]">
-
                               <div
-
                                 className="h-2 rounded-full bg-[color:var(--ds-accent-strong)]"
-
                                 style={{ width: `${widthPercent}%` }}
-
                                 aria-hidden="true"
-
                               />
-
                             </div>
-
                             <span className="w-12 text-right text-xs text-[color:var(--ds-text-secondary)]">{sharePercent.toFixed(1)}%</span>
-
                           </div>
-
                         </td>
-
-                        <td className="px-3 py-2 text-right font-semibold text-[color:var(--ds-text-secondary)]">{formatDecimal(row.kpi)}</td>
-
                       </tr>
-
                     );
-
                   })
-
                 ) : (
-
                   <tr>
-
-                    <td className="px-3 py-6 text-center text-sm text-[color:var(--ds-text-muted)]" colSpan={5}>
-
+                    <td className="px-3 py-6 text-center text-sm text-[color:var(--ds-text-muted)]" colSpan={6}>
                       Không có dữ liệu top doanh nghiệp cho kỳ này.
-
                     </td>
-
                   </tr>
-
                 )}
-
               </tbody>
-
             </table>
-
           </div>
-
+          {otherCompanyCount > 0 ? (
+            <div className="text-xs text-[color:var(--ds-text-muted)]">
+              Còn {otherCompanyCount} công ty khác ngoài danh sách đang hiển thị.
+            </div>
+          ) : null}
         </>
-
+      ) : (
+        <div className="rounded-lg border border-dashed border-[color:var(--ds-border-subtle)] p-6 text-center text-sm text-[color:var(--ds-text-muted)]">
+          Chưa có dữ liệu doanh nghiệp cho kỳ này.
+        </div>
       )}
-
     </section>
-
   );
-
 }
+
 
 function KpiOverviewSection({
   summary,
   summaryCompanyCardValue,
   companyCardSubtitle,
   adjustmentsReport,
-  overviewTopStaff,
   overviewAlerts,
   trendSeries,
   trendComparison,
@@ -1773,7 +1708,9 @@ function KpiOverviewSection({
   teamDeclPieData,
   companyLeaderboard,
   topCompanyPeriod,
+  topCompanyVisibleCount,
   onTopCompanyPeriodChange,
+  onTopCompanyVisibleCountChange,
   topStaffMetric,
   onTopStaffMetricChange,
   topStaffByKpi,
@@ -1793,594 +1730,271 @@ function KpiOverviewSection({
       </header>
       <div className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
         <div className="space-y-6">
-          <section className="space-y-3">
-            <header className="space-y-1">
-              <h3 className="text-sm font-semibold uppercase tracking-wide text-[color:var(--ds-text-secondary)]">
-                Diễn biến hiệu suất
-              </h3>
-              <p className="text-xs text-[color:var(--ds-text-muted)]">
-                Xu hướng điểm KPI, tờ khai và cảnh báo nổi bật theo thời gian.
-              </p>
-            </header>
-            <KpiOverviewDashboard
-              summary={summary}
-              adjustmentsTotal={Number(adjustmentsReport.totalPoints || 0)}
-              trendSeries={trendSeries}
-              comparison={trendComparison}
-              topStaff={overviewTopStaff}
-              alerts={overviewAlerts}
-              palette={palette}
-            />
-          </section>
-          <section className="space-y-3">
-            <header className="space-y-1">
-              <h3 className="text-sm font-semibold uppercase tracking-wide text-[color:var(--ds-text-secondary)]">
-                Chỉ số tổng hợp
-              </h3>
-              <p className="text-xs text-[color:var(--ds-text-muted)]">
-                Tổng hợp nhanh các chỉ số quan trọng nhất của kỳ báo cáo.
-              </p>
-            </header>
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              <SummaryCard
-                title="Tổng tờ khai"
-                value={formatInt(summary.decls)}
-                subtitle={`Nhập: ${formatInt(summary.import)} • Xuất: ${formatInt(summary.export)}`}
-              />
-              <SummaryCard
-                title="Tổng điểm KPI"
-                value={formatDecimal(summary.kpi)}
-                subtitle="Bao gồm điểm loại hình và giấy phép"
-              />
-              <SummaryCard
-                title="Điểm KPI +/- bổ sung"
-                value={formatDecimal(adjustmentsReport.totalPoints || 0)}
-                subtitle={`Đã duyệt: ${formatInt(adjustmentsReport.approvedCount || 0)} • Chờ duyệt: ${formatInt(
-                  adjustmentsReport.pendingCount || 0,
-                )}`}
-              />
-              <SummaryCard
-                title="Tổng số công ty"
-                value={formatInt(summaryCompanyCardValue)}
-                subtitle={companyCardSubtitle}
-              />
-              <SummaryCard
-                title="Số giấy phép hợp lệ"
-                value={formatInt(summary.licenses)}
-                subtitle={`Đã loại trừ • ${formatInt(summary.licenseCount ?? 0)} mã khác nhau`}
-              />
-              <SummaryCard
-                title="Tờ khai có C/O"
-                value={formatInt(summary.co ?? 0)}
-                subtitle={`Tổng dòng áp C/O: ${formatInt(summary.coLines ?? 0)}`}
-              />
-              <SummaryCard
-                title="Danh sách mã giấy phép"
-                value={formatInt(summary.licenseCount ?? 0)}
-                subtitle={summary.licenseSummary || "—"}
-              />
-            </div>
-          </section>
-          <section className="space-y-3">
-            <header className="space-y-1">
-              <h3 className="text-sm font-semibold uppercase tracking-wide text-[color:var(--ds-text-secondary)]">
-                Cơ cấu tổ đội
-              </h3>
-              <p className="text-xs text-[color:var(--ds-text-muted)]">
-                Tỷ trọng điểm KPI và số tờ khai giữa các tổ đội trong cùng kỳ báo cáo.
-              </p>
-            </header>
-            <TeamPieWidget kpiData={teamPieData} declData={teamDeclPieData} palette={palette} />
-          </section>
+          <KpiOverviewDashboard
+            summary={summary}
+            summaryCompanyCardValue={summaryCompanyCardValue}
+            companyCardSubtitle={companyCardSubtitle}
+            adjustmentsTotal={Number(adjustmentsReport.totalPoints || 0)}
+            trendSeries={trendSeries}
+            comparison={trendComparison}
+            alerts={overviewAlerts}
+            palette={palette}
+            teamPieData={teamPieData}
+            teamDeclPieData={teamDeclPieData}
+          />
+          {children}
         </div>
-        <div className="space-y-3">
-          <div className="flex flex-col gap-1">
+        <div className="space-y-4">
+          <div className="space-y-1">
             <h3 className="text-sm font-semibold uppercase tracking-wide text-[color:var(--ds-text-secondary)]">
               Xếp hạng nổi bật
             </h3>
             <p className="text-xs text-[color:var(--ds-text-muted)]">
-              So sánh nhân sự dẫn đầu và Top 10 doanh nghiệp trong cùng bộ lọc.
+              So sánh nhân sự dẫn đầu và doanh nghiệp phát sinh tờ khai trong cùng bộ lọc.
             </p>
           </div>
-          <div className="space-y-6">
-            <TopStaffWidget
-              metric={topStaffMetric}
-              onMetricChange={onTopStaffMetricChange}
-              kpiData={topStaffByKpi}
-              declData={topStaffByDecls}
-              palette={palette}
-              visibleCountPreference={topStaffVisibleCount}
-              onVisibleCountPreferenceChange={onTopStaffVisibleCountChange}
-            />
-            <TopCompanyLeaderboard
-              periods={companyLeaderboard}
-              selectedKey={topCompanyPeriod}
-              onPeriodChange={onTopCompanyPeriodChange}
-            />
-          </div>
+          <TopStaffWidget
+            metric={topStaffMetric}
+            onMetricChange={onTopStaffMetricChange}
+            kpiData={topStaffByKpi}
+            declData={topStaffByDecls}
+            visibleCount={topStaffVisibleCount}
+            onVisibleCountPreferenceChange={onTopStaffVisibleCountChange}
+            palette={palette}
+          />
+          <TopCompanyLeaderboard
+            periods={companyLeaderboard}
+            selectedKey={topCompanyPeriod}
+            onPeriodChange={onTopCompanyPeriodChange}
+            visibleCount={topCompanyVisibleCount}
+            onVisibleCountChange={onTopCompanyVisibleCountChange}
+            visibleCountOptions={TOP_COMPANY_VISIBLE_COUNT_OPTIONS}
+          />
         </div>
       </div>
-      {children ? <div className="space-y-6">{children}</div> : null}
     </section>
   );
 }
-
-
-
-function TrendLineChart({ data, comparison, palette = DEFAULT_CHART_COLORS, variant = "card" }) {
-
-  const colors = Array.isArray(palette) && palette.length ? palette : DEFAULT_CHART_COLORS;
-
-  const kpiColor = colors[0] ?? DEFAULT_CHART_COLORS[0];
-
-  const declColor = colors[1] ?? DEFAULT_CHART_COLORS[1];
-
-  const deltaKPI = comparison?.delta?.kpi ?? 0;
-
-  const deltaDecls = comparison?.delta?.decls ?? 0;
-
-  const deltaPercent = comparison?.delta?.kpiPercent ?? null;
-
-  const deltaClass =
-
-    deltaKPI > 0 ? "text-emerald-600" : deltaKPI < 0 ? "text-red-600" : "text-[color:var(--ds-text-secondary)]";
-
-  const renderDeltaSummary = () => {
-
-    if (!comparison) {
-
-      return null;
-
-    }
-
-    return (
-
-      <>
-
-        So với kỳ liền trước:
-
-        <span className={`ml-1 font-medium ${deltaClass}`}>
-
-          {deltaKPI > 0 ? "+" : ""}{deltaKPI.toFixed(1)} điểm KPI
-
-        </span>
-
-        {deltaPercent !== null && (
-
-          <span className={`ml-1 ${deltaClass}`}>
-
-            ({deltaPercent > 0 ? "+" : ""}{deltaPercent.toFixed(1)}%)
-
-          </span>
-
-        )}
-
-        <span className="ml-2 text-[color:var(--ds-text-muted)]">
-
-          {deltaDecls > 0 ? "+" : ""}{formatInt(deltaDecls)} tờ khai
-
-        </span>
-
-      </>
-
-    );
-
-  };
-
-  if (!data || data.length === 0) {
-
-    if (variant === "inline") {
-
-      return (
-
-        <div className="rounded border border-dashed border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-muted)] p-4 text-sm text-[color:var(--ds-text-muted)]">
-
-          Chưa có dữ liệu để hiển thị biểu đồ xu hướng.
-
-        </div>
-
-      );
-
-    }
-
-    return (
-
-      <section className="ds-card space-y-3 p-4">
-
-        <h3 className="text-base font-semibold text-gray-900">Xu hướng KPI 6 kỳ gần nhất</h3>
-
-        <p className="mt-3 text-sm text-gray-500">Chưa có dữ liệu để hiển thị biểu đồ xu hướng.</p>
-
-      </section>
-
-    );
-
-  }
-
-
-
-  const chart = (
-
-    <ResponsiveContainer width="100%" height="100%">
-
-      <LineChart data={data} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
-
-        <CartesianGrid strokeDasharray="3 3" />
-
-        <XAxis dataKey="period" />
-
-        <YAxis yAxisId="left" stroke={kpiColor} />
-
-        <YAxis yAxisId="right" orientation="right" stroke={declColor} />
-
-        <Tooltip />
-
-        <Legend />
-
-        <Line yAxisId="left" type="monotone" dataKey="kpi" name="Điểm KPI" stroke={kpiColor} strokeWidth={2} />
-
-        <Line yAxisId="right" type="monotone" dataKey="decls" name="Tờ khai" stroke={declColor} strokeWidth={2} />
-
-      </LineChart>
-
-    </ResponsiveContainer>
-
-  );
-
-
-
-  if (variant === "inline") {
-
-    return (
-
-      <div className="space-y-3">
-
-        <div className="flex flex-wrap items-center justify-between gap-2">
-
-          <h4 className="text-sm font-semibold text-[color:var(--ds-text-primary)]">Xu hướng KPI 6 kỳ gần nhất</h4>
-
-          {comparison ? (
-
-            <div className="text-xs text-[color:var(--ds-text-muted)]">{renderDeltaSummary()}</div>
-
-          ) : null}
-
-        </div>
-
-        <div className="h-56 w-full">{chart}</div>
-
-      </div>
-
-    );
-
-  }
-
-
-
-  return (
-
-    <section className="ds-card space-y-4 p-4">
-
-      <div className="flex items-baseline justify-between gap-2">
-
-        <h3 className="text-base font-semibold text-gray-900">Xu hướng KPI 6 kỳ gần nhất</h3>
-
-        {comparison ? <div className="text-xs text-gray-500">{renderDeltaSummary()}</div> : null}
-
-      </div>
-
-      <div className="mt-4 h-64 w-full">{chart}</div>
-
-    </section>
-
-  );
-
-}
-
 
 
 function KpiOverviewDashboard({
-
   summary = {},
-
+  summaryCompanyCardValue = 0,
+  companyCardSubtitle = '',
   adjustmentsTotal = 0,
-
   trendSeries = [],
-
   comparison = null,
-
-  topStaff = [],
-
   alerts = [],
-
   palette = DEFAULT_CHART_COLORS,
-
+  teamPieData = [],
+  teamDeclPieData = [],
 }) {
-
   const totalKpi = Number(summary?.kpi || 0);
-
-  const totalDecls = Number(summary?.decls || 0);
-
   const importDecls = Number(summary?.import || 0);
-
   const exportDecls = Number(summary?.export || 0);
-
   const adjustmentsValue = Number(adjustmentsTotal || 0);
-
-  const staffEntries = Array.isArray(topStaff) ? topStaff.slice(0, 3) : [];
-
   const alertEntries = Array.isArray(alerts) && alerts.length ? alerts : [];
-
-  const cards = [
-
+  const summaryCards = [
     {
-
-      label: "Tổng KPI",
-
+      title: 'Tổng tờ khai',
+      value: formatInt(summary.decls),
+      subtitle: `Nhập: ${formatInt(importDecls)} • Xuất: ${formatInt(exportDecls)}`,
+    },
+    {
+      title: 'Tổng điểm KPI',
       value: formatDecimal(totalKpi),
-
-      note:
-
+      subtitle:
         comparison?.delta?.kpiPercent != null
-
-          ? `So với kỳ trước ${comparison.delta.kpiPercent > 0 ? "tăng" : "giảm"} ${Math.abs(
-
+          ? `So với kỳ trước ${comparison.delta.kpiPercent > 0 ? 'tăng' : 'giảm'} ${Math.abs(
               comparison.delta.kpiPercent
-
             ).toFixed(1)}%`
-
-          : "Bao gồm điểm loại hình & giấy phép",
-
+          : 'Bao gồm điểm loại hình & giấy phép',
     },
-
     {
-
-      label: "Tờ khai hợp lệ",
-
-      value: formatInt(totalDecls),
-
-      note: `Nhập ${formatInt(importDecls)} • Xuất ${formatInt(exportDecls)}`,
-
-    },
-
-    {
-
-      label: "Điểm KPI +/- bổ sung",
-
+      title: 'Điểm KPI +/- bổ sung',
       value: formatDecimal(adjustmentsValue),
-
-      note:
-
+      subtitle:
         adjustmentsValue === 0
-
-          ? "Chưa có điều chỉnh trong kỳ"
-
+          ? 'Chưa có điều chỉnh trong kỳ'
           : adjustmentsValue > 0
-
           ? `Đang cộng ${formatDecimal(adjustmentsValue)} điểm`
-
           : `Đang trừ ${formatDecimal(Math.abs(adjustmentsValue))} điểm`,
-
     },
-
+    {
+      title: 'Tổng số công ty',
+      value: formatInt(summaryCompanyCardValue),
+      subtitle: companyCardSubtitle || 'Theo bộ lọc hiện tại',
+    },
+    {
+      title: 'Số giấy phép hợp lệ',
+      value: formatInt(summary.licenses),
+      subtitle: `Đã loại trừ • ${formatInt(summary.licenseCount ?? 0)} mã khác nhau`,
+    },
+    {
+      title: 'Tờ khai có C/O',
+      value: formatInt(summary.co ?? 0),
+      subtitle: `Tổng dòng áp C/O: ${formatInt(summary.coLines ?? 0)}`,
+    },
   ];
-
   return (
-
-    <section className="ds-card space-y-4 p-4">
-
-      <div className="flex flex-wrap items-start justify-between gap-4">
-
-        <div className="space-y-1">
-
-          <h3 className="text-base font-semibold text-[color:var(--ds-text-primary)]">Dashboard KPI tổng quan</h3>
-
-          <p className="text-sm text-[color:var(--ds-text-muted)]">
-
-            Tóm tắt nhanh hiệu suất KPI gần đây cùng cảnh báo các biến động bất thường.
-
-          </p>
-
-        </div>
-
-        <div className="grid gap-3 text-right text-sm sm:auto-cols-max sm:grid-flow-col">
-
-          {cards.map((item) => (
-
-            <div key={item.label} className="space-y-1">
-
-              <div className="text-[11px] font-semibold uppercase tracking-wide text-[color:var(--ds-text-muted)]">
-
-                {item.label}
-
-              </div>
-
-              <div className="text-lg font-semibold text-[color:var(--ds-text-primary)]">{item.value}</div>
-
-              <div className="text-[11px] text-[color:var(--ds-text-secondary)]">{item.note}</div>
-
-            </div>
-
-          ))}
-
-        </div>
-
+    <section className="rounded-3xl border border-[color:var(--ds-border-subtle)] bg-white/90 p-6 shadow-sm">
+      <div className="space-y-1">
+        <h3 className="text-base font-semibold text-[color:var(--ds-text-primary)]">Diễn biến & cơ cấu KPI</h3>
+        <p className="text-sm text-[color:var(--ds-text-secondary)]">
+          Toàn bộ chỉ số, xu hướng và cơ cấu tổ đội được cập nhật tự động theo khoảng thời gian bạn đã chọn.
+        </p>
       </div>
-
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
-
-        <div className="rounded-lg border border-[color:var(--ds-border-subtle)] bg-white/70 p-4">
-
-          <TrendLineChart variant="inline" data={trendSeries} comparison={comparison} palette={palette} />
-
-        </div>
-
-        <div className="space-y-4">
-
-          <div className="rounded-lg border border-[color:var(--ds-border-subtle)] bg-white/70 p-4">
-
-            <div className="flex items-center justify-between gap-2">
-
-              <span className="text-sm font-semibold text-[color:var(--ds-text-primary)]">Top nhân sự nổi bật</span>
-
-              <span className="text-[11px] uppercase text-[color:var(--ds-text-muted)]">Top 3 KPI</span>
-
-            </div>
-
-            <ul className="mt-2 space-y-2">
-
-              {staffEntries.length ? (
-
-                staffEntries.map((entry, index) => (
-
-                  <li
-
-                    key={entry.key || `${entry.name || "staff"}-${index}`}
-
-                    className="flex items-center justify-between gap-3 rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-muted)] px-3 py-2 text-sm"
-
-                  >
-
-                    <div className="flex items-center gap-3">
-
-                      <span className="text-xs font-semibold text-[color:var(--ds-text-muted)]">#{index + 1}</span>
-
-                      <div>
-
-                        <div className="font-medium text-[color:var(--ds-text-primary)]">{entry.name}</div>
-
-                        <div className="text-[11px] text-[color:var(--ds-text-secondary)]">
-
-                          {entry.team ? entry.team : "Chưa gán tổ đội"}
-
-                        </div>
-
-                      </div>
-
-                    </div>
-
-                    <div className="text-right text-[11px] text-[color:var(--ds-text-secondary)]">
-
-                      <div className="font-semibold text-[color:var(--ds-text-primary)]">{entry.kpiLabel} KPI</div>
-
-                      <div>{entry.declsLabel} tờ khai</div>
-
-                    </div>
-
-                  </li>
-
-                ))
-
-              ) : (
-
-                <li className="rounded border border-dashed border-[color:var(--ds-border-subtle)] p-3 text-sm text-[color:var(--ds-text-muted)]">
-
-                  Chưa có dữ liệu KPI cho nhân sự.
-
-                </li>
-
-              )}
-
-            </ul>
-
-          </div>
-
-          <div className="rounded-lg border border-[color:var(--ds-border-subtle)] bg-white/70 p-4">
-
-            <div className="flex items-center justify-between gap-2">
-
-              <span className="text-sm font-semibold text-[color:var(--ds-text-primary)]">Cảnh báo lệch chuẩn</span>
-
-              <span className="text-[11px] uppercase text-[color:var(--ds-text-muted)]">6 kỳ gần nhất</span>
-
-            </div>
-
-            <ul className="mt-2 space-y-2 text-sm">
-
+      <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1.75fr)_minmax(0,1fr)]">
+        <div className="space-y-6">
+          <div className="space-y-4 rounded-2xl border border-[color:var(--ds-border-subtle)] bg-gradient-to-br from-white via-[color:var(--ds-surface-muted)]/60 to-white p-4 shadow-inner">
+            <TrendLineChart variant="inline" data={trendSeries} comparison={comparison} palette={palette} />
+            <div className="grid gap-3 md:grid-cols-2">
               {alertEntries.length ? (
-
                 alertEntries.map((alert) => {
-
                   const tone = ALERT_TONE_STYLES[alert.tone] || ALERT_TONE_STYLES.info;
-
                   return (
-
-                    <li
-
+                    <div
                       key={alert.key}
-
-                      className="space-y-1 rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-muted)] p-3"
-
+                      className="space-y-1 rounded-2xl border border-[color:var(--ds-border-subtle)] bg-white/80 p-3 shadow-sm"
                     >
-
                       <div className="flex items-center justify-between gap-2">
-
                         <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${tone.badge}`}>
-
-                          {alert.badge || "Lưu ý"}
-
+                          {alert.badge || 'Lưu ý'}
                         </span>
-
-                        <span className={`text-xs font-medium ${tone.title}`}>{alert.title}</span>
-
+                        <span className={`text-xs font-semibold ${tone.title}`}>{alert.title}</span>
                       </div>
-
                       {alert.detail ? (
-
-                        <p className="text-[11px] leading-relaxed text-[color:var(--ds-text-secondary)]">{alert.detail}</p>
-
+                        <p className="text-xs leading-relaxed text-[color:var(--ds-text-secondary)]">{alert.detail}</p>
                       ) : null}
-
-                    </li>
-
+                    </div>
                   );
-
                 })
-
               ) : (
-
-                <li className="rounded border border-dashed border-[color:var(--ds-border-subtle)] p-3 text-sm text-[color:var(--ds-text-muted)]">
-
+                <div className="rounded-2xl border border-dashed border-[color:var(--ds-border-subtle)] bg-white/50 p-4 text-sm text-[color:var(--ds-text-muted)]">
                   KPI biến động trong phạm vi cho phép, chưa có cảnh báo nào.
-
-                </li>
-
+                </div>
               )}
-
-            </ul>
-
+            </div>
           </div>
-
+          <div className="space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h4 className="text-sm font-semibold uppercase tracking-wide text-[color:var(--ds-text-secondary)]">Chỉ số tổng hợp</h4>
+              <span className="text-xs text-[color:var(--ds-text-muted)]">Đồng bộ cùng bộ lọc báo cáo</span>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              {summaryCards.map((item) => (
+                <SummaryCard key={item.title} title={item.title} value={item.value} subtitle={item.subtitle} />
+              ))}
+            </div>
+          </div>
         </div>
-
+        <div className="space-y-4 rounded-2xl border border-[color:var(--ds-border-subtle)] bg-white/80 p-4 shadow-sm">
+          <div className="space-y-1">
+            <h4 className="text-sm font-semibold uppercase tracking-wide text-[color:var(--ds-text-secondary)]">Cơ cấu tổ đội</h4>
+            <p className="text-xs text-[color:var(--ds-text-muted)]">Tỷ trọng điểm KPI và số tờ khai giữa các tổ đội.</p>
+          </div>
+          <TeamPieWidget kpiData={teamPieData} declData={teamDeclPieData} palette={palette} variant="inline" />
+        </div>
       </div>
-
     </section>
-
   );
-
 }
 
+
+function TrendLineChart({ data, comparison, palette = DEFAULT_CHART_COLORS, variant = "card" }) {
+  const colors = Array.isArray(palette) && palette.length ? palette : DEFAULT_CHART_COLORS;
+  const kpiColor = colors[0] ?? DEFAULT_CHART_COLORS[0];
+  const declColor = colors[1] ?? DEFAULT_CHART_COLORS[1];
+  const deltaKPI = comparison?.delta?.kpi ?? 0;
+  const deltaDecls = comparison?.delta?.decls ?? 0;
+  const deltaPercent = comparison?.delta?.kpiPercent ?? null;
+  const deltaClass =
+    deltaKPI > 0 ? 'text-emerald-600' : deltaKPI < 0 ? 'text-red-600' : 'text-[color:var(--ds-text-secondary)]';
+  const renderDeltaSummary = () => {
+    if (!comparison) {
+      return null;
+    }
+    return (
+      <>
+        So với kỳ liền trước:
+        <span className={`ml-1 font-medium ${deltaClass}`}>
+          {deltaKPI > 0 ? '+' : ''}
+          {deltaKPI.toFixed(1)} điểm KPI
+        </span>
+        {deltaPercent !== null && (
+          <span className={`ml-1 ${deltaClass}`}>
+            ({deltaPercent > 0 ? '+' : ''}
+            {deltaPercent.toFixed(1)}%)
+          </span>
+        )}
+        <span className="ml-2 text-[color:var(--ds-text-muted)]">
+          {deltaDecls > 0 ? '+' : ''}
+          {formatInt(deltaDecls)} tờ khai
+        </span>
+      </>
+    );
+  };
+  if (!data || data.length === 0) {
+    if (variant === 'inline') {
+      return (
+        <div className="rounded border border-dashed border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-muted)] p-4 text-sm text-[color:var(--ds-text-muted)]">
+          Chưa có dữ liệu để hiển thị biểu đồ xu hướng.
+        </div>
+      );
+    }
+    return (
+      <section className="ds-card space-y-3 p-4">
+        <h3 className="text-base font-semibold text-gray-900">Xu hướng KPI 6 kỳ gần nhất</h3>
+        <p className="mt-3 text-sm text-gray-500">Chưa có dữ liệu để hiển thị biểu đồ xu hướng.</p>
+      </section>
+    );
+  }
+  const chart = (
+    <ResponsiveContainer width="100%" height="100%">
+      <LineChart data={data} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
+        <CartesianGrid strokeDasharray="3 3" />
+        <XAxis dataKey="period" />
+        <YAxis yAxisId="left" stroke={kpiColor} />
+        <YAxis yAxisId="right" orientation="right" stroke={declColor} />
+        <Tooltip />
+        <Legend />
+        <Line yAxisId="left" type="monotone" dataKey="kpi" name="Điểm KPI" stroke={kpiColor} strokeWidth={2} />
+        <Line yAxisId="right" type="monotone" dataKey="decls" name="Tờ khai" stroke={declColor} strokeWidth={2} />
+      </LineChart>
+    </ResponsiveContainer>
+  );
+  if (variant === 'inline') {
+    return (
+      <div className="space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h4 className="text-sm font-semibold text-[color:var(--ds-text-primary)]">Xu hướng KPI 6 kỳ gần nhất</h4>
+          {comparison ? <div className="text-xs text-[color:var(--ds-text-muted)]">{renderDeltaSummary()}</div> : null}
+        </div>
+        <div className="h-56 w-full">{chart}</div>
+      </div>
+    );
+  }
+  return (
+    <section className="ds-card space-y-4 p-4">
+      <div className="flex items-baseline justify-between gap-2">
+        <h3 className="text-base font-semibold text-gray-900">Xu hướng KPI 6 kỳ gần nhất</h3>
+        {comparison ? <div className="text-xs text-gray-500">{renderDeltaSummary()}</div> : null}
+      </div>
+      <div className="mt-4 h-64 w-full">{chart}</div>
+    </section>
+  );
+}
 
 
 function SummaryCard({ title, value, subtitle }) {
-
   return (
-
-    <div className="ds-card p-4">
-
-      <div className="text-sm text-gray-500">{title}</div>
-
-      <div className="mt-1 text-2xl font-semibold text-gray-900">{value}</div>
-
-      {subtitle ? <div className="mt-1 text-xs text-gray-500">{subtitle}</div> : null}
-
+    <div className="rounded-2xl border border-[color:var(--ds-border-subtle)] bg-white/85 p-4 shadow-sm">
+      <div className="text-[11px] font-semibold uppercase tracking-wide text-[color:var(--ds-text-muted)]">{title}</div>
+      <div className="mt-1 text-2xl font-semibold text-[color:var(--ds-text-primary)]">{value}</div>
+      {subtitle ? <div className="mt-1 text-xs text-[color:var(--ds-text-secondary)]">{subtitle}</div> : null}
     </div>
-
   );
-
 }
-
 
 
 function DetailPanelSkeleton({ label }) {
@@ -2555,6 +2169,12 @@ export default function ReportViewer({ canExport = true, currentUser = null }) {
 
   );
 
+  const [topCompanyVisibleCount, setTopCompanyVisibleCount] = useState(() =>
+
+    sanitizeTopCompanyVisibleCount(storedPrefs.topCompanyVisibleCount)
+
+  );
+
   const [adjustmentExpanded, setAdjustmentExpanded] = useState(() => storedPrefs.adjustmentExpanded === true);
 
   useRenderMetrics('ReportViewer', () => ({
@@ -2566,9 +2186,14 @@ export default function ReportViewer({ canExport = true, currentUser = null }) {
     teamMode: teamViewMode,
     exporting,
     topCompanyPeriod,
+    topCompanyVisibleCount,
   }));
 
   const isAdmin = isAdminRole(currentUser?.role);
+  const adjustmentPermissions = currentUser?.permissions || {};
+  const canSubmitAdjustments = adjustmentPermissions.adjustSubmit !== false;
+  const canApproveAdjustments = adjustmentPermissions.adjustApprove === true;
+  const adjustmentPanelReadOnly = !canSubmitAdjustments && !canApproveAdjustments;
 
   const actorLabel = useMemo(() => {
 
@@ -3028,6 +2653,8 @@ const [detailPageSizeCustomInput, setDetailPageSizeCustomInput] = useState(() =>
 
       topCompanyPeriod,
 
+      topCompanyVisibleCount,
+
       columns: exportColumns,
 
       ruleId: selectedRuleId,
@@ -3077,6 +2704,8 @@ const [detailPageSizeCustomInput, setDetailPageSizeCustomInput] = useState(() =>
     topStaffVisibleCount,
 
     topCompanyPeriod,
+
+    topCompanyVisibleCount,
 
     exportColumns,
 
@@ -3638,6 +3267,13 @@ const [detailPageSizeCustomInput, setDetailPageSizeCustomInput] = useState(() =>
 
     : "Áp dụng ngay";
 
+  const reportAdminInfo = {
+    totalDeclsLabel: formatInt(summary.decls),
+    rangeLabel: `Khoảng: ${report.range.from || "…"} → ${report.range.to || "…"}`,
+    contextLabel: appliedContextLabel,
+    ruleApplyLabel: ruleApply,
+  };
+
 
 
   const adjustmentsReport = useMemo(() => {
@@ -3795,40 +3431,6 @@ const [detailPageSizeCustomInput, setDetailPageSizeCustomInput] = useState(() =>
   }, [report.staff.list]);
 
 
-
-  const overviewTopStaff = useMemo(() => {
-
-    return topStaffByKpi.slice(0, 3).map((item, index) => {
-
-      const kpiValue = Number(item?.stats?.kpi || 0);
-
-      const declValue = Number(item?.stats?.decls || 0);
-
-      const teamLabel =
-
-        item.teamLabel && item.teamLabel !== "Chưa gán tổ đội" ? item.teamLabel : "";
-
-      return {
-
-        key: item.key || `${item.name || "staff"}-${index}`,
-
-        name: item.name || "Chưa gán",
-
-        team: teamLabel,
-
-        kpi: kpiValue,
-
-        decls: declValue,
-
-        kpiLabel: formatDecimal(kpiValue),
-
-        declsLabel: formatInt(declValue),
-
-      };
-
-    });
-
-  }, [topStaffByKpi]);
 
 
 
@@ -4032,7 +3634,7 @@ const [detailPageSizeCustomInput, setDetailPageSizeCustomInput] = useState(() =>
 
         });
 
-        const topCompanies = sorted.slice(0, 10).map((item) => ({
+        const topCompanies = sorted.map((item) => ({
 
           ...item,
 
@@ -4205,18 +3807,6 @@ const [detailPageSizeCustomInput, setDetailPageSizeCustomInput] = useState(() =>
     return alerts;
 
   }, [trendSeries, trendComparison, summary?.kpi, adjustmentsReport.totalPoints]);
-
-  const activeLeaderboardPeriod = useMemo(() => {
-
-    if (!companyLeaderboard.length) {
-
-      return null;
-
-    }
-
-    return companyLeaderboard.find((item) => item.key === topCompanyPeriod) || companyLeaderboard[0];
-
-  }, [companyLeaderboard, topCompanyPeriod]);
 
   const staffOptions = useMemo(() => {
 
@@ -5154,89 +4744,73 @@ const [detailPageSizeCustomInput, setDetailPageSizeCustomInput] = useState(() =>
 
     <div className="space-y-6">
 
-      <div className="ds-card space-y-4 p-4 print:hidden">
+      <div className="space-y-4 print:hidden">
 
-        <ReportFilterBar
+        <div className="ds-card p-4">
 
-          quickRange={quickRange}
+          <ReportFilterBar
 
-          quickRangeOptions={QUICK_RANGE_OPTIONS}
+            quickRange={quickRange}
 
-          onQuickRangeChange={handleQuickRangeChange}
+            quickRangeOptions={QUICK_RANGE_OPTIONS}
 
-          from={from}
+            onQuickRangeChange={handleQuickRangeChange}
 
-          to={to}
+            from={from}
 
-          onFromChange={handleFromChange}
+            to={to}
 
-          onToChange={handleToChange}
+            onFromChange={handleFromChange}
 
-          summaryLabel={filterSummaryLabel}
+            onToChange={handleToChange}
 
-        />
+            summaryLabel={filterSummaryLabel}
 
-        <ReportContextToolbar
-
-          templateOptions={templateOptions}
-
-          activeTemplateId={activeTemplateId}
-
-          onTemplateChange={handleApplyTemplate}
-
-          isTemplateDirty={isTemplateDirty}
-
-          hasTemplates={hasTemplates}
-
-          onSaveTemplate={handleSaveTemplateAsNew}
-
-          onOverwriteTemplate={handleOverwriteTemplate}
-
-          onDeleteTemplate={handleDeleteTemplate}
-
-          canOverwriteTemplate={canOverwriteTemplate}
-
-          canDeleteTemplate={canDeleteTemplate}
-
-          ruleOptions={ruleOptions}
-
-          selectedRuleId={selectedRuleId}
-
-          onRuleChange={setSelectedRuleId}
-
-          ruleStatusLabel={ruleStatusLabel}
-
-          ruleMetaLabel={ruleMetaLabel}
-
-          appliedContextLabel={appliedContextLabel}
-
-        />
-
-        <div className="rounded-xl border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] p-4 text-sm text-[color:var(--ds-text-secondary)]">
-
-          <div className="flex flex-wrap items-center justify-between gap-2">
-
-            <span className="text-xs uppercase text-[color:var(--ds-text-muted)]">Thông tin báo cáo</span>
-
-            <span className="text-xs text-[color:var(--ds-text-muted)]">{ruleApply}</span>
-
-          </div>
-
-          <div className="mt-2 text-base font-semibold text-[color:var(--ds-text-primary)]">
-
-            {formatInt(summary.decls)} tờ khai hợp lệ
-
-          </div>
-
-          <div className="mt-1 text-xs text-[color:var(--ds-text-secondary)]">
-
-            Khoảng: {report.range.from || "…"} → {report.range.to || "…"}
-
-          </div>
-
-          <div className="mt-1 text-xs text-[color:var(--ds-text-secondary)]">{appliedContextLabel}</div>
+          />
 
         </div>
+
+        {isAdmin ? (
+
+          <ReportContextToolbar
+
+            templateOptions={templateOptions}
+
+            activeTemplateId={activeTemplateId}
+
+            onTemplateChange={handleApplyTemplate}
+
+            isTemplateDirty={isTemplateDirty}
+
+            hasTemplates={hasTemplates}
+
+            onSaveTemplate={handleSaveTemplateAsNew}
+
+            onOverwriteTemplate={handleOverwriteTemplate}
+
+            onDeleteTemplate={handleDeleteTemplate}
+
+            canOverwriteTemplate={canOverwriteTemplate}
+
+            canDeleteTemplate={canDeleteTemplate}
+
+            ruleOptions={ruleOptions}
+
+            selectedRuleId={selectedRuleId}
+
+            onRuleChange={setSelectedRuleId}
+
+            ruleStatusLabel={ruleStatusLabel}
+
+            ruleMetaLabel={ruleMetaLabel}
+
+            appliedContextLabel={appliedContextLabel}
+
+            reportInfo={reportAdminInfo}
+
+          />
+
+        ) : null}
 
       </div>
 
@@ -5249,7 +4823,6 @@ const [detailPageSizeCustomInput, setDetailPageSizeCustomInput] = useState(() =>
         summaryCompanyCardValue={summaryCompanyCardValue}
         companyCardSubtitle={companyCardSubtitle}
         adjustmentsReport={adjustmentsReport}
-        overviewTopStaff={overviewTopStaff}
         overviewAlerts={overviewAlerts}
         trendSeries={trendSeries}
         trendComparison={trendComparison}
@@ -5257,7 +4830,9 @@ const [detailPageSizeCustomInput, setDetailPageSizeCustomInput] = useState(() =>
         teamDeclPieData={teamDeclPieData}
         companyLeaderboard={companyLeaderboard}
         topCompanyPeriod={topCompanyPeriod}
+        topCompanyVisibleCount={topCompanyVisibleCount}
         onTopCompanyPeriodChange={setTopCompanyPeriod}
+        onTopCompanyVisibleCountChange={setTopCompanyVisibleCount}
         topStaffMetric={topStaffMetric}
         onTopStaffMetricChange={setTopStaffMetric}
         topStaffByKpi={topStaffByKpi}
@@ -5285,6 +4860,7 @@ const [detailPageSizeCustomInput, setDetailPageSizeCustomInput] = useState(() =>
           formatInt={formatInt}
           formatOptionalDecimal={formatOptionalDecimal}
           formatOptionalInt={formatOptionalInt}
+          readOnly={adjustmentPanelReadOnly}
         />
       </KpiOverviewSection>
 
