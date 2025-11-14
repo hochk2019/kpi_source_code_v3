@@ -1377,123 +1377,102 @@ function TopStaffWidget({
 
 
 function TeamMetricPieCard({ title, data, valueFormatter, percentLabel, emptyMessage, palette = DEFAULT_CHART_COLORS }) {
-
   const normalizedData = Array.isArray(data)
-
     ? data.map((item = {}) => ({
-
-        name: item.name || "",
-
+        name: item.name || 'Chưa gán tổ đội',
         value: Number(item.value || 0),
-
       }))
-
     : [];
-
-
-
   const total = normalizedData.reduce((sum, item) => sum + item.value, 0);
-
+  const hasData = normalizedData.length > 0 && total > 0;
   const segments = [];
-
   let cursor = 0;
-
   const colors = Array.isArray(palette) && palette.length ? palette : DEFAULT_CHART_COLORS;
-
-
-
   normalizedData.forEach((item, idx) => {
-
     const percent = total > 0 ? (item.value / total) * 100 : 0;
-
     const start = cursor;
-
     const end = cursor + percent;
-
     const color = colors[idx % colors.length];
-
     segments.push(`${color} ${start}% ${end}%`);
-
     cursor = end;
-
   });
-
-
-
-  const gradient = segments.length ? `conic-gradient(${segments.join(", ")})` : "conic-gradient(#e5e7eb 0 100%)";
-
-
-
+  const gradient = segments.length ? `conic-gradient(${segments.join(', ')})` : 'conic-gradient(#e5e7eb 0 100%)';
+  const topEntry = hasData
+    ? normalizedData.reduce((prev, current) => (current.value > prev.value ? current : prev), normalizedData[0])
+    : null;
+  const topPercent = topEntry && total > 0 ? (topEntry.value / total) * 100 : 0;
   return (
-
-    <div className="space-y-4">
-
-      <h3 className="text-base font-semibold text-gray-900">{title}</h3>
-
-      <div className="mt-4 flex flex-col items-center gap-4 sm:flex-row">
-
-        <div
-
-          className="h-40 w-40 flex-shrink-0 rounded-full border border-subtle"
-
-          style={{ backgroundImage: gradient }}
-
-        >
-
-          {total === 0 ? (
-
-            <div className="flex h-full w-full items-center justify-center text-xs text-gray-500">
-
-              Không có dữ liệu
-
-            </div>
-
-          ) : null}
-
+    <div className="space-y-4 rounded-2xl border border-[color:var(--ds-border-subtle)] bg-white/90 p-4 shadow-inner">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold text-[color:var(--ds-text-primary)]">{title}</p>
+          <p className="text-xs text-[color:var(--ds-text-muted)]">
+            {hasData ? `Theo dõi ${normalizedData.length} tổ đội` : 'Đang chờ dữ liệu từ các tổ đội'}
+          </p>
         </div>
-
-        <ul className="w-full space-y-2 text-sm">
-
-          {normalizedData.length ? (
-
-            normalizedData.map((item, idx) => {
-
-              const color = colors[idx % colors.length];
-
-              const percent = total > 0 ? Math.round((item.value / total) * 1000) / 10 : 0;
-
-              return (
-
-                <li key={`${title}-${item.name}-${idx}`} className="flex flex-wrap items-center gap-x-2 gap-y-1">
-
-                  <span className="h-3 w-3 rounded-full" style={{ backgroundColor: color }} />
-
-                  <span className="font-medium text-gray-900">{item.name || "Chưa gán tổ đội"}</span>
-
-                  <span className="text-gray-500">{valueFormatter(item.value)}</span>
-
-                  <span className="text-gray-500">({percent}% {percentLabel})</span>
-
-                </li>
-
-              );
-
-            })
-
-          ) : (
-
-            <li className="text-gray-500">{emptyMessage}</li>
-
-          )}
-
-        </ul>
-
+        {topEntry && hasData ? (
+          <div className="text-right">
+            <p className="text-[11px] uppercase tracking-wide text-[color:var(--ds-text-muted)]">Tỷ trọng dẫn đầu</p>
+            <p className="text-lg font-semibold text-[color:var(--ds-text-primary)]">{topPercent.toFixed(1)}%</p>
+            <p className="text-xs text-[color:var(--ds-text-secondary)]">{topEntry.name}</p>
+          </div>
+        ) : null}
       </div>
-
+      <div className="flex flex-col items-center gap-4 sm:flex-row sm:items-center">
+        <div className="relative flex h-40 w-40 flex-shrink-0 items-center justify-center">
+          <div
+            className={`absolute inset-0 rounded-full border ${hasData ? 'border-[color:var(--ds-border-subtle)]' : 'border-dashed border-[color:var(--ds-border-subtle)]/80'}`}
+            style={{ backgroundImage: gradient }}
+          />
+          <div className="absolute inset-5 rounded-full bg-white/85 shadow-inner" />
+          <div className="relative z-10 flex flex-col items-center text-center">
+            {hasData ? (
+              <>
+                <span className="text-[11px] uppercase tracking-wide text-[color:var(--ds-text-muted)]">{percentLabel}</span>
+                <span className="text-xl font-semibold text-[color:var(--ds-text-primary)]">{topPercent.toFixed(1)}%</span>
+                <span className="text-xs text-[color:var(--ds-text-secondary)]">{topEntry?.name}</span>
+              </>
+            ) : (
+              <span className="px-6 text-center text-xs leading-relaxed text-[color:var(--ds-text-muted)]">{emptyMessage}</span>
+            )}
+          </div>
+        </div>
+        <div className="w-full flex-1 space-y-3">
+          {hasData ? (
+            normalizedData.map((item, idx) => {
+              const color = colors[idx % colors.length];
+              const percent = total > 0 ? Math.round((item.value / total) * 1000) / 10 : 0;
+              return (
+                <div
+                  key={`${title}-${item.name}-${idx}`}
+                  className="rounded-2xl border border-[color:var(--ds-border-subtle)] bg-white/70 p-3 shadow-sm"
+                >
+                  <div className="flex items-center justify-between text-sm font-medium text-[color:var(--ds-text-primary)]">
+                    <div className="flex items-center gap-2">
+                      <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: color }} />
+                      <span>{item.name || 'Chưa gán tổ đội'}</span>
+                    </div>
+                    <span>{percent}%</span>
+                  </div>
+                  <div className="flex items-center justify-between text-xs text-[color:var(--ds-text-secondary)]">
+                    <span>{valueFormatter(item.value)}</span>
+                    <span>{percentLabel}</span>
+                  </div>
+                  <div className="mt-2 h-1.5 w-full rounded-full bg-[color:var(--ds-border-subtle)]/40">
+                    <div className="h-full rounded-full" style={{ width: `${percent}%`, backgroundColor: color }} />
+                  </div>
+                </div>
+              );
+            })
+          ) : (
+            <div className="rounded-2xl border border-dashed border-[color:var(--ds-border-subtle)]/80 bg-white/70 p-4 text-sm text-[color:var(--ds-text-muted)]">
+              {emptyMessage}
+            </div>
+          )}
+        </div>
+      </div>
     </div>
-
   );
-
 }
 
 
