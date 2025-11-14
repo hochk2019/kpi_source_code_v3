@@ -41,7 +41,7 @@ Sử dụng checklist này để rà soát nhanh các luồng quan trọng trư�
 ## 8. Accessibility & Regression nhanh
 - [ ] Duyệt các dialog chính với bàn phím (Tab/Shift+Tab) để đảm bảo không bị trap focus ngoài ý muốn.
 - [ ] Kiểm tra tương phản màu cho các badge cảnh báo và trạng thái (sử dụng devtools/extension nếu cần).
-- [ ] Chụp nhanh 3 màn hình trọng yếu (Data Importer, KPI Adjustments, Báo cáo KPI) và lưu liên kết vào nhật ký UI.
+- [ ] Chụp nhanh 3 màn hình trọng yếu (Data Importer, KPI Adjustments, Báo cáo KPI) và lưu liên kết vào nhật ký UI. *(Ảnh mới nhất của tab "Báo cáo KPI" đã được lưu tại `docs/images/kpi-report-tab.png`; cần bổ sung thêm Data Importer và KPI Adjustments).* 
 
 ## 9. Kết thúc
 - [ ] Tổng hợp ghi chú QA vào `docs/operations/ui-verification-log.md` (ngày kiểm tra, các issue phát hiện, ảnh chụp tham chiếu).
