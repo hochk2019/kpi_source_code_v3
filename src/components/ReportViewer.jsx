@@ -84,6 +84,10 @@ import {
 
   Cell,
 
+  PieChart,
+
+  Pie,
+
 } from "recharts";
 
 import { useChartPalette } from "@/designSystem/hooks.js";
@@ -1377,132 +1381,102 @@ function TopStaffWidget({
 
 
 function TeamMetricPieCard({ title, data, valueFormatter, percentLabel, emptyMessage, palette = DEFAULT_CHART_COLORS }) {
-
   const normalizedData = Array.isArray(data)
-
     ? data.map((item = {}) => ({
-
-        name: item.name || "",
-
+        name: item.name || "Chưa gán tổ đội",
         value: Number(item.value || 0),
-
       }))
-
     : [];
-
-
-
   const total = normalizedData.reduce((sum, item) => sum + item.value, 0);
-
-  const segments = [];
-
-  let cursor = 0;
-
+  const hasData = normalizedData.length > 0 && total > 0;
   const colors = Array.isArray(palette) && palette.length ? palette : DEFAULT_CHART_COLORS;
-
-
-
-  normalizedData.forEach((item, idx) => {
-
-    const percent = total > 0 ? (item.value / total) * 100 : 0;
-
-    const start = cursor;
-
-    const end = cursor + percent;
-
-    const color = colors[idx % colors.length];
-
-    segments.push(`${color} ${start}% ${end}%`);
-
-    cursor = end;
-
-  });
-
-
-
-  const gradient = segments.length ? `conic-gradient(${segments.join(", ")})` : "conic-gradient(#e5e7eb 0 100%)";
-
-
-
+  const topEntry = hasData
+    ? normalizedData.reduce((prev, current) => (current.value > prev.value ? current : prev), normalizedData[0])
+    : null;
+  const topPercent = topEntry && total > 0 ? (topEntry.value / total) * 100 : 0;
   return (
-
-    <div className="space-y-4">
-
-      <h3 className="text-base font-semibold text-gray-900">{title}</h3>
-
-      <div className="mt-4 flex flex-col items-center gap-4 sm:flex-row">
-
-        <div
-
-          className="h-40 w-40 flex-shrink-0 rounded-full border border-subtle"
-
-          style={{ backgroundImage: gradient }}
-
-        >
-
-          {total === 0 ? (
-
-            <div className="flex h-full w-full items-center justify-center text-xs text-gray-500">
-
-              Không có dữ liệu
-
-            </div>
-
-          ) : null}
-
+    <article className="space-y-4 rounded-2xl border border-[color:var(--ds-border-subtle)] bg-white/95 p-4 shadow-sm">
+      <header className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold text-[color:var(--ds-text-primary)]">{title}</p>
+          <p className="text-xs text-[color:var(--ds-text-muted)]">
+            {hasData
+              ? `${normalizedData.length} tổ đội • Tổng ${valueFormatter(total)} ${percentLabel}`
+              : "Đang chờ dữ liệu từ các tổ đội"}
+          </p>
         </div>
-
-        <ul className="w-full space-y-2 text-sm">
-
-          {normalizedData.length ? (
-
-            normalizedData.map((item, idx) => {
-
+        {topEntry && hasData ? (
+          <div className="text-right">
+            <p className="text-[11px] uppercase tracking-wide text-[color:var(--ds-text-muted)]">Tỷ trọng cao nhất</p>
+            <p className="text-lg font-semibold text-[color:var(--ds-text-primary)]">{topPercent.toFixed(1)}%</p>
+            <p className="text-xs text-[color:var(--ds-text-secondary)]">{topEntry.name}</p>
+          </div>
+        ) : null}
+      </header>
+      {hasData ? (
+        <div className="space-y-5">
+          <div className="mx-auto w-full max-w-[320px]">
+            <ResponsiveContainer width="100%" height={220}>
+              <PieChart>
+                <Pie
+                  data={normalizedData}
+                  dataKey="value"
+                  nameKey="name"
+                  startAngle={90}
+                  endAngle={-270}
+                  innerRadius={60}
+                  outerRadius={90}
+                  paddingAngle={1}
+                  stroke="var(--ds-card-bg, #fff)"
+                >
+                  {normalizedData.map((entry, idx) => (
+                    <Cell key={`${title}-segment-${idx}`} fill={colors[idx % colors.length]} />
+                  ))}
+                </Pie>
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+          <div className="grid gap-2 text-sm sm:grid-cols-2">
+            {normalizedData.map((item, idx) => {
               const color = colors[idx % colors.length];
-
               const percent = total > 0 ? Math.round((item.value / total) * 1000) / 10 : 0;
-
               return (
-
-                <li key={`${title}-${item.name}-${idx}`} className="flex flex-wrap items-center gap-x-2 gap-y-1">
-
-                  <span className="h-3 w-3 rounded-full" style={{ backgroundColor: color }} />
-
-                  <span className="font-medium text-gray-900">{item.name || "Chưa gán tổ đội"}</span>
-
-                  <span className="text-gray-500">{valueFormatter(item.value)}</span>
-
-                  <span className="text-gray-500">({percent}% {percentLabel})</span>
-
-                </li>
-
+                <div
+                  key={`${title}-${item.name}-${idx}`}
+                  className="flex flex-col gap-1 rounded-xl border border-[color:var(--ds-border-subtle)]/80 bg-white/80 px-3 py-2"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-[color:var(--ds-text-primary)]">
+                      <span className="h-2 w-2 rounded-full" style={{ backgroundColor: color }} />
+                      <span className="font-medium">{item.name || "Chưa gán tổ đội"}</span>
+                    </div>
+                    <span className="text-xs text-[color:var(--ds-text-muted)]">{percent}%</span>
+                  </div>
+                  <div className="flex items-baseline justify-between text-xs text-[color:var(--ds-text-secondary)]">
+                    <span>{valueFormatter(item.value)}</span>
+                    <span>{percentLabel}</span>
+                  </div>
+                </div>
               );
-
-            })
-
-          ) : (
-
-            <li className="text-gray-500">{emptyMessage}</li>
-
-          )}
-
-        </ul>
-
-      </div>
-
-    </div>
-
+            })}
+          </div>
+        </div>
+      ) : (
+        <div className="rounded-2xl border border-dashed border-[color:var(--ds-border-subtle)]/80 bg-white/70 p-4 text-sm text-[color:var(--ds-text-muted)]">
+          {emptyMessage}
+        </div>
+      )}
+    </article>
   );
-
 }
 
 
 
 function TeamPieWidget({ kpiData, declData, palette = DEFAULT_CHART_COLORS, variant = "card" }) {
-  const content = (
-    <div className="grid gap-6 lg:grid-cols-2">
+  const charts = (
+    <div className="space-y-6">
       <TeamMetricPieCard
-        title="Phân bổ KPI theo tổ đội"
+        title="Cơ cấu tổ đội KPI"
         data={kpiData}
         valueFormatter={formatDecimal}
         percentLabel="KPI"
@@ -1510,7 +1484,7 @@ function TeamPieWidget({ kpiData, declData, palette = DEFAULT_CHART_COLORS, vari
         palette={palette}
       />
       <TeamMetricPieCard
-        title="Phân bổ lượng tờ khai theo tổ đội"
+        title="Cơ cấu tổ đội tờ khai"
         data={declData}
         valueFormatter={formatInt}
         percentLabel="tờ khai"
@@ -1520,11 +1494,11 @@ function TeamPieWidget({ kpiData, declData, palette = DEFAULT_CHART_COLORS, vari
     </div>
   );
   if (variant === "inline") {
-    return <div className="space-y-6">{content}</div>;
+    return charts;
   }
   return (
     <section className="ds-card space-y-6 p-4">
-      {content}
+      {charts}
     </section>
   );
 }
