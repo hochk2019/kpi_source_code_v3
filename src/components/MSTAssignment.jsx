@@ -1,508 +1,2787 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+
+import clsx from "clsx";
+
 import * as XLSX from "xlsx";
+
 import {
+
   getMSTHistoryEntries,
+
   getMSTMap,
+
   upsertMSTRows,
+
   saveMSTRow,
+
   MST_ASSIGNMENT_STATUS,
+
   getTeamRoster,
+
   subscribeTeamRoster,
+
   normalizeStr,
+
   normalizeName,
+
 } from "@/lib/store.js";
+
 import useTooltipTitles from "@/hooks/useTooltipTitles.js";
+
 import usePagination from "@/hooks/usePagination.js";
+
 import useMSTQuickFilters from "@/hooks/useMSTQuickFilters.js";
+import useRestoreFocus from "@/hooks/useRestoreFocus.js";
+
 import { Button } from "@/components/ui/button.jsx";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover.jsx";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog.jsx";
+
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover.jsx";
+
+import {
+
   Command,
+
   CommandEmpty,
+
   CommandGroup,
+
   CommandInput,
+
   CommandItem,
+
   CommandList,
+
 } from "@/components/ui/command.jsx";
-import { Check, ChevronsUpDown, CircleX, Plus } from "lucide-react";
+
+import { Check, ChevronsUpDown, CircleX, Plus, LogIn, LogOut, AlertTriangle } from "lucide-react";
+
+
 
 /** Utils */
+
 const normalize = (s = "") =>
+
   s
+
     .toString()
+
     .normalize("NFD")
+
     .replace(/[\u0300-\u036f]/g, "")
+
     .replace(/\s+/g, " ")
+
     .trim()
+
     .toLowerCase();
 
-const buildRosterTeams = (rosterSnapshot) => {
-  const rawTeams = Array.isArray(rosterSnapshot?.teams) ? rosterSnapshot.teams : [];
-  const teams = [];
+export const COMPANY_NAME_WRAP_THRESHOLD = 25;
+export const COMPANY_NAME_MAX_LENGTH = 120;
 
-  rawTeams.forEach((team, teamIndex) => {
-    const name = normalizeStr(team?.name ?? "");
-    const normalized = normalizeName(name);
-    if (!name || !normalized) return;
+const COMPANY_NAME_DISALLOWED_CHAR_REGEX = /[^\p{L}\p{N}\s&.,()'/-]/gu;
+const COMPANY_NAME_REQUIRED_CHAR_PATTERN = /\p{L}/u;
 
-    const members = Array.isArray(team?.members) ? team.members : [];
-    const normalizedMembers = members
-      .map((member, memberIndex) => {
-        const memberName = normalizeStr(member?.name ?? "");
-        const memberNormalized = normalizeName(memberName);
-        if (!memberName || !memberNormalized) return null;
-        return {
-          id: member?.id || `${teamIndex}-${memberIndex}`,
-          name: memberName,
-          normalized: memberNormalized,
-        };
-      })
-      .filter(Boolean)
-      .sort((a, b) => a.name.localeCompare(b.name, "vi", { sensitivity: "base" }));
+const HISTORY_ACTION_TYPES = new Set(["create", "update", "delete"]);
 
-    teams.push({
-      id: team?.id || `${teamIndex}`,
-      name,
-      normalized,
-      members: normalizedMembers,
-    });
-  });
-
-  return teams.sort((a, b) => a.name.localeCompare(b.name, "vi", { sensitivity: "base" }));
+const HISTORY_ACTION_LABELS = {
+  create: "Thêm mới",
+  update: "Chỉnh sửa",
+  delete: "Xóa",
 };
 
-function StaffCombobox({
-  value,
-  teamValue,
-  onSelect,
-  teams,
-  disabled = false,
-  placeholder = "Chọn nhân viên",
-}) {
-  const [open, setOpen] = useState(false);
-  const [search, setSearch] = useState("");
-
-  useEffect(() => {
-    if (!open) {
-      setSearch("");
-    }
-  }, [open]);
-
-  const normalizedValue = normalizeStr(value || "");
-  const normalizedKey = normalizeName(normalizedValue);
-  const normalizedTeamValue = normalizeName(normalizeStr(teamValue || ""));
-
-  const staffIndex = useMemo(() => {
-    const result = [];
-    teams.forEach((team) => {
-      team.members.forEach((member) => {
-        result.push({
-          teamId: team.id,
-          teamName: team.name,
-          teamNormalized: team.normalized,
-          memberId: member.id,
-          name: member.name,
-          normalized: member.normalized,
-        });
-      });
-    });
-    return result;
-  }, [teams]);
-
-  const filteredTeams = useMemo(() => {
-    if (normalizedTeamValue) {
-      const matched = teams.filter((team) => team.normalized === normalizedTeamValue);
-      if (matched.length) {
-        return matched;
-      }
-    }
-    return teams;
-  }, [teams, normalizedTeamValue]);
-
-  const searchValue = normalizeStr(search);
-  const searchKey = normalizeName(searchValue);
-  const hasExactStaff = staffIndex.some((entry) => entry.normalized === searchKey);
-  const canCreateCustom = Boolean(searchKey) && !hasExactStaff;
-
-  const handleSelect = (staffName = "", teamName = "", extra = {}) => {
-    onSelect?.({
-      staffName,
-      teamName,
-      isCustom: Boolean(extra.isCustom),
-    });
-    setOpen(false);
-    setSearch("");
-  };
-
-  return (
-    <Popover open={open} onOpenChange={disabled ? undefined : setOpen}>
-      <PopoverTrigger asChild>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          role="combobox"
-          aria-expanded={open}
-          disabled={disabled}
-          className="w-full justify-between px-2 py-1 text-left font-normal"
-        >
-          <span className="truncate">{normalizedValue || placeholder}</span>
-          <ChevronsUpDown className="ml-2 size-3 shrink-0 opacity-50" />
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent className="w-64 p-0" align="start">
-        <Command>
-          <CommandInput
-            placeholder="Tìm nhân viên"
-            value={search}
-            onValueChange={setSearch}
-            autoFocus
-          />
-          <CommandList className="max-h-60 overflow-y-auto">
-            <CommandEmpty>Không có nhân viên phù hợp.</CommandEmpty>
-            {normalizedValue ? (
-              <CommandGroup heading="Tùy chọn">
-                <CommandItem value="__clear__" onSelect={() => handleSelect("", teamValue || "")}>
-                  <CircleX className="mr-2 size-4" />
-                  Bỏ chọn nhân viên
-                </CommandItem>
-              </CommandGroup>
-            ) : null}
-            {canCreateCustom ? (
-              <CommandGroup heading="Thêm mới">
-                <CommandItem
-                  value={searchValue}
-                  onSelect={() =>
-                    handleSelect(searchValue, normalizedTeamValue ? teamValue : "", {
-                      isCustom: true,
-                    })
-                  }
-                >
-                  <Plus className="mr-2 size-4" />
-                  Dùng giá trị "{searchValue}"
-                </CommandItem>
-              </CommandGroup>
-            ) : null}
-            {filteredTeams.map((team) => (
-              <CommandGroup key={team.id} heading={`Tổ: ${team.name}`}>
-                {team.members.map((member) => {
-                  const isSelected =
-                    member.normalized === normalizedKey && team.normalized === normalizedTeamValue;
-                  return (
-                    <CommandItem
-                      key={member.id}
-                      value={`${member.name}`}
-                      onSelect={() => handleSelect(member.name, team.name, { isCustom: false })}
-                    >
-                      <Check
-                        className={`mr-2 size-4 ${isSelected ? "opacity-100" : "opacity-0"}`}
-                      />
-                      <span className="truncate">{member.name}</span>
-                    </CommandItem>
-                  );
-                })}
-              </CommandGroup>
-            ))}
-          </CommandList>
-        </Command>
-      </PopoverContent>
-    </Popover>
-  );
-}
-
-const STATUS_LABELS = Object.values(MST_ASSIGNMENT_STATUS);
-const STATUS_SELECT_VALUES = ["", ...STATUS_LABELS];
-
-const normalizeStatusLabel = (value) => {
-  const raw = (value ?? "").toString().trim();
-  if (!raw) return "";
-  const normalized = normalize(raw);
-  const matched = STATUS_LABELS.find((label) => normalize(label) === normalized);
-  return matched || raw;
+const HISTORY_ACTION_BADGE_CLASSES = {
+  create: "border-emerald-200 bg-emerald-50 text-emerald-700",
+  update: "border-blue-200 bg-blue-50 text-blue-700",
+  delete: "border-red-200 bg-red-50 text-red-600",
 };
 
-const toISO = (v) => {
-  if (!v) return "";
-  // v có thể dạng Date, serial excel, "dd/mm/yyyy", "yyyy-mm-dd"
-  if (v instanceof Date && !isNaN(v)) {
-    const y = v.getFullYear();
-    const m = `${v.getMonth() + 1}`.padStart(2, "0");
-    const d = `${v.getDate()}`.padStart(2, "0");
-    return `${y}-${m}-${d}`;
-  }
-  if (typeof v === "number") {
-    // serial Excel
-    const d = XLSX.SSF.parse_date_code(v);
-    if (!d) return "";
-    const y = d.y;
-    const m = `${d.m}`.padStart(2, "0");
-    const day = `${d.d}`.padStart(2, "0");
-    return `${y}-${m}-${day}`;
-  }
-  const s = v.toString().trim();
-  // dd/mm/yyyy
-  const m1 = s.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
-  if (m1) {
-    const d = m1[1].padStart(2, "0");
-    const m = m1[2].padStart(2, "0");
-    const y = m1[3];
-    return `${y}-${m}-${d}`;
-  }
-  // yyyy-mm-dd
-  const m2 = s.match(/^(\d{4})[/-](\d{1,2})[/-](\d{1,2})$/);
-  if (m2) {
-    const y = m2[1];
-    const m = m2[2].padStart(2, "0");
-    const d = m2[3].padStart(2, "0");
-    return `${y}-${m}-${d}`;
-  }
-  return "";
-};
+const HISTORY_TIMELINE_PREVIEW_LIMIT = 8;
 
-const headerAliases = {
-  mst: ["mst", "mã số thuế", "ma so thue", "mã số thuế (mst)"],
-  company: ["company", "công ty", "ten cong ty", "doanh nghiep"],
-  person_import: [
-    "person_import",
-    "người phụ trách nhập",
-    "nguoi phu trach nhap",
-    "nhap",
-  ],
-  person_export: [
-    "person_export",
-    "người phụ trách xuất",
-    "nguoi phu trach xuat",
-    "xuat",
-  ],
-  team: ["team", "tổ đội", "to doi", "nhom", "group"],
-  effective_from: [
-    "effective_from",
-    "áp dụng từ ngày",
-    "ap dung tu ngay",
-    "apply_from",
-    "effective from",
-  ],
-  status: [
-    "status",
-    "trạng thái",
-    "trang thai",
-    "ghi chu trang thai",
-    "tinh trang",
-  ],
-};
+const STATUS_FILTER_MAP = new Map([
+  ["status:assigned", MST_ASSIGNMENT_STATUS.ASSIGNED],
+  ["status:pending", MST_ASSIGNMENT_STATUS.PENDING],
+]);
 
-const findCell = (row, key) => {
-  const wanted = headerAliases[key] || [key];
-  const keys = Object.keys(row);
-  for (const w of wanted) {
-    const hit = keys.find((k) => normalize(k) === normalize(w));
-    if (hit) return row[hit];
-  }
-  return "";
-};
-
-const tidyMST = (v) => {
-  if (v == null) return "";
-  // lấy chuỗi hiển thị (để giữ 0 ở đầu nếu có)
-  let s = String(v).trim();
-  // loại mọi ký tự không phải số
-  s = s.replace(/[^\d]/g, "");
-  return s;
-};
-
-const DEFAULT_PAGE_SIZE = 50;
-
-const HISTORY_FIELD_LABELS = {
-  person_import: "Người phụ trách Nhập",
-  person_export: "Người phụ trách Xuất",
-  effective_from: "Áp dụng từ ngày",
-};
-
-const MST_ROW_FIELDS = [
+const LEAD_VIEW_VISIBLE_COLUMNS = new Set([
   "mst",
   "company",
   "person_import",
   "person_export",
-  "team",
-  "effective_from",
   "status",
+  "actions",
+]);
+
+const LEAD_TEAM_ALL = "__all__";
+
+const normalizeTeamKey = (value = "") => normalizeName(normalizeStr(value || ""));
+
+export const shouldWrapCompanyName = (value = "") => {
+  if (value == null) {
+    return false;
+  }
+
+  const raw = value.toString();
+  const trimmed = raw.trim();
+  if (!trimmed) {
+    return false;
+  }
+
+  return Array.from(trimmed).length >= COMPANY_NAME_WRAP_THRESHOLD;
+};
+
+
+
+export const sanitizeCompanyNameInput = (value = "") => {
+  if (value == null) {
+    return "";
+  }
+
+  if (typeof value !== "string") {
+    return value.toString();
+  }
+
+  return value.replace(/\r?\n|\r/g, " ");
+};
+
+export const getCompanyNameValidation = (value = "") => {
+  const safeValue = value == null ? "" : value.toString();
+  const trimmed = safeValue.trim();
+  const characters = Array.from(trimmed);
+  const warnings = [];
+
+  if (!trimmed) {
+    return {
+      value: safeValue,
+      trimmed,
+      characterCount: 0,
+      warnings,
+      hasWarnings: false,
+    };
+  }
+
+  const characterCount = characters.length;
+
+  if (characterCount > COMPANY_NAME_MAX_LENGTH) {
+    warnings.push({
+      type: "length",
+      message: `Tên công ty đang dài ${characterCount} ký tự (tối đa ${COMPANY_NAME_MAX_LENGTH}).`,
+    });
+  }
+
+  const invalidCharacters = trimmed.match(COMPANY_NAME_DISALLOWED_CHAR_REGEX);
+  if (invalidCharacters && invalidCharacters.length > 0) {
+    const uniqueCharacters = Array.from(new Set(invalidCharacters));
+    warnings.push({
+      type: "invalid-characters",
+      message: `Tên công ty chứa ký tự không hợp lệ: ${uniqueCharacters
+        .map((char) => `"${char}"`)
+        .join(", ")}.`,
+    });
+  }
+
+  if (!COMPANY_NAME_REQUIRED_CHAR_PATTERN.test(trimmed)) {
+    warnings.push({
+      type: "format",
+      message: "Tên công ty cần chứa ít nhất một ký tự chữ.",
+    });
+  }
+
+  return {
+    value: safeValue,
+    trimmed,
+    characterCount,
+    warnings,
+    hasWarnings: warnings.length > 0,
+  };
+};
+
+
+
+
+const formatISODate = (value) => {
+
+  if (!value) return "";
+
+  try {
+
+    const d = new Date(value);
+
+    if (Number.isNaN(d.getTime())) {
+
+      return value;
+
+    }
+
+    return d.toLocaleDateString("vi-VN");
+
+  } catch (err) {
+
+    console.warn("formatISODate", err);
+
+    return value;
+
+  }
+
+};
+
+
+
+const buildRosterTeams = (rosterSnapshot) => {
+
+  const rawTeams = Array.isArray(rosterSnapshot?.teams) ? rosterSnapshot.teams : [];
+
+  const teams = [];
+
+
+
+  rawTeams.forEach((team, teamIndex) => {
+
+    const name = normalizeStr(team?.name ?? "");
+
+    const normalized = normalizeName(name);
+
+    if (!name || !normalized) return;
+
+
+
+    const members = Array.isArray(team?.members) ? team.members : [];
+
+    const normalizedMembers = members
+
+      .map((member, memberIndex) => {
+
+        const memberName = normalizeStr(member?.name ?? "");
+
+        const memberNormalized = normalizeName(memberName);
+
+        if (!memberName || !memberNormalized) return null;
+
+        return {
+
+          id: member?.id || `${teamIndex}-${memberIndex}`,
+
+          name: memberName,
+
+          normalized: memberNormalized,
+
+        };
+
+      })
+
+      .filter(Boolean)
+
+      .sort((a, b) => a.name.localeCompare(b.name, "vi", { sensitivity: "base" }));
+
+
+
+    teams.push({
+
+      id: team?.id || `${teamIndex}`,
+
+      name,
+
+      normalized,
+
+      members: normalizedMembers,
+
+    });
+
+  });
+
+
+
+  return teams.sort((a, b) => a.name.localeCompare(b.name, "vi", { sensitivity: "base" }));
+
+};
+
+
+
+function StaffCombobox({
+
+  value,
+
+  teamValue,
+
+  onSelect,
+
+  teams,
+
+  disabled = false,
+
+  placeholder = "Chọn nhân viên",
+
+}) {
+
+  const [open, setOpen] = useState(false);
+
+  const [search, setSearch] = useState("");
+
+
+
+  useEffect(() => {
+
+    if (!open) {
+
+      setSearch("");
+
+    }
+
+  }, [open]);
+
+
+
+  const normalizedValue = normalizeStr(value || "");
+
+  const normalizedKey = normalizeName(normalizedValue);
+
+  const normalizedTeamValue = normalizeName(normalizeStr(teamValue || ""));
+
+
+
+  const staffIndex = useMemo(() => {
+
+    const result = [];
+
+    teams.forEach((team) => {
+
+      team.members.forEach((member) => {
+
+        result.push({
+
+          teamId: team.id,
+
+          teamName: team.name,
+
+          teamNormalized: team.normalized,
+
+          memberId: member.id,
+
+          name: member.name,
+
+          normalized: member.normalized,
+
+        });
+
+      });
+
+    });
+
+    return result;
+
+  }, [teams]);
+
+
+
+  const orderedTeams = useMemo(() => {
+
+    if (!teams.length) return [];
+
+    if (!normalizedTeamValue) return teams;
+
+
+
+    const next = [...teams];
+
+    const index = next.findIndex((team) => team.normalized === normalizedTeamValue);
+
+    if (index <= 0) {
+
+      return next;
+
+    }
+
+
+
+    const [currentTeam] = next.splice(index, 1);
+
+    return [currentTeam, ...next];
+
+  }, [teams, normalizedTeamValue]);
+
+
+
+  const searchValue = normalizeStr(search);
+
+  const searchKey = normalizeName(searchValue);
+
+  const hasExactStaff = staffIndex.some((entry) => entry.normalized === searchKey);
+
+  const canCreateCustom = Boolean(searchKey) && !hasExactStaff;
+
+
+
+  const handleSelect = (staffName = "", teamName = "", extra = {}) => {
+
+    onSelect?.({
+
+      staffName,
+
+      teamName,
+
+      isCustom: Boolean(extra.isCustom),
+
+    });
+
+    setOpen(false);
+
+    setSearch("");
+
+  };
+
+
+
+  return (
+
+    <Popover open={open} onOpenChange={disabled ? undefined : setOpen}>
+
+      <PopoverTrigger asChild>
+
+        <Button
+
+          type="button"
+
+          variant="outline"
+
+          size="sm"
+
+          role="combobox"
+
+          aria-expanded={open}
+
+          disabled={disabled}
+
+          className="w-full justify-between px-2 py-1 text-left font-normal"
+
+        >
+
+          <span className="truncate">{normalizedValue || placeholder}</span>
+
+          <ChevronsUpDown className="ml-2 size-3 shrink-0 opacity-50" />
+
+        </Button>
+
+      </PopoverTrigger>
+
+      <PopoverContent className="w-64 p-0" align="start">
+
+        <Command>
+
+          <CommandInput
+
+            placeholder="Tìm nhân viên"
+
+            value={search}
+
+            onValueChange={setSearch}
+
+            autoFocus
+
+          />
+
+          <CommandList className="max-h-60 overflow-y-auto">
+
+            <CommandEmpty>Không có nhân viên phù hợp.</CommandEmpty>
+
+            {normalizedValue ? (
+
+              <CommandGroup heading="Tùy chọn">
+
+                <CommandItem value="__clear__" onSelect={() => handleSelect("", teamValue || "")}>
+
+                  <CircleX className="mr-2 size-4" />
+
+                  Bỏ chọn nhân viên
+
+                </CommandItem>
+
+              </CommandGroup>
+
+            ) : null}
+
+            {canCreateCustom ? (
+
+              <CommandGroup heading="Thêm mới">
+
+                <CommandItem
+
+                  value={searchValue}
+
+                  onSelect={() =>
+
+                    handleSelect(searchValue, normalizedTeamValue ? teamValue : "", {
+
+                      isCustom: true,
+
+                    })
+
+                  }
+
+                >
+
+                  <Plus className="mr-2 size-4" />
+
+                  Dùng giá trị "{searchValue}"
+
+                </CommandItem>
+
+              </CommandGroup>
+
+            ) : null}
+
+            {orderedTeams.map((team) => (
+
+              <CommandGroup key={team.id} heading={`Tổ: ${team.name}`}>
+
+                {team.members.map((member) => {
+
+                  const isSelected =
+
+                    member.normalized === normalizedKey && team.normalized === normalizedTeamValue;
+
+                  return (
+
+                    <CommandItem
+
+                      key={member.id}
+
+                      value={`${member.name}`}
+
+                      onSelect={() => handleSelect(member.name, team.name, { isCustom: false })}
+
+                    >
+
+                      <Check
+
+                        className={`mr-2 size-4 ${isSelected ? "opacity-100" : "opacity-0"}`}
+
+                      />
+
+                      <span className="truncate">{member.name}</span>
+
+                    </CommandItem>
+
+                  );
+
+                })}
+
+              </CommandGroup>
+
+            ))}
+
+          </CommandList>
+
+        </Command>
+
+      </PopoverContent>
+
+    </Popover>
+
+  );
+
+}
+
+
+
+const STATUS_LABELS = Object.values(MST_ASSIGNMENT_STATUS);
+
+
+
+const normalizeStatusLabel = (value) => {
+
+  const raw = (value ?? "").toString().trim();
+
+  if (!raw) return "";
+
+  const normalized = normalize(raw);
+
+  const matched = STATUS_LABELS.find((label) => normalize(label) === normalized);
+
+  return matched || raw;
+
+};
+
+
+
+const computeStoredStatus = (row) => {
+
+  const hasImport = Boolean(normalizeStr(row?.person_import || ""));
+
+  const hasExport = Boolean(normalizeStr(row?.person_export || ""));
+
+  if (hasImport && hasExport) {
+
+    return MST_ASSIGNMENT_STATUS.ASSIGNED;
+
+  }
+
+  return MST_ASSIGNMENT_STATUS.PENDING;
+
+};
+
+
+
+const computeStatusDisplay = (row) => {
+
+  const hasImport = Boolean(normalizeStr(row?.person_import || ""));
+
+  const hasExport = Boolean(normalizeStr(row?.person_export || ""));
+
+
+
+  if (hasImport && hasExport) {
+
+    return MST_ASSIGNMENT_STATUS.ASSIGNED;
+
+  }
+
+
+
+  if (!hasImport && !hasExport) {
+
+    return MST_ASSIGNMENT_STATUS.PENDING;
+
+  }
+
+
+
+  if (!hasImport) {
+
+    return "Thiếu người phụ trách nhập";
+
+  }
+
+
+
+  if (!hasExport) {
+
+    return "Thiếu người phụ trách xuất";
+
+  }
+
+
+
+  return normalizeStatusLabel(row?.status);
+
+};
+
+
+
+const hasAssignee = (row) =>
+  Boolean(normalizeStr(row?.person_import || "") || normalizeStr(row?.person_export || ""));
+
+
+const formatDateTimeForExport = (value) => {
+  try {
+    const date = value instanceof Date ? value : new Date(value);
+    if (Number.isNaN(date.getTime())) {
+      return "";
+    }
+    return date.toLocaleString("vi-VN", {
+      dateStyle: "medium",
+      timeStyle: "short",
+    });
+  } catch (error) {
+    console.warn("formatDateTimeForExport", error);
+    return "";
+  }
+};
+
+const summarizeEffectiveRange = (rows = []) => {
+  let minFrom = null;
+  let maxTo = null;
+  let hasOpenEnded = false;
+
+  rows.forEach((row) => {
+    const from = row?.effective_from ? row.effective_from : "";
+    const to = row?.effective_to ? row.effective_to : "";
+
+    if (from) {
+      if (!minFrom || from < minFrom) {
+        minFrom = from;
+      }
+    }
+
+    if (to) {
+      if (!maxTo || to > maxTo) {
+        maxTo = to;
+      }
+    } else if (hasAssignee(row)) {
+      hasOpenEnded = true;
+    }
+  });
+
+  if (!minFrom && !maxTo) {
+    return "Chưa có dữ liệu ngày hiệu lực";
+  }
+
+  const fromLabel = minFrom ? formatISODate(minFrom) : "Chưa đặt";
+  let toLabel = "";
+
+  if (hasOpenEnded) {
+    toLabel = "Hiện tại";
+  } else if (maxTo) {
+    toLabel = formatISODate(maxTo);
+  }
+
+  if (!toLabel) {
+    return fromLabel;
+  }
+
+  return `${fromLabel} → ${toLabel}`;
+};
+
+const summarizeAssignees = (rows = []) => {
+  const assignees = new Set();
+
+  rows.forEach((row) => {
+    const importName = String(row?.person_import || "").trim();
+    const exportName = String(row?.person_export || "").trim();
+
+    if (importName) {
+      assignees.add(importName);
+    }
+
+    if (exportName) {
+      assignees.add(exportName);
+    }
+  });
+
+  if (!assignees.size) {
+    return "Chưa gán nhân sự";
+  }
+
+  const sorted = Array.from(assignees).sort((a, b) =>
+    a.localeCompare(b, "vi", { sensitivity: "base" })
+  );
+
+  if (sorted.length <= 6) {
+    return sorted.join(", ");
+  }
+
+  const preview = sorted.slice(0, 6).join(", ");
+  return `${preview}… (+${sorted.length - 6} người)`;
+};
+
+const buildExportMetadataEntries = ({
+  scopeLabel,
+  totalCount,
+  filteredCount,
+  search,
+  staffFilter,
+  historyFilter,
+  leadViewEnabled,
+  leadTeamName,
+  assigneeSummary,
+  effectiveRange,
+  actorLabel,
+  generatedAt,
+}) => {
+  const entries = [];
+
+  entries.push(["Phạm vi xuất", scopeLabel]);
+  entries.push(["Số dòng", `${filteredCount} / ${totalCount}`]);
+  entries.push(["Thời gian xuất", formatDateTimeForExport(generatedAt)]);
+  entries.push(["Thực hiện bởi", actorLabel || "Không xác định"]);
+
+  entries.push(["Tìm kiếm", search ? search : "(Không)"]);
+  entries.push(["Bộ lọc nhân sự", staffFilter ? staffFilter : "(Không)"]);
+
+  if (leadViewEnabled) {
+    entries.push(["Chế độ trưởng nhóm", leadTeamName || "Đang bật"]);
+  }
+
+  if (historyFilter && typeof historyFilter === "object") {
+    const { from, to, type } = historyFilter;
+    if (from || to || (type && type !== "all")) {
+      entries.push([
+        "Bộ lọc lịch sử",
+        [
+          type && type !== "all" ? `Loại: ${type}` : null,
+          from ? `Từ: ${from}` : null,
+          to ? `Đến: ${to}` : null,
+        ]
+          .filter(Boolean)
+          .join(" • ") || "Đang bật",
+      ]);
+    }
+  }
+
+  entries.push(["Người gán trong danh sách", assigneeSummary]);
+  entries.push(["Khoảng ngày hiệu lực", effectiveRange]);
+
+  return entries;
+};
+
+const downloadBlob = (blob, fileName) => {
+  if (typeof window === "undefined") {
+    console.warn("downloadBlob: window is undefined");
+    return;
+  }
+
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+};
+
+
+const DEFAULT_RANGE_START = "0000-01-01";
+
+const DEFAULT_RANGE_END = "9999-12-31";
+
+
+
+const getRowRange = (row = {}) => {
+
+  const start = row?.effective_from || DEFAULT_RANGE_START;
+
+  const end = row?.effective_to || DEFAULT_RANGE_END;
+
+  return { start, end };
+
+};
+
+
+
+const rangesOverlap = (a, b) => {
+
+  if (!a || !b) return false;
+
+  return a.start <= b.end && b.start <= a.end;
+
+};
+
+
+
+const buildRangeLabel = (row) => {
+
+  const startLabel = row?.effective_from ? formatISODate(row.effective_from) : "Chưa đặt";
+
+  const endLabel = row?.effective_to ? formatISODate(row.effective_to) : "Hiện tại";
+
+  return `${startLabel} → ${endLabel}`;
+
+};
+
+
+
+const formatAssigneeSummary = (row) => {
+
+  const importName = normalizeStr(row?.person_import || "") ? row.person_import : "";
+
+  const exportName = normalizeStr(row?.person_export || "") ? row.person_export : "";
+
+  if (importName && exportName) {
+
+    if (importName === exportName) {
+
+      return `${importName} (Nhập & Xuất)`;
+
+    }
+
+    return `${importName} (Nhập) • ${exportName} (Xuất)`;
+
+  }
+
+  if (importName) {
+
+    return `${importName} (Nhập)`;
+
+  }
+
+  if (exportName) {
+
+    return `${exportName} (Xuất)`;
+
+  }
+
+  return "Chưa gán nhân viên";
+
+};
+
+
+
+const COLUMN_OPTIONS = [
+
+  { key: "mst", label: "MST", required: true },
+
+  { key: "company", label: "Công ty" },
+
+  { key: "person_import", label: "Người phụ trách Nhập" },
+
+  { key: "person_export", label: "Người phụ trách Xuất" },
+
+  { key: "status", label: "Trạng thái" },
+
+  { key: "effective_from", label: "Áp dụng từ ngày" },
+
+  { key: "effective_to", label: "Đến hết ngày" },
+
+  { key: "actions", label: "Hành động" },
+
 ];
 
-const sortMSTRows = (list = []) => {
-  return [...list]
-    .filter(Boolean)
-    .sort((a, b) => {
-      const mstA = (a?.mst || "").toString();
-      const mstB = (b?.mst || "").toString();
-      const byMST = mstA.localeCompare(mstB);
-      if (byMST !== 0) return byMST;
-      const dateA = a?.effective_from || "";
-      const dateB = b?.effective_from || "";
-      return dateA.localeCompare(dateB);
-    });
+const createDefaultVisibleColumns = () => {
+
+  const defaults = {};
+
+  COLUMN_OPTIONS.forEach((option) => {
+
+    defaults[option.key] = true;
+
+  });
+
+  return defaults;
+
 };
+
+export const DEFAULT_VISIBLE_COLUMNS = Object.freeze(createDefaultVisibleColumns());
+
+export const COLUMN_VISIBILITY_STORAGE_PREFIX = "mstAssignment.visibleColumns";
+
+
+
+export const COLUMN_WIDTH_STORAGE_KEY = "mstAssignment.columnWidths";
+
+
+
+export const DEFAULT_COLUMN_WIDTHS = Object.freeze({
+
+  mst: 136,
+
+  company: 320,
+
+  person_import: 224,
+
+  person_export: 224,
+
+  status: 180,
+
+  effective_from: 188,
+
+  effective_to: 188,
+
+  actions: 168,
+
+});
+
+
+
+export const COLUMN_MIN_WIDTH = 120;
+
+
+
+export const COLUMN_MIN_WIDTHS = Object.freeze({
+
+  mst: 120,
+
+  company: 240,
+
+  person_import: 180,
+
+  person_export: 180,
+
+  status: 150,
+
+  effective_from: 160,
+
+  effective_to: 160,
+
+  actions: 150,
+
+});
+
+
+
+export const COLUMN_MAX_WIDTH = 640;
+
+
+
+const getColumnFallbackWidth = (key, fallback = DEFAULT_COLUMN_WIDTHS) => {
+
+  const width = fallback?.[key];
+
+  if (Number.isFinite(width)) {
+
+    return width;
+
+  }
+
+  const defaultWidth = DEFAULT_COLUMN_WIDTHS[key];
+
+  if (Number.isFinite(defaultWidth)) {
+
+    return defaultWidth;
+
+  }
+
+  return Math.max(COLUMN_MIN_WIDTHS[key] ?? COLUMN_MIN_WIDTH, COLUMN_MIN_WIDTH);
+
+};
+
+
+
+export function sanitizeColumnWidths(raw, fallback = DEFAULT_COLUMN_WIDTHS) {
+
+  const result = {};
+
+  COLUMN_OPTIONS.forEach((option) => {
+
+    const { key } = option;
+
+    const baseWidth = getColumnFallbackWidth(key, fallback);
+
+    const minWidth = COLUMN_MIN_WIDTHS[key] ?? COLUMN_MIN_WIDTH;
+
+    const maxWidth = COLUMN_MAX_WIDTH;
+
+
+
+    let width = raw?.[key];
+
+    if (typeof width === "string" && width.trim() !== "") {
+
+      width = Number.parseFloat(width);
+
+    }
+
+    if (!Number.isFinite(width)) {
+
+      width = baseWidth;
+
+    }
+
+    width = Math.round(width);
+
+    if (!Number.isFinite(width) || width <= 0) {
+
+      width = baseWidth;
+
+    }
+
+    if (width < minWidth) {
+
+      width = minWidth;
+
+    }
+
+    if (Number.isFinite(maxWidth) && width > maxWidth) {
+
+      width = maxWidth;
+
+    }
+
+    result[key] = width;
+
+  });
+
+  return result;
+
+}
+
+
+
+export function readStoredColumnWidths(storage, fallback = DEFAULT_COLUMN_WIDTHS) {
+
+  if (!storage) {
+
+    return sanitizeColumnWidths({}, fallback);
+
+  }
+
+  try {
+
+    const raw = storage.getItem(COLUMN_WIDTH_STORAGE_KEY);
+
+    if (!raw) {
+
+      return sanitizeColumnWidths({}, fallback);
+
+    }
+
+    const parsed = JSON.parse(raw);
+
+    return sanitizeColumnWidths(parsed, fallback);
+
+  } catch (error) {
+
+    console.warn("readStoredColumnWidths", error);
+
+    return sanitizeColumnWidths({}, fallback);
+
+  }
+
+}
+
+
+
+export function writeStoredColumnWidths(storage, widths) {
+
+  if (!storage) {
+
+    return false;
+
+  }
+
+  try {
+
+    const sanitized = sanitizeColumnWidths(widths);
+
+    storage.setItem(COLUMN_WIDTH_STORAGE_KEY, JSON.stringify(sanitized));
+
+    return true;
+
+  } catch (error) {
+
+    console.warn("writeStoredColumnWidths", error);
+
+    return false;
+
+  }
+
+}
+
+
+
+
+const normalizeActorKey = (username) => {
+
+  if (!username) {
+
+    return "guest";
+
+  }
+
+  const value = username.toString().trim();
+
+  return value || "guest";
+
+};
+
+
+
+const getColumnVisibilityStorageKey = (username) =>
+
+  `${COLUMN_VISIBILITY_STORAGE_PREFIX}:${normalizeActorKey(username)}`;
+
+
+
+export function sanitizeColumnVisibility(raw, fallback = DEFAULT_VISIBLE_COLUMNS) {
+
+  const result = {};
+
+  COLUMN_OPTIONS.forEach((option) => {
+
+    if (option.required) {
+
+      result[option.key] = true;
+
+      return;
+
+    }
+
+    const fallbackValue = fallback?.[option.key] !== false;
+
+    let value = raw?.[option.key];
+
+    if (typeof value === "string") {
+
+      const trimmed = value.trim().toLowerCase();
+
+      if (["false", "0", "off", "no"].includes(trimmed)) {
+
+        value = false;
+
+      } else if (["true", "1", "on", "yes"].includes(trimmed)) {
+
+        value = true;
+
+      }
+
+    }
+
+    if (typeof value !== "boolean") {
+
+      value = value === 0 ? false : fallbackValue;
+
+    }
+
+    result[option.key] = value;
+
+  });
+
+  return result;
+
+}
+
+
+
+export function readStoredColumnVisibility(
+
+  storage,
+
+  username,
+
+  fallback = DEFAULT_VISIBLE_COLUMNS
+
+) {
+
+  const defaults = sanitizeColumnVisibility(fallback);
+
+  if (!storage) {
+
+    return defaults;
+
+  }
+
+  try {
+
+    const key = getColumnVisibilityStorageKey(username);
+
+    const raw = storage.getItem(key);
+
+    if (!raw) {
+
+      return defaults;
+
+    }
+
+    const parsed = JSON.parse(raw);
+
+    const sanitized = sanitizeColumnVisibility(parsed, defaults);
+
+    return { ...defaults, ...sanitized };
+
+  } catch (error) {
+
+    console.warn("readStoredColumnVisibility", error);
+
+    return defaults;
+
+  }
+
+}
+
+
+
+export function writeStoredColumnVisibility(storage, username, visibility) {
+
+  if (!storage) {
+
+    return false;
+
+  }
+
+  try {
+
+    const key = getColumnVisibilityStorageKey(username);
+
+    const sanitized = sanitizeColumnVisibility(visibility);
+
+    storage.setItem(key, JSON.stringify(sanitized));
+
+    return true;
+
+  } catch (error) {
+
+    console.warn("writeStoredColumnVisibility", error);
+
+    return false;
+
+  }
+
+}
+
+
+
+const getColumnLabel = (key) => COLUMN_OPTIONS.find((option) => option.key === key)?.label || key;
+
+
+
+const toISO = (v) => {
+
+  if (!v) return "";
+
+  // v có thể dạng Date, serial excel, "dd/mm/yyyy", "yyyy-mm-dd"
+
+  if (v instanceof Date && !isNaN(v)) {
+
+    const y = v.getFullYear();
+
+    const m = `${v.getMonth() + 1}`.padStart(2, "0");
+
+    const d = `${v.getDate()}`.padStart(2, "0");
+
+    return `${y}-${m}-${d}`;
+
+  }
+
+  if (typeof v === "number") {
+
+    // serial Excel
+
+    const d = XLSX.SSF.parse_date_code(v);
+
+    if (!d) return "";
+
+    const y = d.y;
+
+    const m = `${d.m}`.padStart(2, "0");
+
+    const day = `${d.d}`.padStart(2, "0");
+
+    return `${y}-${m}-${day}`;
+
+  }
+
+  const s = v.toString().trim();
+
+  // dd/mm/yyyy
+
+  const m1 = s.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
+
+  if (m1) {
+
+    const d = m1[1].padStart(2, "0");
+
+    const m = m1[2].padStart(2, "0");
+
+    const y = m1[3];
+
+    return `${y}-${m}-${d}`;
+
+  }
+
+  // yyyy-mm-dd
+
+  const m2 = s.match(/^(\d{4})[/-](\d{1,2})[/-](\d{1,2})$/);
+
+  if (m2) {
+
+    const y = m2[1];
+
+    const m = m2[2].padStart(2, "0");
+
+    const d = m2[3].padStart(2, "0");
+
+    return `${y}-${m}-${d}`;
+
+  }
+
+  return "";
+
+};
+
+
+
+const headerAliases = {
+
+  mst: ["mst", "mã số thuế", "ma so thue", "mã số thuế (mst)"],
+
+  company: ["company", "công ty", "ten cong ty", "doanh nghiep"],
+
+  person_import: [
+
+    "person_import",
+
+    "người phụ trách nhập",
+
+    "nguoi phu trach nhap",
+
+    "nhap",
+
+  ],
+
+  person_export: [
+
+    "person_export",
+
+    "người phụ trách xuất",
+
+    "nguoi phu trach xuat",
+
+    "xuat",
+
+  ],
+
+  team: ["team", "tổ đội", "to doi", "nhom", "group"],
+
+  effective_from: [
+
+    "effective_from",
+
+    "áp dụng từ ngày",
+
+    "ap dung tu ngay",
+
+    "apply_from",
+
+    "effective from",
+
+  ],
+
+  effective_to: [
+
+    "effective_to",
+
+    "đến hết ngày",
+
+    "den het ngay",
+
+    "apply_to",
+
+    "effective to",
+
+  ],
+
+  status: [
+
+    "status",
+
+    "trạng thái",
+
+    "trang thai",
+
+    "ghi chu trang thai",
+
+    "tinh trang",
+
+  ],
+
+};
+
+
+
+const findCell = (row, key) => {
+
+  const wanted = headerAliases[key] || [key];
+
+  const keys = Object.keys(row);
+
+  for (const w of wanted) {
+
+    const hit = keys.find((k) => normalize(k) === normalize(w));
+
+    if (hit) return row[hit];
+
+  }
+
+  return "";
+
+};
+
+
+
+const tidyMST = (v) => {
+
+  if (v == null) return "";
+
+  // lấy chuỗi hiển thị (để giữ 0 ở đầu nếu có)
+
+  let s = String(v).trim();
+
+  // loại mọi ký tự không phải số
+
+  s = s.replace(/[^\d]/g, "");
+
+  return s;
+
+};
+
+
+
+export const MIN_PAGE_SIZE = 10;
+
+const DEFAULT_PAGE_SIZE = 15;
+
+export const PAGE_SIZE_OPTIONS = [15, 30, 50, 100];
+
+export const PAGE_SIZE_STORAGE_KEY = "mstAssignment.pageSize";
+
+export const normalizePageSize = (value, minValue = MIN_PAGE_SIZE) => {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) {
+    return minValue;
+  }
+  const normalized = Math.trunc(numeric);
+  if (normalized < minValue) {
+    return minValue;
+  }
+  return normalized;
+};
+
+export const readStoredPageSize = (
+  storage,
+  fallback = DEFAULT_PAGE_SIZE,
+  minValue = MIN_PAGE_SIZE
+) => {
+  if (!storage) return normalizePageSize(fallback, minValue);
+  try {
+    const raw = storage.getItem(PAGE_SIZE_STORAGE_KEY);
+    if (raw == null || raw === "") {
+      return normalizePageSize(fallback, minValue);
+    }
+    return normalizePageSize(raw, minValue);
+  } catch (err) {
+    console.warn("readStoredPageSize", err);
+    return normalizePageSize(fallback, minValue);
+  }
+};
+
+
+
+const HISTORY_FIELD_LABELS = {
+
+  person_import: "Người phụ trách Nhập",
+
+  person_export: "Người phụ trách Xuất",
+
+  effective_from: "Áp dụng từ ngày",
+
+  effective_to: "Đến hết ngày",
+
+};
+
+
+
+const MST_ROW_FIELDS = [
+
+  "mst",
+
+  "company",
+
+  "person_import",
+
+  "person_export",
+
+  "team",
+
+  "effective_from",
+
+  "effective_to",
+
+  "status",
+
+];
+
+
+
+const sortMSTRows = (list = []) => {
+
+  return [...list]
+
+    .filter(Boolean)
+
+    .sort((a, b) => {
+
+      const mstA = (a?.mst || "").toString();
+
+      const mstB = (b?.mst || "").toString();
+
+      const byMST = mstA.localeCompare(mstB);
+
+      if (byMST !== 0) return byMST;
+
+      const dateA = a?.effective_from || "";
+
+      const dateB = b?.effective_from || "";
+
+      if (dateA !== dateB) {
+
+        return dateA.localeCompare(dateB);
+
+      }
+
+      const toA = a?.effective_to || "9999-12-31";
+
+      const toB = b?.effective_to || "9999-12-31";
+
+      return toA.localeCompare(toB);
+
+    });
+
+};
+
+
 
 const makeRowKey = (row) => {
+
   if (!row) return "";
-  return `${row.mst || ""}__${row.effective_from || ""}`;
+
+  return `${row.mst || ""}__${row.effective_from || ""}__${row.effective_to || ""}`;
+
 };
+
+
 
 const buildHistoryIndex = (entries = []) => {
+
   const map = new Map();
+
   for (const entry of entries) {
+
     if (!entry || !entry.rowKey || !entry.field) continue;
+
     if (!map.has(entry.rowKey)) {
+
       map.set(entry.rowKey, {});
+
     }
+
     const fieldBuckets = map.get(entry.rowKey);
+
     if (!fieldBuckets[entry.field]) {
+
       fieldBuckets[entry.field] = [];
+
     }
+
     fieldBuckets[entry.field].push(entry);
+
   }
+
   return map;
+
 };
+
+
+
+const groupHistoryTimelineEntries = (entries = []) => {
+  const groups = new Map();
+
+  entries.forEach((entry) => {
+    if (!entry) return;
+    const dateKey = (entry.timestamp || "").slice(0, 10) || "";
+    if (!groups.has(dateKey)) {
+      groups.set(dateKey, []);
+    }
+    groups.get(dateKey).push(entry);
+  });
+
+  return Array.from(groups.entries()).map(([date, list]) => ({
+    date,
+    entries: Array.isArray(list) ? list : [],
+  }));
+};
+
 
 const formatHistoryTime = (value) => {
+
   if (!value) return "";
+
   try {
+
     return new Date(value).toLocaleString("vi-VN", { hour12: false });
+
   } catch (err) {
+
     console.warn("formatHistoryTime error", err);
+
     return value;
+
   }
+
 };
 
+
+
 const HistoryDetails = ({ entries = [], label }) => {
+
   if (!entries.length) return null;
+
+  const renderValue = (value) =>
+
+    value ? (
+
+      <span>{value}</span>
+
+    ) : (
+
+      <span className="italic text-gray-500">(trống)</span>
+
+    );
+
+
+
+  return (
+
+    <details className="mt-1 text-xs text-gray-600">
+
+      <summary
+
+        className="cursor-pointer text-blue-600 hover:text-blue-800"
+
+        data-tooltip="Xem nhanh các lần chỉnh sửa trường này"
+
+      >
+
+        Lịch sử {label || ""}
+
+      </summary>
+
+      <ul className="mt-1 space-y-2 max-h-40 overflow-auto pr-1">
+
+        {entries.map((entry) => (
+
+          <li key={entry.id} className="border-t pt-1 first:border-t-0 first:pt-0">
+
+            <div className="font-medium text-gray-700">
+
+              {formatHistoryTime(entry.timestamp)} — {entry.actor || "Hệ thống"}
+
+              {entry.type === "create" && (
+
+                <span className="ml-2 text-emerald-600">(Thêm mới)</span>
+
+              )}
+
+              {entry.type === "update" && (
+
+                <span className="ml-2 text-blue-600">(Chỉnh sửa)</span>
+
+              )}
+
+              {entry.type === "delete" && (
+
+                <span className="ml-2 text-red-600">(Đã xoá)</span>
+
+              )}
+
+            </div>
+
+            <div className="text-gray-600">
+
+              <span className="text-gray-500">Từ:</span> {renderValue(entry.from)}
+
+            </div>
+
+            <div className="text-gray-600">
+
+              <span className="text-gray-500">Đến:</span> {renderValue(entry.to)}
+
+            </div>
+
+          </li>
+
+        ))}
+
+      </ul>
+
+    </details>
+
+  );
+
+};
+
+
+
+
+
+const HistoryTimelineGroups = ({ groups = [] }) => {
+  const safeGroups = Array.isArray(groups) ? groups : [];
+
+  if (!safeGroups.length) {
+    return (
+      <p className="text-sm text-slate-500">
+        Không có thay đổi nào khớp bộ lọc hiện tại.
+      </p>
+    );
+  }
+
   const renderValue = (value) =>
     value ? (
-      <span>{value}</span>
+      <span className="text-slate-700">{value}</span>
     ) : (
-      <span className="italic text-gray-500">(trống)</span>
+      <span className="italic text-slate-400">(trống)</span>
     );
 
   return (
-    <details className="mt-1 text-xs text-gray-600">
-      <summary
-        className="cursor-pointer text-blue-600 hover:text-blue-800"
-        data-tooltip="Xem nhanh các lần chỉnh sửa trường này"
-      >
-        Lịch sử {label || ""}
+    <div className="space-y-4">
+      {safeGroups.map((group, groupIndex) => {
+        const entries = Array.isArray(group?.entries) ? group.entries : [];
+        const groupKey = group?.date || `history-${groupIndex}`;
+        const dateLabel = group?.date ? formatISODate(group.date) : "";
+        const title = dateLabel || "Không xác định";
+
+        return (
+          <section key={groupKey} className="space-y-2">
+            <header className="flex flex-wrap items-center justify-between gap-2">
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                {title}
+              </h3>
+              <span className="text-[11px] font-medium text-slate-400">
+                {entries.length} thay đổi
+              </span>
+            </header>
+            {entries.length ? (
+              <ol className="relative border-l border-slate-200 pl-4">
+                {entries.map((entry, entryIndex) => {
+                  const key = entry?.id || `${groupKey}-${entryIndex}`;
+                  const actionLabel =
+                    HISTORY_ACTION_LABELS[entry?.type] || entry?.type || "Khác";
+                  const badgeClass =
+                    HISTORY_ACTION_BADGE_CLASSES[entry?.type] ||
+                    "border-slate-200 bg-slate-100 text-slate-600";
+                  const timestampLabel = formatHistoryTime(entry?.timestamp);
+                  const actorName = entry?.actor ? `Bởi ${entry.actor}` : "Bởi hệ thống";
+                  const fieldLabel =
+                    HISTORY_FIELD_LABELS[entry?.field] ||
+                    (entry?.field ? entry.field : "Trường dữ liệu");
+
+                  return (
+                    <li key={key} className="relative mb-6 ml-2 last:mb-0">
+                      <span
+                        className="absolute -left-[9px] top-1.5 inline-flex size-3 rounded-full border border-white bg-slate-400 shadow"
+                        aria-hidden="true"
+                      />
+                      <div className="flex flex-col gap-2 rounded border border-slate-200 bg-white p-3 text-sm text-slate-700">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="font-semibold text-slate-800">
+                            {timestampLabel || "Chưa rõ thời gian"}
+                          </span>
+                          <span
+                            className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${badgeClass}`}
+                          >
+                            {actionLabel}
+                          </span>
+                          <span className="text-xs text-slate-500">{actorName}</span>
+                        </div>
+                        <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-600">
+                          <span>
+                            <span className="text-slate-500">MST:</span> {entry?.mst || "(Không xác định)"}
+                          </span>
+                          {fieldLabel ? (
+                            <span>
+                              <span className="text-slate-500">Trường:</span> {fieldLabel}
+                            </span>
+                          ) : null}
+                        </div>
+                        <div className="flex flex-wrap items-baseline gap-2 text-xs text-slate-600">
+                          <span className="text-slate-500">Từ:</span> {renderValue(entry?.from)}
+                          <span className="text-slate-400">→</span>
+                          <span className="text-slate-500">Đến:</span> {renderValue(entry?.to)}
+                        </div>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ol>
+            ) : (
+              <p className="text-xs italic text-slate-400">
+                Chưa ghi nhận thay đổi trong ngày này.
+              </p>
+            )}
+          </section>
+        );
+      })}
+    </div>
+  );
+};
+
+
+const StageTimelinePreview = ({ stages = [], onViewFull }) => {
+  const safeStages = Array.isArray(stages) ? stages : [];
+  const limitedStages = safeStages.slice(0, 3);
+  const canViewFull = typeof onViewFull === "function" && safeStages.length > 0;
+
+  return (
+    <details className="mt-2 text-xs text-slate-600">
+      <summary className="flex cursor-pointer items-center gap-2 text-blue-600 hover:text-blue-800">
+        <span>Lịch sử giai đoạn</span>
+        <span className="rounded bg-slate-200 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-600">
+          {safeStages.length}
+        </span>
       </summary>
-      <ul className="mt-1 space-y-2 max-h-40 overflow-auto pr-1">
-        {entries.map((entry) => (
-          <li key={entry.id} className="border-t pt-1 first:border-t-0 first:pt-0">
-            <div className="font-medium text-gray-700">
-              {formatHistoryTime(entry.timestamp)} — {entry.actor || "Hệ thống"}
-              {entry.type === "create" && (
-                <span className="ml-2 text-emerald-600">(Thêm mới)</span>
-              )}
-              {entry.type === "update" && (
-                <span className="ml-2 text-blue-600">(Chỉnh sửa)</span>
-              )}
-              {entry.type === "delete" && (
-                <span className="ml-2 text-red-600">(Đã xoá)</span>
-              )}
-            </div>
-            <div className="text-gray-600">
-              <span className="text-gray-500">Từ:</span> {renderValue(entry.from)}
-            </div>
-            <div className="text-gray-600">
-              <span className="text-gray-500">Đến:</span> {renderValue(entry.to)}
-            </div>
-          </li>
-        ))}
-      </ul>
+      {safeStages.length ? (
+        <>
+          <ul className="mt-1 space-y-1">
+            {limitedStages.map((stage, index) => {
+              const stageKey =
+                makeRowKey(stage) ||
+                `${stage?.mst || "stage"}-${stage?.effective_from || ""}-${stage?.effective_to || index}`;
+              const startLabel = stage?.effective_from
+                ? formatISODate(stage.effective_from)
+                : "Không xác định";
+              const endLabel = stage?.effective_to ? formatISODate(stage.effective_to) : "Hiện tại";
+              const active = !stage?.effective_to;
+              return (
+                <li
+                  key={stageKey}
+                  className="rounded border border-slate-200 bg-white px-2 py-1"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-semibold text-slate-700">
+                      {startLabel} → {endLabel}
+                    </span>
+                    {active ? (
+                      <span className="rounded bg-emerald-600 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
+                        Hiện hành
+                      </span>
+                    ) : null}
+                  </div>
+                  <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-slate-500">
+                    <span>Nhập: {stage?.person_import || "—"}</span>
+                    <span>Xuất: {stage?.person_export || "—"}</span>
+                    {stage?.status ? <span>Trạng thái: {stage.status}</span> : null}
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+          {safeStages.length > limitedStages.length ? (
+            <p className="mt-1 text-[11px] text-slate-500">
+              … và {safeStages.length - limitedStages.length} giai đoạn khác
+            </p>
+          ) : null}
+          {canViewFull ? (
+            <button
+              type="button"
+              className="mt-2 inline-flex items-center text-[11px] font-semibold text-blue-600 hover:text-blue-800"
+              onClick={onViewFull}
+            >
+              Xem toàn màn hình
+            </button>
+          ) : null}
+        </>
+      ) : (
+        <p className="mt-1 italic text-slate-400">Chưa có dữ liệu giai đoạn.</p>
+      )}
     </details>
   );
 };
 
-export default function MSTAssignment({ canEdit = true, currentUser = null }) {
-  const [rows, setRows] = useState([]); // toàn bộ (bao gồm metadata)
-  const [originalRows, setOriginalRows] = useState([]);
-  const [search, setSearch] = useState("");
-  const [staffFilter, setStaffFilter] = useState("");
-  const [applyFrom, setApplyFrom] = useState(""); // yyyy-mm-dd
-  const rootRef = useRef(null);
-  const fileRef = useRef();
-  const [selectedFileName, setSelectedFileName] = useState("");
-  const [historyEntries, setHistoryEntries] = useState(() =>
-    getMSTHistoryEntries(500)
+
+const StageTimelineGroups = ({ groups = [] }) => {
+  const safeGroups = Array.isArray(groups) ? groups : [];
+
+  if (!safeGroups.length) {
+    return (
+      <p className="text-sm text-slate-500">
+        Không có giai đoạn nào khớp bộ lọc hiện tại.
+      </p>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      {safeGroups.map((group, groupIndex) => {
+        const stageList = Array.isArray(group?.stages) ? group.stages : [];
+        const groupKey = group?.mst || `group-${groupIndex}`;
+        return (
+          <div
+            key={groupKey}
+            className="rounded border border-slate-200 bg-slate-50 p-3"
+          >
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <div className="text-sm font-semibold text-slate-800">
+                  {group?.mst || "(MST trống)"}
+                </div>
+                <div className="max-w-2xl truncate text-xs text-slate-500">
+                  {group?.company || "Chưa cập nhật tên công ty"}
+                </div>
+              </div>
+              <span className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                {stageList.length} giai đoạn
+              </span>
+            </div>
+            {stageList.length ? (
+              <div className="mt-3 flex flex-wrap gap-2">
+                {stageList.map((stage, stageIndex) => {
+                  const stageKey =
+                    makeRowKey(stage) ||
+                    `${group?.mst || "stage"}-${stage?.effective_from || ""}-${stage?.effective_to || stageIndex}`;
+                  const startLabel = stage?.effective_from
+                    ? formatISODate(stage.effective_from)
+                    : "Không xác định";
+                  const endLabel = stage?.effective_to
+                    ? formatISODate(stage.effective_to)
+                    : "Hiện tại";
+                  const active = !stage?.effective_to;
+                  return (
+                    <div
+                      key={stageKey}
+                      className={`min-w-[14rem] rounded border px-3 py-2 text-xs ${
+                        active
+                          ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                          : "border-slate-200 bg-white text-slate-700"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-semibold">
+                          {startLabel} → {endLabel}
+                        </span>
+                        {active ? (
+                          <span className="rounded bg-emerald-600 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
+                            Đang áp dụng
+                          </span>
+                        ) : null}
+                      </div>
+                      <div className="mt-2 space-y-1 text-slate-600">
+                        <div>
+                          <span className="font-medium text-slate-500">Nhập:</span> {stage?.person_import || "—"}
+                        </div>
+                        <div>
+                          <span className="font-medium text-slate-500">Xuất:</span> {stage?.person_export || "—"}
+                        </div>
+                        {stage?.status ? (
+                          <div>
+                            <span className="font-medium text-slate-500">Trạng thái:</span> {stage.status}
+                          </div>
+                        ) : null}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="mt-2 text-xs italic text-slate-500">Chưa có dữ liệu giai đoạn.</p>
+            )}
+          </div>
+        );
+      })}
+    </div>
   );
-  const [historyFilter, setHistoryFilter] = useState({
-    from: "",
-    to: "",
-    type: "all",
-  });
-  const [rosterSnapshot, setRosterSnapshot] = useState(() => getTeamRoster());
-  const rosterTeams = useMemo(() => buildRosterTeams(rosterSnapshot), [rosterSnapshot]);
-  const [recentlyImportedKeys, setRecentlyImportedKeys] = useState(() => new Set());
-  const markRecentlyImported = useCallback((keys = []) => {
-    if (!Array.isArray(keys) || !keys.length) {
+};
+
+
+
+
+const CompanyNameValidationMessages = ({ warnings }) => {
+  if (!warnings || warnings.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="flex flex-col gap-1 text-xs text-amber-700" role="status" aria-live="polite">
+      {warnings.map((warning, index) => (
+        <div
+          key={`${warning.type}-${index}`}
+          className="flex items-start gap-1"
+          data-company-warning-type={warning.type}
+        >
+          <AlertTriangle className="mt-0.5 size-3 shrink-0" aria-hidden="true" />
+          <span>{warning.message}</span>
+        </div>
+      ))}
+    </div>
+  );
+};
+
+export function CompanyNameCell({ value, isReadOnly, onChange, placeholder = "Tên công ty" }) {
+  const safeValue = value == null ? "" : value.toString();
+  const trimmedValue = safeValue.trim();
+  const shouldWrap = shouldWrapCompanyName(safeValue);
+  const textareaRef = useRef(null);
+  const { warnings, hasWarnings } = useMemo(
+    () => getCompanyNameValidation(safeValue),
+    [safeValue]
+  );
+
+  const adjustTextareaHeight = useCallback(
+    (element, nextValue) => {
+      const target = element || textareaRef.current;
+      if (!target) {
+        return;
+      }
+
+      const measuredValue = nextValue ?? safeValue;
+      const wrapCandidate = shouldWrapCompanyName(measuredValue);
+      const baseMinHeight = wrapCandidate ? 40 : 36;
+
+      target.style.minHeight = `${baseMinHeight}px`;
+      target.style.height = "auto";
+      const nextHeight = Math.max(target.scrollHeight, baseMinHeight);
+      target.style.height = `${nextHeight}px`;
+    },
+    [safeValue]
+  );
+
+  useEffect(() => {
+    adjustTextareaHeight();
+  }, [safeValue, adjustTextareaHeight]);
+
+  if (isReadOnly) {
+    if (!trimmedValue) {
+      return (
+        <span className="italic text-gray-400" data-company-wrap="empty">
+          (Không tên)
+        </span>
+      );
+    }
+
+    return (
+      <span
+        className={clsx(
+          'block whitespace-normal break-words text-gray-900',
+          shouldWrap ? 'leading-snug' : 'leading-normal'
+        )}
+        title={safeValue}
+        data-company-wrap={shouldWrap ? 'wrapped' : 'single'}
+        style={{ wordBreak: 'break-word' }}
+      >
+        {safeValue}
+      </span>
+    );
+  }
+
+  const handleChange = (event) => {
+    const sanitizedValue = sanitizeCompanyNameInput(event.target.value);
+    adjustTextareaHeight(event.target, sanitizedValue);
+    if (!onChange) {
       return;
     }
-    setRecentlyImportedKeys((prev) => {
-      const next = new Set(prev);
-      keys.forEach((key) => {
-        if (key) {
-          next.add(key);
-        }
-      });
-      return next;
-    });
-  }, []);
+
+    if (sanitizedValue !== safeValue || event.target.value !== safeValue) {
+      onChange(sanitizedValue);
+    }
+  };
+
+  return (
+    <div className="flex flex-col gap-1">
+      <textarea
+        ref={textareaRef}
+        value={safeValue}
+        onChange={handleChange}
+        className={clsx(
+          'border rounded px-2 py-1 w-full resize-y whitespace-normal break-words focus:outline-none focus:ring-2',
+          shouldWrap ? 'leading-snug min-h-[2.5rem]' : 'leading-normal min-h-[2.25rem]',
+          hasWarnings
+            ? 'border-amber-500/70 focus:border-amber-500 focus:ring-amber-200'
+            : 'border-gray-300 focus:border-blue-500 focus:ring-blue-200'
+        )}
+        placeholder={placeholder}
+        title={trimmedValue ? safeValue : undefined}
+        spellCheck={false}
+        data-company-wrap={shouldWrap ? 'wrapped' : 'single'}
+        aria-invalid={hasWarnings || undefined}
+        style={{ wordBreak: 'break-word' }}
+      />
+      <CompanyNameValidationMessages warnings={warnings} />
+    </div>
+  );
+}
+
+const PERSON_HEADER_CONFIG = {
+  person_import: {
+    icon: LogIn,
+    labelLines: ["Phụ trách", "Nhập"],
+    tooltip: "Người phụ trách Nhập",
+  },
+  person_export: {
+    icon: LogOut,
+    labelLines: ["Phụ trách", "Xuất"],
+    tooltip: "Người phụ trách Xuất",
+  },
+};
+
+export function PersonColumnHeader({ columnKey }) {
+  const config = PERSON_HEADER_CONFIG[columnKey];
+  if (!config) {
+    return null;
+  }
+
+  const { icon: Icon, labelLines, tooltip } = config;
+
+  return (
+    <div
+      className="flex items-start gap-1.5"
+      title={tooltip}
+      data-tooltip={tooltip}
+      data-column={columnKey}
+    >
+      <Icon className="mt-0.5 size-4 shrink-0 text-gray-500" aria-hidden="true" />
+      <span className="flex flex-col text-left font-medium leading-tight text-gray-700">
+        {labelLines.map((line) => (
+          <span key={line}>{line}</span>
+        ))}
+        <span className="sr-only">{tooltip}</span>
+      </span>
+    </div>
+  );
+}
+
+function ColumnResizeHandle({ columnKey, onResizeStart }) {
+
+  const label = getColumnLabel(columnKey);
+
+  const handleMouseDown = (event) => {
+
+    if (typeof onResizeStart === "function") {
+
+      onResizeStart(columnKey, event);
+
+    }
+
+  };
+
+  return (
+
+    <span
+
+      role="separator"
+
+      aria-orientation="vertical"
+
+      aria-label={`Điều chỉnh chiều rộng cột ${label}`}
+
+      title={`Kéo để điều chỉnh chiều rộng cột ${label}`}
+
+      data-resize-handle={columnKey}
+
+      className="absolute inset-y-0 right-0 flex w-3 cursor-col-resize select-none items-center justify-center"
+
+      onMouseDown={handleMouseDown}
+
+    >
+
+      <span className="pointer-events-none h-full w-px bg-amber-500/50 opacity-0 transition-opacity duration-150 group-hover:opacity-100" />
+
+    </span>
+
+  );
+
+}
+
+export function AssigneeCell({
+  value = "",
+  placeholder,
+  isReadOnly,
+  teams = [],
+  teamValue = "",
+  onSelect,
+  historyEntries = [],
+  historyLabel,
+  showTeamHint = false,
+}) {
+  const safeValue = value == null ? "" : value.toString();
+  const trimmedValue = safeValue.trim();
+  const normalizedTeam = teamValue == null ? "" : teamValue.toString().trim();
+  const hasTeamHint = showTeamHint && normalizedTeam;
+
+  const displayNode = isReadOnly ? (
+    trimmedValue ? (
+      <span
+        className="whitespace-normal break-words text-gray-900 leading-snug"
+        style={{
+          display: "-webkit-box",
+          WebkitLineClamp: 2,
+          WebkitBoxOrient: "vertical",
+          overflow: "hidden",
+        }}
+        title={trimmedValue}
+        data-assignee-state="filled"
+      >
+        {trimmedValue}
+      </span>
+    ) : (
+      <span className="italic text-gray-400" data-assignee-state="empty">
+        (Chưa chọn)
+      </span>
+    )
+  ) : (
+    <StaffCombobox
+      value={safeValue}
+      teamValue={teamValue || ""}
+      teams={teams}
+      placeholder={placeholder}
+      onSelect={onSelect}
+    />
+  );
+
+  return (
+    <div className="flex flex-col">
+      <div className="flex flex-col gap-1">
+        {displayNode}
+        {hasTeamHint ? (
+          <span
+            className="text-xs text-gray-500"
+            title={`Tổ phụ trách: ${normalizedTeam}`}
+            data-team-hint="true"
+          >
+            Tổ: {normalizedTeam}
+          </span>
+        ) : null}
+      </div>
+      <HistoryDetails entries={historyEntries} label={historyLabel} />
+    </div>
+  );
+}
+
+export function PageSizeControl({
+  value,
+  onChange,
+  options = PAGE_SIZE_OPTIONS,
+  minValue = MIN_PAGE_SIZE,
+  selectId = "mst-assignment-page-size",
+}) {
+  const hasPredefinedOption = options.includes(value);
+  const [customValue, setCustomValue] = useState(() => String(Math.max(minValue, value || minValue)));
+  const [selectedOption, setSelectedOption] = useState(() =>
+    hasPredefinedOption ? String(value) : "custom"
+  );
+  const previousValueRef = useRef(value);
+
   useEffect(() => {
-    const unsubscribe = subscribeTeamRoster((next) => {
-      setRosterSnapshot(next);
-    });
-    return () => {
-      if (typeof unsubscribe === "function") {
-        unsubscribe();
+    if (previousValueRef.current === value) {
+      return;
+    }
+    previousValueRef.current = value;
+    const nextHasOption = options.includes(value);
+    const nextOption = nextHasOption ? String(value) : "custom";
+    setSelectedOption(nextOption);
+    if (!nextHasOption) {
+      setCustomValue(String(Math.max(minValue, value || minValue)));
+    }
+  }, [minValue, options, value]);
+
+  const handleSelectChange = useCallback(
+    (event) => {
+      const next = event.target.value;
+      if (next === "custom") {
+        setSelectedOption("custom");
+        setCustomValue(String(Math.max(minValue, value || minValue)));
+        return;
       }
-    };
+      setSelectedOption(next);
+      const numeric = Number(next);
+      if (Number.isFinite(numeric)) {
+        onChange(normalizePageSize(numeric, minValue));
+      }
+    },
+    [minValue, onChange, value]
+  );
+
+  const handleCustomChange = useCallback((event) => {
+    const next = event.target.value;
+    if (/^\d*$/.test(next)) {
+      setCustomValue(next);
+    }
   }, []);
+
+  const applyCustomValue = useCallback(() => {
+    if (customValue === "") {
+      const fallback = Math.max(minValue, value || minValue);
+      setCustomValue(String(fallback));
+      onChange(fallback);
+      return;
+    }
+    const normalized = normalizePageSize(customValue, minValue);
+    setCustomValue(String(normalized));
+    onChange(normalized);
+  }, [customValue, minValue, onChange, value]);
+
+  const handleCustomBlur = useCallback(() => {
+    applyCustomValue();
+  }, [applyCustomValue]);
+
+  const handleCustomKeyDown = useCallback(
+    (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        applyCustomValue();
+      }
+    },
+    [applyCustomValue]
+  );
+
+  return (
+    <div className="flex flex-wrap items-center gap-2 text-sm text-gray-600">
+      <label htmlFor={selectId} className="font-medium text-gray-700">
+        Số dòng mỗi trang
+      </label>
+      <select
+        id={selectId}
+        className="rounded border px-2 py-1"
+        value={selectedOption}
+        onChange={handleSelectChange}
+      >
+        {options.map((option) => (
+          <option key={option} value={option}>
+            {option} dòng
+          </option>
+        ))}
+        <option value="custom">Tùy chỉnh…</option>
+      </select>
+      {selectedOption === "custom" ? (
+        <div className="flex items-center gap-2">
+          <label htmlFor={`${selectId}-custom`} className="sr-only">
+            Nhập số dòng tùy chỉnh
+          </label>
+          <input
+            id={`${selectId}-custom`}
+            type="text"
+            inputMode="numeric"
+            pattern="[0-9]*"
+            className="w-20 rounded border px-2 py-1 text-right"
+            value={customValue}
+            onChange={handleCustomChange}
+            onBlur={handleCustomBlur}
+            onKeyDown={handleCustomKeyDown}
+            aria-describedby={`${selectId}-hint`}
+          />
+          <span id={`${selectId}-hint`} className="text-xs text-gray-500">
+            Tối thiểu {minValue} dòng
+          </span>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+const QuickFilterPill = ({ active, children, onClick }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    className={clsx(
+      "rounded-full border px-3 py-1 text-xs font-semibold transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-500",
+      active
+        ? "border-amber-600 bg-amber-600 text-white shadow-sm"
+        : "border-amber-200 bg-white text-amber-800 hover:border-amber-300 hover:bg-amber-100"
+    )}
+    aria-pressed={active}
+  >
+    {children}
+  </button>
+);
+
+export default function MSTAssignment({
+  canEdit = true,
+  currentUser = null,
+  quickLookup = null,
+  onQuickLookupConsumed = null,
+}) {
+
+  const [rows, setRows] = useState([]); // toàn bộ (bao gồm metadata)
+
+  const [originalRows, setOriginalRows] = useState([]);
+  const [groupByMST, setGroupByMST] = useState(true);
+
+  const [search, setSearch] = useState("");
+
+  const [staffFilter, setStaffFilter] = useState("");
+
+  const [applyFrom, setApplyFrom] = useState(""); // yyyy-mm-dd
+
+  const [initialPageSize] = useState(() => {
+    if (typeof window === "undefined") {
+      return DEFAULT_PAGE_SIZE;
+    }
+    return readStoredPageSize(window.localStorage, DEFAULT_PAGE_SIZE, MIN_PAGE_SIZE);
+  });
+
+  const rootRef = useRef(null);
+
+  const fileRef = useRef();
+
+  const setPageRef = useRef(() => {});
+  const quickLookupHandledRef = useRef(null);
+
+  const [selectedFileName, setSelectedFileName] = useState("");
+
+  const [historyEntries, setHistoryEntries] = useState(() =>
+
+    getMSTHistoryEntries(500)
+
+  );
+
+  const refreshHistory = useCallback(() => {
+
+    setHistoryEntries(getMSTHistoryEntries(500));
+
+  }, []);
+
+  const [historyFilter, setHistoryFilter] = useState({
+
+    from: "",
+
+    to: "",
+
+    type: "all",
+
+  });
+
+  const [rosterSnapshot, setRosterSnapshot] = useState(() => getTeamRoster());
+
+  const rosterTeams = useMemo(() => buildRosterTeams(rosterSnapshot), [rosterSnapshot]);
+  const [leadViewEnabled, setLeadViewEnabled] = useState(false);
+  const [leadStatusQuick, setLeadStatusQuick] = useState("all");
+  const [leadTeamQuick, setLeadTeamQuick] = useState(LEAD_TEAM_ALL);
+
+  const leadStatusFilter = useMemo(() => {
+    if (!leadViewEnabled) {
+      return null;
+    }
+    if (leadStatusQuick === "assigned") {
+      return MST_ASSIGNMENT_STATUS.ASSIGNED;
+    }
+    if (leadStatusQuick === "pending") {
+      return MST_ASSIGNMENT_STATUS.PENDING;
+    }
+    return null;
+  }, [leadStatusQuick, leadViewEnabled]);
+
+  const normalizedLeadTeamFilter = useMemo(() => {
+    if (!leadViewEnabled) {
+      return "";
+    }
+    if (!leadTeamQuick || leadTeamQuick === LEAD_TEAM_ALL) {
+      return "";
+    }
+    return leadTeamQuick;
+  }, [leadTeamQuick, leadViewEnabled]);
+
+  const leadTeamName = useMemo(() => {
+    if (!leadTeamQuick || leadTeamQuick === LEAD_TEAM_ALL) {
+      return "Tất cả tổ";
+    }
+    const matched = rosterTeams.find((team) => team.normalized === leadTeamQuick);
+    return matched?.name || "Tổ đang chọn";
+  }, [leadTeamQuick, rosterTeams]);
+
+  useEffect(() => {
+    if (leadTeamQuick === LEAD_TEAM_ALL) {
+      return;
+    }
+    const exists = rosterTeams.some((team) => team.normalized === leadTeamQuick);
+    if (!exists) {
+      setLeadTeamQuick(LEAD_TEAM_ALL);
+    }
+  }, [leadTeamQuick, rosterTeams]);
+
+  useEffect(() => {
+    if (!quickLookup || typeof quickLookup !== "object") {
+      return;
+    }
+
+    const { type, value, company, timestamp } = quickLookup;
+    const lookupKey =
+      Number.isFinite(timestamp) && timestamp > 0
+        ? timestamp
+        : `${type || ""}|${value || ""}|${company || ""}`;
+    if (quickLookupHandledRef.current === lookupKey) {
+      return;
+    }
+    quickLookupHandledRef.current = lookupKey;
+
+    const lookupType = typeof type === "string" ? type.toLowerCase() : "";
+    const rawValue = typeof value === "string" ? value.trim() : "";
+    const rawCompany = typeof company === "string" ? company.trim() : "";
+    let nextSearch = search;
+    let shouldUpdateSearch = false;
+    let shouldResetPage = false;
+
+    if (lookupType === "mst") {
+      const sanitized = tidyMST(rawValue);
+      const display = sanitized || rawValue;
+      if (display && display !== search) {
+        nextSearch = display;
+        shouldUpdateSearch = true;
+      } else if (!display && rawCompany && rawCompany !== search) {
+        nextSearch = rawCompany;
+        shouldUpdateSearch = true;
+      }
+      if (!groupByMST) {
+        setGroupByMST(true);
+      }
+      shouldResetPage = Boolean(display || rawCompany);
+    } else if (lookupType === "company") {
+      if (rawCompany && rawCompany !== search) {
+        nextSearch = rawCompany;
+        shouldUpdateSearch = true;
+      }
+      shouldResetPage = Boolean(rawCompany);
+    } else if (rawValue) {
+      if (rawValue !== search) {
+        nextSearch = rawValue;
+        shouldUpdateSearch = true;
+      }
+      shouldResetPage = true;
+    }
+
+    if (shouldUpdateSearch) {
+      setSearch(nextSearch);
+    }
+
+    if (shouldResetPage) {
+      if (staffFilter) {
+        setStaffFilter("");
+      }
+      setPageRef.current(1);
+    }
+
+    if (typeof onQuickLookupConsumed === "function") {
+      onQuickLookupConsumed();
+    }
+  }, [
+    quickLookup,
+    onQuickLookupConsumed,
+    search,
+    staffFilter,
+    groupByMST,
+  ]);
+
+  const [recentlyImportedKeys, setRecentlyImportedKeys] = useState(() => new Set());
+
+  const markRecentlyImported = useCallback((keys = []) => {
+
+    if (!Array.isArray(keys) || !keys.length) {
+
+      return;
+
+    }
+
+    setRecentlyImportedKeys((prev) => {
+
+      const next = new Set(prev);
+
+      keys.forEach((key) => {
+
+        if (key) {
+
+          next.add(key);
+
+        }
+
+      });
+
+      return next;
+
+    });
+
+  }, []);
+
+  useEffect(() => {
+
+    const unsubscribe = subscribeTeamRoster((next) => {
+
+      setRosterSnapshot(next);
+
+    });
+
+    return () => {
+
+      if (typeof unsubscribe === "function") {
+
+        unsubscribe();
+
+      }
+
+    };
+
+  }, []);
+
   const filteredHistoryEntries = useMemo(() => {
+
     if (!historyEntries?.length) return [];
+
+    const shouldFilterByActionType = HISTORY_ACTION_TYPES.has(historyFilter.type);
+
     return historyEntries.filter((entry) => {
+
       if (!entry) return false;
+
       const entryDate = (entry.timestamp || "").slice(0, 10);
+
       if (historyFilter.from && entryDate < historyFilter.from) {
+
         return false;
+
       }
+
       if (historyFilter.to && entryDate > historyFilter.to) {
+
         return false;
+
       }
-      if (historyFilter.type !== "all" && entry.type !== historyFilter.type) {
+
+      if (shouldFilterByActionType && entry.type !== historyFilter.type) {
+
         return false;
+
       }
+
       return true;
+
     });
+
   }, [historyEntries, historyFilter]);
+
   const historyIndex = useMemo(
+
     () => buildHistoryIndex(filteredHistoryEntries),
+
     [filteredHistoryEntries]
+
   );
+
   const isHistoryFilterActive = useMemo(
+
     () =>
+
       Boolean(
+
         (historyFilter.from && historyFilter.from.trim()) ||
+
           (historyFilter.to && historyFilter.to.trim()) ||
+
           (historyFilter.type && historyFilter.type !== "all")
+
       ),
+
     [historyFilter]
+
   );
+
   const historyFilteredRowKeys = useMemo(() => {
+
     if (!isHistoryFilterActive) return null;
+
+    if (!HISTORY_ACTION_TYPES.has(historyFilter.type)) {
+
+      return null;
+
+    }
+
     const set = new Set();
+
     filteredHistoryEntries.forEach((entry) => {
+
       if (entry?.rowKey) {
+
         set.add(entry.rowKey);
+
       }
+
     });
+
     return set;
-  }, [filteredHistoryEntries, isHistoryFilterActive]);
+
+  }, [filteredHistoryEntries, historyFilter.type, isHistoryFilterActive]);
+
+  const activeStatusFilter = useMemo(() => {
+
+    if (!isHistoryFilterActive) return null;
+
+    return STATUS_FILTER_MAP.get(historyFilter.type) || null;
+
+  }, [historyFilter.type, isHistoryFilterActive]);
+
+  const [exportMenuOpen, setExportMenuOpen] = useState(false);
+
   const [showAddForm, setShowAddForm] = useState(false);
+
   const [draft, setDraft] = useState({
     mst: "",
     company: "",
@@ -510,364 +2789,1292 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
     person_export: "",
     team: "",
     effective_from: "",
-    status: "",
+    effective_to: "",
   });
-  const [addError, setAddError] = useState("");
+  const draftCompanyValidation = useMemo(
+    () => getCompanyNameValidation(draft.company),
+    [draft.company]
+  );
+
+  const canUseLocalStorage =
+
+    typeof window !== "undefined" && typeof window.localStorage !== "undefined";
 
   const actor = currentUser?.username || "guest";
-  const isReadOnly = !canEdit;
-  const {
-    favorites: quickFavorites,
-    addFavorite: addQuickFavorite,
-    removeFavorite: removeQuickFavorite,
-    clearType: clearQuickFavorite,
-  } = useMSTQuickFilters();
-  const originalMap = useMemo(() => {
-    const map = new Map();
-    originalRows.forEach((row) => {
-      if (!row) return;
-      const key = row.__originalKey || makeRowKey(row);
-      if (key) {
-        map.set(key, row);
+
+  const exportActorLabel = useMemo(() => {
+    const candidates = [
+      currentUser?.name,
+      currentUser?.fullName,
+      currentUser?.displayName,
+      currentUser?.username,
+      actor,
+    ];
+    for (const candidate of candidates) {
+      if (typeof candidate === "string") {
+        const trimmed = candidate.trim();
+        if (trimmed) {
+          return trimmed;
+        }
       }
-    });
-    return map;
-  }, [originalRows]);
-  const createRowState = useCallback((row, meta = {}) => {
-    const normalizedStatus = normalizeStatusLabel(row?.status);
-    const mstValue = tidyMST(row?.mst || "");
-    const base = {
-      mst: mstValue,
-      company: String(row?.company || "").trim(),
-      person_import: String(row?.person_import || "").trim(),
-      person_export: String(row?.person_export || "").trim(),
-      team: String(row?.team || "").trim(),
-      effective_from: row?.effective_from || "",
-      status: normalizedStatus,
+    }
+    return "Không xác định";
+  }, [actor, currentUser]);
+
+  const defaultVisibleColumns = useMemo(
+
+    () => sanitizeColumnVisibility(DEFAULT_VISIBLE_COLUMNS),
+
+    []
+
+  );
+
+  const [columnWidths, setColumnWidths] = useState(() => {
+
+    if (!canUseLocalStorage) {
+
+      return sanitizeColumnWidths(DEFAULT_COLUMN_WIDTHS);
+
+    }
+
+    return readStoredColumnWidths(window.localStorage, DEFAULT_COLUMN_WIDTHS);
+
+  });
+
+  const columnWidthsRef = useRef(columnWidths);
+
+  useEffect(() => {
+
+    columnWidthsRef.current = columnWidths;
+
+  }, [columnWidths]);
+
+  const pendingColumnWidthsRef = useRef(columnWidths);
+
+  const persistColumnWidthsTimeoutRef = useRef(null);
+
+  const schedulePersistColumnWidths = useCallback(
+
+    (nextWidths) => {
+
+      if (!canUseLocalStorage) {
+
+        return;
+
+      }
+
+      pendingColumnWidthsRef.current = nextWidths;
+
+      if (persistColumnWidthsTimeoutRef.current) {
+
+        clearTimeout(persistColumnWidthsTimeoutRef.current);
+
+      }
+
+      persistColumnWidthsTimeoutRef.current = setTimeout(() => {
+
+        writeStoredColumnWidths(window.localStorage, pendingColumnWidthsRef.current);
+
+        persistColumnWidthsTimeoutRef.current = null;
+
+      }, 280);
+
+    },
+
+    [canUseLocalStorage]
+
+  );
+
+  useEffect(() => {
+
+    schedulePersistColumnWidths(columnWidths);
+
+  }, [columnWidths, schedulePersistColumnWidths]);
+
+  useEffect(() => {
+
+    return () => {
+
+      if (persistColumnWidthsTimeoutRef.current) {
+
+        clearTimeout(persistColumnWidthsTimeoutRef.current);
+
+      }
+
+      if (typeof document !== "undefined" && document.body) {
+
+        document.body.style.removeProperty("user-select");
+
+        document.body.style.removeProperty("cursor");
+
+      }
+
     };
-    const originalKey = meta.originalKey ?? (meta.isNew ? null : makeRowKey(base));
-    return {
-      ...base,
-      __originalKey: originalKey,
-      __isNew: Boolean(meta.isNew),
-    };
+
   }, []);
-  const getRowDiff = useCallback(
-    (row) => {
-      if (!row) {
-        return { changed: false, sanitized: createRowState({}, { isNew: true }) };
+
+  const columnResizeStateRef = useRef({ key: null, startX: 0, startWidth: 0 });
+
+  const handleColumnResizeStart = useCallback(
+
+    (key, event) => {
+
+      if (event.button !== 0) {
+
+        return;
+
       }
-      const baseKey = row.__originalKey || "";
-      const sanitized = createRowState(row, {
-        originalKey: baseKey || undefined,
-        isNew: row.__isNew,
-      });
-      const nextKey = makeRowKey(sanitized);
-      const baseline = baseKey ? originalMap.get(baseKey) : null;
-      if (!baseline) {
-        const payload = {};
-        MST_ROW_FIELDS.forEach((field) => {
-          payload[field] = sanitized[field] || "";
-        });
-        return { changed: true, isNew: true, sanitized, patch: payload, keyChanged: true };
+
+      event.preventDefault();
+
+      event.stopPropagation();
+
+      const currentWidths = columnWidthsRef.current || {};
+
+      const startWidth = currentWidths[key] ?? getColumnFallbackWidth(key);
+
+      columnResizeStateRef.current = {
+
+        key,
+
+        startX: event.clientX,
+
+        startWidth,
+
+      };
+
+      if (typeof document !== "undefined" && document.body) {
+
+        document.body.style.userSelect = "none";
+
+        document.body.style.cursor = "col-resize";
+
       }
-      const patch = {};
-      MST_ROW_FIELDS.forEach((field) => {
-        const nextValue = sanitized[field] || "";
-        const prevValue = baseline[field] || "";
-        if (field === "effective_from") {
-          if ((nextValue || "") !== (prevValue || "")) {
-            patch[field] = nextValue;
-          }
-          return;
-        }
-        if (field === "status") {
-          if (normalizeStatusLabel(nextValue) !== normalizeStatusLabel(prevValue)) {
-            patch[field] = normalizeStatusLabel(nextValue);
-          }
-          return;
-        }
-        if (field === "mst") {
-          if (tidyMST(nextValue) !== tidyMST(prevValue)) {
-            patch[field] = tidyMST(nextValue);
-          }
-          return;
-        }
-        if (normalizeStr(nextValue) !== normalizeStr(prevValue)) {
-          patch[field] = nextValue;
-        }
-      });
-      const keyChanged = nextKey !== (baseKey || nextKey);
-      const changed = keyChanged || Object.keys(patch).length > 0;
-      return { changed, isNew: false, sanitized, patch, keyChanged, baseline };
+
     },
-    [createRowState, originalMap]
+
+    []
+
   );
-  const rowHasChanges = useCallback((row) => getRowDiff(row).changed, [getRowDiff]);
-  const commitRow = useCallback(
-    (row) => {
-      if (isReadOnly) {
-        alert("Bạn không có quyền cập nhật dòng này.");
-        return;
+
+  const handleColumnResizeMove = useCallback((event) => {
+
+    const state = columnResizeStateRef.current;
+
+    if (!state?.key) {
+
+      return;
+
+    }
+
+    const delta = event.clientX - state.startX;
+
+    const proposed = state.startWidth + delta;
+
+    const minWidth = COLUMN_MIN_WIDTHS[state.key] ?? COLUMN_MIN_WIDTH;
+
+    const maxWidth = COLUMN_MAX_WIDTH;
+
+    const nextWidth = Math.min(maxWidth, Math.max(minWidth, Math.round(proposed)));
+
+    setColumnWidths((prev) => {
+
+      const current = prev?.[state.key];
+
+      if (current === nextWidth) {
+
+        return prev;
+
       }
-      const diff = getRowDiff(row);
-      if (!diff.changed) {
-        alert("Không có thay đổi mới để lưu.");
+
+      return { ...prev, [state.key]: nextWidth };
+
+    });
+
+  }, []);
+
+  useEffect(() => {
+
+    if (typeof window === "undefined") {
+
+      return undefined;
+
+    }
+
+    const handleMove = (event) => {
+
+      if (!columnResizeStateRef.current?.key) {
+
         return;
+
       }
-      const payload = { ...diff.sanitized };
-      delete payload.__originalKey;
-      delete payload.__isNew;
-      try {
-        const result = saveMSTRow(payload, {
-          originalKey: row.__originalKey || null,
-          actor,
-          detail: "Cập nhật gán MST từ tab Gán MST",
-        });
-        if (!result?.ok) {
-          switch (result?.reason) {
-            case "conflict":
-              alert(
-                "MST và ngày áp dụng trùng với dòng khác. Vui lòng đổi ngày áp dụng hoặc kiểm tra dữ liệu hiện có."
-              );
-              break;
-            case "invalid":
-              alert("Dữ liệu chưa hợp lệ, vui lòng kiểm tra lại.");
-              break;
-            case "not-found":
-              alert("Không tìm thấy bản ghi gốc. Hãy tải lại trang trước khi cập nhật.");
-              break;
-            case "no-change":
-              alert("Không có thay đổi mới để lưu.");
-              break;
-            default:
-              alert("Không thể lưu dòng này. Vui lòng thử lại sau.");
-          }
-          return;
+
+      handleColumnResizeMove(event);
+
+    };
+
+    const handleUp = (event) => {
+
+      if (!columnResizeStateRef.current?.key) {
+
+        return;
+
+      }
+
+      handleColumnResizeMove(event);
+
+      columnResizeStateRef.current = { key: null, startX: 0, startWidth: 0 };
+
+      if (typeof document !== "undefined" && document.body) {
+
+        document.body.style.removeProperty("user-select");
+
+        document.body.style.removeProperty("cursor");
+
+      }
+
+    };
+
+    window.addEventListener("mousemove", handleMove);
+
+    window.addEventListener("mouseup", handleUp);
+
+    return () => {
+
+      window.removeEventListener("mousemove", handleMove);
+
+      window.removeEventListener("mouseup", handleUp);
+
+    };
+
+  }, [handleColumnResizeMove]);
+
+  const handleResetColumnWidths = useCallback(() => {
+
+    const defaults = sanitizeColumnWidths(DEFAULT_COLUMN_WIDTHS);
+
+    setColumnWidths(defaults);
+
+  }, []);
+
+  const columnStyleMap = useMemo(() => {
+
+    const map = {};
+
+    COLUMN_OPTIONS.forEach((option) => {
+
+      const key = option.key;
+
+      const stored = columnWidths?.[key];
+
+      const minWidth = COLUMN_MIN_WIDTHS[key] ?? COLUMN_MIN_WIDTH;
+
+      const fallbackWidth = getColumnFallbackWidth(key);
+
+      const resolved = Math.max(minWidth, Number.isFinite(stored) ? stored : fallbackWidth);
+
+      map[key] = {
+
+        width: `${resolved}px`,
+
+        minWidth: `${minWidth}px`,
+
+        maxWidth: `${Math.max(resolved, minWidth)}px`,
+
+      };
+
+    });
+
+    return map;
+
+  }, [columnWidths]);
+
+  const [visibleColumns, setVisibleColumns] = useState(() => {
+
+    if (!canUseLocalStorage) {
+
+      return defaultVisibleColumns;
+
+    }
+
+    return readStoredColumnVisibility(
+
+      window.localStorage,
+
+      actor,
+
+      defaultVisibleColumns
+
+    );
+
+  });
+
+  useEffect(() => {
+
+    if (!canUseLocalStorage) {
+
+      setVisibleColumns(defaultVisibleColumns);
+
+      return;
+
+    }
+
+    const storedVisibility = readStoredColumnVisibility(
+
+      window.localStorage,
+
+      actor,
+
+      defaultVisibleColumns
+
+    );
+
+    setVisibleColumns((prev) => {
+
+      const allKeys = new Set([
+
+        ...Object.keys(prev || {}),
+
+        ...Object.keys(storedVisibility || {}),
+
+      ]);
+
+      const isSame = Array.from(allKeys).every(
+
+        (key) => prev?.[key] === storedVisibility?.[key]
+
+      );
+
+      if (isSame) {
+
+        return prev;
+
+      }
+
+      return storedVisibility;
+
+    });
+
+  }, [actor, canUseLocalStorage, defaultVisibleColumns]);
+
+  const [columnMenuOpen, setColumnMenuOpen] = useState(false);
+
+  const isColumnVisible = useCallback(
+
+    (key) => {
+
+      const option = COLUMN_OPTIONS.find((item) => item.key === key);
+
+      if (!option) return true;
+
+      if (option.required) return true;
+
+      if (leadViewEnabled) {
+
+        if (!LEAD_VIEW_VISIBLE_COLUMNS.has(key)) {
+
+          return false;
+
         }
-        const savedRow = createRowState(result.row, {
-          originalKey: result.key,
-          isNew: false,
-        });
-        setRows((prev) => {
-          const current = Array.isArray(prev) ? prev : [];
-          const replaced = current.map((item) => (item === row ? savedRow : item));
-          return sortMSTRows(replaced);
-        });
-        setOriginalRows((prev) => {
-          const baseKey = result.previousKey || row.__originalKey || "";
-          const filtered = (Array.isArray(prev) ? prev : []).filter((item) => {
-            const itemKey = item.__originalKey || makeRowKey(item);
-            return itemKey !== baseKey;
-          });
-          const merged = [...filtered, savedRow];
-          return sortMSTRows(merged);
-        });
-        setRecentlyImportedKeys((prev) => {
-          const next = new Set(prev);
-          const currentKey = makeRowKey(row);
-          if (currentKey && next.has(currentKey)) {
-            next.delete(currentKey);
+
+        return true;
+
+      }
+
+      return visibleColumns[key] !== false;
+
+    },
+
+    [leadViewEnabled, visibleColumns]
+
+  );
+
+  const visibleColumnKeys = useMemo(
+
+    () => COLUMN_OPTIONS.filter((option) => isColumnVisible(option.key)).map((option) => option.key),
+
+    [isColumnVisible]
+
+  );
+
+    const toggleColumnVisibility = useCallback(
+
+      (key) => {
+
+        const option = COLUMN_OPTIONS.find((item) => item.key === key);
+
+        if (option?.required) {
+
+          return;
+
+        }
+
+        setVisibleColumns((prev) => {
+
+          const next = { ...prev };
+
+          next[key] = prev[key] === false ? true : false;
+
+          if (canUseLocalStorage) {
+
+            writeStoredColumnVisibility(window.localStorage, actor, next);
+
           }
-          if (row.__originalKey && next.has(row.__originalKey)) {
-            next.delete(row.__originalKey);
-          }
-          next.add(result.key);
+
           return next;
+
         });
+
+      },
+
+      [setVisibleColumns, canUseLocalStorage, actor]
+
+    );
+
+    const [addError, setAddError] = useState("");
+
+  const isReadOnly = !canEdit;
+
+  const {
+
+    favorites: quickFavorites,
+
+    addFavorite: addQuickFavorite,
+
+    removeFavorite: removeQuickFavorite,
+
+  } = useMSTQuickFilters();
+
+  const originalMap = useMemo(() => {
+
+    const map = new Map();
+
+    originalRows.forEach((row) => {
+
+      if (!row) return;
+
+      const key = row.__originalKey || makeRowKey(row);
+
+      if (key) {
+
+        map.set(key, row);
+
+      }
+
+    });
+
+    return map;
+
+  }, [originalRows]);
+
+  const createRowState = useCallback((row, meta = {}) => {
+
+    const mstValue = tidyMST(row?.mst || "");
+
+    const base = {
+
+      mst: mstValue,
+
+      company: String(row?.company || "").trim(),
+
+      person_import: String(row?.person_import || "").trim(),
+
+      person_export: String(row?.person_export || "").trim(),
+
+      team: String(row?.team || "").trim(),
+
+      effective_from: row?.effective_from || "",
+
+      effective_to: row?.effective_to || "",
+
+      status: "",
+
+    };
+
+    base.status = computeStoredStatus(base);
+
+    const originalKey = meta.originalKey ?? (meta.isNew ? null : makeRowKey(base));
+
+    return {
+
+      ...base,
+
+      __originalKey: originalKey,
+
+      __isNew: Boolean(meta.isNew),
+
+    };
+
+  }, []);
+
+  const getRowDiff = useCallback(
+
+    (row) => {
+
+      if (!row) {
+
+        return { changed: false, sanitized: createRowState({}, { isNew: true }) };
+
+      }
+
+      const baseKey = row.__originalKey || "";
+
+      const sanitized = createRowState(row, {
+
+        originalKey: baseKey || undefined,
+
+        isNew: row.__isNew,
+
+      });
+
+      const nextKey = makeRowKey(sanitized);
+
+      const baseline = baseKey ? originalMap.get(baseKey) : null;
+
+      if (!baseline) {
+
+        const payload = {};
+
+        MST_ROW_FIELDS.forEach((field) => {
+
+          payload[field] = sanitized[field] || "";
+
+        });
+
+        return { changed: true, isNew: true, sanitized, patch: payload, keyChanged: true };
+
+      }
+
+      const patch = {};
+
+      MST_ROW_FIELDS.forEach((field) => {
+
+        const nextValue = sanitized[field] || "";
+
+        const prevValue = baseline[field] || "";
+
+        if (field === "effective_from") {
+
+          if ((nextValue || "") !== (prevValue || "")) {
+
+            patch[field] = nextValue;
+
+          }
+
+          return;
+
+        }
+
+        if (field === "effective_to") {
+
+          if ((nextValue || "") !== (prevValue || "")) {
+
+            patch[field] = nextValue;
+
+          }
+
+          return;
+
+        }
+
+        if (field === "status") {
+
+          if (normalizeStatusLabel(nextValue) !== normalizeStatusLabel(prevValue)) {
+
+            patch[field] = normalizeStatusLabel(nextValue);
+
+          }
+
+          return;
+
+        }
+
+        if (field === "mst") {
+
+          if (tidyMST(nextValue) !== tidyMST(prevValue)) {
+
+            patch[field] = tidyMST(nextValue);
+
+          }
+
+          return;
+
+        }
+
+        if (normalizeStr(nextValue) !== normalizeStr(prevValue)) {
+
+          patch[field] = nextValue;
+
+        }
+
+      });
+
+      const keyChanged = nextKey !== (baseKey || nextKey);
+
+      const changed = keyChanged || Object.keys(patch).length > 0;
+
+      return { changed, isNew: false, sanitized, patch, keyChanged, baseline };
+
+    },
+
+    [createRowState, originalMap]
+
+  );
+
+  const rowHasChanges = useCallback((row) => getRowDiff(row).changed, [getRowDiff]);
+
+  const commitRow = useCallback(
+
+    (row) => {
+
+      if (isReadOnly) {
+
+        alert("Bạn không có quyền cập nhật dòng này.");
+
+        return;
+
+      }
+
+      const diff = getRowDiff(row);
+
+      if (!diff.changed) {
+
+        alert("Không có thay đổi mới để lưu.");
+
+        return;
+
+      }
+
+      const payload = { ...diff.sanitized };
+
+      delete payload.__originalKey;
+
+      delete payload.__isNew;
+
+      try {
+
+        const result = saveMSTRow(payload, {
+
+          originalKey: row.__originalKey || null,
+
+          actor,
+
+          detail: "Cập nhật gán MST từ tab Gán MST",
+
+        });
+
+        if (!result?.ok) {
+
+          switch (result?.reason) {
+
+            case "conflict":
+
+              alert(
+
+                "MST và ngày áp dụng trùng với dòng khác. Vui lòng đổi ngày áp dụng hoặc kiểm tra dữ liệu hiện có."
+
+              );
+
+              break;
+
+            case "invalid":
+
+              alert("Dữ liệu chưa hợp lệ, vui lòng kiểm tra lại.");
+
+              break;
+
+            case "not-found":
+
+              alert("Không tìm thấy bản ghi gốc. Hãy tải lại trang trước khi cập nhật.");
+
+              break;
+
+            case "no-change":
+
+              alert("Không có thay đổi mới để lưu.");
+
+              break;
+
+            default:
+
+              alert("Không thể lưu dòng này. Vui lòng thử lại sau.");
+
+          }
+
+          return;
+
+        }
+
+        const savedRow = createRowState(result.row, {
+
+          originalKey: result.key,
+
+          isNew: false,
+
+        });
+
+        setRows((prev) => {
+
+          const current = Array.isArray(prev) ? prev : [];
+
+          const replaced = current.map((item) => (item === row ? savedRow : item));
+
+          return sortMSTRows(replaced);
+
+        });
+
+        setOriginalRows((prev) => {
+
+          const baseKey = result.previousKey || row.__originalKey || "";
+
+          const filtered = (Array.isArray(prev) ? prev : []).filter((item) => {
+
+            const itemKey = item.__originalKey || makeRowKey(item);
+
+            return itemKey !== baseKey;
+
+          });
+
+          const merged = [...filtered, savedRow];
+
+          return sortMSTRows(merged);
+
+        });
+
+        setRecentlyImportedKeys((prev) => {
+
+          const next = new Set(prev);
+
+          const currentKey = makeRowKey(row);
+
+          if (currentKey && next.has(currentKey)) {
+
+            next.delete(currentKey);
+
+          }
+
+          if (row.__originalKey && next.has(row.__originalKey)) {
+
+            next.delete(row.__originalKey);
+
+          }
+
+          next.add(result.key);
+
+          return next;
+
+        });
+
         refreshHistory();
+
         alert("Đã lưu thay đổi cho dòng này.");
+
       } catch (error) {
+
         console.error("saveMSTRow error", error);
+
         alert("Không thể lưu dòng này. Vui lòng thử lại sau.");
+
       }
+
     },
+
     [actor, createRowState, getRowDiff, isReadOnly, refreshHistory]
+
   );
-  const handleStaffFilterSelect = useCallback(
-    ({ staffName }) => {
-      setStaffFilter(staffName || "");
-      setPage(1);
-    },
-    [setPage]
-  );
+
+  const handleStaffFilterSelect = useCallback(({ staffName }) => {
+
+    setStaffFilter(staffName || "");
+
+    setPageRef.current(1);
+
+  }, []);
+
   const clearStaffFilter = useCallback(() => {
+
     setStaffFilter("");
-    setPage(1);
-  }, [setPage]);
-  const applyStaffFavorite = useCallback(
-    (value) => {
-      setStaffFilter(value || "");
-      setPage(1);
-    },
-    [setPage]
-  );
+
+    setPageRef.current(1);
+
+  }, []);
+
+  const applyStaffFavorite = useCallback((value) => {
+
+    setStaffFilter(value || "");
+
+    setPageRef.current(1);
+
+  }, []);
+
+  const updateHistoryFilter = useCallback((patch) => {
+
+    setHistoryFilter((prev) => ({ ...prev, ...patch }));
+
+  }, []);
+
   const applyActionFavorite = useCallback(
+
     (value) => {
+
       if (!value) {
+
         updateHistoryFilter({ type: "all" });
+
       } else {
+
         updateHistoryFilter({ type: value });
+
       }
-      setPage(1);
+
+      setPageRef.current(1);
+
     },
-    [setPage, updateHistoryFilter]
+
+    [updateHistoryFilter]
+
   );
+
   const handleSaveStaffFavorite = useCallback(() => {
+
     if (!staffFilter.trim()) {
+
       alert("Nhập hoặc chọn nhân viên trước khi lưu bộ lọc.");
+
       return;
+
     }
+
     const result = addQuickFavorite("staff", staffFilter);
+
     if (!result.ok) {
+
       if (result.reason === "duplicate") {
+
         alert("Bộ lọc này đã nằm trong danh sách ưa thích.");
+
       }
+
       return;
+
     }
+
     alert("Đã lưu bộ lọc nhân viên.");
+
   }, [addQuickFavorite, staffFilter]);
+
   const handleSaveActionFavorite = useCallback(() => {
+
     if (!historyFilter.type || historyFilter.type === "all") {
-      alert("Chỉ lưu bộ lọc thao tác khi bạn chọn Thêm mới/Chỉnh sửa/Xóa.");
+
+      alert("Chỉ lưu bộ lọc khi bạn chọn thao tác hoặc trạng thái cụ thể.");
+
       return;
+
     }
+
     const result = addQuickFavorite("action", historyFilter.type);
+
     if (!result.ok) {
+
       if (result.reason === "duplicate") {
-        alert("Bộ lọc thao tác đã tồn tại.");
+
+        const duplicateMessage = HISTORY_ACTION_TYPES.has(historyFilter.type)
+
+          ? "Bộ lọc thao tác đã tồn tại."
+
+          : STATUS_FILTER_MAP.has(historyFilter.type)
+
+            ? "Bộ lọc trạng thái đã tồn tại."
+
+            : "Bộ lọc đã tồn tại.";
+
+        alert(duplicateMessage);
+
       }
+
       return;
+
     }
-    alert("Đã lưu bộ lọc thao tác.");
+
+    const successMessage = HISTORY_ACTION_TYPES.has(historyFilter.type)
+
+      ? "Đã lưu bộ lọc thao tác."
+
+      : STATUS_FILTER_MAP.has(historyFilter.type)
+
+        ? "Đã lưu bộ lọc trạng thái nhân viên."
+
+        : "Đã lưu bộ lọc.";
+
+    alert(successMessage);
+
   }, [addQuickFavorite, historyFilter.type]);
 
-  const refreshHistory = useCallback(() => {
-    setHistoryEntries(getMSTHistoryEntries(500));
-  }, []);
 
-  const updateHistoryFilter = (patch) => {
-    setHistoryFilter((prev) => ({ ...prev, ...patch }));
-  };
 
   const resetHistoryFilter = () => {
+
     setHistoryFilter({ from: "", to: "", type: "all" });
+
   };
+
+
 
   /** Load lần đầu */
+
   useEffect(() => {
+
     try {
+
       const cur = getMSTMap() || [];
+
       const prepared = sortMSTRows(cur).map((row) =>
+
         createRowState(row, { originalKey: makeRowKey(row), isNew: false })
+
       );
+
       setRows(prepared);
+
       setOriginalRows(prepared);
+
     } catch (e) {
+
       console.error("getMSTMap error:", e);
+
     }
+
   }, [createRowState]);
 
+
+
   useEffect(() => {
+
     refreshHistory();
+
   }, [refreshHistory]);
 
+
+
   const toggleAddForm = () => {
+
     if (isReadOnly) {
+
       alert(
+
         "Bạn không có quyền thêm mới thủ công. Đăng nhập bằng tài khoản được cấp quyền để tiếp tục."
+
       );
+
       return;
+
     }
+
     if (showAddForm) {
+
       setShowAddForm(false);
+
       setAddError("");
+
       return;
+
     }
+
     setDraft({
+
       mst: "",
+
       company: "",
+
       person_import: "",
+
       person_export: "",
+
       team: "",
+
       effective_from: applyFrom || "",
-      status: "",
+
+      effective_to: "",
+
     });
+
     setAddError("");
+
     setShowAddForm(true);
+
   };
+
+
+
+  const computeNextStageStart = useCallback(
+
+    (row) => {
+
+      if (!row) {
+
+        return applyFrom || "";
+
+      }
+
+      const base = row.effective_to || row.effective_from || applyFrom || "";
+
+      if (!base) return "";
+
+      const date = new Date(base);
+
+      if (Number.isNaN(date.getTime())) {
+
+        return base;
+
+      }
+
+      date.setDate(date.getDate() + 1);
+
+      return date.toISOString().slice(0, 10);
+
+    },
+
+    [applyFrom]
+
+  );
+
+
+
+  const startNewStageFromRow = useCallback(
+
+    (row) => {
+
+      if (isReadOnly) {
+
+        alert("Bạn không có quyền thêm giai đoạn mới.");
+
+        return;
+
+      }
+
+      const nextStart = computeNextStageStart(row);
+
+      setDraft({
+
+        mst: row?.mst || "",
+
+        company: row?.company || "",
+
+        person_import: row?.person_import || "",
+
+        person_export: row?.person_export || "",
+
+        team: row?.team || "",
+
+        effective_from: nextStart || "",
+
+        effective_to: "",
+
+      });
+
+      setAddError("");
+
+      setShowAddForm(true);
+
+      setTimeout(() => {
+
+        if (rootRef.current) {
+
+          rootRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+
+        }
+
+      }, 60);
+
+    },
+
+    [computeNextStageStart, isReadOnly]
+
+  );
+
+
 
   const handleDraftChange = (field, formatter = (value) => value) => (event) => {
+
     const raw = event?.target?.value ?? "";
+
     const value = formatter(raw);
+
     setDraft((prev) => ({ ...prev, [field]: value }));
+
   };
+
+
 
   const handleAddSubmit = (event) => {
+
     event.preventDefault();
+
     if (isReadOnly) {
+
       alert("Bạn không có quyền thêm mới.");
+
       return;
+
     }
+
     const mst = tidyMST(draft.mst);
+
     if (!mst) {
+
       setAddError("Vui lòng nhập mã số thuế hợp lệ (chỉ chứa số).");
+
       return;
+
     }
+
     const normalizedCompany = String(draft.company || "").trim();
+
     const normalizedImport = String(draft.person_import || "").trim();
+
     const normalizedExport = String(draft.person_export || "").trim();
+
     const normalizedTeam = String(draft.team || "").trim();
+
     const normalizedDate = draft.effective_from || "";
-    const normalizedStatus = normalizeStatusLabel(draft.status);
+
+    const normalizedEnd = draft.effective_to || "";
+
+    if (normalizedDate && normalizedEnd && normalizedEnd < normalizedDate) {
+
+      setAddError("Ngày kết thúc phải sau hoặc bằng ngày bắt đầu.");
+
+      return;
+
+    }
 
     const newRow = {
+
       mst,
+
       company: normalizedCompany,
+
       person_import: normalizedImport,
+
       person_export: normalizedExport,
+
       team: normalizedTeam,
+
       effective_from: normalizedDate,
-      status: normalizedStatus,
+
+      effective_to: normalizedEnd,
+
+      status: computeStoredStatus({
+
+        person_import: normalizedImport,
+
+        person_export: normalizedExport,
+
+      }),
+
     };
 
+
+
     let createdKey = "";
+
     setRows((prev) => {
+
       const current = Array.isArray(prev) ? prev : [];
+
       const newKey = makeRowKey(newRow);
+
       const next = [...current];
+
       const existingIndex = next.findIndex((row) => makeRowKey(row) === newKey);
+
       const resolvedTeam = normalizedTeam || (existingIndex >= 0 ? next[existingIndex]?.team || "" : "");
-      const resolvedStatus =
-        normalizedStatus || (existingIndex >= 0 ? normalizeStatusLabel(next[existingIndex]?.status) : "");
+
+      const resolvedStatus = computeStoredStatus({
+
+        ...newRow,
+
+        team: resolvedTeam,
+
+        status: newRow.status,
+
+      });
+
       const payload = { ...newRow, team: resolvedTeam, status: resolvedStatus };
+
       if (existingIndex >= 0) {
+
         const originalMeta = next[existingIndex];
+
         next[existingIndex] = createRowState({ ...originalMeta, ...payload }, {
+
           originalKey: originalMeta.__originalKey,
+
           isNew: originalMeta.__isNew,
+
         });
+
       } else {
+
         next.push(createRowState(payload, { isNew: true }));
+
         createdKey = newKey;
+
       }
+
       return sortMSTRows(next);
+
     });
+
     if (createdKey) {
+
       markRecentlyImported([createdKey]);
+
     }
-    setPage(1);
+
+    setPageRef.current(1);
+
     setShowAddForm(false);
+
     setAddError("");
+
     alert("Đã thêm vào danh sách. Bấm Lưu để ghi vào hệ thống.");
+
   };
 
-  const exportRowsToExcel = (scope = "filtered") => {
+
+
+  const exportRows = useCallback((scope = "filtered", format = "xlsx") => {
     const source = scope === "all" ? rows : filtered;
     if (!source.length) {
-      alert("Không có dữ liệu để xuất Excel.");
+      alert("Không có dữ liệu để xuất file.");
       return;
     }
+
+    const generatedAt = new Date();
+    const totalCount = rows.length;
+    const filteredCount = source.length;
+    const scopeLabel =
+      scope === "all"
+        ? "Toàn bộ danh sách đang quản lý"
+        : "Theo bộ lọc hiện tại";
+
+    const metadataEntries = buildExportMetadataEntries({
+      scopeLabel,
+      totalCount,
+      filteredCount,
+      search: (search || "").trim(),
+      staffFilter: (staffFilter || "").trim(),
+      historyFilter,
+      leadViewEnabled,
+      leadTeamName,
+      assigneeSummary: summarizeAssignees(source),
+      effectiveRange: summarizeEffectiveRange(source),
+      actorLabel: exportActorLabel,
+      generatedAt,
+    });
+
     const data = source.map((item, index) => ({
       STT: index + 1,
       MST: item.mst,
@@ -876,933 +4083,3883 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
       "Người phụ trách Xuất": item.person_export || "",
       "Tổ đội": item.team || "",
       "Áp dụng từ ngày": item.effective_from || "",
-      "Trạng thái": item.status || "",
+      "Đến hết ngày": item.effective_to || "",
+      "Trạng thái": computeStatusDisplay(item) || item.status || "",
     }));
 
-    const worksheet = XLSX.utils.json_to_sheet(data);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Gan MST");
-    const now = new Date();
-    const timestamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(
-      now.getDate()
-    ).padStart(2, "0")}_${String(now.getHours()).padStart(2, "0")}${String(now.getMinutes()).padStart(
-      2,
-      "0"
-    )}`;
-    const suffix = scope === "all" ? "toan-bo" : "loc";
-    XLSX.writeFile(workbook, `gan-mst-${suffix}-${timestamp}.xlsx`);
-  };
+    const timestamp = `${generatedAt.getFullYear()}${String(
+      generatedAt.getMonth() + 1
+    ).padStart(2, "0")}${String(generatedAt.getDate()).padStart(2, "0")}_${String(
+      generatedAt.getHours()
+    ).padStart(2, "0")}${String(generatedAt.getMinutes()).padStart(2, "0")}`;
+    const scopeSuffix = scope === "all" ? "toan-bo" : "loc";
+    const baseName = `gan-mst-${scopeSuffix}-${timestamp}`;
+    const normalizedFormat = format === "csv" ? "csv" : "xlsx";
 
-  /** Filter + phân trang */
-  const filtered = useMemo(() => {
-    const query = normalize(search || "");
-    const hasQuery = Boolean(query);
-    const staffQuery = normalize(staffFilter || "");
-    const hasStaffQuery = Boolean(staffQuery);
-    const base = rows.filter((row) => {
-      if (isHistoryFilterActive) {
-        const key = makeRowKey(row);
-        if (!historyFilteredRowKeys?.has(key)) {
-          return false;
-        }
+    if (normalizedFormat === "csv") {
+      try {
+        const worksheet = XLSX.utils.json_to_sheet(data);
+        const csvBody = XLSX.utils.sheet_to_csv(worksheet);
+        const metadataLines = [
+          "# Báo cáo phân bổ MST",
+          ...metadataEntries.map(([label, value]) => `# ${label}: ${value}`),
+          "",
+        ];
+        const csvContent = `${metadataLines.join("\n")}${csvBody}`;
+        const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+        downloadBlob(blob, `${baseName}.csv`);
+      } catch (error) {
+        console.error("Không thể xuất CSV", error);
+        alert("Không thể xuất file CSV. Vui lòng thử lại.");
       }
-      if (hasStaffQuery) {
-        const staffMatched =
-          normalize(row.person_import || "").includes(staffQuery) ||
-          normalize(row.person_export || "").includes(staffQuery) ||
-          normalize(row.team || "").includes(staffQuery);
-        if (!staffMatched) {
-          return false;
-        }
-      }
-      if (!hasQuery) return true;
-      return (
-        normalize(row.mst).includes(query) ||
-        normalize(row.company).includes(query) ||
-        normalize(row.status || "").includes(query)
-      );
-    });
+      return;
+    }
 
-    const prioritized = [...base].sort((a, b) => {
-      const keyA = makeRowKey(a);
-      const keyB = makeRowKey(b);
-      const aIsNew = recentlyImportedKeys.has(keyA) ? 1 : 0;
-      const bIsNew = recentlyImportedKeys.has(keyB) ? 1 : 0;
-      if (aIsNew !== bIsNew) {
-        return bIsNew - aIsNew;
-      }
-      const byMST = (a.mst || "").localeCompare(b.mst || "");
-      if (byMST !== 0) return byMST;
-      return (a.effective_from || "").localeCompare(b.effective_from || "");
-    });
-
-    return prioritized;
+    try {
+      const workbook = XLSX.utils.book_new();
+      const metadataSheet = XLSX.utils.aoa_to_sheet([["Trường", "Giá trị"], ...metadataEntries]);
+      XLSX.utils.book_append_sheet(workbook, metadataSheet, "Thong tin");
+      const dataSheet = XLSX.utils.json_to_sheet(data);
+      XLSX.utils.book_append_sheet(workbook, dataSheet, "Gan MST");
+      XLSX.writeFile(workbook, `${baseName}.xlsx`);
+    } catch (error) {
+      console.error("Không thể xuất Excel", error);
+      alert("Không thể xuất file Excel. Vui lòng thử lại.");
+    }
   }, [
     rows,
+    filtered,
     search,
     staffFilter,
-    isHistoryFilterActive,
-    historyFilteredRowKeys,
-    recentlyImportedKeys,
+    historyFilter,
+    leadViewEnabled,
+    leadTeamName,
+    exportActorLabel,
   ]);
+
+  const leadTeamPool = useMemo(() => {
+
+    if (!leadViewEnabled) {
+
+      return rows;
+
+    }
+
+    if (!normalizedLeadTeamFilter) {
+
+      return rows;
+
+    }
+
+    return rows.filter((row) => normalizeTeamKey(row?.team || "") === normalizedLeadTeamFilter);
+
+  }, [leadViewEnabled, normalizedLeadTeamFilter, rows]);
+
+
+
+  const leadSummary = useMemo(() => {
+
+    if (!leadViewEnabled) {
+
+      return { total: 0, assigned: 0, pending: 0 };
+
+    }
+
+    let assigned = 0;
+
+    let pending = 0;
+
+    leadTeamPool.forEach((row) => {
+
+      const status = computeStoredStatus(row);
+
+      if (status === MST_ASSIGNMENT_STATUS.ASSIGNED) {
+
+        assigned += 1;
+
+      } else {
+
+        pending += 1;
+
+      }
+
+    });
+
+    return {
+
+      total: leadTeamPool.length,
+
+      assigned,
+
+      pending,
+
+    };
+
+  }, [leadTeamPool, leadViewEnabled]);
+
+
+
+  /** Filter + phân trang */
+
+  const filtered = useMemo(() => {
+
+    const query = normalize(search || "");
+
+    const hasQuery = Boolean(query);
+
+    const staffQuery = normalize(staffFilter || "");
+
+    const hasStaffQuery = Boolean(staffQuery);
+
+    const base = rows.filter((row) => {
+
+      if (historyFilteredRowKeys) {
+
+        const key = makeRowKey(row);
+
+        if (!historyFilteredRowKeys.has(key)) {
+
+          return false;
+
+        }
+
+      }
+
+      const rowStatus = computeStoredStatus(row);
+
+      if (activeStatusFilter && rowStatus !== activeStatusFilter) {
+
+        return false;
+
+      }
+
+      if (leadStatusFilter && rowStatus !== leadStatusFilter) {
+
+        return false;
+
+      }
+
+      if (leadViewEnabled && normalizedLeadTeamFilter) {
+
+        const rowTeamKey = normalizeTeamKey(row.team || "");
+
+        if (rowTeamKey !== normalizedLeadTeamFilter) {
+
+          return false;
+
+        }
+
+      }
+
+      if (hasStaffQuery) {
+
+        const staffMatched =
+
+          normalize(row.person_import || "").includes(staffQuery) ||
+
+          normalize(row.person_export || "").includes(staffQuery) ||
+
+          normalize(row.team || "").includes(staffQuery);
+
+        if (!staffMatched) {
+
+          return false;
+
+        }
+
+      }
+
+      if (!hasQuery) return true;
+
+      return (
+
+        normalize(row.mst).includes(query) ||
+
+        normalize(row.company).includes(query) ||
+
+        normalize(row.status || "").includes(query)
+
+      );
+
+    });
+
+
+
+    const prioritized = [...base].sort((a, b) => {
+
+      const keyA = makeRowKey(a);
+
+      const keyB = makeRowKey(b);
+
+      const aIsNew = recentlyImportedKeys.has(keyA) ? 1 : 0;
+
+      const bIsNew = recentlyImportedKeys.has(keyB) ? 1 : 0;
+
+      if (aIsNew !== bIsNew) {
+
+        return bIsNew - aIsNew;
+
+      }
+
+      const byMST = (a.mst || "").localeCompare(b.mst || "");
+
+      if (byMST !== 0) return byMST;
+
+      const fromCompare = (a.effective_from || "").localeCompare(b.effective_from || "");
+
+      if (fromCompare !== 0) return fromCompare;
+
+      return (a.effective_to || "9999-12-31").localeCompare(b.effective_to || "9999-12-31");
+
+    });
+
+
+
+    return prioritized;
+
+  }, [
+
+    rows,
+
+    search,
+
+    staffFilter,
+
+    historyFilteredRowKeys,
+
+    activeStatusFilter,
+
+    leadStatusFilter,
+
+    leadViewEnabled,
+
+    normalizedLeadTeamFilter,
+
+    recentlyImportedKeys,
+
+  ]);
+
+
+  const duplicateClusters = useMemo(() => {
+
+    if (!rows.length) return [];
+
+    const byMst = new Map();
+
+    rows.forEach((row, index) => {
+
+      if (!row) return;
+
+      const mstKey = row.mst || "";
+
+      if (!mstKey) return;
+
+      if (!byMst.has(mstKey)) {
+
+        byMst.set(mstKey, []);
+
+      }
+
+      byMst.get(mstKey).push({ row, index });
+
+    });
+
+
+
+    const clusters = [];
+
+    byMst.forEach((entries, mst) => {
+
+      const prepared = entries
+
+        .map(({ row, index }) => ({
+
+          row,
+
+          index,
+
+          identity:
+
+            row.__originalKey ||
+
+            makeRowKey(row) ||
+
+            `${mst || "UNKNOWN"}__${index}`,
+
+        }))
+
+        .filter(({ row }) => hasAssignee(row));
+
+      if (prepared.length < 2) return;
+
+      const entryByRow = new Map(prepared.map((entry) => [entry.row, entry]));
+
+      const sortedRows = sortMSTRows(prepared.map((entry) => entry.row));
+
+      const sortedEntries = sortedRows
+
+        .map((row) => entryByRow.get(row))
+
+        .filter(Boolean);
+
+      const overlapping = new Map();
+
+      for (let i = 0; i < sortedEntries.length; i += 1) {
+
+        const entryA = sortedEntries[i];
+
+        const rangeA = getRowRange(entryA.row);
+
+        for (let j = i + 1; j < sortedEntries.length; j += 1) {
+
+          const entryB = sortedEntries[j];
+
+          const rangeB = getRowRange(entryB.row);
+
+          if (rangesOverlap(rangeA, rangeB)) {
+
+            overlapping.set(entryA.identity, entryA);
+
+            overlapping.set(entryB.identity, entryB);
+
+          }
+
+        }
+
+      }
+
+      if (overlapping.size < 2) return;
+
+      const sortedConflictEntries = Array.from(overlapping.values()).sort(
+
+        (entryA, entryB) => {
+
+          const rowA = entryA.row;
+
+          const rowB = entryB.row;
+
+          const filledA =
+
+            (normalizeStr(rowA.person_import || "") ? 1 : 0) +
+
+            (normalizeStr(rowA.person_export || "") ? 1 : 0);
+
+          const filledB =
+
+            (normalizeStr(rowB.person_import || "") ? 1 : 0) +
+
+            (normalizeStr(rowB.person_export || "") ? 1 : 0);
+
+          if (filledA !== filledB) return filledB - filledA;
+
+          const activeA = rowA.effective_to ? 0 : 1;
+
+          const activeB = rowB.effective_to ? 0 : 1;
+
+          if (activeA !== activeB) return activeB - activeA;
+
+          const fromA = rowA.effective_from || DEFAULT_RANGE_START;
+
+          const fromB = rowB.effective_from || DEFAULT_RANGE_START;
+
+          if (fromA !== fromB) return fromB.localeCompare(fromA);
+
+          const toA = rowA.effective_to || DEFAULT_RANGE_END;
+
+          const toB = rowB.effective_to || DEFAULT_RANGE_END;
+
+          return toA.localeCompare(toB);
+
+        }
+
+      );
+
+      const details = sortedConflictEntries.map((entry) => {
+
+        const row = entry.row;
+
+        return {
+
+          key: entry.identity,
+
+          row,
+
+          summary: formatAssigneeSummary(row),
+
+          rangeLabel: buildRangeLabel(row),
+
+          teamLabel: row.team || "",
+
+          hasImport: Boolean(normalizeStr(row.person_import || "")),
+
+          hasExport: Boolean(normalizeStr(row.person_export || "")),
+
+          isActive: !row.effective_to,
+
+        };
+
+      });
+
+      if (!details.length) return;
+
+      const keepDetail = details[0];
+
+      const otherDetails = details.slice(1);
+
+      const companyName =
+
+        keepDetail?.row?.company ||
+
+        details.find((detail) => detail.row.company)?.row.company ||
+
+        "";
+
+      const id = `${mst || "UNKNOWN"}__${details
+
+        .map((detail) => detail.key)
+
+        .join("|")}`;
+
+      const staffSet = new Set();
+
+      details.forEach((detail) => {
+
+        if (detail.hasImport) {
+
+          staffSet.add(detail.row.person_import);
+
+        }
+
+        if (detail.hasExport) {
+
+          staffSet.add(detail.row.person_export);
+
+        }
+
+      });
+
+      const keepMissingImport = !keepDetail?.hasImport;
+
+      const keepMissingExport = !keepDetail?.hasExport;
+
+      const splitOption =
+
+        (keepMissingImport && otherDetails.some((detail) => detail.hasImport)) ||
+
+        (keepMissingExport && otherDetails.some((detail) => detail.hasExport));
+
+      clusters.push({
+
+        id,
+
+        mst,
+
+        company: companyName,
+
+        details,
+
+        keepDetail,
+
+        otherDetails,
+
+        staffList: Array.from(staffSet),
+
+        hasSplitOption: splitOption,
+
+      });
+
+    });
+
+    return clusters;
+
+  }, [rows]);
+
+
+
+  const visibleDuplicateClusters = useMemo(() => {
+
+    if (!duplicateClusters.length) return [];
+
+    if (!filtered.length) return [];
+
+    const visibleSet = new Set(filtered);
+
+    return duplicateClusters.filter((cluster) =>
+
+      cluster.details.some((detail) => visibleSet.has(detail.row))
+
+    );
+
+  }, [duplicateClusters, filtered]);
+
+
+
+  const hiddenDuplicateCount = Math.max(
+
+    duplicateClusters.length - visibleDuplicateClusters.length,
+
+    0
+
+  );
+
+
+
+  // Precompute grouped stages for aggregated view to avoid temporal dead zone
+  const groupedStages2 = useMemo(() => {
+    if (!filtered.length) return [];
+    const map = new Map();
+    filtered.forEach((row) => {
+      const key = row.mst || "__unknown";
+      if (!map.has(key)) {
+        map.set(key, { mst: row.mst || "", company: row.company || "", stages: [] });
+      }
+      map.get(key).stages.push(row);
+    });
+    return Array.from(map.values())
+      .map((entry) => ({ ...entry, stages: sortMSTRows(entry.stages) }))
+      .sort((a, b) => (a.mst || "").localeCompare(b.mst || ""));
+  }, [filtered]);
+
+  
+
+
+
+
+
+
+
+  const groupedStages = useMemo(() => {
+    if (!filtered.length) return [];
+    const map = new Map();
+    filtered.forEach((row) => {
+      const key = row.mst || "__unknown";
+      if (!map.has(key)) {
+        map.set(key, {
+          mst: row.mst || "",
+          company: row.company || "",
+          stages: [],
+        });
+      }
+      map.get(key).stages.push(row);
+    });
+    return Array.from(map.values())
+      .map((entry) => ({
+        ...entry,
+        stages: sortMSTRows(entry.stages),
+      }))
+      .sort((a, b) => (a.mst || "").localeCompare(b.mst || ""));
+  }, [filtered]);
+
+  // Danh sách hiển thị: theo giai đoạn (mặc định) hoặc gộp theo MST
+  const aggregatedByMST = useMemo(() => {
+    if (!groupByMST) return [];
+    return groupedStages2.map((group) => {
+      const stages = Array.isArray(group?.stages) ? group.stages : [];
+      if (!stages.length) {
+        return {
+          __group: true,
+          mst: group?.mst || "",
+          company: group?.company || "",
+          person_import: "",
+          person_export: "",
+          team: "",
+          effective_from: "",
+          effective_to: "",
+        };
+      }
+      const latest = stages[stages.length - 1];
+      const active = [...stages].reverse().find((s) => !s?.effective_to) || latest;
+      return {
+        ...active,
+        __group: true,
+        mst: group?.mst || active?.mst || "",
+        company: active?.company || group?.company || "",
+      };
+    });
+  }, [groupByMST, groupedStages2]);
+
+  const displayList = useMemo(
+    () => (groupByMST ? aggregatedByMST : filtered),
+    [groupByMST, aggregatedByMST, filtered]
+  );
 
   const {
     page,
+    pageSize,
     pageCount: totalPages,
     currentPageItems: pageRows,
     setPage,
+    setPageSize,
     nextPage,
     previousPage,
-  } = usePagination(filtered, {
+  } = usePagination(displayList, {
     initialPage: 1,
-    initialPageSize: DEFAULT_PAGE_SIZE,
+    initialPageSize,
+    minPageSize: MIN_PAGE_SIZE,
   });
 
+  const tableStatusMessage = useMemo(() => {
+    const base = `${filtered.length.toLocaleString('vi-VN')} dòng, trang ${page}/${totalPages}.`;
+    if (!recentlyImportedCount) {
+      return base;
+    }
+    return `${base} Có ${recentlyImportedCount.toLocaleString('vi-VN')} dòng mới import đang được ưu tiên.`;
+  }, [filtered.length, page, totalPages, recentlyImportedCount]);
+
   useEffect(() => {
+
     setPage(1);
-  }, [setPage, historyFilter.from, historyFilter.to, historyFilter.type, isHistoryFilterActive]);
+
+  }, [leadStatusFilter, leadViewEnabled, normalizedLeadTeamFilter, setPage]);
+
+  const timelineGroupsByMST = useMemo(() => {
+    const map = new Map();
+    groupedStages.forEach((group) => {
+      const key = group?.mst || "__unknown";
+      if (!map.has(key)) {
+        map.set(key, group);
+      }
+    });
+    return map;
+  }, [groupedStages]);
+
+  const [timelineDialogState, setTimelineDialogState] = useState({
+    open: false,
+    groups: [],
+    title: "",
+    subtitle: "",
+  });
+  const timelineDialogContentRef = useRef(null);
+
+  const showTimelineDialog = useCallback(({ title, subtitle, groups }) => {
+    const normalizedGroups = Array.isArray(groups) ? groups.filter(Boolean) : [];
+    if (!normalizedGroups.length) {
+      setTimelineDialogState((prev) => ({ ...prev, open: false }));
+      return;
+    }
+    setTimelineDialogState({
+      open: true,
+      groups: normalizedGroups,
+      title: title || "Dòng thời gian giai đoạn",
+      subtitle: subtitle || "",
+    });
+  }, []);
+
+  const handleTimelineDialogOpenChange = useCallback((nextOpen) => {
+    setTimelineDialogState((prev) => ({ ...prev, open: nextOpen }));
+  }, []);
+
+  const handleOpenTimelineGroup = useCallback(
+    (group) => {
+      if (!group) return;
+      const safeGroup = {
+        mst: group?.mst || "",
+        company: group?.company || "",
+        stages: Array.isArray(group?.stages) ? group.stages : [],
+      };
+      showTimelineDialog({
+        title: `Dòng thời gian — ${safeGroup.mst || "(MST trống)"}`,
+        subtitle: safeGroup.company ? `Công ty: ${safeGroup.company}` : "",
+        groups: [safeGroup],
+      });
+    },
+    [showTimelineDialog]
+  );
+
+  const handleOpenAllTimelines = useCallback(() => {
+    if (!groupedStages.length) return;
+    showTimelineDialog({
+      title: "Dòng thời gian giai đoạn",
+      subtitle: `${groupedStages.length} MST khớp bộ lọc hiện tại`,
+      groups: groupedStages,
+    });
+  }, [groupedStages, showTimelineDialog]);
+
+
+
+  useEffect(() => {
+
+    setPageRef.current(1);
+
+  }, [historyFilter.from, historyFilter.to, historyFilter.type, isHistoryFilterActive]);
+
+
+
+  useEffect(() => {
+
+    setPageRef.current = setPage;
+
+  }, [setPage]);
+
+
 
   useTooltipTitles(rootRef, [
+
     rows,
+
     search,
+
     staffFilter,
+
     applyFrom,
+
     page,
+
+    pageSize,
+
     showAddForm,
+
     selectedFileName,
+
     historyFilter,
+
+    leadViewEnabled,
+
+    leadStatusQuick,
+
+    leadTeamQuick,
+
   ]);
 
-  const totalHistoryCount = historyEntries.length;
+
+
+  useEffect(() => {
+
+    if (typeof window === "undefined") return;
+
+    try {
+
+      window.localStorage.setItem(PAGE_SIZE_STORAGE_KEY, String(pageSize));
+
+    } catch (err) {
+
+      console.warn("persistPageSize", err);
+
+    }
+
+  }, [pageSize]);
+
+
+
+  const totalHistoryCount = Array.isArray(historyEntries)
+
+    ? historyEntries.length
+
+    : 0;
+
   const filteredHistoryCount = filteredHistoryEntries.length;
+
   const recentlyImportedCount = recentlyImportedKeys.size;
 
+
+  const historyTimelinePreviewEntries = useMemo(
+    () => filteredHistoryEntries.slice(0, HISTORY_TIMELINE_PREVIEW_LIMIT),
+    [filteredHistoryEntries]
+  );
+
+  const historyTimelinePreviewGroups = useMemo(
+    () => groupHistoryTimelineEntries(historyTimelinePreviewEntries),
+    [historyTimelinePreviewEntries]
+  );
+
+  const historyTimelineGroups = useMemo(
+    () => groupHistoryTimelineEntries(filteredHistoryEntries),
+    [filteredHistoryEntries]
+  );
+
+  const historyTimelinePreviewCount = historyTimelinePreviewEntries.length;
+  const canOpenHistoryTimeline = historyTimelineGroups.length > 0;
+
+  const [historyTimelineDialogState, setHistoryTimelineDialogState] = useState({
+    open: false,
+    groups: [],
+    title: "",
+    subtitle: "",
+  });
+  const historyTimelineDialogContentRef = useRef(null);
+
+  const handleHistoryTimelineDialogOpenChange = useCallback((nextOpen) => {
+    setHistoryTimelineDialogState((prev) => ({ ...prev, open: nextOpen }));
+  }, []);
+
+  useRestoreFocus(timelineDialogState.open, { focusTargetRef: timelineDialogContentRef });
+  useRestoreFocus(historyTimelineDialogState.open, { focusTargetRef: historyTimelineDialogContentRef });
+
+  const handleOpenHistoryTimeline = useCallback(() => {
+    if (!historyTimelineGroups.length) {
+      setHistoryTimelineDialogState((prev) => ({ ...prev, open: false }));
+      return;
+    }
+    setHistoryTimelineDialogState({
+      open: true,
+      groups: historyTimelineGroups,
+      title: "Timeline thay đổi MST",
+      subtitle: `${filteredHistoryCount} thay đổi khớp bộ lọc hiện tại`,
+    });
+  }, [filteredHistoryCount, historyTimelineGroups]);
+
+
+
+
+
   /** Excel import */
+
   const onImportXLSX = async () => {
+
     if (isReadOnly) {
+
       alert("Bạn không có quyền import bảng MST. Đăng nhập bằng tài khoản được cấp quyền để tiếp tục.");
+
       return;
+
     }
+
     const f = fileRef.current?.files?.[0];
+
     if (!f) {
+
       alert("Chưa chọn file .xlsx/.xls");
+
       return;
+
     }
+
     try {
+
       const buf = await f.arrayBuffer();
+
       const wb = XLSX.read(buf, { type: "array" });
+
       const sheet = wb.Sheets[wb.SheetNames[0]];
+
       // lấy text đã format để hạn chế mất 0 đầu
+
       const json = XLSX.utils.sheet_to_json(sheet, {
+
         defval: "",
+
         raw: false,
+
       });
+
+
 
       const newRowKeys = [];
 
+
+
       const mapped = json
+
         .map((r) => {
+
           const mst = tidyMST(findCell(r, "mst"));
+
           if (!mst) return null;
 
+
+
           return {
+
             mst,
+
             company: String(findCell(r, "company") ?? "").trim(),
+
             person_import: String(findCell(r, "person_import") ?? "").trim(),
+
             person_export: String(findCell(r, "person_export") ?? "").trim(),
+
             team: String(findCell(r, "team") ?? "").trim(),
+
             effective_from:
+
               toISO(findCell(r, "effective_from")) || applyFrom || "",
+
+            effective_to: toISO(findCell(r, "effective_to")) || "",
+
             status: normalizeStatusLabel(findCell(r, "status")),
+
           };
+
         })
+
         .filter(Boolean);
 
+
+
       if (!mapped.length) {
+
         alert("Không thấy dữ liệu hợp lệ trong file.");
+
         return;
+
       }
+
+
+
+      const sanitizedMapped = mapped.filter((item) => {
+
+        if (item.effective_from && item.effective_to && item.effective_to < item.effective_from) {
+
+          console.warn("Bỏ qua dòng do ngày kết thúc nhỏ hơn ngày bắt đầu", item);
+
+          return false;
+
+        }
+
+        return true;
+
+      });
+
+
+
+      if (!sanitizedMapped.length) {
+
+        alert("Tất cả dòng trong file bị bỏ qua vì ngày kết thúc nhỏ hơn ngày bắt đầu.");
+
+        return;
+
+      }
+
+
 
       // Gộp với dữ liệu hiện có theo MST + ngày hiệu lực (ưu tiên dữ liệu mới)
+
       const byKey = new Map();
+
       for (const r of rows) {
+
         byKey.set(makeRowKey(r), { ...r });
+
       }
-      for (const r of mapped) {
+
+      for (const r of sanitizedMapped) {
+
         const key = makeRowKey(r);
+
         const previous = byKey.get(key);
+
         let nextRow;
+
         if (previous) {
+
           nextRow = createRowState({ ...previous, ...r }, {
+
             originalKey: previous.__originalKey,
+
             isNew: previous.__isNew,
+
           });
+
         } else {
+
           nextRow = createRowState(r, { isNew: true });
+
         }
+
         byKey.set(key, nextRow);
+
         if (!previous) {
+
           newRowKeys.push(key);
+
         }
+
       }
+
+
 
       const nextRows = sortMSTRows(Array.from(byKey.values()));
+
       setRows(nextRows);
-      setPage(1);
-      alert(`Đọc file thành công: ${mapped.length} dòng. Bấm Lưu để ghi.`);
+
+      setPageRef.current(1);
+
+      alert(`Đọc file thành công: ${sanitizedMapped.length} dòng. Bấm Lưu để ghi.`);
+
       markRecentlyImported(newRowKeys);
+
     } catch (e) {
+
       console.error(e);
+
       alert("Không thể đọc file .xlsx — kiểm tra lại định dạng.");
+
     } finally {
+
       if (fileRef.current) fileRef.current.value = "";
+
       setSelectedFileName("");
+
     }
+
   };
+
+
 
   /** Lưu */
+
   const onSave = () => {
+
     if (isReadOnly) {
+
       alert("Bạn không có quyền lưu bảng MST.");
+
       return;
+
     }
+
     try {
+
       upsertMSTRows(rows, {
+
         actor,
+
         detail: "Cập nhật gán MST từ giao diện",
+
       });
+
       refreshHistory();
+
       const synced = sortMSTRows(getMSTMap()).map((row) =>
+
         createRowState(row, { originalKey: makeRowKey(row), isNew: false })
+
       );
+
       setRows(synced);
+
       setOriginalRows(synced);
+
       setRecentlyImportedKeys(new Set());
+
       alert("Lưu thành công!");
+
     } catch (e) {
+
       console.error(e);
+
       alert("Lưu thất bại!");
+
     }
+
   };
+
+
 
   /** Thao tác inline */
+
   const updateRow = (originalRow, patch) => {
+
     if (isReadOnly) return;
-    const targetKey = makeRowKey(originalRow);
-    let updatedKey = "";
-    let didUpdate = false;
-    setRows((prev) =>
-      sortMSTRows(
-        prev.map((r) => {
-          if (makeRowKey(r) !== targetKey) return r;
-          const next = { ...r, ...patch };
-          next.__originalKey = r.__originalKey ?? null;
-          next.__isNew = r.__isNew;
-          if (patch && Object.prototype.hasOwnProperty.call(patch, "mst")) {
-            next.mst = tidyMST(next.mst);
-          }
-          if (patch && Object.prototype.hasOwnProperty.call(patch, "status")) {
-            next.status = normalizeStatusLabel(next.status);
-          }
-          updatedKey = makeRowKey(next);
-          didUpdate = true;
-          return next;
-        })
-      )
-    );
-    if (didUpdate && updatedKey && updatedKey !== targetKey) {
-      setRecentlyImportedKeys((prev) => {
-        if (!prev.has(targetKey)) return prev;
-        const next = new Set(prev);
-        next.delete(targetKey);
-        next.add(updatedKey);
-        return next;
-      });
+
+    const nextFrom =
+
+      Object.prototype.hasOwnProperty.call(patch || {}, "effective_from")
+
+        ? patch.effective_from || ""
+
+        : originalRow.effective_from || "";
+
+    const nextTo =
+
+      Object.prototype.hasOwnProperty.call(patch || {}, "effective_to")
+
+        ? patch.effective_to || ""
+
+        : originalRow.effective_to || "";
+
+    if (nextFrom && nextTo && nextTo < nextFrom) {
+
+      alert("Ngày kết thúc phải sau hoặc bằng ngày bắt đầu.");
+
+      return;
+
     }
+
+    const targetKey = makeRowKey(originalRow);
+
+    let updatedKey = "";
+
+    let didUpdate = false;
+
+    setRows((prev) =>
+
+      sortMSTRows(
+
+        prev.map((r) => {
+
+          if (makeRowKey(r) !== targetKey) return r;
+
+          const next = { ...r, ...patch };
+
+          next.__originalKey = r.__originalKey ?? null;
+
+          next.__isNew = r.__isNew;
+
+          if (patch && Object.prototype.hasOwnProperty.call(patch, "mst")) {
+
+            next.mst = tidyMST(next.mst);
+
+          }
+
+          if (patch && Object.prototype.hasOwnProperty.call(patch, "effective_from")) {
+
+            next.effective_from = patch.effective_from || "";
+
+          }
+
+          if (patch && Object.prototype.hasOwnProperty.call(patch, "effective_to")) {
+
+            next.effective_to = patch.effective_to || "";
+
+          }
+
+          next.status = computeStoredStatus(next);
+
+          updatedKey = makeRowKey(next);
+
+          didUpdate = true;
+
+          return next;
+
+        })
+
+      )
+
+    );
+
+    if (didUpdate && updatedKey && updatedKey !== targetKey) {
+
+      setRecentlyImportedKeys((prev) => {
+
+        if (!prev.has(targetKey)) return prev;
+
+        const next = new Set(prev);
+
+        next.delete(targetKey);
+
+        next.add(updatedKey);
+
+        return next;
+
+      });
+
+    }
+
   };
+
+
+
+  const handleKeepDuplicate = useCallback(
+
+    (targetRow, duplicates = []) => {
+
+      if (!targetRow) {
+
+        alert("Chọn dòng ưu tiên trước khi giữ.");
+
+        return;
+
+      }
+
+      if (!hasAssignee(targetRow)) {
+
+        alert("Điền nhân viên phụ trách cho dòng ưu tiên trước khi giữ.");
+
+        return;
+
+      }
+
+      const others = duplicates.filter((row) => row && row !== targetRow);
+
+      if (!others.length) {
+
+        alert("Không tìm thấy dòng trùng để xử lý.");
+
+        return;
+
+      }
+
+      others.forEach((row) => {
+
+        const patch = {};
+
+        if (normalizeStr(row.person_import || "")) {
+
+          patch.person_import = "";
+
+        }
+
+        if (normalizeStr(row.person_export || "")) {
+
+          patch.person_export = "";
+
+        }
+
+        if (Object.keys(patch).length) {
+
+          updateRow(row, patch);
+
+        }
+
+      });
+
+      alert(
+
+        "Đã giữ dòng ưu tiên và làm trống nhân viên ở các dòng trùng. Bấm Lưu để hoàn tất."
+
+      );
+
+    },
+
+    [updateRow]
+
+  );
+
+
+
+  const handleTransferDuplicate = useCallback(
+
+    (targetRow, sourceRow) => {
+
+      if (!targetRow || !sourceRow) {
+
+        alert("Chọn dòng nguồn để chuyển nhân viên.");
+
+        return;
+
+      }
+
+      const patch = {};
+
+      if (normalizeStr(sourceRow.person_import || "")) {
+
+        patch.person_import = sourceRow.person_import;
+
+      }
+
+      if (normalizeStr(sourceRow.person_export || "")) {
+
+        patch.person_export = sourceRow.person_export;
+
+      }
+
+      if (!Object.keys(patch).length) {
+
+        alert("Dòng nguồn chưa có nhân viên để chuyển.");
+
+        return;
+
+      }
+
+      updateRow(targetRow, patch);
+
+      const clearPatch = {};
+
+      if (patch.person_import) clearPatch.person_import = "";
+
+      if (patch.person_export) clearPatch.person_export = "";
+
+      if (Object.keys(clearPatch).length) {
+
+        updateRow(sourceRow, clearPatch);
+
+      }
+
+      alert("Đã chuyển nhân viên sang dòng ưu tiên. Bấm Lưu để hoàn tất.");
+
+    },
+
+    [updateRow]
+
+  );
+
+
+
+  const handleSplitDuplicate = useCallback(
+
+    (targetRow, duplicates = []) => {
+
+      if (!targetRow) {
+
+        alert("Chọn dòng ưu tiên để tách vai trò.");
+
+        return;
+
+      }
+
+      const others = duplicates.filter((row) => row && row !== targetRow);
+
+      if (!others.length) {
+
+        alert("Không có dòng khác để tách vai trò.");
+
+        return;
+
+      }
+
+      const importSource = normalizeStr(targetRow.person_import || "")
+
+        ? targetRow
+
+        : others.find((row) => normalizeStr(row.person_import || ""));
+
+      const exportSource = normalizeStr(targetRow.person_export || "")
+
+        ? targetRow
+
+        : others.find((row) => normalizeStr(row.person_export || ""));
+
+      if (!importSource && !exportSource) {
+
+        alert("Không tìm thấy nhân viên nhập hoặc xuất để tách vai trò.");
+
+        return;
+
+      }
+
+      const patch = {};
+
+      if (importSource && normalizeStr(importSource.person_import || "")) {
+
+        patch.person_import = importSource.person_import;
+
+      }
+
+      if (exportSource && normalizeStr(exportSource.person_export || "")) {
+
+        patch.person_export = exportSource.person_export;
+
+      }
+
+      if (!Object.keys(patch).length) {
+
+        alert("Không có dữ liệu nhân viên hợp lệ để tách vai trò.");
+
+        return;
+
+      }
+
+      updateRow(targetRow, patch);
+
+      others.forEach((row) => {
+
+        const nextPatch = {};
+
+        if (importSource === row) {
+
+          nextPatch.person_import = "";
+
+        }
+
+        if (exportSource === row) {
+
+          nextPatch.person_export = "";
+
+        }
+
+        if (Object.keys(nextPatch).length) {
+
+          updateRow(row, nextPatch);
+
+        }
+
+      });
+
+      alert("Đã tách vai trò giữa các dòng trùng. Bấm Lưu để hoàn tất.");
+
+    },
+
+    [updateRow]
+
+  );
+
+
 
   const removeRow = (row) => {
+
     if (isReadOnly) return;
+
     const key = makeRowKey(row);
-    const label = row.effective_from
-      ? `${row.mst} (${row.effective_from})`
-      : row.mst;
+
+    const fromLabel = row.effective_from ? row.effective_from : "";
+
+    const toLabel = row.effective_to ? row.effective_to : "";
+
+    const rangeLabel = fromLabel || toLabel ? `(${fromLabel || "…"} → ${toLabel || "…"})` : "";
+
+    const label = `${row.mst}${rangeLabel ? ` ${rangeLabel}` : ""}`;
+
     if (!confirm(`Xóa dòng ${label}?`)) return;
+
     setRows((prev) => prev.filter((r) => makeRowKey(r) !== key));
+
     setRecentlyImportedKeys((prev) => {
+
       if (!prev.has(key)) return prev;
+
       const next = new Set(prev);
+
       next.delete(key);
+
       return next;
+
     });
+
   };
 
+
+
   /** UI */
+
   return (
-    <div ref={rootRef} className="p-6 max-w-6xl mx-auto">
+
+    <div
+
+      ref={rootRef}
+
+      className="p-6 max-w-6xl mx-auto"
+
+      data-lead-view={leadViewEnabled ? "true" : "false"}
+
+    >
+
       {isReadOnly && (
+
         <div className="mb-4 rounded border border-amber-300 bg-amber-50 p-3 text-sm text-amber-700">
+
           Bạn đang xem bảng gán MST ở chế độ chỉ xem. Đăng nhập bằng tài khoản quản trị hoặc được cấp quyền để import, chỉnh sửa và lưu thay đổi.
+
         </div>
+
       )}
-      <div className="flex flex-wrap items-end gap-2 mb-3">
-        {canEdit && (
-          <>
+
+      {visibleDuplicateClusters.length ? (
+
+        <div className="mb-4 rounded border border-amber-400 bg-amber-50 p-4 text-amber-900">
+
+          <div className="flex flex-col gap-1">
+
+            <h2 className="text-sm font-semibold">
+
+              Phát hiện {visibleDuplicateClusters.length} MST đang gán trùng nhân viên
+
+            </h2>
+
+            <p className="text-xs text-amber-800">
+
+              Chọn phương án xử lý nhanh bên dưới (giữ dòng ưu tiên, chuyển nhân viên, tách vai trò).
+
+              {hiddenDuplicateCount > 0
+
+                ? ` • ${hiddenDuplicateCount} MST trùng khác đang bị ẩn theo bộ lọc hiện tại.`
+
+                : ""}
+
+            </p>
+
+          </div>
+
+          <div className="mt-3 space-y-3">
+
+            {visibleDuplicateClusters.map((cluster) => {
+
+              const timelineGroup = timelineGroupsByMST.get(cluster.mst || "__unknown");
+
+              const allRows = cluster.details.map((detail) => detail.row);
+
+              return (
+
+                <div
+
+                  key={cluster.id}
+
+                  className="rounded border border-amber-200 bg-white p-3 shadow-sm"
+
+                >
+
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+
+                    <div>
+
+                      <div className="text-sm font-semibold text-amber-900">
+
+                        MST {cluster.mst || "(trống)"}
+
+                      </div>
+
+                      <div className="text-xs text-amber-700">
+
+                        {cluster.company ? `Công ty: ${cluster.company}` : "Chưa có tên công ty"}
+
+                      </div>
+
+                      <div className="mt-1 text-xs text-amber-600">
+
+                        {cluster.details.length} dòng chồng lấn • Ưu tiên: {cluster.keepDetail?.summary || "—"}
+
+                      </div>
+
+                    </div>
+
+                    {timelineGroup ? (
+
+                      <Button
+
+                        type="button"
+
+                        variant="ghost"
+
+                        size="sm"
+
+                        onClick={() => handleOpenTimelineGroup(timelineGroup)}
+
+                      >
+
+                        Xem timeline
+
+                      </Button>
+
+                    ) : null}
+
+                  </div>
+
+                  <div className="mt-2 grid gap-2 text-xs md:grid-cols-2">
+
+                    {cluster.details.map((detail) => (
+
+                      <div
+
+                        key={detail.key}
+
+                        className={`rounded border px-3 py-2 ${
+
+                          detail === cluster.keepDetail
+
+                            ? "border-emerald-300 bg-emerald-50"
+
+                            : "border-slate-200 bg-slate-50"
+
+                        }`}
+
+                      >
+
+                        <div className="flex items-center justify-between gap-2">
+
+                          <span className="font-semibold text-slate-700">
+
+                            {detail.teamLabel || "Chưa có tổ"}
+
+                          </span>
+
+                          {detail === cluster.keepDetail ? (
+
+                            <span className="rounded bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-emerald-700">
+
+                              Ưu tiên
+
+                            </span>
+
+                          ) : null}
+
+                        </div>
+
+                        <div className="mt-1 text-[11px] text-slate-500">
+
+                          {detail.rangeLabel}
+
+                          {detail.isActive ? " • Đang hiệu lực" : ""}
+
+                        </div>
+
+                        <div className="mt-1 text-[11px] text-slate-600">
+
+                          {detail.summary}
+
+                        </div>
+
+                      </div>
+
+                    ))}
+
+                  </div>
+
+                  <div className="mt-3 flex flex-wrap gap-2 text-xs">
+
+                    <Button
+
+                      type="button"
+
+                      size="sm"
+
+                      onClick={() =>
+
+                        handleKeepDuplicate(cluster.keepDetail?.row, allRows)
+
+                      }
+
+                    >
+
+                      Giữ dòng ưu tiên
+
+                    </Button>
+
+                    {cluster.otherDetails.map((detail) => {
+
+                      if (!detail.hasImport && !detail.hasExport) return null;
+
+                      return (
+
+                        <Button
+
+                          key={`${cluster.id}-transfer-${detail.key}`}
+
+                          type="button"
+
+                          size="sm"
+
+                          variant="outline"
+
+                          onClick={() =>
+
+                            handleTransferDuplicate(
+
+                              cluster.keepDetail?.row,
+
+                              detail.row
+
+                            )
+
+                          }
+
+                        >
+
+                          Chuyển từ {detail.summary}
+
+                        </Button>
+
+                      );
+
+                    })}
+
+                    {cluster.hasSplitOption ? (
+
+                      <Button
+
+                        type="button"
+
+                        size="sm"
+
+                        variant="outline"
+
+                        onClick={() =>
+
+                          handleSplitDuplicate(
+
+                            cluster.keepDetail?.row,
+
+                            allRows
+
+                          )
+
+                        }
+
+                      >
+
+                        Tách vai trò
+
+                      </Button>
+
+                    ) : null}
+
+                  </div>
+
+                </div>
+
+              );
+
+            })}
+
+          </div>
+
+        </div>
+
+      ) : null}
+
+      <div className="mb-4 rounded border border-amber-200 bg-amber-50 p-4 text-amber-900 shadow-sm">
+
+        <div className="flex flex-wrap items-start justify-between gap-3">
+
+          <div className="max-w-2xl space-y-1">
+
+            <h2 className="text-sm font-semibold">Chế độ trưởng nhóm</h2>
+
+            <p className="text-xs text-amber-700">
+
+              Bật để xem nhanh trạng thái phân bổ theo tổ cùng bộ lọc gọn nhẹ.
+
+            </p>
+
+            {leadViewEnabled ? (
+
+              <div className="text-xs text-amber-800">
+
+                Tổng: <span className="font-semibold text-amber-900">{leadSummary.total}</span> • Đã gán: <span className="font-semibold text-emerald-700">{leadSummary.assigned}</span> • Chờ gán: <span className="font-semibold text-red-600">{leadSummary.pending}</span>
+
+                {leadTeamQuick !== LEAD_TEAM_ALL ? ` • Tổ đang chọn: ${leadTeamName}` : ""}
+
+              </div>
+
+            ) : null}
+
+          </div>
+
+          <label className="inline-flex items-center gap-2 text-sm font-medium text-amber-800">
+
             <input
-              ref={fileRef}
-              type="file"
-              accept=".xlsx,.xls"
-              className="hidden"
-              disabled={isReadOnly}
-              onChange={(e) => {
-                const name = e.target.files?.[0]?.name || "";
-                setSelectedFileName(name);
+
+              type="checkbox"
+
+              className="h-4 w-4 rounded border-amber-400 text-amber-600 focus:ring-amber-500"
+
+              checked={leadViewEnabled}
+
+              onChange={(event) => {
+
+                const next = event.target.checked;
+
+                setLeadViewEnabled(next);
+
+                if (!next) {
+
+                  setLeadStatusQuick("all");
+
+                  setLeadTeamQuick(LEAD_TEAM_ALL);
+
+                }
+
               }}
+
             />
-            <button
-              type="button"
-              onClick={() => fileRef.current?.click()}
-              className="px-3 py-1 rounded border bg-white hover:bg-gray-50"
-              data-tooltip="Chọn file Excel chứa dữ liệu gán MST"
-            >
-              Chọn file XLSX
-            </button>
-            <button
-              onClick={onImportXLSX}
-              className="px-3 py-1 rounded bg-black text-white"
-              type="button"
-              data-tooltip="Đọc file Excel và đổ vào danh sách tạm"
-            >
-              Import XLSX
-            </button>
-            <button
-              type="button"
-              onClick={toggleAddForm}
-              className="px-3 py-1 rounded border bg-white hover:bg-gray-50"
-              data-tooltip="Thêm thủ công một dòng gán MST"
-            >
-              {showAddForm ? "Đóng thêm mới" : "Thêm mới"}
-            </button>
-            {selectedFileName && (
-              <span className="text-sm text-gray-600">Đã chọn: {selectedFileName}</span>
-            )}
-          </>
-        )}
+
+            Bật chế độ rút gọn
+
+          </label>
+
+        </div>
+
+        {leadViewEnabled ? (
+
+          <div className="mt-3 space-y-3">
+
+            <div className="flex flex-wrap items-center gap-2">
+
+              <span className="text-xs font-semibold uppercase text-amber-700">Trạng thái</span>
+
+              <QuickFilterPill active={leadStatusQuick === "all"} onClick={() => setLeadStatusQuick("all")}>
+
+                Tất cả ({leadSummary.total})
+
+              </QuickFilterPill>
+
+              <QuickFilterPill active={leadStatusQuick === "assigned"} onClick={() => setLeadStatusQuick("assigned")}>
+
+                Đã gán ({leadSummary.assigned})
+
+              </QuickFilterPill>
+
+              <QuickFilterPill active={leadStatusQuick === "pending"} onClick={() => setLeadStatusQuick("pending")}>
+
+                Chờ gán ({leadSummary.pending})
+
+              </QuickFilterPill>
+
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+
+              <span className="text-xs font-semibold uppercase text-amber-700">Tổ đội</span>
+
+              <select
+
+                value={leadTeamQuick}
+
+                onChange={(event) => setLeadTeamQuick(event.target.value || LEAD_TEAM_ALL)}
+
+                className="min-w-[180px] rounded border border-amber-200 bg-white px-2 py-1 text-sm text-amber-900 shadow-sm focus:border-amber-400 focus:outline-none focus:ring-amber-400"
+
+              >
+
+                <option value={LEAD_TEAM_ALL}>Tất cả tổ</option>
+
+                {rosterTeams.map((team) => (
+
+                  <option key={team.id} value={team.normalized}>
+
+                    {team.name}
+
+                  </option>
+
+                ))}
+
+              </select>
+
+              {leadTeamQuick !== LEAD_TEAM_ALL ? (
+
+                <button
+
+                  type="button"
+
+                  className="text-xs font-medium text-amber-600 underline hover:text-amber-800"
+
+                  onClick={() => setLeadTeamQuick(LEAD_TEAM_ALL)}
+
+                >
+
+                  Xóa chọn
+
+                </button>
+
+              ) : null}
+
+            </div>
+
+          </div>
+
+        ) : null}
+
+      </div>
+
+      <div className="flex flex-wrap items-end gap-2 mb-3">
 
         {canEdit && (
-          <input
-            type="date"
-            value={applyFrom}
-            onChange={(e) => setApplyFrom(e.target.value)}
-            className="border rounded px-2 py-1"
-            placeholder="Áp dụng từ ngày"
-            data-tooltip="Áp dụng từ ngày (ghi vào trường trống khi import)"
-          />
+
+          <>
+
+            <input
+
+              ref={fileRef}
+
+              type="file"
+
+              accept=".xlsx,.xls"
+
+              className="hidden"
+
+              disabled={isReadOnly}
+
+              onChange={(e) => {
+
+                const name = e.target.files?.[0]?.name || "";
+
+                setSelectedFileName(name);
+
+              }}
+
+            />
+
+            <button
+
+              type="button"
+
+              onClick={() => fileRef.current?.click()}
+
+              className="px-3 py-1 rounded border bg-white hover:bg-gray-50"
+
+              data-tooltip="Chọn file Excel chứa dữ liệu gán MST"
+
+            >
+
+              Chọn file XLSX
+
+            </button>
+
+            <button
+
+              onClick={onImportXLSX}
+
+              className="px-3 py-1 rounded bg-black text-white"
+
+              type="button"
+
+              data-tooltip="Đọc file Excel và đổ vào danh sách tạm"
+
+            >
+
+              Import XLSX
+
+            </button>
+
+            <button
+
+              type="button"
+
+              onClick={toggleAddForm}
+
+              className="px-3 py-1 rounded border bg-white hover:bg-gray-50"
+
+              data-tooltip="Thêm thủ công một dòng gán MST"
+
+            >
+
+              {showAddForm ? "Đóng thêm mới" : "Thêm mới"}
+
+            </button>
+
+            {selectedFileName && (
+
+              <span className="text-sm text-gray-600">Đã chọn: {selectedFileName}</span>
+
+            )}
+
+          </>
+
         )}
+
+
+
+        {canEdit && (
+
+          <input
+
+            type="date"
+
+            value={applyFrom}
+
+            onChange={(e) => setApplyFrom(e.target.value)}
+
+            className="border rounded px-2 py-1"
+
+            placeholder="Áp dụng từ ngày"
+
+            data-tooltip="Áp dụng từ ngày (ghi vào trường trống khi import)"
+
+          />
+
+        )}
+
+
 
         <span className="text-xs text-gray-500 whitespace-nowrap">
+
           * Khi lưu, quy tắc mới chỉ áp dụng cho tờ khai có ngày khai báo từ ngày này trở đi.
+
         </span>
+
+
 
         <div className="flex-1" />
 
+
+
         <div className="flex flex-wrap items-center gap-2">
+          <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+              <input
+                type="checkbox"
+                checked={groupByMST}
+                onChange={(e) => {
+                  setGroupByMST(e.target.checked);
+                  setPageRef.current(1);
+                }}
+              />
+            Gom theo MST
+          </label>
+
           <input
+
             type="text"
+
             value={search}
+
             onChange={(e) => {
+
               setSearch(e.target.value);
-              setPage(1);
+
+              setPageRef.current(1);
+
             }}
+
             placeholder="Tìm nhanh (MST / Công ty)"
+
             className="border rounded px-2 py-1 w-64"
+
             data-tooltip="Tìm nhanh theo mã số thuế hoặc tên công ty"
+
           />
-          <button
-            type="button"
-            onClick={() => exportRowsToExcel("filtered")}
-            className="px-3 py-1 rounded border bg-white hover:bg-gray-50"
-            data-tooltip="Xuất ra Excel các dòng đang hiển thị theo bộ lọc hiện tại"
-          >
-            Export (lọc)
-          </button>
-          <button
-            type="button"
-            onClick={() => exportRowsToExcel("all")}
-            className="px-3 py-1 rounded border bg-white hover:bg-gray-50"
-            data-tooltip="Xuất ra Excel toàn bộ danh sách đang quản lý"
-          >
-            Export (tất cả)
-          </button>
+
+          <Popover open={exportMenuOpen} onOpenChange={setExportMenuOpen}>
+            <PopoverTrigger asChild>
+              <button
+                type="button"
+                className="px-3 py-1 rounded border bg-white hover:bg-gray-50"
+                data-tooltip="Xuất CSV/XLSX kèm metadata hiện trạng"
+              >
+                Export
+              </button>
+            </PopoverTrigger>
+            <PopoverContent align="end" className="w-80 space-y-4 p-4">
+              <div>
+                <p className="text-sm font-semibold text-slate-800">Theo bộ lọc ({filtered.length} dòng)</p>
+                <p className="mt-1 text-xs text-slate-500">Bao gồm metadata: người gán, bộ lọc và khoảng ngày hiệu lực.</p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    className="rounded border px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                    onClick={() => {
+                      exportRows("filtered", "xlsx");
+                      setExportMenuOpen(false);
+                    }}
+                  >
+                    Excel (.xlsx)
+                  </button>
+                  <button
+                    type="button"
+                    className="rounded border px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                    onClick={() => {
+                      exportRows("filtered", "csv");
+                      setExportMenuOpen(false);
+                    }}
+                  >
+                    CSV (.csv)
+                  </button>
+                </div>
+              </div>
+              <div className="border-t border-slate-200 pt-3">
+                <p className="text-sm font-semibold text-slate-800">Toàn bộ danh sách ({rows.length} dòng)</p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    className="rounded border px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                    onClick={() => {
+                      exportRows("all", "xlsx");
+                      setExportMenuOpen(false);
+                    }}
+                  >
+                    Excel (.xlsx)
+                  </button>
+                  <button
+                    type="button"
+                    className="rounded border px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                    onClick={() => {
+                      exportRows("all", "csv");
+                      setExportMenuOpen(false);
+                    }}
+                  >
+                    CSV (.csv)
+                  </button>
+                </div>
+              </div>
+              <p className="text-xs text-slate-500">File sẽ bao gồm tóm tắt bộ lọc, người xuất và khoảng ngày hiệu lực.</p>
+            </PopoverContent>
+          </Popover>
+
           {canEdit && (
+
             <button
+
               onClick={onSave}
+
               className="px-3 py-1 rounded bg-emerald-600 text-white"
+
               data-tooltip="Lưu danh sách đang hiển thị vào hệ thống"
+
             >
+
               Lưu
+
             </button>
+
           )}
+
         </div>
+
       </div>
+
+
 
       <div className="mb-4 rounded border border-gray-200 bg-white p-4 shadow-sm">
+
         <div className="flex flex-wrap items-center gap-3">
+
           <span className="text-sm font-medium text-gray-700">Lọc theo nhân viên phụ trách</span>
+
           <div className="w-64">
+
             <StaffCombobox
+
               value={staffFilter}
+
               teamValue=""
+
               onSelect={handleStaffFilterSelect}
+
               teams={rosterTeams}
+
               placeholder="Chọn nhân viên"
+
             />
+
           </div>
+
           {staffFilter ? (
+
             <button
+
               type="button"
+
               onClick={clearStaffFilter}
+
               className="px-2 py-1 rounded border bg-white hover:bg-gray-50"
+
             >
+
               Xóa lọc
+
             </button>
+
           ) : null}
+
           <button
+
             type="button"
+
             onClick={handleSaveStaffFavorite}
+
             className="px-2 py-1 rounded bg-slate-800 text-white hover:bg-slate-900"
+
             disabled={!staffFilter.trim()}
+
           >
+
             Lưu bộ lọc nhân viên
+
           </button>
+
         </div>
+
         {quickFavorites.staff.length ? (
+
           <div className="mt-3">
+
             <div className="text-xs font-semibold uppercase text-gray-500 mb-1">
+
               Bộ lọc nhanh
+
             </div>
+
             <div className="flex flex-wrap gap-2">
+
               {quickFavorites.staff.map((fav) => (
+
                 <div
+
                   key={`staff-${fav.normalized}`}
+
                   className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1 text-sm text-slate-700"
+
                 >
+
                   <button
+
                     type="button"
+
                     onClick={() => applyStaffFavorite(fav.value)}
+
                     className="font-medium hover:text-slate-900"
+
                   >
+
                     {fav.value}
+
                   </button>
+
                   <button
+
                     type="button"
+
                     onClick={() => removeQuickFavorite("staff", fav.value)}
+
                     className="text-xs text-slate-500 hover:text-slate-700"
+
                     aria-label={`Xóa ${fav.value}`}
+
                   >
+
                     ×
+
                   </button>
+
                 </div>
+
               ))}
+
             </div>
+
           </div>
+
         ) : null}
+
       </div>
 
+
+
       <div className="mb-4 rounded border border-sky-200 bg-sky-50 p-4 text-sm text-gray-700">
+
         <div className="flex flex-wrap items-end gap-3">
+
           <label className="flex flex-col gap-1">
+
             <span className="font-medium">Từ ngày</span>
+
             <input
+
               type="date"
+
               value={historyFilter.from}
+
               onChange={(e) => updateHistoryFilter({ from: e.target.value })}
+
               className="border rounded px-2 py-1"
+
               data-tooltip="Giới hạn lịch sử từ ngày này trở đi"
+
             />
+
           </label>
+
           <label className="flex flex-col gap-1">
+
             <span className="font-medium">Đến ngày</span>
+
             <input
+
               type="date"
+
               value={historyFilter.to}
+
               onChange={(e) => updateHistoryFilter({ to: e.target.value })}
+
               className="border rounded px-2 py-1"
+
               data-tooltip="Giới hạn lịch sử tới hết ngày này"
+
             />
+
           </label>
+
           <label className="flex flex-col gap-1">
-            <span className="font-medium">Thao tác</span>
+
+            <span className="font-medium">Thao tác / Trạng thái</span>
+
             <select
+
               value={historyFilter.type}
+
               onChange={(e) => updateHistoryFilter({ type: e.target.value })}
+
               className="border rounded px-2 py-1"
-              data-tooltip="Lọc theo thao tác thêm/sửa/xóa"
+
+              data-tooltip="Lọc theo thao tác (thêm/sửa/xóa) hoặc trạng thái phân công nhân viên"
+
             >
+
               <option value="all">Tất cả</option>
+
               <option value="create">Thêm mới</option>
+
               <option value="update">Chỉnh sửa</option>
+
               <option value="delete">Xóa</option>
+
+              <option value="status:assigned">Đã gán nhân viên</option>
+
+              <option value="status:pending">Chưa gán nhân viên</option>
+
             </select>
+
           </label>
+
           <button
+
             type="button"
+
             onClick={resetHistoryFilter}
+
             className="px-3 py-1 rounded border bg-white hover:bg-gray-50"
+
             data-tooltip="Xóa bộ lọc lịch sử"
+
           >
+
             Xóa lọc
+
           </button>
+
           <button
+
             type="button"
+
             onClick={handleSaveActionFavorite}
+
             className="px-3 py-1 rounded border bg-white hover:bg-gray-50"
-            data-tooltip="Lưu nhanh bộ lọc thao tác hiện tại"
+
+            data-tooltip="Lưu nhanh bộ lọc thao tác hoặc trạng thái hiện tại"
+
           >
-            Lưu thao tác
+
+            Lưu thao tác/Trạng thái
+
           </button>
+
           <div className="flex-1" />
+
           <div className="text-right text-xs text-gray-600">
+
             <div>
+
               Hiển thị {filteredHistoryCount} / {totalHistoryCount} bản ghi lịch sử.
+
             </div>
+
             <div>Áp dụng cho phần lịch sử của từng dòng bên dưới.</div>
+
             {isHistoryFilterActive ? (
+
               <div className="text-amber-600">
+
                 * Danh sách MST cũng đang lọc theo điều kiện lịch sử này.
+
               </div>
+
             ) : null}
+
+          </div>
+
+        </div>
+
+        {quickFavorites.action.length ? (
+
+          <div className="mt-3">
+
+            <div className="text-xs font-semibold uppercase text-gray-500 mb-1">
+
+              Bộ lọc thao tác/trạng thái đã lưu
+
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+
+              {quickFavorites.action.map((fav) => (
+
+                <div
+
+                  key={`action-${fav.normalized}`}
+
+                  className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-3 py-1 text-sm text-amber-700"
+
+                >
+
+                  <button
+
+                    type="button"
+
+                    onClick={() => applyActionFavorite(fav.value)}
+
+                    className="font-medium hover:text-amber-900"
+
+                  >
+
+                    {fav.value}
+
+                  </button>
+
+                  <button
+
+                    type="button"
+
+                    onClick={() => removeQuickFavorite("action", fav.value)}
+
+                    className="text-xs text-amber-600 hover:text-amber-800"
+
+                    aria-label={`Xóa ${fav.value}`}
+
+                  >
+
+                    ×
+
+                  </button>
+
+                </div>
+
+              ))}
+
+            </div>
+
+          </div>
+
+        ) : null}
+
+
+</div>
+
+      <div className="mb-4 rounded border border-slate-200 bg-white p-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-semibold text-slate-700">
+              Timeline thay đổi MST
+            </h2>
+            <p className="text-xs text-slate-500">
+              Áp dụng bộ lọc ngày và thao tác ở trên.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={refreshHistory}
+            >
+              Tải lại lịch sử
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              onClick={handleOpenHistoryTimeline}
+              disabled={!canOpenHistoryTimeline}
+            >
+              Xem tất cả ({filteredHistoryCount})
+            </Button>
           </div>
         </div>
-        {quickFavorites.action.length ? (
-          <div className="mt-3">
-            <div className="text-xs font-semibold uppercase text-gray-500 mb-1">
-              Thao tác đã lưu
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {quickFavorites.action.map((fav) => (
-                <div
-                  key={`action-${fav.normalized}`}
-                  className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-3 py-1 text-sm text-amber-700"
-                >
-                  <button
-                    type="button"
-                    onClick={() => applyActionFavorite(fav.value)}
-                    className="font-medium hover:text-amber-900"
-                  >
-                    {fav.value}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => removeQuickFavorite("action", fav.value)}
-                    className="text-xs text-amber-600 hover:text-amber-800"
-                    aria-label={`Xóa ${fav.value}`}
-                  >
-                    ×
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
+        <div className="mt-3">
+          <HistoryTimelineGroups groups={historyTimelinePreviewGroups} />
+        </div>
+        {filteredHistoryCount > historyTimelinePreviewCount ? (
+          <p className="mt-2 text-[11px] text-slate-500">
+            Hiển thị {historyTimelinePreviewCount} / {filteredHistoryCount} thay đổi gần nhất. Sử dụng bộ lọc hoặc bấm "Xem tất cả" để xem đầy đủ.
+          </p>
         ) : null}
       </div>
 
       {showAddForm && (
+
+
         <form
+
           onSubmit={handleAddSubmit}
+
           className="mb-4 rounded border border-gray-200 bg-white p-4 shadow-sm"
+
         >
+
           <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+
             <label className="flex flex-col gap-1 text-sm font-medium text-gray-700">
+
               Mã số thuế
+
               <input
+
                 type="text"
+
                 value={draft.mst}
+
                 onChange={handleDraftChange("mst", tidyMST)}
+
                 className="border rounded px-2 py-1"
+
                 placeholder="Nhập mã số thuế"
+
                 required
+
                 data-tooltip="Nhập mã số thuế (chỉ chứa số)"
+
               />
+
             </label>
+
             <label className="flex flex-col gap-1 text-sm font-medium text-gray-700">
+
               Tên công ty
+
               <input
+
                 type="text"
+
                 value={draft.company}
-                onChange={handleDraftChange("company")}
-                className="border rounded px-2 py-1"
+
+                onChange={handleDraftChange("company", sanitizeCompanyNameInput)}
+
+                className={clsx(
+                  "border rounded px-2 py-1 focus:outline-none focus:ring-2",
+                  draftCompanyValidation.hasWarnings
+                    ? "border-amber-500/70 focus:border-amber-500 focus:ring-amber-200"
+                    : "border-gray-300 focus:border-blue-500 focus:ring-blue-200"
+                )}
+                aria-invalid={draftCompanyValidation.hasWarnings || undefined}
+
                 placeholder="Tên công ty"
+
                 data-tooltip="Tên doanh nghiệp tương ứng với MST"
+
               />
+
+              <CompanyNameValidationMessages warnings={draftCompanyValidation.warnings} />
+
             </label>
+
             <label className="flex flex-col gap-1 text-sm font-medium text-gray-700">
+
               Người phụ trách Nhập
+
               <StaffCombobox
+
                 value={draft.person_import}
+
                 teamValue={draft.team}
+
                 teams={rosterTeams}
+
                 placeholder="Chọn nhân viên nhập"
+
                 onSelect={({ staffName, teamName, isCustom }) => {
+
                   setDraft((prev) => {
+
                     const next = { ...prev, person_import: staffName || "" };
+
                     if (staffName && teamName && !isCustom) {
+
                       const prevTeamKey = normalizeName(normalizeStr(prev.team || ""));
+
                       const nextTeamKey = normalizeName(normalizeStr(teamName));
+
                       if (!prevTeamKey || prevTeamKey === nextTeamKey) {
+
                         next.team = teamName;
+
                       }
+
                     }
+
                     return next;
+
                   });
+
                 }}
+
               />
+
             </label>
+
             <label className="flex flex-col gap-1 text-sm font-medium text-gray-700">
+
               Người phụ trách Xuất
+
               <StaffCombobox
+
                 value={draft.person_export}
+
                 teamValue={draft.team}
+
                 teams={rosterTeams}
+
                 placeholder="Chọn nhân viên xuất"
+
                 onSelect={({ staffName, teamName, isCustom }) => {
+
                   setDraft((prev) => {
+
                     const next = { ...prev, person_export: staffName || "" };
+
                     if (staffName && teamName && !isCustom) {
+
                       const prevTeamKey = normalizeName(normalizeStr(prev.team || ""));
+
                       const nextTeamKey = normalizeName(normalizeStr(teamName));
+
                       if (!prevTeamKey || prevTeamKey === nextTeamKey) {
+
                         next.team = teamName;
+
                       }
+
                     }
+
                     return next;
+
                   });
+
                 }}
+
               />
+
             </label>
+
             <label className="flex flex-col gap-1 text-sm font-medium text-gray-700">
+
               Tổ đội (tuỳ chọn)
+
               <input
+
                 type="text"
+
                 value={draft.team}
+
                 onChange={handleDraftChange("team")}
+
                 className="border rounded px-2 py-1"
+
                 placeholder="Tên tổ đội"
+
                 data-tooltip="Ghi chú tổ đội/nhóm phụ trách nếu cần"
+
               />
+
             </label>
+
             <label className="flex flex-col gap-1 text-sm font-medium text-gray-700">
-              Trạng thái gán MST
-              <select
-                value={normalizeStatusLabel(draft.status)}
-                onChange={handleDraftChange("status", normalizeStatusLabel)}
-                className="border rounded px-2 py-1"
-                data-tooltip="Theo dõi trạng thái phân công nhân viên"
-              >
-                {STATUS_SELECT_VALUES.map((option) => (
-                  <option key={option || "__blank"} value={option}>
-                    {option || "(Chưa chọn)"}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="flex flex-col gap-1 text-sm font-medium text-gray-700">
+
               Áp dụng từ ngày
+
               <input
+
                 type="date"
+
                 value={draft.effective_from}
+
                 onChange={handleDraftChange("effective_from")}
+
                 className="border rounded px-2 py-1"
+
                 data-tooltip="Ngày bắt đầu áp dụng cấu hình"
+
               />
+
             </label>
+
+            <label className="flex flex-col gap-1 text-sm font-medium text-gray-700">
+
+              Đến hết ngày (tuỳ chọn)
+
+              <input
+
+                type="date"
+
+                value={draft.effective_to}
+
+                onChange={handleDraftChange("effective_to")}
+
+                className="border rounded px-2 py-1"
+
+                data-tooltip="Ngày kết thúc hiệu lực. Để trống nếu áp dụng vô thời hạn."
+
+              />
+
+            </label>
+
           </div>
+
           {addError && <p className="mt-2 text-sm text-red-600">{addError}</p>}
+
           <div className="mt-4 flex flex-wrap items-center gap-2">
+
             <button
+
               type="submit"
+
               className="px-3 py-1.5 rounded bg-emerald-600 text-white"
+
               data-tooltip="Thêm dòng này vào danh sách tạm"
+
             >
+
               Thêm vào danh sách
+
             </button>
+
             <button
+
               type="button"
+
               onClick={() => {
+
                 setShowAddForm(false);
+
                 setAddError("");
+
               }}
+
               className="px-3 py-1.5 rounded border bg-white hover:bg-gray-50"
+
               data-tooltip="Đóng biểu mẫu thêm mới"
+
             >
+
               Hủy
+
             </button>
+
             <span className="text-xs text-gray-500">
+
               * Sau khi thêm, bấm Lưu để ghi dữ liệu vào hệ thống chính thức.
+
             </span>
+
           </div>
+
         </form>
+
       )}
 
-      <div className="text-sm text-gray-500 mb-2 flex flex-wrap items-center gap-2">
-        <span>
-          {filtered.length} dòng — Trang {page}/{totalPages}
-        </span>
-        {recentlyImportedCount ? (
-          <span className="inline-flex items-center gap-1 rounded bg-amber-100 px-2 py-0.5 text-amber-700">
-            <span className="text-xs font-semibold uppercase">Ưu tiên</span>
-            <span>
-              {recentlyImportedCount} dòng mới import đang hiển thị đầu danh sách
-            </span>
+
+
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2 text-sm text-gray-500">
+
+        <div className="flex flex-wrap items-center gap-2">
+
+          <span className="sr-only" role="status" aria-live="polite">
+
+            {tableStatusMessage}
+
           </span>
-        ) : null}
+
+          <span>
+
+            {filtered.length} dòng — Trang {page}/{totalPages}
+
+          </span>
+
+          {recentlyImportedCount ? (
+
+            <span className="inline-flex items-center gap-1 rounded bg-amber-100 px-2 py-0.5 text-amber-700">
+
+              <span className="text-xs font-semibold uppercase">Ưu tiên</span>
+
+              <span>
+
+                {recentlyImportedCount} dòng mới import đang hiển thị đầu danh sách
+
+              </span>
+
+            </span>
+
+          ) : null}
+
+        </div>
+
+        <Popover open={columnMenuOpen} onOpenChange={setColumnMenuOpen}>
+
+          <PopoverTrigger asChild>
+
+            <Button type="button" variant="outline" size="sm" className="gap-2">
+
+              <ChevronsUpDown className="size-4" />
+
+              Cột hiển thị ({visibleColumnKeys.length})
+
+            </Button>
+
+          </PopoverTrigger>
+
+          <PopoverContent className="w-64 p-3" align="end">
+
+            <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+
+              Tùy chọn hiển thị
+
+            </div>
+
+            <div className="mt-2 flex flex-col gap-2">
+
+              {COLUMN_OPTIONS.map((option) => {
+
+                const checked = isColumnVisible(option.key);
+
+                return (
+
+                  <label key={option.key} className="flex items-center gap-2 text-sm text-gray-700">
+
+                    <input
+
+                      type="checkbox"
+
+                      className="size-4"
+
+                      checked={checked}
+
+                      disabled={option.required}
+
+                      onChange={() => toggleColumnVisibility(option.key)}
+
+                    />
+
+                    <span className="flex-1 truncate">{option.label}</span>
+
+                    {option.required ? (
+
+                      <span className="text-xs text-gray-400">Bắt buộc</span>
+
+                    ) : null}
+
+                  </label>
+
+                );
+
+              })}
+
+            </div>
+
+            <Button
+
+              type="button"
+
+              variant="ghost"
+
+              size="sm"
+
+              className="mt-3 justify-start text-amber-700 hover:text-amber-800"
+
+              onClick={handleResetColumnWidths}
+
+            >
+
+              Đặt lại chiều rộng
+
+            </Button>
+
+            <p className="mt-3 text-xs text-gray-500">
+
+              * Kéo tay cầm bên phải tiêu đề cột để điều chỉnh chiều rộng. Nếu nội dung vượt màn hình, hãy cuộn ngang bảng.
+
+            </p>
+
+          </PopoverContent>
+
+        </Popover>
+
       </div>
 
-      <div className="border rounded overflow-hidden">
-        <table className="w-full text-sm">
+
+
+      <div className="border rounded overflow-x-auto">
+
+        <table
+
+          className={clsx(
+
+            "min-w-max table-auto",
+
+            leadViewEnabled ? "text-xs" : "text-sm"
+
+          )}
+
+          data-condensed={leadViewEnabled ? "true" : "false"}
+
+        >
+
           <thead className="bg-gray-50">
+
             <tr>
-              <th className="p-2 text-left w-36">MST</th>
-              <th className="p-2 text-left">Công ty</th>
-              <th className="p-2 text-left w-40">Người phụ trách Nhập</th>
-              <th className="p-2 text-left w-40">Người phụ trách Xuất</th>
-              <th className="p-2 text-left w-40">Trạng thái</th>
-              <th className="p-2 text-left w-40">Áp dụng từ ngày</th>
-              <th className="p-2 w-32">Hành động</th>
+
+              {isColumnVisible("mst") ? (
+
+                <th
+
+                  className="group relative p-2 text-left whitespace-nowrap align-bottom"
+
+                  data-column-key="mst"
+
+                  style={columnStyleMap.mst}
+
+                  scope="col"
+
+                >
+
+                  <div className="pr-4 font-semibold">MST</div>
+
+                  <ColumnResizeHandle
+
+                    columnKey="mst"
+
+                    onResizeStart={handleColumnResizeStart}
+
+                  />
+
+                </th>
+
+              ) : null}
+
+              {isColumnVisible("company") ? (
+
+                <th
+
+                  className="group relative p-2 text-left align-bottom"
+
+                  data-column-key="company"
+
+                  style={columnStyleMap.company}
+
+                  scope="col"
+
+                >
+
+                  <div className="pr-4 font-semibold">Công ty</div>
+
+                  <ColumnResizeHandle
+
+                    columnKey="company"
+
+                    onResizeStart={handleColumnResizeStart}
+
+                  />
+
+                </th>
+
+              ) : null}
+
+              {isColumnVisible("person_import") ? (
+
+                <th
+
+                  className="group relative p-2 text-left align-bottom"
+
+                  data-column-key="person_import"
+
+                  style={columnStyleMap.person_import}
+
+                  scope="col"
+
+                >
+
+                  <div className="pr-4">
+
+                    <PersonColumnHeader columnKey="person_import" />
+
+                  </div>
+
+                  <ColumnResizeHandle
+
+                    columnKey="person_import"
+
+                    onResizeStart={handleColumnResizeStart}
+
+                  />
+
+                </th>
+
+              ) : null}
+
+              {isColumnVisible("person_export") ? (
+
+                <th
+
+                  className="group relative p-2 text-left align-bottom"
+
+                  data-column-key="person_export"
+
+                  style={columnStyleMap.person_export}
+
+                  scope="col"
+
+                >
+
+                  <div className="pr-4">
+
+                    <PersonColumnHeader columnKey="person_export" />
+
+                  </div>
+
+                  <ColumnResizeHandle
+
+                    columnKey="person_export"
+
+                    onResizeStart={handleColumnResizeStart}
+
+                  />
+
+                </th>
+
+              ) : null}
+
+              {isColumnVisible("status") ? (
+
+                <th
+
+                  className="group relative p-2 text-left whitespace-nowrap align-bottom"
+
+                  data-column-key="status"
+
+                  style={columnStyleMap.status}
+
+                  scope="col"
+
+                >
+
+                  <div className="pr-4 font-semibold">Trạng thái</div>
+
+                  <ColumnResizeHandle
+
+                    columnKey="status"
+
+                    onResizeStart={handleColumnResizeStart}
+
+                  />
+
+                </th>
+
+              ) : null}
+
+              {isColumnVisible("effective_from") ? (
+
+                <th
+
+                  className="group relative p-2 text-left whitespace-nowrap align-bottom"
+
+                  data-column-key="effective_from"
+
+                  style={columnStyleMap.effective_from}
+
+                  scope="col"
+
+                >
+
+                  <div className="pr-4 font-semibold">Áp dụng từ ngày</div>
+
+                  <ColumnResizeHandle
+
+                    columnKey="effective_from"
+
+                    onResizeStart={handleColumnResizeStart}
+
+                  />
+
+                </th>
+
+              ) : null}
+
+              {isColumnVisible("effective_to") ? (
+
+                <th
+
+                  className="group relative p-2 text-left whitespace-nowrap align-bottom"
+
+                  data-column-key="effective_to"
+
+                  style={columnStyleMap.effective_to}
+
+                  scope="col"
+
+                >
+
+                  <div className="pr-4 font-semibold">Đến hết ngày</div>
+
+                  <ColumnResizeHandle
+
+                    columnKey="effective_to"
+
+                    onResizeStart={handleColumnResizeStart}
+
+                  />
+
+                </th>
+
+              ) : null}
+
+              {isColumnVisible("actions") ? (
+
+                <th
+
+                  className="group relative p-2 text-center whitespace-nowrap align-bottom"
+
+                  data-column-key="actions"
+
+                  style={columnStyleMap.actions}
+
+                  scope="col"
+
+                >
+
+                  <div className="pr-4 font-semibold text-center">Hành động</div>
+
+                  <ColumnResizeHandle
+
+                    columnKey="actions"
+
+                    onResizeStart={handleColumnResizeStart}
+
+                  />
+
+                </th>
+
+              ) : null}
+
             </tr>
+
           </thead>
+
           <tbody>
+
             {pageRows.length === 0 ? (
+
               <tr>
-                <td className="p-3 text-center text-gray-500" colSpan={7}>
+
+                <td className="p-3 text-center text-gray-500" colSpan={visibleColumnKeys.length}>
+
                   Chưa có dữ liệu
+
                 </td>
+
               </tr>
+
             ) : (
+
               pageRows.map((r) => {
+
                 const rowKey = makeRowKey(r);
+
                 const rowHistory = historyIndex.get(rowKey) || {};
+
                 const importHistory = rowHistory.person_import || [];
+
                 const exportHistory = rowHistory.person_export || [];
+
                 const effectiveHistory = rowHistory.effective_from || [];
+
+                const effectiveToHistory = rowHistory.effective_to || [];
+
                 const statusValue = normalizeStatusLabel(r.status);
+
+                const statusDisplay = computeStatusDisplay(r);
+
+                const normalizedStatusDisplay = statusDisplay || "";
+
+                const isStatusAssigned = normalizedStatusDisplay === MST_ASSIGNMENT_STATUS.ASSIGNED;
+
+                const isStatusPending =
+
+                  normalizedStatusDisplay === MST_ASSIGNMENT_STATUS.PENDING ||
+
+                  normalizedStatusDisplay === normalizeStatusLabel(MST_ASSIGNMENT_STATUS.PENDING);
+
+                const isStatusWarning = normalizedStatusDisplay.startsWith("Thiếu");
+
                 const isNewlyImported = recentlyImportedKeys.has(rowKey);
+
                 const isDirty = rowHasChanges(r);
-                const updateDisabled = !canEdit || !isDirty;
+
+                const isGroupRow = Boolean(r.__group);
+
+                const rowIsReadOnly = isReadOnly || isGroupRow;
+
+                const updateDisabled = !canEdit || !isDirty || isGroupRow;
+
                 const updateLabel = r.__originalKey ? "Cập nhật" : "Lưu mới";
+
+                const timelineGroup = timelineGroupsByMST.get(r.mst || "__unknown");
+
+                const timelineStages = Array.isArray(timelineGroup?.stages)
+                  ? timelineGroup.stages
+                  : [];
+
+                const timelineCompany = timelineGroup?.company || r.company || "";
+
+                const timelineMST = timelineGroup?.mst || r.mst || "";
+
+                const timelineGroupWithFallback =
+                  timelineGroup || {
+                    mst: timelineMST,
+                    company: timelineCompany,
+                    stages: timelineStages,
+                  };
+
+                const actionsColumnVisible = isColumnVisible("actions");
+
+                const statusColumnVisible = isColumnVisible("status");
+
+                const showTimelineInStatus = statusColumnVisible && !actionsColumnVisible;
+
                 return (
+
                   <tr
+
                     key={rowKey || r.mst}
+
                     className={`border-t ${isNewlyImported ? "bg-amber-50" : ""}`}
+
                   >
-                    <td className="p-2">
-                      {isReadOnly ? (
-                        <span>{r.mst}</span>
-                      ) : (
-                        <input
-                          value={r.mst}
-                          onChange={(e) =>
-                            updateRow(r, { mst: tidyMST(e.target.value) })
-                          }
-                          className="border rounded px-2 py-1 w-full"
-                        />
-                      )}
-                      {isNewlyImported ? (
-                        <span className="ml-2 inline-flex items-center rounded bg-amber-500/10 px-2 py-0.5 text-xs font-semibold uppercase text-amber-700">
-                          Mới import
-                        </span>
-                      ) : null}
-                      {isDirty ? (
-                        <span className="ml-2 inline-flex items-center rounded bg-blue-500/10 px-2 py-0.5 text-xs font-semibold uppercase text-blue-700">
-                          Chưa lưu
-                        </span>
-                      ) : null}
-                    </td>
-                  <td className="p-2">
-                    {isReadOnly ? (
-                      <span>{r.company || ""}</span>
-                    ) : (
-                      <input
-                        value={r.company || ""}
-                        onChange={(e) =>
-                          updateRow(r, { company: e.target.value })
-                        }
-                        className="border rounded px-2 py-1 w-full"
-                      />
-                    )}
-                  </td>
-                  <td className="p-2">
-                    {isReadOnly ? (
-                      <span>{r.person_import || ""}</span>
-                    ) : (
-                      <StaffCombobox
-                        value={r.person_import || ""}
-                        teamValue={r.team || ""}
-                        teams={rosterTeams}
-                        placeholder="Chọn nhân viên nhập"
-                        onSelect={({ staffName, teamName, isCustom }) => {
-                          const patch = { person_import: staffName || "" };
-                          if (staffName && teamName && !isCustom) {
-                            const currentTeamKey = normalizeName(
-                              normalizeStr(r.team || "")
-                            );
-                            const nextTeamKey = normalizeName(
-                              normalizeStr(teamName)
-                            );
-                            if (!currentTeamKey || currentTeamKey === nextTeamKey) {
-                              patch.team = teamName;
-                            }
-                          }
-                          updateRow(r, patch);
-                        }}
-                      />
-                    )}
-                    <HistoryDetails
-                      entries={importHistory}
-                      label={HISTORY_FIELD_LABELS.person_import}
-                    />
-                  </td>
-                  <td className="p-2">
-                    {isReadOnly ? (
-                      <span>{r.person_export || ""}</span>
-                    ) : (
-                      <StaffCombobox
-                        value={r.person_export || ""}
-                        teamValue={r.team || ""}
-                        teams={rosterTeams}
-                        placeholder="Chọn nhân viên xuất"
-                        onSelect={({ staffName, teamName, isCustom }) => {
-                          const patch = { person_export: staffName || "" };
-                          if (staffName && teamName && !isCustom) {
-                            const currentTeamKey = normalizeName(
-                              normalizeStr(r.team || "")
-                            );
-                            const nextTeamKey = normalizeName(
-                              normalizeStr(teamName)
-                            );
-                            if (!currentTeamKey || currentTeamKey === nextTeamKey) {
-                              patch.team = teamName;
-                            }
-                          }
-                          updateRow(r, patch);
-                        }}
-                      />
-                    )}
-                    <HistoryDetails
-                      entries={exportHistory}
-                      label={HISTORY_FIELD_LABELS.person_export}
-                    />
-                  </td>
-                  <td className="p-2">
-                    {isReadOnly ? (
-                      statusValue ? (
-                        <span>{statusValue}</span>
-                      ) : (
-                        <span className="italic text-gray-400">Chưa thiết lập</span>
-                      )
-                    ) : (
-                      <select
-                        value={statusValue}
-                        onChange={(e) =>
-                          updateRow(r, { status: normalizeStatusLabel(e.target.value) })
-                        }
-                        className="border rounded px-2 py-1 w-full"
-                        data-tooltip="Cập nhật trạng thái gán nhân viên"
+
+
+
+                    {isColumnVisible("mst") ? (
+
+                      <td
+
+                        className="p-2 align-top whitespace-nowrap"
+
+                        style={columnStyleMap.mst}
+
+                        data-column-key="mst"
+
                       >
-                        {STATUS_SELECT_VALUES.map((option) => (
-                          <option key={option || "__blank-row"} value={option}>
-                            {option || "(Chưa chọn)"}
-                          </option>
-                        ))}
-                      </select>
-                    )}
-                  </td>
-                  <td className="p-2">
-                    {isReadOnly ? (
-                      <span>{r.effective_from || ""}</span>
-                    ) : (
-                      <input
-                        type="date"
-                        value={r.effective_from || ""}
-                        onChange={(e) =>
-                          updateRow(r, { effective_from: e.target.value })
-                        }
-                        className="border rounded px-2 py-1 w-full"
-                      />
-                    )}
-                    <HistoryDetails
-                      entries={effectiveHistory}
-                      label={HISTORY_FIELD_LABELS.effective_from}
-                    />
-                  </td>
-                  <td className="p-2 text-center">
-                    {canEdit ? (
-                      <div className="flex flex-col gap-2">
-                        <button
-                          type="button"
-                          onClick={() => commitRow(r)}
-                          disabled={updateDisabled}
-                          className={`px-2 py-1 rounded text-white ${
-                            updateDisabled
-                              ? "bg-gray-400 cursor-not-allowed"
-                              : "bg-emerald-600 hover:bg-emerald-700"
-                          }`}
-                          data-tooltip={
-                            updateDisabled
-                              ? "Không có thay đổi mới"
-                              : "Lưu các thay đổi vừa chỉnh"
-                          }
-                        >
-                          {updateLabel}
-                        </button>
-                        <button
-                          onClick={() => removeRow(r)}
-                          className="px-2 py-1 rounded bg-red-500 text-white hover:bg-red-600"
-                          data-tooltip="Xóa dòng"
-                        >
-                          Xóa
-                        </button>
-                      </div>
-                    ) : (
-                      <span className="text-xs text-gray-400">—</span>
-                    )}
-                  </td>
+
+                        {rowIsReadOnly ? (
+
+                          <span>{r.mst}</span>
+
+                        ) : (
+
+                          <input
+
+                            value={r.mst}
+
+                            onChange={(e) =>
+
+                              updateRow(r, { mst: tidyMST(e.target.value) })
+
+                            }
+
+                            className="border rounded px-2 py-1 w-full"
+
+                          />
+
+                        )}
+
+                        {isNewlyImported ? (
+
+                          <span className="ml-2 inline-flex items-center rounded bg-amber-500/10 px-2 py-0.5 text-xs font-semibold uppercase text-amber-700">
+
+                            Mới import
+
+                          </span>
+
+                        ) : null}
+
+                        {isDirty ? (
+
+                          <span className="ml-2 inline-flex items-center rounded bg-blue-500/10 px-2 py-0.5 text-xs font-semibold uppercase text-blue-700">
+
+                            Đã chỉnh sửa
+
+                          </span>
+
+                        ) : null}
+
+                      </td>
+
+                    ) : null}
+
+                    
+                    {isColumnVisible("company") ? (
+                      <td
+                        className="p-2 align-top"
+                        style={columnStyleMap.company}
+                        data-column-key="company"
+                      >
+                        <CompanyNameCell
+                          value={r.company || ""}
+                          isReadOnly={isReadOnly || Boolean(r.__group)}
+                          onChange={(nextValue) => updateRow(r, { company: nextValue })}
+                        />
+                      </td>
+                    ) : null}
+
+
+                    {isColumnVisible("person_import") ? (
+
+                      <td
+
+                        className="p-2 align-top"
+
+                        style={columnStyleMap.person_import}
+
+                        data-column-key="person_import"
+
+                      >
+
+                        <AssigneeCell
+
+                          value={r.person_import || ""}
+
+                          placeholder="Chọn nhân viên nhập"
+
+                          isReadOnly={isReadOnly || Boolean(r.__group)}
+
+                          teams={rosterTeams}
+
+                          teamValue={r.team || ""}
+
+                          onSelect={({ staffName, teamName, isCustom }) => {
+
+                            const patch = { person_import: staffName || "" };
+
+                            if (staffName && teamName && !isCustom) {
+
+                              const prevTeamKey = normalizeName(normalizeStr(r.team || ""));
+
+                              const nextTeamKey = normalizeName(normalizeStr(teamName));
+
+                              if (!prevTeamKey || prevTeamKey === nextTeamKey) {
+
+                                patch.team = teamName;
+
+                              }
+
+                            }
+
+                            updateRow(r, patch);
+
+                          }}
+
+                          historyEntries={importHistory}
+
+                          historyLabel={HISTORY_FIELD_LABELS.person_import}
+
+                          showTeamHint
+
+                        />
+
+                      </td>
+
+                    ) : null}
+
+
+                    {isColumnVisible("person_export") ? (
+
+                      <td
+
+                        className="p-2 align-top"
+
+                        style={columnStyleMap.person_export}
+
+                        data-column-key="person_export"
+
+                      >
+
+                        <AssigneeCell
+
+                          value={r.person_export || ""}
+
+                          placeholder="Chọn nhân viên xuất"
+
+                          isReadOnly={isReadOnly || Boolean(r.__group)}
+
+                          teams={rosterTeams}
+
+                          teamValue={r.team || ""}
+
+                          onSelect={({ staffName, teamName, isCustom }) => {
+
+                            const patch = { person_export: staffName || "" };
+
+                            if (staffName && teamName && !isCustom) {
+
+                              const prevTeamKey = normalizeName(normalizeStr(r.team || ""));
+
+                              const nextTeamKey = normalizeName(normalizeStr(teamName));
+
+                              if (!prevTeamKey || prevTeamKey === nextTeamKey) {
+
+                                patch.team = teamName;
+
+                              }
+
+                            }
+
+                            updateRow(r, patch);
+
+                          }}
+
+                          historyEntries={exportHistory}
+
+                          historyLabel={HISTORY_FIELD_LABELS.person_export}
+
+                        />
+
+                      </td>
+
+                    ) : null}
+
+
+                    {statusColumnVisible ? (
+
+                      <td
+
+                        className="p-2 align-top whitespace-nowrap"
+
+                        style={columnStyleMap.status}
+
+                        data-column-key="status"
+
+                      >
+
+                        {statusDisplay ? (
+
+                          <span
+
+                            className={`inline-flex items-center rounded px-2 py-1 text-xs font-semibold ${
+
+                              isStatusAssigned
+
+                                ? "bg-emerald-50 text-emerald-700"
+
+                                : isStatusWarning
+
+                                  ? "bg-amber-50 text-amber-700"
+
+                                  : "bg-slate-100 text-slate-700"
+
+                            }`}
+
+                          >
+
+                            {statusDisplay}
+
+                          </span>
+
+                        ) : (
+
+                          <span className="italic text-gray-400">Chưa thiết lập</span>
+
+                        )}
+
+                        {!isStatusAssigned && !isStatusWarning && !isStatusPending ? (
+
+                          <div className="mt-1 text-xs text-gray-500">{statusValue}</div>
+
+                        ) : null}
+
+                        {showTimelineInStatus ? (
+
+                          <StageTimelinePreview
+
+                            stages={timelineStages}
+
+                            onViewFull={
+
+                              timelineStages.length
+
+                                ? () => handleOpenTimelineGroup(timelineGroupWithFallback)
+
+                                : undefined
+
+                            }
+
+                          />
+
+                        ) : null}
+
+                      </td>
+
+                    ) : null}
+
+                    {isColumnVisible("effective_from") ? (
+
+                      <td
+
+                        className="p-2 align-top whitespace-nowrap"
+
+                        style={columnStyleMap.effective_from}
+
+                        data-column-key="effective_from"
+
+                      >
+
+                        {rowIsReadOnly ? (
+
+                          <span>{r.effective_from || "—"}</span>
+
+                        ) : (
+
+                          <input
+
+                            type="date"
+
+                            value={r.effective_from || ""}
+
+                            onChange={(e) =>
+
+                              updateRow(r, { effective_from: e.target.value })
+
+                            }
+
+                            className="border rounded px-2 py-1 w-full"
+
+                          />
+
+                        )}
+
+                        <HistoryDetails
+
+                          entries={effectiveHistory}
+
+                          label={HISTORY_FIELD_LABELS.effective_from}
+
+                        />
+
+                      </td>
+
+                    ) : null}
+
+                    {isColumnVisible("effective_to") ? (
+
+                      <td
+
+                        className="p-2 align-top whitespace-nowrap"
+
+                        style={columnStyleMap.effective_to}
+
+                        data-column-key="effective_to"
+
+                      >
+
+                        {rowIsReadOnly ? (
+
+                          <span>{r.effective_to || "Hiện tại"}</span>
+
+                        ) : (
+
+                          <input
+
+                            type="date"
+
+                            value={r.effective_to || ""}
+
+                            onChange={(e) => updateRow(r, { effective_to: e.target.value })}
+
+                            className="border rounded px-2 py-1 w-full"
+
+                          />
+
+                        )}
+
+                        <HistoryDetails
+
+                          entries={effectiveToHistory}
+
+                          label={HISTORY_FIELD_LABELS.effective_to}
+
+                        />
+
+                      </td>
+
+                    ) : null}
+
+                    {actionsColumnVisible ? (
+
+                      <td
+
+                        className="p-2 align-top text-center whitespace-nowrap"
+
+                        style={columnStyleMap.actions}
+
+                        data-column-key="actions"
+
+                      >
+
+                        <div className="flex flex-col gap-3">
+
+                            {canEdit && !r.__group ? (
+
+                            <div className="flex flex-col gap-2">
+
+                              <button
+
+                                type="button"
+
+                                onClick={() => startNewStageFromRow(r)}
+
+                                className="px-2 py-1 rounded border bg-white text-gray-700 hover:bg-gray-50"
+
+                                data-tooltip="Sao chép thông tin hiện tại để thêm giai đoạn kế tiếp"
+
+                              >
+
+                                Giai đoạn mới
+
+                              </button>
+
+                              <button
+
+                                type="button"
+
+                                onClick={() => commitRow(r)}
+
+                                disabled={updateDisabled}
+
+                                className={`px-2 py-1 rounded text-white ${
+
+                                  updateDisabled
+
+                                    ? "bg-gray-400 cursor-not-allowed"
+
+                                    : "bg-emerald-600 hover:bg-emerald-700"
+
+                                }`}
+
+                                data-tooltip={
+
+                                  updateDisabled
+
+                                    ? "Không có thay đổi mới"
+
+                                    : "Lưu các thay đổi vừa chỉnh"
+
+                                }
+
+                              >
+
+                                {updateLabel}
+
+                              </button>
+
+                              <button
+
+                                onClick={() => removeRow(r)}
+
+                                className="px-2 py-1 rounded bg-red-500 text-white hover:bg-red-600"
+
+                                data-tooltip="Xóa dòng"
+
+                              >
+
+                                Xóa
+
+                              </button>
+
+                            </div>
+
+                          ) : (
+
+                            <span className="text-xs text-gray-400">—</span>
+
+                          )}
+
+                          <StageTimelinePreview
+
+                            stages={timelineStages}
+
+                            onViewFull={
+
+                              timelineStages.length
+
+                                ? () => handleOpenTimelineGroup(timelineGroupWithFallback)
+
+                                : undefined
+
+                            }
+
+                          />
+
+                        </div>
+
+                      </td>
+
+                    ) : null}
+
+
+
                 </tr>
+
               );
+
             })
+
             )}
+
           </tbody>
+
         </table>
+
+      </div>
+
+
+
+      <div className="mt-6 rounded border border-slate-200 bg-slate-50 px-3 py-2">
+
+        <div className="flex flex-wrap items-center justify-between gap-2">
+
+          <div>
+
+            <h2 className="text-sm font-semibold text-slate-700">
+
+              Dòng thời gian giai đoạn
+
+            </h2>
+
+            <p className="text-xs text-slate-500">
+
+              Xem tổng hợp theo bộ lọc hiện tại.
+
+            </p>
+
+          </div>
+
+          <Button
+
+            type="button"
+
+            variant="outline"
+
+            size="sm"
+
+            onClick={handleOpenAllTimelines}
+
+            disabled={!groupedStages.length}
+
+          >
+
+            Mở tổng hợp ({groupedStages.length})
+
+          </Button>
+
+        </div>
+
       </div>
 
       {/* Pagination */}
-      <div className="flex items-center justify-between mt-3">
-        <div />
+
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+
+        <PageSizeControl value={pageSize} onChange={setPageSize} />
+
         <div className="flex items-center gap-2">
+
           <button
+
             disabled={page <= 1}
+
             onClick={previousPage}
+
             className={`px-3 py-1 rounded border ${
+
               page <= 1 ? "opacity-50 cursor-not-allowed" : ""
+
             }`}
+
           >
+
             ← Trước
+
           </button>
+
           <span className="text-sm">
+
             Trang {page}/{totalPages}
+
           </span>
+
           <button
+
             disabled={page >= totalPages}
+
             onClick={nextPage}
+
             className={`px-3 py-1 rounded border ${
+
               page >= totalPages ? "opacity-50 cursor-not-allowed" : ""
+
             }`}
+
           >
+
             Sau →
+
           </button>
+
         </div>
-        <div />
+
       </div>
+
+
+      <Dialog
+
+        open={historyTimelineDialogState.open}
+
+        onOpenChange={handleHistoryTimelineDialogOpenChange}
+
+      >
+
+        <DialogContent
+
+          className="max-w-3xl max-h-[80vh] overflow-hidden"
+
+          ref={historyTimelineDialogContentRef}
+
+          tabIndex={-1}
+
+        >
+
+          <DialogHeader>
+
+            <DialogTitle>
+
+              {historyTimelineDialogState.title || "Timeline thay đổi MST"}
+
+            </DialogTitle>
+
+            {historyTimelineDialogState.subtitle ? (
+
+              <DialogDescription>{historyTimelineDialogState.subtitle}</DialogDescription>
+
+            ) : null}
+
+          </DialogHeader>
+
+          <div className="max-h-[60vh] overflow-auto pr-1">
+
+            <HistoryTimelineGroups groups={historyTimelineDialogState.groups} />
+
+          </div>
+
+        </DialogContent>
+
+      </Dialog>
+
+
+      <Dialog
+
+        open={timelineDialogState.open}
+
+        onOpenChange={handleTimelineDialogOpenChange}
+
+      >
+
+        <DialogContent
+
+          className="max-w-3xl max-h-[80vh] overflow-hidden"
+
+          ref={timelineDialogContentRef}
+
+          tabIndex={-1}
+
+        >
+
+          <DialogHeader>
+
+            <DialogTitle>{timelineDialogState.title || "Dòng thời gian giai đoạn"}</DialogTitle>
+
+            {timelineDialogState.subtitle ? (
+
+              <DialogDescription>{timelineDialogState.subtitle}</DialogDescription>
+
+            ) : null}
+
+          </DialogHeader>
+
+          <div className="max-h-[60vh] overflow-auto pr-1">
+
+            <StageTimelineGroups groups={timelineDialogState.groups} />
+
+          </div>
+
+        </DialogContent>
+
+      </Dialog>
+
     </div>
+
   );
+
 }
+

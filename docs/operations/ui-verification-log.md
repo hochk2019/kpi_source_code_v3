@@ -17,6 +17,11 @@ Trong phiên kiểm tra này, chúng tôi đã đăng nhập bằng tài khoản
 - Đã xác minh lại theme thương hiệu (Golden/Ocean/Forest) và đảm bảo các biến `--brand-*` áp dụng đồng nhất trên header và các nút hành động.
 - Đăng xuất và đăng nhập lại để chắc chắn session lưu thông qua `localStorage` hoạt động ổn định sau khi thay đổi cấu hình bảo mật.
 
+## Checklist QA cuối sprint
+
+- Checklist chi tiết: xem `docs/operations/qa-sprint-checklist.md` để đánh dấu từng hạng mục trước khi chốt sprint.
+- Sau mỗi phiên QA, ghi lại trạng thái tổng quan và ảnh chụp màn hình bổ sung vào mục "Danh sách màn hình đã chụp" phía trên.
+
 ## Ghi chú
 
 Nếu cần so sánh lại trong tương lai, chạy `pnpm dev -- --host 0.0.0.0 --port 4173` rồi đăng nhập với tài khoản quản trị để tái tạo ảnh chụp tương tự.

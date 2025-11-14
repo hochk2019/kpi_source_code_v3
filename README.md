@@ -424,11 +424,17 @@ trong 72 giờ gần nhất nên không phát sinh chi phí token.
 
 ```bash
 pnpm lint
-pnpm test --run
+pnpm test -- --runInBand
 ```
 
-Các bài test sử dụng Vitest (môi trường `jsdom`) và không phụ thuộc vào máy chủ
-API, vì vậy có thể chạy độc lập.
+Các bài test sử dụng Vitest (môi trường `jsdom`) và khởi động mock backend
+ngay trong tiến trình kiểm thử, vì vậy không cần chạy server riêng.
+
+> **Mẹo cho môi trường chưa sẵn SQL Server/Ollama:** đặt biến môi trường
+> `KPI_SKIP_EXTERNAL_TESTS=1` trước khi gọi `pnpm test` (hoặc `pnpm precommit`).
+> Khi đó các nhóm kiểm thử tích hợp phụ thuộc SQL Server hoặc Ollama sẽ được
+> `skip`, giúp rút ngắn thời gian chạy trên máy trạm nhưng vẫn giữ nguyên phạm vi
+> kiểm thử đầy đủ trên CI.
 
 ### Kiểm thử API backend
 
