@@ -22,6 +22,12 @@ Trong phiên kiểm tra này, chúng tôi đã đăng nhập bằng tài khoản
 - Checklist chi tiết: xem `docs/operations/qa-sprint-checklist.md` để đánh dấu từng hạng mục trước khi chốt sprint.
 - Sau mỗi phiên QA, ghi lại trạng thái tổng quan và ảnh chụp màn hình bổ sung vào mục "Danh sách màn hình đã chụp" phía trên.
 
+## Bổ sung ngày 2025-11-13
+
+- Đã chụp lại giao diện tab **Báo cáo KPI** sau đợt tái cấu trúc. Ảnh được lưu ngay trong repo tại `docs/images/kpi-report-tab.png` để tiện tham chiếu nội bộ.
+- Môi trường: `pnpm dev` (backend mock + Vite dev server), trạng thái người dùng khách (guest) với dữ liệu mẫu mặc định.
+- Quan sát nhanh: bố cục mới giữ riêng bộ lọc thời gian, khu vực Tổng quan KPI gộp biểu đồ xu hướng, chỉ số tổng hợp và "Cơ cấu tổ đội", panel "Điểm KPI +/-" mặc định mở kèm nút thu gọn.
+  
 ## Ghi chú
 
-Nếu cần so sánh lại trong tương lai, chạy `pnpm dev -- --host 0.0.0.0 --port 4173` rồi đăng nhập với tài khoản quản trị để tái tạo ảnh chụp tương tự.
+Nếu cần so sánh lại trong tương lai, chạy `pnpm dev -- --host 0.0.0.0 --port 4173` rồi đăng nhập với tài khoản quản trị để tái tạo ảnh chụp tương tự. Khi cần chứng cứ trực quan nhanh, có thể tái sử dụng file `docs/images/kpi-report-tab.png` hoặc cập nhật ảnh mới hơn bằng quy trình trong `docs/operations/qa-sprint-checklist.md`.
