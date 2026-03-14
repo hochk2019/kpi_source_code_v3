@@ -33,6 +33,14 @@ function formatHttpError(response) {
 
 
 
+function isAuthErrorResponse(response) {
+
+  return response?.status === 401 || response?.status === 403;
+
+}
+
+
+
 async function sendWrite(base, key, value) {
 
   const payload = value === null || value === undefined ? { value: null } : { value };
@@ -581,6 +589,20 @@ async function bootstrapFromServer(baseUrl) {
 
       if (!response.ok) {
 
+        if (isAuthErrorResponse(response)) {
+
+          remoteEnabled = false;
+
+          lastSyncError = null;
+
+          emitSyncStatus();
+
+          retryDelayMs = RETRY_MIN_MS;
+
+          return false;
+
+        }
+
         throw new Error(formatHttpError(response));
 
       }
@@ -639,7 +661,7 @@ async function bootstrapFromServer(baseUrl) {
 
     await flushPending();
 
-  } else {
+  } else if (lastSyncError) {
 
     scheduleRetry();
 

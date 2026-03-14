@@ -53,6 +53,12 @@ import {
   AppDialogTitle,
 
 } from "@/components/designSystem/primitives.jsx";
+import {
+  SearchField,
+  SectionHeader,
+  SectionSurface,
+  SectionToolbar,
+} from "@/components/designSystem/shellPrimitives.jsx";
 
 import { ScrollArea } from "@/components/ui/scroll-area.jsx";
 
@@ -560,7 +566,7 @@ function StaffCombobox({
 
 
 
-export default function AccountManager({ currentUser }) {
+export default function AccountManager() {
 
   const [accounts, setAccounts] = useState(() => listAccounts());
 
@@ -613,10 +619,6 @@ export default function AccountManager({ currentUser }) {
     canScrollUp: false,
     canScrollDown: false,
   });
-
-
-
-  const currentActor = currentUser?.username || "system";
 
 
 
@@ -1060,7 +1062,7 @@ export default function AccountManager({ currentUser }) {
 
       };
 
-      await createAccount(payload, { actor: currentActor });
+      await createAccount(payload);
 
       alert("Đã tạo tài khoản mới.");
 
@@ -1296,25 +1298,17 @@ export default function AccountManager({ currentUser }) {
 
       try {
 
-        await updateAccount(
+        await updateAccount(username, {
 
-          username,
+          memberId: nextState.memberId || null,
 
-          {
+          memberName: nextState.memberName || null,
 
-            memberId: nextState.memberId || null,
+          teamId: nextState.teamId || null,
 
-            memberName: nextState.memberName || null,
+          teamName: nextState.teamName || null,
 
-            teamId: nextState.teamId || null,
-
-            teamName: nextState.teamName || null,
-
-          },
-
-          { actor: currentActor }
-
-        );
+        });
 
         setAccounts(listAccounts());
 
@@ -1332,7 +1326,7 @@ export default function AccountManager({ currentUser }) {
 
     },
 
-    [currentActor, setAccountPending]
+    [setAccountPending]
 
   );
 
@@ -1356,7 +1350,7 @@ export default function AccountManager({ currentUser }) {
 
         const nextPermissions = { ...target.permissions, [key]: value };
 
-        await updateAccount(username, { permissions: nextPermissions }, { actor: currentActor });
+        await updateAccount(username, { permissions: nextPermissions });
 
         setAccounts(listAccounts());
 
@@ -1368,7 +1362,7 @@ export default function AccountManager({ currentUser }) {
 
     },
 
-    [accounts, currentActor]
+    [accounts]
 
   );
 
@@ -1382,7 +1376,7 @@ export default function AccountManager({ currentUser }) {
 
         const normalized = normalizeRole(role);
 
-        await updateAccount(username, { role: normalized }, { actor: currentActor });
+        await updateAccount(username, { role: normalized });
 
         setAccounts(listAccounts());
 
@@ -1394,7 +1388,7 @@ export default function AccountManager({ currentUser }) {
 
     },
 
-    [currentActor]
+    []
 
   );
 
@@ -1410,7 +1404,7 @@ export default function AccountManager({ currentUser }) {
 
       try {
 
-        await setAccountPassword(username, nextPassword, { actor: currentActor });
+        await setAccountPassword(username, nextPassword);
 
         alert(`Đã đặt lại mật khẩu cho ${username}.`);
 
@@ -1422,7 +1416,7 @@ export default function AccountManager({ currentUser }) {
 
     },
 
-    [currentActor]
+    []
 
   );
 
@@ -1488,7 +1482,7 @@ export default function AccountManager({ currentUser }) {
 
     try {
 
-      await deleteAccount(username, { actor: currentActor });
+      await deleteAccount(username);
 
       setAccounts(listAccounts());
 
@@ -1504,7 +1498,7 @@ export default function AccountManager({ currentUser }) {
 
     }
 
-  }, [accountToDelete, closeDeleteDialog, currentActor, deleteConfirmText]);
+  }, [accountToDelete, closeDeleteDialog, deleteConfirmText]);
 
 
 
@@ -1835,19 +1829,12 @@ export default function AccountManager({ currentUser }) {
 
 
 
-      <section className="ds-card space-y-6">
+      <SectionSurface className="space-y-6">
 
-        <header className="space-y-1">
-
-          <h2 className="text-lg font-semibold text-[color:var(--ds-text-primary)]">Tạo tài khoản mới</h2>
-
-          <p className="text-sm text-[color:var(--ds-text-secondary)]">
-
-            Điền thông tin đăng nhập, gắn nhân viên KPI (nếu có) và xác định quyền tương ứng trước khi tạo tài khoản.
-
-          </p>
-
-        </header>
+        <SectionHeader
+          title="Tạo tài khoản mới"
+          description="Điền thông tin đăng nhập, gắn nhân viên KPI (nếu có) và xác định quyền tương ứng trước khi tạo tài khoản."
+        />
 
         <form className="grid gap-4 md:grid-cols-2" onSubmit={handleCreate}>
 
@@ -2181,61 +2168,31 @@ export default function AccountManager({ currentUser }) {
 
         </form>
 
-      </section>
+      </SectionSurface>
 
 
 
-      <section className="ds-card space-y-4">
+      <SectionSurface className="space-y-4">
 
-        <header className="flex flex-wrap items-center justify-between gap-3">
+        <SectionHeader
+          title="Danh sách tài khoản"
+          description="Theo dõi quyền truy cập và trạng thái gắn nhân viên."
+          meta={<StatusBadge tone="info">{visibleAccounts}/{totalAccounts} tài khoản</StatusBadge>}
+        />
 
-          <div>
+        <SectionToolbar>
 
-            <h2 className="text-lg font-semibold text-[color:var(--ds-text-primary)]">Danh sách tài khoản</h2>
-
-            <p className="text-sm text-[color:var(--ds-text-secondary)]">Theo dõi quyền truy cập và trạng thái gắn nhân viên.</p>
-
-          </div>
-
-          <StatusBadge tone="info">{visibleAccounts}/{totalAccounts} tài khoản</StatusBadge>
-
-        </header>
-
-        <div className="flex flex-wrap items-center gap-3">
-
-          <input
-
-            type="search"
-
+          <SearchField
+            label="Tìm tài khoản"
+            hideLabel
             value={searchTerm}
-
             onChange={(event) => setSearchTerm(event.target.value)}
-
+            onClear={hasSearch ? () => setSearchTerm("") : undefined}
             placeholder="Tìm nhanh theo tài khoản, họ tên, vai trò hoặc quyền…"
-
-            className={`min-w-[220px] flex-1 ${CONTROL_CLASS}`}
-
+            className="min-w-[220px] flex-1"
           />
 
-          {hasSearch && (
-
-            <button
-
-              type="button"
-
-              onClick={() => setSearchTerm("")}
-
-              className="rounded border border-[color:var(--ds-border-subtle)] px-3 py-1 text-xs text-[color:var(--ds-text-secondary)] hover:bg-[color:var(--ds-surface-muted)]"
-
-            >
-
-              Xóa tìm kiếm
-
-            </button>
-
-          )}
-
-        </div>
+        </SectionToolbar>
 
         <DataTable
 
@@ -2245,15 +2202,21 @@ export default function AccountManager({ currentUser }) {
 
           rowKey={(account) => account.username}
 
-          density="relaxed"
+          density="comfortable"
 
           zebra
+
+          stickyHeader
+
+          ariaLabel="Danh sách tài khoản KPI"
+
+          caption={`Danh sách ${visibleAccounts} trên ${totalAccounts} tài khoản sau khi lọc.`}
 
           emptyState={renderAccountsEmpty}
 
         />
 
-      </section>
+      </SectionSurface>
 
 
 

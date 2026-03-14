@@ -8,7 +8,7 @@ import { fetchNotificationHistory, subscribeNotificationStream } from '@/lib/not
 
 import useAsyncRequest from '@/hooks/useAsyncRequest.js';
 
-import { translateBackupFailure, translateBackupReason } from '@/shared/backupMessages.js';
+import { translateBackupFailure, translateBackupReason } from '../../packages/domain/src/backupMessages.js';
 
 
 

@@ -1,6 +1,19 @@
-import { getDeclRows } from '../../src/lib/store.js';
+import { buildReportingReadModels } from '../../server/reportingReadModels.js';
 
-import { filterDeclRows, normalizeDeclSearchFilters } from '../../src/shared/declSearch.js';
+import { resolveReportingRule } from '../../server/reportingRuleSelection.js';
+
+import {
+  deleteReportSchedule,
+  getDeclRows,
+  getKpiAdjustments,
+  getReportSchedules,
+  getTeamRoster,
+  saveReportSchedule,
+} from '../../src/lib/store.js';
+
+import { filterDeclRows, normalizeDeclSearchFilters } from '../../packages/domain/src/declSearch.js';
+
+import { loadRuleSets, loadRules } from '../../src/lib/rules.js';
 
 
 
@@ -86,7 +99,7 @@ export function createDefaultAccountsState() {
 
   ]);
 
-  return { accounts, passwords, currentUser: null, sessionToken: null };
+  return { accounts, passwords, currentUser: null };
 
 }
 
@@ -174,11 +187,256 @@ function normalizePermissions(permissions, role) {
 
 }
 
+function normalizeText(value) {
+
+  return typeof value === 'string' ? value.trim() : '';
+
+}
+
+function parseSearchParams(url) {
+
+  try {
+
+    return new URL(url, 'http://localhost').searchParams;
+
+  } catch {
+
+    return new URLSearchParams();
+
+  }
+
+}
+
+function buildReportingQuery(url) {
+
+  const params = parseSearchParams(url);
+
+  const requestedLimit = Number(params.get('limit'));
+
+  return {
+
+    from: normalizeText(params.get('from')),
+
+    to: normalizeText(params.get('to')),
+
+    ruleId: normalizeText(params.get('ruleId')),
+
+    limit:
+
+      Number.isFinite(requestedLimit) && requestedLimit > 0
+
+        ? Math.trunc(requestedLimit)
+
+        : undefined,
+
+  };
+
+}
+
+function resolveReportingRules(ruleId) {
+
+  const collection = loadRuleSets();
+
+  const selected = resolveReportingRule(collection, ruleId);
+
+  if (normalizeText(ruleId) && !selected) {
+
+    throw new Error('Không tìm thấy bộ quy tắc KPI cần xem báo cáo.');
+
+  }
+
+  return selected || loadRules();
+
+}
+
+function buildMockScheduleAggregateStatus() {
+
+  const datedRows = getDeclRows()
+    .map((row) => normalizeText(row?.date))
+    .filter(Boolean)
+    .sort();
+
+  if (!datedRows.length) {
+
+    return {
+
+      available: false,
+
+      generatedAt: '',
+
+      queryKey: '',
+
+      total: 0,
+
+      range: {
+
+        from: '',
+
+        to: '',
+
+      },
+
+    };
+
+  }
+
+  const lastDate = datedRows[datedRows.length - 1];
+
+  const match = /^(\d{4})-(\d{2})-\d{2}$/.exec(lastDate);
+
+  if (!match) {
+
+    return {
+
+      available: false,
+
+      generatedAt: '',
+
+      queryKey: '',
+
+      total: 0,
+
+      range: {
+
+        from: '',
+
+        to: '',
+
+      },
+
+    };
+
+  }
+
+  const year = Number(match[1]);
+
+  const monthIndex = Number(match[2]) - 1;
+
+  const lastDayOfMonth = new Date(Date.UTC(year, monthIndex + 1, 0)).getUTCDate();
+
+  const from = `${match[1]}-${match[2]}-01`;
+
+  const to = `${match[1]}-${match[2]}-${String(lastDayOfMonth).padStart(2, '0')}`;
+
+  return {
+
+    available: true,
+
+    generatedAt: `${to}T00:00:00.000Z`,
+
+    queryKey: `mock-default-${from}-${to}`,
+
+    total: 1,
+
+    range: {
+
+      from,
+
+      to,
+
+    },
+
+  };
+
+}
+
+function buildReportingViewPayload(url) {
+
+  const query = buildReportingQuery(url);
+
+  return buildReportingReadModels(getDeclRows(), {
+
+    roster: getTeamRoster(),
+
+    rules: resolveReportingRules(query.ruleId),
+
+    from: query.from,
+
+    to: query.to,
+
+    adjustments: getKpiAdjustments(),
+
+    limit: query.limit,
+
+  });
+
+}
+
+function createReportingViewHandler(slice, errorMessage = 'Không thể tải báo cáo KPI') {
+
+  return ({ url }) => {
+
+    try {
+
+      const reporting = buildReportingViewPayload(url);
+
+      return jsonResponse({ ok: true, data: slice ? reporting[slice] : reporting });
+
+    } catch (error) {
+
+      return jsonResponse({ ok: false, error: error?.message || errorMessage }, 400);
+
+    }
+
+  };
+
+}
+
 
 
 export function createDefaultHandlers(state) {
 
   return {
+
+    'GET /api/v4/reporting/view': createReportingViewHandler(),
+
+    'GET /api/v4/reporting/schedules': () => {
+
+      return jsonResponse({
+
+        ok: true,
+
+        data: {
+
+          total: getReportSchedules().length,
+
+          items: getReportSchedules(),
+
+          aggregateStatus: buildMockScheduleAggregateStatus(),
+
+        },
+
+      });
+
+    },
+    'POST /api/v4/reporting/schedules': ({ init }) => {
+      const body = safeParse(init?.body, {});
+      const saved = saveReportSchedule(body, { actor: 'mock-api' });
+
+      return jsonResponse({
+        ok: true,
+        data: {
+          item: saved,
+          total: getReportSchedules().length,
+        },
+      });
+    },
+    'DELETE /api/v4/reporting/schedules/:id': ({ url }) => {
+      const scheduleId = normalisePath(url).split('/').filter(Boolean).pop() || '';
+      const deleted = deleteReportSchedule(scheduleId, { actor: 'mock-api' });
+
+      if (!deleted) {
+        return jsonResponse({ ok: false, error: 'Không tìm thấy lịch báo cáo KPI' }, 404);
+      }
+
+      return jsonResponse({
+        ok: true,
+        data: {
+          deleted: true,
+          total: getReportSchedules().length,
+        },
+      });
+    },
 
     'GET /api/import/search': ({ url }) => {
 
@@ -322,19 +580,15 @@ export function createDefaultHandlers(state) {
 
       state.currentUser = account;
 
-      state.sessionToken = `mock-token-${account.username}-${Date.now()}`;
-
-      return jsonResponse({ ok: true, user: account, token: state.sessionToken });
+      return jsonResponse({ ok: true, user: account });
 
     },
 
-    'GET /api/auth/session': () => jsonResponse({ ok: true, user: state.currentUser, token: state.sessionToken }),
+    'GET /api/auth/session': () => jsonResponse({ ok: true, user: state.currentUser }),
 
     'POST /api/auth/logout': () => {
 
       state.currentUser = null;
-
-      state.sessionToken = null;
 
       return jsonResponse({ ok: true });
 

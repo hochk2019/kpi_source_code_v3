@@ -10,9 +10,13 @@ import Login from '@/components/Login.jsx';
 
 import KPICalculator from '@/components/KPICalculator.jsx';
 
-import { getViewerAuth, login } from '@/auth/localAuth.js';
+import { fetchWithAuth, getViewerAuth, login } from '@/auth/localAuth.js';
 
 import { installMockApi } from './helpers/mockApi.js';
+
+
+
+let fetchMock;
 
 
 
@@ -20,13 +24,19 @@ beforeEach(() => {
 
   cleanup();
 
-  installMockApi();
+  window.localStorage?.clear?.();
+
+  fetchMock = installMockApi();
 
 });
 
 
 
 afterEach(() => {
+
+  window.localStorage?.clear?.();
+
+  cleanup();
 
   vi.unstubAllGlobals();
 
@@ -35,6 +45,32 @@ afterEach(() => {
 
 
 describe('Login component', () => {
+
+  it('không gắn bearer token legacy vào request và vẫn gửi cookie session', async () => {
+
+    window.localStorage?.setItem?.('kpi_session_token', 'legacy-token');
+
+    await fetchWithAuth('/api/auth/session');
+
+    const [, init] = fetchMock.mock.calls.at(-1);
+    const headers = new Headers(init?.headers);
+
+    expect(headers.get('Authorization')).toBeNull();
+    expect(init?.credentials).toBe('include');
+    expect(window.localStorage?.getItem?.('kpi_session_token')).toBeNull();
+
+  });
+
+  it('đăng nhập thành công mà không lưu bearer token legacy', async () => {
+
+    window.localStorage?.setItem?.('kpi_session_token', 'legacy-token');
+
+    const result = await login('admin', 'admin123');
+
+    expect(result.ok).toBe(true);
+    expect(window.localStorage?.getItem?.('kpi_session_token')).toBeNull();
+
+  });
 
   it('đăng nhập thành công và gọi callback', async () => {
 

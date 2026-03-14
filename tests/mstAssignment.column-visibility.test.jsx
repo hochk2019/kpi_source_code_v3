@@ -184,4 +184,18 @@ describe("MSTAssignment – cấu hình hiển thị cột", () => {
     thirdMount.unmount();
     vi.runOnlyPendingTimers();
   });
+
+  it("exposes shell search and table semantics for operator navigation", () => {
+    render(<MSTAssignment canEdit={false} currentUser={{ username: "alice" }} />);
+
+    expect(
+      screen.getByRole("searchbox", { name: /tìm nhanh mst hoặc công ty/i })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("combobox", { name: /lọc theo nhân viên phụ trách/i })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("table", { name: /danh sách gán mst/i })
+    ).toBeInTheDocument();
+  });
 });

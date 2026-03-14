@@ -2,7 +2,7 @@
 
 Ngày kiểm tra: 2025-10-10
 
-Trong phiên kiểm tra này, chúng tôi đã đăng nhập bằng tài khoản quản trị (`admin/admin123`), duyệt qua các màn hình chính và ghi nhận ảnh chụp để minh họa các thay đổi đã triển khai trong lộ trình cải tiến.
+Trong phiên kiểm tra này, chúng tôi đã đăng nhập bằng tài khoản quản trị bootstrap của môi trường kiểm thử, duyệt qua các màn hình chính và ghi nhận ảnh chụp để minh họa các thay đổi đã triển khai trong lộ trình cải tiến.
 
 ## Danh sách màn hình đã chụp
 

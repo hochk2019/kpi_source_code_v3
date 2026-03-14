@@ -9,3 +9,4 @@ server/data/kpi-rules.json
 server/data/rules-history/
 .env
 test-results/
+.codex_tmp/

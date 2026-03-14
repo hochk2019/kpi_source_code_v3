@@ -11,12 +11,25 @@ import { Buffer } from 'node:buffer';
 import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest';
 
 import request from 'supertest';
+import { installTestBootstrapAuthEnv } from './helpers/bootstrapAuth.js';
 
 import { AUDIT_KEY, saveDeclRows, markDeclRowsReviewed, updateDeclRowFields, getAuditLogs } from '../src/lib/store.js';
 
 import { clearStorageCache, setItem } from '../src/lib/storageClient.js';
 
 import { resetSqlMonitor, getSqlTimeoutEvents } from '../server/sqlMonitor.js';
+import {
+  writeAdjustmentRowsSnapshot,
+  readAdjustmentRowsSnapshot,
+  readDeclarationRowsSnapshot,
+  readMstAssignmentRowsSnapshot,
+  readRuleCollectionSnapshot,
+  writeDeclarationRowsSnapshot,
+  writeMstAssignmentRowsSnapshot,
+  writeRuleCollectionSnapshot,
+} from '../server/businessSnapshotSqlite.js';
+import { readTeamRosterSnapshot, writeTeamRosterSnapshot } from '../server/teamRosterSqlite.js';
+import { writeReportingProjectionValue } from '../server/reportingProjectionSqlite.js';
 
 
 
@@ -31,6 +44,8 @@ process.env.KPI_DISABLE_CRON = '1';
 process.env.KPI_SKIP_LISTEN = '1';
 
 process.env.ECUS_SQL_SERVER = 'MOCK-SERVER';
+
+installTestBootstrapAuthEnv(process.env);
 
 
 
@@ -75,7 +90,6 @@ class FakeStatement {
 
 
   run(...params) {
-
     if (this.sql.includes('INSERT INTO export_audit')) {
 
       const payload = params[0] && typeof params[0] === 'object' ? params[0] : {};
@@ -138,11 +152,388 @@ class FakeStatement {
 
     }
 
+    if (this.sql.includes('INSERT INTO reporting_projections')) {
+
+      const [
+        projectionKey,
+        projectionType,
+        scopeKey,
+        rangeFrom,
+        rangeTo,
+        queryKey,
+        entryCount,
+        payload,
+        updatedAt,
+      ] = params;
+
+      this.database.reportingProjections.set(String(projectionKey), {
+
+        projection_key: String(projectionKey),
+
+        projection_type: String(projectionType),
+
+        scope_key: String(scopeKey ?? ''),
+
+        range_from: String(rangeFrom ?? ''),
+
+        range_to: String(rangeTo ?? ''),
+
+        query_key: String(queryKey ?? ''),
+
+        entry_count: Number(entryCount ?? 0),
+
+        payload: String(payload),
+
+        updated_at: String(updatedAt),
+
+      });
+
+      return { changes: 1 };
+
+    }
+
+    if (this.sql.includes('INSERT INTO business_snapshot_state')) {
+
+      const [domainKey, snapshotKey, version, rowCount, payload, updatedAt] = params;
+      const compositeKey = `${String(domainKey)}::${String(snapshotKey)}`;
+
+      this.database.businessSnapshotState.set(compositeKey, {
+
+        domain_key: String(domainKey),
+
+        snapshot_key: String(snapshotKey),
+
+        version: Number(version ?? 1),
+
+        row_count: Number(rowCount ?? 0),
+
+        payload: payload === null || payload === undefined ? null : String(payload),
+
+        updated_at: String(updatedAt ?? ''),
+
+      });
+
+      return { changes: 1 };
+
+    }
+
+    if (this.sql.includes('INSERT INTO declaration_snapshot_rows')) {
+
+      const [snapshotKey, sortOrder, declarationKey, soTk, soTkFull, branch, mst, registeredAt, payload] = params;
+      const compositeKey = `${String(snapshotKey)}::${Number(sortOrder ?? 0)}`;
+
+      this.database.declarationSnapshotRows.set(compositeKey, {
+
+        snapshot_key: String(snapshotKey),
+
+        sort_order: Number(sortOrder ?? 0),
+
+        declaration_key: String(declarationKey ?? ''),
+
+        so_tk: String(soTk ?? ''),
+
+        so_tk_full: String(soTkFull ?? ''),
+
+        branch: String(branch ?? ''),
+
+        mst: String(mst ?? ''),
+
+        registered_at: String(registeredAt ?? ''),
+
+        payload: String(payload ?? ''),
+
+      });
+
+      return { changes: 1 };
+
+    }
+
+    if (this.sql.includes('INSERT INTO mst_assignment_snapshot_rows')) {
+
+      const [snapshotKey, sortOrder, mst, company, personImport, personExport, team, effectiveFrom, effectiveTo, payload] = params;
+      const compositeKey = `${String(snapshotKey)}::${Number(sortOrder ?? 0)}`;
+
+      this.database.mstAssignmentSnapshotRows.set(compositeKey, {
+
+        snapshot_key: String(snapshotKey),
+
+        sort_order: Number(sortOrder ?? 0),
+
+        mst: String(mst ?? ''),
+
+        company: String(company ?? ''),
+
+        person_import: String(personImport ?? ''),
+
+        person_export: String(personExport ?? ''),
+
+        team: String(team ?? ''),
+
+        effective_from: String(effectiveFrom ?? ''),
+
+        effective_to: String(effectiveTo ?? ''),
+
+        payload: String(payload ?? ''),
+
+      });
+
+      return { changes: 1 };
+
+    }
+
+    if (this.sql.includes('INSERT INTO adjustment_snapshot_rows')) {
+
+      const [snapshotKey, sortOrder, adjustmentId, month, category, staffName, teamName, status, totalPoints, payload] = params;
+      const compositeKey = `${String(snapshotKey)}::${Number(sortOrder ?? 0)}`;
+
+      this.database.adjustmentSnapshotRows.set(compositeKey, {
+
+        snapshot_key: String(snapshotKey),
+
+        sort_order: Number(sortOrder ?? 0),
+
+        adjustment_id: String(adjustmentId ?? ''),
+
+        month: String(month ?? ''),
+
+        category: String(category ?? ''),
+
+        staff_name: String(staffName ?? ''),
+
+        team_name: String(teamName ?? ''),
+
+        status: String(status ?? ''),
+
+        total_points: Number(totalPoints ?? 0),
+
+        payload: String(payload ?? ''),
+
+      });
+
+      return { changes: 1 };
+
+    }
+
+    if (this.sql.includes('INSERT INTO team_roster_state')) {
+
+      const [snapshotKey, version, teamCount, memberCount, updatedAt] = params;
+
+      this.database.teamRosterState.set(String(snapshotKey), {
+
+        snapshot_key: String(snapshotKey),
+
+        version: Number(version),
+
+        team_count: Number(teamCount),
+
+        member_count: Number(memberCount),
+
+        updated_at: String(updatedAt),
+
+      });
+
+      return { changes: 1 };
+
+    }
+
+    if (this.sql.includes('INSERT INTO teams')) {
+
+      const [id, snapshotKey, legacyTeamId, name, sortOrder, active, updatedAt] = params;
+
+      this.database.teams.set(String(id), {
+
+        id: String(id),
+
+        snapshot_key: String(snapshotKey),
+
+        legacy_team_id: String(legacyTeamId ?? ''),
+
+        name: String(name ?? ''),
+
+        sort_order: Number(sortOrder ?? 0),
+
+        active: Number(active ?? 0),
+
+        updated_at: String(updatedAt ?? ''),
+
+      });
+
+      return { changes: 1 };
+
+    }
+
+    if (this.sql.includes('INSERT INTO team_members')) {
+
+      const [id, teamId, snapshotKey, legacyMemberId, fullName, notes, sortOrder, active, updatedAt] = params;
+
+      this.database.teamMembers.set(String(id), {
+
+        id: String(id),
+
+        team_id: String(teamId),
+
+        snapshot_key: String(snapshotKey),
+
+        legacy_member_id: String(legacyMemberId ?? ''),
+
+        full_name: String(fullName ?? ''),
+
+        notes: String(notes ?? ''),
+
+        sort_order: Number(sortOrder ?? 0),
+
+        active: Number(active ?? 0),
+
+        updated_at: String(updatedAt ?? ''),
+
+      });
+
+      return { changes: 1 };
+
+    }
+
     if (this.sql.includes('DELETE FROM kv_store')) {
 
       const [key] = params;
 
       const deleted = this.database.store.delete(String(key));
+
+      return { changes: deleted ? 1 : 0 };
+
+    }
+
+    if (this.sql.includes('DELETE FROM declaration_snapshot_rows WHERE snapshot_key')) {
+
+      const [snapshotKey] = params;
+      let changes = 0;
+
+      for (const [id, row] of Array.from(this.database.declarationSnapshotRows.entries())) {
+
+        if (row.snapshot_key === String(snapshotKey)) {
+
+          this.database.declarationSnapshotRows.delete(id);
+
+          changes += 1;
+
+        }
+
+      }
+
+      return { changes };
+
+    }
+
+    if (this.sql.includes('DELETE FROM mst_assignment_snapshot_rows WHERE snapshot_key')) {
+
+      const [snapshotKey] = params;
+      let changes = 0;
+
+      for (const [id, row] of Array.from(this.database.mstAssignmentSnapshotRows.entries())) {
+
+        if (row.snapshot_key === String(snapshotKey)) {
+
+          this.database.mstAssignmentSnapshotRows.delete(id);
+
+          changes += 1;
+
+        }
+
+      }
+
+      return { changes };
+
+    }
+
+    if (this.sql.includes('DELETE FROM adjustment_snapshot_rows WHERE snapshot_key')) {
+
+      const [snapshotKey] = params;
+      let changes = 0;
+
+      for (const [id, row] of Array.from(this.database.adjustmentSnapshotRows.entries())) {
+
+        if (row.snapshot_key === String(snapshotKey)) {
+
+          this.database.adjustmentSnapshotRows.delete(id);
+
+          changes += 1;
+
+        }
+
+      }
+
+      return { changes };
+
+    }
+
+    if (this.sql.includes('DELETE FROM business_snapshot_state WHERE domain_key')) {
+
+      const [domainKey, snapshotKey] = params;
+      const compositeKey = `${String(domainKey)}::${String(snapshotKey)}`;
+      const deleted = this.database.businessSnapshotState.delete(compositeKey);
+
+      return { changes: deleted ? 1 : 0 };
+
+    }
+
+    if (this.sql.includes('DELETE FROM team_members WHERE snapshot_key')) {
+
+      const [snapshotKey] = params;
+
+      let changes = 0;
+
+      for (const [id, row] of Array.from(this.database.teamMembers.entries())) {
+
+        if (row.snapshot_key === String(snapshotKey)) {
+
+          this.database.teamMembers.delete(id);
+
+          changes += 1;
+
+        }
+
+      }
+
+      return { changes };
+
+    }
+
+    if (this.sql.includes('DELETE FROM teams WHERE snapshot_key')) {
+
+      const [snapshotKey] = params;
+
+      let changes = 0;
+
+      for (const [id, row] of Array.from(this.database.teams.entries())) {
+
+        if (row.snapshot_key === String(snapshotKey)) {
+
+          this.database.teams.delete(id);
+
+          changes += 1;
+
+        }
+
+      }
+
+      return { changes };
+
+    }
+
+    if (this.sql.includes('DELETE FROM team_roster_state WHERE snapshot_key')) {
+
+      const [snapshotKey] = params;
+
+      const deleted = this.database.teamRosterState.delete(String(snapshotKey));
+
+      return { changes: deleted ? 1 : 0 };
+
+    }
+
+    if (this.sql.includes('DELETE FROM reporting_projections')) {
+
+      const [projectionKey] = params;
+
+      const deleted = this.database.reportingProjections.delete(String(projectionKey));
 
       return { changes: deleted ? 1 : 0 };
 
@@ -332,6 +723,56 @@ class FakeStatement {
 
     }
 
+    if (this.sql.includes('SELECT version FROM team_roster_state WHERE snapshot_key = ?')) {
+
+      const [snapshotKey] = params;
+
+      const row = this.database.teamRosterState.get(String(snapshotKey));
+
+      return row ? { version: row.version } : undefined;
+
+    }
+
+    if (this.sql.includes('FROM business_snapshot_state') && this.sql.includes('WHERE domain_key = ? AND snapshot_key = ?')) {
+
+      const [domainKey, snapshotKey] = params;
+      const compositeKey = `${String(domainKey)}::${String(snapshotKey)}`;
+      const row = this.database.businessSnapshotState.get(compositeKey);
+
+      return row ? { ...row } : undefined;
+
+    }
+
+    if (this.sql.includes('SELECT payload FROM reporting_projections WHERE projection_key = ?')) {
+
+      const [projectionKey] = params;
+
+      const row = this.database.reportingProjections.get(String(projectionKey));
+
+      if (!row) {
+
+        return undefined;
+
+      }
+
+      return { payload: row.payload };
+
+    }
+
+    if (this.sql.includes("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?")) {
+
+      const [tableName] = params;
+
+      if (String(tableName) === 'reporting_projections') {
+
+        return { name: 'reporting_projections' };
+
+      }
+
+      return undefined;
+
+    }
+
     if (this.sql.includes('SELECT token, username, created_at, expires_at FROM auth_sessions WHERE token = ?')) {
 
       const [token] = params;
@@ -358,6 +799,18 @@ class FakeStatement {
 
     }
 
+    if (this.sql.includes('SELECT COUNT(*) AS total FROM teams')) {
+
+      return { total: this.database.teams.size };
+
+    }
+
+    if (this.sql.includes('SELECT COUNT(*) AS total FROM team_members')) {
+
+      return { total: this.database.teamMembers.size };
+
+    }
+
     return undefined;
 
   }
@@ -365,6 +818,22 @@ class FakeStatement {
 
 
   all() {
+
+    if (this.sql.includes('PRAGMA table_info(reporting_projections)')) {
+
+      return [
+        { name: 'projection_key' },
+        { name: 'projection_type' },
+        { name: 'scope_key' },
+        { name: 'range_from' },
+        { name: 'range_to' },
+        { name: 'query_key' },
+        { name: 'entry_count' },
+        { name: 'payload' },
+        { name: 'updated_at' },
+      ];
+
+    }
 
     if (this.sql.includes('SELECT key FROM kv_store') && !this.sql.includes('value')) {
 
@@ -375,6 +844,18 @@ class FakeStatement {
     if (this.sql.includes('SELECT key, value FROM kv_store')) {
 
       return Array.from(this.database.store.entries()).map(([key, value]) => ({ key, value }));
+
+    }
+
+    if (this.sql.includes('SELECT projection_key, payload FROM reporting_projections')) {
+
+      return Array.from(this.database.reportingProjections.values()).map((row) => ({
+
+        projection_key: row.projection_key,
+
+        payload: row.payload,
+
+      }));
 
     }
 
@@ -393,6 +874,49 @@ class FakeStatement {
     if (this.sql.includes('SELECT token FROM auth_sessions')) {
 
       return Array.from(this.database.sessions.keys()).map((token) => ({ token }));
+
+    }
+
+    if (this.sql.includes('FROM teams')) {
+
+      if (this.sql.includes('WHERE snapshot_key = ? AND active = 1')) {
+
+        const [snapshotKey] = arguments;
+
+        return Array.from(this.database.teams.values())
+          .filter((row) => row.snapshot_key === String(snapshotKey) && row.active === 1)
+          .sort((left, right) => left.sort_order - right.sort_order || left.name.localeCompare(right.name))
+          .map((row) => ({ ...row }));
+
+      }
+
+      return Array.from(this.database.teams.values())
+        .sort((left, right) => left.sort_order - right.sort_order || left.name.localeCompare(right.name))
+        .map((row) => ({ ...row }));
+
+    }
+
+    if (this.sql.includes('FROM team_members')) {
+
+      if (this.sql.includes('WHERE snapshot_key = ? AND active = 1')) {
+
+        const [snapshotKey] = arguments;
+
+        return Array.from(this.database.teamMembers.values())
+          .filter((row) => row.snapshot_key === String(snapshotKey) && row.active === 1)
+          .sort(
+            (left, right) =>
+              left.team_id.localeCompare(right.team_id) ||
+              left.sort_order - right.sort_order ||
+              left.full_name.localeCompare(right.full_name)
+          )
+          .map((row) => ({ ...row }));
+
+      }
+
+      return Array.from(this.database.teamMembers.values())
+        .sort((left, right) => left.sort_order - right.sort_order || left.full_name.localeCompare(right.full_name))
+        .map((row) => ({ ...row }));
 
     }
 
@@ -478,6 +1002,39 @@ class FakeStatement {
 
     }
 
+    if (this.sql.includes('FROM declaration_snapshot_rows')) {
+
+      const [snapshotKey] = arguments;
+
+      return Array.from(this.database.declarationSnapshotRows.values())
+        .filter((row) => row.snapshot_key === String(snapshotKey))
+        .sort((left, right) => left.sort_order - right.sort_order)
+        .map((row) => ({ payload: row.payload }));
+
+    }
+
+    if (this.sql.includes('FROM mst_assignment_snapshot_rows')) {
+
+      const [snapshotKey] = arguments;
+
+      return Array.from(this.database.mstAssignmentSnapshotRows.values())
+        .filter((row) => row.snapshot_key === String(snapshotKey))
+        .sort((left, right) => left.sort_order - right.sort_order)
+        .map((row) => ({ payload: row.payload }));
+
+    }
+
+    if (this.sql.includes('FROM adjustment_snapshot_rows')) {
+
+      const [snapshotKey] = arguments;
+
+      return Array.from(this.database.adjustmentSnapshotRows.values())
+        .filter((row) => row.snapshot_key === String(snapshotKey))
+        .sort((left, right) => left.sort_order - right.sort_order)
+        .map((row) => ({ payload: row.payload }));
+
+    }
+
     return [];
 
   }
@@ -491,6 +1048,18 @@ class FakeDatabase {
   constructor() {
 
     this.store = new Map();
+
+    this.businessSnapshotState = new Map();
+    this.declarationSnapshotRows = new Map();
+    this.mstAssignmentSnapshotRows = new Map();
+    this.adjustmentSnapshotRows = new Map();
+    this.reportingProjections = new Map();
+
+    this.teamRosterState = new Map();
+
+    this.teams = new Map();
+
+    this.teamMembers = new Map();
 
     this.sessions = new Map();
 
@@ -511,6 +1080,54 @@ class FakeDatabase {
     if (sql.includes('DELETE FROM kv_store')) {
 
       this.store.clear();
+
+    }
+
+    if (sql.includes('DELETE FROM declaration_snapshot_rows')) {
+
+      this.declarationSnapshotRows.clear();
+
+    }
+
+    if (sql.includes('DELETE FROM mst_assignment_snapshot_rows')) {
+
+      this.mstAssignmentSnapshotRows.clear();
+
+    }
+
+    if (sql.includes('DELETE FROM adjustment_snapshot_rows')) {
+
+      this.adjustmentSnapshotRows.clear();
+
+    }
+
+    if (sql.includes('DELETE FROM business_snapshot_state')) {
+
+      this.businessSnapshotState.clear();
+
+    }
+
+    if (sql.includes('DELETE FROM reporting_projections')) {
+
+      this.reportingProjections.clear();
+
+    }
+
+    if (sql.includes('DELETE FROM team_members')) {
+
+      this.teamMembers.clear();
+
+    }
+
+    if (sql.includes('DELETE FROM teams')) {
+
+      this.teams.clear();
+
+    }
+
+    if (sql.includes('DELETE FROM team_roster_state')) {
+
+      this.teamRosterState.clear();
 
     }
 
@@ -551,6 +1168,18 @@ class FakeDatabase {
   close() {
 
     this.store.clear();
+
+    this.businessSnapshotState.clear();
+    this.declarationSnapshotRows.clear();
+    this.mstAssignmentSnapshotRows.clear();
+    this.adjustmentSnapshotRows.clear();
+    this.reportingProjections.clear();
+
+    this.teamRosterState.clear();
+
+    this.teams.clear();
+
+    this.teamMembers.clear();
 
     this.sessions.clear();
 
@@ -1231,8 +1860,473 @@ beforeAll(async () => {
 });
 
 
+function upsertKvValue(key, value) {
 
-describe('API xác thực & bootstrap', () => {
+  getDb()
+
+    .prepare('INSERT INTO kv_store (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value')
+
+    .run(key, JSON.stringify(value));
+
+  const database = getDb();
+
+  if (!database) {
+
+    return;
+
+  }
+
+  if (key === 'decl_rows_v1') {
+
+    writeDeclarationRowsSnapshot(database, value, { updatedAt: '2026-03-12T00:00:00.000Z' });
+
+    return;
+
+  }
+
+  if (key === 'mst_rows_v2') {
+
+    writeMstAssignmentRowsSnapshot(database, value, { updatedAt: '2026-03-12T00:00:00.000Z' });
+
+    return;
+
+  }
+
+  if (key === 'kpi_rules_v2') {
+
+    writeRuleCollectionSnapshot(database, value, { updatedAt: '2026-03-12T00:00:00.000Z' });
+
+    return;
+
+  }
+
+  if (key === 'kpi_adjustments_v1') {
+
+    writeAdjustmentRowsSnapshot(database, value, { updatedAt: '2026-03-12T00:00:00.000Z' });
+
+    return;
+
+  }
+
+  if (key === 'team_roster_v1') {
+
+    writeTeamRosterSnapshot(database, value, { updatedAt: '2026-03-12T00:00:00.000Z' });
+
+    return;
+
+  }
+
+  if (
+    key === 'kpi_report_schedule_v1' ||
+    key === 'kpi_reporting_monthly_aggregates_v1' ||
+    key === 'kpi_reporting_monthly_aggregates_default_v1'
+  ) {
+
+    writeReportingProjectionValue(database, key, value, { updatedAt: '2026-03-12T00:00:00.000Z' });
+
+  }
+
+}
+
+
+
+function createReportingSeed() {
+
+  return {
+
+    decl_rows_v1: [
+
+      {
+
+        date: '2026-02-14',
+
+        so_tk: 'TK1',
+
+        loai_hinh: 'A11',
+
+        nhan_vien: 'Lan',
+
+        team: 'Blue Team',
+
+        num_items: 1,
+
+      },
+
+      {
+
+        date: '2026-02-15',
+
+        so_tk: 'TK2',
+
+        loai_hinh: 'A11',
+
+        nhan_vien: 'Lan',
+
+        team: 'Blue Team',
+
+        num_items: 2,
+
+      },
+
+    ],
+
+    team_roster_v1: {
+
+      version: 1,
+
+      teams: [
+
+        {
+
+          name: 'Blue Team',
+
+          members: [{ name: 'Lan' }],
+
+        },
+
+      ],
+
+    },
+
+    kpi_rules_v2: {
+
+      id: 'legacy-kpi',
+
+      name: 'Legacy KPI',
+
+      description: 'Rule set imported from legacy storage',
+
+      groups: {
+
+        group1: {
+
+          key: 'group1',
+
+          title: 'NhÃƒÆ’Ã‚Â³m 1',
+
+          description: 'Legacy group',
+
+          codes: ['A11'],
+
+          base: 0.5,
+
+          perItem: 0.2,
+
+          tierMode: 'per_item',
+
+          tiers: [],
+
+        },
+
+      },
+
+      license: {
+
+        defaultPoints: 0,
+
+        codePoints: [],
+
+        exclude: {
+
+          codes: [],
+
+          agencies: [],
+
+        },
+
+      },
+
+      bonuses: {
+
+        co: {
+
+          enabled: false,
+
+          label: 'C/O',
+
+          points: 0,
+
+          perLine: 0,
+
+        },
+
+      },
+
+    },
+
+    kpi_report_schedule_v1: [
+
+      {
+
+        id: 'weekly-blue',
+
+        name: 'Weekly Blue',
+
+        frequency: 'weekly',
+
+        dayOfWeek: 1,
+
+        time: '08:30',
+
+        formats: ['pdf', 'excel', 'pdf'],
+
+        recipients: ['ops@example.com', '', 'lead@example.com'],
+
+        active: true,
+
+        lastRun: '2026-03-02T01:30:00.000Z',
+
+      },
+
+      {
+
+        id: 'monthly-finance',
+
+        name: 'Monthly Finance',
+
+        frequency: 'monthly',
+
+        dayOfMonth: 20,
+
+        time: '09:15',
+
+        formats: ['pdf'],
+
+        recipients: ['finance@example.com'],
+
+        active: false,
+
+        lastRun: '2026-02-20T02:15:00.000Z',
+
+      },
+
+    ],
+
+  };
+
+}
+
+
+
+function createReportingAggregateSeed() {
+
+  const seed = createReportingSeed();
+
+  seed.decl_rows_v1 = [
+
+    {
+
+      date: '2026-01-10',
+
+      so_tk: 'TK0',
+
+      loai_hinh: 'A11',
+
+      nhan_vien: 'Lan',
+
+      team: 'Blue Team',
+
+      num_items: 1,
+
+    },
+
+    ...seed.decl_rows_v1,
+
+  ];
+
+  return seed;
+
+}
+
+
+
+function createMonthlyAggregateQueryKey(query = {}) {
+
+  return JSON.stringify({
+
+    from: typeof query.from === 'string' ? query.from.trim() : '',
+
+    to: typeof query.to === 'string' ? query.to.trim() : '',
+
+    limit: Number.isFinite(query.limit) && query.limit > 0 ? Math.trunc(query.limit) : 0,
+
+  });
+
+}
+
+
+
+function createStoredMonthlyAggregateSnapshot() {
+
+  return {
+
+    range: {
+
+      from: '2026-01-01',
+
+      to: '2026-02-28',
+
+    },
+
+    ruleSet: {
+
+      id: 'legacy-kpi',
+
+      name: 'Legacy KPI',
+
+    },
+
+    generatedAt: '2026-03-09T09:00:00.000Z',
+
+    total: 2,
+
+    items: [
+
+      {
+
+        period: '2026-02',
+
+        label: '02/2026',
+
+        range: {
+
+          from: '2026-02-01',
+
+          to: '2026-02-28',
+
+        },
+
+        summary: {
+
+          decls: 2,
+
+          import: 0,
+
+          export: 0,
+
+          items: 3,
+
+          licenses: 0,
+
+          kpi: 1.6,
+
+          co: 0,
+
+          coLines: 0,
+
+          companyCount: 0,
+
+          licenseSummary: 'ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â',
+
+          adjustmentTotals: {},
+
+          licenseCodes: [],
+
+          licenseCount: 0,
+
+        },
+
+        topTeams: [],
+
+        topStaff: [],
+
+      },
+
+      {
+
+        period: '2026-01',
+
+        label: '01/2026',
+
+        range: {
+
+          from: '2026-01-01',
+
+          to: '2026-01-31',
+
+        },
+
+        summary: {
+
+          decls: 1,
+
+          import: 0,
+
+          export: 0,
+
+          items: 1,
+
+          licenses: 0,
+
+          kpi: 0.7,
+
+          co: 0,
+
+          coLines: 0,
+
+          companyCount: 0,
+
+          licenseSummary: 'ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â',
+
+          adjustmentTotals: {},
+
+          licenseCodes: [],
+
+          licenseCount: 0,
+
+        },
+
+        topTeams: [],
+
+        topStaff: [],
+
+      },
+
+    ],
+
+    cache: {
+
+      queryKey: createMonthlyAggregateQueryKey({ from: '2026-01-01', to: '2026-02-28' }),
+
+      reused: false,
+
+    },
+
+  };
+
+}
+
+
+
+function seedReportingReadModelData() {
+
+  const seed = createReportingSeed();
+
+  for (const [key, value] of Object.entries(seed)) {
+
+    upsertKvValue(key, value);
+
+  }
+
+}
+
+
+
+function seedReportingAggregateData() {
+
+  const seed = createReportingAggregateSeed();
+
+  for (const [key, value] of Object.entries(seed)) {
+
+    upsertKvValue(key, value);
+
+  }
+
+}
+
+
+
+describe('API xÃƒÆ’Ã‚Â¡c thÃƒÂ¡Ã‚Â»Ã‚Â±c & bootstrap', () => {
 
   beforeEach(() => {
 
@@ -1242,9 +2336,27 @@ describe('API xác thực & bootstrap', () => {
 
 
 
-  it('bootstrap trả về tài khoản đã khử mật khẩu và có cấu hình HQ mặc định', async () => {
+  it('tÃƒÂ¡Ã‚Â»Ã‚Â« chÃƒÂ¡Ã‚Â»Ã¢â‚¬Ëœi bootstrap khi chÃƒâ€ Ã‚Â°a Ãƒâ€žÃ¢â‚¬ËœÃƒâ€žÃ†â€™ng nhÃƒÂ¡Ã‚ÂºÃ‚Â­p', async () => {
 
     const response = await request(app).get('/api/bootstrap');
+
+    expect(response.status).toBe(401);
+
+    expect(response.body?.ok).toBe(false);
+
+  });
+
+
+
+  it('bootstrap trÃƒÂ¡Ã‚ÂºÃ‚Â£ vÃƒÂ¡Ã‚Â»Ã‚Â tÃƒÆ’Ã‚Â i khoÃƒÂ¡Ã‚ÂºÃ‚Â£n Ãƒâ€žÃ¢â‚¬ËœÃƒÆ’Ã‚Â£ khÃƒÂ¡Ã‚Â»Ã‚Â­ mÃƒÂ¡Ã‚ÂºÃ‚Â­t khÃƒÂ¡Ã‚ÂºÃ‚Â©u vÃƒÆ’Ã‚Â  cÃƒÆ’Ã‚Â³ cÃƒÂ¡Ã‚ÂºÃ‚Â¥u hÃƒÆ’Ã‚Â¬nh HQ mÃƒÂ¡Ã‚ÂºÃ‚Â·c Ãƒâ€žÃ¢â‚¬ËœÃƒÂ¡Ã‚Â»Ã¢â‚¬Â¹nh', async () => {
+
+    const agent = request.agent(app);
+
+    const loginRes = await agent.post('/api/auth/login').send({ username: 'admin', password: 'admin123' });
+
+    expect(loginRes.status).toBe(200);
+
+    const response = await agent.get('/api/bootstrap');
 
     expect(response.status).toBe(200);
 
@@ -1320,9 +2432,9 @@ describe('API xác thực & bootstrap', () => {
 
 
 
-  it('ưu tiên dữ liệu tài khoản từ SQL Server khi đồng bộ bootstrap', async () => {
+  it('Ãƒâ€ Ã‚Â°u tiÃƒÆ’Ã‚Âªn dÃƒÂ¡Ã‚Â»Ã‚Â¯ liÃƒÂ¡Ã‚Â»Ã¢â‚¬Â¡u tÃƒÆ’Ã‚Â i khoÃƒÂ¡Ã‚ÂºÃ‚Â£n tÃƒÂ¡Ã‚Â»Ã‚Â« SQL Server khi Ãƒâ€žÃ¢â‚¬ËœÃƒÂ¡Ã‚Â»Ã¢â‚¬Å“ng bÃƒÂ¡Ã‚Â»Ã¢â€žÂ¢ bootstrap', async () => {
 
-    const updatedAt = new Date('2024-05-15T08:00:00Z');
+    const updatedAt = new Date('2099-05-15T08:00:00Z');
 
     sqlMock.__setMockResult([
 
@@ -1334,7 +2446,7 @@ describe('API xác thực & bootstrap', () => {
 
         role: 'manager',
 
-        name: 'Quản trị SQL',
+        name: 'QuÃƒÂ¡Ã‚ÂºÃ‚Â£n trÃƒÂ¡Ã‚Â»Ã¢â‚¬Â¹ SQL',
 
         permissions: JSON.stringify({
 
@@ -1358,7 +2470,13 @@ describe('API xác thực & bootstrap', () => {
 
 
 
-    const response = await request(app).get('/api/bootstrap');
+    const agent = request.agent(app);
+
+    const loginRes = await agent.post('/api/auth/login').send({ username: 'admin', password: 'AdminSql' });
+
+    expect(loginRes.status).toBe(200);
+
+    const response = await agent.get('/api/bootstrap');
 
     expect(response.status).toBe(200);
 
@@ -1374,7 +2492,7 @@ describe('API xác thực & bootstrap', () => {
 
     expect(admin?.role).toBe('manager');
 
-    expect(admin?.name).toBe('Quản trị SQL');
+    expect(admin?.name).toBe('QuÃƒÂ¡Ã‚ÂºÃ‚Â£n trÃƒÂ¡Ã‚Â»Ã¢â‚¬Â¹ SQL');
 
     expect(admin?.permissions?.mstEdit).toBe(true);
 
@@ -1400,13 +2518,13 @@ describe('API xác thực & bootstrap', () => {
 
     expect(storedAdmin?.passwordHash).toBe('$2a$AdminSql');
 
-    expect(storedAdmin?.updatedAt).toBe('2024-05-15T08:00:00.000Z');
+    expect(storedAdmin?.updatedAt).toBe('2099-05-15T08:00:00.000Z');
 
   });
 
 
 
-  it('cho phép đăng nhập bằng tài khoản mặc định', async () => {
+  it('cho phÃƒÆ’Ã‚Â©p Ãƒâ€žÃ¢â‚¬ËœÃƒâ€žÃ†â€™ng nhÃƒÂ¡Ã‚ÂºÃ‚Â­p bÃƒÂ¡Ã‚ÂºÃ‚Â±ng tÃƒÆ’Ã‚Â i khoÃƒÂ¡Ã‚ÂºÃ‚Â£n mÃƒÂ¡Ã‚ÂºÃ‚Â·c Ãƒâ€žÃ¢â‚¬ËœÃƒÂ¡Ã‚Â»Ã¢â‚¬Â¹nh', async () => {
 
     const response = await request(app).post('/api/auth/login').send({ username: 'admin', password: 'admin123' });
 
@@ -1418,7 +2536,9 @@ describe('API xác thực & bootstrap', () => {
 
     expect(response.body?.user).not.toHaveProperty('passwordHash');
 
-    expect(typeof response.body?.token).toBe('string');
+    expect(response.body).not.toHaveProperty('token');
+
+    expect(typeof response.body?.expiresAt).toBe('number');
 
     expect(response.headers['set-cookie']).toBeDefined();
 
@@ -1426,7 +2546,111 @@ describe('API xác thực & bootstrap', () => {
 
 
 
-  it('cho phép trưởng nhóm đăng nhập với mật khẩu mặc định và không có quyền quản lý tài khoản', async () => {
+  it('dùng mật khẩu bootstrap từ biến môi trường thay vì seed cứng', async () => {
+
+    const previousAlias = process.env.KPI_BOOTSTRAP_ADMIN_PASSWORD;
+
+    const previousGeneric = process.env.KPI_BOOTSTRAP_PASSWORD_ADMIN;
+
+    process.env.KPI_BOOTSTRAP_ADMIN_PASSWORD = 'AdminEnv#2026';
+
+    delete process.env.KPI_BOOTSTRAP_PASSWORD_ADMIN;
+
+    resetDb();
+
+    try {
+
+      const legacyResponse = await request(app).post('/api/auth/login').send({ username: 'admin', password: 'admin123' });
+
+      expect(legacyResponse.status).toBe(401);
+
+      const response = await request(app)
+
+        .post('/api/auth/login')
+
+        .send({ username: 'admin', password: 'AdminEnv#2026' });
+
+      expect(response.status).toBe(200);
+
+      expect(response.body?.user).toMatchObject({ username: 'admin', role: 'admin' });
+
+    } finally {
+
+      process.env.KPI_BOOTSTRAP_ADMIN_PASSWORD = previousAlias;
+
+      if (previousGeneric) {
+
+        process.env.KPI_BOOTSTRAP_PASSWORD_ADMIN = previousGeneric;
+
+      } else {
+
+        delete process.env.KPI_BOOTSTRAP_PASSWORD_ADMIN;
+
+      }
+
+      resetDb();
+
+    }
+
+  });
+
+
+
+  it('trả lỗi cấu hình rõ ràng khi DB rỗng và thiếu mật khẩu bootstrap admin', async () => {
+
+    const previousAlias = process.env.KPI_BOOTSTRAP_ADMIN_PASSWORD;
+
+    const previousGeneric = process.env.KPI_BOOTSTRAP_PASSWORD_ADMIN;
+
+    delete process.env.KPI_BOOTSTRAP_ADMIN_PASSWORD;
+
+    delete process.env.KPI_BOOTSTRAP_PASSWORD_ADMIN;
+
+    resetDb();
+
+    try {
+
+      const response = await request(app)
+
+        .post('/api/auth/login')
+
+        .send({ username: 'admin', password: 'whatever' });
+
+      expect(response.status).toBe(500);
+
+      expect(response.body?.error || '').toContain('KPI_BOOTSTRAP_ADMIN_PASSWORD');
+
+    } finally {
+
+      if (previousAlias) {
+
+        process.env.KPI_BOOTSTRAP_ADMIN_PASSWORD = previousAlias;
+
+      } else {
+
+        delete process.env.KPI_BOOTSTRAP_ADMIN_PASSWORD;
+
+      }
+
+      if (previousGeneric) {
+
+        process.env.KPI_BOOTSTRAP_PASSWORD_ADMIN = previousGeneric;
+
+      } else {
+
+        delete process.env.KPI_BOOTSTRAP_PASSWORD_ADMIN;
+
+      }
+
+      resetDb();
+
+    }
+
+  });
+
+
+
+  it('cho phÃƒÆ’Ã‚Â©p trÃƒâ€ Ã‚Â°ÃƒÂ¡Ã‚Â»Ã…Â¸ng nhÃƒÆ’Ã‚Â³m Ãƒâ€žÃ¢â‚¬ËœÃƒâ€žÃ†â€™ng nhÃƒÂ¡Ã‚ÂºÃ‚Â­p vÃƒÂ¡Ã‚Â»Ã¢â‚¬Âºi mÃƒÂ¡Ã‚ÂºÃ‚Â­t khÃƒÂ¡Ã‚ÂºÃ‚Â©u mÃƒÂ¡Ã‚ÂºÃ‚Â·c Ãƒâ€žÃ¢â‚¬ËœÃƒÂ¡Ã‚Â»Ã¢â‚¬Â¹nh vÃƒÆ’Ã‚Â  khÃƒÆ’Ã‚Â´ng cÃƒÆ’Ã‚Â³ quyÃƒÂ¡Ã‚Â»Ã‚Ân quÃƒÂ¡Ã‚ÂºÃ‚Â£n lÃƒÆ’Ã‚Â½ tÃƒÆ’Ã‚Â i khoÃƒÂ¡Ã‚ÂºÃ‚Â£n', async () => {
 
     const response = await request(app)
 
@@ -1446,7 +2670,7 @@ describe('API xác thực & bootstrap', () => {
 
 
 
-  it('duy trì phiên đăng nhập và cho phép đăng xuất', async () => {
+  it('duy trÃƒÆ’Ã‚Â¬ phiÃƒÆ’Ã‚Âªn Ãƒâ€žÃ¢â‚¬ËœÃƒâ€žÃ†â€™ng nhÃƒÂ¡Ã‚ÂºÃ‚Â­p vÃƒÆ’Ã‚Â  cho phÃƒÆ’Ã‚Â©p Ãƒâ€žÃ¢â‚¬ËœÃƒâ€žÃ†â€™ng xuÃƒÂ¡Ã‚ÂºÃ‚Â¥t', async () => {
 
     const agent = request.agent(app);
 
@@ -1476,7 +2700,7 @@ describe('API xác thực & bootstrap', () => {
 
 
 
-  it('cấp lại cookie phiên sau khi người dùng đổi mật khẩu', async () => {
+  it('cÃƒÂ¡Ã‚ÂºÃ‚Â¥p lÃƒÂ¡Ã‚ÂºÃ‚Â¡i cookie phiÃƒÆ’Ã‚Âªn sau khi ngÃƒâ€ Ã‚Â°ÃƒÂ¡Ã‚Â»Ã‚Âi dÃƒÆ’Ã‚Â¹ng Ãƒâ€žÃ¢â‚¬ËœÃƒÂ¡Ã‚Â»Ã¢â‚¬Â¢i mÃƒÂ¡Ã‚ÂºÃ‚Â­t khÃƒÂ¡Ã‚ÂºÃ‚Â©u', async () => {
 
     const agent = request.agent(app);
 
@@ -1498,7 +2722,9 @@ describe('API xác thực & bootstrap', () => {
 
 
 
-    expect(typeof changeRes.body?.token).toBe('string');
+    expect(changeRes.body).not.toHaveProperty('token');
+
+    expect(typeof changeRes.body?.expiresAt).toBe('number');
 
 
 
@@ -1510,7 +2736,7 @@ describe('API xác thực & bootstrap', () => {
 
 
 
-  it('từ chối đăng nhập khi mật khẩu sai', async () => {
+  it('tÃƒÂ¡Ã‚Â»Ã‚Â« chÃƒÂ¡Ã‚Â»Ã¢â‚¬Ëœi Ãƒâ€žÃ¢â‚¬ËœÃƒâ€žÃ†â€™ng nhÃƒÂ¡Ã‚ÂºÃ‚Â­p khi mÃƒÂ¡Ã‚ÂºÃ‚Â­t khÃƒÂ¡Ã‚ÂºÃ‚Â©u sai', async () => {
 
     const response = await request(app).post('/api/auth/login').send({ username: 'admin', password: 'sai' });
 
@@ -1522,7 +2748,7 @@ describe('API xác thực & bootstrap', () => {
 
 
 
-  it('không cho phép ghi đè kpi_users_v1 qua API storage chung', async () => {
+  it('khÃƒÆ’Ã‚Â´ng cho phÃƒÆ’Ã‚Â©p ghi Ãƒâ€žÃ¢â‚¬ËœÃƒÆ’Ã‚Â¨ kpi_users_v1 qua API storage chung', async () => {
 
     const response = await request(app)
 
@@ -1536,7 +2762,7 @@ describe('API xác thực & bootstrap', () => {
 
 
 
-  it('yêu cầu đăng nhập khi truy vấn lịch sử Đại lý HQ', async () => {
+  it('yÃƒÆ’Ã‚Âªu cÃƒÂ¡Ã‚ÂºÃ‚Â§u Ãƒâ€žÃ¢â‚¬ËœÃƒâ€žÃ†â€™ng nhÃƒÂ¡Ã‚ÂºÃ‚Â­p khi truy vÃƒÂ¡Ã‚ÂºÃ‚Â¥n lÃƒÂ¡Ã‚Â»Ã¢â‚¬Â¹ch sÃƒÂ¡Ã‚Â»Ã‚Â­ Ãƒâ€žÃ‚ÂÃƒÂ¡Ã‚ÂºÃ‚Â¡i lÃƒÆ’Ã‚Â½ HQ', async () => {
 
     const response = await request(app).get('/api/hq/history');
 
@@ -1548,7 +2774,7 @@ describe('API xác thực & bootstrap', () => {
 
 
 
-  it('từ chối truy vấn lịch sử Đại lý HQ nếu tài khoản thiếu quyền mstEdit', async () => {
+  it('tÃƒÂ¡Ã‚Â»Ã‚Â« chÃƒÂ¡Ã‚Â»Ã¢â‚¬Ëœi truy vÃƒÂ¡Ã‚ÂºÃ‚Â¥n lÃƒÂ¡Ã‚Â»Ã¢â‚¬Â¹ch sÃƒÂ¡Ã‚Â»Ã‚Â­ Ãƒâ€žÃ‚ÂÃƒÂ¡Ã‚ÂºÃ‚Â¡i lÃƒÆ’Ã‚Â½ HQ nÃƒÂ¡Ã‚ÂºÃ‚Â¿u tÃƒÆ’Ã‚Â i khoÃƒÂ¡Ã‚ÂºÃ‚Â£n thiÃƒÂ¡Ã‚ÂºÃ‚Â¿u quyÃƒÂ¡Ã‚Â»Ã‚Ân mstEdit', async () => {
 
     const agent = request.agent(app);
 
@@ -1566,7 +2792,7 @@ describe('API xác thực & bootstrap', () => {
 
 
 
-  it('trả về lịch sử Đại lý HQ kèm bộ lọc', async () => {
+  it('trÃƒÂ¡Ã‚ÂºÃ‚Â£ vÃƒÂ¡Ã‚Â»Ã‚Â lÃƒÂ¡Ã‚Â»Ã¢â‚¬Â¹ch sÃƒÂ¡Ã‚Â»Ã‚Â­ Ãƒâ€žÃ‚ÂÃƒÂ¡Ã‚ÂºÃ‚Â¡i lÃƒÆ’Ã‚Â½ HQ kÃƒÆ’Ã‚Â¨m bÃƒÂ¡Ã‚Â»Ã¢â€žÂ¢ lÃƒÂ¡Ã‚Â»Ã‚Âc', async () => {
 
     const agent = request.agent(app);
 
@@ -1586,7 +2812,7 @@ describe('API xác thực & bootstrap', () => {
 
         from: '',
 
-        to: 'Công ty A',
+        to: 'CÃƒÆ’Ã‚Â´ng ty A',
 
         actor: 'admin',
 
@@ -1604,9 +2830,9 @@ describe('API xác thực & bootstrap', () => {
 
         field: 'agents',
 
-        from: 'DL Cũ',
+        from: 'DL CÃƒâ€¦Ã‚Â©',
 
-        to: 'DL Mới',
+        to: 'DL MÃƒÂ¡Ã‚Â»Ã¢â‚¬Âºi',
 
         actor: 'admin',
 
@@ -1626,7 +2852,7 @@ describe('API xác thực & bootstrap', () => {
 
         from: '',
 
-        to: 'Công ty B',
+        to: 'CÃƒÆ’Ã‚Â´ng ty B',
 
         actor: 'tester',
 
@@ -1680,9 +2906,15 @@ describe('API xác thực & bootstrap', () => {
 
 
 
-  it('danh sách tài khoản không lộ hash mật khẩu', async () => {
+  it('danh sÃƒÆ’Ã‚Â¡ch tÃƒÆ’Ã‚Â i khoÃƒÂ¡Ã‚ÂºÃ‚Â£n khÃƒÆ’Ã‚Â´ng lÃƒÂ¡Ã‚Â»Ã¢â€žÂ¢ hash mÃƒÂ¡Ã‚ÂºÃ‚Â­t khÃƒÂ¡Ã‚ÂºÃ‚Â©u', async () => {
 
-    const response = await request(app).get('/api/auth/accounts');
+    const adminAgent = request.agent(app);
+
+    const loginRes = await adminAgent.post('/api/auth/login').send({ username: 'admin', password: 'admin123' });
+
+    expect(loginRes.status).toBe(200);
+
+    const response = await adminAgent.get('/api/auth/accounts');
 
     expect(response.status).toBe(200);
 
@@ -1702,7 +2934,23 @@ describe('API xác thực & bootstrap', () => {
 
 
 
-  it('lưu mật khẩu dạng băm trong cơ sở dữ liệu', () => {
+  it('tÃƒÂ¡Ã‚Â»Ã‚Â« chÃƒÂ¡Ã‚Â»Ã¢â‚¬Ëœi xem danh sÃƒÆ’Ã‚Â¡ch tÃƒÆ’Ã‚Â i khoÃƒÂ¡Ã‚ÂºÃ‚Â£n khi chÃƒâ€ Ã‚Â°a Ãƒâ€žÃ¢â‚¬ËœÃƒâ€žÃ†â€™ng nhÃƒÂ¡Ã‚ÂºÃ‚Â­p', async () => {
+
+    const response = await request(app).get('/api/auth/accounts');
+
+    expect(response.status).toBe(401);
+
+    expect(response.body?.ok).toBe(false);
+
+  });
+
+
+
+  it('lÃƒâ€ Ã‚Â°u mÃƒÂ¡Ã‚ÂºÃ‚Â­t khÃƒÂ¡Ã‚ÂºÃ‚Â©u dÃƒÂ¡Ã‚ÂºÃ‚Â¡ng bÃƒâ€žÃ†â€™m trong cÃƒâ€ Ã‚Â¡ sÃƒÂ¡Ã‚Â»Ã…Â¸ dÃƒÂ¡Ã‚Â»Ã‚Â¯ liÃƒÂ¡Ã‚Â»Ã¢â‚¬Â¡u', async () => {
+
+    const loginRes = await request(app).post('/api/auth/login').send({ username: 'admin', password: 'admin123' });
+
+    expect(loginRes.status).toBe(200);
 
     const db = getDb();
 
@@ -1724,7 +2972,7 @@ describe('API xác thực & bootstrap', () => {
 
 
 
-describe('Quản lý tài khoản', () => {
+describe('QuÃƒÂ¡Ã‚ÂºÃ‚Â£n lÃƒÆ’Ã‚Â½ tÃƒÆ’Ã‚Â i khoÃƒÂ¡Ã‚ÂºÃ‚Â£n', () => {
 
   beforeEach(() => {
 
@@ -1734,7 +2982,25 @@ describe('Quản lý tài khoản', () => {
 
 
 
-  it('gắn nhân viên KPI khi tạo tài khoản mới', async () => {
+  it('tÃƒÂ¡Ã‚Â»Ã‚Â« chÃƒÂ¡Ã‚Â»Ã¢â‚¬Ëœi quÃƒÂ¡Ã‚ÂºÃ‚Â£n lÃƒÆ’Ã‚Â½ tÃƒÆ’Ã‚Â i khoÃƒÂ¡Ã‚ÂºÃ‚Â£n khi khÃƒÆ’Ã‚Â´ng cÃƒÆ’Ã‚Â³ quyÃƒÂ¡Ã‚Â»Ã‚Ân accountManage', async () => {
+
+    const staffAgent = request.agent(app);
+
+    const loginRes = await staffAgent.post('/api/auth/login').send({ username: 'nhanvien', password: '123456' });
+
+    expect(loginRes.status).toBe(200);
+
+    const response = await staffAgent.get('/api/auth/accounts');
+
+    expect(response.status).toBe(403);
+
+    expect(response.body?.ok).toBe(false);
+
+  });
+
+
+
+  it('gÃƒÂ¡Ã‚ÂºÃ‚Â¯n nhÃƒÆ’Ã‚Â¢n viÃƒÆ’Ã‚Âªn KPI khi tÃƒÂ¡Ã‚ÂºÃ‚Â¡o tÃƒÆ’Ã‚Â i khoÃƒÂ¡Ã‚ÂºÃ‚Â£n mÃƒÂ¡Ã‚Â»Ã¢â‚¬Âºi', async () => {
 
     const db = getDb();
 
@@ -1748,13 +3014,13 @@ describe('Quản lý tài khoản', () => {
 
           id: 'team-kt',
 
-          name: 'Team Kế toán',
+          name: 'Team Ke toan',
 
           members: [
 
-            { id: 'kt001', name: 'Nguyễn Thu Phương' },
+            { id: 'kt001', name: 'Nguyen Thu Phuong' },
 
-            { id: 'kt002', name: 'Trần Minh Dũng' },
+            { id: 'kt002', name: 'Tran Minh Duong' },
 
           ],
 
@@ -1764,11 +3030,7 @@ describe('Quản lý tài khoản', () => {
 
     };
 
-    db.prepare(
-
-      "INSERT INTO kv_store (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value"
-
-    ).run('team_roster_v1', JSON.stringify(roster));
+    writeTeamRosterSnapshot(db, roster);
 
 
 
@@ -1804,9 +3066,9 @@ describe('Quản lý tài khoản', () => {
 
       memberId: 'kt001',
 
-      memberName: 'Nguyễn Thu Phương',
+      memberName: 'Nguyen Thu Phuong',
 
-      teamName: 'Team Kế toán',
+      teamName: 'Team Ke toan',
 
     });
 
@@ -1820,13 +3082,13 @@ describe('Quản lý tài khoản', () => {
 
     expect(createLog).toBeTruthy();
 
-    expect(createLog?.meta?.member).toMatchObject({ memberId: 'kt001', teamName: 'Team Kế toán' });
+    expect(createLog?.meta?.member).toMatchObject({ memberId: 'kt001', teamName: 'Team Ke toan' });
 
   });
 
 
 
-  it('ghi log chi tiết khi cập nhật quyền tài khoản', async () => {
+  it('ghi log chi tiÃƒÂ¡Ã‚ÂºÃ‚Â¿t khi cÃƒÂ¡Ã‚ÂºÃ‚Â­p nhÃƒÂ¡Ã‚ÂºÃ‚Â­t quyÃƒÂ¡Ã‚Â»Ã‚Ân tÃƒÆ’Ã‚Â i khoÃƒÂ¡Ã‚ÂºÃ‚Â£n', async () => {
 
     const adminAgent = request.agent(app);
 
@@ -1892,11 +3154,53 @@ describe('Quản lý tài khoản', () => {
 
   });
 
+
+
+  it('bÃƒÂ¡Ã‚Â»Ã‚Â qua actor do client gÃƒÂ¡Ã‚Â»Ã‚Â­i khi cÃƒÂ¡Ã‚ÂºÃ‚Â­p nhÃƒÂ¡Ã‚ÂºÃ‚Â­t tÃƒÆ’Ã‚Â i khoÃƒÂ¡Ã‚ÂºÃ‚Â£n', async () => {
+
+    const adminAgent = request.agent(app);
+
+    const loginRes = await adminAgent.post('/api/auth/login').send({ username: 'admin', password: 'admin123' });
+
+    expect(loginRes.status).toBe(200);
+
+    const createRes = await adminAgent.post('/api/auth/accounts').send({
+
+      username: 'actor.guard',
+
+      password: 'Tester@2025',
+
+      role: 'staff',
+
+    });
+
+    expect(createRes.status).toBe(201);
+
+    const patchRes = await adminAgent
+
+      .patch('/api/auth/accounts/actor.guard')
+
+      .send({ actor: 'spoofed.actor', permissions: { importEdit: true } });
+
+    expect(patchRes.status).toBe(200);
+
+    const auditRow = getDb().prepare('SELECT value FROM kv_store WHERE key = ?').get('audit_logs_v1');
+
+    const logs = JSON.parse(auditRow?.value || '[]');
+
+    const updateLog = logs.find((entry) => entry.action === 'account.update' && entry.detail?.includes('actor.guard'));
+
+    expect(updateLog).toBeTruthy();
+
+    expect(updateLog?.actor).toBe('admin');
+
+  });
+
 });
 
 
 
-describe('API thông báo hệ thống', () => {
+describe('API thÃƒÆ’Ã‚Â´ng bÃƒÆ’Ã‚Â¡o hÃƒÂ¡Ã‚Â»Ã¢â‚¬Â¡ thÃƒÂ¡Ã‚Â»Ã¢â‚¬Ëœng', () => {
 
   beforeEach(() => {
 
@@ -1906,7 +3210,7 @@ describe('API thông báo hệ thống', () => {
 
 
 
-  it('từ chối truy cập lịch sử thông báo khi chưa đăng nhập', async () => {
+  it('tÃƒÂ¡Ã‚Â»Ã‚Â« chÃƒÂ¡Ã‚Â»Ã¢â‚¬Ëœi truy cÃƒÂ¡Ã‚ÂºÃ‚Â­p lÃƒÂ¡Ã‚Â»Ã¢â‚¬Â¹ch sÃƒÂ¡Ã‚Â»Ã‚Â­ thÃƒÆ’Ã‚Â´ng bÃƒÆ’Ã‚Â¡o khi chÃƒâ€ Ã‚Â°a Ãƒâ€žÃ¢â‚¬ËœÃƒâ€žÃ†â€™ng nhÃƒÂ¡Ã‚ÂºÃ‚Â­p', async () => {
 
     const res = await request(app).get('/api/notifications');
 
@@ -1918,7 +3222,7 @@ describe('API thông báo hệ thống', () => {
 
 
 
-  it('cho phép người dùng đã đăng nhập xem thông báo', async () => {
+  it('cho phÃƒÆ’Ã‚Â©p ngÃƒâ€ Ã‚Â°ÃƒÂ¡Ã‚Â»Ã‚Âi dÃƒÆ’Ã‚Â¹ng Ãƒâ€žÃ¢â‚¬ËœÃƒÆ’Ã‚Â£ Ãƒâ€žÃ¢â‚¬ËœÃƒâ€žÃ†â€™ng nhÃƒÂ¡Ã‚ÂºÃ‚Â­p xem thÃƒÆ’Ã‚Â´ng bÃƒÆ’Ã‚Â¡o', async () => {
 
     const agent = request.agent(app);
 
@@ -1938,7 +3242,7 @@ describe('API thông báo hệ thống', () => {
 
 
 
-  it('từ chối mở stream SSE khi chưa đăng nhập', async () => {
+  it('tÃƒÂ¡Ã‚Â»Ã‚Â« chÃƒÂ¡Ã‚Â»Ã¢â‚¬Ëœi mÃƒÂ¡Ã‚Â»Ã…Â¸ stream SSE khi chÃƒâ€ Ã‚Â°a Ãƒâ€žÃ¢â‚¬ËœÃƒâ€žÃ†â€™ng nhÃƒÂ¡Ã‚ÂºÃ‚Â­p', async () => {
 
     const res = await request(app).get('/api/notifications/stream');
 
@@ -1950,7 +3254,7 @@ describe('API thông báo hệ thống', () => {
 
 
 
-describeExternal('Đồng bộ tài khoản với SQL Server', () => {
+describeExternal('Ãƒâ€žÃ‚ÂÃƒÂ¡Ã‚Â»Ã¢â‚¬Å“ng bÃƒÂ¡Ã‚Â»Ã¢â€žÂ¢ tÃƒÆ’Ã‚Â i khoÃƒÂ¡Ã‚ÂºÃ‚Â£n vÃƒÂ¡Ã‚Â»Ã¢â‚¬Âºi SQL Server', () => {
 
   beforeEach(() => {
 
@@ -1962,7 +3266,7 @@ describeExternal('Đồng bộ tài khoản với SQL Server', () => {
 
 
 
-  it('đẩy thay đổi tài khoản lên SQL Server khi tạo mới', async () => {
+  it('Ãƒâ€žÃ¢â‚¬ËœÃƒÂ¡Ã‚ÂºÃ‚Â©y thay Ãƒâ€žÃ¢â‚¬ËœÃƒÂ¡Ã‚Â»Ã¢â‚¬Â¢i tÃƒÆ’Ã‚Â i khoÃƒÂ¡Ã‚ÂºÃ‚Â£n lÃƒÆ’Ã‚Âªn SQL Server khi tÃƒÂ¡Ã‚ÂºÃ‚Â¡o mÃƒÂ¡Ã‚Â»Ã¢â‚¬Âºi', async () => {
 
     const admin = request.agent(app);
 
@@ -2022,7 +3326,7 @@ describeExternal('AI assistant API', () => {
 
 
 
-  it('từ chối khi chưa đăng nhập', async () => {
+  it('tÃƒÂ¡Ã‚Â»Ã‚Â« chÃƒÂ¡Ã‚Â»Ã¢â‚¬Ëœi khi chÃƒâ€ Ã‚Â°a Ãƒâ€žÃ¢â‚¬ËœÃƒâ€žÃ†â€™ng nhÃƒÂ¡Ã‚ÂºÃ‚Â­p', async () => {
 
     const res = await request(app).get('/api/ai/profile');
 
@@ -2034,7 +3338,7 @@ describeExternal('AI assistant API', () => {
 
 
 
-  it('từ chối khi tài khoản không có quyền aiAssistUse', async () => {
+  it('tÃƒÂ¡Ã‚Â»Ã‚Â« chÃƒÂ¡Ã‚Â»Ã¢â‚¬Ëœi khi tÃƒÆ’Ã‚Â i khoÃƒÂ¡Ã‚ÂºÃ‚Â£n khÃƒÆ’Ã‚Â´ng cÃƒÆ’Ã‚Â³ quyÃƒÂ¡Ã‚Â»Ã‚Ân aiAssistUse', async () => {
 
     const adminAgent = request.agent(app);
 
@@ -2078,7 +3382,7 @@ describeExternal('AI assistant API', () => {
 
 
 
-  it('trả về trạng thái rút gọn cho người dùng có quyền', async () => {
+  it('trÃƒÂ¡Ã‚ÂºÃ‚Â£ vÃƒÂ¡Ã‚Â»Ã‚Â trÃƒÂ¡Ã‚ÂºÃ‚Â¡ng thÃƒÆ’Ã‚Â¡i rÃƒÆ’Ã‚Âºt gÃƒÂ¡Ã‚Â»Ã‚Ân cho ngÃƒâ€ Ã‚Â°ÃƒÂ¡Ã‚Â»Ã‚Âi dÃƒÆ’Ã‚Â¹ng cÃƒÆ’Ã‚Â³ quyÃƒÂ¡Ã‚Â»Ã‚Ân', async () => {
 
     const staff = request.agent(app);
 
@@ -2118,7 +3422,7 @@ describeExternal('AI assistant API', () => {
 
 
 
-  it('tạo snapshot KPI và trả về cấu trúc tóm tắt', async () => {
+  it('tÃƒÂ¡Ã‚ÂºÃ‚Â¡o snapshot KPI vÃƒÆ’Ã‚Â  trÃƒÂ¡Ã‚ÂºÃ‚Â£ vÃƒÂ¡Ã‚Â»Ã‚Â cÃƒÂ¡Ã‚ÂºÃ‚Â¥u trÃƒÆ’Ã‚Âºc tÃƒÆ’Ã‚Â³m tÃƒÂ¡Ã‚ÂºÃ‚Â¯t', async () => {
 
     const admin = request.agent(app);
 
@@ -2172,13 +3476,13 @@ describeExternal('AI assistant API', () => {
 
         MaSoThue: '0100109106',
 
-        Ten_doanh_nghiep: 'Công ty A',
+        Ten_doanh_nghiep: 'CÃƒÆ’Ã‚Â´ng ty A',
 
         Loai_hinh: 'A11',
 
-        nhan_vien: 'Nguyễn Văn A',
+        nhan_vien: 'NguyÃƒÂ¡Ã‚Â»Ã¢â‚¬Â¦n VÃƒâ€žÃ†â€™n A',
 
-        team: 'Tổ 1',
+        team: 'TÃƒÂ¡Ã‚Â»Ã¢â‚¬Â¢ 1',
 
         so_luong_mh: 5,
 
@@ -2194,13 +3498,13 @@ describeExternal('AI assistant API', () => {
 
         MaSoThue: '0100109107',
 
-        Ten_doanh_nghiep: 'Công ty B',
+        Ten_doanh_nghiep: 'CÃƒÆ’Ã‚Â´ng ty B',
 
         Loai_hinh: 'B11',
 
-        nhan_vien: 'Nguyễn Văn B',
+        nhan_vien: 'NguyÃƒÂ¡Ã‚Â»Ã¢â‚¬Â¦n VÃƒâ€žÃ†â€™n B',
 
-        team: 'Tổ 2',
+        team: 'TÃƒÂ¡Ã‚Â»Ã¢â‚¬Â¢ 2',
 
         so_luong_mh: 3,
 
@@ -2244,7 +3548,7 @@ describeExternal('AI assistant API', () => {
 
 
 
-  it('tái sử dụng cache snapshot khi gọi cùng tham số', async () => {
+  it('tÃƒÆ’Ã‚Â¡i sÃƒÂ¡Ã‚Â»Ã‚Â­ dÃƒÂ¡Ã‚Â»Ã‚Â¥ng cache snapshot khi gÃƒÂ¡Ã‚Â»Ã‚Âi cÃƒÆ’Ã‚Â¹ng tham sÃƒÂ¡Ã‚Â»Ã¢â‚¬Ëœ', async () => {
 
     const admin = request.agent(app);
 
@@ -2296,13 +3600,13 @@ describeExternal('AI assistant API', () => {
 
         MaSoThue: '0100109106',
 
-        Ten_doanh_nghiep: 'Công ty A',
+        Ten_doanh_nghiep: 'CÃƒÆ’Ã‚Â´ng ty A',
 
         Loai_hinh: 'A11',
 
-        nhan_vien: 'Nguyễn Văn A',
+        nhan_vien: 'NguyÃƒÂ¡Ã‚Â»Ã¢â‚¬Â¦n VÃƒâ€žÃ†â€™n A',
 
-        team: 'Tổ 1',
+        team: 'TÃƒÂ¡Ã‚Â»Ã¢â‚¬Â¢ 1',
 
         so_luong_mh: 4,
 
@@ -2342,7 +3646,7 @@ describeExternal('AI assistant API', () => {
 
 
 
-  it('chạy insight AI và cho phép phản hồi kết quả', async () => {
+  it('chÃƒÂ¡Ã‚ÂºÃ‚Â¡y insight AI vÃƒÆ’Ã‚Â  cho phÃƒÆ’Ã‚Â©p phÃƒÂ¡Ã‚ÂºÃ‚Â£n hÃƒÂ¡Ã‚Â»Ã¢â‚¬Å“i kÃƒÂ¡Ã‚ÂºÃ‚Â¿t quÃƒÂ¡Ã‚ÂºÃ‚Â£', async () => {
 
     const admin = request.agent(app);
 
@@ -2402,13 +3706,13 @@ describeExternal('AI assistant API', () => {
 
         MaSoThue: '0100109106',
 
-        Ten_doanh_nghiep: 'Công ty A',
+        Ten_doanh_nghiep: 'CÃƒÆ’Ã‚Â´ng ty A',
 
         Loai_hinh: 'A11',
 
-        nhan_vien: 'Nguyễn Văn A',
+        nhan_vien: 'NguyÃƒÂ¡Ã‚Â»Ã¢â‚¬Â¦n VÃƒâ€žÃ†â€™n A',
 
-        team: 'Tổ 1',
+        team: 'TÃƒÂ¡Ã‚Â»Ã¢â‚¬Â¢ 1',
 
         so_luong_mh: 5,
 
@@ -2424,13 +3728,13 @@ describeExternal('AI assistant API', () => {
 
         MaSoThue: '0100109107',
 
-        Ten_doanh_nghiep: 'Công ty B',
+        Ten_doanh_nghiep: 'CÃƒÆ’Ã‚Â´ng ty B',
 
         Loai_hinh: 'B11',
 
-        nhan_vien: 'Nguyễn Văn B',
+        nhan_vien: 'NguyÃƒÂ¡Ã‚Â»Ã¢â‚¬Â¦n VÃƒâ€žÃ†â€™n B',
 
-        team: 'Tổ 2',
+        team: 'TÃƒÂ¡Ã‚Â»Ã¢â‚¬Â¢ 2',
 
         so_luong_mh: 3,
 
@@ -2454,7 +3758,7 @@ describeExternal('AI assistant API', () => {
 
           json: async () => ({
 
-            message: { content: 'Báo cáo KPI thử nghiệm: hiệu suất tăng.' },
+            message: { content: 'BÃƒÆ’Ã‚Â¡o cÃƒÆ’Ã‚Â¡o KPI thÃƒÂ¡Ã‚Â»Ã‚Â­ nghiÃƒÂ¡Ã‚Â»Ã¢â‚¬Â¡m: hiÃƒÂ¡Ã‚Â»Ã¢â‚¬Â¡u suÃƒÂ¡Ã‚ÂºÃ‚Â¥t tÃƒâ€žÃ†â€™ng.' },
 
             prompt_eval_count: 16,
 
@@ -2590,7 +3894,7 @@ describeExternal('AI assistant API', () => {
 
 
 
-  it('cho phép cấu hình nhà cung cấp và trả lời qua Ollama mock với cache', async () => {
+  it('cho phÃƒÆ’Ã‚Â©p cÃƒÂ¡Ã‚ÂºÃ‚Â¥u hÃƒÆ’Ã‚Â¬nh nhÃƒÆ’Ã‚Â  cung cÃƒÂ¡Ã‚ÂºÃ‚Â¥p vÃƒÆ’Ã‚Â  trÃƒÂ¡Ã‚ÂºÃ‚Â£ lÃƒÂ¡Ã‚Â»Ã‚Âi qua Ollama mock vÃƒÂ¡Ã‚Â»Ã¢â‚¬Âºi cache', async () => {
 
     const admin = request.agent(app);
 
@@ -2662,7 +3966,7 @@ describeExternal('AI assistant API', () => {
 
           json: async () => ({
 
-            message: { content: 'Trả lời thử nghiệm từ mô phỏng' },
+            message: { content: 'TrÃƒÂ¡Ã‚ÂºÃ‚Â£ lÃƒÂ¡Ã‚Â»Ã‚Âi thÃƒÂ¡Ã‚Â»Ã‚Â­ nghiÃƒÂ¡Ã‚Â»Ã¢â‚¬Â¡m tÃƒÂ¡Ã‚Â»Ã‚Â« mÃƒÆ’Ã‚Â´ phÃƒÂ¡Ã‚Â»Ã‚Âng' },
 
             prompt_eval_count: 12,
 
@@ -2694,7 +3998,7 @@ describeExternal('AI assistant API', () => {
 
     try {
 
-      const payload = { prompt: 'Xin chào trợ lý', scope: 'test', providerId: 'ollama-local' };
+      const payload = { prompt: 'Xin chÃƒÆ’Ã‚Â o trÃƒÂ¡Ã‚Â»Ã‚Â£ lÃƒÆ’Ã‚Â½', scope: 'test', providerId: 'ollama-local' };
 
       const first = await staff.post('/api/ai/chat').send(payload);
 
@@ -2704,7 +4008,7 @@ describeExternal('AI assistant API', () => {
 
       expect(first.body.cached).toBe(false);
 
-      expect(first.body.message).toContain('Trả lời thử nghiệm');
+      expect(first.body.message).toContain('TrÃƒÂ¡Ã‚ÂºÃ‚Â£ lÃƒÂ¡Ã‚Â»Ã‚Âi thÃƒÂ¡Ã‚Â»Ã‚Â­ nghiÃƒÂ¡Ã‚Â»Ã¢â‚¬Â¡m');
 
       expect(fetchSpy).toHaveBeenCalledTimes(1);
 
@@ -2732,7 +4036,7 @@ describeExternal('AI assistant API', () => {
 
 
 
-  it('cho phép kiểm thử Ollama cục bộ mà không cần API key', async () => {
+  it('cho phÃƒÆ’Ã‚Â©p kiÃƒÂ¡Ã‚Â»Ã†â€™m thÃƒÂ¡Ã‚Â»Ã‚Â­ Ollama cÃƒÂ¡Ã‚Â»Ã‚Â¥c bÃƒÂ¡Ã‚Â»Ã¢â€žÂ¢ mÃƒÆ’Ã‚Â  khÃƒÆ’Ã‚Â´ng cÃƒÂ¡Ã‚ÂºÃ‚Â§n API key', async () => {
 
     const admin = request.agent(app);
 
@@ -2776,7 +4080,7 @@ describeExternal('AI assistant API', () => {
 
           json: async () => ({
 
-            message: { content: 'Pong từ kiểm thử Ollama' },
+            message: { content: 'Pong tÃƒÂ¡Ã‚Â»Ã‚Â« kiÃƒÂ¡Ã‚Â»Ã†â€™m thÃƒÂ¡Ã‚Â»Ã‚Â­ Ollama' },
 
             prompt_eval_count: 10,
 
@@ -2822,7 +4126,7 @@ describeExternal('AI assistant API', () => {
 
         },
 
-        prompt: 'kiểm thử ollama nội bộ',
+        prompt: 'kiÃƒÂ¡Ã‚Â»Ã†â€™m thÃƒÂ¡Ã‚Â»Ã‚Â­ ollama nÃƒÂ¡Ã‚Â»Ã¢â€žÂ¢i bÃƒÂ¡Ã‚Â»Ã¢â€žÂ¢',
 
       });
 
@@ -2846,7 +4150,7 @@ describeExternal('AI assistant API', () => {
 
 
 
-  it('ghi log lỗi khi kiểm thử Ollama thất bại', async () => {
+  it('ghi log lÃƒÂ¡Ã‚Â»Ã¢â‚¬â€i khi kiÃƒÂ¡Ã‚Â»Ã†â€™m thÃƒÂ¡Ã‚Â»Ã‚Â­ Ollama thÃƒÂ¡Ã‚ÂºÃ‚Â¥t bÃƒÂ¡Ã‚ÂºÃ‚Â¡i', async () => {
 
     const admin = request.agent(app);
 
@@ -2924,7 +4228,7 @@ describeExternal('AI assistant API', () => {
 
         },
 
-        prompt: 'kiểm thử ollama thất bại',
+        prompt: 'kiÃƒÂ¡Ã‚Â»Ã†â€™m thÃƒÂ¡Ã‚Â»Ã‚Â­ ollama thÃƒÂ¡Ã‚ÂºÃ‚Â¥t bÃƒÂ¡Ã‚ÂºÃ‚Â¡i',
 
       });
 
@@ -2960,7 +4264,7 @@ describeExternal('AI assistant API', () => {
 
 
 
-  it('tự động thử lại khi gọi Ollama lần đầu thất bại', async () => {
+  it('tÃƒÂ¡Ã‚Â»Ã‚Â± Ãƒâ€žÃ¢â‚¬ËœÃƒÂ¡Ã‚Â»Ã¢â€žÂ¢ng thÃƒÂ¡Ã‚Â»Ã‚Â­ lÃƒÂ¡Ã‚ÂºÃ‚Â¡i khi gÃƒÂ¡Ã‚Â»Ã‚Âi Ollama lÃƒÂ¡Ã‚ÂºÃ‚Â§n Ãƒâ€žÃ¢â‚¬ËœÃƒÂ¡Ã‚ÂºÃ‚Â§u thÃƒÂ¡Ã‚ÂºÃ‚Â¥t bÃƒÂ¡Ã‚ÂºÃ‚Â¡i', async () => {
 
     const admin = request.agent(app);
 
@@ -3024,7 +4328,7 @@ describeExternal('AI assistant API', () => {
 
           json: async () => ({
 
-            message: { content: 'Phản hồi sau lần retry' },
+            message: { content: 'PhÃƒÂ¡Ã‚ÂºÃ‚Â£n hÃƒÂ¡Ã‚Â»Ã¢â‚¬Å“i sau lÃƒÂ¡Ã‚ÂºÃ‚Â§n retry' },
 
             prompt_eval_count: 15,
 
@@ -3058,7 +4362,7 @@ describeExternal('AI assistant API', () => {
 
       const res = await staff.post('/api/ai/chat').send({
 
-        prompt: 'Kiểm tra retry Ollama',
+        prompt: 'KiÃƒÂ¡Ã‚Â»Ã†â€™m tra retry Ollama',
 
         scope: 'retry',
 
@@ -3084,7 +4388,7 @@ describeExternal('AI assistant API', () => {
 
 
 
-  it('ping kết nối AI thành công với nhà cung cấp mặc định', async () => {
+  it('ping kÃƒÂ¡Ã‚ÂºÃ‚Â¿t nÃƒÂ¡Ã‚Â»Ã¢â‚¬Ëœi AI thÃƒÆ’Ã‚Â nh cÃƒÆ’Ã‚Â´ng vÃƒÂ¡Ã‚Â»Ã¢â‚¬Âºi nhÃƒÆ’Ã‚Â  cung cÃƒÂ¡Ã‚ÂºÃ‚Â¥p mÃƒÂ¡Ã‚ÂºÃ‚Â·c Ãƒâ€žÃ¢â‚¬ËœÃƒÂ¡Ã‚Â»Ã¢â‚¬Â¹nh', async () => {
 
     const admin = request.agent(app);
 
@@ -3126,7 +4430,7 @@ describeExternal('AI assistant API', () => {
 
           json: async () => ({
 
-            message: { content: 'Pong từ ping Ollama' },
+            message: { content: 'Pong tÃƒÂ¡Ã‚Â»Ã‚Â« ping Ollama' },
 
             prompt_eval_count: 5,
 
@@ -3158,7 +4462,7 @@ describeExternal('AI assistant API', () => {
 
     try {
 
-      const res = await admin.post('/api/ai/providers/ping').send({ prompt: 'ping kiểm tra' });
+      const res = await admin.post('/api/ai/providers/ping').send({ prompt: 'ping kiÃƒÂ¡Ã‚Â»Ã†â€™m tra' });
 
       expect(res.status).toBe(200);
 
@@ -3180,7 +4484,7 @@ describeExternal('AI assistant API', () => {
 
 
 
-  it('trả lỗi khi ping không tìm thấy nhà cung cấp', async () => {
+  it('trÃƒÂ¡Ã‚ÂºÃ‚Â£ lÃƒÂ¡Ã‚Â»Ã¢â‚¬â€i khi ping khÃƒÆ’Ã‚Â´ng tÃƒÆ’Ã‚Â¬m thÃƒÂ¡Ã‚ÂºÃ‚Â¥y nhÃƒÆ’Ã‚Â  cung cÃƒÂ¡Ã‚ÂºÃ‚Â¥p', async () => {
 
     const admin = request.agent(app);
 
@@ -3220,7 +4524,7 @@ describeExternal('AI assistant API', () => {
 
 
 
-  it('dùng cache nội bộ của Ollama ngay cả khi cache chung tắt', async () => {
+  it('dÃƒÆ’Ã‚Â¹ng cache nÃƒÂ¡Ã‚Â»Ã¢â€žÂ¢i bÃƒÂ¡Ã‚Â»Ã¢â€žÂ¢ cÃƒÂ¡Ã‚Â»Ã‚Â§a Ollama ngay cÃƒÂ¡Ã‚ÂºÃ‚Â£ khi cache chung tÃƒÂ¡Ã‚ÂºÃ‚Â¯t', async () => {
 
     const admin = request.agent(app);
 
@@ -3274,7 +4578,7 @@ describeExternal('AI assistant API', () => {
 
           json: async () => ({
 
-            message: { content: 'Nội dung cache nội bộ' },
+            message: { content: 'NÃƒÂ¡Ã‚Â»Ã¢â€žÂ¢i dung cache nÃƒÂ¡Ã‚Â»Ã¢â€žÂ¢i bÃƒÂ¡Ã‚Â»Ã¢â€žÂ¢' },
 
             prompt_eval_count: 8,
 
@@ -3304,7 +4608,7 @@ describeExternal('AI assistant API', () => {
 
 
 
-    const payload = { prompt: 'Cache nội bộ Ollama', scope: 'local-cache', providerId: 'ollama-local' };
+    const payload = { prompt: 'Cache nÃƒÂ¡Ã‚Â»Ã¢â€žÂ¢i bÃƒÂ¡Ã‚Â»Ã¢â€žÂ¢ Ollama', scope: 'local-cache', providerId: 'ollama-local' };
 
 
 
@@ -3318,7 +4622,7 @@ describeExternal('AI assistant API', () => {
 
       expect(first.body.cached).toBe(false);
 
-      expect(first.body.message).toContain('Nội dung cache nội bộ');
+      expect(first.body.message).toContain('NÃƒÂ¡Ã‚Â»Ã¢â€žÂ¢i dung cache nÃƒÂ¡Ã‚Â»Ã¢â€žÂ¢i bÃƒÂ¡Ã‚Â»Ã¢â€žÂ¢');
 
       expect(fetchSpy).toHaveBeenCalledTimes(1);
 
@@ -3332,7 +4636,7 @@ describeExternal('AI assistant API', () => {
 
       expect(second.body.cached).toBe(false);
 
-      expect(second.body.message).toContain('Nội dung cache nội bộ');
+      expect(second.body.message).toContain('NÃƒÂ¡Ã‚Â»Ã¢â€žÂ¢i dung cache nÃƒÂ¡Ã‚Â»Ã¢â€žÂ¢i bÃƒÂ¡Ã‚Â»Ã¢â€žÂ¢');
 
       expect(fetchSpy).toHaveBeenCalledTimes(1);
 
@@ -3380,7 +4684,7 @@ beforeEach(async () => {
 
 describe('Data health summary API', () => {
 
-  it('trả về trạng thái sao lưu và cảnh báo dung lượng', async () => {
+  it('trÃƒÂ¡Ã‚ÂºÃ‚Â£ vÃƒÂ¡Ã‚Â»Ã‚Â trÃƒÂ¡Ã‚ÂºÃ‚Â¡ng thÃƒÆ’Ã‚Â¡i sao lÃƒâ€ Ã‚Â°u vÃƒÆ’Ã‚Â  cÃƒÂ¡Ã‚ÂºÃ‚Â£nh bÃƒÆ’Ã‚Â¡o dung lÃƒâ€ Ã‚Â°ÃƒÂ¡Ã‚Â»Ã‚Â£ng', async () => {
 
     const adminAgent = request.agent(app);
 
@@ -3404,7 +4708,7 @@ describe('Data health summary API', () => {
 
         action: 'db.backup',
 
-        detail: 'Sao lưu định kỳ',
+        detail: 'Sao lÃƒâ€ Ã‚Â°u Ãƒâ€žÃ¢â‚¬ËœÃƒÂ¡Ã‚Â»Ã¢â‚¬Â¹nh kÃƒÂ¡Ã‚Â»Ã‚Â³',
 
         meta: { status: 'success', file: 'C:/backups/storage-20240512.sqlite', bytes: 4096 },
 
@@ -3418,7 +4722,7 @@ describe('Data health summary API', () => {
 
         action: 'db.backup',
 
-        detail: 'Sao lưu thất bại',
+        detail: 'Sao lÃƒâ€ Ã‚Â°u thÃƒÂ¡Ã‚ÂºÃ‚Â¥t bÃƒÂ¡Ã‚ÂºÃ‚Â¡i',
 
         meta: { status: 'failure', reason: 'memory_db' },
 
@@ -3474,7 +4778,7 @@ describe('Data health summary API', () => {
 
 describe('Backup summary API', () => {
 
-  it('từ chối khi chưa đăng nhập', async () => {
+  it('tÃƒÂ¡Ã‚Â»Ã‚Â« chÃƒÂ¡Ã‚Â»Ã¢â‚¬Ëœi khi chÃƒâ€ Ã‚Â°a Ãƒâ€žÃ¢â‚¬ËœÃƒâ€žÃ†â€™ng nhÃƒÂ¡Ã‚ÂºÃ‚Â­p', async () => {
 
     const res = await request(app).get('/api/admin/backups/summary');
 
@@ -3486,7 +4790,7 @@ describe('Backup summary API', () => {
 
 
 
-  it('từ chối khi tài khoản không có quyền audit', async () => {
+  it('tÃƒÂ¡Ã‚Â»Ã‚Â« chÃƒÂ¡Ã‚Â»Ã¢â‚¬Ëœi khi tÃƒÆ’Ã‚Â i khoÃƒÂ¡Ã‚ÂºÃ‚Â£n khÃƒÆ’Ã‚Â´ng cÃƒÆ’Ã‚Â³ quyÃƒÂ¡Ã‚Â»Ã‚Ân audit', async () => {
 
     const staffAgent = request.agent(app);
 
@@ -3510,7 +4814,7 @@ describe('Backup summary API', () => {
 
 
 
-  it('trả về lịch sao lưu và nhật ký gần nhất cho quản trị viên', async () => {
+  it('trÃƒÂ¡Ã‚ÂºÃ‚Â£ vÃƒÂ¡Ã‚Â»Ã‚Â lÃƒÂ¡Ã‚Â»Ã¢â‚¬Â¹ch sao lÃƒâ€ Ã‚Â°u vÃƒÆ’Ã‚Â  nhÃƒÂ¡Ã‚ÂºÃ‚Â­t kÃƒÆ’Ã‚Â½ gÃƒÂ¡Ã‚ÂºÃ‚Â§n nhÃƒÂ¡Ã‚ÂºÃ‚Â¥t cho quÃƒÂ¡Ã‚ÂºÃ‚Â£n trÃƒÂ¡Ã‚Â»Ã¢â‚¬Â¹ viÃƒÆ’Ã‚Âªn', async () => {
 
     const adminAgent = request.agent(app);
 
@@ -3534,7 +4838,7 @@ describe('Backup summary API', () => {
 
         action: 'db.backup',
 
-        detail: 'Sao lưu CSDL (scheduled)',
+        detail: 'Sao lÃƒâ€ Ã‚Â°u CSDL (scheduled)',
 
         meta: { status: 'success', reason: 'scheduled', bytes: 2048 },
 
@@ -3548,7 +4852,7 @@ describe('Backup summary API', () => {
 
         action: 'db.backup',
 
-        detail: 'Sao lưu CSDL thất bại (memory_db)',
+        detail: 'Sao lÃƒâ€ Ã‚Â°u CSDL thÃƒÂ¡Ã‚ÂºÃ‚Â¥t bÃƒÂ¡Ã‚ÂºÃ‚Â¡i (memory_db)',
 
         meta: { status: 'failure', reason: 'memory_db' },
 
@@ -3624,7 +4928,7 @@ describe('Backup summary API', () => {
 
 
 
-  it('từ chối cập nhật cron sao lưu khi chưa đăng nhập', async () => {
+  it('tÃƒÂ¡Ã‚Â»Ã‚Â« chÃƒÂ¡Ã‚Â»Ã¢â‚¬Ëœi cÃƒÂ¡Ã‚ÂºÃ‚Â­p nhÃƒÂ¡Ã‚ÂºÃ‚Â­t cron sao lÃƒâ€ Ã‚Â°u khi chÃƒâ€ Ã‚Â°a Ãƒâ€žÃ¢â‚¬ËœÃƒâ€žÃ†â€™ng nhÃƒÂ¡Ã‚ÂºÃ‚Â­p', async () => {
 
     const res = await request(app)
 
@@ -3640,7 +4944,7 @@ describe('Backup summary API', () => {
 
 
 
-  it('từ chối cập nhật cron sao lưu với tài khoản không có quyền', async () => {
+  it('tÃƒÂ¡Ã‚Â»Ã‚Â« chÃƒÂ¡Ã‚Â»Ã¢â‚¬Ëœi cÃƒÂ¡Ã‚ÂºÃ‚Â­p nhÃƒÂ¡Ã‚ÂºÃ‚Â­t cron sao lÃƒâ€ Ã‚Â°u vÃƒÂ¡Ã‚Â»Ã¢â‚¬Âºi tÃƒÆ’Ã‚Â i khoÃƒÂ¡Ã‚ÂºÃ‚Â£n khÃƒÆ’Ã‚Â´ng cÃƒÆ’Ã‚Â³ quyÃƒÂ¡Ã‚Â»Ã‚Ân', async () => {
 
     const staffAgent = request.agent(app);
 
@@ -3664,7 +4968,7 @@ describe('Backup summary API', () => {
 
 
 
-  it('cho phép quản trị viên cập nhật biểu thức cron hợp lệ', async () => {
+  it('cho phÃƒÆ’Ã‚Â©p quÃƒÂ¡Ã‚ÂºÃ‚Â£n trÃƒÂ¡Ã‚Â»Ã¢â‚¬Â¹ viÃƒÆ’Ã‚Âªn cÃƒÂ¡Ã‚ÂºÃ‚Â­p nhÃƒÂ¡Ã‚ÂºÃ‚Â­t biÃƒÂ¡Ã‚Â»Ã†â€™u thÃƒÂ¡Ã‚Â»Ã‚Â©c cron hÃƒÂ¡Ã‚Â»Ã‚Â£p lÃƒÂ¡Ã‚Â»Ã¢â‚¬Â¡', async () => {
 
     const adminAgent = request.agent(app);
 
@@ -3726,7 +5030,7 @@ describe('Backup summary API', () => {
 
 
 
-  it('trả lỗi khi retention không hợp lệ', async () => {
+  it('trÃƒÂ¡Ã‚ÂºÃ‚Â£ lÃƒÂ¡Ã‚Â»Ã¢â‚¬â€i khi retention khÃƒÆ’Ã‚Â´ng hÃƒÂ¡Ã‚Â»Ã‚Â£p lÃƒÂ¡Ã‚Â»Ã¢â‚¬Â¡', async () => {
 
     const adminAgent = request.agent(app);
 
@@ -3754,7 +5058,7 @@ describe('Backup summary API', () => {
 
 
 
-  it('trả lỗi khi thư mục sao lưu không hợp lệ', async () => {
+  it('trÃƒÂ¡Ã‚ÂºÃ‚Â£ lÃƒÂ¡Ã‚Â»Ã¢â‚¬â€i khi thÃƒâ€ Ã‚Â° mÃƒÂ¡Ã‚Â»Ã‚Â¥c sao lÃƒâ€ Ã‚Â°u khÃƒÆ’Ã‚Â´ng hÃƒÂ¡Ã‚Â»Ã‚Â£p lÃƒÂ¡Ã‚Â»Ã¢â‚¬Â¡', async () => {
 
     const adminAgent = request.agent(app);
 
@@ -3782,7 +5086,7 @@ describe('Backup summary API', () => {
 
 
 
-  it('cho phép cập nhật thư mục sao lưu tùy chỉnh', async () => {
+  it('cho phÃƒÆ’Ã‚Â©p cÃƒÂ¡Ã‚ÂºÃ‚Â­p nhÃƒÂ¡Ã‚ÂºÃ‚Â­t thÃƒâ€ Ã‚Â° mÃƒÂ¡Ã‚Â»Ã‚Â¥c sao lÃƒâ€ Ã‚Â°u tÃƒÆ’Ã‚Â¹y chÃƒÂ¡Ã‚Â»Ã¢â‚¬Â°nh', async () => {
 
     const adminAgent = request.agent(app);
 
@@ -3826,7 +5130,7 @@ describe('Backup summary API', () => {
 
 
 
-  it('trả lỗi khi cập nhật cron không hợp lệ', async () => {
+  it('trÃƒÂ¡Ã‚ÂºÃ‚Â£ lÃƒÂ¡Ã‚Â»Ã¢â‚¬â€i khi cÃƒÂ¡Ã‚ÂºÃ‚Â­p nhÃƒÂ¡Ã‚ÂºÃ‚Â­t cron khÃƒÆ’Ã‚Â´ng hÃƒÂ¡Ã‚Â»Ã‚Â£p lÃƒÂ¡Ã‚Â»Ã¢â‚¬Â¡', async () => {
 
     const adminAgent = request.agent(app);
 
@@ -3854,7 +5158,7 @@ describe('Backup summary API', () => {
 
 describe('Backup manual API', () => {
 
-  it('từ chối danh sách file sao lưu khi chưa đăng nhập', async () => {
+  it('tÃƒÂ¡Ã‚Â»Ã‚Â« chÃƒÂ¡Ã‚Â»Ã¢â‚¬Ëœi danh sÃƒÆ’Ã‚Â¡ch file sao lÃƒâ€ Ã‚Â°u khi chÃƒâ€ Ã‚Â°a Ãƒâ€žÃ¢â‚¬ËœÃƒâ€žÃ†â€™ng nhÃƒÂ¡Ã‚ÂºÃ‚Â­p', async () => {
 
     const res = await request(app).get('/api/admin/backups/files');
 
@@ -3864,7 +5168,7 @@ describe('Backup manual API', () => {
 
 
 
-  it('trả về danh sách rỗng khi chưa có bản sao lưu', async () => {
+  it('trÃƒÂ¡Ã‚ÂºÃ‚Â£ vÃƒÂ¡Ã‚Â»Ã‚Â danh sÃƒÆ’Ã‚Â¡ch rÃƒÂ¡Ã‚Â»Ã¢â‚¬â€ng khi chÃƒâ€ Ã‚Â°a cÃƒÆ’Ã‚Â³ bÃƒÂ¡Ã‚ÂºÃ‚Â£n sao lÃƒâ€ Ã‚Â°u', async () => {
 
     const adminAgent = request.agent(app);
 
@@ -3898,7 +5202,7 @@ describe('Backup manual API', () => {
 
 
 
-  it('không cho phép sao lưu thủ công khi DB chạy memory', async () => {
+  it('khÃƒÆ’Ã‚Â´ng cho phÃƒÆ’Ã‚Â©p sao lÃƒâ€ Ã‚Â°u thÃƒÂ¡Ã‚Â»Ã‚Â§ cÃƒÆ’Ã‚Â´ng khi DB chÃƒÂ¡Ã‚ÂºÃ‚Â¡y memory', async () => {
 
     const adminAgent = request.agent(app);
 
@@ -3922,7 +5226,7 @@ describe('Backup manual API', () => {
 
 
 
-  it('yêu cầu chọn file khi khôi phục', async () => {
+  it('yÃƒÆ’Ã‚Âªu cÃƒÂ¡Ã‚ÂºÃ‚Â§u chÃƒÂ¡Ã‚Â»Ã‚Ân file khi khÃƒÆ’Ã‚Â´i phÃƒÂ¡Ã‚Â»Ã‚Â¥c', async () => {
 
     const adminAgent = request.agent(app);
 
@@ -3950,7 +5254,7 @@ describe('Backup manual API', () => {
 
 describe('Audit export API', () => {
 
-  it('yêu cầu đăng nhập trước khi tải CSV', async () => {
+  it('yÃƒÆ’Ã‚Âªu cÃƒÂ¡Ã‚ÂºÃ‚Â§u Ãƒâ€žÃ¢â‚¬ËœÃƒâ€žÃ†â€™ng nhÃƒÂ¡Ã‚ÂºÃ‚Â­p trÃƒâ€ Ã‚Â°ÃƒÂ¡Ã‚Â»Ã¢â‚¬Âºc khi tÃƒÂ¡Ã‚ÂºÃ‚Â£i CSV', async () => {
 
     const res = await request(app).get('/api/admin/audit/export');
 
@@ -3960,7 +5264,7 @@ describe('Audit export API', () => {
 
 
 
-  it('cho phép quản trị viên tải CSV theo khoảng ngày', async () => {
+  it('cho phÃƒÆ’Ã‚Â©p quÃƒÂ¡Ã‚ÂºÃ‚Â£n trÃƒÂ¡Ã‚Â»Ã¢â‚¬Â¹ viÃƒÆ’Ã‚Âªn tÃƒÂ¡Ã‚ÂºÃ‚Â£i CSV theo khoÃƒÂ¡Ã‚ÂºÃ‚Â£ng ngÃƒÆ’Ã‚Â y', async () => {
 
     const adminAgent = request.agent(app);
 
@@ -3984,7 +5288,7 @@ describe('Audit export API', () => {
 
         action: 'db.backup',
 
-        detail: 'Sao lưu thử nghiệm',
+        detail: 'Sao lÃƒâ€ Ã‚Â°u thÃƒÂ¡Ã‚Â»Ã‚Â­ nghiÃƒÂ¡Ã‚Â»Ã¢â‚¬Â¡m',
 
         result: 'success',
 
@@ -4004,7 +5308,7 @@ describe('Audit export API', () => {
 
         action: 'audit.clear',
 
-        detail: 'Xóa nhật ký',
+        detail: 'XÃƒÆ’Ã‚Â³a nhÃƒÂ¡Ã‚ÂºÃ‚Â­t kÃƒÆ’Ã‚Â½',
 
         result: 'success',
 
@@ -4042,9 +5346,31 @@ describe('Audit export API', () => {
 
 describeExternal('ECUS sync API', () => {
 
-  it('trả về cấu hình mặc định', async () => {
+  it('tÃƒÂ¡Ã‚Â»Ã‚Â« chÃƒÂ¡Ã‚Â»Ã¢â‚¬Ëœi xem cÃƒÂ¡Ã‚ÂºÃ‚Â¥u hÃƒÆ’Ã‚Â¬nh khi chÃƒâ€ Ã‚Â°a Ãƒâ€žÃ¢â‚¬ËœÃƒâ€žÃ†â€™ng nhÃƒÂ¡Ã‚ÂºÃ‚Â­p', async () => {
 
     const res = await request(app).get('/api/import/ecus/config');
+
+    expect(res.status).toBe(401);
+
+    expect(res.body.ok).toBe(false);
+
+  });
+
+
+
+  it('trÃƒÂ¡Ã‚ÂºÃ‚Â£ vÃƒÂ¡Ã‚Â»Ã‚Â cÃƒÂ¡Ã‚ÂºÃ‚Â¥u hÃƒÆ’Ã‚Â¬nh mÃƒÂ¡Ã‚ÂºÃ‚Â·c Ãƒâ€žÃ¢â‚¬ËœÃƒÂ¡Ã‚Â»Ã¢â‚¬Â¹nh cho quÃƒÂ¡Ã‚ÂºÃ‚Â£n trÃƒÂ¡Ã‚Â»Ã¢â‚¬Â¹ viÃƒÆ’Ã‚Âªn', async () => {
+
+    const adminAgent = request.agent(app);
+
+    const loginRes = await adminAgent
+
+      .post('/api/auth/login')
+
+      .send({ username: 'admin', password: 'admin123' });
+
+    expect(loginRes.status).toBe(200);
+
+    const res = await adminAgent.get('/api/import/ecus/config');
 
     expect(res.status).toBe(200);
 
@@ -4100,7 +5426,7 @@ describeExternal('ECUS sync API', () => {
 
 
 
-  it('từ chối cập nhật cấu hình khi chưa đăng nhập', async () => {
+  it('tÃƒÂ¡Ã‚Â»Ã‚Â« chÃƒÂ¡Ã‚Â»Ã¢â‚¬Ëœi cÃƒÂ¡Ã‚ÂºÃ‚Â­p nhÃƒÂ¡Ã‚ÂºÃ‚Â­t cÃƒÂ¡Ã‚ÂºÃ‚Â¥u hÃƒÆ’Ã‚Â¬nh khi chÃƒâ€ Ã‚Â°a Ãƒâ€žÃ¢â‚¬ËœÃƒâ€žÃ†â€™ng nhÃƒÂ¡Ã‚ÂºÃ‚Â­p', async () => {
 
     const res = await request(app).put('/api/import/ecus/config').send({ config: {} });
 
@@ -4112,7 +5438,7 @@ describeExternal('ECUS sync API', () => {
 
 
 
-  it('từ chối cập nhật cấu hình khi tài khoản không phải admin', async () => {
+  it('tÃƒÂ¡Ã‚Â»Ã‚Â« chÃƒÂ¡Ã‚Â»Ã¢â‚¬Ëœi cÃƒÂ¡Ã‚ÂºÃ‚Â­p nhÃƒÂ¡Ã‚ÂºÃ‚Â­t cÃƒÂ¡Ã‚ÂºÃ‚Â¥u hÃƒÆ’Ã‚Â¬nh khi tÃƒÆ’Ã‚Â i khoÃƒÂ¡Ã‚ÂºÃ‚Â£n khÃƒÆ’Ã‚Â´ng phÃƒÂ¡Ã‚ÂºÃ‚Â£i admin', async () => {
 
     const staffAgent = request.agent(app);
 
@@ -4136,7 +5462,7 @@ describeExternal('ECUS sync API', () => {
 
 
 
-  it('chuẩn hóa truy vấn dùng COALESCE ngày đăng ký để tránh timeout', async () => {
+  it('chuÃƒÂ¡Ã‚ÂºÃ‚Â©n hÃƒÆ’Ã‚Â³a truy vÃƒÂ¡Ã‚ÂºÃ‚Â¥n dÃƒÆ’Ã‚Â¹ng COALESCE ngÃƒÆ’Ã‚Â y Ãƒâ€žÃ¢â‚¬ËœÃƒâ€žÃ†â€™ng kÃƒÆ’Ã‚Â½ Ãƒâ€žÃ¢â‚¬ËœÃƒÂ¡Ã‚Â»Ã†â€™ trÃƒÆ’Ã‚Â¡nh timeout', async () => {
 
     resetDb();
 
@@ -4208,7 +5534,7 @@ describeExternal('ECUS sync API', () => {
 
 
 
-  it('thay thế điều kiện COALESCE khi xem trước dữ liệu ECUS', async () => {
+  it('thay thÃƒÂ¡Ã‚ÂºÃ‚Â¿ Ãƒâ€žÃ¢â‚¬ËœiÃƒÂ¡Ã‚Â»Ã‚Âu kiÃƒÂ¡Ã‚Â»Ã¢â‚¬Â¡n COALESCE khi xem trÃƒâ€ Ã‚Â°ÃƒÂ¡Ã‚Â»Ã¢â‚¬Âºc dÃƒÂ¡Ã‚Â»Ã‚Â¯ liÃƒÂ¡Ã‚Â»Ã¢â‚¬Â¡u ECUS', async () => {
 
     resetDb();
 
@@ -4256,14 +5582,6 @@ describeExternal('ECUS sync API', () => {
 
 
 
-    getDb()
-
-      .prepare('INSERT OR REPLACE INTO kv_store(key, value) VALUES(?, ?)')
-
-      .run('ecus_sync_config_v1', JSON.stringify(configPayload));
-
-
-
     const adminAgent = request.agent(app);
 
     const loginRes = await adminAgent
@@ -4273,6 +5591,14 @@ describeExternal('ECUS sync API', () => {
       .send({ username: 'admin', password: 'admin123' });
 
     expect(loginRes.status).toBe(200);
+
+    const saveRes = await adminAgent
+
+      .put('/api/import/ecus/config')
+
+      .send({ config: configPayload });
+
+    expect(saveRes.status).toBe(200);
 
 
 
@@ -4324,9 +5650,19 @@ describeExternal('ECUS sync API', () => {
 
 
 
-  it('trả về trạng thái chưa cấu hình khi thiếu thông tin SQL', async () => {
+  it('trÃƒÂ¡Ã‚ÂºÃ‚Â£ vÃƒÂ¡Ã‚Â»Ã‚Â trÃƒÂ¡Ã‚ÂºÃ‚Â¡ng thÃƒÆ’Ã‚Â¡i chÃƒâ€ Ã‚Â°a cÃƒÂ¡Ã‚ÂºÃ‚Â¥u hÃƒÆ’Ã‚Â¬nh cho quÃƒÂ¡Ã‚ÂºÃ‚Â£n trÃƒÂ¡Ã‚Â»Ã¢â‚¬Â¹ viÃƒÆ’Ã‚Âªn khi thiÃƒÂ¡Ã‚ÂºÃ‚Â¿u thÃƒÆ’Ã‚Â´ng tin SQL', async () => {
 
-    const res = await request(app).get('/api/import/ecus/status');
+    const adminAgent = request.agent(app);
+
+    const loginRes = await adminAgent
+
+      .post('/api/auth/login')
+
+      .send({ username: 'admin', password: 'admin123' });
+
+    expect(loginRes.status).toBe(200);
+
+    const res = await adminAgent.get('/api/import/ecus/status');
 
     expect(res.status).toBe(200);
 
@@ -4340,7 +5676,19 @@ describeExternal('ECUS sync API', () => {
 
 
 
-  it('từ chối chạy đồng bộ khi không đăng nhập', async () => {
+  it('tÃƒÂ¡Ã‚Â»Ã‚Â« chÃƒÂ¡Ã‚Â»Ã¢â‚¬Ëœi xem trÃƒÂ¡Ã‚ÂºÃ‚Â¡ng thÃƒÆ’Ã‚Â¡i ECUS khi chÃƒâ€ Ã‚Â°a Ãƒâ€žÃ¢â‚¬ËœÃƒâ€žÃ†â€™ng nhÃƒÂ¡Ã‚ÂºÃ‚Â­p', async () => {
+
+    const res = await request(app).get('/api/import/ecus/status');
+
+    expect(res.status).toBe(401);
+
+    expect(res.body.ok).toBe(false);
+
+  });
+
+
+
+  it('tÃƒÂ¡Ã‚Â»Ã‚Â« chÃƒÂ¡Ã‚Â»Ã¢â‚¬Ëœi chÃƒÂ¡Ã‚ÂºÃ‚Â¡y Ãƒâ€žÃ¢â‚¬ËœÃƒÂ¡Ã‚Â»Ã¢â‚¬Å“ng bÃƒÂ¡Ã‚Â»Ã¢â€žÂ¢ khi khÃƒÆ’Ã‚Â´ng Ãƒâ€žÃ¢â‚¬ËœÃƒâ€žÃ†â€™ng nhÃƒÂ¡Ã‚ÂºÃ‚Â­p', async () => {
 
     const res = await request(app)
 
@@ -4356,7 +5704,7 @@ describeExternal('ECUS sync API', () => {
 
 
 
-  it('từ chối chạy đồng bộ khi tài khoản không phải admin', async () => {
+  it('tÃƒÂ¡Ã‚Â»Ã‚Â« chÃƒÂ¡Ã‚Â»Ã¢â‚¬Ëœi chÃƒÂ¡Ã‚ÂºÃ‚Â¡y Ãƒâ€žÃ¢â‚¬ËœÃƒÂ¡Ã‚Â»Ã¢â‚¬Å“ng bÃƒÂ¡Ã‚Â»Ã¢â€žÂ¢ khi tÃƒÆ’Ã‚Â i khoÃƒÂ¡Ã‚ÂºÃ‚Â£n khÃƒÆ’Ã‚Â´ng phÃƒÂ¡Ã‚ÂºÃ‚Â£i admin', async () => {
 
     const staffAgent = request.agent(app);
 
@@ -4384,7 +5732,7 @@ describeExternal('ECUS sync API', () => {
 
 
 
-  it('từ chối xem trước dữ liệu ECUS khi chưa đăng nhập', async () => {
+  it('tÃƒÂ¡Ã‚Â»Ã‚Â« chÃƒÂ¡Ã‚Â»Ã¢â‚¬Ëœi xem trÃƒâ€ Ã‚Â°ÃƒÂ¡Ã‚Â»Ã¢â‚¬Âºc dÃƒÂ¡Ã‚Â»Ã‚Â¯ liÃƒÂ¡Ã‚Â»Ã¢â‚¬Â¡u ECUS khi chÃƒâ€ Ã‚Â°a Ãƒâ€žÃ¢â‚¬ËœÃƒâ€žÃ†â€™ng nhÃƒÂ¡Ã‚ÂºÃ‚Â­p', async () => {
 
     const res = await request(app)
 
@@ -4400,7 +5748,7 @@ describeExternal('ECUS sync API', () => {
 
 
 
-  it('từ chối xem trước dữ liệu ECUS khi tài khoản không phải admin', async () => {
+  it('tÃƒÂ¡Ã‚Â»Ã‚Â« chÃƒÂ¡Ã‚Â»Ã¢â‚¬Ëœi xem trÃƒâ€ Ã‚Â°ÃƒÂ¡Ã‚Â»Ã¢â‚¬Âºc dÃƒÂ¡Ã‚Â»Ã‚Â¯ liÃƒÂ¡Ã‚Â»Ã¢â‚¬Â¡u ECUS khi tÃƒÆ’Ã‚Â i khoÃƒÂ¡Ã‚ÂºÃ‚Â£n khÃƒÆ’Ã‚Â´ng phÃƒÂ¡Ã‚ÂºÃ‚Â£i admin', async () => {
 
     const staffAgent = request.agent(app);
 
@@ -4428,7 +5776,7 @@ describeExternal('ECUS sync API', () => {
 
 
 
-  it('xem trước dữ liệu phân loại tờ khai mới và đã tồn tại', async () => {
+  it('xem trÃƒâ€ Ã‚Â°ÃƒÂ¡Ã‚Â»Ã¢â‚¬Âºc dÃƒÂ¡Ã‚Â»Ã‚Â¯ liÃƒÂ¡Ã‚Â»Ã¢â‚¬Â¡u phÃƒÆ’Ã‚Â¢n loÃƒÂ¡Ã‚ÂºÃ‚Â¡i tÃƒÂ¡Ã‚Â»Ã‚Â khai mÃƒÂ¡Ã‚Â»Ã¢â‚¬Âºi vÃƒÆ’Ã‚Â  Ãƒâ€žÃ¢â‚¬ËœÃƒÆ’Ã‚Â£ tÃƒÂ¡Ã‚Â»Ã¢â‚¬Å“n tÃƒÂ¡Ã‚ÂºÃ‚Â¡i', async () => {
 
     const adminAgent = request.agent(app);
 
@@ -4476,15 +5824,11 @@ describeExternal('ECUS sync API', () => {
 
       mst: '1234567890',
 
-      cong_ty: 'CÔNG TY ABC',
+      cong_ty: 'CÃƒÆ’Ã¢â‚¬ÂNG TY ABC',
 
     }];
 
-    getDb()
-
-      .prepare('INSERT INTO kv_store (key, value) VALUES (?, ?)')
-
-      .run('decl_rows_v1', JSON.stringify(existingRow));
+    expect((await adminAgent.put('/api/storage/decl_rows_v1').send({ value: existingRow })).status).toBe(200);
 
 
 
@@ -4498,7 +5842,7 @@ describeExternal('ECUS sync API', () => {
 
         MaSoThue: '1234567890',
 
-        Ten_doanh_nghiep: 'CÔNG TY ABC',
+        Ten_doanh_nghiep: 'CÃƒÆ’Ã¢â‚¬ÂNG TY ABC',
 
         Loai_hinh: 'A11',
 
@@ -4512,7 +5856,7 @@ describeExternal('ECUS sync API', () => {
 
         MaSoThue: '5555555555',
 
-        Ten_doanh_nghiep: 'CÔNG TY MỚI',
+        Ten_doanh_nghiep: 'CÃƒÆ’Ã¢â‚¬ÂNG TY MÃƒÂ¡Ã‚Â»Ã…Â¡I',
 
         Loai_hinh: 'E11',
 
@@ -4552,7 +5896,273 @@ describeExternal('ECUS sync API', () => {
 
 
 
-  it('áp dụng bộ lọc MST khi xem trước và chạy đồng bộ', async () => {
+  it('xem trÃƒâ€ Ã‚Â°ÃƒÂ¡Ã‚Â»Ã¢â‚¬Âºc dÃƒÂ¡Ã‚Â»Ã‚Â¯ liÃƒÂ¡Ã‚Â»Ã¢â‚¬Â¡u qua v4 ECUS bridge contract vÃƒÂ¡Ã‚Â»Ã¢â‚¬Âºi bearer token', async () => {
+
+    resetDb();
+
+    sqlMock.__resetMock();
+
+    const previousBridgeToken = process.env.ECUS_BRIDGE_TOKEN;
+
+    process.env.ECUS_BRIDGE_TOKEN = 'bridge-secret';
+
+    try {
+
+      const adminAgent = request.agent(app);
+
+      const loginRes = await adminAgent
+
+        .post('/api/auth/login')
+
+        .send({ username: 'admin', password: 'admin123' });
+
+      expect(loginRes.status).toBe(200);
+
+
+
+      const existingRow = [{
+
+        so_tk: 'TK002',
+
+        nhanh: '',
+
+        date: '2025-08-01',
+
+        mst: '1234567890',
+
+        cong_ty: 'CÃƒÆ’Ã¢â‚¬ÂNG TY ABC',
+
+      }];
+
+      getDb()
+
+        .prepare('DELETE FROM kv_store WHERE key = ?')
+
+        .run('decl_rows_v1');
+
+      expect((await adminAgent.put('/api/storage/decl_rows_v1').send({ value: existingRow })).status).toBe(200);
+
+
+
+      const res = await request(app)
+
+        .post('/api/v4/declarations/imports/ecus-preview')
+
+        .set('Authorization', 'Bearer bridge-secret')
+
+        .send({
+
+          rawRows: [
+
+            {
+
+              So_tk: 'TK002',
+
+              Ngay_dang_ky: '2025-08-01',
+
+              MaSoThue: '1234567890',
+
+              Ten_doanh_nghiep: 'CÃƒÆ’Ã¢â‚¬ÂNG TY ABC',
+
+              Loai_hinh: 'A11',
+
+            },
+
+            {
+
+              So_tk: 'TK004',
+
+              Ngay_dang_ky: '2025-08-01',
+
+              MaSoThue: '5555555555',
+
+              Ten_doanh_nghiep: 'CÃƒÆ’Ã¢â‚¬ÂNG TY MÃƒÂ¡Ã‚Â»Ã…Â¡I',
+
+              Loai_hinh: 'E11',
+
+            },
+
+          ],
+
+          range: { from: '2025-08-01', to: '2025-08-02' },
+
+        });
+
+
+
+      expect(res.status).toBe(200);
+
+      expect(res.body?.ok).toBe(true);
+
+      expect(Array.isArray(res.body?.preview?.rows)).toBe(true);
+
+      expect(res.body.preview.rows.map((row) => row.status)).toEqual(expect.arrayContaining(['existing', 'new']));
+
+    } finally {
+
+      if (previousBridgeToken === undefined) {
+
+        delete process.env.ECUS_BRIDGE_TOKEN;
+
+      } else {
+
+        process.env.ECUS_BRIDGE_TOKEN = previousBridgeToken;
+
+      }
+
+    }
+
+  });
+
+
+
+  it('commit dÃƒÂ¡Ã‚Â»Ã‚Â¯ liÃƒÂ¡Ã‚Â»Ã¢â‚¬Â¡u qua v4 ECUS bridge contract vÃƒÂ¡Ã‚Â»Ã¢â‚¬Âºi bearer token', async () => {
+
+    resetDb();
+
+    sqlMock.__resetMock();
+
+    const previousBridgeToken = process.env.ECUS_BRIDGE_TOKEN;
+
+    process.env.ECUS_BRIDGE_TOKEN = 'bridge-secret';
+
+    try {
+
+      const adminAgent = request.agent(app);
+
+      const loginRes = await adminAgent
+
+        .post('/api/auth/login')
+
+        .send({ username: 'admin', password: 'admin123' });
+
+      expect(loginRes.status).toBe(200);
+
+
+
+      const existingRow = [{
+
+        so_tk: 'TK002',
+
+        nhanh: '',
+
+        date: '2025-08-01',
+
+        mst: '1234567890',
+
+        cong_ty: 'CÃƒÆ’Ã¢â‚¬ÂNG TY ABC CÃƒâ€¦Ã‚Â¨',
+
+      }];
+
+      getDb()
+
+        .prepare('DELETE FROM kv_store WHERE key = ?')
+
+        .run('decl_rows_v1');
+
+      expect((await adminAgent.put('/api/storage/decl_rows_v1').send({ value: existingRow })).status).toBe(200);
+
+
+
+      const res = await request(app)
+
+        .post('/api/v4/declarations/imports/ecus-commit')
+
+        .set('Authorization', 'Bearer bridge-secret')
+
+        .send({
+
+          rawRows: [
+
+            {
+
+              So_tk: 'TK002',
+
+              Ngay_dang_ky: '2025-08-01',
+
+              MaSoThue: '1234567890',
+
+              Ten_doanh_nghiep: 'CÃƒÆ’Ã¢â‚¬ÂNG TY ABC MÃƒÂ¡Ã‚Â»Ã…Â¡I',
+
+              Loai_hinh: 'A11',
+
+            },
+
+            {
+
+              So_tk: 'TK004',
+
+              Ngay_dang_ky: '2025-08-01',
+
+              MaSoThue: '5555555555',
+
+              Ten_doanh_nghiep: 'CÃƒÆ’Ã¢â‚¬ÂNG TY MÃƒÂ¡Ã‚Â»Ã…Â¡I',
+
+              Loai_hinh: 'E11',
+
+            },
+
+          ],
+
+          fetchedTotal: 2,
+
+          actor: 'bridge-service',
+
+          reason: 'manual',
+
+          range: { from: '2025-08-01', to: '2025-08-02' },
+
+        });
+
+
+
+      expect(res.status).toBe(200);
+
+      expect(res.body?.ok).toBe(true);
+
+      expect(res.body?.result).toMatchObject({
+
+        fetched: 2,
+
+        imported: 1,
+
+        updated: 1,
+
+        skipped: 0,
+
+        reviewLocked: 0,
+
+      });
+
+
+
+      const storedRows = readDeclarationRowsSnapshot(getDb()) || [];
+
+      expect(storedRows).toHaveLength(2);
+
+      expect(storedRows.find((row) => row.mst === '1234567890')).toMatchObject({ cong_ty: 'CÃƒÆ’Ã¢â‚¬ÂNG TY ABC MÃƒÂ¡Ã‚Â»Ã…Â¡I' });
+
+      expect(storedRows.find((row) => row.mst === '5555555555')).toMatchObject({ cong_ty: 'CÃƒÆ’Ã¢â‚¬ÂNG TY MÃƒÂ¡Ã‚Â»Ã…Â¡I' });
+
+    } finally {
+
+      if (previousBridgeToken === undefined) {
+
+        delete process.env.ECUS_BRIDGE_TOKEN;
+
+      } else {
+
+        process.env.ECUS_BRIDGE_TOKEN = previousBridgeToken;
+
+      }
+
+    }
+
+  });
+
+
+
+  it('ÃƒÆ’Ã‚Â¡p dÃƒÂ¡Ã‚Â»Ã‚Â¥ng bÃƒÂ¡Ã‚Â»Ã¢â€žÂ¢ lÃƒÂ¡Ã‚Â»Ã‚Âc MST khi xem trÃƒâ€ Ã‚Â°ÃƒÂ¡Ã‚Â»Ã¢â‚¬Âºc vÃƒÆ’Ã‚Â  chÃƒÂ¡Ã‚ÂºÃ‚Â¡y Ãƒâ€žÃ¢â‚¬ËœÃƒÂ¡Ã‚Â»Ã¢â‚¬Å“ng bÃƒÂ¡Ã‚Â»Ã¢â€žÂ¢', async () => {
 
     resetDb();
 
@@ -4680,7 +6290,7 @@ describeExternal('ECUS sync API', () => {
 
 
 
-  it('tự động bổ sung MST mới vào bảng gán sau khi đồng bộ ECUS', async () => {
+  it('tÃƒÂ¡Ã‚Â»Ã‚Â± Ãƒâ€žÃ¢â‚¬ËœÃƒÂ¡Ã‚Â»Ã¢â€žÂ¢ng bÃƒÂ¡Ã‚Â»Ã¢â‚¬Â¢ sung MST mÃƒÂ¡Ã‚Â»Ã¢â‚¬Âºi vÃƒÆ’Ã‚Â o bÃƒÂ¡Ã‚ÂºÃ‚Â£ng gÃƒÆ’Ã‚Â¡n sau khi Ãƒâ€žÃ¢â‚¬ËœÃƒÂ¡Ã‚Â»Ã¢â‚¬Å“ng bÃƒÂ¡Ã‚Â»Ã¢â€žÂ¢ ECUS', async () => {
 
     resetDb();
 
@@ -4790,7 +6400,7 @@ describeExternal('ECUS sync API', () => {
 
 
 
-  it('lưu cấu hình và chạy đồng bộ thành công', async () => {
+  it('lÃƒâ€ Ã‚Â°u cÃƒÂ¡Ã‚ÂºÃ‚Â¥u hÃƒÆ’Ã‚Â¬nh vÃƒÆ’Ã‚Â  chÃƒÂ¡Ã‚ÂºÃ‚Â¡y Ãƒâ€žÃ¢â‚¬ËœÃƒÂ¡Ã‚Â»Ã¢â‚¬Å“ng bÃƒÂ¡Ã‚Â»Ã¢â€žÂ¢ thÃƒÆ’Ã‚Â nh cÃƒÆ’Ã‚Â´ng', async () => {
 
     const adminAgent = request.agent(app);
 
@@ -4836,29 +6446,27 @@ describeExternal('ECUS sync API', () => {
 
 
 
-    sqlMock.__setMockResult([
+    const ecusRow = {
 
-      {
+      So_tk: '105110557420',
 
-        So_tk: '105110557420',
+      Ngay_dang_ky: '2025-08-01',
 
-        Ngay_dang_ky: '2025-08-01',
+      MaSoThue: '1051105574',
 
-        MaSoThue: '1051105574',
+      TenDoanhNghiep: 'CONG TY TNHH ABC',
 
-        TenDoanhNghiep: 'CÔNG TY TNHH ABC',
+      Loai_hinh: 'A11',
 
-        Loai_hinh: 'A11',
+      muc_hang: 5,
 
-        muc_hang: 5,
+      ds_gp: 'GP01, GP05',
 
-        ds_gp: 'GP01, GP05',
+      NhanVienNhap: 'Phuong',
 
-        NhanVienNhap: 'Phương',
+    };
 
-      },
-
-    ]);
+    sqlMock.__setMockResult([ecusRow]);
 
 
 
@@ -4936,9 +6544,9 @@ describeExternal('ECUS sync API', () => {
 
       mst: '1051105574',
 
-      cong_ty: 'CÔNG TY TNHH ABC',
+      cong_ty: ecusRow.TenDoanhNghiep,
 
-      nhan_vien: 'Phương',
+      nhan_vien: ecusRow.NhanVienNhap,
 
       so_luong_gp: 2,
 
@@ -4948,7 +6556,7 @@ describeExternal('ECUS sync API', () => {
 
 
 
-  it('bỏ qua tờ khai đã có và giữ nguyên dữ liệu hiện tại', async () => {
+  it('bÃƒÂ¡Ã‚Â»Ã‚Â qua tÃƒÂ¡Ã‚Â»Ã‚Â khai Ãƒâ€žÃ¢â‚¬ËœÃƒÆ’Ã‚Â£ cÃƒÆ’Ã‚Â³ vÃƒÆ’Ã‚Â  giÃƒÂ¡Ã‚Â»Ã‚Â¯ nguyÃƒÆ’Ã‚Âªn dÃƒÂ¡Ã‚Â»Ã‚Â¯ liÃƒÂ¡Ã‚Â»Ã¢â‚¬Â¡u hiÃƒÂ¡Ã‚Â»Ã¢â‚¬Â¡n tÃƒÂ¡Ã‚ÂºÃ‚Â¡i', async () => {
 
     const adminAgent = request.agent(app);
 
@@ -4992,13 +6600,13 @@ describeExternal('ECUS sync API', () => {
 
         MaSoThue: '7777777777',
 
-        TenDoanhNghiep: 'CÔNG TY XYZ',
+        TenDoanhNghiep: 'CÃƒÆ’Ã¢â‚¬ÂNG TY XYZ',
 
         Loai_hinh: 'A11',
 
         muc_hang: 3,
 
-        NhanVienNhap: 'Phương',
+        NhanVienNhap: 'PhÃƒâ€ Ã‚Â°Ãƒâ€ Ã‚Â¡ng',
 
       },
 
@@ -5028,7 +6636,7 @@ describeExternal('ECUS sync API', () => {
 
       mst: '7777777777',
 
-      cong_ty: 'CÔNG TY XYZ',
+      cong_ty: 'CÃƒÆ’Ã¢â‚¬ÂNG TY XYZ',
 
       nhan_vien: 'Manual Edit',
 
@@ -5036,11 +6644,7 @@ describeExternal('ECUS sync API', () => {
 
     }];
 
-    getDb()
-
-      .prepare('INSERT INTO kv_store (key, value) VALUES (?, ?)')
-
-      .run('decl_rows_v1', JSON.stringify(manualRow));
+    expect((await adminAgent.put('/api/storage/decl_rows_v1').send({ value: manualRow })).status).toBe(200);
 
 
 
@@ -5054,13 +6658,13 @@ describeExternal('ECUS sync API', () => {
 
         MaSoThue: '7777777777',
 
-        TenDoanhNghiep: 'CÔNG TY XYZ',
+        TenDoanhNghiep: 'CÃƒÆ’Ã¢â‚¬ÂNG TY XYZ',
 
         Loai_hinh: 'A11',
 
         muc_hang: 3,
 
-        NhanVienNhap: 'Khác',
+        NhanVienNhap: 'KhÃƒÆ’Ã‚Â¡c',
 
       },
 
@@ -5156,11 +6760,7 @@ describeExternal('ECUS sync API', () => {
 
     }];
 
-    getDb()
-
-      .prepare('INSERT INTO kv_store (key, value) VALUES (?, ?)')
-
-      .run('decl_rows_v1', JSON.stringify(existingRow));
+    expect((await adminAgent.put('/api/storage/decl_rows_v1').send({ value: existingRow })).status).toBe(200);
 
 
 
@@ -5236,7 +6836,7 @@ describeExternal('ECUS sync API', () => {
 
 
 
-  it('đánh dấu C/O khi dữ liệu ECUS có mã biểu thuế phù hợp', async () => {
+  it('Ãƒâ€žÃ¢â‚¬ËœÃƒÆ’Ã‚Â¡nh dÃƒÂ¡Ã‚ÂºÃ‚Â¥u C/O khi dÃƒÂ¡Ã‚Â»Ã‚Â¯ liÃƒÂ¡Ã‚Â»Ã¢â‚¬Â¡u ECUS cÃƒÆ’Ã‚Â³ mÃƒÆ’Ã‚Â£ biÃƒÂ¡Ã‚Â»Ã†â€™u thuÃƒÂ¡Ã‚ÂºÃ‚Â¿ phÃƒÆ’Ã‚Â¹ hÃƒÂ¡Ã‚Â»Ã‚Â£p', async () => {
 
     const adminAgent = request.agent(app);
 
@@ -5278,17 +6878,17 @@ describeExternal('ECUS sync API', () => {
 
       {
 
-        'Số tờ khai': '105110557420',
+        so_tk: '105110557420',
 
-        'Ngày đăng ký': '2025-08-01',
+        ngay_dang_ky: '2025-08-01',
 
-        'Mã số thuế': '1051105574',
+        mst: '1051105574',
 
-        'Tên doanh nghiệp': 'CÔNG TY TNHH C/O',
+        cong_ty: 'CONG TY TNHH C/O',
 
-        'Mã biểu thuế XNK': 'B05',
+        ma_bieu_thue_xnk: 'B05',
 
-        'Số mục hàng': '1',
+        muc_hang: '1',
 
       },
 
@@ -5310,13 +6910,15 @@ describeExternal('ECUS sync API', () => {
 
     const storedRows = JSON.parse(row.value);
 
-    expect(storedRows[0]).toMatchObject({ co: 'Có', has_co: true });
+    expect(storedRows).toHaveLength(1);
+    expect(storedRows[0].has_co).toBe(true);
+    expect(storedRows[0].co).toBeTruthy();
 
   });
 
 
 
-  it('loại trừ giấy phép theo quy tắc toàn cục khi đồng bộ', async () => {
+  it('loÃƒÂ¡Ã‚ÂºÃ‚Â¡i trÃƒÂ¡Ã‚Â»Ã‚Â« giÃƒÂ¡Ã‚ÂºÃ‚Â¥y phÃƒÆ’Ã‚Â©p theo quy tÃƒÂ¡Ã‚ÂºÃ‚Â¯c toÃƒÆ’Ã‚Â n cÃƒÂ¡Ã‚Â»Ã‚Â¥c khi Ãƒâ€žÃ¢â‚¬ËœÃƒÂ¡Ã‚Â»Ã¢â‚¬Å“ng bÃƒÂ¡Ã‚Â»Ã¢â€žÂ¢', async () => {
 
     const adminAgent = request.agent(app);
 
@@ -5460,7 +7062,7 @@ describeExternal('ECUS sync API', () => {
 
 
 
-  it('loại trừ giấy phép theo đại lý HQ khi đồng bộ', async () => {
+  it('loÃƒÂ¡Ã‚ÂºÃ‚Â¡i trÃƒÂ¡Ã‚Â»Ã‚Â« giÃƒÂ¡Ã‚ÂºÃ‚Â¥y phÃƒÆ’Ã‚Â©p theo Ãƒâ€žÃ¢â‚¬ËœÃƒÂ¡Ã‚ÂºÃ‚Â¡i lÃƒÆ’Ã‚Â½ HQ khi Ãƒâ€žÃ¢â‚¬ËœÃƒÂ¡Ã‚Â»Ã¢â‚¬Å“ng bÃƒÂ¡Ã‚Â»Ã¢â€žÂ¢', async () => {
 
     const adminAgent = request.agent(app);
 
@@ -5626,7 +7228,7 @@ describeExternal('ECUS sync API', () => {
 
 
 
-  it('kiểm tra trạng thái SQL Server thành công khi đã cấu hình', async () => {
+  it('kiÃƒÂ¡Ã‚Â»Ã†â€™m tra trÃƒÂ¡Ã‚ÂºÃ‚Â¡ng thÃƒÆ’Ã‚Â¡i SQL Server thÃƒÆ’Ã‚Â nh cÃƒÆ’Ã‚Â´ng khi Ãƒâ€žÃ¢â‚¬ËœÃƒÆ’Ã‚Â£ cÃƒÂ¡Ã‚ÂºÃ‚Â¥u hÃƒÆ’Ã‚Â¬nh', async () => {
 
     const adminAgent = request.agent(app);
 
@@ -5698,7 +7300,7 @@ describeExternal('ECUS sync API', () => {
 
 
 
-  it('đồng bộ được bản ghi với tiêu đề cột tiếng Việt có dấu', async () => {
+  it('Ãƒâ€žÃ¢â‚¬ËœÃƒÂ¡Ã‚Â»Ã¢â‚¬Å“ng bÃƒÂ¡Ã‚Â»Ã¢â€žÂ¢ Ãƒâ€žÃ¢â‚¬ËœÃƒâ€ Ã‚Â°ÃƒÂ¡Ã‚Â»Ã‚Â£c bÃƒÂ¡Ã‚ÂºÃ‚Â£n ghi vÃƒÂ¡Ã‚Â»Ã¢â‚¬Âºi tiÃƒÆ’Ã‚Âªu Ãƒâ€žÃ¢â‚¬ËœÃƒÂ¡Ã‚Â»Ã‚Â cÃƒÂ¡Ã‚Â»Ã¢â€žÂ¢t tiÃƒÂ¡Ã‚ÂºÃ‚Â¿ng ViÃƒÂ¡Ã‚Â»Ã¢â‚¬Â¡t cÃƒÆ’Ã‚Â³ dÃƒÂ¡Ã‚ÂºÃ‚Â¥u', async () => {
 
     const adminAgent = request.agent(app);
 
@@ -5740,29 +7342,27 @@ describeExternal('ECUS sync API', () => {
 
 
 
-    sqlMock.__setMockResult([
+    const exportRow = {
 
-      {
+      so_tk: '305254416960',
 
-        'Số tờ khai': '305254416960',
+      ngay_dang_ky: '2025-08-15',
 
-        'Ngày đăng ký': '2025-08-15',
+      mst: '2301158516',
 
-        'Mã số thuế': '2301158516',
+      cong_ty: 'CONG TY TNHH XYZ',
 
-        'Tên doanh nghiệp': 'CÔNG TY TNHH XYZ',
+      muc_hang: '4',
 
-        'Số mục hàng': '4',
+      licenses: '3',
 
-        'Số lượng GP': '3',
+      nhan_vien_xuat: 'Hoc',
 
-        'Nhân viên xuất': 'Học',
+      team: 'Team 3',
 
-        'Tổ đội': 'Team 3',
+    };
 
-      },
-
-    ]);
+    sqlMock.__setMockResult([exportRow]);
 
 
 
@@ -5800,13 +7400,13 @@ describeExternal('ECUS sync API', () => {
 
       mst: '2301158516',
 
-      cong_ty: 'CÔNG TY TNHH XYZ',
+      cong_ty: exportRow.cong_ty,
 
       so_luong_gp: 3,
 
       team: 'Team 3',
 
-      nhan_vien: 'Học',
+      nhan_vien: exportRow.nhan_vien_xuat,
 
     });
 
@@ -5814,7 +7414,7 @@ describeExternal('ECUS sync API', () => {
 
 
 
-  it('đặt tham số to tới cuối ngày khi truyền chuỗi ngày để không bỏ sót bản ghi cuối ngày', async () => {
+  it('Ãƒâ€žÃ¢â‚¬ËœÃƒÂ¡Ã‚ÂºÃ‚Â·t tham sÃƒÂ¡Ã‚Â»Ã¢â‚¬Ëœ to tÃƒÂ¡Ã‚Â»Ã¢â‚¬Âºi cuÃƒÂ¡Ã‚Â»Ã¢â‚¬Ëœi ngÃƒÆ’Ã‚Â y khi truyÃƒÂ¡Ã‚Â»Ã‚Ân chuÃƒÂ¡Ã‚Â»Ã¢â‚¬â€i ngÃƒÆ’Ã‚Â y Ãƒâ€žÃ¢â‚¬ËœÃƒÂ¡Ã‚Â»Ã†â€™ khÃƒÆ’Ã‚Â´ng bÃƒÂ¡Ã‚Â»Ã‚Â sÃƒÆ’Ã‚Â³t bÃƒÂ¡Ã‚ÂºÃ‚Â£n ghi cuÃƒÂ¡Ã‚Â»Ã¢â‚¬Ëœi ngÃƒÆ’Ã‚Â y', async () => {
 
     const adminAgent = request.agent(app);
 
@@ -5866,7 +7466,7 @@ describeExternal('ECUS sync API', () => {
 
         MaSoThue: '1234567890',
 
-        Ten_doanh_nghiep: 'CÔNG TY ABC',
+        Ten_doanh_nghiep: 'CÃƒÆ’Ã¢â‚¬ÂNG TY ABC',
 
         So_muc: 2,
 
@@ -5930,7 +7530,7 @@ describeExternal('ECUS sync API', () => {
 
 
 
-  it('ghi nhận lỗi khi SQL Server gặp sự cố', async () => {
+  it('ghi nhÃƒÂ¡Ã‚ÂºÃ‚Â­n lÃƒÂ¡Ã‚Â»Ã¢â‚¬â€i khi SQL Server gÃƒÂ¡Ã‚ÂºÃ‚Â·p sÃƒÂ¡Ã‚Â»Ã‚Â± cÃƒÂ¡Ã‚Â»Ã¢â‚¬Ëœ', async () => {
 
     const adminAgent = request.agent(app);
 
@@ -5992,7 +7592,7 @@ describeExternal('ECUS sync API', () => {
 
 
 
-    const configRes = await request(app).get('/api/import/ecus/config');
+    const configRes = await adminAgent.get('/api/import/ecus/config');
 
     expect(configRes.body.config.lastStatus).toMatch(/error/i);
 
@@ -6012,6 +7612,1301 @@ describeExternal('ECUS sync API', () => {
 
 
 
+describe('V4 reporting read-model API', () => {
+
+  beforeEach(() => {
+
+    resetDb();
+
+    seedReportingReadModelData();
+
+  });
+
+
+
+  it('yÃƒÆ’Ã‚Âªu cÃƒÂ¡Ã‚ÂºÃ‚Â§u Ãƒâ€žÃ¢â‚¬ËœÃƒâ€žÃ†â€™ng nhÃƒÂ¡Ã‚ÂºÃ‚Â­p trÃƒâ€ Ã‚Â°ÃƒÂ¡Ã‚Â»Ã¢â‚¬Âºc khi Ãƒâ€žÃ¢â‚¬ËœÃƒÂ¡Ã‚Â»Ã‚Âc reporting view KPI', async () => {
+
+    const response = await request(app).get('/api/v4/reporting/view');
+
+    expect(response.status).toBe(401);
+
+    expect(response.body.ok).toBe(false);
+
+  });
+
+
+
+  it('returns reporting view contract v4', async () => {
+    const adminAgent = request.agent(app);
+    const loginRes = await adminAgent.post('/api/auth/login').send({ username: 'admin', password: 'admin123' });
+    expect(loginRes.status).toBe(200);
+
+    const response = await adminAgent.get('/api/v4/reporting/view').query({ from: '2026-02-01', to: '2026-02-28' });
+    expect(response.status).toBe(200);
+    expect(response.body.ok).toBe(true);
+    expect(response.body.data.meta).toEqual({
+      servedAt: expect.any(String),
+      aggregateStatus: {
+        available: false,
+        generatedAt: '',
+        queryKey: '',
+        total: 0,
+        range: { from: '', to: '' },
+      },
+    });
+    expect(response.body.data.summary).toEqual(expect.objectContaining({
+      range: { from: '2026-02-01', to: '2026-02-28' },
+      ruleSet: { id: 'legacy-kpi', name: 'Legacy KPI' },
+      summary: expect.objectContaining({
+        decls: expect.any(Number),
+        import: expect.any(Number),
+        export: expect.any(Number),
+        items: expect.any(Number),
+        kpi: expect.any(Number),
+        companyCount: expect.any(Number),
+        licenseSummary: expect.any(String),
+      }),
+      trend: expect.objectContaining({
+        series: expect.any(Array),
+        comparison: expect.objectContaining({
+          delta: expect.objectContaining({
+            kpi: expect.any(Number),
+            decls: expect.any(Number),
+          }),
+        }),
+        topTeams: expect.any(Array),
+      }),
+    }));
+    expect(response.body.data.summary.adjustments).toEqual(expect.objectContaining({
+      list: expect.any(Array),
+      applied: expect.any(Array),
+      totalPoints: expect.any(Number),
+      pendingCount: expect.any(Number),
+      approvedCount: expect.any(Number),
+      rejectedCount: expect.any(Number),
+      appliedCount: expect.any(Number),
+      totalsByCategory: expect.any(Object),
+    }));
+    expect(response.body.data.summary.companies).toEqual(expect.objectContaining({
+      staff: expect.any(Array),
+      teams: expect.any(Array),
+    }));
+    expect(response.body.data.staff).toEqual(expect.objectContaining({
+      range: { from: '2026-02-01', to: '2026-02-28' },
+      ruleSet: { id: 'legacy-kpi', name: 'Legacy KPI' },
+      total: expect.any(Number),
+      keysHash: expect.any(String),
+      items: expect.any(Array),
+    }));
+    expect(response.body.data.teams).toEqual(expect.objectContaining({
+      range: { from: '2026-02-01', to: '2026-02-28' },
+      ruleSet: { id: 'legacy-kpi', name: 'Legacy KPI' },
+      total: expect.any(Number),
+      keysHash: expect.any(String),
+      items: expect.any(Array),
+    }));
+  });
+
+  it('returns reporting view bundle contract v4', async () => {
+    const adminAgent = request.agent(app);
+    const loginRes = await adminAgent.post('/api/auth/login').send({ username: 'admin', password: 'admin123' });
+
+    expect(loginRes.status).toBe(200);
+
+    const response = await adminAgent.get('/api/v4/reporting/view').query({ from: '2026-02-01', to: '2026-02-28' });
+
+    expect(response.status).toBe(200);
+    expect(response.body.ok).toBe(true);
+    expect(response.body.data.summary).toEqual(expect.objectContaining({
+      range: { from: '2026-02-01', to: '2026-02-28' },
+      ruleSet: { id: 'legacy-kpi', name: 'Legacy KPI' },
+    }));
+    expect(response.body.data.meta).toEqual(expect.objectContaining({
+      servedAt: expect.any(String),
+      aggregateStatus: expect.objectContaining({ available: false }),
+    }));
+    expect(response.body.data.staff).toEqual(expect.objectContaining({
+      total: expect.any(Number),
+      range: { from: '2026-02-01', to: '2026-02-28' },
+      ruleSet: { id: 'legacy-kpi', name: 'Legacy KPI' },
+      keysHash: expect.any(String),
+      items: expect.any(Array),
+    }));
+    expect(response.body.data.teams).toEqual(expect.objectContaining({
+      total: expect.any(Number),
+      range: { from: '2026-02-01', to: '2026-02-28' },
+      ruleSet: { id: 'legacy-kpi', name: 'Legacy KPI' },
+      keysHash: expect.any(String),
+      items: expect.any(Array),
+    }));
+  });
+
+  it('Ãƒâ€žÃ¢â‚¬ËœÃƒÆ’Ã‚Â­nh kÃƒÆ’Ã‚Â¨m freshness monthly aggregate vÃƒÆ’Ã‚Â o reporting view khi snapshot phÃƒÆ’Ã‚Â¹ hÃƒÂ¡Ã‚Â»Ã‚Â£p Ãƒâ€žÃ¢â‚¬ËœÃƒÆ’Ã‚Â£ tÃƒÂ¡Ã‚Â»Ã¢â‚¬Å“n tÃƒÂ¡Ã‚ÂºÃ‚Â¡i', async () => {
+
+    const adminAgent = request.agent(app);
+
+    const loginRes = await adminAgent.post('/api/auth/login').send({ username: 'admin', password: 'admin123' });
+
+    expect(loginRes.status).toBe(200);
+
+    const query = { from: '2026-01-01', to: '2026-02-28' };
+    const aggregateRes = await adminAgent.get('/api/v4/reporting/aggregates/monthly').query(query);
+
+    expect(aggregateRes.status).toBe(200);
+
+    const response = await adminAgent.get('/api/v4/reporting/view').query(query);
+
+    expect(response.status).toBe(200);
+    expect(response.body.data.meta).toEqual({
+      servedAt: expect.any(String),
+      aggregateStatus: {
+        available: true,
+        generatedAt: aggregateRes.body.data.generatedAt,
+        queryKey: createMonthlyAggregateQueryKey(query),
+        total: aggregateRes.body.data.total,
+        range: {
+          from: '2026-01-01',
+          to: '2026-02-28',
+        },
+      },
+    });
+  });
+
+  it('retire cÃƒÆ’Ã‚Â¡c compatibility reporting slice endpoints Ãƒâ€žÃ¢â‚¬ËœÃƒÂ¡Ã‚Â»Ã†â€™ dÃƒÂ¡Ã‚Â»Ã¢â‚¬Å“n vÃƒÂ¡Ã‚Â»Ã‚Â /view', async () => {
+
+    const adminAgent = request.agent(app);
+
+    const loginRes = await adminAgent.post('/api/auth/login').send({ username: 'admin', password: 'admin123' });
+
+
+
+    expect(loginRes.status).toBe(200);
+
+
+
+    const query = { from: '2026-02-01', to: '2026-02-28', ruleId: 'legacy-kpi' };
+
+    const [summaryResponse, staffResponse, teamsResponse] = await Promise.all([
+      adminAgent.get('/api/v4/reporting/summary').query(query),
+
+      adminAgent.get('/api/v4/reporting/staff').query(query),
+
+      adminAgent.get('/api/v4/reporting/teams').query(query),
+
+    ]);
+
+
+
+    expect(summaryResponse.status).toBe(404);
+
+    expect(staffResponse.status).toBe(404);
+
+    expect(teamsResponse.status).toBe(404);
+
+  });
+
+
+
+  it('cho phÃƒÆ’Ã‚Â©p chÃƒÂ¡Ã‚Â»Ã‚Ân reporting rule qua ruleId vÃƒÆ’Ã‚Â  trÃƒÂ¡Ã‚ÂºÃ‚Â£ vÃƒÂ¡Ã‚Â»Ã‚Â adjustment summary Ãƒâ€žÃ¢â‚¬ËœÃƒÆ’Ã‚Â£ chuÃƒÂ¡Ã‚ÂºÃ‚Â©n hÃƒÆ’Ã‚Â³a', async () => {
+
+    const seed = createReportingSeed();
+
+    upsertKvValue('kpi_rules_v2', {
+
+      version: 2,
+
+      activeId: 'legacy-kpi',
+
+      sets: [
+
+        seed.kpi_rules_v2,
+
+        {
+
+          ...seed.kpi_rules_v2,
+
+          id: 'boosted-kpi',
+
+          name: 'Boosted KPI',
+
+          groups: {
+
+            ...seed.kpi_rules_v2.groups,
+
+            group1: {
+
+              ...seed.kpi_rules_v2.groups.group1,
+
+              base: 1,
+
+              perItem: 0.5,
+
+            },
+
+          },
+
+        },
+
+      ],
+
+    });
+
+    upsertKvValue('kpi_adjustments_v1', [
+
+      {
+
+        id: 'adj-reporting-1',
+
+        category: 'support_fixed',
+
+        month: '2026-02',
+
+        staffName: 'Lan',
+
+        teamName: 'Blue Team',
+
+        quantity: 1,
+
+        unitPoints: 2,
+
+        totalPoints: 2,
+
+        status: 'approved',
+
+      },
+
+    ]);
+
+
+
+    const adminAgent = request.agent(app);
+
+    const loginRes = await adminAgent.post('/api/auth/login').send({ username: 'admin', password: 'admin123' });
+
+    expect(loginRes.status).toBe(200);
+
+
+
+    const response = await adminAgent.get('/api/v4/reporting/view').query({ from: '2026-02-01', to: '2026-02-28', ruleId: 'boosted-kpi' });
+
+    expect(response.status).toBe(200);
+
+    expect(response.body.data.summary.ruleSet).toEqual({
+
+      id: 'boosted-kpi',
+
+      name: 'Boosted KPI',
+
+    });
+
+    expect(response.body.data.summary.summary).toEqual(
+
+      expect.objectContaining({
+
+        decls: 2,
+
+        items: 3,
+
+        kpi: 5.5,
+
+      })
+
+    );
+
+    expect(response.body.data.summary.adjustments).toEqual(
+
+      expect.objectContaining({
+
+        totalPoints: 2,
+
+        approvedCount: 1,
+
+        appliedCount: 1,
+
+        pendingCount: 0,
+
+        rejectedCount: 0,
+
+      })
+
+    );
+
+    expect(response.body.data.summary.adjustments.list).toEqual(
+
+      expect.arrayContaining([
+
+        expect.objectContaining({
+
+          id: 'adj-reporting-1',
+
+          category: 'support_fixed',
+
+          status: 'approved',
+
+        }),
+
+      ])
+
+    );
+
+    expect(response.body.data.summary.adjustments.applied).toEqual(
+
+      expect.arrayContaining([
+
+        expect.objectContaining({
+
+          so_tk: expect.stringContaining('Điểm bổ sung'),
+
+          kpi: 2,
+
+          nhan_vien: 'Lan',
+
+          team: 'Blue Team',
+
+        }),
+
+      ])
+
+    );
+
+    expect(response.body.data.summary.adjustments.totalsByCategory).toEqual(
+
+      expect.objectContaining({
+
+        support: expect.objectContaining({
+
+          points: 2,
+
+          quantity: 1,
+
+        }),
+
+      })
+
+    );
+
+    expect(response.body.data.summary.adjustments.byStaff).toBeUndefined();
+
+    expect(response.body.data.summary.adjustments.byTeam).toBeUndefined();
+
+    expect(response.body.data.staff.ruleSet).toEqual({
+
+      id: 'boosted-kpi',
+
+      name: 'Boosted KPI',
+
+    });
+
+    expect(response.body.data.staff.items).toEqual([
+
+      expect.objectContaining({
+
+        key: 'lan',
+
+        stats: expect.objectContaining({
+
+          kpi: 5.5,
+
+        }),
+
+      }),
+
+    ]);
+
+    expect(response.body.data.teams.ruleSet).toEqual({
+
+      id: 'boosted-kpi',
+
+      name: 'Boosted KPI',
+
+    });
+
+    expect(response.body.data.teams.items).toEqual([
+
+      expect.objectContaining({
+
+        key: 'blue team',
+
+        stats: expect.objectContaining({
+
+          kpi: 5.5,
+
+        }),
+
+      }),
+
+    ]);
+
+  });
+
+
+
+  it('trÃƒÂ¡Ã‚ÂºÃ‚Â£ vÃƒÂ¡Ã‚Â»Ã‚Â schedule KPI Ãƒâ€žÃ¢â‚¬ËœÃƒÆ’Ã‚Â£ chuÃƒÂ¡Ã‚ÂºÃ‚Â©n hÃƒÆ’Ã‚Â³a vÃƒÆ’Ã‚Â  next-run xÃƒÆ’Ã‚Â¡c Ãƒâ€žÃ¢â‚¬ËœÃƒÂ¡Ã‚Â»Ã¢â‚¬Â¹nh Ãƒâ€žÃ¢â‚¬ËœÃƒâ€ Ã‚Â°ÃƒÂ¡Ã‚Â»Ã‚Â£c', async () => {
+
+    const adminAgent = request.agent(app);
+
+    const loginRes = await adminAgent.post('/api/auth/login').send({ username: 'admin', password: 'admin123' });
+
+    expect(loginRes.status).toBe(200);
+
+
+
+    const asOf = '2026-03-09T07:00:00.000Z';
+
+    const response = await adminAgent.get('/api/v4/reporting/schedules').query({ asOf });
+
+
+
+    expect(response.status).toBe(200);
+
+    expect(response.body.ok).toBe(true);
+
+    expect(response.body.data.total).toBe(2);
+    expect(response.body.data.aggregateStatus).toEqual({
+
+      available: true,
+
+      generatedAt: expect.any(String),
+
+      queryKey: createMonthlyAggregateQueryKey({ from: '2026-02-01', to: '2026-02-28' }),
+
+      total: 1,
+
+      range: {
+
+        from: '2026-02-01',
+
+        to: '2026-02-28',
+
+      },
+
+    });
+
+    expect(response.body.data.items).toEqual([
+
+      expect.objectContaining({
+
+        id: 'weekly-blue',
+
+        name: 'Weekly Blue',
+
+        frequency: 'weekly',
+
+        time: '08:30',
+
+        dayOfWeek: 1,
+
+        dayOfMonth: null,
+
+        formats: ['pdf', 'excel'],
+
+        recipients: ['ops@example.com', 'lead@example.com'],
+
+        active: true,
+
+        lastRun: '2026-03-02T01:30:00.000Z',
+
+      }),
+
+      expect.objectContaining({
+
+        id: 'monthly-finance',
+
+        name: 'Monthly Finance',
+
+        frequency: 'monthly',
+
+        time: '09:15',
+
+        dayOfWeek: null,
+
+        dayOfMonth: 20,
+
+        formats: ['pdf'],
+
+        recipients: ['finance@example.com'],
+
+        active: false,
+
+        lastRun: '2026-02-20T02:15:00.000Z',
+
+        nextRun: '',
+
+      }),
+
+    ]);
+
+    expect(response.body.data.items[0].nextRun).not.toBe('');
+
+    expect(new Date(response.body.data.items[0].nextRun).getTime()).toBeGreaterThan(new Date(asOf).getTime());
+
+  });
+
+
+
+  it('Ãƒâ€žÃ¢â‚¬ËœÃƒÆ’Ã‚Â­nh kÃƒÆ’Ã‚Â¨m trÃƒÂ¡Ã‚ÂºÃ‚Â¡ng thÃƒÆ’Ã‚Â¡i monthly aggregate hiÃƒÂ¡Ã‚Â»Ã¢â‚¬Â¡n cÃƒÆ’Ã‚Â³ vÃƒÆ’Ã‚Â o schedules response', async () => {
+
+    upsertKvValue('kpi_reporting_monthly_aggregates_default_v1', createStoredMonthlyAggregateSnapshot());
+
+    const adminAgent = request.agent(app);
+
+    const loginRes = await adminAgent.post('/api/auth/login').send({ username: 'admin', password: 'admin123' });
+
+    expect(loginRes.status).toBe(200);
+
+
+
+    const response = await adminAgent.get('/api/v4/reporting/schedules').query({ asOf: '2026-03-09T07:00:00.000Z' });
+
+
+
+    expect(response.status).toBe(200);
+
+    expect(response.body.data.aggregateStatus).toEqual({
+
+      available: true,
+
+      generatedAt: '2026-03-09T09:00:00.000Z',
+
+      queryKey: createMonthlyAggregateQueryKey({ from: '2026-01-01', to: '2026-02-28' }),
+
+      total: 2,
+
+      range: {
+
+        from: '2026-01-01',
+
+        to: '2026-02-28',
+
+      },
+
+    });
+
+  });
+
+  it('lÃƒâ€ Ã‚Â°u vÃƒÆ’Ã‚Â  xoÃƒÆ’Ã‚Â¡ schedule KPI qua reporting boundary thay vÃƒÆ’Ã‚Â¬ storage API generic', async () => {
+
+    const adminAgent = request.agent(app);
+
+    const loginRes = await adminAgent.post('/api/auth/login').send({ username: 'admin', password: 'admin123' });
+
+    expect(loginRes.status).toBe(200);
+
+
+
+    const saveResponse = await adminAgent.post('/api/v4/reporting/schedules').send({
+
+      name: 'Friday Ops',
+
+      frequency: 'weekly',
+
+      dayOfWeek: 5,
+
+      time: '09:45',
+
+      formats: ['pdf', ' excel ', 'pdf'],
+
+      recipients: 'ops@example.com\nlead@example.com',
+
+      active: true,
+
+    });
+
+
+
+    expect(saveResponse.status).toBe(200);
+
+    expect(saveResponse.body.ok).toBe(true);
+
+    expect(saveResponse.body.data.total).toBe(3);
+
+    expect(saveResponse.body.data.item).toEqual(
+
+      expect.objectContaining({
+
+        id: expect.any(String),
+
+        name: 'Friday Ops',
+
+        frequency: 'weekly',
+
+        dayOfWeek: 5,
+
+        time: '09:45',
+
+        formats: ['pdf', 'excel'],
+
+        recipients: ['ops@example.com', 'lead@example.com'],
+
+        active: true,
+
+      })
+
+    );
+
+
+
+    const storedSchedules = JSON.parse(
+      getDb()
+        .prepare('SELECT payload FROM reporting_projections WHERE projection_key = ?')
+        .get('kpi_report_schedule_v1')?.payload || '[]'
+    );
+
+    expect(storedSchedules).toEqual(
+
+      expect.arrayContaining([
+
+        expect.objectContaining({
+
+          name: 'Friday Ops',
+
+          formats: ['pdf', 'excel'],
+
+          recipients: ['ops@example.com', 'lead@example.com'],
+
+        }),
+
+      ])
+
+    );
+
+
+
+    const deleteResponse = await adminAgent.delete(`/api/v4/reporting/schedules/${saveResponse.body.data.item.id}`);
+
+
+
+    expect(deleteResponse.status).toBe(200);
+
+    expect(deleteResponse.body).toEqual({
+
+      ok: true,
+
+      data: {
+
+        deleted: true,
+
+        total: 2,
+
+      },
+
+    });
+
+    const remainingSchedules = JSON.parse(
+      getDb()
+        .prepare('SELECT payload FROM reporting_projections WHERE projection_key = ?')
+        .get('kpi_report_schedule_v1')?.payload || '[]'
+    );
+
+    expect(remainingSchedules).toHaveLength(2);
+
+    expect(remainingSchedules.find((entry) => entry.id === saveResponse.body.data.item.id)).toBeUndefined();
+
+  });
+
+  it('chÃƒÂ¡Ã‚ÂºÃ‚Â·n ghi trÃƒÂ¡Ã‚Â»Ã‚Â±c tiÃƒÂ¡Ã‚ÂºÃ‚Â¿p schedule KPI qua storage API generic', async () => {
+
+    const adminAgent = request.agent(app);
+
+    const loginRes = await adminAgent.post('/api/auth/login').send({ username: 'admin', password: 'admin123' });
+
+    expect(loginRes.status).toBe(200);
+
+
+
+    const response = await adminAgent.put('/api/storage/kpi_report_schedule_v1').send({
+
+      value: [],
+
+    });
+
+
+
+    expect(response.status).toBe(403);
+
+    expect(response.body).toEqual({
+
+      ok: false,
+
+      error: 'Khoá này chỉ chỉnh sửa qua API lịch báo cáo KPI',
+
+    });
+
+  });
+
+});
+
+
+
+describe('V4 reporting aggregates API', () => {
+
+  beforeEach(() => {
+
+    resetDb();
+
+    seedReportingAggregateData();
+
+  });
+
+
+
+  it('yÃƒÆ’Ã‚Âªu cÃƒÂ¡Ã‚ÂºÃ‚Â§u Ãƒâ€žÃ¢â‚¬ËœÃƒâ€žÃ†â€™ng nhÃƒÂ¡Ã‚ÂºÃ‚Â­p trÃƒâ€ Ã‚Â°ÃƒÂ¡Ã‚Â»Ã¢â‚¬Âºc khi Ãƒâ€žÃ¢â‚¬ËœÃƒÂ¡Ã‚Â»Ã‚Âc monthly aggregates', async () => {
+
+    const response = await request(app).get('/api/v4/reporting/aggregates/monthly');
+
+    expect(response.status).toBe(401);
+
+    expect(response.body.ok).toBe(false);
+
+  });
+
+
+
+  it('materialize monthly aggregates vÃƒÆ’Ã‚Â  lÃƒâ€ Ã‚Â°u snapshot vÃƒÆ’Ã‚Â o reporting projections', async () => {
+
+    const adminAgent = request.agent(app);
+
+    const loginRes = await adminAgent.post('/api/auth/login').send({ username: 'admin', password: 'admin123' });
+
+    expect(loginRes.status).toBe(200);
+
+
+
+    const response = await adminAgent
+
+      .get('/api/v4/reporting/aggregates/monthly')
+
+      .query({ from: '2026-01-01', to: '2026-02-28' });
+
+
+
+    expect(response.status).toBe(200);
+
+    expect(response.body).toEqual({
+
+      ok: true,
+
+      data: {
+
+        range: {
+
+          from: '2026-01-01',
+
+          to: '2026-02-28',
+
+        },
+
+        ruleSet: {
+
+          id: 'legacy-kpi',
+
+          name: 'Legacy KPI',
+
+        },
+
+        generatedAt: expect.any(String),
+
+        cache: {
+
+          queryKey: createMonthlyAggregateQueryKey({ from: '2026-01-01', to: '2026-02-28' }),
+
+          reused: false,
+
+        },
+
+        total: 2,
+
+        items: [
+
+          {
+
+            period: '2026-02',
+
+            label: '02/2026',
+
+            range: {
+
+              from: '2026-02-01',
+
+              to: '2026-02-28',
+
+            },
+
+            summary: expect.objectContaining({
+
+              decls: 2,
+
+              items: 3,
+
+              kpi: 1.6,
+
+              licenseSummary: '—',
+
+            }),
+
+            topTeams: [
+
+              expect.objectContaining({
+
+                key: 'blue team',
+
+                name: 'Blue Team',
+
+                stats: expect.objectContaining({
+
+                  decls: 2,
+
+                  kpi: 1.6,
+
+                }),
+
+              }),
+
+            ],
+
+            topStaff: [
+
+              expect.objectContaining({
+
+                key: 'lan',
+
+                name: 'Lan',
+
+                teamLabel: 'Blue Team',
+
+                stats: expect.objectContaining({
+
+                  decls: 2,
+
+                  kpi: 1.6,
+
+                }),
+
+              }),
+
+            ],
+
+          },
+
+          {
+
+            period: '2026-01',
+
+            label: '01/2026',
+
+            range: {
+
+              from: '2026-01-01',
+
+              to: '2026-01-31',
+
+            },
+
+            summary: expect.objectContaining({
+
+              decls: 1,
+
+              items: 1,
+
+              kpi: 0.7,
+
+              licenseSummary: '—',
+
+            }),
+
+            topTeams: [
+
+              expect.objectContaining({
+
+                key: 'blue team',
+
+                name: 'Blue Team',
+
+              }),
+
+            ],
+
+            topStaff: [
+
+              expect.objectContaining({
+
+                key: 'lan',
+
+                name: 'Lan',
+
+              }),
+
+            ],
+
+          },
+
+        ],
+
+      },
+
+    });
+
+
+
+    const stored = getDb()
+      .prepare('SELECT payload FROM reporting_projections WHERE projection_key = ?')
+      .get('kpi_reporting_monthly_aggregates_v1');
+
+    expect(stored).toBeTruthy();
+
+    const parsed = JSON.parse(stored.payload);
+
+    expect(parsed.ruleSet).toEqual({
+
+      id: 'legacy-kpi',
+
+      name: 'Legacy KPI',
+
+    });
+
+    expect(parsed.cache).toEqual({
+
+      queryKey: createMonthlyAggregateQueryKey({ from: '2026-01-01', to: '2026-02-28' }),
+
+      reused: false,
+
+    });
+
+    expect(parsed.total).toBe(2);
+
+    expect(parsed.items.map((item) => item.period)).toEqual(['2026-02', '2026-01']);
+  });
+
+  it('returns reporting observability with recent monthly aggregate runs', async () => {
+    const adminAgent = request.agent(app);
+    const loginRes = await adminAgent.post('/api/auth/login').send({ username: 'admin', password: 'admin123' });
+    expect(loginRes.status).toBe(200);
+
+    const query = { from: '2026-01-01', to: '2026-02-28' };
+    const aggregateRes = await adminAgent.get('/api/v4/reporting/aggregates/monthly').query(query);
+    const viewRes = await adminAgent.get('/api/v4/reporting/view').query(query);
+    const observabilityRes = await adminAgent.get('/api/v4/reporting/observability');
+
+    expect(aggregateRes.status).toBe(200);
+    expect(viewRes.status).toBe(200);
+    expect(viewRes.body.data.meta.aggregateStatus).toEqual({
+      available: true,
+      generatedAt: aggregateRes.body.data.generatedAt,
+      queryKey: createMonthlyAggregateQueryKey(query),
+      total: aggregateRes.body.data.total,
+      range: {
+        from: '2026-01-01',
+        to: '2026-02-28',
+      },
+    });
+
+    expect(observabilityRes.status).toBe(200);
+    expect(observabilityRes.body.data.aggregates.active).toEqual({
+      available: true,
+      generatedAt: aggregateRes.body.data.generatedAt,
+      queryKey: createMonthlyAggregateQueryKey(query),
+      total: aggregateRes.body.data.total,
+      range: {
+        from: '2026-01-01',
+        to: '2026-02-28',
+      },
+    });
+    expect(observabilityRes.body.data.jobs).toEqual(
+      expect.objectContaining({
+        total: 2,
+        filteredTotal: 2,
+        successCount: 2,
+        failureCount: 0,
+        lastSuccessAt: aggregateRes.body.data.generatedAt,
+        lastFailureAt: null,
+        items: [
+          expect.objectContaining({
+            job: 'reporting-monthly-aggregate-materialize',
+            status: 'success',
+            source: 'reporting-monthly-aggregates',
+            snapshotKey: 'kpi_reporting_monthly_aggregates_v1',
+            queryKey: createMonthlyAggregateQueryKey(query),
+            total: aggregateRes.body.data.total,
+          }),
+          expect.objectContaining({
+            job: 'reporting-monthly-aggregate-materialize',
+            status: 'success',
+            source: 'storage',
+            snapshotKey: 'kpi_reporting_monthly_aggregates_default_v1',
+            queryKey: createMonthlyAggregateQueryKey(query),
+            total: aggregateRes.body.data.total,
+          }),
+        ],
+      })
+    );
+  });
+
+  it('supports reporting observability search and pagination for jobs and periods', async () => {
+    const adminAgent = request.agent(app);
+    const loginRes = await adminAgent.post('/api/auth/login').send({ username: 'admin', password: 'admin123' });
+    expect(loginRes.status).toBe(200);
+
+    const janQuery = { from: '2026-01-01', to: '2026-01-31' };
+    const fullQuery = { from: '2026-01-01', to: '2026-02-28' };
+    const janResponse = await adminAgent.get('/api/v4/reporting/aggregates/monthly').query(janQuery);
+    const fullResponse = await adminAgent.get('/api/v4/reporting/aggregates/monthly').query(fullQuery);
+    writeReportingProjectionValue(
+      getDb(),
+      'kpi_reporting_monthly_aggregates_v1',
+      createStoredMonthlyAggregateSnapshot(),
+      {
+        updatedAt: '2026-03-09T09:00:00.000Z',
+      }
+    );
+    const observabilityRes = await adminAgent.get('/api/v4/reporting/observability').query({
+      jobSearch: 'aggregate',
+      jobStatus: 'success',
+      jobPageSize: 1,
+      periodSearch: '02/2026',
+      periodPageSize: 1,
+    });
+
+    expect(janResponse.status).toBe(200);
+    expect(fullResponse.status).toBe(200);
+    expect(observabilityRes.status).toBe(200);
+    expect(observabilityRes.body.data.jobs).toEqual(
+      expect.objectContaining({
+        total: 3,
+        filteredTotal: 3,
+        successCount: 3,
+        failureCount: 0,
+        lastSuccessAt: fullResponse.body.data.generatedAt,
+        lastFailureAt: null,
+        search: 'aggregate',
+        status: 'success',
+        page: 1,
+        pageSize: 1,
+        pageCount: 3,
+        items: [
+          expect.objectContaining({
+            job: 'reporting-monthly-aggregate-materialize',
+            status: 'success',
+            queryKey: createMonthlyAggregateQueryKey(fullQuery),
+            total: fullResponse.body.data.total,
+          }),
+        ],
+      })
+    );
+    expect(observabilityRes.body.data.monthlyStats.active).toEqual(
+      expect.objectContaining({
+        total: 2,
+        filteredTotal: 1,
+        totalDecls: 2,
+        totalItems: 3,
+        totalCompanies: 0,
+        averageKpi: 1.6,
+        search: '02/2026',
+        page: 1,
+        pageSize: 1,
+        pageCount: 1,
+        peakPeriod: expect.objectContaining({
+          period: '2026-02',
+          kpi: 1.6,
+        }),
+        items: [
+          expect.objectContaining({
+            period: '2026-02',
+            label: '02/2026',
+            decls: 2,
+            itemCount: 3,
+            companyCount: 0,
+            kpi: 1.6,
+          }),
+        ],
+      })
+    );
+  });
+
+
+
+  it('dÃƒÆ’Ã‚Â¹ng preset aggregate mÃƒÂ¡Ã‚ÂºÃ‚Â·c Ãƒâ€žÃ¢â‚¬ËœÃƒÂ¡Ã‚Â»Ã¢â‚¬Â¹nh khi khÃƒÆ’Ã‚Â´ng truyÃƒÂ¡Ã‚Â»Ã‚Ân query', async () => {
+
+    const adminAgent = request.agent(app);
+
+    const loginRes = await adminAgent.post('/api/auth/login').send({ username: 'admin', password: 'admin123' });
+
+    expect(loginRes.status).toBe(200);
+
+
+
+    const first = await adminAgent.get('/api/v4/reporting/aggregates/monthly');
+
+    const second = await adminAgent.get('/api/v4/reporting/aggregates/monthly');
+
+
+
+    expect(first.status).toBe(200);
+
+    expect(first.body.data.range).toEqual({
+
+      from: '2026-01-01',
+
+      to: '2026-02-28',
+
+    });
+
+    expect(first.body.data.cache.queryKey).toBe(
+      createMonthlyAggregateQueryKey({ from: '2026-01-01', to: '2026-02-28' })
+    );
+
+
+
+    expect(second.status).toBe(200);
+
+    expect(second.body.data.cache).toEqual({
+
+      queryKey: createMonthlyAggregateQueryKey({ from: '2026-01-01', to: '2026-02-28' }),
+
+      reused: true,
+
+    });
+
+    const storedDefault = getDb()
+      .prepare('SELECT payload FROM reporting_projections WHERE projection_key = ?')
+      .get('kpi_reporting_monthly_aggregates_default_v1');
+
+    expect(storedDefault).toBeTruthy();
+
+  });
+
+
+
+  it('tÃƒÆ’Ã‚Â¡i sÃƒÂ¡Ã‚Â»Ã‚Â­ dÃƒÂ¡Ã‚Â»Ã‚Â¥ng snapshot monthly aggregate khi query khÃƒÆ’Ã‚Â´ng Ãƒâ€žÃ¢â‚¬ËœÃƒÂ¡Ã‚Â»Ã¢â‚¬Â¢i', async () => {
+
+    const adminAgent = request.agent(app);
+
+    const loginRes = await adminAgent.post('/api/auth/login').send({ username: 'admin', password: 'admin123' });
+
+    expect(loginRes.status).toBe(200);
+
+
+
+    const first = await adminAgent
+
+      .get('/api/v4/reporting/aggregates/monthly')
+
+      .query({ from: '2026-01-01', to: '2026-02-28' });
+
+    const second = await adminAgent
+
+      .get('/api/v4/reporting/aggregates/monthly')
+
+      .query({ from: '2026-01-01', to: '2026-02-28' });
+
+
+
+    expect(first.status).toBe(200);
+
+    expect(second.status).toBe(200);
+
+    expect(second.body.data.generatedAt).toBe(first.body.data.generatedAt);
+
+    expect(second.body.data.cache).toEqual({
+
+      queryKey: createMonthlyAggregateQueryKey({ from: '2026-01-01', to: '2026-02-28' }),
+
+      reused: true,
+
+    });
+
+  });
+
+
+
+  it('lÃƒÆ’Ã‚Â m mÃƒÂ¡Ã‚Â»Ã¢â‚¬Âºi snapshot monthly aggregate khi dÃƒÂ¡Ã‚Â»Ã‚Â¯ liÃƒÂ¡Ã‚Â»Ã¢â‚¬Â¡u nguÃƒÂ¡Ã‚Â»Ã¢â‚¬Å“n reporting thay Ãƒâ€žÃ¢â‚¬ËœÃƒÂ¡Ã‚Â»Ã¢â‚¬Â¢i', async () => {
+
+    const adminAgent = request.agent(app);
+
+    const loginRes = await adminAgent.post('/api/auth/login').send({ username: 'admin', password: 'admin123' });
+
+    expect(loginRes.status).toBe(200);
+
+
+
+    const buildRes = await adminAgent
+
+      .get('/api/v4/reporting/aggregates/monthly')
+
+      .query({ from: '2026-01-01', to: '2026-02-28' });
+
+    expect(buildRes.status).toBe(200);
+
+    const initialSnapshot = JSON.parse(
+      getDb()
+        .prepare('SELECT payload FROM reporting_projections WHERE projection_key = ?')
+        .get('kpi_reporting_monthly_aggregates_v1').payload
+    );
+
+
+
+    const updateRes = await adminAgent.put('/api/storage/kpi_adjustments_v1').send({
+
+      value: JSON.stringify([
+
+        {
+
+          declarationId: 'TK1',
+
+          points: 0.2,
+
+          reason: 'manual adjustment',
+
+        },
+
+      ]),
+
+    });
+
+
+
+    expect(updateRes.status).toBe(200);
+
+    const refreshedRow = getDb()
+      .prepare('SELECT payload FROM reporting_projections WHERE projection_key = ?')
+      .get('kpi_reporting_monthly_aggregates_v1');
+
+    expect(refreshedRow).toBeTruthy();
+
+    const refreshedSnapshot = JSON.parse(refreshedRow.payload);
+
+    expect(refreshedSnapshot.cache).toEqual({
+
+      queryKey: createMonthlyAggregateQueryKey({ from: '2026-01-01', to: '2026-02-28' }),
+
+      reused: false,
+
+    });
+    expect(refreshedSnapshot).not.toEqual(initialSnapshot);
+
+    const cachedRes = await adminAgent
+
+      .get('/api/v4/reporting/aggregates/monthly')
+
+      .query({ from: '2026-01-01', to: '2026-02-28' });
+
+    expect(cachedRes.status).toBe(200);
+
+    expect(cachedRes.body.data.generatedAt).toBe(refreshedSnapshot.generatedAt);
+
+    expect(cachedRes.body.data.cache).toEqual({
+
+      queryKey: createMonthlyAggregateQueryKey({ from: '2026-01-01', to: '2026-02-28' }),
+
+      reused: true,
+
+    });
+
+  });
+
+});
+
+
+
 describe('Report export API', () => {
 
   beforeEach(() => {
@@ -6024,7 +8919,7 @@ describe('Report export API', () => {
 
 
 
-  it('yêu cầu đăng nhập trước khi xuất báo cáo', async () => {
+  it('yÃƒÆ’Ã‚Âªu cÃƒÂ¡Ã‚ÂºÃ‚Â§u Ãƒâ€žÃ¢â‚¬ËœÃƒâ€žÃ†â€™ng nhÃƒÂ¡Ã‚ÂºÃ‚Â­p trÃƒâ€ Ã‚Â°ÃƒÂ¡Ã‚Â»Ã¢â‚¬Âºc khi xuÃƒÂ¡Ã‚ÂºÃ‚Â¥t bÃƒÆ’Ã‚Â¡o cÃƒÆ’Ã‚Â¡o', async () => {
 
     const res = await request(app)
 
@@ -6046,7 +8941,7 @@ describe('Report export API', () => {
 
 
 
-  it('từ chối khi tài khoản không có quyền báo cáo', async () => {
+  it('tÃƒÂ¡Ã‚Â»Ã‚Â« chÃƒÂ¡Ã‚Â»Ã¢â‚¬Ëœi khi tÃƒÆ’Ã‚Â i khoÃƒÂ¡Ã‚ÂºÃ‚Â£n khÃƒÆ’Ã‚Â´ng cÃƒÆ’Ã‚Â³ quyÃƒÂ¡Ã‚Â»Ã‚Ân bÃƒÆ’Ã‚Â¡o cÃƒÆ’Ã‚Â¡o', async () => {
 
     const admin = request.agent(app);
 
@@ -6062,7 +8957,7 @@ describe('Report export API', () => {
 
       password: '123456',
 
-      name: 'Không quyền',
+      name: 'KhÃƒÆ’Ã‚Â´ng quyÃƒÂ¡Ã‚Â»Ã‚Ân',
 
       role: 'staff',
 
@@ -6108,7 +9003,7 @@ describe('Report export API', () => {
 
 
 
-  it('xuất file báo cáo KPI nhân viên thành công', async () => {
+  it('xuÃƒÂ¡Ã‚ÂºÃ‚Â¥t file bÃƒÆ’Ã‚Â¡o cÃƒÆ’Ã‚Â¡o KPI nhÃƒÆ’Ã‚Â¢n viÃƒÆ’Ã‚Âªn thÃƒÆ’Ã‚Â nh cÃƒÆ’Ã‚Â´ng', async () => {
 
     const agent = request.agent(app);
 
@@ -6122,7 +9017,7 @@ describe('Report export API', () => {
 
       staff: {
 
-        name: 'Nguyễn Văn A',
+        name: 'NguyÃƒÂ¡Ã‚Â»Ã¢â‚¬Â¦n VÃƒâ€žÃ†â€™n A',
 
         teamLabel: 'Team 1',
 
@@ -6138,7 +9033,7 @@ describe('Report export API', () => {
 
             mst: '0123456789',
 
-            cong_ty: 'CÔNG TY A',
+            cong_ty: 'CÃƒÆ’Ã¢â‚¬ÂNG TY A',
 
             loai_hinh: 'A11',
 
@@ -6158,7 +9053,7 @@ describe('Report export API', () => {
 
       range: { from: '2025-01-01', to: '2025-01-31' },
 
-      rules: { name: 'Quy tắc demo', applyFrom: '2025-01-01' },
+      rules: { name: 'Quy tÃƒÂ¡Ã‚ÂºÃ‚Â¯c demo', applyFrom: '2025-01-01' },
 
     };
 
@@ -6232,7 +9127,7 @@ describe('Report export API', () => {
 
 
 
-  it('tái sử dụng cache khi xuất cùng tham số', async () => {
+  it('tÃƒÆ’Ã‚Â¡i sÃƒÂ¡Ã‚Â»Ã‚Â­ dÃƒÂ¡Ã‚Â»Ã‚Â¥ng cache khi xuÃƒÂ¡Ã‚ÂºÃ‚Â¥t cÃƒÆ’Ã‚Â¹ng tham sÃƒÂ¡Ã‚Â»Ã¢â‚¬Ëœ', async () => {
 
     const agent = request.agent(app);
 
@@ -6246,7 +9141,7 @@ describe('Report export API', () => {
 
       staff: {
 
-        name: 'Nguyễn Văn B',
+        name: 'NguyÃƒÂ¡Ã‚Â»Ã¢â‚¬Â¦n VÃƒâ€žÃ†â€™n B',
 
         teamLabel: 'Team 2',
 
@@ -6262,7 +9157,7 @@ describe('Report export API', () => {
 
             mst: '9876543210',
 
-            cong_ty: 'CÔNG TY B',
+            cong_ty: 'CÃƒÆ’Ã¢â‚¬ÂNG TY B',
 
             loai_hinh: 'B11',
 
@@ -6328,7 +9223,83 @@ describe('Report export API', () => {
 
 
 
-  it('yêu cầu đăng nhập trước khi tra cứu lịch sử export', async () => {
+  it('xuÃƒÂ¡Ã‚ÂºÃ‚Â¥t bÃƒÆ’Ã‚Â¡o cÃƒÆ’Ã‚Â¡o nhÃƒÆ’Ã‚Â¢n viÃƒÆ’Ã‚Âªn tÃƒÂ¡Ã‚Â»Ã‚Â« compact reporting-v4 payload', async () => {
+    seedReportingAggregateData();
+
+    const agent = request.agent(app);
+    const loginRes = await agent.post('/api/auth/login').send({ username: 'admin', password: 'admin123' });
+    expect(loginRes.status).toBe(200);
+
+    const response = await agent
+      .post('/api/reports/export')
+      .buffer(true)
+      .parse(binaryParser)
+      .send({
+        kind: 'staff',
+        payload: {
+          source: 'reporting-v4',
+          query: { from: '2026-02-01', to: '2026-02-28' },
+          ruleId: 'legacy-kpi',
+          staffKey: 'lan',
+          columns: { items: true },
+        },
+      });
+
+    expect(response.status).toBe(200);
+    expect(Buffer.isBuffer(response.body)).toBe(true);
+    expect(response.body.byteLength).toBeGreaterThan(0);
+    expect(response.headers['content-disposition']).toMatch(/bao-cao-kpi-nhan-vien-lan/i);
+
+    const rows = getDb()
+      .prepare('SELECT * FROM export_audit ORDER BY id DESC')
+      .all();
+    expect(rows).toHaveLength(1);
+
+    const storedFilters = JSON.parse(rows[0].filters);
+    expect(storedFilters).toEqual(
+      expect.objectContaining({
+        source: 'reporting-v4',
+        query: {
+          from: '2026-02-01',
+          to: '2026-02-28',
+        },
+        ruleId: 'legacy-kpi',
+        staffKey: 'lan',
+        columns: {
+          items: true,
+        },
+      })
+    );
+    expect(storedFilters.staffList).toBeUndefined();
+    expect(storedFilters.summary).toBeUndefined();
+  });
+
+  it('tÃƒÂ¡Ã‚Â»Ã‚Â« chÃƒÂ¡Ã‚Â»Ã¢â‚¬Ëœi compact reporting-v4 payload khi staffKey khÃƒÆ’Ã‚Â´ng tÃƒÂ¡Ã‚Â»Ã¢â‚¬Å“n tÃƒÂ¡Ã‚ÂºÃ‚Â¡i', async () => {
+    seedReportingAggregateData();
+
+    const agent = request.agent(app);
+    const loginRes = await agent.post('/api/auth/login').send({ username: 'admin', password: 'admin123' });
+    expect(loginRes.status).toBe(200);
+
+    const response = await agent.post('/api/reports/export').send({
+      kind: 'staff',
+      payload: {
+        source: 'reporting-v4',
+        query: { from: '2026-02-01', to: '2026-02-28' },
+        ruleId: 'legacy-kpi',
+        staffKey: 'missing-staff',
+      },
+    });
+
+    expect(response.status).toBe(400);
+    expect(response.body.ok).toBe(false);
+    expect(response.body.error).toMatch(/nhân viên/i);
+
+    const auditCount = getDb().prepare('SELECT COUNT(*) AS total FROM export_audit').get() || { total: 0 };
+    expect(auditCount.total ?? 0).toBe(0);
+  });
+
+  it('yÃƒÆ’Ã‚Âªu cÃƒÂ¡Ã‚ÂºÃ‚Â§u Ãƒâ€žÃ¢â‚¬ËœÃƒâ€žÃ†â€™ng nhÃƒÂ¡Ã‚ÂºÃ‚Â­p trÃƒâ€ Ã‚Â°ÃƒÂ¡Ã‚Â»Ã¢â‚¬Âºc khi tra cÃƒÂ¡Ã‚Â»Ã‚Â©u lÃƒÂ¡Ã‚Â»Ã¢â‚¬Â¹ch sÃƒÂ¡Ã‚Â»Ã‚Â­ export', async () => {
 
     const res = await request(app).get('/api/reports/export/audit');
 
@@ -6340,7 +9311,7 @@ describe('Report export API', () => {
 
 
 
-  it('từ chối khi tài khoản không có quyền xem lịch sử export', async () => {
+  it('tÃƒÂ¡Ã‚Â»Ã‚Â« chÃƒÂ¡Ã‚Â»Ã¢â‚¬Ëœi khi tÃƒÆ’Ã‚Â i khoÃƒÂ¡Ã‚ÂºÃ‚Â£n khÃƒÆ’Ã‚Â´ng cÃƒÆ’Ã‚Â³ quyÃƒÂ¡Ã‚Â»Ã‚Ân xem lÃƒÂ¡Ã‚Â»Ã¢â‚¬Â¹ch sÃƒÂ¡Ã‚Â»Ã‚Â­ export', async () => {
 
     resetDb();
 
@@ -6366,7 +9337,7 @@ describe('Report export API', () => {
 
 
 
-  it('trả về lịch sử export theo bộ lọc, phân trang và từ khóa', async () => {
+  it('trÃƒÂ¡Ã‚ÂºÃ‚Â£ vÃƒÂ¡Ã‚Â»Ã‚Â lÃƒÂ¡Ã‚Â»Ã¢â‚¬Â¹ch sÃƒÂ¡Ã‚Â»Ã‚Â­ export theo bÃƒÂ¡Ã‚Â»Ã¢â€žÂ¢ lÃƒÂ¡Ã‚Â»Ã‚Âc, phÃƒÆ’Ã‚Â¢n trang vÃƒÆ’Ã‚Â  tÃƒÂ¡Ã‚Â»Ã‚Â« khÃƒÆ’Ã‚Â³a', async () => {
 
     resetDb();
 
@@ -6448,7 +9419,7 @@ describe('Report export API', () => {
 
       username: 'admin',
 
-      display_name: 'Quản trị viên',
+      display_name: 'QuÃƒÂ¡Ã‚ÂºÃ‚Â£n trÃƒÂ¡Ã‚Â»Ã¢â‚¬Â¹ viÃƒÆ’Ã‚Âªn',
 
       role: 'admin',
 
@@ -6460,7 +9431,7 @@ describe('Report export API', () => {
 
       short_signature: 'AA1001',
 
-      filter_summary: 'Team 1 • Tháng 03/2025',
+      filter_summary: 'Team 1 ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ ThÃƒÆ’Ã‚Â¡ng 03/2025',
 
       filters: JSON.stringify({ range: { from: '2025-03-01', to: '2025-03-31' }, team: 'Team 1' }),
 
@@ -6482,7 +9453,7 @@ describe('Report export API', () => {
 
       username: 'lead.hoc',
 
-      display_name: 'Trưởng nhóm Học',
+      display_name: 'TrÃƒâ€ Ã‚Â°ÃƒÂ¡Ã‚Â»Ã…Â¸ng nhÃƒÆ’Ã‚Â³m HÃƒÂ¡Ã‚Â»Ã‚Âc',
 
       role: 'lead',
 
@@ -6494,7 +9465,7 @@ describe('Report export API', () => {
 
       short_signature: 'BB2002',
 
-      filter_summary: 'Team 2 • So sánh KPI',
+      filter_summary: 'Team 2 ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¢ So sÃƒÆ’Ã‚Â¡nh KPI',
 
       filters: JSON.stringify({ range: { from: '2025-03-01', to: '2025-03-02' }, team: 'Team 2' }),
 
@@ -6516,7 +9487,7 @@ describe('Report export API', () => {
 
       username: 'manager.hoainam',
 
-      display_name: 'Quản lý Nam',
+      display_name: 'QuÃƒÂ¡Ã‚ÂºÃ‚Â£n lÃƒÆ’Ã‚Â½ Nam',
 
       role: 'manager',
 
@@ -6528,7 +9499,7 @@ describe('Report export API', () => {
 
       short_signature: 'CC3003',
 
-      filter_summary: 'Tháng 04/2025',
+      filter_summary: 'ThÃƒÆ’Ã‚Â¡ng 04/2025',
 
       filters: JSON.stringify({ range: { from: '2025-04-01', to: '2025-04-30' } }),
 
@@ -6688,11 +9659,7 @@ describe('Report export API', () => {
 
     }];
 
-    getDb()
-
-      .prepare('INSERT INTO kv_store (key, value) VALUES (?, ?)')
-
-      .run('decl_rows_v1', JSON.stringify(reviewedRow));
+    expect((await adminAgent.put('/api/storage/decl_rows_v1').send({ value: reviewedRow })).status).toBe(200);
 
 
 
@@ -6760,7 +9727,7 @@ describe('Report export API', () => {
 
   });
 
-  it('trả về review-locked khi cập nhật tờ khai đã rà soát', () => {
+  it('trÃƒÂ¡Ã‚ÂºÃ‚Â£ vÃƒÂ¡Ã‚Â»Ã‚Â review-locked khi cÃƒÂ¡Ã‚ÂºÃ‚Â­p nhÃƒÂ¡Ã‚ÂºÃ‚Â­t tÃƒÂ¡Ã‚Â»Ã‚Â khai Ãƒâ€žÃ¢â‚¬ËœÃƒÆ’Ã‚Â£ rÃƒÆ’Ã‚Â  soÃƒÆ’Ã‚Â¡t', () => {
 
     clearStorageCache();
 
@@ -6771,9 +9738,9 @@ describe('Report export API', () => {
           nhanh: '',
           date: '2025-08-15',
           mst: '0107777333',
-          cong_ty: 'Công ty Khoá Rà Soát',
+          cong_ty: 'CÃƒÆ’Ã‚Â´ng ty KhoÃƒÆ’Ã‚Â¡ RÃƒÆ’Ã‚Â  SoÃƒÆ’Ã‚Â¡t',
           loai_hinh: 'A11',
-          nhan_vien: 'Nhân viên',
+          nhan_vien: 'NhÃƒÆ’Ã‚Â¢n viÃƒÆ’Ã‚Âªn',
         },
       ],
       { overwrite: true, actor: 'review-lock-test' }
@@ -6914,6 +9881,217 @@ describe('Storage API', () => {
 
   });
 
+  it('dual-write team_roster_v1 vao bang typed roster khi cap nhat qua Storage API', async () => {
+
+    const adminAgent = request.agent(app);
+
+    const loginRes = await adminAgent.post('/api/auth/login').send({ username: 'admin', password: 'admin123' });
+
+    expect(loginRes.status).toBe(200);
+
+
+
+    const roster = {
+
+      version: 7,
+
+      teams: [
+
+        {
+
+          name: 'Blue Team',
+
+          members: [{ name: 'Lan' }, { id: 'custom-member', name: 'Minh', notes: 'Lead' }],
+
+        },
+
+      ],
+
+    };
+
+
+
+    const putRes = await adminAgent.put('/api/storage/team_roster_v1').send({ value: roster });
+
+    expect(putRes.status).toBe(200);
+
+    expect(readTeamRosterSnapshot(getDb())).toEqual({
+
+      version: 1,
+
+      teams: [
+
+        {
+
+          name: 'Blue Team',
+
+          members: [{ name: 'Lan' }, { id: 'custom-member', name: 'Minh', notes: 'Lead' }],
+
+        },
+
+      ],
+
+    });
+
+  });
+
+  it('dual-write cac hot-path business key vao bang typed runtime khi cap nhat qua Storage API', async () => {
+
+    const adminAgent = request.agent(app);
+
+    const loginRes = await adminAgent.post('/api/auth/login').send({ username: 'admin', password: 'admin123' });
+
+    expect(loginRes.status).toBe(200);
+
+
+
+    const declarations = [{ so_tk: '10756284616', nhanh: 'Blue', mst: '0101234567', date: '2026-02-14' }];
+
+    const mstRows = [{ mst: '0101234567', person_import: 'Lan', team: 'Blue Team' }];
+
+    const rules = {
+
+      version: 2,
+
+      activeId: 'typed-kpi',
+
+      sets: [{ id: 'typed-kpi', name: 'Typed KPI', groups: {} }],
+
+    };
+
+    const adjustments = [{ id: 'adj-typed', totalPoints: 2, status: 'approved' }];
+
+
+
+    expect((await adminAgent.put('/api/storage/decl_rows_v1').send({ value: declarations })).status).toBe(200);
+
+    expect((await adminAgent.put('/api/storage/mst_rows_v2').send({ value: mstRows })).status).toBe(200);
+
+    expect((await adminAgent.put('/api/storage/kpi_rules_v2').send({ value: rules })).status).toBe(200);
+
+    expect((await adminAgent.put('/api/storage/kpi_adjustments_v1').send({ value: adjustments })).status).toBe(200);
+
+
+
+    expect(readDeclarationRowsSnapshot(getDb())).toEqual([
+      {
+        so_tk: '10756284616',
+        so_tk_full: '10756284616',
+        so_tk_suffix: '',
+        nhanh: 'Blue',
+        mst: '0101234567',
+        date: '2026-02-14',
+      },
+    ]);
+
+    expect(readMstAssignmentRowsSnapshot(getDb())).toEqual(mstRows);
+
+    expect(readRuleCollectionSnapshot(getDb())).toEqual(rules);
+
+    expect(readAdjustmentRowsSnapshot(getDb())).toEqual(adjustments);
+
+  });
+
+  it('dong bo reporting schedule va monthly aggregate seeds vao reporting_projections khi reset test db', async () => {
+    const activeSnapshot = createStoredMonthlyAggregateSnapshot();
+    const defaultSnapshot = {
+      ...createStoredMonthlyAggregateSnapshot(),
+      generatedAt: '2026-03-10T09:00:00.000Z',
+    };
+
+    resetDb({
+      kpi_report_schedule_v1: [{ id: 'seed-schedule', name: 'Seed Schedule' }],
+      kpi_reporting_monthly_aggregates_v1: activeSnapshot,
+      kpi_reporting_monthly_aggregates_default_v1: defaultSnapshot,
+    });
+
+    const storedSchedules = JSON.parse(
+      getDb()
+        .prepare('SELECT payload FROM reporting_projections WHERE projection_key = ?')
+        .get('kpi_report_schedule_v1')?.payload || '[]'
+    );
+    const storedActive = JSON.parse(
+      getDb()
+        .prepare('SELECT payload FROM reporting_projections WHERE projection_key = ?')
+        .get('kpi_reporting_monthly_aggregates_v1')?.payload || 'null'
+    );
+    const storedDefault = JSON.parse(
+      getDb()
+        .prepare('SELECT payload FROM reporting_projections WHERE projection_key = ?')
+        .get('kpi_reporting_monthly_aggregates_default_v1')?.payload || 'null'
+    );
+
+    expect(storedSchedules).toEqual([{ id: 'seed-schedule', name: 'Seed Schedule' }]);
+    expect(storedActive).toEqual(activeSnapshot);
+    expect(storedDefault).toEqual(defaultSnapshot);
+  });
+
+  it('xoa cac hot-path typed runtime tuong ung khi xoa qua Storage API', async () => {
+
+    const adminAgent = request.agent(app);
+
+    const loginRes = await adminAgent.post('/api/auth/login').send({ username: 'admin', password: 'admin123' });
+
+    expect(loginRes.status).toBe(200);
+
+
+
+    const roster = {
+
+      version: 1,
+
+      teams: [
+
+        {
+
+          name: 'Blue Team',
+
+          members: [{ name: 'Lan' }],
+
+        },
+
+      ],
+
+    };
+
+    const declarations = [{ so_tk: '10756284616', nhanh: 'Blue', mst: '0101234567', date: '2026-02-14' }];
+
+    const mstRows = [{ mst: '0101234567', person_import: 'Lan', team: 'Blue Team' }];
+
+    const adjustments = [{ id: 'adj-typed', totalPoints: 2, status: 'approved' }];
+
+
+
+    expect((await adminAgent.put('/api/storage/team_roster_v1').send({ value: roster })).status).toBe(200);
+
+    expect((await adminAgent.put('/api/storage/decl_rows_v1').send({ value: declarations })).status).toBe(200);
+
+    expect((await adminAgent.put('/api/storage/mst_rows_v2').send({ value: mstRows })).status).toBe(200);
+
+    expect((await adminAgent.put('/api/storage/kpi_adjustments_v1').send({ value: adjustments })).status).toBe(200);
+
+
+
+    expect((await adminAgent.delete('/api/storage/team_roster_v1')).status).toBe(200);
+
+    expect((await adminAgent.delete('/api/storage/decl_rows_v1')).status).toBe(200);
+
+    expect((await adminAgent.delete('/api/storage/mst_rows_v2')).status).toBe(200);
+
+    expect((await adminAgent.delete('/api/storage/kpi_adjustments_v1')).status).toBe(200);
+
+
+
+    expect(readTeamRosterSnapshot(getDb())).toBeNull();
+
+    expect(readDeclarationRowsSnapshot(getDb())).toBeNull();
+
+    expect(readMstAssignmentRowsSnapshot(getDb())).toBeNull();
+
+    expect(readAdjustmentRowsSnapshot(getDb())).toBeNull();
+
+  });
+
 });
 
 
@@ -6930,7 +10108,7 @@ describe('Alert API', () => {
 
     mst: '0100000001',
 
-    cong_ty: 'CÔNG TY MINH HỌA',
+    cong_ty: 'CÃƒÆ’Ã¢â‚¬ÂNG TY MINH HÃƒÂ¡Ã‚Â»Ã…â€™A',
 
     date: '2000-01-01',
 
@@ -6968,9 +10146,21 @@ describe('Alert API', () => {
 
 
 
-  it('trả về danh sách cảnh báo và cấu hình hiện tại', async () => {
+  it('tÃƒÂ¡Ã‚Â»Ã‚Â« chÃƒÂ¡Ã‚Â»Ã¢â‚¬Ëœi xem cÃƒÂ¡Ã‚ÂºÃ‚Â£nh bÃƒÆ’Ã‚Â¡o khi chÃƒâ€ Ã‚Â°a Ãƒâ€žÃ¢â‚¬ËœÃƒâ€žÃ†â€™ng nhÃƒÂ¡Ã‚ÂºÃ‚Â­p', async () => {
 
     const res = await request(app).get('/api/import/alerts');
+
+    expect(res.status).toBe(401);
+
+    expect(res.body.ok).toBe(false);
+
+  });
+
+
+
+  it('trÃƒÂ¡Ã‚ÂºÃ‚Â£ vÃƒÂ¡Ã‚Â»Ã‚Â danh sÃƒÆ’Ã‚Â¡ch cÃƒÂ¡Ã‚ÂºÃ‚Â£nh bÃƒÆ’Ã‚Â¡o vÃƒÆ’Ã‚Â  cÃƒÂ¡Ã‚ÂºÃ‚Â¥u hÃƒÆ’Ã‚Â¬nh hiÃƒÂ¡Ã‚Â»Ã¢â‚¬Â¡n tÃƒÂ¡Ã‚ÂºÃ‚Â¡i', async () => {
+
+    const res = await adminAgent.get('/api/import/alerts');
 
     expect(res.status).toBe(200);
 
@@ -6984,7 +10174,7 @@ describe('Alert API', () => {
 
 
 
-  it('cho phép cập nhật cấu hình cảnh báo và đánh dấu đã rà soát', async () => {
+  it('cho phÃƒÆ’Ã‚Â©p cÃƒÂ¡Ã‚ÂºÃ‚Â­p nhÃƒÂ¡Ã‚ÂºÃ‚Â­t cÃƒÂ¡Ã‚ÂºÃ‚Â¥u hÃƒÆ’Ã‚Â¬nh cÃƒÂ¡Ã‚ÂºÃ‚Â£nh bÃƒÆ’Ã‚Â¡o vÃƒÆ’Ã‚Â  Ãƒâ€žÃ¢â‚¬ËœÃƒÆ’Ã‚Â¡nh dÃƒÂ¡Ã‚ÂºÃ‚Â¥u Ãƒâ€žÃ¢â‚¬ËœÃƒÆ’Ã‚Â£ rÃƒÆ’Ã‚Â  soÃƒÆ’Ã‚Â¡t', async () => {
 
     const configRes = await adminAgent
 
@@ -7085,6 +10275,88 @@ describe('Alert API', () => {
     expect(unreviewRes.body.summary).toBeDefined();
 
     expect(unreviewRes.body.summary.outstanding).toBeGreaterThan(0);
+
+  });
+
+
+
+  it('bÃƒÂ¡Ã‚Â»Ã‚Â qua actor do client gÃƒÂ¡Ã‚Â»Ã‚Â­i khi rÃƒÆ’Ã‚Â  soÃƒÆ’Ã‚Â¡t cÃƒÂ¡Ã‚ÂºÃ‚Â£nh bÃƒÆ’Ã‚Â¡o', async () => {
+
+    const configRes = await adminAgent
+
+      .put('/api/import/alerts/config')
+
+      .send({
+
+        actor: 'spoofed.actor',
+
+        config: { thresholdDays: 0, channel: 'audit', enabled: true },
+
+      });
+
+    expect(configRes.status).toBe(200);
+
+    const alerts = await adminAgent.get('/api/import/alerts');
+
+    const key = alerts.body.alerts[0].key;
+
+    const reviewRes = await adminAgent
+
+      .post('/api/import/alerts/review')
+
+      .send({ actor: 'spoofed.actor', keys: [key] });
+
+    expect(reviewRes.status).toBe(200);
+
+    const auditRow = getDb().prepare('SELECT value FROM kv_store WHERE key = ?').get('audit_logs_v1');
+
+    const logs = JSON.parse(auditRow?.value || '[]');
+
+    const reviewLog = logs.find((entry) => entry.action === 'decl.review');
+
+    expect(reviewLog).toBeTruthy();
+
+    expect(reviewLog?.actor).toBe('admin');
+
+  });
+
+});
+
+
+
+describe('Import read API authz', () => {
+
+  it('tÃƒÂ¡Ã‚Â»Ã‚Â« chÃƒÂ¡Ã‚Â»Ã¢â‚¬Ëœi tra cÃƒÂ¡Ã‚Â»Ã‚Â©u tÃƒÂ¡Ã‚Â»Ã‚Â khai khi chÃƒâ€ Ã‚Â°a Ãƒâ€žÃ¢â‚¬ËœÃƒâ€žÃ†â€™ng nhÃƒÂ¡Ã‚ÂºÃ‚Â­p', async () => {
+
+    const res = await request(app).get('/api/import/search?mst=0101234567');
+
+    expect(res.status).toBe(401);
+
+    expect(res.body?.ok).toBe(false);
+
+  });
+
+
+
+  it('tÃƒÂ¡Ã‚Â»Ã‚Â« chÃƒÂ¡Ã‚Â»Ã¢â‚¬Ëœi xem cÃƒÂ¡Ã‚ÂºÃ‚Â¥u hÃƒÆ’Ã‚Â¬nh mÃƒÆ’Ã‚Â£ CO khi chÃƒâ€ Ã‚Â°a Ãƒâ€žÃ¢â‚¬ËœÃƒâ€žÃ†â€™ng nhÃƒÂ¡Ã‚ÂºÃ‚Â­p', async () => {
+
+    const res = await request(app).get('/api/import/co-codes');
+
+    expect(res.status).toBe(401);
+
+    expect(res.body?.ok).toBe(false);
+
+  });
+
+
+
+  it('tÃƒÂ¡Ã‚Â»Ã‚Â« chÃƒÂ¡Ã‚Â»Ã¢â‚¬Ëœi xem trÃƒÂ¡Ã‚ÂºÃ‚Â¡ng thÃƒÆ’Ã‚Â¡i kiÃƒÂ¡Ã‚Â»Ã†â€™m tra CO khi chÃƒâ€ Ã‚Â°a Ãƒâ€žÃ¢â‚¬ËœÃƒâ€žÃ†â€™ng nhÃƒÂ¡Ã‚ÂºÃ‚Â­p', async () => {
+
+    const res = await request(app).get('/api/import/co-discrepancy');
+
+    expect(res.status).toBe(401);
+
+    expect(res.body?.ok).toBe(false);
 
   });
 

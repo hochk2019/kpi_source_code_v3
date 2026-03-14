@@ -1,0 +1,20 @@
+import type { DomainModule } from './domain-module.js';
+import { authModule } from '../modules/auth/auth.module.js';
+import { declarationsModule } from '../modules/declarations/declarations.module.js';
+import { hqAgenciesModule } from '../modules/hq-agencies/hq-agencies.module.js';
+import { kpiAdjustmentsModule } from '../modules/kpi-adjustments/kpi-adjustments.module.js';
+import { kpiRulesModule } from '../modules/kpi-rules/kpi-rules.module.js';
+import { mstAssignmentsModule } from '../modules/mst-assignments/mst-assignments.module.js';
+import { reportingModule } from '../modules/reporting/reporting.module.js';
+import { teamsModule } from '../modules/teams/teams.module.js';
+
+export const moduleCatalog: readonly DomainModule[] = Object.freeze([
+  authModule,
+  declarationsModule,
+  mstAssignmentsModule,
+  teamsModule,
+  hqAgenciesModule,
+  kpiRulesModule,
+  kpiAdjustmentsModule,
+  reportingModule,
+]);

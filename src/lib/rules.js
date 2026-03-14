@@ -40,11 +40,11 @@ import {
 
   createDefaultRuleSetV2,
 
-} from '../shared/defaultRules.js';
+} from '../../packages/domain/src/defaultRules.js';
 
-import { coLineCount } from '../shared/co.js';
+import { coLineCount } from '../../packages/domain/src/co.js';
 
-export { DEFAULT_RULES } from '../shared/defaultRules.js';
+export { DEFAULT_RULES } from '../../packages/domain/src/defaultRules.js';
 
 
 
@@ -550,7 +550,7 @@ function loadRuleCollection() {
 
     if (Array.isArray(stored.sets)) {
 
-      return persistCollection(stored);
+      return normalizeCollection(stored);
 
     }
 

@@ -10,6 +10,8 @@ import {
 
   deleteRule,
 
+  loadRules,
+
   loadRuleSets,
 
   exportRuleCollection,
@@ -17,6 +19,8 @@ import {
   restoreRuleCollection,
 
 } from '@/lib/rules.js';
+import { subscribe } from '@/lib/storageClient.js';
+import { RULES_KEY } from '@/lib/store.js';
 
 
 
@@ -165,6 +169,37 @@ describe('deleteRule', () => {
     expect(persisted.sets.some((entry) => entry.id === extra.id)).toBe(false);
 
     expect(persisted.sets.length).toBeGreaterThanOrEqual(1);
+
+  });
+
+});
+
+
+
+describe('loadRuleSets & loadRules', () => {
+
+  it('không phát thay đổi RULES_KEY khi chỉ đọc bộ quy tắc đã lưu', () => {
+
+    const snapshot = exportRuleCollection();
+    restoreRuleCollection(snapshot, { actor: 'tester' });
+
+    let notifications = 0;
+    const unsubscribe = subscribe(RULES_KEY, () => {
+      notifications += 1;
+    });
+
+    try {
+
+      loadRuleSets();
+      loadRules(snapshot.activeId);
+
+      expect(notifications).toBe(0);
+
+    } finally {
+
+      unsubscribe();
+
+    }
 
   });
 

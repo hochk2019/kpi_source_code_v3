@@ -1,10 +1,14 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
 
 import {
 
   BarChart3,
 
   BookOpenCheck,
+
+  Building2,
+
+  ClipboardList,
 
   Command as CommandIcon,
 
@@ -46,7 +50,10 @@ import {
 
 } from 'lucide-react';
 
-import { emitCommand } from '@/lib/commandBus.js';
+import { emitCommand, subscribeCommand } from '@/lib/commandBus.js';
+
+import { getAppShellAccess, getVisibleAppTabs } from '@/lib/appShellNavigation.js';
+import { SearchField } from '@/components/designSystem/shellPrimitives.jsx';
 
 import { useTheme } from '@/designSystem/useTheme.js';
 
@@ -124,41 +131,33 @@ const GROUP_TITLES = {
 
 };
 
+const NAVIGATION_ICONS = {
 
+  mst: Users,
 
-function normalizePermissions(currentUser) {
+  hq: Building2,
 
-  const permissions = currentUser?.permissions || {};
+  import: FileSpreadsheet,
 
-  return {
+  teams: Users,
 
-    canImportEdit: !!permissions.importEdit,
+  rules: Settings2,
 
-    canImportUpload: !!permissions.importUpload,
+  adjustments: Layers3,
 
-    canMstEdit: !!permissions.mstEdit,
+  reports: BarChart3,
 
-    canRulesEdit: !!permissions.rulesEdit,
+  health: ListChecks,
 
-    canTeamsEdit: !!permissions.teamsEdit,
+  ai: Sparkles,
 
-    canManageAccounts: !!permissions.accountManage,
+  accounts: Settings2,
 
-    canExportReports: permissions.reportsExport !== false,
+  audit: ClipboardList,
 
-    canManageSync: !!permissions.syncManage,
+  'export-audit': History,
 
-    canManageAlerts: !!permissions.alertsManage,
-
-    canUseAi: !!permissions.aiAssistUse || !!permissions.aiAssistManage,
-
-    canViewDataHealth: !!permissions.dataHealthView || !!permissions.dataHealthManage,
-
-    canManageDataHealth: !!permissions.dataHealthManage,
-
-  };
-
-}
+};
 
 
 
@@ -180,7 +179,7 @@ function buildCommands({
 
   const isLoggedIn = Boolean(currentUser?.username && currentUser.username !== 'guest');
 
-  const perms = normalizePermissions(currentUser);
+  const access = getAppShellAccess(currentUser);
 
   const loginHandler = typeof onRequestLogin === 'function' ? onRequestLogin : () => {};
 
@@ -193,140 +192,15 @@ function buildCommands({
   const themeHandler = typeof setTheme === 'function' ? setTheme : () => {};
 
   const commands = [
-
-    {
-
-      id: 'navigate:reports',
-
+    ...getVisibleAppTabs(currentUser).map((tab) => ({
+      id: `navigate:${tab.id}`,
       group: 'navigation',
-
-      label: 'Đi tới tab Báo cáo KPI',
-
-      description: 'Mở dashboard KPI tổng hợp và biểu đồ mới nhất',
-
-      icon: BarChart3,
-
-      keywords: ['bao cao', 'dashboard', 'kpi', 'thong ke'],
-
-      run: () => emitCommand('navigate:tab', { tab: 'reports' }),
-
-    },
-
-    {
-
-      id: 'navigate:import',
-
-      group: 'navigation',
-
-      label: 'Đi tới tab Import Data',
-
-      description: 'Nhập file Excel, đồng bộ ECUS và xử lý trùng',
-
-      icon: FileSpreadsheet,
-
-      keywords: ['import', 'excel', 'ecus', 'dong bo', 'du lieu'],
-
-      run: () => emitCommand('navigate:tab', { tab: 'import' }),
-
-    },
-
-    {
-
-      id: 'navigate:health',
-
-      group: 'navigation',
-
-      label: 'Mở tab Sức khỏe dữ liệu',
-
-      description: 'Xem trùng 11 số đầu, timeout SQL và cảnh báo',
-
-      icon: ListChecks,
-
-      keywords: ['suc khoe', 'du lieu', 'trung lap', 'canh bao'],
-
-      run: () => emitCommand('navigate:tab', { tab: 'health' }),
-
-      hidden: !perms.canViewDataHealth,
-
-    },
-
-    {
-
-      id: 'navigate:teams',
-
-      group: 'navigation',
-
-      label: 'Đi tới tab Quản lý Tổ đội',
-
-      description: 'Điều phối tổ đội, KPI mục tiêu và phân công nhân sự',
-
-      icon: Users,
-
-      keywords: ['to doi', 'team', 'phan cong'],
-
-      run: () => emitCommand('navigate:tab', { tab: 'teams' }),
-
-      hidden: !perms.canTeamsEdit,
-
-    },
-
-    {
-
-      id: 'navigate:ai',
-
-      group: 'navigation',
-
-      label: 'Mở tab Trợ lý AI',
-
-      description: 'Truy cập trợ lý AI với lịch sử hội thoại đã lưu',
-
-      icon: Sparkles,
-
-      keywords: ['ai', 'tro ly', 'chatbot'],
-
-      run: () => emitCommand('navigate:tab', { tab: 'ai' }),
-
-      hidden: !perms.canUseAi,
-
-    },
-
-    {
-
-      id: 'navigate:adjustments',
-
-      group: 'navigation',
-
-      label: 'Đi tới tab Điểm KPI +/- Thêm',
-
-      description: 'Ghi nhận cộng trừ điểm KPI thủ công cho từng kỳ',
-
-      icon: Layers3,
-
-      keywords: ['kpi', 'cong tru', 'dieu chinh'],
-
-      run: () => emitCommand('navigate:tab', { tab: 'adjustments' }),
-
-    },
-
-    {
-
-      id: 'navigate:accounts',
-
-      group: 'navigation',
-
-      label: 'Quản trị tài khoản người dùng',
-
-      description: 'Tạo, khoá hoặc phân quyền tài khoản đăng nhập',
-
-      icon: Settings2,
-
-      keywords: ['tai khoan', 'admin', 'phan quyen'],
-
-      run: () => emitCommand('navigate:tab', { tab: 'accounts' }),
-
-      hidden: !perms.canManageAccounts,
-
-    },
+      label: tab.commandLabel || `Đi tới tab ${tab.label}`,
+      description: tab.commandDescription || tab.tooltip,
+      icon: NAVIGATION_ICONS[tab.id] || CommandIcon,
+      keywords: tab.commandKeywords || [],
+      run: () => emitCommand('navigate:tab', { tab: tab.id }),
+    })),
 
     {
 
@@ -361,6 +235,8 @@ function buildCommands({
       keywords: ['dong bo', 'ecus', 'nhat ky'],
 
       run: () => emitCommand('navigate:tab', { tab: 'health', focus: 'sync' }),
+
+      hidden: !access.canViewDataHealth,
 
     },
 
@@ -732,7 +608,7 @@ export default function CommandCenter({
 
 }) {
 
-  const { theme, resolvedTheme, setTheme } = useTheme();
+  const { theme, setTheme } = useTheme();
 
   const [open, setOpen] = useState(false);
 
@@ -745,6 +621,8 @@ export default function CommandCenter({
   const [highlightedIndex, setHighlightedIndex] = useState(0);
 
   const inputRef = useRef(null);
+  const dialogId = useId();
+  const dialogTitleId = useId();
 
 
 
@@ -828,6 +706,16 @@ export default function CommandCenter({
 
     return () => window.removeEventListener('keydown', handleKeyDown);
 
+  }, []);
+
+  useEffect(() => {
+    const unsubscribe = subscribeCommand((id) => {
+      if (id === 'open:command-center') {
+        setOpen(true);
+      }
+    });
+
+    return () => unsubscribe();
   }, []);
 
 
@@ -939,6 +827,9 @@ export default function CommandCenter({
         type="button"
 
         onClick={() => setOpen(true)}
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        aria-controls={dialogId}
 
         className={`inline-flex items-center gap-2 rounded-full border border-gray-300 px-3 py-1.5 text-sm text-gray-600 shadow-sm transition hover:bg-gray-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--ds-accent-ring)] dark:border-gray-700 dark:text-gray-200 dark:hover:bg-slate-800 ${className}`.trim()}
 
@@ -956,43 +847,41 @@ export default function CommandCenter({
 
         <div className="fixed inset-0 z-50 flex items-start justify-center bg-slate-900/40 px-4 py-24 backdrop-blur-sm">
 
-          <div className="w-full max-w-3xl overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-2xl transition dark:border-slate-700 dark:bg-slate-900">
+          <div
+            id={dialogId}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={dialogTitleId}
+            className="w-full max-w-3xl overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-2xl transition dark:border-slate-700 dark:bg-slate-900"
+          >
 
             <div className="flex items-center gap-2 border-b border-gray-200 px-5 py-4 dark:border-slate-700">
+              <h2 id={dialogTitleId} className="sr-only">
+                Command Center
+              </h2>
 
-              <Search className="h-5 w-5 text-gray-400" aria-hidden="true" />
-
-              <input
-
+              <SearchField
                 ref={inputRef}
-
+                label="Tìm thao tác trong Command Center"
+                hideLabel
                 value={query}
-
                 onChange={(event) => {
-
                   setQuery(event.target.value);
-
                   setHighlightedIndex(0);
-
                 }}
-
                 onKeyDown={handleKeyNavigation}
-
                 placeholder="Tìm chức năng, biểu đồ, tài liệu hoặc thao tác..."
-
-                className="flex-1 bg-transparent text-sm text-gray-800 outline-none placeholder:text-gray-400 dark:text-gray-100"
-
+                className="flex-1"
+                controlClassName="min-h-0 border-0 bg-transparent px-0"
+                trailingContent={
+                  <span className="hidden text-xs text-gray-400 sm:inline-flex sm:items-center sm:gap-1">
+                    <kbd className="rounded border border-gray-300 bg-gray-100 px-1.5 py-0.5 text-[10px] font-semibold text-gray-600">Ctrl</kbd>
+                    +
+                    <kbd className="rounded border border-gray-300 bg-gray-100 px-1.5 py-0.5 text-[10px] font-semibold text-gray-600">K</kbd>
+                  </span>
+                }
               />
 
-              <span className="hidden text-xs text-gray-400 sm:inline-flex sm:items-center sm:gap-1">
-
-                <kbd className="rounded border border-gray-300 bg-gray-100 px-1.5 py-0.5 text-[10px] font-semibold text-gray-600">Ctrl</kbd>
-
-                +
-
-                <kbd className="rounded border border-gray-300 bg-gray-100 px-1.5 py-0.5 text-[10px] font-semibold text-gray-600">K</kbd>
-
-              </span>
 
             </div>
 
@@ -1046,11 +935,25 @@ export default function CommandCenter({
 
                       <li key={command.id}>
 
-                        <button
+                        <div
 
-                          type="button"
+                          role="button"
+
+                          tabIndex={0}
 
                           onClick={() => handleRunCommand(command)}
+
+                          onKeyDown={(event) => {
+
+                            if (event.key === 'Enter' || event.key === ' ') {
+
+                              event.preventDefault();
+
+                              handleRunCommand(command);
+
+                            }
+
+                          }}
 
                           onMouseEnter={() => setHighlightedIndex(commandIndex)}
 
@@ -1136,7 +1039,7 @@ export default function CommandCenter({
 
                           </div>
 
-                        </button>
+                        </div>
 
                       </li>
 

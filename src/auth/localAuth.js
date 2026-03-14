@@ -14,7 +14,7 @@ import {
 
   normalizeRoleKey,
 
-} from "../shared/accountRoles.js";
+} from "../../packages/domain/src/accountRoles.js";
 
 
 
@@ -22,7 +22,7 @@ export const PERMISSION_KEYS = [...ACCOUNT_PERMISSION_KEYS];
 
 export const ROLE_OPTIONS = listRoleOptions();
 
-export { ADMIN_ROLE, DEFAULT_ROLE, TEAM_LEAD_ROLE, MANAGER_ROLE } from "../shared/accountRoles.js";
+export { ADMIN_ROLE, DEFAULT_ROLE, TEAM_LEAD_ROLE, MANAGER_ROLE } from "../../packages/domain/src/accountRoles.js";
 
 
 
@@ -44,117 +44,27 @@ let accountCache = [];
 
 
 
-const SESSION_TOKEN_STORAGE_KEY = 'kpi_session_token';
-
-let sessionTokenCache = null;
-
-let sessionTokenLoaded = false;
+const LEGACY_SESSION_TOKEN_STORAGE_KEY = 'kpi_session_token';
 
 
 
-function getBrowserStorage() {
+function clearLegacySessionToken() {
 
   if (typeof window === 'undefined') {
 
-    return null;
+    return;
 
   }
 
   try {
 
-    return window.localStorage ?? null;
+    window.localStorage?.removeItem(LEGACY_SESSION_TOKEN_STORAGE_KEY);
 
   } catch {
 
-    return null;
+    // ignore storage errors
 
   }
-
-}
-
-
-
-function loadSessionTokenFromStorage() {
-
-  if (sessionTokenLoaded) {
-
-    return sessionTokenCache;
-
-  }
-
-  sessionTokenLoaded = true;
-
-  const storage = getBrowserStorage();
-
-  if (!storage) {
-
-    sessionTokenCache = null;
-
-    return sessionTokenCache;
-
-  }
-
-  try {
-
-    const value = storage.getItem(SESSION_TOKEN_STORAGE_KEY);
-
-    if (value && typeof value === 'string') {
-
-      const trimmed = value.trim();
-
-      sessionTokenCache = trimmed ? trimmed : null;
-
-    } else {
-
-      sessionTokenCache = null;
-
-    }
-
-  } catch {
-
-    sessionTokenCache = null;
-
-  }
-
-  return sessionTokenCache;
-
-}
-
-
-
-function setSessionToken(token) {
-
-  const normalized = typeof token === 'string' ? token.trim() : '';
-
-  sessionTokenCache = normalized || null;
-
-  sessionTokenLoaded = true;
-
-  const storage = getBrowserStorage();
-
-  if (storage) {
-
-    try {
-
-      if (sessionTokenCache) {
-
-        storage.setItem(SESSION_TOKEN_STORAGE_KEY, sessionTokenCache);
-
-      } else {
-
-        storage.removeItem(SESSION_TOKEN_STORAGE_KEY);
-
-      }
-
-    } catch {
-
-      // ignore storage errors
-
-    }
-
-  }
-
-  return sessionTokenCache;
 
 }
 
@@ -162,7 +72,9 @@ function setSessionToken(token) {
 
 export function getSessionToken() {
 
-  return sessionTokenLoaded ? sessionTokenCache : loadSessionTokenFromStorage();
+  clearLegacySessionToken();
+
+  return null;
 
 }
 
@@ -292,17 +204,11 @@ export function buildUrl(path) {
 
 export function createAuthHeaders(baseHeaders) {
 
+  clearLegacySessionToken();
+
   const headers =
 
     baseHeaders instanceof Headers ? new Headers(baseHeaders) : new Headers(baseHeaders || undefined);
-
-  const token = getSessionToken();
-
-  if (token) {
-
-    headers.set('Authorization', `Bearer ${token}`);
-
-  }
 
   return headers;
 
@@ -418,11 +324,11 @@ function sanitizeUserForSession(user) {
 
 function setSessionFromUser(user) {
 
+  clearLegacySessionToken();
+
   if (!user) {
 
     sessionCache = null;
-
-    setSessionToken(null);
 
     return null;
 
@@ -514,8 +420,6 @@ export async function login(usernameInput, passwordInput) {
 
     });
 
-    setSessionToken(payload?.token ?? null);
-
     const session = setSessionFromUser(payload?.user);
 
     await reloadAccounts().catch(() => {});
@@ -539,12 +443,6 @@ export async function loadSession() {
     const payload = await requestJson("/api/auth/session");
 
     const session = setSessionFromUser(payload?.user);
-
-    if (payload?.token) {
-
-      setSessionToken(payload.token);
-
-    }
 
     if (payload?.user) {
 
@@ -634,13 +532,13 @@ export async function reloadAccounts() {
 
 
 
-export async function createAccount(payload, { actor = "system" } = {}) {
+export async function createAccount(payload) {
 
   const response = await requestJson("/api/auth/accounts", {
 
     method: "POST",
 
-    body: { ...payload, actor },
+    body: { ...payload },
 
   });
 
@@ -652,13 +550,13 @@ export async function createAccount(payload, { actor = "system" } = {}) {
 
 
 
-export async function updateAccount(usernameInput, patch, { actor = "system" } = {}) {
+export async function updateAccount(usernameInput, patch) {
 
   const response = await requestJson(`/api/auth/accounts/${encodeURIComponent(usernameInput)}`, {
 
     method: "PATCH",
 
-    body: { ...patch, actor },
+    body: { ...patch },
 
   });
 
@@ -672,7 +570,7 @@ export async function updateAccount(usernameInput, patch, { actor = "system" } =
 
 
 
-export async function setAccountPassword(usernameInput, newPasswordInput, { actor = "system" } = {}) {
+export async function setAccountPassword(usernameInput, newPasswordInput) {
 
   const password = String(newPasswordInput || "").trim();
 
@@ -686,7 +584,7 @@ export async function setAccountPassword(usernameInput, newPasswordInput, { acto
 
     method: "POST",
 
-    body: { password, actor },
+    body: { password },
 
   });
 
@@ -704,13 +602,11 @@ export async function setAccountPassword(usernameInput, newPasswordInput, { acto
 
 
 
-export async function deleteAccount(usernameInput, { actor = "system" } = {}) {
+export async function deleteAccount(usernameInput) {
 
   const response = await requestJson(`/api/auth/accounts/${encodeURIComponent(usernameInput)}`, {
 
     method: "DELETE",
-
-    body: { actor },
 
   });
 
@@ -751,8 +647,6 @@ export async function changeOwnPassword(usernameInput, currentPasswordInput, new
     body: { username, currentPassword, newPassword },
 
   });
-
-  setSessionToken(response?.token ?? null);
 
   await reloadAccounts().catch(() => {});
 

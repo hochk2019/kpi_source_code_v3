@@ -14,7 +14,7 @@ import { getAuth, getViewerAuth, loadSession, logout } from './auth/localAuth.js
 
 import './App.css';
 
-import { getSyncStatus, subscribeSyncStatus } from './lib/storageClient.js';
+import { clearStorageCache, getSyncStatus, initSharedStorage, subscribeSyncStatus } from './lib/storageClient.js';
 
 import useTooltipTitles from './hooks/useTooltipTitles.js';
 
@@ -26,7 +26,7 @@ import CommandCenter from './components/CommandCenter.jsx';
 
 import { subscribeCommand } from './lib/commandBus.js';
 
-import { isAdminRole } from './shared/accountRoles.js';
+import { isAdminRole } from '../packages/domain/src/accountRoles.js';
 
 
 
@@ -41,6 +41,7 @@ export default function App() {
   const [syncStatus, setSyncStatus] = useState(() => getSyncStatus());
 
   const [activeTab, setActiveTab] = useState('reports');
+  const [navigationIntent, setNavigationIntent] = useState(null);
 
   const rootRef = useRef(null);
 
@@ -69,6 +70,44 @@ export default function App() {
       });
 
   }, []);
+
+
+
+  useEffect(() => {
+
+    if (!auth?.username) {
+
+      clearStorageCache();
+
+      return undefined;
+
+    }
+
+    if (getSyncStatus().remoteEnabled) {
+
+      return undefined;
+
+    }
+
+    let cancelled = false;
+
+    initSharedStorage().catch((error) => {
+
+      if (!cancelled) {
+
+        console.warn('Không thể đồng bộ bộ nhớ chia sẻ sau khi xác thực.', error);
+
+      }
+
+    });
+
+    return () => {
+
+      cancelled = true;
+
+    };
+
+  }, [auth?.username]);
 
 
 
@@ -213,6 +252,11 @@ export default function App() {
         if (target) {
 
           setActiveTab(target);
+          setNavigationIntent({
+            tab: target,
+            focus: typeof payload?.focus === 'string' ? payload.focus : null,
+            nonce: Date.now(),
+          });
 
           if (rootRef.current) {
 
@@ -438,7 +482,12 @@ export default function App() {
 
         <Suspense fallback={<div className="text-sm text-gray-500 dark:text-gray-400">Đang tải dashboard...</div>}>
 
-          <KPICalculator auth={effectiveAuth} activeTab={activeTab} onTabChange={setActiveTab} />
+          <KPICalculator
+            auth={effectiveAuth}
+            activeTab={activeTab}
+            onTabChange={setActiveTab}
+            navigationIntent={navigationIntent}
+          />
 
         </Suspense>
 

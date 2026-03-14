@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 
-import { seedSampleDeclarations } from '@/shared/sampleDeclarations.js';
+import { seedSampleDeclarations } from '../packages/domain/src/sampleDeclarations.js';
 
-import { DEFAULT_RULES } from '@/shared/defaultRules.js';
+import { DEFAULT_RULES } from '../packages/domain/src/defaultRules.js';
 
 import { clearStorageCache, getItem as sharedGetItem } from '@/lib/storageClient.js';
 

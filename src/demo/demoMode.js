@@ -506,16 +506,6 @@ export async function enableDemoMode() {
 
   window.__kpiDemoMode = true
 
-  try {
-
-    window.localStorage?.setItem('kpi_session_token', 'demo-token')
-
-  } catch (err) {
-
-    console.warn('Không thể lưu token demo vào localStorage', err)
-
-  }
-
 
 
   const bootstrapStore = buildBootstrapStore()

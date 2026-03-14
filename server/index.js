@@ -20,33 +20,82 @@ import Database from 'better-sqlite3';
 
 import cron from 'node-cron';
 
-import sql from 'mssql';
-
 import bcrypt from 'bcryptjs';
 
 import crypto from 'node:crypto';
 
 import { generateReport } from './reportExport.js';
-
-import { buildReportData } from '../src/lib/reports.js';
+import { buildCompactReportExportPayload } from './reportExportPayloads.js';
+import {
+  createReportingProjectionStore,
+  DEFAULT_MONTHLY_REPORTING_AGGREGATE_KEY as MONTHLY_REPORTING_DEFAULT_AGGREGATE_KEY,
+  MONTHLY_REPORTING_AGGREGATE_KEY,
+  REPORTING_JOB_RUNS_KEY,
+  REPORT_SCHEDULE_STORAGE_KEY,
+} from './reportingProjectionStore.js';
+import {
+  deleteReportingProjectionValue,
+  ensureReportingProjectionTable,
+  readReportingJobRunProjectionEntries,
+  readReportingMonthlyAggregateProjectionEntries,
+  readReportingProjectionValue,
+  writeReportingProjectionValue,
+} from './reportingProjectionSqlite.js';
+import {
+  deleteAdjustmentRowsSnapshot,
+  deleteDeclarationRowsSnapshot,
+  deleteMstAssignmentRowsSnapshot,
+  readAdjustmentRowsSnapshot,
+  readDeclarationRowsSnapshot,
+  readMstAssignmentRowsSnapshot,
+  readRuleCollectionSnapshot,
+  writeAdjustmentRowsSnapshot,
+  writeDeclarationRowsSnapshot,
+  writeMstAssignmentRowsSnapshot,
+  writeRuleCollectionSnapshot,
+  ensureBusinessSnapshotTables,
+} from './businessSnapshotSqlite.js';
+import {
+  readTeamRosterSnapshot,
+  deleteTeamRosterSnapshot,
+  ensureTeamRosterTables,
+  writeTeamRosterSnapshot,
+} from './teamRosterSqlite.js';
+import { resolveReportingRule } from './reportingRuleSelection.js';
+import {
+  buildReportingReadModels,
+} from './reportingReadModels.js';
+import { createReportingAggregateRuntime } from './reportingAggregateRuntime.js';
+import { createReportingScheduleRuntime } from './reportingScheduleRuntime.js';
+import {
+  createRuntimeStorageLifecycle,
+  hydrateRuntimeStorageSnapshots,
+  normalizeStorageValue,
+} from './runtimeStorageLifecycle.js';
+import { createStorageRouteRuntime } from './storageRouteRuntime.js';
+import { createStorageRouteController } from './storageRouteController.js';
+import { buildLegacyReportData } from './legacyReportingBridge.js';
+import { createEcusBridgeService } from './ecus/bridgeService.js';
+import { createEcusBridgeMutations } from './ecusBridgeMutations.js';
+import { getBootstrapPasswordEnvKey, readBootstrapAccountPassword } from './bootstrapAccountPasswords.js';
 
 import { buildDefaultAiProviders } from './aiProviders/index.js';
 
-import { normalizeSqlUnicodeRecord } from './ecus/sqlUnicode.js';
+import { createSqlPoolManager } from '../apps/ecus-bridge/src/sqlBridge.js';
 
-import { getSecureSqlCredentials } from './ecus/secureCredentials.js';
+import { normalizeSqlUnicodeRecord } from './ecus/sqlUnicode.js';
 
 import { deliverAlertNotification, hasAlertTargets } from './alerts/delivery.js';
 
 import { loadAiHttpsConfig } from './https/aiHttpsConfig.js';
 
-import { DEFAULT_RULES as SHARED_DEFAULT_RULES } from '../src/shared/defaultRules.js';
+import { DEFAULT_RULES as SHARED_DEFAULT_RULES } from '../packages/domain/src/defaultRules.js';
 
 import { getRulesSeed, persistRulesSnapshot, loadRulesSnapshot, listRulesHistory } from './rulesPersistence.js';
 
-import { deriveCOStatus, parseCoLineCount, setPreferentialCodeConfig } from '../src/shared/co.js';
+import { deriveCOStatus, parseCoLineCount, setPreferentialCodeConfig } from '../packages/domain/src/co.js';
 
-import { filterDeclRows, normalizeDeclSearchFilters } from '../src/shared/declSearch.js';
+import { filterDeclRows, normalizeDeclSearchFilters } from '../packages/domain/src/declSearch.js';
 
 import {
 
@@ -70,9 +119,8 @@ import {
 
   isAdminRole,
 
-} from '../src/shared/accountRoles.js';
-
-import { translateBackupReason, translateBackupFailure } from '../src/shared/backupMessages.js';
+} from '../packages/domain/src/accountRoles.js';
+import { translateBackupReason, translateBackupFailure } from '../packages/domain/src/backupMessages.js';
 
 import { recordSqlTimeout, getSqlTimeoutEvents, onSqlTimeout } from './sqlMonitor.js';
 
@@ -466,31 +514,11 @@ function upgradeLegacyEcusRangeFilter(queryText) {
 
     LEGACY_ECUS_RANGE_TO,
 
-    'COALESCE(lp.Ngay_DK, md.NGAY_DK) <= @to'
+    'COALESCE(lp.Ngay_DK, md.NGAY_DK) < DATEADD(DAY, 1, @to)'
 
   );
 
   return upgraded;
-
-}
-
-
-
-function joinSqlSections(base, addition) {
-
-  if (!addition) {
-
-    return base;
-
-  }
-
-  if (!/\s$/u.test(base) && !/^\s/u.test(addition)) {
-
-    return `${base}\n${addition}`;
-
-  }
-
-  return base + addition;
 
 }
 
@@ -532,67 +560,25 @@ function optimizeEcusCoalesceRangeFilter(queryText) {
 
   const toMatchIndex = secondSliceStart + toMatchInTail.index;
 
-  const toMatchEnd = toMatchIndex + toMatchInTail[0].length;
+  const fromReplacement = 'lp.Ngay_DK >= @from';
 
-  const beforeFromSegment = queryText.slice(0, fromMatch.index);
+  const toReplacement = /dateadd\s*\(\s*day\s*,\s*1\s*,\s*@to\s*\)/iu.test(toMatchInTail[0])
+    ? 'lp.Ngay_DK < DATEADD(DAY, 1, @to)'
+    : 'lp.Ngay_DK <= @to';
 
-  const whereMatches = Array.from(beforeFromSegment.matchAll(/where\b/gi));
+  const withFromOptimized =
+    queryText.slice(0, fromMatch.index) +
+    fromReplacement +
+    queryText.slice(fromMatch.index + fromMatch[0].length);
 
-  const lastWhereMatch = whereMatches[whereMatches.length - 1];
+  const rangeDelta = fromReplacement.length - fromMatch[0].length;
+  const adjustedToIndex = toMatchIndex + rangeDelta;
 
-  if (!lastWhereMatch) {
-
-    return queryText;
-
-  }
-
-
-
-  const whereIndex = lastWhereMatch.index;
-
-  const beforeWhere = queryText.slice(0, whereIndex);
-
-  const afterRange = queryText.slice(toMatchEnd);
-
-  let whereTail = '';
-
-  let trailingSection = '';
-
-  const boundaryMatch = ECUS_QUERY_SECTION_BOUNDARY.exec(afterRange);
-
-  if (boundaryMatch) {
-
-    whereTail = afterRange.slice(0, boundaryMatch.index);
-
-    trailingSection = afterRange.slice(boundaryMatch.index);
-
-  } else {
-
-    whereTail = afterRange;
-
-  }
-
-
-
-  const optimizedRange = [
-
-    'WHERE',
-
-    '  COALESCE(lp.Ngay_DK, md.NGAY_DK) >= @from',
-
-    '  AND COALESCE(lp.Ngay_DK, md.NGAY_DK) <= @to',
-
-  ].join('\n');
-
-
-
-  let rebuilt = beforeWhere + optimizedRange;
-
-  rebuilt = joinSqlSections(rebuilt, whereTail);
-
-  rebuilt = joinSqlSections(rebuilt, trailingSection);
-
-  return rebuilt;
+  return (
+    withFromOptimized.slice(0, adjustedToIndex) +
+    toReplacement +
+    withFromOptimized.slice(adjustedToIndex + toMatchInTail[0].length)
+  );
 
 }
 
@@ -620,16 +606,11 @@ function normalizeEcusQueryInput(value) {
 
   const withoutLegacyCompanyFallback = optimized.replace(/,\s*NULLIF\(md\.TEN_DV\s*,\s*''\)/giu, '');
 
-  const withoutDateAddTo = withoutLegacyCompanyFallback.replace(
-    /<\s*DATEADD\s*\(\s*DAY\s*,\s*1\s*,\s*@to\s*\)/giu,
-    '<= @to'
-  );
-
-  if (/COALESCE\s*\(\s*lp\.Ngay_DK\s*,\s*md\.NGAY_DK\s*\)/iu.test(withoutDateAddTo)) {
+  if (/COALESCE\s*\(\s*lp\.Ngay_DK\s*,\s*md\.NGAY_DK\s*\)/iu.test(withoutLegacyCompanyFallback)) {
     return DEFAULT_ECUS_SYNC_CONFIG.query;
   }
 
-  return withoutDateAddTo;
+  return withoutLegacyCompanyFallback;
 
 }
 
@@ -1282,6 +1263,7 @@ function shouldUseSecureCookies(req) {
 
 
 const DEFAULT_ACCOUNT_SEED_UPDATED_AT = '2024-01-01T00:00:00.000Z';
+const ADMIN_BOOTSTRAP_PASSWORD_ENV_KEY = getBootstrapPasswordEnvKey('admin');
 
 
 
@@ -1290,8 +1272,6 @@ const DEFAULT_ACCOUNT_SEED = [
   {
 
     username: 'admin',
-
-    password: 'admin123',
 
     role: ADMIN_ROLE,
 
@@ -1305,8 +1285,6 @@ const DEFAULT_ACCOUNT_SEED = [
 
     username: 'nhanvien',
 
-    password: '123456',
-
     role: DEFAULT_ROLE,
 
     name: 'Nhân viên',
@@ -1318,8 +1296,6 @@ const DEFAULT_ACCOUNT_SEED = [
   {
 
     username: 'lead.hoc',
-
-    password: 'Hoc@2024',
 
     role: TEAM_LEAD_ROLE,
 
@@ -1333,8 +1309,6 @@ const DEFAULT_ACCOUNT_SEED = [
 
     username: 'lead.phuong',
 
-    password: 'Phuong@2024',
-
     role: TEAM_LEAD_ROLE,
 
     name: 'Phương',
@@ -1346,8 +1320,6 @@ const DEFAULT_ACCOUNT_SEED = [
   {
 
     username: 'lead.tuan',
-
-    password: 'Tuan@2024',
 
     role: TEAM_LEAD_ROLE,
 
@@ -1361,8 +1333,6 @@ const DEFAULT_ACCOUNT_SEED = [
 
     username: 'manager.hoangkimhoa',
 
-    password: 'Hoa@2024',
-
     role: MANAGER_ROLE,
 
     name: 'Hoàng Kim Hòa',
@@ -1375,8 +1345,6 @@ const DEFAULT_ACCOUNT_SEED = [
 
     username: 'manager.thuyha',
 
-    password: 'ThuyHa@2024',
-
     role: MANAGER_ROLE,
 
     name: 'Thúy Hà',
@@ -1388,8 +1356,6 @@ const DEFAULT_ACCOUNT_SEED = [
   {
 
     username: 'manager.hoainam',
-
-    password: 'Nam@2024',
 
     role: MANAGER_ROLE,
 
@@ -1521,17 +1487,27 @@ function normalizeAccountUpdatedAt(value) {
 
 
 
-function buildDefaultAccounts() {
+function buildDefaultAccounts({ requireAdmin = false } = {}) {
 
-  return DEFAULT_ACCOUNT_SEED.map((entry) => {
+  const accounts = [];
+
+  for (const entry of DEFAULT_ACCOUNT_SEED) {
+
+    const password = readBootstrapAccountPassword(entry.username);
+
+    if (!password) {
+
+      continue;
+
+    }
 
     const role = normalizeRoleKey(entry.role);
 
-    return {
+    accounts.push({
 
       username: entry.username,
 
-      passwordHash: bcrypt.hashSync(entry.password, PASSWORD_SALT_ROUNDS),
+      passwordHash: bcrypt.hashSync(password, PASSWORD_SALT_ROUNDS),
 
       role,
 
@@ -1541,9 +1517,17 @@ function buildDefaultAccounts() {
 
       updatedAt: DEFAULT_ACCOUNT_SEED_UPDATED_AT,
 
-    };
+    });
 
-  });
+  }
+
+  if (requireAdmin && !accounts.some((entry) => normalizeRoleKey(entry.role) === ADMIN_ROLE)) {
+
+    throw new Error(`Thiếu ${ADMIN_BOOTSTRAP_PASSWORD_ENV_KEY} để bootstrap tài khoản quản trị`);
+
+  }
+
+  return accounts;
 
 }
 
@@ -2141,7 +2125,7 @@ const DEFAULT_STORAGE = {
 
   decl_alert_state_v1: JSON.stringify(DEFAULT_ALERT_STATE),
 
-  kpi_users_v1: JSON.stringify(buildDefaultAccounts()),
+  kpi_users_v1: '[]',
 
   db_backup_config_v1: JSON.stringify(DEFAULT_BACKUP_CONFIG),
 
@@ -2170,20 +2154,6 @@ const DEFAULT_STORAGE = {
   [AI_INSIGHTS_KEY]: JSON.stringify(DEFAULT_AI_INSIGHTS),
 
 };
-
-
-
-function normalizeValue(value) {
-
-  if (value === null || value === undefined) {
-
-    return null;
-
-  }
-
-  return typeof value === 'string' ? value : JSON.stringify(value);
-
-}
 
 
 
@@ -2292,6 +2262,9 @@ export async function initializeDatabase({ dbFile = DB_FILE } = {}) {
   database.exec(
     'CREATE INDEX IF NOT EXISTS idx_export_audit_access_username ON export_audit_access(username)'
   );
+  ensureReportingProjectionTable(database);
+  ensureBusinessSnapshotTables(database);
+  ensureTeamRosterTables(database);
 
 
   let seedData = { ...DEFAULT_STORAGE };
@@ -2342,7 +2315,7 @@ export async function initializeDatabase({ dbFile = DB_FILE } = {}) {
 
       for (const [key, value] of entries) {
 
-        stmt.run(key, normalizeValue(value));
+        stmt.run(key, normalizeStorageValue(value));
 
       }
 
@@ -2372,7 +2345,7 @@ export async function initializeDatabase({ dbFile = DB_FILE } = {}) {
 
         for (const [key, value] of entries) {
 
-          stmt.run(key, normalizeValue(value));
+          stmt.run(key, normalizeStorageValue(value));
 
         }
 
@@ -2400,35 +2373,24 @@ export async function initializeDatabase({ dbFile = DB_FILE } = {}) {
 
 
 
-  try {
-
-    const row = database.prepare('SELECT value FROM kv_store WHERE key = ?').get('kpi_rules_v2');
-
-    const rawRules = row?.value || null;
-
-    if (typeof rawRules === 'string' && rawRules) {
-
-      const currentSnapshot = loadRulesSnapshot();
-
-      const existingRules = currentSnapshot?.rules || null;
-
-      const parsedRules = safeParse(rawRules, null);
-
-      if (parsedRules && JSON.stringify(existingRules) !== JSON.stringify(parsedRules)) {
-
-        const source = databaseInitState.seeded ? 'bootstrap-seed' : 'bootstrap-sync';
-
-        persistRulesSnapshot(rawRules, { actor: 'system', source });
-
-      }
-
-    }
-
-  } catch (err) {
-
-    console.warn('Không thể đồng bộ file quy tắc KPI khi khởi tạo', err);
-
-  }
+  hydrateRuntimeStorageSnapshots({
+    database,
+    readValue: (key) => database.prepare('SELECT value FROM kv_store WHERE key = ?').get(key)?.value || null,
+    safeParse,
+    normalizeDeclRows,
+    writeDeclarationRowsSnapshot,
+    writeMstAssignmentRowsSnapshot,
+    writeTeamRosterSnapshot,
+    writeRuleCollectionSnapshot,
+    loadRulesSnapshot,
+    persistRulesSnapshot,
+    writeAdjustmentRowsSnapshot,
+    writeProjectionValue: writeReportingProjectionValue,
+    defaultRules: SHARED_DEFAULT_RULES,
+    seeded: databaseInitState.seeded,
+    updatedAt: new Date().toISOString(),
+    logger: console,
+  });
 
 
 
@@ -4154,6 +4116,57 @@ function refreshDatabaseBackupSchedule() {
 
 let db = await initializeDatabase();
 
+let reportingAggregateRuntime = null;
+
+const runtimeStorageLifecycle = createRuntimeStorageLifecycle({
+  getDatabase: () => db,
+  defaultStorage: DEFAULT_STORAGE,
+  safeParse,
+  normalizeDeclRows,
+  scheduleMstHistorySyncFromJson: scheduleMstHistorySqlSyncFromJson,
+  writeTeamRosterSnapshot,
+  deleteTeamRosterSnapshot,
+  writeDeclarationRowsSnapshot,
+  deleteDeclarationRowsSnapshot,
+  writeMstAssignmentRowsSnapshot,
+  deleteMstAssignmentRowsSnapshot,
+  writeRuleCollectionSnapshot,
+  persistRulesSnapshot,
+  loadRulesSnapshot,
+  writeAdjustmentRowsSnapshot,
+  deleteAdjustmentRowsSnapshot,
+  writeProjectionValue: writeReportingProjectionValue,
+  refreshReportingAggregate: (key, options) =>
+    reportingAggregateRuntime?.refreshMonthlyReportingAggregateSnapshot(key, options),
+  getRulesSeed,
+  defaultRules: SHARED_DEFAULT_RULES,
+  aiChatHistoryPrefix: AI_CHAT_HISTORY_PREFIX,
+  listAccountsForClient,
+  logger: console,
+});
+
+const storageRouteRuntime = createStorageRouteRuntime({
+  getValue,
+  upsertValue,
+  deleteValue,
+  safeParse,
+  evaluateDeclarationAlerts,
+  refreshEcusSchedule,
+  applyCoCodeConfig,
+  getCoCodeConfig,
+  refreshCoDiscrepancySchedule,
+  defaultCoCodeConfig: DEFAULT_CO_CODE_CONFIG,
+});
+const storageRouteController = createStorageRouteController({
+  getValue,
+  safeParse,
+  storageRouteRuntime,
+  getSessionContext,
+  resolveActor,
+  permissionRequirements: STORAGE_PERMISSION_REQUIREMENTS,
+  reportScheduleStorageKey: REPORT_SCHEDULE_STORAGE_KEY,
+});
+
 refreshDatabaseBackupSchedule();
 
 applyCoCodeConfig(getCoCodeConfig());
@@ -4394,55 +4407,25 @@ function resolveActor(req, fallback = 'api') {
 
   }
 
-  if (req.body?.actor) {
-
-    return req.body.actor;
-
-  }
-
-  if (req.query?.actor) {
-
-    return req.query.actor;
-
-  }
-
   return fallback;
 
 }
 
 
 
-function verifyStoragePermission(req, res, key) {
-
-  const required = STORAGE_PERMISSION_REQUIREMENTS[key];
-
-  if (!required) {
-
-    return { context: getSessionContext(req), required, denied: false };
-
-  }
+function requireAuthenticated(req, res, errorMessage = 'Bạn cần đăng nhập.') {
 
   const context = getSessionContext(req);
 
   if (!context) {
 
-    res.status(401).json({ ok: false, error: 'Bạn cần đăng nhập để thao tác với dữ liệu này' });
+    res.status(401).json({ ok: false, error: errorMessage });
 
-    return { context: null, required, denied: true };
-
-  }
-
-  const allowed = context.account?.permissions?.[required];
-
-  if (!allowed) {
-
-    res.status(403).json({ ok: false, error: 'Tài khoản hiện không có quyền chỉnh sửa mục này' });
-
-    return { context, required, denied: true };
+    return { context: null, denied: true };
 
   }
 
-  return { context, required, denied: false };
+  return { context, denied: false };
 
 }
 
@@ -4481,6 +4464,77 @@ function requireAdminSyncManage(req, res) {
   }
 
   return { context, denied: false };
+
+}
+
+
+
+function getEcusBridgeApiToken() {
+
+  const rawToken = process.env.ECUS_BRIDGE_TOKEN || process.env.KPI_ECUS_BRIDGE_TOKEN || '';
+
+  const token = `${rawToken}`.trim();
+
+  return token || null;
+
+}
+
+
+
+function requireEcusBridgeAccess(req, res) {
+
+  const authorization = `${req.headers?.authorization || ''}`.trim();
+
+  const bearerMatch = authorization.match(/^Bearer\s+(.+)$/i);
+
+  if (bearerMatch) {
+
+    const expectedToken = getEcusBridgeApiToken();
+
+    if (!expectedToken) {
+
+      res.status(503).json({ ok: false, error: 'ECUS bridge token chưa được cấu hình.' });
+
+      return { context: null, denied: true, actor: null };
+
+    }
+
+    const receivedToken = `${bearerMatch[1] || ''}`.trim();
+
+    const expectedBuffer = Buffer.from(expectedToken);
+
+    const receivedBuffer = Buffer.from(receivedToken);
+
+    const allowed = expectedBuffer.length === receivedBuffer.length
+      && crypto.timingSafeEqual(expectedBuffer, receivedBuffer);
+
+    if (!allowed) {
+
+      res.status(403).json({ ok: false, error: 'ECUS bridge token không hợp lệ.' });
+
+      return { context: null, denied: true, actor: null };
+
+    }
+
+    return { context: null, denied: false, actor: 'ecus-bridge-service' };
+
+  }
+
+  const adminAccess = requireAdminSyncManage(req, res);
+
+  if (adminAccess.denied) {
+
+    return { ...adminAccess, actor: null };
+
+  }
+
+  return {
+
+    ...adminAccess,
+
+    actor: adminAccess.context?.account?.username || resolveActor(req),
+
+  };
 
 }
 
@@ -4549,6 +4603,40 @@ function requireAdminBackupManage(req, res) {
   if (!account.permissions?.accountManage) {
 
     res.status(403).json({ ok: false, error: 'Tài khoản hiện chưa được cấp quyền quản trị hệ thống.' });
+
+    return { context, denied: true };
+
+  }
+
+  return { context, denied: false };
+
+}
+
+
+
+function requireAccountManage(req, res) {
+
+  const { context, denied } = requireAuthenticated(req, res, 'Bạn cần đăng nhập bằng tài khoản quản trị.');
+
+  if (denied) {
+
+    return { context, denied: true };
+
+  }
+
+  const account = context.account || {};
+
+  if (!isAdminRole(normalizeRoleKey(account.role))) {
+
+    res.status(403).json({ ok: false, error: 'Chỉ tài khoản quản trị mới được phép quản lý tài khoản.' });
+
+    return { context, denied: true };
+
+  }
+
+  if (!account.permissions?.accountManage) {
+
+    res.status(403).json({ ok: false, error: 'Tài khoản hiện chưa được cấp quyền quản lý tài khoản.' });
 
     return { context, denied: true };
 
@@ -4775,6 +4863,40 @@ function requireNotificationAccess(req, res) {
   if (account.permissions && account.permissions.notificationView === false) {
 
     res.status(403).json({ ok: false, error: 'Tài khoản hiện không được phép xem thông báo hệ thống.' });
+
+    return { context, denied: true };
+
+  }
+
+  return { context, denied: false };
+
+}
+
+
+
+function requireAlertsManage(req, res) {
+
+  const { context, denied } = requireAuthenticated(
+
+    req,
+
+    res,
+
+    'Bạn cần đăng nhập để xem hoặc quản lý cảnh báo tờ khai.'
+
+  );
+
+  if (denied) {
+
+    return { context, denied: true };
+
+  }
+
+  const account = context.account || {};
+
+  if (account.permissions?.alertsManage !== true) {
+
+    res.status(403).json({ ok: false, error: 'Tài khoản hiện không có quyền quản lý cảnh báo tờ khai.' });
 
     return { context, denied: true };
 
@@ -5036,99 +5158,22 @@ pruneExpiredSessions();
 
 
 
-function readStorage() {
-
-  const rows = db.prepare('SELECT key, value FROM kv_store').all();
-
-  const store = { ...DEFAULT_STORAGE };
-
-  for (const row of rows) {
-
-    store[row.key] = row.value;
-
-  }
-
-  return store;
-
-}
-
-
-
 function getValue(key) {
-
-  const row = db.prepare('SELECT value FROM kv_store WHERE key = ?').get(key);
-
-  if (!row || row.value === undefined || row.value === null) {
-
-    return DEFAULT_STORAGE[key] ?? null;
-
-  }
-
-  return row.value;
+  return runtimeStorageLifecycle.getValue(key);
 
 }
 
 
 
 function upsertValue(key, value, options = {}) {
-
-  const { skipMstHistorySync = false, actor = 'system', source = 'storage' } = options || {};
-
-  const normalized = normalizeValue(value);
-
-  if (normalized === null) {
-
-    deleteValue(key, { actor, source: source || 'storage-delete', skipMstHistorySync });
-
-    return;
-
-  }
-
-  db.prepare(
-
-    'INSERT INTO kv_store (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value'
-
-  ).run(key, normalized);
-
-  if (key === 'mst_history_v1' && !skipMstHistorySync) {
-
-    scheduleMstHistorySqlSyncFromJson(normalized);
-
-  }
-
-  if (key === 'kpi_rules_v2') {
-
-    persistRulesSnapshot(normalized, { actor, source });
-
-  }
+  runtimeStorageLifecycle.upsertValue(key, value, options);
 
 }
 
 
 
 function deleteValue(key, options = {}) {
-
-  const { actor = 'system', source = 'storage-delete', skipMstHistorySync = false } = options || {};
-
-  db.prepare('DELETE FROM kv_store WHERE key = ?').run(key);
-
-  if (key === 'mst_history_v1' && !skipMstHistorySync) {
-
-    scheduleMstHistorySqlSyncFromJson('[]');
-
-  }
-
-  if (key === 'kpi_rules_v2') {
-
-    persistRulesSnapshot(JSON.stringify(getRulesSeed(SHARED_DEFAULT_RULES)), {
-
-      actor,
-
-      source,
-
-    });
-
-  }
+  runtimeStorageLifecycle.deleteValue(key, options);
 
 }
 
@@ -5155,16 +5200,14 @@ function safeParse(json, fallback) {
 
 
 function getJSONValue(key, fallback) {
-
-  return safeParse(getValue(key), fallback);
+  return runtimeStorageLifecycle.getJSONValue(key, fallback);
 
 }
 
 
 
 function setJSONValue(key, value, options = {}) {
-
-  upsertValue(key, value === undefined ? null : JSON.stringify(value), options);
+  runtimeStorageLifecycle.setJSONValue(key, value, options);
 
 }
 
@@ -10648,7 +10691,9 @@ function loadAccountRecords() {
 
 
 
-  const defaults = buildDefaultAccounts();
+  const hasAdminAccount = records.some((record) => normalizeRoleKey(record.role) === ADMIN_ROLE);
+
+  const defaults = buildDefaultAccounts({ requireAdmin: records.length === 0 || !hasAdminAccount });
 
 
 
@@ -10719,36 +10764,13 @@ function listAccountsForClient() {
 
 
 function buildBootstrapSnapshot() {
-
-  const store = readStorage();
-
-  for (const key of Object.keys(store)) {
-
-    if (key.startsWith(AI_CHAT_HISTORY_PREFIX)) {
-
-      delete store[key];
-
-    }
-
-  }
-
-  try {
-
-    store.kpi_users_v1 = JSON.stringify(listAccountsForClient());
-
-  } catch {
-
-    store.kpi_users_v1 = '[]';
-
-  }
-
-  return store;
+  return runtimeStorageLifecycle.buildBootstrapSnapshot();
 
 }
 
 
 
-export function resetDatabaseForTests() {
+export function resetDatabaseForTests(seedOverrides = null) {
 
   if (process.env.NODE_ENV !== 'test' && process.env.VITEST !== 'true') {
 
@@ -10759,6 +10781,15 @@ export function resetDatabaseForTests() {
 
 
   db.exec('DELETE FROM kv_store');
+  db.exec('DELETE FROM declaration_snapshot_rows');
+  db.exec('DELETE FROM mst_assignment_snapshot_rows');
+  db.exec('DELETE FROM adjustment_snapshot_rows');
+  db.exec('DELETE FROM business_snapshot_state');
+  db.exec('DELETE FROM team_members');
+  db.exec('DELETE FROM teams');
+  db.exec('DELETE FROM team_roster_state');
+
+  db.exec('DELETE FROM reporting_projections');
 
   db.exec('DELETE FROM auth_sessions');
 
@@ -10774,13 +10805,23 @@ export function resetDatabaseForTests() {
 
     for (const [key, value] of entries) {
 
-      stmt.run(key, normalizeValue(value));
+      stmt.run(key, normalizeStorageValue(value));
 
     }
 
   });
 
-  insertMany(Object.entries(DEFAULT_STORAGE));
+  const seedData =
+    seedOverrides && typeof seedOverrides === 'object'
+      ? { ...DEFAULT_STORAGE, ...seedOverrides }
+      : DEFAULT_STORAGE;
+
+  insertMany(Object.entries(seedData));
+  runtimeStorageLifecycle.hydrateSqliteSnapshots({
+    seeded: true,
+    source: 'test-reset',
+    updatedAt: new Date().toISOString(),
+  });
 
   resetAccountSyncState();
 
@@ -10909,31 +10950,43 @@ function normalizeDeclarationRow(row) {
 
   }
 
-  const cloned = { ...row };
+  let normalized = row;
+  let changed = false;
+
+  const assign = (field, value) => {
+    if (isEqualValue(normalized[field], value)) {
+      return;
+    }
+    if (!changed) {
+      normalized = { ...row };
+      changed = true;
+    }
+    normalized[field] = value;
+  };
 
   const originalNumber = (row.so_tk_full ?? row.so_tk ?? '').toString();
 
   const normalizedNumber = normalizeDeclarationNumber(originalNumber || row.so_tk);
 
-  cloned.so_tk = normalizedNumber;
+  assign('so_tk', normalizedNumber);
 
   if (originalNumber) {
 
-    cloned.so_tk_full = originalNumber;
+    assign('so_tk_full', originalNumber);
 
     const suffix = normalizedNumber ? originalNumber.slice(normalizedNumber.length) : originalNumber;
 
-    cloned.so_tk_suffix = suffix || '';
+    assign('so_tk_suffix', suffix || '');
 
   }
 
-  if (!cloned.nhanh && cloned.branch) {
+  if (!normalizeStr(row.nhanh || '') && row.branch) {
 
-    cloned.nhanh = cloned.branch;
+    assign('nhanh', row.branch);
 
   }
 
-  return cloned;
+  return normalized;
 
 }
 
@@ -11726,8 +11779,7 @@ function updateAccountRecord(usernameInput, patch, { actor = 'system' } = {}) {
   if (rosterChanged) {
 
     detailParts.push(
-
-      `nhân viên KPI ${formatRosterLabel(previousRoster)} → ${formatRosterLabel(rosterInfo)}`
+      `Nhân viên KPI ${formatRosterLabel(previousRoster)} → ${formatRosterLabel(rosterInfo)}`
 
     );
 
@@ -12269,7 +12321,8 @@ function writeDeclRows(rows) {
 
 function getDeclRows() {
 
-  const rows = getJSONValue('decl_rows_v1', []);
+  const typedRows = readDeclarationRowsSnapshot(db);
+  const rows = Array.isArray(typedRows) ? typedRows : getJSONValue('decl_rows_v1', []);
 
   const { normalizedRows, changed } = normalizeDeclRows(rows);
 
@@ -12340,7 +12393,16 @@ function saveDeclRowsServer(newRows, { overwrite = false, actor = 'system', deta
 
 function getRulesValue() {
 
-  return getJSONValue('kpi_rules_v2', SHARED_DEFAULT_RULES);
+  const typedRules = readRuleCollectionSnapshot(db);
+
+  if (typedRules && typeof typedRules === 'object' && resolveReportingRule(typedRules)) {
+
+    return typedRules;
+
+  }
+
+  const legacyRules = getJSONValue('kpi_rules_v2', SHARED_DEFAULT_RULES);
+  return resolveReportingRule(legacyRules) ? legacyRules : SHARED_DEFAULT_RULES;
 
 }
 
@@ -12348,7 +12410,26 @@ function getRulesValue() {
 
 function getRosterValue() {
 
+  const typedRoster = readTeamRosterSnapshot(db);
+
+  if (typedRoster && typeof typedRoster === 'object') {
+
+    return typedRoster;
+
+  }
+
   return getJSONValue('team_roster_v1', { version: 1, teams: [] });
+
+}
+
+
+
+function getAdjustmentRowsValue() {
+
+  const typedRows = readAdjustmentRowsSnapshot(db);
+  const rows = Array.isArray(typedRows) ? typedRows : getJSONValue('kpi_adjustments_v1', []);
+
+  return Array.isArray(rows) ? rows : [];
 
 }
 
@@ -12730,7 +12811,19 @@ function mapHqAgenciesByMST() {
 
 const HQ_HISTORY_MAX_ENTRIES = 500;
 
+function clampLength(value, max) {
 
+  const text = normalizeStr(value);
+
+  if (!text) {
+
+    return '';
+
+  }
+
+  return text.length > max ? text.slice(0, max) : text;
+
+}
 
 function normalizeHqHistoryEntries(entries) {
 
@@ -13172,7 +13265,8 @@ function buildLicenseExcludeContext(rules) {
 
 function getMSTRowsRaw() {
 
-  const rows = getJSONValue('mst_rows_v2', []);
+  const typedRows = readMstAssignmentRowsSnapshot(db);
+  const rows = Array.isArray(typedRows) ? typedRows : getJSONValue('mst_rows_v2', []);
 
   return Array.isArray(rows) ? rows : [];
 
@@ -18526,338 +18620,6 @@ async function buildEcusSyncMonitorSnapshot() {
 
 
 
-function buildSqlConnectionConfig(config) {
-
-  const connection = config?.connection || {};
-
-  const poolOptions = connection.pool && typeof connection.pool === 'object' ? connection.pool : undefined;
-
-  const parseTimeout = (value) => {
-
-    const num = Number(value);
-
-    return Number.isFinite(num) && num >= 0 ? num : undefined;
-
-  };
-
-  const secureCredentials = getSecureSqlCredentials();
-
-  const server = `${connection.server || secureCredentials.server || ''}`.trim();
-
-  const database = `${connection.database || secureCredentials.database || ''}`.trim();
-
-  const user = `${connection.user || secureCredentials.user || ''}`.trim();
-
-  const password = connection.password || secureCredentials.password || '';
-
-  return {
-
-    server,
-
-    database,
-
-    user,
-
-    password,
-
-    options: {
-
-      encrypt: false,
-
-      trustServerCertificate: true,
-
-      enableArithAbort: true,
-
-      ...(connection.options || {}),
-
-    },
-
-    port: connection.port ? Number(connection.port) : undefined,
-
-    connectionTimeout: parseTimeout(connection.connectionTimeout),
-
-    requestTimeout: parseTimeout(connection.requestTimeout),
-
-    pool: poolOptions,
-
-  };
-
-}
-
-
-
-const SQL_POOL_DEFAULT_CONNECTION_TIMEOUT = 5000;
-
-const SQL_POOL_DEFAULT_REQUEST_TIMEOUT = 10000;
-
-const SQL_POOL_DEFAULT_OPTIONS = { max: 5, min: 0, idleTimeoutMillis: 5000 };
-
-const SQL_CAPABILITY_CACHE = new Map();
-
-
-
-async function resolveSqlPaginationCapabilities(pool, connectionConfig, requestTimeout) {
-
-  const server = String(connectionConfig?.server ?? '').trim();
-
-  const database = String(connectionConfig?.database ?? '').trim();
-
-  if (!server || !database) {
-
-    return null;
-
-  }
-
-
-
-  const cacheKey = `${server}::${database}`;
-
-  const cached = SQL_CAPABILITY_CACHE.get(cacheKey);
-
-  if (cached) {
-
-    return cached;
-
-  }
-
-
-
-  try {
-
-    const request = pool.request();
-
-    if (Number.isFinite(requestTimeout) && requestTimeout > 0) {
-
-      request.timeout = requestTimeout;
-
-    }
-
-    request.input('dbName', sql.NVarChar, database);
-
-    const result = await request.query(`
-
-      SELECT
-
-        CAST(SERVERPROPERTY('ProductVersion') AS NVARCHAR(128)) AS productVersion,
-
-        CAST(SERVERPROPERTY('Edition') AS NVARCHAR(128)) AS edition,
-
-        d.compatibility_level AS compatibilityLevel
-
-      FROM sys.databases AS d
-
-      WHERE d.name = @dbName;
-
-    `);
-
-    const row = result?.recordset?.[0] || {};
-
-    const level = Number(row.compatibilityLevel);
-
-    const compatibilityLevel = Number.isFinite(level) ? level : null;
-
-    const supportsOffsetFetch = compatibilityLevel !== null ? compatibilityLevel >= 110 : false;
-
-    if (!supportsOffsetFetch) {
-
-      const levelText = compatibilityLevel === null ? 'unknown' : compatibilityLevel;
-
-      console.warn(
-
-        `SQL Server compatibility level ${levelText} does not support OFFSET/FETCH pagination; falling back to non-paginated sync.`
-
-      );
-
-    }
-
-    const payload = {
-
-      productVersion: row.productVersion || null,
-
-      edition: row.edition || null,
-
-      compatibilityLevel,
-
-      supportsOffsetFetch,
-
-    };
-
-
-
-    SQL_CAPABILITY_CACHE.set(cacheKey, payload);
-
-    return payload;
-
-  } catch (err) {
-
-    console.warn('Failed to discover SQL Server pagination capabilities', err);
-
-    const fallback = { compatibilityLevel: null, supportsOffsetFetch: false };
-
-    SQL_CAPABILITY_CACHE.set(cacheKey, fallback);
-
-    return fallback;
-
-  }
-
-}
-
-
-
-
-
-function createSqlPoolManager() {
-
-  let pool = null;
-
-  let poolKey = null;
-
-  let connectPromise = null;
-
-
-
-  const close = async () => {
-
-    const pending = connectPromise;
-
-    connectPromise = null;
-
-    if (pending) {
-
-      try {
-
-        await pending;
-
-      } catch {
-
-        // bỏ qua lỗi kết nối đang xử lý
-
-      }
-
-    }
-
-    if (pool) {
-
-      const closing = pool;
-
-      pool = null;
-
-      poolKey = null;
-
-      try {
-
-        await closing.close();
-
-      } catch {
-
-        // bỏ qua lỗi đóng kết nối
-
-      }
-
-    }
-
-  };
-
-
-
-  const getPool = async (config) => {
-
-    const { connectionTimeout, requestTimeout, pool: poolOptions, ...core } = config || {};
-
-    const normalizedKey = JSON.stringify(core);
-
-    if (pool && poolKey === normalizedKey) {
-
-      if (pool.connected) {
-
-        return pool;
-
-      }
-
-      if (!connectPromise) {
-
-        connectPromise = pool.connect();
-
-      }
-
-      await connectPromise;
-
-      connectPromise = null;
-
-      return pool;
-
-    }
-
-
-
-    await close();
-
-    const effectiveConnectionTimeout =
-
-      connectionTimeout ?? SQL_POOL_DEFAULT_CONNECTION_TIMEOUT;
-
-    const effectiveRequestTimeout = requestTimeout ?? SQL_POOL_DEFAULT_REQUEST_TIMEOUT;
-
-    const effectivePoolOptions = {
-
-      ...SQL_POOL_DEFAULT_OPTIONS,
-
-      ...(poolOptions || {}),
-
-    };
-
-    const nextPool = new sql.ConnectionPool({
-
-      ...core,
-
-      connectionTimeout: effectiveConnectionTimeout,
-
-      requestTimeout: effectiveRequestTimeout,
-
-      pool: effectivePoolOptions,
-
-    });
-
-    pool = nextPool;
-
-    poolKey = normalizedKey;
-
-    connectPromise = nextPool.connect();
-
-    try {
-
-      await connectPromise;
-
-    } catch (err) {
-
-      await close();
-
-      throw err;
-
-    } finally {
-
-      connectPromise = null;
-
-    }
-
-    return pool;
-
-  };
-
-
-
-  return {
-
-    getPool,
-
-    close,
-
-  };
-
-}
-
-
-
 function registerSqlPoolShutdown(manager) {
 
   if (!manager) return;
@@ -18922,1230 +18684,74 @@ const sqlPoolManager = createSqlPoolManager();
 
 registerSqlPoolShutdown(sqlPoolManager);
 
-
-
-const DEFAULT_MST_HISTORY_TABLE_NAME =
-
-  (process.env.KPI_MST_HISTORY_TABLE || 'dbo.KPI_MST_HISTORY').trim() || 'dbo.KPI_MST_HISTORY';
-
-const MST_HISTORY_MAX_ENTRIES = 500;
-
-
-
-function parseSqlTableName(input) {
-
-  const trimmed = `${input ?? ''}`.trim();
-
-  if (!trimmed) {
-
-    return null;
-
-  }
-
-  const rawParts = trimmed.split('.').map((part) => part.trim()).filter(Boolean);
-
-  if (!rawParts.length || rawParts.length > 2) {
-
-    return null;
-
-  }
-
-  const normalizedParts = rawParts
-
-    .map((part) => part.replace(/[^a-zA-Z0-9_]/g, ''))
-
-    .filter(Boolean);
-
-  if (!normalizedParts.length || normalizedParts.length > 2) {
-
-    return null;
-
-  }
-
-  if (normalizedParts.length === 1) {
-
-    normalizedParts.unshift('dbo');
-
-  }
-
-  const objectId = normalizedParts.join('.');
-
-  const quoted = normalizedParts.map((part) => `[${part}]`).join('.');
-
-  const indexName = normalizedParts.join('_');
-
-  return { objectId, quoted, indexName };
-
-}
-
-
-
-const MST_HISTORY_TABLE = parseSqlTableName(DEFAULT_MST_HISTORY_TABLE_NAME);
-
-let mstHistoryEnsurePromise = null;
-
-let mstHistorySyncPromise = null;
-
-
-
-const DEFAULT_ACCOUNT_SYNC_TABLE_NAME =
-
-  (process.env.KPI_ACCOUNT_SYNC_TABLE || 'dbo.KPI_USER_ROLES').trim() || 'dbo.KPI_USER_ROLES';
-
-const ACCOUNT_SYNC_TABLE = parseSqlTableName(DEFAULT_ACCOUNT_SYNC_TABLE_NAME);
-
-let accountTableEnsurePromise = null;
-
-let accountSyncPromise = null;
-
-let accountPullPromise = null;
-
-let lastAccountPullAt = 0;
-
-const ACCOUNT_SYNC_MIN_INTERVAL_MS = 5000;
-
-
-
-function clampLength(value, max) {
-
-  if (!value) return '';
-
-  const str = `${value}`;
-
-  return str.length > max ? str.slice(0, max) : str;
-
-}
-
-
-
-function resolveEffectiveFrom(entry) {
-
-  if (!entry) return '';
-
-  const direct = entry.effective_from || entry.effectiveFrom;
-
-  const normalizedDirect = toISODate(direct || '');
-
-  if (normalizedDirect) {
-
-    return normalizedDirect;
-
-  }
-
-  const rowKey = `${entry.rowKey || ''}`;
-
-  const parts = rowKey.split('__');
-
-  if (parts.length >= 2) {
-
-    const iso = toISODate(parts[1]);
-
-    if (iso) {
-
-      return iso;
-
-    }
-
-  }
-
-  return '';
-
-}
-
-
-
-function normalizeMstHistoryEntries(entries) {
-
-  if (!Array.isArray(entries)) {
-
-    return [];
-
-  }
-
-  const normalized = [];
-
-  for (const entry of entries) {
-
-    if (!entry) continue;
-
-    const mst = normalizeMST(entry.mst);
-
-    if (!mst) continue;
-
-    const timestamp = new Date(entry.timestamp || Date.now());
-
-    if (Number.isNaN(timestamp.getTime())) {
-
-      timestamp.setTime(Date.now());
-
-    }
-
-    const field = normalizeStr(entry.field) || 'field';
-
-    const rowKey = normalizeStr(entry.rowKey) || `${mst}__${resolveEffectiveFrom(entry)}`;
-
-    const actor = normalizeStr(entry.actor) || 'system';
-
-    const type = normalizeStr(entry.type) || 'update';
-
-    const effectiveFrom = resolveEffectiveFrom(entry);
-
-    const normalizedEntry = {
-
-      id: clampLength(entry.id || `mst-${mst}-${field}-${timestamp.getTime()}`, 120),
-
-      mst,
-
-      field: clampLength(field, 64),
-
-      from: clampLength(normalizeStr(entry.from), 255),
-
-      to: clampLength(normalizeStr(entry.to), 255),
-
-      actor: clampLength(actor, 128),
-
-      timestamp,
-
-      rowKey: clampLength(rowKey, 128),
-
-      effectiveFrom: clampLength(effectiveFrom, 32),
-
-      type: clampLength(type, 32),
-
-    };
-
-    normalized.push(normalizedEntry);
-
-  }
-
-  normalized.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
-
-  return normalized.slice(0, MST_HISTORY_MAX_ENTRIES);
-
-}
-
-
+const ecusBridge = createEcusBridgeService({
+  getEcusConfig,
+  sqlPoolManager,
+  loadAccountRecords,
+  persistAccountRecords,
+  sortAccountRecords,
+  normalizeAccountRecordForStorage,
+  normalizeRoleKey,
+  normalizePermissionsForRole,
+  normalizeAccountUpdatedAt,
+  toNullableString,
+  normalizeMST,
+  normalizeStr,
+  toISODate,
+  safeParse,
+  getValue,
+  upsertValue,
+  normalizeRangeDate,
+  recordSqlTimeout,
+  isSqlTimeoutError,
+  defaultSyncConfig: DEFAULT_ECUS_SYNC_CONFIG,
+  logger: console,
+});
+
+const ecusBridgeMutations = createEcusBridgeMutations({
+  getEcusConfig,
+  computeRangeWindow,
+  normalizeEcusTaxCodeList,
+  buildEcusSyncContext,
+  shouldSkipByMst,
+  mapEcusRow,
+  getDeclRows,
+  getDeclarationKey,
+  mergeDeclarationRow,
+  writeDeclRows,
+  ensureMSTEntriesForDeclRows,
+  pushAuditLog,
+  evaluateDeclarationAlerts,
+  pushImportLog,
+  saveEcusConfig,
+  pushNotification,
+  recordEcusMonitorSyncSuccess,
+  recordEcusMonitorSyncFailure,
+  normalizeStr,
+});
 
 function resolveMstHistorySqlConfig() {
-
-  if (!MST_HISTORY_TABLE) {
-
-    return null;
-
-  }
-
-  const config = getEcusConfig();
-
-  const connectionConfig = buildSqlConnectionConfig(config);
-
-  if (!connectionConfig.server || !connectionConfig.database) {
-
-    return null;
-
-  }
-
-  return { connectionConfig, table: MST_HISTORY_TABLE };
-
+  return ecusBridge.hasMstHistorySqlConfig();
 }
-
-
-
-async function ensureMstHistoryTable(pool, tableMeta) {
-
-  if (!pool || !tableMeta) {
-
-    return false;
-
-  }
-
-  if (mstHistoryEnsurePromise) {
-
-    return mstHistoryEnsurePromise;
-
-  }
-
-  mstHistoryEnsurePromise = (async () => {
-
-    try {
-
-      const request = pool.request();
-
-      const createSql = `
-
-        IF OBJECT_ID('${tableMeta.objectId}', 'U') IS NULL
-
-        BEGIN
-
-          CREATE TABLE ${tableMeta.quoted} (
-
-            id NVARCHAR(128) NOT NULL PRIMARY KEY,
-
-            mst NVARCHAR(32) NOT NULL,
-
-            field NVARCHAR(64) NOT NULL,
-
-            from_value NVARCHAR(255) NULL,
-
-            to_value NVARCHAR(255) NULL,
-
-            actor NVARCHAR(128) NULL,
-
-            changed_at DATETIME NOT NULL,
-
-            row_key NVARCHAR(128) NULL,
-
-            effective_from NVARCHAR(32) NULL,
-
-            change_type NVARCHAR(32) NOT NULL
-
-          );
-
-          CREATE INDEX IX_${tableMeta.indexName}_mst_changed_at ON ${tableMeta.quoted}(mst, changed_at);
-
-        END
-
-      `;
-
-      await request.query(createSql);
-
-      return true;
-
-    } catch (err) {
-
-      console.error('Không thể đảm bảo bảng lịch sử Gán MST tồn tại', err);
-
-      recordSqlTimeout(err);
-
-      return false;
-
-    } finally {
-
-      mstHistoryEnsurePromise = null;
-
-    }
-
-  })();
-
-  return mstHistoryEnsurePromise;
-
-}
-
-
-
-async function syncMstHistoryToSql(entries) {
-
-  const config = resolveMstHistorySqlConfig();
-
-  if (!config) {
-
-    return;
-
-  }
-
-  try {
-
-    const pool = await sqlPoolManager.getPool(config.connectionConfig);
-
-    const ready = await ensureMstHistoryTable(pool, config.table);
-
-    if (!ready) {
-
-      return;
-
-    }
-
-    const normalizedEntries = normalizeMstHistoryEntries(entries);
-
-    const transaction = new sql.Transaction(pool);
-
-    await transaction.begin();
-
-    try {
-
-      const cleanupRequest = new sql.Request(transaction);
-
-      await cleanupRequest.query(`DELETE FROM ${config.table.quoted};`);
-
-      if (normalizedEntries.length) {
-
-        const insert = new sql.PreparedStatement(transaction);
-
-        insert.input('id', sql.NVarChar(128));
-
-        insert.input('mst', sql.NVarChar(32));
-
-        insert.input('field', sql.NVarChar(64));
-
-        insert.input('from', sql.NVarChar(255));
-
-        insert.input('to', sql.NVarChar(255));
-
-        insert.input('actor', sql.NVarChar(128));
-
-        insert.input('changed_at', sql.DateTime);
-
-        insert.input('row_key', sql.NVarChar(128));
-
-        insert.input('effective_from', sql.NVarChar(32));
-
-        insert.input('change_type', sql.NVarChar(32));
-
-        await insert.prepare(
-
-          `INSERT INTO ${config.table.quoted} (id, mst, field, from_value, to_value, actor, changed_at, row_key, effective_from, change_type)
-
-           VALUES (@id, @mst, @field, @from, @to, @actor, @changed_at, @row_key, @effective_from, @change_type)`
-
-        );
-
-        try {
-
-          for (const entry of normalizedEntries) {
-
-            await insert.execute({
-
-              id: entry.id,
-
-              mst: entry.mst,
-
-              field: entry.field,
-
-              from: entry.from,
-
-              to: entry.to,
-
-              actor: entry.actor,
-
-              changed_at: entry.timestamp,
-
-              row_key: entry.rowKey,
-
-              effective_from: entry.effectiveFrom,
-
-              change_type: entry.type,
-
-            });
-
-          }
-
-        } finally {
-
-          await insert.unprepare().catch(() => {});
-
-        }
-
-      }
-
-      await transaction.commit();
-
-    } catch (err) {
-
-      await transaction.rollback().catch(() => {});
-
-      throw err;
-
-    }
-
-  } catch (err) {
-
-    if (isSqlTimeoutError(err)) {
-
-      recordSqlTimeout(err);
-
-    }
-
-    console.error('Không thể đồng bộ lịch sử Gán MST lên SQL Server', err);
-
-  }
-
-}
-
-
-
-async function fetchMstHistoryFromSql() {
-
-  const config = resolveMstHistorySqlConfig();
-
-  if (!config) {
-
-    return [];
-
-  }
-
-  try {
-
-    const pool = await sqlPoolManager.getPool(config.connectionConfig);
-
-    const ready = await ensureMstHistoryTable(pool, config.table);
-
-    if (!ready) {
-
-      return [];
-
-    }
-
-    const request = pool.request();
-
-    request.input('limit', sql.Int, MST_HISTORY_MAX_ENTRIES);
-
-    const result = await request.query(
-
-      `SELECT TOP (@limit)
-
-         id,
-
-         mst,
-
-         field,
-
-         from_value,
-
-         to_value,
-
-         actor,
-
-         changed_at,
-
-         row_key,
-
-         effective_from,
-
-         change_type
-
-       FROM ${config.table.quoted}
-
-       ORDER BY changed_at DESC, id DESC;`
-
-    );
-
-    const rows = Array.isArray(result?.recordset) ? result.recordset : [];
-
-    return rows
-
-      .map((row) => {
-
-        const mst = normalizeMST(row?.mst);
-
-        if (!mst) return null;
-
-        const timestamp = row?.changed_at instanceof Date ? row.changed_at : new Date(row?.changed_at);
-
-        if (Number.isNaN(timestamp?.getTime?.())) {
-
-          return null;
-
-        }
-
-        return {
-
-          id: clampLength(row?.id, 120),
-
-          mst,
-
-          field: clampLength(normalizeStr(row?.field), 64),
-
-          from: clampLength(normalizeStr(row?.from_value), 255),
-
-          to: clampLength(normalizeStr(row?.to_value), 255),
-
-          actor: clampLength(normalizeStr(row?.actor), 128),
-
-          timestamp: timestamp.toISOString(),
-
-          rowKey: clampLength(normalizeStr(row?.row_key) || `${mst}__${toISODate(row?.effective_from || '')}`, 128),
-
-          type: clampLength(normalizeStr(row?.change_type), 32) || 'update',
-
-        };
-
-      })
-
-      .filter(Boolean);
-
-  } catch (err) {
-
-    if (isSqlTimeoutError(err)) {
-
-      recordSqlTimeout(err);
-
-    }
-
-    console.error('Không thể tải lịch sử Gán MST từ SQL Server', err);
-
-    return [];
-
-  }
-
-}
-
-
 
 async function maybeSyncMstHistoryFromSql() {
-
-  const entries = await fetchMstHistoryFromSql();
-
-  if (!entries.length) {
-
-    return;
-
-  }
-
-  const normalized = JSON.stringify(entries);
-
-  const current = getValue('mst_history_v1');
-
-  if (current !== normalized) {
-
-    upsertValue('mst_history_v1', normalized, { skipMstHistorySync: true });
-
-  }
-
+  return ecusBridge.maybeSyncMstHistoryFromSql();
 }
-
-
 
 function scheduleMstHistorySqlSyncFromJson(jsonValue) {
-
-  const entries = safeParse(jsonValue, []);
-
-  if (!Array.isArray(entries)) {
-
-    return;
-
-  }
-
-  const queue = mstHistorySyncPromise
-
-    ? mstHistorySyncPromise.catch(() => {}).then(() => syncMstHistoryToSql(entries))
-
-    : syncMstHistoryToSql(entries);
-
-  mstHistorySyncPromise = queue
-
-    .catch((err) => {
-
-      console.error('Đồng bộ lịch sử Gán MST lên SQL Server thất bại', err);
-
-    })
-
-    .finally(() => {
-
-      if (mstHistorySyncPromise === queue) {
-
-        mstHistorySyncPromise = null;
-
-      }
-
-    });
-
+  return ecusBridge.scheduleMstHistorySyncFromJson(jsonValue);
 }
-
-
-
-function resolveAccountSqlConfig() {
-
-  if (!ACCOUNT_SYNC_TABLE) {
-
-    return null;
-
-  }
-
-  const config = getEcusConfig();
-
-  const connectionConfig = buildSqlConnectionConfig(config);
-
-  let serverName = String(connectionConfig.server || '').trim();
-
-  if (!serverName || /^server$/i.test(serverName)) {
-
-    const envServer = String(process.env.ECUS_SQL_SERVER || '').trim();
-
-    if (!envServer || /^server$/i.test(envServer)) {
-
-      return null;
-
-    }
-
-    connectionConfig.server = envServer;
-
-    serverName = envServer;
-
-  }
-
-  if (!connectionConfig.database) {
-
-    return null;
-
-  }
-
-  return { connectionConfig, table: ACCOUNT_SYNC_TABLE };
-
-}
-
-
-
-async function ensureAccountSyncTable(pool, tableMeta) {
-
-  if (!pool || !tableMeta) {
-
-    return false;
-
-  }
-
-  if (accountTableEnsurePromise) {
-
-    return accountTableEnsurePromise;
-
-  }
-
-  accountTableEnsurePromise = (async () => {
-
-    try {
-
-      const request = pool.request();
-
-      const createSql = `
-
-        IF OBJECT_ID('${tableMeta.objectId}', 'U') IS NULL
-
-        BEGIN
-
-          CREATE TABLE ${tableMeta.quoted} (
-
-            username NVARCHAR(128) NOT NULL PRIMARY KEY,
-
-            password_hash NVARCHAR(255) NOT NULL,
-
-            role NVARCHAR(32) NOT NULL,
-
-            name NVARCHAR(255) NULL,
-
-            permissions NVARCHAR(MAX) NOT NULL,
-
-            updated_at DATETIME NOT NULL
-
-          );
-
-        END
-
-      `;
-
-      await request.query(createSql);
-
-      const alterSql = `
-
-        IF COL_LENGTH('${tableMeta.objectId}', 'member_id') IS NULL
-
-        BEGIN
-
-          ALTER TABLE ${tableMeta.quoted} ADD member_id NVARCHAR(128) NULL;
-
-        END;
-
-        IF COL_LENGTH('${tableMeta.objectId}', 'member_name') IS NULL
-
-        BEGIN
-
-          ALTER TABLE ${tableMeta.quoted} ADD member_name NVARCHAR(255) NULL;
-
-        END;
-
-        IF COL_LENGTH('${tableMeta.objectId}', 'team_id') IS NULL
-
-        BEGIN
-
-          ALTER TABLE ${tableMeta.quoted} ADD team_id NVARCHAR(128) NULL;
-
-        END;
-
-        IF COL_LENGTH('${tableMeta.objectId}', 'team_name') IS NULL
-
-        BEGIN
-
-          ALTER TABLE ${tableMeta.quoted} ADD team_name NVARCHAR(255) NULL;
-
-        END;
-
-      `;
-
-      await request.query(alterSql);
-
-      return true;
-
-    } catch (err) {
-
-      if (isSqlTimeoutError(err)) {
-
-        recordSqlTimeout({ message: err?.message, context: { feature: 'account-sync', action: 'ensure-table' } });
-
-      }
-
-      console.error('Không thể đảm bảo bảng phân quyền tài khoản tồn tại', err);
-
-      return false;
-
-    } finally {
-
-      accountTableEnsurePromise = null;
-
-    }
-
-  })();
-
-  return accountTableEnsurePromise;
-
-}
-
-
-
-function escapeSqlLiteral(value, { nvarchar = false } = {}) {
-
-  if (value === null || value === undefined) {
-
-    return nvarchar ? "N''" : "''";
-
-  }
-
-  const text = `${value}`.replace(/'/g, "''");
-
-  return nvarchar ? `N'${text}'` : `'${text}'`;
-
-}
-
-
-
-function serializeAccountRecordForSql(record) {
-
-  if (!record) {
-
-    return null;
-
-  }
-
-  const normalized = normalizeAccountRecordForStorage(record);
-
-  if (!normalized) {
-
-    return null;
-
-  }
-
-  return {
-
-    username: normalized.username,
-
-    passwordHash: normalized.passwordHash,
-
-    role: normalized.role,
-
-    name: normalized.name,
-
-    permissions: normalized.permissions,
-
-    permissionsJson: JSON.stringify(normalized.permissions || {}),
-
-    updatedAt: normalized.updatedAt,
-
-    memberId: normalized.memberId ?? null,
-
-    memberName: normalized.memberName ?? null,
-
-    teamId: normalized.teamId ?? null,
-
-    teamName: normalized.teamName ?? null,
-
-  };
-
-}
-
-
-
-function normalizeSqlAccountRow(row) {
-
-  if (!row) return null;
-
-  const username = normalizeStr(row.username);
-
-  if (!username) {
-
-    return null;
-
-  }
-
-  const passwordHash = (row.password_hash ?? row.passwordHash ?? '').toString().trim();
-
-  if (!passwordHash) {
-
-    return null;
-
-  }
-
-  const role = normalizeRoleKey(row.role);
-
-  const name = normalizeStr(row.name) || username;
-
-  const permissionsSource = row.permissions;
-
-  let parsedPermissions = null;
-
-  if (typeof permissionsSource === 'string' && permissionsSource.trim()) {
-
-    try {
-
-      parsedPermissions = JSON.parse(permissionsSource);
-
-    } catch {
-
-      parsedPermissions = null;
-
-    }
-
-  } else if (permissionsSource && typeof permissionsSource === 'object') {
-
-    parsedPermissions = permissionsSource;
-
-  }
-
-  const permissions = normalizePermissionsForRole(parsedPermissions, role);
-
-  const updatedAtRaw = row.updated_at || row.updatedAt;
-
-  const updatedAt = normalizeAccountUpdatedAt(updatedAtRaw);
-
-  const memberId = toNullableString(row.member_id ?? row.memberId, { maxLength: 160 });
-
-  const memberName = toNullableString(row.member_name ?? row.memberName, { maxLength: 255 });
-
-  const teamId = toNullableString(row.team_id ?? row.teamId, { maxLength: 160 });
-
-  const teamName = toNullableString(row.team_name ?? row.teamName, { maxLength: 255 });
-
-  return { username, passwordHash, role, name, permissions, updatedAt, memberId, memberName, teamId, teamName };
-
-}
-
-
-
-async function syncAccountsToSql(records) {
-
-  const config = resolveAccountSqlConfig();
-
-  if (!config) {
-
-    return;
-
-  }
-
-  try {
-
-    const pool = await sqlPoolManager.getPool(config.connectionConfig);
-
-    const ready = await ensureAccountSyncTable(pool, config.table);
-
-    if (!ready) {
-
-      return;
-
-    }
-
-    const serialized = Array.isArray(records)
-
-      ? records.map((record) => serializeAccountRecordForSql(record)).filter(Boolean)
-
-      : [];
-
-    const statements = serialized.map((record) => {
-
-      const username = escapeSqlLiteral(record.username, { nvarchar: true });
-
-      const passwordHash = escapeSqlLiteral(record.passwordHash, { nvarchar: true });
-
-      const role = escapeSqlLiteral(record.role, { nvarchar: true });
-
-      const name = escapeSqlLiteral(record.name || record.username, { nvarchar: true });
-
-      const permissions = escapeSqlLiteral(record.permissionsJson || '{}', { nvarchar: true });
-
-      const updatedAt = `CONVERT(DATETIME, ${escapeSqlLiteral(record.updatedAt, { nvarchar: true })}, 126)`;
-
-      const memberId = escapeSqlLiteral(record.memberId, { nvarchar: true });
-
-      const memberName = escapeSqlLiteral(record.memberName, { nvarchar: true });
-
-      const teamId = escapeSqlLiteral(record.teamId, { nvarchar: true });
-
-      const teamName = escapeSqlLiteral(record.teamName, { nvarchar: true });
-
-      return `INSERT INTO ${config.table.quoted} (username, password_hash, role, name, permissions, updated_at, member_id, member_name, team_id, team_name)
-
-VALUES (${username}, ${passwordHash}, ${role}, ${name}, ${permissions}, ${updatedAt}, ${memberId}, ${memberName}, ${teamId}, ${teamName});`;
-
-    });
-
-    const batch = [
-
-      'BEGIN TRY',
-
-      'BEGIN TRANSACTION;',
-
-      `DELETE FROM ${config.table.quoted};`,
-
-      ...statements,
-
-      'COMMIT TRANSACTION;',
-
-      'END TRY',
-
-      'BEGIN CATCH',
-
-      '  IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION;',
-
-      '  THROW;',
-
-      'END CATCH;',
-
-    ].join('\n');
-
-    await pool.request().query(batch);
-
-  } catch (err) {
-
-    if (isSqlTimeoutError(err)) {
-
-      recordSqlTimeout({ message: err?.message, context: { feature: 'account-sync', action: 'push' } });
-
-    }
-
-    console.error('Không thể đồng bộ tài khoản lên SQL Server', err);
-
-  }
-
-}
-
-
 
 function scheduleAccountSqlSync(records) {
-
-  if (!Array.isArray(records)) {
-
-    return;
-
-  }
-
-  const payload = records.map((record) => ({ ...record }));
-
-  const queue = accountSyncPromise
-
-    ? accountSyncPromise.catch(() => {}).then(() => syncAccountsToSql(payload))
-
-    : syncAccountsToSql(payload);
-
-  accountSyncPromise = queue
-
-    .catch(() => {})
-
-    .finally(() => {
-
-      if (accountSyncPromise === queue) {
-
-        accountSyncPromise = null;
-
-      }
-
-    });
-
+  return ecusBridge.scheduleAccountSync(records);
 }
 
-
-
-async function maybeSyncAccountsFromSql({ force = false } = {}) {
-
-  const config = resolveAccountSqlConfig();
-
-  if (!config) {
-
-    return false;
-
-  }
-
-  const now = Date.now();
-
-  if (!force) {
-
-    if (accountPullPromise) {
-
-      return accountPullPromise;
-
-    }
-
-    if (lastAccountPullAt && now - lastAccountPullAt < ACCOUNT_SYNC_MIN_INTERVAL_MS) {
-
-      return false;
-
-    }
-
-  }
-
-  if (accountPullPromise) {
-
-    return accountPullPromise;
-
-  }
-
-  accountPullPromise = (async () => {
-
-    try {
-
-      const pool = await sqlPoolManager.getPool(config.connectionConfig);
-
-      const ready = await ensureAccountSyncTable(pool, config.table);
-
-      if (!ready) {
-
-        return false;
-
-      }
-
-      const result = await pool
-
-        .request()
-
-        .query(
-
-          `SELECT username, password_hash, role, name, permissions, updated_at, member_id, member_name, team_id, team_name FROM ${config.table.quoted};`
-
-        );
-
-      const rows = Array.isArray(result?.recordset) ? result.recordset : [];
-
-      const sqlRecords = rows.map((row) => normalizeSqlAccountRow(row)).filter(Boolean);
-
-      if (!sqlRecords.length) {
-
-        return false;
-
-      }
-
-      const currentRecords = loadAccountRecords();
-
-      const currentMap = new Map();
-
-      for (const record of currentRecords) {
-
-        currentMap.set(record.username.toLowerCase(), normalizeAccountRecordForStorage(record));
-
-      }
-
-      let changed = false;
-
-      for (const sqlRecord of sqlRecords) {
-
-        const key = sqlRecord.username.toLowerCase();
-
-        const existing = currentMap.get(key);
-
-        if (!existing) {
-
-          currentMap.set(key, sqlRecord);
-
-          changed = true;
-
-          continue;
-
-        }
-
-        const existingTime = Date.parse(existing.updatedAt) || 0;
-
-        const sqlTime = Date.parse(sqlRecord.updatedAt) || 0;
-
-        if (sqlTime >= existingTime) {
-
-          const diff =
-
-            existing.passwordHash !== sqlRecord.passwordHash ||
-
-            existing.role !== sqlRecord.role ||
-
-            existing.name !== sqlRecord.name ||
-
-            JSON.stringify(existing.permissions) !== JSON.stringify(sqlRecord.permissions) ||
-
-            sqlTime > existingTime;
-
-          if (diff) {
-
-            currentMap.set(key, sqlRecord);
-
-            changed = true;
-
-          }
-
-        }
-
-      }
-
-      const merged = Array.from(currentMap.values());
-
-      sortAccountRecords(merged);
-
-      const serializedMerged = JSON.stringify(merged);
-
-      const serializedCurrent = JSON.stringify(
-
-        currentRecords.map((record) => normalizeAccountRecordForStorage(record)).sort((a, b) =>
-
-          a.username.localeCompare(b.username, 'vi', { sensitivity: 'base' })
-
-        )
-
-      );
-
-      if (changed || serializedMerged !== serializedCurrent) {
-
-        persistAccountRecords(merged, { skipSqlSync: true });
-
-      }
-
-      return changed;
-
-    } catch (err) {
-
-      if (isSqlTimeoutError(err)) {
-
-        recordSqlTimeout({ message: err?.message, context: { feature: 'account-sync', action: 'pull' } });
-
-      }
-
-      console.error('Không thể tải tài khoản từ SQL Server', err);
-
-      return false;
-
-    } finally {
-
-      lastAccountPullAt = Date.now();
-
-      accountPullPromise = null;
-
-    }
-
-  })();
-
-  return accountPullPromise;
-
+async function maybeSyncAccountsFromSql(options = {}) {
+  return ecusBridge.maybeSyncAccountsFromSql(options);
 }
-
-
 
 function resetAccountSyncState() {
-
-  accountSyncPromise = null;
-
-  accountPullPromise = null;
-
-  accountTableEnsurePromise = null;
-
-  lastAccountPullAt = 0;
-
+  return ecusBridge.resetAccountSyncState();
 }
 
 
@@ -20958,8 +19564,6 @@ function mapEcusRow(record, config, context) {
 
   }
 
-
-
   let licenseCount;
 
   let includedLicenseCodes = [];
@@ -21351,328 +19955,14 @@ function mergeDeclarationRow(existing, incoming) {
 
 
 async function* fetchEcusDeclarations(range, config, options = {}) {
-
-  const connectionConfig = buildSqlConnectionConfig(config);
-
-  if (!connectionConfig.server || !connectionConfig.database) {
-
-    throw new Error('Chưa cấu hình máy chủ hoặc cơ sở dữ liệu SQL Server');
-
-  }
-
-
-
-  const pool = await sqlPoolManager.getPool(connectionConfig);
-
-  const requestTimeout =
-
-    connectionConfig.requestTimeout ?? SQL_POOL_DEFAULT_REQUEST_TIMEOUT;
-
-  const queryText = (config.query || DEFAULT_ECUS_SYNC_CONFIG.query || '').trim();
-
-  if (!queryText) {
-
-    return;
-
-  }
-
-  const baseQuery = queryText.replace(/;\s*$/u, '');
-
-  const includeFilterSet = options?.includeTaxCodesSet instanceof Set
-
-    ? new Set(Array.from(options.includeTaxCodesSet).map((value) => normalizeMST(value)).filter(Boolean))
-
-    : new Set();
-
-  const excludeFilterSet = options?.excludeTaxCodesSet instanceof Set
-
-    ? new Set(Array.from(options.excludeTaxCodesSet).map((value) => normalizeMST(value)).filter(Boolean))
-
-    : new Set();
-
-  const includeFilterList = Array.from(includeFilterSet);
-
-  const excludeFilterList = Array.from(excludeFilterSet);
-
-  const applyIncludeInSql = includeFilterList.length > 0 && includeFilterList.length <= 50;
-
-  const applyExcludeInSql = excludeFilterList.length > 0 && excludeFilterList.length <= 50;
-
-  let workingQuery = baseQuery;
-
-  if (applyIncludeInSql || applyExcludeInSql) {
-
-    const alias = 'filtered_source';
-
-    const clauses = [];
-
-    if (applyIncludeInSql) {
-
-      const placeholders = includeFilterList.map((_, idx) => `@__include${idx}`);
-
-      clauses.push(`${alias}.mst IN (${placeholders.join(', ')})`);
-
-    }
-
-    if (applyExcludeInSql) {
-
-      const placeholders = excludeFilterList.map((_, idx) => `@__exclude${idx}`);
-
-      clauses.push(`${alias}.mst NOT IN (${placeholders.join(', ')})`);
-
-    }
-
-    let innerQuery = baseQuery.trim();
-
-    if (innerQuery.endsWith(';')) {
-
-      innerQuery = innerQuery.slice(0, -1);
-
-    }
-
-    if (!/^select\s+top\s+\d+/iu.test(innerQuery)) {
-
-      innerQuery = innerQuery.replace(/^select\s+/iu, 'SELECT TOP 100 PERCENT ');
-
-    }
-
-    workingQuery = `SELECT * FROM (${innerQuery}) AS ${alias} WHERE ${clauses.join(' AND ')}`;
-
-  }
-
-  const configuredBatchSize = Number(config?.batchSize);
-
-  const defaultBatchSize = Number(DEFAULT_ECUS_SYNC_CONFIG.batchSize);
-
-  const normalizedBatchSize =
-
-    Number.isFinite(configuredBatchSize) && configuredBatchSize > 0
-
-      ? configuredBatchSize
-
-      : defaultBatchSize;
-
-  const batchSize =
-
-    Number.isFinite(normalizedBatchSize) && normalizedBatchSize > 0
-
-      ? Math.max(1, Math.floor(normalizedBatchSize))
-
-      : 0;
-
-  const fromDate = normalizeRangeDate(range.from);
-
-  const toDate = normalizeRangeDate(range.to, { isEnd: true });
-
-
-
-  const attachRangeParameters = (request) => {
-
-    if (fromDate instanceof Date && !Number.isNaN(fromDate.getTime())) {
-
-      request.input('from', sql.DateTime, fromDate);
-
-    }
-
-    if (toDate instanceof Date && !Number.isNaN(toDate.getTime())) {
-
-      request.input('to', sql.DateTime, toDate);
-
-    }
-
-  };
-
-
-
-  const attachFilterParameters = (request) => {
-
-    includeFilterList.forEach((mst, idx) => {
-
-      request.input(`__include${idx}`, sql.NVarChar, mst);
-
-    });
-
-    excludeFilterList.forEach((mst, idx) => {
-
-      request.input(`__exclude${idx}`, sql.NVarChar, mst);
-
-    });
-
-  };
-
-
-
-  const lowerQuery = workingQuery.toLowerCase();
-
-  const containsOffset = /\boffset\s+\d+/u.test(lowerQuery) || /\bfetch\s+next\s+/u.test(lowerQuery);
-
-  let supportsOffsetFetch = true;
-
-  if (batchSize > 0 && !containsOffset) {
-
-    const capabilities = await resolveSqlPaginationCapabilities(pool, connectionConfig, requestTimeout);
-
-    supportsOffsetFetch = capabilities?.supportsOffsetFetch !== false;
-
-  }
-
-  const supportsPagination = batchSize > 0 && !containsOffset && supportsOffsetFetch;
-
-
-
-  if (!supportsPagination) {
-
-    const request = pool.request();
-
-    request.timeout = requestTimeout;
-
-    attachRangeParameters(request);
-
-    attachFilterParameters(request);
-
-    const result = await request.query(workingQuery);
-
-    const rows = result?.recordset || [];
-
-    if (rows.length > 0) {
-
-      yield rows;
-
-    }
-
-    return;
-
-  }
-
-
-
-  const hasOrderBy = /order\s+by/u.test(lowerQuery);
-
-  const wrappedQuery = hasOrderBy
-
-    ? workingQuery
-
-    : `SELECT * FROM (${workingQuery}) AS base_query ORDER BY (SELECT NULL)`;
-
-  const pagedQuery = `${wrappedQuery} OFFSET @__offset ROWS FETCH NEXT @__limit ROWS ONLY`;
-
-
-
-  let offset = 0;
-
-  while (true) {
-
-    const request = pool.request();
-
-    request.timeout = requestTimeout;
-
-    attachRangeParameters(request);
-
-    attachFilterParameters(request);
-
-    request.input('__offset', sql.Int, offset);
-
-    request.input('__limit', sql.Int, batchSize);
-
-    const result = await request.query(pagedQuery);
-
-    const rows = result?.recordset || [];
-
-    if (!rows.length) {
-
-      break;
-
-    }
-
-    yield rows;
-
-    if (rows.length < batchSize) {
-
-      break;
-
-    }
-
-    offset += rows.length;
-
-  }
+  yield* ecusBridge.fetchDeclarations(range, config, options);
 
 }
 
 
 
 export async function checkSqlServerHealth() {
-
-  const config = getEcusConfig();
-
-  const connectionConfig = buildSqlConnectionConfig(config);
-
-  if (!connectionConfig.server || !connectionConfig.database) {
-
-    return {
-
-      ok: false,
-
-      state: 'not_configured',
-
-      message: 'Chưa cấu hình máy chủ hoặc cơ sở dữ liệu SQL Server',
-
-    };
-
-  }
-
-  try {
-
-    const pool = await sqlPoolManager.getPool(connectionConfig);
-
-    const request = pool.request();
-
-    const timeout = connectionConfig.requestTimeout ?? 5000;
-
-    request.timeout = timeout;
-
-    await request.query('SELECT 1 AS ok');
-
-    return {
-
-      ok: true,
-
-      state: 'ready',
-
-      server: connectionConfig.server,
-
-      database: connectionConfig.database,
-
-      checkedAt: new Date().toISOString(),
-
-    };
-
-  } catch (err) {
-
-    const timeout = isSqlTimeoutError(err);
-
-    if (timeout) {
-
-      recordSqlTimeout({ message: err?.message, context: { actor: 'healthcheck', reason: 'status-check' } });
-
-    }
-
-    return {
-
-      ok: false,
-
-      state: timeout ? 'timeout' : 'error',
-
-      message: err?.message || 'Không thể kết nối SQL Server',
-
-      code: err?.code || null,
-
-      number: err?.number || null,
-
-      checkedAt: new Date().toISOString(),
-
-    };
-
-  }
+  return ecusBridge.checkSqlServerHealth();
 
 }
 
@@ -22462,10 +20752,8 @@ async function buildAiKpiSnapshot(rangeInput = {}, {
 } = {}) {
 
   const config = getEcusConfig();
-
-  const connectionConfig = buildSqlConnectionConfig(config);
-
-  if (!connectionConfig.server || !connectionConfig.database) {
+  const connectionSummary = ecusBridge.getConnectionSummary(config);
+  if (!ecusBridge.hasConfiguredConnection(config)) {
 
     const error = new Error('Chưa cấu hình kết nối SQL Server để lấy snapshot KPI.');
 
@@ -22597,7 +20885,7 @@ async function buildAiKpiSnapshot(rangeInput = {}, {
 
   const rules = getRulesValue();
 
-  const adjustments = getJSONValue('kpi_adjustments_v1', []);
+  const adjustments = getAdjustmentRowsValue();
 
   const rulesVersion = resolveVersionLabel(
 
@@ -22611,7 +20899,7 @@ async function buildAiKpiSnapshot(rangeInput = {}, {
 
   const rosterVersion = resolveVersionLabel(roster?.meta?.version, roster?.version);
 
-  const report = buildReportData(mappedRows, {
+  const report = buildLegacyReportData(mappedRows, {
 
     roster,
 
@@ -22831,9 +21119,9 @@ async function buildAiKpiSnapshot(rangeInput = {}, {
 
     source: {
 
-      server: connectionConfig.server,
+      server: connectionSummary.server,
 
-      database: connectionConfig.database,
+      database: connectionSummary.database,
 
     },
 
@@ -23310,10 +21598,7 @@ async function runCoDiscrepancyCheck({ actor = 'system', reason = 'auto', range 
   const config = getCoDiscrepancyConfig();
 
   const ecusConfig = getEcusConfig();
-
-  const connectionConfig = buildSqlConnectionConfig(ecusConfig);
-
-  if (!connectionConfig.server || !connectionConfig.database) {
+  if (!ecusBridge.hasConfiguredConnection(ecusConfig)) {
 
     const error = new Error('Chưa cấu hình kết nối SQL Server cho chức năng đối soát C/O.');
 
@@ -24637,6 +22922,14 @@ app.get('/api/notifications/stream', (req, res) => {
 
 app.get('/api/bootstrap', async (req, res) => {
 
+  const { denied } = requireAuthenticated(req, res, 'Bạn cần đăng nhập để khởi tạo dữ liệu ứng dụng.');
+
+  if (denied) {
+
+    return;
+
+  }
+
   try {
 
     await maybeSyncMstHistoryFromSql();
@@ -24657,9 +22950,19 @@ app.get('/api/bootstrap', async (req, res) => {
 
   }
 
-  const store = buildBootstrapSnapshot();
+  try {
 
-  res.json({ data: store });
+    const store = buildBootstrapSnapshot();
+
+    res.json({ data: store });
+
+  } catch (err) {
+
+    console.error('Không thể bootstrap ứng dụng', err);
+
+    res.status(500).json({ ok: false, error: err?.message || 'Không thể bootstrap ứng dụng' });
+
+  }
 
 });
 
@@ -25255,6 +23558,444 @@ app.get('/api/admin/audit/export', (req, res) => {
 
 
 
+function resolveReportingReadQuery(req) {
+
+  const fromRaw = Array.isArray(req.query?.from) ? req.query.from[0] : req.query?.from;
+
+  const toRaw = Array.isArray(req.query?.to) ? req.query.to[0] : req.query?.to;
+
+  const limitRaw = Array.isArray(req.query?.limit) ? req.query.limit[0] : req.query?.limit;
+
+  const ruleIdRaw = Array.isArray(req.query?.ruleId) ? req.query.ruleId[0] : req.query?.ruleId;
+
+  const limit = toPositiveInt(limitRaw, 0);
+
+  return {
+
+    from: normalizeStr(fromRaw),
+
+    to: normalizeStr(toRaw),
+
+    ruleId: normalizeStr(ruleIdRaw),
+
+    limit: limit > 0 ? limit : undefined,
+
+  };
+
+}
+
+
+
+function resolveReportingSchedulesQuery(req) {
+
+  const asOfRaw = Array.isArray(req.query?.asOf) ? req.query.asOf[0] : req.query?.asOf;
+
+  return {
+
+    asOf: normalizeStr(asOfRaw),
+
+  };
+
+}
+
+
+
+const reportingProjectionStore = createReportingProjectionStore({
+  readJsonValue: getJSONValue,
+  readProjectionValue: (key) => readReportingProjectionValue(db, key),
+  writeProjectionValue: (key, value, options) => writeReportingProjectionValue(db, key, value, options),
+  deleteProjectionValue: (key) => deleteReportingProjectionValue(db, key),
+});
+
+reportingAggregateRuntime = createReportingAggregateRuntime({
+  projectionStore: reportingProjectionStore,
+  buildSourceSnapshot: () => ({
+    rows: getDeclRows(),
+    roster: getRosterValue(),
+    rules: getRulesValue(),
+    adjustments: getAdjustmentRowsValue(),
+    schedules: reportingProjectionStore.readScheduleEntries(),
+  }),
+  readRelationalMonthlyAggregateEntries: (snapshotKey) =>
+    readReportingMonthlyAggregateProjectionEntries(db, snapshotKey),
+  readRelationalJobRuns: (snapshotKey) => readReportingJobRunProjectionEntries(db, snapshotKey),
+  activeSnapshotKey: MONTHLY_REPORTING_AGGREGATE_KEY,
+  defaultSnapshotKey: MONTHLY_REPORTING_DEFAULT_AGGREGATE_KEY,
+  jobRunsKey: REPORTING_JOB_RUNS_KEY,
+});
+
+const reportingScheduleRuntime = createReportingScheduleRuntime({
+  projectionStore: reportingProjectionStore,
+  aggregateRuntime: reportingAggregateRuntime,
+  buildSourceSnapshot: () => readReportingSourceSnapshot(),
+  defaultAggregateSnapshotKey: MONTHLY_REPORTING_DEFAULT_AGGREGATE_KEY,
+});
+
+
+
+function readReportingSourceSnapshot() {
+
+  const snapshot = reportingAggregateRuntime.readRawReportingSourceSnapshot();
+
+  return {
+
+    rows: getDeclRows(),
+
+    roster: snapshot.roster,
+
+    rules: snapshot.rules,
+
+    adjustments: snapshot.adjustments,
+
+    schedules: snapshot.schedules,
+
+  };
+
+}
+
+function buildReportingViewPayload(query) {
+
+  const snapshot = readReportingSourceSnapshot();
+
+  const selectedRules = resolveReportingRule(snapshot.rules, query.ruleId);
+
+  if (!selectedRules) {
+
+    return {
+
+      ok: false,
+
+      error: 'Không tìm thấy bộ quy tắc KPI cần xem báo cáo.',
+
+    };
+
+  }
+
+
+
+  const readModel = buildReportingReadModels(snapshot.rows, {
+
+    roster: snapshot.roster,
+
+    rules: selectedRules,
+
+    from: query.from,
+
+    to: query.to,
+
+    adjustments: snapshot.adjustments,
+
+    limit: query.limit,
+
+  });
+
+  return {
+
+      ok: true,
+
+      data: {
+
+      meta: reportingAggregateRuntime.buildReportingViewMeta(query),
+
+      ...readModel,
+
+    },
+
+  };
+
+}
+
+function respondWithReportingViewSlice(req, res, options = {}) {
+
+  const { denied } = requireAuthenticated(req, res, 'Bạn cần đăng nhập để xem báo cáo KPI.');
+
+  if (denied) {
+
+    return;
+
+  }
+
+
+
+  try {
+
+    const query = resolveReportingReadQuery(req);
+
+    const payload = buildReportingViewPayload(query);
+
+    if (!payload.ok) {
+
+      return res.status(400).json({ ok: false, error: payload.error });
+
+    }
+
+
+
+    const data = options.slice ? payload.data[options.slice] : payload.data;
+
+    res.json({ ok: true, data });
+
+  } catch (err) {
+
+    res.status(500).json({ ok: false, error: err?.message || options.errorMessage || 'Không thể tải báo cáo KPI.' });
+
+  }
+
+}
+
+
+
+app.get('/api/v4/reporting/view', (req, res) => {
+
+  respondWithReportingViewSlice(req, res);
+
+});
+
+app.get('/api/v4/reporting/observability', (req, res) => {
+
+  const { denied } = requireAuthenticated(req, res, 'Bạn cần đăng nhập để xem trạng thái reporting KPI.');
+
+  if (denied) {
+
+    return;
+
+  }
+
+  try {
+    const query = reportingAggregateRuntime.resolveReportingObservabilityQuery(req);
+
+    res.json({
+      ok: true,
+      data: reportingAggregateRuntime.buildReportingObservabilityPayload(query),
+    });
+
+  } catch (err) {
+
+    res.status(500).json({
+      ok: false,
+      error: err?.message || 'Không thể tải trạng thái reporting KPI.',
+    });
+
+  }
+
+});
+
+
+
+app.get('/api/v4/reporting/aggregates/monthly', (req, res) => {
+
+  const { context, denied } = requireAuthenticated(req, res, 'Bạn cần đăng nhập để xem tổng hợp KPI.');
+
+  if (denied) {
+
+    return;
+
+  }
+
+
+
+  try {
+
+    const actor = context?.account?.username || resolveActor(req);
+
+    const query = resolveReportingReadQuery(req);
+    const data = reportingAggregateRuntime.hasMonthlyReportingAggregateQuery(query)
+      ? reportingAggregateRuntime.materializeMonthlyReportingAggregateSnapshot(() => readReportingSourceSnapshot(), query, {
+
+          actor,
+
+        })
+      : reportingAggregateRuntime.materializeDefaultMonthlyReportingAggregateSnapshot(() => readReportingSourceSnapshot(), {
+
+          actor,
+
+        }) ||
+        reportingAggregateRuntime.buildMonthlyReportingAggregateData(readReportingSourceSnapshot(), query);
+
+
+
+    res.json({ ok: true, data });
+
+  } catch (err) {
+
+    res.status(500).json({ ok: false, error: err?.message || 'Không thể tải tổng hợp KPI theo tháng.' });
+
+  }
+
+});
+
+
+
+app.get('/api/v4/reporting/schedules', (req, res) => {
+
+  const { context, denied } = requireAuthenticated(req, res, 'Bạn cần đăng nhập để xem lịch báo cáo KPI.');
+
+  if (denied) {
+
+    return;
+
+  }
+
+
+
+  try {
+
+    const query = resolveReportingSchedulesQuery(req);
+    const actor = context?.account?.username || resolveActor(req);
+    const data = reportingScheduleRuntime.readSchedules(query, {
+      actor,
+    });
+
+
+
+    res.json({ ok: true, data });
+
+  } catch (err) {
+
+    res.status(500).json({ ok: false, error: err?.message || 'Không thể tải lịch báo cáo KPI.' });
+
+  }
+
+});
+
+
+
+app.post('/api/v4/reporting/schedules', (req, res) => {
+
+  const { context, denied } = requireAuthenticated(req, res, 'Bạn cần đăng nhập để lưu lịch báo cáo KPI.');
+
+  if (denied) {
+
+    return;
+
+  }
+
+
+
+  try {
+
+    const actor = context?.account?.username || resolveActor(req);
+    const result = reportingScheduleRuntime.saveSchedule(req.body || {}, {
+      actor,
+    });
+
+    pushAuditLog({
+
+      actor,
+
+      action: 'report.schedule.save',
+
+      detail: `Cập nhật lịch gửi báo cáo ${result.item.name}`,
+
+      meta: {
+
+        scheduleId: result.item.id,
+
+        frequency: result.item.frequency,
+
+        formats: result.item.formats,
+
+        active: result.item.active,
+
+      },
+
+    });
+
+    res.json({
+
+      ok: true,
+
+      data: {
+
+        total: result.total,
+
+        item: result.item,
+
+      },
+
+    });
+
+  } catch (err) {
+
+    console.error('Lỗi lưu lịch báo cáo KPI', err);
+
+    res.status(500).json({ ok: false, error: 'Không thể lưu lịch báo cáo KPI.' });
+
+  }
+
+});
+
+
+
+app.delete('/api/v4/reporting/schedules/:id', (req, res) => {
+
+  const { context, denied } = requireAuthenticated(req, res, 'Bạn cần đăng nhập để xoá lịch báo cáo KPI.');
+
+  if (denied) {
+
+    return;
+
+  }
+
+
+
+  try {
+
+    const actor = context?.account?.username || resolveActor(req);
+    const result = reportingScheduleRuntime.deleteSchedule(req.params.id, {
+      actor,
+    });
+
+    if (!result.deleted) {
+
+      res.status(404).json({ ok: false, error: 'Không tìm thấy lịch báo cáo cần xoá.' });
+
+      return;
+
+    }
+
+    pushAuditLog({
+
+      actor,
+
+      action: 'report.schedule.delete',
+
+      detail: `Xoá lịch gửi báo cáo ${String(req.params.id || '').trim()}`,
+
+      meta: {
+
+        scheduleId: String(req.params.id || '').trim(),
+
+      },
+
+    });
+
+    res.json({
+
+      ok: true,
+
+      data: {
+
+        deleted: true,
+
+        total: result.total,
+
+      },
+
+    });
+
+  } catch (err) {
+
+    console.error('Lỗi xoá lịch báo cáo KPI', err);
+
+    res.status(500).json({ ok: false, error: 'Không thể xoá lịch báo cáo KPI.' });
+
+  }
+
+});
+
+
+
 app.post('/api/reports/export', async (req, res) => {
 
   try {
@@ -25291,7 +24032,10 @@ app.post('/api/reports/export', async (req, res) => {
 
 
 
-    const payload = req.body?.payload && typeof req.body.payload === 'object' ? req.body.payload : {};
+    const requestedPayload = req.body?.payload && typeof req.body.payload === 'object' ? req.body.payload : {};
+    const compactPayload = buildCompactReportExportPayload(kind, requestedPayload, readReportingSourceSnapshot());
+    const payload = compactPayload?.exportPayload || requestedPayload;
+    const auditPayload = compactPayload?.auditPayload || requestedPayload;
 
     const ipHeader = req.headers['x-forwarded-for'];
 
@@ -25309,7 +24053,7 @@ app.post('/api/reports/export', async (req, res) => {
 
         kind,
 
-        filters: payload,
+        filters: auditPayload,
 
         ipAddress,
 
@@ -25429,7 +24173,7 @@ app.post('/api/reports/export', async (req, res) => {
 
       filterSummary: watermark?.filterSummary,
 
-      filters: watermark?.filters ?? payload,
+      filters: watermark?.filters ?? auditPayload,
 
       ipAddress: ipAddress || null,
 
@@ -25443,9 +24187,15 @@ app.post('/api/reports/export', async (req, res) => {
 
   } catch (err) {
 
-    console.error('Không thể xuất báo cáo', err);
-
-    const status = err?.message && /không hợp lệ/i.test(err.message) ? 400 : 500;
+    const status =
+      Number.isInteger(Number(err?.statusCode)) && Number(err.statusCode) >= 400 && Number(err.statusCode) < 500
+        ? Number(err.statusCode)
+        : err?.message && /không hợp lệ/i.test(err.message)
+        ? 400
+        : 500;
+    if (status >= 500) {
+      console.error('Không thể xuất báo cáo', err);
+    }
 
     res.status(status).json({ ok: false, error: err?.message || 'Không thể xuất báo cáo' });
 
@@ -25881,7 +24631,7 @@ app.post('/api/auth/login', async (req, res) => {
 
     pushAuditLog({ actor: account.username, action: 'auth.login', detail: 'Đăng nhập thành công' });
 
-    res.json({ ok: true, user, token, expiresAt });
+    res.json({ ok: true, user, expiresAt });
 
   } catch (err) {
 
@@ -25953,6 +24703,14 @@ app.post('/api/auth/logout', (req, res) => {
 
 app.get('/api/auth/accounts', async (req, res) => {
 
+  const { denied } = requireAccountManage(req, res);
+
+  if (denied) {
+
+    return;
+
+  }
+
   try {
 
     await maybeSyncAccountsFromSql();
@@ -25971,11 +24729,19 @@ app.get('/api/auth/accounts', async (req, res) => {
 
 app.post('/api/auth/accounts', async (req, res) => {
 
+  const { context, denied } = requireAccountManage(req, res);
+
+  if (denied) {
+
+    return;
+
+  }
+
   try {
 
     await maybeSyncAccountsFromSql();
 
-    const actor = resolveActor(req);
+    const actor = context.account.username;
 
     const account = createAccountRecord(req.body, { actor });
 
@@ -25993,11 +24759,19 @@ app.post('/api/auth/accounts', async (req, res) => {
 
 app.patch('/api/auth/accounts/:username', async (req, res) => {
 
+  const { context, denied } = requireAccountManage(req, res);
+
+  if (denied) {
+
+    return;
+
+  }
+
   try {
 
     await maybeSyncAccountsFromSql();
 
-    const actor = resolveActor(req);
+    const actor = context.account.username;
 
     const account = updateAccountRecord(req.params.username, req.body, { actor });
 
@@ -26017,11 +24791,19 @@ app.patch('/api/auth/accounts/:username', async (req, res) => {
 
 app.post('/api/auth/accounts/:username/password', async (req, res) => {
 
+  const { context, denied } = requireAccountManage(req, res);
+
+  if (denied) {
+
+    return;
+
+  }
+
   try {
 
     await maybeSyncAccountsFromSql();
 
-    const actor = resolveActor(req);
+    const actor = context.account.username;
 
     setAccountPasswordRecord(req.params.username, req.body?.password, { actor });
 
@@ -26041,11 +24823,19 @@ app.post('/api/auth/accounts/:username/password', async (req, res) => {
 
 app.delete('/api/auth/accounts/:username', async (req, res) => {
 
+  const { context, denied } = requireAccountManage(req, res);
+
+  if (denied) {
+
+    return;
+
+  }
+
   try {
 
     await maybeSyncAccountsFromSql();
 
-    const actor = resolveActor(req);
+    const actor = context.account.username;
 
     const accounts = deleteAccountRecord(req.params.username, { actor });
 
@@ -26079,7 +24869,7 @@ app.post('/api/auth/password/change', async (req, res) => {
 
     setSessionCookie(req, res, token, expiresAt);
 
-    res.json({ ok: true, account, token, expiresAt });
+    res.json({ ok: true, account, expiresAt });
 
   } catch (err) {
 
@@ -26093,335 +24883,13 @@ app.post('/api/auth/password/change', async (req, res) => {
 
 
 
-app.get('/api/storage/:key', (req, res) => {
+app.get('/api/storage/:key', storageRouteController.getStorageValue);
 
-  const key = req.params.key;
+app.put('/api/storage/:key', storageRouteController.putStorageValue);
 
-  if (!key) {
+app.patch('/api/storage/:key', storageRouteController.patchStorageValue);
 
-    res.status(400).json({ ok: false, error: 'Thi?u key' });
-
-    return;
-
-  }
-
-  const { denied } = verifyStoragePermission(req, res, key);
-
-  if (denied) {
-
-    return;
-
-  }
-
-  try {
-
-    const raw = getValue(key);
-
-    if (raw === undefined || raw === null) {
-
-      res.json({ ok: true, key, value: null, raw: null });
-
-      return;
-
-    }
-
-    const value = safeParse(raw, raw);
-
-    res.json({ ok: true, key, value, raw });
-
-  } catch (err) {
-
-    console.error('Kh�ng th? d?c d? li?u', err);
-
-    res.status(500).json({ ok: false, error: 'Kh�ng th? d?c d? li?u' });
-
-  }
-
-});
-
-
-
-app.put('/api/storage/:key', (req, res) => {
-
-  const key = req.params.key;
-
-  if (!key) {
-
-    res.status(400).json({ ok: false, error: 'Thiếu key' });
-
-    return;
-
-  }
-
-  if (key === 'kpi_users_v1') {
-
-    res.status(403).json({ ok: false, error: 'Khoá này chỉ chỉnh sửa qua API tài khoản' });
-
-    return;
-
-  }
-
-  const { value } = req.body || {};
-
-  const { context, denied } = verifyStoragePermission(req, res, key);
-
-  if (denied) {
-
-    return;
-
-  }
-
-  const actor = context?.account?.username || resolveActor(req);
-
-  try {
-
-    if (value === null || value === undefined) {
-
-      deleteValue(key, { actor, source: 'api' });
-
-    } else {
-
-      upsertValue(key, value, { actor, source: 'api' });
-
-    }
-
-    if (key === 'decl_rows_v1') {
-
-      evaluateDeclarationAlerts({ actor, reason: 'storage-put' });
-
-    }
-
-    if (key === 'ecus_sync_config_v1') {
-
-      refreshEcusSchedule();
-
-    }
-
-    if (key === 'co_tax_code_config_v1') {
-
-      applyCoCodeConfig(getCoCodeConfig());
-
-    }
-
-    if (key === 'co_discrepancy_config_v1') {
-
-      refreshCoDiscrepancySchedule();
-
-    }
-
-    res.json({ ok: true });
-
-  } catch (err) {
-
-    console.error('Lỗi ghi dữ liệu', err);
-
-    res.status(500).json({ ok: false, error: 'Không thể ghi dữ liệu' });
-
-  }
-
-});
-
-
-
-function getDeclRowSimpleKey(row) {
-
-  if (!row || typeof row !== 'object') {
-
-    return '';
-
-  }
-
-  const soTk = (row.so_tk ?? '').toString();
-
-  const nhanh = (row.nhanh ?? '').toString();
-
-  return `${soTk}_${nhanh}`.trim();
-
-}
-
-
-
-app.patch('/api/storage/:key', (req, res) => {
-
-  const key = req.params.key;
-
-  if (!key) {
-
-    res.status(400).json({ ok: false, error: 'Thiếu key' });
-
-    return;
-
-  }
-
-  if (key !== 'decl_rows_v1') {
-
-    res.status(405).json({ ok: false, error: 'Khoá này chưa hỗ trợ PATCH' });
-
-    return;
-
-  }
-
-  const { updates } = req.body || {};
-
-  if (!Array.isArray(updates) || updates.length === 0) {
-
-    res.status(400).json({ ok: false, error: 'Không có dữ liệu cập nhật' });
-
-    return;
-
-  }
-
-  const { context, denied } = verifyStoragePermission(req, res, key);
-
-  if (denied) {
-
-    return;
-
-  }
-
-  const actor = context?.account?.username || resolveActor(req);
-
-  try {
-
-    const rawValue = getValue(key) ?? '[]';
-
-    const rows = safeParse(rawValue, []);
-
-    if (!Array.isArray(rows)) {
-
-      res.status(500).json({ ok: false, error: 'Dữ liệu hiện tại không hợp lệ' });
-
-      return;
-
-    }
-
-    const indexByKey = new Map();
-
-    rows.forEach((row, idx) => {
-
-      const rowKey = getDeclRowSimpleKey(row);
-
-      if (rowKey) {
-
-        indexByKey.set(rowKey, idx);
-
-      }
-
-    });
-
-    let updated = 0;
-
-    for (const entry of updates) {
-
-      const rowKey = typeof entry?.key === 'string' ? entry.key.trim() : '';
-
-      const nextRow = entry && typeof entry.row === 'object' && entry.row !== null ? entry.row : null;
-
-      if (!rowKey || !nextRow) {
-
-        continue;
-
-      }
-
-      const index = indexByKey.has(rowKey) ? indexByKey.get(rowKey) : -1;
-
-      if (typeof index !== 'number' || index < 0) {
-
-        continue;
-
-      }
-
-      rows[index] = nextRow;
-
-      updated += 1;
-
-    }
-
-    if (!updated) {
-
-      res.json({ ok: true, updated: 0, totalStored: rows.length });
-
-      return;
-
-    }
-
-    const serialized = JSON.stringify(rows);
-
-    upsertValue(key, serialized, { actor, source: 'api-patch' });
-
-    evaluateDeclarationAlerts({ actor, reason: 'storage-patch' });
-
-    res.json({ ok: true, updated, totalStored: rows.length });
-
-  } catch (err) {
-
-    console.error('Lỗi cập nhật từng phần kho chia sẻ', err);
-
-    res.status(500).json({ ok: false, error: 'Không thể cập nhật dữ liệu' });
-
-  }
-
-});
-
-
-
-app.delete('/api/storage/:key', (req, res) => {
-
-  const key = req.params.key;
-
-  if (!key) {
-
-    res.status(400).json({ ok: false, error: 'Thiếu key' });
-
-    return;
-
-  }
-
-  if (key === 'kpi_users_v1') {
-
-    res.status(403).json({ ok: false, error: 'Khoá này chỉ chỉnh sửa qua API tài khoản' });
-
-    return;
-
-  }
-
-  const { context, denied } = verifyStoragePermission(req, res, key);
-
-  if (denied) {
-
-    return;
-
-  }
-
-  const actor = context?.account?.username || resolveActor(req);
-
-  try {
-
-    deleteValue(key, { actor, source: 'api-delete' });
-
-    if (key === 'co_tax_code_config_v1') {
-
-      applyCoCodeConfig(DEFAULT_CO_CODE_CONFIG);
-
-    }
-
-    if (key === 'co_discrepancy_config_v1') {
-
-      refreshCoDiscrepancySchedule();
-
-    }
-
-    res.json({ ok: true });
-
-  } catch (err) {
-
-    console.error('Lỗi xóa dữ liệu', err);
-
-    res.status(500).json({ ok: false, error: 'Không thể xóa dữ liệu' });
-
-  }
-
-});
+app.delete('/api/storage/:key', storageRouteController.deleteStorageValue);
 
 
 
@@ -27611,6 +26079,14 @@ app.post('/api/ai/chat', async (req, res) => {
 
 app.get('/api/import/ecus/config', (req, res) => {
 
+  const { denied } = requireAdminSyncManage(req, res);
+
+  if (denied) {
+
+    return;
+
+  }
+
   const config = formatEcusConfigForClient(getEcusConfig());
 
   res.json({ ok: true, config });
@@ -27619,7 +26095,133 @@ app.get('/api/import/ecus/config', (req, res) => {
 
 
 
+app.get('/api/v4/declarations/imports/ecus-config', (req, res) => {
+
+  const { denied } = requireEcusBridgeAccess(req, res);
+
+  if (denied) {
+
+    return;
+
+  }
+
+  res.json({ ok: true, config: formatEcusConfigForClient(getEcusConfig()) });
+
+});
+
+
+
+app.post('/api/v4/declarations/imports/ecus-preview', async (req, res) => {
+
+  const { denied } = requireEcusBridgeAccess(req, res);
+
+  if (denied) {
+
+    return;
+
+  }
+
+  try {
+
+    const {
+      rawRows,
+      range,
+      from,
+      to,
+      limit,
+      includeTaxCodes,
+      excludeTaxCodes,
+    } = req.body || {};
+
+    const preview = await ecusBridgeMutations.previewFetchedRows(rawRows, {
+      rangeInput: range || { from, to },
+      limit,
+      includeTaxCodes,
+      excludeTaxCodes,
+    });
+
+    res.json({
+
+      ok: true,
+
+      preview: {
+
+        rows: preview.rows,
+
+        limited: preview.limited,
+
+        fetched: preview.totalFetched,
+
+        range: preview.range,
+
+      },
+
+    });
+
+  } catch (err) {
+
+    res.status(500).json({ ok: false, error: err?.message || 'Không thể xem trước dữ liệu ECUS bridge' });
+
+  }
+
+});
+
+
+
+app.post('/api/v4/declarations/imports/ecus-commit', async (req, res) => {
+
+  const access = requireEcusBridgeAccess(req, res);
+
+  if (access.denied) {
+
+    return;
+
+  }
+
+  try {
+
+    const {
+      rawRows,
+      fetchedTotal,
+      actor,
+      reason,
+      range,
+      from,
+      to,
+      includeTaxCodes,
+      excludeTaxCodes,
+    } = req.body || {};
+
+    const result = await ecusBridgeMutations.commitFetchedRows(rawRows, {
+      fetchedTotal,
+      actor: actor || access.actor || 'ecus-bridge-service',
+      reason: reason || 'manual',
+      rangeInput: range || { from, to },
+      includeTaxCodes,
+      excludeTaxCodes,
+    });
+
+    res.json({ ok: true, result });
+
+  } catch (err) {
+
+    res.status(500).json({ ok: false, error: err?.message || 'Không thể commit dữ liệu ECUS bridge' });
+
+  }
+
+});
+
+
+
 app.get('/api/import/ecus/status', async (req, res) => {
+
+  const { denied } = requireAdminSyncManage(req, res);
+
+  if (denied) {
+
+    return;
+
+  }
 
   try {
 
@@ -27785,6 +26387,14 @@ app.post('/api/import/ecus/run', async (req, res) => {
 
 app.get('/api/import/alerts', (req, res) => {
 
+  const { denied } = requireAlertsManage(req, res);
+
+  if (denied) {
+
+    return;
+
+  }
+
   const payload = buildAlertPayload();
 
   res.json({ ok: true, ...payload });
@@ -27794,6 +26404,14 @@ app.get('/api/import/alerts', (req, res) => {
 
 
 app.get('/api/import/search', (req, res) => {
+
+  const { denied } = requireAuthenticated(req, res, 'Bạn cần đăng nhập để tra cứu tờ khai.');
+
+  if (denied) {
+
+    return;
+
+  }
 
   try {
 
@@ -27865,6 +26483,14 @@ app.get('/api/import/search', (req, res) => {
 
 app.get('/api/import/co-codes', (req, res) => {
 
+  const { denied } = requireAdminSyncManage(req, res);
+
+  if (denied) {
+
+    return;
+
+  }
+
   try {
 
     const config = getCoCodeConfig();
@@ -27910,6 +26536,14 @@ app.put('/api/import/co-codes', (req, res) => {
 
 
 app.get('/api/import/co-discrepancy', (req, res) => {
+
+  const { denied } = requireAdminSyncManage(req, res);
+
+  if (denied) {
+
+    return;
+
+  }
 
   try {
 
@@ -27993,6 +26627,14 @@ app.post('/api/import/co-discrepancy/run', async (req, res) => {
 
 app.get('/api/import/alerts/config', (req, res) => {
 
+  const { denied } = requireAlertsManage(req, res);
+
+  if (denied) {
+
+    return;
+
+  }
+
   res.json({ ok: true, config: getAlertConfig() });
 
 });
@@ -28001,9 +26643,17 @@ app.get('/api/import/alerts/config', (req, res) => {
 
 app.put('/api/import/alerts/config', (req, res) => {
 
+  const { context, denied } = requireAlertsManage(req, res);
+
+  if (denied) {
+
+    return;
+
+  }
+
   try {
 
-    const actor = resolveActor(req);
+    const actor = context.account.username;
 
     const next = saveAlertConfig(req.body?.config || {});
 
@@ -28023,9 +26673,17 @@ app.put('/api/import/alerts/config', (req, res) => {
 
 app.post('/api/import/alerts/review', (req, res) => {
 
+  const { context, denied } = requireAlertsManage(req, res);
+
+  if (denied) {
+
+    return;
+
+  }
+
   const keys = Array.isArray(req.body?.keys) ? req.body.keys : [];
 
-  const actor = resolveActor(req);
+  const actor = context.account.username;
 
   const updated = markDeclarationsReviewed(keys, { actor });
 
@@ -28039,9 +26697,17 @@ app.post('/api/import/alerts/review', (req, res) => {
 
 app.post('/api/import/alerts/unreview', (req, res) => {
 
+  const { context, denied } = requireAlertsManage(req, res);
+
+  if (denied) {
+
+    return;
+
+  }
+
   const keys = Array.isArray(req.body?.keys) ? req.body.keys : [];
 
-  const actor = resolveActor(req);
+  const actor = context.account.username;
 
   const updated = unmarkDeclarationsReviewed(keys, { actor });
 
@@ -28057,7 +26723,11 @@ refreshEcusSchedule();
 
 refreshAiInsightSchedule();
 
+app.use('/api', (_req, res) => {
 
+  res.status(404).json({ ok: false, error: 'Không tìm thấy API.' });
+
+});
 
 app.use(express.static(DIST_DIR));
 
@@ -28233,21 +26903,7 @@ export function getDatabaseInitState() {
 
 export async function waitForAccountSqlSyncIdle() {
 
-  if (!accountSyncPromise) {
-
-    return;
-
-  }
-
-  try {
-
-    await accountSyncPromise;
-
-  } catch {
-
-    // Bỏ qua lỗi để không làm gián đoạn luồng kiểm thử
-
-  }
+  return ecusBridge.waitForAccountSyncIdle();
 
 }
 

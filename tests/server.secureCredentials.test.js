@@ -26,7 +26,7 @@ vi.mock('node:child_process', () => ({
 
 async function importModule() {
 
-  return import('../server/ecus/secureCredentials.js');
+  return import('../apps/ecus-bridge/src/bridgeSecureCredentials.js');
 
 }
 

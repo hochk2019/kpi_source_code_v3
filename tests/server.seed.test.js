@@ -47,6 +47,9 @@ describe('initializeDatabase seed logic', () => {
     const db = await initializeDatabase({ dbFile: ':memory:' });
 
     const keys = db.prepare('SELECT key FROM kv_store').all().map((row) => row.key);
+    const projectionTable = db
+      .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?")
+      .get('reporting_projections');
 
 
 
@@ -73,6 +76,7 @@ describe('initializeDatabase seed logic', () => {
     expect(usersRow).toBeTruthy();
 
     expect(() => JSON.parse(usersRow.value)).not.toThrow();
+    expect(projectionTable?.name).toBe('reporting_projections');
 
 
 
@@ -117,6 +121,9 @@ describe('initializeDatabase seed logic', () => {
 
 
     const db = await initializeDatabase({ dbFile });
+    const projectionTable = db
+      .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?")
+      .get('reporting_projections');
 
 
 
@@ -139,6 +146,7 @@ describe('initializeDatabase seed logic', () => {
       'kpi_users_v1',
 
     ]));
+    expect(projectionTable?.name).toBe('reporting_projections');
 
 
 

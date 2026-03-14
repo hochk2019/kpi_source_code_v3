@@ -8,11 +8,8 @@ Hệ thống được triển khai cho Công ty TNHH Tiếp Vận Hoàng Kim (Go
 
 - Khi mở ứng dụng tại `http://localhost:5173`, mọi người đều có thể xem dữ liệu đã lưu mà **không cần đăng nhập**. Ở chế độ này chỉ được phép tra cứu và xuất báo cáo, không thể sửa hoặc import dữ liệu.
 - Dữ liệu được lưu tập trung trên máy chủ nội bộ (chạy `pnpm server`) bằng cơ sở dữ liệu SQLite (`server/data/storage.sqlite`). File SQLite sẽ được tạo tự động trong lần đầu khởi chạy hoặc bạn có thể chủ động tạo trước bằng `pnpm db:init` sau khi cài đặt. Tất cả máy trong cùng mạng LAN truy cập giao diện (`pnpm dev` hoặc `pnpm start`) sẽ dùng chung nguồn dữ liệu này. Ứng dụng phía client sẽ tự động dò tìm máy chủ định kỳ: nếu lúc mở trang máy chủ chưa khởi động, giao diện sẽ hiển thị trạng thái “đang chờ backend” và tự động gửi lại các thao tác khi kết nối thành công, tránh tình trạng mỗi máy giữ dữ liệu riêng lẻ. Script `pnpm server` sẽ tự động chạy `pnpm rebuild better-sqlite3` nếu thiếu native binding; nếu vẫn gặp lỗi, hãy chạy `pnpm server:rebuild` (hoặc `pnpm rebuild better-sqlite3`) rồi thử lại.
-- Nút **“Đăng nhập quản trị”** ở góc trên bên phải dành cho quản trị viên. Tài khoản mặc định:
-  - `admin / admin123` (quản trị viên toàn quyền)
-  - `manager.hoangkimhoa / Hoa@2024`, `manager.thuyha / ThuyHa@2024`, `manager.hoainam / Nam@2024` (nhóm quản lý – đầy đủ quyền cấu hình, không quản lý tài khoản)
-  - `lead.hoc / Hoc@2024`, `lead.phuong / Phuong@2024`, `lead.tuan / Tuan@2024` (trưởng nhóm – quyền import, MST, cảnh báo và báo cáo)
-  - `nhanvien / 123456` (tài khoản mẫu quyền hạn hạn chế)
+- Nút **“Đăng nhập quản trị”** ở góc trên bên phải dành cho quản trị viên. Với cơ sở dữ liệu mới, cần cấu hình biến môi trường `KPI_BOOTSTRAP_ADMIN_PASSWORD` trước khi đăng nhập lần đầu để bootstrap tài khoản `admin`.
+- Nếu muốn bật thêm tài khoản mẫu ở lần bootstrap, dùng mẫu `KPI_BOOTSTRAP_PASSWORD_<USERNAME>` với username viết hoa và thay ký tự đặc biệt bằng `_`. Ví dụ `lead.phuong` -> `KPI_BOOTSTRAP_PASSWORD_LEAD_PHUONG`.
 - Sau khi đăng nhập, phần tiêu đề hiển thị tên người dùng cùng vai trò và bổ sung các nút **Đổi mật khẩu** và **Đăng xuất**.
 
 ## 2. Chức năng theo từng khu vực

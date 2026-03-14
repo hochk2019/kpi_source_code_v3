@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.server-v4.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "outDir": "dist/server-v4",
+    "rootDir": "server-v4/src",
+    "declaration": false,
+    "sourceMap": false
+  }
+}

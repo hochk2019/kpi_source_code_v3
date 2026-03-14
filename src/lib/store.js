@@ -1,9 +1,9 @@
-﻿// src/lib/store.js
+// src/lib/store.js
 
 
 
-import { createDefaultRuleCollection } from '../shared/defaultRules.js';
-import { normalizeDateInput } from '../shared/declSearch.js';
+import { createDefaultRuleCollection } from '../../packages/domain/src/defaultRules.js';
+import { normalizeDateInput } from '../../packages/domain/src/declSearch.js';
 
 import {
 
@@ -5124,8 +5124,6 @@ function applyPartialUpdatesToRow(row, updates, { sanitized = false } = {}) {
   const nextRow = { ...row };
 
   for (const [field, value] of entries) {
-
-    const current = nextRow[field];
 
     if (value === null) {
 

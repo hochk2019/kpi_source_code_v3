@@ -1,6 +1,6 @@
 import { describe, it, beforeEach, afterEach, expect, vi } from 'vitest';
 
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 
 import userEvent from '@testing-library/user-event';
 
@@ -115,6 +115,7 @@ describe('AccountManager – gắn nhân viên KPI', () => {
 
 
   afterEach(() => {
+    cleanup();
 
     vi.unstubAllGlobals();
 
@@ -188,8 +189,6 @@ describe('AccountManager – gắn nhân viên KPI', () => {
 
         teamName: 'Tổ Thuế A',
 
-        actor: 'admin',
-
       })
 
     );
@@ -242,8 +241,6 @@ describe('AccountManager – gắn nhân viên KPI', () => {
 
         teamName: null,
 
-        actor: 'admin',
-
       })
 
     );
@@ -256,6 +253,14 @@ describe('AccountManager – gắn nhân viên KPI', () => {
 
     );
 
+  });
+
+  it('hiển thị bộ lọc tìm kiếm và bảng tài khoản với nhãn truy cập rõ ràng', async () => {
+    render(<AccountManager currentUser={{ username: 'admin' }} />);
+
+    expect(await screen.findByRole('searchbox', { name: /tìm tài khoản/i })).toBeInTheDocument();
+    expect(await screen.findByRole('table', { name: /danh sách tài khoản kpi/i })).toBeInTheDocument();
+    expect(screen.getByText(/\d+\/\d+ tài khoản/i)).toBeInTheDocument();
   });
 
 

@@ -3,20 +3,12 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import "../print.css";
 
 import {
-  getDeclRows,
   getTeamRoster,
-  sortDeclRows,
   getMSTMap,
   normalizeName,
   normalizeStr,
   mapMemberNamesToTeams,
-  getKpiAdjustments,
   KPI_ADJUSTMENTS_KEY,
-  getReportSchedules,
-  saveReportSchedule,
-  deleteReportSchedule,
-  REPORT_SCHEDULE_KEY,
-  calculateNextReportScheduleRun,
   DECL_KEY,
   MST_KEY,
   RULES_KEY,
@@ -27,18 +19,30 @@ import { refreshSharedKeys, subscribe as subscribeStorage } from "@/lib/storageC
 
 import { loadRules, loadRuleSets } from "@/lib/rules.js";
 
-import { formatDisplayDate } from "@/shared/format.js";
+import {
+  createEmptyReportingViewModel,
+  createEmptyReportingSchedulesViewModel,
+  deleteReportingSchedule,
+  fetchReportingSchedules,
+  fetchReportingViewModel,
+  saveReportingSchedule,
+  subscribeReportingSchedules,
+} from "../../packages/api-client/src/reportingClient.js";
+import {
+  SectionHeader,
+  SectionSurface,
+  SectionToolbar,
+} from "@/components/designSystem/shellPrimitives.jsx";
+
+import { formatDisplayDate } from "../../packages/domain/src/format.js";
 
 import {
   QUICK_RANGE_OPTIONS,
   computeQuickRange,
-  buildReportData,
-  aggregateByCompany,
 } from "@/lib/reports.js";
 
-import { toAdjustmentTotalsArray } from "../../shared/kpiAdjustments.js";
 
-import { isAdminRole } from "@/shared/accountRoles.js";
+import { isAdminRole } from "../../packages/domain/src/accountRoles.js";
 
 import {
 
@@ -1796,19 +1800,19 @@ function StaffDetailCard({
 
 }) {
 
-  const { stats, rows, adjustmentSummary } = staff;
+  const {
+    stats,
+    rows,
+    licenseSummary = "",
+    adjustmentTotals = [],
+    adjustmentMetrics = {},
+  } = staff;
 
   const [mode, setMode] = useState("summary");
 
   const [detailPage, setDetailPage] = useState(0);
 
-  const aggregated = useMemo(
-
-    () => aggregateByCompany(rows, { includeStaff: false, includeTeam: false }),
-
-    [rows]
-
-  );
+  const aggregated = Array.isArray(staff?.companies) ? staff.companies : [];
 
   const showItems = visibleColumns.items !== false;
 
@@ -1820,77 +1824,15 @@ function StaffDetailCard({
 
   const showLicenseCodes = visibleColumns.licenseCodes !== false;
 
-  const licenseSummary = (stats.licenseCodes || []).join(", ");
+  const totalAdjustmentPoints = Number(adjustmentMetrics.totalPoints || 0);
 
-  const adjustmentTotals = useMemo(
+  const totalAdjustmentEntries = Number(adjustmentMetrics.entryCount || 0);
 
-    () => toAdjustmentTotalsArray(adjustmentSummary || {}),
+  const positiveAdjustmentEntries = Number(adjustmentMetrics.positive || 0);
 
-    [adjustmentSummary]
+  const negativeAdjustmentEntries = Number(adjustmentMetrics.negative || 0);
 
-  );
-
-  const totalAdjustmentPoints = useMemo(
-
-    () =>
-
-      adjustmentTotals.reduce((sum, item) => {
-
-        const value = Number(item?.points || 0);
-
-        return Number.isFinite(value) ? sum + value : sum;
-
-      }, 0),
-
-    [adjustmentTotals]
-
-  );
-
-  const totalAdjustmentEntries = useMemo(
-
-    () => rows.filter((row) => row?.isAdjustment).length,
-
-    [rows]
-
-  );
-
-  const adjustmentBreakdown = useMemo(() => {
-
-    let positive = 0;
-
-    let negative = 0;
-
-    let neutral = 0;
-
-    for (const row of rows) {
-
-      if (!row?.isAdjustment) continue;
-
-      const value = Number(row?.kpi || 0);
-
-      if (!Number.isFinite(value) || Math.abs(value) < 0.0001) {
-
-        neutral += 1;
-
-        continue;
-
-      }
-
-      if (value > 0) {
-
-        positive += 1;
-
-      } else {
-
-        negative += 1;
-
-      }
-
-    }
-
-    return { positive, negative, neutral };
-
-  }, [rows]);
+  const neutralAdjustmentEntries = Number(adjustmentMetrics.neutral || 0);
 
   const adjustmentTooltip = useMemo(() => {
 
@@ -1920,21 +1862,21 @@ function StaffDetailCard({
 
     const segments = [];
 
-    if (adjustmentBreakdown.positive) {
+    if (positiveAdjustmentEntries) {
 
-      segments.push(`${formatInt(adjustmentBreakdown.positive)} lượt cộng`);
-
-    }
-
-    if (adjustmentBreakdown.negative) {
-
-      segments.push(`${formatInt(adjustmentBreakdown.negative)} lượt trừ`);
+      segments.push(`${formatInt(positiveAdjustmentEntries)} lượt cộng`);
 
     }
 
-    if (adjustmentBreakdown.neutral) {
+    if (negativeAdjustmentEntries) {
 
-      segments.push(`${formatInt(adjustmentBreakdown.neutral)} lượt 0 điểm`);
+      segments.push(`${formatInt(negativeAdjustmentEntries)} lượt trừ`);
+
+    }
+
+    if (neutralAdjustmentEntries) {
+
+      segments.push(`${formatInt(neutralAdjustmentEntries)} lượt 0 điểm`);
 
     }
 
@@ -1946,7 +1888,12 @@ function StaffDetailCard({
 
     return segments.join(" • ");
 
-  }, [adjustmentBreakdown, totalAdjustmentEntries]);
+  }, [
+    negativeAdjustmentEntries,
+    neutralAdjustmentEntries,
+    positiveAdjustmentEntries,
+    totalAdjustmentEntries,
+  ]);
 
   const infoLineParts = [
 
@@ -1969,20 +1916,6 @@ function StaffDetailCard({
   }
 
   const infoLine = infoLineParts.join(" — ");
-
-  const detailColumnCount =
-
-    7 +
-
-    (showItems ? 1 : 0) +
-
-    (showLicenses ? 1 : 0) +
-
-    (showCo ? 1 : 0) +
-
-    (showCoLines ? 1 : 0) +
-
-    (showLicenseCodes ? 1 : 0);
 
   const normalizedDetailPageSize = Math.max(1, Number(detailPageSize) || DEFAULT_DETAIL_PAGE_SIZE);
 
@@ -2352,15 +2285,7 @@ function StaffDetailCard({
 
                       {chunkRows.map((row, idx) => {
 
-                        const licenseCodes = Array.isArray(row.licenseCodes) ? row.licenseCodes : [];
-
-                        const excludedCodes = Array.isArray(row.licenseExcludedCodes)
-
-                          ? row.licenseExcludedCodes
-
-                          : [];
-
-                        const licenseLabel = licenseCodes.join(", ") || "";
+                        const licenseLabel = row.licenseSummary || "";
 
                         const licenseTooltipParts = [];
 
@@ -2370,9 +2295,9 @@ function StaffDetailCard({
 
                         }
 
-                        if (excludedCodes.length) {
+                        if (row.licenseExcludedSummary) {
 
-                          licenseTooltipParts.push(`Loai tru: ${excludedCodes.join(", ")}`);
+                          licenseTooltipParts.push(`Loai tru: ${row.licenseExcludedSummary}`);
 
                         }
 
@@ -2614,19 +2539,20 @@ function TeamDetailCard({
 
 }) {
 
-  const { stats, members, rows, adjustmentSummary } = team;
+  const {
+    stats,
+    members,
+    rows,
+    licenseSummary = "",
+    adjustmentTotals = [],
+    adjustmentMetrics = {},
+  } = team;
 
   const [mode, setMode] = useState("summary");
 
   const [detailPage, setDetailPage] = useState(0);
 
-  const aggregated = useMemo(
-
-    () => aggregateByCompany(rows, { includeStaff: true, includeTeam: false }),
-
-    [rows]
-
-  );
+  const aggregated = Array.isArray(team?.companies) ? team.companies : [];
 
   const showItems = visibleColumns.items !== false;
 
@@ -2638,77 +2564,15 @@ function TeamDetailCard({
 
   const showLicenseCodes = visibleColumns.licenseCodes !== false;
 
-  const licenseSummary = (stats.licenseCodes || []).join(", ");
+  const totalAdjustmentPoints = Number(adjustmentMetrics.totalPoints || 0);
 
-  const adjustmentTotals = useMemo(
+  const totalAdjustmentEntries = Number(adjustmentMetrics.entryCount || 0);
 
-    () => toAdjustmentTotalsArray(adjustmentSummary || {}),
+  const positiveAdjustmentEntries = Number(adjustmentMetrics.positive || 0);
 
-    [adjustmentSummary]
+  const negativeAdjustmentEntries = Number(adjustmentMetrics.negative || 0);
 
-  );
-
-  const totalAdjustmentPoints = useMemo(
-
-    () =>
-
-      adjustmentTotals.reduce((sum, item) => {
-
-        const value = Number(item?.points || 0);
-
-        return Number.isFinite(value) ? sum + value : sum;
-
-      }, 0),
-
-    [adjustmentTotals]
-
-  );
-
-  const totalAdjustmentEntries = useMemo(
-
-    () => rows.filter((row) => row?.isAdjustment).length,
-
-    [rows]
-
-  );
-
-  const adjustmentBreakdown = useMemo(() => {
-
-    let positive = 0;
-
-    let negative = 0;
-
-    let neutral = 0;
-
-    for (const row of rows) {
-
-      if (!row?.isAdjustment) continue;
-
-      const value = Number(row?.kpi || 0);
-
-      if (!Number.isFinite(value) || Math.abs(value) < 0.0001) {
-
-        neutral += 1;
-
-        continue;
-
-      }
-
-      if (value > 0) {
-
-        positive += 1;
-
-      } else {
-
-        negative += 1;
-
-      }
-
-    }
-
-    return { positive, negative, neutral };
-
-  }, [rows]);
+  const neutralAdjustmentEntries = Number(adjustmentMetrics.neutral || 0);
 
   const adjustmentTooltip = useMemo(() => {
 
@@ -2738,21 +2602,21 @@ function TeamDetailCard({
 
     const segments = [];
 
-    if (adjustmentBreakdown.positive) {
+    if (positiveAdjustmentEntries) {
 
-      segments.push(`${formatInt(adjustmentBreakdown.positive)} lượt cộng`);
-
-    }
-
-    if (adjustmentBreakdown.negative) {
-
-      segments.push(`${formatInt(adjustmentBreakdown.negative)} lượt trừ`);
+      segments.push(`${formatInt(positiveAdjustmentEntries)} lượt cộng`);
 
     }
 
-    if (adjustmentBreakdown.neutral) {
+    if (negativeAdjustmentEntries) {
 
-      segments.push(`${formatInt(adjustmentBreakdown.neutral)} lượt 0 điểm`);
+      segments.push(`${formatInt(negativeAdjustmentEntries)} lượt trừ`);
+
+    }
+
+    if (neutralAdjustmentEntries) {
+
+      segments.push(`${formatInt(neutralAdjustmentEntries)} lượt 0 điểm`);
 
     }
 
@@ -2764,7 +2628,12 @@ function TeamDetailCard({
 
     return segments.join(" • ");
 
-  }, [adjustmentBreakdown, totalAdjustmentEntries]);
+  }, [
+    negativeAdjustmentEntries,
+    neutralAdjustmentEntries,
+    positiveAdjustmentEntries,
+    totalAdjustmentEntries,
+  ]);
 
   const infoLineParts = [
 
@@ -3180,11 +3049,11 @@ function TeamDetailCard({
 
                         className="px-3 py-1.5"
 
-                        title={(member.stats.licenseCodes || []).join(", ") || "—"}
+                        title={member.licenseSummary || "—"}
 
                       >
 
-                        {(member.stats.licenseCodes || []).join(", ") || "—"}
+                        {member.licenseSummary || "—"}
 
                       </td>
 
@@ -3298,15 +3167,7 @@ function TeamDetailCard({
 
                           {chunkRows.map((row, idx) => {
 
-                            const licenseCodes = Array.isArray(row.licenseCodes) ? row.licenseCodes : [];
-
-                            const excludedCodes = Array.isArray(row.licenseExcludedCodes)
-
-                              ? row.licenseExcludedCodes
-
-                              : [];
-
-                            const licenseLabel = licenseCodes.join(", ") || "—";
+                            const licenseLabel = row.licenseSummary || "—";
 
                             const licenseTooltipParts = [];
 
@@ -3316,9 +3177,9 @@ function TeamDetailCard({
 
                             }
 
-                            if (excludedCodes.length) {
+                            if (row.licenseExcludedSummary) {
 
-                              licenseTooltipParts.push(`Loại trừ: ${excludedCodes.join(", ")}`);
+                              licenseTooltipParts.push(`Loại trừ: ${row.licenseExcludedSummary}`);
 
                             }
 
@@ -3550,27 +3411,27 @@ export default function ReportViewer({ canExport = true, currentUser = null }) {
 
   const initialRange = useMemo(() => computeQuickRange(quickRangeBase), [quickRangeBase]);
 
-  const [quickRange, setQuickRange] = useState(initialQuickRange);
-
-  const [from, setFrom] = useState(() =>
+  const initialFrom =
 
     initialQuickRange === "custom"
 
       ? sanitizeDateInput(storedPrefs.from, initialRange.from)
 
-      : initialRange.from
+      : initialRange.from;
 
-  );
-
-  const [to, setTo] = useState(() =>
+  const initialTo =
 
     initialQuickRange === "custom"
 
       ? sanitizeDateInput(storedPrefs.to, initialRange.to)
 
-      : initialRange.to
+      : initialRange.to;
 
-  );
+  const [quickRange, setQuickRange] = useState(initialQuickRange);
+
+  const [from, setFrom] = useState(initialFrom);
+
+  const [to, setTo] = useState(initialTo);
 
   const [scope, setScope] = useState(() => sanitizeScope(storedPrefs.scope));
 
@@ -3658,7 +3519,6 @@ export default function ReportViewer({ canExport = true, currentUser = null }) {
         RULES_KEY,
         TEAM_KEY,
         KPI_ADJUSTMENTS_KEY,
-        REPORT_SCHEDULE_KEY,
       ]);
       setVersion((value) => value + 1);
       toast.success?.("Đã tải lại dữ liệu báo cáo KPI mới nhất.");
@@ -3686,11 +3546,23 @@ export default function ReportViewer({ canExport = true, currentUser = null }) {
 
   const [mstRows, setMstRows] = useState(() => getMSTMap());
 
-  const [declarations, setDeclarations] = useState(() => sortDeclRows(getDeclRows()));
+  const [scheduleReadModel, setScheduleReadModel] = useState(() =>
 
-  const [adjustments, setAdjustments] = useState(() => getKpiAdjustments());
+    createEmptyReportingSchedulesViewModel()
 
-  const [reportSchedules, setReportSchedules] = useState(() => getReportSchedules());
+  );
+
+  const [report, setReport] = useState(() =>
+
+    createEmptyReportingViewModel({ from: initialFrom, to: initialTo }, rules)
+
+  );
+
+  const [baselineSummary, setBaselineSummary] = useState(null);
+
+  const [reportLoading, setReportLoading] = useState(true);
+
+  const [reportError, setReportError] = useState("");
 
   const [scheduleDraft, setScheduleDraft] = useState(() => createScheduleDraft());
 
@@ -3826,35 +3698,55 @@ const [detailPageSizeCustomInput, setDetailPageSizeCustomInput] = useState(() =>
 
     setMstRows(getMSTMap());
 
-    setDeclarations(sortDeclRows(getDeclRows()));
-
-    setAdjustments(getKpiAdjustments());
-
-    setReportSchedules(getReportSchedules());
-
   }, [version]);
 
 
 
   useEffect(() => {
 
-    const unsubscribeAdjustments = subscribeStorage(KPI_ADJUSTMENTS_KEY, () => {
+    const bumpReportVersion = () => {
 
-      setAdjustments(getKpiAdjustments());
+      setVersion((value) => value + 1);
+
+    };
+
+    const unsubscribeDeclarations = subscribeStorage(DECL_KEY, bumpReportVersion);
+
+    const unsubscribeAdjustments = subscribeStorage(KPI_ADJUSTMENTS_KEY, bumpReportVersion);
+
+    const unsubscribeRules = subscribeStorage(RULES_KEY, () => {
+
+      setRuleCollection(loadRuleSets());
+
+      bumpReportVersion();
 
     });
 
-    const unsubscribeSchedules = subscribeStorage(REPORT_SCHEDULE_KEY, () => {
+    const unsubscribeTeams = subscribeStorage(TEAM_KEY, () => {
 
-      setReportSchedules(getReportSchedules());
+      setRoster(getTeamRoster());
+
+      bumpReportVersion();
+
+    });
+
+    const unsubscribeMst = subscribeStorage(MST_KEY, () => {
+
+      setMstRows(getMSTMap());
 
     });
 
     return () => {
 
+      unsubscribeDeclarations();
+
       unsubscribeAdjustments();
 
-      unsubscribeSchedules();
+      unsubscribeRules();
+
+      unsubscribeTeams();
+
+      unsubscribeMst();
 
     };
 
@@ -3920,16 +3812,6 @@ const [detailPageSizeCustomInput, setDetailPageSizeCustomInput] = useState(() =>
 
 
 
-  const report = useMemo(
-
-    () => buildReportData(declarations, { roster, rules, from, to, adjustments }),
-
-    [declarations, roster, rules, from, to, adjustments]
-
-  );
-
-
-
   const activeRule = useMemo(() => {
 
     const sets = Array.isArray(ruleCollection?.sets) ? ruleCollection.sets : [];
@@ -3938,43 +3820,155 @@ const [detailPageSizeCustomInput, setDetailPageSizeCustomInput] = useState(() =>
 
   }, [ruleCollection]);
 
+  useEffect(() => {
 
+    let cancelled = false;
 
-  const baselineReport = useMemo(() => {
+    async function loadReportData() {
 
-    if (!activeRule || !activeRule.id) {
+      setReportLoading(true);
 
-      return null;
+      setReportError("");
+
+      try {
+
+        const query = {
+
+          from,
+
+          to,
+
+          ruleId: selectedRuleId,
+
+        };
+
+        const shouldLoadBaseline = Boolean(activeRule?.id) && activeRule.id !== normalizeStr(selectedRuleId);
+
+        const [nextReport, nextBaseline] = await Promise.all([
+
+          fetchReportingViewModel(query, rules),
+
+          shouldLoadBaseline
+
+            ? fetchReportingViewModel({
+
+                from,
+
+                to,
+
+                ruleId: activeRule?.id,
+
+              }, rules)
+
+            : Promise.resolve(null),
+
+        ]);
+
+        if (cancelled) {
+
+          return;
+
+        }
+
+        setReport(nextReport);
+
+        setBaselineSummary(nextBaseline);
+
+      } catch (error) {
+
+        if (cancelled) {
+
+          return;
+
+        }
+
+        console.error("Không thể tải read-model báo cáo KPI", error);
+
+        setReport(createEmptyReportingViewModel({ from, to }, rules));
+
+        setBaselineSummary(null);
+
+        setReportError(error?.message || "Không thể tải dữ liệu báo cáo KPI.");
+
+      } finally {
+
+        if (!cancelled) {
+
+          setReportLoading(false);
+
+        }
+
+      }
 
     }
 
-    if (rules && activeRule.id === rules.id) {
+    loadReportData();
 
-      return null;
+    return () => {
 
-    }
+      cancelled = true;
 
-    return buildReportData(declarations, {
+    };
 
-      roster,
+  }, [from, to, selectedRuleId, activeRule?.id, version, rules]);
 
-      rules: activeRule,
 
-      from,
 
-      to,
+  useEffect(() => {
 
-      adjustments,
-
+    let cancelled = false;
+    const unsubscribe = subscribeReportingSchedules((nextSchedules) => {
+      if (!cancelled) {
+        setScheduleReadModel(nextSchedules);
+      }
     });
 
-  }, [activeRule, declarations, roster, from, to, adjustments, rules]);
+    async function loadScheduleReadModel() {
+
+      try {
+
+        const nextSchedules = await fetchReportingSchedules();
+
+        if (cancelled) {
+
+          return;
+
+        }
+
+        setScheduleReadModel(nextSchedules);
+
+      } catch (error) {
+
+        if (cancelled) {
+
+          return;
+
+        }
+
+        console.error("Không thể tải read-model lịch báo cáo KPI", error);
+
+        setScheduleReadModel(createEmptyReportingSchedulesViewModel());
+
+      }
+
+    }
+
+    loadScheduleReadModel();
+
+    return () => {
+
+      cancelled = true;
+      unsubscribe();
+
+    };
+
+  }, [version]);
 
 
 
   const ruleComparison = useMemo(() => {
 
-    if (!baselineReport) {
+    if (!baselineSummary) {
 
       return null;
 
@@ -3982,9 +3976,9 @@ const [detailPageSizeCustomInput, setDetailPageSizeCustomInput] = useState(() =>
 
     const currentSummary = report?.summary;
 
-    const baselineSummary = baselineReport.summary;
+    const baselineStats = baselineSummary.summary;
 
-    if (!currentSummary || !baselineSummary) {
+    if (!currentSummary || !baselineStats) {
 
       return null;
 
@@ -3992,15 +3986,15 @@ const [detailPageSizeCustomInput, setDetailPageSizeCustomInput] = useState(() =>
 
     return {
 
-      kpi: (currentSummary.kpi || 0) - (baselineSummary.kpi || 0),
+      kpi: (currentSummary.kpi || 0) - (baselineStats.kpi || 0),
 
-      decls: (currentSummary.decls || 0) - (baselineSummary.decls || 0),
+      decls: (currentSummary.decls || 0) - (baselineStats.decls || 0),
 
-      items: (currentSummary.items || 0) - (baselineSummary.items || 0),
+      items: (currentSummary.items || 0) - (baselineStats.items || 0),
 
     };
 
-  }, [baselineReport, report]);
+  }, [baselineSummary, report]);
 
 
 
@@ -4040,9 +4034,21 @@ const [detailPageSizeCustomInput, setDetailPageSizeCustomInput] = useState(() =>
 
 
 
+  const displayReportSchedules = useMemo(() => {
+
+    return scheduleReadModel.items;
+
+  }, [scheduleReadModel.items]);
+
+
+
+  const scheduleAggregateStatus = scheduleReadModel.aggregateStatus;
+
+
+
   const nextScheduleRun = useMemo(() => {
 
-    const activeSchedules = (reportSchedules || []).filter((item) => item && item.active);
+    const activeSchedules = (displayReportSchedules || []).filter((item) => item && item.active);
 
     const sorted = activeSchedules
 
@@ -4062,7 +4068,7 @@ const [detailPageSizeCustomInput, setDetailPageSizeCustomInput] = useState(() =>
 
     return sorted[0] || null;
 
-  }, [reportSchedules]);
+  }, [displayReportSchedules]);
 
 
 
@@ -4268,8 +4274,6 @@ const [detailPageSizeCustomInput, setDetailPageSizeCustomInput] = useState(() =>
 
     : "Doanh nghiệp duy nhất trong giai đoạn";
 
-  const ruleTitle = selectedRuleMeta?.name || report.rules?.name || "Chưa đặt tên";
-
   const ruleApply = selectedRuleMeta?.applyFrom
 
     ? `Áp dụng từ ${selectedRuleMeta.applyFrom}`
@@ -4280,51 +4284,7 @@ const [detailPageSizeCustomInput, setDetailPageSizeCustomInput] = useState(() =>
 
     : "Áp dụng ngay";
 
-
-
-  const adjustmentsReport = useMemo(() => {
-
-    const base = report.adjustments || {};
-
-    const totalsRaw = base.totalsByCategory || base.totals || {};
-
-    const normalizeTotals = (entry) => ({
-
-      points: Number(entry?.points || 0),
-
-      quantity: Number(entry?.quantity || 0),
-
-    });
-
-    const totalsByCategory = Object.keys(totalsRaw).reduce((acc, key) => {
-
-      acc[key] = normalizeTotals(totalsRaw[key]);
-
-      return acc;
-
-    }, {});
-
-    return {
-
-      list: Array.isArray(base.list) ? base.list : [],
-
-      applied: Array.isArray(base.applied) ? base.applied : [],
-
-      totalPoints: Number(base.totalPoints || 0),
-
-      pendingCount: Number(base.pendingCount || 0),
-
-      approvedCount: Number(base.approvedCount || 0),
-
-      rejectedCount: Number(base.rejectedCount || 0),
-
-      appliedCount: Number(base.appliedCount || 0),
-
-      totalsByCategory,
-
-    };
-
-  }, [report.adjustments]);
+  const adjustmentsReport = report.adjustments;
 
 
 
@@ -4374,9 +4334,9 @@ const [detailPageSizeCustomInput, setDetailPageSizeCustomInput] = useState(() =>
 
   const adjustmentTotals = useMemo(
 
-    () => toAdjustmentTotalsArray(adjustmentsReport.totalsByCategory || {}),
+    () => (Array.isArray(adjustmentsReport.totalsList) ? adjustmentsReport.totalsList : []),
 
-    [adjustmentsReport.totalsByCategory]
+    [adjustmentsReport.totalsList]
 
   );
 
@@ -4508,21 +4468,9 @@ const [detailPageSizeCustomInput, setDetailPageSizeCustomInput] = useState(() =>
 
 
 
-  const companySummaryAllStaff = useMemo(
+  const companySummaryAllStaff = Array.isArray(report?.companies?.staff) ? report.companies.staff : [];
 
-    () => aggregateByCompany(report.rows, { includeStaff: true, includeTeam: false }),
-
-    [report.rows]
-
-  );
-
-  const companySummaryAllTeams = useMemo(
-
-    () => aggregateByCompany(report.rows, { includeStaff: true, includeTeam: true }),
-
-    [report.rows]
-
-  );
+  const companySummaryAllTeams = Array.isArray(report?.companies?.teams) ? report.companies.teams : [];
 
 
 
@@ -4840,7 +4788,7 @@ const handleDetailPageSizeCustomInputChange = (event) => {
 
 
 
-  const handleSaveSchedule = (event) => {
+  const handleSaveSchedule = async (event) => {
 
     event?.preventDefault?.();
 
@@ -4864,9 +4812,7 @@ const handleDetailPageSizeCustomInputChange = (event) => {
 
     try {
 
-      const saved = saveReportSchedule(payload, { actor: "ui.report" });
-
-      setReportSchedules(getReportSchedules());
+      const saved = await saveReportingSchedule(payload, { actor: "ui.report" });
 
       setEditingScheduleId(saved.id);
 
@@ -4886,7 +4832,7 @@ const handleDetailPageSizeCustomInputChange = (event) => {
 
 
 
-  const handleDeleteSchedule = (schedule) => {
+  const handleDeleteSchedule = async (schedule) => {
 
     if (!schedule?.id) return;
 
@@ -4902,23 +4848,30 @@ const handleDetailPageSizeCustomInputChange = (event) => {
 
     }
 
-    const ok = deleteReportSchedule(schedule.id, { actor: "ui.report" });
+    try {
 
-    if (ok) {
+      const ok = await deleteReportingSchedule(schedule.id, { actor: "ui.report" });
 
-      setReportSchedules(getReportSchedules());
+      if (ok) {
 
-      if (editingScheduleId === schedule.id) {
+        if (editingScheduleId === schedule.id) {
 
-        handleResetScheduleForm();
+          handleResetScheduleForm();
+
+        }
+
+        toast.success?.("Đã xoá lịch gửi báo cáo.");
+
+      } else {
+
+        toast.error?.("Không thể xoá lịch gửi báo cáo đã chọn.");
 
       }
+    } catch (error) {
 
-      toast.success?.("Đã xoá lịch gửi báo cáo.");
+      console.error(error);
 
-    } else {
-
-      toast.error?.("Không thể xoá lịch gửi báo cáo đã chọn.");
+      toast.error?.(error?.message || "Không thể xoá lịch gửi báo cáo.");
 
     }
 
@@ -5020,10 +4973,6 @@ const handleDetailPageSizeCustomInputChange = (event) => {
 
       module.exportAllStaffReport({
 
-        staffList: report.staff.list,
-
-        summary,
-
         range: report.range,
 
         rules: report.rules,
@@ -5070,10 +5019,6 @@ const handleDetailPageSizeCustomInputChange = (event) => {
 
       module.exportAllTeamReport({
 
-        teamList: report.teams.list,
-
-        summary,
-
         range: report.range,
 
         rules: report.rules,
@@ -5113,6 +5058,34 @@ const handleDetailPageSizeCustomInputChange = (event) => {
 
 
   const renderStaffSection = () => {
+
+    if (reportLoading && !summary.decls) {
+
+      return (
+
+        <div className="rounded border bg-white p-6 text-center text-sm text-gray-500">
+
+          Đang tải dữ liệu báo cáo KPI từ máy chủ...
+
+        </div>
+
+      );
+
+    }
+
+    if (reportError && !summary.decls) {
+
+      return (
+
+        <div className="rounded border border-rose-200 bg-rose-50 p-6 text-center text-sm text-rose-700">
+
+          Không thể tải báo cáo KPI: {reportError}
+
+        </div>
+
+      );
+
+    }
 
     if (!summary.decls) {
 
@@ -5406,11 +5379,11 @@ const handleDetailPageSizeCustomInputChange = (event) => {
 
                               className="px-3 py-1.5"
 
-                              title={(item.stats.licenseCodes || []).join(", ") || "—"}
+                              title={item.licenseSummary || "—"}
 
                             >
 
-                              {(item.stats.licenseCodes || []).join(", ") || "—"}
+                              {item.licenseSummary || "—"}
 
                             </td>
 
@@ -5675,6 +5648,34 @@ const handleDetailPageSizeCustomInputChange = (event) => {
 
 
   const renderTeamSection = () => {
+
+    if (reportLoading && !summary.decls) {
+
+      return (
+
+        <div className="rounded border bg-white p-6 text-center text-sm text-gray-500">
+
+          Đang tải dữ liệu báo cáo KPI từ máy chủ...
+
+        </div>
+
+      );
+
+    }
+
+    if (reportError && !summary.decls) {
+
+      return (
+
+        <div className="rounded border border-rose-200 bg-rose-50 p-6 text-center text-sm text-rose-700">
+
+          Không thể tải báo cáo KPI: {reportError}
+
+        </div>
+
+      );
+
+    }
 
     if (!summary.decls) {
 
@@ -5956,11 +5957,11 @@ const handleDetailPageSizeCustomInputChange = (event) => {
 
                               className="px-3 py-1.5"
 
-                              title={(item.stats.licenseCodes || []).join(", ") || "—"}
+                              title={item.licenseSummary || "—"}
 
                             >
 
-                              {(item.stats.licenseCodes || []).join(", ") || "—"}
+                              {item.licenseSummary || "—"}
 
                             </td>
 
@@ -6222,11 +6223,34 @@ const handleDetailPageSizeCustomInputChange = (event) => {
 
 
 
-  const excludeCodes = Array.isArray(report.rules?.license?.exclude?.codes)
+  const excludeCodes = report.rules?.licenseExcludedSummary || "Không có";
 
-    ? report.rules.license.exclude.codes.join(", ") || "Không có"
+  const shellMetaPillClassName =
+    "rounded-full border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-muted)] px-2.5 py-1 text-[11px] font-semibold text-[color:var(--ds-text-secondary)]";
 
-    : "Không có";
+  const reportControlsMeta = (
+    <>
+      <span className={shellMetaPillClassName}>{formatInt(summary.decls)} tờ khai hợp lệ</span>
+      <span className={shellMetaPillClassName}>
+        {selectedRuleMeta?.name || "Chưa có bộ quy tắc KPI"}
+      </span>
+    </>
+  );
+
+  const scheduleShellMeta = (
+    <>
+      <span className={shellMetaPillClassName}>
+        {nextScheduleRun
+          ? `Lịch sắp chạy: ${formatScheduleNextRunLabel(nextScheduleRun.nextRun)}`
+          : "Chưa có lịch chạy tự động"}
+      </span>
+      <span className={shellMetaPillClassName}>
+        {scheduleAggregateStatus?.available
+          ? "Read model tháng mặc định sẵn sàng"
+          : "Read model tháng mặc định chưa sẵn sàng"}
+      </span>
+    </>
+  );
 
 
 
@@ -6234,9 +6258,25 @@ const handleDetailPageSizeCustomInputChange = (event) => {
 
     <div className="space-y-6">
 
-      <div className="ds-card space-y-4 p-4 print:hidden">
+      <SectionSurface className="print:hidden" aria-label="Điều khiển báo cáo KPI">
 
-        <div className="flex flex-wrap items-end gap-4">
+        <SectionHeader
+          title="Điều khiển báo cáo KPI"
+          description="Chọn khoảng thời gian, bộ quy tắc và trạng thái read model trước khi xem dashboard KPI."
+          meta={reportControlsMeta}
+          actions={
+            <button
+              type="button"
+              onClick={handleReloadData}
+              disabled={reloading}
+              className="rounded border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {reloading ? "Đang tải..." : "Tải lại dữ liệu"}
+            </button>
+          }
+        />
+
+        <SectionToolbar mainClassName="items-end">
 
           <div className="flex flex-col">
 
@@ -6314,27 +6354,7 @@ const handleDetailPageSizeCustomInputChange = (event) => {
 
           </div>
 
-          <div className="ml-auto flex flex-wrap items-center gap-2">
-
-            <button
-
-              type="button"
-
-              onClick={handleReloadData}
-
-              disabled={reloading}
-
-              className="rounded border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
-
-            >
-
-              {reloading ? "Đang tải..." : "Tải lại dữ liệu"}
-
-            </button>
-
-          </div>
-
-        </div>
+        </SectionToolbar>
 
 
 
@@ -6454,73 +6474,71 @@ const handleDetailPageSizeCustomInputChange = (event) => {
 
             <div className="mt-1 text-xs text-[color:var(--ds-text-secondary)]">{ruleApply}</div>
 
+            <div className="mt-1 text-xs text-[color:var(--ds-text-secondary)]">
+
+              {scheduleAggregateStatus?.available
+
+                ? `Tổng hợp tháng mặc định: ${scheduleAggregateStatus.range.from || "…"} → ${
+
+                    scheduleAggregateStatus.range.to || "…"
+
+                  }`
+
+                : "Tổng hợp tháng mặc định: chưa sẵn sàng"}
+
+            </div>
+
+            {scheduleAggregateStatus?.available && scheduleAggregateStatus.generatedAt ? (
+
+              <div className="mt-1 text-xs text-[color:var(--ds-text-muted)]">
+
+                Cập nhật read model: {formatScheduleNextRunLabel(scheduleAggregateStatus.generatedAt)}
+
+              </div>
+
+            ) : null}
+
           </div>
 
         </div>
 
-      </div>
+      </SectionSurface>
 
 
 
       {isAdmin ? (
 
-        <div className="ds-card space-y-4 p-4 print:hidden">
+        <SectionSurface className="print:hidden" aria-label="Lập lịch gửi báo cáo KPI">
 
-          <div className="flex flex-wrap items-center justify-between gap-3">
-
-            <div>
-
-              <h3 className="text-base font-semibold text-[color:var(--ds-text-primary)]">
-
-                Lập lịch gửi báo cáo KPI
-
-              </h3>
-
-              <p className="text-sm text-[color:var(--ds-text-secondary)]">
-
-                Thiết lập gửi tự động file Excel/PDF theo tuần hoặc tháng tới danh sách email mong muốn.
-
-              </p>
-
-            </div>
-
-            <div className="flex items-center gap-3 text-xs text-[color:var(--ds-text-muted)]">
-
-              <span>
-
-                {nextScheduleRun
-
-                  ? `Lịch sắp chạy: ${formatScheduleNextRunLabel(nextScheduleRun.nextRun)}`
-
-                  : "Chưa có lịch chạy tự động"}
-
-              </span>
-
+          <SectionHeader
+            title="Lập lịch gửi báo cáo KPI"
+            titleAs="h3"
+            description="Thiết lập gửi tự động file Excel/PDF theo tuần hoặc tháng tới danh sách email mong muốn."
+            meta={scheduleShellMeta}
+            actions={
               <button
-
                 type="button"
-
                 onClick={() => setScheduleCollapsed((value) => !value)}
-
+                aria-controls="report-schedule-panel"
+                aria-expanded={String(!scheduleCollapsed)}
                 className="inline-flex items-center gap-1 rounded border border-[color:var(--ds-border-subtle)] px-2 py-1 font-semibold text-[color:var(--ds-text-secondary)] transition-colors hover:border-[color:var(--ds-border-strong)] hover:text-[color:var(--ds-text-primary)]"
-
               >
-
                 {scheduleCollapsed ? "Mở rộng" : "Thu gọn"}
-
               </button>
-
-            </div>
-
-          </div>
+            }
+          />
 
 
 
           {!scheduleCollapsed ? (
 
-            <>
+            <div id="report-schedule-panel" className="space-y-4">
 
-              <form className="grid gap-3 md:grid-cols-2 xl:grid-cols-4" onSubmit={handleSaveSchedule}>
+              <form
+                className="grid gap-3 md:grid-cols-2 xl:grid-cols-4"
+                onSubmit={handleSaveSchedule}
+                aria-label="Biểu mẫu lịch gửi báo cáo KPI"
+              >
 
                 <div className="flex flex-col gap-1">
 
@@ -6772,32 +6790,24 @@ const handleDetailPageSizeCustomInputChange = (event) => {
 
               <div className="border-t border-[color:var(--ds-border-subtle)] pt-4">
 
-                {reportSchedules.length ? (
+                {displayReportSchedules.length ? (
 
-                  <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                  <div
+                    className="grid gap-3 md:grid-cols-2 xl:grid-cols-3"
+                    role="list"
+                    aria-label="Danh sách lịch gửi báo cáo KPI"
+                  >
 
-                    {reportSchedules.map((schedule) => {
+                    {displayReportSchedules.map((schedule) => {
 
-                      const nextLabel = formatScheduleNextRunLabel(
-
-                        schedule.nextRun || calculateNextReportScheduleRun(schedule) || ""
-
-                      );
-
-                      const formatLabel = Array.isArray(schedule.formats)
-
-                        ? schedule.formats.map((item) => item.toUpperCase()).join(", ")
-
-                        : "EXCEL";
+                      const nextLabel = formatScheduleNextRunLabel(schedule.nextRun || "");
 
                       return (
 
                         <div
-
                           key={schedule.id}
-
+                          role="listitem"
                           className="rounded-lg border border-[color:var(--ds-border-subtle)] bg-white p-3 text-sm text-[color:var(--ds-text-secondary)] shadow-sm"
-
                         >
 
                           <div className="flex items-start justify-between gap-2">
@@ -6842,9 +6852,9 @@ const handleDetailPageSizeCustomInputChange = (event) => {
 
                             <div>Lần tiếp theo: {nextLabel}</div>
 
-                            <div>Định dạng: {formatLabel}</div>
+                            <div>Định dạng: {schedule.formatsSummary || "EXCEL"}</div>
 
-                            <div>Email: {(schedule.recipients || []).join(", ") || '—'}</div>
+                            <div>Email: {schedule.recipientsSummary || '—'}</div>
 
                           </div>
 
@@ -6900,11 +6910,11 @@ const handleDetailPageSizeCustomInputChange = (event) => {
 
               </div>
 
-            </>
+            </div>
 
           ) : null}
 
-        </div>
+        </SectionSurface>
 
       ) : null}
 
@@ -7108,49 +7118,27 @@ const handleDetailPageSizeCustomInputChange = (event) => {
 
                         paginatedAppliedAdjustments.map((item) => {
 
-                          const key = item.adjustment?.id || `${item.date}-${item.nhan_vien || ''}`;
-
-                          const quantity = Number.isFinite(Number(item.adjustment?.quantity))
-
-                            ? Number(item.adjustment.quantity)
-
-                            : null;
-
-                          const unitPoints = Number.isFinite(Number(item.adjustment?.unitPoints))
-
-                            ? Number(item.adjustment.unitPoints)
-
-                            : null;
-
-                          const references = Array.isArray(item.adjustment?.references)
-
-                            ? item.adjustment.references.filter(Boolean).join(', ')
-
-                            : '';
-
-                          const note = item.adjustment?.note || '';
-
                           const scoreClass = item.kpi >= 0 ? 'text-emerald-600' : 'text-rose-600';
 
                           return (
 
-                            <tr key={key} className="border-b border-[color:var(--ds-border-subtle)] odd:bg-[color:var(--ds-surface-card)] even:bg-[color:var(--ds-surface-muted)] last:border-b-0">
+                            <tr key={item.key} className="border-b border-[color:var(--ds-border-subtle)] odd:bg-[color:var(--ds-surface-card)] even:bg-[color:var(--ds-surface-muted)] last:border-b-0">
 
                               <td className="px-3 py-2">{item.displayDate || (item.date ? item.date.slice(0, 7) : '—')}</td>
 
-                              <td className="px-3 py-2">{item.adjustment?.label || item.loai_hinh}</td>
+                              <td className="px-3 py-2">{item.label || '—'}</td>
 
-                              <td className="px-3 py-2">{item.nhan_vien || 'Chưa gán'}</td>
+                              <td className="px-3 py-2">{item.staffName || 'Chưa gán'}</td>
 
-                              <td className="px-3 py-2">{item.team || 'Chưa gán tổ đội'}</td>
+                              <td className="px-3 py-2">{item.teamName || 'Chưa gán tổ đội'}</td>
 
                               <td className="px-3 py-2 text-right">
 
-                                {quantity !== null ? formatDecimal(quantity) : '—'}
+                                {item.quantity !== null ? formatDecimal(item.quantity) : '—'}
 
-                                {unitPoints !== null ? (
+                                {item.unitPoints !== null ? (
 
-                                  <span className="ml-1 text-xs text-[color:var(--ds-text-muted)]">× {formatDecimal(unitPoints)}</span>
+                                  <span className="ml-1 text-xs text-[color:var(--ds-text-muted)]">× {formatDecimal(item.unitPoints)}</span>
 
                                 ) : null}
 
@@ -7162,9 +7150,9 @@ const handleDetailPageSizeCustomInputChange = (event) => {
 
                               </td>
 
-                              <td className="px-3 py-2">{references || '—'}</td>
+                              <td className="px-3 py-2">{item.referencesText || '—'}</td>
 
-                              <td className="px-3 py-2">{note || '—'}</td>
+                              <td className="px-3 py-2">{item.note || '—'}</td>
 
                             </tr>
 

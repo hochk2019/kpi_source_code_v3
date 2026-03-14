@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { seedSampleDeclarations } from '@/shared/sampleDeclarations.js';
+import { seedSampleDeclarations } from '../packages/domain/src/sampleDeclarations.js';
 
 import { mapRow } from '@/lib/importer.js';
 
@@ -363,6 +363,10 @@ describe('Tích hợp dữ liệu Đại lý HQ & import', () => {
         team: 'Team 1',
 
         effective_from: '2024-01-01',
+
+        effective_to: '',
+
+        status: 'Đã gán nhân viên',
 
       },
 

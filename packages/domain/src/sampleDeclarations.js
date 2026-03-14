@@ -1,6 +1,6 @@
-import { saveDeclRows, sortDeclRows } from "../lib/store.js";
+import { saveDeclRows, sortDeclRows } from "../../../src/lib/store.js";
 
-import { computeKPI, loadRules } from "../lib/rules.js";
+import { computeKPI, loadRules } from "../../../src/lib/rules.js";
 
 
 

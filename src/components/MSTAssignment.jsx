@@ -34,6 +34,12 @@ import useMSTQuickFilters from "@/hooks/useMSTQuickFilters.js";
 
 import { Button } from "@/components/ui/button.jsx";
 import {
+  SearchField,
+  SectionHeader,
+  SectionSurface,
+  SectionToolbar,
+} from "@/components/designSystem/shellPrimitives.jsx";
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -233,6 +239,10 @@ function StaffCombobox({
 
   placeholder = "Chọn nhân viên",
 
+  ariaLabel,
+
+  searchAriaLabel,
+
 }) {
 
   const [open, setOpen] = useState(false);
@@ -371,6 +381,8 @@ function StaffCombobox({
 
           aria-expanded={open}
 
+          aria-label={ariaLabel}
+
           disabled={disabled}
 
           className="w-full justify-between px-2 py-1 text-left font-normal"
@@ -396,6 +408,8 @@ function StaffCombobox({
             value={search}
 
             onValueChange={setSearch}
+
+            aria-label={searchAriaLabel}
 
             autoFocus
 
@@ -4235,542 +4249,330 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
 
       )}
 
-      <div className="flex flex-wrap items-end gap-2 mb-3">
-
-        {canEdit && (
-
-          <>
-
-            <input
-
-              ref={fileRef}
-
-              type="file"
-
-              accept=".xlsx,.xls"
-
-              className="hidden"
-
-              disabled={isReadOnly}
-
-              onChange={(e) => {
-
-                const name = e.target.files?.[0]?.name || "";
-
-                setSelectedFileName(name);
-
-              }}
-
-            />
-
-            <button
-
-              type="button"
-
-              onClick={() => fileRef.current?.click()}
-
-              className="px-3 py-1 rounded border bg-white hover:bg-gray-50"
-
-              data-tooltip="Chọn file Excel chứa dữ liệu gán MST"
-
-            >
-
-              Chọn file XLSX
-
-            </button>
-
-            <button
-
-              onClick={onImportXLSX}
-
-              className="px-3 py-1 rounded bg-black text-white"
-
-              type="button"
-
-              data-tooltip="Đọc file Excel và đổ vào danh sách tạm"
-
-            >
-
-              Import XLSX
-
-            </button>
-
-            <button
-
-              type="button"
-
-              onClick={toggleAddForm}
-
-              className="px-3 py-1 rounded border bg-white hover:bg-gray-50"
-
-              data-tooltip="Thêm thủ công một dòng gán MST"
-
-            >
-
-              {showAddForm ? "Đóng thêm mới" : "Thêm mới"}
-
-            </button>
-
-            {selectedFileName && (
-
-              <span className="text-sm text-gray-600">Đã chọn: {selectedFileName}</span>
-
-            )}
-
-          </>
-
-        )}
-
-
-
-        {canEdit && (
-
-          <input
-
-            type="date"
-
-            value={applyFrom}
-
-            onChange={(e) => setApplyFrom(e.target.value)}
-
-            className="border rounded px-2 py-1"
-
-            placeholder="Áp dụng từ ngày"
-
-            data-tooltip="Áp dụng từ ngày (ghi vào trường trống khi import)"
-
-          />
-
-        )}
-
-
-
-        <span className="text-xs text-gray-500 whitespace-nowrap">
-
-          * Khi lưu, quy tắc mới chỉ áp dụng cho tờ khai có ngày khai báo từ ngày này trở đi.
-
-        </span>
-
-
-
-        <div className="flex-1" />
-
-
-
-        <div className="flex flex-wrap items-center gap-2">
-          <label className="inline-flex items-center gap-2 text-sm text-gray-700">
-            <input
-              type="checkbox"
-              checked={groupByMST}
-              onChange={(e) => {
-                setGroupByMST(e.target.checked);
-                try { setPage(1); } catch {}
-              }}
-            />
-            Gom theo MST
-          </label>
-
-          <input
-
-            type="text"
-
-            value={search}
-
-            onChange={(e) => {
-
-              setSearch(e.target.value);
-
-              setPageRef.current(1);
-
-            }}
-
-            placeholder="Tìm nhanh (MST / Công ty)"
-
-            className="border rounded px-2 py-1 w-64"
-
-            data-tooltip="Tìm nhanh theo mã số thuế hoặc tên công ty"
-
-          />
-
-          <button
-
-            type="button"
-
-            onClick={() => exportRowsToExcel("filtered")}
-
-            className="px-3 py-1 rounded border bg-white hover:bg-gray-50"
-
-            data-tooltip="Xuất ra Excel các dòng đang hiển thị theo bộ lọc hiện tại"
-
-          >
-
-            Export (lọc)
-
-          </button>
-
-          <button
-
-            type="button"
-
-            onClick={() => exportRowsToExcel("all")}
-
-            className="px-3 py-1 rounded border bg-white hover:bg-gray-50"
-
-            data-tooltip="Xuất ra Excel toàn bộ danh sách đang quản lý"
-
-          >
-
-            Export (tất cả)
-
-          </button>
-
-          {canEdit && (
-
-            <button
-
-              onClick={onSave}
-
-              className="px-3 py-1 rounded bg-emerald-600 text-white"
-
-              data-tooltip="Lưu danh sách đang hiển thị vào hệ thống"
-
-            >
-
-              Lưu
-
-            </button>
-
+      <SectionSurface className="mb-4">
+        <SectionHeader
+          title="Danh sách gán MST"
+          description="Quản lý mapping MST, tìm nhanh theo công ty, rồi xuất hoặc lưu working set hiện tại."
+          meta={
+            <>
+              <span className="ds-pill">{filtered.length} dòng đang hiển thị</span>
+              {selectedFileName ? <span className="ds-pill">Đã chọn: {selectedFileName}</span> : null}
+            </>
+          }
+        />
+        <SectionToolbar
+          className="items-start"
+          mainClassName="items-end"
+          actionsClassName="items-end"
+          actions={
+            <>
+              <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+                <input
+                  type="checkbox"
+                  checked={groupByMST}
+                  onChange={(e) => {
+                    setGroupByMST(e.target.checked);
+                    setPage(1);
+                  }}
+                />
+                Gom theo MST
+              </label>
+              <SearchField
+                label="Tìm nhanh MST hoặc công ty"
+                hideLabel
+                value={search}
+                onChange={(e) => {
+                  setSearch(e.target.value);
+                  setPageRef.current(1);
+                }}
+                onClear={() => {
+                  setSearch("");
+                  setPageRef.current(1);
+                }}
+                placeholder="Tìm nhanh (MST / Công ty)"
+                className="w-full sm:w-72"
+                data-tooltip="Tìm nhanh theo mã số thuế hoặc tên công ty"
+              />
+              <button
+                type="button"
+                onClick={() => exportRowsToExcel("filtered")}
+                className="px-3 py-1 rounded border bg-white hover:bg-gray-50"
+                data-tooltip="Xuất ra Excel các dòng đang hiển thị theo bộ lọc hiện tại"
+              >
+                Export (lọc)
+              </button>
+              <button
+                type="button"
+                onClick={() => exportRowsToExcel("all")}
+                className="px-3 py-1 rounded border bg-white hover:bg-gray-50"
+                data-tooltip="Xuất ra Excel toàn bộ danh sách đang quản lý"
+              >
+                Export (tất cả)
+              </button>
+              {canEdit ? (
+                <button
+                  onClick={onSave}
+                  className="px-3 py-1 rounded bg-emerald-600 text-white"
+                  data-tooltip="Lưu danh sách đang hiển thị vào hệ thống"
+                >
+                  Lưu
+                </button>
+              ) : null}
+            </>
+          }
+        >
+          {canEdit ? (
+            <>
+              <input
+                ref={fileRef}
+                type="file"
+                accept=".xlsx,.xls"
+                className="hidden"
+                disabled={isReadOnly}
+                onChange={(e) => {
+                  const name = e.target.files?.[0]?.name || "";
+                  setSelectedFileName(name);
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => fileRef.current?.click()}
+                className="px-3 py-1 rounded border bg-white hover:bg-gray-50"
+                data-tooltip="Chọn file Excel chứa dữ liệu gán MST"
+              >
+                Chọn file XLSX
+              </button>
+              <button
+                onClick={onImportXLSX}
+                className="px-3 py-1 rounded bg-black text-white"
+                type="button"
+                data-tooltip="Đọc file Excel và đổ vào danh sách tạm"
+              >
+                Import XLSX
+              </button>
+              <button
+                type="button"
+                onClick={toggleAddForm}
+                className="px-3 py-1 rounded border bg-white hover:bg-gray-50"
+                data-tooltip="Thêm thủ công một dòng gán MST"
+              >
+                {showAddForm ? "Đóng thêm mới" : "Thêm mới"}
+              </button>
+              <label className="flex flex-col gap-1 text-sm text-gray-700">
+                <span className="font-medium">Áp dụng từ ngày</span>
+                <input
+                  type="date"
+                  value={applyFrom}
+                  onChange={(e) => setApplyFrom(e.target.value)}
+                  className="border rounded px-2 py-1"
+                  placeholder="Áp dụng từ ngày"
+                  data-tooltip="Áp dụng từ ngày (ghi vào trường trống khi import)"
+                />
+              </label>
+            </>
+          ) : (
+            <p className="text-sm text-gray-600">Xem nhanh danh sách MST, tìm kiếm, gom theo MST và xuất dữ liệu hiện tại.</p>
           )}
+        </SectionToolbar>
+        {canEdit ? (
+          <p className="text-xs text-gray-500">
+            * Khi lưu, quy tắc mới chỉ áp dụng cho tờ khai có ngày khai báo từ ngày này trở đi.
+          </p>
+        ) : null}
+      </SectionSurface>
 
-        </div>
-
-      </div>
-
-
-
-      <div className="mb-4 rounded border border-gray-200 bg-white p-4 shadow-sm">
-
-        <div className="flex flex-wrap items-center gap-3">
-
-          <span className="text-sm font-medium text-gray-700">Lọc theo nhân viên phụ trách</span>
-
-          <div className="w-64">
-
+      <SectionSurface className="mb-4">
+        <SectionHeader
+          title="Bộ lọc nhân viên phụ trách"
+          description="Cô lập working set theo nhân viên và lưu lại các bộ lọc thường dùng cho thao tác quản trị hằng ngày."
+          meta={
+            quickFavorites.staff.length ? (
+              <span className="ds-pill">{quickFavorites.staff.length} bộ lọc nhanh</span>
+            ) : null
+          }
+        />
+        <SectionToolbar
+          mainClassName="items-center"
+          actions={
+            <>
+              {staffFilter ? (
+                <button
+                  type="button"
+                  onClick={clearStaffFilter}
+                  className="px-2 py-1 rounded border bg-white hover:bg-gray-50"
+                >
+                  Xóa lọc
+                </button>
+              ) : null}
+              <button
+                type="button"
+                onClick={handleSaveStaffFavorite}
+                className="px-2 py-1 rounded bg-slate-800 text-white hover:bg-slate-900"
+                disabled={!staffFilter.trim()}
+              >
+                Lưu bộ lọc nhân viên
+              </button>
+            </>
+          }
+        >
+          <div className="w-full sm:w-72">
             <StaffCombobox
-
               value={staffFilter}
-
               teamValue=""
-
               onSelect={handleStaffFilterSelect}
-
               teams={rosterTeams}
-
               placeholder="Chọn nhân viên"
-
+              ariaLabel="Lọc theo nhân viên phụ trách"
+              searchAriaLabel="Tìm nhân viên phụ trách"
             />
-
           </div>
-
-          {staffFilter ? (
-
-            <button
-
-              type="button"
-
-              onClick={clearStaffFilter}
-
-              className="px-2 py-1 rounded border bg-white hover:bg-gray-50"
-
-            >
-
-              Xóa lọc
-
-            </button>
-
-          ) : null}
-
-          <button
-
-            type="button"
-
-            onClick={handleSaveStaffFavorite}
-
-            className="px-2 py-1 rounded bg-slate-800 text-white hover:bg-slate-900"
-
-            disabled={!staffFilter.trim()}
-
-          >
-
-            Lưu bộ lọc nhân viên
-
-          </button>
-
-        </div>
-
+        </SectionToolbar>
         {quickFavorites.staff.length ? (
-
-          <div className="mt-3">
-
+          <div className="mt-1">
             <div className="text-xs font-semibold uppercase text-gray-500 mb-1">
-
               Bộ lọc nhanh
-
             </div>
-
             <div className="flex flex-wrap gap-2">
-
               {quickFavorites.staff.map((fav) => (
-
                 <div
-
                   key={`staff-${fav.normalized}`}
-
                   className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1 text-sm text-slate-700"
-
                 >
-
                   <button
-
                     type="button"
-
                     onClick={() => applyStaffFavorite(fav.value)}
-
                     className="font-medium hover:text-slate-900"
-
                   >
-
                     {fav.value}
-
                   </button>
-
                   <button
-
                     type="button"
-
                     onClick={() => removeQuickFavorite("staff", fav.value)}
-
                     className="text-xs text-slate-500 hover:text-slate-700"
-
                     aria-label={`Xóa ${fav.value}`}
-
                   >
-
                     ×
-
                   </button>
-
                 </div>
-
               ))}
-
             </div>
-
           </div>
-
         ) : null}
-
-      </div>
-
-
-
-      <div className="mb-4 rounded border border-sky-200 bg-sky-50 p-4 text-sm text-gray-700">
-
-        <div className="flex flex-wrap items-end gap-3">
-
-          <label className="flex flex-col gap-1">
-
-            <span className="font-medium">Từ ngày</span>
-
-            <input
-
-              type="date"
-
-              value={historyFilter.from}
-
-              onChange={(e) => updateHistoryFilter({ from: e.target.value })}
-
-              className="border rounded px-2 py-1"
-
-              data-tooltip="Giới hạn lịch sử từ ngày này trở đi"
-
-            />
-
-          </label>
-
-          <label className="flex flex-col gap-1">
-
-            <span className="font-medium">Đến ngày</span>
-
-            <input
-
-              type="date"
-
-              value={historyFilter.to}
-
-              onChange={(e) => updateHistoryFilter({ to: e.target.value })}
-
-              className="border rounded px-2 py-1"
-
-              data-tooltip="Giới hạn lịch sử tới hết ngày này"
-
-            />
-
-          </label>
-
-          <label className="flex flex-col gap-1">
-
-            <span className="font-medium">Thao tác / Trạng thái</span>
-
-            <select
-
-              value={historyFilter.type}
-
-              onChange={(e) => updateHistoryFilter({ type: e.target.value })}
-
-              className="border rounded px-2 py-1"
-
-              data-tooltip="Lọc theo thao tác (thêm/sửa/xóa) hoặc trạng thái phân công nhân viên"
-
-            >
-
-              <option value="all">Tất cả</option>
-
-              <option value="create">Thêm mới</option>
-
-              <option value="update">Chỉnh sửa</option>
-
-              <option value="delete">Xóa</option>
-
-              <option value="status:assigned">Đã gán nhân viên</option>
-
-              <option value="status:pending">Chưa gán nhân viên</option>
-
-            </select>
-
-          </label>
-
-          <button
-
-            type="button"
-
-            onClick={resetHistoryFilter}
-
-            className="px-3 py-1 rounded border bg-white hover:bg-gray-50"
-
-            data-tooltip="Xóa bộ lọc lịch sử"
-
-          >
-
-            Xóa lọc
-
-          </button>
-
-          <button
-
-            type="button"
-
-            onClick={handleSaveActionFavorite}
-
-            className="px-3 py-1 rounded border bg-white hover:bg-gray-50"
-
-            data-tooltip="Lưu nhanh bộ lọc thao tác hoặc trạng thái hiện tại"
-
-          >
-
-            Lưu thao tác/Trạng thái
-
-          </button>
-
-          <div className="flex-1" />
-
-          <div className="text-right text-xs text-gray-600">
-
-            <div>
-
-              Hiển thị {filteredHistoryCount} / {totalHistoryCount} bản ghi lịch sử.
-
-            </div>
-
-            <div>Áp dụng cho phần lịch sử của từng dòng bên dưới.</div>
-
-            {isHistoryFilterActive ? (
-
-              <div className="text-amber-600">
-
-                * Danh sách MST cũng đang lọc theo điều kiện lịch sử này.
-
+      </SectionSurface>
+
+      <SectionSurface className="mb-4 border-sky-200 bg-sky-50">
+        <SectionHeader
+          title="Bộ lọc lịch sử thay đổi"
+          description="Thu hẹp timeline theo khoảng ngày, loại thao tác hoặc trạng thái gán nhân viên trước khi rà soát chi tiết từng MST."
+          meta={
+            <div className="text-right text-xs text-sky-900">
+              <div>
+                Hiển thị {filteredHistoryCount} / {totalHistoryCount} bản ghi lịch sử.
               </div>
-
-            ) : null}
-
-          </div>
-
-        </div>
-
-        {quickFavorites.action.length ? (
-
-          <div className="mt-3">
-
-            <div className="text-xs font-semibold uppercase text-gray-500 mb-1">
-
-              Bộ lọc thao tác/trạng thái đã lưu
-
-            </div>
-
-            <div className="flex flex-wrap gap-2">
-
-              {quickFavorites.action.map((fav) => (
-
-                <div
-
-                  key={`action-${fav.normalized}`}
-
-                  className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-3 py-1 text-sm text-amber-700"
-
-                >
-
-                  <button
-
-                    type="button"
-
-                    onClick={() => applyActionFavorite(fav.value)}
-
-                    className="font-medium hover:text-amber-900"
-
-                  >
-
-                    {fav.value}
-
-                  </button>
-
-                  <button
-
-                    type="button"
-
-                    onClick={() => removeQuickFavorite("action", fav.value)}
-
-                    className="text-xs text-amber-600 hover:text-amber-800"
-
-                    aria-label={`Xóa ${fav.value}`}
-
-                  >
-
-                    ×
-
-                  </button>
-
+              <div>Áp dụng cho phần lịch sử của từng dòng bên dưới.</div>
+              {isHistoryFilterActive ? (
+                <div className="text-amber-700">
+                  * Danh sách MST cũng đang lọc theo điều kiện lịch sử này.
                 </div>
-
-              ))}
-
+              ) : null}
             </div>
-
+          }
+        />
+        <SectionToolbar
+          className="text-sm text-gray-700"
+          mainClassName="items-end"
+          actions={
+            <>
+              <button
+                type="button"
+                onClick={resetHistoryFilter}
+                className="px-3 py-1 rounded border bg-white hover:bg-gray-50"
+                data-tooltip="Xóa bộ lọc lịch sử"
+              >
+                Xóa lọc
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveActionFavorite}
+                className="px-3 py-1 rounded border bg-white hover:bg-gray-50"
+                data-tooltip="Lưu nhanh bộ lọc thao tác hoặc trạng thái hiện tại"
+              >
+                Lưu thao tác/Trạng thái
+              </button>
+            </>
+          }
+        >
+          <>
+            <label className="flex flex-col gap-1">
+              <span className="font-medium">Từ ngày</span>
+              <input
+                type="date"
+                value={historyFilter.from}
+                onChange={(e) => updateHistoryFilter({ from: e.target.value })}
+                className="border rounded px-2 py-1"
+                data-tooltip="Giới hạn lịch sử từ ngày này trở đi"
+              />
+            </label>
+            <label className="flex flex-col gap-1">
+              <span className="font-medium">Đến ngày</span>
+              <input
+                type="date"
+                value={historyFilter.to}
+                onChange={(e) => updateHistoryFilter({ to: e.target.value })}
+                className="border rounded px-2 py-1"
+                data-tooltip="Giới hạn lịch sử tới hết ngày này"
+              />
+            </label>
+            <label className="flex flex-col gap-1">
+              <span className="font-medium">Thao tác / Trạng thái</span>
+              <select
+                value={historyFilter.type}
+                onChange={(e) => updateHistoryFilter({ type: e.target.value })}
+                className="border rounded px-2 py-1"
+                data-tooltip="Lọc theo thao tác (thêm/sửa/xóa) hoặc trạng thái phân công nhân viên"
+              >
+                <option value="all">Tất cả</option>
+                <option value="create">Thêm mới</option>
+                <option value="update">Chỉnh sửa</option>
+                <option value="delete">Xóa</option>
+                <option value="status:assigned">Đã gán nhân viên</option>
+                <option value="status:pending">Chưa gán nhân viên</option>
+              </select>
+            </label>
+          </>
+        </SectionToolbar>
+        {quickFavorites.action.length ? (
+          <div className="mt-1">
+            <div className="text-xs font-semibold uppercase text-gray-500 mb-1">
+              Bộ lọc thao tác/trạng thái đã lưu
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {quickFavorites.action.map((fav) => (
+                <div
+                  key={`action-${fav.normalized}`}
+                  className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-3 py-1 text-sm text-amber-700"
+                >
+                  <button
+                    type="button"
+                    onClick={() => applyActionFavorite(fav.value)}
+                    className="font-medium hover:text-amber-900"
+                  >
+                    {fav.value}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => removeQuickFavorite("action", fav.value)}
+                    className="text-xs text-amber-600 hover:text-amber-800"
+                    aria-label={`Xóa ${fav.value}`}
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+            </div>
           </div>
-
         ) : null}
-
-      </div>
+      </SectionSurface>
 
 
 
@@ -5162,7 +4964,10 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
 
       <div className="border rounded overflow-x-auto">
 
-        <table className="min-w-max table-auto text-sm">
+        <table className="min-w-max table-auto text-sm" aria-label="Danh sách gán MST">
+          <caption className="sr-only">
+            Danh sách gán MST sau khi áp dụng bộ lọc nhanh, bộ lọc nhân viên và bộ lọc lịch sử.
+          </caption>
 
           <thead className="bg-gray-50">
 
@@ -5865,7 +5670,7 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
 
                         <div className="flex flex-col gap-3">
 
-                          {canEdit && !Boolean(r.__group) ? (
+                          {canEdit && !r.__group ? (
 
                             <div className="flex flex-col gap-2">
 

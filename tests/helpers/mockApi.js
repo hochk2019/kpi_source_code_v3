@@ -316,9 +316,7 @@ export function installMockApi(overrides = {}) {
 
       state.currentUser = account ?? null;
 
-      state.sessionToken = `mock-token-${username}-${Date.now()}`;
-
-      return jsonResponse({ ok: true, account, token: state.sessionToken });
+      return jsonResponse({ ok: true, account });
 
     }
 

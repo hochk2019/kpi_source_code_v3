@@ -1,20 +1,12 @@
 import React, { Suspense, useEffect, useMemo, useState } from 'react';
 
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs.jsx';
-
-
+import { TabsContent } from '@/components/ui/tabs.jsx';
 
 import DataImporter from './DataImporter.jsx';
 
 const RulesEditor = React.lazy(() => import('./RulesEditor.jsx'));
 
-const MSTAssignment = React.lazy(() => import('./MSTAssignment.jsx'));
-
 const TeamManager = React.lazy(() => import('./TeamManager.jsx'));
-
-const ReportViewer = React.lazy(() => import('./ReportViewer.jsx'));
-
-const KPIAdjustments = React.lazy(() => import('./KPIAdjustments.jsx'));
 
 const AccountManager = React.lazy(() => import('./AccountManager.jsx'));
 
@@ -28,7 +20,23 @@ const DataHealthDashboard = React.lazy(() => import('./DataHealthDashboard.jsx')
 
 const ExportAuditReport = React.lazy(() => import('./ExportAuditReport.jsx'));
 
-
+import {
+  getVisibleAppNavigationSections,
+  getVisibleAppTabIds,
+  getVisibleAppTabs,
+  resolveVisibleAppTab,
+} from '@/lib/appShellNavigation.js';
+import {
+  buildAppShellWorkflowState,
+  getAppTabRootId,
+  resolveAppShellFocusTarget,
+} from '@/components/appShell/appShellWorkflowState.js';
+import AppShellFrame from '@/components/appShell/AppShellFrame.jsx';
+import { emitCommand } from '@/lib/commandBus.js';
+import MSTWorkflowPanel from '@/components/workflows/MSTWorkflowPanel.jsx';
+import KPIAdjustmentsWorkflowPanel from '@/components/workflows/KPIAdjustmentsWorkflowPanel.jsx';
+import ReportCenterPanel from '@/components/workflows/ReportCenterPanel.jsx';
+import { SectionHeader, SectionSurface } from '@/components/designSystem/shellPrimitives.jsx';
 
 const TabPanel = ({ children }) => (
 
@@ -41,14 +49,17 @@ const TabPanel = ({ children }) => (
 );
 
 
+const KPICalculator = ({
+  auth,
+  activeTab = 'reports',
+  onTabChange,
+  navigationIntent = null,
+}) => {
 
-const TAB_TRIGGER_CLASS = 'ds-tab-trigger';
-
-
-
-const KPICalculator = ({ auth, activeTab = 'reports', onTabChange }) => {
-
-  const effectiveAuth = auth || { username: 'guest', role: 'viewer', permissions: {} };
+  const effectiveAuth = useMemo(
+    () => auth || { username: 'guest', role: 'viewer', permissions: {} },
+    [auth],
+  );
 
   const permissions = effectiveAuth.permissions || {};
 
@@ -78,55 +89,24 @@ const KPICalculator = ({ auth, activeTab = 'reports', onTabChange }) => {
 
   const canViewDataHealth = !!permissions.dataHealthView || canManageDataHealth;
 
+  const visibleTabs = useMemo(() => getVisibleAppTabs(effectiveAuth), [effectiveAuth]);
 
+  const navigationSections = useMemo(() => getVisibleAppNavigationSections(effectiveAuth), [effectiveAuth]);
 
-  const allowedTabs = useMemo(() => {
+  const allowedTabs = useMemo(() => getVisibleAppTabIds(effectiveAuth), [effectiveAuth]);
 
-    const base = new Set(['mst', 'hq', 'import', 'teams', 'rules', 'adjustments', 'reports']);
-
-    if (canViewDataHealth) {
-
-      base.add('health');
-
-    }
-
-    if (canUseAi) {
-
-      base.add('ai');
-
-    }
-
-    if (canManageAccounts) {
-
-      base.add('accounts');
-
-    }
-
-    if (canViewAudit) {
-
-      base.add('audit');
-
-      base.add('export-audit');
-
-    }
-
-    return base;
-
-  }, [canManageAccounts, canUseAi, canViewAudit, canViewDataHealth]);
-
-
-
-  const initialTab = useMemo(() => (allowedTabs.has(activeTab) ? activeTab : 'reports'), [activeTab, allowedTabs]);
+  const initialTab = useMemo(() => resolveVisibleAppTab(activeTab, effectiveAuth), [activeTab, effectiveAuth]);
 
   const [tabValue, setTabValue] = useState(initialTab);
+  const [pendingFocusTarget, setPendingFocusTarget] = useState(null);
 
 
 
   useEffect(() => {
 
-    setTabValue(allowedTabs.has(activeTab) ? activeTab : 'reports');
+    setTabValue(resolveVisibleAppTab(activeTab, effectiveAuth));
 
-  }, [activeTab, allowedTabs]);
+  }, [activeTab, effectiveAuth]);
 
 
 
@@ -134,7 +114,7 @@ const KPICalculator = ({ auth, activeTab = 'reports', onTabChange }) => {
 
     if (!allowedTabs.has(tabValue)) {
 
-      const fallback = allowedTabs.has('reports') ? 'reports' : Array.from(allowedTabs)[0] || 'reports';
+      const fallback = resolveVisibleAppTab(tabValue, effectiveAuth);
 
       setTabValue(fallback);
 
@@ -146,7 +126,7 @@ const KPICalculator = ({ auth, activeTab = 'reports', onTabChange }) => {
 
     }
 
-  }, [allowedTabs, tabValue, onTabChange]);
+  }, [allowedTabs, effectiveAuth, tabValue, onTabChange]);
 
 
 
@@ -155,8 +135,6 @@ const KPICalculator = ({ auth, activeTab = 'reports', onTabChange }) => {
     import('./ReportViewer.jsx');
 
   }, []);
-
-
 
   const handleTabChange = (value) => {
 
@@ -172,205 +150,94 @@ const KPICalculator = ({ auth, activeTab = 'reports', onTabChange }) => {
 
   };
 
+  useEffect(() => {
+    const nextTarget = resolveAppShellFocusTarget(navigationIntent?.tab, navigationIntent?.focus);
+    if (nextTarget) {
+      setPendingFocusTarget(nextTarget);
+    }
+  }, [navigationIntent]);
+
+  useEffect(() => {
+    if (!pendingFocusTarget || typeof window === 'undefined') {
+      return undefined;
+    }
+
+    let attempts = 0;
+    let timeoutId = null;
+
+    const scrollToTarget = () => {
+      const target = document.getElementById(pendingFocusTarget);
+      if (target) {
+        if (typeof target.scrollIntoView === 'function') {
+          target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+        if (typeof target.focus === 'function') {
+          target.focus({ preventScroll: true });
+        }
+        setPendingFocusTarget(null);
+        return;
+      }
+
+      attempts += 1;
+      if (attempts < 8) {
+        timeoutId = window.setTimeout(scrollToTarget, 90);
+      }
+    };
+
+    timeoutId = window.setTimeout(scrollToTarget, 60);
+
+    return () => {
+      if (timeoutId) {
+        window.clearTimeout(timeoutId);
+      }
+    };
+  }, [pendingFocusTarget, tabValue]);
+
+  const requestTabNavigation = (tabId, focus = null) => {
+    const targetId = resolveAppShellFocusTarget(tabId, focus);
+    if (targetId) {
+      setPendingFocusTarget(targetId);
+    }
+    handleTabChange(tabId);
+  };
+
+  const currentTab = useMemo(
+    () => visibleTabs.find((tab) => tab.id === tabValue) || visibleTabs[0] || null,
+    [tabValue, visibleTabs],
+  );
+
+  const currentSection = useMemo(
+    () =>
+      navigationSections.find((section) =>
+        section.tabs.some((tab) => tab.id === currentTab?.id),
+      ) ||
+      navigationSections[0] ||
+      null,
+    [currentTab, navigationSections],
+  );
+
+  const workflowGuide = buildAppShellWorkflowState({
+    currentTab,
+    canViewAudit,
+    onNavigate: requestTabNavigation,
+    onOpenCommandCenter: () => emitCommand('open:command-center'),
+  });
+
 
 
   return (
 
-    <div className="mx-auto max-w-6xl space-y-6">
-
-      <Tabs value={tabValue} onValueChange={handleTabChange} className="space-y-6">
-
-        <TabsList className="ds-tab-list">
-
-          <TabsTrigger
-
-            value="mst"
-
-            data-tooltip="Quản lý gán MST cho doanh nghiệp và người phụ trách"
-
-            className={TAB_TRIGGER_CLASS}
-
-          >
-
-            Gán MST
-
-          </TabsTrigger>
-
-          <TabsTrigger
-
-            value="hq"
-
-            data-tooltip="Quản lý danh sách đại lý hải quan hợp tác"
-
-            className={TAB_TRIGGER_CLASS}
-
-          >
-
-            Đại Lý HQ
-
-          </TabsTrigger>
-
-          <TabsTrigger
-
-            value="import"
-
-            data-tooltip="Nhập và đồng bộ dữ liệu tờ khai từ ECUS"
-
-            className={TAB_TRIGGER_CLASS}
-
-          >
-
-            Import Data
-
-          </TabsTrigger>
-
-          <TabsTrigger
-
-            value="teams"
-
-            data-tooltip="Thiết lập tổ đội và phân bổ chỉ tiêu"
-
-            className={TAB_TRIGGER_CLASS}
-
-          >
-
-            Quản lý Tổ đội
-
-          </TabsTrigger>
-
-          <TabsTrigger
-
-            value="rules"
-
-            data-tooltip="Cấu hình quy tắc tính điểm KPI"
-
-            className={TAB_TRIGGER_CLASS}
-
-          >
-
-            Quy tắc KPI
-
-          </TabsTrigger>
-
-          <TabsTrigger
-
-            value="adjustments"
-
-            data-tooltip="Cộng/trừ điểm KPI bổ sung theo tháng"
-
-            className={TAB_TRIGGER_CLASS}
-
-          >
-
-            Điểm KPI +/- Thêm
-
-          </TabsTrigger>
-
-          <TabsTrigger
-
-            value="reports"
-
-            data-tooltip="Xem và xuất báo cáo KPI tổng hợp"
-
-            className={TAB_TRIGGER_CLASS}
-
-          >
-
-            Báo cáo KPI
-
-          </TabsTrigger>
-
-          {canViewDataHealth && (
-
-            <TabsTrigger
-
-              value="health"
-
-              data-tooltip="Theo dõi dữ liệu trùng, cảnh báo và trạng thái đồng bộ"
-
-              className={TAB_TRIGGER_CLASS}
-
-            >
-
-              Sức khỏe dữ liệu
-
-            </TabsTrigger>
-
-          )}
-
-          {canUseAi && (
-
-            <TabsTrigger
-
-              value="ai"
-
-              data-tooltip="Trợ lý AI nội bộ hỗ trợ KPI và tờ khai"
-
-              className={TAB_TRIGGER_CLASS}
-
-            >
-
-              Trợ lý AI
-
-            </TabsTrigger>
-
-          )}
-
-          {canManageAccounts && (
-
-            <TabsTrigger
-
-              value="accounts"
-
-              data-tooltip="Quản trị tài khoản đăng nhập hệ thống"
-
-              className={TAB_TRIGGER_CLASS}
-
-            >
-
-              Tài khoản
-
-            </TabsTrigger>
-
-          )}
-
-          {canViewAudit && (
-
-            <>
-
-              <TabsTrigger
-
-                value="audit"
-
-                data-tooltip="Xem nhật ký thao tác hệ thống"
-
-                className={TAB_TRIGGER_CLASS}
-
-              >
-
-                Nhật ký
-
-              </TabsTrigger>
-
-              <TabsTrigger
-
-                value="export-audit"
-
-                data-tooltip="Tra cứu lịch sử tải báo cáo Excel"
-
-                className={TAB_TRIGGER_CLASS}
-
-              >
-
-                Lịch sử export
-
-              </TabsTrigger>
-
-            </>
-
-          )}
-
-        </TabsList>
+    <div className="mx-auto max-w-7xl">
+      <AppShellFrame
+        sections={navigationSections}
+        value={tabValue}
+        onValueChange={handleTabChange}
+        currentTab={currentTab}
+        currentSection={currentSection}
+        currentUser={effectiveAuth}
+        workflowGuide={workflowGuide}
+        onOpenCommandCenter={() => emitCommand('open:command-center')}
+      >
 
 
 
@@ -378,7 +245,11 @@ const KPICalculator = ({ auth, activeTab = 'reports', onTabChange }) => {
 
           <TabPanel>
 
-            <MSTAssignment canEdit={canMstEdit} currentUser={effectiveAuth} />
+            <MSTWorkflowPanel
+              canEdit={canMstEdit}
+              currentUser={effectiveAuth}
+              onNavigate={requestTabNavigation}
+            />
 
           </TabPanel>
 
@@ -390,7 +261,9 @@ const KPICalculator = ({ auth, activeTab = 'reports', onTabChange }) => {
 
           <TabPanel>
 
-            <HQAgencyManager canEdit={canMstEdit} currentUser={effectiveAuth} />
+            <div id={getAppTabRootId('hq')} tabIndex={-1}>
+              <HQAgencyManager canEdit={canMstEdit} currentUser={effectiveAuth} />
+            </div>
 
           </TabPanel>
 
@@ -402,19 +275,15 @@ const KPICalculator = ({ auth, activeTab = 'reports', onTabChange }) => {
 
           <TabPanel>
 
-            <DataImporter
-
-              canEdit={canImportEdit}
-
-              canImportUpload={canImportUpload}
-
-              currentUser={effectiveAuth}
-
-              canManageSync={canManageSync}
-
-              canManageAlerts={canManageAlerts}
-
-            />
+            <div id={getAppTabRootId('import')} tabIndex={-1}>
+              <DataImporter
+                canEdit={canImportEdit}
+                canImportUpload={canImportUpload}
+                currentUser={effectiveAuth}
+                canManageSync={canManageSync}
+                canManageAlerts={canManageAlerts}
+              />
+            </div>
 
           </TabPanel>
 
@@ -426,7 +295,9 @@ const KPICalculator = ({ auth, activeTab = 'reports', onTabChange }) => {
 
           <TabPanel>
 
-            <TeamManager canEdit={canTeamsEdit} currentUser={effectiveAuth} />
+            <div id={getAppTabRootId('teams')} tabIndex={-1}>
+              <TeamManager canEdit={canTeamsEdit} currentUser={effectiveAuth} />
+            </div>
 
           </TabPanel>
 
@@ -438,7 +309,9 @@ const KPICalculator = ({ auth, activeTab = 'reports', onTabChange }) => {
 
           <TabPanel>
 
-            <RulesEditor canEdit={canRulesEdit} currentUser={effectiveAuth} />
+            <div id={getAppTabRootId('rules')} tabIndex={-1}>
+              <RulesEditor canEdit={canRulesEdit} currentUser={effectiveAuth} />
+            </div>
 
           </TabPanel>
 
@@ -450,7 +323,10 @@ const KPICalculator = ({ auth, activeTab = 'reports', onTabChange }) => {
 
           <TabPanel>
 
-            <KPIAdjustments currentUser={effectiveAuth} />
+            <KPIAdjustmentsWorkflowPanel
+              currentUser={effectiveAuth}
+              onNavigate={requestTabNavigation}
+            />
 
           </TabPanel>
 
@@ -462,7 +338,12 @@ const KPICalculator = ({ auth, activeTab = 'reports', onTabChange }) => {
 
           <TabPanel>
 
-            <ReportViewer canExport={canExportReports} currentUser={effectiveAuth} />
+            <ReportCenterPanel
+              canExport={canExportReports}
+              canViewAudit={canViewAudit}
+              currentUser={effectiveAuth}
+              onNavigate={requestTabNavigation}
+            />
 
           </TabPanel>
 
@@ -476,7 +357,15 @@ const KPICalculator = ({ auth, activeTab = 'reports', onTabChange }) => {
 
           <TabPanel>
 
+              <div id={getAppTabRootId('health')} className="space-y-4" tabIndex={-1}>
+                <SectionSurface id="app-workflow-health-sync" tabIndex={-1}>
+                  <SectionHeader
+                    title="Health & sync triage"
+                    description="Kiểm tra đồng bộ, cảnh báo dữ liệu và backlog trước khi chuyển sang module xử lý tương ứng."
+                  />
               <DataHealthDashboard currentUser={effectiveAuth} canManage={canManageDataHealth} />
+                </SectionSurface>
+              </div>
 
           </TabPanel>
 
@@ -492,7 +381,9 @@ const KPICalculator = ({ auth, activeTab = 'reports', onTabChange }) => {
 
             <TabPanel>
 
-              <AiAssistant currentUser={effectiveAuth} />
+              <div id={getAppTabRootId('ai')} tabIndex={-1}>
+                <AiAssistant currentUser={effectiveAuth} />
+              </div>
 
             </TabPanel>
 
@@ -508,7 +399,9 @@ const KPICalculator = ({ auth, activeTab = 'reports', onTabChange }) => {
 
             <TabPanel>
 
-              <AccountManager currentUser={effectiveAuth} />
+              <div id={getAppTabRootId('accounts')} tabIndex={-1}>
+                <AccountManager currentUser={effectiveAuth} />
+              </div>
 
             </TabPanel>
 
@@ -524,7 +417,7 @@ const KPICalculator = ({ auth, activeTab = 'reports', onTabChange }) => {
 
             <TabPanel>
 
-              <div className="grid gap-6 xl:grid-cols-[5fr,3fr]">
+              <div id={getAppTabRootId('audit')} className="grid gap-6 xl:grid-cols-[5fr,3fr]" tabIndex={-1}>
 
                 <div className="space-y-6">
 
@@ -554,16 +447,16 @@ const KPICalculator = ({ auth, activeTab = 'reports', onTabChange }) => {
 
             <TabPanel>
 
-              <ExportAuditReport currentUser={effectiveAuth} />
+              <div id={getAppTabRootId('export-audit')} tabIndex={-1}>
+                <ExportAuditReport currentUser={effectiveAuth} />
+              </div>
 
             </TabPanel>
 
           </TabsContent>
 
         )}
-
-      </Tabs>
-
+      </AppShellFrame>
     </div>
 
   );

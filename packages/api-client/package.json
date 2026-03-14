@@ -1,0 +1,8 @@
+{
+  "name": "@kpi/api-client",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.js"
+  }
+}

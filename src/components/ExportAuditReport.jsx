@@ -6,9 +6,9 @@ import { fetchWithAuth } from '@/auth/localAuth.js';
 
 import { toast } from '@/shared/toast.js';
 
-import { formatDateTime } from '@/shared/format.js';
+import { formatDateTime } from '../../packages/domain/src/format.js';
 
-import { ROLE_LABELS, normalizeRoleKey } from '@/shared/accountRoles.js';
+import { ROLE_LABELS, normalizeRoleKey } from '../../packages/domain/src/accountRoles.js';
 
 
 

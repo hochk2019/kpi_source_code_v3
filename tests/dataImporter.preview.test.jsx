@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
-import { render, screen, within, waitFor, fireEvent } from '@testing-library/react';
+import { cleanup, render, screen, within, waitFor, fireEvent } from '@testing-library/react';
 
 import userEvent from '@testing-library/user-event';
 
@@ -10,7 +10,7 @@ import { setItem as sharedSetItem, clearStorageCache } from '@/lib/storageClient
 
 import * as store from '@/lib/store.js';
 
-import { filterDeclRows, normalizeDeclSearchFilters } from '@/shared/declSearch.js';
+import { filterDeclRows, normalizeDeclSearchFilters } from '../packages/domain/src/declSearch.js';
 
 import * as auth from '@/auth/localAuth.js';
 
@@ -564,6 +564,9 @@ describe('DataImporter preview UI', () => {
       fetchSpy = null;
     }
 
+    vi.restoreAllMocks();
+    cleanup();
+
   });
 
 
@@ -602,13 +605,21 @@ describe('DataImporter preview UI', () => {
 
 
 
-    expect(screen.getByText('CÔNG TY MỚI')).toBeInTheDocument();
+    expect(
+      await screen.findByText('2 dòng ECUS đang chờ rà soát trước khi đồng bộ.')
+    ).toBeInTheDocument();
 
-    expect(screen.getByText('CÔNG TY ABC')).toBeInTheDocument();
+    expect(screen.getAllByText('CÔNG TY MỚI').length).toBeGreaterThan(0);
 
-    expect(screen.getByText('Mới')).toBeInTheDocument();
+    expect(screen.getAllByText('CÔNG TY ABC').length).toBeGreaterThan(0);
 
-    expect(screen.getByText('Đã có')).toBeInTheDocument();
+    expect(screen.getByText('Kết quả kiểm tra trước khi đồng bộ')).toBeInTheDocument();
+    expect(
+      screen.getByRole('table', { name: 'Bảng các dòng thêm mới từ xem trước đồng bộ ECUS' })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText('Dữ liệu xem trước đã được chuyển sang bước 2 để rà soát trước khi đồng bộ.')
+    ).toBeInTheDocument();
 
 
 
@@ -990,7 +1001,7 @@ describe('DataImporter preview UI', () => {
 
 
 
-    const table = await waitFor(() => {
+    await waitFor(() => {
 
       const main = pickMainTable();
 
@@ -1011,6 +1022,40 @@ describe('DataImporter preview UI', () => {
     await userEvent.type(searchInput, 'Công ty 4 dòng');
 
     expect(searchInput).toHaveValue('Công ty 4 dòng');
+
+  });
+
+
+
+  it('gắn shell semantics rõ ràng cho vùng điều khiển và bảng import chính', async () => {
+
+    render(
+
+      <DataImporter
+
+        canEdit
+
+        currentUser={{ username: 'viewer', permissions: [] }}
+
+      />
+
+    );
+
+
+
+    const controls = (await screen.findAllByRole('region', { name: 'Điều khiển danh sách tờ khai' })).at(-1);
+
+    expect(controls).toBeTruthy();
+
+    const filterForm = within(controls).getByRole('form', { name: 'Bộ lọc tờ khai import' });
+
+    expect(
+
+      within(filterForm).getByRole('searchbox', { name: 'Tìm nhanh danh sách tờ khai' })
+
+    ).toBeInTheDocument();
+
+    expect(screen.getByRole('table', { name: 'Danh sách tờ khai import' })).toBeInTheDocument();
 
   });
 
@@ -1100,21 +1145,9 @@ describe('DataImporter preview UI', () => {
 
 
 
-    const helperTexts = await screen.findAllByText(
-
-      'Nhập từ khóa để tìm nhanh theo Số tờ khai, mã số thuế, tên doanh nghiệp, nhân viên hoặc tổ đội phụ trách.'
-
-    );
-
-    const helperText = helperTexts[helperTexts.length - 1];
-
-    const searchInput = helperText.previousElementSibling;
-
-    if (!(searchInput instanceof HTMLInputElement)) {
-
-      throw new Error('Không tìm thấy ô tìm nhanh chính');
-
-    }
+    const searchInput = await screen.findByRole('searchbox', {
+      name: 'Tìm nhanh danh sách tờ khai',
+    });
 
     await user.clear(searchInput);
 
@@ -1447,6 +1480,8 @@ describe('DataImporter saved data actions', () => {
     alertMock.mockRestore();
 
     vi.restoreAllMocks();
+
+    cleanup();
 
   });
 

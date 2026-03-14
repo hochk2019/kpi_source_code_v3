@@ -1,6 +1,6 @@
 import { describe, it, beforeEach, afterEach, expect, vi } from 'vitest';
 
-import { render, screen, waitFor, within, fireEvent } from '@testing-library/react';
+import { cleanup, render, screen, waitFor, within, fireEvent } from '@testing-library/react';
 
 import userEvent from '@testing-library/user-event';
 
@@ -20,7 +20,7 @@ import { clearStorageCache, setItem as sharedSetItem } from '@/lib/storageClient
 
 import { MST_KEY, MST_HISTORY_KEY, HQ_KEY, HQ_HISTORY_KEY, DECL_KEY, getMSTMap, getHQAgencies } from '@/lib/store.js';
 
-import { seedSampleDeclarations } from '@/shared/sampleDeclarations.js';
+import { seedSampleDeclarations } from '../packages/domain/src/sampleDeclarations.js';
 
 import { installMockApi } from './helpers/mockApi.js';
 
@@ -47,6 +47,56 @@ function ensureTestGlobals() {
       unobserve() {}
 
       disconnect() {}
+
+    });
+
+  }
+
+  if (typeof HTMLElement !== 'undefined' && !HTMLElement.prototype.scrollIntoView) {
+
+    Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {
+
+      configurable: true,
+
+      value() {},
+
+    });
+
+  }
+
+  if (typeof Element !== 'undefined' && !Element.prototype.hasPointerCapture) {
+
+    Object.defineProperty(Element.prototype, 'hasPointerCapture', {
+
+      configurable: true,
+
+      value() {
+        return false;
+      },
+
+    });
+
+  }
+
+  if (typeof Element !== 'undefined' && !Element.prototype.setPointerCapture) {
+
+    Object.defineProperty(Element.prototype, 'setPointerCapture', {
+
+      configurable: true,
+
+      value() {},
+
+    });
+
+  }
+
+  if (typeof Element !== 'undefined' && !Element.prototype.releasePointerCapture) {
+
+    Object.defineProperty(Element.prototype, 'releasePointerCapture', {
+
+      configurable: true,
+
+      value() {},
 
     });
 
@@ -83,6 +133,7 @@ describe('Luồng quản trị – Gán MST', () => {
   afterEach(() => {
 
     vi.unstubAllGlobals();
+    cleanup();
 
   });
 
@@ -97,22 +148,33 @@ describe('Luồng quản trị – Gán MST', () => {
 
 
     await user.click(screen.getByRole('button', { name: /thêm mới/i }));
+    const addFormSubmit = await screen.findByRole('button', { name: /thêm vào danh sách/i });
+    const addForm = addFormSubmit.closest('form');
+    const addFormScope = within(addForm ?? document.body);
 
-    await user.type(screen.getByLabelText('Mã số thuế'), '0312345678');
+    await user.type(addFormScope.getByLabelText('Mã số thuế'), '0312345678');
 
-    await user.type(screen.getByLabelText('Tên công ty'), 'Công ty Kim Liên');
+    await user.type(addFormScope.getByLabelText('Tên công ty'), 'Công ty Kim Liên');
 
-    await user.type(screen.getByLabelText('Người phụ trách Nhập'), 'Minh Trí');
+    await user.type(addFormScope.getByLabelText('Tổ đội (tuỳ chọn)'), 'Tổ 1');
 
-    await user.type(screen.getByLabelText('Người phụ trách Xuất'), 'Ngọc Hà');
+    const importStaffCombobox = addFormScope.getByRole('combobox', { name: 'Người phụ trách Nhập' });
+    await user.click(importStaffCombobox);
+    await user.type(screen.getByPlaceholderText('Tìm nhân viên'), 'Minh Trí');
+    await user.click(await screen.findByText('Dùng giá trị "Minh Trí"'));
 
-    await user.type(screen.getByLabelText('Tổ đội (tuỳ chọn)'), 'Tổ 1');
+    const exportStaffCombobox = addFormScope.getByRole('combobox', { name: 'Người phụ trách Xuất' });
+    await user.click(exportStaffCombobox);
+    await user.type(screen.getByPlaceholderText('Tìm nhân viên'), 'Ngọc Hà');
+    await user.click(await screen.findByText('Dùng giá trị "Ngọc Hà"'));
 
-    await user.type(screen.getByLabelText('Áp dụng từ ngày'), '2025-01-01');
+    fireEvent.change(addFormScope.getByLabelText('Áp dụng từ ngày'), {
+      target: { value: '2025-01-01' },
+    });
 
 
 
-    await user.click(screen.getByRole('button', { name: /thêm vào danh sách/i }));
+    await user.click(addFormSubmit);
 
     await waitFor(() => expect(alertMock).toHaveBeenCalledWith('Đã thêm vào danh sách. Bấm Lưu để ghi vào hệ thống.'));
 
@@ -208,7 +270,8 @@ describe('Luồng quản trị – Gán MST', () => {
 
     });
 
-    const typeSelect = screen.getByLabelText('Thao tác / Trạng thái');
+    const historyFilterSection = screen.getByText('Bộ lọc lịch sử thay đổi').closest('section');
+    const typeSelect = within(historyFilterSection ?? document.body).getByLabelText('Thao tác / Trạng thái');
 
     await user.selectOptions(typeSelect, 'status:assigned');
 
@@ -265,6 +328,7 @@ describe('Luồng quản trị – Đại Lý HQ', () => {
   afterEach(() => {
 
     vi.unstubAllGlobals();
+    cleanup();
 
   });
 
@@ -276,65 +340,55 @@ describe('Luồng quản trị – Đại Lý HQ', () => {
 
     render(<HQAgencyManager canEdit currentUser={{ username: 'admin' }} />);
 
-
-
     await user.click(screen.getByRole('button', { name: /thêm dòng mới/i }));
 
     const hqSection = screen.getByText('Danh sách Đại lý Hải quan hợp tác').closest('section');
+    const resolveDraftRowControls = () => {
+      const agentInput = within(hqSection ?? document.body).queryByPlaceholderText('Ví dụ: Đại lý A, Đại lý B');
+      const draftRow = agentInput?.closest('tr');
+      if (!agentInput || !draftRow) {
+        throw new Error('Không tìm thấy dòng đại lý có thể chỉnh sửa');
+      }
 
-    const resolveRowInputs = () => {
+      const textboxes = within(draftRow).queryAllByRole('textbox');
+      if (textboxes.length < 2) {
+        throw new Error('Không tìm thấy đầy đủ ô nhập MST và công ty');
+      }
 
-      const table = within(hqSection ?? document.body).getAllByRole('table')[0];
-
-      const row = within(table).getAllByRole('row')[1];
-
-      return within(row).getAllByRole('textbox');
-
+      const [mstInput, companyInput] = textboxes;
+      return { mstInput, companyInput, agentInput };
     };
 
+    await waitFor(() => {
+      expect(resolveDraftRowControls().agentInput).toBeInTheDocument();
+    });
 
-
-    let [mstInput] = resolveRowInputs();
+    let { mstInput } = resolveDraftRowControls();
 
     fireEvent.change(mstInput, { target: { value: '0312345678' } });
 
     await waitFor(() => {
-
-      [mstInput] = resolveRowInputs();
-
+      ({ mstInput } = resolveDraftRowControls());
       expect(mstInput).toHaveValue('0312345678');
-
     });
 
-
-
-    let [, companyInput] = resolveRowInputs();
+    let { companyInput } = resolveDraftRowControls();
 
     fireEvent.change(companyInput, { target: { value: 'Công ty Hợp Tác' } });
 
     await waitFor(() => {
-
-      [, companyInput] = resolveRowInputs();
-
+      ({ companyInput } = resolveDraftRowControls());
       expect(companyInput).toHaveValue('Công ty Hợp Tác');
-
     });
 
-
-
-    let [, , agentInput] = resolveRowInputs();
+    let { agentInput } = resolveDraftRowControls();
 
     fireEvent.change(agentInput, { target: { value: 'AnExpress, BLogistics' } });
 
     await waitFor(() => {
-
-      [, , agentInput] = resolveRowInputs();
-
+      ({ agentInput } = resolveDraftRowControls());
       expect(agentInput).toHaveValue('AnExpress, BLogistics');
-
     });
-
-
 
     await user.click(screen.getByRole('button', { name: /lưu cấu hình/i }));
 
@@ -380,6 +434,16 @@ describe('Luồng quản trị – Báo Cáo KPI', () => {
 
     seedSampleDeclarations({ actor: 'vitest', count: 24 });
 
+    installMockApi();
+
+    window.localStorage.setItem(
+
+      'kpi_report_viewer_prefs_v1',
+
+      JSON.stringify({ quickRange: 'all_time' })
+
+    );
+
   });
 
 
@@ -387,6 +451,7 @@ describe('Luồng quản trị – Báo Cáo KPI', () => {
   afterEach(() => {
 
     vi.unstubAllGlobals();
+    cleanup();
 
   });
 
@@ -408,7 +473,7 @@ describe('Luồng quản trị – Báo Cáo KPI', () => {
 
 
 
-    await screen.findByText(/Top 5 nhân viên theo điểm KPI/i);
+    await screen.findByText(/Top nhân viên theo điểm KPI/i);
 
     const rangeLabel = screen.getByText('Khoảng thời gian');
 
@@ -487,6 +552,7 @@ describe('Luồng quản trị – Tài khoản', () => {
   afterEach(() => {
 
     vi.unstubAllGlobals();
+    cleanup();
 
   });
 
@@ -508,9 +574,10 @@ describe('Luồng quản trị – Tài khoản', () => {
 
     await user.type(within(createSection ?? document.body).getByPlaceholderText('Ít nhất 6 ký tự'), 'Tester@2025');
 
-    const roleSelect = within(createSection ?? document.body).getByRole('combobox');
+    const roleSelect = within(createSection ?? document.body).getAllByRole('combobox').at(-1);
 
-    await user.selectOptions(roleSelect, 'manager');
+    await user.click(roleSelect);
+    await user.click(await screen.findByRole('option', { name: 'Quản lý' }));
 
 
 

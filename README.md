@@ -205,15 +205,22 @@ Thông báo "Dữ liệu mới đang tạm lưu cục bộ vì backend chưa s�
 
 Sau khi hoàn tất các bước trên, thông báo cảnh báo sẽ tự biến mất khi frontend đồng bộ thành công. Bạn cũng có thể tham khảo thêm phần [Kiểm thử](#7-kiểm-thử) để chạy `pnpm healthcheck` hỗ trợ tự chẩn đoán hệ thống.
 
-## 5. Tài khoản mặc định
+## 5. Bootstrap tài khoản
 
-- `admin / admin123` – quản trị viên toàn quyền.
-- `manager.hoangkimhoa / Hoa@2024`, `manager.thuyha / ThuyHa@2024`, `manager.hoainam / Nam@2024` – nhóm quản lý có đầy đủ quyền cấu hình (trừ quản lý tài khoản).
-- `lead.hoc / Hoc@2024`, `lead.phuong / Phuong@2024`, `lead.tuan / Tuan@2024` – trưởng nhóm phụ trách nhập liệu, MST và cảnh báo.
-- `nhanvien / 123456` – tài khoản mẫu với quyền hạn chế.
+Hệ thống không còn seed mật khẩu công khai trong mã nguồn. Với cơ sở dữ liệu
+mới, hãy cấu hình ít nhất biến môi trường `KPI_BOOTSTRAP_ADMIN_PASSWORD` trước
+khi đăng nhập lần đầu để tạo tài khoản `admin`.
 
-Bạn có thể tạo thêm tài khoản và phân quyền trong tab **Tài khoản** của giao
-diện. Mọi thao tác chỉnh sửa đều ghi lại trong tab **Nhật ký**.
+Nếu muốn bật thêm các tài khoản mẫu khác ở lần bootstrap, hãy đặt biến theo
+mẫu `KPI_BOOTSTRAP_PASSWORD_<USERNAME>`, trong đó `USERNAME` là username viết
+hoa và thay ký tự không phải chữ/số bằng `_`. Ví dụ:
+
+- `lead.phuong` -> `KPI_BOOTSTRAP_PASSWORD_LEAD_PHUONG`
+- `manager.hoangkimhoa` -> `KPI_BOOTSTRAP_PASSWORD_MANAGER_HOANGKIMHOA`
+- `nhanvien` -> `KPI_BOOTSTRAP_PASSWORD_NHANVIEN`
+
+Sau khi bootstrap xong, bạn có thể tạo thêm tài khoản và phân quyền trong tab
+**Tài khoản**. Mọi thao tác chỉnh sửa đều ghi lại trong tab **Nhật ký**.
 
 ## 6. Trợ lý AI tiết kiệm token
 
