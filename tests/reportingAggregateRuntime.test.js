@@ -167,6 +167,20 @@ describe('createReportingAggregateRuntime', () => {
       }),
       expect.objectContaining({ snapshotKey: 'kpi_reporting_job_runs_v1' }),
     );
+    expect(projectionStore.writeMonthlyAggregateSnapshot.mock.calls[0][0]).toEqual(
+      expect.objectContaining({
+        projectionState: expect.objectContaining({
+          snapshotKey: ACTIVE_SNAPSHOT_KEY,
+          refreshedBy: 'alice',
+          refreshSource: 'storage-update',
+          invalidatedByKey: 'kpi_adjustments_v1',
+          freshnessKey: expect.any(String),
+          owner: expect.objectContaining({
+            ruleSetId: 'default',
+          }),
+        }),
+      }),
+    );
   });
 
   it('deletes stale stored aggregates when refresh cannot derive queries anymore', async () => {
@@ -206,6 +220,71 @@ describe('createReportingAggregateRuntime', () => {
       2,
       DEFAULT_SNAPSHOT_KEY,
     );
+  });
+
+  it('rebuilds the active aggregate when cached projection ownership metadata is stale', () => {
+    const currentSourceSnapshot = createSourceSnapshot({
+      rules: {
+        id: 'default',
+        name: 'Default KPI',
+        updatedAt: '2026-03-14T00:00:00.000Z',
+        groups: {},
+      },
+    });
+    const projectionStore = createProjectionStore({
+      [ACTIVE_SNAPSHOT_KEY]: createStoredSnapshot({
+        query: { from: '2026-02-01', to: '2026-02-28' },
+        total: 1,
+        projectionState: {
+          schemaVersion: 1,
+          snapshotKey: ACTIVE_SNAPSHOT_KEY,
+          refreshedAt: '2026-03-13T09:00:00.000Z',
+          freshnessKey: '',
+          owner: {
+            ruleSetId: 'default',
+            ruleUpdatedAt: '2026-03-01T00:00:00.000Z',
+          },
+        },
+      }),
+    });
+    const buildMonthlyReportingAggregates = vi.fn(({ from, to, limit }) => ({
+      generatedAt: '2026-03-14T10:00:00.000Z',
+      range: { from, to },
+      total: limit ? 1 : 2,
+      cache: {
+        queryKey: JSON.stringify({
+          from: from || '',
+          to: to || '',
+          limit: Number.isFinite(limit) && limit > 0 ? Math.trunc(limit) : 0,
+        }),
+        reused: false,
+      },
+      items: [{ period: '2026-02' }],
+    }));
+    const runtime = createReportingAggregateRuntime({
+      projectionStore,
+      buildMonthlyReportingAggregates,
+    });
+
+    const result = runtime.materializeMonthlyReportingAggregateSnapshot(currentSourceSnapshot, {
+      from: '2026-02-01',
+      to: '2026-02-28',
+    });
+
+    expect(buildMonthlyReportingAggregates).toHaveBeenCalledTimes(1);
+    expect(projectionStore.writeMonthlyAggregateSnapshot).toHaveBeenCalledWith(
+      expect.objectContaining({
+        projectionState: expect.objectContaining({
+          owner: expect.objectContaining({
+            ruleUpdatedAt: '2026-03-14T00:00:00.000Z',
+          }),
+        }),
+      }),
+      expect.objectContaining({
+        snapshotKey: ACTIVE_SNAPSHOT_KEY,
+      }),
+    );
+    expect(result.cache.reused).toBe(false);
   });
 });
 
@@ -281,6 +360,7 @@ function createStoredSnapshot({
   query = { from: '2026-02-01', to: '2026-02-28' },
   total = 1,
   items = [],
+  projectionState,
 } = {}) {
   return {
     generatedAt,
@@ -298,6 +378,7 @@ function createStoredSnapshot({
       reused: false,
     },
     items,
+    ...(projectionState ? { projectionState } : {}),
   };
 }
 

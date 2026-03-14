@@ -1272,6 +1272,17 @@ describe('server-v4 runtime routes', () => {
           }),
         ])
       );
+      expect(
+        db
+          .prepare(
+            'SELECT position, schedule_id, name FROM reporting_schedule_projection_entries WHERE projection_key = ? ORDER BY position ASC, schedule_id ASC'
+          )
+          .all('kpi_report_schedule_v1')
+      ).toEqual([
+        { position: 0, schedule_id: 'weekly-blue', name: 'Weekly Blue' },
+        { position: 1, schedule_id: 'monthly-finance', name: 'Monthly Finance' },
+        { position: 2, schedule_id: createdId, name: 'Monthly Red' },
+      ]);
 
       const deleteResponse = await request(app).delete(`/api/v4/reporting/schedules/${createdId}`);
       expect(deleteResponse.status).toBe(200);
@@ -1291,15 +1302,38 @@ describe('server-v4 runtime routes', () => {
         .prepare('SELECT payload FROM reporting_projections WHERE projection_key = ?')
         .get('kpi_report_schedule_v1');
       expect(JSON.parse(storedAfterDelete.payload)).toHaveLength(2);
+      expect(
+        db
+          .prepare(
+            'SELECT position, schedule_id, name FROM reporting_schedule_projection_entries WHERE projection_key = ? ORDER BY position ASC, schedule_id ASC'
+          )
+          .all('kpi_report_schedule_v1')
+      ).toEqual([
+        { position: 0, schedule_id: 'weekly-blue', name: 'Weekly Blue' },
+        { position: 1, schedule_id: 'monthly-finance', name: 'Monthly Finance' },
+      ]);
     } finally {
       db.close();
     }
   });
 
   it('surfaces stored monthly aggregate status on the schedules route', async () => {
+    const seededDefaultSnapshot = createStoredMonthlyAggregateSnapshot();
     const dbFile = registerTempDb({
       ...createReportingSeed(),
-      kpi_reporting_monthly_aggregates_default_v1: createStoredMonthlyAggregateSnapshot(),
+      kpi_reporting_monthly_aggregates_default_v1: {
+        ...seededDefaultSnapshot,
+        range: {
+          from: '2026-02-01',
+          to: '2026-02-28',
+        },
+        total: 1,
+        items: [seededDefaultSnapshot.items[0]],
+        cache: {
+          queryKey: createMonthlyAggregateQueryKey({ from: '2026-02-01', to: '2026-02-28' }),
+          reused: false,
+        },
+      },
     });
     const app = buildV4App({ dbFile });
 
@@ -1309,10 +1343,10 @@ describe('server-v4 runtime routes', () => {
     expect(response.body.data.aggregateStatus).toEqual({
       available: true,
       generatedAt: '2026-03-09T09:00:00.000Z',
-      queryKey: createMonthlyAggregateQueryKey({ from: '2026-01-01', to: '2026-02-28' }),
-      total: 2,
+      queryKey: createMonthlyAggregateQueryKey({ from: '2026-02-01', to: '2026-02-28' }),
+      total: 1,
       range: {
-        from: '2026-01-01',
+        from: '2026-02-01',
         to: '2026-02-28',
       },
     });

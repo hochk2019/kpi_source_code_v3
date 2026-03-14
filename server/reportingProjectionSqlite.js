@@ -35,6 +35,7 @@ export function ensureReportingProjectionTable(database) {
   database.exec(
     'CREATE TABLE IF NOT EXISTS reporting_schedule_projection_entries (\n' +
       '  projection_key TEXT NOT NULL,\n' +
+      '  position INTEGER NOT NULL DEFAULT 0,\n' +
       '  schedule_id TEXT NOT NULL,\n' +
       '  name TEXT NOT NULL DEFAULT \'\',\n' +
       '  frequency TEXT NOT NULL DEFAULT \'\',\n' +
@@ -53,6 +54,10 @@ export function ensureReportingProjectionTable(database) {
   database.exec(
     'CREATE INDEX IF NOT EXISTS idx_reporting_schedule_projection_entries_projection_key ON ' +
       'reporting_schedule_projection_entries(projection_key)'
+  );
+  database.exec(
+    'CREATE INDEX IF NOT EXISTS idx_reporting_schedule_projection_entries_projection_position ON ' +
+      'reporting_schedule_projection_entries(projection_key, position)'
   );
   database.exec(
     'CREATE INDEX IF NOT EXISTS idx_reporting_schedule_projection_entries_active ON ' +
@@ -122,6 +127,12 @@ export function ensureReportingProjectionTable(database) {
   ensureColumn(database, 'range_to', "TEXT NOT NULL DEFAULT ''");
   ensureColumn(database, 'query_key', "TEXT NOT NULL DEFAULT ''");
   ensureColumn(database, 'entry_count', 'INTEGER NOT NULL DEFAULT 0');
+  ensureTableColumn(
+    database,
+    REPORTING_SCHEDULE_ENTRY_TABLE,
+    'position',
+    'INTEGER NOT NULL DEFAULT 0'
+  );
 }
 
 export function readReportingProjectionValue(database, key) {
@@ -149,6 +160,15 @@ export function readReportingMonthlyAggregateProjectionEntries(database, key) {
     database,
     REPORTING_MONTHLY_AGGREGATE_ENTRY_TABLE,
     'period DESC',
+    key
+  );
+}
+
+export function readReportingScheduleProjectionEntries(database, key) {
+  return readMaterializedProjectionEntries(
+    database,
+    REPORTING_SCHEDULE_ENTRY_TABLE,
+    'position ASC, schedule_id ASC',
     key
   );
 }
@@ -324,13 +344,14 @@ function materializeScheduleProjectionEntries(database, key, value) {
 
   const statement = database.prepare(
     `INSERT INTO ${REPORTING_SCHEDULE_ENTRY_TABLE} ` +
-      '(projection_key, schedule_id, name, frequency, time, day_of_week, day_of_month, active, last_run, next_run, recipient_count, format_count, payload) ' +
-      'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+      '(projection_key, position, schedule_id, name, frequency, time, day_of_week, day_of_month, active, last_run, next_run, recipient_count, format_count, payload) ' +
+      'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
   );
 
   schedules.forEach((entry, index) => {
     statement.run(
       key,
+      index,
       normalizeText(entry.id) || `schedule-${index + 1}`,
       normalizeText(entry.name),
       normalizeText(entry.frequency),
@@ -435,6 +456,18 @@ function ensureColumn(database, columnName, columnDefinition) {
     database.exec(
       `ALTER TABLE ${REPORTING_PROJECTION_TABLE} ADD COLUMN ${columnName} ${columnDefinition}`
     );
+  } catch {
+    // Best-effort schema evolution only.
+  }
+}
+
+function ensureTableColumn(database, tableName, columnName, columnDefinition) {
+  try {
+    const columns = database.prepare(`PRAGMA table_info(${tableName})`).all();
+    if (Array.isArray(columns) && columns.some((column) => column?.name === columnName)) {
+      return;
+    }
+    database.exec(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${columnDefinition}`);
   } catch {
     // Best-effort schema evolution only.
   }

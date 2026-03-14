@@ -246,6 +246,7 @@ function createProjectionPersistence() {
     readValue: async () => null,
     writeValue: async () => {},
     deleteValue: async () => {},
+    readScheduleEntries: async () => [],
     readMonthlyAggregateEntries: async () => [],
     readJobRunEntries: async () => [],
   };

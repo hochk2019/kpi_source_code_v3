@@ -16,6 +16,7 @@ import {
   readReportingJobRunProjectionEntries,
   readReportingMonthlyAggregateProjectionEntries,
   readReportingProjectionValue,
+  readReportingScheduleProjectionEntries,
   writeReportingProjectionValue,
 } from '../server/reportingProjectionSqlite.js';
 
@@ -158,6 +159,16 @@ describe('reportingProjectionSqlite', () => {
           recipients: ['ops@example.com', 'lead@example.com'],
           formats: ['pdf'],
         },
+        {
+          id: 'sched-2',
+          name: 'Weekly Blue',
+          frequency: 'weekly',
+          dayOfWeek: 1,
+          time: '08:30',
+          active: false,
+          recipients: ['blue@example.com'],
+          formats: ['excel', 'pdf'],
+        },
       ];
 
       writeReportingProjectionValue(db, 'kpi_report_schedule_v1', schedules);
@@ -176,18 +187,19 @@ describe('reportingProjectionSqlite', () => {
         range_from: '',
         range_to: '',
         query_key: '',
-        entry_count: 1,
+        entry_count: 2,
       });
 
       const materializedSchedules = db
         .prepare(
-          'SELECT projection_key, schedule_id, name, frequency, time, day_of_week, day_of_month, active, recipient_count, format_count FROM reporting_schedule_projection_entries WHERE projection_key = ?'
+          'SELECT projection_key, position, schedule_id, name, frequency, time, day_of_week, day_of_month, active, recipient_count, format_count FROM reporting_schedule_projection_entries WHERE projection_key = ? ORDER BY position ASC, schedule_id ASC'
         )
         .all('kpi_report_schedule_v1');
 
       expect(materializedSchedules).toEqual([
         {
           projection_key: 'kpi_report_schedule_v1',
+          position: 0,
           schedule_id: 'sched-1',
           name: 'Monthly Red',
           frequency: 'monthly',
@@ -198,7 +210,21 @@ describe('reportingProjectionSqlite', () => {
           recipient_count: 2,
           format_count: 1,
         },
+        {
+          projection_key: 'kpi_report_schedule_v1',
+          position: 1,
+          schedule_id: 'sched-2',
+          name: 'Weekly Blue',
+          frequency: 'weekly',
+          time: '08:30',
+          day_of_week: 1,
+          day_of_month: 0,
+          active: 0,
+          recipient_count: 1,
+          format_count: 2,
+        },
       ]);
+      expect(readReportingScheduleProjectionEntries(db, 'kpi_report_schedule_v1')).toEqual(schedules);
 
       deleteReportingProjectionValue(db, 'kpi_report_schedule_v1');
 

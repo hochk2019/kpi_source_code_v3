@@ -5,7 +5,7 @@
 - Status: in_progress
 - Tracking:
   - Epic: `cng-z7u`
-  - Active bead: `cng-z7u.1` (`in_progress`)
+  - Active bead: `cng-z7u.4` (`in_progress`)
   - Planning notebook: `task_plan.md`, `findings.md`, `progress.md`
 
 ## Program Scope
@@ -14,17 +14,17 @@
 - Finish the remaining `F7`/`F8` residue: shrink the last oversized reporting/importer modules and remove noisy reporting-test output that still hides signal.
 
 ## Backlog
-- `cng-z7u.1` (`P1`, in progress): build a projection-backed reporting aggregate pipeline with explicit freshness, invalidation, and version ownership.
-- `cng-z7u.2` (`P1`, blocked by `cng-z7u.1`): move reporting schedules to a typed projection-backed store instead of legacy `kv_store` ownership.
-- `cng-z7u.3` (`P1`, blocked by `cng-z7u.1` and `cng-z7u.2`): converge dashboard and export onto one projection-first reporting read-model contract.
-- `cng-z7u.4` (`P2`, blocked by `cng-z7u.3`): finish `ReportViewer` convergence and split the remaining reporting UI monolith.
+- `cng-z7u.1` (`P1`, closed): build a projection-backed reporting aggregate pipeline with explicit freshness, invalidation, and version ownership.
+- `cng-z7u.2` (`P1`, closed): move reporting schedules to a typed projection-backed store instead of legacy `kv_store` ownership.
+- `cng-z7u.3` (`P1`, closed): converge dashboard and export onto one projection-first reporting read-model contract.
+- `cng-z7u.4` (`P2`, in progress): finish `ReportViewer` convergence and split the remaining reporting UI monolith.
 - `cng-z7u.5` (`P2`, independent): continue `DataImporter.jsx` decomposition toward maintainable module boundaries.
 - `cng-z7u.6` (`P3`, blocked by `cng-z7u.4`): silence `Recharts`/jsdom warning noise and harden the reporting harness.
 
 ## Current Slice
-- `cng-z7u.1`: the highest remaining technical leverage is still the reporting aggregate path. Active/default monthly snapshots are reused better than before, but they are still materialized on demand and cached back later instead of flowing through an explicit projection pipeline.
-- `cng-z7u.1`: practical review status is now clear: `F1`-`F4` and `F6` are effectively closed at blocker level, while the real residual work sits in `F5` (`projection/persistence/read-model ownership`) and `F7`/`F8` (`module size and noisy verification`).
-- `cng-z7u.1`: the tracker and notebook now agree on the execution order, so the next concrete action after the planning commit is to implement the projection pipeline slice rather than reopen already-closed smoke/debug work.
+- `cng-z7u.1`, `cng-z7u.2`, and `cng-z7u.3` are now functionally landed: monthly aggregate projections carry freshness/ownership metadata, schedule persistence flows through typed projection stores, and both `/api/v4/reporting/view` and compact export resolve through the same reporting read-model builder.
+- `cng-z7u.4` is now the active leverage point: `ReportViewer` has already shed the reporting controls/schedule seam plus overview widgets/company-summary table into dedicated modules, but still owns too much local shaping/detail-card orchestration to close the slice.
+- The practical residual work is now concentrated in `F7`/`F8` (`ReportViewer`/`DataImporter` module size plus noisy reporting verification), not in backend reporting contract drift.
 - Recently closed slices retained below:
 - `cng-cff`: the broad backend diagnostic path moved from `14` mixed failures to green by first reducing stale fixture/assertion drift to `6`, then isolating the last rule-selection regression to `1`, and finally closing it end-to-end.
 - `cng-cff`: root cause was `server/reportingRuleSelection.js` rejecting legacy/simple rule-set snapshots that lacked `groups`; `getRulesValue()` then fell back to `SHARED_DEFAULT_RULES`, which masked agency-specific ECUS license exclusions.

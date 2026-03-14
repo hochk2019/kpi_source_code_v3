@@ -177,6 +177,7 @@ function createRelationalStorePersistenceStub() {
       readValue: async () => null,
       writeValue: async () => {},
       deleteValue: async () => {},
+      readScheduleEntries: emptyList,
       readMonthlyAggregateEntries: emptyList,
       readJobRunEntries: emptyList,
     },

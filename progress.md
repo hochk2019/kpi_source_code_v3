@@ -72,8 +72,62 @@
 
 ## Current Focus
 - Active epic: `cng-z7u`
-- Active task target: `cng-z7u.1` (`in_progress`)
-- Next action: commit the planning/tracker/notebook state locally, then execute the projection-backed reporting aggregate pipeline slice.
+- Active task target: `cng-z7u.4` (`in_progress`)
+- Next action: extract one more `ReportViewer` detail/local-shaping seam now that controls, schedules, overview widgets, and the shared company-summary table live in dedicated reporting modules; keep `cng-z7u.6` chart-noise cleanup as the follow-on once that convergence is done.
+
+## Session: 2026-03-14 ReportViewer UI Split Follow-Through
+- Continued `cng-z7u.4` after the schedule/panel seam by externalizing the overview/reporting presentation layer out of `src/components/ReportViewer.jsx`.
+- Added `src/components/reporting/CompanySummaryTable.jsx` for the sortable reporting company table and `src/components/reporting/ReportingOverviewWidgets.jsx` for the KPI summary cards, top-staff widget, team pie widget, and trend chart shell.
+- Rewired `ReportViewer.jsx` to consume those modules plus the already-extracted `ReportingPanels.jsx`, keeping the file on the unified `/api/v4/reporting/view` + `reportingClient` contract while deleting duplicated inline presentation blocks.
+- Added focused coverage in `tests/reportingOverviewWidgets.test.jsx` and tightened `tests/reportingPanels.test.jsx` so both new reporting modules have direct regression coverage.
+- `ReportViewer.jsx` is now `5798` lines instead of `6838`; the file is still too large, but the reporting controls/schedule shell and overview widgets are no longer blocking further detail-card extraction.
+- Verification:
+  - `pnpm exec vitest run tests/reportingOverviewWidgets.test.jsx tests/reportingPanels.test.jsx tests/reportViewer.test.jsx tests/reportingClient.test.js` -> passed (`18/18`), with the existing known `Recharts` width/height jsdom warnings still present in `tests/reportViewer.test.jsx`
+  - `pnpm exec eslint src/components/ReportViewer.jsx src/components/reporting/CompanySummaryTable.jsx src/components/reporting/ReportingOverviewWidgets.jsx tests/reportingOverviewWidgets.test.jsx tests/reportingPanels.test.jsx` -> passed
+  - `git diff --check -- src/components/ReportViewer.jsx src/components/reporting/CompanySummaryTable.jsx src/components/reporting/ReportingOverviewWidgets.jsx src/components/reporting/ReportingPanels.jsx tests/reportingOverviewWidgets.test.jsx tests/reportingPanels.test.jsx` -> passed
+
+## Session: 2026-03-14 Reporting Projection And Schedule Persistence
+
+### Phase A Closure: Projection-Backed Monthly Aggregates (`cng-z7u.1`)
+- **Status:** complete
+- Actions taken:
+  - Added freshness/ownership-aware monthly aggregate persistence in `server/reportingAggregateRuntime.js` and `server-v4/src/modules/reporting/reportingService.ts`.
+  - Persisted internal projection metadata while stripping it from public cached snapshot reads in `server/reportingProjectionStore.js`.
+  - Extended Postgres materialization support for reporting aggregate/job-run entry tables in `server-v4/src/persistence/reportingProjectionPostgres.ts`.
+  - Added regression coverage for stale-owner rebuilds and projection metadata handling in `tests/reportingAggregateRuntime.test.js`, `tests/reportingProjectionStore.test.js`, `tests/server-v4/reportingProjectionPostgres.test.js`, and `tests/server-v4/reportingService.test.js`.
+- Verification:
+  - `pnpm exec vitest run tests/reportingAggregateRuntime.test.js tests/reportingProjectionStore.test.js tests/server-v4/reportingProjectionPostgres.test.js tests/server-v4/reportingService.test.js` -> passed (`16/16`)
+  - `pnpm exec vitest run tests/server-v4/runtimeRoutes.test.js -t "persists active monthly aggregate freshness for subsequent view reads|uses the default monthly aggregate preset when the query is omitted"` -> passed (`2/2`)
+
+### Phase B Closure: Typed Schedule Projection Store (`cng-z7u.2`)
+- **Status:** complete
+- Actions taken:
+  - Added typed schedule projection reads to `server-v4/src/persistence/reportingProjectionPersistence.ts` and `server-v4/src/persistence/reportingProjectionPostgres.ts`.
+  - Switched `server-v4/src/modules/reporting/ReportingRepository.ts` and `server-v4/src/modules/reporting/reportingService.ts` from `rawSchedules` accessors to `listScheduleEntries()` / `writeScheduleEntries()`.
+  - Materialized schedule rows with deterministic `position` ordering in SQLite and Postgres projection tables.
+  - Strengthened route/persistence coverage in `tests/reportingProjectionSqlite.test.js`, `tests/server-v4/reportingProjectionPostgres.test.js`, and `tests/server-v4/runtimeRoutes.test.js`.
+  - Updated supporting projection stubs in Postgres route/app-shell tests so the new persistence contract stays shape-safe.
+- Verification:
+  - `pnpm exec vitest run tests/reportingProjectionSqlite.test.js tests/server-v4/reportingProjectionPostgres.test.js tests/server-v4/reportingService.test.js tests/server-v4/runtimeRoutes.test.js` -> passed (`32/32`)
+  - `pnpm exec vitest run tests/server-v4/appShell.test.js tests/server-v4/postgresDeclarationsRoute.test.js tests/server-v4/postgresKpiRulesRoute.test.js tests/server-v4/postgresMstAssignmentsRoute.test.js tests/server-v4/postgresReportingInputRoute.test.js tests/server-v4/postgresTeamsRoute.test.js` -> passed (`16/16`)
+
+### Phase C Closure: Unified Dashboard + Export Reporting Read Models (`cng-z7u.3`)
+- **Status:** complete
+- Actions taken:
+  - Switched `server-v4/src/modules/reporting/reportingService.ts` `getView()` to build its bundle from the shared `server/reportingReadModels.js` contract instead of maintaining a second `buildReport()` + enrich path.
+  - Removed the duplicated service-local summary/staff/team shaping helpers that had drift risk against compact export and monolith/runtime reporting routes.
+  - Added a service-level regression in `tests/server-v4/reportingService.test.js` to lock the shared builder call, requested rule-set selection, and limit propagation.
+  - Re-verified the backend route/export path and the frontend `ReportViewer`/`reportingClient` path so the same contract is covered at both ends.
+- Files created/modified:
+  - `server-v4/src/modules/reporting/reportingService.ts` (updated)
+  - `tests/server-v4/reportingService.test.js` (updated)
+  - `task.md` (updated)
+  - `task_plan.md` (updated)
+  - `findings.md` (updated)
+  - `progress.md` (updated)
+- Verification:
+  - `pnpm exec vitest run tests/server-v4/reportingService.test.js tests/reportExportPayloads.test.js tests/server-v4/runtimeRoutes.test.js` -> passed (`27/27`)
+  - `pnpm exec vitest run tests/reportViewer.test.jsx tests/reportingClient.test.js` -> passed (`12/12`) with the pre-existing `Recharts` zero-size jsdom warnings still present
 
 ## Session: 2026-03-14 Residual Convergence Planning
 

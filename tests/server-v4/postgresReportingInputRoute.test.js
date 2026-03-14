@@ -132,6 +132,7 @@ function createProjectionPersistence() {
     readValue: async () => null,
     writeValue: vi.fn(async () => {}),
     deleteValue: async () => {},
+    readScheduleEntries: async () => [],
     readMonthlyAggregateEntries: async () => [],
     readJobRunEntries: async () => [],
   };

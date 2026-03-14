@@ -1,10 +1,8 @@
 import {
-  aggregateLegacyCompanies,
-  buildLegacyReportData,
   type LegacyCompanySummaryRow,
   type LegacyReportData,
 } from '../../legacy/legacy-report-bridge.js';
-import { ReportingRepository } from './ReportingRepository.js';
+import { ReportingRepository, type ReportingSourceSnapshot } from './ReportingRepository.js';
 import {
   buildDefaultMonthlyAggregateQuery,
   buildMonthlyAggregateQueryKey,
@@ -27,6 +25,10 @@ import {
   buildReportingJobRunCollection,
   type ReportingMonthlyAggregateCollection,
 } from '../../../../server/reportingObservabilityCollections.js';
+import { buildReportingReadModels } from '../../../../server/reportingReadModels.js';
+
+const ACTIVE_MONTHLY_AGGREGATE_KEY = 'kpi_reporting_monthly_aggregates_v1';
+const DEFAULT_MONTHLY_AGGREGATE_KEY = 'kpi_reporting_monthly_aggregates_default_v1';
 
 export type ReportingQuery = {
   from?: string;
@@ -133,6 +135,8 @@ export type ReportingViewResponse = {
   teams: ReportingTeamsResponse;
 };
 
+type ReportingViewReadModels = Pick<ReportingViewResponse, 'summary' | 'staff' | 'teams'>;
+
 export type ReportingViewMeta = {
   servedAt: string;
   aggregateStatus: ReportingAggregateStatus;
@@ -206,106 +210,63 @@ export class ReportingService {
   constructor(private readonly repository: ReportingRepository) {}
 
   async getView(query: ReportingQuery = {}): Promise<ReportingViewResponse> {
-    const report = await this.buildReport(query);
-    const [companies, staffItems, teamItems] = await Promise.all([
-      buildSummaryCompanyGroups(report),
-      enrichStaffItems(applyLimit(report.staff.list, query.limit)),
-      enrichTeamItems(applyLimit(report.teams.list, query.limit)),
-    ]);
+    const metaPromise = this.buildViewMeta(query);
+    const snapshot = await this.repository.readReportingSnapshot();
+    const selectedRuleSet = resolveRequestedRuleSet(snapshot, query.ruleId);
+    const readModels = buildReportingReadModels(snapshot.declarations, {
+      roster: snapshot.roster,
+      rules: selectedRuleSet,
+      from: query.from,
+      to: query.to,
+      adjustments: snapshot.adjustments,
+      limit: query.limit,
+    }) as ReportingViewReadModels;
 
     return {
-      meta: await this.buildViewMeta(query),
-      summary: {
-        range: report.range,
-        ruleSet: toRuleSetReference(report.rules),
-        summary: report.summary,
-        trend: report.trend,
-        adjustments: normalizeAdjustments(report.adjustments),
-        companies,
-      },
-      staff: {
-        range: report.range,
-        ruleSet: toRuleSetReference(report.rules),
-        total: report.staff.list.length,
-        keysHash: report.staff.keysHash,
-        items: staffItems,
-      },
-      teams: {
-        range: report.range,
-        ruleSet: toRuleSetReference(report.rules),
-        total: report.teams.list.length,
-        keysHash: report.teams.keysHash,
-        items: teamItems,
-      },
+      meta: await metaPromise,
+      ...readModels,
     };
   }
 
   async getMonthlyAggregates(query: ReportingQuery = {}): Promise<ReportingMonthlyAggregateResponse> {
+    const snapshot = await this.repository.readReportingSnapshot();
     if (!hasAggregateQuery(query)) {
-      const defaultSnapshot = await this.readOrBuildDefaultMonthlyAggregateSnapshot();
+      const defaultQuery = buildDefaultMonthlyAggregateQuery(snapshot.declarations);
+      const defaultSnapshot = await this.readStoredMonthlyAggregateSnapshot(
+        DEFAULT_MONTHLY_AGGREGATE_KEY,
+        defaultQuery,
+        snapshot,
+      );
       if (defaultSnapshot) {
         return defaultSnapshot;
       }
+
+      if (hasAggregateQuery(defaultQuery)) {
+        return this.materializeMonthlyAggregateSnapshot(snapshot, defaultQuery, {
+          snapshotKey: DEFAULT_MONTHLY_AGGREGATE_KEY,
+          source: 'reporting-monthly-aggregates-default',
+        });
+      }
     }
 
-    const cached = await this.readCachedMonthlyAggregateSnapshot(query);
+    const cached = await this.readStoredMonthlyAggregateSnapshot(
+      ACTIVE_MONTHLY_AGGREGATE_KEY,
+      query,
+      snapshot,
+    );
     if (cached) {
       return cached;
     }
 
-    const snapshot = await this.repository.readReportingSnapshot();
-    const startedAt = new Date().toISOString();
-
-    try {
-      const built = await buildMonthlyReportingAggregates({
-        rows: snapshot.declarations,
-        roster: snapshot.roster,
-        rules: snapshot.activeRuleSet,
-        adjustments: snapshot.adjustments,
-        from: query.from,
-        to: query.to,
-        limit: query.limit,
-      });
-      await this.repository.writeRawMonthlyAggregateSnapshot(built as unknown as Record<string, unknown>);
-      await this.recordJobRun({
-        job: 'reporting-monthly-aggregate-materialize',
-        status: 'success',
-        source: 'reporting-monthly-aggregates',
-        actor: 'system',
-        snapshotKey: 'kpi_reporting_monthly_aggregates_v1',
-        queryKey: built.cache.queryKey,
-        range: built.range,
-        total: built.total,
-        startedAt,
-        finishedAt: built.generatedAt,
-      });
-      return built;
-    } catch (error) {
-      await this.recordJobRun({
-        job: 'reporting-monthly-aggregate-materialize',
-        status: 'error',
-        source: 'reporting-monthly-aggregates',
-        actor: 'system',
-        snapshotKey: 'kpi_reporting_monthly_aggregates_v1',
-        queryKey: buildMonthlyAggregateQueryKey(query),
-        range: {
-          from: normalizeText(query.from),
-          to: normalizeText(query.to),
-        },
-        startedAt,
-        finishedAt: new Date().toISOString(),
-        error:
-          error instanceof Error
-            ? error.message
-            : 'Failed to build monthly reporting aggregates.',
-      });
-      throw error;
-    }
+    return this.materializeMonthlyAggregateSnapshot(snapshot, query, {
+      snapshotKey: ACTIVE_MONTHLY_AGGREGATE_KEY,
+      source: 'reporting-monthly-aggregates',
+    });
   }
 
   async listSchedules(query: ReportingSchedulesQuery = {}): Promise<ReportingSchedulesResponse> {
     const asOf = resolveAsOfDate(query.asOf);
-    const items = (await this.repository.listRawSchedules())
+    const items = (await this.repository.listScheduleEntries())
       .map((entry, index) =>
         normalizeReportingScheduleEntry(entry, {
           fallbackId: `schedule-${index + 1}`,
@@ -384,14 +345,14 @@ export class ReportingService {
     total: number;
   }> {
     const { saved, items } = upsertReportingScheduleEntry(
-      await this.repository.listRawSchedules(),
+      await this.repository.listScheduleEntries(),
       input,
       {
         fromDate: new Date(),
       }
     );
 
-    await this.repository.writeRawSchedules(items as unknown as Record<string, unknown>[]);
+    await this.repository.writeScheduleEntries(items as unknown as Record<string, unknown>[]);
 
     return {
       item: saved,
@@ -404,7 +365,7 @@ export class ReportingService {
     total: number;
   }> {
     const { deleted, items } = removeReportingScheduleEntry(
-      await this.repository.listRawSchedules(),
+      await this.repository.listScheduleEntries(),
       id,
     );
     if (!deleted) {
@@ -414,30 +375,22 @@ export class ReportingService {
       };
     }
 
-    await this.repository.writeRawSchedules(items as unknown as Record<string, unknown>[]);
+    await this.repository.writeScheduleEntries(items as unknown as Record<string, unknown>[]);
     return {
       deleted: true,
       total: items.length,
     };
   }
 
-  private async buildReport(query: ReportingQuery): Promise<LegacyReportData> {
-    const snapshot = await this.repository.readReportingSnapshot();
-    const selectedRuleSet = resolveRequestedRuleSet(snapshot, query.ruleId);
-
-    return buildLegacyReportData(snapshot.declarations, {
-      roster: snapshot.roster,
-      rules: selectedRuleSet,
-      from: query.from,
-      to: query.to,
-      adjustments: snapshot.adjustments,
-    });
-  }
-
-  private async readCachedMonthlyAggregateSnapshot(
+  private async readStoredMonthlyAggregateSnapshot(
+    snapshotKey: string,
     query: ReportingQuery,
+    sourceSnapshot: ReportingSourceSnapshot,
   ): Promise<ReportingMonthlyAggregateResponse | null> {
-    const snapshot = await this.repository.readRawMonthlyAggregateSnapshot();
+    const snapshot =
+      snapshotKey === DEFAULT_MONTHLY_AGGREGATE_KEY
+        ? await this.repository.readRawDefaultMonthlyAggregateSnapshot()
+        : await this.repository.readRawMonthlyAggregateSnapshot();
     if (!snapshot) {
       return null;
     }
@@ -445,6 +398,10 @@ export class ReportingService {
     const queryKey = buildMonthlyAggregateQueryKey(query);
     const cache = getRecord(snapshot.cache);
     if (normalizeText(cache.queryKey) !== queryKey) {
+      return null;
+    }
+
+    if (isStoredMonthlyAggregateSnapshotStale(snapshot, sourceSnapshot, query)) {
       return null;
     }
 
@@ -473,39 +430,53 @@ export class ReportingService {
     return toAggregateStatus(snapshot);
   }
 
-  private async readOrBuildDefaultMonthlyAggregateSnapshot(): Promise<ReportingMonthlyAggregateResponse | null> {
-    const stored = await this.repository.readRawDefaultMonthlyAggregateSnapshot();
-    if (stored) {
-      const queryKey = normalizeText(getRecord(stored.cache).queryKey);
-      return normalizeStoredMonthlyAggregateSnapshot(stored, queryKey);
-    }
-
-    const snapshot = await this.repository.readReportingSnapshot();
-    const defaultQuery = buildDefaultMonthlyAggregateQuery(snapshot.declarations);
-    if (!hasAggregateQuery(defaultQuery)) {
-      return null;
-    }
-
+  private async materializeMonthlyAggregateSnapshot(
+    sourceSnapshot: ReportingSourceSnapshot,
+    query: ReportingQuery,
+    options: {
+      snapshotKey: string;
+      source: string;
+      invalidatedAt?: string;
+      invalidatedByKey?: string;
+    },
+  ): Promise<ReportingMonthlyAggregateResponse> {
     const startedAt = new Date().toISOString();
+    const snapshotKey = options.snapshotKey;
+    const source = options.source;
 
     try {
       const built = await buildMonthlyReportingAggregates({
-        rows: snapshot.declarations,
-        roster: snapshot.roster,
-        rules: snapshot.activeRuleSet,
-        adjustments: snapshot.adjustments,
-        from: defaultQuery.from,
-        to: defaultQuery.to,
+        rows: sourceSnapshot.declarations,
+        roster: sourceSnapshot.roster,
+        rules: sourceSnapshot.activeRuleSet,
+        adjustments: sourceSnapshot.adjustments,
+        from: query.from,
+        to: query.to,
+        limit: query.limit,
       });
-      await this.repository.writeRawDefaultMonthlyAggregateSnapshot(
-        built as unknown as Record<string, unknown>
+      const storedSnapshot = attachStoredMonthlyAggregateProjectionState(
+        built,
+        sourceSnapshot,
+        query,
+        {
+          snapshotKey,
+          actor: 'system',
+          source,
+          invalidatedAt: options.invalidatedAt || startedAt,
+          invalidatedByKey: options.invalidatedByKey,
+        },
       );
+      if (snapshotKey === DEFAULT_MONTHLY_AGGREGATE_KEY) {
+        await this.repository.writeRawDefaultMonthlyAggregateSnapshot(storedSnapshot);
+      } else {
+        await this.repository.writeRawMonthlyAggregateSnapshot(storedSnapshot);
+      }
       await this.recordJobRun({
         job: 'reporting-monthly-aggregate-materialize',
         status: 'success',
-        source: 'reporting-monthly-aggregates-default',
+        source,
         actor: 'system',
-        snapshotKey: 'kpi_reporting_monthly_aggregates_default_v1',
+        snapshotKey,
         queryKey: built.cache.queryKey,
         range: built.range,
         total: built.total,
@@ -517,29 +488,51 @@ export class ReportingService {
       await this.recordJobRun({
         job: 'reporting-monthly-aggregate-materialize',
         status: 'error',
-        source: 'reporting-monthly-aggregates-default',
+        source,
         actor: 'system',
-        snapshotKey: 'kpi_reporting_monthly_aggregates_default_v1',
-        queryKey: buildMonthlyAggregateQueryKey(defaultQuery),
+        snapshotKey,
+        queryKey: buildMonthlyAggregateQueryKey(query),
         range: {
-          from: normalizeText(defaultQuery.from),
-          to: normalizeText(defaultQuery.to),
+          from: normalizeText(query.from),
+          to: normalizeText(query.to),
         },
         startedAt,
         finishedAt: new Date().toISOString(),
         error:
           error instanceof Error
             ? error.message
-            : 'Failed to build default monthly reporting aggregates.',
+            : 'Failed to build monthly reporting aggregates.',
       });
       throw error;
     }
   }
 
   private async readDefaultAggregateStatus(): Promise<ReportingAggregateStatus> {
-    const defaultSnapshot = await this.readOrBuildDefaultMonthlyAggregateSnapshot();
+    const snapshot = await this.repository.readReportingSnapshot();
+    const defaultQuery = buildDefaultMonthlyAggregateQuery(snapshot.declarations);
+    const defaultSnapshot = hasAggregateQuery(defaultQuery)
+      ? await this.readStoredMonthlyAggregateSnapshot(
+          DEFAULT_MONTHLY_AGGREGATE_KEY,
+          defaultQuery,
+          snapshot,
+        )
+      : null;
     if (!defaultSnapshot) {
-      return toAggregateStatus(null);
+      if (!hasAggregateQuery(defaultQuery)) {
+        return toAggregateStatus(null);
+      }
+
+      const built = await this.materializeMonthlyAggregateSnapshot(snapshot, defaultQuery, {
+        snapshotKey: DEFAULT_MONTHLY_AGGREGATE_KEY,
+        source: 'reporting-monthly-aggregates-default',
+      });
+      return {
+        available: true,
+        generatedAt: built.generatedAt,
+        queryKey: built.cache.queryKey,
+        total: built.total,
+        range: built.range,
+      };
     }
 
     return {
@@ -584,65 +577,6 @@ export class ReportingService {
   }
 }
 
-function toRuleSetReference(ruleSet: LegacyReportData['rules']): RuleSetReference {
-  return {
-    id: ruleSet.id,
-    name: ruleSet.name,
-  };
-}
-
-function normalizeAdjustments(input: LegacyReportData['adjustments'] | undefined): ReportingAdjustmentsResponse {
-  const source = isRecord(input) ? input : {};
-
-  return {
-    list: Array.isArray(source.list) ? source.list.filter(isRecord) : [],
-    applied: Array.isArray(source.applied) ? source.applied.filter(isRecord) : [],
-    totalPoints: Number(source.totalPoints || 0),
-    pendingCount: Number(source.pendingCount || 0),
-    approvedCount: Number(source.approvedCount || 0),
-    rejectedCount: Number(source.rejectedCount || 0),
-    appliedCount: Number(source.appliedCount || 0),
-    totalsByCategory: isRecord(source.totalsByCategory) ? source.totalsByCategory : {},
-  };
-}
-
-async function buildSummaryCompanyGroups(report: LegacyReportData): Promise<ReportingCompanyGroups> {
-  const rows = report.staff.list.flatMap((item) => item.rows);
-
-  return {
-    staff: await aggregateLegacyCompanies(rows, { includeStaff: true, includeTeam: false }),
-    teams: await aggregateLegacyCompanies(rows, { includeStaff: true, includeTeam: true }),
-  };
-}
-
-async function enrichStaffItems(
-  items: LegacyReportData['staff']['list']
-): Promise<ReportingStaffItemResponse[]> {
-  return Promise.all(
-    items.map(async (item) => ({
-      ...item,
-      companies: await aggregateLegacyCompanies(item.rows, {
-        includeStaff: false,
-        includeTeam: false,
-      }),
-    }))
-  );
-}
-
-async function enrichTeamItems(
-  items: LegacyReportData['teams']['list']
-): Promise<ReportingTeamItemResponse[]> {
-  return Promise.all(
-    items.map(async (item) => ({
-      ...item,
-      companies: await aggregateLegacyCompanies(item.rows, {
-        includeStaff: true,
-        includeTeam: false,
-      }),
-    }))
-  );
-}
-
 function resolveRequestedRuleSet(
   snapshot: Awaited<ReturnType<ReportingRepository['readReportingSnapshot']>>,
   ruleIdInput?: string,
@@ -670,14 +604,6 @@ function resolveAsOfDate(input?: string): Date | undefined {
 
   const parsed = new Date(input);
   return Number.isNaN(parsed.getTime()) ? undefined : parsed;
-}
-
-function applyLimit<T>(items: readonly T[], limit?: number): T[] {
-  if (!Number.isFinite(limit) || !limit || limit <= 0) {
-    return [...items];
-  }
-
-  return items.slice(0, Math.trunc(limit));
 }
 
 function toAggregateStatus(snapshot: Record<string, unknown> | null): ReportingAggregateStatus {
@@ -743,6 +669,95 @@ function normalizeStoredMonthlyAggregateSnapshot(
       ? (snapshot.items as ReportingMonthlyAggregateResponse['items'])
       : [],
   };
+}
+
+function attachStoredMonthlyAggregateProjectionState(
+  snapshot: ReportingMonthlyAggregateResponse,
+  sourceSnapshot: ReportingSourceSnapshot,
+  query: ReportingQuery,
+  options: {
+    snapshotKey: string;
+    actor?: string;
+    source?: string;
+    invalidatedAt?: string;
+    invalidatedByKey?: string;
+  },
+): Record<string, unknown> {
+  const refreshedAt = normalizeText(snapshot.generatedAt) || new Date().toISOString();
+
+  return {
+    ...snapshot,
+    projectionState: {
+      schemaVersion: 1,
+      snapshotKey: normalizeText(options.snapshotKey),
+      refreshedAt,
+      refreshedBy: normalizeText(options.actor) || 'system',
+      refreshSource: normalizeText(options.source),
+      invalidatedAt: normalizeText(options.invalidatedAt),
+      invalidatedByKey: normalizeText(options.invalidatedByKey),
+      freshnessKey: buildStoredMonthlyAggregateFreshnessKey(sourceSnapshot, query),
+      owner: {
+        ruleSetId: normalizeText(sourceSnapshot.activeRuleSet?.id) || 'default',
+        ruleUpdatedAt: normalizeText(sourceSnapshot.activeRuleSet?.updatedAt),
+      },
+      sourceCounts: {
+        declarations: Array.isArray(sourceSnapshot.declarations) ? sourceSnapshot.declarations.length : 0,
+        teams: Array.isArray(sourceSnapshot.roster?.teams) ? sourceSnapshot.roster.teams.length : 0,
+        adjustments: Array.isArray(sourceSnapshot.adjustments) ? sourceSnapshot.adjustments.length : 0,
+      },
+    },
+  };
+}
+
+function isStoredMonthlyAggregateSnapshotStale(
+  snapshotInput: Record<string, unknown> | null,
+  sourceSnapshot: ReportingSourceSnapshot,
+  query: ReportingQuery,
+): boolean {
+  const snapshot = isRecord(snapshotInput) ? snapshotInput : null;
+  if (!snapshot) {
+    return true;
+  }
+
+  const projectionState = getRecord(snapshot.projectionState);
+  if (!Object.keys(projectionState).length) {
+    return false;
+  }
+
+  const owner = getRecord(projectionState.owner);
+  const expectedFreshnessKey = buildStoredMonthlyAggregateFreshnessKey(sourceSnapshot, query);
+  const storedFreshnessKey = normalizeText(projectionState.freshnessKey);
+  if (storedFreshnessKey && storedFreshnessKey !== expectedFreshnessKey) {
+    return true;
+  }
+
+  const currentRuleSetId = normalizeText(sourceSnapshot.activeRuleSet?.id) || 'default';
+  if (normalizeText(owner.ruleSetId) && normalizeText(owner.ruleSetId) !== currentRuleSetId) {
+    return true;
+  }
+
+  const currentRuleUpdatedAt = normalizeText(sourceSnapshot.activeRuleSet?.updatedAt);
+  if (normalizeText(owner.ruleUpdatedAt) && normalizeText(owner.ruleUpdatedAt) !== currentRuleUpdatedAt) {
+    return true;
+  }
+
+  const invalidatedAt = normalizeText(projectionState.invalidatedAt);
+  const refreshedAt = normalizeText(projectionState.refreshedAt);
+  return Boolean(invalidatedAt && refreshedAt && invalidatedAt > refreshedAt);
+}
+
+function buildStoredMonthlyAggregateFreshnessKey(
+  sourceSnapshot: ReportingSourceSnapshot,
+  query: ReportingQuery,
+): string {
+  return JSON.stringify({
+    queryKey: buildMonthlyAggregateQueryKey(query),
+    ruleSetId: normalizeText(sourceSnapshot.activeRuleSet?.id) || 'default',
+    ruleUpdatedAt: normalizeText(sourceSnapshot.activeRuleSet?.updatedAt),
+    declarationCount: Array.isArray(sourceSnapshot.declarations) ? sourceSnapshot.declarations.length : 0,
+    teamCount: Array.isArray(sourceSnapshot.roster?.teams) ? sourceSnapshot.roster.teams.length : 0,
+    adjustmentCount: Array.isArray(sourceSnapshot.adjustments) ? sourceSnapshot.adjustments.length : 0,
+  });
 }
 
 function getRecord(input: unknown): Record<string, unknown> {

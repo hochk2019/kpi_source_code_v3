@@ -39,6 +39,10 @@ describe('reportingProjectionStore', () => {
       generatedAt: '2026-03-09T00:00:00.000Z',
       total: 2,
       range: { from: '2026-02-01', to: '2026-02-28' },
+      projectionState: {
+        schemaVersion: 1,
+        freshnessKey: 'internal-only',
+      },
       cache: {
         queryKey: JSON.stringify({
           from: '2026-02-01',
@@ -68,6 +72,7 @@ describe('reportingProjectionStore', () => {
       },
       items: [{ period: '2026-02' }],
     });
+    expect(cached).not.toHaveProperty('projectionState');
 
     cached.items.push({ period: 'mutated' });
     expect(memoryStore.values.get(MONTHLY_REPORTING_AGGREGATE_KEY).items).toEqual([{ period: '2026-02' }]);

@@ -70,14 +70,7 @@ export function createReportingProjectionStore(storage = {}) {
       return null;
     }
 
-    const cloned = cloneJson(snapshot);
-    return {
-      ...cloned,
-      cache: {
-        queryKey,
-        reused: true,
-      },
-    };
+    return toCachedMonthlyAggregateSnapshot(snapshot, queryKey);
   }
 
   function buildMonthlyAggregateStatus(snapshot) {
@@ -191,6 +184,22 @@ function cloneJson(value) {
   }
 
   return JSON.parse(JSON.stringify(value));
+}
+
+function toCachedMonthlyAggregateSnapshot(snapshot, queryKey) {
+  const cloned = cloneJson(snapshot);
+  if (!isRecord(cloned)) {
+    return null;
+  }
+
+  delete cloned.projectionState;
+  return {
+    ...cloned,
+    cache: {
+      queryKey,
+      reused: true,
+    },
+  };
 }
 
 function isRecord(value) {

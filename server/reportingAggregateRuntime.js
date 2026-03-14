@@ -227,8 +227,29 @@ export function createReportingAggregateRuntime(options = {}) {
   function readCachedMonthlyReportingAggregateSnapshotFromKey(
     query,
     snapshotKey = activeSnapshotKey,
+    options = {},
   ) {
-    return projectionStore.readCachedMonthlyAggregateSnapshot(query, snapshotKey);
+    const cached = projectionStore.readCachedMonthlyAggregateSnapshot(query, snapshotKey);
+    if (!cached) {
+      return null;
+    }
+
+    const sourceSnapshot = options.sourceSnapshot
+      ? normalizeSourceSnapshot(options.sourceSnapshot)
+      : null;
+    const storedSnapshot = sourceSnapshot
+      ? readStoredMonthlyReportingAggregateSnapshot(snapshotKey)
+      : null;
+
+    if (
+      sourceSnapshot &&
+      storedSnapshot &&
+      isStoredMonthlyReportingAggregateSnapshotStale(storedSnapshot, sourceSnapshot, query)
+    ) {
+      return null;
+    }
+
+    return cached;
   }
 
   function readRawReportingSourceSnapshot() {
@@ -245,7 +266,14 @@ export function createReportingAggregateRuntime(options = {}) {
 
     try {
       const data = buildMonthlyReportingAggregateData(sourceSnapshot, query || {});
-      projectionStore.writeMonthlyAggregateSnapshot(data, {
+      const storedSnapshot = attachMonthlyAggregateProjectionState(data, sourceSnapshot, query, {
+        actor,
+        snapshotKey,
+        source,
+        invalidatedAt: normalizeText(options.invalidatedAt) || startedAt,
+        invalidatedByKey: normalizeText(options.invalidatedByKey),
+      });
+      projectionStore.writeMonthlyAggregateSnapshot(storedSnapshot, {
         actor,
         snapshotKey,
         source,
@@ -264,7 +292,10 @@ export function createReportingAggregateRuntime(options = {}) {
           finishedAt: data.generatedAt,
         }),
       );
-      return data;
+      return sanitizeMonthlyAggregateSnapshot(storedSnapshot, {
+        queryKey,
+        reused: false,
+      });
     } catch (error) {
       appendReportingJobRun(
         buildReportingJobRunImpl({
@@ -300,12 +331,15 @@ export function createReportingAggregateRuntime(options = {}) {
     const query = readStoredMonthlyReportingAggregateQuery(
       readStoredMonthlyReportingAggregateSnapshot(activeSnapshotKey),
     );
+    const invalidatedAt = new Date().toISOString();
 
     if (query) {
       materializeStoredMonthlyReportingAggregateSnapshot(sourceSnapshot, query, {
         actor,
         snapshotKey: activeSnapshotKey,
         source: options.source || `reporting-monthly-aggregates-refresh:${key}`,
+        invalidatedAt,
+        invalidatedByKey: key,
       });
     } else {
       projectionStore.deleteMonthlyAggregateSnapshot(activeSnapshotKey);
@@ -321,23 +355,30 @@ export function createReportingAggregateRuntime(options = {}) {
       actor,
       snapshotKey: defaultSnapshotKey,
       source: options.source || `reporting-monthly-aggregates-default-refresh:${key}`,
+      invalidatedAt,
+      invalidatedByKey: key,
     });
   }
 
   function materializeMonthlyReportingAggregateSnapshot(sourceSnapshotInput, query, options = {}) {
     const snapshotKey = options.snapshotKey || activeSnapshotKey;
-    const cached = readCachedMonthlyReportingAggregateSnapshotFromKey(query, snapshotKey);
+    const actor = options.actor || 'system';
+    const sourceSnapshot =
+      typeof sourceSnapshotInput === 'function' ? sourceSnapshotInput() : sourceSnapshotInput;
+    const normalizedSourceSnapshot = normalizeSourceSnapshot(sourceSnapshot);
+    const cached = readCachedMonthlyReportingAggregateSnapshotFromKey(query, snapshotKey, {
+      sourceSnapshot: normalizedSourceSnapshot,
+    });
     if (cached) {
       return cached;
     }
 
-    const actor = options.actor || 'system';
-    const sourceSnapshot =
-      typeof sourceSnapshotInput === 'function' ? sourceSnapshotInput() : sourceSnapshotInput;
     const data = materializeStoredMonthlyReportingAggregateSnapshot(sourceSnapshot, query, {
       actor,
       snapshotKey,
       source: options.source || 'reporting-monthly-aggregates',
+      invalidatedAt: normalizeText(options.invalidatedAt),
+      invalidatedByKey: normalizeText(options.invalidatedByKey),
     });
 
     return cloneJson(data);
@@ -380,6 +421,7 @@ export function createReportingAggregateRuntime(options = {}) {
     resolveDefaultMonthlyReportingAggregateQuery,
     buildMonthlyReportingAggregateData,
     readCachedMonthlyReportingAggregateSnapshotFromKey,
+    isStoredMonthlyReportingAggregateSnapshotStale,
     readRawReportingSourceSnapshot,
     materializeStoredMonthlyReportingAggregateSnapshot,
     refreshMonthlyReportingAggregateSnapshot,
@@ -418,6 +460,115 @@ function cloneJson(value) {
   }
 
   return JSON.parse(JSON.stringify(value));
+}
+
+function attachMonthlyAggregateProjectionState(snapshotInput, sourceSnapshotInput, query, options = {}) {
+  const snapshot = isRecord(snapshotInput) ? cloneJson(snapshotInput) : {};
+  const sourceSnapshot = normalizeSourceSnapshot(sourceSnapshotInput);
+  const rules = isRecord(sourceSnapshot.rules) ? sourceSnapshot.rules : {};
+  const refreshedAt = normalizeText(snapshot.generatedAt) || new Date().toISOString();
+
+  return {
+    ...snapshot,
+    projectionState: {
+      schemaVersion: 1,
+      snapshotKey: normalizeText(options.snapshotKey),
+      refreshedAt,
+      refreshedBy: normalizeText(options.actor) || 'system',
+      refreshSource: normalizeText(options.source),
+      invalidatedAt: normalizeText(options.invalidatedAt),
+      invalidatedByKey: normalizeText(options.invalidatedByKey),
+      freshnessKey: buildMonthlyAggregateFreshnessKey(sourceSnapshot, query),
+      owner: {
+        ruleSetId: normalizeText(rules.id) || 'default',
+        ruleUpdatedAt: normalizeText(rules.updatedAt),
+      },
+      sourceCounts: {
+        rows: sourceSnapshot.rows.length,
+        teams: Array.isArray(sourceSnapshot.roster?.teams) ? sourceSnapshot.roster.teams.length : 0,
+        adjustments: sourceSnapshot.adjustments.length,
+        schedules: sourceSnapshot.schedules.length,
+      },
+    },
+  };
+}
+
+function sanitizeMonthlyAggregateSnapshot(snapshotInput, options = {}) {
+  const snapshot = isRecord(snapshotInput) ? cloneJson(snapshotInput) : null;
+  if (!snapshot) {
+    return null;
+  }
+
+  delete snapshot.projectionState;
+  const cache = isRecord(snapshot.cache) ? snapshot.cache : {};
+  return {
+    ...snapshot,
+    cache: {
+      queryKey: normalizeText(options.queryKey) || normalizeText(cache.queryKey),
+      reused: Boolean(options.reused),
+    },
+  };
+}
+
+function isStoredMonthlyReportingAggregateSnapshotStale(snapshotInput, sourceSnapshotInput, query) {
+  const snapshot = isRecord(snapshotInput) ? snapshotInput : null;
+  if (!snapshot) {
+    return true;
+  }
+
+  const projectionState = isRecord(snapshot.projectionState) ? snapshot.projectionState : null;
+  if (!projectionState) {
+    return false;
+  }
+
+  const sourceSnapshot = normalizeSourceSnapshot(sourceSnapshotInput);
+  const rules = isRecord(sourceSnapshot.rules) ? sourceSnapshot.rules : {};
+  const owner = isRecord(projectionState.owner) ? projectionState.owner : {};
+  const storedFreshnessKey = normalizeText(projectionState.freshnessKey);
+  const expectedFreshnessKey = buildMonthlyAggregateFreshnessKey(sourceSnapshot, query);
+
+  if (storedFreshnessKey && storedFreshnessKey !== expectedFreshnessKey) {
+    return true;
+  }
+
+  if (
+    normalizeText(owner.ruleSetId) &&
+    normalizeText(owner.ruleSetId) !== (normalizeText(rules.id) || 'default')
+  ) {
+    return true;
+  }
+
+  if (
+    normalizeText(owner.ruleUpdatedAt) &&
+    normalizeText(owner.ruleUpdatedAt) !== normalizeText(rules.updatedAt)
+  ) {
+    return true;
+  }
+
+  const invalidatedAt = normalizeText(projectionState.invalidatedAt);
+  const refreshedAt = normalizeText(projectionState.refreshedAt);
+  return Boolean(invalidatedAt && refreshedAt && invalidatedAt > refreshedAt);
+}
+
+function buildMonthlyAggregateFreshnessKey(sourceSnapshot, query) {
+  const rules = isRecord(sourceSnapshot.rules) ? sourceSnapshot.rules : {};
+  const roster = isRecord(sourceSnapshot.roster) ? sourceSnapshot.roster : {};
+  return JSON.stringify({
+    queryKey: JSON.stringify({
+      from: normalizeText(query?.from),
+      to: normalizeText(query?.to),
+      limit:
+        typeof query?.limit === 'number' && Number.isFinite(query.limit) && query.limit > 0
+          ? Math.trunc(query.limit)
+          : 0,
+    }),
+    ruleSetId: normalizeText(rules.id) || 'default',
+    ruleUpdatedAt: normalizeText(rules.updatedAt),
+    rowCount: Array.isArray(sourceSnapshot.rows) ? sourceSnapshot.rows.length : 0,
+    teamCount: Array.isArray(roster.teams) ? roster.teams.length : 0,
+    adjustmentCount: Array.isArray(sourceSnapshot.adjustments) ? sourceSnapshot.adjustments.length : 0,
+    scheduleCount: Array.isArray(sourceSnapshot.schedules) ? sourceSnapshot.schedules.length : 0,
+  });
 }
 
 function isRecord(value) {

@@ -7,6 +7,7 @@ import {
   ensureReportingProjectionTable,
   readReportingJobRunProjectionEntries,
   readReportingMonthlyAggregateProjectionEntries,
+  readReportingScheduleProjectionEntries,
   readReportingProjectionValue,
   writeReportingProjectionValue,
 } from '../../../server/reportingProjectionSqlite.js';
@@ -17,6 +18,7 @@ export interface ReportingProjectionPersistence {
   readValue(key: string): Promise<ReportingProjectionPayload>;
   writeValue(key: string, value: ReportingProjectionPayload): Promise<void>;
   deleteValue(key: string): Promise<void>;
+  readScheduleEntries(snapshotKey: string): Promise<Record<string, unknown>[]>;
   readMonthlyAggregateEntries(snapshotKey: string): Promise<Record<string, unknown>[]>;
   readJobRunEntries(snapshotKey: string): Promise<Record<string, unknown>[]>;
 }
@@ -43,6 +45,16 @@ export function createSqliteReportingProjectionPersistence(dbFile: string): Repo
       withWritableDatabase(dbFile, (database) => {
         ensureReportingProjectionTable(database);
         deleteReportingProjectionValue(database, key);
+      });
+    },
+    async readScheduleEntries(snapshotKey) {
+      return withReadableDatabase(dbFile, [], (database) => {
+        ensureReportingProjectionTable(database);
+        const rows = readReportingScheduleProjectionEntries<Record<string, unknown>>(
+          database,
+          snapshotKey,
+        );
+        return Array.isArray(rows) ? rows.filter(isRecord) : [];
       });
     },
     async readMonthlyAggregateEntries(snapshotKey) {

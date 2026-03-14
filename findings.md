@@ -16,18 +16,24 @@
 | `F2` account route authorization | `~95%` | mostly complete | maintain route-level authz as account management evolves; the original takeover risk is closed |
 | `F3` hardcoded credentials | `100%` | complete | keep the env-backed bootstrap contract stable; no active follow-up remains |
 | `F4` public config routes / actor spoofing | `~90%` | mostly complete | guard future operational routes consistently, but the original public-route blocker is no longer open |
-| `F5` blob-backed persistence / wrong data model | `~70%` | partial | reporting still needs a true projection pipeline, typed schedule persistence, and projection-first dashboard/export reads |
+| `F5` blob-backed persistence / wrong data model | `~90%` | mostly complete | reporting aggregate + schedule projections plus the shared dashboard/export read-model contract are landed; residual work is mainly thinner reporting UI ownership and harness cleanup |
 | `F6` contradictory auth model | `~90%` | mostly complete | cookie-session ownership is now canonical; remaining work is mostly guardrail maintenance |
 | `F7` oversized module boundaries | `~75%` | partial | `ReportViewer.jsx` and `DataImporter.jsx` are still larger than the maintainability target |
 | `F8` unreliable baseline / tooling | `~85%` | mostly complete | smoke verification is trustworthy, but reporting tests still emit noisy chart warnings and the harness can be cleaner |
 
 ## Residual Convergence Backlog (`cng-z7u`)
-- `cng-z7u.1` (`P1`, in progress): build the projection-backed reporting aggregate pipeline; this is the foundation for the remaining `F5` work.
-- `cng-z7u.2` (`P1`, blocked by `cng-z7u.1`): move reporting schedules to a typed projection-backed store instead of legacy `kv_store` ownership.
-- `cng-z7u.3` (`P1`, blocked by `cng-z7u.1` and `cng-z7u.2`): converge dashboard and export onto one projection-first reporting read-model contract.
-- `cng-z7u.4` (`P2`, blocked by `cng-z7u.3`): finish `ReportViewer` convergence and split the remaining reporting UI monolith.
+- `cng-z7u.1` (`P1`, closed): build the projection-backed reporting aggregate pipeline; this foundation is now landed.
+- `cng-z7u.2` (`P1`, closed): move reporting schedules to a typed projection-backed store instead of legacy `kv_store` ownership.
+- `cng-z7u.3` (`P1`, closed): converge dashboard and export onto one projection-first reporting read-model contract.
+- `cng-z7u.4` (`P2`, in progress): finish `ReportViewer` convergence and split the remaining reporting UI monolith.
 - `cng-z7u.5` (`P2`, independent): continue `DataImporter` decomposition toward maintainable module boundaries.
 - `cng-z7u.6` (`P3`, blocked by `cng-z7u.4`): silence `Recharts`/jsdom warning noise and harden the reporting harness.
+
+## Latest Reporting UI Status
+- `ReportViewer.jsx` no longer owns the reporting controls/schedule shell directly; that surface now lives in `src/components/reporting/ReportingPanels.jsx` with focused tests.
+- The overview KPI widgets and shared company summary table are now also externalized into `src/components/reporting/ReportingOverviewWidgets.jsx` and `src/components/reporting/CompanySummaryTable.jsx`.
+- `ReportViewer.jsx` is down to `5798` lines from `6838`, which is material progress but still above the maintainability target; the next `cng-z7u.4` seam should target remaining detail-card/local-shaping ownership.
+- The known `Recharts` width/height warning remains in jsdom-backed `reportViewer` tests, so `cng-z7u.6` is still a real follow-on slice after the remaining `ReportViewer` convergence work.
 
 ## Research Findings
 - The project is a JavaScript monolith split across a React/Vite frontend and an Express backend, but both sides centralize major business logic into a handful of oversized files.
@@ -68,6 +74,8 @@
 - The export boundary is tighter now: `/api/reports/export` can rebuild report payloads from a compact `reporting-v4` contract (`source`, `query`, `ruleId`, `staffKey`/`teamKey`, `columns`) and no longer needs to trust large client-posted report blobs for the new path.
 - `ReportViewer` still computes `buildReportData()` in the browser for the interactive screen, so the export hardening is an incremental server-side safety win rather than the final reporting cutover.
 - Reporting schedule writes now sit behind the reporting boundary too: the monolith shim exposes `POST /api/v4/reporting/schedules` and `DELETE /api/v4/reporting/schedules/:id`, and generic storage `PUT`/`DELETE` writes for `kpi_report_schedule_v1` are blocked.
+- Reporting projection persistence is now materially less blob-shaped: active/default monthly aggregates and schedules materialize typed projection rows in both SQLite and Postgres adapters, so the next `F5` gap is read-model convergence, not schedule ownership.
+- `server-v4` `/api/v4/reporting/view` now also resolves through `server/reportingReadModels.js`, so compact export, runtime routes, and dashboard/client tests all lock the same reporting read-model contract; the remaining reporting residue is UI/module split and jsdom chart noise, not backend contract drift.
 - `ReportViewer` no longer depends on store-backed schedule overlays or schedule-key subscriptions. Schedule save/delete now go through `reportingClient`, and the shared reporting schedule cache updates the UI directly after each mutation.
 - The earlier `server-v4` vite-node loader problem is now retired: reporting math has been extracted into shared modules, so `server-v4` no longer needs to import `src/lib/reports.js` via runtime file-URL tricks.
 - Both the monolith shim and `server-v4` can now serve a combined reporting view bundle from `/api/v4/reporting/view`, which lets the dashboard read path cross the reporting boundary in a single request instead of rebuilding the view model from three browser-side fetches.
@@ -214,6 +222,7 @@
 - Schedule refresh is now centralized in the shared `reportingClient` cache/subscription path instead of a component-local reload bump, but more reporting consumers still need to adopt that same query/mutation boundary.
 - The new `/api/v4/reporting/view` bundle removes browser-side request fan-out for `ReportViewer`, but it still recomputes the same legacy KPI math on demand; this is a boundary cleanup, not yet a projection-backed reporting pipeline.
 - Compact `reporting-v4` exports now also resolve through `server/reportingReadModels.js`, so the dashboard bundle and compact export materialization share the same reporting read-model contract even though both still sit on top of legacy on-demand KPI math.
+- `ReportViewer` regression coverage still proves the browser path stays on `/api/v4/reporting/view` without falling back to `/api/v4/reporting/summary`; the remaining reporting verification noise is the known `Recharts` zero-size warning already tracked under `cng-z7u.6`.
 - The monolith now also has a dedicated `server/reportingProjectionStore.js` boundary for `kpi_report_schedule_v1` plus monthly aggregate snapshot keys, which reduces direct `kv_store` key handling inside `server/index.js` and lines the legacy runtime up more closely with the typed `server-v4` reporting repository.
 - That reporting projection boundary now writes to a real `reporting_projections` SQLite table in both runtimes, and the active/default monthly aggregate refresh path now also updates that table instead of silently leaving the read model behind in legacy `kv_store`.
 - `ReportViewer` still had one leftover dashboard fan-out branch for baseline rule comparisons. That branch now also consumes `/api/v4/reporting/view`, and the new UI regression test proves the component no longer hits `/api/v4/reporting/summary` when comparing a selected rule against the active rule.

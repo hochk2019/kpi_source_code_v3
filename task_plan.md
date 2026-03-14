@@ -4,7 +4,7 @@
 Close the remaining incomplete or only-partially-complete end-state work after the main refactor phases: finish the reporting projection/persistence story, converge dashboard/export on one reporting read model, and continue shrinking the last large UI/reporting verification residues.
 
 ## Current Phase
-Execute the projection-backed reporting aggregate pipeline slice (`cng-z7u.1`)
+Execute the `ReportViewer` convergence and residual reporting UI split slice (`cng-z7u.4`)
 
 ## F1-F8 Practical Status Matrix
 | Finding | Practical completion | Status | Residual reality |
@@ -13,38 +13,38 @@ Execute the projection-backed reporting aggregate pipeline slice (`cng-z7u.1`)
 | `F2` account-route authorization | `~95%` | mostly complete | maintain current guards as auth routes evolve; no active blocker remains |
 | `F3` hardcoded credentials | `100%` | complete | env-backed bootstrap contract is now the intended steady state |
 | `F4` public operational routes / actor spoofing | `~90%` | mostly complete | continue guarding new operational routes, but the original blocker is closed |
-| `F5` blob-backed SQLite / weak persistence model | `~70%` | partial | reporting still lacks a true projection pipeline, schedule store is still legacy-backed, and hot reporting reads are not fully projection-first |
+| `F5` blob-backed SQLite / weak persistence model | `~90%` | mostly complete | reporting aggregate + schedule projections plus the shared dashboard/export read-model contract are landed; residual work is now mostly thinner reporting UI ownership and harness cleanup |
 | `F6` contradictory auth model | `~90%` | mostly complete | cookie-session ownership is now canonical; residual work is mostly guardrail maintenance |
 | `F7` oversized module boundaries | `~75%` | partial | `ReportViewer.jsx` and `DataImporter.jsx` remain larger than the target maintainability bar |
 | `F8` unreliable baseline / tooling | `~85%` | mostly complete | smoke gate is green, but reporting tests still emit chart noise and the broad baseline still benefits from cleaner harness output |
 
 ## Residual Convergence Phases (`cng-z7u`)
 ### Phase A: Build Projection-Backed Reporting Aggregate Pipeline (`cng-z7u.1`)
-- [ ] Replace request-time monthly aggregate rebuilds with an explicit projection pipeline for active/default reporting ranges
-- [ ] Record freshness, invalidation, and rule-version ownership in projection state
-- [ ] Add targeted projection refresh/stale-detection regression coverage
-- **Status:** in_progress
+- [x] Replace request-time monthly aggregate rebuilds with an explicit projection pipeline for active/default reporting ranges
+- [x] Record freshness, invalidation, and rule-version ownership in projection state
+- [x] Add targeted projection refresh/stale-detection regression coverage
+- **Status:** complete
 
 ### Phase B: Move Reporting Schedules To A Typed Projection-Backed Store (`cng-z7u.2`)
-- [ ] Retire `kpi_report_schedule_v1` as the primary schedule source of truth
-- [ ] Persist schedule state through a typed reporting store/service boundary
-- [ ] Keep schedule API and persistence regression coverage green
-- **Dependencies:** blocked by `cng-z7u.1`
-- **Status:** open
+- [x] Retire `kpi_report_schedule_v1` as the primary schedule source of truth
+- [x] Persist schedule state through a typed reporting store/service boundary
+- [x] Keep schedule API and persistence regression coverage green
+- **Dependencies:** satisfied by `cng-z7u.1`
+- **Status:** complete
 
 ### Phase C: Converge Dashboard And Export On Projection-First Reporting Read Models (`cng-z7u.3`)
-- [ ] Make `/api/v4/reporting/view` and compact export resolve through the same projection-first read-model path
-- [ ] Retire or thin compatibility `summary|staff|teams` adapters to that same contract
-- [ ] Keep dashboard/export regression coverage green without browser-side request fan-out
-- **Dependencies:** blocked by `cng-z7u.1`, `cng-z7u.2`
-- **Status:** open
+- [x] Make `/api/v4/reporting/view` and compact export resolve through the same projection-first read-model path
+- [x] Retire or thin compatibility `summary|staff|teams` adapters to that same contract
+- [x] Keep dashboard/export regression coverage green without browser-side request fan-out
+- **Dependencies:** unblocked (`cng-z7u.1`, `cng-z7u.2` complete)
+- **Status:** complete
 
 ### Phase D: Finish ReportViewer Convergence And Split Residual Reporting UI Logic (`cng-z7u.4`)
 - [ ] Remove remaining `ReportViewer`-local shaping/request orchestration
-- [ ] Split the reporting UI into smaller modules around the unified client contract
-- [ ] Keep `ReportViewer` and `reportingClient` tests green
-- **Dependencies:** blocked by `cng-z7u.3`
-- **Status:** open
+- [x] Split the reporting UI into smaller modules around the unified client contract
+- [x] Keep `ReportViewer` and `reportingClient` tests green
+- **Dependencies:** unblocked (`cng-z7u.3` complete)
+- **Status:** in_progress
 
 ### Phase E: Continue DataImporter Decomposition Toward Maintainable Module Boundaries (`cng-z7u.5`)
 - [ ] Extract another meaningful importer behavior/presentation seam out of `DataImporter.jsx`

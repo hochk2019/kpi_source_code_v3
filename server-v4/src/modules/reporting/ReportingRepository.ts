@@ -61,7 +61,12 @@ export class ReportingRepository {
     };
   }
 
-  async listRawSchedules(): Promise<Record<string, unknown>[]> {
+  async listScheduleEntries(): Promise<Record<string, unknown>[]> {
+    const relational = await this.projections.readScheduleEntries(REPORT_SCHEDULE_STORAGE_KEY);
+    if (relational.length > 0) {
+      return relational;
+    }
+
     const stored = await this.readProjectionValue(REPORT_SCHEDULE_STORAGE_KEY);
     if (!Array.isArray(stored)) {
       return [];
@@ -70,7 +75,7 @@ export class ReportingRepository {
     return stored.filter(isRecord);
   }
 
-  async writeRawSchedules(items: Record<string, unknown>[]): Promise<void> {
+  async writeScheduleEntries(items: Record<string, unknown>[]): Promise<void> {
     await this.writeProjectionValue(REPORT_SCHEDULE_STORAGE_KEY, items);
   }
 
