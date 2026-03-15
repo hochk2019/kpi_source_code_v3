@@ -1,6 +1,7 @@
 # Findings & Decisions
 
 ## Requirements
+
 - Perform a comprehensive review of the current KPI project.
 - Build a refactor/rebuild plan for a future v4.
 - Optimize system architecture, code quality, UI/UX, and database design.
@@ -10,32 +11,50 @@
 - Consider moving from SQLite to PostgreSQL and moving away from all-JavaScript if justified.
 
 ## F1-F8 Practical Status Matrix
-| Finding | Practical completion | Status | What is actually left |
-|---------|----------------------|--------|------------------------|
-| `F1` bootstrap boundary | `~95%` | mostly complete | preserve the protected bootstrap contract and auth regressions; no new architecture slice is required now |
-| `F2` account route authorization | `~95%` | mostly complete | maintain route-level authz as account management evolves; the original takeover risk is closed |
-| `F3` hardcoded credentials | `100%` | complete | keep the env-backed bootstrap contract stable; no active follow-up remains |
-| `F4` public config routes / actor spoofing | `~90%` | mostly complete | guard future operational routes consistently, but the original public-route blocker is no longer open |
-| `F5` blob-backed persistence / wrong data model | `~90%` | mostly complete | reporting aggregate + schedule projections plus the shared dashboard/export read-model contract are landed; residual work is mainly thinner reporting UI ownership and harness cleanup |
-| `F6` contradictory auth model | `~90%` | mostly complete | cookie-session ownership is now canonical; remaining work is mostly guardrail maintenance |
-| `F7` oversized module boundaries | `~75%` | partial | `ReportViewer.jsx` and `DataImporter.jsx` are still larger than the maintainability target |
-| `F8` unreliable baseline / tooling | `~85%` | mostly complete | smoke verification is trustworthy, but reporting tests still emit noisy chart warnings and the harness can be cleaner |
+
+| Finding                                         | Practical completion | Status          | What is actually left                                                                                                                                                                  |
+| ----------------------------------------------- | -------------------- | --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `F1` bootstrap boundary                         | `~95%`               | mostly complete | preserve the protected bootstrap contract and auth regressions; no new architecture slice is required now                                                                              |
+| `F2` account route authorization                | `~95%`               | mostly complete | maintain route-level authz as account management evolves; the original takeover risk is closed                                                                                         |
+| `F3` hardcoded credentials                      | `100%`               | complete        | keep the env-backed bootstrap contract stable; no active follow-up remains                                                                                                             |
+| `F4` public config routes / actor spoofing      | `~90%`               | mostly complete | guard future operational routes consistently, but the original public-route blocker is no longer open                                                                                  |
+| `F5` blob-backed persistence / wrong data model | `~90%`               | mostly complete | reporting aggregate + schedule projections plus the shared dashboard/export read-model contract are landed; residual work is mainly thinner reporting UI ownership and harness cleanup |
+| `F6` contradictory auth model                   | `~90%`               | mostly complete | cookie-session ownership is now canonical; remaining work is mostly guardrail maintenance                                                                                              |
+| `F7` oversized module boundaries                | `~90%`               | mostly complete | `DataImporter.jsx` is now a thin wrapper, `ReportViewer.jsx` is now below the soft cap, and the remaining maintainability residue is scattered smaller seam cleanup rather than one hotspot |
+| `F8` unreliable baseline / tooling              | `~95%`               | mostly complete | smoke verification is trustworthy and the reporting chart harness noise is fixed; remaining baseline work is general repo hygiene rather than this specific warning class                |
 
 ## Residual Convergence Backlog (`cng-z7u`)
+
 - `cng-z7u.1` (`P1`, closed): build the projection-backed reporting aggregate pipeline; this foundation is now landed.
 - `cng-z7u.2` (`P1`, closed): move reporting schedules to a typed projection-backed store instead of legacy `kv_store` ownership.
 - `cng-z7u.3` (`P1`, closed): converge dashboard and export onto one projection-first reporting read-model contract.
-- `cng-z7u.4` (`P2`, in progress): finish `ReportViewer` convergence and split the remaining reporting UI monolith.
-- `cng-z7u.5` (`P2`, independent): continue `DataImporter` decomposition toward maintainable module boundaries.
-- `cng-z7u.6` (`P3`, blocked by `cng-z7u.4`): silence `Recharts`/jsdom warning noise and harden the reporting harness.
+- `cng-z7u.4` (`P2`, closed): finish `ReportViewer` convergence and split the remaining reporting UI monolith.
+- `cng-z7u.5` (`P2`, closed): continue `DataImporter` decomposition toward maintainable module boundaries.
+- `cng-z7u.6` (`P3`, closed): silence `Recharts`/jsdom warning noise and harden the reporting harness.
 
 ## Latest Reporting UI Status
+
 - `ReportViewer.jsx` no longer owns the reporting controls/schedule shell directly; that surface now lives in `src/components/reporting/ReportingPanels.jsx` with focused tests.
 - The overview KPI widgets and shared company summary table are now also externalized into `src/components/reporting/ReportingOverviewWidgets.jsx` and `src/components/reporting/CompanySummaryTable.jsx`.
-- `ReportViewer.jsx` is down to `5798` lines from `6838`, which is material progress but still above the maintainability target; the next `cng-z7u.4` seam should target remaining detail-card/local-shaping ownership.
-- The known `Recharts` width/height warning remains in jsdom-backed `reportViewer` tests, so `cng-z7u.6` is still a real follow-on slice after the remaining `ReportViewer` convergence work.
+- The staff/team detail cards now live in `src/components/reporting/StaffDetailCard.jsx` and `src/components/reporting/TeamDetailCard.jsx`, with shared sort/pagination/button helpers in `src/components/reporting/reportingDetailUtils.js`.
+- `src/components/reporting/useReportViewerReadModel.js` now owns read-model fetch/baseline comparison, schedule subscription/fetch, and reload/version orchestration, with focused regression coverage in `tests/useReportViewerReadModel.test.jsx`.
+- `src/components/reporting/ReportingStaffSection.jsx` and `src/components/reporting/ReportingTeamSection.jsx` now own the remaining staff/team section composition seam, with focused regression coverage in `tests/reportingScopeSections.test.jsx`.
+- `src/components/reporting/ReportingAdjustmentsPanel.jsx` now owns the remaining applied/pending/rejected adjustments seam, while `adjustmentPageSize` preference ownership now lives in `src/components/reporting/useReportViewerPreferences.js`; the seam is locked by `tests/reportingAdjustmentsPanel.test.jsx`.
+- `src/components/reporting/ReportingScopeExplorerPanel.jsx` now owns the scope selector, staff/team chooser, column-visibility controls, and branch handoff into the staff/team sections; the seam is locked by `tests/reportingScopeExplorerPanel.test.jsx`.
+- Before `cng-tuw`, `ReportViewer.jsx` had already been reduced to `1405` lines from `6838`; request/state orchestration, detail-card ownership, staff/team section composition, adjustments rendering, and the scope explorer shell were no longer blockers inside the parent component.
+- `src/components/reporting/ReportingDashboardOverview.jsx` now owns the inline dashboard overview block that previously sat immediately before `ReportingScopeExplorerPanel`, including the summary-card grid, `TrendLineChart`, `TeamPieWidget`, `TopStaffWidget`, and `ReportingAdjustmentsPanel`.
+- `tests/reportingDashboardOverview.test.jsx` now locks the extracted overview seam directly, including top-staff metric/visible-count forwarding and adjustments page-size forwarding.
+- `src/components/reporting/useReportViewerPreferences.js` now owns the report-viewer localStorage key, sanitizers, quick-range/filter initialization, column-visibility persistence, detail page-size state, and adjustment page-size sanitization; the seam is locked by `tests/useReportViewerPreferences.test.jsx`.
+- `src/components/reporting/useReportViewerActions.js` now owns schedule draft/edit/reset/toggle/save/delete behavior plus export permission validation/dispatch; the seam is locked by `tests/useReportViewerActions.test.jsx`.
+- `ReportViewer.jsx` is now down to `735` lines from `6838`; the parent still has residual reporting logic, but the last large preference/action controller seam is no longer inline and the file is below the project soft cap.
+- `vitest.setup.js` now owns an explicit jsdom `ResponsiveContainer` harness for `recharts`, and `tests/reportingOverviewWidgets.test.jsx` now covers populated chart branches while asserting the old width/height-zero warning pattern does not recur.
+- `src/components/DataImporter.jsx` now delegates through `src/components/dataImporter/useDataImporterContainerProps.js`, so the parent component is just a thin shell wrapper while the extracted orchestration hook stays under the project soft cap at `748` lines.
+- `tests/useDataImporterContainerProps.test.jsx` now locks the importer container seam directly, including session-controller wiring, duplicate workflow composition, results-surface composition, and final prop-builder handoff.
+- The mapped `cng-z7u.*` slices are now all closed and the epic itself is closed.
+- The immediate reporting follow-up beads `cng-f2z`, `cng-vlt`, `cng-tuw`, and `cng-2ch` are now all closed; `bd ready --json` is back to `[]`.
 
 ## Research Findings
+
 - The project is a JavaScript monolith split across a React/Vite frontend and an Express backend, but both sides centralize major business logic into a handful of oversized files.
 - The backend persists most business state in SQLite as JSON blobs inside `kv_store`, including declaration rows, MST assignments, KPI rules, teams, accounts, alerts, and schedules.
 - Several routes appear to trust unauthenticated requests or request-supplied `actor` values for sensitive operations; this is more than a code-quality issue and may be a security issue.
@@ -86,58 +105,61 @@
 - Retiring those business blob fallbacks safely requires test fixtures to materialize typed snapshots from seed data directly; otherwise `server-v4` regressions keep passing for the wrong reason by leaning on the same legacy blobs the runtime is supposed to stop reading.
 
 ## Technical Decisions
-| Decision | Rationale |
-|----------|-----------|
-| Focus findings on security, architecture, data model, and operability first | These dominate both business risk and refactor cost |
-| Use UI skills for design-system and workflow recommendations, not only visual commentary | The user explicitly requested UI/UX optimization, and the UI problems are structural |
-| Recommend staged migration over a one-shot rewrite | The system has many operational features and business rules that would be easy to lose in a rewrite |
-| Put the long-form review in `docs/system-v4-review-plan.md` | Keeps the review persistent and reusable in later implementation turns |
-| Track the execution program under epic `cng-7c8` | Review is done; implementation now needs phase-by-phase control |
-| Start implementation with security hardening (`cng-7c8.1`) | Broken trust boundaries are the highest-risk defects in the current codebase |
-| Treat the remaining ESLint output as legacy warning debt, not a blocker to migration work | The baseline now has `0` lint errors and `61` warnings, so the repo is usable again |
-| Move next to `cng-7c8.3` instead of spending more time polishing Phase 0 | The highest remaining design risk is auth/session inconsistency, not tooling breakage |
-| Remove bearer-token behavior from the frontend before changing backend auth responses | This shrinks the XSS/session surface first while keeping the backend contract change isolated for the next slice |
-| Normalize touched files back to `CRLF` before lint verification | This repo enforces Windows line endings, so auth cleanup needs format normalization to keep lint green |
-| Close `cng-7c8.3` after documenting the backend guard surface | Phase 1A is about making the auth/session boundary coherent, not endlessly polishing adjacent UI code |
-| Keep rule-engine payloads and low-churn operational config in JSONB for the first Postgres cut | Deeply normalizing rules/config now would add migration cost without helping the hot paths |
-| Introduce explicit `kpi_declaration_results` and monthly aggregate tables keyed by `rule_set_id` | Reporting and AI snapshots need derived data, but the derivation must remain traceable to the active rules |
-| Use typed event tables for declaration/MST/HQ history instead of more JSON history blobs | The current history arrays are append-only event streams in disguise |
-| Keep the first TypeScript backend scaffold isolated in `server-v4/` instead of rewiring the production backend immediately | This lets the team establish contracts and tests without destabilizing the current Express monolith |
-| Use a read-only legacy SQLite adapter as the first migration bridge for `server-v4` | This preserves current data truth while proving the new domain boundaries before PostgreSQL cutover work begins |
-| Normalize legacy `kpi_rules_v2` snapshots into a v4 rule-collection response instead of forcing collection-shaped storage first | The current store still mixes single-rule payloads with newer collection expectations, so the bridge should absorb that mismatch |
-| Let declaration MST filters match both exact IDs and branch-suffixed IDs during the bridge period | Operators may search by the base company MST while legacy rows still carry branch suffix digits |
-| Reuse the legacy `buildReportData()` function through a small async bridge instead of re-implementing reporting math in `server-v4` | Rule-sensitive KPI calculations are already subtle; duplicating them before the aggregate redesign would create parity bugs for little gain |
-| Add monolith-side `/api/v4/reporting/*` shim routes before switching the frontend to `server-v4` | The frontend needs a stable read-model contract now, but operations do not yet depend on a separate v4 runtime process or Postgres aggregates |
-| Tighten `/api/reports/export` with a compact reporting contract before refactoring the full `ReportViewer` read path | This removes direct trust in client-computed export blobs with a much smaller blast radius than a full reporting UI cutover |
-| Route schedule writes through explicit reporting endpoints instead of the generic storage API | Leaving `kpi_report_schedule_v1` mutations on `/api/storage` would keep the reporting boundary half-open and bypass the stricter reporting-specific contract |
-| Replace hardcoded seed passwords with env-backed bootstrap contracts keyed by account name | Removes known shipped credentials while keeping deterministic local/test bootstrap behavior |
-| Require `KPI_BOOTSTRAP_ADMIN_PASSWORD` only when no persisted admin exists | Prevents secure bootstrap hardening from breaking already-populated local/runtime databases |
-| Add `@typescript-eslint` at the workspace root and target the first `server-v4` slice via explicit flat-config globs | This gives the extracted TypeScript runtime a real lint boundary without forcing a repo-wide lint migration in one step |
-| Keep `linebreak-style` disabled for the `server-v4` TypeScript scope and add a config-file override for `eslint.config.js` | The first hardening slice should expose meaningful TS issues, not explode on legacy LF-heavy files or local Windows `autocrlf` noise |
-| Split remaining post-cutover hardening into follow-up beads `cng-4or.2` and `cng-4or.3` | The initial lint slice is done; broader TS coverage and CI wiring should stay explicit backlog items instead of inflating one task |
-| Expand the Phase B lint seam to all `server-v4/src/**/*.ts` once the first slice is stable | A partial domain allowlist would leave newly extracted runtime modules outside the real hardening gate and quietly reintroduce blind spots |
-| Use `vitest run tests/server-v4 --environment node` for the reusable `test:server-v4` script instead of a quoted glob | The directory-form invocation is stable across Windows/PowerShell and CI, while the quoted glob proved brittle for the repo's cross-platform scripts |
-| Reuse the existing `frontend-ci.yml` workflow for Phase C instead of adding another dedicated workflow file | The goal is to make the current pre-merge path stricter, not split hardening signals across parallel CI definitions |
-| Remove stale nonexistent paths from `format:check` / `format:write` when wiring CI gates | A missing file in the script makes the hardening gate look flaky even when the actual touched sources are clean |
+
+| Decision                                                                                                                            | Rationale                                                                                                                                                    |
+| ----------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Focus findings on security, architecture, data model, and operability first                                                         | These dominate both business risk and refactor cost                                                                                                          |
+| Use UI skills for design-system and workflow recommendations, not only visual commentary                                            | The user explicitly requested UI/UX optimization, and the UI problems are structural                                                                         |
+| Recommend staged migration over a one-shot rewrite                                                                                  | The system has many operational features and business rules that would be easy to lose in a rewrite                                                          |
+| Put the long-form review in `docs/system-v4-review-plan.md`                                                                         | Keeps the review persistent and reusable in later implementation turns                                                                                       |
+| Track the execution program under epic `cng-7c8`                                                                                    | Review is done; implementation now needs phase-by-phase control                                                                                              |
+| Start implementation with security hardening (`cng-7c8.1`)                                                                          | Broken trust boundaries are the highest-risk defects in the current codebase                                                                                 |
+| Treat the remaining ESLint output as legacy warning debt, not a blocker to migration work                                           | The baseline now has `0` lint errors and `61` warnings, so the repo is usable again                                                                          |
+| Move next to `cng-7c8.3` instead of spending more time polishing Phase 0                                                            | The highest remaining design risk is auth/session inconsistency, not tooling breakage                                                                        |
+| Remove bearer-token behavior from the frontend before changing backend auth responses                                               | This shrinks the XSS/session surface first while keeping the backend contract change isolated for the next slice                                             |
+| Normalize touched files back to `CRLF` before lint verification                                                                     | This repo enforces Windows line endings, so auth cleanup needs format normalization to keep lint green                                                       |
+| Close `cng-7c8.3` after documenting the backend guard surface                                                                       | Phase 1A is about making the auth/session boundary coherent, not endlessly polishing adjacent UI code                                                        |
+| Keep rule-engine payloads and low-churn operational config in JSONB for the first Postgres cut                                      | Deeply normalizing rules/config now would add migration cost without helping the hot paths                                                                   |
+| Introduce explicit `kpi_declaration_results` and monthly aggregate tables keyed by `rule_set_id`                                    | Reporting and AI snapshots need derived data, but the derivation must remain traceable to the active rules                                                   |
+| Use typed event tables for declaration/MST/HQ history instead of more JSON history blobs                                            | The current history arrays are append-only event streams in disguise                                                                                         |
+| Keep the first TypeScript backend scaffold isolated in `server-v4/` instead of rewiring the production backend immediately          | This lets the team establish contracts and tests without destabilizing the current Express monolith                                                          |
+| Use a read-only legacy SQLite adapter as the first migration bridge for `server-v4`                                                 | This preserves current data truth while proving the new domain boundaries before PostgreSQL cutover work begins                                              |
+| Normalize legacy `kpi_rules_v2` snapshots into a v4 rule-collection response instead of forcing collection-shaped storage first     | The current store still mixes single-rule payloads with newer collection expectations, so the bridge should absorb that mismatch                             |
+| Let declaration MST filters match both exact IDs and branch-suffixed IDs during the bridge period                                   | Operators may search by the base company MST while legacy rows still carry branch suffix digits                                                              |
+| Reuse the legacy `buildReportData()` function through a small async bridge instead of re-implementing reporting math in `server-v4` | Rule-sensitive KPI calculations are already subtle; duplicating them before the aggregate redesign would create parity bugs for little gain                  |
+| Add monolith-side `/api/v4/reporting/*` shim routes before switching the frontend to `server-v4`                                    | The frontend needs a stable read-model contract now, but operations do not yet depend on a separate v4 runtime process or Postgres aggregates                |
+| Tighten `/api/reports/export` with a compact reporting contract before refactoring the full `ReportViewer` read path                | This removes direct trust in client-computed export blobs with a much smaller blast radius than a full reporting UI cutover                                  |
+| Route schedule writes through explicit reporting endpoints instead of the generic storage API                                       | Leaving `kpi_report_schedule_v1` mutations on `/api/storage` would keep the reporting boundary half-open and bypass the stricter reporting-specific contract |
+| Replace hardcoded seed passwords with env-backed bootstrap contracts keyed by account name                                          | Removes known shipped credentials while keeping deterministic local/test bootstrap behavior                                                                  |
+| Require `KPI_BOOTSTRAP_ADMIN_PASSWORD` only when no persisted admin exists                                                          | Prevents secure bootstrap hardening from breaking already-populated local/runtime databases                                                                  |
+| Add `@typescript-eslint` at the workspace root and target the first `server-v4` slice via explicit flat-config globs                | This gives the extracted TypeScript runtime a real lint boundary without forcing a repo-wide lint migration in one step                                      |
+| Keep `linebreak-style` disabled for the `server-v4` TypeScript scope and add a config-file override for `eslint.config.js`          | The first hardening slice should expose meaningful TS issues, not explode on legacy LF-heavy files or local Windows `autocrlf` noise                         |
+| Split remaining post-cutover hardening into follow-up beads `cng-4or.2` and `cng-4or.3`                                             | The initial lint slice is done; broader TS coverage and CI wiring should stay explicit backlog items instead of inflating one task                           |
+| Expand the Phase B lint seam to all `server-v4/src/**/*.ts` once the first slice is stable                                          | A partial domain allowlist would leave newly extracted runtime modules outside the real hardening gate and quietly reintroduce blind spots                   |
+| Use `vitest run tests/server-v4 --environment node` for the reusable `test:server-v4` script instead of a quoted glob               | The directory-form invocation is stable across Windows/PowerShell and CI, while the quoted glob proved brittle for the repo's cross-platform scripts         |
+| Reuse the existing `frontend-ci.yml` workflow for Phase C instead of adding another dedicated workflow file                         | The goal is to make the current pre-merge path stricter, not split hardening signals across parallel CI definitions                                          |
+| Remove stale nonexistent paths from `format:check` / `format:write` when wiring CI gates                                            | A missing file in the script makes the hardening gate look flaky even when the actual touched sources are clean                                              |
 
 ## Issues Encountered
-| Issue | Resolution |
-|-------|------------|
-| No existing `task.md` or beads DB in the repo copy | Create project-local tracking artifacts for this review |
-| Existing docs are fragmented across multiple plans | Consolidate them into a single review and phased v4 plan |
-| Full test verification was blocked by broken local dependencies (`express`, `vitest`) | Resolved in Phase 0B after dependency recovery and fresh verification runs |
-| Two ECUS sync regression tests were failing on stale range-filter expectations and a test-only raw config injection path | Fixed by restoring the intended query normalization and routing the preview regression through the real config-save API |
-| `pnpm lint` intermittently failed after edits because touched files were written with `LF` in a Windows-enforced repo | Normalized the touched files back to `CRLF`; root lint returned to warnings-only (`0` errors, `61` warnings) |
-| The original `test:server-v4` script used a quoted glob that did not behave as a stable reusable gate on Windows/PowerShell | Replaced it with the directory-form `vitest run tests/server-v4 --environment node` invocation and verified the bundle directly |
-| `format:check` referenced `docs/system-improvement-proposals.md`, which does not exist in this repo copy | Removed the stale path from both `format:check` and `format:write`, then reran `pnpm run format:check` successfully |
-| `git diff --check` reported every CRLF line in touched root/workflow files as trailing whitespace during Phase B/C closure | Restored the repo-formatted `CRLF` files with Prettier, then set repo-local `core.whitespace=cr-at-eol` so the whitespace gate matches the Windows line-ending policy instead of flagging end-of-line carriage returns as trailing whitespace |
-| `tests/reportViewer.test.jsx` asserted the old responsive copy `Top 5 ...`, while the component now renders `Top nhân viên ...` | Updated the assertion to match the current, less brittle heading text |
-| `tests/e2e.admin-flows.test.jsx` still targeted the shell search textbox after the HQ add-row surface exposed a combobox-style agency input | Rescoped the regression to the editable draft `tr` via the agency placeholder, so it now fills MST/company/agency on the real add-row instead of mutating the page search filter |
-| `tests/commandCenter.test.jsx` was order-sensitive in wider bundle runs because `CommandCenter` dispatches navigation commands through a short `setTimeout(10)` | Updated the regression to `waitFor()` the emitted command and scope the reopened search assertion to the active dialog, removing the bundle-only flake |
-| A first attempt to normalize touched root files to `CRLF` made `git diff --check` treat every added line in `eslint.config.js` as trailing whitespace | Reverted the touched root files to `LF` and solved the lint noise with a file-specific `linebreak-style` override instead |
-| `bd` daemon startup remained slow during hardening tracker updates | Let `bd` fall back to direct mode; issue create/update operations still succeeded without blocking the slice |
+
+| Issue                                                                                                                                                           | Resolution                                                                                                                                                                                                                                    |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| No existing `task.md` or beads DB in the repo copy                                                                                                              | Create project-local tracking artifacts for this review                                                                                                                                                                                       |
+| Existing docs are fragmented across multiple plans                                                                                                              | Consolidate them into a single review and phased v4 plan                                                                                                                                                                                      |
+| Full test verification was blocked by broken local dependencies (`express`, `vitest`)                                                                           | Resolved in Phase 0B after dependency recovery and fresh verification runs                                                                                                                                                                    |
+| Two ECUS sync regression tests were failing on stale range-filter expectations and a test-only raw config injection path                                        | Fixed by restoring the intended query normalization and routing the preview regression through the real config-save API                                                                                                                       |
+| `pnpm lint` intermittently failed after edits because touched files were written with `LF` in a Windows-enforced repo                                           | Normalized the touched files back to `CRLF`; root lint returned to warnings-only (`0` errors, `61` warnings)                                                                                                                                  |
+| The original `test:server-v4` script used a quoted glob that did not behave as a stable reusable gate on Windows/PowerShell                                     | Replaced it with the directory-form `vitest run tests/server-v4 --environment node` invocation and verified the bundle directly                                                                                                               |
+| `format:check` referenced `docs/system-improvement-proposals.md`, which does not exist in this repo copy                                                        | Removed the stale path from both `format:check` and `format:write`, then reran `pnpm run format:check` successfully                                                                                                                           |
+| `git diff --check` reported every CRLF line in touched root/workflow files as trailing whitespace during Phase B/C closure                                      | Restored the repo-formatted `CRLF` files with Prettier, then set repo-local `core.whitespace=cr-at-eol` so the whitespace gate matches the Windows line-ending policy instead of flagging end-of-line carriage returns as trailing whitespace |
+| `tests/reportViewer.test.jsx` asserted the old responsive copy `Top 5 ...`, while the component now renders `Top nhân viên ...`                                 | Updated the assertion to match the current, less brittle heading text                                                                                                                                                                         |
+| `tests/e2e.admin-flows.test.jsx` still targeted the shell search textbox after the HQ add-row surface exposed a combobox-style agency input                     | Rescoped the regression to the editable draft `tr` via the agency placeholder, so it now fills MST/company/agency on the real add-row instead of mutating the page search filter                                                              |
+| `tests/commandCenter.test.jsx` was order-sensitive in wider bundle runs because `CommandCenter` dispatches navigation commands through a short `setTimeout(10)` | Updated the regression to `waitFor()` the emitted command and scope the reopened search assertion to the active dialog, removing the bundle-only flake                                                                                        |
+| A first attempt to normalize touched root files to `CRLF` made `git diff --check` treat every added line in `eslint.config.js` as trailing whitespace           | Reverted the touched root files to `LF` and solved the lint noise with a file-specific `linebreak-style` override instead                                                                                                                     |
+| `bd` daemon startup remained slow during hardening tracker updates                                                                                              | Let `bd` fall back to direct mode; issue create/update operations still succeeded without blocking the slice                                                                                                                                  |
 
 ## Resources
+
 - `AGENTS.md`
 - `README.md`
 - `package.json`
@@ -193,14 +215,16 @@
 - `tests/reportExport.test.js`
 
 ## Visual/Browser Findings
+
 - None; this review is based on local code and documentation analysis.
 
 ## Current Residual Risks
+
 - The new monthly aggregate path is still materialized on request and cached back into legacy `kv_store`; it improves contract shape and reuse, but it is not yet a true background precompute pipeline with invalidation/versioning.
 - The new write-time refresh now coexists with a canonical default monthly preset for schedules and no-query reads, but exports and other dashboard/report consumers still do not share a broader preset aggregate strategy yet.
 - Reporting routes still depend on legacy declaration normalization behavior; the new lazy-read/cache-order fix prevents accidental cache eviction, but the deeper source-read path should still be pulled behind explicit projection jobs in a later slice.
 - The export route no longer trusts raw client report blobs for the compact `reporting-v4` path, but the dashboard still derives report state in-browser and only uses the compact contract when exporting; full convergence on shared read models is still pending.
-- ReportViewer/read-model tests still emit `Recharts` width/height `0` warnings under jsdom because `ResponsiveContainer` has no real layout box there; the warnings are currently noise-only and the behavior assertions still pass, but test output will stay chatty until chart rendering is abstracted or mocked more explicitly.
+- Reporting chart rendering is now isolated behind an explicit jsdom harness in `vitest.setup.js`; future reporting/chart tests should keep using that accepted seam (and direct warning assertions where needed) instead of relying on stderr noise or reintroducing implicit zero-size container behavior.
 - The new `companies` read-model contract removes browser-side recomputation, but company identity completeness still depends on what legacy declaration rows actually carry; sparse legacy fixtures can legitimately produce blank `mst`/`cong_ty` while still yielding correct KPI totals and staff/team grouping.
 - `reportingClient` previously still paid a browser-side dedupe cost to build `report.rows` even though `ReportViewer` no longer consumed it; that path is now removed, so any future need for a cross-staff raw-row snapshot should be justified explicitly rather than recreated implicitly.
 - `reportingClient` also previously mirrored collection-level `keysHash` strings from the server into the browser view model without a consumer; that metadata is now stripped client-side, so future reintroduction should only happen if the UI genuinely needs hash-aware invalidation or display behavior.
@@ -236,7 +260,7 @@
 - The new shell regression test also exposed invalid interactive markup in `CommandCenter`: each command row was a `button` containing a nested pin `button`. That has been corrected by moving the row surface to a keyboardable `div[role="button"]`, which removes a hydration/accessibility warning from a core navigation surface.
 - The data-heavy shell still lacked reusable chrome below navigation: `AccountManager` carried one-off section headers, search bars, and table framing that larger screens will otherwise keep copying into MST/import/reporting modules. `src/components/designSystem/shellPrimitives.jsx` is now the first shared seam for that shell layer.
 - `CommandCenter` also lacked true dialog semantics even after the navigation cleanup; the overlay was visually modal but exposed no `role="dialog"` or labelled searchbox to assistive tech. The new shell primitive adoption closes that gap.
-- `MSTAssignment.jsx`, `ReportViewer.jsx`, and especially `DataImporter.jsx` now share the v4 shell primitives, but they remain large monolithic modules. Later UI-heavy phases should keep extracting behavior into smaller modules instead of continuing to accrete shell and workflow logic in place.
+- `MSTAssignment.jsx` and other UI-heavy screens still deserve incremental extraction work, but `ReportViewer.jsx` is now below the soft cap at `735` lines and `DataImporter.jsx` is already a thin wrapper. The remaining `F7` risk is now broader repo hygiene and smaller follow-up seams rather than one blocking reporting monolith.
 - The first low-risk behavior seam inside `DataImporter.jsx` was the multi-select action rail. That block now lives in `src/components/dataImporter/DataImporterSelectionActions.jsx` with isolated regression coverage, which is a workable pattern for continuing the importer breakup without forcing a full workflow redesign in one patch.
 - The new importer action test also showed that this part of the test setup cannot rely on implicit DOM teardown. `tests/dataImporterSelectionActions.test.jsx` needs explicit RTL `cleanup()` in `afterEach` or duplicate controls from prior renders will create false-negative query failures.
 - The ECUS preview/sync operator panel was another clean importer seam: the range presets, manual date inputs, preview table, and run/preview actions now live in `src/components/dataImporter/DataImporterSyncPreviewPanel.jsx`, while the remaining parent component still owns sync state and API orchestration.
@@ -276,6 +300,7 @@
 - The next selection seam after the roster assignment controller was the shared row-selection controller: `src/components/dataImporter/useDataImporterSelectionActions.js` now owns filtered-selection derivation, selected-reviewed counting, row selection toggling, clear selection, and select-filtered behavior, leaving `DataImporter.jsx` free of another selection-state/callback cluster.
 
 ## Program Backlog
+
 - `cng-i6h`: Blueprint end-state follow-through
 - `cng-i6h.5`: Phase E: Retire residual SQLite compatibility and deepen canonical Postgres ownership
 - `cng-7c8`: KPI v4 re-architecture program
@@ -292,6 +317,7 @@
 - `cng-7c8.11`: Phase 3: Observability, QA matrix, and staged rollout
 
 ## 2026-03-11 Importer Workflow Hooks
+
 - The next workflow seam after `dataImporterConfig.js` was the ECUS sync controller: `src/components/dataImporter/useDataImporterSync.js` now owns sync config/status/alert fetches, preview/run mutations, MST filter notices, and post-run reload orchestration, leaving `DataImporter.jsx` with prop wiring instead of another long mutation-heavy branch.
 - The next orchestration seam after that was the C/O monitoring controller: `src/components/dataImporter/useDataImporterCoMonitoring.js` now owns code-config/discrepancy fetches, save/run mutations, mismatch preview shaping, and refreshed state sync, leaving `DataImporter.jsx` with view-state wiring instead of another long admin-only monitoring branch.
 - The next low-risk session seam after the sync/monitoring hooks was the saved-session controller: `src/components/dataImporter/useDataImporterSavedSession.js` now owns persisted-row loading, saved-mode UI reset, auto-load-on-mount behavior, duplicate-filter reset when leaving saved mode, and unsaved-navigation guarding, leaving `DataImporter.jsx` free of another state-reset/effect cluster.
@@ -515,6 +541,7 @@
 - The local `better-sqlite3` type shim had drifted behind runtime reality: build only surfaced the gap once the new SQLite teams store used `database.transaction()`. Keeping that declaration aligned with the runtime API is now part of the server-v4 hardening boundary for future SQLite-backed adapters.
 
 ## 2026-03-14 Broad Backend Diagnostic Reduction (`cng-cff`)
+
 - The broad `tests/server.seed.test.js + tests/server.api.test.js` bundle was not inherently flaky anymore; the active failures reduced cleanly once stale fixtures were normalized and the final rule-selection regression was isolated instead of treating the whole bundle as undifferentiated noise.
 - The last remaining failure came from `getRulesValue()` accepting only rule collections that `resolveReportingRule()` considered valid. Legacy/simple rule snapshots with `license` but no `groups` were discarded and silently replaced by `SHARED_DEFAULT_RULES`.
 - That fallback masked HQ agency-specific ECUS license exclusions: the agency/company binding still resolved correctly, but excluded codes such as `AG01` were not removed because the runtime was applying the shared default rule set instead of the test-provided legacy snapshot.
@@ -527,6 +554,7 @@
   - after widening rule-set detection and adding regressions: `0` failures in `tests/server.seed.test.js + tests/server.api.test.js + tests/reportingRuleSelection.test.js`
 
 ## 2026-03-14 Smoke Gate Pool Disposal Regression (`cng-q7u`)
+
 - `verify:smoke:core` exposed a contract mismatch, not a broad persistence failure: `createPostgresReportingProjectionPersistence()` treated any injected pool as caller-owned unless `managePool` was set, so direct consumers could call `dispose()` and never close the pool.
 - The runtime already models shared-pool ownership explicitly in `runtimePersistence` by passing `managePool: false`. That makes the safe default the opposite of the old implementation: standalone persistence instances should own disposal unless the caller opts out.
 - The correct fix is a default ownership change plus explicit regression coverage for the opt-out path. Reworking `runtimePersistence` or weakening `dispose()` would have blurred the boundary between standalone persistence helpers and the shared runtime pool.

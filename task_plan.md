@@ -1,31 +1,37 @@
 # Task Plan: Residual End-State Convergence After V4 Refactor
 
 ## Goal
+
 Close the remaining incomplete or only-partially-complete end-state work after the main refactor phases: finish the reporting projection/persistence story, converge dashboard/export on one reporting read model, and continue shrinking the last large UI/reporting verification residues.
 
 ## Current Phase
-Execute the `ReportViewer` convergence and residual reporting UI split slice (`cng-z7u.4`)
+
+Mapped `cng-z7u` child slices plus the immediate follow-up beads `cng-f2z`, `cng-vlt`, `cng-tuw`, and `cng-2ch` are complete; there is no ready residual bead active right now.
 
 ## F1-F8 Practical Status Matrix
-| Finding | Practical completion | Status | Residual reality |
-|---------|----------------------|--------|------------------|
-| `F1` bootstrap auth boundary | `~95%` | mostly complete | keep protected bootstrap and regression coverage intact; not an active redesign slice |
-| `F2` account-route authorization | `~95%` | mostly complete | maintain current guards as auth routes evolve; no active blocker remains |
-| `F3` hardcoded credentials | `100%` | complete | env-backed bootstrap contract is now the intended steady state |
-| `F4` public operational routes / actor spoofing | `~90%` | mostly complete | continue guarding new operational routes, but the original blocker is closed |
-| `F5` blob-backed SQLite / weak persistence model | `~90%` | mostly complete | reporting aggregate + schedule projections plus the shared dashboard/export read-model contract are landed; residual work is now mostly thinner reporting UI ownership and harness cleanup |
-| `F6` contradictory auth model | `~90%` | mostly complete | cookie-session ownership is now canonical; residual work is mostly guardrail maintenance |
-| `F7` oversized module boundaries | `~75%` | partial | `ReportViewer.jsx` and `DataImporter.jsx` remain larger than the target maintainability bar |
-| `F8` unreliable baseline / tooling | `~85%` | mostly complete | smoke gate is green, but reporting tests still emit chart noise and the broad baseline still benefits from cleaner harness output |
+
+| Finding                                          | Practical completion | Status          | Residual reality                                                                                                                                                                           |
+| ------------------------------------------------ | -------------------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `F1` bootstrap auth boundary                     | `~95%`               | mostly complete | keep protected bootstrap and regression coverage intact; not an active redesign slice                                                                                                      |
+| `F2` account-route authorization                 | `~95%`               | mostly complete | maintain current guards as auth routes evolve; no active blocker remains                                                                                                                   |
+| `F3` hardcoded credentials                       | `100%`               | complete        | env-backed bootstrap contract is now the intended steady state                                                                                                                             |
+| `F4` public operational routes / actor spoofing  | `~90%`               | mostly complete | continue guarding new operational routes, but the original blocker is closed                                                                                                               |
+| `F5` blob-backed SQLite / weak persistence model | `~90%`               | mostly complete | reporting aggregate + schedule projections plus the shared dashboard/export read-model contract are landed; residual work is now mostly thinner reporting UI ownership and harness cleanup |
+| `F6` contradictory auth model                    | `~90%`               | mostly complete | cookie-session ownership is now canonical; residual work is mostly guardrail maintenance                                                                                                   |
+| `F7` oversized module boundaries                 | `~90%`               | mostly complete | `DataImporter.jsx` is now a thin wrapper, `ReportViewer.jsx` is now below the soft cap, and the remaining residue is smaller repo-wide seam cleanup rather than one blocking hotspot        |
+| `F8` unreliable baseline / tooling               | `~95%`               | mostly complete | smoke gate is green and the reporting chart-noise harness is fixed; remaining baseline work is general repo hygiene, not this specific jsdom warning class                                 |
 
 ## Residual Convergence Phases (`cng-z7u`)
+
 ### Phase A: Build Projection-Backed Reporting Aggregate Pipeline (`cng-z7u.1`)
+
 - [x] Replace request-time monthly aggregate rebuilds with an explicit projection pipeline for active/default reporting ranges
 - [x] Record freshness, invalidation, and rule-version ownership in projection state
 - [x] Add targeted projection refresh/stale-detection regression coverage
 - **Status:** complete
 
 ### Phase B: Move Reporting Schedules To A Typed Projection-Backed Store (`cng-z7u.2`)
+
 - [x] Retire `kpi_report_schedule_v1` as the primary schedule source of truth
 - [x] Persist schedule state through a typed reporting store/service boundary
 - [x] Keep schedule API and persistence regression coverage green
@@ -33,6 +39,7 @@ Execute the `ReportViewer` convergence and residual reporting UI split slice (`c
 - **Status:** complete
 
 ### Phase C: Converge Dashboard And Export On Projection-First Reporting Read Models (`cng-z7u.3`)
+
 - [x] Make `/api/v4/reporting/view` and compact export resolve through the same projection-first read-model path
 - [x] Retire or thin compatibility `summary|staff|teams` adapters to that same contract
 - [x] Keep dashboard/export regression coverage green without browser-side request fan-out
@@ -40,28 +47,106 @@ Execute the `ReportViewer` convergence and residual reporting UI split slice (`c
 - **Status:** complete
 
 ### Phase D: Finish ReportViewer Convergence And Split Residual Reporting UI Logic (`cng-z7u.4`)
-- [ ] Remove remaining `ReportViewer`-local shaping/request orchestration
+
+- [x] Remove remaining `ReportViewer` request/state orchestration
+- [x] Split the remaining staff/team section composition out of `ReportViewer`
 - [x] Split the reporting UI into smaller modules around the unified client contract
 - [x] Keep `ReportViewer` and `reportingClient` tests green
+- Completed slice: `src/components/reporting/StaffDetailCard.jsx`, `src/components/reporting/TeamDetailCard.jsx`, and `src/components/reporting/reportingDetailUtils.js` now own the detail-card/detail-page-size seam, with focused coverage in `tests/reportingDetailCards.test.jsx`.
+- Completed slice: `src/components/reporting/useReportViewerReadModel.js` now owns report fetch/baseline comparison, schedule subscription/fetch, and reload/version handling, with focused coverage in `tests/useReportViewerReadModel.test.jsx`.
+- Completed slice: `src/components/reporting/ReportingStaffSection.jsx` and `src/components/reporting/ReportingTeamSection.jsx` now own the remaining staff/team section composition seam, with focused coverage in `tests/reportingScopeSections.test.jsx`.
+- Completed follow-up slice: `src/components/reporting/ReportingAdjustmentsPanel.jsx` now owns the remaining adjustments/applied-points seam, with focused coverage in `tests/reportingAdjustmentsPanel.test.jsx`.
+- Completed follow-up slice: `src/components/reporting/ReportingScopeExplorerPanel.jsx` now owns the scope explorer card and staff/team branch handoff, with focused coverage in `tests/reportingScopeExplorerPanel.test.jsx`.
+- Completed slice: `ReportViewer.jsx` is down to `1405` lines from `2585`; the remaining reporting residue is now concentrated in the inline dashboard overview composition immediately before `ReportingScopeExplorerPanel`.
 - **Dependencies:** unblocked (`cng-z7u.3` complete)
-- **Status:** in_progress
+- **Status:** complete
 
 ### Phase E: Continue DataImporter Decomposition Toward Maintainable Module Boundaries (`cng-z7u.5`)
-- [ ] Extract another meaningful importer behavior/presentation seam out of `DataImporter.jsx`
-- [ ] Add/update focused tests for the extracted seam
-- [ ] Move touched importer modules closer to the sub-`800`-line target where feasible
+
+- [x] Extract another meaningful importer behavior/presentation seam out of `DataImporter.jsx`
+- [x] Add/update focused tests for the extracted seam
+- [x] Move touched importer modules closer to the sub-`800`-line target where feasible
 - **Dependencies:** none
-- **Status:** open
+- Completed slice: `src/components/DataImporter.jsx` now delegates to `src/components/dataImporter/useDataImporterContainerProps.js`, so the parent is only a thin shell wrapper instead of carrying the whole importer orchestration layer inline.
+- Completed slice: `tests/useDataImporterContainerProps.test.jsx` now locks the session/duplicate/results/prop-builder orchestration contract directly, and the extracted hook sits at `748` lines while `DataImporter.jsx` is down to `7`.
+- **Status:** complete
 
 ### Phase F: Silence Reporting Chart Warning Noise And Harden The Jsdom Harness (`cng-z7u.6`)
-- [ ] Remove or isolate the known `Recharts` width/height-zero warning flood
-- [ ] Keep reporting behavior assertions as strong as they are today
-- [ ] Make targeted reporting test output materially cleaner
-- **Dependencies:** blocked by `cng-z7u.4`
-- **Status:** open
+
+- [x] Remove or isolate the known `Recharts` width/height-zero warning flood
+- [x] Keep reporting behavior assertions as strong as they are today
+- [x] Make targeted reporting test output materially cleaner
+- **Dependencies:** unblocked (`cng-z7u.4` complete)
+- Completed slice: `vitest.setup.js` now provides an explicit jsdom `ResponsiveContainer` harness for `recharts`, so `ReportViewer` and reporting widget tests no longer emit the known zero-size chart flood.
+- Completed slice: `tests/reportingOverviewWidgets.test.jsx` now exercises populated chart branches and asserts the old width/height-zero warning pattern does not reappear, so the harness cleanup is locked by direct regression coverage instead of only by cleaner stdout/stderr.
+- **Status:** complete
+
+## Fresh Follow-Up Slice (`cng-f2z`)
+
+### Phase G: Extract ReportViewer Adjustments Panel Into A Dedicated Reporting Module (`cng-f2z`)
+
+- [x] Move the inline KPI adjustments/applied-points panel out of `src/components/ReportViewer.jsx`
+- [x] Keep adjustment page-size persistence in the parent while moving panel-specific paging/derivation/render logic into the new module
+- [x] Add focused regression coverage for applied/pending/rejected adjustment rendering and pagination behavior
+- **Dependencies:** follows the closed `cng-z7u.4` `ReportViewer` breakup work
+- Verification:
+  - `pnpm exec vitest run tests/reportingAdjustmentsPanel.test.jsx tests/reportViewer.test.jsx tests/reportingOverviewWidgets.test.jsx tests/reportingDetailCards.test.jsx tests/useReportViewerReadModel.test.jsx --environment jsdom` -> passed
+  - `pnpm exec eslint src/components/ReportViewer.jsx src/components/reporting/ReportingAdjustmentsPanel.jsx tests/reportingAdjustmentsPanel.test.jsx tests/reportViewer.test.jsx` -> passed
+- **Status:** complete
+
+## Fresh Follow-Up Slice (`cng-vlt`)
+
+### Phase H: Extract ReportViewer Scope Explorer Card Into A Dedicated Reporting Module (`cng-vlt`)
+
+- [x] Move the inline scope selector / column-visibility / branch-handoff card out of `src/components/ReportViewer.jsx`
+- [x] Keep parent-owned filter/export/detail state intact while moving the presentation shell into the new reporting module
+- [x] Add focused regression coverage for scope switching, selector forwarding, and column-toggle wiring
+- **Dependencies:** follows the closed `cng-f2z` adjustments-panel extraction
+- Verification:
+  - `pnpm exec vitest run tests/reportingScopeExplorerPanel.test.jsx tests/reportingScopeSections.test.jsx tests/reportingAdjustmentsPanel.test.jsx tests/reportViewer.test.jsx tests/reportingOverviewWidgets.test.jsx tests/reportingDetailCards.test.jsx tests/useReportViewerReadModel.test.jsx --environment jsdom` -> passed (`21/21`)
+  - `pnpm exec eslint src/components/ReportViewer.jsx src/components/reporting/ReportingScopeExplorerPanel.jsx tests/reportingScopeExplorerPanel.test.jsx tests/reportingScopeSections.test.jsx tests/reportingAdjustmentsPanel.test.jsx tests/reportViewer.test.jsx` -> passed
+- `git diff --check -- src/components/ReportViewer.jsx src/components/reporting/ReportingScopeExplorerPanel.jsx tests/reportingScopeExplorerPanel.test.jsx task.md task_plan.md findings.md progress.md` -> passed
+- **Status:** complete
+
+## Fresh Follow-Up Slice (`cng-tuw`)
+
+### Phase I: Extract ReportViewer Dashboard Overview Composition (`cng-tuw`)
+
+- [x] Move the inline dashboard overview block out of `src/components/ReportViewer.jsx`
+- [x] Keep parent-owned state for top-staff metric/count and adjustments paging/page-size sanitization
+- [x] Add focused regression coverage for the extracted dashboard composition seam
+- **Dependencies:** follows the closed `cng-vlt` scope-explorer extraction
+- Completed slice:
+  - `src/components/reporting/ReportingDashboardOverview.jsx` now owns the overview composition seam between the schedule shell and `ReportingScopeExplorerPanel`.
+  - `tests/reportingDashboardOverview.test.jsx` now locks summary rendering plus top-staff/adjusments callback forwarding on the extracted seam.
+  - `ReportViewer.jsx` is down to `958` lines from `1405`, leaving the preference/action controller layer as the next clean residual seam.
+- Verification:
+  - `pnpm exec vitest run tests/reportingDashboardOverview.test.jsx tests/reportingOverviewWidgets.test.jsx tests/reportingAdjustmentsPanel.test.jsx tests/reportViewer.test.jsx --environment jsdom` -> passed (`10/10`)
+  - `pnpm exec eslint src/components/ReportViewer.jsx src/components/reporting/ReportingDashboardOverview.jsx tests/reportingDashboardOverview.test.jsx tests/reportingOverviewWidgets.test.jsx tests/reportingAdjustmentsPanel.test.jsx tests/reportViewer.test.jsx` -> passed
+  - `git diff --check -- src/components/ReportViewer.jsx src/components/reporting/ReportingDashboardOverview.jsx tests/reportingDashboardOverview.test.jsx task.md task_plan.md findings.md progress.md` -> passed
+- **Status:** complete
+
+## Fresh Follow-Up Slice (`cng-2ch`)
+
+### Phase J: Extract ReportViewer Preference And Action Controller Seams (`cng-2ch`)
+
+- [x] Move the remaining report-viewer preference/localStorage/controller helpers out of `src/components/ReportViewer.jsx`
+- [x] Move schedule/export controller actions behind a dedicated reporting hook without changing behavior
+- [x] Add focused regression coverage and bring `ReportViewer.jsx` below the project soft `800`-line target
+- **Dependencies:** follows the closed `cng-tuw` dashboard-overview extraction
+- Completed slice:
+  - `src/components/reporting/useReportViewerPreferences.js` now owns report-viewer localStorage persistence, sanitize helpers, quick-range/filter initialization, column visibility, detail page sizes, and adjustment page-size sanitization.
+  - `src/components/reporting/useReportViewerActions.js` now owns schedule draft/edit/reset/toggle/save/delete behavior plus export permission validation and dispatch.
+  - `ReportViewer.jsx` is down to `735` lines from `958`, so the parent is below the soft cap and no longer owns the preference/action controller layer inline.
+- Verification:
+  - `pnpm exec vitest run tests/useReportViewerPreferences.test.jsx tests/useReportViewerActions.test.jsx tests/reportViewer.test.jsx --environment jsdom` -> passed (`9/9`)
+  - `pnpm exec eslint src/components/ReportViewer.jsx src/components/reporting/useReportViewerPreferences.js src/components/reporting/useReportViewerActions.js tests/useReportViewerPreferences.test.jsx tests/useReportViewerActions.test.jsx tests/reportViewer.test.jsx` -> passed
+- **Status:** complete
 
 ## Archived Immediate Follow-Through
+
 ### Smoke Gate Regression Follow-Up Complete (`cng-q7u`)
+
 - [x] Reproduce the new `verify:smoke:core` failure and isolate it to one ownership contract
 - [x] Fix pool disposal behavior without breaking shared runtime pool ownership
 - [x] Re-run the affected unit tests and the full smoke gate
@@ -72,6 +157,7 @@ Execute the `ReportViewer` convergence and residual reporting UI split slice (`c
   - `pnpm verify:smoke:core` -> passed
 
 ## Previous Diagnostic Slice (`cng-cff`)
+
 - [x] Re-run the broad backend diagnostic bundle and group the active failures into coherent clusters
 - [x] Fix at least one cluster end-to-end and confirm the bundle failure count drops
 - [x] Update `task.md`, `task_plan.md`, `findings.md`, and `progress.md` with the new active slice and verification evidence
@@ -84,7 +170,9 @@ Execute the `ReportViewer` convergence and residual reporting UI split slice (`c
   - `pnpm exec vitest run tests/server.seed.test.js tests/server.api.test.js tests/reportingRuleSelection.test.js --environment node` -> passed (`129/129`)
 
 ## Follow-Through Phases (`cng-i6h`)
+
 ### Phase A: Remove Hardcoded Default Credentials (`cng-i6h.1`)
+
 - [x] Remove plaintext password literals from backend bootstrap/default seed logic
 - [x] Replace public credential docs and checked-in runtime snapshot data with explicit bootstrap-secret guidance
 - [x] Keep auth/bootstrap tests deterministic through explicit env-based test helpers
@@ -94,6 +182,7 @@ Execute the `ReportViewer` convergence and residual reporting UI split slice (`c
 - **Status:** completed
 
 ### Phase B: Retire Remaining Compatibility Fallbacks (`cng-i6h.2`)
+
 - [x] Inventory monolith, `server-v4`, package, and shared fallback paths that still exist only for transitional compatibility
 - [x] Retire or narrow the lowest-risk fallback seam first without breaking current API/runtime contracts
 - [x] Keep fallback retirement isolated from unrelated redesign work
@@ -103,6 +192,7 @@ Execute the `ReportViewer` convergence and residual reporting UI split slice (`c
 - **Status:** completed
 
 ### Phase C: Stabilize Broad Verification Gates (`cng-i6h.3`)
+
 - [x] Inventory the broad suites and smoke flows that still fail or remain too flaky to gate merges
 - [x] Split true regressions from pre-existing noise and record trustworthy closure criteria
 - [x] Promote at least one broader verification path from ad hoc evidence to stable gate
@@ -112,6 +202,7 @@ Execute the `ReportViewer` convergence and residual reporting UI split slice (`c
 - **Status:** completed
 
 ### Phase D: Advance Canonical Apps-Api And Postgres Cutover (`cng-i6h.4`)
+
 - [x] Inventory what still keeps `server/index.js` and SQLite sidecars as the canonical runtime
 - [x] Pick the next small cut that moves ownership toward `apps/api` and PostgreSQL-backed persistence
 - [x] Keep migration risk explicit with dual-read/dual-write or fallback guardrails where needed
@@ -139,6 +230,7 @@ Execute the `ReportViewer` convergence and residual reporting UI split slice (`c
 - **Status:** completed
 
 ### Phase E: Retire Residual SQLite Compatibility And Deepen Canonical Postgres Ownership (`cng-i6h.5`)
+
 - [x] Inventory the remaining SQLite compatibility ownership after the declarations write slice and rank the next cut by leverage and migration risk
 - [x] Move at least one remaining canonical business path further toward relational-store ownership with explicit runtime seams and rollback/fallback guardrails
 - [x] Keep notebook/bead state and targeted verification green for the chosen slice
@@ -161,7 +253,9 @@ Execute the `ReportViewer` convergence and residual reporting UI split slice (`c
 - **Status:** completed
 
 ## Archived Hardening Phases (`cng-4or`)
+
 ### Phase A: Server-v4 ESLint And CI Hardening (`cng-4or.1`)
+
 - [x] Add TypeScript ESLint parser/plugin support at the workspace root
 - [x] Lint a real `server-v4` TypeScript slice from the root flat config
 - [x] Add a repeatable `pnpm run lint:server-v4` command
@@ -170,6 +264,7 @@ Execute the `ReportViewer` convergence and residual reporting UI split slice (`c
 - **Status:** completed
 
 ### Phase B: Broaden Server-v4 ESLint Coverage (`cng-4or.2`)
+
 - [x] Extend the lint boundary to the remaining `server-v4` domain modules
 - [x] Decide scope-specific rule posture for any newly surfaced warning/error buckets
 - [x] Keep the expanded scope green without reintroducing monolith-wide warning debt
@@ -177,6 +272,7 @@ Execute the `ReportViewer` convergence and residual reporting UI split slice (`c
 - **Status:** completed
 
 ### Phase C: Wire Hardening Gates Into CI (`cng-4or.3`)
+
 - [x] Add repeatable CI / pre-merge execution for the new `server-v4` lint gate
 - [x] Pair lint coverage with the right typecheck / targeted test gates
 - [x] Document the gate in the notebook and repo scripts/workflows
@@ -184,7 +280,9 @@ Execute the `ReportViewer` convergence and residual reporting UI split slice (`c
 - **Status:** completed
 
 ## Archived Full-Cutover Phases (`cng-3or`)
+
 ### Phase A: PostgreSQL Runtime Persistence And Dual-Write Cutover (`cng-3or.1`)
+
 - [x] Inventory remaining hot-path `kv_store` and blob-backed runtime reads/writes
 - [x] Introduce a typed `server-v4` business snapshot seam so future adapter swaps do not require per-repository `readJsonValue('...')` rewiring
 - [x] Pick the first low-risk relational-backed domain cutover behind current APIs
@@ -197,6 +295,7 @@ Execute the `ReportViewer` convergence and residual reporting UI split slice (`c
 - **Status:** completed
 
 ### Phase B: Delivery-Shape Split Into Apps And Shared Packages (`cng-3or.3`)
+
 - [x] Define the first safe extraction from the mixed root layout into target app/package boundaries
 - [x] Move shared contracts/utilities without breaking current entrypoints
 - [x] Keep module size and test coverage constraints intact during the split
@@ -204,6 +303,7 @@ Execute the `ReportViewer` convergence and residual reporting UI split slice (`c
 - **Status:** completed
 
 ### Phase C: Standalone Windows ECUS Bridge Service (`cng-3or.2`)
+
 - [x] Land the first standalone bridge runtime primitives (`apps/ecus-bridge` API client/runtime plus a core ECUS mutation seam)
 - [x] Wire token-protected core API contracts for ECUS config/preview/commit through the extracted bridge mutation seam
 - [x] Add a standalone bridge host controller with health/status/busy contracts around the extracted runtime
@@ -214,6 +314,7 @@ Execute the `ReportViewer` convergence and residual reporting UI split slice (`c
 - **Status:** completed
 
 ### Phase D: Operator Shell End-State And Heavy-Workflow Redesign (`cng-3or.4`)
+
 - [x] Finish the domain sidebar/top bar shell target
 - [x] Move MST/import/report/report-center flows toward the final guided/operator workflow
 - [x] Keep accessibility and regression coverage aligned while reshaping the shell
@@ -223,13 +324,16 @@ Execute the `ReportViewer` convergence and residual reporting UI split slice (`c
 - **Status:** completed
 
 ### Phase E: Reporting Analytics And Observability End-State (`cng-3or.5`)
+
 - [x] Expand precomputed relational KPI/reporting stats beyond the initial projection tables
 - [x] Broaden server-side search/pagination and freshness metrics
 - [x] Add durable reporting/job observability for the end-state runtime
 - **Status:** completed
 
 ## Archived Program Phases (`cng-7c8`)
+
 ### Phase 0A: Security Boundary Hardening (`cng-7c8.1`)
+
 - [x] Lock down `/api/bootstrap`
 - [x] Lock down `/api/auth/accounts*`
 - [x] Lock down `/api/import/alerts*` and other weakly-protected operational routes
@@ -238,6 +342,7 @@ Execute the `ReportViewer` convergence and residual reporting UI split slice (`c
 - **Status:** completed
 
 ### Phase 0B: Baseline Recovery And Toolchain Stabilization (`cng-7c8.2`)
+
 - [x] Restore dependency integrity in the repo copy
 - [x] Make install/healthcheck behavior trustworthy again
 - [x] Triage lint and targeted test failures into actionable buckets
@@ -245,12 +350,14 @@ Execute the `ReportViewer` convergence and residual reporting UI split slice (`c
 - **Status:** completed
 
 ### Phase 1A: Auth And Session Model Cleanup (`cng-7c8.3`)
+
 - [x] Unify frontend/backend auth model on the client path
 - [x] Remove contradictory bearer-token storage if cookie sessions remain canonical
 - [x] Define clean RBAC enforcement points
 - **Status:** completed
 
 ### Phase 1B: PostgreSQL Target Schema And Migration Map (`cng-7c8.4`)
+
 - [x] Design normalized Postgres tables and indexes
 - [x] Define aggregate tables for KPI/reporting workloads
 - [x] Map current blob keys to migration targets
@@ -258,6 +365,7 @@ Execute the `ReportViewer` convergence and residual reporting UI split slice (`c
 - **Status:** completed
 
 ### Phase 1C: Backend Modular Monolith Scaffold In TypeScript (`cng-7c8.5`)
+
 - [x] Create target app/package structure
 - [x] Define route/service/repository boundaries
 - [x] Add schema validation and shared contracts
@@ -265,6 +373,7 @@ Execute the `ReportViewer` convergence and residual reporting UI split slice (`c
 - **Status:** completed
 
 ### Phase 2A: Declarations, MST, Teams, And Rules Migration (`cng-7c8.6`)
+
 - [x] Stand up read-only typed runtime adapters for `teams` and `mst-assignments`
 - [x] Migrate `declarations` and `kpi-rules` behind the same boundary style
 - [x] Migrate adjacent reporting inputs behind the same boundary style
@@ -273,6 +382,7 @@ Execute the `ReportViewer` convergence and residual reporting UI split slice (`c
 - **Status:** completed
 
 ### Phase 2B: Reporting And KPI Aggregation Redesign (`cng-7c8.7`)
+
 - [x] Introduce the first monthly aggregate read model and snapshot materialization path
 - [x] Add cache-aware monthly aggregate reuse, invalidation, and schedule status surfacing
 - [x] Refresh the stored working-set monthly aggregate snapshot when reporting source keys change
@@ -282,6 +392,7 @@ Execute the `ReportViewer` convergence and residual reporting UI split slice (`c
 - **Status:** completed
 
 ### Phase 2C: UI Shell And Design System V4 (`cng-7c8.8`)
+
 - [x] Centralize shell/navigation metadata into a shared registry used by the shell and Command Center
 - [x] Expand Command Center coverage to all visible shell tabs
 - [x] Remove invalid nested-button markup from the Command Center command list
@@ -291,6 +402,7 @@ Execute the `ReportViewer` convergence and residual reporting UI split slice (`c
 - **Status:** completed
 
 ### Phase 2D: Import Workflow And Data-Heavy UI Optimization (`cng-7c8.9`)
+
 - [x] Extract low-risk behavioral seams out of `DataImporter.jsx` with dedicated regression coverage
 - [x] Break up `DataImporter.jsx`
 - [x] Move heavy parsing off the main thread where useful
@@ -328,6 +440,7 @@ Execute the `ReportViewer` convergence and residual reporting UI split slice (`c
   - `src/components/dataImporter/dataImporterConfig.js`
 
 ### Phase 3A: ECUS Bridge Extraction (`cng-7c8.10`)
+
 - [x] Separate Windows/DPAPI/SQL Server concerns into a bridge service
 - [x] Define the bridge contract with the core app
 - [x] Reduce core-platform coupling to legacy ECUS constraints
@@ -338,6 +451,7 @@ Execute the `ReportViewer` convergence and residual reporting UI split slice (`c
   - `server/index.js` delegation through `createEcusBridgeService(...)`
 
 ### Phase 3B: Observability, QA Matrix, And Staged Rollout (`cng-7c8.11`)
+
 - [x] Add metrics, health, and migration verification
 - [x] Define staged rollout and fallback checks
 - [x] Build QA matrix for parity and regression coverage
@@ -351,6 +465,7 @@ Execute the `ReportViewer` convergence and residual reporting UI split slice (`c
   - All planned phases under `cng-7c8` are complete and ready for epic closure.
 
 ## Key Questions
+
 1. Which route hardening changes can land immediately without breaking operator workflows?
 2. Which tests need to change because they currently encode insecure behavior?
 3. What is the minimum safe path from blob persistence to relational persistence?
@@ -359,30 +474,33 @@ Execute the `ReportViewer` convergence and residual reporting UI split slice (`c
 6. How much of the app/package split can happen without destabilizing the current monolith and `server-v4` dual-runtime arrangement?
 
 ## Decisions Made
-| Decision | Rationale |
-|----------|-----------|
-| Keep the review artifact and create a separate execution program | Review and implementation need distinct tracking states |
-| Start with `cng-7c8.1` before toolchain cleanup | Security boundary failures are the highest risk and easiest to justify immediately |
-| Treat this repo copy as a safe place for aggressive restructuring experiments | The user explicitly said this is a copy of the production project |
-| Keep all implementation tracked in both notebook files and beads | Required by `AGENTS.md` and useful for long-running work |
-| Create a new epic `cng-3or` instead of reopening `cng-7c8` | The first execution program is complete; remaining blueprint work needs a clean second program with its own phases |
-| Start the continuation program with runtime persistence (`cng-3or.1`) | Postgres cutover remains the biggest blocker for the later app/package split and end-state reporting architecture |
+
+| Decision                                                                      | Rationale                                                                                                          |
+| ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| Keep the review artifact and create a separate execution program              | Review and implementation need distinct tracking states                                                            |
+| Start with `cng-7c8.1` before toolchain cleanup                               | Security boundary failures are the highest risk and easiest to justify immediately                                 |
+| Treat this repo copy as a safe place for aggressive restructuring experiments | The user explicitly said this is a copy of the production project                                                  |
+| Keep all implementation tracked in both notebook files and beads              | Required by `AGENTS.md` and useful for long-running work                                                           |
+| Create a new epic `cng-3or` instead of reopening `cng-7c8`                    | The first execution program is complete; remaining blueprint work needs a clean second program with its own phases |
+| Start the continuation program with runtime persistence (`cng-3or.1`)         | Postgres cutover remains the biggest blocker for the later app/package split and end-state reporting architecture  |
 
 ## Errors Encountered
-| Error | Attempt | Resolution |
-|-------|---------|------------|
-| `pnpm healthcheck` fails because `node_modules/express/index.js` is missing | 1 | Resolved in Phase 0B by restoring dependency integrity with `pnpm install --force` |
-| `bd` daemon startup is slow and falls back to direct mode | 1 | Continue in direct mode for local tracking; not a blocker to planning |
-| `pnpm vitest tests/server.api.test.js --run` fails because `node_modules/vitest/vitest.mjs` is missing | 1 | Resolved in Phase 0B after reinstalling dependencies |
-| `pnpm lint` reports repo-wide line-ending and legacy lint debt | 1 | Fixed line endings and new local errors; remaining output is warnings-only legacy debt |
-| `tests/server-v4/runtimeRoutes.test.js` initially failed because `buildV4App()` still treated runtime config like a module array | 1 | Added `BuildV4AppOptions`, runtime config resolution, and typed router wiring for migrated domains |
-| `eslint` currently ignores `server-v4/**/*.ts` because the repo lint config has no matching rule set for that subtree | 1 | Accept temporarily for this slice and rely on `tsc` + tests; add proper lint coverage for `server-v4` in a later infrastructure pass |
-| A combined regression run forced `--environment node` onto `tests/reportViewer.test.jsx`, which broke `window` access before any reporting assertion ran | 1 | Re-ran browser/UI suites without the node override and kept the node env only for `tests/reportingClient.test.js` |
-| `tests/commandCenter.test.jsx` initially failed before collection because `vi.mock()` hoisted above spy initialization, and the component also emitted invalid nested-button warnings | 1 | Switched the test spies to `vi.hoisted()` and changed command rows from nested `button` markup to a keyboardable `div[role="button"]` surface |
-| `tests/accountManager.staff.test.jsx` still encoded legacy `actor` payload expectations and leaked DOM across cases once the list shell grew a second search field | 1 | Updated the regression to the current actor-free auth contract and added explicit RTL `cleanup()` in `afterEach` |
-| `tests/dataImporterSelectionActions.test.jsx` produced duplicate button matches after the second render | 1 | Added explicit RTL `cleanup()` in `afterEach` because this suite does not get automatic DOM cleanup between those cases |
+
+| Error                                                                                                                                                                                 | Attempt | Resolution                                                                                                                                    |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm healthcheck` fails because `node_modules/express/index.js` is missing                                                                                                           | 1       | Resolved in Phase 0B by restoring dependency integrity with `pnpm install --force`                                                            |
+| `bd` daemon startup is slow and falls back to direct mode                                                                                                                             | 1       | Continue in direct mode for local tracking; not a blocker to planning                                                                         |
+| `pnpm vitest tests/server.api.test.js --run` fails because `node_modules/vitest/vitest.mjs` is missing                                                                                | 1       | Resolved in Phase 0B after reinstalling dependencies                                                                                          |
+| `pnpm lint` reports repo-wide line-ending and legacy lint debt                                                                                                                        | 1       | Fixed line endings and new local errors; remaining output is warnings-only legacy debt                                                        |
+| `tests/server-v4/runtimeRoutes.test.js` initially failed because `buildV4App()` still treated runtime config like a module array                                                      | 1       | Added `BuildV4AppOptions`, runtime config resolution, and typed router wiring for migrated domains                                            |
+| `eslint` currently ignores `server-v4/**/*.ts` because the repo lint config has no matching rule set for that subtree                                                                 | 1       | Accept temporarily for this slice and rely on `tsc` + tests; add proper lint coverage for `server-v4` in a later infrastructure pass          |
+| A combined regression run forced `--environment node` onto `tests/reportViewer.test.jsx`, which broke `window` access before any reporting assertion ran                              | 1       | Re-ran browser/UI suites without the node override and kept the node env only for `tests/reportingClient.test.js`                             |
+| `tests/commandCenter.test.jsx` initially failed before collection because `vi.mock()` hoisted above spy initialization, and the component also emitted invalid nested-button warnings | 1       | Switched the test spies to `vi.hoisted()` and changed command rows from nested `button` markup to a keyboardable `div[role="button"]` surface |
+| `tests/accountManager.staff.test.jsx` still encoded legacy `actor` payload expectations and leaked DOM across cases once the list shell grew a second search field                    | 1       | Updated the regression to the current actor-free auth contract and added explicit RTL `cleanup()` in `afterEach`                              |
+| `tests/dataImporterSelectionActions.test.jsx` produced duplicate button matches after the second render                                                                               | 1       | Added explicit RTL `cleanup()` in `afterEach` because this suite does not get automatic DOM cleanup between those cases                       |
 
 ## Notes
+
 - Prioritize real risk reduction over cosmetic cleanup.
 - Do not spread new work into oversized modules; split as we go.
 - Any new behavior change must bring its own test coverage.
@@ -542,19 +660,23 @@ Execute the `ReportViewer` convergence and residual reporting UI split slice (`c
 - Phase D residual after the `kpi-adjustments` write-ownership slice:
   - `server-v4` now owns real business writes for `reporting`, `auth`, and `kpi-adjustments`, but broader business mutations/settings still remain outside the canonical runtime and Postgres cutover story.
   - the next material slice should move another domain's write/settings ownership into `server-v4` with the same explicit runtime-store contract, while `/api/storage` route registration in `server/index.js` stays low-value cleanup only.
+
 ## 2026-03-13 Reporting Boundary Cleanup
+
 - Landed a small Phase D follow-on slice that removes the raw sync `BusinessSnapshotReader` dependency from the reporting boundary now that declarations, rules, adjustments, and teams already have explicit async seams.
 - `server-v4/src/modules/reporting/ReportingRepository.ts` now consumes a required async-reader bundle instead of constructing fallback wrappers from a sync reader.
 - `server-v4/src/modules/reporting/reportingRoutes.ts` and `server-v4/src/app/build-v4-app.ts` now wire reporting from `persistence.{declarationsReader,kpiRulesReader,adjustmentsReader,teamsReader}` plus `persistence.projections`, without forwarding `persistence.reader`.
 - Residual stays centered on broader SQLite-compatibility reduction and business write-path ownership; `/api/storage` route registration in `server/index.js` remains low-value cleanup only.
 
 ## 2026-03-13 Runtime Persistence Contract Cleanup
+
 - Landed a direct follow-on slice that removes `reader` from the public `RuntimePersistence` contract now that app composition no longer needs it.
 - `server-v4/src/persistence/runtimePersistence.ts` still keeps the SQLite compatibility reader internally, but only to construct async seams and derive source metadata.
 - `tests/server-v4/runtimePersistence.test.js` and the postgres route-wiring tests now verify that custom persistence fixtures can mount `buildV4App()` without providing a raw sync reader at all.
 - Residual stays unchanged at the architectural level: SQLite compatibility still exists internally for untouched business paths, but it is no longer part of the public app-composition contract.
 
 ## 2026-03-13 Auth Module Cutover
+
 - Mounted `auth` as the last scaffold replacement in the default `server-v4` catalog by wiring `buildAuthRouter(...)` through `persistence.authStore`.
 - Added explicit runtime auth persistence ownership for both compatibility and canonical modes:
   - `server-v4/src/modules/auth/sqliteAuthStore.ts`

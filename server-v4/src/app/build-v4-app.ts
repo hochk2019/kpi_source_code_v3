@@ -10,6 +10,7 @@ import { buildMstAssignmentsRouter } from '../modules/mst-assignments/mstAssignm
 import { buildReportingRouter } from '../modules/reporting/reportingRoutes.js';
 import { buildTeamsRouter } from '../modules/teams/teamsRoutes.js';
 import { createRuntimePersistence, type RuntimePersistence } from '../persistence/runtimePersistence.js';
+import { buildLegacyCompatRouter } from './legacyCompatRoutes.js';
 import { moduleCatalog } from './module-catalog.js';
 import { serializeDomainModules, type DomainModule } from './domain-module.js';
 import { runtimeModuleRouteCoverage } from './runtimeRouteCoverage.js';
@@ -190,6 +191,8 @@ export function buildV4App(input?: readonly DomainModule[] | BuildV4AppOptions):
 
     app.use(domainModule.basePath, buildDefaultModuleRouter(domainModule));
   }
+
+  app.use(buildLegacyCompatRouter(persistence));
 
   return app;
 }

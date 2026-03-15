@@ -1,30 +1,50 @@
 # Task Tracker
 
 ## Active Program
+
 - Title: Residual end-state convergence after v4 refactor
 - Status: in_progress
 - Tracking:
-  - Epic: `cng-z7u`
-  - Active bead: `cng-z7u.4` (`in_progress`)
+  - Previous epic: `cng-z7u` (closed)
+  - Active bead: none
   - Planning notebook: `task_plan.md`, `findings.md`, `progress.md`
 
 ## Program Scope
+
 - Convert the original `F1..F8` review into a practical end-state matrix: what is done, what is only mostly done, and what still needs execution.
 - Finish the remaining `F5` persistence/reporting work: projection pipeline, typed schedule persistence, and projection-first reporting reads.
 - Finish the remaining `F7`/`F8` residue: shrink the last oversized reporting/importer modules and remove noisy reporting-test output that still hides signal.
 
 ## Backlog
+
 - `cng-z7u.1` (`P1`, closed): build a projection-backed reporting aggregate pipeline with explicit freshness, invalidation, and version ownership.
 - `cng-z7u.2` (`P1`, closed): move reporting schedules to a typed projection-backed store instead of legacy `kv_store` ownership.
 - `cng-z7u.3` (`P1`, closed): converge dashboard and export onto one projection-first reporting read-model contract.
-- `cng-z7u.4` (`P2`, in progress): finish `ReportViewer` convergence and split the remaining reporting UI monolith.
-- `cng-z7u.5` (`P2`, independent): continue `DataImporter.jsx` decomposition toward maintainable module boundaries.
-- `cng-z7u.6` (`P3`, blocked by `cng-z7u.4`): silence `Recharts`/jsdom warning noise and harden the reporting harness.
+- `cng-z7u.4` (`P2`, closed): finish `ReportViewer` convergence and split the remaining reporting UI monolith.
+- `cng-z7u.5` (`P2`, closed): continue `DataImporter.jsx` decomposition toward maintainable module boundaries.
+- `cng-z7u.6` (`P3`, closed): silence `Recharts`/jsdom warning noise and harden the reporting harness.
+- `cng-f2z` (`P2`, closed): extract the remaining KPI adjustments panel from `ReportViewer.jsx` into a dedicated reporting module with focused regression coverage.
+- `cng-vlt` (`P2`, closed): extract the remaining scope explorer card from `ReportViewer.jsx` into a dedicated reporting module with focused regression coverage.
+- `cng-tuw` (`P2`, closed): extract the remaining dashboard overview composition from `ReportViewer.jsx` into a dedicated reporting module with focused regression coverage.
+- `cng-2ch` (`P2`, closed): extract the remaining `ReportViewer.jsx` preference/action controller seams into dedicated reporting hooks with focused regression coverage.
 
 ## Current Slice
+
 - `cng-z7u.1`, `cng-z7u.2`, and `cng-z7u.3` are now functionally landed: monthly aggregate projections carry freshness/ownership metadata, schedule persistence flows through typed projection stores, and both `/api/v4/reporting/view` and compact export resolve through the same reporting read-model builder.
-- `cng-z7u.4` is now the active leverage point: `ReportViewer` has already shed the reporting controls/schedule seam plus overview widgets/company-summary table into dedicated modules, but still owns too much local shaping/detail-card orchestration to close the slice.
-- The practical residual work is now concentrated in `F7`/`F8` (`ReportViewer`/`DataImporter` module size plus noisy reporting verification), not in backend reporting contract drift.
+- `cng-z7u.4` is now functionally closed: `ReportViewer` has already shed the reporting controls/schedule seam, overview widgets/company-summary table, the staff/team detail-card boundary, the read-model/request orchestration, and finally the remaining staff/team section composition into dedicated reporting modules.
+- `src/components/reporting/useReportViewerReadModel.js` now owns report fetch/baseline comparison, schedule subscription/fetch, reload/version orchestration, and the focused regression surface in `tests/useReportViewerReadModel.test.jsx`.
+- `src/components/reporting/ReportingStaffSection.jsx` and `src/components/reporting/ReportingTeamSection.jsx` now own the remaining staff/team section composition seam, with focused regression coverage in `tests/reportingScopeSections.test.jsx`.
+- `src/components/reporting/ReportingAdjustmentsPanel.jsx` now owns the applied/pending/rejected adjustments panel plus its page-size/pagination render logic, while `adjustmentPageSize` preference ownership now lives in `src/components/reporting/useReportViewerPreferences.js`.
+- `src/components/reporting/ReportingScopeExplorerPanel.jsx` now owns the scope toggle, staff/team selector, column-visibility controls, and the branch handoff into the staff/team reporting sections.
+- `vitest.setup.js` now provides an explicit jsdom `ResponsiveContainer` harness for `recharts`, and `tests/reportingOverviewWidgets.test.jsx` now covers populated chart branches while asserting the old width/height-zero warning does not come back.
+- `src/components/DataImporter.jsx` is now a `7`-line wrapper around `src/components/dataImporter/useDataImporterContainerProps.js`, and the extracted orchestration hook sits at `748` lines with direct regression coverage in `tests/useDataImporterContainerProps.test.jsx`.
+- `tests/reportingAdjustmentsPanel.test.jsx` and `tests/reportingScopeExplorerPanel.test.jsx` now lock both fresh reporting seams directly; before the dashboard-overview extraction, `ReportViewer.jsx` had already been reduced to `1405` lines from `6838`.
+- `src/components/reporting/ReportingDashboardOverview.jsx` now owns the inline dashboard overview composition seam: summary cards, `TrendLineChart`, `TeamPieWidget`, `TopStaffWidget`, and `ReportingAdjustmentsPanel` are no longer rendered inline inside `ReportViewer.jsx`.
+- `tests/reportingDashboardOverview.test.jsx` now locks the new overview seam directly, including top-staff interaction forwarding and adjustments page-size forwarding.
+- `src/components/reporting/useReportViewerPreferences.js` now owns the report-viewer localStorage key, sanitizers, quick-range/filter initialization, column-visibility persistence, detail page-size state, and adjustment page-size sanitization; the seam is locked by `tests/useReportViewerPreferences.test.jsx`.
+- `src/components/reporting/useReportViewerActions.js` now owns schedule draft/edit/reset/toggle/save/delete behavior plus export permission validation/dispatch; the seam is locked by `tests/useReportViewerActions.test.jsx`.
+- `ReportViewer.jsx` is now down to `735` lines from `958`, so the last major reporting hotspot is below the project soft cap and the parent no longer owns the preference/action controller layer inline.
+- `cng-2ch` is closed and there is no immediate residual bead active right now.
 - Recently closed slices retained below:
 - `cng-cff`: the broad backend diagnostic path moved from `14` mixed failures to green by first reducing stale fixture/assertion drift to `6`, then isolating the last rule-selection regression to `1`, and finally closing it end-to-end.
 - `cng-cff`: root cause was `server/reportingRuleSelection.js` rejecting legacy/simple rule-set snapshots that lacked `groups`; `getRulesValue()` then fell back to `SHARED_DEFAULT_RULES`, which masked agency-specific ECUS license exclusions.
@@ -60,6 +80,7 @@
 - `cng-i6h.5`: `server-v4/src/types/better-sqlite3.d.ts` now matches the runtime `transaction()` API, which keeps the new SQLite teams store on the same type-safe build boundary as the rest of `server-v4`.
 
 ## Completed Context
+
 - `cng-i6h.4`: advance canonical apps-api and Postgres cutover (`closed`)
 - `cng-i6h.5`: retire residual SQLite compatibility and deepen canonical Postgres ownership (`closed`)
 - `cng-i6h`: Complete blueprint end-state follow-through (`closed`)
@@ -91,6 +112,7 @@
 - Main review artifact: `docs/system-v4-review-plan.md`
 
 ## Notes
+
 - This repository is a copy of the production project, so implementation here can be stronger-handed than the production rollout sequence.
 - New modules should stay under roughly 800 LOC where feasible.
 - Every new module needs tests, and any changed behavior should update tests accordingly.

@@ -26,6 +26,11 @@ export function readReportingMonthlyAggregateProjectionEntries<T = unknown>(
   key: string
 ): T[];
 
+export function readReportingScheduleProjectionEntries<T = unknown>(
+  database: SqliteDatabaseLike | null | undefined,
+  key: string
+): T[];
+
 export function readReportingJobRunProjectionEntries<T = unknown>(
   database: SqliteDatabaseLike | null | undefined,
   key: string
