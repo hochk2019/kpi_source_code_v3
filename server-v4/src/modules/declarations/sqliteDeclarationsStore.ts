@@ -5,6 +5,25 @@ import {
   writeDeclarationRowsSnapshot,
 } from '../../../../server/businessSnapshotSqlite.js';
 import {
+  normalizeCoCodeConfig,
+  normalizeCoDiscrepancyConfig,
+  normalizeCoDiscrepancyState,
+  type CoCodeConfigDocument,
+  type CoDiscrepancyConfigDocument,
+  type CoDiscrepancyStateDocument,
+} from './declarationCoMonitoring.js';
+import {
+  normalizeDeclarationAlertConfig,
+  normalizeDeclarationAlertState,
+  type DeclarationAlertConfigDocument,
+  type DeclarationAlertStateDocument,
+} from './declarationAlerts.js';
+import {
+  ECUS_SYNC_CONFIG_STORAGE_KEY,
+  normalizeEcusSyncConfig,
+  type EcusSyncConfigDocument,
+} from './ecusSyncConfig.js';
+import {
   applyDeclarationPatch,
   buildDeclarationDeletionEvent,
   buildDeclarationUpdateEvent,
@@ -12,6 +31,7 @@ import {
   compareDeclarationEventsDescending,
   createDeclarationRowKey,
   declarationTargetMatchesRow,
+  type DeclarationImportCommitInput,
   type DeclarationActor,
   type DeclarationEventRecord,
   type DeclarationHistoryChange,
@@ -23,6 +43,11 @@ import {
 const DECLARATION_ROWS_STORAGE_KEY = 'decl_rows_v1';
 const DECLARATION_HISTORY_STORAGE_KEY = 'decl_history_v1';
 const DECLARATION_DELETE_LOG_STORAGE_KEY = 'decl_deleted_log_v1';
+const CO_CODE_CONFIG_STORAGE_KEY = 'co_tax_code_config_v1';
+const CO_DISCREPANCY_CONFIG_STORAGE_KEY = 'co_discrepancy_config_v1';
+const CO_DISCREPANCY_STATE_STORAGE_KEY = 'co_discrepancy_state_v1';
+const DECLARATION_ALERT_CONFIG_STORAGE_KEY = 'decl_alert_config_v1';
+const DECLARATION_ALERT_STATE_STORAGE_KEY = 'decl_alert_state_v1';
 const READ_KV_VALUE_SQL = 'SELECT value FROM kv_store WHERE key = ?';
 const UPSERT_KV_VALUE_SQL =
   'INSERT INTO kv_store (key, value) VALUES (?, ?) ' +
@@ -82,11 +107,216 @@ export class SqliteDeclarationsStore implements DeclarationsStore {
     });
   }
 
+  async commitImportedDeclarations(input: DeclarationImportCommitInput): Promise<void> {
+    this.withDatabase((database) => {
+      const rows = this.readRows(database);
+
+      for (const entry of input.entries ?? []) {
+        const nextRow = cloneDeclarationRecord(entry.nextRecord);
+        if (!normalizeText(nextRow.declaration_id ?? nextRow.id)) {
+          nextRow.declaration_id = `decl-${entry.key}`;
+        }
+
+        const index = rows.findIndex(
+          (row) => createDeclarationRowKey(row.so_tk, row.nhanh ?? row.branch) === entry.key,
+        );
+
+        if (index >= 0) {
+          rows[index] = nextRow;
+          continue;
+        }
+
+        rows.push(nextRow);
+      }
+
+      writeDeclarationRowsSnapshot(database, rows);
+      this.writeStoredRows(database, rows);
+    });
+  }
+
   async listDeclarationEvents(target: DeclarationStoreTarget): Promise<DeclarationEventRecord[]> {
     return this.withDatabase((database) => {
       const historyEvents = this.readHistoryEvents(database, target);
       const deleteEvents = this.readDeletionEvents(database, target);
       return [...historyEvents, ...deleteEvents].sort(compareDeclarationEventsDescending);
+    });
+  }
+
+  async readEcusSyncConfig(): Promise<EcusSyncConfigDocument | null> {
+    return this.withDatabase((database) => {
+      const parsed = this.readStoredObject(database, ECUS_SYNC_CONFIG_STORAGE_KEY);
+      return parsed ? normalizeEcusSyncConfig(parsed) : null;
+    });
+  }
+
+  async writeEcusSyncConfig(
+    config: EcusSyncConfigDocument,
+    _updatedBy: string | null,
+  ): Promise<EcusSyncConfigDocument> {
+    return this.withDatabase((database) => {
+      const normalized = normalizeEcusSyncConfig(config);
+      this.writeStoredObject(database, ECUS_SYNC_CONFIG_STORAGE_KEY, normalized);
+      return normalizeEcusSyncConfig(normalized);
+    });
+  }
+
+  async readCoCodeConfig(): Promise<CoCodeConfigDocument | null> {
+    return this.withDatabase((database) => {
+      const parsed = this.readStoredObject(database, CO_CODE_CONFIG_STORAGE_KEY);
+      return parsed ? normalizeCoCodeConfig(parsed) : null;
+    });
+  }
+
+  async writeCoCodeConfig(
+    config: CoCodeConfigDocument,
+    _updatedBy: string | null,
+  ): Promise<CoCodeConfigDocument> {
+    return this.withDatabase((database) => {
+      const normalized = normalizeCoCodeConfig(config);
+      this.writeStoredObject(database, CO_CODE_CONFIG_STORAGE_KEY, normalized);
+      return normalizeCoCodeConfig(normalized);
+    });
+  }
+
+  async readCoDiscrepancyConfig(): Promise<CoDiscrepancyConfigDocument | null> {
+    return this.withDatabase((database) => {
+      const parsed = this.readStoredObject(database, CO_DISCREPANCY_CONFIG_STORAGE_KEY);
+      return parsed ? normalizeCoDiscrepancyConfig(parsed) : null;
+    });
+  }
+
+  async writeCoDiscrepancyConfig(
+    config: CoDiscrepancyConfigDocument,
+    _updatedBy: string | null,
+  ): Promise<CoDiscrepancyConfigDocument> {
+    return this.withDatabase((database) => {
+      const normalized = normalizeCoDiscrepancyConfig(config);
+      this.writeStoredObject(database, CO_DISCREPANCY_CONFIG_STORAGE_KEY, normalized);
+      return normalizeCoDiscrepancyConfig(normalized);
+    });
+  }
+
+  async readCoDiscrepancyState(): Promise<CoDiscrepancyStateDocument | null> {
+    return this.withDatabase((database) => {
+      const parsed = this.readStoredObject(database, CO_DISCREPANCY_STATE_STORAGE_KEY);
+      return parsed ? normalizeCoDiscrepancyState(parsed) : null;
+    });
+  }
+
+  async writeCoDiscrepancyState(
+    state: CoDiscrepancyStateDocument,
+    _updatedBy: string | null,
+  ): Promise<CoDiscrepancyStateDocument> {
+    return this.withDatabase((database) => {
+      const normalized = normalizeCoDiscrepancyState(state);
+      this.writeStoredObject(database, CO_DISCREPANCY_STATE_STORAGE_KEY, normalized);
+      return normalizeCoDiscrepancyState(normalized);
+    });
+  }
+
+  async readDeclarationAlertConfig(): Promise<DeclarationAlertConfigDocument | null> {
+    return this.withDatabase((database) => {
+      const parsed = this.readStoredObject(database, DECLARATION_ALERT_CONFIG_STORAGE_KEY);
+      return parsed ? normalizeDeclarationAlertConfig(parsed) : null;
+    });
+  }
+
+  async writeDeclarationAlertConfig(
+    config: DeclarationAlertConfigDocument,
+    _updatedBy: string | null,
+  ): Promise<DeclarationAlertConfigDocument> {
+    return this.withDatabase((database) => {
+      const normalized = normalizeDeclarationAlertConfig(config);
+      this.writeStoredObject(database, DECLARATION_ALERT_CONFIG_STORAGE_KEY, normalized);
+      return normalizeDeclarationAlertConfig(normalized);
+    });
+  }
+
+  async readDeclarationAlertState(): Promise<DeclarationAlertStateDocument | null> {
+    return this.withDatabase((database) => {
+      const parsed = this.readStoredObject(database, DECLARATION_ALERT_STATE_STORAGE_KEY);
+      return parsed ? normalizeDeclarationAlertState(parsed) : null;
+    });
+  }
+
+  async writeDeclarationAlertState(
+    state: DeclarationAlertStateDocument,
+    _updatedBy: string | null,
+  ): Promise<DeclarationAlertStateDocument> {
+    return this.withDatabase((database) => {
+      const normalized = normalizeDeclarationAlertState(state);
+      this.writeStoredObject(database, DECLARATION_ALERT_STATE_STORAGE_KEY, normalized);
+      return normalizeDeclarationAlertState(normalized);
+    });
+  }
+
+  async markDeclarationsReviewed(keys: readonly string[], actor: string): Promise<number> {
+    return this.withDatabase((database) => {
+      const keySet = new Set(
+        (Array.isArray(keys) ? keys : []).map((key) => normalizeText(key)).filter(Boolean),
+      );
+      if (keySet.size === 0) {
+        return 0;
+      }
+
+      const rows = this.readRows(database);
+      let updated = 0;
+      const reviewedAt = new Date().toISOString();
+      const nextRows = rows.map((row) => {
+        const key = createDeclarationRowKey(row.so_tk, row.nhanh ?? row.branch ?? row.branch_code);
+        if (!keySet.has(key) || row.reviewed === true) {
+          return row;
+        }
+
+        updated += 1;
+        return {
+          ...cloneDeclarationRecord(row),
+          reviewed: true,
+          reviewed_at: reviewedAt,
+          reviewed_by: actor || 'system',
+        };
+      });
+
+      if (updated > 0) {
+        writeDeclarationRowsSnapshot(database, nextRows);
+        this.writeStoredRows(database, nextRows);
+      }
+
+      return updated;
+    });
+  }
+
+  async unmarkDeclarationsReviewed(keys: readonly string[], _actor: string): Promise<number> {
+    return this.withDatabase((database) => {
+      const keySet = new Set(
+        (Array.isArray(keys) ? keys : []).map((key) => normalizeText(key)).filter(Boolean),
+      );
+      if (keySet.size === 0) {
+        return 0;
+      }
+
+      const rows = this.readRows(database);
+      let updated = 0;
+      const nextRows = rows.map((row) => {
+        const key = createDeclarationRowKey(row.so_tk, row.nhanh ?? row.branch ?? row.branch_code);
+        if (!keySet.has(key) || row.reviewed !== true) {
+          return row;
+        }
+
+        updated += 1;
+        const next = cloneDeclarationRecord(row);
+        next.reviewed = false;
+        delete next.reviewed_at;
+        delete next.reviewed_by;
+        return next;
+      });
+
+      if (updated > 0) {
+        writeDeclarationRowsSnapshot(database, nextRows);
+        this.writeStoredRows(database, nextRows);
+      }
+
+      return updated;
     });
   }
 
@@ -209,6 +439,28 @@ export class SqliteDeclarationsStore implements DeclarationsStore {
     }
   }
 
+  private readStoredObject(database: Database, key: string): Record<string, unknown> | null {
+    this.ensureKvStore(database);
+    const row = database.prepare(READ_KV_VALUE_SQL).get(key) as { value?: string | null } | undefined;
+    if (!row?.value) {
+      return null;
+    }
+
+    try {
+      const parsed = JSON.parse(row.value);
+      return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+        ? (parsed as Record<string, unknown>)
+        : null;
+    } catch {
+      return null;
+    }
+  }
+
+  private writeStoredObject(database: Database, key: string, value: Record<string, unknown>): void {
+    this.ensureKvStore(database);
+    database.prepare(UPSERT_KV_VALUE_SQL).run(key, JSON.stringify(value));
+  }
+
   private ensureKvStore(database: Database): void {
     database.exec('CREATE TABLE IF NOT EXISTS kv_store (key TEXT PRIMARY KEY, value TEXT NOT NULL)');
   }
@@ -248,4 +500,8 @@ function normalizeDeletedDeclarationEntry(
     nhanh,
     deleted_at: deletedAt,
   };
+}
+
+function normalizeText(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : `${value ?? ''}`.trim();
 }

@@ -3,6 +3,8 @@ import express, { type Express, type Router } from 'express';
 import { resolveServerV4Config, type ServerV4ConfigInput } from '../config/server-v4-config.js';
 import { buildAuthRouter } from '../modules/auth/authRoutes.js';
 import { buildDeclarationsRouter } from '../modules/declarations/declarationsRoutes.js';
+import type { EcusSqlHealthCheck } from '../modules/declarations/declarationsEcusSyncService.js';
+import type { CoDiscrepancyRunner } from '../modules/declarations/ecusCoDiscrepancyRunner.js';
 import { buildHqAgenciesRouter } from '../modules/hq-agencies/hqAgenciesRoutes.js';
 import { buildKpiAdjustmentsRouter } from '../modules/kpi-adjustments/kpiAdjustmentsRoutes.js';
 import { buildKpiRulesRouter } from '../modules/kpi-rules/kpiRulesRoutes.js';
@@ -19,6 +21,11 @@ import { buildV4RolloutStatus } from './v4-rollout-status.js';
 export type BuildV4AppOptions = ServerV4ConfigInput & {
   modules?: readonly DomainModule[];
   persistence?: RuntimePersistence;
+  declarations?: {
+    ecusImportRunner?: CoDiscrepancyRunner;
+    coDiscrepancyRunner?: CoDiscrepancyRunner;
+    sqlHealthCheck?: EcusSqlHealthCheck;
+  };
 };
 
 function buildDefaultModuleRouter(domainModule: DomainModule): Router {
@@ -153,6 +160,7 @@ export function buildV4App(input?: readonly DomainModule[] | BuildV4AppOptions):
           persistence.declarationsReader,
           persistence.declarationsStore,
           persistence.authStore,
+          options.declarations,
         ),
       );
       continue;
@@ -192,7 +200,7 @@ export function buildV4App(input?: readonly DomainModule[] | BuildV4AppOptions):
     app.use(domainModule.basePath, buildDefaultModuleRouter(domainModule));
   }
 
-  app.use(buildLegacyCompatRouter(persistence));
+  app.use(buildLegacyCompatRouter(persistence, options.declarations));
 
   return app;
 }

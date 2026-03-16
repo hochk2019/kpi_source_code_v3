@@ -21,6 +21,9 @@ type CanonicalDeclarationRow = {
   agency_text?: unknown;
   is_export?: unknown;
   co_line_count?: unknown;
+  reviewed?: unknown;
+  reviewed_at?: unknown;
+  reviewed_by?: unknown;
   license_codes?: unknown;
   license_source_codes?: unknown;
   license_excluded_codes?: unknown;
@@ -43,6 +46,9 @@ const READ_CANONICAL_DECLARATION_ROWS_SQL =
   "COALESCE(d.agency_text, '') AS agency_text, " +
   'd.is_export, ' +
   'd.co_line_count, ' +
+  'd.reviewed, ' +
+  'd.reviewed_at::text AS reviewed_at, ' +
+  "COALESCE(d.reviewed_by, '') AS reviewed_by, " +
   `COALESCE(
      array_agg(DISTINCT dlc.code) FILTER (WHERE dlc.code IS NOT NULL AND dlc.code <> '' AND NOT dlc.is_excluded),
      ARRAY[]::text[]
@@ -58,7 +64,7 @@ const READ_CANONICAL_DECLARATION_ROWS_SQL =
   'FROM declarations d ' +
   'LEFT JOIN declaration_license_codes dlc ON dlc.declaration_id = d.id ' +
   'WHERE d.deleted_at IS NULL ' +
-  'GROUP BY d.id, d.declaration_no, d.declaration_no_raw, d.branch_code, d.declared_at, d.tax_code, d.company_name, d.customs_type_code, d.item_count, d.license_count, d.staff_name_snapshot, d.team_name_snapshot, d.agency_text, d.is_export, d.co_line_count ' +
+  'GROUP BY d.id, d.declaration_no, d.declaration_no_raw, d.branch_code, d.declared_at, d.tax_code, d.company_name, d.customs_type_code, d.item_count, d.license_count, d.staff_name_snapshot, d.team_name_snapshot, d.agency_text, d.is_export, d.co_line_count, d.reviewed, d.reviewed_at, d.reviewed_by ' +
   'ORDER BY d.declared_at DESC, d.declaration_no DESC, d.branch_code DESC';
 
 export class PostgresDeclarationAsyncReader implements DeclarationAsyncReader {
@@ -146,6 +152,9 @@ function buildCanonicalDeclaration(row: CanonicalDeclarationRow): Record<string,
     isExport: toBoolean(row?.is_export),
     co_line_count: coLineCount,
     has_co: coLineCount > 0,
+    reviewed: toBoolean(row?.reviewed),
+    reviewed_at: normalizeText(row?.reviewed_at),
+    reviewed_by: normalizeText(row?.reviewed_by),
     licenseCodes: normalizeStringArray(row?.license_codes),
     licenseSourceCodes: normalizeStringArray(row?.license_source_codes),
     licenseExcludedCodes: normalizeStringArray(row?.license_excluded_codes),

@@ -6,7 +6,7 @@ Close the remaining incomplete or only-partially-complete end-state work after t
 
 ## Current Phase
 
-Mapped `cng-z7u` child slices plus the immediate follow-up beads `cng-f2z`, `cng-vlt`, `cng-tuw`, and `cng-2ch` are complete; there is no ready residual bead active right now.
+Mapped `cng-z7u` child slices plus the immediate follow-up beads `cng-f2z`, `cng-vlt`, `cng-tuw`, and `cng-2ch` are complete, and the notebook-only declarations/import follow-through now covers the full legacy declarations `/api/import/*` route surface: ECUS config/status/preview/run, alerts*, search, co-codes, and co-discrepancy*. There is still no ready residual bead active right now.
 
 ## F1-F8 Practical Status Matrix
 
@@ -250,6 +250,11 @@ Mapped `cng-z7u` child slices plus the immediate follow-up beads `cng-f2z`, `cng
 - Completed slice: `server-v4/src/types/better-sqlite3.d.ts` now declares `transaction()`, matching the runtime API the new SQLite teams store already uses. That keeps the local SQLite adapter seam type-safe instead of letting the build silently drift behind runtime behavior.
 - Completed slice: default rollout truth now settles at `8/8` implemented modules, `0` scaffold modules, `1` read-only modules, `7` read-write modules, `31` implemented routes, `15` implemented mutation routes, `readiness=ready`, and `currentStage=cutover-ready`.
 - Completed slice: targeted verification for the teams write/ownership cut is green: `pnpm exec vitest run tests/server-v4/postgresTeamsRoute.test.js tests/server-v4/sqliteTeamsStore.test.js tests/server-v4/runtimePersistence.test.js tests/server-v4/appShell.test.js tests/server-v4/v4RolloutStatus.test.js --environment node` (`16/16`), scoped `pnpm exec eslint ...`, `pnpm run build:server-v4`, and scoped `git diff --check`.
+- Completed slice: `server-v4/src/modules/declarations/declarationCoMonitoring.ts`, `declarationsCoMonitoringService.ts`, the declarations stores, and `DeclarationsController` now own the C/O monitoring config/state contract through the typed runtime boundary instead of leaving it only on the legacy storage path. `server-v4` now serves `GET/PUT /api/v4/declarations/imports/co-codes`, `GET /api/v4/declarations/imports/co-discrepancy`, and `PUT /api/v4/declarations/imports/co-discrepancy/config`, while `server-v4/src/app/legacyCompatRoutes.ts` exposes matching legacy aliases at `/api/import/co-codes` and `/api/import/co-discrepancy*`.
+- Completed slice: declarations import parity now also covers `POST /api/v4/declarations/imports/co-discrepancy/run` plus the legacy alias `POST /api/import/co-discrepancy/run`. `server-v4/src/modules/declarations/ecusCoDiscrepancyRunner.ts` now owns a reusable/injectable ECUS fetch seam, and `DeclarationsCoMonitoringService` owns the compare/state persistence path instead of leaving it in the monolith-only `runCoDiscrepancyCheck()` flow.
+- Completed hardening: the default discrepancy runner now initializes lazily, so unrelated `server-v4` app builds and tests that do not inject a declarations reader no longer fail during `buildLegacyCompatRouter(...)` construction.
+- Verification: `pnpm vitest run tests/server-v4/postgresDeclarationsRoute.test.js --environment node` passed (`11/11`), and `pnpm run verify:server-v4` passed (`28` files, `105` tests; includes lint + typecheck + full `tests/server-v4`).
+- Residual after this slice: the previously-open `co-discrepancy/run` parity gap is closed; the next declarations/import follow-up should be chosen from the remaining legacy `/api/import/*` surface instead of assumed in advance.
 - **Status:** completed
 
 ## Archived Hardening Phases (`cng-4or`)

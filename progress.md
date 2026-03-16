@@ -79,8 +79,75 @@
 ## Current Focus
 
 - Active bead: none
-- Last completed slice: `cng-2ch`
-- Next action: wait for the next residual bead or identify the next smaller repo-hygiene/reporting seam now that `ReportViewer.jsx` is below the soft cap.
+- Last completed slice: `server-v4 declarations ECUS config/status + legacy import search parity`
+- Current in-flight slice: none
+- Current discovery update: ECUS sync config now persists through the typed declarations store seam (`config_documents` in Postgres, `kv_store` in SQLite), and the legacy `ecus/config|status` routes now resolve through `server-v4` with session-backed `syncManage` guards while canonical `/api/v4/declarations/imports/ecus-config` keeps bridge-or-session access for the ECUS client.
+- Current discovery: legacy `/api/import/search` is now owned by `server-v4` and keeps the monolith filter/pagination contract inside the typed declarations repository/service boundary. A direct route scan against `server/index.js` and `server-v4/src/app/legacyCompatRoutes.ts` shows the monolith declarations/import surface is now fully bridged: ECUS config/status/preview/run, alerts*, search, co-codes, and co-discrepancy*.
+- Next action: if the declarations/import follow-up continues, move from small legacy route-parity cuts to broader persistence/cutover work (for example canonical search ownership, frontend cutover validation, or declarations-store cleanup) because no residual legacy `/api/import/*` declarations gaps remain.
+- Immediate execution plan: keep the notebook closed on declarations/import route parity and choose the next broader residual slice only after re-scanning the wider v4 backlog.
+
+## Session: 2026-03-16 Server-v4 Declarations ECUS Preview-Run Parity
+
+- Re-read the monolith ECUS sync route contract and the frontend `src/components/dataImporter/useDataImporterSync.js` expectations, then scoped the next declarations/import follow-up to legacy `/api/import/ecus/preview` and `/api/import/ecus/run`.
+- Extended `server-v4/src/modules/declarations/ecusCoDiscrepancyRunner.ts` from a discrepancy-only helper into a reusable ECUS fetch seam that accepts explicit include/exclude tax-code overrides and range-derived fetches even when `rawRows` are not pre-supplied.
+- Extended `server-v4/src/modules/declarations/declarationsImportService.ts` so both canonical `POST /api/v4/declarations/imports/ecus-preview|ecus-commit` and legacy `/api/import/ecus/preview|run` can resolve their source rows by date range through the injected runner when `rawRows` are omitted.
+- Rewired `declarationsRoutes.ts`, `legacyCompatRoutes.ts`, and `build-v4-app.ts` so the canonical and legacy import routes share the same fetch-capable runner/service wiring instead of keeping the legacy ECUS flow trapped in the monolith.
+- Added route-level regression coverage in `tests/server-v4/postgresDeclarationsRoute.test.js` for the legacy ECUS preview/run aliases, including session-backed authorization, preview payload shape, commit result shape, and fetched-row/store integration expectations.
+- Verification:
+  - `pnpm vitest run tests/server-v4/postgresDeclarationsRoute.test.js --environment node` -> passed (`12/12`)
+  - `pnpm run verify:server-v4` -> passed (`28` files, `106` tests; includes lint + typecheck + full `tests/server-v4`)
+
+## Session: 2026-03-16 Server-v4 Declarations ECUS Config-Status Parity
+
+- Re-read the monolith ECUS config/status contract plus the frontend sync expectations, then scoped the next declarations/import follow-up to the remaining read/config routes instead of another fetch/run cut.
+- Added route-level regression coverage in `tests/server-v4/postgresDeclarationsRoute.test.js` for legacy `GET /api/import/ecus/config`, legacy `GET /api/import/ecus/status`, legacy `PUT /api/import/ecus/config`, and canonical `GET /api/v4/declarations/imports/ecus-config`.
+- Added `server-v4/src/modules/declarations/declarationsEcusSyncService.ts`, `server-v4/src/modules/declarations/ecusSyncConfig.ts`, and `server-v4/src/modules/declarations/ecusBridgeAccess.ts` so the typed runtime now owns ECUS sync config normalization, password masking/preservation, canonical bridge/session access, and the legacy session-only status/config checks instead of leaving that seam in the monolith.
+- Extended the declarations store contracts so ECUS sync config persists through the same typed config-document boundary already used for alerts and C/O monitoring.
+- Rewired `DeclarationsController`, `declarationsRoutes.ts`, `declarations.module.ts`, and `server-v4/src/app/legacyCompatRoutes.ts` so both canonical and legacy ECUS config/status routes now resolve through `server-v4`.
+- Verification:
+  - `pnpm run verify:server-v4` -> passed later in the same follow-through after the subsequent legacy-search slice (`28` files, `109` tests; includes lint + typecheck + full `tests/server-v4`)
+
+## Session: 2026-03-16 Server-v4 Declarations Legacy Import Search Parity
+
+- Re-read the monolith `/api/import/search` handler and the frontend `src/components/dataImporter/useDataImporterResultRows.js` caller, then scoped the final route-parity cut to the session-backed search endpoint and its legacy pagination contract.
+- Added route-level regression coverage in `tests/server-v4/postgresDeclarationsRoute.test.js` for legacy `/api/import/search`, including unauthenticated rejection, `query|mst|noStaff` filters, and paginated `{ ok, total, page, pageSize, rows }` responses.
+- Extended `server-v4/src/modules/declarations/DeclarationsRepository.ts`, `server-v4/src/modules/declarations/declarationsService.ts`, and `server-v4/src/modules/declarations/DeclarationsController.ts`, then wired `server-v4/src/app/legacyCompatRoutes.ts` so `/api/import/search` now resolves through `server-v4`.
+- Kept the search filter logic typed inside `DeclarationsRepository` instead of relying on an untyped JS-domain import, so `server-v4` preserves the monolith search contract without carrying a new typecheck hole across package boundaries.
+- Verification:
+  - `pnpm vitest run tests/server-v4/postgresDeclarationsRoute.test.js --environment node -t "legacy declaration search"` -> passed (`1` active test, `14` skipped in-file)
+  - `pnpm run verify:server-v4` -> passed (`28` files, `109` tests; includes lint + typecheck + full `tests/server-v4`)
+
+## Session: 2026-03-16 Server-v4 Declarations C/O Discrepancy Run Parity
+
+- Added `server-v4/src/modules/declarations/ecusCoDiscrepancyRunner.ts` as a reusable/injectable ECUS fetch seam for discrepancy monitoring, reusing the existing bridge-service/sql-bridge compatibility utilities without pulling SQL Server access directly into the tests.
+- Extended `server-v4/src/modules/declarations/declarationsCoMonitoringService.ts` so the typed runtime now owns the full `runCoDiscrepancy()` compare/state persistence flow instead of leaving that logic trapped in the monolith-only `runCoDiscrepancyCheck()` path.
+- Rewired `DeclarationsController`, `declarationsRoutes.ts`, `legacyCompatRoutes.ts`, `build-v4-app.ts`, and `declarations.module.ts` so both canonical and legacy paths now serve `POST /api/v4/declarations/imports/co-discrepancy/run` and `POST /api/import/co-discrepancy/run`.
+- Added route-level regression coverage in `tests/server-v4/postgresDeclarationsRoute.test.js` for the new run endpoint, including session-backed authorization and the legacy alias.
+- Fixed the verification fallout after the first green route test:
+  - corrected the relative runtime import path to `server/ecus/bridgeService.js` and `apps/ecus-bridge/src/sqlBridge.js`
+  - replaced static TS imports of those JS modules with typed `createRequire(...)` loading so `typecheck:server-v4` stays clean
+  - moved default runner configuration loading to fetch-time so unrelated `server-v4` app builds no longer fail when no declarations reader is injected
+- Verification:
+  - `pnpm vitest run tests/server-v4/postgresDeclarationsRoute.test.js --environment node` -> passed (`11/11`)
+  - `pnpm run verify:server-v4` -> passed (`28` files, `105` tests; includes lint + typecheck + full `tests/server-v4`)
+
+## Session: 2026-03-15 Server-v4 Declarations C/O Config-State Parity
+
+- Re-read and applied `planning-with-files`, `test-driven-development`, and `verification-before-completion`.
+- Restored the interrupted `server-v4` migration context from notebook files and confirmed the latest landed declarations slices already covered ECUS preview/commit plus alerts.
+- Re-read the monolith `co-*` route contract and frontend `useDataImporterCoMonitoring.js` expectations, then scoped this cut to the safe config/state routes first instead of forcing the still-missing `co-discrepancy/run` ECUS fetch seam into the same change.
+- Added route-level regression coverage in `tests/server-v4/postgresDeclarationsRoute.test.js` for:
+  - `GET/PUT /api/v4/declarations/imports/co-codes`
+  - `GET /api/v4/declarations/imports/co-discrepancy`
+  - `PUT /api/v4/declarations/imports/co-discrepancy/config`
+  - legacy aliases `/api/import/co-codes` and `/api/import/co-discrepancy*`
+- Added `server-v4/src/modules/declarations/declarationCoMonitoring.ts` and `server-v4/src/modules/declarations/declarationsCoMonitoringService.ts` to own C/O config/state defaults, normalization, and `syncManage`-guarded service behavior.
+- Extended declarations stores (`declarationsStore.ts`, `noopDeclarationsStore.ts`, `postgresDeclarationsStore.ts`, `sqliteDeclarationsStore.ts`) so C/O config/state now persists through the typed runtime store boundary instead of only the legacy storage path.
+- Rewired `DeclarationsController`, `declarationsRoutes.ts`, `declarations.module.ts`, and `server-v4/src/app/legacyCompatRoutes.ts` so both canonical v4 and legacy compatibility paths now resolve the C/O config/state routes through `server-v4`.
+- Remaining gap after this slice: `POST /api/import/co-discrepancy/run` still depends on the monolith-only `runCoDiscrepancyCheck()` / ECUS preview-fetch seam and should be migrated separately.
+- Verification:
+  - `pnpm vitest run tests/server-v4/postgresDeclarationsRoute.test.js --environment node` -> passed (`10/10`)
+  - `pnpm run verify:server-v4` -> passed (`28` files, `104` tests; includes lint + typecheck + full `tests/server-v4`)
 
 ## Session: 2026-03-15 ReportViewer Preference + Action Extraction
 

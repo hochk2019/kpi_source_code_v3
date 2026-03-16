@@ -17,6 +17,19 @@ export type DeclarationsListResponse = {
   items: DeclarationRecord[];
 };
 
+export type DeclarationsImportSearchQuery = {
+  filters?: unknown;
+  page?: number;
+  pageSize?: number;
+};
+
+export type DeclarationsImportSearchResponse = {
+  total: number;
+  page: number;
+  pageSize: number;
+  rows: DeclarationRecord[];
+};
+
 export type DeclarationEventsQuery = {
   limit?: number;
 };
@@ -38,6 +51,10 @@ export class DeclarationsHttpError extends Error {
 }
 
 export class DeclarationsService {
+  private static readonly IMPORT_SEARCH_DEFAULT_PAGE_SIZE = 10;
+
+  private static readonly IMPORT_SEARCH_MAX_PAGE_SIZE = 200;
+
   constructor(
     private readonly repository: DeclarationsRepository,
     private readonly store: DeclarationsStore,
@@ -50,6 +67,34 @@ export class DeclarationsService {
     return {
       total: matches.length,
       items: limit ? matches.slice(0, limit) : matches,
+    };
+  }
+
+  async searchImportDeclarations(
+    query: DeclarationsImportSearchQuery = {},
+  ): Promise<DeclarationsImportSearchResponse> {
+    const matches = await this.repository.searchDeclarations(query.filters);
+    const pageValue = Number(query.page);
+    const requestedPageSize = Number(query.pageSize);
+    const page = Number.isFinite(pageValue) && pageValue > 0 ? Math.floor(pageValue) : 1;
+    const pageSizeCandidate =
+      Number.isFinite(requestedPageSize) && requestedPageSize > 0
+        ? Math.floor(requestedPageSize)
+        : DeclarationsService.IMPORT_SEARCH_DEFAULT_PAGE_SIZE;
+    const pageSize = Math.max(
+      1,
+      Math.min(pageSizeCandidate, DeclarationsService.IMPORT_SEARCH_MAX_PAGE_SIZE),
+    );
+    const total = matches.length;
+    const maxPage = Math.max(1, Math.ceil(total / pageSize));
+    const safePage = Math.min(page, maxPage);
+    const offset = (safePage - 1) * pageSize;
+
+    return {
+      total,
+      page: safePage,
+      pageSize,
+      rows: matches.slice(offset, offset + pageSize),
     };
   }
 

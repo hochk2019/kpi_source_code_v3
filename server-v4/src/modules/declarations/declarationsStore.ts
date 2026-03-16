@@ -2,6 +2,16 @@ import { randomUUID } from 'node:crypto';
 
 import { normalizeStr } from '../../legacy/legacy-normalizers.js';
 import type { AuthPermissionMap } from '../auth/authTypes.js';
+import type {
+  CoCodeConfigDocument,
+  CoDiscrepancyConfigDocument,
+  CoDiscrepancyStateDocument,
+} from './declarationCoMonitoring.js';
+import type {
+  DeclarationAlertConfigDocument,
+  DeclarationAlertStateDocument,
+} from './declarationAlerts.js';
+import type { EcusSyncConfigDocument } from './ecusSyncConfig.js';
 
 export type DeclarationActor = {
   username: string;
@@ -67,6 +77,27 @@ export type DeclarationStoreTarget = {
   current: Record<string, unknown>;
 };
 
+export type DeclarationImportRange = {
+  from: string;
+  to: string;
+};
+
+export type DeclarationImportCommitEntry = {
+  kind: 'insert' | 'update';
+  key: string;
+  current: Record<string, unknown> | null;
+  nextRecord: Record<string, unknown>;
+  changedFields: string[];
+};
+
+export type DeclarationImportCommitInput = {
+  entries: DeclarationImportCommitEntry[];
+  actor: string;
+  reason: string;
+  runAt: string;
+  range: DeclarationImportRange;
+};
+
 export type ApplyDeclarationPatchResult = {
   changed: boolean;
   nextRecord: Record<string, unknown>;
@@ -79,7 +110,37 @@ export interface DeclarationsStore {
     normalizedPatch: NormalizedDeclarationPatch,
     actor: DeclarationActor,
   ): Promise<Record<string, unknown>>;
+  commitImportedDeclarations(input: DeclarationImportCommitInput): Promise<void>;
   listDeclarationEvents(target: DeclarationStoreTarget): Promise<DeclarationEventRecord[]>;
+  readEcusSyncConfig(): Promise<EcusSyncConfigDocument | null>;
+  writeEcusSyncConfig(
+    config: EcusSyncConfigDocument,
+    updatedBy: string | null,
+  ): Promise<EcusSyncConfigDocument>;
+  readCoCodeConfig(): Promise<CoCodeConfigDocument | null>;
+  writeCoCodeConfig(config: CoCodeConfigDocument, updatedBy: string | null): Promise<CoCodeConfigDocument>;
+  readCoDiscrepancyConfig(): Promise<CoDiscrepancyConfigDocument | null>;
+  writeCoDiscrepancyConfig(
+    config: CoDiscrepancyConfigDocument,
+    updatedBy: string | null,
+  ): Promise<CoDiscrepancyConfigDocument>;
+  readCoDiscrepancyState(): Promise<CoDiscrepancyStateDocument | null>;
+  writeCoDiscrepancyState(
+    state: CoDiscrepancyStateDocument,
+    updatedBy: string | null,
+  ): Promise<CoDiscrepancyStateDocument>;
+  readDeclarationAlertConfig(): Promise<DeclarationAlertConfigDocument | null>;
+  writeDeclarationAlertConfig(
+    config: DeclarationAlertConfigDocument,
+    updatedBy: string | null,
+  ): Promise<DeclarationAlertConfigDocument>;
+  readDeclarationAlertState(): Promise<DeclarationAlertStateDocument | null>;
+  writeDeclarationAlertState(
+    state: DeclarationAlertStateDocument,
+    updatedBy: string | null,
+  ): Promise<DeclarationAlertStateDocument>;
+  markDeclarationsReviewed(keys: readonly string[], actor: string): Promise<number>;
+  unmarkDeclarationsReviewed(keys: readonly string[], actor: string): Promise<number>;
 }
 
 const EMPTY_PATCH: NormalizedDeclarationPatch = Object.freeze({

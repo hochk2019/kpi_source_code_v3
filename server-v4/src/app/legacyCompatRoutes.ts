@@ -3,6 +3,21 @@ import express, { type Response, type Router } from 'express';
 import { ZodError, z } from 'zod';
 
 import type { RuntimePersistence } from '../persistence/runtimePersistence.js';
+import { DeclarationsController } from '../modules/declarations/DeclarationsController.js';
+import { DeclarationsAlertsService } from '../modules/declarations/declarationsAlertsService.js';
+import { DeclarationsCoMonitoringService } from '../modules/declarations/declarationsCoMonitoringService.js';
+import {
+  createDefaultEcusSqlHealthCheck,
+  DeclarationsEcusSyncService,
+  type EcusSqlHealthCheck,
+} from '../modules/declarations/declarationsEcusSyncService.js';
+import { DeclarationsImportService } from '../modules/declarations/declarationsImportService.js';
+import { DeclarationsRepository } from '../modules/declarations/DeclarationsRepository.js';
+import { DeclarationsService } from '../modules/declarations/declarationsService.js';
+import {
+  createDefaultCoDiscrepancyRunner,
+  type CoDiscrepancyRunner,
+} from '../modules/declarations/ecusCoDiscrepancyRunner.js';
 import { createDefaultKpiRuleCollection } from '../modules/kpi-rules/kpiRuleDefaults.js';
 import { createEmptyTeamRoster } from '../modules/teams/teamRosterDocument.js';
 import { AuthHttpError, AuthService } from '../modules/auth/authService.js';
@@ -87,9 +102,52 @@ const changeOwnPasswordBodySchema = z.object({
   newPassword: z.string().trim().min(MIN_PASSWORD_LENGTH),
 });
 
-export function buildLegacyCompatRouter(persistence: RuntimePersistence): Router {
+export function buildLegacyCompatRouter(
+  persistence: RuntimePersistence,
+  options: {
+    ecusImportRunner?: CoDiscrepancyRunner;
+    coDiscrepancyRunner?: CoDiscrepancyRunner;
+    sqlHealthCheck?: EcusSqlHealthCheck;
+  } = {},
+): Router {
   const router = express.Router();
   const authService = new AuthService(persistence.authStore);
+  const declarationsRepository = new DeclarationsRepository(persistence.declarationsReader);
+  const declarationsService = new DeclarationsService(
+    declarationsRepository,
+    persistence.declarationsStore,
+  );
+  const ecusFetchRunner =
+    options.ecusImportRunner ??
+    options.coDiscrepancyRunner ??
+    createDefaultCoDiscrepancyRunner(persistence.declarationsReader);
+  const declarationsImportService = new DeclarationsImportService(
+    declarationsRepository,
+    persistence.declarationsStore,
+    ecusFetchRunner,
+  );
+  const declarationsAlertsService = new DeclarationsAlertsService(
+    declarationsRepository,
+    persistence.declarationsStore,
+  );
+  const declarationsCoMonitoringService = new DeclarationsCoMonitoringService(
+    declarationsRepository,
+    declarationsImportService,
+    persistence.declarationsStore,
+    options.coDiscrepancyRunner ?? ecusFetchRunner,
+  );
+  const declarationsEcusSyncService = new DeclarationsEcusSyncService(
+    persistence.declarationsStore,
+    options.sqlHealthCheck ?? createDefaultEcusSqlHealthCheck(),
+  );
+  const declarationsController = new DeclarationsController(
+    declarationsService,
+    declarationsImportService,
+    declarationsAlertsService,
+    declarationsCoMonitoringService,
+    declarationsEcusSyncService,
+    persistence.authStore,
+  );
 
   router.get('/api/health', async (_req, res) => {
     res.status(200).json({
@@ -249,6 +307,39 @@ export function buildLegacyCompatRouter(persistence: RuntimePersistence): Router
       handleLegacyAuthError(error, res, 'bootstrap application data');
     }
   });
+
+  router.post('/api/import/ecus/preview', (req, res) => void declarationsController.previewEcusImport(req, res));
+  router.post('/api/import/ecus/run', (req, res) => void declarationsController.commitEcusImport(req, res));
+  router.get('/api/import/ecus/config', (req, res) => void declarationsController.readLegacyEcusConfig(req, res));
+  router.get('/api/import/ecus/status', (req, res) => void declarationsController.readLegacyEcusStatus(req, res));
+  router.put('/api/import/ecus/config', (req, res) => void declarationsController.updateLegacyEcusConfig(req, res));
+  router.get('/api/import/alerts', (req, res) => void declarationsController.listImportAlerts(req, res));
+  router.get('/api/import/search', (req, res) =>
+    void declarationsController.searchLegacyImportDeclarations(req, res),
+  );
+  router.get('/api/import/alerts/config', (req, res) =>
+    void declarationsController.readImportAlertConfig(req, res),
+  );
+  router.put('/api/import/alerts/config', (req, res) =>
+    void declarationsController.updateImportAlertConfig(req, res),
+  );
+  router.post('/api/import/alerts/review', (req, res) =>
+    void declarationsController.markImportAlertsReviewed(req, res),
+  );
+  router.post('/api/import/alerts/unreview', (req, res) =>
+    void declarationsController.unmarkImportAlertsReviewed(req, res),
+  );
+  router.get('/api/import/co-codes', (req, res) => void declarationsController.readCoCodeConfig(req, res));
+  router.put('/api/import/co-codes', (req, res) => void declarationsController.updateCoCodeConfig(req, res));
+  router.get('/api/import/co-discrepancy', (req, res) =>
+    void declarationsController.readCoDiscrepancy(req, res),
+  );
+  router.post('/api/import/co-discrepancy/run', (req, res) =>
+    void declarationsController.runCoDiscrepancy(req, res),
+  );
+  router.put('/api/import/co-discrepancy/config', (req, res) =>
+    void declarationsController.updateCoDiscrepancyConfig(req, res),
+  );
 
   router.get('/api/storage/:key', async (req, res) => {
     try {

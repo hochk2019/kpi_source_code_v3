@@ -53,6 +53,41 @@
 - The mapped `cng-z7u.*` slices are now all closed and the epic itself is closed.
 - The immediate reporting follow-up beads `cng-f2z`, `cng-vlt`, `cng-tuw`, and `cng-2ch` are now all closed; `bd ready --json` is back to `[]`.
 
+## Latest Declarations Import Parity Status
+
+- `server-v4` declarations ownership now covers ECUS preview/commit, legacy ECUS preview/run parity, alerts, and the full C/O monitoring config/state/run surface.
+- `server-v4/src/modules/declarations/declarationCoMonitoring.ts` now centralizes the C/O monitoring defaults and normalization rules that previously lived only in the monolith config helpers.
+- `server-v4/src/modules/declarations/declarationsCoMonitoringService.ts` now owns the `syncManage`-guarded C/O config/state contract and the immediate `co-discrepancy/run` compare/state flow, keeping both config writes and discrepancy persistence inside the typed runtime boundary instead of the legacy storage route path.
+- `server-v4/src/modules/declarations/ecusCoDiscrepancyRunner.ts` now provides a reusable/injectable ECUS fetch seam backed by the existing bridge-service/sql-bridge compatibility utilities, so both discrepancy monitoring and date-range-based ECUS import preview/commit can be tested without a live SQL Server dependency.
+- `server-v4/src/modules/declarations/declarationsImportService.ts` now resolves ECUS import sources through that same runner when `rawRows` are omitted, which keeps canonical and legacy sync paths on one typed import flow instead of one bridge-fed path plus one monolith-only path.
+- The same declarations persistence seam now carries ECUS sync config too: `postgresDeclarationsStore.ts` writes typed config blobs through `config_documents`, `sqliteDeclarationsStore.ts` mirrors that contract in `kv_store`, and `noopDeclarationsStore.ts` follows the same per-document method pattern. `server-v4/src/modules/declarations/declarationsEcusSyncService.ts` now owns the normalization, masking, and write/read flow on top of that seam.
+- The ECUS config/status auth split is now explicit inside `server-v4`: legacy `GET/PUT /api/import/ecus/config` plus legacy `GET /api/import/ecus/status` stay session-only `syncManage` endpoints for the web UI, while canonical `GET /api/v4/declarations/imports/ecus-config` allows the ECUS bridge bearer token or a session-backed sync manager through `server-v4/src/modules/declarations/ecusBridgeAccess.ts`.
+- `server-v4` now serves:
+  - `POST /api/v4/declarations/imports/ecus-preview`
+  - `POST /api/v4/declarations/imports/ecus-commit`
+  - `GET/PUT /api/v4/declarations/imports/co-codes`
+  - `GET /api/v4/declarations/imports/co-discrepancy`
+  - `POST /api/v4/declarations/imports/co-discrepancy/run`
+  - `PUT /api/v4/declarations/imports/co-discrepancy/config`
+  - legacy aliases `/api/import/ecus/preview` and `/api/import/ecus/run`
+  - legacy aliases `/api/import/ecus/config` and `/api/import/ecus/status`
+  - legacy alias `/api/import/search`
+  - legacy aliases `/api/import/co-codes` and `/api/import/co-discrepancy*`
+- The previous residual gap `POST /api/import/co-discrepancy/run` is now closed. The migrated `server-v4` path follows the same monolith shape that guided the slice:
+  - validates ECUS SQL Server bridge configuration
+  - resolves the effective date range from explicit input or `rangeDays`
+  - calls `previewEcusSync()` with `sampleLimit`
+  - compares remote-vs-stored `co_line_count` and `has_co`
+  - writes discrepancy state and returns `{ ok: true, config, state }`
+- A real hardening issue surfaced during full verification: eager default-runner initialization broke auth/HQ/KPI/teams app builds that do not inject a declarations reader. The final fix was lazy runner initialization so `buildLegacyCompatRouter(...)` no longer touches the declarations seam at construction time.
+- The latest follow-through also closes the old frontend-facing ECUS sync gap: `src/components/dataImporter/useDataImporterSync.js` still expects `/api/import/ecus/preview` to return `preview.rows|limited|range` and `/api/import/ecus/run` to return `result.imported|skipped|reviewLocked`, and those legacy aliases now resolve through `server-v4` instead of the monolith.
+- `GET /api/import/search` is now also served by `server-v4`. `DeclarationsRepository.searchDeclarations()` keeps the legacy query/mst/company/status/range/noStaff/noTeam/duplicate/C/O filter behavior inside the typed runtime boundary, and `DeclarationsService.searchImportDeclarations()` preserves the monolith pagination shape `{ ok: true, total, page, pageSize, rows }`.
+- A route scan against `server/index.js` and `server-v4/src/app/legacyCompatRoutes.ts` now shows no remaining monolith-only declarations/import endpoints under `/api/import/*`. The bridged legacy surface covers ECUS config/status/preview/run, alerts*, search, co-codes, and co-discrepancy*.
+- Verification for the latest completed declarations/import parity slice:
+  - `pnpm vitest run tests/server-v4/postgresDeclarationsRoute.test.js --environment node -t "legacy declaration search"` -> passed (`1` active test, `14` skipped in-file)
+  - `pnpm run verify:server-v4` -> passed (`28` files, `109` tests)
+- The next declarations/import work, if any, is no longer small legacy route parity. It is broader cutover work such as canonicalizing search ownership, removing compatibility seams, or validating the current frontend against the bridged `server-v4` runtime end-to-end.
+
 ## Research Findings
 
 - The project is a JavaScript monolith split across a React/Vite frontend and an Express backend, but both sides centralize major business logic into a handful of oversized files.
