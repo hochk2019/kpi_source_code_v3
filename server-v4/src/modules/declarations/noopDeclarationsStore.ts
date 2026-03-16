@@ -24,6 +24,9 @@ export function createNoopDeclarationsStore(): DeclarationsStore {
     async listDeclarationEvents() {
       return [];
     },
+    async listDeletedDeclarations() {
+      return [];
+    },
     async readEcusSyncConfig() {
       return null;
     },

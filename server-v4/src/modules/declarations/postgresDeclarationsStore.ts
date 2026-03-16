@@ -28,6 +28,8 @@ import {
   compareDeclarationEventsDescending,
   type DeclarationImportCommitInput,
   type DeclarationActor,
+  type DeletedDeclarationFilters,
+  type DeletedDeclarationRecord,
   type DeclarationEventRecord,
   type DeclarationStoreTarget,
   type DeclarationsStore,
@@ -136,6 +138,14 @@ const READ_DECLARATION_EVENTS_SQL =
   'SELECT id::text AS id, event_type, payload, actor_username, occurred_at::text AS occurred_at ' +
   'FROM declaration_events ' +
   'WHERE declaration_id = $1 OR (payload ->> \'key\') = $2 ' +
+  'ORDER BY occurred_at DESC, id DESC';
+
+const LIST_DELETED_DECLARATION_EVENTS_SQL =
+  'SELECT id::text AS id, event_type, payload, actor_username, occurred_at::text AS occurred_at ' +
+  'FROM declaration_events ' +
+  "WHERE event_type ILIKE 'delete%' " +
+  'AND ($1::timestamptz IS NULL OR occurred_at >= $1::timestamptz) ' +
+  'AND ($2::timestamptz IS NULL OR occurred_at <= $2::timestamptz) ' +
   'ORDER BY occurred_at DESC, id DESC';
 
 const CO_CODE_CONFIG_KEY = 'co_tax_code_config_v1';
@@ -284,6 +294,24 @@ export class PostgresDeclarationsStore implements DeclarationsStore {
       .map((row) => normalizeEventRow(row))
       .filter((entry): entry is DeclarationEventRecord => Boolean(entry))
       .sort(compareDeclarationEventsDescending);
+  }
+
+  async listDeletedDeclarations(
+    filters: DeletedDeclarationFilters = {},
+  ): Promise<DeletedDeclarationRecord[]> {
+    await this.ensureInitialized();
+    const normalizedType = normalizeDeletedDeclarationFilterType(filters.type);
+    const rangeFrom = normalizeDeletedDeclarationTimestampFilter(filters.from, false);
+    const rangeTo = normalizeDeletedDeclarationTimestampFilter(filters.to, true);
+    const result = await this.pool.query<DeclarationEventRow>(LIST_DELETED_DECLARATION_EVENTS_SQL, [
+      rangeFrom,
+      rangeTo,
+    ]);
+
+    return (Array.isArray(result.rows) ? result.rows : [])
+      .map((row) => normalizeDeletedDeclarationRow(row))
+      .filter((entry): entry is DeletedDeclarationRecord => Boolean(entry))
+      .filter((entry) => !normalizedType || entry.type === normalizedType);
   }
 
   async readEcusSyncConfig(): Promise<EcusSyncConfigDocument | null> {
@@ -636,6 +664,38 @@ function normalizeEventRow(row: DeclarationEventRow): DeclarationEventRecord | n
   });
 }
 
+function normalizeDeletedDeclarationRow(row: DeclarationEventRow): DeletedDeclarationRecord | null {
+  const payload = parseEventPayload(row.payload);
+  const eventType = `${row.event_type ?? ''}`.trim().toLowerCase();
+  if (!eventType.startsWith('delete')) {
+    return null;
+  }
+
+  const snapshot =
+    payload.snapshot && typeof payload.snapshot === 'object' && !Array.isArray(payload.snapshot)
+      ? (payload.snapshot as Record<string, unknown>)
+      : payload;
+  const soTk = normalizeStr(snapshot.so_tk);
+  if (!soTk) {
+    return null;
+  }
+
+  const company = normalizeStr(snapshot.company ?? snapshot.ten_dn);
+
+  return {
+    so_tk: soTk,
+    nhanh: normalizeStr(snapshot.nhanh),
+    mst: normalizeStr(snapshot.mst),
+    company,
+    ten_dn: company,
+    type: normalizeDeletedDeclarationStoredType(
+      payload.deletionType ?? payload.type ?? eventType.replace(/^delete\.?/, ''),
+    ),
+    deleted_at: `${row.occurred_at ?? ''}`.trim() || new Date().toISOString(),
+    deleted_by: `${row.actor_username ?? ''}`.trim() || 'system',
+  };
+}
+
 function parseEventPayload(value: unknown): Record<string, unknown> {
   if (value && typeof value === 'object' && !Array.isArray(value)) {
     return value as Record<string, unknown>;
@@ -653,6 +713,27 @@ function parseEventPayload(value: unknown): Record<string, unknown> {
   } catch {
     return {};
   }
+}
+
+function normalizeDeletedDeclarationFilterType(value: unknown): 'soft' | 'hard' | null {
+  const normalized = normalizeStr(value).toLowerCase();
+  if (normalized === 'soft' || normalized === 'hard') {
+    return normalized;
+  }
+  return null;
+}
+
+function normalizeDeletedDeclarationStoredType(value: unknown): 'soft' | 'hard' {
+  return normalizeStr(value).toLowerCase() === 'hard' ? 'hard' : 'soft';
+}
+
+function normalizeDeletedDeclarationTimestampFilter(value: unknown, endOfDay: boolean): string | null {
+  const normalized = normalizeStr(value).slice(0, 10);
+  if (!normalized) {
+    return null;
+  }
+
+  return `${normalized}${endOfDay ? 'T23:59:59.999Z' : 'T00:00:00.000Z'}`;
 }
 
 function normalizeDeclarationReviewTargets(

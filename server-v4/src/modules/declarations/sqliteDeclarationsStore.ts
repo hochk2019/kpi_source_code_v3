@@ -33,6 +33,8 @@ import {
   declarationTargetMatchesRow,
   type DeclarationImportCommitInput,
   type DeclarationActor,
+  type DeletedDeclarationFilters,
+  type DeletedDeclarationRecord,
   type DeclarationEventRecord,
   type DeclarationHistoryChange,
   type DeclarationStoreTarget,
@@ -139,6 +141,39 @@ export class SqliteDeclarationsStore implements DeclarationsStore {
       const historyEvents = this.readHistoryEvents(database, target);
       const deleteEvents = this.readDeletionEvents(database, target);
       return [...historyEvents, ...deleteEvents].sort(compareDeclarationEventsDescending);
+    });
+  }
+
+  async listDeletedDeclarations(
+    filters: DeletedDeclarationFilters = {},
+  ): Promise<DeletedDeclarationRecord[]> {
+    return this.withDatabase((database) => {
+      const normalizedType = normalizeDeletedDeclarationFilterType(filters.type);
+      const rangeFrom = normalizeDeletedDeclarationDate(filters.from);
+      const rangeTo = normalizeDeletedDeclarationDate(filters.to);
+
+      return this.readStoredArray(database, DECLARATION_DELETE_LOG_STORAGE_KEY)
+        .map((entry, index) => normalizeDeletedDeclarationEntry(entry, index))
+        .filter((entry): entry is StoredDeletedDeclarationEntry & { id: string } => Boolean(entry))
+        .filter((entry) => {
+          const entryType = normalizeStoredDeletedDeclarationType(entry.type);
+          if (normalizedType && entryType !== normalizedType) {
+            return false;
+          }
+
+          if (rangeFrom || rangeTo) {
+            const entryDate = normalizeDeletedDeclarationDate(entry.deleted_at);
+            if (rangeFrom && (!entryDate || entryDate < rangeFrom)) {
+              return false;
+            }
+            if (rangeTo && (!entryDate || entryDate > rangeTo)) {
+              return false;
+            }
+          }
+
+          return true;
+        })
+        .map((entry) => toDeletedDeclarationRecord(entry));
     });
   }
 
@@ -504,4 +539,37 @@ function normalizeDeletedDeclarationEntry(
 
 function normalizeText(value: unknown): string {
   return typeof value === 'string' ? value.trim() : `${value ?? ''}`.trim();
+}
+
+function normalizeDeletedDeclarationDate(value: unknown): string {
+  return normalizeText(value).slice(0, 10);
+}
+
+function normalizeDeletedDeclarationFilterType(value: unknown): 'soft' | 'hard' | null {
+  const normalized = normalizeText(value).toLowerCase();
+  if (normalized === 'soft' || normalized === 'hard') {
+    return normalized;
+  }
+  return null;
+}
+
+function normalizeStoredDeletedDeclarationType(value: unknown): 'soft' | 'hard' {
+  return normalizeText(value).toLowerCase() === 'hard' ? 'hard' : 'soft';
+}
+
+function toDeletedDeclarationRecord(
+  entry: StoredDeletedDeclarationEntry & { id?: string },
+): DeletedDeclarationRecord {
+  const company = normalizeText(entry.company ?? entry.ten_dn);
+
+  return {
+    so_tk: normalizeText(entry.so_tk),
+    nhanh: normalizeText(entry.nhanh),
+    mst: normalizeText(entry.mst),
+    company,
+    ten_dn: company,
+    type: normalizeStoredDeletedDeclarationType(entry.type),
+    deleted_at: normalizeText(entry.deleted_at) || new Date().toISOString(),
+    deleted_by: normalizeText(entry.deleted_by) || 'system',
+  };
 }

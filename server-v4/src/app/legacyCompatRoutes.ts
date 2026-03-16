@@ -314,6 +314,22 @@ export function buildLegacyCompatRouter(
   router.get('/api/import/ecus/status', (req, res) => void declarationsController.readLegacyEcusStatus(req, res));
   router.put('/api/import/ecus/config', (req, res) => void declarationsController.updateLegacyEcusConfig(req, res));
   router.get('/api/import/alerts', (req, res) => void declarationsController.listImportAlerts(req, res));
+  router.get('/api/import/deleted-declarations', async (req, res) => {
+    try {
+      await requireAuthenticatedUser(authService, getSessionTokenFromRequest(req));
+      const rows = await persistence.declarationsStore.listDeletedDeclarations({
+        type: getSingleLegacyQueryValue(req.query?.type),
+        from: getSingleLegacyQueryValue(req.query?.from),
+        to: getSingleLegacyQueryValue(req.query?.to),
+      });
+      res.status(200).json({
+        ok: true,
+        rows,
+      });
+    } catch (error) {
+      handleLegacyAuthError(error, res, 'load deleted declarations');
+    }
+  });
   router.get('/api/import/search', (req, res) =>
     void declarationsController.searchLegacyImportDeclarations(req, res),
   );
@@ -429,6 +445,23 @@ function normalizeLegacyBootstrapValue(value: unknown): string | null {
   }
 
   return typeof value === 'string' ? value : JSON.stringify(value);
+}
+
+function getSingleLegacyQueryValue(value: unknown): string | null {
+  if (typeof value === 'string') {
+    const normalized = value.trim();
+    return normalized || null;
+  }
+
+  if (Array.isArray(value)) {
+    for (const entry of value) {
+      if (typeof entry === 'string' && entry.trim()) {
+        return entry.trim();
+      }
+    }
+  }
+
+  return null;
 }
 
 async function requireAuthenticatedUser(authService: AuthService, token: string): Promise<AuthAccountView> {

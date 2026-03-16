@@ -175,6 +175,7 @@ describe("useDataImporterSync", () => {
           json: async () => ({
             result: {
               imported: 4,
+              updated: 2,
               skipped: 1,
               reviewLocked: 2,
             },
@@ -276,7 +277,117 @@ describe("useDataImporterSync", () => {
     expect(refreshDeclRowsFromServer).toHaveBeenCalledTimes(1);
     expect(loadSavedRows).toHaveBeenCalledWith({ bypassConfirm: true });
     expect(result.current.syncMessage).toBe(
-      "Đã đồng bộ 4 tờ khai mới từ ECUS, bỏ qua 1 tờ khai đã có, khóa 2 tờ khai đã rà soát. Lọc theo chỉ MST: 0312345678; loại trừ MST: 0399999999."
+      "Đã đồng bộ 4 tờ khai mới từ ECUS, cập nhật 2 tờ khai đã có, bỏ qua 1 tờ khai đã có, khóa 2 tờ khai đã rà soát. Lọc theo chỉ MST: 0312345678; loại trừ MST: 0399999999."
     );
+  });
+
+  it("preserves fetched preview totals from the server preview payload", async () => {
+    const previewRange = { from: "2026-03-10", to: "2026-03-12" };
+    const previewRows = [{ so_tk: "00000012345" }, { so_tk: "00000067890" }];
+    const fetchWithAuth = vi.fn(async (url, options = {}) => {
+      if (url === "/api/import/ecus/config" && !options.method) {
+        return {
+          ok: true,
+          json: async () => ({
+            config: {
+              enabled: true,
+              schedule: "0 5 * * *",
+              rangeDays: 2,
+              preferMonthFirst: true,
+              connection: {
+                server: "srv01",
+                database: "ecus",
+                user: "sync-user",
+                hasPassword: true,
+              },
+              includeTaxCodes: [],
+              excludeTaxCodes: [],
+            },
+          }),
+        };
+      }
+
+      if (url === "/api/import/ecus/status" && !options.method) {
+        return {
+          ok: true,
+          json: async () => ({
+            backend: { status: "ok", checkedAt: "2026-03-11T00:00:00.000Z" },
+            database: { status: "ok", checkedAt: "2026-03-11T00:01:00.000Z" },
+          }),
+        };
+      }
+
+      if (url === "/api/import/alerts" && !options.method) {
+        return {
+          ok: true,
+          json: async () => ({
+            alerts: [],
+            summary: {
+              outstanding: 0,
+              totalTracked: 0,
+              lastEvaluatedAt: null,
+            },
+          }),
+        };
+      }
+
+      if (url === "/api/import/ecus/preview" && options.method === "POST") {
+        return {
+          ok: true,
+          json: async () => ({
+            preview: {
+              rows: previewRows,
+              fetched: 125,
+              limited: true,
+              range: previewRange,
+            },
+          }),
+        };
+      }
+
+      throw new Error(`Unexpected request ${url} ${options.method || "GET"}`);
+    });
+
+    const { result } = renderHook(() =>
+      useDataImporterSync({
+        actor: "tester",
+        canManageSync: true,
+        fetchWithAuth,
+        extractErrorMessage: async (_response, fallback) => fallback,
+        refreshDeclRowsFromServer: vi.fn(),
+        loadSavedRows: vi.fn(),
+      })
+    );
+
+    await waitFor(() => {
+      expect(fetchWithAuth).toHaveBeenCalledWith(
+        "/api/import/ecus/config",
+        expect.objectContaining({ cache: "no-store", credentials: "include" })
+      );
+    });
+
+    let previewResult;
+    await act(async () => {
+      previewResult = await result.current.handlePreviewSync();
+    });
+
+    expect(fetchWithAuth).toHaveBeenCalledWith(
+      "/api/import/ecus/preview",
+      expect.objectContaining({
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+      })
+    );
+    expect(previewResult).toEqual({
+      ok: true,
+      rows: previewRows,
+      fetched: 125,
+      limited: true,
+      range: previewRange,
+    });
+    expect(result.current.previewRows).toEqual(previewRows);
+    expect(result.current.previewLimited).toBe(true);
+    expect(result.current.previewRangeInfo).toEqual(previewRange);
   });
 });

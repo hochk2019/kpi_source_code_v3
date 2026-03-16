@@ -67,9 +67,20 @@ describe("useDataImporterCoMonitoring", () => {
         sampleLimit: 25,
       });
       expect(result.current.coDiscrepancyState).toEqual({
+        lastRunAt: null,
+        range: null,
+        mismatchCount: 1,
+        totalChecked: 0,
         status: "warning",
+        error: null,
+        durationMs: 0,
         mismatches: [{ declarationNo: "TK-01" }],
+        triggered: false,
+        limited: false,
+        actor: null,
+        reason: null,
       });
+      expect(result.current.coDiscrepancyStatusLabel).toBe("Có chênh lệch");
     });
   });
 
@@ -128,8 +139,21 @@ describe("useDataImporterCoMonitoring", () => {
                 sampleLimit: 100,
               },
               state: {
-                status: "success",
+                lastRunAt: "2026-03-11T05:00:00.000Z",
+                range: {
+                  from: "2026-03-01",
+                  to: "2026-03-05",
+                },
+                mismatchCount: 1,
+                totalChecked: 2,
+                status: "ok",
+                error: null,
+                durationMs: 4500,
                 mismatches: [{ declarationNo: "TK-02" }],
+                triggered: false,
+                limited: true,
+                actor: "tester",
+                reason: "manual",
               },
             },
           }),
@@ -206,10 +230,26 @@ describe("useDataImporterCoMonitoring", () => {
         }),
       })
     );
-    expect(result.current.coDiscrepancyMessage).toBe("Đã chạy đối soát C/O thành công.");
+    expect(result.current.coDiscrepancyMessage).toBe(
+      "Đã chạy đối soát C/O: phát hiện 1 chênh lệch trên 2 tờ khai, đã cắt bớt danh sách do vượt giới hạn mẫu."
+    );
+    expect(result.current.coDiscrepancyStatusLabel).toBe("Có chênh lệch");
     expect(result.current.coDiscrepancyState).toEqual({
-      status: "success",
+      lastRunAt: "2026-03-11T05:00:00.000Z",
+      range: {
+        from: "2026-03-01",
+        to: "2026-03-05",
+      },
+      mismatchCount: 1,
+      totalChecked: 2,
+      status: "ok",
+      error: null,
+      durationMs: 4500,
       mismatches: [{ declarationNo: "TK-02" }],
+      triggered: false,
+      limited: true,
+      actor: "tester",
+      reason: "manual",
     });
   });
 });

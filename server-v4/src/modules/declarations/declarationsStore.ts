@@ -63,6 +63,25 @@ export type DeclarationDeletionEventRecord = {
 
 export type DeclarationEventRecord = DeclarationUpdateEventRecord | DeclarationDeletionEventRecord;
 
+export type DeletedDeclarationType = 'soft' | 'hard' | null;
+
+export type DeletedDeclarationRecord = {
+  so_tk: string;
+  nhanh: string;
+  mst: string;
+  company: string;
+  ten_dn: string;
+  type: DeletedDeclarationType;
+  deleted_at: string;
+  deleted_by: string;
+};
+
+export type DeletedDeclarationFilters = {
+  from?: string | null;
+  to?: string | null;
+  type?: string | null;
+};
+
 export type NormalizedDeclarationPatch = {
   patch: Record<string, unknown>;
   requestedFields: DeclarationEditableField[];
@@ -112,6 +131,7 @@ export interface DeclarationsStore {
   ): Promise<Record<string, unknown>>;
   commitImportedDeclarations(input: DeclarationImportCommitInput): Promise<void>;
   listDeclarationEvents(target: DeclarationStoreTarget): Promise<DeclarationEventRecord[]>;
+  listDeletedDeclarations(filters?: DeletedDeclarationFilters): Promise<DeletedDeclarationRecord[]>;
   readEcusSyncConfig(): Promise<EcusSyncConfigDocument | null>;
   writeEcusSyncConfig(
     config: EcusSyncConfigDocument,

@@ -1,4 +1,4 @@
-﻿import bcrypt from 'bcryptjs';
+import bcrypt from 'bcryptjs';
 import { describe, expect, it } from 'vitest';
 import request from 'supertest';
 
@@ -110,6 +110,82 @@ describe('server-v4 legacy compatibility routes', () => {
     expect(rosterResponse.body.value).toEqual(roster);
   });
 
+  it('lists deleted declarations through the legacy import compatibility route', async () => {
+    const authStore = createAuthStore([
+      createAccount({
+        username: 'admin',
+        password: 'admin123',
+        role: ADMIN_ROLE,
+        name: 'Admin User',
+      }),
+    ]);
+    const app = buildV4App({
+      modules: [authModule],
+      persistence: createPersistenceStub({
+        authStore,
+        deletedDeclarations: [
+          {
+            so_tk: '102030',
+            nhanh: '01',
+            mst: '1234567890',
+            company: 'Alpha Co',
+            ten_dn: 'Alpha Co',
+            type: 'hard',
+            deleted_at: '2026-03-04T10:00:00.000Z',
+            deleted_by: 'admin',
+          },
+          {
+            so_tk: '202122',
+            nhanh: '01',
+            mst: '1234567891',
+            company: 'Beta Co',
+            ten_dn: 'Beta Co',
+            type: 'soft',
+            deleted_at: '2026-03-04T12:00:00.000Z',
+            deleted_by: 'admin',
+          },
+          {
+            so_tk: '303132',
+            nhanh: '01',
+            mst: '1234567892',
+            company: 'Gamma Co',
+            ten_dn: 'Gamma Co',
+            type: 'hard',
+            deleted_at: '2026-02-27T08:00:00.000Z',
+            deleted_by: 'admin',
+          },
+        ],
+      }),
+    });
+
+    const loginResponse = await request(app).post('/api/auth/login').send({
+      username: 'admin',
+      password: 'admin123',
+    });
+    const cookie = getCookie(loginResponse);
+
+    const response = await request(app)
+      .get('/api/import/deleted-declarations?type=hard&from=2026-03-01&to=2026-03-05')
+      .set('Cookie', cookie);
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({
+      ok: true,
+      rows: [
+        {
+          so_tk: '102030',
+          nhanh: '01',
+          mst: '1234567890',
+          company: 'Alpha Co',
+          ten_dn: 'Alpha Co',
+          type: 'hard',
+          deleted_at: '2026-03-04T10:00:00.000Z',
+          deleted_by: 'admin',
+        },
+      ],
+    });
+  });
+
   it('rejects unauthenticated bootstrap/storage access and returns 404 for unknown keys', async () => {
     const authStore = createAuthStore([
       createAccount({
@@ -132,6 +208,12 @@ describe('server-v4 legacy compatibility routes', () => {
     expect(unauthenticatedResponse.status).toBe(401);
     expect(unauthenticatedResponse.body.error).toBe('Bạn cần đăng nhập.');
 
+    const unauthenticatedDeletedDeclarationsResponse = await request(app).get(
+      '/api/import/deleted-declarations',
+    );
+    expect(unauthenticatedDeletedDeclarationsResponse.status).toBe(401);
+    expect(unauthenticatedDeletedDeclarationsResponse.body.error).toBe('Bạn cần đăng nhập.');
+
     const loginResponse = await request(app).post('/api/auth/login').send({
       username: 'admin',
       password: 'admin123',
@@ -152,6 +234,7 @@ function createPersistenceStub({
   roster = { version: 1, teams: [] },
   bindings = [],
   hqHistory = [],
+  deletedDeclarations = [],
   adjustments = [],
   adjustmentSettings = {
     categories: {},
@@ -190,8 +273,29 @@ function createPersistenceStub({
       readDeclarationRows: async () => clone(declarations),
     },
     declarationsStore: {
-      patchDeclaration: async (_target, _patch, _actor) => ({}),
+      patchDeclaration: async () => ({}),
       listDeclarationEvents: async () => [],
+      listDeletedDeclarations: async ({ from = null, to = null, type = null } = {}) =>
+        clone(deletedDeclarations).filter((entry) => {
+          const normalizedType =
+            type === 'hard' ? 'hard' : type === 'soft' ? 'soft' : null;
+          const entryType = entry?.type === 'hard' ? 'hard' : 'soft';
+          const entryDate = `${entry?.deleted_at ?? ''}`.trim().slice(0, 10);
+          const fromDate = `${from ?? ''}`.trim().slice(0, 10);
+          const toDate = `${to ?? ''}`.trim().slice(0, 10);
+
+          if (normalizedType && entryType !== normalizedType) {
+            return false;
+          }
+          if (fromDate && (!entryDate || entryDate < fromDate)) {
+            return false;
+          }
+          if (toDate && (!entryDate || entryDate > toDate)) {
+            return false;
+          }
+
+          return true;
+        }),
     },
     hqAgenciesReader: {
       getSourceKind: () => 'relational-store',

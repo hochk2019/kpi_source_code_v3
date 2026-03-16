@@ -101,6 +101,7 @@ export default function useDataImporterContainerProps({
 
   const [selectedFile, setSelectedFile] = useState("");
   const [previewSource, setPreviewSource] = useState(null);
+  const [syncPreviewMeta, setSyncPreviewMeta] = useState(null);
 
   const keyOfRow = useCallback((row) => getRowKey(row), []);
 
@@ -282,7 +283,7 @@ export default function useDataImporterContainerProps({
     handleRefreshAlerts,
     handleMarkReviewed,
     handleUnmarkReviewed,
-    outstandingAlerts,
+    alertEntries,
     summaryCards,
     lastAlertEvaluated,
     syncLastRunLabel,
@@ -314,11 +315,13 @@ export default function useDataImporterContainerProps({
     setPage,
     mode,
     setMode,
-    selectedFile,
-    setSelectedFile,
-    previewSource,
-    setPreviewSource,
-    selectedKeys,
+     selectedFile,
+     setSelectedFile,
+     previewSource,
+     setPreviewSource,
+     syncPreviewMeta,
+     setSyncPreviewMeta,
+     selectedKeys,
     setSelectedKeys,
     hasUnsaved,
     setHasUnsaved,
@@ -515,7 +518,7 @@ export default function useDataImporterContainerProps({
     canManageSync,
     isAdminRole,
     alertSummary,
-    alertEntries: outstandingAlerts,
+    alertEntries,
     alertLoading,
     lastAlertEvaluated,
     coCodeLoading,

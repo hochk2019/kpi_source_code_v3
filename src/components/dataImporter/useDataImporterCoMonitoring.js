@@ -14,6 +14,21 @@ const DEFAULT_CO_DISCREPANCY_FORM = {
   sampleLimit: 500,
 };
 
+const DEFAULT_CO_DISCREPANCY_STATUS = {
+  lastRunAt: null,
+  range: null,
+  mismatchCount: 0,
+  totalChecked: 0,
+  status: "idle",
+  error: null,
+  durationMs: 0,
+  mismatches: [],
+  triggered: false,
+  limited: false,
+  actor: null,
+  reason: null,
+};
+
 function normalizeCoCodeConfig(config) {
   const whitelist = Array.isArray(config?.whitelist) ? config.whitelist : [];
   const blacklist = Array.isArray(config?.blacklist) ? config.blacklist : [];
@@ -46,6 +61,83 @@ function normalizeCoDiscrepancyConfig(config) {
     updatedAt: config?.updatedAt || null,
     updatedBy: config?.updatedBy || null,
   };
+}
+
+function normalizeCoDiscrepancyRange(range) {
+  if (!range || typeof range !== "object" || Array.isArray(range)) {
+    return null;
+  }
+
+  const from = `${range.from ?? ""}`.trim();
+  const to = `${range.to ?? ""}`.trim();
+  if (!from && !to) {
+    return null;
+  }
+
+  return { from, to };
+}
+
+function normalizeNonNegativeInteger(value, fallback = 0) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? Math.max(0, Math.floor(parsed)) : fallback;
+}
+
+function normalizeCoDiscrepancyState(state) {
+  const mismatches = Array.isArray(state?.mismatches) ? state.mismatches : [];
+  const mismatchCount = normalizeNonNegativeInteger(state?.mismatchCount, mismatches.length);
+
+  return {
+    ...DEFAULT_CO_DISCREPANCY_STATUS,
+    ...(state && typeof state === "object" ? state : {}),
+    lastRunAt: state?.lastRunAt || null,
+    range: normalizeCoDiscrepancyRange(state?.range),
+    mismatchCount,
+    totalChecked: normalizeNonNegativeInteger(state?.totalChecked, 0),
+    status: `${state?.status ?? DEFAULT_CO_DISCREPANCY_STATUS.status}`.trim() || DEFAULT_CO_DISCREPANCY_STATUS.status,
+    error: state?.error || null,
+    durationMs: normalizeNonNegativeInteger(state?.durationMs, 0),
+    mismatches,
+    triggered: state?.triggered === true,
+    limited: state?.limited === true,
+    actor: state?.actor || null,
+    reason: state?.reason || null,
+  };
+}
+
+function buildCoDiscrepancyStatusLabel(state) {
+  if (!state) {
+    return "Chưa chạy";
+  }
+
+  if (state.status === "error") {
+    return "Lỗi đối soát";
+  }
+
+  if ((state.mismatchCount ?? 0) > 0) {
+    return state.triggered ? "Vượt ngưỡng cảnh báo" : "Có chênh lệch";
+  }
+
+  if (state.status === "ok" || state.status === "success") {
+    return "Đã đối soát";
+  }
+
+  if (!state.lastRunAt) {
+    return "Chưa chạy";
+  }
+
+  return state.status || "Chưa chạy";
+}
+
+function buildCoDiscrepancyRunMessage(state) {
+  const mismatchCount = Number(state?.mismatchCount ?? 0);
+  const totalChecked = Number(state?.totalChecked ?? 0);
+  const limitedNote = state?.limited ? ", đã cắt bớt danh sách do vượt giới hạn mẫu" : "";
+
+  if (mismatchCount > 0) {
+    return `Đã chạy đối soát C/O: phát hiện ${mismatchCount.toLocaleString("vi-VN")} chênh lệch trên ${totalChecked.toLocaleString("vi-VN")} tờ khai${limitedNote}.`;
+  }
+
+  return `Đã chạy đối soát C/O: không phát hiện chênh lệch trên ${totalChecked.toLocaleString("vi-VN")} tờ khai${limitedNote}.`;
 }
 
 export default function useDataImporterCoMonitoring({
@@ -173,6 +265,17 @@ export default function useDataImporterCoMonitoring({
     });
   }, []);
 
+  const syncCoDiscrepancyState = useCallback((state) => {
+    if (!state || typeof state !== "object") {
+      setCoDiscrepancyState(null);
+      return null;
+    }
+
+    const nextState = normalizeCoDiscrepancyState(state);
+    setCoDiscrepancyState(nextState);
+    return nextState;
+  }, []);
+
   const fetchCoDiscrepancy = useCallback(async () => {
     setCoDiscrepancyLoading(true);
     setCoDiscrepancyError("");
@@ -190,14 +293,14 @@ export default function useDataImporterCoMonitoring({
 
       const payload = await response.json();
       syncCoDiscrepancyConfig(payload?.config || {});
-      setCoDiscrepancyState(payload?.state || null);
+      syncCoDiscrepancyState(payload?.state || null);
     } catch (err) {
       console.error("Không thể tải trạng thái đối soát C/O", err);
       setCoDiscrepancyError(err?.message || "Không thể tải trạng thái đối soát C/O.");
     } finally {
       setCoDiscrepancyLoading(false);
     }
-  }, [extractErrorMessage, fetchWithAuth, syncCoDiscrepancyConfig]);
+  }, [extractErrorMessage, fetchWithAuth, syncCoDiscrepancyConfig, syncCoDiscrepancyState]);
 
   const handleSaveCoDiscrepancyConfig = useCallback(async () => {
     if (!canManageSync) {
@@ -289,15 +392,13 @@ export default function useDataImporterCoMonitoring({
       }
 
       const result = await response.json();
+      const nextState = result?.result?.state ? syncCoDiscrepancyState(result.result.state) : null;
 
       if (result?.result?.config) {
         syncCoDiscrepancyConfig(result.result.config);
       }
-      if (result?.result?.state) {
-        setCoDiscrepancyState(result.result.state);
-      }
 
-      setCoDiscrepancyMessage("Đã chạy đối soát C/O thành công.");
+      setCoDiscrepancyMessage(buildCoDiscrepancyRunMessage(nextState));
     } catch (err) {
       console.error("Không thể chạy đối soát C/O", err);
       setCoDiscrepancyError(err?.message || "Không thể chạy đối soát C/O.");
@@ -311,6 +412,7 @@ export default function useDataImporterCoMonitoring({
     extractErrorMessage,
     fetchWithAuth,
     syncCoDiscrepancyConfig,
+    syncCoDiscrepancyState,
   ]);
 
   const handleRefreshCoCodeConfig = useCallback(() => {
@@ -371,7 +473,10 @@ export default function useDataImporterCoMonitoring({
     }
   }, [coCodeConfig?.updatedAt, coCodeConfig?.updatedBy]);
 
-  const coDiscrepancyStatusLabel = coDiscrepancyState?.status || "idle";
+  const coDiscrepancyStatusLabel = useMemo(
+    () => buildCoDiscrepancyStatusLabel(coDiscrepancyState),
+    [coDiscrepancyState]
+  );
 
   return {
     coCodeConfig,

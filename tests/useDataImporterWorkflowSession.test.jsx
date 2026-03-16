@@ -41,6 +41,7 @@ function createProps(overrides = {}) {
     rawRows: [{ id: "row-1" }],
     selectedKeys: ["row-1"],
     selectedFile: "decl.xlsx",
+    previewSource: null,
     effectivePreviewRows: [],
     importPreview: { totalRows: 1 },
     canOverwriteData: true,
@@ -65,6 +66,8 @@ function createProps(overrides = {}) {
     setPage: vi.fn(),
     setQuery: vi.fn(),
     setSelectedFile: vi.fn(),
+    setPreviewSource: vi.fn(),
+    setSyncPreviewMeta: vi.fn(),
     setFilterNoStaff: vi.fn(),
     setFilterNoTeam: vi.fn(),
     setFilterDuplicate11: vi.fn(),
@@ -224,6 +227,7 @@ describe("useDataImporterWorkflowSession", () => {
     const previewSyncRows = vi.fn().mockResolvedValue({
       ok: true,
       rows: previewRows,
+      fetched: 7,
       limited: false,
       range: { from: "2026-03-01", to: "2026-03-02" },
     });
@@ -295,6 +299,7 @@ describe("useDataImporterWorkflowSession", () => {
     expect(props.setMode).toHaveBeenCalledWith("preview");
     expect(props.setSelectedFile).toHaveBeenCalledWith("");
     expect(props.setPreviewSource).toHaveBeenCalledWith("sync");
+    expect(props.setSyncPreviewMeta).toHaveBeenCalledWith({ fetched: 7 });
     expect(props.setQuery).toHaveBeenCalledWith("");
     expect(props.setFilterNoStaff).toHaveBeenCalledWith(false);
     expect(props.setFilterNoTeam).toHaveBeenCalledWith(false);

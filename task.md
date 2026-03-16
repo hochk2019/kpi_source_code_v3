@@ -7,6 +7,8 @@
 - Tracking:
   - Previous epic: `cng-z7u` (closed)
   - Active bead: none
+  - Latest micro-bead: `cng-62v` (closed)
+  - Latest notebook-only slice: `server-v4 declarations deleted-declarations compat parity` (closed)
   - Planning notebook: `task_plan.md`, `findings.md`, `progress.md`
 
 ## Program Scope
@@ -27,6 +29,10 @@
 - `cng-vlt` (`P2`, closed): extract the remaining scope explorer card from `ReportViewer.jsx` into a dedicated reporting module with focused regression coverage.
 - `cng-tuw` (`P2`, closed): extract the remaining dashboard overview composition from `ReportViewer.jsx` into a dedicated reporting module with focused regression coverage.
 - `cng-2ch` (`P2`, closed): extract the remaining `ReportViewer.jsx` preference/action controller seams into dedicated reporting hooks with focused regression coverage.
+- `cng-y0o` (`P2`, closed): align the ECUS sync success message with the `server-v4` commit payload so updated counts are not dropped in the importer UI.
+- `cng-qrq` (`P2`, closed): align C/O monitoring status text and manual-run messaging with the `server-v4` discrepancy payload.
+- `cng-6js` (`P2`, closed): align the importer monitoring alerts panel with the full `server-v4` alerts list instead of an overview-only shortlist.
+- `cng-62v` (`P2`, closed): preserve `preview.fetched` through the ECUS sync-preview hook so truncated previews do not under-report incoming totals in the importer review flow.
 
 ## Current Slice
 
@@ -52,6 +58,49 @@
 - The latest route regression in `tests/server-v4/postgresDeclarationsRoute.test.js` now locks the legacy ECUS preview/run aliases directly, including manager authorization, preview payload shape, commit result counts, and fetched-row/store integration.
 - `server-v4/src/modules/declarations/declarationsEcusSyncService.ts` plus `server-v4/src/modules/declarations/ecusBridgeAccess.ts` now own the ECUS config/status seam, and `legacyCompatRoutes.ts` now bridges `/api/import/ecus/config|status` plus `/api/import/search` in addition to the earlier ECUS preview/run aliases.
 - A route scan against `server/index.js` shows no remaining monolith-only declarations/import endpoints under `/api/import/*`; the next declarations follow-up should be broader persistence/cutover work, not another small route-parity slice.
+- The current notebook-only declarations follow-up is `frontend cutover validation`, not more route additions.
+- First validated cut in that bucket: importer search paging is now contract-aligned across the real `server-v4` legacy route, the `useDataImporterResultRows` hook regression surface, and the local UI mock inside `tests/dataImporter.preview.test.jsx`.
+- Concrete change:
+  - `tests/server-v4/postgresDeclarationsRoute.test.js` now proves `/api/import/search` clamps an out-of-range page to the last valid page under `server-v4`
+  - `tests/useDataImporterResultRows.test.jsx` now proves the hook adopts that returned page and syncs UI paging state
+  - `tests/dataImporter.preview.test.jsx` no longer mocks `/api/import/search` with stale requested-page echo behavior
+- Verification:
+  - `pnpm vitest run tests/server-v4/postgresDeclarationsRoute.test.js --environment node` -> passed (`15/15`)
+  - `pnpm vitest run tests/useDataImporterResultRows.test.jsx tests/dataImporter.preview.test.jsx --environment jsdom` -> passed (`14/14`)
+  - `pnpm exec eslint tests/useDataImporterResultRows.test.jsx tests/dataImporter.preview.test.jsx tests/server-v4/postgresDeclarationsRoute.test.js` -> passed
+- Follow-up micro-slice `cng-y0o` is now closed: `src/components/dataImporter/useDataImporterSync.js` includes `result.updated` in the post-sync success message instead of silently dropping it.
+- Focused regression coverage now lives in `tests/useDataImporterSync.test.jsx`, which asserts the exact composed success message including `updated`, `skipped`, `reviewLocked`, and MST filter text.
+- Verification for `cng-y0o`:
+  - `pnpm exec vitest run tests/useDataImporterSync.test.jsx --environment jsdom` -> passed (`2/2`)
+  - `pnpm exec eslint src/components/dataImporter/useDataImporterSync.js tests/useDataImporterSync.test.jsx` -> passed
+  - `git diff --check -- src/components/dataImporter/useDataImporterSync.js tests/useDataImporterSync.test.jsx` -> passed
+- Follow-up micro-slice `cng-qrq` is now closed: `src/components/dataImporter/useDataImporterCoMonitoring.js` normalizes discrepancy state from the `server-v4` payload, maps human-readable status labels from that state, and composes the manual-run success message from `mismatchCount`, `totalChecked`, and `limited` instead of showing a generic success toast.
+- Focused regression coverage now lives in `tests/useDataImporterCoMonitoring.test.jsx`, which asserts backward-compatible state normalization plus the exact composed run message for the `server-v4` discrepancy response shape.
+- Verification for `cng-qrq`:
+  - `pnpm exec vitest run tests/useDataImporterCoMonitoring.test.jsx tests/dataImporterMonitoringPanel.test.jsx --environment jsdom` -> passed (`5/5`)
+  - `pnpm exec eslint src/components/dataImporter/useDataImporterCoMonitoring.js tests/useDataImporterCoMonitoring.test.jsx` -> passed
+  - `git diff --check -- src/components/dataImporter/useDataImporterCoMonitoring.js tests/useDataImporterCoMonitoring.test.jsx` -> passed
+- Follow-up micro-slice `cng-6js` is now closed: the monitoring alerts panel no longer receives `outstandingAlerts.slice(0, 5)` from the overview seam and instead consumes the full raw `alertEntries` list returned by the bridged `/api/import/alerts` contract.
+- Focused regression coverage now lives in `tests/useDataImporterSessionController.test.jsx` and `tests/useDataImporterContainerProps.test.jsx`, which lock raw `alertEntries` propagation through the workflow/session/container seam while `tests/dataImporterMonitoringPanel.test.jsx` remains green on the unchanged panel contract.
+- Verification for `cng-6js`:
+  - `pnpm exec vitest run tests/useDataImporterSessionController.test.jsx tests/useDataImporterContainerProps.test.jsx tests/dataImporterMonitoringPanel.test.jsx --environment jsdom` -> passed (`6/6`)
+  - `pnpm exec eslint src/components/dataImporter/useDataImporterSessionController.js src/components/dataImporter/useDataImporterContainerProps.js tests/useDataImporterSessionController.test.jsx tests/useDataImporterContainerProps.test.jsx` -> passed
+  - `git diff --check -- src/components/dataImporter/useDataImporterSessionController.js src/components/dataImporter/useDataImporterContainerProps.js tests/useDataImporterSessionController.test.jsx tests/useDataImporterContainerProps.test.jsx` -> passed
+- Follow-up micro-slice `cng-62v` is now closed: `src/components/dataImporter/useDataImporterSync.js` no longer drops `preview.fetched` from the `server-v4` ECUS preview payload, so the downstream workflow/import-preview path can preserve authoritative incoming totals even when preview rows are truncated.
+- Focused regression coverage now lives in `tests/useDataImporterSync.test.jsx`, which now asserts the preview hook returns `fetched` and updates the preview state from the server payload.
+- Verification for `cng-62v`:
+  - `pnpm exec vitest run tests/useDataImporterSync.test.jsx tests/useDataImporterWorkflowSession.test.jsx tests/useDataImporterImportPreview.test.jsx --environment jsdom` -> passed (`11/11`)
+  - `pnpm exec eslint src/components/dataImporter/useDataImporterSync.js tests/useDataImporterSync.test.jsx` -> passed
+  - `git diff --check -- src/components/dataImporter/useDataImporterSync.js tests/useDataImporterSync.test.jsx` -> passed
+- A hidden residual compat gap still existed beyond `cng-62v`: `src/components/dataImporter/useDataImporterDeletedRows.js` called `GET /api/import/deleted-declarations?type=hard&from=...&to=...`, but `server-v4` had not actually bridged that legacy route yet.
+- The smallest safe fix was store-first, not another monolith callback: `server-v4/src/modules/declarations/declarationsStore.ts` now exposes `listDeletedDeclarations(...)`, implemented by the SQLite/Postgres/noop declarations stores so deleted-row reads stay inside typed runtime ownership.
+- `server-v4/src/app/legacyCompatRoutes.ts` now bridges `GET /api/import/deleted-declarations` with the legacy `{ ok: true, rows }` shape, and `tests/server-v4/legacyCompatRoutes.test.js` now locks both filtered rows and unauthenticated rejection.
+- Verification for the deleted-declarations notebook slice:
+  - `pnpm exec vitest run tests/server-v4/legacyCompatRoutes.test.js --environment node` -> passed (`3/3`)
+  - `pnpm exec vitest run tests/useDataImporterDeletedRows.test.jsx --environment jsdom` -> passed (`4/4`)
+  - `pnpm exec eslint server-v4/src/app/legacyCompatRoutes.ts server-v4/src/modules/declarations/declarationsStore.ts server-v4/src/modules/declarations/sqliteDeclarationsStore.ts server-v4/src/modules/declarations/postgresDeclarationsStore.ts server-v4/src/modules/declarations/noopDeclarationsStore.ts tests/server-v4/legacyCompatRoutes.test.js` -> passed
+  - `git diff --check -- server-v4/src/app/legacyCompatRoutes.ts server-v4/src/modules/declarations/declarationsStore.ts server-v4/src/modules/declarations/sqliteDeclarationsStore.ts server-v4/src/modules/declarations/postgresDeclarationsStore.ts server-v4/src/modules/declarations/noopDeclarationsStore.ts tests/server-v4/legacyCompatRoutes.test.js` -> passed
+- The next declarations follow-up should now move beyond search paging, ECUS success messaging, C/O monitoring, alert-list ownership, preview-fetched propagation, and deleted-declarations parity before reopening broader declarations-store cleanup.
 - Recently closed slices retained below:
 - `cng-cff`: the broad backend diagnostic path moved from `14` mixed failures to green by first reducing stale fixture/assertion drift to `6`, then isolating the last rule-selection regression to `1`, and finally closing it end-to-end.
 - `cng-cff`: root cause was `server/reportingRuleSelection.js` rejecting legacy/simple rule-set snapshots that lacked `groups`; `getRulesValue()` then fell back to `SHARED_DEFAULT_RULES`, which masked agency-specific ECUS license exclusions.
@@ -108,6 +157,20 @@
 - `cng-7c8`: KPI v4 re-architecture program (`closed`)
 - `cng-3or.1`: Phase A PostgreSQL runtime persistence and dual-write cutover (`closed`)
 - `cng-3or.3`: Phase B delivery-shape split into apps and shared packages (`closed`)
+
+## Latest Slice
+
+- `server-v4 declarations frontend cutover validation` advanced again without reopening route parity.
+- Latest completed mismatch:
+  - the backend ECUS preview contract already returned authoritative `preview.fetched`, and the downstream workflow/import-preview seams were already prepared to use it
+  - `src/components/dataImporter/useDataImporterSync.js` still returned only `rows`, `limited`, and `range`, so any limited/truncated preview silently fell back to `rows.length` and under-reported incoming totals
+  - the sync preview hook now preserves `fetched`, which keeps the authoritative count alive through the review/import summary flow
+- Verification completed:
+  - `pnpm exec vitest run tests/useDataImporterSync.test.jsx tests/useDataImporterWorkflowSession.test.jsx tests/useDataImporterImportPreview.test.jsx --environment jsdom`
+  - `pnpm exec eslint src/components/dataImporter/useDataImporterSync.js tests/useDataImporterSync.test.jsx`
+  - `git diff --check -- src/components/dataImporter/useDataImporterSync.js tests/useDataImporterSync.test.jsx`
+- Best next candidate if continuing this thread:
+  - inspect the next remaining importer UI/runtime interpretation seam beyond search paging, ECUS success messaging, C/O monitoring messaging, alert-list ownership, and preview-fetched propagation before reopening broader declarations-store cleanup
 - `cng-3or.2`: Phase C standalone Windows ECUS bridge service (`closed`)
 - `cng-3or.4`: Phase D operator shell end-state and heavy-workflow redesign (`closed`)
 - `cng-3or.5`: Phase E reporting analytics and observability end-state (`closed`)

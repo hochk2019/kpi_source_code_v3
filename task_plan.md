@@ -6,7 +6,67 @@ Close the remaining incomplete or only-partially-complete end-state work after t
 
 ## Current Phase
 
-Mapped `cng-z7u` child slices plus the immediate follow-up beads `cng-f2z`, `cng-vlt`, `cng-tuw`, and `cng-2ch` are complete, and the notebook-only declarations/import follow-through now covers the full legacy declarations `/api/import/*` route surface: ECUS config/status/preview/run, alerts*, search, co-codes, and co-discrepancy*. There is still no ready residual bead active right now.
+Mapped `cng-z7u` child slices plus the immediate follow-up beads `cng-f2z`, `cng-vlt`, `cng-tuw`, and `cng-2ch` are complete, and the notebook-only declarations/import follow-through now covers the full legacy declarations `/api/import/*` route surface: ECUS config/status/preview/run, alerts*, search, co-codes, co-discrepancy*, and deleted-declarations. The active notebook-only follow-up remains `server-v4 declarations frontend cutover validation`: keep validating the existing `DataImporter` UI/runtime behavior against those bridged compat routes before choosing deeper persistence cleanup. The latest tracked micro-slice `cng-62v` is closed, the hidden `/api/import/deleted-declarations` compat gap is now closed too, and there is still no ready residual bead active right now.
+
+## Active Declarations Follow-Up Options
+
+1. `frontend cutover validation`
+   - Validate the current `DataImporter` network/runtime contract against the already-bridged `server-v4` compat routes.
+   - Highest leverage for the smallest change because it can reveal the next real blocker without inventing more route aliases.
+2. `canonical search ownership`
+   - Move importer search consumption toward a canonical `server-v4` declarations path instead of only the legacy `/api/import/search` alias.
+   - Useful, but lower immediate product leverage than proving the current frontend cutover works.
+3. `declarations-store cleanup / SQLite compatibility reduction`
+   - Reduce remaining SQLite-era residue inside the typed declarations persistence seam.
+   - Valuable, but broader and riskier before the real frontend/runtime path has been validated.
+
+### Chosen Slice
+
+- [x] Validate `DataImporter` frontend/runtime behavior against bridged `server-v4` declarations/import routes
+- [x] Add focused regression coverage for the first concrete contract mismatch found
+- [x] Fix the mismatch inside the smallest appropriate frontend or `server-v4` seam
+- [x] Run targeted verification and update the notebook with the result
+
+### Completed Result
+
+- Closed validation mismatch `#1`: importer search paging contract is now consistent across `server-v4` route coverage, hook-level frontend regression coverage, and the local UI integration mock used by `tests/dataImporter.preview.test.jsx`.
+- Evidence:
+  - `pnpm vitest run tests/server-v4/postgresDeclarationsRoute.test.js --environment node`
+  - `pnpm vitest run tests/useDataImporterResultRows.test.jsx tests/dataImporter.preview.test.jsx --environment jsdom`
+  - `pnpm exec eslint tests/useDataImporterResultRows.test.jsx tests/dataImporter.preview.test.jsx tests/server-v4/postgresDeclarationsRoute.test.js`
+- Closed validation mismatch `#2`: sync preview summary ownership is now aligned with `server-v4` row semantics instead of local saved-row diff recomputation.
+- Evidence:
+  - `pnpm exec vitest run tests/useDataImporterImportPreview.test.jsx tests/useDataImporterWorkflowSession.test.jsx --environment jsdom`
+  - `pnpm exec vitest run tests/useDataImporterImportPreview.test.jsx tests/useDataImporterWorkflowSession.test.jsx tests/useDataImporterSessionController.test.jsx tests/useDataImporterContainerProps.test.jsx tests/useDataImporterImportFlow.test.jsx tests/useDataImporterSavedSession.test.jsx tests/dataImporter.preview.test.jsx --environment jsdom`
+  - `pnpm exec eslint src/components/dataImporter/useDataImporterContainerProps.js src/components/dataImporter/useDataImporterImportFlow.js src/components/dataImporter/useDataImporterImportPreview.js src/components/dataImporter/useDataImporterSavedSession.js src/components/dataImporter/useDataImporterSessionController.js src/components/dataImporter/useDataImporterWorkflowSession.js tests/useDataImporterImportPreview.test.jsx tests/useDataImporterWorkflowSession.test.jsx`
+  - `git diff --check -- src/components/dataImporter/useDataImporterContainerProps.js src/components/dataImporter/useDataImporterImportFlow.js src/components/dataImporter/useDataImporterImportPreview.js src/components/dataImporter/useDataImporterSavedSession.js src/components/dataImporter/useDataImporterSessionController.js src/components/dataImporter/useDataImporterWorkflowSession.js tests/useDataImporterImportPreview.test.jsx tests/useDataImporterWorkflowSession.test.jsx`
+- Closed validation mismatch `#3`: the ECUS success toast now mirrors the `server-v4` commit payload instead of silently dropping `result.updated`.
+- Evidence:
+  - `pnpm exec vitest run tests/useDataImporterSync.test.jsx --environment jsdom`
+  - `pnpm exec eslint src/components/dataImporter/useDataImporterSync.js tests/useDataImporterSync.test.jsx`
+  - `git diff --check -- src/components/dataImporter/useDataImporterSync.js tests/useDataImporterSync.test.jsx`
+- Closed validation mismatch `#4`: C/O monitoring status text and manual-run messaging are now aligned with the `server-v4` discrepancy payload instead of exposing raw `status` values or dropping `mismatchCount|totalChecked|limited` details.
+- Evidence:
+  - `pnpm exec vitest run tests/useDataImporterCoMonitoring.test.jsx tests/dataImporterMonitoringPanel.test.jsx --environment jsdom`
+  - `pnpm exec eslint src/components/dataImporter/useDataImporterCoMonitoring.js tests/useDataImporterCoMonitoring.test.jsx`
+  - `git diff --check -- src/components/dataImporter/useDataImporterCoMonitoring.js tests/useDataImporterCoMonitoring.test.jsx`
+- Closed validation mismatch `#5`: the importer monitoring alerts panel now consumes the full `server-v4` alerts list instead of the overview-only `outstandingAlerts.slice(0, 5)` preview, so the operator-facing table is no longer silently truncated.
+- Evidence:
+  - `pnpm exec vitest run tests/useDataImporterSessionController.test.jsx tests/useDataImporterContainerProps.test.jsx tests/dataImporterMonitoringPanel.test.jsx --environment jsdom`
+  - `pnpm exec eslint src/components/dataImporter/useDataImporterSessionController.js src/components/dataImporter/useDataImporterContainerProps.js tests/useDataImporterSessionController.test.jsx tests/useDataImporterContainerProps.test.jsx`
+  - `git diff --check -- src/components/dataImporter/useDataImporterSessionController.js src/components/dataImporter/useDataImporterContainerProps.js tests/useDataImporterSessionController.test.jsx tests/useDataImporterContainerProps.test.jsx`
+- Closed validation mismatch `#6`: ECUS preview fetched totals now survive the sync hook seam instead of silently falling back to preview row count when the preview payload is limited/truncated.
+- Evidence:
+  - `pnpm exec vitest run tests/useDataImporterSync.test.jsx tests/useDataImporterWorkflowSession.test.jsx tests/useDataImporterImportPreview.test.jsx --environment jsdom`
+  - `pnpm exec eslint src/components/dataImporter/useDataImporterSync.js tests/useDataImporterSync.test.jsx`
+  - `git diff --check -- src/components/dataImporter/useDataImporterSync.js tests/useDataImporterSync.test.jsx`
+- Closed validation mismatch `#7`: deleted-declarations parity is now restored across the frontend hook, the typed declarations store seam, and the `server-v4` legacy compat layer instead of leaving `/api/import/deleted-declarations` as a hidden monolith-only gap.
+- Evidence:
+  - `pnpm exec vitest run tests/server-v4/legacyCompatRoutes.test.js --environment node`
+  - `pnpm exec vitest run tests/useDataImporterDeletedRows.test.jsx --environment jsdom`
+  - `pnpm exec eslint server-v4/src/app/legacyCompatRoutes.ts server-v4/src/modules/declarations/declarationsStore.ts server-v4/src/modules/declarations/sqliteDeclarationsStore.ts server-v4/src/modules/declarations/postgresDeclarationsStore.ts server-v4/src/modules/declarations/noopDeclarationsStore.ts tests/server-v4/legacyCompatRoutes.test.js`
+  - `git diff --check -- server-v4/src/app/legacyCompatRoutes.ts server-v4/src/modules/declarations/declarationsStore.ts server-v4/src/modules/declarations/sqliteDeclarationsStore.ts server-v4/src/modules/declarations/postgresDeclarationsStore.ts server-v4/src/modules/declarations/noopDeclarationsStore.ts tests/server-v4/legacyCompatRoutes.test.js`
+- Next smallest declarations follow-up remains in the same broad bucket (`frontend cutover validation`), but the next candidate should now move beyond search paging, ECUS success messaging, C/O monitoring, alert-list ownership, preview-fetched propagation, and deleted-declarations parity into another concrete UI/runtime interpretation seam before broader declarations-store cleanup is justified.
 
 ## F1-F8 Practical Status Matrix
 

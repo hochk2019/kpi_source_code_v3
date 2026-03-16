@@ -40,6 +40,7 @@ export default function useDataImporterImportFlow({
   setMode,
   setSelectedFile,
   setPreviewSource,
+  setSyncPreviewMeta,
   setQuery,
   setFilterNoStaff,
   setFilterNoTeam,
@@ -203,6 +204,7 @@ export default function useDataImporterImportFlow({
           setMode("preview");
           setSelectedFile(file.name || "");
           setPreviewSource?.("file");
+          setSyncPreviewMeta?.(null);
           setQuery("");
           setFilterNoStaff(false);
           setFilterNoTeam(false);
@@ -247,6 +249,7 @@ export default function useDataImporterImportFlow({
       setMode,
       setPage,
       setPreviewSource,
+      setSyncPreviewMeta,
       setQuery,
       setRawRows,
       setRules,

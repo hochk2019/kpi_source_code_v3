@@ -1039,7 +1039,7 @@ describe("server-v4 postgres declarations route wiring", () => {
         mst: "0101234567",
         noStaff: "1",
         pageSize: "1",
-        page: "2",
+        page: "3",
       });
 
     expect(searchResponse.status).toBe(200);

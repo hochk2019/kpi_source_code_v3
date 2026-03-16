@@ -138,6 +138,53 @@ describe("useDataImporterResultRows", () => {
     expect(props.setPage).toHaveBeenCalledWith(2);
   });
 
+  it("adopts a server-clamped page when the requested page is out of range", async () => {
+    const rows = [createRow(21, { rowKey: "server-last" })];
+    const fetchWithAuth = vi.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        rows,
+        total: 1,
+        page: 1,
+        pageSize: 1,
+      }),
+    }));
+    const props = createProps({
+      shouldUseServerSearch: true,
+      page: 4,
+      pageSize: 1,
+      fetchWithAuth,
+      normalizedFilters: {
+        query: "clamped",
+        mst: "",
+        company: "",
+        statuses: [],
+        range: { from: "", to: "" },
+        noStaff: false,
+        noTeam: false,
+        duplicate: false,
+        includeDeleted: false,
+        coMode: "all",
+        coMin: 0,
+      },
+    });
+
+    const { result } = renderHook(() => useDataImporterResultRows(props));
+
+    await waitFor(() => {
+      expect(result.current.serverSearchState.loading).toBe(false);
+      expect(result.current.serverSearchState.page).toBe(1);
+    });
+
+    const [requestUrl] = fetchWithAuth.mock.calls[0];
+    expect(requestUrl).toContain("query=clamped");
+    expect(requestUrl).toContain("page=4");
+    expect(requestUrl).toContain("pageSize=1");
+    expect(result.current.pageRows).toEqual(rows);
+    expect(result.current.total).toBe(1);
+    expect(props.setPage).toHaveBeenCalledWith(1);
+  });
+
   it("resets to page one when the page reset key changes", () => {
     const rows = [createRow(1), createRow(2), createRow(3), createRow(4)];
     const props = createProps({

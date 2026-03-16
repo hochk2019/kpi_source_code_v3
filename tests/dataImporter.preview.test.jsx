@@ -409,7 +409,11 @@ describe('DataImporter preview UI', () => {
 
         const total = filtered.length;
 
-        const offset = (page - 1) * pageSize;
+        const maxPage = Math.max(1, Math.ceil(total / pageSize));
+
+        const safePage = Math.min(page, maxPage);
+
+        const offset = (safePage - 1) * pageSize;
 
         const rows = filtered.slice(offset, offset + pageSize);
 
@@ -423,7 +427,7 @@ describe('DataImporter preview UI', () => {
 
         }
 
-        return Promise.resolve(createJsonResponse({ ok: true, total, page, pageSize, rows }));
+        return Promise.resolve(createJsonResponse({ ok: true, total, page: safePage, pageSize, rows }));
 
       }
 

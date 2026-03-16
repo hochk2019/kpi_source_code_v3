@@ -22,6 +22,7 @@ export default function useDataImporterSavedSession({
   setQuery,
   setSelectedFile,
   setPreviewSource,
+  setSyncPreviewMeta,
   setFilterNoStaff,
   setFilterNoTeam,
   setFilterDuplicate11,
@@ -59,6 +60,7 @@ export default function useDataImporterSavedSession({
     setQuery("");
     setSelectedFile("");
     setPreviewSource?.(null);
+    setSyncPreviewMeta?.(null);
     setFilterNoStaff(false);
     setFilterNoTeam(false);
     setFilterDuplicate11(false);
@@ -94,6 +96,7 @@ export default function useDataImporterSavedSession({
     setRules,
     setSelectedFile,
     setPreviewSource,
+    setSyncPreviewMeta,
     setSelectedKeys,
     sortDeclRows,
     updateBaselineSnapshot,

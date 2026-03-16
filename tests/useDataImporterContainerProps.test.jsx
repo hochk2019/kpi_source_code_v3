@@ -242,6 +242,7 @@ describe("useDataImporterContainerProps", () => {
       handleRefreshAlerts: vi.fn(),
       handleMarkReviewed: vi.fn(),
       handleUnmarkReviewed: vi.fn(),
+      alertEntries: [{ id: "alert-full-1" }, { id: "alert-full-2" }, { id: "alert-full-3" }],
       outstandingAlerts: [{ id: "alert-1" }],
       summaryCards: [{ label: "Tổng cộng" }],
       lastAlertEvaluated: "2026-03-14T08:00:00.000Z",
@@ -407,6 +408,12 @@ describe("useDataImporterContainerProps", () => {
         deletedDialog: { section: "deleted" },
         cardResultsProps: { kind: "card" },
         tableResultsProps: { kind: "table" },
+      }),
+    );
+
+    expect(createDataImporterSyncPanelProps).toHaveBeenCalledWith(
+      expect.objectContaining({
+        alertEntries: [{ id: "alert-full-1" }, { id: "alert-full-2" }, { id: "alert-full-3" }],
       }),
     );
 

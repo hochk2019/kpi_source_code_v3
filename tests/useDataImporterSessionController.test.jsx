@@ -324,6 +324,7 @@ describe("useDataImporterSessionController", () => {
       handleRefreshAlerts: vi.fn(),
       handleMarkReviewed: vi.fn(),
       handleUnmarkReviewed: vi.fn(),
+      alertEntries: [{ id: "alert-full-1" }, { id: "alert-full-2" }],
       outstandingAlerts: [{ id: "alert-1" }],
       summaryCards: [{ label: "alerts" }],
       lastAlertEvaluated: "2026-03-11T00:00:00.000Z",
@@ -369,6 +370,7 @@ describe("useDataImporterSessionController", () => {
     expect(result.current.deletedRowCount).toBe(1);
     expect(result.current.queryFilterControlsProps).toEqual({ query: "acme" });
     expect(result.current.agencyOptions).toEqual([{ label: "Agency A", value: "agency-a" }]);
+    expect(result.current.alertEntries).toEqual([{ id: "alert-full-1" }, { id: "alert-full-2" }]);
     expect(result.current.summaryCards).toEqual([{ label: "alerts" }]);
   });
 

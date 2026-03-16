@@ -342,11 +342,13 @@ export default function useDataImporterSync({
 
       const payload = await response.json();
       const imported = payload?.result?.imported ?? 0;
+      const updated = payload?.result?.updated ?? 0;
       const skipped = payload?.result?.skipped ?? 0;
       const locked = payload?.result?.reviewLocked ?? 0;
+      const updatedNote = updated > 0 ? `, cập nhật ${updated} tờ khai đã có` : "";
       const skippedNote = skipped > 0 ? `, bỏ qua ${skipped} tờ khai đã có` : "";
       const lockedNote = locked > 0 ? `, khóa ${locked} tờ khai đã rà soát` : "";
-      const baseMessage = `Đã đồng bộ ${imported} tờ khai mới từ ECUS${skippedNote}${lockedNote}.`;
+      const baseMessage = `Đã đồng bộ ${imported} tờ khai mới từ ECUS${updatedNote}${skippedNote}${lockedNote}.`;
       const messageParts = [baseMessage];
 
       if (mstFilterNotice) {
@@ -426,6 +428,9 @@ export default function useDataImporterSync({
 
       const payload = await response.json();
       const rows = Array.isArray(payload?.preview?.rows) ? payload.preview.rows : [];
+      const fetched = Number.isFinite(Number(payload?.preview?.fetched))
+        ? Number(payload.preview.fetched)
+        : rows.length;
 
       setPreviewRows(rows);
       setPreviewLimited(!!payload?.preview?.limited);
@@ -439,6 +444,7 @@ export default function useDataImporterSync({
       return {
         ok: true,
         rows,
+        fetched,
         limited: !!payload?.preview?.limited,
         range: payload?.preview?.range || null,
       };

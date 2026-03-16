@@ -42,6 +42,7 @@ export default function useDataImporterWorkflowSession({
   setQuery,
   setSelectedFile,
   setPreviewSource,
+  setSyncPreviewMeta,
   setFilterNoStaff,
   setFilterNoTeam,
   setFilterDuplicate11,
@@ -91,11 +92,12 @@ export default function useDataImporterWorkflowSession({
     setRowHistoryExpanded,
     setRowHistoryEntries,
     setMode,
-    setPage,
-    setQuery,
-    setSelectedFile,
-    setPreviewSource,
-    setFilterNoStaff,
+      setPage,
+      setQuery,
+      setSelectedFile,
+      setPreviewSource,
+      setSyncPreviewMeta,
+      setFilterNoStaff,
     setFilterNoTeam,
     setFilterDuplicate11,
     setCoFilterMode,
@@ -168,11 +170,12 @@ export default function useDataImporterWorkflowSession({
     ensureLicenseFields,
     sortDeclRows,
     setRawRows,
-    setPage,
-    setMode,
-    setSelectedFile,
-    setPreviewSource,
-    setQuery,
+     setPage,
+     setMode,
+     setSelectedFile,
+     setPreviewSource,
+     setSyncPreviewMeta,
+     setQuery,
     setFilterNoStaff,
     setFilterNoTeam,
     setCoFilterMode,
@@ -217,6 +220,9 @@ export default function useDataImporterWorkflowSession({
     setMode("preview");
     setSelectedFile("");
     setPreviewSource?.("sync");
+    setSyncPreviewMeta?.({
+      fetched: Number.isFinite(Number(preview?.fetched)) ? Number(preview.fetched) : normalizedRows.length,
+    });
     setQuery("");
     setFilterNoStaff(false);
     setFilterNoTeam(false);
@@ -243,6 +249,7 @@ export default function useDataImporterWorkflowSession({
     setMode,
     setPage,
     setPreviewSource,
+    setSyncPreviewMeta,
     setQuery,
     setRawRows,
     setSelectedFile,
