@@ -375,3 +375,14 @@
 - Current `cng-i6h.4` slice: `server-v4/src/persistence/runtimePersistence.ts` no longer exposes `reader` on the public `RuntimePersistence` contract, so `buildV4App()` custom persistence fixtures and route wiring no longer need to carry a raw sync SQLite reader outside the persistence layer.
 - Current `cng-i6h.4` slice: `auth` is now mounted as a canonical `server-v4` read/write surface through `server-v4/src/modules/auth/*` plus `persistence.authStore`, so `/api/v4/auth/{session,login,logout,accounts}` no longer remains metadata-only and the default rollout catalog now has zero scaffold modules.
 - Current `cng-i6h.4` slice: `kpi-adjustments` is now the third true `server-v4` write-owned business surface alongside `reporting` plus `auth`. `server-v4/src/modules/kpi-adjustments/kpiAdjustmentsRoutes.ts` now mounts `GET/PUT /settings`, `POST /`, and `PATCH /:adjustmentId`; `server-v4/src/persistence/runtimePersistence.ts` now exposes `adjustmentsStore` in both SQLite dual-write and Postgres modes; and the default rollout truth now sits at `5` read-only modules, `3` read-write modules, `24` implemented routes, and `9` implemented mutation routes.
+
+## Session: 2026-03-16 Post-Commit System Review Snapshot
+
+- Commit checkpoint: `b536650` (`fix(declarations): align importer cutover parity`).
+- Current review conclusion:
+  - rollout truthfulness is now the highest-priority system issue, ahead of another small declarations compat slice
+  - the importer frontend still depends on legacy `/api/import/*`, so declarations cutover is not yet end-to-end
+  - commit-time quality gates still under-cover `server-v4`
+- Recommended next thread:
+  - fix rollout/readiness truth first
+  - then move importer traffic from legacy compat paths onto canonical `/api/v4/declarations/*`

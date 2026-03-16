@@ -4856,3 +4856,19 @@
 - Outcome:
   - `frontend cutover validation` remains the right declarations thread, but the next smallest residual is another UI/runtime interpretation seam, not route parity.
   - The best next candidate is `handleRunSync()` result messaging because `server-v4` returns `updated` counts that the current success notice still appears to underreport.
+
+## Session: 2026-03-16 Post-Commit Review + Priorities
+
+- Commit completed on branch `ux-improvement-plan`:
+  - `b536650` -> `fix(declarations): align importer cutover parity`
+- Commit hook result:
+  - `pnpm lint` passed with warnings
+  - targeted frontend vitest subset in `precommit` passed
+- Post-commit system review refreshed against current code instead of older review assumptions.
+- Highest-signal findings now recorded in `findings.md`:
+  - rollout readiness can still overstate cutover progress in default `sqlite-dual-write` mode
+  - manual runtime route coverage is stale for `declarations`
+  - importer UI still depends on legacy compat routes
+  - commit-time gates still omit `verify:server-v4`
+- Recommended next action:
+  - take an operational-truth slice first (`v4-rollout-status` + coverage + health semantics), then resume frontend declarations cutover work on canonical routes.

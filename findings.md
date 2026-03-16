@@ -636,3 +636,23 @@
   - `tests/useDataImporterImportPreview.test.jsx` proves sync preview counts ignore bogus local diff recomputation and follow server row semantics instead
   - `tests/useDataImporterWorkflowSession.test.jsx` proves sync preview promotion preserves the `fetched` metadata needed for accurate `totalIncoming`
 - The next smallest follow-up in this thread is likely another UI/runtime contract check, especially ECUS commit success messaging. `server-v4` commit results expose `updated` explicitly, and the current importer success notice may still compress that detail away.
+
+## 2026-03-16 Post-Commit System Review
+
+- `server-v4` rollout truth is currently optimistic in a way that can mislead operators:
+  - `resolveServerV4Config()` still defaults runtime persistence to `sqlite-dual-write`
+  - `createRuntimePersistence()` reports that mode as `sourceKind: 'dual-write'`
+  - but `buildV4RolloutStatus()` can still mark readiness/stages as `ready` when the legacy SQLite store is merely readable
+  - that means `/api/v4/health` and `/api/v4/meta/rollout` can present a cutover-ready story before the runtime is actually on the relational-store path
+- `runtimeRouteCoverage.ts` has drifted away from the real declarations router:
+  - the declarations module catalog exposes `16` routes and `9` mutations
+  - `runtimeRouteCoverage.ts` still reports `3` routes and `1` mutation for `declarations`
+  - because `buildV4App()` feeds that table directly into rollout status, the health metrics are not trustworthy enough for rollout decisions
+- The declarations frontend is still compat-bound rather than canonically cut over:
+  - importer hooks still call legacy `/api/import/*` routes directly for ECUS config/status/run, alerts, deleted rows, C/O monitoring, and search
+  - canonical `/api/v4/declarations/imports/*` routes now exist for the same runtime-owned surface
+  - as long as the UI stays on compat paths, the system cannot prove a real end-to-end declarations cutover
+- Quality gates still under-protect the runtime:
+  - `package.json` defines `verify:server-v4`
+  - `precommit` still runs only repo lint plus a narrow frontend vitest subset
+  - so `server-v4` route/type/runtime regressions can still be committed without the canonical backend verification suite

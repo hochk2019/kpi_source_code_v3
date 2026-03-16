@@ -760,3 +760,14 @@ Mapped `cng-z7u` child slices plus the immediate follow-up beads `cng-f2z`, `cng
 - Residual after this slice:
   - Phase D no longer needs more scaffold/module-parity work.
   - The next meaningful work is broader business write-path ownership beyond `reporting` plus `auth`, while `/api/storage` route registration in `server/index.js` remains low-value cleanup only.
+
+## 2026-03-16 Post-Commit Review Follow-Up
+
+- Review checkpoint recorded after commit `b536650`.
+- Prioritized follow-up order:
+  1. Correct rollout/readiness truth so default `sqlite-dual-write` compatibility mode cannot present as genuine cutover-ready state.
+  2. Replace manual `runtimeRouteCoverage.ts` drift with route coverage derived from mounted runtime routers or guarded parity tests.
+  3. Start a real frontend declarations cutover by routing importer hooks through canonical `/api/v4/declarations/imports/*` endpoints.
+  4. Tighten quality gates so `server-v4` lint/typecheck/tests run before commits land.
+- Constraint for the next slice:
+  - prefer one operational-truth slice over another small compat alias, because the current risk is misleading system state rather than a newly missing route.
