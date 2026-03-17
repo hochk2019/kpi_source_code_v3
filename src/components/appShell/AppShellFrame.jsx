@@ -37,12 +37,18 @@ export default function AppShellFrame({
                   <p className="ds-app-shell__group-description">{section.description}</p>
                 </div>
                 <TabsList
+                  unstyled
                   orientation="vertical"
                   aria-label={section.label}
                   className="ds-app-shell__nav-list"
                 >
                   {section.tabs.map((tab) => (
-                    <TabsTrigger key={tab.id} value={tab.id} className="ds-app-shell__nav-trigger">
+                    <TabsTrigger
+                      unstyled
+                      key={tab.id}
+                      value={tab.id}
+                      className="ds-app-shell__nav-trigger"
+                    >
                       <span className="ds-app-shell__nav-label">{tab.label}</span>
                       <span className="ds-app-shell__nav-caption">{tab.tooltip}</span>
                     </TabsTrigger>

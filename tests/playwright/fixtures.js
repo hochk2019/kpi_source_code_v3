@@ -54,7 +54,8 @@ function toHeadersObject(headersList) {
 
 const test = base.extend({
 
-  apiEvents: async (_fixtureContext, applyFixture) => {
+  apiEvents: async ({ browserName }, applyFixture) => {
+    void browserName;
 
     const events = { preview: [], run: [], reportExports: [], requests: [] };
 

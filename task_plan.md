@@ -2,35 +2,43 @@
 
 ## Active Bead
 
-- `cng-o3u` - Stabilize bootstrap baseline and remove stale audit docs
+- `cng-mtn` - Remediation backlog for app shell and report UX audit
 
 ## Execution Plan
 
-1. Fix reporting projection migration ordering.
+1. Shell foundation
+   - Bead: `cng-mtn.1`
+   - Intent: sửa sidebar ghosting và làm sạch navigation states trước khi đổi layout lớn hơn.
    - Status: completed
-   - Result: `position` column creation now precedes index creation in the reporting projection SQLite migration.
-2. Shrink initial bootstrap payload.
-   - Status: completed
-   - Result: `/api/bootstrap?mode=shared-light` now returns a lighter shared snapshot and defers non-critical keys.
-3. Replace full in-memory import search filtering.
-   - Status: completed
-   - Result: `/api/import/search` now prefers typed declaration snapshot queries with SQL pagination and only falls back when an older snapshot schema is detected.
-4. Remove stale planning/review docs and rewrite the notebook.
-   - Status: completed
-   - Result: obsolete review files are removed and the notebook now tracks the live slice instead of historical epics.
-5. Run final verification and close the bead.
-   - Status: completed
+   - Outcome: shell tabs đã bỏ default tab utility classes, sidebar không còn overlap ở desktop/mobile, và regression tests đã được thêm.
+2. Responsive shell
+   - Bead: `cng-mtn.2`
+   - Intent: bỏ mô hình desktop-thu-nho-tren-mobile, nén hero/workflow chrome, và ưu tiên vùng thao tác chính.
+   - Status: next
+3. Report navigation bug
+   - Bead: `cng-mtn.3`
+   - Intent: ổn định luồng chuyển tuần tự vào `reports`, tập trung vào tab state, focus routing, và render timing.
+4. Report information architecture
+   - Bead: `cng-mtn.4`
+   - Intent: tái cấu trúc bề mặt report để giảm density và cải thiện khả năng quét ở desktop/mobile.
+5. Conditional data/backend investigation
+   - Bead: `cng-mtn.5`
+   - Intent: profile read-model và aggregation cost của report trước khi quyết định có mở rộng sang backend/database hay không.
+6. Regression guardrails
+   - Bead: `cng-mtn.6`
+   - Intent: khóa fix bằng Playwright coverage cho report navigation và mobile shell behavior.
 
 ## Verification Targets
 
-- `tests/reportingProjectionSqlite.test.js`
-- `tests/runtimeStorageLifecycle.test.js`
-- `tests/storageClient.test.js`
-- `tests/businessSnapshotSqlite.test.js`
-- `tests/declarationSnapshotSearch.test.js`
-- `tests/server.api.test.js`
+- `cng-mtn.1`: xác nhận lại shell sidebar ở desktop/mobile bằng Playwright trên build hiện tại, đồng thời khóa `unstyled` behavior bằng unit test.
+- `cng-mtn.2`: kiểm tra viewport 375px, 768px, 1024px, 1440px và khả năng thao tác thật.
+- `cng-mtn.3`: flow tuần tự Import -> Accounts -> Teams -> HQ -> Reports pass ổn định.
+- `cng-mtn.4`: report surface có hierarchy rõ và mobile không còn bị nén như desktop co nhỏ.
+- `cng-mtn.5`: có kết quả profiling rõ ràng cho report data pipeline.
+- `cng-mtn.6`: Playwright suite có guardrails ổn định cho các fix UX chính.
 
 ## Decisions
 
-- Keep the declaration search fallback path for one request when an outdated snapshot schema is detected, then rewrite the snapshot so later requests use the indexed path.
-- Treat the old review plan and `TODO.md` as obsolete documentation, not as active backlog.
+- Sửa shell foundation trước khi đụng sâu vào report surface để giảm rủi ro side effect.
+- Không giả định ngay lỗi nằm ở backend/database; chỉ mở rộng khi profiling có bằng chứng.
+- Giữ E2E guardrails như deliverable cuối của epic để tránh tái phát regression.

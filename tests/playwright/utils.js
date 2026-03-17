@@ -6,9 +6,13 @@ import XLSX from 'xlsx';
 
 
 
-export function registerDialogAutoAccept(page) {
+export function registerDialogAutoAccept(page, { promptText = 'Playwright@2026' } = {}) {
 
   page.on('dialog', (dialog) => {
+    if (dialog.type() === 'prompt') {
+      dialog.accept(promptText).catch(() => {});
+      return;
+    }
 
     dialog.accept().catch(() => {});
 
@@ -69,6 +73,51 @@ export async function openImportTab(page) {
 
   await importRoot.waitFor({ state: 'visible' });
   await page.getByRole('button', { name: 'Xem trước dữ liệu' }).waitFor();
+
+}
+
+async function openTabWithRoot(page, tabName, tabId) {
+
+  const tab = page.getByRole('tab', { name: tabName });
+  const root = page.locator(`#app-tab-root-${tabId}`);
+
+  await tab.waitFor();
+
+  if (!(await root.isVisible().catch(() => false))) {
+    await tab.click({ force: true });
+  }
+
+  await root.waitFor({ state: 'visible' });
+
+  return root;
+
+}
+
+export async function openAccountsTab(page) {
+
+  await openTabWithRoot(page, 'Tài khoản', 'accounts');
+  await page.getByRole('button', { name: 'Tạo tài khoản' }).waitFor();
+
+}
+
+export async function openTeamsTab(page) {
+
+  await openTabWithRoot(page, 'Quản lý Tổ đội', 'teams');
+  await page.getByRole('button', { name: 'Lưu thay đổi' }).waitFor();
+
+}
+
+export async function openHQTab(page) {
+
+  await openTabWithRoot(page, 'Đại Lý HQ', 'hq');
+  await page.getByRole('button', { name: 'Lưu cấu hình' }).waitFor();
+
+}
+
+export async function openReportsTab(page) {
+
+  await openTabWithRoot(page, 'Báo cáo KPI', 'reports');
+  await page.getByRole('region', { name: 'Điều khiển báo cáo KPI' }).waitFor();
 
 }
 

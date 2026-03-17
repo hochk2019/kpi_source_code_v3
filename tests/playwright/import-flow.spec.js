@@ -30,11 +30,16 @@ test('quản trị viên import tờ khai từ file Excel mẫu', async ({ page 
 
   await page.setInputFiles('[data-testid="import-file-input"]', filePath);
 
+  const previewTable = page.getByRole('table', {
+    name: 'Bảng các dòng thêm mới từ file import',
+  });
 
+  await expect(previewTable.getByText('Công ty Playwright')).toBeVisible();
 
-  await expect(page.getByText('Công ty Playwright')).toBeVisible();
-
-  await page.getByRole('button', { name: 'Import XLSX' }).click();
+  await page
+    .getByLabel('Bước 1: Nạp nguồn')
+    .getByRole('button', { name: 'Import XLSX' })
+    .click();
 
 
 

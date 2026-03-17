@@ -3,6 +3,13 @@ import { buildReportingReadModels } from '../../server/reportingReadModels.js';
 import { resolveReportingRule } from '../../server/reportingRuleSelection.js';
 
 import {
+  ADMIN_ROLE,
+  DEFAULT_ROLE,
+  getPermissionTemplate,
+  normalizeRoleKey,
+} from '../../packages/domain/src/accountRoles.js';
+
+import {
   deleteReportSchedule,
   getDeclRows,
   getKpiAdjustments,
@@ -35,52 +42,11 @@ export function jsonResponse(payload, status = 200) {
 
 export function createDefaultAccountsState() {
 
-  const adminPermissions = {
-
-    importEdit: true,
-
-    importUpload: true,
-
-    mstEdit: true,
-
-    rulesEdit: true,
-
-    teamsEdit: true,
-
-    syncManage: true,
-
-    reportsExport: true,
-
-    alertsManage: true,
-
-    auditView: true,
-
-    accountManage: true,
-
-  };
+  const adminPermissions = getPermissionTemplate(ADMIN_ROLE);
 
   const staffPermissions = {
-
+    ...getPermissionTemplate(DEFAULT_ROLE),
     importEdit: true,
-
-    importUpload: false,
-
-    mstEdit: false,
-
-    rulesEdit: false,
-
-    teamsEdit: false,
-
-    syncManage: false,
-
-    reportsExport: true,
-
-    alertsManage: false,
-
-    auditView: false,
-
-    accountManage: false,
-
   };
 
   const accounts = [
@@ -103,59 +69,15 @@ export function createDefaultAccountsState() {
 
 }
 
+const MIN_PASSWORD_LENGTH = 6;
+
 
 
 function normalizePermissions(permissions, role) {
 
-  const adminDefaults = {
+  const normalizedRole = normalizeRoleKey(role);
 
-    importEdit: true,
-
-    importUpload: true,
-
-    mstEdit: true,
-
-    rulesEdit: true,
-
-    teamsEdit: true,
-
-    syncManage: true,
-
-    reportsExport: true,
-
-    alertsManage: true,
-
-    auditView: true,
-
-    accountManage: true,
-
-  };
-
-  const staffDefaults = {
-
-    importEdit: false,
-
-    importUpload: false,
-
-    mstEdit: false,
-
-    rulesEdit: false,
-
-    teamsEdit: false,
-
-    syncManage: false,
-
-    reportsExport: true,
-
-    alertsManage: false,
-
-    auditView: false,
-
-    accountManage: false,
-
-  };
-
-  const base = role === 'admin' ? adminDefaults : staffDefaults;
+  const base = getPermissionTemplate(normalizedRole);
 
   const result = { ...base };
 
@@ -177,7 +99,7 @@ function normalizePermissions(permissions, role) {
 
   }
 
-  if (role === 'admin') {
+  if (normalizedRole === ADMIN_ROLE) {
 
     result.accountManage = true;
 
@@ -190,6 +112,64 @@ function normalizePermissions(permissions, role) {
 function normalizeText(value) {
 
   return typeof value === 'string' ? value.trim() : '';
+
+}
+
+function sanitizeAccount(account) {
+
+  if (!account) {
+
+    return null;
+
+  }
+
+  const username = normalizeText(account.username);
+
+  const role = normalizeRoleKey(account.role);
+
+  return {
+    username,
+    role,
+    name: normalizeText(account.name) || username,
+    permissions: normalizePermissions(account.permissions, role),
+    memberId: normalizeText(account.memberId),
+    memberName: normalizeText(account.memberName),
+    teamId: normalizeText(account.teamId),
+    teamName: normalizeText(account.teamName),
+  };
+
+}
+
+function listClientAccounts(state) {
+
+  return state.accounts.map((account) => sanitizeAccount(account)).filter(Boolean);
+
+}
+
+function findAccountIndex(state, usernameInput) {
+
+  const username = normalizeText(usernameInput).toLowerCase();
+
+  return state.accounts.findIndex((account) => normalizeText(account.username).toLowerCase() === username);
+
+}
+
+function extractAccountUsername(path) {
+
+  const parts = String(path || '')
+    .split('/')
+    .filter(Boolean)
+    .map((part) => decodeURIComponent(part));
+
+  const accountsIndex = parts.findIndex((part) => part === 'accounts');
+
+  if (accountsIndex < 0 || accountsIndex + 1 >= parts.length) {
+
+    return '';
+
+  }
+
+  return parts[accountsIndex + 1];
 
 }
 
@@ -667,7 +647,146 @@ export function createDefaultHandlers(state) {
 
     'GET /api/audit': () => jsonResponse({ ok: true, logs: [] }),
 
-    'GET /api/auth/accounts': () => jsonResponse({ ok: true, accounts: state.accounts.slice() }),
+    'GET /api/auth/accounts': () => jsonResponse({ ok: true, accounts: listClientAccounts(state) }),
+
+    'POST /api/auth/accounts': ({ init }) => {
+
+      const body = safeParse(init?.body, {});
+
+      const username = normalizeText(body?.username);
+
+      if (!username) {
+
+        return jsonResponse({ ok: false, error: 'Vui lòng nhập tài khoản' }, 400);
+
+      }
+
+      if (findAccountIndex(state, username) >= 0) {
+
+        return jsonResponse({ ok: false, error: 'Tài khoản đã tồn tại' }, 400);
+
+      }
+
+      const password = normalizeText(body?.password);
+
+      if (password.length < MIN_PASSWORD_LENGTH) {
+
+        return jsonResponse({ ok: false, error: `Mật khẩu cần tối thiểu ${MIN_PASSWORD_LENGTH} ký tự` }, 400);
+
+      }
+
+      const role = normalizeRoleKey(body?.role);
+
+      const account = sanitizeAccount({
+        username,
+        role,
+        name: normalizeText(body?.name) || username,
+        permissions: body?.permissions,
+        memberId: body?.memberId,
+        memberName: body?.memberName,
+        teamId: body?.teamId,
+        teamName: body?.teamName,
+      });
+
+      state.accounts.push(account);
+      state.passwords.set(account.username, password);
+
+      return jsonResponse({ ok: true, account, accounts: listClientAccounts(state) }, 201);
+
+    },
+
+    'PATCH /api/auth/accounts/:username': ({ init, path }) => {
+
+      const username = extractAccountUsername(path);
+
+      const index = findAccountIndex(state, username);
+
+      if (index < 0) {
+
+        return jsonResponse({ ok: false, error: 'Không tìm thấy tài khoản' }, 404);
+
+      }
+
+      const body = safeParse(init?.body, {});
+
+      const current = state.accounts[index];
+      const role = normalizeRoleKey(body?.role ?? current.role);
+      const updated = sanitizeAccount({
+        ...current,
+        role,
+        name: body?.name ?? current.name,
+        permissions: body?.permissions ?? current.permissions,
+        memberId: body?.memberId ?? current.memberId,
+        memberName: body?.memberName ?? current.memberName,
+        teamId: body?.teamId ?? current.teamId,
+        teamName: body?.teamName ?? current.teamName,
+      });
+
+      state.accounts[index] = updated;
+
+      if (state.currentUser?.username === updated.username) {
+
+        state.currentUser = updated;
+
+      }
+
+      return jsonResponse({ ok: true, account: updated, accounts: listClientAccounts(state) });
+
+    },
+
+    'POST /api/auth/accounts/:username/password': ({ init, path }) => {
+
+      const username = extractAccountUsername(path);
+
+      const index = findAccountIndex(state, username);
+
+      if (index < 0) {
+
+        return jsonResponse({ ok: false, error: 'Không tìm thấy tài khoản' }, 404);
+
+      }
+
+      const body = safeParse(init?.body, {});
+
+      const password = normalizeText(body?.password);
+
+      if (password.length < MIN_PASSWORD_LENGTH) {
+
+        return jsonResponse({ ok: false, error: `Mật khẩu cần tối thiểu ${MIN_PASSWORD_LENGTH} ký tự` }, 400);
+
+      }
+
+      state.passwords.set(state.accounts[index].username, password);
+
+      return jsonResponse({ ok: true, accounts: listClientAccounts(state) });
+
+    },
+
+    'DELETE /api/auth/accounts/:username': ({ path }) => {
+
+      const username = extractAccountUsername(path);
+
+      const index = findAccountIndex(state, username);
+
+      if (index < 0) {
+
+        return jsonResponse({ ok: false, error: 'Không tìm thấy tài khoản' }, 404);
+
+      }
+
+      const [removed] = state.accounts.splice(index, 1);
+
+      state.passwords.delete(removed.username);
+
+      if (state.currentUser?.username === removed.username) {
+
+        state.currentUser = null;
+
+      }
+
+      return jsonResponse({ ok: true, accounts: listClientAccounts(state) });
+
+    },
 
     'POST /api/auth/login': ({ init }) => {
 
@@ -691,9 +810,9 @@ export function createDefaultHandlers(state) {
 
       }
 
-      state.currentUser = account;
+      state.currentUser = sanitizeAccount(account);
 
-      return jsonResponse({ ok: true, user: account });
+      return jsonResponse({ ok: true, user: state.currentUser });
 
     },
 
@@ -749,7 +868,9 @@ export function normalisePath(rawUrl) {
 
 export function resolveHandler(map, method, path) {
 
-  const key = `${method} ${path}`;
+  const normalizedPath = path.replace(/\/$/, '') || '/';
+
+  const key = `${method} ${normalizedPath}`;
 
   if (map.has(key)) {
 
@@ -757,13 +878,75 @@ export function resolveHandler(map, method, path) {
 
   }
 
-  if (map.has(path)) {
+  if (map.has(normalizedPath)) {
 
-    return map.get(path);
+    return map.get(normalizedPath);
 
   }
 
-  return map.get(`${method} ${path.replace(/\/$/, '')}`) ?? map.get(path.replace(/\/$/, ''));
+  const patternMatches = (patternPath, actualPath) => {
+
+    const normalize = (value) => (value.replace(/\/$/, '') || '/').split('/').filter(Boolean);
+
+    const patternParts = normalize(patternPath);
+    const actualParts = normalize(actualPath);
+
+    if (patternParts.length !== actualParts.length) {
+
+      return false;
+
+    }
+
+    for (let index = 0; index < patternParts.length; index += 1) {
+
+      const expected = patternParts[index];
+      const actual = actualParts[index];
+
+      if (expected.startsWith(':')) {
+
+        continue;
+
+      }
+
+      if (expected !== actual) {
+
+        return false;
+
+      }
+
+    }
+
+    return true;
+
+  };
+
+  for (const [entryKey, handler] of map.entries()) {
+
+    const match = /^([A-Z]+) (.+)$/.exec(entryKey);
+
+    if (match) {
+
+      const [, entryMethod, entryPath] = match;
+
+      if (entryMethod === method && patternMatches(entryPath, normalizedPath)) {
+
+        return handler;
+
+      }
+
+      continue;
+
+    }
+
+    if (patternMatches(entryKey, normalizedPath)) {
+
+      return handler;
+
+    }
+
+  }
+
+  return undefined;
 
 }
 
