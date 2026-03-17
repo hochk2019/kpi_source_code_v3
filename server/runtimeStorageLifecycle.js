@@ -165,10 +165,30 @@ export function createRuntimeStorageLifecycle(options = {}) {
   const getDatabase =
     typeof options.getDatabase === 'function' ? options.getDatabase : () => options.database ?? null;
 
-  function readStorage() {
+  function readStorage(keys = null) {
     const database = getDatabase();
-    const rows = database.prepare('SELECT key, value FROM kv_store').all();
-    const store = { ...defaultStorage };
+    const requestedKeys = normalizeStorageKeys(keys);
+    const store =
+      requestedKeys === null
+        ? { ...defaultStorage }
+        : requestedKeys.reduce((result, key) => {
+            if (Object.prototype.hasOwnProperty.call(defaultStorage, key)) {
+              result[key] = defaultStorage[key];
+            }
+            return result;
+          }, {});
+    const rows =
+      requestedKeys === null
+        ? database.prepare('SELECT key, value FROM kv_store').all()
+        : requestedKeys.length === 0
+          ? []
+          : database
+              .prepare(
+                `SELECT key, value FROM kv_store WHERE key IN (${requestedKeys
+                  .map(() => '?')
+                  .join(', ')})`
+              )
+              .all(...requestedKeys);
 
     for (const row of rows) {
       store[row.key] = row.value;
@@ -281,8 +301,9 @@ export function createRuntimeStorageLifecycle(options = {}) {
     upsertValue(key, value === undefined ? null : JSON.stringify(value), runtimeOptions);
   }
 
-  function buildBootstrapSnapshot() {
-    const store = readStorage();
+  function buildBootstrapSnapshot(options = {}) {
+    const requestedKeys = normalizeStorageKeys(options?.keys);
+    const store = readStorage(requestedKeys);
 
     if (aiChatHistoryPrefix) {
       for (const key of Object.keys(store)) {
@@ -292,10 +313,12 @@ export function createRuntimeStorageLifecycle(options = {}) {
       }
     }
 
-    try {
-      store.kpi_users_v1 = JSON.stringify(listAccountsForClient());
-    } catch {
-      store.kpi_users_v1 = '[]';
+    if (requestedKeys === null || requestedKeys.includes('kpi_users_v1')) {
+      try {
+        store.kpi_users_v1 = JSON.stringify(listAccountsForClient());
+      } catch {
+        store.kpi_users_v1 = '[]';
+      }
     }
 
     return store;
@@ -358,6 +381,15 @@ function isRecord(value) {
 
 function normalizeText(value) {
   return typeof value === 'string' ? value.trim() : '';
+}
+
+function normalizeStorageKeys(keys) {
+  if (!Array.isArray(keys)) {
+    return null;
+  }
+
+  const normalized = Array.from(new Set(keys.map((key) => normalizeText(key)).filter(Boolean)));
+  return normalized;
 }
 
 function resolveWarn(logger) {

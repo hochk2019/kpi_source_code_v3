@@ -1,3 +1,5 @@
+import fs from 'node:fs/promises';
+
 import bcrypt from 'bcryptjs';
 import { describe, expect, it } from 'vitest';
 import request from 'supertest';
@@ -7,6 +9,19 @@ import { buildV4App } from '../../server-v4/src/index.ts';
 import { authModule } from '../../server-v4/src/modules/auth/auth.module.ts';
 
 describe('server-v4 legacy compatibility routes', () => {
+  it('keeps legacy compatibility routing split into thin domain-specific builders', async () => {
+    const source = await fs.readFile(
+      new URL('../../server-v4/src/app/legacyCompatRoutes.ts', import.meta.url),
+      'utf8',
+    );
+
+    expect(source).toContain('registerLegacyCompatAuthRoutes');
+    expect(source).toContain('registerLegacyCompatBootstrapRoutes');
+    expect(source).toContain('registerLegacyCompatImporterRoutes');
+    expect(source).toContain('registerLegacyCompatStorageRoutes');
+    expect(source.split(/\r?\n/u).length).toBeLessThan(260);
+  });
+
   it('supports legacy auth payloads, bootstrap snapshots, and storage reads', async () => {
     const authStore = createAuthStore([
       createAccount({
@@ -110,7 +125,7 @@ describe('server-v4 legacy compatibility routes', () => {
     expect(rosterResponse.body.value).toEqual(roster);
   });
 
-  it('lists deleted declarations through the legacy import compatibility route', async () => {
+  it('returns 404 for the retired legacy deleted declarations route', async () => {
     const authStore = createAuthStore([
       createAccount({
         username: 'admin',
@@ -168,21 +183,81 @@ describe('server-v4 legacy compatibility routes', () => {
       .get('/api/import/deleted-declarations?type=hard&from=2026-03-01&to=2026-03-05')
       .set('Cookie', cookie);
 
-    expect(response.status).toBe(200);
-    expect(response.body).toEqual({
-      ok: true,
-      rows: [
-        {
-          so_tk: '102030',
-          nhanh: '01',
-          mst: '1234567890',
-          company: 'Alpha Co',
-          ten_dn: 'Alpha Co',
-          type: 'hard',
-          deleted_at: '2026-03-04T10:00:00.000Z',
-          deleted_by: 'admin',
-        },
-      ],
+    expect(response.status).toBe(404);
+  });
+
+  it('tracks importer compat traffic and blocks migrated legacy routes when the guardrail is enabled', async () => {
+    const authStore = createAuthStore([
+      createAccount({
+        username: 'admin',
+        password: 'admin123',
+        role: ADMIN_ROLE,
+        name: 'Admin User',
+      }),
+    ]);
+    const app = buildV4App({
+      modules: [authModule],
+      importerCompat: {
+        guardMode: 'block-migrated',
+      },
+      persistence: createPersistenceStub({
+        authStore,
+      }),
+    });
+
+    const loginResponse = await request(app).post('/api/auth/login').send({
+      username: 'admin',
+      password: 'admin123',
+    });
+    const cookie = getCookie(loginResponse);
+
+    const retiredAliasResponse = await request(app)
+      .get('/api/import/deleted-declarations?type=hard&from=2026-03-01&to=2026-03-05')
+      .set('Cookie', cookie);
+    expect(retiredAliasResponse.status).toBe(404);
+
+    const migratedResponse = await request(app)
+      .get('/api/import/alerts')
+      .set('Cookie', cookie);
+    expect(migratedResponse.status).toBe(409);
+    expect(migratedResponse.body).toMatchObject({
+      ok: false,
+      legacyRoute: '/api/import/alerts',
+      canonicalRoute: '/api/v4/declarations/imports/alerts',
+    });
+
+    const rolloutResponse = await request(app).get('/api/v4/meta/rollout');
+    expect(rolloutResponse.status).toBe(200);
+    expect(rolloutResponse.body.compatibility.importerTraffic).toMatchObject({
+      guardMode: 'block-migrated',
+      totals: {
+        hits: 1,
+        migratedHits: 1,
+        legacyOnlyHits: 0,
+        blockedHits: 1,
+      },
+    });
+    expect(
+      rolloutResponse.body.compatibility.importerTraffic.routes.find(
+        (entry) => entry.id === 'alerts-list',
+      ),
+    ).toMatchObject({
+      kind: 'migrated',
+      hitCount: 1,
+      blockedCount: 1,
+      canonicalPath: '/api/v4/declarations/imports/alerts',
+    });
+    expect(
+      rolloutResponse.body.compatibility.importerTraffic.routes.find(
+        (entry) => entry.id === 'deleted-declarations',
+      ),
+    ).toBeUndefined();
+    expect(
+      rolloutResponse.body.migrationVerification.checks.find(
+        (entry) => entry.id === 'importer-compat-traffic',
+      ),
+    ).toMatchObject({
+      status: 'warn',
     });
   });
 
@@ -211,8 +286,7 @@ describe('server-v4 legacy compatibility routes', () => {
     const unauthenticatedDeletedDeclarationsResponse = await request(app).get(
       '/api/import/deleted-declarations',
     );
-    expect(unauthenticatedDeletedDeclarationsResponse.status).toBe(401);
-    expect(unauthenticatedDeletedDeclarationsResponse.body.error).toBe('Bạn cần đăng nhập.');
+    expect(unauthenticatedDeletedDeclarationsResponse.status).toBe(404);
 
     const loginResponse = await request(app).post('/api/auth/login').send({
       username: 'admin',

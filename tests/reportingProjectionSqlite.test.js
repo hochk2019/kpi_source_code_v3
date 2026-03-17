@@ -241,6 +241,48 @@ describe('reportingProjectionSqlite', () => {
     }
   });
 
+  it('backfills the schedule position column before creating its index on legacy tables', () => {
+    const db = new Database(':memory:');
+
+    try {
+      db.exec(
+        'CREATE TABLE reporting_schedule_projection_entries (\n' +
+          '  projection_key TEXT NOT NULL,\n' +
+          '  schedule_id TEXT NOT NULL,\n' +
+          '  name TEXT NOT NULL DEFAULT \'\',\n' +
+          '  frequency TEXT NOT NULL DEFAULT \'\',\n' +
+          '  time TEXT NOT NULL DEFAULT \'\',\n' +
+          '  day_of_week INTEGER NOT NULL DEFAULT 0,\n' +
+          '  day_of_month INTEGER NOT NULL DEFAULT 0,\n' +
+          '  active INTEGER NOT NULL DEFAULT 0,\n' +
+          '  last_run TEXT NOT NULL DEFAULT \'\',\n' +
+          '  next_run TEXT NOT NULL DEFAULT \'\',\n' +
+          '  recipient_count INTEGER NOT NULL DEFAULT 0,\n' +
+          '  format_count INTEGER NOT NULL DEFAULT 0,\n' +
+          '  payload TEXT NOT NULL,\n' +
+          '  PRIMARY KEY (projection_key, schedule_id)\n' +
+          ')'
+      );
+
+      expect(() => ensureReportingProjectionTable(db)).not.toThrow();
+
+      const columns = db.prepare('PRAGMA table_info(reporting_schedule_projection_entries)').all();
+      expect(columns.some((column) => column?.name === 'position')).toBe(true);
+
+      const positionIndex = db
+        .prepare(
+          "SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'idx_reporting_schedule_projection_entries_projection_position'"
+        )
+        .get();
+
+      expect(positionIndex).toEqual({
+        name: 'idx_reporting_schedule_projection_entries_projection_position',
+      });
+    } finally {
+      db.close();
+    }
+  });
+
   it('materializes reporting job runs into a dedicated entry table', () => {
     const db = new Database(':memory:');
 

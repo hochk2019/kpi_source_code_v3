@@ -219,7 +219,25 @@ class FakeStatement {
 
     if (this.sql.includes('INSERT INTO declaration_snapshot_rows')) {
 
-      const [snapshotKey, sortOrder, declarationKey, soTk, soTkFull, branch, mst, registeredAt, payload] = params;
+      const [
+        snapshotKey,
+        sortOrder,
+        declarationKey,
+        soTk,
+        soTkFull,
+        branch,
+        mst,
+        registeredAt,
+        company,
+        status,
+        staffName,
+        teamName,
+        deletedAt,
+        coCount,
+        duplicatePrefix,
+        agencySearch,
+        payload,
+      ] = params;
       const compositeKey = `${String(snapshotKey)}::${Number(sortOrder ?? 0)}`;
 
       this.database.declarationSnapshotRows.set(compositeKey, {
@@ -239,6 +257,22 @@ class FakeStatement {
         mst: String(mst ?? ''),
 
         registered_at: String(registeredAt ?? ''),
+
+        company: String(company ?? ''),
+
+        status: String(status ?? ''),
+
+        staff_name: String(staffName ?? ''),
+
+        team_name: String(teamName ?? ''),
+
+        deleted_at: String(deletedAt ?? ''),
+
+        co_count: Number(coCount ?? 0),
+
+        duplicate_prefix: String(duplicatePrefix ?? ''),
+
+        agency_search: String(agencySearch ?? ''),
 
         payload: String(payload ?? ''),
 

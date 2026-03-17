@@ -1,3 +1,10 @@
+import { coLineCount } from '../packages/domain/src/co.js';
+import {
+  normalizeDateInput,
+  normalizeDeclarationNumber,
+  normalizeStatusKey,
+} from '../packages/domain/src/declSearch.js';
+
 export const BUSINESS_SNAPSHOT_STATE_TABLE = 'business_snapshot_state';
 export const DECLARATION_SNAPSHOT_ROW_TABLE = 'declaration_snapshot_rows';
 export const MST_ASSIGNMENT_SNAPSHOT_ROW_TABLE = 'mst_assignment_snapshot_rows';
@@ -8,19 +15,55 @@ export const DECLARATION_SNAPSHOT_DOMAIN_KEY = 'decl_rows_v1';
 export const MST_ASSIGNMENT_SNAPSHOT_DOMAIN_KEY = 'mst_rows_v2';
 export const RULE_COLLECTION_SNAPSHOT_DOMAIN_KEY = 'kpi_rules_v2';
 export const ADJUSTMENT_SNAPSHOT_DOMAIN_KEY = 'kpi_adjustments_v1';
+export const DECLARATION_SNAPSHOT_SCHEMA_VERSION = 2;
 
 const DECLARATION_ROW_DEFINITION = {
   domainKey: DECLARATION_SNAPSHOT_DOMAIN_KEY,
   tableName: DECLARATION_SNAPSHOT_ROW_TABLE,
-  columns: ['declaration_key', 'so_tk', 'so_tk_full', 'branch', 'mst', 'registered_at'],
+  version: DECLARATION_SNAPSHOT_SCHEMA_VERSION,
+  columns: [
+    'declaration_key',
+    'so_tk',
+    'so_tk_full',
+    'branch',
+    'mst',
+    'registered_at',
+    'company',
+    'status',
+    'staff_name',
+    'team_name',
+    'deleted_at',
+    'co_count',
+    'duplicate_prefix',
+    'agency_search',
+  ],
   projectRow(row) {
+    const company = normalizeSearchText(
+      row.cong_ty || row.company || row.ten_cong_ty || row.doanh_nghiep
+    );
+    const status = normalizeStatusKey(
+      row.status || row.trang_thai || row.previewStatus || row.importStatus || row.state
+    );
+    const staffName = normalizeSearchText(row.nhan_vien || row.staff);
+    const teamName = normalizeSearchText(row.team || row.to_doi || row.bo_phan);
+    const duplicatePrefix = normalizeDeclarationNumber(row.so_tk_full ?? row.so_tk ?? '', 11);
+    const agencySearch = normalizeSearchText(buildAgencySearchString(row));
+
     return [
       normalizeText(row.key || row.id || row.so_tk_full || row.so_tk),
       normalizeText(row.so_tk),
       normalizeText(row.so_tk_full),
       normalizeText(row.nhanh || row.branch),
-      normalizeText(row.mst),
-      normalizeText(row.date),
+      normalizeText(row.mst || row.ma_so_thue),
+      normalizeDateInput(row.date || row.raw_date || row.registered_at),
+      company,
+      status,
+      staffName,
+      teamName,
+      normalizeText(row.deleted_at),
+      normalizeInteger(coLineCount(row)),
+      duplicatePrefix,
+      agencySearch,
     ];
   },
 };
@@ -81,16 +124,44 @@ export function ensureBusinessSnapshotTables(database) {
       '  sort_order INTEGER NOT NULL,\n' +
       '  declaration_key TEXT NOT NULL DEFAULT \'\',\n' +
       '  so_tk TEXT NOT NULL DEFAULT \'\',\n' +
-      '  so_tk_full TEXT NOT NULL DEFAULT \'\',\n' +
-      '  branch TEXT NOT NULL DEFAULT \'\',\n' +
-      '  mst TEXT NOT NULL DEFAULT \'\',\n' +
-      '  registered_at TEXT NOT NULL DEFAULT \'\',\n' +
-      '  payload TEXT NOT NULL,\n' +
-      '  PRIMARY KEY(snapshot_key, sort_order)\n' +
-      ')'
+        '  so_tk_full TEXT NOT NULL DEFAULT \'\',\n' +
+        '  branch TEXT NOT NULL DEFAULT \'\',\n' +
+        '  mst TEXT NOT NULL DEFAULT \'\',\n' +
+        '  registered_at TEXT NOT NULL DEFAULT \'\',\n' +
+        '  company TEXT NOT NULL DEFAULT \'\',\n' +
+        '  status TEXT NOT NULL DEFAULT \'\',\n' +
+        '  staff_name TEXT NOT NULL DEFAULT \'\',\n' +
+        '  team_name TEXT NOT NULL DEFAULT \'\',\n' +
+        '  deleted_at TEXT NOT NULL DEFAULT \'\',\n' +
+        '  co_count INTEGER NOT NULL DEFAULT 0,\n' +
+        '  duplicate_prefix TEXT NOT NULL DEFAULT \'\',\n' +
+        '  agency_search TEXT NOT NULL DEFAULT \'\',\n' +
+        '  payload TEXT NOT NULL,\n' +
+        '  PRIMARY KEY(snapshot_key, sort_order)\n' +
+        ')'
   );
+  ensureTableColumn(database, DECLARATION_SNAPSHOT_ROW_TABLE, 'company', "TEXT NOT NULL DEFAULT ''");
+  ensureTableColumn(database, DECLARATION_SNAPSHOT_ROW_TABLE, 'status', "TEXT NOT NULL DEFAULT ''");
+  ensureTableColumn(database, DECLARATION_SNAPSHOT_ROW_TABLE, 'staff_name', "TEXT NOT NULL DEFAULT ''");
+  ensureTableColumn(database, DECLARATION_SNAPSHOT_ROW_TABLE, 'team_name', "TEXT NOT NULL DEFAULT ''");
+  ensureTableColumn(database, DECLARATION_SNAPSHOT_ROW_TABLE, 'deleted_at', "TEXT NOT NULL DEFAULT ''");
+  ensureTableColumn(database, DECLARATION_SNAPSHOT_ROW_TABLE, 'co_count', 'INTEGER NOT NULL DEFAULT 0');
+  ensureTableColumn(database, DECLARATION_SNAPSHOT_ROW_TABLE, 'duplicate_prefix', "TEXT NOT NULL DEFAULT ''");
+  ensureTableColumn(database, DECLARATION_SNAPSHOT_ROW_TABLE, 'agency_search', "TEXT NOT NULL DEFAULT ''");
   database.exec(
     'CREATE INDEX IF NOT EXISTS idx_declaration_snapshot_rows_snapshot_key_sort_order ON declaration_snapshot_rows(snapshot_key, sort_order)'
+  );
+  database.exec(
+    'CREATE INDEX IF NOT EXISTS idx_declaration_snapshot_rows_snapshot_key_status ON declaration_snapshot_rows(snapshot_key, status)'
+  );
+  database.exec(
+    'CREATE INDEX IF NOT EXISTS idx_declaration_snapshot_rows_snapshot_key_mst ON declaration_snapshot_rows(snapshot_key, mst)'
+  );
+  database.exec(
+    'CREATE INDEX IF NOT EXISTS idx_declaration_snapshot_rows_snapshot_key_registered_at ON declaration_snapshot_rows(snapshot_key, registered_at)'
+  );
+  database.exec(
+    'CREATE INDEX IF NOT EXISTS idx_declaration_snapshot_rows_snapshot_key_duplicate_prefix ON declaration_snapshot_rows(snapshot_key, duplicate_prefix)'
   );
   database.exec(
     'CREATE TABLE IF NOT EXISTS mst_assignment_snapshot_rows (\n' +
@@ -135,6 +206,21 @@ export function readDeclarationRowsSnapshot(
   snapshotKey = ACTIVE_BUSINESS_SNAPSHOT_KEY
 ) {
   return readJsonRowSnapshot(database, DECLARATION_ROW_DEFINITION, snapshotKey);
+}
+
+export function readDeclarationRowsSnapshotState(
+  database,
+  snapshotKey = ACTIVE_BUSINESS_SNAPSHOT_KEY
+) {
+  if (!database || typeof database.prepare !== 'function') {
+    return null;
+  }
+
+  try {
+    return readStateRow(database, DECLARATION_SNAPSHOT_DOMAIN_KEY, snapshotKey) || null;
+  } catch {
+    return null;
+  }
 }
 
 export function writeDeclarationRowsSnapshot(
@@ -344,7 +430,7 @@ function replaceJsonRows(database, definition, snapshotKey, rows, updatedAt) {
   });
 
   upsertStateRow(database, definition.domainKey, snapshotKey, {
-    version: 1,
+    version: resolveSnapshotVersion(definition.version, 1),
     rowCount: rows.length,
     payload: null,
     updatedAt,
@@ -465,6 +551,10 @@ function normalizeNumber(input) {
   return Number.isFinite(value) ? value : 0;
 }
 
+function normalizeSearchText(input) {
+  return normalizeText(input).replace(/\s+/gu, ' ').trim().toLowerCase();
+}
+
 function normalizeText(input) {
   if (typeof input === 'string') {
     return input.trim();
@@ -485,4 +575,48 @@ function normalizeTimestamp(input) {
   }
 
   return new Date().toISOString();
+}
+
+function buildAgencySearchString(row) {
+  if (!row || typeof row !== 'object') {
+    return '';
+  }
+
+  const parts = [];
+  if (row.agency) {
+    parts.push(row.agency);
+  }
+  if (row.dai_ly) {
+    parts.push(row.dai_ly);
+  }
+  if (Array.isArray(row.agents)) {
+    for (const agent of row.agents) {
+      if (agent) {
+        parts.push(agent);
+      }
+    }
+  }
+
+  return parts.join(' ');
+}
+
+function ensureTableColumn(database, tableName, columnName, columnDefinition) {
+  if (hasTableColumn(database, tableName, columnName)) {
+    return;
+  }
+
+  database.exec(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${columnDefinition}`);
+}
+
+function hasTableColumn(database, tableName, columnName) {
+  if (!database || typeof database.prepare !== 'function') {
+    return false;
+  }
+
+  try {
+    const columns = database.prepare(`PRAGMA table_info(${tableName})`).all();
+    return columns.some((column) => normalizeText(column?.name) === columnName);
+  } catch {
+    return false;
+  }
 }

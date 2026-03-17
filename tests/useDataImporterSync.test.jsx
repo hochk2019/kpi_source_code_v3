@@ -3,6 +3,12 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 
 import useDataImporterSync from "@/components/dataImporter/useDataImporterSync.js";
 
+const ECUS_CONFIG_ROUTE = "/api/v4/declarations/imports/ecus-config";
+const ECUS_COMMIT_ROUTE = "/api/v4/declarations/imports/ecus-commit";
+const ECUS_PREVIEW_ROUTE = "/api/v4/declarations/imports/ecus-preview";
+const ECUS_STATUS_ROUTE = "/api/v4/declarations/imports/ecus-status";
+const ALERTS_ROUTE = "/api/v4/declarations/imports/alerts";
+
 describe("useDataImporterSync", () => {
   afterEach(() => {
     vi.restoreAllMocks();
@@ -10,7 +16,7 @@ describe("useDataImporterSync", () => {
 
   it("loads sync config, status, and alerts on mount", async () => {
     const fetchWithAuth = vi.fn(async (url) => {
-      if (url === "/api/import/ecus/config") {
+      if (url === ECUS_CONFIG_ROUTE) {
         return {
           ok: true,
           json: async () => ({
@@ -32,7 +38,7 @@ describe("useDataImporterSync", () => {
         };
       }
 
-      if (url === "/api/import/ecus/status") {
+      if (url === ECUS_STATUS_ROUTE) {
         return {
           ok: true,
           json: async () => ({
@@ -42,7 +48,7 @@ describe("useDataImporterSync", () => {
         };
       }
 
-      if (url === "/api/import/alerts") {
+      if (url === ALERTS_ROUTE) {
         return {
           ok: true,
           json: async () => ({
@@ -101,7 +107,7 @@ describe("useDataImporterSync", () => {
     const loadSavedRows = vi.fn(() => true);
 
     const fetchWithAuth = vi.fn(async (url, options = {}) => {
-      if (url === "/api/import/ecus/config" && !options.method) {
+      if (url === ECUS_CONFIG_ROUTE && !options.method) {
         return {
           ok: true,
           json: async () => ({
@@ -123,7 +129,7 @@ describe("useDataImporterSync", () => {
         };
       }
 
-      if (url === "/api/import/ecus/status" && !options.method) {
+      if (url === ECUS_STATUS_ROUTE && !options.method) {
         return {
           ok: true,
           json: async () => ({
@@ -133,7 +139,7 @@ describe("useDataImporterSync", () => {
         };
       }
 
-      if (url === "/api/import/alerts" && !options.method) {
+      if (url === ALERTS_ROUTE && !options.method) {
         return {
           ok: true,
           json: async () => ({
@@ -147,7 +153,7 @@ describe("useDataImporterSync", () => {
         };
       }
 
-      if (url === "/api/import/ecus/config" && options.method === "PUT") {
+      if (url === ECUS_CONFIG_ROUTE && options.method === "PUT") {
         return {
           ok: true,
           json: async () => ({
@@ -169,7 +175,7 @@ describe("useDataImporterSync", () => {
         };
       }
 
-      if (url === "/api/import/ecus/run" && options.method === "POST") {
+      if (url === ECUS_COMMIT_ROUTE && options.method === "POST") {
         return {
           ok: true,
           json: async () => ({
@@ -199,7 +205,7 @@ describe("useDataImporterSync", () => {
 
     await waitFor(() => {
       expect(fetchWithAuth).toHaveBeenCalledWith(
-        "/api/import/ecus/config",
+        ECUS_CONFIG_ROUTE,
         expect.objectContaining({ cache: "no-store", credentials: "include" })
       );
     });
@@ -226,7 +232,7 @@ describe("useDataImporterSync", () => {
     });
 
     expect(fetchWithAuth).toHaveBeenCalledWith(
-      "/api/import/ecus/config",
+      ECUS_CONFIG_ROUTE,
       expect.objectContaining({
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -260,7 +266,7 @@ describe("useDataImporterSync", () => {
     });
 
     expect(fetchWithAuth).toHaveBeenCalledWith(
-      "/api/import/ecus/run",
+      ECUS_COMMIT_ROUTE,
       expect.objectContaining({
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -285,7 +291,7 @@ describe("useDataImporterSync", () => {
     const previewRange = { from: "2026-03-10", to: "2026-03-12" };
     const previewRows = [{ so_tk: "00000012345" }, { so_tk: "00000067890" }];
     const fetchWithAuth = vi.fn(async (url, options = {}) => {
-      if (url === "/api/import/ecus/config" && !options.method) {
+      if (url === ECUS_CONFIG_ROUTE && !options.method) {
         return {
           ok: true,
           json: async () => ({
@@ -307,7 +313,7 @@ describe("useDataImporterSync", () => {
         };
       }
 
-      if (url === "/api/import/ecus/status" && !options.method) {
+      if (url === ECUS_STATUS_ROUTE && !options.method) {
         return {
           ok: true,
           json: async () => ({
@@ -317,7 +323,7 @@ describe("useDataImporterSync", () => {
         };
       }
 
-      if (url === "/api/import/alerts" && !options.method) {
+      if (url === ALERTS_ROUTE && !options.method) {
         return {
           ok: true,
           json: async () => ({
@@ -331,7 +337,7 @@ describe("useDataImporterSync", () => {
         };
       }
 
-      if (url === "/api/import/ecus/preview" && options.method === "POST") {
+      if (url === ECUS_PREVIEW_ROUTE && options.method === "POST") {
         return {
           ok: true,
           json: async () => ({
@@ -361,7 +367,7 @@ describe("useDataImporterSync", () => {
 
     await waitFor(() => {
       expect(fetchWithAuth).toHaveBeenCalledWith(
-        "/api/import/ecus/config",
+        ECUS_CONFIG_ROUTE,
         expect.objectContaining({ cache: "no-store", credentials: "include" })
       );
     });
@@ -372,7 +378,7 @@ describe("useDataImporterSync", () => {
     });
 
     expect(fetchWithAuth).toHaveBeenCalledWith(
-      "/api/import/ecus/preview",
+      ECUS_PREVIEW_ROUTE,
       expect.objectContaining({
         method: "POST",
         headers: { "Content-Type": "application/json" },

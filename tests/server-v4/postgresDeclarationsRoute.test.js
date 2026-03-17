@@ -720,23 +720,15 @@ describe("server-v4 postgres declarations route wiring", () => {
         },
       });
 
-      const unauthorizedConfig = await request(app).get("/api/import/ecus/config");
+      const unauthorizedConfig = await request(app).get("/api/v4/declarations/imports/ecus-status");
       expect(unauthorizedConfig.status).toBe(401);
       expect(unauthorizedConfig.body.error).toMatchObject({
         code: "auth_required",
       });
 
-      const forbiddenConfig = await request(app)
-        .get("/api/import/ecus/config")
-        .set("Cookie", "kpi_session=session-staff");
-      expect(forbiddenConfig.status).toBe(403);
-      expect(forbiddenConfig.body.error).toMatchObject({
-        code: "forbidden",
-      });
-
       const configResponse = await request(app)
-        .get("/api/import/ecus/config")
-        .set("Cookie", "kpi_session=session-manager");
+        .get("/api/v4/declarations/imports/ecus-config")
+        .set("Authorization", "Bearer bridge-secret");
 
       expect(configResponse.status).toBe(200);
       expect(configResponse.body).toMatchObject({
@@ -767,7 +759,7 @@ describe("server-v4 postgres declarations route wiring", () => {
       expect(typeof configResponse.body.config.scheduleDescription).toBe("string");
 
       const statusResponse = await request(app)
-        .get("/api/import/ecus/status")
+        .get("/api/v4/declarations/imports/ecus-status")
         .set("Cookie", "kpi_session=session-manager");
 
       expect(statusResponse.status).toBe(200);
@@ -791,20 +783,15 @@ describe("server-v4 postgres declarations route wiring", () => {
       expect(typeof statusResponse.body.backend.checkedAt).toBe("string");
       expect(sqlHealthCheck).toHaveBeenCalledTimes(1);
 
-      const canonicalConfigResponse = await request(app)
-        .get("/api/v4/declarations/imports/ecus-config")
-        .set("Authorization", "Bearer bridge-secret");
+      const retiredConfigAlias = await request(app)
+        .get("/api/import/ecus/config")
+        .set("Cookie", "kpi_session=session-manager");
+      expect(retiredConfigAlias.status).toBe(404);
 
-      expect(canonicalConfigResponse.status).toBe(200);
-      expect(canonicalConfigResponse.body).toMatchObject({
-        ok: true,
-        config: expect.objectContaining({
-          schedule: "0 3 * * *",
-          connection: expect.objectContaining({
-            password: "",
-          }),
-        }),
-      });
+      const retiredStatusAlias = await request(app)
+        .get("/api/import/ecus/status")
+        .set("Cookie", "kpi_session=session-manager");
+      expect(retiredStatusAlias.status).toBe(404);
     } finally {
       if (previousToken === undefined) {
         delete process.env.ECUS_BRIDGE_TOKEN;
@@ -840,7 +827,7 @@ describe("server-v4 postgres declarations route wiring", () => {
       });
 
       const saveResponse = await request(app)
-        .put("/api/import/ecus/config")
+        .put("/api/v4/declarations/imports/ecus-config")
         .set("Cookie", "kpi_session=session-manager")
         .send({
           config: {
@@ -886,7 +873,7 @@ describe("server-v4 postgres declarations route wiring", () => {
       });
 
       const preserveResponse = await request(app)
-        .put("/api/import/ecus/config")
+        .put("/api/v4/declarations/imports/ecus-config")
         .set("Cookie", "kpi_session=session-manager")
         .send({
           config: {
@@ -914,25 +901,11 @@ describe("server-v4 postgres declarations route wiring", () => {
         },
       });
 
-      const legacyReadResponse = await request(app)
-        .get("/api/import/ecus/config")
+      const legacyWriteAlias = await request(app)
+        .put("/api/import/ecus/config")
         .set("Cookie", "kpi_session=session-manager");
 
-      expect(legacyReadResponse.status).toBe(200);
-      expect(legacyReadResponse.body).toMatchObject({
-        ok: true,
-        config: {
-          schedule: "15 6 */2 * *",
-          rangeDays: 5,
-          connection: {
-            server: "srv02",
-            database: "ecus-prod",
-            user: "runner",
-            password: "",
-            hasPassword: true,
-          },
-        },
-      });
+      expect(legacyWriteAlias.status).toBe(404);
 
       const canonicalReadResponse = await request(app)
         .get("/api/v4/declarations/imports/ecus-config")
@@ -1023,7 +996,7 @@ describe("server-v4 postgres declarations route wiring", () => {
       },
     });
 
-    const unauthorizedResponse = await request(app).get("/api/import/search").query({
+    const unauthorizedResponse = await request(app).get("/api/v4/declarations/imports/search").query({
       mst: "0101234567",
     });
     expect(unauthorizedResponse.status).toBe(401);
@@ -1032,7 +1005,7 @@ describe("server-v4 postgres declarations route wiring", () => {
     });
 
     const searchResponse = await request(app)
-      .get("/api/import/search")
+      .get("/api/v4/declarations/imports/search")
       .set("Cookie", "kpi_session=session-staff")
       .query({
         query: "Cong ty",
@@ -1058,6 +1031,106 @@ describe("server-v4 postgres declarations route wiring", () => {
         }),
       ],
     });
+
+    const retiredSearchAlias = await request(app)
+      .get("/api/import/search")
+      .set("Cookie", "kpi_session=session-staff")
+      .query({
+        query: "Cong ty",
+        mst: "0101234567",
+      });
+    expect(retiredSearchAlias.status).toBe(404);
+  });
+
+  it("lists canonical deleted declarations behind authenticated sessions and retires the legacy alias", async () => {
+    const runtime = createDeclarationsRuntimeStub([
+      createDeclarationRow({
+        declaration_id: "decl-1",
+        so_tk: "00000012345",
+        so_tk_full: "12345",
+        mst: "01012345671",
+        cong_ty: "Cong ty Hard Deleted",
+        company: "Cong ty Hard Deleted",
+        deleted_at: "2026-03-04T10:00:00.000Z",
+        deleted_by: "manager",
+        deleted_type: "hard",
+      }),
+      createDeclarationRow({
+        declaration_id: "decl-2",
+        so_tk: "00000012346",
+        so_tk_full: "12346",
+        mst: "01012345672",
+        cong_ty: "Cong ty Soft Deleted",
+        company: "Cong ty Soft Deleted",
+        deleted_at: "2026-03-04T12:00:00.000Z",
+        deleted_by: "manager",
+        deleted_type: "soft",
+      }),
+    ]);
+    const authStore = createAuthStore([
+      createAccount({
+        username: "staff",
+        role: DEFAULT_ROLE,
+        name: "Staff User",
+      }),
+    ]);
+    const app = buildV4App({
+      modules: [declarationsModule],
+      persistence: {
+        mode: "postgres",
+        sourceKind: "relational-store",
+        declarationsReader: runtime.reader,
+        declarationsStore: runtime.store,
+        authStore,
+        dispose: async () => {},
+      },
+    });
+
+    const unauthorizedResponse = await request(app)
+      .get("/api/v4/declarations/imports/deleted-declarations")
+      .query({
+        type: "hard",
+        from: "2026-03-01",
+        to: "2026-03-05",
+      });
+    expect(unauthorizedResponse.status).toBe(401);
+    expect(unauthorizedResponse.body.error).toMatchObject({
+      code: "auth_required",
+    });
+
+    const response = await request(app)
+      .get("/api/v4/declarations/imports/deleted-declarations")
+      .set("Cookie", "kpi_session=session-staff")
+      .query({
+        type: "hard",
+        from: "2026-03-01",
+        to: "2026-03-05",
+      });
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({
+      ok: true,
+      rows: [
+        expect.objectContaining({
+          so_tk: "00000012345",
+          mst: "01012345671",
+          company: "Cong ty Hard Deleted",
+          type: "hard",
+          deleted_at: "2026-03-04T10:00:00.000Z",
+          deleted_by: "manager",
+        }),
+      ],
+    });
+
+    const retiredAliasResponse = await request(app)
+      .get("/api/import/deleted-declarations")
+      .set("Cookie", "kpi_session=session-staff")
+      .query({
+        type: "hard",
+        from: "2026-03-01",
+        to: "2026-03-05",
+      });
+    expect(retiredAliasResponse.status).toBe(404);
   });
 
   it("owns C/O monitoring config routes behind session-backed syncManage permission and exposes legacy aliases", async () => {
@@ -1770,6 +1843,38 @@ function createDeclarationsRuntimeStub(seedRows) {
         }
       }),
       listDeclarationEvents: vi.fn(async (target) => clone(eventMap.get(target.key) ?? [])),
+      listDeletedDeclarations: vi.fn(async (filters = {}) =>
+        rows
+          .filter((row) => row.deleted_at)
+          .filter((row) => {
+            if (!filters.type) {
+              return true;
+            }
+            return `${row.deleted_type ?? row.type ?? ""}` === `${filters.type}`;
+          })
+          .filter((row) => {
+            if (!filters.from) {
+              return true;
+            }
+            return `${row.deleted_at}` >= `${filters.from}`;
+          })
+          .filter((row) => {
+            if (!filters.to) {
+              return true;
+            }
+            return `${row.deleted_at}` <= `${filters.to}T23:59:59.999Z`;
+          })
+          .map((row) => ({
+            so_tk: row.so_tk,
+            nhanh: row.nhanh ?? row.branch ?? "",
+            mst: row.mst ?? "",
+            company: row.company ?? row.cong_ty ?? row.ten_dn ?? "",
+            ten_dn: row.ten_dn ?? row.company ?? row.cong_ty ?? "",
+            type: row.deleted_type ?? row.type ?? "hard",
+            deleted_at: row.deleted_at,
+            deleted_by: row.deleted_by ?? "",
+          })),
+      ),
       readEcusSyncConfig: vi.fn(async () => clone(ecusSyncConfig)),
       writeEcusSyncConfig: vi.fn(async (config) => {
         ecusSyncConfig = clone(config);

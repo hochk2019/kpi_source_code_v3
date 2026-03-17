@@ -438,7 +438,7 @@ export function createDefaultHandlers(state) {
       });
     },
 
-    'GET /api/import/search': ({ url }) => {
+    'GET /api/v4/declarations/imports/search': ({ url }) => {
 
       let params;
 
@@ -512,6 +512,16 @@ export function createDefaultHandlers(state) {
 
     },
 
+    'GET /api/v4/declarations/imports/deleted-declarations': () =>
+
+      jsonResponse({
+
+        ok: true,
+
+        rows: [],
+
+      }),
+
     'GET /api/import/ecus/config': () =>
 
       jsonResponse({
@@ -532,7 +542,51 @@ export function createDefaultHandlers(state) {
 
       }),
 
+    'GET /api/v4/declarations/imports/ecus-config': () =>
+
+      jsonResponse({
+
+        ok: true,
+
+        config: {
+
+          enabled: false,
+
+          schedule: '0 * * * *',
+
+          rangeDays: 1,
+
+          connection: { server: '', database: '', user: '', hasPassword: false },
+
+        },
+
+      }),
+
+    'GET /api/v4/declarations/imports/ecus-status': () =>
+
+      jsonResponse({
+
+        ok: true,
+
+        backend: { ok: true, state: 'online', checkedAt: new Date().toISOString() },
+
+        database: { ok: true, state: 'ready', checkedAt: new Date().toISOString() },
+
+      }),
+
     'GET /api/import/alerts': () =>
+
+      jsonResponse({
+
+        ok: true,
+
+        alerts: [],
+
+        summary: { outstanding: 0, totalTracked: 0, lastEvaluatedAt: null },
+
+      }),
+
+    'GET /api/v4/declarations/imports/alerts': () =>
 
       jsonResponse({
 
@@ -548,9 +602,68 @@ export function createDefaultHandlers(state) {
 
     'POST /api/import/ecus/run': () => jsonResponse({ ok: true, result: { imported: 0, fetched: 0, alerts: {} } }),
 
+    'POST /api/v4/declarations/imports/ecus-commit': () =>
+      jsonResponse({ ok: true, result: { imported: 0, fetched: 0, alerts: {} } }),
+
     'POST /api/import/ecus/preview': () =>
 
       jsonResponse({ ok: true, preview: { rows: [], limited: false, fetched: 0, range: { from: '', to: '' } } }),
+
+    'POST /api/v4/declarations/imports/ecus-preview': () =>
+
+      jsonResponse({ ok: true, preview: { rows: [], limited: false, fetched: 0, range: { from: '', to: '' } } }),
+
+    'GET /api/v4/declarations/imports/co-codes': () =>
+      jsonResponse({ ok: true, config: { whitelist: [], blacklist: [] } }),
+
+    'PUT /api/v4/declarations/imports/co-codes': ({ init }) =>
+      jsonResponse({ ok: true, config: safeParse(init?.body, {})?.config || { whitelist: [], blacklist: [] } }),
+
+    'GET /api/v4/declarations/imports/co-discrepancy': () =>
+      jsonResponse({
+        ok: true,
+        config: { enabled: false, cron: '', rangeDays: 3, threshold: 10, sampleLimit: 0 },
+        state: null,
+      }),
+
+    'PUT /api/v4/declarations/imports/co-discrepancy/config': ({ init }) =>
+      jsonResponse({
+        ok: true,
+        config:
+          safeParse(init?.body, {})?.config || {
+            enabled: false,
+            cron: '',
+            rangeDays: 3,
+            threshold: 10,
+            sampleLimit: 0,
+          },
+      }),
+
+    'POST /api/v4/declarations/imports/co-discrepancy/run': () =>
+      jsonResponse({
+        ok: true,
+        result: {
+          config: { enabled: false, cron: '', rangeDays: 3, threshold: 10, sampleLimit: 0 },
+          state: {
+            lastRunAt: null,
+            range: null,
+            mismatchCount: 0,
+            totalChecked: 0,
+            status: 'ok',
+            error: null,
+            durationMs: 0,
+            mismatches: [],
+            triggered: false,
+            limited: false,
+            actor: null,
+            reason: null,
+          },
+        },
+      }),
+
+    'POST /api/v4/declarations/imports/alerts/review': () => jsonResponse({ ok: true, updated: [] }),
+
+    'POST /api/v4/declarations/imports/alerts/unreview': () => jsonResponse({ ok: true, updated: [] }),
 
     'GET /api/audit': () => jsonResponse({ ok: true, logs: [] }),
 

@@ -1,5 +1,7 @@
 import { test as base, expect } from '@playwright/test';
 
+import { resetStorageClientForTests } from '../../src/lib/storageClient.js';
+
 import {
 
   createDefaultAccountsState,
@@ -52,15 +54,17 @@ function toHeadersObject(headersList) {
 
 const test = base.extend({
 
-  apiEvents: async (_args, applyFixture) => {
+  apiEvents: async (_fixtureContext, applyFixture) => {
 
-    const events = { preview: [], run: [], reportExports: [] };
+    const events = { preview: [], run: [], reportExports: [], requests: [] };
 
     await applyFixture(events);
 
   },
 
   page: async ({ page, apiEvents }, applyFixture) => {
+
+    resetStorageClientForTests();
 
     const state = createDefaultAccountsState();
 
@@ -78,7 +82,7 @@ const test = base.extend({
 
     handlerMap.set('GET /api/bootstrap', () => jsonResponse({ ok: true, data: {} }));
 
-    handlerMap.set('GET /api/import/ecus/status', () =>
+    handlerMap.set('GET /api/v4/declarations/imports/ecus-status', () =>
 
       jsonResponse({
 
@@ -112,11 +116,79 @@ const test = base.extend({
 
 
 
-    handlerMap.set('POST /api/import/ecus/preview', ({ init }) => {
+    handlerMap.set('POST /api/import/ecus/preview', ({ init, path }) => {
 
       const body = safeParse(init?.body, {});
 
-      apiEvents.preview.push(body);
+      apiEvents.preview.push({ path, body });
+
+      const from = body?.from || '2025-08-01';
+
+      const to = body?.to || '2025-08-02';
+
+      return jsonResponse({
+
+        ok: true,
+
+        preview: {
+
+          rows: [
+
+            {
+
+              so_tk: 'TK-PREVIEW-001',
+
+              date: '2025-08-01',
+
+              mst: '0101234567',
+
+              cong_ty: 'CÔNG TY PREVIEW',
+
+              nhan_vien: '',
+
+              status: 'new',
+
+              co_line_count: 2,
+
+            },
+
+            {
+
+              so_tk: 'TK-PREVIEW-888',
+
+              date: '2025-08-01',
+
+              mst: '0312345678',
+
+              cong_ty: 'CÔNG TY ĐÃ CÓ',
+
+              nhan_vien: 'Hạnh',
+
+              status: 'existing',
+
+              co_line_count: 0,
+
+            },
+
+          ],
+
+          limited: false,
+
+          fetched: 2,
+
+          range: { from, to },
+
+        },
+
+      });
+
+    });
+
+    handlerMap.set('POST /api/v4/declarations/imports/ecus-preview', ({ init, path }) => {
+
+      const body = safeParse(init?.body, {});
+
+      apiEvents.preview.push({ path, body });
 
       const from = body?.from || '2025-08-01';
 
@@ -182,11 +254,27 @@ const test = base.extend({
 
 
 
-    handlerMap.set('POST /api/import/ecus/run', ({ init }) => {
+    handlerMap.set('POST /api/import/ecus/run', ({ init, path }) => {
 
       const body = safeParse(init?.body, {});
 
-      apiEvents.run.push(body);
+      apiEvents.run.push({ path, body });
+
+      return jsonResponse({
+
+        ok: true,
+
+        result: { imported: 4, fetched: 4, skipped: 0, alerts: {} },
+
+      });
+
+    });
+
+    handlerMap.set('POST /api/v4/declarations/imports/ecus-commit', ({ init, path }) => {
+
+      const body = safeParse(init?.body, {});
+
+      apiEvents.run.push({ path, body });
 
       return jsonResponse({
 
@@ -236,6 +324,30 @@ const test = base.extend({
 
     );
 
+    handlerMap.set('GET /api/v4/declarations/imports/co-codes', () =>
+
+      jsonResponse({ ok: true, config: { whitelist: [], blacklist: [] } })
+
+    );
+
+    handlerMap.set('PUT /api/v4/declarations/imports/co-codes', ({ init }) => {
+
+      const body = safeParse(init?.body, {});
+
+      return jsonResponse({ ok: true, config: body?.config || { whitelist: [], blacklist: [] } });
+
+    });
+
+    handlerMap.set('GET /api/v4/declarations/imports/co-discrepancy', () =>
+
+      jsonResponse({
+        ok: true,
+        config: { enabled: false, cron: '', rangeDays: 3, threshold: 10, sampleLimit: 500 },
+        state: { lastRun: null, total: 0, limited: false, entries: [] },
+      })
+
+    );
+
 
 
     handlerMap.set('GET /api/import/co-discrepancy/config', () =>
@@ -260,6 +372,60 @@ const test = base.extend({
 
     });
 
+    handlerMap.set('PUT /api/v4/declarations/imports/co-discrepancy/config', ({ init }) => {
+
+      const body = safeParse(init?.body, {});
+
+      return jsonResponse({ ok: true, config: body?.config || {} });
+
+    });
+
+    handlerMap.set('POST /api/v4/declarations/imports/co-discrepancy/run', ({ init }) => {
+
+      const body = safeParse(init?.body, {});
+
+      return jsonResponse({
+
+        ok: true,
+
+        result: {
+
+          config: { enabled: false, cron: '', rangeDays: 3, threshold: 10, sampleLimit: 500 },
+
+          state: {
+
+            lastRunAt: null,
+
+            range: body?.range || null,
+
+            mismatchCount: 0,
+
+            totalChecked: 0,
+
+            status: 'ok',
+
+            error: null,
+
+            durationMs: 0,
+
+            mismatches: [],
+
+            triggered: false,
+
+            limited: false,
+
+            actor: null,
+
+            reason: body?.reason || null,
+
+          },
+
+        },
+
+      });
+
+    });
+
 
 
     await page.route('**/api/**', async (route, request) => {
@@ -269,6 +435,8 @@ const test = base.extend({
       const url = request.url();
 
       const path = normalisePath(url);
+
+      apiEvents.requests.push({ method, path });
 
       const handler = resolveHandler(handlerMap, method, path);
 

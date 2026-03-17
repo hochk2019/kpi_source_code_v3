@@ -1,5 +1,8 @@
 import { useCallback } from "react";
 
+const ALERTS_REVIEW_ROUTE = "/api/v4/declarations/imports/alerts/review";
+const ALERTS_UNREVIEW_ROUTE = "/api/v4/declarations/imports/alerts/unreview";
+
 export default function useDataImporterReviewActions({
   actor = "system",
   canReviewAlerts = false,
@@ -47,7 +50,7 @@ export default function useDataImporterReviewActions({
     }
 
     try {
-      await fetchWithAuth?.("/api/import/alerts/review", {
+      await fetchWithAuth?.(ALERTS_REVIEW_ROUTE, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ keys: allowedKeys, actor }),
@@ -112,7 +115,7 @@ export default function useDataImporterReviewActions({
     }
 
     try {
-      await fetchWithAuth?.("/api/import/alerts/unreview", {
+      await fetchWithAuth?.(ALERTS_UNREVIEW_ROUTE, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ keys: reviewedKeys, actor }),

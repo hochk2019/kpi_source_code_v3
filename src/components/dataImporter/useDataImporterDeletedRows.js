@@ -41,7 +41,7 @@ export default function useDataImporterDeletedRows({
         if (from) params.set("from", from);
         if (to) params.set("to", to);
         const queryString = params.toString();
-        const target = `/api/import/deleted-declarations${queryString ? `?${queryString}` : ""}`;
+        const target = `/api/v4/declarations/imports/deleted-declarations${queryString ? `?${queryString}` : ""}`;
 
         const response = await fetchWithAuth(target, {
           cache: "no-store",

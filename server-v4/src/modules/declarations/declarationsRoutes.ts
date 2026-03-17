@@ -63,8 +63,14 @@ export function buildDeclarationsRouter(
   });
 
   router.get('/imports/ecus-config', (req, res) => void controller.readEcusConfig(req, res));
+  router.put('/imports/ecus-config', (req, res) => void controller.updateEcusConfig(req, res));
+  router.get('/imports/ecus-status', (req, res) => void controller.readEcusStatus(req, res));
   router.post('/imports/ecus-preview', (req, res) => void controller.previewEcusImport(req, res));
   router.post('/imports/ecus-commit', (req, res) => void controller.commitEcusImport(req, res));
+  router.get('/imports/search', (req, res) => void controller.searchImportDeclarations(req, res));
+  router.get('/imports/deleted-declarations', (req, res) =>
+    void controller.listDeletedDeclarations(req, res),
+  );
   router.get('/imports/co-codes', (req, res) => void controller.readCoCodeConfig(req, res));
   router.put('/imports/co-codes', (req, res) => void controller.updateCoCodeConfig(req, res));
   router.get('/imports/co-discrepancy', (req, res) => void controller.readCoDiscrepancy(req, res));

@@ -44,9 +44,31 @@ export async function loginAsAdmin(page) {
 
 export async function openImportTab(page) {
 
-  await page.getByRole('tab', { name: 'Import Data' }).click();
+  const importTab = page.getByRole('tab', { name: 'Import Data' });
+  const importRoot = page.locator('#app-tab-root-import');
 
-  await page.getByRole('heading', { name: 'Đồng bộ ECUS' }).waitFor();
+  await importTab.waitFor();
+
+  if (!(await importRoot.isVisible().catch(() => false))) {
+
+    await importTab.click({ force: true });
+
+  }
+
+  if (!(await importRoot.isVisible().catch(() => false))) {
+
+    await page.getByRole('button', { name: 'Command Center' }).first().click();
+
+    const commandDialog = page.getByRole('dialog');
+    const commandSearch = commandDialog.getByRole('searchbox', { name: 'Tìm thao tác trong Command Center' });
+
+    await commandSearch.fill('Import Data');
+    await commandDialog.getByRole('button', { name: /^Đi tới tab Import Data/i }).click();
+
+  }
+
+  await importRoot.waitFor({ state: 'visible' });
+  await page.getByRole('button', { name: 'Xem trước dữ liệu' }).waitFor();
 
 }
 

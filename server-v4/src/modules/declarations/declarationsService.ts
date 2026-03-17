@@ -4,6 +4,8 @@ import {
   normalizeDeclarationPatch,
   type DeclarationActor,
   type DeclarationEventRecord,
+  type DeletedDeclarationFilters,
+  type DeletedDeclarationRecord,
   type DeclarationStoreTarget,
   type DeclarationsStore,
 } from './declarationsStore.js';
@@ -96,6 +98,12 @@ export class DeclarationsService {
       pageSize,
       rows: matches.slice(offset, offset + pageSize),
     };
+  }
+
+  async listDeletedDeclarations(
+    filters: DeletedDeclarationFilters = {},
+  ): Promise<DeletedDeclarationRecord[]> {
+    return this.store.listDeletedDeclarations(filters);
   }
 
   async patchDeclaration(

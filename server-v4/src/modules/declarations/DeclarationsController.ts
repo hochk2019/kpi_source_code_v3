@@ -26,7 +26,7 @@ const listDeclarationsQuerySchema = z.object({
     ),
 });
 
-const legacyImportSearchQuerySchema = z.object({
+const importSearchQuerySchema = z.object({
   page: z.preprocess(
     (value) => (value === undefined || value === null || value === '' ? undefined : value),
     z.coerce.number().int().positive().optional(),
@@ -35,6 +35,12 @@ const legacyImportSearchQuerySchema = z.object({
     (value) => (value === undefined || value === null || value === '' ? undefined : value),
     z.coerce.number().int().positive().optional(),
   ),
+});
+
+const deletedDeclarationsQuerySchema = z.object({
+  from: z.string().trim().optional(),
+  to: z.string().trim().optional(),
+  type: z.string().trim().optional(),
 });
 
 const declarationEventsQuerySchema = z.object({
@@ -149,7 +155,7 @@ export class DeclarationsController extends BaseController {
   async searchLegacyImportDeclarations(req: Request, res: Response): Promise<void> {
     try {
       await this.readActor(req, 'Bạn cần đăng nhập để tra cứu tờ khai.');
-      const query = legacyImportSearchQuerySchema.parse({
+      const query = importSearchQuerySchema.parse({
         page: pickQueryValue(req.query.page),
         pageSize: pickQueryValue(req.query.pageSize),
       });
@@ -161,6 +167,39 @@ export class DeclarationsController extends BaseController {
       res.json({ ok: true, ...result });
     } catch (error) {
       this.handleDeclarationsError(error, res, 'search legacy import declarations');
+    }
+  }
+
+  async searchImportDeclarations(req: Request, res: Response): Promise<void> {
+    try {
+      await this.readActor(req, 'Bạn cần đăng nhập để tra cứu tờ khai.');
+      const query = importSearchQuerySchema.parse({
+        page: pickQueryValue(req.query.page),
+        pageSize: pickQueryValue(req.query.pageSize),
+      });
+      const result = await this.declarationsService.searchImportDeclarations({
+        filters: req.query ?? {},
+        page: query.page,
+        pageSize: query.pageSize,
+      });
+      res.json({ ok: true, ...result });
+    } catch (error) {
+      this.handleDeclarationsError(error, res, 'search import declarations');
+    }
+  }
+
+  async listDeletedDeclarations(req: Request, res: Response): Promise<void> {
+    try {
+      await this.readActor(req, 'Bạn cần đăng nhập để xem danh sách tờ khai đã xoá.');
+      const query = deletedDeclarationsQuerySchema.parse({
+        type: pickQueryValue(req.query.type),
+        from: pickQueryValue(req.query.from),
+        to: pickQueryValue(req.query.to),
+      });
+      const rows = await this.declarationsService.listDeletedDeclarations(query);
+      res.json({ ok: true, rows });
+    } catch (error) {
+      this.handleDeclarationsError(error, res, 'list deleted declarations');
     }
   }
 
@@ -254,6 +293,29 @@ export class DeclarationsController extends BaseController {
       res.json({ ok: true, config });
     } catch (error) {
       this.handleDeclarationsError(error, res, 'read ECUS sync config');
+    }
+  }
+
+  async updateEcusConfig(req: Request, res: Response): Promise<void> {
+    try {
+      const actor = await readEcusBridgeActor(req, this.authStore);
+      const payload = ecusSyncConfigBodySchema.parse(req.body ?? {});
+      const config = await this.declarationsEcusSyncService.updateConfig(actor, payload.config, {
+        preservePassword: payload.preservePassword,
+      });
+      res.json({ ok: true, config });
+    } catch (error) {
+      this.handleDeclarationsError(error, res, 'update ECUS sync config');
+    }
+  }
+
+  async readEcusStatus(req: Request, res: Response): Promise<void> {
+    try {
+      const actor = await readEcusBridgeActor(req, this.authStore);
+      const payload = await this.declarationsEcusSyncService.readStatus(actor);
+      res.json({ ok: true, ...payload });
+    } catch (error) {
+      this.handleDeclarationsError(error, res, 'read ECUS sync status');
     }
   }
 

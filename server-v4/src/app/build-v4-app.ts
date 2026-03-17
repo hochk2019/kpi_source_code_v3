@@ -13,6 +13,11 @@ import { buildReportingRouter } from '../modules/reporting/reportingRoutes.js';
 import { buildTeamsRouter } from '../modules/teams/teamsRoutes.js';
 import { createRuntimePersistence, type RuntimePersistence } from '../persistence/runtimePersistence.js';
 import { buildLegacyCompatRouter } from './legacyCompatRoutes.js';
+import {
+  createImporterCompatTrafficTracker,
+  type ImporterCompatGuardMode,
+  type ImporterCompatTrafficTracker,
+} from './importerCompatTraffic.js';
 import { moduleCatalog } from './module-catalog.js';
 import { serializeDomainModules, type DomainModule } from './domain-module.js';
 import { runtimeModuleRouteCoverage } from './runtimeRouteCoverage.js';
@@ -25,6 +30,10 @@ export type BuildV4AppOptions = ServerV4ConfigInput & {
     ecusImportRunner?: CoDiscrepancyRunner;
     coDiscrepancyRunner?: CoDiscrepancyRunner;
     sqlHealthCheck?: EcusSqlHealthCheck;
+  };
+  importerCompat?: {
+    guardMode?: ImporterCompatGuardMode;
+    tracker?: ImporterCompatTrafficTracker;
   };
 };
 
@@ -52,6 +61,11 @@ export function buildV4App(input?: readonly DomainModule[] | BuildV4AppOptions):
   const safeModules = serializeDomainModules(options.modules ?? moduleCatalog);
   const config = resolveServerV4Config(options);
   const persistence = options.persistence ?? createRuntimePersistence(config);
+  const importerCompatTracker =
+    options.importerCompat?.tracker ??
+    createImporterCompatTrafficTracker({
+      guardMode: options.importerCompat?.guardMode,
+    });
   const implementedModuleIds = new Set([
     'auth',
     'kpi-rules',
@@ -74,6 +88,7 @@ export function buildV4App(input?: readonly DomainModule[] | BuildV4AppOptions):
       implementedModuleIds,
       runtimeRouteCoverage: runtimeModuleRouteCoverage,
       persistenceSourceKind: persistence.sourceKind,
+      importerCompat: importerCompatTracker.snapshot(),
     });
 
     res.json({
@@ -103,6 +118,7 @@ export function buildV4App(input?: readonly DomainModule[] | BuildV4AppOptions):
         implementedModuleIds,
         runtimeRouteCoverage: runtimeModuleRouteCoverage,
         persistenceSourceKind: persistence.sourceKind,
+        importerCompat: importerCompatTracker.snapshot(),
       }),
     });
   });
@@ -200,7 +216,12 @@ export function buildV4App(input?: readonly DomainModule[] | BuildV4AppOptions):
     app.use(domainModule.basePath, buildDefaultModuleRouter(domainModule));
   }
 
-  app.use(buildLegacyCompatRouter(persistence, options.declarations));
+  app.use(
+    buildLegacyCompatRouter(persistence, {
+      ...options.declarations,
+      importerCompatTracker,
+    }),
+  );
 
   return app;
 }

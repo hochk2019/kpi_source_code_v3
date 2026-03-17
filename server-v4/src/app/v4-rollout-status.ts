@@ -1,6 +1,11 @@
 import fs from 'node:fs';
 
 import type { DomainModule } from './domain-module.js';
+import {
+  createEmptyImporterCompatTrafficSnapshot,
+  describeImporterCompatTraffic,
+  type ImporterCompatTrafficSnapshot,
+} from './importerCompatTraffic.js';
 import type { RuntimeModuleRouteCoverage } from './runtimeRouteCoverage.js';
 import {
   LEGACY_BUSINESS_HOT_PATH_KEYS,
@@ -53,11 +58,17 @@ export type V4RolloutStatus = {
     };
     readiness: {
       state: 'ready' | 'degraded' | 'blocked';
+      label: string;
       detail: string;
     };
   };
   migrationVerification: {
     checks: V4RolloutCheck[];
+  };
+  compatibility: {
+    importerTraffic: ImporterCompatTrafficSnapshot & {
+      summary: string;
+    };
   };
   rollout: {
     currentStage: RolloutStageId;
@@ -86,6 +97,7 @@ export type BuildV4RolloutStatusOptions = {
   implementedModuleIds: Iterable<string>;
   runtimeRouteCoverage?: Iterable<RuntimeModuleRouteCoverage>;
   persistenceSourceKind?: BusinessSnapshotSourceKind;
+  importerCompat?: ImporterCompatTrafficSnapshot;
   now?: Date;
 };
 
@@ -95,6 +107,7 @@ export function buildV4RolloutStatus(options: BuildV4RolloutStatusOptions): V4Ro
     Array.from(options.runtimeRouteCoverage ?? []).map((entry) => [entry.id, entry] as const),
   );
   const persistenceSourceKind = options.persistenceSourceKind ?? 'dual-write';
+  const importerCompat = options.importerCompat ?? createEmptyImporterCompatTrafficSnapshot();
   const hotPathKeys =
     persistenceSourceKind === 'legacy-kv-store' ? [...LEGACY_BUSINESS_HOT_PATH_KEYS] : [];
   const moduleStatuses = options.modules.map((domainModule) =>
@@ -102,7 +115,14 @@ export function buildV4RolloutStatus(options: BuildV4RolloutStatusOptions): V4Ro
   );
   const dbFile = inspectDbFile(options.dbFile, persistenceSourceKind);
   const metrics = buildMetrics(moduleStatuses, options.modules);
-  const checks = buildChecks({ dbFile, metrics, moduleStatuses, persistenceSourceKind, hotPathKeys });
+  const checks = buildChecks({
+    dbFile,
+    metrics,
+    moduleStatuses,
+    persistenceSourceKind,
+    hotPathKeys,
+    importerCompat,
+  });
   const readiness = buildReadiness(dbFile, metrics, persistenceSourceKind);
   const stages = buildStages({ dbFile, metrics, persistenceSourceKind });
 
@@ -121,6 +141,12 @@ export function buildV4RolloutStatus(options: BuildV4RolloutStatusOptions): V4Ro
     },
     migrationVerification: {
       checks,
+    },
+    compatibility: {
+      importerTraffic: {
+        ...importerCompat,
+        summary: describeImporterCompatTraffic(importerCompat),
+      },
     },
     rollout: {
       currentStage: resolveCurrentStage(stages),
@@ -280,6 +306,7 @@ function buildChecks(input: {
   moduleStatuses: V4RolloutStatus['modules'];
   persistenceSourceKind: BusinessSnapshotSourceKind;
   hotPathKeys: string[];
+  importerCompat: ImporterCompatTrafficSnapshot;
 }): V4RolloutCheck[] {
   const scaffoldModules = input.moduleStatuses.filter((entry) => entry.runtimeMode === 'scaffold').map((entry) => entry.id);
 
@@ -297,9 +324,15 @@ function buildChecks(input: {
     },
     {
       id: 'hot-path-persistence-source',
-      status: input.persistenceSourceKind === 'legacy-kv-store' ? 'warn' : 'pass',
+      status: input.persistenceSourceKind === 'relational-store' ? 'pass' : 'warn',
       summary: 'Hot-path persistence source',
       detail: describePersistenceState(input.persistenceSourceKind, input.hotPathKeys),
+    },
+    {
+      id: 'importer-compat-traffic',
+      status: input.importerCompat.totals.migratedHits === 0 ? 'pass' : 'warn',
+      summary: 'Importer compat traffic',
+      detail: describeImporterCompatTraffic(input.importerCompat),
     },
     {
       id: 'implemented-module-coverage',
@@ -359,6 +392,7 @@ function buildReadiness(
   if (legacyStoreBlocked || metrics.modules.implemented === 0) {
     return {
       state: 'blocked',
+      label: 'Rollout blocked',
       detail:
         persistenceSourceKind === 'relational-store'
           ? 'server-v4 cannot progress because no runtime modules are mounted.'
@@ -369,16 +403,24 @@ function buildReadiness(
   if (dbFile.state === 'memory' || metrics.modules.scaffold > 0) {
     return {
       state: 'degraded',
+      label: 'Internal QA only',
       detail: 'server-v4 is usable for internal verification, but scaffold gaps or non-production storage still block rollout.',
+    };
+  }
+
+  if (persistenceSourceKind !== 'relational-store') {
+    return {
+      state: 'degraded',
+      label: 'Compatibility verification only',
+      detail:
+        'server-v4 is usable for compatibility verification, but full rollout readiness remains blocked until relational runtime stores own the hot paths.',
     };
   }
 
   return {
     state: 'ready',
-    detail:
-      persistenceSourceKind === 'relational-store'
-        ? 'All catalog modules have runtime coverage and relational runtime stores satisfy the rollout gates.'
-        : 'All catalog modules have runtime coverage and the legacy store is readable for rollout gates.',
+    label: 'Production cutover ready',
+    detail: 'All catalog modules have runtime coverage and relational runtime stores satisfy the rollout gates.',
   };
 }
 
@@ -402,7 +444,9 @@ function buildStages(input: {
   const moduleParityStatus =
     internalQaStatus === 'ready' && input.metrics.modules.scaffold === 0 ? 'ready' : internalQaStatus === 'blocked' ? 'blocked' : 'hold';
   const cutoverStatus =
-    moduleParityStatus === 'ready' && input.metrics.modules.readWrite > 0
+    moduleParityStatus === 'ready' &&
+    input.persistenceSourceKind === 'relational-store' &&
+    input.metrics.modules.readWrite > 0
       ? 'ready'
       : moduleParityStatus === 'blocked'
         ? 'blocked'
@@ -411,30 +455,30 @@ function buildStages(input: {
   return [
     {
       id: 'baseline-health',
-      label: 'Baseline health',
+      label: 'Compatibility baseline',
       status: baselineStatus,
       gate:
         input.persistenceSourceKind === 'relational-store'
           ? 'Configured relational runtime stores satisfy the server-v4 baseline prerequisites.'
-          : 'Configured legacy store path is readable by server-v4.',
+          : 'Configured compatibility storage is readable by server-v4 for baseline validation.',
     },
     {
       id: 'internal-qa',
-      label: 'Internal QA',
+      label: 'Internal QA ready',
       status: internalQaStatus,
-      gate: 'At least one runtime module is mounted and ready for parity checks.',
+      gate: 'At least one runtime module is mounted and ready for internal QA parity checks.',
     },
     {
       id: 'module-parity',
-      label: 'Module parity',
+      label: 'Catalog parity ready',
       status: moduleParityStatus,
-      gate: 'No metadata-only modules remain in the published catalog.',
+      gate: 'No metadata-only modules remain in the published catalog, even if compatibility mode is still active.',
     },
     {
       id: 'cutover-ready',
-      label: 'Cutover ready',
+      label: 'Production cutover ready',
       status: cutoverStatus,
-      gate: 'Module parity is complete and write-capable routes are available for staged rollout.',
+      gate: 'Relational runtime stores own hot paths and write-capable routes are available for production cutover.',
     },
   ];
 }

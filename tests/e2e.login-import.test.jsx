@@ -303,7 +303,9 @@ describe('Luồng đăng nhập và import thực tế', () => {
     const saveButton = screen.getByRole('button', { name: 'Lưu chỉnh sửa' });
     expect(saveButton).toBeDisabled();
 
-    const reviewCall = fetchMock.mock.calls.find(([url]) => url === '/api/import/alerts/review');
+    const reviewCall = fetchMock.mock.calls.find(
+      ([url]) => url === '/api/v4/declarations/imports/alerts/review'
+    );
     expect(reviewCall).toBeTruthy();
     const body = JSON.parse(reviewCall[1]?.body || '{}');
     expect(body.keys).toEqual(['00000007001_']);

@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 const DEFAULT_HOST = "127.0.0.1";
 const DEFAULT_PORT = 0;
 const DEFAULT_PERSISTENCE_MODE = "sqlite-dual-write";
+const DEFAULT_IMPORTER_COMPAT_GUARD_MODE = "off";
 
 const moduleDirectory = path.dirname(fileURLToPath(import.meta.url));
 
@@ -29,6 +30,9 @@ export function resolveApiRuntimeConfig(input = {}, env = process.env) {
     persistenceMode,
     postgresUrl: resolvePostgresUrl(input.postgresUrl ?? env.KPI_API_POSTGRES_URL),
     postgresLegacySqliteFallback,
+    importerCompatGuardMode: resolveImporterCompatGuardMode(
+      input.importerCompatGuardMode ?? env.KPI_API_IMPORTER_COMPAT_GUARD_MODE,
+    ),
   };
 }
 
@@ -108,4 +112,17 @@ function resolveBooleanFlag(value) {
   }
 
   return normalized === "1" || normalized === "true" || normalized === "yes" || normalized === "on";
+}
+
+function resolveImporterCompatGuardMode(value) {
+  const normalized = typeof value === "string" ? value.trim() : "";
+  if (!normalized) {
+    return DEFAULT_IMPORTER_COMPAT_GUARD_MODE;
+  }
+
+  if (normalized === "off" || normalized === "block-migrated") {
+    return normalized;
+  }
+
+  throw new Error(`Invalid importer compat guard mode: ${normalized}`);
 }

@@ -7,6 +7,12 @@ import {
 } from "@/components/dataImporter/dataImporterConfig.js";
 import { formatDateRangeLabel } from "../../../packages/domain/src/format.js";
 
+const ECUS_CONFIG_ROUTE = "/api/v4/declarations/imports/ecus-config";
+const ECUS_COMMIT_ROUTE = "/api/v4/declarations/imports/ecus-commit";
+const ECUS_PREVIEW_ROUTE = "/api/v4/declarations/imports/ecus-preview";
+const ECUS_STATUS_ROUTE = "/api/v4/declarations/imports/ecus-status";
+const ALERTS_ROUTE = "/api/v4/declarations/imports/alerts";
+
 const DEFAULT_ALERT_SUMMARY = {
   outstanding: 0,
   totalTracked: 0,
@@ -132,7 +138,7 @@ export default function useDataImporterSync({
     setSyncError("");
 
     try {
-      const response = await fetchWithAuth("/api/import/ecus/config", {
+      const response = await fetchWithAuth(ECUS_CONFIG_ROUTE, {
         cache: "no-store",
         credentials: "include",
       });
@@ -172,7 +178,7 @@ export default function useDataImporterSync({
     setStatusError("");
 
     try {
-      const response = await fetchWithAuth("/api/import/ecus/status", {
+      const response = await fetchWithAuth(ECUS_STATUS_ROUTE, {
         cache: "no-store",
         credentials: "include",
       });
@@ -203,7 +209,7 @@ export default function useDataImporterSync({
     setAlertLoading(true);
 
     try {
-      const response = await fetchWithAuth("/api/import/alerts", {
+      const response = await fetchWithAuth(ALERTS_ROUTE, {
         cache: "no-store",
         credentials: "include",
       });
@@ -271,7 +277,7 @@ export default function useDataImporterSync({
         payload.config.columnMap = syncConfig.columnMap;
       }
 
-      const response = await fetchWithAuth("/api/import/ecus/config", {
+      const response = await fetchWithAuth(ECUS_CONFIG_ROUTE, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -323,7 +329,7 @@ export default function useDataImporterSync({
     setSyncError("");
 
     try {
-      const response = await fetchWithAuth("/api/import/ecus/run", {
+      const response = await fetchWithAuth(ECUS_COMMIT_ROUTE, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -409,7 +415,7 @@ export default function useDataImporterSync({
     setPreviewError("");
 
     try {
-      const response = await fetchWithAuth("/api/import/ecus/preview", {
+      const response = await fetchWithAuth(ECUS_PREVIEW_ROUTE, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

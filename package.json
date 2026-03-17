@@ -24,7 +24,8 @@
     "test:frontend": "vitest run \"tests/**/*.test.js\" \"tests/**/*.test.jsx\" --environment jsdom",
     "test:smoke:backend-core": "vitest run tests/server.seed.test.js tests/businessSnapshotSqlite.test.js tests/teamRosterSqlite.test.js tests/reportingProjectionSqlite.test.js tests/reportingObservability.test.js tests/server.ecusBridgeService.test.js tests/server.ecusSqlBridge.test.js --environment node",
     "test:smoke:frontend-core": "vitest run tests/auth.test.jsx tests/appShellFrame.test.jsx tests/commandCenter.test.jsx tests/dataImporter.preview.test.jsx tests/reportViewer.test.jsx --environment jsdom",
-    "test:smoke:core": "pnpm run test:smoke:backend-core && pnpm run test:smoke:frontend-core",
+    "test:smoke:frontend-canonical": "pnpm exec vite build && pnpm exec playwright test tests/playwright/sync-flow.spec.js",
+    "test:smoke:core": "pnpm run test:smoke:backend-core && pnpm run test:smoke:frontend-core && pnpm run test:smoke:frontend-canonical",
     "build:server-v4": "tsc -p tsconfig.server-v4.build.json",
     "typecheck:server-v4": "tsc -p tsconfig.server-v4.json --noEmit",
     "verify:server-v4": "pnpm run lint:server-v4 && pnpm run typecheck:server-v4 && pnpm run test:server-v4",
@@ -35,7 +36,7 @@
     "dev:frontend": "vite",
     "favicon:update": "node scripts/update-favicon.mjs",
     "cert:ai": "pwsh -File ./scripts/create-ai-https-cert.ps1",
-    "precommit": "pnpm lint && pnpm exec vitest run --config vitest.frontend.config.mjs tests/reports.test.js tests/store.test.js tests/dataImporter.preview.test.jsx tests/storageClient.test.js",
+    "precommit": "pnpm run verify:server-v4 && pnpm lint && pnpm exec vitest run --config vitest.frontend.config.mjs tests/reports.test.js tests/store.test.js tests/dataImporter.preview.test.jsx tests/storageClient.test.js",
     "prepare": "pnpm exec simple-git-hooks",
     "test:screenshot": "pnpm build && pnpm exec playwright test tests/playwright/favicon.spec.js",
     "test:playwright": "pnpm exec playwright test"

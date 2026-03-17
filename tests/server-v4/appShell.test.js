@@ -3,6 +3,12 @@ import request from 'supertest';
 
 import { buildV4App, moduleCatalog } from '../../server-v4/src/index.ts';
 
+const catalogRoutes = moduleCatalog.flatMap((entry) => entry.routeGroups.flatMap((group) => group.routes));
+const catalogMutationRoutes = catalogRoutes.filter((entry) => entry.method !== 'GET');
+const implementedReadWriteModules = moduleCatalog.filter((entry) =>
+  entry.routeGroups.some((group) => group.routes.some((route) => route.method !== 'GET')),
+);
+
 describe('server-v4 app shell', () => {
   it('reports health for the scaffolded module set', async () => {
     const app = buildV4App();
@@ -21,13 +27,14 @@ describe('server-v4 app shell', () => {
       state: 'ready',
     });
     expect(response.body.readiness).toMatchObject({
-      state: 'ready',
+      state: 'degraded',
+      label: 'Compatibility verification only',
     });
     expect(response.body.metrics?.modules?.implemented).toBe(8);
-    expect(response.body.metrics?.modules?.readOnly).toBe(1);
-    expect(response.body.metrics?.modules?.readWrite).toBe(7);
-    expect(response.body.metrics?.routes?.implemented).toBe(31);
-    expect(response.body.metrics?.routes?.implementedMutation).toBe(15);
+    expect(response.body.metrics?.modules?.readOnly).toBe(moduleCatalog.length - implementedReadWriteModules.length);
+    expect(response.body.metrics?.modules?.readWrite).toBe(implementedReadWriteModules.length);
+    expect(response.body.metrics?.routes?.implemented).toBe(catalogRoutes.length);
+    expect(response.body.metrics?.routes?.implementedMutation).toBe(catalogMutationRoutes.length);
   });
 
   it('exposes module metadata for the root catalog and mounted module path', async () => {
@@ -53,13 +60,30 @@ describe('server-v4 app shell', () => {
     expect(response.body.ok).toBe(true);
     expect(response.body.metrics.modules.total).toBe(moduleCatalog.length);
     expect(response.body.metrics.modules.scaffold).toBe(0);
-    expect(response.body.rollout.currentStage).toBe('cutover-ready');
-    expect(response.body.rollout.recommendedNextStage).toBe(null);
+    expect(response.body.health.readiness.state).toBe('degraded');
+    expect(response.body.rollout.currentStage).toBe('module-parity');
+    expect(response.body.rollout.recommendedNextStage).toBe('cutover-ready');
+    expect(response.body.rollout.stages.find((entry) => entry.id === 'baseline-health')).toMatchObject({
+      label: 'Compatibility baseline',
+    });
+    expect(response.body.rollout.stages.find((entry) => entry.id === 'cutover-ready')).toMatchObject({
+      label: 'Production cutover ready',
+      gate: 'Relational runtime stores own hot paths and write-capable routes are available for production cutover.',
+    });
     expect(response.body.rollout.fallback).toContain('Keep monolith `/api/*` routes as the production write path until the next gate is green.');
     expect(
       response.body.migrationVerification.checks.find((entry) => entry.id === 'implemented-module-coverage'),
     ).toMatchObject({
       status: 'pass',
+    });
+    expect(response.body.compatibility.importerTraffic).toMatchObject({
+      guardMode: 'off',
+      totals: {
+        hits: 0,
+        migratedHits: 0,
+        legacyOnlyHits: 0,
+        blockedHits: 0,
+      },
     });
   });
 
@@ -85,6 +109,7 @@ describe('server-v4 app shell', () => {
     });
     expect(response.body.health.readiness).toMatchObject({
       state: 'ready',
+      label: 'Production cutover ready',
     });
   });
 });

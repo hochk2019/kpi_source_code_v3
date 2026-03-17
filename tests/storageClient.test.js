@@ -8,7 +8,7 @@ let sharedSetItem;
 
 let sharedGetItem;
 
-let clearStorageCacheFn;
+let resetStorageClientForTestsFn;
 
 let getSyncStatus;
 
@@ -72,7 +72,7 @@ describe('storageClient remote đồng bộ lại khi server lên trễ', () => 
 
     sharedGetItem = storageModule.getItem;
 
-    clearStorageCacheFn = storageModule.clearStorageCache;
+    resetStorageClientForTestsFn = storageModule.resetStorageClientForTests;
 
     getSyncStatus = storageModule.getSyncStatus;
 
@@ -80,7 +80,7 @@ describe('storageClient remote đồng bộ lại khi server lên trễ', () => 
 
     refreshSharedKeys = storageModule.refreshSharedKeys;
 
-    clearStorageCacheFn();
+    resetStorageClientForTestsFn();
 
   });
 
@@ -94,7 +94,7 @@ describe('storageClient remote đồng bộ lại khi server lên trễ', () => 
 
     vi.useRealTimers();
 
-    clearStorageCacheFn?.();
+    resetStorageClientForTestsFn?.();
 
   });
 
@@ -790,6 +790,100 @@ describe('storageClient remote đồng bộ lại khi server lên trễ', () => 
 
   });
 
+  it('bootstrap voi che do shared-light roi tai them deferred keys', async () => {
+
+    const fetchMock = vi.fn(async (input, init) => {
+
+      const method = (init?.method || 'GET').toUpperCase();
+
+      const url = typeof input === 'string' ? input : input?.url ?? '';
+
+      if (url.includes('/api/bootstrap?mode=shared-light')) {
+
+        return {
+
+          ok: true,
+
+          json: async () => ({
+
+            data: { kpi_users_v1: '[]' },
+
+            mode: 'shared-light',
+
+            deferredKeys: ['decl_rows_v1'],
+
+          }),
+
+        };
+
+      }
+
+      if (url.includes('/api/storage/decl_rows_v1') && method === 'GET') {
+
+        const rows = [{ so_tk: 'LIGHT-001', nhanh: '', date: '2025-08-11' }];
+
+        return {
+
+          ok: true,
+
+          json: async () => ({
+
+            ok: true,
+
+            key: 'decl_rows_v1',
+
+            value: rows,
+
+            raw: JSON.stringify(rows),
+
+          }),
+
+        };
+
+      }
+
+      if (url.includes('/api/storage/') && method === 'PUT') {
+
+        return { ok: true, json: async () => ({ ok: true }) };
+
+      }
+
+      return { ok: true, json: async () => ({ ok: true }) };
+
+    });
+
+    vi.stubGlobal('fetch', fetchMock);
+
+
+
+    const initial = await initSharedStorage({ baseUrl: '' });
+
+    expect(initial).toBe(true);
+
+    expect(JSON.parse(sharedGetItem('decl_rows_v1'))).toEqual([
+
+      { so_tk: 'LIGHT-001', nhanh: '', date: '2025-08-11' },
+
+    ]);
+
+    expect(fetchMock).toHaveBeenCalledWith(
+
+      expect.stringContaining('/api/bootstrap?mode=shared-light'),
+
+      expect.objectContaining({ cache: 'no-store' })
+
+    );
+
+    expect(fetchMock).toHaveBeenCalledWith(
+
+      expect.stringContaining('/api/storage/decl_rows_v1'),
+
+      expect.objectContaining({ method: 'GET' })
+
+    );
+
+  });
+
 });
 
 describe('storageClient giới hạn dung lượng khi backend trả về 413', () => {
@@ -822,7 +916,7 @@ describe('storageClient giới hạn dung lượng khi backend trả về 413', 
 
     refreshKeys = storageModule.refreshSharedKeys;
 
-    clearCache = storageModule.clearStorageCache;
+    clearCache = storageModule.resetStorageClientForTests;
 
     storageLimitMessage = storageModule.STORAGE_LIMIT_ERROR_MESSAGE;
 

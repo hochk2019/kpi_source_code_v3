@@ -3,6 +3,9 @@ import { act, renderHook } from "@testing-library/react";
 
 import useDataImporterReviewActions from "@/components/dataImporter/useDataImporterReviewActions.js";
 
+const ALERTS_REVIEW_ROUTE = "/api/v4/declarations/imports/alerts/review";
+const ALERTS_UNREVIEW_ROUTE = "/api/v4/declarations/imports/alerts/unreview";
+
 function createProps(overrides = {}) {
   return {
     actor: "tester",
@@ -54,7 +57,7 @@ describe("useDataImporterReviewActions", () => {
     expect(props.ensureEditableKeys).toHaveBeenCalledWith(["row-1", "row-2"], "đánh dấu rà soát");
     expect(props.markDeclRowsReviewed).toHaveBeenCalledWith(["row-1", "row-2"], { actor: "tester" });
     expect(props.fetchWithAuth).toHaveBeenCalledWith(
-      "/api/import/alerts/review",
+      ALERTS_REVIEW_ROUTE,
       expect.objectContaining({
         method: "POST",
         credentials: "include",
@@ -85,7 +88,7 @@ describe("useDataImporterReviewActions", () => {
     expect(props.ensureEditableKeys).toHaveBeenCalledWith(["row-1", "row-2"], "bỏ đánh dấu rà soát");
     expect(props.unmarkDeclRowsReviewed).toHaveBeenCalledWith(["row-1"], { actor: "tester" });
     expect(props.fetchWithAuth).toHaveBeenCalledWith(
-      "/api/import/alerts/unreview",
+      ALERTS_UNREVIEW_ROUTE,
       expect.objectContaining({
         method: "POST",
         credentials: "include",

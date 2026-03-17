@@ -52,6 +52,9 @@ export async function startApiServer(options = {}) {
     persistenceMode: config.persistenceMode,
     postgresUrl: config.postgresUrl,
     postgresLegacySqliteFallback: config.postgresLegacySqliteFallback,
+    importerCompat: {
+      guardMode: config.importerCompatGuardMode,
+    },
   });
   if (!app || typeof app.listen !== "function") {
     throw new Error("buildApp() must return an Express-compatible application with listen()");

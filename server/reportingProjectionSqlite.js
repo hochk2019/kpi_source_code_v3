@@ -55,6 +55,12 @@ export function ensureReportingProjectionTable(database) {
     'CREATE INDEX IF NOT EXISTS idx_reporting_schedule_projection_entries_projection_key ON ' +
       'reporting_schedule_projection_entries(projection_key)'
   );
+  ensureTableColumn(
+    database,
+    REPORTING_SCHEDULE_ENTRY_TABLE,
+    'position',
+    'INTEGER NOT NULL DEFAULT 0'
+  );
   database.exec(
     'CREATE INDEX IF NOT EXISTS idx_reporting_schedule_projection_entries_projection_position ON ' +
       'reporting_schedule_projection_entries(projection_key, position)'
@@ -127,12 +133,6 @@ export function ensureReportingProjectionTable(database) {
   ensureColumn(database, 'range_to', "TEXT NOT NULL DEFAULT ''");
   ensureColumn(database, 'query_key', "TEXT NOT NULL DEFAULT ''");
   ensureColumn(database, 'entry_count', 'INTEGER NOT NULL DEFAULT 0');
-  ensureTableColumn(
-    database,
-    REPORTING_SCHEDULE_ENTRY_TABLE,
-    'position',
-    'INTEGER NOT NULL DEFAULT 0'
-  );
 }
 
 export function readReportingProjectionValue(database, key) {

@@ -357,7 +357,7 @@ describe('DataImporter preview UI', () => {
 
       }
 
-      if (url.startsWith('/api/import/search')) {
+      if (url.startsWith('/api/v4/declarations/imports/search')) {
 
         const urlObj = new URL(url, 'http://localhost');
 
@@ -431,13 +431,13 @@ describe('DataImporter preview UI', () => {
 
       }
 
-      if (url.startsWith('/api/import/deleted-declarations')) {
+      if (url.startsWith('/api/v4/declarations/imports/deleted-declarations')) {
 
         return Promise.resolve(createJsonResponse({ ok: true, rows: hardDeletedRows }));
 
       }
 
-      if (url === '/api/import/ecus/config') {
+      if (url === '/api/v4/declarations/imports/ecus-config') {
 
         return Promise.resolve(
 
@@ -477,7 +477,7 @@ describe('DataImporter preview UI', () => {
 
       }
 
-      if (url === '/api/import/ecus/status') {
+      if (url === '/api/v4/declarations/imports/ecus-status') {
 
         return Promise.resolve(
 
@@ -505,7 +505,7 @@ describe('DataImporter preview UI', () => {
 
       }
 
-      if (url === '/api/import/alerts') {
+      if (url === '/api/v4/declarations/imports/alerts') {
 
         return Promise.resolve(
 
@@ -523,7 +523,7 @@ describe('DataImporter preview UI', () => {
 
       }
 
-      if (url === '/api/import/ecus/preview') {
+      if (url === '/api/v4/declarations/imports/ecus-preview') {
 
         return Promise.resolve(
 
@@ -627,7 +627,9 @@ describe('DataImporter preview UI', () => {
 
 
 
-    const previewCall = fetchMock.mock.calls.find(([url]) => url === '/api/import/ecus/preview');
+    const previewCall = fetchMock.mock.calls.find(
+      ([url]) => url === '/api/v4/declarations/imports/ecus-preview'
+    );
 
     expect(previewCall).toBeTruthy();
 
@@ -701,7 +703,9 @@ describe('DataImporter preview UI', () => {
 
 
 
-    const previewCall = fetchMock.mock.calls.find(([url]) => url === '/api/import/ecus/preview');
+    const previewCall = fetchMock.mock.calls.find(
+      ([url]) => url === '/api/v4/declarations/imports/ecus-preview'
+    );
 
     expect(previewCall).toBeTruthy();
 
@@ -719,7 +723,9 @@ describe('DataImporter preview UI', () => {
 
 
 
-    const runCall = fetchMock.mock.calls.find(([url]) => url === '/api/import/ecus/run');
+    const runCall = fetchMock.mock.calls.find(
+      ([url]) => url === '/api/v4/declarations/imports/ecus-commit'
+    );
 
     expect(runCall).toBeTruthy();
 
@@ -781,7 +787,7 @@ describe('DataImporter preview UI', () => {
 
     const deletedCall = fetchMock.mock.calls.find(([url]) =>
 
-      url.startsWith('/api/import/deleted-declarations')
+        url.startsWith('/api/v4/declarations/imports/deleted-declarations')
 
     );
 
@@ -1161,7 +1167,9 @@ describe('DataImporter preview UI', () => {
 
     await waitFor(() => {
 
-      const searchCalls = fetchMock.mock.calls.filter(([url]) => url.startsWith('/api/import/search'));
+    const searchCalls = fetchMock.mock.calls.filter(([url]) =>
+      url.startsWith('/api/v4/declarations/imports/search')
+    );
 
       expect(searchCalls.length).toBeGreaterThan(0);
 
@@ -1183,7 +1191,7 @@ describe('DataImporter preview UI', () => {
 
       .map(([url], index) => ({ url, index }))
 
-      .filter(({ url }) => url.startsWith('/api/import/search'));
+      .filter(({ url }) => url.startsWith('/api/v4/declarations/imports/search'));
 
     const queryCallEntry = searchCallEntries.find(({ url }) => {
 
@@ -1437,7 +1445,7 @@ describe('DataImporter saved data actions', () => {
 
       const url = typeof input === 'string' ? input : input?.url || '';
 
-      if (url === '/api/import/alerts') {
+      if (url === '/api/v4/declarations/imports/alerts') {
 
         return Promise.resolve(
 

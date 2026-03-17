@@ -1,4 +1,5 @@
 import { fetchWithAuth } from '../auth/localAuth.js';
+import { SHARED_LIGHT_BOOTSTRAP_MODE } from '../../packages/domain/src/bootstrapStorageKeys.js';
 
 export const STORAGE_LIMIT_ERROR_MESSAGE =
   'Dung lượng dữ liệu vượt quá giới hạn máy chủ đồng bộ. Vui lòng chia nhỏ dữ liệu hoặc liên hệ quản trị viên để nâng giới hạn.';
@@ -389,6 +390,34 @@ function normalizeBaseUrl(value) {
 
 
 
+function isBrowserRuntime() {
+
+  return typeof window !== 'undefined' && typeof window.location !== 'undefined';
+
+}
+
+
+
+function canUseRemoteSync(baseUrl) {
+
+  if (typeof fetch !== 'function') {
+
+    return false;
+
+  }
+
+  if (isBrowserRuntime()) {
+
+    return true;
+
+  }
+
+  return /^https?:\/\//i.test(normalizeBaseUrl(baseUrl ?? ''));
+
+}
+
+
+
 function applyRemoteSnapshot(data) {
 
   const entries = data && typeof data === 'object' ? Object.entries(data) : [];
@@ -428,6 +457,16 @@ function scheduleRetry() {
   }
 
   const base = typeof apiBase === 'string' ? apiBase : '';
+
+  if (!canUseRemoteSync(base)) {
+
+    nextRetryAt = null;
+
+    emitSyncStatus();
+
+    return;
+
+  }
 
   nextRetryAt = Date.now() + retryDelayMs;
 
@@ -557,6 +596,20 @@ async function bootstrapFromServer(baseUrl) {
 
   apiBase = normalizedBase;
 
+  if (!canUseRemoteSync(normalizedBase)) {
+
+    remoteEnabled = false;
+
+    lastSyncError = null;
+
+    nextRetryAt = null;
+
+    emitSyncStatus();
+
+    return false;
+
+  }
+
   bootstrapPromise = (async () => {
 
     try {
@@ -565,11 +618,14 @@ async function bootstrapFromServer(baseUrl) {
 
       try {
 
-        response = await fetchWithAuth(`${normalizedBase}/api/bootstrap`, {
+        response = await fetchWithAuth(
+          `${normalizedBase}/api/bootstrap?mode=${encodeURIComponent(SHARED_LIGHT_BOOTSTRAP_MODE)}`,
+          {
 
-          cache: 'no-store',
+            cache: 'no-store',
 
-        });
+          }
+        );
 
       } catch (error) {
 
@@ -630,6 +686,22 @@ async function bootstrapFromServer(baseUrl) {
       lastSyncError = null;
 
       emitSyncStatus();
+
+      if (Array.isArray(payload?.deferredKeys) && payload.deferredKeys.length > 0) {
+
+        try {
+
+          await refreshSharedKeys(payload.deferredKeys, { baseUrl: normalizedBase });
+
+        } catch (error) {
+
+          console.warn('Không thể làm mới dữ liệu bootstrap trì hoãn.', error);
+
+          scheduleRetry();
+
+        }
+
+      }
 
       retryDelayMs = RETRY_MIN_MS;
 
@@ -701,7 +773,7 @@ function queueSync(key, value) {
 
 export async function refreshSharedKeys(keys, options = {}) {
 
-  const targets = Array.isArray(keys) && keys.length ? keys : Array.from(SHARED_KEYS);
+  const targets = Array.isArray(keys) && keys.length ? Array.from(new Set(keys)) : Array.from(SHARED_KEYS);
 
   if (!targets.length) {
 
@@ -727,77 +799,85 @@ export async function refreshSharedKeys(keys, options = {}) {
 
   const results = {};
 
-  for (const key of targets) {
+  const entries = await Promise.all(
+    targets.map(async (key) => {
 
-    const url = `${base}/api/storage/${encodeURIComponent(key)}`;
+      const url = `${base}/api/storage/${encodeURIComponent(key)}`;
 
-    let response;
+      let response;
 
-    try {
+      try {
 
-      response = await fetchWithAuth(url, { method: 'GET' });
+        response = await fetchWithAuth(url, { method: 'GET' });
 
-    } catch (error) {
+      } catch (error) {
 
-      const message = `Không thể tải khóa đồng bộ "${key}": ${error?.message ?? error}`;
+        const message = `Không thể tải khóa đồng bộ "${key}": ${error?.message ?? error}`;
 
-      lastSyncError = message;
+        lastSyncError = message;
 
-      remoteEnabled = false;
+        remoteEnabled = false;
 
-      emitSyncStatus();
+        emitSyncStatus();
 
-      throw new Error(message, { cause: error instanceof Error ? error : undefined });
+        throw new Error(message, { cause: error instanceof Error ? error : undefined });
 
-    }
+      }
 
-    if (!response || typeof response.ok !== 'boolean') {
+      if (!response || typeof response.ok !== 'boolean') {
 
-      const message = 'Không nhận được phản hồi hợp lệ từ máy chủ đồng bộ';
+        const message = 'Không nhận được phản hồi hợp lệ từ máy chủ đồng bộ';
 
-      lastSyncError = message;
+        lastSyncError = message;
 
-      remoteEnabled = false;
+        remoteEnabled = false;
 
-      emitSyncStatus();
+        emitSyncStatus();
 
-      throw new Error(message);
+        throw new Error(message);
 
-    }
+      }
 
-    if (!response.ok) {
+      if (!response.ok) {
 
-      const message = formatHttpError(response);
+        const message = formatHttpError(response);
 
-      lastSyncError = message;
+        lastSyncError = message;
 
-      remoteEnabled = false;
+        remoteEnabled = false;
 
-      emitSyncStatus();
+        emitSyncStatus();
 
-      throw new Error(message);
+        throw new Error(message);
 
-    }
+      }
 
-    let payload;
+      let payload;
 
-    try {
+      try {
 
-      payload = await response.json();
+        payload = await response.json();
 
-    } catch (error) {
+      } catch (error) {
 
-      const message = `Không thể phân tích phản hồi JSON cho khóa đồng bộ "${key}"`;
+        const message = `Không thể phân tích phản hồi JSON cho khóa đồng bộ "${key}"`;
 
-      lastSyncError = message;
+        lastSyncError = message;
 
-      remoteEnabled = false;
+        remoteEnabled = false;
 
-      emitSyncStatus();
+        emitSyncStatus();
 
-      throw new Error(message, { cause: error instanceof Error ? error : undefined });
+        throw new Error(message, { cause: error instanceof Error ? error : undefined });
 
-    }
+      }
+
+      return [key, payload];
+
+    })
+  );
+
+  for (const [key, payload] of entries) {
 
     const raw = payload?.raw;
 
@@ -1028,6 +1108,44 @@ export async function initSharedStorage(options = {}) {
 export function clearStorageCache() {
 
   cache.clear();
+
+}
+
+
+
+export function resetStorageClientForTests() {
+
+  if (retryTimer) {
+
+    clearTimeout(retryTimer);
+
+    retryTimer = null;
+
+  }
+
+  cache.clear();
+
+  pendingWrites.clear();
+
+  remoteEnabled = false;
+
+  apiBase = '';
+
+  bootstrapPromise = null;
+
+  flushPromise = null;
+
+  retryDelayMs = RETRY_MIN_MS;
+
+  lastSyncError = null;
+
+  nextRetryAt = null;
+
+  pendingSyncSnapshot = null;
+
+  syncStatusScheduled = false;
+
+  emitSyncStatus();
 
 }
 

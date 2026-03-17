@@ -6,6 +6,11 @@ import {
   parseCodeListInput,
 } from "@/components/dataImporter/dataImporterLicenseUtils.js";
 
+const CO_CODES_ROUTE = "/api/v4/declarations/imports/co-codes";
+const CO_DISCREPANCY_ROUTE = "/api/v4/declarations/imports/co-discrepancy";
+const CO_DISCREPANCY_CONFIG_ROUTE = "/api/v4/declarations/imports/co-discrepancy/config";
+const CO_DISCREPANCY_RUN_ROUTE = "/api/v4/declarations/imports/co-discrepancy/run";
+
 const DEFAULT_CO_DISCREPANCY_FORM = {
   enabled: false,
   cron: "",
@@ -177,7 +182,7 @@ export default function useDataImporterCoMonitoring({
     setCoCodeError("");
 
     try {
-      const response = await fetchWithAuth("/api/import/co-codes", {
+      const response = await fetchWithAuth(CO_CODES_ROUTE, {
         cache: "no-store",
         credentials: "include",
       });
@@ -215,7 +220,7 @@ export default function useDataImporterCoMonitoring({
         },
       };
 
-      const response = await fetchWithAuth("/api/import/co-codes", {
+      const response = await fetchWithAuth(CO_CODES_ROUTE, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -281,7 +286,7 @@ export default function useDataImporterCoMonitoring({
     setCoDiscrepancyError("");
 
     try {
-      const response = await fetchWithAuth("/api/import/co-discrepancy", {
+      const response = await fetchWithAuth(CO_DISCREPANCY_ROUTE, {
         cache: "no-store",
         credentials: "include",
       });
@@ -323,7 +328,7 @@ export default function useDataImporterCoMonitoring({
         },
       };
 
-      const response = await fetchWithAuth("/api/import/co-discrepancy/config", {
+      const response = await fetchWithAuth(CO_DISCREPANCY_CONFIG_ROUTE, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -379,7 +384,7 @@ export default function useDataImporterCoMonitoring({
         };
       }
 
-      const response = await fetchWithAuth("/api/import/co-discrepancy/run", {
+      const response = await fetchWithAuth(CO_DISCREPANCY_RUN_ROUTE, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",

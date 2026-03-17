@@ -108,7 +108,7 @@ describe("useDataImporterResultRows", () => {
 
     expect(fetchWithAuth).toHaveBeenCalledTimes(1);
     const [requestUrl, requestOptions] = fetchWithAuth.mock.calls[0];
-    expect(requestUrl).toContain("/api/import/search?");
+    expect(requestUrl).toContain("/api/v4/declarations/imports/search?");
     expect(requestUrl).toContain("query=abc");
     expect(requestUrl).toContain("mst=0101");
     expect(requestUrl).toContain("company=Cong+ty");

@@ -3,6 +3,10 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 
 import useDataImporterCoMonitoring from "@/components/dataImporter/useDataImporterCoMonitoring.js";
 
+const CO_CODES_ROUTE = "/api/v4/declarations/imports/co-codes";
+const CO_DISCREPANCY_ROUTE = "/api/v4/declarations/imports/co-discrepancy";
+const CO_DISCREPANCY_RUN_ROUTE = "/api/v4/declarations/imports/co-discrepancy/run";
+
 describe("useDataImporterCoMonitoring", () => {
   afterEach(() => {
     vi.restoreAllMocks();
@@ -10,7 +14,7 @@ describe("useDataImporterCoMonitoring", () => {
 
   it("loads co-code and discrepancy configs on mount", async () => {
     const fetchWithAuth = vi.fn(async (url) => {
-      if (url === "/api/import/co-codes") {
+      if (url === CO_CODES_ROUTE) {
         return {
           ok: true,
           json: async () => ({
@@ -24,7 +28,7 @@ describe("useDataImporterCoMonitoring", () => {
         };
       }
 
-      if (url === "/api/import/co-discrepancy") {
+      if (url === CO_DISCREPANCY_ROUTE) {
         return {
           ok: true,
           json: async () => ({
@@ -86,7 +90,7 @@ describe("useDataImporterCoMonitoring", () => {
 
   it("saves co-code config and runs discrepancy manually", async () => {
     const fetchWithAuth = vi.fn(async (url, options = {}) => {
-      if (url === "/api/import/co-codes" && !options.method) {
+      if (url === CO_CODES_ROUTE && !options.method) {
         return {
           ok: true,
           json: async () => ({
@@ -98,7 +102,7 @@ describe("useDataImporterCoMonitoring", () => {
         };
       }
 
-      if (url === "/api/import/co-discrepancy" && !options.method) {
+      if (url === CO_DISCREPANCY_ROUTE && !options.method) {
         return {
           ok: true,
           json: async () => ({
@@ -114,7 +118,7 @@ describe("useDataImporterCoMonitoring", () => {
         };
       }
 
-      if (url === "/api/import/co-codes" && options.method === "PUT") {
+      if (url === CO_CODES_ROUTE && options.method === "PUT") {
         return {
           ok: true,
           json: async () => ({
@@ -126,7 +130,7 @@ describe("useDataImporterCoMonitoring", () => {
         };
       }
 
-      if (url === "/api/import/co-discrepancy/run" && options.method === "POST") {
+      if (url === CO_DISCREPANCY_RUN_ROUTE && options.method === "POST") {
         return {
           ok: true,
           json: async () => ({
@@ -172,11 +176,11 @@ describe("useDataImporterCoMonitoring", () => {
 
     await waitFor(() => {
       expect(fetchWithAuth).toHaveBeenCalledWith(
-        "/api/import/co-codes",
+        CO_CODES_ROUTE,
         expect.objectContaining({ cache: "no-store", credentials: "include" })
       );
       expect(fetchWithAuth).toHaveBeenCalledWith(
-        "/api/import/co-discrepancy",
+        CO_DISCREPANCY_ROUTE,
         expect.objectContaining({ cache: "no-store", credentials: "include" })
       );
     });
@@ -193,7 +197,7 @@ describe("useDataImporterCoMonitoring", () => {
     });
 
     expect(fetchWithAuth).toHaveBeenCalledWith(
-      "/api/import/co-codes",
+      CO_CODES_ROUTE,
       expect.objectContaining({
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -217,7 +221,7 @@ describe("useDataImporterCoMonitoring", () => {
     });
 
     expect(fetchWithAuth).toHaveBeenCalledWith(
-      "/api/import/co-discrepancy/run",
+      CO_DISCREPANCY_RUN_ROUTE,
       expect.objectContaining({
         method: "POST",
         headers: { "Content-Type": "application/json" },

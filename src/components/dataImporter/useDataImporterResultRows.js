@@ -109,7 +109,7 @@ export default function useDataImporterResultRows({
 
     (async () => {
       try {
-        const response = await fetchWithAuth(`/api/import/search?${queryKey}`, {
+        const response = await fetchWithAuth(`/api/v4/declarations/imports/search?${queryKey}`, {
           cache: "no-store",
           signal: controller.signal,
         });

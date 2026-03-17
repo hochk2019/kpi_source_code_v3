@@ -16,8 +16,15 @@ const implementedModuleIds = [
   'reporting',
   'teams',
 ];
+const implementedModules = moduleCatalog.filter((entry) => implementedModuleIds.includes(entry.id));
 const catalogRoutes = moduleCatalog.flatMap((entry) => entry.routeGroups.flatMap((group) => group.routes));
 const catalogMutationRoutes = catalogRoutes.filter((entry) => entry.method !== 'GET');
+const implementedReadWriteModules = implementedModules.filter((entry) =>
+  entry.routeGroups.some((group) => group.routes.some((route) => route.method !== 'GET')),
+);
+const declarationsModule = moduleCatalog.find((entry) => entry.id === 'declarations');
+const declarationsRoutes = declarationsModule.routeGroups.flatMap((group) => group.routes);
+const declarationsMutationRoutes = declarationsRoutes.filter((entry) => entry.method !== 'GET');
 
 describe('server-v4 rollout status', () => {
   it('summarizes health, module coverage, and rollout gates for the current scaffold', () => {
@@ -32,23 +39,31 @@ describe('server-v4 rollout status', () => {
       total: moduleCatalog.length,
       implemented: implementedModuleIds.length,
       scaffold: moduleCatalog.length - implementedModuleIds.length,
-      readOnly: 1,
-      readWrite: 7,
+      readOnly: implementedModuleIds.length - implementedReadWriteModules.length,
+      readWrite: implementedReadWriteModules.length,
     });
     expect(status.metrics.routes).toMatchObject({
       total: catalogRoutes.length,
-      implemented: 31,
+      implemented: catalogRoutes.length,
       mutation: catalogMutationRoutes.length,
-      implementedMutation: 15,
+      implementedMutation: catalogMutationRoutes.length,
     });
     expect(status.persistence).toMatchObject({
       source: 'dual-write',
       hotPathCount: 0,
     });
     expect(status.health.dbFile.state).toBe('ready');
-    expect(status.health.readiness.state).toBe('ready');
+    expect(status.health.readiness).toMatchObject({
+      state: 'degraded',
+      label: 'Compatibility verification only',
+    });
     expect(
       status.migrationVerification.checks.find((entry) => entry.id === 'hot-path-persistence-source'),
+    ).toMatchObject({
+      status: 'warn',
+    });
+    expect(
+      status.migrationVerification.checks.find((entry) => entry.id === 'importer-compat-traffic'),
     ).toMatchObject({
       status: 'pass',
     });
@@ -60,9 +75,32 @@ describe('server-v4 rollout status', () => {
     expect(status.migrationVerification.checks.find((entry) => entry.id === 'scaffold-module-gap')).toMatchObject({
       status: 'pass',
     });
-    expect(status.health.readiness.state).toBe('ready');
-    expect(status.rollout.currentStage).toBe('cutover-ready');
-    expect(status.rollout.recommendedNextStage).toBe(null);
+    expect(status.rollout.currentStage).toBe('module-parity');
+    expect(status.rollout.recommendedNextStage).toBe('cutover-ready');
+    expect(status.rollout.stages.find((entry) => entry.id === 'baseline-health')).toMatchObject({
+      label: 'Compatibility baseline',
+    });
+    expect(status.rollout.stages.find((entry) => entry.id === 'internal-qa')).toMatchObject({
+      label: 'Internal QA ready',
+    });
+    expect(status.rollout.stages.find((entry) => entry.id === 'cutover-ready')).toMatchObject({
+      status: 'hold',
+      label: 'Production cutover ready',
+      gate: 'Relational runtime stores own hot paths and write-capable routes are available for production cutover.',
+    });
+    expect(status.modules.find((entry) => entry.id === 'declarations')).toMatchObject({
+      routeCount: declarationsRoutes.length,
+      mutationRouteCount: declarationsMutationRoutes.length,
+    });
+    expect(status.compatibility.importerTraffic).toMatchObject({
+      guardMode: 'off',
+      totals: {
+        hits: 0,
+        migratedHits: 0,
+        legacyOnlyHits: 0,
+        blockedHits: 0,
+      },
+    });
   });
 
   it('blocks rollout readiness when the legacy db file is missing', () => {
@@ -102,7 +140,10 @@ describe('server-v4 rollout status', () => {
       exists: false,
       readable: false,
     });
-    expect(status.health.readiness.state).toBe('ready');
+    expect(status.health.readiness).toMatchObject({
+      state: 'ready',
+      label: 'Production cutover ready',
+    });
     expect(
       status.migrationVerification.checks.find((entry) => entry.id === 'legacy-store-access'),
     ).toMatchObject({

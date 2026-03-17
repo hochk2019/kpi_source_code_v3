@@ -95,7 +95,14 @@ import { getRulesSeed, persistRulesSnapshot, loadRulesSnapshot, listRulesHistory
 
 import { deriveCOStatus, parseCoLineCount, setPreferentialCodeConfig } from '../packages/domain/src/co.js';
 
+import {
+  DEFERRED_BOOTSTRAP_STORAGE_KEYS,
+  LIGHT_BOOTSTRAP_STORAGE_KEYS,
+  SHARED_LIGHT_BOOTSTRAP_MODE,
+} from '../packages/domain/src/bootstrapStorageKeys.js';
+
 import { filterDeclRows, normalizeDeclSearchFilters } from '../packages/domain/src/declSearch.js';
+import { searchDeclarationSnapshot } from './declarationSnapshotSearch.js';
 
 import {
 
@@ -22952,7 +22959,33 @@ app.get('/api/bootstrap', async (req, res) => {
 
   try {
 
-    const store = buildBootstrapSnapshot();
+    const modeRaw = Array.isArray(req.query?.mode) ? req.query.mode[0] : req.query?.mode;
+
+    const mode = typeof modeRaw === 'string' ? modeRaw.trim().toLowerCase() : '';
+
+    const useLightBootstrap = mode === SHARED_LIGHT_BOOTSTRAP_MODE;
+
+    const store = useLightBootstrap
+
+      ? buildBootstrapSnapshot({ keys: LIGHT_BOOTSTRAP_STORAGE_KEYS })
+
+      : buildBootstrapSnapshot();
+
+    if (useLightBootstrap) {
+
+      res.json({
+
+        data: store,
+
+        mode: SHARED_LIGHT_BOOTSTRAP_MODE,
+
+        deferredKeys: DEFERRED_BOOTSTRAP_STORAGE_KEYS,
+
+      });
+
+      return;
+
+    }
 
     res.json({ data: store });
 
@@ -26439,7 +26472,34 @@ app.get('/api/import/search', (req, res) => {
 
 
 
+    const snapshotSearch = searchDeclarationSnapshot(db, filters, {
+      page,
+      pageSize,
+    });
+    if (snapshotSearch) {
+
+      res.json({
+
+        ok: true,
+
+        ...snapshotSearch,
+
+      });
+
+      return;
+
+    }
+
     const rows = getDeclRows();
+    try {
+
+      writeDeclarationRowsSnapshot(db, rows, { updatedAt: new Date().toISOString() });
+
+    } catch (snapshotErr) {
+
+      console.warn('Không thể nâng cấp declaration snapshot cho tra cứu SQL', snapshotErr);
+
+    }
 
     const filtered = filterDeclRows(rows, filters);
 

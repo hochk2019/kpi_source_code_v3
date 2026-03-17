@@ -39,7 +39,7 @@ describe("useDataImporterDeletedRows", () => {
 
     await waitFor(() => {
       expect(props.fetchWithAuth).toHaveBeenCalledWith(
-        "/api/import/deleted-declarations?type=hard&from=2026-03-01&to=2026-03-05",
+        "/api/v4/declarations/imports/deleted-declarations?type=hard&from=2026-03-01&to=2026-03-05",
         expect.objectContaining({
           cache: "no-store",
           credentials: "include",
@@ -75,7 +75,7 @@ describe("useDataImporterDeletedRows", () => {
     await waitFor(() => {
       expect(props.fetchWithAuth).toHaveBeenCalledTimes(2);
       expect(props.fetchWithAuth).toHaveBeenLastCalledWith(
-        "/api/import/deleted-declarations?type=hard&from=2026-03-01&to=2026-03-05",
+        "/api/v4/declarations/imports/deleted-declarations?type=hard&from=2026-03-01&to=2026-03-05",
         expect.objectContaining({
           cache: "no-store",
           credentials: "include",

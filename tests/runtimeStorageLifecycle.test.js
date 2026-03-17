@@ -246,4 +246,25 @@ describe('runtimeStorageLifecycle', () => {
     });
     expect(snapshot).not.toHaveProperty('kpi_ai_history_admin');
   });
+
+  it('limits bootstrap snapshots to requested keys when building a light payload', () => {
+    seedKv(database, {
+      hq_history_v1: JSON.stringify([{ mst: '0101234567' }]),
+      decl_rows_v1: JSON.stringify([{ so_tk: 'DECL-001' }]),
+      [`kpi_ai_history_admin`]: JSON.stringify({ messages: [{ id: 'm-1' }] }),
+      kpi_users_v1: JSON.stringify([{ username: 'legacy-user' }]),
+    });
+    const { lifecycle } = createHarness(database, {
+      listAccountsForClient: () => [{ username: 'fresh-admin', role: 'admin' }],
+    });
+
+    const snapshot = lifecycle.buildBootstrapSnapshot({
+      keys: ['hq_history_v1', 'kpi_users_v1'],
+    });
+
+    expect(snapshot).toEqual({
+      hq_history_v1: JSON.stringify([{ mst: '0101234567' }]),
+      kpi_users_v1: JSON.stringify([{ username: 'fresh-admin', role: 'admin' }]),
+    });
+  });
 });
