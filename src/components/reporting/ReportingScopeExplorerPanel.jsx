@@ -58,11 +58,11 @@ export function ReportingScopeExplorerPanel({
   formatDecimal,
 }) {
   return (
-    <div className="ds-card space-y-4 p-4">
-      <div className="flex flex-wrap items-center gap-3 text-sm text-gray-600">
+    <div className="space-y-4">
+      <div className="flex flex-col gap-3 text-sm text-gray-600 md:flex-row md:flex-wrap md:items-center">
         <div className="font-semibold text-gray-900">Chế độ xem</div>
 
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <button
             type="button"
             onClick={() => onScopeChange("staff")}
@@ -88,31 +88,33 @@ export function ReportingScopeExplorerPanel({
           </button>
         </div>
 
-        {scope === "staff" ? (
-          <select
-            className="ml-auto rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] px-3 py-2 text-sm text-[color:var(--ds-text-primary)] shadow-sm focus:outline-none focus:ring-2 focus:ring-[color:var(--ds-accent-ring)] focus:ring-offset-0"
-            value={selectedStaff}
-            onChange={(event) => onSelectedStaffChange(event.target.value)}
-          >
-            {staffOptions.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        ) : (
-          <select
-            className="ml-auto rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] px-3 py-2 text-sm text-[color:var(--ds-text-primary)] shadow-sm focus:outline-none focus:ring-2 focus:ring-[color:var(--ds-accent-ring)] focus:ring-offset-0"
-            value={selectedTeam}
-            onChange={(event) => onSelectedTeamChange(event.target.value)}
-          >
-            {teamOptions.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        )}
+        <div className="w-full md:ml-auto md:w-auto">
+          {scope === "staff" ? (
+            <select
+              className="w-full rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] px-3 py-2 text-sm text-[color:var(--ds-text-primary)] shadow-sm focus:outline-none focus:ring-2 focus:ring-[color:var(--ds-accent-ring)] focus:ring-offset-0 md:min-w-[15rem]"
+              value={selectedStaff}
+              onChange={(event) => onSelectedStaffChange(event.target.value)}
+            >
+              {staffOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <select
+              className="w-full rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] px-3 py-2 text-sm text-[color:var(--ds-text-primary)] shadow-sm focus:outline-none focus:ring-2 focus:ring-[color:var(--ds-accent-ring)] focus:ring-offset-0 md:min-w-[15rem]"
+              value={selectedTeam}
+              onChange={(event) => onSelectedTeamChange(event.target.value)}
+            >
+              {teamOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          )}
+        </div>
       </div>
 
       <div className="flex flex-wrap items-center gap-2 text-xs text-gray-600">
@@ -140,7 +142,7 @@ export function ReportingScopeExplorerPanel({
           );
         })}
 
-        <span className="ml-auto text-[11px] text-gray-400">
+        <span className="w-full text-[11px] text-gray-400 md:ml-auto md:w-auto">
           Ẩn/hiện sẽ được áp dụng cho cả giao diện và bản in.
         </span>
       </div>

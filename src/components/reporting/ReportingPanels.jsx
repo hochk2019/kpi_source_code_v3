@@ -142,6 +142,57 @@ function ScheduleShellMeta({ nextScheduleRun, scheduleAggregateStatus }) {
   );
 }
 
+function WorkspaceJumpLink({ href, title, detail }) {
+  return (
+    <a
+      href={href}
+      className="flex min-h-24 flex-col justify-between rounded-xl border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-muted)]/45 p-3 transition hover:border-[color:var(--ds-border-strong)] hover:bg-[color:var(--ds-surface-muted)]"
+    >
+      <div className="space-y-1">
+        <p className="text-sm font-semibold text-[color:var(--ds-text-primary)]">{title}</p>
+        <p className="text-[13px] leading-5 text-[color:var(--ds-text-secondary)]">{detail}</p>
+      </div>
+      <span className="pt-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-[color:var(--ds-text-muted)]">
+        Đi tới
+      </span>
+    </a>
+  );
+}
+
+export function ReportingWorkspaceGuidePanel({ canManageSchedule = false }) {
+  return (
+    <SectionSurface className="print:hidden" aria-label="Sơ đồ điều hướng report center">
+      <SectionHeader
+        title="Sơ đồ report center"
+        titleAs="h3"
+        description="Đi theo thứ tự đọc insight trước, drill-down sau, rồi mới chạm tới lịch gửi hoặc ghi chú phát hành để giảm cognitive load trên mobile."
+      />
+
+      <div className="grid gap-3 md:grid-cols-3">
+        <WorkspaceJumpLink
+          href="#report-viewer-insights"
+          title="Dashboard insight"
+          detail="Đọc summary, trend, phân bổ tổ đội và top staff trước khi đi sâu từng phạm vi."
+        />
+        <WorkspaceJumpLink
+          href="#report-viewer-explorer"
+          title="Drill-down phạm vi"
+          detail="Chọn nhân viên hoặc tổ đội, đổi cột hiển thị và xuất đúng lát cắt đang phân tích."
+        />
+        <WorkspaceJumpLink
+          href={canManageSchedule ? "#report-viewer-schedule" : "#report-viewer-notes"}
+          title={canManageSchedule ? "Lịch gửi & phát hành" : "Ghi chú phát hành"}
+          detail={
+            canManageSchedule
+              ? "Quản lý lịch gửi sau khi đã đọc xong insight thay vì phải lướt qua form ngay từ đầu."
+              : "Xem quy tắc tính điểm, lưu ý export và các điểm kiểm tra cuối trước khi phát hành."
+          }
+        />
+      </div>
+    </SectionSurface>
+  );
+}
+
 export function ReportingControlsPanel({
   summaryDeclsText,
   selectedRuleName,
@@ -168,6 +219,7 @@ export function ReportingControlsPanel({
     <SectionSurface className="print:hidden" aria-label="Điều khiển báo cáo KPI">
       <SectionHeader
         title="Điều khiển báo cáo KPI"
+        titleAs="h3"
         description="Chọn khoảng thời gian, bộ quy tắc và trạng thái read model trước khi xem dashboard KPI."
         meta={<ReportControlsMeta summaryDeclsText={summaryDeclsText} selectedRuleName={selectedRuleName} />}
         actions={
@@ -183,7 +235,7 @@ export function ReportingControlsPanel({
       />
 
       <SectionToolbar mainClassName="items-end">
-        <div className="flex flex-col">
+        <div className="flex min-w-[11rem] flex-1 flex-col">
           <label className="text-sm font-medium text-[color:var(--ds-text-primary)]">Khoảng thời gian</label>
           <select
             className="mt-1 rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] px-3 py-2 text-sm text-[color:var(--ds-text-primary)] shadow-sm focus:outline-none focus:ring-2 focus:ring-[color:var(--ds-accent-ring)] focus:ring-offset-0"
@@ -198,7 +250,7 @@ export function ReportingControlsPanel({
           </select>
         </div>
 
-        <div className="flex flex-col">
+        <div className="flex min-w-[11rem] flex-1 flex-col">
           <label className="text-sm font-medium text-[color:var(--ds-text-primary)]">Từ ngày</label>
           <input
             type="date"
@@ -208,7 +260,7 @@ export function ReportingControlsPanel({
           />
         </div>
 
-        <div className="flex flex-col">
+        <div className="flex min-w-[11rem] flex-1 flex-col">
           <label className="text-sm font-medium text-[color:var(--ds-text-primary)]">Đến ngày</label>
           <input
             type="date"

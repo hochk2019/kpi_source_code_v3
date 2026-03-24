@@ -31,6 +31,7 @@
     "verify:server-v4": "pnpm run lint:server-v4 && pnpm run typecheck:server-v4 && pnpm run test:server-v4",
     "verify:smoke:core": "pnpm run verify:server-v4 && pnpm run test:smoke:core",
     "healthcheck": "node scripts/healthcheck.mjs",
+    "backup:run": "node scripts/run-backup.mjs",
     "ecus:mock": "node scripts/ecus-tools.mjs mock",
     "ecus:inspect": "node scripts/ecus-tools.mjs inspect",
     "dev:frontend": "vite",

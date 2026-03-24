@@ -31,6 +31,9 @@ describe("apps/api server launcher", () => {
         persistenceMode: "sqlite-dual-write",
         postgresUrl: null,
         postgresLegacySqliteFallback: false,
+        importerCompat: {
+          guardMode: "off",
+        },
       });
       expect(runtime.config.dbFile).toBe(":memory:");
       expect(runtime.config.persistenceMode).toBe("sqlite-dual-write");
@@ -73,6 +76,9 @@ describe("apps/api server launcher", () => {
         persistenceMode: "postgres",
         postgresUrl: "postgres://runtime/kpi",
         postgresLegacySqliteFallback: false,
+        importerCompat: {
+          guardMode: "off",
+        },
       });
       expect(runtime.config.dbFile).toBeNull();
     } finally {
@@ -101,6 +107,9 @@ describe("apps/api server launcher", () => {
         persistenceMode: "postgres",
         postgresUrl: "postgres://runtime/kpi",
         postgresLegacySqliteFallback: true,
+        importerCompat: {
+          guardMode: "off",
+        },
       });
     } finally {
       await runtime.close();

@@ -34,6 +34,8 @@ let resetDatabaseForTests;
 
 let getDatabaseHandle;
 
+let getDataHealthSnapshot;
+
 
 
 beforeAll(async () => {
@@ -47,6 +49,8 @@ beforeAll(async () => {
     resetDatabaseForTests,
 
     getDatabaseHandle,
+
+    getDataHealthSnapshot,
 
   } = await import('../server/index.js'));
 
@@ -323,6 +327,44 @@ describe('performDatabaseBackup', () => {
 
 
     await fs.rm(tmpDir, { recursive: true, force: true });
+
+  });
+
+  it('cho phep healthcheck bo qua canh bao cron bi tat boi env', async () => {
+
+    const baselineSnapshot = await getDataHealthSnapshot();
+
+    const baselineCodes = baselineSnapshot.storage.health.issues.map((issue) => issue.code);
+
+    expect(baselineCodes).toContain('backup_missing');
+
+    expect(baselineCodes).toContain('schedule_inactive');
+
+    expect(baselineCodes).toContain('schedule_reason_cron_disabled_env');
+
+
+
+    const filteredSnapshot = await getDataHealthSnapshot({
+
+      backupHealth: {
+
+        ignoreIssueCodes: ['schedule_inactive', 'schedule_reason_cron_disabled_env'],
+
+      },
+
+    });
+
+    const filteredCodes = filteredSnapshot.storage.health.issues.map((issue) => issue.code);
+
+    expect(filteredCodes).toContain('backup_missing');
+
+    expect(filteredCodes).not.toContain('schedule_inactive');
+
+    expect(filteredCodes).not.toContain('schedule_reason_cron_disabled_env');
+
+    expect(filteredSnapshot.storage.backup.schedule.active).toBe(false);
+
+    expect(filteredSnapshot.storage.backup.schedule.reasons).toContain('cron_disabled_env');
 
   });
 

@@ -179,7 +179,7 @@ function buildAdjustmentWorkflowState({ onNavigate }) {
 function buildReportWorkflowState({ onNavigate, onOpenCommandCenter, canViewAudit }) {
   return {
     eyebrow: "Report center",
-    headline: "Report center giờ được tách thành workflow riêng: chốt phạm vi, đọc dashboard, rồi export hoặc truy vết lịch sử phát hành.",
+    headline: "Report center giờ có hierarchy rõ hơn: chốt phạm vi, đọc insight, drill-down theo lát cắt phù hợp, rồi mới phát hành hoặc truy vết lịch sử.",
     actions: [
       createAction("Mở dashboard KPI", () => onNavigate?.("reports", "dashboard"), "primary"),
       createAction("Tới khu export", () => onNavigate?.("reports", "export")),
@@ -196,14 +196,14 @@ function buildReportWorkflowState({ onNavigate, onOpenCommandCenter, canViewAudi
       ),
       createStep(
         2,
-        "2. Đọc dashboard",
-        "Phân tích dashboard KPI, drill-down chi tiết và lịch gửi định kỳ trong cùng report center.",
+        "2. Insight & drill-down",
+        "Đọc dashboard KPI và mở lát cắt chi tiết theo nhân viên hoặc tổ đội trước khi phát hành.",
         APP_SHELL_WORKFLOW_TARGETS.reports.dashboard,
       ),
       createStep(
         3,
-        "3. Export và truy vết",
-        "Tách khu export / audit ra khỏi dashboard để người vận hành phát hành báo cáo và theo dõi lịch sử rõ ràng hơn.",
+        "3. Lịch gửi, export và truy vết",
+        "Đưa lịch gửi và khu export / audit xuống sau phần phân tích để mobile không phải lướt qua form phát hành quá sớm.",
         APP_SHELL_WORKFLOW_TARGETS.reports.export,
       ),
     ],

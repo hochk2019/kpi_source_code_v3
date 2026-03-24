@@ -711,15 +711,16 @@ export function createDefaultHandlers(state) {
 
       const current = state.accounts[index];
       const role = normalizeRoleKey(body?.role ?? current.role);
+      const hasField = (key) => Object.prototype.hasOwnProperty.call(body, key);
       const updated = sanitizeAccount({
         ...current,
         role,
         name: body?.name ?? current.name,
         permissions: body?.permissions ?? current.permissions,
-        memberId: body?.memberId ?? current.memberId,
-        memberName: body?.memberName ?? current.memberName,
-        teamId: body?.teamId ?? current.teamId,
-        teamName: body?.teamName ?? current.teamName,
+        memberId: hasField('memberId') ? body?.memberId : current.memberId,
+        memberName: hasField('memberName') ? body?.memberName : current.memberName,
+        teamId: hasField('teamId') ? body?.teamId : current.teamId,
+        teamName: hasField('teamName') ? body?.teamName : current.teamName,
       });
 
       state.accounts[index] = updated;

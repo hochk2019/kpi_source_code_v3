@@ -12,6 +12,7 @@ export default mergeConfig(
         'tests/check-server.test.mjs',
         'tests/e2e.*.test.jsx',
         'tests/automation.flows.test.js',
+        '.codex_tmp/**',
       ],
       environment: 'jsdom',
       environmentMatchGlobs: [],

@@ -1,4 +1,5 @@
 import fs from 'node:fs/promises';
+import path from 'node:path';
 
 import bcrypt from 'bcryptjs';
 import { describe, expect, it } from 'vitest';
@@ -11,7 +12,7 @@ import { authModule } from '../../server-v4/src/modules/auth/auth.module.ts';
 describe('server-v4 legacy compatibility routes', () => {
   it('keeps legacy compatibility routing split into thin domain-specific builders', async () => {
     const source = await fs.readFile(
-      new URL('../../server-v4/src/app/legacyCompatRoutes.ts', import.meta.url),
+      path.resolve(process.cwd(), 'server-v4', 'src', 'app', 'legacyCompatRoutes.ts'),
       'utf8',
     );
 

@@ -4,7 +4,7 @@ import cors from 'cors';
 
 import path from 'node:path';
 
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import fs from 'node:fs/promises';
 
@@ -158,6 +158,88 @@ const __dirname = moduleUrl.startsWith('file:')
   ? fileURLToPath(new URL('.', moduleUrl))
 
   : path.resolve(process.cwd(), 'server');
+
+async function loadCompiledV4Runtime() {
+
+  const modulePath = path.resolve(__dirname, '..', 'dist', 'server-v4', 'index.js');
+
+  try {
+
+    const runtimeModule = await import(pathToFileURL(modulePath).href);
+
+    if (
+
+      typeof runtimeModule?.buildV4App !== 'function' ||
+
+      !Array.isArray(runtimeModule?.moduleCatalog)
+
+    ) {
+
+      console.warn('[v4 Migration] Compiled runtime is missing expected exports:', modulePath);
+
+      return null;
+
+    }
+
+    return runtimeModule;
+
+  } catch (error) {
+
+    if (
+
+      error?.code === 'ERR_MODULE_NOT_FOUND' ||
+
+      String(error?.message ?? '').includes('Cannot find module')
+
+    ) {
+
+      console.warn('[v4 Migration] Skip mounting reporting v4 runtime because build output is missing:', modulePath);
+
+      return null;
+
+    }
+
+    throw error;
+
+  }
+
+}
+
+async function mountReportingV4App(targetApp) {
+
+  try {
+
+    const runtimeModule = await loadCompiledV4Runtime();
+
+    if (!runtimeModule) {
+
+      return;
+
+    }
+
+    const reportingModule = runtimeModule.moduleCatalog.find((moduleItem) => moduleItem.id === 'reporting');
+
+    if (!reportingModule) {
+
+      console.warn('[v4 Migration] Reporting module was not found in compiled runtime.');
+
+      return;
+
+    }
+
+    const v4App = runtimeModule.buildV4App({ modules: [reportingModule] });
+
+    targetApp.use(v4App);
+
+    console.log('[v4 Migration] Successfully migrated Reporting domain to v4!');
+
+  } catch (error) {
+
+    console.error('[v4 Migration] Error mounting v4 reporting app:', error);
+
+  }
+
+}
 
 const execFileAsync = promisify(execFile);
 
@@ -3669,13 +3751,26 @@ async function collectDatabaseStorageDetails() {
 
 
 
-function evaluateBackupHealth(summary) {
+function evaluateBackupHealth(summary, options = {}) {
 
   const schedule = summary?.schedule || {};
 
   const issues = [];
 
   let severity = 'good';
+
+  const ignoredIssueCodes = new Set(
+    Array.isArray(options?.ignoreIssueCodes) ? options.ignoreIssueCodes.filter(Boolean) : []
+  );
+
+  const pushIssue = (issue) => {
+    if (!issue?.code || ignoredIssueCodes.has(issue.code)) {
+      return;
+    }
+
+    severity = escalateSeverity(severity, issue.severity);
+    issues.push(issue);
+  };
 
   const now = Date.now();
 
@@ -3689,9 +3784,7 @@ function evaluateBackupHealth(summary) {
 
   if (!lastSuccessTs) {
 
-    severity = 'critical';
-
-    issues.push({
+    pushIssue({
 
       severity: 'critical',
 
@@ -3703,11 +3796,9 @@ function evaluateBackupHealth(summary) {
 
   } else if (minutesSinceSuccess >= 72 * 60) {
 
-    severity = 'critical';
-
     const hours = Math.floor(minutesSinceSuccess / 60);
 
-    issues.push({
+    pushIssue({
 
       severity: 'critical',
 
@@ -3719,11 +3810,9 @@ function evaluateBackupHealth(summary) {
 
   } else if (minutesSinceSuccess >= 36 * 60) {
 
-    severity = 'warning';
-
     const hours = Math.floor(minutesSinceSuccess / 60);
 
-    issues.push({
+    pushIssue({
 
       severity: 'warning',
 
@@ -3739,9 +3828,7 @@ function evaluateBackupHealth(summary) {
 
   if (schedule.active === false) {
 
-    severity = escalateSeverity(severity, 'warning');
-
-    issues.push({
+    pushIssue({
 
       severity: 'warning',
 
@@ -3765,9 +3852,7 @@ function evaluateBackupHealth(summary) {
 
       const level = reason === 'schedule_error' ? 'critical' : 'warning';
 
-      severity = escalateSeverity(severity, level);
-
-      issues.push({ severity: level, code: `schedule_reason_${reason}`, message: description });
+      pushIssue({ severity: level, code: `schedule_reason_${reason}`, message: description });
 
     }
 
@@ -17803,7 +17888,7 @@ function evaluateDuplicatePolicies({
 
 
 
-async function buildDataHealthSummary() {
+async function buildDataHealthSummary(options = {}) {
 
   const rows = getDeclRows();
 
@@ -17861,7 +17946,7 @@ async function buildDataHealthSummary() {
 
   const backupSummary = buildBackupSummary({ limit: 6 });
 
-  const backupHealth = evaluateBackupHealth(backupSummary);
+  const backupHealth = evaluateBackupHealth(backupSummary, options.backupHealth);
 
   const diskHealth = evaluateDiskHealth(storageDetails);
 
@@ -17993,9 +18078,9 @@ async function buildDataHealthSummary() {
 
 
 
-export async function getDataHealthSnapshot() {
+export async function getDataHealthSnapshot(options = {}) {
 
-  return buildDataHealthSummary();
+  return buildDataHealthSummary(options);
 
 }
 
@@ -21970,6 +22055,8 @@ function refreshCoDiscrepancySchedule() {
 
 
 export const app = express();
+
+await mountReportingV4App(app);
 
 
 

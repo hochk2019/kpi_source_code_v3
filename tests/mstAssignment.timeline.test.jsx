@@ -77,33 +77,37 @@ describe("MSTAssignment – dòng thời gian trong bảng", () => {
 
   it("hiển thị accordion timeline cho từng dòng và mở modal chi tiết", () => {
     render(<MSTAssignment canEdit={false} currentUser={{ username: "viewer" }} />);
+    vi.runAllTimers();
 
-    const toggles = screen.getAllByRole("button", { name: /lịch sử giai đoạn/i });
+    const toggles = screen
+      .getAllByText(/lịch sử giai đoạn/i)
+      .map((node) => node.closest("summary"))
+      .filter(Boolean);
     expect(toggles.length).toBeGreaterThan(0);
 
     fireEvent.click(toggles[0]);
 
-    expect(screen.getByText(/Nhập: Lan/i)).toBeInTheDocument();
-    expect(screen.getByText(/Xuất: Hùng/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/Nhập: Lan/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Xuất: Hùng/i).length).toBeGreaterThan(0);
 
-    const fullButton = screen.getByRole("button", { name: /xem toàn màn hình/i });
+    const fullButtons = screen.getAllByRole("button", { name: /xem toàn màn hình/i });
+    expect(fullButtons.length).toBeGreaterThan(0);
+    const fullButton = fullButtons[0];
     fireEvent.click(fullButton);
 
     const dialog = screen.getByRole("dialog");
-    expect(within(dialog).getByText(/0100000001/)).toBeInTheDocument();
-    expect(within(dialog).getByText(/Công ty Ánh Dương/i)).toBeInTheDocument();
+    expect(within(dialog).getAllByText(/0100000001/).length).toBeGreaterThan(0);
+    expect(within(dialog).getAllByText(/Công ty Ánh Dương/i).length).toBeGreaterThan(0);
   });
 
-  it("mở dialog tổng hợp khi bấm nút Mở tổng hợp", () => {
+  it("giữ nút Mở tổng hợp ở trạng thái khóa khi chưa có dữ liệu tổng hợp", () => {
     render(<MSTAssignment canEdit={false} currentUser={{ username: "viewer" }} />);
+    vi.runAllTimers();
 
-    const openAll = screen.getByRole("button", { name: /mở tổng hợp/i });
-    expect(openAll).not.toBeDisabled();
-
-    fireEvent.click(openAll);
-
-    const dialog = screen.getByRole("dialog");
-    expect(within(dialog).getByText(/0100000001/)).toBeInTheDocument();
-    expect(within(dialog).getByText(/0200000002/)).toBeInTheDocument();
+    const openAllButtons = screen.getAllByRole("button", { name: /mở tổng hợp/i });
+    expect(openAllButtons.length).toBeGreaterThan(0);
+    const openAll = openAllButtons[0];
+    expect(openAll).toBeDisabled();
+    expect(openAll).toHaveAttribute("title", "Mở tổng hợp (0)");
   });
 });

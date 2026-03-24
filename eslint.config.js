@@ -14,10 +14,17 @@ const rootDir = dirname(fileURLToPath(import.meta.url));
 
 const isWindows = process.platform === "win32";
 
-const linebreakRule = isWindows ? ["error", "windows"] : "off";
+const linebreakRule = "off";
 
 export default [
-  { ignores: ["dist", ".codex_tmp/**"] },
+  {
+    ignores: [
+      "dist",
+      ".codex_tmp/**",
+      "vite.config.js.timestamp-*",
+      "*.timestamp-*.mjs",
+    ],
+  },
 
   {
     files: ["**/*.{js,jsx}"],

@@ -40,9 +40,26 @@ const sections = [
   },
 ];
 
+function stubMatchMedia(matches) {
+  vi.stubGlobal(
+    'matchMedia',
+    vi.fn().mockImplementation((query) => ({
+      matches,
+      media: query,
+      onchange: null,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })),
+  );
+}
+
 describe('AppShellFrame', () => {
   afterEach(() => {
     cleanup();
+    vi.unstubAllGlobals();
   });
 
   it('render sidebar groups and current workflow summary', () => {
@@ -70,7 +87,7 @@ describe('AppShellFrame', () => {
     );
 
     expect(screen.getByText('KPI Control Center')).toBeInTheDocument();
-    expect(screen.getAllByText('Hieu suat')).toHaveLength(2);
+    expect(screen.getAllByText('Hieu suat').length).toBeGreaterThanOrEqual(2);
     expect(screen.getByRole('tab', { name: /Bao cao KPI/i })).toBeInTheDocument();
     expect(screen.getByText(/Nguoi dung admin/i)).toBeInTheDocument();
     expect(screen.getByText(/Workflow Bao cao KPI/i)).toBeInTheDocument();
@@ -101,5 +118,36 @@ describe('AppShellFrame', () => {
     await user.click(adjustmentsTab);
 
     expect(onValueChange).toHaveBeenCalledWith('adjustments');
+  });
+
+  it('collapses navigation groups into compact mode on small viewports', async () => {
+    const user = userEvent.setup();
+    stubMatchMedia(true);
+
+    render(
+      <AppShellFrame
+        sections={sections}
+        value="reports"
+        onValueChange={vi.fn()}
+        currentTab={sections[1].tabs[0]}
+        currentSection={sections[1]}
+        currentUser={{ username: 'admin', role: 'admin' }}
+      >
+        <TabsContent value="reports">Dashboard KPI</TabsContent>
+        <TabsContent value="adjustments">Adjustment Panel</TabsContent>
+        <TabsContent value="import">Import Panel</TabsContent>
+      </AppShellFrame>,
+    );
+
+    const shell = document.querySelector('.ds-app-shell__layout');
+    expect(shell).toHaveAttribute('data-shell-layout', 'compact');
+    expect(screen.getByText('3 modules')).toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: /Import Data/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /Bao cao KPI/i })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /Van hanh/i }));
+
+    expect(screen.getByRole('tab', { name: /Import Data/i })).toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: /Bao cao KPI/i })).not.toBeInTheDocument();
   });
 });

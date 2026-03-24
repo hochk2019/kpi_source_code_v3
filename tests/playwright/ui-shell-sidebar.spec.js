@@ -36,10 +36,33 @@ test('sidebar tabs do not overlap on desktop shell', async ({ page }, testInfo) 
   await assertSidebarLayout(page, testInfo, 'sidebar-desktop.png');
 });
 
-test('sidebar tabs do not overlap on mobile shell', async ({ page }, testInfo) => {
+test('mobile shell uses compact navigation with readable targets', async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 390, height: 844 });
 
   await loginAsAdmin(page);
 
-  await assertSidebarLayout(page, testInfo, 'sidebar-mobile.png');
+  const shell = page.locator('.ds-app-shell__layout');
+  const sidebar = page.locator('.ds-app-shell__sidebar');
+  const compactSummary = sidebar.locator('.ds-app-shell__compact-status');
+  const brandCopy = sidebar.locator('.ds-app-shell__brand-copy');
+  const firstToggle = sidebar.locator('.ds-app-shell__group-toggle').first();
+
+  await expect(shell).toHaveAttribute('data-shell-layout', 'compact');
+  await expect(compactSummary).toBeVisible();
+  await expect(brandCopy).toBeHidden();
+  await expect(firstToggle).toBeVisible();
+
+  const visibleTabs = sidebar.getByRole('tab');
+  const compactTabCount = await visibleTabs.count();
+  expect(compactTabCount).toBeGreaterThan(0);
+  expect(compactTabCount).toBeLessThan(6);
+
+  const activeTabBox = await visibleTabs.first().boundingBox();
+  expect(activeTabBox).not.toBeNull();
+  expect(activeTabBox.height).toBeGreaterThanOrEqual(44);
+
+  await firstToggle.click();
+  await expect(sidebar.getByRole('tab', { name: /MST/i })).toBeVisible();
+
+  await sidebar.screenshot({ path: testInfo.outputPath('sidebar-mobile-compact.png') });
 });

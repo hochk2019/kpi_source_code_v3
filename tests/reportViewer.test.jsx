@@ -186,4 +186,55 @@ describe("ReportViewer", () => {
     expect(screen.getByRole("form", { name: /biểu mẫu lịch gửi báo cáo kpi/i })).toBeTruthy();
     expect(screen.getByRole("button", { name: /thu gọn/i })).toHaveAttribute("aria-expanded", "true");
   });
+
+  it("tách report workspace thành insight, drill-down và lịch gửi theo thứ tự đọc mobile-first", async () => {
+    sharedSetItem(
+      DECL_KEY,
+      JSON.stringify([
+        {
+          date: "2024-08-01",
+          so_tk: "10234567890",
+          loai_hinh: "E11",
+          num_items: 10,
+          licenses: 1,
+          nhan_vien: "Phương",
+          team: "Team 1",
+          mst: "0101234567",
+          cong_ty: "Công ty A",
+        },
+      ])
+    );
+    sharedSetItem(RULES_KEY, JSON.stringify(DEFAULT_RULES));
+
+    render(<ReportViewer currentUser={{ role: "admin" }} />);
+
+    const insightRegions = await screen.findAllByRole("region", { name: /dashboard insight kpi/i });
+    const [insightRegion] = insightRegions;
+    const [guideRegion] = screen.getAllByRole("region", { name: /sơ đồ điều hướng report center/i });
+    const [explorerRegion] = screen.getAllByRole("region", { name: /khám phá phạm vi báo cáo kpi/i });
+    const [scheduleRegion] = screen.getAllByRole("region", { name: /lập lịch gửi báo cáo kpi/i });
+    const [notesRegion] = screen.getAllByRole("region", { name: /ghi chú báo cáo kpi/i });
+    const insightAnchor = document.getElementById("report-viewer-insights");
+    const explorerAnchor = document.getElementById("report-viewer-explorer");
+    const scheduleAnchor = document.getElementById("report-viewer-schedule");
+    const notesAnchor = document.getElementById("report-viewer-notes");
+
+    expect(insightRegions.length).toBeGreaterThan(0);
+    expect(guideRegion).toBeTruthy();
+    expect(explorerRegion).toBeTruthy();
+    expect(insightAnchor).toBeTruthy();
+    expect(explorerAnchor).toBeTruthy();
+    expect(scheduleAnchor).toBeTruthy();
+    expect(notesAnchor).toBeTruthy();
+    expect(notesRegion).toBeTruthy();
+    expect(
+      guideRegion.compareDocumentPosition(insightAnchor) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+    expect(
+      insightAnchor.compareDocumentPosition(explorerAnchor) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+    expect(
+      explorerAnchor.compareDocumentPosition(scheduleAnchor) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+  });
 });

@@ -44,7 +44,7 @@ describe('operator workflow panels', () => {
     expect(screen.getByText(/Xuất bản tác động/i)).toBeInTheDocument();
   });
 
-  it('renders report center export surface separately when audit is allowed', () => {
+  it('renders report center export surface separately when audit is allowed', async () => {
     render(
       <ReportCenterPanel
         canExport
@@ -55,7 +55,7 @@ describe('operator workflow panels', () => {
     );
 
     expect(screen.getByText(/Chốt phạm vi báo cáo/i)).toBeInTheDocument();
-    expect(screen.getByText('Report dashboard body')).toBeInTheDocument();
-    expect(screen.getByText('Export audit widget')).toBeInTheDocument();
+    expect(await screen.findByText('Report dashboard body')).toBeInTheDocument();
+    expect(await screen.findByText('Export audit widget')).toBeInTheDocument();
   });
 });

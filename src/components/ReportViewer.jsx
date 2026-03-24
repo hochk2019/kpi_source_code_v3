@@ -21,6 +21,7 @@ import { loadRules, loadRuleSets } from "@/lib/rules.js";
 
 import {
   ReportingControlsPanel,
+  ReportingWorkspaceGuidePanel,
   ReportingSchedulePanel,
 } from "@/components/reporting/ReportingPanels.jsx";
 import { ReportingDashboardOverview } from "@/components/reporting/ReportingDashboardOverview.jsx";
@@ -33,12 +34,19 @@ import { ReportingScopeExplorerPanel } from "@/components/reporting/ReportingSco
 import useReportViewerActions from "@/components/reporting/useReportViewerActions.js";
 import useReportViewerPreferences from "@/components/reporting/useReportViewerPreferences.js";
 import useReportViewerReadModel from "@/components/reporting/useReportViewerReadModel.js";
+import { SectionHeader, SectionSurface } from "@/components/designSystem/shellPrimitives.jsx";
 
 import { isAdminRole } from "../../packages/domain/src/accountRoles.js";
 
 import { useChartPalette } from "@/designSystem/hooks.js";
 
 const REPORTING_REFRESH_KEYS = [DECL_KEY, MST_KEY, RULES_KEY, TEAM_KEY, KPI_ADJUSTMENTS_KEY];
+const REPORT_VIEWER_SECTION_IDS = {
+  insights: "report-viewer-insights",
+  explorer: "report-viewer-explorer",
+  schedule: "report-viewer-schedule",
+  notes: "report-viewer-notes",
+};
 
 export default function ReportViewer({ canExport = true, currentUser = null }) {
   const {
@@ -619,117 +627,141 @@ export default function ReportViewer({ canExport = true, currentUser = null }) {
         scheduleAggregateStatus={scheduleAggregateStatus}
       />
 
-      {isAdmin ? (
-        <ReportingSchedulePanel
-          collapsed={scheduleCollapsed}
-          onToggleCollapsed={() => setScheduleCollapsed((value) => !value)}
-          nextScheduleRun={nextScheduleRun}
-          scheduleAggregateStatus={scheduleAggregateStatus}
-          scheduleDraft={scheduleDraft}
-          editingScheduleId={editingScheduleId}
-          onSubmit={handleSaveSchedule}
-          onFieldChange={handleScheduleFieldChange}
-          onToggleFormat={handleToggleScheduleFormat}
-          onReset={handleResetScheduleForm}
-          onEdit={handleEditSchedule}
-          onDelete={handleDeleteSchedule}
-          schedules={displayReportSchedules}
+      <ReportingWorkspaceGuidePanel canManageSchedule={isAdmin} />
+
+      <SectionSurface id={REPORT_VIEWER_SECTION_IDS.insights} aria-label="Dashboard insight KPI">
+        <SectionHeader
+          title="Dashboard insight KPI"
+          titleAs="h3"
+          description="Bắt đầu ở dashboard để nắm nhịp KPI, xu hướng và phân bổ trước khi drill-down theo nhân viên hoặc tổ đội."
         />
+        <ReportingDashboardOverview
+          summary={summary}
+          adjustmentsReport={adjustmentsReport}
+          summaryCompanyCardValue={summaryCompanyCardValue}
+          companyCardSubtitle={companyCardSubtitle}
+          trendSeries={trendSeries}
+          trendComparison={trendComparison}
+          chartPalette={chartPalette}
+          teamPieData={teamPieData}
+          teamDeclPieData={teamDeclPieData}
+          topStaffMetric={topStaffMetric}
+          onTopStaffMetricChange={setTopStaffMetric}
+          topStaffByKpi={topStaffByKpi}
+          topStaffByDecls={topStaffByDecls}
+          topStaffVisibleCount={topStaffVisibleCount}
+          onTopStaffVisibleCountChange={setTopStaffVisibleCount}
+          adjustmentPage={adjustmentPage}
+          adjustmentPageSize={adjustmentPageSize}
+          onAdjustmentPageChange={setAdjustmentPage}
+          onAdjustmentPageSizeChange={handleAdjustmentPageSizeChange}
+          formatInt={formatInt}
+          formatDecimal={formatDecimal}
+        />
+      </SectionSurface>
+
+      <SectionSurface id={REPORT_VIEWER_SECTION_IDS.explorer} aria-label="Khám phá phạm vi báo cáo KPI">
+        <SectionHeader
+          title="Khám phá phạm vi báo cáo"
+          titleAs="h3"
+          description="Đổi lát cắt theo nhân viên hoặc tổ đội, tinh chỉnh cột hiển thị và xuất đúng phần dữ liệu đang cần kiểm tra."
+        />
+        <ReportingScopeExplorerPanel
+          scope={scope}
+          onScopeChange={setScope}
+          selectedStaff={selectedStaff}
+          onSelectedStaffChange={setSelectedStaff}
+          selectedTeam={selectedTeam}
+          onSelectedTeamChange={setSelectedTeam}
+          staffOptions={staffOptions}
+          teamOptions={teamOptions}
+          columnVisibility={columnVisibility}
+          onToggleColumnVisibility={handleToggleColumnVisibility}
+          reportLoading={reportLoading}
+          reportError={reportError}
+          summary={summary}
+          staffViewMode={staffViewMode}
+          setStaffViewMode={setStaffViewMode}
+          staffSortKey={staffSortKey}
+          setStaffSortKey={setStaffSortKey}
+          staffDetailPage={staffDetailPage}
+          setStaffDetailPage={setStaffDetailPage}
+          filteredStaffList={filteredStaffList}
+          filteredCompanySummaryStaff={filteredCompanySummaryStaff}
+          activeStaff={activeStaff}
+          handleExportStaffAll={handleExportStaffAll}
+          handleExportStaffDetail={handleExportStaffDetail}
+          teamViewMode={teamViewMode}
+          setTeamViewMode={setTeamViewMode}
+          teamSortKey={teamSortKey}
+          setTeamSortKey={setTeamSortKey}
+          teamDetailPage={teamDetailPage}
+          setTeamDetailPage={setTeamDetailPage}
+          filteredTeamList={filteredTeamList}
+          filteredCompanySummaryTeam={filteredCompanySummaryTeam}
+          activeTeam={activeTeam}
+          handleExportTeamAll={handleExportTeamAll}
+          handleExportTeamDetail={handleExportTeamDetail}
+          canExport={canExport}
+          exporting={exporting}
+          detailPageSize={detailPageSize}
+          detailPageSizeMode={detailPageSizeMode}
+          detailPageSizeCustomInput={detailPageSizeCustomInput}
+          handleDetailPageSizeChange={handleDetailPageSizeChange}
+          handleDetailPageSizeCustomInputChange={handleDetailPageSizeCustomInputChange}
+          formatInt={formatInt}
+          formatDecimal={formatDecimal}
+        />
+      </SectionSurface>
+
+      {isAdmin ? (
+        <div id={REPORT_VIEWER_SECTION_IDS.schedule}>
+          <ReportingSchedulePanel
+            collapsed={scheduleCollapsed}
+            onToggleCollapsed={() => setScheduleCollapsed((value) => !value)}
+            nextScheduleRun={nextScheduleRun}
+            scheduleAggregateStatus={scheduleAggregateStatus}
+            scheduleDraft={scheduleDraft}
+            editingScheduleId={editingScheduleId}
+            onSubmit={handleSaveSchedule}
+            onFieldChange={handleScheduleFieldChange}
+            onToggleFormat={handleToggleScheduleFormat}
+            onReset={handleResetScheduleForm}
+            onEdit={handleEditSchedule}
+            onDelete={handleDeleteSchedule}
+            schedules={displayReportSchedules}
+          />
+        </div>
       ) : null}
 
-      <ReportingDashboardOverview
-        summary={summary}
-        adjustmentsReport={adjustmentsReport}
-        summaryCompanyCardValue={summaryCompanyCardValue}
-        companyCardSubtitle={companyCardSubtitle}
-        trendSeries={trendSeries}
-        trendComparison={trendComparison}
-        chartPalette={chartPalette}
-        teamPieData={teamPieData}
-        teamDeclPieData={teamDeclPieData}
-        topStaffMetric={topStaffMetric}
-        onTopStaffMetricChange={setTopStaffMetric}
-        topStaffByKpi={topStaffByKpi}
-        topStaffByDecls={topStaffByDecls}
-        topStaffVisibleCount={topStaffVisibleCount}
-        onTopStaffVisibleCountChange={setTopStaffVisibleCount}
-        adjustmentPage={adjustmentPage}
-        adjustmentPageSize={adjustmentPageSize}
-        onAdjustmentPageChange={setAdjustmentPage}
-        onAdjustmentPageSizeChange={handleAdjustmentPageSizeChange}
-        formatInt={formatInt}
-        formatDecimal={formatDecimal}
-      />
+      <SectionSurface id={REPORT_VIEWER_SECTION_IDS.notes} aria-label="Ghi chú báo cáo KPI">
+        <SectionHeader
+          title="Ghi chú báo cáo KPI"
+          titleAs="h3"
+          description="Giữ lại các quy tắc tính điểm và lưu ý export ở cuối workspace để phần đọc insight không bị chìm giữa nội dung vận hành."
+        />
 
-      <ReportingScopeExplorerPanel
-        scope={scope}
-        onScopeChange={setScope}
-        selectedStaff={selectedStaff}
-        onSelectedStaffChange={setSelectedStaff}
-        selectedTeam={selectedTeam}
-        onSelectedTeamChange={setSelectedTeam}
-        staffOptions={staffOptions}
-        teamOptions={teamOptions}
-        columnVisibility={columnVisibility}
-        onToggleColumnVisibility={handleToggleColumnVisibility}
-        reportLoading={reportLoading}
-        reportError={reportError}
-        summary={summary}
-        staffViewMode={staffViewMode}
-        setStaffViewMode={setStaffViewMode}
-        staffSortKey={staffSortKey}
-        setStaffSortKey={setStaffSortKey}
-        staffDetailPage={staffDetailPage}
-        setStaffDetailPage={setStaffDetailPage}
-        filteredStaffList={filteredStaffList}
-        filteredCompanySummaryStaff={filteredCompanySummaryStaff}
-        activeStaff={activeStaff}
-        handleExportStaffAll={handleExportStaffAll}
-        handleExportStaffDetail={handleExportStaffDetail}
-        teamViewMode={teamViewMode}
-        setTeamViewMode={setTeamViewMode}
-        teamSortKey={teamSortKey}
-        setTeamSortKey={setTeamSortKey}
-        teamDetailPage={teamDetailPage}
-        setTeamDetailPage={setTeamDetailPage}
-        filteredTeamList={filteredTeamList}
-        filteredCompanySummaryTeam={filteredCompanySummaryTeam}
-        activeTeam={activeTeam}
-        handleExportTeamAll={handleExportTeamAll}
-        handleExportTeamDetail={handleExportTeamDetail}
-        canExport={canExport}
-        exporting={exporting}
-        detailPageSize={detailPageSize}
-        detailPageSizeMode={detailPageSizeMode}
-        detailPageSizeCustomInput={detailPageSizeCustomInput}
-        handleDetailPageSizeChange={handleDetailPageSizeChange}
-        handleDetailPageSizeCustomInputChange={handleDetailPageSizeCustomInputChange}
-        formatInt={formatInt}
-        formatDecimal={formatDecimal}
-      />
+        <div className="space-y-2 text-sm text-gray-600">
+          <p>
+            Điểm KPI được tính tự động dựa trên quy tắc trong mục “Quy tắc KPI”. Khi bạn import tờ
+            khai hợp lệ từ Excel, hệ thống sẽ áp dụng quy tắc hiện hành để tính điểm cho từng bản
+            ghi và cộng dồn theo nhân viên, tổ đội.
+          </p>
 
-      <div className="ds-card ds-card--flat space-y-2 p-4 text-sm text-gray-600">
-        <div className="font-semibold text-gray-900">Ghi chú & Quy tắc tính điểm</div>
+          <p>
+            Các loại giấy phép bị loại trừ khỏi việc tính điểm: <strong>{excludeCodes}</strong>.
+            Bạn có thể điều chỉnh danh sách này trong phần cấu hình quy tắc.
+          </p>
 
-        <p>
-          Điểm KPI được tính tự động dựa trên quy tắc trong mục “Quy tắc KPI”. Khi bạn import tờ
-          khai hợp lệ từ Excel, hệ thống sẽ áp dụng quy tắc hiện hành để tính điểm cho từng bản ghi
-          và cộng dồn theo nhân viên, tổ đội.
-        </p>
-
-        <p>
-          Các loại giấy phép bị loại trừ khỏi việc tính điểm: <strong>{excludeCodes}</strong>. Bạn
-          có thể điều chỉnh danh sách này trong phần cấu hình quy tắc.
-        </p>
-
-        <p>
-          Để in báo cáo, hãy chọn phạm vi thời gian và chế độ xem mong muốn, sau đó sử dụng tổ hợp
-          phím
-          <strong> Ctrl+P</strong> (hoặc Command+P trên macOS). Khi cần lưu trữ hoặc chia sẻ, sử
-          dụng nút “Xuất Excel” để tải file theo template chứa bảng tổng hợp và bảng chi tiết tương
-          ứng.
-        </p>
-      </div>
+          <p>
+            Để in báo cáo, hãy chọn phạm vi thời gian và chế độ xem mong muốn, sau đó sử dụng tổ
+            hợp phím
+            <strong> Ctrl+P</strong> (hoặc Command+P trên macOS). Khi cần lưu trữ hoặc chia sẻ, sử
+            dụng nút “Xuất Excel” để tải file theo template chứa bảng tổng hợp và bảng chi tiết
+            tương ứng.
+          </p>
+        </div>
+      </SectionSurface>
     </div>
   );
 }

@@ -122,7 +122,7 @@ export default defineConfig({
 
     ],
 
-    exclude: ['tests/playwright/**', 'node_modules/**', 'dist/**'],
+    exclude: ['tests/playwright/**', 'node_modules/**', 'dist/**', '.codex_tmp/**'],
 
   },
 

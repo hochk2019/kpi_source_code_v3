@@ -278,20 +278,20 @@
   }
 
   .ds-app-shell {
-    gap: 1.5rem;
+    gap: 1rem;
   }
 
   .ds-app-shell__layout {
     display: grid;
-    gap: 1.5rem;
+    gap: 1rem;
     align-items: start;
   }
 
   .ds-app-shell__sidebar {
     display: flex;
     flex-direction: column;
-    gap: 1.25rem;
-    padding: 1.25rem;
+    gap: 1rem;
+    padding: 1rem;
     border-radius: var(--ds-radius-lg);
     border: 1px solid var(--ds-border-subtle);
     background:
@@ -303,7 +303,7 @@
   .ds-app-shell__brand {
     display: flex;
     flex-direction: column;
-    gap: 0.45rem;
+    gap: 0.35rem;
   }
 
   .ds-app-shell__eyebrow {
@@ -330,26 +330,111 @@
     color: var(--ds-text-secondary);
   }
 
+  .ds-app-shell__brand-copy {
+    display: none;
+  }
+
+  .ds-app-shell__compact-status {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    padding: 0.9rem 0.95rem;
+    border-radius: var(--ds-radius-md);
+    border: 1px solid color-mix(in srgb, var(--ds-accent-ring) 28%, transparent);
+    background: color-mix(in srgb, var(--ds-accent-soft) 52%, var(--ds-surface-card));
+  }
+
+  .ds-app-shell__compact-label {
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ds-accent-strong);
+  }
+
+  .ds-app-shell__compact-title-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.75rem;
+  }
+
+  .ds-app-shell__compact-title {
+    font-size: 1rem;
+    font-weight: 700;
+    line-height: 1.25;
+    color: var(--ds-text-primary);
+  }
+
+  .ds-app-shell__compact-count {
+    display: inline-flex;
+    align-items: center;
+    min-height: 2rem;
+    padding: 0.25rem 0.65rem;
+    border-radius: var(--ds-radius-pill);
+    border: 1px solid color-mix(in srgb, var(--ds-accent-ring) 36%, transparent);
+    background: color-mix(in srgb, var(--ds-surface-card) 88%, transparent);
+    font-size: 0.76rem;
+    font-weight: 700;
+    color: var(--ds-accent-strong);
+    white-space: nowrap;
+  }
+
+  .ds-app-shell__compact-caption {
+    font-size: 0.84rem;
+    line-height: 1.5;
+    color: var(--ds-text-muted);
+  }
+
   .ds-app-shell__nav-groups {
     display: flex;
     flex-direction: column;
-    gap: 1rem;
+    gap: 0.75rem;
   }
 
   .ds-app-shell__nav-group {
     display: flex;
     flex-direction: column;
+    gap: 0.6rem;
+  }
+
+  .ds-app-shell__group-toggle {
+    display: flex;
+    width: 100%;
+    align-items: flex-start;
+    justify-content: space-between;
     gap: 0.75rem;
+    padding: 0.8rem 0.9rem;
+    border-radius: var(--ds-radius-md);
+    border: 1px solid color-mix(in srgb, var(--ds-border-subtle) 78%, transparent);
+    background: color-mix(in srgb, var(--ds-surface-raised) 88%, transparent);
+    text-align: left;
+    transition:
+      border-color 0.2s ease,
+      background-color 0.2s ease,
+      box-shadow 0.2s ease;
+  }
+
+  .ds-app-shell__group-toggle:disabled {
+    opacity: 1;
+    color: inherit;
+    cursor: default;
+  }
+
+  .ds-app-shell__nav-group[data-active="true"] .ds-app-shell__group-toggle {
+    border-color: color-mix(in srgb, var(--ds-accent-ring) 40%, transparent);
+    background: color-mix(in srgb, var(--ds-accent-soft) 42%, var(--ds-surface-card));
   }
 
   .ds-app-shell__group-copy {
     display: flex;
     flex-direction: column;
     gap: 0.2rem;
+    min-width: 0;
   }
 
   .ds-app-shell__group-title {
-    font-size: 0.83rem;
+    font-size: 0.8rem;
     font-weight: 700;
     letter-spacing: 0.08em;
     text-transform: uppercase;
@@ -357,9 +442,25 @@
   }
 
   .ds-app-shell__group-description {
+    display: none;
     font-size: 0.84rem;
-    line-height: 1.5;
+    line-height: 1.45;
     color: var(--ds-text-muted);
+  }
+
+  .ds-app-shell__group-toggle-meta {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 2rem;
+    padding: 0.25rem 0.65rem;
+    border-radius: var(--ds-radius-pill);
+    background: color-mix(in srgb, var(--ds-surface-card) 86%, transparent);
+    font-size: 0.76rem;
+    font-weight: 700;
+    line-height: 1.2;
+    color: var(--ds-text-secondary);
+    white-space: nowrap;
   }
 
   .ds-app-shell__nav-list {
@@ -369,7 +470,7 @@
     flex-direction: column;
     align-items: stretch;
     justify-content: flex-start;
-    gap: 0.55rem;
+    gap: 0.45rem;
     padding: 0;
     background: transparent;
   }
@@ -381,8 +482,9 @@
     flex: none;
     flex-direction: column;
     align-items: flex-start;
-    gap: 0.3rem;
-    padding: 0.85rem 0.95rem;
+    gap: 0.15rem;
+    min-height: 3rem;
+    padding: 0.7rem 0.85rem;
     white-space: normal;
     border-radius: var(--ds-radius-md);
     border: 1px solid color-mix(in srgb, var(--ds-border-subtle) 75%, transparent);
@@ -392,7 +494,7 @@
   }
 
   .ds-app-shell__nav-trigger:hover {
-    transform: translateX(2px);
+    transform: none;
     border-color: color-mix(in srgb, var(--ds-accent-ring) 48%, transparent);
     background: color-mix(in srgb, var(--ds-accent-soft) 45%, var(--ds-surface-card));
   }
@@ -404,23 +506,25 @@
       color-mix(in srgb, var(--ds-accent-muted) 78%, var(--ds-surface-card))
     );
     border-color: color-mix(in srgb, var(--ds-accent-ring) 60%, transparent);
-    box-shadow: 0 16px 40px color-mix(in srgb, var(--ds-accent-ring) 18%, transparent);
+    box-shadow: 0 10px 26px color-mix(in srgb, var(--ds-accent-ring) 14%, transparent);
   }
 
   .ds-app-shell__nav-label {
-    font-size: 0.95rem;
+    font-size: 0.92rem;
     font-weight: 700;
     line-height: 1.3;
     color: var(--ds-text-primary);
   }
 
   .ds-app-shell__nav-caption {
-    font-size: 0.82rem;
+    display: none;
+    font-size: 0.8rem;
     line-height: 1.45;
     color: var(--ds-text-muted);
   }
 
   .ds-app-shell__nav-trigger[data-state="active"] .ds-app-shell__nav-caption {
+    display: block;
     color: var(--ds-accent-strong);
   }
 
@@ -428,7 +532,7 @@
     display: flex;
     min-width: 0;
     flex-direction: column;
-    gap: 1rem;
+    gap: 0.85rem;
   }
 
   .ds-app-shell__hero {
@@ -436,8 +540,8 @@
     flex-wrap: wrap;
     align-items: flex-start;
     justify-content: space-between;
-    gap: 1rem;
-    padding: 1.25rem 1.4rem;
+    gap: 0.75rem;
+    padding: 1rem;
     border-radius: var(--ds-radius-lg);
     border: 1px solid var(--ds-border-subtle);
     background:
@@ -449,16 +553,16 @@
   .ds-app-shell__hero-copy {
     display: flex;
     min-width: 0;
-    flex: 1 1 28rem;
+    flex: 1 1 100%;
     flex-direction: column;
-    gap: 0.45rem;
+    gap: 0.35rem;
   }
 
   .ds-app-shell__hero-title-row {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 0.75rem;
+    gap: 0.55rem;
   }
 
   .ds-app-shell__role-pill,
@@ -466,12 +570,12 @@
     display: inline-flex;
     align-items: center;
     gap: 0.35rem;
-    min-height: 2rem;
-    padding: 0.35rem 0.75rem;
+    min-height: 2.5rem;
+    padding: 0.45rem 0.75rem;
     border-radius: var(--ds-radius-pill);
     border: 1px solid color-mix(in srgb, var(--ds-accent-ring) 38%, transparent);
     background: color-mix(in srgb, var(--ds-accent-soft) 60%, transparent);
-    font-size: 0.82rem;
+    font-size: 0.78rem;
     font-weight: 650;
     color: var(--ds-accent-strong);
   }
@@ -479,18 +583,23 @@
   .ds-app-shell__hero-meta {
     display: flex;
     flex-wrap: wrap;
-    justify-content: flex-end;
-    gap: 0.65rem;
+    width: 100%;
+    justify-content: flex-start;
+    gap: 0.5rem;
   }
 
   .ds-app-shell__command-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 2.75rem;
     border-radius: 999px;
     border: 1px solid var(--ds-border-subtle);
     background: color-mix(in srgb, var(--ds-surface-card) 88%, white);
     color: var(--ds-text-secondary);
     font-size: 0.875rem;
     font-weight: 600;
-    padding: 0.55rem 0.95rem;
+    padding: 0.65rem 1rem;
     transition:
       background-color 160ms ease,
       border-color 160ms ease,
@@ -505,17 +614,141 @@
   .ds-app-shell__content {
     display: flex;
     flex-direction: column;
-    gap: 1rem;
+    gap: 0.85rem;
   }
 
   @media (min-width: 1024px) {
+    .ds-app-shell {
+      gap: 1.5rem;
+    }
+
     .ds-app-shell__layout {
+      gap: 1.5rem;
       grid-template-columns: minmax(18rem, 20rem) minmax(0, 1fr);
     }
 
     .ds-app-shell__sidebar {
+      gap: 1.25rem;
+      padding: 1.25rem;
       position: sticky;
       top: 1rem;
+      max-height: calc(100vh - 2rem);
+      overflow-y: auto;
+      overscroll-behavior: contain;
+    }
+
+    .ds-app-shell__brand {
+      gap: 0.45rem;
+    }
+
+    .ds-app-shell__brand-copy {
+      display: block;
+    }
+
+    .ds-app-shell__compact-status {
+      display: none;
+    }
+
+    .ds-app-shell__nav-groups {
+      gap: 1rem;
+    }
+
+    .ds-app-shell__nav-group {
+      gap: 0.75rem;
+    }
+
+    .ds-app-shell__group-toggle {
+      padding: 0;
+      border: none;
+      background: transparent;
+      box-shadow: none;
+      gap: 0;
+    }
+
+    .ds-app-shell__nav-group[data-active="true"] .ds-app-shell__group-toggle {
+      background: transparent;
+      border-color: transparent;
+    }
+
+    .ds-app-shell__group-title {
+      font-size: 0.83rem;
+    }
+
+    .ds-app-shell__group-description {
+      display: block;
+      font-size: 0.84rem;
+      line-height: 1.5;
+    }
+
+    .ds-app-shell__group-toggle-meta {
+      display: none;
+    }
+
+    .ds-app-shell__nav-list {
+      gap: 0.55rem;
+    }
+
+    .ds-app-shell__nav-trigger {
+      gap: 0.3rem;
+      min-height: auto;
+      padding: 0.85rem 0.95rem;
+    }
+
+    .ds-app-shell__nav-trigger:hover {
+      transform: translateX(2px);
+    }
+
+    .ds-app-shell__nav-trigger[data-state="active"] {
+      box-shadow: 0 16px 40px color-mix(in srgb, var(--ds-accent-ring) 18%, transparent);
+    }
+
+    .ds-app-shell__nav-label {
+      font-size: 0.95rem;
+    }
+
+    .ds-app-shell__nav-caption {
+      display: block;
+      font-size: 0.82rem;
+    }
+
+    .ds-app-shell__main {
+      gap: 1rem;
+    }
+
+    .ds-app-shell__hero {
+      gap: 1rem;
+      padding: 1.25rem 1.4rem;
+    }
+
+    .ds-app-shell__hero-copy {
+      flex: 1 1 28rem;
+      gap: 0.45rem;
+    }
+
+    .ds-app-shell__hero-title-row {
+      gap: 0.75rem;
+    }
+
+    .ds-app-shell__role-pill,
+    .ds-app-shell__meta-pill {
+      min-height: 2rem;
+      padding: 0.35rem 0.75rem;
+      font-size: 0.82rem;
+    }
+
+    .ds-app-shell__hero-meta {
+      width: auto;
+      justify-content: flex-end;
+      gap: 0.65rem;
+    }
+
+    .ds-app-shell__command-button {
+      min-height: 2.5rem;
+      padding: 0.55rem 0.95rem;
+    }
+
+    .ds-app-shell__content {
+      gap: 1rem;
     }
   }
 

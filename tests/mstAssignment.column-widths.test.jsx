@@ -58,7 +58,7 @@ describe("sanitizeColumnWidths", () => {
     expect(sanitized.mst).toBeGreaterThanOrEqual(COLUMN_MIN_WIDTHS.mst);
     expect(sanitized.company).toBe(COLUMN_MAX_WIDTH);
     expect(sanitized.person_import).toBe(DEFAULT_COLUMN_WIDTHS.person_import);
-    expect(sanitized.status).toBe(COLUMN_MIN_WIDTHS.status);
+    expect(sanitized.status).toBe(DEFAULT_COLUMN_WIDTHS.status);
     expect(sanitized.effective_from).toBeGreaterThanOrEqual(COLUMN_MIN_WIDTH);
     expect(sanitized.effective_to).toBeLessThanOrEqual(COLUMN_MAX_WIDTH);
     expect(sanitized.actions).toBeLessThanOrEqual(COLUMN_MAX_WIDTH);

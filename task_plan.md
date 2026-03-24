@@ -2,43 +2,27 @@
 
 ## Active Bead
 
-- `cng-mtn` - Remediation backlog for app shell and report UX audit
+- `cng-bik` - Bổ sung test cho cảnh báo disk error trong healthcheck
 
 ## Execution Plan
 
-1. Shell foundation
-   - Bead: `cng-mtn.1`
-   - Intent: sửa sidebar ghosting và làm sạch navigation states trước khi đổi layout lớn hơn.
+1. Bổ sung coverage cho nhánh `disk.error`
+   - Intent: khóa behavior khi snapshot storage có lỗi thống kê dung lượng ổ đĩa.
    - Status: completed
-   - Outcome: shell tabs đã bỏ default tab utility classes, sidebar không còn overlap ở desktop/mobile, và regression tests đã được thêm.
-2. Responsive shell
-   - Bead: `cng-mtn.2`
-   - Intent: bỏ mô hình desktop-thu-nho-tren-mobile, nén hero/workflow chrome, và ưu tiên vùng thao tác chính.
-   - Status: next
-3. Report navigation bug
-   - Bead: `cng-mtn.3`
-   - Intent: ổn định luồng chuyển tuần tự vào `reports`, tập trung vào tab state, focus routing, và render timing.
-4. Report information architecture
-   - Bead: `cng-mtn.4`
-   - Intent: tái cấu trúc bề mặt report để giảm density và cải thiện khả năng quét ở desktop/mobile.
-5. Conditional data/backend investigation
-   - Bead: `cng-mtn.5`
-   - Intent: profile read-model và aggregation cost của report trước khi quyết định có mở rộng sang backend/database hay không.
-6. Regression guardrails
-   - Bead: `cng-mtn.6`
-   - Intent: khóa fix bằng Playwright coverage cho report navigation và mobile shell behavior.
+   - Outcome: test mới xác nhận warning `Không thể thống kê đầy đủ dung lượng ổ đĩa` và disk summary line.
+2. Verify runtime không đổi
+   - Intent: chắc rằng việc tăng coverage không kéo theo side effect ngoài ý muốn.
+   - Status: completed
+   - Outcome: `node scripts/healthcheck.mjs` vẫn pass trên local DB thật.
 
 ## Verification Targets
 
-- `cng-mtn.1`: xác nhận lại shell sidebar ở desktop/mobile bằng Playwright trên build hiện tại, đồng thời khóa `unstyled` behavior bằng unit test.
-- `cng-mtn.2`: kiểm tra viewport 375px, 768px, 1024px, 1440px và khả năng thao tác thật.
-- `cng-mtn.3`: flow tuần tự Import -> Accounts -> Teams -> HQ -> Reports pass ổn định.
-- `cng-mtn.4`: report surface có hierarchy rõ và mobile không còn bị nén như desktop co nhỏ.
-- `cng-mtn.5`: có kết quả profiling rõ ràng cho report data pipeline.
-- `cng-mtn.6`: Playwright suite có guardrails ổn định cho các fix UX chính.
+- `tests/healthcheckCore.test.js` cover thêm nhánh `disk.error` và tăng lên 13 case.
+- `tests/runBackupCore.test.js` và `tests/server.backup.test.js` vẫn pass để chứng minh không có regression lân cận.
+- `node scripts/healthcheck.mjs` vẫn pass trên local DB thật.
 
 ## Decisions
 
-- Sửa shell foundation trước khi đụng sâu vào report surface để giảm rủi ro side effect.
-- Không giả định ngay lỗi nằm ở backend/database; chỉ mở rộng khi profiling có bằng chứng.
-- Giữ E2E guardrails như deliverable cuối của epic để tránh tái phát regression.
+- Không sửa runtime code; bead này chỉ mở rộng snapshot test.
+- Với warning output kiểu informational/non-fatal, test phải khóa cả message warning lẫn summary line đi kèm để tránh regression format.
+- Tiếp tục dùng fake `serverModule`/`serverModuleLoader` để giữ test nhanh và tách biệt khỏi DB thật.

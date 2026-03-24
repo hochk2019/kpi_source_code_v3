@@ -44,18 +44,42 @@ export async function loginAsAdmin(page) {
 
 }
 
+async function revealTab(page, tabName) {
+
+  const visibleTab = page.getByRole('tab', { name: tabName });
+
+  if (await visibleTab.isVisible().catch(() => false)) {
+    return visibleTab;
+  }
+
+  const group = page
+    .locator('.ds-app-shell__nav-group')
+    .filter({ has: page.getByRole('tab', { name: tabName, includeHidden: true }) })
+    .first();
+
+  if (await group.count()) {
+    const toggle = group.locator('.ds-app-shell__group-toggle');
+    await toggle.scrollIntoViewIfNeeded();
+    await toggle.click();
+  }
+
+  await visibleTab.waitFor();
+
+  return visibleTab;
+
+}
+
 
 
 export async function openImportTab(page) {
 
-  const importTab = page.getByRole('tab', { name: 'Import Data' });
+  const importTab = await revealTab(page, 'Import Data');
   const importRoot = page.locator('#app-tab-root-import');
-
-  await importTab.waitFor();
 
   if (!(await importRoot.isVisible().catch(() => false))) {
 
-    await importTab.click({ force: true });
+    await importTab.scrollIntoViewIfNeeded();
+    await importTab.click();
 
   }
 
@@ -78,13 +102,12 @@ export async function openImportTab(page) {
 
 async function openTabWithRoot(page, tabName, tabId) {
 
-  const tab = page.getByRole('tab', { name: tabName });
+  const tab = await revealTab(page, tabName);
   const root = page.locator(`#app-tab-root-${tabId}`);
 
-  await tab.waitFor();
-
   if (!(await root.isVisible().catch(() => false))) {
-    await tab.click({ force: true });
+    await tab.scrollIntoViewIfNeeded();
+    await tab.click();
   }
 
   await root.waitFor({ state: 'visible' });

@@ -1,12 +1,21 @@
-import React from "react";
+import React, { Suspense } from "react";
 
-import ExportAuditReport from "@/components/ExportAuditReport.jsx";
-import ReportViewer from "@/components/ReportViewer.jsx";
 import {
   APP_SHELL_WORKFLOW_TARGETS,
   getAppTabRootId,
 } from "@/components/appShell/appShellWorkflowState.js";
 import { SectionHeader, SectionSurface } from "@/components/designSystem/shellPrimitives.jsx";
+
+const ReportViewer = React.lazy(() => import("@/components/ReportViewer.jsx"));
+const ExportAuditReport = React.lazy(() => import("@/components/ExportAuditReport.jsx"));
+
+function ReportSurfaceFallback({ label }) {
+  return (
+    <div className="rounded-xl border border-dashed border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-muted)]/40 p-4 text-sm text-[color:var(--ds-text-secondary)]">
+      Đang tải {label}...
+    </div>
+  );
+}
 
 function WorkflowLinkButton({ children, onClick }) {
   if (typeof onClick !== "function") {
@@ -46,10 +55,12 @@ export default function ReportCenterPanel({
 
       <SectionSurface id={APP_SHELL_WORKFLOW_TARGETS.reports.dashboard} tabIndex={-1}>
         <SectionHeader
-          title="2. Dashboard và lịch gửi"
-          description="Đọc dashboard KPI, drill-down và quản lý lịch gửi định kỳ trong cùng workspace báo cáo."
+          title="2. Insight, drill-down và lịch gửi"
+          description="Report center ưu tiên đọc insight trước, sau đó mở drill-down và chỉ chạm tới lịch gửi khi đã xong phần phân tích."
         />
-        <ReportViewer canExport={canExport} currentUser={currentUser} />
+        <Suspense fallback={<ReportSurfaceFallback label="report center" />}>
+          <ReportViewer canExport={canExport} currentUser={currentUser} />
+        </Suspense>
       </SectionSurface>
 
       <SectionSurface id={APP_SHELL_WORKFLOW_TARGETS.reports.export} tabIndex={-1}>
@@ -69,7 +80,9 @@ export default function ReportCenterPanel({
               có điểm vào export chuyên biệt để người vận hành phát hành báo cáo mà không bị lẫn vào
               dashboard phân tích.
             </div>
-            <ExportAuditReport currentUser={currentUser} />
+            <Suspense fallback={<ReportSurfaceFallback label="audit export" />}>
+              <ExportAuditReport currentUser={currentUser} />
+            </Suspense>
           </div>
         ) : (
           <p className="text-sm text-[color:var(--ds-text-secondary)]">

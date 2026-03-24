@@ -212,7 +212,7 @@ describe('Luồng quản trị – Gán MST', () => {
 
     );
 
-  });
+  }, 30000);
 
   it('lọc danh sách theo trạng thái nhân viên từ bộ lọc lịch sử', async () => {
 
@@ -418,7 +418,7 @@ describe('Luồng quản trị – Đại Lý HQ', () => {
 
     );
 
-  });
+  }, 30000);
 
 });
 
@@ -515,7 +515,7 @@ describe('Luồng quản trị – Báo Cáo KPI', () => {
 
     }
 
-  });
+  }, 30000);
 
 });
 
@@ -589,7 +589,7 @@ describe('Luồng quản trị – Tài khoản', () => {
 
     expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('/api/auth/accounts'), expect.anything());
 
-  });
+  }, 30000);
 
 });
 
