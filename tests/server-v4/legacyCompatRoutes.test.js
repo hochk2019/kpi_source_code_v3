@@ -8,6 +8,7 @@ import request from 'supertest';
 import { ADMIN_ROLE, DEFAULT_ROLE, getPermissionTemplate } from '../../packages/domain/src/accountRoles.js';
 import { buildV4App } from '../../server-v4/src/index.ts';
 import { authModule } from '../../server-v4/src/modules/auth/auth.module.ts';
+import { declarationsModule } from '../../server-v4/src/modules/declarations/declarations.module.ts';
 
 describe('server-v4 legacy compatibility routes', () => {
   it('keeps legacy compatibility routing split into thin domain-specific builders', async () => {
@@ -197,7 +198,7 @@ describe('server-v4 legacy compatibility routes', () => {
       }),
     ]);
     const app = buildV4App({
-      modules: [authModule],
+      modules: [authModule, declarationsModule],
       importerCompat: {
         guardMode: 'block-migrated',
       },
@@ -259,6 +260,18 @@ describe('server-v4 legacy compatibility routes', () => {
       ),
     ).toMatchObject({
       status: 'warn',
+    });
+    expect(rolloutResponse.body.compatibility.declarationShadow.summary).toContain(
+      'legacy compat traffic',
+    );
+    expect(
+      rolloutResponse.body.compatibility.declarationShadow.groups.find(
+        (entry) => entry.id === 'declarations-shadow-alerts',
+      ),
+    ).toMatchObject({
+      status: 'warn',
+      observedCompatHits: 1,
+      blockedCompatHits: 1,
     });
   });
 

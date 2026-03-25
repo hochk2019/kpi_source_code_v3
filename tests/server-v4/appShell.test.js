@@ -1,8 +1,11 @@
+import path from 'node:path';
+
 import { describe, expect, it } from 'vitest';
 import request from 'supertest';
 
 import { buildV4App, moduleCatalog } from '../../server-v4/src/index.ts';
 
+const READY_DB_FILE = path.resolve(process.cwd(), 'package.json');
 const catalogRoutes = moduleCatalog.flatMap((entry) => entry.routeGroups.flatMap((group) => group.routes));
 const catalogMutationRoutes = catalogRoutes.filter((entry) => entry.method !== 'GET');
 const implementedReadWriteModules = moduleCatalog.filter((entry) =>
@@ -11,7 +14,11 @@ const implementedReadWriteModules = moduleCatalog.filter((entry) =>
 
 describe('server-v4 app shell', () => {
   it('reports health for the scaffolded module set', async () => {
-    const app = buildV4App();
+    const app = buildV4App({
+      dbFile: READY_DB_FILE,
+      persistenceMode: 'postgres',
+      persistence: createDualWritePersistenceStub(),
+    });
     const response = await request(app).get('/api/v4/health');
 
     expect(response.status).toBe(200);
@@ -53,7 +60,11 @@ describe('server-v4 app shell', () => {
   });
 
   it('exposes rollout metadata with migration checks and fallback guidance', async () => {
-    const app = buildV4App();
+    const app = buildV4App({
+      dbFile: READY_DB_FILE,
+      persistenceMode: 'postgres',
+      persistence: createDualWritePersistenceStub(),
+    });
     const response = await request(app).get('/api/v4/meta/rollout');
 
     expect(response.status).toBe(200);
@@ -85,6 +96,24 @@ describe('server-v4 app shell', () => {
         blockedHits: 0,
       },
     });
+    expect(response.body.compatibility.declarationShadow.summary).toContain(
+      'Declarations shadow rollout gate is green',
+    );
+    expect(
+      response.body.compatibility.declarationShadow.groups.find(
+        (entry) => entry.id === 'declarations-shadow-ecus-preview-commit',
+      ),
+    ).toMatchObject({
+      status: 'pass',
+      observedCompatHits: 0,
+    });
+    expect(
+      response.body.migrationVerification.checks.find(
+        (entry) => entry.id === 'declarations-shadow-alerts',
+      ),
+    ).toMatchObject({
+      status: 'pass',
+    });
   });
 
   it('surfaces relational-store rollout health without requiring the legacy db file', async () => {
@@ -113,6 +142,38 @@ describe('server-v4 app shell', () => {
     });
   });
 });
+
+function createDualWritePersistenceStub() {
+  return {
+    ...createRelationalStorePersistenceStub(),
+    sourceKind: 'dual-write',
+    adjustmentsReader: {
+      ...createCompatReader(),
+      readAdjustmentRows: async () => [],
+    },
+    declarationsReader: {
+      ...createCompatReader(),
+      readDeclarationRows: async () => [],
+    },
+    hqAgenciesReader: {
+      ...createCompatReader(),
+      readBindings: async () => [],
+      readHistoryEntries: async () => [],
+    },
+    kpiRulesReader: {
+      ...createCompatReader(),
+      readRuleCollection: async () => ({}),
+    },
+    mstAssignmentsReader: {
+      ...createCompatReader(),
+      readMstAssignmentRows: async () => [],
+    },
+    teamsReader: {
+      ...createCompatReader(),
+      readTeamRoster: async () => ({}),
+    },
+  };
+}
 
 function createRelationalStorePersistenceStub() {
   const emptyList = async () => [];
@@ -207,5 +268,13 @@ function createRelationalStorePersistenceStub() {
       readJobRunEntries: emptyList,
     },
     dispose: async () => {},
+  };
+}
+
+function createCompatReader() {
+  return {
+    getSourceKind: () => 'dual-write',
+    getHotPathKeys: () => [],
+    getLegacyDbFile: () => READY_DB_FILE,
   };
 }

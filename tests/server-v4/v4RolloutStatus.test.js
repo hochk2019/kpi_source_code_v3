@@ -2,10 +2,15 @@ import path from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
+import {
+  createImporterCompatTrafficTracker,
+  getImporterCompatRouteDefinition,
+} from '../../server-v4/src/app/importerCompatTraffic.ts';
 import { moduleCatalog } from '../../server-v4/src/index.ts';
 import { runtimeModuleRouteCoverage } from '../../server-v4/src/app/runtimeRouteCoverage.ts';
 import { buildV4RolloutStatus } from '../../server-v4/src/app/v4-rollout-status.ts';
 
+const READY_DB_FILE = path.resolve(process.cwd(), 'package.json');
 const implementedModuleIds = [
   'auth',
   'declarations',
@@ -30,7 +35,7 @@ describe('server-v4 rollout status', () => {
   it('summarizes health, module coverage, and rollout gates for the current scaffold', () => {
     const status = buildV4RolloutStatus({
       modules: moduleCatalog,
-      dbFile: path.resolve(process.cwd(), 'server', 'data', 'storage.sqlite'),
+      dbFile: READY_DB_FILE,
       implementedModuleIds,
       runtimeRouteCoverage: runtimeModuleRouteCoverage,
     });
@@ -101,6 +106,38 @@ describe('server-v4 rollout status', () => {
         blockedHits: 0,
       },
     });
+    expect(status.compatibility.declarationShadow.summary).toContain('Declarations shadow rollout gate is green');
+    expect(status.compatibility.declarationShadow.groups).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'declarations-shadow-ecus-preview-commit',
+          status: 'pass',
+          observedCompatHits: 0,
+        }),
+        expect.objectContaining({
+          id: 'declarations-shadow-alerts',
+          status: 'pass',
+          observedCompatHits: 0,
+        }),
+        expect.objectContaining({
+          id: 'declarations-shadow-co-discrepancy',
+          status: 'pass',
+          observedCompatHits: 0,
+        }),
+        expect.objectContaining({
+          id: 'declarations-shadow-history-edit',
+          status: 'pass',
+          compatRouteIds: [],
+        }),
+      ]),
+    );
+    expect(
+      status.migrationVerification.checks.find(
+        (entry) => entry.id === 'declarations-shadow-history-edit',
+      ),
+    ).toMatchObject({
+      status: 'pass',
+    });
   });
 
   it('blocks rollout readiness when the legacy db file is missing', () => {
@@ -151,5 +188,45 @@ describe('server-v4 rollout status', () => {
     });
     expect(status.rollout.currentStage).toBe('cutover-ready');
     expect(status.rollout.recommendedNextStage).toBe(null);
+  });
+
+  it('warns the declarations shadow gate when migrated compat traffic is still observed for a tracked declaration workflow', () => {
+    const tracker = createImporterCompatTrafficTracker({
+      guardMode: 'block-migrated',
+    });
+    const alertsRoute = getImporterCompatRouteDefinition('GET', '/api/import/alerts');
+    expect(alertsRoute).not.toBeNull();
+    tracker.record(alertsRoute, {
+      blocked: true,
+      now: '2026-03-25T09:15:00.000Z',
+    });
+
+    const status = buildV4RolloutStatus({
+      modules: moduleCatalog,
+      dbFile: READY_DB_FILE,
+      implementedModuleIds,
+      runtimeRouteCoverage: runtimeModuleRouteCoverage,
+      importerCompat: tracker.snapshot(),
+    });
+
+    expect(status.compatibility.declarationShadow.summary).toContain(
+      'legacy compat traffic',
+    );
+    expect(
+      status.compatibility.declarationShadow.groups.find(
+        (entry) => entry.id === 'declarations-shadow-alerts',
+      ),
+    ).toMatchObject({
+      status: 'warn',
+      observedCompatHits: 1,
+      blockedCompatHits: 1,
+    });
+    expect(
+      status.migrationVerification.checks.find(
+        (entry) => entry.id === 'declarations-shadow-alerts',
+      ),
+    ).toMatchObject({
+      status: 'warn',
+    });
   });
 });

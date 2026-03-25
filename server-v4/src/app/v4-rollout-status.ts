@@ -1,5 +1,9 @@
 import fs from 'node:fs';
 
+import {
+  buildDeclarationsShadowStatus,
+  type DeclarationShadowGroupStatus,
+} from './declarationsShadowRollout.js';
 import type { DomainModule } from './domain-module.js';
 import {
   createEmptyImporterCompatTrafficSnapshot,
@@ -69,6 +73,10 @@ export type V4RolloutStatus = {
     importerTraffic: ImporterCompatTrafficSnapshot & {
       summary: string;
     };
+    declarationShadow: {
+      summary: string;
+      groups: DeclarationShadowGroupStatus[];
+    };
   };
   rollout: {
     currentStage: RolloutStageId;
@@ -108,6 +116,10 @@ export function buildV4RolloutStatus(options: BuildV4RolloutStatusOptions): V4Ro
   );
   const persistenceSourceKind = options.persistenceSourceKind ?? 'dual-write';
   const importerCompat = options.importerCompat ?? createEmptyImporterCompatTrafficSnapshot();
+  const declarationShadow = buildDeclarationsShadowStatus({
+    modules: options.modules,
+    importerCompat,
+  });
   const hotPathKeys =
     persistenceSourceKind === 'legacy-kv-store' ? [...LEGACY_BUSINESS_HOT_PATH_KEYS] : [];
   const moduleStatuses = options.modules.map((domainModule) =>
@@ -122,6 +134,7 @@ export function buildV4RolloutStatus(options: BuildV4RolloutStatusOptions): V4Ro
     persistenceSourceKind,
     hotPathKeys,
     importerCompat,
+    declarationShadowGroups: declarationShadow.groups,
   });
   const readiness = buildReadiness(dbFile, metrics, persistenceSourceKind);
   const stages = buildStages({ dbFile, metrics, persistenceSourceKind });
@@ -147,6 +160,7 @@ export function buildV4RolloutStatus(options: BuildV4RolloutStatusOptions): V4Ro
         ...importerCompat,
         summary: describeImporterCompatTraffic(importerCompat),
       },
+      declarationShadow,
     },
     rollout: {
       currentStage: resolveCurrentStage(stages),
@@ -307,10 +321,10 @@ function buildChecks(input: {
   persistenceSourceKind: BusinessSnapshotSourceKind;
   hotPathKeys: string[];
   importerCompat: ImporterCompatTrafficSnapshot;
+  declarationShadowGroups: DeclarationShadowGroupStatus[];
 }): V4RolloutCheck[] {
   const scaffoldModules = input.moduleStatuses.filter((entry) => entry.runtimeMode === 'scaffold').map((entry) => entry.id);
-
-  return [
+  const checks = [
     {
       id: 'legacy-store-access',
       status:
@@ -364,6 +378,17 @@ function buildChecks(input: {
           : 'No write-capable server-v4 modules are mounted yet.',
     },
   ];
+
+  for (const group of input.declarationShadowGroups) {
+    checks.push({
+      id: group.id,
+      status: group.status,
+      summary: group.label,
+      detail: group.detail,
+    });
+  }
+
+  return checks;
 }
 
 function describePersistenceState(
