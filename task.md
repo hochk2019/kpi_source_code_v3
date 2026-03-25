@@ -2,9 +2,9 @@
 
 ## Active Slice
 
-- Title: Close auth parity gaps before server-v4 cutover
-- Bead: `cng-d0a`
-- Status: in_progress
+- Title: Run declarations shadow rollout and compat telemetry gate
+- Bead: `cng-0fs`
+- Status: open
 - Last updated: 2026-03-25
 
 ## Completed This Session
@@ -44,12 +44,19 @@
 8. `cng-d0a` da duoc mo cho auth parity:
    - muc tieu tiep theo la dua cac endpoint auth con thieu ve `server-v4` truoc khi xu ly declarations shadow/cutover
    - can doi chieu lai 3 parity gap da note trong rollout plan va verify lai auth route matrix
+9. `cng-d0a` da duoc implementation o muc code/test:
+   - canonical `/api/v4/auth` da bo sung `POST /accounts/:username/password`, `DELETE /accounts/:username`, va `POST /password/change`
+   - `AuthService` va `AuthController` da co canonical home cho 3 flow con thieu, thay vi chi ton tai o compat layer
+   - auth regression tests da cover password reset, self-change password, delete account, boundary permission, va last-admin guard
+10. `cng-0fs` da duoc mo cho declarations shadow:
+   - day la domain blast radius cao nhat, can shadow parity + compat telemetry truoc write cutover
+   - verify gate se tap trung vao ECUS preview/commit, alerts config/review, C/O discrepancy, va declaration history/edit
 
 ## Next Suggested Slice
 
-- Title: Doi chieu va implement auth parity cho `server-v4`
-- Bead: `cng-d0a`
-- Status: in_progress
+- Title: Bat dau declarations shadow parity va telemetry gate
+- Bead: `cng-0fs`
+- Status: open
 3. `cng-xyq.6` da duoc implementation va dong bead:
    - them `helmet` + `express-rate-limit`
    - them `server/securityHardening.js`
@@ -76,6 +83,7 @@
   - `pnpm exec vitest run tests/passwordPolicy.test.js tests/securityHardening.test.js --environment node`
   - `pnpm exec vitest run tests/v4RolloutMount.test.js tests/server.monitor.test.js tests/server-v4/appShell.test.js tests/server-v4/legacyCompatRoutes.test.js tests/server-v4/postgresTeamsRoute.test.js tests/server-v4/postgresMstAssignmentsRoute.test.js tests/server-v4/postgresHqAgenciesRoute.test.js --environment node`
   - `pnpm exec vitest run tests/v4RolloutMount.test.js tests/server.monitor.test.js tests/server-v4/appShell.test.js tests/server-v4/legacyCompatRoutes.test.js tests/server-v4/postgresKpiRulesRoute.test.js tests/server-v4/postgresKpiAdjustmentsRoute.test.js --environment node`
+  - `pnpm exec vitest run tests/server-v4/authRoutes.test.js tests/server-v4/legacyCompatRoutes.test.js tests/server-v4/appShell.test.js tests/server-v4/runtimeRoutes.test.js --environment node`
 - Frontend/jsdom tests:
   - `pnpm exec vitest run tests/auth.test.jsx tests/accountManager.staff.test.jsx tests/automation.flows.test.js tests/e2e.admin-flows.test.jsx --environment jsdom`
   - `pnpm exec vitest run tests/runtimeErrorBoundary.test.jsx tests/appRoot.errorBoundary.test.jsx tests/kpiCalculator.errorBoundary.test.jsx tests/appShellFrame.test.jsx --environment jsdom`
@@ -107,8 +115,10 @@
 - `cng-xyq.7` da hoan tat va dong bead; working tree hien chi chua commit thay doi wave-1 mount truoc khi bat dau wave-2.
 - `cng-wh8` la bead tiep theo cho wave-2 mount `kpi-rules` + `kpi-adjustments`.
 - `cng-wh8` da pass targeted lint + node verification cho startup mount helper, `server.monitor`, `appShell`, legacy compat, `postgresKpiRulesRoute`, va `postgresKpiAdjustmentsRoute`.
-- `cng-wh8` da hoan tat va dong bead; commit wave-2 chua duoc tao o working tree hien tai.
+- `cng-wh8` da hoan tat va dong bead; wave-2 mount da duoc chot thanh commit rieng.
 - `cng-d0a` la bead active tiep theo cho auth parity closure truoc declarations rollout.
+- `cng-d0a` da hoan tat va dong bead; auth parity canonical da pass targeted lint + node verification.
+- `cng-0fs` la bead tiep theo cho declarations shadow rollout va compat telemetry gate.
 - `tests/server.monitor.test.js` van in stderr khi `dist/server-v4/index.js` khong co trong vitest runtime, nhung suite van pass vi startup path fallback dung nhu hien trang.
 
 ## Previous Completed Slice

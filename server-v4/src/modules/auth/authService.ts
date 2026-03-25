@@ -42,6 +42,17 @@ export type UpdateAccountPayload = {
   teamName?: string | null;
 };
 
+export type SetAccountPasswordPayload = {
+  username: string;
+  password: string;
+};
+
+export type ChangeOwnPasswordPayload = {
+  username: string;
+  currentPassword: string;
+  newPassword: string;
+};
+
 export class AuthHttpError extends Error {
   constructor(
     readonly statusCode: number,
@@ -212,6 +223,137 @@ export class AuthService {
     return {
       account: sanitizeAuthAccount(nextAccount)!,
       accounts: accounts.map((entry) => sanitizeAuthAccount(entry)!).filter(Boolean),
+    };
+  }
+
+  async setAccountPassword(
+    token: string,
+    payload: SetAccountPasswordPayload,
+  ): Promise<{
+    account: AuthAccountView;
+    accounts: AuthAccountView[];
+  }> {
+    await this.requireAccountManager(token);
+    const accounts = await this.authStore.listAccounts();
+    const username = `${payload.username ?? ''}`.trim();
+    const currentIndex = accounts.findIndex(
+      (entry) => toUsernameKey(entry.username) === toUsernameKey(username),
+    );
+
+    if (currentIndex < 0) {
+      throw new AuthHttpError(404, 'not_found', 'Không tìm thấy tài khoản.');
+    }
+    if (payload.password.trim().length < MIN_PASSWORD_LENGTH) {
+      throw new AuthHttpError(
+        400,
+        'invalid_request',
+        `Mật khẩu cần tối thiểu ${MIN_PASSWORD_LENGTH} ký tự.`,
+      );
+    }
+
+    const current = accounts[currentIndex];
+    const nextAccount = normalizeStoredAccountRecord({
+      ...current,
+      passwordHash: bcrypt.hashSync(payload.password.trim(), 10),
+      updatedAt: new Date().toISOString(),
+    });
+
+    if (!nextAccount) {
+      throw new AuthHttpError(400, 'invalid_request', 'Không thể cập nhật mật khẩu tài khoản.');
+    }
+
+    accounts[currentIndex] = nextAccount;
+    sortAuthAccounts(accounts);
+    await this.authStore.saveAccounts(accounts);
+    await this.authStore.deleteSessionsForUser(nextAccount.username);
+
+    return {
+      account: sanitizeAuthAccount(nextAccount)!,
+      accounts: accounts.map((entry) => sanitizeAuthAccount(entry)!).filter(Boolean),
+    };
+  }
+
+  async deleteAccount(
+    token: string,
+    usernameInput: string,
+  ): Promise<{ accounts: AuthAccountView[] }> {
+    await this.requireAccountManager(token);
+    const accounts = await this.authStore.listAccounts();
+    const username = `${usernameInput ?? ''}`.trim();
+    const nextAccounts = accounts.filter(
+      (entry) => toUsernameKey(entry.username) !== toUsernameKey(username),
+    );
+
+    if (nextAccounts.length === accounts.length) {
+      throw new AuthHttpError(404, 'not_found', 'Không tìm thấy tài khoản.');
+    }
+    if (countAdmins(nextAccounts) <= 0) {
+      throw new AuthHttpError(400, 'invalid_request', 'Cần ít nhất một quản trị viên.');
+    }
+
+    await this.authStore.saveAccounts(nextAccounts);
+    await this.authStore.deleteSessionsForUser(username);
+
+    return {
+      accounts: nextAccounts.map((entry) => sanitizeAuthAccount(entry)!).filter(Boolean),
+    };
+  }
+
+  async changeOwnPassword(
+    token: string,
+    payload: ChangeOwnPasswordPayload,
+  ): Promise<{
+    account: AuthAccountView;
+    token: string;
+    expiresAt: number;
+  }> {
+    const sessionAccount = await this.requireAuthenticatedAccount(token);
+    if (toUsernameKey(sessionAccount.username) !== toUsernameKey(payload.username)) {
+      throw new AuthHttpError(403, 'forbidden', 'Bạn chỉ có thể đổi mật khẩu của chính mình.');
+    }
+
+    const accounts = await this.authStore.listAccounts();
+    const currentIndex = accounts.findIndex(
+      (entry) => toUsernameKey(entry.username) === toUsernameKey(payload.username),
+    );
+
+    if (currentIndex < 0) {
+      throw new AuthHttpError(404, 'not_found', 'Không tìm thấy tài khoản.');
+    }
+    if (payload.newPassword.trim().length < MIN_PASSWORD_LENGTH) {
+      throw new AuthHttpError(
+        400,
+        'invalid_request',
+        `Mật khẩu cần tối thiểu ${MIN_PASSWORD_LENGTH} ký tự.`,
+      );
+    }
+
+    const current = accounts[currentIndex];
+    const matches = await bcrypt.compare(payload.currentPassword, current.passwordHash);
+    if (!matches) {
+      throw new AuthHttpError(401, 'invalid_credentials', 'Mật khẩu hiện tại không đúng.');
+    }
+
+    const nextAccount = normalizeStoredAccountRecord({
+      ...current,
+      passwordHash: bcrypt.hashSync(payload.newPassword.trim(), 10),
+      updatedAt: new Date().toISOString(),
+    });
+
+    if (!nextAccount) {
+      throw new AuthHttpError(400, 'invalid_request', 'Không thể đổi mật khẩu.');
+    }
+
+    accounts[currentIndex] = nextAccount;
+    sortAuthAccounts(accounts);
+    await this.authStore.saveAccounts(accounts);
+    await this.authStore.deleteSessionsForUser(nextAccount.username);
+    const session = await this.authStore.createSession(nextAccount.username);
+
+    return {
+      account: sanitizeAuthAccount(nextAccount)!,
+      token: session.token,
+      expiresAt: session.expiresAt,
     };
   }
 

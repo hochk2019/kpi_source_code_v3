@@ -7,7 +7,7 @@ import { buildV4App } from '../../server-v4/src/index.ts';
 import { authModule } from '../../server-v4/src/modules/auth/auth.module.ts';
 
 describe('server-v4 auth routes', () => {
-  it('supports login, session restore, account management, and logout with cookie-backed sessions', async () => {
+  it('supports login, session restore, account management, password flows, and logout with cookie-backed sessions', async () => {
     const authStore = createAuthStore([
       createAccount({
         username: 'admin',
@@ -99,9 +99,72 @@ describe('server-v4 auth routes', () => {
       teamName: 'Red Team',
     });
 
+    const setPasswordResponse = await request(app)
+      .post('/api/v4/auth/accounts/new.staff/password')
+      .set('Cookie', cookie)
+      .send({
+        password: 'newstaff456',
+      });
+
+    expect(setPasswordResponse.status).toBe(200);
+    expect(setPasswordResponse.body.data.account).toMatchObject({
+      username: 'new.staff',
+      name: 'Updated Staff',
+    });
+
+    const newStaffLoginResponse = await request(app)
+      .post('/api/v4/auth/login')
+      .send({ username: 'new.staff', password: 'newstaff456' });
+
+    expect(newStaffLoginResponse.status).toBe(200);
+    expect(newStaffLoginResponse.body.data.user).toMatchObject({
+      username: 'new.staff',
+    });
+
+    const newStaffCookie = getCookie(newStaffLoginResponse);
+
+    const changeOwnPasswordResponse = await request(app)
+      .post('/api/v4/auth/password/change')
+      .set('Cookie', newStaffCookie)
+      .send({
+        username: 'new.staff',
+        currentPassword: 'newstaff456',
+        newPassword: 'newstaff789',
+      });
+
+    expect(changeOwnPasswordResponse.status).toBe(200);
+    expect(changeOwnPasswordResponse.body.data.account).toMatchObject({
+      username: 'new.staff',
+      name: 'Updated Staff',
+    });
+
+    const changedPasswordCookie = getCookie(changeOwnPasswordResponse);
+
+    const oldPasswordLoginResponse = await request(app)
+      .post('/api/v4/auth/login')
+      .send({ username: 'new.staff', password: 'newstaff456' });
+
+    expect(oldPasswordLoginResponse.status).toBe(401);
+    expect(oldPasswordLoginResponse.body.error).toMatchObject({
+      code: 'invalid_credentials',
+    });
+
+    const reloginResponse = await request(app)
+      .post('/api/v4/auth/login')
+      .send({ username: 'new.staff', password: 'newstaff789' });
+
+    expect(reloginResponse.status).toBe(200);
+
+    const deleteResponse = await request(app)
+      .delete('/api/v4/auth/accounts/new.staff')
+      .set('Cookie', cookie);
+
+    expect(deleteResponse.status).toBe(200);
+    expect(deleteResponse.body.data.accounts).toHaveLength(2);
+
     const logoutResponse = await request(app)
       .post('/api/v4/auth/logout')
-      .set('Cookie', cookie);
+      .set('Cookie', changedPasswordCookie);
 
     expect(logoutResponse.status).toBe(200);
     expect(logoutResponse.body).toEqual({
@@ -111,7 +174,7 @@ describe('server-v4 auth routes', () => {
 
     const postLogoutSessionResponse = await request(app)
       .get('/api/v4/auth/session')
-      .set('Cookie', cookie);
+      .set('Cookie', changedPasswordCookie);
 
     expect(postLogoutSessionResponse.status).toBe(200);
     expect(postLogoutSessionResponse.body).toEqual({
@@ -174,9 +237,21 @@ describe('server-v4 auth routes', () => {
     expect(invalidCreateResponse.body.error).toMatchObject({
       code: 'validation_error',
     });
+
+    const invalidSetPasswordResponse = await request(app)
+      .post('/api/v4/auth/accounts/admin/password')
+      .set('Cookie', cookie)
+      .send({
+        password: '123',
+      });
+
+    expect(invalidSetPasswordResponse.status).toBe(400);
+    expect(invalidSetPasswordResponse.body.error).toMatchObject({
+      code: 'validation_error',
+    });
   });
 
-  it('forbids non-admin account management and blocks the last admin demotion', async () => {
+  it('forbids non-admin account management, enforces self-change boundaries, and blocks the last admin delete/demotion', async () => {
     const authStore = createAuthStore([
       createAccount({
         username: 'admin',
@@ -215,6 +290,41 @@ describe('server-v4 auth routes', () => {
       code: 'forbidden',
     });
 
+    const forbiddenPasswordResetResponse = await request(app)
+      .post('/api/v4/auth/accounts/admin/password')
+      .set('Cookie', staffCookie)
+      .send({
+        password: 'admin456',
+      });
+
+    expect(forbiddenPasswordResetResponse.status).toBe(403);
+    expect(forbiddenPasswordResetResponse.body.error).toMatchObject({
+      code: 'forbidden',
+    });
+
+    const forbiddenDeleteResponse = await request(app)
+      .delete('/api/v4/auth/accounts/admin')
+      .set('Cookie', staffCookie);
+
+    expect(forbiddenDeleteResponse.status).toBe(403);
+    expect(forbiddenDeleteResponse.body.error).toMatchObject({
+      code: 'forbidden',
+    });
+
+    const forbiddenOwnPasswordResponse = await request(app)
+      .post('/api/v4/auth/password/change')
+      .set('Cookie', staffCookie)
+      .send({
+        username: 'admin',
+        currentPassword: 'staff123',
+        newPassword: 'admin456',
+      });
+
+    expect(forbiddenOwnPasswordResponse.status).toBe(403);
+    expect(forbiddenOwnPasswordResponse.body.error).toMatchObject({
+      code: 'forbidden',
+    });
+
     const adminLoginResponse = await request(app)
       .post('/api/v4/auth/login')
       .send({ username: 'admin', password: 'admin123' });
@@ -228,6 +338,29 @@ describe('server-v4 auth routes', () => {
     expect(lastAdminResponse.status).toBe(400);
     expect(lastAdminResponse.body.error).toMatchObject({
       code: 'invalid_request',
+    });
+
+    const lastAdminDeleteResponse = await request(app)
+      .delete('/api/v4/auth/accounts/admin')
+      .set('Cookie', adminCookie);
+
+    expect(lastAdminDeleteResponse.status).toBe(400);
+    expect(lastAdminDeleteResponse.body.error).toMatchObject({
+      code: 'invalid_request',
+    });
+
+    const wrongCurrentPasswordResponse = await request(app)
+      .post('/api/v4/auth/password/change')
+      .set('Cookie', staffCookie)
+      .send({
+        username: 'staff',
+        currentPassword: 'wrong-password',
+        newPassword: 'staff456',
+      });
+
+    expect(wrongCurrentPasswordResponse.status).toBe(401);
+    expect(wrongCurrentPasswordResponse.body.error).toMatchObject({
+      code: 'invalid_credentials',
     });
   });
 });

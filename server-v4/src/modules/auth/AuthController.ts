@@ -41,6 +41,16 @@ const updateAccountBodySchema = z.object({
   teamName: z.string().trim().nullable().optional(),
 });
 
+const setPasswordBodySchema = z.object({
+  password: z.string().trim().min(MIN_PASSWORD_LENGTH),
+});
+
+const changeOwnPasswordBodySchema = z.object({
+  username: z.string().trim().min(1),
+  currentPassword: z.string().min(1),
+  newPassword: z.string().trim().min(MIN_PASSWORD_LENGTH),
+});
+
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
@@ -122,6 +132,48 @@ export class AuthController {
       res.status(200).json({ ok: true, data: result });
     } catch (error) {
       this.handleError(error, res, 'update account');
+    }
+  }
+
+  async setAccountPassword(req: Request, res: Response): Promise<void> {
+    try {
+      const payload = setPasswordBodySchema.parse(req.body ?? {});
+      const result = await this.authService.setAccountPassword(getSessionTokenFromRequest(req), {
+        username: `${req.params.username ?? ''}`.trim(),
+        password: payload.password,
+      });
+      res.status(200).json({ ok: true, data: result });
+    } catch (error) {
+      this.handleError(error, res, 'set account password');
+    }
+  }
+
+  async deleteAccount(req: Request, res: Response): Promise<void> {
+    try {
+      const result = await this.authService.deleteAccount(
+        getSessionTokenFromRequest(req),
+        `${req.params.username ?? ''}`.trim(),
+      );
+      res.status(200).json({ ok: true, data: result });
+    } catch (error) {
+      this.handleError(error, res, 'delete account');
+    }
+  }
+
+  async changeOwnPassword(req: Request, res: Response): Promise<void> {
+    try {
+      const payload = changeOwnPasswordBodySchema.parse(req.body ?? {});
+      const result = await this.authService.changeOwnPassword(getSessionTokenFromRequest(req), payload);
+      setSessionCookie(req, res, result.token, result.expiresAt);
+      res.status(200).json({
+        ok: true,
+        data: {
+          account: result.account,
+          expiresAt: result.expiresAt,
+        },
+      });
+    } catch (error) {
+      this.handleError(error, res, 'change password');
     }
   }
 

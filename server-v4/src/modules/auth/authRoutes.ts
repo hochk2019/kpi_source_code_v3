@@ -20,6 +20,9 @@ export function buildAuthRouter(domainModule: DomainModule, authStore: AuthStore
   router.get('/accounts', (req, res) => void controller.listAccounts(req, res));
   router.post('/accounts', (req, res) => void controller.createAccount(req, res));
   router.patch('/accounts/:username', (req, res) => void controller.updateAccount(req, res));
+  router.post('/accounts/:username/password', (req, res) => void controller.setAccountPassword(req, res));
+  router.delete('/accounts/:username', (req, res) => void controller.deleteAccount(req, res));
+  router.post('/password/change', (req, res) => void controller.changeOwnPassword(req, res));
 
   return router;
 }
