@@ -20,9 +20,9 @@ Chot backlog tach nho wave 1 cho 4 fat component lon nhat de giam kich thuoc mod
 - [x] RulesEditor slice B: dat baseline test truc tiep cho `RulesEditor`, sau do tach `RulesSimulationPanel.jsx` va `RulesHistoryPanel.jsx` ra khoi file chinh -> Verify: `tests/rulesEditor.test.jsx`, `tests/rulesEditorSimulationPanel.test.jsx`, va `tests/rulesEditorHistoryPanel.test.jsx` da pass cho flow simulation/history refresh/restore.
 
 ## Done When
-- [ ] Moi component co it nhat 1 slice pure/presentational truoc khi cham vao stateful orchestration.
-- [ ] Co danh sach module dich ro rang cho wave 1, theo thu tu refactor an toan.
-- [ ] Da xac dinh test can bo sung truoc khi tach state hoac history flow.
+- [x] Moi component co it nhat 1 slice pure/presentational truoc khi cham vao stateful orchestration.
+- [x] Co danh sach module dich ro rang cho wave 1, theo thu tu refactor an toan.
+- [x] Da xac dinh test can bo sung truoc khi tach state hoac history flow.
 
 ## Notes
 - Thu tu uu tien an toan: `MSTAssignment helpers -> KPIAdjustments pure model -> AiAssistant pure helpers -> RulesEditor baseline tests -> cac slice hook/panel stateful`.
@@ -31,4 +31,5 @@ Chot backlog tach nho wave 1 cho 4 fat component lon nhat de giam kich thuoc mod
 - `RulesEditor` da co baseline test truc tiep cho flow simulation/history; gap con lai cua file nay la cac control/editor nho va phan config tabs chua tach.
 - `cng-xyq.13` da dong sau khi tach xong controls cua `RulesEditor`; file chinh giam tiep tu 1625 dong xuong 1143 dong.
 - `cng-xyq.14` da dong sau khi tach xong panel/hook cho `AiAssistant`; file chinh giam xuong orchestration layer va da co regression coverage cho config/panel/conversation hooks.
+- Wave 1 decomposition da hoan tat cho 4 fat component; backlog tiep theo neu can se la wave-2 orchestration/config tab refinement thay vi tach pure/helper co ban.
 - Wave 1 uu tien tach pure helper va panel nho; cac state machine lon chi tach sau khi da co regression coverage khoa hanh vi.
