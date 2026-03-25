@@ -2,8 +2,8 @@
 
 ## Active Slice
 
-- Title: Codify declarations write-cutover policy in rollout status
-- Bead: `cng-2wn`
+- Title: Tach column visibility width va pagination hooks khoi MSTAssignment
+- Bead: `cng-xyq.12`
 - Status: closed
 - Last updated: 2026-03-25
 
@@ -61,31 +61,46 @@
    - `/api/v4/meta/rollout` hien bo sung `compatibility.declarationCutover` va migration check `declarations-write-cutover-policy`, dua tren guard mode, migrated compat hits, va declaration shadow gate health
    - readiness/stage `cutover-ready` khong con len xanh chi vi runtime da relational-store; declarations phai co `block-migrated` + zero migrated compat hits + shadow gate xanh moi duoc xem la ready
    - them regression test moi `tests/server-v4/declarationsWriteCutover.test.js` va cap nhat `v4RolloutStatus`/`appShell` expectations cho hold/ready/blocked transitions
+13. `cng-7wv` da duoc implementation o muc runtime config wiring:
+   - `server-v4/src/config/server-v4-config.ts` hien co field chinh thuc `importerCompatGuardMode` va validate hai mode `off` / `block-migrated`
+   - `buildV4App` fallback sang runtime config khi caller khong truyen `options.importerCompat.guardMode`, nen block mode co the bat qua config thay vi patch tracker thu cong
+   - `apps/api/src/startApiServer.js` forward top-level `importerCompatGuardMode` xuong compiled `server-v4`, dong bo voi env `KPI_API_IMPORTER_COMPAT_GUARD_MODE`
+   - regression tests da khoa ca config env/apps-api path va route behavior path cho `off` vs `block-migrated`
+14. `cng-xyq.4` da duoc implementation o muc decomposition planning:
+   - them artifact goc `frontend-wave1-decomposition.md` tai project root de chot wave-1 backlog cho `MSTAssignment`, `KPIAdjustments`, `AiAssistant`, va `RulesEditor`
+   - chot thu tu tach nho an toan theo huong `pure/presentational truoc, hooks/panel stateful sau`
+   - xac dinh ro gap test hien tai: `RulesEditor` chua co test truc tiep, can dat baseline test truoc khi rut component
+   - seed them 4 bead follow-up de backlog khong dung o muc tai lieu:
+     - `cng-xyq.8` MSTAssignment helper + layout decomposition
+     - `cng-xyq.9` KPIAdjustments pure calculation + form hook decomposition
+     - `cng-xyq.10` AiAssistant snapshot/provider/history helper decomposition
+     - `cng-xyq.11` RulesEditor baseline test + panel decomposition
+15. `cng-xyq.8` da duoc implementation o muc helper extraction:
+   - tach `HistoryDetails`, `StageTimelinePreview`, `StageTimelineGroups`, va `ColumnResizeHandle` ra khoi `src/components/MSTAssignment.jsx` thanh module rieng duoi `src/components/mst-assignment/`
+   - `MSTAssignment.jsx` giam tu moc backlog 3170 dong xuong 2973 dong sau helper extraction
+   - targeted verify da pass:
+     - `pnpm exec vitest run tests/mstAssignment.timeline.test.jsx tests/mstAssignment.column-widths.test.jsx tests/mstAssignment.column-visibility.test.jsx tests/mstAssignment.pagination.test.jsx --environment jsdom`
+     - `pnpm exec eslint src/components/MSTAssignment.jsx src/components/mst-assignment/timeline/HistoryDetails.jsx src/components/mst-assignment/timeline/StageTimelinePreview.jsx src/components/mst-assignment/timeline/StageTimelineGroups.jsx src/components/mst-assignment/table/ColumnResizeHandle.jsx`
+   - tach them bead `cng-xyq.12` de xu ly phan con lai cua MSTAssignment state/layout hook ma khong lam bead helper extraction bi qua to
+16. `cng-xyq.12` da duoc implementation o muc state/layout hook extraction:
+   - them `src/components/mst-assignment/hooks/useMSTAssignmentColumnLayout.js` de gom `COLUMN_OPTIONS`, width persistence, visibility persistence, resize handlers, va `columnMenuOpen`
+   - them `src/components/mst-assignment/hooks/useMSTAssignmentPageSize.js` de tach `pageSize` read/write helpers khoi `MSTAssignment.jsx`
+   - `src/components/MSTAssignment.jsx` da chuyen sang dung 2 hook moi thay vi giu localStorage + resize state trong component chinh
+   - bo sung `tests/mstAssignment.layout-hooks.test.jsx` de khoa hook moi, va doi test width/visibility/pagination sang import helper truc tiep tu module moi
+   - add-form MST bo sung `ariaLabel`/`searchAriaLabel` cho 2 combobox nhap/xuat de giu gate `tests/e2e.admin-flows.test.jsx` xanh
+   - targeted verify da pass:
+     - `pnpm exec vitest run tests/mstAssignment.column-widths.test.jsx tests/mstAssignment.column-visibility.test.jsx tests/mstAssignment.pagination.test.jsx tests/mstAssignment.layout-hooks.test.jsx --environment jsdom`
+     - `pnpm exec vitest run tests/mstAssignment.person-columns.test.jsx tests/e2e.admin-flows.test.jsx --environment jsdom`
+     - `pnpm exec eslint src/components/MSTAssignment.jsx src/components/mst-assignment/hooks/useMSTAssignmentColumnLayout.js src/components/mst-assignment/hooks/useMSTAssignmentPageSize.js tests/mstAssignment.column-widths.test.jsx tests/mstAssignment.column-visibility.test.jsx tests/mstAssignment.pagination.test.jsx tests/mstAssignment.layout-hooks.test.jsx`
 
 ## Next Suggested Slice
 
-- Title: Wire importer compat guard mode into runtime config
-- Bead: `cng-7wv`
-- Status: pending
-3. `cng-xyq.6` da duoc implementation va dong bead:
-   - them `helmet` + `express-rate-limit`
-   - them `server/securityHardening.js`
-   - them shared `packages/domain/src/passwordPolicy.js`
-   - nang password minimum length len `8`
-   - dong bo `server/index.js`, `src/auth/localAuth.js`, UI auth/account, va test/mock lien quan
-4. `cng-9dx` da dong bo tai lieu sau `cng-xyq.6`:
-   - cap nhat `docs/gemini-review-v1-factcheck-2026-03-25.md` de loai bo cac nhan dinh da stale ve `helmet`, login rate limit va password policy
-   - bo sung `docs/USER_GUIDE.md` voi quy dinh mat khau toi thieu `8` ky tu cho bootstrap, tao tai khoan, dat lai va doi mat khau
-5. `cng-xyq.3` da duoc implementation:
-   - them reusable `RuntimeErrorBoundary`
-   - them `AppRoot` de boundary boc cap ung dung tu entrypoint `src/main.jsx`
-   - boc tung `TabPanel` trong `KPICalculator` bang boundary cap module/tab de tranh white-screen khi mot panel loi
-   - them regression tests cho app-level fallback va tab-level fallback
-6. `cng-xyq.2` da duoc implementation:
-   - them shared `src/components/shared/StaffCombobox.jsx` va helper normalize roster/member cho ca assignment mode va member mode
-   - thay local duplicate implementation tai `MSTAssignment`, `AccountManager` va data importer bang shared component/wrapper gon nhe
-   - giu contract importer assignment payload on dinh, dong thoi bo sung test moi `tests/staffCombobox.test.jsx`
-   - cap nhat regression tests lien quan cho `AccountManager` sau khi chuyen trigger sang role `combobox`
+- Title: Tach helper snapshot/provider/history khoi AiAssistant
+- Bead: `cng-xyq.10`
+- Status: ready
+- Follow-up backlog seeded:
+  - `cng-xyq.11` -> RulesEditor baseline tests + control/panel split
+  - `cng-xyq.12` -> MSTAssignment state/layout hooks (closed)
 
 ## Verification
 
@@ -96,6 +111,7 @@
   - `pnpm exec vitest run tests/server-v4/authRoutes.test.js tests/server-v4/legacyCompatRoutes.test.js tests/server-v4/appShell.test.js tests/server-v4/runtimeRoutes.test.js --environment node`
   - `pnpm exec vitest run tests/server-v4/v4RolloutStatus.test.js tests/server-v4/appShell.test.js tests/server-v4/legacyCompatRoutes.test.js tests/server-v4/postgresDeclarationsRoute.test.js --environment node`
   - `pnpm exec vitest run tests/server-v4/declarationsWriteCutover.test.js tests/server-v4/v4RolloutStatus.test.js tests/server-v4/appShell.test.js --environment node`
+  - `pnpm exec vitest run tests/appsApiRuntimeConfig.test.js tests/apps/apiRuntimeConfig.test.js tests/appsApiStart.test.js tests/server-v4/appShell.test.js tests/server-v4/legacyCompatRoutes.test.js --environment node`
 - Frontend/jsdom tests:
   - `pnpm exec vitest run tests/auth.test.jsx tests/accountManager.staff.test.jsx tests/automation.flows.test.js tests/e2e.admin-flows.test.jsx --environment jsdom`
   - `pnpm exec vitest run tests/runtimeErrorBoundary.test.jsx tests/appRoot.errorBoundary.test.jsx tests/kpiCalculator.errorBoundary.test.jsx tests/appShellFrame.test.jsx --environment jsdom`
@@ -107,6 +123,7 @@
   - `pnpm exec eslint src/components/shared/StaffCombobox.jsx src/components/dataImporter/DataImporterAssignmentComboboxes.jsx src/components/AccountManager.jsx tests/accountManager.staff.test.jsx tests/staffCombobox.test.jsx`
   - `pnpm exec eslint server-v4/src/app/declarationsShadowRollout.ts server-v4/src/app/v4-rollout-status.ts tests/server-v4/v4RolloutStatus.test.js tests/server-v4/appShell.test.js tests/server-v4/legacyCompatRoutes.test.js`
   - `pnpm exec eslint server-v4/src/app/declarationsWriteCutover.ts server-v4/src/app/v4-rollout-status.ts tests/server-v4/declarationsWriteCutover.test.js tests/server-v4/v4RolloutStatus.test.js tests/server-v4/appShell.test.js`
+  - `pnpm exec eslint apps/api/src/startApiServer.js server-v4/src/config/server-v4-config.ts server-v4/src/app/build-v4-app.ts tests/appsApiRuntimeConfig.test.js tests/appsApiStart.test.js tests/apps/apiRuntimeConfig.test.js tests/server-v4/appShell.test.js tests/server-v4/legacyCompatRoutes.test.js`
 - GitNexus scope check:
   - `detect_changes(scope: "all")` -> `risk_level: low`
   - `detect_changes(scope: "all")` sau `cng-xyq.2` -> `risk_level: high` do diff cham 2 file lon (`AccountManager.jsx`, `MSTAssignment.jsx`), nhung 4 test muc tieu cua shared combobox/account/importer/mst deu pass
@@ -138,7 +155,18 @@
 - `gitnexus_detect_changes(scope: "all")` tra ve `No changes detected` du `git status` van co diff; can kiem tra lai GitNexus/worktree awareness truoc luc dung no lam gate cho commit cua bead nay.
 - Remaining write-cutover risk sau `cng-0fs`: legacy aliases declarations van con song va duoc mount trong compat layer; can co quyet dinh rieng cho block mode/cutover sequence truoc khi dong bead write-cutover.
 - `cng-2wn` da xong o muc code/test va bead da duoc dong; rollout metadata gio tach rieng declaration shadow gate va declaration write-cutover policy, nen operator thay ro khi nao shadow xanh nhung cutover van phai hold vi guard mode/hit counter.
-- `cng-7wv` da duoc seed cho buoc tiep theo: plumb `block-migrated` qua runtime config/server startup de QA co the rehearsal canonical importer flow ma khong can patch code tay.
+- `cng-7wv` da duoc hoan tat: env `KPI_API_IMPORTER_COMPAT_GUARD_MODE` trong `apps/api` gio di het duong xuong `server-v4` qua top-level runtime config, va `buildV4App` cung fallback ve config nay khi khong co override tracker rieng.
+- bead ready tiep theo theo `bd ready` sau khi dong planning la `cng-xyq.8` cho MSTAssignment helper + layout decomposition; day la slice an toan nhat de mo dau wave-1 implementation.
+- `frontend-wave1-decomposition.md` la artifact root-level chot danh sach module dich, thu tu tach nho, va test gate cho 4 frontend fat component lon nhat.
+- `cng-xyq.4` da xong o muc planning/backlog; 4 child bead moi (`cng-xyq.8` -> `cng-xyq.11`) da duoc tao de chuyen ngay sang implementation slices nho.
+- `cng-xyq.8` da xong o muc tach helper UI; phan state/layout hook cua MSTAssignment da duoc tach thanh bead rieng `cng-xyq.12` de giu moi bead gon va de verify.
+- `cng-xyq.12` da xong o muc tach hook state/layout cho `MSTAssignment`.
+- `cng-xyq.9` da xong o muc tach pure model + form/filter hooks cho `KPIAdjustments`: them `src/components/kpi-adjustments/model/*`, `src/components/kpi-adjustments/hooks/*`, rut logic trung lap khoi file chinh, va bo sung `tests/kpiAdjustments.model.test.js` + `tests/kpiAdjustments.hooks.test.jsx`.
+- targeted verify cho `cng-xyq.9` da pass:
+  - `pnpm exec vitest run tests/kpiAdjustments.test.jsx tests/kpiAdjustments.model.test.js tests/kpiAdjustments.hooks.test.jsx --environment jsdom`
+  - `pnpm exec eslint src/components/KPIAdjustments.jsx src/components/kpi-adjustments/model/businessDirectory.js src/components/kpi-adjustments/model/calculationInfo.js src/components/kpi-adjustments/model/guidanceGroups.js src/components/kpi-adjustments/model/settingsDraft.js src/components/kpi-adjustments/hooks/useKpiAdjustmentForm.js src/components/kpi-adjustments/hooks/useKpiAdjustmentFilters.js tests/kpiAdjustments.test.jsx tests/kpiAdjustments.model.test.js tests/kpiAdjustments.hooks.test.jsx`
+- `cng-xyq.10` la slice wave-1 hop ly nhat tiep theo de tach snapshot/provider/history helper khoi `AiAssistant`.
+- `gitnexus_detect_changes(scope: "all")` van tra `No changes detected` ngay ca sau helper extraction, nen tiep tuc coi day la van de worktree-awareness cua GitNexus; gate thuc te van dua tren `git status`, lint, va test muc tieu.
 - `tests/server.monitor.test.js` van in stderr khi `dist/server-v4/index.js` khong co trong vitest runtime, nhung suite van pass vi startup path fallback dung nhu hien trang.
 
 ## Previous Completed Slice

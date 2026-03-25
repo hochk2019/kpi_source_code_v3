@@ -109,6 +109,15 @@ describe('KPIAdjustments UI', () => {
 
     vi.spyOn(window, 'prompt').mockImplementation(() => '');
 
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ raw: null }),
+        text: async () => '',
+      })
+    );
+
   });
 
 
@@ -118,6 +127,7 @@ describe('KPIAdjustments UI', () => {
     cleanup();
 
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
 
   });
 
