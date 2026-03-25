@@ -31,6 +31,9 @@ import useTooltipTitles from "@/hooks/useTooltipTitles.js";
 import usePagination from "@/hooks/usePagination.js";
 
 import useMSTQuickFilters from "@/hooks/useMSTQuickFilters.js";
+import SharedStaffCombobox, {
+  buildStaffComboboxTeams,
+} from "@/components/shared/StaffCombobox.jsx";
 
 import { Button } from "@/components/ui/button.jsx";
 import {
@@ -55,17 +58,11 @@ import {
 
   CommandEmpty,
 
-  CommandGroup,
-
-  CommandInput,
-
   CommandItem,
-
-  CommandList,
 
 } from "@/components/ui/command.jsx";
 
-import { Check, ChevronsUpDown, CircleX, Plus, LogIn, LogOut } from "lucide-react";
+import { ChevronsUpDown, LogIn, LogOut } from "lucide-react";
 
 
 
@@ -155,367 +152,16 @@ const formatISODate = (value) => {
 
 
 
-const buildRosterTeams = (rosterSnapshot) => {
-
-  const rawTeams = Array.isArray(rosterSnapshot?.teams) ? rosterSnapshot.teams : [];
-
-  const teams = [];
-
-
-
-  rawTeams.forEach((team, teamIndex) => {
-
-    const name = normalizeStr(team?.name ?? "");
-
-    const normalized = normalizeName(name);
-
-    if (!name || !normalized) return;
-
-
-
-    const members = Array.isArray(team?.members) ? team.members : [];
-
-    const normalizedMembers = members
-
-      .map((member, memberIndex) => {
-
-        const memberName = normalizeStr(member?.name ?? "");
-
-        const memberNormalized = normalizeName(memberName);
-
-        if (!memberName || !memberNormalized) return null;
-
-        return {
-
-          id: member?.id || `${teamIndex}-${memberIndex}`,
-
-          name: memberName,
-
-          normalized: memberNormalized,
-
-        };
-
-      })
-
-      .filter(Boolean)
-
-      .sort((a, b) => a.name.localeCompare(b.name, "vi", { sensitivity: "base" }));
-
-
-
-    teams.push({
-
-      id: team?.id || `${teamIndex}`,
-
-      name,
-
-      normalized,
-
-      members: normalizedMembers,
-
-    });
-
-  });
-
-
-
-  return teams.sort((a, b) => a.name.localeCompare(b.name, "vi", { sensitivity: "base" }));
-
-};
-
-
-
-function StaffCombobox({
-
-  value,
-
-  teamValue,
-
-  onSelect,
-
-  teams,
-
-  disabled = false,
-
-  placeholder = "Chọn nhân viên",
-
-  ariaLabel,
-
-  searchAriaLabel,
-
-}) {
-
-  const [open, setOpen] = useState(false);
-
-  const [search, setSearch] = useState("");
-
-
-
-  useEffect(() => {
-
-    if (!open) {
-
-      setSearch("");
-
-    }
-
-  }, [open]);
-
-
-
-  const normalizedValue = normalizeStr(value || "");
-
-  const normalizedKey = normalizeName(normalizedValue);
-
-  const normalizedTeamValue = normalizeName(normalizeStr(teamValue || ""));
-
-
-
-  const staffIndex = useMemo(() => {
-
-    const result = [];
-
-    teams.forEach((team) => {
-
-      team.members.forEach((member) => {
-
-        result.push({
-
-          teamId: team.id,
-
-          teamName: team.name,
-
-          teamNormalized: team.normalized,
-
-          memberId: member.id,
-
-          name: member.name,
-
-          normalized: member.normalized,
-
-        });
-
-      });
-
-    });
-
-    return result;
-
-  }, [teams]);
-
-
-
-  const orderedTeams = useMemo(() => {
-
-    if (!teams.length) return [];
-
-    if (!normalizedTeamValue) return teams;
-
-
-
-    const next = [...teams];
-
-    const index = next.findIndex((team) => team.normalized === normalizedTeamValue);
-
-    if (index <= 0) {
-
-      return next;
-
-    }
-
-
-
-    const [currentTeam] = next.splice(index, 1);
-
-    return [currentTeam, ...next];
-
-  }, [teams, normalizedTeamValue]);
-
-
-
-  const searchValue = normalizeStr(search);
-
-  const searchKey = normalizeName(searchValue);
-
-  const hasExactStaff = staffIndex.some((entry) => entry.normalized === searchKey);
-
-  const canCreateCustom = Boolean(searchKey) && !hasExactStaff;
-
-
-
-  const handleSelect = (staffName = "", teamName = "", extra = {}) => {
-
-    onSelect?.({
-
-      staffName,
-
-      teamName,
-
-      isCustom: Boolean(extra.isCustom),
-
-    });
-
-    setOpen(false);
-
-    setSearch("");
-
-  };
-
-
-
-  return (
-
-    <Popover open={open} onOpenChange={disabled ? undefined : setOpen}>
-
-      <PopoverTrigger asChild>
-
-        <Button
-
-          type="button"
-
-          variant="outline"
-
-          size="sm"
-
-          role="combobox"
-
-          aria-expanded={open}
-
-          aria-label={ariaLabel}
-
-          disabled={disabled}
-
-          className="w-full justify-between px-2 py-1 text-left font-normal"
-
-        >
-
-          <span className="truncate">{normalizedValue || placeholder}</span>
-
-          <ChevronsUpDown className="ml-2 size-3 shrink-0 opacity-50" />
-
-        </Button>
-
-      </PopoverTrigger>
-
-      <PopoverContent className="w-64 p-0" align="start">
-
-        <Command>
-
-          <CommandInput
-
-            placeholder="Tìm nhân viên"
-
-            value={search}
-
-            onValueChange={setSearch}
-
-            aria-label={searchAriaLabel}
-
-            autoFocus
-
-          />
-
-          <CommandList className="max-h-60 overflow-y-auto">
-
-            <CommandEmpty>Không có nhân viên phù hợp.</CommandEmpty>
-
-            {normalizedValue ? (
-
-              <CommandGroup heading="Tùy chọn">
-
-                <CommandItem value="__clear__" onSelect={() => handleSelect("", teamValue || "")}>
-
-                  <CircleX className="mr-2 size-4" />
-
-                  Bỏ chọn nhân viên
-
-                </CommandItem>
-
-              </CommandGroup>
-
-            ) : null}
-
-            {canCreateCustom ? (
-
-              <CommandGroup heading="Thêm mới">
-
-                <CommandItem
-
-                  value={searchValue}
-
-                  onSelect={() =>
-
-                    handleSelect(searchValue, normalizedTeamValue ? teamValue : "", {
-
-                      isCustom: true,
-
-                    })
-
-                  }
-
-                >
-
-                  <Plus className="mr-2 size-4" />
-
-                  Dùng giá trị "{searchValue}"
-
-                </CommandItem>
-
-              </CommandGroup>
-
-            ) : null}
-
-            {orderedTeams.map((team) => (
-
-              <CommandGroup key={team.id} heading={`Tổ: ${team.name}`}>
-
-                {team.members.map((member) => {
-
-                  const isSelected =
-
-                    member.normalized === normalizedKey && team.normalized === normalizedTeamValue;
-
-                  return (
-
-                    <CommandItem
-
-                      key={member.id}
-
-                      value={`${member.name}`}
-
-                      onSelect={() => handleSelect(member.name, team.name, { isCustom: false })}
-
-                    >
-
-                      <Check
-
-                        className={`mr-2 size-4 ${isSelected ? "opacity-100" : "opacity-0"}`}
-
-                      />
-
-                      <span className="truncate">{member.name}</span>
-
-                    </CommandItem>
-
-                  );
-
-                })}
-
-              </CommandGroup>
-
-            ))}
-
-          </CommandList>
-
-        </Command>
-
-      </PopoverContent>
-
-    </Popover>
-
-  );
-
-}
+const buildRosterTeams = buildStaffComboboxTeams;
+
+const StaffCombobox = (props) => (
+  <SharedStaffCombobox
+    {...props}
+    allowCustom
+    preserveTeamOnCustom
+    preserveTeamOnClear
+  />
+);
 
 
 
@@ -5919,4 +5565,6 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
   );
 
 }
+
+
 

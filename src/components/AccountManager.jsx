@@ -32,7 +32,7 @@ import {
 
 } from "@/auth/localAuth.js";
 
-import { getTeamRoster, subscribeTeamRoster, normalizeName, normalizeStr } from "@/lib/store.js";
+import { getTeamRoster, subscribeTeamRoster, normalizeName } from "@/lib/store.js";
 
 import {
 
@@ -63,28 +63,14 @@ import {
   SectionSurface,
   SectionToolbar,
 } from "@/components/designSystem/shellPrimitives.jsx";
+import StaffCombobox, {
+  buildStaffComboboxTeams,
+  flattenStaffComboboxMembers,
+} from "@/components/shared/StaffCombobox.jsx";
 
 import { ScrollArea } from "@/components/ui/scroll-area.jsx";
 
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover.jsx";
-
-import {
-
-  Command,
-
-  CommandEmpty,
-
-  CommandGroup,
-
-  CommandInput,
-
-  CommandItem,
-
-  CommandList,
-
-} from "@/components/ui/command.jsx";
-
-import { Check, ChevronsUpDown, CircleX, ChevronDown } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 
 
 
@@ -380,196 +366,6 @@ function PermissionCheckbox({
 
 
 
-function StaffCombobox({
-
-  value,
-
-  onSelect,
-
-  options,
-
-  disabled = false,
-
-  ariaLabel,
-
-  dataTestId,
-
-}) {
-
-  const [open, setOpen] = useState(false);
-
-
-
-  const selected = useMemo(() => options.find((option) => option.id === value) || null, [options, value]);
-
-  const buttonLabel = selected
-
-    ? `${selected.name}${selected.teamName ? ` – ${selected.teamName}` : ""}`
-
-    : "Chọn nhân viên";
-
-
-
-  const groupedOptions = useMemo(() => {
-
-    const map = new Map();
-
-    for (const option of options) {
-
-      const key = option.teamName || "Không rõ tổ đội";
-
-      if (!map.has(key)) {
-
-        map.set(key, []);
-
-      }
-
-      map.get(key).push(option);
-
-    }
-
-    return Array.from(map.entries()).map(([teamName, members]) => ({
-
-      key: teamName || "unknown",
-
-      label: teamName || "Không rõ tổ đội",
-
-      members,
-
-    }));
-
-  }, [options]);
-
-
-
-  const handleSelect = (option) => {
-
-    onSelect?.(option);
-
-    setOpen(false);
-
-  };
-
-
-
-  return (
-
-    <Popover open={open} onOpenChange={setOpen}>
-
-      <PopoverTrigger asChild>
-
-        <button
-
-          type="button"
-
-          className={`${CONTROL_CLASS} flex w-full items-center justify-between gap-2 text-left ${disabled ? "cursor-not-allowed opacity-60" : ""}`}
-
-          disabled={disabled}
-
-          aria-haspopup="listbox"
-
-          aria-expanded={open}
-
-          aria-label={ariaLabel || buttonLabel}
-
-          data-testid={dataTestId}
-
-        >
-
-          <span className="truncate">{buttonLabel}</span>
-
-          <ChevronsUpDown className="h-4 w-4 opacity-60" />
-
-        </button>
-
-      </PopoverTrigger>
-
-      <PopoverContent align="start" className="w-[320px] p-0" side="bottom">
-
-        <Command>
-
-          <CommandInput placeholder="Tìm theo tên nhân viên hoặc tổ đội…" />
-
-          <CommandList className="max-h-64 overflow-y-auto">
-
-            <CommandEmpty>Không tìm thấy nhân viên phù hợp.</CommandEmpty>
-
-            <CommandGroup heading="Tùy chọn chung">
-
-              <CommandItem
-
-                value="__none__"
-
-                onSelect={() => handleSelect(null)}
-
-                className="flex items-center gap-2"
-
-              >
-
-                <CircleX className="h-4 w-4" />
-
-                <span className="flex-1">Không gắn nhân viên</span>
-
-                {!value && <Check className="h-4 w-4" />}
-
-              </CommandItem>
-
-            </CommandGroup>
-
-            {groupedOptions.map((group) => (
-
-              <CommandGroup key={group.key} heading={group.label}>
-
-                {group.members.map((member) => (
-
-                  <CommandItem
-
-                    key={member.id}
-
-                    value={`${member.normalizedName} ${member.normalizedTeam} ${member.id}`}
-
-                    onSelect={() => handleSelect(member)}
-
-                    className="flex items-center gap-2"
-
-                  >
-
-                    <div className="flex flex-1 items-center justify-between gap-2">
-
-                      <span className="truncate">{member.name}</span>
-
-                      {member.teamName && (
-
-                        <span className="text-xs text-[color:var(--ds-text-muted)]">{member.teamName}</span>
-
-                      )}
-
-                    </div>
-
-                    {value === member.id && <Check className="h-4 w-4" />}
-
-                  </CommandItem>
-
-                ))}
-
-              </CommandGroup>
-
-            ))}
-
-          </CommandList>
-
-        </Command>
-
-      </PopoverContent>
-
-    </Popover>
-
-  );
-
-}
-
-
-
 export default function AccountManager() {
 
   const [accounts, setAccounts] = useState(() => listAccounts());
@@ -672,59 +468,9 @@ export default function AccountManager() {
 
 
 
-  const staffOptions = useMemo(() => {
+  const staffTeams = useMemo(() => buildStaffComboboxTeams(roster), [roster]);
 
-    const teams = Array.isArray(roster?.teams) ? roster.teams : [];
-
-    const list = [];
-
-    for (const team of teams) {
-
-      if (!team || typeof team !== "object") continue;
-
-      const teamId = typeof team.id === "string" ? team.id : "";
-
-      const teamName = normalizeStr(team?.name) || "";
-
-      const members = Array.isArray(team?.members) ? team.members : [];
-
-      for (const member of members) {
-
-        if (!member || typeof member !== "object") continue;
-
-        const id = typeof member.id === "string" ? member.id.trim() : "";
-
-        const name = normalizeStr(member?.name) || "";
-
-        if (!id || !name) {
-
-          continue;
-
-        }
-
-        list.push({
-
-          id,
-
-          name,
-
-          teamId: teamId || null,
-
-          teamName: teamName || null,
-
-          normalizedName: normalizeName(name),
-
-          normalizedTeam: normalizeName(teamName || ""),
-
-        });
-
-      }
-
-    }
-
-    return list.sort((a, b) => a.name.localeCompare(b.name, "vi", { sensitivity: "base" }));
-
-  }, [roster]);
+  const staffOptions = useMemo(() => flattenStaffComboboxMembers(staffTeams), [staffTeams]);
 
 
 
@@ -1578,13 +1324,29 @@ export default function AccountManager() {
 
                 onSelect={(option) => updateAccountStaff(account, option)}
 
-                options={staffOptions}
+                teams={staffTeams}
 
                 disabled={rosterMissing || isPending}
 
                 ariaLabel={`Nhân viên KPI cho ${account.username}`}
 
                 dataTestId={`account-staff-${account.username}`}
+
+                selectionMode="member"
+
+                searchPlaceholder="Tìm theo tên nhân viên hoặc tổ đội…"
+
+                clearGroupLabel="Tùy chọn chung"
+
+                clearLabel="Không gắn nhân viên"
+
+                showClearWhenEmpty
+
+                buttonClassName={`${CONTROL_CLASS} flex w-full items-center justify-between gap-2 text-left ${rosterMissing || isPending ? "cursor-not-allowed opacity-60" : ""}`}
+
+                popoverClassName="w-[320px] p-0"
+
+                groupHeadingFormatter={(team) => team.name}
 
               />
 
@@ -1783,6 +1545,8 @@ export default function AccountManager() {
 
       staffOptions,
 
+      staffTeams,
+
       updateAccountStaff,
 
     ]
@@ -1872,11 +1636,27 @@ export default function AccountManager() {
 
               onSelect={handleSelectStaff}
 
-              options={staffOptions}
+              teams={staffTeams}
 
               disabled={staffOptions.length === 0}
 
               ariaLabel="Nhân viên KPI cho tài khoản mới"
+
+              selectionMode="member"
+
+              searchPlaceholder="Tìm theo tên nhân viên hoặc tổ đội…"
+
+              clearGroupLabel="Tùy chọn chung"
+
+              clearLabel="Không gắn nhân viên"
+
+              showClearWhenEmpty
+
+              buttonClassName={`${CONTROL_CLASS} flex w-full items-center justify-between gap-2 text-left ${staffOptions.length === 0 ? "cursor-not-allowed opacity-60" : ""}`}
+
+              popoverClassName="w-[320px] p-0"
+
+              groupHeadingFormatter={(team) => team.name}
 
             />
 
@@ -2651,4 +2431,5 @@ export default function AccountManager() {
   );
 
 }
+
 

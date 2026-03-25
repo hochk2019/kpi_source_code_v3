@@ -147,7 +147,7 @@ describe('AccountManager – gắn nhân viên KPI', () => {
 
 
 
-    const staffButton = within(accountRow).getByRole('button', {
+    const staffButton = within(accountRow).getByRole('combobox', {
 
       name: 'Nhân viên KPI cho nhanvien',
 
@@ -203,7 +203,7 @@ describe('AccountManager – gắn nhân viên KPI', () => {
 
 
 
-    const reopenButton = within(accountRow).getByRole('button', {
+    const reopenButton = within(accountRow).getByRole('combobox', {
 
       name: 'Nhân viên KPI cho nhanvien',
 
