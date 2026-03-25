@@ -572,7 +572,7 @@ describe('Luồng quản trị – Tài khoản', () => {
 
     await user.type(within(createSection ?? document.body).getByPlaceholderText('Tên người dùng'), 'Tài khoản thử nghiệm');
 
-    await user.type(within(createSection ?? document.body).getByPlaceholderText('Ít nhất 6 ký tự'), 'Tester@2025');
+    await user.type(within(createSection ?? document.body).getByPlaceholderText(/Ít nhất \d+ ký tự/), 'Tester@2025');
 
     const roleSelect = within(createSection ?? document.body).getAllByRole('combobox').at(-1);
 

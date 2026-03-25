@@ -10,6 +10,7 @@ Hệ thống được triển khai cho Công ty TNHH Tiếp Vận Hoàng Kim (Go
 - Dữ liệu được lưu tập trung trên máy chủ nội bộ (chạy `pnpm server`) bằng cơ sở dữ liệu SQLite (`server/data/storage.sqlite`). File SQLite sẽ được tạo tự động trong lần đầu khởi chạy hoặc bạn có thể chủ động tạo trước bằng `pnpm db:init` sau khi cài đặt. Tất cả máy trong cùng mạng LAN truy cập giao diện (`pnpm dev` hoặc `pnpm start`) sẽ dùng chung nguồn dữ liệu này. Ứng dụng phía client sẽ tự động dò tìm máy chủ định kỳ: nếu lúc mở trang máy chủ chưa khởi động, giao diện sẽ hiển thị trạng thái “đang chờ backend” và tự động gửi lại các thao tác khi kết nối thành công, tránh tình trạng mỗi máy giữ dữ liệu riêng lẻ. Script `pnpm server` sẽ tự động chạy `pnpm rebuild better-sqlite3` nếu thiếu native binding; nếu vẫn gặp lỗi, hãy chạy `pnpm server:rebuild` (hoặc `pnpm rebuild better-sqlite3`) rồi thử lại.
 - Nút **“Đăng nhập quản trị”** ở góc trên bên phải dành cho quản trị viên. Với cơ sở dữ liệu mới, cần cấu hình biến môi trường `KPI_BOOTSTRAP_ADMIN_PASSWORD` trước khi đăng nhập lần đầu để bootstrap tài khoản `admin`.
 - Nếu muốn bật thêm tài khoản mẫu ở lần bootstrap, dùng mẫu `KPI_BOOTSTRAP_PASSWORD_<USERNAME>` với username viết hoa và thay ký tự đặc biệt bằng `_`. Ví dụ `lead.phuong` -> `KPI_BOOTSTRAP_PASSWORD_LEAD_PHUONG`.
+- Mật khẩu bootstrap, mật khẩu tạm và mật khẩu đổi mới hiện đều phải có **tối thiểu 8 ký tự**.
 - Sau khi đăng nhập, phần tiêu đề hiển thị tên người dùng cùng vai trò và bổ sung các nút **Đổi mật khẩu** và **Đăng xuất**.
 
 ## 2. Chức năng theo từng khu vực
@@ -75,8 +76,8 @@ Hệ thống được triển khai cho Công ty TNHH Tiếp Vận Hoàng Kim (Go
 
 ### 2.7 Quản lý tài khoản *(chỉ hiển thị khi tài khoản có quyền `Quản lý tài khoản`)*
 
-- **Tạo tài khoản**: nhập username, họ tên hiển thị, mật khẩu tạm, chọn vai trò và bật/tắt các quyền cụ thể.
-- **Danh sách tài khoản**: chỉnh quyền bằng checkbox, đổi vai trò, đặt lại mật khẩu hoặc xóa tài khoản. Không thể xóa quản trị viên cuối cùng.
+- **Tạo tài khoản**: nhập username, họ tên hiển thị, mật khẩu tạm (tối thiểu 8 ký tự), chọn vai trò và bật/tắt các quyền cụ thể.
+- **Danh sách tài khoản**: chỉnh quyền bằng checkbox, đổi vai trò, đặt lại mật khẩu hoặc xóa tài khoản. Mật khẩu đặt lại cũng phải có tối thiểu 8 ký tự. Không thể xóa quản trị viên cuối cùng.
 - Tất cả thao tác đều được ghi vào nhật ký.
 
 ### 2.8 Nhật ký hệ thống *(chỉ hiển thị khi có quyền `Quản lý tài khoản`)*
@@ -100,8 +101,8 @@ Hệ thống được triển khai cho Công ty TNHH Tiếp Vận Hoàng Kim (Go
 ## 3. Quản trị tài khoản
 
 - Vào tab **Tài khoản** để tạo người dùng mới, gán quyền theo nhu cầu (ví dụ chỉ cho phép import nhưng không sửa quy tắc).
-- Chọn **Đặt lại mật khẩu** để cấp mật khẩu mới cho nhân sự (hệ thống không gửi email, thông báo trực tiếp cho người dùng).
-- Người dùng có thể tự đổi mật khẩu bằng nút **Đổi mật khẩu** ở tiêu đề. Nếu nhập sai mật khẩu hiện tại, hệ thống hiển thị thông báo.
+- Chọn **Đặt lại mật khẩu** để cấp mật khẩu mới cho nhân sự (hệ thống không gửi email, thông báo trực tiếp cho người dùng). Mật khẩu mới phải có tối thiểu 8 ký tự.
+- Người dùng có thể tự đổi mật khẩu bằng nút **Đổi mật khẩu** ở tiêu đề. Nếu nhập sai mật khẩu hiện tại, hệ thống hiển thị thông báo. Mật khẩu mới cũng phải có tối thiểu 8 ký tự.
 
 ## 4. Ghi log và minh bạch dữ liệu
 
@@ -117,7 +118,7 @@ Hệ thống được triển khai cho Công ty TNHH Tiếp Vận Hoàng Kim (Go
 
 ## 6. Tài khoản mặc định & khuyến nghị bảo mật
 
-- Sau khi chạy thử, nên đổi mật khẩu của tài khoản `admin` (dùng nút **Đổi mật khẩu**).
+- Sau khi chạy thử, nên đổi mật khẩu của tài khoản `admin` (dùng nút **Đổi mật khẩu**) và dùng mật khẩu mạnh có tối thiểu 8 ký tự.
 - Có thể tạo thêm tài khoản với quyền hạn phù hợp cho từng nhóm (ví dụ tài khoản chỉ được import dữ liệu nhưng không chỉnh sửa quy tắc).
 - Nếu quên mật khẩu, quản trị viên khác có thể đặt lại trong tab **Tài khoản**.
 

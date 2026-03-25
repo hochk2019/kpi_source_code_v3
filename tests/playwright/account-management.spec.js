@@ -17,7 +17,7 @@ test('quản trị viên tạo và xóa tài khoản từ giao diện quản tr�
 
   await page.getByPlaceholder('username').fill(username);
   await page.getByPlaceholder('Tên người dùng').fill('Tài khoản Playwright');
-  await page.getByPlaceholder('Ít nhất 6 ký tự').fill('Playwright@2026');
+  await page.getByPlaceholder(/Ít nhất \d+ ký tự/).fill('Playwright@2026');
   await page.getByRole('button', { name: 'Tạo tài khoản' }).click();
 
   const accountRow = accountsTable.locator('tbody tr', { hasText: username });

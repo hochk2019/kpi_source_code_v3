@@ -302,7 +302,7 @@ describe('Tự động hoá quy trình nghiệp vụ chính', () => {
 
         username: 'tester',
 
-        password: '123456',
+        password: '12345678',
 
         role: 'manager',
 

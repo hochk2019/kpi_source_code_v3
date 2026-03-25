@@ -37,15 +37,18 @@ import MSTWorkflowPanel from '@/components/workflows/MSTWorkflowPanel.jsx';
 import KPIAdjustmentsWorkflowPanel from '@/components/workflows/KPIAdjustmentsWorkflowPanel.jsx';
 import ReportCenterPanel from '@/components/workflows/ReportCenterPanel.jsx';
 import { SectionHeader, SectionSurface } from '@/components/designSystem/shellPrimitives.jsx';
+import RuntimeErrorBoundary from '@/components/errorBoundaries/RuntimeErrorBoundary.jsx';
 
-const TabPanel = ({ children }) => (
-
-  <Suspense fallback={<div className="p-4 text-sm text-gray-500">Đang tải nội dung...</div>}>
-
-    <div className="ds-panel__inner">{children}</div>
-
-  </Suspense>
-
+const TabPanel = ({ children, tabLabel }) => (
+  <RuntimeErrorBoundary
+    level="panel"
+    title={`Không thể hiển thị ${tabLabel}.`}
+    description="Bạn có thể thử hiển thị lại module này hoặc chuyển sang tab khác để tiếp tục công việc."
+  >
+    <Suspense fallback={<div className="p-4 text-sm text-gray-500">Đang tải nội dung...</div>}>
+      <div className="ds-panel__inner">{children}</div>
+    </Suspense>
+  </RuntimeErrorBoundary>
 );
 
 
@@ -243,7 +246,7 @@ const KPICalculator = ({
 
         <TabsContent value="mst" className="ds-panel">
 
-          <TabPanel>
+          <TabPanel tabLabel="Gán MST">
 
             <MSTWorkflowPanel
               canEdit={canMstEdit}
@@ -259,7 +262,7 @@ const KPICalculator = ({
 
         <TabsContent value="hq" className="ds-panel">
 
-          <TabPanel>
+          <TabPanel tabLabel="Đại Lý HQ">
 
             <div id={getAppTabRootId('hq')} tabIndex={-1}>
               <HQAgencyManager canEdit={canMstEdit} currentUser={effectiveAuth} />
@@ -273,7 +276,7 @@ const KPICalculator = ({
 
         <TabsContent value="import" className="ds-panel">
 
-          <TabPanel>
+          <TabPanel tabLabel="Import Data">
 
             <div id={getAppTabRootId('import')} tabIndex={-1}>
               <DataImporter
@@ -293,7 +296,7 @@ const KPICalculator = ({
 
         <TabsContent value="teams" className="ds-panel">
 
-          <TabPanel>
+          <TabPanel tabLabel="Quản lý tổ đội">
 
             <div id={getAppTabRootId('teams')} tabIndex={-1}>
               <TeamManager canEdit={canTeamsEdit} currentUser={effectiveAuth} />
@@ -307,7 +310,7 @@ const KPICalculator = ({
 
         <TabsContent value="rules" className="ds-panel">
 
-          <TabPanel>
+          <TabPanel tabLabel="Quy tắc KPI">
 
             <div id={getAppTabRootId('rules')} tabIndex={-1}>
               <RulesEditor canEdit={canRulesEdit} currentUser={effectiveAuth} />
@@ -321,7 +324,7 @@ const KPICalculator = ({
 
         <TabsContent value="adjustments" className="ds-panel">
 
-          <TabPanel>
+          <TabPanel tabLabel="Điểm KPI +/- Thêm">
 
             <KPIAdjustmentsWorkflowPanel
               currentUser={effectiveAuth}
@@ -336,7 +339,7 @@ const KPICalculator = ({
 
         <TabsContent value="reports" className="ds-panel">
 
-          <TabPanel>
+          <TabPanel tabLabel="Báo cáo KPI">
 
             <ReportCenterPanel
               canExport={canExportReports}
@@ -355,7 +358,7 @@ const KPICalculator = ({
 
         <TabsContent value="health" className="ds-panel">
 
-          <TabPanel>
+          <TabPanel tabLabel="Health & sync">
 
               <div id={getAppTabRootId('health')} className="space-y-4" tabIndex={-1}>
                 <SectionSurface id="app-workflow-health-sync" tabIndex={-1}>
@@ -379,7 +382,7 @@ const KPICalculator = ({
 
           <TabsContent value="ai" className="ds-panel">
 
-            <TabPanel>
+            <TabPanel tabLabel="Trợ lý AI">
 
               <div id={getAppTabRootId('ai')} tabIndex={-1}>
                 <AiAssistant currentUser={effectiveAuth} />
@@ -397,7 +400,7 @@ const KPICalculator = ({
 
           <TabsContent value="accounts" className="ds-panel">
 
-            <TabPanel>
+            <TabPanel tabLabel="Tài khoản">
 
               <div id={getAppTabRootId('accounts')} tabIndex={-1}>
                 <AccountManager currentUser={effectiveAuth} />
@@ -415,7 +418,7 @@ const KPICalculator = ({
 
           <TabsContent value="audit" className="ds-panel">
 
-            <TabPanel>
+            <TabPanel tabLabel="Nhật ký hệ thống">
 
               <div id={getAppTabRootId('audit')} className="grid gap-6 xl:grid-cols-[5fr,3fr]" tabIndex={-1}>
 
@@ -445,7 +448,7 @@ const KPICalculator = ({
 
           <TabsContent value="export-audit" className="ds-panel">
 
-            <TabPanel>
+            <TabPanel tabLabel="Xuất nhật ký">
 
               <div id={getAppTabRootId('export-audit')} tabIndex={-1}>
                 <ExportAuditReport currentUser={effectiveAuth} />

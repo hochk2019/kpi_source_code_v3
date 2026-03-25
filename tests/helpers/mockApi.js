@@ -1,4 +1,8 @@
 import { vi } from 'vitest';
+import {
+  getPasswordMinLengthMessage,
+  MIN_PASSWORD_LENGTH,
+} from '../../packages/domain/src/passwordPolicy.js';
 
 import {
 
@@ -78,9 +82,9 @@ export function installMockApi(overrides = {}) {
 
         }
 
-        if (password.length < 6) {
+        if (password.length < MIN_PASSWORD_LENGTH) {
 
-          return jsonResponse({ ok: false, error: 'Mật khẩu cần tối thiểu 6 ký tự' }, 400);
+          return jsonResponse({ ok: false, error: getPasswordMinLengthMessage() }, 400);
 
         }
 
@@ -244,9 +248,9 @@ export function installMockApi(overrides = {}) {
 
       const password = String(body?.password || '').trim();
 
-      if (password.length < 6) {
+      if (password.length < MIN_PASSWORD_LENGTH) {
 
-        return jsonResponse({ ok: false, error: 'Mật khẩu cần tối thiểu 6 ký tự' }, 400);
+        return jsonResponse({ ok: false, error: getPasswordMinLengthMessage() }, 400);
 
       }
 

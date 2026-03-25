@@ -1,6 +1,11 @@
 import React, { useState } from "react";
 
-import { changeOwnPassword } from "@/auth/localAuth.js";
+import {
+  changeOwnPassword,
+  getNewPasswordMinLengthMessage,
+  getPasswordMinLengthPlaceholder,
+  MIN_PASSWORD_LENGTH,
+} from "@/auth/localAuth.js";
 
 
 
@@ -32,9 +37,9 @@ export default function ChangePasswordDialog({ currentUser, onClose }) {
 
     }
 
-    if (!newPassword || newPassword.length < 6) {
+    if (!newPassword || newPassword.length < MIN_PASSWORD_LENGTH) {
 
-      setError("Mật khẩu mới cần tối thiểu 6 ký tự");
+      setError(getNewPasswordMinLengthMessage());
 
       return;
 
@@ -116,7 +121,8 @@ export default function ChangePasswordDialog({ currentUser, onClose }) {
 
               onChange={(e) => setNewPassword(e.target.value)}
 
-              placeholder="Ít nhất 6 ký tự"
+              placeholder={getPasswordMinLengthPlaceholder()}
+              minLength={MIN_PASSWORD_LENGTH}
 
               required
 

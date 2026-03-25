@@ -24,6 +24,10 @@ import {
 
   DEFAULT_ROLE,
 
+  getPasswordMinLengthPlaceholder,
+
+  MIN_PASSWORD_LENGTH,
+
   normalizeRole,
 
 } from "@/auth/localAuth.js";
@@ -1398,7 +1402,7 @@ export default function AccountManager() {
 
     async (username) => {
 
-      const nextPassword = window.prompt(`Nhập mật khẩu mới cho ${username} (>=6 ký tự):`);
+      const nextPassword = window.prompt(`Nhập mật khẩu mới cho ${username} (>={MIN_PASSWORD_LENGTH} ký tự):`);
 
       if (!nextPassword) return;
 
@@ -1932,7 +1936,7 @@ export default function AccountManager() {
 
               onChange={(e) => setForm((prev) => ({ ...prev, password: e.target.value }))}
 
-              placeholder="Ít nhất 6 ký tự"
+              placeholder={getPasswordMinLengthPlaceholder()}
 
               required
 

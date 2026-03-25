@@ -8,6 +8,10 @@ import {
   getPermissionTemplate,
   normalizeRoleKey,
 } from '../../packages/domain/src/accountRoles.js';
+import {
+  getPasswordMinLengthMessage,
+  MIN_PASSWORD_LENGTH,
+} from '../../packages/domain/src/passwordPolicy.js';
 
 import {
   deleteReportSchedule,
@@ -61,17 +65,13 @@ export function createDefaultAccountsState() {
 
     ['admin', 'admin123'],
 
-    ['nhanvien', '123456'],
+    ['nhanvien', '12345678'],
 
   ]);
 
   return { accounts, passwords, currentUser: null };
 
 }
-
-const MIN_PASSWORD_LENGTH = 6;
-
-
 
 function normalizePermissions(permissions, role) {
 
@@ -671,7 +671,7 @@ export function createDefaultHandlers(state) {
 
       if (password.length < MIN_PASSWORD_LENGTH) {
 
-        return jsonResponse({ ok: false, error: `Mật khẩu cần tối thiểu ${MIN_PASSWORD_LENGTH} ký tự` }, 400);
+        return jsonResponse({ ok: false, error: getPasswordMinLengthMessage() }, 400);
 
       }
 
@@ -753,7 +753,7 @@ export function createDefaultHandlers(state) {
 
       if (password.length < MIN_PASSWORD_LENGTH) {
 
-        return jsonResponse({ ok: false, error: `Mật khẩu cần tối thiểu ${MIN_PASSWORD_LENGTH} ký tự` }, 400);
+        return jsonResponse({ ok: false, error: getPasswordMinLengthMessage() }, 400);
 
       }
 

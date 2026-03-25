@@ -15,6 +15,11 @@ import {
   normalizeRoleKey,
 
 } from "../../packages/domain/src/accountRoles.js";
+import {
+  getNewPasswordMinLengthMessage,
+  getPasswordMinLengthMessage,
+  MIN_PASSWORD_LENGTH,
+} from "../../packages/domain/src/passwordPolicy.js";
 
 
 
@@ -23,6 +28,12 @@ export const PERMISSION_KEYS = [...ACCOUNT_PERMISSION_KEYS];
 export const ROLE_OPTIONS = listRoleOptions();
 
 export { ADMIN_ROLE, DEFAULT_ROLE, TEAM_LEAD_ROLE, MANAGER_ROLE } from "../../packages/domain/src/accountRoles.js";
+export {
+  getNewPasswordMinLengthMessage,
+  getPasswordMinLengthMessage,
+  getPasswordMinLengthPlaceholder,
+  MIN_PASSWORD_LENGTH,
+} from "../../packages/domain/src/passwordPolicy.js";
 
 
 
@@ -31,10 +42,6 @@ export function normalizeRole(role) {
   return normalizeRoleKey(role);
 
 }
-
-
-
-const MIN_PASSWORD_LENGTH = 6;
 
 
 
@@ -576,7 +583,7 @@ export async function setAccountPassword(usernameInput, newPasswordInput) {
 
   if (password.length < MIN_PASSWORD_LENGTH) {
 
-    throw new Error(`Mật khẩu cần tối thiểu ${MIN_PASSWORD_LENGTH} ký tự`);
+    throw new Error(getPasswordMinLengthMessage());
 
   }
 
@@ -636,7 +643,7 @@ export async function changeOwnPassword(usernameInput, currentPasswordInput, new
 
   if (newPassword.length < MIN_PASSWORD_LENGTH) {
 
-    throw new Error(`Mật khẩu mới cần tối thiểu ${MIN_PASSWORD_LENGTH} ký tự`);
+    throw new Error(getNewPasswordMinLengthMessage());
 
   }
 

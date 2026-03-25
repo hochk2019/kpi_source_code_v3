@@ -88,8 +88,14 @@ import { normalizeSqlUnicodeRecord } from './ecus/sqlUnicode.js';
 import { deliverAlertNotification, hasAlertTargets } from './alerts/delivery.js';
 
 import { loadAiHttpsConfig } from './https/aiHttpsConfig.js';
+import { createLoginRateLimit, createSecurityMiddleware } from './securityHardening.js';
 
 import { DEFAULT_RULES as SHARED_DEFAULT_RULES } from '../packages/domain/src/defaultRules.js';
+import {
+  getNewPasswordMinLengthMessage,
+  getPasswordMinLengthMessage,
+  MIN_PASSWORD_LENGTH,
+} from '../packages/domain/src/passwordPolicy.js';
 
 import { getRulesSeed, persistRulesSnapshot, loadRulesSnapshot, listRulesHistory } from './rulesPersistence.js';
 
@@ -1306,8 +1312,6 @@ const backupScheduleMeta = {
 
 
 const PASSWORD_SALT_ROUNDS = 10;
-
-const MIN_PASSWORD_LENGTH = 6;
 
 const SESSION_COOKIE_NAME = 'kpi_session';
 
@@ -11680,7 +11684,7 @@ function createAccountRecord(payload, { actor = 'system' } = {}) {
 
   if (password.length < MIN_PASSWORD_LENGTH) {
 
-    throw new Error(`Mật khẩu cần tối thiểu ${MIN_PASSWORD_LENGTH} ký tự`);
+    throw new Error(getPasswordMinLengthMessage());
 
   }
 
@@ -11967,7 +11971,7 @@ function setAccountPasswordRecord(usernameInput, newPasswordInput, { actor = 'sy
 
   if (newPassword.length < MIN_PASSWORD_LENGTH) {
 
-    throw new Error(`Mật khẩu cần tối thiểu ${MIN_PASSWORD_LENGTH} ký tự`);
+    throw new Error(getPasswordMinLengthMessage());
 
   }
 
@@ -12121,7 +12125,7 @@ async function changeOwnPasswordRecord(usernameInput, currentPasswordInput, newP
 
   if (newPassword.length < MIN_PASSWORD_LENGTH) {
 
-    throw new Error(`Mật khẩu mới cần tối thiểu ${MIN_PASSWORD_LENGTH} ký tự`);
+    throw new Error(getNewPasswordMinLengthMessage());
 
   }
 
@@ -22058,6 +22062,8 @@ export const app = express();
 
 await mountReportingV4App(app);
 
+app.use(createSecurityMiddleware());
+
 
 
 onSqlTimeout((event) => {
@@ -22167,6 +22173,18 @@ const maxJsonBodyLimit = (() => {
 })();
 
 app.use(express.json({ limit: maxJsonBodyLimit }));
+
+const loginRateLimit = createLoginRateLimit({
+  onLimitReached: (req) => {
+    const usernameInput = (req.body?.username ?? '').toString().trim();
+    pushAuditLog({
+      actor: usernameInput || 'unknown',
+      action: 'auth.login_rate_limited',
+      detail: 'Chặn đăng nhập do vượt ngưỡng thử lại',
+      meta: { ip: req.ip || null },
+    });
+  },
+});
 
 
 
@@ -24689,7 +24707,7 @@ app.get('/api/reports/export/audit', (req, res) => {
 
 
 
-app.post('/api/auth/login', async (req, res) => {
+app.post('/api/auth/login', loginRateLimit, async (req, res) => {
 
   try {
 

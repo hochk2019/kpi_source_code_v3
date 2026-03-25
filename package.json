@@ -42,7 +42,8 @@
     "test:screenshot": "pnpm build && pnpm exec playwright test tests/playwright/favicon.spec.js",
     "test:playwright": "pnpm exec playwright test",
     "gitnexus:analyze": "npx gitnexus analyze",
-    "gitnexus:refresh": "node scripts/gitnexus-refresh.mjs"
+    "gitnexus:refresh": "node scripts/gitnexus-refresh.mjs",
+    "gitnexus:serve": "npx gitnexus serve --host 127.0.0.1 --port 4747"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.0.1",
@@ -84,7 +85,9 @@
     "embla-carousel-react": "^8.6.0",
     "exceljs": "^4.4.0",
     "express": "^4.21.2",
+    "express-rate-limit": "^8.3.1",
     "framer-motion": "^12.15.0",
+    "helmet": "^8.1.0",
     "input-otp": "^1.4.2",
     "lucide-react": "^0.510.0",
     "mssql": "^11.0.1",
