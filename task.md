@@ -2,8 +2,8 @@
 
 ## Active Slice
 
-- Title: Lap ke hoach rollout `server-v4` beyond reporting truoc khi mount them module
-- Bead: `cng-xyq.5`
+- Title: Mount wave-2 server-v4 KPI modules through legacy server
+- Bead: `cng-wh8`
 - Status: in_progress
 - Last updated: 2026-03-25
 
@@ -30,11 +30,18 @@
      - cac parity gap hien tai, dac biet quanh `auth` va `declarations`
      - thu tu rollout theo wave thay vi mount dong loat 8 module
      - verify gate va test suite nen chay cho moi wave
+5. `cng-xyq.7` dang implementation wave-1 mount:
+   - them `server/v4RolloutMount.js` de co dinh danh sach module wave-1 va helper chon module tu compiled `moduleCatalog`
+   - doi legacy mount tu `reporting` don le sang `reporting + teams + mst-assignments + hq-agencies`
+   - them `tests/v4RolloutMount.test.js` de khoa logic selection va missing-module warning path
+6. `cng-wh8` da duoc mo cho wave-2 mount:
+   - muc tieu tiep theo la mount `kpi-rules` va `kpi-adjustments` qua legacy server sau khi wave-1 da on dinh
+   - can chay impact analysis truoc khi cham vao startup mount helper va verify lai toan bo matrix `reporting + wave-1 + wave-2`
 
 ## Next Suggested Slice
 
-- Title: Mount wave-1 cho `teams` + `mst-assignments` + `hq-agencies` qua legacy server
-- Bead: `cng-xyq.5`
+- Title: Thuc hien wave-2 mount `kpi-rules` + `kpi-adjustments`
+- Bead: `cng-wh8`
 - Status: in_progress
 3. `cng-xyq.6` da duoc implementation va dong bead:
    - them `helmet` + `express-rate-limit`
@@ -60,11 +67,13 @@
 
 - Node tests:
   - `pnpm exec vitest run tests/passwordPolicy.test.js tests/securityHardening.test.js --environment node`
+  - `pnpm exec vitest run tests/v4RolloutMount.test.js tests/server.monitor.test.js tests/server-v4/appShell.test.js tests/server-v4/legacyCompatRoutes.test.js tests/server-v4/postgresTeamsRoute.test.js tests/server-v4/postgresMstAssignmentsRoute.test.js tests/server-v4/postgresHqAgenciesRoute.test.js --environment node`
 - Frontend/jsdom tests:
   - `pnpm exec vitest run tests/auth.test.jsx tests/accountManager.staff.test.jsx tests/automation.flows.test.js tests/e2e.admin-flows.test.jsx --environment jsdom`
   - `pnpm exec vitest run tests/runtimeErrorBoundary.test.jsx tests/appRoot.errorBoundary.test.jsx tests/kpiCalculator.errorBoundary.test.jsx tests/appShellFrame.test.jsx --environment jsdom`
   - `pnpm exec vitest run tests/staffCombobox.test.jsx tests/dataImporterAssignmentComboboxes.test.jsx tests/accountManager.staff.test.jsx tests/mstAssignment.person-columns.test.jsx`
 - Targeted lint:
+  - `pnpm exec eslint server/index.js server/v4RolloutMount.js tests/v4RolloutMount.test.js`
   - `pnpm exec eslint server/index.js server/securityHardening.js packages/domain/src/passwordPolicy.js src/auth/localAuth.js src/components/ChangePasswordDialog.jsx src/components/AccountManager.jsx tests/passwordPolicy.test.js tests/securityHardening.test.js tests/helpers/mockApi.js tests/helpers/mockApiState.js tests/automation.flows.test.js tests/e2e.admin-flows.test.jsx tests/playwright/account-management.spec.js`
   - `pnpm exec eslint src/main.jsx src/AppRoot.jsx src/components/errorBoundaries/RuntimeErrorBoundary.jsx src/components/KPICalculator.jsx tests/runtimeErrorBoundary.test.jsx tests/appRoot.errorBoundary.test.jsx tests/kpiCalculator.errorBoundary.test.jsx`
   - `pnpm exec eslint src/components/shared/StaffCombobox.jsx src/components/dataImporter/DataImporterAssignmentComboboxes.jsx src/components/AccountManager.jsx tests/accountManager.staff.test.jsx tests/staffCombobox.test.jsx`
@@ -75,7 +84,7 @@
 ## Notes
 
 - GitNexus impact/context dang bi lock file `.gitnexus/lbug` do session `gitnexus serve`; tam thoi da fallback sang caller grep de scope edit an toan.
-- Working tree hien co thay doi chua commit. Chua commit/push cho draft rollout plan vi nguoi dung chua yeu cau them sau 2 commit vua xong.
+- Working tree hien co thay doi chua commit cho `cng-xyq.7`; `cng-xyq.5` da duoc commit thanh rollout-plan artifact rieng.
 - `package.json` da co script `gitnexus:serve` tu thay doi truoc do; phien nay bo sung them dependency `helmet` va `express-rate-limit`.
 - `cng-9dx` chi dong bo tai lieu/notebook, khong thay doi runtime code.
 - `cng-xyq.3` khong doi logic nghiep vu; chi tang guardrail de app shell va tung module co fallback ro rang khi render/runtime error xay ra.
@@ -86,6 +95,10 @@
   - wave 2: `kpi-rules` + `kpi-adjustments`
   - wave 3: auth parity closure
   - wave 4-5: declarations shadow rollout va write cutover
+- `cng-xyq.7` hien chi doi logic mount tren legacy server; khong doi `buildV4App` hay router internals ben trong `server-v4`.
+- `cng-xyq.7` da hoan tat va dong bead; working tree hien chi chua commit thay doi wave-1 mount truoc khi bat dau wave-2.
+- `cng-wh8` la bead tiep theo cho wave-2 mount `kpi-rules` + `kpi-adjustments`.
+- `tests/server.monitor.test.js` van in stderr khi `dist/server-v4/index.js` khong co trong vitest runtime, nhung suite van pass vi startup path fallback dung nhu hien trang.
 
 ## Previous Completed Slice
 
