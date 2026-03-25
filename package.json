@@ -40,7 +40,9 @@
     "precommit": "pnpm run verify:server-v4 && pnpm lint && pnpm exec vitest run --config vitest.frontend.config.mjs tests/reports.test.js tests/store.test.js tests/dataImporter.preview.test.jsx tests/storageClient.test.js",
     "prepare": "pnpm exec simple-git-hooks",
     "test:screenshot": "pnpm build && pnpm exec playwright test tests/playwright/favicon.spec.js",
-    "test:playwright": "pnpm exec playwright test"
+    "test:playwright": "pnpm exec playwright test",
+    "gitnexus:analyze": "npx gitnexus analyze",
+    "gitnexus:refresh": "node scripts/gitnexus-refresh.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.0.1",
@@ -144,6 +146,8 @@
     ]
   },
   "simple-git-hooks": {
-    "pre-commit": "pnpm precommit"
+    "pre-commit": "pnpm precommit",
+    "post-commit": "pnpm gitnexus:refresh",
+    "post-merge": "pnpm gitnexus:refresh"
   }
 }
