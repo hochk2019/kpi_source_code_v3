@@ -4,8 +4,8 @@
 
 - Title: Tach panel va hook orchestration khoi AiAssistant
 - Bead: `cng-xyq.14`
-- Status: in_progress
-- Last updated: 2026-03-25
+- Status: completed
+- Last updated: 2026-03-26
 
 ## Completed This Session
 
@@ -190,7 +190,10 @@
 - `cng-xyq.10` da hoan tat o muc helper extraction cho `AiAssistant`; buoc tiep theo trong wave-1 la `cng-xyq.11` de dat baseline test va tach panel khoi `RulesEditor`.
 - `cng-xyq.11` da hoan tat o muc panel decomposition cho `RulesEditor`; phan con lai hop ly nhat neu tiep tuc wave-1 la tach cac control/editor nho va co the seed them bead rieng cho RulesEditor slice tiep theo.
 - `cng-xyq.13` da hoan tat; `RulesEditor` hien da tach xong panel + control co san, phan con lai neu muon giam them coupling se la config-tab/orchestration layer, nhung wave-1 backlog con bead pending hop ly hon la `AiAssistant` slice B.
-- `cng-xyq.14` da duoc mo va claim; blast radius cua `AiAssistant` hien la `LOW`, va buoc tiep theo dang la map ranh gioi de tach panel `config/history/chat` cung hook orchestration ra khoi `src/components/AiAssistant.jsx`.
+- `cng-xyq.14` da hoan tat; `AiAssistant` hien da tach panel `config/history/chat`, `AiAssistantStatusSidebar`, va hook `useAiAssistantConfig` / `useAiConversation` ra khoi `src/components/AiAssistant.jsx`, trong khi file goc giu lai orchestration snapshot/insight/history flow.
+- verify `cng-xyq.14`:
+  - `pnpm exec vitest run tests/aiAssistant.config.test.jsx tests/aiAssistant.panels.test.jsx tests/useAiConversation.test.jsx tests/useAiAssistantConfig.test.jsx --environment jsdom`
+  - `pnpm exec eslint src/components/AiAssistant.jsx src/components/ai-assistant/hooks/useAiConversation.js src/components/ai-assistant/hooks/useAiAssistantConfig.js src/components/ai-assistant/panels/AiAssistantChatPanel.jsx src/components/ai-assistant/panels/AiAssistantHistoryPanel.jsx src/components/ai-assistant/panels/AiAssistantStatusSidebar.jsx src/components/ai-assistant/panels/AiAssistantConfigPanel.jsx tests/aiAssistant.panels.test.jsx tests/useAiConversation.test.jsx tests/useAiAssistantConfig.test.jsx`
 - `gitnexus_detect_changes(scope: "all")` van tra `No changes detected` ngay ca sau helper extraction, nen tiep tuc coi day la van de worktree-awareness cua GitNexus; gate thuc te van dua tren `git status`, lint, va test muc tieu.
 - `tests/server.monitor.test.js` van in stderr khi `dist/server-v4/index.js` khong co trong vitest runtime, nhung suite van pass vi startup path fallback dung nhu hien trang.
 
