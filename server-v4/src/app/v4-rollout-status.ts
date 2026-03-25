@@ -4,6 +4,10 @@ import {
   buildDeclarationsShadowStatus,
   type DeclarationShadowGroupStatus,
 } from './declarationsShadowRollout.js';
+import {
+  buildDeclarationWriteCutoverStatus,
+  type DeclarationWriteCutoverStatus,
+} from './declarationsWriteCutover.js';
 import type { DomainModule } from './domain-module.js';
 import {
   createEmptyImporterCompatTrafficSnapshot,
@@ -77,6 +81,7 @@ export type V4RolloutStatus = {
       summary: string;
       groups: DeclarationShadowGroupStatus[];
     };
+    declarationCutover: DeclarationWriteCutoverStatus;
   };
   rollout: {
     currentStage: RolloutStageId;
@@ -120,6 +125,10 @@ export function buildV4RolloutStatus(options: BuildV4RolloutStatusOptions): V4Ro
     modules: options.modules,
     importerCompat,
   });
+  const declarationCutover = buildDeclarationWriteCutoverStatus({
+    shadowGroups: declarationShadow.groups,
+    importerCompat,
+  });
   const hotPathKeys =
     persistenceSourceKind === 'legacy-kv-store' ? [...LEGACY_BUSINESS_HOT_PATH_KEYS] : [];
   const moduleStatuses = options.modules.map((domainModule) =>
@@ -135,9 +144,15 @@ export function buildV4RolloutStatus(options: BuildV4RolloutStatusOptions): V4Ro
     hotPathKeys,
     importerCompat,
     declarationShadowGroups: declarationShadow.groups,
+    declarationCutover,
   });
-  const readiness = buildReadiness(dbFile, metrics, persistenceSourceKind);
-  const stages = buildStages({ dbFile, metrics, persistenceSourceKind });
+  const readiness = buildReadiness(dbFile, metrics, persistenceSourceKind, declarationCutover);
+  const stages = buildStages({
+    dbFile,
+    metrics,
+    persistenceSourceKind,
+    declarationCutoverReadiness: declarationCutover.readiness,
+  });
 
   return {
     generatedAt: (options.now ?? new Date()).toISOString(),
@@ -161,6 +176,7 @@ export function buildV4RolloutStatus(options: BuildV4RolloutStatusOptions): V4Ro
         summary: describeImporterCompatTraffic(importerCompat),
       },
       declarationShadow,
+      declarationCutover,
     },
     rollout: {
       currentStage: resolveCurrentStage(stages),
@@ -322,9 +338,10 @@ function buildChecks(input: {
   hotPathKeys: string[];
   importerCompat: ImporterCompatTrafficSnapshot;
   declarationShadowGroups: DeclarationShadowGroupStatus[];
+  declarationCutover: DeclarationWriteCutoverStatus;
 }): V4RolloutCheck[] {
   const scaffoldModules = input.moduleStatuses.filter((entry) => entry.runtimeMode === 'scaffold').map((entry) => entry.id);
-  const checks = [
+  const checks: V4RolloutCheck[] = [
     {
       id: 'legacy-store-access',
       status:
@@ -377,6 +394,12 @@ function buildChecks(input: {
           ? `${input.metrics.modules.readWrite} implemented modules expose mutation routes for staged rollout verification.`
           : 'No write-capable server-v4 modules are mounted yet.',
     },
+    {
+      id: 'declarations-write-cutover-policy',
+      status: toCheckStatus(input.declarationCutover.readiness),
+      summary: 'Declarations write cutover policy',
+      detail: input.declarationCutover.detail,
+    },
   ];
 
   for (const group of input.declarationShadowGroups) {
@@ -410,16 +433,19 @@ function buildReadiness(
   dbFile: V4RolloutStatus['health']['dbFile'],
   metrics: V4RolloutStatus['metrics'],
   persistenceSourceKind: BusinessSnapshotSourceKind,
+  declarationCutover: DeclarationWriteCutoverStatus,
 ): V4RolloutStatus['health']['readiness'] {
   const legacyStoreBlocked =
     persistenceSourceKind !== 'relational-store' && (dbFile.state === 'missing' || dbFile.state === 'unreadable');
 
-  if (legacyStoreBlocked || metrics.modules.implemented === 0) {
+  if (legacyStoreBlocked || metrics.modules.implemented === 0 || declarationCutover.readiness === 'blocked') {
     return {
       state: 'blocked',
       label: 'Rollout blocked',
       detail:
-        persistenceSourceKind === 'relational-store'
+        declarationCutover.readiness === 'blocked'
+          ? declarationCutover.detail
+          : persistenceSourceKind === 'relational-store'
           ? 'server-v4 cannot progress because no runtime modules are mounted.'
           : 'server-v4 cannot progress because the legacy store is unavailable or no runtime modules are mounted.',
     };
@@ -442,6 +468,14 @@ function buildReadiness(
     };
   }
 
+  if (declarationCutover.readiness !== 'ready') {
+    return {
+      state: 'degraded',
+      label: 'Declarations cutover hold',
+      detail: declarationCutover.detail,
+    };
+  }
+
   return {
     state: 'ready',
     label: 'Production cutover ready',
@@ -453,6 +487,7 @@ function buildStages(input: {
   dbFile: V4RolloutStatus['health']['dbFile'];
   metrics: V4RolloutStatus['metrics'];
   persistenceSourceKind: BusinessSnapshotSourceKind;
+  declarationCutoverReadiness: DeclarationWriteCutoverStatus['readiness'];
 }): V4RolloutStatus['rollout']['stages'] {
   const baselineStatus =
     input.persistenceSourceKind === 'relational-store' || input.dbFile.state === 'ready'
@@ -471,9 +506,10 @@ function buildStages(input: {
   const cutoverStatus =
     moduleParityStatus === 'ready' &&
     input.persistenceSourceKind === 'relational-store' &&
-    input.metrics.modules.readWrite > 0
+    input.metrics.modules.readWrite > 0 &&
+    input.declarationCutoverReadiness === 'ready'
       ? 'ready'
-      : moduleParityStatus === 'blocked'
+      : moduleParityStatus === 'blocked' || input.declarationCutoverReadiness === 'blocked'
         ? 'blocked'
         : 'hold';
 
@@ -503,9 +539,22 @@ function buildStages(input: {
       id: 'cutover-ready',
       label: 'Production cutover ready',
       status: cutoverStatus,
-      gate: 'Relational runtime stores own hot paths and write-capable routes are available for production cutover.',
+      gate:
+        'Relational runtime stores own hot paths, write-capable routes are available, and declarations cutover policy is green.',
     },
   ];
+}
+
+function toCheckStatus(readiness: DeclarationWriteCutoverStatus['readiness']): CheckStatus {
+  if (readiness === 'ready') {
+    return 'pass';
+  }
+
+  if (readiness === 'blocked') {
+    return 'fail';
+  }
+
+  return 'warn';
 }
 
 function resolveCurrentStage(stages: V4RolloutStatus['rollout']['stages']): RolloutStageId {

@@ -79,7 +79,8 @@ describe('server-v4 app shell', () => {
     });
     expect(response.body.rollout.stages.find((entry) => entry.id === 'cutover-ready')).toMatchObject({
       label: 'Production cutover ready',
-      gate: 'Relational runtime stores own hot paths and write-capable routes are available for production cutover.',
+      gate:
+        'Relational runtime stores own hot paths, write-capable routes are available, and declarations cutover policy is green.',
     });
     expect(response.body.rollout.fallback).toContain('Keep monolith `/api/*` routes as the production write path until the next gate is green.');
     expect(
@@ -99,6 +100,13 @@ describe('server-v4 app shell', () => {
     expect(response.body.compatibility.declarationShadow.summary).toContain(
       'Declarations shadow rollout gate is green',
     );
+    expect(response.body.compatibility.declarationCutover).toMatchObject({
+      readiness: 'hold',
+      requiredGuardMode: 'block-migrated',
+      observedGuardMode: 'off',
+      observedMigratedCompatHits: 0,
+      shadowGateStatus: 'pass',
+    });
     expect(
       response.body.compatibility.declarationShadow.groups.find(
         (entry) => entry.id === 'declarations-shadow-ecus-preview-commit',
@@ -114,6 +122,13 @@ describe('server-v4 app shell', () => {
     ).toMatchObject({
       status: 'pass',
     });
+    expect(
+      response.body.migrationVerification.checks.find(
+        (entry) => entry.id === 'declarations-write-cutover-policy',
+      ),
+    ).toMatchObject({
+      status: 'warn',
+    });
   });
 
   it('surfaces relational-store rollout health without requiring the legacy db file', async () => {
@@ -121,6 +136,9 @@ describe('server-v4 app shell', () => {
       dbFile: null,
       persistenceMode: 'postgres',
       persistence: createRelationalStorePersistenceStub(),
+      importerCompat: {
+        guardMode: 'block-migrated',
+      },
     });
     const response = await request(app).get('/api/v4/meta/rollout');
 

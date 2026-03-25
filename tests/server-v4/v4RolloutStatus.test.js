@@ -91,7 +91,8 @@ describe('server-v4 rollout status', () => {
     expect(status.rollout.stages.find((entry) => entry.id === 'cutover-ready')).toMatchObject({
       status: 'hold',
       label: 'Production cutover ready',
-      gate: 'Relational runtime stores own hot paths and write-capable routes are available for production cutover.',
+      gate:
+        'Relational runtime stores own hot paths, write-capable routes are available, and declarations cutover policy is green.',
     });
     expect(status.modules.find((entry) => entry.id === 'declarations')).toMatchObject({
       routeCount: declarationsRoutes.length,
@@ -107,6 +108,13 @@ describe('server-v4 rollout status', () => {
       },
     });
     expect(status.compatibility.declarationShadow.summary).toContain('Declarations shadow rollout gate is green');
+    expect(status.compatibility.declarationCutover).toMatchObject({
+      readiness: 'hold',
+      requiredGuardMode: 'block-migrated',
+      observedGuardMode: 'off',
+      observedMigratedCompatHits: 0,
+      shadowGateStatus: 'pass',
+    });
     expect(status.compatibility.declarationShadow.groups).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -138,6 +146,13 @@ describe('server-v4 rollout status', () => {
     ).toMatchObject({
       status: 'pass',
     });
+    expect(
+      status.migrationVerification.checks.find(
+        (entry) => entry.id === 'declarations-write-cutover-policy',
+      ),
+    ).toMatchObject({
+      status: 'warn',
+    });
   });
 
   it('blocks rollout readiness when the legacy db file is missing', () => {
@@ -165,6 +180,9 @@ describe('server-v4 rollout status', () => {
       implementedModuleIds,
       runtimeRouteCoverage: runtimeModuleRouteCoverage,
       persistenceSourceKind: 'relational-store',
+      importerCompat: createImporterCompatTrafficTracker({
+        guardMode: 'block-migrated',
+      }).snapshot(),
     });
 
     expect(status.persistence).toMatchObject({
@@ -224,6 +242,20 @@ describe('server-v4 rollout status', () => {
     expect(
       status.migrationVerification.checks.find(
         (entry) => entry.id === 'declarations-shadow-alerts',
+      ),
+    ).toMatchObject({
+      status: 'warn',
+    });
+    expect(status.compatibility.declarationCutover).toMatchObject({
+      readiness: 'hold',
+      observedGuardMode: 'block-migrated',
+      observedMigratedCompatHits: 1,
+      observedBlockedCompatHits: 1,
+      shadowGateStatus: 'warn',
+    });
+    expect(
+      status.migrationVerification.checks.find(
+        (entry) => entry.id === 'declarations-write-cutover-policy',
       ),
     ).toMatchObject({
       status: 'warn',
