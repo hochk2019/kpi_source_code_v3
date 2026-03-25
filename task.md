@@ -2,9 +2,9 @@
 
 ## Active Slice
 
-- Title: Xac minh checklist nghiep vu va cap nhat Checklist.md
-- Bead: `cng-xyq.1`
-- Status: completed
+- Title: Lap ke hoach rollout `server-v4` beyond reporting truoc khi mount them module
+- Bead: `cng-xyq.5`
+- Status: in_progress
 - Last updated: 2026-03-25
 
 ## Completed This Session
@@ -23,12 +23,19 @@
    - da danh dau cac muc co bang chung code/test
    - da ghi ro cac muc chua thay, chua khop day du, hoac can E2E/runtime verification
    - cac diem can theo doi them: C/O runtime 500, cot AMA, cleanup toan repo, muc "di lam muon", va mapping tai khoan mac dinh dung theo danh sach nghiep vu
+4. Draft rollout plan cho `server-v4` beyond reporting da duoc ghi lai tai:
+   - `docs/server-v4-rollout-plan-2026-03-25.md`
+   - bao gom:
+     - inventory route `legacy` va `v4` can doi chieu
+     - cac parity gap hien tai, dac biet quanh `auth` va `declarations`
+     - thu tu rollout theo wave thay vi mount dong loat 8 module
+     - verify gate va test suite nen chay cho moi wave
 
 ## Next Suggested Slice
 
-- Title: Lap ke hoach rollout `server-v4` sau module reporting
+- Title: Mount wave-1 cho `teams` + `mst-assignments` + `hq-agencies` qua legacy server
 - Bead: `cng-xyq.5`
-- Status: ready
+- Status: in_progress
 3. `cng-xyq.6` da duoc implementation va dong bead:
    - them `helmet` + `express-rate-limit`
    - them `server/securityHardening.js`
@@ -68,20 +75,17 @@
 ## Notes
 
 - GitNexus impact/context dang bi lock file `.gitnexus/lbug` do session `gitnexus serve`; tam thoi da fallback sang caller grep de scope edit an toan.
-- Working tree hien co thay doi chua commit. Chua commit/push vi nguoi dung chua yeu cau.
+- Working tree hien co thay doi chua commit. Chua commit/push cho draft rollout plan vi nguoi dung chua yeu cau them sau 2 commit vua xong.
 - `package.json` da co script `gitnexus:serve` tu thay doi truoc do; phien nay bo sung them dependency `helmet` va `express-rate-limit`.
 - `cng-9dx` chi dong bo tai lieu/notebook, khong thay doi runtime code.
 - `cng-xyq.3` khong doi logic nghiep vu; chi tang guardrail de app shell va tung module co fallback ro rang khi render/runtime error xay ra.
 - `cng-xyq.2` co working tree chua commit. Shared component moi da co test rieng; lint con 2 warning `react-refresh/only-export-components` do file export helper thuần.
-
-## Next Suggested Slice
-
-- Bead: `cng-xyq.1`
-- Title: Xac minh checklist nghiep vu va cap nhat Checklist.md theo trang thai thuc te
-- Why next:
-  - tiep noi truc tiep backlog fact-check va khong can mo rong blast radius code runtime trong luc `cng-xyq.2` chua commit
-  - giup doi chieu checklist nghiep vu voi trang thai implementation thuc te sau 2 slice vua xong
-  - tao mat bang ro rang truoc khi lam rollout `server-v4` hoac tach nho cac fat component con lai
+- `cng-xyq.5` draft plan hien de xuat thu tu rollout:
+  - wave 0: rollout instrumentation
+  - wave 1: `teams` + `mst-assignments` + `hq-agencies`
+  - wave 2: `kpi-rules` + `kpi-adjustments`
+  - wave 3: auth parity closure
+  - wave 4-5: declarations shadow rollout va write cutover
 
 ## Previous Completed Slice
 
