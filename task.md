@@ -2,9 +2,9 @@
 
 ## Active Slice
 
-- Title: Dat baseline test va tach panel khoi RulesEditor
-- Bead: `cng-xyq.11`
-- Status: closed
+- Title: Tach panel va hook orchestration khoi AiAssistant
+- Bead: `cng-xyq.14`
+- Status: in_progress
 - Last updated: 2026-03-25
 
 ## Completed This Session
@@ -141,6 +141,13 @@
    - targeted verify da pass:
      - `pnpm exec vitest run tests/rulesEditor.test.jsx tests/rulesEditorSimulationPanel.test.jsx tests/rulesEditorHistoryPanel.test.jsx --environment jsdom`
      - `pnpm exec eslint src/components/RulesEditor.jsx src/components/rules-editor/RulesSimulationPanel.jsx src/components/rules-editor/RulesHistoryPanel.jsx tests/rulesEditor.test.jsx tests/rulesEditorSimulationPanel.test.jsx tests/rulesEditorHistoryPanel.test.jsx`
+20. `cng-xyq.13` da xong o muc tach control inline khoi `RulesEditor`:
+   - them `src/components/rules-editor/controls/RuleNumberInput.jsx`, `TierEditor.jsx`, `CodeMultiSelect.jsx`, `LicenseCodeInput.jsx`, `AgencyInput.jsx`, `LicensePointTable.jsx`, va `AgencyExcludeEditor.jsx`
+   - `src/components/RulesEditor.jsx` giam tiep tu 1625 dong xuong 1143 dong sau khi rut controls va input so dung chung
+   - bo sung regression test moi `tests/rulesEditor.controls.test.jsx` de khoa chon/bo chon ma, uppercase code, them bac, them dong ma giay phep, va dai ly loai tru
+   - targeted verify da pass:
+     - `pnpm exec vitest run tests/rulesEditor.test.jsx tests/rulesEditorSimulationPanel.test.jsx tests/rulesEditorHistoryPanel.test.jsx tests/rulesEditor.controls.test.jsx --environment jsdom`
+     - `pnpm exec eslint src/components/RulesEditor.jsx src/components/rules-editor/RulesSimulationPanel.jsx src/components/rules-editor/RulesHistoryPanel.jsx src/components/rules-editor/controls/RuleNumberInput.jsx src/components/rules-editor/controls/TierEditor.jsx src/components/rules-editor/controls/CodeMultiSelect.jsx src/components/rules-editor/controls/LicenseCodeInput.jsx src/components/rules-editor/controls/AgencyInput.jsx src/components/rules-editor/controls/LicensePointTable.jsx src/components/rules-editor/controls/AgencyExcludeEditor.jsx tests/rulesEditor.test.jsx tests/rulesEditorSimulationPanel.test.jsx tests/rulesEditorHistoryPanel.test.jsx tests/rulesEditor.controls.test.jsx`
 
 ## Notes
 
@@ -182,6 +189,8 @@
 - `cng-xyq.10` la slice wave-1 hop ly nhat tiep theo de tach snapshot/provider/history helper khoi `AiAssistant`.
 - `cng-xyq.10` da hoan tat o muc helper extraction cho `AiAssistant`; buoc tiep theo trong wave-1 la `cng-xyq.11` de dat baseline test va tach panel khoi `RulesEditor`.
 - `cng-xyq.11` da hoan tat o muc panel decomposition cho `RulesEditor`; phan con lai hop ly nhat neu tiep tuc wave-1 la tach cac control/editor nho va co the seed them bead rieng cho RulesEditor slice tiep theo.
+- `cng-xyq.13` da hoan tat; `RulesEditor` hien da tach xong panel + control co san, phan con lai neu muon giam them coupling se la config-tab/orchestration layer, nhung wave-1 backlog con bead pending hop ly hon la `AiAssistant` slice B.
+- `cng-xyq.14` da duoc mo va claim; blast radius cua `AiAssistant` hien la `LOW`, va buoc tiep theo dang la map ranh gioi de tach panel `config/history/chat` cung hook orchestration ra khoi `src/components/AiAssistant.jsx`.
 - `gitnexus_detect_changes(scope: "all")` van tra `No changes detected` ngay ca sau helper extraction, nen tiep tuc coi day la van de worktree-awareness cua GitNexus; gate thuc te van dua tren `git status`, lint, va test muc tieu.
 - `tests/server.monitor.test.js` van in stderr khi `dist/server-v4/index.js` khong co trong vitest runtime, nhung suite van pass vi startup path fallback dung nhu hien trang.
 
