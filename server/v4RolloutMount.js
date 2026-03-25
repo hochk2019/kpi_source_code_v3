@@ -5,7 +5,17 @@ export const WAVE1_V4_MODULE_IDS = Object.freeze([
   'hq-agencies',
 ]);
 
-export function selectWave1V4Modules(moduleCatalog, moduleIds = WAVE1_V4_MODULE_IDS) {
+export const WAVE2_V4_MODULE_IDS = Object.freeze([
+  'kpi-rules',
+  'kpi-adjustments',
+]);
+
+export const LEGACY_V4_MODULE_IDS = Object.freeze([
+  ...WAVE1_V4_MODULE_IDS,
+  ...WAVE2_V4_MODULE_IDS,
+]);
+
+export function selectV4Modules(moduleCatalog, moduleIds) {
   const requestedIds = Array.from(moduleIds);
   const selectedModules = moduleCatalog.filter((moduleItem) => requestedIds.includes(moduleItem.id));
   const selectedIds = new Set(selectedModules.map((moduleItem) => moduleItem.id));
@@ -17,3 +27,10 @@ export function selectWave1V4Modules(moduleCatalog, moduleIds = WAVE1_V4_MODULE_
   };
 }
 
+export function selectWave1V4Modules(moduleCatalog, moduleIds = WAVE1_V4_MODULE_IDS) {
+  return selectV4Modules(moduleCatalog, moduleIds);
+}
+
+export function selectLegacyV4Modules(moduleCatalog, moduleIds = LEGACY_V4_MODULE_IDS) {
+  return selectV4Modules(moduleCatalog, moduleIds);
+}

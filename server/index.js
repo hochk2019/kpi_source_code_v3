@@ -150,7 +150,7 @@ import {
 import { getTrainingResources } from './trainingResources.js';
 
 import { addFeedbackEntry, getFeedbackSummary, listFeedbackEntries } from './feedbackStore.js';
-import { selectWave1V4Modules } from './v4RolloutMount.js';
+import { selectLegacyV4Modules } from './v4RolloutMount.js';
 
 import cronstrue from 'cronstrue';
 
@@ -224,11 +224,11 @@ async function mountReportingV4App(targetApp) {
 
     }
 
-    const { selectedModules, missingModuleIds } = selectWave1V4Modules(runtimeModule.moduleCatalog);
+    const { selectedModules, missingModuleIds } = selectLegacyV4Modules(runtimeModule.moduleCatalog);
 
     if (selectedModules.length === 0) {
 
-      console.warn('[v4 Migration] No wave-1 modules were found in the compiled runtime.');
+      console.warn('[v4 Migration] No legacy-mounted v4 modules were found in the compiled runtime.');
 
       return;
 
@@ -236,7 +236,7 @@ async function mountReportingV4App(targetApp) {
 
     if (missingModuleIds.length > 0) {
 
-      console.warn('[v4 Migration] Missing wave-1 modules in compiled runtime:', missingModuleIds.join(', '));
+      console.warn('[v4 Migration] Missing legacy-mounted v4 modules in compiled runtime:', missingModuleIds.join(', '));
 
     }
 
@@ -244,13 +244,13 @@ async function mountReportingV4App(targetApp) {
 
     targetApp.use(v4App);
 
-    console.log(
+      console.log(
 
-      '[v4 Migration] Successfully mounted wave-1 domains to v4:',
+        '[v4 Migration] Successfully mounted wave-1 and wave-2 domains to v4:',
 
-      selectedModules.map((moduleItem) => moduleItem.id).join(', '),
+        selectedModules.map((moduleItem) => moduleItem.id).join(', '),
 
-    );
+      );
 
   } catch (error) {
 

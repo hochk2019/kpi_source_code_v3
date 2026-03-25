@@ -2,8 +2,8 @@
 
 ## Active Slice
 
-- Title: Mount wave-2 server-v4 KPI modules through legacy server
-- Bead: `cng-wh8`
+- Title: Close auth parity gaps before server-v4 cutover
+- Bead: `cng-d0a`
 - Status: in_progress
 - Last updated: 2026-03-25
 
@@ -37,11 +37,18 @@
 6. `cng-wh8` da duoc mo cho wave-2 mount:
    - muc tieu tiep theo la mount `kpi-rules` va `kpi-adjustments` qua legacy server sau khi wave-1 da on dinh
    - can chay impact analysis truoc khi cham vao startup mount helper va verify lai toan bo matrix `reporting + wave-1 + wave-2`
+7. `cng-wh8` da duoc implementation o muc code/test:
+   - mo rong `server/v4RolloutMount.js` bang `WAVE2_V4_MODULE_IDS`, `LEGACY_V4_MODULE_IDS`, `selectV4Modules`, va `selectLegacyV4Modules`
+   - legacy server startup mount hien chon tong hop `reporting + teams + mst-assignments + hq-agencies + kpi-rules + kpi-adjustments`
+   - bo sung regression tests cho selector legacy-v4 tong hop va missing-module path cua wave-2
+8. `cng-d0a` da duoc mo cho auth parity:
+   - muc tieu tiep theo la dua cac endpoint auth con thieu ve `server-v4` truoc khi xu ly declarations shadow/cutover
+   - can doi chieu lai 3 parity gap da note trong rollout plan va verify lai auth route matrix
 
 ## Next Suggested Slice
 
-- Title: Thuc hien wave-2 mount `kpi-rules` + `kpi-adjustments`
-- Bead: `cng-wh8`
+- Title: Doi chieu va implement auth parity cho `server-v4`
+- Bead: `cng-d0a`
 - Status: in_progress
 3. `cng-xyq.6` da duoc implementation va dong bead:
    - them `helmet` + `express-rate-limit`
@@ -68,6 +75,7 @@
 - Node tests:
   - `pnpm exec vitest run tests/passwordPolicy.test.js tests/securityHardening.test.js --environment node`
   - `pnpm exec vitest run tests/v4RolloutMount.test.js tests/server.monitor.test.js tests/server-v4/appShell.test.js tests/server-v4/legacyCompatRoutes.test.js tests/server-v4/postgresTeamsRoute.test.js tests/server-v4/postgresMstAssignmentsRoute.test.js tests/server-v4/postgresHqAgenciesRoute.test.js --environment node`
+  - `pnpm exec vitest run tests/v4RolloutMount.test.js tests/server.monitor.test.js tests/server-v4/appShell.test.js tests/server-v4/legacyCompatRoutes.test.js tests/server-v4/postgresKpiRulesRoute.test.js tests/server-v4/postgresKpiAdjustmentsRoute.test.js --environment node`
 - Frontend/jsdom tests:
   - `pnpm exec vitest run tests/auth.test.jsx tests/accountManager.staff.test.jsx tests/automation.flows.test.js tests/e2e.admin-flows.test.jsx --environment jsdom`
   - `pnpm exec vitest run tests/runtimeErrorBoundary.test.jsx tests/appRoot.errorBoundary.test.jsx tests/kpiCalculator.errorBoundary.test.jsx tests/appShellFrame.test.jsx --environment jsdom`
@@ -98,6 +106,9 @@
 - `cng-xyq.7` hien chi doi logic mount tren legacy server; khong doi `buildV4App` hay router internals ben trong `server-v4`.
 - `cng-xyq.7` da hoan tat va dong bead; working tree hien chi chua commit thay doi wave-1 mount truoc khi bat dau wave-2.
 - `cng-wh8` la bead tiep theo cho wave-2 mount `kpi-rules` + `kpi-adjustments`.
+- `cng-wh8` da pass targeted lint + node verification cho startup mount helper, `server.monitor`, `appShell`, legacy compat, `postgresKpiRulesRoute`, va `postgresKpiAdjustmentsRoute`.
+- `cng-wh8` da hoan tat va dong bead; commit wave-2 chua duoc tao o working tree hien tai.
+- `cng-d0a` la bead active tiep theo cho auth parity closure truoc declarations rollout.
 - `tests/server.monitor.test.js` van in stderr khi `dist/server-v4/index.js` khong co trong vitest runtime, nhung suite van pass vi startup path fallback dung nhu hien trang.
 
 ## Previous Completed Slice
