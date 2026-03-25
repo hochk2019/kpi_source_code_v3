@@ -2,8 +2,8 @@
 
 ## Active Slice
 
-- Title: Tach snapshot provider history helpers khoi AiAssistant
-- Bead: `cng-xyq.10`
+- Title: Dat baseline test va tach panel khoi RulesEditor
+- Bead: `cng-xyq.11`
 - Status: closed
 - Last updated: 2026-03-25
 
@@ -134,6 +134,13 @@
    - targeted verify da pass:
      - `pnpm exec vitest run tests/aiAssistant.config.test.jsx tests/aiAssistant.snapshotCache.test.js tests/aiAssistant.providerHelpers.test.js tests/aiAssistant.historyStore.test.js --environment jsdom`
      - `pnpm exec eslint src/components/AiAssistant.jsx src/components/ai-assistant/snapshotCache.js src/components/ai-assistant/providerConfig.js src/components/ai-assistant/historyStore.js tests/aiAssistant.config.test.jsx tests/aiAssistant.snapshotCache.test.js tests/aiAssistant.providerHelpers.test.js tests/aiAssistant.historyStore.test.js`
+19. `cng-xyq.11` da xong o muc baseline test + tach panel `RulesEditor`:
+   - them `src/components/rules-editor/RulesSimulationPanel.jsx` va `src/components/rules-editor/RulesHistoryPanel.jsx`, rut 2 block JSX lon khoi `src/components/RulesEditor.jsx`
+   - bo sung regression tests `tests/rulesEditor.test.jsx`, `tests/rulesEditorSimulationPanel.test.jsx`, va `tests/rulesEditorHistoryPanel.test.jsx`
+   - flow da duoc khoa bang test: mo phong KPI, refresh lich su, expand chi tiet, va khoi phuc phien ban lich su
+   - targeted verify da pass:
+     - `pnpm exec vitest run tests/rulesEditor.test.jsx tests/rulesEditorSimulationPanel.test.jsx tests/rulesEditorHistoryPanel.test.jsx --environment jsdom`
+     - `pnpm exec eslint src/components/RulesEditor.jsx src/components/rules-editor/RulesSimulationPanel.jsx src/components/rules-editor/RulesHistoryPanel.jsx tests/rulesEditor.test.jsx tests/rulesEditorSimulationPanel.test.jsx tests/rulesEditorHistoryPanel.test.jsx`
 
 ## Notes
 
@@ -174,6 +181,7 @@
   - `pnpm exec eslint src/components/KPIAdjustments.jsx src/components/kpi-adjustments/model/businessDirectory.js src/components/kpi-adjustments/model/calculationInfo.js src/components/kpi-adjustments/model/guidanceGroups.js src/components/kpi-adjustments/model/settingsDraft.js src/components/kpi-adjustments/hooks/useKpiAdjustmentForm.js src/components/kpi-adjustments/hooks/useKpiAdjustmentFilters.js tests/kpiAdjustments.test.jsx tests/kpiAdjustments.model.test.js tests/kpiAdjustments.hooks.test.jsx`
 - `cng-xyq.10` la slice wave-1 hop ly nhat tiep theo de tach snapshot/provider/history helper khoi `AiAssistant`.
 - `cng-xyq.10` da hoan tat o muc helper extraction cho `AiAssistant`; buoc tiep theo trong wave-1 la `cng-xyq.11` de dat baseline test va tach panel khoi `RulesEditor`.
+- `cng-xyq.11` da hoan tat o muc panel decomposition cho `RulesEditor`; phan con lai hop ly nhat neu tiep tuc wave-1 la tach cac control/editor nho va co the seed them bead rieng cho RulesEditor slice tiep theo.
 - `gitnexus_detect_changes(scope: "all")` van tra `No changes detected` ngay ca sau helper extraction, nen tiep tuc coi day la van de worktree-awareness cua GitNexus; gate thuc te van dua tren `git status`, lint, va test muc tieu.
 - `tests/server.monitor.test.js` van in stderr khi `dist/server-v4/index.js` khong co trong vitest runtime, nhung suite van pass vi startup path fallback dung nhu hien trang.
 

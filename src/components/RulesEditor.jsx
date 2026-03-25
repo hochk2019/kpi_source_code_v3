@@ -13,6 +13,8 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover.jsx";
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs.jsx";
+import RulesHistoryPanel from "@/components/rules-editor/RulesHistoryPanel.jsx";
+import RulesSimulationPanel from "@/components/rules-editor/RulesSimulationPanel.jsx";
 
 import {
 
@@ -2950,111 +2952,13 @@ export default function RulesEditor({ canEdit = true, currentUser = null }) {
 
 
 
-          <div className="space-y-3 rounded border p-3">
-
-            <div className="flex flex-wrap items-start justify-between gap-3">
-
-              <div>
-
-                <div className="font-semibold">Mô phỏng KPI "Thu"</div>
-
-                <p className="text-xs text-gray-500">
-
-                  Ước tính tổng điểm dựa trên {data.length.toLocaleString('vi-VN')} tờ khai đang lưu bằng phiên bản quy tắc hiện tại và bản đã lưu gần nhất.
-
-                </p>
-
-              </div>
-
-              <Button onClick={runSimulation} disabled={simRunning || !data.length} variant="outline">
-
-                {simRunning ? 'Đang tính…' : 'Chạy mô phỏng'}
-
-              </Button>
-
-            </div>
-
-            {simError ? <p className="text-xs text-red-500">{simError}</p> : null}
-
-            {simResult ? (
-
-              <div className="space-y-3 text-sm">
-
-                <div className="grid gap-3 md:grid-cols-2">
-
-                  {simResult.preview ? (
-
-                    <div className="rounded border p-3">
-
-                      <div className="text-xs uppercase text-gray-500">Phiên bản đang chỉnh</div>
-
-                      <div className="text-lg font-semibold text-gray-800">
-
-                        {simResult.preview.total.toFixed(2)} điểm
-
-                      </div>
-
-                      <div>Trung bình / tờ khai: {simResult.preview.average.toFixed(2)}</div>
-
-                      <div>Phiên bản: {simResult.preview.version}</div>
-
-                    </div>
-
-                  ) : null}
-
-                  {simResult.baseline ? (
-
-                    <div className="rounded border p-3">
-
-                      <div className="text-xs uppercase text-gray-500">Phiên bản đã lưu</div>
-
-                      <div className="text-lg font-semibold text-gray-800">
-
-                        {simResult.baseline.total.toFixed(2)} điểm
-
-                      </div>
-
-                      <div>Trung bình / tờ khai: {simResult.baseline.average.toFixed(2)}</div>
-
-                      <div>Phiên bản: {simResult.baseline.version}</div>
-
-                    </div>
-
-                  ) : null}
-
-                </div>
-
-                {simResult.difference !== null ? (
-
-                  <div className="text-xs">
-
-                    Chênh lệch tổng điểm so với bản đã lưu:{' '}
-
-                    <span
-
-                      className={simResult.difference >= 0 ? 'font-semibold text-emerald-600' : 'font-semibold text-red-600'}
-
-                    >
-
-                      {simResult.difference >= 0 ? '+' : ''}
-
-                      {simResult.difference.toFixed(2)}
-
-                    </span>
-
-                  </div>
-
-                ) : null}
-
-              </div>
-
-            ) : (
-
-              <p className="text-xs text-gray-500">Chưa có dữ liệu mô phỏng. Nhấn "Chạy mô phỏng" để xem kết quả.</p>
-
-            )}
-
-          </div>
+          <RulesSimulationPanel
+            declarationCount={data.length}
+            simRunning={simRunning}
+            simError={simError}
+            simResult={simResult}
+            onRunSimulation={runSimulation}
+          />
 
 
 
@@ -3312,217 +3216,20 @@ export default function RulesEditor({ canEdit = true, currentUser = null }) {
 
 
 
-          <div className="space-y-2 rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] p-3">
-
-            <div className="flex flex-wrap items-center justify-between gap-2">
-
-              <h3 className="text-sm font-semibold text-gray-700">Lịch sử cập nhật điểm KPI</h3>
-
-              <div className="flex flex-wrap items-center gap-2">
-
-                <button
-
-                  type="button"
-
-                  onClick={() => setHistoryCollapsed((prev) => !prev)}
-
-                  className="rounded border border-[color:var(--ds-border-subtle)] px-3 py-1 text-xs font-medium text-[color:var(--ds-text-secondary)] hover:bg-[color:var(--ds-surface-muted)]"
-
-                >
-
-                  {historyCollapsed ? "Mở rộng" : "Thu gọn"}
-
-                </button>
-
-                {historyError && !historyLoading && (
-
-                  <span className="text-xs text-red-500">{historyError}</span>
-
-                )}
-
-                {historyLoading && (
-
-                  <span className="text-xs text-[color:var(--ds-text-muted)]">Đang tải…</span>
-
-                )}
-
-                <button
-
-                  type="button"
-
-                  onClick={handleHistoryRefresh}
-
-                  disabled={historyLoading}
-
-                  className="rounded border border-[color:var(--ds-border-subtle)] px-3 py-1 text-xs text-[color:var(--ds-text-secondary)] hover:bg-[color:var(--ds-surface-muted)] disabled:cursor-not-allowed disabled:opacity-60"
-
-                >
-
-                  {historyLoading ? 'Đang tải…' : 'Làm mới'}
-
-                </button>
-
-              </div>
-
-            </div>
-
-            {historyCollapsed ? (
-
-              <p className="text-xs text-[color:var(--ds-text-muted)]">Đã thu gọn lịch sử. Nhấn “Mở rộng” để xem chi tiết.</p>
-
-            ) : historyEntries.length === 0 ? (
-
-              <p className="text-xs text-[color:var(--ds-text-muted)]">Chưa có ghi nhận lịch sử nào.</p>
-
-            ) : (
-
-              <div className="overflow-x-auto">
-
-                <table className="w-full text-sm">
-
-                  <thead>
-
-                    <tr className="text-left text-xs uppercase text-gray-500">
-
-                      <th className="px-2 py-2">Cập nhật</th>
-
-                      <th className="px-2 py-2">Áp dụng từ</th>
-
-                      <th className="px-2 py-2">Tên bộ quy tắc</th>
-
-                      <th className="px-2 py-2 text-right">Phiên bản</th>
-
-                      <th className="px-2 py-2 text-right">Điểm cơ bản</th>
-
-                      <th className="px-2 py-2 text-right">Thao tác</th>
-
-                    </tr>
-
-                  </thead>
-
-                  <tbody>
-
-                    {historyEntries.map((entry, index) => {
-
-                      const rowId = entry.id || entry.snapshot?.id || `${entry.updatedAt || ''}-${index}`;
-
-                      const basePoints = Number(entry.snapshot?.points?.base);
-
-                      const baseLabel = Number.isFinite(basePoints) ? basePoints.toFixed(1) : '—';
-
-                      const isExpanded = expandedHistoryId === rowId;
-
-                      const versionValue = Number.isFinite(Number(entry.snapshot?.version))
-
-                        ? Number(entry.snapshot.version)
-
-                        : Number.isFinite(Number(entry.version))
-
-                        ? Number(entry.version)
-
-                        : null;
-
-                      const versionLabel = versionValue !== null ? versionValue : '—';
-
-                      return (
-
-                        <React.Fragment key={rowId}>
-
-                          <tr className="border-t border-gray-100">
-
-                            <td className="px-2 py-2 text-xs text-gray-600">{formatHistoryTimestamp(entry.updatedAt)}</td>
-
-                            <td className="px-2 py-2 text-xs text-gray-600">{entry.applyFrom || 'Áp dụng ngay'}</td>
-
-                            <td className="px-2 py-2 text-sm text-gray-700">{entry.name || entry.snapshot?.name || rowId}</td>
-
-                            <td className="px-2 py-2 text-right text-sm text-gray-700">{versionLabel}</td>
-
-                            <td className="px-2 py-2 text-right text-sm font-medium text-gray-800">{baseLabel}</td>
-
-                            <td className="px-2 py-2 text-right">
-
-                              <div className="flex items-center justify-end gap-2">
-
-                                <button
-
-                                  type="button"
-
-                                  onClick={() => setExpandedHistoryId(isExpanded ? null : rowId)}
-
-                                  className="text-xs font-medium text-amber-600 hover:underline"
-
-                                >
-
-                                  {isExpanded ? 'Thu gọn' : 'Xem'}
-
-                                </button>
-
-                                {!isReadOnly ? (
-
-                                  <button
-
-                                    type="button"
-
-                                    onClick={() => handleRestoreEntry(entry)}
-
-                                    disabled={restoringId === rowId}
-
-                                    className="text-xs font-medium text-blue-600 hover:underline disabled:cursor-not-allowed disabled:opacity-60"
-
-                                  >
-
-                                    {restoringId === rowId ? 'Đang khôi phục…' : 'Khôi phục'}
-
-                                  </button>
-
-                                ) : null}
-
-                              </div>
-
-                            </td>
-
-                          </tr>
-
-                          {isExpanded && (
-
-                            <tr>
-
-                              <td colSpan={6} className="px-2 pb-4 pt-1">
-
-                                <div className="rounded bg-slate-900 p-3 text-xs text-slate-100">
-
-                                  <div className="mb-2 font-semibold">Chi tiết điểm & cấu hình</div>
-
-                                  <pre className="max-h-52 overflow-auto whitespace-pre-wrap text-xs">
-
-{JSON.stringify(entry.snapshot?.points, null, 2)}
-
-                                  </pre>
-
-                                </div>
-
-                              </td>
-
-                            </tr>
-
-                          )}
-
-                        </React.Fragment>
-
-                      );
-
-                    })}
-
-                  </tbody>
-
-                </table>
-
-              </div>
-
-            )}
-
-          </div>
+          <RulesHistoryPanel
+            entries={historyEntries}
+            loading={historyLoading}
+            error={historyError}
+            collapsed={historyCollapsed}
+            expandedId={expandedHistoryId}
+            isReadOnly={isReadOnly}
+            restoringId={restoringId}
+            onToggleCollapsed={() => setHistoryCollapsed((prev) => !prev)}
+            onRefresh={handleHistoryRefresh}
+            onToggleExpanded={setExpandedHistoryId}
+            onRestoreEntry={handleRestoreEntry}
+            formatTimestamp={formatHistoryTimestamp}
+          />
 
 
 
