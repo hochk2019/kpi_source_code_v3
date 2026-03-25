@@ -16,6 +16,7 @@ describe("apps/api runtime config", () => {
     expect(config.host).toBe("127.0.0.1");
     expect(config.port).toBe(0);
     expect(config.dbFile).toBe(path.resolve(projectRoot, "server", "data", "storage.sqlite"));
+    expect(config.importerCompatGuardMode).toBe("off");
     expect(config.persistenceMode).toBe("sqlite-dual-write");
     expect(config.postgresUrl).toBeNull();
     expect(config.postgresLegacySqliteFallback).toBe(false);
@@ -45,6 +46,7 @@ describe("apps/api runtime config", () => {
         KPI_API_HOST: "0.0.0.0",
         KPI_API_PORT: "4014",
         KPI_API_DB_FILE: "tmp/runtime.sqlite",
+        KPI_API_IMPORTER_COMPAT_GUARD_MODE: "block-migrated",
         KPI_API_PERSISTENCE_MODE: "postgres",
         KPI_API_POSTGRES_URL: "postgres://runtime/kpi",
         KPI_API_POSTGRES_LEGACY_SQLITE_FALLBACK: "true",
@@ -54,6 +56,7 @@ describe("apps/api runtime config", () => {
     expect(config.host).toBe("0.0.0.0");
     expect(config.port).toBe(4014);
     expect(config.dbFile).toBe(path.resolve(projectRoot, "tmp", "runtime.sqlite"));
+    expect(config.importerCompatGuardMode).toBe("block-migrated");
     expect(config.persistenceMode).toBe("postgres");
     expect(config.postgresUrl).toBe("postgres://runtime/kpi");
     expect(config.postgresLegacySqliteFallback).toBe(true);
@@ -81,5 +84,13 @@ describe("apps/api runtime config", () => {
     expect(() =>
       resolveApiRuntimeConfig({ projectRoot }, { KPI_API_PERSISTENCE_MODE: "sqlite-legacy" }),
     ).toThrow(/Invalid API persistence mode/i);
+  });
+
+  it("rejects unsupported importer compat guard modes", () => {
+    const projectRoot = resolveApiProjectRoot();
+
+    expect(() =>
+      resolveApiRuntimeConfig({ projectRoot }, { KPI_API_IMPORTER_COMPAT_GUARD_MODE: "warn-only" }),
+    ).toThrow(/Invalid importer compat guard mode/i);
   });
 });

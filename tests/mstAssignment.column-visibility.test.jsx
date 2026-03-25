@@ -40,13 +40,14 @@ vi.mock("@/lib/store.js", () => {
   };
 });
 
-import MSTAssignment, {
+import MSTAssignment from "@/components/MSTAssignment.jsx";
+import {
   COLUMN_VISIBILITY_STORAGE_PREFIX,
   DEFAULT_VISIBLE_COLUMNS,
   readStoredColumnVisibility,
   sanitizeColumnVisibility,
   writeStoredColumnVisibility,
-} from "@/components/MSTAssignment.jsx";
+} from "@/components/mst-assignment/hooks/useMSTAssignmentColumnLayout.js";
 
 describe("sanitizeColumnVisibility", () => {
   it("giữ cột bắt buộc luôn hiển thị và chuẩn hoá giá trị", () => {

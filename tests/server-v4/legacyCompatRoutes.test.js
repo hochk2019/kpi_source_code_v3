@@ -198,10 +198,8 @@ describe('server-v4 legacy compatibility routes', () => {
       }),
     ]);
     const app = buildV4App({
+      importerCompatGuardMode: 'block-migrated',
       modules: [authModule, declarationsModule],
-      importerCompat: {
-        guardMode: 'block-migrated',
-      },
       persistence: createPersistenceStub({
         authStore,
       }),

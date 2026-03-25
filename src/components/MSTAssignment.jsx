@@ -34,6 +34,20 @@ import useMSTQuickFilters from "@/hooks/useMSTQuickFilters.js";
 import SharedStaffCombobox, {
   buildStaffComboboxTeams,
 } from "@/components/shared/StaffCombobox.jsx";
+import {
+  COLUMN_OPTIONS,
+  getColumnLabel,
+  useMSTAssignmentColumnLayout,
+} from "@/components/mst-assignment/hooks/useMSTAssignmentColumnLayout.js";
+import useMSTAssignmentPageSize, {
+  MIN_PAGE_SIZE,
+  normalizePageSize,
+  PAGE_SIZE_OPTIONS,
+} from "@/components/mst-assignment/hooks/useMSTAssignmentPageSize.js";
+import HistoryDetails from "@/components/mst-assignment/timeline/HistoryDetails.jsx";
+import StageTimelinePreview from "@/components/mst-assignment/timeline/StageTimelinePreview.jsx";
+import StageTimelineGroups from "@/components/mst-assignment/timeline/StageTimelineGroups.jsx";
+import ColumnResizeHandle from "@/components/mst-assignment/table/ColumnResizeHandle.jsx";
 
 import { Button } from "@/components/ui/button.jsx";
 import {
@@ -249,403 +263,6 @@ const computeStatusDisplay = (row) => {
 
 
 
-const COLUMN_OPTIONS = [
-
-  { key: "mst", label: "MST", required: true },
-
-  { key: "company", label: "Công ty" },
-
-  { key: "person_import", label: "Người phụ trách Nhập" },
-
-  { key: "person_export", label: "Người phụ trách Xuất" },
-
-  { key: "status", label: "Trạng thái" },
-
-  { key: "effective_from", label: "Áp dụng từ ngày" },
-
-  { key: "effective_to", label: "Đến hết ngày" },
-
-  { key: "actions", label: "Hành động" },
-
-];
-
-const createDefaultVisibleColumns = () => {
-
-  const defaults = {};
-
-  COLUMN_OPTIONS.forEach((option) => {
-
-    defaults[option.key] = true;
-
-  });
-
-  return defaults;
-
-};
-
-export const DEFAULT_VISIBLE_COLUMNS = Object.freeze(createDefaultVisibleColumns());
-
-export const COLUMN_VISIBILITY_STORAGE_PREFIX = "mstAssignment.visibleColumns";
-
-
-
-export const COLUMN_WIDTH_STORAGE_KEY = "mstAssignment.columnWidths";
-
-
-
-export const DEFAULT_COLUMN_WIDTHS = Object.freeze({
-
-  mst: 136,
-
-  company: 320,
-
-  person_import: 224,
-
-  person_export: 224,
-
-  status: 180,
-
-  effective_from: 188,
-
-  effective_to: 188,
-
-  actions: 168,
-
-});
-
-
-
-export const COLUMN_MIN_WIDTH = 120;
-
-
-
-export const COLUMN_MIN_WIDTHS = Object.freeze({
-
-  mst: 120,
-
-  company: 240,
-
-  person_import: 180,
-
-  person_export: 180,
-
-  status: 150,
-
-  effective_from: 160,
-
-  effective_to: 160,
-
-  actions: 150,
-
-});
-
-
-
-export const COLUMN_MAX_WIDTH = 640;
-
-
-
-const getColumnFallbackWidth = (key, fallback = DEFAULT_COLUMN_WIDTHS) => {
-
-  const width = fallback?.[key];
-
-  if (Number.isFinite(width)) {
-
-    return width;
-
-  }
-
-  const defaultWidth = DEFAULT_COLUMN_WIDTHS[key];
-
-  if (Number.isFinite(defaultWidth)) {
-
-    return defaultWidth;
-
-  }
-
-  return Math.max(COLUMN_MIN_WIDTHS[key] ?? COLUMN_MIN_WIDTH, COLUMN_MIN_WIDTH);
-
-};
-
-
-
-export function sanitizeColumnWidths(raw, fallback = DEFAULT_COLUMN_WIDTHS) {
-
-  const result = {};
-
-  COLUMN_OPTIONS.forEach((option) => {
-
-    const { key } = option;
-
-    const baseWidth = getColumnFallbackWidth(key, fallback);
-
-    const minWidth = COLUMN_MIN_WIDTHS[key] ?? COLUMN_MIN_WIDTH;
-
-    const maxWidth = COLUMN_MAX_WIDTH;
-
-
-
-    let width = raw?.[key];
-
-    if (typeof width === "string" && width.trim() !== "") {
-
-      width = Number.parseFloat(width);
-
-    }
-
-    if (!Number.isFinite(width)) {
-
-      width = baseWidth;
-
-    }
-
-    width = Math.round(width);
-
-    if (!Number.isFinite(width) || width <= 0) {
-
-      width = baseWidth;
-
-    }
-
-    if (width < minWidth) {
-
-      width = minWidth;
-
-    }
-
-    if (Number.isFinite(maxWidth) && width > maxWidth) {
-
-      width = maxWidth;
-
-    }
-
-    result[key] = width;
-
-  });
-
-  return result;
-
-}
-
-
-
-export function readStoredColumnWidths(storage, fallback = DEFAULT_COLUMN_WIDTHS) {
-
-  if (!storage) {
-
-    return sanitizeColumnWidths({}, fallback);
-
-  }
-
-  try {
-
-    const raw = storage.getItem(COLUMN_WIDTH_STORAGE_KEY);
-
-    if (!raw) {
-
-      return sanitizeColumnWidths({}, fallback);
-
-    }
-
-    const parsed = JSON.parse(raw);
-
-    return sanitizeColumnWidths(parsed, fallback);
-
-  } catch (error) {
-
-    console.warn("readStoredColumnWidths", error);
-
-    return sanitizeColumnWidths({}, fallback);
-
-  }
-
-}
-
-
-
-export function writeStoredColumnWidths(storage, widths) {
-
-  if (!storage) {
-
-    return false;
-
-  }
-
-  try {
-
-    const sanitized = sanitizeColumnWidths(widths);
-
-    storage.setItem(COLUMN_WIDTH_STORAGE_KEY, JSON.stringify(sanitized));
-
-    return true;
-
-  } catch (error) {
-
-    console.warn("writeStoredColumnWidths", error);
-
-    return false;
-
-  }
-
-}
-
-
-
-
-const normalizeActorKey = (username) => {
-
-  if (!username) {
-
-    return "guest";
-
-  }
-
-  const value = username.toString().trim();
-
-  return value || "guest";
-
-};
-
-
-
-const getColumnVisibilityStorageKey = (username) =>
-
-  `${COLUMN_VISIBILITY_STORAGE_PREFIX}:${normalizeActorKey(username)}`;
-
-
-
-export function sanitizeColumnVisibility(raw, fallback = DEFAULT_VISIBLE_COLUMNS) {
-
-  const result = {};
-
-  COLUMN_OPTIONS.forEach((option) => {
-
-    if (option.required) {
-
-      result[option.key] = true;
-
-      return;
-
-    }
-
-    const fallbackValue = fallback?.[option.key] !== false;
-
-    let value = raw?.[option.key];
-
-    if (typeof value === "string") {
-
-      const trimmed = value.trim().toLowerCase();
-
-      if (["false", "0", "off", "no"].includes(trimmed)) {
-
-        value = false;
-
-      } else if (["true", "1", "on", "yes"].includes(trimmed)) {
-
-        value = true;
-
-      }
-
-    }
-
-    if (typeof value !== "boolean") {
-
-      value = value === 0 ? false : fallbackValue;
-
-    }
-
-    result[option.key] = value;
-
-  });
-
-  return result;
-
-}
-
-
-
-export function readStoredColumnVisibility(
-
-  storage,
-
-  username,
-
-  fallback = DEFAULT_VISIBLE_COLUMNS
-
-) {
-
-  const defaults = sanitizeColumnVisibility(fallback);
-
-  if (!storage) {
-
-    return defaults;
-
-  }
-
-  try {
-
-    const key = getColumnVisibilityStorageKey(username);
-
-    const raw = storage.getItem(key);
-
-    if (!raw) {
-
-      return defaults;
-
-    }
-
-    const parsed = JSON.parse(raw);
-
-    const sanitized = sanitizeColumnVisibility(parsed, defaults);
-
-    return { ...defaults, ...sanitized };
-
-  } catch (error) {
-
-    console.warn("readStoredColumnVisibility", error);
-
-    return defaults;
-
-  }
-
-}
-
-
-
-export function writeStoredColumnVisibility(storage, username, visibility) {
-
-  if (!storage) {
-
-    return false;
-
-  }
-
-  try {
-
-    const key = getColumnVisibilityStorageKey(username);
-
-    const sanitized = sanitizeColumnVisibility(visibility);
-
-    storage.setItem(key, JSON.stringify(sanitized));
-
-    return true;
-
-  } catch (error) {
-
-    console.warn("writeStoredColumnVisibility", error);
-
-    return false;
-
-  }
-
-}
-
-
-
-const getColumnLabel = (key) => COLUMN_OPTIONS.find((option) => option.key === key)?.label || key;
-
-
-
 const toISO = (v) => {
 
   if (!v) return "";
@@ -838,46 +455,6 @@ const tidyMST = (v) => {
 
 
 
-export const MIN_PAGE_SIZE = 10;
-
-const DEFAULT_PAGE_SIZE = 15;
-
-export const PAGE_SIZE_OPTIONS = [15, 30, 50, 100];
-
-export const PAGE_SIZE_STORAGE_KEY = "mstAssignment.pageSize";
-
-export const normalizePageSize = (value, minValue = MIN_PAGE_SIZE) => {
-  const numeric = Number(value);
-  if (!Number.isFinite(numeric)) {
-    return minValue;
-  }
-  const normalized = Math.trunc(numeric);
-  if (normalized < minValue) {
-    return minValue;
-  }
-  return normalized;
-};
-
-export const readStoredPageSize = (
-  storage,
-  fallback = DEFAULT_PAGE_SIZE,
-  minValue = MIN_PAGE_SIZE
-) => {
-  if (!storage) return normalizePageSize(fallback, minValue);
-  try {
-    const raw = storage.getItem(PAGE_SIZE_STORAGE_KEY);
-    if (raw == null || raw === "") {
-      return normalizePageSize(fallback, minValue);
-    }
-    return normalizePageSize(raw, minValue);
-  } catch (err) {
-    console.warn("readStoredPageSize", err);
-    return normalizePageSize(fallback, minValue);
-  }
-};
-
-
-
 const HISTORY_FIELD_LABELS = {
 
   person_import: "Người phụ trách Nhập",
@@ -1014,263 +591,6 @@ const formatHistoryTime = (value) => {
 
 
 
-const HistoryDetails = ({ entries = [], label }) => {
-
-  if (!entries.length) return null;
-
-  const renderValue = (value) =>
-
-    value ? (
-
-      <span>{value}</span>
-
-    ) : (
-
-      <span className="italic text-gray-500">(trống)</span>
-
-    );
-
-
-
-  return (
-
-    <details className="mt-1 text-xs text-gray-600">
-
-      <summary
-
-        className="cursor-pointer text-blue-600 hover:text-blue-800"
-
-        data-tooltip="Xem nhanh các lần chỉnh sửa trường này"
-
-      >
-
-        Lịch sử {label || ""}
-
-      </summary>
-
-      <ul className="mt-1 space-y-2 max-h-40 overflow-auto pr-1">
-
-        {entries.map((entry) => (
-
-          <li key={entry.id} className="border-t pt-1 first:border-t-0 first:pt-0">
-
-            <div className="font-medium text-gray-700">
-
-              {formatHistoryTime(entry.timestamp)} — {entry.actor || "Hệ thống"}
-
-              {entry.type === "create" && (
-
-                <span className="ml-2 text-emerald-600">(Thêm mới)</span>
-
-              )}
-
-              {entry.type === "update" && (
-
-                <span className="ml-2 text-blue-600">(Chỉnh sửa)</span>
-
-              )}
-
-              {entry.type === "delete" && (
-
-                <span className="ml-2 text-red-600">(Đã xoá)</span>
-
-              )}
-
-            </div>
-
-            <div className="text-gray-600">
-
-              <span className="text-gray-500">Từ:</span> {renderValue(entry.from)}
-
-            </div>
-
-            <div className="text-gray-600">
-
-              <span className="text-gray-500">Đến:</span> {renderValue(entry.to)}
-
-            </div>
-
-          </li>
-
-        ))}
-
-      </ul>
-
-    </details>
-
-  );
-
-};
-
-
-const StageTimelinePreview = ({ stages = [], onViewFull }) => {
-  const safeStages = Array.isArray(stages) ? stages : [];
-  const limitedStages = safeStages.slice(0, 3);
-  const canViewFull = typeof onViewFull === "function" && safeStages.length > 0;
-
-  return (
-    <details className="mt-2 text-xs text-slate-600">
-      <summary className="flex cursor-pointer items-center gap-2 text-blue-600 hover:text-blue-800">
-        <span>Lịch sử giai đoạn</span>
-        <span className="rounded bg-slate-200 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-600">
-          {safeStages.length}
-        </span>
-      </summary>
-      {safeStages.length ? (
-        <>
-          <ul className="mt-1 space-y-1">
-            {limitedStages.map((stage, index) => {
-              const stageKey =
-                makeRowKey(stage) ||
-                `${stage?.mst || "stage"}-${stage?.effective_from || ""}-${stage?.effective_to || index}`;
-              const startLabel = stage?.effective_from
-                ? formatISODate(stage.effective_from)
-                : "Không xác định";
-              const endLabel = stage?.effective_to ? formatISODate(stage.effective_to) : "Hiện tại";
-              const active = !stage?.effective_to;
-              return (
-                <li
-                  key={stageKey}
-                  className="rounded border border-slate-200 bg-white px-2 py-1"
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="font-semibold text-slate-700">
-                      {startLabel} → {endLabel}
-                    </span>
-                    {active ? (
-                      <span className="rounded bg-emerald-600 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
-                        Hiện hành
-                      </span>
-                    ) : null}
-                  </div>
-                  <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-slate-500">
-                    <span>Nhập: {stage?.person_import || "—"}</span>
-                    <span>Xuất: {stage?.person_export || "—"}</span>
-                    {stage?.status ? <span>Trạng thái: {stage.status}</span> : null}
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-          {safeStages.length > limitedStages.length ? (
-            <p className="mt-1 text-[11px] text-slate-500">
-              … và {safeStages.length - limitedStages.length} giai đoạn khác
-            </p>
-          ) : null}
-          {canViewFull ? (
-            <button
-              type="button"
-              className="mt-2 inline-flex items-center text-[11px] font-semibold text-blue-600 hover:text-blue-800"
-              onClick={onViewFull}
-            >
-              Xem toàn màn hình
-            </button>
-          ) : null}
-        </>
-      ) : (
-        <p className="mt-1 italic text-slate-400">Chưa có dữ liệu giai đoạn.</p>
-      )}
-    </details>
-  );
-};
-
-
-const StageTimelineGroups = ({ groups = [] }) => {
-  const safeGroups = Array.isArray(groups) ? groups : [];
-
-  if (!safeGroups.length) {
-    return (
-      <p className="text-sm text-slate-500">
-        Không có giai đoạn nào khớp bộ lọc hiện tại.
-      </p>
-    );
-  }
-
-  return (
-    <div className="space-y-3">
-      {safeGroups.map((group, groupIndex) => {
-        const stageList = Array.isArray(group?.stages) ? group.stages : [];
-        const groupKey = group?.mst || `group-${groupIndex}`;
-        return (
-          <div
-            key={groupKey}
-            className="rounded border border-slate-200 bg-slate-50 p-3"
-          >
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div>
-                <div className="text-sm font-semibold text-slate-800">
-                  {group?.mst || "(MST trống)"}
-                </div>
-                <div className="max-w-2xl truncate text-xs text-slate-500">
-                  {group?.company || "Chưa cập nhật tên công ty"}
-                </div>
-              </div>
-              <span className="text-xs font-medium uppercase tracking-wide text-slate-500">
-                {stageList.length} giai đoạn
-              </span>
-            </div>
-            {stageList.length ? (
-              <div className="mt-3 flex flex-wrap gap-2">
-                {stageList.map((stage, stageIndex) => {
-                  const stageKey =
-                    makeRowKey(stage) ||
-                    `${group?.mst || "stage"}-${stage?.effective_from || ""}-${stage?.effective_to || stageIndex}`;
-                  const startLabel = stage?.effective_from
-                    ? formatISODate(stage.effective_from)
-                    : "Không xác định";
-                  const endLabel = stage?.effective_to
-                    ? formatISODate(stage.effective_to)
-                    : "Hiện tại";
-                  const active = !stage?.effective_to;
-                  return (
-                    <div
-                      key={stageKey}
-                      className={`min-w-[14rem] rounded border px-3 py-2 text-xs ${
-                        active
-                          ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                          : "border-slate-200 bg-white text-slate-700"
-                      }`}
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="font-semibold">
-                          {startLabel} → {endLabel}
-                        </span>
-                        {active ? (
-                          <span className="rounded bg-emerald-600 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
-                            Đang áp dụng
-                          </span>
-                        ) : null}
-                      </div>
-                      <div className="mt-2 space-y-1 text-slate-600">
-                        <div>
-                          <span className="font-medium text-slate-500">Nhập:</span> {stage?.person_import || "—"}
-                        </div>
-                        <div>
-                          <span className="font-medium text-slate-500">Xuất:</span> {stage?.person_export || "—"}
-                        </div>
-                        {stage?.status ? (
-                          <div>
-                            <span className="font-medium text-slate-500">Trạng thái:</span> {stage.status}
-                          </div>
-                        ) : null}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <p className="mt-2 text-xs italic text-slate-500">Chưa có dữ liệu giai đoạn.</p>
-            )}
-          </div>
-        );
-      })}
-    </div>
-  );
-};
-
-
-
-
 export function CompanyNameCell({ value, isReadOnly, onChange, placeholder = "Tên công ty" }) {
   const safeValue = value == null ? "" : value.toString();
   const trimmedValue = safeValue.trim();
@@ -1393,48 +713,6 @@ export function PersonColumnHeader({ columnKey }) {
   );
 }
 
-function ColumnResizeHandle({ columnKey, onResizeStart }) {
-
-  const label = getColumnLabel(columnKey);
-
-  const handleMouseDown = (event) => {
-
-    if (typeof onResizeStart === "function") {
-
-      onResizeStart(columnKey, event);
-
-    }
-
-  };
-
-  return (
-
-    <span
-
-      role="separator"
-
-      aria-orientation="vertical"
-
-      aria-label={`Điều chỉnh chiều rộng cột ${label}`}
-
-      title={`Kéo để điều chỉnh chiều rộng cột ${label}`}
-
-      data-resize-handle={columnKey}
-
-      className="absolute inset-y-0 right-0 flex w-3 cursor-col-resize select-none items-center justify-center"
-
-      onMouseDown={handleMouseDown}
-
-    >
-
-      <span className="pointer-events-none h-full w-px bg-amber-500/50 opacity-0 transition-opacity duration-150 group-hover:opacity-100" />
-
-    </span>
-
-  );
-
-}
-
 export function AssigneeCell({
   value = "",
   placeholder,
@@ -1495,7 +773,11 @@ export function AssigneeCell({
           </span>
         ) : null}
       </div>
-      <HistoryDetails entries={historyEntries} label={historyLabel} />
+      <HistoryDetails
+        entries={historyEntries}
+        label={historyLabel}
+        formatTimestamp={formatHistoryTime}
+      />
     </div>
   );
 }
@@ -1633,13 +915,18 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
   const [staffFilter, setStaffFilter] = useState("");
 
   const [applyFrom, setApplyFrom] = useState(""); // yyyy-mm-dd
-
-  const [initialPageSize] = useState(() => {
-    if (typeof window === "undefined") {
-      return DEFAULT_PAGE_SIZE;
-    }
-    return readStoredPageSize(window.localStorage, DEFAULT_PAGE_SIZE, MIN_PAGE_SIZE);
-  });
+  const actor = currentUser?.username || "guest";
+  const { initialPageSize, persistPageSize } = useMSTAssignmentPageSize();
+  const {
+    columnMenuOpen,
+    columnStyleMap,
+    handleColumnResizeStart,
+    handleResetColumnWidths,
+    isColumnVisible,
+    setColumnMenuOpen,
+    toggleColumnVisibility,
+    visibleColumnKeys,
+  } = useMSTAssignmentColumnLayout({ actor });
 
   const rootRef = useRef(null);
 
@@ -1841,411 +1128,7 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
 
   });
 
-  const canUseLocalStorage =
-
-    typeof window !== "undefined" && typeof window.localStorage !== "undefined";
-
-  const actor = currentUser?.username || "guest";
-
-  const defaultVisibleColumns = useMemo(
-
-    () => sanitizeColumnVisibility(DEFAULT_VISIBLE_COLUMNS),
-
-    []
-
-  );
-
-  const [columnWidths, setColumnWidths] = useState(() => {
-
-    if (!canUseLocalStorage) {
-
-      return sanitizeColumnWidths(DEFAULT_COLUMN_WIDTHS);
-
-    }
-
-    return readStoredColumnWidths(window.localStorage, DEFAULT_COLUMN_WIDTHS);
-
-  });
-
-  const columnWidthsRef = useRef(columnWidths);
-
-  useEffect(() => {
-
-    columnWidthsRef.current = columnWidths;
-
-  }, [columnWidths]);
-
-  const pendingColumnWidthsRef = useRef(columnWidths);
-
-  const persistColumnWidthsTimeoutRef = useRef(null);
-
-  const schedulePersistColumnWidths = useCallback(
-
-    (nextWidths) => {
-
-      if (!canUseLocalStorage) {
-
-        return;
-
-      }
-
-      pendingColumnWidthsRef.current = nextWidths;
-
-      if (persistColumnWidthsTimeoutRef.current) {
-
-        clearTimeout(persistColumnWidthsTimeoutRef.current);
-
-      }
-
-      persistColumnWidthsTimeoutRef.current = setTimeout(() => {
-
-        writeStoredColumnWidths(window.localStorage, pendingColumnWidthsRef.current);
-
-        persistColumnWidthsTimeoutRef.current = null;
-
-      }, 280);
-
-    },
-
-    [canUseLocalStorage]
-
-  );
-
-  useEffect(() => {
-
-    schedulePersistColumnWidths(columnWidths);
-
-  }, [columnWidths, schedulePersistColumnWidths]);
-
-  useEffect(() => {
-
-    return () => {
-
-      if (persistColumnWidthsTimeoutRef.current) {
-
-        clearTimeout(persistColumnWidthsTimeoutRef.current);
-
-      }
-
-      if (typeof document !== "undefined" && document.body) {
-
-        document.body.style.removeProperty("user-select");
-
-        document.body.style.removeProperty("cursor");
-
-      }
-
-    };
-
-  }, []);
-
-  const columnResizeStateRef = useRef({ key: null, startX: 0, startWidth: 0 });
-
-  const handleColumnResizeStart = useCallback(
-
-    (key, event) => {
-
-      if (event.button !== 0) {
-
-        return;
-
-      }
-
-      event.preventDefault();
-
-      event.stopPropagation();
-
-      const currentWidths = columnWidthsRef.current || {};
-
-      const startWidth = currentWidths[key] ?? getColumnFallbackWidth(key);
-
-      columnResizeStateRef.current = {
-
-        key,
-
-        startX: event.clientX,
-
-        startWidth,
-
-      };
-
-      if (typeof document !== "undefined" && document.body) {
-
-        document.body.style.userSelect = "none";
-
-        document.body.style.cursor = "col-resize";
-
-      }
-
-    },
-
-    []
-
-  );
-
-  const handleColumnResizeMove = useCallback((event) => {
-
-    const state = columnResizeStateRef.current;
-
-    if (!state?.key) {
-
-      return;
-
-    }
-
-    const delta = event.clientX - state.startX;
-
-    const proposed = state.startWidth + delta;
-
-    const minWidth = COLUMN_MIN_WIDTHS[state.key] ?? COLUMN_MIN_WIDTH;
-
-    const maxWidth = COLUMN_MAX_WIDTH;
-
-    const nextWidth = Math.min(maxWidth, Math.max(minWidth, Math.round(proposed)));
-
-    setColumnWidths((prev) => {
-
-      const current = prev?.[state.key];
-
-      if (current === nextWidth) {
-
-        return prev;
-
-      }
-
-      return { ...prev, [state.key]: nextWidth };
-
-    });
-
-  }, []);
-
-  useEffect(() => {
-
-    if (typeof window === "undefined") {
-
-      return undefined;
-
-    }
-
-    const handleMove = (event) => {
-
-      if (!columnResizeStateRef.current?.key) {
-
-        return;
-
-      }
-
-      handleColumnResizeMove(event);
-
-    };
-
-    const handleUp = (event) => {
-
-      if (!columnResizeStateRef.current?.key) {
-
-        return;
-
-      }
-
-      handleColumnResizeMove(event);
-
-      columnResizeStateRef.current = { key: null, startX: 0, startWidth: 0 };
-
-      if (typeof document !== "undefined" && document.body) {
-
-        document.body.style.removeProperty("user-select");
-
-        document.body.style.removeProperty("cursor");
-
-      }
-
-    };
-
-    window.addEventListener("mousemove", handleMove);
-
-    window.addEventListener("mouseup", handleUp);
-
-    return () => {
-
-      window.removeEventListener("mousemove", handleMove);
-
-      window.removeEventListener("mouseup", handleUp);
-
-    };
-
-  }, [handleColumnResizeMove]);
-
-  const handleResetColumnWidths = useCallback(() => {
-
-    const defaults = sanitizeColumnWidths(DEFAULT_COLUMN_WIDTHS);
-
-    setColumnWidths(defaults);
-
-  }, []);
-
-  const columnStyleMap = useMemo(() => {
-
-    const map = {};
-
-    COLUMN_OPTIONS.forEach((option) => {
-
-      const key = option.key;
-
-      const stored = columnWidths?.[key];
-
-      const minWidth = COLUMN_MIN_WIDTHS[key] ?? COLUMN_MIN_WIDTH;
-
-      const fallbackWidth = getColumnFallbackWidth(key);
-
-      const resolved = Math.max(minWidth, Number.isFinite(stored) ? stored : fallbackWidth);
-
-      map[key] = {
-
-        width: `${resolved}px`,
-
-        minWidth: `${minWidth}px`,
-
-        maxWidth: `${Math.max(resolved, minWidth)}px`,
-
-      };
-
-    });
-
-    return map;
-
-  }, [columnWidths]);
-
-  const [visibleColumns, setVisibleColumns] = useState(() => {
-
-    if (!canUseLocalStorage) {
-
-      return defaultVisibleColumns;
-
-    }
-
-    return readStoredColumnVisibility(
-
-      window.localStorage,
-
-      actor,
-
-      defaultVisibleColumns
-
-    );
-
-  });
-
-  useEffect(() => {
-
-    if (!canUseLocalStorage) {
-
-      setVisibleColumns(defaultVisibleColumns);
-
-      return;
-
-    }
-
-    const storedVisibility = readStoredColumnVisibility(
-
-      window.localStorage,
-
-      actor,
-
-      defaultVisibleColumns
-
-    );
-
-    setVisibleColumns((prev) => {
-
-      const allKeys = new Set([
-
-        ...Object.keys(prev || {}),
-
-        ...Object.keys(storedVisibility || {}),
-
-      ]);
-
-      const isSame = Array.from(allKeys).every(
-
-        (key) => prev?.[key] === storedVisibility?.[key]
-
-      );
-
-      if (isSame) {
-
-        return prev;
-
-      }
-
-      return storedVisibility;
-
-    });
-
-  }, [actor, canUseLocalStorage, defaultVisibleColumns]);
-
-  const [columnMenuOpen, setColumnMenuOpen] = useState(false);
-
-  const isColumnVisible = useCallback(
-
-    (key) => {
-
-      const option = COLUMN_OPTIONS.find((item) => item.key === key);
-
-      if (!option) return true;
-
-      if (option.required) return true;
-
-      return visibleColumns[key] !== false;
-
-    },
-
-    [visibleColumns]
-
-  );
-
-  const visibleColumnKeys = useMemo(
-
-    () => COLUMN_OPTIONS.filter((option) => isColumnVisible(option.key)).map((option) => option.key),
-
-    [isColumnVisible]
-
-  );
-
-    const toggleColumnVisibility = useCallback(
-
-      (key) => {
-
-        const option = COLUMN_OPTIONS.find((item) => item.key === key);
-
-        if (option?.required) {
-
-          return;
-
-        }
-
-        setVisibleColumns((prev) => {
-
-          const next = { ...prev };
-
-          next[key] = prev[key] === false ? true : false;
-
-          if (canUseLocalStorage) {
-
-            writeStoredColumnVisibility(window.localStorage, actor, next);
-
-          }
-
-          return next;
-
-        });
-
-      },
-
-      [setVisibleColumns, canUseLocalStorage, actor]
-
-    );
-
-    const [addError, setAddError] = useState("");
+  const [addError, setAddError] = useState("");
 
   const isReadOnly = !canEdit;
 
@@ -3469,19 +2352,9 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
 
   useEffect(() => {
 
-    if (typeof window === "undefined") return;
+    persistPageSize(pageSize);
 
-    try {
-
-      window.localStorage.setItem(PAGE_SIZE_STORAGE_KEY, String(pageSize));
-
-    } catch (err) {
-
-      console.warn("persistPageSize", err);
-
-    }
-
-  }, [pageSize]);
+  }, [pageSize, persistPageSize]);
 
 
 
@@ -4293,6 +3166,8 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
                 teams={rosterTeams}
 
                 placeholder="Chọn nhân viên nhập"
+                ariaLabel="Người phụ trách Nhập"
+                searchAriaLabel="Tìm người phụ trách Nhập"
 
                 onSelect={({ staffName, teamName, isCustom }) => {
 
@@ -4337,6 +3212,8 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
                 teams={rosterTeams}
 
                 placeholder="Chọn nhân viên xuất"
+                ariaLabel="Người phụ trách Xuất"
+                searchAriaLabel="Tìm người phụ trách Xuất"
 
                 onSelect={({ staffName, teamName, isCustom }) => {
 
@@ -4638,6 +3515,7 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
                   <ColumnResizeHandle
 
                     columnKey="mst"
+                    label={getColumnLabel("mst")}
 
                     onResizeStart={handleColumnResizeStart}
 
@@ -4666,6 +3544,7 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
                   <ColumnResizeHandle
 
                     columnKey="company"
+                    label={getColumnLabel("company")}
 
                     onResizeStart={handleColumnResizeStart}
 
@@ -4698,6 +3577,7 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
                   <ColumnResizeHandle
 
                     columnKey="person_import"
+                    label={getColumnLabel("person_import")}
 
                     onResizeStart={handleColumnResizeStart}
 
@@ -4730,6 +3610,7 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
                   <ColumnResizeHandle
 
                     columnKey="person_export"
+                    label={getColumnLabel("person_export")}
 
                     onResizeStart={handleColumnResizeStart}
 
@@ -4758,6 +3639,7 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
                   <ColumnResizeHandle
 
                     columnKey="status"
+                    label={getColumnLabel("status")}
 
                     onResizeStart={handleColumnResizeStart}
 
@@ -4786,6 +3668,7 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
                   <ColumnResizeHandle
 
                     columnKey="effective_from"
+                    label={getColumnLabel("effective_from")}
 
                     onResizeStart={handleColumnResizeStart}
 
@@ -4814,6 +3697,7 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
                   <ColumnResizeHandle
 
                     columnKey="effective_to"
+                    label={getColumnLabel("effective_to")}
 
                     onResizeStart={handleColumnResizeStart}
 
@@ -4842,6 +3726,7 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
                   <ColumnResizeHandle
 
                     columnKey="actions"
+                    label={getColumnLabel("actions")}
 
                     onResizeStart={handleColumnResizeStart}
 
@@ -5191,6 +4076,8 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
                           <StageTimelinePreview
 
                             stages={timelineStages}
+                            formatDate={formatISODate}
+                            getStageKey={makeRowKey}
 
                             onViewFull={
 
@@ -5251,6 +4138,7 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
                           entries={effectiveHistory}
 
                           label={HISTORY_FIELD_LABELS.effective_from}
+                          formatTimestamp={formatHistoryTime}
 
                         />
 
@@ -5295,6 +4183,7 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
                           entries={effectiveToHistory}
 
                           label={HISTORY_FIELD_LABELS.effective_to}
+                          formatTimestamp={formatHistoryTime}
 
                         />
 
@@ -5395,6 +4284,8 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
                           <StageTimelinePreview
 
                             stages={timelineStages}
+                            formatDate={formatISODate}
+                            getStageKey={makeRowKey}
 
                             onViewFull={
 
@@ -5552,7 +4443,11 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
 
           <div className="max-h-[60vh] overflow-auto pr-1">
 
-            <StageTimelineGroups groups={timelineDialogState.groups} />
+            <StageTimelineGroups
+              groups={timelineDialogState.groups}
+              formatDate={formatISODate}
+              getStageKey={makeRowKey}
+            />
 
           </div>
 

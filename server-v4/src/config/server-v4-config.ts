@@ -1,9 +1,12 @@
 import path from 'node:path';
 
+import type { ImporterCompatGuardMode } from '../app/importerCompatTraffic.js';
+
 export type ServerV4PersistenceMode = 'sqlite-dual-write' | 'postgres';
 
 export type ServerV4ConfigInput = {
   dbFile?: string | null;
+  importerCompatGuardMode?: ImporterCompatGuardMode;
   persistenceMode?: ServerV4PersistenceMode;
   postgresUrl?: string | null;
   postgresLegacySqliteFallback?: boolean;
@@ -11,12 +14,14 @@ export type ServerV4ConfigInput = {
 
 export type ServerV4Config = {
   dbFile: string | null;
+  importerCompatGuardMode: ImporterCompatGuardMode;
   persistenceMode: ServerV4PersistenceMode;
   postgresUrl: string | null;
   postgresLegacySqliteFallback: boolean;
 };
 
 export function resolveServerV4Config(input: ServerV4ConfigInput = {}): ServerV4Config {
+  const importerCompatGuardMode = resolveImporterCompatGuardMode(input.importerCompatGuardMode);
   const persistenceMode = resolvePersistenceMode(input.persistenceMode);
   const postgresLegacySqliteFallback = resolvePostgresLegacySqliteFallback(
     input.postgresLegacySqliteFallback,
@@ -27,6 +32,7 @@ export function resolveServerV4Config(input: ServerV4ConfigInput = {}): ServerV4
       persistenceMode,
       postgresLegacySqliteFallback,
     }),
+    importerCompatGuardMode,
     persistenceMode,
     postgresUrl: resolvePostgresUrl(input.postgresUrl),
     postgresLegacySqliteFallback,
@@ -70,6 +76,19 @@ function resolvePersistenceMode(value?: string): ServerV4PersistenceMode {
   }
 
   throw new Error(`Invalid persistence mode: ${normalized}`);
+}
+
+function resolveImporterCompatGuardMode(value?: string): ImporterCompatGuardMode {
+  const normalized = typeof value === 'string' ? value.trim() : '';
+  if (!normalized) {
+    return 'off';
+  }
+
+  if (normalized === 'off' || normalized === 'block-migrated') {
+    return normalized;
+  }
+
+  throw new Error(`Invalid importer compat guard mode: ${normalized}`);
 }
 
 function resolvePostgresUrl(value?: string | null): string | null {

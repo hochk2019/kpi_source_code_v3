@@ -134,11 +134,9 @@ describe('server-v4 app shell', () => {
   it('surfaces relational-store rollout health without requiring the legacy db file', async () => {
     const app = buildV4App({
       dbFile: null,
+      importerCompatGuardMode: 'block-migrated',
       persistenceMode: 'postgres',
       persistence: createRelationalStorePersistenceStub(),
-      importerCompat: {
-        guardMode: 'block-migrated',
-      },
     });
     const response = await request(app).get('/api/v4/meta/rollout');
 

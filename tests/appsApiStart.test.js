@@ -28,12 +28,10 @@ describe("apps/api server launcher", () => {
     try {
       expect(receivedOptions).toEqual({
         dbFile: ":memory:",
+        importerCompatGuardMode: "off",
         persistenceMode: "sqlite-dual-write",
         postgresUrl: null,
         postgresLegacySqliteFallback: false,
-        importerCompat: {
-          guardMode: "off",
-        },
       });
       expect(runtime.config.dbFile).toBe(":memory:");
       expect(runtime.config.persistenceMode).toBe("sqlite-dual-write");
@@ -73,12 +71,10 @@ describe("apps/api server launcher", () => {
     try {
       expect(receivedOptions).toEqual({
         dbFile: null,
+        importerCompatGuardMode: "off",
         persistenceMode: "postgres",
         postgresUrl: "postgres://runtime/kpi",
         postgresLegacySqliteFallback: false,
-        importerCompat: {
-          guardMode: "off",
-        },
       });
       expect(runtime.config.dbFile).toBeNull();
     } finally {
@@ -104,13 +100,37 @@ describe("apps/api server launcher", () => {
     try {
       expect(receivedOptions).toEqual({
         dbFile: ":memory:",
+        importerCompatGuardMode: "off",
         persistenceMode: "postgres",
         postgresUrl: "postgres://runtime/kpi",
         postgresLegacySqliteFallback: true,
-        importerCompat: {
-          guardMode: "off",
-        },
       });
+    } finally {
+      await runtime.close();
+    }
+  });
+
+  it("forwards importer compat guard mode through runtime config", async () => {
+    let receivedOptions = null;
+
+    const runtime = await startApiServer({
+      importerCompatGuardMode: "block-migrated",
+      disableSignalHandlers: true,
+      buildApp(options) {
+        receivedOptions = options;
+        return express();
+      },
+    });
+
+    try {
+      expect(receivedOptions).toEqual({
+        dbFile: expect.any(String),
+        importerCompatGuardMode: "block-migrated",
+        persistenceMode: "sqlite-dual-write",
+        postgresUrl: null,
+        postgresLegacySqliteFallback: false,
+      });
+      expect(runtime.config.importerCompatGuardMode).toBe("block-migrated");
     } finally {
       await runtime.close();
     }

@@ -61,10 +61,12 @@ export function buildV4App(input?: readonly DomainModule[] | BuildV4AppOptions):
   const safeModules = serializeDomainModules(options.modules ?? moduleCatalog);
   const config = resolveServerV4Config(options);
   const persistence = options.persistence ?? createRuntimePersistence(config);
+  const importerCompatGuardMode =
+    options.importerCompat?.guardMode ?? config.importerCompatGuardMode;
   const importerCompatTracker =
     options.importerCompat?.tracker ??
     createImporterCompatTrafficTracker({
-      guardMode: options.importerCompat?.guardMode,
+      guardMode: importerCompatGuardMode,
     });
   const implementedModuleIds = new Set([
     'auth',

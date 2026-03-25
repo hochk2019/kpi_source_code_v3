@@ -32,7 +32,8 @@ vi.mock("@/lib/store.js", () => {
   };
 });
 
-import MSTAssignment, {
+import MSTAssignment from "@/components/MSTAssignment.jsx";
+import {
   COLUMN_MAX_WIDTH,
   COLUMN_MIN_WIDTH,
   COLUMN_MIN_WIDTHS,
@@ -40,7 +41,7 @@ import MSTAssignment, {
   DEFAULT_COLUMN_WIDTHS,
   readStoredColumnWidths,
   sanitizeColumnWidths,
-} from "@/components/MSTAssignment.jsx";
+} from "@/components/mst-assignment/hooks/useMSTAssignmentColumnLayout.js";
 
 describe("sanitizeColumnWidths", () => {
   it("chuẩn hóa giá trị về trong biên an toàn", () => {
