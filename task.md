@@ -2,11 +2,12 @@
 
 ## Active Slice
 
-- Title: Tach MSTAssignment create-row-state helper
-- Bead: cng-crs
+- Title: Tach MSTAssignment page-size control
+- Bead: cng-8j3
 - Status: completed
 - Last updated: 2026-03-26
 
+- `cng-8j3` da hoan tat tach `PageSizeControl` khoi `MSTAssignment` sang `src/components/mst-assignment/table/PageSizeControl.jsx`; shell hien import lai control moi cho footer pagination, con regression test pagination da tro thang vao module moi de khoa hanh vi select/custom page-size.
 - `cng-crs` da hoan tat tach `createRowState` khoi `MSTAssignment` sang `src/components/mst-assignment/model/createRowState.js`; shell hien import lai helper moi cho luong bootstrap/add-form/import-save/row-commit va giu nguyen contract cua cac workspace da tach truoc do.
 - `cng-svm` da hoan tat tach `buildStatusViewModel` khoi `MSTAssignment` sang `src/components/mst-assignment/model/statusViewModel.js`; shell hien import lai helper moi cho luong table/history status chip va giu nguyen contract cua cac panel/workspace da tach truoc do.
 - `cng-hfy` da hoan tat tach `formatHistoryTime` va `HISTORY_FIELD_LABELS` khoi `MSTAssignment` sang `src/components/mst-assignment/model/historyFormatting.js`; shell hien import lai helper moi cho luong history/timeline formatting va giu nguyen contract cua cac workspace da tach truoc do.
@@ -40,6 +41,15 @@
 - `cng-4hs` da tach xong card danh sach + bo loc thanh `KpiAdjustmentListPanel`, bo sung regression test panel, va giam `src/components/KPIAdjustments.jsx` xuong 1343 dong.
 
 ## Completed This Session
+
+- `cng-8j3` da hoan tat tach page-size control khoi `MSTAssignment`:
+  - them `src/components/mst-assignment/table/PageSizeControl.jsx` de gom toan bo UI/behavior cho predefined options + custom page-size
+  - `src/components/MSTAssignment.jsx` hien chi import control moi thay vi giu block pagination control inline trong entry file
+  - cap nhat `tests/mstAssignment.pagination.test.jsx` de import truc tiep module moi va tiep tuc khoa hanh vi dropdown/custom input
+  - targeted verify da pass:
+    - `pnpm exec vitest run tests/mstAssignment.pagination.test.jsx tests/mstAssignmentDataTablePanel.test.jsx --environment jsdom`
+    - `pnpm exec eslint src/components/MSTAssignment.jsx src/components/mst-assignment/table/PageSizeControl.jsx tests/mstAssignment.pagination.test.jsx tests/mstAssignmentDataTablePanel.test.jsx`
+  - slice nay chi rut UI pagination control sang table module rieng, khong doi contract footer pagination cua data-table panel
 
 - `cng-crs` da hoan tat tach create-row-state helper khoi `MSTAssignment`:
   - them `src/components/mst-assignment/model/createRowState.js` de gom `createRowState`
@@ -432,14 +442,14 @@
 
 ## Next Suggested Slice
 
-- Title: Danh gia tiep UI subcomponent slices cua MSTAssignment
+- Title: Tach MSTAssignment person-column header
 - Bead: `TBD`
 - Status: san sang tao bead tiep theo
 - Follow-up backlog:
-  - cac helper pure de tach an toan nhat da duoc rut ra; buoc tiep theo neu tiep tuc voi `MSTAssignment` nen danh gia tach UI subcomponent nhu `PageSizeControl`, `AssigneeCell`, hoac `PersonColumnHeader` sang file rieng
-  - can giu scope o muc presentation/component extraction va tranh lan sang bootstrap/import/export/timeline dialog orchestration dang on dinh
-  - uu tien bead moi chi khi co mot cut ro rang, co regression test panel/interaction, va diff van giu nho nhu cac commit helper vua xong
-  - hoac chon mot bead frontend khac trong backlog neu uu tien chuyen sang orchestration refinement component khac
+  - sau khi `PageSizeControl` da tach xong, cut UI nho va an toan nhat con lai trong `MSTAssignment` la `PersonColumnHeader`; component nay co scope presentation gon, caller it, va regression test san co
+  - sau `PersonColumnHeader` moi nen danh gia `AssigneeCell`, vi component do dinh `HistoryDetails`, roster/team hint, va callback chon nhan vien nen scope verify rong hon
+  - tiep tuc giu scope o muc presentation/component extraction, tranh lan sang bootstrap/import/export/timeline dialog orchestration dang on dinh
+  - uu tien bead moi chi khi co mot cut ro rang, co regression test panel/interaction, va diff van giu nho nhu cac commit helper/UI control vua xong
 
 ## Verification
 

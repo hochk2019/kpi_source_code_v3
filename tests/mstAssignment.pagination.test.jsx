@@ -2,7 +2,7 @@ import React, { useEffect } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 
-import { PageSizeControl } from "@/components/MSTAssignment.jsx";
+import PageSizeControl from "@/components/mst-assignment/table/PageSizeControl.jsx";
 import {
   PAGE_SIZE_OPTIONS,
   PAGE_SIZE_STORAGE_KEY,
