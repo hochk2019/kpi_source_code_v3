@@ -32,4 +32,5 @@ Chot backlog tach nho wave 1 cho 4 fat component lon nhat de giam kich thuoc mod
 - `cng-xyq.13` da dong sau khi tach xong controls cua `RulesEditor`; file chinh giam tiep tu 1625 dong xuong 1143 dong.
 - `cng-xyq.14` da dong sau khi tach xong panel/hook cho `AiAssistant`; file chinh giam xuong orchestration layer va da co regression coverage cho config/panel/conversation hooks.
 - Wave 1 decomposition da hoan tat cho 4 fat component; backlog tiep theo neu can se la wave-2 orchestration/config tab refinement thay vi tach pure/helper co ban.
+- `cng-jyz` da dong cho wave-2 `RulesEditor`; config tabs `groups/license/bonus` da duoc tach sang `src/components/rules-editor/RulesConfigTabsPanel.jsx`, va orchestration state/handlers lien quan da duoc rut sang `src/components/rules-editor/hooks/useRulesConfigState.js` cung voi regression tests rieng.
 - Wave 1 uu tien tach pure helper va panel nho; cac state machine lon chi tach sau khi da co regression coverage khoa hanh vi.

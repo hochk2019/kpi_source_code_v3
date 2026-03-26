@@ -2,9 +2,9 @@
 
 ## Active Slice
 
-- Title: Wave-1 frontend decomposition backlog complete
-- Bead: `cng-xyq`
-- Status: completed
+- Title: None
+- Bead: n/a
+- Status: idle
 - Last updated: 2026-03-26
 
 ## Completed This Session
@@ -142,12 +142,20 @@
      - `pnpm exec vitest run tests/rulesEditor.test.jsx tests/rulesEditorSimulationPanel.test.jsx tests/rulesEditorHistoryPanel.test.jsx --environment jsdom`
      - `pnpm exec eslint src/components/RulesEditor.jsx src/components/rules-editor/RulesSimulationPanel.jsx src/components/rules-editor/RulesHistoryPanel.jsx tests/rulesEditor.test.jsx tests/rulesEditorSimulationPanel.test.jsx tests/rulesEditorHistoryPanel.test.jsx`
 20. `cng-xyq.13` da xong o muc tach control inline khoi `RulesEditor`:
-   - them `src/components/rules-editor/controls/RuleNumberInput.jsx`, `TierEditor.jsx`, `CodeMultiSelect.jsx`, `LicenseCodeInput.jsx`, `AgencyInput.jsx`, `LicensePointTable.jsx`, va `AgencyExcludeEditor.jsx`
-   - `src/components/RulesEditor.jsx` giam tiep tu 1625 dong xuong 1143 dong sau khi rut controls va input so dung chung
-   - bo sung regression test moi `tests/rulesEditor.controls.test.jsx` de khoa chon/bo chon ma, uppercase code, them bac, them dong ma giay phep, va dai ly loai tru
+    - them `src/components/rules-editor/controls/RuleNumberInput.jsx`, `TierEditor.jsx`, `CodeMultiSelect.jsx`, `LicenseCodeInput.jsx`, `AgencyInput.jsx`, `LicensePointTable.jsx`, va `AgencyExcludeEditor.jsx`
+    - `src/components/RulesEditor.jsx` giam tiep tu 1625 dong xuong 1143 dong sau khi rut controls va input so dung chung
+    - bo sung regression test moi `tests/rulesEditor.controls.test.jsx` de khoa chon/bo chon ma, uppercase code, them bac, them dong ma giay phep, va dai ly loai tru
+    - targeted verify da pass:
+      - `pnpm exec vitest run tests/rulesEditor.test.jsx tests/rulesEditorSimulationPanel.test.jsx tests/rulesEditorHistoryPanel.test.jsx tests/rulesEditor.controls.test.jsx --environment jsdom`
+      - `pnpm exec eslint src/components/RulesEditor.jsx src/components/rules-editor/RulesSimulationPanel.jsx src/components/rules-editor/RulesHistoryPanel.jsx src/components/rules-editor/controls/RuleNumberInput.jsx src/components/rules-editor/controls/TierEditor.jsx src/components/rules-editor/controls/CodeMultiSelect.jsx src/components/rules-editor/controls/LicenseCodeInput.jsx src/components/rules-editor/controls/AgencyInput.jsx src/components/rules-editor/controls/LicensePointTable.jsx src/components/rules-editor/controls/AgencyExcludeEditor.jsx tests/rulesEditor.test.jsx tests/rulesEditorSimulationPanel.test.jsx tests/rulesEditorHistoryPanel.test.jsx tests/rulesEditor.controls.test.jsx`
+21. `cng-jyz` da xong o muc tach config tab/orchestration khoi `RulesEditor`:
+   - them `src/components/rules-editor/RulesConfigTabsPanel.jsx` de gom JSX cho 3 tab `groups/license/bonus`
+   - them `src/components/rules-editor/hooks/useRulesConfigState.js` de tach derived state + handler `groups/license/agencies` khoi file chinh
+   - `src/components/RulesEditor.jsx` hien chi wiring panel/hook moi, khong con giu inline block config tab va handler update lien quan
+   - bo sung regression tests `tests/rulesEditorConfigTabsPanel.test.jsx` va `tests/useRulesConfigState.test.jsx`
    - targeted verify da pass:
-     - `pnpm exec vitest run tests/rulesEditor.test.jsx tests/rulesEditorSimulationPanel.test.jsx tests/rulesEditorHistoryPanel.test.jsx tests/rulesEditor.controls.test.jsx --environment jsdom`
-     - `pnpm exec eslint src/components/RulesEditor.jsx src/components/rules-editor/RulesSimulationPanel.jsx src/components/rules-editor/RulesHistoryPanel.jsx src/components/rules-editor/controls/RuleNumberInput.jsx src/components/rules-editor/controls/TierEditor.jsx src/components/rules-editor/controls/CodeMultiSelect.jsx src/components/rules-editor/controls/LicenseCodeInput.jsx src/components/rules-editor/controls/AgencyInput.jsx src/components/rules-editor/controls/LicensePointTable.jsx src/components/rules-editor/controls/AgencyExcludeEditor.jsx tests/rulesEditor.test.jsx tests/rulesEditorSimulationPanel.test.jsx tests/rulesEditorHistoryPanel.test.jsx tests/rulesEditor.controls.test.jsx`
+     - `pnpm exec vitest run tests/useRulesConfigState.test.jsx tests/rulesEditorConfigTabsPanel.test.jsx tests/rulesEditor.test.jsx --environment jsdom`
+     - `pnpm exec eslint src/components/RulesEditor.jsx src/components/rules-editor/RulesConfigTabsPanel.jsx src/components/rules-editor/hooks/useRulesConfigState.js tests/rulesEditorConfigTabsPanel.test.jsx tests/useRulesConfigState.test.jsx`
 
 ## Notes
 
@@ -157,6 +165,7 @@
 - `cng-9dx` chi dong bo tai lieu/notebook, khong thay doi runtime code.
 - `cng-xyq.3` khong doi logic nghiep vu; chi tang guardrail de app shell va tung module co fallback ro rang khi render/runtime error xay ra.
 - `cng-xyq.2` co working tree chua commit. Shared component moi da co test rieng; lint con 2 warning `react-refresh/only-export-components` do file export helper thuần.
+- GitNexus `detect_changes(scope: "all" | "unstaged")` trong worktree nay dang tra `No changes detected` du `git status` van co diff local; can xem ket qua nay la khong du tin cay cho slice `cng-jyz`.
 - `cng-xyq.5` draft plan hien de xuat thu tu rollout:
   - wave 0: rollout instrumentation
   - wave 1: `teams` + `mst-assignments` + `hq-agencies`
@@ -195,6 +204,7 @@
   - `pnpm exec vitest run tests/aiAssistant.config.test.jsx tests/aiAssistant.panels.test.jsx tests/useAiConversation.test.jsx tests/useAiAssistantConfig.test.jsx --environment jsdom`
   - `pnpm exec eslint src/components/AiAssistant.jsx src/components/ai-assistant/hooks/useAiConversation.js src/components/ai-assistant/hooks/useAiAssistantConfig.js src/components/ai-assistant/panels/AiAssistantChatPanel.jsx src/components/ai-assistant/panels/AiAssistantHistoryPanel.jsx src/components/ai-assistant/panels/AiAssistantStatusSidebar.jsx src/components/ai-assistant/panels/AiAssistantConfigPanel.jsx tests/aiAssistant.panels.test.jsx tests/useAiConversation.test.jsx tests/useAiAssistantConfig.test.jsx`
 - epic `cng-xyq` da du dieu kien dong: tat ca child task rollout/server-v4, security hardening, checklist verification, va 4 slice refactor frontend wave-1 deu da closed.
+- `cng-jyz` da duoc mo va claim cho wave-2 `RulesEditor`; muc tieu hien tai la tach ba config tab `groups/license/bonus` cung orchestration state/handlers lien quan ra khoi `src/components/RulesEditor.jsx` tren nen regression tests da co.
 - `gitnexus_detect_changes(scope: "all")` van tra `No changes detected` ngay ca sau helper extraction, nen tiep tuc coi day la van de worktree-awareness cua GitNexus; gate thuc te van dua tren `git status`, lint, va test muc tieu.
 - `tests/server.monitor.test.js` van in stderr khi `dist/server-v4/index.js` khong co trong vitest runtime, nhung suite van pass vi startup path fallback dung nhu hien trang.
 
