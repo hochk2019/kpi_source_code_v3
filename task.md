@@ -2,11 +2,12 @@
 
 ## Active Slice
 
-- Title: Tach KPIAdjustments formatting helpers
-- Bead: cng-lch
+- Title: Tach KPIAdjustments field-id helpers
+- Bead: cng-pnz
 - Status: completed
 - Last updated: 2026-03-27
 
+- `cng-pnz` da hoan tat tach `normalizeFieldSegment`, `buildSettingsFieldId`, va `buildLicenseFieldId` khoi `KPIAdjustments` sang `src/components/kpi-adjustments/model/fieldIds.js`; shell hien import lai helper moi cho settings dialog wiring, con unit test moi khoa contract sanitize segment va field-id generation.
 - `cng-lch` da hoan tat tach `formatDateOnly`, `formatInt`, va `formatDecimal` khoi `KPIAdjustments` sang `src/components/kpi-adjustments/model/formatting.js`; shell hien import lai helper moi cho form/list/overview dialogs, con unit test moi khoa date/int/decimal formatting contract.
 - `cng-y03` da hoan tat tach `AssigneeCell` khoi `MSTAssignment` sang `src/components/mst-assignment/table/AssigneeCell.jsx`; shell hien import lai component moi cho cot phu trach, con regression test person-columns da tro thang vao module moi de khoa display clamp, team hint, va che do edit.
 - `cng-gpl` da hoan tat tach wrapper `MstAssignmentStaffCombobox` khoi `MSTAssignment` sang `src/components/mst-assignment/shared/MstAssignmentStaffCombobox.jsx`; shell hien import lai wrapper moi cho ca `AssigneeCell` va `MstAssignmentAddFormPanel`, con regression test moi khoa 3 preset `allowCustom`/`preserveTeamOnCustom`/`preserveTeamOnClear`.
@@ -46,6 +47,11 @@
 - `cng-4hs` da tach xong card danh sach + bo loc thanh `KpiAdjustmentListPanel`, bo sung regression test panel, va giam `src/components/KPIAdjustments.jsx` xuong 1343 dong.
 
 ## Completed This Session
+
+- `cng-pnz` da hoan tat tach KPI field-id helpers:
+  - them `src/components/kpi-adjustments/model/fieldIds.js` de gom `normalizeFieldSegment`, `buildSettingsFieldId`, va `buildLicenseFieldId`
+  - `src/components/KPIAdjustments.jsx` hien chi import helper moi thay vi giu sanitize/id builder inline trong component shell
+  - bo sung `tests/kpiAdjustments.fieldIds.test.js` de khoa contract normalize segment va settings/license field-id generation
 
 - `cng-lch` da hoan tat tach KPI formatting helpers:
   - them `src/components/kpi-adjustments/model/formatting.js` de gom `formatDateOnly`, `formatInt`, va `formatDecimal`
@@ -480,12 +486,12 @@
 
 ## Next Suggested Slice
 
-- Title: Tach KPIAdjustments field-id helpers
+- Title: Tach KPIAdjustments reference parsing helper
 - Bead: `TBD`
 - Status: san sang tao bead tiep theo
 - Follow-up backlog:
-  - sau khi formatting helpers da tach xong, cut tiep theo hop ly nhat la field-id helpers (`normalizeFieldSegment`, `buildSettingsFieldId`, `buildLicenseFieldId`) vi scope caller van rat hep quanh settings dialog
-  - sau field-id helpers co the tiep tuc tach `parseReferences` va `buildStaffOptions` de chot them 1-2 slice pure helper trong `KPIAdjustments.jsx`
+  - `parseReferences` la helper thuần du lieu duoc goi o nhieu luong submit/dialog trong `KPIAdjustments`, nen co the tach sang module model nho ma khong doi wiring UI
+  - sau `parseReferences` co the tiep tuc tach `buildStaffOptions` de chot them 1 quick win nua trong `KPIAdjustments.jsx`
   - tiep tuc giu scope o muc presentation/component extraction, tranh lan sang bootstrap/import/export/timeline dialog orchestration dang on dinh
   - uu tien bead moi chi khi co mot cut ro rang, co regression test panel/interaction, va diff van giu nho nhu cac commit helper/UI control vua xong
 

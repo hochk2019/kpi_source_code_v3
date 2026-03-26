@@ -29,6 +29,10 @@ import {
   formatDecimal,
   formatInt,
 } from "@/components/kpi-adjustments/model/formatting.js";
+import {
+  buildLicenseFieldId,
+  buildSettingsFieldId,
+} from "@/components/kpi-adjustments/model/fieldIds.js";
 import KpiAdjustmentDetailDialog from "@/components/kpi-adjustments/panels/KpiAdjustmentDetailDialog.jsx";
 import KpiAdjustmentFormPanel from "@/components/kpi-adjustments/panels/KpiAdjustmentFormPanel.jsx";
 import KpiAdjustmentGuidanceDialog from "@/components/kpi-adjustments/panels/KpiAdjustmentGuidanceDialog.jsx";
@@ -93,34 +97,6 @@ const FORM_FIELD_IDS = Object.freeze({
   decisionNote: "kpi-adjust-decision-note",
 
 });
-
-
-
-const normalizeFieldSegment = (value) =>
-
-  String(value ?? "")
-
-    .trim()
-
-    .toLowerCase()
-
-    .replace(/[^a-z0-9_-]+/g, "-")
-
-    .replace(/-{2,}/g, "-")
-
-    .replace(/^-+|-+$/g, "");
-
-
-
-const buildSettingsFieldId = (category, suffix) =>
-
-  `kpi-setting-${normalizeFieldSegment(category)}-${normalizeFieldSegment(suffix)}`;
-
-
-
-const buildLicenseFieldId = (category, code) =>
-
-  `kpi-setting-${normalizeFieldSegment(category)}-license-${normalizeFieldSegment(code)}`;
 
 
 
