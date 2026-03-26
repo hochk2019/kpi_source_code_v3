@@ -2,14 +2,22 @@
 
 ## Active Slice
 
-- Title: None
-- Bead: n/a
-- Status: idle
+- Title: Tach workflow save-restore va simulation orchestration khoi RulesEditor
+- Bead: cng-lte
+- Status: done
 - Last updated: 2026-03-26
 
 ## Completed This Session
 
-1. Fact-check review da duoc ghi lai tai:
+1. `cng-lte` da duoc implementation o muc workflow/orchestration extraction cho `RulesEditor`:
+   - them `src/components/rules-editor/hooks/useRulesEditorWorkflow.js` de tach save/reset/default/delete/import-export, history refresh/restore, va simulation khoi `src/components/RulesEditor.jsx`
+   - `src/components/RulesEditor.jsx` hien giu vai tro compose UI + wiring voi `useRulesConfigState` va `useRulesEditorWorkflow`, khong con giu block handler workflow trung lap
+   - them `tests/useRulesEditorWorkflow.test.jsx` de khoa truc tiep 2 flow quan trong: simulation summary va history refresh/restore
+   - targeted verify da pass:
+     - `pnpm exec eslint src/components/RulesEditor.jsx src/components/rules-editor/hooks/useRulesEditorWorkflow.js tests/useRulesEditorWorkflow.test.jsx tests/rulesEditor.test.jsx`
+     - `pnpm exec vitest run tests/useRulesEditorWorkflow.test.jsx tests/rulesEditor.test.jsx tests/rulesEditorHistoryPanel.test.jsx tests/rulesEditorSimulationPanel.test.jsx --environment jsdom`
+
+2. Fact-check review da duoc ghi lai tai:
    - `docs/gemini-review-v1-factcheck-2026-03-25.md`
 2. Backlog bead da duoc seed:
    - `cng-xyq` epic
@@ -204,7 +212,7 @@
   - `pnpm exec vitest run tests/aiAssistant.config.test.jsx tests/aiAssistant.panels.test.jsx tests/useAiConversation.test.jsx tests/useAiAssistantConfig.test.jsx --environment jsdom`
   - `pnpm exec eslint src/components/AiAssistant.jsx src/components/ai-assistant/hooks/useAiConversation.js src/components/ai-assistant/hooks/useAiAssistantConfig.js src/components/ai-assistant/panels/AiAssistantChatPanel.jsx src/components/ai-assistant/panels/AiAssistantHistoryPanel.jsx src/components/ai-assistant/panels/AiAssistantStatusSidebar.jsx src/components/ai-assistant/panels/AiAssistantConfigPanel.jsx tests/aiAssistant.panels.test.jsx tests/useAiConversation.test.jsx tests/useAiAssistantConfig.test.jsx`
 - epic `cng-xyq` da du dieu kien dong: tat ca child task rollout/server-v4, security hardening, checklist verification, va 4 slice refactor frontend wave-1 deu da closed.
-- `cng-jyz` da duoc mo va claim cho wave-2 `RulesEditor`; muc tieu hien tai la tach ba config tab `groups/license/bonus` cung orchestration state/handlers lien quan ra khoi `src/components/RulesEditor.jsx` tren nen regression tests da co.
+- `cng-jyz` da duoc mo va claim cho wave-2 `RulesEditor`; slice config tabs da xong truoc do, va `cng-lte` vua hoan tat phan workflow save/restore/simulation orchestration tiep theo.
 - `gitnexus_detect_changes(scope: "all")` van tra `No changes detected` ngay ca sau helper extraction, nen tiep tuc coi day la van de worktree-awareness cua GitNexus; gate thuc te van dua tren `git status`, lint, va test muc tieu.
 - `tests/server.monitor.test.js` van in stderr khi `dist/server-v4/index.js` khong co trong vitest runtime, nhung suite van pass vi startup path fallback dung nhu hien trang.
 
