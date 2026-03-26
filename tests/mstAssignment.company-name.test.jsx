@@ -2,9 +2,7 @@ import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { render, screen, fireEvent, cleanup } from "@testing-library/react";
 
-import {
-  CompanyNameCell,
-} from "@/components/MSTAssignment.jsx";
+import CompanyNameCell from "@/components/mst-assignment/table/CompanyNameCell.jsx";
 import {
   COMPANY_NAME_WRAP_THRESHOLD,
   shouldWrapCompanyName,

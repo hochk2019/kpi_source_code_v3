@@ -2,11 +2,12 @@
 
 ## Active Slice
 
-- Title: Tach MSTAssignment person-column header
-- Bead: cng-y9o
+- Title: Tach MSTAssignment company-name cell
+- Bead: cng-s7x
 - Status: completed
-- Last updated: 2026-03-26
+- Last updated: 2026-03-27
 
+- `cng-s7x` da hoan tat tach `CompanyNameCell` khoi `MSTAssignment` sang `src/components/mst-assignment/table/CompanyNameCell.jsx`; shell hien import lai component moi cho cot cong ty, con regression test company-name da tro thang vao module moi de khoa sanitize/wrap/textarea resize behavior.
 - `cng-y9o` da hoan tat tach `PersonColumnHeader` khoi `MSTAssignment` sang `src/components/mst-assignment/table/PersonColumnHeader.jsx`; shell hien import lai header moi cho cac cot `person_import`/`person_export`, con regression test person-columns da tro thang vao module moi de khoa presentation metadata va tooltip behavior.
 - `cng-8j3` da hoan tat tach `PageSizeControl` khoi `MSTAssignment` sang `src/components/mst-assignment/table/PageSizeControl.jsx`; shell hien import lai control moi cho footer pagination, con regression test pagination da tro thang vao module moi de khoa hanh vi select/custom page-size.
 - `cng-crs` da hoan tat tach `createRowState` khoi `MSTAssignment` sang `src/components/mst-assignment/model/createRowState.js`; shell hien import lai helper moi cho luong bootstrap/add-form/import-save/row-commit va giu nguyen contract cua cac workspace da tach truoc do.
@@ -42,6 +43,15 @@
 - `cng-4hs` da tach xong card danh sach + bo loc thanh `KpiAdjustmentListPanel`, bo sung regression test panel, va giam `src/components/KPIAdjustments.jsx` xuong 1343 dong.
 
 ## Completed This Session
+
+- `cng-s7x` da hoan tat tach company-name cell khoi `MSTAssignment`:
+  - them `src/components/mst-assignment/table/CompanyNameCell.jsx` de gom render/view-edit behavior cho cot cong ty
+  - `src/components/MSTAssignment.jsx` hien chi import component moi thay vi giu sanitize/wrap/textarea sizing logic inline trong entry file
+  - cap nhat `tests/mstAssignment.company-name.test.jsx` de import truc tiep module moi va tiep tuc khoa wrap threshold, sanitize, va auto-resize behavior
+  - targeted verify da pass:
+    - `pnpm exec vitest run tests/mstAssignment.company-name.test.jsx tests/mstAssignmentDataTablePanel.test.jsx --environment jsdom`
+    - `pnpm exec eslint src/components/MSTAssignment.jsx src/components/mst-assignment/table/CompanyNameCell.jsx tests/mstAssignment.company-name.test.jsx tests/mstAssignmentDataTablePanel.test.jsx`
+  - slice nay chi rut company cell presentation/editing logic sang table module rieng, khong doi contract render cua data-table panel
 
 - `cng-y9o` da hoan tat tach person-column header khoi `MSTAssignment`:
   - them `src/components/mst-assignment/table/PersonColumnHeader.jsx` de gom presentation config + icon wiring cho `person_import` / `person_export`
@@ -452,12 +462,12 @@
 
 ## Next Suggested Slice
 
-- Title: Tach MSTAssignment assignee cell
+- Title: Tach MSTAssignment staff combobox wrapper
 - Bead: `TBD`
 - Status: san sang tao bead tiep theo
 - Follow-up backlog:
-  - sau khi `PersonColumnHeader` da tach xong, UI cut tiep theo trong `MSTAssignment` la `AssigneeCell`; component nay van nam trong nhom presentation/table nhung scope verify rong hon vi co `HistoryDetails`, roster/team hint, va callback chon nhan vien
-  - neu tiep tuc bead nay, nen giu contract bang cach re-export tu `MSTAssignment` hoac cap nhat ro cac test import truc tiep sang module moi nhu 2 slice UI vua xong
+  - sau khi `CompanyNameCell` da tach xong, cut nho tiep theo hop ly nhat la wrapper `StaffCombobox`; no la dependency presentation dung chung cho add-form va assignee cell, nen tach no truoc se lam bead `AssigneeCell` sau do gon hon
+  - sau `StaffCombobox` moi nen tach `AssigneeCell`, vi component do dinh `HistoryDetails`, roster/team hint, va callback chon nhan vien nen scope verify rong hon
   - tiep tuc giu scope o muc presentation/component extraction, tranh lan sang bootstrap/import/export/timeline dialog orchestration dang on dinh
   - uu tien bead moi chi khi co mot cut ro rang, co regression test panel/interaction, va diff van giu nho nhu cac commit helper/UI control vua xong
 
