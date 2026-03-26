@@ -48,6 +48,10 @@ import {
   toISO,
 } from "@/components/mst-assignment/model/importSheet.js";
 import {
+  makeRowKey,
+  tidyMST,
+} from "@/components/mst-assignment/model/rowIdentity.js";
+import {
   computeStatusDisplay,
   computeStoredStatus,
   formatISODate,
@@ -97,24 +101,6 @@ const StaffCombobox = (props) => (
 
 
 
-const tidyMST = (v) => {
-
-  if (v == null) return "";
-
-  // lấy chuỗi hiển thị (để giữ 0 ở đầu nếu có)
-
-  let s = String(v).trim();
-
-  // loại mọi ký tự không phải số
-
-  s = s.replace(/[^\d]/g, "");
-
-  return s;
-
-};
-
-
-
 const HISTORY_FIELD_LABELS = {
 
   person_import: "Người phụ trách Nhập",
@@ -124,16 +110,6 @@ const HISTORY_FIELD_LABELS = {
   effective_from: "Áp dụng từ ngày",
 
   effective_to: "Đến hết ngày",
-
-};
-
-
-
-const makeRowKey = (row) => {
-
-  if (!row) return "";
-
-  return `${row.mst || ""}__${row.effective_from || ""}__${row.effective_to || ""}`;
 
 };
 

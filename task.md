@@ -2,11 +2,12 @@
 
 ## Active Slice
 
-- Title: Tach MSTAssignment import parsing helpers
-- Bead: cng-w2c
+- Title: Tach MSTAssignment row identity helpers
+- Bead: cng-kun
 - Status: completed
 - Last updated: 2026-03-26
 
+- `cng-kun` da hoan tat tach `tidyMST` va `makeRowKey` khoi `MSTAssignment` sang `src/components/mst-assignment/model/rowIdentity.js`; shell hien import lai helper moi cho luong row identity va giu nguyen contract cua cac workspace da tach truoc do.
 - `cng-w2c` da hoan tat tach `findCell`, `toISO`, va `headerAliases` khoi `MSTAssignment` sang `src/components/mst-assignment/model/importSheet.js`; shell hien import lai helper moi cho luong import Excel, con regression test parsing da duoc tach rieng.
 - `cng-d5g` da hoan tat tach `formatISODate`, `normalizeStatusLabel`, `computeStoredStatus`, va `computeStatusDisplay` khoi `MSTAssignment` sang `src/components/mst-assignment/model/statusDate.js`; shell hien import lai helper moi va giu nguyen contract truyen vao add-form/import-save/row-mutations/export/table panel.
 - `cng-jix` da hoan tat hop nhat `goToFirstPage` wiring khoi `MSTAssignment` sang `src/components/mst-assignment/hooks/useMSTAssignmentPageResetWorkspace.js`; shell hien dung mot callback reset-page on dinh de feed cho add-form/history/import/staff/view workspace thay vi lap lai 5 lambda `setPageRef.current(1)`.
@@ -36,6 +37,15 @@
 - `cng-4hs` da tach xong card danh sach + bo loc thanh `KpiAdjustmentListPanel`, bo sung regression test panel, va giam `src/components/KPIAdjustments.jsx` xuong 1343 dong.
 
 ## Completed This Session
+
+- `cng-kun` da hoan tat tach row-identity helpers khoi `MSTAssignment`:
+  - them `src/components/mst-assignment/model/rowIdentity.js` de gom `tidyMST` va `makeRowKey`
+  - `src/components/MSTAssignment.jsx` hien chi import helper moi thay vi giu block normalize MST/key builder trong entry file
+  - bo sung `tests/mstAssignment.row-identity.test.js` de khoa normalize MST digits-only, fallback rong, va row-key builder cho ca row day du lẫn row thieu field
+  - targeted verify da pass:
+    - `pnpm exec vitest run tests/mstAssignment.row-identity.test.js tests/useMSTAssignmentAddFormWorkspace.test.jsx tests/useMSTAssignmentBootstrapWorkspace.test.jsx tests/useMSTAssignmentDerivedRowsWorkspace.test.jsx tests/useMSTAssignmentImportSaveWorkspace.test.jsx tests/useMSTAssignmentRowCommitWorkspace.test.jsx tests/useMSTAssignmentRowMutations.test.jsx --environment jsdom`
+    - `pnpm exec eslint src/components/MSTAssignment.jsx src/components/mst-assignment/model/rowIdentity.js tests/mstAssignment.row-identity.test.js tests/useMSTAssignmentAddFormWorkspace.test.jsx tests/useMSTAssignmentBootstrapWorkspace.test.jsx tests/useMSTAssignmentDerivedRowsWorkspace.test.jsx tests/useMSTAssignmentImportSaveWorkspace.test.jsx tests/useMSTAssignmentRowCommitWorkspace.test.jsx tests/useMSTAssignmentRowMutations.test.jsx`
+  - slice nay chi rut helper pure cho identity/lookup key, khong doi contract cua add-form/bootstrap/derived/import-save/row-commit/row-mutations workspace
 
 - `cng-w2c` da hoan tat tach import-sheet parsing helpers khoi `MSTAssignment`:
   - them `src/components/mst-assignment/model/importSheet.js` de gom `headerAliases`, `findCell`, va `toISO`
@@ -392,13 +402,13 @@
 
 ## Next Suggested Slice
 
-- Title: Tach row-identity/history formatting helpers khoi MSTAssignment
+- Title: Tach MSTAssignment history formatting helpers
 - Bead: `TBD`
 - Status: san sang tao bead tiep theo
 - Follow-up backlog:
-  - co the tach `tidyMST`, `makeRowKey`, va `formatHistoryTime` ra helper/model rieng neu muon rut gon them shell `MSTAssignment`
-  - can giu slice nho de tranh lan sang logic export/timeline/table dang on dinh
-  - uu tien chi doi helper pure va test formatter/key builder, khong doi contract cac workspace da tach
+  - uu tien tach `formatHistoryTime` va `HISTORY_FIELD_LABELS` sang helper/model rieng de tiep tuc rut gon them shell `MSTAssignment`
+  - can giu slice nho de tranh lan sang `buildStatusViewModel`, export, timeline, va table orchestration dang on dinh
+  - uu tien chi doi helper pure va test formatter/history labels, khong doi contract cac workspace da tach
   - hoac chon mot bead frontend khac trong backlog neu uu tien chuyen sang orchestration refinement component khac
 
 ## Verification
