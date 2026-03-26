@@ -2,11 +2,12 @@
 
 ## Active Slice
 
-- Title: Tach MSTAssignment status view-model helper
-- Bead: cng-svm
+- Title: Tach MSTAssignment create-row-state helper
+- Bead: cng-crs
 - Status: completed
 - Last updated: 2026-03-26
 
+- `cng-crs` da hoan tat tach `createRowState` khoi `MSTAssignment` sang `src/components/mst-assignment/model/createRowState.js`; shell hien import lai helper moi cho luong bootstrap/add-form/import-save/row-commit va giu nguyen contract cua cac workspace da tach truoc do.
 - `cng-svm` da hoan tat tach `buildStatusViewModel` khoi `MSTAssignment` sang `src/components/mst-assignment/model/statusViewModel.js`; shell hien import lai helper moi cho luong table/history status chip va giu nguyen contract cua cac panel/workspace da tach truoc do.
 - `cng-hfy` da hoan tat tach `formatHistoryTime` va `HISTORY_FIELD_LABELS` khoi `MSTAssignment` sang `src/components/mst-assignment/model/historyFormatting.js`; shell hien import lai helper moi cho luong history/timeline formatting va giu nguyen contract cua cac workspace da tach truoc do.
 - `cng-kun` da hoan tat tach `tidyMST` va `makeRowKey` khoi `MSTAssignment` sang `src/components/mst-assignment/model/rowIdentity.js`; shell hien import lai helper moi cho luong row identity va giu nguyen contract cua cac workspace da tach truoc do.
@@ -39,6 +40,15 @@
 - `cng-4hs` da tach xong card danh sach + bo loc thanh `KpiAdjustmentListPanel`, bo sung regression test panel, va giam `src/components/KPIAdjustments.jsx` xuong 1343 dong.
 
 ## Completed This Session
+
+- `cng-crs` da hoan tat tach create-row-state helper khoi `MSTAssignment`:
+  - them `src/components/mst-assignment/model/createRowState.js` de gom `createRowState`
+  - `src/components/MSTAssignment.jsx` hien chi import helper moi thay vi giu block normalize row state/meta trong entry file
+  - bo sung `tests/mstAssignment.create-row-state.test.js` de khoa normalization MST, trim field strings, auto-compute status, va meta behavior cua `__originalKey` / `__isNew`
+  - targeted verify da pass:
+    - `pnpm exec vitest run tests/mstAssignment.create-row-state.test.js tests/useMSTAssignmentAddFormWorkspace.test.jsx tests/useMSTAssignmentBootstrapWorkspace.test.jsx tests/useMSTAssignmentImportSaveWorkspace.test.jsx tests/useMSTAssignmentRowCommitWorkspace.test.jsx --environment jsdom`
+    - `pnpm exec eslint src/components/MSTAssignment.jsx src/components/mst-assignment/model/createRowState.js tests/mstAssignment.create-row-state.test.js tests/useMSTAssignmentAddFormWorkspace.test.jsx tests/useMSTAssignmentBootstrapWorkspace.test.jsx tests/useMSTAssignmentImportSaveWorkspace.test.jsx tests/useMSTAssignmentRowCommitWorkspace.test.jsx`
+  - slice nay chi rut helper pure cho bootstrap/import/add-form/row-commit row normalization, khong doi contract cua cac workspace consumer
 
 - `cng-svm` da hoan tat tach status view-model helper khoi `MSTAssignment`:
   - them `src/components/mst-assignment/model/statusViewModel.js` de gom `buildStatusViewModel`
@@ -422,13 +432,13 @@
 
 ## Next Suggested Slice
 
-- Title: Danh gia tiep helper/presentation slices con lai cua MSTAssignment
+- Title: Danh gia tiep UI subcomponent slices cua MSTAssignment
 - Bead: `TBD`
 - Status: san sang tao bead tiep theo
 - Follow-up backlog:
-  - cac helper pure de tach an toan nhat da duoc rut ra; buoc tiep theo can review xem co nen tach them presentation helpers nho hay chuyen sang component khac trong backlog
-  - neu tiep tuc voi `MSTAssignment`, nen giu scope o muc presentation/helper va tranh lan sang bootstrap/import/export/timeline dialog orchestration dang on dinh
-  - uu tien bead moi chi khi co mot cut ro rang, co test diem roi, va diff van giu nho nhu 3 commit helper vua xong
+  - cac helper pure de tach an toan nhat da duoc rut ra; buoc tiep theo neu tiep tuc voi `MSTAssignment` nen danh gia tach UI subcomponent nhu `PageSizeControl`, `AssigneeCell`, hoac `PersonColumnHeader` sang file rieng
+  - can giu scope o muc presentation/component extraction va tranh lan sang bootstrap/import/export/timeline dialog orchestration dang on dinh
+  - uu tien bead moi chi khi co mot cut ro rang, co regression test panel/interaction, va diff van giu nho nhu cac commit helper vua xong
   - hoac chon mot bead frontend khac trong backlog neu uu tien chuyen sang orchestration refinement component khac
 
 ## Verification

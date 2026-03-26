@@ -51,6 +51,7 @@ import {
   formatHistoryTime,
   HISTORY_FIELD_LABELS,
 } from "@/components/mst-assignment/model/historyFormatting.js";
+import { createRowState } from "@/components/mst-assignment/model/createRowState.js";
 import {
   makeRowKey,
   tidyMST,
@@ -484,45 +485,6 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
     goToFirstPage,
   });
 
-  const createRowState = useCallback((row, meta = {}) => {
-
-    const mstValue = tidyMST(row?.mst || "");
-
-    const base = {
-
-      mst: mstValue,
-
-      company: String(row?.company || "").trim(),
-
-      person_import: String(row?.person_import || "").trim(),
-
-      person_export: String(row?.person_export || "").trim(),
-
-      team: String(row?.team || "").trim(),
-
-      effective_from: row?.effective_from || "",
-
-      effective_to: row?.effective_to || "",
-
-      status: "",
-
-    };
-
-    base.status = computeStoredStatus(base);
-
-    const originalKey = meta.originalKey ?? (meta.isNew ? null : makeRowKey(base));
-
-    return {
-
-      ...base,
-
-      __originalKey: originalKey,
-
-      __isNew: Boolean(meta.isNew),
-
-    };
-
-  }, []);
   const { rosterTeams } = useMSTAssignmentBootstrapWorkspace({
     createRowState,
     makeRowKey,
