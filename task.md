@@ -2,11 +2,13 @@
 
 ## Active Slice
 
-- Title: Tach helper grouping/display list khoi MSTAssignment
-- Bead: cng-a4y
+- Title: Tach row mutation handlers khoi MSTAssignment
+- Bead: cng-czt
 - Status: completed
 - Last updated: 2026-03-26
 
+- `cng-czt` da hoan tat tach row-mutation orchestration khoi `MSTAssignment` sang `src/components/mst-assignment/hooks/useMSTAssignmentRowMutations.js`; shell hien chi giu wiring props cho panel, con hook moi gom `updateRow`, assignee select handlers, va `removeRow`.
+- `cng-elr` da hoan tat tach file-input/import/save orchestration khoi `MSTAssignment` sang `src/components/mst-assignment/hooks/useMSTAssignmentImportSaveWorkspace.js`; shell hien chi giu wiring props, con hook moi gom `fileRef`, `selectedFileName`, `handleFileChange`, `onImportXLSX`, `onSave`, va `markRecentlyImported`.
 - `cng-a4y` da hoan tat tach pure helper `sortMSTRows`, grouped stages, aggregated-by-MST rows, display list, va timeline map sang `src/components/mst-assignment/model/displaySelectors.js`; `src/components/MSTAssignment.jsx` da bo duplicate `groupedStages2`/`groupedStages` va giam con 2969 dong sau khi verify bang test moi `tests/mstAssignment.displaySelectors.test.js`.
 
 - `cng-oe3` da duoc dong nhu bead trung lap voi `cng-4zp`; task tach `KpiAdjustmentFormPanel` da hoan tat o slice truoc.
@@ -21,6 +23,26 @@
 - `cng-4hs` da tach xong card danh sach + bo loc thanh `KpiAdjustmentListPanel`, bo sung regression test panel, va giam `src/components/KPIAdjustments.jsx` xuong 1343 dong.
 
 ## Completed This Session
+
+- `cng-czt` da hoan tat tach row-mutation handlers khoi `MSTAssignment`:
+  - them `src/components/mst-assignment/hooks/useMSTAssignmentRowMutations.js` de gom `updateRow`, assignee patch builder, imported-key migration, va `removeRow`
+  - `src/components/MSTAssignment.jsx` hien dung hook moi thay vi giu inline block `updateRow` + assignee select handlers + remove-row confirm flow
+  - bo sung `tests/useMSTAssignmentRowMutations.test.jsx` de khoa row update normalization/status, imported-key migration, assignee patching, va delete flow
+  - targeted verify da pass:
+    - `pnpm exec vitest run tests/useMSTAssignmentRowMutations.test.jsx tests/useMSTAssignmentImportSaveWorkspace.test.jsx tests/mstAssignmentDataTablePanel.test.jsx tests/mstAssignmentTimelinePanel.test.jsx tests/mstAssignment.displaySelectors.test.js --environment jsdom`
+    - `pnpm exec eslint src/components/MSTAssignment.jsx src/components/mst-assignment/hooks/useMSTAssignmentImportSaveWorkspace.js src/components/mst-assignment/hooks/useMSTAssignmentRowMutations.js tests/useMSTAssignmentImportSaveWorkspace.test.jsx tests/useMSTAssignmentRowMutations.test.jsx`
+  - `eslint` chi con 2 warning Fast Refresh cu o `src/components/MSTAssignment.jsx`
+  - `detect_changes(scope: "all")` van bao `risk_level: high` vi GitNexus map diff theo file `MSTAssignment.jsx`, nhung impact truoc khi sua cho `handleRowImportSelect` la `LOW` va scope thuc te chi quanh row-mutation extraction
+
+- `cng-elr` da hoan tat tach import/save orchestration khoi `MSTAssignment`:
+  - them `src/components/mst-assignment/hooks/useMSTAssignmentImportSaveWorkspace.js` de gom file-input state, import workbook mapping/merge, save orchestration, va helper add imported keys
+  - `src/components/MSTAssignment.jsx` hien dung hook moi thay vi giu inline block `onImportXLSX` + `onSave` + `selectedFileName`/`fileRef`
+  - bo sung `tests/useMSTAssignmentImportSaveWorkspace.test.jsx` de khoa import flow local va save/reset imported highlights
+  - targeted verify da pass:
+    - `pnpm exec vitest run tests/useMSTAssignmentImportSaveWorkspace.test.jsx tests/mstAssignment.displaySelectors.test.js tests/mstAssignmentDataTablePanel.test.jsx tests/mstAssignmentTimelinePanel.test.jsx --environment jsdom`
+    - `pnpm exec eslint src/components/MSTAssignment.jsx src/components/mst-assignment/hooks/useMSTAssignmentImportSaveWorkspace.js tests/useMSTAssignmentImportSaveWorkspace.test.jsx`
+  - `eslint` chi con 2 warning Fast Refresh cu o `src/components/MSTAssignment.jsx`
+  - `detect_changes(scope: "all")` van bao `risk_level: high` vi GitNexus map diff theo entry-point `MSTAssignment.jsx`; impact truoc khi sua cho symbol `MSTAssignment` van la `LOW` va scope thuc te cua slice chi quanh import/save extraction
 
 - `cng-a4y` da hoan tat tach selector/grouping helper khoi `MSTAssignment`:
   - them `src/components/mst-assignment/model/displaySelectors.js` de gom `sortMSTRows`, `buildGroupedStages`, `buildAggregatedRowsByMST`, `buildDisplayList`, va `buildTimelineGroupsByMST`
@@ -239,11 +261,12 @@
 
 ## Next Suggested Slice
 
-- Title: Tach import/save orchestration khoi MSTAssignment
+- Title: Tach add-form workflow/state khoi MSTAssignment
 - Bead: `TBD`
 - Status: san sang tao bead tiep theo
 - Follow-up backlog:
-  - tiep tuc wave-2 cho `MSTAssignment` bang cach tach `onImportXLSX` + `onSave` va phan file-input state thanh hook/workspace rieng
+  - tiep tuc wave-2 cho `MSTAssignment` bang cach tach `draft`, `addError`, `handleDraftImportSelect`, `handleDraftExportSelect`, `handleCloseAddForm`, va `handleAddSubmit` thanh hook/workspace rieng
+  - can nhac tach tiep `startNewStageFromRow`/`commitRow` neu uu tien chuyen sang workflow luu tung dong thay vi form them moi
   - hoac chon mot bead frontend khac trong backlog neu uu tien chuyen sang orchestration refinement component khac
 
 ## Verification

@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import clsx from "clsx";
-
 import * as XLSX from "xlsx";
 
 import {
@@ -9,8 +8,6 @@ import {
   getMSTHistoryEntries,
 
   getMSTMap,
-
-  upsertMSTRows,
 
   saveMSTRow,
 
@@ -43,6 +40,8 @@ import useMSTAssignmentPageSize, {
   normalizePageSize,
   PAGE_SIZE_OPTIONS,
 } from "@/components/mst-assignment/hooks/useMSTAssignmentPageSize.js";
+import useMSTAssignmentImportSaveWorkspace from "@/components/mst-assignment/hooks/useMSTAssignmentImportSaveWorkspace.js";
+import useMSTAssignmentRowMutations from "@/components/mst-assignment/hooks/useMSTAssignmentRowMutations.js";
 import {
   buildAggregatedRowsByMST,
   buildDisplayList,
@@ -887,11 +886,7 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
 
   const rootRef = useRef(null);
 
-  const fileRef = useRef();
-
   const setPageRef = useRef(() => {});
-
-  const [selectedFileName, setSelectedFileName] = useState("");
 
   const [historyEntries, setHistoryEntries] = useState(() =>
 
@@ -920,34 +915,6 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
   const rosterTeams = useMemo(() => buildRosterTeams(rosterSnapshot), [rosterSnapshot]);
 
   const [recentlyImportedKeys, setRecentlyImportedKeys] = useState(() => new Set());
-
-  const markRecentlyImported = useCallback((keys = []) => {
-
-    if (!Array.isArray(keys) || !keys.length) {
-
-      return;
-
-    }
-
-    setRecentlyImportedKeys((prev) => {
-
-      const next = new Set(prev);
-
-      keys.forEach((key) => {
-
-        if (key) {
-
-          next.add(key);
-
-        }
-
-      });
-
-      return next;
-
-    });
-
-  }, []);
 
   useEffect(() => {
 
@@ -2306,411 +2273,50 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
 
   const recentlyImportedCount = recentlyImportedKeys.size;
 
-
-
-  /** Excel import */
-
-  const onImportXLSX = async () => {
-
-    if (isReadOnly) {
-
-      alert("Bạn không có quyền import bảng MST. Đăng nhập bằng tài khoản được cấp quyền để tiếp tục.");
-
-      return;
-
-    }
-
-    const f = fileRef.current?.files?.[0];
-
-    if (!f) {
-
-      alert("Chưa chọn file .xlsx/.xls");
-
-      return;
-
-    }
-
-    try {
-
-      const buf = await f.arrayBuffer();
-
-      const wb = XLSX.read(buf, { type: "array" });
-
-      const sheet = wb.Sheets[wb.SheetNames[0]];
-
-      // lấy text đã format để hạn chế mất 0 đầu
-
-      const json = XLSX.utils.sheet_to_json(sheet, {
-
-        defval: "",
-
-        raw: false,
-
-      });
-
-
-
-      const newRowKeys = [];
-
-
-
-      const mapped = json
-
-        .map((r) => {
-
-          const mst = tidyMST(findCell(r, "mst"));
-
-          if (!mst) return null;
-
-
-
-          return {
-
-            mst,
-
-            company: String(findCell(r, "company") ?? "").trim(),
-
-            person_import: String(findCell(r, "person_import") ?? "").trim(),
-
-            person_export: String(findCell(r, "person_export") ?? "").trim(),
-
-            team: String(findCell(r, "team") ?? "").trim(),
-
-            effective_from:
-
-              toISO(findCell(r, "effective_from")) || applyFrom || "",
-
-            effective_to: toISO(findCell(r, "effective_to")) || "",
-
-            status: normalizeStatusLabel(findCell(r, "status")),
-
-          };
-
-        })
-
-        .filter(Boolean);
-
-
-
-      if (!mapped.length) {
-
-        alert("Không thấy dữ liệu hợp lệ trong file.");
-
-        return;
-
-      }
-
-
-
-      const sanitizedMapped = mapped.filter((item) => {
-
-        if (item.effective_from && item.effective_to && item.effective_to < item.effective_from) {
-
-          console.warn("Bỏ qua dòng do ngày kết thúc nhỏ hơn ngày bắt đầu", item);
-
-          return false;
-
-        }
-
-        return true;
-
-      });
-
-
-
-      if (!sanitizedMapped.length) {
-
-        alert("Tất cả dòng trong file bị bỏ qua vì ngày kết thúc nhỏ hơn ngày bắt đầu.");
-
-        return;
-
-      }
-
-
-
-      // Gộp với dữ liệu hiện có theo MST + ngày hiệu lực (ưu tiên dữ liệu mới)
-
-      const byKey = new Map();
-
-      for (const r of rows) {
-
-        byKey.set(makeRowKey(r), { ...r });
-
-      }
-
-      for (const r of sanitizedMapped) {
-
-        const key = makeRowKey(r);
-
-        const previous = byKey.get(key);
-
-        let nextRow;
-
-        if (previous) {
-
-          nextRow = createRowState({ ...previous, ...r }, {
-
-            originalKey: previous.__originalKey,
-
-            isNew: previous.__isNew,
-
-          });
-
-        } else {
-
-          nextRow = createRowState(r, { isNew: true });
-
-        }
-
-        byKey.set(key, nextRow);
-
-        if (!previous) {
-
-          newRowKeys.push(key);
-
-        }
-
-      }
-
-
-
-      const nextRows = sortMSTRows(Array.from(byKey.values()));
-
-      setRows(nextRows);
-
-      setPageRef.current(1);
-
-      alert(`Đọc file thành công: ${sanitizedMapped.length} dòng. Bấm Lưu để ghi.`);
-
-      markRecentlyImported(newRowKeys);
-
-    } catch (e) {
-
-      console.error(e);
-
-      alert("Không thể đọc file .xlsx — kiểm tra lại định dạng.");
-
-    } finally {
-
-      if (fileRef.current) fileRef.current.value = "";
-
-      setSelectedFileName("");
-
-    }
-
-  };
-
-
-
-  /** Lưu */
-
-  const onSave = () => {
-
-    if (isReadOnly) {
-
-      alert("Bạn không có quyền lưu bảng MST.");
-
-      return;
-
-    }
-
-    try {
-
-      upsertMSTRows(rows, {
-
-        actor,
-
-        detail: "Cập nhật gán MST từ giao diện",
-
-      });
-
-      refreshHistory();
-
-      const synced = sortMSTRows(getMSTMap()).map((row) =>
-
-        createRowState(row, { originalKey: makeRowKey(row), isNew: false })
-
-      );
-
-      setRows(synced);
-
-      setOriginalRows(synced);
-
-      setRecentlyImportedKeys(new Set());
-
-      alert("Lưu thành công!");
-
-    } catch (e) {
-
-      console.error(e);
-
-      alert("Lưu thất bại!");
-
-    }
-
-  };
-
-
-
-  /** Thao tác inline */
-
-  const updateRow = (originalRow, patch) => {
-
-    if (isReadOnly) return;
-
-    const nextFrom =
-
-      Object.prototype.hasOwnProperty.call(patch || {}, "effective_from")
-
-        ? patch.effective_from || ""
-
-        : originalRow.effective_from || "";
-
-    const nextTo =
-
-      Object.prototype.hasOwnProperty.call(patch || {}, "effective_to")
-
-        ? patch.effective_to || ""
-
-        : originalRow.effective_to || "";
-
-    if (nextFrom && nextTo && nextTo < nextFrom) {
-
-      alert("Ngày kết thúc phải sau hoặc bằng ngày bắt đầu.");
-
-      return;
-
-    }
-
-    const targetKey = makeRowKey(originalRow);
-
-    let updatedKey = "";
-
-    let didUpdate = false;
-
-    setRows((prev) =>
-
-      sortMSTRows(
-
-        prev.map((r) => {
-
-          if (makeRowKey(r) !== targetKey) return r;
-
-          const next = { ...r, ...patch };
-
-          next.__originalKey = r.__originalKey ?? null;
-
-          next.__isNew = r.__isNew;
-
-          if (patch && Object.prototype.hasOwnProperty.call(patch, "mst")) {
-
-            next.mst = tidyMST(next.mst);
-
-          }
-
-          if (patch && Object.prototype.hasOwnProperty.call(patch, "effective_from")) {
-
-            next.effective_from = patch.effective_from || "";
-
-          }
-
-          if (patch && Object.prototype.hasOwnProperty.call(patch, "effective_to")) {
-
-            next.effective_to = patch.effective_to || "";
-
-          }
-
-          next.status = computeStoredStatus(next);
-
-          updatedKey = makeRowKey(next);
-
-          didUpdate = true;
-
-          return next;
-
-        })
-
-      )
-
-    );
-
-    if (didUpdate && updatedKey && updatedKey !== targetKey) {
-
-      setRecentlyImportedKeys((prev) => {
-
-        if (!prev.has(targetKey)) return prev;
-
-        const next = new Set(prev);
-
-        next.delete(targetKey);
-
-        next.add(updatedKey);
-
-        return next;
-
-      });
-
-    }
-
-  };
-
-
-
-  const handleRowImportSelect = (row, { staffName, teamName, isCustom }) => {
-    const patch = { person_import: staffName || "" };
-    if (staffName && teamName && !isCustom) {
-      const prevTeamKey = normalizeName(normalizeStr(row?.team || ""));
-      const nextTeamKey = normalizeName(normalizeStr(teamName));
-      if (!prevTeamKey || prevTeamKey === nextTeamKey) {
-        patch.team = teamName;
-      }
-    }
-    updateRow(row, patch);
-  };
-
-  const handleRowExportSelect = (row, { staffName, teamName, isCustom }) => {
-    const patch = { person_export: staffName || "" };
-    if (staffName && teamName && !isCustom) {
-      const prevTeamKey = normalizeName(normalizeStr(row?.team || ""));
-      const nextTeamKey = normalizeName(normalizeStr(teamName));
-      if (!prevTeamKey || prevTeamKey === nextTeamKey) {
-        patch.team = teamName;
-      }
-    }
-    updateRow(row, patch);
-  };
-
-  const removeRow = (row) => {
-
-    if (isReadOnly) return;
-
-    const key = makeRowKey(row);
-
-    const fromLabel = row.effective_from ? row.effective_from : "";
-
-    const toLabel = row.effective_to ? row.effective_to : "";
-
-    const rangeLabel = fromLabel || toLabel ? `(${fromLabel || "…"} → ${toLabel || "…"})` : "";
-
-    const label = `${row.mst}${rangeLabel ? ` ${rangeLabel}` : ""}`;
-
-    if (!confirm(`Xóa dòng ${label}?`)) return;
-
-    setRows((prev) => prev.filter((r) => makeRowKey(r) !== key));
-
-    setRecentlyImportedKeys((prev) => {
-
-      if (!prev.has(key)) return prev;
-
-      const next = new Set(prev);
-
-      next.delete(key);
-
-      return next;
-
-    });
-
-  };
+  const {
+    fileRef,
+    selectedFileName,
+    handleFileChange,
+    markRecentlyImported,
+    onImportXLSX,
+    onSave,
+  } = useMSTAssignmentImportSaveWorkspace({
+    actor,
+    applyFrom,
+    helpers: {
+      createRowState,
+      findCell,
+      makeRowKey,
+      normalizeStatusLabel,
+      tidyMST,
+      toISO,
+    },
+    isReadOnly,
+    refreshHistory,
+    rows,
+    setOriginalRows,
+    setRecentlyImportedKeys,
+    setRows,
+    goToFirstPage: () => setPageRef.current(1),
+  });
+
+  const {
+    updateRow,
+    handleRowImportSelect,
+    handleRowExportSelect,
+    removeRow,
+  } = useMSTAssignmentRowMutations({
+    computeStoredStatus,
+    helpers: {
+      makeRowKey,
+      normalizeName,
+      normalizeStr,
+      tidyMST,
+    },
+    isReadOnly,
+    setRecentlyImportedKeys,
+    setRows,
+  });
 
 
 
@@ -2810,10 +2416,7 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
                 accept=".xlsx,.xls"
                 className="hidden"
                 disabled={isReadOnly}
-                onChange={(e) => {
-                  const name = e.target.files?.[0]?.name || "";
-                  setSelectedFileName(name);
-                }}
+                onChange={handleFileChange}
               />
               <button
                 type="button"
