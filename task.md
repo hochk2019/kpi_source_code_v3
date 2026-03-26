@@ -2,11 +2,12 @@
 
 ## Active Slice
 
-- Title: Tach KPIAdjustments staff option builder
-- Bead: cng-0jn
+- Title: Tach KPIAdjustments category options
+- Bead: cng-dhd
 - Status: completed
 - Last updated: 2026-03-27
 
+- `cng-dhd` da hoan tat tach `resolveCategoryOptions` va `CATEGORY_OPTIONS` khoi `KPIAdjustments` sang `src/components/kpi-adjustments/model/categoryOptions.js`; shell hien import lai constant moi cho form/list config, con unit test moi khoa mapping tu `KPI_ADJUSTMENT_CATEGORY_CONFIG`.
 - `cng-0jn` da hoan tat tach `buildStaffOptions` khoi `KPIAdjustments` sang `src/components/kpi-adjustments/model/staffOptions.js`; shell hien import lai helper moi cho derived `staffOptions` ma khong doi shape `{ team, name }`, con unit test moi khoa flatten roster va trim member names.
 - `cng-u7h` da hoan tat tach `parseReferences` khoi `KPIAdjustments` sang `src/components/kpi-adjustments/model/referenceParsing.js`; shell hien import lai helper moi cho 2 hook form/workspace ma khong doi contract prop, con unit test moi khoa behavior tach reference, normalize, va dedupe.
 - `cng-pnz` da hoan tat tach `normalizeFieldSegment`, `buildSettingsFieldId`, va `buildLicenseFieldId` khoi `KPIAdjustments` sang `src/components/kpi-adjustments/model/fieldIds.js`; shell hien import lai helper moi cho settings dialog wiring, con unit test moi khoa contract sanitize segment va field-id generation.
@@ -49,6 +50,11 @@
 - `cng-4hs` da tach xong card danh sach + bo loc thanh `KpiAdjustmentListPanel`, bo sung regression test panel, va giam `src/components/KPIAdjustments.jsx` xuong 1343 dong.
 
 ## Completed This Session
+
+- `cng-dhd` da hoan tat tach KPI category options:
+  - them `src/components/kpi-adjustments/model/categoryOptions.js` de gom `resolveCategoryOptions` va `CATEGORY_OPTIONS`
+  - `src/components/KPIAdjustments.jsx` hien import constant moi thay vi giu mapping config inline trong shell
+  - bo sung `tests/kpiAdjustments.categoryOptions.test.js` de khoa mapping category config -> option shape
 
 - `cng-0jn` da hoan tat tach KPI staff option builder:
   - them `src/components/kpi-adjustments/model/staffOptions.js` de gom `buildStaffOptions`
@@ -498,12 +504,12 @@
 
 ## Next Suggested Slice
 
-- Title: Ra soat quick wins con lai quanh KPIAdjustments shell
+- Title: Chuyen buoc tu helper extraction sang ra soat quick wins khac
 - Bead: `TBD`
 - Status: san sang tao bead tiep theo
 - Follow-up backlog:
-  - sau 3 helper pure lien tiep da duoc tach, can danh gia lai do day `KPIAdjustments.jsx` de xac dinh con nen cat tiep `resolveCategoryOptions`/`formatDateTime` hay tam dung de tranh chia nho qua muc
-  - uu tien tiep theo neu lam nua la cac helper pure khong keo theo them hook caller moi
+  - `KPIAdjustments.jsx` da giam them mot nhip sau khi tach `resolveCategoryOptions`; buoc tiep theo hop ly la ra soat khu vuc khac trong plan thay vi tiep tuc chia helper qua muc
+  - neu van can quick win trong KPI shell, `formatDateTime` la ung vien sau cung va can disambiguate bang GitNexus context truoc khi sua
   - tiep tuc giu scope o muc presentation/component extraction, tranh lan sang bootstrap/import/export/timeline dialog orchestration dang on dinh
   - uu tien bead moi chi khi co mot cut ro rang, co regression test panel/interaction, va diff van giu nho nhu cac commit helper/UI control vua xong
 

@@ -33,6 +33,7 @@ import {
   buildLicenseFieldId,
   buildSettingsFieldId,
 } from "@/components/kpi-adjustments/model/fieldIds.js";
+import { CATEGORY_OPTIONS } from "@/components/kpi-adjustments/model/categoryOptions.js";
 import { parseReferences } from "@/components/kpi-adjustments/model/referenceParsing.js";
 import { buildStaffOptions } from "@/components/kpi-adjustments/model/staffOptions.js";
 import KpiAdjustmentDetailDialog from "@/components/kpi-adjustments/panels/KpiAdjustmentDetailDialog.jsx";
@@ -101,24 +102,6 @@ const FORM_FIELD_IDS = Object.freeze({
 });
 
 
-
-function resolveCategoryOptions() {
-
-  return Object.entries(KPI_ADJUSTMENT_CATEGORY_CONFIG).map(([key, config]) => ({
-
-    value: key,
-
-    label: config.label,
-
-    type: config.type,
-
-  }));
-
-}
-
-
-
-const CATEGORY_OPTIONS = resolveCategoryOptions();
 
 const SELECT_FIELD_CLASS =
 
