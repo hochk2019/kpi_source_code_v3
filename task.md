@@ -2,11 +2,12 @@
 
 ## Active Slice
 
-- Title: Tach search/view controls workspace khoi MSTAssignment
-- Bead: cng-6d3
+- Title: Tach derived data workspace khoi MSTAssignment
+- Bead: cng-eg4
 - Status: completed
 - Last updated: 2026-03-26
 
+- `cng-eg4` da hoan tat tach derived-data workspace khoi `MSTAssignment` sang `src/components/mst-assignment/hooks/useMSTAssignmentDerivedRowsWorkspace.js`; shell hien chi giu wiring `filtered`, `groupedStages`, `displayList`, con hook moi gom pipeline loc/uu tien row moi import va bridge sang grouped/aggregated selectors.
 - `cng-6d3` da hoan tat tach search/view controls workspace khoi `MSTAssignment` sang `src/components/mst-assignment/hooks/useMSTAssignmentViewControlsWorkspace.js`; shell hien chi giu wiring cho `search`, `applyFrom`, `groupByMST`, va header actions, con hook moi gom state dieu khien header + search reset page flow.
 - `cng-7db` da hoan tat tach staff-filter workspace khoi `MSTAssignment` sang `src/components/mst-assignment/hooks/useMSTAssignmentStaffFilterWorkspace.js`; shell hien chi giu wiring `staffFilter` + panel props, con hook moi gom state filter nhan vien, page-reset flow, va quick-favorite alerts.
 - `cng-xkg` da hoan tat tach bootstrap workspace khoi `MSTAssignment` sang `src/components/mst-assignment/hooks/useMSTAssignmentBootstrapWorkspace.js`; shell hien chi giu wiring `rosterTeams`, con hook moi gom roster subscription, initial `getMSTMap` hydrate, va bridge setRows/setOriginalRows.
@@ -31,6 +32,15 @@
 - `cng-4hs` da tach xong card danh sach + bo loc thanh `KpiAdjustmentListPanel`, bo sung regression test panel, va giam `src/components/KPIAdjustments.jsx` xuong 1343 dong.
 
 ## Completed This Session
+
+- `cng-eg4` da hoan tat tach derived-data workspace khoi `MSTAssignment`:
+  - them `src/components/mst-assignment/hooks/useMSTAssignmentDerivedRowsWorkspace.js` de gom `filterAndPrioritizeRows`, `filtered`, `groupedStages`, `aggregatedByMST`, va `displayList`
+  - `src/components/MSTAssignment.jsx` hien khong con giu inline `useMemo` block cho filtering/sorting/grouping; shell chi con wiring outputs cua hook moi sang export, pagination, timeline, va table
+  - bo sung `tests/useMSTAssignmentDerivedRowsWorkspace.test.jsx` de khoa 3 nhanh chinh: history/status/staff/search filtering + imported priority, grouped/aggregated display path, va raw display path khi tat `groupByMST`
+  - targeted verify da pass:
+    - `pnpm exec vitest run tests/useMSTAssignmentDerivedRowsWorkspace.test.jsx tests/useMSTAssignmentViewControlsWorkspace.test.jsx tests/useMSTAssignmentStaffFilterWorkspace.test.jsx tests/useMSTAssignmentBootstrapWorkspace.test.jsx tests/useMSTAssignmentExportWorkspace.test.jsx tests/useMSTAssignmentHistoryWorkspace.test.jsx tests/useMSTAssignmentTimelineWorkspace.test.jsx tests/mstAssignment.displaySelectors.test.js tests/mstAssignmentDataTablePanel.test.jsx --environment jsdom`
+    - `pnpm exec eslint src/components/MSTAssignment.jsx src/components/mst-assignment/hooks/useMSTAssignmentDerivedRowsWorkspace.js src/components/mst-assignment/hooks/useMSTAssignmentViewControlsWorkspace.js src/components/mst-assignment/hooks/useMSTAssignmentStaffFilterWorkspace.js src/components/mst-assignment/hooks/useMSTAssignmentBootstrapWorkspace.js src/components/mst-assignment/hooks/useMSTAssignmentExportWorkspace.js src/components/mst-assignment/hooks/useMSTAssignmentHistoryWorkspace.js src/components/mst-assignment/hooks/useMSTAssignmentTimelineWorkspace.js src/components/mst-assignment/model/displaySelectors.js tests/useMSTAssignmentDerivedRowsWorkspace.test.jsx tests/useMSTAssignmentViewControlsWorkspace.test.jsx tests/useMSTAssignmentStaffFilterWorkspace.test.jsx tests/useMSTAssignmentBootstrapWorkspace.test.jsx tests/useMSTAssignmentExportWorkspace.test.jsx tests/useMSTAssignmentHistoryWorkspace.test.jsx tests/useMSTAssignmentTimelineWorkspace.test.jsx tests/mstAssignment.displaySelectors.test.js tests/mstAssignmentDataTablePanel.test.jsx`
+  - `eslint` chi con 2 warning Fast Refresh cu o `src/components/MSTAssignment.jsx`
 
 - `cng-6d3` da hoan tat tach search/view controls workspace khoi `MSTAssignment`:
   - them `src/components/mst-assignment/hooks/useMSTAssignmentViewControlsWorkspace.js` de gom `search`, `groupByMST`, `applyFrom`, va cac handler `handleSearchChange`, `handleClearSearch`, `handleGroupByMSTChange`, `handleApplyFromChange`
@@ -342,13 +352,13 @@
 
 ## Next Suggested Slice
 
-- Title: Tach go-to-first-page wiring helper khoi MSTAssignment
+- Title: Tach helper Fast Refresh / go-to-first-page wiring khoi MSTAssignment
 - Bead: `TBD`
 - Status: san sang tao bead tiep theo
 - Follow-up backlog:
   - hop nhat callback `goToFirstPage` dang lap lai giua history/staff/import/add/view workspace thanh mot helper on dinh de giam churn props va event wiring
-  - sau do co the can nhac tach tiep pipeline `filtered/groupedStages/aggregatedByMST/displayList` thanh workspace derived-data rieng neu muon rut gon them `MSTAssignment.jsx`
-  - hoac tach cac helper Fast Refresh con lai khoi `src/components/MSTAssignment.jsx` neu muon bat dau xu ly 2 warning lint cu
+  - tach cac helper/constant export dang giu `MSTAssignment.jsx` bi warning Fast Refresh sang module rieng neu muon don tiep 2 warning lint cu
+  - sau do co the can nhac bead rieng cho timeline map hoac status/helper cleanup neu muc tieu la tiep tuc rut gon shell
   - hoac chon mot bead frontend khac trong backlog neu uu tien chuyen sang orchestration refinement component khac
 
 ## Verification

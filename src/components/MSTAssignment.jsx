@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 
 import clsx from "clsx";
 import * as XLSX from "xlsx";
@@ -37,11 +37,7 @@ import useMSTAssignmentRowMutations from "@/components/mst-assignment/hooks/useM
 import useMSTAssignmentStaffFilterWorkspace from "@/components/mst-assignment/hooks/useMSTAssignmentStaffFilterWorkspace.js";
 import useMSTAssignmentTimelineWorkspace from "@/components/mst-assignment/hooks/useMSTAssignmentTimelineWorkspace.js";
 import useMSTAssignmentViewControlsWorkspace from "@/components/mst-assignment/hooks/useMSTAssignmentViewControlsWorkspace.js";
-import {
-  buildAggregatedRowsByMST,
-  buildDisplayList,
-  buildGroupedStages,
-} from "@/components/mst-assignment/model/displaySelectors.js";
+import useMSTAssignmentDerivedRowsWorkspace from "@/components/mst-assignment/hooks/useMSTAssignmentDerivedRowsWorkspace.js";
 import HistoryDetails from "@/components/mst-assignment/timeline/HistoryDetails.jsx";
 import MstAssignmentTimelinePanel from "@/components/mst-assignment/timeline/MstAssignmentTimelinePanel.jsx";
 import MstAssignmentDataTablePanel from "@/components/mst-assignment/table/MstAssignmentDataTablePanel.jsx";
@@ -941,161 +937,17 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
     goToFirstPage: () => setPageRef.current(1),
   });
   /** Filter + phân trang */
-
-  const filtered = useMemo(() => {
-
-    const query = normalize(search || "");
-
-    const hasQuery = Boolean(query);
-
-    const staffQuery = normalize(staffFilter || "");
-
-    const hasStaffQuery = Boolean(staffQuery);
-
-    const base = rows.filter((row) => {
-
-      if (historyFilteredRowKeys) {
-
-        const key = makeRowKey(row);
-
-        if (!historyFilteredRowKeys.has(key)) {
-
-          return false;
-
-        }
-
-      }
-
-      if (activeStatusFilter) {
-
-        const hasImport = Boolean(normalizeStr(row.person_import || ""));
-
-        const hasExport = Boolean(normalizeStr(row.person_export || ""));
-
-        if (
-
-          activeStatusFilter === MST_ASSIGNMENT_STATUS.ASSIGNED &&
-
-          (!hasImport || !hasExport)
-
-        ) {
-
-          return false;
-
-        }
-
-        if (
-
-          activeStatusFilter === MST_ASSIGNMENT_STATUS.PENDING &&
-
-          hasImport &&
-
-          hasExport
-
-        ) {
-
-          return false;
-
-        }
-
-      }
-
-      if (hasStaffQuery) {
-
-        const staffMatched =
-
-          normalize(row.person_import || "").includes(staffQuery) ||
-
-          normalize(row.person_export || "").includes(staffQuery) ||
-
-          normalize(row.team || "").includes(staffQuery);
-
-        if (!staffMatched) {
-
-          return false;
-
-        }
-
-      }
-
-      if (!hasQuery) return true;
-
-      return (
-
-        normalize(row.mst).includes(query) ||
-
-        normalize(row.company).includes(query) ||
-
-        normalize(row.status || "").includes(query)
-
-      );
-
-    });
-
-
-
-    const prioritized = [...base].sort((a, b) => {
-
-      const keyA = makeRowKey(a);
-
-      const keyB = makeRowKey(b);
-
-      const aIsNew = recentlyImportedKeys.has(keyA) ? 1 : 0;
-
-      const bIsNew = recentlyImportedKeys.has(keyB) ? 1 : 0;
-
-      if (aIsNew !== bIsNew) {
-
-        return bIsNew - aIsNew;
-
-      }
-
-      const byMST = (a.mst || "").localeCompare(b.mst || "");
-
-      if (byMST !== 0) return byMST;
-
-      const fromCompare = (a.effective_from || "").localeCompare(b.effective_from || "");
-
-      if (fromCompare !== 0) return fromCompare;
-
-      return (a.effective_to || "9999-12-31").localeCompare(b.effective_to || "9999-12-31");
-
-    });
-
-
-
-    return prioritized;
-
-  }, [
-
-    rows,
-
-    search,
-
-    staffFilter,
-
-    historyFilteredRowKeys,
-
+  const { displayList, filtered, groupedStages } = useMSTAssignmentDerivedRowsWorkspace({
     activeStatusFilter,
-
+    groupByMST,
+    historyFilteredRowKeys,
+    makeRowKey,
+    normalizeStr,
     recentlyImportedKeys,
-
-  ]);
-
-
-
-  const groupedStages = useMemo(() => {
-    return buildGroupedStages(filtered);
-  }, [filtered]);
-
-  const aggregatedByMST = useMemo(() => {
-    return buildAggregatedRowsByMST(groupedStages, groupByMST);
-  }, [groupByMST, groupedStages]);
-
-  const displayList = useMemo(
-    () => buildDisplayList({ groupByMST, aggregatedByMST, filtered }),
-    [groupByMST, aggregatedByMST, filtered]
-  );
+    rows,
+    search,
+    staffFilter,
+  });
   const { exportRowsToExcel } = useMSTAssignmentExportWorkspace({
     rows,
     filteredRows: filtered,
