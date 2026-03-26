@@ -2,11 +2,9 @@ import React, { useMemo } from "react";
 
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card.jsx";
 
-import { Badge } from "@/components/ui/badge.jsx";
-
-import { Button } from "@/components/ui/button.jsx";
-import { Input } from "@/components/ui/input.jsx";
+import RulesApplyActionsPanel from "@/components/rules-editor/RulesApplyActionsPanel.jsx";
 import RulesConfigTabsPanel from "@/components/rules-editor/RulesConfigTabsPanel.jsx";
+import RulesGeneralInfoPanel from "@/components/rules-editor/RulesGeneralInfoPanel.jsx";
 import RulesHistoryPanel from "@/components/rules-editor/RulesHistoryPanel.jsx";
 import RulesSimulationPanel from "@/components/rules-editor/RulesSimulationPanel.jsx";
 import RulesTestWorkspacePanel from "@/components/rules-editor/RulesTestWorkspacePanel.jsx";
@@ -126,166 +124,21 @@ export default function RulesEditor({ canEdit = true, currentUser = null }) {
         </CardHeader>
 
         <CardContent className="space-y-8">
-
-          <div className="space-y-3">
-
-            <div className="flex flex-wrap items-center gap-2">
-
-              {collection.sets.map((item) => (
-
-                <button
-
-                  key={item.id}
-
-                  type="button"
-
-                  onClick={() => handleSelectTab(item.id)}
-
-                  className={`rounded border px-3 py-2 text-sm transition ${
-
-                    item.id === activeTab
-
-                      ? "border-blue-500 bg-blue-50 text-blue-700"
-
-                      : "border-gray-200 bg-white hover:border-blue-300"
-
-                  }`}
-
-                >
-
-                  <span className="font-medium">{item.name || "Bộ quy tắc"}</span>
-
-                  {collection.activeId === item.id && (
-
-                    <Badge variant="secondary" className="ml-2">Mặc định</Badge>
-
-                  )}
-
-                </button>
-
-              ))}
-
-              {!isReadOnly && (
-
-                <Button variant="outline" onClick={handleAddRule}>
-
-                  Thêm bộ quy tắc
-
-                </Button>
-
-              )}
-
-            </div>
-
-            <div className="flex flex-wrap items-center gap-3 text-sm">
-
-              <label className="text-gray-600">Bộ quy tắc mặc định:</label>
-
-              <select
-
-                value={collection.activeId}
-
-                onChange={handleSetDefault}
-
-                className="rounded border px-3 py-2"
-
-              >
-
-                {collection.sets.map((item) => (
-
-                  <option key={item.id} value={item.id}>
-
-                    {item.name || "Bộ quy tắc"}
-
-                  </option>
-
-                ))}
-
-              </select>
-
-              {!isDefaultRule && !isReadOnly && (
-
-                <Button variant="outline" onClick={handleSetDefaultButton}>
-
-                  Đặt bộ đang mở làm mặc định
-
-                </Button>
-
-              )}
-
-            </div>
-
-          </div>
-
-
-
-          <div className="space-y-3 rounded border p-3">
-
-            <div className="font-semibold">Thông tin chung</div>
-
-            <div className="flex flex-wrap items-center gap-3 text-xs text-gray-500">
-
-              <span>
-
-                Phiên bản đang chỉnh: <strong>{currentVersion !== null ? currentVersion : '—'}</strong>
-
-              </span>
-
-              {savedVersion !== null && savedVersion !== currentVersion ? (
-
-                <span>
-
-                  Phiên bản đã lưu gần nhất: <strong>{savedVersion}</strong>
-
-                </span>
-
-              ) : null}
-
-              {rule?.updatedAt ? (
-
-                <span>Cập nhật gần nhất: {formatHistoryTimestamp(rule.updatedAt)}</span>
-
-              ) : null}
-
-            </div>
-
-            <div className="grid gap-4 md:grid-cols-2">
-
-              <div>
-
-                <label className="text-sm text-gray-600">Tên bộ quy tắc</label>
-
-                <Input
-
-                  value={rule.name || ""}
-
-                  onChange={(event) => updateRule({ ...rule, name: event.target.value })}
-
-                  disabled={isReadOnly}
-
-                />
-
-              </div>
-
-              <div>
-
-                <label className="text-sm text-gray-600">Ghi chú (tuỳ chọn)</label>
-
-                <Input
-
-                  value={rule.description || ""}
-
-                  onChange={(event) => updateRule({ ...rule, description: event.target.value })}
-
-                  disabled={isReadOnly}
-
-                />
-
-              </div>
-
-            </div>
-
-          </div>
+          <RulesGeneralInfoPanel
+            collection={collection}
+            activeTab={activeTab}
+            isReadOnly={isReadOnly}
+            isDefaultRule={isDefaultRule}
+            currentVersion={currentVersion}
+            savedVersion={savedVersion}
+            rule={rule}
+            formatTimestamp={formatHistoryTimestamp}
+            onSelectTab={handleSelectTab}
+            onAddRule={handleAddRule}
+            onSetDefault={handleSetDefault}
+            onSetDefaultButton={handleSetDefaultButton}
+            onRuleChange={updateRule}
+          />
 
 
 
@@ -318,161 +171,21 @@ export default function RulesEditor({ canEdit = true, currentUser = null }) {
 
 
 
-          <div className="space-y-3 rounded border p-3">
-
-            <div className="font-semibold">Áp dụng</div>
-
-            <div className="grid gap-4 md:grid-cols-3">
-
-              <div>
-
-                <label className="text-sm text-gray-600">Áp dụng từ ngày (yyyy-mm-dd)</label>
-
-                <Input
-
-                  value={rule.applyFrom || ""}
-
-                  onChange={(event) => updateRule({ ...rule, applyFrom: event.target.value })}
-
-                  placeholder="yyyy-mm-dd"
-
-                  disabled={isReadOnly}
-
-                />
-
-              </div>
-
-              <label className="mt-6 inline-flex items-center gap-2 text-sm">
-
-                <input
-
-                  type="checkbox"
-
-                  checked={applyNow}
-
-                  onChange={(event) => setApplyNow(event.target.checked)}
-
-                  disabled={isReadOnly}
-
-                />
-
-                Tính lại KPI cho dữ liệu từ ngày này sau khi lưu
-
-              </label>
-
-            </div>
-
-            <div className="flex flex-wrap gap-2">
-
-              <Button onClick={handleSave} disabled={isReadOnly}>Lưu</Button>
-
-              <Button variant="outline" onClick={handleReset} disabled={isReadOnly}>Khôi phục bản đã lưu</Button>
-
-              <Button variant="outline" onClick={exportCurrentRule}>Xuất bộ đang mở</Button>
-
-              <label className="inline-flex items-center gap-2">
-
-                <input
-
-                  id="import-rule-json"
-
-                  type="file"
-
-                  accept=".json"
-
-                  className="hidden"
-
-                  onChange={importCurrentRule}
-
-                  disabled={isReadOnly}
-
-                />
-
-                <Button
-
-                  variant="outline"
-
-                  onClick={() => {
-
-                    if (isReadOnly) return;
-
-                    const input = document.getElementById("import-rule-json");
-
-                    if (input) input.click();
-
-                  }}
-
-                  disabled={isReadOnly}
-
-                >
-
-                  Nhập vào bộ đang mở
-
-                </Button>
-
-              </label>
-
-              <Button variant="outline" onClick={exportAllRules}>Xuất quy tắc (sao lưu)</Button>
-
-              <label className="inline-flex items-center gap-2">
-
-                <input
-
-                  id="import-rules-collection"
-
-                  type="file"
-
-                  accept=".json"
-
-                  className="hidden"
-
-                  onChange={importAllRules}
-
-                  disabled={isReadOnly}
-
-                />
-
-                <Button
-
-                  variant="outline"
-
-                  onClick={() => {
-
-                    if (isReadOnly) return;
-
-                    const input = document.getElementById("import-rules-collection");
-
-                    if (input) input.click();
-
-                  }}
-
-                  disabled={isReadOnly}
-
-                >
-
-                  Khôi phục toàn bộ quy tắc
-
-                </Button>
-
-              </label>
-
-              <Button
-
-                variant="destructive"
-
-                onClick={handleDeleteRule}
-
-                disabled={isReadOnly || collection.sets.length <= 1}
-
-              >
-
-                Xóa bộ quy tắc
-
-              </Button>
-
-            </div>
-
-          </div>
+          <RulesApplyActionsPanel
+            rule={rule}
+            applyNow={applyNow}
+            isReadOnly={isReadOnly}
+            canDeleteRule={collection.sets.length > 1}
+            onRuleChange={updateRule}
+            onApplyNowChange={setApplyNow}
+            onSave={handleSave}
+            onReset={handleReset}
+            onExportCurrentRule={exportCurrentRule}
+            onImportCurrentRule={importCurrentRule}
+            onExportAllRules={exportAllRules}
+            onImportAllRules={importAllRules}
+            onDeleteRule={handleDeleteRule}
+          />
 
 
 

@@ -2,14 +2,23 @@
 
 ## Active Slice
 
-- Title: Tach test workspace khoi RulesEditor
-- Bead: cng-42t
+- Title: Tach general info va apply actions khoi RulesEditor
+- Bead: cng-0pm
 - Status: done
 - Last updated: 2026-03-26
 
 ## Completed This Session
 
-1. `cng-42t` da duoc implementation o muc test-workspace extraction cho `RulesEditor`:
+1. `cng-0pm` da duoc implementation o muc hoan tat shell decomposition cho `RulesEditor`:
+   - them `src/components/rules-editor/RulesGeneralInfoPanel.jsx` de tach khoi chon bo quy tac, metadata version, va form `name/description` khoi file goc
+   - them `src/components/rules-editor/RulesApplyActionsPanel.jsx` de tach khu vuc `applyFrom/applyNow`, save/reset, import/export, va delete action khoi `RulesEditor`
+   - import JSON hien dung `ref` ngay trong panel moi, khong con DOM lookup `document.getElementById(...)`
+   - bo sung regression tests `tests/rulesGeneralInfoPanel.test.jsx` va `tests/rulesApplyActionsPanel.test.jsx`
+   - targeted verify da pass:
+     - `pnpm exec eslint src/components/RulesEditor.jsx src/components/rules-editor/RulesGeneralInfoPanel.jsx src/components/rules-editor/RulesApplyActionsPanel.jsx tests/rulesGeneralInfoPanel.test.jsx tests/rulesApplyActionsPanel.test.jsx tests/rulesEditor.test.jsx`
+     - `pnpm exec vitest run tests/rulesGeneralInfoPanel.test.jsx tests/rulesApplyActionsPanel.test.jsx tests/rulesEditor.test.jsx tests/rulesEditor.controls.test.jsx tests/useRulesEditorWorkflow.test.jsx tests/rulesEditorHistoryPanel.test.jsx tests/rulesEditorSimulationPanel.test.jsx tests/useRulesTestWorkspace.test.jsx tests/rulesTestWorkspacePanel.test.jsx --environment jsdom`
+
+2. `cng-42t` da duoc implementation o muc test-workspace extraction cho `RulesEditor`:
    - them `src/components/rules-editor/hooks/useRulesTestWorkspace.js` de tach declaration search/pick state, manual KPI scenario state, va derived KPI preview khoi file goc
    - them `src/components/rules-editor/RulesTestWorkspacePanel.jsx` de render hai khu vuc "Test nhanh 1 tờ khai đã import" va "Test nhập tay" thanh panel rieng
    - `src/components/RulesEditor.jsx` hien chi wiring `useRulesTestWorkspace` + `RulesTestWorkspacePanel`, giam them local state va JSX trung lap trong file goc
@@ -18,7 +27,7 @@
      - `pnpm exec eslint src/components/RulesEditor.jsx src/components/rules-editor/RulesTestWorkspacePanel.jsx src/components/rules-editor/hooks/useRulesTestWorkspace.js tests/useRulesTestWorkspace.test.jsx tests/rulesTestWorkspacePanel.test.jsx tests/rulesEditor.test.jsx`
      - `pnpm exec vitest run tests/useRulesTestWorkspace.test.jsx tests/rulesTestWorkspacePanel.test.jsx tests/rulesEditor.test.jsx tests/useRulesEditorWorkflow.test.jsx tests/rulesEditorHistoryPanel.test.jsx tests/rulesEditorSimulationPanel.test.jsx --environment jsdom`
 
-2. `cng-lte` da duoc implementation o muc workflow/orchestration extraction cho `RulesEditor`:
+3. `cng-lte` da duoc implementation o muc workflow/orchestration extraction cho `RulesEditor`:
    - them `src/components/rules-editor/hooks/useRulesEditorWorkflow.js` de tach save/reset/default/delete/import-export, history refresh/restore, va simulation khoi `src/components/RulesEditor.jsx`
    - `src/components/RulesEditor.jsx` hien giu vai tro compose UI + wiring voi `useRulesConfigState` va `useRulesEditorWorkflow`, khong con giu block handler workflow trung lap
    - them `tests/useRulesEditorWorkflow.test.jsx` de khoa truc tiep 2 flow quan trong: simulation summary va history refresh/restore
@@ -26,9 +35,9 @@
      - `pnpm exec eslint src/components/RulesEditor.jsx src/components/rules-editor/hooks/useRulesEditorWorkflow.js tests/useRulesEditorWorkflow.test.jsx tests/rulesEditor.test.jsx`
      - `pnpm exec vitest run tests/useRulesEditorWorkflow.test.jsx tests/rulesEditor.test.jsx tests/rulesEditorHistoryPanel.test.jsx tests/rulesEditorSimulationPanel.test.jsx --environment jsdom`
 
-3. Fact-check review da duoc ghi lai tai:
+4. Fact-check review da duoc ghi lai tai:
    - `docs/gemini-review-v1-factcheck-2026-03-25.md`
-2. Backlog bead da duoc seed:
+5. Backlog bead da duoc seed:
    - `cng-xyq` epic
    - `cng-xyq.6` security hardening baseline
    - `cng-xyq.3` React Error Boundary app/tab level
@@ -36,54 +45,54 @@
    - `cng-xyq.1` checklist verification + `Checklist.md`
    - `cng-xyq.5` server-v4 rollout planning beyond reporting
    - `cng-xyq.4` wave-1 frontend decomposition planning
-3. `Checklist.md` da duoc cap nhat voi trang thai xac minh hien tai:
+6. `Checklist.md` da duoc cap nhat voi trang thai xac minh hien tai:
    - da danh dau cac muc co bang chung code/test
    - da ghi ro cac muc chua thay, chua khop day du, hoac can E2E/runtime verification
    - cac diem can theo doi them: C/O runtime 500, cot AMA, cleanup toan repo, muc "di lam muon", va mapping tai khoan mac dinh dung theo danh sach nghiep vu
-4. Draft rollout plan cho `server-v4` beyond reporting da duoc ghi lai tai:
+7. Draft rollout plan cho `server-v4` beyond reporting da duoc ghi lai tai:
    - `docs/server-v4-rollout-plan-2026-03-25.md`
    - bao gom:
      - inventory route `legacy` va `v4` can doi chieu
      - cac parity gap hien tai, dac biet quanh `auth` va `declarations`
      - thu tu rollout theo wave thay vi mount dong loat 8 module
      - verify gate va test suite nen chay cho moi wave
-5. `cng-xyq.7` dang implementation wave-1 mount:
+8. `cng-xyq.7` dang implementation wave-1 mount:
    - them `server/v4RolloutMount.js` de co dinh danh sach module wave-1 va helper chon module tu compiled `moduleCatalog`
    - doi legacy mount tu `reporting` don le sang `reporting + teams + mst-assignments + hq-agencies`
    - them `tests/v4RolloutMount.test.js` de khoa logic selection va missing-module warning path
-6. `cng-wh8` da duoc mo cho wave-2 mount:
+9. `cng-wh8` da duoc mo cho wave-2 mount:
    - muc tieu tiep theo la mount `kpi-rules` va `kpi-adjustments` qua legacy server sau khi wave-1 da on dinh
    - can chay impact analysis truoc khi cham vao startup mount helper va verify lai toan bo matrix `reporting + wave-1 + wave-2`
-7. `cng-wh8` da duoc implementation o muc code/test:
+10. `cng-wh8` da duoc implementation o muc code/test:
    - mo rong `server/v4RolloutMount.js` bang `WAVE2_V4_MODULE_IDS`, `LEGACY_V4_MODULE_IDS`, `selectV4Modules`, va `selectLegacyV4Modules`
    - legacy server startup mount hien chon tong hop `reporting + teams + mst-assignments + hq-agencies + kpi-rules + kpi-adjustments`
    - bo sung regression tests cho selector legacy-v4 tong hop va missing-module path cua wave-2
-8. `cng-d0a` da duoc mo cho auth parity:
+11. `cng-d0a` da duoc mo cho auth parity:
    - muc tieu tiep theo la dua cac endpoint auth con thieu ve `server-v4` truoc khi xu ly declarations shadow/cutover
    - can doi chieu lai 3 parity gap da note trong rollout plan va verify lai auth route matrix
-9. `cng-d0a` da duoc implementation o muc code/test:
+12. `cng-d0a` da duoc implementation o muc code/test:
    - canonical `/api/v4/auth` da bo sung `POST /accounts/:username/password`, `DELETE /accounts/:username`, va `POST /password/change`
    - `AuthService` va `AuthController` da co canonical home cho 3 flow con thieu, thay vi chi ton tai o compat layer
    - auth regression tests da cover password reset, self-change password, delete account, boundary permission, va last-admin guard
-10. `cng-0fs` da duoc mo cho declarations shadow:
+13. `cng-0fs` da duoc mo cho declarations shadow:
    - day la domain blast radius cao nhat, can shadow parity + compat telemetry truoc write cutover
    - verify gate se tap trung vao ECUS preview/commit, alerts config/review, C/O discrepancy, va declaration history/edit
-11. `cng-0fs` da duoc implementation o muc rollout status + test gate:
+14. `cng-0fs` da duoc implementation o muc rollout status + test gate:
    - them `server-v4/src/app/declarationsShadowRollout.ts` de tong hop 4 declaration shadow groups: ECUS preview/commit, alerts config/review, C/O discrepancy, va declaration history/edit parity
    - `/api/v4/meta/rollout` hien bo sung `compatibility.declarationShadow` va them declaration-specific migration checks, de operator biet ro nhom nao dang xanh, nhom nao van con legacy compat hits
    - rollout tests da khoa pass-path khi khong co legacy hits va warn-path khi route migrated van bi goi qua compat layer
    - app-shell/legacy-compat fixtures da duoc lam ben vung hon, khong con phu thuoc vao file sqlite mac dinh ton tai trong worktree
-12. `cng-2wn` da duoc implementation o muc declarations cutover policy:
+15. `cng-2wn` da duoc implementation o muc declarations cutover policy:
    - them `server-v4/src/app/declarationsWriteCutover.ts` de tong hop readiness rieng cho declarations write cutover, tach biet shadow parity voi cutover readiness thuc su
    - `/api/v4/meta/rollout` hien bo sung `compatibility.declarationCutover` va migration check `declarations-write-cutover-policy`, dua tren guard mode, migrated compat hits, va declaration shadow gate health
    - readiness/stage `cutover-ready` khong con len xanh chi vi runtime da relational-store; declarations phai co `block-migrated` + zero migrated compat hits + shadow gate xanh moi duoc xem la ready
    - them regression test moi `tests/server-v4/declarationsWriteCutover.test.js` va cap nhat `v4RolloutStatus`/`appShell` expectations cho hold/ready/blocked transitions
-13. `cng-7wv` da duoc implementation o muc runtime config wiring:
+16. `cng-7wv` da duoc implementation o muc runtime config wiring:
    - `server-v4/src/config/server-v4-config.ts` hien co field chinh thuc `importerCompatGuardMode` va validate hai mode `off` / `block-migrated`
    - `buildV4App` fallback sang runtime config khi caller khong truyen `options.importerCompat.guardMode`, nen block mode co the bat qua config thay vi patch tracker thu cong
    - `apps/api/src/startApiServer.js` forward top-level `importerCompatGuardMode` xuong compiled `server-v4`, dong bo voi env `KPI_API_IMPORTER_COMPAT_GUARD_MODE`
    - regression tests da khoa ca config env/apps-api path va route behavior path cho `off` vs `block-migrated`
-14. `cng-xyq.4` da duoc implementation o muc decomposition planning:
+17. `cng-xyq.4` da duoc implementation o muc decomposition planning:
    - them artifact goc `frontend-wave1-decomposition.md` tai project root de chot wave-1 backlog cho `MSTAssignment`, `KPIAdjustments`, `AiAssistant`, va `RulesEditor`
    - chot thu tu tach nho an toan theo huong `pure/presentational truoc, hooks/panel stateful sau`
    - xac dinh ro gap test hien tai: `RulesEditor` chua co test truc tiep, can dat baseline test truoc khi rut component
@@ -92,14 +101,14 @@
      - `cng-xyq.9` KPIAdjustments pure calculation + form hook decomposition
      - `cng-xyq.10` AiAssistant snapshot/provider/history helper decomposition
      - `cng-xyq.11` RulesEditor baseline test + panel decomposition
-15. `cng-xyq.8` da duoc implementation o muc helper extraction:
+18. `cng-xyq.8` da duoc implementation o muc helper extraction:
    - tach `HistoryDetails`, `StageTimelinePreview`, `StageTimelineGroups`, va `ColumnResizeHandle` ra khoi `src/components/MSTAssignment.jsx` thanh module rieng duoi `src/components/mst-assignment/`
    - `MSTAssignment.jsx` giam tu moc backlog 3170 dong xuong 2973 dong sau helper extraction
    - targeted verify da pass:
      - `pnpm exec vitest run tests/mstAssignment.timeline.test.jsx tests/mstAssignment.column-widths.test.jsx tests/mstAssignment.column-visibility.test.jsx tests/mstAssignment.pagination.test.jsx --environment jsdom`
      - `pnpm exec eslint src/components/MSTAssignment.jsx src/components/mst-assignment/timeline/HistoryDetails.jsx src/components/mst-assignment/timeline/StageTimelinePreview.jsx src/components/mst-assignment/timeline/StageTimelineGroups.jsx src/components/mst-assignment/table/ColumnResizeHandle.jsx`
    - tach them bead `cng-xyq.12` de xu ly phan con lai cua MSTAssignment state/layout hook ma khong lam bead helper extraction bi qua to
-16. `cng-xyq.12` da duoc implementation o muc state/layout hook extraction:
+19. `cng-xyq.12` da duoc implementation o muc state/layout hook extraction:
    - them `src/components/mst-assignment/hooks/useMSTAssignmentColumnLayout.js` de gom `COLUMN_OPTIONS`, width persistence, visibility persistence, resize handlers, va `columnMenuOpen`
    - them `src/components/mst-assignment/hooks/useMSTAssignmentPageSize.js` de tach `pageSize` read/write helpers khoi `MSTAssignment.jsx`
    - `src/components/MSTAssignment.jsx` da chuyen sang dung 2 hook moi thay vi giu localStorage + resize state trong component chinh
@@ -112,12 +121,12 @@
 
 ## Next Suggested Slice
 
-- Title: Tach helper snapshot/provider/history khoi AiAssistant
-- Bead: `cng-xyq.10`
-- Status: ready
-- Follow-up backlog seeded:
-  - `cng-xyq.11` -> RulesEditor baseline tests + control/panel split
-  - `cng-xyq.12` -> MSTAssignment state/layout hooks (closed)
+- Title: Tach orchestration snapshot/insight flow khoi AiAssistant
+- Bead: `chua seed`
+- Status: de xuat
+- Follow-up backlog:
+  - rut phan snapshot orchestration + insight/history assembly khoi `src/components/AiAssistant.jsx`
+  - neu tiep tuc backend thay vi frontend, uu tien declarations write-cutover verification gate
 
 ## Verification
 
@@ -224,6 +233,7 @@
 - `cng-jyz` da duoc mo va claim cho wave-2 `RulesEditor`; slice config tabs da xong truoc do, va `cng-lte` vua hoan tat phan workflow save/restore/simulation orchestration tiep theo.
 - `gitnexus_detect_changes(scope: "all")` van tra `No changes detected` ngay ca sau helper extraction, nen tiep tuc coi day la van de worktree-awareness cua GitNexus; gate thuc te van dua tren `git status`, lint, va test muc tieu.
 - `tests/server.monitor.test.js` van in stderr khi `dist/server-v4/index.js` khong co trong vitest runtime, nhung suite van pass vi startup path fallback dung nhu hien trang.
+- GitNexus `detect_changes` da hoat dong dung tro lai trong worktree nay sau khi xoa index cu trung ten cua repo goc `E:\GPT\kpi_source_code_v4`; root cause la registry co 2 entry cung ten `kpi_source_code_v4`.
 
 ## Previous Completed Slice
 
