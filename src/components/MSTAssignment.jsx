@@ -4,9 +4,6 @@ import clsx from "clsx";
 import * as XLSX from "xlsx";
 
 import {
-
-  getMSTHistoryEntries,
-
   getMSTMap,
 
   MST_ASSIGNMENT_STATUS,
@@ -39,14 +36,15 @@ import useMSTAssignmentPageSize, {
   PAGE_SIZE_OPTIONS,
 } from "@/components/mst-assignment/hooks/useMSTAssignmentPageSize.js";
 import useMSTAssignmentAddFormWorkspace from "@/components/mst-assignment/hooks/useMSTAssignmentAddFormWorkspace.js";
+import useMSTAssignmentHistoryWorkspace from "@/components/mst-assignment/hooks/useMSTAssignmentHistoryWorkspace.js";
 import useMSTAssignmentImportSaveWorkspace from "@/components/mst-assignment/hooks/useMSTAssignmentImportSaveWorkspace.js";
 import useMSTAssignmentRowCommitWorkspace from "@/components/mst-assignment/hooks/useMSTAssignmentRowCommitWorkspace.js";
 import useMSTAssignmentRowMutations from "@/components/mst-assignment/hooks/useMSTAssignmentRowMutations.js";
+import useMSTAssignmentTimelineWorkspace from "@/components/mst-assignment/hooks/useMSTAssignmentTimelineWorkspace.js";
 import {
   buildAggregatedRowsByMST,
   buildDisplayList,
   buildGroupedStages,
-  buildTimelineGroupsByMST,
   sortMSTRows,
 } from "@/components/mst-assignment/model/displaySelectors.js";
 import HistoryDetails from "@/components/mst-assignment/timeline/HistoryDetails.jsx";
@@ -93,13 +91,6 @@ const normalize = (s = "") =>
     .toLowerCase();
 
 export const COMPANY_NAME_WRAP_THRESHOLD = 25;
-
-const HISTORY_ACTION_TYPES = new Set(["create", "update", "delete"]);
-
-const STATUS_FILTER_MAP = new Map([
-  ["status:assigned", MST_ASSIGNMENT_STATUS.ASSIGNED],
-  ["status:pending", MST_ASSIGNMENT_STATUS.PENDING],
-]);
 
 export const shouldWrapCompanyName = (value = "") => {
   if (value == null) {
@@ -473,38 +464,6 @@ const makeRowKey = (row) => {
 
 
 
-const buildHistoryIndex = (entries = []) => {
-
-  const map = new Map();
-
-  for (const entry of entries) {
-
-    if (!entry || !entry.rowKey || !entry.field) continue;
-
-    if (!map.has(entry.rowKey)) {
-
-      map.set(entry.rowKey, {});
-
-    }
-
-    const fieldBuckets = map.get(entry.rowKey);
-
-    if (!fieldBuckets[entry.field]) {
-
-      fieldBuckets[entry.field] = [];
-
-    }
-
-    fieldBuckets[entry.field].push(entry);
-
-  }
-
-  return map;
-
-};
-
-
-
 const formatHistoryTime = (value) => {
 
   if (!value) return "";
@@ -866,28 +825,6 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
 
   const setPageRef = useRef(() => {});
 
-  const [historyEntries, setHistoryEntries] = useState(() =>
-
-    getMSTHistoryEntries(500)
-
-  );
-
-  const refreshHistory = useCallback(() => {
-
-    setHistoryEntries(getMSTHistoryEntries(500));
-
-  }, []);
-
-  const [historyFilter, setHistoryFilter] = useState({
-
-    from: "",
-
-    to: "",
-
-    type: "all",
-
-  });
-
   const [rosterSnapshot, setRosterSnapshot] = useState(() => getTeamRoster());
 
   const rosterTeams = useMemo(() => buildRosterTeams(rosterSnapshot), [rosterSnapshot]);
@@ -914,102 +851,6 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
 
   }, []);
 
-  const filteredHistoryEntries = useMemo(() => {
-
-    if (!historyEntries?.length) return [];
-
-    const shouldFilterByActionType = HISTORY_ACTION_TYPES.has(historyFilter.type);
-
-    return historyEntries.filter((entry) => {
-
-      if (!entry) return false;
-
-      const entryDate = (entry.timestamp || "").slice(0, 10);
-
-      if (historyFilter.from && entryDate < historyFilter.from) {
-
-        return false;
-
-      }
-
-      if (historyFilter.to && entryDate > historyFilter.to) {
-
-        return false;
-
-      }
-
-      if (shouldFilterByActionType && entry.type !== historyFilter.type) {
-
-        return false;
-
-      }
-
-      return true;
-
-    });
-
-  }, [historyEntries, historyFilter]);
-
-  const historyIndex = useMemo(
-
-    () => buildHistoryIndex(filteredHistoryEntries),
-
-    [filteredHistoryEntries]
-
-  );
-
-  const isHistoryFilterActive = useMemo(
-
-    () =>
-
-      Boolean(
-
-        (historyFilter.from && historyFilter.from.trim()) ||
-
-          (historyFilter.to && historyFilter.to.trim()) ||
-
-          (historyFilter.type && historyFilter.type !== "all")
-
-      ),
-
-    [historyFilter]
-
-  );
-
-  const historyFilteredRowKeys = useMemo(() => {
-
-    if (!isHistoryFilterActive) return null;
-
-    if (!HISTORY_ACTION_TYPES.has(historyFilter.type)) {
-
-      return null;
-
-    }
-
-    const set = new Set();
-
-    filteredHistoryEntries.forEach((entry) => {
-
-      if (entry?.rowKey) {
-
-        set.add(entry.rowKey);
-
-      }
-
-    });
-
-    return set;
-
-  }, [filteredHistoryEntries, historyFilter.type, isHistoryFilterActive]);
-
-  const activeStatusFilter = useMemo(() => {
-
-    if (!isHistoryFilterActive) return null;
-
-    return STATUS_FILTER_MAP.get(historyFilter.type) || null;
-
-  }, [historyFilter.type, isHistoryFilterActive]);
-
   const isReadOnly = !canEdit;
 
   const {
@@ -1023,6 +864,24 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
     clearType: _clearQuickFavorite,
 
   } = useMSTQuickFilters();
+
+  const {
+    activeStatusFilter,
+    applyActionFavorite,
+    filteredHistoryCount,
+    handleSaveActionFavorite,
+    historyFilter,
+    historyFilteredRowKeys,
+    historyIndex,
+    isHistoryFilterActive,
+    refreshHistory,
+    resetHistoryFilter,
+    totalHistoryCount,
+    updateHistoryFilter,
+  } = useMSTAssignmentHistoryWorkspace({
+    addQuickFavorite,
+    goToFirstPage: () => setPageRef.current(1),
+  });
 
   const createRowState = useCallback((row, meta = {}) => {
 
@@ -1117,34 +976,6 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
 
   }, []);
 
-  const updateHistoryFilter = useCallback((patch) => {
-
-    setHistoryFilter((prev) => ({ ...prev, ...patch }));
-
-  }, []);
-
-  const applyActionFavorite = useCallback(
-
-    (value) => {
-
-      if (!value) {
-
-        updateHistoryFilter({ type: "all" });
-
-      } else {
-
-        updateHistoryFilter({ type: value });
-
-      }
-
-      setPageRef.current(1);
-
-    },
-
-    [updateHistoryFilter]
-
-  );
-
   const handleSaveStaffFavorite = useCallback(() => {
 
     if (!staffFilter.trim()) {
@@ -1172,65 +1003,6 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
     alert("Đã lưu bộ lọc nhân viên.");
 
   }, [addQuickFavorite, staffFilter]);
-
-  const handleSaveActionFavorite = useCallback(() => {
-
-    if (!historyFilter.type || historyFilter.type === "all") {
-
-      alert("Chỉ lưu bộ lọc khi bạn chọn thao tác hoặc trạng thái cụ thể.");
-
-      return;
-
-    }
-
-    const result = addQuickFavorite("action", historyFilter.type);
-
-    if (!result.ok) {
-
-      if (result.reason === "duplicate") {
-
-        const duplicateMessage = HISTORY_ACTION_TYPES.has(historyFilter.type)
-
-          ? "Bộ lọc thao tác đã tồn tại."
-
-          : STATUS_FILTER_MAP.has(historyFilter.type)
-
-            ? "Bộ lọc trạng thái đã tồn tại."
-
-            : "Bộ lọc đã tồn tại.";
-
-        alert(duplicateMessage);
-
-      }
-
-      return;
-
-    }
-
-    const successMessage = HISTORY_ACTION_TYPES.has(historyFilter.type)
-
-      ? "Đã lưu bộ lọc thao tác."
-
-      : STATUS_FILTER_MAP.has(historyFilter.type)
-
-        ? "Đã lưu bộ lọc trạng thái nhân viên."
-
-        : "Đã lưu bộ lọc.";
-
-    alert(successMessage);
-
-  }, [addQuickFavorite, historyFilter.type]);
-
-
-
-  const resetHistoryFilter = () => {
-
-    setHistoryFilter({ from: "", to: "", type: "all" });
-
-  };
-
-
-
   /** Load lần đầu */
 
   useEffect(() => {
@@ -1256,15 +1028,6 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
     }
 
   }, [createRowState]);
-
-
-
-  useEffect(() => {
-
-    refreshHistory();
-
-  }, [refreshHistory]);
-
 
 
   const exportRowsToExcel = (scope = "filtered") => {
@@ -1502,70 +1265,15 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
     initialPageSize,
     minPageSize: MIN_PAGE_SIZE,
   });
-
-  const timelineGroupsByMST = useMemo(() => {
-    return buildTimelineGroupsByMST(groupedStages);
-  }, [groupedStages]);
-
-  const [timelineDialogState, setTimelineDialogState] = useState({
-    open: false,
-    groups: [],
-    title: "",
-    subtitle: "",
+  const {
+    handleOpenAllTimelines,
+    handleOpenTimelineGroup,
+    handleTimelineDialogOpenChange,
+    timelineDialogState,
+    timelineGroupsByMST,
+  } = useMSTAssignmentTimelineWorkspace({
+    groupedStages,
   });
-
-  const showTimelineDialog = useCallback(({ title, subtitle, groups }) => {
-    const normalizedGroups = Array.isArray(groups) ? groups.filter(Boolean) : [];
-    if (!normalizedGroups.length) {
-      setTimelineDialogState((prev) => ({ ...prev, open: false }));
-      return;
-    }
-    setTimelineDialogState({
-      open: true,
-      groups: normalizedGroups,
-      title: title || "Dòng thời gian giai đoạn",
-      subtitle: subtitle || "",
-    });
-  }, []);
-
-  const handleTimelineDialogOpenChange = useCallback((nextOpen) => {
-    setTimelineDialogState((prev) => ({ ...prev, open: nextOpen }));
-  }, []);
-
-  const handleOpenTimelineGroup = useCallback(
-    (group) => {
-      if (!group) return;
-      const safeGroup = {
-        mst: group?.mst || "",
-        company: group?.company || "",
-        stages: Array.isArray(group?.stages) ? group.stages : [],
-      };
-      showTimelineDialog({
-        title: `Dòng thời gian — ${safeGroup.mst || "(MST trống)"}`,
-        subtitle: safeGroup.company ? `Công ty: ${safeGroup.company}` : "",
-        groups: [safeGroup],
-      });
-    },
-    [showTimelineDialog]
-  );
-
-  const handleOpenAllTimelines = useCallback(() => {
-    if (!groupedStages.length) return;
-    showTimelineDialog({
-      title: "Dòng thời gian giai đoạn",
-      subtitle: `${groupedStages.length} MST khớp bộ lọc hiện tại`,
-      groups: groupedStages,
-    });
-  }, [groupedStages, showTimelineDialog]);
-
-
-
-  useEffect(() => {
-
-    setPageRef.current(1);
-
-  }, [historyFilter.from, historyFilter.to, historyFilter.type, isHistoryFilterActive]);
-
 
 
   useEffect(() => {
@@ -1582,14 +1290,6 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
   }, [pageSize, persistPageSize]);
 
 
-
-  const totalHistoryCount = Array.isArray(historyEntries)
-
-    ? historyEntries.length
-
-    : 0;
-
-  const filteredHistoryCount = filteredHistoryEntries.length;
 
   const recentlyImportedCount = recentlyImportedKeys.size;
 
