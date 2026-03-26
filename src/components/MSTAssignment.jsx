@@ -36,6 +36,7 @@ import useMSTAssignmentRowCommitWorkspace from "@/components/mst-assignment/hook
 import useMSTAssignmentRowMutations from "@/components/mst-assignment/hooks/useMSTAssignmentRowMutations.js";
 import useMSTAssignmentStaffFilterWorkspace from "@/components/mst-assignment/hooks/useMSTAssignmentStaffFilterWorkspace.js";
 import useMSTAssignmentTimelineWorkspace from "@/components/mst-assignment/hooks/useMSTAssignmentTimelineWorkspace.js";
+import useMSTAssignmentViewControlsWorkspace from "@/components/mst-assignment/hooks/useMSTAssignmentViewControlsWorkspace.js";
 import {
   buildAggregatedRowsByMST,
   buildDisplayList,
@@ -793,11 +794,6 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
   const [rows, setRows] = useState([]); // toàn bộ (bao gồm metadata)
 
   const [originalRows, setOriginalRows] = useState([]);
-  const [groupByMST, setGroupByMST] = useState(true);
-
-  const [search, setSearch] = useState("");
-
-  const [applyFrom, setApplyFrom] = useState(""); // yyyy-mm-dd
   const actor = currentUser?.username || "guest";
   const { initialPageSize, persistPageSize } = useMSTAssignmentPageSize();
   const {
@@ -814,6 +810,17 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
   const rootRef = useRef(null);
 
   const setPageRef = useRef(() => {});
+  const {
+    applyFrom,
+    groupByMST,
+    handleApplyFromChange,
+    handleClearSearch,
+    handleGroupByMSTChange,
+    handleSearchChange,
+    search,
+  } = useMSTAssignmentViewControlsWorkspace({
+    goToFirstPage: () => setPageRef.current(1),
+  });
 
   const [recentlyImportedKeys, setRecentlyImportedKeys] = useState(() => new Set());
 
@@ -1261,10 +1268,7 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
                 <input
                   type="checkbox"
                   checked={groupByMST}
-                  onChange={(e) => {
-                    setGroupByMST(e.target.checked);
-                    setPage(1);
-                  }}
+                  onChange={(e) => handleGroupByMSTChange(e.target.checked)}
                 />
                 Gom theo MST
               </label>
@@ -1272,14 +1276,8 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
                 label="Tìm nhanh MST hoặc công ty"
                 hideLabel
                 value={search}
-                onChange={(e) => {
-                  setSearch(e.target.value);
-                  setPageRef.current(1);
-                }}
-                onClear={() => {
-                  setSearch("");
-                  setPageRef.current(1);
-                }}
+                onChange={(e) => handleSearchChange(e.target.value)}
+                onClear={handleClearSearch}
                 placeholder="Tìm nhanh (MST / Công ty)"
                 className="w-full sm:w-72"
                 data-tooltip="Tìm nhanh theo mã số thuế hoặc tên công ty"
@@ -1351,7 +1349,7 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
                 <input
                   type="date"
                   value={applyFrom}
-                  onChange={(e) => setApplyFrom(e.target.value)}
+                  onChange={(e) => handleApplyFromChange(e.target.value)}
                   className="border rounded px-2 py-1"
                   placeholder="Áp dụng từ ngày"
                   data-tooltip="Áp dụng từ ngày (ghi vào trường trống khi import)"
