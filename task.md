@@ -2,11 +2,12 @@
 
 ## Active Slice
 
-- Title: Tach MSTAssignment assignee cell
-- Bead: cng-y03
+- Title: Tach KPIAdjustments formatting helpers
+- Bead: cng-lch
 - Status: completed
 - Last updated: 2026-03-27
 
+- `cng-lch` da hoan tat tach `formatDateOnly`, `formatInt`, va `formatDecimal` khoi `KPIAdjustments` sang `src/components/kpi-adjustments/model/formatting.js`; shell hien import lai helper moi cho form/list/overview dialogs, con unit test moi khoa date/int/decimal formatting contract.
 - `cng-y03` da hoan tat tach `AssigneeCell` khoi `MSTAssignment` sang `src/components/mst-assignment/table/AssigneeCell.jsx`; shell hien import lai component moi cho cot phu trach, con regression test person-columns da tro thang vao module moi de khoa display clamp, team hint, va che do edit.
 - `cng-gpl` da hoan tat tach wrapper `MstAssignmentStaffCombobox` khoi `MSTAssignment` sang `src/components/mst-assignment/shared/MstAssignmentStaffCombobox.jsx`; shell hien import lai wrapper moi cho ca `AssigneeCell` va `MstAssignmentAddFormPanel`, con regression test moi khoa 3 preset `allowCustom`/`preserveTeamOnCustom`/`preserveTeamOnClear`.
 - `cng-s7x` da hoan tat tach `CompanyNameCell` khoi `MSTAssignment` sang `src/components/mst-assignment/table/CompanyNameCell.jsx`; shell hien import lai component moi cho cot cong ty, con regression test company-name da tro thang vao module moi de khoa sanitize/wrap/textarea resize behavior.
@@ -45,6 +46,11 @@
 - `cng-4hs` da tach xong card danh sach + bo loc thanh `KpiAdjustmentListPanel`, bo sung regression test panel, va giam `src/components/KPIAdjustments.jsx` xuong 1343 dong.
 
 ## Completed This Session
+
+- `cng-lch` da hoan tat tach KPI formatting helpers:
+  - them `src/components/kpi-adjustments/model/formatting.js` de gom `formatDateOnly`, `formatInt`, va `formatDecimal`
+  - `src/components/KPIAdjustments.jsx` hien chi import helper moi thay vi giu formatter inline trong component shell
+  - bo sung `tests/kpiAdjustments.formatting.test.js` de khoa defensive date parsing va `vi-VN` numeric formatting
 
 - `cng-y03` da hoan tat tach assignee cell khoi `MSTAssignment`:
   - them `src/components/mst-assignment/table/AssigneeCell.jsx` de gom display clamp, team hint, `HistoryDetails`, va che do edit thong qua `MstAssignmentStaffCombobox`
@@ -474,12 +480,12 @@
 
 ## Next Suggested Slice
 
-- Title: Tach KPIAdjustments formatting helpers
+- Title: Tach KPIAdjustments field-id helpers
 - Bead: `TBD`
 - Status: san sang tao bead tiep theo
 - Follow-up backlog:
-  - sau khi `AssigneeCell` da tach xong, nhom cut tiep theo hop ly nhat la pure helper trong `KPIAdjustments.jsx`, bat dau bang formatting helpers (`formatDateOnly`, `formatInt`, `formatDecimal`)
-  - tiep theo co the tach field-id helpers (`normalizeFieldSegment`, `buildSettingsFieldId`, `buildLicenseFieldId`) va references/staff option helpers de tiep tuc giam shell component ma khong dong vao orchestration
+  - sau khi formatting helpers da tach xong, cut tiep theo hop ly nhat la field-id helpers (`normalizeFieldSegment`, `buildSettingsFieldId`, `buildLicenseFieldId`) vi scope caller van rat hep quanh settings dialog
+  - sau field-id helpers co the tiep tuc tach `parseReferences` va `buildStaffOptions` de chot them 1-2 slice pure helper trong `KPIAdjustments.jsx`
   - tiep tuc giu scope o muc presentation/component extraction, tranh lan sang bootstrap/import/export/timeline dialog orchestration dang on dinh
   - uu tien bead moi chi khi co mot cut ro rang, co regression test panel/interaction, va diff van giu nho nhu cac commit helper/UI control vua xong
 

@@ -24,6 +24,11 @@ import { subscribe as subscribeStorage } from "@/lib/storageClient.js";
 import { useKpiAdjustmentForm } from "@/components/kpi-adjustments/hooks/useKpiAdjustmentForm.js";
 import { useKpiAdjustmentFilters } from "@/components/kpi-adjustments/hooks/useKpiAdjustmentFilters.js";
 import { useKpiAdjustmentFormWorkspace } from "@/components/kpi-adjustments/hooks/useKpiAdjustmentFormWorkspace.js";
+import {
+  formatDateOnly,
+  formatDecimal,
+  formatInt,
+} from "@/components/kpi-adjustments/model/formatting.js";
 import KpiAdjustmentDetailDialog from "@/components/kpi-adjustments/panels/KpiAdjustmentDetailDialog.jsx";
 import KpiAdjustmentFormPanel from "@/components/kpi-adjustments/panels/KpiAdjustmentFormPanel.jsx";
 import KpiAdjustmentGuidanceDialog from "@/components/kpi-adjustments/panels/KpiAdjustmentGuidanceDialog.jsx";
@@ -91,28 +96,6 @@ const FORM_FIELD_IDS = Object.freeze({
 
 
 
-function formatDateOnly(value) {
-
-  if (!value) return "";
-
-  const ts = Date.parse(value);
-
-  if (!Number.isFinite(ts)) return "";
-
-  try {
-
-    return new Date(ts).toLocaleDateString("vi-VN");
-
-  } catch {
-
-    return "";
-
-  }
-
-}
-
-
-
 const normalizeFieldSegment = (value) =>
 
   String(value ?? "")
@@ -138,30 +121,6 @@ const buildSettingsFieldId = (category, suffix) =>
 const buildLicenseFieldId = (category, code) =>
 
   `kpi-setting-${normalizeFieldSegment(category)}-license-${normalizeFieldSegment(code)}`;
-
-
-
-function formatInt(value) {
-
-  const num = Number(value || 0);
-
-  return Number.isFinite(num) ? num.toLocaleString("vi-VN") : "0";
-
-}
-
-
-
-function formatDecimal(value) {
-
-  const num = Number(value || 0);
-
-  return Number.isFinite(num)
-
-    ? num.toLocaleString("vi-VN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-
-    : "0,0";
-
-}
 
 
 
