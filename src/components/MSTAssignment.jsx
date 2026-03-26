@@ -36,6 +36,7 @@ import useMSTAssignmentPageSize, {
   PAGE_SIZE_OPTIONS,
 } from "@/components/mst-assignment/hooks/useMSTAssignmentPageSize.js";
 import useMSTAssignmentAddFormWorkspace from "@/components/mst-assignment/hooks/useMSTAssignmentAddFormWorkspace.js";
+import useMSTAssignmentExportWorkspace from "@/components/mst-assignment/hooks/useMSTAssignmentExportWorkspace.js";
 import useMSTAssignmentHistoryWorkspace from "@/components/mst-assignment/hooks/useMSTAssignmentHistoryWorkspace.js";
 import useMSTAssignmentImportSaveWorkspace from "@/components/mst-assignment/hooks/useMSTAssignmentImportSaveWorkspace.js";
 import useMSTAssignmentRowCommitWorkspace from "@/components/mst-assignment/hooks/useMSTAssignmentRowCommitWorkspace.js";
@@ -1030,70 +1031,6 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
   }, [createRowState]);
 
 
-  const exportRowsToExcel = (scope = "filtered") => {
-
-    const source = scope === "all" ? rows : filtered;
-
-    if (!source.length) {
-
-      alert("Không có dữ liệu để xuất Excel.");
-
-      return;
-
-    }
-
-    const data = source.map((item, index) => ({
-
-      STT: index + 1,
-
-      MST: item.mst,
-
-      "Công ty": item.company || "",
-
-      "Người phụ trách Nhập": item.person_import || "",
-
-      "Người phụ trách Xuất": item.person_export || "",
-
-      "Tổ đội": item.team || "",
-
-      "Áp dụng từ ngày": item.effective_from || "",
-
-      "Đến hết ngày": item.effective_to || "",
-
-      "Trạng thái": computeStatusDisplay(item) || item.status || "",
-
-    }));
-
-
-
-    const worksheet = XLSX.utils.json_to_sheet(data);
-
-    const workbook = XLSX.utils.book_new();
-
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Gan MST");
-
-    const now = new Date();
-
-    const timestamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(
-
-      now.getDate()
-
-    ).padStart(2, "0")}_${String(now.getHours()).padStart(2, "0")}${String(now.getMinutes()).padStart(
-
-      2,
-
-      "0"
-
-    )}`;
-
-    const suffix = scope === "all" ? "toan-bo" : "loc";
-
-    XLSX.writeFile(workbook, `gan-mst-${suffix}-${timestamp}.xlsx`);
-
-  };
-
-
-
   /** Filter + phân trang */
 
   const filtered = useMemo(() => {
@@ -1250,6 +1187,11 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
     () => buildDisplayList({ groupByMST, aggregatedByMST, filtered }),
     [groupByMST, aggregatedByMST, filtered]
   );
+  const { exportRowsToExcel } = useMSTAssignmentExportWorkspace({
+    rows,
+    filteredRows: filtered,
+    computeStatusDisplay,
+  });
 
   const {
     page,

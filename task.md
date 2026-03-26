@@ -2,11 +2,12 @@
 
 ## Active Slice
 
-- Title: Tach timeline dialog workspace khoi MSTAssignment
-- Bead: cng-5r6
+- Title: Tach export workspace khoi MSTAssignment
+- Bead: cng-5dp
 - Status: completed
 - Last updated: 2026-03-26
 
+- `cng-5dp` da hoan tat tach export workspace khoi `MSTAssignment` sang `src/components/mst-assignment/hooks/useMSTAssignmentExportWorkspace.js`; shell hien chi giu wiring `exportRowsToExcel(scope)`, con hook moi gom `filtered/all` scope selection, workbook build, timestamped filename, va empty-state alert.
 - `cng-5r6` da hoan tat tach timeline dialog workspace khoi `MSTAssignment` sang `src/components/mst-assignment/hooks/useMSTAssignmentTimelineWorkspace.js`; shell hien chi giu wiring cho `timelineDialogState`, `handleOpenTimelineGroup`, `handleOpenAllTimelines`, va `handleTimelineDialogOpenChange`.
 - `cng-cxh` da hoan tat tach history workspace khoi `MSTAssignment` sang `src/components/mst-assignment/hooks/useMSTAssignmentHistoryWorkspace.js`; shell hien chi giu wiring cho `refreshHistory`, history filter state, derived counters, quick favorites, va filtered row-key mapping.
 - `cng-bxf` da hoan tat tach row commit workflow khoi `MSTAssignment` sang `src/components/mst-assignment/hooks/useMSTAssignmentRowCommitWorkspace.js`; shell hien chi giu wiring props cho bang, con hook moi gom `originalMap`, row diff detection, `rowHasChanges`, va `commitRow` save side effects.
@@ -27,6 +28,15 @@
 - `cng-4hs` da tach xong card danh sach + bo loc thanh `KpiAdjustmentListPanel`, bo sung regression test panel, va giam `src/components/KPIAdjustments.jsx` xuong 1343 dong.
 
 ## Completed This Session
+
+- `cng-5dp` da hoan tat tach export workspace khoi `MSTAssignment`:
+  - them `src/components/mst-assignment/hooks/useMSTAssignmentExportWorkspace.js` de gom `filtered/all` scope selection, export row mapping, workbook build, timestamp formatting, va `writeFile`
+  - `src/components/MSTAssignment.jsx` hien dung hook moi thay vi giu inline block `exportRowsToExcel`; shell giu nguyen contract cho 2 nut `Export (lọc)` va `Export (tất cả)`
+  - bo sung `tests/useMSTAssignmentExportWorkspace.test.jsx` de khoa 3 nhanh chinh: `empty-state alert`, export filtered rows mac dinh, va export full rows cho scope `all`
+  - targeted verify da pass:
+    - `pnpm exec vitest run tests/useMSTAssignmentExportWorkspace.test.jsx tests/useMSTAssignmentHistoryWorkspace.test.jsx tests/useMSTAssignmentTimelineWorkspace.test.jsx tests/mstAssignmentDataTablePanel.test.jsx --environment jsdom`
+    - `pnpm exec eslint src/components/MSTAssignment.jsx src/components/mst-assignment/hooks/useMSTAssignmentExportWorkspace.js src/components/mst-assignment/hooks/useMSTAssignmentHistoryWorkspace.js src/components/mst-assignment/hooks/useMSTAssignmentTimelineWorkspace.js tests/useMSTAssignmentExportWorkspace.test.jsx tests/useMSTAssignmentHistoryWorkspace.test.jsx tests/useMSTAssignmentTimelineWorkspace.test.jsx tests/mstAssignmentDataTablePanel.test.jsx`
+  - `eslint` chi con 2 warning Fast Refresh cu o `src/components/MSTAssignment.jsx`
 
 - `cng-5r6` da hoan tat tach timeline dialog workspace khoi `MSTAssignment`:
   - them `src/components/mst-assignment/hooks/useMSTAssignmentTimelineWorkspace.js` de gom `timelineDialogState`, `handleOpenTimelineGroup`, `handleOpenAllTimelines`, va `handleTimelineDialogOpenChange`
@@ -302,12 +312,12 @@
 
 ## Next Suggested Slice
 
-- Title: Tach export workspace khoi MSTAssignment
+- Title: Tach bootstrap workspace khoi MSTAssignment
 - Bead: `TBD`
 - Status: san sang tao bead tiep theo
 - Follow-up backlog:
-  - tach `exportRowsToExcel` va cac helper export/reporting lien quan thanh workspace rieng de lam sach shell bang du lieu
-  - neu scope export qua rong, uu tien tach bootstrap/roster sync effect khoi shell de giam tiep coupling trong `MSTAssignment.jsx`
+  - tach bootstrap/roster sync effect (`getMSTMap`, `getTeamRoster`, `subscribeTeamRoster`, page reset wiring) thanh workspace rieng de giam tiep coupling trong `MSTAssignment.jsx`
+  - neu bootstrap scope qua rong, uu tien tach rieng `team roster` sync va `initial rows hydrate` thanh 2 bead nho hon
   - sau export/bootstrap, co the can nhac tach tiep cac helper Fast Refresh con lai ra file rieng neu muon giam them kich thuoc `MSTAssignment.jsx`
   - hoac chon mot bead frontend khac trong backlog neu uu tien chuyen sang orchestration refinement component khac
 
