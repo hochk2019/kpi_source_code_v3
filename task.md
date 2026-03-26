@@ -2,11 +2,12 @@
 
 ## Active Slice
 
-- Title: Tach export workspace khoi MSTAssignment
-- Bead: cng-5dp
+- Title: Tach bootstrap workspace khoi MSTAssignment
+- Bead: cng-xkg
 - Status: completed
 - Last updated: 2026-03-26
 
+- `cng-xkg` da hoan tat tach bootstrap workspace khoi `MSTAssignment` sang `src/components/mst-assignment/hooks/useMSTAssignmentBootstrapWorkspace.js`; shell hien chi giu wiring `rosterTeams`, con hook moi gom roster subscription, initial `getMSTMap` hydrate, va bridge setRows/setOriginalRows.
 - `cng-5dp` da hoan tat tach export workspace khoi `MSTAssignment` sang `src/components/mst-assignment/hooks/useMSTAssignmentExportWorkspace.js`; shell hien chi giu wiring `exportRowsToExcel(scope)`, con hook moi gom `filtered/all` scope selection, workbook build, timestamped filename, va empty-state alert.
 - `cng-5r6` da hoan tat tach timeline dialog workspace khoi `MSTAssignment` sang `src/components/mst-assignment/hooks/useMSTAssignmentTimelineWorkspace.js`; shell hien chi giu wiring cho `timelineDialogState`, `handleOpenTimelineGroup`, `handleOpenAllTimelines`, va `handleTimelineDialogOpenChange`.
 - `cng-cxh` da hoan tat tach history workspace khoi `MSTAssignment` sang `src/components/mst-assignment/hooks/useMSTAssignmentHistoryWorkspace.js`; shell hien chi giu wiring cho `refreshHistory`, history filter state, derived counters, quick favorites, va filtered row-key mapping.
@@ -28,6 +29,15 @@
 - `cng-4hs` da tach xong card danh sach + bo loc thanh `KpiAdjustmentListPanel`, bo sung regression test panel, va giam `src/components/KPIAdjustments.jsx` xuong 1343 dong.
 
 ## Completed This Session
+
+- `cng-xkg` da hoan tat tach bootstrap workspace khoi `MSTAssignment`:
+  - them `src/components/mst-assignment/hooks/useMSTAssignmentBootstrapWorkspace.js` de gom `subscribeTeamRoster`, derive `rosterTeams`, initial `getMSTMap` hydrate, va error logging path
+  - `src/components/MSTAssignment.jsx` hien khong con giu inline roster subscription hay initial hydrate effect; shell chi con wiring cho `rosterTeams` va cac hook phu thuoc vao rows/originalRows
+  - bo sung `tests/useMSTAssignmentBootstrapWorkspace.test.jsx` de khoa 3 nhanh chinh: hydrate rows/originalRows, roster subscription + cleanup, va hydrate failure logging
+  - targeted verify da pass:
+    - `pnpm exec vitest run tests/useMSTAssignmentBootstrapWorkspace.test.jsx tests/useMSTAssignmentExportWorkspace.test.jsx tests/useMSTAssignmentHistoryWorkspace.test.jsx tests/useMSTAssignmentTimelineWorkspace.test.jsx tests/mstAssignmentDataTablePanel.test.jsx --environment jsdom`
+    - `pnpm exec eslint src/components/MSTAssignment.jsx src/components/mst-assignment/hooks/useMSTAssignmentBootstrapWorkspace.js src/components/mst-assignment/hooks/useMSTAssignmentExportWorkspace.js src/components/mst-assignment/hooks/useMSTAssignmentHistoryWorkspace.js src/components/mst-assignment/hooks/useMSTAssignmentTimelineWorkspace.js tests/useMSTAssignmentBootstrapWorkspace.test.jsx tests/useMSTAssignmentExportWorkspace.test.jsx tests/useMSTAssignmentHistoryWorkspace.test.jsx tests/useMSTAssignmentTimelineWorkspace.test.jsx tests/mstAssignmentDataTablePanel.test.jsx`
+  - `eslint` chi con 2 warning Fast Refresh cu o `src/components/MSTAssignment.jsx`
 
 - `cng-5dp` da hoan tat tach export workspace khoi `MSTAssignment`:
   - them `src/components/mst-assignment/hooks/useMSTAssignmentExportWorkspace.js` de gom `filtered/all` scope selection, export row mapping, workbook build, timestamp formatting, va `writeFile`
@@ -312,13 +322,13 @@
 
 ## Next Suggested Slice
 
-- Title: Tach bootstrap workspace khoi MSTAssignment
+- Title: Tach staff filter workspace khoi MSTAssignment
 - Bead: `TBD`
 - Status: san sang tao bead tiep theo
 - Follow-up backlog:
-  - tach bootstrap/roster sync effect (`getMSTMap`, `getTeamRoster`, `subscribeTeamRoster`, page reset wiring) thanh workspace rieng de giam tiep coupling trong `MSTAssignment.jsx`
-  - neu bootstrap scope qua rong, uu tien tach rieng `team roster` sync va `initial rows hydrate` thanh 2 bead nho hon
-  - sau export/bootstrap, co the can nhac tach tiep cac helper Fast Refresh con lai ra file rieng neu muon giam them kich thuoc `MSTAssignment.jsx`
+  - tach `handleStaffFilterSelect`, `clearStaffFilter`, `applyStaffFavorite`, va `handleSaveStaffFavorite` thanh workspace rieng de shell chi giu wiring voi panel
+  - neu scope staff filter qua rong, uu tien tach rieng quick-favorite save flow va page-reset flow thanh 2 bead nho hon
+  - sau staff filter, co the can nhac tach tiep search/paging reset wiring hoac helper Fast Refresh con lai neu muon giam them kich thuoc `MSTAssignment.jsx`
   - hoac chon mot bead frontend khac trong backlog neu uu tien chuyen sang orchestration refinement component khac
 
 ## Verification

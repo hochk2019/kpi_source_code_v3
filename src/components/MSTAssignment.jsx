@@ -4,13 +4,7 @@ import clsx from "clsx";
 import * as XLSX from "xlsx";
 
 import {
-  getMSTMap,
-
   MST_ASSIGNMENT_STATUS,
-
-  getTeamRoster,
-
-  subscribeTeamRoster,
 
   normalizeStr,
 
@@ -23,9 +17,7 @@ import useTooltipTitles from "@/hooks/useTooltipTitles.js";
 import usePagination from "@/hooks/usePagination.js";
 
 import useMSTQuickFilters from "@/hooks/useMSTQuickFilters.js";
-import SharedStaffCombobox, {
-  buildStaffComboboxTeams,
-} from "@/components/shared/StaffCombobox.jsx";
+import SharedStaffCombobox from "@/components/shared/StaffCombobox.jsx";
 import MstAssignmentAddFormPanel from "@/components/mst-assignment/forms/MstAssignmentAddFormPanel.jsx";
 import MstAssignmentHistoryFilterPanel from "@/components/mst-assignment/filters/MstAssignmentHistoryFilterPanel.jsx";
 import MstAssignmentStaffFilterPanel from "@/components/mst-assignment/filters/MstAssignmentStaffFilterPanel.jsx";
@@ -36,6 +28,7 @@ import useMSTAssignmentPageSize, {
   PAGE_SIZE_OPTIONS,
 } from "@/components/mst-assignment/hooks/useMSTAssignmentPageSize.js";
 import useMSTAssignmentAddFormWorkspace from "@/components/mst-assignment/hooks/useMSTAssignmentAddFormWorkspace.js";
+import useMSTAssignmentBootstrapWorkspace from "@/components/mst-assignment/hooks/useMSTAssignmentBootstrapWorkspace.js";
 import useMSTAssignmentExportWorkspace from "@/components/mst-assignment/hooks/useMSTAssignmentExportWorkspace.js";
 import useMSTAssignmentHistoryWorkspace from "@/components/mst-assignment/hooks/useMSTAssignmentHistoryWorkspace.js";
 import useMSTAssignmentImportSaveWorkspace from "@/components/mst-assignment/hooks/useMSTAssignmentImportSaveWorkspace.js";
@@ -46,7 +39,6 @@ import {
   buildAggregatedRowsByMST,
   buildDisplayList,
   buildGroupedStages,
-  sortMSTRows,
 } from "@/components/mst-assignment/model/displaySelectors.js";
 import HistoryDetails from "@/components/mst-assignment/timeline/HistoryDetails.jsx";
 import MstAssignmentTimelinePanel from "@/components/mst-assignment/timeline/MstAssignmentTimelinePanel.jsx";
@@ -151,8 +143,6 @@ const formatISODate = (value) => {
 };
 
 
-
-const buildRosterTeams = buildStaffComboboxTeams;
 
 const StaffCombobox = (props) => (
   <SharedStaffCombobox
@@ -826,31 +816,7 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
 
   const setPageRef = useRef(() => {});
 
-  const [rosterSnapshot, setRosterSnapshot] = useState(() => getTeamRoster());
-
-  const rosterTeams = useMemo(() => buildRosterTeams(rosterSnapshot), [rosterSnapshot]);
-
   const [recentlyImportedKeys, setRecentlyImportedKeys] = useState(() => new Set());
-
-  useEffect(() => {
-
-    const unsubscribe = subscribeTeamRoster((next) => {
-
-      setRosterSnapshot(next);
-
-    });
-
-    return () => {
-
-      if (typeof unsubscribe === "function") {
-
-        unsubscribe();
-
-      }
-
-    };
-
-  }, []);
 
   const isReadOnly = !canEdit;
 
@@ -938,6 +904,12 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
       isStatusWarning: normalizedStatusDisplay.startsWith("Thiếu"),
     };
   }, []);
+  const { rosterTeams } = useMSTAssignmentBootstrapWorkspace({
+    createRowState,
+    makeRowKey,
+    setRows,
+    setOriginalRows,
+  });
   const { rowHasChanges, commitRow } = useMSTAssignmentRowCommitWorkspace({
     actor,
     createRowState,
@@ -1004,33 +976,6 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
     alert("Đã lưu bộ lọc nhân viên.");
 
   }, [addQuickFavorite, staffFilter]);
-  /** Load lần đầu */
-
-  useEffect(() => {
-
-    try {
-
-      const cur = getMSTMap() || [];
-
-      const prepared = sortMSTRows(cur).map((row) =>
-
-        createRowState(row, { originalKey: makeRowKey(row), isNew: false })
-
-      );
-
-      setRows(prepared);
-
-      setOriginalRows(prepared);
-
-    } catch (e) {
-
-      console.error("getMSTMap error:", e);
-
-    }
-
-  }, [createRowState]);
-
-
   /** Filter + phân trang */
 
   const filtered = useMemo(() => {
