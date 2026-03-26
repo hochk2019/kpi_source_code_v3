@@ -34,6 +34,7 @@ import useMSTAssignmentHistoryWorkspace from "@/components/mst-assignment/hooks/
 import useMSTAssignmentImportSaveWorkspace from "@/components/mst-assignment/hooks/useMSTAssignmentImportSaveWorkspace.js";
 import useMSTAssignmentRowCommitWorkspace from "@/components/mst-assignment/hooks/useMSTAssignmentRowCommitWorkspace.js";
 import useMSTAssignmentRowMutations from "@/components/mst-assignment/hooks/useMSTAssignmentRowMutations.js";
+import useMSTAssignmentStaffFilterWorkspace from "@/components/mst-assignment/hooks/useMSTAssignmentStaffFilterWorkspace.js";
 import useMSTAssignmentTimelineWorkspace from "@/components/mst-assignment/hooks/useMSTAssignmentTimelineWorkspace.js";
 import {
   buildAggregatedRowsByMST,
@@ -796,8 +797,6 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
 
   const [search, setSearch] = useState("");
 
-  const [staffFilter, setStaffFilter] = useState("");
-
   const [applyFrom, setApplyFrom] = useState(""); // yyyy-mm-dd
   const actor = currentUser?.username || "guest";
   const { initialPageSize, persistPageSize } = useMSTAssignmentPageSize();
@@ -924,58 +923,16 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
     setRows,
     tidyMST,
   });
-
-  const handleStaffFilterSelect = useCallback(({ staffName }) => {
-
-    setStaffFilter(staffName || "");
-
-    setPageRef.current(1);
-
-  }, []);
-
-  const clearStaffFilter = useCallback(() => {
-
-    setStaffFilter("");
-
-    setPageRef.current(1);
-
-  }, []);
-
-  const applyStaffFavorite = useCallback((value) => {
-
-    setStaffFilter(value || "");
-
-    setPageRef.current(1);
-
-  }, []);
-
-  const handleSaveStaffFavorite = useCallback(() => {
-
-    if (!staffFilter.trim()) {
-
-      alert("Nhập hoặc chọn nhân viên trước khi lưu bộ lọc.");
-
-      return;
-
-    }
-
-    const result = addQuickFavorite("staff", staffFilter);
-
-    if (!result.ok) {
-
-      if (result.reason === "duplicate") {
-
-        alert("Bộ lọc này đã nằm trong danh sách ưa thích.");
-
-      }
-
-      return;
-
-    }
-
-    alert("Đã lưu bộ lọc nhân viên.");
-
-  }, [addQuickFavorite, staffFilter]);
+  const {
+    applyStaffFavorite,
+    clearStaffFilter,
+    handleSaveStaffFavorite,
+    handleStaffFilterSelect,
+    staffFilter,
+  } = useMSTAssignmentStaffFilterWorkspace({
+    addQuickFavorite,
+    goToFirstPage: () => setPageRef.current(1),
+  });
   /** Filter + phân trang */
 
   const filtered = useMemo(() => {

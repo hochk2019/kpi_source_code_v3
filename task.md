@@ -2,11 +2,12 @@
 
 ## Active Slice
 
-- Title: Tach bootstrap workspace khoi MSTAssignment
-- Bead: cng-xkg
+- Title: Tach staff filter workspace khoi MSTAssignment
+- Bead: cng-7db
 - Status: completed
 - Last updated: 2026-03-26
 
+- `cng-7db` da hoan tat tach staff-filter workspace khoi `MSTAssignment` sang `src/components/mst-assignment/hooks/useMSTAssignmentStaffFilterWorkspace.js`; shell hien chi giu wiring `staffFilter` + panel props, con hook moi gom state filter nhan vien, page-reset flow, va quick-favorite alerts.
 - `cng-xkg` da hoan tat tach bootstrap workspace khoi `MSTAssignment` sang `src/components/mst-assignment/hooks/useMSTAssignmentBootstrapWorkspace.js`; shell hien chi giu wiring `rosterTeams`, con hook moi gom roster subscription, initial `getMSTMap` hydrate, va bridge setRows/setOriginalRows.
 - `cng-5dp` da hoan tat tach export workspace khoi `MSTAssignment` sang `src/components/mst-assignment/hooks/useMSTAssignmentExportWorkspace.js`; shell hien chi giu wiring `exportRowsToExcel(scope)`, con hook moi gom `filtered/all` scope selection, workbook build, timestamped filename, va empty-state alert.
 - `cng-5r6` da hoan tat tach timeline dialog workspace khoi `MSTAssignment` sang `src/components/mst-assignment/hooks/useMSTAssignmentTimelineWorkspace.js`; shell hien chi giu wiring cho `timelineDialogState`, `handleOpenTimelineGroup`, `handleOpenAllTimelines`, va `handleTimelineDialogOpenChange`.
@@ -29,6 +30,15 @@
 - `cng-4hs` da tach xong card danh sach + bo loc thanh `KpiAdjustmentListPanel`, bo sung regression test panel, va giam `src/components/KPIAdjustments.jsx` xuong 1343 dong.
 
 ## Completed This Session
+
+- `cng-7db` da hoan tat tach staff-filter workspace khoi `MSTAssignment`:
+  - them `src/components/mst-assignment/hooks/useMSTAssignmentStaffFilterWorkspace.js` de gom `staffFilter` state, `handleStaffFilterSelect`, `clearStaffFilter`, `applyStaffFavorite`, va `handleSaveStaffFavorite`
+  - `src/components/MSTAssignment.jsx` hien khong con giu inline staff-filter state/callback; shell chi con wiring voi `MstAssignmentStaffFilterPanel` va doc `staffFilter` cho pipeline filter hien co
+  - bo sung `tests/useMSTAssignmentStaffFilterWorkspace.test.jsx` de khoa 3 nhanh chinh: select/clear/favorite deu reset page, empty-save alert, va duplicate/success messaging khi luu favorite
+  - targeted verify da pass:
+    - `pnpm exec vitest run tests/useMSTAssignmentStaffFilterWorkspace.test.jsx tests/useMSTAssignmentBootstrapWorkspace.test.jsx tests/useMSTAssignmentExportWorkspace.test.jsx tests/useMSTAssignmentHistoryWorkspace.test.jsx tests/useMSTAssignmentTimelineWorkspace.test.jsx tests/mstAssignmentDataTablePanel.test.jsx --environment jsdom`
+    - `pnpm exec eslint src/components/MSTAssignment.jsx src/components/mst-assignment/hooks/useMSTAssignmentStaffFilterWorkspace.js src/components/mst-assignment/hooks/useMSTAssignmentBootstrapWorkspace.js src/components/mst-assignment/hooks/useMSTAssignmentExportWorkspace.js src/components/mst-assignment/hooks/useMSTAssignmentHistoryWorkspace.js src/components/mst-assignment/hooks/useMSTAssignmentTimelineWorkspace.js tests/useMSTAssignmentStaffFilterWorkspace.test.jsx tests/useMSTAssignmentBootstrapWorkspace.test.jsx tests/useMSTAssignmentExportWorkspace.test.jsx tests/useMSTAssignmentHistoryWorkspace.test.jsx tests/useMSTAssignmentTimelineWorkspace.test.jsx tests/mstAssignmentDataTablePanel.test.jsx`
+  - `eslint` chi con 2 warning Fast Refresh cu o `src/components/MSTAssignment.jsx`
 
 - `cng-xkg` da hoan tat tach bootstrap workspace khoi `MSTAssignment`:
   - them `src/components/mst-assignment/hooks/useMSTAssignmentBootstrapWorkspace.js` de gom `subscribeTeamRoster`, derive `rosterTeams`, initial `getMSTMap` hydrate, va error logging path
@@ -322,13 +332,13 @@
 
 ## Next Suggested Slice
 
-- Title: Tach staff filter workspace khoi MSTAssignment
+- Title: Tach search/view controls workspace khoi MSTAssignment
 - Bead: `TBD`
 - Status: san sang tao bead tiep theo
 - Follow-up backlog:
-  - tach `handleStaffFilterSelect`, `clearStaffFilter`, `applyStaffFavorite`, va `handleSaveStaffFavorite` thanh workspace rieng de shell chi giu wiring voi panel
-  - neu scope staff filter qua rong, uu tien tach rieng quick-favorite save flow va page-reset flow thanh 2 bead nho hon
-  - sau staff filter, co the can nhac tach tiep search/paging reset wiring hoac helper Fast Refresh con lai neu muon giam them kich thuoc `MSTAssignment.jsx`
+  - tach state/callback `search`, `applyFrom`, va `groupByMST` thanh workspace rieng de shell chi giu wiring cho search bar, date input, va toggle gom MST
+  - can nhac hop nhat `goToFirstPage` wiring dang lap lai giua history/staff/import/add workspace thanh mot callback on dinh neu muon giam churn props
+  - sau search/view workspace, co the tiep tuc tach pipeline filter/pagination derived data neu muon rut gon them `MSTAssignment.jsx`
   - hoac chon mot bead frontend khac trong backlog neu uu tien chuyen sang orchestration refinement component khac
 
 ## Verification
