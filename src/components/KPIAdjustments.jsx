@@ -33,6 +33,7 @@ import {
   buildLicenseFieldId,
   buildSettingsFieldId,
 } from "@/components/kpi-adjustments/model/fieldIds.js";
+import { parseReferences } from "@/components/kpi-adjustments/model/referenceParsing.js";
 import KpiAdjustmentDetailDialog from "@/components/kpi-adjustments/panels/KpiAdjustmentDetailDialog.jsx";
 import KpiAdjustmentFormPanel from "@/components/kpi-adjustments/panels/KpiAdjustmentFormPanel.jsx";
 import KpiAdjustmentGuidanceDialog from "@/components/kpi-adjustments/panels/KpiAdjustmentGuidanceDialog.jsx";
@@ -97,24 +98,6 @@ const FORM_FIELD_IDS = Object.freeze({
   decisionNote: "kpi-adjust-decision-note",
 
 });
-
-
-
-function parseReferences(text) {
-
-  if (!text) return [];
-
-  const raw = text
-
-    .split(/[\n,;]+/)
-
-    .map((item) => normalizeStr(item))
-
-    .filter(Boolean);
-
-  return Array.from(new Set(raw));
-
-}
 
 
 

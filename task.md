@@ -2,11 +2,12 @@
 
 ## Active Slice
 
-- Title: Tach KPIAdjustments field-id helpers
-- Bead: cng-pnz
+- Title: Tach KPIAdjustments reference parsing helper
+- Bead: cng-u7h
 - Status: completed
 - Last updated: 2026-03-27
 
+- `cng-u7h` da hoan tat tach `parseReferences` khoi `KPIAdjustments` sang `src/components/kpi-adjustments/model/referenceParsing.js`; shell hien import lai helper moi cho 2 hook form/workspace ma khong doi contract prop, con unit test moi khoa behavior tach reference, normalize, va dedupe.
 - `cng-pnz` da hoan tat tach `normalizeFieldSegment`, `buildSettingsFieldId`, va `buildLicenseFieldId` khoi `KPIAdjustments` sang `src/components/kpi-adjustments/model/fieldIds.js`; shell hien import lai helper moi cho settings dialog wiring, con unit test moi khoa contract sanitize segment va field-id generation.
 - `cng-lch` da hoan tat tach `formatDateOnly`, `formatInt`, va `formatDecimal` khoi `KPIAdjustments` sang `src/components/kpi-adjustments/model/formatting.js`; shell hien import lai helper moi cho form/list/overview dialogs, con unit test moi khoa date/int/decimal formatting contract.
 - `cng-y03` da hoan tat tach `AssigneeCell` khoi `MSTAssignment` sang `src/components/mst-assignment/table/AssigneeCell.jsx`; shell hien import lai component moi cho cot phu trach, con regression test person-columns da tro thang vao module moi de khoa display clamp, team hint, va che do edit.
@@ -47,6 +48,11 @@
 - `cng-4hs` da tach xong card danh sach + bo loc thanh `KpiAdjustmentListPanel`, bo sung regression test panel, va giam `src/components/KPIAdjustments.jsx` xuong 1343 dong.
 
 ## Completed This Session
+
+- `cng-u7h` da hoan tat tach KPI reference parsing helper:
+  - them `src/components/kpi-adjustments/model/referenceParsing.js` de gom `parseReferences`
+  - `src/components/KPIAdjustments.jsx` hien chi import helper moi thay vi giu parse logic inline trong shell
+  - bo sung `tests/kpiAdjustments.referenceParsing.test.js` de khoa behavior split/normalize/dedupe
 
 - `cng-pnz` da hoan tat tach KPI field-id helpers:
   - them `src/components/kpi-adjustments/model/fieldIds.js` de gom `normalizeFieldSegment`, `buildSettingsFieldId`, va `buildLicenseFieldId`
@@ -486,12 +492,12 @@
 
 ## Next Suggested Slice
 
-- Title: Tach KPIAdjustments reference parsing helper
+- Title: Tach KPIAdjustments staff option builder
 - Bead: `TBD`
 - Status: san sang tao bead tiep theo
 - Follow-up backlog:
-  - `parseReferences` la helper thuần du lieu duoc goi o nhieu luong submit/dialog trong `KPIAdjustments`, nen co the tach sang module model nho ma khong doi wiring UI
-  - sau `parseReferences` co the tiep tuc tach `buildStaffOptions` de chot them 1 quick win nua trong `KPIAdjustments.jsx`
+  - `buildStaffOptions` van la helper pure xu ly roster -> option list; tach sang `model` se giam them logic derived-data khoi shell ma khong doi render flow
+  - sau do co the danh gia lai do day `KPIAdjustments.jsx` de quyet dinh co con quick-win nao an toan nua hay khong
   - tiep tuc giu scope o muc presentation/component extraction, tranh lan sang bootstrap/import/export/timeline dialog orchestration dang on dinh
   - uu tien bead moi chi khi co mot cut ro rang, co regression test panel/interaction, va diff van giu nho nhu cac commit helper/UI control vua xong
 
