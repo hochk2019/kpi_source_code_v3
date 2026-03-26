@@ -14,7 +14,6 @@ import useTooltipTitles from "@/hooks/useTooltipTitles.js";
 import usePagination from "@/hooks/usePagination.js";
 
 import useMSTQuickFilters from "@/hooks/useMSTQuickFilters.js";
-import SharedStaffCombobox from "@/components/shared/StaffCombobox.jsx";
 import MstAssignmentAddFormPanel from "@/components/mst-assignment/forms/MstAssignmentAddFormPanel.jsx";
 import MstAssignmentHistoryFilterPanel from "@/components/mst-assignment/filters/MstAssignmentHistoryFilterPanel.jsx";
 import MstAssignmentStaffFilterPanel from "@/components/mst-assignment/filters/MstAssignmentStaffFilterPanel.jsx";
@@ -37,6 +36,7 @@ import useMSTAssignmentDerivedRowsWorkspace from "@/components/mst-assignment/ho
 import {
   COMPANY_NAME_WRAP_THRESHOLD,
 } from "@/components/mst-assignment/model/companyName.js";
+import MstAssignmentStaffCombobox from "@/components/mst-assignment/shared/MstAssignmentStaffCombobox.jsx";
 import {
   findCell,
   toISO,
@@ -64,6 +64,7 @@ import MstAssignmentDataTablePanel from "@/components/mst-assignment/table/MstAs
 import PageSizeControl from "@/components/mst-assignment/table/PageSizeControl.jsx";
 import PersonColumnHeader from "@/components/mst-assignment/table/PersonColumnHeader.jsx";
 export { default as CompanyNameCell } from "@/components/mst-assignment/table/CompanyNameCell.jsx";
+export { default as MstAssignmentStaffCombobox } from "@/components/mst-assignment/shared/MstAssignmentStaffCombobox.jsx";
 export { default as PageSizeControl } from "@/components/mst-assignment/table/PageSizeControl.jsx";
 export { default as PersonColumnHeader } from "@/components/mst-assignment/table/PersonColumnHeader.jsx";
 
@@ -89,14 +90,7 @@ import {
 
 
 
-const StaffCombobox = (props) => (
-  <SharedStaffCombobox
-    {...props}
-    allowCustom
-    preserveTeamOnCustom
-    preserveTeamOnClear
-  />
-);
+ 
 
 
 
@@ -140,7 +134,7 @@ export function AssigneeCell({
       </span>
     )
   ) : (
-    <StaffCombobox
+    <MstAssignmentStaffCombobox
       value={safeValue}
       teamValue={teamValue || ""}
       teams={teams}
@@ -575,7 +569,7 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
 
       {showAddForm ? (
         <MstAssignmentAddFormPanel
-          StaffComboboxComponent={StaffCombobox}
+        StaffComboboxComponent={MstAssignmentStaffCombobox}
           draft={draft}
           addError={addError}
           rosterTeams={rosterTeams}
