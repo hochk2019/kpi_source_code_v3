@@ -32,6 +32,7 @@ import useMSTAssignmentBootstrapWorkspace from "@/components/mst-assignment/hook
 import useMSTAssignmentExportWorkspace from "@/components/mst-assignment/hooks/useMSTAssignmentExportWorkspace.js";
 import useMSTAssignmentHistoryWorkspace from "@/components/mst-assignment/hooks/useMSTAssignmentHistoryWorkspace.js";
 import useMSTAssignmentImportSaveWorkspace from "@/components/mst-assignment/hooks/useMSTAssignmentImportSaveWorkspace.js";
+import useMSTAssignmentPageResetWorkspace from "@/components/mst-assignment/hooks/useMSTAssignmentPageResetWorkspace.js";
 import useMSTAssignmentRowCommitWorkspace from "@/components/mst-assignment/hooks/useMSTAssignmentRowCommitWorkspace.js";
 import useMSTAssignmentRowMutations from "@/components/mst-assignment/hooks/useMSTAssignmentRowMutations.js";
 import useMSTAssignmentStaffFilterWorkspace from "@/components/mst-assignment/hooks/useMSTAssignmentStaffFilterWorkspace.js";
@@ -776,8 +777,7 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
   } = useMSTAssignmentColumnLayout({ actor });
 
   const rootRef = useRef(null);
-
-  const setPageRef = useRef(() => {});
+  const { bindPageSetter, goToFirstPage } = useMSTAssignmentPageResetWorkspace();
   const {
     applyFrom,
     groupByMST,
@@ -787,7 +787,7 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
     handleSearchChange,
     search,
   } = useMSTAssignmentViewControlsWorkspace({
-    goToFirstPage: () => setPageRef.current(1),
+    goToFirstPage,
   });
 
   const [recentlyImportedKeys, setRecentlyImportedKeys] = useState(() => new Set());
@@ -821,7 +821,7 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
     updateHistoryFilter,
   } = useMSTAssignmentHistoryWorkspace({
     addQuickFavorite,
-    goToFirstPage: () => setPageRef.current(1),
+    goToFirstPage,
   });
 
   const createRowState = useCallback((row, meta = {}) => {
@@ -906,7 +906,7 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
     staffFilter,
   } = useMSTAssignmentStaffFilterWorkspace({
     addQuickFavorite,
-    goToFirstPage: () => setPageRef.current(1),
+    goToFirstPage,
   });
   /** Filter + phân trang */
   const { displayList, filtered, groupedStages } = useMSTAssignmentDerivedRowsWorkspace({
@@ -949,13 +949,9 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
   } = useMSTAssignmentTimelineWorkspace({
     groupedStages,
   });
-
-
   useEffect(() => {
-
-    setPageRef.current = setPage;
-
-  }, [setPage]);
+    bindPageSetter(setPage);
+  }, [bindPageSetter, setPage]);
 
 
   useEffect(() => {
@@ -992,7 +988,7 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
     setOriginalRows,
     setRecentlyImportedKeys,
     setRows,
-    goToFirstPage: () => setPageRef.current(1),
+    goToFirstPage,
   });
 
   const {
@@ -1028,7 +1024,7 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
     applyFrom,
     computeStoredStatus,
     createRowState,
-    goToFirstPage: () => setPageRef.current(1),
+    goToFirstPage,
     isReadOnly,
     makeRowKey,
     markRecentlyImported,

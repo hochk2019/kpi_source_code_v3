@@ -2,11 +2,12 @@
 
 ## Active Slice
 
-- Title: Tach company-name helpers khoi MSTAssignment
-- Bead: cng-tai
+- Title: Hop nhat go-to-first-page wiring khoi MSTAssignment
+- Bead: cng-jix
 - Status: completed
 - Last updated: 2026-03-26
 
+- `cng-jix` da hoan tat hop nhat `goToFirstPage` wiring khoi `MSTAssignment` sang `src/components/mst-assignment/hooks/useMSTAssignmentPageResetWorkspace.js`; shell hien dung mot callback reset-page on dinh de feed cho add-form/history/import/staff/view workspace thay vi lap lai 5 lambda `setPageRef.current(1)`.
 - `cng-tai` da hoan tat tach company-name helpers khoi `MSTAssignment` sang `src/components/mst-assignment/model/companyName.js`; entry file hien chi giu `CompanyNameCell` component va import helper moi, con regression test company-name da tro helper import sang module rieng.
 - `cng-eg4` da hoan tat tach derived-data workspace khoi `MSTAssignment` sang `src/components/mst-assignment/hooks/useMSTAssignmentDerivedRowsWorkspace.js`; shell hien chi giu wiring `filtered`, `groupedStages`, `displayList`, con hook moi gom pipeline loc/uu tien row moi import va bridge sang grouped/aggregated selectors.
 - `cng-6d3` da hoan tat tach search/view controls workspace khoi `MSTAssignment` sang `src/components/mst-assignment/hooks/useMSTAssignmentViewControlsWorkspace.js`; shell hien chi giu wiring cho `search`, `applyFrom`, `groupByMST`, va header actions, con hook moi gom state dieu khien header + search reset page flow.
@@ -33,6 +34,15 @@
 - `cng-4hs` da tach xong card danh sach + bo loc thanh `KpiAdjustmentListPanel`, bo sung regression test panel, va giam `src/components/KPIAdjustments.jsx` xuong 1343 dong.
 
 ## Completed This Session
+
+- `cng-jix` da hoan tat hop nhat `goToFirstPage` wiring khoi `MSTAssignment`:
+  - them `src/components/mst-assignment/hooks/useMSTAssignmentPageResetWorkspace.js` de gom `bindPageSetter` va `goToFirstPage`
+  - `src/components/MSTAssignment.jsx` hien bind `setPage` vao workspace moi sau `usePagination`, roi truyen chung mot `goToFirstPage` cho add-form/history/import-save/staff-filter/view-controls workspace
+  - bo sung `tests/useMSTAssignmentPageResetWorkspace.test.jsx` de khoa 2 nhanh chinh: dispatch den current page setter va no-op an toan truoc khi bind
+  - targeted verify da pass:
+    - `pnpm exec vitest run tests/useMSTAssignmentPageResetWorkspace.test.jsx tests/useMSTAssignmentAddFormWorkspace.test.jsx tests/useMSTAssignmentHistoryWorkspace.test.jsx tests/useMSTAssignmentImportSaveWorkspace.test.jsx tests/useMSTAssignmentStaffFilterWorkspace.test.jsx tests/useMSTAssignmentViewControlsWorkspace.test.jsx --environment jsdom`
+    - `pnpm exec eslint src/components/MSTAssignment.jsx src/components/mst-assignment/hooks/useMSTAssignmentPageResetWorkspace.js tests/useMSTAssignmentPageResetWorkspace.test.jsx tests/useMSTAssignmentAddFormWorkspace.test.jsx tests/useMSTAssignmentHistoryWorkspace.test.jsx tests/useMSTAssignmentImportSaveWorkspace.test.jsx tests/useMSTAssignmentStaffFilterWorkspace.test.jsx tests/useMSTAssignmentViewControlsWorkspace.test.jsx`
+  - slice nay chi giam lap wiring pagination callback, khong doi contract cac workspace con lai
 
 - `cng-tai` da hoan tat tach company-name helpers khoi `MSTAssignment`:
   - them `src/components/mst-assignment/model/companyName.js` de gom `COMPANY_NAME_WRAP_THRESHOLD`, `shouldWrapCompanyName`, va `sanitizeCompanyNameInput`
@@ -363,11 +373,12 @@
 ## Next Suggested Slice
 
 - Title: Hop nhat go-to-first-page wiring khoi MSTAssignment
+- Title: Tach status/date helper model khoi MSTAssignment neu muon rut gon shell them
 - Bead: `TBD`
 - Status: san sang tao bead tiep theo
 - Follow-up backlog:
-  - hop nhat callback `goToFirstPage` dang lap lai giua history/staff/import/add/view workspace thanh mot helper on dinh de giam churn props va event wiring
-  - sau khi helper company-name da tach xong, co the can nhac bead rieng cho timeline map hoac status/date helper cleanup neu muc tieu la tiep tuc rut gon shell
+  - co the tach `formatISODate`, `normalizeStatusLabel`, `computeStoredStatus`, `computeStatusDisplay` ra model rieng neu muon tiep tuc don shell `MSTAssignment`
+  - can giu slice nho de tranh lan sang logic export/timeline/table dang on dinh
   - uu tien giu slice nho de tranh lan sang logic export/timeline/table da on dinh
   - hoac chon mot bead frontend khac trong backlog neu uu tien chuyen sang orchestration refinement component khac
 
