@@ -2,17 +2,39 @@
 
 ## Active Slice
 
-- Title: Tach dialog panels khoi KPIAdjustments
-- Bead: cng-e4b
-- Status: done
+- Title: Tach shell con lai KPIAdjustments
+- Bead: cng-ejo
+- Status: open
 - Last updated: 2026-03-26
 
+- `cng-4zp` da hoan tat panel `KpiAdjustmentFormPanel`, bo sung test regression rieng va dong bead de chuyen sang slice orchestration.
+- `cng-cpg` da dong bead sau khi tach xong form workspace hook cho declaration/reference lookup va derived metrics.
+- `cng-ejo` la bead ke tiep de tach them overview/detail shell va dua `src/components/KPIAdjustments.jsx` xuong duoi 1000 dong neu co the.
 - `cng-xyq.9` da duoc verify lai bang targeted lint + vitest va dong bead de dong bo tracker.
 - `cng-e4b` da tach xong 3 dialog (`detail`, `guidance`, `settings`) khoi `src/components/KPIAdjustments.jsx`, bo sung regression test rieng cho panel moi, va dong bead sau khi verify xanh.
+- `cng-4hs` da tach xong card danh sach + bo loc thanh `KpiAdjustmentListPanel`, bo sung regression test panel, va giam `src/components/KPIAdjustments.jsx` xuong 1343 dong.
+- `cng-ejo` la slice tiep theo de tach tiep shell con lai cua `KPIAdjustments` sau khi form workspace da duoc rut thanh hook rieng.
 
 ## Completed This Session
 
-1. `cng-e4b` da hoan tat dialog decomposition cho `KPIAdjustments`:
+- `cng-cpg` da hoan tat form workspace extraction cho `KPIAdjustments`:
+  - them `src/components/kpi-adjustments/hooks/useKpiAdjustmentFormWorkspace.js` de gom declaration search/reference workspace, business lookup MST/cong ty, team-filtered staff options, guidance groups, va derived total/license state khoi file chinh
+  - bo sung `tests/useKpiAdjustmentFormWorkspace.test.jsx` de khoa lookup append-reference va computed totals/team filtering
+  - `src/components/KPIAdjustments.jsx` giam xuong 1021 dong sau khi rut block orchestration lon nhat cua form
+  - targeted verify da pass:
+    - `pnpm exec eslint src/components/KPIAdjustments.jsx src/components/kpi-adjustments/hooks/useKpiAdjustmentFormWorkspace.js tests/useKpiAdjustmentFormWorkspace.test.jsx tests/kpiAdjustmentFormPanel.test.jsx tests/kpiAdjustments.test.jsx`
+    - `pnpm exec vitest run tests/useKpiAdjustmentFormWorkspace.test.jsx tests/kpiAdjustmentFormPanel.test.jsx tests/kpiAdjustments.test.jsx --environment jsdom`
+  - `detect_changes(scope: "all")` van bao `risk_level: high` vi tiep tuc cham entry-point `KPIAdjustments`, nhung affected process van chi xoay quanh flow cua chinh component nay
+
+1. `cng-4zp` da hoan tat form/declaration panel decomposition cho `KPIAdjustments`:
+   - them `src/components/kpi-adjustments/panels/KpiAdjustmentFormPanel.jsx` de rut card "Them diem KPI +/-", declaration workspace UI, va khu vuc tong hop diem khoi file chinh
+   - bo sung `tests/kpiAdjustmentFormPanel.test.jsx` de khoa header actions, declaration workspace callback, edit summary, va history/reset flow
+   - targeted verify da pass:
+     - `pnpm exec eslint src/components/KPIAdjustments.jsx src/components/kpi-adjustments/panels/KpiAdjustmentFormPanel.jsx tests/kpiAdjustmentFormPanel.test.jsx tests/kpiAdjustments.test.jsx`
+     - `pnpm exec vitest run tests/kpiAdjustmentFormPanel.test.jsx tests/kpiAdjustments.test.jsx --environment jsdom`
+   - `detect_changes(scope: "all")` bao `risk_level: high` vi van cham entry-point `KPIAdjustments`, nhung pham vi thay doi khop muc tieu panel extraction cua slice nay
+
+2. `cng-e4b` da hoan tat dialog decomposition cho `KPIAdjustments`:
    - them `src/components/kpi-adjustments/panels/KpiAdjustmentDetailDialog.jsx`, `KpiAdjustmentGuidanceDialog.jsx`, va `KpiAdjustmentSettingsDialog.jsx`
    - `src/components/KPIAdjustments.jsx` giam con 1536 dong sau khi rut 3 dialog lon ra panel rieng
    - bo sung `tests/kpiAdjustmentDialogs.test.jsx` de khoa detail reject actions, guidance accordion/actions, va settings submit/reset flow
@@ -21,7 +43,15 @@
      - `pnpm exec vitest run tests/kpiAdjustmentDialogs.test.jsx tests/kpiAdjustments.test.jsx tests/kpiAdjustments.hooks.test.jsx tests/kpiAdjustments.model.test.js --environment jsdom`
    - `detect_changes(scope: "all")` bao `risk_level: high` vi cham entry-point `KPIAdjustments`, nhung changed scope van dung ky vong cho slice nay (`KPIAdjustments.jsx` + `task.md`)
 
-2. `cng-oo6` da duoc implementation o muc snapshot/insight orchestration extraction cho `AiAssistant`:
+3. `cng-4hs` da hoan tat list/filter decomposition cho `KPIAdjustments`:
+   - them `src/components/kpi-adjustments/panels/KpiAdjustmentListPanel.jsx` de rut card "Danh sách điểm KPI +/-", bo loc, bang danh sach, va action buttons khoi file chinh
+   - bo sung `tests/kpiAdjustmentListPanel.test.jsx` de khoa filter interactions va row action callbacks
+   - targeted verify da pass:
+     - `pnpm exec eslint src/components/KPIAdjustments.jsx src/components/kpi-adjustments/panels/KpiAdjustmentListPanel.jsx tests/kpiAdjustmentListPanel.test.jsx tests/kpiAdjustments.test.jsx`
+     - `pnpm exec vitest run tests/kpiAdjustmentListPanel.test.jsx tests/kpiAdjustments.test.jsx --environment jsdom`
+   - `detect_changes(scope: "all")` van bao `risk_level: high` vi chinh entry-point `KPIAdjustments`, nhung pham vi van khop muc tieu refactor UI shell
+
+4. `cng-oo6` da duoc implementation o muc snapshot/insight orchestration extraction cho `AiAssistant`:
    - them `src/components/ai-assistant/hooks/useAiAssistantInsightWorkspace.js` de gom snapshot fetch/cache, KPI summary generation, insight refresh/run/feedback, notify toggle, va snapshot history/detail loading khoi `src/components/AiAssistant.jsx`
    - `src/components/AiAssistant.jsx` giam tu 832 dong xuong 310 dong, hien chu yeu con constants + composition/wiring voi `useAiAssistantConfig`, `useAiConversation`, va hook moi
    - bo sung `tests/useAiAssistantInsightWorkspace.test.jsx` de khoa 3 flow chinh: hydrate insights/settings/history, summary tu cached snapshot, va feedback/notify/history-entry orchestration
@@ -30,7 +60,7 @@
      - `pnpm exec vitest run tests/useAiAssistantInsightWorkspace.test.jsx tests/aiAssistant.config.test.jsx tests/aiAssistant.panels.test.jsx tests/useAiAssistantConfig.test.jsx --environment jsdom`
    - `detect_changes(scope: "all")` hien tra ve `risk_level: medium` vi cham entry-point `AiAssistant`, nhung scope dung ky vong cua slice nay
 
-3. `cng-0pm` da duoc implementation o muc hoan tat shell decomposition cho `RulesEditor`:
+5. `cng-0pm` da duoc implementation o muc hoan tat shell decomposition cho `RulesEditor`:
    - them `src/components/rules-editor/RulesGeneralInfoPanel.jsx` de tach khoi chon bo quy tac, metadata version, va form `name/description` khoi file goc
    - them `src/components/rules-editor/RulesApplyActionsPanel.jsx` de tach khu vuc `applyFrom/applyNow`, save/reset, import/export, va delete action khoi `RulesEditor`
    - import JSON hien dung `ref` ngay trong panel moi, khong con DOM lookup `document.getElementById(...)`
@@ -39,7 +69,7 @@
      - `pnpm exec eslint src/components/RulesEditor.jsx src/components/rules-editor/RulesGeneralInfoPanel.jsx src/components/rules-editor/RulesApplyActionsPanel.jsx tests/rulesGeneralInfoPanel.test.jsx tests/rulesApplyActionsPanel.test.jsx tests/rulesEditor.test.jsx`
      - `pnpm exec vitest run tests/rulesGeneralInfoPanel.test.jsx tests/rulesApplyActionsPanel.test.jsx tests/rulesEditor.test.jsx tests/rulesEditor.controls.test.jsx tests/useRulesEditorWorkflow.test.jsx tests/rulesEditorHistoryPanel.test.jsx tests/rulesEditorSimulationPanel.test.jsx tests/useRulesTestWorkspace.test.jsx tests/rulesTestWorkspacePanel.test.jsx --environment jsdom`
 
-4. `cng-42t` da duoc implementation o muc test-workspace extraction cho `RulesEditor`:
+5. `cng-42t` da duoc implementation o muc test-workspace extraction cho `RulesEditor`:
    - them `src/components/rules-editor/hooks/useRulesTestWorkspace.js` de tach declaration search/pick state, manual KPI scenario state, va derived KPI preview khoi file goc
    - them `src/components/rules-editor/RulesTestWorkspacePanel.jsx` de render hai khu vuc "Test nhanh 1 tờ khai đã import" va "Test nhập tay" thanh panel rieng
    - `src/components/RulesEditor.jsx` hien chi wiring `useRulesTestWorkspace` + `RulesTestWorkspacePanel`, giam them local state va JSX trung lap trong file goc
@@ -48,7 +78,7 @@
      - `pnpm exec eslint src/components/RulesEditor.jsx src/components/rules-editor/RulesTestWorkspacePanel.jsx src/components/rules-editor/hooks/useRulesTestWorkspace.js tests/useRulesTestWorkspace.test.jsx tests/rulesTestWorkspacePanel.test.jsx tests/rulesEditor.test.jsx`
      - `pnpm exec vitest run tests/useRulesTestWorkspace.test.jsx tests/rulesTestWorkspacePanel.test.jsx tests/rulesEditor.test.jsx tests/useRulesEditorWorkflow.test.jsx tests/rulesEditorHistoryPanel.test.jsx tests/rulesEditorSimulationPanel.test.jsx --environment jsdom`
 
-5. `cng-lte` da duoc implementation o muc workflow/orchestration extraction cho `RulesEditor`:
+6. `cng-lte` da duoc implementation o muc workflow/orchestration extraction cho `RulesEditor`:
    - them `src/components/rules-editor/hooks/useRulesEditorWorkflow.js` de tach save/reset/default/delete/import-export, history refresh/restore, va simulation khoi `src/components/RulesEditor.jsx`
    - `src/components/RulesEditor.jsx` hien giu vai tro compose UI + wiring voi `useRulesConfigState` va `useRulesEditorWorkflow`, khong con giu block handler workflow trung lap
    - them `tests/useRulesEditorWorkflow.test.jsx` de khoa truc tiep 2 flow quan trong: simulation summary va history refresh/restore
@@ -142,12 +172,12 @@
 
 ## Next Suggested Slice
 
-- Title: Tach list va bo loc khoi KPIAdjustments
-- Bead: `cng-4hs`
+- Title: Tach shell con lai KPIAdjustments
+- Bead: `cng-ejo`
 - Status: de xuat
 - Follow-up backlog:
-  - tach khu vuc danh sach diem KPI +/- thanh panel rieng, giu contract props/handlers hien tai
-  - rut bo loc, thanh thao tac, va action-level wiring lien quan khoi `src/components/KPIAdjustments.jsx`
+  - tach overview stats card thanh panel rieng neu muon giam them entry-point
+  - can nhac rut detail approval shell / dialog launcher wiring neu muon dua file entry-point ve duoi 1000 dong
 
 ## Verification
 
