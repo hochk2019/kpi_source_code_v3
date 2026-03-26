@@ -61,6 +61,7 @@ import {
   formatISODate,
   normalizeStatusLabel,
 } from "@/components/mst-assignment/model/statusDate.js";
+import { buildStatusViewModel } from "@/components/mst-assignment/model/statusViewModel.js";
 import HistoryDetails from "@/components/mst-assignment/timeline/HistoryDetails.jsx";
 import MstAssignmentTimelinePanel from "@/components/mst-assignment/timeline/MstAssignmentTimelinePanel.jsx";
 import MstAssignmentDataTablePanel from "@/components/mst-assignment/table/MstAssignmentDataTablePanel.jsx";
@@ -521,21 +522,6 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
 
     };
 
-  }, []);
-  const buildStatusViewModel = useCallback((row) => {
-    const statusValue = normalizeStatusLabel(row?.status);
-    const statusDisplay = computeStatusDisplay(row);
-    const normalizedStatusDisplay = statusDisplay || "";
-
-    return {
-      statusValue,
-      statusDisplay,
-      isStatusAssigned: normalizedStatusDisplay === MST_ASSIGNMENT_STATUS.ASSIGNED,
-      isStatusPending:
-        normalizedStatusDisplay === MST_ASSIGNMENT_STATUS.PENDING ||
-        normalizedStatusDisplay === normalizeStatusLabel(MST_ASSIGNMENT_STATUS.PENDING),
-      isStatusWarning: normalizedStatusDisplay.startsWith("Thiếu"),
-    };
   }, []);
   const { rosterTeams } = useMSTAssignmentBootstrapWorkspace({
     createRowState,

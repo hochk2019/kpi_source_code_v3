@@ -2,11 +2,12 @@
 
 ## Active Slice
 
-- Title: Tach MSTAssignment history formatting helpers
-- Bead: cng-hfy
+- Title: Tach MSTAssignment status view-model helper
+- Bead: cng-svm
 - Status: completed
 - Last updated: 2026-03-26
 
+- `cng-svm` da hoan tat tach `buildStatusViewModel` khoi `MSTAssignment` sang `src/components/mst-assignment/model/statusViewModel.js`; shell hien import lai helper moi cho luong table/history status chip va giu nguyen contract cua cac panel/workspace da tach truoc do.
 - `cng-hfy` da hoan tat tach `formatHistoryTime` va `HISTORY_FIELD_LABELS` khoi `MSTAssignment` sang `src/components/mst-assignment/model/historyFormatting.js`; shell hien import lai helper moi cho luong history/timeline formatting va giu nguyen contract cua cac workspace da tach truoc do.
 - `cng-kun` da hoan tat tach `tidyMST` va `makeRowKey` khoi `MSTAssignment` sang `src/components/mst-assignment/model/rowIdentity.js`; shell hien import lai helper moi cho luong row identity va giu nguyen contract cua cac workspace da tach truoc do.
 - `cng-w2c` da hoan tat tach `findCell`, `toISO`, va `headerAliases` khoi `MSTAssignment` sang `src/components/mst-assignment/model/importSheet.js`; shell hien import lai helper moi cho luong import Excel, con regression test parsing da duoc tach rieng.
@@ -38,6 +39,15 @@
 - `cng-4hs` da tach xong card danh sach + bo loc thanh `KpiAdjustmentListPanel`, bo sung regression test panel, va giam `src/components/KPIAdjustments.jsx` xuong 1343 dong.
 
 ## Completed This Session
+
+- `cng-svm` da hoan tat tach status view-model helper khoi `MSTAssignment`:
+  - them `src/components/mst-assignment/model/statusViewModel.js` de gom `buildStatusViewModel`
+  - `src/components/MSTAssignment.jsx` hien chi import helper moi thay vi giu block status-chip view model trong entry file
+  - bo sung `tests/mstAssignment.status-view-model.test.js` de khoa 3 nhanh chinh: assigned, pending, va warning branches
+  - targeted verify da pass:
+    - `pnpm exec vitest run tests/mstAssignment.status-view-model.test.js tests/mstAssignmentDataTablePanel.test.jsx tests/useMSTAssignmentHistoryWorkspace.test.jsx tests/useMSTAssignmentTimelineWorkspace.test.jsx tests/useMSTAssignmentRowMutations.test.jsx --environment jsdom`
+    - `pnpm exec eslint src/components/MSTAssignment.jsx src/components/mst-assignment/model/statusViewModel.js tests/mstAssignment.status-view-model.test.js tests/mstAssignmentDataTablePanel.test.jsx tests/useMSTAssignmentHistoryWorkspace.test.jsx tests/useMSTAssignmentTimelineWorkspace.test.jsx tests/useMSTAssignmentRowMutations.test.jsx`
+  - slice nay chi rut helper pure cho status-chip/status-badge projection, khong doi contract cua data-table/history/timeline/row-mutations consumer
 
 - `cng-hfy` da hoan tat tach history formatting helpers khoi `MSTAssignment`:
   - them `src/components/mst-assignment/model/historyFormatting.js` de gom `formatHistoryTime` va `HISTORY_FIELD_LABELS`
@@ -412,13 +422,13 @@
 
 ## Next Suggested Slice
 
-- Title: Tach MSTAssignment status view-model helper
+- Title: Danh gia tiep helper/presentation slices con lai cua MSTAssignment
 - Bead: `TBD`
 - Status: san sang tao bead tiep theo
 - Follow-up backlog:
-  - co the tach `buildStatusViewModel` sang helper/model rieng neu muon tiep tuc rut gon shell `MSTAssignment` ma van giu nguyen logic hien thi timeline/history
-  - can giu slice nho de tranh lan sang export, timeline dialog orchestration, table panel, va import parsing dang on dinh
-  - uu tien chi doi helper pure va bo sung regression test cho status chip/view-model branches, khong doi contract cac workspace da tach
+  - cac helper pure de tach an toan nhat da duoc rut ra; buoc tiep theo can review xem co nen tach them presentation helpers nho hay chuyen sang component khac trong backlog
+  - neu tiep tuc voi `MSTAssignment`, nen giu scope o muc presentation/helper va tranh lan sang bootstrap/import/export/timeline dialog orchestration dang on dinh
+  - uu tien bead moi chi khi co mot cut ro rang, co test diem roi, va diff van giu nho nhu 3 commit helper vua xong
   - hoac chon mot bead frontend khac trong backlog neu uu tien chuyen sang orchestration refinement component khac
 
 ## Verification
