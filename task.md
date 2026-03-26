@@ -2,20 +2,56 @@
 
 ## Active Slice
 
-- Title: Tach shell con lai KPIAdjustments
-- Bead: cng-ejo
-- Status: open
+- Title: Tach form them MST khoi MSTAssignment
+- Bead: cng-sz6
+- Status: in_progress
 - Last updated: 2026-03-26
 
-- `cng-4zp` da hoan tat panel `KpiAdjustmentFormPanel`, bo sung test regression rieng va dong bead de chuyen sang slice orchestration.
-- `cng-cpg` da dong bead sau khi tach xong form workspace hook cho declaration/reference lookup va derived metrics.
-- `cng-ejo` la bead ke tiep de tach them overview/detail shell va dua `src/components/KPIAdjustments.jsx` xuong duoi 1000 dong neu co the.
+- `cng-sz6` la bead hien tai de tach form them MST khoi `src/components/MSTAssignment.jsx`.
+- `cng-u40` da dong bead sau khi tach xong `MstAssignmentHistoryFilterPanel`; block bo loc lich su thay doi da duoc rut thanh panel rieng va verify bang regression test moi.
+- `cng-c6v` da dong bead sau khi tach xong `MstAssignmentStaffFilterPanel`; `src/components/MSTAssignment.jsx` da rut duoc block bo loc nhan vien phu trach + quick favorites thanh panel rieng va khoa bang regression test moi.
+- `cng-ejo` da dong bead sau khi tach xong `KpiAdjustmentOverviewPanel`; `src/components/KPIAdjustments.jsx` hien con 564 dong.
+- `cng-b9t` da dong bead sau khi tach xong `MstAssignmentTimelinePanel`; `src/components/MSTAssignment.jsx` tiep tuc giam shell orchestration quanh timeline.
 - `cng-xyq.9` da duoc verify lai bang targeted lint + vitest va dong bead de dong bo tracker.
 - `cng-e4b` da tach xong 3 dialog (`detail`, `guidance`, `settings`) khoi `src/components/KPIAdjustments.jsx`, bo sung regression test rieng cho panel moi, va dong bead sau khi verify xanh.
 - `cng-4hs` da tach xong card danh sach + bo loc thanh `KpiAdjustmentListPanel`, bo sung regression test panel, va giam `src/components/KPIAdjustments.jsx` xuong 1343 dong.
-- `cng-ejo` la slice tiep theo de tach tiep shell con lai cua `KPIAdjustments` sau khi form workspace da duoc rut thanh hook rieng.
 
 ## Completed This Session
+
+- `cng-u40` da hoan tat tach bo loc lich su thay doi khoi `MSTAssignment`:
+  - them `src/components/mst-assignment/filters/MstAssignmentHistoryFilterPanel.jsx` de rut section history filter thanh panel presentational rieng
+  - bo sung `tests/mstAssignmentHistoryFilterPanel.test.jsx` de khoa history summary, update filter callbacks, toolbar actions, va quick favorite action filter
+  - `src/components/MSTAssignment.jsx` hien dung panel moi thay vi giu inline block UI cho history filter
+  - targeted verify da pass:
+    - `pnpm exec eslint src/components/MSTAssignment.jsx src/components/mst-assignment/filters/MstAssignmentHistoryFilterPanel.jsx tests/mstAssignmentHistoryFilterPanel.test.jsx tests/mstAssignment.timeline.test.jsx`
+    - `pnpm exec vitest run tests/mstAssignmentHistoryFilterPanel.test.jsx tests/mstAssignment.timeline.test.jsx --environment jsdom`
+  - `detect_changes(scope: "all")` van bao `risk_level: critical` vi worktree dang gom ca refactor chua commit cua `KPIAdjustments` va nhieu slice `MSTAssignment`
+
+- `cng-c6v` da hoan tat tach bo loc nhan vien khoi `MSTAssignment`:
+  - them `src/components/mst-assignment/filters/MstAssignmentStaffFilterPanel.jsx` de rut section bo loc nhan vien phu trach + quick favorites khoi entry-point
+  - bo sung `tests/mstAssignmentStaffFilterPanel.test.jsx` de khoa nut save filter, quick favorite apply/remove, va wiring callback
+  - `src/components/MSTAssignment.jsx` hien dung panel moi thay vi giu inline block UI cho staff filter
+  - targeted verify da pass:
+    - `pnpm exec eslint src/components/MSTAssignment.jsx src/components/mst-assignment/filters/MstAssignmentStaffFilterPanel.jsx tests/mstAssignmentStaffFilterPanel.test.jsx tests/mstAssignment.timeline.test.jsx`
+    - `pnpm exec vitest run tests/mstAssignmentStaffFilterPanel.test.jsx tests/mstAssignment.timeline.test.jsx --environment jsdom`
+  - `detect_changes(scope: "all")` van bao `risk_level: critical` vi worktree dang gom ca refactor chua commit cua `KPIAdjustments` va `MSTAssignment`
+
+- `cng-b9t` da hoan tat timeline shell extraction cho `MSTAssignment`:
+  - them `src/components/mst-assignment/timeline/MstAssignmentTimelinePanel.jsx` de tach khung tong hop timeline va dialog shell khoi entry-point
+  - bo sung `tests/mstAssignmentTimelinePanel.test.jsx` de khoa trang thai nut tong hop, dialog render, va grouping display co ban
+  - `src/components/MSTAssignment.jsx` giam con 2537 dong sau khi rut summary/dialog shell cua timeline
+  - targeted verify da pass:
+    - `pnpm exec eslint src/components/MSTAssignment.jsx src/components/mst-assignment/timeline/MstAssignmentTimelinePanel.jsx tests/mstAssignmentTimelinePanel.test.jsx tests/mstAssignment.timeline.test.jsx`
+    - `pnpm exec vitest run tests/mstAssignmentTimelinePanel.test.jsx tests/mstAssignment.timeline.test.jsx --environment jsdom`
+
+- `cng-ejo` da hoan tat shell decomposition cuoi cho `KPIAdjustments`:
+  - them `src/components/kpi-adjustments/panels/KpiAdjustmentOverviewPanel.jsx` de tach card tong quan KPI +/- khoi file goc
+  - bo sung `tests/kpiAdjustmentOverviewPanel.test.jsx` de khoa 4 metric tong hop va formatter wiring
+  - `src/components/KPIAdjustments.jsx` giam con 564 dong sau khi rut xong overview panel
+  - targeted verify da pass:
+    - `pnpm exec eslint src/components/KPIAdjustments.jsx src/components/kpi-adjustments/panels/KpiAdjustmentOverviewPanel.jsx tests/kpiAdjustmentOverviewPanel.test.jsx tests/kpiAdjustments.test.jsx`
+    - `pnpm exec vitest run tests/kpiAdjustmentOverviewPanel.test.jsx tests/kpiAdjustments.test.jsx --environment jsdom`
+  - `detect_changes(scope: "all")` giam xuong `risk_level: medium`, pham vi van tap trung quanh `KPIAdjustments`
 
 - `cng-cpg` da hoan tat form workspace extraction cho `KPIAdjustments`:
   - them `src/components/kpi-adjustments/hooks/useKpiAdjustmentFormWorkspace.js` de gom declaration search/reference workspace, business lookup MST/cong ty, team-filtered staff options, guidance groups, va derived total/license state khoi file chinh
@@ -172,12 +208,15 @@
 
 ## Next Suggested Slice
 
-- Title: Tach shell con lai KPIAdjustments
-- Bead: `cng-ejo`
+- Title: Tach form them MST khoi MSTAssignment
+- Bead: `cng-sz6`
 - Status: de xuat
 - Follow-up backlog:
-  - tach overview stats card thanh panel rieng neu muon giam them entry-point
-  - can nhac rut detail approval shell / dialog launcher wiring neu muon dua file entry-point ve duoi 1000 dong
+  - tach form them MST thanh panel rieng, giu nguyen wiring `draft`, submit flow, va validation hien tai
+  - giu nguyen hanh vi `StaffCombobox` cho nguoi phu trach nhap/xuat, accessibility labels, va team roster binding
+  - targeted verify du kien:
+    - `pnpm exec vitest run tests/mstAssignment.person-columns.test.jsx tests/mstAssignment.timeline.test.jsx --environment jsdom`
+    - `pnpm exec eslint src/components/MSTAssignment.jsx src/components/mst-assignment/**/*.jsx tests/mstAssignment.person-columns.test.jsx tests/mstAssignment.timeline.test.jsx`
 
 ## Verification
 

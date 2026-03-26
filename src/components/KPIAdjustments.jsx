@@ -21,24 +21,6 @@ import {
 
 import { subscribe as subscribeStorage } from "@/lib/storageClient.js";
 
-import { Button } from "@/components/ui/button.jsx";
-
-import { Badge } from "@/components/ui/badge.jsx";
-
-import {
-
-  Card,
-
-  CardHeader,
-
-  CardTitle,
-
-  CardDescription,
-
-  CardContent,
-
-} from "@/components/ui/card.jsx";
-
 import { useKpiAdjustmentForm } from "@/components/kpi-adjustments/hooks/useKpiAdjustmentForm.js";
 import { useKpiAdjustmentFilters } from "@/components/kpi-adjustments/hooks/useKpiAdjustmentFilters.js";
 import { useKpiAdjustmentFormWorkspace } from "@/components/kpi-adjustments/hooks/useKpiAdjustmentFormWorkspace.js";
@@ -46,6 +28,7 @@ import KpiAdjustmentDetailDialog from "@/components/kpi-adjustments/panels/KpiAd
 import KpiAdjustmentFormPanel from "@/components/kpi-adjustments/panels/KpiAdjustmentFormPanel.jsx";
 import KpiAdjustmentGuidanceDialog from "@/components/kpi-adjustments/panels/KpiAdjustmentGuidanceDialog.jsx";
 import KpiAdjustmentListPanel from "@/components/kpi-adjustments/panels/KpiAdjustmentListPanel.jsx";
+import KpiAdjustmentOverviewPanel from "@/components/kpi-adjustments/panels/KpiAdjustmentOverviewPanel.jsx";
 import KpiAdjustmentSettingsDialog from "@/components/kpi-adjustments/panels/KpiAdjustmentSettingsDialog.jsx";
 
 
@@ -827,55 +810,7 @@ export default function KPIAdjustments({ currentUser }) {
 
     <div className="space-y-6">
 
-      <Card>
-
-        <CardHeader>
-
-          <CardTitle className="text-lg font-semibold text-foreground">
-
-            Tổng quan điểm KPI +/-
-
-          </CardTitle>
-
-        </CardHeader>
-
-        <CardContent className="grid gap-4 pt-0 sm:grid-cols-2 lg:grid-cols-4">
-
-          <div className="rounded-lg border border-border bg-muted/50 p-4 text-sm shadow-sm">
-
-            <div className="text-xs font-medium uppercase text-muted-foreground">Tổng số mục</div>
-
-            <div className="mt-1 text-2xl font-semibold text-foreground">{formatInt(stats.total)}</div>
-
-          </div>
-
-          <div className="rounded-lg border border-border bg-muted/50 p-4 text-sm shadow-sm">
-
-            <div className="text-xs font-medium uppercase text-muted-foreground">Đã duyệt</div>
-
-            <div className="mt-1 text-2xl font-semibold text-emerald-600">{formatInt(stats.approved)}</div>
-
-          </div>
-
-          <div className="rounded-lg border border-border bg-muted/50 p-4 text-sm shadow-sm">
-
-            <div className="text-xs font-medium uppercase text-muted-foreground">Chờ duyệt</div>
-
-            <div className="mt-1 text-2xl font-semibold text-amber-600">{formatInt(stats.pending)}</div>
-
-          </div>
-
-          <div className="rounded-lg border border-border bg-muted/50 p-4 text-sm shadow-sm">
-
-            <div className="text-xs font-medium uppercase text-muted-foreground">Điểm đã cộng/trừ</div>
-
-            <div className="mt-1 text-2xl font-semibold text-blue-600">{formatDecimal(stats.totalPoints)}</div>
-
-          </div>
-
-        </CardContent>
-
-      </Card>
+      <KpiAdjustmentOverviewPanel stats={stats} formatInt={formatInt} formatDecimal={formatDecimal} />
 
 
 

@@ -34,6 +34,8 @@ import useMSTQuickFilters from "@/hooks/useMSTQuickFilters.js";
 import SharedStaffCombobox, {
   buildStaffComboboxTeams,
 } from "@/components/shared/StaffCombobox.jsx";
+import MstAssignmentHistoryFilterPanel from "@/components/mst-assignment/filters/MstAssignmentHistoryFilterPanel.jsx";
+import MstAssignmentStaffFilterPanel from "@/components/mst-assignment/filters/MstAssignmentStaffFilterPanel.jsx";
 import {
   COLUMN_OPTIONS,
   getColumnLabel,
@@ -45,8 +47,8 @@ import useMSTAssignmentPageSize, {
   PAGE_SIZE_OPTIONS,
 } from "@/components/mst-assignment/hooks/useMSTAssignmentPageSize.js";
 import HistoryDetails from "@/components/mst-assignment/timeline/HistoryDetails.jsx";
+import MstAssignmentTimelinePanel from "@/components/mst-assignment/timeline/MstAssignmentTimelinePanel.jsx";
 import StageTimelinePreview from "@/components/mst-assignment/timeline/StageTimelinePreview.jsx";
-import StageTimelineGroups from "@/components/mst-assignment/timeline/StageTimelineGroups.jsx";
 import ColumnResizeHandle from "@/components/mst-assignment/table/ColumnResizeHandle.jsx";
 
 import { Button } from "@/components/ui/button.jsx";
@@ -57,14 +59,10 @@ import {
   SectionToolbar,
 } from "@/components/designSystem/shellPrimitives.jsx";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog.jsx";
-
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover.jsx";
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover.jsx";
 
 import {
 
@@ -2900,198 +2898,29 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
         ) : null}
       </SectionSurface>
 
-      <SectionSurface className="mb-4">
-        <SectionHeader
-          title="Bộ lọc nhân viên phụ trách"
-          description="Cô lập working set theo nhân viên và lưu lại các bộ lọc thường dùng cho thao tác quản trị hằng ngày."
-          meta={
-            quickFavorites.staff.length ? (
-              <span className="ds-pill">{quickFavorites.staff.length} bộ lọc nhanh</span>
-            ) : null
-          }
-        />
-        <SectionToolbar
-          mainClassName="items-center"
-          actions={
-            <>
-              {staffFilter ? (
-                <button
-                  type="button"
-                  onClick={clearStaffFilter}
-                  className="px-2 py-1 rounded border bg-white hover:bg-gray-50"
-                >
-                  Xóa lọc
-                </button>
-              ) : null}
-              <button
-                type="button"
-                onClick={handleSaveStaffFavorite}
-                className="px-2 py-1 rounded bg-slate-800 text-white hover:bg-slate-900"
-                disabled={!staffFilter.trim()}
-              >
-                Lưu bộ lọc nhân viên
-              </button>
-            </>
-          }
-        >
-          <div className="w-full sm:w-72">
-            <StaffCombobox
-              value={staffFilter}
-              teamValue=""
-              onSelect={handleStaffFilterSelect}
-              teams={rosterTeams}
-              placeholder="Chọn nhân viên"
-              ariaLabel="Lọc theo nhân viên phụ trách"
-              searchAriaLabel="Tìm nhân viên phụ trách"
-            />
-          </div>
-        </SectionToolbar>
-        {quickFavorites.staff.length ? (
-          <div className="mt-1">
-            <div className="text-xs font-semibold uppercase text-gray-500 mb-1">
-              Bộ lọc nhanh
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {quickFavorites.staff.map((fav) => (
-                <div
-                  key={`staff-${fav.normalized}`}
-                  className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1 text-sm text-slate-700"
-                >
-                  <button
-                    type="button"
-                    onClick={() => applyStaffFavorite(fav.value)}
-                    className="font-medium hover:text-slate-900"
-                  >
-                    {fav.value}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => removeQuickFavorite("staff", fav.value)}
-                    className="text-xs text-slate-500 hover:text-slate-700"
-                    aria-label={`Xóa ${fav.value}`}
-                  >
-                    ×
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
-        ) : null}
-      </SectionSurface>
+      <MstAssignmentStaffFilterPanel
+        quickFavorites={quickFavorites}
+        staffFilter={staffFilter}
+        rosterTeams={rosterTeams}
+        onClearStaffFilter={clearStaffFilter}
+        onSaveStaffFavorite={handleSaveStaffFavorite}
+        onStaffFilterSelect={handleStaffFilterSelect}
+        onApplyStaffFavorite={applyStaffFavorite}
+        onRemoveQuickFavorite={removeQuickFavorite}
+      />
 
-      <SectionSurface className="mb-4 border-sky-200 bg-sky-50">
-        <SectionHeader
-          title="Bộ lọc lịch sử thay đổi"
-          description="Thu hẹp timeline theo khoảng ngày, loại thao tác hoặc trạng thái gán nhân viên trước khi rà soát chi tiết từng MST."
-          meta={
-            <div className="text-right text-xs text-sky-900">
-              <div>
-                Hiển thị {filteredHistoryCount} / {totalHistoryCount} bản ghi lịch sử.
-              </div>
-              <div>Áp dụng cho phần lịch sử của từng dòng bên dưới.</div>
-              {isHistoryFilterActive ? (
-                <div className="text-amber-700">
-                  * Danh sách MST cũng đang lọc theo điều kiện lịch sử này.
-                </div>
-              ) : null}
-            </div>
-          }
-        />
-        <SectionToolbar
-          className="text-sm text-gray-700"
-          mainClassName="items-end"
-          actions={
-            <>
-              <button
-                type="button"
-                onClick={resetHistoryFilter}
-                className="px-3 py-1 rounded border bg-white hover:bg-gray-50"
-                data-tooltip="Xóa bộ lọc lịch sử"
-              >
-                Xóa lọc
-              </button>
-              <button
-                type="button"
-                onClick={handleSaveActionFavorite}
-                className="px-3 py-1 rounded border bg-white hover:bg-gray-50"
-                data-tooltip="Lưu nhanh bộ lọc thao tác hoặc trạng thái hiện tại"
-              >
-                Lưu thao tác/Trạng thái
-              </button>
-            </>
-          }
-        >
-          <>
-            <label className="flex flex-col gap-1">
-              <span className="font-medium">Từ ngày</span>
-              <input
-                type="date"
-                value={historyFilter.from}
-                onChange={(e) => updateHistoryFilter({ from: e.target.value })}
-                className="border rounded px-2 py-1"
-                data-tooltip="Giới hạn lịch sử từ ngày này trở đi"
-              />
-            </label>
-            <label className="flex flex-col gap-1">
-              <span className="font-medium">Đến ngày</span>
-              <input
-                type="date"
-                value={historyFilter.to}
-                onChange={(e) => updateHistoryFilter({ to: e.target.value })}
-                className="border rounded px-2 py-1"
-                data-tooltip="Giới hạn lịch sử tới hết ngày này"
-              />
-            </label>
-            <label className="flex flex-col gap-1">
-              <span className="font-medium">Thao tác / Trạng thái</span>
-              <select
-                value={historyFilter.type}
-                onChange={(e) => updateHistoryFilter({ type: e.target.value })}
-                className="border rounded px-2 py-1"
-                data-tooltip="Lọc theo thao tác (thêm/sửa/xóa) hoặc trạng thái phân công nhân viên"
-              >
-                <option value="all">Tất cả</option>
-                <option value="create">Thêm mới</option>
-                <option value="update">Chỉnh sửa</option>
-                <option value="delete">Xóa</option>
-                <option value="status:assigned">Đã gán nhân viên</option>
-                <option value="status:pending">Chưa gán nhân viên</option>
-              </select>
-            </label>
-          </>
-        </SectionToolbar>
-        {quickFavorites.action.length ? (
-          <div className="mt-1">
-            <div className="text-xs font-semibold uppercase text-gray-500 mb-1">
-              Bộ lọc thao tác/trạng thái đã lưu
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {quickFavorites.action.map((fav) => (
-                <div
-                  key={`action-${fav.normalized}`}
-                  className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-3 py-1 text-sm text-amber-700"
-                >
-                  <button
-                    type="button"
-                    onClick={() => applyActionFavorite(fav.value)}
-                    className="font-medium hover:text-amber-900"
-                  >
-                    {fav.value}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => removeQuickFavorite("action", fav.value)}
-                    className="text-xs text-amber-600 hover:text-amber-800"
-                    aria-label={`Xóa ${fav.value}`}
-                  >
-                    ×
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
-        ) : null}
-      </SectionSurface>
+      <MstAssignmentHistoryFilterPanel
+        filteredHistoryCount={filteredHistoryCount}
+        totalHistoryCount={totalHistoryCount}
+        isHistoryFilterActive={isHistoryFilterActive}
+        historyFilter={historyFilter}
+        quickFavorites={quickFavorites}
+        onResetHistoryFilter={resetHistoryFilter}
+        onSaveActionFavorite={handleSaveActionFavorite}
+        onHistoryFilterChange={updateHistoryFilter}
+        onApplyActionFavorite={applyActionFavorite}
+        onRemoveQuickFavorite={removeQuickFavorite}
+      />
 
 
 
@@ -4323,47 +4152,14 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
 
 
 
-      <div className="mt-6 rounded border border-slate-200 bg-slate-50 px-3 py-2">
-
-        <div className="flex flex-wrap items-center justify-between gap-2">
-
-          <div>
-
-            <h2 className="text-sm font-semibold text-slate-700">
-
-              Dòng thời gian giai đoạn
-
-            </h2>
-
-            <p className="text-xs text-slate-500">
-
-              Xem tổng hợp theo bộ lọc hiện tại.
-
-            </p>
-
-          </div>
-
-          <Button
-
-            type="button"
-
-            variant="outline"
-
-            size="sm"
-
-            onClick={handleOpenAllTimelines}
-
-            disabled={!groupedStages.length}
-
-          >
-
-            Mở tổng hợp ({groupedStages.length})
-
-          </Button>
-
-        </div>
-
-      </div>
+      <MstAssignmentTimelinePanel
+        groupedStages={groupedStages}
+        onOpenAllTimelines={handleOpenAllTimelines}
+        timelineDialogState={timelineDialogState}
+        onTimelineDialogOpenChange={handleTimelineDialogOpenChange}
+        formatDate={formatISODate}
+        getStageKey={makeRowKey}
+      />
 
       {/* Pagination */}
 
@@ -4418,42 +4214,6 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
         </div>
 
       </div>
-
-      <Dialog
-
-        open={timelineDialogState.open}
-
-        onOpenChange={handleTimelineDialogOpenChange}
-
-      >
-
-        <DialogContent className="max-w-3xl max-h-[80vh] overflow-hidden">
-
-          <DialogHeader>
-
-            <DialogTitle>{timelineDialogState.title || "Dòng thời gian giai đoạn"}</DialogTitle>
-
-            {timelineDialogState.subtitle ? (
-
-              <DialogDescription>{timelineDialogState.subtitle}</DialogDescription>
-
-            ) : null}
-
-          </DialogHeader>
-
-          <div className="max-h-[60vh] overflow-auto pr-1">
-
-            <StageTimelineGroups
-              groups={timelineDialogState.groups}
-              formatDate={formatISODate}
-              getStageKey={makeRowKey}
-            />
-
-          </div>
-
-        </DialogContent>
-
-      </Dialog>
 
     </div>
 
