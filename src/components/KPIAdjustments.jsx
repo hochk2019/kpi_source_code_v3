@@ -34,6 +34,7 @@ import {
   buildSettingsFieldId,
 } from "@/components/kpi-adjustments/model/fieldIds.js";
 import { parseReferences } from "@/components/kpi-adjustments/model/referenceParsing.js";
+import { buildStaffOptions } from "@/components/kpi-adjustments/model/staffOptions.js";
 import KpiAdjustmentDetailDialog from "@/components/kpi-adjustments/panels/KpiAdjustmentDetailDialog.jsx";
 import KpiAdjustmentFormPanel from "@/components/kpi-adjustments/panels/KpiAdjustmentFormPanel.jsx";
 import KpiAdjustmentGuidanceDialog from "@/components/kpi-adjustments/panels/KpiAdjustmentGuidanceDialog.jsx";
@@ -98,44 +99,6 @@ const FORM_FIELD_IDS = Object.freeze({
   decisionNote: "kpi-adjust-decision-note",
 
 });
-
-
-
-function buildStaffOptions(roster) {
-
-  const options = [];
-
-  if (!roster || !Array.isArray(roster.teams)) {
-
-    return options;
-
-  }
-
-  for (const team of roster.teams) {
-
-    if (!team?.name || !Array.isArray(team.members)) continue;
-
-    for (const member of team.members) {
-
-      const name = normalizeStr(member?.name);
-
-      if (!name) continue;
-
-      options.push({
-
-        team: team.name,
-
-        name,
-
-      });
-
-    }
-
-  }
-
-  return options;
-
-}
 
 
 
