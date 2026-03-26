@@ -2,11 +2,12 @@
 
 ## Active Slice
 
-- Title: Hop nhat go-to-first-page wiring khoi MSTAssignment
-- Bead: cng-jix
+- Title: Tach status/date helper model khoi MSTAssignment
+- Bead: cng-d5g
 - Status: completed
 - Last updated: 2026-03-26
 
+- `cng-d5g` da hoan tat tach `formatISODate`, `normalizeStatusLabel`, `computeStoredStatus`, va `computeStatusDisplay` khoi `MSTAssignment` sang `src/components/mst-assignment/model/statusDate.js`; shell hien import lai helper moi va giu nguyen contract truyen vao add-form/import-save/row-mutations/export/table panel.
 - `cng-jix` da hoan tat hop nhat `goToFirstPage` wiring khoi `MSTAssignment` sang `src/components/mst-assignment/hooks/useMSTAssignmentPageResetWorkspace.js`; shell hien dung mot callback reset-page on dinh de feed cho add-form/history/import/staff/view workspace thay vi lap lai 5 lambda `setPageRef.current(1)`.
 - `cng-tai` da hoan tat tach company-name helpers khoi `MSTAssignment` sang `src/components/mst-assignment/model/companyName.js`; entry file hien chi giu `CompanyNameCell` component va import helper moi, con regression test company-name da tro helper import sang module rieng.
 - `cng-eg4` da hoan tat tach derived-data workspace khoi `MSTAssignment` sang `src/components/mst-assignment/hooks/useMSTAssignmentDerivedRowsWorkspace.js`; shell hien chi giu wiring `filtered`, `groupedStages`, `displayList`, con hook moi gom pipeline loc/uu tien row moi import va bridge sang grouped/aggregated selectors.
@@ -34,6 +35,15 @@
 - `cng-4hs` da tach xong card danh sach + bo loc thanh `KpiAdjustmentListPanel`, bo sung regression test panel, va giam `src/components/KPIAdjustments.jsx` xuong 1343 dong.
 
 ## Completed This Session
+
+- `cng-d5g` da hoan tat tach status/date helpers khoi `MSTAssignment`:
+  - them `src/components/mst-assignment/model/statusDate.js` de gom `formatISODate`, `normalizeStatusLabel`, `computeStoredStatus`, va `computeStatusDisplay`
+  - `src/components/MSTAssignment.jsx` hien chi import helper moi thay vi giu 4 pure helper trong entry file, con `normalize`/`findCell` local van giu nguyen de tranh mo rong slice sang import parsing
+  - bo sung `tests/mstAssignment.status-date.test.js` de khoa format date, canonical status label, stored status, va display status branches
+  - targeted verify da pass:
+    - `pnpm exec vitest run tests/mstAssignment.status-date.test.js tests/useMSTAssignmentAddFormWorkspace.test.jsx tests/useMSTAssignmentRowMutations.test.jsx tests/useMSTAssignmentExportWorkspace.test.jsx tests/useMSTAssignmentImportSaveWorkspace.test.jsx --environment jsdom`
+    - `pnpm exec eslint src/components/MSTAssignment.jsx src/components/mst-assignment/model/statusDate.js tests/mstAssignment.status-date.test.js tests/useMSTAssignmentAddFormWorkspace.test.jsx tests/useMSTAssignmentRowMutations.test.jsx tests/useMSTAssignmentExportWorkspace.test.jsx tests/useMSTAssignmentImportSaveWorkspace.test.jsx`
+  - slice nay giu nguyen wiring workspace hien co; chi rut 4 helper pure ra model rieng de don shell va co regression test rieng
 
 - `cng-jix` da hoan tat hop nhat `goToFirstPage` wiring khoi `MSTAssignment`:
   - them `src/components/mst-assignment/hooks/useMSTAssignmentPageResetWorkspace.js` de gom `bindPageSetter` va `goToFirstPage`
@@ -372,14 +382,13 @@
 
 ## Next Suggested Slice
 
-- Title: Hop nhat go-to-first-page wiring khoi MSTAssignment
-- Title: Tach status/date helper model khoi MSTAssignment neu muon rut gon shell them
+- Title: Tach import-sheet parsing helpers khoi MSTAssignment
 - Bead: `TBD`
 - Status: san sang tao bead tiep theo
 - Follow-up backlog:
-  - co the tach `formatISODate`, `normalizeStatusLabel`, `computeStoredStatus`, `computeStatusDisplay` ra model rieng neu muon tiep tuc don shell `MSTAssignment`
+  - co the tach `headerAliases`, `findCell`, va `toISO` ra model rieng cho luong import Excel neu muon rut gon them shell `MSTAssignment`
   - can giu slice nho de tranh lan sang logic export/timeline/table dang on dinh
-  - uu tien giu slice nho de tranh lan sang logic export/timeline/table da on dinh
+  - uu tien chi doi helper pure va test parsing, khong doi contract cac workspace da tach
   - hoac chon mot bead frontend khac trong backlog neu uu tien chuyen sang orchestration refinement component khac
 
 ## Verification

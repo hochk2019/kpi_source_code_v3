@@ -44,6 +44,12 @@ import {
   sanitizeCompanyNameInput,
   shouldWrapCompanyName,
 } from "@/components/mst-assignment/model/companyName.js";
+import {
+  computeStatusDisplay,
+  computeStoredStatus,
+  formatISODate,
+  normalizeStatusLabel,
+} from "@/components/mst-assignment/model/statusDate.js";
 import HistoryDetails from "@/components/mst-assignment/timeline/HistoryDetails.jsx";
 import MstAssignmentTimelinePanel from "@/components/mst-assignment/timeline/MstAssignmentTimelinePanel.jsx";
 import MstAssignmentDataTablePanel from "@/components/mst-assignment/table/MstAssignmentDataTablePanel.jsx";
@@ -87,32 +93,6 @@ const normalize = (s = "") =>
 
     .toLowerCase();
 
-const formatISODate = (value) => {
-
-  if (!value) return "";
-
-  try {
-
-    const d = new Date(value);
-
-    if (Number.isNaN(d.getTime())) {
-
-      return value;
-
-    }
-
-    return d.toLocaleDateString("vi-VN");
-
-  } catch (err) {
-
-    console.warn("formatISODate", err);
-
-    return value;
-
-  }
-
-};
-
 
 
 const StaffCombobox = (props) => (
@@ -126,87 +106,6 @@ const StaffCombobox = (props) => (
 
 
 
-const STATUS_LABELS = Object.values(MST_ASSIGNMENT_STATUS);
-
-
-
-const normalizeStatusLabel = (value) => {
-
-  const raw = (value ?? "").toString().trim();
-
-  if (!raw) return "";
-
-  const normalized = normalize(raw);
-
-  const matched = STATUS_LABELS.find((label) => normalize(label) === normalized);
-
-  return matched || raw;
-
-};
-
-
-
-const computeStoredStatus = (row) => {
-
-  const hasImport = Boolean(normalizeStr(row?.person_import || ""));
-
-  const hasExport = Boolean(normalizeStr(row?.person_export || ""));
-
-  if (hasImport && hasExport) {
-
-    return MST_ASSIGNMENT_STATUS.ASSIGNED;
-
-  }
-
-  return MST_ASSIGNMENT_STATUS.PENDING;
-
-};
-
-
-
-const computeStatusDisplay = (row) => {
-
-  const hasImport = Boolean(normalizeStr(row?.person_import || ""));
-
-  const hasExport = Boolean(normalizeStr(row?.person_export || ""));
-
-
-
-  if (hasImport && hasExport) {
-
-    return MST_ASSIGNMENT_STATUS.ASSIGNED;
-
-  }
-
-
-
-  if (!hasImport && !hasExport) {
-
-    return MST_ASSIGNMENT_STATUS.PENDING;
-
-  }
-
-
-
-  if (!hasImport) {
-
-    return "Thiếu người phụ trách nhập";
-
-  }
-
-
-
-  if (!hasExport) {
-
-    return "Thiếu người phụ trách xuất";
-
-  }
-
-
-
-  return normalizeStatusLabel(row?.status);
-
-};
 
 
 
