@@ -2,10 +2,12 @@
 
 ## Active Slice
 
-- Title: Tach panel bang du lieu khoi MSTAssignment
-- Bead: cng-pvx
+- Title: Tach helper grouping/display list khoi MSTAssignment
+- Bead: cng-a4y
 - Status: completed
 - Last updated: 2026-03-26
+
+- `cng-a4y` da hoan tat tach pure helper `sortMSTRows`, grouped stages, aggregated-by-MST rows, display list, va timeline map sang `src/components/mst-assignment/model/displaySelectors.js`; `src/components/MSTAssignment.jsx` da bo duplicate `groupedStages2`/`groupedStages` va giam con 2969 dong sau khi verify bang test moi `tests/mstAssignment.displaySelectors.test.js`.
 
 - `cng-oe3` da duoc dong nhu bead trung lap voi `cng-4zp`; task tach `KpiAdjustmentFormPanel` da hoan tat o slice truoc.
 - `cng-pvx` da hoan tat tach block bang du lieu/paging khoi `src/components/MSTAssignment.jsx` thanh `src/components/mst-assignment/table/MstAssignmentDataTablePanel.jsx`, giu nguyen orchestration callback tren shell va bo sung regression test panel moi.
@@ -19,6 +21,15 @@
 - `cng-4hs` da tach xong card danh sach + bo loc thanh `KpiAdjustmentListPanel`, bo sung regression test panel, va giam `src/components/KPIAdjustments.jsx` xuong 1343 dong.
 
 ## Completed This Session
+
+- `cng-a4y` da hoan tat tach selector/grouping helper khoi `MSTAssignment`:
+  - them `src/components/mst-assignment/model/displaySelectors.js` de gom `sortMSTRows`, `buildGroupedStages`, `buildAggregatedRowsByMST`, `buildDisplayList`, va `buildTimelineGroupsByMST`
+  - `src/components/MSTAssignment.jsx` hien dung mot `groupedStages` selector duy nhat, khong con duplicate `groupedStages2`, va timeline/display list deu dung helper module moi
+  - bo sung `tests/mstAssignment.displaySelectors.test.js` de khoa sorting, grouped stages, aggregated-by-MST rows, display-list switch, va timeline map
+  - targeted verify da pass:
+    - `pnpm exec vitest run tests/mstAssignment.displaySelectors.test.js tests/mstAssignmentDataTablePanel.test.jsx tests/mstAssignmentTimelinePanel.test.jsx --environment jsdom`
+    - `pnpm exec eslint src/components/MSTAssignment.jsx src/components/mst-assignment/model/displaySelectors.js tests/mstAssignment.displaySelectors.test.js tests/mstAssignmentDataTablePanel.test.jsx tests/mstAssignmentTimelinePanel.test.jsx`
+  - `eslint` chi con 2 warning Fast Refresh cu o `src/components/MSTAssignment.jsx`
 
 - `cng-pvx` da hoan tat tach bang du lieu/paging khoi `MSTAssignment`:
   - them `src/components/mst-assignment/table/MstAssignmentDataTablePanel.jsx` de gom summary bar, column visibility popover, data table, row action, va pagination shell
@@ -228,12 +239,12 @@
 
 ## Next Suggested Slice
 
-- Title: Chua chot slice tiep theo
+- Title: Tach import/save orchestration khoi MSTAssignment
 - Bead: `TBD`
-- Status: cho user uu tien
+- Status: san sang tao bead tiep theo
 - Follow-up backlog:
-  - tiep tuc wave decomposition cho `MSTAssignment` neu muon giam them orchestration/state khoi entry-point
-  - hoac chon mot bead frontend khac trong backlog de song song hoa refactor sau khi `cng-sz6` da dong
+  - tiep tuc wave-2 cho `MSTAssignment` bang cach tach `onImportXLSX` + `onSave` va phan file-input state thanh hook/workspace rieng
+  - hoac chon mot bead frontend khac trong backlog neu uu tien chuyen sang orchestration refinement component khac
 
 ## Verification
 
