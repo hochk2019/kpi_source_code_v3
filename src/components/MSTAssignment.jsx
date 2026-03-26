@@ -48,6 +48,10 @@ import {
   toISO,
 } from "@/components/mst-assignment/model/importSheet.js";
 import {
+  formatHistoryTime,
+  HISTORY_FIELD_LABELS,
+} from "@/components/mst-assignment/model/historyFormatting.js";
+import {
   makeRowKey,
   tidyMST,
 } from "@/components/mst-assignment/model/rowIdentity.js";
@@ -98,40 +102,6 @@ const StaffCombobox = (props) => (
 
 
 
-
-
-
-const HISTORY_FIELD_LABELS = {
-
-  person_import: "Người phụ trách Nhập",
-
-  person_export: "Người phụ trách Xuất",
-
-  effective_from: "Áp dụng từ ngày",
-
-  effective_to: "Đến hết ngày",
-
-};
-
-
-
-const formatHistoryTime = (value) => {
-
-  if (!value) return "";
-
-  try {
-
-    return new Date(value).toLocaleString("vi-VN", { hour12: false });
-
-  } catch (err) {
-
-    console.warn("formatHistoryTime error", err);
-
-    return value;
-
-  }
-
-};
 
 
 
