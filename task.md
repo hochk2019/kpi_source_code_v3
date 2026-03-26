@@ -2,11 +2,12 @@
 
 ## Active Slice
 
-- Title: Tach row mutation handlers khoi MSTAssignment
-- Bead: cng-czt
+- Title: Tach add-form workflow state khoi MSTAssignment
+- Bead: cng-7j8
 - Status: completed
 - Last updated: 2026-03-26
 
+- `cng-7j8` da hoan tat tach add-form workflow/state khoi `MSTAssignment` sang `src/components/mst-assignment/hooks/useMSTAssignmentAddFormWorkspace.js`; shell hien chi giu wiring props cho button/panel/table, con hook moi gom `showAddForm`, `draft`, `addError`, open/close flow, prefill tu stage hien tai, draft field handlers, va submit orchestration.
 - `cng-czt` da hoan tat tach row-mutation orchestration khoi `MSTAssignment` sang `src/components/mst-assignment/hooks/useMSTAssignmentRowMutations.js`; shell hien chi giu wiring props cho panel, con hook moi gom `updateRow`, assignee select handlers, va `removeRow`.
 - `cng-elr` da hoan tat tach file-input/import/save orchestration khoi `MSTAssignment` sang `src/components/mst-assignment/hooks/useMSTAssignmentImportSaveWorkspace.js`; shell hien chi giu wiring props, con hook moi gom `fileRef`, `selectedFileName`, `handleFileChange`, `onImportXLSX`, `onSave`, va `markRecentlyImported`.
 - `cng-a4y` da hoan tat tach pure helper `sortMSTRows`, grouped stages, aggregated-by-MST rows, display list, va timeline map sang `src/components/mst-assignment/model/displaySelectors.js`; `src/components/MSTAssignment.jsx` da bo duplicate `groupedStages2`/`groupedStages` va giam con 2969 dong sau khi verify bang test moi `tests/mstAssignment.displaySelectors.test.js`.
@@ -23,6 +24,16 @@
 - `cng-4hs` da tach xong card danh sach + bo loc thanh `KpiAdjustmentListPanel`, bo sung regression test panel, va giam `src/components/KPIAdjustments.jsx` xuong 1343 dong.
 
 ## Completed This Session
+
+- `cng-7j8` da hoan tat tach add-form workflow/state khoi `MSTAssignment`:
+  - them `src/components/mst-assignment/hooks/useMSTAssignmentAddFormWorkspace.js` de gom `showAddForm`, `draft`, `addError`, `toggleAddForm`, `startNewStageFromRow`, draft assignee handlers, close flow, va submit orchestration
+  - `src/components/MSTAssignment.jsx` hien dung hook moi thay vi giu inline block add-form state/handlers; `useTooltipTitles` da duoc doi xuong sau workspace setup de tranh TDZ runtime regression
+  - bo sung `tests/useMSTAssignmentAddFormWorkspace.test.jsx` de khoa open/submit flow, stage prefill flow, va invalid date validation
+  - targeted verify da pass:
+    - `pnpm exec vitest run tests/useMSTAssignmentAddFormWorkspace.test.jsx tests/mstAssignmentAddFormPanel.test.jsx tests/e2e.admin-flows.test.jsx tests/useMSTAssignmentImportSaveWorkspace.test.jsx tests/useMSTAssignmentRowMutations.test.jsx --environment jsdom`
+    - `pnpm exec eslint src/components/MSTAssignment.jsx src/components/mst-assignment/hooks/useMSTAssignmentAddFormWorkspace.js tests/useMSTAssignmentAddFormWorkspace.test.jsx tests/mstAssignmentAddFormPanel.test.jsx`
+  - `eslint` chi con 2 warning Fast Refresh cu o `src/components/MSTAssignment.jsx`
+  - local checkpoint cho hai slice truoc da duoc commit thanh `25cdeca` (`ref(frontend): Extract MST assignment import workspaces`)
 
 - `cng-czt` da hoan tat tach row-mutation handlers khoi `MSTAssignment`:
   - them `src/components/mst-assignment/hooks/useMSTAssignmentRowMutations.js` de gom `updateRow`, assignee patch builder, imported-key migration, va `removeRow`
@@ -261,12 +272,12 @@
 
 ## Next Suggested Slice
 
-- Title: Tach add-form workflow/state khoi MSTAssignment
+- Title: Tach row commit workflow khoi MSTAssignment
 - Bead: `TBD`
 - Status: san sang tao bead tiep theo
 - Follow-up backlog:
-  - tiep tuc wave-2 cho `MSTAssignment` bang cach tach `draft`, `addError`, `handleDraftImportSelect`, `handleDraftExportSelect`, `handleCloseAddForm`, va `handleAddSubmit` thanh hook/workspace rieng
-  - can nhac tach tiep `startNewStageFromRow`/`commitRow` neu uu tien chuyen sang workflow luu tung dong thay vi form them moi
+  - tiep tuc wave-2 cho `MSTAssignment` bang cach tach `commitRow` va neu can thi phan row-save side effect lien quan thanh workspace rieng
+  - sau khi add-form workspace da tach xong, co the can nhac tach nhe cac helper/export Fast Refresh ra file rieng neu muon lam sach `MSTAssignment.jsx`
   - hoac chon mot bead frontend khac trong backlog neu uu tien chuyen sang orchestration refinement component khac
 
 ## Verification

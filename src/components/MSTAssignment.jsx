@@ -40,6 +40,7 @@ import useMSTAssignmentPageSize, {
   normalizePageSize,
   PAGE_SIZE_OPTIONS,
 } from "@/components/mst-assignment/hooks/useMSTAssignmentPageSize.js";
+import useMSTAssignmentAddFormWorkspace from "@/components/mst-assignment/hooks/useMSTAssignmentAddFormWorkspace.js";
 import useMSTAssignmentImportSaveWorkspace from "@/components/mst-assignment/hooks/useMSTAssignmentImportSaveWorkspace.js";
 import useMSTAssignmentRowMutations from "@/components/mst-assignment/hooks/useMSTAssignmentRowMutations.js";
 import {
@@ -1032,28 +1033,6 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
 
   }, [historyFilter.type, isHistoryFilterActive]);
 
-  const [showAddForm, setShowAddForm] = useState(false);
-
-  const [draft, setDraft] = useState({
-
-    mst: "",
-
-    company: "",
-
-    person_import: "",
-
-    person_export: "",
-
-    team: "",
-
-    effective_from: "",
-
-    effective_to: "",
-
-  });
-
-  const [addError, setAddError] = useState("");
-
   const isReadOnly = !canEdit;
 
   const {
@@ -1595,333 +1574,6 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
 
 
 
-  const toggleAddForm = () => {
-
-    if (isReadOnly) {
-
-      alert(
-
-        "Bạn không có quyền thêm mới thủ công. Đăng nhập bằng tài khoản được cấp quyền để tiếp tục."
-
-      );
-
-      return;
-
-    }
-
-    if (showAddForm) {
-
-      setShowAddForm(false);
-
-      setAddError("");
-
-      return;
-
-    }
-
-    setDraft({
-
-      mst: "",
-
-      company: "",
-
-      person_import: "",
-
-      person_export: "",
-
-      team: "",
-
-      effective_from: applyFrom || "",
-
-      effective_to: "",
-
-    });
-
-    setAddError("");
-
-    setShowAddForm(true);
-
-  };
-
-
-
-  const computeNextStageStart = useCallback(
-
-    (row) => {
-
-      if (!row) {
-
-        return applyFrom || "";
-
-      }
-
-      const base = row.effective_to || row.effective_from || applyFrom || "";
-
-      if (!base) return "";
-
-      const date = new Date(base);
-
-      if (Number.isNaN(date.getTime())) {
-
-        return base;
-
-      }
-
-      date.setDate(date.getDate() + 1);
-
-      return date.toISOString().slice(0, 10);
-
-    },
-
-    [applyFrom]
-
-  );
-
-
-
-  const startNewStageFromRow = useCallback(
-
-    (row) => {
-
-      if (isReadOnly) {
-
-        alert("Bạn không có quyền thêm giai đoạn mới.");
-
-        return;
-
-      }
-
-      const nextStart = computeNextStageStart(row);
-
-      setDraft({
-
-        mst: row?.mst || "",
-
-        company: row?.company || "",
-
-        person_import: row?.person_import || "",
-
-        person_export: row?.person_export || "",
-
-        team: row?.team || "",
-
-        effective_from: nextStart || "",
-
-        effective_to: "",
-
-      });
-
-      setAddError("");
-
-      setShowAddForm(true);
-
-      setTimeout(() => {
-
-        if (rootRef.current) {
-
-          rootRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
-
-        }
-
-      }, 60);
-
-    },
-
-    [computeNextStageStart, isReadOnly]
-
-  );
-
-
-
-  const handleDraftChange = (field, formatter = (value) => value) => (event) => {
-
-    const raw = event?.target?.value ?? "";
-
-    const value = formatter(raw);
-
-    setDraft((prev) => ({ ...prev, [field]: value }));
-
-  };
-
-  const handleDraftImportSelect = useCallback(
-    ({ staffName, teamName, isCustom }) => {
-      setDraft((prev) => {
-        const next = { ...prev, person_import: staffName || "" };
-        if (staffName && teamName && !isCustom) {
-          const prevTeamKey = normalizeName(normalizeStr(prev.team || ""));
-          const nextTeamKey = normalizeName(normalizeStr(teamName));
-          if (!prevTeamKey || prevTeamKey === nextTeamKey) {
-            next.team = teamName;
-          }
-        }
-        return next;
-      });
-    },
-    []
-  );
-
-  const handleDraftExportSelect = useCallback(
-    ({ staffName, teamName, isCustom }) => {
-      setDraft((prev) => {
-        const next = { ...prev, person_export: staffName || "" };
-        if (staffName && teamName && !isCustom) {
-          const prevTeamKey = normalizeName(normalizeStr(prev.team || ""));
-          const nextTeamKey = normalizeName(normalizeStr(teamName));
-          if (!prevTeamKey || prevTeamKey === nextTeamKey) {
-            next.team = teamName;
-          }
-        }
-        return next;
-      });
-    },
-    []
-  );
-
-  const handleCloseAddForm = useCallback(() => {
-    setShowAddForm(false);
-    setAddError("");
-  }, []);
-
-
-
-  const handleAddSubmit = (event) => {
-
-    event.preventDefault();
-
-    if (isReadOnly) {
-
-      alert("Bạn không có quyền thêm mới.");
-
-      return;
-
-    }
-
-    const mst = tidyMST(draft.mst);
-
-    if (!mst) {
-
-      setAddError("Vui lòng nhập mã số thuế hợp lệ (chỉ chứa số).");
-
-      return;
-
-    }
-
-    const normalizedCompany = String(draft.company || "").trim();
-
-    const normalizedImport = String(draft.person_import || "").trim();
-
-    const normalizedExport = String(draft.person_export || "").trim();
-
-    const normalizedTeam = String(draft.team || "").trim();
-
-    const normalizedDate = draft.effective_from || "";
-
-    const normalizedEnd = draft.effective_to || "";
-
-    if (normalizedDate && normalizedEnd && normalizedEnd < normalizedDate) {
-
-      setAddError("Ngày kết thúc phải sau hoặc bằng ngày bắt đầu.");
-
-      return;
-
-    }
-
-    const newRow = {
-
-      mst,
-
-      company: normalizedCompany,
-
-      person_import: normalizedImport,
-
-      person_export: normalizedExport,
-
-      team: normalizedTeam,
-
-      effective_from: normalizedDate,
-
-      effective_to: normalizedEnd,
-
-      status: computeStoredStatus({
-
-        person_import: normalizedImport,
-
-        person_export: normalizedExport,
-
-      }),
-
-    };
-
-
-
-    let createdKey = "";
-
-    setRows((prev) => {
-
-      const current = Array.isArray(prev) ? prev : [];
-
-      const newKey = makeRowKey(newRow);
-
-      const next = [...current];
-
-      const existingIndex = next.findIndex((row) => makeRowKey(row) === newKey);
-
-      const resolvedTeam = normalizedTeam || (existingIndex >= 0 ? next[existingIndex]?.team || "" : "");
-
-      const resolvedStatus = computeStoredStatus({
-
-        ...newRow,
-
-        team: resolvedTeam,
-
-        status: newRow.status,
-
-      });
-
-      const payload = { ...newRow, team: resolvedTeam, status: resolvedStatus };
-
-      if (existingIndex >= 0) {
-
-        const originalMeta = next[existingIndex];
-
-        next[existingIndex] = createRowState({ ...originalMeta, ...payload }, {
-
-          originalKey: originalMeta.__originalKey,
-
-          isNew: originalMeta.__isNew,
-
-        });
-
-      } else {
-
-        next.push(createRowState(payload, { isNew: true }));
-
-        createdKey = newKey;
-
-      }
-
-      return sortMSTRows(next);
-
-    });
-
-    if (createdKey) {
-
-      markRecentlyImported([createdKey]);
-
-    }
-
-    setPageRef.current(1);
-
-    setShowAddForm(false);
-
-    setAddError("");
-
-    alert("Đã thêm vào danh sách. Bấm Lưu để ghi vào hệ thống.");
-
-  };
-
-
-
   const exportRowsToExcel = (scope = "filtered") => {
 
     const source = scope === "all" ? rows : filtered;
@@ -2230,31 +1882,6 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
   }, [setPage]);
 
 
-
-  useTooltipTitles(rootRef, [
-
-    rows,
-
-    search,
-
-    staffFilter,
-
-    applyFrom,
-
-    page,
-
-    pageSize,
-
-    showAddForm,
-
-    selectedFileName,
-
-    historyFilter,
-
-  ]);
-
-
-
   useEffect(() => {
 
     persistPageSize(pageSize);
@@ -2317,6 +1944,46 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
     setRecentlyImportedKeys,
     setRows,
   });
+
+  const {
+    showAddForm,
+    draft,
+    addError,
+    toggleAddForm,
+    startNewStageFromRow,
+    handleDraftChange,
+    handleDraftImportSelect,
+    handleDraftExportSelect,
+    handleCloseAddForm,
+    handleAddSubmit,
+  } = useMSTAssignmentAddFormWorkspace({
+    applyFrom,
+    computeStoredStatus,
+    createRowState,
+    goToFirstPage: () => setPageRef.current(1),
+    isReadOnly,
+    makeRowKey,
+    markRecentlyImported,
+    normalizeName,
+    normalizeStr,
+    rows,
+    scrollToTopFn: () =>
+      rootRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }),
+    setRows,
+    tidyMST,
+  });
+
+  useTooltipTitles(rootRef, [
+    rows,
+    search,
+    staffFilter,
+    applyFrom,
+    page,
+    pageSize,
+    showAddForm,
+    selectedFileName,
+    historyFilter,
+  ]);
 
 
 
