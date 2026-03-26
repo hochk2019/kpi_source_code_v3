@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
 
-import { AssigneeCell, PersonColumnHeader } from "@/components/MSTAssignment.jsx";
+import { AssigneeCell } from "@/components/MSTAssignment.jsx";
+import PersonColumnHeader from "@/components/mst-assignment/table/PersonColumnHeader.jsx";
 
 afterEach(() => {
   cleanup();
