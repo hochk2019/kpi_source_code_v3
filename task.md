@@ -2,11 +2,12 @@
 
 ## Active Slice
 
-- Title: Tach KPIAdjustments category options
-- Bead: cng-dhd
+- Title: Tach AccountManager permission groups panel
+- Bead: cng-aqp
 - Status: completed
 - Last updated: 2026-03-27
 
+- `cng-aqp` da hoan tat tach permission group list dung chung khoi `AccountManager` sang `src/components/account-manager/AccountPermissionGroupsPanel.jsx`; shell hien chi giu toolbar/orchestration cho create-form va permission dialog, con regression test moi khoa collapse state, count label, disabled rule, va permission toggle callback.
 - `cng-dhd` da hoan tat tach `resolveCategoryOptions` va `CATEGORY_OPTIONS` khoi `KPIAdjustments` sang `src/components/kpi-adjustments/model/categoryOptions.js`; shell hien import lai constant moi cho form/list config, con unit test moi khoa mapping tu `KPI_ADJUSTMENT_CATEGORY_CONFIG`.
 - `cng-0jn` da hoan tat tach `buildStaffOptions` khoi `KPIAdjustments` sang `src/components/kpi-adjustments/model/staffOptions.js`; shell hien import lai helper moi cho derived `staffOptions` ma khong doi shape `{ team, name }`, con unit test moi khoa flatten roster va trim member names.
 - `cng-u7h` da hoan tat tach `parseReferences` khoi `KPIAdjustments` sang `src/components/kpi-adjustments/model/referenceParsing.js`; shell hien import lai helper moi cho 2 hook form/workspace ma khong doi contract prop, con unit test moi khoa behavior tach reference, normalize, va dedupe.
@@ -50,6 +51,11 @@
 - `cng-4hs` da tach xong card danh sach + bo loc thanh `KpiAdjustmentListPanel`, bo sung regression test panel, va giam `src/components/KPIAdjustments.jsx` xuong 1343 dong.
 
 ## Completed This Session
+
+- `cng-aqp` da hoan tat tach AccountManager permission groups panel:
+  - them `src/components/account-manager/AccountPermissionGroupsPanel.jsx` de gom permission checkbox rendering + per-group collapse logic dung chung cho create-form va dialog quan ly quyen
+  - `src/components/AccountManager.jsx` hien chi import panel moi thay vi giu 2 block JSX permission list gan nhu trung nhau
+  - bo sung `tests/accountPermissionGroupsPanel.test.jsx` de khoa count label, collapse/expand behavior, disabled predicate, va permission change callback
 
 - `cng-dhd` da hoan tat tach KPI category options:
   - them `src/components/kpi-adjustments/model/categoryOptions.js` de gom `resolveCategoryOptions` va `CATEGORY_OPTIONS`
@@ -504,14 +510,14 @@
 
 ## Next Suggested Slice
 
-- Title: Chuyen buoc tu helper extraction sang ra soat quick wins khac
+- Title: Ra soat DataHealthDashboard de chon panel extraction nho tiep theo
 - Bead: `TBD`
 - Status: san sang tao bead tiep theo
 - Follow-up backlog:
-  - `KPIAdjustments.jsx` da giam them mot nhip sau khi tach `resolveCategoryOptions`; buoc tiep theo hop ly la ra soat khu vuc khac trong plan thay vi tiep tuc chia helper qua muc
-  - neu van can quick win trong KPI shell, `formatDateTime` la ung vien sau cung va can disambiguate bang GitNexus context truoc khi sua
-  - tiep tuc giu scope o muc presentation/component extraction, tranh lan sang bootstrap/import/export/timeline dialog orchestration dang on dinh
-  - uu tien bead moi chi khi co mot cut ro rang, co regression test panel/interaction, va diff van giu nho nhu cac commit helper/UI control vua xong
+  - `AccountManager` da giam mot khoi JSX lap lai sau khi tach permission group panel; buoc tiep theo hop ly la tiep tuc ra soat mot presentation-heavy screen khac thay vi quay lai helper extraction
+  - `DataHealthDashboard.jsx` dang la ung vien lon nhat con lai trong root `src/components`; uu tien tim mot panel/card extraction ro rang thay vi tach cac formatter top-file
+  - tiep tuc giu scope o muc presentation/component extraction, tranh lan sang async data orchestration va notification stream subscription neu chua can
+  - truoc khi chon slice moi, can chay GitNexus impact/context cho symbol dich de giu diff nho va co test regression ro rang
 
 ## Verification
 
