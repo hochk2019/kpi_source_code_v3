@@ -9,8 +9,6 @@ import {
 
   getMSTMap,
 
-  saveMSTRow,
-
   MST_ASSIGNMENT_STATUS,
 
   getTeamRoster,
@@ -42,6 +40,7 @@ import useMSTAssignmentPageSize, {
 } from "@/components/mst-assignment/hooks/useMSTAssignmentPageSize.js";
 import useMSTAssignmentAddFormWorkspace from "@/components/mst-assignment/hooks/useMSTAssignmentAddFormWorkspace.js";
 import useMSTAssignmentImportSaveWorkspace from "@/components/mst-assignment/hooks/useMSTAssignmentImportSaveWorkspace.js";
+import useMSTAssignmentRowCommitWorkspace from "@/components/mst-assignment/hooks/useMSTAssignmentRowCommitWorkspace.js";
 import useMSTAssignmentRowMutations from "@/components/mst-assignment/hooks/useMSTAssignmentRowMutations.js";
 import {
   buildAggregatedRowsByMST,
@@ -461,28 +460,6 @@ const HISTORY_FIELD_LABELS = {
   effective_to: "Đến hết ngày",
 
 };
-
-
-
-const MST_ROW_FIELDS = [
-
-  "mst",
-
-  "company",
-
-  "person_import",
-
-  "person_export",
-
-  "team",
-
-  "effective_from",
-
-  "effective_to",
-
-  "status",
-
-];
 
 
 
@@ -1047,28 +1024,6 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
 
   } = useMSTQuickFilters();
 
-  const originalMap = useMemo(() => {
-
-    const map = new Map();
-
-    originalRows.forEach((row) => {
-
-      if (!row) return;
-
-      const key = row.__originalKey || makeRowKey(row);
-
-      if (key) {
-
-        map.set(key, row);
-
-      }
-
-    });
-
-    return map;
-
-  }, [originalRows]);
-
   const createRowState = useCallback((row, meta = {}) => {
 
     const mstValue = tidyMST(row?.mst || "");
@@ -1108,122 +1063,6 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
     };
 
   }, []);
-
-  const getRowDiff = useCallback(
-
-    (row) => {
-
-      if (!row) {
-
-        return { changed: false, sanitized: createRowState({}, { isNew: true }) };
-
-      }
-
-      const baseKey = row.__originalKey || "";
-
-      const sanitized = createRowState(row, {
-
-        originalKey: baseKey || undefined,
-
-        isNew: row.__isNew,
-
-      });
-
-      const nextKey = makeRowKey(sanitized);
-
-      const baseline = baseKey ? originalMap.get(baseKey) : null;
-
-      if (!baseline) {
-
-        const payload = {};
-
-        MST_ROW_FIELDS.forEach((field) => {
-
-          payload[field] = sanitized[field] || "";
-
-        });
-
-        return { changed: true, isNew: true, sanitized, patch: payload, keyChanged: true };
-
-      }
-
-      const patch = {};
-
-      MST_ROW_FIELDS.forEach((field) => {
-
-        const nextValue = sanitized[field] || "";
-
-        const prevValue = baseline[field] || "";
-
-        if (field === "effective_from") {
-
-          if ((nextValue || "") !== (prevValue || "")) {
-
-            patch[field] = nextValue;
-
-          }
-
-          return;
-
-        }
-
-        if (field === "effective_to") {
-
-          if ((nextValue || "") !== (prevValue || "")) {
-
-            patch[field] = nextValue;
-
-          }
-
-          return;
-
-        }
-
-        if (field === "status") {
-
-          if (normalizeStatusLabel(nextValue) !== normalizeStatusLabel(prevValue)) {
-
-            patch[field] = normalizeStatusLabel(nextValue);
-
-          }
-
-          return;
-
-        }
-
-        if (field === "mst") {
-
-          if (tidyMST(nextValue) !== tidyMST(prevValue)) {
-
-            patch[field] = tidyMST(nextValue);
-
-          }
-
-          return;
-
-        }
-
-        if (normalizeStr(nextValue) !== normalizeStr(prevValue)) {
-
-          patch[field] = nextValue;
-
-        }
-
-      });
-
-      const keyChanged = nextKey !== (baseKey || nextKey);
-
-      const changed = keyChanged || Object.keys(patch).length > 0;
-
-      return { changed, isNew: false, sanitized, patch, keyChanged, baseline };
-
-    },
-
-    [createRowState, originalMap]
-
-  );
-
-  const rowHasChanges = useCallback((row) => getRowDiff(row).changed, [getRowDiff]);
   const buildStatusViewModel = useCallback((row) => {
     const statusValue = normalizeStatusLabel(row?.status);
     const statusDisplay = computeStatusDisplay(row);
@@ -1239,166 +1078,20 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
       isStatusWarning: normalizedStatusDisplay.startsWith("Thiếu"),
     };
   }, []);
-
-  const commitRow = useCallback(
-
-    (row) => {
-
-      if (isReadOnly) {
-
-        alert("Bạn không có quyền cập nhật dòng này.");
-
-        return;
-
-      }
-
-      const diff = getRowDiff(row);
-
-      if (!diff.changed) {
-
-        alert("Không có thay đổi mới để lưu.");
-
-        return;
-
-      }
-
-      const payload = { ...diff.sanitized };
-
-      delete payload.__originalKey;
-
-      delete payload.__isNew;
-
-      try {
-
-        const result = saveMSTRow(payload, {
-
-          originalKey: row.__originalKey || null,
-
-          actor,
-
-          detail: "Cập nhật gán MST từ tab Gán MST",
-
-        });
-
-        if (!result?.ok) {
-
-          switch (result?.reason) {
-
-            case "conflict":
-
-              alert(
-
-                "MST và ngày áp dụng trùng với dòng khác. Vui lòng đổi ngày áp dụng hoặc kiểm tra dữ liệu hiện có."
-
-              );
-
-              break;
-
-            case "invalid":
-
-              alert("Dữ liệu chưa hợp lệ, vui lòng kiểm tra lại.");
-
-              break;
-
-            case "not-found":
-
-              alert("Không tìm thấy bản ghi gốc. Hãy tải lại trang trước khi cập nhật.");
-
-              break;
-
-            case "no-change":
-
-              alert("Không có thay đổi mới để lưu.");
-
-              break;
-
-            default:
-
-              alert("Không thể lưu dòng này. Vui lòng thử lại sau.");
-
-          }
-
-          return;
-
-        }
-
-        const savedRow = createRowState(result.row, {
-
-          originalKey: result.key,
-
-          isNew: false,
-
-        });
-
-        setRows((prev) => {
-
-          const current = Array.isArray(prev) ? prev : [];
-
-          const replaced = current.map((item) => (item === row ? savedRow : item));
-
-          return sortMSTRows(replaced);
-
-        });
-
-        setOriginalRows((prev) => {
-
-          const baseKey = result.previousKey || row.__originalKey || "";
-
-          const filtered = (Array.isArray(prev) ? prev : []).filter((item) => {
-
-            const itemKey = item.__originalKey || makeRowKey(item);
-
-            return itemKey !== baseKey;
-
-          });
-
-          const merged = [...filtered, savedRow];
-
-          return sortMSTRows(merged);
-
-        });
-
-        setRecentlyImportedKeys((prev) => {
-
-          const next = new Set(prev);
-
-          const currentKey = makeRowKey(row);
-
-          if (currentKey && next.has(currentKey)) {
-
-            next.delete(currentKey);
-
-          }
-
-          if (row.__originalKey && next.has(row.__originalKey)) {
-
-            next.delete(row.__originalKey);
-
-          }
-
-          next.add(result.key);
-
-          return next;
-
-        });
-
-        refreshHistory();
-
-        alert("Đã lưu thay đổi cho dòng này.");
-
-      } catch (error) {
-
-        console.error("saveMSTRow error", error);
-
-        alert("Không thể lưu dòng này. Vui lòng thử lại sau.");
-
-      }
-
-    },
-
-    [actor, createRowState, getRowDiff, isReadOnly, refreshHistory]
-
-  );
+  const { rowHasChanges, commitRow } = useMSTAssignmentRowCommitWorkspace({
+    actor,
+    createRowState,
+    isReadOnly,
+    makeRowKey,
+    normalizeStatusLabel,
+    normalizeStr,
+    originalRows,
+    refreshHistory,
+    setOriginalRows,
+    setRecentlyImportedKeys,
+    setRows,
+    tidyMST,
+  });
 
   const handleStaffFilterSelect = useCallback(({ staffName }) => {
 

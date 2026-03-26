@@ -2,11 +2,12 @@
 
 ## Active Slice
 
-- Title: Tach add-form workflow state khoi MSTAssignment
-- Bead: cng-7j8
+- Title: Tach row commit workflow khoi MSTAssignment
+- Bead: cng-bxf
 - Status: completed
 - Last updated: 2026-03-26
 
+- `cng-bxf` da hoan tat tach row commit workflow khoi `MSTAssignment` sang `src/components/mst-assignment/hooks/useMSTAssignmentRowCommitWorkspace.js`; shell hien chi giu wiring props cho bang, con hook moi gom `originalMap`, row diff detection, `rowHasChanges`, va `commitRow` save side effects.
 - `cng-7j8` da hoan tat tach add-form workflow/state khoi `MSTAssignment` sang `src/components/mst-assignment/hooks/useMSTAssignmentAddFormWorkspace.js`; shell hien chi giu wiring props cho button/panel/table, con hook moi gom `showAddForm`, `draft`, `addError`, open/close flow, prefill tu stage hien tai, draft field handlers, va submit orchestration.
 - `cng-czt` da hoan tat tach row-mutation orchestration khoi `MSTAssignment` sang `src/components/mst-assignment/hooks/useMSTAssignmentRowMutations.js`; shell hien chi giu wiring props cho panel, con hook moi gom `updateRow`, assignee select handlers, va `removeRow`.
 - `cng-elr` da hoan tat tach file-input/import/save orchestration khoi `MSTAssignment` sang `src/components/mst-assignment/hooks/useMSTAssignmentImportSaveWorkspace.js`; shell hien chi giu wiring props, con hook moi gom `fileRef`, `selectedFileName`, `handleFileChange`, `onImportXLSX`, `onSave`, va `markRecentlyImported`.
@@ -24,6 +25,15 @@
 - `cng-4hs` da tach xong card danh sach + bo loc thanh `KpiAdjustmentListPanel`, bo sung regression test panel, va giam `src/components/KPIAdjustments.jsx` xuong 1343 dong.
 
 ## Completed This Session
+
+- `cng-bxf` da hoan tat tach row commit workflow khoi `MSTAssignment`:
+  - them `src/components/mst-assignment/hooks/useMSTAssignmentRowCommitWorkspace.js` de gom `originalMap`, `getRowDiff`, `rowHasChanges`, va `commitRow` save side effects khoi shell
+  - `src/components/MSTAssignment.jsx` hien dung hook moi thay vi giu inline diff/save block, nen file goc tiep tuc giam orchestration quanh bang du lieu
+  - bo sung `tests/useMSTAssignmentRowCommitWorkspace.test.jsx` de khoa 3 nhanh chinh: `no-change`, save thanh cong, va `conflict`
+  - targeted verify da pass:
+    - `pnpm exec vitest run tests/useMSTAssignmentRowCommitWorkspace.test.jsx tests/mstAssignmentDataTablePanel.test.jsx tests/useMSTAssignmentAddFormWorkspace.test.jsx tests/useMSTAssignmentRowMutations.test.jsx tests/useMSTAssignmentImportSaveWorkspace.test.jsx --environment jsdom`
+    - `pnpm exec eslint src/components/MSTAssignment.jsx src/components/mst-assignment/hooks/useMSTAssignmentRowCommitWorkspace.js tests/useMSTAssignmentRowCommitWorkspace.test.jsx tests/mstAssignmentDataTablePanel.test.jsx`
+  - `eslint` chi con 2 warning Fast Refresh cu o `src/components/MSTAssignment.jsx`
 
 - `cng-7j8` da hoan tat tach add-form workflow/state khoi `MSTAssignment`:
   - them `src/components/mst-assignment/hooks/useMSTAssignmentAddFormWorkspace.js` de gom `showAddForm`, `draft`, `addError`, `toggleAddForm`, `startNewStageFromRow`, draft assignee handlers, close flow, va submit orchestration
@@ -272,11 +282,12 @@
 
 ## Next Suggested Slice
 
-- Title: Tach row commit workflow khoi MSTAssignment
+- Title: Tach history timeline/detail workspace khoi MSTAssignment
 - Bead: `TBD`
 - Status: san sang tao bead tiep theo
 - Follow-up backlog:
-  - tiep tuc wave-2 cho `MSTAssignment` bang cach tach `commitRow` va neu can thi phan row-save side effect lien quan thanh workspace rieng
+  - tiep tuc wave-2 cho `MSTAssignment` bang cach tach `refreshHistory`, timeline dialog state, va `handleOpenTimelineGroup` thanh workspace rieng
+  - neu scope can nho hon, tach rieng history load/filter/detail orchestration khoi shell truoc roi moi gom timeline dialog
   - sau khi add-form workspace da tach xong, co the can nhac tach nhe cac helper/export Fast Refresh ra file rieng neu muon lam sach `MSTAssignment.jsx`
   - hoac chon mot bead frontend khac trong backlog neu uu tien chuyen sang orchestration refinement component khac
 
