@@ -2,11 +2,13 @@
 
 ## Active Slice
 
-- Title: Tach form them MST khoi MSTAssignment
-- Bead: cng-sz6
+- Title: Tach panel bang du lieu khoi MSTAssignment
+- Bead: cng-pvx
 - Status: completed
 - Last updated: 2026-03-26
 
+- `cng-oe3` da duoc dong nhu bead trung lap voi `cng-4zp`; task tach `KpiAdjustmentFormPanel` da hoan tat o slice truoc.
+- `cng-pvx` da hoan tat tach block bang du lieu/paging khoi `src/components/MSTAssignment.jsx` thanh `src/components/mst-assignment/table/MstAssignmentDataTablePanel.jsx`, giu nguyen orchestration callback tren shell va bo sung regression test panel moi.
 - `cng-sz6` da hoan tat tach form them MST khoi `src/components/MSTAssignment.jsx`; file goc gio chi giu orchestration/callback, con UI form da duoc rut thanh panel rieng va bo sung regression test moi.
 - `cng-u40` da dong bead sau khi tach xong `MstAssignmentHistoryFilterPanel`; block bo loc lich su thay doi da duoc rut thanh panel rieng va verify bang regression test moi.
 - `cng-c6v` da dong bead sau khi tach xong `MstAssignmentStaffFilterPanel`; `src/components/MSTAssignment.jsx` da rut duoc block bo loc nhan vien phu trach + quick favorites thanh panel rieng va khoa bang regression test moi.
@@ -17,6 +19,15 @@
 - `cng-4hs` da tach xong card danh sach + bo loc thanh `KpiAdjustmentListPanel`, bo sung regression test panel, va giam `src/components/KPIAdjustments.jsx` xuong 1343 dong.
 
 ## Completed This Session
+
+- `cng-pvx` da hoan tat tach bang du lieu/paging khoi `MSTAssignment`:
+  - them `src/components/mst-assignment/table/MstAssignmentDataTablePanel.jsx` de gom summary bar, column visibility popover, data table, row action, va pagination shell
+  - `src/components/MSTAssignment.jsx` hien chi giu orchestration callback/state va render panel moi + timeline panel nhu child thay vi block JSX inline >1000 dong
+  - bo sung `tests/mstAssignmentDataTablePanel.test.jsx` de khoa column controls, badge row moi import, row actions, va paging/page-size callback
+  - targeted verify da pass:
+    - `pnpm exec eslint src/components/MSTAssignment.jsx src/components/mst-assignment/table/MstAssignmentDataTablePanel.jsx tests/mstAssignmentDataTablePanel.test.jsx tests/mstAssignment.person-columns.test.jsx tests/mstAssignment.timeline.test.jsx tests/mstAssignment.pagination.test.jsx`
+    - `pnpm exec vitest run tests/mstAssignmentDataTablePanel.test.jsx tests/mstAssignment.person-columns.test.jsx tests/mstAssignment.timeline.test.jsx tests/mstAssignment.pagination.test.jsx --environment jsdom`
+  - `detect_changes(scope: "all")` van bao `risk_level: high` vi GitNexus gom diff theo file entry-point `MSTAssignment.jsx`, nhung impact truoc khi sua cho symbol `MSTAssignment` la `LOW` va scope thuc te chi tap trung quanh table-panel extraction
 
 - `cng-sz6` da hoan tat tach form them MST khoi `MSTAssignment`:
   - them `src/components/mst-assignment/forms/MstAssignmentAddFormPanel.jsx` de rut block form them MST thanh panel presentational rieng
