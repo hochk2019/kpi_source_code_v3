@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 
 import clsx from "clsx";
-import * as XLSX from "xlsx";
 
 import {
   MST_ASSIGNMENT_STATUS,
@@ -45,6 +44,10 @@ import {
   shouldWrapCompanyName,
 } from "@/components/mst-assignment/model/companyName.js";
 import {
+  findCell,
+  toISO,
+} from "@/components/mst-assignment/model/importSheet.js";
+import {
   computeStatusDisplay,
   computeStoredStatus,
   formatISODate,
@@ -77,21 +80,6 @@ import { LogIn, LogOut } from "lucide-react";
 
 /** Utils */
 
-const normalize = (s = "") =>
-
-  s
-
-    .toString()
-
-    .normalize("NFD")
-
-    .replace(/[\u0300-\u036f]/g, "")
-
-    .replace(/\s+/g, " ")
-
-    .trim()
-
-    .toLowerCase();
 
 
 
@@ -106,180 +94,6 @@ const StaffCombobox = (props) => (
 
 
 
-
-
-
-const toISO = (v) => {
-
-  if (!v) return "";
-
-  // v có thể dạng Date, serial excel, "dd/mm/yyyy", "yyyy-mm-dd"
-
-  if (v instanceof Date && !isNaN(v)) {
-
-    const y = v.getFullYear();
-
-    const m = `${v.getMonth() + 1}`.padStart(2, "0");
-
-    const d = `${v.getDate()}`.padStart(2, "0");
-
-    return `${y}-${m}-${d}`;
-
-  }
-
-  if (typeof v === "number") {
-
-    // serial Excel
-
-    const d = XLSX.SSF.parse_date_code(v);
-
-    if (!d) return "";
-
-    const y = d.y;
-
-    const m = `${d.m}`.padStart(2, "0");
-
-    const day = `${d.d}`.padStart(2, "0");
-
-    return `${y}-${m}-${day}`;
-
-  }
-
-  const s = v.toString().trim();
-
-  // dd/mm/yyyy
-
-  const m1 = s.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
-
-  if (m1) {
-
-    const d = m1[1].padStart(2, "0");
-
-    const m = m1[2].padStart(2, "0");
-
-    const y = m1[3];
-
-    return `${y}-${m}-${d}`;
-
-  }
-
-  // yyyy-mm-dd
-
-  const m2 = s.match(/^(\d{4})[/-](\d{1,2})[/-](\d{1,2})$/);
-
-  if (m2) {
-
-    const y = m2[1];
-
-    const m = m2[2].padStart(2, "0");
-
-    const d = m2[3].padStart(2, "0");
-
-    return `${y}-${m}-${d}`;
-
-  }
-
-  return "";
-
-};
-
-
-
-const headerAliases = {
-
-  mst: ["mst", "mã số thuế", "ma so thue", "mã số thuế (mst)"],
-
-  company: ["company", "công ty", "ten cong ty", "doanh nghiep"],
-
-  person_import: [
-
-    "person_import",
-
-    "người phụ trách nhập",
-
-    "nguoi phu trach nhap",
-
-    "nhap",
-
-  ],
-
-  person_export: [
-
-    "person_export",
-
-    "người phụ trách xuất",
-
-    "nguoi phu trach xuat",
-
-    "xuat",
-
-  ],
-
-  team: ["team", "tổ đội", "to doi", "nhom", "group"],
-
-  effective_from: [
-
-    "effective_from",
-
-    "áp dụng từ ngày",
-
-    "ap dung tu ngay",
-
-    "apply_from",
-
-    "effective from",
-
-  ],
-
-  effective_to: [
-
-    "effective_to",
-
-    "đến hết ngày",
-
-    "den het ngay",
-
-    "apply_to",
-
-    "effective to",
-
-  ],
-
-  status: [
-
-    "status",
-
-    "trạng thái",
-
-    "trang thai",
-
-    "ghi chu trang thai",
-
-    "tinh trang",
-
-  ],
-
-};
-
-
-
-const findCell = (row, key) => {
-
-  const wanted = headerAliases[key] || [key];
-
-  const keys = Object.keys(row);
-
-  for (const w of wanted) {
-
-    const hit = keys.find((k) => normalize(k) === normalize(w));
-
-    if (hit) return row[hit];
-
-  }
-
-  return "";
-
-};
 
 
 

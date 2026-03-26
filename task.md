@@ -2,11 +2,12 @@
 
 ## Active Slice
 
-- Title: Tach status/date helper model khoi MSTAssignment
-- Bead: cng-d5g
+- Title: Tach MSTAssignment import parsing helpers
+- Bead: cng-w2c
 - Status: completed
 - Last updated: 2026-03-26
 
+- `cng-w2c` da hoan tat tach `findCell`, `toISO`, va `headerAliases` khoi `MSTAssignment` sang `src/components/mst-assignment/model/importSheet.js`; shell hien import lai helper moi cho luong import Excel, con regression test parsing da duoc tach rieng.
 - `cng-d5g` da hoan tat tach `formatISODate`, `normalizeStatusLabel`, `computeStoredStatus`, va `computeStatusDisplay` khoi `MSTAssignment` sang `src/components/mst-assignment/model/statusDate.js`; shell hien import lai helper moi va giu nguyen contract truyen vao add-form/import-save/row-mutations/export/table panel.
 - `cng-jix` da hoan tat hop nhat `goToFirstPage` wiring khoi `MSTAssignment` sang `src/components/mst-assignment/hooks/useMSTAssignmentPageResetWorkspace.js`; shell hien dung mot callback reset-page on dinh de feed cho add-form/history/import/staff/view workspace thay vi lap lai 5 lambda `setPageRef.current(1)`.
 - `cng-tai` da hoan tat tach company-name helpers khoi `MSTAssignment` sang `src/components/mst-assignment/model/companyName.js`; entry file hien chi giu `CompanyNameCell` component va import helper moi, con regression test company-name da tro helper import sang module rieng.
@@ -35,6 +36,15 @@
 - `cng-4hs` da tach xong card danh sach + bo loc thanh `KpiAdjustmentListPanel`, bo sung regression test panel, va giam `src/components/KPIAdjustments.jsx` xuong 1343 dong.
 
 ## Completed This Session
+
+- `cng-w2c` da hoan tat tach import-sheet parsing helpers khoi `MSTAssignment`:
+  - them `src/components/mst-assignment/model/importSheet.js` de gom `headerAliases`, `findCell`, va `toISO`
+  - `src/components/MSTAssignment.jsx` hien chi import helper parsing moi thay vi giu block alias/date parsing trong entry file; `XLSX` cung da duoc bo khoi shell vi khong con dung truc tiep
+  - bo sung `tests/mstAssignment.import-sheet.test.js` de khoa alias tieng Viet/khong dau, parsing `Date`, serial Excel, va string date
+  - targeted verify da pass:
+    - `pnpm exec vitest run tests/mstAssignment.import-sheet.test.js tests/useMSTAssignmentImportSaveWorkspace.test.jsx --environment jsdom`
+    - `pnpm exec eslint src/components/MSTAssignment.jsx src/components/mst-assignment/model/importSheet.js tests/mstAssignment.import-sheet.test.js tests/useMSTAssignmentImportSaveWorkspace.test.jsx`
+  - slice nay chi rut helper pure cho luong import, khong doi contract `useMSTAssignmentImportSaveWorkspace`
 
 - `cng-d5g` da hoan tat tach status/date helpers khoi `MSTAssignment`:
   - them `src/components/mst-assignment/model/statusDate.js` de gom `formatISODate`, `normalizeStatusLabel`, `computeStoredStatus`, va `computeStatusDisplay`
@@ -382,13 +392,13 @@
 
 ## Next Suggested Slice
 
-- Title: Tach import-sheet parsing helpers khoi MSTAssignment
+- Title: Tach row-identity/history formatting helpers khoi MSTAssignment
 - Bead: `TBD`
 - Status: san sang tao bead tiep theo
 - Follow-up backlog:
-  - co the tach `headerAliases`, `findCell`, va `toISO` ra model rieng cho luong import Excel neu muon rut gon them shell `MSTAssignment`
+  - co the tach `tidyMST`, `makeRowKey`, va `formatHistoryTime` ra helper/model rieng neu muon rut gon them shell `MSTAssignment`
   - can giu slice nho de tranh lan sang logic export/timeline/table dang on dinh
-  - uu tien chi doi helper pure va test parsing, khong doi contract cac workspace da tach
+  - uu tien chi doi helper pure va test formatter/key builder, khong doi contract cac workspace da tach
   - hoac chon mot bead frontend khac trong backlog neu uu tien chuyen sang orchestration refinement component khac
 
 ## Verification
