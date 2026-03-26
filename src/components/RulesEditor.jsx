@@ -1,23 +1,20 @@
-import React, { useCallback, useId, useMemo, useState } from "react";
+import React, { useMemo } from "react";
 
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card.jsx";
 
 import { Badge } from "@/components/ui/badge.jsx";
 
 import { Button } from "@/components/ui/button.jsx";
-
 import { Input } from "@/components/ui/input.jsx";
-
-import RuleNumberInput from "@/components/rules-editor/controls/RuleNumberInput.jsx";
 import RulesConfigTabsPanel from "@/components/rules-editor/RulesConfigTabsPanel.jsx";
 import RulesHistoryPanel from "@/components/rules-editor/RulesHistoryPanel.jsx";
 import RulesSimulationPanel from "@/components/rules-editor/RulesSimulationPanel.jsx";
-
-import { computeKPI } from "@/lib/rules.js";
+import RulesTestWorkspacePanel from "@/components/rules-editor/RulesTestWorkspacePanel.jsx";
 
 import { getData, getHQAgencies } from "@/lib/store.js";
 import useRulesConfigState from "@/components/rules-editor/hooks/useRulesConfigState.js";
 import useRulesEditorWorkflow from "@/components/rules-editor/hooks/useRulesEditorWorkflow.js";
+import useRulesTestWorkspace from "@/components/rules-editor/hooks/useRulesTestWorkspace.js";
 
 
 function formatHistoryTimestamp(value) {
@@ -40,11 +37,6 @@ function formatHistoryTimestamp(value) {
 
 
 export default function RulesEditor({ canEdit = true, currentUser = null }) {
-
-  const manualLicenseListId = useId();
-
-  const manualAgencyListId = useId();
-
   const hqAgencies = useMemo(() => getHQAgencies(), []);
   const data = useMemo(() => getData(), []);
   const {
@@ -90,174 +82,7 @@ export default function RulesEditor({ canEdit = true, currentUser = null }) {
     currentUser,
     data,
   });
-
-  const testList = useMemo(() => {
-
-    return data.map((row, index) => {
-
-      const soTkRaw = row?.so_tk ?? row?.soToKhai ?? row?.soTK ?? row?.so_to_khai ?? "";
-
-      const soTk = soTkRaw ? String(soTkRaw).trim() : "";
-
-      const date = row?.date || row?.ngay || "";
-
-      const company = row?.cong_ty || row?.company || row?.customer || "";
-
-      const mst = row?.mst || "";
-
-      const loai = row?.loai_hinh || row?.loaiHinh || "";
-
-      const label = [date, soTk, mst, company, loai]
-
-        .filter(Boolean)
-
-        .join(" | ") || `Tờ khai ${index + 1}`;
-
-      return {
-
-        key: `${index}-${soTk}-${date}`,
-
-        soTk,
-
-        label,
-
-        labelLower: label.toLowerCase(),
-
-        soTkLower: soTk.toLowerCase(),
-
-        row,
-
-      };
-
-    });
-
-  }, [data]);
-
-
-
-  const [testSearch, setTestSearch] = useState("");
-
-  const [pickedKey, setPickedKey] = useState("");
-
-
-
-  const filteredTestList = useMemo(() => {
-
-    const keyword = testSearch.trim().toLowerCase();
-
-    const base = keyword
-
-      ? testList.filter((item) =>
-
-          item.soTkLower.includes(keyword) || item.labelLower.includes(keyword)
-
-        )
-
-      : testList;
-
-    return base.slice(0, 400);
-
-  }, [testList, testSearch]);
-
-
-
-  const firstMatch = useMemo(() => {
-
-    const keyword = testSearch.trim().toLowerCase();
-
-    if (!keyword) return null;
-
-    return testList.find((item) => item.soTkLower.includes(keyword)) || null;
-
-  }, [testList, testSearch]);
-
-
-
-  const handleSearchSubmit = useCallback((event) => {
-
-    event.preventDefault();
-
-    if (firstMatch) {
-
-      setPickedKey(firstMatch.key);
-
-    } else if (testSearch.trim()) {
-
-      alert("Không tìm thấy tờ khai khớp với số đã nhập.");
-
-    }
-
-  }, [firstMatch, testSearch]);
-
-
-
-  const pickedEntry = useMemo(
-
-    () => testList.find((item) => item.key === pickedKey) || null,
-
-    [testList, pickedKey]
-
-  );
-
-
-
-  const pickedRow = pickedEntry?.row || null;
-
-  const kpiPicked = pickedRow ? computeKPI(pickedRow, rule) : 0;
-
-
-
-  const [manualType, setManualType] = useState("A11");
-
-  const [manualItems, setManualItems] = useState(10);
-
-  const [manualLicenses, setManualLicenses] = useState("ZB02,ZB03");
-
-  const [manualAgency, setManualAgency] = useState("G&B");
-
-  const [manualHasCO, setManualHasCO] = useState(true);
-
-  const [manualCoLines, setManualCoLines] = useState(0);
-
-
-
-  const manualRow = useMemo(() => {
-
-    const codes = manualLicenses
-
-      .split(",")
-
-      .map((code) => code.trim().toUpperCase())
-
-      .filter(Boolean);
-
-    const coLines = Number(manualCoLines || 0);
-
-    const hasCOFlag = manualHasCO || coLines > 0;
-
-    return {
-
-      loaiHinh: manualType,
-
-      num_items: Number(manualItems || 0),
-
-      licenseCodes: codes,
-
-      agency: manualAgency,
-
-      has_co: hasCOFlag,
-
-      co: hasCOFlag ? "Có" : "",
-
-      co_line_count: coLines,
-
-    };
-
-  }, [manualAgency, manualCoLines, manualHasCO, manualItems, manualLicenses, manualType]);
-
-
-
-  const kpiManual = computeKPI(manualRow, rule);
+  const testWorkspace = useRulesTestWorkspace({ data, rule });
 
 
 
@@ -651,99 +476,11 @@ export default function RulesEditor({ canEdit = true, currentUser = null }) {
 
 
 
-          <div className="space-y-4 rounded border p-3">
-
-            <div className="font-semibold">Test nhanh 1 tờ khai đã import</div>
-
-            <form className="flex flex-col gap-2 sm:flex-row" onSubmit={handleSearchSubmit}>
-
-              <Input
-
-                placeholder="Nhập số tờ khai để tìm"
-
-                value={testSearch}
-
-                onChange={(event) => setTestSearch(event.target.value)}
-
-              />
-
-              <Button type="submit" variant="outline">
-
-                Tìm theo số tờ khai
-
-              </Button>
-
-            </form>
-
-            <div className="text-xs text-gray-500">
-
-              Hiển thị {filteredTestList.length} / {testList.length} tờ khai đã lưu
-
-            </div>
-
-            <select
-
-              className="h-40 w-full rounded border p-2"
-
-              size={8}
-
-              value={pickedKey}
-
-              onChange={(event) => setPickedKey(event.target.value)}
-
-            >
-
-              <option value="">-- Chọn 1 tờ khai --</option>
-
-              {filteredTestList.map((item) => (
-
-                <option key={item.key} value={item.key}>
-
-                  {item.label}
-
-                </option>
-
-              ))}
-
-            </select>
-
-            <div className="text-sm">
-
-              {pickedRow ? (
-
-                <>
-
-                  <div>
-
-                    <b>Số tờ khai:</b> {pickedRow.so_tk || pickedRow.soToKhai || ""} &nbsp;
-
-                    <b>Loại hình:</b> {pickedRow.loai_hinh || pickedRow.loaiHinh || ""} &nbsp;
-
-                    <b>Mục hàng:</b> {pickedRow.num_items ?? pickedRow.muc_hang ?? 0} &nbsp;
-
-                    <b>MST:</b> {pickedRow.mst || ""} &nbsp;
-
-                    <b>Cty:</b> {pickedRow.cong_ty || pickedRow.company || ""}
-
-                  </div>
-
-                  <div className="mt-1">
-
-                    <b>KẾT QUẢ:</b> {kpiPicked.toFixed(1)}
-
-                  </div>
-
-                </>
-
-              ) : (
-
-                <i>Chọn 1 dòng để test…</i>
-
-              )}
-
-            </div>
-
-          </div>
+          <RulesTestWorkspacePanel
+            workspace={testWorkspace}
+            licenseOptions={licenseOptions}
+            agencyOptions={agencyOptions}
+          />
 
 
 
@@ -761,161 +498,6 @@ export default function RulesEditor({ canEdit = true, currentUser = null }) {
             onRestoreEntry={handleRestoreEntry}
             formatTimestamp={formatHistoryTimestamp}
           />
-
-
-
-          <div className="space-y-4 rounded border p-3">
-
-            <div className="font-semibold">Test nhập tay</div>
-
-            <div className="grid gap-4 md:grid-cols-2">
-
-              <div>
-
-                <label className="text-sm text-gray-600">Loại hình</label>
-
-                <Input value={manualType} onChange={(event) => setManualType(event.target.value.toUpperCase())} />
-
-              </div>
-
-              <div>
-
-                <label className="text-sm text-gray-600">Tổng số mục hàng</label>
-
-                <RuleNumberInput step="1" value={manualItems} onChange={setManualItems} />
-
-              </div>
-
-              <div>
-
-                <label className="text-sm text-gray-600">Mã giấy phép (phẩy)</label>
-
-                <Input
-
-                  value={manualLicenses}
-
-                  onChange={(event) => setManualLicenses(event.target.value)}
-
-                  list={manualLicenseListId}
-
-                  placeholder="Ví dụ: ZB02,ZB03"
-
-                />
-
-                <datalist id={manualLicenseListId}>
-
-                  {licenseOptions.map((item) => (
-
-                    <option
-
-                      key={`manual-license-${item.value}`}
-
-                      value={item.value}
-
-                      label={
-
-                        item.count
-
-                          ? `${item.value} (${item.count.toLocaleString("vi-VN")})`
-
-                          : item.value
-
-                      }
-
-                    />
-
-                  ))}
-
-                </datalist>
-
-              </div>
-
-              <div>
-
-                <label className="text-sm text-gray-600">Đại lý HQ</label>
-
-                <Input
-
-                  value={manualAgency}
-
-                  onChange={(event) => setManualAgency(event.target.value)}
-
-                  list={manualAgencyListId}
-
-                  placeholder="Nhập hoặc chọn đại lý"
-
-                />
-
-                <datalist id={manualAgencyListId}>
-
-                  {agencyOptions.map((item) => (
-
-                    <option
-
-                      key={`manual-agency-${item.value}`}
-
-                      value={item.value}
-
-                      label={item.hint ? `${item.value} – ${item.hint}` : item.value}
-
-                    />
-
-                  ))}
-
-                </datalist>
-
-              </div>
-
-              <div className="flex items-center gap-2 text-sm">
-
-                <label className="inline-flex items-center gap-2">
-
-                  <input
-
-                    type="checkbox"
-
-                    checked={manualHasCO}
-
-                    onChange={(event) => setManualHasCO(event.target.checked)}
-
-                  />
-
-                  Có C/O
-
-                </label>
-
-              </div>
-
-              <div>
-
-                <label className="text-sm text-gray-600">Số dòng áp C/O</label>
-
-                <RuleNumberInput step="1" value={manualCoLines} onChange={setManualCoLines} />
-
-                <div className="text-xs text-gray-500 mt-1">
-
-                  Điểm C/O theo dòng = số dòng × điểm mỗi dòng.
-
-                </div>
-
-              </div>
-
-            </div>
-
-            <div>
-
-              <b>KẾT QUẢ:</b> {kpiManual.toFixed(1)}
-
-            </div>
-
-            <div className="text-xs text-gray-500">
-
-              * Kết quả = Điểm cơ bản + (số mục hàng × điểm mỗi mục) + điểm giấy phép (áp dụng loại trừ) + điểm C/O (nếu bật).
-
-            </div>
-
-          </div>
-
         </CardContent>
 
       </Card>

@@ -2,14 +2,23 @@
 
 ## Active Slice
 
-- Title: Tach workflow save-restore va simulation orchestration khoi RulesEditor
-- Bead: cng-lte
+- Title: Tach test workspace khoi RulesEditor
+- Bead: cng-42t
 - Status: done
 - Last updated: 2026-03-26
 
 ## Completed This Session
 
-1. `cng-lte` da duoc implementation o muc workflow/orchestration extraction cho `RulesEditor`:
+1. `cng-42t` da duoc implementation o muc test-workspace extraction cho `RulesEditor`:
+   - them `src/components/rules-editor/hooks/useRulesTestWorkspace.js` de tach declaration search/pick state, manual KPI scenario state, va derived KPI preview khoi file goc
+   - them `src/components/rules-editor/RulesTestWorkspacePanel.jsx` de render hai khu vuc "Test nhanh 1 tờ khai đã import" va "Test nhập tay" thanh panel rieng
+   - `src/components/RulesEditor.jsx` hien chi wiring `useRulesTestWorkspace` + `RulesTestWorkspacePanel`, giam them local state va JSX trung lap trong file goc
+   - them `tests/useRulesTestWorkspace.test.jsx` va `tests/rulesTestWorkspacePanel.test.jsx` de khoa ca hook state lẫn panel interaction
+   - targeted verify da pass:
+     - `pnpm exec eslint src/components/RulesEditor.jsx src/components/rules-editor/RulesTestWorkspacePanel.jsx src/components/rules-editor/hooks/useRulesTestWorkspace.js tests/useRulesTestWorkspace.test.jsx tests/rulesTestWorkspacePanel.test.jsx tests/rulesEditor.test.jsx`
+     - `pnpm exec vitest run tests/useRulesTestWorkspace.test.jsx tests/rulesTestWorkspacePanel.test.jsx tests/rulesEditor.test.jsx tests/useRulesEditorWorkflow.test.jsx tests/rulesEditorHistoryPanel.test.jsx tests/rulesEditorSimulationPanel.test.jsx --environment jsdom`
+
+2. `cng-lte` da duoc implementation o muc workflow/orchestration extraction cho `RulesEditor`:
    - them `src/components/rules-editor/hooks/useRulesEditorWorkflow.js` de tach save/reset/default/delete/import-export, history refresh/restore, va simulation khoi `src/components/RulesEditor.jsx`
    - `src/components/RulesEditor.jsx` hien giu vai tro compose UI + wiring voi `useRulesConfigState` va `useRulesEditorWorkflow`, khong con giu block handler workflow trung lap
    - them `tests/useRulesEditorWorkflow.test.jsx` de khoa truc tiep 2 flow quan trong: simulation summary va history refresh/restore
@@ -17,7 +26,7 @@
      - `pnpm exec eslint src/components/RulesEditor.jsx src/components/rules-editor/hooks/useRulesEditorWorkflow.js tests/useRulesEditorWorkflow.test.jsx tests/rulesEditor.test.jsx`
      - `pnpm exec vitest run tests/useRulesEditorWorkflow.test.jsx tests/rulesEditor.test.jsx tests/rulesEditorHistoryPanel.test.jsx tests/rulesEditorSimulationPanel.test.jsx --environment jsdom`
 
-2. Fact-check review da duoc ghi lai tai:
+3. Fact-check review da duoc ghi lai tai:
    - `docs/gemini-review-v1-factcheck-2026-03-25.md`
 2. Backlog bead da duoc seed:
    - `cng-xyq` epic
