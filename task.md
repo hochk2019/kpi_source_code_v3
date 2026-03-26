@@ -4,10 +4,10 @@
 
 - Title: Tach form them MST khoi MSTAssignment
 - Bead: cng-sz6
-- Status: in_progress
+- Status: completed
 - Last updated: 2026-03-26
 
-- `cng-sz6` la bead hien tai de tach form them MST khoi `src/components/MSTAssignment.jsx`.
+- `cng-sz6` da hoan tat tach form them MST khoi `src/components/MSTAssignment.jsx`; file goc gio chi giu orchestration/callback, con UI form da duoc rut thanh panel rieng va bo sung regression test moi.
 - `cng-u40` da dong bead sau khi tach xong `MstAssignmentHistoryFilterPanel`; block bo loc lich su thay doi da duoc rut thanh panel rieng va verify bang regression test moi.
 - `cng-c6v` da dong bead sau khi tach xong `MstAssignmentStaffFilterPanel`; `src/components/MSTAssignment.jsx` da rut duoc block bo loc nhan vien phu trach + quick favorites thanh panel rieng va khoa bang regression test moi.
 - `cng-ejo` da dong bead sau khi tach xong `KpiAdjustmentOverviewPanel`; `src/components/KPIAdjustments.jsx` hien con 564 dong.
@@ -17,6 +17,15 @@
 - `cng-4hs` da tach xong card danh sach + bo loc thanh `KpiAdjustmentListPanel`, bo sung regression test panel, va giam `src/components/KPIAdjustments.jsx` xuong 1343 dong.
 
 ## Completed This Session
+
+- `cng-sz6` da hoan tat tach form them MST khoi `MSTAssignment`:
+  - them `src/components/mst-assignment/forms/MstAssignmentAddFormPanel.jsx` de rut block form them MST thanh panel presentational rieng
+  - bo sung `tests/mstAssignmentAddFormPanel.test.jsx` de khoa wiring callback, assignee combobox labels, submit/cancel action, va error display
+  - `src/components/MSTAssignment.jsx` hien chi giu callback orchestration (`handleDraftImportSelect`, `handleDraftExportSelect`, `handleCloseAddForm`) va render panel moi thay vi block JSX inline
+  - targeted verify da pass:
+    - `pnpm exec eslint src/components/MSTAssignment.jsx src/components/mst-assignment/forms/MstAssignmentAddFormPanel.jsx tests/mstAssignmentAddFormPanel.test.jsx tests/mstAssignment.person-columns.test.jsx tests/mstAssignment.timeline.test.jsx`
+    - `pnpm exec vitest run tests/mstAssignmentAddFormPanel.test.jsx tests/mstAssignment.person-columns.test.jsx tests/mstAssignment.timeline.test.jsx --environment jsdom`
+  - `detect_changes(scope: "all")` van bao `risk_level: high` vi GitNexus map diff theo file `MSTAssignment.jsx`, nhung scope thuc te chi la add-form extraction va regression tests lien quan da xanh
 
 - `cng-u40` da hoan tat tach bo loc lich su thay doi khoi `MSTAssignment`:
   - them `src/components/mst-assignment/filters/MstAssignmentHistoryFilterPanel.jsx` de rut section history filter thanh panel presentational rieng
@@ -208,15 +217,12 @@
 
 ## Next Suggested Slice
 
-- Title: Tach form them MST khoi MSTAssignment
-- Bead: `cng-sz6`
-- Status: de xuat
+- Title: Chua chot slice tiep theo
+- Bead: `TBD`
+- Status: cho user uu tien
 - Follow-up backlog:
-  - tach form them MST thanh panel rieng, giu nguyen wiring `draft`, submit flow, va validation hien tai
-  - giu nguyen hanh vi `StaffCombobox` cho nguoi phu trach nhap/xuat, accessibility labels, va team roster binding
-  - targeted verify du kien:
-    - `pnpm exec vitest run tests/mstAssignment.person-columns.test.jsx tests/mstAssignment.timeline.test.jsx --environment jsdom`
-    - `pnpm exec eslint src/components/MSTAssignment.jsx src/components/mst-assignment/**/*.jsx tests/mstAssignment.person-columns.test.jsx tests/mstAssignment.timeline.test.jsx`
+  - tiep tuc wave decomposition cho `MSTAssignment` neu muon giam them orchestration/state khoi entry-point
+  - hoac chon mot bead frontend khac trong backlog de song song hoa refactor sau khi `cng-sz6` da dong
 
 ## Verification
 

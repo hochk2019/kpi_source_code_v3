@@ -34,6 +34,7 @@ import useMSTQuickFilters from "@/hooks/useMSTQuickFilters.js";
 import SharedStaffCombobox, {
   buildStaffComboboxTeams,
 } from "@/components/shared/StaffCombobox.jsx";
+import MstAssignmentAddFormPanel from "@/components/mst-assignment/forms/MstAssignmentAddFormPanel.jsx";
 import MstAssignmentHistoryFilterPanel from "@/components/mst-assignment/filters/MstAssignmentHistoryFilterPanel.jsx";
 import MstAssignmentStaffFilterPanel from "@/components/mst-assignment/filters/MstAssignmentStaffFilterPanel.jsx";
 import {
@@ -1802,6 +1803,45 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
 
   };
 
+  const handleDraftImportSelect = useCallback(
+    ({ staffName, teamName, isCustom }) => {
+      setDraft((prev) => {
+        const next = { ...prev, person_import: staffName || "" };
+        if (staffName && teamName && !isCustom) {
+          const prevTeamKey = normalizeName(normalizeStr(prev.team || ""));
+          const nextTeamKey = normalizeName(normalizeStr(teamName));
+          if (!prevTeamKey || prevTeamKey === nextTeamKey) {
+            next.team = teamName;
+          }
+        }
+        return next;
+      });
+    },
+    []
+  );
+
+  const handleDraftExportSelect = useCallback(
+    ({ staffName, teamName, isCustom }) => {
+      setDraft((prev) => {
+        const next = { ...prev, person_export: staffName || "" };
+        if (staffName && teamName && !isCustom) {
+          const prevTeamKey = normalizeName(normalizeStr(prev.team || ""));
+          const nextTeamKey = normalizeName(normalizeStr(teamName));
+          if (!prevTeamKey || prevTeamKey === nextTeamKey) {
+            next.team = teamName;
+          }
+        }
+        return next;
+      });
+    },
+    []
+  );
+
+  const handleCloseAddForm = useCallback(() => {
+    setShowAddForm(false);
+    setAddError("");
+  }, []);
+
 
 
   const handleAddSubmit = (event) => {
@@ -2924,271 +2964,23 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
 
 
 
-      {showAddForm && (
-
-        <form
-
+      {showAddForm ? (
+        <MstAssignmentAddFormPanel
+          StaffComboboxComponent={StaffCombobox}
+          draft={draft}
+          addError={addError}
+          rosterTeams={rosterTeams}
           onSubmit={handleAddSubmit}
-
-          className="mb-4 rounded border border-gray-200 bg-white p-4 shadow-sm"
-
-        >
-
-          <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-
-            <label className="flex flex-col gap-1 text-sm font-medium text-gray-700">
-
-              Mã số thuế
-
-              <input
-
-                type="text"
-
-                value={draft.mst}
-
-                onChange={handleDraftChange("mst", tidyMST)}
-
-                className="border rounded px-2 py-1"
-
-                placeholder="Nhập mã số thuế"
-
-                required
-
-                data-tooltip="Nhập mã số thuế (chỉ chứa số)"
-
-              />
-
-            </label>
-
-            <label className="flex flex-col gap-1 text-sm font-medium text-gray-700">
-
-              Tên công ty
-
-              <input
-
-                type="text"
-
-                value={draft.company}
-
-                onChange={handleDraftChange("company")}
-
-                className="border rounded px-2 py-1"
-
-                placeholder="Tên công ty"
-
-                data-tooltip="Tên doanh nghiệp tương ứng với MST"
-
-              />
-
-            </label>
-
-            <label className="flex flex-col gap-1 text-sm font-medium text-gray-700">
-
-              Người phụ trách Nhập
-
-              <StaffCombobox
-
-                value={draft.person_import}
-
-                teamValue={draft.team}
-
-                teams={rosterTeams}
-
-                placeholder="Chọn nhân viên nhập"
-                ariaLabel="Người phụ trách Nhập"
-                searchAriaLabel="Tìm người phụ trách Nhập"
-
-                onSelect={({ staffName, teamName, isCustom }) => {
-
-                  setDraft((prev) => {
-
-                    const next = { ...prev, person_import: staffName || "" };
-
-                    if (staffName && teamName && !isCustom) {
-
-                      const prevTeamKey = normalizeName(normalizeStr(prev.team || ""));
-
-                      const nextTeamKey = normalizeName(normalizeStr(teamName));
-
-                      if (!prevTeamKey || prevTeamKey === nextTeamKey) {
-
-                        next.team = teamName;
-
-                      }
-
-                    }
-
-                    return next;
-
-                  });
-
-                }}
-
-              />
-
-            </label>
-
-            <label className="flex flex-col gap-1 text-sm font-medium text-gray-700">
-
-              Người phụ trách Xuất
-
-              <StaffCombobox
-
-                value={draft.person_export}
-
-                teamValue={draft.team}
-
-                teams={rosterTeams}
-
-                placeholder="Chọn nhân viên xuất"
-                ariaLabel="Người phụ trách Xuất"
-                searchAriaLabel="Tìm người phụ trách Xuất"
-
-                onSelect={({ staffName, teamName, isCustom }) => {
-
-                  setDraft((prev) => {
-
-                    const next = { ...prev, person_export: staffName || "" };
-
-                    if (staffName && teamName && !isCustom) {
-
-                      const prevTeamKey = normalizeName(normalizeStr(prev.team || ""));
-
-                      const nextTeamKey = normalizeName(normalizeStr(teamName));
-
-                      if (!prevTeamKey || prevTeamKey === nextTeamKey) {
-
-                        next.team = teamName;
-
-                      }
-
-                    }
-
-                    return next;
-
-                  });
-
-                }}
-
-              />
-
-            </label>
-
-            <label className="flex flex-col gap-1 text-sm font-medium text-gray-700">
-
-              Tổ đội (tuỳ chọn)
-
-              <input
-
-                type="text"
-
-                value={draft.team}
-
-                onChange={handleDraftChange("team")}
-
-                className="border rounded px-2 py-1"
-
-                placeholder="Tên tổ đội"
-
-                data-tooltip="Ghi chú tổ đội/nhóm phụ trách nếu cần"
-
-              />
-
-            </label>
-
-            <label className="flex flex-col gap-1 text-sm font-medium text-gray-700">
-
-              Áp dụng từ ngày
-
-              <input
-
-                type="date"
-
-                value={draft.effective_from}
-
-                onChange={handleDraftChange("effective_from")}
-
-                className="border rounded px-2 py-1"
-
-                data-tooltip="Ngày bắt đầu áp dụng cấu hình"
-
-              />
-
-            </label>
-
-            <label className="flex flex-col gap-1 text-sm font-medium text-gray-700">
-
-              Đến hết ngày (tuỳ chọn)
-
-              <input
-
-                type="date"
-
-                value={draft.effective_to}
-
-                onChange={handleDraftChange("effective_to")}
-
-                className="border rounded px-2 py-1"
-
-                data-tooltip="Ngày kết thúc hiệu lực. Để trống nếu áp dụng vô thời hạn."
-
-              />
-
-            </label>
-
-          </div>
-
-          {addError && <p className="mt-2 text-sm text-red-600">{addError}</p>}
-
-          <div className="mt-4 flex flex-wrap items-center gap-2">
-
-            <button
-
-              type="submit"
-
-              className="px-3 py-1.5 rounded bg-emerald-600 text-white"
-
-              data-tooltip="Thêm dòng này vào danh sách tạm"
-
-            >
-
-              Thêm vào danh sách
-
-            </button>
-
-            <button
-
-              type="button"
-
-              onClick={() => {
-
-                setShowAddForm(false);
-
-                setAddError("");
-
-              }}
-
-              className="px-3 py-1.5 rounded border bg-white hover:bg-gray-50"
-
-              data-tooltip="Đóng biểu mẫu thêm mới"
-
-            >
-
-              Hủy
-
-            </button>
-
-            <span className="text-xs text-gray-500">
-
-              * Sau khi thêm, bấm Lưu để ghi dữ liệu vào hệ thống chính thức.
-
-            </span>
-
-          </div>
-
-        </form>
-
-      )}
+          onMstChange={handleDraftChange("mst", tidyMST)}
+          onCompanyChange={handleDraftChange("company")}
+          onImportSelect={handleDraftImportSelect}
+          onExportSelect={handleDraftExportSelect}
+          onTeamChange={handleDraftChange("team")}
+          onEffectiveFromChange={handleDraftChange("effective_from")}
+          onEffectiveToChange={handleDraftChange("effective_to")}
+          onCancel={handleCloseAddForm}
+        />
+      ) : null}
 
 
 
