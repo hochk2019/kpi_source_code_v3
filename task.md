@@ -2,11 +2,12 @@
 
 ## Active Slice
 
-- Title: Tach derived data workspace khoi MSTAssignment
-- Bead: cng-eg4
+- Title: Tach company-name helpers khoi MSTAssignment
+- Bead: cng-tai
 - Status: completed
 - Last updated: 2026-03-26
 
+- `cng-tai` da hoan tat tach company-name helpers khoi `MSTAssignment` sang `src/components/mst-assignment/model/companyName.js`; entry file hien chi giu `CompanyNameCell` component va import helper moi, con regression test company-name da tro helper import sang module rieng.
 - `cng-eg4` da hoan tat tach derived-data workspace khoi `MSTAssignment` sang `src/components/mst-assignment/hooks/useMSTAssignmentDerivedRowsWorkspace.js`; shell hien chi giu wiring `filtered`, `groupedStages`, `displayList`, con hook moi gom pipeline loc/uu tien row moi import va bridge sang grouped/aggregated selectors.
 - `cng-6d3` da hoan tat tach search/view controls workspace khoi `MSTAssignment` sang `src/components/mst-assignment/hooks/useMSTAssignmentViewControlsWorkspace.js`; shell hien chi giu wiring cho `search`, `applyFrom`, `groupByMST`, va header actions, con hook moi gom state dieu khien header + search reset page flow.
 - `cng-7db` da hoan tat tach staff-filter workspace khoi `MSTAssignment` sang `src/components/mst-assignment/hooks/useMSTAssignmentStaffFilterWorkspace.js`; shell hien chi giu wiring `staffFilter` + panel props, con hook moi gom state filter nhan vien, page-reset flow, va quick-favorite alerts.
@@ -32,6 +33,15 @@
 - `cng-4hs` da tach xong card danh sach + bo loc thanh `KpiAdjustmentListPanel`, bo sung regression test panel, va giam `src/components/KPIAdjustments.jsx` xuong 1343 dong.
 
 ## Completed This Session
+
+- `cng-tai` da hoan tat tach company-name helpers khoi `MSTAssignment`:
+  - them `src/components/mst-assignment/model/companyName.js` de gom `COMPANY_NAME_WRAP_THRESHOLD`, `shouldWrapCompanyName`, va `sanitizeCompanyNameInput`
+  - `src/components/MSTAssignment.jsx` hien chi con giu `CompanyNameCell` component va import helper moi thay vi export non-component helpers trong cung entry file
+  - cap nhat `tests/mstAssignment.company-name.test.jsx` de giu `CompanyNameCell` import tu `MSTAssignment.jsx`, con helper assertions chuyen sang module moi
+  - targeted verify da pass:
+    - `pnpm exec vitest run tests/mstAssignment.company-name.test.jsx --environment jsdom`
+    - `pnpm exec eslint src/components/MSTAssignment.jsx src/components/mst-assignment/model/companyName.js tests/mstAssignment.company-name.test.jsx`
+  - muc tieu cua slice nay la don 2 warning Fast Refresh con lai o `src/components/MSTAssignment.jsx`
 
 - `cng-eg4` da hoan tat tach derived-data workspace khoi `MSTAssignment`:
   - them `src/components/mst-assignment/hooks/useMSTAssignmentDerivedRowsWorkspace.js` de gom `filterAndPrioritizeRows`, `filtered`, `groupedStages`, `aggregatedByMST`, va `displayList`
@@ -352,13 +362,13 @@
 
 ## Next Suggested Slice
 
-- Title: Tach helper Fast Refresh / go-to-first-page wiring khoi MSTAssignment
+- Title: Hop nhat go-to-first-page wiring khoi MSTAssignment
 - Bead: `TBD`
 - Status: san sang tao bead tiep theo
 - Follow-up backlog:
   - hop nhat callback `goToFirstPage` dang lap lai giua history/staff/import/add/view workspace thanh mot helper on dinh de giam churn props va event wiring
-  - tach cac helper/constant export dang giu `MSTAssignment.jsx` bi warning Fast Refresh sang module rieng neu muon don tiep 2 warning lint cu
-  - sau do co the can nhac bead rieng cho timeline map hoac status/helper cleanup neu muc tieu la tiep tuc rut gon shell
+  - sau khi helper company-name da tach xong, co the can nhac bead rieng cho timeline map hoac status/date helper cleanup neu muc tieu la tiep tuc rut gon shell
+  - uu tien giu slice nho de tranh lan sang logic export/timeline/table da on dinh
   - hoac chon mot bead frontend khac trong backlog neu uu tien chuyen sang orchestration refinement component khac
 
 ## Verification

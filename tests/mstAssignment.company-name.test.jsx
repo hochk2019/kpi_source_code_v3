@@ -3,11 +3,13 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { render, screen, fireEvent, cleanup } from "@testing-library/react";
 
 import {
+  CompanyNameCell,
+} from "@/components/MSTAssignment.jsx";
+import {
   COMPANY_NAME_WRAP_THRESHOLD,
   shouldWrapCompanyName,
   sanitizeCompanyNameInput,
-  CompanyNameCell,
-} from "@/components/MSTAssignment.jsx";
+} from "@/components/mst-assignment/model/companyName.js";
 
 afterEach(() => {
   cleanup();
