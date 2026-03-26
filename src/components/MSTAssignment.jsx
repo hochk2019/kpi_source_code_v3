@@ -59,10 +59,12 @@ import {
 import { buildStatusViewModel } from "@/components/mst-assignment/model/statusViewModel.js";
 import HistoryDetails from "@/components/mst-assignment/timeline/HistoryDetails.jsx";
 import MstAssignmentTimelinePanel from "@/components/mst-assignment/timeline/MstAssignmentTimelinePanel.jsx";
+import AssigneeCell from "@/components/mst-assignment/table/AssigneeCell.jsx";
 import CompanyNameCell from "@/components/mst-assignment/table/CompanyNameCell.jsx";
 import MstAssignmentDataTablePanel from "@/components/mst-assignment/table/MstAssignmentDataTablePanel.jsx";
 import PageSizeControl from "@/components/mst-assignment/table/PageSizeControl.jsx";
 import PersonColumnHeader from "@/components/mst-assignment/table/PersonColumnHeader.jsx";
+export { default as AssigneeCell } from "@/components/mst-assignment/table/AssigneeCell.jsx";
 export { default as CompanyNameCell } from "@/components/mst-assignment/table/CompanyNameCell.jsx";
 export { default as MstAssignmentStaffCombobox } from "@/components/mst-assignment/shared/MstAssignmentStaffCombobox.jsx";
 export { default as PageSizeControl } from "@/components/mst-assignment/table/PageSizeControl.jsx";
@@ -96,75 +98,6 @@ import {
 
 
 
-
-export function AssigneeCell({
-  value = "",
-  placeholder,
-  isReadOnly,
-  teams = [],
-  teamValue = "",
-  onSelect,
-  historyEntries = [],
-  historyLabel,
-  showTeamHint = false,
-}) {
-  const safeValue = value == null ? "" : value.toString();
-  const trimmedValue = safeValue.trim();
-  const normalizedTeam = teamValue == null ? "" : teamValue.toString().trim();
-  const hasTeamHint = showTeamHint && normalizedTeam;
-
-  const displayNode = isReadOnly ? (
-    trimmedValue ? (
-      <span
-        className="whitespace-normal break-words text-gray-900 leading-snug"
-        style={{
-          display: "-webkit-box",
-          WebkitLineClamp: 2,
-          WebkitBoxOrient: "vertical",
-          overflow: "hidden",
-        }}
-        title={trimmedValue}
-        data-assignee-state="filled"
-      >
-        {trimmedValue}
-      </span>
-    ) : (
-      <span className="italic text-gray-400" data-assignee-state="empty">
-        (Chưa chọn)
-      </span>
-    )
-  ) : (
-    <MstAssignmentStaffCombobox
-      value={safeValue}
-      teamValue={teamValue || ""}
-      teams={teams}
-      placeholder={placeholder}
-      onSelect={onSelect}
-    />
-  );
-
-  return (
-    <div className="flex flex-col">
-      <div className="flex flex-col gap-1">
-        {displayNode}
-        {hasTeamHint ? (
-          <span
-            className="text-xs text-gray-500"
-            title={`Tổ phụ trách: ${normalizedTeam}`}
-            data-team-hint="true"
-          >
-            Tổ: {normalizedTeam}
-          </span>
-        ) : null}
-      </div>
-      <HistoryDetails
-        entries={historyEntries}
-        label={historyLabel}
-        formatTimestamp={formatHistoryTime}
-      />
-    </div>
-  );
-}
 
 export default function MSTAssignment({ canEdit = true, currentUser = null }) {
 
