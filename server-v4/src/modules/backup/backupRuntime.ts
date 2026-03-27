@@ -3,6 +3,7 @@ import path from 'node:path';
 
 import cron from 'node-cron';
 
+import type { AuthStore } from '../auth/authStore.js';
 import { createBackupDomain } from './backupDomain.js';
 
 export type BackupConfigSnapshot = {
@@ -37,6 +38,13 @@ export interface BackupAdminDomain {
     reason?: string;
     retention?: number | null;
   }): Promise<BackupDomainResult>;
+  restoreDatabaseBackup(options?: {
+    actor?: string;
+    filename?: string;
+    note?: string | null;
+    reason?: string;
+    backupDir?: string;
+  }): Promise<BackupDomainResult>;
   refreshDatabaseBackupSchedule(): void;
 }
 
@@ -54,6 +62,7 @@ export interface BackupAdminRuntime {
 }
 
 type CreateBackupAdminRuntimeOptions = {
+  authStore?: AuthStore | null;
   dbFile: string | null;
   defaultCron?: string;
   defaultRetentionCopies?: number;
@@ -106,7 +115,7 @@ export function createBackupAdminRuntime(
     ),
   };
 
-  let currentDbHandle: { close?: () => void } | null = null;
+  let currentDbHandle: { close?: () => void } | null = createManagedDatabaseHandle(options.authStore);
 
   function getBackupConfig(): BackupConfigSnapshot {
     const cronValue = normalizeCronExpression(configState.cron) || DEFAULT_BACKUP_CRON;
@@ -178,7 +187,7 @@ export function createBackupAdminRuntime(
       state.dbBackupJob = value;
     },
     setDatabase: (value: typeof currentDbHandle) => {
-      currentDbHandle = value;
+      currentDbHandle = value ?? createManagedDatabaseHandle(options.authStore);
     },
     setRestoreInProgress: (value: boolean) => {
       state.restoreInProgress = value;
@@ -197,6 +206,18 @@ export function createBackupAdminRuntime(
     normalizeBackupDirectoryInput,
     pushAuditLog,
     saveBackupConfig,
+  };
+}
+
+function createManagedDatabaseHandle(authStore: AuthStore | null | undefined): { close?: () => void } | null {
+  if (!authStore?.reset) {
+    return null;
+  }
+
+  return {
+    close: () => {
+      authStore.reset?.();
+    },
   };
 }
 

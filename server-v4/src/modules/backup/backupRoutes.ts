@@ -195,6 +195,40 @@ export function buildBackupRouter(
     }
   });
 
+  router.post('/restore', async (req, res) => {
+    const account = await requireAdminBackupManage(req, res, authStore);
+    if (!account) {
+      return;
+    }
+
+    try {
+      const body = req.body ?? {};
+      const filename = typeof body.filename === 'string' ? body.filename : '';
+      const note = typeof body.note === 'string' ? body.note : null;
+      const result = await backupAdmin.domain.restoreDatabaseBackup({
+        filename,
+        actor: account.username || 'system',
+        note,
+      });
+
+      if (result?.ok === false) {
+        const message =
+          translateBackupFailure(result.reason) ||
+          translateBackupReason(result.reason) ||
+          'Không thể khôi phục CSDL.';
+        const status = ['restore_in_progress', 'backup_in_progress'].includes(`${result.reason ?? ''}`)
+          ? 409
+          : 400;
+        res.status(status).json({ ok: false, error: message, reason: result.reason });
+        return;
+      }
+
+      res.json({ ok: true, result });
+    } catch (error) {
+      res.status(500).json({ ok: false, error: asMessage(error, 'Không thể khôi phục CSDL') });
+    }
+  });
+
   return router;
 }
 

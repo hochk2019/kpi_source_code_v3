@@ -18,6 +18,7 @@ export const backupModule = createDomainModule({
       routes: [
         { method: 'POST', path: '/run', purpose: 'Run a database backup immediately.' },
         { method: 'POST', path: '/schedule', purpose: 'Update the database backup schedule and retention policy.' },
+        { method: 'POST', path: '/restore', purpose: 'Restore the database from a selected backup file.' },
       ],
     },
   ],

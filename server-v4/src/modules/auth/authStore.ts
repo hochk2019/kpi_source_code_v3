@@ -7,4 +7,5 @@ export interface AuthStore {
   createSession(username: string): Promise<AuthSessionRecord>;
   deleteSession(token: string): Promise<void>;
   deleteSessionsForUser(username: string): Promise<void>;
+  reset?(): void;
 }

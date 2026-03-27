@@ -7,7 +7,7 @@ import fs from 'node:fs/promises';
 
 import express from 'express';
 import request from 'supertest';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { backupModule } from '../../server-v4/src/modules/backup/backup.module.ts';
 import { buildBackupRouter } from '../../server-v4/src/modules/backup/backupRoutes.ts';
@@ -30,7 +30,10 @@ async function createTempRoot() {
 }
 
 function createAuthStore(accountsByToken) {
+  const resetMock = vi.fn();
+
   return {
+    resetMock,
     listAccounts: async () => Object.values(accountsByToken).map((entry) => entry.account),
     saveAccounts: async () => {},
     readSession: async (token) => {
@@ -49,6 +52,9 @@ function createAuthStore(accountsByToken) {
     createSession: async () => null,
     deleteSession: async () => {},
     deleteSessionsForUser: async () => {},
+    reset: () => {
+      resetMock();
+    },
   };
 }
 
@@ -59,8 +65,6 @@ async function createApp() {
 
   await fs.writeFile(dbFile, 'primary-db');
 
-  const backupAdmin = createBackupAdminRuntime({ dbFile, defaultCron: '0 3 * * *' });
-  runtimes.push(backupAdmin);
   const authStore = createAuthStore({
     'admin-token': {
       account: {
@@ -77,12 +81,18 @@ async function createApp() {
       },
     },
   });
+  const backupAdmin = createBackupAdminRuntime({
+    authStore,
+    dbFile,
+    defaultCron: '0 3 * * *',
+  });
+  runtimes.push(backupAdmin);
 
   const app = express();
   app.use(express.json());
   app.use(backupModule.basePath, buildBackupRouter(backupModule, authStore, backupAdmin));
 
-  return { app, backupDir, backupAdmin };
+  return { app, authStore, backupAdmin, backupDir, dbFile };
 }
 
 describe('buildBackupRouter', () => {
@@ -146,5 +156,34 @@ describe('buildBackupRouter', () => {
         },
       },
     });
+  });
+
+  it('restores a selected backup file and resets the auth store handle', async () => {
+    const { app, authStore, backupDir, dbFile } = await createApp();
+    await fs.mkdir(backupDir, { recursive: true });
+    await fs.writeFile(path.join(backupDir, 'storage-restore.sqlite'), 'restored-db');
+    await fs.writeFile(dbFile, 'live-db');
+
+    const scheduleResponse = await request(app)
+      .post('/api/v4/backups/schedule')
+      .set('Cookie', 'kpi_session=admin-token')
+      .send({
+        cron: '0 3 * * *',
+        directory: backupDir,
+      });
+    expect(scheduleResponse.status).toBe(200);
+
+    const restoreResponse = await request(app)
+      .post('/api/v4/backups/restore')
+      .set('Cookie', 'kpi_session=admin-token')
+      .send({
+        filename: 'storage-restore.sqlite',
+        note: 'restore smoke',
+      });
+
+    expect(restoreResponse.status).toBe(200);
+    expect(restoreResponse.body.ok).toBe(true);
+    expect(await fs.readFile(dbFile, 'utf8')).toBe('restored-db');
+    expect(authStore.resetMock).toHaveBeenCalled();
   });
 });

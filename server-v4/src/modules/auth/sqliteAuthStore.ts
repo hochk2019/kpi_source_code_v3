@@ -100,6 +100,11 @@ export class SqliteAuthStore implements AuthStore {
       .run(normalizedUsername);
   }
 
+  reset(): void {
+    this.database?.close();
+    this.database = null;
+  }
+
   private getDatabase(): Database {
     if (!this.database) {
       this.database = new Database(this.dbFile);

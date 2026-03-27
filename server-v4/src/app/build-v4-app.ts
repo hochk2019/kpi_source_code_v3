@@ -68,7 +68,12 @@ export function buildV4App(input?: readonly DomainModule[] | BuildV4AppOptions):
   const safeModules = serializeDomainModules(options.modules ?? moduleCatalog);
   const config = resolveServerV4Config(options);
   const persistence = options.persistence ?? createRuntimePersistence(config);
-  const backupAdmin = options.backup ?? createBackupAdminRuntime({ dbFile: config.dbFile });
+  const backupAdmin =
+    options.backup ??
+    createBackupAdminRuntime({
+      authStore: persistence.authStore,
+      dbFile: config.dbFile,
+    });
   const importerCompatGuardMode =
     options.importerCompat?.guardMode ?? config.importerCompatGuardMode;
   const importerCompatTracker =
