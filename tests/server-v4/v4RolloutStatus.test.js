@@ -110,11 +110,25 @@ describe('server-v4 rollout status', () => {
     expect(status.compatibility.declarationShadow.summary).toContain('Declarations shadow rollout gate is green');
     expect(status.compatibility.declarationCutover).toMatchObject({
       readiness: 'hold',
+      recommendedWritePath: 'monolith-legacy',
       requiredGuardMode: 'block-migrated',
       observedGuardMode: 'off',
       observedMigratedCompatHits: 0,
       shadowGateStatus: 'pass',
     });
+    expect(status.rollout.declarationCutover).toMatchObject({
+      writePath: 'monolith-legacy',
+      verificationGates: [
+        'postgresDeclarationsRoute',
+        'legacyCompatRoutes',
+        'importerCompatTraffic',
+        'runtimeRoutes',
+        'v4RolloutStatus',
+      ],
+    });
+    expect(status.rollout.fallback).toContain(
+      'Set `KPI_API_IMPORTER_COMPAT_GUARD_MODE=off` and restart server-v4 to reopen migrated legacy importer routes.',
+    );
     expect(status.compatibility.declarationShadow.groups).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -206,6 +220,9 @@ describe('server-v4 rollout status', () => {
     });
     expect(status.rollout.currentStage).toBe('cutover-ready');
     expect(status.rollout.recommendedNextStage).toBe(null);
+    expect(status.rollout.declarationCutover).toMatchObject({
+      writePath: 'canonical-v4',
+    });
   });
 
   it('warns the declarations shadow gate when migrated compat traffic is still observed for a tracked declaration workflow', () => {
@@ -248,11 +265,13 @@ describe('server-v4 rollout status', () => {
     });
     expect(status.compatibility.declarationCutover).toMatchObject({
       readiness: 'hold',
+      recommendedWritePath: 'monolith-legacy',
       observedGuardMode: 'block-migrated',
       observedMigratedCompatHits: 1,
       observedBlockedCompatHits: 1,
       shadowGateStatus: 'warn',
     });
+    expect(status.rollout.declarationCutover.operatorAction).toContain('monolith `/api/*` write flows');
     expect(
       status.migrationVerification.checks.find(
         (entry) => entry.id === 'declarations-write-cutover-policy',

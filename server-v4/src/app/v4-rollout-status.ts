@@ -92,6 +92,12 @@ export type V4RolloutStatus = {
       status: RolloutStageStatus;
       gate: string;
     }>;
+    declarationCutover: {
+      writePath: DeclarationWriteCutoverStatus['recommendedWritePath'];
+      operatorAction: DeclarationWriteCutoverStatus['operatorAction'];
+      verificationGates: DeclarationWriteCutoverStatus['verificationGates'];
+      rollbackSteps: DeclarationWriteCutoverStatus['rollbackSteps'];
+    };
     fallback: string[];
   };
   modules: Array<{
@@ -182,10 +188,16 @@ export function buildV4RolloutStatus(options: BuildV4RolloutStatusOptions): V4Ro
       currentStage: resolveCurrentStage(stages),
       recommendedNextStage: resolveRecommendedNextStage(stages),
       stages,
+      declarationCutover: {
+        writePath: declarationCutover.recommendedWritePath,
+        operatorAction: declarationCutover.operatorAction,
+        verificationGates: declarationCutover.verificationGates,
+        rollbackSteps: declarationCutover.rollbackSteps,
+      },
       fallback: [
         'Keep monolith `/api/*` routes as the production write path until the next gate is green.',
         'Re-run the QA matrix before enabling any additional `/api/v4/*` write traffic.',
-        'If legacy DB access or module parity drops, route operators back to the monolith shell and investigate before retrying.',
+        ...declarationCutover.rollbackSteps,
       ],
     },
     modules: moduleStatuses,

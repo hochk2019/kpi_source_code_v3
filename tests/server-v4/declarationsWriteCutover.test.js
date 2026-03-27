@@ -25,12 +25,22 @@ describe('declarations write cutover policy', () => {
 
     expect(status).toMatchObject({
       readiness: 'ready',
+      recommendedWritePath: 'canonical-v4',
       requiredGuardMode: 'block-migrated',
       observedGuardMode: 'block-migrated',
       observedMigratedCompatHits: 0,
       shadowGateStatus: 'pass',
     });
     expect(status.summary).toContain('ready');
+    expect(status.operatorAction).toContain('/api/v4/declarations/*');
+    expect(status.verificationGates).toEqual([
+      'postgresDeclarationsRoute',
+      'legacyCompatRoutes',
+      'importerCompatTraffic',
+      'runtimeRoutes',
+      'v4RolloutStatus',
+    ]);
+    expect(status.rollbackSteps[0]).toContain('KPI_API_IMPORTER_COMPAT_GUARD_MODE=off');
   });
 
   it('holds cutover when compat guard mode is not enforcing migrated legacy blocks', () => {
@@ -41,12 +51,14 @@ describe('declarations write cutover policy', () => {
 
     expect(status).toMatchObject({
       readiness: 'hold',
+      recommendedWritePath: 'monolith-legacy',
       observedGuardMode: 'off',
       shadowGateStatus: 'pass',
     });
     expect(status.blockers).toContain(
       'Compat guard mode must be `block-migrated` before declarations write cutover.',
     );
+    expect(status.operatorAction).toContain('monolith `/api/*` write flows');
   });
 
   it('blocks cutover when any declaration shadow group is still failing', () => {
@@ -64,8 +76,10 @@ describe('declarations write cutover policy', () => {
 
     expect(status).toMatchObject({
       readiness: 'blocked',
+      recommendedWritePath: 'monolith-legacy',
       shadowGateStatus: 'fail',
     });
     expect(status.detail).toContain('ECUS preview/commit');
+    expect(status.operatorAction).toContain('shadow parity failures');
   });
 });

@@ -8,26 +8,26 @@
   - `cng-2k4` — Post-Gemini remaining technical backlog
   - `cng-7z0` — UX improvement backlog execution
 - Highest-priority ready items hien tai:
-  - `cng-2k4.2` — declarations write cutover
   - `cng-2k4.3` — entrypoint cutover sang `server-v4`
   - `cng-2k4.10` — CSRF protection
 
 ## Active Slice
 
-- Title: Giam `TeamManager.jsx` duoi nguong module bang cach tach history panel va history helper khoi shell
-- Bead: cng-2k4.17
+- Title: Execute declarations write cutover with compat guard and rollback plan
+- Bead: cng-2k4.2
 - Status: completed
 - Last updated: 2026-03-27
 
-- `TeamManager.jsx` da giam tu 914 dong xuong 756 dong sau khi tach history panel va helper formatting/field-label ra module rieng, dat duoi nguong 800 dong cho slice nay.
-- Da them `src/components/team-manager/TeamManagerHistoryPanel.jsx` de rut toan bo history UI/team-tab/MST-tab/refetch action khoi shell ma khong cham vao luong save/import.
-- Da them `src/components/team-manager/teamManagerHistoryModel.js` de gom `MST_HISTORY_FIELD_LABELS` va formatter timestamp, tranh de presentation module giu helper thuần.
+- `server-v4/src/app/declarationsWriteCutover.ts` da duoc bo sung metadata van hanh cho cutover: `recommendedWritePath`, `operatorAction`, `rollbackSteps`, va `verificationGates` de operator co duong tien/lui ro rang khi chuyen write traffic declarations sang canonical server-v4.
+- `server-v4/src/app/v4-rollout-status.ts` hien expose declaration cutover plan ngay trong `rollout`, dong thoi dua rollback steps vao fallback guidance de QA/operator co the tat compat guard va quay lai monolith neu parity hoi quy.
 - Bo sung regression test moi:
-  - `tests/teamManagerHistoryPanel.test.jsx`
-  - `tests/teamManagerHistoryModel.test.js`
+  - cap nhat `tests/server-v4/declarationsWriteCutover.test.js`
+  - cap nhat `tests/server-v4/v4RolloutStatus.test.js`
 - Targeted verify da pass:
-  - `pnpm exec eslint src/components/TeamManager.jsx src/components/team-manager/TeamManagerHistoryPanel.jsx src/components/team-manager/teamManagerHistoryModel.js tests/teamManagerHistoryPanel.test.jsx tests/teamManagerHistoryModel.test.js`
-  - `pnpm exec vitest run tests/teamManagerHistoryPanel.test.jsx tests/teamManagerHistoryModel.test.js --environment jsdom`
+  - `pnpm exec eslint server-v4/src/app/declarationsWriteCutover.ts server-v4/src/app/v4-rollout-status.ts tests/server-v4/declarationsWriteCutover.test.js tests/server-v4/v4RolloutStatus.test.js`
+  - `pnpm exec vitest run tests/server-v4/declarationsWriteCutover.test.js tests/server-v4/v4RolloutStatus.test.js`
+## Recent Completed Slices
+
 - `HQAgencyManager.jsx` da giam tu 1065 dong xuong 804 dong sau khi tach bang du lieu/history panel ra module rieng, giu shell tap trung vao orchestration/state.
 - Da them `src/components/hq-agency-manager/HQAgencyTable.jsx` de rut toan bo bang agency, history details, datalist, va row actions khoi shell.
 - Da tiep tuc dung `src/components/hq-agency-manager/hqAgencyManagerModel.js` cho cac pure helper/view-model de tranh de presentation module moi phai lap lai formatting logic.
@@ -576,13 +576,13 @@
 
 ## Next Suggested Slice
 
-- Title: Execute declarations write cutover with compat guard and rollback plan
-- Bead: `cng-2k4.2`
+- Title: Switch app entrypoint traffic to `server-v4` with staged rollback hooks
+- Bead: `cng-2k4.3`
 - Status: open
 - Follow-up backlog:
-  - day la task P1 con dang ready cao nhat trong backlog sau khi dong xong 2 slice structural `cng-2k4.16` va `cng-2k4.17`
-  - truoc khi chuyen sang cutover, can doc lai `docs/server-v4-rollout-plan-2026-03-25.md` va chot scope rollback/compat guard cho declarations write path
-  - tiep tuc chay GitNexus impact/context cho symbol dich truoc moi thay doi de giu diff nho va co test regression ro rang
+  - day la task P1 tiep theo sau khi declarations write cutover da co operator guidance va rollback plan ro rang
+  - scope ke tiep can chot cach dua app shell/entrypoint sang `server-v4` nhung van giu rollback hook de quay lai monolith neu health gate hoi quy
+  - truoc moi thay doi entrypoint/router wiring, tiep tuc chay GitNexus impact/context de khoa blast radius va giu regression test ro rang
 
 ## Verification
 

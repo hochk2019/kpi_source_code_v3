@@ -8,6 +8,12 @@ export type DeclarationWriteCutoverStatus = {
   summary: string;
   detail: string;
   blockers: string[];
+  recommendedWritePath: 'canonical-v4' | 'monolith-legacy';
+  operatorAction: string;
+  rollbackSteps: string[];
+  verificationGates: Array<
+    'postgresDeclarationsRoute' | 'legacyCompatRoutes' | 'importerCompatTraffic' | 'runtimeRoutes' | 'v4RolloutStatus'
+  >;
   requiredGuardMode: 'block-migrated';
   observedGuardMode: ImporterCompatTrafficSnapshot['guardMode'];
   observedMigratedCompatHits: number;
@@ -19,6 +25,20 @@ export type DeclarationWriteCutoverStatus = {
     status: DeclarationShadowGroupStatus['status'];
   }>;
 };
+
+const DECLARATION_WRITE_CUTOVER_VERIFICATION_GATES: DeclarationWriteCutoverStatus['verificationGates'] = [
+  'postgresDeclarationsRoute',
+  'legacyCompatRoutes',
+  'importerCompatTraffic',
+  'runtimeRoutes',
+  'v4RolloutStatus',
+];
+
+const DECLARATION_WRITE_CUTOVER_ROLLBACK_STEPS: string[] = [
+  'Set `KPI_API_IMPORTER_COMPAT_GUARD_MODE=off` and restart server-v4 to reopen migrated legacy importer routes.',
+  'Route declarations/importer operators back to the monolith `/api/*` write flows until canonical parity is green again.',
+  'Rerun the declarations QA matrix and confirm `v4RolloutStatus` is green before re-enabling the cutover.',
+];
 
 export function buildDeclarationWriteCutoverStatus(input: {
   shadowGroups: DeclarationShadowGroupStatus[];
@@ -59,6 +79,11 @@ export function buildDeclarationWriteCutoverStatus(input: {
       detail:
         'All declaration shadow groups are green, compat guard mode is `block-migrated`, and no migrated compat hits were observed since process start.',
       blockers: [],
+      recommendedWritePath: 'canonical-v4',
+      operatorAction:
+        'Route declarations/importer writes to canonical `/api/v4/declarations/*` endpoints, keep the compat guard at `block-migrated`, and watch rollout status during controlled QA.',
+      rollbackSteps: DECLARATION_WRITE_CUTOVER_ROLLBACK_STEPS,
+      verificationGates: DECLARATION_WRITE_CUTOVER_VERIFICATION_GATES,
       requiredGuardMode: 'block-migrated',
       observedGuardMode: input.importerCompat.guardMode,
       observedMigratedCompatHits: input.importerCompat.totals.migratedHits,
@@ -80,6 +105,13 @@ export function buildDeclarationWriteCutoverStatus(input: {
         : 'Declarations write cutover is on hold pending compat guard and clean canonical QA.',
     detail: blockers.join(' '),
     blockers,
+    recommendedWritePath: 'monolith-legacy',
+    operatorAction:
+      readiness === 'blocked'
+        ? 'Keep declarations/importer operators on the monolith `/api/*` write flows until shadow parity failures are fixed and the cutover gates return green.'
+        : 'Keep declarations/importer operators on the monolith `/api/*` write flows until compat guard is `block-migrated` and canonical QA completes with zero migrated compat hits.',
+    rollbackSteps: DECLARATION_WRITE_CUTOVER_ROLLBACK_STEPS,
+    verificationGates: DECLARATION_WRITE_CUTOVER_VERIFICATION_GATES,
     requiredGuardMode: 'block-migrated',
     observedGuardMode: input.importerCompat.guardMode,
     observedMigratedCompatHits: input.importerCompat.totals.migratedHits,
