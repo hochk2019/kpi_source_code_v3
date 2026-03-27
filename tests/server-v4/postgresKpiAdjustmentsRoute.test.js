@@ -175,7 +175,7 @@ describe('server-v4 kpi adjustments route', () => {
 
     const createResponse = await request(app)
       .post('/api/v4/kpi-adjustments')
-      .set('Cookie', 'kpi_session=session-staff')
+      .set(sessionHeaders('session-staff'))
       .send({
         category: 'support_misc',
         month: '2026-02',
@@ -209,14 +209,14 @@ describe('server-v4 kpi adjustments route', () => {
 
     const settingsReadResponse = await request(app)
       .get('/api/v4/kpi-adjustments/settings')
-      .set('Cookie', 'kpi_session=session-staff');
+      .set(sessionHeaders('session-staff'));
 
     expect(settingsReadResponse.status).toBe(200);
     expect(settingsReadResponse.body.data.autoApprove.enabled).toBe(false);
 
     const forbiddenSettingsResponse = await request(app)
       .put('/api/v4/kpi-adjustments/settings')
-      .set('Cookie', 'kpi_session=session-staff')
+      .set(sessionHeaders('session-staff'))
       .send({
         autoApprove: {
           enabled: true,
@@ -230,7 +230,7 @@ describe('server-v4 kpi adjustments route', () => {
 
     const settingsUpdateResponse = await request(app)
       .put('/api/v4/kpi-adjustments/settings')
-      .set('Cookie', 'kpi_session=session-admin')
+      .set(sessionHeaders('session-admin'))
       .send({
         autoApprove: {
           enabled: true,
@@ -251,7 +251,7 @@ describe('server-v4 kpi adjustments route', () => {
 
     const autoApprovedCreateResponse = await request(app)
       .post('/api/v4/kpi-adjustments')
-      .set('Cookie', 'kpi_session=session-staff')
+      .set(sessionHeaders('session-staff'))
       .send({
         category: 'support_misc',
         month: '2026-03',
@@ -274,7 +274,7 @@ describe('server-v4 kpi adjustments route', () => {
 
     const patchResponse = await request(app)
       .patch(`/api/v4/kpi-adjustments/${createdId}`)
-      .set('Cookie', 'kpi_session=session-admin')
+      .set(sessionHeaders('session-admin'))
       .send({
         status: 'approved',
         note: 'Approved after review',
@@ -296,6 +296,14 @@ describe('server-v4 kpi adjustments route', () => {
   });
 });
 
+const TEST_CSRF_TOKEN = 'test-csrf-token';
+
+function sessionHeaders(sessionToken) {
+  return {
+    Cookie: `kpi_session=${sessionToken}; kpi_csrf=${TEST_CSRF_TOKEN}`,
+    'X-CSRF-Token': TEST_CSRF_TOKEN,
+  };
+}
 function createAdjustmentsStoreStub() {
   const records = new Map();
   let settings = {
@@ -399,3 +407,5 @@ function createAccount({ username, role, name }) {
 function clone(value) {
   return value === null ? null : JSON.parse(JSON.stringify(value));
 }
+
+

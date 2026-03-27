@@ -130,7 +130,7 @@ describe("server-v4 postgres teams route wiring", () => {
 
     const forbiddenResponse = await request(app)
       .put("/api/v4/teams")
-      .set("Cookie", "kpi_session=session-staff")
+      .set(sessionHeaders("session-staff"))
       .send({
         version: 1,
         teams: [{ name: "Forbidden Team", members: [] }],
@@ -143,7 +143,7 @@ describe("server-v4 postgres teams route wiring", () => {
 
     const replaceResponse = await request(app)
       .put("/api/v4/teams")
-      .set("Cookie", "kpi_session=session-manager")
+      .set(sessionHeaders("session-manager"))
       .send({
         version: 1,
         teams: [
@@ -214,6 +214,14 @@ describe("server-v4 postgres teams route wiring", () => {
   });
 });
 
+const TEST_CSRF_TOKEN = "test-csrf-token";
+
+function sessionHeaders(sessionToken) {
+  return {
+    Cookie: `kpi_session=${sessionToken}; kpi_csrf=${TEST_CSRF_TOKEN}`,
+    "X-CSRF-Token": TEST_CSRF_TOKEN,
+  };
+}
 function createDeclarationsReader() {
   return {
     getSourceKind: () => "dual-write",
@@ -342,3 +350,4 @@ function createAccount({ username, role, name }) {
 function clone(value) {
   return value === null ? null : JSON.parse(JSON.stringify(value));
 }
+

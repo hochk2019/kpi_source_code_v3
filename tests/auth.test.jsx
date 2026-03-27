@@ -61,6 +61,32 @@ describe('Login component', () => {
 
   });
 
+  it('gắn CSRF header cho unsafe request khi cookie token tồn tại', async () => {
+
+    document.cookie = 'kpi_csrf=test-csrf-token';
+
+    await fetchWithAuth('/api/auth/accounts', { method: 'POST' });
+
+    const [, init] = fetchMock.mock.calls.at(-1);
+    const headers = new Headers(init?.headers);
+
+    expect(headers.get('X-CSRF-Token')).toBe('test-csrf-token');
+
+  });
+
+  it('không gắn CSRF header cho safe request', async () => {
+
+    document.cookie = 'kpi_csrf=test-csrf-token';
+
+    await fetchWithAuth('/api/auth/session');
+
+    const [, init] = fetchMock.mock.calls.at(-1);
+    const headers = new Headers(init?.headers);
+
+    expect(headers.get('X-CSRF-Token')).toBeNull();
+
+  });
+
   it('đăng nhập thành công mà không lưu bearer token legacy', async () => {
 
     window.localStorage?.setItem?.('kpi_session_token', 'legacy-token');

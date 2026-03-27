@@ -73,6 +73,8 @@ const DEFAULT_ACCOUNT_SEED = [
 
 export const MIN_PASSWORD_LENGTH = 6;
 export const SESSION_COOKIE_NAME = 'kpi_session';
+export const CSRF_COOKIE_NAME = 'kpi_csrf';
+export const CSRF_HEADER_NAME = 'x-csrf-token';
 export const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 export const AUTH_ACCOUNTS_STORAGE_KEY = 'kpi_users_v1';
 
@@ -222,8 +224,16 @@ export function createSessionRecord(username: string, now = Date.now()): AuthSes
 }
 
 export function getSessionTokenFromRequest(req: Request): string {
-  const cookies = parseCookies(req.headers?.cookie ?? '');
+  const cookies = getRequestCookies(req);
   return cookies[SESSION_COOKIE_NAME] ?? '';
+}
+
+export function createCsrfToken(): string {
+  return crypto.randomBytes(24).toString('base64url');
+}
+
+export function getRequestCookies(req: Request): Record<string, string> {
+  return parseCookies(req.headers?.cookie ?? '');
 }
 
 export function shouldUseSecureCookies(req: Request): boolean {
@@ -245,6 +255,20 @@ export function shouldUseSecureCookies(req: Request): boolean {
   return Boolean(req?.secure) || proto.trim().toLowerCase() === 'https';
 }
 
+export function setCsrfCookie(
+  req: Request,
+  res: Response,
+  token: string,
+  expiresAt?: number,
+): void {
+  res.cookie(CSRF_COOKIE_NAME, token, {
+    httpOnly: false,
+    sameSite: 'lax',
+    secure: shouldUseSecureCookies(req),
+    ...(expiresAt !== undefined ? { expires: new Date(expiresAt) } : {}),
+  });
+}
+
 export function setSessionCookie(req: Request, res: Response, token: string, expiresAt: number): void {
   res.cookie(SESSION_COOKIE_NAME, token, {
     httpOnly: true,
@@ -252,6 +276,8 @@ export function setSessionCookie(req: Request, res: Response, token: string, exp
     secure: shouldUseSecureCookies(req),
     expires: new Date(expiresAt),
   });
+  const csrfToken = getRequestCookies(req)[CSRF_COOKIE_NAME] ?? createCsrfToken();
+  setCsrfCookie(req, res, csrfToken, expiresAt);
 }
 
 export function clearSessionCookie(req: Request, res: Response): void {
@@ -261,6 +287,7 @@ export function clearSessionCookie(req: Request, res: Response): void {
     secure: shouldUseSecureCookies(req),
     expires: new Date(0),
   });
+  setCsrfCookie(req, res, '', 0);
 }
 
 export function normalizeUsername(value: unknown): string {

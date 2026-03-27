@@ -171,7 +171,7 @@ describe("server-v4 postgres declarations route wiring", () => {
 
     const forbiddenResponse = await request(app)
       .patch(`/api/v4/declarations/${declarationId}`)
-      .set("Cookie", "kpi_session=session-staff")
+      .set(sessionHeaders("session-staff"))
       .send({
         teamName: "Forbidden Team",
       });
@@ -183,7 +183,7 @@ describe("server-v4 postgres declarations route wiring", () => {
 
     const updateResponse = await request(app)
       .patch(`/api/v4/declarations/${declarationId}`)
-      .set("Cookie", "kpi_session=session-manager")
+      .set(sessionHeaders("session-manager"))
       .send({
         staffName: "Tran Thi Lan",
         teamName: "Blue Team",
@@ -305,7 +305,7 @@ describe("server-v4 postgres declarations route wiring", () => {
 
     const forbiddenPreview = await request(app)
       .post("/api/v4/declarations/imports/ecus-preview")
-      .set("Cookie", "kpi_session=session-staff")
+      .set(sessionHeaders("session-staff"))
       .send({ rawRows });
 
     expect(forbiddenPreview.status).toBe(403);
@@ -315,7 +315,7 @@ describe("server-v4 postgres declarations route wiring", () => {
 
     const previewResponse = await request(app)
       .post("/api/v4/declarations/imports/ecus-preview")
-      .set("Cookie", "kpi_session=session-manager")
+      .set(sessionHeaders("session-manager"))
       .send({ rawRows, limit: 10 });
 
     expect(previewResponse.status).toBe(200);
@@ -362,7 +362,7 @@ describe("server-v4 postgres declarations route wiring", () => {
 
     const commitResponse = await request(app)
       .post("/api/v4/declarations/imports/ecus-commit")
-      .set("Cookie", "kpi_session=session-manager")
+      .set(sessionHeaders("session-manager"))
       .send({
         rawRows,
         fetchedTotal: 2,
@@ -501,7 +501,7 @@ describe("server-v4 postgres declarations route wiring", () => {
 
     const forbiddenPreview = await request(app)
       .post("/api/import/ecus/preview")
-      .set("Cookie", "kpi_session=session-staff")
+      .set(sessionHeaders("session-staff"))
       .send({
         from: "2026-02-14",
         to: "2026-02-21",
@@ -515,7 +515,7 @@ describe("server-v4 postgres declarations route wiring", () => {
 
     const previewResponse = await request(app)
       .post("/api/import/ecus/preview")
-      .set("Cookie", "kpi_session=session-manager")
+      .set(sessionHeaders("session-manager"))
       .send({
         from: "2026-02-14",
         to: "2026-02-21",
@@ -557,7 +557,7 @@ describe("server-v4 postgres declarations route wiring", () => {
 
     const runResponse = await request(app)
       .post("/api/import/ecus/run")
-      .set("Cookie", "kpi_session=session-manager")
+      .set(sessionHeaders("session-manager"))
       .send({
         from: "2026-02-14",
         to: "2026-02-21",
@@ -760,7 +760,7 @@ describe("server-v4 postgres declarations route wiring", () => {
 
       const statusResponse = await request(app)
         .get("/api/v4/declarations/imports/ecus-status")
-        .set("Cookie", "kpi_session=session-manager");
+        .set(sessionHeaders("session-manager"));
 
       expect(statusResponse.status).toBe(200);
       expect(statusResponse.body).toMatchObject({
@@ -785,12 +785,12 @@ describe("server-v4 postgres declarations route wiring", () => {
 
       const retiredConfigAlias = await request(app)
         .get("/api/import/ecus/config")
-        .set("Cookie", "kpi_session=session-manager");
+        .set(sessionHeaders("session-manager"));
       expect(retiredConfigAlias.status).toBe(404);
 
       const retiredStatusAlias = await request(app)
         .get("/api/import/ecus/status")
-        .set("Cookie", "kpi_session=session-manager");
+        .set(sessionHeaders("session-manager"));
       expect(retiredStatusAlias.status).toBe(404);
     } finally {
       if (previousToken === undefined) {
@@ -828,7 +828,7 @@ describe("server-v4 postgres declarations route wiring", () => {
 
       const saveResponse = await request(app)
         .put("/api/v4/declarations/imports/ecus-config")
-        .set("Cookie", "kpi_session=session-manager")
+        .set(sessionHeaders("session-manager"))
         .send({
           config: {
             enabled: true,
@@ -874,7 +874,7 @@ describe("server-v4 postgres declarations route wiring", () => {
 
       const preserveResponse = await request(app)
         .put("/api/v4/declarations/imports/ecus-config")
-        .set("Cookie", "kpi_session=session-manager")
+        .set(sessionHeaders("session-manager"))
         .send({
           config: {
             connection: {
@@ -903,7 +903,7 @@ describe("server-v4 postgres declarations route wiring", () => {
 
       const legacyWriteAlias = await request(app)
         .put("/api/import/ecus/config")
-        .set("Cookie", "kpi_session=session-manager");
+        .set(sessionHeaders("session-manager"));
 
       expect(legacyWriteAlias.status).toBe(404);
 
@@ -1006,7 +1006,7 @@ describe("server-v4 postgres declarations route wiring", () => {
 
     const searchResponse = await request(app)
       .get("/api/v4/declarations/imports/search")
-      .set("Cookie", "kpi_session=session-staff")
+      .set(sessionHeaders("session-staff"))
       .query({
         query: "Cong ty",
         mst: "0101234567",
@@ -1034,7 +1034,7 @@ describe("server-v4 postgres declarations route wiring", () => {
 
     const retiredSearchAlias = await request(app)
       .get("/api/import/search")
-      .set("Cookie", "kpi_session=session-staff")
+      .set(sessionHeaders("session-staff"))
       .query({
         query: "Cong ty",
         mst: "0101234567",
@@ -1100,7 +1100,7 @@ describe("server-v4 postgres declarations route wiring", () => {
 
     const response = await request(app)
       .get("/api/v4/declarations/imports/deleted-declarations")
-      .set("Cookie", "kpi_session=session-staff")
+      .set(sessionHeaders("session-staff"))
       .query({
         type: "hard",
         from: "2026-03-01",
@@ -1124,7 +1124,7 @@ describe("server-v4 postgres declarations route wiring", () => {
 
     const retiredAliasResponse = await request(app)
       .get("/api/import/deleted-declarations")
-      .set("Cookie", "kpi_session=session-staff")
+      .set(sessionHeaders("session-staff"))
       .query({
         type: "hard",
         from: "2026-03-01",
@@ -1167,7 +1167,7 @@ describe("server-v4 postgres declarations route wiring", () => {
 
     const forbiddenCodes = await request(app)
       .get("/api/v4/declarations/imports/co-codes")
-      .set("Cookie", "kpi_session=session-staff");
+      .set(sessionHeaders("session-staff"));
     expect(forbiddenCodes.status).toBe(403);
     expect(forbiddenCodes.body.error).toMatchObject({
       code: "forbidden",
@@ -1175,7 +1175,7 @@ describe("server-v4 postgres declarations route wiring", () => {
 
     const codesResponse = await request(app)
       .get("/api/v4/declarations/imports/co-codes")
-      .set("Cookie", "kpi_session=session-manager");
+      .set(sessionHeaders("session-manager"));
     expect(codesResponse.status).toBe(200);
     expect(codesResponse.body).toEqual({
       ok: true,
@@ -1190,7 +1190,7 @@ describe("server-v4 postgres declarations route wiring", () => {
 
     const saveCodesResponse = await request(app)
       .put("/api/v4/declarations/imports/co-codes")
-      .set("Cookie", "kpi_session=session-manager")
+      .set(sessionHeaders("session-manager"))
       .send({
         config: {
           whitelist: [" a1 ", "A1", "b2"],
@@ -1212,7 +1212,7 @@ describe("server-v4 postgres declarations route wiring", () => {
 
     const legacyCodesResponse = await request(app)
       .get("/api/import/co-codes")
-      .set("Cookie", "kpi_session=session-manager");
+      .set(sessionHeaders("session-manager"));
     expect(legacyCodesResponse.status).toBe(200);
     expect(legacyCodesResponse.body).toEqual({
       ok: true,
@@ -1227,7 +1227,7 @@ describe("server-v4 postgres declarations route wiring", () => {
 
     const discrepancyResponse = await request(app)
       .get("/api/v4/declarations/imports/co-discrepancy")
-      .set("Cookie", "kpi_session=session-manager");
+      .set(sessionHeaders("session-manager"));
     expect(discrepancyResponse.status).toBe(200);
     expect(discrepancyResponse.body).toEqual({
       ok: true,
@@ -1258,7 +1258,7 @@ describe("server-v4 postgres declarations route wiring", () => {
 
     const saveDiscrepancyConfigResponse = await request(app)
       .put("/api/v4/declarations/imports/co-discrepancy/config")
-      .set("Cookie", "kpi_session=session-manager")
+      .set(sessionHeaders("session-manager"))
       .send({
         config: {
           enabled: true,
@@ -1285,7 +1285,7 @@ describe("server-v4 postgres declarations route wiring", () => {
 
     const legacyDiscrepancyResponse = await request(app)
       .get("/api/import/co-discrepancy")
-      .set("Cookie", "kpi_session=session-manager");
+      .set(sessionHeaders("session-manager"));
     expect(legacyDiscrepancyResponse.status).toBe(200);
     expect(legacyDiscrepancyResponse.body).toEqual({
       ok: true,
@@ -1405,7 +1405,7 @@ describe("server-v4 postgres declarations route wiring", () => {
 
     const forbiddenResponse = await request(app)
       .post("/api/v4/declarations/imports/co-discrepancy/run")
-      .set("Cookie", "kpi_session=session-staff")
+      .set(sessionHeaders("session-staff"))
       .send({
         range: {
           from: "2026-02-13",
@@ -1419,7 +1419,7 @@ describe("server-v4 postgres declarations route wiring", () => {
 
     const runResponse = await request(app)
       .post("/api/v4/declarations/imports/co-discrepancy/run")
-      .set("Cookie", "kpi_session=session-manager")
+      .set(sessionHeaders("session-manager"))
       .send({
         range: {
           from: "2026-02-13",
@@ -1478,7 +1478,7 @@ describe("server-v4 postgres declarations route wiring", () => {
 
     const legacyRunResponse = await request(app)
       .post("/api/import/co-discrepancy/run")
-      .set("Cookie", "kpi_session=session-manager")
+      .set(sessionHeaders("session-manager"))
       .send({
         range: {
           from: "2026-02-13",
@@ -1550,7 +1550,7 @@ describe("server-v4 postgres declarations route wiring", () => {
 
     const forbiddenResponse = await request(app)
       .get("/api/v4/declarations/imports/alerts")
-      .set("Cookie", "kpi_session=session-staff");
+      .set(sessionHeaders("session-staff"));
     expect(forbiddenResponse.status).toBe(403);
     expect(forbiddenResponse.body.error).toMatchObject({
       code: "forbidden",
@@ -1558,7 +1558,7 @@ describe("server-v4 postgres declarations route wiring", () => {
 
     const alertsResponse = await request(app)
       .get("/api/v4/declarations/imports/alerts")
-      .set("Cookie", "kpi_session=session-manager");
+      .set(sessionHeaders("session-manager"));
 
     expect(alertsResponse.status).toBe(200);
     expect(alertsResponse.body).toEqual({
@@ -1590,7 +1590,7 @@ describe("server-v4 postgres declarations route wiring", () => {
 
     const configResponse = await request(app)
       .put("/api/v4/declarations/imports/alerts/config")
-      .set("Cookie", "kpi_session=session-manager")
+      .set(sessionHeaders("session-manager"))
       .send({
         config: {
           thresholdDays: 9999,
@@ -1651,7 +1651,7 @@ describe("server-v4 postgres declarations route wiring", () => {
 
     const reviewResponse = await request(app)
       .post("/api/v4/declarations/imports/alerts/review")
-      .set("Cookie", "kpi_session=session-manager")
+      .set(sessionHeaders("session-manager"))
       .send({
         keys: ["00000012345_Chi nhanh A"],
       });
@@ -1669,7 +1669,7 @@ describe("server-v4 postgres declarations route wiring", () => {
 
     const reviewedAlertsResponse = await request(app)
       .get("/api/v4/declarations/imports/alerts")
-      .set("Cookie", "kpi_session=session-manager");
+      .set(sessionHeaders("session-manager"));
 
     expect(reviewedAlertsResponse.status).toBe(200);
     expect(reviewedAlertsResponse.body.summary).toEqual({
@@ -1681,7 +1681,7 @@ describe("server-v4 postgres declarations route wiring", () => {
 
     const unreviewResponse = await request(app)
       .post("/api/v4/declarations/imports/alerts/unreview")
-      .set("Cookie", "kpi_session=session-manager")
+      .set(sessionHeaders("session-manager"))
       .send({
         keys: ["00000012345_Chi nhanh A"],
       });
@@ -1699,7 +1699,7 @@ describe("server-v4 postgres declarations route wiring", () => {
 
     const unreveiwedAlertsResponse = await request(app)
       .get("/api/v4/declarations/imports/alerts")
-      .set("Cookie", "kpi_session=session-manager");
+      .set(sessionHeaders("session-manager"));
 
     expect(unreveiwedAlertsResponse.status).toBe(200);
     expect(unreveiwedAlertsResponse.body.summary).toEqual({
@@ -1754,7 +1754,7 @@ describe("server-v4 postgres declarations route wiring", () => {
 
     const managerResponse = await request(app)
       .patch(`/api/v4/declarations/${declarationId}`)
-      .set("Cookie", "kpi_session=session-manager")
+      .set(sessionHeaders("session-manager"))
       .send({
         teamName: "Blocked Team",
       });
@@ -1766,7 +1766,7 @@ describe("server-v4 postgres declarations route wiring", () => {
 
     const adminResponse = await request(app)
       .patch(`/api/v4/declarations/${declarationId}`)
-      .set("Cookie", "kpi_session=session-admin")
+      .set(sessionHeaders("session-admin"))
       .send({
         teamName: "Admin Override Team",
       });
@@ -2023,6 +2023,14 @@ function createProjectionPersistence() {
   };
 }
 
+const TEST_CSRF_TOKEN = "test-csrf-token";
+
+function sessionHeaders(sessionToken) {
+  return {
+    Cookie: `kpi_session=${sessionToken}; kpi_csrf=${TEST_CSRF_TOKEN}`,
+    "X-CSRF-Token": TEST_CSRF_TOKEN,
+  };
+}
 function createAuthStore(accounts) {
   const sessions = new Map([
     [
@@ -2103,3 +2111,4 @@ function createAccount({ username, role, name }) {
 function clone(value) {
   return value === null ? null : JSON.parse(JSON.stringify(value));
 }
+

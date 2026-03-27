@@ -190,7 +190,7 @@ describe('server-v4 HQ agencies route', () => {
 
     const forbiddenResponse = await request(app)
       .post('/api/v4/hq-agencies')
-      .set('Cookie', 'kpi_session=session-staff')
+      .set(sessionHeaders('session-staff'))
       .send({
         mst: '0101234567',
         company: 'Cong ty ABC Logistics',
@@ -204,7 +204,7 @@ describe('server-v4 HQ agencies route', () => {
 
     const createResponse = await request(app)
       .post('/api/v4/hq-agencies')
-      .set('Cookie', 'kpi_session=session-manager')
+      .set(sessionHeaders('session-manager'))
       .send({
         mst: '0101234567',
         company: 'Cong ty ABC Logistics',
@@ -226,7 +226,7 @@ describe('server-v4 HQ agencies route', () => {
 
     const updateResponse = await request(app)
       .post('/api/v4/hq-agencies')
-      .set('Cookie', 'kpi_session=session-manager')
+      .set(sessionHeaders('session-manager'))
       .send({
         taxCode: '0101234567',
         companyName: 'Cong ty ABC Logistics Updated',
@@ -262,7 +262,7 @@ describe('server-v4 HQ agencies route', () => {
 
     const deleteResponse = await request(app)
       .delete('/api/v4/hq-agencies/0101234567')
-      .set('Cookie', 'kpi_session=session-manager');
+      .set(sessionHeaders('session-manager'));
 
     expect(deleteResponse.status).toBe(200);
     expect(deleteResponse.body.data).toMatchObject({
@@ -312,6 +312,14 @@ describe('server-v4 HQ agencies route', () => {
   });
 });
 
+const TEST_CSRF_TOKEN = 'test-csrf-token';
+
+function sessionHeaders(sessionToken) {
+  return {
+    Cookie: `kpi_session=${sessionToken}; kpi_csrf=${TEST_CSRF_TOKEN}`,
+    'X-CSRF-Token': TEST_CSRF_TOKEN,
+  };
+}
 function createHqRuntimeStub() {
   const bindings = new Map();
   const historyEntries = [];
@@ -422,3 +430,5 @@ function createAccount({ username, role, name }) {
 function clone(value) {
   return value === null ? null : JSON.parse(JSON.stringify(value));
 }
+
+

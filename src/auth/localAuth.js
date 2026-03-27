@@ -52,6 +52,9 @@ let accountCache = [];
 
 
 const LEGACY_SESSION_TOKEN_STORAGE_KEY = 'kpi_session_token';
+const CSRF_COOKIE_NAME = 'kpi_csrf';
+const CSRF_HEADER_NAME = 'X-CSRF-Token';
+const UNSAFE_HTTP_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
 
 
@@ -221,6 +224,33 @@ export function createAuthHeaders(baseHeaders) {
 
 }
 
+function readCookie(name) {
+
+  if (typeof document === 'undefined') {
+
+    return '';
+
+  }
+
+  const entries = `${document.cookie || ''}`.split(';');
+  for (const entry of entries) {
+    const trimmed = entry.trim();
+    if (!trimmed.startsWith(`${name}=`)) {
+      continue;
+    }
+    return decodeURIComponent(trimmed.slice(name.length + 1));
+  }
+
+  return '';
+
+}
+
+function shouldAttachCsrfHeader(method) {
+
+  return UNSAFE_HTTP_METHODS.has(`${method || 'GET'}`.trim().toUpperCase());
+
+}
+
 
 
 export function fetchWithAuth(path, init = {}) {
@@ -234,6 +264,12 @@ export function fetchWithAuth(path, init = {}) {
   const finalInit = { ...init };
 
   finalInit.headers = createAuthHeaders(init.headers);
+  if (shouldAttachCsrfHeader(finalInit.method) && !finalInit.headers.has(CSRF_HEADER_NAME)) {
+    const csrfToken = readCookie(CSRF_COOKIE_NAME);
+    if (csrfToken) {
+      finalInit.headers.set(CSRF_HEADER_NAME, csrfToken);
+    }
+  }
 
   if (finalInit.credentials === undefined) {
 

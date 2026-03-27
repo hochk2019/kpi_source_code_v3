@@ -12,6 +12,7 @@ import { buildMstAssignmentsRouter } from '../modules/mst-assignments/mstAssignm
 import { buildReportingRouter } from '../modules/reporting/reportingRoutes.js';
 import { buildTeamsRouter } from '../modules/teams/teamsRoutes.js';
 import { createRuntimePersistence, type RuntimePersistence } from '../persistence/runtimePersistence.js';
+import { createCsrfProtection } from './csrfProtection.js';
 import { buildLegacyCompatRouter } from './legacyCompatRoutes.js';
 import {
   createImporterCompatTrafficTracker,
@@ -81,6 +82,7 @@ export function buildV4App(input?: readonly DomainModule[] | BuildV4AppOptions):
 
   app.disable('x-powered-by');
   app.use(express.json());
+  app.use(createCsrfProtection());
   app.locals.runtimePersistenceDispose = persistence.dispose;
 
   app.get('/api/v4/health', (_req, res) => {

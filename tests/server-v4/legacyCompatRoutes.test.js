@@ -9,6 +9,7 @@ import { ADMIN_ROLE, DEFAULT_ROLE, getPermissionTemplate } from '../../packages/
 import { buildV4App } from '../../server-v4/src/index.ts';
 import { authModule } from '../../server-v4/src/modules/auth/auth.module.ts';
 import { declarationsModule } from '../../server-v4/src/modules/declarations/declarations.module.ts';
+import { CSRF_COOKIE_NAME, CSRF_HEADER_NAME, SESSION_COOKIE_NAME } from '../../server-v4/src/modules/auth/authShared.ts';
 
 describe('server-v4 legacy compatibility routes', () => {
   it('keeps legacy compatibility routing split into thin domain-specific builders', async () => {
@@ -80,7 +81,7 @@ describe('server-v4 legacy compatibility routes', () => {
       },
     });
 
-    const cookie = getCookie(loginResponse);
+    const cookie = getCookieHeader(loginResponse);
 
     const sessionResponse = await request(app).get('/api/auth/session').set('Cookie', cookie);
     expect(sessionResponse.status).toBe(200);
@@ -179,7 +180,7 @@ describe('server-v4 legacy compatibility routes', () => {
       username: 'admin',
       password: 'admin123',
     });
-    const cookie = getCookie(loginResponse);
+    const cookie = getCookieHeader(loginResponse);
 
     const response = await request(app)
       .get('/api/import/deleted-declarations?type=hard&from=2026-03-01&to=2026-03-05')
@@ -209,7 +210,7 @@ describe('server-v4 legacy compatibility routes', () => {
       username: 'admin',
       password: 'admin123',
     });
-    const cookie = getCookie(loginResponse);
+    const cookie = getCookieHeader(loginResponse);
 
     const retiredAliasResponse = await request(app)
       .get('/api/import/deleted-declarations?type=hard&from=2026-03-01&to=2026-03-05')
@@ -304,11 +305,50 @@ describe('server-v4 legacy compatibility routes', () => {
       username: 'admin',
       password: 'admin123',
     });
-    const cookie = getCookie(loginResponse);
+    const cookie = getCookieHeader(loginResponse);
 
     const unknownResponse = await request(app).get('/api/storage/unknown-key').set('Cookie', cookie);
     expect(unknownResponse.status).toBe(404);
     expect(unknownResponse.body.error).toContain('Unknown storage key');
+  });
+
+  it('requires a csrf header for legacy cookie-authenticated mutations', async () => {
+    const authStore = createAuthStore([
+      createAccount({
+        username: 'admin',
+        password: 'admin123',
+        role: ADMIN_ROLE,
+        name: 'Admin User',
+      }),
+    ]);
+    const app = buildV4App({
+      modules: [authModule],
+      persistence: createPersistenceStub({ authStore }),
+    });
+
+    const loginResponse = await request(app).post('/api/auth/login').send({
+      username: 'admin',
+      password: 'admin123',
+    });
+    const cookie = getCookieHeader(loginResponse);
+    const csrfToken = getCookieValue(loginResponse, CSRF_COOKIE_NAME);
+
+    const missingTokenResponse = await request(app)
+      .post('/api/auth/logout')
+      .set('Cookie', cookie);
+
+    expect(missingTokenResponse.status).toBe(403);
+    expect(missingTokenResponse.body.error).toMatchObject({
+      code: 'csrf_invalid',
+    });
+
+    const allowedResponse = await request(app)
+      .post('/api/auth/logout')
+      .set('Cookie', cookie)
+      .set(CSRF_HEADER_NAME, csrfToken);
+
+    expect(allowedResponse.status).toBe(200);
+    expect(allowedResponse.body).toEqual({ ok: true });
   });
 });
 
@@ -483,8 +523,21 @@ function createAccount({ username, password, role, name }) {
   };
 }
 
-function getCookie(response) {
-  return response.headers['set-cookie']?.[0] ?? '';
+function getCookieHeader(response) {
+  return [
+    getCookiePair(response, SESSION_COOKIE_NAME),
+    getCookiePair(response, CSRF_COOKIE_NAME),
+  ].join('; ');
+}
+
+function getCookieValue(response, name) {
+  return getCookiePair(response, name).slice(name.length + 1);
+}
+
+function getCookiePair(response, name) {
+  const cookie = response.headers['set-cookie']?.find((entry) => entry.startsWith(`${name}=`));
+  expect(cookie).toBeTruthy();
+  return cookie.split(';', 1)[0];
 }
 
 function clone(value) {

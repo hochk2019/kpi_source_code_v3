@@ -8,26 +8,32 @@
   - `cng-2k4` — Post-Gemini remaining technical backlog
   - `cng-7z0` — UX improvement backlog execution
 - Highest-priority ready items hien tai:
-  - `cng-2k4.10` — CSRF protection
+  - `cng-2k4.4` — Extract backup and restore domain into server-v4 backup module
 
 ## Active Slice
 
-- Title: Switch app entrypoint traffic to `server-v4` with staged rollback hooks
-- Bead: cng-2k4.3
+- Title: Implement CSRF protection for cookie-authenticated mutation routes
+- Bead: cng-2k4.10
 - Status: completed
 - Last updated: 2026-03-27
 
-- Them `apps/api/src/backendEntrypointPlan.js` de chot bootstrap mode theo mot helper thuần: mac dinh launch `server-v4`, nhung van giu rollback mode `legacy` ro rang va co test rieng.
-- `scripts/start-backend.mjs` hien resolve entrypoint qua helper moi, mac dinh spawn `apps/api/src/cli.js`, va expose rollback hook qua `KPI_API_ENTRYPOINT_MODE=legacy`, `--legacy-entrypoint`, hoac bat lai `--server-v4-entrypoint`.
+- Them `server-v4/src/app/csrfProtection.ts` de enforce double-submit CSRF cho cookie-authenticated mutation routes o ca `/api/v4/*` va legacy compat `/api/*`, nhung van bo qua bearer-token flows nhu ECUS bridge.
+- `server-v4/src/modules/auth/authShared.ts` hien set/clear dong bo ca `kpi_session` va `kpi_csrf`; client wrapper `src/auth/localAuth.js` tu doc cookie va gan `X-CSRF-Token` cho `POST`/`PUT`/`PATCH`/`DELETE`.
 - Bo sung regression test moi:
-  - them `tests/backendEntrypointPlan.test.js`
-  - giu `tests/appsApiStart.test.js` xanh de xac nhan launcher `apps/api` van dung contract runtime hien tai
+  - them `tests/server-v4/csrfProtection.test.js`
+  - cap nhat `tests/server-v4/authRoutes.test.js` va `tests/server-v4/legacyCompatRoutes.test.js` de gui dung cookie pair + header CSRF
+  - cap nhat `tests/auth.test.jsx` de khoa behavior auto-attach header tren browser client
 - Targeted verify da pass:
-  - `pnpm exec eslint apps/api/src/backendEntrypointPlan.js scripts/start-backend.mjs tests/backendEntrypointPlan.test.js tests/appsApiStart.test.js`
-  - `pnpm exec vitest run tests/backendEntrypointPlan.test.js tests/appsApiStart.test.js --environment node`
-- `gitnexus_detect_changes(scope: "all")` hien bao `risk_level: low`; symbol index thay doi la `scripts/start-backend.mjs`, phu hop voi muc tieu bootstrap-only cua slice nay.
+  - `pnpm exec eslint server-v4/src/app/csrfProtection.ts server-v4/src/app/build-v4-app.ts server-v4/src/modules/auth/authShared.ts src/auth/localAuth.js tests/auth.test.jsx tests/server-v4/csrfProtection.test.js tests/server-v4/authRoutes.test.js tests/server-v4/legacyCompatRoutes.test.js`
+  - `pnpm exec vitest run tests/server-v4/csrfProtection.test.js tests/server-v4/authRoutes.test.js tests/server-v4/legacyCompatRoutes.test.js --environment node`
+  - `pnpm exec vitest run tests/auth.test.jsx --environment jsdom`
 ## Recent Completed Slices
 
+- `cng-2k4.10` da hoan tat CSRF protection cho mutation routes:
+  - them `server-v4/src/app/csrfProtection.ts` de enforce CSRF cho cookie-authenticated `POST`/`PUT`/`PATCH`/`DELETE` o build path trung tam `buildV4App`, dong thoi hydrate `kpi_csrf` cookie khi session da ton tai
+  - cap nhat `server-v4/src/modules/auth/authShared.ts` de session helper set/clear dong bo `kpi_session` va `kpi_csrf`
+  - cap nhat `src/auth/localAuth.js` de frontend tu doc `kpi_csrf` cookie va gan `X-CSRF-Token` cho unsafe requests, giu thay doi toi thieu tren `fetchWithAuth`
+  - bo sung `tests/server-v4/csrfProtection.test.js`, cap nhat `tests/server-v4/authRoutes.test.js`, `tests/server-v4/legacyCompatRoutes.test.js`, va `tests/auth.test.jsx`; targeted eslint + vitest da pass
 - `HQAgencyManager.jsx` da giam tu 1065 dong xuong 804 dong sau khi tach bang du lieu/history panel ra module rieng, giu shell tap trung vao orchestration/state.
 - Da them `src/components/hq-agency-manager/HQAgencyTable.jsx` de rut toan bo bang agency, history details, datalist, va row actions khoi shell.
 - Da tiep tuc dung `src/components/hq-agency-manager/hqAgencyManagerModel.js` cho cac pure helper/view-model de tranh de presentation module moi phai lap lai formatting logic.

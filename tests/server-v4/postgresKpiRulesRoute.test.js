@@ -122,7 +122,7 @@ describe("server-v4 postgres KPI rules route wiring", () => {
 
     const forbiddenResponse = await request(app)
       .post("/api/v4/kpi-rules")
-      .set("Cookie", "kpi_session=session-staff")
+      .set(sessionHeaders("session-staff"))
       .send({
         name: "Forbidden Draft",
       });
@@ -134,7 +134,7 @@ describe("server-v4 postgres KPI rules route wiring", () => {
 
     const createResponse = await request(app)
       .post("/api/v4/kpi-rules")
-      .set("Cookie", "kpi_session=session-manager")
+      .set(sessionHeaders("session-manager"))
       .send({
         name: "March Draft",
         description: "Draft for March KPI rollout",
@@ -170,7 +170,7 @@ describe("server-v4 postgres KPI rules route wiring", () => {
 
     const activateResponse = await request(app)
       .post(`/api/v4/kpi-rules/${createResponse.body.data.ruleSet.id}/activate`)
-      .set("Cookie", "kpi_session=session-manager")
+      .set(sessionHeaders("session-manager"))
       .send({});
 
     expect(activateResponse.status).toBe(200);
@@ -185,6 +185,14 @@ describe("server-v4 postgres KPI rules route wiring", () => {
   });
 });
 
+const TEST_CSRF_TOKEN = "test-csrf-token";
+
+function sessionHeaders(sessionToken) {
+  return {
+    Cookie: `kpi_session=${sessionToken}; kpi_csrf=${TEST_CSRF_TOKEN}`,
+    "X-CSRF-Token": TEST_CSRF_TOKEN,
+  };
+}
 function createDeclarationsReader() {
   return {
     getSourceKind: () => "dual-write",
@@ -354,3 +362,4 @@ function createAccount({ username, role, name }) {
 function clone(value) {
   return value === null ? null : JSON.parse(JSON.stringify(value));
 }
+

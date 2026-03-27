@@ -5,6 +5,7 @@ import request from 'supertest';
 import { ADMIN_ROLE, DEFAULT_ROLE, getPermissionTemplate } from '../../packages/domain/src/accountRoles.js';
 import { buildV4App } from '../../server-v4/src/index.ts';
 import { authModule } from '../../server-v4/src/modules/auth/auth.module.ts';
+import { CSRF_COOKIE_NAME, CSRF_HEADER_NAME, SESSION_COOKIE_NAME } from '../../server-v4/src/modules/auth/authShared.ts';
 
 describe('server-v4 auth routes', () => {
   it('supports login, session restore, account management, password flows, and logout with cookie-backed sessions', async () => {
@@ -43,7 +44,8 @@ describe('server-v4 auth routes', () => {
       name: 'Admin User',
     });
 
-    const cookie = getCookie(loginResponse);
+    const cookie = getCookieHeader(loginResponse);
+    const csrfToken = getCookieValue(loginResponse, CSRF_COOKIE_NAME);
 
     const sessionResponse = await request(app)
       .get('/api/v4/auth/session')
@@ -65,6 +67,7 @@ describe('server-v4 auth routes', () => {
     const createResponse = await request(app)
       .post('/api/v4/auth/accounts')
       .set('Cookie', cookie)
+      .set(CSRF_HEADER_NAME, csrfToken)
       .send({
         username: 'new.staff',
         password: 'newstaff123',
@@ -87,6 +90,7 @@ describe('server-v4 auth routes', () => {
     const updateResponse = await request(app)
       .patch('/api/v4/auth/accounts/new.staff')
       .set('Cookie', cookie)
+      .set(CSRF_HEADER_NAME, csrfToken)
       .send({
         name: 'Updated Staff',
         teamName: 'Red Team',
@@ -102,6 +106,7 @@ describe('server-v4 auth routes', () => {
     const setPasswordResponse = await request(app)
       .post('/api/v4/auth/accounts/new.staff/password')
       .set('Cookie', cookie)
+      .set(CSRF_HEADER_NAME, csrfToken)
       .send({
         password: 'newstaff456',
       });
@@ -121,11 +126,13 @@ describe('server-v4 auth routes', () => {
       username: 'new.staff',
     });
 
-    const newStaffCookie = getCookie(newStaffLoginResponse);
+    const newStaffCookie = getCookieHeader(newStaffLoginResponse);
+    const newStaffCsrfToken = getCookieValue(newStaffLoginResponse, CSRF_COOKIE_NAME);
 
     const changeOwnPasswordResponse = await request(app)
       .post('/api/v4/auth/password/change')
       .set('Cookie', newStaffCookie)
+      .set(CSRF_HEADER_NAME, newStaffCsrfToken)
       .send({
         username: 'new.staff',
         currentPassword: 'newstaff456',
@@ -138,7 +145,8 @@ describe('server-v4 auth routes', () => {
       name: 'Updated Staff',
     });
 
-    const changedPasswordCookie = getCookie(changeOwnPasswordResponse);
+    const changedPasswordCookie = getCookieHeader(changeOwnPasswordResponse);
+    const changedPasswordCsrfToken = getCookieValue(changeOwnPasswordResponse, CSRF_COOKIE_NAME);
 
     const oldPasswordLoginResponse = await request(app)
       .post('/api/v4/auth/login')
@@ -157,14 +165,16 @@ describe('server-v4 auth routes', () => {
 
     const deleteResponse = await request(app)
       .delete('/api/v4/auth/accounts/new.staff')
-      .set('Cookie', cookie);
+      .set('Cookie', cookie)
+      .set(CSRF_HEADER_NAME, csrfToken);
 
     expect(deleteResponse.status).toBe(200);
     expect(deleteResponse.body.data.accounts).toHaveLength(2);
 
     const logoutResponse = await request(app)
       .post('/api/v4/auth/logout')
-      .set('Cookie', changedPasswordCookie);
+      .set('Cookie', changedPasswordCookie)
+      .set(CSRF_HEADER_NAME, changedPasswordCsrfToken);
 
     expect(logoutResponse.status).toBe(200);
     expect(logoutResponse.body).toEqual({
@@ -223,11 +233,13 @@ describe('server-v4 auth routes', () => {
     const loginResponse = await request(app)
       .post('/api/v4/auth/login')
       .send({ username: 'admin', password: 'admin123' });
-    const cookie = getCookie(loginResponse);
+    const cookie = getCookieHeader(loginResponse);
+    const csrfToken = getCookieValue(loginResponse, CSRF_COOKIE_NAME);
 
     const invalidCreateResponse = await request(app)
       .post('/api/v4/auth/accounts')
       .set('Cookie', cookie)
+      .set(CSRF_HEADER_NAME, csrfToken)
       .send({
         username: 'too-short',
         password: '123',
@@ -241,6 +253,7 @@ describe('server-v4 auth routes', () => {
     const invalidSetPasswordResponse = await request(app)
       .post('/api/v4/auth/accounts/admin/password')
       .set('Cookie', cookie)
+      .set(CSRF_HEADER_NAME, csrfToken)
       .send({
         password: '123',
       });
@@ -279,7 +292,8 @@ describe('server-v4 auth routes', () => {
     const staffLoginResponse = await request(app)
       .post('/api/v4/auth/login')
       .send({ username: 'staff', password: 'staff123' });
-    const staffCookie = getCookie(staffLoginResponse);
+    const staffCookie = getCookieHeader(staffLoginResponse);
+    const staffCsrfToken = getCookieValue(staffLoginResponse, CSRF_COOKIE_NAME);
 
     const forbiddenResponse = await request(app)
       .get('/api/v4/auth/accounts')
@@ -293,6 +307,7 @@ describe('server-v4 auth routes', () => {
     const forbiddenPasswordResetResponse = await request(app)
       .post('/api/v4/auth/accounts/admin/password')
       .set('Cookie', staffCookie)
+      .set(CSRF_HEADER_NAME, staffCsrfToken)
       .send({
         password: 'admin456',
       });
@@ -304,7 +319,8 @@ describe('server-v4 auth routes', () => {
 
     const forbiddenDeleteResponse = await request(app)
       .delete('/api/v4/auth/accounts/admin')
-      .set('Cookie', staffCookie);
+      .set('Cookie', staffCookie)
+      .set(CSRF_HEADER_NAME, staffCsrfToken);
 
     expect(forbiddenDeleteResponse.status).toBe(403);
     expect(forbiddenDeleteResponse.body.error).toMatchObject({
@@ -314,6 +330,7 @@ describe('server-v4 auth routes', () => {
     const forbiddenOwnPasswordResponse = await request(app)
       .post('/api/v4/auth/password/change')
       .set('Cookie', staffCookie)
+      .set(CSRF_HEADER_NAME, staffCsrfToken)
       .send({
         username: 'admin',
         currentPassword: 'staff123',
@@ -328,11 +345,13 @@ describe('server-v4 auth routes', () => {
     const adminLoginResponse = await request(app)
       .post('/api/v4/auth/login')
       .send({ username: 'admin', password: 'admin123' });
-    const adminCookie = getCookie(adminLoginResponse);
+    const adminCookie = getCookieHeader(adminLoginResponse);
+    const adminCsrfToken = getCookieValue(adminLoginResponse, CSRF_COOKIE_NAME);
 
     const lastAdminResponse = await request(app)
       .patch('/api/v4/auth/accounts/admin')
       .set('Cookie', adminCookie)
+      .set(CSRF_HEADER_NAME, adminCsrfToken)
       .send({ role: DEFAULT_ROLE });
 
     expect(lastAdminResponse.status).toBe(400);
@@ -342,7 +361,8 @@ describe('server-v4 auth routes', () => {
 
     const lastAdminDeleteResponse = await request(app)
       .delete('/api/v4/auth/accounts/admin')
-      .set('Cookie', adminCookie);
+      .set('Cookie', adminCookie)
+      .set(CSRF_HEADER_NAME, adminCsrfToken);
 
     expect(lastAdminDeleteResponse.status).toBe(400);
     expect(lastAdminDeleteResponse.body.error).toMatchObject({
@@ -352,6 +372,7 @@ describe('server-v4 auth routes', () => {
     const wrongCurrentPasswordResponse = await request(app)
       .post('/api/v4/auth/password/change')
       .set('Cookie', staffCookie)
+      .set(CSRF_HEADER_NAME, staffCsrfToken)
       .send({
         username: 'staff',
         currentPassword: 'wrong-password',
@@ -361,6 +382,40 @@ describe('server-v4 auth routes', () => {
     expect(wrongCurrentPasswordResponse.status).toBe(401);
     expect(wrongCurrentPasswordResponse.body.error).toMatchObject({
       code: 'invalid_credentials',
+    });
+  });
+
+  it('rejects cookie-authenticated mutations when the csrf token is missing', async () => {
+    const authStore = createAuthStore([
+      createAccount({
+        username: 'admin',
+        password: 'admin123',
+        role: ADMIN_ROLE,
+        name: 'Admin User',
+      }),
+    ]);
+    const app = buildV4App({
+      modules: [authModule],
+      persistence: {
+        mode: 'sqlite-dual-write',
+        sourceKind: 'dual-write',
+        authStore,
+        dispose: async () => {},
+      },
+    });
+
+    const loginResponse = await request(app)
+      .post('/api/v4/auth/login')
+      .send({ username: 'admin', password: 'admin123' });
+    const cookie = getCookieHeader(loginResponse);
+
+    const response = await request(app)
+      .post('/api/v4/auth/logout')
+      .set('Cookie', cookie);
+
+    expect(response.status).toBe(403);
+    expect(response.body.error).toMatchObject({
+      code: 'csrf_invalid',
     });
   });
 });
@@ -418,10 +473,21 @@ function createAccount({ username, password, role, name }) {
   };
 }
 
-function getCookie(response) {
-  const cookie = response.headers['set-cookie']?.[0];
-  expect(cookie).toContain('kpi_session=');
-  return cookie;
+function getCookieHeader(response) {
+  return [
+    getCookiePair(response, SESSION_COOKIE_NAME),
+    getCookiePair(response, CSRF_COOKIE_NAME),
+  ].join('; ');
+}
+
+function getCookieValue(response, name) {
+  return getCookiePair(response, name).slice(name.length + 1);
+}
+
+function getCookiePair(response, name) {
+  const cookie = response.headers['set-cookie']?.find((entry) => entry.startsWith(`${name}=`));
+  expect(cookie).toBeTruthy();
+  return cookie.split(';', 1)[0];
 }
 
 function clone(value) {
