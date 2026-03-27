@@ -2,57 +2,12 @@ export const TEAM_ROSTER_STATE_TABLE = 'team_roster_state';
 export const TEAM_TABLE = 'teams';
 export const TEAM_MEMBER_TABLE = 'team_members';
 export const ACTIVE_TEAM_ROSTER_SNAPSHOT_KEY = 'active';
+import { ensureSqliteTeamRosterTables } from './sqliteMigrations.js';
 
 const EMPTY_ROSTER = Object.freeze({ version: 1, teams: [] });
 
 export function ensureTeamRosterTables(database) {
-  if (!database || typeof database.exec !== 'function') {
-    return;
-  }
-
-  database.exec(
-    'CREATE TABLE IF NOT EXISTS team_roster_state (\n' +
-      '  snapshot_key TEXT PRIMARY KEY,\n' +
-      '  version INTEGER NOT NULL DEFAULT 1,\n' +
-      '  team_count INTEGER NOT NULL DEFAULT 0,\n' +
-      '  member_count INTEGER NOT NULL DEFAULT 0,\n' +
-      '  updated_at TEXT NOT NULL\n' +
-      ')'
-  );
-  database.exec(
-    'CREATE TABLE IF NOT EXISTS teams (\n' +
-      '  id TEXT PRIMARY KEY,\n' +
-      '  snapshot_key TEXT NOT NULL,\n' +
-      '  legacy_team_id TEXT NOT NULL DEFAULT \'\',\n' +
-      '  name TEXT NOT NULL DEFAULT \'\',\n' +
-      '  sort_order INTEGER NOT NULL DEFAULT 0,\n' +
-      '  active INTEGER NOT NULL DEFAULT 1,\n' +
-      '  updated_at TEXT NOT NULL\n' +
-      ')'
-  );
-  database.exec(
-    'CREATE INDEX IF NOT EXISTS idx_teams_snapshot_key_sort_order ON teams(snapshot_key, sort_order)'
-  );
-  database.exec(
-    'CREATE TABLE IF NOT EXISTS team_members (\n' +
-      '  id TEXT PRIMARY KEY,\n' +
-      '  team_id TEXT NOT NULL,\n' +
-      '  snapshot_key TEXT NOT NULL,\n' +
-      '  legacy_member_id TEXT NOT NULL DEFAULT \'\',\n' +
-      '  full_name TEXT NOT NULL DEFAULT \'\',\n' +
-      '  notes TEXT NOT NULL DEFAULT \'\',\n' +
-      '  sort_order INTEGER NOT NULL DEFAULT 0,\n' +
-      '  active INTEGER NOT NULL DEFAULT 1,\n' +
-      '  updated_at TEXT NOT NULL,\n' +
-      '  FOREIGN KEY(team_id) REFERENCES teams(id) ON DELETE CASCADE\n' +
-      ')'
-  );
-  database.exec(
-    'CREATE INDEX IF NOT EXISTS idx_team_members_team_id_sort_order ON team_members(team_id, sort_order)'
-  );
-  database.exec(
-    'CREATE INDEX IF NOT EXISTS idx_team_members_snapshot_key_sort_order ON team_members(snapshot_key, sort_order)'
-  );
+  ensureSqliteTeamRosterTables(database);
 }
 
 export function readTeamRosterSnapshot(database, snapshotKey = ACTIVE_TEAM_ROSTER_SNAPSHOT_KEY) {

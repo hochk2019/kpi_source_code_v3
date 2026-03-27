@@ -13,6 +13,7 @@ import fs from 'node:fs/promises';
 import Database from 'better-sqlite3';
 
 import { describe, it, expect, beforeAll } from 'vitest';
+import { readAppliedSqliteMigrations } from '../server/sqliteMigrations.js';
 
 
 
@@ -50,6 +51,7 @@ describe('initializeDatabase seed logic', () => {
     const projectionTable = db
       .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?")
       .get('reporting_projections');
+    const appliedMigrations = readAppliedSqliteMigrations(db).map((entry) => entry.id);
 
 
 
@@ -77,6 +79,17 @@ describe('initializeDatabase seed logic', () => {
 
     expect(() => JSON.parse(usersRow.value)).not.toThrow();
     expect(projectionTable?.name).toBe('reporting_projections');
+    expect(appliedMigrations).toEqual(
+      expect.arrayContaining([
+        '0001_kv_store',
+        '0002_auth_sessions',
+        '0003_export_audit',
+        '0004_export_audit_access',
+        '0100_reporting_projections',
+        '0200_business_snapshot_state',
+        '0300_team_roster_state',
+      ])
+    );
 
 
 
@@ -124,6 +137,7 @@ describe('initializeDatabase seed logic', () => {
     const projectionTable = db
       .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?")
       .get('reporting_projections');
+    const appliedMigrations = readAppliedSqliteMigrations(db).map((entry) => entry.id);
 
 
 
@@ -147,6 +161,14 @@ describe('initializeDatabase seed logic', () => {
 
     ]));
     expect(projectionTable?.name).toBe('reporting_projections');
+    expect(appliedMigrations).toEqual(
+      expect.arrayContaining([
+        '0001_kv_store',
+        '0002_auth_sessions',
+        '0100_reporting_projections',
+        '0200_business_snapshot_state',
+      ])
+    );
 
 
 

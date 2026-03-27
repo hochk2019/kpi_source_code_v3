@@ -12,20 +12,36 @@
 
 ## Active Slice
 
-- Title: Extract backup and restore domain into server-v4 backup module
-- Bead: cng-2k4.4
+- Title: Add numbered schema migrations for SQLite and server-v4
+- Bead: cng-2k4.7
 - Status: completed
 - Last updated: 2026-03-27
 
-- Da them `server-v4/src/modules/backup/backupDomain.js` de gom domain logic backup/restore/schedule/summary ra khoi `server/index.js` bang dependency injection, giu duoc admin routes va CLI backup flow hien tai.
-- `server/index.js` hien chi giu wrapper mong cho `performDatabaseBackup`, `listBackupFiles`, `restoreDatabaseBackup`, `buildBackupSummary`, va `refreshDatabaseBackupSchedule`; dong thoi da xoa cac helper backup trung lap trong shell.
-- Da bo sung regression `tests/server-v4/backupDomain.test.js` de khoa 3 nhom behavior chinh: backup + retention, restore + re-init, va schedule/summary metadata.
-- Targeted verify da pass:
-  - `pnpm exec eslint server/index.js server-v4/src/modules/backup/backupDomain.js tests/server-v4/backupDomain.test.js tests/server.backup.test.js tests/runBackupCore.test.js`
-  - `pnpm exec vitest run tests/server-v4/backupDomain.test.js tests/server.backup.test.js tests/runBackupCore.test.js --environment node`
-- `gitnexus_detect_changes(scope: "unstaged")` hien van tra `critical` do worktree dang gom nhieu slice/frontend changes chua commit song song; ket qua nay khong phan tach rieng duoc blast radius cua backup slice, nen gate thuc te cho slice nay van dua tren targeted lint + targeted test + impact analysis muc tieu da chay truoc khi sua symbol.
+- Muc tieu hien tai la thay bootstrap schema inline bang migration runner co danh so va bang lich su, nhung van giu nguyen public entry points nhu `initializeDatabase`, `ensureBusinessSnapshotTables`, `ensureReportingProjectionTable`, `ensureTeamRosterTables`, va cac `Sqlite*Store`.
+- GitNexus impact da duoc chay truoc khi sua:
+  - `initializeDatabase`: `LOW`
+  - `ensureTeamRosterTables`: `LOW`
+  - `ensureReportingProjectionTable`: `HIGH`
+  - `ensureBusinessSnapshotTables`: `CRITICAL`
+  - `SqliteAuthStore` / `SqliteDeclarationsStore` / `SqliteHqAgenciesStore` / `SqliteKpiAdjustmentsStore` / `SqliteKpiRulesStore`: `HIGH`
+- Cach sua du kien:
+  - them helper migration chung cho SQLite de luu `schema_migrations`
+  - de cac helper/store hien tai delegate sang migration runner thay vi `CREATE TABLE IF NOT EXISTS` truc tiep
+  - bo sung regression cho migration history va legacy-column backfill truoc khi commit slice
+- Trang thai verify hien tai:
+  - `pnpm exec eslint ...` cho cum file migration/storage/test da pass
+  - `pnpm exec vitest run tests/sqliteMigrations.test.js tests/server.seed.test.js tests/reportingProjectionSqlite.test.js --environment node` da pass
+  - `gitnexus_detect_changes(scope: all)` van bao `critical` do day la slice persistence dung chung, nhung diff thuc te van gioi han trong nhom migration/storage/test du kien
+  - `bd` / `bd.cmd` trong worktree hien tai khong tim thay beads database, nen trang thai bead chua sync duoc bang CLI
 ## Recent Completed Slices
 
+- `cng-2k4.7` da xong o muc numbered SQLite schema migrations:
+  - them `server/sqliteMigrations.js` de quan ly `schema_migrations` va chay migration co danh so cho kv/auth/export-audit/reporting/business-snapshot/team-roster
+  - `server/index.js`, `server/reportingProjectionSqlite.js`, `server/businessSnapshotSqlite.js`, `server/teamRosterSqlite.js`, va cac `Sqlite*Store` ben `server-v4` da delegate sang migration runner thay vi tu bootstrap bang `CREATE TABLE IF NOT EXISTS`
+  - bo sung regression `tests/sqliteMigrations.test.js` va cap nhat `tests/reportingProjectionSqlite.test.js`, `tests/server.seed.test.js` de khoa migration history + legacy backfill path
+  - targeted verify da pass:
+    - `pnpm exec eslint server/sqliteMigrations.js server/index.js server/businessSnapshotSqlite.js server/reportingProjectionSqlite.js server/teamRosterSqlite.js server-v4/src/modules/auth/sqliteAuthStore.ts server-v4/src/modules/declarations/sqliteDeclarationsStore.ts server-v4/src/modules/hq-agencies/sqliteHqAgenciesStore.ts server-v4/src/modules/kpi-adjustments/sqliteKpiAdjustmentsStore.ts server-v4/src/modules/kpi-rules/sqliteKpiRulesStore.ts server-v4/src/modules/teams/sqliteTeamsStore.ts tests/sqliteMigrations.test.js tests/server.seed.test.js tests/reportingProjectionSqlite.test.js`
+    - `pnpm exec vitest run tests/sqliteMigrations.test.js tests/server.seed.test.js tests/reportingProjectionSqlite.test.js --environment node`
 - `cng-2k4.1` da hoan tat canonical auth v4 cutover cho client account flows:
   - doi `src/auth/localAuth.js` sang `/api/v4/auth/*` cho login/session/logout + account/password mutations
   - cap nhat auth/account test assertions va Playwright login helper sang canonical route

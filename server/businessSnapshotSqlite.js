@@ -4,6 +4,7 @@ import {
   normalizeDeclarationNumber,
   normalizeStatusKey,
 } from '../packages/domain/src/declSearch.js';
+import { ensureSqliteBusinessSnapshotTables } from './sqliteMigrations.js';
 
 export const BUSINESS_SNAPSHOT_STATE_TABLE = 'business_snapshot_state';
 export const DECLARATION_SNAPSHOT_ROW_TABLE = 'declaration_snapshot_rows';
@@ -103,102 +104,7 @@ const ADJUSTMENT_ROW_DEFINITION = {
 };
 
 export function ensureBusinessSnapshotTables(database) {
-  if (!database || typeof database.exec !== 'function') {
-    return;
-  }
-
-  database.exec(
-    'CREATE TABLE IF NOT EXISTS business_snapshot_state (\n' +
-      '  domain_key TEXT NOT NULL,\n' +
-      '  snapshot_key TEXT NOT NULL,\n' +
-      '  version INTEGER NOT NULL DEFAULT 1,\n' +
-      '  row_count INTEGER NOT NULL DEFAULT 0,\n' +
-      '  payload TEXT,\n' +
-      '  updated_at TEXT NOT NULL,\n' +
-      '  PRIMARY KEY(domain_key, snapshot_key)\n' +
-      ')'
-  );
-  database.exec(
-    'CREATE TABLE IF NOT EXISTS declaration_snapshot_rows (\n' +
-      '  snapshot_key TEXT NOT NULL,\n' +
-      '  sort_order INTEGER NOT NULL,\n' +
-      '  declaration_key TEXT NOT NULL DEFAULT \'\',\n' +
-      '  so_tk TEXT NOT NULL DEFAULT \'\',\n' +
-        '  so_tk_full TEXT NOT NULL DEFAULT \'\',\n' +
-        '  branch TEXT NOT NULL DEFAULT \'\',\n' +
-        '  mst TEXT NOT NULL DEFAULT \'\',\n' +
-        '  registered_at TEXT NOT NULL DEFAULT \'\',\n' +
-        '  company TEXT NOT NULL DEFAULT \'\',\n' +
-        '  status TEXT NOT NULL DEFAULT \'\',\n' +
-        '  staff_name TEXT NOT NULL DEFAULT \'\',\n' +
-        '  team_name TEXT NOT NULL DEFAULT \'\',\n' +
-        '  deleted_at TEXT NOT NULL DEFAULT \'\',\n' +
-        '  co_count INTEGER NOT NULL DEFAULT 0,\n' +
-        '  duplicate_prefix TEXT NOT NULL DEFAULT \'\',\n' +
-        '  agency_search TEXT NOT NULL DEFAULT \'\',\n' +
-        '  payload TEXT NOT NULL,\n' +
-        '  PRIMARY KEY(snapshot_key, sort_order)\n' +
-        ')'
-  );
-  ensureTableColumn(database, DECLARATION_SNAPSHOT_ROW_TABLE, 'company', "TEXT NOT NULL DEFAULT ''");
-  ensureTableColumn(database, DECLARATION_SNAPSHOT_ROW_TABLE, 'status', "TEXT NOT NULL DEFAULT ''");
-  ensureTableColumn(database, DECLARATION_SNAPSHOT_ROW_TABLE, 'staff_name', "TEXT NOT NULL DEFAULT ''");
-  ensureTableColumn(database, DECLARATION_SNAPSHOT_ROW_TABLE, 'team_name', "TEXT NOT NULL DEFAULT ''");
-  ensureTableColumn(database, DECLARATION_SNAPSHOT_ROW_TABLE, 'deleted_at', "TEXT NOT NULL DEFAULT ''");
-  ensureTableColumn(database, DECLARATION_SNAPSHOT_ROW_TABLE, 'co_count', 'INTEGER NOT NULL DEFAULT 0');
-  ensureTableColumn(database, DECLARATION_SNAPSHOT_ROW_TABLE, 'duplicate_prefix', "TEXT NOT NULL DEFAULT ''");
-  ensureTableColumn(database, DECLARATION_SNAPSHOT_ROW_TABLE, 'agency_search', "TEXT NOT NULL DEFAULT ''");
-  database.exec(
-    'CREATE INDEX IF NOT EXISTS idx_declaration_snapshot_rows_snapshot_key_sort_order ON declaration_snapshot_rows(snapshot_key, sort_order)'
-  );
-  database.exec(
-    'CREATE INDEX IF NOT EXISTS idx_declaration_snapshot_rows_snapshot_key_status ON declaration_snapshot_rows(snapshot_key, status)'
-  );
-  database.exec(
-    'CREATE INDEX IF NOT EXISTS idx_declaration_snapshot_rows_snapshot_key_mst ON declaration_snapshot_rows(snapshot_key, mst)'
-  );
-  database.exec(
-    'CREATE INDEX IF NOT EXISTS idx_declaration_snapshot_rows_snapshot_key_registered_at ON declaration_snapshot_rows(snapshot_key, registered_at)'
-  );
-  database.exec(
-    'CREATE INDEX IF NOT EXISTS idx_declaration_snapshot_rows_snapshot_key_duplicate_prefix ON declaration_snapshot_rows(snapshot_key, duplicate_prefix)'
-  );
-  database.exec(
-    'CREATE TABLE IF NOT EXISTS mst_assignment_snapshot_rows (\n' +
-      '  snapshot_key TEXT NOT NULL,\n' +
-      '  sort_order INTEGER NOT NULL,\n' +
-      '  mst TEXT NOT NULL DEFAULT \'\',\n' +
-      '  company TEXT NOT NULL DEFAULT \'\',\n' +
-      '  person_import TEXT NOT NULL DEFAULT \'\',\n' +
-      '  person_export TEXT NOT NULL DEFAULT \'\',\n' +
-      '  team TEXT NOT NULL DEFAULT \'\',\n' +
-      '  effective_from TEXT NOT NULL DEFAULT \'\',\n' +
-      '  effective_to TEXT NOT NULL DEFAULT \'\',\n' +
-      '  payload TEXT NOT NULL,\n' +
-      '  PRIMARY KEY(snapshot_key, sort_order)\n' +
-      ')'
-  );
-  database.exec(
-    'CREATE INDEX IF NOT EXISTS idx_mst_assignment_snapshot_rows_snapshot_key_sort_order ON mst_assignment_snapshot_rows(snapshot_key, sort_order)'
-  );
-  database.exec(
-    'CREATE TABLE IF NOT EXISTS adjustment_snapshot_rows (\n' +
-      '  snapshot_key TEXT NOT NULL,\n' +
-      '  sort_order INTEGER NOT NULL,\n' +
-      '  adjustment_id TEXT NOT NULL DEFAULT \'\',\n' +
-      '  month TEXT NOT NULL DEFAULT \'\',\n' +
-      '  category TEXT NOT NULL DEFAULT \'\',\n' +
-      '  staff_name TEXT NOT NULL DEFAULT \'\',\n' +
-      '  team_name TEXT NOT NULL DEFAULT \'\',\n' +
-      '  status TEXT NOT NULL DEFAULT \'\',\n' +
-      '  total_points REAL NOT NULL DEFAULT 0,\n' +
-      '  payload TEXT NOT NULL,\n' +
-      '  PRIMARY KEY(snapshot_key, sort_order)\n' +
-      ')'
-  );
-  database.exec(
-    'CREATE INDEX IF NOT EXISTS idx_adjustment_snapshot_rows_snapshot_key_sort_order ON adjustment_snapshot_rows(snapshot_key, sort_order)'
-  );
+  ensureSqliteBusinessSnapshotTables(database);
 }
 
 export function readDeclarationRowsSnapshot(
@@ -600,23 +506,3 @@ function buildAgencySearchString(row) {
   return parts.join(' ');
 }
 
-function ensureTableColumn(database, tableName, columnName, columnDefinition) {
-  if (hasTableColumn(database, tableName, columnName)) {
-    return;
-  }
-
-  database.exec(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${columnDefinition}`);
-}
-
-function hasTableColumn(database, tableName, columnName) {
-  if (!database || typeof database.prepare !== 'function') {
-    return false;
-  }
-
-  try {
-    const columns = database.prepare(`PRAGMA table_info(${tableName})`).all();
-    return columns.some((column) => normalizeText(column?.name) === columnName);
-  } catch {
-    return false;
-  }
-}

@@ -61,6 +61,11 @@ import {
   ensureTeamRosterTables,
   writeTeamRosterSnapshot,
 } from './teamRosterSqlite.js';
+import {
+  ensureSqliteAuthTables,
+  ensureSqliteExportAuditTables,
+  ensureSqliteKvStore,
+} from './sqliteMigrations.js';
 import { resolveReportingRule } from './reportingRuleSelection.js';
 import {
   buildReportingReadModels,
@@ -2334,85 +2339,9 @@ export async function initializeDatabase({ dbFile = DB_FILE } = {}) {
 
 
   database.pragma('journal_mode = WAL');
-
-  database.exec(
-
-    'CREATE TABLE IF NOT EXISTS kv_store (key TEXT PRIMARY KEY, value TEXT NOT NULL)'
-
-  );
-
-  database.exec(
-
-    'CREATE TABLE IF NOT EXISTS auth_sessions (token TEXT PRIMARY KEY, username TEXT NOT NULL, created_at INTEGER NOT NULL, expires_at INTEGER NOT NULL)'
-
-  );
-
-  database.exec(
-
-    'CREATE INDEX IF NOT EXISTS idx_auth_sessions_username ON auth_sessions(username)'
-
-  );
-
-  database.exec(
-
-    'CREATE TABLE IF NOT EXISTS export_audit (\n' +
-
-      '  id INTEGER PRIMARY KEY AUTOINCREMENT,\n' +
-
-      '  created_at TEXT NOT NULL,\n' +
-
-      '  issued_at TEXT,\n' +
-
-      '  username TEXT NOT NULL,\n' +
-
-      '  display_name TEXT,\n' +
-
-      '  role TEXT,\n' +
-
-      '  report_kind TEXT NOT NULL,\n' +
-
-      '  filename TEXT,\n' +
-
-      '  signature TEXT,\n' +
-
-      '  short_signature TEXT,\n' +
-
-      '  filter_summary TEXT,\n' +
-
-      '  filters TEXT,\n' +
-
-      '  ip_address TEXT,\n' +
-
-      '  request_id TEXT,\n' +
-
-      '  user_agent TEXT\n' +
-
-      ')'
-
-  );
-
-  database.exec('CREATE INDEX IF NOT EXISTS idx_export_audit_created_at ON export_audit(created_at)');
-  database.exec('CREATE INDEX IF NOT EXISTS idx_export_audit_username ON export_audit(username)');
-  database.exec(
-    'CREATE TABLE IF NOT EXISTS export_audit_access (\n' +
-      '  id INTEGER PRIMARY KEY AUTOINCREMENT,\n' +
-      '  viewed_at TEXT NOT NULL,\n' +
-      '  username TEXT NOT NULL,\n' +
-      '  display_name TEXT,\n' +
-      '  role TEXT,\n' +
-      '  ip_address TEXT,\n' +
-      '  client_host TEXT,\n' +
-      '  user_agent TEXT,\n' +
-      '  filters TEXT,\n' +
-      '  query TEXT\n' +
-      ')'
-  );
-  database.exec(
-    'CREATE INDEX IF NOT EXISTS idx_export_audit_access_viewed_at ON export_audit_access(viewed_at)'
-  );
-  database.exec(
-    'CREATE INDEX IF NOT EXISTS idx_export_audit_access_username ON export_audit_access(username)'
-  );
+  ensureSqliteKvStore(database);
+  ensureSqliteAuthTables(database);
+  ensureSqliteExportAuditTables(database);
   ensureReportingProjectionTable(database);
   ensureBusinessSnapshotTables(database);
   ensureTeamRosterTables(database);

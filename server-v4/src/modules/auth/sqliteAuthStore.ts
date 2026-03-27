@@ -1,4 +1,5 @@
 import Database from 'better-sqlite3';
+import { ensureSqliteAuthTables } from '../../../../server/sqliteMigrations.js';
 
 import type { AuthStore } from './authStore.js';
 import type { AuthAccountRecord, AuthSessionRecord } from './authTypes.js';
@@ -102,20 +103,7 @@ export class SqliteAuthStore implements AuthStore {
   private getDatabase(): Database {
     if (!this.database) {
       this.database = new Database(this.dbFile);
-      this.database.exec(
-        'CREATE TABLE IF NOT EXISTS kv_store (key TEXT PRIMARY KEY, value TEXT NOT NULL)',
-      );
-      this.database.exec(
-        'CREATE TABLE IF NOT EXISTS auth_sessions (' +
-          'token TEXT PRIMARY KEY, ' +
-          'username TEXT NOT NULL, ' +
-          'created_at INTEGER NOT NULL, ' +
-          'expires_at INTEGER NOT NULL' +
-          ')',
-      );
-      this.database.exec(
-        'CREATE INDEX IF NOT EXISTS idx_auth_sessions_username ON auth_sessions(username)',
-      );
+      ensureSqliteAuthTables(this.database);
     }
 
     return this.database;

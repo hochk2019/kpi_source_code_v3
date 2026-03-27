@@ -5,6 +5,7 @@
 import Database from 'better-sqlite3';
 
 import { describe, expect, it } from 'vitest';
+import { readAppliedSqliteMigrations } from '../server/sqliteMigrations.js';
 
 import {
   REPORTING_JOB_RUN_ENTRY_TABLE,
@@ -36,6 +37,15 @@ describe('reportingProjectionSqlite', () => {
 
       expect(table).toEqual({ name: REPORTING_PROJECTION_TABLE });
       expect(monthlyEntryTable).toEqual({ name: REPORTING_MONTHLY_AGGREGATE_ENTRY_TABLE });
+      expect(readAppliedSqliteMigrations(db).map((entry) => entry.id)).toEqual(
+        expect.arrayContaining([
+          '0100_reporting_projections',
+          '0101_reporting_schedule_projection_entries',
+          '0103_reporting_monthly_aggregate_projection_entries',
+          '0104_reporting_job_run_entries',
+          '0105_reporting_projection_columns_backfill',
+        ]),
+      );
 
       const snapshot = {
         generatedAt: '2026-03-09T09:00:00.000Z',

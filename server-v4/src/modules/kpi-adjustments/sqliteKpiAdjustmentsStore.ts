@@ -1,4 +1,5 @@
 import Database from 'better-sqlite3';
+import { ensureSqliteKvStore } from '../../../../server/sqliteMigrations.js';
 
 import {
   readAdjustmentRowsSnapshot,
@@ -114,7 +115,7 @@ export class SqliteKpiAdjustmentsStore implements KpiAdjustmentsStore {
   }
 
   private ensureKvStore(database: Database): void {
-    database.exec('CREATE TABLE IF NOT EXISTS kv_store (key TEXT PRIMARY KEY, value TEXT NOT NULL)');
+    ensureSqliteKvStore(database);
   }
 
   private withDatabase<T>(work: (database: Database) => T): T {

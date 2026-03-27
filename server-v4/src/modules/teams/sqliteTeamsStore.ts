@@ -1,4 +1,5 @@
 import Database from 'better-sqlite3';
+import { ensureSqliteKvStore } from '../../../../server/sqliteMigrations.js';
 
 import { writeTeamRosterSnapshot } from '../../../../server/teamRosterSqlite.js';
 import { cloneTeamRoster, normalizeTeamRoster, type TeamRoster } from './teamRosterDocument.js';
@@ -30,7 +31,7 @@ export class SqliteTeamsStore implements TeamsStore {
   }
 
   private ensureKvStore(database: Database): void {
-    database.exec('CREATE TABLE IF NOT EXISTS kv_store (key TEXT PRIMARY KEY, value TEXT NOT NULL)');
+    ensureSqliteKvStore(database);
   }
 
   private withDatabase<T>(work: (database: Database) => T): T {

@@ -3,6 +3,7 @@ export const REPORTING_SCHEDULE_ENTRY_TABLE = 'reporting_schedule_projection_ent
 export const REPORTING_MONTHLY_AGGREGATE_ENTRY_TABLE =
   'reporting_monthly_aggregate_projection_entries';
 export const REPORTING_JOB_RUN_ENTRY_TABLE = 'reporting_job_run_entries';
+import { ensureSqliteReportingProjectionTables } from './sqliteMigrations.js';
 
 const PROJECTION_TYPE_BY_KEY = {
   kpi_report_schedule_v1: 'report_schedule',
@@ -12,127 +13,7 @@ const PROJECTION_TYPE_BY_KEY = {
 };
 
 export function ensureReportingProjectionTable(database) {
-  if (!database || typeof database.exec !== 'function') {
-    return;
-  }
-
-  database.exec(
-    'CREATE TABLE IF NOT EXISTS reporting_projections (\n' +
-      '  projection_key TEXT PRIMARY KEY,\n' +
-      '  projection_type TEXT NOT NULL,\n' +
-      '  scope_key TEXT NOT NULL DEFAULT \'\',\n' +
-      '  range_from TEXT NOT NULL DEFAULT \'\',\n' +
-      '  range_to TEXT NOT NULL DEFAULT \'\',\n' +
-      '  query_key TEXT NOT NULL DEFAULT \'\',\n' +
-      '  entry_count INTEGER NOT NULL DEFAULT 0,\n' +
-      '  payload TEXT NOT NULL,\n' +
-      '  updated_at TEXT NOT NULL\n' +
-      ')'
-  );
-  database.exec(
-    'CREATE INDEX IF NOT EXISTS idx_reporting_projections_type ON reporting_projections(projection_type)'
-  );
-  database.exec(
-    'CREATE TABLE IF NOT EXISTS reporting_schedule_projection_entries (\n' +
-      '  projection_key TEXT NOT NULL,\n' +
-      '  position INTEGER NOT NULL DEFAULT 0,\n' +
-      '  schedule_id TEXT NOT NULL,\n' +
-      '  name TEXT NOT NULL DEFAULT \'\',\n' +
-      '  frequency TEXT NOT NULL DEFAULT \'\',\n' +
-      '  time TEXT NOT NULL DEFAULT \'\',\n' +
-      '  day_of_week INTEGER NOT NULL DEFAULT 0,\n' +
-      '  day_of_month INTEGER NOT NULL DEFAULT 0,\n' +
-      '  active INTEGER NOT NULL DEFAULT 0,\n' +
-      '  last_run TEXT NOT NULL DEFAULT \'\',\n' +
-      '  next_run TEXT NOT NULL DEFAULT \'\',\n' +
-      '  recipient_count INTEGER NOT NULL DEFAULT 0,\n' +
-      '  format_count INTEGER NOT NULL DEFAULT 0,\n' +
-      '  payload TEXT NOT NULL,\n' +
-      '  PRIMARY KEY (projection_key, schedule_id)\n' +
-      ')'
-  );
-  database.exec(
-    'CREATE INDEX IF NOT EXISTS idx_reporting_schedule_projection_entries_projection_key ON ' +
-      'reporting_schedule_projection_entries(projection_key)'
-  );
-  ensureTableColumn(
-    database,
-    REPORTING_SCHEDULE_ENTRY_TABLE,
-    'position',
-    'INTEGER NOT NULL DEFAULT 0'
-  );
-  database.exec(
-    'CREATE INDEX IF NOT EXISTS idx_reporting_schedule_projection_entries_projection_position ON ' +
-      'reporting_schedule_projection_entries(projection_key, position)'
-  );
-  database.exec(
-    'CREATE INDEX IF NOT EXISTS idx_reporting_schedule_projection_entries_active ON ' +
-      'reporting_schedule_projection_entries(active)'
-  );
-  database.exec(
-    'CREATE TABLE IF NOT EXISTS reporting_monthly_aggregate_projection_entries (\n' +
-      '  projection_key TEXT NOT NULL,\n' +
-      '  period TEXT NOT NULL,\n' +
-      '  label TEXT NOT NULL DEFAULT \'\',\n' +
-      '  range_from TEXT NOT NULL DEFAULT \'\',\n' +
-      '  range_to TEXT NOT NULL DEFAULT \'\',\n' +
-      '  decls INTEGER NOT NULL DEFAULT 0,\n' +
-      '  import_count INTEGER NOT NULL DEFAULT 0,\n' +
-      '  export_count INTEGER NOT NULL DEFAULT 0,\n' +
-      '  item_count INTEGER NOT NULL DEFAULT 0,\n' +
-      '  license_count INTEGER NOT NULL DEFAULT 0,\n' +
-      '  kpi REAL NOT NULL DEFAULT 0,\n' +
-      '  co_count INTEGER NOT NULL DEFAULT 0,\n' +
-      '  co_line_count INTEGER NOT NULL DEFAULT 0,\n' +
-      '  company_count INTEGER NOT NULL DEFAULT 0,\n' +
-      '  top_team_count INTEGER NOT NULL DEFAULT 0,\n' +
-      '  top_staff_count INTEGER NOT NULL DEFAULT 0,\n' +
-      '  payload TEXT NOT NULL,\n' +
-      '  PRIMARY KEY (projection_key, period)\n' +
-      ')'
-  );
-  database.exec(
-    'CREATE INDEX IF NOT EXISTS idx_reporting_monthly_aggregate_projection_entries_projection_key ON ' +
-      'reporting_monthly_aggregate_projection_entries(projection_key)'
-  );
-  database.exec(
-    'CREATE INDEX IF NOT EXISTS idx_reporting_monthly_aggregate_projection_entries_range ON ' +
-      'reporting_monthly_aggregate_projection_entries(range_from, range_to)'
-  );
-  database.exec(
-    'CREATE TABLE IF NOT EXISTS reporting_job_run_entries (\n' +
-      '  projection_key TEXT NOT NULL,\n' +
-      '  run_id TEXT NOT NULL,\n' +
-      '  job_name TEXT NOT NULL DEFAULT \'\',\n' +
-      '  status TEXT NOT NULL DEFAULT \'\',\n' +
-      '  source TEXT NOT NULL DEFAULT \'\',\n' +
-      '  actor TEXT NOT NULL DEFAULT \'\',\n' +
-      '  snapshot_key TEXT NOT NULL DEFAULT \'\',\n' +
-      '  query_key TEXT NOT NULL DEFAULT \'\',\n' +
-      '  range_from TEXT NOT NULL DEFAULT \'\',\n' +
-      '  range_to TEXT NOT NULL DEFAULT \'\',\n' +
-      '  total INTEGER NOT NULL DEFAULT 0,\n' +
-      '  started_at TEXT NOT NULL DEFAULT \'\',\n' +
-      '  finished_at TEXT NOT NULL DEFAULT \'\',\n' +
-      '  duration_ms INTEGER NOT NULL DEFAULT 0,\n' +
-      '  error_message TEXT NOT NULL DEFAULT \'\',\n' +
-      '  payload TEXT NOT NULL,\n' +
-      '  PRIMARY KEY (projection_key, run_id)\n' +
-      ')'
-  );
-  database.exec(
-    'CREATE INDEX IF NOT EXISTS idx_reporting_job_run_entries_projection_key ON ' +
-      'reporting_job_run_entries(projection_key)'
-  );
-  database.exec(
-    'CREATE INDEX IF NOT EXISTS idx_reporting_job_run_entries_finished_at ON ' +
-      'reporting_job_run_entries(finished_at DESC)'
-  );
-  ensureColumn(database, 'scope_key', "TEXT NOT NULL DEFAULT ''");
-  ensureColumn(database, 'range_from', "TEXT NOT NULL DEFAULT ''");
-  ensureColumn(database, 'range_to', "TEXT NOT NULL DEFAULT ''");
-  ensureColumn(database, 'query_key', "TEXT NOT NULL DEFAULT ''");
-  ensureColumn(database, 'entry_count', 'INTEGER NOT NULL DEFAULT 0');
+  ensureSqliteReportingProjectionTables(database);
 }
 
 export function readReportingProjectionValue(database, key) {
@@ -445,32 +326,6 @@ function normalizeTimestamp(input) {
   }
 
   return new Date().toISOString();
-}
-
-function ensureColumn(database, columnName, columnDefinition) {
-  try {
-    const columns = database.prepare(`PRAGMA table_info(${REPORTING_PROJECTION_TABLE})`).all();
-    if (Array.isArray(columns) && columns.some((column) => column?.name === columnName)) {
-      return;
-    }
-    database.exec(
-      `ALTER TABLE ${REPORTING_PROJECTION_TABLE} ADD COLUMN ${columnName} ${columnDefinition}`
-    );
-  } catch {
-    // Best-effort schema evolution only.
-  }
-}
-
-function ensureTableColumn(database, tableName, columnName, columnDefinition) {
-  try {
-    const columns = database.prepare(`PRAGMA table_info(${tableName})`).all();
-    if (Array.isArray(columns) && columns.some((column) => column?.name === columnName)) {
-      return;
-    }
-    database.exec(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${columnDefinition}`);
-  } catch {
-    // Best-effort schema evolution only.
-  }
 }
 
 function isRecord(value) {
