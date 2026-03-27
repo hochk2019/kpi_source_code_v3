@@ -22,10 +22,6 @@ import {
 
   ADMIN_ROLE,
 
-  DEFAULT_ROLE,
-
-  getPasswordMinLengthPlaceholder,
-
   MIN_PASSWORD_LENGTH,
 
   normalizeRole,
@@ -63,223 +59,18 @@ import {
   SectionSurface,
   SectionToolbar,
 } from "@/components/designSystem/shellPrimitives.jsx";
-import AccountPermissionGroupsPanel from "@/components/account-manager/AccountPermissionGroupsPanel.jsx";
+import AccountCreateFormPanel from "@/components/account-manager/AccountCreateFormPanel.jsx";
+import AccountPermissionsDialog from "@/components/account-manager/AccountPermissionsDialog.jsx";
+import {
+  CONTROL_CLASS,
+  buildGroupedPermissions,
+  buildPermissionDefinitions,
+} from "@/components/account-manager/accountManagerPermissions.js";
+import { createEmptyAccountForm } from "@/components/account-manager/accountManagerFormState.js";
 import StaffCombobox, {
   buildStaffComboboxTeams,
   flattenStaffComboboxMembers,
 } from "@/components/shared/StaffCombobox.jsx";
-
-import { ScrollArea } from "@/components/ui/scroll-area.jsx";
-
-
-
-const PERMISSION_DETAILS = Object.freeze({
-
-  importEdit: {
-
-    label: "Import Data – chỉnh sửa & lưu",
-
-    description: "Cho phép nhập file ECUS, hợp nhất và ghi dữ liệu vào kho KPI.",
-
-    category: "Nhập liệu & đồng bộ",
-
-  },
-
-  importUpload: {
-
-    label: "Import Data – tải file",
-
-    description: "Cho phép tải file Excel tờ khai lên hệ thống để xem trước và chuẩn bị import.",
-
-    category: "Nhập liệu & đồng bộ",
-
-  },
-
-  mstEdit: {
-
-    label: "Gán MST – chỉnh sửa",
-
-    description: "Cập nhật mã số thuế, phân công nhân viên và đại lý hải quan phụ trách.",
-
-    category: "Tổ chức & đối tác",
-
-  },
-
-  rulesEdit: {
-
-    label: "Quy tắc KPI – chỉnh sửa",
-
-    description: "Thay đổi công thức, trọng số và điều kiện tính điểm KPI.",
-
-    category: "Cấu hình & kiểm soát",
-
-  },
-
-  teamsEdit: {
-
-    label: "Quản lý tổ đội – chỉnh sửa",
-
-    description: "Điều chỉnh cơ cấu tổ đội, phân bổ nhân viên và chỉ tiêu.",
-
-    category: "Tổ chức & đối tác",
-
-  },
-
-  syncManage: {
-
-    label: "Đồng bộ ECUS – cấu hình & chạy tay",
-
-    description: "Thiết lập lịch đồng bộ và chạy đồng bộ ECUS thủ công khi cần.",
-
-    category: "Nhập liệu & đồng bộ",
-
-  },
-
-  reportsExport: {
-
-    label: "Báo cáo KPI – xuất file",
-
-    description: "Tải báo cáo KPI ra Excel và tải nhanh biểu đồ tổng hợp.",
-
-    category: "Báo cáo & giám sát",
-
-  },
-
-  alertsManage: {
-
-    label: "Quản lý cảnh báo thiếu thông tin",
-
-    description: "Xử lý cảnh báo tờ khai thiếu dữ liệu, ghi nhận trạng thái hoàn tất.",
-
-    category: "Giám sát dữ liệu",
-
-  },
-
-  auditView: {
-
-    label: "Xem nhật ký hệ thống",
-
-    description: "Tra cứu lịch sử thao tác và truy vết hoạt động người dùng.",
-
-    category: "Báo cáo & giám sát",
-
-  },
-
-  accountManage: {
-
-    label: "Quản lý tài khoản",
-
-    description: "Tạo, khóa, đặt lại mật khẩu và phân quyền người dùng.",
-
-    category: "Quản trị hệ thống",
-
-  },
-
-  adjustSubmit: {
-
-    label: "Điểm KPI +/- thêm – gửi đề xuất",
-
-    description: "Tạo phiếu cộng/trừ điểm KPI bổ sung cho từng nhân viên.",
-
-    category: "Điều chỉnh KPI",
-
-  },
-
-  adjustApprove: {
-
-    label: "Điểm KPI +/- thêm – duyệt đề xuất",
-
-    description: "Phê duyệt hoặc từ chối các phiếu điều chỉnh KPI bổ sung.",
-
-    category: "Điều chỉnh KPI",
-
-  },
-
-  adjustOverridePoints: {
-
-    label: "Điểm KPI +/- thêm – ghi đè điểm chuẩn",
-
-    description: "Cho phép sửa điểm chuẩn mỗi đơn vị/điểm bổ sung thay vì dùng cấu hình mặc định (trừ hạng mục đặc biệt).",
-
-    category: "Điều chỉnh KPI",
-
-  },
-
-  aiAssistUse: {
-
-    label: "Trợ lý AI – sử dụng",
-
-    description: "Trao đổi với trợ lý AI nội bộ và xem lịch sử hội thoại.",
-
-    category: "Trợ lý AI",
-
-  },
-
-  aiAssistManage: {
-
-    label: "Trợ lý AI – cấu hình",
-
-    description: "Quản lý nguồn tri thức, prompt và quyền truy cập trợ lý AI.",
-
-    category: "Trợ lý AI",
-
-  },
-
-  dataHealthView: {
-
-    label: "Sức khỏe dữ liệu – xem dashboard",
-
-    description: "Theo dõi dữ liệu trùng, cảnh báo và chất lượng đồng bộ.",
-
-    category: "Giám sát dữ liệu",
-
-  },
-
-  dataHealthManage: {
-
-    label: "Sức khỏe dữ liệu – cấu hình & khóa nguồn",
-
-    description: "Chỉnh ngưỡng cảnh báo, khóa/mở khóa nguồn và lưu chính sách.",
-
-    category: "Giám sát dữ liệu",
-
-  },
-
-});
-
-
-
-const PERMISSION_CATEGORY_ORDER = Object.freeze([
-
-  "Nhập liệu & đồng bộ",
-
-  "Tổ chức & đối tác",
-
-  "Giám sát dữ liệu",
-
-  "Cấu hình & kiểm soát",
-
-  "Báo cáo & giám sát",
-
-  "Điều chỉnh KPI",
-
-  "Trợ lý AI",
-
-  "Quản trị hệ thống",
-
-  "Khác",
-
-]);
-
-
-
-const CONTROL_CLASS =
-
-  "rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] px-3 py-2 text-sm text-[color:var(--ds-text-primary)] shadow-sm focus:outline-none focus:ring-2 focus:ring-[color:var(--ds-accent-ring)] focus:ring-offset-0";
-
-const GROUP_TOGGLE_BUTTON_CLASS =
-
-  "inline-flex items-center gap-1 rounded border border-transparent px-2 py-1 text-xs font-medium text-[color:var(--ds-text-secondary)] transition hover:border-[color:var(--ds-border-subtle)] hover:bg-[color:var(--ds-surface-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ds-accent-ring)] focus-visible:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-60";
 
 
 
@@ -289,27 +80,7 @@ export default function AccountManager() {
 
   const [error, setError] = useState("");
 
-  const [form, setForm] = useState(() => ({
-
-    username: "",
-
-    name: "",
-
-    password: "",
-
-    role: DEFAULT_ROLE,
-
-    permissions: getPermissionTemplate(DEFAULT_ROLE),
-
-    memberId: "",
-
-    memberName: "",
-
-    teamId: "",
-
-    teamName: "",
-
-  }));
+  const [form, setForm] = useState(() => createEmptyAccountForm());
 
   const [searchTerm, setSearchTerm] = useState("");
 
@@ -408,47 +179,7 @@ export default function AccountManager() {
 
 
   const permissionDefinitions = useMemo(() => {
-
-    const items = PERMISSION_KEYS.map((key) => {
-
-      const details = PERMISSION_DETAILS[key] || {};
-
-      return {
-
-        key,
-
-        label: details.label || key,
-
-        description: details.description || "",
-
-        category: details.category || "Khác",
-
-      };
-
-    });
-
-    const getCategoryOrder = (category) => {
-
-      const index = PERMISSION_CATEGORY_ORDER.indexOf(category);
-
-      return index === -1 ? PERMISSION_CATEGORY_ORDER.length : index;
-
-    };
-
-    return items.sort((a, b) => {
-
-      const categoryDiff = getCategoryOrder(a.category) - getCategoryOrder(b.category);
-
-      if (categoryDiff !== 0) {
-
-        return categoryDiff;
-
-      }
-
-      return a.label.localeCompare(b.label, "vi", { sensitivity: "base" });
-
-    });
-
+    return buildPermissionDefinitions(PERMISSION_KEYS);
   }, []);
 
 
@@ -466,28 +197,10 @@ export default function AccountManager() {
     return map;
 
   }, [permissionDefinitions]);
-  const groupedPermissions = useMemo(() => {
-    const groups = new Map();
-    for (const definition of permissionDefinitions) {
-      const category = definition.category || "Khác";
-      if (!groups.has(category)) {
-        groups.set(category, []);
-      }
-      groups.get(category).push(definition);
-    }
-    const getCategoryOrder = (category) => {
-      const index = PERMISSION_CATEGORY_ORDER.indexOf(category);
-      return index === -1 ? PERMISSION_CATEGORY_ORDER.length : index;
-    };
-    return Array.from(groups.entries())
-      .sort((a, b) => getCategoryOrder(a[0]) - getCategoryOrder(b[0]))
-      .map(([category, items]) => ({
-        category,
-        items: items
-          .slice()
-          .sort((a, b) => a.label.localeCompare(b.label, "vi", { sensitivity: "base" })),
-      }));
-  }, [permissionDefinitions]);
+  const groupedPermissions = useMemo(
+    () => buildGroupedPermissions(permissionDefinitions),
+    [permissionDefinitions]
+  );
 
   const [collapsedPermissionGroups, setCollapsedPermissionGroups] = useState(() => new Set());
 
@@ -680,29 +393,7 @@ export default function AccountManager() {
 
 
   const resetForm = () => {
-
-    setForm({
-
-      username: "",
-
-      name: "",
-
-      password: "",
-
-      role: DEFAULT_ROLE,
-
-      permissions: getPermissionTemplate(DEFAULT_ROLE),
-
-      memberId: "",
-
-      memberName: "",
-
-      teamId: "",
-
-      teamName: "",
-
-    });
-
+    setForm(createEmptyAccountForm());
   };
 
 
@@ -1515,262 +1206,27 @@ export default function AccountManager() {
 
 
       <SectionSurface className="space-y-6">
-
-        <SectionHeader
-          title="Tạo tài khoản mới"
-          description="Điền thông tin đăng nhập, gắn nhân viên KPI (nếu có) và xác định quyền tương ứng trước khi tạo tài khoản."
+        <AccountCreateFormPanel
+          form={form}
+          error={error}
+          groupedPermissions={groupedPermissions}
+          collapsedPermissionGroups={collapsedPermissionGroups}
+          allPermissionGroupsCollapsed={allPermissionGroupsCollapsed}
+          noPermissionGroupCollapsed={noPermissionGroupCollapsed}
+          staffTeams={staffTeams}
+          staffOptions={staffOptions}
+          onSubmit={handleCreate}
+          onReset={resetForm}
+          onUsernameChange={(value) => setForm((prev) => ({ ...prev, username: value }))}
+          onNameChange={(value) => setForm((prev) => ({ ...prev, name: value }))}
+          onPasswordChange={(value) => setForm((prev) => ({ ...prev, password: value }))}
+          onSelectStaff={handleSelectStaff}
+          onRoleChange={updateFormRole}
+          onTogglePermissionGroup={togglePermissionGroup}
+          onCollapseAllPermissionGroups={collapseAllPermissionGroups}
+          onExpandAllPermissionGroups={expandAllPermissionGroups}
+          onPermissionChange={updateFormPermission}
         />
-
-        <form className="grid gap-4 md:grid-cols-2" onSubmit={handleCreate}>
-
-          <div className="space-y-2">
-
-            <label className="text-sm font-medium text-[color:var(--ds-text-primary)]">Tài khoản *</label>
-
-            <input
-
-              className={CONTROL_CLASS}
-
-              value={form.username}
-
-              onChange={(e) => setForm((prev) => ({ ...prev, username: e.target.value }))}
-
-              placeholder="username"
-
-              required
-
-            />
-
-          </div>
-
-          <div className="space-y-2 md:col-span-2">
-
-            <label className="text-sm font-medium text-[color:var(--ds-text-primary)]">Nhân viên KPI</label>
-
-            <StaffCombobox
-
-              value={form.memberId}
-
-              onSelect={handleSelectStaff}
-
-              teams={staffTeams}
-
-              disabled={staffOptions.length === 0}
-
-              ariaLabel="Nhân viên KPI cho tài khoản mới"
-
-              selectionMode="member"
-
-              searchPlaceholder="Tìm theo tên nhân viên hoặc tổ đội…"
-
-              clearGroupLabel="Tùy chọn chung"
-
-              clearLabel="Không gắn nhân viên"
-
-              showClearWhenEmpty
-
-              buttonClassName={`${CONTROL_CLASS} flex w-full items-center justify-between gap-2 text-left ${staffOptions.length === 0 ? "cursor-not-allowed opacity-60" : ""}`}
-
-              popoverClassName="w-[320px] p-0"
-
-              groupHeadingFormatter={(team) => team.name}
-
-            />
-
-            {form.memberId ? (
-
-              <p className="text-xs text-[color:var(--ds-text-muted)]">
-
-                Sẽ gắn tài khoản với {form.memberName || form.memberId}
-
-                {form.teamName ? ` • ${form.teamName}` : ""}
-
-              </p>
-
-            ) : (
-
-              <p className="text-xs text-[color:var(--ds-text-muted)]">Tùy chọn: gắn tài khoản với nhân viên trong danh sách KPI.</p>
-
-            )}
-
-            {staffOptions.length === 0 && (
-
-              <StatusBadge tone="warning">Chưa có dữ liệu tổ đội. Hãy cập nhật trong mục Quản lý tổ đội trước.</StatusBadge>
-
-            )}
-
-          </div>
-
-          <div className="space-y-2">
-
-            <label className="text-sm font-medium text-[color:var(--ds-text-primary)]">Họ tên hiển thị</label>
-
-            <input
-
-              className={CONTROL_CLASS}
-
-              value={form.name}
-
-              onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
-
-              placeholder="Tên người dùng"
-
-            />
-
-          </div>
-
-          <div className="space-y-2">
-
-            <label className="text-sm font-medium text-[color:var(--ds-text-primary)]">Mật khẩu tạm *</label>
-
-            <input
-
-              type="password"
-
-              className={CONTROL_CLASS}
-
-              value={form.password}
-
-              onChange={(e) => setForm((prev) => ({ ...prev, password: e.target.value }))}
-
-              placeholder={getPasswordMinLengthPlaceholder()}
-
-              required
-
-            />
-
-          </div>
-
-          <div className="space-y-2">
-
-            <label className="text-sm font-medium text-[color:var(--ds-text-primary)]">Vai trò</label>
-
-            <FilterSelect
-
-              value={form.role}
-
-              onChange={updateFormRole}
-
-              options={ROLE_OPTIONS}
-
-              placeholder="Chọn vai trò"
-
-              triggerClassName="w-full"
-
-            />
-
-          </div>
-
-          <div className="md:col-span-2 space-y-4">
-
-            <div className="flex flex-wrap items-end justify-between gap-3">
-
-              <div>
-
-                <div className="text-sm font-medium text-[color:var(--ds-text-primary)]">Quyền chức năng</div>
-
-                <p className="text-xs text-[color:var(--ds-text-muted)]">
-
-                  Chọn quyền tương ứng cho tài khoản. Những quyền bị làm mờ thuộc nhóm chỉ dành cho quản trị viên.
-
-                </p>
-
-              </div>
-
-              {groupedPermissions.length > 0 ? (
-
-                <div className="flex items-center gap-2 text-xs text-[color:var(--ds-text-muted)]">
-
-                  <button
-
-                    type="button"
-
-                    onClick={collapseAllPermissionGroups}
-
-                    className={GROUP_TOGGLE_BUTTON_CLASS}
-
-                    disabled={allPermissionGroupsCollapsed}
-
-                  >
-
-                    Thu gọn tất cả
-
-                  </button>
-
-                  <button
-
-                    type="button"
-
-                    onClick={expandAllPermissionGroups}
-
-                    className={GROUP_TOGGLE_BUTTON_CLASS}
-
-                    disabled={noPermissionGroupCollapsed}
-
-                  >
-
-                    Mở rộng tất cả
-
-                  </button>
-
-                </div>
-
-              ) : null}
-
-            </div>
-
-            <AccountPermissionGroupsPanel
-              groups={groupedPermissions}
-              permissionValues={form.permissions}
-              collapsedGroups={collapsedPermissionGroups}
-              onToggleGroup={togglePermissionGroup}
-              scope="account-create"
-              onPermissionChange={updateFormPermission}
-              isPermissionDisabled={(item) => item.key === "accountManage" && form.role !== ADMIN_ROLE}
-              countLabelFormatter={(enabledCount, totalCount) => `${enabledCount}/${totalCount} quyền`}
-              headingVariant="compact"
-            />
-
-          </div>
-
-          {error && <div className="md:col-span-2 text-sm text-red-600">{error}</div>}
-
-          <div className="md:col-span-2 flex flex-wrap gap-3">
-
-            <button
-
-              type="submit"
-
-              className="rounded bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700"
-
-              data-tooltip="Tạo tài khoản mới với thông tin và quyền đã chọn"
-
-            >
-
-              Tạo tài khoản
-
-            </button>
-
-            <button
-
-              type="button"
-
-              onClick={resetForm}
-
-              className="rounded border border-[color:var(--ds-border-subtle)] px-4 py-2 text-sm text-[color:var(--ds-text-secondary)] hover:bg-[color:var(--ds-surface-muted)]"
-
-              data-tooltip="Xóa nội dung biểu mẫu và nhập lại từ đầu"
-
-            >
-
-              Nhập lại
-
-            </button>
-
-          </div>
-
-        </form>
-
       </SectionSurface>
 
 
@@ -1823,181 +1279,27 @@ export default function AccountManager() {
 
 
 
-      <AppDialog
-
+      <AccountPermissionsDialog
         open={permissionDialogOpen}
-
         onOpenChange={(open) => (open ? setPermissionDialogOpen(true) : closePermissionDialog())}
-
-      >
-
-        <AppDialogContent
-          size="xl"
-          className="flex max-h-[calc(100vh-2rem)] flex-col overflow-hidden sm:max-h-[85vh]"
-        >
-
-          <AppDialogHeader className="px-6 pb-3 pt-6">
-
-            <AppDialogTitle>Quản lý quyền</AppDialogTitle>
-
-            <AppDialogDescription>
-
-              {permissionAccount
-                ? `Điều chỉnh quyền truy cập cho tài khoản ${permissionAccount.username}.`
-                : "Chọn tài khoản để điều chỉnh quyền."}
-
-            </AppDialogDescription>
-
-          </AppDialogHeader>
-
-          <ScrollArea
-            ref={permissionScrollRootRef}
-            viewportRef={permissionScrollViewportRef}
-            type="always"
-            className="flex-1 min-h-0 px-6 pb-6 pt-2 [--scrollbar-size:0.625rem]"
-          >
-
-            <div className="space-y-4">
-
-              {permissionAccount ? (
-
-                <>
-
-                  <div className="rounded-lg border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-subtle)] px-4 py-3 text-sm text-[color:var(--ds-text-secondary)]">
-
-                    <p className="font-semibold text-[color:var(--ds-text-primary)]">{permissionAccount.username}</p>
-
-                    {permissionAccount.name && permissionAccount.name !== permissionAccount.username ? (
-
-                      <p className="text-xs text-[color:var(--ds-text-muted)]">{permissionAccount.name}</p>
-
-                    ) : null}
-
-                    {permissionAccount.teamName ? (
-
-                      <p className="text-xs text-[color:var(--ds-text-muted)]">{permissionAccount.teamName}</p>
-
-                    ) : null}
-
-                  </div>
-
-                  {permissionAccountPending ? (
-
-                    <StatusBadge tone="info">Đang lưu thay đổi…</StatusBadge>
-
-                  ) : null}
-
-                  {groupedPermissions.length > 0 ? (
-
-                    <div className="flex flex-wrap items-center justify-end gap-2 text-xs text-[color:var(--ds-text-muted)]">
-
-                      <button
-
-                        type="button"
-
-                        onClick={collapseAllPermissionGroups}
-
-                        className={GROUP_TOGGLE_BUTTON_CLASS}
-
-                        disabled={allPermissionGroupsCollapsed}
-
-                      >
-
-                        Thu gọn tất cả
-
-                      </button>
-
-                      <button
-
-                        type="button"
-
-                        onClick={expandAllPermissionGroups}
-
-                        className={GROUP_TOGGLE_BUTTON_CLASS}
-
-                        disabled={noPermissionGroupCollapsed}
-
-                      >
-
-                        Mở rộng tất cả
-
-                      </button>
-
-                    </div>
-
-                  ) : null}
-
-                  <AccountPermissionGroupsPanel
-                    groups={groupedPermissions}
-                    permissionValues={permissionAccount.permissions}
-                    collapsedGroups={collapsedPermissionGroups}
-                    onToggleGroup={togglePermissionGroup}
-                    scope="permission-dialog"
-                    onPermissionChange={(key, value) =>
-                      togglePermission(permissionAccount.username, key, value)
-                    }
-                    isPermissionDisabled={(item) =>
-                      permissionAccountPending ||
-                      (item.key === "accountManage" && permissionAccount.role !== ADMIN_ROLE)
-                    }
-                    countLabelFormatter={(enabledCount, totalCount) =>
-                      `${enabledCount}/${totalCount} quyền đang bật`
-                    }
-                  />
-
-                </>
-
-              ) : (
-
-                <p className="text-sm text-[color:var(--ds-text-muted)]">Không tìm thấy thông tin tài khoản đã chọn.</p>
-
-              )}
-
-            </div>
-
-          </ScrollArea>
-
-          <AppDialogFooter className="flex flex-wrap items-center justify-end gap-2 px-6 pb-6 pt-4">
-            <button
-              type="button"
-              onClick={scrollPermissionsToTop}
-              className={GROUP_TOGGLE_BUTTON_CLASS}
-              disabled={!canScrollUp}
-            >
-              Cuộn lên đầu
-            </button>
-            <button
-              type="button"
-              onClick={scrollPermissionsToBottom}
-              className={GROUP_TOGGLE_BUTTON_CLASS}
-              disabled={!canScrollDown}
-            >
-              Cuộn xuống cuối
-            </button>
-
-            <AppDialogClose asChild>
-
-              <button
-
-                type="button"
-
-                onClick={closePermissionDialog}
-
-                className="inline-flex items-center justify-center rounded border border-[color:var(--ds-border-subtle)] px-4 py-2 text-sm font-medium text-[color:var(--ds-text-primary)] hover:bg-[color:var(--ds-surface-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--ds-accent-ring)] focus-visible:ring-offset-0"
-
-              >
-
-                Đóng
-
-              </button>
-
-            </AppDialogClose>
-
-          </AppDialogFooter>
-
-        </AppDialogContent>
-
-      </AppDialog>
+        permissionAccount={permissionAccount}
+        permissionAccountPending={permissionAccountPending}
+        groupedPermissions={groupedPermissions}
+        collapsedPermissionGroups={collapsedPermissionGroups}
+        allPermissionGroupsCollapsed={allPermissionGroupsCollapsed}
+        noPermissionGroupCollapsed={noPermissionGroupCollapsed}
+        canScrollUp={canScrollUp}
+        canScrollDown={canScrollDown}
+        scrollRootRef={permissionScrollRootRef}
+        scrollViewportRef={permissionScrollViewportRef}
+        onTogglePermissionGroup={togglePermissionGroup}
+        onCollapseAllPermissionGroups={collapseAllPermissionGroups}
+        onExpandAllPermissionGroups={expandAllPermissionGroups}
+        onTogglePermission={(key, value) => togglePermission(permissionAccount.username, key, value)}
+        onScrollToTop={scrollPermissionsToTop}
+        onScrollToBottom={scrollPermissionsToBottom}
+        onClose={closePermissionDialog}
+      />
 
 
 

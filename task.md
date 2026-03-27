@@ -11,15 +11,28 @@
   - `cng-2k4.2` — declarations write cutover
   - `cng-2k4.3` — entrypoint cutover sang `server-v4`
   - `cng-2k4.10` — CSRF protection
-  - `cng-2k4.15` — giam `AccountManager.jsx` xuong duoi nguong module
+  - `cng-2k4.16` — giam `HQAgencyManager.jsx` xuong duoi nguong module
 
 ## Active Slice
 
-- Title: Giam `DataHealthDashboard.jsx` xuong duoi nguong module bang cach tach policy config section va dashboard view-model builders
-- Bead: cng-2k4.14
+- Title: Giam `AccountManager.jsx` xuong duoi nguong module bang cach tach metadata quyen, create form panel, permission dialog, va form-state helper
+- Bead: cng-2k4.15
 - Status: completed
 - Last updated: 2026-03-27
 
+- `AccountManager.jsx` da giam tu 1142 dong xuong 786 dong, dat duoi nguong module muc tieu cho slice nay.
+- Da them `src/components/account-manager/accountManagerPermissions.js` de tach metadata quyen, permission grouping helpers, va shared class tokens khoi shell.
+- Da them `src/components/account-manager/accountManagerFormState.js` de gom draft state mac dinh cho create-account flow, tranh lap object literal trong shell.
+- Da them `src/components/account-manager/AccountCreateFormPanel.jsx` de rut toan bo phan tao tai khoan + permission create section khoi shell.
+- Da them `src/components/account-manager/AccountPermissionsDialog.jsx` de rut toan bo presentation cua permission dialog khoi shell, trong khi `AccountManager` giu lai scroll state + auth callbacks.
+- Bo sung regression test moi:
+  - `tests/accountManagerPermissions.test.js`
+  - `tests/accountManagerFormState.test.js`
+  - `tests/accountCreateFormPanel.test.jsx`
+  - `tests/accountPermissionsDialog.test.jsx`
+- Targeted verify da pass:
+  - `pnpm exec eslint src/components/AccountManager.jsx src/components/account-manager/accountManagerPermissions.js src/components/account-manager/accountManagerFormState.js src/components/account-manager/AccountCreateFormPanel.jsx src/components/account-manager/AccountPermissionsDialog.jsx tests/accountManager.staff.test.jsx tests/accountManagerPermissions.test.js tests/accountManagerFormState.test.js tests/accountCreateFormPanel.test.jsx tests/accountPermissionsDialog.test.jsx`
+  - `pnpm exec vitest run tests/accountManager.staff.test.jsx tests/accountManagerPermissions.test.js tests/accountManagerFormState.test.js tests/accountCreateFormPanel.test.jsx tests/accountPermissionsDialog.test.jsx --environment jsdom`
 - `DataHealthDashboard.jsx` da giam tu 1060 dong xuong 742 dong, dat duoi nguong module muc tieu cho slice nay.
 - Da them `src/components/data-health-dashboard/DataHealthPolicyConfigSection.jsx` de tach toan bo section policy form/header/action bar khoi shell.
 - Da them `src/components/data-health-dashboard/dataHealthDashboardViewModels.js` de gom phan build card/panel props thuần ra khoi shell, giu JSX chinh gon va de test hon.
@@ -545,13 +558,13 @@
 
 ## Next Suggested Slice
 
-- Title: Giam `AccountManager.jsx` duoi nguong module, uu tien tach panel/quyen dung chung truoc khi dung vao state orchestration
-- Bead: `cng-2k4.15`
+- Title: Giam `HQAgencyManager.jsx` duoi nguong module, uu tien tach panel/pure helper truoc khi dung vao orchestration state
+- Bead: `cng-2k4.16`
 - Status: ready
 - Follow-up backlog:
-  - uu tien tim cum JSX/view-model dai nhat trong `AccountManager.jsx` ma chua duoc tach thanh module rieng
+  - uu tien tim cum JSX/view-model dai nhat trong `HQAgencyManager.jsx` ma chua duoc tach thanh module rieng
   - giu diff nho: tach panel presentation + pure helper truoc, tranh cham vao auth/account workflow neu chua can
-  - sau `cng-2k4.15`, backlog structural con lai tiep theo la `cng-2k4.16` va `cng-2k4.17`
+  - sau `cng-2k4.16`, backlog structural con lai tiep theo la `cng-2k4.17`
   - truoc khi chon slice moi, tiep tuc chay GitNexus impact/context cho symbol dich de giu diff nho va co test regression ro rang
 
 ## Verification
