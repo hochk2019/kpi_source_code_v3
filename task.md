@@ -14,11 +14,20 @@
 
 ## Active Slice
 
-- Title: Giam `HQAgencyManager.jsx` duoi nguong module bang cach tach bang du lieu/history panel khoi shell
-- Bead: cng-2k4.16
+- Title: Giam `TeamManager.jsx` duoi nguong module bang cach tach history panel va history helper khoi shell
+- Bead: cng-2k4.17
 - Status: completed
 - Last updated: 2026-03-27
 
+- `TeamManager.jsx` da giam tu 914 dong xuong 756 dong sau khi tach history panel va helper formatting/field-label ra module rieng, dat duoi nguong 800 dong cho slice nay.
+- Da them `src/components/team-manager/TeamManagerHistoryPanel.jsx` de rut toan bo history UI/team-tab/MST-tab/refetch action khoi shell ma khong cham vao luong save/import.
+- Da them `src/components/team-manager/teamManagerHistoryModel.js` de gom `MST_HISTORY_FIELD_LABELS` va formatter timestamp, tranh de presentation module giu helper thuần.
+- Bo sung regression test moi:
+  - `tests/teamManagerHistoryPanel.test.jsx`
+  - `tests/teamManagerHistoryModel.test.js`
+- Targeted verify da pass:
+  - `pnpm exec eslint src/components/TeamManager.jsx src/components/team-manager/TeamManagerHistoryPanel.jsx src/components/team-manager/teamManagerHistoryModel.js tests/teamManagerHistoryPanel.test.jsx tests/teamManagerHistoryModel.test.js`
+  - `pnpm exec vitest run tests/teamManagerHistoryPanel.test.jsx tests/teamManagerHistoryModel.test.js --environment jsdom`
 - `HQAgencyManager.jsx` da giam tu 1065 dong xuong 804 dong sau khi tach bang du lieu/history panel ra module rieng, giu shell tap trung vao orchestration/state.
 - Da them `src/components/hq-agency-manager/HQAgencyTable.jsx` de rut toan bo bang agency, history details, datalist, va row actions khoi shell.
 - Da tiep tuc dung `src/components/hq-agency-manager/hqAgencyManagerModel.js` cho cac pure helper/view-model de tranh de presentation module moi phai lap lai formatting logic.
@@ -567,14 +576,13 @@
 
 ## Next Suggested Slice
 
-- Title: Giam `TeamManager.jsx` duoi nguong module, uu tien tach panel/pure helper truoc khi dung vao orchestration state
-- Bead: `cng-2k4.17`
+- Title: Execute declarations write cutover with compat guard and rollback plan
+- Bead: `cng-2k4.2`
 - Status: open
 - Follow-up backlog:
-  - uu tien tim cum JSX/view-model dai nhat trong `TeamManager.jsx` ma chua duoc tach thanh module rieng
-  - giu diff nho: tach panel presentation + pure helper truoc, tranh cham vao auth/account workflow neu chua can
-  - `cng-2k4.17` la bead structural tiep theo trong wave giam module-size sau khi da dong `cng-2k4.16`
-  - truoc khi chon slice moi, tiep tuc chay GitNexus impact/context cho symbol dich de giu diff nho va co test regression ro rang
+  - day la task P1 con dang ready cao nhat trong backlog sau khi dong xong 2 slice structural `cng-2k4.16` va `cng-2k4.17`
+  - truoc khi chuyen sang cutover, can doc lai `docs/server-v4-rollout-plan-2026-03-25.md` va chot scope rollback/compat guard cho declarations write path
+  - tiep tuc chay GitNexus impact/context cho symbol dich truoc moi thay doi de giu diff nho va co test regression ro rang
 
 ## Verification
 
