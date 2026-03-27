@@ -8,24 +8,24 @@
   - `cng-2k4` — Post-Gemini remaining technical backlog
   - `cng-7z0` — UX improvement backlog execution
 - Highest-priority ready items hien tai:
-  - `cng-2k4.3` — entrypoint cutover sang `server-v4`
   - `cng-2k4.10` — CSRF protection
 
 ## Active Slice
 
-- Title: Execute declarations write cutover with compat guard and rollback plan
-- Bead: cng-2k4.2
+- Title: Switch app entrypoint traffic to `server-v4` with staged rollback hooks
+- Bead: cng-2k4.3
 - Status: completed
 - Last updated: 2026-03-27
 
-- `server-v4/src/app/declarationsWriteCutover.ts` da duoc bo sung metadata van hanh cho cutover: `recommendedWritePath`, `operatorAction`, `rollbackSteps`, va `verificationGates` de operator co duong tien/lui ro rang khi chuyen write traffic declarations sang canonical server-v4.
-- `server-v4/src/app/v4-rollout-status.ts` hien expose declaration cutover plan ngay trong `rollout`, dong thoi dua rollback steps vao fallback guidance de QA/operator co the tat compat guard va quay lai monolith neu parity hoi quy.
+- Them `apps/api/src/backendEntrypointPlan.js` de chot bootstrap mode theo mot helper thuần: mac dinh launch `server-v4`, nhung van giu rollback mode `legacy` ro rang va co test rieng.
+- `scripts/start-backend.mjs` hien resolve entrypoint qua helper moi, mac dinh spawn `apps/api/src/cli.js`, va expose rollback hook qua `KPI_API_ENTRYPOINT_MODE=legacy`, `--legacy-entrypoint`, hoac bat lai `--server-v4-entrypoint`.
 - Bo sung regression test moi:
-  - cap nhat `tests/server-v4/declarationsWriteCutover.test.js`
-  - cap nhat `tests/server-v4/v4RolloutStatus.test.js`
+  - them `tests/backendEntrypointPlan.test.js`
+  - giu `tests/appsApiStart.test.js` xanh de xac nhan launcher `apps/api` van dung contract runtime hien tai
 - Targeted verify da pass:
-  - `pnpm exec eslint server-v4/src/app/declarationsWriteCutover.ts server-v4/src/app/v4-rollout-status.ts tests/server-v4/declarationsWriteCutover.test.js tests/server-v4/v4RolloutStatus.test.js`
-  - `pnpm exec vitest run tests/server-v4/declarationsWriteCutover.test.js tests/server-v4/v4RolloutStatus.test.js`
+  - `pnpm exec eslint apps/api/src/backendEntrypointPlan.js scripts/start-backend.mjs tests/backendEntrypointPlan.test.js tests/appsApiStart.test.js`
+  - `pnpm exec vitest run tests/backendEntrypointPlan.test.js tests/appsApiStart.test.js --environment node`
+- `gitnexus_detect_changes(scope: "all")` hien bao `risk_level: low`; symbol index thay doi la `scripts/start-backend.mjs`, phu hop voi muc tieu bootstrap-only cua slice nay.
 ## Recent Completed Slices
 
 - `HQAgencyManager.jsx` da giam tu 1065 dong xuong 804 dong sau khi tach bang du lieu/history panel ra module rieng, giu shell tap trung vao orchestration/state.
@@ -576,13 +576,13 @@
 
 ## Next Suggested Slice
 
-- Title: Switch app entrypoint traffic to `server-v4` with staged rollback hooks
-- Bead: `cng-2k4.3`
+- Title: Implement CSRF protection for mutation routes
+- Bead: `cng-2k4.10`
 - Status: open
 - Follow-up backlog:
-  - day la task P1 tiep theo sau khi declarations write cutover da co operator guidance va rollback plan ro rang
-  - scope ke tiep can chot cach dua app shell/entrypoint sang `server-v4` nhung van giu rollback hook de quay lai monolith neu health gate hoi quy
-  - truoc moi thay doi entrypoint/router wiring, tiep tuc chay GitNexus impact/context de khoa blast radius va giu regression test ro rang
+  - day la task P1 tiep theo sau khi entrypoint bootstrap da chuyen sang `server-v4` nhung mutation surface van chua co CSRF gate tap trung
+  - uu tien chot middleware/secret strategy co the dung chung cho legacy compat routes va server-v4 runtime routes de tranh hinh thanh hai co che khac nhau
+  - truoc moi thay doi symbol middleware/router, tiep tuc chay GitNexus impact/context de khoa blast radius va cap nhat test cho ca success path lan reject path
 
 ## Verification
 

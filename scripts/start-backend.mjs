@@ -4,6 +4,7 @@ import net from 'node:net';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { existsSync } from 'node:fs';
+import { resolveBackendEntrypointPlan } from '../apps/api/src/backendEntrypointPlan.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -74,6 +75,7 @@ async function ensureBetterSqlite3({ forceRebuild = false } = {}) {
 function extractFlags(argv) {
   const flags = new Set();
   const passthrough = [];
+  let entrypointMode;
   for (const arg of argv) {
     if (arg === '--rebuild') {
       flags.add('rebuild');
@@ -83,9 +85,17 @@ function extractFlags(argv) {
       flags.add('production');
       continue;
     }
+    if (arg === '--legacy-entrypoint') {
+      entrypointMode = 'legacy';
+      continue;
+    }
+    if (arg === '--server-v4-entrypoint') {
+      entrypointMode = 'server-v4';
+      continue;
+    }
     passthrough.push(arg);
   }
-  return { flags, passthrough };
+  return { flags, passthrough, entrypointMode };
 }
 
 function normalizeListenHost(value) {
@@ -170,7 +180,7 @@ async function isPortBusy(host, port) {
 }
 async function startServer() {
   const args = process.argv.slice(2);
-  const { flags, passthrough } = extractFlags(args);
+  const { flags, passthrough, entrypointMode } = extractFlags(args);
   const forceRebuild = flags.has('rebuild');
   const production = flags.has('production');
 
@@ -200,7 +210,13 @@ async function startServer() {
 
   await ensureBetterSqlite3({ forceRebuild });
 
-  const serverEntry = resolve(__dirname, '..', 'server', 'index.js');
+  const repoRoot = resolve(__dirname, '..');
+  const entrypointPlan = resolveBackendEntrypointPlan({
+    envMode: process.env.KPI_API_ENTRYPOINT_MODE,
+    flagMode: entrypointMode,
+    rootDir: repoRoot,
+  });
+  const serverEntry = entrypointPlan.entryFile;
   if (!existsSync(serverEntry)) {
     console.error('Khong tim thay file backend:', serverEntry);
     console.error('Vui long kiem tra cac buoc sau:');
@@ -209,8 +225,16 @@ async function startServer() {
     console.error('- Neu van gap loi, hay kiem tra lai duong dan va quyen truy cap file.');
     process.exit(1);
   }
-  console.log('Khoi dong backend tu', serverEntry);
-  const childEnv = { ...process.env };
+  console.log(`Khoi dong backend (${entrypointPlan.label}) tu`, serverEntry);
+  if (entrypointPlan.mode !== entrypointPlan.rollbackMode) {
+    console.log(
+      `Rollback nhanh: dat KPI_API_ENTRYPOINT_MODE=${entrypointPlan.rollbackMode} hoac chay lai voi --legacy-entrypoint.`,
+    );
+  }
+  const childEnv = {
+    ...process.env,
+    KPI_API_ENTRYPOINT_MODE: entrypointPlan.mode,
+  };
   const childArgs = [serverEntry, ...passthrough];
   const child = spawn(process.execPath, childArgs, { stdio: 'inherit', env: childEnv });
 
