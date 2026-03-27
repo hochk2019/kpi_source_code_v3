@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+const EMPTY_ARGS = Object.freeze([]);
+
 
 
 /**
@@ -34,7 +36,7 @@ export default function useAsyncRequest(task, options = {}) {
 
     immediate = false,
 
-    initialArgs = [],
+    initialArgs = EMPTY_ARGS,
 
     onSuccess,
 
@@ -50,6 +52,10 @@ export default function useAsyncRequest(task, options = {}) {
 
   const abortRef = useRef(null);
 
+  const onSuccessRef = useRef(onSuccess);
+
+  const onErrorRef = useRef(onError);
+
 
 
   const [data, setData] = useState(initialData);
@@ -57,6 +63,18 @@ export default function useAsyncRequest(task, options = {}) {
   const [loading, setLoading] = useState(false);
 
   const [error, setError] = useState('');
+
+  useEffect(() => {
+
+    onSuccessRef.current = onSuccess;
+
+  }, [onSuccess]);
+
+  useEffect(() => {
+
+    onErrorRef.current = onError;
+
+  }, [onError]);
 
 
 
@@ -104,7 +122,7 @@ export default function useAsyncRequest(task, options = {}) {
 
         setError('');
 
-        onSuccess?.(result);
+        onSuccessRef.current?.(result);
 
         return result;
 
@@ -124,7 +142,7 @@ export default function useAsyncRequest(task, options = {}) {
 
         }
 
-        onError?.(err);
+        onErrorRef.current?.(err);
 
         if (throwOnError) {
 
@@ -152,7 +170,7 @@ export default function useAsyncRequest(task, options = {}) {
 
     },
 
-    [task, onSuccess, onError, throwOnError]
+    [task, throwOnError]
 
   );
 
@@ -160,11 +178,7 @@ export default function useAsyncRequest(task, options = {}) {
 
   useEffect(() => {
 
-    if (immediate) {
-
-      execute(...initialArgs);
-
-    }
+    mountedRef.current = true;
 
     return () => {
 
@@ -175,6 +189,16 @@ export default function useAsyncRequest(task, options = {}) {
       abortRef.current = null;
 
     };
+
+  }, []);
+
+  useEffect(() => {
+
+    if (immediate) {
+
+      execute(...initialArgs);
+
+    }
 
   }, [execute, immediate, initialArgs]);
 

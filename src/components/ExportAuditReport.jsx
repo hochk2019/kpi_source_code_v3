@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 
 import useAsyncRequest from '@/hooks/useAsyncRequest.js';
 
@@ -152,65 +152,42 @@ export default function ExportAuditReport() {
 
 
 
-  const { data, loading, error, execute } = useAsyncRequest(
+  const loadExportAudit = useCallback(async ({ signal }, params) => {
+    const query = new URLSearchParams();
 
-    async ({ signal }, params) => {
+    query.set('limit', params.limit);
+    query.set('page', params.page);
 
-      const query = new URLSearchParams();
+    if (params.from) query.set('from', params.from);
+    if (params.to) query.set('to', params.to);
+    if (params.kind && params.kind !== 'all') query.set('kind', params.kind);
+    if (params.search) query.set('search', params.search);
 
-      query.set('limit', params.limit);
+    const response = await fetchWithAuth(`/api/reports/export/audit?${query.toString()}`, { signal });
+    let payload = null;
 
-      query.set('page', params.page);
-
-      if (params.from) query.set('from', params.from);
-
-      if (params.to) query.set('to', params.to);
-
-      if (params.kind && params.kind !== 'all') query.set('kind', params.kind);
-
-      if (params.search) query.set('search', params.search);
-
-
-
-      const response = await fetchWithAuth(`/api/reports/export/audit?${query.toString()}`, { signal });
-
-      let payload = null;
-
-      try {
-
-        payload = await response.json();
-
-      } catch {
-
-        payload = null;
-
-      }
-
-      if (!response.ok || !payload || payload.ok === false) {
-
-        const message = payload?.error || `Không thể tải lịch sử export (HTTP ${response.status}).`;
-
-        throw new Error(message);
-
-      }
-
-      return payload;
-
-    },
-
-    {
-
-      initialData: EMPTY_RESPONSE,
-
-      onError: (err) => {
-
-        toast.error(err?.message || 'Không thể tải lịch sử export.');
-
-      },
-
+    try {
+      payload = await response.json();
+    } catch {
+      payload = null;
     }
 
-  );
+    if (!response.ok || !payload || payload.ok === false) {
+      const message = payload?.error || `Không thể tải lịch sử export (HTTP ${response.status}).`;
+      throw new Error(message);
+    }
+
+    return payload;
+  }, []);
+
+  const handleLoadError = useCallback((err) => {
+    toast.error(err?.message || 'Không thể tải lịch sử export.');
+  }, []);
+
+  const { data, loading, error, execute } = useAsyncRequest(loadExportAudit, {
+    initialData: EMPTY_RESPONSE,
+    onError: handleLoadError,
+  });
 
 
 

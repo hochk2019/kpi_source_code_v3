@@ -9,6 +9,7 @@ import DataHealthActivityFeedsPanel from '@/components/data-health-dashboard/Dat
 import DataHealthInfrastructureStatusPanel from '@/components/data-health-dashboard/DataHealthInfrastructureStatusPanel.jsx';
 import DataHealthMetricsAlertsPanel from '@/components/data-health-dashboard/DataHealthMetricsAlertsPanel.jsx';
 import DataHealthPolicyConfigSection from '@/components/data-health-dashboard/DataHealthPolicyConfigSection.jsx';
+import DataHealthRolloutStatusPanel from '@/components/data-health-dashboard/DataHealthRolloutStatusPanel.jsx';
 import DataHealthStorageOverviewPanel from '@/components/data-health-dashboard/DataHealthStorageOverviewPanel.jsx';
 import { buildDataHealthDashboardViewModels } from '@/components/data-health-dashboard/dataHealthDashboardViewModels.js';
 
@@ -356,6 +357,38 @@ export default function DataHealthDashboard({ currentUser, canManage = false }) 
 
   const canEditPolicy = Boolean(canManage);
 
+  const handleSummarySuccess = useCallback((result) => {
+
+    if (Array.isArray(result?.notifications)) {
+
+      setHistoryNotifications(result.notifications);
+
+    }
+
+  }, []);
+
+  const handlePolicySuccess = useCallback(({ config, state, summary: stats }) => {
+
+    setPolicyConfig(config || null);
+
+    setPolicyForm(config ? { ...config } : null);
+
+    setPolicyState(state || null);
+
+    setPolicyStats(stats || null);
+
+    setPolicyError('');
+
+  }, []);
+
+  const handlePolicyError = useCallback((err) => {
+
+    console.error('Không thể tải chính sách trùng 11 số', err);
+
+    setPolicyError(err?.message || 'Không thể tải chính sách trùng 11 số');
+
+  }, []);
+
   const summaryTask = useCallback(async ({ signal }) => {
 
     const response = await fetchWithAuth('/api/data-health/summary', { cache: 'no-store', signal });
@@ -394,15 +427,49 @@ export default function DataHealthDashboard({ currentUser, canManage = false }) 
 
     initialData: null,
 
-    onSuccess: (result) => {
+    onSuccess: handleSummarySuccess,
 
-      if (Array.isArray(result?.notifications)) {
+  });
 
-        setHistoryNotifications(result.notifications);
 
-      }
 
-    },
+  const rolloutTask = useCallback(async ({ signal }) => {
+
+    const response = await fetchWithAuth('/api/v4/meta/rollout', { cache: 'no-store', signal });
+
+    if (!response.ok) {
+
+      throw new Error(`HTTP ${response.status}`);
+
+    }
+
+    const payload = await response.json();
+
+    if (payload?.ok === false) {
+
+      throw new Error(payload.error || 'Không thể tải metadata rollout server-v4');
+
+    }
+
+    return payload || null;
+
+  }, []);
+
+
+
+  const {
+
+    data: rolloutSummary,
+
+    loading: rolloutLoading,
+
+    error: rolloutError,
+
+    execute: reloadRollout,
+
+  } = useAsyncRequest(rolloutTask, {
+
+    initialData: null,
 
   });
 
@@ -411,12 +478,18 @@ export default function DataHealthDashboard({ currentUser, canManage = false }) 
   useEffect(() => {
 
     reloadSummary();
+    reloadRollout();
 
-    const interval = setInterval(reloadSummary, 60000);
+    const interval = setInterval(() => {
+
+      reloadSummary();
+      reloadRollout();
+
+    }, 60000);
 
     return () => clearInterval(interval);
 
-  }, [reloadSummary]);
+  }, [reloadRollout, reloadSummary]);
 
 
 
@@ -454,27 +527,9 @@ export default function DataHealthDashboard({ currentUser, canManage = false }) 
 
   const { execute: reloadPolicy, loading: policyLoading } = useAsyncRequest(policyTask, {
 
-    onSuccess: ({ config, state, summary: stats }) => {
+    onSuccess: handlePolicySuccess,
 
-      setPolicyConfig(config || null);
-
-      setPolicyForm(config ? { ...config } : null);
-
-      setPolicyState(state || null);
-
-      setPolicyStats(stats || null);
-
-      setPolicyError('');
-
-    },
-
-    onError: (err) => {
-
-      console.error('Không thể tải chính sách trùng 11 số', err);
-
-      setPolicyError(err?.message || 'Không thể tải chính sách trùng 11 số');
-
-    },
+    onError: handlePolicyError,
 
   });
 
@@ -483,6 +538,13 @@ export default function DataHealthDashboard({ currentUser, canManage = false }) 
   const policyInputsDisabled = !canEditPolicy || policySaving || policyLoading;
 
   const policyActionsDisabled = !canEditPolicy || policySaving;
+
+  const handleRefresh = useCallback(() => {
+
+    reloadSummary();
+    reloadRollout();
+
+  }, [reloadRollout, reloadSummary]);
 
 
 
@@ -1422,13 +1484,13 @@ export default function DataHealthDashboard({ currentUser, canManage = false }) 
 
               type="button"
 
-              onClick={reloadSummary}
+              onClick={handleRefresh}
 
               className="rounded border border-gray-300 px-3 py-1 text-sm text-gray-700 transition hover:bg-gray-100 dark:border-slate-600 dark:text-gray-200 dark:hover:bg-slate-800"
 
             >
 
-              {summaryLoading ? 'Đang tải…' : 'Làm mới'}
+              {summaryLoading || rolloutLoading ? 'Đang tải…' : 'Làm mới'}
 
             </button>
 
@@ -1445,12 +1507,31 @@ export default function DataHealthDashboard({ currentUser, canManage = false }) 
           </div>
 
         )}
+        {rolloutError && (
+
+          <div className="rounded border border-amber-200 bg-amber-50 p-2 text-sm text-amber-700 dark:border-amber-500/60 dark:bg-amber-500/10 dark:text-amber-200">
+
+            {rolloutSummary
+              ? `Không thể làm mới rollout metadata: ${rolloutError}`
+              : `Không thể tải rollout metadata: ${rolloutError}`}
+
+          </div>
+
+        )}
 
       </header>
 
 
 
       <DataHealthInfrastructureStatusPanel alerts={infrastructureStatusAlerts} sync={infrastructureSyncStatus} />
+
+
+
+      <DataHealthRolloutStatusPanel
+        rollout={rolloutSummary}
+        loading={rolloutLoading}
+        error={rolloutError}
+      />
 
 
 
