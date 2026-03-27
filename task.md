@@ -12,19 +12,24 @@
 
 ## Active Slice
 
-- Title: Re-verify remaining Checklist runtime gaps and refresh documentation
-- Bead: cng-2k4.13
+- Title: Add automated regression coverage for filter and sync flows
+- Bead: cng-7z0.33
 - Status: completed
 - Last updated: 2026-03-27
 
-- Da them `tests/playwright/import-monitoring.spec.js` de chay runtime smoke cho panel `Đối soát C/O` trong tab `Import Data`, xac nhan nut `Chạy kiểm tra` hoan tat va khong hien `HTTP 500`/`Lỗi đối soát`.
-- `Checklist.md` da duoc refresh de nang muc `Lỗi đối soát C/O` thanh `[x]`, dong thoi bo sung bang chung runtime Playwright cho `Export Excel` o `Import Data` va tab `Điểm KPI +/- Thêm`.
-- Cac muc checklist van de `[ ]` gio duoc ghi ro hon la missing feature hoac bang chung chua du, thay vi note mo ho ve "xac minh tĩnh".
+- Da mo rong `tests/playwright/sync-flow.spec.js` voi runtime regression moi cho luong filter + sync:
+  - nhap `Chỉ đồng bộ các MST`, `Danh sách MST loại trừ`, va khoang ngay chay tay
+  - xac nhan payload `ecus-preview` va `ecus-commit` giu nguyen `from/to/includeTaxCodes/excludeTaxCodes`
+  - xac nhan o tim nhanh cua bang `Danh sách tờ khai import` loc duoc du lieu preview ngay tren runtime
 - Targeted verify da pass:
-  - `pnpm exec eslint tests/playwright/import-monitoring.spec.js`
-  - `pnpm exec playwright test tests/playwright/import-monitoring.spec.js --config=playwright.config.mjs --workers=1`
+  - `pnpm exec eslint tests/playwright/sync-flow.spec.js`
+  - `pnpm exec playwright test tests/playwright/sync-flow.spec.js --config=playwright.config.mjs --workers=1`
 ## Recent Completed Slices
 
+- `cng-7z0.33` da hoan tat regression coverage cho filter va sync runtime:
+  - mo rong `tests/playwright/sync-flow.spec.js` de cover payload propagation cua `from/to/includeTaxCodes/excludeTaxCodes` giua `Xem trước dữ liệu` va `Đồng bộ ngay`
+  - them runtime assertion cho o `Tìm nhanh danh sách tờ khai` de bao ve filter behavior tren du lieu preview sau khi sync preview duoc promote sang bang review
+  - targeted verify da pass: `pnpm exec eslint tests/playwright/sync-flow.spec.js` va `pnpm exec playwright test tests/playwright/sync-flow.spec.js --config=playwright.config.mjs --workers=1`
 - `cng-2k4.13` da hoan tat pass xac minh runtime + refresh `Checklist.md`:
   - them `tests/playwright/import-monitoring.spec.js` de cover thao tac `Chạy kiểm tra` trong panel `Đối soát C/O` va assert khong con `HTTP 500`/`Lỗi đối soát` tren preview app
   - cap nhat `Checklist.md` de nang hang muc `Lỗi đối soát C/O` len `[x]` va bo sung references runtime cho `Export Excel` o `Import Data` cung shell `Điểm KPI +/- Thêm`
@@ -717,6 +722,11 @@
     - `pnpm exec eslint src/components/dataImporter/DataImporterMonitoringPanel.jsx src/components/dataImporter/DataImporterQueryFilterControls.jsx src/components/dataImporter/DataImporterTableResults.jsx src/components/dataImporter/DataImporterSyncPreviewPanel.jsx src/components/dataImporter/DataImporterCoCodeConfigPanel.jsx src/components/dataImporter/DataImporterGridToolbarControls.jsx src/components/dataImporter/DataImporterListControlsPanel.jsx src/components/mst-assignment/table/MstAssignmentDataTablePanel.jsx tests/playwright/accessibility-admin.spec.js`
     - `pnpm run build`
     - `pnpm exec playwright test tests/playwright/accessibility-admin.spec.js --config=playwright.config.mjs --workers=1`
+- `cng-7z0.33` da hoan tat:
+  - `tests/playwright/sync-flow.spec.js` gio co them regression runtime cho bo loc MST + khoang ngay va quick-search tren bang preview sau sync preview
+  - targeted verify da pass:
+    - `pnpm exec eslint tests/playwright/sync-flow.spec.js`
+    - `pnpm exec playwright test tests/playwright/sync-flow.spec.js --config=playwright.config.mjs --workers=1`
 
 ## Previous Completed Slice
 
