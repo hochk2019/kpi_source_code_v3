@@ -2,11 +2,12 @@
 
 ## Active Slice
 
-- Title: Tach AccountManager permission groups panel
-- Bead: cng-aqp
+- Title: Tach DataHealthDashboard storage overview panel
+- Bead: cng-dsv
 - Status: completed
 - Last updated: 2026-03-27
 
+- `cng-dsv` da hoan tat tach cum 3 card storage overview khoi `DataHealthDashboard` sang `src/components/data-health-dashboard/DataHealthStorageOverviewPanel.jsx`; shell hien chi build view-model props cho backup / dung luong he thong / SQL Server, con regression test moi khoa ca branch co du lieu va fallback branch khi thieu nhat ky + SQLite stats.
 - `cng-aqp` da hoan tat tach permission group list dung chung khoi `AccountManager` sang `src/components/account-manager/AccountPermissionGroupsPanel.jsx`; shell hien chi giu toolbar/orchestration cho create-form va permission dialog, con regression test moi khoa collapse state, count label, disabled rule, va permission toggle callback.
 - `cng-dhd` da hoan tat tach `resolveCategoryOptions` va `CATEGORY_OPTIONS` khoi `KPIAdjustments` sang `src/components/kpi-adjustments/model/categoryOptions.js`; shell hien import lai constant moi cho form/list config, con unit test moi khoa mapping tu `KPI_ADJUSTMENT_CATEGORY_CONFIG`.
 - `cng-0jn` da hoan tat tach `buildStaffOptions` khoi `KPIAdjustments` sang `src/components/kpi-adjustments/model/staffOptions.js`; shell hien import lai helper moi cho derived `staffOptions` ma khong doi shape `{ team, name }`, con unit test moi khoa flatten roster va trim member names.
@@ -51,6 +52,11 @@
 - `cng-4hs` da tach xong card danh sach + bo loc thanh `KpiAdjustmentListPanel`, bo sung regression test panel, va giam `src/components/KPIAdjustments.jsx` xuong 1343 dong.
 
 ## Completed This Session
+
+- `cng-dsv` da hoan tat tach DataHealthDashboard storage overview panel:
+  - them `src/components/data-health-dashboard/DataHealthStorageOverviewPanel.jsx` de gom 3 card `Trạng thái sao lưu CSDL`, `Dung lượng hệ thống`, va `Trạng thái SQL Server`
+  - `src/components/DataHealthDashboard.jsx` hien chi build props/view-model cho cum storage overview thay vi giu nguyen block JSX presentation dai trong shell
+  - bo sung `tests/dataHealthStorageOverviewPanel.test.jsx` de khoa branch co du lieu day du va fallback branch khi chua co nhat ky sao luu / SQLite stats
 
 - `cng-aqp` da hoan tat tach AccountManager permission groups panel:
   - them `src/components/account-manager/AccountPermissionGroupsPanel.jsx` de gom permission checkbox rendering + per-group collapse logic dung chung cho create-form va dialog quan ly quyen
@@ -510,14 +516,13 @@
 
 ## Next Suggested Slice
 
-- Title: Ra soat DataHealthDashboard de chon panel extraction nho tiep theo
+- Title: Ra soat DataHealthDashboard metrics + alert cards de chon panel extraction tiep theo
 - Bead: `TBD`
 - Status: san sang tao bead tiep theo
 - Follow-up backlog:
-  - `AccountManager` da giam mot khoi JSX lap lai sau khi tach permission group panel; buoc tiep theo hop ly la tiep tuc ra soat mot presentation-heavy screen khac thay vi quay lai helper extraction
-  - `DataHealthDashboard.jsx` dang la ung vien lon nhat con lai trong root `src/components`; uu tien tim mot panel/card extraction ro rang thay vi tach cac formatter top-file
-  - tiep tuc giu scope o muc presentation/component extraction, tranh lan sang async data orchestration va notification stream subscription neu chua can
-  - truoc khi chon slice moi, can chay GitNexus impact/context cho symbol dich de giu diff nho va co test regression ro rang
+  - `DataHealthDashboard.jsx` da giam mot cum presentation lon sau khi tach storage overview; buoc tiep theo hop ly la ra soat tiep cac the metrics/alert o nua tren thay vi quay lai helper extraction
+  - uu tien mot panel/card extraction tiep tuc o muc presentation, tranh lan sang async fetch orchestration, notification stream subscription, va policy editor form neu chua can
+  - truoc khi chon slice moi, tiep tuc chay GitNexus impact/context cho symbol dich de giu diff nho va co test regression ro rang
 
 ## Verification
 

@@ -7,6 +7,7 @@ import { fetchWithAuth } from '@/auth/localAuth.js';
 import { fetchNotificationHistory, subscribeNotificationStream } from '@/lib/notificationClient.js';
 
 import useAsyncRequest from '@/hooks/useAsyncRequest.js';
+import DataHealthStorageOverviewPanel from '@/components/data-health-dashboard/DataHealthStorageOverviewPanel.jsx';
 
 import { translateBackupFailure, translateBackupReason } from '../../packages/domain/src/backupMessages.js';
 
@@ -1418,6 +1419,88 @@ export default function DataHealthDashboard({ currentUser, canManage = false }) 
 
   const diskWarningMessage = describeDiskWarning(diskInfo);
 
+  const backupRecentEntries = (backupSummary.recent || []).slice(0, 4).map((entry) => {
+    const status = entry?.meta?.status || 'unknown';
+    const statusTone =
+      status === 'success'
+        ? severityStyles.good
+        : status === 'failure'
+        ? severityStyles.critical
+        : severityStyles.info;
+
+    return {
+      id: entry.ts || `${entry.action}_${entry.detail}`,
+      statusLabel: status === 'success' ? 'Thành công' : status === 'failure' ? 'Thất bại' : 'Khác',
+      toneClass: statusTone.container,
+      timestampLabel: formatDate(entry.ts),
+      detail: entry.detail || '—',
+      reasonLabel: entry.meta?.reason
+        ? status === 'failure'
+          ? translateBackupFailure(entry.meta.reason)
+          : translateBackupReason(entry.meta.reason)
+        : '',
+    };
+  });
+
+  const diskMethodLabel = !diskInfo.method
+    ? ''
+    : diskInfo.method === 'statfs'
+    ? 'Hệ điều hành (statfs)'
+    : diskInfo.method === 'df'
+    ? 'Lệnh df'
+    : 'PowerShell';
+
+  const backupCard = {
+    badgeClass: backupSeverity.badge,
+    severityLabel: backupSeverityLabel,
+    lastSuccessAtLabel: lastBackupAt,
+    relativeLabel: lastBackupRelative,
+    directory: backupSchedule.directory || '—',
+    fileLabel: lastBackupFile,
+    nextRunLabel: nextBackupRun,
+    lastFailureAtLabel: lastFailureAt,
+    lastFailureReason,
+    scheduleReasons: scheduleReasons.map((reason) => translateBackupReason(reason) || reason),
+    recentEntries: backupRecentEntries,
+  };
+
+  const databaseCard = {
+    badgeClass: diskSeverity.badge,
+    severityLabel: severityLabels[storageHealth.severity] || 'Thông tin',
+    file: databaseStorage.file || '—',
+    sizeLabel: databaseSizeLabel,
+    updatedAtLabel: databaseUpdatedAt,
+    sqliteStatsAvailable,
+    sqliteUsedPages,
+    sqliteTotalPages,
+    sqliteUsedPercentLabel,
+    sqliteFreePages,
+    sqliteFreePercentLabel,
+    sqliteHasFreeBytes,
+    sqliteFreeLabel,
+    sqlitePageSizeLabel,
+    sqliteUsedLabel,
+    isMemoryDb: databaseStorage.warningCode === 'memory_db',
+    sqliteStatsError: databaseStorage.sqliteStatsError || '',
+    diskUsedLabel,
+    diskUsedPercentLabel: diskUsedPercent !== null ? formatPercent(diskUsedPercent) : '—',
+    diskUsedPercentWidth: diskUsedPercent !== null ? Math.min(100, Math.max(0, diskUsedPercent)) : 0,
+    diskFreeLabel,
+    diskTotalLabel,
+    methodLabel: diskMethodLabel,
+    warningMessage: diskWarningMessage,
+  };
+
+  const sqlCard = {
+    badgeClass: (severityStyles[sqlHealthIndicator.severity] || severityStyles.info).badge,
+    severityLabel: severityLabels[sqlHealthIndicator.severity] || 'Thông tin',
+    title: sqlHealthIndicator.title,
+    message: sqlHealthIndicator.message,
+    checkedAtLabel: sqlHealthIndicator.checkedAt,
+    code: sqlHealth?.code || '',
+    number: sqlHealth?.number || '',
+  };
+
 
 
   return (
@@ -1562,403 +1645,7 @@ export default function DataHealthDashboard({ currentUser, canManage = false }) 
 
 
 
-      <section className="grid gap-4 lg:grid-cols-3">
-
-        <div className="rounded border border-gray-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900">
-
-          <div className="flex items-center justify-between gap-2">
-
-            <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">Trạng thái sao lưu CSDL</h3>
-
-            <span className={clsx('rounded px-2 py-0.5 text-xs font-semibold', backupSeverity.badge)}>
-
-              {backupSeverityLabel}
-
-            </span>
-
-          </div>
-
-          <dl className="mt-3 space-y-2 text-xs text-gray-600 dark:text-gray-300">
-
-            <div className="flex items-center justify-between gap-3">
-
-              <dt className="font-medium">Lần thành công gần nhất</dt>
-
-              <dd className="text-right text-gray-700 dark:text-gray-100">{lastBackupAt}</dd>
-
-            </div>
-
-            <div className="flex items-center justify-between gap-3">
-
-              <dt className="font-medium">Thời gian tương đối</dt>
-
-              <dd className="text-right text-gray-700 dark:text-gray-100">{lastBackupRelative}</dd>
-
-            </div>
-
-            <div>
-
-              <dt className="font-medium">Đường dẫn lưu</dt>
-
-              <dd className="mt-1 truncate text-[11px] text-gray-700 dark:text-gray-200">
-
-                {backupSchedule.directory || '—'}
-
-              </dd>
-
-            </div>
-
-            <div>
-
-              <dt className="font-medium">Tệp gần nhất</dt>
-
-              <dd className="mt-1 truncate text-[11px] text-gray-700 dark:text-gray-200">{lastBackupFile}</dd>
-
-            </div>
-
-            <div className="flex items-center justify-between gap-3">
-
-              <dt className="font-medium">Lần chạy kế tiếp</dt>
-
-              <dd className="text-right text-gray-700 dark:text-gray-100">{nextBackupRun}</dd>
-
-            </div>
-
-            {lastFailureAt && (
-
-              <div>
-
-                <dt className="font-medium text-red-600 dark:text-red-300">Lỗi gần nhất</dt>
-
-                <dd className="mt-1 text-[11px] text-red-600 dark:text-red-300">
-
-                  {lastFailureAt}
-
-                  {lastFailureReason ? ` • ${lastFailureReason}` : ''}
-
-                </dd>
-
-              </div>
-
-            )}
-
-            {scheduleReasons.length > 0 && (
-
-              <div>
-
-                <dt className="font-medium">Ghi chú lịch</dt>
-
-                <dd className="mt-1 space-y-1 text-[11px]">
-
-                  {scheduleReasons.map((reason) => (
-
-                    <div key={reason}>• {translateBackupReason(reason) || reason}</div>
-
-                  ))}
-
-                </dd>
-
-              </div>
-
-            )}
-
-          </dl>
-
-          <div className="mt-3 rounded border border-gray-200 p-2 text-xs dark:border-slate-700 dark:bg-slate-800">
-
-            <div className="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-
-              Nhật ký gần đây
-
-            </div>
-
-            <div className="mt-2 space-y-2">
-
-              {(backupSummary.recent || []).slice(0, 4).map((entry) => {
-
-                const status = entry?.meta?.status || 'unknown';
-
-                const statusTone =
-
-                  status === 'success'
-
-                    ? severityStyles.good
-
-                    : status === 'failure'
-
-                    ? severityStyles.critical
-
-                    : severityStyles.info;
-
-                return (
-
-                  <div
-
-                    key={entry.ts || `${entry.action}_${entry.detail}`}
-
-                    className={clsx('rounded border px-2 py-1 text-[11px] leading-relaxed', statusTone.container)}
-
-                  >
-
-                    <div className="flex items-center justify-between gap-2 font-semibold">
-
-                      <span>{status === 'success' ? 'Thành công' : status === 'failure' ? 'Thất bại' : 'Khác'}</span>
-
-                      <span>{formatDate(entry.ts)}</span>
-
-                    </div>
-
-                    <div className="mt-1 text-[11px] opacity-80">{entry.detail || '—'}</div>
-
-                    {entry.meta?.reason && (
-
-                      <div className="mt-1 text-[11px] opacity-70">
-
-                        {status === 'failure'
-
-                          ? translateBackupFailure(entry.meta.reason)
-
-                          : translateBackupReason(entry.meta.reason)}
-
-                      </div>
-
-                    )}
-
-                  </div>
-
-                );
-
-              })}
-
-              {(backupSummary.recent || []).length === 0 && (
-
-                <p className="text-[11px] text-gray-500 dark:text-gray-400">Chưa có nhật ký sao lưu.</p>
-
-              )}
-
-            </div>
-
-          </div>
-
-        </div>
-
-
-
-        <div className="rounded border border-gray-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900">
-
-          <div className="flex items-center justify-between gap-2">
-
-            <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">Dung lượng hệ thống</h3>
-
-            <span className={clsx('rounded px-2 py-0.5 text-xs font-semibold', diskSeverity.badge)}>
-
-              {severityLabels[storageHealth.severity] || 'Thông tin'}
-
-            </span>
-
-          </div>
-
-          <dl className="mt-3 space-y-2 text-xs text-gray-600 dark:text-gray-300">
-
-            <div>
-
-              <dt className="font-medium">Tệp CSDL</dt>
-
-              <dd className="mt-1 truncate text-[11px] text-gray-700 dark:text-gray-200">{databaseStorage.file || '—'}</dd>
-
-            </div>
-
-            <div className="flex items-center justify-between gap-3">
-
-              <dt className="font-medium">Dung lượng</dt>
-
-              <dd className="text-right text-gray-700 dark:text-gray-100">{databaseSizeLabel}</dd>
-
-            </div>
-
-            <div className="flex items-center justify-between gap-3">
-
-              <dt className="font-medium">Cập nhật file</dt>
-
-              <dd className="text-right text-gray-700 dark:text-gray-100">{databaseUpdatedAt}</dd>
-
-            </div>
-
-            {sqliteStatsAvailable && (
-
-              <>
-
-                <div className="flex items-center justify-between gap-3">
-
-                  <dt className="font-medium">Trang sử dụng</dt>
-
-                  <dd className="text-right text-gray-700 dark:text-gray-100">
-
-                    {sqliteUsedPages ?? '—'} / {sqliteTotalPages ?? '—'}
-
-                    {sqliteUsedPercentLabel ? ` • ${sqliteUsedPercentLabel}` : ''}
-
-                  </dd>
-
-                </div>
-
-                <div className="flex items-center justify-between gap-3">
-
-                  <dt className="font-medium">Trang trống</dt>
-
-                  <dd className="text-right text-gray-700 dark:text-gray-100">
-
-                    {sqliteFreePages ?? 0}
-
-                    {sqliteFreePercentLabel ? ` • ${sqliteFreePercentLabel}` : ''}
-
-                    {sqliteHasFreeBytes ? ` (${sqliteFreeLabel})` : ''}
-
-                  </dd>
-
-                </div>
-
-                <div className="flex items-center justify-between gap-3">
-
-                  <dt className="font-medium">Kích thước trang</dt>
-
-                  <dd className="text-right text-gray-700 dark:text-gray-100">{sqlitePageSizeLabel}</dd>
-
-                </div>
-
-                <div className="flex items-center justify-between gap-3">
-
-                  <dt className="font-medium">Dung lượng thực dùng</dt>
-
-                  <dd className="text-right text-gray-700 dark:text-gray-100">{sqliteUsedLabel}</dd>
-
-                </div>
-
-              </>
-
-            )}
-
-            {databaseStorage.warningCode === 'memory_db' && (
-
-              <div className="rounded border border-amber-200 bg-amber-50 p-2 text-[11px] text-amber-700 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-200">
-
-                Hệ thống đang chạy CSDL ở chế độ bộ nhớ. Hãy cấu hình file thực tế để sao lưu được dữ liệu.
-
-              </div>
-
-            )}
-
-            {databaseStorage.sqliteStatsError && (
-
-              <div className="rounded border border-amber-200 bg-amber-50 p-2 text-[11px] text-amber-700 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-200">
-
-                Không thể thống kê trang dữ liệu SQLite: {databaseStorage.sqliteStatsError}
-
-              </div>
-
-            )}
-
-          </dl>
-
-          <div className="mt-4">
-
-            <div className="flex items-center justify-between text-[11px] text-gray-500 dark:text-gray-400">
-
-              <span>Đã dùng: {diskUsedLabel}</span>
-
-              <span>{diskUsedPercent !== null ? formatPercent(diskUsedPercent) : '—'}</span>
-
-            </div>
-
-            <div className="mt-2 h-2 w-full rounded-full bg-gray-200 dark:bg-slate-700">
-
-              <div
-
-                className="h-2 rounded-full bg-emerald-500 transition-all dark:bg-emerald-400"
-
-                style={{ width: `${diskUsedPercent !== null ? Math.min(100, Math.max(0, diskUsedPercent)) : 0}%` }}
-
-              />
-
-            </div>
-
-            <div className="mt-2 flex items-center justify-between text-[11px] text-gray-500 dark:text-gray-400">
-
-              <span>Còn trống: {diskFreeLabel}</span>
-
-              <span>Tổng: {diskTotalLabel}</span>
-
-            </div>
-
-            {diskInfo.method && (
-
-              <div className="mt-2 text-[11px] text-gray-500 dark:text-gray-400">
-
-                Nguồn số liệu: {diskInfo.method === 'statfs' ? 'Hệ điều hành (statfs)' : diskInfo.method === 'df' ? 'Lệnh df' : 'PowerShell'}
-
-              </div>
-
-            )}
-
-            {diskWarningMessage && (
-
-              <div className="mt-2 text-[11px] text-amber-700 dark:text-amber-200">{diskWarningMessage}</div>
-
-            )}
-
-          </div>
-
-        </div>
-
-
-
-        <div className="rounded border border-gray-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900">
-
-          <div className="flex items-center justify-between gap-2">
-
-            <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">Trạng thái SQL Server</h3>
-
-            <span className={clsx('rounded px-2 py-0.5 text-xs font-semibold', (severityStyles[sqlHealthIndicator.severity] || severityStyles.info).badge)}>
-
-              {severityLabels[sqlHealthIndicator.severity] || 'Thông tin'}
-
-            </span>
-
-          </div>
-
-          <div className="mt-3 space-y-2 text-sm text-gray-600 dark:text-gray-300">
-
-            <div className="text-sm font-semibold text-gray-800 dark:text-gray-100">{sqlHealthIndicator.title}</div>
-
-            <p className="text-xs leading-relaxed">{sqlHealthIndicator.message}</p>
-
-            {sqlHealthIndicator.checkedAt && (
-
-              <div className="text-[11px] text-gray-500 dark:text-gray-400">
-
-                Kiểm tra gần nhất: {sqlHealthIndicator.checkedAt}
-
-              </div>
-
-            )}
-
-            {sqlHealth?.code && (
-
-              <div className="text-[11px] text-gray-500 dark:text-gray-400">Mã lỗi: {sqlHealth.code}</div>
-
-            )}
-
-            {sqlHealth?.number && (
-
-              <div className="text-[11px] text-gray-500 dark:text-gray-400">SQL Number: {sqlHealth.number}</div>
-
-            )}
-
-          </div>
-
-        </div>
-
-      </section>
+      <DataHealthStorageOverviewPanel backup={backupCard} database={databaseCard} sql={sqlCard} />
 
 
 
