@@ -11,33 +11,24 @@
   - `cng-2k4.2` — declarations write cutover
   - `cng-2k4.3` — entrypoint cutover sang `server-v4`
   - `cng-2k4.10` — CSRF protection
-  - `cng-2k4.14` — giam `DataHealthDashboard.jsx` xuong duoi nguong module
   - `cng-2k4.15` — giam `AccountManager.jsx` xuong duoi nguong module
 
 ## Active Slice
 
-- Title: Tach DataHealthDashboard policy summary va source control panels
-- Bead: cng-dps
+- Title: Giam `DataHealthDashboard.jsx` xuong duoi nguong module bang cach tach policy config section va dashboard view-model builders
+- Bead: cng-2k4.14
 - Status: completed
 - Last updated: 2026-03-27
 
-- `cng-dps` da hoan tat tach block summary `policyStatusCounts` va 2 card `Nguồn dữ liệu` / `Nguồn đang khóa` khoi `DataHealthDashboard` sang `src/components/data-health-dashboard/DataHealthPolicySourcesPanel.jsx`; shell hien chi build view-model props da format san cho summary, source action tone, va locked-source metadata, con regression test moi khoa branch co du lieu day du, callback lock/unlock, va fallback branch khi khong co source / lock data.
-- `cng-daf` da hoan tat tach cum activity feeds khoi `DataHealthDashboard` sang `src/components/data-health-dashboard/DataHealthActivityFeedsPanel.jsx`; shell hien chi build view-model props da format san cho SQL timeout events va real-time notifications, con regression test moi khoa branch co du lieu day du va fallback branch khi khong co timeout / thong bao.
-- `cng-dsb` da hoan tat tach cum `infrastructureAlerts` + `syncIndicator` khoi `DataHealthDashboard` sang `src/components/data-health-dashboard/DataHealthInfrastructureStatusPanel.jsx`; shell hien chi build view-model props cho alert tone, sync overview, va operator label, con regression test moi khoa branch co canh bao day du va fallback branch khi khong co alert ha tang.
-- `cng-dma` da hoan tat tach cum metrics grid + 2 card duplicate/alert summary khoi `DataHealthDashboard` sang `src/components/data-health-dashboard/DataHealthMetricsAlertsPanel.jsx`; shell hien chi build view-model props da format san cho metrics, duplicate groups, va alert entries, con regression test moi khoa branch co du lieu va fallback branch khi khong co duplicate/alert ton dong.
-- `cng-dsv` da hoan tat tach cum 3 card storage overview khoi `DataHealthDashboard` sang `src/components/data-health-dashboard/DataHealthStorageOverviewPanel.jsx`; shell hien chi build view-model props cho backup / dung luong he thong / SQL Server, con regression test moi khoa ca branch co du lieu va fallback branch khi thieu nhat ky + SQLite stats.
-- `cng-aqp` da hoan tat tach permission group list dung chung khoi `AccountManager` sang `src/components/account-manager/AccountPermissionGroupsPanel.jsx`; shell hien chi giu toolbar/orchestration cho create-form va permission dialog, con regression test moi khoa collapse state, count label, disabled rule, va permission toggle callback.
-- `cng-dhd` da hoan tat tach `resolveCategoryOptions` va `CATEGORY_OPTIONS` khoi `KPIAdjustments` sang `src/components/kpi-adjustments/model/categoryOptions.js`; shell hien import lai constant moi cho form/list config, con unit test moi khoa mapping tu `KPI_ADJUSTMENT_CATEGORY_CONFIG`.
-- `cng-0jn` da hoan tat tach `buildStaffOptions` khoi `KPIAdjustments` sang `src/components/kpi-adjustments/model/staffOptions.js`; shell hien import lai helper moi cho derived `staffOptions` ma khong doi shape `{ team, name }`, con unit test moi khoa flatten roster va trim member names.
-- `cng-u7h` da hoan tat tach `parseReferences` khoi `KPIAdjustments` sang `src/components/kpi-adjustments/model/referenceParsing.js`; shell hien import lai helper moi cho 2 hook form/workspace ma khong doi contract prop, con unit test moi khoa behavior tach reference, normalize, va dedupe.
-- `cng-pnz` da hoan tat tach `normalizeFieldSegment`, `buildSettingsFieldId`, va `buildLicenseFieldId` khoi `KPIAdjustments` sang `src/components/kpi-adjustments/model/fieldIds.js`; shell hien import lai helper moi cho settings dialog wiring, con unit test moi khoa contract sanitize segment va field-id generation.
-- `cng-lch` da hoan tat tach `formatDateOnly`, `formatInt`, va `formatDecimal` khoi `KPIAdjustments` sang `src/components/kpi-adjustments/model/formatting.js`; shell hien import lai helper moi cho form/list/overview dialogs, con unit test moi khoa date/int/decimal formatting contract.
-- `cng-y03` da hoan tat tach `AssigneeCell` khoi `MSTAssignment` sang `src/components/mst-assignment/table/AssigneeCell.jsx`; shell hien import lai component moi cho cot phu trach, con regression test person-columns da tro thang vao module moi de khoa display clamp, team hint, va che do edit.
-- `cng-gpl` da hoan tat tach wrapper `MstAssignmentStaffCombobox` khoi `MSTAssignment` sang `src/components/mst-assignment/shared/MstAssignmentStaffCombobox.jsx`; shell hien import lai wrapper moi cho ca `AssigneeCell` va `MstAssignmentAddFormPanel`, con regression test moi khoa 3 preset `allowCustom`/`preserveTeamOnCustom`/`preserveTeamOnClear`.
-- `cng-s7x` da hoan tat tach `CompanyNameCell` khoi `MSTAssignment` sang `src/components/mst-assignment/table/CompanyNameCell.jsx`; shell hien import lai component moi cho cot cong ty, con regression test company-name da tro thang vao module moi de khoa sanitize/wrap/textarea resize behavior.
-- `cng-y9o` da hoan tat tach `PersonColumnHeader` khoi `MSTAssignment` sang `src/components/mst-assignment/table/PersonColumnHeader.jsx`; shell hien import lai header moi cho cac cot `person_import`/`person_export`, con regression test person-columns da tro thang vao module moi de khoa presentation metadata va tooltip behavior.
-- `cng-8j3` da hoan tat tach `PageSizeControl` khoi `MSTAssignment` sang `src/components/mst-assignment/table/PageSizeControl.jsx`; shell hien import lai control moi cho footer pagination, con regression test pagination da tro thang vao module moi de khoa hanh vi select/custom page-size.
-- `cng-crs` da hoan tat tach `createRowState` khoi `MSTAssignment` sang `src/components/mst-assignment/model/createRowState.js`; shell hien import lai helper moi cho luong bootstrap/add-form/import-save/row-commit va giu nguyen contract cua cac workspace da tach truoc do.
+- `DataHealthDashboard.jsx` da giam tu 1060 dong xuong 742 dong, dat duoi nguong module muc tieu cho slice nay.
+- Da them `src/components/data-health-dashboard/DataHealthPolicyConfigSection.jsx` de tach toan bo section policy form/header/action bar khoi shell.
+- Da them `src/components/data-health-dashboard/dataHealthDashboardViewModels.js` de gom phan build card/panel props thuần ra khoi shell, giu JSX chinh gon va de test hon.
+- Da bo sung regression test moi:
+  - `tests/dataHealthPolicyConfigSection.test.jsx`
+  - `tests/dataHealthDashboardViewModels.test.js`
+- Targeted verify da pass:
+  - `pnpm exec eslint src/components/DataHealthDashboard.jsx src/components/data-health-dashboard/DataHealthPolicyConfigSection.jsx src/components/data-health-dashboard/dataHealthDashboardViewModels.js tests/dataHealthPolicyConfigSection.test.jsx tests/dataHealthDashboardViewModels.test.js`
+  - `pnpm exec vitest run tests/dataHealthPolicySourcesPanel.test.jsx tests/dataHealthPolicyConfigSection.test.jsx tests/dataHealthDashboardViewModels.test.js tests/dataHealthActivityFeedsPanel.test.jsx tests/dataHealthInfrastructureStatusPanel.test.jsx tests/dataHealthMetricsAlertsPanel.test.jsx tests/dataHealthStorageOverviewPanel.test.jsx`
 - `cng-svm` da hoan tat tach `buildStatusViewModel` khoi `MSTAssignment` sang `src/components/mst-assignment/model/statusViewModel.js`; shell hien import lai helper moi cho luong table/history status chip va giu nguyen contract cua cac panel/workspace da tach truoc do.
 - `cng-hfy` da hoan tat tach `formatHistoryTime` va `HISTORY_FIELD_LABELS` khoi `MSTAssignment` sang `src/components/mst-assignment/model/historyFormatting.js`; shell hien import lai helper moi cho luong history/timeline formatting va giu nguyen contract cua cac workspace da tach truoc do.
 - `cng-kun` da hoan tat tach `tidyMST` va `makeRowKey` khoi `MSTAssignment` sang `src/components/mst-assignment/model/rowIdentity.js`; shell hien import lai helper moi cho luong row identity va giu nguyen contract cua cac workspace da tach truoc do.
@@ -554,13 +545,13 @@
 
 ## Next Suggested Slice
 
-- Title: Giam `DataHealthDashboard.jsx` duoi nguong module, bat dau bang policy form inputs va action wiring
-- Bead: `cng-2k4.14`
+- Title: Giam `AccountManager.jsx` duoi nguong module, uu tien tach panel/quyen dung chung truoc khi dung vao state orchestration
+- Bead: `cng-2k4.15`
 - Status: ready
 - Follow-up backlog:
-  - `DataHealthDashboard.jsx` da rut them mot cum presentation lon o khu policy; buoc tiep theo hop ly la xem xet tach tiep form inputs read-mostly va action row quanh threshold / auto-lock ma van tranh dong vao wiring state nhoi nhat cua shell
-  - uu tien tach panel read-only trong muc policy truoc, tranh lan sang input wiring, async fetch orchestration, va action-heavy form state neu chua can
-  - neu slice nay xong, cac viec structural con lai da duoc track san trong `docs/open-backlog.md`: `cng-2k4.15`, `cng-2k4.16`, `cng-2k4.17`
+  - uu tien tim cum JSX/view-model dai nhat trong `AccountManager.jsx` ma chua duoc tach thanh module rieng
+  - giu diff nho: tach panel presentation + pure helper truoc, tranh cham vao auth/account workflow neu chua can
+  - sau `cng-2k4.15`, backlog structural con lai tiep theo la `cng-2k4.16` va `cng-2k4.17`
   - truoc khi chon slice moi, tiep tuc chay GitNexus impact/context cho symbol dich de giu diff nho va co test regression ro rang
 
 ## Verification

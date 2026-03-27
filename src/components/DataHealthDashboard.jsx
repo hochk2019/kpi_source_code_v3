@@ -1,7 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 
-import clsx from 'clsx';
-
 import { fetchWithAuth } from '@/auth/localAuth.js';
 
 import { fetchNotificationHistory, subscribeNotificationStream } from '@/lib/notificationClient.js';
@@ -10,12 +8,9 @@ import useAsyncRequest from '@/hooks/useAsyncRequest.js';
 import DataHealthActivityFeedsPanel from '@/components/data-health-dashboard/DataHealthActivityFeedsPanel.jsx';
 import DataHealthInfrastructureStatusPanel from '@/components/data-health-dashboard/DataHealthInfrastructureStatusPanel.jsx';
 import DataHealthMetricsAlertsPanel from '@/components/data-health-dashboard/DataHealthMetricsAlertsPanel.jsx';
-import DataHealthPolicySourcesPanel from '@/components/data-health-dashboard/DataHealthPolicySourcesPanel.jsx';
+import DataHealthPolicyConfigSection from '@/components/data-health-dashboard/DataHealthPolicyConfigSection.jsx';
 import DataHealthStorageOverviewPanel from '@/components/data-health-dashboard/DataHealthStorageOverviewPanel.jsx';
-
-import { translateBackupFailure, translateBackupReason } from '../../packages/domain/src/backupMessages.js';
-
-
+import { buildDataHealthDashboardViewModels } from '@/components/data-health-dashboard/dataHealthDashboardViewModels.js';
 
 function formatDate(value) {
 
@@ -132,6 +127,8 @@ function formatRelativeTime(value) {
 
 
 let numberFormatter;
+
+const EMPTY_OBJECT = Object.freeze({});
 
 function formatNumber(value) {
 
@@ -284,18 +281,6 @@ const metricPalette = [
   'bg-fuchsia-500/10 text-fuchsia-700 border border-fuchsia-400/60',
 
 ];
-
-
-
-const policyInputClass =
-
-  'w-full rounded border border-gray-300 px-2 py-1 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-gray-100 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400 dark:disabled:bg-slate-800/50 dark:disabled:text-slate-500';
-
-
-
-const policyCheckboxClass =
-
-  'h-4 w-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500 dark:border-slate-600 dark:bg-slate-800 disabled:cursor-not-allowed disabled:border-gray-300 disabled:bg-gray-100';
 
 
 
@@ -575,17 +560,17 @@ export default function DataHealthDashboard({ currentUser, canManage = false }) 
 
   const sqlHealth = summary?.sqlServer?.health || null;
 
-  const storageInfo = summary?.storage || {};
+  const storageInfo = summary?.storage || EMPTY_OBJECT;
 
-  const backupSummary = storageInfo.backup || {};
+  const backupSummary = storageInfo.backup || EMPTY_OBJECT;
 
-  const backupHealth = backupSummary.health || {};
+  const backupHealth = backupSummary.health || EMPTY_OBJECT;
 
-  const databaseStorage = storageInfo.database || {};
+  const databaseStorage = storageInfo.database || EMPTY_OBJECT;
 
-  const diskInfo = storageInfo.disk || {};
+  const diskInfo = storageInfo.disk || EMPTY_OBJECT;
 
-  const storageHealth = storageInfo.health || {};
+  const storageHealth = storageInfo.health || EMPTY_OBJECT;
 
   const operatorName = useMemo(() => {
 
@@ -1031,6 +1016,10 @@ export default function DataHealthDashboard({ currentUser, canManage = false }) 
 
   }, [summary, policyStats]);
 
+  const handlePolicyFieldChange = useCallback((field, value) => {
+    setPolicyForm((prev) => ({ ...(prev || {}), [field]: value }));
+  }, []);
+
 
 
   const handleSavePolicy = useCallback(async () => {
@@ -1353,281 +1342,57 @@ export default function DataHealthDashboard({ currentUser, canManage = false }) 
 
   }, [liveNotifications, historyNotifications]);
 
-
-
-  const backupSchedule = backupSummary.schedule || {};
-
-  const backupSeverity = severityStyles[backupHealth.severity] || severityStyles.info;
-
-  const backupSeverityLabel = severityLabels[backupHealth.severity] || 'Thông tin';
-
-  const lastBackupAt = backupSummary.lastSuccess?.ts ? formatDate(backupSummary.lastSuccess.ts) : 'Chưa có';
-
-  const lastBackupRelative = backupHealth.lastSuccessAt ? formatRelativeTime(backupHealth.lastSuccessAt) : 'Không xác định';
-
-  const lastBackupFile = backupSummary.lastSuccess?.meta?.file || '—';
-
-  const lastFailureAt = backupSummary.lastFailure?.ts ? formatDate(backupSummary.lastFailure.ts) : null;
-
-  const lastFailureReason = backupSummary.lastFailure?.meta?.reason
-
-    ? translateBackupFailure(backupSummary.lastFailure.meta.reason)
-
-    : '';
-
-  const nextBackupRun = backupSchedule.active === false
-
-    ? 'Đang tắt'
-
-    : backupSchedule.nextRunHuman || 'Không xác định';
-
-  const scheduleReasons = Array.isArray(backupSchedule.reasons) ? backupSchedule.reasons : [];
-
-
-
-  const databaseSizeLabel = databaseStorage.sizeLabel || formatBytes(databaseStorage.sizeBytes);
-
-  const databaseUpdatedAt = databaseStorage.lastModifiedAt ? formatDate(databaseStorage.lastModifiedAt) : 'Không rõ';
-
-  const sqliteStats = databaseStorage.sqliteStats || {};
-
-  const sqliteStatsAvailable = typeof sqliteStats.pageCount === 'number' && sqliteStats.pageCount >= 0;
-
-  const sqliteTotalPages = sqliteStatsAvailable ? sqliteStats.pageCount : null;
-
-  const sqliteFreePages = sqliteStatsAvailable ? sqliteStats.freelistCount ?? 0 : null;
-
-  const sqliteUsedPages = sqliteStatsAvailable && sqliteTotalPages !== null ? Math.max(0, sqliteTotalPages - (sqliteFreePages ?? 0)) : null;
-
-  const sqlitePageSizeLabel = Number.isFinite(sqliteStats.pageSizeBytes) ? formatBytes(sqliteStats.pageSizeBytes) : '—';
-
-  const sqliteUsedLabel = Number.isFinite(sqliteStats.usedBytes) ? formatBytes(sqliteStats.usedBytes) : '—';
-
-  const sqliteHasFreeBytes = Number.isFinite(sqliteStats.freeBytes);
-
-  const sqliteFreeLabel = sqliteHasFreeBytes ? formatBytes(sqliteStats.freeBytes) : '—';
-
-  const sqliteUsedPercentLabel = Number.isFinite(sqliteStats.usedPercent) ? formatPercent(sqliteStats.usedPercent) : null;
-
-  const sqliteFreePercentLabel = Number.isFinite(sqliteStats.freePercent) ? formatPercent(sqliteStats.freePercent) : null;
-
-  const diskUsedPercent = typeof diskInfo.usedPercent === 'number' ? Math.max(0, Math.min(100, diskInfo.usedPercent)) : null;
-
-  const diskUsedLabel = diskInfo.usedLabel || formatBytes(diskInfo.usedBytes);
-
-  const diskFreeLabel = diskInfo.freeLabel || formatBytes(diskInfo.freeBytes);
-
-  const diskTotalLabel = diskInfo.totalLabel || formatBytes(diskInfo.totalBytes);
-
-  const diskSeverity = severityStyles[storageHealth.severity] || severityStyles.info;
-
-  const diskWarningMessage = describeDiskWarning(diskInfo);
-
-  const backupRecentEntries = (backupSummary.recent || []).slice(0, 4).map((entry) => {
-    const status = entry?.meta?.status || 'unknown';
-    const statusTone =
-      status === 'success'
-        ? severityStyles.good
-        : status === 'failure'
-        ? severityStyles.critical
-        : severityStyles.info;
-
-    return {
-      id: entry.ts || `${entry.action}_${entry.detail}`,
-      statusLabel: status === 'success' ? 'Thành công' : status === 'failure' ? 'Thất bại' : 'Khác',
-      toneClass: statusTone.container,
-      timestampLabel: formatDate(entry.ts),
-      detail: entry.detail || '—',
-      reasonLabel: entry.meta?.reason
-        ? status === 'failure'
-          ? translateBackupFailure(entry.meta.reason)
-          : translateBackupReason(entry.meta.reason)
-        : '',
-    };
-  });
-
-  const diskMethodLabel = !diskInfo.method
-    ? ''
-    : diskInfo.method === 'statfs'
-    ? 'Hệ điều hành (statfs)'
-    : diskInfo.method === 'df'
-    ? 'Lệnh df'
-    : 'PowerShell';
-
-  const backupCard = {
-    badgeClass: backupSeverity.badge,
-    severityLabel: backupSeverityLabel,
-    lastSuccessAtLabel: lastBackupAt,
-    relativeLabel: lastBackupRelative,
-    directory: backupSchedule.directory || '—',
-    fileLabel: lastBackupFile,
-    nextRunLabel: nextBackupRun,
-    lastFailureAtLabel: lastFailureAt,
-    lastFailureReason,
-    scheduleReasons: scheduleReasons.map((reason) => translateBackupReason(reason) || reason),
-    recentEntries: backupRecentEntries,
-  };
-
-  const databaseCard = {
-    badgeClass: diskSeverity.badge,
-    severityLabel: severityLabels[storageHealth.severity] || 'Thông tin',
-    file: databaseStorage.file || '—',
-    sizeLabel: databaseSizeLabel,
-    updatedAtLabel: databaseUpdatedAt,
-    sqliteStatsAvailable,
-    sqliteUsedPages,
-    sqliteTotalPages,
-    sqliteUsedPercentLabel,
-    sqliteFreePages,
-    sqliteFreePercentLabel,
-    sqliteHasFreeBytes,
-    sqliteFreeLabel,
-    sqlitePageSizeLabel,
-    sqliteUsedLabel,
-    isMemoryDb: databaseStorage.warningCode === 'memory_db',
-    sqliteStatsError: databaseStorage.sqliteStatsError || '',
-    diskUsedLabel,
-    diskUsedPercentLabel: diskUsedPercent !== null ? formatPercent(diskUsedPercent) : '—',
-    diskUsedPercentWidth: diskUsedPercent !== null ? Math.min(100, Math.max(0, diskUsedPercent)) : 0,
-    diskFreeLabel,
-    diskTotalLabel,
-    methodLabel: diskMethodLabel,
-    warningMessage: diskWarningMessage,
-  };
-
-  const sqlCard = {
-    badgeClass: (severityStyles[sqlHealthIndicator.severity] || severityStyles.info).badge,
-    severityLabel: severityLabels[sqlHealthIndicator.severity] || 'Thông tin',
-    title: sqlHealthIndicator.title,
-    message: sqlHealthIndicator.message,
-    checkedAtLabel: sqlHealthIndicator.checkedAt,
-    code: sqlHealth?.code || '',
-    number: sqlHealth?.number || '',
-  };
-
-  const metricCards = metrics.map((metric, index) => ({
-    ...metric,
-    toneClass: metricPalette[index % metricPalette.length],
-  }));
-
-  const duplicateSummaryCard = {
-    countLabel: `${duplicateGroups.length} nhóm gần nhất`,
-    groups: duplicateGroups.map((group) => ({
-      key: group.key,
-      prefix: group.prefix,
-      totalLabel: `${group.total} bản ghi`,
-      branch: group.branch || '',
-      keepLabel: `${group.keep?.so_tk_full || group.keep?.so_tk || '—'} • Cập nhật: ${formatDate(group.keep?.updatedAt)}`,
-      duplicates: (group.duplicates || []).slice(0, 4).map((row, index) => ({
-        key: `${group.key}_${row.so_tk || index}`,
-        label: `${row.so_tk_full || row.so_tk} • NV: ${row.staff || '—'} • Tổ: ${row.team || '—'} • Cập nhật ${formatDate(row.updatedAt)}`,
-      })),
-      remainingLabel:
-        (group.duplicates || []).length > 4 ? `… ${(group.duplicates || []).length - 4} bản ghi khác` : '',
-    })),
-  };
-
-  const alertSummaryCard = {
-    lastEvaluatedAtLabel: summary?.alerts?.lastEvaluatedAt ? formatDate(summary.alerts.lastEvaluatedAt) : 'Chưa có',
-    entries: alertEntries.map((alert) => ({
-      key: alert.key,
-      soTkLabel: alert.so_tk,
-      dateLabel: formatDateOnly(alert.date),
-      mstLabel: alert.mst || '—',
-      companyLabel: alert.company || '—',
-      missingLabel: Array.isArray(alert.missing) ? alert.missing.join(', ') : '—',
-      staffLabel: alert.staff || 'Chưa gán',
-      teamLabel: alert.team || 'Chưa gán',
-      lastAlertAtLabel: formatDate(alert.lastAlertAt),
-    })),
-  };
-
-  const infrastructureStatusAlerts = infrastructureAlerts.map((alert) => {
-    const tone = severityStyles[alert.severity] || severityStyles.info;
-    return {
-      key: alert.key,
-      containerClass: tone.container,
-      dotClass: tone.dot,
-      severityLabel: severityLabels[alert.severity] || 'Thông tin',
-      message: alert.message,
-    };
-  });
-
-  const infrastructureSyncStatus = {
-    containerClass: syncIndicator.classes.container,
-    dotClass: syncIndicator.classes.dot,
-    overview: syncIndicator.overview,
-    lastRunLabel: syncIndicator.lastRunLabel,
-    relative: syncIndicator.relative,
-    statusText: syncIndicator.statusText,
-    operatorName,
-  };
-
-  const activityFeedsPanel = {
-    sqlEvents: sqlTimeouts.map((event, index) => ({
-      key: event.at || `${event.message || 'timeout'}_${index}`,
-      atLabel: formatDate(event.at),
-      message: event.message || 'Timeout kết nối SQL Server',
-      contextLabel: event.context ? JSON.stringify(event.context, null, 2) : '',
-    })),
-    notifications: {
-      countLabel: `${combinedNotifications.length} sự kiện mới`,
-      entries: combinedNotifications.map((event, index) => ({
-        key: event.id || `${event.createdAt || 'unknown'}_${event.type || 'notification'}_${index}`,
-        containerClass: clsx(
-          event.severity === 'error' && 'border-red-200 bg-red-50 text-red-700 dark:border-red-500/40 dark:bg-red-500/10 dark:text-red-200',
-          event.severity === 'warning' &&
-            'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-200',
-          event.severity === 'success' &&
-            'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/40 dark:bg-emerald-500/10 dark:text-emerald-200',
-          (!event.severity || event.severity === 'info') &&
-            'border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200'
-        ),
-        typeLabel: event.type || 'thông báo',
-        createdAtLabel: formatDate(event.createdAt),
-        title: event.title || '',
-        message: event.message || '',
-      })),
-    },
-  };
-
   const policyLastEvaluatedAtLabel = policyOverview.lastEvaluatedAt
     ? formatDate(policyOverview.lastEvaluatedAt)
     : policyState?.lastEvaluatedAt
     ? formatDate(policyState.lastEvaluatedAt)
     : 'Chưa có';
 
-  const policySourcesPanel = {
-    statusSummary: {
-      awaitingActionLabel: policyStatusCounts.awaitingAction || 0,
-      pendingReviewLabel: policyStatusCounts.pendingReview || 0,
-      lockedLabel: policyStatusCounts.locked || 0,
-      lastEvaluatedAtLabel: policyLastEvaluatedAtLabel,
-    },
-    sources: policySourceBreakdown.map((item) => ({
-      key: item.source,
-      source: item.source,
-      awaitingActionLabel: item.awaitingActionGroups || 0,
-      pendingReviewLabel: item.pendingReviewGroups || 0,
-      locked: !!item.locked,
-      actionLabel: item.locked ? 'Mở khóa' : 'Khóa nguồn',
-      actionToneClass: item.locked
-        ? 'border-emerald-500 text-emerald-600 hover:bg-emerald-50 dark:border-emerald-400 dark:text-emerald-300 dark:hover:bg-emerald-400/10'
-        : 'border-amber-500 text-amber-600 hover:bg-amber-50 dark:border-amber-400 dark:text-amber-300 dark:hover:bg-amber-400/10',
-      lockedAtLabel: item.locked && item.lockedAt ? formatDate(item.lockedAt) : '',
-      lockedReasonLabel: item.lockedReason || '',
-    })),
-    lockedSources: policyLockedSources.map((item) => ({
-      key: item.source,
-      source: item.source,
-      lockedByLabel: item.lockedBy || 'Hệ thống',
-      lockedAtLabel: item.lockedAt ? formatDate(item.lockedAt) : 'Không rõ thời gian',
-      reasonLabel: item.reason || '',
-    })),
-    actionsDisabled: policyActionsDisabled,
-    onLockSource: handleLockSource,
-    onUnlockSource: handleUnlockSource,
-  };
+  const {
+    activityFeedsPanel,
+    alertSummaryCard,
+    backupCard,
+    databaseCard,
+    duplicateSummaryCard,
+    infrastructureStatusAlerts,
+    infrastructureSyncStatus,
+    metricCards,
+    policySourcesPanel,
+    sqlCard,
+  } = buildDataHealthDashboardViewModels({
+    alertEntries,
+    alertLastEvaluatedAt: summary?.alerts?.lastEvaluatedAt || null,
+    backupSummary,
+    backupHealth,
+    combinedNotifications,
+    databaseStorage,
+    describeDiskWarning,
+    diskInfo,
+    duplicateGroups,
+    formatBytes,
+    formatDate,
+    formatDateOnly,
+    formatPercent,
+    formatRelativeTime,
+    infrastructureAlerts,
+    metrics,
+    metricPalette,
+    operatorName,
+    policyActionsDisabled,
+    policyLastEvaluatedAtLabel,
+    policyLockedSources,
+    policySourceBreakdown,
+    policyStatusCounts,
+    severityLabels,
+    severityStyles,
+    sqlHealth,
+    sqlHealthIndicator,
+    sqlTimeouts,
+    storageHealth,
+    syncIndicator,
+    handleLockSource,
+    handleUnlockSource,
+  });
 
 
 
@@ -1701,308 +1466,19 @@ export default function DataHealthDashboard({ currentUser, canManage = false }) 
 
 
 
-      <section className="rounded border border-gray-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900">
-
-        <div className="flex flex-wrap items-center justify-between gap-2">
-
-          <div>
-
-            <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">Chính sách tự động trùng 11 số</h3>
-
-            <p className="text-xs text-gray-500 dark:text-gray-400">
-
-              Tinh chỉnh ngưỡng cảnh báo, trạng thái khóa nguồn và theo dõi lần đánh giá gần nhất.
-
-            </p>
-
-            {!canEditPolicy && (
-
-              <p className="mt-1 text-xs font-semibold text-amber-600 dark:text-amber-300">
-
-                Tài khoản hiện chỉ có quyền xem cấu hình, không thể chỉnh sửa thông số.
-
-              </p>
-
-            )}
-
-          </div>
-
-          <div className="flex items-center gap-2">
-
-            <button
-
-              type="button"
-
-              onClick={reloadPolicy}
-
-              className="rounded border border-gray-300 px-3 py-1 text-xs text-gray-700 transition hover:bg-gray-100 dark:border-slate-600 dark:text-gray-200 dark:hover:bg-slate-800"
-
-              disabled={policyLoading || policySaving}
-
-            >
-
-              {policyLoading ? 'Đang tải…' : 'Tải lại'}
-
-            </button>
-
-            <button
-
-              type="button"
-
-              onClick={handleSavePolicy}
-
-              className="rounded bg-emerald-600 px-3 py-1 text-xs font-medium text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
-
-              disabled={policyActionsDisabled}
-
-            >
-
-              {policySaving ? 'Đang lưu…' : 'Lưu cấu hình'}
-
-            </button>
-
-          </div>
-
-        </div>
-
-        {policyError && (
-
-          <div className="mt-3 rounded border border-red-200 bg-red-50 p-2 text-xs text-red-700 dark:border-red-500/50 dark:bg-red-500/10 dark:text-red-200">
-
-            {policyError}
-
-          </div>
-
-        )}
-
-        <div className="mt-4 grid gap-4 lg:grid-cols-2">
-
-          <div className="space-y-3">
-
-            <div className="grid gap-3 md:grid-cols-2">
-
-              <label className="space-y-1 text-xs font-medium text-gray-600 dark:text-gray-300">
-
-                Số ngày nhắc nhở tự động
-
-                <input
-
-                  type="number"
-
-                  min="0"
-
-                  value={policyForm?.autoNotifyAfterDays ?? ''}
-
-                  onChange={(event) => {
-
-                    const raw = event.target.value;
-
-                    setPolicyForm((prev) => ({ ...(prev || {}), autoNotifyAfterDays: raw === '' ? '' : Number(raw) }));
-
-                  }}
-
-                  disabled={policyInputsDisabled}
-
-                  readOnly={!canEditPolicy}
-
-                  className={policyInputClass}
-
-                />
-
-              </label>
-
-              <label className="space-y-1 text-xs font-medium text-gray-600 dark:text-gray-300">
-
-                Thời gian chờ giữa các lần nhắc (giờ)
-
-                <input
-
-                  type="number"
-
-                  min="0"
-
-                  value={policyForm?.notifyCooldownHours ?? ''}
-
-                  onChange={(event) => {
-
-                    const raw = event.target.value;
-
-                    setPolicyForm((prev) => ({ ...(prev || {}), notifyCooldownHours: raw === '' ? '' : Number(raw) }));
-
-                  }}
-
-                  disabled={policyInputsDisabled}
-
-                  readOnly={!canEditPolicy}
-
-                  className={policyInputClass}
-
-                />
-
-              </label>
-
-              <label className="space-y-1 text-xs font-medium text-gray-600 dark:text-gray-300">
-
-                Cửa sổ đánh giá (ngày)
-
-                <input
-
-                  type="number"
-
-                  min="0"
-
-                  value={policyForm?.evaluationWindowDays ?? ''}
-
-                  onChange={(event) => {
-
-                    const raw = event.target.value;
-
-                    setPolicyForm((prev) => ({ ...(prev || {}), evaluationWindowDays: raw === '' ? '' : Number(raw) }));
-
-                  }}
-
-                  disabled={policyInputsDisabled}
-
-                  readOnly={!canEditPolicy}
-
-                  className={policyInputClass}
-
-                />
-
-              </label>
-
-              <label className="space-y-1 text-xs font-medium text-gray-600 dark:text-gray-300">
-
-                Tự khóa sau số nhóm trùng
-
-                <input
-
-                  type="number"
-
-                  min="0"
-
-                  value={policyForm?.autoLockAfterGroups ?? ''}
-
-                  onChange={(event) => {
-
-                    const raw = event.target.value;
-
-                    setPolicyForm((prev) => ({ ...(prev || {}), autoLockAfterGroups: raw === '' ? '' : Number(raw) }));
-
-                  }}
-
-                  disabled={policyInputsDisabled}
-
-                  readOnly={!canEditPolicy}
-
-                  className={policyInputClass}
-
-                />
-
-              </label>
-
-              <label className="space-y-1 text-xs font-medium text-gray-600 dark:text-gray-300">
-
-                Số bản ghi tối thiểu để khóa
-
-                <input
-
-                  type="number"
-
-                  min="0"
-
-                  value={policyForm?.minGroupSizeForLock ?? ''}
-
-                  onChange={(event) => {
-
-                    const raw = event.target.value;
-
-                    setPolicyForm((prev) => ({ ...(prev || {}), minGroupSizeForLock: raw === '' ? '' : Number(raw) }));
-
-                  }}
-
-                  disabled={policyInputsDisabled}
-
-                  readOnly={!canEditPolicy}
-
-                  className={policyInputClass}
-
-                />
-
-              </label>
-
-              <label className="space-y-1 text-xs font-medium text-gray-600 dark:text-gray-300">
-
-                Tự mở khóa sau (ngày)
-
-                <input
-
-                  type="number"
-
-                  min="0"
-
-                  value={policyForm?.autoUnlockAfterDays ?? ''}
-
-                  onChange={(event) => {
-
-                    const raw = event.target.value;
-
-                    setPolicyForm((prev) => ({ ...(prev || {}), autoUnlockAfterDays: raw === '' ? '' : Number(raw) }));
-
-                  }}
-
-                  disabled={policyInputsDisabled}
-
-                  readOnly={!canEditPolicy}
-
-                  className={policyInputClass}
-
-                />
-
-              </label>
-
-            </div>
-
-            <label className="flex items-center gap-2 text-xs font-medium text-gray-600 dark:text-gray-300">
-
-              <input
-
-                type="checkbox"
-
-                checked={!!policyForm?.autoLockEnabled}
-
-                onChange={(event) => {
-
-                  const checked = event.target.checked;
-
-                  setPolicyForm((prev) => ({ ...(prev || {}), autoLockEnabled: checked }));
-
-                }}
-
-                disabled={policyInputsDisabled}
-
-                className={policyCheckboxClass}
-
-              />
-
-              Bật chế độ khóa nguồn tự động khi vượt ngưỡng
-
-            </label>
-
-          </div>
-
-          <DataHealthPolicySourcesPanel
-            statusSummary={policySourcesPanel.statusSummary}
-            sources={policySourcesPanel.sources}
-            lockedSources={policySourcesPanel.lockedSources}
-            actionsDisabled={policySourcesPanel.actionsDisabled}
-            onLockSource={policySourcesPanel.onLockSource}
-            onUnlockSource={policySourcesPanel.onUnlockSource}
-          />
-
-        </div>
-
-      </section>
+      <DataHealthPolicyConfigSection
+        canEditPolicy={canEditPolicy}
+        policyLoading={policyLoading}
+        policySaving={policySaving}
+        policyError={policyError}
+        policyActionsDisabled={policyActionsDisabled}
+        policyInputsDisabled={policyInputsDisabled}
+        policyForm={policyForm}
+        policySourcesPanel={policySourcesPanel}
+        onReloadPolicy={reloadPolicy}
+        onSavePolicy={handleSavePolicy}
+        onPolicyFieldChange={handlePolicyFieldChange}
+      />
 
 
 

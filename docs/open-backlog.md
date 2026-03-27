@@ -17,7 +17,6 @@ Current highest-priority ready items:
 - `cng-2k4.2` — Execute declarations write cutover with compat guard and rollback plan
 - `cng-2k4.3` — Switch production entrypoint from legacy server to server-v4
 - `cng-2k4.10` — Implement CSRF protection for mutation routes
-- `cng-2k4.14` — Reduce `DataHealthDashboard.jsx` below the module size target
 - `cng-2k4.15` — Reduce `AccountManager.jsx` below the module size target
 
 ## Technical Stabilization
@@ -38,7 +37,6 @@ Source set: `Gemini_review_V1.md`, `docs/gemini-review-v1-factcheck-2026-03-25.m
 - `cng-2k4.11` — Replace sync bcrypt usage on legacy auth hot paths
 - `cng-2k4.12` — Add global unhandled rejection logging and standard API error envelope
 - `cng-2k4.13` — Re-verify remaining `Checklist.md` runtime gaps and refresh documentation
-- `cng-2k4.14` — Reduce `DataHealthDashboard.jsx` below the module size target
 - `cng-2k4.15` — Reduce `AccountManager.jsx` below the module size target
 - `cng-2k4.16` — Reduce `HQAgencyManager.jsx` below the module size target
 - `cng-2k4.17` — Reduce `TeamManager.jsx` below the module size target
