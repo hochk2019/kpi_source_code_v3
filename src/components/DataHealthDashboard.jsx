@@ -10,6 +10,7 @@ import useAsyncRequest from '@/hooks/useAsyncRequest.js';
 import DataHealthActivityFeedsPanel from '@/components/data-health-dashboard/DataHealthActivityFeedsPanel.jsx';
 import DataHealthInfrastructureStatusPanel from '@/components/data-health-dashboard/DataHealthInfrastructureStatusPanel.jsx';
 import DataHealthMetricsAlertsPanel from '@/components/data-health-dashboard/DataHealthMetricsAlertsPanel.jsx';
+import DataHealthPolicySourcesPanel from '@/components/data-health-dashboard/DataHealthPolicySourcesPanel.jsx';
 import DataHealthStorageOverviewPanel from '@/components/data-health-dashboard/DataHealthStorageOverviewPanel.jsx';
 
 import { translateBackupFailure, translateBackupReason } from '../../packages/domain/src/backupMessages.js';
@@ -1590,6 +1591,44 @@ export default function DataHealthDashboard({ currentUser, canManage = false }) 
     },
   };
 
+  const policyLastEvaluatedAtLabel = policyOverview.lastEvaluatedAt
+    ? formatDate(policyOverview.lastEvaluatedAt)
+    : policyState?.lastEvaluatedAt
+    ? formatDate(policyState.lastEvaluatedAt)
+    : 'Chưa có';
+
+  const policySourcesPanel = {
+    statusSummary: {
+      awaitingActionLabel: policyStatusCounts.awaitingAction || 0,
+      pendingReviewLabel: policyStatusCounts.pendingReview || 0,
+      lockedLabel: policyStatusCounts.locked || 0,
+      lastEvaluatedAtLabel: policyLastEvaluatedAtLabel,
+    },
+    sources: policySourceBreakdown.map((item) => ({
+      key: item.source,
+      source: item.source,
+      awaitingActionLabel: item.awaitingActionGroups || 0,
+      pendingReviewLabel: item.pendingReviewGroups || 0,
+      locked: !!item.locked,
+      actionLabel: item.locked ? 'Mở khóa' : 'Khóa nguồn',
+      actionToneClass: item.locked
+        ? 'border-emerald-500 text-emerald-600 hover:bg-emerald-50 dark:border-emerald-400 dark:text-emerald-300 dark:hover:bg-emerald-400/10'
+        : 'border-amber-500 text-amber-600 hover:bg-amber-50 dark:border-amber-400 dark:text-amber-300 dark:hover:bg-amber-400/10',
+      lockedAtLabel: item.locked && item.lockedAt ? formatDate(item.lockedAt) : '',
+      lockedReasonLabel: item.lockedReason || '',
+    })),
+    lockedSources: policyLockedSources.map((item) => ({
+      key: item.source,
+      source: item.source,
+      lockedByLabel: item.lockedBy || 'Hệ thống',
+      lockedAtLabel: item.lockedAt ? formatDate(item.lockedAt) : 'Không rõ thời gian',
+      reasonLabel: item.reason || '',
+    })),
+    actionsDisabled: policyActionsDisabled,
+    onLockSource: handleLockSource,
+    onUnlockSource: handleUnlockSource,
+  };
+
 
 
   return (
@@ -1950,211 +1989,16 @@ export default function DataHealthDashboard({ currentUser, canManage = false }) 
 
             </label>
 
-            <div className="rounded border border-gray-200 bg-gray-50 p-3 text-xs text-gray-600 dark:border-slate-700 dark:bg-slate-800/80 dark:text-gray-300">
-
-              <div>• Nhóm chờ xử lý: {policyStatusCounts.awaitingAction || 0}</div>
-
-              <div>• Nhóm chờ rà soát: {policyStatusCounts.pendingReview || 0}</div>
-
-              <div>• Nhóm thuộc nguồn khóa: {policyStatusCounts.locked || 0}</div>
-
-              <div>
-
-                • Lần đánh giá gần nhất:{' '}
-
-                {policyOverview.lastEvaluatedAt
-
-                  ? formatDate(policyOverview.lastEvaluatedAt)
-
-                  : policyState?.lastEvaluatedAt
-
-                  ? formatDate(policyState.lastEvaluatedAt)
-
-                  : 'Chưa có'}
-
-              </div>
-
-            </div>
-
           </div>
 
-          <div className="space-y-3">
-
-            <div className="rounded border border-gray-200 p-3 text-xs dark:border-slate-700 dark:bg-slate-800">
-
-              <div className="mb-2 flex items-center justify-between text-xs font-semibold text-gray-700 dark:text-gray-200">
-
-                <span>Nguồn dữ liệu</span>
-
-                <span>Tác vụ</span>
-
-              </div>
-
-              <div className="max-h-64 overflow-auto">
-
-                {policySourceBreakdown.length === 0 ? (
-
-                  <p className="text-xs text-gray-500 dark:text-gray-400">Chưa có thống kê nguồn dữ liệu.</p>
-
-                ) : (
-
-                  <ul className="space-y-2">
-
-                    {policySourceBreakdown.map((item) => (
-
-                      <li
-
-                        key={item.source}
-
-                        className="rounded border border-gray-200 px-2 py-1 text-xs dark:border-slate-700 dark:bg-slate-900/40"
-
-                      >
-
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-
-                          <div>
-
-                            <div className="font-semibold text-gray-700 dark:text-gray-200">{item.source}</div>
-
-                            <div className="text-[11px] text-gray-500 dark:text-gray-400">
-
-                              {item.awaitingActionGroups || 0} nhóm chờ xử lý • {item.pendingReviewGroups || 0} nhóm chờ rà soát
-
-                            </div>
-
-                          </div>
-
-                          <div className="flex items-center gap-2">
-
-                            {item.locked ? (
-
-                              <button
-
-                                type="button"
-
-                                onClick={() => handleUnlockSource(item.source)}
-
-                                className="rounded border border-emerald-500 px-2 py-1 text-[11px] text-emerald-600 hover:bg-emerald-50 dark:border-emerald-400 dark:text-emerald-300 dark:hover:bg-emerald-400/10"
-
-                                disabled={policyActionsDisabled}
-
-                              >
-
-                                Mở khóa
-
-                              </button>
-
-                            ) : (
-
-                              <button
-
-                                type="button"
-
-                                onClick={() => handleLockSource(item.source)}
-
-                                className="rounded border border-amber-500 px-2 py-1 text-[11px] text-amber-600 hover:bg-amber-50 dark:border-amber-400 dark:text-amber-300 dark:hover:bg-amber-400/10"
-
-                                disabled={policyActionsDisabled}
-
-                              >
-
-                                Khóa nguồn
-
-                              </button>
-
-                            )}
-
-                          </div>
-
-                        </div>
-
-                        {item.locked && item.lockedAt && (
-
-                          <div className="mt-1 text-[11px] text-gray-500 dark:text-gray-400">
-
-                            Khóa lúc: {formatDate(item.lockedAt)}
-
-                            {item.lockedReason ? ` • ${item.lockedReason}` : ''}
-
-                          </div>
-
-                        )}
-
-                      </li>
-
-                    ))}
-
-                  </ul>
-
-                )}
-
-              </div>
-
-            </div>
-
-            <div className="rounded border border-gray-200 p-3 text-xs dark:border-slate-700 dark:bg-slate-800">
-
-              <div className="text-xs font-semibold text-gray-700 dark:text-gray-200">Nguồn đang khóa</div>
-
-              <div className="mt-2 space-y-2">
-
-                {policyLockedSources.length === 0 ? (
-
-                  <p className="text-xs text-gray-500 dark:text-gray-400">Không có nguồn nào bị khóa.</p>
-
-                ) : (
-
-                  policyLockedSources.map((item) => (
-
-                    <div
-
-                      key={item.source}
-
-                      className="rounded border border-amber-300 bg-amber-50 p-2 text-amber-700 dark:border-amber-500/50 dark:bg-amber-500/10 dark:text-amber-200"
-
-                    >
-
-                      <div className="flex items-center justify-between text-xs font-semibold">
-
-                        <span>{item.source}</span>
-
-                        <button
-
-                          type="button"
-
-                          className="rounded border border-amber-600 px-2 py-0.5 text-[11px] text-amber-700 hover:bg-amber-100 dark:border-amber-400 dark:text-amber-200 dark:hover:bg-amber-400/20"
-
-                          onClick={() => handleUnlockSource(item.source)}
-
-                          disabled={policyActionsDisabled}
-
-                        >
-
-                          Mở khóa
-
-                        </button>
-
-                      </div>
-
-                      <div className="mt-1 text-[11px]">
-
-                        Khóa bởi: {item.lockedBy || 'Hệ thống'} • {item.lockedAt ? formatDate(item.lockedAt) : 'Không rõ thời gian'}
-
-                      </div>
-
-                      {item.reason && <div className="mt-1 text-[11px] opacity-80">Lý do: {item.reason}</div>}
-
-                    </div>
-
-                  ))
-
-                )}
-
-              </div>
-
-            </div>
-
-          </div>
+          <DataHealthPolicySourcesPanel
+            statusSummary={policySourcesPanel.statusSummary}
+            sources={policySourcesPanel.sources}
+            lockedSources={policySourcesPanel.lockedSources}
+            actionsDisabled={policySourcesPanel.actionsDisabled}
+            onLockSource={policySourcesPanel.onLockSource}
+            onUnlockSource={policySourcesPanel.onUnlockSource}
+          />
 
         </div>
 

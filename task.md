@@ -2,11 +2,12 @@
 
 ## Active Slice
 
-- Title: Tach DataHealthDashboard status va activity feed panels
-- Bead: cng-dsb / cng-daf
+- Title: Tach DataHealthDashboard policy summary va source control panels
+- Bead: cng-dps
 - Status: completed
 - Last updated: 2026-03-27
 
+- `cng-dps` da hoan tat tach block summary `policyStatusCounts` va 2 card `Nguồn dữ liệu` / `Nguồn đang khóa` khoi `DataHealthDashboard` sang `src/components/data-health-dashboard/DataHealthPolicySourcesPanel.jsx`; shell hien chi build view-model props da format san cho summary, source action tone, va locked-source metadata, con regression test moi khoa branch co du lieu day du, callback lock/unlock, va fallback branch khi khong co source / lock data.
 - `cng-daf` da hoan tat tach cum activity feeds khoi `DataHealthDashboard` sang `src/components/data-health-dashboard/DataHealthActivityFeedsPanel.jsx`; shell hien chi build view-model props da format san cho SQL timeout events va real-time notifications, con regression test moi khoa branch co du lieu day du va fallback branch khi khong co timeout / thong bao.
 - `cng-dsb` da hoan tat tach cum `infrastructureAlerts` + `syncIndicator` khoi `DataHealthDashboard` sang `src/components/data-health-dashboard/DataHealthInfrastructureStatusPanel.jsx`; shell hien chi build view-model props cho alert tone, sync overview, va operator label, con regression test moi khoa branch co canh bao day du va fallback branch khi khong co alert ha tang.
 - `cng-dma` da hoan tat tach cum metrics grid + 2 card duplicate/alert summary khoi `DataHealthDashboard` sang `src/components/data-health-dashboard/DataHealthMetricsAlertsPanel.jsx`; shell hien chi build view-model props da format san cho metrics, duplicate groups, va alert entries, con regression test moi khoa branch co du lieu va fallback branch khi khong co duplicate/alert ton dong.
@@ -55,6 +56,11 @@
 - `cng-4hs` da tach xong card danh sach + bo loc thanh `KpiAdjustmentListPanel`, bo sung regression test panel, va giam `src/components/KPIAdjustments.jsx` xuong 1343 dong.
 
 ## Completed This Session
+
+- `cng-dps` da hoan tat tach DataHealthDashboard policy sources panel:
+  - them `src/components/data-health-dashboard/DataHealthPolicySourcesPanel.jsx` de gom summary `policyStatusCounts` cung 2 card `Nguồn dữ liệu` va `Nguồn đang khóa`
+  - `src/components/DataHealthDashboard.jsx` hien chi build props/view-model da format san cho source breakdown, action tone, locked metadata, va callback lock/unlock thay vi giu block JSX presentation dai
+  - bo sung `tests/dataHealthPolicySourcesPanel.test.jsx` de khoa branch co du lieu day du, lock/unlock callback, va fallback branch khi khong co source / lock data
 
 - `cng-daf` da hoan tat tach DataHealthDashboard activity feeds panel:
   - them `src/components/data-health-dashboard/DataHealthActivityFeedsPanel.jsx` de gom 2 card `Sự kiện SQL Server gần đây` va `Thông báo real-time`
@@ -534,11 +540,11 @@
 
 ## Next Suggested Slice
 
-- Title: Ra soat DataHealthDashboard policy summary va source control panels
+- Title: Ra soat DataHealthDashboard policy form inputs va action wiring
 - Bead: `TBD`
 - Status: san sang tao bead tiep theo
 - Follow-up backlog:
-  - `DataHealthDashboard.jsx` da giam them 2 cum presentation lon sau khi tach status va activity feeds; buoc tiep theo hop ly la ra soat block summary `policyStatusCounts` va 2 card `Nguồn dữ liệu` / `Nguồn đang khóa`
+  - `DataHealthDashboard.jsx` da rut them mot cum presentation lon o khu policy; buoc tiep theo hop ly la xem xet tach tiep form inputs read-mostly va action row quanh threshold / auto-lock ma van tranh dong vao wiring state nhoi nhat cua shell
   - uu tien tach panel read-only trong muc policy truoc, tranh lan sang input wiring, async fetch orchestration, va action-heavy form state neu chua can
   - truoc khi chon slice moi, tiep tuc chay GitNexus impact/context cho symbol dich de giu diff nho va co test regression ro rang
 
