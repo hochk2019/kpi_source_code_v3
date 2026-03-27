@@ -11,15 +11,24 @@
   - `cng-2k4.2` — declarations write cutover
   - `cng-2k4.3` — entrypoint cutover sang `server-v4`
   - `cng-2k4.10` — CSRF protection
-  - `cng-2k4.16` — giam `HQAgencyManager.jsx` xuong duoi nguong module
 
 ## Active Slice
 
-- Title: Giam `AccountManager.jsx` xuong duoi nguong module bang cach tach metadata quyen, create form panel, permission dialog, va form-state helper
-- Bead: cng-2k4.15
+- Title: Giam `HQAgencyManager.jsx` duoi nguong module bang cach tach bang du lieu/history panel khoi shell
+- Bead: cng-2k4.16
 - Status: completed
 - Last updated: 2026-03-27
 
+- `HQAgencyManager.jsx` da giam tu 1065 dong xuong 804 dong sau khi tach bang du lieu/history panel ra module rieng, giu shell tap trung vao orchestration/state.
+- Da them `src/components/hq-agency-manager/HQAgencyTable.jsx` de rut toan bo bang agency, history details, datalist, va row actions khoi shell.
+- Da tiep tuc dung `src/components/hq-agency-manager/hqAgencyManagerModel.js` cho cac pure helper/view-model de tranh de presentation module moi phai lap lai formatting logic.
+- Bo sung regression test moi:
+  - `tests/hqAgencyManagerModel.test.js`
+  - `tests/hqAgencyTable.test.jsx`
+- Cap nhat `tests/hqAgencyManager.test.jsx` de giu regression coverage khop voi wiring moi cua shell.
+- Targeted verify da pass:
+  - `pnpm exec eslint src/components/HQAgencyManager.jsx src/components/hq-agency-manager/HQAgencyTable.jsx src/components/hq-agency-manager/hqAgencyManagerModel.js tests/hqAgencyManager.test.jsx tests/hqAgencyManagerModel.test.js tests/hqAgencyTable.test.jsx`
+  - `pnpm exec vitest run tests/hqAgencyManager.test.jsx tests/hqAgencyManagerModel.test.js tests/hqAgencyTable.test.jsx --environment jsdom`
 - `AccountManager.jsx` da giam tu 1142 dong xuong 786 dong, dat duoi nguong module muc tieu cho slice nay.
 - Da them `src/components/account-manager/accountManagerPermissions.js` de tach metadata quyen, permission grouping helpers, va shared class tokens khoi shell.
 - Da them `src/components/account-manager/accountManagerFormState.js` de gom draft state mac dinh cho create-account flow, tranh lap object literal trong shell.
@@ -558,13 +567,13 @@
 
 ## Next Suggested Slice
 
-- Title: Giam `HQAgencyManager.jsx` duoi nguong module, uu tien tach panel/pure helper truoc khi dung vao orchestration state
-- Bead: `cng-2k4.16`
-- Status: ready
+- Title: Giam `TeamManager.jsx` duoi nguong module, uu tien tach panel/pure helper truoc khi dung vao orchestration state
+- Bead: `cng-2k4.17`
+- Status: open
 - Follow-up backlog:
-  - uu tien tim cum JSX/view-model dai nhat trong `HQAgencyManager.jsx` ma chua duoc tach thanh module rieng
+  - uu tien tim cum JSX/view-model dai nhat trong `TeamManager.jsx` ma chua duoc tach thanh module rieng
   - giu diff nho: tach panel presentation + pure helper truoc, tranh cham vao auth/account workflow neu chua can
-  - sau `cng-2k4.16`, backlog structural con lai tiep theo la `cng-2k4.17`
+  - `cng-2k4.17` la bead structural tiep theo trong wave giam module-size sau khi da dong `cng-2k4.16`
   - truoc khi chon slice moi, tiep tuc chay GitNexus impact/context cho symbol dich de giu diff nho va co test regression ro rang
 
 ## Verification
