@@ -1,4 +1,3 @@
-import bcrypt from 'bcryptjs';
 import { type Response } from 'express';
 import { ZodError } from 'zod';
 
@@ -6,12 +5,8 @@ import type { RuntimePersistence } from '../../persistence/runtimePersistence.js
 import { createDefaultKpiRuleCollection } from '../../modules/kpi-rules/kpiRuleDefaults.js';
 import { createEmptyTeamRoster } from '../../modules/teams/teamRosterDocument.js';
 import { AuthHttpError, AuthService } from '../../modules/auth/authService.js';
-import type { AuthAccountRecord, AuthAccountView } from '../../modules/auth/authTypes.js';
-import {
-  sanitizeAuthAccount,
-  sortAuthAccounts,
-  toUsernameKey,
-} from '../../modules/auth/authShared.js';
+import type { AuthAccountView } from '../../modules/auth/authTypes.js';
+import { sanitizeAuthAccount, toUsernameKey } from '../../modules/auth/authShared.js';
 
 const AUTH_ACCOUNTS_STORAGE_KEY = 'kpi_users_v1';
 const DECLARATION_ROWS_STORAGE_KEY = 'decl_rows_v1';
@@ -101,6 +96,15 @@ export async function readLegacyStorageValue(
   }
 }
 
+export async function setAccountPassword(
+  _persistence: RuntimePersistence,
+  authService: AuthService,
+  token: string,
+  payload: { username: string; password: string },
+): Promise<{ account: AuthAccountView; accounts: AuthAccountView[] }> {
+  return authService.setAccountPassword(token, payload);
+}
+
 export async function requireAuthenticatedUser(
   authService: AuthService,
   token: string,
@@ -110,35 +114,6 @@ export async function requireAuthenticatedUser(
     throw new AuthHttpError(401, 'auth_required', 'Bạn cần đăng nhập.');
   }
   return result.user;
-}
-
-export async function setAccountPassword(
-  persistence: RuntimePersistence,
-  authService: AuthService,
-  token: string,
-  payload: { username: string; password: string },
-): Promise<{ account: AuthAccountView; accounts: AuthAccountView[] }> {
-  await authService.listAccounts(token);
-  const accounts = await persistence.authStore.listAccounts();
-  const index = accounts.findIndex((entry) => toUsernameKey(entry.username) === toUsernameKey(payload.username));
-  if (index < 0) {
-    throw new AuthHttpError(404, 'not_found', 'Không tìm thấy tài khoản.');
-  }
-
-  const current = accounts[index];
-  const nextAccount: AuthAccountRecord = {
-    ...current,
-    passwordHash: bcrypt.hashSync(payload.password.trim(), 10),
-    updatedAt: new Date().toISOString(),
-  };
-  accounts[index] = nextAccount;
-  sortAuthAccounts(accounts);
-  await persistence.authStore.saveAccounts(accounts);
-
-  return {
-    account: sanitizeAuthAccount(nextAccount)!,
-    accounts: accounts.map((entry) => sanitizeAuthAccount(entry)!).filter(Boolean),
-  };
 }
 
 export async function deleteAccount(
@@ -168,46 +143,12 @@ export async function deleteAccount(
 }
 
 export async function changeOwnPassword(
-  persistence: RuntimePersistence,
+  _persistence: RuntimePersistence,
   authService: AuthService,
   token: string,
   payload: { username: string; currentPassword: string; newPassword: string },
 ): Promise<{ account: AuthAccountView; token: string; expiresAt: number }> {
-  const sessionUser = await requireAuthenticatedUser(authService, token);
-  if (toUsernameKey(sessionUser.username) !== toUsernameKey(payload.username)) {
-    throw new AuthHttpError(403, 'forbidden', 'Bạn chỉ có thể đổi mật khẩu của chính mình.');
-  }
-
-  const accounts = await persistence.authStore.listAccounts();
-  const index = accounts.findIndex(
-    (entry) => toUsernameKey(entry.username) === toUsernameKey(payload.username),
-  );
-  if (index < 0) {
-    throw new AuthHttpError(404, 'not_found', 'Không tìm thấy tài khoản.');
-  }
-
-  const current = accounts[index];
-  const matches = await bcrypt.compare(payload.currentPassword, current.passwordHash);
-  if (!matches) {
-    throw new AuthHttpError(401, 'invalid_credentials', 'Mật khẩu hiện tại không đúng.');
-  }
-
-  const nextAccount: AuthAccountRecord = {
-    ...current,
-    passwordHash: bcrypt.hashSync(payload.newPassword.trim(), 10),
-    updatedAt: new Date().toISOString(),
-  };
-  accounts[index] = nextAccount;
-  sortAuthAccounts(accounts);
-  await persistence.authStore.saveAccounts(accounts);
-  await persistence.authStore.deleteSessionsForUser(nextAccount.username);
-  const session = await persistence.authStore.createSession(nextAccount.username);
-
-  return {
-    account: sanitizeAuthAccount(nextAccount)!,
-    token: session.token,
-    expiresAt: session.expiresAt,
-  };
+  return authService.changeOwnPassword(token, payload);
 }
 
 export function handleLegacyAuthError(error: unknown, res: Response, context: string): void {

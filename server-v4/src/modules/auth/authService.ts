@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import { isAdminRole, mergePermissions, normalizeRoleKey } from '../../../../packages/domain/src/accountRoles.js';
 import type { AuthStore } from './authStore.js';
 import {
+  hashPassword,
   MIN_PASSWORD_LENGTH,
   normalizeDisplayName,
   normalizeNullableText,
@@ -154,7 +155,7 @@ export class AuthService {
     const role = normalizeRoleKey(payload.role);
     const nextAccount = normalizeStoredAccountRecord({
       username,
-      passwordHash: bcrypt.hashSync(payload.password.trim(), 10),
+      passwordHash: await hashPassword(payload.password.trim()),
       role,
       name: normalizeDisplayName(payload.name, username),
       permissions: mergePermissions(role, payload.permissions),
@@ -254,7 +255,7 @@ export class AuthService {
     const current = accounts[currentIndex];
     const nextAccount = normalizeStoredAccountRecord({
       ...current,
-      passwordHash: bcrypt.hashSync(payload.password.trim(), 10),
+      passwordHash: await hashPassword(payload.password.trim()),
       updatedAt: new Date().toISOString(),
     });
 
@@ -336,7 +337,7 @@ export class AuthService {
 
     const nextAccount = normalizeStoredAccountRecord({
       ...current,
-      passwordHash: bcrypt.hashSync(payload.newPassword.trim(), 10),
+      passwordHash: await hashPassword(payload.newPassword.trim()),
       updatedAt: new Date().toISOString(),
     });
 

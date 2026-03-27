@@ -350,6 +350,95 @@ describe('server-v4 legacy compatibility routes', () => {
     expect(allowedResponse.status).toBe(200);
     expect(allowedResponse.body).toEqual({ ok: true });
   });
+
+  it('keeps legacy password reset and self-change flows working after delegating to the async auth service', async () => {
+    const authStore = createAuthStore([
+      createAccount({
+        username: 'admin',
+        password: 'admin123',
+        role: ADMIN_ROLE,
+        name: 'Admin User',
+      }),
+      createAccount({
+        username: 'staff',
+        password: 'staff123',
+        role: DEFAULT_ROLE,
+        name: 'Staff User',
+      }),
+    ]);
+    const app = buildV4App({
+      modules: [authModule],
+      persistence: createPersistenceStub({ authStore }),
+    });
+
+    const adminLoginResponse = await request(app).post('/api/auth/login').send({
+      username: 'admin',
+      password: 'admin123',
+    });
+    const adminCookie = getCookieHeader(adminLoginResponse);
+    const adminCsrfToken = getCookieValue(adminLoginResponse, CSRF_COOKIE_NAME);
+
+    const resetResponse = await request(app)
+      .post('/api/auth/accounts/staff/password')
+      .set('Cookie', adminCookie)
+      .set(CSRF_HEADER_NAME, adminCsrfToken)
+      .send({
+        password: 'staff456',
+      });
+
+    expect(resetResponse.status).toBe(200);
+    expect(resetResponse.body).toMatchObject({
+      ok: true,
+      account: {
+        username: 'staff',
+      },
+    });
+
+    const oldStaffLoginResponse = await request(app).post('/api/auth/login').send({
+      username: 'staff',
+      password: 'staff123',
+    });
+    expect(oldStaffLoginResponse.status).toBe(401);
+
+    const newStaffLoginResponse = await request(app).post('/api/auth/login').send({
+      username: 'staff',
+      password: 'staff456',
+    });
+    expect(newStaffLoginResponse.status).toBe(200);
+
+    const staffCookie = getCookieHeader(newStaffLoginResponse);
+    const staffCsrfToken = getCookieValue(newStaffLoginResponse, CSRF_COOKIE_NAME);
+
+    const changeOwnPasswordResponse = await request(app)
+      .post('/api/auth/password/change')
+      .set('Cookie', staffCookie)
+      .set(CSRF_HEADER_NAME, staffCsrfToken)
+      .send({
+        username: 'staff',
+        currentPassword: 'staff456',
+        newPassword: 'staff789',
+      });
+
+    expect(changeOwnPasswordResponse.status).toBe(200);
+    expect(changeOwnPasswordResponse.body).toMatchObject({
+      ok: true,
+      account: {
+        username: 'staff',
+      },
+    });
+
+    const staleSessionResponse = await request(app)
+      .get('/api/auth/session')
+      .set('Cookie', staffCookie);
+    expect(staleSessionResponse.status).toBe(200);
+    expect(staleSessionResponse.body.user).toBeNull();
+
+    const reloginResponse = await request(app).post('/api/auth/login').send({
+      username: 'staff',
+      password: 'staff789',
+    });
+    expect(reloginResponse.status).toBe(200);
+  });
 });
 
 function createPersistenceStub({

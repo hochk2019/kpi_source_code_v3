@@ -12,23 +12,25 @@
 
 ## Active Slice
 
-- Title: Implement CSRF protection for cookie-authenticated mutation routes
-- Bead: cng-2k4.10
+- Title: Replace sync bcrypt usage on legacy auth hot paths
+- Bead: cng-2k4.11
 - Status: completed
 - Last updated: 2026-03-27
 
-- Them `server-v4/src/app/csrfProtection.ts` de enforce double-submit CSRF cho cookie-authenticated mutation routes o ca `/api/v4/*` va legacy compat `/api/*`, nhung van bo qua bearer-token flows nhu ECUS bridge.
-- `server-v4/src/modules/auth/authShared.ts` hien set/clear dong bo ca `kpi_session` va `kpi_csrf`; client wrapper `src/auth/localAuth.js` tu doc cookie va gan `X-CSRF-Token` cho `POST`/`PUT`/`PATCH`/`DELETE`.
-- Bo sung regression test moi:
-  - them `tests/server-v4/csrfProtection.test.js`
-  - cap nhat `tests/server-v4/authRoutes.test.js` va `tests/server-v4/legacyCompatRoutes.test.js` de gui dung cookie pair + header CSRF
-  - cap nhat `tests/auth.test.jsx` de khoa behavior auto-attach header tren browser client
+- Them helper async `hashPassword` trong `server-v4/src/modules/auth/authShared.ts` de doi request-path hashing sang `bcrypt.hash(...)` ma khong doi bootstrap/normalization sync flow.
+- `server-v4/src/modules/auth/authService.ts` hien dung async hashing cho `createAccount`, `setAccountPassword`, va `changeOwnPassword`.
+- `server-v4/src/app/legacy-compat/legacyCompatShared.ts` da bo duplication password mutation logic; legacy compat gio delegate truc tiep ve `AuthService` de giu parity session invalidation va tranh `hashSync` tren request path.
+- Bo sung regression test moi trong `tests/server-v4/legacyCompatRoutes.test.js` de khoa legacy password reset + self-change flow sau khi delegate sang async service.
 - Targeted verify da pass:
-  - `pnpm exec eslint server-v4/src/app/csrfProtection.ts server-v4/src/app/build-v4-app.ts server-v4/src/modules/auth/authShared.ts src/auth/localAuth.js tests/auth.test.jsx tests/server-v4/csrfProtection.test.js tests/server-v4/authRoutes.test.js tests/server-v4/legacyCompatRoutes.test.js`
-  - `pnpm exec vitest run tests/server-v4/csrfProtection.test.js tests/server-v4/authRoutes.test.js tests/server-v4/legacyCompatRoutes.test.js --environment node`
-  - `pnpm exec vitest run tests/auth.test.jsx --environment jsdom`
+  - `pnpm exec eslint server-v4/src/modules/auth/authShared.ts server-v4/src/modules/auth/authService.ts server-v4/src/app/legacy-compat/legacyCompatShared.ts tests/server-v4/legacyCompatRoutes.test.js`
+  - `pnpm exec vitest run tests/server-v4/authRoutes.test.js tests/server-v4/legacyCompatRoutes.test.js --environment node`
 ## Recent Completed Slices
 
+- `cng-2k4.11` da hoan tat thay `bcrypt.hashSync` o auth request paths:
+  - them `hashPassword` async trong `server-v4/src/modules/auth/authShared.ts`
+  - doi `server-v4/src/modules/auth/authService.ts` sang async hashing cho create/reset/change password
+  - don gian hoa `server-v4/src/app/legacy-compat/legacyCompatShared.ts` bang cach delegate password mutations ve `AuthService`, giu dong bo session invalidation giua canonical va legacy compat auth routes
+  - bo sung regression `tests/server-v4/legacyCompatRoutes.test.js` cho legacy password reset + self-change flow; targeted eslint + vitest da pass
 - `cng-2k4.10` da hoan tat CSRF protection cho mutation routes:
   - them `server-v4/src/app/csrfProtection.ts` de enforce CSRF cho cookie-authenticated `POST`/`PUT`/`PATCH`/`DELETE` o build path trung tam `buildV4App`, dong thoi hydrate `kpi_csrf` cookie khi session da ton tai
   - cap nhat `server-v4/src/modules/auth/authShared.ts` de session helper set/clear dong bo `kpi_session` va `kpi_csrf`

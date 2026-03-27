@@ -78,6 +78,10 @@ export const CSRF_HEADER_NAME = 'x-csrf-token';
 export const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 export const AUTH_ACCOUNTS_STORAGE_KEY = 'kpi_users_v1';
 
+export async function hashPassword(password: string): Promise<string> {
+  return bcrypt.hash(password, PASSWORD_SALT_ROUNDS);
+}
+
 export function sanitizeAuthAccount(record: AuthAccountRecord | null | undefined): AuthAccountView | null {
   if (!record) {
     return null;
