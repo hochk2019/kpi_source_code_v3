@@ -2,11 +2,13 @@
 
 ## Active Slice
 
-- Title: Tach DataHealthDashboard metrics va alert summary panel
-- Bead: cng-dma
+- Title: Tach DataHealthDashboard status va activity feed panels
+- Bead: cng-dsb / cng-daf
 - Status: completed
 - Last updated: 2026-03-27
 
+- `cng-daf` da hoan tat tach cum activity feeds khoi `DataHealthDashboard` sang `src/components/data-health-dashboard/DataHealthActivityFeedsPanel.jsx`; shell hien chi build view-model props da format san cho SQL timeout events va real-time notifications, con regression test moi khoa branch co du lieu day du va fallback branch khi khong co timeout / thong bao.
+- `cng-dsb` da hoan tat tach cum `infrastructureAlerts` + `syncIndicator` khoi `DataHealthDashboard` sang `src/components/data-health-dashboard/DataHealthInfrastructureStatusPanel.jsx`; shell hien chi build view-model props cho alert tone, sync overview, va operator label, con regression test moi khoa branch co canh bao day du va fallback branch khi khong co alert ha tang.
 - `cng-dma` da hoan tat tach cum metrics grid + 2 card duplicate/alert summary khoi `DataHealthDashboard` sang `src/components/data-health-dashboard/DataHealthMetricsAlertsPanel.jsx`; shell hien chi build view-model props da format san cho metrics, duplicate groups, va alert entries, con regression test moi khoa branch co du lieu va fallback branch khi khong co duplicate/alert ton dong.
 - `cng-dsv` da hoan tat tach cum 3 card storage overview khoi `DataHealthDashboard` sang `src/components/data-health-dashboard/DataHealthStorageOverviewPanel.jsx`; shell hien chi build view-model props cho backup / dung luong he thong / SQL Server, con regression test moi khoa ca branch co du lieu va fallback branch khi thieu nhat ky + SQLite stats.
 - `cng-aqp` da hoan tat tach permission group list dung chung khoi `AccountManager` sang `src/components/account-manager/AccountPermissionGroupsPanel.jsx`; shell hien chi giu toolbar/orchestration cho create-form va permission dialog, con regression test moi khoa collapse state, count label, disabled rule, va permission toggle callback.
@@ -53,6 +55,16 @@
 - `cng-4hs` da tach xong card danh sach + bo loc thanh `KpiAdjustmentListPanel`, bo sung regression test panel, va giam `src/components/KPIAdjustments.jsx` xuong 1343 dong.
 
 ## Completed This Session
+
+- `cng-daf` da hoan tat tach DataHealthDashboard activity feeds panel:
+  - them `src/components/data-health-dashboard/DataHealthActivityFeedsPanel.jsx` de gom 2 card `Sự kiện SQL Server gần đây` va `Thông báo real-time`
+  - `src/components/DataHealthDashboard.jsx` hien chi build props/view-model da format san cho SQL timeout events va notification entries thay vi giu inline block JSX + tone wiring
+  - bo sung `tests/dataHealthActivityFeedsPanel.test.jsx` de khoa branch co du lieu day du va fallback branch khi khong co timeout / thong bao moi
+
+- `cng-dsb` da hoan tat tach DataHealthDashboard infrastructure status panel:
+  - them `src/components/data-health-dashboard/DataHealthInfrastructureStatusPanel.jsx` de gom grid `infrastructureAlerts` va banner `Trạng thái kết nối ECUS`
+  - `src/components/DataHealthDashboard.jsx` hien chi build props/view-model cho alert severity tone, sync overview, va operator label thay vi giu JSX presentation o shell
+  - bo sung `tests/dataHealthInfrastructureStatusPanel.test.jsx` de khoa branch co canh bao day du va fallback branch khi khong co alert ha tang / khong co nguoi truc
 
 - `cng-dma` da hoan tat tach DataHealthDashboard metrics va alert summary panel:
   - them `src/components/data-health-dashboard/DataHealthMetricsAlertsPanel.jsx` de gom metrics grid cung 2 card `Nhóm trùng 11 số cần xử lý` va `Cảnh báo cần xử lý`
@@ -522,12 +534,12 @@
 
 ## Next Suggested Slice
 
-- Title: Ra soat DataHealthDashboard infrastructure alerts va sync status banner
+- Title: Ra soat DataHealthDashboard policy summary va source control panels
 - Bead: `TBD`
 - Status: san sang tao bead tiep theo
 - Follow-up backlog:
-  - `DataHealthDashboard.jsx` da giam tiep mot cum presentation lon sau khi tach metrics + alert summary; buoc tiep theo hop ly la ra soat banner `infrastructureAlerts` + `syncIndicator` o phan dau component
-  - uu tien mot panel/card extraction tiep tuc o muc presentation, tranh lan sang async fetch orchestration, notification stream subscription internals, va policy editor form neu chua can
+  - `DataHealthDashboard.jsx` da giam them 2 cum presentation lon sau khi tach status va activity feeds; buoc tiep theo hop ly la ra soat block summary `policyStatusCounts` va 2 card `Nguồn dữ liệu` / `Nguồn đang khóa`
+  - uu tien tach panel read-only trong muc policy truoc, tranh lan sang input wiring, async fetch orchestration, va action-heavy form state neu chua can
   - truoc khi chon slice moi, tiep tuc chay GitNexus impact/context cho symbol dich de giu diff nho va co test regression ro rang
 
 ## Verification

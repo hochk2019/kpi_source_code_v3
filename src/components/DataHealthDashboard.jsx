@@ -7,6 +7,8 @@ import { fetchWithAuth } from '@/auth/localAuth.js';
 import { fetchNotificationHistory, subscribeNotificationStream } from '@/lib/notificationClient.js';
 
 import useAsyncRequest from '@/hooks/useAsyncRequest.js';
+import DataHealthActivityFeedsPanel from '@/components/data-health-dashboard/DataHealthActivityFeedsPanel.jsx';
+import DataHealthInfrastructureStatusPanel from '@/components/data-health-dashboard/DataHealthInfrastructureStatusPanel.jsx';
 import DataHealthMetricsAlertsPanel from '@/components/data-health-dashboard/DataHealthMetricsAlertsPanel.jsx';
 import DataHealthStorageOverviewPanel from '@/components/data-health-dashboard/DataHealthStorageOverviewPanel.jsx';
 
@@ -1539,6 +1541,55 @@ export default function DataHealthDashboard({ currentUser, canManage = false }) 
     })),
   };
 
+  const infrastructureStatusAlerts = infrastructureAlerts.map((alert) => {
+    const tone = severityStyles[alert.severity] || severityStyles.info;
+    return {
+      key: alert.key,
+      containerClass: tone.container,
+      dotClass: tone.dot,
+      severityLabel: severityLabels[alert.severity] || 'Thông tin',
+      message: alert.message,
+    };
+  });
+
+  const infrastructureSyncStatus = {
+    containerClass: syncIndicator.classes.container,
+    dotClass: syncIndicator.classes.dot,
+    overview: syncIndicator.overview,
+    lastRunLabel: syncIndicator.lastRunLabel,
+    relative: syncIndicator.relative,
+    statusText: syncIndicator.statusText,
+    operatorName,
+  };
+
+  const activityFeedsPanel = {
+    sqlEvents: sqlTimeouts.map((event, index) => ({
+      key: event.at || `${event.message || 'timeout'}_${index}`,
+      atLabel: formatDate(event.at),
+      message: event.message || 'Timeout kết nối SQL Server',
+      contextLabel: event.context ? JSON.stringify(event.context, null, 2) : '',
+    })),
+    notifications: {
+      countLabel: `${combinedNotifications.length} sự kiện mới`,
+      entries: combinedNotifications.map((event, index) => ({
+        key: event.id || `${event.createdAt || 'unknown'}_${event.type || 'notification'}_${index}`,
+        containerClass: clsx(
+          event.severity === 'error' && 'border-red-200 bg-red-50 text-red-700 dark:border-red-500/40 dark:bg-red-500/10 dark:text-red-200',
+          event.severity === 'warning' &&
+            'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-200',
+          event.severity === 'success' &&
+            'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/40 dark:bg-emerald-500/10 dark:text-emerald-200',
+          (!event.severity || event.severity === 'info') &&
+            'border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200'
+        ),
+        typeLabel: event.type || 'thông báo',
+        createdAtLabel: formatDate(event.createdAt),
+        title: event.title || '',
+        message: event.message || '',
+      })),
+    },
+  };
+
 
 
   return (
@@ -1595,91 +1646,7 @@ export default function DataHealthDashboard({ currentUser, canManage = false }) 
 
 
 
-      {infrastructureAlerts.length > 0 && (
-
-        <section className="grid gap-2 md:grid-cols-2">
-
-          {infrastructureAlerts.map((alert) => {
-
-            const tone = severityStyles[alert.severity] || severityStyles.info;
-
-            return (
-
-              <div
-
-                key={alert.key}
-
-                className={clsx(
-
-                  'rounded border p-3 text-xs shadow-sm transition dark:border-slate-700 dark:bg-slate-900',
-
-                  tone.container
-
-                )}
-
-              >
-
-                <div className="flex items-center gap-2 text-xs font-semibold">
-
-                  <span className={clsx('h-2.5 w-2.5 rounded-full', tone.dot)} />
-
-                  <span>{severityLabels[alert.severity] || 'Thông tin'}</span>
-
-                </div>
-
-                <p className="mt-1 leading-relaxed">{alert.message}</p>
-
-              </div>
-
-            );
-
-          })}
-
-        </section>
-
-      )}
-
-
-
-      <section
-
-        className={clsx(
-
-          'flex flex-col gap-2 rounded border p-4 text-sm shadow-sm transition md:flex-row md:items-center md:justify-between',
-
-          syncIndicator.classes.container
-
-        )}
-
-      >
-
-        <div>
-
-          <div className="flex items-center gap-2 text-sm font-semibold">
-
-            <span className={clsx('h-2.5 w-2.5 rounded-full', syncIndicator.classes.dot)} />
-
-            <span>Trạng thái kết nối ECUS</span>
-
-          </div>
-
-          <p className="mt-1 text-xs opacity-90">{syncIndicator.overview}</p>
-
-        </div>
-
-        <div className="text-xs text-right opacity-80 md:text-left">
-
-          <div>Lần chạy gần nhất: {syncIndicator.lastRunLabel}</div>
-
-          <div>{syncIndicator.relative}</div>
-
-          <div>Trạng thái: {syncIndicator.statusText}</div>
-
-          {operatorName ? <div>Người trực: {operatorName}</div> : null}
-
-        </div>
-
-      </section>
+      <DataHealthInfrastructureStatusPanel alerts={infrastructureStatusAlerts} sync={infrastructureSyncStatus} />
 
 
 
@@ -2195,117 +2162,7 @@ export default function DataHealthDashboard({ currentUser, canManage = false }) 
 
 
 
-      <section className="grid gap-4 lg:grid-cols-2">
-
-        <div className="rounded border border-gray-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900">
-
-          <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">Sự kiện SQL Server gần đây</h3>
-
-          <div className="mt-3 space-y-2 text-sm">
-
-            {sqlTimeouts.length === 0 ? (
-
-              <p className="text-xs text-gray-500 dark:text-gray-400">Không ghi nhận timeout trong thời gian gần đây.</p>
-
-            ) : (
-
-              sqlTimeouts.map((event) => (
-
-                <div key={event.at} className="rounded border border-sky-200 bg-sky-50 p-3 text-sky-700 dark:border-sky-500/40 dark:bg-sky-500/10 dark:text-sky-200">
-
-                  <div className="flex flex-wrap items-center justify-between gap-2 text-xs uppercase tracking-wide">
-
-                    <span>Timeout</span>
-
-                    <span>{formatDate(event.at)}</span>
-
-                  </div>
-
-                  <div className="mt-1 text-xs">{event.message || 'Timeout kết nối SQL Server'}</div>
-
-                  {event.context && (
-
-                    <pre className="mt-2 overflow-x-auto rounded bg-black/5 p-2 text-[11px] leading-tight text-sky-800 dark:bg-black/40 dark:text-sky-100">
-
-                      {JSON.stringify(event.context, null, 2)}
-
-                    </pre>
-
-                  )}
-
-                </div>
-
-              ))
-
-            )}
-
-          </div>
-
-        </div>
-
-
-
-        <div className="rounded border border-gray-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900">
-
-          <div className="flex items-center justify-between gap-2">
-
-            <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">Thông báo real-time</h3>
-
-            <span className="text-xs text-gray-500 dark:text-gray-400">{combinedNotifications.length} sự kiện mới</span>
-
-          </div>
-
-          <div className="mt-3 space-y-2 text-sm">
-
-            {combinedNotifications.length === 0 ? (
-
-              <p className="text-xs text-gray-500 dark:text-gray-400">Chưa có thông báo mới.</p>
-
-            ) : (
-
-              combinedNotifications.map((event) => (
-
-                <div key={event.id || `${event.createdAt}_${event.type}`}
-
-                  className={clsx(
-
-                    'rounded border px-3 py-2 text-xs shadow-sm',
-
-                    event.severity === 'error' && 'border-red-200 bg-red-50 text-red-700 dark:border-red-500/40 dark:bg-red-500/10 dark:text-red-200',
-
-                    event.severity === 'warning' && 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-200',
-
-                    event.severity === 'success' && 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/40 dark:bg-emerald-500/10 dark:text-emerald-200',
-
-                    (!event.severity || event.severity === 'info') && 'border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200'
-
-                  )}
-
-                >
-
-                  <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] uppercase tracking-wide">
-
-                    <span>{event.type || 'thông báo'}</span>
-
-                    <span>{formatDate(event.createdAt)}</span>
-
-                  </div>
-
-                  {event.title && <div className="mt-1 text-sm font-semibold">{event.title}</div>}
-
-                  {event.message && <div className="mt-1 whitespace-pre-wrap text-sm">{event.message}</div>}
-
-                </div>
-
-              ))
-
-            )}
-
-          </div>
-
-        </div>
-
-      </section>
+      <DataHealthActivityFeedsPanel sqlEvents={activityFeedsPanel.sqlEvents} notifications={activityFeedsPanel.notifications} />
 
     </div>
 
