@@ -12,20 +12,27 @@
 
 ## Active Slice
 
-- Title: Add global process error logging and standardize legacy compat API error envelope
-- Bead: cng-2k4.12
+- Title: Re-verify remaining Checklist runtime gaps and refresh documentation
+- Bead: cng-2k4.13
 - Status: completed
 - Last updated: 2026-03-27
 
-- `apps/api/src/startApiServer.js` hien dang ky process-level logging hooks cho `unhandledRejection` va `uncaughtExceptionMonitor`, dong thoi cleanup listener khi `runtime.close()` de tranh leak giua cac lan khoi dong server.
-- `server-v4/src/app/legacy-compat/legacyCompatShared.ts` da chuyen `handleLegacyAuthError(...)` sang error envelope long nhau `{ ok: false, error: { code, message, details? } }` de dong bo voi `BaseController`/auth v4.
-- `server-v4/src/app/legacy-compat/legacyCompatStorageRoutes.ts` da chuan hoa nhanh 404 `unknown storage key` theo cung envelope long nhau.
-- `tests/appsApiStart.test.js` da bo sung regression cho dang ky + cleanup global process error logging hooks; `tests/server-v4/legacyCompatRoutes.test.js` da cap nhat expectation cho legacy compat auth/storage errors.
+- Da them `tests/playwright/import-monitoring.spec.js` de chay runtime smoke cho panel `Đối soát C/O` trong tab `Import Data`, xac nhan nut `Chạy kiểm tra` hoan tat va khong hien `HTTP 500`/`Lỗi đối soát`.
+- `Checklist.md` da duoc refresh de nang muc `Lỗi đối soát C/O` thanh `[x]`, dong thoi bo sung bang chung runtime Playwright cho `Export Excel` o `Import Data` va tab `Điểm KPI +/- Thêm`.
+- Cac muc checklist van de `[ ]` gio duoc ghi ro hon la missing feature hoac bang chung chua du, thay vi note mo ho ve "xac minh tĩnh".
 - Targeted verify da pass:
-  - `pnpm exec eslint apps/api/src/startApiServer.js server-v4/src/app/legacy-compat/legacyCompatShared.ts server-v4/src/app/legacy-compat/legacyCompatStorageRoutes.ts tests/appsApiStart.test.js tests/server-v4/legacyCompatRoutes.test.js`
-  - `pnpm exec vitest run tests/appsApiStart.test.js tests/server-v4/legacyCompatRoutes.test.js --environment node`
+  - `pnpm exec eslint tests/playwright/import-monitoring.spec.js`
+  - `pnpm exec playwright test tests/playwright/import-monitoring.spec.js --config=playwright.config.mjs --workers=1`
 ## Recent Completed Slices
 
+- `cng-2k4.13` da hoan tat pass xac minh runtime + refresh `Checklist.md`:
+  - them `tests/playwright/import-monitoring.spec.js` de cover thao tac `Chạy kiểm tra` trong panel `Đối soát C/O` va assert khong con `HTTP 500`/`Lỗi đối soát` tren preview app
+  - cap nhat `Checklist.md` de nang hang muc `Lỗi đối soát C/O` len `[x]` va bo sung references runtime cho `Export Excel` o `Import Data` cung shell `Điểm KPI +/- Thêm`
+  - targeted verify da pass: `pnpm exec eslint tests/playwright/import-monitoring.spec.js` va `pnpm exec playwright test tests/playwright/import-monitoring.spec.js --config=playwright.config.mjs --workers=1`
+- `cng-2k4.21` da hoan tat Playwright smoke coverage cho admin adjustments + health:
+  - them `tests/playwright/adjustments-health.spec.js` de verify admin mo duoc workflow `Điểm KPI +/- Thêm` voi du 3 chang van hanh va health tab `Sức khỏe dữ liệu` voi heading/overview triage chinh
+  - fix selector nut refresh trong health tab bang cach scope vao match dau tien, tranh strict-mode failure khi UI render hai nut `Đang tải…`
+  - targeted verify da pass: `pnpm exec eslint tests/playwright/adjustments-health.spec.js` va `pnpm exec playwright test tests/playwright/adjustments-health.spec.js --config=playwright.config.mjs --workers=1`
 - `cng-2k4.12` da hoan tat process-level logging + legacy compat error envelope:
   - `apps/api/src/startApiServer.js` dang ky logging hooks cho `unhandledRejection` va `uncaughtExceptionMonitor`, cleanup listener khi `runtime.close()` de tranh ro listener khi test/start lai runtime
   - `server-v4/src/app/legacy-compat/legacyCompatShared.ts` chuan hoa `handleLegacyAuthError(...)` ve nested error envelope cung format voi `BaseController`

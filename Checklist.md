@@ -11,8 +11,8 @@ Bạn hãy xác nhận xem các hạng mục dưới đây đã được hoàn t
 - [x] **Lỗi loại trừ giấy phép:** Các tờ khai có mã giấy phép trong danh sách loại trừ (ví dụ: ZN02, HDGC) đã được lọc bỏ một cách chính xác khi đồng bộ từ ECUS.
   Bằng chứng: có luồng loại trừ và test tại `src/components/dataImporter/useDataImporterLicenseExclusions.js`, `packages/domain/src/defaultRules.js`, `tests/useDataImporterLicenseExclusions.test.jsx`, `tests/dataImporter.test.js`, `tests/reportingClient.test.js`.
 
-- [ ] **Lỗi đối soát C/O:** Chức năng "Chạy kiểm tra" trong khu vực "Đối soát C/O" ở tab **Import Data** không còn báo lỗi `HTTP 500`.
-  Ghi chú: code hiện đã có panel, hook gọi API, trạng thái lỗi và test manual run/range tại `src/components/dataImporter/DataImporterMonitoringPanel.jsx`, `src/components/dataImporter/useDataImporterCoMonitoring.js`, `tests/useDataImporterCoMonitoring.test.jsx`. Tuy vậy, checklist này đòi khẳng định hành vi runtime "không còn 500", còn pass này mới xác minh tĩnh chứ chưa chạy E2E đầy đủ.
+- [x] **Lỗi đối soát C/O:** Chức năng "Chạy kiểm tra" trong khu vực "Đối soát C/O" ở tab **Import Data** không còn báo lỗi `HTTP 500`.
+  Bằng chứng: code panel/hook và test manual run/range tại `src/components/dataImporter/DataImporterMonitoringPanel.jsx`, `src/components/dataImporter/useDataImporterCoMonitoring.js`, `tests/useDataImporterCoMonitoring.test.jsx`; thêm runtime smoke `tests/playwright/import-monitoring.spec.js` xác nhận nút `Chạy kiểm tra` hoàn tất trong preview app, hiện thông điệp `Đã chạy đối soát C/O:` và không render `HTTP 500`/`Lỗi đối soát`.
 
 - [ ] **Tối ưu mã nguồn:** Mã nguồn đã được rà soát để loại bỏ các đoạn code không sử dụng (code thừa).
   Ghi chú: chưa có bằng chứng cho một pass cleanup toàn repo. Repo vẫn còn nhiều component lớn và backlog decomposition vẫn còn mở.
@@ -41,7 +41,7 @@ Bạn hãy xác nhận xem các hạng mục dưới đây đã được hoàn t
   Ghi chú: label hiện tại trong UI là `Đối chiếu giấy phép`, nhưng tooltip và luồng xử lý cho thấy mục đích đúng với yêu cầu "đối chiếu lại giấy phép và loại bỏ mã bị loại trừ".
 
 - [x] **Export Excel:** Đã có nút để xuất danh sách tờ khai đã được chọn ra file Excel.
-  Bằng chứng: `DataImporterSelectionActions.jsx` có nút `Export Excel`; được test trong `tests/dataImporterSelectionActions.test.jsx`.
+  Bằng chứng: `DataImporterSelectionActions.jsx` có nút `Export Excel`; được test trong `tests/dataImporterSelectionActions.test.jsx` và runtime smoke `tests/playwright/export-flow.spec.js`.
 
 ##### **2. Tab "Gán MST"**
 - [x] **Thêm thủ công:** Đã có nút **"Thêm mới"** để nhập tay thông tin gán MST cho khách hàng.
@@ -70,10 +70,10 @@ Bạn hãy xác nhận xem các hạng mục dưới đây đã được hoàn t
 
 ##### **6. Tab mới "Điểm KPI +/- Thêm"**
 - [x] **Tạo tab mới:** Giao diện đã có tab mới tên là **"Điểm KPI +/- Thêm"**.
-  Bằng chứng: `src/lib/appShellNavigation.js` khai báo tab `adjustments` với label `Điểm KPI +/- Thêm`.
+  Bằng chứng: `src/lib/appShellNavigation.js` khai báo tab `adjustments` với label `Điểm KPI +/- Thêm`; runtime smoke `tests/playwright/adjustments-health.spec.js` xác nhận admin mở được workflow tab trong app shell thật.
 
 - [ ] **Đầy đủ chức năng:** Tab này đã có các mục để cộng/trừ điểm KPI thủ công cho nhân viên theo tháng.
-  Ghi chú: phần lớn nhóm chức năng đã có, nhưng chưa thấy hạng mục đi làm muộn.
+  Ghi chú: phần lớn nhóm chức năng đã có va runtime shell da duoc smoke-test qua `tests/playwright/adjustments-health.spec.js`, nhưng chưa thấy hạng mục đi làm muộn.
 
 - [x] Hỗ trợ thông quan.
   Bằng chứng: `packages/domain/src/kpiAdjustments.js` có `support_fixed`, `support_dynamic`.
