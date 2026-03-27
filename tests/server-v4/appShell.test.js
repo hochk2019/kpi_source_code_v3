@@ -59,6 +59,25 @@ describe('server-v4 app shell', () => {
     expect(authMetaResponse.body.module.basePath).toBe('/api/v4/auth');
   });
 
+  it('mounts __meta handlers for every module in the catalog', async () => {
+    const app = buildV4App();
+
+    for (const entry of moduleCatalog) {
+      const response = await request(app).get(`${entry.basePath}/__meta`);
+
+      expect(response.status, `expected __meta route for ${entry.id}`).toBe(200);
+      expect(response.body).toEqual(
+        expect.objectContaining({
+          ok: true,
+          module: expect.objectContaining({
+            id: entry.id,
+            basePath: entry.basePath,
+          }),
+        }),
+      );
+    }
+  });
+
   it('exposes rollout metadata with migration checks and fallback guidance', async () => {
     const app = buildV4App({
       dbFile: READY_DB_FILE,
@@ -156,6 +175,70 @@ describe('server-v4 app shell', () => {
       state: 'ready',
       label: 'Production cutover ready',
     });
+  });
+
+  it('reports a reduced route matrix when buildV4App mounts a subset catalog', async () => {
+    const selectedModuleIds = new Set(['auth', 'teams']);
+    const selectedModules = moduleCatalog.filter((entry) => selectedModuleIds.has(entry.id));
+    const selectedRoutes = selectedModules.flatMap((entry) =>
+      entry.routeGroups.flatMap((group) => group.routes),
+    );
+    const selectedMutationRoutes = selectedRoutes.filter((entry) => entry.method !== 'GET');
+    const app = buildV4App({
+      modules: selectedModules,
+      dbFile: READY_DB_FILE,
+      persistenceMode: 'postgres',
+      persistence: createDualWritePersistenceStub(),
+    });
+
+    const modulesResponse = await request(app).get('/api/v4/meta/modules');
+    expect(modulesResponse.status).toBe(200);
+    expect(modulesResponse.body.modules.map((entry) => entry.id)).toEqual(['auth', 'teams']);
+
+    const healthResponse = await request(app).get('/api/v4/health');
+    expect(healthResponse.status).toBe(200);
+    expect(healthResponse.body).toEqual(
+      expect.objectContaining({
+        ok: true,
+        moduleCount: selectedModules.length,
+        modules: ['auth', 'teams'],
+      }),
+    );
+    expect(healthResponse.body.metrics?.modules).toMatchObject({
+      total: selectedModules.length,
+      implemented: selectedModules.length,
+      scaffold: 0,
+      readWrite: selectedModules.length,
+      readOnly: 0,
+    });
+    expect(healthResponse.body.metrics?.routes).toMatchObject({
+      total: selectedRoutes.length,
+      implemented: selectedRoutes.length,
+      implementedMutation: selectedMutationRoutes.length,
+    });
+
+    const rolloutResponse = await request(app).get('/api/v4/meta/rollout');
+    expect(rolloutResponse.status).toBe(200);
+    expect(rolloutResponse.body.metrics.modules).toMatchObject({
+      total: selectedModules.length,
+      implemented: selectedModules.length,
+      scaffold: 0,
+    });
+    expect(rolloutResponse.body.metrics.routes).toMatchObject({
+      total: selectedRoutes.length,
+      implemented: selectedRoutes.length,
+      implementedMutation: selectedMutationRoutes.length,
+    });
+    expect(rolloutResponse.body.modules.map((entry) => entry.id)).toEqual(['auth', 'teams']);
+
+    const authMetaResponse = await request(app).get('/api/v4/auth/__meta');
+    expect(authMetaResponse.status).toBe(200);
+
+    const teamsMetaResponse = await request(app).get('/api/v4/teams/__meta');
+    expect(teamsMetaResponse.status).toBe(200);
+
+    const declarationsMetaResponse = await request(app).get('/api/v4/declarations/__meta');
+    expect(declarationsMetaResponse.status).toBe(404);
   });
 });
 
