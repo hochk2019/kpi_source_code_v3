@@ -8,28 +8,22 @@
   - `cng-2k4` — Post-Gemini remaining technical backlog
   - `cng-7z0` — UX improvement backlog execution
 - Highest-priority ready items hien tai:
-  - `cng-2k4.4` — Extract backup and restore domain into server-v4 backup module
+  - Can re-evaluate tu `docs/open-backlog.md` sau khi dong bo bead cho `cng-2k4.4`
 
 ## Active Slice
 
-- Title: Canonicalize auth v4 and retire legacy-only account flows
-- Bead: cng-2k4.1
+- Title: Extract backup and restore domain into server-v4 backup module
+- Bead: cng-2k4.4
 - Status: completed
 - Last updated: 2026-03-27
 
-- Da canonicalize client auth transport sang `/api/v4/auth/*` trong `src/auth/localAuth.js` cho cac flow:
-  - login, session, logout
-  - list/create/update/delete account
-  - reset password va self-change password
-- Da cap nhat runtime/test surfaces de khop canonical route:
-  - doi assertion/unit helpers trong `tests/auth.test.jsx`, `tests/accountManager.staff.test.jsx`, `tests/e2e.admin-flows.test.jsx`, `tests/playwright/utils.js`
-  - doi `tests/helpers/mockApiState.js` sang v4 auth routes
-  - giu `src/demo/demoMode.js` va `tests/helpers/mockApi.js` accept ca legacy + canonical auth routes de tranh gay cac luong compat ngoai pham vi slice
+- Da them `server-v4/src/modules/backup/backupDomain.js` de gom domain logic backup/restore/schedule/summary ra khoi `server/index.js` bang dependency injection, giu duoc admin routes va CLI backup flow hien tai.
+- `server/index.js` hien chi giu wrapper mong cho `performDatabaseBackup`, `listBackupFiles`, `restoreDatabaseBackup`, `buildBackupSummary`, va `refreshDatabaseBackupSchedule`; dong thoi da xoa cac helper backup trung lap trong shell.
+- Da bo sung regression `tests/server-v4/backupDomain.test.js` de khoa 3 nhom behavior chinh: backup + retention, restore + re-init, va schedule/summary metadata.
 - Targeted verify da pass:
-  - `pnpm exec eslint src/auth/localAuth.js src/demo/demoMode.js tests/auth.test.jsx tests/accountManager.staff.test.jsx tests/e2e.admin-flows.test.jsx tests/playwright/utils.js tests/helpers/mockApi.js tests/helpers/mockApiState.js`
-  - `pnpm exec vitest run --config vitest.frontend.config.mjs tests/auth.test.jsx tests/accountManager.staff.test.jsx tests/e2e.admin-flows.test.jsx` (runner exclude `tests/e2e.*.test.jsx`, nen file `tests/e2e.admin-flows.test.jsx` khong duoc nap; 2 file auth/account con lai pass)
-  - `pnpm build`
-  - `pnpm exec playwright test tests/playwright/account-management.spec.js --config=playwright.config.mjs --workers=1`
+  - `pnpm exec eslint server/index.js server-v4/src/modules/backup/backupDomain.js tests/server-v4/backupDomain.test.js tests/server.backup.test.js tests/runBackupCore.test.js`
+  - `pnpm exec vitest run tests/server-v4/backupDomain.test.js tests/server.backup.test.js tests/runBackupCore.test.js --environment node`
+- `gitnexus_detect_changes(scope: "unstaged")` hien van tra `critical` do worktree dang gom nhieu slice/frontend changes chua commit song song; ket qua nay khong phan tach rieng duoc blast radius cua backup slice, nen gate thuc te cho slice nay van dua tren targeted lint + targeted test + impact analysis muc tieu da chay truoc khi sua symbol.
 ## Recent Completed Slices
 
 - `cng-2k4.1` da hoan tat canonical auth v4 cutover cho client account flows:
@@ -128,6 +122,23 @@
 - `cng-4hs` da tach xong card danh sach + bo loc thanh `KpiAdjustmentListPanel`, bo sung regression test panel, va giam `src/components/KPIAdjustments.jsx` xuong 1343 dong.
 
 ## Completed This Session
+
+- `cng-2k4.8` da hoan tat integration test cho `buildV4App` va route matrix:
+  - mo rong `tests/server-v4/appShell.test.js` de verify moi module trong `moduleCatalog` deu mount `__meta` route dung catalog contract
+  - bo sung scenario subset mount (`auth` + `teams`) de khoa `/api/v4/meta/modules`, `/api/v4/health`, `/api/v4/meta/rollout`, va `404` cho route nam ngoai matrix da mount
+  - targeted verify da pass:
+    - `pnpm exec vitest run tests/server-v4/appShell.test.js tests/server-v4/v4RolloutStatus.test.js --environment node`
+    - `pnpm exec eslint tests/server-v4/appShell.test.js tests/server-v4/v4RolloutStatus.test.js`
+
+- `cng-2k4.9` da hoan tat rollout metadata dashboard cho operator:
+  - them `src/components/data-health-dashboard/DataHealthRolloutStatusPanel.jsx` de render rollout stage, persistence source, declaration write path, va canh bao/doc readiness tu `/api/v4/meta/rollout`
+  - cap nhat `src/components/DataHealthDashboard.jsx` de nap rollout metadata voi callback on dinh, tranh request loop khi mount dashboard
+  - fix `src/hooks/useAsyncRequest.js` de khong reset `mountedRef` tren moi lan dependency change, dong thoi on dinh hoa `initialArgs`, `onSuccess`, va `onError` qua refs de async state settle dung cho `DataHealthDashboard` va `ExportAuditReport`
+  - cap nhat `src/components/ExportAuditReport.jsx` de request task/onError dung `useCallback`, loai bo render loop khi effect phu thuoc `execute`
+  - bo sung regression tests `tests/useAsyncRequest.test.jsx`, `tests/dataHealthRolloutStatusPanel.test.jsx`, va cap nhat `tests/dataHealthDashboard.test.jsx`, `tests/ExportAuditReport.test.jsx`
+  - targeted verify da pass:
+    - `pnpm exec vitest run tests/useAsyncRequest.test.jsx tests/dataHealthRolloutStatusPanel.test.jsx tests/dataHealthDashboard.test.jsx tests/ExportAuditReport.test.jsx --environment jsdom`
+    - `pnpm exec eslint src/hooks/useAsyncRequest.js src/components/DataHealthDashboard.jsx src/components/ExportAuditReport.jsx src/components/data-health-dashboard/DataHealthRolloutStatusPanel.jsx tests/useAsyncRequest.test.jsx tests/dataHealthDashboard.test.jsx tests/dataHealthRolloutStatusPanel.test.jsx tests/ExportAuditReport.test.jsx`
 
 - `cng-dps` da hoan tat tach DataHealthDashboard policy sources panel:
   - them `src/components/data-health-dashboard/DataHealthPolicySourcesPanel.jsx` de gom summary `policyStatusCounts` cung 2 card `Nguồn dữ liệu` va `Nguồn đang khóa`
