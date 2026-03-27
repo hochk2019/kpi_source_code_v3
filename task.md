@@ -2,11 +2,12 @@
 
 ## Active Slice
 
-- Title: Tach DataHealthDashboard storage overview panel
-- Bead: cng-dsv
+- Title: Tach DataHealthDashboard metrics va alert summary panel
+- Bead: cng-dma
 - Status: completed
 - Last updated: 2026-03-27
 
+- `cng-dma` da hoan tat tach cum metrics grid + 2 card duplicate/alert summary khoi `DataHealthDashboard` sang `src/components/data-health-dashboard/DataHealthMetricsAlertsPanel.jsx`; shell hien chi build view-model props da format san cho metrics, duplicate groups, va alert entries, con regression test moi khoa branch co du lieu va fallback branch khi khong co duplicate/alert ton dong.
 - `cng-dsv` da hoan tat tach cum 3 card storage overview khoi `DataHealthDashboard` sang `src/components/data-health-dashboard/DataHealthStorageOverviewPanel.jsx`; shell hien chi build view-model props cho backup / dung luong he thong / SQL Server, con regression test moi khoa ca branch co du lieu va fallback branch khi thieu nhat ky + SQLite stats.
 - `cng-aqp` da hoan tat tach permission group list dung chung khoi `AccountManager` sang `src/components/account-manager/AccountPermissionGroupsPanel.jsx`; shell hien chi giu toolbar/orchestration cho create-form va permission dialog, con regression test moi khoa collapse state, count label, disabled rule, va permission toggle callback.
 - `cng-dhd` da hoan tat tach `resolveCategoryOptions` va `CATEGORY_OPTIONS` khoi `KPIAdjustments` sang `src/components/kpi-adjustments/model/categoryOptions.js`; shell hien import lai constant moi cho form/list config, con unit test moi khoa mapping tu `KPI_ADJUSTMENT_CATEGORY_CONFIG`.
@@ -52,6 +53,11 @@
 - `cng-4hs` da tach xong card danh sach + bo loc thanh `KpiAdjustmentListPanel`, bo sung regression test panel, va giam `src/components/KPIAdjustments.jsx` xuong 1343 dong.
 
 ## Completed This Session
+
+- `cng-dma` da hoan tat tach DataHealthDashboard metrics va alert summary panel:
+  - them `src/components/data-health-dashboard/DataHealthMetricsAlertsPanel.jsx` de gom metrics grid cung 2 card `Nhóm trùng 11 số cần xử lý` va `Cảnh báo cần xử lý`
+  - `src/components/DataHealthDashboard.jsx` hien chi build props/view-model da format san cho metrics, duplicate groups, va alert entries thay vi giu tiep block JSX presentation dai
+  - bo sung `tests/dataHealthMetricsAlertsPanel.test.jsx` de khoa branch co du lieu day du va fallback branch khi khong co duplicate group / alert ton dong
 
 - `cng-dsv` da hoan tat tach DataHealthDashboard storage overview panel:
   - them `src/components/data-health-dashboard/DataHealthStorageOverviewPanel.jsx` de gom 3 card `Trạng thái sao lưu CSDL`, `Dung lượng hệ thống`, va `Trạng thái SQL Server`
@@ -516,12 +522,12 @@
 
 ## Next Suggested Slice
 
-- Title: Ra soat DataHealthDashboard metrics + alert cards de chon panel extraction tiep theo
+- Title: Ra soat DataHealthDashboard infrastructure alerts va sync status banner
 - Bead: `TBD`
 - Status: san sang tao bead tiep theo
 - Follow-up backlog:
-  - `DataHealthDashboard.jsx` da giam mot cum presentation lon sau khi tach storage overview; buoc tiep theo hop ly la ra soat tiep cac the metrics/alert o nua tren thay vi quay lai helper extraction
-  - uu tien mot panel/card extraction tiep tuc o muc presentation, tranh lan sang async fetch orchestration, notification stream subscription, va policy editor form neu chua can
+  - `DataHealthDashboard.jsx` da giam tiep mot cum presentation lon sau khi tach metrics + alert summary; buoc tiep theo hop ly la ra soat banner `infrastructureAlerts` + `syncIndicator` o phan dau component
+  - uu tien mot panel/card extraction tiep tuc o muc presentation, tranh lan sang async fetch orchestration, notification stream subscription internals, va policy editor form neu chua can
   - truoc khi chon slice moi, tiep tuc chay GitNexus impact/context cho symbol dich de giu diff nho va co test regression ro rang
 
 ## Verification

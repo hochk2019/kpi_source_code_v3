@@ -7,6 +7,7 @@ import { fetchWithAuth } from '@/auth/localAuth.js';
 import { fetchNotificationHistory, subscribeNotificationStream } from '@/lib/notificationClient.js';
 
 import useAsyncRequest from '@/hooks/useAsyncRequest.js';
+import DataHealthMetricsAlertsPanel from '@/components/data-health-dashboard/DataHealthMetricsAlertsPanel.jsx';
 import DataHealthStorageOverviewPanel from '@/components/data-health-dashboard/DataHealthStorageOverviewPanel.jsx';
 
 import { translateBackupFailure, translateBackupReason } from '../../packages/domain/src/backupMessages.js';
@@ -1501,6 +1502,43 @@ export default function DataHealthDashboard({ currentUser, canManage = false }) 
     number: sqlHealth?.number || '',
   };
 
+  const metricCards = metrics.map((metric, index) => ({
+    ...metric,
+    toneClass: metricPalette[index % metricPalette.length],
+  }));
+
+  const duplicateSummaryCard = {
+    countLabel: `${duplicateGroups.length} nhóm gần nhất`,
+    groups: duplicateGroups.map((group) => ({
+      key: group.key,
+      prefix: group.prefix,
+      totalLabel: `${group.total} bản ghi`,
+      branch: group.branch || '',
+      keepLabel: `${group.keep?.so_tk_full || group.keep?.so_tk || '—'} • Cập nhật: ${formatDate(group.keep?.updatedAt)}`,
+      duplicates: (group.duplicates || []).slice(0, 4).map((row, index) => ({
+        key: `${group.key}_${row.so_tk || index}`,
+        label: `${row.so_tk_full || row.so_tk} • NV: ${row.staff || '—'} • Tổ: ${row.team || '—'} • Cập nhật ${formatDate(row.updatedAt)}`,
+      })),
+      remainingLabel:
+        (group.duplicates || []).length > 4 ? `… ${(group.duplicates || []).length - 4} bản ghi khác` : '',
+    })),
+  };
+
+  const alertSummaryCard = {
+    lastEvaluatedAtLabel: summary?.alerts?.lastEvaluatedAt ? formatDate(summary.alerts.lastEvaluatedAt) : 'Chưa có',
+    entries: alertEntries.map((alert) => ({
+      key: alert.key,
+      soTkLabel: alert.so_tk,
+      dateLabel: formatDateOnly(alert.date),
+      mstLabel: alert.mst || '—',
+      companyLabel: alert.company || '—',
+      missingLabel: Array.isArray(alert.missing) ? alert.missing.join(', ') : '—',
+      staffLabel: alert.staff || 'Chưa gán',
+      teamLabel: alert.team || 'Chưa gán',
+      lastAlertAtLabel: formatDate(alert.lastAlertAt),
+    })),
+  };
+
 
 
   return (
@@ -1649,179 +1687,11 @@ export default function DataHealthDashboard({ currentUser, canManage = false }) 
 
 
 
-      <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-
-        {metrics.map((metric, index) => (
-
-          <div
-
-            key={metric.label}
-
-            className={clsx(
-
-              'rounded p-4 text-sm shadow-sm backdrop-blur transition',
-
-              metricPalette[index % metricPalette.length]
-
-            )}
-
-          >
-
-            <div className="text-xs uppercase tracking-wide opacity-75">{metric.label}</div>
-
-            <div className="mt-2 text-2xl font-semibold">{metric.value ?? '—'}</div>
-
-            <div className="mt-1 text-xs opacity-80">{metric.description}</div>
-
-          </div>
-
-        ))}
-
-      </section>
-
-
-
-      <section className="grid gap-4 lg:grid-cols-2">
-
-        <div className="rounded border border-gray-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900">
-
-          <div className="flex items-center justify-between gap-2">
-
-            <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">Nhóm trùng 11 số cần xử lý</h3>
-
-            <span className="text-xs text-gray-500 dark:text-gray-400">
-
-              {duplicateGroups.length} nhóm gần nhất
-
-            </span>
-
-          </div>
-
-          <div className="mt-3 space-y-3 text-sm">
-
-            {duplicateGroups.length === 0 ? (
-
-              <p className="text-xs text-gray-500 dark:text-gray-400">Không phát hiện nhóm trùng nào.</p>
-
-            ) : (
-
-              duplicateGroups.map((group) => (
-
-                <div key={group.key} className="rounded border border-amber-200 bg-amber-50 p-3 text-amber-800 dark:border-amber-500/50 dark:bg-amber-500/10 dark:text-amber-200">
-
-                  <div className="flex flex-wrap items-center justify-between gap-2 text-xs uppercase tracking-wide">
-
-                    <span>{group.prefix}</span>
-
-                    <span>{group.total} bản ghi</span>
-
-                  </div>
-
-                  <div className="mt-1 text-xs text-amber-700 dark:text-amber-200/80">
-
-                    Tổ/chi nhánh: {group.branch || 'Chưa xác định'}
-
-                  </div>
-
-                  <div className="mt-2 text-xs text-amber-700/80 dark:text-amber-100/70">
-
-                    Giữ lại: {group.keep?.so_tk_full || group.keep?.so_tk} • Cập nhật: {formatDate(group.keep?.updatedAt)}
-
-                  </div>
-
-                  {group.duplicates?.length ? (
-
-                    <ul className="mt-2 list-disc space-y-1 pl-5 text-xs">
-
-                      {group.duplicates.slice(0, 4).map((row, index) => (
-
-                        <li key={`${group.key}_${row.so_tk || index}`}>
-
-                          {row.so_tk_full || row.so_tk} • NV: {row.staff || '—'} • Tổ: {row.team || '—'} • Cập nhật {formatDate(row.updatedAt)}
-
-                        </li>
-
-                      ))}
-
-                      {group.duplicates.length > 4 && (
-
-                        <li className="italic">… {group.duplicates.length - 4} bản ghi khác</li>
-
-                      )}
-
-                    </ul>
-
-                  ) : null}
-
-                </div>
-
-              ))
-
-            )}
-
-          </div>
-
-        </div>
-
-
-
-        <div className="rounded border border-gray-200 bg-white p-4 shadow-sm dark:border-slate-700 dark:bg-slate-900">
-
-          <div className="flex items-center justify-between gap-2">
-
-            <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">Cảnh báo cần xử lý</h3>
-
-            <span className="text-xs text-gray-500 dark:text-gray-400">
-
-              Đánh giá lần cuối: {summary?.alerts?.lastEvaluatedAt ? formatDate(summary.alerts.lastEvaluatedAt) : 'Chưa có'}
-
-            </span>
-
-          </div>
-
-          <div className="mt-3 space-y-3 text-sm">
-
-            {alertEntries.length === 0 ? (
-
-              <p className="text-xs text-gray-500 dark:text-gray-400">Không có cảnh báo tồn đọng.</p>
-
-            ) : (
-
-              alertEntries.map((alert) => (
-
-                <div key={alert.key} className="rounded border border-red-200 bg-red-50 p-3 text-red-700 dark:border-red-500/50 dark:bg-red-500/10 dark:text-red-200">
-
-                  <div className="flex flex-wrap items-center justify-between gap-2 text-xs uppercase tracking-wide">
-
-                    <span>{alert.so_tk}</span>
-
-                    <span>{formatDateOnly(alert.date)}</span>
-
-                  </div>
-
-                  <div className="mt-1 text-xs">MST: {alert.mst || '—'} • Công ty: {alert.company || '—'}</div>
-
-                  <div className="mt-1 text-xs">Thiếu: {Array.isArray(alert.missing) ? alert.missing.join(', ') : '—'}</div>
-
-                  <div className="mt-1 text-xs">
-
-                    Nhân viên: {alert.staff || 'Chưa gán'} • Tổ đội: {alert.team || 'Chưa gán'}
-
-                  </div>
-
-                  <div className="mt-1 text-xs opacity-80">Cảnh báo lần cuối: {formatDate(alert.lastAlertAt)}</div>
-
-                </div>
-
-              ))
-
-            )}
-
-          </div>
-
-        </div>
-
-      </section>
+      <DataHealthMetricsAlertsPanel
+        metrics={metricCards}
+        duplicateSummary={duplicateSummaryCard}
+        alertSummary={alertSummaryCard}
+      />
 
 
 
