@@ -50,7 +50,7 @@ describe('Login component', () => {
 
     window.localStorage?.setItem?.('kpi_session_token', 'legacy-token');
 
-    await fetchWithAuth('/api/auth/session');
+    await fetchWithAuth('/api/v4/auth/session');
 
     const [, init] = fetchMock.mock.calls.at(-1);
     const headers = new Headers(init?.headers);
@@ -65,7 +65,7 @@ describe('Login component', () => {
 
     document.cookie = 'kpi_csrf=test-csrf-token';
 
-    await fetchWithAuth('/api/auth/accounts', { method: 'POST' });
+    await fetchWithAuth('/api/v4/auth/accounts', { method: 'POST' });
 
     const [, init] = fetchMock.mock.calls.at(-1);
     const headers = new Headers(init?.headers);
@@ -78,7 +78,7 @@ describe('Login component', () => {
 
     document.cookie = 'kpi_csrf=test-csrf-token';
 
-    await fetchWithAuth('/api/auth/session');
+    await fetchWithAuth('/api/v4/auth/session');
 
     const [, init] = fetchMock.mock.calls.at(-1);
     const headers = new Headers(init?.headers);

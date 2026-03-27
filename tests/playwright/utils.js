@@ -34,7 +34,7 @@ export async function loginAsAdmin(page) {
 
   await Promise.all([
 
-    page.waitForResponse((resp) => resp.url().includes('/api/auth/login') && resp.request().method() === 'POST'),
+    page.waitForResponse((resp) => resp.url().includes('/api/v4/auth/login') && resp.request().method() === 'POST'),
 
     page.getByRole('button', { name: /^Đăng nhập$/i }).click(),
 

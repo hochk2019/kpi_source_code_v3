@@ -455,7 +455,7 @@ export async function login(usernameInput, passwordInput) {
 
   try {
 
-    const payload = await requestJson("/api/auth/login", {
+    const payload = await requestJson("/api/v4/auth/login", {
 
       method: "POST",
 
@@ -483,7 +483,7 @@ export async function loadSession() {
 
   try {
 
-    const payload = await requestJson("/api/auth/session");
+    const payload = await requestJson("/api/v4/auth/session");
 
     const session = setSessionFromUser(payload?.user);
 
@@ -511,7 +511,7 @@ export async function logout() {
 
   try {
 
-    await requestJson("/api/auth/logout", { method: "POST" });
+    await requestJson("/api/v4/auth/logout", { method: "POST" });
 
   } catch {
 
@@ -553,7 +553,7 @@ export function getPermissionTemplate(role = DEFAULT_ROLE) {
 
 export async function reloadAccounts() {
 
-  const payload = await requestJson("/api/auth/accounts");
+  const payload = await requestJson("/api/v4/auth/accounts");
 
   const accounts = setAccountCache(payload?.accounts ?? []);
 
@@ -577,7 +577,7 @@ export async function reloadAccounts() {
 
 export async function createAccount(payload) {
 
-  const response = await requestJson("/api/auth/accounts", {
+  const response = await requestJson("/api/v4/auth/accounts", {
 
     method: "POST",
 
@@ -595,7 +595,7 @@ export async function createAccount(payload) {
 
 export async function updateAccount(usernameInput, patch) {
 
-  const response = await requestJson(`/api/auth/accounts/${encodeURIComponent(usernameInput)}`, {
+  const response = await requestJson(`/api/v4/auth/accounts/${encodeURIComponent(usernameInput)}`, {
 
     method: "PATCH",
 
@@ -623,7 +623,7 @@ export async function setAccountPassword(usernameInput, newPasswordInput) {
 
   }
 
-  const response = await requestJson(`/api/auth/accounts/${encodeURIComponent(usernameInput)}/password`, {
+  const response = await requestJson(`/api/v4/auth/accounts/${encodeURIComponent(usernameInput)}/password`, {
 
     method: "POST",
 
@@ -647,7 +647,7 @@ export async function setAccountPassword(usernameInput, newPasswordInput) {
 
 export async function deleteAccount(usernameInput) {
 
-  const response = await requestJson(`/api/auth/accounts/${encodeURIComponent(usernameInput)}`, {
+  const response = await requestJson(`/api/v4/auth/accounts/${encodeURIComponent(usernameInput)}`, {
 
     method: "DELETE",
 
@@ -683,7 +683,7 @@ export async function changeOwnPassword(usernameInput, currentPasswordInput, new
 
   }
 
-  const response = await requestJson("/api/auth/password/change", {
+  const response = await requestJson("/api/v4/auth/password/change", {
 
     method: "POST",
 

@@ -12,20 +12,31 @@
 
 ## Active Slice
 
-- Title: Add automated regression coverage for filter and sync flows
-- Bead: cng-7z0.33
+- Title: Canonicalize auth v4 and retire legacy-only account flows
+- Bead: cng-2k4.1
 - Status: completed
 - Last updated: 2026-03-27
 
-- Da mo rong `tests/playwright/sync-flow.spec.js` voi runtime regression moi cho luong filter + sync:
-  - nhap `Chỉ đồng bộ các MST`, `Danh sách MST loại trừ`, va khoang ngay chay tay
-  - xac nhan payload `ecus-preview` va `ecus-commit` giu nguyen `from/to/includeTaxCodes/excludeTaxCodes`
-  - xac nhan o tim nhanh cua bang `Danh sách tờ khai import` loc duoc du lieu preview ngay tren runtime
+- Da canonicalize client auth transport sang `/api/v4/auth/*` trong `src/auth/localAuth.js` cho cac flow:
+  - login, session, logout
+  - list/create/update/delete account
+  - reset password va self-change password
+- Da cap nhat runtime/test surfaces de khop canonical route:
+  - doi assertion/unit helpers trong `tests/auth.test.jsx`, `tests/accountManager.staff.test.jsx`, `tests/e2e.admin-flows.test.jsx`, `tests/playwright/utils.js`
+  - doi `tests/helpers/mockApiState.js` sang v4 auth routes
+  - giu `src/demo/demoMode.js` va `tests/helpers/mockApi.js` accept ca legacy + canonical auth routes de tranh gay cac luong compat ngoai pham vi slice
 - Targeted verify da pass:
-  - `pnpm exec eslint tests/playwright/sync-flow.spec.js`
-  - `pnpm exec playwright test tests/playwright/sync-flow.spec.js --config=playwright.config.mjs --workers=1`
+  - `pnpm exec eslint src/auth/localAuth.js src/demo/demoMode.js tests/auth.test.jsx tests/accountManager.staff.test.jsx tests/e2e.admin-flows.test.jsx tests/playwright/utils.js tests/helpers/mockApi.js tests/helpers/mockApiState.js`
+  - `pnpm exec vitest run --config vitest.frontend.config.mjs tests/auth.test.jsx tests/accountManager.staff.test.jsx tests/e2e.admin-flows.test.jsx` (runner exclude `tests/e2e.*.test.jsx`, nen file `tests/e2e.admin-flows.test.jsx` khong duoc nap; 2 file auth/account con lai pass)
+  - `pnpm build`
+  - `pnpm exec playwright test tests/playwright/account-management.spec.js --config=playwright.config.mjs --workers=1`
 ## Recent Completed Slices
 
+- `cng-2k4.1` da hoan tat canonical auth v4 cutover cho client account flows:
+  - doi `src/auth/localAuth.js` sang `/api/v4/auth/*` cho login/session/logout + account/password mutations
+  - cap nhat auth/account test assertions va Playwright login helper sang canonical route
+  - chuan hoa `tests/helpers/mockApiState.js` theo v4 route, dong thoi giu `src/demo/demoMode.js` va `tests/helpers/mockApi.js` nhan ca legacy route de bao toan compat ngoai scope
+  - targeted verify da pass: eslint batch auth files, `vitest.frontend` cho `tests/auth.test.jsx` + `tests/accountManager.staff.test.jsx`, `pnpm build`, va `pnpm exec playwright test tests/playwright/account-management.spec.js --config=playwright.config.mjs --workers=1`
 - `cng-7z0.33` da hoan tat regression coverage cho filter va sync runtime:
   - mo rong `tests/playwright/sync-flow.spec.js` de cover payload propagation cua `from/to/includeTaxCodes/excludeTaxCodes` giua `Xem trước dữ liệu` va `Đồng bộ ngay`
   - them runtime assertion cho o `Tìm nhanh danh sách tờ khai` de bao ve filter behavior tren du lieu preview sau khi sync preview duoc promote sang bang review

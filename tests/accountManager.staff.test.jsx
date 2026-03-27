@@ -169,7 +169,7 @@ describe('AccountManager – gắn nhân viên KPI', () => {
 
     const patchCalls = fetchMock.mock.calls.filter(
 
-      ([url, init]) => url.includes('/api/auth/accounts/nhanvien') && (init?.method || 'GET') === 'PATCH'
+      ([url, init]) => url.includes('/api/v4/auth/accounts/nhanvien') && (init?.method || 'GET') === 'PATCH'
 
     );
 
@@ -223,7 +223,7 @@ describe('AccountManager – gắn nhân viên KPI', () => {
 
     const latestPatch = fetchMock.mock.calls
 
-      .filter(([url, init]) => url.includes('/api/auth/accounts/nhanvien') && (init?.method || 'GET') === 'PATCH')
+      .filter(([url, init]) => url.includes('/api/v4/auth/accounts/nhanvien') && (init?.method || 'GET') === 'PATCH')
 
       .pop();
 

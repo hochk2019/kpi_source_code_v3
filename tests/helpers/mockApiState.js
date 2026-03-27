@@ -647,9 +647,9 @@ export function createDefaultHandlers(state) {
 
     'GET /api/audit': () => jsonResponse({ ok: true, logs: [] }),
 
-    'GET /api/auth/accounts': () => jsonResponse({ ok: true, accounts: listClientAccounts(state) }),
+    'GET /api/v4/auth/accounts': () => jsonResponse({ ok: true, accounts: listClientAccounts(state) }),
 
-    'POST /api/auth/accounts': ({ init }) => {
+    'POST /api/v4/auth/accounts': ({ init }) => {
 
       const body = safeParse(init?.body, {});
 
@@ -695,7 +695,7 @@ export function createDefaultHandlers(state) {
 
     },
 
-    'PATCH /api/auth/accounts/:username': ({ init, path }) => {
+    'PATCH /api/v4/auth/accounts/:username': ({ init, path }) => {
 
       const username = extractAccountUsername(path);
 
@@ -735,7 +735,7 @@ export function createDefaultHandlers(state) {
 
     },
 
-    'POST /api/auth/accounts/:username/password': ({ init, path }) => {
+    'POST /api/v4/auth/accounts/:username/password': ({ init, path }) => {
 
       const username = extractAccountUsername(path);
 
@@ -763,7 +763,7 @@ export function createDefaultHandlers(state) {
 
     },
 
-    'DELETE /api/auth/accounts/:username': ({ path }) => {
+    'DELETE /api/v4/auth/accounts/:username': ({ path }) => {
 
       const username = extractAccountUsername(path);
 
@@ -789,7 +789,7 @@ export function createDefaultHandlers(state) {
 
     },
 
-    'POST /api/auth/login': ({ init }) => {
+    'POST /api/v4/auth/login': ({ init }) => {
 
       const body = safeParse(init?.body, {});
 
@@ -817,9 +817,9 @@ export function createDefaultHandlers(state) {
 
     },
 
-    'GET /api/auth/session': () => jsonResponse({ ok: true, user: state.currentUser }),
+    'GET /api/v4/auth/session': () => jsonResponse({ ok: true, user: state.currentUser }),
 
-    'POST /api/auth/logout': () => {
+    'POST /api/v4/auth/logout': () => {
 
       state.currentUser = null;
 

@@ -587,7 +587,7 @@ describe('Luồng quản trị – Tài khoản', () => {
 
     await waitFor(() => expect(screen.getByText('tester')).toBeInTheDocument());
 
-    expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('/api/auth/accounts'), expect.anything());
+    expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('/api/v4/auth/accounts'), expect.anything());
 
   }, 30000);
 
