@@ -37,7 +37,7 @@ describe('server-v4 app shell', () => {
       state: 'degraded',
       label: 'Compatibility verification only',
     });
-    expect(response.body.metrics?.modules?.implemented).toBe(8);
+    expect(response.body.metrics?.modules?.implemented).toBe(moduleCatalog.length);
     expect(response.body.metrics?.modules?.readOnly).toBe(moduleCatalog.length - implementedReadWriteModules.length);
     expect(response.body.metrics?.modules?.readWrite).toBe(implementedReadWriteModules.length);
     expect(response.body.metrics?.routes?.implemented).toBe(catalogRoutes.length);

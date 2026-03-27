@@ -8,33 +8,37 @@
   - `cng-2k4` — Post-Gemini remaining technical backlog
   - `cng-7z0` — UX improvement backlog execution
 - Highest-priority ready items hien tai:
-  - Can re-evaluate tu `docs/open-backlog.md` sau khi dong bo bead cho `cng-2k4.4`
+  - `cng-2k4.4` con mo voi phan follow-up `restore` cho backup module server-v4; cac route `summary/files/run/schedule` da xong va can tach bead/scope rieng neu muon chot restore an toan
 
 ## Active Slice
 
-- Title: Add numbered schema migrations for SQLite and server-v4
-- Bead: cng-2k4.7
+- Title: Extract backup admin routes into server-v4 backup module
+- Bead: cng-2k4.4
 - Status: completed
 - Last updated: 2026-03-27
 
-- Muc tieu hien tai la thay bootstrap schema inline bang migration runner co danh so va bang lich su, nhung van giu nguyen public entry points nhu `initializeDatabase`, `ensureBusinessSnapshotTables`, `ensureReportingProjectionTable`, `ensureTeamRosterTables`, va cac `Sqlite*Store`.
+- Muc tieu hien tai la dua backup admin flow vao `server-v4` theo module rieng, giu parity voi legacy mount cho `summary/files/run/schedule`, nhung chua dong goi `restore` cho den khi giai quyet an toan bai toan thay the file SQLite khi `SqliteAuthStore` dang giu open handle.
 - GitNexus impact da duoc chay truoc khi sua:
-  - `initializeDatabase`: `LOW`
-  - `ensureTeamRosterTables`: `LOW`
-  - `ensureReportingProjectionTable`: `HIGH`
-  - `ensureBusinessSnapshotTables`: `CRITICAL`
-  - `SqliteAuthStore` / `SqliteDeclarationsStore` / `SqliteHqAgenciesStore` / `SqliteKpiAdjustmentsStore` / `SqliteKpiRulesStore`: `HIGH`
+  - `buildV4App`: `MEDIUM`
+  - `mountReportingV4App`: `LOW`
+  - `selectLegacyV4Modules`: `LOW`
 - Cach sua du kien:
-  - them helper migration chung cho SQLite de luu `schema_migrations`
-  - de cac helper/store hien tai delegate sang migration runner thay vi `CREATE TABLE IF NOT EXISTS` truc tiep
-  - bo sung regression cho migration history va legacy-column backfill truoc khi commit slice
+  - them `server-v4/src/modules/backup/*` cho module/runtime/router rieng
+  - de `buildV4App` co backup runtime mac dinh cho app shell/tests, nhung legacy `server/index.js` override bang `backupDomain` that su de giu persisted config/audit state
+  - bo sung regression route-level cho auth/permission/run/schedule, va cap nhat app shell assertion de theo `moduleCatalog.length`
 - Trang thai verify hien tai:
-  - `pnpm exec eslint ...` cho cum file migration/storage/test da pass
-  - `pnpm exec vitest run tests/sqliteMigrations.test.js tests/server.seed.test.js tests/reportingProjectionSqlite.test.js --environment node` da pass
-  - `gitnexus_detect_changes(scope: all)` van bao `critical` do day la slice persistence dung chung, nhung diff thuc te van gioi han trong nhom migration/storage/test du kien
+  - `pnpm exec eslint server-v4/src/modules/backup/backup.module.ts server-v4/src/modules/backup/backupRuntime.ts server-v4/src/modules/backup/backupRoutes.ts server-v4/src/app/module-catalog.ts server-v4/src/app/build-v4-app.ts server-v4/src/index.ts server/v4RolloutMount.js server/index.js tests/server-v4/backupRoutes.test.js` da pass
+  - `pnpm exec vitest run tests/server-v4/backupRoutes.test.js tests/server-v4/appShell.test.js --environment node` da pass
+  - `gitnexus_detect_changes(scope: all)` tra `high` do index over-attribution tren `server/index.js`, nhung diff thuc te gioi han trong nhom backup mount/runtime/test du kien
   - `bd` / `bd.cmd` trong worktree hien tai khong tim thay beads database, nen trang thai bead chua sync duoc bang CLI
 ## Recent Completed Slices
 
+- `cng-2k4.4` da xong o muc backup module extraction cho server-v4:
+  - them `server-v4/src/modules/backup/backup.module.ts`, `backupRoutes.ts`, `backupRuntime.ts` de mount `GET /summary`, `GET /files`, `POST /run`, va `POST /schedule` duoi `/api/v4/backups`
+  - `server-v4/src/app/build-v4-app.ts` va `server-v4/src/app/module-catalog.ts` da mount module moi; `server-v4/src/index.ts` export runtime adapter de legacy server co the reuse
+  - `server/index.js` da truyen `backupDomain`/`saveBackupConfig`/audit helpers vao runtime v4, giu persisted backup config state khi mount qua legacy app
+  - bo sung `tests/server-v4/backupRoutes.test.js`, cap nhat `tests/server-v4/appShell.test.js`; targeted eslint + vitest da pass
+  - `restore` duoc tach follow-up rieng vi `SqliteAuthStore` dang cache `better-sqlite3` handle, chua an toan de thay file DB ngay trong cung process
 - `cng-2k4.7` da xong o muc numbered SQLite schema migrations:
   - them `server/sqliteMigrations.js` de quan ly `schema_migrations` va chay migration co danh so cho kv/auth/export-audit/reporting/business-snapshot/team-roster
   - `server/index.js`, `server/reportingProjectionSqlite.js`, `server/businessSnapshotSqlite.js`, `server/teamRosterSqlite.js`, va cac `Sqlite*Store` ben `server-v4` da delegate sang migration runner thay vi tu bootstrap bang `CREATE TABLE IF NOT EXISTS`

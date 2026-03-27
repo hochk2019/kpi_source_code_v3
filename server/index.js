@@ -246,7 +246,16 @@ async function mountReportingV4App(targetApp) {
 
     }
 
-    const v4App = runtimeModule.buildV4App({ modules: selectedModules });
+    const v4App = runtimeModule.buildV4App({
+      modules: selectedModules,
+      backup: {
+        domain: backupDomain,
+        describeBackupDirectoryError,
+        normalizeBackupDirectoryInput,
+        pushAuditLog,
+        saveBackupConfig,
+      },
+    });
 
     targetApp.use(v4App);
 

@@ -6,6 +6,7 @@ describe('server-v4 module catalog', () => {
   it('tracks the expected domain boundaries', () => {
     expect(moduleCatalog.map((entry) => entry.id)).toEqual([
       'auth',
+      'backup',
       'declarations',
       'mst-assignments',
       'teams',

@@ -2,6 +2,11 @@ import express, { type Express, type Router } from 'express';
 
 import { resolveServerV4Config, type ServerV4ConfigInput } from '../config/server-v4-config.js';
 import { buildAuthRouter } from '../modules/auth/authRoutes.js';
+import { buildBackupRouter } from '../modules/backup/backupRoutes.js';
+import {
+  createBackupAdminRuntime,
+  type BackupAdminRuntime,
+} from '../modules/backup/backupRuntime.js';
 import { buildDeclarationsRouter } from '../modules/declarations/declarationsRoutes.js';
 import type { EcusSqlHealthCheck } from '../modules/declarations/declarationsEcusSyncService.js';
 import type { CoDiscrepancyRunner } from '../modules/declarations/ecusCoDiscrepancyRunner.js';
@@ -36,6 +41,7 @@ export type BuildV4AppOptions = ServerV4ConfigInput & {
     guardMode?: ImporterCompatGuardMode;
     tracker?: ImporterCompatTrafficTracker;
   };
+  backup?: BackupAdminRuntime;
 };
 
 function buildDefaultModuleRouter(domainModule: DomainModule): Router {
@@ -62,6 +68,7 @@ export function buildV4App(input?: readonly DomainModule[] | BuildV4AppOptions):
   const safeModules = serializeDomainModules(options.modules ?? moduleCatalog);
   const config = resolveServerV4Config(options);
   const persistence = options.persistence ?? createRuntimePersistence(config);
+  const backupAdmin = options.backup ?? createBackupAdminRuntime({ dbFile: config.dbFile });
   const importerCompatGuardMode =
     options.importerCompat?.guardMode ?? config.importerCompatGuardMode;
   const importerCompatTracker =
@@ -73,6 +80,7 @@ export function buildV4App(input?: readonly DomainModule[] | BuildV4AppOptions):
     'auth',
     'kpi-rules',
     'kpi-adjustments',
+    'backup',
     'declarations',
     'hq-agencies',
     'mst-assignments',
@@ -83,7 +91,10 @@ export function buildV4App(input?: readonly DomainModule[] | BuildV4AppOptions):
   app.disable('x-powered-by');
   app.use(express.json());
   app.use(createCsrfProtection());
-  app.locals.runtimePersistenceDispose = persistence.dispose;
+  app.locals.runtimePersistenceDispose = async () => {
+    await persistence.dispose();
+    await backupAdmin.dispose?.();
+  };
 
   app.get('/api/v4/health', (_req, res) => {
     const rolloutStatus = buildV4RolloutStatus({
@@ -130,6 +141,11 @@ export function buildV4App(input?: readonly DomainModule[] | BuildV4AppOptions):
   for (const domainModule of safeModules) {
     if (domainModule.id === 'auth') {
       app.use(domainModule.basePath, buildAuthRouter(domainModule, persistence.authStore));
+      continue;
+    }
+
+    if (domainModule.id === 'backup') {
+      app.use(domainModule.basePath, buildBackupRouter(domainModule, persistence.authStore, backupAdmin));
       continue;
     }
 

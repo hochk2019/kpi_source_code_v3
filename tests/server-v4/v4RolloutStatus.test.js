@@ -13,6 +13,7 @@ import { buildV4RolloutStatus } from '../../server-v4/src/app/v4-rollout-status.
 const READY_DB_FILE = path.resolve(process.cwd(), 'package.json');
 const implementedModuleIds = [
   'auth',
+  'backup',
   'declarations',
   'hq-agencies',
   'kpi-adjustments',
