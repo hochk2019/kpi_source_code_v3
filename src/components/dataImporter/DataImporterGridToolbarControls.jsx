@@ -78,7 +78,7 @@ export default function DataImporterGridToolbarControls({
             onClick={() => onChangeViewMode?.("table")}
             className={`rounded px-2 py-1 font-medium transition ${
               viewMode === "table"
-                ? "bg-blue-500 text-white shadow"
+                ? "bg-blue-700 text-white shadow"
                 : "text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-slate-700"
             }`}
           >
@@ -89,7 +89,7 @@ export default function DataImporterGridToolbarControls({
             onClick={() => onChangeViewMode?.("card")}
             className={`rounded px-2 py-1 font-medium transition ${
               viewMode === "card"
-                ? "bg-blue-500 text-white shadow"
+                ? "bg-blue-700 text-white shadow"
                 : "text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-slate-700"
             }`}
           >
@@ -135,6 +135,7 @@ export default function DataImporterGridToolbarControls({
 
         <div className="flex items-center gap-2">
           <select
+            aria-label="Số dòng mỗi trang"
             value={pageSizeMode === "custom" ? "custom" : String(pageSize)}
             onChange={(event) => onChangePageSizeSelect?.(event.target.value)}
             className="border rounded px-2 py-1 text-sm"

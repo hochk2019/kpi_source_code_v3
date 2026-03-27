@@ -710,6 +710,13 @@
 - `gitnexus_detect_changes(scope: "all")` van tra `No changes detected` ngay ca sau helper extraction, nen tiep tuc coi day la van de worktree-awareness cua GitNexus; gate thuc te van dua tren `git status`, lint, va test muc tieu.
 - `tests/server.monitor.test.js` van in stderr khi `dist/server-v4/index.js` khong co trong vitest runtime, nhung suite van pass vi startup path fallback dung nhu hien trang.
 - GitNexus `detect_changes` da hoat dong dung tro lai trong worktree nay sau khi xoa index cu trung ten cua repo goc `E:\GPT\kpi_source_code_v4`; root cause la registry co 2 entry cung ten `kpi_source_code_v4`.
+- `cng-7z0.32` da hoan tat audit accessibility cho `Import Data`, `Gán MST`, va `Điểm KPI +/- Thêm`:
+  - them smoke audit `tests/playwright/accessibility-admin.spec.js` dung `axe-core` de quet 3 tab admin runtime
+  - fix accessible name cho date/select controls trong `DataImporter*`, bo sung keyboard focus cho vung bang cuon ngang cua `DataImporter` va `MSTAssignment`, va tang contrast cho toolbar/badge/button text trong workflow import
+  - targeted verify da pass:
+    - `pnpm exec eslint src/components/dataImporter/DataImporterMonitoringPanel.jsx src/components/dataImporter/DataImporterQueryFilterControls.jsx src/components/dataImporter/DataImporterTableResults.jsx src/components/dataImporter/DataImporterSyncPreviewPanel.jsx src/components/dataImporter/DataImporterCoCodeConfigPanel.jsx src/components/dataImporter/DataImporterGridToolbarControls.jsx src/components/dataImporter/DataImporterListControlsPanel.jsx src/components/mst-assignment/table/MstAssignmentDataTablePanel.jsx tests/playwright/accessibility-admin.spec.js`
+    - `pnpm run build`
+    - `pnpm exec playwright test tests/playwright/accessibility-admin.spec.js --config=playwright.config.mjs --workers=1`
 
 ## Previous Completed Slice
 

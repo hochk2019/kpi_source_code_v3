@@ -43,13 +43,13 @@ export default function DataImporterCoCodeConfigPanel({
       bodyClassName="space-y-3"
     >
       {error ? <div className="text-sm text-red-600">{error}</div> : null}
-      {message ? <div className="text-sm text-emerald-600">{message}</div> : null}
+      {message ? <div className="text-sm text-emerald-700">{message}</div> : null}
 
       <div className="grid gap-3 md:grid-cols-2">
         <div>
           <label className="flex items-center justify-between text-sm font-medium text-gray-700">
             <span>Whitelist ưu tiên</span>
-            <span className="text-xs text-gray-400">Mỗi dòng một mã (để trống nếu không dùng)</span>
+            <span className="text-xs text-gray-600">Mỗi dòng một mã (để trống nếu không dùng)</span>
           </label>
           <textarea
             value={form.whitelist}
@@ -63,7 +63,7 @@ export default function DataImporterCoCodeConfigPanel({
         <div>
           <label className="flex items-center justify-between text-sm font-medium text-gray-700">
             <span>Blacklist không C/O</span>
-            <span className="text-xs text-gray-400">Mỗi dòng một mã</span>
+            <span className="text-xs text-gray-600">Mỗi dòng một mã</span>
           </label>
           <textarea
             value={form.blacklist}
@@ -75,7 +75,7 @@ export default function DataImporterCoCodeConfigPanel({
         </div>
       </div>
 
-      <p className="text-xs text-gray-500">
+      <p className="text-xs text-gray-700">
         Nếu whitelist để trống, hệ thống sẽ sử dụng blacklist để loại bỏ các mã không được xem là C/O.
       </p>
 
@@ -83,7 +83,7 @@ export default function DataImporterCoCodeConfigPanel({
         <button
           type="button"
           onClick={onSave}
-          className="rounded bg-emerald-600 px-3 py-1 text-xs font-medium text-white disabled:opacity-50"
+          className="rounded bg-emerald-700 px-3 py-1 text-xs font-medium text-white disabled:opacity-50"
           disabled={saving || loading || !canManageSync}
           data-tooltip="Lưu danh sách mã ưu đãi"
         >
@@ -101,7 +101,7 @@ export default function DataImporterCoCodeConfigPanel({
         </button>
       </div>
 
-      <div className="text-xs text-gray-400">{updatedLabel}</div>
+      <div className="text-xs text-gray-600">{updatedLabel}</div>
     </CollapsibleCard>
   );
 }

@@ -129,7 +129,11 @@ export default function MstAssignmentDataTablePanel({
         </Popover>
       </div>
 
-      <div className="border rounded overflow-x-auto">
+      <div
+        className="border rounded overflow-x-auto"
+        tabIndex={0}
+        aria-label="Vùng cuộn ngang của bảng gán MST"
+      >
         <table className="min-w-max table-auto text-sm" aria-label="Danh sách gán MST">
           <caption className="sr-only">
             Danh sách gán MST sau khi áp dụng bộ lọc nhanh, bộ lọc nhân viên và bộ lọc lịch sử.

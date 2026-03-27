@@ -50,7 +50,11 @@ export default function DataImporterTableResults({
   DeclarationStatusDisplayComponent,
 }) {
   return (
-    <div className="relative overflow-x-auto overflow-y-hidden rounded border bg-white dark:border-slate-700 dark:bg-slate-900/40">
+    <div
+      className="relative overflow-x-auto overflow-y-hidden rounded border bg-white dark:border-slate-700 dark:bg-slate-900/40"
+      tabIndex={0}
+      aria-label="Vùng cuộn ngang của bảng danh sách tờ khai import"
+    >
       <table className="relative w-full min-w-[1200px] table-auto text-sm" aria-label="Danh sách tờ khai import">
         <caption className="sr-only">Danh sách tờ khai import</caption>
         <DataImporterTableHeader

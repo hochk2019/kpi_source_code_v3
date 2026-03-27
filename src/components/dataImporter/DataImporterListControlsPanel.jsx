@@ -46,10 +46,10 @@ export default function DataImporterListControlsPanel({
         description="Tìm kiếm, lọc và điều chỉnh cách hiển thị dữ liệu import trước khi rà soát hoặc lưu."
         meta={
           <>
-            <span className="rounded-full border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-muted)] px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-[color:var(--ds-text-muted)]">
+            <span className="rounded-full border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-[color:var(--ds-text-secondary)]">
               {mode === "saved" ? "Dữ liệu đã lưu" : isSyncPreview ? "Xem trước đồng bộ" : "Xem trước import"}
             </span>
-            <span className="rounded-full border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-muted)] px-2.5 py-1 text-xs font-medium text-[color:var(--ds-text-muted)]">
+            <span className="rounded-full border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] px-2.5 py-1 text-xs font-medium text-[color:var(--ds-text-secondary)]">
               {total.toLocaleString("vi-VN")} dòng
             </span>
           </>

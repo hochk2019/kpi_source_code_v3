@@ -39,7 +39,7 @@ export default function DataImporterQueryFilterControls({
           aria-describedby={mainSearchHelpTextId}
         />
 
-        <span id={mainSearchHelpTextId} className="text-xs text-gray-500">
+        <span id={mainSearchHelpTextId} className="text-xs text-gray-700">
           Nhập từ khóa để tìm nhanh theo Số tờ khai, mã số thuế, tên doanh nghiệp, nhân viên hoặc tổ đội phụ trách.
         </span>
       </div>
@@ -120,6 +120,7 @@ export default function DataImporterQueryFilterControls({
             <select
               value={coFilterMode}
               onChange={(event) => onCoFilterModeChange?.(event.target.value)}
+              aria-label="Lọc C/O"
               className="rounded border px-2 py-1 text-sm"
             >
               {coFilterOptions.map((option) => (

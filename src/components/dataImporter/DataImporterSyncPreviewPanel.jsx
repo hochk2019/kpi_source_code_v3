@@ -5,7 +5,7 @@ function renderPreviewStatus(status) {
     return <span className="rounded bg-gray-200 px-2 py-0.5 text-xs text-gray-700">Đã có</span>;
   }
 
-  return <span className="rounded bg-emerald-100 px-2 py-0.5 text-xs text-emerald-700">Mới</span>;
+  return <span className="rounded bg-emerald-100 px-2 py-0.5 text-xs text-emerald-800">Mới</span>;
 }
 
 export default function DataImporterSyncPreviewPanel({
@@ -31,13 +31,13 @@ export default function DataImporterSyncPreviewPanel({
   return (
     <>
       <div className="flex flex-wrap items-center gap-2">
-        <span className="text-xs uppercase tracking-wide text-gray-500">Khoảng thời gian chạy tay</span>
+        <span className="text-xs uppercase tracking-wide text-gray-700">Khoảng thời gian chạy tay</span>
         <div className="flex flex-wrap items-center gap-1">
           {rangePresets.map((preset) => (
             <button
               key={preset.days}
               type="button"
-              className="rounded border px-2 py-1 text-xs text-gray-600 hover:bg-gray-50"
+              className="rounded border px-2 py-1 text-xs text-gray-700 hover:bg-gray-50"
               onClick={() => onApplyRangePreset?.(preset.days)}
               disabled={syncRunning}
             >
@@ -45,17 +45,19 @@ export default function DataImporterSyncPreviewPanel({
             </button>
           ))}
         </div>
-        <span className="text-xs text-gray-500">hoặc chọn ngày cụ thể</span>
+        <span className="text-xs text-gray-700">hoặc chọn ngày cụ thể</span>
         <input
           type="date"
+          aria-label="Ngày bắt đầu chạy tay ECUS"
           className="rounded border px-2 py-1 text-sm"
           value={manualRange.from || ""}
           onChange={(event) => onManualRangeChange?.("from", event.target.value)}
           disabled={syncRunning}
         />
-        <span className="text-xs text-gray-500">đến</span>
+        <span className="text-xs text-gray-700">đến</span>
         <input
           type="date"
+          aria-label="Ngày kết thúc chạy tay ECUS"
           className="rounded border px-2 py-1 text-sm"
           value={manualRange.to || ""}
           onChange={(event) => onManualRangeChange?.("to", event.target.value)}
@@ -73,7 +75,7 @@ export default function DataImporterSyncPreviewPanel({
           type="button"
           onClick={onRunSync}
           disabled={syncRunning}
-          className="rounded bg-emerald-600 px-3 py-1 text-sm text-white disabled:opacity-50"
+          className="rounded bg-emerald-700 px-3 py-1 text-sm text-white disabled:opacity-50"
         >
           {syncRunning ? "Đang đồng bộ..." : "Đồng bộ ngay"}
         </button>
@@ -86,7 +88,7 @@ export default function DataImporterSyncPreviewPanel({
       ) : null}
 
       {showPreviewRange ? (
-        <div className="text-xs text-gray-500">
+        <div className="text-xs text-gray-700">
           Khoảng xem trước: {previewRangeLabel || "..."}
           {previewLimited ? " (giới hạn 100 dòng đầu tiên)" : ""}
         </div>
@@ -96,7 +98,7 @@ export default function DataImporterSyncPreviewPanel({
 
       {previewRows.length > 0 && showPreviewTableInline ? (
         <div className="space-y-2">
-          <div className="text-xs text-gray-600">
+          <div className="text-xs text-gray-700">
             Xem trước {previewRows.length.toLocaleString("vi-VN")} dòng đầu tiên sẽ nhập vào hệ thống.
           </div>
           <div className="max-h-64 overflow-auto rounded border">
@@ -125,7 +127,7 @@ export default function DataImporterSyncPreviewPanel({
                     <td className="px-2 py-1">{row.mst}</td>
                     <td className="px-2 py-1">{row.cong_ty}</td>
                     <td className="px-2 py-1">
-                      {row.nhan_vien || <span className="italic text-gray-400">(chưa gán)</span>}
+                      {row.nhan_vien || <span className="italic text-gray-600">(chưa gán)</span>}
                     </td>
                     <td className="px-2 py-1">{renderPreviewStatus(row.status)}</td>
                   </tr>
@@ -142,7 +144,7 @@ export default function DataImporterSyncPreviewPanel({
         </div>
       ) : null}
 
-      {syncMessage ? <div className="text-sm text-emerald-600">{syncMessage}</div> : null}
+      {syncMessage ? <div className="text-sm text-emerald-700">{syncMessage}</div> : null}
       {syncError ? <div className="text-sm text-red-600">{syncError}</div> : null}
     </>
   );

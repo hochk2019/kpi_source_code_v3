@@ -68,14 +68,16 @@ export default function DataImporterMonitoringPanel({
           <div className="flex flex-wrap items-center gap-2">
             <input
               type="date"
+              aria-label="Ngày bắt đầu đối soát C/O"
               className="rounded border px-2 py-1 text-xs"
               value={range.from}
               onChange={(event) => handleRangeFieldChange("from", event.target.value)}
               data-tooltip="Ngày bắt đầu đối soát"
             />
-            <span className="text-xs text-gray-500">→</span>
+            <span className="text-xs text-gray-700">→</span>
             <input
               type="date"
+              aria-label="Ngày kết thúc đối soát C/O"
               className="rounded border px-2 py-1 text-xs"
               value={range.to}
               onChange={(event) => handleRangeFieldChange("to", event.target.value)}
@@ -84,7 +86,7 @@ export default function DataImporterMonitoringPanel({
             <button
               type="button"
               onClick={onRun}
-              className="rounded bg-emerald-600 px-3 py-1 text-xs font-medium text-white disabled:opacity-50"
+              className="rounded bg-emerald-700 px-3 py-1 text-xs font-medium text-white disabled:opacity-50"
               disabled={running || loading || !canManageSync}
               data-tooltip="Chạy đối chiếu C/O với dữ liệu ECUS"
             >
@@ -104,23 +106,23 @@ export default function DataImporterMonitoringPanel({
         bodyClassName="space-y-3"
       >
         {error ? <div className="text-sm text-red-600">{error}</div> : null}
-        {message ? <div className="text-sm text-emerald-600">{message}</div> : null}
+        {message ? <div className="text-sm text-emerald-700">{message}</div> : null}
 
         <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
           <div className="rounded border bg-gray-50 px-3 py-2">
-            <div className="text-xs uppercase text-gray-500">Trạng thái</div>
+            <div className="text-xs uppercase text-gray-700">Trạng thái</div>
             <div className="text-sm font-semibold text-gray-900">{statusLabel}</div>
           </div>
           <div className="rounded border bg-gray-50 px-3 py-2">
-            <div className="text-xs uppercase text-gray-500">Lần chạy gần nhất</div>
+            <div className="text-xs uppercase text-gray-700">Lần chạy gần nhất</div>
             <div className="text-sm font-semibold text-gray-900">{lastRunLabel}</div>
           </div>
           <div className="rounded border bg-gray-50 px-3 py-2">
-            <div className="text-xs uppercase text-gray-500">Chênh lệch</div>
+            <div className="text-xs uppercase text-gray-700">Chênh lệch</div>
             <div className="text-sm font-semibold text-gray-900">{mismatchCount.toLocaleString("vi-VN")}</div>
           </div>
           <div className="rounded border bg-gray-50 px-3 py-2">
-            <div className="text-xs uppercase text-gray-500">Tổng đã kiểm</div>
+            <div className="text-xs uppercase text-gray-700">Tổng đã kiểm</div>
             <div className="text-sm font-semibold text-gray-900">{checkedCount.toLocaleString("vi-VN")}</div>
           </div>
         </div>
@@ -187,7 +189,7 @@ export default function DataImporterMonitoringPanel({
               <button
                 type="button"
                 onClick={onSaveConfig}
-                className="rounded bg-emerald-600 px-3 py-1 text-xs font-medium text-white disabled:opacity-50"
+                className="rounded bg-emerald-700 px-3 py-1 text-xs font-medium text-white disabled:opacity-50"
                 disabled={saving || !canManageSync}
               >
                 {saving ? "Đang lưu..." : "Lưu cấu hình"}
@@ -202,7 +204,7 @@ export default function DataImporterMonitoringPanel({
               </button>
             </div>
 
-            <div className="text-xs text-gray-500">
+            <div className="text-xs text-gray-700">
               {rangeLabel ? `Khoảng lần chạy gần nhất: ${rangeLabel}` : "Chưa có kết quả đối soát."}
               {mismatchLimited ? " (Đã cắt bớt danh sách do vượt giới hạn mẫu)" : ""}
             </div>
@@ -253,7 +255,7 @@ export default function DataImporterMonitoringPanel({
                   </tbody>
                 </table>
               ) : (
-                <div className="py-4 text-center text-xs text-gray-500">Chưa phát hiện chênh lệch nào.</div>
+                <div className="py-4 text-center text-xs text-gray-700">Chưa phát hiện chênh lệch nào.</div>
               )}
             </div>
           </div>
