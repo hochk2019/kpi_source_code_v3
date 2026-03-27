@@ -1,5 +1,19 @@
 # Task Tracker
 
+## Canonical Open Backlog
+
+- Source of truth cho tat ca viec chua xong hien tai la `docs/open-backlog.md`.
+- Da reconcile ngay 2026-03-27 voi cac nguon: `Gemini_review_V1.md`, `docs/gemini-review-v1-factcheck-2026-03-25.md`, `docs/server-v4-rollout-plan-2026-03-25.md`, `frontend-wave1-decomposition.md`, va `docs/ux-improvement-backlog.md`.
+- Open epics hien tai:
+  - `cng-2k4` — Post-Gemini remaining technical backlog
+  - `cng-7z0` — UX improvement backlog execution
+- Highest-priority ready items hien tai:
+  - `cng-2k4.2` — declarations write cutover
+  - `cng-2k4.3` — entrypoint cutover sang `server-v4`
+  - `cng-2k4.10` — CSRF protection
+  - `cng-2k4.14` — giam `DataHealthDashboard.jsx` xuong duoi nguong module
+  - `cng-2k4.15` — giam `AccountManager.jsx` xuong duoi nguong module
+
 ## Active Slice
 
 - Title: Tach DataHealthDashboard policy summary va source control panels
@@ -540,12 +554,13 @@
 
 ## Next Suggested Slice
 
-- Title: Ra soat DataHealthDashboard policy form inputs va action wiring
-- Bead: `TBD`
-- Status: san sang tao bead tiep theo
+- Title: Giam `DataHealthDashboard.jsx` duoi nguong module, bat dau bang policy form inputs va action wiring
+- Bead: `cng-2k4.14`
+- Status: ready
 - Follow-up backlog:
   - `DataHealthDashboard.jsx` da rut them mot cum presentation lon o khu policy; buoc tiep theo hop ly la xem xet tach tiep form inputs read-mostly va action row quanh threshold / auto-lock ma van tranh dong vao wiring state nhoi nhat cua shell
   - uu tien tach panel read-only trong muc policy truoc, tranh lan sang input wiring, async fetch orchestration, va action-heavy form state neu chua can
+  - neu slice nay xong, cac viec structural con lai da duoc track san trong `docs/open-backlog.md`: `cng-2k4.15`, `cng-2k4.16`, `cng-2k4.17`
   - truoc khi chon slice moi, tiep tuc chay GitNexus impact/context cho symbol dich de giu diff nho va co test regression ro rang
 
 ## Verification

@@ -2,6 +2,11 @@
 
 This backlog liệt kê các hạng mục cải thiện trải nghiệm người dùng. Mỗi nhiệm vụ được đánh dấu bằng checkbox để Codex Cloud có thể cập nhật tiến độ. Khi hoàn thành nhiệm vụ, hãy thay `[ ]` bằng `[x]` và ghi chú ngắn gọn (ví dụ: `[x] ... (done in PR #123)`).
 
+Reconciliation note 2026-03-27:
+- Tat ca checkbox chua xong ben duoi da duoc map thanh bead mo duoi epic `cng-7z0`.
+- Mapping canonically duoc theo doi tai `docs/open-backlog.md`.
+- Neu phat sinh muc moi trong file nay, can tao bead va cap nhat `docs/open-backlog.md` ngay trong cung session.
+
 ## 1. KPI Adjustments
 
 - [ ] Persist filter states (month, status, mine-only, staff) per user using local storage hoặc `UI_LAYOUT_KEY` trong store.

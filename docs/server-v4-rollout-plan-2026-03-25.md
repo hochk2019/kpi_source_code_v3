@@ -4,6 +4,10 @@ Date: 2026-03-25
 Bead: `cng-xyq.5`
 Status: draft for implementation sequencing
 
+Reconciliation note 2026-03-27:
+- Planning artifact nay da xong vai tro sequencing.
+- Cac viec rollout con mo hien duoc track canonically trong `docs/open-backlog.md` duoi epic `cng-2k4`, dac biet: `cng-2k4.1`, `cng-2k4.2`, `cng-2k4.3`, `cng-2k4.4`, `cng-2k4.6`, `cng-2k4.7`, `cng-2k4.8`, va `cng-2k4.9`.
+
 ## Current State
 
 - The legacy server already mounts the compiled `server-v4` runtime, but only with the `reporting` module via `mountReportingV4App` in `server/index.js`.

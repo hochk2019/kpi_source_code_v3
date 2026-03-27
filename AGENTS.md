@@ -33,6 +33,16 @@ bd close <id>                         # Complete work
 bd sync                               # Sync with git
 ```
 
+## Backlog Hygiene
+
+- Canonical open backlog cua repo la `docs/open-backlog.md`.
+- Moi muc chua xong trong review, fact-check, rollout plan, decomposition plan, hoac UX backlog deu phai co bead mo tuong ung; khong de lai TODO mo ma khong co bead.
+- Truoc khi ket thuc session, reconcile `bd ready --json`, `task.md`, `docs/open-backlog.md`, va moi planning doc da sua trong session do.
+- Neu dang lam ma lo ra follow-up moi, phai chon 1 trong 2 cach ngay lap tuc:
+  - tao bead moi va them vao `docs/open-backlog.md`
+  - ghi ro la deferred/out-of-scope trong source doc
+- Khong de `Next Suggested Slice` o trang thai `TBD` neu da du biet buoc tiep theo hop ly.
+
 ## Kết thúc phiên làm việc (tóm tắt)
 
 - Nếu có thay đổi code: chạy test/lint phù hợp và báo kết quả.
