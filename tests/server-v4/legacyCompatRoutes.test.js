@@ -290,11 +290,17 @@ describe('server-v4 legacy compatibility routes', () => {
 
     const unauthenticatedBootstrapResponse = await request(app).get('/api/bootstrap');
     expect(unauthenticatedBootstrapResponse.status).toBe(401);
-    expect(unauthenticatedBootstrapResponse.body.error).toBe('Bạn cần đăng nhập.');
+    expect(unauthenticatedBootstrapResponse.body.error).toMatchObject({
+      code: 'auth_required',
+      message: 'Bạn cần đăng nhập.',
+    });
 
     const unauthenticatedResponse = await request(app).get('/api/storage/decl_rows_v1');
     expect(unauthenticatedResponse.status).toBe(401);
-    expect(unauthenticatedResponse.body.error).toBe('Bạn cần đăng nhập.');
+    expect(unauthenticatedResponse.body.error).toMatchObject({
+      code: 'auth_required',
+      message: 'Bạn cần đăng nhập.',
+    });
 
     const unauthenticatedDeletedDeclarationsResponse = await request(app).get(
       '/api/import/deleted-declarations',
@@ -309,7 +315,10 @@ describe('server-v4 legacy compatibility routes', () => {
 
     const unknownResponse = await request(app).get('/api/storage/unknown-key').set('Cookie', cookie);
     expect(unknownResponse.status).toBe(404);
-    expect(unknownResponse.body.error).toContain('Unknown storage key');
+    expect(unknownResponse.body.error).toMatchObject({
+      code: 'not_found',
+    });
+    expect(unknownResponse.body.error.message).toContain('Unknown storage key');
   });
 
   it('requires a csrf header for legacy cookie-authenticated mutations', async () => {

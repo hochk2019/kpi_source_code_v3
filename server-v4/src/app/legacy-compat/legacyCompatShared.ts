@@ -153,27 +153,16 @@ export async function changeOwnPassword(
 
 export function handleLegacyAuthError(error: unknown, res: Response, context: string): void {
   if (error instanceof ZodError) {
-    res.status(400).json({
-      ok: false,
-      error: `Invalid request for ${context}.`,
-      details: error.flatten(),
-    });
+    respondWithLegacyError(res, 400, 'validation_error', `Invalid request for ${context}.`, error.flatten());
     return;
   }
 
   if (error instanceof AuthHttpError) {
-    res.status(error.statusCode).json({
-      ok: false,
-      error: error.message,
-      code: error.code,
-    });
+    respondWithLegacyError(res, error.statusCode, error.code, error.message);
     return;
   }
 
-  res.status(500).json({
-    ok: false,
-    error: `Failed to ${context}.`,
-  });
+  respondWithLegacyError(res, 500, 'internal_error', `Failed to ${context}.`);
 }
 
 function normalizeLegacyBootstrapValue(value: unknown): string | null {
@@ -187,4 +176,21 @@ function normalizeLegacyBootstrapValue(value: unknown): string | null {
 async function listSanitizedAccounts(persistence: RuntimePersistence): Promise<AuthAccountView[]> {
   const accounts = await persistence.authStore.listAccounts();
   return accounts.map((entry) => sanitizeAuthAccount(entry)!).filter(Boolean);
+}
+
+function respondWithLegacyError(
+  res: Response,
+  statusCode: number,
+  code: string,
+  message: string,
+  details?: unknown,
+): void {
+  res.status(statusCode).json({
+    ok: false,
+    error: {
+      code,
+      message,
+      ...(details ? { details } : {}),
+    },
+  });
 }

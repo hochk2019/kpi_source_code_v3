@@ -140,4 +140,53 @@ describe("apps/api server launcher", () => {
     expect(formatListenAddress({ address: "::1", port: 3104 })).toBe("[::1]:3104");
     expect(formatListenAddress("\\\\.\\pipe\\kpi-api")).toBe("\\\\.\\pipe\\kpi-api");
   });
+
+  it("registers and cleans up global process error logging hooks", async () => {
+    const existingUnhandledRejectionListeners = process.listeners("unhandledRejection");
+    const existingUncaughtExceptionListeners = process.listeners("uncaughtExceptionMonitor");
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const runtime = await startApiServer({
+      disableSignalHandlers: true,
+      buildApp() {
+        return express();
+      },
+    });
+
+    try {
+      const unhandledRejectionListeners = process.listeners("unhandledRejection");
+      const uncaughtExceptionListeners = process.listeners("uncaughtExceptionMonitor");
+      const unhandledRejectionHandler = unhandledRejectionListeners.find(
+        (listener) => !existingUnhandledRejectionListeners.includes(listener),
+      );
+      const uncaughtExceptionHandler = uncaughtExceptionListeners.find(
+        (listener) => !existingUncaughtExceptionListeners.includes(listener),
+      );
+
+      expect(unhandledRejectionHandler).toBeTypeOf("function");
+      expect(uncaughtExceptionHandler).toBeTypeOf("function");
+
+      unhandledRejectionHandler(new Error("background task failed"));
+      uncaughtExceptionHandler(new Error("fatal crash"));
+
+      expect(errorSpy).toHaveBeenNthCalledWith(
+        1,
+        "[kpi-api] Unhandled promise rejection",
+        expect.objectContaining({ message: "background task failed" }),
+      );
+      expect(errorSpy).toHaveBeenNthCalledWith(
+        2,
+        "[kpi-api] Uncaught exception",
+        expect.objectContaining({ message: "fatal crash" }),
+      );
+    } finally {
+      await runtime.close();
+      errorSpy.mockRestore();
+    }
+
+    expect(process.listeners("unhandledRejection")).toEqual(existingUnhandledRejectionListeners);
+    expect(process.listeners("uncaughtExceptionMonitor")).toEqual(
+      existingUncaughtExceptionListeners,
+    );
+  });
 });

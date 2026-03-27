@@ -12,20 +12,25 @@
 
 ## Active Slice
 
-- Title: Replace sync bcrypt usage on legacy auth hot paths
-- Bead: cng-2k4.11
+- Title: Add global process error logging and standardize legacy compat API error envelope
+- Bead: cng-2k4.12
 - Status: completed
 - Last updated: 2026-03-27
 
-- Them helper async `hashPassword` trong `server-v4/src/modules/auth/authShared.ts` de doi request-path hashing sang `bcrypt.hash(...)` ma khong doi bootstrap/normalization sync flow.
-- `server-v4/src/modules/auth/authService.ts` hien dung async hashing cho `createAccount`, `setAccountPassword`, va `changeOwnPassword`.
-- `server-v4/src/app/legacy-compat/legacyCompatShared.ts` da bo duplication password mutation logic; legacy compat gio delegate truc tiep ve `AuthService` de giu parity session invalidation va tranh `hashSync` tren request path.
-- Bo sung regression test moi trong `tests/server-v4/legacyCompatRoutes.test.js` de khoa legacy password reset + self-change flow sau khi delegate sang async service.
+- `apps/api/src/startApiServer.js` hien dang ky process-level logging hooks cho `unhandledRejection` va `uncaughtExceptionMonitor`, dong thoi cleanup listener khi `runtime.close()` de tranh leak giua cac lan khoi dong server.
+- `server-v4/src/app/legacy-compat/legacyCompatShared.ts` da chuyen `handleLegacyAuthError(...)` sang error envelope long nhau `{ ok: false, error: { code, message, details? } }` de dong bo voi `BaseController`/auth v4.
+- `server-v4/src/app/legacy-compat/legacyCompatStorageRoutes.ts` da chuan hoa nhanh 404 `unknown storage key` theo cung envelope long nhau.
+- `tests/appsApiStart.test.js` da bo sung regression cho dang ky + cleanup global process error logging hooks; `tests/server-v4/legacyCompatRoutes.test.js` da cap nhat expectation cho legacy compat auth/storage errors.
 - Targeted verify da pass:
-  - `pnpm exec eslint server-v4/src/modules/auth/authShared.ts server-v4/src/modules/auth/authService.ts server-v4/src/app/legacy-compat/legacyCompatShared.ts tests/server-v4/legacyCompatRoutes.test.js`
-  - `pnpm exec vitest run tests/server-v4/authRoutes.test.js tests/server-v4/legacyCompatRoutes.test.js --environment node`
+  - `pnpm exec eslint apps/api/src/startApiServer.js server-v4/src/app/legacy-compat/legacyCompatShared.ts server-v4/src/app/legacy-compat/legacyCompatStorageRoutes.ts tests/appsApiStart.test.js tests/server-v4/legacyCompatRoutes.test.js`
+  - `pnpm exec vitest run tests/appsApiStart.test.js tests/server-v4/legacyCompatRoutes.test.js --environment node`
 ## Recent Completed Slices
 
+- `cng-2k4.12` da hoan tat process-level logging + legacy compat error envelope:
+  - `apps/api/src/startApiServer.js` dang ky logging hooks cho `unhandledRejection` va `uncaughtExceptionMonitor`, cleanup listener khi `runtime.close()` de tranh ro listener khi test/start lai runtime
+  - `server-v4/src/app/legacy-compat/legacyCompatShared.ts` chuan hoa `handleLegacyAuthError(...)` ve nested error envelope cung format voi `BaseController`
+  - `server-v4/src/app/legacy-compat/legacyCompatStorageRoutes.ts` chuan hoa 404 `unknown storage key` theo nested error envelope
+  - bo sung regression `tests/appsApiStart.test.js` cho process hook lifecycle, cap nhat `tests/server-v4/legacyCompatRoutes.test.js` cho 401/404 legacy compat errors; targeted eslint + vitest da pass
 - `cng-2k4.11` da hoan tat thay `bcrypt.hashSync` o auth request paths:
   - them `hashPassword` async trong `server-v4/src/modules/auth/authShared.ts`
   - doi `server-v4/src/modules/auth/authService.ts` sang async hashing cho create/reset/change password

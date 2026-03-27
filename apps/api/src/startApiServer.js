@@ -59,17 +59,11 @@ export async function startApiServer(options = {}) {
   }
 
   const server = await listenApp(app, config);
-  const close = createClose(server, app);
-
-  if (!options.disableSignalHandlers) {
-    const stop = async () => {
-      await close();
-      process.exitCode ??= 0;
-    };
-
-    process.once("SIGINT", stop);
-    process.once("SIGTERM", stop);
-  }
+  let cleanupProcessHandlers = () => {};
+  const close = createClose(server, app, () => cleanupProcessHandlers());
+  cleanupProcessHandlers = registerRuntimeProcessHandlers(close, {
+    disableSignalHandlers: options.disableSignalHandlers,
+  });
 
   return {
     app,
@@ -91,7 +85,7 @@ function listenApp(app, config) {
   });
 }
 
-function createClose(server, app) {
+function createClose(server, app, cleanup = () => {}) {
   let closePromise = null;
 
   return () => {
@@ -114,8 +108,41 @@ function createClose(server, app) {
       if (typeof app?.locals?.runtimePersistenceDispose === "function") {
         await app.locals.runtimePersistenceDispose();
       }
-    })();
+    })().finally(() => {
+      cleanup();
+    });
 
     return closePromise;
+  };
+}
+
+function registerRuntimeProcessHandlers(close, options = {}) {
+  const stop = async () => {
+    await close();
+    process.exitCode ??= 0;
+  };
+  const logUnhandledRejection = (reason) => {
+    console.error("[kpi-api] Unhandled promise rejection", reason);
+  };
+  const logUncaughtException = (error) => {
+    console.error("[kpi-api] Uncaught exception", error);
+  };
+
+  if (!options.disableSignalHandlers) {
+    process.once("SIGINT", stop);
+    process.once("SIGTERM", stop);
+  }
+
+  process.on("unhandledRejection", logUnhandledRejection);
+  process.on("uncaughtExceptionMonitor", logUncaughtException);
+
+  return () => {
+    process.off("unhandledRejection", logUnhandledRejection);
+    process.off("uncaughtExceptionMonitor", logUncaughtException);
+
+    if (!options.disableSignalHandlers) {
+      process.off("SIGINT", stop);
+      process.off("SIGTERM", stop);
+    }
   };
 }

@@ -26,7 +26,10 @@ export function registerLegacyCompatStorageRoutes(
       if (value === undefined) {
         res.status(404).json({
           ok: false,
-          error: `Unknown storage key: ${key}`,
+          error: {
+            code: 'not_found',
+            message: `Unknown storage key: ${key}`,
+          },
         });
         return;
       }
