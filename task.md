@@ -9,7 +9,7 @@
   - `cng-7z0` — UX improvement backlog execution
 - Highest-priority ready items hien tai:
   - frontend stabilization lane:
-    - `cng-2k4.21` — Playwright regression cho lazy tab bootstrap, focus handoff, va fallback/error-boundary flow
+    - `cng-7z0.34` — checklist QA cuoi sprint + operations log cho shell/runtime UI
     - `cng-2k4.22` — text/lint hygiene cho app/runtime code, khong gom dirt co san trong `.claude/skills/*`
   - backend cutover lane:
     - `cng-2k4.2` — declarations write cutover voi compat guard + rollback plan
@@ -17,29 +17,33 @@
 
 ## Active Slice
 
-- Title: Polish accessibility and loading states after lazy admin tab split
-- Bead: cng-2k4.20 (bead CLI khong kha dung trong worktree nay)
+- Title: Expand browser regression coverage for lazy audit bootstrap and error fallback
+- Bead: cng-2k4.21 (bead CLI khong kha dung trong worktree nay)
 - Status: completed
 - Last updated: 2026-03-28
 
-- Muc tieu hien tai la chot phan polish con lai quanh `src/components/KPICalculator.jsx` sau `cng-2k4.19`, tap trung vao 3 diem:
-  - loading fallback co semantics dung cho screen reader
-  - focus handoff on dinh khi dieu huong vao cac tab lazy-load
-  - giu shell/tab root co target focus ton tai som, khong phu thuoc vao timing resolve cua module nang
+- Muc tieu slice nay la khoa regression browser runtime quanh shell lazy tabs sau `cng-2k4.20`, tap trung vao:
+  - chunk lazy-load cho `audit` tab khi di tu report workflow
+  - root focus target va loading status trong luc module nang chua resolve
+  - runtime error boundary khi dynamic import that bai tren browser thuc
 - GitNexus impact da duoc chay truoc khi sua:
-  - `KPICalculator`: `LOW`
+  - `ReportCenterPanel`: `LOW`
+  - `ExportAuditReport`: `LOW`
 - Cach sua da ap dung:
-  - tinh chinh `TabPanel` de render root focus target on dinh cho tung tab ngay ca khi module lazy con dang resolve
-  - bo sung loading fallback semantics voi `role="status"` + `aria-live="polite"` thay vi text loading thuan
-  - them fallback tu workflow step target ve tab-root target de focus handoff khong bi roi khi child anchor chua mount
-  - mo rong regression tests quanh lazy tab loading/focus contract
+  - them Playwright spec moi cho lazy `AuditLog` chunk: delay-path va failed-import path
+  - sua `ReportCenterPanel` de bo duplicate `app-tab-root-reports`, tranh DOM id collision trong shell va helper Playwright
+  - harden `ExportAuditReport` khi payload summary/total khuyet field so, tranh runtime crash trong `audit` tab
 - Trang thai verify hien tai:
-  - `npx eslint src/components/KPICalculator.jsx tests/kpiCalculator.lazyTabs.test.jsx` da pass
-  - `npx vitest run tests/kpiCalculator.errorBoundary.test.jsx tests/kpiCalculator.lazyTabs.test.jsx` da pass
-  - `gitnexus_detect_changes(scope: all)` -> `risk_level: low`, `changed_files: 4`, `affected_count: 0`
+  - `npx eslint src/components/workflows/ReportCenterPanel.jsx src/components/ExportAuditReport.jsx tests/playwright/lazy-tab-shell.spec.js` da pass
+  - `pnpm build` da pass
+  - `npx playwright test tests/playwright/lazy-tab-shell.spec.js --reporter=line` da pass
   - `bd` / `bd.cmd` trong worktree hien tai khong tim thay beads database, nen trang thai bead chua sync duoc bang CLI
 ## Recent Completed Slices
 
+- `cng-2k4.21` da xong voi browser runtime regression coverage cho lazy shell tabs:
+  - them `tests/playwright/lazy-tab-shell.spec.js` de khoa flow `Mở audit trail` khi `AuditLog` chunk dang delay va khi chunk fail
+  - bo duplicate `app-tab-root-reports` trong `src/components/workflows/ReportCenterPanel.jsx` de giu root target unique va helper E2E on dinh
+  - harden `src/components/ExportAuditReport.jsx` cho payload summary/total thieu field so, tranh runtime error trong audit workspace
 - `cng-2k4.20` da xong o muc accessibility/loading polish sau lazy admin tab split:
   - doi `TabPanel` trong `src/components/KPICalculator.jsx` thanh root wrapper focusable co `id` on dinh cho moi tab, khong con phu thuoc vao inner workflow panel moi co focus target
   - bo sung loading fallback semantics voi `role="status"` + `aria-live="polite"` de lazy tab loading duoc announce dung cho screen reader

@@ -2,7 +2,6 @@ import React, { Suspense } from "react";
 
 import {
   APP_SHELL_WORKFLOW_TARGETS,
-  getAppTabRootId,
 } from "@/components/appShell/appShellWorkflowState.js";
 import { SectionHeader, SectionSurface } from "@/components/designSystem/shellPrimitives.jsx";
 
@@ -40,7 +39,7 @@ export default function ReportCenterPanel({
   onNavigate,
 }) {
   return (
-    <div id={getAppTabRootId("reports")} className="space-y-4">
+    <div className="space-y-4">
       <SectionSurface id={APP_SHELL_WORKFLOW_TARGETS.reports.scope} tabIndex={-1}>
         <SectionHeader
           title="1. Chốt phạm vi báo cáo"

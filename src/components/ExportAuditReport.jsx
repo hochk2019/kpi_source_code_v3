@@ -106,6 +106,11 @@ function formatFilters(filters) {
 
 }
 
+function formatCount(value) {
+  const normalized = Number(value);
+  return Number.isFinite(normalized) ? normalized.toLocaleString('vi-VN') : '0';
+}
+
 function summarizeAccessFilters(filters) {
   if (!filters || typeof filters !== 'object') {
     return '';
@@ -336,7 +341,7 @@ export default function ExportAuditReport() {
 
             <span className="truncate pr-2">{item.kind || item.displayName || item.username}</span>
 
-            <span className="font-semibold text-amber-600 dark:text-amber-300">{item.total.toLocaleString('vi-VN')}</span>
+            <span className="font-semibold text-amber-600 dark:text-amber-300">{formatCount(item?.total)}</span>
 
           </li>
 
@@ -508,7 +513,7 @@ export default function ExportAuditReport() {
 
             <p className="mt-1 text-2xl font-semibold text-amber-600 dark:text-amber-300">
 
-              {summary.total.toLocaleString('vi-VN')}
+              {formatCount(summary?.total)}
 
             </p>
 
@@ -526,7 +531,7 @@ export default function ExportAuditReport() {
 
             <p className="mt-1 text-2xl font-semibold text-amber-600 dark:text-amber-300">
 
-              {totalViews.toLocaleString('vi-VN')}
+              {formatCount(totalViews)}
 
             </p>
 
@@ -663,7 +668,7 @@ export default function ExportAuditReport() {
 
             <p className="text-sm text-gray-500 dark:text-gray-400">
 
-              Hiển thị {entries.length.toLocaleString('vi-VN')} / {auditData.total.toLocaleString('vi-VN')} lượt tải.
+              Hiển thị {formatCount(entries.length)} / {formatCount(auditData?.total)} lượt tải.
 
             </p>
 
@@ -809,7 +814,7 @@ export default function ExportAuditReport() {
 
           <div className="text-gray-600 dark:text-gray-300">
 
-            Trang {page.toLocaleString('vi-VN')} / {totalPages.toLocaleString('vi-VN')}
+            Trang {formatCount(page)} / {formatCount(totalPages)}
 
           </div>
 
