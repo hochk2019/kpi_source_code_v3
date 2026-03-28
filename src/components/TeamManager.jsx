@@ -1,7 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import * as XLSX from "xlsx";
-
 import {
   getTeamRoster,
   setTeamRoster,
@@ -15,6 +13,7 @@ import {
   getAuditLogs,
 } from "@/lib/store.js";
 import TeamManagerHistoryPanel from "@/components/team-manager/TeamManagerHistoryPanel.jsx";
+import { loadXlsx } from "@/lib/loadXlsx.js";
 
 const COMPANY_PAGE_SIZE = 20;
 
@@ -300,8 +299,10 @@ function TeamManager({ canEdit = true, currentUser = null }) {
     return counts;
   }, [mstRows, resolveTeamForRow]);
 
-  const handleExportExcel = useCallback(() => {
-    const workbook = XLSX.utils.book_new();
+  const handleExportExcel = useCallback(async () => {
+    try {
+      const xlsx = await loadXlsx();
+      const workbook = xlsx.utils.book_new();
 
     const teams = Array.isArray(roster?.teams) ? roster.teams : [];
 
@@ -329,9 +330,9 @@ function TeamManager({ canEdit = true, currentUser = null }) {
       memberRows.push({ "Tổ đội": "", "Thành viên": "" });
     }
 
-    const memberSheet = XLSX.utils.json_to_sheet(memberRows);
+      const memberSheet = xlsx.utils.json_to_sheet(memberRows);
 
-    XLSX.utils.book_append_sheet(workbook, memberSheet, "Thanh_vien");
+      xlsx.utils.book_append_sheet(workbook, memberSheet, "Thanh_vien");
 
     const companyRows = [];
 
@@ -403,13 +404,17 @@ function TeamManager({ canEdit = true, currentUser = null }) {
       });
     }
 
-    const companySheet = XLSX.utils.json_to_sheet(companyRows);
+      const companySheet = xlsx.utils.json_to_sheet(companyRows);
 
-    XLSX.utils.book_append_sheet(workbook, companySheet, "Cong_ty");
+      xlsx.utils.book_append_sheet(workbook, companySheet, "Cong_ty");
 
-    const stamp = new Date().toISOString().slice(0, 10);
+      const stamp = new Date().toISOString().slice(0, 10);
 
-    XLSX.writeFile(workbook, `to-doi_${stamp}.xlsx`);
+      xlsx.writeFile(workbook, `to-doi_${stamp}.xlsx`);
+    } catch (error) {
+      console.error(error);
+      alert("Không thể xuất file Excel lúc này.");
+    }
   }, [roster, mstRows, resolveTeamForRow]);
 
   const handleRefreshMST = () => {

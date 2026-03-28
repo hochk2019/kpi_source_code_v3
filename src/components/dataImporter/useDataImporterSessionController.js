@@ -1,5 +1,4 @@
 import { useCallback, useState } from "react";
-import * as XLSX from "xlsx";
 
 import {
   getDeclHistoryForRow,
@@ -62,6 +61,7 @@ import {
   toDateInputValue,
 } from "@/components/dataImporter/dataImporterConfig.js";
 import { ensureCOFields, ensureLicenseFields } from "@/components/dataImporter/dataImporterLicenseUtils.js";
+import { loadXlsx } from "@/lib/loadXlsx.js";
 
 export default function useDataImporterSessionController({
   currentUser,
@@ -504,7 +504,7 @@ export default function useDataImporterSessionController({
     mapRow,
     saveDeclRows,
     pushImportLog,
-    xlsx: XLSX,
+    xlsxLoader: loadXlsx,
     FileReaderCtor: typeof FileReader === "function" ? FileReader : null,
     toast,
     acceptedImportExtensions: ACCEPTED_IMPORT_EXTENSIONS,

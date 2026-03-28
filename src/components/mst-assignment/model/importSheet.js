@@ -1,5 +1,3 @@
-import * as XLSX from "xlsx";
-
 const normalize = (value = "") =>
   value
     .toString()
@@ -8,6 +6,26 @@ const normalize = (value = "") =>
     .replace(/\s+/g, " ")
     .trim()
     .toLowerCase();
+
+const EXCEL_EPOCH_UTC = Date.UTC(1899, 11, 30);
+
+function excelSerialToISO(value) {
+  if (!Number.isFinite(value)) {
+    return "";
+  }
+
+  const date = new Date(EXCEL_EPOCH_UTC + Math.round(value * 24 * 60 * 60 * 1000));
+
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  const year = date.getUTCFullYear();
+  const month = `${date.getUTCMonth() + 1}`.padStart(2, "0");
+  const day = `${date.getUTCDate()}`.padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
 
 export const headerAliases = {
   mst: ["mst", "mã số thuế", "ma so thue", "mã số thuế (mst)"],
@@ -38,14 +56,7 @@ export const toISO = (value) => {
   }
 
   if (typeof value === "number") {
-    const date = XLSX.SSF.parse_date_code(value);
-    if (!date) return "";
-
-    const year = date.y;
-    const month = `${date.m}`.padStart(2, "0");
-    const day = `${date.d}`.padStart(2, "0");
-
-    return `${year}-${month}-${day}`;
+    return excelSerialToISO(value);
   }
 
   const raw = value.toString().trim();

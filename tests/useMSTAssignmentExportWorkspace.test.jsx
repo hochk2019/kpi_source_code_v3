@@ -15,7 +15,7 @@ function createXlsxDouble() {
 }
 
 describe("useMSTAssignmentExportWorkspace", () => {
-  it("alerts and skips export when the selected scope has no rows", () => {
+  it("alerts and skips export when the selected scope has no rows", async () => {
     const alertFn = vi.fn();
     const xlsx = createXlsxDouble();
 
@@ -29,8 +29,8 @@ describe("useMSTAssignmentExportWorkspace", () => {
       })
     );
 
-    act(() => {
-      result.current.exportRowsToExcel("filtered");
+    await act(async () => {
+      await result.current.exportRowsToExcel("filtered");
     });
 
     expect(alertFn).toHaveBeenCalledWith("Không có dữ liệu để xuất Excel.");
@@ -38,7 +38,7 @@ describe("useMSTAssignmentExportWorkspace", () => {
     expect(xlsx.writeFile).not.toHaveBeenCalled();
   });
 
-  it("exports the filtered rows by default with normalized column data", () => {
+  it("exports the filtered rows by default with normalized column data", async () => {
     const xlsx = createXlsxDouble();
     const computeStatusDisplay = vi.fn((item) => (item.mst === "0312345678" ? "Đang gán" : ""));
 
@@ -65,8 +65,8 @@ describe("useMSTAssignmentExportWorkspace", () => {
       })
     );
 
-    act(() => {
-      result.current.exportRowsToExcel();
+    await act(async () => {
+      await result.current.exportRowsToExcel();
     });
 
     expect(xlsx.utils.json_to_sheet).toHaveBeenCalledWith([
@@ -90,7 +90,7 @@ describe("useMSTAssignmentExportWorkspace", () => {
     expect(xlsx.writeFile).toHaveBeenCalledWith({ workbook: true }, "gan-mst-loc-20260326_1509.xlsx");
   });
 
-  it("exports the full rows collection when scope is all", () => {
+  it("exports the full rows collection when scope is all", async () => {
     const xlsx = createXlsxDouble();
     const rows = [
       { mst: "0312345678", company: "Công ty A", status: "assigned" },
@@ -107,8 +107,8 @@ describe("useMSTAssignmentExportWorkspace", () => {
       })
     );
 
-    act(() => {
-      result.current.exportRowsToExcel("all");
+    await act(async () => {
+      await result.current.exportRowsToExcel("all");
     });
 
     expect(xlsx.utils.json_to_sheet).toHaveBeenCalledWith([

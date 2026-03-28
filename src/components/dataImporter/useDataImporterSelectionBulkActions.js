@@ -1,5 +1,7 @@
 import { useCallback } from "react";
 
+import { loadXlsx } from "@/lib/loadXlsx.js";
+
 export default function useDataImporterSelectionBulkActions({
   deleteEnabled,
   selectionEnabled,
@@ -17,6 +19,7 @@ export default function useDataImporterSelectionBulkActions({
   coLabel,
   coLineCount,
   xlsx,
+  xlsxLoader = loadXlsx,
   handleSelectFiltered,
   handleMarkReviewed,
   handleUnmarkReviewed,
@@ -29,7 +32,7 @@ export default function useDataImporterSelectionBulkActions({
   const canReview = selectionEnabled && selectedKeys.length > 0 && canReviewAlerts;
   const canUnreview = selectionEnabled && selectedReviewedCount > 0 && canReviewAlerts;
 
-  const handleExportSelected = useCallback(() => {
+  const handleExportSelected = useCallback(async () => {
     if (selectedKeys.length === 0) {
       alert("Hãy chọn tờ khai trước khi xuất Excel.");
       return;
@@ -62,11 +65,12 @@ export default function useDataImporterSelectionBulkActions({
       };
     });
 
-    const worksheet = xlsx.utils.json_to_sheet(data);
-    const workbook = xlsx.utils.book_new();
-    xlsx.utils.book_append_sheet(workbook, worksheet, "ToKhai");
+    const activeXlsx = xlsx ?? (await xlsxLoader());
+    const worksheet = activeXlsx.utils.json_to_sheet(data);
+    const workbook = activeXlsx.utils.book_new();
+    activeXlsx.utils.book_append_sheet(workbook, worksheet, "ToKhai");
     const timestamp = new Date().toISOString().slice(0, 10);
-    xlsx.writeFile(workbook, `tokhai_da_chon_${timestamp}.xlsx`);
+    activeXlsx.writeFile(workbook, `tokhai_da_chon_${timestamp}.xlsx`);
   }, [
     coLabel,
     coLineCount,
@@ -76,6 +80,7 @@ export default function useDataImporterSelectionBulkActions({
     selectedKeys,
     summarizeLicenseSnapshot,
     xlsx,
+    xlsxLoader,
   ]);
 
   const selectionActionsProps = {

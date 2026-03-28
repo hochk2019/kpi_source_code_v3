@@ -71,25 +71,25 @@ describe("useDataImporterSelectionBulkActions", () => {
     expect(result.current.selectionActionsProps.filteredKeysLength).toBe(2);
   });
 
-  it("alerts instead of exporting when nothing is selected", () => {
+  it("alerts instead of exporting when nothing is selected", async () => {
     const alertSpy = vi.spyOn(window, "alert").mockImplementation(() => {});
     const props = createProps({ selectedKeys: [] });
     const { result } = renderHook(() => useDataImporterSelectionBulkActions(props));
 
-    act(() => {
-      result.current.handleExportSelected();
+    await act(async () => {
+      await result.current.handleExportSelected();
     });
 
     expect(alertSpy).toHaveBeenCalledWith("Hãy chọn tờ khai trước khi xuất Excel.");
     expect(props.xlsx.writeFile).not.toHaveBeenCalled();
   });
 
-  it("exports the selected rows through XLSX with normalized license and C/O fields", () => {
+  it("exports the selected rows through XLSX with normalized license and C/O fields", async () => {
     const props = createProps();
     const { result } = renderHook(() => useDataImporterSelectionBulkActions(props));
 
-    act(() => {
-      result.current.handleExportSelected();
+    await act(async () => {
+      await result.current.handleExportSelected();
     });
 
     expect(props.summarizeLicenseSnapshot).toHaveBeenCalledWith(props.rawRows[0]);

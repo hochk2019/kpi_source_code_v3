@@ -1,7 +1,6 @@
 import { useCallback, useRef, useState } from "react";
 
-import * as XLSX from "xlsx";
-
+import { loadXlsx } from "@/lib/loadXlsx.js";
 import { getMSTMap, upsertMSTRows } from "@/lib/store.js";
 import { sortMSTRows } from "@/components/mst-assignment/model/displaySelectors.js";
 
@@ -104,7 +103,8 @@ export default function useMSTAssignmentImportSaveWorkspace({
     : NOOP_ALERT,
   loadRows = getMSTMap,
   persistRows = upsertMSTRows,
-  xlsx = XLSX,
+  xlsx = null,
+  xlsxLoader = loadXlsx,
 }) {
   const fileRef = useRef(null);
   const [selectedFileName, setSelectedFileName] = useState("");
@@ -141,10 +141,11 @@ export default function useMSTAssignmentImportSaveWorkspace({
     }
 
     try {
+      const activeXlsx = xlsx ?? (await xlsxLoader());
       const buffer = await file.arrayBuffer();
-      const workbook = xlsx.read(buffer, { type: "array" });
+      const workbook = activeXlsx.read(buffer, { type: "array" });
       const sheet = workbook.Sheets[workbook.SheetNames[0]];
-      const jsonRows = xlsx.utils.sheet_to_json(sheet, {
+      const jsonRows = activeXlsx.utils.sheet_to_json(sheet, {
         defval: "",
         raw: false,
       });
@@ -197,6 +198,7 @@ export default function useMSTAssignmentImportSaveWorkspace({
     rows,
     setRows,
     xlsx,
+    xlsxLoader,
   ]);
 
   const onSave = useCallback(() => {

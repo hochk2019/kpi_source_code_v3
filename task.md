@@ -8,34 +8,41 @@
   - `cng-2k4` — Post-Gemini remaining technical backlog
   - `cng-7z0` — UX improvement backlog execution
 - Highest-priority ready items hien tai:
-  - chua ghi nhan them ready item moi sau khi xong `cng-2k4.6`; can tiep tuc chon slice tiep theo trong `cng-2k4`
+  - `cng-2k4.18` da hoan tat lazy-load `xlsx` cho cac luong import/export Excel tren client; can tiep tuc chon slice tiep theo trong `cng-2k4`
 
 ## Active Slice
 
-- Title: Extract alerts + notifications backend into server-v4 alerts module
-- Bead: cng-2k4.6 (bead CLI khong kha dung trong worktree nay)
+- Title: Lazy-load `xlsx` across Excel import/export UI flows
+- Bead: cng-2k4.18 (bead CLI khong kha dung trong worktree nay)
 - Status: completed
 - Last updated: 2026-03-28
 
-- Muc tieu hien tai la dua alert/notification surface ve module `server-v4` rieng (`/api/v4/alerts/*`) trong khi van reuse legacy domain logic tu `server/index.js` de tranh tach monolith qua rong trong cung mot slice.
+- Muc tieu hien tai la cat static `xlsx` khoi main UI bundle bang cach doi cac luong import/export Excel sang lazy runtime loader, nhung van giu worker chunk va injection path cho test/dependency seams.
 - GitNexus impact da duoc chay truoc khi sua:
-  - `buildV4App`: `MEDIUM`
-  - `selectLegacyV4Modules`: `LOW`
-  - `mountReportingV4App`: `LOW`
+  - `TeamManager`: `LOW`
+  - `HQAgencyManager`: `LOW`
+  - `useDataImporterSessionController`: `LOW`
+  - `useDataImporterResultsSurface`: `LOW`
+  - `useMSTAssignmentExportWorkspace`: `LOW`
+  - `useMSTAssignmentImportSaveWorkspace`: `LOW`
 - Cach sua da ap dung:
-  - them `server-v4/src/modules/alerts/alerts.module.ts`, `alertsRuntime.ts`, va `alertsRoutes.ts` de mount canonical routes: `GET /summary`, `GET|PUT /config`, `POST /review`, `POST /unreview`, `GET /notifications`, va `GET /notifications/stream`
-  - mo rong `server-v4/src/app/module-catalog.ts`, `build-v4-app.ts`, va `server-v4/src/index.ts` de `alerts` tro thanh module first-class trong app shell, health metrics, va runtime exports
-  - noi `server/index.js` vao `runtimeModule.buildV4App({ alerts })` bang adapter reuse `buildAlertPayload`, `getAlertConfig`, `saveAlertConfig`, `markDeclarationsReviewed`, `unmarkDeclarationsReviewed`, `evaluateDeclarationAlerts`, `listNotifications`, va `registerSseClient`
-  - cap nhat `server/v4RolloutMount.js` va `tests/v4RolloutMount.test.js` de legacy rollout selector mount them `alerts` cung wave-2 modules
-  - bo sung regression `tests/server-v4/alertsRoutes.test.js` cho permission gates, config/review wiring, va notification stream delegation
+  - them `src/lib/loadXlsx.js` de memoize dynamic import `xlsx` va dung chung cho cac luong UI can Excel runtime
+  - doi `TeamManager`, `HQAgencyManager`, `useMSTAssignmentExportWorkspace`, `useMSTAssignmentImportSaveWorkspace`, va cum `dataImporter/*` sang injected-or-lazy `xlsxLoader`, giu test seam nhung khong con static import trong shell hooks/components
+  - cap nhat `src/components/mst-assignment/model/importSheet.js` de parse Excel serial date noi bo, cat phu thuoc `XLSX.SSF.parse_date_code` khoi model file dang duoc import truc tiep boi shell
+  - giu `src/components/dataImporter/dataImporterWorkbook.worker.js` tiep tuc import `xlsx` trong worker chunk rieng, tranh lam to main bundle nhung khong vo luong parse trong worker
+  - cap nhat regression tests cho export/import async flow va lazy loader wiring (`hqAgencyManager`, `dataImporter`, `mst-assignment`)
 - Trang thai verify hien tai:
-  - `pnpm exec eslint server-v4/src/modules/alerts/alerts.module.ts server-v4/src/modules/alerts/alertsRuntime.ts server-v4/src/modules/alerts/alertsRoutes.ts server-v4/src/app/module-catalog.ts server-v4/src/app/build-v4-app.ts server-v4/src/index.ts server/index.js server/v4RolloutMount.js tests/server-v4/alertsRoutes.test.js tests/v4RolloutMount.test.js` da pass
-  - `pnpm run typecheck:server-v4` da pass
-  - `pnpm exec vitest run tests/server-v4/alertsRoutes.test.js tests/server-v4/appShell.test.js tests/v4RolloutMount.test.js --environment node` da pass
-  - `gitnexus_detect_changes(scope: all)` hien tra `high` do graph quy fan-out rong tren `server/index.js`; practical diff van gioi han trong `mountReportingV4App` + rollout wiring, va targeted tests cho d=1 scope da pass
+  - `pnpm exec vitest run tests/useMSTAssignmentExportWorkspace.test.jsx tests/useMSTAssignmentImportSaveWorkspace.test.jsx tests/mstAssignment.import-sheet.test.js tests/dataImporterWorkbookParser.test.js tests/useDataImporterSelectionBulkActions.test.jsx tests/useDataImporterResultsController.test.jsx tests/useDataImporterResultsSurface.test.jsx tests/useDataImporterSessionController.test.jsx tests/hqAgencyManager.test.jsx --environment jsdom` da pass
+  - `pnpm exec eslint src/lib/loadXlsx.js src/components/TeamManager.jsx src/components/HQAgencyManager.jsx src/components/mst-assignment/hooks/useMSTAssignmentExportWorkspace.js src/components/mst-assignment/hooks/useMSTAssignmentImportSaveWorkspace.js src/components/mst-assignment/model/importSheet.js src/components/dataImporter/dataImporterWorkbookParser.js src/components/dataImporter/useDataImporterImportFlow.js src/components/dataImporter/useDataImporterSelectionBulkActions.js src/components/dataImporter/useDataImporterWorkflowSession.js src/components/dataImporter/useDataImporterResultsController.js src/components/dataImporter/useDataImporterSessionController.js src/components/dataImporter/useDataImporterResultsSurface.jsx tests/useMSTAssignmentExportWorkspace.test.jsx tests/useDataImporterSelectionBulkActions.test.jsx tests/hqAgencyManager.test.jsx tests/mstAssignment.import-sheet.test.js tests/dataImporterWorkbookParser.test.js tests/useMSTAssignmentImportSaveWorkspace.test.jsx tests/useDataImporterResultsController.test.jsx tests/useDataImporterResultsSurface.test.jsx tests/useDataImporterSessionController.test.jsx` da pass
+  - `gitnexus_detect_changes(scope: all)` dang duoc chay de xac nhan fan-out dung voi pham vi client Excel flows truoc khi chot handoff
   - `bd` / `bd.cmd` trong worktree hien tai khong tim thay beads database, nen trang thai bead chua sync duoc bang CLI
 ## Recent Completed Slices
 
+- `cng-2k4.18` da xong o muc lazy-load `xlsx` cho cac luong Excel tren client:
+  - them `src/lib/loadXlsx.js` de memoize dynamic import `xlsx` va cat static dependency khoi cac shell UI/hook
+  - refactor `TeamManager`, `HQAgencyManager`, `dataImporter/*`, `useMSTAssignmentExportWorkspace`, va `useMSTAssignmentImportSaveWorkspace` sang runtime lazy-load / injected loader
+  - bo static `xlsx` khoi `src/components/mst-assignment/model/importSheet.js` bang local Excel serial date parser, tranh model file nay tiep tuc keo `xlsx` vao main bundle
+  - targeted verify da pass: vitest jsdom batch cho `mst-assignment + dataImporter + HQAgencyManager` va eslint batch tren toan bo file da doi
 - `cng-2k4.6` da xong o muc alerts + notifications module extraction cho server-v4:
   - them module `server-v4/src/modules/alerts/*` de expose canonical alert surface duoi `/api/v4/alerts`
   - `buildV4App`/`moduleCatalog`/`server-v4` public exports da mount runtime moi va dua `alerts` vao rollout health metrics

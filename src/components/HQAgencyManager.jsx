@@ -1,7 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import * as XLSX from "xlsx";
-
 import {
   upsertHQAgencies,
   saveHQAgencyRow,
@@ -35,6 +33,7 @@ import {
   suggestCompanyByMST,
   formatHistoryTimestamp,
 } from "@/components/hq-agency-manager/hqAgencyManagerModel.js";
+import { loadXlsx } from "@/lib/loadXlsx.js";
 
 export default function HQAgencyManager({ canEdit = true, currentUser = null }) {
   const initialDraftsRef = useRef(null);
@@ -660,13 +659,14 @@ export default function HQAgencyManager({ canEdit = true, currentUser = null }) 
     }
 
     try {
+      const xlsx = await loadXlsx();
       const buffer = await file.arrayBuffer();
 
-      const wb = XLSX.read(buffer, { type: "array" });
+      const wb = xlsx.read(buffer, { type: "array" });
 
       const sheet = wb.Sheets[wb.SheetNames[0]];
 
-      const json = XLSX.utils.sheet_to_json(sheet, { raw: false, defval: "" });
+      const json = xlsx.utils.sheet_to_json(sheet, { raw: false, defval: "" });
 
       const mapped = json
 

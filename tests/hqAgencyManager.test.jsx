@@ -17,28 +17,27 @@ import {
 } from "@/lib/storageClient.js";
 
 const historyMock = vi.hoisted(() => vi.fn().mockResolvedValue([]));
+const xlsxModuleMock = vi.hoisted(() => ({
+  read: vi.fn(() => ({
+    SheetNames: ["Sheet1"],
+
+    Sheets: { Sheet1: { mock: true } },
+  })),
+
+  utils: {
+    sheet_to_json: vi.fn(() => []),
+  },
+}));
 
 vi.mock("@/lib/hqHistoryClient.js", () => ({
   refreshHQHistoryCache: historyMock,
 }));
 
-vi.mock("xlsx", () => {
-  const sheet_to_json = vi.fn(() => []);
+vi.mock("@/lib/loadXlsx.js", () => ({
+  loadXlsx: vi.fn(async () => xlsxModuleMock),
+}));
 
-  const read = vi.fn(() => ({
-    SheetNames: ["Sheet1"],
-
-    Sheets: { Sheet1: { mock: true } },
-  }));
-
-  return {
-    read,
-
-    utils: { sheet_to_json },
-  };
-});
-
-import * as XLSX from "xlsx";
+import { loadXlsx } from "@/lib/loadXlsx.js";
 
 describe("HQAgencyManager", () => {
   let alertMock;
@@ -52,7 +51,8 @@ describe("HQAgencyManager", () => {
 
     sharedSetItem(DECL_KEY, "[]");
 
-    XLSX.utils.sheet_to_json.mockReset();
+    xlsxModuleMock.utils.sheet_to_json.mockReset();
+    loadXlsx.mockClear();
 
     alertMock = vi.spyOn(window, "alert").mockImplementation(() => {});
 
@@ -74,7 +74,7 @@ describe("HQAgencyManager", () => {
   it("import Excel rồi lưu cấu hình Đại lý HQ vào store", async () => {
     const user = userEvent.setup();
 
-    XLSX.utils.sheet_to_json.mockReturnValue([
+    xlsxModuleMock.utils.sheet_to_json.mockReturnValue([
       { MST: "0201234567", "Công ty": "Alpha Trading", "Đại lý HQ": "AIR" },
 
       { MST: "0101234567", "Công Ty": "Beta Logistics", "Đại lý": "FCL" },
@@ -95,7 +95,8 @@ describe("HQAgencyManager", () => {
     await user.click(screen.getByRole("button", { name: /Import Excel/i }));
 
     await waitFor(() => {
-      expect(XLSX.utils.sheet_to_json).toHaveBeenCalled();
+      expect(loadXlsx).toHaveBeenCalledTimes(1);
+      expect(xlsxModuleMock.utils.sheet_to_json).toHaveBeenCalled();
 
       expect(screen.getByDisplayValue("Alpha Trading")).toBeInTheDocument();
 

@@ -53,6 +53,7 @@ export default function useDataImporterImportFlow({
   loadSavedRows,
   fetchAlerts,
   xlsx,
+  xlsxLoader,
   parseWorkbookRows,
   FileReaderCtor,
   toast,
@@ -129,7 +130,7 @@ export default function useDataImporterImportFlow({
         try {
           const workbookData = await (parseWorkbookRows
             ? parseWorkbookRows(reader.result)
-            : parseDataImporterWorkbook(reader.result, { xlsx }));
+            : parseDataImporterWorkbook(reader.result, { xlsx, xlsxLoader }));
           const sheetName = workbookData?.sheetName;
 
           if (!sheetName) {
@@ -258,6 +259,7 @@ export default function useDataImporterImportFlow({
       sortDeclRows,
       toast,
       xlsx,
+      xlsxLoader,
       parseWorkbookRows,
     ],
   );

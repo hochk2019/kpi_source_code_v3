@@ -1,5 +1,4 @@
 import { useEffect } from "react";
-import * as XLSX from "xlsx";
 
 import {
   hardDeleteDeclRows,
@@ -32,6 +31,7 @@ import useTooltipTitles from "@/hooks/useTooltipTitles.js";
 import { filterDeclRows } from "../../../packages/domain/src/declSearch.js";
 import { computeLicenseSnapshot } from "../../../shared/licenseSummary.js";
 import { toast } from "@/shared/toast.js";
+import { loadXlsx } from "@/lib/loadXlsx.js";
 
 export default function useDataImporterResultsSurface({
   actor,
@@ -287,7 +287,7 @@ export default function useDataImporterResultsSurface({
     hardDeleteDeclRows,
     restoreDeclRows,
     pushAuditLog,
-    xlsx: XLSX,
+    xlsxLoader: loadXlsx,
     toast,
     registerHeaderRef,
     renderResizeHandle,

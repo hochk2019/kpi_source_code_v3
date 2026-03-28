@@ -1,4 +1,4 @@
-import * as XLSX from "xlsx";
+import { loadXlsx } from "@/lib/loadXlsx.js";
 
 function normalizeWorkerResult(data) {
   return {
@@ -7,7 +7,11 @@ function normalizeWorkerResult(data) {
   };
 }
 
-export function parseDataImporterWorkbookSync(buffer, { xlsx = XLSX } = {}) {
+export function parseDataImporterWorkbookSync(buffer, { xlsx } = {}) {
+  if (!xlsx) {
+    throw new Error("xlsx instance is required for sync parsing.");
+  }
+
   const workbook = xlsx.read(buffer, { type: "array" });
   const sheetName = workbook?.SheetNames?.[0] || "";
   const sheet = sheetName ? workbook?.Sheets?.[sheetName] : null;
@@ -69,9 +73,13 @@ function parseDataImporterWorkbookInWorker(buffer, { WorkerCtor, workerUrl }) {
 export function createDataImporterWorkbookParser({
   WorkerCtor = typeof Worker === "function" ? Worker : undefined,
   workerUrl = new URL("./dataImporterWorkbook.worker.js", import.meta.url),
-  xlsx = XLSX,
+  xlsx = null,
+  xlsxLoader = loadXlsx,
 } = {}) {
-  const parseSync = (buffer) => Promise.resolve(parseDataImporterWorkbookSync(buffer, { xlsx }));
+  const parseSync = async (buffer) => {
+    const activeXlsx = xlsx ?? (await xlsxLoader());
+    return parseDataImporterWorkbookSync(buffer, { xlsx: activeXlsx });
+  };
 
   if (typeof WorkerCtor !== "function") {
     return parseSync;
