@@ -5,6 +5,7 @@ import { moduleCatalog } from '../../server-v4/src/index.ts';
 describe('server-v4 module catalog', () => {
   it('tracks the expected domain boundaries', () => {
     expect(moduleCatalog.map((entry) => entry.id)).toEqual([
+      'alerts',
       'auth',
       'backup',
       'declarations',

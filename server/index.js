@@ -248,6 +248,26 @@ async function mountReportingV4App(targetApp) {
 
     const v4App = runtimeModule.buildV4App({
       modules: selectedModules,
+      alerts: {
+        domain: {
+          buildAlertPayload,
+          getAlertConfig,
+          listNotifications: ({ limit } = {}) => listNotifications({ limit }),
+          reviewAlerts: ({ actor, keys }) => ({
+            updated: markDeclarationsReviewed(keys, { actor }),
+            summary: evaluateDeclarationAlerts({ actor, reason: 'manual-review' }),
+          }),
+          unreviewAlerts: ({ actor, keys }) => ({
+            updated: unmarkDeclarationsReviewed(keys, { actor }),
+            summary: evaluateDeclarationAlerts({ actor, reason: 'manual-unreview' }),
+          }),
+          updateAlertConfig: ({ actor, config }) => ({
+            config: saveAlertConfig(config || {}),
+            summary: evaluateDeclarationAlerts({ actor, reason: 'alert-config' }),
+          }),
+        },
+        registerNotificationStream: registerSseClient,
+      },
       backup: {
         domain: backupDomain,
         describeBackupDirectoryError,

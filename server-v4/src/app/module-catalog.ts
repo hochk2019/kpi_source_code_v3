@@ -1,4 +1,5 @@
 import type { DomainModule } from './domain-module.js';
+import { alertsModule } from '../modules/alerts/alerts.module.js';
 import { authModule } from '../modules/auth/auth.module.js';
 import { backupModule } from '../modules/backup/backup.module.js';
 import { declarationsModule } from '../modules/declarations/declarations.module.js';
@@ -10,6 +11,7 @@ import { reportingModule } from '../modules/reporting/reporting.module.js';
 import { teamsModule } from '../modules/teams/teams.module.js';
 
 export const moduleCatalog: readonly DomainModule[] = Object.freeze([
+  alertsModule,
   authModule,
   backupModule,
   declarationsModule,

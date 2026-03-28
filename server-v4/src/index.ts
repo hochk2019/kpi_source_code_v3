@@ -2,5 +2,7 @@ export { buildV4App } from './app/build-v4-app.js';
 export type { BuildV4AppOptions } from './app/build-v4-app.js';
 export { moduleCatalog } from './app/module-catalog.js';
 export { serializeDomainModules, type DomainModule } from './app/domain-module.js';
+export { createAlertsRuntime } from './modules/alerts/alertsRuntime.js';
+export type { AlertsRuntime } from './modules/alerts/alertsRuntime.js';
 export { createBackupAdminRuntime } from './modules/backup/backupRuntime.js';
 export type { BackupAdminRuntime } from './modules/backup/backupRuntime.js';

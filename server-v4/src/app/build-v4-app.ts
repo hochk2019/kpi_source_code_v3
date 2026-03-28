@@ -1,6 +1,8 @@
 import express, { type Express, type Router } from 'express';
 
 import { resolveServerV4Config, type ServerV4ConfigInput } from '../config/server-v4-config.js';
+import { buildAlertsRouter } from '../modules/alerts/alertsRoutes.js';
+import { createAlertsRuntime, type AlertsRuntime } from '../modules/alerts/alertsRuntime.js';
 import { buildAuthRouter } from '../modules/auth/authRoutes.js';
 import { buildBackupRouter } from '../modules/backup/backupRoutes.js';
 import {
@@ -41,6 +43,7 @@ export type BuildV4AppOptions = ServerV4ConfigInput & {
     guardMode?: ImporterCompatGuardMode;
     tracker?: ImporterCompatTrafficTracker;
   };
+  alerts?: AlertsRuntime;
   backup?: BackupAdminRuntime;
 };
 
@@ -68,6 +71,7 @@ export function buildV4App(input?: readonly DomainModule[] | BuildV4AppOptions):
   const safeModules = serializeDomainModules(options.modules ?? moduleCatalog);
   const config = resolveServerV4Config(options);
   const persistence = options.persistence ?? createRuntimePersistence(config);
+  const alertsRuntime = options.alerts ?? createAlertsRuntime();
   const backupAdmin =
     options.backup ??
     createBackupAdminRuntime({
@@ -82,6 +86,7 @@ export function buildV4App(input?: readonly DomainModule[] | BuildV4AppOptions):
       guardMode: importerCompatGuardMode,
     });
   const implementedModuleIds = new Set([
+    'alerts',
     'auth',
     'kpi-rules',
     'kpi-adjustments',
@@ -97,6 +102,7 @@ export function buildV4App(input?: readonly DomainModule[] | BuildV4AppOptions):
   app.use(express.json());
   app.use(createCsrfProtection());
   app.locals.runtimePersistenceDispose = async () => {
+    await alertsRuntime.dispose?.();
     await persistence.dispose();
     await backupAdmin.dispose?.();
   };
@@ -144,6 +150,11 @@ export function buildV4App(input?: readonly DomainModule[] | BuildV4AppOptions):
   });
 
   for (const domainModule of safeModules) {
+    if (domainModule.id === 'alerts') {
+      app.use(domainModule.basePath, buildAlertsRouter(domainModule, persistence.authStore, alertsRuntime));
+      continue;
+    }
+
     if (domainModule.id === 'auth') {
       app.use(domainModule.basePath, buildAuthRouter(domainModule, persistence.authStore));
       continue;

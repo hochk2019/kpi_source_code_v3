@@ -8,34 +8,40 @@
   - `cng-2k4` — Post-Gemini remaining technical backlog
   - `cng-7z0` — UX improvement backlog execution
 - Highest-priority ready items hien tai:
-  - chua ghi nhan them ready item moi; follow-up `restore` cua `cng-2k4.4` da xong va can chon slice tiep theo trong `cng-2k4`
+  - chua ghi nhan them ready item moi sau khi xong `cng-2k4.6`; can tiep tuc chon slice tiep theo trong `cng-2k4`
 
 ## Active Slice
 
-- Title: Harden server-v4 backup restore flow
-- Bead: cng-2k4.4 (follow-up scope; bead CLI khong kha dung trong worktree nay)
+- Title: Extract alerts + notifications backend into server-v4 alerts module
+- Bead: cng-2k4.6 (bead CLI khong kha dung trong worktree nay)
 - Status: completed
 - Last updated: 2026-03-28
 
-- Muc tieu hien tai la dong goi not `restore` cho backup module `server-v4`, giu parity voi legacy route va xu ly an toan bai toan thay file SQLite khi `SqliteAuthStore` dang cache open handle.
+- Muc tieu hien tai la dua alert/notification surface ve module `server-v4` rieng (`/api/v4/alerts/*`) trong khi van reuse legacy domain logic tu `server/index.js` de tranh tach monolith qua rong trong cung mot slice.
 - GitNexus impact da duoc chay truoc khi sua:
-  - `restoreDatabaseBackup`: `LOW`
-  - `SqliteAuthStore`: `LOW`
-  - `AuthStore`: `LOW`
-  - `BackupAdminDomain`: `LOW`
+  - `buildV4App`: `MEDIUM`
+  - `selectLegacyV4Modules`: `LOW`
+  - `mountReportingV4App`: `LOW`
 - Cach sua da ap dung:
-  - mo rong `AuthStore` voi hook `reset?()` va implement `SqliteAuthStore.reset()` de dong cached `better-sqlite3` handle truoc khi restore
-  - mo `POST /restore` trong `server-v4/src/modules/backup/backup.module.ts` va `backupRoutes.ts`
-  - noi `buildV4App` vao `createBackupAdminRuntime({ authStore })` de runtime co the release/reopen SQLite handle an toan trong cung process
-  - bo sung regression route-level cho restore, assert DB file duoc thay the va auth store reset hook duoc goi
+  - them `server-v4/src/modules/alerts/alerts.module.ts`, `alertsRuntime.ts`, va `alertsRoutes.ts` de mount canonical routes: `GET /summary`, `GET|PUT /config`, `POST /review`, `POST /unreview`, `GET /notifications`, va `GET /notifications/stream`
+  - mo rong `server-v4/src/app/module-catalog.ts`, `build-v4-app.ts`, va `server-v4/src/index.ts` de `alerts` tro thanh module first-class trong app shell, health metrics, va runtime exports
+  - noi `server/index.js` vao `runtimeModule.buildV4App({ alerts })` bang adapter reuse `buildAlertPayload`, `getAlertConfig`, `saveAlertConfig`, `markDeclarationsReviewed`, `unmarkDeclarationsReviewed`, `evaluateDeclarationAlerts`, `listNotifications`, va `registerSseClient`
+  - cap nhat `server/v4RolloutMount.js` va `tests/v4RolloutMount.test.js` de legacy rollout selector mount them `alerts` cung wave-2 modules
+  - bo sung regression `tests/server-v4/alertsRoutes.test.js` cho permission gates, config/review wiring, va notification stream delegation
 - Trang thai verify hien tai:
-  - `pnpm exec eslint server-v4/src/modules/auth/authStore.ts server-v4/src/modules/auth/sqliteAuthStore.ts server-v4/src/modules/backup/backup.module.ts server-v4/src/modules/backup/backupRuntime.ts server-v4/src/modules/backup/backupRoutes.ts server-v4/src/app/build-v4-app.ts tests/server-v4/backupRoutes.test.js` da pass
+  - `pnpm exec eslint server-v4/src/modules/alerts/alerts.module.ts server-v4/src/modules/alerts/alertsRuntime.ts server-v4/src/modules/alerts/alertsRoutes.ts server-v4/src/app/module-catalog.ts server-v4/src/app/build-v4-app.ts server-v4/src/index.ts server/index.js server/v4RolloutMount.js tests/server-v4/alertsRoutes.test.js tests/v4RolloutMount.test.js` da pass
   - `pnpm run typecheck:server-v4` da pass
-  - `pnpm exec vitest run tests/server-v4/backupRoutes.test.js tests/server-v4/backupDomain.test.js --environment node` da pass
-  - `gitnexus_detect_changes(scope: all)` hien tra `low`; diff nam trong nhom `backup/auth/build-v4-app` va test lien quan nhu du kien
+  - `pnpm exec vitest run tests/server-v4/alertsRoutes.test.js tests/server-v4/appShell.test.js tests/v4RolloutMount.test.js --environment node` da pass
+  - `gitnexus_detect_changes(scope: all)` hien tra `high` do graph quy fan-out rong tren `server/index.js`; practical diff van gioi han trong `mountReportingV4App` + rollout wiring, va targeted tests cho d=1 scope da pass
   - `bd` / `bd.cmd` trong worktree hien tai khong tim thay beads database, nen trang thai bead chua sync duoc bang CLI
 ## Recent Completed Slices
 
+- `cng-2k4.6` da xong o muc alerts + notifications module extraction cho server-v4:
+  - them module `server-v4/src/modules/alerts/*` de expose canonical alert surface duoi `/api/v4/alerts`
+  - `buildV4App`/`moduleCatalog`/`server-v4` public exports da mount runtime moi va dua `alerts` vao rollout health metrics
+  - `server/index.js` da adapter legacy alert helpers sang runtime v4, giu `server/index.js` la source of truth cho config/evaluation/notification stream trong giai doan parity
+  - `server/v4RolloutMount.js` va `tests/v4RolloutMount.test.js` da dua `alerts` vao wave-2 legacy selector, phu hop voi thuc te modules dang mount
+  - targeted verify da pass: eslint batch alerts/build wiring, `pnpm run typecheck:server-v4`, va vitest batch `alertsRoutes + appShell + v4RolloutMount`
 - `cng-2k4.4` da xong o muc backup module extraction cho server-v4:
   - them `server-v4/src/modules/backup/backup.module.ts`, `backupRoutes.ts`, `backupRuntime.ts` de mount `GET /summary`, `GET /files`, `POST /run`, va `POST /schedule` duoi `/api/v4/backups`
   - `server-v4/src/app/build-v4-app.ts` va `server-v4/src/app/module-catalog.ts` da mount module moi; `server-v4/src/index.ts` export runtime adapter de legacy server co the reuse

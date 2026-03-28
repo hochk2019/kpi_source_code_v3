@@ -8,6 +8,7 @@ export const WAVE1_V4_MODULE_IDS = Object.freeze([
 export const WAVE2_V4_MODULE_IDS = Object.freeze([
   'kpi-rules',
   'kpi-adjustments',
+  'alerts',
   'backup',
 ]);
 

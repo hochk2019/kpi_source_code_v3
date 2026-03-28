@@ -61,12 +61,14 @@ describe('legacy server-v4 module selection', () => {
       { id: 'hq-agencies' },
       { id: 'kpi-rules' },
       { id: 'kpi-adjustments' },
+      { id: 'alerts' },
+      { id: 'backup' },
       { id: 'declarations' },
     ];
 
     const result = selectLegacyV4Modules(moduleCatalog);
 
-    expect(WAVE2_V4_MODULE_IDS).toEqual(['kpi-rules', 'kpi-adjustments']);
+    expect(WAVE2_V4_MODULE_IDS).toEqual(['kpi-rules', 'kpi-adjustments', 'alerts', 'backup']);
     expect(LEGACY_V4_MODULE_IDS).toEqual([
       'reporting',
       'teams',
@@ -74,6 +76,8 @@ describe('legacy server-v4 module selection', () => {
       'hq-agencies',
       'kpi-rules',
       'kpi-adjustments',
+      'alerts',
+      'backup',
     ]);
     expect(result.selectedModules.map((entry) => entry.id)).toEqual(LEGACY_V4_MODULE_IDS);
     expect(result.missingModuleIds).toEqual([]);
@@ -86,6 +90,7 @@ describe('legacy server-v4 module selection', () => {
       { id: 'mst-assignments' },
       { id: 'hq-agencies' },
       { id: 'kpi-rules' },
+      { id: 'alerts' },
     ];
 
     const result = selectLegacyV4Modules(moduleCatalog);
@@ -96,7 +101,8 @@ describe('legacy server-v4 module selection', () => {
       'mst-assignments',
       'hq-agencies',
       'kpi-rules',
+      'alerts',
     ]);
-    expect(result.missingModuleIds).toEqual(['kpi-adjustments']);
+    expect(result.missingModuleIds).toEqual(['kpi-adjustments', 'backup']);
   });
 });
