@@ -16,23 +16,28 @@
 
 ## Active Slice
 
-- Title: Remove unused report export adjustment helpers
-- Bead: cng-2k4.22 / slice G (bead CLI khong kha dung trong worktree nay)
+- Title: Split reporting and staff combobox helper exports
+- Bead: cng-2k4.22 / slice H (bead CLI khong kha dung trong worktree nay)
 - Status: completed
 - Last updated: 2026-03-28
 
-- Muc tieu slice nay la don warning low-risk trong production export path ma khong doi luong du lieu bao cao:
-  - xoa 4 helper adjustment summary da chet trong `server/reportExport.js`
-  - bo import `createAdjustmentTotals` da tro thanh unused sau cleanup
-  - giu nguyen contract cho `aggregateByCompany`, `generateStaffReport`, `generateTeamReport`, va cac export public khac
+- Muc tieu slice nay la don 4 warning `react-refresh/only-export-components` ma khong doi contract caller:
+  - tach `createScheduleDraft` / `toSchedulePayload` khoi `src/components/reporting/ReportingPanels.jsx`
+  - tach `buildStaffComboboxTeams` / `flattenStaffComboboxMembers` khoi `src/components/shared/StaffCombobox.jsx`
+  - cap nhat caller `useReportViewerActions`, `AccountManager`, `useMSTAssignmentBootstrapWorkspace`, va test imports theo module moi
 - Cach sua da ap dung:
-  - xoa `ensureStaffAdjustmentSummary`, `ensureTeamAdjustmentSummary`, `finalizeStaffAdjustmentEntry`, `finalizeTeamAdjustmentEntry`
-  - rut `createAdjustmentTotals` khoi import list vi khong con caller noi bo
+  - them `src/components/reporting/reportingScheduleDraft.js` + `tests/reportingScheduleDraft.test.js`
+  - them `src/components/shared/staffComboboxOptions.js` + `tests/staffComboboxOptions.test.js`
+  - giu component exports o `ReportingPanels.jsx` va `StaffCombobox.jsx` chi con phan render/component contract
 - Trang thai verify hien tai:
-  - GitNexus impact truoc khi sua cho 4 helper tren deu tra `LOW`, `impactedCount: 0`
-  - `pnpm exec eslint server/reportExport.js` da pass
-  - `pnpm exec vitest run tests/server.reportWatermark.test.js tests/reportExportPayloads.test.js --environment node` da pass
-  - `gitnexus_detect_changes(scope: "unstaged")` da thay dung 2 file (`server/reportExport.js`, `task.md`) nhung van over-report `critical` o muc process vi diff chạm file `reportExport.js`; diff tay xac nhan chi la dead-code cleanup + notebook update
+  - GitNexus impact truoc khi sua:
+    - `createScheduleDraft`: `LOW`, 4 direct callers trong reporting flow
+    - `toSchedulePayload`: `LOW`, 0 caller duoc graph bat ra
+    - `buildStaffComboboxTeams`: `LOW`, direct callers chinh la `AccountManager`, `StaffCombobox`, `useMSTAssignmentBootstrapWorkspace`
+    - `flattenStaffComboboxMembers`: `LOW`, direct caller chinh la `AccountManager`
+  - `pnpm exec eslint src/components/reporting/ReportingPanels.jsx src/components/reporting/reportingScheduleDraft.js src/components/reporting/useReportViewerActions.js src/components/shared/StaffCombobox.jsx src/components/shared/staffComboboxOptions.js src/components/AccountManager.jsx src/components/mst-assignment/hooks/useMSTAssignmentBootstrapWorkspace.js tests/reportingPanels.test.jsx tests/reportingScheduleDraft.test.js tests/staffCombobox.test.jsx tests/staffComboboxOptions.test.js tests/accountManager.staff.test.jsx tests/useMSTAssignmentBootstrapWorkspace.test.jsx` da pass
+  - `pnpm exec vitest run tests/reportingPanels.test.jsx tests/reportingScheduleDraft.test.js tests/staffCombobox.test.jsx tests/staffComboboxOptions.test.js tests/accountManager.staff.test.jsx tests/useMSTAssignmentBootstrapWorkspace.test.jsx --environment jsdom` da pass
+  - `gitnexus_detect_changes(scope: "unstaged")` van over-report `critical` do relocation cham cac file process-level (`AccountManager`, reporting actions/panels), nhung diff tay + targeted verify xac nhan khong co doi contract runtime
   - `bd` / `bd.cmd` trong worktree hien tai khong tim thay beads database, nen trang thai bead chua sync duoc bang CLI
 ## Recent Completed Slices
 
@@ -703,12 +708,11 @@
 
 ## Next Suggested Slice
 
-- Title: Split non-component exports out of reporting refresh-sensitive files
+- Title: Add browser/runtime regression for focus handoff and loading fallback states
 - Bead: `cng-2k4.22`
 - Status: open
 - Follow-up backlog:
   - khoa regression cho focus handoff/fallback contract sau khi dieu huong bang workflow guide hoac command surfaces
-  - warning react-refresh trong `src/components/reporting/ReportingPanels.jsx` va `src/components/shared/StaffCombobox.jsx` can tach helper thuần ra module rieng sau khi chay impact analysis cho moi symbol export hien tai
   - bo sung case error-boundary + loading-status tren browser runtime de tranh gap lai regression chi bi thay o integration path
 
 ## Verification
@@ -835,6 +839,12 @@
   - targeted verify da pass:
     - `pnpm exec eslint server/reportExport.js`
     - `pnpm exec vitest run tests/server.reportWatermark.test.js tests/reportExportPayloads.test.js --environment node`
+- `cng-2k4.22 / slice H` da xong o muc react-refresh hygiene:
+  - tach helper schedule draft sang `src/components/reporting/reportingScheduleDraft.js` va helper staff roster sang `src/components/shared/staffComboboxOptions.js`
+  - cap nhat caller `useReportViewerActions`, `AccountManager`, `useMSTAssignmentBootstrapWorkspace`, va test imports de giu nguyen contract
+  - targeted verify da pass:
+    - `pnpm exec eslint src/components/reporting/ReportingPanels.jsx src/components/reporting/reportingScheduleDraft.js src/components/reporting/useReportViewerActions.js src/components/shared/StaffCombobox.jsx src/components/shared/staffComboboxOptions.js src/components/AccountManager.jsx src/components/mst-assignment/hooks/useMSTAssignmentBootstrapWorkspace.js tests/reportingPanels.test.jsx tests/reportingScheduleDraft.test.js tests/staffCombobox.test.jsx tests/staffComboboxOptions.test.js tests/accountManager.staff.test.jsx tests/useMSTAssignmentBootstrapWorkspace.test.jsx`
+    - `pnpm exec vitest run tests/reportingPanels.test.jsx tests/reportingScheduleDraft.test.js tests/staffCombobox.test.jsx tests/staffComboboxOptions.test.js tests/accountManager.staff.test.jsx tests/useMSTAssignmentBootstrapWorkspace.test.jsx --environment jsdom`
 
 ## Previous Completed Slice
 

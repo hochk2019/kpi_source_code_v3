@@ -67,10 +67,11 @@ import {
   buildPermissionDefinitions,
 } from "@/components/account-manager/accountManagerPermissions.js";
 import { createEmptyAccountForm } from "@/components/account-manager/accountManagerFormState.js";
-import StaffCombobox, {
+import StaffCombobox from "@/components/shared/StaffCombobox.jsx";
+import {
   buildStaffComboboxTeams,
   flattenStaffComboboxMembers,
-} from "@/components/shared/StaffCombobox.jsx";
+} from "@/components/shared/staffComboboxOptions.js";
 
 
 

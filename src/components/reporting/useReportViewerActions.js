@@ -7,7 +7,7 @@ import {
 import {
   createScheduleDraft,
   toSchedulePayload,
-} from "@/components/reporting/ReportingPanels.jsx";
+} from "@/components/reporting/reportingScheduleDraft.js";
 import { toast } from "@/shared/toast.js";
 
 let reportExporterPromise;

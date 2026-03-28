@@ -4,11 +4,13 @@ import { describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 
 import {
-  createScheduleDraft,
   ReportingControlsPanel,
   ReportingSchedulePanel,
-  toSchedulePayload,
 } from "@/components/reporting/ReportingPanels.jsx";
+import {
+  createScheduleDraft,
+  toSchedulePayload,
+} from "@/components/reporting/reportingScheduleDraft.js";
 
 describe("ReportingPanels", () => {
   it("normalizes schedule draft state and save payload", () => {

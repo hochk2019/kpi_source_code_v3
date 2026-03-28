@@ -5,7 +5,7 @@ import {
   getTeamRoster,
   subscribeTeamRoster,
 } from "@/lib/store.js";
-import { buildStaffComboboxTeams } from "@/components/shared/StaffCombobox.jsx";
+import { buildStaffComboboxTeams } from "@/components/shared/staffComboboxOptions.js";
 import { sortMSTRows } from "@/components/mst-assignment/model/displaySelectors.js";
 
 export default function useMSTAssignmentBootstrapWorkspace({
