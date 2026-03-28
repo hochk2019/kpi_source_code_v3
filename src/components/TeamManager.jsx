@@ -13,6 +13,9 @@ import {
   getAuditLogs,
 } from "@/lib/store.js";
 import TeamManagerHistoryPanel from "@/components/team-manager/TeamManagerHistoryPanel.jsx";
+import TeamManagerMemberPanel from "@/components/team-manager/TeamManagerMemberPanel.jsx";
+import TeamManagerCompaniesPanel from "@/components/team-manager/TeamManagerCompaniesPanel.jsx";
+import TeamManagerToolbar from "@/components/team-manager/TeamManagerToolbar.jsx";
 import { loadXlsx } from "@/lib/loadXlsx.js";
 
 const COMPANY_PAGE_SIZE = 20;
@@ -679,62 +682,18 @@ function TeamManager({ canEdit = true, currentUser = null }) {
         </div>
       )}
 
-      <div className="flex flex-wrap items-center gap-3">
-        <button
-          onClick={handleSave}
-          disabled={!dirty || isReadOnly}
-          className={`px-3 py-1 rounded text-white ${
-            dirty && !isReadOnly ? "bg-emerald-600 hover:bg-emerald-700" : "bg-gray-400"
-          }`}
-          title={isReadOnly ? "Chỉ người được cấp quyền mới có thể lưu" : "Lưu thay đổi tổ đội"}
-        >
-          Lưu thay đổi
-        </button>
-
-        <button onClick={handleReloadRoster} className="px-3 py-1 rounded border">
-          Hoàn tác về dữ liệu đã lưu
-        </button>
-
-        <button onClick={handleRefreshMST} className="px-3 py-1 rounded border">
-          Tải lại dữ liệu MST
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setHistoryOpen((prev) => !prev)}
-          className={`px-3 py-1 rounded border transition-colors ${
-            historyOpen ? "bg-blue-600 text-white" : "bg-white hover:bg-gray-50"
-          }`}
-          title={
-            historyOpen
-              ? "Ẩn bảng lịch sử thay đổi tổ đội và gán MST"
-              : "Xem lịch sử thay đổi tổ đội, team và trường MST liên quan"
-          }
-          data-tooltip="Xem/ẩn lịch sử thay đổi team và MST"
-        >
-          {historyOpen ? "Ẩn lịch sử" : "Lịch sử cập nhật"}
-        </button>
-
-        {dirty && !isReadOnly && (
-          <span className="text-sm text-amber-600">Có thay đổi chưa lưu</span>
-        )}
-
-        {isReadOnly && (
-          <span className="text-sm text-amber-600">Chế độ chỉ xem — không thể lưu thay đổi</span>
-        )}
-
-        <button
-          type="button"
-          onClick={handleExportExcel}
-          className="ml-auto px-3 py-1 rounded border bg-white hover:bg-gray-50"
-        >
-          Export Excel
-        </button>
-
-        <span className="text-sm text-gray-500 ml-2">
-          Tổng cộng {roster.teams.length} tổ đội — {totalMembers} thành viên
-        </span>
-      </div>
+      <TeamManagerToolbar
+        dirty={dirty}
+        isReadOnly={isReadOnly}
+        roster={roster}
+        totalMembers={totalMembers}
+        onSave={handleSave}
+        onReloadRoster={handleReloadRoster}
+        onRefreshMST={handleRefreshMST}
+        historyOpen={historyOpen}
+        onToggleHistory={() => setHistoryOpen((prev) => !prev)}
+        onExportExcel={handleExportExcel}
+      />
 
       <p className="text-sm text-gray-600">
         Quản lý danh sách tổ đội để đồng bộ với dữ liệu gán MST và báo cáo KPI. Chọn một team để xem
@@ -784,236 +743,40 @@ function TeamManager({ canEdit = true, currentUser = null }) {
 
       {selectedTeam ? (
         <div className="grid gap-6 lg:grid-cols-[minmax(240px,280px)_1fr]">
-          <div className="space-y-4">
-            <div className="border rounded p-4 space-y-3 bg-white shadow-sm">
-              <h3 className="font-semibold text-sm uppercase text-gray-500">
-                Thành viên của {selectedTeam.name}
-              </h3>
+          <TeamManagerMemberPanel
+            selectedTeam={selectedTeam}
+            canEdit={canEdit}
+            isReadOnly={isReadOnly}
+            newMemberName={newMemberName}
+            onNewMemberNameChange={setNewMemberName}
+            onAddMember={handleAddMember}
+            selectedMemberId={selectedMemberId}
+            onSelectMember={setSelectedMemberId}
+            memberAssignments={memberAssignments}
+            activeMember={activeMember}
+            memberNameDraft={memberNameDraft}
+            onMemberNameDraftChange={setMemberNameDraft}
+            onCommitMemberName={commitMemberName}
+            onMemberNameKey={handleMemberNameKey}
+            teams={roster.teams}
+            selectedTeamId={selectedTeamId}
+            onMoveMember={handleMoveMember}
+            onRemoveMember={handleRemoveMember}
+            memberCompanies={memberCompanies}
+          />
 
-              {canEdit ? (
-                <form className="flex gap-2" onSubmit={handleAddMember}>
-                  <input
-                    value={newMemberName}
-                    onChange={(e) => setNewMemberName(e.target.value)}
-                    placeholder="Tên thành viên mới"
-                    className="flex-1 border rounded px-2 py-1"
-                  />
-
-                  <button type="submit" className="px-3 py-1 rounded bg-emerald-600 text-white">
-                    Thêm
-                  </button>
-                </form>
-              ) : (
-                <div className="rounded border border-dashed p-3 text-sm text-gray-500">
-                  Đăng nhập bằng tài khoản được cấp quyền để thêm thành viên mới.
-                </div>
-              )}
-
-              <div className="max-h-72 overflow-y-auto border rounded">
-                {selectedTeam.members.length === 0 ? (
-                  <div className="p-3 text-sm text-gray-500 text-center">
-                    Chưa có thành viên trong team này.
-                  </div>
-                ) : (
-                  <ul className="divide-y">
-                    {selectedTeam.members.map((member) => {
-                      const key = normalizeName(member.name);
-
-                      const assigned = memberAssignments.get(key)?.length ?? 0;
-
-                      const isActiveMember = member.id === selectedMemberId;
-
-                      return (
-                        <li key={member.id}>
-                          <button
-                            onClick={() => setSelectedMemberId(member.id)}
-                            className={`w-full flex items-center justify-between px-3 py-2 text-left ${
-                              isActiveMember ? "bg-blue-50" : ""
-                            }`}
-                          >
-                            <span>{member.name}</span>
-
-                            <span className="text-xs text-gray-500">{assigned} DN</span>
-                          </button>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                )}
-              </div>
-            </div>
-
-            <div className="border rounded p-4 bg-white shadow-sm space-y-3">
-              <h3 className="font-semibold text-sm uppercase text-gray-500">Chi tiết thành viên</h3>
-
-              {activeMember ? (
-                <div className="space-y-3 text-sm">
-                  <div>
-                    <label className="text-xs uppercase text-gray-400">Tên thành viên</label>
-
-                    <input
-                      value={memberNameDraft}
-                      onChange={(e) => setMemberNameDraft(e.target.value)}
-                      onBlur={commitMemberName}
-                      onKeyDown={handleMemberNameKey}
-                      className="mt-1 w-full border rounded px-2 py-1"
-                      readOnly={isReadOnly}
-                      disabled={isReadOnly}
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-xs uppercase text-gray-400">Thuộc tổ đội</label>
-
-                    <select
-                      value={selectedTeamId ?? ""}
-                      onChange={(e) => handleMoveMember(activeMember.id, e.target.value)}
-                      className="mt-1 w-full border rounded px-2 py-1"
-                      disabled={isReadOnly}
-                    >
-                      {roster.teams.map((team) => (
-                        <option key={team.id} value={team.id}>
-                          {team.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {canEdit && (
-                    <div className="flex gap-2">
-                      <button onClick={commitMemberName} className="px-3 py-1 rounded border">
-                        Cập nhật tên
-                      </button>
-
-                      <button
-                        onClick={() => handleRemoveMember(activeMember.id)}
-                        className="px-3 py-1 rounded bg-red-500 text-white"
-                      >
-                        Xóa thành viên
-                      </button>
-                    </div>
-                  )}
-
-                  <div className="text-xs text-gray-500">
-                    Thành viên đang phụ trách {memberCompanies.length} doanh nghiệp.
-                  </div>
-                </div>
-              ) : (
-                <div className="text-sm text-gray-500">
-                  Chọn một thành viên để xem chi tiết và lịch sử doanh nghiệp được phân công.
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div className="border rounded p-4 bg-white shadow-sm space-y-4">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <h3 className="font-semibold text-sm uppercase text-gray-500">
-                {activeMember
-                  ? `Doanh nghiệp phụ trách của ${activeMember.name}`
-                  : `Doanh nghiệp theo ${selectedTeam.name}`}
-              </h3>
-
-              <div className="flex items-center gap-2 text-xs text-gray-500">
-                <span>{displayCompanies.length} doanh nghiệp đang được gán</span>
-
-                {activeMember && (
-                  <button
-                    type="button"
-                    onClick={() => setSelectedMemberId(null)}
-                    className="px-3 py-1 rounded border bg-white hover:bg-gray-50"
-                  >
-                    Xem toàn bộ team
-                  </button>
-                )}
-              </div>
-            </div>
-
-            <div className="overflow-x-auto border rounded">
-              {displayCompanies.length === 0 ? (
-                <div className="p-4 text-sm text-gray-500">
-                  {activeMember
-                    ? "Thành viên này chưa được gán doanh nghiệp nào trong bảng MST."
-                    : "Team chưa được gán doanh nghiệp nào trong bảng MST."}
-                </div>
-              ) : (
-                <table className="w-full text-sm">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="p-2 text-left w-28">MST</th>
-
-                      <th className="p-2 text-left">Công ty</th>
-
-                      {activeMember ? (
-                        <th className="p-2 text-left w-24">Vai trò</th>
-                      ) : (
-                        <>
-                          <th className="p-2 text-left w-40">Phụ trách Nhập</th>
-
-                          <th className="p-2 text-left w-40">Phụ trách Xuất</th>
-                        </>
-                      )}
-
-                      <th className="p-2 text-left w-32">Áp dụng từ</th>
-                    </tr>
-                  </thead>
-
-                  <tbody>
-                    {pagedCompanies.map((row, idx) => (
-                      <tr
-                        key={`${row.mst}-${row.company}-${idx}-${activeMember ? row.role : "team"}`}
-                        className="border-t"
-                      >
-                        <td className="p-2">{row.mst}</td>
-
-                        <td className="p-2">{row.company}</td>
-
-                        {activeMember ? (
-                          <td className="p-2">{row.role}</td>
-                        ) : (
-                          <>
-                            <td className="p-2">{row.person_import}</td>
-
-                            <td className="p-2">{row.person_export}</td>
-                          </>
-                        )}
-
-                        <td className="p-2">{row.effective_from || ""}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </div>
-
-            {displayCompanies.length > COMPANY_PAGE_SIZE && (
-              <div className="flex items-center justify-between text-sm">
-                <button
-                  onClick={() => setCompanyPage((page) => Math.max(1, page - 1))}
-                  disabled={currentCompanyPage <= 1}
-                  className={`px-3 py-1 rounded border ${
-                    currentCompanyPage <= 1 ? "opacity-50 cursor-not-allowed" : ""
-                  }`}
-                >
-                  ← Trước
-                </button>
-
-                <span>
-                  Trang {currentCompanyPage}/{totalCompanyPages}
-                </span>
-
-                <button
-                  onClick={() => setCompanyPage((page) => Math.min(totalCompanyPages, page + 1))}
-                  disabled={currentCompanyPage >= totalCompanyPages}
-                  className={`px-3 py-1 rounded border ${
-                    currentCompanyPage >= totalCompanyPages ? "opacity-50 cursor-not-allowed" : ""
-                  }`}
-                >
-                  Sau →
-                </button>
-              </div>
-            )}
-          </div>
+          <TeamManagerCompaniesPanel
+            activeMember={activeMember}
+            selectedTeam={selectedTeam}
+            displayCompanies={displayCompanies}
+            pagedCompanies={pagedCompanies}
+            currentCompanyPage={currentCompanyPage}
+            totalCompanyPages={totalCompanyPages}
+            showPagination={displayCompanies.length > COMPANY_PAGE_SIZE}
+            onShowAllTeamCompanies={() => setSelectedMemberId(null)}
+            onPreviousPage={() => setCompanyPage((page) => Math.max(1, page - 1))}
+            onNextPage={() => setCompanyPage((page) => Math.min(totalCompanyPages, page + 1))}
+          />
         </div>
       ) : (
         <div className="border rounded p-6 text-center text-gray-500">

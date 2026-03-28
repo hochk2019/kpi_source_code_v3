@@ -8,36 +8,33 @@
   - `cng-2k4` — Post-Gemini remaining technical backlog
   - `cng-7z0` — UX improvement backlog execution
 - Highest-priority ready items hien tai:
-  - `cng-2k4.18` da hoan tat lazy-load `xlsx` cho cac luong import/export Excel tren client; can tiep tuc chon slice tiep theo trong `cng-2k4`
+  - `cng-2k4.17` da hoan tat tach `TeamManager.jsx` xuong 790 dong; can tiep tuc chon slice tiep theo trong `cng-2k4`
 
 ## Active Slice
 
-- Title: Lazy-load `xlsx` across Excel import/export UI flows
-- Bead: cng-2k4.18 (bead CLI khong kha dung trong worktree nay)
+- Title: Reduce `TeamManager.jsx` below the module size target
+- Bead: cng-2k4.17 (bead CLI khong kha dung trong worktree nay)
 - Status: completed
 - Last updated: 2026-03-28
 
-- Muc tieu hien tai la cat static `xlsx` khoi main UI bundle bang cach doi cac luong import/export Excel sang lazy runtime loader, nhung van giu worker chunk va injection path cho test/dependency seams.
+- Muc tieu hien tai la dua `src/components/TeamManager.jsx` ve duoi target 800 dong bang cach tach cac block presentation co fan-in thap ra module rieng, giu nguyen orchestration state/save flow trong shell.
 - GitNexus impact da duoc chay truoc khi sua:
   - `TeamManager`: `LOW`
-  - `HQAgencyManager`: `LOW`
-  - `useDataImporterSessionController`: `LOW`
-  - `useDataImporterResultsSurface`: `LOW`
-  - `useMSTAssignmentExportWorkspace`: `LOW`
-  - `useMSTAssignmentImportSaveWorkspace`: `LOW`
 - Cach sua da ap dung:
-  - them `src/lib/loadXlsx.js` de memoize dynamic import `xlsx` va dung chung cho cac luong UI can Excel runtime
-  - doi `TeamManager`, `HQAgencyManager`, `useMSTAssignmentExportWorkspace`, `useMSTAssignmentImportSaveWorkspace`, va cum `dataImporter/*` sang injected-or-lazy `xlsxLoader`, giu test seam nhung khong con static import trong shell hooks/components
-  - cap nhat `src/components/mst-assignment/model/importSheet.js` de parse Excel serial date noi bo, cat phu thuoc `XLSX.SSF.parse_date_code` khoi model file dang duoc import truc tiep boi shell
-  - giu `src/components/dataImporter/dataImporterWorkbook.worker.js` tiep tuc import `xlsx` trong worker chunk rieng, tranh lam to main bundle nhung khong vo luong parse trong worker
-  - cap nhat regression tests cho export/import async flow va lazy loader wiring (`hqAgencyManager`, `dataImporter`, `mst-assignment`)
+  - them `src/components/team-manager/TeamManagerToolbar.jsx`, `TeamManagerMemberPanel.jsx`, va `TeamManagerCompaniesPanel.jsx` de tach toolbar, khu vuc quan ly thanh vien, va bang doanh nghiep khoi shell
+  - giu `src/components/TeamManager.jsx` tap trung vao state, derived data, va mutation orchestration; sau refactor file goc con 790 dong
+  - bo sung regression tests `tests/teamManagerToolbar.test.jsx`, `tests/teamManagerMemberPanel.test.jsx`, va `tests/teamManagerCompaniesPanel.test.jsx` de khoa UI wiring cua cac panel moi
 - Trang thai verify hien tai:
-  - `pnpm exec vitest run tests/useMSTAssignmentExportWorkspace.test.jsx tests/useMSTAssignmentImportSaveWorkspace.test.jsx tests/mstAssignment.import-sheet.test.js tests/dataImporterWorkbookParser.test.js tests/useDataImporterSelectionBulkActions.test.jsx tests/useDataImporterResultsController.test.jsx tests/useDataImporterResultsSurface.test.jsx tests/useDataImporterSessionController.test.jsx tests/hqAgencyManager.test.jsx --environment jsdom` da pass
-  - `pnpm exec eslint src/lib/loadXlsx.js src/components/TeamManager.jsx src/components/HQAgencyManager.jsx src/components/mst-assignment/hooks/useMSTAssignmentExportWorkspace.js src/components/mst-assignment/hooks/useMSTAssignmentImportSaveWorkspace.js src/components/mst-assignment/model/importSheet.js src/components/dataImporter/dataImporterWorkbookParser.js src/components/dataImporter/useDataImporterImportFlow.js src/components/dataImporter/useDataImporterSelectionBulkActions.js src/components/dataImporter/useDataImporterWorkflowSession.js src/components/dataImporter/useDataImporterResultsController.js src/components/dataImporter/useDataImporterSessionController.js src/components/dataImporter/useDataImporterResultsSurface.jsx tests/useMSTAssignmentExportWorkspace.test.jsx tests/useDataImporterSelectionBulkActions.test.jsx tests/hqAgencyManager.test.jsx tests/mstAssignment.import-sheet.test.js tests/dataImporterWorkbookParser.test.js tests/useMSTAssignmentImportSaveWorkspace.test.jsx tests/useDataImporterResultsController.test.jsx tests/useDataImporterResultsSurface.test.jsx tests/useDataImporterSessionController.test.jsx` da pass
+  - `pnpm exec eslint src/components/TeamManager.jsx src/components/team-manager/TeamManagerToolbar.jsx src/components/team-manager/TeamManagerMemberPanel.jsx src/components/team-manager/TeamManagerCompaniesPanel.jsx tests/teamManagerToolbar.test.jsx tests/teamManagerMemberPanel.test.jsx tests/teamManagerCompaniesPanel.test.jsx` da pass
+  - `pnpm exec vitest run tests/teamManagerHistoryPanel.test.jsx tests/teamManagerToolbar.test.jsx tests/teamManagerMemberPanel.test.jsx tests/teamManagerCompaniesPanel.test.jsx --environment jsdom` da pass
   - `gitnexus_detect_changes(scope: all)` dang duoc chay de xac nhan fan-out dung voi pham vi client Excel flows truoc khi chot handoff
   - `bd` / `bd.cmd` trong worktree hien tai khong tim thay beads database, nen trang thai bead chua sync duoc bang CLI
 ## Recent Completed Slices
 
+- `cng-2k4.17` da xong o muc giam kich thuoc `TeamManager.jsx`:
+  - tach toolbar, member workspace, va company table thanh 3 panel rieng duoi `src/components/team-manager/`
+  - giu shell `TeamManager.jsx` cho orchestration state/save flow va dua file goc xuong 790 dong, vuot target kich thuoc module
+  - bo sung regression tests cho tung panel moi va verify lai cung `TeamManagerHistoryPanel`
 - `cng-2k4.18` da xong o muc lazy-load `xlsx` cho cac luong Excel tren client:
   - them `src/lib/loadXlsx.js` de memoize dynamic import `xlsx` va cat static dependency khoi cac shell UI/hook
   - refactor `TeamManager`, `HQAgencyManager`, `dataImporter/*`, `useMSTAssignmentExportWorkspace`, va `useMSTAssignmentImportSaveWorkspace` sang runtime lazy-load / injected loader
