@@ -73,6 +73,18 @@ describe("ReportingPanels", () => {
           range: { from: "2024-08-01", to: "2024-08-31" },
           generatedAt: "2024-08-30T01:00:00.000Z",
         }}
+        templates={[{ id: "template-1", name: "Ban điều hành", updatedAt: "2024-08-30T01:00:00.000Z" }]}
+        selectedTemplateId="template-1"
+        appliedTemplate={{ id: "template-1", name: "Ban điều hành" }}
+        appliedTemplateUpdatedAt="30/08/2024 08:00:00"
+        templateBusy={false}
+        templateSaving={false}
+        onSelectTemplate={() => {}}
+        onApplySelectedTemplate={() => {}}
+        onSaveTemplateAsNew={() => {}}
+        onOverwriteSelectedTemplate={() => {}}
+        onDeleteSelectedTemplate={() => {}}
+        onRefreshTemplates={() => {}}
       />
     );
 
@@ -80,6 +92,8 @@ describe("ReportingPanels", () => {
     expect(screen.getAllByText("Rules tháng 8")).toHaveLength(2);
     expect(screen.getByText(/lịch gửi tiếp theo:/i)).toBeTruthy();
     expect(screen.getByText(/tổng hợp tháng mặc định: 2024-08-01 → 2024-08-31/i)).toBeTruthy();
+    expect(screen.getByText(/mẫu báo cáo/i)).toBeTruthy();
+    expect(screen.getByText(/đang áp dụng:/i)).toBeTruthy();
   });
 
   it("renders the schedule panel form semantics and schedule list", () => {

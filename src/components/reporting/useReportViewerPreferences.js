@@ -105,6 +105,63 @@ export function sanitizeDateInput(value, fallback) {
   return normalized || fallback;
 }
 
+export function buildReportTemplatePayload({
+  quickRange,
+  from,
+  to,
+  scope,
+  selectedStaff,
+  selectedTeam,
+  staffSortKey,
+  teamSortKey,
+  topStaffMetric,
+  topStaffVisibleCount,
+  columns,
+  ruleId,
+  adjustmentPageSize,
+  detailPageSize,
+} = {}) {
+  return {
+    quickRange: sanitizeQuickRange(quickRange),
+    from: typeof from === "string" ? from : "",
+    to: typeof to === "string" ? to : "",
+    scope: sanitizeScope(scope),
+    selectedStaff: sanitizeSelection(selectedStaff),
+    selectedTeam: sanitizeSelection(selectedTeam),
+    staffSortKey: sanitizeSortKey(staffSortKey),
+    teamSortKey: sanitizeSortKey(teamSortKey),
+    topStaffMetric: sanitizeTopStaffMetric(topStaffMetric),
+    topStaffVisibleCount: sanitizeTopStaffVisibleCount(topStaffVisibleCount),
+    columns: sanitizeColumnVisibility(columns),
+    ruleId: sanitizeRulePreference(ruleId),
+    adjustmentPageSize: sanitizeAdjustmentPageSize(adjustmentPageSize),
+    detailPageSize: sanitizeDetailPageSize(detailPageSize),
+  };
+}
+
+export function sanitizeReportTemplateFilters(input = {}) {
+  const quickRange = sanitizeQuickRange(input.quickRange);
+  const quickRangeBase = quickRange === "custom" ? "this_month" : quickRange;
+  const computedRange = computeQuickRange(quickRangeBase);
+
+  return buildReportTemplatePayload({
+    quickRange,
+    from: sanitizeDateInput(input.from, computedRange.from),
+    to: sanitizeDateInput(input.to, computedRange.to),
+    scope: input.scope,
+    selectedStaff: input.selectedStaff,
+    selectedTeam: input.selectedTeam,
+    staffSortKey: input.staffSortKey,
+    teamSortKey: input.teamSortKey,
+    topStaffMetric: input.topStaffMetric,
+    topStaffVisibleCount: input.topStaffVisibleCount,
+    columns: input.columns,
+    ruleId: input.ruleId,
+    adjustmentPageSize: input.adjustmentPageSize,
+    detailPageSize: input.detailPageSize,
+  });
+}
+
 export function loadReportPreferences() {
   if (typeof window === "undefined" || !window.localStorage) {
     return {};
@@ -365,6 +422,72 @@ export function useReportViewerPreferences() {
     setAdjustmentPageSize(sanitizeAdjustmentPageSize(value));
   };
 
+  const templatePayload = useMemo(
+    () =>
+      buildReportTemplatePayload({
+        quickRange,
+        from,
+        to,
+        scope,
+        selectedStaff,
+        selectedTeam,
+        staffSortKey,
+        teamSortKey,
+        topStaffMetric,
+        topStaffVisibleCount,
+        columns: exportColumns,
+        ruleId: selectedRuleId,
+        adjustmentPageSize,
+        detailPageSize,
+      }),
+    [
+      adjustmentPageSize,
+      detailPageSize,
+      exportColumns,
+      from,
+      quickRange,
+      scope,
+      selectedRuleId,
+      selectedStaff,
+      selectedTeam,
+      staffSortKey,
+      teamSortKey,
+      to,
+      topStaffMetric,
+      topStaffVisibleCount,
+    ],
+  );
+
+  const applyTemplateFilters = (input = {}) => {
+    const nextFilters = sanitizeReportTemplateFilters(input);
+    const nextColumnPrefs = sanitizeColumnVisibility(nextFilters.columns);
+    const nextDetailPageSize = sanitizeDetailPageSize(nextFilters.detailPageSize);
+
+    setQuickRange(nextFilters.quickRange);
+    setFrom(nextFilters.from);
+    setTo(nextFilters.to);
+    setScope(nextFilters.scope);
+    setSelectedStaff(nextFilters.selectedStaff);
+    setSelectedTeam(nextFilters.selectedTeam);
+    setTopStaffMetric(nextFilters.topStaffMetric);
+    setStaffSortKey(nextFilters.staffSortKey);
+    setTeamSortKey(nextFilters.teamSortKey);
+    setTopStaffVisibleCount(nextFilters.topStaffVisibleCount);
+    setColumnVisibility(buildColumnVisibilityState(nextColumnPrefs));
+    setSelectedRuleId(nextFilters.ruleId);
+    setAdjustmentPageSize(nextFilters.adjustmentPageSize);
+    setAdjustmentPage(0);
+    setDetailPageSize(nextDetailPageSize);
+    setDetailPageSizeMode(
+      DETAIL_PAGE_SIZE_OPTIONS.includes(nextDetailPageSize) ? "preset" : "custom",
+    );
+    setDetailPageSizeCustomInput(
+      DETAIL_PAGE_SIZE_OPTIONS.includes(nextDetailPageSize) ? "" : String(nextDetailPageSize),
+    );
+    setStaffDetailPage(0);
+    setTeamDetailPage(0);
+  };
+
   return {
     storedRuleId,
     quickRange,
@@ -404,10 +527,12 @@ export function useReportViewerPreferences() {
     detailPageSize,
     detailPageSizeMode,
     detailPageSizeCustomInput,
+    templatePayload,
     staffDetailPage,
     setStaffDetailPage,
     teamDetailPage,
     setTeamDetailPage,
+    applyTemplateFilters,
     handleQuickRangeChange,
     handleDetailPageSizeChange,
     handleDetailPageSizeCustomInputChange,

@@ -1,6 +1,7 @@
 import React from "react";
 
 import { QUICK_RANGE_OPTIONS } from "@/lib/reports.js";
+import ReportingTemplateControls from "@/components/reporting/ReportingTemplateControls.jsx";
 import {
   SectionHeader,
   SectionSurface,
@@ -354,6 +355,18 @@ export function ReportingControlsPanel({
   reportRange,
   ruleApply,
   scheduleAggregateStatus,
+  templates = [],
+  selectedTemplateId = "",
+  appliedTemplate = null,
+  appliedTemplateUpdatedAt = "",
+  templateBusy = false,
+  templateSaving = false,
+  onSelectTemplate,
+  onApplySelectedTemplate,
+  onSaveTemplateAsNew,
+  onOverwriteSelectedTemplate,
+  onDeleteSelectedTemplate,
+  onRefreshTemplates,
 }) {
   return (
     <SectionSurface className="print:hidden" aria-label="Điều khiển báo cáo KPI">
@@ -372,6 +385,21 @@ export function ReportingControlsPanel({
             {reloading ? "Đang tải..." : "Tải lại dữ liệu"}
           </button>
         }
+      />
+
+      <ReportingTemplateControls
+        templates={templates}
+        selectedTemplateId={selectedTemplateId}
+        appliedTemplate={appliedTemplate}
+        appliedTemplateUpdatedAt={appliedTemplateUpdatedAt}
+        templateBusy={templateBusy}
+        templateSaving={templateSaving}
+        onSelectTemplate={onSelectTemplate}
+        onApplySelectedTemplate={onApplySelectedTemplate}
+        onSaveTemplateAsNew={onSaveTemplateAsNew}
+        onOverwriteSelectedTemplate={onOverwriteSelectedTemplate}
+        onDeleteSelectedTemplate={onDeleteSelectedTemplate}
+        onRefreshTemplates={onRefreshTemplates}
       />
 
       <SectionToolbar mainClassName="items-end">

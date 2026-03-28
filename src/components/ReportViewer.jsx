@@ -34,6 +34,7 @@ import { ReportingScopeExplorerPanel } from "@/components/reporting/ReportingSco
 import useReportViewerActions from "@/components/reporting/useReportViewerActions.js";
 import useReportViewerPreferences from "@/components/reporting/useReportViewerPreferences.js";
 import useReportViewerReadModel from "@/components/reporting/useReportViewerReadModel.js";
+import useReportViewerTemplates from "@/components/reporting/useReportViewerTemplates.js";
 import { SectionHeader, SectionSurface } from "@/components/designSystem/shellPrimitives.jsx";
 
 import { isAdminRole } from "../../packages/domain/src/accountRoles.js";
@@ -88,15 +89,35 @@ export default function ReportViewer({ canExport = true, currentUser = null }) {
     detailPageSize,
     detailPageSizeMode,
     detailPageSizeCustomInput,
+    templatePayload,
     staffDetailPage,
     setStaffDetailPage,
     teamDetailPage,
     setTeamDetailPage,
+    applyTemplateFilters,
     handleQuickRangeChange,
     handleDetailPageSizeChange,
     handleDetailPageSizeCustomInputChange,
     handleAdjustmentPageSizeChange,
   } = useReportViewerPreferences();
+
+  const {
+    templates,
+    selectedTemplateId,
+    appliedTemplate,
+    appliedTemplateUpdatedAt,
+    templateBusy,
+    templateSaving,
+    handleSelectTemplate,
+    handleApplySelectedTemplate,
+    handleSaveTemplateAsNew,
+    handleOverwriteSelectedTemplate,
+    handleDeleteSelectedTemplate,
+    handleRefreshTemplates,
+  } = useReportViewerTemplates({
+    templatePayload,
+    onApplyTemplateFilters: applyTemplateFilters,
+  });
 
   const isAdmin = isAdminRole(currentUser?.role);
 
@@ -626,6 +647,18 @@ export default function ReportViewer({ canExport = true, currentUser = null }) {
         reportRange={report.range}
         ruleApply={ruleApply}
         scheduleAggregateStatus={scheduleAggregateStatus}
+        templates={templates}
+        selectedTemplateId={selectedTemplateId}
+        appliedTemplate={appliedTemplate}
+        appliedTemplateUpdatedAt={appliedTemplateUpdatedAt}
+        templateBusy={templateBusy}
+        templateSaving={templateSaving}
+        onSelectTemplate={handleSelectTemplate}
+        onApplySelectedTemplate={handleApplySelectedTemplate}
+        onSaveTemplateAsNew={handleSaveTemplateAsNew}
+        onOverwriteSelectedTemplate={handleOverwriteSelectedTemplate}
+        onDeleteSelectedTemplate={handleDeleteSelectedTemplate}
+        onRefreshTemplates={handleRefreshTemplates}
       />
 
       <ReportingWorkspaceGuidePanel canManageSchedule={isAdmin} />

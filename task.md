@@ -16,26 +16,26 @@
 
 ## Active Slice
 
-- Title: Reporting lane polish for delivery channels and delivery-status tracking
-- Bead: cng-7z0.28 (bead CLI khong kha dung trong worktree nay)
+- Title: Reporting lane local template management for reusable report configurations
+- Bead: cng-7z0.29 (bead CLI khong kha dung trong worktree nay)
 - Status: completed
 - Last updated: 2026-03-28
 
-- Muc tieu slice nay la mo rong lane reporting ma khong mo them delivery engine moi:
-  - cho phep lich bao cao chon nhieu kenh giao (`email`, `report_center`, `download_bundle`)
-  - surface trang thai giao gan nhat va loi giao tren cung report center lane
+- Muc tieu slice nay la cho nguoi dung luu va tai su dung nhanh cau hinh report ma khong mo them contract server:
+  - cho phep luu template report tu state hien tai (khoang ngay, rule, scope, sort, cot export, pagination)
+  - cho phep ap dung/ghi de/xoa template trong chinh panel dieu khien cua Report Center
+  - giu storage local theo browser hien tai nhu mot "kho rieng" dung cho reporting lane
 - Cach sua da ap dung:
-  - mo rong `reportingScheduleDraft` + `useReportViewerActions` de luu `deliveryChannels`, validate toi thieu 1 kenh, va chi bat buoc recipients khi co kenh email
-  - cap nhat `ReportingSchedulePanel` de hien preview kenh giao, checkbox chon kenh, chip delivery status, va thong tin lan giao gan nhat
-  - dong bo contract client/server (`packages/api-client`, `server-v4`, `server/`) de normalize va persist `deliveryChannels`, `deliveryStatus`, `lastDeliveryAt`, `lastDeliveryError`
-  - mo rong regression tests cho UI, client merge logic, runtime routes, va legacy API compat
+  - mo rong `useReportViewerPreferences` de build snapshot template va ap template da sanitize quay lai state dang su dung
+  - them `useReportViewerTemplates` de quan ly CRUD local-storage cho template report + ghi nho template dang ap dung
+  - them `ReportingTemplateControls` va noi vao `ReportingControlsPanel` / `ReportViewer`
+  - mo rong regression tests cho panel, hook preferences, va hook templates moi
 - Trang thai verify hien tai:
-  - `pnpm exec vitest tests/reportingPanels.test.jsx tests/useReportViewerActions.test.jsx tests/reportingClient.test.js tests/server-v4/runtimeRoutes.test.js --run` da pass
-  - `pnpm exec vitest tests/server.api.test.js -t "reporting/schedules|schedule KPI|monthly aggregate" --run` da pass; con warning cu khi mount `dist/server-v4/index.js`
-  - `pnpm exec eslint src/components/ReportViewer.jsx src/components/reporting/ReportingPanels.jsx src/components/reporting/reportingScheduleDraft.js src/components/reporting/useReportViewerActions.js packages/api-client/src/reportingClient.js server-v4/src/modules/reporting/ReportingController.ts server-v4/src/modules/reporting/reportingService.ts server-v4/src/modules/reporting/reportingScheduleNormalizer.ts server/reportingScheduleMutations.js server/reportingReadModels.js tests/reportingPanels.test.jsx tests/useReportViewerActions.test.jsx tests/reportingClient.test.js tests/server-v4/runtimeRoutes.test.js tests/server.api.test.js` da pass
+  - `pnpm exec vitest tests/reportingPanels.test.jsx tests/useReportViewerPreferences.test.jsx tests/useReportViewerTemplates.test.jsx tests/reportViewer.test.jsx --run` da pass
+  - `pnpm exec eslint src/components/ReportViewer.jsx src/components/reporting/ReportingPanels.jsx src/components/reporting/ReportingTemplateControls.jsx src/components/reporting/useReportViewerPreferences.js src/components/reporting/useReportViewerTemplates.js tests/reportingPanels.test.jsx tests/useReportViewerPreferences.test.jsx tests/useReportViewerTemplates.test.jsx tests/reportViewer.test.jsx` da pass
   - `bd` / `bd.cmd` trong worktree hien tai khong tim thay beads database, nen trang thai bead chua sync duoc bang CLI
 - Next suggested slice:
-  - `cng-7z0.29` — cho phep nguoi dung tu tao template bao cao tuy bien va luu template tai cho
+  - `cng-7z0.30` — persist filter states cho KPI Adjustments theo user va bo sung regression cho lane dieu chinh
 ## Recent Completed Slices
 
 - `cng-7z0.28` da xong o muc delivery channel + delivery status tracking:
@@ -43,6 +43,11 @@
   - hien delivery status chip, `lastDeliveryAt`, va `lastDeliveryError` tren schedule cards de nguoi van hanh thay nhanh lan giao gan nhat
   - dong bo contract luu/doc qua `packages/api-client/src/reportingClient.js`, `server-v4/src/modules/reporting/reportingScheduleNormalizer.ts`, `server-v4/src/modules/reporting/ReportingController.ts`, `server-v4/src/modules/reporting/reportingService.ts`, `server/reportingReadModels.js`, va `server/reportingScheduleMutations.js`
   - bo sung regression `tests/reportingPanels.test.jsx`, `tests/useReportViewerActions.test.jsx`, `tests/reportingClient.test.js`, `tests/server-v4/runtimeRoutes.test.js`, va `tests/server.api.test.js`
+- `cng-7z0.29` da xong o muc local report templates:
+  - them `ReportingTemplateControls.jsx` + `useReportViewerTemplates.js` de luu/ap dung/ghi de/xoa template report trong local storage trinh duyet
+  - mo rong `useReportViewerPreferences.js` de sanitize/build/apply snapshot template cho report viewer state
+  - cap nhat `ReportViewer.jsx` + `ReportingPanels.jsx` de template control song song voi bo loc/rule chon report
+  - bo sung regression `tests/useReportViewerTemplates.test.jsx`, cap nhat `tests/useReportViewerPreferences.test.jsx`, `tests/reportingPanels.test.jsx`, va verify `tests/reportViewer.test.jsx`
 - `cng-7z0.27` da xong o muc executive dashboard snapshot:
   - them `ReportingExecutiveSummaryPanel.jsx` + `reportingExecutiveSummaryModel.js` de tong hop KPI/decl, top staff, team concentration, pending adjustments, va deviation signals
   - cap nhat `ReportingDashboardOverview.jsx` de surfacing executive summary truoc summary cards/trend/top staff widgets

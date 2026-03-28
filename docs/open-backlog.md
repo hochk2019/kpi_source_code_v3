@@ -105,3 +105,18 @@ Source set: `docs/ux-improvement-backlog.md`
 - If a new unfinished item appears during implementation or review, create its bead in the same session and add it here immediately.
 - When closing a bead, update the source doc and `task.md` in the same session.
 - If an item is intentionally deferred or removed, note that explicitly in the source doc instead of leaving an orphan unchecked line.
+# Open backlog
+
+Canonical open backlog duoc tiep tuc theo doi tai file nay. Da reconcile lai ngay 2026-03-28 sau khi dong `cng-7z0.29`.
+
+## Ready next
+
+- [ ] `cng-7z0.30` — Persist filter states cho KPI Adjustments theo user va bo sung regression cho lane dieu chinh.
+- [ ] `cng-2k4.22` — Text/lint hygiene cho app/runtime code, khong gom dirt co san trong `.claude/skills/*`.
+- [ ] `cng-2k4.2` — Declarations write cutover voi compat guard + rollback plan.
+- [ ] `cng-2k4.3` — Switch production entrypoint sang `server-v4`.
+
+## Notes
+
+- `cng-7z0.29` da dong trong session 2026-03-28 sau khi them local report templates cho Report Center.
+- `bd` / `bd.cmd` hien chua truy cap duoc beads database trong worktree nay, nen backlog duoc giu song song tai day va `task.md`.
