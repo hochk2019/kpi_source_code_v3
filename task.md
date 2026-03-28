@@ -8,29 +8,33 @@
   - `cng-2k4` — Post-Gemini remaining technical backlog
   - `cng-7z0` — UX improvement backlog execution
 - Highest-priority ready items hien tai:
-  - `cng-2k4.17` da hoan tat tach `TeamManager.jsx` xuong 790 dong; can tiep tuc chon slice tiep theo trong `cng-2k4`
+  - `cng-2k4.16` da hoan tat tach control panel cua `HQAgencyManager.jsx` va dua shell xuong 674 dong; co the commit slice nay roi chon buoc tiep theo trong `cng-2k4`
 
 ## Active Slice
 
-- Title: Reduce `TeamManager.jsx` below the module size target
-- Bead: cng-2k4.17 (bead CLI khong kha dung trong worktree nay)
+- Title: Reduce `HQAgencyManager.jsx` below the module size target
+- Bead: cng-2k4.16 (bead CLI khong kha dung trong worktree nay)
 - Status: completed
 - Last updated: 2026-03-28
 
-- Muc tieu hien tai la dua `src/components/TeamManager.jsx` ve duoi target 800 dong bang cach tach cac block presentation co fan-in thap ra module rieng, giu nguyen orchestration state/save flow trong shell.
+- Muc tieu hien tai la dua `src/components/HQAgencyManager.jsx` ve duoi target 800 dong bang cach tach control/header/history/filter toolbar ra khoi shell, giu nguyen orchestration state/save/import flow trong file goc.
 - GitNexus impact da duoc chay truoc khi sua:
-  - `TeamManager`: `LOW`
+  - `HQAgencyManager`: `LOW`
 - Cach sua da ap dung:
-  - them `src/components/team-manager/TeamManagerToolbar.jsx`, `TeamManagerMemberPanel.jsx`, va `TeamManagerCompaniesPanel.jsx` de tach toolbar, khu vuc quan ly thanh vien, va bang doanh nghiep khoi shell
-  - giu `src/components/TeamManager.jsx` tap trung vao state, derived data, va mutation orchestration; sau refactor file goc con 790 dong
-  - bo sung regression tests `tests/teamManagerToolbar.test.jsx`, `tests/teamManagerMemberPanel.test.jsx`, va `tests/teamManagerCompaniesPanel.test.jsx` de khoa UI wiring cua cac panel moi
+  - them `src/components/hq-agency-manager/HQAgencyManagerControls.jsx` de tach header, save/reload actions, read-only + error banners, history summary, file import controls, filter/search toolbar, va paging actions khoi shell
+  - giu `src/components/HQAgencyManager.jsx` tap trung vao state, derived data, va mutation orchestration; sau refactor file goc con 674 dong
+  - bo sung regression test `tests/hqAgencyManagerControls.test.jsx` de khoa UI wiring cua control panel moi, dong thoi verify lai `tests/hqAgencyManager.test.jsx` cho import/save flow cua shell
 - Trang thai verify hien tai:
-  - `pnpm exec eslint src/components/TeamManager.jsx src/components/team-manager/TeamManagerToolbar.jsx src/components/team-manager/TeamManagerMemberPanel.jsx src/components/team-manager/TeamManagerCompaniesPanel.jsx tests/teamManagerToolbar.test.jsx tests/teamManagerMemberPanel.test.jsx tests/teamManagerCompaniesPanel.test.jsx` da pass
-  - `pnpm exec vitest run tests/teamManagerHistoryPanel.test.jsx tests/teamManagerToolbar.test.jsx tests/teamManagerMemberPanel.test.jsx tests/teamManagerCompaniesPanel.test.jsx --environment jsdom` da pass
-  - `gitnexus_detect_changes(scope: all)` dang duoc chay de xac nhan fan-out dung voi pham vi client Excel flows truoc khi chot handoff
+  - `npx eslint src/components/HQAgencyManager.jsx src/components/hq-agency-manager/HQAgencyManagerControls.jsx tests/hqAgencyManager.test.jsx tests/hqAgencyManagerControls.test.jsx` da pass
+  - `npx vitest run tests/hqAgencyManager.test.jsx tests/hqAgencyManagerControls.test.jsx` da pass
+  - `gitnexus_detect_changes(scope: all)` dang duoc chay de xac nhan fan-out dung voi pham vi `HQAgencyManager` truoc khi chot handoff
   - `bd` / `bd.cmd` trong worktree hien tai khong tim thay beads database, nen trang thai bead chua sync duoc bang CLI
 ## Recent Completed Slices
 
+- `cng-2k4.16` da xong o muc giam kich thuoc `HQAgencyManager.jsx`:
+  - tach header/history/filter/import toolbar thanh `src/components/hq-agency-manager/HQAgencyManagerControls.jsx`
+  - giu shell `HQAgencyManager.jsx` cho orchestration state/save/import va dua file goc xuong 674 dong, dat duoi target kich thuoc module
+  - bo sung regression test `tests/hqAgencyManagerControls.test.jsx` va verify lai `tests/hqAgencyManager.test.jsx`
 - `cng-2k4.17` da xong o muc giam kich thuoc `TeamManager.jsx`:
   - tach toolbar, member workspace, va company table thanh 3 panel rieng duoi `src/components/team-manager/`
   - giu shell `TeamManager.jsx` cho orchestration state/save flow va dua file goc xuong 790 dong, vuot target kich thuoc module
