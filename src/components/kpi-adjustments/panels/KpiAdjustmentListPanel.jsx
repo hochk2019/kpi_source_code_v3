@@ -22,6 +22,16 @@ export default function KpiAdjustmentListPanel({
   onStaffFilterChange,
   staffFilterOptions,
   filteredAdjustments,
+  currentPageItems,
+  page,
+  pageSize,
+  pageCount,
+  totalItems,
+  pageSizeOptions,
+  onPageSizeChange,
+  onNextPage,
+  onPreviousPage,
+  PageSizeControlComponent,
   categoryConfig,
   statusLabels,
   formatDecimal,
@@ -32,6 +42,12 @@ export default function KpiAdjustmentListPanel({
   onReject,
   onDelete,
 }) {
+  const visibleAdjustments = Array.isArray(currentPageItems) ? currentPageItems : filteredAdjustments;
+  const rangeStart = totalItems > 0 ? (page - 1) * pageSize + 1 : 0;
+  const rangeEnd = totalItems > 0 ? Math.min(totalItems, page * pageSize) : 0;
+  const canGoPrevious = page > 1;
+  const canGoNext = page < pageCount;
+
   return (
     <Card>
       <CardHeader>
@@ -112,6 +128,48 @@ export default function KpiAdjustmentListPanel({
           ) : null}
         </div>
 
+        <div className="mt-6 flex flex-col gap-3 border-b border-border/60 pb-4 md:flex-row md:items-center md:justify-between">
+          <div className="space-y-1 text-sm text-muted-foreground">
+            <p>
+              {totalItems > 0
+                ? `Hiển thị ${rangeStart}-${rangeEnd} / ${totalItems} mục`
+                : "Không có mục nào khớp bộ lọc hiện tại"}
+            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <span>
+                Trang {page} / {pageCount}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                type="button"
+                onClick={onPreviousPage}
+                disabled={!canGoPrevious}
+              >
+                Trang trước
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                type="button"
+                onClick={onNextPage}
+                disabled={!canGoNext}
+              >
+                Trang sau
+              </Button>
+            </div>
+          </div>
+
+          {PageSizeControlComponent ? (
+            <PageSizeControlComponent
+              value={pageSize}
+              onChange={onPageSizeChange}
+              options={pageSizeOptions}
+              selectId="kpi-adjustment-page-size"
+            />
+          ) : null}
+        </div>
+
         <div className="mt-6 overflow-hidden rounded-xl border border-border">
           <table className="min-w-full text-sm">
             <thead className="bg-muted/60 text-xs uppercase text-muted-foreground">
@@ -129,8 +187,8 @@ export default function KpiAdjustmentListPanel({
               </tr>
             </thead>
             <tbody className="divide-y divide-border/60 text-foreground">
-              {filteredAdjustments.length ? (
-                filteredAdjustments.map((item) => {
+              {visibleAdjustments.length ? (
+                visibleAdjustments.map((item) => {
                   const rowConfig = categoryConfig[item.category] || {};
                   const label = rowConfig.label || item.category;
                   const statusLabel = statusLabels[item.status] || item.status;

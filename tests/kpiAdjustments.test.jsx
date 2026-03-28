@@ -32,6 +32,7 @@ describe('KPIAdjustments UI', () => {
 
     const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 
+    window.localStorage.clear();
     clearStorageCache();
 
     const baseSettings = {
@@ -125,6 +126,7 @@ describe('KPIAdjustments UI', () => {
   afterEach(() => {
 
     cleanup();
+    window.localStorage.clear();
 
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
@@ -530,6 +532,58 @@ describe('KPIAdjustments UI', () => {
     expect(screen.getByLabelText('Lọc theo nhân viên')).toHaveValue('binh');
     expect(await screen.findByRole('cell', { name: 'Bình' })).toBeInTheDocument();
     expect(screen.queryByRole('cell', { name: 'Lan' })).not.toBeInTheDocument();
+  });
+
+  it('phân trang danh sách và khôi phục số dòng mỗi trang sau khi mở lại', async () => {
+    const now = new Date();
+    const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+
+    Array.from({ length: 18 }, (_, index) => index + 1).forEach((index) => {
+      saveKpiAdjustment(
+        {
+          category: 'support_misc',
+          month: currentMonth,
+          staffName: 'Lan',
+          teamName: 'Team 1',
+          companyName: `Công ty ${index}`,
+          taxCode: `01000000${String(index).padStart(2, '0')}`,
+          note: `Dòng ${index}`,
+          references: ['TK001'],
+          quantity: 1,
+          unitPoints: 1,
+          mode: 'fixed',
+          status: 'pending',
+        },
+        { actor: 'seed', permissions: { adjustApprove: true } }
+      );
+    });
+
+    const approverUser = {
+      username: 'manager.pagination',
+      permissions: { adjustApprove: true, adjustSubmit: true },
+    };
+
+    const firstRender = render(<KPIAdjustments currentUser={approverUser} />);
+
+    expect(await screen.findByText('Hiển thị 1-15 / 19 mục')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Trang sau' }));
+
+    expect(await screen.findByText('Hiển thị 16-19 / 19 mục')).toBeInTheDocument();
+    expect(screen.getByText('Trang 2 / 2')).toBeInTheDocument();
+
+    await userEvent.selectOptions(screen.getByLabelText('Số dòng mỗi trang'), '30');
+
+    expect(await screen.findByText('Hiển thị 1-19 / 19 mục')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Trang sau' })).toBeDisabled();
+
+    firstRender.unmount();
+
+    render(<KPIAdjustments currentUser={approverUser} />);
+
+    expect(await screen.findByLabelText('Số dòng mỗi trang')).toHaveValue('30');
+    expect(screen.getByText('Hiển thị 1-19 / 19 mục')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Trang sau' })).toBeDisabled();
   });
 
 });

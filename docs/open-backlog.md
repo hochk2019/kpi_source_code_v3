@@ -50,7 +50,6 @@ Source set: `docs/ux-improvement-backlog.md`
 
 ### KPI Adjustments
 
-- `cng-7z0.2` — Virtualize or paginate KPI adjustment list
 - `cng-7z0.3` — Add bulk approve and reject actions for KPI adjustments
 - `cng-7z0.4` — Add quick links from KPI adjustments to related declaration or MST
 - `cng-7z0.5` — Manage default KPI category settings directly in UI
@@ -106,11 +105,11 @@ Source set: `docs/ux-improvement-backlog.md`
 - If an item is intentionally deferred or removed, note that explicitly in the source doc instead of leaving an orphan unchecked line.
 # Open backlog
 
-Canonical open backlog duoc tiep tuc theo doi tai file nay. Da reconcile lai ngay 2026-03-28 sau khi dong `cng-7z0.29`.
+Canonical open backlog duoc tiep tuc theo doi tai file nay. Da reconcile lai ngay 2026-03-28 sau khi dong `cng-7z0.29`, `cng-7z0.1`, va `cng-7z0.2`.
 
 ## Ready next
 
-- [ ] `cng-7z0.2` — Virtualize or paginate KPI adjustment list de giu lane KPI Adjustments on dinh voi dataset lon.
+- [ ] `cng-7z0.3` — Bulk approve/reject cho KPI Adjustments de giam click-path cua approver.
 - [ ] `cng-2k4.22` — Text/lint hygiene cho app/runtime code, khong gom dirt co san trong `.claude/skills/*`.
 - [ ] `cng-2k4.2` — Declarations write cutover voi compat guard + rollback plan.
 - [ ] `cng-2k4.3` — Switch production entrypoint sang `server-v4`.
@@ -119,4 +118,5 @@ Canonical open backlog duoc tiep tuc theo doi tai file nay. Da reconcile lai nga
 
 - `cng-7z0.29` da dong trong session 2026-03-28 sau khi them local report templates cho Report Center.
 - `cng-7z0.1` da dong trong session 2026-03-28 sau khi them local persistence cho filter KPI Adjustments theo user va khoa regression hook/UI.
+- `cng-7z0.2` da dong trong session 2026-03-28 sau khi paginate KPI Adjustments list, persist `pageSize`, va khoa regression panel/remount flow.
 - `bd` / `bd.cmd` hien chua truy cap duoc beads database trong worktree nay, nen backlog duoc giu song song tai day va `task.md`.

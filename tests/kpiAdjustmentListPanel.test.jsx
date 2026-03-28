@@ -1,8 +1,12 @@
-import { render, screen, within } from "@testing-library/react";
+import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import KpiAdjustmentListPanel from "@/components/kpi-adjustments/panels/KpiAdjustmentListPanel.jsx";
+
+afterEach(() => {
+  cleanup();
+});
 
 describe("kpi adjustment list panel", () => {
   it("renders filters and forwards filter interactions", async () => {
@@ -33,6 +37,20 @@ describe("kpi adjustment list panel", () => {
         onStaffFilterChange={onStaffFilterChange}
         staffFilterOptions={[{ value: "lan", label: "Lan - Team 1" }]}
         filteredAdjustments={[]}
+        currentPageItems={[]}
+        page={1}
+        pageSize={15}
+        pageCount={1}
+        totalItems={0}
+        pageSizeOptions={[15, 30, 50]}
+        onPageSizeChange={vi.fn()}
+        onNextPage={vi.fn()}
+        onPreviousPage={vi.fn()}
+        PageSizeControlComponent={({ value, onChange }) => (
+          <button type="button" onClick={() => onChange(30)}>
+            Page size {value}
+          </button>
+        )}
         categoryConfig={{}}
         statusLabels={{}}
         formatDecimal={(value) => String(value)}
@@ -106,6 +124,16 @@ describe("kpi adjustment list panel", () => {
         onStaffFilterChange={vi.fn()}
         staffFilterOptions={[]}
         filteredAdjustments={[item]}
+        currentPageItems={[item]}
+        page={1}
+        pageSize={15}
+        pageCount={1}
+        totalItems={1}
+        pageSizeOptions={[15, 30, 50]}
+        onPageSizeChange={vi.fn()}
+        onNextPage={vi.fn()}
+        onPreviousPage={vi.fn()}
+        PageSizeControlComponent={({ value }) => <span>Page size {value}</span>}
         categoryConfig={{
           support_misc: {
             label: "Hỗ trợ khác",
@@ -144,5 +172,77 @@ describe("kpi adjustment list panel", () => {
     expect(onApprove).toHaveBeenCalledWith(item);
     expect(onReject).toHaveBeenCalledWith(item);
     expect(onDelete).toHaveBeenCalledWith(item);
+  });
+
+  it("renders pagination controls and forwards paging events", async () => {
+    const onPreviousPage = vi.fn();
+    const onNextPage = vi.fn();
+    const onPageSizeChange = vi.fn();
+
+    render(
+      <KpiAdjustmentListPanel
+        formFieldIds={{
+          filterMonth: "filter-month",
+          filterStatus: "filter-status",
+          filterMine: "filter-mine",
+          filterStaff: "filter-staff",
+        }}
+        selectFieldClass="select"
+        filterMonth="all"
+        onFilterMonthChange={vi.fn()}
+        filterStatus="all"
+        onFilterStatusChange={vi.fn()}
+        showMineToggle={false}
+        showMineOnly={false}
+        currentStaffKey=""
+        onMineToggle={vi.fn()}
+        canApprove={false}
+        staffFilter="all"
+        onStaffFilterChange={vi.fn()}
+        staffFilterOptions={[]}
+        filteredAdjustments={[
+          { id: "adj-1", category: "support_misc", totalPoints: 1, status: "pending" },
+          { id: "adj-2", category: "support_misc", totalPoints: 2, status: "pending" },
+          { id: "adj-3", category: "support_misc", totalPoints: 3, status: "pending" },
+        ]}
+        currentPageItems={[
+          { id: "adj-3", category: "support_misc", totalPoints: 3, status: "pending" },
+        ]}
+        page={2}
+        pageSize={2}
+        pageCount={2}
+        totalItems={3}
+        pageSizeOptions={[15, 30, 50]}
+        onPageSizeChange={onPageSizeChange}
+        onNextPage={onNextPage}
+        onPreviousPage={onPreviousPage}
+        PageSizeControlComponent={({ value, onChange }) => (
+          <button type="button" onClick={() => onChange(30)}>
+            Page size {value}
+          </button>
+        )}
+        categoryConfig={{ support_misc: { label: "Hỗ trợ khác" } }}
+        statusLabels={{ pending: "Chờ duyệt" }}
+        formatDecimal={(value) => String(value)}
+        formatDateTime={() => "fmt"}
+        onEdit={vi.fn()}
+        onViewDetail={vi.fn()}
+        onApprove={vi.fn()}
+        onReject={vi.fn()}
+        onDelete={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText("Hiển thị 3-3 / 3 mục")).toBeInTheDocument();
+    expect(screen.getByText("Trang 2 / 2")).toBeInTheDocument();
+    expect(screen.getByText("Page size 2")).toBeInTheDocument();
+    expect(screen.getAllByText("Hỗ trợ khác").length).toBeGreaterThan(0);
+
+    await userEvent.click(screen.getByRole("button", { name: "Trang trước" }));
+    await userEvent.click(screen.getByRole("button", { name: "Page size 2" }));
+
+    expect(onPreviousPage).toHaveBeenCalledTimes(1);
+    expect(onPageSizeChange).toHaveBeenCalledWith(30);
+    expect(screen.getByRole("button", { name: "Trang sau" })).toBeDisabled();
   });
 });

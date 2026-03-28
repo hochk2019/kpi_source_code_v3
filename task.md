@@ -16,25 +16,26 @@
 
 ## Active Slice
 
-- Title: KPI Adjustments filter persistence per user
-- Bead: cng-7z0.1 (bead CLI khong kha dung trong worktree nay)
+- Title: KPI Adjustments pagination and persisted page size
+- Bead: cng-7z0.2 (bead CLI khong kha dung trong worktree nay)
 - Status: completed
 - Last updated: 2026-03-28
 
-- Muc tieu slice nay la giu bo loc KPI Adjustments on dinh theo user va khong can mo them contract backend:
-  - persist `month`, `status`, `mine-only`, `staff` filter theo tung user scope trong local storage
-  - hydrate lai state bo loc khi mo lai KPI Adjustments ma van ton trong reset logic theo quyen/nhan vien hien tai
-  - khoa regression cho ca hook layer va UI remount flow cua lane dieu chinh
+- Muc tieu slice nay la tach KPI Adjustments list sang lane pagination nhe hon ma khong mo them contract backend:
+  - paginate danh sach KPI adjustment de lane nay van on dinh khi dataset tang lon
+  - persist `pageSize` trong local storage va hydrate lai sau khi remount
+  - giu component shell gon bang cach tach page-size persistence sang hook rieng co test
 - Cach sua da ap dung:
-  - mo rong `useKpiAdjustmentFilters` de doc/ghi local-storage theo user scope va sanitize lai state bo loc truoc khi hydrate
-  - giu `showMineOnly`/`staffFilter` phu hop voi current auth state thay vi replay nguyen si state cu
-  - bo sung regression cho `tests/kpiAdjustments.hooks.test.jsx` va `tests/kpiAdjustments.test.jsx` de khoa restore flow sau remount
+  - them `useKpiAdjustmentPageSize.js` de chuan hoa read/write `pageSize` cho lane KPI Adjustments ma khong nhoi them vao `KPIAdjustments.jsx`
+  - noi `usePagination` vao `KPIAdjustments.jsx`, persist page size khi doi so dong moi trang, va pass summary/controls xuong list panel
+  - mo rong `KpiAdjustmentListPanel.jsx` de hien `range`, `page`, `PageSizeControl`, va `Trang truoc/sau`
+  - bo sung regression cho hook/page-size helpers, list panel pagination events, va UI remount flow cua KPI Adjustments
 - Trang thai verify hien tai:
-  - `pnpm exec vitest run tests/kpiAdjustments.hooks.test.jsx tests/kpiAdjustments.test.jsx tests/kpiAdjustmentListPanel.test.jsx --environment jsdom` da pass
-  - `pnpm exec eslint src/components/kpi-adjustments/hooks/useKpiAdjustmentFilters.js tests/kpiAdjustments.hooks.test.jsx tests/kpiAdjustments.test.jsx` da pass
+  - `pnpm exec vitest run tests/useKpiAdjustmentPageSize.test.jsx tests/kpiAdjustmentListPanel.test.jsx tests/kpiAdjustments.test.jsx tests/kpiAdjustments.hooks.test.jsx --environment jsdom` da pass
+  - `pnpm exec eslint src/components/KPIAdjustments.jsx src/components/kpi-adjustments/hooks/useKpiAdjustmentPageSize.js src/components/kpi-adjustments/panels/KpiAdjustmentListPanel.jsx tests/useKpiAdjustmentPageSize.test.jsx tests/kpiAdjustmentListPanel.test.jsx tests/kpiAdjustments.test.jsx` da pass
   - `bd` / `bd.cmd` trong worktree hien tai khong tim thay beads database, nen trang thai bead chua sync duoc bang CLI
 - Next suggested slice:
-  - `cng-7z0.2` — tach list KPI Adjustments sang pagination / virtualized lane de giu perf voi dataset lon
+  - `cng-7z0.3` — bo sung bulk approve/reject cho KPI Adjustments de giam click-path cua approver
 ## Recent Completed Slices
 
 - `cng-7z0.28` da xong o muc delivery channel + delivery status tracking:
@@ -51,6 +52,10 @@
   - them local-storage persistence theo user scope trong `useKpiAdjustmentFilters.js` cho `month`, `status`, `mine-only`, va `staff`
   - sanitize lai state restore de khong giu bo loc staff/mine-only sai khi auth scope thay doi
   - bo sung regression `tests/kpiAdjustments.hooks.test.jsx` va `tests/kpiAdjustments.test.jsx` de khoa remount restore flow
+- `cng-7z0.2` da xong o muc paginate KPI Adjustments list:
+  - them `useKpiAdjustmentPageSize.js` de persist `pageSize` rieng cho lane dieu chinh KPI
+  - noi `usePagination` + `PageSizeControl` vao `KPIAdjustments.jsx` va `KpiAdjustmentListPanel.jsx` de hien page summary, prev/next controls, va hydrate page size sau remount
+  - bo sung regression `tests/useKpiAdjustmentPageSize.test.jsx`, `tests/kpiAdjustmentListPanel.test.jsx`, va cap nhat `tests/kpiAdjustments.test.jsx`
 - `cng-7z0.27` da xong o muc executive dashboard snapshot:
   - them `ReportingExecutiveSummaryPanel.jsx` + `reportingExecutiveSummaryModel.js` de tong hop KPI/decl, top staff, team concentration, pending adjustments, va deviation signals
   - cap nhat `ReportingDashboardOverview.jsx` de surfacing executive summary truoc summary cards/trend/top staff widgets
@@ -729,13 +734,13 @@
 
 ## Next Suggested Slice
 
-- Title: Custom report templates for reporting workspace
-- Bead: `cng-7z0.29`
+- Title: Bulk approve/reject for KPI adjustments
+- Bead: `cng-7z0.3`
 - Status: open
 - Follow-up backlog:
-  - xac dinh tap filter/cau hinh nao cua report center can luu thanh template ma khong lam roi UX hien tai
-  - tai su dung pattern preset/hook co san neu phu hop, nhung tach module rieng cho reporting neu contract khac biet
-  - bo sung test cho create/load/delete template truoc khi mo rong sang shared storage hoac backend sau nay
+  - thiet ke bulk selection state ma khong xung dot voi row action hien tai trong `KpiAdjustmentListPanel`
+  - khoa permission gate `adjustApprove` cho ca toolbar, checkbox, va batch mutation flow
+  - bo sung regression cho bulk approve, bulk reject, va partial failure handling truoc khi mo rong sang async queue neu can
 
 ## Verification
 

@@ -20,9 +20,14 @@ import {
 } from "@/lib/store.js";
 
 import { subscribe as subscribeStorage } from "@/lib/storageClient.js";
+import PageSizeControl from "@/components/mst-assignment/table/PageSizeControl.jsx";
 
 import { useKpiAdjustmentForm } from "@/components/kpi-adjustments/hooks/useKpiAdjustmentForm.js";
 import { useKpiAdjustmentFilters } from "@/components/kpi-adjustments/hooks/useKpiAdjustmentFilters.js";
+import useKpiAdjustmentPageSize, {
+  KPI_ADJUSTMENT_PAGE_SIZE_OPTIONS,
+  MIN_KPI_ADJUSTMENT_PAGE_SIZE,
+} from "@/components/kpi-adjustments/hooks/useKpiAdjustmentPageSize.js";
 import { useKpiAdjustmentFormWorkspace } from "@/components/kpi-adjustments/hooks/useKpiAdjustmentFormWorkspace.js";
 import {
   formatDateOnly,
@@ -42,6 +47,7 @@ import KpiAdjustmentGuidanceDialog from "@/components/kpi-adjustments/panels/Kpi
 import KpiAdjustmentListPanel from "@/components/kpi-adjustments/panels/KpiAdjustmentListPanel.jsx";
 import KpiAdjustmentOverviewPanel from "@/components/kpi-adjustments/panels/KpiAdjustmentOverviewPanel.jsx";
 import KpiAdjustmentSettingsDialog from "@/components/kpi-adjustments/panels/KpiAdjustmentSettingsDialog.jsx";
+import usePagination from "@/hooks/usePagination.js";
 
 
 
@@ -217,6 +223,21 @@ export default function KPIAdjustments({ currentUser }) {
     currentStaffKey,
     canApprove,
     isAuthenticated,
+  });
+  const { initialPageSize, persistPageSize } = useKpiAdjustmentPageSize();
+  const {
+    page,
+    pageSize,
+    pageCount,
+    totalItems,
+    currentPageItems,
+    setPageSize,
+    nextPage,
+    previousPage,
+  } = usePagination(filteredAdjustments, {
+    initialPage: 1,
+    initialPageSize,
+    minPageSize: MIN_KPI_ADJUSTMENT_PAGE_SIZE,
   });
 
   const {
@@ -427,6 +448,10 @@ export default function KPIAdjustments({ currentUser }) {
     }
 
   }, [detailEntry]);
+
+  useEffect(() => {
+    persistPageSize(pageSize);
+  }, [pageSize, persistPageSize]);
 
 
 
@@ -798,6 +823,16 @@ export default function KPIAdjustments({ currentUser }) {
         onStaffFilterChange={setStaffFilter}
         staffFilterOptions={staffFilterOptions}
         filteredAdjustments={filteredAdjustments}
+        currentPageItems={currentPageItems}
+        page={page}
+        pageSize={pageSize}
+        pageCount={pageCount}
+        totalItems={totalItems}
+        pageSizeOptions={KPI_ADJUSTMENT_PAGE_SIZE_OPTIONS}
+        onPageSizeChange={setPageSize}
+        onNextPage={nextPage}
+        onPreviousPage={previousPage}
+        PageSizeControlComponent={PageSizeControl}
         categoryConfig={KPI_ADJUSTMENT_CATEGORY_CONFIG}
         statusLabels={STATUS_LABELS}
         formatDecimal={formatDecimal}

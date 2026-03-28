@@ -10,7 +10,7 @@ Reconciliation note 2026-03-27:
 ## 1. KPI Adjustments
 
 - [x] Persist filter states (month, status, mine-only, staff) per user using local storage hoặc `UI_LAYOUT_KEY` trong store.
-- [ ] Tách danh sách điều chỉnh sang virtual list / pagination để cải thiện hiệu năng với dataset lớn.
+- [x] Tách danh sách điều chỉnh sang virtual list / pagination để cải thiện hiệu năng với dataset lớn. (done 2026-03-28, them pagination + persisted page size cho KPI Adjustments list va khoa regression panel/remount flow)
 - [ ] Bổ sung thao tác duyệt hàng loạt (bulk approve/reject) dựa trên quyền `adjustApprove`.
 - [ ] Thêm liên kết nhanh tới tờ khai hoặc MST liên quan để người duyệt tra cứu ngay tại chỗ.
 - [ ] Cho phép quản lý cấu hình điểm mặc định trực tiếp trong UI và phản ánh vào `KPI_ADJUSTMENT_CATEGORY_CONFIG`.
