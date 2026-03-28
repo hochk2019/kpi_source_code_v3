@@ -16,26 +16,26 @@
 
 ## Active Slice
 
-- Title: KPI Adjustments pagination and persisted page size
-- Bead: cng-7z0.2 (bead CLI khong kha dung trong worktree nay)
+- Title: KPI Adjustments bulk approve/reject for approvers
+- Bead: cng-7z0.3 (bead CLI khong kha dung trong worktree nay)
 - Status: completed
 - Last updated: 2026-03-28
 
-- Muc tieu slice nay la tach KPI Adjustments list sang lane pagination nhe hon ma khong mo them contract backend:
-  - paginate danh sach KPI adjustment de lane nay van on dinh khi dataset tang lon
-  - persist `pageSize` trong local storage va hydrate lai sau khi remount
-  - giu component shell gon bang cach tach page-size persistence sang hook rieng co test
+- Muc tieu slice nay la giam click-path cua approver trong KPI Adjustments ma khong mo them contract backend:
+  - them selection state theo trang hien tai de approver co the chon nhieu dong cung luc
+  - bo sung bulk approve va bulk reject toolbar, dung lai `updateKpiAdjustmentStatus` hien co
+  - giu `KPIAdjustments.jsx` gon bang cach tach selection state sang hook rieng co test
 - Cach sua da ap dung:
-  - them `useKpiAdjustmentPageSize.js` de chuan hoa read/write `pageSize` cho lane KPI Adjustments ma khong nhoi them vao `KPIAdjustments.jsx`
-  - noi `usePagination` vao `KPIAdjustments.jsx`, persist page size khi doi so dong moi trang, va pass summary/controls xuong list panel
-  - mo rong `KpiAdjustmentListPanel.jsx` de hien `range`, `page`, `PageSizeControl`, va `Trang truoc/sau`
-  - bo sung regression cho hook/page-size helpers, list panel pagination events, va UI remount flow cua KPI Adjustments
+  - them `useKpiAdjustmentSelection.js` de quan ly selected rows, select-all tren trang hien tai, va prune selection khi page/filter doi
+  - mo rong `KpiAdjustmentListPanel.jsx` voi cot checkbox, toolbar bulk action, va summary selection cho approver
+  - cap nhat `KPIAdjustments.jsx` de orchestrate bulk approve/reject qua loop `updateKpiAdjustmentStatus`, confirm/prompt note, va clear selection sau khi xong
+  - bo sung regression `tests/useKpiAdjustmentSelection.test.jsx`, cap nhat `tests/kpiAdjustmentListPanel.test.jsx`, va them UI integration cho bulk approve/reject trong `tests/kpiAdjustments.test.jsx`
 - Trang thai verify hien tai:
-  - `pnpm exec vitest run tests/useKpiAdjustmentPageSize.test.jsx tests/kpiAdjustmentListPanel.test.jsx tests/kpiAdjustments.test.jsx tests/kpiAdjustments.hooks.test.jsx --environment jsdom` da pass
-  - `pnpm exec eslint src/components/KPIAdjustments.jsx src/components/kpi-adjustments/hooks/useKpiAdjustmentPageSize.js src/components/kpi-adjustments/panels/KpiAdjustmentListPanel.jsx tests/useKpiAdjustmentPageSize.test.jsx tests/kpiAdjustmentListPanel.test.jsx tests/kpiAdjustments.test.jsx` da pass
+  - `pnpm exec vitest run tests/useKpiAdjustmentSelection.test.jsx tests/kpiAdjustmentListPanel.test.jsx tests/kpiAdjustments.test.jsx tests/kpiAdjustments.hooks.test.jsx --environment jsdom` da pass
+  - `pnpm exec eslint src/components/KPIAdjustments.jsx src/components/kpi-adjustments/hooks/useKpiAdjustmentSelection.js src/components/kpi-adjustments/panels/KpiAdjustmentListPanel.jsx tests/useKpiAdjustmentSelection.test.jsx tests/kpiAdjustmentListPanel.test.jsx tests/kpiAdjustments.test.jsx` da pass
   - `bd` / `bd.cmd` trong worktree hien tai khong tim thay beads database, nen trang thai bead chua sync duoc bang CLI
 - Next suggested slice:
-  - `cng-7z0.3` — bo sung bulk approve/reject cho KPI Adjustments de giam click-path cua approver
+  - `cng-7z0.4` — them quick links toi to khai hoac MST lien quan ngay trong KPI Adjustments
 ## Recent Completed Slices
 
 - `cng-7z0.28` da xong o muc delivery channel + delivery status tracking:
@@ -56,6 +56,11 @@
   - them `useKpiAdjustmentPageSize.js` de persist `pageSize` rieng cho lane dieu chinh KPI
   - noi `usePagination` + `PageSizeControl` vao `KPIAdjustments.jsx` va `KpiAdjustmentListPanel.jsx` de hien page summary, prev/next controls, va hydrate page size sau remount
   - bo sung regression `tests/useKpiAdjustmentPageSize.test.jsx`, `tests/kpiAdjustmentListPanel.test.jsx`, va cap nhat `tests/kpiAdjustments.test.jsx`
+- `cng-7z0.3` da xong o muc bulk approve/reject cho KPI Adjustments:
+  - them `useKpiAdjustmentSelection.js` de quan ly selection state theo trang va select-all behavior
+  - mo rong `KpiAdjustmentListPanel.jsx` voi checkbox cot dau, toolbar bulk action, va selection summary cho approver
+  - cap nhat `KPIAdjustments.jsx` de bulk-loop `updateKpiAdjustmentStatus`, confirm/prompt note, va clear selection sau khi apply
+  - bo sung regression `tests/useKpiAdjustmentSelection.test.jsx`, cap nhat `tests/kpiAdjustmentListPanel.test.jsx`, va them integration tests bulk approve/reject trong `tests/kpiAdjustments.test.jsx`
 - `cng-7z0.27` da xong o muc executive dashboard snapshot:
   - them `ReportingExecutiveSummaryPanel.jsx` + `reportingExecutiveSummaryModel.js` de tong hop KPI/decl, top staff, team concentration, pending adjustments, va deviation signals
   - cap nhat `ReportingDashboardOverview.jsx` de surfacing executive summary truoc summary cards/trend/top staff widgets
@@ -734,13 +739,13 @@
 
 ## Next Suggested Slice
 
-- Title: Bulk approve/reject for KPI adjustments
-- Bead: `cng-7z0.3`
+- Title: Quick links to declaration or MST from KPI adjustments
+- Bead: `cng-7z0.4`
 - Status: open
 - Follow-up backlog:
-  - thiet ke bulk selection state ma khong xung dot voi row action hien tai trong `KpiAdjustmentListPanel`
-  - khoa permission gate `adjustApprove` cho ca toolbar, checkbox, va batch mutation flow
-  - bo sung regression cho bulk approve, bulk reject, va partial failure handling truoc khi mo rong sang async queue neu can
+  - xac dinh nguon deep-link an toan tu references/MST data hien co trong `KPIAdjustments`
+  - bo sung action shortcut ngay tren list/detail de approver mo nhanh to khai hoac MST lien quan
+  - khoa regression cho permission-neutral navigation va fallback khi record lien quan khong con ton tai
 
 ## Verification
 

@@ -47,6 +47,7 @@ import KpiAdjustmentGuidanceDialog from "@/components/kpi-adjustments/panels/Kpi
 import KpiAdjustmentListPanel from "@/components/kpi-adjustments/panels/KpiAdjustmentListPanel.jsx";
 import KpiAdjustmentOverviewPanel from "@/components/kpi-adjustments/panels/KpiAdjustmentOverviewPanel.jsx";
 import KpiAdjustmentSettingsDialog from "@/components/kpi-adjustments/panels/KpiAdjustmentSettingsDialog.jsx";
+import useKpiAdjustmentSelection from "@/components/kpi-adjustments/hooks/useKpiAdjustmentSelection.js";
 import usePagination from "@/hooks/usePagination.js";
 
 
@@ -238,6 +239,18 @@ export default function KPIAdjustments({ currentUser }) {
     initialPage: 1,
     initialPageSize,
     minPageSize: MIN_KPI_ADJUSTMENT_PAGE_SIZE,
+  });
+  const {
+    selectedIdSet: selectedAdjustmentIdSet,
+    selectedItems: selectedAdjustments,
+    selectedCount: selectedAdjustmentCount,
+    allVisibleSelected: allVisibleAdjustmentsSelected,
+    toggleSelection: toggleAdjustmentSelection,
+    toggleVisibleSelection: toggleVisibleAdjustmentsSelection,
+    clearSelection: clearAdjustmentSelection,
+  } = useKpiAdjustmentSelection({
+    canSelect: canApprove,
+    visibleItems: currentPageItems,
   });
 
   const {
@@ -658,6 +671,63 @@ export default function KPIAdjustments({ currentUser }) {
     }
 
   };
+  const bulkApproveCount = useMemo(
+    () => selectedAdjustments.filter((item) => item?.status !== "approved").length,
+    [selectedAdjustments]
+  );
+  const bulkRejectCount = useMemo(
+    () => selectedAdjustments.filter((item) => item?.status !== "rejected").length,
+    [selectedAdjustments]
+  );
+
+  const handleBulkStatusChange = async (status) => {
+    if (!canApprove) {
+      window.alert("Bạn không có quyền duyệt điểm KPI bổ sung.");
+      return;
+    }
+
+    const actionableEntries = selectedAdjustments.filter((item) => {
+      if (!item) {
+        return false;
+      }
+
+      return status === "approved" ? item.status !== "approved" : item.status !== "rejected";
+    });
+
+    if (actionableEntries.length === 0) {
+      return;
+    }
+
+    const actionLabel = status === "approved" ? "duyệt" : "từ chối";
+    const confirmed = window.confirm(
+      `Bạn có chắc chắn muốn ${actionLabel} ${actionableEntries.length} mục điểm KPI bổ sung đã chọn?`
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    let note = "";
+    if (status === "rejected") {
+      note = window.prompt("Nhập lý do từ chối cho các mục đã chọn (tuỳ chọn)", "") || "";
+    }
+
+    try {
+      for (const entry of actionableEntries) {
+        updateKpiAdjustmentStatus(entry.id, status, {
+          actor,
+          note,
+          permissions: currentUser?.permissions || {},
+        });
+      }
+
+      setAdjustments(getKpiAdjustments());
+      clearAdjustmentSelection();
+    } catch (err) {
+      console.error(err);
+      window.alert("Không thể cập nhật trạng thái hàng loạt. Vui lòng thử lại.");
+    }
+  };
 
 
 
@@ -837,6 +907,16 @@ export default function KPIAdjustments({ currentUser }) {
         statusLabels={STATUS_LABELS}
         formatDecimal={formatDecimal}
         formatDateTime={formatDateTime}
+        selectedAdjustmentIds={selectedAdjustmentIdSet}
+        allVisibleAdjustmentsSelected={allVisibleAdjustmentsSelected}
+        selectedAdjustmentCount={selectedAdjustmentCount}
+        bulkApproveCount={bulkApproveCount}
+        bulkRejectCount={bulkRejectCount}
+        onToggleAdjustmentSelection={toggleAdjustmentSelection}
+        onToggleVisibleAdjustmentsSelection={toggleVisibleAdjustmentsSelection}
+        onClearSelection={clearAdjustmentSelection}
+        onBulkApprove={() => handleBulkStatusChange("approved")}
+        onBulkReject={() => handleBulkStatusChange("rejected")}
         onEdit={handleEdit}
         onViewDetail={(item) => setDetailEntry({ entry: item, intent: "view" })}
         onApprove={(item) => setDetailEntry({ entry: item, intent: "approve" })}

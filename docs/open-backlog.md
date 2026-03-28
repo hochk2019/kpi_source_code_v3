@@ -105,11 +105,11 @@ Source set: `docs/ux-improvement-backlog.md`
 - If an item is intentionally deferred or removed, note that explicitly in the source doc instead of leaving an orphan unchecked line.
 # Open backlog
 
-Canonical open backlog duoc tiep tuc theo doi tai file nay. Da reconcile lai ngay 2026-03-28 sau khi dong `cng-7z0.29`, `cng-7z0.1`, va `cng-7z0.2`.
+Canonical open backlog duoc tiep tuc theo doi tai file nay. Da reconcile lai ngay 2026-03-28 sau khi dong `cng-7z0.29`, `cng-7z0.1`, `cng-7z0.2`, va `cng-7z0.3`.
 
 ## Ready next
 
-- [ ] `cng-7z0.3` — Bulk approve/reject cho KPI Adjustments de giam click-path cua approver.
+- [ ] `cng-7z0.4` — Them quick links toi to khai hoac MST lien quan ngay trong KPI Adjustments.
 - [ ] `cng-2k4.22` — Text/lint hygiene cho app/runtime code, khong gom dirt co san trong `.claude/skills/*`.
 - [ ] `cng-2k4.2` — Declarations write cutover voi compat guard + rollback plan.
 - [ ] `cng-2k4.3` — Switch production entrypoint sang `server-v4`.
@@ -119,4 +119,5 @@ Canonical open backlog duoc tiep tuc theo doi tai file nay. Da reconcile lai nga
 - `cng-7z0.29` da dong trong session 2026-03-28 sau khi them local report templates cho Report Center.
 - `cng-7z0.1` da dong trong session 2026-03-28 sau khi them local persistence cho filter KPI Adjustments theo user va khoa regression hook/UI.
 - `cng-7z0.2` da dong trong session 2026-03-28 sau khi paginate KPI Adjustments list, persist `pageSize`, va khoa regression panel/remount flow.
+- `cng-7z0.3` da dong trong session 2026-03-28 sau khi them bulk selection + bulk approve/reject toolbar cho approver trong KPI Adjustments, giu scope tren trang hien tai va khoa regression hook/panel/UI.
 - `bd` / `bd.cmd` hien chua truy cap duoc beads database trong worktree nay, nen backlog duoc giu song song tai day va `task.md`.

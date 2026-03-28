@@ -1,6 +1,7 @@
 import { Badge } from "@/components/ui/badge.jsx";
 import { Button } from "@/components/ui/button.jsx";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card.jsx";
+import { Checkbox } from "@/components/ui/checkbox.jsx";
 import { Input } from "@/components/ui/input.jsx";
 import { Switch } from "@/components/ui/switch.jsx";
 import { roundAdjustmentPoint } from "@/lib/store.js";
@@ -36,6 +37,16 @@ export default function KpiAdjustmentListPanel({
   statusLabels,
   formatDecimal,
   formatDateTime,
+  selectedAdjustmentIds,
+  allVisibleAdjustmentsSelected,
+  selectedAdjustmentCount,
+  bulkApproveCount,
+  bulkRejectCount,
+  onToggleAdjustmentSelection,
+  onToggleVisibleAdjustmentsSelection,
+  onClearSelection,
+  onBulkApprove,
+  onBulkReject,
   onEdit,
   onViewDetail,
   onApprove,
@@ -43,6 +54,7 @@ export default function KpiAdjustmentListPanel({
   onDelete,
 }) {
   const visibleAdjustments = Array.isArray(currentPageItems) ? currentPageItems : filteredAdjustments;
+  const selectedIdSet = selectedAdjustmentIds instanceof Set ? selectedAdjustmentIds : new Set(selectedAdjustmentIds || []);
   const rangeStart = totalItems > 0 ? (page - 1) * pageSize + 1 : 0;
   const rangeEnd = totalItems > 0 ? Math.min(totalItems, page * pageSize) : 0;
   const canGoPrevious = page > 1;
@@ -170,10 +182,63 @@ export default function KpiAdjustmentListPanel({
           ) : null}
         </div>
 
+        {canApprove ? (
+          <div className="mt-4 flex flex-col gap-3 rounded-xl border border-border/60 bg-muted/20 px-4 py-3 md:flex-row md:items-center md:justify-between">
+            <div className="space-y-1 text-sm">
+              <p className="font-medium text-foreground">
+                {selectedAdjustmentCount > 0
+                  ? `Đã chọn ${selectedAdjustmentCount} mục trên trang hiện tại`
+                  : "Chưa chọn mục nào để xử lý hàng loạt"}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Chọn các dòng đang hiển thị rồi duyệt hoặc từ chối cùng lúc để giảm thao tác lặp lại.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                type="button"
+                onClick={onClearSelection}
+                disabled={selectedAdjustmentCount === 0}
+              >
+                Bỏ chọn
+              </Button>
+              <Button
+                size="sm"
+                type="button"
+                onClick={onBulkApprove}
+                disabled={bulkApproveCount === 0}
+              >
+                Duyệt đã chọn ({bulkApproveCount})
+              </Button>
+              <Button
+                variant="destructive"
+                size="sm"
+                type="button"
+                onClick={onBulkReject}
+                disabled={bulkRejectCount === 0}
+              >
+                Từ chối đã chọn ({bulkRejectCount})
+              </Button>
+            </div>
+          </div>
+        ) : null}
+
         <div className="mt-6 overflow-hidden rounded-xl border border-border">
           <table className="min-w-full text-sm">
             <thead className="bg-muted/60 text-xs uppercase text-muted-foreground">
               <tr className="text-left">
+                {canApprove ? (
+                  <th className="px-4 py-2">
+                    <Checkbox
+                      checked={allVisibleAdjustmentsSelected}
+                      aria-label="Chọn tất cả mục trên trang"
+                      onCheckedChange={onToggleVisibleAdjustmentsSelection}
+                      disabled={visibleAdjustments.length === 0}
+                    />
+                  </th>
+                ) : null}
                 <th className="px-4 py-2">Tháng</th>
                 <th className="px-4 py-2">Hạng mục</th>
                 <th className="px-4 py-2">Công ty</th>
@@ -211,6 +276,15 @@ export default function KpiAdjustmentListPanel({
 
                   return (
                     <tr key={item.id} className="odd:bg-background even:bg-muted/30">
+                      {canApprove ? (
+                        <td className="px-4 py-2 align-top">
+                          <Checkbox
+                            checked={selectedIdSet.has(item.id)}
+                            aria-label={`Chọn mục điểm ${label} của ${item.staffName || "Chưa gán"}`}
+                            onCheckedChange={(checked) => onToggleAdjustmentSelection(item.id, checked === true)}
+                          />
+                        </td>
+                      ) : null}
                       <td className="px-4 py-2 align-top">{item.month || "—"}</td>
                       <td className="px-4 py-2 align-top">
                         <div className="flex flex-col gap-1">
@@ -288,7 +362,7 @@ export default function KpiAdjustmentListPanel({
                 })
               ) : (
                 <tr>
-                  <td className="px-4 py-6 text-center text-muted-foreground" colSpan={10}>
+                  <td className="px-4 py-6 text-center text-muted-foreground" colSpan={canApprove ? 11 : 10}>
                     Không có điểm KPI bổ sung nào phù hợp với bộ lọc hiện tại.
                   </td>
                 </tr>

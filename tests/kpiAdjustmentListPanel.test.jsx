@@ -55,6 +55,16 @@ describe("kpi adjustment list panel", () => {
         statusLabels={{}}
         formatDecimal={(value) => String(value)}
         formatDateTime={(value) => String(value)}
+        selectedAdjustmentIds={[]}
+        allVisibleAdjustmentsSelected={false}
+        selectedAdjustmentCount={0}
+        bulkApproveCount={0}
+        bulkRejectCount={0}
+        onToggleAdjustmentSelection={vi.fn()}
+        onToggleVisibleAdjustmentsSelection={vi.fn()}
+        onClearSelection={vi.fn()}
+        onBulkApprove={vi.fn()}
+        onBulkReject={vi.fn()}
         onEdit={vi.fn()}
         onViewDetail={vi.fn()}
         onApprove={vi.fn()}
@@ -144,6 +154,16 @@ describe("kpi adjustment list panel", () => {
         statusLabels={{ pending: "Chờ duyệt" }}
         formatDecimal={(value) => Number(value || 0).toFixed(1)}
         formatDateTime={(value) => `fmt:${value}`}
+        selectedAdjustmentIds={[]}
+        allVisibleAdjustmentsSelected={false}
+        selectedAdjustmentCount={0}
+        bulkApproveCount={0}
+        bulkRejectCount={0}
+        onToggleAdjustmentSelection={vi.fn()}
+        onToggleVisibleAdjustmentsSelection={vi.fn()}
+        onClearSelection={vi.fn()}
+        onBulkApprove={vi.fn()}
+        onBulkReject={vi.fn()}
         onEdit={onEdit}
         onViewDetail={onViewDetail}
         onApprove={onApprove}
@@ -178,6 +198,11 @@ describe("kpi adjustment list panel", () => {
     const onPreviousPage = vi.fn();
     const onNextPage = vi.fn();
     const onPageSizeChange = vi.fn();
+    const onToggleAdjustmentSelection = vi.fn();
+    const onToggleVisibleAdjustmentsSelection = vi.fn();
+    const onClearSelection = vi.fn();
+    const onBulkApprove = vi.fn();
+    const onBulkReject = vi.fn();
 
     render(
       <KpiAdjustmentListPanel
@@ -196,7 +221,7 @@ describe("kpi adjustment list panel", () => {
         showMineOnly={false}
         currentStaffKey=""
         onMineToggle={vi.fn()}
-        canApprove={false}
+        canApprove
         staffFilter="all"
         onStaffFilterChange={vi.fn()}
         staffFilterOptions={[]}
@@ -225,6 +250,16 @@ describe("kpi adjustment list panel", () => {
         statusLabels={{ pending: "Chờ duyệt" }}
         formatDecimal={(value) => String(value)}
         formatDateTime={() => "fmt"}
+        selectedAdjustmentIds={["adj-3"]}
+        allVisibleAdjustmentsSelected={true}
+        selectedAdjustmentCount={1}
+        bulkApproveCount={1}
+        bulkRejectCount={1}
+        onToggleAdjustmentSelection={onToggleAdjustmentSelection}
+        onToggleVisibleAdjustmentsSelection={onToggleVisibleAdjustmentsSelection}
+        onClearSelection={onClearSelection}
+        onBulkApprove={onBulkApprove}
+        onBulkReject={onBulkReject}
         onEdit={vi.fn()}
         onViewDetail={vi.fn()}
         onApprove={vi.fn()}
@@ -236,11 +271,20 @@ describe("kpi adjustment list panel", () => {
     expect(screen.getByText("Hiển thị 3-3 / 3 mục")).toBeInTheDocument();
     expect(screen.getByText("Trang 2 / 2")).toBeInTheDocument();
     expect(screen.getByText("Page size 2")).toBeInTheDocument();
+    expect(screen.getByText("Đã chọn 1 mục trên trang hiện tại")).toBeInTheDocument();
     expect(screen.getAllByText("Hỗ trợ khác").length).toBeGreaterThan(0);
 
+    await userEvent.click(screen.getByRole("checkbox", { name: "Chọn tất cả mục trên trang" }));
+    await userEvent.click(screen.getByRole("button", { name: "Duyệt đã chọn (1)" }));
+    await userEvent.click(screen.getByRole("button", { name: "Từ chối đã chọn (1)" }));
+    await userEvent.click(screen.getByRole("button", { name: "Bỏ chọn" }));
     await userEvent.click(screen.getByRole("button", { name: "Trang trước" }));
     await userEvent.click(screen.getByRole("button", { name: "Page size 2" }));
 
+    expect(onToggleVisibleAdjustmentsSelection).toHaveBeenCalledWith(false);
+    expect(onBulkApprove).toHaveBeenCalledTimes(1);
+    expect(onBulkReject).toHaveBeenCalledTimes(1);
+    expect(onClearSelection).toHaveBeenCalledTimes(1);
     expect(onPreviousPage).toHaveBeenCalledTimes(1);
     expect(onPageSizeChange).toHaveBeenCalledWith(30);
     expect(screen.getByRole("button", { name: "Trang sau" })).toBeDisabled();

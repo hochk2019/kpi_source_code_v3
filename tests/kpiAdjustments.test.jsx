@@ -16,6 +16,8 @@ import {
 
   DECL_KEY,
 
+  getKpiAdjustments,
+
   saveKpiAdjustment,
 
 } from '@/lib/store.js';
@@ -584,6 +586,107 @@ describe('KPIAdjustments UI', () => {
     expect(await screen.findByLabelText('Số dòng mỗi trang')).toHaveValue('30');
     expect(screen.getByText('Hiển thị 1-19 / 19 mục')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Trang sau' })).toBeDisabled();
+  });
+
+  it('duyệt hàng loạt các mục đã chọn trong trang hiện tại', async () => {
+    const now = new Date();
+    const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+
+    const secondEntry = saveKpiAdjustment(
+      {
+        category: 'support_misc',
+        month: currentMonth,
+        staffName: 'Bình',
+        teamName: 'Team 1',
+        note: 'Chờ duyệt hàng loạt',
+        references: ['TK002'],
+        quantity: 1,
+        unitPoints: 2,
+        mode: 'fixed',
+        status: 'pending',
+      },
+      { actor: 'seed', permissions: { adjustApprove: true } }
+    );
+
+    render(
+      <KPIAdjustments
+        currentUser={{ username: 'manager.bulk', permissions: { adjustApprove: true, adjustSubmit: true } }}
+      />
+    );
+
+    await screen.findByText('Danh sách điểm KPI +/-');
+
+    const rowCheckboxes = screen.getAllByRole('checkbox', { name: /Chọn mục điểm/i });
+    expect(rowCheckboxes.length).toBeGreaterThan(1);
+
+    await userEvent.click(rowCheckboxes[0]);
+    await userEvent.click(rowCheckboxes[1]);
+    await userEvent.click(screen.getByRole('button', { name: 'Duyệt đã chọn (2)' }));
+
+    expect(window.confirm).toHaveBeenCalledWith(
+      'Bạn có chắc chắn muốn duyệt 2 mục điểm KPI bổ sung đã chọn?'
+    );
+
+    await waitFor(() => {
+      const updatedItems = getKpiAdjustments().filter((item) => item.id === secondEntry.id || item.staffName === 'Lan');
+      expect(updatedItems).toHaveLength(2);
+      expect(updatedItems.every((item) => item.status === 'approved')).toBe(true);
+    });
+
+    expect(screen.getByText('Chưa chọn mục nào để xử lý hàng loạt')).toBeInTheDocument();
+  });
+
+  it('từ chối hàng loạt các mục đã chọn với cùng ghi chú', async () => {
+    const now = new Date();
+    const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+
+    const secondEntry = saveKpiAdjustment(
+      {
+        category: 'support_misc',
+        month: currentMonth,
+        staffName: 'Bình',
+        teamName: 'Team 1',
+        note: 'Từ chối hàng loạt',
+        references: ['TK002'],
+        quantity: 1,
+        unitPoints: 2,
+        mode: 'fixed',
+        status: 'pending',
+      },
+      { actor: 'seed', permissions: { adjustApprove: true } }
+    );
+
+    window.prompt.mockReturnValue('Thiếu chứng từ');
+
+    render(
+      <KPIAdjustments
+        currentUser={{ username: 'manager.bulk', permissions: { adjustApprove: true, adjustSubmit: true } }}
+      />
+    );
+
+    await screen.findByText('Danh sách điểm KPI +/-');
+
+    const rowCheckboxes = screen.getAllByRole('checkbox', { name: /Chọn mục điểm/i });
+    await userEvent.click(rowCheckboxes[0]);
+    await userEvent.click(rowCheckboxes[1]);
+    await userEvent.click(screen.getByRole('button', { name: 'Từ chối đã chọn (2)' }));
+
+    expect(window.confirm).toHaveBeenCalledWith(
+      'Bạn có chắc chắn muốn từ chối 2 mục điểm KPI bổ sung đã chọn?'
+    );
+    expect(window.prompt).toHaveBeenCalledWith(
+      'Nhập lý do từ chối cho các mục đã chọn (tuỳ chọn)',
+      ''
+    );
+
+    await waitFor(() => {
+      const updatedItems = getKpiAdjustments().filter((item) => item.id === secondEntry.id || item.staffName === 'Lan');
+      expect(updatedItems).toHaveLength(2);
+      expect(updatedItems.every((item) => item.status === 'rejected')).toBe(true);
+      expect(updatedItems.every((item) => item.history.at(-1)?.detail === 'Thiếu chứng từ')).toBe(true);
+    });
+
+    expect(screen.getByText('Chưa chọn mục nào để xử lý hàng loạt')).toBeInTheDocument();
   });
 
 });
