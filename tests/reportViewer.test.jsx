@@ -209,10 +209,9 @@ describe("ReportViewer", () => {
     render(<ReportViewer currentUser={{ role: "admin" }} />);
 
     const insightRegions = await screen.findAllByRole("region", { name: /dashboard insight kpi/i });
-    const [insightRegion] = insightRegions;
     const [guideRegion] = screen.getAllByRole("region", { name: /sơ đồ điều hướng report center/i });
     const [explorerRegion] = screen.getAllByRole("region", { name: /khám phá phạm vi báo cáo kpi/i });
-    const [scheduleRegion] = screen.getAllByRole("region", { name: /lập lịch gửi báo cáo kpi/i });
+    const scheduleRegions = screen.getAllByRole("region", { name: /lập lịch gửi báo cáo kpi/i });
     const [notesRegion] = screen.getAllByRole("region", { name: /ghi chú báo cáo kpi/i });
     const insightAnchor = document.getElementById("report-viewer-insights");
     const explorerAnchor = document.getElementById("report-viewer-explorer");
@@ -220,6 +219,7 @@ describe("ReportViewer", () => {
     const notesAnchor = document.getElementById("report-viewer-notes");
 
     expect(insightRegions.length).toBeGreaterThan(0);
+    expect(scheduleRegions.length).toBeGreaterThan(0);
     expect(guideRegion).toBeTruthy();
     expect(explorerRegion).toBeTruthy();
     expect(insightAnchor).toBeTruthy();

@@ -238,7 +238,7 @@ describe('AuditLog', () => {
 
     };
 
-    fetchSpy.mockImplementation((url, init) => {
+    fetchSpy.mockImplementation((url) => {
 
       if (url === '/api/admin/backups/summary') {
 

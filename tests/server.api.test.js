@@ -1361,7 +1361,7 @@ class MockPreparedStatement {
 
 
 
-  input(name, _type) {
+  input(name) {
 
     this.inputs[name] = true;
 
@@ -1371,7 +1371,7 @@ class MockPreparedStatement {
 
 
 
-  async prepare(_sql) {
+  async prepare() {
 
     this.prepared = true;
 

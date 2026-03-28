@@ -2636,11 +2636,9 @@ describe('unmarkDeclRowsReviewed', () => {
 
 describe('kpi adjustment settings', () => {
 
-  let fetchOverride;
-
   beforeEach(() => {
 
-    fetchOverride = fetchSpy.mockImplementation((url) => {
+    fetchSpy.mockImplementation((url) => {
 
       const key = decodeURIComponent(String(url).split('/').pop() || '');
 
