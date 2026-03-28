@@ -1,8 +1,10 @@
 import React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { getAppTabRootId } from '@/components/appShell/appShellWorkflowState.js';
 
 let mstModuleLoadCount = 0;
+let resolveAdjustmentsModule;
 
 vi.mock('@/components/workflows/MSTWorkflowPanel.jsx', () => {
   mstModuleLoadCount += 1;
@@ -13,6 +15,19 @@ vi.mock('@/components/workflows/MSTWorkflowPanel.jsx', () => {
     },
   };
 });
+
+vi.mock(
+  '@/components/workflows/KPIAdjustmentsWorkflowPanel.jsx',
+  () =>
+    new Promise((resolve) => {
+      resolveAdjustmentsModule = () =>
+        resolve({
+          default: function KPIAdjustmentsWorkflowPanelStub() {
+            return <div>Adjustment workflow stub</div>;
+          },
+        });
+    }),
+);
 
 vi.mock('@/components/workflows/ReportCenterPanel.jsx', () => ({
   default: function ReportCenterPanelStub() {
@@ -57,5 +72,35 @@ describe('KPICalculator lazy tab loading', () => {
 
     expect(await screen.findByText('MST workflow stub')).toBeInTheDocument();
     expect(mstModuleLoadCount).toBe(1);
+  });
+
+  it('giu focus target va loading status san sang khi lazy tab dang resolve', async () => {
+    const view = render(<KPICalculator auth={adminAuth} activeTab="reports" />);
+
+    expect(await screen.findByText('Report center stub')).toBeInTheDocument();
+
+    view.rerender(
+      <KPICalculator
+        auth={adminAuth}
+        activeTab="adjustments"
+        navigationIntent={{ tab: 'adjustments', focus: null }}
+      />,
+    );
+
+    const panelRoot = document.getElementById(getAppTabRootId('adjustments'));
+
+    expect(panelRoot).toBeInTheDocument();
+    expect(panelRoot).toHaveAttribute('tabindex', '-1');
+    expect(await screen.findByRole('status')).toHaveTextContent(
+      'Đang tải nội dung Điểm KPI +/- Thêm...',
+    );
+
+    await waitFor(() => {
+      expect(panelRoot).toHaveFocus();
+    });
+
+    resolveAdjustmentsModule();
+
+    expect(await screen.findByText('Adjustment workflow stub')).toBeInTheDocument();
   });
 });

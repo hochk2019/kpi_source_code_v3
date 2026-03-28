@@ -8,32 +8,43 @@
   - `cng-2k4` — Post-Gemini remaining technical backlog
   - `cng-7z0` — UX improvement backlog execution
 - Highest-priority ready items hien tai:
-  - `cng-2k4.20` — polish accessibility/loading states con lai sau dot tach shell + lazy-load admin tabs
+  - frontend stabilization lane:
+    - `cng-2k4.21` — Playwright regression cho lazy tab bootstrap, focus handoff, va fallback/error-boundary flow
+    - `cng-2k4.22` — text/lint hygiene cho app/runtime code, khong gom dirt co san trong `.claude/skills/*`
+  - backend cutover lane:
+    - `cng-2k4.2` — declarations write cutover voi compat guard + rollback plan
+    - `cng-2k4.3` — switch production entrypoint sang `server-v4`
 
 ## Active Slice
 
-- Title: Add route-based code splitting for heavy admin tabs
-- Bead: cng-2k4.19 (bead CLI khong kha dung trong worktree nay)
+- Title: Polish accessibility and loading states after lazy admin tab split
+- Bead: cng-2k4.20 (bead CLI khong kha dung trong worktree nay)
 - Status: completed
 - Last updated: 2026-03-28
 
-- Muc tieu hien tai la tri hoan import cac tab admin/workflow nang trong `src/components/KPICalculator.jsx` cho toi khi nguoi dung mo tab lan dau, de giam bundle bootstrap va giu shell route-load nhe hon.
+- Muc tieu hien tai la chot phan polish con lai quanh `src/components/KPICalculator.jsx` sau `cng-2k4.19`, tap trung vao 3 diem:
+  - loading fallback co semantics dung cho screen reader
+  - focus handoff on dinh khi dieu huong vao cac tab lazy-load
+  - giu shell/tab root co target focus ton tai som, khong phu thuoc vao timing resolve cua module nang
 - GitNexus impact da duoc chay truoc khi sua:
-  - `App`: `LOW`
-  - `CommandCenter`: `LOW`
   - `KPICalculator`: `LOW`
 - Cach sua da ap dung:
-  - doi `DataImporter`, `HQAgencyManager`, `MSTWorkflowPanel`, `KPIAdjustmentsWorkflowPanel`, va `ReportCenterPanel` sang `React.lazy(...)`
-  - them `loadedTabs` cache trong `src/components/KPICalculator.jsx` va chi mount tung `TabsContent` sau khi tab do da duoc truy cap, giu tab hien tai/fallback van hydrate dung
-  - bo sung regression test `tests/kpiCalculator.lazyTabs.test.jsx` de khoa hanh vi: tab `mst` khong bi import khi shell mo o `reports`, va chi duoc tai sau khi chuyen tab
-  - cap nhat `tests/kpiCalculator.errorBoundary.test.jsx` sang async assertion de phan anh dung contract moi cua lazy-loaded error boundary
+  - tinh chinh `TabPanel` de render root focus target on dinh cho tung tab ngay ca khi module lazy con dang resolve
+  - bo sung loading fallback semantics voi `role="status"` + `aria-live="polite"` thay vi text loading thuan
+  - them fallback tu workflow step target ve tab-root target de focus handoff khong bi roi khi child anchor chua mount
+  - mo rong regression tests quanh lazy tab loading/focus contract
 - Trang thai verify hien tai:
-  - `npx eslint src/components/KPICalculator.jsx tests/kpiCalculator.errorBoundary.test.jsx tests/kpiCalculator.lazyTabs.test.jsx` da pass
-  - `npx vitest run tests/auth.test.jsx tests/kpiCalculator.errorBoundary.test.jsx tests/kpiCalculator.lazyTabs.test.jsx` da pass
-  - `gitnexus_detect_changes(scope: all)` can chay tiep de xac nhan fan-out dung voi pham vi `KPICalculator` truoc khi chot handoff
+  - `npx eslint src/components/KPICalculator.jsx tests/kpiCalculator.lazyTabs.test.jsx` da pass
+  - `npx vitest run tests/kpiCalculator.errorBoundary.test.jsx tests/kpiCalculator.lazyTabs.test.jsx` da pass
+  - `gitnexus_detect_changes(scope: all)` -> `risk_level: low`, `changed_files: 4`, `affected_count: 0`
   - `bd` / `bd.cmd` trong worktree hien tai khong tim thay beads database, nen trang thai bead chua sync duoc bang CLI
 ## Recent Completed Slices
 
+- `cng-2k4.20` da xong o muc accessibility/loading polish sau lazy admin tab split:
+  - doi `TabPanel` trong `src/components/KPICalculator.jsx` thanh root wrapper focusable co `id` on dinh cho moi tab, khong con phu thuoc vao inner workflow panel moi co focus target
+  - bo sung loading fallback semantics voi `role="status"` + `aria-live="polite"` de lazy tab loading duoc announce dung cho screen reader
+  - them fallback focus tu workflow-step target ve `getAppTabRootId(tab)` khi lazy child anchor chua mount, giu handoff on dinh cho `navigationIntent`
+  - mo rong `tests/kpiCalculator.lazyTabs.test.jsx` de khoa contract loading status + focus target trong luc tab `adjustments` con dang lazy resolve
 - `cng-2k4.19` da xong o muc code splitting cho heavy admin tabs:
   - doi `DataImporter`, `HQAgencyManager`, `MSTWorkflowPanel`, `KPIAdjustmentsWorkflowPanel`, va `ReportCenterPanel` trong `src/components/KPICalculator.jsx` sang `React.lazy(...)`
   - them `loadedTabs` state de chi mount tab content sau lan truy cap dau tien, tranh keo cac module nang vao route bootstrap cua shell
@@ -669,13 +680,13 @@
 
 ## Next Suggested Slice
 
-- Title: Implement remaining accessibility and loading polish from review
-- Bead: `cng-2k4.20`
+- Title: Expand Playwright regression for lazy tab bootstrap and shell focus contracts
+- Bead: `cng-2k4.21`
 - Status: open
 - Follow-up backlog:
-  - tiep tuc sau `cng-2k4.19` voi loading polish va a11y gaps con lai quanh lazy tab shell, nhat la fallback states, focus handoff, va aria contract tren admin tabs nang
-  - uu tien kiem tra lai spinner/fallback text, tab focus sau khi lazy mount, va cac panel moi tach gan day de tranh tao regressions mobile/keyboard
-  - truoc moi thay doi symbol trong `KPICalculator`, `AppShellFrame`, hoac cac tab panels, tiep tuc chay GitNexus impact/context de khoa blast radius va cap nhat regression test tuong ung
+  - mo rong Playwright de cover first-visit lazy bootstrap cho `adjustments`, `reports`, va `mst` tu shell route thuc
+  - khoa regression cho focus handoff/fallback contract sau khi dieu huong bang workflow guide hoac command surfaces
+  - bo sung case error-boundary + loading-status tren browser runtime de tranh gap lai regression chi bi thay o integration path
 
 ## Verification
 

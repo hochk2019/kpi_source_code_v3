@@ -14,10 +14,12 @@ Current open epics:
 - `cng-7z0` — UX improvement backlog execution
 
 Current highest-priority ready items:
+- Frontend stabilization lane:
+- `cng-2k4.21` — Expand Playwright coverage for lazy tab bootstrap, focus handoff, and fallback/error-boundary regressions
+- `cng-2k4.22` — Restore app/runtime text and lint hygiene after backlog refactors; exclude unrelated pre-existing tool dirt
+- Backend cutover lane:
 - `cng-2k4.2` — Execute declarations write cutover with compat guard and rollback plan
 - `cng-2k4.3` — Switch production entrypoint from legacy server to server-v4
-- `cng-2k4.20` — Implement remaining accessibility and loading polish from review
-- `cng-2k4.21` — Expand Playwright regression coverage for refactor-critical admin flows
 
 ## Technical Stabilization
 
@@ -40,9 +42,8 @@ Source set: `Gemini_review_V1.md`, `docs/gemini-review-v1-factcheck-2026-03-25.m
 - `cng-2k4.16` — Reduce `HQAgencyManager.jsx` below the module size target
 - `cng-2k4.17` — Reduce `TeamManager.jsx` below the module size target
 - `cng-2k4.18` — Lazy-load `xlsx` and trim Excel-flow bundle cost
-- `cng-2k4.20` — Implement remaining accessibility and loading polish from review
-- `cng-2k4.21` — Expand Playwright regression coverage for refactor-critical admin flows
-- `cng-2k4.22` — Restore repository text and lint hygiene after backlog refactors
+- `cng-2k4.21` — Expand Playwright coverage for lazy tab bootstrap, focus handoff, and fallback/error-boundary regressions
+- `cng-2k4.22` — Restore app/runtime text and lint hygiene after backlog refactors; exclude unrelated pre-existing tool dirt
 
 ## UX Improvement Backlog
 
