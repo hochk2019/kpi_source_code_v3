@@ -16,24 +16,27 @@
 
 ## Active Slice
 
-- Title: Remove low-risk unused test variables in hygiene follow-up
-- Bead: cng-2k4.22 / slice B (bead CLI khong kha dung trong worktree nay)
+- Title: Remove unused JSON parse catch binding in filter preset hook
+- Bead: cng-2k4.22 / slice C (bead CLI khong kha dung trong worktree nay)
 - Status: completed
 - Last updated: 2026-03-28
 
-- Muc tieu slice nay la giam bot lint noise khong can thiet o test-only files, khong doi logic runtime:
-  - bo bien/tham so thua trong `auditLog`, `reportViewer`, `server.api`, va `store` tests
-  - giu nguyen assertion nghiep vu, chi don hygienic surface
-  - tiep tuc giu `cng-2k4.22` mo cho cac phan cleanup chua lam
+- Muc tieu slice nay la don warning unused binding co blast radius thap trong runtime hook:
+  - bo `catch (err)` khong duoc dung trong `parseJsonSafely` cua `useFilterPresets`
+  - giu nguyen fallback `null` khi `response.json()` fail de khong doi contract caller `DataImporter`
+  - tiep tuc giu `cng-2k4.22` mo cho cac warning khac nhung can tach slice rieng
 - Cach sua da ap dung:
-  - bo tham so `init`, `_type`, `_sql` va bien `fetchOverride` khong duoc dung
-  - sua `tests/reportViewer.test.jsx` de giu assertion region ma khong con bind bien thua
+  - doi `catch (err)` thanh `catch` trong `src/hooks/useFilterPresets.js`
+  - khong sua logic parse/fallback, chi cat binding thua de giam lint noise runtime
 - Trang thai verify hien tai:
-  - `pnpm exec eslint tests/auditLog.test.jsx tests/reportViewer.test.jsx tests/server.api.test.js tests/store.test.js` da pass
-  - `pnpm exec vitest run tests/auditLog.test.jsx tests/reportViewer.test.jsx tests/store.test.js --environment jsdom` da pass
+  - `pnpm exec eslint src/hooks/useFilterPresets.js tests/useDataImporterSessionController.test.jsx` da pass
+  - `pnpm exec vitest run tests/useDataImporterSessionController.test.jsx --environment jsdom` da pass
   - `bd` / `bd.cmd` trong worktree hien tai khong tim thay beads database, nen trang thai bead chua sync duoc bang CLI
 ## Recent Completed Slices
 
+- `cng-2k4.22 / slice C` da xong o muc runtime lint hygiene cho filter preset hook:
+  - bo binding `err` khong duoc dung trong `parseJsonSafely` cua `src/hooks/useFilterPresets.js`
+  - verify lai caller-side test `tests/useDataImporterSessionController.test.jsx` de khoa contract preset session
 - `cng-2k4.22 / slice B` da xong o muc lint hygiene cho test-only files:
   - bo 4 warning unused-var ro rang trong `tests/auditLog.test.jsx`, `tests/reportViewer.test.jsx`, `tests/server.api.test.js`, va `tests/store.test.js`
   - giu nguyen hanh vi test, chi cleanup binding/tham so du thua
@@ -689,11 +692,12 @@
 
 ## Next Suggested Slice
 
-- Title: Expand Playwright regression for lazy tab bootstrap and shell focus contracts
-- Bead: `cng-2k4.21`
+- Title: Trim remaining low-risk lint warnings outside shell navigation copy
+- Bead: `cng-2k4.22`
 - Status: open
 - Follow-up backlog:
-  - mo rong Playwright de cover first-visit lazy bootstrap cho `adjustments`, `reports`, va `mst` tu shell route thuc
+  - warning config-level trong `eslint.config.js` (`isWindows`) co risk rat thap va khong doi runtime
+  - warning runtime helper trong `server/reportExport.js` can impact analysis rieng truoc khi sua vi la production export path
   - khoa regression cho focus handoff/fallback contract sau khi dieu huong bang workflow guide hoac command surfaces
   - bo sung case error-boundary + loading-status tren browser runtime de tranh gap lai regression chi bi thay o integration path
 

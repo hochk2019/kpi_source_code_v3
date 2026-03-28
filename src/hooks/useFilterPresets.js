@@ -264,7 +264,7 @@ async function parseJsonSafely(response) {
 
     return await response.json();
 
-  } catch (err) {
+  } catch {
 
     return null;
 
