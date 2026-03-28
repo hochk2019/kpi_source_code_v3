@@ -99,6 +99,10 @@ describe("ReportingDashboardOverview", () => {
     expect(screen.getByText("Tổng điểm KPI")).toBeTruthy();
     expect(screen.getByText("Tổng số công ty")).toBeTruthy();
     expect(screen.getByText("Danh sách mã giấy phép")).toBeTruthy();
+    expect(screen.getByText("Tóm tắt điều hành KPI")).toBeTruthy();
+    expect(screen.getByText("KPI / tờ khai")).toBeTruthy();
+    expect(screen.getByText("Điều chỉnh KPI chưa khóa sổ")).toBeTruthy();
+    expect(screen.getByText(/1 điều chỉnh đang chờ duyệt/i)).toBeTruthy();
     expect(screen.getByText(/chưa có dữ liệu để hiển thị biểu đồ xu hướng/i)).toBeTruthy();
     expect(screen.getByText(/phân bổ kpi theo tổ đội/i)).toBeTruthy();
     expect(screen.getByText(/top nhân viên theo điểm kpi/i)).toBeTruthy();

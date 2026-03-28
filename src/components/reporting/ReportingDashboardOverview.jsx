@@ -7,6 +7,7 @@ import {
   TrendLineChart,
 } from "@/components/reporting/ReportingOverviewWidgets.jsx";
 import { ReportingAdjustmentsPanel } from "@/components/reporting/ReportingAdjustmentsPanel.jsx";
+import { ReportingExecutiveSummaryPanel } from "@/components/reporting/ReportingExecutiveSummaryPanel.jsx";
 
 export function ReportingDashboardOverview({
   summary = {},
@@ -74,6 +75,16 @@ export function ReportingDashboardOverview({
   return (
     <div className="grid gap-6 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
       <div className="space-y-6">
+        <ReportingExecutiveSummaryPanel
+          summary={summary}
+          adjustmentsReport={adjustmentsReport}
+          trendComparison={trendComparison}
+          topStaffByKpi={topStaffByKpi}
+          teamPieData={teamPieData}
+          formatInt={formatInt}
+          formatDecimal={formatDecimal}
+        />
+
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           {summaryCards.map((card) => (
             <SummaryCard

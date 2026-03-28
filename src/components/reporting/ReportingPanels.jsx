@@ -70,6 +70,108 @@ function describeScheduleFrequency(schedule) {
   return "";
 }
 
+function describeScheduleFormats(formats) {
+  const normalized = Array.isArray(formats) && formats.length ? formats : ["excel"];
+
+  return normalized
+    .map((format) => {
+      const option = SCHEDULE_FORMAT_OPTIONS.find((item) => item.value === format);
+      return option ? option.label : String(format || "").toUpperCase();
+    })
+    .join(" + ");
+}
+
+function describeScheduleRecipients(recipientsInput) {
+  const recipients = String(recipientsInput || "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  if (!recipients.length) {
+    return "Chưa thêm email nhận";
+  }
+
+  if (recipients.length === 1) {
+    return recipients[0];
+  }
+
+  const visibleRecipients = recipients.slice(0, 2).join(", ");
+  const extraCount = recipients.length - 2;
+
+  return extraCount > 0
+    ? `${recipients.length} email • ${visibleRecipients} +${extraCount}`
+    : `${recipients.length} email • ${visibleRecipients}`;
+}
+
+function describeScheduleDataSource(scheduleAggregateStatus) {
+  if (!scheduleAggregateStatus?.available) {
+    return "Read model tháng mặc định chưa sẵn sàng";
+  }
+
+  const rangeFrom = scheduleAggregateStatus?.range?.from;
+  const rangeTo = scheduleAggregateStatus?.range?.to;
+
+  if (rangeFrom && rangeTo) {
+    return `Read model tháng mặc định ${rangeFrom} → ${rangeTo}`;
+  }
+
+  return "Read model tháng mặc định sẵn sàng";
+}
+
+function clampScheduleDayOfMonth(year, monthIndex, requestedDay) {
+  const maxDay = new Date(year, monthIndex + 1, 0).getDate();
+  const normalizedDay = Number.isFinite(Number(requestedDay)) ? Number(requestedDay) : 1;
+
+  return Math.min(Math.max(normalizedDay, 1), maxDay);
+}
+
+function estimateScheduleNextRun(scheduleDraft, now = new Date()) {
+  if (!scheduleDraft) {
+    return null;
+  }
+
+  const reference = now instanceof Date && !Number.isNaN(now.getTime()) ? new Date(now) : new Date();
+  const [rawHour = "08", rawMinute = "00"] = String(scheduleDraft.time || "08:00").split(":");
+  const hours = Number.isFinite(Number(rawHour)) ? Number(rawHour) : 8;
+  const minutes = Number.isFinite(Number(rawMinute)) ? Number(rawMinute) : 0;
+
+  if (scheduleDraft.frequency === "monthly") {
+    const requestedDay = Number.isFinite(Number(scheduleDraft.dayOfMonth))
+      ? Number(scheduleDraft.dayOfMonth)
+      : 1;
+
+    const candidate = new Date(reference);
+    candidate.setHours(hours, minutes, 0, 0);
+    candidate.setDate(clampScheduleDayOfMonth(candidate.getFullYear(), candidate.getMonth(), requestedDay));
+
+    if (candidate <= reference) {
+      const nextMonth = new Date(reference.getFullYear(), reference.getMonth() + 1, 1, hours, minutes, 0, 0);
+      nextMonth.setDate(
+        clampScheduleDayOfMonth(nextMonth.getFullYear(), nextMonth.getMonth(), requestedDay)
+      );
+      return nextMonth;
+    }
+
+    return candidate;
+  }
+
+  const normalizedDayOfWeek = Number.isFinite(Number(scheduleDraft.dayOfWeek))
+    ? Number(scheduleDraft.dayOfWeek)
+    : 1;
+  const targetDay = normalizedDayOfWeek === 7 ? 0 : Math.min(Math.max(normalizedDayOfWeek, 1), 6);
+  const candidate = new Date(reference);
+  candidate.setHours(hours, minutes, 0, 0);
+
+  const offset = (targetDay - candidate.getDay() + 7) % 7;
+  candidate.setDate(candidate.getDate() + offset);
+
+  if (candidate <= reference) {
+    candidate.setDate(candidate.getDate() + 7);
+  }
+
+  return candidate;
+}
+
 function ReportControlsMeta({ summaryDeclsText, selectedRuleName }) {
   return (
     <>
@@ -309,6 +411,17 @@ export function ReportingSchedulePanel({
   onDelete,
   schedules,
 }) {
+  const draftNextRun = estimateScheduleNextRun(scheduleDraft);
+  const previewCadence = describeScheduleFrequency(scheduleDraft) || "Chưa chọn chu kỳ gửi";
+  const previewFormats = describeScheduleFormats(scheduleDraft?.formats);
+  const previewRecipients = describeScheduleRecipients(scheduleDraft?.recipientsInput);
+  const previewDataSource = describeScheduleDataSource(scheduleAggregateStatus);
+  const previewNextRunLabel = draftNextRun
+    ? formatScheduleNextRunLabel(draftNextRun.toISOString())
+    : nextScheduleRun?.nextRun
+      ? formatScheduleNextRunLabel(nextScheduleRun.nextRun)
+      : "Chưa lên lịch";
+
   return (
     <SectionSurface className="print:hidden" aria-label="Lập lịch gửi báo cáo KPI">
       <SectionHeader
@@ -444,6 +557,62 @@ export function ReportingSchedulePanel({
                 />
                 Kích hoạt lịch gửi này
               </label>
+            </div>
+
+            <div className="md:col-span-2 xl:col-span-4">
+              <div className="rounded-xl border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-muted)]/50 p-4">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="space-y-1">
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[color:var(--ds-text-muted)]">
+                      Xem trước lần gửi kế tiếp
+                    </p>
+                    <h4 className="text-sm font-semibold text-[color:var(--ds-text-primary)]">
+                      {scheduleDraft.name || "Báo cáo KPI tự động"}
+                    </h4>
+                    <p className="text-xs text-[color:var(--ds-text-secondary)]">{previewCadence}</p>
+                  </div>
+
+                  <span
+                    className={`rounded-full px-2 py-1 text-xs font-semibold ${
+                      scheduleDraft.active
+                        ? "bg-emerald-500/10 text-emerald-600"
+                        : "bg-amber-500/10 text-amber-700"
+                    }`}
+                  >
+                    {scheduleDraft.active ? "Lịch đang bật" : "Lịch đang tạm tắt"}
+                  </span>
+                </div>
+
+                <dl className="mt-3 grid gap-3 text-xs text-[color:var(--ds-text-secondary)] md:grid-cols-2 xl:grid-cols-4">
+                  <div className="space-y-1">
+                    <dt className="font-semibold uppercase tracking-[0.12em] text-[color:var(--ds-text-muted)]">
+                      Lần chạy dự kiến
+                    </dt>
+                    <dd>{previewNextRunLabel}</dd>
+                  </div>
+
+                  <div className="space-y-1">
+                    <dt className="font-semibold uppercase tracking-[0.12em] text-[color:var(--ds-text-muted)]">
+                      Tệp sẽ gửi
+                    </dt>
+                    <dd>{previewFormats}</dd>
+                  </div>
+
+                  <div className="space-y-1">
+                    <dt className="font-semibold uppercase tracking-[0.12em] text-[color:var(--ds-text-muted)]">
+                      Người nhận
+                    </dt>
+                    <dd>{previewRecipients}</dd>
+                  </div>
+
+                  <div className="space-y-1">
+                    <dt className="font-semibold uppercase tracking-[0.12em] text-[color:var(--ds-text-muted)]">
+                      Nguồn dữ liệu
+                    </dt>
+                    <dd>{previewDataSource}</dd>
+                  </div>
+                </dl>
+              </div>
             </div>
 
             <div className="md:col-span-2 xl:col-span-4 flex flex-wrap items-center justify-end gap-2 pt-2">

@@ -88,3 +88,28 @@ test('workflow guide trong report center handoff focus đúng tới khu export',
   await expect(exportSurface).toBeFocused();
   await expect(page.getByText('3. Export và truy vết')).toBeVisible();
 });
+
+test('schedule preview cập nhật đầu ra và next-run ngay khi chỉnh draft', async ({ page }) => {
+  await loginAsAdmin(page);
+  await openReportsTab(page);
+
+  const schedulePanel = page.getByRole('region', { name: 'Lập lịch gửi báo cáo KPI' });
+
+  await expect(schedulePanel.getByText('Xem trước lần gửi kế tiếp')).toBeVisible();
+
+  await schedulePanel.getByLabel('Tên lịch gửi').fill('Lịch điều hành');
+  await schedulePanel
+    .getByLabel('Email nhận (phân tách bằng dấu phẩy)')
+    .fill('ceo@company.vn, ops@company.vn');
+  await schedulePanel.getByLabel('Chu kỳ gửi').selectOption('monthly');
+  await schedulePanel.getByRole('spinbutton').fill('15');
+  await schedulePanel.getByLabel('Thời gian gửi').fill('09:45');
+  await schedulePanel.getByRole('checkbox', { name: 'PDF' }).check();
+
+  await expect(schedulePanel).toContainText('Lịch điều hành');
+  await expect(schedulePanel).toContainText('Ngày 15 hàng tháng lúc 09:45');
+  await expect(schedulePanel).toContainText('Excel + PDF');
+  await expect(schedulePanel).toContainText(/2 email • ceo@company\.vn, ops@company\.vn/);
+  await expect(schedulePanel).toContainText(/Lần chạy dự kiến/);
+  await expect(schedulePanel).toContainText(/09:45 \d{2}\/\d{2}\/\d{4}/);
+});

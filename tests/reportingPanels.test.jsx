@@ -1,7 +1,7 @@
 import React from "react";
 
 import { describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { cleanup, render, screen, within } from "@testing-library/react";
 
 import {
   ReportingControlsPanel,
@@ -120,5 +120,58 @@ describe("ReportingPanels", () => {
     expect(screen.getByRole("button", { name: /thu gọn/i })).toHaveAttribute("aria-expanded", "true");
     expect(screen.getByRole("list", { name: /danh sách lịch gửi báo cáo kpi/i })).toBeTruthy();
     expect(screen.getAllByText("KPI tuần").length).toBeGreaterThan(0);
+  });
+
+  it("renders draft preview output and estimated next run before saving", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-03-28T12:00:00.000Z"));
+
+    const draft = createScheduleDraft({
+      name: "Lịch điều hành tháng",
+      recipients: ["ceo@company.vn", "ops@company.vn", "audit@company.vn"],
+      formats: ["excel", "pdf"],
+      frequency: "monthly",
+      dayOfMonth: 31,
+      time: "09:45",
+      active: false,
+    });
+
+    try {
+      cleanup();
+
+      render(
+        <ReportingSchedulePanel
+          collapsed={false}
+          onToggleCollapsed={() => {}}
+          nextScheduleRun={null}
+          scheduleAggregateStatus={{
+            available: true,
+            range: { from: "2026-03-01", to: "2026-03-31" },
+          }}
+          scheduleDraft={draft}
+          editingScheduleId=""
+          onSubmit={(event) => event.preventDefault()}
+          onFieldChange={() => {}}
+          onToggleFormat={() => {}}
+          onReset={vi.fn()}
+          onEdit={vi.fn()}
+          onDelete={vi.fn()}
+          schedules={[]}
+        />
+      );
+
+      const scheduleRegion = screen.getByRole("region", { name: /lập lịch gửi báo cáo kpi/i });
+
+      expect(within(scheduleRegion).getByText(/xem trước lần gửi kế tiếp/i)).toBeTruthy();
+      expect(within(scheduleRegion).getByText("Lịch điều hành tháng")).toBeTruthy();
+      expect(within(scheduleRegion).getByText(/ngày 31 hàng tháng lúc 09:45/i)).toBeTruthy();
+      expect(within(scheduleRegion).getByText("Lịch đang tạm tắt")).toBeTruthy();
+      expect(within(scheduleRegion).getByText("Excel + PDF")).toBeTruthy();
+      expect(within(scheduleRegion).getByText(/3 email • ceo@company\.vn, ops@company\.vn \+1/i)).toBeTruthy();
+      expect(within(scheduleRegion).getByText(/read model tháng mặc định 2026-03-01 → 2026-03-31/i)).toBeTruthy();
+      expect(within(scheduleRegion).getByText(/09:45 31\/03\/2026/)).toBeTruthy();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

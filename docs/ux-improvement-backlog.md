@@ -49,8 +49,8 @@ Reconciliation note 2026-03-27:
 
 ## 6. Reporting & automation
 
-- [ ] Xem trước nội dung báo cáo và lịch chạy kế tiếp ngay trong màn hình lập lịch (`getReportSchedules`).
-- [ ] Tạo dashboard KPI tổng quan với xu hướng tháng, top nhân sự, cảnh báo lệch chuẩn.
+- [x] Xem trước nội dung báo cáo và lịch chạy kế tiếp ngay trong màn hình lập lịch (`getReportSchedules`). (done 2026-03-28, them preview next-run/output/recipients/data-source ngay trong `ReportingSchedulePanel` va khoa bang jsdom + Playwright)
+- [x] Tạo dashboard KPI tổng quan với xu hướng tháng, top nhân sự, cảnh báo lệch chuẩn. (done 2026-03-28, them `ReportingExecutiveSummaryPanel` de surfacing executive snapshot + deviation signals tren report center)
 - [ ] Mở rộng kênh gửi báo cáo (email, chat nội bộ) và theo dõi trạng thái giao thành công/thất bại.
 - [ ] Cho phép người dùng tự tạo template báo cáo tùy biến, lưu trữ vào `KPI_ADJUSTMENT_SETTINGS_KEY` hoặc kho riêng.
 

@@ -16,26 +16,42 @@
 
 ## Active Slice
 
-- Title: Add report shell focus and loading fallback regression coverage
-- Bead: cng-2k4.22 / slice I (bead CLI khong kha dung trong worktree nay)
+- Title: Reporting lane polish for schedule preview and executive summary
+- Bead: cng-7z0.26 + cng-7z0.27 (bead CLI khong kha dung trong worktree nay)
 - Status: completed
 - Last updated: 2026-03-28
 
-- Muc tieu slice nay la khoa regression report shell o 2 lop bo sung:
-  - browser/runtime: workflow guide va report workflow phai giu focus handoff on dinh khi dieu huong den report center hoac khu export
-  - jsdom contract: `KPICalculator` van phai announce loading status va fallback focus ve `app-tab-root-reports` khi target chi tiet chua mount
+- Muc tieu slice nay la hoan tat lane reporting trong UX backlog theo huong khong mo them API moi:
+  - `cng-7z0.26`: xem truoc lan chay ke tiep, dinh dang file gui, danh sach nguoi nhan, va nguon du lieu ngay trong form lap lich
+  - `cng-7z0.27`: bo sung executive snapshot va tin hieu lech chuan len dau dashboard de lanh dao doc nhanh xu huong truoc khi drill-down
 - Cach sua da ap dung:
+  - them preview block trong `ReportingSchedulePanel` voi uoc tinh next-run tu draft ngay khi sua form
+  - mo rong `tests/reportingPanels.test.jsx` va `tests/playwright/report-viewer.spec.js` de khoa preview schedule tren jsdom + browser runtime
+  - them `ReportingExecutiveSummaryPanel.jsx` + `reportingExecutiveSummaryModel.js` de render highlights (`KPI / to khai`, nhan su dan dau, to doi ty trong cao nhat, pending adjustments) va cac tin hieu lech chuan
+  - cap nhat `ReportingDashboardOverview.jsx` de dua executive summary vao dau report center ma khong lam phinh overview shell
+- Trang thai verify hien tai:
+  - `pnpm exec eslint src/components/reporting/ReportingPanels.jsx tests/reportingPanels.test.jsx tests/playwright/report-viewer.spec.js` da pass
+  - `pnpm exec vitest run tests/reportingPanels.test.jsx --environment jsdom` da pass
+  - `pnpm build` da pass
+  - `pnpm exec playwright test tests/playwright/report-viewer.spec.js --config=playwright.config.mjs --workers=1` da pass sau khi ep build moi, tranh reuse preview dist cu
+  - `pnpm exec eslint src/components/reporting/ReportingDashboardOverview.jsx src/components/reporting/ReportingExecutiveSummaryPanel.jsx src/components/reporting/reportingExecutiveSummaryModel.js tests/reportingDashboardOverview.test.jsx tests/reportingExecutiveSummaryPanel.test.jsx` da pass
+  - `pnpm exec vitest run tests/reportingDashboardOverview.test.jsx tests/reportingExecutiveSummaryPanel.test.jsx --environment jsdom` da pass
+  - `bd` / `bd.cmd` trong worktree hien tai khong tim thay beads database, nen trang thai bead chua sync duoc bang CLI
+- Next suggested slice:
+  - `cng-7z0.28` — mo rong kenh giao bao cao va tracking trang thai giao/that bai tren cung report center lane
+## Recent Completed Slices
+
+- `cng-7z0.27` da xong o muc executive dashboard snapshot:
+  - them `ReportingExecutiveSummaryPanel.jsx` + `reportingExecutiveSummaryModel.js` de tong hop KPI/decl, top staff, team concentration, pending adjustments, va deviation signals
+  - cap nhat `ReportingDashboardOverview.jsx` de surfacing executive summary truoc summary cards/trend/top staff widgets
+  - bo sung regression `tests/reportingExecutiveSummaryPanel.test.jsx` va cap nhat `tests/reportingDashboardOverview.test.jsx`
+- `cng-7z0.26` da xong o muc schedule preview:
+  - them preview next-run / outputs / recipients / data-source vao `ReportingSchedulePanel`
+  - cap nhat `tests/reportingPanels.test.jsx` va `tests/playwright/report-viewer.spec.js` de khoa jsdom + browser runtime
+- `cng-2k4.22 / slice I` da xong o muc report shell focus va loading fallback regression coverage:
   - mo rong `tests/playwright/lazy-tab-shell.spec.js` de khoa fallback focus khi workflow guide nhay sang `Báo cáo KPI` trong luc `ReportCenterPanel` chunk con dang treo
   - mo rong `tests/playwright/report-viewer.spec.js` de khoa handoff focus tu action `Tới khu export`
   - them `tests/kpiCalculator.navigation.test.jsx` de khoa loading status + fallback focus o jsdom contract level
-- Trang thai verify hien tai:
-  - `pnpm exec eslint tests/playwright/lazy-tab-shell.spec.js tests/playwright/report-viewer.spec.js` da pass
-  - `pnpm exec playwright test tests/playwright/lazy-tab-shell.spec.js tests/playwright/report-viewer.spec.js --config=playwright.config.mjs --workers=1` da pass
-  - `pnpm exec eslint tests/kpiCalculator.navigation.test.jsx tests/kpiCalculator.errorBoundary.test.jsx` da pass
-  - `pnpm exec vitest run tests/kpiCalculator.navigation.test.jsx tests/kpiCalculator.errorBoundary.test.jsx --environment jsdom` da pass
-  - `bd` / `bd.cmd` trong worktree hien tai khong tim thay beads database, nen trang thai bead chua sync duoc bang CLI
-## Recent Completed Slices
-
 - `cng-2k4.22 / slice F` da xong o muc pagination hook hygiene:
   - memoize `safeItems` trong `src/hooks/usePagination.js` de on dinh dependency cua `currentPageItems`
   - verify lai `tests/mstAssignment.pagination.test.jsx` vi day la harness call truc tiep theo GitNexus impact
