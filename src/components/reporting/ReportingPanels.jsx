@@ -30,6 +30,24 @@ const SCHEDULE_FORMAT_OPTIONS = [
   { value: "pdf", label: "PDF" },
 ];
 
+const DELIVERY_CHANNEL_OPTIONS = [
+  {
+    value: "email",
+    label: "Email",
+    description: "Gửi file Excel/PDF tới danh sách nhận.",
+  },
+  {
+    value: "report_center",
+    label: "Trung tâm báo cáo",
+    description: "Giữ bản báo cáo trong report center để mở trực tiếp.",
+  },
+  {
+    value: "download_bundle",
+    label: "Gói tải xuống",
+    description: "Chuẩn bị gói file để trợ lý vận hành tải thủ công.",
+  },
+];
+
 function formatScheduleNextRunLabel(isoString) {
   if (!isoString) {
     return "Chưa lên lịch";
@@ -103,6 +121,21 @@ function describeScheduleRecipients(recipientsInput) {
     : `${recipients.length} email • ${visibleRecipients}`;
 }
 
+function describeScheduleChannels(channels) {
+  const normalized = Array.isArray(channels) ? channels.filter(Boolean) : [];
+
+  if (!normalized.length) {
+    return "Chưa chọn kênh giao";
+  }
+
+  return normalized
+    .map((channel) => {
+      const option = DELIVERY_CHANNEL_OPTIONS.find((item) => item.value === channel);
+      return option ? option.label : String(channel || "");
+    })
+    .join(" + ");
+}
+
 function describeScheduleDataSource(scheduleAggregateStatus) {
   if (!scheduleAggregateStatus?.available) {
     return "Read model tháng mặc định chưa sẵn sàng";
@@ -116,6 +149,57 @@ function describeScheduleDataSource(scheduleAggregateStatus) {
   }
 
   return "Read model tháng mặc định sẵn sàng";
+}
+
+function scheduleUsesEmailChannel(scheduleLike) {
+  return Array.isArray(scheduleLike?.deliveryChannels)
+    ? scheduleLike.deliveryChannels.includes("email")
+    : true;
+}
+
+function resolveScheduleDeliveryState(schedule, scheduleAggregateStatus) {
+  const deliveryStatus = String(schedule?.deliveryStatus || "").trim().toLowerCase();
+  const lastDeliveryError = String(schedule?.lastDeliveryError || "").trim();
+
+  if (deliveryStatus === "success") {
+    return {
+      toneClassName: "bg-emerald-500/10 text-emerald-700",
+      label: "Đã giao thành công",
+      detail: schedule?.lastDeliveryAt
+        ? `Lần giao gần nhất ${formatScheduleNextRunLabel(schedule.lastDeliveryAt)}`
+        : "Lịch đã có bản ghi giao thành công gần nhất.",
+    };
+  }
+
+  if (deliveryStatus === "error") {
+    return {
+      toneClassName: "bg-rose-500/10 text-rose-700",
+      label: "Lỗi giao gần nhất",
+      detail: lastDeliveryError || "Chưa có chi tiết lỗi từ runtime giao báo cáo.",
+    };
+  }
+
+  if (!schedule?.active) {
+    return {
+      toneClassName: "bg-slate-500/10 text-slate-600",
+      label: "Tạm dừng theo lịch",
+      detail: "Lịch đang tắt nên chưa phát hành thêm đợt giao nào.",
+    };
+  }
+
+  if (!scheduleAggregateStatus?.available) {
+    return {
+      toneClassName: "bg-amber-500/10 text-amber-700",
+      label: "Chờ nguồn dữ liệu",
+      detail: "Read model tháng mặc định chưa sẵn sàng nên chưa thể phát hành báo cáo tự động.",
+    };
+  }
+
+  return {
+    toneClassName: "bg-sky-500/10 text-sky-700",
+    label: "Sẵn sàng giao",
+    detail: "Kênh giao đã cấu hình đủ điều kiện cho lần chạy kế tiếp.",
+  };
 }
 
 function clampScheduleDayOfMonth(year, monthIndex, requestedDay) {
@@ -406,6 +490,7 @@ export function ReportingSchedulePanel({
   onSubmit,
   onFieldChange,
   onToggleFormat,
+  onToggleDeliveryChannel,
   onReset,
   onEdit,
   onDelete,
@@ -414,7 +499,10 @@ export function ReportingSchedulePanel({
   const draftNextRun = estimateScheduleNextRun(scheduleDraft);
   const previewCadence = describeScheduleFrequency(scheduleDraft) || "Chưa chọn chu kỳ gửi";
   const previewFormats = describeScheduleFormats(scheduleDraft?.formats);
-  const previewRecipients = describeScheduleRecipients(scheduleDraft?.recipientsInput);
+  const previewRecipients = scheduleUsesEmailChannel(scheduleDraft)
+    ? describeScheduleRecipients(scheduleDraft?.recipientsInput)
+    : "Không dùng email";
+  const previewChannels = describeScheduleChannels(scheduleDraft?.deliveryChannels);
   const previewDataSource = describeScheduleDataSource(scheduleAggregateStatus);
   const previewNextRunLabel = draftNextRun
     ? formatScheduleNextRunLabel(draftNextRun.toISOString())
@@ -427,7 +515,7 @@ export function ReportingSchedulePanel({
       <SectionHeader
         title="Lập lịch gửi báo cáo KPI"
         titleAs="h3"
-        description="Thiết lập gửi tự động file Excel/PDF theo tuần hoặc tháng tới danh sách email mong muốn."
+        description="Thiết lập lịch phát hành Excel/PDF theo tuần hoặc tháng qua email, report center hoặc gói tải xuống cho vận hành."
         meta={<ScheduleShellMeta nextScheduleRun={nextScheduleRun} scheduleAggregateStatus={scheduleAggregateStatus} />}
         actions={
           <button
@@ -465,7 +553,7 @@ export function ReportingSchedulePanel({
 
             <div className="flex flex-col gap-1">
               <label className="text-xs font-semibold uppercase text-[color:var(--ds-text-secondary)]" htmlFor="schedule-recipients">
-                Email nhận (phân tách bằng dấu phẩy)
+                Email nhận (khi bật kênh email)
               </label>
               <textarea
                 id="schedule-recipients"
@@ -475,6 +563,9 @@ export function ReportingSchedulePanel({
                 placeholder="ceo@company.vn, kpi@company.vn"
                 className="min-h-[60px] rounded border border-[color:var(--ds-border-subtle)] bg-white px-3 py-2 text-sm text-[color:var(--ds-text-primary)] shadow-sm focus:border-[color:var(--ds-border-strong)] focus:outline-none"
               />
+              <span className="text-[11px] text-[color:var(--ds-text-muted)]">
+                Có thể bỏ trống nếu chỉ dùng report center hoặc gói tải xuống.
+              </span>
             </div>
 
             <div className="flex flex-col gap-1">
@@ -560,6 +651,45 @@ export function ReportingSchedulePanel({
             </div>
 
             <div className="md:col-span-2 xl:col-span-4">
+              <div className="rounded-xl border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-card)] p-3">
+                <div className="space-y-1">
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[color:var(--ds-text-muted)]">
+                    Kênh giao báo cáo
+                  </p>
+                  <p className="text-xs text-[color:var(--ds-text-secondary)]">
+                    Có thể bật nhiều kênh cùng lúc để vừa phát hành nội bộ, vừa giữ bản báo cáo trong workspace.
+                  </p>
+                </div>
+                <div className="mt-3 grid gap-3 md:grid-cols-3">
+                  {DELIVERY_CHANNEL_OPTIONS.map((option) => {
+                    const checked = Array.isArray(scheduleDraft.deliveryChannels)
+                      ? scheduleDraft.deliveryChannels.includes(option.value)
+                      : option.value === "email";
+
+                    return (
+                      <label
+                        key={option.value}
+                        className="flex min-h-[92px] cursor-pointer flex-col gap-2 rounded-xl border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-muted)]/40 p-3"
+                      >
+                        <span className="inline-flex items-center gap-2 text-sm font-semibold text-[color:var(--ds-text-primary)]">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => onToggleDeliveryChannel(option.value)}
+                          />
+                          <span>{option.label}</span>
+                        </span>
+                        <span className="text-xs leading-5 text-[color:var(--ds-text-secondary)]">
+                          {option.description}
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            <div className="md:col-span-2 xl:col-span-4">
               <div className="rounded-xl border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-muted)]/50 p-4">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="space-y-1">
@@ -583,7 +713,7 @@ export function ReportingSchedulePanel({
                   </span>
                 </div>
 
-                <dl className="mt-3 grid gap-3 text-xs text-[color:var(--ds-text-secondary)] md:grid-cols-2 xl:grid-cols-4">
+                <dl className="mt-3 grid gap-3 text-xs text-[color:var(--ds-text-secondary)] md:grid-cols-2 xl:grid-cols-5">
                   <div className="space-y-1">
                     <dt className="font-semibold uppercase tracking-[0.12em] text-[color:var(--ds-text-muted)]">
                       Lần chạy dự kiến
@@ -603,6 +733,13 @@ export function ReportingSchedulePanel({
                       Người nhận
                     </dt>
                     <dd>{previewRecipients}</dd>
+                  </div>
+
+                  <div className="space-y-1">
+                    <dt className="font-semibold uppercase tracking-[0.12em] text-[color:var(--ds-text-muted)]">
+                      Kênh giao
+                    </dt>
+                    <dd>{previewChannels}</dd>
                   </div>
 
                   <div className="space-y-1">
@@ -637,56 +774,83 @@ export function ReportingSchedulePanel({
           <div className="border-t border-[color:var(--ds-border-subtle)] pt-4">
             {schedules.length ? (
               <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3" role="list" aria-label="Danh sách lịch gửi báo cáo KPI">
-                {schedules.map((schedule) => (
-                  <div
-                    key={schedule.id}
-                    role="listitem"
-                    className="rounded-lg border border-[color:var(--ds-border-subtle)] bg-white p-3 text-sm text-[color:var(--ds-text-secondary)] shadow-sm"
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <div className="text-sm font-semibold text-[color:var(--ds-text-primary)]">
-                          {schedule.name || "Lịch gửi"}
+                {schedules.map((schedule) => {
+                  const deliveryState = resolveScheduleDeliveryState(schedule, scheduleAggregateStatus);
+
+                  return (
+                    <div
+                      key={schedule.id}
+                      role="listitem"
+                      className="rounded-lg border border-[color:var(--ds-border-subtle)] bg-white p-3 text-sm text-[color:var(--ds-text-secondary)] shadow-sm"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <div className="text-sm font-semibold text-[color:var(--ds-text-primary)]">
+                            {schedule.name || "Lịch gửi"}
+                          </div>
+                          <div className="text-xs text-[color:var(--ds-text-muted)]">
+                            {describeScheduleFrequency(schedule)}
+                          </div>
                         </div>
-                        <div className="text-xs text-[color:var(--ds-text-muted)]">
-                          {describeScheduleFrequency(schedule)}
-                        </div>
+                        <span
+                          className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
+                            schedule.active
+                              ? "bg-emerald-500/10 text-emerald-600"
+                              : "bg-gray-200 text-gray-500"
+                          }`}
+                        >
+                          {schedule.active ? "Đang bật" : "Tạm tắt"}
+                        </span>
                       </div>
-                      <span
-                        className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
-                          schedule.active
-                            ? "bg-emerald-500/10 text-emerald-600"
-                            : "bg-gray-200 text-gray-500"
-                        }`}
-                      >
-                        {schedule.active ? "Đang bật" : "Tạm tắt"}
-                      </span>
-                    </div>
 
-                    <div className="mt-2 text-xs text-[color:var(--ds-text-secondary)]">
-                      <div>Lần tiếp theo: {formatScheduleNextRunLabel(schedule.nextRun || "")}</div>
-                      <div>Định dạng: {schedule.formatsSummary || "EXCEL"}</div>
-                      <div>Email: {schedule.recipientsSummary || "—"}</div>
-                    </div>
+                      <div className="mt-2 space-y-1 text-xs text-[color:var(--ds-text-secondary)]">
+                        <div>Lần tiếp theo: {formatScheduleNextRunLabel(schedule.nextRun || "")}</div>
+                        <div>Định dạng: {schedule.formatsSummary || "EXCEL"}</div>
+                        <div>
+                          Email:{" "}
+                          {scheduleUsesEmailChannel(schedule) ? schedule.recipientsSummary || "Chưa cấu hình" : "Không dùng email"}
+                        </div>
+                        <div>Kênh: {describeScheduleChannels(schedule.deliveryChannels)}</div>
+                      </div>
 
-                    <div className="mt-3 flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => onEdit(schedule)}
-                        className="rounded border border-[color:var(--ds-border-subtle)] px-2 py-1 text-xs font-semibold text-[color:var(--ds-text-secondary)] transition-colors hover:border-[color:var(--ds-border-strong)]"
-                      >
-                        Chỉnh sửa
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => onDelete(schedule)}
-                        className="rounded border border-rose-200 px-2 py-1 text-xs font-semibold text-rose-600 transition-colors hover:border-rose-400 hover:text-rose-700"
-                      >
-                        Xoá
-                      </button>
+                      <div className="mt-3 rounded-xl border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-muted)]/45 p-3">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[color:var(--ds-text-muted)]">
+                            Trạng thái giao
+                          </span>
+                          <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${deliveryState.toneClassName}`}>
+                            {deliveryState.label}
+                          </span>
+                        </div>
+                        <p className="mt-2 text-xs leading-5 text-[color:var(--ds-text-secondary)]">
+                          {deliveryState.detail}
+                        </p>
+                        {schedule.lastDeliveryAt ? (
+                          <p className="mt-2 text-[11px] text-[color:var(--ds-text-muted)]">
+                            Lần giao gần nhất: {formatScheduleNextRunLabel(schedule.lastDeliveryAt)}
+                          </p>
+                        ) : null}
+                      </div>
+
+                      <div className="mt-3 flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => onEdit(schedule)}
+                          className="rounded border border-[color:var(--ds-border-subtle)] px-2 py-1 text-xs font-semibold text-[color:var(--ds-text-secondary)] transition-colors hover:border-[color:var(--ds-border-strong)]"
+                        >
+                          Chỉnh sửa
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => onDelete(schedule)}
+                          className="rounded border border-rose-200 px-2 py-1 text-xs font-semibold text-rose-600 transition-colors hover:border-rose-400 hover:text-rose-700"
+                        >
+                          Xoá
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             ) : (
               <p className="text-sm text-[color:var(--ds-text-muted)]">

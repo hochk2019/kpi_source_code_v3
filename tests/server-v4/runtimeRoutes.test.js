@@ -1190,6 +1190,10 @@ describe('server-v4 runtime routes', () => {
         dayOfMonth: null,
         formats: ['pdf', 'excel'],
         recipients: ['ops@example.com', 'lead@example.com'],
+        deliveryChannels: ['email'],
+        deliveryStatus: 'idle',
+        lastDeliveryAt: '',
+        lastDeliveryError: '',
         active: true,
         lastRun: '2026-03-02T01:30:00.000Z',
       }),
@@ -1202,6 +1206,10 @@ describe('server-v4 runtime routes', () => {
         dayOfMonth: 20,
         formats: ['pdf'],
         recipients: ['finance@example.com'],
+        deliveryChannels: ['email'],
+        deliveryStatus: 'idle',
+        lastDeliveryAt: '',
+        lastDeliveryError: '',
         active: false,
         lastRun: '2026-02-20T02:15:00.000Z',
         nextRun: '',
@@ -1223,6 +1231,7 @@ describe('server-v4 runtime routes', () => {
       time: '09:45',
       formats: ['pdf', 'excel', 'pdf'],
       recipients: ['ops@example.com', 'lead@example.com', 'ops@example.com'],
+      deliveryChannels: ['email', 'report_center'],
       active: true,
     });
 
@@ -1238,6 +1247,8 @@ describe('server-v4 runtime routes', () => {
         time: '09:45',
         formats: ['pdf', 'excel'],
         recipients: ['ops@example.com', 'lead@example.com'],
+        deliveryChannels: ['email', 'report_center'],
+        deliveryStatus: 'idle',
         active: true,
       })
     );
@@ -1260,6 +1271,7 @@ describe('server-v4 runtime routes', () => {
             name: 'Monthly Red',
             formats: ['pdf', 'excel'],
             recipients: ['ops@example.com', 'lead@example.com'],
+            deliveryChannels: ['email', 'report_center'],
           }),
         ])
       );
@@ -1269,6 +1281,7 @@ describe('server-v4 runtime routes', () => {
           expect.objectContaining({
             id: createdId,
             name: 'Monthly Red',
+            deliveryChannels: ['email', 'report_center'],
           }),
         ])
       );

@@ -16,31 +16,33 @@
 
 ## Active Slice
 
-- Title: Reporting lane polish for schedule preview and executive summary
-- Bead: cng-7z0.26 + cng-7z0.27 (bead CLI khong kha dung trong worktree nay)
+- Title: Reporting lane polish for delivery channels and delivery-status tracking
+- Bead: cng-7z0.28 (bead CLI khong kha dung trong worktree nay)
 - Status: completed
 - Last updated: 2026-03-28
 
-- Muc tieu slice nay la hoan tat lane reporting trong UX backlog theo huong khong mo them API moi:
-  - `cng-7z0.26`: xem truoc lan chay ke tiep, dinh dang file gui, danh sach nguoi nhan, va nguon du lieu ngay trong form lap lich
-  - `cng-7z0.27`: bo sung executive snapshot va tin hieu lech chuan len dau dashboard de lanh dao doc nhanh xu huong truoc khi drill-down
+- Muc tieu slice nay la mo rong lane reporting ma khong mo them delivery engine moi:
+  - cho phep lich bao cao chon nhieu kenh giao (`email`, `report_center`, `download_bundle`)
+  - surface trang thai giao gan nhat va loi giao tren cung report center lane
 - Cach sua da ap dung:
-  - them preview block trong `ReportingSchedulePanel` voi uoc tinh next-run tu draft ngay khi sua form
-  - mo rong `tests/reportingPanels.test.jsx` va `tests/playwright/report-viewer.spec.js` de khoa preview schedule tren jsdom + browser runtime
-  - them `ReportingExecutiveSummaryPanel.jsx` + `reportingExecutiveSummaryModel.js` de render highlights (`KPI / to khai`, nhan su dan dau, to doi ty trong cao nhat, pending adjustments) va cac tin hieu lech chuan
-  - cap nhat `ReportingDashboardOverview.jsx` de dua executive summary vao dau report center ma khong lam phinh overview shell
+  - mo rong `reportingScheduleDraft` + `useReportViewerActions` de luu `deliveryChannels`, validate toi thieu 1 kenh, va chi bat buoc recipients khi co kenh email
+  - cap nhat `ReportingSchedulePanel` de hien preview kenh giao, checkbox chon kenh, chip delivery status, va thong tin lan giao gan nhat
+  - dong bo contract client/server (`packages/api-client`, `server-v4`, `server/`) de normalize va persist `deliveryChannels`, `deliveryStatus`, `lastDeliveryAt`, `lastDeliveryError`
+  - mo rong regression tests cho UI, client merge logic, runtime routes, va legacy API compat
 - Trang thai verify hien tai:
-  - `pnpm exec eslint src/components/reporting/ReportingPanels.jsx tests/reportingPanels.test.jsx tests/playwright/report-viewer.spec.js` da pass
-  - `pnpm exec vitest run tests/reportingPanels.test.jsx --environment jsdom` da pass
-  - `pnpm build` da pass
-  - `pnpm exec playwright test tests/playwright/report-viewer.spec.js --config=playwright.config.mjs --workers=1` da pass sau khi ep build moi, tranh reuse preview dist cu
-  - `pnpm exec eslint src/components/reporting/ReportingDashboardOverview.jsx src/components/reporting/ReportingExecutiveSummaryPanel.jsx src/components/reporting/reportingExecutiveSummaryModel.js tests/reportingDashboardOverview.test.jsx tests/reportingExecutiveSummaryPanel.test.jsx` da pass
-  - `pnpm exec vitest run tests/reportingDashboardOverview.test.jsx tests/reportingExecutiveSummaryPanel.test.jsx --environment jsdom` da pass
+  - `pnpm exec vitest tests/reportingPanels.test.jsx tests/useReportViewerActions.test.jsx tests/reportingClient.test.js tests/server-v4/runtimeRoutes.test.js --run` da pass
+  - `pnpm exec vitest tests/server.api.test.js -t "reporting/schedules|schedule KPI|monthly aggregate" --run` da pass; con warning cu khi mount `dist/server-v4/index.js`
+  - `pnpm exec eslint src/components/ReportViewer.jsx src/components/reporting/ReportingPanels.jsx src/components/reporting/reportingScheduleDraft.js src/components/reporting/useReportViewerActions.js packages/api-client/src/reportingClient.js server-v4/src/modules/reporting/ReportingController.ts server-v4/src/modules/reporting/reportingService.ts server-v4/src/modules/reporting/reportingScheduleNormalizer.ts server/reportingScheduleMutations.js server/reportingReadModels.js tests/reportingPanels.test.jsx tests/useReportViewerActions.test.jsx tests/reportingClient.test.js tests/server-v4/runtimeRoutes.test.js tests/server.api.test.js` da pass
   - `bd` / `bd.cmd` trong worktree hien tai khong tim thay beads database, nen trang thai bead chua sync duoc bang CLI
 - Next suggested slice:
-  - `cng-7z0.28` — mo rong kenh giao bao cao va tracking trang thai giao/that bai tren cung report center lane
+  - `cng-7z0.29` — cho phep nguoi dung tu tao template bao cao tuy bien va luu template tai cho
 ## Recent Completed Slices
 
+- `cng-7z0.28` da xong o muc delivery channel + delivery status tracking:
+  - them chon kenh giao (`email`, `report_center`, `download_bundle`) trong `ReportingSchedulePanel` va preview payload ngay trong form
+  - hien delivery status chip, `lastDeliveryAt`, va `lastDeliveryError` tren schedule cards de nguoi van hanh thay nhanh lan giao gan nhat
+  - dong bo contract luu/doc qua `packages/api-client/src/reportingClient.js`, `server-v4/src/modules/reporting/reportingScheduleNormalizer.ts`, `server-v4/src/modules/reporting/ReportingController.ts`, `server-v4/src/modules/reporting/reportingService.ts`, `server/reportingReadModels.js`, va `server/reportingScheduleMutations.js`
+  - bo sung regression `tests/reportingPanels.test.jsx`, `tests/useReportViewerActions.test.jsx`, `tests/reportingClient.test.js`, `tests/server-v4/runtimeRoutes.test.js`, va `tests/server.api.test.js`
 - `cng-7z0.27` da xong o muc executive dashboard snapshot:
   - them `ReportingExecutiveSummaryPanel.jsx` + `reportingExecutiveSummaryModel.js` de tong hop KPI/decl, top staff, team concentration, pending adjustments, va deviation signals
   - cap nhat `ReportingDashboardOverview.jsx` de surfacing executive summary truoc summary cards/trend/top staff widgets
@@ -719,12 +721,13 @@
 
 ## Next Suggested Slice
 
-- Title: Preview report output and next run time in scheduling UI
-- Bead: `cng-7z0.26`
+- Title: Custom report templates for reporting workspace
+- Bead: `cng-7z0.29`
 - Status: open
 - Follow-up backlog:
-  - dua preview output va `nextRun` summary ro hon vao `ReportingSchedulePanel` de nguoi van hanh thay tac dong truoc khi luu lich
-  - bo sung regression jsdom + browser cho preview state va next-run copy truoc khi mo rong kenh delivery/tracking
+  - xac dinh tap filter/cau hinh nao cua report center can luu thanh template ma khong lam roi UX hien tai
+  - tai su dung pattern preset/hook co san neu phu hop, nhung tach module rieng cho reporting neu contract khac biet
+  - bo sung test cho create/load/delete template truoc khi mo rong sang shared storage hoac backend sau nay
 
 ## Verification
 

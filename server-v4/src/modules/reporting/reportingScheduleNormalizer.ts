@@ -3,6 +3,8 @@ import { normalizeStr } from '../../legacy/legacy-normalizers.js';
 const DEFAULT_SCHEDULE_TIME = '08:00';
 const VALID_SCHEDULE_FORMATS = new Set(['excel', 'pdf']);
 const VALID_SCHEDULE_FREQUENCIES = new Set(['weekly', 'monthly']);
+const VALID_DELIVERY_CHANNELS = new Set(['email', 'report_center', 'download_bundle']);
+const VALID_DELIVERY_STATUSES = new Set(['idle', 'pending', 'ready', 'success', 'error', 'blocked']);
 
 export type ReportingScheduleRecord = {
   id: string;
@@ -13,6 +15,10 @@ export type ReportingScheduleRecord = {
   dayOfMonth: number | null;
   recipients: string[];
   formats: string[];
+  deliveryChannels: string[];
+  deliveryStatus: string;
+  lastDeliveryAt: string;
+  lastDeliveryError: string;
   active: boolean;
   lastRun: string;
   nextRun: string;
@@ -48,6 +54,10 @@ export function normalizeReportingScheduleEntry(
     dayOfMonth: frequency === 'monthly' ? clampMonthDay(input.dayOfMonth) : null,
     recipients: normalizeScheduleRecipients(input.recipients),
     formats: normalizeScheduleFormats(input.formats),
+    deliveryChannels: normalizeDeliveryChannels(input.deliveryChannels),
+    deliveryStatus: normalizeDeliveryStatus(input.deliveryStatus),
+    lastDeliveryAt: normalizeOptionalIsoString(input.lastDeliveryAt),
+    lastDeliveryError: normalizeOptionalText(input.lastDeliveryError),
     active: normalizeBoolean(input.active, true),
     lastRun: normalizeOptionalIsoString(input.lastRun),
     nextRun: normalizeOptionalIsoString(input.nextRun),
@@ -86,6 +96,12 @@ export function normalizeReportingScheduleMutationEntry(
     dayOfMonth: frequency === 'monthly' ? clampMonthDay(raw.dayOfMonth ?? base.dayOfMonth ?? 1) : null,
     recipients: normalizeScheduleRecipients(raw.recipients ?? base.recipients ?? []),
     formats: normalizeScheduleFormats(raw.formats ?? base.formats ?? []),
+    deliveryChannels: normalizeDeliveryChannels(raw.deliveryChannels ?? base.deliveryChannels ?? []),
+    deliveryStatus: normalizeDeliveryStatus(raw.deliveryStatus ?? base.deliveryStatus),
+    lastDeliveryAt:
+      normalizeOptionalIsoString(raw.lastDeliveryAt) || normalizeOptionalIsoString(base.lastDeliveryAt),
+    lastDeliveryError:
+      normalizeOptionalText(raw.lastDeliveryError) || normalizeOptionalText(base.lastDeliveryError),
     active: normalizeBoolean(raw.active ?? base.active, true),
     lastRun: normalizeOptionalIsoString(raw.lastRun) || normalizeOptionalIsoString(base.lastRun),
     nextRun: normalizeOptionalIsoString(raw.nextRun) || normalizeOptionalIsoString(base.nextRun),
@@ -264,6 +280,29 @@ function normalizeScheduleFormats(input: unknown): string[] {
   return formats.length ? formats : ['excel'];
 }
 
+function normalizeDeliveryChannels(input: unknown): string[] {
+  const rawValues = Array.isArray(input) ? input : typeof input === 'string' ? input.split(/[,\n;]/) : [];
+  const channels: string[] = [];
+  const seen = new Set<string>();
+
+  for (const rawValue of rawValues) {
+    const value = normalizeStr(rawValue).toLowerCase();
+    if (!VALID_DELIVERY_CHANNELS.has(value) || seen.has(value)) {
+      continue;
+    }
+
+    seen.add(value);
+    channels.push(value);
+  }
+
+  return channels.length ? channels : ['email'];
+}
+
+function normalizeDeliveryStatus(input: unknown): string {
+  const value = normalizeStr(input).toLowerCase();
+  return VALID_DELIVERY_STATUSES.has(value) ? value : 'idle';
+}
+
 function normalizeFrequency(input: unknown): 'weekly' | 'monthly' | null {
   const normalized = normalizeStr(input);
   if (!VALID_SCHEDULE_FREQUENCIES.has(normalized)) {
@@ -316,6 +355,10 @@ function normalizeOptionalIsoString(input: unknown): string {
 
   const parsed = new Date(value);
   return Number.isNaN(parsed.getTime()) ? '' : parsed.toISOString();
+}
+
+function normalizeOptionalText(input: unknown): string {
+  return normalizeStr(input);
 }
 
 function listStoredReportingSchedules(entriesInput: unknown): ReportingScheduleRecord[] {

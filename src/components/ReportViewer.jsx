@@ -570,6 +570,7 @@ export default function ReportViewer({ canExport = true, currentUser = null }) {
     exporting,
     handleScheduleFieldChange,
     handleToggleScheduleFormat,
+    handleToggleDeliveryChannel,
     handleEditSchedule,
     handleResetScheduleForm,
     handleSaveSchedule,
@@ -726,6 +727,7 @@ export default function ReportViewer({ canExport = true, currentUser = null }) {
             onSubmit={handleSaveSchedule}
             onFieldChange={handleScheduleFieldChange}
             onToggleFormat={handleToggleScheduleFormat}
+            onToggleDeliveryChannel={handleToggleDeliveryChannel}
             onReset={handleResetScheduleForm}
             onEdit={handleEditSchedule}
             onDelete={handleDeleteSchedule}

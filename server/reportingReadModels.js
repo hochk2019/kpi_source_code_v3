@@ -3,6 +3,8 @@ import { aggregateLegacyCompanies, buildLegacyReportData } from './legacyReporti
 const DEFAULT_SCHEDULE_TIME = '08:00';
 const VALID_SCHEDULE_FORMATS = new Set(['excel', 'pdf']);
 const VALID_SCHEDULE_FREQUENCIES = new Set(['weekly', 'monthly']);
+const VALID_DELIVERY_CHANNELS = new Set(['email', 'report_center', 'download_bundle']);
+const VALID_DELIVERY_STATUSES = new Set(['idle', 'pending', 'ready', 'success', 'error', 'blocked']);
 
 export function buildReportingReadModels(rowsInput, options = {}) {
   const report = buildLegacyReportData(normalizeRowList(rowsInput), {
@@ -388,6 +390,10 @@ function normalizeReportingScheduleEntry(input, options = {}) {
     dayOfMonth: frequency === 'monthly' ? clampMonthDay(input.dayOfMonth) : null,
     recipients: normalizeScheduleRecipients(input.recipients),
     formats: normalizeScheduleFormats(input.formats),
+    deliveryChannels: normalizeDeliveryChannels(input.deliveryChannels),
+    deliveryStatus: normalizeDeliveryStatus(input.deliveryStatus),
+    lastDeliveryAt: normalizeOptionalIsoString(input.lastDeliveryAt),
+    lastDeliveryError: normalizeText(input.lastDeliveryError),
     active: normalizeBoolean(input.active, true),
     lastRun: normalizeOptionalIsoString(input.lastRun),
     nextRun: normalizeOptionalIsoString(input.nextRun),
@@ -503,6 +509,29 @@ function normalizeScheduleFormats(input) {
   }
 
   return formats.length ? formats : ['excel'];
+}
+
+function normalizeDeliveryChannels(input) {
+  const rawValues = Array.isArray(input) ? input : typeof input === 'string' ? input.split(/[,\n;]/) : [];
+  const channels = [];
+  const seen = new Set();
+
+  for (const rawValue of rawValues) {
+    const value = normalizeText(rawValue).toLowerCase();
+    if (!VALID_DELIVERY_CHANNELS.has(value) || seen.has(value)) {
+      continue;
+    }
+
+    seen.add(value);
+    channels.push(value);
+  }
+
+  return channels.length ? channels : ['email'];
+}
+
+function normalizeDeliveryStatus(input) {
+  const normalized = normalizeText(input).toLowerCase();
+  return VALID_DELIVERY_STATUSES.has(normalized) ? normalized : 'idle';
 }
 
 function normalizeFrequency(input) {

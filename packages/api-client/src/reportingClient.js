@@ -200,6 +200,27 @@ function toScheduleFormats(input) {
   return values.length ? values : ["excel"];
 }
 
+function toScheduleDeliveryChannels(input) {
+  const rawValues = Array.isArray(input) ? input : typeof input === "string" ? input.split(/[,\n;]/) : [];
+  const values = [];
+  const seen = new Set();
+
+  for (const rawValue of rawValues) {
+    const value = normalizeText(rawValue).toLowerCase();
+    if (!value || seen.has(value)) {
+      continue;
+    }
+    seen.add(value);
+    values.push(value);
+  }
+
+  return values.length ? values : ["email"];
+}
+
+function toScheduleDeliveryStatus(input) {
+  return normalizeText(input).toLowerCase() || "idle";
+}
+
 function toScheduleRecipients(input) {
   const rawValues = Array.isArray(input) ? input : [];
   const recipients = [];
@@ -221,6 +242,7 @@ function toScheduleItem(input) {
   const source = isRecord(input) ? input : {};
   const formats = toScheduleFormats(source.formats);
   const recipients = toScheduleRecipients(source.recipients);
+  const deliveryChannels = toScheduleDeliveryChannels(source.deliveryChannels);
   const rawDayOfWeek = source.dayOfWeek;
   const rawDayOfMonth = source.dayOfMonth;
   const dayOfWeek = Number(rawDayOfWeek);
@@ -247,6 +269,10 @@ function toScheduleItem(input) {
     formatsSummary: formats.map((item) => item.toUpperCase()).join(", "),
     recipients,
     recipientsSummary: recipients.join(", "),
+    deliveryChannels,
+    deliveryStatus: toScheduleDeliveryStatus(source.deliveryStatus),
+    lastDeliveryAt: normalizeText(source.lastDeliveryAt),
+    lastDeliveryError: normalizeText(source.lastDeliveryError),
     active: source.active !== false,
     lastRun: normalizeText(source.lastRun),
     nextRun: normalizeText(source.nextRun),
@@ -588,6 +614,13 @@ export function mergeReportingScheduleItems(remoteItems = [], localItems = []) {
 
     const formats = localItem.formats.length ? localItem.formats : remoteItem.formats;
     const recipients = localItem.recipients.length ? localItem.recipients : remoteItem.recipients;
+    const deliveryChannels = localItem.deliveryChannels.length
+      ? localItem.deliveryChannels
+      : remoteItem.deliveryChannels;
+    const localHasDeliveryState =
+      (localItem.deliveryStatus && localItem.deliveryStatus !== "idle") ||
+      localItem.lastDeliveryAt ||
+      localItem.lastDeliveryError;
 
     merged.push({
       ...remoteItem,
@@ -596,6 +629,10 @@ export function mergeReportingScheduleItems(remoteItems = [], localItems = []) {
       formatsSummary: formats.map((item) => item.toUpperCase()).join(", "),
       recipients,
       recipientsSummary: recipients.join(", "),
+      deliveryChannels,
+      deliveryStatus: localHasDeliveryState ? localItem.deliveryStatus : remoteItem.deliveryStatus,
+      lastDeliveryAt: localItem.lastDeliveryAt || remoteItem.lastDeliveryAt,
+      lastDeliveryError: localItem.lastDeliveryError || remoteItem.lastDeliveryError,
       lastRun: localItem.lastRun || remoteItem.lastRun,
       nextRun: localItem.nextRun || remoteItem.nextRun,
     });

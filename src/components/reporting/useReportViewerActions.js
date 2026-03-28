@@ -65,6 +65,21 @@ export function useReportViewerActions({
     });
   };
 
+  const handleToggleDeliveryChannel = (channel) => {
+    setScheduleDraft((prev) => {
+      const current = Array.isArray(prev.deliveryChannels) ? [...prev.deliveryChannels] : [];
+      const index = current.indexOf(channel);
+
+      if (index >= 0) {
+        current.splice(index, 1);
+      } else {
+        current.push(channel);
+      }
+
+      return { ...prev, deliveryChannels: current };
+    });
+  };
+
   const handleEditSchedule = (schedule) => {
     setEditingScheduleId(schedule?.id || "");
     setScheduleDraft(createScheduleDraft(schedule));
@@ -84,7 +99,12 @@ export function useReportViewerActions({
       return;
     }
 
-    if (!String(payload.recipients || "").trim()) {
+    if (!Array.isArray(payload.deliveryChannels) || !payload.deliveryChannels.length) {
+      toast.warning?.("Chon it nhat mot kenh giao bao cao truoc khi luu.");
+      return;
+    }
+
+    if (payload.deliveryChannels.includes("email") && !String(payload.recipients || "").trim()) {
       toast.warning?.(
         "Nhap danh sach email nhan bao cao (ngan cach boi dau phay hoac xuong dong).",
       );
@@ -215,6 +235,7 @@ export function useReportViewerActions({
     exporting,
     handleScheduleFieldChange,
     handleToggleScheduleFormat,
+    handleToggleDeliveryChannel,
     handleEditSchedule,
     handleResetScheduleForm,
     handleSaveSchedule,

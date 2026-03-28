@@ -60,6 +60,10 @@ export type ReportingScheduleMutationInput = {
   dayOfMonth?: number | null;
   recipients?: string[] | string;
   formats?: string[] | string;
+  deliveryChannels?: string[] | string;
+  deliveryStatus?: string;
+  lastDeliveryAt?: string;
+  lastDeliveryError?: string;
   active?: boolean | string;
   lastRun?: string;
   nextRun?: string;

@@ -8136,6 +8136,14 @@ describe('V4 reporting read-model API', () => {
 
         recipients: ['ops@example.com', 'lead@example.com'],
 
+        deliveryChannels: ['email'],
+
+        deliveryStatus: 'idle',
+
+        lastDeliveryAt: '',
+
+        lastDeliveryError: '',
+
         active: true,
 
         lastRun: '2026-03-02T01:30:00.000Z',
@@ -8159,6 +8167,14 @@ describe('V4 reporting read-model API', () => {
         formats: ['pdf'],
 
         recipients: ['finance@example.com'],
+
+        deliveryChannels: ['email'],
+
+        deliveryStatus: 'idle',
+
+        lastDeliveryAt: '',
+
+        lastDeliveryError: '',
 
         active: false,
 
@@ -8242,6 +8258,8 @@ describe('V4 reporting read-model API', () => {
 
       recipients: 'ops@example.com\nlead@example.com',
 
+      deliveryChannels: ['email', 'report_center'],
+
       active: true,
 
     });
@@ -8272,6 +8290,10 @@ describe('V4 reporting read-model API', () => {
 
         recipients: ['ops@example.com', 'lead@example.com'],
 
+        deliveryChannels: ['email', 'report_center'],
+
+        deliveryStatus: 'idle',
+
         active: true,
 
       })
@@ -8297,6 +8319,8 @@ describe('V4 reporting read-model API', () => {
           formats: ['pdf', 'excel'],
 
           recipients: ['ops@example.com', 'lead@example.com'],
+
+          deliveryChannels: ['email', 'report_center'],
 
         }),
 

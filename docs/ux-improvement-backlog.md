@@ -51,7 +51,7 @@ Reconciliation note 2026-03-27:
 
 - [x] Xem trước nội dung báo cáo và lịch chạy kế tiếp ngay trong màn hình lập lịch (`getReportSchedules`). (done 2026-03-28, them preview next-run/output/recipients/data-source ngay trong `ReportingSchedulePanel` va khoa bang jsdom + Playwright)
 - [x] Tạo dashboard KPI tổng quan với xu hướng tháng, top nhân sự, cảnh báo lệch chuẩn. (done 2026-03-28, them `ReportingExecutiveSummaryPanel` de surfacing executive snapshot + deviation signals tren report center)
-- [ ] Mở rộng kênh gửi báo cáo (email, chat nội bộ) và theo dõi trạng thái giao thành công/thất bại.
+- [x] Mở rộng kênh gửi báo cáo (email, chat nội bộ) và theo dõi trạng thái giao thành công/thất bại. (done 2026-03-28, them `deliveryChannels` + delivery status card metadata tren reporting schedules va dong bo contract client/server)
 - [ ] Cho phép người dùng tự tạo template báo cáo tùy biến, lưu trữ vào `KPI_ADJUSTMENT_SETTINGS_KEY` hoặc kho riêng.
 
 ## 7. Reliability, QA & accessibility

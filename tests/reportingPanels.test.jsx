@@ -24,6 +24,7 @@ describe("ReportingPanels", () => {
 
     expect(draft.recipientsInput).toBe("ceo@company.vn, ops@company.vn");
     expect(draft.formats).toEqual(["excel"]);
+    expect(draft.deliveryChannels).toEqual(["email"]);
 
     expect(
       toSchedulePayload({
@@ -31,6 +32,7 @@ describe("ReportingPanels", () => {
         frequency: "monthly",
         dayOfMonth: 15,
         recipientsInput: "ceo@company.vn",
+        deliveryChannels: ["report_center", "download_bundle"],
       })
     ).toMatchObject({
       id: "weekly-kpi",
@@ -39,6 +41,7 @@ describe("ReportingPanels", () => {
       dayOfMonth: 15,
       recipients: "ceo@company.vn",
       formats: ["excel"],
+      deliveryChannels: ["report_center", "download_bundle"],
       active: true,
     });
   });
@@ -96,6 +99,7 @@ describe("ReportingPanels", () => {
         onSubmit={(event) => event.preventDefault()}
         onFieldChange={() => {}}
         onToggleFormat={() => {}}
+        onToggleDeliveryChannel={() => {}}
         onReset={vi.fn()}
         onEdit={vi.fn()}
         onDelete={vi.fn()}
@@ -108,6 +112,9 @@ describe("ReportingPanels", () => {
             time: "08:00",
             active: true,
             nextRun: "2024-08-31T01:00:00.000Z",
+            deliveryChannels: ["email", "report_center"],
+            deliveryStatus: "success",
+            lastDeliveryAt: "2024-08-30T01:00:00.000Z",
             formatsSummary: "EXCEL",
             recipientsSummary: "ceo@company.vn",
           },
@@ -120,6 +127,8 @@ describe("ReportingPanels", () => {
     expect(screen.getByRole("button", { name: /thu gọn/i })).toHaveAttribute("aria-expanded", "true");
     expect(screen.getByRole("list", { name: /danh sách lịch gửi báo cáo kpi/i })).toBeTruthy();
     expect(screen.getAllByText("KPI tuần").length).toBeGreaterThan(0);
+    expect(screen.getByText(/kênh giao báo cáo/i)).toBeTruthy();
+    expect(screen.getByText(/đã giao thành công/i)).toBeTruthy();
   });
 
   it("renders draft preview output and estimated next run before saving", () => {
@@ -130,6 +139,7 @@ describe("ReportingPanels", () => {
       name: "Lịch điều hành tháng",
       recipients: ["ceo@company.vn", "ops@company.vn", "audit@company.vn"],
       formats: ["excel", "pdf"],
+      deliveryChannels: ["report_center", "download_bundle"],
       frequency: "monthly",
       dayOfMonth: 31,
       time: "09:45",
@@ -153,6 +163,7 @@ describe("ReportingPanels", () => {
           onSubmit={(event) => event.preventDefault()}
           onFieldChange={() => {}}
           onToggleFormat={() => {}}
+          onToggleDeliveryChannel={() => {}}
           onReset={vi.fn()}
           onEdit={vi.fn()}
           onDelete={vi.fn()}
@@ -167,7 +178,8 @@ describe("ReportingPanels", () => {
       expect(within(scheduleRegion).getByText(/ngày 31 hàng tháng lúc 09:45/i)).toBeTruthy();
       expect(within(scheduleRegion).getByText("Lịch đang tạm tắt")).toBeTruthy();
       expect(within(scheduleRegion).getByText("Excel + PDF")).toBeTruthy();
-      expect(within(scheduleRegion).getByText(/3 email • ceo@company\.vn, ops@company\.vn \+1/i)).toBeTruthy();
+      expect(within(scheduleRegion).getByText("Không dùng email")).toBeTruthy();
+      expect(within(scheduleRegion).getByText("Trung tâm báo cáo + Gói tải xuống")).toBeTruthy();
       expect(within(scheduleRegion).getByText(/read model tháng mặc định 2026-03-01 → 2026-03-31/i)).toBeTruthy();
       expect(within(scheduleRegion).getByText(/09:45 31\/03\/2026/)).toBeTruthy();
     } finally {

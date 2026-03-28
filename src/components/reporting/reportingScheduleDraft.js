@@ -1,6 +1,10 @@
 export function createScheduleDraft(entry = null) {
   const raw = entry && typeof entry === "object" ? entry : {};
   const formats = Array.isArray(raw.formats) && raw.formats.length ? raw.formats : ["excel"];
+  const deliveryChannels =
+    Array.isArray(raw.deliveryChannels) && raw.deliveryChannels.length
+      ? raw.deliveryChannels
+      : ["email"];
   const recipients = Array.isArray(raw.recipients)
     ? raw.recipients.join(", ")
     : typeof raw.recipientsInput === "string"
@@ -16,6 +20,7 @@ export function createScheduleDraft(entry = null) {
     time: raw.time || "08:00",
     recipientsInput: recipients,
     formats,
+    deliveryChannels,
     active: raw.active !== false,
   };
 }
@@ -40,6 +45,10 @@ export function toSchedulePayload(draft) {
     time: draft.time || "08:00",
     recipients: draft.recipientsInput || "",
     formats: Array.isArray(draft.formats) && draft.formats.length ? draft.formats : ["excel"],
+    deliveryChannels:
+      Array.isArray(draft.deliveryChannels) && draft.deliveryChannels.length
+        ? draft.deliveryChannels
+        : ["email"],
     active: Boolean(draft.active),
   };
 }

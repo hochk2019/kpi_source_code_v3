@@ -90,7 +90,6 @@ Source set: `docs/ux-improvement-backlog.md`
 
 ### Reporting And Automation
 
-- `cng-7z0.28` — Expand report delivery channels and delivery-status tracking
 - `cng-7z0.29` — Allow custom report templates to be created and stored
 
 ### Reliability, QA, And Accessibility

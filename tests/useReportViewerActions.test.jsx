@@ -79,6 +79,7 @@ describe("useReportViewerActions", () => {
       frequency: "weekly",
       dayOfWeek: 1,
       time: "08:00",
+      deliveryChannels: ["email", "report_center"],
       recipients: ["ops@example.com"],
       formats: ["excel", "csv"],
       active: true,
@@ -108,13 +109,58 @@ describe("useReportViewerActions", () => {
         name: "Bao cao thu 2",
         recipients: "ops@example.com",
         formats: ["excel", "csv"],
+        deliveryChannels: ["email"],
       }),
       { actor: "ui.report" },
     );
     expect(result.current.editingScheduleId).toBe("schedule-1");
     expect(result.current.scheduleDraft.recipientsInput).toBe("ops@example.com");
     expect(result.current.scheduleDraft.formats).toEqual(["excel", "csv"]);
+    expect(result.current.scheduleDraft.deliveryChannels).toEqual(["email", "report_center"]);
     expect(toastMock.success).toHaveBeenCalledWith(expect.stringMatching(/da luu lich gui/i));
+  });
+
+  it("allows non-email delivery channels without requiring recipients", async () => {
+    saveReportingScheduleMock.mockResolvedValue({
+      id: "schedule-3",
+      name: "Bao cao report center",
+      frequency: "weekly",
+      dayOfWeek: 1,
+      time: "08:00",
+      deliveryChannels: ["report_center"],
+      recipients: [],
+      formats: ["excel"],
+      active: true,
+    });
+
+    const { result } = renderHook(() =>
+      useReportViewerActions({
+        canExport: true,
+        summary: { decls: 10 },
+        report: { range: {}, rules: {} },
+        exportColumns: {},
+      }),
+    );
+
+    act(() => {
+      result.current.handleScheduleFieldChange("name", "Bao cao report center");
+      result.current.handleToggleDeliveryChannel("email");
+      result.current.handleToggleDeliveryChannel("report_center");
+    });
+
+    await act(async () => {
+      await result.current.handleSaveSchedule({ preventDefault: vi.fn() });
+    });
+
+    expect(saveReportingScheduleMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: "Bao cao report center",
+        recipients: "",
+        deliveryChannels: ["report_center"],
+      }),
+      { actor: "ui.report" },
+    );
+    expect(toastMock.warning).not.toHaveBeenCalled();
   });
 
   it("deletes the active schedule and resets the editor when the record is removed", async () => {

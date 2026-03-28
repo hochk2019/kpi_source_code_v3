@@ -466,14 +466,18 @@ describe("reportingClient", () => {
           name: "Weekly Blue",
           frequency: "weekly",
           time: "08:30",
-          dayOfWeek: 1,
-          dayOfMonth: null,
-          formats: ["pdf", " excel "],
-          recipients: ["ops@example.com", " lead@example.com "],
-          active: true,
-          lastRun: "2026-03-02T01:30:00.000Z",
-          nextRun: "2026-03-09T01:30:00.000Z",
-          serverOnlyScheduleMeta: { etag: "schedule-v1" },
+        dayOfWeek: 1,
+        dayOfMonth: null,
+        formats: ["pdf", " excel "],
+        recipients: ["ops@example.com", " lead@example.com "],
+        deliveryChannels: [" email ", "report_center"],
+        deliveryStatus: "success",
+        lastDeliveryAt: "2026-03-09T01:32:00.000Z",
+        lastDeliveryError: "stale",
+        active: true,
+        lastRun: "2026-03-02T01:30:00.000Z",
+        nextRun: "2026-03-09T01:30:00.000Z",
+        serverOnlyScheduleMeta: { etag: "schedule-v1" },
         },
       ],
       aggregateStatus: {
@@ -505,6 +509,10 @@ describe("reportingClient", () => {
         formatsSummary: "PDF, EXCEL",
         recipients: ["ops@example.com", "lead@example.com"],
         recipientsSummary: "ops@example.com, lead@example.com",
+        deliveryChannels: ["email", "report_center"],
+        deliveryStatus: "success",
+        lastDeliveryAt: "2026-03-09T01:32:00.000Z",
+        lastDeliveryError: "stale",
       }),
     ]);
     expect("serverOnlyScheduleMeta" in schedules.items[0]).toBe(false);
@@ -518,6 +526,7 @@ describe("reportingClient", () => {
         dayOfWeek: 1,
         formats: ["excel"],
         recipients: ["local@example.com"],
+        deliveryChannels: ["download_bundle"],
         active: false,
       },
       {
@@ -528,6 +537,7 @@ describe("reportingClient", () => {
         time: "09:15",
         formats: ["pdf"],
         recipients: ["finance@example.com"],
+        deliveryChannels: ["report_center"],
         active: true,
       },
     ]);
@@ -542,6 +552,10 @@ describe("reportingClient", () => {
         formatsSummary: "EXCEL",
         recipients: ["local@example.com"],
         recipientsSummary: "local@example.com",
+        deliveryChannels: ["download_bundle"],
+        deliveryStatus: "success",
+        lastDeliveryAt: "2026-03-09T01:32:00.000Z",
+        lastDeliveryError: "stale",
         nextRun: "2026-03-09T01:30:00.000Z",
       }),
       expect.objectContaining({
@@ -549,6 +563,7 @@ describe("reportingClient", () => {
         name: "Monthly Local",
         formatsSummary: "PDF",
         recipientsSummary: "finance@example.com",
+        deliveryChannels: ["report_center"],
       }),
     ]);
   });
@@ -563,6 +578,10 @@ describe("reportingClient", () => {
         time: "09:05",
         formats: [" pdf ", "excel", "pdf"],
         recipients: ["ops@example.com", " ops@example.com ", "finance@example.com"],
+        deliveryChannels: ["report_center", "report_center", "download_bundle"],
+        deliveryStatus: "error",
+        lastDeliveryAt: "2026-03-11T02:05:00.000Z",
+        lastDeliveryError: "smtp timeout",
         active: true,
         nextRun: "2026-03-12T02:05:00.000Z",
       },
@@ -576,6 +595,10 @@ describe("reportingClient", () => {
         formatsSummary: "PDF, EXCEL",
         recipients: ["ops@example.com", "finance@example.com"],
         recipientsSummary: "ops@example.com, finance@example.com",
+        deliveryChannels: ["report_center", "download_bundle"],
+        deliveryStatus: "error",
+        lastDeliveryAt: "2026-03-11T02:05:00.000Z",
+        lastDeliveryError: "smtp timeout",
         nextRun: "2026-03-12T02:05:00.000Z",
       }),
     ]);
@@ -597,6 +620,10 @@ describe("reportingClient", () => {
             dayOfMonth: null,
             formats: ["pdf", "excel"],
             recipients: ["ops@example.com", "lead@example.com"],
+            deliveryChannels: ["email", "report_center"],
+            deliveryStatus: "success",
+            lastDeliveryAt: "2026-03-13T02:46:00.000Z",
+            lastDeliveryError: "",
             active: true,
             lastRun: "",
             nextRun: "2026-03-13T02:45:00.000Z",
@@ -614,6 +641,7 @@ describe("reportingClient", () => {
         dayOfWeek: 5,
         formats: ["pdf", " excel "],
         recipients: "ops@example.com\nlead@example.com",
+        deliveryChannels: ["email", "report_center"],
         active: true,
       },
       { actor: "ui.report" }
@@ -633,6 +661,7 @@ describe("reportingClient", () => {
       dayOfWeek: 5,
       formats: ["pdf", " excel "],
       recipients: "ops@example.com\nlead@example.com",
+      deliveryChannels: ["email", "report_center"],
       active: true,
     });
     expect(refreshSpy).not.toHaveBeenCalled();
@@ -641,6 +670,8 @@ describe("reportingClient", () => {
         id: "weekly-red",
         formatsSummary: "PDF, EXCEL",
         recipientsSummary: "ops@example.com, lead@example.com",
+        deliveryChannels: ["email", "report_center"],
+        deliveryStatus: "success",
       })
     );
   });

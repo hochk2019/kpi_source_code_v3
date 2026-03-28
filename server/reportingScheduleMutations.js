@@ -3,6 +3,8 @@ export const REPORT_SCHEDULE_STORAGE_KEY = 'kpi_report_schedule_v1';
 const DEFAULT_SCHEDULE_TIME = '08:00';
 const VALID_SCHEDULE_FORMATS = new Set(['excel', 'pdf']);
 const VALID_SCHEDULE_FREQUENCIES = new Set(['weekly', 'monthly']);
+const VALID_DELIVERY_CHANNELS = new Set(['email', 'report_center', 'download_bundle']);
+const VALID_DELIVERY_STATUSES = new Set(['idle', 'pending', 'ready', 'success', 'error', 'blocked']);
 
 function normalizeText(value) {
   return typeof value === 'string' ? value.trim() : '';
@@ -62,6 +64,29 @@ function normalizeScheduleFormats(input) {
   }
 
   return formats.length ? formats : ['excel'];
+}
+
+function normalizeDeliveryChannels(input) {
+  const rawValues = Array.isArray(input) ? input : typeof input === 'string' ? input.split(/[,\n;]/) : [];
+  const seen = new Set();
+  const channels = [];
+
+  for (const rawValue of rawValues) {
+    const value = normalizeText(rawValue).toLowerCase();
+    if (!VALID_DELIVERY_CHANNELS.has(value) || seen.has(value)) {
+      continue;
+    }
+
+    seen.add(value);
+    channels.push(value);
+  }
+
+  return channels.length ? channels : ['email'];
+}
+
+function normalizeDeliveryStatus(input) {
+  const value = normalizeText(input).toLowerCase();
+  return VALID_DELIVERY_STATUSES.has(value) ? value : 'idle';
 }
 
 function normalizeFrequency(input) {
@@ -181,6 +206,10 @@ export function normalizeReportingScheduleMutationEntry(input, fallback = null, 
     dayOfMonth: frequency === 'monthly' ? clampMonthDay(raw.dayOfMonth ?? base.dayOfMonth ?? 1) : null,
     recipients: normalizeScheduleRecipients(raw.recipients ?? base.recipients ?? []),
     formats: normalizeScheduleFormats(raw.formats ?? base.formats ?? []),
+    deliveryChannels: normalizeDeliveryChannels(raw.deliveryChannels ?? base.deliveryChannels ?? []),
+    deliveryStatus: normalizeDeliveryStatus(raw.deliveryStatus ?? base.deliveryStatus),
+    lastDeliveryAt: normalizeOptionalIsoString(raw.lastDeliveryAt) || normalizeOptionalIsoString(base.lastDeliveryAt),
+    lastDeliveryError: normalizeText(raw.lastDeliveryError) || normalizeText(base.lastDeliveryError),
     active: normalizeBoolean(raw.active ?? base.active, true),
     lastRun: normalizeOptionalIsoString(raw.lastRun) || normalizeOptionalIsoString(base.lastRun),
     nextRun: normalizeOptionalIsoString(raw.nextRun) || normalizeOptionalIsoString(base.nextRun),
