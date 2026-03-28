@@ -2,7 +2,7 @@ import React, { Suspense, useEffect, useMemo, useState } from 'react';
 
 import { TabsContent } from '@/components/ui/tabs.jsx';
 
-import DataImporter from './DataImporter.jsx';
+const DataImporter = React.lazy(() => import('./DataImporter.jsx'));
 
 const RulesEditor = React.lazy(() => import('./RulesEditor.jsx'));
 
@@ -12,7 +12,7 @@ const AccountManager = React.lazy(() => import('./AccountManager.jsx'));
 
 const AuditLog = React.lazy(() => import('./AuditLog.jsx'));
 
-import HQAgencyManager from './HQAgencyManager.jsx';
+const HQAgencyManager = React.lazy(() => import('./HQAgencyManager.jsx'));
 
 const AiAssistant = React.lazy(() => import('./AiAssistant.jsx'));
 
@@ -33,9 +33,11 @@ import {
 } from '@/components/appShell/appShellWorkflowState.js';
 import AppShellFrame from '@/components/appShell/AppShellFrame.jsx';
 import { emitCommand } from '@/lib/commandBus.js';
-import MSTWorkflowPanel from '@/components/workflows/MSTWorkflowPanel.jsx';
-import KPIAdjustmentsWorkflowPanel from '@/components/workflows/KPIAdjustmentsWorkflowPanel.jsx';
-import ReportCenterPanel from '@/components/workflows/ReportCenterPanel.jsx';
+const MSTWorkflowPanel = React.lazy(() => import('@/components/workflows/MSTWorkflowPanel.jsx'));
+const KPIAdjustmentsWorkflowPanel = React.lazy(() =>
+  import('@/components/workflows/KPIAdjustmentsWorkflowPanel.jsx'),
+);
+const ReportCenterPanel = React.lazy(() => import('@/components/workflows/ReportCenterPanel.jsx'));
 import { SectionHeader, SectionSurface } from '@/components/designSystem/shellPrimitives.jsx';
 import RuntimeErrorBoundary from '@/components/errorBoundaries/RuntimeErrorBoundary.jsx';
 
@@ -101,13 +103,23 @@ const KPICalculator = ({
   const initialTab = useMemo(() => resolveVisibleAppTab(activeTab, effectiveAuth), [activeTab, effectiveAuth]);
 
   const [tabValue, setTabValue] = useState(initialTab);
+  const [loadedTabs, setLoadedTabs] = useState(() => new Set([initialTab]));
   const [pendingFocusTarget, setPendingFocusTarget] = useState(null);
 
 
 
   useEffect(() => {
 
-    setTabValue(resolveVisibleAppTab(activeTab, effectiveAuth));
+    const nextTab = resolveVisibleAppTab(activeTab, effectiveAuth);
+
+    setLoadedTabs((prev) => {
+      if (prev.has(nextTab)) {
+        return prev;
+      }
+      return new Set([...prev, nextTab]);
+    });
+
+    setTabValue(nextTab);
 
   }, [activeTab, effectiveAuth]);
 
@@ -118,6 +130,13 @@ const KPICalculator = ({
     if (!allowedTabs.has(tabValue)) {
 
       const fallback = resolveVisibleAppTab(tabValue, effectiveAuth);
+
+      setLoadedTabs((prev) => {
+        if (prev.has(fallback)) {
+          return prev;
+        }
+        return new Set([...prev, fallback]);
+      });
 
       setTabValue(fallback);
 
@@ -148,6 +167,12 @@ const KPICalculator = ({
     }
 
     setTabValue(value);
+    setLoadedTabs((prev) => {
+      if (prev.has(value)) {
+        return prev;
+      }
+      return new Set([...prev, value]);
+    });
 
     onTabChange?.(value);
 
@@ -246,6 +271,7 @@ const KPICalculator = ({
 
         <TabsContent value="mst" className="ds-panel">
 
+          {loadedTabs.has('mst') ? (
           <TabPanel tabLabel="Gán MST">
 
             <MSTWorkflowPanel
@@ -255,6 +281,7 @@ const KPICalculator = ({
             />
 
           </TabPanel>
+          ) : null}
 
         </TabsContent>
 
@@ -262,6 +289,7 @@ const KPICalculator = ({
 
         <TabsContent value="hq" className="ds-panel">
 
+          {loadedTabs.has('hq') ? (
           <TabPanel tabLabel="Đại Lý HQ">
 
             <div id={getAppTabRootId('hq')} tabIndex={-1}>
@@ -269,6 +297,7 @@ const KPICalculator = ({
             </div>
 
           </TabPanel>
+          ) : null}
 
         </TabsContent>
 
@@ -276,6 +305,7 @@ const KPICalculator = ({
 
         <TabsContent value="import" className="ds-panel">
 
+          {loadedTabs.has('import') ? (
           <TabPanel tabLabel="Import Data">
 
             <div id={getAppTabRootId('import')} tabIndex={-1}>
@@ -289,6 +319,7 @@ const KPICalculator = ({
             </div>
 
           </TabPanel>
+          ) : null}
 
         </TabsContent>
 
@@ -296,6 +327,7 @@ const KPICalculator = ({
 
         <TabsContent value="teams" className="ds-panel">
 
+          {loadedTabs.has('teams') ? (
           <TabPanel tabLabel="Quản lý tổ đội">
 
             <div id={getAppTabRootId('teams')} tabIndex={-1}>
@@ -303,6 +335,7 @@ const KPICalculator = ({
             </div>
 
           </TabPanel>
+          ) : null}
 
         </TabsContent>
 
@@ -310,6 +343,7 @@ const KPICalculator = ({
 
         <TabsContent value="rules" className="ds-panel">
 
+          {loadedTabs.has('rules') ? (
           <TabPanel tabLabel="Quy tắc KPI">
 
             <div id={getAppTabRootId('rules')} tabIndex={-1}>
@@ -317,6 +351,7 @@ const KPICalculator = ({
             </div>
 
           </TabPanel>
+          ) : null}
 
         </TabsContent>
 
@@ -324,6 +359,7 @@ const KPICalculator = ({
 
         <TabsContent value="adjustments" className="ds-panel">
 
+          {loadedTabs.has('adjustments') ? (
           <TabPanel tabLabel="Điểm KPI +/- Thêm">
 
             <KPIAdjustmentsWorkflowPanel
@@ -332,6 +368,7 @@ const KPICalculator = ({
             />
 
           </TabPanel>
+          ) : null}
 
         </TabsContent>
 
@@ -339,6 +376,7 @@ const KPICalculator = ({
 
         <TabsContent value="reports" className="ds-panel">
 
+          {loadedTabs.has('reports') ? (
           <TabPanel tabLabel="Báo cáo KPI">
 
             <ReportCenterPanel
@@ -349,6 +387,7 @@ const KPICalculator = ({
             />
 
           </TabPanel>
+          ) : null}
 
         </TabsContent>
 
@@ -358,6 +397,7 @@ const KPICalculator = ({
 
         <TabsContent value="health" className="ds-panel">
 
+          {loadedTabs.has('health') ? (
           <TabPanel tabLabel="Health & sync">
 
               <div id={getAppTabRootId('health')} className="space-y-4" tabIndex={-1}>
@@ -371,6 +411,7 @@ const KPICalculator = ({
               </div>
 
           </TabPanel>
+          ) : null}
 
         </TabsContent>
 
@@ -382,6 +423,7 @@ const KPICalculator = ({
 
           <TabsContent value="ai" className="ds-panel">
 
+            {loadedTabs.has('ai') ? (
             <TabPanel tabLabel="Trợ lý AI">
 
               <div id={getAppTabRootId('ai')} tabIndex={-1}>
@@ -389,6 +431,7 @@ const KPICalculator = ({
               </div>
 
             </TabPanel>
+            ) : null}
 
           </TabsContent>
 
@@ -400,6 +443,7 @@ const KPICalculator = ({
 
           <TabsContent value="accounts" className="ds-panel">
 
+            {loadedTabs.has('accounts') ? (
             <TabPanel tabLabel="Tài khoản">
 
               <div id={getAppTabRootId('accounts')} tabIndex={-1}>
@@ -407,6 +451,7 @@ const KPICalculator = ({
               </div>
 
             </TabPanel>
+            ) : null}
 
           </TabsContent>
 
@@ -418,6 +463,7 @@ const KPICalculator = ({
 
           <TabsContent value="audit" className="ds-panel">
 
+            {loadedTabs.has('audit') ? (
             <TabPanel tabLabel="Nhật ký hệ thống">
 
               <div id={getAppTabRootId('audit')} className="grid gap-6 xl:grid-cols-[5fr,3fr]" tabIndex={-1}>
@@ -437,6 +483,7 @@ const KPICalculator = ({
               </div>
 
             </TabPanel>
+            ) : null}
 
           </TabsContent>
 
@@ -448,6 +495,7 @@ const KPICalculator = ({
 
           <TabsContent value="export-audit" className="ds-panel">
 
+            {loadedTabs.has('export-audit') ? (
             <TabPanel tabLabel="Xuất nhật ký">
 
               <div id={getAppTabRootId('export-audit')} tabIndex={-1}>
@@ -455,6 +503,7 @@ const KPICalculator = ({
               </div>
 
             </TabPanel>
+            ) : null}
 
           </TabsContent>
 

@@ -8,29 +8,37 @@
   - `cng-2k4` — Post-Gemini remaining technical backlog
   - `cng-7z0` — UX improvement backlog execution
 - Highest-priority ready items hien tai:
-  - `cng-2k4.16` da hoan tat tach control panel cua `HQAgencyManager.jsx` va dua shell xuong 674 dong; co the commit slice nay roi chon buoc tiep theo trong `cng-2k4`
+  - `cng-2k4.20` — polish accessibility/loading states con lai sau dot tach shell + lazy-load admin tabs
 
 ## Active Slice
 
-- Title: Reduce `HQAgencyManager.jsx` below the module size target
-- Bead: cng-2k4.16 (bead CLI khong kha dung trong worktree nay)
+- Title: Add route-based code splitting for heavy admin tabs
+- Bead: cng-2k4.19 (bead CLI khong kha dung trong worktree nay)
 - Status: completed
 - Last updated: 2026-03-28
 
-- Muc tieu hien tai la dua `src/components/HQAgencyManager.jsx` ve duoi target 800 dong bang cach tach control/header/history/filter toolbar ra khoi shell, giu nguyen orchestration state/save/import flow trong file goc.
+- Muc tieu hien tai la tri hoan import cac tab admin/workflow nang trong `src/components/KPICalculator.jsx` cho toi khi nguoi dung mo tab lan dau, de giam bundle bootstrap va giu shell route-load nhe hon.
 - GitNexus impact da duoc chay truoc khi sua:
-  - `HQAgencyManager`: `LOW`
+  - `App`: `LOW`
+  - `CommandCenter`: `LOW`
+  - `KPICalculator`: `LOW`
 - Cach sua da ap dung:
-  - them `src/components/hq-agency-manager/HQAgencyManagerControls.jsx` de tach header, save/reload actions, read-only + error banners, history summary, file import controls, filter/search toolbar, va paging actions khoi shell
-  - giu `src/components/HQAgencyManager.jsx` tap trung vao state, derived data, va mutation orchestration; sau refactor file goc con 674 dong
-  - bo sung regression test `tests/hqAgencyManagerControls.test.jsx` de khoa UI wiring cua control panel moi, dong thoi verify lai `tests/hqAgencyManager.test.jsx` cho import/save flow cua shell
+  - doi `DataImporter`, `HQAgencyManager`, `MSTWorkflowPanel`, `KPIAdjustmentsWorkflowPanel`, va `ReportCenterPanel` sang `React.lazy(...)`
+  - them `loadedTabs` cache trong `src/components/KPICalculator.jsx` va chi mount tung `TabsContent` sau khi tab do da duoc truy cap, giu tab hien tai/fallback van hydrate dung
+  - bo sung regression test `tests/kpiCalculator.lazyTabs.test.jsx` de khoa hanh vi: tab `mst` khong bi import khi shell mo o `reports`, va chi duoc tai sau khi chuyen tab
+  - cap nhat `tests/kpiCalculator.errorBoundary.test.jsx` sang async assertion de phan anh dung contract moi cua lazy-loaded error boundary
 - Trang thai verify hien tai:
-  - `npx eslint src/components/HQAgencyManager.jsx src/components/hq-agency-manager/HQAgencyManagerControls.jsx tests/hqAgencyManager.test.jsx tests/hqAgencyManagerControls.test.jsx` da pass
-  - `npx vitest run tests/hqAgencyManager.test.jsx tests/hqAgencyManagerControls.test.jsx` da pass
-  - `gitnexus_detect_changes(scope: all)` dang duoc chay de xac nhan fan-out dung voi pham vi `HQAgencyManager` truoc khi chot handoff
+  - `npx eslint src/components/KPICalculator.jsx tests/kpiCalculator.errorBoundary.test.jsx tests/kpiCalculator.lazyTabs.test.jsx` da pass
+  - `npx vitest run tests/auth.test.jsx tests/kpiCalculator.errorBoundary.test.jsx tests/kpiCalculator.lazyTabs.test.jsx` da pass
+  - `gitnexus_detect_changes(scope: all)` can chay tiep de xac nhan fan-out dung voi pham vi `KPICalculator` truoc khi chot handoff
   - `bd` / `bd.cmd` trong worktree hien tai khong tim thay beads database, nen trang thai bead chua sync duoc bang CLI
 ## Recent Completed Slices
 
+- `cng-2k4.19` da xong o muc code splitting cho heavy admin tabs:
+  - doi `DataImporter`, `HQAgencyManager`, `MSTWorkflowPanel`, `KPIAdjustmentsWorkflowPanel`, va `ReportCenterPanel` trong `src/components/KPICalculator.jsx` sang `React.lazy(...)`
+  - them `loadedTabs` state de chi mount tab content sau lan truy cap dau tien, tranh keo cac module nang vao route bootstrap cua shell
+  - bo sung regression test `tests/kpiCalculator.lazyTabs.test.jsx` va cap nhat `tests/kpiCalculator.errorBoundary.test.jsx` de dong bo voi lazy import timing
+  - targeted verify da pass: eslint batch `KPICalculator + errorBoundary test + lazyTabs test`, vitest batch `auth + errorBoundary + lazyTabs`
 - `cng-2k4.16` da xong o muc giam kich thuoc `HQAgencyManager.jsx`:
   - tach header/history/filter/import toolbar thanh `src/components/hq-agency-manager/HQAgencyManagerControls.jsx`
   - giu shell `HQAgencyManager.jsx` cho orchestration state/save/import va dua file goc xuong 674 dong, dat duoi target kich thuoc module
@@ -661,13 +669,13 @@
 
 ## Next Suggested Slice
 
-- Title: Implement CSRF protection for mutation routes
-- Bead: `cng-2k4.10`
+- Title: Implement remaining accessibility and loading polish from review
+- Bead: `cng-2k4.20`
 - Status: open
 - Follow-up backlog:
-  - day la task P1 tiep theo sau khi entrypoint bootstrap da chuyen sang `server-v4` nhung mutation surface van chua co CSRF gate tap trung
-  - uu tien chot middleware/secret strategy co the dung chung cho legacy compat routes va server-v4 runtime routes de tranh hinh thanh hai co che khac nhau
-  - truoc moi thay doi symbol middleware/router, tiep tuc chay GitNexus impact/context de khoa blast radius va cap nhat test cho ca success path lan reject path
+  - tiep tuc sau `cng-2k4.19` voi loading polish va a11y gaps con lai quanh lazy tab shell, nhat la fallback states, focus handoff, va aria contract tren admin tabs nang
+  - uu tien kiem tra lai spinner/fallback text, tab focus sau khi lazy mount, va cac panel moi tach gan day de tranh tao regressions mobile/keyboard
+  - truoc moi thay doi symbol trong `KPICalculator`, `AppShellFrame`, hoac cac tab panels, tiep tuc chay GitNexus impact/context de khoa blast radius va cap nhat regression test tuong ung
 
 ## Verification
 

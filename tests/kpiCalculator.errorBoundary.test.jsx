@@ -16,7 +16,7 @@ describe('KPICalculator tab error boundary', () => {
     vi.restoreAllMocks();
   });
 
-  it('giữ shell hoạt động khi tab báo cáo ném lỗi', () => {
+  it('giữ shell hoạt động khi tab báo cáo ném lỗi', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
 
     render(
@@ -27,7 +27,7 @@ describe('KPICalculator tab error boundary', () => {
     );
 
     expect(screen.getByText('KPI Control Center')).toBeInTheDocument();
-    expect(screen.getByRole('alert')).toHaveTextContent('Không thể hiển thị Báo cáo KPI.');
+    expect(await screen.findByRole('alert')).toHaveTextContent('Không thể hiển thị Báo cáo KPI.');
     expect(screen.getByText(/Chi tiết kỹ thuật: report center crashed/i)).toBeInTheDocument();
   });
 });
