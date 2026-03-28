@@ -16,7 +16,7 @@ export default function usePagination(items = [], options = {}) {
 
   const { initialPage = 1, initialPageSize = 20, minPageSize = 1 } = options;
 
-  const safeItems = Array.isArray(items) ? items : [];
+  const safeItems = useMemo(() => (Array.isArray(items) ? items : []), [items]);
 
 
 

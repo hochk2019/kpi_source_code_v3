@@ -16,25 +16,27 @@
 
 ## Active Slice
 
-- Title: Stabilize chart palette hook dependencies
-- Bead: cng-2k4.22 / slice E (bead CLI khong kha dung trong worktree nay)
+- Title: Memoize sanitized pagination items
+- Bead: cng-2k4.22 / slice F (bead CLI khong kha dung trong worktree nay)
 - Status: completed
 - Last updated: 2026-03-28
 
-- Muc tieu slice nay la don warning hook dependency co blast radius thap trong design system:
-  - on dinh `reader` trong `useChartPalette` bang `useMemo`
-  - them `reader` vao dependency array cua effect thay vi bo qua warning `react-hooks/exhaustive-deps`
-  - giu nguyen API tra ve palette cho caller `ReportViewer`
+- Muc tieu slice nay la don warning hook dependency co blast radius thap trong pagination hook:
+  - memoize `safeItems` trong `usePagination` de dependency cua `currentPageItems` on dinh hon
+  - giu nguyen API phan trang cho caller `MSTAssignment` va test harness hien co
+  - cat warning `react-hooks/exhaustive-deps` ma khong doi logic clamp/page slicing
 - Cach sua da ap dung:
-  - them `useMemo` vao import cua `src/designSystem/hooks.js`
-  - memoize `reader = getChartPalette ?? readPalette` theo `getChartPalette`
-  - cap nhat effect dependency thanh `[resolvedTheme, reader]`
+  - doi `safeItems` thanh `useMemo(() => (Array.isArray(items) ? items : []), [items])`
+  - giu nguyen toan bo logic `itemCount`, `pageCount`, `currentPageItems`, va callback paging
 - Trang thai verify hien tai:
-  - `pnpm exec eslint src/designSystem/hooks.js tests/reportViewer.test.jsx` da pass
-  - `pnpm exec vitest run tests/reportViewer.test.jsx --environment jsdom` da pass
+  - `pnpm exec eslint src/hooks/usePagination.js tests/mstAssignment.pagination.test.jsx` da pass
+  - `pnpm exec vitest run tests/mstAssignment.pagination.test.jsx --environment jsdom` da pass
   - `bd` / `bd.cmd` trong worktree hien tai khong tim thay beads database, nen trang thai bead chua sync duoc bang CLI
 ## Recent Completed Slices
 
+- `cng-2k4.22 / slice F` da xong o muc pagination hook hygiene:
+  - memoize `safeItems` trong `src/hooks/usePagination.js` de on dinh dependency cua `currentPageItems`
+  - verify lai `tests/mstAssignment.pagination.test.jsx` vi day la harness call truc tiep theo GitNexus impact
 - `cng-2k4.22 / slice E` da xong o muc design-system hook hygiene:
   - on dinh dependency cua `useChartPalette` trong `src/designSystem/hooks.js`
   - verify lai `tests/reportViewer.test.jsx` vi day la caller truc tiep theo GitNexus impact
@@ -704,8 +706,8 @@
 - Status: open
 - Follow-up backlog:
   - warning runtime helper trong `server/reportExport.js` can impact analysis rieng truoc khi sua vi la production export path
-  - warning hook-level trong `src/hooks/usePagination.js` can danh gia blast radius truoc khi sua
   - khoa regression cho focus handoff/fallback contract sau khi dieu huong bang workflow guide hoac command surfaces
+  - warning react-refresh trong `src/components/reporting/ReportingPanels.jsx` va `src/components/shared/StaffCombobox.jsx` can danh gia refactor scope truoc khi tach constant/helper
   - bo sung case error-boundary + loading-status tren browser runtime de tranh gap lai regression chi bi thay o integration path
 
 ## Verification
