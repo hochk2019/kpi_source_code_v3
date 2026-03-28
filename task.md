@@ -16,28 +16,23 @@
 
 ## Active Slice
 
-- Title: Split reporting and staff combobox helper exports
-- Bead: cng-2k4.22 / slice H (bead CLI khong kha dung trong worktree nay)
+- Title: Add report shell focus and loading fallback regression coverage
+- Bead: cng-2k4.22 / slice I (bead CLI khong kha dung trong worktree nay)
 - Status: completed
 - Last updated: 2026-03-28
 
-- Muc tieu slice nay la don 4 warning `react-refresh/only-export-components` ma khong doi contract caller:
-  - tach `createScheduleDraft` / `toSchedulePayload` khoi `src/components/reporting/ReportingPanels.jsx`
-  - tach `buildStaffComboboxTeams` / `flattenStaffComboboxMembers` khoi `src/components/shared/StaffCombobox.jsx`
-  - cap nhat caller `useReportViewerActions`, `AccountManager`, `useMSTAssignmentBootstrapWorkspace`, va test imports theo module moi
+- Muc tieu slice nay la khoa regression report shell o 2 lop bo sung:
+  - browser/runtime: workflow guide va report workflow phai giu focus handoff on dinh khi dieu huong den report center hoac khu export
+  - jsdom contract: `KPICalculator` van phai announce loading status va fallback focus ve `app-tab-root-reports` khi target chi tiet chua mount
 - Cach sua da ap dung:
-  - them `src/components/reporting/reportingScheduleDraft.js` + `tests/reportingScheduleDraft.test.js`
-  - them `src/components/shared/staffComboboxOptions.js` + `tests/staffComboboxOptions.test.js`
-  - giu component exports o `ReportingPanels.jsx` va `StaffCombobox.jsx` chi con phan render/component contract
+  - mo rong `tests/playwright/lazy-tab-shell.spec.js` de khoa fallback focus khi workflow guide nhay sang `Báo cáo KPI` trong luc `ReportCenterPanel` chunk con dang treo
+  - mo rong `tests/playwright/report-viewer.spec.js` de khoa handoff focus tu action `Tới khu export`
+  - them `tests/kpiCalculator.navigation.test.jsx` de khoa loading status + fallback focus o jsdom contract level
 - Trang thai verify hien tai:
-  - GitNexus impact truoc khi sua:
-    - `createScheduleDraft`: `LOW`, 4 direct callers trong reporting flow
-    - `toSchedulePayload`: `LOW`, 0 caller duoc graph bat ra
-    - `buildStaffComboboxTeams`: `LOW`, direct callers chinh la `AccountManager`, `StaffCombobox`, `useMSTAssignmentBootstrapWorkspace`
-    - `flattenStaffComboboxMembers`: `LOW`, direct caller chinh la `AccountManager`
-  - `pnpm exec eslint src/components/reporting/ReportingPanels.jsx src/components/reporting/reportingScheduleDraft.js src/components/reporting/useReportViewerActions.js src/components/shared/StaffCombobox.jsx src/components/shared/staffComboboxOptions.js src/components/AccountManager.jsx src/components/mst-assignment/hooks/useMSTAssignmentBootstrapWorkspace.js tests/reportingPanels.test.jsx tests/reportingScheduleDraft.test.js tests/staffCombobox.test.jsx tests/staffComboboxOptions.test.js tests/accountManager.staff.test.jsx tests/useMSTAssignmentBootstrapWorkspace.test.jsx` da pass
-  - `pnpm exec vitest run tests/reportingPanels.test.jsx tests/reportingScheduleDraft.test.js tests/staffCombobox.test.jsx tests/staffComboboxOptions.test.js tests/accountManager.staff.test.jsx tests/useMSTAssignmentBootstrapWorkspace.test.jsx --environment jsdom` da pass
-  - `gitnexus_detect_changes(scope: "unstaged")` van over-report `critical` do relocation cham cac file process-level (`AccountManager`, reporting actions/panels), nhung diff tay + targeted verify xac nhan khong co doi contract runtime
+  - `pnpm exec eslint tests/playwright/lazy-tab-shell.spec.js tests/playwright/report-viewer.spec.js` da pass
+  - `pnpm exec playwright test tests/playwright/lazy-tab-shell.spec.js tests/playwright/report-viewer.spec.js --config=playwright.config.mjs --workers=1` da pass
+  - `pnpm exec eslint tests/kpiCalculator.navigation.test.jsx tests/kpiCalculator.errorBoundary.test.jsx` da pass
+  - `pnpm exec vitest run tests/kpiCalculator.navigation.test.jsx tests/kpiCalculator.errorBoundary.test.jsx --environment jsdom` da pass
   - `bd` / `bd.cmd` trong worktree hien tai khong tim thay beads database, nen trang thai bead chua sync duoc bang CLI
 ## Recent Completed Slices
 
@@ -708,12 +703,12 @@
 
 ## Next Suggested Slice
 
-- Title: Add browser/runtime regression for focus handoff and loading fallback states
-- Bead: `cng-2k4.22`
+- Title: Preview report output and next run time in scheduling UI
+- Bead: `cng-7z0.26`
 - Status: open
 - Follow-up backlog:
-  - khoa regression cho focus handoff/fallback contract sau khi dieu huong bang workflow guide hoac command surfaces
-  - bo sung case error-boundary + loading-status tren browser runtime de tranh gap lai regression chi bi thay o integration path
+  - dua preview output va `nextRun` summary ro hon vao `ReportingSchedulePanel` de nguoi van hanh thay tac dong truoc khi luu lich
+  - bo sung regression jsdom + browser cho preview state va next-run copy truoc khi mo rong kenh delivery/tracking
 
 ## Verification
 
@@ -845,6 +840,15 @@
   - targeted verify da pass:
     - `pnpm exec eslint src/components/reporting/ReportingPanels.jsx src/components/reporting/reportingScheduleDraft.js src/components/reporting/useReportViewerActions.js src/components/shared/StaffCombobox.jsx src/components/shared/staffComboboxOptions.js src/components/AccountManager.jsx src/components/mst-assignment/hooks/useMSTAssignmentBootstrapWorkspace.js tests/reportingPanels.test.jsx tests/reportingScheduleDraft.test.js tests/staffCombobox.test.jsx tests/staffComboboxOptions.test.js tests/accountManager.staff.test.jsx tests/useMSTAssignmentBootstrapWorkspace.test.jsx`
     - `pnpm exec vitest run tests/reportingPanels.test.jsx tests/reportingScheduleDraft.test.js tests/staffCombobox.test.jsx tests/staffComboboxOptions.test.js tests/accountManager.staff.test.jsx tests/useMSTAssignmentBootstrapWorkspace.test.jsx --environment jsdom`
+- `cng-2k4.22 / slice I` da xong o muc report shell regression hardening:
+  - them browser regression trong `tests/playwright/lazy-tab-shell.spec.js` de khoa fallback focus khi workflow guide mo `Báo cáo KPI` luc `ReportCenterPanel` chunk con dang treo
+  - them browser regression trong `tests/playwright/report-viewer.spec.js` de khoa handoff focus tu action `Tới khu export`
+  - them `tests/kpiCalculator.navigation.test.jsx` de khoa loading status va fallback focus cua `KPICalculator` o jsdom contract level
+  - targeted verify da pass:
+    - `pnpm exec eslint tests/playwright/lazy-tab-shell.spec.js tests/playwright/report-viewer.spec.js`
+    - `pnpm exec playwright test tests/playwright/lazy-tab-shell.spec.js tests/playwright/report-viewer.spec.js --config=playwright.config.mjs --workers=1`
+    - `pnpm exec eslint tests/kpiCalculator.navigation.test.jsx tests/kpiCalculator.errorBoundary.test.jsx`
+    - `pnpm exec vitest run tests/kpiCalculator.navigation.test.jsx tests/kpiCalculator.errorBoundary.test.jsx --environment jsdom`
 
 ## Previous Completed Slice
 

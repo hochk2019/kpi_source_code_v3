@@ -75,3 +75,16 @@ test('mobile report center cho phép nhảy nhanh từ sơ đồ điều hướn
   await expect(page).toHaveURL(/#report-viewer-schedule$/);
   await expect(page.getByRole('region', { name: 'Lập lịch gửi báo cáo KPI' })).toBeVisible();
 });
+
+test('workflow guide trong report center handoff focus đúng tới khu export', async ({ page }) => {
+  await loginAsAdmin(page);
+  await openReportsTab(page);
+
+  await page.getByRole('button', { name: 'Tới khu export' }).click();
+
+  const exportSurface = page.locator('#app-workflow-reports-export');
+
+  await expect(exportSurface).toBeVisible();
+  await expect(exportSurface).toBeFocused();
+  await expect(page.getByText('3. Export và truy vết')).toBeVisible();
+});
