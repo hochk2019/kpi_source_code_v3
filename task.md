@@ -9,7 +9,6 @@
   - `cng-7z0` — UX improvement backlog execution
 - Highest-priority ready items hien tai:
   - frontend stabilization lane:
-    - `cng-7z0.34` — checklist QA cuoi sprint + operations log cho shell/runtime UI
     - `cng-2k4.22` — text/lint hygiene cho app/runtime code, khong gom dirt co san trong `.claude/skills/*`
   - backend cutover lane:
     - `cng-2k4.2` — declarations write cutover voi compat guard + rollback plan
@@ -17,29 +16,29 @@
 
 ## Active Slice
 
-- Title: Expand browser regression coverage for lazy audit bootstrap and error fallback
-- Bead: cng-2k4.21 (bead CLI khong kha dung trong worktree nay)
+- Title: Create end-of-sprint UI QA checklist and link operations log
+- Bead: cng-7z0.34 (bead CLI khong kha dung trong worktree nay)
 - Status: completed
 - Last updated: 2026-03-28
 
-- Muc tieu slice nay la khoa regression browser runtime quanh shell lazy tabs sau `cng-2k4.20`, tap trung vao:
-  - chunk lazy-load cho `audit` tab khi di tu report workflow
-  - root focus target va loading status trong luc module nang chua resolve
-  - runtime error boundary khi dynamic import that bai tren browser thuc
-- GitNexus impact da duoc chay truoc khi sua:
-  - `ReportCenterPanel`: `LOW`
-  - `ExportAuditReport`: `LOW`
+- Muc tieu slice nay la chot mot artifact QA nho, co the tai su dung cho cac dot shell/runtime UI tiep theo:
+  - tao checklist QA cuoi sprint cho build, lazy tabs, runtime fallback, accessibility smoke
+  - noi checklist vao `docs/operations/ui-verification-log.md`
+  - cap nhat backlog canon de xac nhan slice nay khong con mo
 - Cach sua da ap dung:
-  - them Playwright spec moi cho lazy `AuditLog` chunk: delay-path va failed-import path
-  - sua `ReportCenterPanel` de bo duplicate `app-tab-root-reports`, tranh DOM id collision trong shell va helper Playwright
-  - harden `ExportAuditReport` khi payload summary/total khuyet field so, tranh runtime crash trong `audit` tab
+  - them `docs/operations/ui-sprint-qa-checklist.md`
+  - cap nhat `docs/operations/ui-verification-log.md` thanh log co cau truc va link toi checklist
+  - danh dau hoan tat muc tuong ung trong `docs/ux-improvement-backlog.md`
+  - go `cng-7z0.34` khoi `docs/open-backlog.md`
 - Trang thai verify hien tai:
-  - `npx eslint src/components/workflows/ReportCenterPanel.jsx src/components/ExportAuditReport.jsx tests/playwright/lazy-tab-shell.spec.js` da pass
-  - `pnpm build` da pass
-  - `npx playwright test tests/playwright/lazy-tab-shell.spec.js --reporter=line` da pass
+  - slice tai lieu, verify bang `git diff --check` truoc khi commit
   - `bd` / `bd.cmd` trong worktree hien tai khong tim thay beads database, nen trang thai bead chua sync duoc bang CLI
 ## Recent Completed Slices
 
+- `cng-7z0.34` da xong o muc artifact QA cuoi sprint cho giao dien:
+  - them `docs/operations/ui-sprint-qa-checklist.md` de chot command matrix, manual smoke checks va cach ghi nhat ky verify
+  - cap nhat `docs/operations/ui-verification-log.md` thanh log theo phien va noi truc tiep den checklist nay
+  - cap nhat `docs/ux-improvement-backlog.md` + `docs/open-backlog.md` de dong slice tai lieu nay
 - `cng-2k4.21` da xong voi browser runtime regression coverage cho lazy shell tabs:
   - them `tests/playwright/lazy-tab-shell.spec.js` de khoa flow `Mở audit trail` khi `AuditLog` chunk dang delay va khi chunk fail
   - bo duplicate `app-tab-root-reports` trong `src/components/workflows/ReportCenterPanel.jsx` de giu root target unique va helper E2E on dinh

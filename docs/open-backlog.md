@@ -15,7 +15,6 @@ Current open epics:
 
 Current highest-priority ready items:
 - Frontend stabilization lane:
-- `cng-7z0.34` — Create end-of-sprint UI QA checklist and link operations log
 - `cng-2k4.22` — Restore app/runtime text and lint hygiene after backlog refactors; exclude unrelated pre-existing tool dirt
 - Backend cutover lane:
 - `cng-2k4.2` — Execute declarations write cutover with compat guard and rollback plan
@@ -102,7 +101,6 @@ Source set: `docs/ux-improvement-backlog.md`
 - `cng-7z0.31` — Add frontend performance telemetry and slow-screen dashboard
 - `cng-7z0.32` — Run accessibility audit on `KPIAdjustments`, `DataImporter`, and `MSTAssignment`
 - `cng-7z0.33` — Add automated regression coverage for filter and sync flows
-- `cng-7z0.34` — Create end-of-sprint UI QA checklist and link operations log
 
 ## Reconciliation Workflow
 

@@ -60,7 +60,7 @@ Reconciliation note 2026-03-27:
 - [ ] Bổ sung đo lường hiệu năng (Web Vitals, log render) và dashboard theo dõi để phát hiện màn hình chậm.
 - [ ] Thực hiện audit accessibility (focus trap, aria-label, contrast) trên các component trọng yếu (`KPIAdjustments`, `DataImporter`, `MSTAssignment`).
 - [ ] Viết thêm test tự động cho các luồng filter và đồng bộ, đảm bảo không regress khi refactor.
-- [ ] Xây dựng checklist QA cuối sprint, liên kết vào `docs/operations/ui-verification-log.md`.
+- [x] Xây dựng checklist QA cuối sprint, liên kết vào `docs/operations/ui-verification-log.md`. (done 2026-03-28, thêm `docs/operations/ui-sprint-qa-checklist.md`)
 
 ## Cách sử dụng
 
