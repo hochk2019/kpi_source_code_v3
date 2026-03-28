@@ -351,6 +351,48 @@ describe('KPIAdjustments UI', () => {
 
   });
 
+  it('cho phép mở nhanh cấu hình của hạng mục đang chọn ngay từ form', async () => {
+
+    render(
+
+      <KPIAdjustments
+
+        currentUser={{ username: 'admin', permissions: { adjustApprove: true, adjustSubmit: true } }}
+
+      />
+
+    );
+
+
+
+    await screen.findByText('Thêm điểm KPI +/-');
+
+
+
+    const categorySelect = screen.getByLabelText('Hạng mục');
+
+    await userEvent.selectOptions(categorySelect, 'support_misc');
+
+
+
+    const settingsSummary = screen.getByTestId('kpi-adjust-active-settings');
+
+    expect(within(settingsSummary).getByText('Cấu hình đang áp dụng')).toBeInTheDocument();
+
+    expect(within(settingsSummary).getByText('Chế độ mặc định')).toBeInTheDocument();
+
+
+
+    await userEvent.click(within(settingsSummary).getByRole('button', { name: 'Chỉnh cấu hình hạng mục này' }));
+
+
+
+    const focusBanner = await screen.findByTestId('kpi-adjust-settings-focus-banner');
+
+    expect(focusBanner).toHaveTextContent('Đang chỉnh nhanh cho: Hỗ trợ khác');
+
+  });
+
   it('không cho phép nhân viên chỉnh sửa điểm chuẩn khi thiếu quyền override', async () => {
 
     render(

@@ -12,6 +12,7 @@ import { KPI_ADJUSTMENT_CATEGORY_CONFIG } from "@/lib/store.js";
 
 export default function KpiAdjustmentSettingsDialog({
   open,
+  focusCategory,
   settingsDraft,
   settingsError,
   settingsSaving,
@@ -23,17 +24,35 @@ export default function KpiAdjustmentSettingsDialog({
   buildSettingsFieldId,
   buildLicenseFieldId,
 }) {
+  const orderedCategories = Object.entries(KPI_ADJUSTMENT_CATEGORY_CONFIG).sort(([leftKey], [rightKey]) => {
+    if (focusCategory && leftKey === focusCategory) return -1;
+    if (focusCategory && rightKey === focusCategory) return 1;
+    return 0;
+  });
+  const focusLabel = focusCategory ? KPI_ADJUSTMENT_CATEGORY_CONFIG[focusCategory]?.label || focusCategory : "";
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl">
         <DialogHeader>
           <DialogTitle>Cấu hình điểm mặc định</DialogTitle>
-          <DialogDescription>Chỉ áp dụng cho Admin/Quản lý. Để trống sẽ dùng giá trị hệ thống.</DialogDescription>
+          <DialogDescription>
+            Chỉ áp dụng cho Admin/Quản lý. Để trống sẽ dùng giá trị hệ thống.
+          </DialogDescription>
         </DialogHeader>
 
         <form className="space-y-6" onSubmit={onSubmit}>
+          {focusLabel ? (
+            <div
+              className="rounded-lg border border-primary/20 bg-primary/5 px-3 py-2 text-sm text-foreground"
+              data-testid="kpi-adjust-settings-focus-banner"
+            >
+              Đang chỉnh nhanh cho: <span className="font-semibold">{focusLabel}</span>
+            </div>
+          ) : null}
+
           <div className="max-h-[55vh] space-y-4 overflow-y-auto pr-1">
-            {Object.entries(KPI_ADJUSTMENT_CATEGORY_CONFIG).map(([category, config]) => {
+            {orderedCategories.map(([category, config]) => {
               const draft = settingsDraft[category] || {};
               const groupLabel = config.groupLabel || config.groupKey;
               const defaultUnitId = buildSettingsFieldId(category, "default-unit");
@@ -42,7 +61,11 @@ export default function KpiAdjustmentSettingsDialog({
               const licenseKeys = draft.licensePoints ? Object.keys(draft.licensePoints) : [];
 
               return (
-                <div key={category} className="rounded-xl border border-border bg-muted/30 p-4 text-sm shadow-sm">
+                <div
+                  key={category}
+                  className="rounded-xl border border-border bg-muted/30 p-4 text-sm shadow-sm"
+                  data-testid={focusCategory === category ? "kpi-adjust-settings-focused-card" : undefined}
+                >
                   <div className="font-semibold text-foreground">{config.label}</div>
                   {groupLabel ? <div className="text-xs text-muted-foreground">{groupLabel}</div> : null}
 

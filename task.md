@@ -16,26 +16,26 @@
 
 ## Active Slice
 
-- Title: KPI Adjustments quick links to related declaration or MST
-- Bead: cng-7z0.4 (bead CLI khong kha dung trong worktree nay)
+- Title: KPI Adjustments direct default-setting management in active form
+- Bead: cng-7z0.5 (bead CLI khong kha dung trong worktree nay)
 - Status: completed
 - Last updated: 2026-03-28
 
-- Muc tieu slice nay la rut ngan buoc tra cuu cua approver tu workspace adjustments hien tai:
-  - them quick link tu dong sang tab `mst` va `import` thay vi bat nguoi dung chuyen tay qua app shell
-  - tan dung command bus `navigate:tab` hien co de scope thay doi van nam trong frontend shell, khong mo them contract backend
-  - giu lookup value san sang de paste nhanh o workspace dich bang cach copy MST/so to khai vao clipboard neu trinh duyet ho tro
+- Muc tieu slice nay la bien cau hinh diem mac dinh thanh thao tac "tai cho" hon cho approver:
+  - hien summary "cau hinh dang ap dung" ngay trong form KPI Adjustments de khong phai mo dialog tong moi biet he thong dang dung default nao
+  - them CTA mo thang category dang chon vao `KpiAdjustmentSettingsDialog`, tranh buoc tim tay giua danh sach tat ca category
+  - giu nguyen contract settings hien co (`KPI_ADJUSTMENT_SETTINGS_KEY` / `saveKpiAdjustmentSettings`) va chi tang discoverability o frontend
 - Cach sua da ap dung:
-  - mo rong `KpiAdjustmentListPanel.jsx` voi link `Mở MST` ngay tai cot MST va quick button toi to khai dau tien trong hang adjustment
-  - mo rong `KpiAdjustmentDetailDialog.jsx` voi button `Mở MST` va button theo tung tham chieu de approver co the jump tu dialog chi tiet
-  - su dung `emitCommand("navigate:tab", { tab, focus })` de nhay den `mst/review` hoac `import/review`, kem clipboard copy best-effort
-  - cap nhat regression `tests/kpiAdjustmentListPanel.test.jsx` va `tests/kpiAdjustmentDialogs.test.jsx` de khoa navigate command moi
+  - mo rong `useKpiAdjustmentForm.js` de giu `settingsFocusCategory`, cho phep `openSettingsDialog(category)` va reset focus sau close/save
+  - mo rong `KpiAdjustmentFormPanel.jsx` voi summary card `Cấu hình đang áp dụng` va button `Chỉnh cấu hình hạng mục này`
+  - mo rong `KpiAdjustmentSettingsDialog.jsx` de dua category duoc focus len dau va hien focus banner khi mo theo context category
+  - noi wiring moi trong `KPIAdjustments.jsx` va bo sung regression `tests/kpiAdjustmentDialogs.test.jsx` + `tests/kpiAdjustments.test.jsx`
 - Trang thai verify hien tai:
-  - `pnpm exec vitest run tests/kpiAdjustmentListPanel.test.jsx tests/kpiAdjustmentDialogs.test.jsx --environment jsdom` da pass
-  - `pnpm exec eslint src/components/kpi-adjustments/panels/KpiAdjustmentListPanel.jsx src/components/kpi-adjustments/panels/KpiAdjustmentDetailDialog.jsx tests/kpiAdjustmentListPanel.test.jsx tests/kpiAdjustmentDialogs.test.jsx` da pass
+  - `pnpm exec eslint src/components/KPIAdjustments.jsx src/components/kpi-adjustments/hooks/useKpiAdjustmentForm.js src/components/kpi-adjustments/panels/KpiAdjustmentFormPanel.jsx src/components/kpi-adjustments/panels/KpiAdjustmentSettingsDialog.jsx tests/kpiAdjustmentDialogs.test.jsx tests/kpiAdjustments.test.jsx` da pass
+  - `pnpm exec vitest run tests/kpiAdjustmentDialogs.test.jsx tests/kpiAdjustments.test.jsx --environment jsdom` da pass
   - `bd` / `bd.cmd` trong worktree hien tai khong tim thay beads database, nen trang thai bead chua sync duoc bang CLI
 - Next suggested slice:
-  - `cng-7z0.5` — cho phep quan ly cau hinh diem mac dinh truc tiep trong UI va dong bo vao `KPI_ADJUSTMENT_CATEGORY_CONFIG`
+  - `cng-7z0.6` — hien thi tien trinh dong bo theo tung buoc khi goi `refreshDeclRowsFromServer`
 ## Recent Completed Slices
 
 - `cng-7z0.28` da xong o muc delivery channel + delivery status tracking:
@@ -66,6 +66,10 @@
   - tan dung `emitCommand("navigate:tab")` de nhay den `mst/review` hoac `import/review` thay vi mo them prop drilling moi
   - copy lookup value (MST/so to khai) vao clipboard theo best-effort de nguoi dung paste ngay o workspace dich khi can
   - khoa regression command bus trong `tests/kpiAdjustmentListPanel.test.jsx` va `tests/kpiAdjustmentDialogs.test.jsx`
+- `cng-7z0.5` da xong o muc quan ly cau hinh diem mac dinh truc tiep trong UI:
+  - them summary `Cấu hình đang áp dụng` vao `KpiAdjustmentFormPanel.jsx` de approver thay ngay default unit/mode/license points cua hạng mục dang chon
+  - them quick action `Chỉnh cấu hình hạng mục này` de mo `KpiAdjustmentSettingsDialog` theo dung category dang thao tac, kem focus banner va reorder card
+  - cap nhat `useKpiAdjustmentForm.js` + `KPIAdjustments.jsx` de giu context `settingsFocusCategory` va khoa regression trong `tests/kpiAdjustmentDialogs.test.jsx` / `tests/kpiAdjustments.test.jsx`
 - `cng-7z0.27` da xong o muc executive dashboard snapshot:
   - them `ReportingExecutiveSummaryPanel.jsx` + `reportingExecutiveSummaryModel.js` de tong hop KPI/decl, top staff, team concentration, pending adjustments, va deviation signals
   - cap nhat `ReportingDashboardOverview.jsx` de surfacing executive summary truoc summary cards/trend/top staff widgets

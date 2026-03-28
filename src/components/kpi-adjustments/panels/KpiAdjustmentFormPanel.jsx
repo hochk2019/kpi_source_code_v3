@@ -17,6 +17,7 @@ export default function KpiAdjustmentFormPanel({
   onRefreshDeclarations,
   onOpenGuidance,
   onOpenSettings,
+  onOpenCategorySettings,
   onSubmit,
   formFieldIds,
   form,
@@ -33,6 +34,7 @@ export default function KpiAdjustmentFormPanel({
   onCategoryChange,
   categoryOptions,
   formCategoryConfig,
+  activeCategorySettings,
   isEditing,
   statusSet,
   statusLabels,
@@ -58,6 +60,26 @@ export default function KpiAdjustmentFormPanel({
   historyEntries,
   formatDateTime,
 }) {
+  const categoryLabel =
+    formCategoryConfig.label ||
+    categoryOptions.find((option) => option.value === form.category)?.label ||
+    form.category;
+  const defaultModeLabel =
+    modeOptions.find((option) => option.value === activeCategorySettings?.defaultMode)?.label || "Theo hệ thống";
+  const activeModeUnits = activeCategorySettings?.modeUnits
+    ? Object.entries(activeCategorySettings.modeUnits).filter(([, value]) => value !== "" && value !== null)
+    : [];
+  const activeLicensePoints = activeCategorySettings?.licensePoints
+    ? Object.entries(activeCategorySettings.licensePoints).filter(([, value]) => value !== "" && value !== null)
+    : [];
+  const formatSettingValue = (value) => {
+    if (value === "" || value === null || value === undefined) {
+      return "Theo hệ thống";
+    }
+    const parsed = Number.parseFloat(value);
+    return Number.isFinite(parsed) ? formatDecimal(parsed) : String(value);
+  };
+
   return (
     <Card>
       <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -317,6 +339,89 @@ export default function KpiAdjustmentFormPanel({
                 </select>
               </div>
             ) : null}
+          </div>
+
+          <div
+            className="rounded-xl border border-border bg-muted/30 p-4 text-sm"
+            data-testid="kpi-adjust-active-settings"
+          >
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  Cấu hình đang áp dụng
+                </div>
+                <div className="mt-1 font-semibold text-foreground">{categoryLabel}</div>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Các giá trị dưới đây được dùng làm mặc định khi chọn hạng mục hiện tại.
+                </p>
+              </div>
+
+              {canApprove ? (
+                <Button type="button" variant="secondary" size="sm" onClick={onOpenCategorySettings}>
+                  Chỉnh cấu hình hạng mục này
+                </Button>
+              ) : null}
+            </div>
+
+            <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+              <div>
+                <div className="text-xs font-semibold text-muted-foreground">Điểm mặc định</div>
+                <div className="mt-1 font-medium text-foreground">
+                  {formatSettingValue(activeCategorySettings?.defaultUnit)}
+                </div>
+              </div>
+
+              {formCategoryConfig.type === "hybrid" ? (
+                <div>
+                  <div className="text-xs font-semibold text-muted-foreground">Chế độ mặc định</div>
+                  <div className="mt-1 font-medium text-foreground">{defaultModeLabel}</div>
+                </div>
+              ) : null}
+
+              {formCategoryConfig.extraPointConfig ? (
+                <div>
+                  <div className="text-xs font-semibold text-muted-foreground">
+                    {formCategoryConfig.extraPointConfig.unitLabel || "Điểm bổ sung mỗi đơn vị"}
+                  </div>
+                  <div className="mt-1 font-medium text-foreground">
+                    {formatSettingValue(activeCategorySettings?.extraUnitPoints)}
+                  </div>
+                </div>
+              ) : null}
+
+              {formCategoryConfig.requiresLicenseCode ? (
+                <div className="md:col-span-2 xl:col-span-2">
+                  <div className="text-xs font-semibold text-muted-foreground">Mã giấy phép</div>
+                  <div className="mt-1 text-foreground">
+                    {activeLicensePoints.length ? (
+                      activeLicensePoints.map(([code, value]) => (
+                        <span key={code} className="mr-3 inline-flex">
+                          {code}: {formatSettingValue(value)}
+                        </span>
+                      ))
+                    ) : (
+                      <span className="text-muted-foreground">Theo hệ thống</span>
+                    )}
+                  </div>
+                </div>
+              ) : null}
+
+              {formCategoryConfig.type === "hybrid" && activeModeUnits.length ? (
+                <div className="md:col-span-2 xl:col-span-2">
+                  <div className="text-xs font-semibold text-muted-foreground">Điểm theo chế độ</div>
+                  <div className="mt-1 text-foreground">
+                    {activeModeUnits.map(([modeKey, value]) => {
+                      const label = modeOptions.find((option) => option.value === modeKey)?.label || modeKey;
+                      return (
+                        <span key={modeKey} className="mr-3 inline-flex">
+                          {label}: {formatSettingValue(value)}
+                        </span>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : null}
+            </div>
           </div>
 
           <div className="grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">

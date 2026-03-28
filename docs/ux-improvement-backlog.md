@@ -13,7 +13,7 @@ Reconciliation note 2026-03-27:
 - [x] Tách danh sách điều chỉnh sang virtual list / pagination để cải thiện hiệu năng với dataset lớn. (done 2026-03-28, them pagination + persisted page size cho KPI Adjustments list va khoa regression panel/remount flow)
 - [x] Bổ sung thao tác duyệt hàng loạt (bulk approve/reject) dựa trên quyền `adjustApprove`. (done 2026-03-28, them checkbox + bulk toolbar cho approver, loop `updateKpiAdjustmentStatus` theo selection hien tai, va khoa regression hook/panel/UI)
 - [x] Thêm liên kết nhanh tới tờ khai hoặc MST liên quan để người duyệt tra cứu ngay tại chỗ. (done 2026-03-28, them quick link tu list/detail dialog sang workspace import/MST qua app-shell command bus va copy lookup value vao clipboard khi ho tro)
-- [ ] Cho phép quản lý cấu hình điểm mặc định trực tiếp trong UI và phản ánh vào `KPI_ADJUSTMENT_CATEGORY_CONFIG`.
+- [x] Cho phép quản lý cấu hình điểm mặc định trực tiếp trong UI và phản ánh vào `KPI_ADJUSTMENT_CATEGORY_CONFIG`. (done 2026-03-28, them summary "cau hinh dang ap dung" ngay trong form KPI Adjustments + quick action mo thang category hien tai trong settings dialog)
 
 ## 2. ECUS declaration sync
 

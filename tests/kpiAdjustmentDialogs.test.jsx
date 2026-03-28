@@ -154,6 +154,7 @@ describe("kpi adjustment dialogs", () => {
     render(
       <KpiAdjustmentSettingsDialog
         open
+        focusCategory="license_support"
         settingsDraft={{
           support_misc: {
             defaultUnit: "0.2",
@@ -177,6 +178,9 @@ describe("kpi adjustment dialogs", () => {
       />
     );
 
+    expect(screen.getByTestId("kpi-adjust-settings-focus-banner")).toHaveTextContent(
+      "Đang chỉnh nhanh cho: Hỗ trợ xin giấy phép"
+    );
     expect(screen.getByText("Loi demo")).toBeInTheDocument();
 
     await userEvent.clear(screen.getByLabelText("Điểm mặc định", { selector: "#support_misc-default-unit" }));

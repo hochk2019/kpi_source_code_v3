@@ -5,7 +5,7 @@ Last reconciled: 2026-03-28
 This file is the canonical source of truth for unfinished work in this repo.
 
 Reconciliation note:
-- Reconciled after completing `cng-7z0.29`, `cng-7z0.1`, `cng-7z0.2`, `cng-7z0.3`, and `cng-7z0.4`.
+- Reconciled after completing `cng-7z0.29`, `cng-7z0.1`, `cng-7z0.2`, `cng-7z0.3`, `cng-7z0.4`, and `cng-7z0.5`.
 
 Rule:
 - Every unfinished item from review notes, rollout plans, decomposition plans, or UX backlogs must be in one of two states:
@@ -23,7 +23,7 @@ Current highest-priority ready items:
 - `cng-2k4.2` — Execute declarations write cutover with compat guard and rollback plan
 - `cng-2k4.3` — Switch production entrypoint from legacy server to server-v4
 - Ready next in UX lane:
-- `cng-7z0.5` — Cho phép quản lý cấu hình điểm mặc định trực tiếp trong UI và phản ánh vào `KPI_ADJUSTMENT_CATEGORY_CONFIG`
+- `cng-7z0.6` — Hiển thị tiến trình đồng bộ theo từng bước khi gọi `refreshDeclRowsFromServer`
 
 ## Technical Stabilization
 
@@ -57,7 +57,6 @@ Source set: `docs/ux-improvement-backlog.md`
 
 - `cng-7z0.3` — Add bulk approve and reject actions for KPI adjustments
 - `cng-7z0.4` — Add quick links from KPI adjustments to related declaration or MST
-- `cng-7z0.5` — Manage default KPI category settings directly in UI
 
 ### ECUS Declaration Sync
 
@@ -114,13 +113,14 @@ Canonical open backlog duoc tiep tuc theo doi tai file nay. Da reconcile lai nga
 
 ## Ready next
 
-- [ ] `cng-7z0.4` — Them quick links toi to khai hoac MST lien quan ngay trong KPI Adjustments.
+- [ ] `cng-7z0.6` — Hien thi tien trinh dong bo theo tung buoc khi goi `refreshDeclRowsFromServer`.
 - [ ] `cng-2k4.22` — Text/lint hygiene cho app/runtime code, khong gom dirt co san trong `.claude/skills/*`.
 - [ ] `cng-2k4.2` — Declarations write cutover voi compat guard + rollback plan.
 - [ ] `cng-2k4.3` — Switch production entrypoint sang `server-v4`.
 
 ## Notes
 
+- `cng-7z0.5` da dong trong session 2026-03-28 sau khi them summary cau hinh dang ap dung vao KPI Adjustments form va quick action mo thang category hien tai trong settings dialog.
 - `cng-7z0.29` da dong trong session 2026-03-28 sau khi them local report templates cho Report Center.
 - `cng-7z0.1` da dong trong session 2026-03-28 sau khi them local persistence cho filter KPI Adjustments theo user va khoa regression hook/UI.
 - `cng-7z0.2` da dong trong session 2026-03-28 sau khi paginate KPI Adjustments list, persist `pageSize`, va khoa regression panel/remount flow.

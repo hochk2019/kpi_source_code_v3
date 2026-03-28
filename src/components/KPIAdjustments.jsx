@@ -40,6 +40,7 @@ import {
 } from "@/components/kpi-adjustments/model/fieldIds.js";
 import { CATEGORY_OPTIONS } from "@/components/kpi-adjustments/model/categoryOptions.js";
 import { parseReferences } from "@/components/kpi-adjustments/model/referenceParsing.js";
+import { buildSettingsDraft } from "@/components/kpi-adjustments/model/settingsDraft.js";
 import { buildStaffOptions } from "@/components/kpi-adjustments/model/staffOptions.js";
 import KpiAdjustmentDetailDialog from "@/components/kpi-adjustments/panels/KpiAdjustmentDetailDialog.jsx";
 import KpiAdjustmentFormPanel from "@/components/kpi-adjustments/panels/KpiAdjustmentFormPanel.jsx";
@@ -260,6 +261,7 @@ export default function KPIAdjustments({ currentUser }) {
     formError,
     settingsOpen,
     setSettingsOpen,
+    settingsFocusCategory,
     settingsDraft,
     settingsError,
     settingsSaving,
@@ -319,6 +321,10 @@ export default function KPIAdjustments({ currentUser }) {
     canOverridePoints,
     parseReferences,
   });
+  const activeCategorySettings = useMemo(
+    () => buildSettingsDraft(settings)?.[form.category] || {},
+    [form.category, settings]
+  );
 
   const [autoApproveSaving, setAutoApproveSaving] = useState(false);
   const [autoApproveError, setAutoApproveError] = useState("");
@@ -811,6 +817,7 @@ export default function KPIAdjustments({ currentUser }) {
 
       <KpiAdjustmentSettingsDialog
         open={settingsOpen}
+        focusCategory={settingsFocusCategory}
         settingsDraft={settingsDraft}
         settingsError={settingsError}
         settingsSaving={settingsSaving}
@@ -832,7 +839,8 @@ export default function KPIAdjustments({ currentUser }) {
         onAutoApproveToggle={handleToggleAutoApprove}
         onRefreshDeclarations={handleRefreshDeclarations}
         onOpenGuidance={() => setGuidanceOpen(true)}
-        onOpenSettings={openSettingsDialog}
+        onOpenSettings={() => openSettingsDialog()}
+        onOpenCategorySettings={() => openSettingsDialog(form.category)}
         onSubmit={handleSubmit}
         formFieldIds={FORM_FIELD_IDS}
         form={form}
@@ -849,6 +857,7 @@ export default function KPIAdjustments({ currentUser }) {
         onCategoryChange={handleCategoryChange}
         categoryOptions={CATEGORY_OPTIONS}
         formCategoryConfig={formCategoryConfig}
+        activeCategorySettings={activeCategorySettings}
         isEditing={isEditing}
         statusSet={KPI_ADJUSTMENT_STATUS_SET}
         statusLabels={STATUS_LABELS}

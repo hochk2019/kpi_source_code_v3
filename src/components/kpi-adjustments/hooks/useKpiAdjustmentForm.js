@@ -64,6 +64,7 @@ export function useKpiAdjustmentForm({
   const [isEditing, setIsEditing] = useState(false);
   const [formError, setFormError] = useState("");
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsFocusCategory, setSettingsFocusCategory] = useState("");
   const [settingsDraft, setSettingsDraft] = useState({});
   const [settingsError, setSettingsError] = useState("");
   const [settingsSaving, setSettingsSaving] = useState(false);
@@ -303,7 +304,11 @@ export function useKpiAdjustmentForm({
     [actor, canApprove, canSubmit, currentUser?.permissions, form, parseReferences, resetForm, setAdjustments, settings]
   );
 
-  const openSettingsDialog = useCallback(() => {
+  const openSettingsDialog = useCallback((category) => {
+    const normalizedCategory = normalizeStr(category || "").toLowerCase();
+    setSettingsFocusCategory(
+      normalizedCategory && KPI_ADJUSTMENT_CATEGORY_CONFIG[normalizedCategory] ? normalizedCategory : ""
+    );
     setSettingsDraft(buildSettingsDraft(settings));
     setSettingsError("");
     setSettingsOpen(true);
@@ -312,6 +317,7 @@ export function useKpiAdjustmentForm({
   const closeSettingsDialog = useCallback(() => {
     if (!settingsSaving) {
       setSettingsOpen(false);
+      setSettingsFocusCategory("");
     }
   }, [settingsSaving]);
 
@@ -434,6 +440,7 @@ export function useKpiAdjustmentForm({
         saveKpiAdjustmentSettings(payload, { actor, permissions: currentUser?.permissions || {} });
         setSettings(getKpiAdjustmentSettings());
         setSettingsOpen(false);
+        setSettingsFocusCategory("");
       } catch (err) {
         console.error(err);
         setSettingsError(err?.message || "Không thể lưu cấu hình mặc định.");
@@ -453,6 +460,7 @@ export function useKpiAdjustmentForm({
     setFormError,
     settingsOpen,
     setSettingsOpen,
+    settingsFocusCategory,
     settingsDraft,
     settingsError,
     settingsSaving,
