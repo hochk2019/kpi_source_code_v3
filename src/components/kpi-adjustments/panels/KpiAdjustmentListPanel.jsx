@@ -4,8 +4,23 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Checkbox } from "@/components/ui/checkbox.jsx";
 import { Input } from "@/components/ui/input.jsx";
 import { Switch } from "@/components/ui/switch.jsx";
+import { emitCommand } from "@/lib/commandBus.js";
 import { roundAdjustmentPoint } from "@/lib/store.js";
 import { cn } from "@/lib/utils.js";
+
+function copyLookupValue(value) {
+  const normalizedValue = String(value || "").trim();
+  if (!normalizedValue || typeof navigator === "undefined" || !navigator.clipboard?.writeText) {
+    return;
+  }
+
+  navigator.clipboard.writeText(normalizedValue).catch(() => {});
+}
+
+function openWorkflowLookup(tab, focus, value) {
+  copyLookupValue(value);
+  emitCommand("navigate:tab", { tab, focus });
+}
 
 export default function KpiAdjustmentListPanel({
   formFieldIds,
@@ -257,6 +272,9 @@ export default function KpiAdjustmentListPanel({
                   const rowConfig = categoryConfig[item.category] || {};
                   const label = rowConfig.label || item.category;
                   const statusLabel = statusLabels[item.status] || item.status;
+                  const primaryReference = Array.isArray(item.references)
+                    ? item.references.find((reference) => String(reference || "").trim())
+                    : "";
                   const statusClass = cn(
                     "rounded-md px-2 py-1 text-xs font-medium",
                     item.status === "approved"
@@ -307,7 +325,24 @@ export default function KpiAdjustmentListPanel({
                         </div>
                       </td>
                       <td className="px-4 py-2 align-top">{item.companyName || "—"}</td>
-                      <td className="px-4 py-2 align-top">{item.taxCode || "—"}</td>
+                      <td className="px-4 py-2 align-top">
+                        {item.taxCode ? (
+                          <div className="flex flex-col items-start gap-2">
+                            <span>{item.taxCode}</span>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              type="button"
+                              className="h-auto px-0 py-0 text-xs font-medium text-primary hover:bg-transparent"
+                              onClick={() => openWorkflowLookup("mst", "review", item.taxCode)}
+                            >
+                              Mở MST
+                            </Button>
+                          </div>
+                        ) : (
+                          "—"
+                        )}
+                      </td>
                       <td className="px-4 py-2 align-top">{item.staffName || "Chưa gán"}</td>
                       <td className="px-4 py-2 align-top">{item.teamName || "—"}</td>
                       <td
@@ -332,6 +367,17 @@ export default function KpiAdjustmentListPanel({
                           <Button variant="ghost" size="sm" type="button" onClick={() => onViewDetail(item)}>
                             Chi tiết
                           </Button>
+                          {primaryReference ? (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              type="button"
+                              aria-label={`Mở tờ khai ${primaryReference}`}
+                              onClick={() => openWorkflowLookup("import", "review", primaryReference)}
+                            >
+                              {primaryReference}
+                            </Button>
+                          ) : null}
                           {canApprove ? (
                             <>
                               {item.status !== "approved" ? (

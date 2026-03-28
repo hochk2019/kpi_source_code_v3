@@ -1,4 +1,3 @@
-import { Badge } from "@/components/ui/badge.jsx";
 import { Button } from "@/components/ui/button.jsx";
 import {
   Dialog,
@@ -9,7 +8,22 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog.jsx";
 import { Textarea } from "@/components/ui/textarea.jsx";
+import { emitCommand } from "@/lib/commandBus.js";
 import { KPI_ADJUSTMENT_CATEGORY_CONFIG } from "@/lib/store.js";
+
+function copyLookupValue(value) {
+  const normalizedValue = String(value || "").trim();
+  if (!normalizedValue || typeof navigator === "undefined" || !navigator.clipboard?.writeText) {
+    return;
+  }
+
+  navigator.clipboard.writeText(normalizedValue).catch(() => {});
+}
+
+function openWorkflowLookup(tab, focus, value) {
+  copyLookupValue(value);
+  emitCommand("navigate:tab", { tab, focus });
+}
 
 export default function KpiAdjustmentDetailDialog({
   open,
@@ -67,7 +81,22 @@ export default function KpiAdjustmentDetailDialog({
               </div>
               <div>
                 <div className="text-xs font-medium uppercase text-muted-foreground">Mã số thuế</div>
-                <div className="mt-1 font-medium text-foreground">{detailData.taxCode || "—"}</div>
+                {detailData.taxCode ? (
+                  <div className="mt-1 flex flex-col items-start gap-2">
+                    <span className="font-medium text-foreground">{detailData.taxCode}</span>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-auto px-0 py-0 text-xs font-medium text-primary hover:bg-transparent"
+                      onClick={() => openWorkflowLookup("mst", "review", detailData.taxCode)}
+                    >
+                      Mở MST
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="mt-1 font-medium text-foreground">—</div>
+                )}
               </div>
             </div>
 
@@ -122,9 +151,16 @@ export default function KpiAdjustmentDetailDialog({
               {Array.isArray(detailData.references) && detailData.references.length ? (
                 <div className="mt-2 flex flex-wrap gap-2">
                   {detailData.references.map((ref) => (
-                    <Badge key={ref} variant="outline">
+                    <Button
+                      key={ref}
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      aria-label={`Mở tờ khai ${ref}`}
+                      onClick={() => openWorkflowLookup("import", "review", ref)}
+                    >
                       {ref}
-                    </Badge>
+                    </Button>
                   ))}
                 </div>
               ) : (

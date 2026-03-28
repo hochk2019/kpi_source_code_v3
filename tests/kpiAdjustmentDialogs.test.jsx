@@ -1,10 +1,22 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const { emitCommand } = vi.hoisted(() => ({
+  emitCommand: vi.fn(),
+}));
+
+vi.mock("@/lib/commandBus.js", () => ({
+  emitCommand,
+}));
 
 import KpiAdjustmentDetailDialog from "@/components/kpi-adjustments/panels/KpiAdjustmentDetailDialog.jsx";
 import KpiAdjustmentGuidanceDialog from "@/components/kpi-adjustments/panels/KpiAdjustmentGuidanceDialog.jsx";
 import KpiAdjustmentSettingsDialog from "@/components/kpi-adjustments/panels/KpiAdjustmentSettingsDialog.jsx";
+
+beforeEach(() => {
+  emitCommand.mockReset();
+});
 
 describe("kpi adjustment dialogs", () => {
   it("renders detail dialog content and reject actions", async () => {
@@ -59,6 +71,9 @@ describe("kpi adjustment dialogs", () => {
     expect(queries.getByText("ZB03")).toBeInTheDocument();
     expect(queries.getByDisplayValue("Thiếu chứng từ")).toBeInTheDocument();
 
+    await userEvent.click(queries.getByRole("button", { name: "Mở MST" }));
+    await userEvent.click(queries.getByRole("button", { name: "Mở tờ khai TK001" }));
+
     await userEvent.type(queries.getByLabelText("Lý do từ chối (tuỳ chọn)"), " cập nhật");
     expect(onDecisionNoteChange).toHaveBeenCalled();
 
@@ -70,6 +85,8 @@ describe("kpi adjustment dialogs", () => {
 
     fireEvent.click(queries.getByRole("button", { name: "Đóng" }));
     expect(onClose).toHaveBeenCalledTimes(1);
+    expect(emitCommand).toHaveBeenNthCalledWith(1, "navigate:tab", { tab: "mst", focus: "review" });
+    expect(emitCommand).toHaveBeenNthCalledWith(2, "navigate:tab", { tab: "import", focus: "review" });
   });
 
   it("renders guidance dialog actions and accordion content", async () => {

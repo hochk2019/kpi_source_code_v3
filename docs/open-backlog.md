@@ -4,6 +4,9 @@ Last reconciled: 2026-03-28
 
 This file is the canonical source of truth for unfinished work in this repo.
 
+Reconciliation note:
+- Reconciled after completing `cng-7z0.29`, `cng-7z0.1`, `cng-7z0.2`, `cng-7z0.3`, and `cng-7z0.4`.
+
 Rule:
 - Every unfinished item from review notes, rollout plans, decomposition plans, or UX backlogs must be in one of two states:
 - mapped to an open bead in this file
@@ -19,6 +22,8 @@ Current highest-priority ready items:
 - Backend cutover lane:
 - `cng-2k4.2` — Execute declarations write cutover with compat guard and rollback plan
 - `cng-2k4.3` — Switch production entrypoint from legacy server to server-v4
+- Ready next in UX lane:
+- `cng-7z0.5` — Cho phép quản lý cấu hình điểm mặc định trực tiếp trong UI và phản ánh vào `KPI_ADJUSTMENT_CATEGORY_CONFIG`
 
 ## Technical Stabilization
 

@@ -2,9 +2,18 @@ import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+const { emitCommand } = vi.hoisted(() => ({
+  emitCommand: vi.fn(),
+}));
+
+vi.mock("@/lib/commandBus.js", () => ({
+  emitCommand,
+}));
+
 import KpiAdjustmentListPanel from "@/components/kpi-adjustments/panels/KpiAdjustmentListPanel.jsx";
 
 afterEach(() => {
+  emitCommand.mockReset();
   cleanup();
 });
 
@@ -108,6 +117,7 @@ describe("kpi adjustment list panel", () => {
       updatedAt: "2026-03-26T10:00:00.000Z",
       mode: "fixed",
       licenseCode: "ZB03",
+      references: ["TK001"],
       extraQuantity: 2,
       extraUnitPoints: 0.5,
     };
@@ -183,6 +193,8 @@ describe("kpi adjustment list panel", () => {
 
     await userEvent.click(queries.getByRole("button", { name: "Sửa" }));
     await userEvent.click(queries.getByRole("button", { name: "Chi tiết" }));
+    await userEvent.click(queries.getByRole("button", { name: "Mở MST" }));
+    await userEvent.click(queries.getByRole("button", { name: "Mở tờ khai TK001" }));
     await userEvent.click(queries.getByRole("button", { name: "Duyệt" }));
     await userEvent.click(queries.getByRole("button", { name: "Từ chối" }));
     await userEvent.click(queries.getByRole("button", { name: "Xóa" }));
@@ -192,6 +204,8 @@ describe("kpi adjustment list panel", () => {
     expect(onApprove).toHaveBeenCalledWith(item);
     expect(onReject).toHaveBeenCalledWith(item);
     expect(onDelete).toHaveBeenCalledWith(item);
+    expect(emitCommand).toHaveBeenNthCalledWith(1, "navigate:tab", { tab: "mst", focus: "review" });
+    expect(emitCommand).toHaveBeenNthCalledWith(2, "navigate:tab", { tab: "import", focus: "review" });
   });
 
   it("renders pagination controls and forwards paging events", async () => {

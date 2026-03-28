@@ -16,26 +16,26 @@
 
 ## Active Slice
 
-- Title: KPI Adjustments bulk approve/reject for approvers
-- Bead: cng-7z0.3 (bead CLI khong kha dung trong worktree nay)
+- Title: KPI Adjustments quick links to related declaration or MST
+- Bead: cng-7z0.4 (bead CLI khong kha dung trong worktree nay)
 - Status: completed
 - Last updated: 2026-03-28
 
-- Muc tieu slice nay la giam click-path cua approver trong KPI Adjustments ma khong mo them contract backend:
-  - them selection state theo trang hien tai de approver co the chon nhieu dong cung luc
-  - bo sung bulk approve va bulk reject toolbar, dung lai `updateKpiAdjustmentStatus` hien co
-  - giu `KPIAdjustments.jsx` gon bang cach tach selection state sang hook rieng co test
+- Muc tieu slice nay la rut ngan buoc tra cuu cua approver tu workspace adjustments hien tai:
+  - them quick link tu dong sang tab `mst` va `import` thay vi bat nguoi dung chuyen tay qua app shell
+  - tan dung command bus `navigate:tab` hien co de scope thay doi van nam trong frontend shell, khong mo them contract backend
+  - giu lookup value san sang de paste nhanh o workspace dich bang cach copy MST/so to khai vao clipboard neu trinh duyet ho tro
 - Cach sua da ap dung:
-  - them `useKpiAdjustmentSelection.js` de quan ly selected rows, select-all tren trang hien tai, va prune selection khi page/filter doi
-  - mo rong `KpiAdjustmentListPanel.jsx` voi cot checkbox, toolbar bulk action, va summary selection cho approver
-  - cap nhat `KPIAdjustments.jsx` de orchestrate bulk approve/reject qua loop `updateKpiAdjustmentStatus`, confirm/prompt note, va clear selection sau khi xong
-  - bo sung regression `tests/useKpiAdjustmentSelection.test.jsx`, cap nhat `tests/kpiAdjustmentListPanel.test.jsx`, va them UI integration cho bulk approve/reject trong `tests/kpiAdjustments.test.jsx`
+  - mo rong `KpiAdjustmentListPanel.jsx` voi link `Mở MST` ngay tai cot MST va quick button toi to khai dau tien trong hang adjustment
+  - mo rong `KpiAdjustmentDetailDialog.jsx` voi button `Mở MST` va button theo tung tham chieu de approver co the jump tu dialog chi tiet
+  - su dung `emitCommand("navigate:tab", { tab, focus })` de nhay den `mst/review` hoac `import/review`, kem clipboard copy best-effort
+  - cap nhat regression `tests/kpiAdjustmentListPanel.test.jsx` va `tests/kpiAdjustmentDialogs.test.jsx` de khoa navigate command moi
 - Trang thai verify hien tai:
-  - `pnpm exec vitest run tests/useKpiAdjustmentSelection.test.jsx tests/kpiAdjustmentListPanel.test.jsx tests/kpiAdjustments.test.jsx tests/kpiAdjustments.hooks.test.jsx --environment jsdom` da pass
-  - `pnpm exec eslint src/components/KPIAdjustments.jsx src/components/kpi-adjustments/hooks/useKpiAdjustmentSelection.js src/components/kpi-adjustments/panels/KpiAdjustmentListPanel.jsx tests/useKpiAdjustmentSelection.test.jsx tests/kpiAdjustmentListPanel.test.jsx tests/kpiAdjustments.test.jsx` da pass
+  - `pnpm exec vitest run tests/kpiAdjustmentListPanel.test.jsx tests/kpiAdjustmentDialogs.test.jsx --environment jsdom` da pass
+  - `pnpm exec eslint src/components/kpi-adjustments/panels/KpiAdjustmentListPanel.jsx src/components/kpi-adjustments/panels/KpiAdjustmentDetailDialog.jsx tests/kpiAdjustmentListPanel.test.jsx tests/kpiAdjustmentDialogs.test.jsx` da pass
   - `bd` / `bd.cmd` trong worktree hien tai khong tim thay beads database, nen trang thai bead chua sync duoc bang CLI
 - Next suggested slice:
-  - `cng-7z0.4` — them quick links toi to khai hoac MST lien quan ngay trong KPI Adjustments
+  - `cng-7z0.5` — cho phep quan ly cau hinh diem mac dinh truc tiep trong UI va dong bo vao `KPI_ADJUSTMENT_CATEGORY_CONFIG`
 ## Recent Completed Slices
 
 - `cng-7z0.28` da xong o muc delivery channel + delivery status tracking:
@@ -61,6 +61,11 @@
   - mo rong `KpiAdjustmentListPanel.jsx` voi checkbox cot dau, toolbar bulk action, va selection summary cho approver
   - cap nhat `KPIAdjustments.jsx` de bulk-loop `updateKpiAdjustmentStatus`, confirm/prompt note, va clear selection sau khi apply
   - bo sung regression `tests/useKpiAdjustmentSelection.test.jsx`, cap nhat `tests/kpiAdjustmentListPanel.test.jsx`, va them integration tests bulk approve/reject trong `tests/kpiAdjustments.test.jsx`
+- `cng-7z0.4` da xong o muc quick link tra cuu lien quan trong KPI Adjustments:
+  - them `Mở MST` ngay trong list/detail dialog va link theo tung tham chieu to khai de approver jump sang workspace dich nhanh hon
+  - tan dung `emitCommand("navigate:tab")` de nhay den `mst/review` hoac `import/review` thay vi mo them prop drilling moi
+  - copy lookup value (MST/so to khai) vao clipboard theo best-effort de nguoi dung paste ngay o workspace dich khi can
+  - khoa regression command bus trong `tests/kpiAdjustmentListPanel.test.jsx` va `tests/kpiAdjustmentDialogs.test.jsx`
 - `cng-7z0.27` da xong o muc executive dashboard snapshot:
   - them `ReportingExecutiveSummaryPanel.jsx` + `reportingExecutiveSummaryModel.js` de tong hop KPI/decl, top staff, team concentration, pending adjustments, va deviation signals
   - cap nhat `ReportingDashboardOverview.jsx` de surfacing executive summary truoc summary cards/trend/top staff widgets
