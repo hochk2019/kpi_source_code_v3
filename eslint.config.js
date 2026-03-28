@@ -12,8 +12,6 @@ import reactRefresh from "eslint-plugin-react-refresh";
 
 const rootDir = dirname(fileURLToPath(import.meta.url));
 
-const isWindows = process.platform === "win32";
-
 const linebreakRule = "off";
 
 export default [

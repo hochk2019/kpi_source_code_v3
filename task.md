@@ -16,24 +16,26 @@
 
 ## Active Slice
 
-- Title: Remove unused JSON parse catch binding in filter preset hook
-- Bead: cng-2k4.22 / slice C (bead CLI khong kha dung trong worktree nay)
+- Title: Remove unused eslint config platform flag
+- Bead: cng-2k4.22 / slice D (bead CLI khong kha dung trong worktree nay)
 - Status: completed
 - Last updated: 2026-03-28
 
-- Muc tieu slice nay la don warning unused binding co blast radius thap trong runtime hook:
-  - bo `catch (err)` khong duoc dung trong `parseJsonSafely` cua `useFilterPresets`
-  - giu nguyen fallback `null` khi `response.json()` fail de khong doi contract caller `DataImporter`
-  - tiep tuc giu `cng-2k4.22` mo cho cac warning khac nhung can tach slice rieng
+- Muc tieu slice nay la don warning config-level co risk thap nhat trong backlog lint:
+  - bo `isWindows` khong duoc dung trong `eslint.config.js`
+  - giu nguyen `linebreakRule = "off"` va toan bo lint behavior hien tai
+  - tiep tuc de cac warning runtime/production o slice sau vi can impact analysis rieng
 - Cach sua da ap dung:
-  - doi `catch (err)` thanh `catch` trong `src/hooks/useFilterPresets.js`
-  - khong sua logic parse/fallback, chi cat binding thua de giam lint noise runtime
+  - xoa khai bao `const isWindows = process.platform === "win32";`
+  - khong thay doi rules, ignores, hay parser config nao khac
 - Trang thai verify hien tai:
-  - `pnpm exec eslint src/hooks/useFilterPresets.js tests/useDataImporterSessionController.test.jsx` da pass
-  - `pnpm exec vitest run tests/useDataImporterSessionController.test.jsx --environment jsdom` da pass
+  - `pnpm exec eslint eslint.config.js` da pass
   - `bd` / `bd.cmd` trong worktree hien tai khong tim thay beads database, nen trang thai bead chua sync duoc bang CLI
 ## Recent Completed Slices
 
+- `cng-2k4.22 / slice D` da xong o muc config lint hygiene:
+  - bo bien `isWindows` khong duoc dung trong `eslint.config.js`
+  - giu nguyen lint contract, chi cat warning level config
 - `cng-2k4.22 / slice C` da xong o muc runtime lint hygiene cho filter preset hook:
   - bo binding `err` khong duoc dung trong `parseJsonSafely` cua `src/hooks/useFilterPresets.js`
   - verify lai caller-side test `tests/useDataImporterSessionController.test.jsx` de khoa contract preset session
@@ -696,8 +698,8 @@
 - Bead: `cng-2k4.22`
 - Status: open
 - Follow-up backlog:
-  - warning config-level trong `eslint.config.js` (`isWindows`) co risk rat thap va khong doi runtime
   - warning runtime helper trong `server/reportExport.js` can impact analysis rieng truoc khi sua vi la production export path
+  - warning hook-level trong `src/designSystem/hooks.js` va `src/hooks/usePagination.js` can danh gia blast radius truoc khi sua
   - khoa regression cho focus handoff/fallback contract sau khi dieu huong bang workflow guide hoac command surfaces
   - bo sung case error-boundary + loading-status tren browser runtime de tranh gap lai regression chi bi thay o integration path
 
