@@ -55,7 +55,7 @@ test('audit tab hiển thị runtime error boundary khi lazy chunk tải lỗi',
   const runtimeAlert = page.getByRole('alert');
 
   await expect(auditRoot).toBeVisible();
-  await expect(runtimeAlert).toContainText('Runtime error');
+  await expect(runtimeAlert).toContainText('Lỗi runtime');
   await expect(runtimeAlert).toContainText('Không thể hiển thị Nhật ký hệ thống.');
   await expect(runtimeAlert).toContainText('Thử hiển thị lại');
 });

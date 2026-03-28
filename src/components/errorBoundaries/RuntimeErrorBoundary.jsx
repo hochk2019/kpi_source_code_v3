@@ -25,7 +25,7 @@ function DefaultFallback({
     <div className={wrapperClassName} role="alert">
       <div className="space-y-2">
         <p className="text-xs font-semibold uppercase tracking-[0.18em] text-red-600 dark:text-red-300">
-          Runtime error
+          Lỗi runtime
         </p>
         <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{title}</h2>
         <p className="text-sm text-slate-600 dark:text-slate-300">{description}</p>

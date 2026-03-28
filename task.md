@@ -16,25 +16,30 @@
 
 ## Active Slice
 
-- Title: Create end-of-sprint UI QA checklist and link operations log
-- Bead: cng-7z0.34 (bead CLI khong kha dung trong worktree nay)
+- Title: Normalize runtime fallback copy for shell error boundaries
+- Bead: cng-2k4.22 / slice A (bead CLI khong kha dung trong worktree nay)
 - Status: completed
 - Last updated: 2026-03-28
 
-- Muc tieu slice nay la chot mot artifact QA nho, co the tai su dung cho cac dot shell/runtime UI tiep theo:
-  - tao checklist QA cuoi sprint cho build, lazy tabs, runtime fallback, accessibility smoke
-  - noi checklist vao `docs/operations/ui-verification-log.md`
-  - cap nhat backlog canon de xac nhan slice nay khong con mo
+- Muc tieu slice nay la mo dau `cng-2k4.22` theo cach tach nho, chi xu ly copy runtime fallback co visible impact:
+  - doi nhan fallback `Runtime error` thanh tieng Viet nhat quan trong shell
+  - cap nhat test browser + unit de khoa copy moi
+  - giu bead `cng-2k4.22` mo cho cac phan tiep theo ve text/lint hygiene
 - Cach sua da ap dung:
-  - them `docs/operations/ui-sprint-qa-checklist.md`
-  - cap nhat `docs/operations/ui-verification-log.md` thanh log co cau truc va link toi checklist
-  - danh dau hoan tat muc tuong ung trong `docs/ux-improvement-backlog.md`
-  - go `cng-7z0.34` khoi `docs/open-backlog.md`
+  - sua `src/components/errorBoundaries/RuntimeErrorBoundary.jsx` de fallback badge hien `Lỗi runtime`
+  - cap nhat `tests/runtimeErrorBoundary.test.jsx` va `tests/playwright/lazy-tab-shell.spec.js` theo copy moi
 - Trang thai verify hien tai:
-  - slice tai lieu, verify bang `git diff --check` truoc khi commit
+  - `pnpm exec eslint src/components/errorBoundaries/RuntimeErrorBoundary.jsx tests/runtimeErrorBoundary.test.jsx tests/playwright/lazy-tab-shell.spec.js` da pass
+  - `pnpm exec vitest run tests/runtimeErrorBoundary.test.jsx tests/appRoot.errorBoundary.test.jsx tests/kpiCalculator.errorBoundary.test.jsx --environment jsdom` da pass
+  - `pnpm build` da pass
+  - `npx playwright test tests/playwright/lazy-tab-shell.spec.js --reporter=line` da pass
   - `bd` / `bd.cmd` trong worktree hien tai khong tim thay beads database, nen trang thai bead chua sync duoc bang CLI
 ## Recent Completed Slices
 
+- `cng-2k4.22 / slice A` da xong o muc runtime text hygiene:
+  - doi nhan fallback `Runtime error` thanh `Lỗi runtime` trong `RuntimeErrorBoundary`
+  - cap nhat unit/browser regression de khoa visible copy moi tren shell error states
+  - bead lon `cng-2k4.22` van con mo cho nhung phan lint hygiene va text cleanup khac
 - `cng-7z0.34` da xong o muc artifact QA cuoi sprint cho giao dien:
   - them `docs/operations/ui-sprint-qa-checklist.md` de chot command matrix, manual smoke checks va cach ghi nhat ky verify
   - cap nhat `docs/operations/ui-verification-log.md` thanh log theo phien va noi truc tiep den checklist nay

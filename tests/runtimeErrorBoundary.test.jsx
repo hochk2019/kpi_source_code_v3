@@ -36,6 +36,7 @@ describe('RuntimeErrorBoundary', () => {
     render(<RecoverableBoundaryHarness />);
 
     expect(screen.getByRole('alert')).toHaveTextContent('Panel gặp lỗi.');
+    expect(screen.getByRole('alert')).toHaveTextContent('Lỗi runtime');
     expect(screen.getByText(/Chi tiết kỹ thuật: boom/i)).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: /Thử hiển thị lại/i }));
