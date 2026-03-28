@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import { getChartPalette as readPalette } from './themeTokens.js';
 
@@ -10,7 +10,7 @@ export function useChartPalette() {
 
   const { resolvedTheme, getChartPalette } = useTheme();
 
-  const reader = getChartPalette ?? readPalette;
+  const reader = useMemo(() => getChartPalette ?? readPalette, [getChartPalette]);
 
   const [palette, setPalette] = useState(() => reader());
 
@@ -20,7 +20,7 @@ export function useChartPalette() {
 
     setPalette(reader());
 
-  }, [resolvedTheme]);
+  }, [resolvedTheme, reader]);
 
 
 

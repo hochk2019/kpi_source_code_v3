@@ -16,23 +16,28 @@
 
 ## Active Slice
 
-- Title: Remove unused eslint config platform flag
-- Bead: cng-2k4.22 / slice D (bead CLI khong kha dung trong worktree nay)
+- Title: Stabilize chart palette hook dependencies
+- Bead: cng-2k4.22 / slice E (bead CLI khong kha dung trong worktree nay)
 - Status: completed
 - Last updated: 2026-03-28
 
-- Muc tieu slice nay la don warning config-level co risk thap nhat trong backlog lint:
-  - bo `isWindows` khong duoc dung trong `eslint.config.js`
-  - giu nguyen `linebreakRule = "off"` va toan bo lint behavior hien tai
-  - tiep tuc de cac warning runtime/production o slice sau vi can impact analysis rieng
+- Muc tieu slice nay la don warning hook dependency co blast radius thap trong design system:
+  - on dinh `reader` trong `useChartPalette` bang `useMemo`
+  - them `reader` vao dependency array cua effect thay vi bo qua warning `react-hooks/exhaustive-deps`
+  - giu nguyen API tra ve palette cho caller `ReportViewer`
 - Cach sua da ap dung:
-  - xoa khai bao `const isWindows = process.platform === "win32";`
-  - khong thay doi rules, ignores, hay parser config nao khac
+  - them `useMemo` vao import cua `src/designSystem/hooks.js`
+  - memoize `reader = getChartPalette ?? readPalette` theo `getChartPalette`
+  - cap nhat effect dependency thanh `[resolvedTheme, reader]`
 - Trang thai verify hien tai:
-  - `pnpm exec eslint eslint.config.js` da pass
+  - `pnpm exec eslint src/designSystem/hooks.js tests/reportViewer.test.jsx` da pass
+  - `pnpm exec vitest run tests/reportViewer.test.jsx --environment jsdom` da pass
   - `bd` / `bd.cmd` trong worktree hien tai khong tim thay beads database, nen trang thai bead chua sync duoc bang CLI
 ## Recent Completed Slices
 
+- `cng-2k4.22 / slice E` da xong o muc design-system hook hygiene:
+  - on dinh dependency cua `useChartPalette` trong `src/designSystem/hooks.js`
+  - verify lai `tests/reportViewer.test.jsx` vi day la caller truc tiep theo GitNexus impact
 - `cng-2k4.22 / slice D` da xong o muc config lint hygiene:
   - bo bien `isWindows` khong duoc dung trong `eslint.config.js`
   - giu nguyen lint contract, chi cat warning level config
@@ -699,7 +704,7 @@
 - Status: open
 - Follow-up backlog:
   - warning runtime helper trong `server/reportExport.js` can impact analysis rieng truoc khi sua vi la production export path
-  - warning hook-level trong `src/designSystem/hooks.js` va `src/hooks/usePagination.js` can danh gia blast radius truoc khi sua
+  - warning hook-level trong `src/hooks/usePagination.js` can danh gia blast radius truoc khi sua
   - khoa regression cho focus handoff/fallback contract sau khi dieu huong bang workflow guide hoac command surfaces
   - bo sung case error-boundary + loading-status tren browser runtime de tranh gap lai regression chi bi thay o integration path
 
