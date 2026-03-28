@@ -1,6 +1,8 @@
 import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { clearStorageCache } from "@/lib/storageClient.js";
+
 const storeMocks = vi.hoisted(() => ({
   getKpiAdjustments: vi.fn(),
   getKpiAdjustmentSettings: vi.fn(),
@@ -29,6 +31,7 @@ function getCurrentMonth() {
 
 describe("kpi adjustment hooks", () => {
   beforeEach(() => {
+    clearStorageCache();
     storeMocks.getKpiAdjustments.mockReset();
     storeMocks.getKpiAdjustmentSettings.mockReset();
     storeMocks.saveKpiAdjustment.mockReset();
@@ -61,6 +64,50 @@ describe("kpi adjustment hooks", () => {
 
     expect(result.current.showMineOnly).toBe(false);
     expect(result.current.filteredAdjustments.map((item) => item.id)).toEqual(["a", "b"]);
+  });
+
+  it("persists filter preferences per user scope and restores them on remount", () => {
+    const currentMonth = getCurrentMonth();
+    const adjustments = [
+      { id: "a", month: currentMonth, staffName: "Lan", status: "pending", updatedAt: "2025-01-02" },
+      { id: "b", month: currentMonth, staffName: "Bình", status: "approved", updatedAt: "2025-01-01" },
+    ];
+    const baseProps = {
+      adjustments,
+      staffOptions: [{ name: "Lan" }, { name: "Bình" }],
+      currentStaffKey: "lan",
+      canApprove: false,
+      isAuthenticated: true,
+    };
+
+    const { result, unmount } = renderHook(() => useKpiAdjustmentFilters(baseProps));
+
+    act(() => {
+      result.current.handleMineToggle(false);
+      result.current.setFilterStatus("approved");
+      result.current.setFilterMonth("all");
+    });
+
+    expect(result.current.showMineOnly).toBe(false);
+    expect(result.current.filterStatus).toBe("approved");
+    expect(result.current.filterMonth).toBe("all");
+
+    unmount();
+
+    const restored = renderHook(() => useKpiAdjustmentFilters(baseProps));
+    expect(restored.result.current.showMineOnly).toBe(false);
+    expect(restored.result.current.filterStatus).toBe("approved");
+    expect(restored.result.current.filterMonth).toBe("all");
+
+    const otherUser = renderHook(() =>
+      useKpiAdjustmentFilters({
+        ...baseProps,
+        currentStaffKey: "binh",
+      })
+    );
+    expect(otherUser.result.current.showMineOnly).toBe(true);
+    expect(otherUser.result.current.filterStatus).toBe("all");
+    expect(otherUser.result.current.filterMonth).toBe(currentMonth);
   });
 
   it("initializes form defaults and submits a support adjustment payload", () => {

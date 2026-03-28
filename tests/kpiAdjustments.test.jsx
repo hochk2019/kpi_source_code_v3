@@ -487,5 +487,50 @@ describe('KPIAdjustments UI', () => {
 
   });
 
+  it('khôi phục bộ lọc danh sách theo user sau khi mở lại màn hình', async () => {
+    const now = new Date();
+    const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+
+    saveKpiAdjustment(
+      {
+        category: 'support_misc',
+        month: currentMonth,
+        staffName: 'Bình',
+        teamName: 'Team 1',
+        note: 'Đã duyệt cho Bình',
+        references: ['TK002'],
+        quantity: 1,
+        unitPoints: 12,
+        mode: 'fixed',
+        status: 'approved',
+      },
+      { actor: 'seed', permissions: { adjustApprove: true } }
+    );
+
+    const approverUser = {
+      username: 'manager.persist',
+      permissions: { adjustApprove: true, adjustSubmit: true },
+    };
+
+    const firstRender = render(<KPIAdjustments currentUser={approverUser} />);
+
+    await screen.findByText('Danh sách điểm KPI +/-');
+
+    await userEvent.selectOptions(screen.getByLabelText('Trạng thái'), 'approved');
+    await userEvent.selectOptions(screen.getByLabelText('Lọc theo nhân viên'), 'binh');
+
+    await waitFor(() => expect(screen.getByRole('cell', { name: 'Bình' })).toBeInTheDocument());
+    expect(screen.queryByRole('cell', { name: 'Lan' })).not.toBeInTheDocument();
+
+    firstRender.unmount();
+
+    render(<KPIAdjustments currentUser={approverUser} />);
+
+    expect(await screen.findByLabelText('Trạng thái')).toHaveValue('approved');
+    expect(screen.getByLabelText('Lọc theo nhân viên')).toHaveValue('binh');
+    expect(await screen.findByRole('cell', { name: 'Bình' })).toBeInTheDocument();
+    expect(screen.queryByRole('cell', { name: 'Lan' })).not.toBeInTheDocument();
+  });
+
 });
 

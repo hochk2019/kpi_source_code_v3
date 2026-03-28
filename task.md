@@ -16,26 +16,25 @@
 
 ## Active Slice
 
-- Title: Reporting lane local template management for reusable report configurations
-- Bead: cng-7z0.29 (bead CLI khong kha dung trong worktree nay)
+- Title: KPI Adjustments filter persistence per user
+- Bead: cng-7z0.1 (bead CLI khong kha dung trong worktree nay)
 - Status: completed
 - Last updated: 2026-03-28
 
-- Muc tieu slice nay la cho nguoi dung luu va tai su dung nhanh cau hinh report ma khong mo them contract server:
-  - cho phep luu template report tu state hien tai (khoang ngay, rule, scope, sort, cot export, pagination)
-  - cho phep ap dung/ghi de/xoa template trong chinh panel dieu khien cua Report Center
-  - giu storage local theo browser hien tai nhu mot "kho rieng" dung cho reporting lane
+- Muc tieu slice nay la giu bo loc KPI Adjustments on dinh theo user va khong can mo them contract backend:
+  - persist `month`, `status`, `mine-only`, `staff` filter theo tung user scope trong local storage
+  - hydrate lai state bo loc khi mo lai KPI Adjustments ma van ton trong reset logic theo quyen/nhan vien hien tai
+  - khoa regression cho ca hook layer va UI remount flow cua lane dieu chinh
 - Cach sua da ap dung:
-  - mo rong `useReportViewerPreferences` de build snapshot template va ap template da sanitize quay lai state dang su dung
-  - them `useReportViewerTemplates` de quan ly CRUD local-storage cho template report + ghi nho template dang ap dung
-  - them `ReportingTemplateControls` va noi vao `ReportingControlsPanel` / `ReportViewer`
-  - mo rong regression tests cho panel, hook preferences, va hook templates moi
+  - mo rong `useKpiAdjustmentFilters` de doc/ghi local-storage theo user scope va sanitize lai state bo loc truoc khi hydrate
+  - giu `showMineOnly`/`staffFilter` phu hop voi current auth state thay vi replay nguyen si state cu
+  - bo sung regression cho `tests/kpiAdjustments.hooks.test.jsx` va `tests/kpiAdjustments.test.jsx` de khoa restore flow sau remount
 - Trang thai verify hien tai:
-  - `pnpm exec vitest tests/reportingPanels.test.jsx tests/useReportViewerPreferences.test.jsx tests/useReportViewerTemplates.test.jsx tests/reportViewer.test.jsx --run` da pass
-  - `pnpm exec eslint src/components/ReportViewer.jsx src/components/reporting/ReportingPanels.jsx src/components/reporting/ReportingTemplateControls.jsx src/components/reporting/useReportViewerPreferences.js src/components/reporting/useReportViewerTemplates.js tests/reportingPanels.test.jsx tests/useReportViewerPreferences.test.jsx tests/useReportViewerTemplates.test.jsx tests/reportViewer.test.jsx` da pass
+  - `pnpm exec vitest run tests/kpiAdjustments.hooks.test.jsx tests/kpiAdjustments.test.jsx tests/kpiAdjustmentListPanel.test.jsx --environment jsdom` da pass
+  - `pnpm exec eslint src/components/kpi-adjustments/hooks/useKpiAdjustmentFilters.js tests/kpiAdjustments.hooks.test.jsx tests/kpiAdjustments.test.jsx` da pass
   - `bd` / `bd.cmd` trong worktree hien tai khong tim thay beads database, nen trang thai bead chua sync duoc bang CLI
 - Next suggested slice:
-  - `cng-7z0.30` — persist filter states cho KPI Adjustments theo user va bo sung regression cho lane dieu chinh
+  - `cng-7z0.2` — tach list KPI Adjustments sang pagination / virtualized lane de giu perf voi dataset lon
 ## Recent Completed Slices
 
 - `cng-7z0.28` da xong o muc delivery channel + delivery status tracking:
@@ -48,6 +47,10 @@
   - mo rong `useReportViewerPreferences.js` de sanitize/build/apply snapshot template cho report viewer state
   - cap nhat `ReportViewer.jsx` + `ReportingPanels.jsx` de template control song song voi bo loc/rule chon report
   - bo sung regression `tests/useReportViewerTemplates.test.jsx`, cap nhat `tests/useReportViewerPreferences.test.jsx`, `tests/reportingPanels.test.jsx`, va verify `tests/reportViewer.test.jsx`
+- `cng-7z0.1` da xong o muc persist filter states cho KPI Adjustments:
+  - them local-storage persistence theo user scope trong `useKpiAdjustmentFilters.js` cho `month`, `status`, `mine-only`, va `staff`
+  - sanitize lai state restore de khong giu bo loc staff/mine-only sai khi auth scope thay doi
+  - bo sung regression `tests/kpiAdjustments.hooks.test.jsx` va `tests/kpiAdjustments.test.jsx` de khoa remount restore flow
 - `cng-7z0.27` da xong o muc executive dashboard snapshot:
   - them `ReportingExecutiveSummaryPanel.jsx` + `reportingExecutiveSummaryModel.js` de tong hop KPI/decl, top staff, team concentration, pending adjustments, va deviation signals
   - cap nhat `ReportingDashboardOverview.jsx` de surfacing executive summary truoc summary cards/trend/top staff widgets
