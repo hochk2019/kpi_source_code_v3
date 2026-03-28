@@ -16,21 +16,23 @@
 
 ## Active Slice
 
-- Title: Memoize sanitized pagination items
-- Bead: cng-2k4.22 / slice F (bead CLI khong kha dung trong worktree nay)
+- Title: Remove unused report export adjustment helpers
+- Bead: cng-2k4.22 / slice G (bead CLI khong kha dung trong worktree nay)
 - Status: completed
 - Last updated: 2026-03-28
 
-- Muc tieu slice nay la don warning hook dependency co blast radius thap trong pagination hook:
-  - memoize `safeItems` trong `usePagination` de dependency cua `currentPageItems` on dinh hon
-  - giu nguyen API phan trang cho caller `MSTAssignment` va test harness hien co
-  - cat warning `react-hooks/exhaustive-deps` ma khong doi logic clamp/page slicing
+- Muc tieu slice nay la don warning low-risk trong production export path ma khong doi luong du lieu bao cao:
+  - xoa 4 helper adjustment summary da chet trong `server/reportExport.js`
+  - bo import `createAdjustmentTotals` da tro thanh unused sau cleanup
+  - giu nguyen contract cho `aggregateByCompany`, `generateStaffReport`, `generateTeamReport`, va cac export public khac
 - Cach sua da ap dung:
-  - doi `safeItems` thanh `useMemo(() => (Array.isArray(items) ? items : []), [items])`
-  - giu nguyen toan bo logic `itemCount`, `pageCount`, `currentPageItems`, va callback paging
+  - xoa `ensureStaffAdjustmentSummary`, `ensureTeamAdjustmentSummary`, `finalizeStaffAdjustmentEntry`, `finalizeTeamAdjustmentEntry`
+  - rut `createAdjustmentTotals` khoi import list vi khong con caller noi bo
 - Trang thai verify hien tai:
-  - `pnpm exec eslint src/hooks/usePagination.js tests/mstAssignment.pagination.test.jsx` da pass
-  - `pnpm exec vitest run tests/mstAssignment.pagination.test.jsx --environment jsdom` da pass
+  - GitNexus impact truoc khi sua cho 4 helper tren deu tra `LOW`, `impactedCount: 0`
+  - `pnpm exec eslint server/reportExport.js` da pass
+  - `pnpm exec vitest run tests/server.reportWatermark.test.js tests/reportExportPayloads.test.js --environment node` da pass
+  - `gitnexus_detect_changes(scope: "unstaged")` da thay dung 2 file (`server/reportExport.js`, `task.md`) nhung van over-report `critical` o muc process vi diff chạm file `reportExport.js`; diff tay xac nhan chi la dead-code cleanup + notebook update
   - `bd` / `bd.cmd` trong worktree hien tai khong tim thay beads database, nen trang thai bead chua sync duoc bang CLI
 ## Recent Completed Slices
 
@@ -701,13 +703,12 @@
 
 ## Next Suggested Slice
 
-- Title: Trim remaining low-risk lint warnings outside shell navigation copy
+- Title: Split non-component exports out of reporting refresh-sensitive files
 - Bead: `cng-2k4.22`
 - Status: open
 - Follow-up backlog:
-  - warning runtime helper trong `server/reportExport.js` can impact analysis rieng truoc khi sua vi la production export path
   - khoa regression cho focus handoff/fallback contract sau khi dieu huong bang workflow guide hoac command surfaces
-  - warning react-refresh trong `src/components/reporting/ReportingPanels.jsx` va `src/components/shared/StaffCombobox.jsx` can danh gia refactor scope truoc khi tach constant/helper
+  - warning react-refresh trong `src/components/reporting/ReportingPanels.jsx` va `src/components/shared/StaffCombobox.jsx` can tach helper thuần ra module rieng sau khi chay impact analysis cho moi symbol export hien tai
   - bo sung case error-boundary + loading-status tren browser runtime de tranh gap lai regression chi bi thay o integration path
 
 ## Verification
@@ -828,6 +829,12 @@
   - targeted verify da pass:
     - `pnpm exec eslint tests/playwright/sync-flow.spec.js`
     - `pnpm exec playwright test tests/playwright/sync-flow.spec.js --config=playwright.config.mjs --workers=1`
+- `cng-2k4.22 / slice G` da xong o muc cleanup production export hygiene:
+  - xoa 4 helper adjustment summary da chet trong `server/reportExport.js` va bo import `createAdjustmentTotals` khong con dung den
+  - GitNexus impact truoc khi sua cho 4 helper deu `LOW`, `impactedCount: 0`; `detect_changes` van over-report `critical` do file-level process mapping, nhung diff tay xac nhan chi cham dead-code cleanup + `task.md`
+  - targeted verify da pass:
+    - `pnpm exec eslint server/reportExport.js`
+    - `pnpm exec vitest run tests/server.reportWatermark.test.js tests/reportExportPayloads.test.js --environment node`
 
 ## Previous Completed Slice
 
