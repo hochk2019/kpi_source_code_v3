@@ -8,6 +8,7 @@ Reconciliation note:
 - Reconciled after completing `cng-7z0.29`, `cng-7z0.1`, `cng-7z0.2`, `cng-7z0.3`, `cng-7z0.4`, and `cng-7z0.5`.
 - Reconciled again on 2026-03-29 after closing stale beads `cng-7z0.1`, `cng-7z0.2`, `cng-7z0.3`, `cng-7z0.4`, `cng-7z0.5`, `cng-7z0.29`, `cng-2k4.19`, and `cng-2k4.20`, and removing stale open-list entries already reflected in code and `task.md`.
 - Reconciled again on 2026-03-29 after completing `cng-7z0.6` and promoting `cng-7z0.7` as the next ready UX slice.
+- Reconciled again on 2026-03-29 after shipping the ECUS preflight/retry/resume UX lane: `cng-7z0.9` and `cng-7z0.10` are complete, while `cng-7z0.7` remains open only for true backend-detached queue orchestration.
 
 Rule:
 - Every unfinished item from review notes, rollout plans, decomposition plans, or UX backlogs must be in one of two states:
@@ -25,7 +26,7 @@ Current highest-priority ready items:
 - `cng-2k4.2` — Execute declarations write cutover with compat guard and rollback plan
 - `cng-2k4.3` — Switch production entrypoint from legacy server to server-v4
 - Ready next in UX lane:
-- `cng-7z0.7` — Add background sync queue with resume support for ECUS imports
+- `cng-7z0.7` — Finish backend-detached sync queue/orchestration for ECUS imports
 
 ## Technical Stabilization
 
@@ -61,8 +62,6 @@ Source set: `docs/ux-improvement-backlog.md`
 
 - `cng-7z0.7` — Add background sync queue with resume support for ECUS imports
 - `cng-7z0.8` — Warn on declaration sync conflicts before overwrite
-- `cng-7z0.9` — Add ECUS pre-check checklist before sync runs
-- `cng-7z0.10` — Add automatic retry with backoff for failed ECUS writes
 - `cng-7z0.11` — Persist declaration sync history for notifications and dashboards
 
 ### Data Importer

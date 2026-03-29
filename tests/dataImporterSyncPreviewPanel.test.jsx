@@ -10,6 +10,7 @@ function renderPanel(props = {}) {
     onManualRangeChange: vi.fn(),
     onPreview: vi.fn(),
     onRunSync: vi.fn(),
+    onResumeSync: vi.fn(),
     ...props,
   };
 
@@ -26,6 +27,31 @@ function renderPanel(props = {}) {
       showPreviewRange
       previewRangeLabel="01/03/2026 - 08/03/2026"
       previewLimited
+      syncPreflightChecks={[
+        {
+          key: "backend",
+          label: "Backend đồng bộ sẵn sàng",
+          status: "pass",
+          detail: "Backend đang phản hồi bình thường.",
+        },
+        {
+          key: "range",
+          label: "Khoảng dữ liệu hợp lệ",
+          status: "warn",
+          detail: "Chưa chọn khoảng ngày thủ công. Lần chạy này sẽ dùng RangeDays mặc định trong cấu hình.",
+        },
+      ]}
+      syncPreflightSummary={{ ready: true, blockingCount: 0, warningCount: 1 }}
+      syncActivityLog={[
+        {
+          id: "log-1",
+          level: "info",
+          at: "2026-03-11T08:09:10.000Z",
+          message: "Đã tạo job đồng bộ.",
+        },
+      ]}
+      syncResumeJob={{ id: "job-1" }}
+      syncResumeLabel="Job lưu lúc 11/03/2026 15:09:10 cho khoảng 2026-03-01 → 2026-03-08."
       previewRows={[
         {
           so_tk: "102030",
@@ -80,13 +106,18 @@ describe("DataImporterSyncPreviewPanel", () => {
     await user.type(screen.getByDisplayValue("2026-03-08"), "0");
     await user.click(screen.getByRole("button", { name: "Xem trước dữ liệu" }));
     await user.click(screen.getByRole("button", { name: "Đồng bộ ngay" }));
+    await user.click(screen.getByRole("button", { name: "Tiếp tục job dang dở" }));
 
     expect(handlers.onApplyRangePreset).toHaveBeenCalledWith(7);
     expect(handlers.onManualRangeChange).toHaveBeenCalled();
     expect(handlers.onPreview).toHaveBeenCalledTimes(1);
     expect(handlers.onRunSync).toHaveBeenCalledTimes(1);
+    expect(handlers.onResumeSync).toHaveBeenCalledTimes(1);
 
     expect(screen.getByText("Đang bật bộ lọc MST: 0100109106.")).toBeInTheDocument();
+    expect(screen.getByText("Checklist trước khi chạy")).toBeInTheDocument();
+    expect(screen.getByText("Sẵn sàng chạy")).toBeInTheDocument();
+    expect(screen.getByText("Job lưu lúc 11/03/2026 15:09:10 cho khoảng 2026-03-01 → 2026-03-08.")).toBeInTheDocument();
     expect(screen.getByText("Khoảng xem trước: 01/03/2026 - 08/03/2026 (giới hạn 100 dòng đầu tiên)")).toBeInTheDocument();
     expect(screen.getByText("Xem trước 1 dòng đầu tiên sẽ nhập vào hệ thống.")).toBeInTheDocument();
     expect(screen.getByRole("table", { name: "Bảng xem trước dữ liệu đồng bộ ECUS" })).toBeInTheDocument();
@@ -99,6 +130,8 @@ describe("DataImporterSyncPreviewPanel", () => {
     expect(screen.getByText("Đã nhập 1 mới, cập nhật 0, bỏ qua 0, khóa 0.")).toBeInTheDocument();
     expect(screen.getByText("Làm mới cấu hình, trạng thái và cảnh báo")).toBeInTheDocument();
     expect(screen.getByText("Đang chạy")).toBeInTheDocument();
+    expect(screen.getByText("Nhật ký queue và retry")).toBeInTheDocument();
+    expect(screen.getByText(/Đã tạo job đồng bộ/)).toBeInTheDocument();
     expect(screen.getByText("Đã đồng bộ thành công")).toBeInTheDocument();
   });
 

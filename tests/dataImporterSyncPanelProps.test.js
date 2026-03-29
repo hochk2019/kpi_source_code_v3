@@ -51,6 +51,10 @@ describe("dataImporterSyncPanelProps", () => {
     const manualRange = { from: "2026-03-01", to: "2026-03-03" };
     const previewRows = [{ so_tk: "102030" }];
     const syncProgressSteps = [{ key: "commit", status: "done", label: "Đồng bộ dữ liệu từ ECUS" }];
+    const syncPreflightChecks = [{ key: "backend", status: "pass", label: "Backend đồng bộ sẵn sàng" }];
+    const syncPreflightSummary = { ready: true, blockingCount: 0, warningCount: 0 };
+    const syncActivityLog = [{ id: "log-1", message: "queued", at: "2026-03-10T02:15:00.000Z" }];
+    const syncResumeJob = { id: "job-1" };
     const formatDisplayDate = (value) => `DATE:${value}`;
     const fetchSyncConfig = () => "fetch-config";
     const fetchSyncStatus = () => "fetch-status";
@@ -58,6 +62,7 @@ describe("dataImporterSyncPanelProps", () => {
     const handleManualRangeChange = () => "change-manual-range";
     const handlePreviewSync = () => "preview-sync";
     const handleRunSync = () => "run-sync";
+    const handleResumeSync = () => "resume-sync";
     const handleRefreshAlerts = () => "refresh-alerts";
     const handleRunCoDiscrepancy = () => "run-co";
     const handleRefreshCoDiscrepancy = () => "refresh-co";
@@ -147,10 +152,16 @@ describe("dataImporterSyncPanelProps", () => {
       previewLimited: true,
       previewError: "preview-error",
       previewRows,
+      syncPreflightChecks,
+      syncPreflightSummary,
+      syncActivityLog,
+      syncResumeJob,
+      syncResumeLabel: "resume-label",
       syncProgressSteps,
       formatDisplayDate,
       syncMessage: "sync-message",
       syncError: "sync-error",
+      handleResumeSync,
       cardSurfaceClass: "surface-card",
     });
 
@@ -206,8 +217,14 @@ describe("dataImporterSyncPanelProps", () => {
     expect(syncConfigPanelProps.onApplyRangePreset).toBe(onApplyRangePreset);
     expect(syncConfigPanelProps.onManualRangeChange).toBe(handleManualRangeChange);
     expect(syncConfigPanelProps.previewRows).toBe(previewRows);
+    expect(syncConfigPanelProps.syncPreflightChecks).toBe(syncPreflightChecks);
+    expect(syncConfigPanelProps.syncPreflightSummary).toBe(syncPreflightSummary);
+    expect(syncConfigPanelProps.syncActivityLog).toBe(syncActivityLog);
+    expect(syncConfigPanelProps.syncResumeJob).toBe(syncResumeJob);
+    expect(syncConfigPanelProps.syncResumeLabel).toBe("resume-label");
     expect(syncConfigPanelProps.syncProgressSteps).toBe(syncProgressSteps);
     expect(syncConfigPanelProps.formatDisplayDate).toBe(formatDisplayDate);
+    expect(syncConfigPanelProps.onResumeSync).toBe(handleResumeSync);
     expect(syncConfigPanelProps.cardSurfaceClass).toBe("surface-card");
   });
 });

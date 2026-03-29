@@ -35,11 +35,17 @@ export default function DataImporterSyncConfigPanel({
   previewLimited = false,
   previewError = "",
   previewRows = [],
+  syncPreflightChecks = [],
+  syncPreflightSummary = null,
+  syncActivityLog = [],
+  syncResumeJob = null,
+  syncResumeLabel = "",
   showPreviewTableInline = true,
   formatDisplayDate,
   syncProgressSteps = [],
   syncMessage = "",
   syncError = "",
+  onResumeSync,
   cardSurfaceClass = "",
 }) {
   if (!isAdminRole) {
@@ -300,11 +306,17 @@ export default function DataImporterSyncConfigPanel({
               previewLimited={previewLimited}
               previewError={previewError}
               previewRows={previewRows}
+              syncPreflightChecks={syncPreflightChecks}
+              syncPreflightSummary={syncPreflightSummary}
+              syncActivityLog={syncActivityLog}
+              syncResumeJob={syncResumeJob}
+              syncResumeLabel={syncResumeLabel}
               showPreviewTableInline={showPreviewTableInline}
               formatDate={formatDisplayDate}
               syncProgressSteps={syncProgressSteps}
               syncMessage={syncMessage}
               syncError={syncError}
+              onResumeSync={onResumeSync}
             />
           </div>
         ) : (

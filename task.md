@@ -18,13 +18,18 @@
 
 -- Title: ECUS background sync queue with resume support
 -- Bead: cng-7z0.7
--- Status: pending
+-- Status: in_progress
 -- Last updated: 2026-03-29
 
-- Muc tieu slice tiep theo la mo rong luong sync ECUS thanh background job co the tiep tuc sau khi tab dong/mat ket noi:
-  - tach lenh sync khoi request-response ngắn hiện tại de job lon khong bi ket UI
-  - co queue state / progress / result de operator quay lai van thay duoc trang thai moi nhat
-  - uu tien tan dung progress model vua them o `cng-7z0.6` thay vi tao them loading state rieng
+- Da hoan tat phase client-side cho lane `cng-7z0.7` + `cng-7z0.9` + `cng-7z0.10`:
+  - them `dataImporterSyncQueue.js` de luu sync job snapshot, progress, retry logs, va resume metadata vao local storage
+  - mo rong `useDataImporterSync.js` voi preflight checklist, retry/backoff co nhat ky than thien, resume CTA, va persisted job state
+  - day state moi qua `useDataImporterWorkflowSession.js`, `useDataImporterSessionController.js`, `useDataImporterContainerProps.js`, `dataImporterSyncPanelProps.js`, `DataImporterSyncConfigPanel.jsx`, va `DataImporterSyncPreviewPanel.jsx`
+  - bo sung regression cho helper/hook/panel/workflow/container seams, verify xanh voi 19 test jsdom + eslint targeted
+- Phan con lai de dong hẳn `cng-7z0.7`:
+  - tach lenh sync khoi request-response ngan hien tai de job lon van chay duoc khi operator roi tab hoac mat ket noi
+  - chuyen persisted state tu local-only snapshot sang backend-truth/job polling de resume khong phu thuoc vao tab vua tao job
+  - them stale-job cleanup/handoff rule ro rang sau khi co backend queue that su
 - Ghi chu backlog/repo:
   - da reconcile stale state ngay 2026-03-29: bead `cng-7z0.1`, `cng-7z0.2`, `cng-7z0.3`, `cng-7z0.4`, `cng-7z0.5`, `cng-7z0.29`, `cng-2k4.19`, va `cng-2k4.20` da duoc xac nhan completed theo code/task va da dong trong bead DB
   - `docs/open-backlog.md` da duoc don lai cho khop voi bead DB va code hien tai
@@ -39,6 +44,11 @@
   - day state moi qua `dataImporterSyncPanelProps.js` va `DataImporterSyncConfigPanel.jsx` de UI shell khong can tu tinh lai progress
   - cap nhat `DataImporterSyncPreviewPanel.jsx` thanh stepper co badge `dang chay` / `hoan tat` / `gap loi`, giu operator thay ro buoc nao dang active va chi tiet tung buoc
   - bo sung regression `tests/useDataImporterSync.test.jsx`, `tests/dataImporterSyncPreviewPanel.test.jsx`, `tests/dataImporterSyncPanelProps.test.js`, va re-verify seam `tests/useDataImporterContainerProps.test.jsx`
+- `cng-7z0.9` va `cng-7z0.10` da xong o muc checklist + retry lane cho dong bo ECUS:
+  - preflight checklist hien trang thai backend, SQL Server, thong tin ket noi, va khoang ngay truoc khi cho phep chay sync/resume
+  - commit phase co retry/backoff tu dong, thong bao countdown than thien, va activity log de operator thay duoc lan thu/ly do thu lai
+  - persisted job snapshot giu duoc tham so actor/range/include-exclude MST va cho phep resume tren lan mo lai tiep theo
+  - bo sung `tests/dataImporterSyncQueue.test.js`, cap nhat `tests/useDataImporterSync.test.jsx`, `tests/dataImporterSyncPreviewPanel.test.jsx`, `tests/dataImporterSyncPanelProps.test.js`, `tests/useDataImporterWorkflowSession.test.jsx`, va `tests/useDataImporterContainerProps.test.jsx`
 - `cng-7z0.28` da xong o muc delivery channel + delivery status tracking:
   - them chon kenh giao (`email`, `report_center`, `download_bundle`) trong `ReportingSchedulePanel` va preview payload ngay trong form
   - hien delivery status chip, `lastDeliveryAt`, va `lastDeliveryError` tren schedule cards de nguoi van hanh thay nhanh lan giao gan nhat
@@ -751,11 +761,11 @@
 
 - Title: ECUS background sync queue with resume support
 - Bead: `cng-7z0.7`
-- Status: pending
+- Status: in_progress
 - Follow-up backlog:
-  - dinh nghia sync job model co thể resume sau reload/tab close ma khong mat operator context
-  - tach trigger UI khoi vong doi request ngắn, bo sung persisted status/result lane cho sync ECUS
-  - khoa regression cho queue resume, stale-job cleanup, va hand-off tu progress stepper hien tai
+  - tach trigger UI khoi vong doi request ngan, doi sang backend job id + polling/dequeue that su
+  - bo sung stale-job cleanup va cross-tab hand-off dua tren backend-truth thay vi chi local snapshot
+  - khoa regression cho queue lifecycle moi truoc khi mo tiep `cng-7z0.8` hoac `cng-7z0.11`
 
 ## Verification
 

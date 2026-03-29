@@ -15,7 +15,9 @@ function getSyncStep(steps, key) {
 
 describe("useDataImporterSync", () => {
   afterEach(() => {
+    vi.useRealTimers();
     vi.restoreAllMocks();
+    window.localStorage.clear();
   });
 
   it("loads sync config, status, and alerts on mount", async () => {
@@ -103,6 +105,11 @@ describe("useDataImporterSync", () => {
         lastEvaluatedAt: "2026-03-11T00:02:00.000Z",
       });
       expect(result.current.mstFilterNotice).toBe("Lọc theo chỉ MST: 0312345678; loại trừ MST: 0399999999");
+      expect(result.current.syncPreflightSummary).toEqual({
+        ready: true,
+        blockingCount: 0,
+        warningCount: 1,
+      });
     });
   });
 
@@ -303,6 +310,7 @@ describe("useDataImporterSync", () => {
       status: "done",
       detail: "Danh sách tờ khai trên giao diện đã được làm mới.",
     });
+    expect(result.current.syncActivityLog.at(-1)?.message).toContain("đã hoàn tất");
   });
 
   it("keeps the sync successful while surfacing a failed declaration refresh step", async () => {
@@ -318,15 +326,15 @@ describe("useDataImporterSync", () => {
           ok: true,
           json: async () => ({
             config: {
-              enabled: false,
+              enabled: true,
               schedule: "0 * * * *",
               rangeDays: 1,
               preferMonthFirst: false,
               connection: {
-                server: "",
-                database: "",
-                user: "",
-                hasPassword: false,
+                server: "srv01",
+                database: "ecus",
+                user: "runner",
+                hasPassword: true,
               },
               includeTaxCodes: [],
               excludeTaxCodes: [],
@@ -522,5 +530,259 @@ describe("useDataImporterSync", () => {
     expect(result.current.previewRows).toEqual(previewRows);
     expect(result.current.previewLimited).toBe(true);
     expect(result.current.previewRangeInfo).toEqual(previewRange);
+  });
+
+  it("blocks sync runs when the preflight checklist is not ready", async () => {
+    const fetchWithAuth = vi.fn(async (url) => {
+      if (url === ECUS_CONFIG_ROUTE) {
+        return {
+          ok: true,
+          json: async () => ({
+            config: {
+              enabled: false,
+              schedule: "0 * * * *",
+              rangeDays: 1,
+              preferMonthFirst: false,
+              connection: {
+                server: "",
+                database: "",
+                user: "",
+                hasPassword: false,
+              },
+              includeTaxCodes: [],
+              excludeTaxCodes: [],
+            },
+          }),
+        };
+      }
+
+      if (url === ECUS_STATUS_ROUTE) {
+        return {
+          ok: true,
+          json: async () => ({
+            backend: { state: "timeout", message: "backend-timeout" },
+            database: { state: "timeout", message: "sql-timeout" },
+          }),
+        };
+      }
+
+      if (url === ALERTS_ROUTE) {
+        return {
+          ok: true,
+          json: async () => ({
+            alerts: [],
+            summary: {
+              outstanding: 0,
+              totalTracked: 0,
+              lastEvaluatedAt: null,
+            },
+          }),
+        };
+      }
+
+      throw new Error(`Unexpected url ${url}`);
+    });
+
+    const { result } = renderHook(() =>
+      useDataImporterSync({
+        actor: "tester",
+        canManageSync: true,
+        fetchWithAuth,
+        refreshDeclRowsFromServer: vi.fn(),
+        loadSavedRows: vi.fn(),
+      })
+    );
+
+    await waitFor(() => {
+      expect(result.current.syncPreflightSummary?.ready).toBe(false);
+    });
+
+    await act(async () => {
+      await result.current.handleRunSync();
+    });
+
+    expect(fetchWithAuth).not.toHaveBeenCalledWith(
+      ECUS_COMMIT_ROUTE,
+      expect.objectContaining({ method: "POST" }),
+    );
+    expect(result.current.syncError).toContain("Checklist trước khi chạy chưa đạt yêu cầu");
+  });
+
+  it("retries retriable ECUS commit failures and persists a resumable job snapshot", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+
+    const refreshDeclRowsFromServer = vi.fn(async () => []);
+    const loadSavedRows = vi.fn(() => true);
+    const fetchWithAuth = vi.fn(async (url, options = {}) => {
+      if (url === ECUS_CONFIG_ROUTE && !options.method) {
+        return {
+          ok: true,
+          json: async () => ({
+            config: {
+              enabled: true,
+              schedule: "0 * * * *",
+              rangeDays: 1,
+              preferMonthFirst: false,
+              connection: {
+                server: "srv01",
+                database: "ecus",
+                user: "runner",
+                hasPassword: true,
+              },
+              includeTaxCodes: [],
+              excludeTaxCodes: [],
+            },
+          }),
+        };
+      }
+
+      if (url === ECUS_STATUS_ROUTE && !options.method) {
+        return {
+          ok: true,
+          json: async () => ({
+            backend: { ok: true, checkedAt: "2026-03-11T01:00:00.000Z" },
+            database: { ok: true, checkedAt: "2026-03-11T01:00:30.000Z" },
+          }),
+        };
+      }
+
+      if (url === ALERTS_ROUTE && !options.method) {
+        return {
+          ok: true,
+          json: async () => ({
+            alerts: [],
+            summary: {
+              outstanding: 0,
+              totalTracked: 0,
+              lastEvaluatedAt: null,
+            },
+          }),
+        };
+      }
+
+      if (url === ECUS_COMMIT_ROUTE && options.method === "POST") {
+        const commitCallCount = fetchWithAuth.mock.calls.filter(
+          ([calledUrl, calledOptions]) => calledUrl === ECUS_COMMIT_ROUTE && calledOptions?.method === "POST",
+        ).length;
+
+        if (commitCallCount < 2) {
+          return { ok: false, status: 500 };
+        }
+
+        return {
+          ok: true,
+          json: async () => ({
+            result: {
+              imported: 3,
+              updated: 0,
+              skipped: 0,
+              reviewLocked: 0,
+            },
+          }),
+        };
+      }
+
+      throw new Error(`Unexpected request ${url} ${options.method || "GET"}`);
+    });
+
+    const { result, unmount } = renderHook(() =>
+      useDataImporterSync({
+        actor: "tester",
+        canManageSync: true,
+        fetchWithAuth,
+        refreshDeclRowsFromServer,
+        loadSavedRows,
+      })
+    );
+
+    await waitFor(() => {
+      expect(result.current.syncPreflightSummary?.ready).toBe(true);
+    });
+
+    let runPromise;
+    await act(async () => {
+      runPromise = result.current.handleRunSync();
+      await runPromise;
+    });
+
+    expect(fetchWithAuth.mock.calls.filter(([url]) => url === ECUS_COMMIT_ROUTE)).toHaveLength(2);
+    expect(result.current.syncMessage).toContain("Hoàn tất sau 2 lần thử");
+    expect(
+      result.current.syncActivityLog.some((entry) => entry.message.includes("Sẽ thử lại sau 1.5 giây")),
+    ).toBe(true);
+
+    const stored = JSON.parse(window.localStorage.getItem("data-importer-ecus-sync-job-v1"));
+    expect(stored.lastJob.status).toBe("completed");
+
+    unmount();
+
+    window.localStorage.setItem(
+      "data-importer-ecus-sync-job-v1",
+      JSON.stringify({
+        activeJob: stored.lastJob,
+        resumableJob: null,
+        lastJob: null,
+      }),
+    );
+
+    const resumed = renderHook(() =>
+      useDataImporterSync({
+        actor: "tester",
+        canManageSync: true,
+        fetchWithAuth: vi.fn(async (url) => {
+          if (url === ECUS_CONFIG_ROUTE) {
+            return {
+              ok: true,
+              json: async () => ({
+                config: {
+                  enabled: true,
+                  schedule: "0 * * * *",
+                  rangeDays: 1,
+                  preferMonthFirst: false,
+                  connection: {
+                    server: "srv01",
+                    database: "ecus",
+                    user: "runner",
+                    hasPassword: true,
+                  },
+                  includeTaxCodes: [],
+                  excludeTaxCodes: [],
+                },
+              }),
+            };
+          }
+
+          if (url === ECUS_STATUS_ROUTE) {
+            return {
+              ok: true,
+              json: async () => ({
+                backend: { ok: true },
+                database: { ok: true },
+              }),
+            };
+          }
+
+          if (url === ALERTS_ROUTE) {
+            return {
+              ok: true,
+              json: async () => ({ alerts: [], summary: { outstanding: 0, totalTracked: 0, lastEvaluatedAt: null } }),
+            };
+          }
+
+          throw new Error(`Unexpected url ${url}`);
+        }),
+        refreshDeclRowsFromServer: vi.fn(),
+        loadSavedRows: vi.fn(),
+      })
+    );
+
+    await waitFor(() => {
+      expect(resumed.result.current.syncResumeJob).not.toBeNull();
+      expect(resumed.result.current.syncPreflightSummary?.ready).toBe(true);
+    });
+
+    expect(resumed.result.current.syncResumeLabel).toContain("Job lưu lúc");
+    resumed.unmount();
   });
 });

@@ -5,6 +5,22 @@ import {
   formatMstListForInput,
   parseMstListInput,
 } from "@/components/dataImporter/dataImporterConfig.js";
+import {
+  appendSyncJobLog,
+  buildSyncPreflightChecks,
+  createDefaultSyncJobState,
+  createSyncJob,
+  createSyncProgressSteps,
+  formatRetryDelayLabel,
+  getSyncRetryDelayMs,
+  isRetriableSyncError,
+  readStoredSyncJobState,
+  SYNC_RETRY_DELAYS_MS,
+  setSyncJobStatus,
+  summarizeSyncPreflight,
+  updateSyncJobProgress,
+  writeStoredSyncJobState,
+} from "@/components/dataImporter/dataImporterSyncQueue.js";
 import { formatDateRangeLabel } from "../../../packages/domain/src/format.js";
 
 const ECUS_CONFIG_ROUTE = "/api/v4/declarations/imports/ecus-config";
@@ -24,21 +40,6 @@ const DEFAULT_STATUS_INFO = {
   database: null,
   checkedAt: null,
 };
-
-const SYNC_PROGRESS_STEP_DEFS = [
-  { key: "commit", label: "Đồng bộ dữ liệu từ ECUS" },
-  { key: "reconcile", label: "Làm mới cấu hình, trạng thái và cảnh báo" },
-  { key: "refreshDeclRows", label: "Tải lại tờ khai từ server" },
-  { key: "reloadSavedRows", label: "Làm mới danh sách đang hiển thị" },
-];
-
-function createSyncProgressSteps() {
-  return SYNC_PROGRESS_STEP_DEFS.map((step) => ({
-    ...step,
-    status: "pending",
-    detail: "",
-  }));
-}
 
 function buildMstFilterNotice(includeTaxCodes, excludeTaxCodes) {
   if (!includeTaxCodes.length && !excludeTaxCodes.length) {
@@ -95,6 +96,7 @@ export default function useDataImporterSync({
   const [previewError, setPreviewError] = useState("");
   const [previewRangeInfo, setPreviewRangeInfo] = useState(null);
   const [syncProgressSteps, setSyncProgressSteps] = useState(() => createSyncProgressSteps());
+  const [syncJobState, setSyncJobState] = useState(() => readStoredSyncJobState());
 
   const previewRangeLabel = useMemo(() => formatDateRangeLabel(previewRangeInfo), [previewRangeInfo]);
 
@@ -112,6 +114,46 @@ export default function useDataImporterSync({
     () => buildMstFilterNotice(activeIncludeTaxCodes, activeExcludeTaxCodes),
     [activeExcludeTaxCodes, activeIncludeTaxCodes]
   );
+
+  const visibleSyncJob = useMemo(
+    () => syncJobState.activeJob || syncJobState.resumableJob || syncJobState.lastJob || null,
+    [syncJobState.activeJob, syncJobState.lastJob, syncJobState.resumableJob]
+  );
+
+  const syncPreflightChecks = useMemo(
+    () =>
+      buildSyncPreflightChecks({
+        statusInfo,
+        syncForm,
+        manualRange,
+      }),
+    [manualRange, statusInfo, syncForm]
+  );
+
+  const syncPreflightSummary = useMemo(
+    () => summarizeSyncPreflight(syncPreflightChecks),
+    [syncPreflightChecks]
+  );
+
+  const syncActivityLog = useMemo(
+    () => (Array.isArray(visibleSyncJob?.logs) ? visibleSyncJob.logs : []),
+    [visibleSyncJob]
+  );
+
+  const syncResumeLabel = useMemo(() => {
+    if (!syncJobState.resumableJob) {
+      return "";
+    }
+
+    const { createdAt, from, to } = syncJobState.resumableJob;
+    const createdLabel = createdAt ? new Date(createdAt).toLocaleString("vi-VN") : "không rõ thời gian";
+
+    if (from && to) {
+      return `Job lưu lúc ${createdLabel} cho khoảng ${from} → ${to}.`;
+    }
+
+    return `Job lưu lúc ${createdLabel} sẽ dùng RangeDays mặc định trong cấu hình.`;
+  }, [syncJobState.resumableJob]);
 
   const applyConfigToForm = useCallback((config) => {
     const normalizedConfig = {
@@ -140,6 +182,44 @@ export default function useDataImporterSync({
       excludeTaxCodesText: formatMstListForInput(normalizedConfig.excludeTaxCodes),
     });
   }, []);
+
+  const updateSyncJobState = useCallback((updater) => {
+    setSyncJobState((prev) => {
+      const nextState =
+        typeof updater === "function"
+          ? updater(prev || createDefaultSyncJobState())
+          : updater || createDefaultSyncJobState();
+
+      writeStoredSyncJobState(nextState);
+      return nextState;
+    });
+  }, []);
+
+  const waitForDelay = useCallback((delayMs) => {
+    return new Promise((resolve) => {
+      window.setTimeout(resolve, delayMs);
+    });
+  }, []);
+
+  useEffect(() => {
+    const nextSteps =
+      Array.isArray(visibleSyncJob?.progressSteps) && visibleSyncJob.progressSteps.length
+        ? visibleSyncJob.progressSteps
+        : createSyncProgressSteps();
+
+    setSyncProgressSteps(nextSteps);
+  }, [visibleSyncJob]);
+
+  useEffect(() => {
+    if (!syncJobState.resumableJob || syncRunning) {
+      return;
+    }
+
+    setSyncMessage((prev) =>
+      prev ||
+      "Đã phát hiện một job đồng bộ dang dở từ phiên trước. Bạn có thể tiếp tục lại với đúng tham số đã lưu."
+    );
+  }, [syncJobState.resumableJob, syncRunning]);
 
   useEffect(() => {
     setPreviewRows([]);
@@ -325,63 +405,145 @@ export default function useDataImporterSync({
     syncForm,
   ]);
 
-  const handleRunSync = useCallback(async () => {
-    if (!canManageSync) {
-      alert("Bạn không có quyền chạy đồng bộ ECUS.");
-      return;
+  const executeSyncJob = useCallback(async (job, options = {}) => {
+    if (!job) {
+      return false;
     }
 
-    if (!manualRange.from && !manualRange.to) {
-      const confirmDefault = window.confirm(
-        "Bạn chưa chọn khoảng thời gian cụ thể. Hệ thống sẽ dùng số ngày mặc định trong cấu hình (RangeDays). Bạn có muốn tiếp tục?"
-      );
-      if (!confirmDefault) {
-        return;
-      }
-    }
+    const totalAttempts = 1 + SYNC_RETRY_DELAYS_MS.length;
 
     setSyncRunning(true);
     setSyncMessage("");
     setSyncError("");
-    setSyncProgressSteps(createSyncProgressSteps());
+    setPreviewRows([]);
+    setPreviewRangeInfo(null);
+    setPreviewLimited(false);
+    setPreviewError("");
 
     let currentStepKey = "commit";
-    const updateSyncStep = (key, status, detail = "") => {
-      currentStepKey = key;
-      setSyncProgressSteps((prev) => {
-        const base = Array.isArray(prev) && prev.length ? prev : createSyncProgressSteps();
-        return base.map((step) =>
-          step.key === key
-            ? {
-                ...step,
-                status,
-                detail,
-              }
-            : step
-        );
-      });
+    let workingJob = setSyncJobStatus(job, "running", {
+      startedAt: job.startedAt || new Date().toISOString(),
+      finishedAt: null,
+      lastError: "",
+    });
+
+    const persistActiveJob = (nextJob) => {
+      workingJob = nextJob;
+      setSyncProgressSteps(nextJob?.progressSteps || createSyncProgressSteps());
+      updateSyncJobState((prev) => ({
+        ...prev,
+        activeJob: nextJob,
+        resumableJob: prev?.resumableJob?.id === nextJob?.id ? null : prev?.resumableJob || null,
+        lastJob: prev?.lastJob || null,
+      }));
+      return nextJob;
     };
 
-    try {
-      updateSyncStep("commit", "active", "Đang gửi yêu cầu đồng bộ tới ECUS.");
-      const response = await fetchWithAuth(ECUS_COMMIT_ROUTE, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          actor,
-          from: manualRange.from || undefined,
-          to: manualRange.to || undefined,
-          includeTaxCodes: activeIncludeTaxCodes,
-          excludeTaxCodes: activeExcludeTaxCodes,
-        }),
-        credentials: "include",
-      });
+    const persistFinishedJob = (nextJob) => {
+      workingJob = nextJob;
+      setSyncProgressSteps(nextJob?.progressSteps || createSyncProgressSteps());
+      updateSyncJobState((prev) => ({
+        ...prev,
+        activeJob: null,
+        resumableJob: null,
+        lastJob: nextJob,
+      }));
+      return nextJob;
+    };
 
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
+    const updateWorkingJob = (transformer) => {
+      const nextJob = transformer(workingJob);
+      return persistActiveJob(nextJob || workingJob);
+    };
+
+    const appendActivityLog = (message, level = "info") => {
+      updateWorkingJob((current) => appendSyncJobLog(current, message, { level }));
+    };
+
+    const updateSyncStep = (key, status, detail = "") => {
+      currentStepKey = key;
+      updateWorkingJob((current) => updateSyncJobProgress(current, key, status, detail));
+    };
+
+    persistActiveJob(
+      appendSyncJobLog(
+        workingJob,
+        options.resumed
+          ? "Đang tiếp tục job đồng bộ ECUS đã lưu từ phiên trước."
+          : "Bắt đầu chạy job đồng bộ ECUS.",
+        { level: "info" }
+      )
+    );
+
+    try {
+      let payload = null;
+
+      for (let attempt = 1; attempt <= totalAttempts; attempt += 1) {
+        persistActiveJob(
+          setSyncJobStatus(workingJob, "running", {
+            attemptCount: attempt,
+            currentStepKey: "commit",
+          })
+        );
+
+        updateSyncStep(
+          "commit",
+          "active",
+          attempt === 1
+            ? "Đang gửi yêu cầu đồng bộ tới ECUS."
+            : `Đang thử lại lần ${attempt}/${totalAttempts}.`,
+        );
+        appendActivityLog(`Gửi yêu cầu đồng bộ ECUS lần ${attempt}/${totalAttempts}.`);
+
+        try {
+          const response = await fetchWithAuth(ECUS_COMMIT_ROUTE, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              actor: workingJob.actor || actor,
+              from: workingJob.from || undefined,
+              to: workingJob.to || undefined,
+              includeTaxCodes: workingJob.includeTaxCodes || [],
+              excludeTaxCodes: workingJob.excludeTaxCodes || [],
+            }),
+            credentials: "include",
+          });
+
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+          }
+
+          payload = await response.json();
+
+          if (attempt > 1) {
+            appendActivityLog(
+              `Yêu cầu đồng bộ ECUS đã thành công ở lần ${attempt}/${totalAttempts}.`
+            );
+          }
+          break;
+        } catch (commitError) {
+          const delayMs = isRetriableSyncError(commitError)
+            ? getSyncRetryDelayMs(attempt - 1)
+            : null;
+
+          if (!delayMs || attempt >= totalAttempts) {
+            throw commitError;
+          }
+
+          const retryLabel = formatRetryDelayLabel(delayMs);
+          appendActivityLog(
+            `Lần ${attempt}/${totalAttempts} thất bại: ${commitError?.message || "Không rõ lỗi"}. Sẽ thử lại sau ${retryLabel}.`,
+            "warn"
+          );
+          updateSyncStep(
+            "commit",
+            "active",
+            `Lần ${attempt}/${totalAttempts} thất bại (${commitError?.message || "Không rõ lỗi"}). Sẽ tự thử lại sau ${retryLabel}.`,
+          );
+          await waitForDelay(delayMs);
+        }
       }
 
-      const payload = await response.json();
       const imported = payload?.result?.imported ?? 0;
       const updated = payload?.result?.updated ?? 0;
       const skipped = payload?.result?.skipped ?? 0;
@@ -389,11 +551,13 @@ export default function useDataImporterSync({
       const updatedNote = updated > 0 ? `, cập nhật ${updated} tờ khai đã có` : "";
       const skippedNote = skipped > 0 ? `, bỏ qua ${skipped} tờ khai đã có` : "";
       const lockedNote = locked > 0 ? `, khóa ${locked} tờ khai đã rà soát` : "";
-      const baseMessage = `Đã đồng bộ ${imported} tờ khai mới từ ECUS${updatedNote}${skippedNote}${lockedNote}.`;
+      const attemptNote =
+        workingJob.attemptCount > 1 ? ` Hoàn tất sau ${workingJob.attemptCount} lần thử.` : "";
+      const baseMessage = `Đã đồng bộ ${imported} tờ khai mới từ ECUS${updatedNote}${skippedNote}${lockedNote}.${attemptNote}`;
       const messageParts = [baseMessage];
 
-      if (mstFilterNotice) {
-        messageParts.push(`${mstFilterNotice}.`);
+      if (workingJob.mstFilterNotice) {
+        messageParts.push(`${workingJob.mstFilterNotice}.`);
       }
 
       updateSyncStep(
@@ -401,28 +565,24 @@ export default function useDataImporterSync({
         "done",
         `Đã nhập ${imported} mới, cập nhật ${updated}, bỏ qua ${skipped}, khóa ${locked}.`,
       );
+      appendActivityLog(
+        `ECUS đã trả kết quả: nhập ${imported}, cập nhật ${updated}, bỏ qua ${skipped}, khóa ${locked}.`
+      );
       setSyncMessage(messageParts.join(" ").replace(/\s+/g, " ").trim());
-      setPreviewRows([]);
-      setPreviewRangeInfo(null);
-      setPreviewLimited(false);
-      setPreviewError("");
 
       updateSyncStep(
         "reconcile",
         "active",
         "Đang tải lại cấu hình, trạng thái kết nối và cảnh báo sau khi đồng bộ.",
       );
+      appendActivityLog("Đang đồng bộ lại cấu hình, trạng thái kết nối và cảnh báo.");
       await fetchSyncConfig({ preserveMessage: true });
       await fetchSyncStatus();
       await fetchAlerts();
       if (typeof onAfterSyncSuccess === "function") {
         await onAfterSyncSuccess();
       }
-      updateSyncStep(
-        "reconcile",
-        "done",
-        "Đã làm mới cấu hình, trạng thái kết nối và cảnh báo.",
-      );
+      updateSyncStep("reconcile", "done", "Đã làm mới cấu hình, trạng thái kết nối và cảnh báo.");
 
       updateSyncStep("refreshDeclRows", "active", "Đang tải lại dữ liệu tờ khai từ server.");
       try {
@@ -437,6 +597,10 @@ export default function useDataImporterSync({
         );
       } catch (refreshError) {
         console.error("Không thể tải dữ liệu tờ khai sau đồng bộ", refreshError);
+        appendActivityLog(
+          `Bỏ qua lỗi khi tải lại dữ liệu tờ khai: ${refreshError?.message || "Không rõ lỗi"}.`,
+          "warn"
+        );
         updateSyncStep(
           "refreshDeclRows",
           "error",
@@ -451,6 +615,20 @@ export default function useDataImporterSync({
         "done",
         "Danh sách tờ khai trên giao diện đã được làm mới.",
       );
+      appendActivityLog("Danh sách tờ khai trong giao diện đã được làm mới.");
+
+      persistFinishedJob(
+        setSyncJobStatus(
+          appendSyncJobLog(workingJob, "Job đồng bộ ECUS đã hoàn tất.", { level: "info" }),
+          "completed",
+          {
+            finishedAt: new Date().toISOString(),
+            lastError: "",
+          }
+        )
+      );
+      setSyncError("");
+      return true;
     } catch (err) {
       console.error("Đồng bộ ECUS thất bại", err);
       updateSyncStep(
@@ -458,26 +636,114 @@ export default function useDataImporterSync({
         "error",
         err?.message || "Không thể hoàn tất bước đồng bộ hiện tại.",
       );
+      const failedJob = setSyncJobStatus(
+        appendSyncJobLog(
+          workingJob,
+          `Job đồng bộ ECUS thất bại: ${err?.message || "Không rõ lỗi"}.`,
+          { level: "error" }
+        ),
+        "failed",
+        {
+          finishedAt: new Date().toISOString(),
+          lastError: err?.message || "Không thể đồng bộ ECUS",
+        }
+      );
+      persistFinishedJob(failedJob);
       setSyncMessage("");
       setSyncError(err?.message || "Không thể đồng bộ ECUS");
+      return false;
     } finally {
       setSyncRunning(false);
     }
   }, [
     actor,
-    activeExcludeTaxCodes,
-    activeIncludeTaxCodes,
-    canManageSync,
     fetchAlerts,
     fetchSyncConfig,
     fetchSyncStatus,
     fetchWithAuth,
     loadSavedRows,
-    manualRange.from,
-    manualRange.to,
-    mstFilterNotice,
     onAfterSyncSuccess,
     refreshDeclRowsFromServer,
+    updateSyncJobState,
+    waitForDelay,
+  ]);
+
+  const handleRunSync = useCallback(async () => {
+    if (!canManageSync) {
+      alert("Bạn không có quyền chạy đồng bộ ECUS.");
+      return false;
+    }
+
+    if (!syncPreflightSummary.ready) {
+      setSyncMessage("");
+      setSyncError("Checklist trước khi chạy chưa đạt yêu cầu. Hãy xử lý các mục đang báo lỗi rồi thử lại.");
+      return false;
+    }
+
+    if (!manualRange.from && !manualRange.to) {
+      const confirmDefault = window.confirm(
+        "Bạn chưa chọn khoảng thời gian cụ thể. Hệ thống sẽ dùng số ngày mặc định trong cấu hình (RangeDays). Bạn có muốn tiếp tục?"
+      );
+      if (!confirmDefault) {
+        return false;
+      }
+    }
+
+    const job = createSyncJob({
+      actor,
+      manualRange,
+      includeTaxCodes: activeIncludeTaxCodes,
+      excludeTaxCodes: activeExcludeTaxCodes,
+      mstFilterNotice,
+    });
+
+    updateSyncJobState((prev) => ({
+      ...prev,
+      activeJob: null,
+      resumableJob: null,
+      lastJob: prev?.lastJob || null,
+    }));
+
+    return executeSyncJob(job, { resumed: false });
+  }, [
+    activeExcludeTaxCodes,
+    activeIncludeTaxCodes,
+    actor,
+    canManageSync,
+    executeSyncJob,
+    manualRange,
+    mstFilterNotice,
+    syncPreflightSummary.ready,
+    updateSyncJobState,
+  ]);
+
+  const handleResumeSync = useCallback(async () => {
+    if (!syncJobState.resumableJob) {
+      return false;
+    }
+
+    if (!syncPreflightSummary.ready) {
+      setSyncMessage("");
+      setSyncError("Checklist trước khi resume chưa đạt yêu cầu. Hãy xử lý các mục đang báo lỗi rồi thử lại.");
+      return false;
+    }
+
+    setManualRange({
+      from: syncJobState.resumableJob.from || "",
+      to: syncJobState.resumableJob.to || "",
+    });
+    setSyncForm((prev) => ({
+      ...prev,
+      includeTaxCodesText: formatMstListForInput(syncJobState.resumableJob.includeTaxCodes),
+      excludeTaxCodesText: formatMstListForInput(syncJobState.resumableJob.excludeTaxCodes),
+    }));
+
+    return executeSyncJob(syncJobState.resumableJob, { resumed: true });
+  }, [
+    executeSyncJob,
+    setSyncForm,
+    syncJobState.resumableJob,
+    syncPreflightSummary.ready,
   ]);
 
   const handlePreviewSync = useCallback(async () => {
@@ -581,6 +847,11 @@ export default function useDataImporterSync({
     previewRangeInfo,
     previewRangeLabel,
     syncProgressSteps,
+    syncPreflightChecks,
+    syncPreflightSummary,
+    syncActivityLog,
+    syncResumeJob: syncJobState.resumableJob,
+    syncResumeLabel,
     activeIncludeTaxCodes,
     activeExcludeTaxCodes,
     mstFilterNotice,
@@ -589,6 +860,7 @@ export default function useDataImporterSync({
     handleRefreshAlerts,
     handleSaveSyncConfig,
     handleRunSync,
+    handleResumeSync,
     handlePreviewSync,
   };
 }

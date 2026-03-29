@@ -24,6 +24,27 @@ const SYNC_PROGRESS_STATUS_META = {
   },
 };
 
+const PREFLIGHT_STATUS_META = {
+  pass: {
+    badgeClass: "border border-emerald-200 bg-emerald-50 text-emerald-700",
+    label: "Đạt",
+  },
+  warn: {
+    badgeClass: "border border-amber-200 bg-amber-50 text-amber-700",
+    label: "Lưu ý",
+  },
+  fail: {
+    badgeClass: "border border-red-200 bg-red-50 text-red-700",
+    label: "Chặn chạy",
+  },
+};
+
+const ACTIVITY_LOG_LEVEL_META = {
+  info: "text-gray-700",
+  warn: "text-amber-700",
+  error: "text-red-700",
+};
+
 function renderPreviewStatus(status) {
   if (status === "existing") {
     return <span className="rounded bg-gray-200 px-2 py-0.5 text-xs text-gray-700">Đã có</span>;
@@ -47,15 +68,23 @@ export default function DataImporterSyncPreviewPanel({
   previewLimited = false,
   previewError = "",
   previewRows = [],
+  syncPreflightChecks = [],
+  syncPreflightSummary = null,
+  syncActivityLog = [],
+  syncResumeJob = null,
+  syncResumeLabel = "",
   showPreviewTableInline = true,
   formatDate = (value) => value,
   syncProgressSteps = [],
   syncMessage = "",
   syncError = "",
+  onResumeSync,
 }) {
   const hasSyncProgress = syncProgressSteps.some(
     (step) => step?.status && step.status !== "pending",
   );
+  const hasPreflightChecks = syncPreflightChecks.length > 0;
+  const hasActivityLog = syncActivityLog.length > 0;
 
   return (
     <>
@@ -108,7 +137,64 @@ export default function DataImporterSyncPreviewPanel({
         >
           {syncRunning ? "Đang đồng bộ..." : "Đồng bộ ngay"}
         </button>
+        {syncResumeJob ? (
+          <button
+            type="button"
+            onClick={onResumeSync}
+            disabled={syncRunning}
+            className="rounded border border-sky-600 px-3 py-1 text-sm text-sky-700 hover:bg-sky-50 disabled:opacity-50"
+          >
+            Tiếp tục job dang dở
+          </button>
+        ) : null}
       </div>
+
+      {syncResumeLabel ? (
+        <div className="rounded border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-700">
+          {syncResumeLabel}
+        </div>
+      ) : null}
+
+      {hasPreflightChecks ? (
+        <div className="space-y-2 rounded border border-[color:var(--ds-border-subtle)] bg-white/80 px-3 py-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="text-xs font-medium uppercase tracking-wide text-gray-700">
+              Checklist trước khi chạy
+            </div>
+            {syncPreflightSummary ? (
+              <span
+                className={`rounded px-2 py-0.5 text-xs font-medium ${
+                  syncPreflightSummary.ready
+                    ? "border border-emerald-200 bg-emerald-50 text-emerald-700"
+                    : "border border-red-200 bg-red-50 text-red-700"
+                }`}
+              >
+                {syncPreflightSummary.ready
+                  ? "Sẵn sàng chạy"
+                  : `Còn ${syncPreflightSummary.blockingCount} mục cần xử lý`}
+              </span>
+            ) : null}
+          </div>
+          <ul className="space-y-2" aria-label="Checklist trước khi chạy đồng bộ ECUS">
+            {syncPreflightChecks.map((check) => {
+              const meta = PREFLIGHT_STATUS_META[check?.status] || PREFLIGHT_STATUS_META.warn;
+              return (
+                <li key={check?.key || check?.label} className="rounded border border-[color:var(--ds-border-subtle)] px-3 py-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-sm text-gray-800">{check?.label || "Mục kiểm tra"}</span>
+                    <span className={`rounded px-2 py-0.5 text-xs font-medium ${meta.badgeClass}`}>
+                      {meta.label}
+                    </span>
+                  </div>
+                  {check?.detail ? (
+                    <div className="mt-1 text-xs text-gray-600">{check.detail}</div>
+                  ) : null}
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      ) : null}
 
       {mstFilterNotice ? (
         <div className="text-xs text-amber-600">
@@ -154,6 +240,27 @@ export default function DataImporterSyncPreviewPanel({
                 </li>
               );
             })}
+          </ol>
+        </div>
+      ) : null}
+
+      {hasActivityLog ? (
+        <div className="space-y-2 rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-muted)] px-3 py-3">
+          <div className="text-xs font-medium uppercase tracking-wide text-gray-700">
+            Nhật ký queue và retry
+          </div>
+          <ol className="space-y-1" aria-label="Nhật ký queue và retry của đồng bộ ECUS">
+            {syncActivityLog.map((entry) => (
+              <li
+                key={entry?.id || `${entry?.at || ""}-${entry?.message || ""}`}
+                className={`text-xs ${ACTIVITY_LOG_LEVEL_META[entry?.level] || ACTIVITY_LOG_LEVEL_META.info}`}
+              >
+                <span className="font-medium">
+                  {entry?.at ? new Date(entry.at).toLocaleTimeString("vi-VN") : "--:--:--"}
+                </span>{" "}
+                {entry?.message || ""}
+              </li>
+            ))}
           </ol>
         </div>
       ) : null}
