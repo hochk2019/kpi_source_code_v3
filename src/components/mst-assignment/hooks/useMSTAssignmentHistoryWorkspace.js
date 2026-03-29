@@ -9,6 +9,27 @@ const STATUS_FILTER_MAP = new Map([
   ["status:pending", MST_ASSIGNMENT_STATUS.PENDING],
 ]);
 
+const normalizeHistoryValue = (value) => (value || "").toString().trim().toLowerCase();
+
+function entryMatchesHistoryFilter(entry, filterType) {
+  if (!entry) return false;
+  if (!filterType || filterType === "all") return true;
+
+  if (HISTORY_ACTION_TYPES.has(filterType)) {
+    return entry.type === filterType;
+  }
+
+  const expectedStatus = STATUS_FILTER_MAP.get(filterType);
+  if (!expectedStatus) {
+    return true;
+  }
+
+  return (
+    entry.field === "status" &&
+    normalizeHistoryValue(entry.to) === normalizeHistoryValue(expectedStatus)
+  );
+}
+
 function buildHistoryIndex(entries = []) {
   const map = new Map();
 
@@ -59,8 +80,6 @@ export default function useMSTAssignmentHistoryWorkspace({
   const filteredHistoryEntries = useMemo(() => {
     if (!historyEntries?.length) return [];
 
-    const shouldFilterByActionType = HISTORY_ACTION_TYPES.has(historyFilter.type);
-
     return historyEntries.filter((entry) => {
       if (!entry) return false;
 
@@ -73,7 +92,7 @@ export default function useMSTAssignmentHistoryWorkspace({
         return false;
       }
 
-      if (shouldFilterByActionType && entry.type !== historyFilter.type) {
+      if (!entryMatchesHistoryFilter(entry, historyFilter.type)) {
         return false;
       }
 
@@ -98,9 +117,6 @@ export default function useMSTAssignmentHistoryWorkspace({
 
   const historyFilteredRowKeys = useMemo(() => {
     if (!isHistoryFilterActive) return null;
-    if (!HISTORY_ACTION_TYPES.has(historyFilter.type)) {
-      return null;
-    }
 
     const set = new Set();
     filteredHistoryEntries.forEach((entry) => {
@@ -109,13 +125,10 @@ export default function useMSTAssignmentHistoryWorkspace({
       }
     });
 
-    return set;
-  }, [filteredHistoryEntries, historyFilter.type, isHistoryFilterActive]);
+    return set.size ? set : null;
+  }, [filteredHistoryEntries, isHistoryFilterActive]);
 
-  const activeStatusFilter = useMemo(() => {
-    if (!isHistoryFilterActive) return null;
-    return STATUS_FILTER_MAP.get(historyFilter.type) || null;
-  }, [historyFilter.type, isHistoryFilterActive]);
+  const activeStatusFilter = null;
 
   const updateHistoryFilter = useCallback((patch) => {
     setHistoryFilter((prev) => ({ ...prev, ...patch }));
@@ -141,7 +154,7 @@ export default function useMSTAssignmentHistoryWorkspace({
         const duplicateMessage = HISTORY_ACTION_TYPES.has(historyFilter.type)
           ? "Bộ lọc thao tác đã tồn tại."
           : STATUS_FILTER_MAP.has(historyFilter.type)
-            ? "Bộ lọc trạng thái đã tồn tại."
+            ? "Bộ lọc thay đổi trạng thái đã tồn tại."
             : "Bộ lọc đã tồn tại.";
 
         alertFn(duplicateMessage);
@@ -152,7 +165,7 @@ export default function useMSTAssignmentHistoryWorkspace({
     const successMessage = HISTORY_ACTION_TYPES.has(historyFilter.type)
       ? "Đã lưu bộ lọc thao tác."
       : STATUS_FILTER_MAP.has(historyFilter.type)
-        ? "Đã lưu bộ lọc trạng thái nhân viên."
+        ? "Đã lưu bộ lọc thay đổi trạng thái."
         : "Đã lưu bộ lọc.";
 
     alertFn(successMessage);

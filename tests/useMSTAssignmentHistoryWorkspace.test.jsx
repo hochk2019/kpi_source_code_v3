@@ -29,6 +29,13 @@ function createEntries() {
       type: "create",
       timestamp: "2025-03-02T08:00:00.000Z",
     },
+    {
+      rowKey: "031__2025-03-03__",
+      field: "status",
+      to: "Chưa gán nhân viên",
+      type: "update",
+      timestamp: "2025-03-03T08:00:00.000Z",
+    },
   ];
 }
 
@@ -49,8 +56,8 @@ describe("useMSTAssignmentHistoryWorkspace", () => {
     );
 
     expect(storeMocks.getMSTHistoryEntries).toHaveBeenCalled();
-    expect(result.current.totalHistoryCount).toBe(2);
-    expect(result.current.filteredHistoryCount).toBe(2);
+    expect(result.current.totalHistoryCount).toBe(3);
+    expect(result.current.filteredHistoryCount).toBe(3);
     expect(result.current.historyIndex.get("031__2025-03-01__")).toMatchObject({
       person_import: [expect.objectContaining({ type: "update" })],
     });
@@ -60,8 +67,9 @@ describe("useMSTAssignmentHistoryWorkspace", () => {
     });
 
     expect(result.current.isHistoryFilterActive).toBe(true);
-    expect(result.current.filteredHistoryCount).toBe(1);
+    expect(result.current.filteredHistoryCount).toBe(2);
     expect(result.current.historyFilteredRowKeys.has("031__2025-03-01__")).toBe(true);
+    expect(result.current.historyFilteredRowKeys.has("031__2025-03-03__")).toBe(true);
     expect(result.current.activeStatusFilter).toBeNull();
     expect(goToFirstPage).toHaveBeenCalled();
   });
@@ -89,14 +97,14 @@ describe("useMSTAssignmentHistoryWorkspace", () => {
       result.current.handleSaveActionFavorite();
     });
 
-    expect(alertFn).toHaveBeenCalledWith("Bộ lọc trạng thái đã tồn tại.");
+    expect(alertFn).toHaveBeenCalledWith("Bộ lọc thay đổi trạng thái đã tồn tại.");
 
     act(() => {
       result.current.handleSaveActionFavorite();
     });
 
     expect(addQuickFavorite).toHaveBeenLastCalledWith("action", "status:assigned");
-    expect(alertFn).toHaveBeenCalledWith("Đã lưu bộ lọc trạng thái nhân viên.");
+    expect(alertFn).toHaveBeenCalledWith("Đã lưu bộ lọc thay đổi trạng thái.");
 
     act(() => {
       result.current.resetHistoryFilter();
@@ -106,7 +114,7 @@ describe("useMSTAssignmentHistoryWorkspace", () => {
     expect(result.current.isHistoryFilterActive).toBe(false);
   });
 
-  it("refreshes entries and maps status filter types to assignment states", () => {
+  it("refreshes entries and filters real history events for status transitions", () => {
     let currentEntries = createEntries();
 
     const { result } = renderHook(() =>
@@ -121,7 +129,14 @@ describe("useMSTAssignmentHistoryWorkspace", () => {
       result.current.updateHistoryFilter({ type: "status:pending" });
     });
 
-    expect(result.current.activeStatusFilter).toBe("Chưa gán nhân viên");
+    expect(result.current.activeStatusFilter).toBeNull();
+    expect(result.current.filteredHistoryCount).toBe(1);
+    expect(result.current.filteredHistoryEntries[0]).toMatchObject({
+      rowKey: "031__2025-03-03__",
+      field: "status",
+      to: "Chưa gán nhân viên",
+    });
+    expect(result.current.historyFilteredRowKeys.has("031__2025-03-03__")).toBe(true);
 
     act(() => {
       currentEntries = [
@@ -136,8 +151,6 @@ describe("useMSTAssignmentHistoryWorkspace", () => {
     });
 
     expect(result.current.totalHistoryCount).toBe(1);
-    expect(result.current.filteredHistoryEntries[0]).toMatchObject({
-      rowKey: "031__2025-03-05__",
-    });
+    expect(result.current.filteredHistoryEntries).toEqual([]);
   });
 });

@@ -70,6 +70,16 @@
   - `cng-7z0.7` — them hang doi dong bo nen va resume support cho ECUS imports
 ## Recent Completed Slices
 
+- `cng-7z0.17` da hoan tat duplicate-detection lane cho MST assignment:
+  - `src/components/mst-assignment/model/displaySelectors.js` nay sinh `conflictSummary` cho moi MST co nhieu giai doan dang cung hieu luc, gom active-stage count, assignee/team divergence, va goi y xu ly `giu / chuyen / tach vai tro`
+  - `src/components/mst-assignment/table/MstAssignmentDataTablePanel.jsx` surfacing badge `Trung gan` tren bang, canh bao inline cho tung dong, va danh sach goi y xu ly nhanh tren group row de truong nhom chot thao tac ngay
+  - targeted verify da pass:
+    - `pnpm exec vitest run tests/mstAssignment.displaySelectors.test.js tests/mstAssignmentDataTablePanel.test.jsx tests/useMSTAssignmentHistoryWorkspace.test.jsx tests/mstAssignmentHistoryFilterPanel.test.jsx --environment jsdom`
+    - `pnpm exec eslint src/components/mst-assignment/model/displaySelectors.js src/components/mst-assignment/table/MstAssignmentDataTablePanel.jsx src/components/mst-assignment/hooks/useMSTAssignmentHistoryWorkspace.js src/components/mst-assignment/filters/MstAssignmentHistoryFilterPanel.jsx tests/mstAssignment.displaySelectors.test.js tests/mstAssignmentDataTablePanel.test.jsx tests/useMSTAssignmentHistoryWorkspace.test.jsx tests/mstAssignmentHistoryFilterPanel.test.jsx`
+- `cng-7z0.18` da hoan tat filtered-history lane cho MST assignment:
+  - `useMSTAssignmentHistoryWorkspace.js` nay loc `filteredHistoryEntries` theo su kien lich su thuc te cho create/update/delete va mốc chuyen trang thai `status:assigned/pending`, dong thoi `historyFilteredRowKeys` cung ap dung cho cac filter nay thay vi chi co action thuần
+  - `MstAssignmentHistoryFilterPanel.jsx` doi copy thanh `Thao tac / Chuyen trang thai` de khop voi nghia moi cua timeline filter va quick favorite messaging cho status transition
+  - slice nay mo duong cho bead tiep theo `cng-7z0.19` gom quick filters current-state rieng cho truong nhom, khong con tron voi history filter panel
 - `cng-7z0.6` da xong o muc surfacing tien trinh dong bo ECUS theo tung buoc:
   - them `syncProgressSteps` trong `useDataImporterSync.js` de track 4 phase thuc te: commit ECUS, refresh config/status/alerts, refresh declaration rows, va reload danh sach hien thi
   - day state moi qua `dataImporterSyncPanelProps.js` va `DataImporterSyncConfigPanel.jsx` de UI shell khong can tu tinh lai progress

@@ -198,10 +198,29 @@ describe("MstAssignmentDataTablePanel", () => {
       onNextPage,
       onPageSizeChange,
       makeRowKey,
+      timelineGroupsByMST: new Map([
+        [
+          row.mst,
+          {
+            mst: row.mst,
+            company: row.company,
+            stages: [row],
+            conflictSummary: {
+              hasConflict: true,
+              activeStageCount: 2,
+              suggestions: [
+                "Giữ 1 dòng hiện hành và chốt ngày kết thúc cho các dòng còn lại.",
+              ],
+            },
+          },
+        ],
+      ]),
     });
 
     expect(screen.getByText("Mới import")).toBeInTheDocument();
     expect(screen.getByText("Đã chỉnh sửa")).toBeInTheDocument();
+    expect(screen.getByText("Trùng gán")).toBeInTheDocument();
+    expect(screen.getByText("MST này đang có trùng gán hiện hành. Mở timeline để rà soát chi tiết.")).toBeInTheDocument();
     expect(screen.getByText("Dòng thời gian")).toBeInTheDocument();
 
     fireEvent.change(screen.getByDisplayValue("0312345678"), {
@@ -238,5 +257,43 @@ describe("MstAssignmentDataTablePanel", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Sau →" }));
     expect(onNextPage).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows inline resolution suggestions for grouped rows with duplicate active stages", () => {
+    const groupedRow = {
+      mst: "0312345678",
+      company: "Công ty A",
+      person_import: "Lan",
+      person_export: "Hà",
+      effective_from: "2024-03-01",
+      effective_to: "",
+      __group: true,
+    };
+
+    renderPanel({
+      pageRows: [groupedRow],
+      timelineGroupsByMST: new Map([
+        [
+          groupedRow.mst,
+          {
+            mst: groupedRow.mst,
+            company: groupedRow.company,
+            stages: [groupedRow],
+            conflictSummary: {
+              hasConflict: true,
+              activeStageCount: 2,
+              suggestions: [
+                "Giữ 1 dòng hiện hành và chốt ngày kết thúc cho các dòng còn lại.",
+                "Nếu đang bàn giao, hãy chuyển người phụ trách sang dòng mới nhất rồi khóa giai đoạn cũ.",
+              ],
+            },
+          },
+        ],
+      ]),
+    });
+
+    expect(screen.getByText("Gợi ý xử lý nhanh:")).toBeInTheDocument();
+    expect(screen.getByText("Giữ 1 dòng hiện hành và chốt ngày kết thúc cho các dòng còn lại.")).toBeInTheDocument();
+    expect(screen.getByText("Nếu đang bàn giao, hãy chuyển người phụ trách sang dòng mới nhất rồi khóa giai đoạn cũ.")).toBeInTheDocument();
   });
 });

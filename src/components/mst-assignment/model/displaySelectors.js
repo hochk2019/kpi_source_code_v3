@@ -20,6 +20,47 @@ export const sortMSTRows = (list = []) => {
     });
 };
 
+const collectDistinctLabels = (values = []) =>
+  Array.from(
+    new Set(
+      values
+        .map((value) => (value || "").toString().trim())
+        .filter(Boolean)
+    )
+  );
+
+function buildConflictSummary(stages = []) {
+  const activeStages = stages.filter((stage) => !stage?.effective_to);
+  if (activeStages.length <= 1) {
+    return null;
+  }
+
+  const importAssignees = collectDistinctLabels(activeStages.map((stage) => stage?.person_import));
+  const exportAssignees = collectDistinctLabels(activeStages.map((stage) => stage?.person_export));
+  const teams = collectDistinctLabels(activeStages.map((stage) => stage?.team));
+  const suggestions = [
+    "Giữ 1 dòng hiện hành và chốt ngày kết thúc cho các dòng còn lại.",
+  ];
+
+  if (importAssignees.length > 1 || exportAssignees.length > 1 || teams.length > 1) {
+    suggestions.push("Nếu đang bàn giao, hãy chuyển người phụ trách sang dòng mới nhất rồi khóa giai đoạn cũ.");
+  }
+
+  if (importAssignees.length > 1 && exportAssignees.length > 1) {
+    suggestions.push("Nếu mỗi dòng đang giữ một phần trách nhiệm khác nhau, hãy gộp về 1 dòng và tách vai trò nhập/xuất trên cùng MST.");
+  }
+
+  return {
+    hasConflict: true,
+    activeStageCount: activeStages.length,
+    stageCount: stages.length,
+    importAssignees,
+    exportAssignees,
+    teams,
+    suggestions,
+  };
+}
+
 export const buildGroupedStages = (rows = []) => {
   if (!Array.isArray(rows) || !rows.length) return [];
 
@@ -37,10 +78,15 @@ export const buildGroupedStages = (rows = []) => {
   });
 
   return Array.from(groups.values())
-    .map((entry) => ({
-      ...entry,
-      stages: sortMSTRows(entry.stages),
-    }))
+    .map((entry) => {
+      const stages = sortMSTRows(entry.stages);
+
+      return {
+        ...entry,
+        stages,
+        conflictSummary: buildConflictSummary(stages),
+      };
+    })
     .sort((a, b) => (a.mst || "").localeCompare(b.mst || ""));
 };
 

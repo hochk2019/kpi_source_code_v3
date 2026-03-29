@@ -43,10 +43,17 @@ describe("mst assignment history filter panel", () => {
     fireEvent.change(screen.getByLabelText("Đến ngày"), { target: { value: "2024-02-29" } });
     expect(onHistoryFilterChange).toHaveBeenCalledWith({ to: "2024-02-29" });
 
-    fireEvent.change(screen.getByLabelText("Thao tác / Trạng thái"), {
+    fireEvent.change(screen.getByLabelText("Thao tác / Chuyển trạng thái"), {
       target: { value: "status:assigned" },
     });
     expect(onHistoryFilterChange).toHaveBeenCalledWith({ type: "status:assigned" });
+
+    expect(
+      screen.getByRole("option", { name: "Chuyển sang Đã gán nhân viên" })
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("option", { name: "Chuyển sang Chưa gán nhân viên" })
+    ).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("button", { name: "Xóa lọc" }));
     expect(onResetHistoryFilter).toHaveBeenCalledTimes(1);

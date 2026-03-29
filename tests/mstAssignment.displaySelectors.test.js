@@ -30,6 +30,14 @@ describe("mst assignment display selectors", () => {
       { mst: "0312", company: "Công ty A", effective_from: "2024-02-01", effective_to: "" },
       { mst: "0311", company: "Công ty B", effective_from: "2024-01-01", effective_to: "" },
       { mst: "0312", company: "Công ty A", effective_from: "2024-01-01", effective_to: "2024-01-31" },
+      {
+        mst: "0312",
+        company: "Công ty A",
+        person_import: "Lan",
+        person_export: "Hà",
+        effective_from: "2024-03-01",
+        effective_to: "",
+      },
     ];
 
     expect(buildGroupedStages(rows)).toEqual([
@@ -37,6 +45,7 @@ describe("mst assignment display selectors", () => {
         mst: "0311",
         company: "Công ty B",
         stages: [{ mst: "0311", company: "Công ty B", effective_from: "2024-01-01", effective_to: "" }],
+        conflictSummary: null,
       },
       {
         mst: "0312",
@@ -44,7 +53,23 @@ describe("mst assignment display selectors", () => {
         stages: [
           { mst: "0312", company: "Công ty A", effective_from: "2024-01-01", effective_to: "2024-01-31" },
           { mst: "0312", company: "Công ty A", effective_from: "2024-02-01", effective_to: "" },
+          {
+            mst: "0312",
+            company: "Công ty A",
+            person_import: "Lan",
+            person_export: "Hà",
+            effective_from: "2024-03-01",
+            effective_to: "",
+          },
         ],
+        conflictSummary: expect.objectContaining({
+          hasConflict: true,
+          activeStageCount: 2,
+          stageCount: 3,
+          suggestions: expect.arrayContaining([
+            "Giữ 1 dòng hiện hành và chốt ngày kết thúc cho các dòng còn lại.",
+          ]),
+        }),
       },
     ]);
   });

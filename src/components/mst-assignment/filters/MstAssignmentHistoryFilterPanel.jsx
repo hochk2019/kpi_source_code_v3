@@ -9,8 +9,8 @@ const HISTORY_TYPE_OPTIONS = [
   { value: "create", label: "Thêm mới" },
   { value: "update", label: "Chỉnh sửa" },
   { value: "delete", label: "Xóa" },
-  { value: "status:assigned", label: "Đã gán nhân viên" },
-  { value: "status:pending", label: "Chưa gán nhân viên" },
+  { value: "status:assigned", label: "Chuyển sang Đã gán nhân viên" },
+  { value: "status:pending", label: "Chuyển sang Chưa gán nhân viên" },
 ];
 
 export default function MstAssignmentHistoryFilterPanel({
@@ -31,7 +31,7 @@ export default function MstAssignmentHistoryFilterPanel({
     <SectionSurface className="mb-4 border-sky-200 bg-sky-50">
       <SectionHeader
         title="Bộ lọc lịch sử thay đổi"
-        description="Thu hẹp timeline theo khoảng ngày, loại thao tác hoặc trạng thái gán nhân viên trước khi rà soát chi tiết từng MST."
+        description="Thu hẹp timeline theo khoảng ngày, loại thao tác hoặc mốc chuyển trạng thái trước khi rà soát chi tiết từng MST."
         meta={
           <div className="text-right text-xs text-sky-900">
             <div>
@@ -92,12 +92,12 @@ export default function MstAssignmentHistoryFilterPanel({
             />
           </label>
           <label className="flex flex-col gap-1">
-            <span className="font-medium">Thao tác / Trạng thái</span>
+            <span className="font-medium">Thao tác / Chuyển trạng thái</span>
             <select
               value={historyFilter.type}
               onChange={(event) => onHistoryFilterChange({ type: event.target.value })}
               className="border rounded px-2 py-1"
-              data-tooltip="Lọc theo thao tác (thêm/sửa/xóa) hoặc trạng thái phân công nhân viên"
+              data-tooltip="Lọc theo thao tác thêm/sửa/xóa hoặc các mốc chuyển trạng thái của MST"
             >
               {HISTORY_TYPE_OPTIONS.map((option) => (
                 <option key={option.value} value={option.value}>

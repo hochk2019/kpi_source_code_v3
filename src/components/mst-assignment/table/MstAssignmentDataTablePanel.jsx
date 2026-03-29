@@ -307,6 +307,8 @@ export default function MstAssignmentDataTablePanel({
                 const timelineStages = Array.isArray(timelineGroup?.stages) ? timelineGroup.stages : [];
                 const timelineCompany = timelineGroup?.company || row.company || "";
                 const timelineMST = timelineGroup?.mst || row.mst || "";
+                const conflictSummary = timelineGroup?.conflictSummary || null;
+                const hasConflictSummary = Boolean(conflictSummary?.hasConflict);
                 const timelineGroupWithFallback = timelineGroup || {
                   mst: timelineMST,
                   company: timelineCompany,
@@ -345,6 +347,13 @@ export default function MstAssignmentDataTablePanel({
                           <span className="ml-2 inline-flex items-center rounded bg-blue-500/10 px-2 py-0.5 text-xs font-semibold uppercase text-blue-700">
                             Đã chỉnh sửa
                           </span>
+                        ) : null}
+                        {hasConflictSummary ? (
+                          <div className="mt-2">
+                            <span className="inline-flex items-center rounded bg-amber-100 px-2 py-0.5 text-xs font-semibold uppercase text-amber-800">
+                              Trùng gán
+                            </span>
+                          </div>
                         ) : null}
                       </td>
                     ) : null}
@@ -421,6 +430,25 @@ export default function MstAssignmentDataTablePanel({
                         )}
                         {!isStatusAssigned && !isStatusWarning && !isStatusPending ? (
                           <div className="mt-1 text-xs text-gray-500">{statusValue}</div>
+                        ) : null}
+                        {hasConflictSummary ? (
+                          <div className="mt-2 rounded border border-amber-200 bg-amber-50 px-2 py-1 text-xs text-amber-900">
+                            <div className="font-semibold">
+                              {conflictSummary.activeStageCount} giai đoạn đang cùng hiệu lực
+                            </div>
+                            <div className="mt-1">
+                              {isGroupRow
+                                ? "Gợi ý xử lý nhanh:"
+                                : "MST này đang có trùng gán hiện hành. Mở timeline để rà soát chi tiết."}
+                            </div>
+                            {isGroupRow ? (
+                              <ul className="mt-1 list-disc space-y-1 pl-4">
+                                {conflictSummary.suggestions.map((suggestion) => (
+                                  <li key={suggestion}>{suggestion}</li>
+                                ))}
+                              </ul>
+                            ) : null}
+                          </div>
                         ) : null}
                         {showTimelineInStatus ? (
                           <StageTimelinePreview
