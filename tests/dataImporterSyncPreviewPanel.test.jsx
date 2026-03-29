@@ -62,6 +62,15 @@ function renderPanel(props = {}) {
           status: "new",
         },
       ]}
+      previewConflictSummary={{
+        totalRows: 3,
+        newCount: 1,
+        existingCount: 2,
+        overwriteCount: 2,
+        unchangedCount: 0,
+        lockedCount: 1,
+      }}
+      previewConflictWarningActive
       syncProgressSteps={[
         {
           key: "commit",
@@ -119,6 +128,9 @@ describe("DataImporterSyncPreviewPanel", () => {
     expect(screen.getByText("Sẵn sàng chạy")).toBeInTheDocument();
     expect(screen.getByText("Job lưu lúc 11/03/2026 15:09:10 cho khoảng 2026-03-01 → 2026-03-08.")).toBeInTheDocument();
     expect(screen.getByText("Khoảng xem trước: 01/03/2026 - 08/03/2026 (giới hạn 100 dòng đầu tiên)")).toBeInTheDocument();
+    expect(screen.getByText("Cảnh báo overwrite trước khi đồng bộ")).toBeInTheDocument();
+    expect(screen.getByText(/2 tờ khai đã tồn tại sẽ bị cập nhật/)).toBeInTheDocument();
+    expect(screen.getByText(/1 tờ khai đang khóa rà soát sẽ bị bỏ qua/)).toBeInTheDocument();
     expect(screen.getByText("Xem trước 1 dòng đầu tiên sẽ nhập vào hệ thống.")).toBeInTheDocument();
     expect(screen.getByRole("table", { name: "Bảng xem trước dữ liệu đồng bộ ECUS" })).toBeInTheDocument();
     expect(screen.getByText("fmt:2026-03-07")).toBeInTheDocument();

@@ -57,6 +57,67 @@ function buildMstFilterNotice(includeTaxCodes, excludeTaxCodes) {
   return parts.length ? `Lọc theo ${parts.join("; ")}` : "";
 }
 
+function buildPreviewRequestKey({ from = "", to = "", includeTaxCodes = [], excludeTaxCodes = [] }) {
+  return JSON.stringify({
+    from,
+    to,
+    includeTaxCodes: [...includeTaxCodes].sort(),
+    excludeTaxCodes: [...excludeTaxCodes].sort(),
+  });
+}
+
+function summarizePreviewConflictRows(rows) {
+  return (Array.isArray(rows) ? rows : []).reduce(
+    (summary, row) => {
+      summary.totalRows += 1;
+
+      if (row?.status !== "existing") {
+        summary.newCount += 1;
+        return summary;
+      }
+
+      summary.existingCount += 1;
+
+      if (row?.locked) {
+        summary.lockedCount += 1;
+        return summary;
+      }
+
+      if (Array.isArray(row?.changedFields) && row.changedFields.length > 0) {
+        summary.overwriteCount += 1;
+        return summary;
+      }
+
+      summary.unchangedCount += 1;
+      return summary;
+    },
+    {
+      totalRows: 0,
+      newCount: 0,
+      existingCount: 0,
+      overwriteCount: 0,
+      unchangedCount: 0,
+      lockedCount: 0,
+    },
+  );
+}
+
+function buildOverwriteConfirmationMessage(summary) {
+  const overwriteLine = `${summary.overwriteCount.toLocaleString(
+    "vi-VN",
+  )} tờ khai đã tồn tại sẽ bị cập nhật nếu bạn tiếp tục đồng bộ.`;
+  const lockedLine =
+    summary.lockedCount > 0
+      ? `\n${summary.lockedCount.toLocaleString("vi-VN")} tờ khai đã khóa rà soát sẽ bị bỏ qua.`
+      : "";
+  const unchangedLine =
+    summary.unchangedCount > 0
+      ? `\n${summary.unchangedCount.toLocaleString("vi-VN")} tờ khai trùng nhưng không đổi sẽ được bỏ qua.`
+      : "";
+
+  return `Cảnh báo xung đột dữ liệu:\n${overwriteLine}${lockedLine}${unchangedLine}\n\nBạn có muốn tiếp tục không?`;
+}
+
 export default function useDataImporterSync({
   actor = "system",
   canManageSync = false,
@@ -95,6 +156,7 @@ export default function useDataImporterSync({
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState("");
   const [previewRangeInfo, setPreviewRangeInfo] = useState(null);
+  const [previewRequestKey, setPreviewRequestKey] = useState("");
   const [syncProgressSteps, setSyncProgressSteps] = useState(() => createSyncProgressSteps());
   const [syncJobState, setSyncJobState] = useState(() => readStoredSyncJobState());
 
@@ -113,6 +175,28 @@ export default function useDataImporterSync({
   const mstFilterNotice = useMemo(
     () => buildMstFilterNotice(activeIncludeTaxCodes, activeExcludeTaxCodes),
     [activeExcludeTaxCodes, activeIncludeTaxCodes]
+  );
+
+  const currentPreviewRequestKey = useMemo(
+    () =>
+      buildPreviewRequestKey({
+        from: manualRange.from,
+        to: manualRange.to,
+        includeTaxCodes: activeIncludeTaxCodes,
+        excludeTaxCodes: activeExcludeTaxCodes,
+      }),
+    [activeExcludeTaxCodes, activeIncludeTaxCodes, manualRange.from, manualRange.to],
+  );
+
+  const previewConflictSummary = useMemo(
+    () => summarizePreviewConflictRows(previewRows),
+    [previewRows],
+  );
+
+  const previewConflictWarningActive = useMemo(
+    () =>
+      previewRequestKey === currentPreviewRequestKey && previewConflictSummary.overwriteCount > 0,
+    [currentPreviewRequestKey, previewConflictSummary.overwriteCount, previewRequestKey],
   );
 
   const visibleSyncJob = useMemo(
@@ -225,8 +309,14 @@ export default function useDataImporterSync({
     setPreviewRows([]);
     setPreviewLimited(false);
     setPreviewError("");
+    setPreviewRequestKey("");
     setPreviewRangeInfo(null);
-  }, [manualRange.from, manualRange.to]);
+  }, [
+    activeExcludeTaxCodes,
+    activeIncludeTaxCodes,
+    manualRange.from,
+    manualRange.to,
+  ]);
 
   const fetchSyncConfig = useCallback(async (options = {}) => {
     const { preserveMessage = false } = options;
@@ -419,6 +509,7 @@ export default function useDataImporterSync({
     setPreviewRangeInfo(null);
     setPreviewLimited(false);
     setPreviewError("");
+    setPreviewRequestKey("");
 
     let currentStepKey = "commit";
     let workingJob = setSyncJobStatus(job, "running", {
@@ -680,6 +771,15 @@ export default function useDataImporterSync({
       return false;
     }
 
+    if (previewConflictWarningActive) {
+      const confirmedOverwrite = window.confirm(
+        buildOverwriteConfirmationMessage(previewConflictSummary),
+      );
+      if (!confirmedOverwrite) {
+        return false;
+      }
+    }
+
     if (!manualRange.from && !manualRange.to) {
       const confirmDefault = window.confirm(
         "Bạn chưa chọn khoảng thời gian cụ thể. Hệ thống sẽ dùng số ngày mặc định trong cấu hình (RangeDays). Bạn có muốn tiếp tục?"
@@ -713,6 +813,8 @@ export default function useDataImporterSync({
     executeSyncJob,
     manualRange,
     mstFilterNotice,
+    previewConflictSummary,
+    previewConflictWarningActive,
     syncPreflightSummary.ready,
     updateSyncJobState,
   ]);
@@ -781,6 +883,7 @@ export default function useDataImporterSync({
 
       setPreviewRows(rows);
       setPreviewLimited(!!payload?.preview?.limited);
+      setPreviewRequestKey(currentPreviewRequestKey);
       setPreviewRangeInfo(payload?.preview?.range || null);
 
       if (!rows.length) {
@@ -800,6 +903,7 @@ export default function useDataImporterSync({
       setPreviewError(err?.message || "Không thể xem trước dữ liệu đồng bộ");
       setPreviewRows([]);
       setPreviewLimited(false);
+      setPreviewRequestKey("");
       setPreviewRangeInfo(null);
       return { ok: false, error: err };
     } finally {
@@ -809,6 +913,7 @@ export default function useDataImporterSync({
     activeExcludeTaxCodes,
     activeIncludeTaxCodes,
     canManageSync,
+    currentPreviewRequestKey,
     fetchWithAuth,
     manualRange.from,
     manualRange.to,
@@ -846,6 +951,8 @@ export default function useDataImporterSync({
     previewError,
     previewRangeInfo,
     previewRangeLabel,
+    previewConflictSummary,
+    previewConflictWarningActive,
     syncProgressSteps,
     syncPreflightChecks,
     syncPreflightSummary,

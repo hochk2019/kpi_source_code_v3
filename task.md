@@ -26,6 +26,10 @@
   - mo rong `useDataImporterSync.js` voi preflight checklist, retry/backoff co nhat ky than thien, resume CTA, va persisted job state
   - day state moi qua `useDataImporterWorkflowSession.js`, `useDataImporterSessionController.js`, `useDataImporterContainerProps.js`, `dataImporterSyncPanelProps.js`, `DataImporterSyncConfigPanel.jsx`, va `DataImporterSyncPreviewPanel.jsx`
   - bo sung regression cho helper/hook/panel/workflow/container seams, verify xanh voi 19 test jsdom + eslint targeted
+- Slice bo sung vua xong ngay 2026-03-29:
+  - dong bead `cng-7z0.8` bang warning overwrite truoc khi sync commit
+  - preview sync gio tong hop `new/existing/overwrite/locked/unchanged` tu `previewRows`, hien banner conflict trong `DataImporterSyncPreviewPanel.jsx`, va buoc operator confirm neu preview hien tai cho thay co declaration se bi cap nhat
+  - cap nhat regression cho hook/panel/panel-props/workflow/container seams de khoa contract moi
 - Phan con lai de dong hẳn `cng-7z0.7`:
   - tach lenh sync khoi request-response ngan hien tai de job lon van chay duoc khi operator roi tab hoac mat ket noi
   - chuyen persisted state tu local-only snapshot sang backend-truth/job polling de resume khong phu thuoc vao tab vua tao job
@@ -49,6 +53,10 @@
   - commit phase co retry/backoff tu dong, thong bao countdown than thien, va activity log de operator thay duoc lan thu/ly do thu lai
   - persisted job snapshot giu duoc tham so actor/range/include-exclude MST va cho phep resume tren lan mo lai tiep theo
   - bo sung `tests/dataImporterSyncQueue.test.js`, cap nhat `tests/useDataImporterSync.test.jsx`, `tests/dataImporterSyncPreviewPanel.test.jsx`, `tests/dataImporterSyncPanelProps.test.js`, `tests/useDataImporterWorkflowSession.test.jsx`, va `tests/useDataImporterContainerProps.test.jsx`
+- `cng-7z0.8` da xong o muc canh bao conflict truoc overwrite:
+  - `useDataImporterSync.js` gio tong hop preview conflict summary tu payload preview co san va chi bat confirm overwrite khi preview hien tai cho thay co declaration `existing` voi `changedFields`
+  - `DataImporterSyncPreviewPanel.jsx` hien banner canh bao overwrite/locked/unchanged de operator thay ro tac dong truoc khi bam `Dong bo ngay`
+  - cap nhat `dataImporterSyncPanelProps.js`, `useDataImporterWorkflowSession.js`, `useDataImporterSessionController.js`, `useDataImporterContainerProps.js`, `tests/useDataImporterSync.test.jsx`, `tests/dataImporterSyncPreviewPanel.test.jsx`, va `tests/dataImporterSyncPanelProps.test.js`
 - `cng-7z0.28` da xong o muc delivery channel + delivery status tracking:
   - them chon kenh giao (`email`, `report_center`, `download_bundle`) trong `ReportingSchedulePanel` va preview payload ngay trong form
   - hien delivery status chip, `lastDeliveryAt`, va `lastDeliveryError` tren schedule cards de nguoi van hanh thay nhanh lan giao gan nhat
@@ -765,7 +773,7 @@
 - Follow-up backlog:
   - tach trigger UI khoi vong doi request ngan, doi sang backend job id + polling/dequeue that su
   - bo sung stale-job cleanup va cross-tab hand-off dua tren backend-truth thay vi chi local snapshot
-  - khoa regression cho queue lifecycle moi truoc khi mo tiep `cng-7z0.8` hoac `cng-7z0.11`
+  - khoa regression cho queue lifecycle moi truoc khi mo tiep `cng-7z0.11`
 
 ## Verification
 

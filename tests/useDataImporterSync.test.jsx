@@ -424,7 +424,15 @@ describe("useDataImporterSync", () => {
 
   it("preserves fetched preview totals from the server preview payload", async () => {
     const previewRange = { from: "2026-03-10", to: "2026-03-12" };
-    const previewRows = [{ so_tk: "00000012345" }, { so_tk: "00000067890" }];
+    const previewRows = [
+      { so_tk: "00000012345", status: "new", locked: false, changedFields: [] },
+      {
+        so_tk: "00000067890",
+        status: "existing",
+        locked: false,
+        changedFields: ["nhan_vien"],
+      },
+    ];
     const fetchWithAuth = vi.fn(async (url, options = {}) => {
       if (url === ECUS_CONFIG_ROUTE && !options.method) {
         return {
@@ -530,6 +538,137 @@ describe("useDataImporterSync", () => {
     expect(result.current.previewRows).toEqual(previewRows);
     expect(result.current.previewLimited).toBe(true);
     expect(result.current.previewRangeInfo).toEqual(previewRange);
+    expect(result.current.previewConflictSummary).toEqual({
+      totalRows: 2,
+      newCount: 1,
+      existingCount: 1,
+      overwriteCount: 1,
+      unchangedCount: 0,
+      lockedCount: 0,
+    });
+    expect(result.current.previewConflictWarningActive).toBe(true);
+  });
+
+  it("asks for confirmation before overwriting existing declarations from preview conflicts", async () => {
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
+    const fetchWithAuth = vi.fn(async (url, options = {}) => {
+      if (url === ECUS_CONFIG_ROUTE && !options.method) {
+        return {
+          ok: true,
+          json: async () => ({
+            config: {
+              enabled: true,
+              schedule: "0 * * * *",
+              rangeDays: 1,
+              preferMonthFirst: false,
+              connection: {
+                server: "srv01",
+                database: "ecus",
+                user: "runner",
+                hasPassword: true,
+              },
+              includeTaxCodes: [],
+              excludeTaxCodes: [],
+            },
+          }),
+        };
+      }
+
+      if (url === ECUS_STATUS_ROUTE && !options.method) {
+        return {
+          ok: true,
+          json: async () => ({
+            backend: { ok: true },
+            database: { ok: true },
+          }),
+        };
+      }
+
+      if (url === ALERTS_ROUTE && !options.method) {
+        return {
+          ok: true,
+          json: async () => ({
+            alerts: [],
+            summary: {
+              outstanding: 0,
+              totalTracked: 0,
+              lastEvaluatedAt: null,
+            },
+          }),
+        };
+      }
+
+      if (url === ECUS_PREVIEW_ROUTE && options.method === "POST") {
+        return {
+          ok: true,
+          json: async () => ({
+            preview: {
+              rows: [
+                {
+                  so_tk: "00000067890",
+                  status: "existing",
+                  locked: false,
+                  changedFields: ["nhan_vien"],
+                },
+              ],
+              fetched: 1,
+              limited: false,
+              range: { from: "2026-03-10", to: "2026-03-12" },
+            },
+          }),
+        };
+      }
+
+      if (url === ECUS_COMMIT_ROUTE && options.method === "POST") {
+        return {
+          ok: true,
+          json: async () => ({
+            result: {
+              imported: 0,
+              updated: 1,
+              skipped: 0,
+              reviewLocked: 0,
+            },
+          }),
+        };
+      }
+
+      throw new Error(`Unexpected request ${url} ${options.method || "GET"}`);
+    });
+
+    const { result } = renderHook(() =>
+      useDataImporterSync({
+        actor: "tester",
+        canManageSync: true,
+        fetchWithAuth,
+        refreshDeclRowsFromServer: vi.fn(async () => []),
+        loadSavedRows: vi.fn(() => true),
+      }),
+    );
+
+    await waitFor(() => {
+      expect(result.current.syncPreflightSummary?.ready).toBe(true);
+    });
+
+    await act(async () => {
+      result.current.setManualRange({ from: "2026-03-10", to: "2026-03-12" });
+    });
+
+    await act(async () => {
+      await result.current.handlePreviewSync();
+    });
+
+    await act(async () => {
+      await result.current.handleRunSync();
+    });
+
+    expect(confirmSpy).toHaveBeenCalledWith(
+      expect.stringContaining("1 tờ khai đã tồn tại sẽ bị cập nhật"),
+    );
+    expect(fetchWithAuth).not.toHaveBeenCalledWith(
+      ECUS_COMMIT_ROUTE,
+      expect.objectContaining({ method: "POST" }),
+    );
   });
 
   it("blocks sync runs when the preflight checklist is not ready", async () => {

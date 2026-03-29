@@ -68,6 +68,8 @@ export default function DataImporterSyncPreviewPanel({
   previewLimited = false,
   previewError = "",
   previewRows = [],
+  previewConflictSummary = null,
+  previewConflictWarningActive = false,
   syncPreflightChecks = [],
   syncPreflightSummary = null,
   syncActivityLog = [],
@@ -210,6 +212,28 @@ export default function DataImporterSyncPreviewPanel({
       ) : null}
 
       {previewError ? <div className="text-xs text-red-600">{previewError}</div> : null}
+
+      {previewConflictWarningActive && previewConflictSummary ? (
+        <div className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+          <div className="font-medium">Cảnh báo overwrite trước khi đồng bộ</div>
+          <div className="mt-1">
+            {previewConflictSummary.overwriteCount.toLocaleString("vi-VN")} tờ khai đã tồn tại sẽ bị
+            cập nhật nếu bạn bấm Đồng bộ ngay.
+          </div>
+          {previewConflictSummary.lockedCount > 0 ? (
+            <div className="mt-1">
+              {previewConflictSummary.lockedCount.toLocaleString("vi-VN")} tờ khai đang khóa rà soát sẽ
+              bị bỏ qua.
+            </div>
+          ) : null}
+          {previewConflictSummary.unchangedCount > 0 ? (
+            <div className="mt-1">
+              {previewConflictSummary.unchangedCount.toLocaleString("vi-VN")} tờ khai trùng nhưng không
+              có thay đổi sẽ được bỏ qua.
+            </div>
+          ) : null}
+        </div>
+      ) : null}
 
       {hasSyncProgress ? (
         <div

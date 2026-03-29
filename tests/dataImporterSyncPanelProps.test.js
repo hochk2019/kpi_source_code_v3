@@ -50,6 +50,14 @@ describe("dataImporterSyncPanelProps", () => {
     const syncForm = { schedule: "daily" };
     const manualRange = { from: "2026-03-01", to: "2026-03-03" };
     const previewRows = [{ so_tk: "102030" }];
+    const previewConflictSummary = {
+      totalRows: 4,
+      newCount: 1,
+      existingCount: 3,
+      overwriteCount: 2,
+      unchangedCount: 1,
+      lockedCount: 1,
+    };
     const syncProgressSteps = [{ key: "commit", status: "done", label: "Đồng bộ dữ liệu từ ECUS" }];
     const syncPreflightChecks = [{ key: "backend", status: "pass", label: "Backend đồng bộ sẵn sàng" }];
     const syncPreflightSummary = { ready: true, blockingCount: 0, warningCount: 0 };
@@ -152,6 +160,8 @@ describe("dataImporterSyncPanelProps", () => {
       previewLimited: true,
       previewError: "preview-error",
       previewRows,
+      previewConflictSummary,
+      previewConflictWarningActive: true,
       syncPreflightChecks,
       syncPreflightSummary,
       syncActivityLog,
@@ -217,6 +227,8 @@ describe("dataImporterSyncPanelProps", () => {
     expect(syncConfigPanelProps.onApplyRangePreset).toBe(onApplyRangePreset);
     expect(syncConfigPanelProps.onManualRangeChange).toBe(handleManualRangeChange);
     expect(syncConfigPanelProps.previewRows).toBe(previewRows);
+    expect(syncConfigPanelProps.previewConflictSummary).toBe(previewConflictSummary);
+    expect(syncConfigPanelProps.previewConflictWarningActive).toBe(true);
     expect(syncConfigPanelProps.syncPreflightChecks).toBe(syncPreflightChecks);
     expect(syncConfigPanelProps.syncPreflightSummary).toBe(syncPreflightSummary);
     expect(syncConfigPanelProps.syncActivityLog).toBe(syncActivityLog);

@@ -61,7 +61,6 @@ Source set: `docs/ux-improvement-backlog.md`
 ### ECUS Declaration Sync
 
 - `cng-7z0.7` — Add background sync queue with resume support for ECUS imports
-- `cng-7z0.8` — Warn on declaration sync conflicts before overwrite
 - `cng-7z0.11` — Persist declaration sync history for notifications and dashboards
 
 ### Data Importer
