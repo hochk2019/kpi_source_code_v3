@@ -27,6 +27,10 @@ function createPreset(overrides = {}) {
       coFilterMode: "min",
       coFilterMin: 7,
       status: ["green", "amber"],
+      columns: {
+        hidden: ["status", "history"],
+        widths: { date: 180, company: 240 },
+      },
     },
     ...overrides,
   };
@@ -76,6 +80,12 @@ function createProps(overrides = {}) {
     setCoFilterMode: vi.fn(),
     setCoFilterMin: vi.fn(),
     setPage: vi.fn(),
+    actor: "tester",
+    getCurrentColumnConfig: vi.fn(() => ({
+      hidden: ["status", "history"],
+      widths: { date: 160, company: 220, invalid: "skip" },
+    })),
+    applyColumnConfig: vi.fn(),
     ...overrides,
   };
 }
@@ -115,6 +125,13 @@ describe("useDataImporterFilterPresets", () => {
     expect(props.setCoFilterMin).toHaveBeenCalledWith(7);
     expect(props.setStatusFilters).toHaveBeenCalledWith(["green", "amber"]);
     expect(props.setPage).toHaveBeenCalledWith(1);
+    expect(props.applyColumnConfig).toHaveBeenCalledWith(
+      {
+        hidden: ["status", "history"],
+        widths: { date: 180, company: 240 },
+      },
+      { actor: "tester" },
+    );
     expect(result.current.selectedPresetId).toBe("preset-1");
     expect(result.current.appliedPreset?.id).toBe("preset-1");
     expect(window.localStorage.getItem(LAST_FILTER_PRESET_KEY)).toBe("preset-1");
@@ -147,8 +164,20 @@ describe("useDataImporterFilterPresets", () => {
         filterNoTeam: true,
         filterDuplicate11: true,
         status: ["red", "green"],
+        columns: {
+          hidden: ["status", "history"],
+          widths: { date: 160, company: 220 },
+        },
       },
     });
+    expect(props.getCurrentColumnConfig).toHaveBeenCalled();
+    expect(props.applyColumnConfig).toHaveBeenCalledWith(
+      {
+        hidden: ["status", "history"],
+        widths: { date: 160, company: 220 },
+      },
+      { actor: "tester" },
+    );
     expect(props.setQuery).toHaveBeenCalledWith("current query");
     expect(window.localStorage.getItem(LAST_FILTER_PRESET_KEY)).toBe("preset-new");
     expect(alertSpy).toHaveBeenCalledWith('Đã lưu bộ lọc "Preset moi".');
@@ -203,6 +232,22 @@ describe("useDataImporterFilterPresets", () => {
     await waitFor(() => {
       expect(props.setQuery).toHaveBeenCalledWith("legacy query");
     });
+    expect(props.applyColumnConfig).not.toHaveBeenCalled();
     expect(window.localStorage.getItem(LEGACY_FILTER_STORAGE_KEY)).toBeNull();
+  });
+
+  it("clears preset errors through the legacy clearError alias used by the session controller", () => {
+    const clearError = vi.fn();
+    const props = createProps({
+      clearPresetError: undefined,
+      clearError,
+    });
+    const { result } = renderHook(() => useDataImporterFilterPresets(props));
+
+    act(() => {
+      result.current.handleSelectPreset("preset-1");
+    });
+
+    expect(clearError).toHaveBeenCalledTimes(1);
   });
 });

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  buildDataImporterSyncRecoveryHints,
   TONE_CLASS_MAP,
   createDataImporterSyncPanelProps,
   resolveStatusMeta,
@@ -37,6 +38,32 @@ describe("dataImporterSyncPanelProps", () => {
       label: "Timeout kết nối SQL Server",
       detail: "slow",
     });
+  });
+
+  it("builds actionable recovery hints from failed checks and sync errors", () => {
+    const hints = buildDataImporterSyncRecoveryHints({
+      previewError: "Không tìm thấy tờ khai mới trong khoảng thời gian đã chọn.",
+      syncError: "HTTP 503",
+      syncPreflightChecks: [
+        { key: "backend", status: "fail" },
+        { key: "database", status: "fail" },
+        { key: "connection", status: "fail" },
+        { key: "range", status: "fail" },
+      ],
+      syncResumeJob: { id: "job-1" },
+    });
+
+    expect(hints).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ key: "connection-config" }),
+        expect.objectContaining({ key: "vpn-sql" }),
+        expect.objectContaining({ key: "retry-backend" }),
+        expect.objectContaining({ key: "range" }),
+        expect.objectContaining({ key: "no-data" }),
+        expect.objectContaining({ key: "resume" }),
+        expect.objectContaining({ key: "escalate" }),
+      ]),
+    );
   });
 
   it("builds sync, co-code, and monitoring panel props from importer state", () => {
@@ -231,6 +258,14 @@ describe("dataImporterSyncPanelProps", () => {
     expect(syncConfigPanelProps.previewRows).toBe(previewRows);
     expect(syncConfigPanelProps.previewConflictSummary).toBe(previewConflictSummary);
     expect(syncConfigPanelProps.previewConflictWarningActive).toBe(true);
+    expect(syncConfigPanelProps.syncRecoveryHints).toEqual(
+      buildDataImporterSyncRecoveryHints({
+        previewError: "preview-error",
+        syncError: "sync-error",
+        syncPreflightChecks,
+        syncResumeJob,
+      }),
+    );
     expect(syncConfigPanelProps.syncPreflightChecks).toBe(syncPreflightChecks);
     expect(syncConfigPanelProps.syncPreflightSummary).toBe(syncPreflightSummary);
     expect(syncConfigPanelProps.syncActivityLog).toBe(syncActivityLog);

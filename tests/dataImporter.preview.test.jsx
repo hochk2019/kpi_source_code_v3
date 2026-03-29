@@ -613,17 +613,16 @@ describe('DataImporter preview UI', () => {
       await screen.findByText('2 dòng ECUS đang chờ rà soát trước khi đồng bộ.')
     ).toBeInTheDocument();
 
+    expect(
+      await screen.findByText('Dữ liệu xem trước đã được chuyển sang bước 2 để rà soát trước khi đồng bộ.')
+    ).toBeInTheDocument();
+
+    expect(await screen.findByText('Kết quả kiểm tra trước khi đồng bộ')).toBeInTheDocument();
+    expect(
+      await screen.findByRole('table', { name: 'Bảng các dòng thêm mới từ xem trước đồng bộ ECUS' })
+    ).toBeInTheDocument();
     expect(screen.getAllByText('CÔNG TY MỚI').length).toBeGreaterThan(0);
-
     expect(screen.getAllByText('CÔNG TY ABC').length).toBeGreaterThan(0);
-
-    expect(screen.getByText('Kết quả kiểm tra trước khi đồng bộ')).toBeInTheDocument();
-    expect(
-      screen.getByRole('table', { name: 'Bảng các dòng thêm mới từ xem trước đồng bộ ECUS' })
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText('Dữ liệu xem trước đã được chuyển sang bước 2 để rà soát trước khi đồng bộ.')
-    ).toBeInTheDocument();
 
 
 

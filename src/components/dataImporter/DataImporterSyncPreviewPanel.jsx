@@ -98,6 +98,7 @@ export default function DataImporterSyncPreviewPanel({
   previewRows = [],
   previewConflictSummary = null,
   previewConflictWarningActive = false,
+  syncRecoveryHints = [],
   syncPreflightChecks = [],
   syncPreflightSummary = null,
   syncActivityLog = [],
@@ -117,6 +118,7 @@ export default function DataImporterSyncPreviewPanel({
   const hasPreflightChecks = syncPreflightChecks.length > 0;
   const hasActivityLog = syncActivityLog.length > 0;
   const hasSyncHistory = Array.isArray(syncHistory) && syncHistory.length > 0;
+  const hasRecoveryHints = Array.isArray(syncRecoveryHints) && syncRecoveryHints.length > 0;
 
   return (
     <>
@@ -241,7 +243,34 @@ export default function DataImporterSyncPreviewPanel({
         </div>
       ) : null}
 
-      {previewError ? <div className="text-xs text-red-600">{previewError}</div> : null}
+      {previewError || syncError || hasRecoveryHints ? (
+        <div className="space-y-2">
+          {previewError ? <div className="text-xs text-red-600">{previewError}</div> : null}
+          {syncError ? <div className="text-sm text-red-600">{syncError}</div> : null}
+          {hasRecoveryHints ? (
+            <div className="space-y-2 rounded border border-amber-200 bg-amber-50 px-3 py-3">
+              <div className="text-xs font-medium uppercase tracking-wide text-amber-800">
+                Gợi ý khắc phục
+              </div>
+              <ul className="space-y-2" aria-label="Gợi ý khắc phục khi đồng bộ ECUS thất bại">
+                {syncRecoveryHints.map((hint) => (
+                  <li
+                    key={hint?.key || hint?.title}
+                    className="rounded border border-white/70 bg-white/70 px-3 py-2"
+                  >
+                    <div className="text-sm font-medium text-amber-900">
+                      {hint?.title || "Thao tác đề xuất"}
+                    </div>
+                    {hint?.detail ? (
+                      <div className="mt-1 text-xs text-amber-800">{hint.detail}</div>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
 
       {previewConflictWarningActive && previewConflictSummary ? (
         <div className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
@@ -416,7 +445,6 @@ export default function DataImporterSyncPreviewPanel({
       ) : null}
 
       {syncMessage ? <div className="text-sm text-emerald-700">{syncMessage}</div> : null}
-      {syncError ? <div className="text-sm text-red-600">{syncError}</div> : null}
     </>
   );
 }

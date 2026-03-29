@@ -26,11 +26,11 @@ Reconciliation note 2026-03-27:
 
 ## 3. Data Importer
 
-- [ ] Chuyển việc đọc/ghi XLSX sang Web Worker để tránh khóa UI trong khi `XLSX.read` chạy.
-- [ ] Tách DataImporter thành các module nhỏ (picker, preview, filters, sync) và lazy-load khi cần.
-- [ ] Lưu/gửi preset bộ lọc và cấu hình cột, cho phép chia sẻ giữa các thành viên trong cùng tổ.
-- [ ] Thiết kế wizard nhiều bước giúp người dùng theo dõi tiến trình import, tránh quá tải thông tin.
-- [ ] Cải thiện feedback khi đồng bộ thất bại: gợi ý hành động cụ thể (thử lại, kiểm tra VPN, báo CNTT).
+- [x] Chuyển việc đọc/ghi XLSX sang Web Worker để tránh khóa UI trong khi `XLSX.read` chạy. (done 2026-03-29, `dataImporterWorkbookParser.js` uu tien worker-module parser, co fallback ve sync parser khi worker khong kha dung, va regression `tests/dataImporterWorkbookParser.test.js` khoa ca worker + fallback lane)
+- [x] Tách DataImporter thành các module nhỏ (picker, preview, filters, sync) và lazy-load khi cần. (done 2026-03-29, `DataImporterShell.jsx` lazy-load cac panel/dialog nang theo tung stage de giam initial bundle trong khi giu nguyen shell workflow contract)
+- [x] Lưu/gửi preset bộ lọc và cấu hình cột, cho phép chia sẻ giữa các thành viên trong cùng tổ. (done 2026-03-29, `useDataImporterFilterPresets.js` luu kem `filters.columns` snapshot da sanitize va apply lai qua store khi preset duoc chon, dong thoi khoa regression `tests/useDataImporterFilterPresets.test.jsx` cho save/apply/share lane)
+- [x] Thiết kế wizard nhiều bước giúp người dùng theo dõi tiến trình import, tránh quá tải thông tin. (done 2026-03-29, `DataImporterWorkflowGuide` + `DataImporterShell.jsx` da chia ro 3 buoc `Nap nguon` / `Ra soat` / `Luu va theo doi`, co action theo trang thai va regression `tests/dataImporterWorkflowGuideState.test.js` + `tests/dataImporterShell.test.jsx`)
+- [x] Cải thiện feedback khi đồng bộ thất bại: gợi ý hành động cụ thể (thử lại, kiểm tra VPN, báo CNTT). (done 2026-03-29, `dataImporterSyncPanelProps.js` suy ra recovery hints tu checklist loi + sync/preview error, `DataImporterSyncConfigPanel.jsx` forward day du conflict/history/hint props vao luong that, va `DataImporterSyncPreviewPanel.jsx` hien thi khung `Goi y khac phuc` cho operator truoc khi retry/escalate)
 
 ## 4. MST assignment & staffing
 

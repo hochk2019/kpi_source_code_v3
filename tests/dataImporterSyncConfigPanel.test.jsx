@@ -69,6 +69,40 @@ function createProps(overrides = {}) {
         status: "new",
       },
     ],
+    previewConflictSummary: {
+      totalRows: 3,
+      newCount: 1,
+      existingCount: 2,
+      overwriteCount: 2,
+      unchangedCount: 0,
+      lockedCount: 1,
+    },
+    previewConflictWarningActive: true,
+    syncRecoveryHints: [
+      {
+        key: "vpn-sql",
+        title: "Kiểm tra VPN và đường vào SQL Server",
+        detail: "Nếu đang làm việc ngoài văn phòng, hãy kết nối VPN hoặc mạng nội bộ rồi thử lại.",
+      },
+    ],
+    syncHistory: [
+      {
+        id: "job-history-1",
+        actor: "tester",
+        status: "completed",
+        from: "2026-03-01",
+        to: "2026-03-08",
+        finishedAt: "2026-03-11T08:10:10.000Z",
+        resultSummary: {
+          imported: 1,
+          updated: 2,
+          skipped: 0,
+          reviewLocked: 1,
+          affectedRows: 3,
+          previewedRows: 4,
+        },
+      },
+    ],
     formatDisplayDate: (value) => `fmt:${value}`,
     syncMessage: "Đã đồng bộ thành công",
     syncError: "",
@@ -91,6 +125,11 @@ describe("DataImporterSyncConfigPanel", () => {
     expect(screen.getByText("Tóm tắt lần đồng bộ gần nhất")).toBeInTheDocument();
     expect(screen.getByLabelText("Biểu thức cron")).toHaveValue("0 * * * *");
     expect(screen.getByLabelText("Chỉ đồng bộ các MST")).toHaveValue("0100109106");
+    expect(screen.getByText("Cảnh báo overwrite trước khi đồng bộ")).toBeInTheDocument();
+    expect(screen.getByText("Gợi ý khắc phục")).toBeInTheDocument();
+    expect(screen.getByText("Kiểm tra VPN và đường vào SQL Server")).toBeInTheDocument();
+    expect(screen.getByText("Lịch sử đồng bộ gần đây")).toBeInTheDocument();
+    expect(screen.getByText(/Khoảng chạy: 2026-03-01 → 2026-03-08/)).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Tải lại cấu hình" }));
     await user.click(screen.getByRole("button", { name: "Kiểm tra kết nối" }));

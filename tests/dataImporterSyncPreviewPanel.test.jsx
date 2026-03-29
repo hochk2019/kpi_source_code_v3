@@ -112,6 +112,13 @@ function renderPanel(props = {}) {
       ]}
       syncMessage="Đã đồng bộ thành công"
       syncError=""
+      syncRecoveryHints={[
+        {
+          key: "retry-backend",
+          title: "Làm mới trạng thái rồi thử lại",
+          detail: "Bấm 'Kiểm tra kết nối', chờ Backend và SQL Server về trạng thái sẵn sàng, rồi thử lại thao tác xem trước hoặc đồng bộ.",
+        },
+      ]}
       formatDate={(value) => `fmt:${value}`}
       {...handlers}
     />,
@@ -147,6 +154,8 @@ describe("DataImporterSyncPreviewPanel", () => {
     expect(screen.getByText("Sẵn sàng chạy")).toBeInTheDocument();
     expect(screen.getByText("Job lưu lúc 11/03/2026 15:09:10 cho khoảng 2026-03-01 → 2026-03-08.")).toBeInTheDocument();
     expect(screen.getByText("Khoảng xem trước: 01/03/2026 - 08/03/2026 (giới hạn 100 dòng đầu tiên)")).toBeInTheDocument();
+    expect(screen.getByText("Gợi ý khắc phục")).toBeInTheDocument();
+    expect(screen.getByText("Làm mới trạng thái rồi thử lại")).toBeInTheDocument();
     expect(screen.getByText("Cảnh báo overwrite trước khi đồng bộ")).toBeInTheDocument();
     expect(screen.getByText(/2 tờ khai đã tồn tại sẽ bị cập nhật/)).toBeInTheDocument();
     expect(screen.getByText(/1 tờ khai đang khóa rà soát sẽ bị bỏ qua/)).toBeInTheDocument();
@@ -188,6 +197,13 @@ describe("DataImporterSyncPreviewPanel", () => {
         ]}
         previewError="Không thể tải xem trước"
         syncError="Đồng bộ thất bại"
+        syncRecoveryHints={[
+          {
+            key: "network",
+            title: "Kiểm tra mạng trước khi chạy lại",
+            detail: "Lỗi hiện tại giống mất kết nối hoặc timeout. Hãy kiểm tra VPN, Wi-Fi hoặc mạng nội bộ rồi chạy lại thao tác vừa thất bại.",
+          },
+        ]}
       />,
     );
 
@@ -198,6 +214,7 @@ describe("DataImporterSyncPreviewPanel", () => {
     expect(screen.getByText("Gặp lỗi")).toBeInTheDocument();
     expect(screen.getByText("Không thể tải xem trước")).toBeInTheDocument();
     expect(screen.getByText("Đồng bộ thất bại")).toBeInTheDocument();
+    expect(screen.getByText("Kiểm tra mạng trước khi chạy lại")).toBeInTheDocument();
     expect(screen.queryByRole("table", { name: "Bảng xem trước dữ liệu đồng bộ ECUS" })).not.toBeInTheDocument();
   });
 

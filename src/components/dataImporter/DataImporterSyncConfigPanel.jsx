@@ -35,9 +35,13 @@ export default function DataImporterSyncConfigPanel({
   previewLimited = false,
   previewError = "",
   previewRows = [],
+  previewConflictSummary = null,
+  previewConflictWarningActive = false,
+  syncRecoveryHints = [],
   syncPreflightChecks = [],
   syncPreflightSummary = null,
   syncActivityLog = [],
+  syncHistory = [],
   syncResumeJob = null,
   syncResumeLabel = "",
   showPreviewTableInline = true,
@@ -306,9 +310,13 @@ export default function DataImporterSyncConfigPanel({
               previewLimited={previewLimited}
               previewError={previewError}
               previewRows={previewRows}
+              previewConflictSummary={previewConflictSummary}
+              previewConflictWarningActive={previewConflictWarningActive}
+              syncRecoveryHints={syncRecoveryHints}
               syncPreflightChecks={syncPreflightChecks}
               syncPreflightSummary={syncPreflightSummary}
               syncActivityLog={syncActivityLog}
+              syncHistory={syncHistory}
               syncResumeJob={syncResumeJob}
               syncResumeLabel={syncResumeLabel}
               showPreviewTableInline={showPreviewTableInline}

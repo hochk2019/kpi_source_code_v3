@@ -1,15 +1,6 @@
-import DataImporterCoCodeConfigPanel from "@/components/dataImporter/DataImporterCoCodeConfigPanel.jsx";
-import DataImporterColumnConfigDialog from "@/components/dataImporter/DataImporterColumnConfigDialog.jsx";
-import DataImporterDeletedRowsDialog from "@/components/dataImporter/DataImporterDeletedRowsDialog.jsx";
-import DataImporterDuplicateDiffDialog from "@/components/dataImporter/DataImporterDuplicateDiffDialog.jsx";
-import DataImporterDuplicateReviewDialog from "@/components/dataImporter/DataImporterDuplicateReviewDialog.jsx";
-import DataImporterFileActions from "@/components/dataImporter/DataImporterFileActions.jsx";
-import DataImporterImportPreviewSummary from "@/components/dataImporter/DataImporterImportPreviewSummary.jsx";
-import DataImporterListControlsPanel from "@/components/dataImporter/DataImporterListControlsPanel.jsx";
-import DataImporterMonitoringPanel from "@/components/dataImporter/DataImporterMonitoringPanel.jsx";
-import DataImporterResultsPanel from "@/components/dataImporter/DataImporterResultsPanel.jsx";
+import { Suspense, lazy } from "react";
+
 import DataImporterSummaryCards from "@/components/dataImporter/DataImporterSummaryCards.jsx";
-import DataImporterSyncConfigPanel from "@/components/dataImporter/DataImporterSyncConfigPanel.jsx";
 import DataImporterUpdatedRowsBanner from "@/components/dataImporter/DataImporterUpdatedRowsBanner.jsx";
 import DataImporterWorkflowGuide from "@/components/dataImporter/DataImporterWorkflowGuide.jsx";
 import {
@@ -20,6 +11,40 @@ import {
   buildWorkflowGuideState,
   getWorkflowStageStatus,
 } from "@/components/dataImporter/dataImporterWorkflowGuideState.js";
+
+const DataImporterCoCodeConfigPanel = lazy(
+  () => import("@/components/dataImporter/DataImporterCoCodeConfigPanel.jsx"),
+);
+const DataImporterColumnConfigDialog = lazy(
+  () => import("@/components/dataImporter/DataImporterColumnConfigDialog.jsx"),
+);
+const DataImporterDeletedRowsDialog = lazy(
+  () => import("@/components/dataImporter/DataImporterDeletedRowsDialog.jsx"),
+);
+const DataImporterDuplicateDiffDialog = lazy(
+  () => import("@/components/dataImporter/DataImporterDuplicateDiffDialog.jsx"),
+);
+const DataImporterDuplicateReviewDialog = lazy(
+  () => import("@/components/dataImporter/DataImporterDuplicateReviewDialog.jsx"),
+);
+const DataImporterFileActions = lazy(
+  () => import("@/components/dataImporter/DataImporterFileActions.jsx"),
+);
+const DataImporterImportPreviewSummary = lazy(
+  () => import("@/components/dataImporter/DataImporterImportPreviewSummary.jsx"),
+);
+const DataImporterListControlsPanel = lazy(
+  () => import("@/components/dataImporter/DataImporterListControlsPanel.jsx"),
+);
+const DataImporterMonitoringPanel = lazy(
+  () => import("@/components/dataImporter/DataImporterMonitoringPanel.jsx"),
+);
+const DataImporterResultsPanel = lazy(
+  () => import("@/components/dataImporter/DataImporterResultsPanel.jsx"),
+);
+const DataImporterSyncConfigPanel = lazy(
+  () => import("@/components/dataImporter/DataImporterSyncConfigPanel.jsx"),
+);
 
 function WorkflowStageSection({ ariaLabel, title, description, status, children, ...props }) {
   return (
@@ -41,6 +66,18 @@ function WorkflowStageSection({ ariaLabel, title, description, status, children,
       />
       {children}
     </SectionSurface>
+  );
+}
+
+function StageLoadingState({ message }) {
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      className="rounded border border-dashed border-[color:var(--ds-border-subtle)] px-3 py-2 text-xs text-[color:var(--ds-text-muted)]"
+    >
+      {message}
+    </div>
   );
 }
 
@@ -75,10 +112,12 @@ export default function DataImporterShell({
 
   return (
     <>
-      <DataImporterDeletedRowsDialog {...deletedRowsDialogProps} />
-      <DataImporterColumnConfigDialog {...columnConfigDialogProps} />
-      <DataImporterDuplicateDiffDialog {...duplicateDiffDialogProps} />
-      <DataImporterDuplicateReviewDialog {...duplicateReviewDialogProps} />
+      <Suspense fallback={null}>
+        <DataImporterDeletedRowsDialog {...deletedRowsDialogProps} />
+        <DataImporterColumnConfigDialog {...columnConfigDialogProps} />
+        <DataImporterDuplicateDiffDialog {...duplicateDiffDialogProps} />
+        <DataImporterDuplicateReviewDialog {...duplicateReviewDialogProps} />
+      </Suspense>
 
       <div ref={rootRef} className="import-data-view space-y-3">
         {!canUploadFiles && (
@@ -113,9 +152,11 @@ export default function DataImporterShell({
           description="Chuẩn bị nguồn dữ liệu bằng file XLSX hoặc đồng bộ ECUS trước khi chuyển sang bước rà soát."
           status={sourceStageStatus}
         >
-          <DataImporterSyncConfigPanel {...syncConfigPanelProps} />
-          {isAdminRole ? <DataImporterCoCodeConfigPanel {...coCodeConfigProps} /> : null}
-          <DataImporterFileActions {...fileActionsProps} />
+          <Suspense fallback={<StageLoadingState message="Đang tải khối nạp nguồn dữ liệu..." />}>
+            <DataImporterSyncConfigPanel {...syncConfigPanelProps} />
+            {isAdminRole ? <DataImporterCoCodeConfigPanel {...coCodeConfigProps} /> : null}
+            <DataImporterFileActions {...fileActionsProps} />
+          </Suspense>
         </WorkflowStageSection>
 
         <WorkflowStageSection
@@ -131,15 +172,17 @@ export default function DataImporterShell({
           }
           status={reviewStageStatus}
         >
-          {mode === "preview" ? (
-            <>
-              <DataImporterImportPreviewSummary {...importPreviewSummaryProps} />
+          <Suspense fallback={<StageLoadingState message="Đang tải khối rà soát dữ liệu..." />}>
+            {mode === "preview" ? (
+              <>
+                <DataImporterImportPreviewSummary {...importPreviewSummaryProps} />
+                <DataImporterListControlsPanel {...listControlsPanelProps} />
+                <DataImporterResultsPanel {...resultsPanelProps} />
+              </>
+            ) : (
               <DataImporterListControlsPanel {...listControlsPanelProps} />
-              <DataImporterResultsPanel {...resultsPanelProps} />
-            </>
-          ) : (
-            <DataImporterListControlsPanel {...listControlsPanelProps} />
-          )}
+            )}
+          </Suspense>
         </WorkflowStageSection>
 
         <WorkflowStageSection
@@ -155,8 +198,10 @@ export default function DataImporterShell({
         >
           <DataImporterSummaryCards {...summaryCardsProps} />
           <DataImporterUpdatedRowsBanner {...updatedRowsBannerProps} />
-          {mode !== "preview" ? <DataImporterResultsPanel {...resultsPanelProps} /> : null}
-          {isAdminRole ? <DataImporterMonitoringPanel {...monitoringPanelProps} /> : null}
+          <Suspense fallback={<StageLoadingState message="Đang tải khối lưu và theo dõi..." />}>
+            {mode !== "preview" ? <DataImporterResultsPanel {...resultsPanelProps} /> : null}
+            {isAdminRole ? <DataImporterMonitoringPanel {...monitoringPanelProps} /> : null}
+          </Suspense>
           {mode === "preview" ? (
             <p className="text-xs text-[color:var(--ds-text-muted)]">
               Import xong, toàn bộ workspace đã lưu và bề mặt theo dõi cảnh báo sẽ xuất hiện ở bước này.

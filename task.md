@@ -35,6 +35,28 @@
   - `dataImporterSyncQueue.js` gio luu bounded `jobHistory` cung `resultSummary` (actor/range/imported/updated/skipped/reviewLocked/affectedRows) cho moi job da ket thuc
   - `useDataImporterSync.js`, `useDataImporterWorkflowSession.js`, `useDataImporterSessionController.js`, `useDataImporterContainerProps.js`, `dataImporterSyncPanelProps.js`, va `DataImporterSyncPreviewPanel.jsx` da surfacing lich su nay ngay trong panel sync de lam nguon cho notification/dashboard slices sau
   - cap nhat regression cho queue/hook/workflow/panel-props/panel de khoa contract luu-doc-moi
+- Slice bo sung vua xong ngay 2026-03-29:
+  - dong bead `cng-7z0.12` bang worker-backed XLSX parsing lane cho DataImporter
+  - `dataImporterWorkbookParser.js` uu tien `dataImporterWorkbook.worker.js` khi browser ho tro worker module, va fallback an toan ve sync parser khi worker loi/khong co san
+  - regression `tests/dataImporterWorkbookParser.test.js` da khoa worker-success, worker-error, va no-worker fallback contracts
+- Slice bo sung vua xong ngay 2026-03-29:
+  - dong bead `cng-7z0.13` bang lazy-load shell-level subflows cho DataImporter
+  - `DataImporterShell.jsx` gio chi lazy-load dialog/panel nang theo tung stage (source/review/save), giu shell workflow va summary shell render ngay de operator khong mat context
+  - regression `tests/dataImporterShell.test.jsx` da cap nhat de khoa render contract trong lazy boundary
+- Slice bo sung vua xong ngay 2026-03-29:
+  - dong stale bead `cng-7z0.15` vi multi-step wizard cua DataImporter da duoc ship tu truoc
+  - `DataImporterWorkflowGuide` + `dataImporterWorkflowGuideState.js` + 3 stage sections trong `DataImporterShell.jsx` da bao phu full luong `Nap nguon` / `Ra soat` / `Luu va theo doi`
+  - regression hien co `tests/dataImporterWorkflowGuideState.test.js` va `tests/dataImporterShell.test.jsx` duoc dung lam bang chung reconcile
+- Slice bo sung vua xong ngay 2026-03-29:
+  - dong bead `cng-7z0.14` bang shared preset lane cho DataImporter
+  - `useDataImporterFilterPresets.js` gio serialise kem `filters.columns` snapshot da sanitize khi luu/ghi de preset, va restore lai column config qua store ngay luc apply preset
+  - hook preset cung accept alias `clearError` tu session controller hien tai de khong bo sot clear-state khi operator doi preset
+  - regression `tests/useDataImporterFilterPresets.test.jsx` da khoa ca save/apply column preset, legacy import khong ghi de column config, va alias contract tu session controller
+- Slice bo sung vua xong ngay 2026-03-29:
+  - dong bead `cng-7z0.16` bang actionable recovery-hint lane cho DataImporter sync
+  - `dataImporterSyncPanelProps.js` gio build `syncRecoveryHints` tu preflight fail + `previewError`/`syncError` (retry sau refresh, kiem tra VPN/SQL Server, sua range, resume job, va escalate CNTT)
+  - `DataImporterSyncConfigPanel.jsx` da forward day du `previewConflictSummary`, `syncHistory`, va `syncRecoveryHints` vao `DataImporterSyncPreviewPanel.jsx`, dong thoi panel sync hien thi them khung `Goi y khac phuc` ngay tren luong that thay vi chi co test direct
+  - regression `tests/dataImporterSyncPanelProps.test.js`, `tests/dataImporterSyncConfigPanel.test.jsx`, va `tests/dataImporterSyncPreviewPanel.test.jsx` da khoa contract hint-builder + prop forwarding + panel rendering
 - Phan con lai de dong hẳn `cng-7z0.7`:
   - tach lenh sync khoi request-response ngan hien tai de job lon van chay duoc khi operator roi tab hoac mat ket noi
   - chuyen persisted state tu local-only snapshot sang backend-truth/job polling de resume khong phu thuoc vao tab vua tao job
@@ -67,6 +89,18 @@
   - `useDataImporterSync.js` giu lich su nay xuyen session, cap nhat ngay sau moi lan sync xong, va expose `syncHistory` qua workflow/controller/container seam
   - `DataImporterSyncPreviewPanel.jsx` them block `Lich su dong bo gan day` de operator thay ngay lan chay, status, range, MST notice, va ket qua `imported/updated/skipped/locked`
   - bo sung regression `tests/dataImporterSyncQueue.test.js`, cap nhat `tests/useDataImporterSync.test.jsx`, `tests/useDataImporterWorkflowSession.test.jsx`, `tests/dataImporterSyncPanelProps.test.js`, va `tests/dataImporterSyncPreviewPanel.test.jsx`
+- `cng-7z0.12` da xong o muc worker-backed XLSX parsing:
+  - `dataImporterWorkbookParser.js` dung `dataImporterWorkbook.worker.js` de day `XLSX.read` sang worker module va chi fallback ve sync parser khi worker khong kha dung
+  - `useDataImporterImportFlow.js` tiep tuc goi parser chung nen UI import flow nhan worker offload ma khong can doi contract caller
+  - bo sung regression `tests/dataImporterWorkbookParser.test.js` cho worker-success, worker-error, va no-worker fallback
+- `cng-7z0.13` da xong o muc lazy-load shell-level DataImporter:
+  - `DataImporterShell.jsx` lazy-load cac dialog/panel nang cho `sync`, `preview`, `filters`, `results`, va `monitoring` theo tung workflow stage
+  - shell workflow guide, summary cards, va banner van render ngay de giu nhan thuc ngu canh trong luc chunk con dang tai
+  - cap nhat regression `tests/dataImporterShell.test.jsx` de khoa stage contract trong lazy boundary
+- `cng-7z0.15` da duoc reconcile closed o muc wizard da ship san:
+  - `DataImporterWorkflowGuide` da huong dan theo trang thai va goi y action theo tung buoc import/sync/save
+  - `DataImporterShell.jsx` da chia workflow thanh 3 stage co heading, status badge, va target anchor rieng cho nguoi dung theo doi
+  - bang chung regression nam o `tests/dataImporterWorkflowGuideState.test.js` va `tests/dataImporterShell.test.jsx`
 - `cng-7z0.28` da xong o muc delivery channel + delivery status tracking:
   - them chon kenh giao (`email`, `report_center`, `download_bundle`) trong `ReportingSchedulePanel` va preview payload ngay trong form
   - hien delivery status chip, `lastDeliveryAt`, va `lastDeliveryError` tren schedule cards de nguoi van hanh thay nhanh lan giao gan nhat

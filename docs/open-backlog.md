@@ -10,6 +10,8 @@ Reconciliation note:
 - Reconciled again on 2026-03-29 after completing `cng-7z0.6` and promoting `cng-7z0.7` as the next ready UX slice.
 - Reconciled again on 2026-03-29 after shipping the ECUS preflight/retry/resume UX lane: `cng-7z0.9` and `cng-7z0.10` are complete, while `cng-7z0.7` remains open only for true backend-detached queue orchestration.
 - Reconciled again on 2026-03-29 after completing `cng-7z0.11`; recent sync history is now persisted in the ECUS sync queue state and surfaced in-panel, while notification/dashboard consumers remain deferred to later slices.
+- Reconciled again on 2026-03-29 after closing `cng-7z0.12`, `cng-7z0.13`, stale wizard bead `cng-7z0.15`, and preset-sharing slice `cng-7z0.14`; DataImporter now has worker-backed parsing, stage-level lazy loading, a shipped multi-step workflow guide, and shared filter/column presets, so the next UX-ready item in this lane is actionable failure recovery hints.
+- Reconciled again on 2026-03-29 after completing `cng-7z0.16`; DataImporter sync failures now surface actionable recovery hints in the real sync panel, and the remaining open UX work returns to backend-detached ECUS queue orchestration plus MST/navigation slices.
 
 Rule:
 - Every unfinished item from review notes, rollout plans, decomposition plans, or UX backlogs must be in one of two states:
@@ -62,14 +64,6 @@ Source set: `docs/ux-improvement-backlog.md`
 ### ECUS Declaration Sync
 
 - `cng-7z0.7` — Add background sync queue with resume support for ECUS imports
-
-### Data Importer
-
-- `cng-7z0.12` — Move XLSX parsing to a Web Worker in DataImporter
-- `cng-7z0.13` — Modularize and lazy-load DataImporter subflows
-- `cng-7z0.14` — Persist and share DataImporter filter and column presets
-- `cng-7z0.15` — Design a multi-step import wizard for DataImporter
-- `cng-7z0.16` — Improve DataImporter failure feedback with actionable recovery hints
 
 ### MST Assignment And Staffing
 

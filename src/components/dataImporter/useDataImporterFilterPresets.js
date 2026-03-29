@@ -4,6 +4,11 @@ import {
   LAST_FILTER_PRESET_KEY,
   LEGACY_FILTER_STORAGE_KEY,
 } from "@/components/dataImporter/dataImporterConfig.js";
+import {
+  isConfigColumnKey,
+  sanitizeColumnWidths,
+} from "@/components/dataImporter/dataImporterConfig.js";
+import { getImportColumnConfig, saveImportColumnConfig } from "@/lib/store.js";
 import { normalizeStatusKey } from "../../../packages/domain/src/declSearch.js";
 
 function normalizePresetStatuses(status) {
@@ -85,10 +90,34 @@ function normalizeLegacyStoredFilters(stored) {
   return Object.keys(normalizedFilters).length > 0 ? normalizedFilters : null;
 }
 
+function normalizePresetColumnConfig(config) {
+  if (!config || typeof config !== "object" || Array.isArray(config)) {
+    return null;
+  }
+
+  const hidden = Array.isArray(config.hidden)
+    ? Array.from(
+        new Set(
+          config.hidden
+            .map((value) => (typeof value === "string" ? value.trim() : ""))
+            .filter((value) => value && isConfigColumnKey(value))
+        )
+      )
+    : [];
+  const widths = sanitizeColumnWidths(config.widths);
+
+  if (!hidden.length && !Object.keys(widths).length) {
+    return null;
+  }
+
+  return { hidden, widths };
+}
+
 export default function useDataImporterFilterPresets({
   savedPresets = [],
   presetLoading = false,
   clearPresetError,
+  clearError,
   refreshPresetList,
   createFilterPreset,
   updateFilterPreset,
@@ -116,12 +145,16 @@ export default function useDataImporterFilterPresets({
   setCoFilterMode,
   setCoFilterMin,
   setPage,
+  actor = "system",
+  getCurrentColumnConfig = getImportColumnConfig,
+  applyColumnConfig = saveImportColumnConfig,
 }) {
   const [selectedPresetId, setSelectedPresetId] = useState("");
   const [appliedPresetId, setAppliedPresetId] = useState("");
   const [presetSaving, setPresetSaving] = useState(false);
   const lastPresetSeedRef = useRef("");
   const presetAutoAppliedRef = useRef(false);
+  const resetPresetError = clearPresetError ?? clearError;
 
   const buildFilterPresetPayload = useCallback(() => {
     const payload = {
@@ -168,6 +201,11 @@ export default function useDataImporterFilterPresets({
       payload.status = Array.from(new Set(statusFilters.filter(Boolean)));
     }
 
+    const columns = normalizePresetColumnConfig(getCurrentColumnConfig?.());
+    if (columns) {
+      payload.columns = columns;
+    }
+
     return payload;
   }, [
     coFilterMin,
@@ -182,6 +220,7 @@ export default function useDataImporterFilterPresets({
     searchRange.from,
     searchRange.to,
     statusFilters,
+    getCurrentColumnConfig,
   ]);
 
   const applyPresetFilters = useCallback(
@@ -191,8 +230,17 @@ export default function useDataImporterFilterPresets({
         return;
       }
 
-      clearPresetError?.();
+      resetPresetError?.();
       const filters = preset.filters && typeof preset.filters === "object" ? preset.filters : {};
+      const columns = normalizePresetColumnConfig(filters.columns);
+
+      if (columns) {
+        try {
+          applyColumnConfig(columns, { actor });
+        } catch (error) {
+          console.error("Không thể áp dụng cấu hình cột từ bộ lọc đã lưu", error);
+        }
+      }
 
       setQuery(typeof filters.query === "string" ? filters.query : "");
       setQuickMST(typeof filters.mst === "string" ? filters.mst : "");
@@ -248,7 +296,9 @@ export default function useDataImporterFilterPresets({
       }
     },
     [
-      clearPresetError,
+      actor,
+      applyColumnConfig,
+      resetPresetError,
       setCoFilterMin,
       setCoFilterMode,
       setDatePreset,
@@ -389,10 +439,10 @@ export default function useDataImporterFilterPresets({
 
   const handleSelectPreset = useCallback(
     (value) => {
-      clearPresetError?.();
+      resetPresetError?.();
       setSelectedPresetId(value);
     },
-    [clearPresetError]
+    [resetPresetError]
   );
 
   const handleApplySelectedPreset = useCallback(() => {
@@ -421,7 +471,7 @@ export default function useDataImporterFilterPresets({
       }
     }
 
-    clearPresetError?.();
+    resetPresetError?.();
     setPresetSaving(true);
 
     try {
@@ -445,9 +495,9 @@ export default function useDataImporterFilterPresets({
   }, [
     applyPresetFilters,
     buildFilterPresetPayload,
-    clearPresetError,
-    createFilterPreset,
-    selectedPreset,
+      resetPresetError,
+      createFilterPreset,
+      selectedPreset,
   ]);
 
   const handleOverwriteSelectedPreset = useCallback(async () => {
@@ -463,7 +513,7 @@ export default function useDataImporterFilterPresets({
       return;
     }
 
-    clearPresetError?.();
+    resetPresetError?.();
     setPresetSaving(true);
 
     try {
@@ -484,9 +534,9 @@ export default function useDataImporterFilterPresets({
   }, [
     applyPresetFilters,
     buildFilterPresetPayload,
-    clearPresetError,
-    selectedPreset,
-    updateFilterPreset,
+      resetPresetError,
+      selectedPreset,
+      updateFilterPreset,
   ]);
 
   const handleDeleteSelectedPreset = useCallback(async () => {
@@ -499,7 +549,7 @@ export default function useDataImporterFilterPresets({
       return;
     }
 
-    clearPresetError?.();
+    resetPresetError?.();
     setPresetSaving(true);
 
     try {
@@ -526,12 +576,12 @@ export default function useDataImporterFilterPresets({
     } finally {
       setPresetSaving(false);
     }
-  }, [appliedPresetId, clearPresetError, deleteFilterPreset, selectedPreset]);
+  }, [appliedPresetId, deleteFilterPreset, resetPresetError, selectedPreset]);
 
   const handleRefreshPresetList = useCallback(() => {
-    clearPresetError?.();
+    resetPresetError?.();
     refreshPresetList?.();
-  }, [clearPresetError, refreshPresetList]);
+  }, [refreshPresetList, resetPresetError]);
 
   const handleClearSearchRange = useCallback(() => {
     setSearchRange({ from: "", to: "" });

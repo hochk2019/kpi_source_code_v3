@@ -91,7 +91,7 @@ describe("DataImporterShell", () => {
     cleanup();
   });
 
-  it("renders shared shell sections and preview-specific content", () => {
+  it("renders shared shell sections and preview-specific content", async () => {
     render(
       <DataImporterShell
         {...createProps({
@@ -111,11 +111,11 @@ describe("DataImporterShell", () => {
     expect(screen.getByTestId("workflow-guide")).toBeInTheDocument();
     expect(screen.getByTestId("summary-cards")).toBeInTheDocument();
     expect(screen.getByTestId("updated-rows-banner")).toBeInTheDocument();
-    expect(screen.getByTestId("sync-config-panel")).toBeInTheDocument();
-    expect(screen.getByTestId("file-actions")).toBeInTheDocument();
-    expect(screen.getByTestId("import-preview-summary")).toBeInTheDocument();
-    expect(screen.getByTestId("list-controls-panel")).toBeInTheDocument();
-    expect(screen.getByTestId("results-panel")).toBeInTheDocument();
+    expect(await screen.findByTestId("sync-config-panel")).toBeInTheDocument();
+    expect(await screen.findByTestId("file-actions")).toBeInTheDocument();
+    expect(await screen.findByTestId("import-preview-summary")).toBeInTheDocument();
+    expect(await screen.findByTestId("list-controls-panel")).toBeInTheDocument();
+    expect(await screen.findByTestId("results-panel")).toBeInTheDocument();
     const sourceStage = screen.getByRole("region", { name: "Bước 1: Nạp nguồn" });
     const reviewStage = screen.getByRole("region", { name: "Bước 2: Rà soát dữ liệu" });
     const saveStage = screen.getByRole("region", { name: "Bước 3: Lưu và theo dõi" });
@@ -132,7 +132,7 @@ describe("DataImporterShell", () => {
     expect(screen.queryByTestId("monitoring-panel")).not.toBeInTheDocument();
   });
 
-  it("renders admin monitoring surfaces and review-only banner", () => {
+  it("renders admin monitoring surfaces and review-only banner", async () => {
     render(
       <DataImporterShell
         {...createProps({
@@ -151,10 +151,10 @@ describe("DataImporterShell", () => {
     ).toBeInTheDocument();
     const sourceStage = screen.getByRole("region", { name: "Bước 1: Nạp nguồn" });
     const saveStage = screen.getByRole("region", { name: "Bước 3: Lưu và theo dõi" });
-    expect(within(sourceStage).getByTestId("co-code-panel")).toBeInTheDocument();
-    expect(within(saveStage).getByTestId("results-panel")).toBeInTheDocument();
+    expect(await within(sourceStage).findByTestId("co-code-panel")).toBeInTheDocument();
+    expect(await within(saveStage).findByTestId("results-panel")).toBeInTheDocument();
     expect(screen.getByTestId("co-code-panel")).toBeInTheDocument();
-    expect(screen.getByTestId("monitoring-panel")).toBeInTheDocument();
+    expect(await screen.findByTestId("monitoring-panel")).toBeInTheDocument();
     expect(screen.queryByTestId("import-preview-summary")).not.toBeInTheDocument();
   });
 });
