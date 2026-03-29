@@ -9,6 +9,10 @@ const ECUS_PREVIEW_ROUTE = "/api/v4/declarations/imports/ecus-preview";
 const ECUS_STATUS_ROUTE = "/api/v4/declarations/imports/ecus-status";
 const ALERTS_ROUTE = "/api/v4/declarations/imports/alerts";
 
+function getSyncStep(steps, key) {
+  return steps.find((step) => step.key === key);
+}
+
 describe("useDataImporterSync", () => {
   afterEach(() => {
     vi.restoreAllMocks();
@@ -285,6 +289,129 @@ describe("useDataImporterSync", () => {
     expect(result.current.syncMessage).toBe(
       "Đã đồng bộ 4 tờ khai mới từ ECUS, cập nhật 2 tờ khai đã có, bỏ qua 1 tờ khai đã có, khóa 2 tờ khai đã rà soát. Lọc theo chỉ MST: 0312345678; loại trừ MST: 0399999999."
     );
+    expect(getSyncStep(result.current.syncProgressSteps, "commit")).toMatchObject({
+      status: "done",
+      detail: "Đã nhập 4 mới, cập nhật 2, bỏ qua 1, khóa 2.",
+    });
+    expect(getSyncStep(result.current.syncProgressSteps, "reconcile")).toMatchObject({
+      status: "done",
+    });
+    expect(getSyncStep(result.current.syncProgressSteps, "refreshDeclRows")).toMatchObject({
+      status: "done",
+    });
+    expect(getSyncStep(result.current.syncProgressSteps, "reloadSavedRows")).toMatchObject({
+      status: "done",
+      detail: "Danh sách tờ khai trên giao diện đã được làm mới.",
+    });
+  });
+
+  it("keeps the sync successful while surfacing a failed declaration refresh step", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const refreshDeclRowsFromServer = vi.fn(async () => {
+      throw new Error("Không thể tải lại tờ khai");
+    });
+    const loadSavedRows = vi.fn(() => true);
+
+    const fetchWithAuth = vi.fn(async (url, options = {}) => {
+      if (url === ECUS_CONFIG_ROUTE && !options.method) {
+        return {
+          ok: true,
+          json: async () => ({
+            config: {
+              enabled: false,
+              schedule: "0 * * * *",
+              rangeDays: 1,
+              preferMonthFirst: false,
+              connection: {
+                server: "",
+                database: "",
+                user: "",
+                hasPassword: false,
+              },
+              includeTaxCodes: [],
+              excludeTaxCodes: [],
+            },
+          }),
+        };
+      }
+
+      if (url === ECUS_STATUS_ROUTE && !options.method) {
+        return {
+          ok: true,
+          json: async () => ({
+            backend: { status: "ok", checkedAt: "2026-03-11T01:00:00.000Z" },
+            database: { status: "ok", checkedAt: "2026-03-11T01:00:30.000Z" },
+          }),
+        };
+      }
+
+      if (url === ALERTS_ROUTE && !options.method) {
+        return {
+          ok: true,
+          json: async () => ({
+            alerts: [],
+            summary: {
+              outstanding: 0,
+              totalTracked: 0,
+              lastEvaluatedAt: null,
+            },
+          }),
+        };
+      }
+
+      if (url === ECUS_COMMIT_ROUTE && options.method === "POST") {
+        return {
+          ok: true,
+          json: async () => ({
+            result: {
+              imported: 2,
+              updated: 0,
+              skipped: 0,
+              reviewLocked: 0,
+            },
+          }),
+        };
+      }
+
+      throw new Error(`Unexpected request ${url} ${options.method || "GET"}`);
+    });
+
+    const { result } = renderHook(() =>
+      useDataImporterSync({
+        actor: "tester",
+        canManageSync: true,
+        fetchWithAuth,
+        extractErrorMessage: async (_response, fallback) => fallback,
+        refreshDeclRowsFromServer,
+        loadSavedRows,
+      })
+    );
+
+    await waitFor(() => {
+      expect(fetchWithAuth).toHaveBeenCalledWith(
+        ECUS_CONFIG_ROUTE,
+        expect.objectContaining({ cache: "no-store", credentials: "include" })
+      );
+    });
+
+    await act(async () => {
+      result.current.setManualRange({ from: "2026-03-01", to: "2026-03-05" });
+    });
+
+    await act(async () => {
+      await result.current.handleRunSync();
+    });
+
+    expect(result.current.syncMessage).toBe("Đã đồng bộ 2 tờ khai mới từ ECUS.");
+    expect(result.current.syncError).toBe("");
+    expect(loadSavedRows).toHaveBeenCalledWith({ bypassConfirm: true });
+    expect(getSyncStep(result.current.syncProgressSteps, "refreshDeclRows")).toMatchObject({
+      status: "error",
+      detail: "Không thể tải lại tờ khai",
+    });
+    expect(getSyncStep(result.current.syncProgressSteps, "reloadSavedRows")).toMatchObject({
+      status: "done",
+    });
   });
 
   it("preserves fetched preview totals from the server preview payload", async () => {

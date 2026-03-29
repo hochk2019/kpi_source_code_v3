@@ -25,6 +25,21 @@ const DEFAULT_STATUS_INFO = {
   checkedAt: null,
 };
 
+const SYNC_PROGRESS_STEP_DEFS = [
+  { key: "commit", label: "Đồng bộ dữ liệu từ ECUS" },
+  { key: "reconcile", label: "Làm mới cấu hình, trạng thái và cảnh báo" },
+  { key: "refreshDeclRows", label: "Tải lại tờ khai từ server" },
+  { key: "reloadSavedRows", label: "Làm mới danh sách đang hiển thị" },
+];
+
+function createSyncProgressSteps() {
+  return SYNC_PROGRESS_STEP_DEFS.map((step) => ({
+    ...step,
+    status: "pending",
+    detail: "",
+  }));
+}
+
 function buildMstFilterNotice(includeTaxCodes, excludeTaxCodes) {
   if (!includeTaxCodes.length && !excludeTaxCodes.length) {
     return "";
@@ -79,6 +94,7 @@ export default function useDataImporterSync({
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState("");
   const [previewRangeInfo, setPreviewRangeInfo] = useState(null);
+  const [syncProgressSteps, setSyncProgressSteps] = useState(() => createSyncProgressSteps());
 
   const previewRangeLabel = useMemo(() => formatDateRangeLabel(previewRangeInfo), [previewRangeInfo]);
 
@@ -325,10 +341,29 @@ export default function useDataImporterSync({
     }
 
     setSyncRunning(true);
-    setSyncMessage("Đang đồng bộ...");
+    setSyncMessage("");
     setSyncError("");
+    setSyncProgressSteps(createSyncProgressSteps());
+
+    let currentStepKey = "commit";
+    const updateSyncStep = (key, status, detail = "") => {
+      currentStepKey = key;
+      setSyncProgressSteps((prev) => {
+        const base = Array.isArray(prev) && prev.length ? prev : createSyncProgressSteps();
+        return base.map((step) =>
+          step.key === key
+            ? {
+                ...step,
+                status,
+                detail,
+              }
+            : step
+        );
+      });
+    };
 
     try {
+      updateSyncStep("commit", "active", "Đang gửi yêu cầu đồng bộ tới ECUS.");
       const response = await fetchWithAuth(ECUS_COMMIT_ROUTE, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -361,28 +396,68 @@ export default function useDataImporterSync({
         messageParts.push(`${mstFilterNotice}.`);
       }
 
+      updateSyncStep(
+        "commit",
+        "done",
+        `Đã nhập ${imported} mới, cập nhật ${updated}, bỏ qua ${skipped}, khóa ${locked}.`,
+      );
       setSyncMessage(messageParts.join(" ").replace(/\s+/g, " ").trim());
       setPreviewRows([]);
       setPreviewRangeInfo(null);
       setPreviewLimited(false);
       setPreviewError("");
 
+      updateSyncStep(
+        "reconcile",
+        "active",
+        "Đang tải lại cấu hình, trạng thái kết nối và cảnh báo sau khi đồng bộ.",
+      );
       await fetchSyncConfig({ preserveMessage: true });
       await fetchSyncStatus();
       await fetchAlerts();
       if (typeof onAfterSyncSuccess === "function") {
         await onAfterSyncSuccess();
       }
+      updateSyncStep(
+        "reconcile",
+        "done",
+        "Đã làm mới cấu hình, trạng thái kết nối và cảnh báo.",
+      );
 
+      updateSyncStep("refreshDeclRows", "active", "Đang tải lại dữ liệu tờ khai từ server.");
       try {
-        await refreshDeclRowsFromServer();
+        const refreshedRows = await refreshDeclRowsFromServer();
+        const refreshedCount = Array.isArray(refreshedRows) ? refreshedRows.length : null;
+        updateSyncStep(
+          "refreshDeclRows",
+          "done",
+          refreshedCount === null
+            ? "Đã tải lại dữ liệu tờ khai từ server."
+            : `Đã tải ${refreshedCount.toLocaleString("vi-VN")} tờ khai từ server.`,
+        );
       } catch (refreshError) {
         console.error("Không thể tải dữ liệu tờ khai sau đồng bộ", refreshError);
+        updateSyncStep(
+          "refreshDeclRows",
+          "error",
+          refreshError?.message || "Không thể tải lại dữ liệu tờ khai từ server.",
+        );
       }
 
+      updateSyncStep("reloadSavedRows", "active", "Đang làm mới danh sách tờ khai trong giao diện.");
       loadSavedRows({ bypassConfirm: true });
+      updateSyncStep(
+        "reloadSavedRows",
+        "done",
+        "Danh sách tờ khai trên giao diện đã được làm mới.",
+      );
     } catch (err) {
       console.error("Đồng bộ ECUS thất bại", err);
+      updateSyncStep(
+        currentStepKey,
+        "error",
+        err?.message || "Không thể hoàn tất bước đồng bộ hiện tại.",
+      );
       setSyncMessage("");
       setSyncError(err?.message || "Không thể đồng bộ ECUS");
     } finally {
@@ -505,6 +580,7 @@ export default function useDataImporterSync({
     previewError,
     previewRangeInfo,
     previewRangeLabel,
+    syncProgressSteps,
     activeIncludeTaxCodes,
     activeExcludeTaxCodes,
     mstFilterNotice,

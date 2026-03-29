@@ -37,6 +37,7 @@ export default function DataImporterSyncConfigPanel({
   previewRows = [],
   showPreviewTableInline = true,
   formatDisplayDate,
+  syncProgressSteps = [],
   syncMessage = "",
   syncError = "",
   cardSurfaceClass = "",
@@ -301,6 +302,7 @@ export default function DataImporterSyncConfigPanel({
               previewRows={previewRows}
               showPreviewTableInline={showPreviewTableInline}
               formatDate={formatDisplayDate}
+              syncProgressSteps={syncProgressSteps}
               syncMessage={syncMessage}
               syncError={syncError}
             />

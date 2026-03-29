@@ -36,6 +36,26 @@ function renderPanel(props = {}) {
           status: "new",
         },
       ]}
+      syncProgressSteps={[
+        {
+          key: "commit",
+          label: "Đồng bộ dữ liệu từ ECUS",
+          status: "done",
+          detail: "Đã nhập 1 mới, cập nhật 0, bỏ qua 0, khóa 0.",
+        },
+        {
+          key: "reconcile",
+          label: "Làm mới cấu hình, trạng thái và cảnh báo",
+          status: "active",
+          detail: "Đang tải lại cấu hình, trạng thái kết nối và cảnh báo sau khi đồng bộ.",
+        },
+        {
+          key: "refreshDeclRows",
+          label: "Tải lại tờ khai từ server",
+          status: "pending",
+          detail: "",
+        },
+      ]}
       syncMessage="Đã đồng bộ thành công"
       syncError=""
       formatDate={(value) => `fmt:${value}`}
@@ -73,6 +93,12 @@ describe("DataImporterSyncPreviewPanel", () => {
     expect(screen.getByText("fmt:2026-03-07")).toBeInTheDocument();
     expect(screen.getByText("(chưa gán)")).toBeInTheDocument();
     expect(screen.getByText("Mới")).toBeInTheDocument();
+    expect(screen.getByRole("status")).toBeInTheDocument();
+    expect(screen.getByRole("list", { name: "Tiến trình đồng bộ ECUS" })).toBeInTheDocument();
+    expect(screen.getByText("Đồng bộ dữ liệu từ ECUS")).toBeInTheDocument();
+    expect(screen.getByText("Đã nhập 1 mới, cập nhật 0, bỏ qua 0, khóa 0.")).toBeInTheDocument();
+    expect(screen.getByText("Làm mới cấu hình, trạng thái và cảnh báo")).toBeInTheDocument();
+    expect(screen.getByText("Đang chạy")).toBeInTheDocument();
     expect(screen.getByText("Đã đồng bộ thành công")).toBeInTheDocument();
   });
 
@@ -83,6 +109,14 @@ describe("DataImporterSyncPreviewPanel", () => {
         manualRange={{ from: "", to: "" }}
         syncRunning
         previewLoading
+        syncProgressSteps={[
+          {
+            key: "commit",
+            label: "Đồng bộ dữ liệu từ ECUS",
+            status: "error",
+            detail: "HTTP 500",
+          },
+        ]}
         previewError="Không thể tải xem trước"
         syncError="Đồng bộ thất bại"
       />,
@@ -91,6 +125,8 @@ describe("DataImporterSyncPreviewPanel", () => {
     expect(screen.getByRole("button", { name: "Hôm nay" })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Đang xem trước..." })).toBeDisabled();
     expect(screen.getByRole("button", { name: "Đang đồng bộ..." })).toBeDisabled();
+    expect(screen.getByText("HTTP 500")).toBeInTheDocument();
+    expect(screen.getByText("Gặp lỗi")).toBeInTheDocument();
     expect(screen.getByText("Không thể tải xem trước")).toBeInTheDocument();
     expect(screen.getByText("Đồng bộ thất bại")).toBeInTheDocument();
     expect(screen.queryByRole("table", { name: "Bảng xem trước dữ liệu đồng bộ ECUS" })).not.toBeInTheDocument();

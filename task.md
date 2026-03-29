@@ -3,7 +3,7 @@
 ## Canonical Open Backlog
 
 - Source of truth cho tat ca viec chua xong hien tai la `docs/open-backlog.md`.
-- Da reconcile ngay 2026-03-27 voi cac nguon: `Gemini_review_V1.md`, `docs/gemini-review-v1-factcheck-2026-03-25.md`, `docs/server-v4-rollout-plan-2026-03-25.md`, `frontend-wave1-decomposition.md`, va `docs/ux-improvement-backlog.md`.
+- Da reconcile ngay 2026-03-29 voi cac nguon: `Gemini_review_V1.md`, `docs/gemini-review-v1-factcheck-2026-03-25.md`, `docs/server-v4-rollout-plan-2026-03-25.md`, `frontend-wave1-decomposition.md`, `docs/ux-improvement-backlog.md`, va bead database.
 - Open epics hien tai:
   - `cng-2k4` — Post-Gemini remaining technical backlog
   - `cng-7z0` — UX improvement backlog execution
@@ -16,28 +16,29 @@
 
 ## Active Slice
 
-- Title: KPI Adjustments direct default-setting management in active form
-- Bead: cng-7z0.5 (bead CLI khong kha dung trong worktree nay)
-- Status: completed
-- Last updated: 2026-03-28
+-- Title: ECUS background sync queue with resume support
+-- Bead: cng-7z0.7
+-- Status: pending
+-- Last updated: 2026-03-29
 
-- Muc tieu slice nay la bien cau hinh diem mac dinh thanh thao tac "tai cho" hon cho approver:
-  - hien summary "cau hinh dang ap dung" ngay trong form KPI Adjustments de khong phai mo dialog tong moi biet he thong dang dung default nao
-  - them CTA mo thang category dang chon vao `KpiAdjustmentSettingsDialog`, tranh buoc tim tay giua danh sach tat ca category
-  - giu nguyen contract settings hien co (`KPI_ADJUSTMENT_SETTINGS_KEY` / `saveKpiAdjustmentSettings`) va chi tang discoverability o frontend
-- Cach sua da ap dung:
-  - mo rong `useKpiAdjustmentForm.js` de giu `settingsFocusCategory`, cho phep `openSettingsDialog(category)` va reset focus sau close/save
-  - mo rong `KpiAdjustmentFormPanel.jsx` voi summary card `Cấu hình đang áp dụng` va button `Chỉnh cấu hình hạng mục này`
-  - mo rong `KpiAdjustmentSettingsDialog.jsx` de dua category duoc focus len dau va hien focus banner khi mo theo context category
-  - noi wiring moi trong `KPIAdjustments.jsx` va bo sung regression `tests/kpiAdjustmentDialogs.test.jsx` + `tests/kpiAdjustments.test.jsx`
-- Trang thai verify hien tai:
-  - `pnpm exec eslint src/components/KPIAdjustments.jsx src/components/kpi-adjustments/hooks/useKpiAdjustmentForm.js src/components/kpi-adjustments/panels/KpiAdjustmentFormPanel.jsx src/components/kpi-adjustments/panels/KpiAdjustmentSettingsDialog.jsx tests/kpiAdjustmentDialogs.test.jsx tests/kpiAdjustments.test.jsx` da pass
-  - `pnpm exec vitest run tests/kpiAdjustmentDialogs.test.jsx tests/kpiAdjustments.test.jsx --environment jsdom` da pass
-  - `bd` / `bd.cmd` trong worktree hien tai khong tim thay beads database, nen trang thai bead chua sync duoc bang CLI
+- Muc tieu slice tiep theo la mo rong luong sync ECUS thanh background job co the tiep tuc sau khi tab dong/mat ket noi:
+  - tach lenh sync khoi request-response ngắn hiện tại de job lon khong bi ket UI
+  - co queue state / progress / result de operator quay lai van thay duoc trang thai moi nhat
+  - uu tien tan dung progress model vua them o `cng-7z0.6` thay vi tao them loading state rieng
+- Ghi chu backlog/repo:
+  - da reconcile stale state ngay 2026-03-29: bead `cng-7z0.1`, `cng-7z0.2`, `cng-7z0.3`, `cng-7z0.4`, `cng-7z0.5`, `cng-7z0.29`, `cng-2k4.19`, va `cng-2k4.20` da duoc xac nhan completed theo code/task va da dong trong bead DB
+  - `docs/open-backlog.md` da duoc don lai cho khop voi bead DB va code hien tai
+  - `cng-7z0.6` da xong va da duoc chuyen sang Recent Completed Slices + bead close
+  - bead DB trong worktree hien da truy cap duoc qua junction `.beads`, nhung `bd.cmd` van chay o direct mode vi wrapper WSL khong fingerprint duoc worktree `.git` dung Windows path
 - Next suggested slice:
-  - `cng-7z0.6` — hien thi tien trinh dong bo theo tung buoc khi goi `refreshDeclRowsFromServer`
+  - `cng-7z0.7` — them hang doi dong bo nen va resume support cho ECUS imports
 ## Recent Completed Slices
 
+- `cng-7z0.6` da xong o muc surfacing tien trinh dong bo ECUS theo tung buoc:
+  - them `syncProgressSteps` trong `useDataImporterSync.js` de track 4 phase thuc te: commit ECUS, refresh config/status/alerts, refresh declaration rows, va reload danh sach hien thi
+  - day state moi qua `dataImporterSyncPanelProps.js` va `DataImporterSyncConfigPanel.jsx` de UI shell khong can tu tinh lai progress
+  - cap nhat `DataImporterSyncPreviewPanel.jsx` thanh stepper co badge `dang chay` / `hoan tat` / `gap loi`, giu operator thay ro buoc nao dang active va chi tiet tung buoc
+  - bo sung regression `tests/useDataImporterSync.test.jsx`, `tests/dataImporterSyncPreviewPanel.test.jsx`, `tests/dataImporterSyncPanelProps.test.js`, va re-verify seam `tests/useDataImporterContainerProps.test.jsx`
 - `cng-7z0.28` da xong o muc delivery channel + delivery status tracking:
   - them chon kenh giao (`email`, `report_center`, `download_bundle`) trong `ReportingSchedulePanel` va preview payload ngay trong form
   - hien delivery status chip, `lastDeliveryAt`, va `lastDeliveryError` tren schedule cards de nguoi van hanh thay nhanh lan giao gan nhat
@@ -748,13 +749,13 @@
 
 ## Next Suggested Slice
 
-- Title: Quick links to declaration or MST from KPI adjustments
-- Bead: `cng-7z0.4`
-- Status: open
+- Title: ECUS background sync queue with resume support
+- Bead: `cng-7z0.7`
+- Status: pending
 - Follow-up backlog:
-  - xac dinh nguon deep-link an toan tu references/MST data hien co trong `KPIAdjustments`
-  - bo sung action shortcut ngay tren list/detail de approver mo nhanh to khai hoac MST lien quan
-  - khoa regression cho permission-neutral navigation va fallback khi record lien quan khong con ton tai
+  - dinh nghia sync job model co thể resume sau reload/tab close ma khong mat operator context
+  - tach trigger UI khoi vong doi request ngắn, bo sung persisted status/result lane cho sync ECUS
+  - khoa regression cho queue resume, stale-job cleanup, va hand-off tu progress stepper hien tai
 
 ## Verification
 

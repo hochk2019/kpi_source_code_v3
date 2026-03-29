@@ -1,5 +1,29 @@
 import React from "react";
 
+const SYNC_PROGRESS_STATUS_META = {
+  pending: {
+    badgeClass:
+      "border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-muted)] text-[color:var(--ds-text-muted)]",
+    label: "Chưa chạy",
+    markerClass: "bg-[color:var(--ds-border-subtle)]",
+  },
+  active: {
+    badgeClass: "border border-emerald-200 bg-emerald-50 text-emerald-700",
+    label: "Đang chạy",
+    markerClass: "bg-emerald-500",
+  },
+  done: {
+    badgeClass: "border border-sky-200 bg-sky-50 text-sky-700",
+    label: "Hoàn tất",
+    markerClass: "bg-sky-500",
+  },
+  error: {
+    badgeClass: "border border-red-200 bg-red-50 text-red-700",
+    label: "Gặp lỗi",
+    markerClass: "bg-red-500",
+  },
+};
+
 function renderPreviewStatus(status) {
   if (status === "existing") {
     return <span className="rounded bg-gray-200 px-2 py-0.5 text-xs text-gray-700">Đã có</span>;
@@ -25,9 +49,14 @@ export default function DataImporterSyncPreviewPanel({
   previewRows = [],
   showPreviewTableInline = true,
   formatDate = (value) => value,
+  syncProgressSteps = [],
   syncMessage = "",
   syncError = "",
 }) {
+  const hasSyncProgress = syncProgressSteps.some(
+    (step) => step?.status && step.status !== "pending",
+  );
+
   return (
     <>
       <div className="flex flex-wrap items-center gap-2">
@@ -95,6 +124,39 @@ export default function DataImporterSyncPreviewPanel({
       ) : null}
 
       {previewError ? <div className="text-xs text-red-600">{previewError}</div> : null}
+
+      {hasSyncProgress ? (
+        <div
+          className="space-y-2 rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-muted)] px-3 py-3"
+          role="status"
+          aria-live="polite"
+        >
+          <div className="text-xs font-medium uppercase tracking-wide text-gray-700">
+            Tiến trình đồng bộ
+          </div>
+          <ol className="space-y-2" aria-label="Tiến trình đồng bộ ECUS">
+            {syncProgressSteps.map((step) => {
+              const meta = SYNC_PROGRESS_STATUS_META[step?.status] || SYNC_PROGRESS_STATUS_META.pending;
+              return (
+                <li key={step?.key || step?.label} className="rounded border border-white/70 bg-white/80 px-3 py-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 text-sm text-gray-800">
+                      <span className={`h-2.5 w-2.5 rounded-full ${meta.markerClass}`} aria-hidden="true" />
+                      <span>{step?.label || "Bước đồng bộ"}</span>
+                    </div>
+                    <span className={`rounded px-2 py-0.5 text-xs font-medium ${meta.badgeClass}`}>
+                      {meta.label}
+                    </span>
+                  </div>
+                  {step?.detail ? (
+                    <div className="mt-1 pl-4 text-xs text-gray-600">{step.detail}</div>
+                  ) : null}
+                </li>
+              );
+            })}
+          </ol>
+        </div>
+      ) : null}
 
       {previewRows.length > 0 && showPreviewTableInline ? (
         <div className="space-y-2">

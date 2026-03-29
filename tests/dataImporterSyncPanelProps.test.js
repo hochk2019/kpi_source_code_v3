@@ -50,6 +50,7 @@ describe("dataImporterSyncPanelProps", () => {
     const syncForm = { schedule: "daily" };
     const manualRange = { from: "2026-03-01", to: "2026-03-03" };
     const previewRows = [{ so_tk: "102030" }];
+    const syncProgressSteps = [{ key: "commit", status: "done", label: "Đồng bộ dữ liệu từ ECUS" }];
     const formatDisplayDate = (value) => `DATE:${value}`;
     const fetchSyncConfig = () => "fetch-config";
     const fetchSyncStatus = () => "fetch-status";
@@ -146,6 +147,7 @@ describe("dataImporterSyncPanelProps", () => {
       previewLimited: true,
       previewError: "preview-error",
       previewRows,
+      syncProgressSteps,
       formatDisplayDate,
       syncMessage: "sync-message",
       syncError: "sync-error",
@@ -204,6 +206,7 @@ describe("dataImporterSyncPanelProps", () => {
     expect(syncConfigPanelProps.onApplyRangePreset).toBe(onApplyRangePreset);
     expect(syncConfigPanelProps.onManualRangeChange).toBe(handleManualRangeChange);
     expect(syncConfigPanelProps.previewRows).toBe(previewRows);
+    expect(syncConfigPanelProps.syncProgressSteps).toBe(syncProgressSteps);
     expect(syncConfigPanelProps.formatDisplayDate).toBe(formatDisplayDate);
     expect(syncConfigPanelProps.cardSurfaceClass).toBe("surface-card");
   });

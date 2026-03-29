@@ -1,11 +1,13 @@
 # Open Backlog
 
-Last reconciled: 2026-03-28
+Last reconciled: 2026-03-29
 
 This file is the canonical source of truth for unfinished work in this repo.
 
 Reconciliation note:
 - Reconciled after completing `cng-7z0.29`, `cng-7z0.1`, `cng-7z0.2`, `cng-7z0.3`, `cng-7z0.4`, and `cng-7z0.5`.
+- Reconciled again on 2026-03-29 after closing stale beads `cng-7z0.1`, `cng-7z0.2`, `cng-7z0.3`, `cng-7z0.4`, `cng-7z0.5`, `cng-7z0.29`, `cng-2k4.19`, and `cng-2k4.20`, and removing stale open-list entries already reflected in code and `task.md`.
+- Reconciled again on 2026-03-29 after completing `cng-7z0.6` and promoting `cng-7z0.7` as the next ready UX slice.
 
 Rule:
 - Every unfinished item from review notes, rollout plans, decomposition plans, or UX backlogs must be in one of two states:
@@ -23,7 +25,7 @@ Current highest-priority ready items:
 - `cng-2k4.2` — Execute declarations write cutover with compat guard and rollback plan
 - `cng-2k4.3` — Switch production entrypoint from legacy server to server-v4
 - Ready next in UX lane:
-- `cng-7z0.6` — Hiển thị tiến trình đồng bộ theo từng bước khi gọi `refreshDeclRowsFromServer`
+- `cng-7z0.7` — Add background sync queue with resume support for ECUS imports
 
 ## Technical Stabilization
 
@@ -55,12 +57,8 @@ Source set: `docs/ux-improvement-backlog.md`
 
 ### KPI Adjustments
 
-- `cng-7z0.3` — Add bulk approve and reject actions for KPI adjustments
-- `cng-7z0.4` — Add quick links from KPI adjustments to related declaration or MST
-
 ### ECUS Declaration Sync
 
-- `cng-7z0.6` — Show step-by-step ECUS sync progress
 - `cng-7z0.7` — Add background sync queue with resume support for ECUS imports
 - `cng-7z0.8` — Warn on declaration sync conflicts before overwrite
 - `cng-7z0.9` — Add ECUS pre-check checklist before sync runs
@@ -92,14 +90,10 @@ Source set: `docs/ux-improvement-backlog.md`
 
 ### Reporting And Automation
 
-- `cng-7z0.29` — Allow custom report templates to be created and stored
-
 ### Reliability, QA, And Accessibility
 
 - `cng-7z0.30` — Standardize network-error handling in `storageClient.js`
 - `cng-7z0.31` — Add frontend performance telemetry and slow-screen dashboard
-- `cng-7z0.32` — Run accessibility audit on `KPIAdjustments`, `DataImporter`, and `MSTAssignment`
-- `cng-7z0.33` — Add automated regression coverage for filter and sync flows
 
 ## Reconciliation Workflow
 
@@ -107,22 +101,3 @@ Source set: `docs/ux-improvement-backlog.md`
 - If a new unfinished item appears during implementation or review, create its bead in the same session and add it here immediately.
 - When closing a bead, update the source doc and `task.md` in the same session.
 - If an item is intentionally deferred or removed, note that explicitly in the source doc instead of leaving an orphan unchecked line.
-# Open backlog
-
-Canonical open backlog duoc tiep tuc theo doi tai file nay. Da reconcile lai ngay 2026-03-28 sau khi dong `cng-7z0.29`, `cng-7z0.1`, `cng-7z0.2`, va `cng-7z0.3`.
-
-## Ready next
-
-- [ ] `cng-7z0.6` — Hien thi tien trinh dong bo theo tung buoc khi goi `refreshDeclRowsFromServer`.
-- [ ] `cng-2k4.22` — Text/lint hygiene cho app/runtime code, khong gom dirt co san trong `.claude/skills/*`.
-- [ ] `cng-2k4.2` — Declarations write cutover voi compat guard + rollback plan.
-- [ ] `cng-2k4.3` — Switch production entrypoint sang `server-v4`.
-
-## Notes
-
-- `cng-7z0.5` da dong trong session 2026-03-28 sau khi them summary cau hinh dang ap dung vao KPI Adjustments form va quick action mo thang category hien tai trong settings dialog.
-- `cng-7z0.29` da dong trong session 2026-03-28 sau khi them local report templates cho Report Center.
-- `cng-7z0.1` da dong trong session 2026-03-28 sau khi them local persistence cho filter KPI Adjustments theo user va khoa regression hook/UI.
-- `cng-7z0.2` da dong trong session 2026-03-28 sau khi paginate KPI Adjustments list, persist `pageSize`, va khoa regression panel/remount flow.
-- `cng-7z0.3` da dong trong session 2026-03-28 sau khi them bulk selection + bulk approve/reject toolbar cho approver trong KPI Adjustments, giu scope tren trang hien tai va khoa regression hook/panel/UI.
-- `bd` / `bd.cmd` hien chua truy cap duoc beads database trong worktree nay, nen backlog duoc giu song song tai day va `task.md`.
