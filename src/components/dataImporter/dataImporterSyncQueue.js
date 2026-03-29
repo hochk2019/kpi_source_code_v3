@@ -1,5 +1,6 @@
 const SYNC_QUEUE_STORAGE_KEY = "data-importer-ecus-sync-job-v1";
 const READY_STATUS_VALUES = new Set(["ok", "ready", "healthy", "connected"]);
+const SYNC_HISTORY_LIMIT = 6;
 
 export const SYNC_RETRY_DELAYS_MS = [1500, 5000];
 
@@ -23,6 +24,31 @@ export function createDefaultSyncJobState() {
     activeJob: null,
     resumableJob: null,
     lastJob: null,
+    jobHistory: [],
+  };
+}
+
+function toNonNegativeCount(value) {
+  const normalized = Number(value);
+  if (!Number.isFinite(normalized) || normalized < 0) {
+    return 0;
+  }
+  return normalized;
+}
+
+export function buildSyncJobResultSummary(result = {}) {
+  const imported = toNonNegativeCount(result?.imported);
+  const updated = toNonNegativeCount(result?.updated);
+  const skipped = toNonNegativeCount(result?.skipped);
+  const reviewLocked = toNonNegativeCount(result?.reviewLocked);
+
+  return {
+    imported,
+    updated,
+    skipped,
+    reviewLocked,
+    affectedRows: imported + updated,
+    previewedRows: imported + updated + skipped + reviewLocked,
   };
 }
 
@@ -146,6 +172,11 @@ function normalizeSyncJob(job) {
     return null;
   }
 
+  const resultSummary =
+    job.resultSummary && typeof job.resultSummary === "object"
+      ? buildSyncJobResultSummary(job.resultSummary)
+      : null;
+
   return {
     id: typeof job.id === "string" ? job.id : `sync-${Date.now()}`,
     actor: typeof job.actor === "string" ? job.actor : "system",
@@ -163,6 +194,7 @@ function normalizeSyncJob(job) {
     startedAt: typeof job.startedAt === "string" ? job.startedAt : null,
     finishedAt: typeof job.finishedAt === "string" ? job.finishedAt : null,
     lastError: typeof job.lastError === "string" ? job.lastError : "",
+    resultSummary,
     progressSteps: cloneProgressSteps(job.progressSteps),
     logs: Array.isArray(job.logs)
       ? job.logs
@@ -191,7 +223,29 @@ function normalizeSyncJobState(state) {
     activeJob: normalizeSyncJob(state.activeJob),
     resumableJob: normalizeSyncJob(state.resumableJob),
     lastJob: normalizeSyncJob(state.lastJob),
+    jobHistory: Array.isArray(state.jobHistory)
+      ? state.jobHistory
+          .map((job) => normalizeSyncJob(job))
+          .filter(Boolean)
+          .slice(0, SYNC_HISTORY_LIMIT)
+      : [],
   };
+}
+
+export function mergeSyncJobHistory(history = [], job) {
+  const normalizedJob = normalizeSyncJob(job);
+  if (!normalizedJob) {
+    return Array.isArray(history) ? history.map((entry) => normalizeSyncJob(entry)).filter(Boolean) : [];
+  }
+
+  const normalizedHistory = Array.isArray(history)
+    ? history.map((entry) => normalizeSyncJob(entry)).filter(Boolean)
+    : [];
+
+  return [normalizedJob, ...normalizedHistory.filter((entry) => entry.id !== normalizedJob.id)].slice(
+    0,
+    SYNC_HISTORY_LIMIT,
+  );
 }
 
 export function appendSyncJobLog(job, message, options = {}) {
@@ -334,7 +388,11 @@ export function writeStoredSyncJobState(state) {
 
   try {
     const normalized = normalizeSyncJobState(state);
-    const hasPayload = normalized.activeJob || normalized.resumableJob || normalized.lastJob;
+    const hasPayload =
+      normalized.activeJob ||
+      normalized.resumableJob ||
+      normalized.lastJob ||
+      normalized.jobHistory.length > 0;
 
     if (!hasPayload) {
       window.localStorage.removeItem(SYNC_QUEUE_STORAGE_KEY);

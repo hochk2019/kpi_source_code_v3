@@ -62,6 +62,7 @@ describe("dataImporterSyncPanelProps", () => {
     const syncPreflightChecks = [{ key: "backend", status: "pass", label: "Backend đồng bộ sẵn sàng" }];
     const syncPreflightSummary = { ready: true, blockingCount: 0, warningCount: 0 };
     const syncActivityLog = [{ id: "log-1", message: "queued", at: "2026-03-10T02:15:00.000Z" }];
+    const syncHistory = [{ id: "job-1", status: "completed" }];
     const syncResumeJob = { id: "job-1" };
     const formatDisplayDate = (value) => `DATE:${value}`;
     const fetchSyncConfig = () => "fetch-config";
@@ -165,6 +166,7 @@ describe("dataImporterSyncPanelProps", () => {
       syncPreflightChecks,
       syncPreflightSummary,
       syncActivityLog,
+      syncHistory,
       syncResumeJob,
       syncResumeLabel: "resume-label",
       syncProgressSteps,
@@ -232,6 +234,7 @@ describe("dataImporterSyncPanelProps", () => {
     expect(syncConfigPanelProps.syncPreflightChecks).toBe(syncPreflightChecks);
     expect(syncConfigPanelProps.syncPreflightSummary).toBe(syncPreflightSummary);
     expect(syncConfigPanelProps.syncActivityLog).toBe(syncActivityLog);
+    expect(syncConfigPanelProps.syncHistory).toBe(syncHistory);
     expect(syncConfigPanelProps.syncResumeJob).toBe(syncResumeJob);
     expect(syncConfigPanelProps.syncResumeLabel).toBe("resume-label");
     expect(syncConfigPanelProps.syncProgressSteps).toBe(syncProgressSteps);

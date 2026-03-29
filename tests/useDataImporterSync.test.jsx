@@ -311,6 +311,20 @@ describe("useDataImporterSync", () => {
       detail: "Danh sách tờ khai trên giao diện đã được làm mới.",
     });
     expect(result.current.syncActivityLog.at(-1)?.message).toContain("đã hoàn tất");
+    expect(result.current.syncHistory[0]).toMatchObject({
+      actor: "tester",
+      status: "completed",
+      from: "2026-03-01",
+      to: "2026-03-05",
+      resultSummary: {
+        imported: 4,
+        updated: 2,
+        skipped: 1,
+        reviewLocked: 2,
+        affectedRows: 6,
+        previewedRows: 9,
+      },
+    });
   });
 
   it("keeps the sync successful while surfacing a failed declaration refresh step", async () => {

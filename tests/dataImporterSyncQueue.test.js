@@ -2,6 +2,7 @@ import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 
 import {
   appendSyncJobLog,
+  buildSyncJobResultSummary,
   buildSyncPreflightChecks,
   createSyncJob,
   createSyncProgressSteps,
@@ -9,6 +10,7 @@ import {
   getSyncRetryDelayMs,
   isHealthySyncStatus,
   isRetriableSyncError,
+  mergeSyncJobHistory,
   readStoredSyncJobState,
   summarizeSyncPreflight,
   updateSyncJobProgress,
@@ -110,5 +112,61 @@ describe("dataImporterSyncQueue", () => {
       expect.objectContaining({ key: "refreshDeclRows", status: "pending" }),
       expect.objectContaining({ key: "reloadSavedRows", status: "pending" }),
     ]);
+  });
+
+  it("stores bounded sync history with normalized result summaries", () => {
+    const firstJob = {
+      ...createSyncJob({
+        actor: "tester",
+        manualRange: { from: "2026-03-01", to: "2026-03-05" },
+      }),
+      status: "completed",
+      finishedAt: "2026-03-05T09:00:00.000Z",
+      resultSummary: buildSyncJobResultSummary({
+        imported: 3,
+        updated: 2,
+        skipped: 1,
+        reviewLocked: 4,
+      }),
+    };
+    const secondJob = {
+      ...createSyncJob({
+        actor: "reviewer",
+        manualRange: { from: "2026-03-06", to: "2026-03-07" },
+      }),
+      status: "failed",
+      finishedAt: "2026-03-07T10:30:00.000Z",
+      lastError: "HTTP 500",
+    };
+
+    const jobHistory = mergeSyncJobHistory([firstJob], secondJob);
+
+    writeStoredSyncJobState({
+      activeJob: null,
+      resumableJob: null,
+      lastJob: secondJob,
+      jobHistory,
+    });
+
+    const restored = readStoredSyncJobState();
+
+    expect(restored.jobHistory).toHaveLength(2);
+    expect(restored.jobHistory[0]).toMatchObject({
+      id: secondJob.id,
+      status: "failed",
+      lastError: "HTTP 500",
+    });
+    expect(restored.jobHistory[1]).toMatchObject({
+      id: firstJob.id,
+      status: "completed",
+      resultSummary: {
+        imported: 3,
+        updated: 2,
+        skipped: 1,
+        reviewLocked: 4,
+        affectedRows: 5,
+        previewedRows: 10,
+      },
+    });
   });
 });

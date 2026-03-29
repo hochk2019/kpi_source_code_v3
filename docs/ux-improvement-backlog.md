@@ -22,7 +22,7 @@ Reconciliation note 2026-03-27:
 - [ ] Cảnh báo xung đột (vd. tờ khai đã bị chỉnh sửa tại chỗ khác) và cung cấp giao diện so sánh trước khi ghi đè.
 - [ ] Thực hiện pre-check (kiểm tra kết nối DB, quyền truy cập ECUS, dung lượng đĩa) và hiển thị check-list trước khi chạy đồng bộ.
 - [ ] Bổ sung cơ chế retry tự động với backoff và log thân thiện khi `sendWrite` trả về lỗi.
-- [ ] Lưu lịch sử đồng bộ (ai chạy, thời gian, số bản ghi cập nhật) để hiện trong Notification Center và trang tổng quan.
+- [x] Lưu lịch sử đồng bộ (ai chạy, thời gian, số bản ghi cập nhật) để hiện trong Notification Center và trang tổng quan. (done 2026-03-29, persist bounded sync history trong queue local state, luu actor/range/resultSummary cho moi lan sync, va surfacing ngay trong ECUS sync panel de lam nguon cho notification/dashboard slices sau)
 
 ## 3. Data Importer
 

@@ -30,6 +30,11 @@
   - dong bead `cng-7z0.8` bang warning overwrite truoc khi sync commit
   - preview sync gio tong hop `new/existing/overwrite/locked/unchanged` tu `previewRows`, hien banner conflict trong `DataImporterSyncPreviewPanel.jsx`, va buoc operator confirm neu preview hien tai cho thay co declaration se bi cap nhat
   - cap nhat regression cho hook/panel/panel-props/workflow/container seams de khoa contract moi
+- Slice bo sung vua xong ngay 2026-03-29:
+  - dong bead `cng-7z0.11` bang persisted sync history cho lane ECUS
+  - `dataImporterSyncQueue.js` gio luu bounded `jobHistory` cung `resultSummary` (actor/range/imported/updated/skipped/reviewLocked/affectedRows) cho moi job da ket thuc
+  - `useDataImporterSync.js`, `useDataImporterWorkflowSession.js`, `useDataImporterSessionController.js`, `useDataImporterContainerProps.js`, `dataImporterSyncPanelProps.js`, va `DataImporterSyncPreviewPanel.jsx` da surfacing lich su nay ngay trong panel sync de lam nguon cho notification/dashboard slices sau
+  - cap nhat regression cho queue/hook/workflow/panel-props/panel de khoa contract luu-doc-moi
 - Phan con lai de dong hẳn `cng-7z0.7`:
   - tach lenh sync khoi request-response ngan hien tai de job lon van chay duoc khi operator roi tab hoac mat ket noi
   - chuyen persisted state tu local-only snapshot sang backend-truth/job polling de resume khong phu thuoc vao tab vua tao job
@@ -57,6 +62,11 @@
   - `useDataImporterSync.js` gio tong hop preview conflict summary tu payload preview co san va chi bat confirm overwrite khi preview hien tai cho thay co declaration `existing` voi `changedFields`
   - `DataImporterSyncPreviewPanel.jsx` hien banner canh bao overwrite/locked/unchanged de operator thay ro tac dong truoc khi bam `Dong bo ngay`
   - cap nhat `dataImporterSyncPanelProps.js`, `useDataImporterWorkflowSession.js`, `useDataImporterSessionController.js`, `useDataImporterContainerProps.js`, `tests/useDataImporterSync.test.jsx`, `tests/dataImporterSyncPreviewPanel.test.jsx`, va `tests/dataImporterSyncPanelProps.test.js`
+- `cng-7z0.11` da xong o muc lich su dong bo:
+  - `dataImporterSyncQueue.js` gio luu `jobHistory` co gioi han cho cac job `completed/failed` va normalize `resultSummary` de ghi ro actor, thoi diem, khoang ngay, va so ban ghi bi tac dong
+  - `useDataImporterSync.js` giu lich su nay xuyen session, cap nhat ngay sau moi lan sync xong, va expose `syncHistory` qua workflow/controller/container seam
+  - `DataImporterSyncPreviewPanel.jsx` them block `Lich su dong bo gan day` de operator thay ngay lan chay, status, range, MST notice, va ket qua `imported/updated/skipped/locked`
+  - bo sung regression `tests/dataImporterSyncQueue.test.js`, cap nhat `tests/useDataImporterSync.test.jsx`, `tests/useDataImporterWorkflowSession.test.jsx`, `tests/dataImporterSyncPanelProps.test.js`, va `tests/dataImporterSyncPreviewPanel.test.jsx`
 - `cng-7z0.28` da xong o muc delivery channel + delivery status tracking:
   - them chon kenh giao (`email`, `report_center`, `download_bundle`) trong `ReportingSchedulePanel` va preview payload ngay trong form
   - hien delivery status chip, `lastDeliveryAt`, va `lastDeliveryError` tren schedule cards de nguoi van hanh thay nhanh lan giao gan nhat

@@ -137,6 +137,7 @@ describe("useDataImporterWorkflowSession", () => {
       syncPreflightChecks: [],
       syncPreflightSummary: { ready: true, blockingCount: 0, warningCount: 0 },
       syncActivityLog: [],
+      syncHistory: [{ id: "job-1", status: "completed" }],
       syncResumeJob: null,
       syncResumeLabel: "",
       fetchSyncConfig: vi.fn(),
@@ -205,6 +206,7 @@ describe("useDataImporterWorkflowSession", () => {
 
     expect(result.current.loadSavedRows).toBe(loadSavedRows);
     expect(result.current.fetchAlerts).toBe(handleRefreshAlerts);
+    expect(result.current.syncHistory).toEqual([{ id: "job-1", status: "completed" }]);
     expect(result.current.summaryCards).toEqual([{ label: "A" }]);
     expect(result.current.handleImport).toBe(useDataImporterImportFlow.mock.results[0].value.handleImport);
   });

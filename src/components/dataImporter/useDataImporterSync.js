@@ -7,6 +7,7 @@ import {
 } from "@/components/dataImporter/dataImporterConfig.js";
 import {
   appendSyncJobLog,
+  buildSyncJobResultSummary,
   buildSyncPreflightChecks,
   createDefaultSyncJobState,
   createSyncJob,
@@ -14,6 +15,7 @@ import {
   formatRetryDelayLabel,
   getSyncRetryDelayMs,
   isRetriableSyncError,
+  mergeSyncJobHistory,
   readStoredSyncJobState,
   SYNC_RETRY_DELAYS_MS,
   setSyncJobStatus,
@@ -202,6 +204,11 @@ export default function useDataImporterSync({
   const visibleSyncJob = useMemo(
     () => syncJobState.activeJob || syncJobState.resumableJob || syncJobState.lastJob || null,
     [syncJobState.activeJob, syncJobState.lastJob, syncJobState.resumableJob]
+  );
+
+  const syncHistory = useMemo(
+    () => (Array.isArray(syncJobState.jobHistory) ? syncJobState.jobHistory : []),
+    [syncJobState.jobHistory],
   );
 
   const syncPreflightChecks = useMemo(
@@ -526,6 +533,7 @@ export default function useDataImporterSync({
         activeJob: nextJob,
         resumableJob: prev?.resumableJob?.id === nextJob?.id ? null : prev?.resumableJob || null,
         lastJob: prev?.lastJob || null,
+        jobHistory: prev?.jobHistory || [],
       }));
       return nextJob;
     };
@@ -538,6 +546,7 @@ export default function useDataImporterSync({
         activeJob: null,
         resumableJob: null,
         lastJob: nextJob,
+        jobHistory: mergeSyncJobHistory(prev?.jobHistory, nextJob),
       }));
       return nextJob;
     };
@@ -639,6 +648,7 @@ export default function useDataImporterSync({
       const updated = payload?.result?.updated ?? 0;
       const skipped = payload?.result?.skipped ?? 0;
       const locked = payload?.result?.reviewLocked ?? 0;
+      const resultSummary = buildSyncJobResultSummary(payload?.result);
       const updatedNote = updated > 0 ? `, cập nhật ${updated} tờ khai đã có` : "";
       const skippedNote = skipped > 0 ? `, bỏ qua ${skipped} tờ khai đã có` : "";
       const lockedNote = locked > 0 ? `, khóa ${locked} tờ khai đã rà soát` : "";
@@ -715,6 +725,7 @@ export default function useDataImporterSync({
           {
             finishedAt: new Date().toISOString(),
             lastError: "",
+            resultSummary,
           }
         )
       );
@@ -802,6 +813,7 @@ export default function useDataImporterSync({
       activeJob: null,
       resumableJob: null,
       lastJob: prev?.lastJob || null,
+      jobHistory: prev?.jobHistory || [],
     }));
 
     return executeSyncJob(job, { resumed: false });
@@ -957,6 +969,7 @@ export default function useDataImporterSync({
     syncPreflightChecks,
     syncPreflightSummary,
     syncActivityLog,
+    syncHistory,
     syncResumeJob: syncJobState.resumableJob,
     syncResumeLabel,
     activeIncludeTaxCodes,

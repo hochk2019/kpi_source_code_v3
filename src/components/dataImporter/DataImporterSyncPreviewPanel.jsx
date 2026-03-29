@@ -45,6 +45,34 @@ const ACTIVITY_LOG_LEVEL_META = {
   error: "text-red-700",
 };
 
+const SYNC_HISTORY_STATUS_META = {
+  completed: "border border-emerald-200 bg-emerald-50 text-emerald-700",
+  failed: "border border-red-200 bg-red-50 text-red-700",
+  resume_required: "border border-amber-200 bg-amber-50 text-amber-700",
+  default:
+    "border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-muted)] text-[color:var(--ds-text-muted)]",
+};
+
+function renderSyncHistoryStatus(status) {
+  if (status === "completed") {
+    return "Hoàn tất";
+  }
+  if (status === "failed") {
+    return "Thất bại";
+  }
+  if (status === "resume_required") {
+    return "Cần tiếp tục";
+  }
+  return "Đã lưu";
+}
+
+function formatSyncHistoryWindow(entry) {
+  if (entry?.from && entry?.to) {
+    return `${entry.from} → ${entry.to}`;
+  }
+  return "Dùng RangeDays mặc định";
+}
+
 function renderPreviewStatus(status) {
   if (status === "existing") {
     return <span className="rounded bg-gray-200 px-2 py-0.5 text-xs text-gray-700">Đã có</span>;
@@ -73,6 +101,7 @@ export default function DataImporterSyncPreviewPanel({
   syncPreflightChecks = [],
   syncPreflightSummary = null,
   syncActivityLog = [],
+  syncHistory = [],
   syncResumeJob = null,
   syncResumeLabel = "",
   showPreviewTableInline = true,
@@ -87,6 +116,7 @@ export default function DataImporterSyncPreviewPanel({
   );
   const hasPreflightChecks = syncPreflightChecks.length > 0;
   const hasActivityLog = syncActivityLog.length > 0;
+  const hasSyncHistory = Array.isArray(syncHistory) && syncHistory.length > 0;
 
   return (
     <>
@@ -285,6 +315,54 @@ export default function DataImporterSyncPreviewPanel({
                 {entry?.message || ""}
               </li>
             ))}
+          </ol>
+        </div>
+      ) : null}
+
+      {hasSyncHistory ? (
+        <div className="space-y-2 rounded border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-muted)] px-3 py-3">
+          <div className="text-xs font-medium uppercase tracking-wide text-gray-700">
+            Lịch sử đồng bộ gần đây
+          </div>
+          <ol className="space-y-2" aria-label="Lịch sử đồng bộ ECUS gần đây">
+            {syncHistory.map((entry) => {
+              const statusClass =
+                SYNC_HISTORY_STATUS_META[entry?.status] || SYNC_HISTORY_STATUS_META.default;
+              const summary = entry?.resultSummary || null;
+              return (
+                <li
+                  key={entry?.id || `${entry?.finishedAt || entry?.updatedAt || ""}-${entry?.actor || ""}`}
+                  className="rounded border border-white/70 bg-white/80 px-3 py-2"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="text-sm text-gray-800">
+                      {entry?.actor || "system"} ·{" "}
+                      {entry?.finishedAt || entry?.updatedAt || entry?.createdAt
+                        ? new Date(entry.finishedAt || entry.updatedAt || entry.createdAt).toLocaleString("vi-VN")
+                        : "Không rõ thời điểm"}
+                    </div>
+                    <span className={`rounded px-2 py-0.5 text-xs font-medium ${statusClass}`}>
+                      {renderSyncHistoryStatus(entry?.status)}
+                    </span>
+                  </div>
+                  <div className="mt-1 text-xs text-gray-600">
+                    Khoảng chạy: {formatSyncHistoryWindow(entry)}
+                  </div>
+                  {summary ? (
+                    <div className="mt-1 text-xs text-gray-600">
+                      Tác động {summary.affectedRows.toLocaleString("vi-VN")} bản ghi
+                      {" "}({summary.imported.toLocaleString("vi-VN")} mới, {summary.updated.toLocaleString("vi-VN")} cập nhật, {summary.skipped.toLocaleString("vi-VN")} bỏ qua, {summary.reviewLocked.toLocaleString("vi-VN")} khóa).
+                    </div>
+                  ) : null}
+                  {entry?.mstFilterNotice ? (
+                    <div className="mt-1 text-xs text-gray-600">{entry.mstFilterNotice}</div>
+                  ) : null}
+                  {entry?.lastError ? (
+                    <div className="mt-1 text-xs text-red-700">{entry.lastError}</div>
+                  ) : null}
+                </li>
+              );
+            })}
           </ol>
         </div>
       ) : null}

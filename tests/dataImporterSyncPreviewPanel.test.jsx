@@ -50,6 +50,25 @@ function renderPanel(props = {}) {
           message: "Đã tạo job đồng bộ.",
         },
       ]}
+      syncHistory={[
+        {
+          id: "job-history-1",
+          actor: "tester",
+          status: "completed",
+          from: "2026-03-01",
+          to: "2026-03-08",
+          finishedAt: "2026-03-11T08:10:10.000Z",
+          mstFilterNotice: "Lọc theo chỉ MST: 0100109106",
+          resultSummary: {
+            imported: 1,
+            updated: 2,
+            skipped: 0,
+            reviewLocked: 1,
+            affectedRows: 3,
+            previewedRows: 4,
+          },
+        },
+      ]}
       syncResumeJob={{ id: "job-1" }}
       syncResumeLabel="Job lưu lúc 11/03/2026 15:09:10 cho khoảng 2026-03-01 → 2026-03-08."
       previewRows={[
@@ -144,6 +163,11 @@ describe("DataImporterSyncPreviewPanel", () => {
     expect(screen.getByText("Đang chạy")).toBeInTheDocument();
     expect(screen.getByText("Nhật ký queue và retry")).toBeInTheDocument();
     expect(screen.getByText(/Đã tạo job đồng bộ/)).toBeInTheDocument();
+    expect(screen.getByText("Lịch sử đồng bộ gần đây")).toBeInTheDocument();
+    expect(screen.getByText(/tester ·/)).toBeInTheDocument();
+    expect(screen.getByText("Khoảng chạy: 2026-03-01 → 2026-03-08")).toBeInTheDocument();
+    expect(screen.getByText(/Tác động 3 bản ghi/)).toBeInTheDocument();
+    expect(screen.getByText("Lọc theo chỉ MST: 0100109106")).toBeInTheDocument();
     expect(screen.getByText("Đã đồng bộ thành công")).toBeInTheDocument();
   });
 
