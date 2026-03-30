@@ -228,6 +228,8 @@ const SHARED_KEYS = new Set([
 
   'kpi_report_schedule_v1',
 
+  'kpi_command_center_pins_v1',
+
   'ui_layout_config_v1',
 
 ]);

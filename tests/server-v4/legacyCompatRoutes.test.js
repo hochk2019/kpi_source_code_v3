@@ -56,6 +56,7 @@ describe('server-v4 legacy compatibility routes', () => {
       version: 1,
       teams: [{ id: 'team-blue', name: 'Blue Team', members: [{ id: 'lan', name: 'Lan' }] }],
     };
+    const commandPins = ['navigate:hq'];
     const app = buildV4App({
       modules: [authModule],
       persistence: createPersistenceStub({
@@ -63,6 +64,9 @@ describe('server-v4 legacy compatibility routes', () => {
         declarations,
         rules,
         roster,
+        sharedProjectionValues: {
+          kpi_command_center_pins_v1: { pins: commandPins },
+        },
       }),
     });
 
@@ -106,6 +110,7 @@ describe('server-v4 legacy compatibility routes', () => {
       decl_rows_v1: JSON.stringify(declarations),
       kpi_rules_v2: JSON.stringify(rules),
       team_roster_v1: JSON.stringify(roster),
+      kpi_command_center_pins_v1: JSON.stringify(commandPins),
     });
     expect(JSON.parse(bootstrapResponse.body.data.kpi_users_v1)).toEqual([
       expect.objectContaining({ username: 'admin', role: ADMIN_ROLE }),
@@ -126,6 +131,62 @@ describe('server-v4 legacy compatibility routes', () => {
     const rosterResponse = await request(app).get('/api/storage/team_roster_v1').set('Cookie', cookie);
     expect(rosterResponse.status).toBe(200);
     expect(rosterResponse.body.value).toEqual(roster);
+
+    const pinResponse = await request(app)
+      .get('/api/storage/kpi_command_center_pins_v1')
+      .set('Cookie', cookie);
+    expect(pinResponse.status).toBe(200);
+    expect(pinResponse.body.value).toEqual(commandPins);
+    expect(pinResponse.body.raw).toBe(JSON.stringify(commandPins));
+  });
+
+  it('writes and rereads projection-backed command center pins via legacy storage routes', async () => {
+    const authStore = createAuthStore([
+      createAccount({
+        username: 'admin',
+        password: 'admin123',
+        role: ADMIN_ROLE,
+        name: 'Admin User',
+      }),
+    ]);
+    const app = buildV4App({
+      modules: [authModule],
+      persistence: createPersistenceStub({ authStore }),
+    });
+
+    const loginResponse = await request(app).post('/api/auth/login').send({
+      username: 'admin',
+      password: 'admin123',
+    });
+    const cookie = getCookieHeader(loginResponse);
+    const csrfToken = getCookieValue(loginResponse, CSRF_COOKIE_NAME);
+    const nextPins = ['navigate:hq', 'navigate:reports'];
+
+    const writeResponse = await request(app)
+      .put('/api/storage/kpi_command_center_pins_v1')
+      .set('Cookie', cookie)
+      .set(CSRF_HEADER_NAME, csrfToken)
+      .send({
+        value: JSON.stringify(nextPins),
+      });
+
+    expect(writeResponse.status).toBe(200);
+    expect(writeResponse.body).toMatchObject({
+      ok: true,
+      key: 'kpi_command_center_pins_v1',
+      value: nextPins,
+      raw: JSON.stringify(nextPins),
+    });
+
+    const readResponse = await request(app)
+      .get('/api/storage/kpi_command_center_pins_v1')
+      .set('Cookie', cookie);
+    expect(readResponse.status).toBe(200);
+    expect(readResponse.body.value).toEqual(nextPins);
+
+    const bootstrapResponse = await request(app).get('/api/bootstrap').set('Cookie', cookie);
+    expect(bootstrapResponse.status).toBe(200);
+    expect(bootstrapResponse.body.data.kpi_command_center_pins_v1).toBe(JSON.stringify(nextPins));
   });
 
   it('returns 404 for the retired legacy deleted declarations route', async () => {
@@ -472,7 +533,12 @@ function createPersistenceStub({
     },
   },
   schedules = [],
+  sharedProjectionValues = {},
 } = {}) {
+  const projectionValues = new Map(
+    Object.entries(clone(sharedProjectionValues) ?? {}).map(([key, value]) => [key, clone(value)]),
+  );
+
   return {
     mode: 'postgres',
     sourceKind: 'relational-store',
@@ -557,9 +623,13 @@ function createPersistenceStub({
       writeRoster: async (value) => value,
     },
     projections: {
-      readValue: async () => null,
-      writeValue: async () => {},
-      deleteValue: async () => {},
+      readValue: async (key) => clone(projectionValues.get(key) ?? null),
+      writeValue: async (key, value) => {
+        projectionValues.set(key, clone(value));
+      },
+      deleteValue: async (key) => {
+        projectionValues.delete(key);
+      },
       readScheduleEntries: async () => clone(schedules),
       readMonthlyAggregateEntries: async () => [],
       readJobRunEntries: async () => [],

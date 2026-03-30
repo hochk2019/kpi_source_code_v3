@@ -16,60 +16,39 @@
 
 ## Active Slice
 
--- Title: ECUS background sync queue with resume support
--- Bead: cng-7z0.7
--- Status: in_progress
--- Last updated: 2026-03-29
+-- Title: Contextual quick-help / FAQ hub
+-- Bead: cng-7z0.25
+-- Status: ready
+-- Last updated: 2026-03-30
 
-- Da hoan tat phase client-side cho lane `cng-7z0.7` + `cng-7z0.9` + `cng-7z0.10`:
-  - them `dataImporterSyncQueue.js` de luu sync job snapshot, progress, retry logs, va resume metadata vao local storage
-  - mo rong `useDataImporterSync.js` voi preflight checklist, retry/backoff co nhat ky than thien, resume CTA, va persisted job state
-  - day state moi qua `useDataImporterWorkflowSession.js`, `useDataImporterSessionController.js`, `useDataImporterContainerProps.js`, `dataImporterSyncPanelProps.js`, `DataImporterSyncConfigPanel.jsx`, va `DataImporterSyncPreviewPanel.jsx`
-  - bo sung regression cho helper/hook/panel/workflow/container seams, verify xanh voi 19 test jsdom + eslint targeted
-- Slice bo sung vua xong ngay 2026-03-29:
-  - dong bead `cng-7z0.8` bang warning overwrite truoc khi sync commit
-  - preview sync gio tong hop `new/existing/overwrite/locked/unchanged` tu `previewRows`, hien banner conflict trong `DataImporterSyncPreviewPanel.jsx`, va buoc operator confirm neu preview hien tai cho thay co declaration se bi cap nhat
-  - cap nhat regression cho hook/panel/panel-props/workflow/container seams de khoa contract moi
-- Slice bo sung vua xong ngay 2026-03-29:
-  - dong bead `cng-7z0.11` bang persisted sync history cho lane ECUS
-  - `dataImporterSyncQueue.js` gio luu bounded `jobHistory` cung `resultSummary` (actor/range/imported/updated/skipped/reviewLocked/affectedRows) cho moi job da ket thuc
-  - `useDataImporterSync.js`, `useDataImporterWorkflowSession.js`, `useDataImporterSessionController.js`, `useDataImporterContainerProps.js`, `dataImporterSyncPanelProps.js`, va `DataImporterSyncPreviewPanel.jsx` da surfacing lich su nay ngay trong panel sync de lam nguon cho notification/dashboard slices sau
-  - cap nhat regression cho queue/hook/workflow/panel-props/panel de khoa contract luu-doc-moi
-- Slice bo sung vua xong ngay 2026-03-29:
-  - dong bead `cng-7z0.12` bang worker-backed XLSX parsing lane cho DataImporter
-  - `dataImporterWorkbookParser.js` uu tien `dataImporterWorkbook.worker.js` khi browser ho tro worker module, va fallback an toan ve sync parser khi worker loi/khong co san
-  - regression `tests/dataImporterWorkbookParser.test.js` da khoa worker-success, worker-error, va no-worker fallback contracts
-- Slice bo sung vua xong ngay 2026-03-29:
-  - dong bead `cng-7z0.13` bang lazy-load shell-level subflows cho DataImporter
-  - `DataImporterShell.jsx` gio chi lazy-load dialog/panel nang theo tung stage (source/review/save), giu shell workflow va summary shell render ngay de operator khong mat context
-  - regression `tests/dataImporterShell.test.jsx` da cap nhat de khoa render contract trong lazy boundary
-- Slice bo sung vua xong ngay 2026-03-29:
-  - dong stale bead `cng-7z0.15` vi multi-step wizard cua DataImporter da duoc ship tu truoc
-  - `DataImporterWorkflowGuide` + `dataImporterWorkflowGuideState.js` + 3 stage sections trong `DataImporterShell.jsx` da bao phu full luong `Nap nguon` / `Ra soat` / `Luu va theo doi`
-  - regression hien co `tests/dataImporterWorkflowGuideState.test.js` va `tests/dataImporterShell.test.jsx` duoc dung lam bang chung reconcile
-- Slice bo sung vua xong ngay 2026-03-29:
-  - dong bead `cng-7z0.14` bang shared preset lane cho DataImporter
-  - `useDataImporterFilterPresets.js` gio serialise kem `filters.columns` snapshot da sanitize khi luu/ghi de preset, va restore lai column config qua store ngay luc apply preset
-  - hook preset cung accept alias `clearError` tu session controller hien tai de khong bo sot clear-state khi operator doi preset
-  - regression `tests/useDataImporterFilterPresets.test.jsx` da khoa ca save/apply column preset, legacy import khong ghi de column config, va alias contract tu session controller
-- Slice bo sung vua xong ngay 2026-03-29:
-  - dong bead `cng-7z0.16` bang actionable recovery-hint lane cho DataImporter sync
-  - `dataImporterSyncPanelProps.js` gio build `syncRecoveryHints` tu preflight fail + `previewError`/`syncError` (retry sau refresh, kiem tra VPN/SQL Server, sua range, resume job, va escalate CNTT)
-  - `DataImporterSyncConfigPanel.jsx` da forward day du `previewConflictSummary`, `syncHistory`, va `syncRecoveryHints` vao `DataImporterSyncPreviewPanel.jsx`, dong thoi panel sync hien thi them khung `Goi y khac phuc` ngay tren luong that thay vi chi co test direct
-  - regression `tests/dataImporterSyncPanelProps.test.js`, `tests/dataImporterSyncConfigPanel.test.jsx`, va `tests/dataImporterSyncPreviewPanel.test.jsx` da khoa contract hint-builder + prop forwarding + panel rendering
-- Phan con lai de dong hẳn `cng-7z0.7`:
-  - tach lenh sync khoi request-response ngan hien tai de job lon van chay duoc khi operator roi tab hoac mat ket noi
-  - chuyen persisted state tu local-only snapshot sang backend-truth/job polling de resume khong phu thuoc vao tab vua tao job
-  - them stale-job cleanup/handoff rule ro rang sau khi co backend queue that su
-- Ghi chu backlog/repo:
-  - da reconcile stale state ngay 2026-03-29: bead `cng-7z0.1`, `cng-7z0.2`, `cng-7z0.3`, `cng-7z0.4`, `cng-7z0.5`, `cng-7z0.29`, `cng-2k4.19`, va `cng-2k4.20` da duoc xac nhan completed theo code/task va da dong trong bead DB
-  - `docs/open-backlog.md` da duoc don lai cho khop voi bead DB va code hien tai
-  - `cng-7z0.6` da xong va da duoc chuyen sang Recent Completed Slices + bead close
-  - bead DB trong worktree hien da truy cap duoc qua junction `.beads`, nhung `bd.cmd` van chay o direct mode vi wrapper WSL khong fingerprint duoc worktree `.git` dung Windows path
-- Next suggested slice:
-  - `cng-7z0.7` — them hang doi dong bo nen va resume support cho ECUS imports
+- Vua hoan tat `cng-7z0.22` va `cng-7z0.23` trong cung lane navigation:
+  - pin state cua `CommandCenter` da sync qua backend compat storage + shared client cache
+  - global search nay goi y nhanh cho module, report workflow, va user/account khi quyen truy cap cho phep
+  - targeted verify xanh cho backend route, storage sync helper, `CommandCenter`, va storage client flow
+- Slice ke tiep theo du hop ly la `cng-7z0.25`:
+  - bo sung hub huong dan nhanh / FAQ theo ngu canh trang
+  - uu tien tan dung tai lieu san co trong `docs/` va command bus / shell workflow da ship
+  - giu scope nho, tranh bien `docs/` thanh mot kho noi dung trung lap kho bao tri
+- Backlog note:
+  - `cng-7z0.7` van mo cho backend-detached ECUS queue/orchestration; khong bi mat trang thai khi tam thoi chuyen sang navigation slice theo uu tien session nay
+  - sau `cng-7z0.25`, can quyet dinh quay lai `cng-7z0.7` hay tiep tuc cleanup UX/support lane tuy theo uu tien van hanh
 ## Recent Completed Slices
 
+- `cng-7z0.23` da hoan tat permission-aware global search lane:
+  - `src/components/CommandCenter.jsx` nay them shortcut report workflow (`scope`, `dashboard`, `export`) va goi y `Người dùng: ...` khi tai khoan co quyen `accountManage`
+  - module search tiep tuc dua tren `getVisibleAppTabs(currentUser)` nen khong can sua app-shell navigation definitions co blast radius MEDIUM
+  - regression `tests/commandCenter.test.jsx` da khoa hai contract moi: report-focus navigation va user suggestion theo quyen
+  - targeted verify da pass:
+    - `pnpm exec vitest run tests/commandCenter.test.jsx tests/commandCenter.pinStorage.test.js tests/storageClient.test.js --environment jsdom`
+    - `pnpm exec eslint src/components/CommandCenter.jsx tests/commandCenter.test.jsx tests/commandCenter.pinStorage.test.js tests/storageClient.test.js`
+- `cng-7z0.22` da hoan tat backend-synced Command Center pin lane:
+  - `server-v4/src/app/legacy-compat/legacyCompatShared.ts` + `legacyCompatStorageRoutes.ts` nay doc/ghi `kpi_command_center_pins_v1` qua `persistence.projections`, giu response shape tuong thich voi compat storage API
+  - `src/lib/storageClient.js`, `src/components/command-center/pinStorage.js`, va `src/components/CommandCenter.jsx` nay hydrate/subscribe/write pin state qua shared storage va fallback local storage
+  - bo sung regression `tests/server-v4/legacyCompatRoutes.test.js`, `tests/commandCenter.pinStorage.test.js`, `tests/commandCenter.test.jsx`, va `tests/storageClient.test.js`
+  - targeted verify da pass:
+    - `pnpm exec vitest run tests/server-v4/legacyCompatRoutes.test.js --environment node`
+    - `pnpm exec vitest run tests/commandCenter.pinStorage.test.js tests/commandCenter.test.jsx tests/storageClient.test.js --environment jsdom`
+    - `pnpm exec eslint server-v4/src/app/legacy-compat/legacyCompatShared.ts server-v4/src/app/legacy-compat/legacyCompatStorageRoutes.ts src/components/CommandCenter.jsx src/components/command-center/pinStorage.js src/lib/storageClient.js tests/server-v4/legacyCompatRoutes.test.js tests/commandCenter.pinStorage.test.js tests/commandCenter.test.jsx tests/storageClient.test.js`
 - `cng-7z0.24` da hoan tat unread notification lane:
   - `src/components/NotificationCenter.jsx` khong con auto-clear unread khi mo panel; unread badge chi ve 0 khi operator chu dong bam `Đánh dấu tất cả đã đọc`
   - them CTA bulk clear trong header panel va badge `Mới` tren event chua doc de phan biet ro muc vua den truoc khi triage

@@ -15,6 +15,8 @@ Reconciliation note:
 - Reconciled again on 2026-03-30 after completing `cng-7z0.21`; MST assignment exports now ship CSV/XLSX outputs with latest assignee metadata derived from history, so the remaining UX backlog in this lane moves on to navigation/help work.
 - Reconciled again on 2026-03-30 after closing stale bead `cng-2k4.18`; the repo already lazy-loads `xlsx` via `src/lib/loadXlsx.js`, so the technical backlog now focuses on the remaining server-v4, module-size, and hygiene items.
 - Reconciled again on 2026-03-30 after completing `cng-7z0.24`; Notification Center now keeps unread state until the operator explicitly bulk-marks all items as read, so the navigation backlog narrows to backend-synced pins, global search, and contextual help.
+- Reconciled again on 2026-03-30 after completing `cng-7z0.22`; Command Center pin state now persists through the backend compat storage path and shared client cache, so the remaining navigation backlog narrows to permission-aware search plus contextual help.
+- Reconciled again on 2026-03-30 after completing `cng-7z0.23`; Command Center search now suggests report workflow shortcuts and account-aware user entries without widening app-shell blast radius, so the remaining navigation backlog is contextual quick-help only.
 
 Rule:
 - Every unfinished item from review notes, rollout plans, decomposition plans, or UX backlogs must be in one of two states:
@@ -71,8 +73,6 @@ Source set: `docs/ux-improvement-backlog.md`
 
 ### Navigation And Notifications
 
-- `cng-7z0.22` — Sync Command Center pin state to backend across devices
-- `cng-7z0.23` — Add permission-aware global search
 - `cng-7z0.25` — Provide contextual quick-help and FAQ hub
 
 ### Reporting And Automation

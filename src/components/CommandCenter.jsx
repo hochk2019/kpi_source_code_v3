@@ -53,13 +53,17 @@ import {
 import { emitCommand, subscribeCommand } from '@/lib/commandBus.js';
 
 import { getAppShellAccess, getVisibleAppTabs } from '@/lib/appShellNavigation.js';
+import { listAccounts } from '@/auth/localAuth.js';
 import { SearchField } from '@/components/designSystem/shellPrimitives.jsx';
+import {
+  readCommandCenterPins,
+  subscribeToCommandCenterPins,
+  writeCommandCenterPins,
+} from '@/components/command-center/pinStorage.js';
 
 import { useTheme } from '@/designSystem/useTheme.js';
 
 
-
-const PIN_STORAGE_KEY = 'kpi_command_center_pins_v1';
 
 const USAGE_STORAGE_KEY = 'kpi_command_center_usage_v1';
 
@@ -119,6 +123,8 @@ const GROUP_TITLES = {
 
   navigation: 'Điều hướng nhanh',
 
+  reports: 'Báo cáo & phát hành',
+
   data: 'Dữ liệu & vận hành',
 
   support: 'Hỗ trợ & đào tạo',
@@ -158,6 +164,86 @@ const NAVIGATION_ICONS = {
   'export-audit': History,
 
 };
+
+function buildReportShortcutCommands(currentUser) {
+
+  const canExportReports = currentUser?.permissions?.reportsExport !== false;
+
+  const commands = [
+    {
+      id: 'reports:scope',
+      group: 'reports',
+      label: 'Báo cáo KPI: chốt phạm vi',
+      description: 'Mở report center tại bước chọn kỳ và phạm vi báo cáo',
+      icon: Filter,
+      keywords: ['bao cao', 'report center', 'pham vi', 'ky', 'scope'],
+      run: () => emitCommand('navigate:tab', { tab: 'reports', focus: 'scope' }),
+    },
+    {
+      id: 'reports:dashboard',
+      group: 'reports',
+      label: 'Báo cáo KPI: dashboard insight',
+      description: 'Đi tới khu insight và drill-down của report center',
+      icon: BarChart3,
+      keywords: ['bao cao', 'dashboard', 'insight', 'drill down', 'thong ke'],
+      run: () => emitCommand('navigate:tab', { tab: 'reports', focus: 'dashboard' }),
+    },
+  ];
+
+  if (canExportReports) {
+    commands.push({
+      id: 'reports:export',
+      group: 'reports',
+      label: 'Báo cáo KPI: phát hành & export',
+      description: 'Nhảy thẳng tới khu lịch gửi, export và truy vết báo cáo',
+      icon: History,
+      keywords: ['bao cao', 'export', 'phat hanh', 'lich gui', 'audit'],
+      run: () => emitCommand('navigate:tab', { tab: 'reports', focus: 'export' }),
+    });
+  }
+
+  return commands;
+
+}
+
+function buildAccountSearchCommands(currentUser) {
+
+  const access = getAppShellAccess(currentUser);
+
+  if (!access.canManageAccounts) {
+    return [];
+  }
+
+  return listAccounts()
+    .slice()
+    .sort((a, b) => {
+      const left = `${a?.name || ''} ${a?.username || ''}`.trim();
+      const right = `${b?.name || ''} ${b?.username || ''}`.trim();
+      return left.localeCompare(right, 'vi');
+    })
+    .map((account) => {
+      const teamMeta = account?.teamName ? ` • ${account.teamName}` : '';
+      const memberMeta = account?.memberName ? ` • ${account.memberName}` : '';
+      return {
+        id: `account:user:${account.username}`,
+        group: 'account',
+        label: `Người dùng: ${account.name || account.username}`,
+        description: `${account.username} • ${account.role || 'viewer'}${teamMeta}${memberMeta}`,
+        icon: Users,
+        keywords: [
+          'nguoi dung',
+          'tai khoan',
+          account?.username || '',
+          account?.name || '',
+          account?.role || '',
+          account?.teamName || '',
+          account?.memberName || '',
+        ].filter(Boolean),
+        run: () => emitCommand('navigate:tab', { tab: 'accounts' }),
+      };
+    });
+
+}
 
 
 
@@ -239,6 +325,10 @@ function buildCommands({
       hidden: !access.canViewDataHealth,
 
     },
+
+    ...buildReportShortcutCommands(currentUser),
+
+    ...buildAccountSearchCommands(currentUser),
 
     {
 
@@ -574,16 +664,6 @@ function formatResults(commands, pinnedIds, usage, query) {
 
 
 
-function loadPins() {
-
-  const raw = loadJsonFromStorage(PIN_STORAGE_KEY, []);
-
-  return Array.isArray(raw) ? raw.filter((item) => typeof item === 'string') : [];
-
-}
-
-
-
 function loadUsage() {
 
   const raw = loadJsonFromStorage(USAGE_STORAGE_KEY, {});
@@ -614,7 +694,7 @@ export default function CommandCenter({
 
   const [query, setQuery] = useState('');
 
-  const [pinned, setPinned] = useState(() => loadPins());
+  const [pinned, setPinned] = useState(() => readCommandCenterPins());
 
   const [usage, setUsage] = useState(() => loadUsage());
 
@@ -718,6 +798,15 @@ export default function CommandCenter({
     return () => unsubscribe();
   }, []);
 
+  useEffect(() => {
+    setPinned(readCommandCenterPins());
+    const unsubscribe = subscribeToCommandCenterPins((nextPins) => {
+      setPinned(nextPins);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
 
 
   const handleRunCommand = (command) => {
@@ -776,9 +865,7 @@ export default function CommandCenter({
 
         : [...prev, commandId];
 
-      saveJsonToStorage(PIN_STORAGE_KEY, next);
-
-      return next;
+      return writeCommandCenterPins(next);
 
     });
 

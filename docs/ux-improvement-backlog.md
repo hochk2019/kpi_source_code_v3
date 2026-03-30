@@ -42,8 +42,8 @@ Reconciliation note 2026-03-27:
 
 ## 5. Navigation & notifications
 
-- [ ] Đồng bộ danh sách Command Center pin lên backend (dùng API mới lưu vào `UI_LAYOUT_KEY`) để giữ cấu hình giữa các thiết bị.
-- [ ] Thêm ô tìm kiếm toàn cục gợi ý nhanh theo quyền truy cập (module, báo cáo, người dùng).
+- [x] Đồng bộ danh sách Command Center pin lên backend (done 2026-03-30, them compat API doc/ghi `kpi_command_center_pins_v1` tren server-v4, dong bo `storageClient` + `CommandCenter` qua shared storage, va khoa regression backend/jsdom cho read-write-hydrate flow).
+- [x] Thêm ô tìm kiếm toàn cục gợi ý nhanh theo quyền truy cập (done 2026-03-30, mo rong `CommandCenter` voi shortcut theo workflow report center va goi y nguoi dung khi co quyen `accountManage`, giu module search dua tren tab visibility hien co va khoa regression jsdom cho report/user search).
 - [x] Hiển thị badge số lượng thông báo chưa đọc và thao tác đánh dấu đã đọc hàng loạt. (done 2026-03-30, giu unread badge cho den khi nguoi dung chu dong bam `Danh dau tat ca da doc`, them CTA bulk clear ngay trong `NotificationCenter.jsx`, va khoa regression `tests/notificationCenter.test.jsx`)
 - [ ] Cung cấp hub hướng dẫn nhanh/FAQ theo ngữ cảnh mỗi trang, liên kết tới tài liệu trong thư mục `docs/`.
 

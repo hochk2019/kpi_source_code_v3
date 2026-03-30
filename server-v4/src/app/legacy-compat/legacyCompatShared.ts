@@ -1,5 +1,5 @@
 import { type Response } from 'express';
-import { ZodError } from 'zod';
+import { z, ZodError } from 'zod';
 
 import type { RuntimePersistence } from '../../persistence/runtimePersistence.js';
 import { createDefaultKpiRuleCollection } from '../../modules/kpi-rules/kpiRuleDefaults.js';
@@ -22,6 +22,7 @@ const HQ_HISTORY_STORAGE_KEY = 'hq_history_v1';
 const KPI_ADJUSTMENTS_STORAGE_KEY = 'kpi_adjustments_v1';
 const KPI_ADJUSTMENT_SETTINGS_STORAGE_KEY = 'kpi_adjustment_settings_v1';
 const KPI_REPORT_SCHEDULE_STORAGE_KEY = 'kpi_report_schedule_v1';
+const COMMAND_CENTER_PINS_STORAGE_KEY = 'kpi_command_center_pins_v1';
 const UI_LAYOUT_STORAGE_KEY = 'ui_layout_config_v1';
 const LEGACY_BOOTSTRAP_STORAGE_KEYS = [
   AUTH_ACCOUNTS_STORAGE_KEY,
@@ -38,8 +39,13 @@ const LEGACY_BOOTSTRAP_STORAGE_KEYS = [
   KPI_ADJUSTMENTS_STORAGE_KEY,
   KPI_ADJUSTMENT_SETTINGS_STORAGE_KEY,
   KPI_REPORT_SCHEDULE_STORAGE_KEY,
+  COMMAND_CENTER_PINS_STORAGE_KEY,
   UI_LAYOUT_STORAGE_KEY,
 ] as const;
+const commandCenterPinsSchema = z.array(z.string().trim().min(1));
+const commandCenterPinsProjectionSchema = z.object({
+  pins: commandCenterPinsSchema,
+});
 
 export async function buildLegacyBootstrapSnapshot(
   persistence: RuntimePersistence,
@@ -89,8 +95,37 @@ export async function readLegacyStorageValue(
       return persistence.adjustmentsStore.readSettings();
     case KPI_REPORT_SCHEDULE_STORAGE_KEY:
       return [];
+    case COMMAND_CENTER_PINS_STORAGE_KEY: {
+      const stored = await persistence.projections.readValue(COMMAND_CENTER_PINS_STORAGE_KEY);
+      if (Array.isArray(stored)) {
+        return commandCenterPinsSchema.parse(stored);
+      }
+      if (stored) {
+        return commandCenterPinsProjectionSchema.parse(stored).pins;
+      }
+      return [];
+    }
     case UI_LAYOUT_STORAGE_KEY:
       return {};
+    default:
+      return undefined;
+  }
+}
+
+export async function writeLegacyStorageValue(
+  persistence: RuntimePersistence,
+  key: string,
+  value: unknown,
+): Promise<unknown | undefined> {
+  switch (key) {
+    case COMMAND_CENTER_PINS_STORAGE_KEY: {
+      const nextValue =
+        value === null || value === undefined
+          ? []
+          : commandCenterPinsSchema.parse(normalizeLegacyStoragePayload(value));
+      await persistence.projections.writeValue(COMMAND_CENTER_PINS_STORAGE_KEY, { pins: nextValue });
+      return nextValue;
+    }
     default:
       return undefined;
   }
@@ -171,6 +206,23 @@ function normalizeLegacyBootstrapValue(value: unknown): string | null {
   }
 
   return typeof value === 'string' ? value : JSON.stringify(value);
+}
+
+function normalizeLegacyStoragePayload(value: unknown): unknown {
+  if (typeof value !== 'string') {
+    return value;
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return value;
+  }
+
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    return value;
+  }
 }
 
 async function listSanitizedAccounts(persistence: RuntimePersistence): Promise<AuthAccountView[]> {
