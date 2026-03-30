@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { act, renderHook, waitFor } from "@testing-library/react";
 
+import {
+  createSyncJob,
+  createSyncProgressSteps,
+  writeStoredSyncJobState,
+} from "@/components/dataImporter/dataImporterSyncQueue.js";
 import useDataImporterSync from "@/components/dataImporter/useDataImporterSync.js";
 
 const ECUS_CONFIG_ROUTE = "/api/v4/declarations/imports/ecus-config";
@@ -110,6 +115,126 @@ describe("useDataImporterSync", () => {
         blockingCount: 0,
         warningCount: 1,
       });
+    });
+  });
+
+  it("resumes from the first incomplete post-commit phase instead of re-running ECUS commit", async () => {
+    const progressSteps = createSyncProgressSteps().map((step) =>
+      step.key === "commit"
+        ? {
+            ...step,
+            status: "done",
+            detail: "Đã nhập 5 mới, cập nhật 1, bỏ qua 0, khóa 0.",
+          }
+        : step,
+    );
+    const interruptedJob = {
+      ...createSyncJob({
+        actor: "tester",
+        manualRange: { from: "2026-03-01", to: "2026-03-05" },
+      }),
+      status: "running",
+      currentStepKey: "reconcile",
+      attemptCount: 1,
+      progressSteps,
+      resultSummary: {
+        imported: 5,
+        updated: 1,
+        skipped: 0,
+        reviewLocked: 0,
+      },
+    };
+
+    writeStoredSyncJobState({
+      activeJob: interruptedJob,
+      resumableJob: null,
+      lastJob: null,
+      jobHistory: [],
+    });
+
+    const refreshDeclRowsFromServer = vi.fn(async () => new Array(6).fill(null));
+    const loadSavedRows = vi.fn(() => true);
+    const fetchWithAuth = vi.fn(async (url) => {
+      if (url === ECUS_CONFIG_ROUTE) {
+        return {
+          ok: true,
+          json: async () => ({
+            config: {
+              enabled: true,
+              schedule: "0 * * * *",
+              rangeDays: 1,
+              preferMonthFirst: false,
+              connection: {
+                server: "srv01",
+                database: "ecus",
+                user: "runner",
+                hasPassword: true,
+              },
+              includeTaxCodes: [],
+              excludeTaxCodes: [],
+            },
+          }),
+        };
+      }
+
+      if (url === ECUS_STATUS_ROUTE) {
+        return {
+          ok: true,
+          json: async () => ({
+            backend: { ok: true },
+            database: { ok: true },
+          }),
+        };
+      }
+
+      if (url === ALERTS_ROUTE) {
+        return {
+          ok: true,
+          json: async () => ({
+            alerts: [],
+            summary: { outstanding: 0, totalTracked: 0, lastEvaluatedAt: null },
+          }),
+        };
+      }
+
+      throw new Error(`Unexpected url ${url}`);
+    });
+
+    const { result } = renderHook(() =>
+      useDataImporterSync({
+        actor: "tester",
+        canManageSync: true,
+        fetchWithAuth,
+        refreshDeclRowsFromServer,
+        loadSavedRows,
+      }),
+    );
+
+    await waitFor(() => {
+      expect(result.current.syncResumeJob).not.toBeNull();
+      expect(result.current.syncPreflightSummary?.ready).toBe(true);
+    });
+
+    expect(result.current.syncResumeLabel).toContain("Tiếp tục từ bước: Làm mới cấu hình, trạng thái và cảnh báo.");
+
+    await act(async () => {
+      await result.current.handleResumeSync();
+    });
+
+    expect(fetchWithAuth.mock.calls.filter(([url]) => url === ECUS_COMMIT_ROUTE)).toHaveLength(0);
+    expect(refreshDeclRowsFromServer).toHaveBeenCalledTimes(1);
+    expect(loadSavedRows).toHaveBeenCalledWith({ bypassConfirm: true });
+    expect(getSyncStep(result.current.syncProgressSteps, "commit")?.status).toBe("done");
+    expect(getSyncStep(result.current.syncProgressSteps, "reconcile")?.status).toBe("done");
+    expect(result.current.syncMessage).toContain("Đã đồng bộ 5 tờ khai mới từ ECUS, cập nhật 1 tờ khai đã có.");
+    expect(result.current.syncResumeJob).toBeNull();
+    expect(result.current.syncHistory[0]).toMatchObject({
+      status: "completed",
+      resultSummary: expect.objectContaining({
+        imported: 5,
+        updated: 1,
+        affectedRows: 6,
+      }),
     });
   });
 

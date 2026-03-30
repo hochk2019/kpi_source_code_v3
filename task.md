@@ -27,6 +27,13 @@
 - Lane UX ready tiep theo quay ve `cng-7z0.7`:
   - phan con lai la backend-detached queue/resume orchestration cho ECUS imports, khong con navigation/help debt mo
   - can giu tri nho ve cac lane da ship (`cng-7z0.9`, `cng-7z0.10`, `cng-7z0.11`) de khong lap lai phan preflight/retry UX da xong
+  - tien do moi ngay 2026-03-30:
+    - them helper `src/components/dataImporter/dataImporterSyncResume.js` de suy ra phase resume tiep theo tu `progressSteps` da luu
+    - `useDataImporterSync.js` gio resume tu phase chua xong dau tien thay vi mac dinh goi lai `ecus-commit`; neu browser dong sau khi commit xong nhung truoc luc refresh state, operator se tiep tuc tu `reconcile` / `refreshDeclRows` / `reloadSavedRows`
+    - label resume hien ro se tiep tuc tu buoc nao, va hook tu dong dong job neu snapshot phuc hoi khong con phase nao chua xong
+    - regression moi `tests/dataImporterSyncResume.test.js` + cap nhat `tests/useDataImporterSync.test.jsx` khoa lane "dong trinh duyet sau commit" de tranh duplicate ECUS commit
+  - phan con lai cua bead da hep hon:
+    - van chua co server-side async job handle/job id de dong bo tiep tuc hoan toan tach khoi browser session; hien tai operator van can mo lai man hinh va bam resume
 - Backlog note:
   - neu doi uu tien khoi UX lane, hai technical ready items tiep theo la `cng-2k4.2` va `cng-2k4.3`
   - `docs/open-backlog.md` da duoc reconcile de bo `cng-7z0.25` va `cng-2k4.22` khoi danh sach open

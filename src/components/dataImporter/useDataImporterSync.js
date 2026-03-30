@@ -23,6 +23,7 @@ import {
   updateSyncJobProgress,
   writeStoredSyncJobState,
 } from "@/components/dataImporter/dataImporterSyncQueue.js";
+import { resolveNextSyncExecutionStep } from "@/components/dataImporter/dataImporterSyncResume.js";
 import { formatDateRangeLabel } from "../../../packages/domain/src/format.js";
 
 const ECUS_CONFIG_ROUTE = "/api/v4/declarations/imports/ecus-config";
@@ -118,6 +119,24 @@ function buildOverwriteConfirmationMessage(summary) {
       : "";
 
   return `Cảnh báo xung đột dữ liệu:\n${overwriteLine}${lockedLine}${unchangedLine}\n\nBạn có muốn tiếp tục không?`;
+}
+
+function buildSyncCompletionMessage(resultSummary, attemptCount = 0, mstFilterNotice = "") {
+  const summary = buildSyncJobResultSummary(resultSummary);
+  const updatedNote = summary.updated > 0 ? `, cập nhật ${summary.updated} tờ khai đã có` : "";
+  const skippedNote = summary.skipped > 0 ? `, bỏ qua ${summary.skipped} tờ khai đã có` : "";
+  const lockedNote =
+    summary.reviewLocked > 0 ? `, khóa ${summary.reviewLocked} tờ khai đã rà soát` : "";
+  const attemptNote = attemptCount > 1 ? ` Hoàn tất sau ${attemptCount} lần thử.` : "";
+  const messageParts = [
+    `Đã đồng bộ ${summary.imported} tờ khai mới từ ECUS${updatedNote}${skippedNote}${lockedNote}.${attemptNote}`,
+  ];
+
+  if (mstFilterNotice) {
+    messageParts.push(`${mstFilterNotice}.`);
+  }
+
+  return messageParts.join(" ").replace(/\s+/g, " ").trim();
 }
 
 export default function useDataImporterSync({
@@ -236,14 +255,16 @@ export default function useDataImporterSync({
       return "";
     }
 
-    const { createdAt, from, to } = syncJobState.resumableJob;
+    const { createdAt, from, to, progressSteps } = syncJobState.resumableJob;
     const createdLabel = createdAt ? new Date(createdAt).toLocaleString("vi-VN") : "không rõ thời gian";
+    const resumeStep = resolveNextSyncExecutionStep(progressSteps);
+    const resumeStepNote = resumeStep ? ` Tiếp tục từ bước: ${resumeStep.label}.` : "";
 
     if (from && to) {
-      return `Job lưu lúc ${createdLabel} cho khoảng ${from} → ${to}.`;
+      return `Job lưu lúc ${createdLabel} cho khoảng ${from} → ${to}.${resumeStepNote}`;
     }
 
-    return `Job lưu lúc ${createdLabel} sẽ dùng RangeDays mặc định trong cấu hình.`;
+    return `Job lưu lúc ${createdLabel} sẽ dùng RangeDays mặc định trong cấu hình.${resumeStepNote}`;
   }, [syncJobState.resumableJob]);
 
   const applyConfigToForm = useCallback((config) => {
@@ -524,6 +545,9 @@ export default function useDataImporterSync({
       finishedAt: null,
       lastError: "",
     });
+    let resultSummary = workingJob?.resultSummary
+      ? buildSyncJobResultSummary(workingJob.resultSummary)
+      : null;
 
     const persistActiveJob = (nextJob) => {
       workingJob = nextJob;
@@ -576,147 +600,188 @@ export default function useDataImporterSync({
     );
 
     try {
-      let payload = null;
+      const stepKeys = ["commit", "reconcile", "refreshDeclRows", "reloadSavedRows"];
+      const resumeStep = options.resumed ? resolveNextSyncExecutionStep(workingJob.progressSteps) : null;
 
-      for (let attempt = 1; attempt <= totalAttempts; attempt += 1) {
-        persistActiveJob(
-          setSyncJobStatus(workingJob, "running", {
-            attemptCount: attempt,
-            currentStepKey: "commit",
-          })
+      if (options.resumed && resumeStep) {
+        currentStepKey = resumeStep.key;
+        appendActivityLog(`Tiếp tục job từ bước "${resumeStep.label}".`);
+      }
+
+      if (options.resumed && !resumeStep) {
+        const completedMessage = buildSyncCompletionMessage(
+          resultSummary,
+          workingJob.attemptCount,
+          workingJob.mstFilterNotice,
         );
-
-        updateSyncStep(
-          "commit",
-          "active",
-          attempt === 1
-            ? "Đang gửi yêu cầu đồng bộ tới ECUS."
-            : `Đang thử lại lần ${attempt}/${totalAttempts}.`,
-        );
-        appendActivityLog(`Gửi yêu cầu đồng bộ ECUS lần ${attempt}/${totalAttempts}.`);
-
-        try {
-          const response = await fetchWithAuth(ECUS_COMMIT_ROUTE, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              actor: workingJob.actor || actor,
-              from: workingJob.from || undefined,
-              to: workingJob.to || undefined,
-              includeTaxCodes: workingJob.includeTaxCodes || [],
-              excludeTaxCodes: workingJob.excludeTaxCodes || [],
+        persistFinishedJob(
+          setSyncJobStatus(
+            appendSyncJobLog(workingJob, "Job đồng bộ ECUS đã được tiếp tục và không còn bước nào chờ xử lý.", {
+              level: "info",
             }),
-            credentials: "include",
-          });
+            "completed",
+            {
+              finishedAt: new Date().toISOString(),
+              lastError: "",
+              resultSummary,
+            },
+          ),
+        );
+        setSyncMessage(completedMessage);
+        setSyncError("");
+        return true;
+      }
 
-          if (!response.ok) {
-            throw new Error(`HTTP ${response.status}`);
-          }
+      const startStepIndex = Math.max(
+        0,
+        stepKeys.findIndex((stepKey) => stepKey === currentStepKey),
+      );
+      const remainingStepKeys = stepKeys.slice(startStepIndex);
 
-          payload = await response.json();
+      if (remainingStepKeys.includes("commit")) {
+        let payload = null;
 
-          if (attempt > 1) {
-            appendActivityLog(
-              `Yêu cầu đồng bộ ECUS đã thành công ở lần ${attempt}/${totalAttempts}.`
-            );
-          }
-          break;
-        } catch (commitError) {
-          const delayMs = isRetriableSyncError(commitError)
-            ? getSyncRetryDelayMs(attempt - 1)
-            : null;
-
-          if (!delayMs || attempt >= totalAttempts) {
-            throw commitError;
-          }
-
-          const retryLabel = formatRetryDelayLabel(delayMs);
-          appendActivityLog(
-            `Lần ${attempt}/${totalAttempts} thất bại: ${commitError?.message || "Không rõ lỗi"}. Sẽ thử lại sau ${retryLabel}.`,
-            "warn"
+        for (let attempt = 1; attempt <= totalAttempts; attempt += 1) {
+          persistActiveJob(
+            setSyncJobStatus(workingJob, "running", {
+              attemptCount: attempt,
+              currentStepKey: "commit",
+            }),
           );
+
           updateSyncStep(
             "commit",
             "active",
-            `Lần ${attempt}/${totalAttempts} thất bại (${commitError?.message || "Không rõ lỗi"}). Sẽ tự thử lại sau ${retryLabel}.`,
+            attempt === 1
+              ? "Đang gửi yêu cầu đồng bộ tới ECUS."
+              : `Đang thử lại lần ${attempt}/${totalAttempts}.`,
           );
-          await waitForDelay(delayMs);
+          appendActivityLog(`Gửi yêu cầu đồng bộ ECUS lần ${attempt}/${totalAttempts}.`);
+
+          try {
+            const response = await fetchWithAuth(ECUS_COMMIT_ROUTE, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                actor: workingJob.actor || actor,
+                from: workingJob.from || undefined,
+                to: workingJob.to || undefined,
+                includeTaxCodes: workingJob.includeTaxCodes || [],
+                excludeTaxCodes: workingJob.excludeTaxCodes || [],
+              }),
+              credentials: "include",
+            });
+
+            if (!response.ok) {
+              throw new Error(`HTTP ${response.status}`);
+            }
+
+            payload = await response.json();
+
+            if (attempt > 1) {
+              appendActivityLog(
+                `Yêu cầu đồng bộ ECUS đã thành công ở lần ${attempt}/${totalAttempts}.`,
+              );
+            }
+            break;
+          } catch (commitError) {
+            const delayMs = isRetriableSyncError(commitError)
+              ? getSyncRetryDelayMs(attempt - 1)
+              : null;
+
+            if (!delayMs || attempt >= totalAttempts) {
+              throw commitError;
+            }
+
+            const retryLabel = formatRetryDelayLabel(delayMs);
+            appendActivityLog(
+              `Lần ${attempt}/${totalAttempts} thất bại: ${commitError?.message || "Không rõ lỗi"}. Sẽ thử lại sau ${retryLabel}.`,
+              "warn",
+            );
+            updateSyncStep(
+              "commit",
+              "active",
+              `Lần ${attempt}/${totalAttempts} thất bại (${commitError?.message || "Không rõ lỗi"}). Sẽ tự thử lại sau ${retryLabel}.`,
+            );
+            await waitForDelay(delayMs);
+          }
+        }
+
+        resultSummary = buildSyncJobResultSummary(payload?.result);
+        persistActiveJob(
+          setSyncJobStatus(workingJob, "running", {
+            resultSummary,
+          }),
+        );
+        updateSyncStep(
+          "commit",
+          "done",
+          `Đã nhập ${resultSummary.imported} mới, cập nhật ${resultSummary.updated}, bỏ qua ${resultSummary.skipped}, khóa ${resultSummary.reviewLocked}.`,
+        );
+        appendActivityLog(
+          `ECUS đã trả kết quả: nhập ${resultSummary.imported}, cập nhật ${resultSummary.updated}, bỏ qua ${resultSummary.skipped}, khóa ${resultSummary.reviewLocked}.`,
+        );
+        setSyncMessage(
+          buildSyncCompletionMessage(resultSummary, workingJob.attemptCount, workingJob.mstFilterNotice),
+        );
+      } else if (resultSummary) {
+        setSyncMessage(
+          buildSyncCompletionMessage(resultSummary, workingJob.attemptCount, workingJob.mstFilterNotice),
+        );
+      }
+
+      if (remainingStepKeys.includes("reconcile")) {
+        updateSyncStep(
+          "reconcile",
+          "active",
+          "Đang tải lại cấu hình, trạng thái kết nối và cảnh báo sau khi đồng bộ.",
+        );
+        appendActivityLog("Đang đồng bộ lại cấu hình, trạng thái kết nối và cảnh báo.");
+        await fetchSyncConfig({ preserveMessage: true });
+        await fetchSyncStatus();
+        await fetchAlerts();
+        if (typeof onAfterSyncSuccess === "function") {
+          await onAfterSyncSuccess();
+        }
+        updateSyncStep("reconcile", "done", "Đã làm mới cấu hình, trạng thái kết nối và cảnh báo.");
+      }
+
+      if (remainingStepKeys.includes("refreshDeclRows")) {
+        updateSyncStep("refreshDeclRows", "active", "Đang tải lại dữ liệu tờ khai từ server.");
+        try {
+          const refreshedRows = await refreshDeclRowsFromServer();
+          const refreshedCount = Array.isArray(refreshedRows) ? refreshedRows.length : null;
+          updateSyncStep(
+            "refreshDeclRows",
+            "done",
+            refreshedCount === null
+              ? "Đã tải lại dữ liệu tờ khai từ server."
+              : `Đã tải ${refreshedCount.toLocaleString("vi-VN")} tờ khai từ server.`,
+          );
+        } catch (refreshError) {
+          console.error("Không thể tải dữ liệu tờ khai sau đồng bộ", refreshError);
+          appendActivityLog(
+            `Bỏ qua lỗi khi tải lại dữ liệu tờ khai: ${refreshError?.message || "Không rõ lỗi"}.`,
+            "warn",
+          );
+          updateSyncStep(
+            "refreshDeclRows",
+            "error",
+            refreshError?.message || "Không thể tải lại dữ liệu tờ khai từ server.",
+          );
         }
       }
 
-      const imported = payload?.result?.imported ?? 0;
-      const updated = payload?.result?.updated ?? 0;
-      const skipped = payload?.result?.skipped ?? 0;
-      const locked = payload?.result?.reviewLocked ?? 0;
-      const resultSummary = buildSyncJobResultSummary(payload?.result);
-      const updatedNote = updated > 0 ? `, cập nhật ${updated} tờ khai đã có` : "";
-      const skippedNote = skipped > 0 ? `, bỏ qua ${skipped} tờ khai đã có` : "";
-      const lockedNote = locked > 0 ? `, khóa ${locked} tờ khai đã rà soát` : "";
-      const attemptNote =
-        workingJob.attemptCount > 1 ? ` Hoàn tất sau ${workingJob.attemptCount} lần thử.` : "";
-      const baseMessage = `Đã đồng bộ ${imported} tờ khai mới từ ECUS${updatedNote}${skippedNote}${lockedNote}.${attemptNote}`;
-      const messageParts = [baseMessage];
-
-      if (workingJob.mstFilterNotice) {
-        messageParts.push(`${workingJob.mstFilterNotice}.`);
-      }
-
-      updateSyncStep(
-        "commit",
-        "done",
-        `Đã nhập ${imported} mới, cập nhật ${updated}, bỏ qua ${skipped}, khóa ${locked}.`,
-      );
-      appendActivityLog(
-        `ECUS đã trả kết quả: nhập ${imported}, cập nhật ${updated}, bỏ qua ${skipped}, khóa ${locked}.`
-      );
-      setSyncMessage(messageParts.join(" ").replace(/\s+/g, " ").trim());
-
-      updateSyncStep(
-        "reconcile",
-        "active",
-        "Đang tải lại cấu hình, trạng thái kết nối và cảnh báo sau khi đồng bộ.",
-      );
-      appendActivityLog("Đang đồng bộ lại cấu hình, trạng thái kết nối và cảnh báo.");
-      await fetchSyncConfig({ preserveMessage: true });
-      await fetchSyncStatus();
-      await fetchAlerts();
-      if (typeof onAfterSyncSuccess === "function") {
-        await onAfterSyncSuccess();
-      }
-      updateSyncStep("reconcile", "done", "Đã làm mới cấu hình, trạng thái kết nối và cảnh báo.");
-
-      updateSyncStep("refreshDeclRows", "active", "Đang tải lại dữ liệu tờ khai từ server.");
-      try {
-        const refreshedRows = await refreshDeclRowsFromServer();
-        const refreshedCount = Array.isArray(refreshedRows) ? refreshedRows.length : null;
+      if (remainingStepKeys.includes("reloadSavedRows")) {
+        updateSyncStep("reloadSavedRows", "active", "Đang làm mới danh sách tờ khai trong giao diện.");
+        loadSavedRows({ bypassConfirm: true });
         updateSyncStep(
-          "refreshDeclRows",
+          "reloadSavedRows",
           "done",
-          refreshedCount === null
-            ? "Đã tải lại dữ liệu tờ khai từ server."
-            : `Đã tải ${refreshedCount.toLocaleString("vi-VN")} tờ khai từ server.`,
+          "Danh sách tờ khai trên giao diện đã được làm mới.",
         );
-      } catch (refreshError) {
-        console.error("Không thể tải dữ liệu tờ khai sau đồng bộ", refreshError);
-        appendActivityLog(
-          `Bỏ qua lỗi khi tải lại dữ liệu tờ khai: ${refreshError?.message || "Không rõ lỗi"}.`,
-          "warn"
-        );
-        updateSyncStep(
-          "refreshDeclRows",
-          "error",
-          refreshError?.message || "Không thể tải lại dữ liệu tờ khai từ server.",
-        );
+        appendActivityLog("Danh sách tờ khai trong giao diện đã được làm mới.");
       }
-
-      updateSyncStep("reloadSavedRows", "active", "Đang làm mới danh sách tờ khai trong giao diện.");
-      loadSavedRows({ bypassConfirm: true });
-      updateSyncStep(
-        "reloadSavedRows",
-        "done",
-        "Danh sách tờ khai trên giao diện đã được làm mới.",
-      );
-      appendActivityLog("Danh sách tờ khai trong giao diện đã được làm mới.");
 
       persistFinishedJob(
         setSyncJobStatus(
