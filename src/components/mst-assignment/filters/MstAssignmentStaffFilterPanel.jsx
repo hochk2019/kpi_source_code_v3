@@ -4,6 +4,7 @@ import {
   SectionSurface,
   SectionToolbar,
 } from "@/components/designSystem/shellPrimitives.jsx";
+import { LEAD_VIEW_STATUSES } from "@/components/mst-assignment/hooks/useMSTAssignmentLeadViewWorkspace.js";
 
 const StaffCombobox = (props) => (
   <SharedStaffCombobox
@@ -16,8 +17,15 @@ const StaffCombobox = (props) => (
 
 export default function MstAssignmentStaffFilterPanel({
   quickFavorites,
+  leadViewEnabled = false,
+  leadViewStatus = LEAD_VIEW_STATUSES.ALL,
+  leadViewTeam = "",
   staffFilter,
   rosterTeams,
+  onLeadViewEnabledChange,
+  onLeadViewStatusChange,
+  onLeadViewTeamChange,
+  onResetLeadView,
   onClearStaffFilter,
   onSaveStaffFavorite,
   onStaffFilterSelect,
@@ -26,6 +34,14 @@ export default function MstAssignmentStaffFilterPanel({
 }) {
   const staffFavorites = quickFavorites?.staff ?? [];
   const trimmedStaffFilter = typeof staffFilter === "string" ? staffFilter.trim() : "";
+  const teamOptions = Array.isArray(rosterTeams)
+    ? rosterTeams
+        .map((team) => team?.name || "")
+        .filter(Boolean)
+    : [];
+  const isLeadViewFiltered =
+    leadViewEnabled &&
+    (leadViewStatus !== LEAD_VIEW_STATUSES.ALL || Boolean(leadViewTeam.trim()));
 
   return (
     <SectionSurface className="mb-4">
@@ -103,6 +119,91 @@ export default function MstAssignmentStaffFilterPanel({
           </div>
         </div>
       ) : null}
+      <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50/80 p-3">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <div className="text-sm font-semibold text-slate-900">Lead-view rút gọn</div>
+            <p className="text-xs text-slate-600">
+              Tự động gom theo MST hiện hành để trưởng nhóm rà soát nhanh các ca đã gán đủ, chờ gán,
+              hoặc theo team phụ trách.
+            </p>
+          </div>
+          <label className="inline-flex items-center gap-2 text-sm font-medium text-slate-700">
+            <input
+              type="checkbox"
+              checked={leadViewEnabled}
+              onChange={(event) => onLeadViewEnabledChange?.(event.target.checked)}
+            />
+            Bật lead-view rút gọn
+          </label>
+        </div>
+        <div className="mt-3 flex flex-wrap items-end gap-2">
+          <div className="flex flex-wrap gap-2" role="group" aria-label="Lọc nhanh trạng thái lead-view">
+            <button
+              type="button"
+              onClick={() => onLeadViewStatusChange?.(LEAD_VIEW_STATUSES.ALL)}
+              disabled={!leadViewEnabled}
+              className={
+                leadViewStatus === LEAD_VIEW_STATUSES.ALL
+                  ? "rounded border border-slate-900 bg-slate-900 px-3 py-1 text-sm text-white"
+                  : "rounded border bg-white px-3 py-1 text-sm hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+              }
+            >
+              Tất cả
+            </button>
+            <button
+              type="button"
+              onClick={() => onLeadViewStatusChange?.(LEAD_VIEW_STATUSES.ASSIGNED)}
+              disabled={!leadViewEnabled}
+              className={
+                leadViewStatus === LEAD_VIEW_STATUSES.ASSIGNED
+                  ? "rounded border border-emerald-700 bg-emerald-700 px-3 py-1 text-sm text-white"
+                  : "rounded border bg-white px-3 py-1 text-sm hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+              }
+            >
+              Đã gán đủ
+            </button>
+            <button
+              type="button"
+              onClick={() => onLeadViewStatusChange?.(LEAD_VIEW_STATUSES.PENDING)}
+              disabled={!leadViewEnabled}
+              className={
+                leadViewStatus === LEAD_VIEW_STATUSES.PENDING
+                  ? "rounded border border-amber-700 bg-amber-700 px-3 py-1 text-sm text-white"
+                  : "rounded border bg-white px-3 py-1 text-sm hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+              }
+            >
+              Chờ gán
+            </button>
+          </div>
+          <label className="flex min-w-[12rem] flex-col gap-1 text-sm text-slate-700">
+            <span className="font-medium">Theo team</span>
+            <select
+              value={leadViewTeam}
+              disabled={!leadViewEnabled}
+              onChange={(event) => onLeadViewTeamChange?.(event.target.value)}
+              className="rounded border bg-white px-2 py-1 disabled:cursor-not-allowed disabled:bg-slate-100"
+              aria-label="Lọc lead-view theo team"
+            >
+              <option value="">Tất cả team</option>
+              {teamOptions.map((teamName) => (
+                <option key={teamName} value={teamName}>
+                  {teamName}
+                </option>
+              ))}
+            </select>
+          </label>
+          {leadViewEnabled ? (
+            <button
+              type="button"
+              onClick={onResetLeadView}
+              className="rounded border bg-white px-3 py-1 text-sm hover:bg-gray-50"
+            >
+              {isLeadViewFiltered ? "Xóa bộ lọc lead-view" : "Tắt lead-view"}
+            </button>
+          ) : null}
+        </div>
+      </div>
     </SectionSurface>
   );
 }

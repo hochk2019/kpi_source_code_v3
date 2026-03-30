@@ -18,8 +18,34 @@ const normalize = (value = "") =>
     .trim()
     .toLowerCase();
 
+const hasCoverageForAssignedState = (row, normalizeStr) => {
+  const hasImport = Boolean(normalizeStr(row?.person_import || ""));
+  const hasExport = Boolean(normalizeStr(row?.person_export || ""));
+
+  return hasImport && hasExport;
+};
+
+function matchesAssignmentState(row, statusFilter, normalizeStr) {
+  if (!statusFilter || statusFilter === "all") {
+    return true;
+  }
+
+  const isAssigned = hasCoverageForAssignedState(row, normalizeStr);
+
+  if (statusFilter === MST_ASSIGNMENT_STATUS.ASSIGNED || statusFilter === "assigned") {
+    return isAssigned;
+  }
+
+  if (statusFilter === MST_ASSIGNMENT_STATUS.PENDING || statusFilter === "pending") {
+    return !isAssigned;
+  }
+
+  return true;
+}
+
 export function filterAndPrioritizeRows({
   activeStatusFilter,
+  leadViewFilter,
   historyFilteredRowKeys,
   makeRowKey,
   normalizeStr,
@@ -32,6 +58,11 @@ export function filterAndPrioritizeRows({
   const hasQuery = Boolean(query);
   const staffQuery = normalize(staffFilter || "");
   const hasStaffQuery = Boolean(staffQuery);
+  const leadStatusFilter = leadViewFilter?.status || "all";
+  const effectiveStatusFilter =
+    leadStatusFilter !== "all" ? leadStatusFilter : activeStatusFilter;
+  const teamQuery = normalize(leadViewFilter?.team || "");
+  const hasTeamQuery = Boolean(teamQuery);
 
   const base = rows.filter((row) => {
     if (historyFilteredRowKeys) {
@@ -41,24 +72,12 @@ export function filterAndPrioritizeRows({
       }
     }
 
-    if (activeStatusFilter) {
-      const hasImport = Boolean(normalizeStr(row.person_import || ""));
-      const hasExport = Boolean(normalizeStr(row.person_export || ""));
+    if (!matchesAssignmentState(row, effectiveStatusFilter, normalizeStr)) {
+      return false;
+    }
 
-      if (
-        activeStatusFilter === MST_ASSIGNMENT_STATUS.ASSIGNED &&
-        (!hasImport || !hasExport)
-      ) {
-        return false;
-      }
-
-      if (
-        activeStatusFilter === MST_ASSIGNMENT_STATUS.PENDING &&
-        hasImport &&
-        hasExport
-      ) {
-        return false;
-      }
+    if (hasTeamQuery && normalize(row.team || "") !== teamQuery) {
+      return false;
     }
 
     if (hasStaffQuery) {
@@ -109,6 +128,7 @@ export function filterAndPrioritizeRows({
 export default function useMSTAssignmentDerivedRowsWorkspace({
   activeStatusFilter,
   groupByMST,
+  leadViewFilter,
   historyFilteredRowKeys,
   makeRowKey,
   normalizeStr,
@@ -121,6 +141,7 @@ export default function useMSTAssignmentDerivedRowsWorkspace({
     () =>
       filterAndPrioritizeRows({
         activeStatusFilter,
+        leadViewFilter,
         historyFilteredRowKeys,
         makeRowKey,
         normalizeStr,
@@ -131,6 +152,7 @@ export default function useMSTAssignmentDerivedRowsWorkspace({
       }),
     [
       activeStatusFilter,
+      leadViewFilter,
       historyFilteredRowKeys,
       makeRowKey,
       normalizeStr,

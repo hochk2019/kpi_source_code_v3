@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import MstAssignmentStaffFilterPanel from "@/components/mst-assignment/filters/MstAssignmentStaffFilterPanel.jsx";
+import { LEAD_VIEW_STATUSES } from "@/components/mst-assignment/hooks/useMSTAssignmentLeadViewWorkspace.js";
 
 afterEach(() => {
   cleanup();
@@ -67,5 +68,50 @@ describe("mst assignment staff filter panel", () => {
 
     expect(screen.queryByText(/bộ lọc nhanh/i)).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Lưu bộ lọc nhân viên" })).toBeDisabled();
+  });
+
+  it("surfaces lead-view quick filters for status and team selection", async () => {
+    const onLeadViewEnabledChange = vi.fn();
+    const onLeadViewStatusChange = vi.fn();
+    const onLeadViewTeamChange = vi.fn();
+    const onResetLeadView = vi.fn();
+
+    render(
+      <MstAssignmentStaffFilterPanel
+        quickFavorites={{ staff: [] }}
+        leadViewEnabled
+        leadViewStatus={LEAD_VIEW_STATUSES.PENDING}
+        leadViewTeam="Alpha"
+        staffFilter=""
+        rosterTeams={[
+          { id: "1", name: "Alpha", members: [] },
+          { id: "2", name: "Beta", members: [] },
+        ]}
+        onLeadViewEnabledChange={onLeadViewEnabledChange}
+        onLeadViewStatusChange={onLeadViewStatusChange}
+        onLeadViewTeamChange={onLeadViewTeamChange}
+        onResetLeadView={onResetLeadView}
+        onClearStaffFilter={vi.fn()}
+        onSaveStaffFavorite={vi.fn()}
+        onStaffFilterSelect={vi.fn()}
+        onApplyStaffFavorite={vi.fn()}
+        onRemoveQuickFavorite={vi.fn()}
+      />
+    );
+
+    expect(screen.getByText("Lead-view rút gọn")).toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: "Bật lead-view rút gọn" })).toBeChecked();
+
+    await userEvent.click(screen.getByRole("button", { name: "Đã gán đủ" }));
+    expect(onLeadViewStatusChange).toHaveBeenCalledWith(LEAD_VIEW_STATUSES.ASSIGNED);
+
+    await userEvent.selectOptions(
+      screen.getByRole("combobox", { name: "Lọc lead-view theo team" }),
+      "Beta",
+    );
+    expect(onLeadViewTeamChange).toHaveBeenCalledWith("Beta");
+
+    await userEvent.click(screen.getByRole("button", { name: "Xóa bộ lọc lead-view" }));
+    expect(onResetLeadView).toHaveBeenCalledTimes(1);
   });
 });

@@ -36,8 +36,8 @@ Reconciliation note 2026-03-27:
 
 - [x] Tự động phát hiện MST được gán trùng và đề xuất cách xử lý (giữ, chuyển, tách vai trò). (done 2026-03-29, `buildGroupedStages()` nay sinh `conflictSummary` cho MST co nhieu giai doan dang cung hieu luc, `MstAssignmentDataTablePanel.jsx` surfacing canh bao `Trung gan` va goi y xu ly nhanh ngay tren bang/timeline)
 - [x] Thêm timeline lịch sử thay đổi MST với bộ lọc theo hành động (create/update/delete). (done 2026-03-29, `useMSTAssignmentHistoryWorkspace.js` nay loc su kien lich su that su theo create/update/delete va mốc chuyen trang thai, `MstAssignmentHistoryFilterPanel.jsx` doi nhan de ro nghia `Chuyen trang thai`, va row-key filter khop voi timeline detail)
-- [ ] Cung cấp chế độ xem rút gọn cho trưởng nhóm với quick filters (assigned/pending, theo nhóm).
-- [ ] Cảnh báo ngay khi nhập tên công ty vượt ngưỡng dài, sai định dạng hoặc chứa ký tự không hợp lệ.
+- [x] Cung cấp chế độ xem rút gọn cho trưởng nhóm với quick filters (assigned/pending, theo nhóm). (done 2026-03-30, them `useMSTAssignmentLeadViewWorkspace.js` + UI `Lead-view rút gọn` trong `MstAssignmentStaffFilterPanel.jsx`, tu dong gom theo MST hien hanh, loc nhanh `Đã gán đủ/Chờ gán`, va loc theo team ma khong tron voi history filter panel)
+- [x] Cảnh báo ngay khi nhập tên công ty vượt ngưỡng dài, sai định dạng hoặc chứa ký tự không hợp lệ. (done 2026-03-30, `companyName.js` nay tra warning cho ten qua dai/ky tu nghi ngo, va `CompanyNameCell.jsx` surfacing canh bao inline ngay trong o sua de operator soat loi som hon truoc khi luu)
 - [ ] Cho phép export báo cáo phân bổ MST ra CSV/XLSX với metadata (người gán, ngày hiệu lực).
 
 ## 5. Navigation & notifications

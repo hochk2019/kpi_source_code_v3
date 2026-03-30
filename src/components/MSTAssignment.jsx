@@ -1,8 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 
 import {
-  MST_ASSIGNMENT_STATUS,
-
   normalizeStr,
 
   normalizeName,
@@ -26,6 +24,7 @@ import useMSTAssignmentBootstrapWorkspace from "@/components/mst-assignment/hook
 import useMSTAssignmentExportWorkspace from "@/components/mst-assignment/hooks/useMSTAssignmentExportWorkspace.js";
 import useMSTAssignmentHistoryWorkspace from "@/components/mst-assignment/hooks/useMSTAssignmentHistoryWorkspace.js";
 import useMSTAssignmentImportSaveWorkspace from "@/components/mst-assignment/hooks/useMSTAssignmentImportSaveWorkspace.js";
+import useMSTAssignmentLeadViewWorkspace from "@/components/mst-assignment/hooks/useMSTAssignmentLeadViewWorkspace.js";
 import useMSTAssignmentPageResetWorkspace from "@/components/mst-assignment/hooks/useMSTAssignmentPageResetWorkspace.js";
 import useMSTAssignmentRowCommitWorkspace from "@/components/mst-assignment/hooks/useMSTAssignmentRowCommitWorkspace.js";
 import useMSTAssignmentRowMutations from "@/components/mst-assignment/hooks/useMSTAssignmentRowMutations.js";
@@ -195,10 +194,24 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
     addQuickFavorite,
     goToFirstPage,
   });
+  const {
+    handleLeadViewEnabledChange,
+    handleLeadViewStatusChange,
+    handleLeadViewTeamChange,
+    leadViewEnabled,
+    leadViewFilter,
+    leadViewStatus,
+    leadViewTeam,
+    resetLeadView,
+  } = useMSTAssignmentLeadViewWorkspace({
+    goToFirstPage,
+  });
+  const effectiveGroupByMST = groupByMST || leadViewEnabled;
   /** Filter + phân trang */
   const { displayList, filtered, groupedStages } = useMSTAssignmentDerivedRowsWorkspace({
     activeStatusFilter,
-    groupByMST,
+    groupByMST: effectiveGroupByMST,
+    leadViewFilter,
     historyFilteredRowKeys,
     makeRowKey,
     normalizeStr,
@@ -361,6 +374,7 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
           meta={
             <>
               <span className="ds-pill">{filtered.length} dòng đang hiển thị</span>
+              {leadViewEnabled ? <span className="ds-pill">Lead-view</span> : null}
               {selectedFileName ? <span className="ds-pill">Đã chọn: {selectedFileName}</span> : null}
             </>
           }
@@ -374,10 +388,11 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
               <label className="inline-flex items-center gap-2 text-sm text-gray-700">
                 <input
                   type="checkbox"
-                  checked={groupByMST}
+                  checked={effectiveGroupByMST}
+                  disabled={leadViewEnabled}
                   onChange={(e) => handleGroupByMSTChange(e.target.checked)}
                 />
-                Gom theo MST
+                {leadViewEnabled ? "Gom theo MST (khóa bởi lead-view)" : "Gom theo MST"}
               </label>
               <SearchField
                 label="Tìm nhanh MST hoặc công ty"
@@ -476,8 +491,15 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
 
       <MstAssignmentStaffFilterPanel
         quickFavorites={quickFavorites}
+        leadViewEnabled={leadViewEnabled}
+        leadViewStatus={leadViewStatus}
+        leadViewTeam={leadViewTeam}
         staffFilter={staffFilter}
         rosterTeams={rosterTeams}
+        onLeadViewEnabledChange={handleLeadViewEnabledChange}
+        onLeadViewStatusChange={handleLeadViewStatusChange}
+        onLeadViewTeamChange={handleLeadViewTeamChange}
+        onResetLeadView={resetLeadView}
         onClearStaffFilter={clearStaffFilter}
         onSaveStaffFavorite={handleSaveStaffFavorite}
         onStaffFilterSelect={handleStaffFilterSelect}

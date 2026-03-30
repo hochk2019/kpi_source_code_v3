@@ -1,8 +1,9 @@
-import React, { useCallback, useEffect, useRef } from "react";
+import React, { useCallback, useEffect, useId, useRef } from "react";
 
 import clsx from "clsx";
 
 import {
+  getCompanyNameWarnings,
   sanitizeCompanyNameInput,
   shouldWrapCompanyName,
 } from "@/components/mst-assignment/model/companyName.js";
@@ -16,7 +17,9 @@ export default function CompanyNameCell({
   const safeValue = value == null ? "" : value.toString();
   const trimmedValue = safeValue.trim();
   const shouldWrap = shouldWrapCompanyName(safeValue);
+  const warnings = getCompanyNameWarnings(safeValue);
   const textareaRef = useRef(null);
+  const warningId = useId();
 
   const adjustTextareaHeight = useCallback(
     (element, nextValue) => {
@@ -78,19 +81,33 @@ export default function CompanyNameCell({
   };
 
   return (
-    <textarea
-      ref={textareaRef}
-      value={safeValue}
-      onChange={handleChange}
-      className={clsx(
-        "border rounded px-2 py-1 w-full resize-y whitespace-normal break-words",
-        shouldWrap ? "leading-snug min-h-[2.5rem]" : "leading-normal min-h-[2.25rem]"
-      )}
-      placeholder={placeholder}
-      title={trimmedValue ? safeValue : undefined}
-      spellCheck={false}
-      data-company-wrap={shouldWrap ? "wrapped" : "single"}
-      style={{ wordBreak: "break-word" }}
-    />
+    <div className="space-y-1">
+      <textarea
+        ref={textareaRef}
+        value={safeValue}
+        onChange={handleChange}
+        className={clsx(
+          "border rounded px-2 py-1 w-full resize-y whitespace-normal break-words",
+          shouldWrap ? "leading-snug min-h-[2.5rem]" : "leading-normal min-h-[2.25rem]",
+          warnings.length ? "border-amber-400 bg-amber-50/40" : null
+        )}
+        placeholder={placeholder}
+        title={trimmedValue ? safeValue : undefined}
+        spellCheck={false}
+        aria-describedby={warnings.length ? warningId : undefined}
+        data-company-wrap={shouldWrap ? "wrapped" : "single"}
+        data-company-warning-count={warnings.length}
+        style={{ wordBreak: "break-word" }}
+      />
+      {warnings.length ? (
+        <div id={warningId} className="space-y-1">
+          {warnings.map((warning) => (
+            <p key={warning.code} className="text-xs text-amber-700">
+              {warning.message}
+            </p>
+          ))}
+        </div>
+      ) : null}
+    </div>
   );
 }

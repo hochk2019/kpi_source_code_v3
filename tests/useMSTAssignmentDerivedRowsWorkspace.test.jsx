@@ -48,6 +48,7 @@ describe("useMSTAssignmentDerivedRowsWorkspace", () => {
     expect(
       filterAndPrioritizeRows({
         activeStatusFilter: MST_ASSIGNMENT_STATUS.ASSIGNED,
+        leadViewFilter: null,
         historyFilteredRowKeys,
         makeRowKey,
         normalizeStr,
@@ -57,6 +58,59 @@ describe("useMSTAssignmentDerivedRowsWorkspace", () => {
         staffFilter: "lan",
       })
     ).toEqual([rows[0], rows[1]]);
+  });
+
+  it("applies compact lead-view filters for current staffing state and team", () => {
+    const rows = [
+      {
+        mst: "0310",
+        company: "Cong ty Team Alpha",
+        person_import: "Lan",
+        person_export: "",
+        team: "Alpha",
+        effective_from: "2024-01-01",
+        effective_to: "",
+        status: "pending",
+      },
+      {
+        mst: "0311",
+        company: "Cong ty Team Alpha Assigned",
+        person_import: "Lan",
+        person_export: "Binh",
+        team: "Alpha",
+        effective_from: "2024-01-02",
+        effective_to: "",
+        status: "assigned",
+      },
+      {
+        mst: "0312",
+        company: "Cong ty Team Beta Pending",
+        person_import: "Mai",
+        person_export: "",
+        team: "Beta",
+        effective_from: "2024-01-03",
+        effective_to: "",
+        status: "pending",
+      },
+    ];
+
+    expect(
+      filterAndPrioritizeRows({
+        activeStatusFilter: null,
+        leadViewFilter: {
+          enabled: true,
+          status: "pending",
+          team: "Alpha",
+        },
+        historyFilteredRowKeys: null,
+        makeRowKey: (row) => `${row.mst}::${row.effective_from}`,
+        normalizeStr,
+        recentlyImportedKeys: new Set(),
+        rows,
+        search: "",
+        staffFilter: "",
+      }),
+    ).toEqual([rows[0]]);
   });
 
   it("derives grouped and aggregated display data from the filtered rows", () => {
@@ -97,6 +151,7 @@ describe("useMSTAssignmentDerivedRowsWorkspace", () => {
       useMSTAssignmentDerivedRowsWorkspace({
         activeStatusFilter: null,
         groupByMST: true,
+        leadViewFilter: null,
         historyFilteredRowKeys: null,
         makeRowKey: (row) => `${row.mst}::${row.effective_from}`,
         normalizeStr,
@@ -113,11 +168,13 @@ describe("useMSTAssignmentDerivedRowsWorkspace", () => {
         mst: "0311",
         company: "Cong ty B",
         stages: [rows[2]],
+        conflictSummary: null,
       },
       {
         mst: "0312",
         company: "Cong ty A",
         stages: [rows[0], rows[1]],
+        conflictSummary: null,
       },
     ]);
     expect(result.current.aggregatedByMST).toEqual([
@@ -151,6 +208,7 @@ describe("useMSTAssignmentDerivedRowsWorkspace", () => {
       useMSTAssignmentDerivedRowsWorkspace({
         activeStatusFilter: null,
         groupByMST: false,
+        leadViewFilter: null,
         historyFilteredRowKeys: null,
         makeRowKey: (row) => `${row.mst}::${row.effective_from}`,
         normalizeStr,

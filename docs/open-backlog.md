@@ -67,8 +67,6 @@ Source set: `docs/ux-improvement-backlog.md`
 
 ### MST Assignment And Staffing
 
-- `cng-7z0.19` — Add compact lead-view mode for MST staffing
-- `cng-7z0.20` — Validate and warn on invalid or oversized company names during MST editing
 - `cng-7z0.21` — Export MST assignment report with assignment metadata
 
 ### Navigation And Notifications

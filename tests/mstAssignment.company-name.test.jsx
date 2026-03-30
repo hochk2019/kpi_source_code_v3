@@ -5,6 +5,8 @@ import { render, screen, fireEvent, cleanup } from "@testing-library/react";
 import CompanyNameCell from "@/components/mst-assignment/table/CompanyNameCell.jsx";
 import {
   COMPANY_NAME_WRAP_THRESHOLD,
+  COMPANY_NAME_WARNING_THRESHOLD,
+  getCompanyNameWarnings,
   shouldWrapCompanyName,
   sanitizeCompanyNameInput,
 } from "@/components/mst-assignment/model/companyName.js";
@@ -34,6 +36,30 @@ describe("sanitizeCompanyNameInput", () => {
 
   it("chuyển đổi giá trị null thành chuỗi rỗng", () => {
     expect(sanitizeCompanyNameInput(null)).toBe("");
+  });
+});
+
+describe("getCompanyNameWarnings", () => {
+  it("cảnh báo khi tên công ty quá dài", () => {
+    const longName = "Công ty cổ phần thương mại dịch vụ xuất nhập khẩu logistics và vận tải xuyên biên giới";
+    expect(Array.from(longName.trim()).length).toBeGreaterThanOrEqual(COMPANY_NAME_WARNING_THRESHOLD);
+    expect(getCompanyNameWarnings(longName)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: "too-long",
+        }),
+      ]),
+    );
+  });
+
+  it("cảnh báo khi tên công ty chứa ký tự cần kiểm tra lại", () => {
+    expect(getCompanyNameWarnings("Công ty <Alpha>")).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: "suspicious-characters",
+        }),
+      ]),
+    );
   });
 });
 
@@ -69,5 +95,23 @@ describe("CompanyNameCell", () => {
     });
 
     expect(input.style.height).toBe("120px");
+  });
+
+  it("hiển thị cảnh báo inline khi tên công ty dài hoặc chứa ký tự bất thường", () => {
+    const suspiciousLongName =
+      "Công ty cổ phần thương mại dịch vụ xuất nhập khẩu logistics xuyên biên giới <Alpha>";
+
+    render(
+      <CompanyNameCell
+        value={suspiciousLongName}
+        isReadOnly={false}
+        onChange={vi.fn()}
+      />,
+    );
+
+    const input = screen.getByRole("textbox");
+    expect(input).toHaveAttribute("data-company-warning-count", "2");
+    expect(screen.getByText(/Tên công ty dài/i)).toBeInTheDocument();
+    expect(screen.getByText(/ký tự cần kiểm tra lại/i)).toBeInTheDocument();
   });
 });

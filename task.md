@@ -79,7 +79,20 @@
 - `cng-7z0.18` da hoan tat filtered-history lane cho MST assignment:
   - `useMSTAssignmentHistoryWorkspace.js` nay loc `filteredHistoryEntries` theo su kien lich su thuc te cho create/update/delete va mốc chuyen trang thai `status:assigned/pending`, dong thoi `historyFilteredRowKeys` cung ap dung cho cac filter nay thay vi chi co action thuần
   - `MstAssignmentHistoryFilterPanel.jsx` doi copy thanh `Thao tac / Chuyen trang thai` de khop voi nghia moi cua timeline filter va quick favorite messaging cho status transition
-  - slice nay mo duong cho bead tiep theo `cng-7z0.19` gom quick filters current-state rieng cho truong nhom, khong con tron voi history filter panel
+  - lane current-state rieng cho truong nhom sau do da duoc ship trong `cng-7z0.19` va `cng-7z0.20`; bead tiep theo hop ly cho MST assignment la `cng-7z0.21` de export bao cao kem metadata
+- `cng-7z0.19` da hoan tat compact lead-view lane cho MST assignment:
+  - them `src/components/mst-assignment/hooks/useMSTAssignmentLeadViewWorkspace.js` de quan ly preset xem rut gon cho truong nhom, giu state `enabled/status/team` rieng voi history filter va reset page moi khi doi nhanh bo loc
+  - `src/components/mst-assignment/filters/MstAssignmentStaffFilterPanel.jsx` nay co khu `Lead-view rút gọn` voi toggle, quick filters `Tất cả / Đã gán đủ / Chờ gán`, va combobox team; `src/components/MSTAssignment.jsx` tu dong khoa `Gom theo MST` khi lead-view bat
+  - `src/components/mst-assignment/hooks/useMSTAssignmentDerivedRowsWorkspace.js` nay ap current-state filter theo assigned/pending + team ma khong dung chung `historyFilteredRowKeys`
+  - targeted verify da pass:
+    - `pnpm exec eslint src/components/MSTAssignment.jsx src/components/mst-assignment/hooks/useMSTAssignmentLeadViewWorkspace.js src/components/mst-assignment/hooks/useMSTAssignmentDerivedRowsWorkspace.js src/components/mst-assignment/filters/MstAssignmentStaffFilterPanel.jsx tests/mstAssignmentStaffFilterPanel.test.jsx tests/useMSTAssignmentLeadViewWorkspace.test.jsx tests/useMSTAssignmentDerivedRowsWorkspace.test.jsx`
+    - `pnpm exec vitest run tests/mstAssignment.displaySelectors.test.js tests/mstAssignmentDataTablePanel.test.jsx tests/mstAssignmentHistoryFilterPanel.test.jsx tests/mstAssignmentStaffFilterPanel.test.jsx tests/useMSTAssignmentDerivedRowsWorkspace.test.jsx tests/useMSTAssignmentHistoryWorkspace.test.jsx tests/useMSTAssignmentStaffFilterWorkspace.test.jsx tests/useMSTAssignmentLeadViewWorkspace.test.jsx --environment jsdom`
+- `cng-7z0.20` da hoan tat company-name validation lane cho MST assignment:
+  - `src/components/mst-assignment/model/companyName.js` bo sung warning builder cho ten cong ty qua dai va ky tu nghi ngo; `src/components/mst-assignment/table/CompanyNameCell.jsx` surfacing warning inline ngay ben duoi textarea va giu nguyen sanitize + auto-resize behavior
+  - `tests/mstAssignment.company-name.test.jsx` nay khoa them contract warning model/UI de tranh hoi quy khi tiep tuc tach MST assignment ra cac module nho hon
+  - targeted verify da pass:
+    - `pnpm exec eslint src/components/mst-assignment/model/companyName.js src/components/mst-assignment/table/CompanyNameCell.jsx tests/mstAssignment.company-name.test.jsx`
+    - `pnpm exec vitest run tests/mstAssignment.company-name.test.jsx --environment jsdom`
 - `cng-7z0.6` da xong o muc surfacing tien trinh dong bo ECUS theo tung buoc:
   - them `syncProgressSteps` trong `useDataImporterSync.js` de track 4 phase thuc te: commit ECUS, refresh config/status/alerts, refresh declaration rows, va reload danh sach hien thi
   - day state moi qua `dataImporterSyncPanelProps.js` va `DataImporterSyncConfigPanel.jsx` de UI shell khong can tu tinh lai progress
