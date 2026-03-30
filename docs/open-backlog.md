@@ -18,6 +18,7 @@ Reconciliation note:
 - Reconciled again on 2026-03-30 after completing `cng-7z0.22`; Command Center pin state now persists through the backend compat storage path and shared client cache, so the remaining navigation backlog narrows to permission-aware search plus contextual help.
 - Reconciled again on 2026-03-30 after completing `cng-7z0.23`; Command Center search now suggests report workflow shortcuts and account-aware user entries without widening app-shell blast radius, so the remaining navigation backlog is contextual quick-help only.
 - Reconciled again on 2026-03-30 after completing `cng-7z0.25` and `cng-2k4.22`; Support Center now surfaces per-tab FAQ/docs guidance with copyable repo references, while repository text normalization now relies on `.gitattributes` plus a clean `pnpm lint`, so the remaining ready work returns to backend cutover and ECUS queue orchestration.
+- Reconciled again on 2026-03-30 after advancing `cng-7z0.7` with phase-aware resume semantics and closing stale shipped beads `cng-7z0.26`, `cng-7z0.27`, `cng-7z0.28`, and `cng-7z0.34` that were already reflected as completed in `docs/ux-improvement-backlog.md`.
 
 Rule:
 - Every unfinished item from review notes, rollout plans, decomposition plans, or UX backlogs must be in one of two states:
