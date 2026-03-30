@@ -16,22 +16,20 @@
 
 ## Active Slice
 
--- Title: Contextual quick-help / FAQ hub
--- Bead: cng-7z0.25
--- Status: ready
+-- Title: Backend-detached ECUS queue orchestration
+-- Bead: cng-7z0.7
+-- Status: in_progress
 -- Last updated: 2026-03-30
 
-- Vua hoan tat `cng-7z0.22` va `cng-7z0.23` trong cung lane navigation:
-  - pin state cua `CommandCenter` da sync qua backend compat storage + shared client cache
-  - global search nay goi y nhanh cho module, report workflow, va user/account khi quyen truy cap cho phep
-  - targeted verify xanh cho backend route, storage sync helper, `CommandCenter`, va storage client flow
-- Slice ke tiep theo du hop ly la `cng-7z0.25`:
-  - bo sung hub huong dan nhanh / FAQ theo ngu canh trang
-  - uu tien tan dung tai lieu san co trong `docs/` va command bus / shell workflow da ship
-  - giu scope nho, tranh bien `docs/` thanh mot kho noi dung trung lap kho bao tri
+- Vua hoan tat lien tiep hai slice nho:
+  - `cng-7z0.25`: `SupportCenter` nay nhan `currentTabId` tu `App`, hien FAQ/doc references theo tung man hinh, co CTA sao chep duong dan `docs/`, va goi y tai nguyen dao tao theo tags/keywords cua context hien tai
+  - `cng-2k4.22`: bo sung `* text=auto` trong `.gitattributes` va re-verify `pnpm lint` sach de dong lane text/lint hygiene sau backlog refactors
+- Lane UX ready tiep theo quay ve `cng-7z0.7`:
+  - phan con lai la backend-detached queue/resume orchestration cho ECUS imports, khong con navigation/help debt mo
+  - can giu tri nho ve cac lane da ship (`cng-7z0.9`, `cng-7z0.10`, `cng-7z0.11`) de khong lap lai phan preflight/retry UX da xong
 - Backlog note:
-  - `cng-7z0.7` van mo cho backend-detached ECUS queue/orchestration; khong bi mat trang thai khi tam thoi chuyen sang navigation slice theo uu tien session nay
-  - sau `cng-7z0.25`, can quyet dinh quay lai `cng-7z0.7` hay tiep tuc cleanup UX/support lane tuy theo uu tien van hanh
+  - neu doi uu tien khoi UX lane, hai technical ready items tiep theo la `cng-2k4.2` va `cng-2k4.3`
+  - `docs/open-backlog.md` da duoc reconcile de bo `cng-7z0.25` va `cng-2k4.22` khoi danh sach open
 ## Recent Completed Slices
 
 - `cng-7z0.23` da hoan tat permission-aware global search lane:
@@ -41,6 +39,16 @@
   - targeted verify da pass:
     - `pnpm exec vitest run tests/commandCenter.test.jsx tests/commandCenter.pinStorage.test.js tests/storageClient.test.js --environment jsdom`
     - `pnpm exec eslint src/components/CommandCenter.jsx tests/commandCenter.test.jsx tests/commandCenter.pinStorage.test.js tests/storageClient.test.js`
+- `cng-7z0.25` da hoan tat contextual quick-help lane:
+  - them `src/components/support/supportContextCatalog.js` va `src/components/support/SupportContextPanel.jsx` de map tab hien tai sang FAQ, tai lieu `docs/`, va tai nguyen dao tao de xuat
+  - `src/components/SupportCenter.jsx` nay nhan `currentTabId`, ho tro `open:support` payload override context, va hien CTA sao chep duong dan tai lieu noi bo thay vi tao runtime link chet cho `docs/`
+  - `src/App.jsx` truyen `activeTab` vao `SupportCenter`, bo sung regression `tests/supportCenter.context.test.jsx`, `tests/supportContextCatalog.test.js`, va giu xanh `tests/accessibility.test.jsx`
+  - targeted verify da pass:
+    - `pnpm exec vitest run tests/accessibility.test.jsx tests/supportCenter.context.test.jsx tests/supportContextCatalog.test.js --environment jsdom`
+    - `pnpm exec eslint src/components/SupportCenter.jsx src/components/support/SupportContextPanel.jsx src/components/support/supportContextCatalog.js src/App.jsx tests/accessibility.test.jsx tests/supportCenter.context.test.jsx tests/supportContextCatalog.test.js`
+- `cng-2k4.22` da hoan tat text/lint hygiene lane:
+  - them `* text=auto` vao `.gitattributes` de git xu ly line endings thay vi de lint/noise can thiep
+  - full `pnpm lint` hien xanh sau cac backlog refactors, khong con can giu bead hygiene mo chi de theo doi warning cu
 - `cng-7z0.22` da hoan tat backend-synced Command Center pin lane:
   - `server-v4/src/app/legacy-compat/legacyCompatShared.ts` + `legacyCompatStorageRoutes.ts` nay doc/ghi `kpi_command_center_pins_v1` qua `persistence.projections`, giu response shape tuong thich voi compat storage API
   - `src/lib/storageClient.js`, `src/components/command-center/pinStorage.js`, va `src/components/CommandCenter.jsx` nay hydrate/subscribe/write pin state qua shared storage va fallback local storage

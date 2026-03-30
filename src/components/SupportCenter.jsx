@@ -19,6 +19,11 @@ import * as Tabs from '@radix-ui/react-tabs';
 import { toast } from '@/shared/toast';
 
 import { subscribeCommand } from '@/lib/commandBus.js';
+import SupportContextPanel from '@/components/support/SupportContextPanel.jsx';
+import {
+  getSuggestedSupportResources,
+  resolveSupportContext,
+} from '@/components/support/supportContextCatalog.js';
 
 import {
 
@@ -256,7 +261,7 @@ function TrainingCard({ item, completedAt, onToggle }) {
 
 
 
-export default function SupportCenter() {
+export default function SupportCenter({ currentTabId = 'reports' }) {
 
   const [open, setOpen] = useState(false);
 
@@ -275,6 +280,7 @@ export default function SupportCenter() {
   const deferredSearch = useDeferredValue(search);
 
   const [activeTab, setActiveTab] = useState('training');
+  const [contextOverrideTabId, setContextOverrideTabId] = useState(null);
 
   const [formState, setFormState] = useState(() => ({ ...DEFAULT_FEEDBACK }));
 
@@ -303,6 +309,7 @@ export default function SupportCenter() {
       }
 
       setOpen(true);
+      setContextOverrideTabId(typeof payload?.contextTab === 'string' ? payload.contextTab : null);
 
       if (payload?.tab === 'feedback') {
 
@@ -319,6 +326,16 @@ export default function SupportCenter() {
     return () => unsubscribe();
 
   }, []);
+
+  useEffect(() => {
+
+    if (!open) {
+
+      setContextOverrideTabId(null);
+
+    }
+
+  }, [open]);
 
 
 
@@ -432,6 +449,18 @@ export default function SupportCenter() {
 
   }, [resources, deferredSearch]);
 
+  const supportContext = useMemo(() => {
+
+    return resolveSupportContext(contextOverrideTabId || currentTabId);
+
+  }, [contextOverrideTabId, currentTabId]);
+
+  const suggestedResources = useMemo(() => {
+
+    return getSuggestedSupportResources(resources, supportContext);
+
+  }, [resources, supportContext]);
+
 
 
   const completedCount = useMemo(() => {
@@ -481,6 +510,28 @@ export default function SupportCenter() {
       });
 
     });
+
+  };
+
+  const handleCopyReference = async (reference) => {
+
+    try {
+
+      if (!navigator?.clipboard?.writeText) {
+
+        throw new Error('clipboard-unavailable');
+
+      }
+
+      await navigator.clipboard.writeText(reference.path);
+
+      toast.success(`Đã sao chép ${reference.path}`);
+
+    } catch {
+
+      toast.error('Không thể sao chép đường dẫn tài liệu trong trình duyệt hiện tại.');
+
+    }
 
   };
 
@@ -650,6 +701,12 @@ export default function SupportCenter() {
 
             </section>
 
+            <SupportContextPanel
+              context={supportContext}
+              suggestedResources={suggestedResources}
+              onCopyReference={handleCopyReference}
+            />
+
 
 
             <Tabs.Root value={activeTab} onValueChange={setActiveTab} className="grid gap-4">
@@ -716,7 +773,7 @@ export default function SupportCenter() {
 
                       onChange={(event) => setSearch(event.target.value)}
 
-                      placeholder="Nhập từ khóa về chủ đề, tổ đội hoặc nhu cầu..."
+                      placeholder={`Tìm tài liệu cho ${supportContext.label.toLowerCase()} hoặc một nhu cầu khác...`}
 
                       className="flex-1 bg-transparent text-sm text-gray-800 outline-none placeholder:text-gray-400 dark:text-gray-100"
 
