@@ -70,6 +70,12 @@
   - `cng-7z0.7` — them hang doi dong bo nen va resume support cho ECUS imports
 ## Recent Completed Slices
 
+- `cng-7z0.24` da hoan tat unread notification lane:
+  - `src/components/NotificationCenter.jsx` khong con auto-clear unread khi mo panel; unread badge chi ve 0 khi operator chu dong bam `Đánh dấu tất cả đã đọc`
+  - them CTA bulk clear trong header panel va badge `Mới` tren event chua doc de phan biet ro muc vua den truoc khi triage
+  - targeted verify da pass:
+    - `pnpm exec eslint src/components/NotificationCenter.jsx tests/notificationCenter.test.jsx`
+    - `pnpm exec vitest run tests/notificationCenter.test.jsx --environment jsdom`
 - `cng-7z0.17` da hoan tat duplicate-detection lane cho MST assignment:
   - `src/components/mst-assignment/model/displaySelectors.js` nay sinh `conflictSummary` cho moi MST co nhieu giai doan dang cung hieu luc, gom active-stage count, assignee/team divergence, va goi y xu ly `giu / chuyen / tach vai tro`
   - `src/components/mst-assignment/table/MstAssignmentDataTablePanel.jsx` surfacing badge `Trung gan` tren bang, canh bao inline cho tung dong, va danh sach goi y xu ly nhanh tren group row de truong nhom chot thao tac ngay

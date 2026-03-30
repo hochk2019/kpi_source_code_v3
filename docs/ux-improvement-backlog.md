@@ -44,7 +44,7 @@ Reconciliation note 2026-03-27:
 
 - [ ] Đồng bộ danh sách Command Center pin lên backend (dùng API mới lưu vào `UI_LAYOUT_KEY`) để giữ cấu hình giữa các thiết bị.
 - [ ] Thêm ô tìm kiếm toàn cục gợi ý nhanh theo quyền truy cập (module, báo cáo, người dùng).
-- [ ] Hiển thị badge số lượng thông báo chưa đọc và thao tác đánh dấu đã đọc hàng loạt.
+- [x] Hiển thị badge số lượng thông báo chưa đọc và thao tác đánh dấu đã đọc hàng loạt. (done 2026-03-30, giu unread badge cho den khi nguoi dung chu dong bam `Danh dau tat ca da doc`, them CTA bulk clear ngay trong `NotificationCenter.jsx`, va khoa regression `tests/notificationCenter.test.jsx`)
 - [ ] Cung cấp hub hướng dẫn nhanh/FAQ theo ngữ cảnh mỗi trang, liên kết tới tài liệu trong thư mục `docs/`.
 
 ## 6. Reporting & automation

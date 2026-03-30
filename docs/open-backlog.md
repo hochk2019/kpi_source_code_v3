@@ -14,6 +14,7 @@ Reconciliation note:
 - Reconciled again on 2026-03-29 after completing `cng-7z0.16`; DataImporter sync failures now surface actionable recovery hints in the real sync panel, and the remaining open UX work returns to backend-detached ECUS queue orchestration plus MST/navigation slices.
 - Reconciled again on 2026-03-30 after completing `cng-7z0.21`; MST assignment exports now ship CSV/XLSX outputs with latest assignee metadata derived from history, so the remaining UX backlog in this lane moves on to navigation/help work.
 - Reconciled again on 2026-03-30 after closing stale bead `cng-2k4.18`; the repo already lazy-loads `xlsx` via `src/lib/loadXlsx.js`, so the technical backlog now focuses on the remaining server-v4, module-size, and hygiene items.
+- Reconciled again on 2026-03-30 after completing `cng-7z0.24`; Notification Center now keeps unread state until the operator explicitly bulk-marks all items as read, so the navigation backlog narrows to backend-synced pins, global search, and contextual help.
 
 Rule:
 - Every unfinished item from review notes, rollout plans, decomposition plans, or UX backlogs must be in one of two states:
@@ -72,7 +73,6 @@ Source set: `docs/ux-improvement-backlog.md`
 
 - `cng-7z0.22` — Sync Command Center pin state to backend across devices
 - `cng-7z0.23` — Add permission-aware global search
-- `cng-7z0.24` — Add unread notification badge and bulk mark-as-read
 - `cng-7z0.25` — Provide contextual quick-help and FAQ hub
 
 ### Reporting And Automation

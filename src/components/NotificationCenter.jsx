@@ -154,20 +154,6 @@ export default function NotificationCenter({ className }) {
 
   useEffect(() => {
 
-    if (!open) {
-
-      return;
-
-    }
-
-    setUnreadIds(new Set());
-
-  }, [open]);
-
-
-
-  useEffect(() => {
-
     const handleClickOutside = (event) => {
 
       if (!panelRef.current) return;
@@ -215,6 +201,14 @@ export default function NotificationCenter({ className }) {
 
 
   const unreadCount = useMemo(() => unreadIds.size, [unreadIds]);
+
+
+
+  const handleMarkAllRead = () => {
+
+    setUnreadIds(new Set());
+
+  };
 
 
 
@@ -312,11 +306,29 @@ export default function NotificationCenter({ className }) {
 
         <div className="absolute right-0 z-40 mt-2 w-80 max-w-[90vw] rounded border border-gray-200 bg-white text-sm shadow-xl dark:border-slate-700 dark:bg-slate-900">
 
-          <div className="flex items-center justify-between border-b border-gray-100 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:border-slate-700 dark:text-gray-300">
+          <div className="flex items-center justify-between gap-3 border-b border-gray-100 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:border-slate-700 dark:text-gray-300">
 
-            <span>Thông báo hệ thống</span>
+            <div className="flex min-w-0 items-center gap-2">
 
-            <span className="font-normal text-gray-400">{loading ? 'Đang tải…' : `${events.length} mục`}</span>
+              <span>Thông báo hệ thống</span>
+
+              <span className="font-normal text-gray-400">{loading ? 'Đang tải…' : `${events.length} mục`}</span>
+
+            </div>
+
+            <button
+              type="button"
+              onClick={handleMarkAllRead}
+              disabled={unreadCount <= 0}
+              className={clsx(
+                'shrink-0 rounded-full border px-2 py-1 text-[10px] font-semibold normal-case tracking-normal transition',
+                unreadCount > 0
+                  ? 'border-sky-200 text-sky-700 hover:bg-sky-50 dark:border-sky-500/40 dark:text-sky-200 dark:hover:bg-sky-500/10'
+                  : 'cursor-not-allowed border-gray-200 text-gray-300 dark:border-slate-700 dark:text-gray-600'
+              )}
+            >
+              Đánh dấu tất cả đã đọc
+            </button>
 
           </div>
 
@@ -343,14 +355,29 @@ export default function NotificationCenter({ className }) {
                   {group.items.map((event) => {
 
                     const tone = toneClassMap[event?.severity] || toneClassMap.info;
+                    const isUnread = Boolean(event?.id && unreadIds.has(event.id));
 
                     return (
 
-                      <div key={event.id || `${event.createdAt}_${event.type}`} className={clsx('rounded border px-3 py-2 text-xs leading-relaxed shadow-sm', tone)}>
+                      <div
+                        key={event.id || `${event.createdAt}_${event.type}`}
+                        className={clsx(
+                          'rounded border px-3 py-2 text-xs leading-relaxed shadow-sm transition',
+                          tone,
+                          isUnread && 'ring-1 ring-sky-200 dark:ring-sky-500/50'
+                        )}
+                      >
 
                         <div className="flex items-start justify-between gap-2 text-[11px] uppercase tracking-wide">
 
-                          <span>{event?.type || 'thông báo'}</span>
+                          <span className="flex items-center gap-1.5">
+                            {event?.type || 'thông báo'}
+                            {isUnread ? (
+                              <span className="rounded-full bg-white/80 px-1.5 py-0.5 text-[10px] font-semibold normal-case tracking-normal text-sky-700 dark:bg-slate-900/70 dark:text-sky-200">
+                                Mới
+                              </span>
+                            ) : null}
+                          </span>
 
                           <span>{formatDate(event?.createdAt)}</span>
 
