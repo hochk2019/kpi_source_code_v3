@@ -13,6 +13,7 @@ Reconciliation note:
 - Reconciled again on 2026-03-29 after closing `cng-7z0.12`, `cng-7z0.13`, stale wizard bead `cng-7z0.15`, and preset-sharing slice `cng-7z0.14`; DataImporter now has worker-backed parsing, stage-level lazy loading, a shipped multi-step workflow guide, and shared filter/column presets, so the next UX-ready item in this lane is actionable failure recovery hints.
 - Reconciled again on 2026-03-29 after completing `cng-7z0.16`; DataImporter sync failures now surface actionable recovery hints in the real sync panel, and the remaining open UX work returns to backend-detached ECUS queue orchestration plus MST/navigation slices.
 - Reconciled again on 2026-03-30 after completing `cng-7z0.21`; MST assignment exports now ship CSV/XLSX outputs with latest assignee metadata derived from history, so the remaining UX backlog in this lane moves on to navigation/help work.
+- Reconciled again on 2026-03-30 after closing stale bead `cng-2k4.18`; the repo already lazy-loads `xlsx` via `src/lib/loadXlsx.js`, so the technical backlog now focuses on the remaining server-v4, module-size, and hygiene items.
 
 Rule:
 - Every unfinished item from review notes, rollout plans, decomposition plans, or UX backlogs must be in one of two states:
@@ -52,7 +53,6 @@ Source set: `Gemini_review_V1.md`, `docs/gemini-review-v1-factcheck-2026-03-25.m
 - `cng-2k4.13` — Re-verify remaining `Checklist.md` runtime gaps and refresh documentation
 - `cng-2k4.16` — Reduce `HQAgencyManager.jsx` below the module size target
 - `cng-2k4.17` — Reduce `TeamManager.jsx` below the module size target
-- `cng-2k4.18` — Lazy-load `xlsx` and trim Excel-flow bundle cost
 - `cng-2k4.22` — Restore app/runtime text and lint hygiene after backlog refactors; exclude unrelated pre-existing tool dirt
 
 ## UX Improvement Backlog
