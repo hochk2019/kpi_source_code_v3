@@ -37,13 +37,15 @@
     "dev:frontend": "vite",
     "favicon:update": "node scripts/update-favicon.mjs",
     "cert:ai": "pwsh -File ./scripts/create-ai-https-cert.ps1",
-    "precommit": "pnpm run verify:server-v4 && pnpm lint && pnpm exec vitest run --config vitest.frontend.config.mjs tests/reports.test.js tests/store.test.js tests/dataImporter.preview.test.jsx tests/storageClient.test.js",
+    "precommit": "pnpm run bd:check && pnpm run verify:server-v4 && pnpm lint && pnpm exec vitest run --config vitest.frontend.config.mjs tests/reports.test.js tests/store.test.js tests/dataImporter.preview.test.jsx tests/storageClient.test.js",
     "prepare": "pnpm exec simple-git-hooks",
     "test:screenshot": "pnpm build && pnpm exec playwright test tests/playwright/favicon.spec.js",
     "test:playwright": "pnpm exec playwright test",
     "gitnexus:analyze": "npx gitnexus analyze",
     "gitnexus:refresh": "node scripts/gitnexus-refresh.mjs",
-    "gitnexus:serve": "npx gitnexus serve --host 127.0.0.1 --port 4747"
+    "gitnexus:serve": "npx gitnexus serve --host 127.0.0.1 --port 4747",
+    "bd:safe": "node scripts/bd-safe.mjs",
+    "bd:check": "node scripts/check-bd-consistency.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.0.1",

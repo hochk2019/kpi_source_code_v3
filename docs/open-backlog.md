@@ -31,8 +31,8 @@ Current open epics:
 
 Current highest-priority ready items:
 - Backend cutover lane:
-- `cng-2k4.2` — Execute declarations write cutover with compat guard and rollback plan
-- `cng-2k4.3` — Switch production entrypoint from legacy server to server-v4
+- `cng-2k4.5` — Extract AI assistant backend routes into server-v4 ai module
+- `cng-2k4.6` — Extract alert and notification backend logic into server-v4 alerts module
 - Ready next in UX lane:
 - `cng-7z0.7` — Finish backend-detached sync queue/orchestration for ECUS imports
 

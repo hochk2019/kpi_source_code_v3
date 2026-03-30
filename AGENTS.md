@@ -9,6 +9,33 @@
 - Mỗi module mới đều cần tạo bản test. Nếu code chính thay đổi thì cũng cập nhật test cho phù hợp và ngược lại.
 - Chủ động tìm hiểu các nội dung tương tự ở dự án khác tương tự, để đề xuất cải tiến mong muốn của người dùng
 
+## Quy tắc tối ưu token va context (bat buoc)
+
+- Muc tieu van hanh: tiet kiem token toi da trong moi turn nhung van giu chat luong va toc do thuc thi cao nhat.
+- Lam viec theo `1 slice = 1 bead = 1 muc tieu` trong moi phien; khong tron nhieu lane trong cung mot turn.
+- Mac dinh chi nap context can thiet:
+  - Chi doc cac file lien quan truc tiep den slice dang lam.
+  - Uu tien `rg` de tim nhanh truoc, sau do moi mo doan nho theo line.
+  - Khong dump toan bo file lon neu khong bat buoc.
+- Gioi han output de tranh no context:
+  - Khong paste log dai; chi trich doan loi lien quan (uu tien <= 80 dong).
+  - Khong trinh bay lai noi dung da xac nhan o turn truoc, chi neu co thay doi moi.
+  - Tra loi uu tien ket qua, command verify, va tac dong; giam giai thich dai dong.
+- Duy tri "so tay ngan":
+  - `task.md` la noi giu tri nho duy nhat cho trang thai thuc thi.
+  - Moi lan chuyen slice phai cap nhat `Active Slice` + `Handoff` truoc khi lam tiep.
+  - Neu context bi nen/reset, khoi phuc tu `task.md` truoc khi thao tac code.
+- Quy tac doc/ghi:
+  - Moi thay doi code phai gioi han pham vi file ro rang truoc khi sua.
+  - Moi module moi hoac thay doi hanh vi deu can test di kem.
+  - Trach viec refactor rong khong can thiet khi user chi yeu cau fix nho.
+- Quy tac session de giam token:
+  - Sau khi xong moi slice, chot bang 5 dong: `Done`, `Verify`, `Risk`, `Decision`, `Next`.
+  - Neu can tiep tuc viec lon, tach thanh phien moi thay vi giu context qua dai.
+- Muc tieu hieu nang:
+  - Uu tien "signal over volume": it chu hon, nhieu hanh dong hon.
+  - Giam token khong duoc lam mat tinh dung dan, test, hoac kha nang rollback.
+
 ## Quy tắc dùng Skills
 
 - Nếu người dùng nhắc tên skill hoặc yêu cầu khớp mô tả skill thì **phải dùng skill** đó.
@@ -31,7 +58,16 @@ bd show <id>                          # View issue details
 bd update <id> --status in_progress   # Claim work
 bd close <id>                         # Complete work
 bd sync                               # Sync with git
+pnpm bd:safe -- ready                 # Wrapper an toan: luon chay tren canonical worktree + auto-sync mutation
+pnpm bd:check                         # Kiem tra task.md/open-backlog co lech voi BD hay khong
 ```
+
+### Quy tắc chống lệch BD giữa nhiều worktree
+
+- Ưu tiên dùng `pnpm bd:safe -- <lenh>` thay cho gọi `bd` trực tiếp khi thao tác từ Codex worktree.
+- `bd:safe` luôn resolve canonical repo root rồi mới chạy `bd`, tránh trạng thái "No git repository initialized" trong worktree tạm.
+- Các lệnh mutate (`create/update/close/...`) sẽ tự chạy `bd sync` sau khi thành công.
+- Gate `pnpm bd:check` đã được gắn vào `precommit` để chặn commit nếu `task.md`/`docs/open-backlog.md` lệch trạng thái bead.
 
 ## Backlog Hygiene
 
