@@ -151,6 +151,7 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
     applyActionFavorite,
     filteredHistoryCount,
     handleSaveActionFavorite,
+    historyEntries,
     historyFilter,
     historyFilteredRowKeys,
     historyIndex,
@@ -220,10 +221,11 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
     search,
     staffFilter,
   });
-  const { exportRowsToExcel } = useMSTAssignmentExportWorkspace({
+  const { exportRowsToCsv, exportRowsToExcel } = useMSTAssignmentExportWorkspace({
     rows,
     filteredRows: filtered,
     computeStatusDisplay,
+    historyEntries,
   });
 
   const {
@@ -408,17 +410,33 @@ export default function MSTAssignment({ canEdit = true, currentUser = null }) {
                 type="button"
                 onClick={() => exportRowsToExcel("filtered")}
                 className="px-3 py-1 rounded border bg-white hover:bg-gray-50"
-                data-tooltip="Xuất ra Excel các dòng đang hiển thị theo bộ lọc hiện tại"
+                data-tooltip="Xuất XLSX các dòng đang hiển thị kèm metadata người gán và mốc cập nhật gần nhất"
               >
-                Export (lọc)
+                XLSX (lọc)
+              </button>
+              <button
+                type="button"
+                onClick={() => exportRowsToCsv("filtered")}
+                className="px-3 py-1 rounded border bg-white hover:bg-gray-50"
+                data-tooltip="Xuất CSV các dòng đang hiển thị kèm metadata người gán và mốc cập nhật gần nhất"
+              >
+                CSV (lọc)
               </button>
               <button
                 type="button"
                 onClick={() => exportRowsToExcel("all")}
                 className="px-3 py-1 rounded border bg-white hover:bg-gray-50"
-                data-tooltip="Xuất ra Excel toàn bộ danh sách đang quản lý"
+                data-tooltip="Xuất XLSX toàn bộ danh sách đang quản lý kèm metadata người gán và mốc cập nhật gần nhất"
               >
-                Export (tất cả)
+                XLSX (tất cả)
+              </button>
+              <button
+                type="button"
+                onClick={() => exportRowsToCsv("all")}
+                className="px-3 py-1 rounded border bg-white hover:bg-gray-50"
+                data-tooltip="Xuất CSV toàn bộ danh sách đang quản lý kèm metadata người gán và mốc cập nhật gần nhất"
+              >
+                CSV (tất cả)
               </button>
               {canEdit ? (
                 <button

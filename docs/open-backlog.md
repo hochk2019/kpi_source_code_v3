@@ -1,6 +1,6 @@
 # Open Backlog
 
-Last reconciled: 2026-03-29
+Last reconciled: 2026-03-30
 
 This file is the canonical source of truth for unfinished work in this repo.
 
@@ -12,6 +12,7 @@ Reconciliation note:
 - Reconciled again on 2026-03-29 after completing `cng-7z0.11`; recent sync history is now persisted in the ECUS sync queue state and surfaced in-panel, while notification/dashboard consumers remain deferred to later slices.
 - Reconciled again on 2026-03-29 after closing `cng-7z0.12`, `cng-7z0.13`, stale wizard bead `cng-7z0.15`, and preset-sharing slice `cng-7z0.14`; DataImporter now has worker-backed parsing, stage-level lazy loading, a shipped multi-step workflow guide, and shared filter/column presets, so the next UX-ready item in this lane is actionable failure recovery hints.
 - Reconciled again on 2026-03-29 after completing `cng-7z0.16`; DataImporter sync failures now surface actionable recovery hints in the real sync panel, and the remaining open UX work returns to backend-detached ECUS queue orchestration plus MST/navigation slices.
+- Reconciled again on 2026-03-30 after completing `cng-7z0.21`; MST assignment exports now ship CSV/XLSX outputs with latest assignee metadata derived from history, so the remaining UX backlog in this lane moves on to navigation/help work.
 
 Rule:
 - Every unfinished item from review notes, rollout plans, decomposition plans, or UX backlogs must be in one of two states:
@@ -66,8 +67,6 @@ Source set: `docs/ux-improvement-backlog.md`
 - `cng-7z0.7` — Add background sync queue with resume support for ECUS imports
 
 ### MST Assignment And Staffing
-
-- `cng-7z0.21` — Export MST assignment report with assignment metadata
 
 ### Navigation And Notifications
 

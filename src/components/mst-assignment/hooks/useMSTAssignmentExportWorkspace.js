@@ -1,6 +1,7 @@
 import { useCallback } from "react";
 
 import { loadXlsx } from "@/lib/loadXlsx.js";
+import { buildMSTAssignmentExportRows } from "@/components/mst-assignment/model/exportDataset.js";
 
 function createExportTimestamp(now) {
   return `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(
@@ -15,55 +16,78 @@ function defaultAlert(message) {
   globalThis.alert?.(message);
 }
 
+function normalizeExportScope(scope) {
+  return scope === "all" ? "all" : "filtered";
+}
+
+function normalizeExportFormat(format) {
+  return format === "csv" ? "csv" : "xlsx";
+}
+
 export default function useMSTAssignmentExportWorkspace({
   rows,
   filteredRows,
   computeStatusDisplay,
+  historyEntries = [],
   alertFn = defaultAlert,
   nowFn = () => new Date(),
   xlsx = null,
   xlsxLoader = loadXlsx,
 }) {
-  const exportRowsToExcel = useCallback(
-    async (scope = "filtered") => {
-      const source = scope === "all" ? rows : filteredRows;
+  const exportRows = useCallback(
+    async ({ scope = "filtered", format = "xlsx" } = {}) => {
+      const normalizedScope = normalizeExportScope(scope);
+      const normalizedFormat = normalizeExportFormat(format);
+      const source = normalizedScope === "all" ? rows : filteredRows;
 
       if (!source.length) {
-        alertFn("Không có dữ liệu để xuất Excel.");
+        alertFn("Không có dữ liệu để xuất báo cáo.");
         return;
       }
 
       try {
         const activeXlsx = xlsx ?? (await xlsxLoader());
-        const data = source.map((item, index) => ({
-          STT: index + 1,
-          MST: item.mst,
-          "Công ty": item.company || "",
-          "Người phụ trách Nhập": item.person_import || "",
-          "Người phụ trách Xuất": item.person_export || "",
-          "Tổ đội": item.team || "",
-          "Áp dụng từ ngày": item.effective_from || "",
-          "Đến hết ngày": item.effective_to || "",
-          "Trạng thái": computeStatusDisplay(item) || item.status || "",
-        }));
+        const data = buildMSTAssignmentExportRows({
+          rows: source,
+          computeStatusDisplay,
+          historyEntries,
+        });
 
         const worksheet = activeXlsx.utils.json_to_sheet(data);
         const workbook = activeXlsx.utils.book_new();
         activeXlsx.utils.book_append_sheet(workbook, worksheet, "Gan MST");
 
-        const suffix = scope === "all" ? "toan-bo" : "loc";
+        const suffix = normalizedScope === "all" ? "toan-bo" : "loc";
         const timestamp = createExportTimestamp(nowFn());
+        const fileName = `gan-mst-${suffix}-${timestamp}.${normalizedFormat}`;
 
-        activeXlsx.writeFile(workbook, `gan-mst-${suffix}-${timestamp}.xlsx`);
+        if (normalizedFormat === "csv") {
+          activeXlsx.writeFile(workbook, fileName, { bookType: "csv" });
+          return;
+        }
+
+        activeXlsx.writeFile(workbook, fileName);
       } catch (error) {
         console.error(error);
-        alertFn("Không thể xuất Excel lúc này.");
+        alertFn("Không thể xuất báo cáo lúc này.");
       }
     },
-    [alertFn, computeStatusDisplay, filteredRows, nowFn, rows, xlsx, xlsxLoader]
+    [alertFn, computeStatusDisplay, filteredRows, historyEntries, nowFn, rows, xlsx, xlsxLoader]
+  );
+
+  const exportRowsToExcel = useCallback(
+    async (scope = "filtered") => exportRows({ scope, format: "xlsx" }),
+    [exportRows]
+  );
+
+  const exportRowsToCsv = useCallback(
+    async (scope = "filtered") => exportRows({ scope, format: "csv" }),
+    [exportRows]
   );
 
   return {
+    exportRows,
+    exportRowsToCsv,
     exportRowsToExcel,
   };
 }
