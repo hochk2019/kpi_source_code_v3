@@ -3,6 +3,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import useAsyncRequest from '@/hooks/useAsyncRequest.js';
 
 import { fetchWithAuth } from '@/auth/localAuth.js';
+import { API_V4_ROUTES } from '@/lib/apiRoutes.js';
 
 import { toast } from '@/shared/toast.js';
 
@@ -168,7 +169,7 @@ export default function ExportAuditReport() {
     if (params.kind && params.kind !== 'all') query.set('kind', params.kind);
     if (params.search) query.set('search', params.search);
 
-    const response = await fetchWithAuth(`/api/reports/export/audit?${query.toString()}`, { signal });
+    const response = await fetchWithAuth(`${API_V4_ROUTES.reporting.exportsAudit}?${query.toString()}`, { signal });
     let payload = null;
 
     try {

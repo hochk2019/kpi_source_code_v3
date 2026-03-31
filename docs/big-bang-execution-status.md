@@ -28,8 +28,8 @@ Moi phien moi, moi tai khoan moi, bat buoc doc file nay truoc khi code.
 | PLAN lane | Bead | Status | Evidence | Remaining |
 |---|---|---|---|---|
 | Week 1 - Contract + Architecture freeze | `cng-mbu.1` | Done | [docs/api-contract-v4-migration-plan.md](/E:/GPT/kpi_source_code_v4/docs/api-contract-v4-migration-plan.md), [docs/server-v4-rollout-plan-2026-03-25.md](/E:/GPT/kpi_source_code_v4/docs/server-v4-rollout-plan-2026-03-25.md) | Da lock inventory + envelope + permission + pagination + ownership matrix cho W2/W3 |
-| Week 2-3 - Backend full modularization | `cng-mbu.2` | In Progress | `server-v4/src/modules/{ai,alerts,auth,backup,data-health,duplicate-policy,filter-presets,feedback-training,declarations,...}`, [docs/api-contract-v4-migration-plan.md](/E:/GPT/kpi_source_code_v4/docs/api-contract-v4-migration-plan.md) | Data-health + duplicate-policy + filter-presets + feedback-training module da co canonical route; con rules-history, export parity, notifications parity |
-| Week 3-5 - Frontend redesign + canonical client | `cng-mbu.3` | Not Started | [docs/api-contract-v4-migration-plan.md](/E:/GPT/kpi_source_code_v4/docs/api-contract-v4-migration-plan.md), `api:contract:report` | Chuyen caller FE sang route canonical theo tung domain lane khi backend da mo route |
+| Week 2-3 - Backend full modularization | `cng-mbu.2` | Done | `server-v4/src/modules/{ai,alerts,auth,backup,data-health,duplicate-policy,filter-presets,feedback-training,declarations,reporting,rules,...}`, [docs/api-contract-v4-migration-plan.md](/E:/GPT/kpi_source_code_v4/docs/api-contract-v4-migration-plan.md) | Da hoan tat lane backend modularization theo W2-3 scope |
+| Week 3-5 - Frontend redesign + canonical client | `cng-mbu.3` | In Progress | [docs/api-contract-v4-migration-plan.md](/E:/GPT/kpi_source_code_v4/docs/api-contract-v4-migration-plan.md), `api:contract:report` | Da chuyen FE lanes data-health, duplicate-policy, filter-presets, feedback-training, rules-history, reports-export/audit; con legacy callers AI + notifications va cleanup legacy route map |
 | Week 5-6 - Integration + parity | `cng-mbu.4` | Not Started | Gate da dinh nghia trong [docs/operations/v4-rollout-plan.md](/E:/GPT/kpi_source_code_v4/docs/operations/v4-rollout-plan.md) | Chay adapter-vs-canonical parity + migration rehearsal |
 | Week 6-7 - Hardening + UAT | `cng-mbu.5` | Not Started | QA matrix san co | Chay full regression, a11y, perf, security smoke, UAT 2 nhom |
 | Week 8 - Big-bang cutover + hypercare | `cng-mbu.7` | Not Started | Rollout stages + fallback da co | Freeze, preflight, cutover, 7-day hypercare |
@@ -61,8 +61,8 @@ Moi phien moi, moi tai khoan moi, bat buoc doc file nay truoc khi code.
 ## Current Observable Metrics
 
 - `pnpm run api:contract:report` (2026-03-31):
-  - canonical routes: `27`
-  - legacy routes: `22`
+  - canonical routes: `37`
+  - legacy routes: `19`
 - `pnpm run api:contract:gate`:
   - expected fail cho den khi legacy usage = `0`
 

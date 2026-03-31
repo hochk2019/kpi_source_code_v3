@@ -316,6 +316,33 @@ const test = base.extend({
       };
 
     });
+    handlerMap.set('POST /api/v4/reporting/exports', ({ init }) => {
+
+      const payload = safeParse(init?.body, {});
+
+      apiEvents.reportExports.push(payload);
+
+      const buffer = Buffer.from('mock-excel');
+
+      return {
+
+        ok: true,
+
+        status: 200,
+
+        body: buffer,
+
+        headers: {
+
+          'content-type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+
+          'content-disposition': "attachment; filename=bao-cao-kpi.xlsx",
+
+        },
+
+      };
+
+    });
 
 
 

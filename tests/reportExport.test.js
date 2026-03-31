@@ -57,8 +57,9 @@ describe('reportExport client', () => {
       summary: { decls: 99 },
     });
 
-    const [, requestInit] = fetchWithAuth.mock.calls[0];
+    const [requestedUrl, requestInit] = fetchWithAuth.mock.calls[0];
     const body = JSON.parse(requestInit.body);
+    expect(new URL(requestedUrl, 'https://example.com').pathname).toBe('/api/v4/reporting/exports');
 
     expect(body).toEqual({
       kind: 'allStaff',

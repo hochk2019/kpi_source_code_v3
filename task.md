@@ -24,6 +24,8 @@
   - da ship slice dau frontend canonicalization cho lanes `data-health`, `duplicate-policy`, `filter-presets`, `feedback-training`: caller o `DataHealthDashboard`, `useFilterPresets`, `feedbackClient` da chuyen sang `/api/v4/*` route constants
   - da cap nhat demo routing fallback cho canonical feedback/data-health/policy route trong `src/demo/demoMode.js`
   - da cap nhat regression `tests/apiRoutes.test.js`, `tests/dataHealthDashboard.test.jsx`, `tests/dataImporter.preview.test.jsx`
+  - da ship slice tiep theo frontend canonicalization cho lanes `rules-history` + `reports-export/audit`: caller o `rules.js`, `reportExport.js`, `ExportAuditReport.jsx`, va `AuditLog.jsx` da chuyen sang route constants `/api/v4/rules/history` + `/api/v4/reporting/*`
+  - da cap nhat regression `tests/reportExport.test.js`, `tests/ExportAuditReport.test.jsx`, `tests/auditLog.test.jsx`, `tests/apiRoutes.test.js`, va Playwright fixture `tests/playwright/fixtures.js` cho endpoint export canonical
 
 ## Handoff
 
@@ -37,6 +39,7 @@
 - Decision: tu gio theo doi tien do big-bang bang epic `cng-mbu` va board `docs/big-bang-execution-status.md`; moi lane tuan bat buoc co bead + gate + evidence.
 - Decision tiep theo (owner request): giam tan suat commit, gom theo lane/slice lon (khong commit moi thay doi nho).
 - Next: tiep tuc slice ke tiep cua `cng-mbu.3` cho `rules-history` + `reports-export/audit` frontend clients sang route canonical `/api/v4/reporting/*` va `/api/v4/rules/history`.
+ - Next: tiep tuc slice ke tiep cua `cng-mbu.3` de giam legacy usage con lai theo `api:contract:report` (uu tien `src/lib/aiClient.js` va `src/lib/notificationClient.js`), sau do danh gia dong/giu `API_LEGACY_ROUTES`.
 ## Recent Completed Slices
 
 - `cng-7z0.30` da hoan tat storage sync error hardening:

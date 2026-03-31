@@ -3,7 +3,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "@/shared/toast";
 
 import { fetchWithAuth } from '@/auth/localAuth.js';
-import { API_LEGACY_ROUTES, API_V4_ROUTES } from '@/lib/apiRoutes.js';
+import { API_V4_ROUTES } from '@/lib/apiRoutes.js';
 
 
 
@@ -688,8 +688,8 @@ export default function AuditLog({ currentUser }) {
       const query = params.toString();
 
       const endpoint = query
-        ? `${API_LEGACY_ROUTES.auditExport}?${query}`
-        : API_LEGACY_ROUTES.auditExport;
+        ? `${API_V4_ROUTES.reporting.adminAuditExport}?${query}`
+        : API_V4_ROUTES.reporting.adminAuditExport;
 
       const response = await fetchWithAuth(endpoint, {
 

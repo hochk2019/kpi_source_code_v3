@@ -1,4 +1,7 @@
 export const API_V4_ROUTES = Object.freeze({
+  rules: Object.freeze({
+    history: '/api/v4/rules/history',
+  }),
   dataHealth: Object.freeze({
     summary: '/api/v4/data-health/summary',
   }),
@@ -12,6 +15,11 @@ export const API_V4_ROUTES = Object.freeze({
     trainingResources: '/api/v4/feedback-training/training-resources',
     feedback: '/api/v4/feedback-training/feedback',
     feedbackSummary: '/api/v4/feedback-training/feedback/summary',
+  }),
+  reporting: Object.freeze({
+    exports: '/api/v4/reporting/exports',
+    exportsAudit: '/api/v4/reporting/exports/audit',
+    adminAuditExport: '/api/v4/reporting/audit/export',
   }),
   hqAgencies: Object.freeze({
     history: '/api/v4/hq-agencies/history',

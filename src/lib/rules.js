@@ -31,6 +31,7 @@ import {
 import { getItem as getStorageItem, setItem as setStorageItem } from './storageClient.js';
 
 import { fetchWithAuth } from '../auth/localAuth.js';
+import { API_V4_ROUTES } from './apiRoutes.js';
 
 import {
 
@@ -700,7 +701,7 @@ export async function fetchRulesHistoryFromServer({ signal } = {}) {
 
   try {
 
-    const response = await fetchWithAuth('/api/rules/history', { signal });
+    const response = await fetchWithAuth(API_V4_ROUTES.rules.history, { signal });
 
     const data = await response.json();
 

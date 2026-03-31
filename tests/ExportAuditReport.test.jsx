@@ -219,7 +219,7 @@ describe('ExportAuditReport', () => {
 
 
 
-    expect(url.pathname).toBe('/api/reports/export/audit');
+    expect(url.pathname).toBe('/api/v4/reporting/exports/audit');
 
     expect(url.searchParams.get('limit')).toBe('50');
 

@@ -1,4 +1,5 @@
 import { fetchWithAuth } from '../auth/localAuth.js';
+import { API_V4_ROUTES } from './apiRoutes.js';
 
 function ensureWindow() {
 
@@ -138,7 +139,7 @@ async function requestExport(kind, payload, fallbackFilename) {
 
 
 
-  const response = await fetchWithAuth(buildUrl("/api/reports/export"), {
+  const response = await fetchWithAuth(buildUrl(API_V4_ROUTES.reporting.exports), {
 
     method: "POST",
 
