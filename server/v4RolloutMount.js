@@ -11,6 +11,7 @@ export const WAVE2_V4_MODULE_IDS = Object.freeze([
   'alerts',
   'backup',
   'data-health',
+  'duplicate-policy',
 ]);
 
 export const LEGACY_V4_MODULE_IDS = Object.freeze([

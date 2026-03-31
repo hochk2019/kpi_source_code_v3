@@ -94,7 +94,7 @@ Nguồn chính: controllers/services ở `declarations`, `hq-agencies`, `kpi-adj
 | Domain | Current frontend route(s) | Target state | Note |
 |---|---|---|---|
 | Data health | `/api/data-health/summary` | `/api/v4/data-health/summary` | Da co module `server-v4`; chua migrate frontend caller |
-| Duplicate policy | `/api/duplicate-policy` | `/api/v4/...` | Chưa có module `server-v4` tương ứng |
+| Duplicate policy | `/api/duplicate-policy` | `/api/v4/duplicate-policy` | Da co module `server-v4`; chua migrate frontend caller |
 | Filter presets | `/api/filter-presets*` | `/api/v4/...` | Cần backend module hoá |
 | Feedback/training | `/api/training-resources`, `/api/feedback*` | `/api/v4/...` | Hiện đang bám legacy store |
 | AI assistant | `/api/ai/*` | `/api/v4/ai/*` | Có thể migrate theo từng subdomain |
@@ -107,7 +107,7 @@ Phan vi domain duoi day duoc freeze de trien khai, khong doi ten lane trong qua 
 | Domain lane | Backend ownership (`cng-mbu.2`) | Frontend ownership (`cng-mbu.3`) | Done when |
 |---|---|---|---|
 | data-health | Tao module `server-v4` + compat adapter `/api/data-health/*` | Chuyen UI qua route canonical trong `apiRoutes` | Frontend khong goi legacy route nua |
-| duplicate-policy | Tao module `server-v4` + contract policy API | Chuyen cac man hinh rule/policy sang canonical route | `api:contract:report` khong con route legacy lane nay |
+| duplicate-policy | Da co module `server-v4` + contract policy API (`GET/PUT /api/v4/duplicate-policy`) | Chuyen cac man hinh rule/policy sang canonical route | `api:contract:report` khong con route legacy lane nay |
 | filter-presets | Tach persistence module + canonical `/api/v4/filter-presets*` | Chuyen hooks/preset client sang canonical | Preset CRUD parity voi legacy |
 | feedback-training | Tach module training-resources/feedback | Chuyen feedback client ve canonical API | Dashboard feedback khong phu thuoc legacy |
 | ai-assistant canonicalization | Chuan hoa route contract cho AI module (giu compat neu can) | Chuyen `aiClient` sang route canonical da freeze | Khong con legacy-only endpoint trong AI lane |

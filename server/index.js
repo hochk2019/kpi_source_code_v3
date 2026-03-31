@@ -308,6 +308,144 @@ async function mountReportingV4App(targetApp) {
       dataHealth: {
         readDataHealthSnapshot: () => getDataHealthSnapshot(),
       },
+      duplicatePolicy: {
+        readDuplicatePolicySnapshot: async () => {
+          const config = getDuplicatePolicyConfig();
+          const state = getDuplicatePolicyState();
+          const summary = summarizeDuplicateGroups(getDeclRows(), { lockedSources: state.lockedSources });
+          const lockedSources = Object.entries(state.lockedSources || {}).map(([source, meta]) => ({
+            source,
+            lockedAt: meta?.lockedAt || null,
+            lockedBy: meta?.lockedBy || null,
+            reason: meta?.reason || '',
+            note: meta?.note || '',
+            auto: meta?.auto === true,
+            manual: meta?.manual === true,
+            unlockedAt: meta?.unlockedAt || null,
+            unlockedBy: meta?.unlockedBy || null,
+          }));
+
+          return {
+            config,
+            state: {
+              lastEvaluatedAt: state.lastEvaluatedAt || null,
+              notifiedCount: Object.keys(state.notifiedGroups || {}).length,
+              lockedSources,
+            },
+            summary: {
+              statusCounts: summary.statusCounts,
+              sourceBreakdown: summary.sourceBreakdown,
+            },
+          };
+        },
+        updateDuplicatePolicySnapshot: async ({ actor = 'system', body = {} } = {}) => {
+          let config = getDuplicatePolicyConfig();
+          if (body.config && typeof body.config === 'object') {
+            config = saveDuplicatePolicyConfig(body.config, { actor });
+          }
+
+          let state = getDuplicatePolicyState();
+          let stateChanged = false;
+          const nextLocked = { ...(state.lockedSources || {}) };
+
+          if (Array.isArray(body.unlockSources)) {
+            for (const entry of body.unlockSources) {
+              const key = normalizeDuplicateSourceKey(entry);
+              if (!key) continue;
+
+              if (nextLocked[key]) {
+                delete nextLocked[key];
+                stateChanged = true;
+                pushNotification({
+                  type: 'duplicate.policy.unlock',
+                  severity: 'success',
+                  title: `Mở khóa nguồn ${key}`,
+                  message: `Nguồn ${key} được mở khóa thủ công bởi ${actor}.`,
+                  meta: { source: key, actor },
+                });
+                pushAuditLog({
+                  actor,
+                  action: 'duplicate.policy.unlock',
+                  detail: `Mở khóa nguồn ${key} thủ công`,
+                });
+              }
+            }
+          }
+
+          if (Array.isArray(body.lockSources)) {
+            for (const entry of body.lockSources) {
+              if (!entry) continue;
+              const sourceKey = normalizeDuplicateSourceKey(entry.source || entry.name || entry.key || entry);
+              if (!sourceKey) continue;
+
+              const note = typeof entry.note === 'string' ? entry.note : '';
+              const reason =
+                typeof entry.reason === 'string' && entry.reason.trim()
+                  ? entry.reason.trim()
+                  : 'Khóa thủ công bởi quản trị viên';
+              nextLocked[sourceKey] = {
+                lockedAt: new Date().toISOString(),
+                lockedBy: actor,
+                reason,
+                note,
+                auto: false,
+                manual: true,
+                unlockedAt: null,
+                unlockedBy: null,
+              };
+              pushNotification({
+                type: 'duplicate.policy.lock',
+                severity: 'warning',
+                title: `Khóa nguồn ${sourceKey}`,
+                message: `Nguồn ${sourceKey} bị khóa thủ công bởi ${actor}.`,
+                meta: { source: sourceKey, actor },
+              });
+              pushAuditLog({
+                actor,
+                action: 'duplicate.policy.lock',
+                detail: `Khóa nguồn ${sourceKey} thủ công`,
+              });
+              stateChanged = true;
+            }
+          }
+
+          if (stateChanged) {
+            state = { ...state, lockedSources: nextLocked };
+            saveDuplicatePolicyState(state, { actor, source: 'duplicate-policy-manual' });
+          }
+
+          const evaluation = evaluateDuplicatePolicies({ config, state, actor, force: true });
+          const effectiveState = evaluation?.state || state;
+          const summary =
+            evaluation?.summary ||
+            summarizeDuplicateGroups(getDeclRows(), {
+              lockedSources: effectiveState.lockedSources,
+            });
+          const lockedSources = Object.entries(effectiveState.lockedSources || {}).map(([source, meta]) => ({
+            source,
+            lockedAt: meta?.lockedAt || null,
+            lockedBy: meta?.lockedBy || null,
+            reason: meta?.reason || '',
+            note: meta?.note || '',
+            auto: meta?.auto === true,
+            manual: meta?.manual === true,
+            unlockedAt: meta?.unlockedAt || null,
+            unlockedBy: meta?.unlockedBy || null,
+          }));
+
+          return {
+            config,
+            state: {
+              lastEvaluatedAt: effectiveState.lastEvaluatedAt || null,
+              lockedSources,
+            },
+            summary: {
+              statusCounts: summary.statusCounts,
+              sourceBreakdown: summary.sourceBreakdown,
+            },
+          };
+        },
+      },
     });
 
     targetApp.use(v4App);

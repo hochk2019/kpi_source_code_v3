@@ -63,12 +63,21 @@ describe('legacy server-v4 module selection', () => {
       { id: 'kpi-adjustments' },
       { id: 'alerts' },
       { id: 'backup' },
+      { id: 'data-health' },
+      { id: 'duplicate-policy' },
       { id: 'declarations' },
     ];
 
     const result = selectLegacyV4Modules(moduleCatalog);
 
-    expect(WAVE2_V4_MODULE_IDS).toEqual(['kpi-rules', 'kpi-adjustments', 'alerts', 'backup']);
+    expect(WAVE2_V4_MODULE_IDS).toEqual([
+      'kpi-rules',
+      'kpi-adjustments',
+      'alerts',
+      'backup',
+      'data-health',
+      'duplicate-policy',
+    ]);
     expect(LEGACY_V4_MODULE_IDS).toEqual([
       'reporting',
       'teams',
@@ -78,6 +87,8 @@ describe('legacy server-v4 module selection', () => {
       'kpi-adjustments',
       'alerts',
       'backup',
+      'data-health',
+      'duplicate-policy',
     ]);
     expect(result.selectedModules.map((entry) => entry.id)).toEqual(LEGACY_V4_MODULE_IDS);
     expect(result.missingModuleIds).toEqual([]);
@@ -91,6 +102,7 @@ describe('legacy server-v4 module selection', () => {
       { id: 'hq-agencies' },
       { id: 'kpi-rules' },
       { id: 'alerts' },
+      { id: 'data-health' },
     ];
 
     const result = selectLegacyV4Modules(moduleCatalog);
@@ -102,7 +114,8 @@ describe('legacy server-v4 module selection', () => {
       'hq-agencies',
       'kpi-rules',
       'alerts',
+      'data-health',
     ]);
-    expect(result.missingModuleIds).toEqual(['kpi-adjustments', 'backup']);
+    expect(result.missingModuleIds).toEqual(['kpi-adjustments', 'backup', 'duplicate-policy']);
   });
 });

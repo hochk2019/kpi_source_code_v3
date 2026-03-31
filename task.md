@@ -20,8 +20,9 @@
   - da sign-off `cng-mbu.1` va lock ownership matrix cho W2/W3 trong `docs/api-contract-v4-migration-plan.md`
   - da chuyen board `docs/big-bang-execution-status.md` sang trang thai Week1=Done, Week2-3=In Progress
   - da ship lane dau W2: module `data-health` trong `server-v4` voi canonical route `GET /api/v4/data-health/summary`
+  - da ship lane tiep theo W2: module `duplicate-policy` trong `server-v4` voi canonical routes `GET/PUT /api/v4/duplicate-policy`
   - da wire mount legacy runtime (`server/v4RolloutMount.js`, `mountReportingV4App`) de route moi co mat trong v4 app khi mount wave hien tai
-  - da bo sung regression `tests/server-v4/dataHealthRoutes.test.js` va cap nhat `tests/server-v4/v4RolloutStatus.test.js`
+  - da bo sung regression `tests/server-v4/dataHealthRoutes.test.js`, `tests/server-v4/duplicatePolicyRoutes.test.js` va cap nhat rollout/module matrix tests
 
 ## Handoff
 
@@ -33,8 +34,8 @@
   - `pnpm bd:check` (nhat quan task.md/open-backlog/BD)
 - Risk: neu khong duy tri 3 nguon truth (`bd`, `task.md`, `docs/big-bang-execution-status.md`) thi se lap lai tinh trang "epic dong som" du plan chua xong.
 - Decision: tu gio theo doi tien do big-bang bang epic `cng-mbu` va board `docs/big-bang-execution-status.md`; moi lane tuan bat buoc co bead + gate + evidence.
-- Decision tiep theo (owner request): auto-commit sau moi bead/slice hoan tat, commit tach rieng theo tung bead.
-- Next: tiep tuc `cng-mbu.2` voi lane `duplicate-policy` canonical module + compat wiring, sau do den `filter-presets`.
+- Decision tiep theo (owner request): giam tan suat commit, gom theo lane/slice lon (khong commit moi thay doi nho).
+- Next: tiep tuc `cng-mbu.2` voi lane `filter-presets` canonical module + compat wiring.
 ## Recent Completed Slices
 
 - `cng-7z0.30` da hoan tat storage sync error hardening:

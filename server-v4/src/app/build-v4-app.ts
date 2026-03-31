@@ -11,6 +11,7 @@ import {
 } from '../modules/backup/backupRuntime.js';
 import { buildDataHealthRouter } from '../modules/data-health/dataHealthRoutes.js';
 import { buildDeclarationsRouter } from '../modules/declarations/declarationsRoutes.js';
+import { buildDuplicatePolicyRouter } from '../modules/duplicate-policy/duplicatePolicyRoutes.js';
 import type { EcusSqlHealthCheck } from '../modules/declarations/declarationsEcusSyncService.js';
 import type { CoDiscrepancyRunner } from '../modules/declarations/ecusCoDiscrepancyRunner.js';
 import { buildHqAgenciesRouter } from '../modules/hq-agencies/hqAgenciesRoutes.js';
@@ -48,6 +49,21 @@ export type BuildV4AppOptions = ServerV4ConfigInput & {
   backup?: BackupAdminRuntime;
   dataHealth?: {
     readDataHealthSnapshot?: () => Promise<unknown>;
+  };
+  duplicatePolicy?: {
+    readDuplicatePolicySnapshot?: () => Promise<{
+      config: unknown;
+      state: unknown;
+      summary: unknown;
+    }>;
+    updateDuplicatePolicySnapshot?: (input: {
+      actor: string;
+      body: Record<string, unknown>;
+    }) => Promise<{
+      config: unknown;
+      state: unknown;
+      summary: unknown;
+    }>;
   };
 };
 
@@ -96,6 +112,7 @@ export function buildV4App(input?: readonly DomainModule[] | BuildV4AppOptions):
     'kpi-adjustments',
     'backup',
     'data-health',
+    'duplicate-policy',
     'declarations',
     'hq-agencies',
     'mst-assignments',
@@ -174,6 +191,14 @@ export function buildV4App(input?: readonly DomainModule[] | BuildV4AppOptions):
       app.use(
         domainModule.basePath,
         buildDataHealthRouter(domainModule, persistence.authStore, options.dataHealth),
+      );
+      continue;
+    }
+
+    if (domainModule.id === 'duplicate-policy') {
+      app.use(
+        domainModule.basePath,
+        buildDuplicatePolicyRouter(domainModule, persistence.authStore, options.duplicatePolicy),
       );
       continue;
     }

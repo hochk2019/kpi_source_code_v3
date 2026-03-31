@@ -9,6 +9,7 @@ describe('server-v4 module catalog', () => {
       'auth',
       'backup',
       'data-health',
+      'duplicate-policy',
       'declarations',
       'mst-assignments',
       'teams',
