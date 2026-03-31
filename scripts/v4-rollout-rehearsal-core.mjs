@@ -6,6 +6,13 @@ export const ROLLOUT_METADATA_ENDPOINT = "/api/v4/meta/rollout";
 export const DEFAULT_REHEARSAL_BASE_URL = "http://127.0.0.1:5000";
 export const DEFAULT_REHEARSAL_OUT_DIR = "docs/operations/v4-rollout-evidence";
 export const DEFAULT_REHEARSAL_TIMEOUT_MS = 15_000;
+export const DEFAULT_REHEARSAL_BASE_URL_CANDIDATES = Object.freeze([
+  "http://127.0.0.1:5000",
+  "http://127.0.0.1:5001",
+  "http://127.0.0.1:5050",
+  "http://127.0.0.1:5173",
+  "http://127.0.0.1:3000",
+]);
 
 function parseStringFlag(rawArgs, index, flagName) {
   const value = rawArgs[index + 1];
@@ -25,6 +32,17 @@ function parseTimeoutMs(value) {
     throw new Error(`Gia tri timeout khong hop le: ${value}.`);
   }
   return parsed;
+}
+
+function parseBaseUrlCandidates(value) {
+  const entries = value
+    .split(",")
+    .map((entry) => normalizeBaseUrl(entry.trim()))
+    .filter(Boolean);
+  if (entries.length === 0) {
+    throw new Error("Danh sach --base-url-candidates rong.");
+  }
+  return entries;
 }
 
 function normalizeCheckStatus(status) {
@@ -56,12 +74,14 @@ export function buildEvidenceBasename({ capturedAt, label }) {
 export function parseRolloutRehearsalArgs(rawArgs) {
   const parsed = {
     baseUrl: DEFAULT_REHEARSAL_BASE_URL,
+    baseUrlCandidates: [...DEFAULT_REHEARSAL_BASE_URL_CANDIDATES],
     outDir: DEFAULT_REHEARSAL_OUT_DIR,
     label: "manual",
     expectedStage: null,
     timeoutMs: DEFAULT_REHEARSAL_TIMEOUT_MS,
     dryRun: false,
     allowFailedGates: false,
+    discoverBaseUrl: false,
   };
 
   for (let index = 0; index < rawArgs.length; index += 1) {
@@ -74,8 +94,19 @@ export function parseRolloutRehearsalArgs(rawArgs) {
       parsed.allowFailedGates = true;
       continue;
     }
+    if (arg === "--discover-base-url") {
+      parsed.discoverBaseUrl = true;
+      continue;
+    }
     if (arg === "--base-url") {
       parsed.baseUrl = normalizeBaseUrl(parseStringFlag(rawArgs, index, "--base-url"));
+      index += 1;
+      continue;
+    }
+    if (arg === "--base-url-candidates") {
+      parsed.baseUrlCandidates = parseBaseUrlCandidates(
+        parseStringFlag(rawArgs, index, "--base-url-candidates"),
+      );
       index += 1;
       continue;
     }
@@ -291,18 +322,33 @@ export async function fetchJsonWithTimeout(
 
 export async function captureRolloutRehearsalSnapshot({
   baseUrl = DEFAULT_REHEARSAL_BASE_URL,
+  discoverBaseUrl = false,
+  baseUrlCandidates = DEFAULT_REHEARSAL_BASE_URL_CANDIDATES,
   label = "manual",
   expectedStage = null,
   timeoutMs = DEFAULT_REHEARSAL_TIMEOUT_MS,
   fetchImpl = fetch,
   capturedAt,
 } = {}) {
-  const normalizedBaseUrl = normalizeBaseUrl(baseUrl);
+  const resolution = discoverBaseUrl
+    ? await resolveRehearsalBaseUrl({
+        baseUrl,
+        candidates: baseUrlCandidates,
+        fetchImpl,
+        timeoutMs,
+      })
+    : {
+        resolvedBaseUrl: normalizeBaseUrl(baseUrl),
+        probeHealthPayload: null,
+      };
+  const normalizedBaseUrl = resolution.resolvedBaseUrl;
   const healthUrl = `${normalizedBaseUrl}${ROLLOUT_HEALTH_ENDPOINT}`;
   const rolloutUrl = `${normalizedBaseUrl}${ROLLOUT_METADATA_ENDPOINT}`;
 
   const [healthPayload, rolloutPayload] = await Promise.all([
-    fetchJsonWithTimeout(healthUrl, { fetchImpl, timeoutMs }),
+    resolution.probeHealthPayload
+      ? Promise.resolve(resolution.probeHealthPayload)
+      : fetchJsonWithTimeout(healthUrl, { fetchImpl, timeoutMs }),
     fetchJsonWithTimeout(rolloutUrl, { fetchImpl, timeoutMs }),
   ]);
 
@@ -314,6 +360,51 @@ export async function captureRolloutRehearsalSnapshot({
     rolloutPayload,
     capturedAt,
   });
+}
+
+export async function resolveRehearsalBaseUrl({
+  baseUrl = DEFAULT_REHEARSAL_BASE_URL,
+  candidates = DEFAULT_REHEARSAL_BASE_URL_CANDIDATES,
+  fetchImpl = fetch,
+  timeoutMs = DEFAULT_REHEARSAL_TIMEOUT_MS,
+} = {}) {
+  const normalizedPrimary = normalizeBaseUrl(baseUrl);
+  const mergedCandidates = [normalizedPrimary, ...candidates.map((entry) => normalizeBaseUrl(entry))]
+    .filter(Boolean);
+  const dedupedCandidates = [...new Set(mergedCandidates)];
+
+  const probeResults = [];
+
+  for (const candidate of dedupedCandidates) {
+    const url = `${candidate}${ROLLOUT_HEALTH_ENDPOINT}`;
+    try {
+      const payload = await fetchJsonWithTimeout(url, { fetchImpl, timeoutMs });
+      probeResults.push({
+        baseUrl: candidate,
+        ok: true,
+      });
+      return {
+        resolvedBaseUrl: candidate,
+        probeHealthPayload: payload,
+        probeResults,
+      };
+    } catch (error) {
+      probeResults.push({
+        baseUrl: candidate,
+        ok: false,
+        reason: error.message,
+      });
+    }
+  }
+
+  const lines = probeResults
+    .map((entry) =>
+      entry.ok
+        ? `- ${entry.baseUrl}: ok`
+        : `- ${entry.baseUrl}: ${entry.reason || "failed"}`,
+    )
+    .join("; ");
+  throw new Error(`Khong tim thay base URL API phu hop. Probe summary: ${lines}`);
 }
 
 export function toRolloutRehearsalMarkdown(report) {

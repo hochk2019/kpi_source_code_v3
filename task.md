@@ -39,15 +39,17 @@
     - script core: `scripts/v4-rollout-rehearsal-core.mjs`
     - cli runner: `scripts/v4-rollout-rehearsal.mjs`
     - package script: `pnpm run verify:v4:rehearsal`
+    - auto-probe variant: `pnpm run verify:v4:rehearsal:auto`
     - regression: `tests/scripts/v4RolloutRehearsal.test.js`
     - docs cap nhat helper usage va output path: `docs/operations/v4-qa-matrix.md`
 
 ## Handoff
 
-- Done: da them rollout rehearsal evidence collector cho `cng-mbu.4` (`scripts/v4-rollout-rehearsal-core.mjs`, `scripts/v4-rollout-rehearsal.mjs`) + package script `verify:v4:rehearsal`, kem regression `tests/scripts/v4RolloutRehearsal.test.js`; giu nguyen parity runner (`verify:v4:parity`) lam gate matrix.
+- Done: da nang cap rollout rehearsal collector voi `--discover-base-url` + probe candidate fallback, them script `verify:v4:rehearsal:auto`, cap nhat regression cho discovery flow/error diagnostics, va giu `verify:v4:parity` lam gate matrix.
 - Verify:
   - `pnpm exec eslint scripts/v4-rollout-rehearsal-core.mjs scripts/v4-rollout-rehearsal.mjs tests/scripts/v4RolloutRehearsal.test.js`
   - `pnpm exec vitest run tests/scripts/v4RolloutRehearsal.test.js --environment node`
+  - `pnpm run verify:v4:rehearsal:auto -- --dry-run --allow-failed-gates --label local`
   - `pnpm run verify:v4:rehearsal -- --dry-run --allow-failed-gates`
   - `pnpm exec eslint scripts/v4-parity-suite-core.mjs scripts/v4-parity-suite.mjs tests/scripts/v4ParitySuite.test.js`
   - `pnpm exec vitest run tests/scripts/v4ParitySuite.test.js --environment node`

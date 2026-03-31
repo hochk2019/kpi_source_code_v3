@@ -43,6 +43,7 @@ Tài liệu này gom các lệnh verify tối thiểu trước khi mở thêm tr
   - fetch `/api/v4/health` + `/api/v4/meta/rollout`
   - đánh giá gate (`readiness blocked`, `migration checks fail`)
   - ghi bằng chứng JSON/Markdown dưới `docs/operations/v4-rollout-evidence/`
+- Nếu chưa chắc cổng backend, dùng `pnpm run verify:v4:rehearsal:auto -- --label staging` để auto probe `baseUrl` trước khi capture evidence.
 - Thêm `--allow-failed-gates` chỉ khi cần chụp chứng cứ điều tra mà không muốn command fail CI.
 
 ## Exit rule

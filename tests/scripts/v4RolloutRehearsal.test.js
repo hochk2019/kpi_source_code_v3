@@ -9,9 +9,11 @@ import {
   buildRehearsalAssessment,
   captureRolloutRehearsalSnapshot,
   createRolloutRehearsalReport,
+  DEFAULT_REHEARSAL_BASE_URL_CANDIDATES,
   fetchJsonWithTimeout,
   formatRolloutRehearsalSummary,
   parseRolloutRehearsalArgs,
+  resolveRehearsalBaseUrl,
   writeRolloutRehearsalEvidence,
 } from "../../scripts/v4-rollout-rehearsal-core.mjs";
 
@@ -57,12 +59,14 @@ describe("v4 rollout rehearsal helpers", () => {
   it("parses default args", () => {
     expect(parseRolloutRehearsalArgs([])).toEqual({
       baseUrl: "http://127.0.0.1:5000",
+      baseUrlCandidates: [...DEFAULT_REHEARSAL_BASE_URL_CANDIDATES],
       outDir: "docs/operations/v4-rollout-evidence",
       label: "manual",
       expectedStage: null,
       timeoutMs: 15_000,
       dryRun: false,
       allowFailedGates: false,
+      discoverBaseUrl: false,
     });
   });
 
@@ -71,6 +75,8 @@ describe("v4 rollout rehearsal helpers", () => {
       parseRolloutRehearsalArgs([
         "--base-url",
         "https://rollout.example.local/",
+        "--base-url-candidates",
+        "http://127.0.0.1:5050,http://127.0.0.1:5000",
         "--out-dir",
         "tmp/rehearsal",
         "--label",
@@ -79,17 +85,20 @@ describe("v4 rollout rehearsal helpers", () => {
         "module-parity",
         "--timeout-ms",
         "25000",
+        "--discover-base-url",
         "--dry-run",
         "--allow-failed-gates",
       ]),
     ).toEqual({
       baseUrl: "https://rollout.example.local",
+      baseUrlCandidates: ["http://127.0.0.1:5050", "http://127.0.0.1:5000"],
       outDir: "tmp/rehearsal",
       label: "staging wave",
       expectedStage: "module-parity",
       timeoutMs: 25_000,
       dryRun: true,
       allowFailedGates: true,
+      discoverBaseUrl: true,
     });
   });
 
@@ -204,6 +213,118 @@ describe("v4 rollout rehearsal helpers", () => {
     expect(fetchImpl).toHaveBeenCalledTimes(2);
     expect(report.assessment.status).toBe("warn");
     expect(report.snapshot.rollout.rollout.currentStage).toBe("module-parity");
+  });
+
+  it("resolves baseUrl by probing candidates when discovery is enabled", async () => {
+    const fetchImpl = vi.fn(async (url) => {
+      if (String(url).startsWith("http://127.0.0.1:5000")) {
+        return {
+          ok: true,
+          status: 200,
+          headers: {
+            get: () => "text/html",
+          },
+          text: async () => "<html>frontend shell</html>",
+          json: async () => ({}),
+        };
+      }
+      return {
+        ok: true,
+        status: 200,
+        headers: {
+          get: () => "application/json",
+        },
+        json: async () => createHealthPayload("degraded"),
+      };
+    });
+
+    const resolved = await resolveRehearsalBaseUrl({
+      baseUrl: "http://127.0.0.1:5000",
+      candidates: ["http://127.0.0.1:5050"],
+      fetchImpl,
+      timeoutMs: 500,
+    });
+
+    expect(resolved.resolvedBaseUrl).toBe("http://127.0.0.1:5050");
+    expect(resolved.probeResults.length).toBe(2);
+    expect(resolved.probeResults[0]).toMatchObject({
+      baseUrl: "http://127.0.0.1:5000",
+      ok: false,
+    });
+  });
+
+  it("returns aggregate diagnostics when no candidate is valid", async () => {
+    const fetchImpl = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      headers: {
+        get: () => "text/html",
+      },
+      text: async () => "<html>no api</html>",
+      json: async () => ({}),
+    }));
+
+    await expect(
+      resolveRehearsalBaseUrl({
+        baseUrl: "http://127.0.0.1:5000",
+        candidates: ["http://127.0.0.1:5050"],
+        fetchImpl,
+        timeoutMs: 500,
+      }),
+    ).rejects.toThrow(/Khong tim thay base URL API phu hop/i);
+  });
+
+  it("captures snapshots with discovery mode and reuses probed health payload", async () => {
+    const fetchImpl = vi.fn(async (url) => {
+      if (String(url).startsWith("http://127.0.0.1:5000")) {
+        return {
+          ok: true,
+          status: 200,
+          headers: {
+            get: () => "text/html",
+          },
+          text: async () => "<html>frontend shell</html>",
+          json: async () => ({}),
+        };
+      }
+      if (String(url).endsWith("/api/v4/health")) {
+        return {
+          ok: true,
+          status: 200,
+          headers: {
+            get: () => "application/json",
+          },
+          json: async () => createHealthPayload("degraded"),
+        };
+      }
+      return {
+        ok: true,
+        status: 200,
+        headers: {
+          get: () => "application/json",
+        },
+        json: async () =>
+          createRolloutPayload({
+            readinessState: "degraded",
+            currentStage: "module-parity",
+          }),
+      };
+    });
+
+    const report = await captureRolloutRehearsalSnapshot({
+      baseUrl: "http://127.0.0.1:5000",
+      discoverBaseUrl: true,
+      baseUrlCandidates: ["http://127.0.0.1:5050"],
+      label: "ci",
+      fetchImpl,
+      timeoutMs: 1_000,
+      expectedStage: "module-parity",
+      capturedAt: "2026-04-01T00:00:00.000Z",
+    });
+
+    expect(report.metadata.baseUrl).toBe("http://127.0.0.1:5050");
+    expect(report.assessment.status).toBe("pass");
+    expect(fetchImpl).toHaveBeenCalledTimes(3);
   });
 
   it("reports a clear error when endpoint does not return JSON", async () => {

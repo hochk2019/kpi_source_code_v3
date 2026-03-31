@@ -20,6 +20,7 @@ async function main() {
 
   const modeFlags = [
     `baseUrl=${parsed.baseUrl}`,
+    `discoverBaseUrl=${parsed.discoverBaseUrl ? "true" : "false"}`,
     `label=${parsed.label}`,
     parsed.expectedStage ? `expectedStage=${parsed.expectedStage}` : "expectedStage=(none)",
     `timeoutMs=${parsed.timeoutMs}`,
@@ -32,6 +33,8 @@ async function main() {
   try {
     report = await captureRolloutRehearsalSnapshot({
       baseUrl: parsed.baseUrl,
+      discoverBaseUrl: parsed.discoverBaseUrl,
+      baseUrlCandidates: parsed.baseUrlCandidates,
       label: parsed.label,
       expectedStage: parsed.expectedStage,
       timeoutMs: parsed.timeoutMs,
