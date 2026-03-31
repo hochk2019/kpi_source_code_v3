@@ -7,14 +7,14 @@
 - Open epics hien tai:
   - `cng-mbu` (Big-bang FE+BE redesign 6-8 week execution).
 - Highest-priority ready items hien tai:
-  - `cng-mbu.3` (in_progress): W3-5 Frontend Redesign Canonical Client.
+  - `cng-mbu.4` (in_progress): W5-6 Integration and Behavior Parity.
 
 ## Active Slice
 
 -- Title: W5-6 Integration and Behavior Parity
 -- Bead: cng-mbu.4
 -- Status: in_progress
--- Last updated: 2026-03-31
+-- Last updated: 2026-04-01
 
 - Scope da lam trong slice hien tai:
   - da hoan tat va close `cng-mbu.3`: frontend clients da dung canonical v4 routes cho lanes data-health, duplicate-policy, filter-presets, feedback-training, rules-history, reports-export/audit, ai-assistant, va notifications
@@ -29,6 +29,12 @@
   - contract gate hien xanh:
     - `pnpm run api:contract:report` => canonical `52`, legacy `0`
     - `pnpm run api:contract:gate` => pass
+  - da them parity rehearsal runner cho W5-6:
+    - script core: `scripts/v4-parity-suite-core.mjs`
+    - cli runner: `scripts/v4-parity-suite.mjs`
+    - package scripts: `pnpm run verify:v4:parity`, `pnpm run verify:v4:parity:quick`
+    - regression: `tests/scripts/v4ParitySuite.test.js`
+    - docs cap nhat ma tran: `docs/operations/v4-qa-matrix.md`
 
 ## Handoff
 
