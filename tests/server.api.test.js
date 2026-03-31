@@ -9013,7 +9013,7 @@ describe('Report export API', () => {
 
       username: 'noperm',
 
-      password: '123456',
+      password: '12345678',
 
       name: 'KhÃƒÆ’Ã‚Â´ng quyÃƒÂ¡Ã‚Â»Ã‚Ân',
 
@@ -9027,7 +9027,7 @@ describe('Report export API', () => {
 
     const staffAgent = request.agent(app);
 
-    const staffLogin = await staffAgent.post('/api/auth/login').send({ username: 'noperm', password: '123456' });
+    const staffLogin = await staffAgent.post('/api/auth/login').send({ username: 'noperm', password: '12345678' });
 
     expect(staffLogin.status).toBe(200);
 

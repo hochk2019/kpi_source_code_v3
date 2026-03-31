@@ -105,6 +105,10 @@ import {
 } from '../server-v4/src/modules/ai/ai.constants.js';
 import { createAiChatHistoryStore } from '../server-v4/src/modules/ai/aiChatHistoryStore.js';
 import { registerAiRoutes } from '../server-v4/src/modules/ai/aiLegacyRoutes.js';
+import {
+  registerLegacyImportAlertRoutes,
+  registerLegacyNotificationRoutes,
+} from '../server-v4/src/modules/alerts/alertsLegacyRoutes.js';
 
 import { buildDefaultAiProviders } from './aiProviders/index.js';
 
@@ -21906,51 +21910,13 @@ app.post('/api/feedback', async (req, res) => {
 
 
 
-app.get('/api/notifications', (req, res) => {
+registerLegacyNotificationRoutes(app, {
 
-  const { denied } = requireNotificationAccess(req, res);
+  requireNotificationAccess,
 
-  if (denied) {
+  listNotifications,
 
-    return;
-
-  }
-
-  try {
-
-    const limitRaw = Number.parseInt(req.query?.limit ?? '50', 10);
-
-    const events = listNotifications({ limit: Number.isFinite(limitRaw) ? limitRaw : 50 });
-
-    res.json({ ok: true, events });
-
-  } catch (err) {
-
-    res.status(500).json({ ok: false, error: err?.message || 'Không thể tải thông báo' });
-
-  }
-
-});
-
-
-
-app.get('/api/notifications/stream', (req, res) => {
-
-  const { denied } = requireNotificationAccess(req, res);
-
-  if (denied) {
-
-    if (!res.headersSent) {
-
-      res.end();
-
-    }
-
-    return;
-
-  }
-
-  registerSseClient(res);
+  registerSseClient,
 
 });
 
@@ -24332,19 +24298,21 @@ app.post('/api/import/ecus/run', async (req, res) => {
 
 
 
-app.get('/api/import/alerts', (req, res) => {
+registerLegacyImportAlertRoutes(app, {
 
-  const { denied } = requireAlertsManage(req, res);
+  requireAlertsManage,
 
-  if (denied) {
+  buildAlertPayload,
 
-    return;
+  getAlertConfig,
 
-  }
+  saveAlertConfig,
 
-  const payload = buildAlertPayload();
+  evaluateDeclarationAlerts,
 
-  res.json({ ok: true, ...payload });
+  markDeclarationsReviewed,
+
+  unmarkDeclarationsReviewed,
 
 });
 
@@ -24599,97 +24567,6 @@ app.post('/api/import/co-discrepancy/run', async (req, res) => {
 
 
 
-app.get('/api/import/alerts/config', (req, res) => {
-
-  const { denied } = requireAlertsManage(req, res);
-
-  if (denied) {
-
-    return;
-
-  }
-
-  res.json({ ok: true, config: getAlertConfig() });
-
-});
-
-
-
-app.put('/api/import/alerts/config', (req, res) => {
-
-  const { context, denied } = requireAlertsManage(req, res);
-
-  if (denied) {
-
-    return;
-
-  }
-
-  try {
-
-    const actor = context.account.username;
-
-    const next = saveAlertConfig(req.body?.config || {});
-
-    const summary = evaluateDeclarationAlerts({ actor, reason: 'alert-config' });
-
-    res.json({ ok: true, config: next, summary });
-
-  } catch (err) {
-
-    res.status(400).json({ ok: false, error: err?.message || 'Không thể cập nhật cấu hình cảnh báo' });
-
-  }
-
-});
-
-
-
-app.post('/api/import/alerts/review', (req, res) => {
-
-  const { context, denied } = requireAlertsManage(req, res);
-
-  if (denied) {
-
-    return;
-
-  }
-
-  const keys = Array.isArray(req.body?.keys) ? req.body.keys : [];
-
-  const actor = context.account.username;
-
-  const updated = markDeclarationsReviewed(keys, { actor });
-
-  const summary = evaluateDeclarationAlerts({ actor, reason: 'manual-review' });
-
-  res.json({ ok: true, updated, summary });
-
-});
-
-
-
-app.post('/api/import/alerts/unreview', (req, res) => {
-
-  const { context, denied } = requireAlertsManage(req, res);
-
-  if (denied) {
-
-    return;
-
-  }
-
-  const keys = Array.isArray(req.body?.keys) ? req.body.keys : [];
-
-  const actor = context.account.username;
-
-  const updated = unmarkDeclarationsReviewed(keys, { actor });
-
-  const summary = evaluateDeclarationAlerts({ actor, reason: 'manual-unreview' });
-
-  res.json({ ok: true, updated, summary });
-
-});
 
 
 
