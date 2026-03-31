@@ -97,3 +97,6 @@ Moi phien moi, moi tai khoan moi, bat buoc doc file nay truoc khi code.
   - bead status,
   - `task.md` Active Slice/Handoff,
   - file nay.
+- Quy tac commit van hanh:
+  - Moi khi hoan tat 1 bead/slice, agent phai tao 1 commit rieng cho bead do.
+  - Khong gom nhieu bead vao cung 1 commit.

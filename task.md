@@ -31,6 +31,7 @@
   - `pnpm bd:check` (nhat quan task.md/open-backlog/BD)
 - Risk: neu khong duy tri 3 nguon truth (`bd`, `task.md`, `docs/big-bang-execution-status.md`) thi se lap lai tinh trang "epic dong som" du plan chua xong.
 - Decision: tu gio theo doi tien do big-bang bang epic `cng-mbu` va board `docs/big-bang-execution-status.md`; moi lane tuan bat buoc co bead + gate + evidence.
+- Decision tiep theo (owner request): auto-commit sau moi bead/slice hoan tat, commit tach rieng theo tung bead.
 - Next: hoan tat deliverable contract-freeze cua `cng-mbu.1`, sau do mo `cng-mbu.2`/`cng-mbu.3` theo dependency graph.
 ## Recent Completed Slices
 
