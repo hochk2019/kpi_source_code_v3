@@ -11,21 +11,24 @@
 
 ## Active Slice
 
--- Title: W3-5 Frontend Redesign Canonical Client
--- Bead: cng-mbu.3
+-- Title: W5-6 Integration and Behavior Parity
+-- Bead: cng-mbu.4
 -- Status: in_progress
 -- Last updated: 2026-03-31
 
 - Scope da lam trong slice hien tai:
-  - da dong `cng-mbu.2` voi day du lane backend modularization W2-3 (data-health, duplicate-policy, filter-presets, feedback-training, rules-history, reports-export, notifications parity)
-  - da cap nhat canonical metadata routing/runtime bridge cho `rules-history` + `reports-export` trong `server-v4` va `server/index.js`
-  - da bo sung regression `tests/server-v4/kpiRulesHistoryRoutes.test.js` va `tests/server-v4/reportingExportRoutes.test.js`
-  - da chuyen active bead sang `cng-mbu.3` de tiep tuc week 3-5 frontend redesign
-  - da ship slice dau frontend canonicalization cho lanes `data-health`, `duplicate-policy`, `filter-presets`, `feedback-training`: caller o `DataHealthDashboard`, `useFilterPresets`, `feedbackClient` da chuyen sang `/api/v4/*` route constants
-  - da cap nhat demo routing fallback cho canonical feedback/data-health/policy route trong `src/demo/demoMode.js`
-  - da cap nhat regression `tests/apiRoutes.test.js`, `tests/dataHealthDashboard.test.jsx`, `tests/dataImporter.preview.test.jsx`
-  - da ship slice tiep theo frontend canonicalization cho lanes `rules-history` + `reports-export/audit`: caller o `rules.js`, `reportExport.js`, `ExportAuditReport.jsx`, va `AuditLog.jsx` da chuyen sang route constants `/api/v4/rules/history` + `/api/v4/reporting/*`
-  - da cap nhat regression `tests/reportExport.test.js`, `tests/ExportAuditReport.test.jsx`, `tests/auditLog.test.jsx`, `tests/apiRoutes.test.js`, va Playwright fixture `tests/playwright/fixtures.js` cho endpoint export canonical
+  - da hoan tat va close `cng-mbu.3`: frontend clients da dung canonical v4 routes cho lanes data-health, duplicate-policy, filter-presets, feedback-training, rules-history, reports-export/audit, ai-assistant, va notifications
+  - da them alias backend `/api/v4/ai/*` song song `/api/ai/*` trong `server-v4/src/modules/ai/aiLegacyRoutes.js` de FE migrate an toan khong pha tuong thich
+  - da bo sung route registry canonical cho `ai` va `alerts.notifications*` trong `src/lib/apiRoutes.js`; cleanup xong `API_LEGACY_ROUTES` (khong con caller runtime)
+  - da cap nhat demo fallback cho ca canonical + legacy ai/notifications trong `src/demo/demoMode.js`
+  - da bo sung regression:
+    - `tests/aiClient.test.js`
+    - `tests/notificationClient.test.js`
+    - `tests/server.aiModules.test.js` (assert canonical ai aliases)
+    - `tests/aiAssistant.config.test.jsx` + `tests/apiRoutes.test.js` (cap nhat canonical paths)
+  - contract gate hien xanh:
+    - `pnpm run api:contract:report` => canonical `52`, legacy `0`
+    - `pnpm run api:contract:gate` => pass
 
 ## Handoff
 
@@ -38,8 +41,7 @@
 - Risk: neu khong duy tri 3 nguon truth (`bd`, `task.md`, `docs/big-bang-execution-status.md`) thi se lap lai tinh trang "epic dong som" du plan chua xong.
 - Decision: tu gio theo doi tien do big-bang bang epic `cng-mbu` va board `docs/big-bang-execution-status.md`; moi lane tuan bat buoc co bead + gate + evidence.
 - Decision tiep theo (owner request): giam tan suat commit, gom theo lane/slice lon (khong commit moi thay doi nho).
-- Next: tiep tuc slice ke tiep cua `cng-mbu.3` cho `rules-history` + `reports-export/audit` frontend clients sang route canonical `/api/v4/reporting/*` va `/api/v4/rules/history`.
- - Next: tiep tuc slice ke tiep cua `cng-mbu.3` de giam legacy usage con lai theo `api:contract:report` (uu tien `src/lib/aiClient.js` va `src/lib/notificationClient.js`), sau do danh gia dong/giu `API_LEGACY_ROUTES`.
+- Next: tiep tuc `cng-mbu.4` (W5-6 integration + parity), uu tien adapter-vs-canonical parity matrix va migration rehearsal theo `docs/operations/v4-rollout-plan.md`.
 ## Recent Completed Slices
 
 - `cng-7z0.30` da hoan tat storage sync error hardening:

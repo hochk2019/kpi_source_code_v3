@@ -54,6 +54,10 @@ export function registerAiRoutes(app, deps) {
     throw new Error('registerAiRoutes requires auth guard dependencies.');
   }
 
+  const LEGACY_AI_PREFIX = '/api/ai';
+  const CANONICAL_AI_PREFIX = '/api/v4/ai';
+  const aiRoute = (suffix) => [`${LEGACY_AI_PREFIX}${suffix}`, `${CANONICAL_AI_PREFIX}${suffix}`];
+
   function normalizeProviderForDiagnostics(rawProvider, { configProviders = [], fallbackSuffix } = {}) {
     const providerInput = rawProvider && typeof rawProvider === 'object' ? rawProvider : null;
     if (!providerInput) {
@@ -136,7 +140,7 @@ export function registerAiRoutes(app, deps) {
     };
   }
 
-  app.get('/api/ai/data/snapshot', async (req, res) => {
+  app.get(aiRoute('/data/snapshot'), async (req, res) => {
     const { context, denied } = requireAiAssistUsage(req, res);
     if (denied) {
       return;
@@ -155,7 +159,7 @@ export function registerAiRoutes(app, deps) {
     }
   });
 
-  app.get('/api/ai/data/snapshot/history', (req, res) => {
+  app.get(aiRoute('/data/snapshot/history'), (req, res) => {
     const { denied } = requireAiAssistUsage(req, res);
     if (denied) {
       return;
@@ -167,7 +171,7 @@ export function registerAiRoutes(app, deps) {
     res.json({ ok: true, entries });
   });
 
-  app.get('/api/ai/data/snapshot/history/:id', (req, res) => {
+  app.get(aiRoute('/data/snapshot/history/:id'), (req, res) => {
     const { denied } = requireAiAssistUsage(req, res);
     if (denied) {
       return;
@@ -182,7 +186,7 @@ export function registerAiRoutes(app, deps) {
     res.json({ ok: true, entry });
   });
 
-  app.get('/api/ai/insights', (req, res) => {
+  app.get(aiRoute('/insights'), (req, res) => {
     const { context, denied } = requireAiAssistUsage(req, res);
     if (denied) {
       return;
@@ -214,7 +218,7 @@ export function registerAiRoutes(app, deps) {
     });
   });
 
-  app.post('/api/ai/insights/run', async (req, res) => {
+  app.post(aiRoute('/insights/run'), async (req, res) => {
     const { context, denied } = requireAiAssistManage(req, res);
     if (denied) {
       return;
@@ -235,7 +239,7 @@ export function registerAiRoutes(app, deps) {
     }
   });
 
-  app.post('/api/ai/insights/feedback', (req, res) => {
+  app.post(aiRoute('/insights/feedback'), (req, res) => {
     const { context, denied } = requireAiAssistUsage(req, res);
     if (denied) {
       return;
@@ -272,7 +276,7 @@ export function registerAiRoutes(app, deps) {
     }
   });
 
-  app.put('/api/ai/insights/settings', (req, res) => {
+  app.put(aiRoute('/insights/settings'), (req, res) => {
     const { context, denied } = requireAiAssistManage(req, res);
     if (denied) {
       return;
@@ -308,7 +312,7 @@ export function registerAiRoutes(app, deps) {
     res.json({ ok: true, settings: nextSettings });
   });
 
-  app.get('/api/ai/history', (req, res) => {
+  app.get(aiRoute('/history'), (req, res) => {
     const { context, denied } = requireAiAssistUsage(req, res);
     if (denied) {
       return;
@@ -328,7 +332,7 @@ export function registerAiRoutes(app, deps) {
     }
   });
 
-  app.put('/api/ai/history', (req, res) => {
+  app.put(aiRoute('/history'), (req, res) => {
     const { context, denied } = requireAiAssistUsage(req, res);
     if (denied) {
       return;
@@ -350,7 +354,7 @@ export function registerAiRoutes(app, deps) {
     }
   });
 
-  app.delete('/api/ai/history', (req, res) => {
+  app.delete(aiRoute('/history'), (req, res) => {
     const { context, denied } = requireAiAssistUsage(req, res);
     if (denied) {
       return;
@@ -371,7 +375,7 @@ export function registerAiRoutes(app, deps) {
     }
   });
 
-  app.get('/api/ai/profile', (req, res) => {
+  app.get(aiRoute('/profile'), (req, res) => {
     const { denied } = requireAiAssistUsage(req, res);
     if (denied) {
       return;
@@ -385,7 +389,7 @@ export function registerAiRoutes(app, deps) {
     }
   });
 
-  app.get('/api/ai/config', (req, res) => {
+  app.get(aiRoute('/config'), (req, res) => {
     const { denied } = requireAiAssistManage(req, res);
     if (denied) {
       return;
@@ -407,7 +411,7 @@ export function registerAiRoutes(app, deps) {
     }
   });
 
-  app.put('/api/ai/config', (req, res) => {
+  app.put(aiRoute('/config'), (req, res) => {
     const { denied, context } = requireAiAssistManage(req, res);
     if (denied) {
       return;
@@ -433,7 +437,7 @@ export function registerAiRoutes(app, deps) {
     }
   });
 
-  app.post('/api/ai/providers/test', async (req, res) => {
+  app.post(aiRoute('/providers/test'), async (req, res) => {
     const { denied } = requireAiAssistManage(req, res);
     if (denied) {
       return;
@@ -472,7 +476,7 @@ export function registerAiRoutes(app, deps) {
     }
   });
 
-  app.post('/api/ai/providers/ping', async (req, res) => {
+  app.post(aiRoute('/providers/ping'), async (req, res) => {
     const { denied } = requireAiAssistManage(req, res);
     if (denied) {
       return;
@@ -532,7 +536,7 @@ export function registerAiRoutes(app, deps) {
     }
   });
 
-  app.delete('/api/ai/cache', (req, res) => {
+  app.delete(aiRoute('/cache'), (req, res) => {
     const { denied, context } = requireAiAssistManage(req, res);
     if (denied) {
       return;
@@ -547,7 +551,7 @@ export function registerAiRoutes(app, deps) {
     }
   });
 
-  app.post('/api/ai/chat', async (req, res) => {
+  app.post(aiRoute('/chat'), async (req, res) => {
     const { denied, context } = requireAiAssistUsage(req, res);
     if (denied) {
       return;

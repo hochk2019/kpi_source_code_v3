@@ -830,20 +830,20 @@ export async function enableDemoMode() {
 
       if ((url.includes('/api/v4/feedback-training/feedback') || url.includes('/api/feedback')) && method === 'POST') return createResponse(responses.feedbackSubmit)
 
-      if (url.includes('/api/ai/config')) return createResponse(responses.aiConfig)
+      if (url.includes('/api/v4/ai/config') || url.includes('/api/ai/config')) return createResponse(responses.aiConfig)
 
-      if (url.includes('/api/ai/cache')) return createResponse(responses.aiCache)
+      if (url.includes('/api/v4/ai/cache') || url.includes('/api/ai/cache')) return createResponse(responses.aiCache)
 
-      if (url.includes('/api/ai/history')) return createResponse(responses.aiHistory)
+      if (url.includes('/api/v4/ai/history') || url.includes('/api/ai/history')) return createResponse(responses.aiHistory)
 
-      if (url.includes('/api/ai/chat')) return createResponse(responses.aiChat)
+      if (url.includes('/api/v4/ai/chat') || url.includes('/api/ai/chat')) return createResponse(responses.aiChat)
 
-      if (url.includes('/api/ai/providers/test')) return createResponse(responses.aiProviderTest)
-      if (url.includes('/api/ai/providers/ping')) return createResponse(responses.aiProviderTest)
+      if (url.includes('/api/v4/ai/providers/test') || url.includes('/api/ai/providers/test')) return createResponse(responses.aiProviderTest)
+      if (url.includes('/api/v4/ai/providers/ping') || url.includes('/api/ai/providers/ping')) return createResponse(responses.aiProviderTest)
 
       if (url.includes('/api/storage/')) return createResponse(responses.storageOk)
 
-      if (url.includes('/api/notifications')) return createResponse(responses.notifications)
+      if (url.includes('/api/v4/alerts/notifications') || url.includes('/api/notifications')) return createResponse(responses.notifications)
 
       if (url.includes('/api/v4/hq-agencies/history')) return createResponse(responses.hqHistory)
 

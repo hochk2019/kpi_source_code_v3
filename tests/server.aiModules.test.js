@@ -171,6 +171,13 @@ describe('AI route module', () => {
       ok: true,
       messages: [{ role: 'user', text: 'saved' }],
     });
+
+    const canonicalHistory = await request(app).get('/api/v4/ai/history');
+    expect(canonicalHistory.status).toBe(200);
+    expect(canonicalHistory.body).toMatchObject({
+      ok: true,
+      messages: [{ role: 'assistant', text: 'hello' }],
+    });
   });
 
   it('validates provider payload for diagnostics route', async () => {
@@ -179,5 +186,10 @@ describe('AI route module', () => {
     expect(response.status).toBe(400);
     expect(response.body.ok).toBe(false);
     expect(response.body.error).toContain('Thiếu thông tin nhà cung cấp');
+
+    const canonicalResponse = await request(app).post('/api/v4/ai/providers/test').send({});
+    expect(canonicalResponse.status).toBe(400);
+    expect(canonicalResponse.body.ok).toBe(false);
+    expect(canonicalResponse.body.error).toContain('Thiếu thông tin nhà cung cấp');
   });
 });

@@ -1,4 +1,5 @@
 import { fetchWithAuth } from '../auth/localAuth.js';
+import { API_V4_ROUTES } from './apiRoutes.js';
 
 
 
@@ -9,6 +10,8 @@ let eventSource = null;
 let reconnectTimer = null;
 
 let lastEventId = null;
+
+const ALERT_ROUTES = API_V4_ROUTES.alerts;
 
 
 
@@ -144,7 +147,7 @@ function ensureConnection() {
 
   }
 
-  const source = new EventSource('/api/notifications/stream', { withCredentials: true });
+  const source = new EventSource(ALERT_ROUTES.notificationsStream, { withCredentials: true });
 
   eventSource = source;
 
@@ -220,7 +223,7 @@ export async function fetchNotificationHistory(limit = 50) {
 
   }
 
-  const url = `/api/notifications${params.toString() ? `?${params.toString()}` : ''}`;
+  const url = `${ALERT_ROUTES.notifications}${params.toString() ? `?${params.toString()}` : ''}`;
 
   const response = await fetchWithAuth(url, { cache: 'no-store' });
 

@@ -1,4 +1,5 @@
 import { fetchWithAuth } from '../auth/localAuth.js';
+import { API_V4_ROUTES } from './apiRoutes.js';
 
 
 
@@ -34,11 +35,13 @@ async function parseJsonResponse(response, fallbackMessage = 'Yêu cầu thất 
 
 }
 
+const AI_ROUTES = API_V4_ROUTES.ai;
+
 
 
 export async function fetchAiConfig({ signal } = {}) {
 
-  const response = await fetchWithAuth('/api/ai/config', { signal });
+  const response = await fetchWithAuth(AI_ROUTES.config, { signal });
 
   const data = await parseJsonResponse(response, 'Không thể tải cấu hình AI.');
 
@@ -56,7 +59,7 @@ export async function fetchAiConfig({ signal } = {}) {
 
 export async function fetchAiProfile({ signal } = {}) {
 
-  const response = await fetchWithAuth('/api/ai/profile', { signal });
+  const response = await fetchWithAuth(AI_ROUTES.profile, { signal });
 
   const data = await parseJsonResponse(response, 'Không thể tải trạng thái trợ lý AI.');
 
@@ -70,7 +73,7 @@ export async function updateAiConfig(config, { signal } = {}) {
 
   const payload = { config };
 
-  const response = await fetchWithAuth('/api/ai/config', {
+  const response = await fetchWithAuth(AI_ROUTES.config, {
 
     method: 'PUT',
 
@@ -92,7 +95,7 @@ export async function updateAiConfig(config, { signal } = {}) {
 
 export async function clearAiCache({ signal } = {}) {
 
-  const response = await fetchWithAuth('/api/ai/cache', {
+  const response = await fetchWithAuth(AI_ROUTES.cache, {
 
     method: 'DELETE',
 
@@ -112,7 +115,7 @@ export async function testAiProvider(provider, { signal } = {}) {
 
   const payload = { provider };
 
-  const response = await fetchWithAuth('/api/ai/providers/test', {
+  const response = await fetchWithAuth(AI_ROUTES.providerTest, {
 
     method: 'POST',
 
@@ -162,7 +165,7 @@ export async function pingAiConnection(params = {}, { signal } = {}) {
 
   }
 
-  const response = await fetchWithAuth('/api/ai/providers/ping', {
+  const response = await fetchWithAuth(AI_ROUTES.providerPing, {
 
     method: 'POST',
 
@@ -206,7 +209,7 @@ export async function fetchAiDataSnapshot(params = {}, { signal } = {}) {
 
   }
 
-  const endpoint = `/api/ai/data/snapshot${query.size ? `?${query.toString()}` : ''}`;
+  const endpoint = `${AI_ROUTES.dataSnapshot}${query.size ? `?${query.toString()}` : ''}`;
 
   const response = await fetchWithAuth(endpoint, { signal });
 
@@ -234,7 +237,7 @@ export async function requestAiCompletion(payload, { signal } = {}) {
 
   };
 
-  const response = await fetchWithAuth('/api/ai/chat', {
+  const response = await fetchWithAuth(AI_ROUTES.chat, {
 
     method: 'POST',
 
@@ -270,7 +273,7 @@ export async function requestAiCompletion(payload, { signal } = {}) {
 
 export async function fetchAiHistory({ signal } = {}) {
 
-  const response = await fetchWithAuth('/api/ai/history', { signal });
+  const response = await fetchWithAuth(AI_ROUTES.history, { signal });
 
   const data = await parseJsonResponse(response, 'Không thể tải lịch sử trò chuyện AI.');
 
@@ -288,7 +291,7 @@ export async function saveAiHistory(messages, { signal } = {}) {
 
   };
 
-  const response = await fetchWithAuth('/api/ai/history', {
+  const response = await fetchWithAuth(AI_ROUTES.history, {
 
     method: 'PUT',
 
@@ -310,7 +313,7 @@ export async function saveAiHistory(messages, { signal } = {}) {
 
 export async function clearAiHistory({ signal } = {}) {
 
-  const response = await fetchWithAuth('/api/ai/history', {
+  const response = await fetchWithAuth(AI_ROUTES.history, {
 
     method: 'DELETE',
 
@@ -346,7 +349,7 @@ export async function fetchAiInsights({ limit, historyLimit, signal } = {}) {
 
   }
 
-  const endpoint = `/api/ai/insights${query.size ? `?${query.toString()}` : ''}`;
+  const endpoint = `${AI_ROUTES.insights}${query.size ? `?${query.toString()}` : ''}`;
 
   const response = await fetchWithAuth(endpoint, { signal });
 
@@ -374,7 +377,7 @@ export async function fetchAiSnapshotHistory({ limit, signal } = {}) {
 
   }
 
-  const endpoint = `/api/ai/data/snapshot/history${query.size ? `?${query.toString()}` : ''}`;
+  const endpoint = `${AI_ROUTES.snapshotHistory}${query.size ? `?${query.toString()}` : ''}`;
 
   const response = await fetchWithAuth(endpoint, { signal });
 
@@ -388,7 +391,7 @@ export async function fetchAiSnapshotHistory({ limit, signal } = {}) {
 
 export async function fetchAiSnapshotHistoryEntry(id, { signal } = {}) {
 
-  const endpoint = `/api/ai/data/snapshot/history/${encodeURIComponent(id)}`;
+  const endpoint = `${AI_ROUTES.snapshotHistory}/${encodeURIComponent(id)}`;
 
   const response = await fetchWithAuth(endpoint, { signal });
 
@@ -404,7 +407,7 @@ export async function updateAiInsightSettings(settings, { signal } = {}) {
 
   const payload = { settings: settings || {} };
 
-  const response = await fetchWithAuth('/api/ai/insights/settings', {
+  const response = await fetchWithAuth(AI_ROUTES.insightsSettings, {
 
     method: 'PUT',
 
@@ -434,7 +437,7 @@ export async function runAiInsightJob(payload = {}, { signal } = {}) {
 
   }
 
-  const response = await fetchWithAuth('/api/ai/insights/run', {
+  const response = await fetchWithAuth(AI_ROUTES.insightsRun, {
 
     method: 'POST',
 
@@ -466,7 +469,7 @@ export async function submitAiInsightFeedback(insightId, payload = {}, { signal 
 
   };
 
-  const response = await fetchWithAuth('/api/ai/insights/feedback', {
+  const response = await fetchWithAuth(AI_ROUTES.insightsFeedback, {
 
     method: 'POST',
 

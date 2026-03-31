@@ -29,11 +29,11 @@ Moi phien moi, moi tai khoan moi, bat buoc doc file nay truoc khi code.
 |---|---|---|---|---|
 | Week 1 - Contract + Architecture freeze | `cng-mbu.1` | Done | [docs/api-contract-v4-migration-plan.md](/E:/GPT/kpi_source_code_v4/docs/api-contract-v4-migration-plan.md), [docs/server-v4-rollout-plan-2026-03-25.md](/E:/GPT/kpi_source_code_v4/docs/server-v4-rollout-plan-2026-03-25.md) | Da lock inventory + envelope + permission + pagination + ownership matrix cho W2/W3 |
 | Week 2-3 - Backend full modularization | `cng-mbu.2` | Done | `server-v4/src/modules/{ai,alerts,auth,backup,data-health,duplicate-policy,filter-presets,feedback-training,declarations,reporting,rules,...}`, [docs/api-contract-v4-migration-plan.md](/E:/GPT/kpi_source_code_v4/docs/api-contract-v4-migration-plan.md) | Da hoan tat lane backend modularization theo W2-3 scope |
-| Week 3-5 - Frontend redesign + canonical client | `cng-mbu.3` | In Progress | [docs/api-contract-v4-migration-plan.md](/E:/GPT/kpi_source_code_v4/docs/api-contract-v4-migration-plan.md), `api:contract:report` | Da chuyen FE lanes data-health, duplicate-policy, filter-presets, feedback-training, rules-history, reports-export/audit; con legacy callers AI + notifications va cleanup legacy route map |
-| Week 5-6 - Integration + parity | `cng-mbu.4` | Not Started | Gate da dinh nghia trong [docs/operations/v4-rollout-plan.md](/E:/GPT/kpi_source_code_v4/docs/operations/v4-rollout-plan.md) | Chay adapter-vs-canonical parity + migration rehearsal |
+| Week 3-5 - Frontend redesign + canonical client | `cng-mbu.3` | Done | [docs/api-contract-v4-migration-plan.md](/E:/GPT/kpi_source_code_v4/docs/api-contract-v4-migration-plan.md), `api:contract:gate` | Hoan tat canonical FE clients (bao gom AI + notifications), legacy FE contract usage = 0 |
+| Week 5-6 - Integration + parity | `cng-mbu.4` | In Progress | Gate da dinh nghia trong [docs/operations/v4-rollout-plan.md](/E:/GPT/kpi_source_code_v4/docs/operations/v4-rollout-plan.md) | Chay adapter-vs-canonical parity + migration rehearsal |
 | Week 6-7 - Hardening + UAT | `cng-mbu.5` | Not Started | QA matrix san co | Chay full regression, a11y, perf, security smoke, UAT 2 nhom |
 | Week 8 - Big-bang cutover + hypercare | `cng-mbu.7` | Not Started | Rollout stages + fallback da co | Freeze, preflight, cutover, 7-day hypercare |
-| Release gates / acceptance closure | `cng-mbu.6` | Blocked | `api:contract:gate` hien fail do legacy usage > 0 | Dat `legacy-only FE calls = 0`, `contract mismatch = 0`, UAT pass |
+| Release gates / acceptance closure | `cng-mbu.6` | Not Started | `api:contract:gate` da pass (`legacy usage = 0`) | Dat `contract mismatch = 0`, parity + UAT pass |
 
 ## Continuity Setup
 
@@ -45,8 +45,8 @@ Moi phien moi, moi tai khoan moi, bat buoc doc file nay truoc khi code.
 
 | Required item | Status | Notes |
 |---|---|---|
-| Canonical API v4 as single FE contract | In Progress | Da co route registry + scanner; chua zero legacy |
-| Legacy `/api/*` chi la adapter tam | In Progress | Van con caller FE dung legacy-only |
+| Canonical API v4 as single FE contract | Done | FE da migrate sang canonical routes; `api:contract:gate` pass voi legacy usage = 0 |
+| Legacy `/api/*` chi la adapter tam | Done | Khong con FE caller legacy-only; legacy routes con lai giu cho backward compatibility |
 | Runtime chinh la module architecture | In Progress | `server-v4` da mo rong nhieu module, chua cutover toan phan |
 | Tach domain monolith con lai | In Progress | Da tach `ai`, `alerts`; con nhieu domain theo plan |
 | Unified auth/session/account lifecycle | In Progress | Co tien trinh, can closure theo contract gate |
@@ -61,10 +61,10 @@ Moi phien moi, moi tai khoan moi, bat buoc doc file nay truoc khi code.
 ## Current Observable Metrics
 
 - `pnpm run api:contract:report` (2026-03-31):
-  - canonical routes: `37`
-  - legacy routes: `19`
+  - canonical routes: `52`
+  - legacy routes: `0`
 - `pnpm run api:contract:gate`:
-  - expected fail cho den khi legacy usage = `0`
+  - pass (khong con legacy FE contract usage)
 
 W1 closure note:
 - Sign-off freeze da dat ngay 2026-03-31 cho `cng-mbu.1`.
