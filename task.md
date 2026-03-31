@@ -16,29 +16,25 @@
 
 ## Active Slice
 
--- Title: Backend-detached ECUS queue orchestration
--- Bead: cng-7z0.7
--- Status: in_progress
--- Last updated: 2026-03-30
+-- Title: Server-v4 AI module extraction prep
+-- Bead: cng-2k4.5
+-- Status: ready
+-- Last updated: 2026-03-31
 
-- Vua hoan tat lien tiep hai slice nho:
-  - `cng-7z0.25`: `SupportCenter` nay nhan `currentTabId` tu `App`, hien FAQ/doc references theo tung man hinh, co CTA sao chep duong dan `docs/`, va goi y tai nguyen dao tao theo tags/keywords cua context hien tai
-  - `cng-2k4.22`: bo sung `* text=auto` trong `.gitattributes` va re-verify `pnpm lint` sach de dong lane text/lint hygiene sau backlog refactors
-- Lane UX ready tiep theo quay ve `cng-7z0.7`:
-  - phan con lai la backend-detached queue/resume orchestration cho ECUS imports, khong con navigation/help debt mo
-  - can giu tri nho ve cac lane da ship (`cng-7z0.9`, `cng-7z0.10`, `cng-7z0.11`) de khong lap lai phan preflight/retry UX da xong
-  - tien do moi ngay 2026-03-30:
-    - them helper `src/components/dataImporter/dataImporterSyncResume.js` de suy ra phase resume tiep theo tu `progressSteps` da luu
-    - `useDataImporterSync.js` gio resume tu phase chua xong dau tien thay vi mac dinh goi lai `ecus-commit`; neu browser dong sau khi commit xong nhung truoc luc refresh state, operator se tiep tuc tu `reconcile` / `refreshDeclRows` / `reloadSavedRows`
-    - label resume hien ro se tiep tuc tu buoc nao, va hook tu dong dong job neu snapshot phuc hoi khong con phase nao chua xong
-    - regression moi `tests/dataImporterSyncResume.test.js` + cap nhat `tests/useDataImporterSync.test.jsx` khoa lane "dong trinh duyet sau commit" de tranh duplicate ECUS commit
-  - phan con lai cua bead da hep hon:
-    - van chua co server-side async job handle/job id de dong bo tiep tuc hoan toan tach khoi browser session; hien tai operator van can mo lai man hinh va bam resume
-- Backlog note:
-  - neu doi uu tien khoi UX lane, hai technical ready items tiep theo la `cng-2k4.2` va `cng-2k4.3`
-  - `docs/open-backlog.md` da duoc reconcile de bo `cng-7z0.25` va `cng-2k4.22` khoi danh sach open
+- `cng-7z0.7` da hoan tat: queue sync ECUS nay co backend-detached commit job (`async: true`) + poll status theo `jobId`, resume duoc sau khi dong trinh duyet, va fallback re-submit khi job cu khong con tren server.
+- Next ready lane quay lai backend cutover:
+  - `cng-2k4.5` — extract AI assistant backend routes vao `server-v4` ai module
+  - `cng-2k4.6` — extract alert + notification backend logic vao `server-v4` alerts module
 ## Recent Completed Slices
 
+- `cng-7z0.7` da xong o muc backend-detached ECUS sync queue:
+  - them `server-v4/src/modules/declarations/declarationsImportJobService.ts` de tao/poll async ECUS commit jobs (`queued/running/completed/failed`) va gioi han memory retention cho job history trong runtime
+  - `DeclarationsController` + `declarationsRoutes` them flow `POST /api/v4/declarations/imports/ecus-commit` voi payload `async: true` va endpoint poll `GET /api/v4/declarations/imports/ecus-jobs/:jobId`
+  - `useDataImporterSync.js` + `dataImporterSyncQueue.js` luu `backendJobId/backendJobStatus`, poll job backend khi run/resume, va chi re-submit commit khi job cu khong con ton tai tren server
+  - bo sung/refresh regression trong `tests/server-v4/postgresDeclarationsRoute.test.js` va `tests/useDataImporterSync.test.jsx`; cap nhat `server-v4/src/app/legacyCompatRoutes.ts` de inject day du `DeclarationsImportJobService` cho legacy importer aliases
+  - targeted verify da pass:
+    - `pnpm exec vitest run tests/useDataImporterSync.test.jsx tests/server-v4/postgresDeclarationsRoute.test.js`
+    - `pnpm exec eslint server-v4/src/modules/declarations/DeclarationsController.ts server-v4/src/modules/declarations/declarationsRoutes.ts server-v4/src/modules/declarations/declarations.module.ts server-v4/src/modules/declarations/declarationsImportJobService.ts server-v4/src/app/legacyCompatRoutes.ts src/components/dataImporter/dataImporterSyncQueue.js src/components/dataImporter/useDataImporterSync.js tests/server-v4/postgresDeclarationsRoute.test.js tests/useDataImporterSync.test.jsx`
 - `cng-7z0.23` da hoan tat permission-aware global search lane:
   - `src/components/CommandCenter.jsx` nay them shortcut report workflow (`scope`, `dashboard`, `export`) va goi y `Người dùng: ...` khi tai khoan co quyen `accountManage`
   - module search tiep tuc dua tren `getVisibleAppTabs(currentUser)` nen khong can sua app-shell navigation definitions co blast radius MEDIUM
@@ -241,6 +237,7 @@
   - them `server/sqliteMigrations.js` de quan ly `schema_migrations` va chay migration co danh so cho kv/auth/export-audit/reporting/business-snapshot/team-roster
   - `server/index.js`, `server/reportingProjectionSqlite.js`, `server/businessSnapshotSqlite.js`, `server/teamRosterSqlite.js`, va cac `Sqlite*Store` ben `server-v4` da delegate sang migration runner thay vi tu bootstrap bang `CREATE TABLE IF NOT EXISTS`
   - bo sung regression `tests/sqliteMigrations.test.js` va cap nhat `tests/reportingProjectionSqlite.test.js`, `tests/server.seed.test.js` de khoa migration history + legacy backfill path
+  - bead `cng-2k4.7` da duoc close ngay 2026-03-31 sau khi re-verify eslint + vitest cua lane migration
   - targeted verify da pass:
     - `pnpm exec eslint server/sqliteMigrations.js server/index.js server/businessSnapshotSqlite.js server/reportingProjectionSqlite.js server/teamRosterSqlite.js server-v4/src/modules/auth/sqliteAuthStore.ts server-v4/src/modules/declarations/sqliteDeclarationsStore.ts server-v4/src/modules/hq-agencies/sqliteHqAgenciesStore.ts server-v4/src/modules/kpi-adjustments/sqliteKpiAdjustmentsStore.ts server-v4/src/modules/kpi-rules/sqliteKpiRulesStore.ts server-v4/src/modules/teams/sqliteTeamsStore.ts tests/sqliteMigrations.test.js tests/server.seed.test.js tests/reportingProjectionSqlite.test.js`
     - `pnpm exec vitest run tests/sqliteMigrations.test.js tests/server.seed.test.js tests/reportingProjectionSqlite.test.js --environment node`

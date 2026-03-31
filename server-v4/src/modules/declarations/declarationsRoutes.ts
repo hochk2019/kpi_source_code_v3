@@ -11,6 +11,7 @@ import {
   type EcusSqlHealthCheck,
 } from './declarationsEcusSyncService.js';
 import { DeclarationsImportService } from './declarationsImportService.js';
+import { DeclarationsImportJobService } from './declarationsImportJobService.js';
 import { DeclarationsRepository } from './DeclarationsRepository.js';
 import type { DeclarationAsyncReader } from './declarationAsyncReader.js';
 import { DeclarationsService } from './declarationsService.js';
@@ -38,6 +39,7 @@ export function buildDeclarationsRouter(
   const ecusFetchRunner =
     options.ecusImportRunner ?? options.coDiscrepancyRunner ?? createDefaultCoDiscrepancyRunner(reader);
   const importService = new DeclarationsImportService(repository, store, ecusFetchRunner);
+  const importJobService = new DeclarationsImportJobService(importService);
   const alertsService = new DeclarationsAlertsService(repository, store);
   const coMonitoringService = new DeclarationsCoMonitoringService(
     repository,
@@ -52,6 +54,7 @@ export function buildDeclarationsRouter(
   const controller = new DeclarationsController(
     service,
     importService,
+    importJobService,
     alertsService,
     coMonitoringService,
     ecusSyncService,
@@ -67,6 +70,7 @@ export function buildDeclarationsRouter(
   router.get('/imports/ecus-status', (req, res) => void controller.readEcusStatus(req, res));
   router.post('/imports/ecus-preview', (req, res) => void controller.previewEcusImport(req, res));
   router.post('/imports/ecus-commit', (req, res) => void controller.commitEcusImport(req, res));
+  router.get('/imports/ecus-jobs/:jobId', (req, res) => void controller.readEcusImportJob(req, res));
   router.get('/imports/search', (req, res) => void controller.searchImportDeclarations(req, res));
   router.get('/imports/deleted-declarations', (req, res) =>
     void controller.listDeletedDeclarations(req, res),

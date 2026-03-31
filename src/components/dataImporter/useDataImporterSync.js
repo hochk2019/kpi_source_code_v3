@@ -28,9 +28,12 @@ import { formatDateRangeLabel } from "../../../packages/domain/src/format.js";
 
 const ECUS_CONFIG_ROUTE = "/api/v4/declarations/imports/ecus-config";
 const ECUS_COMMIT_ROUTE = "/api/v4/declarations/imports/ecus-commit";
+const ECUS_COMMIT_JOB_ROUTE = "/api/v4/declarations/imports/ecus-jobs";
 const ECUS_PREVIEW_ROUTE = "/api/v4/declarations/imports/ecus-preview";
 const ECUS_STATUS_ROUTE = "/api/v4/declarations/imports/ecus-status";
 const ALERTS_ROUTE = "/api/v4/declarations/imports/alerts";
+const ECUS_COMMIT_POLL_DELAY_MS = 1200;
+const ECUS_COMMIT_POLL_MAX_ROUNDS = 300;
 
 const DEFAULT_ALERT_SUMMARY = {
   outstanding: 0,
@@ -137,6 +140,33 @@ function buildSyncCompletionMessage(resultSummary, attemptCount = 0, mstFilterNo
   }
 
   return messageParts.join(" ").replace(/\s+/g, " ").trim();
+}
+
+function normalizeCommitJobStatus(status) {
+  if (typeof status !== "string") {
+    return "unknown";
+  }
+  const normalized = status.trim().toLowerCase();
+  if (["queued", "running", "completed", "failed"].includes(normalized)) {
+    return normalized;
+  }
+  return "unknown";
+}
+
+function pickCommitJobError(jobPayload) {
+  const nestedMessage =
+    typeof jobPayload?.error?.message === "string" && jobPayload.error.message.trim()
+      ? jobPayload.error.message.trim()
+      : "";
+  if (nestedMessage) {
+    return nestedMessage;
+  }
+
+  if (typeof jobPayload?.lastError === "string" && jobPayload.lastError.trim()) {
+    return jobPayload.lastError.trim();
+  }
+
+  return "Job đồng bộ ECUS thất bại.";
 }
 
 export default function useDataImporterSync({
@@ -640,70 +670,183 @@ export default function useDataImporterSync({
 
       if (remainingStepKeys.includes("commit")) {
         let payload = null;
-
-        for (let attempt = 1; attempt <= totalAttempts; attempt += 1) {
-          persistActiveJob(
-            setSyncJobStatus(workingJob, "running", {
-              attemptCount: attempt,
-              currentStepKey: "commit",
-            }),
-          );
-
-          updateSyncStep(
-            "commit",
-            "active",
-            attempt === 1
-              ? "Đang gửi yêu cầu đồng bộ tới ECUS."
-              : `Đang thử lại lần ${attempt}/${totalAttempts}.`,
-          );
-          appendActivityLog(`Gửi yêu cầu đồng bộ ECUS lần ${attempt}/${totalAttempts}.`);
-
-          try {
-            const response = await fetchWithAuth(ECUS_COMMIT_ROUTE, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                actor: workingJob.actor || actor,
-                from: workingJob.from || undefined,
-                to: workingJob.to || undefined,
-                includeTaxCodes: workingJob.includeTaxCodes || [],
-                excludeTaxCodes: workingJob.excludeTaxCodes || [],
-              }),
+        const readCommitJobStatus = async (jobId) => {
+          const response = await fetchWithAuth(
+            `${ECUS_COMMIT_JOB_ROUTE}/${encodeURIComponent(jobId)}`,
+            {
+              cache: "no-store",
               credentials: "include",
-            });
+            },
+          );
 
-            if (!response.ok) {
-              throw new Error(`HTTP ${response.status}`);
-            }
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+          }
 
-            payload = await response.json();
+          const responsePayload = await response.json();
+          if (!responsePayload?.job) {
+            throw new Error("Phản hồi job đồng bộ ECUS không hợp lệ.");
+          }
+          return responsePayload.job;
+        };
 
-            if (attempt > 1) {
-              appendActivityLog(
-                `Yêu cầu đồng bộ ECUS đã thành công ở lần ${attempt}/${totalAttempts}.`,
-              );
-            }
-            break;
-          } catch (commitError) {
-            const delayMs = isRetriableSyncError(commitError)
-              ? getSyncRetryDelayMs(attempt - 1)
-              : null;
+        const waitForCommitJobCompletion = async (jobId) => {
+          for (let round = 1; round <= ECUS_COMMIT_POLL_MAX_ROUNDS; round += 1) {
+            const remoteJob = await readCommitJobStatus(jobId);
+            const remoteStatus = normalizeCommitJobStatus(remoteJob?.status);
 
-            if (!delayMs || attempt >= totalAttempts) {
-              throw commitError;
-            }
-
-            const retryLabel = formatRetryDelayLabel(delayMs);
-            appendActivityLog(
-              `Lần ${attempt}/${totalAttempts} thất bại: ${commitError?.message || "Không rõ lỗi"}. Sẽ thử lại sau ${retryLabel}.`,
-              "warn",
+            persistActiveJob(
+              setSyncJobStatus(workingJob, "running", {
+                backendJobId: jobId,
+                backendJobStatus: remoteStatus,
+                backendUpdatedAt: remoteJob?.updatedAt || new Date().toISOString(),
+              }),
             );
+
+            if (remoteStatus === "completed") {
+              return remoteJob?.result || null;
+            }
+
+            if (remoteStatus === "failed") {
+              throw new Error(pickCommitJobError(remoteJob));
+            }
+
             updateSyncStep(
               "commit",
               "active",
-              `Lần ${attempt}/${totalAttempts} thất bại (${commitError?.message || "Không rõ lỗi"}). Sẽ tự thử lại sau ${retryLabel}.`,
+              `Job đồng bộ đang xử lý trên backend (${round}/${ECUS_COMMIT_POLL_MAX_ROUNDS}).`,
             );
-            await waitForDelay(delayMs);
+
+            if (round >= ECUS_COMMIT_POLL_MAX_ROUNDS) {
+              throw new Error("Job đồng bộ ECUS đang chạy quá lâu. Hãy resume lại để tiếp tục theo dõi.");
+            }
+
+            await waitForDelay(ECUS_COMMIT_POLL_DELAY_MS);
+          }
+
+          return null;
+        };
+
+        let shouldStartNewCommit = true;
+        const hasDetachedCommitJob = Boolean(options.resumed && workingJob.backendJobId);
+        if (hasDetachedCommitJob) {
+          const detachedJobId = workingJob.backendJobId;
+          appendActivityLog(
+            `Phát hiện job backend ${detachedJobId}. Tiếp tục theo dõi trạng thái thay vì gửi lại yêu cầu commit.`,
+          );
+          updateSyncStep("commit", "active", "Đang đồng bộ lại trạng thái job backend đã lưu.");
+
+          try {
+            payload = {
+              result: await waitForCommitJobCompletion(detachedJobId),
+            };
+            shouldStartNewCommit = false;
+          } catch (detachedError) {
+            if (!/^HTTP 404\b/.test(detachedError?.message || "")) {
+              throw detachedError;
+            }
+
+            appendActivityLog(
+              "Job backend đã lưu không còn tồn tại trên server. Hệ thống sẽ gửi lại commit từ snapshot hiện tại.",
+              "warn",
+            );
+            persistActiveJob(
+              setSyncJobStatus(workingJob, "running", {
+                backendJobId: "",
+                backendJobStatus: "missing",
+                backendUpdatedAt: new Date().toISOString(),
+              }),
+            );
+          }
+        }
+
+        if (shouldStartNewCommit) {
+          for (let attempt = 1; attempt <= totalAttempts; attempt += 1) {
+            persistActiveJob(
+              setSyncJobStatus(workingJob, "running", {
+                attemptCount: attempt,
+                currentStepKey: "commit",
+                backendJobStatus: "starting",
+                backendUpdatedAt: new Date().toISOString(),
+              }),
+            );
+
+            updateSyncStep(
+              "commit",
+              "active",
+              attempt === 1
+                ? "Đang gửi yêu cầu đồng bộ tới ECUS."
+                : `Đang thử lại lần ${attempt}/${totalAttempts}.`,
+            );
+            appendActivityLog(`Gửi yêu cầu đồng bộ ECUS lần ${attempt}/${totalAttempts}.`);
+
+            try {
+              const response = await fetchWithAuth(ECUS_COMMIT_ROUTE, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  actor: workingJob.actor || actor,
+                  from: workingJob.from || undefined,
+                  to: workingJob.to || undefined,
+                  includeTaxCodes: workingJob.includeTaxCodes || [],
+                  excludeTaxCodes: workingJob.excludeTaxCodes || [],
+                  async: true,
+                }),
+                credentials: "include",
+              });
+
+              if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+              }
+
+              payload = await response.json();
+
+              const startedJobId =
+                typeof payload?.job?.id === "string" && payload.job.id.trim()
+                  ? payload.job.id.trim()
+                  : "";
+              if (startedJobId) {
+                appendActivityLog(`Đã tạo job backend ${startedJobId}. Đang theo dõi tiến trình.`);
+                persistActiveJob(
+                  setSyncJobStatus(workingJob, "running", {
+                    backendJobId: startedJobId,
+                    backendJobStatus: normalizeCommitJobStatus(payload?.job?.status),
+                    backendUpdatedAt: payload?.job?.updatedAt || new Date().toISOString(),
+                  }),
+                );
+                payload = {
+                  ...payload,
+                  result: await waitForCommitJobCompletion(startedJobId),
+                };
+              }
+
+              if (attempt > 1) {
+                appendActivityLog(
+                  `Yêu cầu đồng bộ ECUS đã thành công ở lần ${attempt}/${totalAttempts}.`,
+                );
+              }
+              break;
+            } catch (commitError) {
+              const delayMs = isRetriableSyncError(commitError)
+                ? getSyncRetryDelayMs(attempt - 1)
+                : null;
+
+              if (!delayMs || attempt >= totalAttempts) {
+                throw commitError;
+              }
+
+              const retryLabel = formatRetryDelayLabel(delayMs);
+              appendActivityLog(
+                `Lần ${attempt}/${totalAttempts} thất bại: ${commitError?.message || "Không rõ lỗi"}. Sẽ thử lại sau ${retryLabel}.`,
+                "warn",
+              );
+              updateSyncStep(
+                "commit",
+                "active",
+                `Lần ${attempt}/${totalAttempts} thất bại (${commitError?.message || "Không rõ lỗi"}). Sẽ tự thử lại sau ${retryLabel}.`,
+              );
+              await waitForDelay(delayMs);
+            }
           }
         }
 
@@ -711,6 +854,7 @@ export default function useDataImporterSync({
         persistActiveJob(
           setSyncJobStatus(workingJob, "running", {
             resultSummary,
+            backendJobStatus: "completed",
           }),
         );
         updateSyncStep(

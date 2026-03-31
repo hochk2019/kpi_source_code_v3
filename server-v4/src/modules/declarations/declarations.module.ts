@@ -18,6 +18,7 @@ export const declarationsModule = createDomainModule({
         { method: 'GET', path: '/imports/ecus-config', purpose: 'Read the effective ECUS bridge sync configuration.' },
         { method: 'POST', path: '/imports/ecus-preview', purpose: 'Preview ECUS declarations before commit.' },
         { method: 'POST', path: '/imports/ecus-commit', purpose: 'Persist ECUS declarations into the fact store.' },
+        { method: 'GET', path: '/imports/ecus-jobs/:jobId', purpose: 'Poll async ECUS import commit job status.' },
       ],
     },
     {

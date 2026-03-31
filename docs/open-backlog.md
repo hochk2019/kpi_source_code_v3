@@ -1,6 +1,6 @@
 # Open Backlog
 
-Last reconciled: 2026-03-30
+Last reconciled: 2026-03-31
 
 This file is the canonical source of truth for unfinished work in this repo.
 
@@ -19,6 +19,8 @@ Reconciliation note:
 - Reconciled again on 2026-03-30 after completing `cng-7z0.23`; Command Center search now suggests report workflow shortcuts and account-aware user entries without widening app-shell blast radius, so the remaining navigation backlog is contextual quick-help only.
 - Reconciled again on 2026-03-30 after completing `cng-7z0.25` and `cng-2k4.22`; Support Center now surfaces per-tab FAQ/docs guidance with copyable repo references, while repository text normalization now relies on `.gitattributes` plus a clean `pnpm lint`, so the remaining ready work returns to backend cutover and ECUS queue orchestration.
 - Reconciled again on 2026-03-30 after advancing `cng-7z0.7` with phase-aware resume semantics and closing stale shipped beads `cng-7z0.26`, `cng-7z0.27`, `cng-7z0.28`, and `cng-7z0.34` that were already reflected as completed in `docs/ux-improvement-backlog.md`.
+- Reconciled again on 2026-03-31 after closing `cng-2k4.7`; numbered SQLite migrations are now tracked as completed in `task.md`, and this item is removed from the open technical backlog list.
+- Reconciled again on 2026-03-31 after closing `cng-7z0.7`; ECUS sync now supports backend-detached async commit jobs with resume polling, so this item is removed from open UX backlog.
 
 Rule:
 - Every unfinished item from review notes, rollout plans, decomposition plans, or UX backlogs must be in one of two states:
@@ -33,8 +35,6 @@ Current highest-priority ready items:
 - Backend cutover lane:
 - `cng-2k4.5` — Extract AI assistant backend routes into server-v4 ai module
 - `cng-2k4.6` — Extract alert and notification backend logic into server-v4 alerts module
-- Ready next in UX lane:
-- `cng-7z0.7` — Finish backend-detached sync queue/orchestration for ECUS imports
 
 ## Technical Stabilization
 
@@ -47,7 +47,6 @@ Source set: `Gemini_review_V1.md`, `docs/gemini-review-v1-factcheck-2026-03-25.m
 - `cng-2k4.4` — Extract backup and restore domain into server-v4 backup module
 - `cng-2k4.5` — Extract AI assistant backend routes into server-v4 ai module
 - `cng-2k4.6` — Extract alert and notification backend logic into server-v4 alerts module
-- `cng-2k4.7` — Add numbered schema migrations for SQLite and server-v4
 - `cng-2k4.8` — Add buildV4App integration and route-matrix verification tests
 - `cng-2k4.9` — Expose rollout metadata in an operator-facing frontend dashboard
 - `cng-2k4.10` — Implement CSRF protection for mutation routes
@@ -65,8 +64,6 @@ Source set: `docs/ux-improvement-backlog.md`
 ### KPI Adjustments
 
 ### ECUS Declaration Sync
-
-- `cng-7z0.7` — Add background sync queue with resume support for ECUS imports
 
 ### MST Assignment And Staffing
 

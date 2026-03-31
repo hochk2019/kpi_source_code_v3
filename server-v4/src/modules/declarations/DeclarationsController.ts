@@ -11,6 +11,7 @@ import {
   type DeclarationsImportCommitRequest,
   type DeclarationsImportService,
 } from './declarationsImportService.js';
+import { DeclarationsImportJobService } from './declarationsImportJobService.js';
 import type { DeclarationActor } from './declarationsStore.js';
 import { DeclarationsHttpError, DeclarationsService } from './declarationsService.js';
 import { readEcusBridgeActor, readEcusSyncManageActor } from './ecusBridgeAccess.js';
@@ -100,6 +101,7 @@ const ecusImportCommitBodySchema = ecusImportPreviewBodySchema.extend({
   ),
   actor: z.string().trim().optional(),
   reason: z.string().trim().optional(),
+  async: z.boolean().optional().default(false),
 });
 
 const declarationAlertConfigBodySchema = z.object({
@@ -128,6 +130,7 @@ export class DeclarationsController extends BaseController {
   constructor(
     private readonly declarationsService: DeclarationsService,
     private readonly declarationsImportService: DeclarationsImportService,
+    private readonly declarationsImportJobService: DeclarationsImportJobService,
     private readonly declarationsAlertsService: DeclarationsAlertsService,
     private readonly declarationsCoMonitoringService: DeclarationsCoMonitoringService,
     private readonly declarationsEcusSyncService: DeclarationsEcusSyncService,
@@ -267,6 +270,21 @@ export class DeclarationsController extends BaseController {
     try {
       const actor = await readEcusBridgeActor(req, this.authStore);
       const payload = ecusImportCommitBodySchema.parse(req.body ?? {});
+      if (payload.async) {
+        const job = this.declarationsImportJobService.createCommitJob(actor, {
+          rawRows: payload.rawRows,
+          fetchedTotal: payload.fetchedTotal,
+          actor: payload.actor,
+          reason: payload.reason,
+          rangeInput: payload.range ?? { from: payload.from, to: payload.to },
+          includeTaxCodes: payload.includeTaxCodes,
+          excludeTaxCodes: payload.excludeTaxCodes,
+        } satisfies DeclarationsImportCommitRequest);
+
+        res.json({ ok: true, job });
+        return;
+      }
+
       const result = await this.declarationsImportService.commitEcusImport(
         actor,
         {
@@ -283,6 +301,25 @@ export class DeclarationsController extends BaseController {
       res.json({ ok: true, result });
     } catch (error) {
       this.handleDeclarationsError(error, res, 'commit ECUS import');
+    }
+  }
+
+  async readEcusImportJob(req: Request, res: Response): Promise<void> {
+    try {
+      const actor = await readEcusBridgeActor(req, this.authStore);
+      const jobId = `${req.params.jobId ?? ''}`.trim();
+      if (!jobId) {
+        throw new DeclarationsHttpError(400, 'invalid_request', 'Thiếu jobId đồng bộ ECUS.');
+      }
+
+      const job = this.declarationsImportJobService.readJob(actor, jobId);
+      if (!job) {
+        throw new DeclarationsHttpError(404, 'not_found', 'Không tìm thấy job đồng bộ ECUS.');
+      }
+
+      res.json({ ok: true, job });
+    } catch (error) {
+      this.handleDeclarationsError(error, res, 'read ECUS import job');
     }
   }
 

@@ -18,6 +18,7 @@ import {
   type EcusSqlHealthCheck,
 } from '../modules/declarations/declarationsEcusSyncService.js';
 import { DeclarationsImportService } from '../modules/declarations/declarationsImportService.js';
+import { DeclarationsImportJobService } from '../modules/declarations/declarationsImportJobService.js';
 import { DeclarationsRepository } from '../modules/declarations/DeclarationsRepository.js';
 import { DeclarationsService } from '../modules/declarations/declarationsService.js';
 import {
@@ -51,6 +52,7 @@ export function buildLegacyCompatRouter(
     persistence.declarationsStore,
     ecusFetchRunner,
   );
+  const declarationsImportJobService = new DeclarationsImportJobService(declarationsImportService);
   const declarationsAlertsService = new DeclarationsAlertsService(
     declarationsRepository,
     persistence.declarationsStore,
@@ -68,6 +70,7 @@ export function buildLegacyCompatRouter(
   const declarationsController = new DeclarationsController(
     declarationsService,
     declarationsImportService,
+    declarationsImportJobService,
     declarationsAlertsService,
     declarationsCoMonitoringService,
     declarationsEcusSyncService,

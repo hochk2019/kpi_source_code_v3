@@ -10,6 +10,7 @@ import useDataImporterSync from "@/components/dataImporter/useDataImporterSync.j
 
 const ECUS_CONFIG_ROUTE = "/api/v4/declarations/imports/ecus-config";
 const ECUS_COMMIT_ROUTE = "/api/v4/declarations/imports/ecus-commit";
+const ECUS_COMMIT_JOB_ROUTE = "/api/v4/declarations/imports/ecus-jobs";
 const ECUS_PREVIEW_ROUTE = "/api/v4/declarations/imports/ecus-preview";
 const ECUS_STATUS_ROUTE = "/api/v4/declarations/imports/ecus-status";
 const ALERTS_ROUTE = "/api/v4/declarations/imports/alerts";
@@ -238,6 +239,148 @@ describe("useDataImporterSync", () => {
     });
   });
 
+  it("resumes a detached backend commit job by polling job status instead of re-submitting commit", async () => {
+    const progressSteps = createSyncProgressSteps().map((step) =>
+      step.key === "commit"
+        ? {
+            ...step,
+            status: "active",
+            detail: "Đang xử lý commit trên backend.",
+          }
+        : step,
+    );
+    const interruptedJob = {
+      ...createSyncJob({
+        actor: "tester",
+        manualRange: { from: "2026-03-01", to: "2026-03-05" },
+      }),
+      status: "running",
+      currentStepKey: "commit",
+      attemptCount: 1,
+      backendJobId: "ecus-sync-job-001",
+      backendJobStatus: "running",
+      progressSteps,
+    };
+
+    writeStoredSyncJobState({
+      activeJob: interruptedJob,
+      resumableJob: null,
+      lastJob: null,
+      jobHistory: [],
+    });
+
+    let pollCount = 0;
+    const refreshDeclRowsFromServer = vi.fn(async () => new Array(3).fill(null));
+    const loadSavedRows = vi.fn(() => true);
+    const fetchWithAuth = vi.fn(async (url, options = {}) => {
+      if (url === ECUS_CONFIG_ROUTE) {
+        return {
+          ok: true,
+          json: async () => ({
+            config: {
+              enabled: true,
+              schedule: "0 * * * *",
+              rangeDays: 1,
+              preferMonthFirst: false,
+              connection: {
+                server: "srv01",
+                database: "ecus",
+                user: "runner",
+                hasPassword: true,
+              },
+              includeTaxCodes: [],
+              excludeTaxCodes: [],
+            },
+          }),
+        };
+      }
+
+      if (url === ECUS_STATUS_ROUTE) {
+        return {
+          ok: true,
+          json: async () => ({
+            backend: { ok: true },
+            database: { ok: true },
+          }),
+        };
+      }
+
+      if (url === ALERTS_ROUTE) {
+        return {
+          ok: true,
+          json: async () => ({
+            alerts: [],
+            summary: { outstanding: 0, totalTracked: 0, lastEvaluatedAt: null },
+          }),
+        };
+      }
+
+      if (url === `${ECUS_COMMIT_JOB_ROUTE}/ecus-sync-job-001`) {
+        pollCount += 1;
+        const status = pollCount >= 2 ? "completed" : "running";
+        return {
+          ok: true,
+          json: async () => ({
+            ok: true,
+            job: {
+              id: "ecus-sync-job-001",
+              status,
+              updatedAt: "2026-03-30T01:02:03.000Z",
+              result:
+                status === "completed"
+                  ? {
+                      fetched: 3,
+                      imported: 2,
+                      updated: 1,
+                      skipped: 0,
+                      reviewLocked: 0,
+                    }
+                  : null,
+            },
+          }),
+        };
+      }
+
+      if (url === ECUS_COMMIT_ROUTE && options.method === "POST") {
+        throw new Error("Should not submit commit again when backend job already exists");
+      }
+
+      throw new Error(`Unexpected url ${url}`);
+    });
+
+    const { result } = renderHook(() =>
+      useDataImporterSync({
+        actor: "tester",
+        canManageSync: true,
+        fetchWithAuth,
+        refreshDeclRowsFromServer,
+        loadSavedRows,
+      }),
+    );
+
+    await waitFor(() => {
+      expect(result.current.syncResumeJob).not.toBeNull();
+      expect(result.current.syncPreflightSummary?.ready).toBe(true);
+    });
+
+    await act(async () => {
+      await result.current.handleResumeSync();
+    });
+
+    expect(fetchWithAuth.mock.calls.filter(([url]) => url === ECUS_COMMIT_ROUTE)).toHaveLength(0);
+    expect(fetchWithAuth.mock.calls.filter(([url]) => url === `${ECUS_COMMIT_JOB_ROUTE}/ecus-sync-job-001`).length).toBeGreaterThanOrEqual(2);
+    expect(refreshDeclRowsFromServer).toHaveBeenCalledTimes(1);
+    expect(loadSavedRows).toHaveBeenCalledWith({ bypassConfirm: true });
+    expect(result.current.syncResumeJob).toBeNull();
+    expect(result.current.syncHistory[0]).toMatchObject({
+      status: "completed",
+      resultSummary: expect.objectContaining({
+        imported: 2,
+        updated: 1,
+      }),
+    });
+  });
+
   it("saves sync config and runs sync with follow-up refresh", async () => {
     const refreshDeclRowsFromServer = vi.fn(async () => {});
     const loadSavedRows = vi.fn(() => true);
@@ -413,6 +556,7 @@ describe("useDataImporterSync", () => {
           to: "2026-03-05",
           includeTaxCodes: ["0312345678"],
           excludeTaxCodes: ["0399999999"],
+          async: true,
         }),
       })
     );

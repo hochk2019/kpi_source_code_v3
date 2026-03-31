@@ -135,6 +135,116 @@ describe("server-v4 postgres declarations route wiring", () => {
     });
   });
 
+  it("supports detached ECUS commit via async job polling", async () => {
+    const runtime = createDeclarationsRuntimeStub([
+      createDeclarationRow({
+        declaration_id: "decl-existing",
+        so_tk: "00000012345",
+        so_tk_full: "12345",
+        nhanh: "Chi nhanh A",
+        date: "2026-02-14",
+        mst: "01012345671",
+        ma_loai_hinh: "A11",
+        licenses: 0,
+        so_luong_gp: 0,
+        licenseManualCount: 0,
+        license_count: 0,
+        licenseCodes: [],
+        licenseSourceCodes: [],
+        agency: "",
+        dai_ly: "",
+        agency_text: "",
+        nhan_vien: "",
+        staff_name_snapshot: "",
+        team: "",
+        team_name_snapshot: "",
+      }),
+    ]);
+    const authStore = createAuthStore([
+      createAccount({
+        username: "manager",
+        role: MANAGER_ROLE,
+        name: "Manager User",
+      }),
+    ]);
+    const app = buildV4App({
+      modules: [declarationsModule],
+      persistence: {
+        mode: "postgres",
+        sourceKind: "relational-store",
+        declarationsReader: runtime.reader,
+        declarationsStore: runtime.store,
+        authStore,
+        dispose: async () => {},
+      },
+    });
+
+    const asyncStart = await request(app)
+      .post("/api/v4/declarations/imports/ecus-commit")
+      .set(sessionHeaders("session-manager"))
+      .send({
+        async: true,
+        rawRows: [
+          {
+            so_tk: "12345",
+            nhanh: "Chi nhanh A",
+            mst: "0101234567-1",
+            date: "2026/02/14",
+            loai_hinh: "A11",
+            num_items: 5,
+            license_codes: ["GP01", "ZN02"],
+            agency: "Agency B",
+            nhan_vien: "Tran Thi Lan",
+            team: "Blue Team",
+          },
+        ],
+        fetchedTotal: 1,
+        reason: "manual",
+      });
+
+    expect(asyncStart.status).toBe(200);
+    expect(asyncStart.body).toEqual({
+      ok: true,
+      job: expect.objectContaining({
+        id: expect.any(String),
+        status: expect.stringMatching(/^(queued|running|completed)$/),
+        actor: "manager",
+      }),
+    });
+
+    const jobId = asyncStart.body.job.id;
+    let finalJobPayload = null;
+    for (let attempt = 0; attempt < 40; attempt += 1) {
+      const jobResponse = await request(app)
+        .get(`/api/v4/declarations/imports/ecus-jobs/${jobId}`)
+        .set(sessionHeaders("session-manager"));
+
+      expect(jobResponse.status).toBe(200);
+      expect(jobResponse.body?.ok).toBe(true);
+      const status = jobResponse.body?.job?.status;
+      if (status === "completed") {
+        finalJobPayload = jobResponse.body.job;
+        break;
+      }
+      if (status === "failed") {
+        throw new Error(`Detached ECUS job failed unexpectedly: ${jobResponse.body?.job?.error?.message ?? "unknown"}`);
+      }
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+
+    expect(finalJobPayload).toMatchObject({
+      status: "completed",
+      result: expect.objectContaining({
+        fetched: 1,
+        skipped: 0,
+        reviewLocked: 0,
+        actor: "manager",
+      }),
+    });
+    expect((finalJobPayload?.result?.imported ?? 0) + (finalJobPayload?.result?.updated ?? 0)).toBe(1);
+    expect(runtime.store.commitImportedDeclarations).toHaveBeenCalledTimes(1);
+  });
+
   it("owns declaration patch and history routes behind session-backed importEdit permission", async () => {
     const runtime = createDeclarationsRuntimeStub([
       createDeclarationRow({
