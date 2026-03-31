@@ -27,9 +27,9 @@ Moi phien moi, moi tai khoan moi, bat buoc doc file nay truoc khi code.
 
 | PLAN lane | Bead | Status | Evidence | Remaining |
 |---|---|---|---|---|
-| Week 1 - Contract + Architecture freeze | `cng-mbu.1` | In Progress | [docs/api-contract-v4-migration-plan.md](/E:/GPT/kpi_source_code_v4/docs/api-contract-v4-migration-plan.md), [docs/server-v4-rollout-plan-2026-03-25.md](/E:/GPT/kpi_source_code_v4/docs/server-v4-rollout-plan-2026-03-25.md) | Da co baseline freeze (inventory + envelope + permission + pagination); con sign-off + lock danh sach migration domain |
-| Week 2-3 - Backend full modularization | `cng-mbu.2` | Blocked | `server-v4/src/modules/{ai,alerts,auth,backup,declarations,...}` | Cho `cng-mbu.1` freeze xong; con domain: feedback-training, filter-presets, data-health, duplicate-policy, rules-history, reports-export, notifications parity cleanup |
-| Week 3-5 - Frontend redesign + canonical client | `cng-mbu.3` | Blocked | [docs/api-contract-v4-migration-plan.md](/E:/GPT/kpi_source_code_v4/docs/api-contract-v4-migration-plan.md), `api:contract:report` | Cho `cng-mbu.1` freeze xong; van con legacy route usage (`aiClient`, `rules`, `reportExport`, `notificationClient`, ... ) |
+| Week 1 - Contract + Architecture freeze | `cng-mbu.1` | Done | [docs/api-contract-v4-migration-plan.md](/E:/GPT/kpi_source_code_v4/docs/api-contract-v4-migration-plan.md), [docs/server-v4-rollout-plan-2026-03-25.md](/E:/GPT/kpi_source_code_v4/docs/server-v4-rollout-plan-2026-03-25.md) | Da lock inventory + envelope + permission + pagination + ownership matrix cho W2/W3 |
+| Week 2-3 - Backend full modularization | `cng-mbu.2` | In Progress | `server-v4/src/modules/{ai,alerts,auth,backup,declarations,...}`, [docs/api-contract-v4-migration-plan.md](/E:/GPT/kpi_source_code_v4/docs/api-contract-v4-migration-plan.md) | Trien khai domain modules da lock: data-health, duplicate-policy, filter-presets, feedback-training, rules-history, export parity, notifications parity |
+| Week 3-5 - Frontend redesign + canonical client | `cng-mbu.3` | Not Started | [docs/api-contract-v4-migration-plan.md](/E:/GPT/kpi_source_code_v4/docs/api-contract-v4-migration-plan.md), `api:contract:report` | Chuyen caller FE sang route canonical theo tung domain lane khi backend da mo route |
 | Week 5-6 - Integration + parity | `cng-mbu.4` | Not Started | Gate da dinh nghia trong [docs/operations/v4-rollout-plan.md](/E:/GPT/kpi_source_code_v4/docs/operations/v4-rollout-plan.md) | Chay adapter-vs-canonical parity + migration rehearsal |
 | Week 6-7 - Hardening + UAT | `cng-mbu.5` | Not Started | QA matrix san co | Chay full regression, a11y, perf, security smoke, UAT 2 nhom |
 | Week 8 - Big-bang cutover + hypercare | `cng-mbu.7` | Not Started | Rollout stages + fallback da co | Freeze, preflight, cutover, 7-day hypercare |
@@ -65,6 +65,10 @@ Moi phien moi, moi tai khoan moi, bat buoc doc file nay truoc khi code.
   - legacy routes: `22`
 - `pnpm run api:contract:gate`:
   - expected fail cho den khi legacy usage = `0`
+
+W1 closure note:
+- Sign-off freeze da dat ngay 2026-03-31 cho `cng-mbu.1`.
+- Tu W2 tro di chi cho phep thay doi trong pham vi ownership matrix da lock.
 
 ## Dependency Graph (program-level)
 

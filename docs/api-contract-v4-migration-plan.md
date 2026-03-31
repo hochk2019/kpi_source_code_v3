@@ -100,6 +100,25 @@ Nguồn chính: controllers/services ở `declarations`, `hq-agencies`, `kpi-adj
 | AI assistant | `/api/ai/*` | `/api/v4/ai/*` | Có thể migrate theo từng subdomain |
 | Report export | `/api/reports/export*`, `/api/admin/audit/export` | `/api/v4/reporting/*` | Cần chuẩn hoá response + file export flow |
 
+## W1 Sign-off: Locked Migration Domain Ownership (W2/W3)
+
+Phan vi domain duoi day duoc freeze de trien khai, khong doi ten lane trong qua trinh lam:
+
+| Domain lane | Backend ownership (`cng-mbu.2`) | Frontend ownership (`cng-mbu.3`) | Done when |
+|---|---|---|---|
+| data-health | Tao module `server-v4` + compat adapter `/api/data-health/*` | Chuyen UI qua route canonical trong `apiRoutes` | Frontend khong goi legacy route nua |
+| duplicate-policy | Tao module `server-v4` + contract policy API | Chuyen cac man hinh rule/policy sang canonical route | `api:contract:report` khong con route legacy lane nay |
+| filter-presets | Tach persistence module + canonical `/api/v4/filter-presets*` | Chuyen hooks/preset client sang canonical | Preset CRUD parity voi legacy |
+| feedback-training | Tach module training-resources/feedback | Chuyen feedback client ve canonical API | Dashboard feedback khong phu thuoc legacy |
+| ai-assistant canonicalization | Chuan hoa route contract cho AI module (giu compat neu can) | Chuyen `aiClient` sang route canonical da freeze | Khong con legacy-only endpoint trong AI lane |
+| rules-history | Chot canonical endpoint cho history trail cua rules | Chuyen caller lich su quy tac sang canonical | Lich su quy tac di qua 1 contract duy nhat |
+| reports-export + audit-export | Chot export contract vao `reporting` module | Chuyen export buttons/workflows sang canonical | Export flow qua reporting contract thong nhat |
+| notifications parity cleanup | Chot route doc/ack/review theo alerts module | Chuyen notification client sang canonical route | Notification center dung contract alerts v4 |
+
+Quy tac freeze:
+- Domain nao khong nam trong bang tren thi khong chen vao W2/W3.
+- Neu can mo rong scope, phai update bang nay truoc, kem bead follow-up ro rang.
+
 ## Guardrails
 
 - Frontend route constants tập trung ở `src/lib/apiRoutes.js`.
@@ -110,8 +129,16 @@ Nguồn chính: controllers/services ở `declarations`, `hq-agencies`, `kpi-adj
 
 ## cng-mbu.1 Exit Criteria
 
-- Chốt xong canonical inventory (module + route group) và được xem là source-of-truth cho W2/W3.
-- Chốt envelope/error contract áp dụng cho toàn bộ route mới.
-- Chốt permission key taxonomy + mapping domain mutation.
-- Chốt chuẩn pagination/filter ở mức key và response shape.
-- Còn lại chỉ là migration implementation ở `cng-mbu.2` (backend) và `cng-mbu.3` (frontend), không thay đổi contract tùy tiện.
+- [x] Chốt xong canonical inventory (module + route group) và được xem là source-of-truth cho W2/W3.
+- [x] Chốt envelope/error contract áp dụng cho toàn bộ route mới.
+- [x] Chốt permission key taxonomy + mapping domain mutation.
+- [x] Chốt chuẩn pagination/filter ở mức key và response shape.
+- [x] Lock domain ownership matrix cho W2/W3.
+- [x] Còn lại chỉ là migration implementation ở `cng-mbu.2` (backend) và `cng-mbu.3` (frontend), không thay đổi contract tùy tiện.
+
+W1 sign-off record:
+- Date: 2026-03-31
+- Evidence commands:
+  - `pnpm run api:contract:report`
+  - `pnpm bd:check`
+  - `pnpm bd:safe -- show cng-mbu.1`

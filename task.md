@@ -7,22 +7,19 @@
 - Open epics hien tai:
   - `cng-mbu` (Big-bang FE+BE redesign 6-8 week execution).
 - Highest-priority ready items hien tai:
-  - `cng-mbu.1` (in_progress): W1 Contract and Architecture Freeze.
+  - `cng-mbu.2` (in_progress): W2-3 Backend Full Modularization.
 
 ## Active Slice
 
--- Title: W1 Contract and Architecture Freeze
--- Bead: cng-mbu.1
+-- Title: W2-3 Backend Full Modularization
+-- Bead: cng-mbu.2
 -- Status: in_progress
 -- Last updated: 2026-03-31
 
 - Scope da lam trong slice hien tai:
-  - da bo sung baseline contract freeze trong `docs/api-contract-v4-migration-plan.md`:
-    - canonical module inventory (`/api/v4/*`)
-    - response envelope + error mapping
-    - role/permission model baseline
-    - pagination/filter contract baseline
-  - cap nhat board `docs/big-bang-execution-status.md` theo muc do hoan tat moi cua W1
+  - da sign-off `cng-mbu.1` va lock ownership matrix cho W2/W3 trong `docs/api-contract-v4-migration-plan.md`
+  - da chuyen board `docs/big-bang-execution-status.md` sang trang thai Week1=Done, Week2-3=In Progress
+  - dang vao W2 voi pham vi domain module hoa da lock: `data-health`, `duplicate-policy`, `filter-presets`, `feedback-training`, `rules-history`, `reports-export`, `notifications parity`
 
 ## Handoff
 
@@ -35,7 +32,7 @@
 - Risk: neu khong duy tri 3 nguon truth (`bd`, `task.md`, `docs/big-bang-execution-status.md`) thi se lap lai tinh trang "epic dong som" du plan chua xong.
 - Decision: tu gio theo doi tien do big-bang bang epic `cng-mbu` va board `docs/big-bang-execution-status.md`; moi lane tuan bat buoc co bead + gate + evidence.
 - Decision tiep theo (owner request): auto-commit sau moi bead/slice hoan tat, commit tach rieng theo tung bead.
-- Next: chot sign-off W1 contract freeze (lock danh sach domain migration + acceptance checklist), sau do mo `cng-mbu.2`/`cng-mbu.3` theo dependency graph.
+- Next: thuc thi dot dau `cng-mbu.2` (backend full modularization) theo ownership matrix da lock, giu `cng-mbu.3` o trang thai cho backend route canonical san sang.
 ## Recent Completed Slices
 
 - `cng-7z0.30` da hoan tat storage sync error hardening:
