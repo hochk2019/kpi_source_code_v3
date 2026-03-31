@@ -17,9 +17,12 @@
 -- Last updated: 2026-03-31
 
 - Scope da lam trong slice hien tai:
-  - chot matrix contract freeze cho toan bo luong trong PLAN big-bang
-  - map tung nhom contract (endpoint mapping, envelope, error model, permission model, pagination/filter/sort) vao evidence table
-  - cap nhat board `docs/big-bang-execution-status.md` theo ket qua freeze gate
+  - da bo sung baseline contract freeze trong `docs/api-contract-v4-migration-plan.md`:
+    - canonical module inventory (`/api/v4/*`)
+    - response envelope + error mapping
+    - role/permission model baseline
+    - pagination/filter contract baseline
+  - cap nhat board `docs/big-bang-execution-status.md` theo muc do hoan tat moi cua W1
 
 ## Handoff
 
@@ -32,7 +35,7 @@
 - Risk: neu khong duy tri 3 nguon truth (`bd`, `task.md`, `docs/big-bang-execution-status.md`) thi se lap lai tinh trang "epic dong som" du plan chua xong.
 - Decision: tu gio theo doi tien do big-bang bang epic `cng-mbu` va board `docs/big-bang-execution-status.md`; moi lane tuan bat buoc co bead + gate + evidence.
 - Decision tiep theo (owner request): auto-commit sau moi bead/slice hoan tat, commit tach rieng theo tung bead.
-- Next: hoan tat deliverable contract-freeze cua `cng-mbu.1`, sau do mo `cng-mbu.2`/`cng-mbu.3` theo dependency graph.
+- Next: chot sign-off W1 contract freeze (lock danh sach domain migration + acceptance checklist), sau do mo `cng-mbu.2`/`cng-mbu.3` theo dependency graph.
 ## Recent Completed Slices
 
 - `cng-7z0.30` da hoan tat storage sync error hardening:
