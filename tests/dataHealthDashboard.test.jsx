@@ -184,6 +184,7 @@ describe('DataHealthDashboard rollout integration', () => {
 
     expect(await screen.findByTestId('rollout-panel-probe')).toBeInTheDocument();
     expect(await screen.findByText('monolith-legacy')).toBeInTheDocument();
+    expect(await screen.findByText('Hiệu năng frontend')).toBeInTheDocument();
 
     await waitFor(() => {
       expect(rolloutPanelSpy).toHaveBeenCalled();

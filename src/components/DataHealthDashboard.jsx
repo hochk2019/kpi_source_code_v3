@@ -6,12 +6,17 @@ import { fetchNotificationHistory, subscribeNotificationStream } from '@/lib/not
 
 import useAsyncRequest from '@/hooks/useAsyncRequest.js';
 import DataHealthActivityFeedsPanel from '@/components/data-health-dashboard/DataHealthActivityFeedsPanel.jsx';
+import DataHealthFrontendPerformancePanel from '@/components/data-health-dashboard/DataHealthFrontendPerformancePanel.jsx';
 import DataHealthInfrastructureStatusPanel from '@/components/data-health-dashboard/DataHealthInfrastructureStatusPanel.jsx';
 import DataHealthMetricsAlertsPanel from '@/components/data-health-dashboard/DataHealthMetricsAlertsPanel.jsx';
 import DataHealthPolicyConfigSection from '@/components/data-health-dashboard/DataHealthPolicyConfigSection.jsx';
 import DataHealthRolloutStatusPanel from '@/components/data-health-dashboard/DataHealthRolloutStatusPanel.jsx';
 import DataHealthStorageOverviewPanel from '@/components/data-health-dashboard/DataHealthStorageOverviewPanel.jsx';
 import { buildDataHealthDashboardViewModels } from '@/components/data-health-dashboard/dataHealthDashboardViewModels.js';
+import {
+  getPerformanceTelemetrySummary,
+  subscribePerformanceTelemetry,
+} from '@/lib/frontendPerformanceTelemetry.js';
 
 function formatDate(value) {
 
@@ -354,6 +359,9 @@ export default function DataHealthDashboard({ currentUser, canManage = false }) 
   const [policySaving, setPolicySaving] = useState(false);
 
   const [policyError, setPolicyError] = useState('');
+  const [frontendPerformanceSummary, setFrontendPerformanceSummary] = useState(() =>
+    getPerformanceTelemetrySummary()
+  );
 
   const canEditPolicy = Boolean(canManage);
 
@@ -387,6 +395,15 @@ export default function DataHealthDashboard({ currentUser, canManage = false }) 
 
     setPolicyError(err?.message || 'Không thể tải chính sách trùng 11 số');
 
+  }, []);
+
+  useEffect(() => {
+    const unsubscribe = subscribePerformanceTelemetry((summary) => {
+      setFrontendPerformanceSummary(summary);
+    });
+    return () => {
+      unsubscribe?.();
+    };
   }, []);
 
   const summaryTask = useCallback(async ({ signal }) => {
@@ -1544,6 +1561,8 @@ export default function DataHealthDashboard({ currentUser, canManage = false }) 
         duplicateSummary={duplicateSummaryCard}
         alertSummary={alertSummaryCard}
       />
+
+      <DataHealthFrontendPerformancePanel summary={frontendPerformanceSummary} />
 
 
 

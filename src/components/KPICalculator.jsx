@@ -41,6 +41,11 @@ const KPIAdjustmentsWorkflowPanel = React.lazy(() =>
 const ReportCenterPanel = React.lazy(() => import('@/components/workflows/ReportCenterPanel.jsx'));
 import { SectionHeader, SectionSurface } from '@/components/designSystem/shellPrimitives.jsx';
 import RuntimeErrorBoundary from '@/components/errorBoundaries/RuntimeErrorBoundary.jsx';
+import {
+  getDefaultDeviceHint,
+  recordScreenRenderMetric,
+  startWebVitalsCapture,
+} from '@/lib/frontendPerformanceTelemetry.js';
 
 const TabPanelLoadingState = ({ tabLabel }) => (
   <div aria-live="polite" className="p-4 text-sm text-gray-500" role="status">
@@ -179,6 +184,64 @@ const KPICalculator = ({
 
     import('./ReportViewer.jsx');
 
+  }, []);
+
+  useEffect(() => {
+    if (!tabValue) {
+      return undefined;
+    }
+
+    const now = () =>
+      typeof performance !== 'undefined' && typeof performance.now === 'function'
+        ? performance.now()
+        : Date.now();
+
+    const startAt = now();
+    let firstFrameId = null;
+    let secondFrameId = null;
+    let timeoutId = null;
+
+    const flushMetric = () => {
+      const durationMs = Math.max(0, now() - startAt);
+      recordScreenRenderMetric({
+        screen: tabValue,
+        durationMs,
+        slowThresholdMs: 800,
+        source: 'tab_panel_render',
+        deviceHint: getDefaultDeviceHint(),
+      });
+    };
+
+    if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
+      firstFrameId = window.requestAnimationFrame(() => {
+        secondFrameId = window.requestAnimationFrame(() => {
+          flushMetric();
+        });
+      });
+    } else {
+      timeoutId = setTimeout(flushMetric, 0);
+    }
+
+    return () => {
+      if (typeof window !== 'undefined' && typeof window.cancelAnimationFrame === 'function') {
+        if (firstFrameId != null) {
+          window.cancelAnimationFrame(firstFrameId);
+        }
+        if (secondFrameId != null) {
+          window.cancelAnimationFrame(secondFrameId);
+        }
+      }
+      if (timeoutId != null) {
+        clearTimeout(timeoutId);
+      }
+    };
+  }, [tabValue]);
+
+  useEffect(() => {
+    const stopWebVitalsCapture = startWebVitalsCapture({ source: 'kpi_calculator' });
+    return () => {
+      stopWebVitalsCapture?.();
+    };
   }, []);
 
   const handleTabChange = (value) => {

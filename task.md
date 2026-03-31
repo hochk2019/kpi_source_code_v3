@@ -29,6 +29,14 @@
 - `cng-2k4.6` da hoan tat: tach legacy notification + import alert routes va declaration-alert domain (`get/save config`, `get/save state`, review/unreview, evaluate summary/payload) khoi `server/index.js` sang `server-v4/src/modules/alerts/*`; bo sung regression `tests/server.alertLegacyRoutes.test.js` va `tests/server.alertLegacyDomain.test.js`.
 - Next ready lane UX reliability:
   - `cng-7z0.31` — frontend performance telemetry + slow-screen dashboard
+ - `cng-7z0.31` dang trien khai:
+  - them telemetry module `src/lib/frontendPerformanceTelemetry.js` (Web Vitals + render-duration snapshot theo tab)
+  - `KPICalculator.jsx` da emit `recordScreenRenderMetric` khi tab panel render va start Web Vitals capture lifecycle
+  - `DataHealthDashboard.jsx` da subscribe telemetry va render panel moi `DataHealthFrontendPerformancePanel`
+  - regression moi: `tests/frontendPerformanceTelemetry.test.js`, `tests/dataHealthFrontendPerformancePanel.test.jsx`, va bo sung assertion integration trong `tests/dataHealthDashboard.test.jsx`
+  - targeted verify da pass:
+    - `pnpm exec eslint src/lib/frontendPerformanceTelemetry.js src/components/KPICalculator.jsx src/components/DataHealthDashboard.jsx src/components/data-health-dashboard/DataHealthFrontendPerformancePanel.jsx tests/frontendPerformanceTelemetry.test.js tests/dataHealthFrontendPerformancePanel.test.jsx tests/dataHealthDashboard.test.jsx`
+    - `pnpm exec vitest run tests/frontendPerformanceTelemetry.test.js tests/dataHealthFrontendPerformancePanel.test.jsx tests/dataHealthDashboard.test.jsx tests/dataHealthDashboardViewModels.test.js --environment jsdom`
 ## Handoff
 
 - Slice vua xong: `cng-7z0.30` (storage sync network-error hardening) da close tren BD.
