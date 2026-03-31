@@ -5,17 +5,15 @@
 - Source of truth cho tat ca viec chua xong hien tai la `docs/open-backlog.md`.
 - Da reconcile ngay 2026-03-29 voi cac nguon: `Gemini_review_V1.md`, `docs/gemini-review-v1-factcheck-2026-03-25.md`, `docs/server-v4-rollout-plan-2026-03-25.md`, `frontend-wave1-decomposition.md`, `docs/ux-improvement-backlog.md`, va bead database.
 - Open epics hien tai:
-  - `cng-2k4` — Post-Gemini remaining technical backlog
-  - `cng-7z0` — UX improvement backlog execution
+  - Khong con open epics trong bead tracker.
 - Highest-priority ready items hien tai:
-  - UX reliability lane:
-    - `cng-7z0.31` — frontend performance telemetry + slow-screen dashboard
+  - Khong co bead `ready`/`in_progress`; cho user seed lane tiep theo.
 
 ## Active Slice
 
--- Title: Frontend performance telemetry + slow-screen dashboard
--- Bead: cng-7z0.31
--- Status: in_progress
+-- Title: Add skip-to-content keyboard navigation affordance
+-- Bead: [none]
+-- Status: done
 -- Last updated: 2026-03-31
 
 - `cng-7z0.30` da hoan tat:
@@ -27,9 +25,7 @@
     - `pnpm exec vitest run tests/storageClient.test.js tests/storageSyncErrors.test.js`
     - `pnpm exec vitest run tests/store.test.js tests/useDataImporterSyncStatusToast.test.jsx tests/commandCenter.pinStorage.test.js`
 - `cng-2k4.6` da hoan tat: tach legacy notification + import alert routes va declaration-alert domain (`get/save config`, `get/save state`, review/unreview, evaluate summary/payload) khoi `server/index.js` sang `server-v4/src/modules/alerts/*`; bo sung regression `tests/server.alertLegacyRoutes.test.js` va `tests/server.alertLegacyDomain.test.js`.
-- Next ready lane UX reliability:
-  - `cng-7z0.31` — frontend performance telemetry + slow-screen dashboard
- - `cng-7z0.31` dang trien khai:
+- `cng-7z0.31` da hoan tat:
   - them telemetry module `src/lib/frontendPerformanceTelemetry.js` (Web Vitals + render-duration snapshot theo tab)
   - `KPICalculator.jsx` da emit `recordScreenRenderMetric` khi tab panel render va start Web Vitals capture lifecycle
   - `DataHealthDashboard.jsx` da subscribe telemetry va render panel moi `DataHealthFrontendPerformancePanel`
@@ -37,11 +33,24 @@
   - targeted verify da pass:
     - `pnpm exec eslint src/lib/frontendPerformanceTelemetry.js src/components/KPICalculator.jsx src/components/DataHealthDashboard.jsx src/components/data-health-dashboard/DataHealthFrontendPerformancePanel.jsx tests/frontendPerformanceTelemetry.test.js tests/dataHealthFrontendPerformancePanel.test.jsx tests/dataHealthDashboard.test.jsx`
     - `pnpm exec vitest run tests/frontendPerformanceTelemetry.test.js tests/dataHealthFrontendPerformancePanel.test.jsx tests/dataHealthDashboard.test.jsx tests/dataHealthDashboardViewModels.test.js --environment jsdom`
+- `cng-2k4.23` da hoan tat:
+  - reconcile toan bo checkbox `[ ]` con sot trong cac source backlog docs va map lai voi bead da close
+  - cap nhat `docs/ux-improvement-backlog.md` + `docs/open-backlog.md` + `task.md` de khong con orphan checklist item
+  - tao child bead tiep theo `cng-2k4.24` (skip-to-content keyboard navigation) va chuyen sang `in_progress`
+- `cng-2k4.24` da hoan tat:
+  - them skip link visible-on-focus `Bỏ qua tới nội dung chính` o shell (`src/App.jsx`) va focus handoff vao main landmark
+  - main content target nay co `id="app-main-content"` + `tabIndex={-1}` de keyboard users co the bo qua navigation nhanh
+  - bo sung regression `tests/app.skipLink.test.jsx` cho contract href/id/tabindex va keyboard focus handoff bang Enter
+  - targeted verify da pass:
+    - `pnpm exec eslint src/App.jsx tests/app.skipLink.test.jsx`
+    - `pnpm exec vitest run tests/app.skipLink.test.jsx tests/appRoot.errorBoundary.test.jsx --environment jsdom`
 ## Handoff
 
-- Slice vua xong: `cng-7z0.30` (storage sync network-error hardening) da close tren BD.
-- Slice tiep theo: `cng-7z0.31` (frontend performance telemetry + slow-screen dashboard).
-- Khoi dong lane tiep theo nen uu tien map metric schema + emit hooks truoc, sau do moi lam dashboard view.
+- Slice vua xong: `cng-7z0.31` (frontend performance telemetry + slow-screen dashboard), commit `8634b5a`.
+- Slice vua xong tiep theo: `cng-2k4.23` (source backlog reconciliation + next-slice definition).
+- Slice vua xong moi nhat: `cng-2k4.24` (skip-to-content keyboard navigation + regression tests).
+- Epic `cng-2k4` da dong; hien khong con bead mo trong backlog canonical.
+- Cho user seed lane/bead tiep theo truoc khi mo implementation moi.
 ## Recent Completed Slices
 
 - `cng-7z0.30` da hoan tat storage sync error hardening:
@@ -880,13 +889,11 @@
 
 ## Next Suggested Slice
 
-- Title: Frontend performance telemetry + slow-screen dashboard
-- Bead: `cng-7z0.31`
-- Status: in_progress
+- Title: Add skip-to-content keyboard navigation affordance
+- Bead: none
+- Status: done
 - Follow-up backlog:
-  - xac dinh schema telemetry nhe (`screen`, `durationMs`, `slowThresholdMs`, `deviceHint`)
-  - them hooks instrument o nhung flow giao dien nang (reporting/importer/command-center)
-  - tao dashboard hien top slow screens + trend theo session de support triage UX backlog
+  - khong co follow-up mo trong bead tracker sau khi dong `cng-2k4.24` va epic `cng-2k4`
 
 ## Verification
 

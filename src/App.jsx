@@ -239,6 +239,19 @@ export default function App() {
 
   }, [auth?.username]);
 
+  const handleSkipToContent = useCallback((event) => {
+    event.preventDefault();
+    if (typeof document === 'undefined') {
+      return;
+    }
+    const target = document.getElementById('app-main-content');
+    if (!target) {
+      return;
+    }
+    target.focus();
+    target.scrollIntoView?.({ block: 'start' });
+  }, []);
+
 
 
   useEffect(() => {
@@ -305,6 +318,13 @@ export default function App() {
   return (
 
     <div ref={rootRef} className="min-h-screen bg-gray-50 text-gray-900 transition-colors duration-300">
+      <a
+        href="#app-main-content"
+        onClick={handleSkipToContent}
+        className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[200] focus:rounded-md focus:bg-amber-600 focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-white focus:shadow-lg focus:outline-none focus:ring-2 focus:ring-amber-200"
+      >
+        Bỏ qua tới nội dung chính
+      </a>
 
       <header className="border-b border-gray-200 bg-white/80 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-white/60 dark:border-gray-800 dark:bg-slate-900/70">
 
@@ -478,7 +498,7 @@ export default function App() {
 
 
 
-      <main className="px-4 py-6">
+      <main id="app-main-content" tabIndex={-1} className="px-4 py-6">
 
         <Suspense fallback={<div className="text-sm text-gray-500 dark:text-gray-400">Đang tải dashboard...</div>}>
 

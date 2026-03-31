@@ -17,11 +17,11 @@ Reconciliation note 2026-03-27:
 
 ## 2. ECUS declaration sync
 
-- [ ] Hiển thị tiến trình đồng bộ theo từng bước (đọc ECUS, tính toán diff, ghi vào store) với trạng thái rõ ràng khi gọi `refreshDeclRowsFromServer`.
-- [ ] Thêm hàng đợi đồng bộ nền để xử lý file lớn, hỗ trợ resume khi mất kết nối hoặc đóng trình duyệt.
-- [ ] Cảnh báo xung đột (vd. tờ khai đã bị chỉnh sửa tại chỗ khác) và cung cấp giao diện so sánh trước khi ghi đè.
-- [ ] Thực hiện pre-check (kiểm tra kết nối DB, quyền truy cập ECUS, dung lượng đĩa) và hiển thị check-list trước khi chạy đồng bộ.
-- [ ] Bổ sung cơ chế retry tự động với backoff và log thân thiện khi `sendWrite` trả về lỗi.
+- [x] Hiển thị tiến trình đồng bộ theo từng bước (đọc ECUS, tính toán diff, ghi vào store) với trạng thái rõ ràng khi gọi `refreshDeclRowsFromServer`. (done 2026-03-31, bead `cng-7z0.6`, them step-level sync progress state + preview stepper UI trong DataImporter sync panel)
+- [x] Thêm hàng đợi đồng bộ nền để xử lý file lớn, hỗ trợ resume khi mất kết nối hoặc đóng trình duyệt. (done 2026-03-31, bead `cng-7z0.7`, backend-detached async ECUS commit jobs + resume polling qua `declarationsImportJobService`)
+- [x] Cảnh báo xung đột (vd. tờ khai đã bị chỉnh sửa tại chỗ khác) và cung cấp giao diện so sánh trước khi ghi đè. (done 2026-03-29, bead `cng-7z0.8`, surfacing conflict summary/banner truoc khi cho overwrite)
+- [x] Thực hiện pre-check (kiểm tra kết nối DB, quyền truy cập ECUS, dung lượng đĩa) và hiển thị check-list trước khi chạy đồng bộ. (done 2026-03-29, bead `cng-7z0.9`, bo sung preflight checklist trong luong sync)
+- [x] Bổ sung cơ chế retry tự động với backoff và log thân thiện khi `sendWrite` trả về lỗi. (done 2026-03-29, bead `cng-7z0.10`, auto retry/backoff + countdown + activity log cho sync failures)
 - [x] Lưu lịch sử đồng bộ (ai chạy, thời gian, số bản ghi cập nhật) để hiện trong Notification Center và trang tổng quan. (done 2026-03-29, persist bounded sync history trong queue local state, luu actor/range/resultSummary cho moi lan sync, va surfacing ngay trong ECUS sync panel de lam nguon cho notification/dashboard slices sau)
 
 ## 3. Data Importer
@@ -56,10 +56,10 @@ Reconciliation note 2026-03-27:
 
 ## 7. Reliability, QA & accessibility
 
-- [ ] Chuẩn hóa xử lý lỗi mạng trong `storageClient.js` (retry queue, rollback, thông báo rõ nghĩa).
-- [ ] Bổ sung đo lường hiệu năng (Web Vitals, log render) và dashboard theo dõi để phát hiện màn hình chậm.
-- [ ] Thực hiện audit accessibility (focus trap, aria-label, contrast) trên các component trọng yếu (`KPIAdjustments`, `DataImporter`, `MSTAssignment`).
-- [ ] Viết thêm test tự động cho các luồng filter và đồng bộ, đảm bảo không regress khi refactor.
+- [x] Chuẩn hóa xử lý lỗi mạng trong `storageClient.js` (retry queue, rollback, thông báo rõ nghĩa). (done 2026-03-31, bead `cng-7z0.30`, them `storageSyncErrors` + rollback/retryability metadata + regression tests)
+- [x] Bổ sung đo lường hiệu năng (Web Vitals, log render) và dashboard theo dõi để phát hiện màn hình chậm. (done 2026-03-31, bead `cng-7z0.31`, them telemetry module + Data Health frontend performance panel)
+- [x] Thực hiện audit accessibility (focus trap, aria-label, contrast) trên các component trọng yếu (`KPIAdjustments`, `DataImporter`, `MSTAssignment`). (done 2026-03-29, bead `cng-7z0.32`, accessibility audit da chay va fixes da duoc merge)
+- [x] Viết thêm test tự động cho các luồng filter và đồng bộ, đảm bảo không regress khi refactor. (done 2026-03-29, bead `cng-7z0.33`, bo sung regression coverage cho filter/sync flows)
 - [x] Xây dựng checklist QA cuối sprint, liên kết vào `docs/operations/ui-verification-log.md`. (done 2026-03-28, thêm `docs/operations/ui-sprint-qa-checklist.md`)
 
 ## Cách sử dụng

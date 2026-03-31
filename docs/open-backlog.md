@@ -23,6 +23,9 @@ Reconciliation note:
 - Reconciled again on 2026-03-31 after closing `cng-7z0.7`; ECUS sync now supports backend-detached async commit jobs with resume polling, so this item is removed from open UX backlog.
 - Reconciled again on 2026-03-31 after closing `cng-2k4.5`; AI assistant backend routes/constants/chat-history are extracted into `server-v4/src/modules/ai/*`, and `cng-2k4.6` is now the active backend-cutover slice.
 - Reconciled again on 2026-03-31 after completing `cng-2k4.6`; alert/notification legacy routes and declaration-alert domain logic are now extracted into `server-v4/src/modules/alerts/*`, so backend cutover focus returns to `cng-2k4.2` and `cng-2k4.3`.
+- Reconciled again on 2026-03-31 after completing `cng-7z0.31`; frontend performance telemetry and slow-screen dashboard are shipped, and epic `cng-7z0` is closed.
+- Reconciled again on 2026-03-31 after completing `cng-2k4.23`; source checklist drift is cleared, and next technical slice `cng-2k4.24` is opened.
+- Reconciled again on 2026-03-31 after completing `cng-2k4.24`; skip-to-content keyboard navigation is shipped with regression tests, and epic `cng-2k4` is now closed with no remaining open child beads.
 
 Rule:
 - Every unfinished item from review notes, rollout plans, decomposition plans, or UX backlogs must be in one of two states:
@@ -30,19 +33,17 @@ Rule:
 - explicitly marked deferred or removed in its source document
 
 Current open epics:
-- `cng-2k4` — Post-Gemini remaining technical backlog
-- `cng-7z0` — UX improvement backlog execution
+- None.
 
 Current highest-priority ready items:
-- UX reliability lane:
-- `cng-7z0.31` — Add frontend performance telemetry and slow-screen dashboard
+- None.
 
 ## Technical Stabilization
 
-Epic: `cng-2k4`
+Epic: `cng-2k4` (closed)
 Source set: `Gemini_review_V1.md`, `docs/gemini-review-v1-factcheck-2026-03-25.md`, `docs/server-v4-rollout-plan-2026-03-25.md`, `frontend-wave1-decomposition.md`, `task.md`
 
-- No open child tasks currently tracked in BD for epic `cng-2k4`.
+- No open child tasks currently tracked in BD for epic `cng-2k4` (epic closed).
 
 ## UX Improvement Backlog
 
@@ -61,7 +62,7 @@ Source set: `docs/ux-improvement-backlog.md`
 
 ### Reliability, QA, And Accessibility
 
-- `cng-7z0.31` — Add frontend performance telemetry and slow-screen dashboard
+- No open child tasks currently tracked in BD for epic `cng-7z0` (epic closed).
 
 ## Reconciliation Workflow
 
