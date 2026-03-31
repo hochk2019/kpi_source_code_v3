@@ -8,24 +8,29 @@
   - `cng-2k4` — Post-Gemini remaining technical backlog
   - `cng-7z0` — UX improvement backlog execution
 - Highest-priority ready items hien tai:
-  - frontend stabilization lane:
-    - `cng-2k4.22` — text/lint hygiene cho app/runtime code, khong gom dirt co san trong `.claude/skills/*`
-  - backend cutover lane:
-    - `cng-2k4.2` — declarations write cutover voi compat guard + rollback plan
-    - `cng-2k4.3` — switch production entrypoint sang `server-v4`
+  - UX reliability lane:
+    - `cng-7z0.31` — frontend performance telemetry + slow-screen dashboard
 
 ## Active Slice
 
--- Title: Server-v4 alert + notification extraction prep
--- Bead: cng-2k4.6
+-- Title: Storage client network error hardening
+-- Bead: cng-7z0.30
 -- Status: in_progress
 -- Last updated: 2026-03-31
 
-- `cng-2k4.5` da xong: tach toan bo AI backend routes/chat-history/constants khoi `server/index.js` sang `server-v4/src/modules/ai/*`, giu route contract cu qua `registerAiRoutes`, bo sung regression `tests/server.aiModules.test.js`, va refresh AI block trong `tests/server.api.test.js` de khop policy mat khau hien tai.
-- Next ready lane backend cutover:
-  - `cng-2k4.6` — extract alert + notification backend logic vao `server-v4` alerts module
+- `cng-2k4.6` da hoan tat: tach legacy notification + import alert routes va declaration-alert domain (`get/save config`, `get/save state`, review/unreview, evaluate summary/payload) khoi `server/index.js` sang `server-v4/src/modules/alerts/*`; bo sung regression `tests/server.alertLegacyRoutes.test.js` va `tests/server.alertLegacyDomain.test.js`.
+- Next ready lane UX reliability:
+  - `cng-7z0.31` — frontend performance telemetry + slow-screen dashboard
 ## Recent Completed Slices
 
+- `cng-2k4.6` da hoan tat o muc tach alerts + notifications backend:
+  - them `server-v4/src/modules/alerts/alertsLegacyDomain.js` de gom alert config/state persistence, review/unreview mutate flow, evaluate declaration alerts, va payload formatter/builders qua dependency injection
+  - `server/index.js` nay chi con wiring domain (`createLegacyAlertsDomain`) va route registration (`registerLegacyNotificationRoutes`, `registerLegacyImportAlertRoutes`) thay vi giu khoi alert functions lon
+  - bo sung regression `tests/server.alertLegacyDomain.test.js` va giu xanh `tests/server.alertLegacyRoutes.test.js`
+  - targeted verify da pass:
+    - `pnpm exec eslint server/index.js server-v4/src/modules/alerts/alertsLegacyDomain.js tests/server.alertLegacyDomain.test.js tests/server.alertLegacyRoutes.test.js tests/server.api.test.js`
+    - `pnpm exec vitest run tests/server.alertLegacyDomain.test.js tests/server.alertLegacyRoutes.test.js --environment node`
+    - `pnpm exec vitest run tests/server.api.test.js tests/server-v4/runtimeRoutes.test.js tests/server-v4/alertsRoutes.test.js --environment node`
 - `cng-2k4.5` da xong o muc tach AI assistant backend module:
   - them `server-v4/src/modules/ai/ai.constants.js`, `server-v4/src/modules/ai/aiChatHistoryStore.js`, va `server-v4/src/modules/ai/aiLegacyRoutes.js` de gom constants + chat history + legacy `/api/ai/*` handlers
   - `server/index.js` nay chi con wiring dependency va `registerAiRoutes(app, deps)` thay vi giu mot khoi route lon, dong thoi giu nguyen route khong lien quan (`/api/rules/history`)

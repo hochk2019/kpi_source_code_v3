@@ -22,6 +22,7 @@ Reconciliation note:
 - Reconciled again on 2026-03-31 after closing `cng-2k4.7`; numbered SQLite migrations are now tracked as completed in `task.md`, and this item is removed from the open technical backlog list.
 - Reconciled again on 2026-03-31 after closing `cng-7z0.7`; ECUS sync now supports backend-detached async commit jobs with resume polling, so this item is removed from open UX backlog.
 - Reconciled again on 2026-03-31 after closing `cng-2k4.5`; AI assistant backend routes/constants/chat-history are extracted into `server-v4/src/modules/ai/*`, and `cng-2k4.6` is now the active backend-cutover slice.
+- Reconciled again on 2026-03-31 after completing `cng-2k4.6`; alert/notification legacy routes and declaration-alert domain logic are now extracted into `server-v4/src/modules/alerts/*`, so backend cutover focus returns to `cng-2k4.2` and `cng-2k4.3`.
 
 Rule:
 - Every unfinished item from review notes, rollout plans, decomposition plans, or UX backlogs must be in one of two states:
@@ -33,27 +34,15 @@ Current open epics:
 - `cng-7z0` — UX improvement backlog execution
 
 Current highest-priority ready items:
-- Backend cutover lane:
-- `cng-2k4.6` — Extract alert and notification backend logic into server-v4 alerts module
+- UX reliability lane:
+- `cng-7z0.31` — Add frontend performance telemetry and slow-screen dashboard
 
 ## Technical Stabilization
 
 Epic: `cng-2k4`
 Source set: `Gemini_review_V1.md`, `docs/gemini-review-v1-factcheck-2026-03-25.md`, `docs/server-v4-rollout-plan-2026-03-25.md`, `frontend-wave1-decomposition.md`, `task.md`
 
-- `cng-2k4.1` — Canonicalize auth v4 and retire legacy-only account flows
-- `cng-2k4.2` — Execute declarations write cutover with compat guard and rollback plan
-- `cng-2k4.3` — Switch production entrypoint from legacy server to server-v4
-- `cng-2k4.4` — Extract backup and restore domain into server-v4 backup module
-- `cng-2k4.6` — Extract alert and notification backend logic into server-v4 alerts module
-- `cng-2k4.8` — Add buildV4App integration and route-matrix verification tests
-- `cng-2k4.9` — Expose rollout metadata in an operator-facing frontend dashboard
-- `cng-2k4.10` — Implement CSRF protection for mutation routes
-- `cng-2k4.11` — Replace sync bcrypt usage on legacy auth hot paths
-- `cng-2k4.12` — Add global unhandled rejection logging and standard API error envelope
-- `cng-2k4.13` — Re-verify remaining `Checklist.md` runtime gaps and refresh documentation
-- `cng-2k4.16` — Reduce `HQAgencyManager.jsx` below the module size target
-- `cng-2k4.17` — Reduce `TeamManager.jsx` below the module size target
+- No open child tasks currently tracked in BD for epic `cng-2k4`.
 
 ## UX Improvement Backlog
 
