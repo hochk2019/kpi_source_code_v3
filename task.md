@@ -38,16 +38,16 @@
 
 ## Handoff
 
-- Done: dat "control tower" cho plan big-bang de khong mat context khi doi tai khoan/phien (bead `cng-mbu.8` da close).
+- Done: da them parity rehearsal runner cho `cng-mbu.4` (`scripts/v4-parity-suite-core.mjs`, `scripts/v4-parity-suite.mjs`) + package scripts `verify:v4:parity` va `verify:v4:parity:quick`, kem regression `tests/scripts/v4ParitySuite.test.js`.
 - Verify:
-  - `bd ready --json` (mo lai `cng-mbu` + child beads)
-  - `bd dep add ...` (dependency graph lane tuan)
-  - `pnpm run api:contract:report` (baseline canonical=27, legacy=22)
-  - `pnpm bd:check` (nhat quan task.md/open-backlog/BD)
-- Risk: neu khong duy tri 3 nguon truth (`bd`, `task.md`, `docs/big-bang-execution-status.md`) thi se lap lai tinh trang "epic dong som" du plan chua xong.
-- Decision: tu gio theo doi tien do big-bang bang epic `cng-mbu` va board `docs/big-bang-execution-status.md`; moi lane tuan bat buoc co bead + gate + evidence.
-- Decision tiep theo (owner request): giam tan suat commit, gom theo lane/slice lon (khong commit moi thay doi nho).
-- Next: tiep tuc `cng-mbu.4` (W5-6 integration + parity), uu tien adapter-vs-canonical parity matrix va migration rehearsal theo `docs/operations/v4-rollout-plan.md`.
+  - `pnpm exec eslint scripts/v4-parity-suite-core.mjs scripts/v4-parity-suite.mjs tests/scripts/v4ParitySuite.test.js`
+  - `pnpm exec vitest run tests/scripts/v4ParitySuite.test.js --environment node`
+  - `pnpm run verify:v4:parity -- --dry-run --with-diff`
+  - `pnpm run verify:v4:parity` (full: `passed=7/7 failed=0`)
+  - `pnpm bd:check`
+- Risk: lane `cng-mbu.4` van con migration rehearsal thu cong tren moi truong rollout that; script runner moi chi automate matrix command va gate local.
+- Decision: giu `cng-mbu.4` o trang thai `in_progress`; dung `verify:v4:parity` lam gate bat buoc truoc moi cap nhat stage W5-6.
+- Next: tiep tuc `cng-mbu.4` voi sub-slice "adapter-vs-canonical migration rehearsal evidence capture" (luu ket qua `/api/v4/meta/rollout` + checklist stage theo moi lan rehearsal).
 ## Recent Completed Slices
 
 - `cng-7z0.30` da hoan tat storage sync error hardening:
