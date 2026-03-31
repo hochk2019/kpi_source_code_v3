@@ -13,6 +13,7 @@ Tài liệu này gom các lệnh verify tối thiểu trước khi mở thêm tr
 | Area | Command | Expected signal | Scope |
 | --- | --- | --- | --- |
 | One-shot parity runner (W5-6) | `pnpm run verify:v4:parity` | exit `0`, summary `failed=0` | adapter-vs-canonical parity + migration rehearsal baseline |
+| Rollout rehearsal evidence capture | `pnpm run verify:v4:rehearsal -- --label <env>` | exit `0` khi khong co blocker gate, ghi `.json` + `.md` vao `docs/operations/v4-rollout-evidence` | luu bang chung `/api/v4/health` + `/api/v4/meta/rollout` moi lan rehearsal |
 | `server-v4` shell health + rollout metadata | `pnpm exec vitest run tests/server-v4/appShell.test.js tests/server-v4/v4RolloutStatus.test.js` | `5/5` pass | `/api/v4/health`, `/api/v4/meta/modules`, `/api/v4/meta/rollout` |
 | `server-v4` runtime reporting parity | `pnpm exec vitest run tests/server-v4/runtimeRoutes.test.js tests/server-v4/reportingService.test.js tests/server-v4/legacyReportBridge.test.js` | all green | reporting read/write boundary + legacy math seam |
 | Monolith ECUS bridge extraction | `pnpm exec vitest run tests/server.ecusBridgeService.test.js tests/server.ecusSqlBridge.test.js tests/server.api.test.js tests/server.seed.test.js` | all green | SQL Server bridge, sync health, API integration |
@@ -35,6 +36,14 @@ Tài liệu này gom các lệnh verify tối thiểu trước khi mở thêm tr
    - `migrationVerification.checks` không có `fail`.
    - `rollout.currentStage` khớp stage đang công bố.
 3. Mở Data Health Dashboard và xác nhận monolith vẫn báo healthy cho ECUS SQL/backup path trước khi bật bất kỳ write traffic nào sang `v4`.
+
+### Rehearsal helper
+
+- Dùng `pnpm run verify:v4:rehearsal -- --label staging --expected-stage module-parity` để tự động:
+  - fetch `/api/v4/health` + `/api/v4/meta/rollout`
+  - đánh giá gate (`readiness blocked`, `migration checks fail`)
+  - ghi bằng chứng JSON/Markdown dưới `docs/operations/v4-rollout-evidence/`
+- Thêm `--allow-failed-gates` chỉ khi cần chụp chứng cứ điều tra mà không muốn command fail CI.
 
 ## Exit rule
 

@@ -35,11 +35,20 @@
     - package scripts: `pnpm run verify:v4:parity`, `pnpm run verify:v4:parity:quick`
     - regression: `tests/scripts/v4ParitySuite.test.js`
     - docs cap nhat ma tran: `docs/operations/v4-qa-matrix.md`
+  - da them rollout rehearsal evidence collector cho migration rehearsal:
+    - script core: `scripts/v4-rollout-rehearsal-core.mjs`
+    - cli runner: `scripts/v4-rollout-rehearsal.mjs`
+    - package script: `pnpm run verify:v4:rehearsal`
+    - regression: `tests/scripts/v4RolloutRehearsal.test.js`
+    - docs cap nhat helper usage va output path: `docs/operations/v4-qa-matrix.md`
 
 ## Handoff
 
-- Done: da them parity rehearsal runner cho `cng-mbu.4` (`scripts/v4-parity-suite-core.mjs`, `scripts/v4-parity-suite.mjs`) + package scripts `verify:v4:parity` va `verify:v4:parity:quick`, kem regression `tests/scripts/v4ParitySuite.test.js`.
+- Done: da them rollout rehearsal evidence collector cho `cng-mbu.4` (`scripts/v4-rollout-rehearsal-core.mjs`, `scripts/v4-rollout-rehearsal.mjs`) + package script `verify:v4:rehearsal`, kem regression `tests/scripts/v4RolloutRehearsal.test.js`; giu nguyen parity runner (`verify:v4:parity`) lam gate matrix.
 - Verify:
+  - `pnpm exec eslint scripts/v4-rollout-rehearsal-core.mjs scripts/v4-rollout-rehearsal.mjs tests/scripts/v4RolloutRehearsal.test.js`
+  - `pnpm exec vitest run tests/scripts/v4RolloutRehearsal.test.js --environment node`
+  - `pnpm run verify:v4:rehearsal -- --dry-run --allow-failed-gates`
   - `pnpm exec eslint scripts/v4-parity-suite-core.mjs scripts/v4-parity-suite.mjs tests/scripts/v4ParitySuite.test.js`
   - `pnpm exec vitest run tests/scripts/v4ParitySuite.test.js --environment node`
   - `pnpm run verify:v4:parity -- --dry-run --with-diff`
@@ -47,7 +56,7 @@
   - `pnpm bd:check`
 - Risk: lane `cng-mbu.4` van con migration rehearsal thu cong tren moi truong rollout that; script runner moi chi automate matrix command va gate local.
 - Decision: giu `cng-mbu.4` o trang thai `in_progress`; dung `verify:v4:parity` lam gate bat buoc truoc moi cap nhat stage W5-6.
-- Next: tiep tuc `cng-mbu.4` voi sub-slice "adapter-vs-canonical migration rehearsal evidence capture" (luu ket qua `/api/v4/meta/rollout` + checklist stage theo moi lan rehearsal).
+- Next: tiep tuc `cng-mbu.4` voi sub-slice "staging/prod rehearsal runbook execution" (chay `verify:v4:rehearsal` tren moi truong that, attach artifact vao rollout issue, va doi chieu voi Data Health Dashboard truoc gate W6).
 ## Recent Completed Slices
 
 - `cng-7z0.30` da hoan tat storage sync error hardening:
