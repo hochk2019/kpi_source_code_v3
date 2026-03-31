@@ -9,6 +9,7 @@ import {
   createBackupAdminRuntime,
   type BackupAdminRuntime,
 } from '../modules/backup/backupRuntime.js';
+import { buildDataHealthRouter } from '../modules/data-health/dataHealthRoutes.js';
 import { buildDeclarationsRouter } from '../modules/declarations/declarationsRoutes.js';
 import type { EcusSqlHealthCheck } from '../modules/declarations/declarationsEcusSyncService.js';
 import type { CoDiscrepancyRunner } from '../modules/declarations/ecusCoDiscrepancyRunner.js';
@@ -45,6 +46,9 @@ export type BuildV4AppOptions = ServerV4ConfigInput & {
   };
   alerts?: AlertsRuntime;
   backup?: BackupAdminRuntime;
+  dataHealth?: {
+    readDataHealthSnapshot?: () => Promise<unknown>;
+  };
 };
 
 function buildDefaultModuleRouter(domainModule: DomainModule): Router {
@@ -91,6 +95,7 @@ export function buildV4App(input?: readonly DomainModule[] | BuildV4AppOptions):
     'kpi-rules',
     'kpi-adjustments',
     'backup',
+    'data-health',
     'declarations',
     'hq-agencies',
     'mst-assignments',
@@ -162,6 +167,14 @@ export function buildV4App(input?: readonly DomainModule[] | BuildV4AppOptions):
 
     if (domainModule.id === 'backup') {
       app.use(domainModule.basePath, buildBackupRouter(domainModule, persistence.authStore, backupAdmin));
+      continue;
+    }
+
+    if (domainModule.id === 'data-health') {
+      app.use(
+        domainModule.basePath,
+        buildDataHealthRouter(domainModule, persistence.authStore, options.dataHealth),
+      );
       continue;
     }
 

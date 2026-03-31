@@ -2,6 +2,7 @@ import type { DomainModule } from './domain-module.js';
 import { alertsModule } from '../modules/alerts/alerts.module.js';
 import { authModule } from '../modules/auth/auth.module.js';
 import { backupModule } from '../modules/backup/backup.module.js';
+import { dataHealthModule } from '../modules/data-health/data-health.module.js';
 import { declarationsModule } from '../modules/declarations/declarations.module.js';
 import { hqAgenciesModule } from '../modules/hq-agencies/hq-agencies.module.js';
 import { kpiAdjustmentsModule } from '../modules/kpi-adjustments/kpi-adjustments.module.js';
@@ -14,6 +15,7 @@ export const moduleCatalog: readonly DomainModule[] = Object.freeze([
   alertsModule,
   authModule,
   backupModule,
+  dataHealthModule,
   declarationsModule,
   mstAssignmentsModule,
   teamsModule,

@@ -10,6 +10,7 @@ export const WAVE2_V4_MODULE_IDS = Object.freeze([
   'kpi-adjustments',
   'alerts',
   'backup',
+  'data-health',
 ]);
 
 export const LEGACY_V4_MODULE_IDS = Object.freeze([

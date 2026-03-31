@@ -15,6 +15,7 @@ const implementedModuleIds = [
   'alerts',
   'auth',
   'backup',
+  'data-health',
   'declarations',
   'hq-agencies',
   'kpi-adjustments',

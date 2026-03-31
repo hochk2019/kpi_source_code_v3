@@ -93,7 +93,7 @@ Nguồn chính: controllers/services ở `declarations`, `hq-agencies`, `kpi-adj
 
 | Domain | Current frontend route(s) | Target state | Note |
 |---|---|---|---|
-| Data health | `/api/data-health/summary` | `/api/v4/...` | Chưa có module `server-v4` tương ứng |
+| Data health | `/api/data-health/summary` | `/api/v4/data-health/summary` | Da co module `server-v4`; chua migrate frontend caller |
 | Duplicate policy | `/api/duplicate-policy` | `/api/v4/...` | Chưa có module `server-v4` tương ứng |
 | Filter presets | `/api/filter-presets*` | `/api/v4/...` | Cần backend module hoá |
 | Feedback/training | `/api/training-resources`, `/api/feedback*` | `/api/v4/...` | Hiện đang bám legacy store |

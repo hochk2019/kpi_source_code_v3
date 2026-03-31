@@ -8,6 +8,7 @@ describe('server-v4 module catalog', () => {
       'alerts',
       'auth',
       'backup',
+      'data-health',
       'declarations',
       'mst-assignments',
       'teams',

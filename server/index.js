@@ -305,6 +305,9 @@ async function mountReportingV4App(targetApp) {
         pushAuditLog,
         saveBackupConfig,
       },
+      dataHealth: {
+        readDataHealthSnapshot: () => getDataHealthSnapshot(),
+      },
     });
 
     targetApp.use(v4App);
