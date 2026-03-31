@@ -13,16 +13,38 @@
 
 ## Active Slice
 
--- Title: Storage client network error hardening
--- Bead: cng-7z0.30
+-- Title: Frontend performance telemetry + slow-screen dashboard
+-- Bead: cng-7z0.31
 -- Status: in_progress
 -- Last updated: 2026-03-31
 
+- `cng-7z0.30` da hoan tat:
+  - them module `src/lib/storageSyncErrors.js` de normalize network/auth/http sync failures va xep retryability thong nhat
+  - cap nhat `src/lib/storageClient.js` voi rollback giu gia tri moi nhat khi in-flight write fail, bo sung sync error metadata (`code/hint/retryable`) va chan auto-retry voi non-retryable errors
+  - bo sung regression `tests/storageSyncErrors.test.js`, cap nhat `tests/storageClient.test.js` cho rollback + payload-too-large behavior
+  - targeted verify da pass:
+    - `pnpm exec eslint src/lib/storageClient.js src/lib/storageSyncErrors.js tests/storageClient.test.js tests/storageSyncErrors.test.js`
+    - `pnpm exec vitest run tests/storageClient.test.js tests/storageSyncErrors.test.js`
+    - `pnpm exec vitest run tests/store.test.js tests/useDataImporterSyncStatusToast.test.jsx tests/commandCenter.pinStorage.test.js`
 - `cng-2k4.6` da hoan tat: tach legacy notification + import alert routes va declaration-alert domain (`get/save config`, `get/save state`, review/unreview, evaluate summary/payload) khoi `server/index.js` sang `server-v4/src/modules/alerts/*`; bo sung regression `tests/server.alertLegacyRoutes.test.js` va `tests/server.alertLegacyDomain.test.js`.
 - Next ready lane UX reliability:
   - `cng-7z0.31` — frontend performance telemetry + slow-screen dashboard
+## Handoff
+
+- Slice vua xong: `cng-7z0.30` (storage sync network-error hardening) da close tren BD.
+- Slice tiep theo: `cng-7z0.31` (frontend performance telemetry + slow-screen dashboard).
+- Khoi dong lane tiep theo nen uu tien map metric schema + emit hooks truoc, sau do moi lam dashboard view.
 ## Recent Completed Slices
 
+- `cng-7z0.30` da hoan tat storage sync error hardening:
+  - them `src/lib/storageSyncErrors.js` de chuan hoa sync error (`code`, `message`, `hint`, `retryable`) cho network/offline/auth/http status
+  - `src/lib/storageClient.js` bo sung sync error state (`lastErrorCode`, `lastErrorHint`, `lastErrorRetryable`, `lastRollback`) va rollback logic giu pending value moi nhat neu fail xay ra khi write cu dang in-flight
+  - `scheduleRetry` nay chi retry khi loi retryable; loi non-retryable (vd `payload_too_large`, auth denied) khong lap retry timer
+  - bo sung `tests/storageSyncErrors.test.js` va mo rong `tests/storageClient.test.js` de khoa cac contract moi
+  - targeted verify da pass:
+    - `pnpm exec eslint src/lib/storageClient.js src/lib/storageSyncErrors.js tests/storageClient.test.js tests/storageSyncErrors.test.js`
+    - `pnpm exec vitest run tests/storageClient.test.js tests/storageSyncErrors.test.js`
+    - `pnpm exec vitest run tests/store.test.js tests/useDataImporterSyncStatusToast.test.jsx tests/commandCenter.pinStorage.test.js`
 - `cng-2k4.6` da hoan tat o muc tach alerts + notifications backend:
   - them `server-v4/src/modules/alerts/alertsLegacyDomain.js` de gom alert config/state persistence, review/unreview mutate flow, evaluate declaration alerts, va payload formatter/builders qua dependency injection
   - `server/index.js` nay chi con wiring domain (`createLegacyAlertsDomain`) va route registration (`registerLegacyNotificationRoutes`, `registerLegacyImportAlertRoutes`) thay vi giu khoi alert functions lon
@@ -850,13 +872,13 @@
 
 ## Next Suggested Slice
 
-- Title: ECUS background sync queue with resume support
-- Bead: `cng-7z0.7`
+- Title: Frontend performance telemetry + slow-screen dashboard
+- Bead: `cng-7z0.31`
 - Status: in_progress
 - Follow-up backlog:
-  - tach trigger UI khoi vong doi request ngan, doi sang backend job id + polling/dequeue that su
-  - bo sung stale-job cleanup va cross-tab hand-off dua tren backend-truth thay vi chi local snapshot
-  - khoa regression cho queue lifecycle moi truoc khi mo tiep `cng-7z0.11`
+  - xac dinh schema telemetry nhe (`screen`, `durationMs`, `slowThresholdMs`, `deviceHint`)
+  - them hooks instrument o nhung flow giao dien nang (reporting/importer/command-center)
+  - tao dashboard hien top slow screens + trend theo session de support triage UX backlog
 
 ## Verification
 

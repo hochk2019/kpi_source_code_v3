@@ -774,6 +774,110 @@ describe('storageClient remote đồng bộ lại khi server lên trễ', () => 
 
 
 
+  it('giu queue moi nhat khi write dang chay bi loi va rollback gia tri cu', async () => {
+
+    const storageWrites = [];
+
+    let startedFirstWriteResolve;
+
+    let releaseFirstWrite;
+
+    const firstWriteStarted = new Promise((resolve) => {
+
+      startedFirstWriteResolve = resolve;
+
+    });
+
+    const firstWriteGate = new Promise((resolve) => {
+
+      releaseFirstWrite = resolve;
+
+    });
+
+    const fetchMock = vi.fn(async (input, init) => {
+
+      const method = (init?.method || 'GET').toUpperCase();
+
+      const url = typeof input === 'string' ? input : input?.url ?? '';
+
+      if (url.includes('/api/bootstrap')) {
+
+        return createBootstrapResponse({ decl_rows_v1: '[]' });
+
+      }
+
+      if (url.includes('/api/storage/') && method === 'PUT') {
+
+        storageWrites.push({ url, body: init?.body });
+
+        if (storageWrites.length === 1) {
+
+          startedFirstWriteResolve?.();
+
+          await firstWriteGate;
+
+          throw new Error('failed to write');
+
+        }
+
+        return { ok: true, json: async () => ({ ok: true }) };
+
+      }
+
+      return { ok: true, json: async () => ({ ok: true }) };
+
+    });
+
+    vi.stubGlobal('fetch', fetchMock);
+
+    const initial = await initSharedStorage({ baseUrl: '' });
+
+    expect(initial).toBe(true);
+
+    const firstPayload = JSON.stringify([{ so_tk: 'ROLLBACK-OLD' }]);
+
+    const secondPayload = JSON.stringify([{ so_tk: 'ROLLBACK-NEW' }]);
+
+    sharedSetItem('decl_rows_v1', firstPayload);
+
+    await firstWriteStarted;
+
+    sharedSetItem('decl_rows_v1', secondPayload);
+
+    releaseFirstWrite?.();
+
+    const remoteDisabled = await waitForCondition(() => !getSyncStatus().remoteEnabled);
+
+    expect(remoteDisabled).toBe(true);
+
+    const statusAfterFailure = getSyncStatus();
+
+    expect(statusAfterFailure.pendingWrites).toBe(1);
+
+    expect(statusAfterFailure.lastRollback).toMatchObject({
+
+      key: 'decl_rows_v1',
+
+      restoredPreviousValue: false,
+
+    });
+
+    await vi.advanceTimersByTimeAsync(statusAfterFailure.retryDelayMs);
+
+    await Promise.resolve();
+
+    await Promise.resolve();
+
+    expect(storageWrites).toHaveLength(2);
+
+    const replayedPayload = JSON.parse(storageWrites[1].body);
+
+    expect(replayedPayload.value).toBe(secondPayload);
+
+  });
+
+
+
   it('lam moi cache voi refreshSharedKeys khi backend tra ve du lieu moi', async () => {
 
     const fetchMock = vi.fn(async (input, init) => {
@@ -1039,8 +1143,11 @@ describe('storageClient giới hạn dung lượng khi backend trả về 413', 
     const status = getStatus();
 
     expect(status.lastError).toBe(storageLimitMessage);
+    expect(status.lastErrorCode).toBe('payload_too_large');
+    expect(status.lastErrorRetryable).toBe(false);
 
     expect(status.waitingForBackend).toBe(true);
+    expect(status.nextRetryAt).toBeNull();
 
   });
 

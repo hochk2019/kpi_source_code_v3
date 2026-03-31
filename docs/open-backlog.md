@@ -61,7 +61,6 @@ Source set: `docs/ux-improvement-backlog.md`
 
 ### Reliability, QA, And Accessibility
 
-- `cng-7z0.30` — Standardize network-error handling in `storageClient.js`
 - `cng-7z0.31` — Add frontend performance telemetry and slow-screen dashboard
 
 ## Reconciliation Workflow

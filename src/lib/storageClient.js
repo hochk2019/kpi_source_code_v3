@@ -1,5 +1,6 @@
 import { fetchWithAuth } from '../auth/localAuth.js';
 import { SHARED_LIGHT_BOOTSTRAP_MODE } from '../../packages/domain/src/bootstrapStorageKeys.js';
+import { createSyncError, normalizeSyncError } from './storageSyncErrors.js';
 
 export const STORAGE_LIMIT_ERROR_MESSAGE =
   'Dung lượng dữ liệu vượt quá giới hạn máy chủ đồng bộ. Vui lòng chia nhỏ dữ liệu hoặc liên hệ quản trị viên để nâng giới hạn.';
@@ -66,23 +67,50 @@ async function sendWrite(base, key, value) {
 
   } catch (error) {
 
-    throw new Error(`Không thể gửi dữ liệu đồng bộ: ${error?.message ?? error}`, {
-
-      cause: error instanceof Error ? error : undefined,
-
+    throw createSyncError({
+      code: 'write_request_failed',
+      message: `Không thể gửi dữ liệu đồng bộ: ${error?.message ?? error}`,
+      retryable: true,
+      hint: 'Kiểm tra mạng/VPN nội bộ rồi thử lại.',
+      cause: error,
     });
 
   }
 
   if (!response || typeof response.ok !== 'boolean') {
 
-    throw new Error('Không nhận được phản hồi hợp lệ từ máy chủ đồng bộ');
+    throw createSyncError({
+      code: 'invalid_response',
+      message: 'Không nhận được phản hồi hợp lệ từ máy chủ đồng bộ',
+      retryable: true,
+    });
 
   }
 
   if (!response.ok) {
 
-    throw new Error(formatHttpError(response));
+    if (isAuthErrorResponse(response)) {
+
+      throw createSyncError({
+        code: 'auth_required',
+        status: response.status,
+        message: 'Phiên đăng nhập đã hết hạn hoặc không đủ quyền đồng bộ.',
+        retryable: false,
+        hint: 'Vui lòng đăng nhập lại để tiếp tục đồng bộ.',
+      });
+
+    }
+
+    const formatted = formatHttpError(response);
+    const isRetryableStatus = response.status === 408 || response.status === 429 || response.status >= 500;
+
+    throw createSyncError({
+      code: isRetryableStatus ? 'http_retryable' : 'http_non_retryable',
+      status: response.status,
+      message: formatted,
+      retryable: isRetryableStatus,
+      hint: isRetryableStatus ? 'Máy chủ đồng bộ sẽ tự thử lại sau ít giây.' : '',
+    });
 
   }
 
@@ -188,7 +216,7 @@ export async function patchDeclRows(updates, options = {}) {
 
   remoteEnabled = true;
 
-  lastSyncError = null;
+  clearSyncErrorState();
 
   emitSyncStatus();
 
@@ -261,8 +289,12 @@ const RETRY_MAX_MS = 60000;
 let retryDelayMs = RETRY_MIN_MS;
 
 let lastSyncError = null;
+let lastSyncErrorCode = null;
+let lastSyncErrorHint = '';
+let lastSyncErrorRetryable = true;
 
 let nextRetryAt = null;
+let lastRollbackInfo = null;
 
 
 
@@ -355,10 +387,14 @@ function createSyncSnapshot() {
     waitingForBackend: pendingWrites.size > 0 && !remoteEnabled,
 
     lastError: lastSyncError,
+    lastErrorCode: lastSyncErrorCode,
+    lastErrorHint: lastSyncErrorHint,
+    lastErrorRetryable: lastSyncErrorRetryable,
 
     retryDelayMs,
 
     nextRetryAt,
+    lastRollback: lastRollbackInfo,
 
   };
 
@@ -373,6 +409,35 @@ function emitSyncStatus() {
   scheduleSyncStatusBroadcast();
 
   return pendingSyncSnapshot;
+
+}
+
+
+
+function clearSyncErrorState() {
+
+  lastSyncError = null;
+  lastSyncErrorCode = null;
+  lastSyncErrorHint = '';
+  lastSyncErrorRetryable = true;
+
+}
+
+
+
+function setSyncErrorState(error, options = {}) {
+
+  const normalized = normalizeSyncError(error, {
+    storageLimitMessage: STORAGE_LIMIT_ERROR_MESSAGE,
+    defaultMessage: options.defaultMessage,
+  });
+
+  lastSyncError = normalized.message;
+  lastSyncErrorCode = normalized.code;
+  lastSyncErrorHint = normalized.hint || '';
+  lastSyncErrorRetryable = normalized.retryable !== false;
+
+  return normalized;
 
 }
 
@@ -470,6 +535,14 @@ function scheduleRetry() {
 
   }
 
+  if (!lastSyncErrorRetryable) {
+
+    nextRetryAt = null;
+    emitSyncStatus();
+    return;
+
+  }
+
   nextRetryAt = Date.now() + retryDelayMs;
 
   emitSyncStatus();
@@ -543,6 +616,8 @@ async function flushPending() {
         const base = typeof apiBase === 'string' ? apiBase : '';
 
         await sendWrite(base, key, value);
+        lastRollbackInfo = null;
+        clearSyncErrorState();
 
         emitSyncStatus();
 
@@ -550,17 +625,32 @@ async function flushPending() {
 
         console.error('Không thể đồng bộ dữ liệu lên máy chủ', err);
 
-        pendingWrites.set(key, value);
+        const hasNewerPendingValue = pendingWrites.has(key);
+        if (!hasNewerPendingValue) {
+          pendingWrites.set(key, value);
+        }
+        lastRollbackInfo = {
+          key,
+          at: Date.now(),
+          restoredPreviousValue: !hasNewerPendingValue,
+        };
 
         remoteEnabled = false;
 
-        lastSyncError = err?.message || 'Không thể kết nối backend';
-
-        retryDelayMs = Math.min(Math.max(Math.floor(retryDelayMs * 1.5), RETRY_MIN_MS), RETRY_MAX_MS);
+        const normalized = setSyncErrorState(err, {
+          defaultMessage: 'Không thể kết nối backend đồng bộ.',
+        });
+        if (normalized.retryable) {
+          retryDelayMs = Math.min(Math.max(Math.floor(retryDelayMs * 1.5), RETRY_MIN_MS), RETRY_MAX_MS);
+        } else {
+          retryDelayMs = RETRY_MIN_MS;
+        }
 
         emitSyncStatus();
 
-        scheduleRetry();
+        if (normalized.retryable) {
+          scheduleRetry();
+        }
 
         break;
 
@@ -602,7 +692,7 @@ async function bootstrapFromServer(baseUrl) {
 
     remoteEnabled = false;
 
-    lastSyncError = null;
+    clearSyncErrorState();
 
     nextRetryAt = null;
 
@@ -651,7 +741,7 @@ async function bootstrapFromServer(baseUrl) {
 
           remoteEnabled = false;
 
-          lastSyncError = null;
+          clearSyncErrorState();
 
           emitSyncStatus();
 
@@ -685,7 +775,8 @@ async function bootstrapFromServer(baseUrl) {
 
       remoteEnabled = true;
 
-      lastSyncError = null;
+      lastRollbackInfo = null;
+      clearSyncErrorState();
 
       emitSyncStatus();
 
@@ -715,7 +806,9 @@ async function bootstrapFromServer(baseUrl) {
 
       remoteEnabled = false;
 
-      lastSyncError = err?.message || 'Không thể kết nối backend';
+      setSyncErrorState(err, {
+        defaultMessage: 'Không thể đồng bộ dữ liệu từ máy chủ, hệ thống sẽ dùng dữ liệu cục bộ.',
+      });
 
       emitSyncStatus();
 
@@ -816,9 +909,8 @@ export async function refreshSharedKeys(keys, options = {}) {
 
         const message = `Không thể tải khóa đồng bộ "${key}": ${error?.message ?? error}`;
 
-        lastSyncError = message;
-
         remoteEnabled = false;
+        setSyncErrorState(error, { defaultMessage: message });
 
         emitSyncStatus();
 
@@ -830,9 +922,8 @@ export async function refreshSharedKeys(keys, options = {}) {
 
         const message = 'Không nhận được phản hồi hợp lệ từ máy chủ đồng bộ';
 
-        lastSyncError = message;
-
         remoteEnabled = false;
+        setSyncErrorState(new Error(message), { defaultMessage: message });
 
         emitSyncStatus();
 
@@ -844,9 +935,13 @@ export async function refreshSharedKeys(keys, options = {}) {
 
         const message = formatHttpError(response);
 
-        lastSyncError = message;
-
         remoteEnabled = false;
+        setSyncErrorState(createSyncError({
+          code: response.status === 413 ? 'payload_too_large' : 'http_non_retryable',
+          status: response.status,
+          message,
+          retryable: response.status === 408 || response.status === 429 || response.status >= 500,
+        }), { defaultMessage: message });
 
         emitSyncStatus();
 
@@ -864,9 +959,8 @@ export async function refreshSharedKeys(keys, options = {}) {
 
         const message = `Không thể phân tích phản hồi JSON cho khóa đồng bộ "${key}"`;
 
-        lastSyncError = message;
-
         remoteEnabled = false;
+        setSyncErrorState(error, { defaultMessage: message });
 
         emitSyncStatus();
 
@@ -905,7 +999,7 @@ export async function refreshSharedKeys(keys, options = {}) {
 
   remoteEnabled = true;
 
-  lastSyncError = null;
+  clearSyncErrorState();
 
   emitSyncStatus();
 
@@ -1139,9 +1233,10 @@ export function resetStorageClientForTests() {
 
   retryDelayMs = RETRY_MIN_MS;
 
-  lastSyncError = null;
+  clearSyncErrorState();
 
   nextRetryAt = null;
+  lastRollbackInfo = null;
 
   pendingSyncSnapshot = null;
 
