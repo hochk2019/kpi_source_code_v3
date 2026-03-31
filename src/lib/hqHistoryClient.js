@@ -1,4 +1,5 @@
 import { fetchWithAuth } from '../auth/localAuth.js';
+import { API_V4_ROUTES } from './apiRoutes.js';
 
 import {
 
@@ -252,7 +253,7 @@ export async function fetchHQHistoryEntries(options = {}) {
 
   const query = buildHistoryQuery(options);
 
-  const response = await fetchWithAuth(`/api/hq/history${query}`, {
+  const response = await fetchWithAuth(`${API_V4_ROUTES.hqAgencies.history}${query}`, {
 
     cache: 'no-store',
 

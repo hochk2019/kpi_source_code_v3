@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { fetchWithAuth } from '@/auth/localAuth.js';
+import { API_LEGACY_ROUTES } from '@/lib/apiRoutes.js';
 
 
 
@@ -384,7 +385,7 @@ export default function useFilterPresets(scope = FILTER_PRESET_SCOPE_DEFAULT) {
 
       const response = await fetchWithAuth(
 
-        `/api/filter-presets?scope=${encodeURIComponent(normalizedScope)}`,
+        `${API_LEGACY_ROUTES.filterPresets}?scope=${encodeURIComponent(normalizedScope)}`,
 
         { cache: 'no-store' }
 
@@ -452,7 +453,7 @@ export default function useFilterPresets(scope = FILTER_PRESET_SCOPE_DEFAULT) {
 
       try {
 
-        const response = await fetchWithAuth('/api/filter-presets', {
+        const response = await fetchWithAuth(API_LEGACY_ROUTES.filterPresets, {
 
           method: 'POST',
 
@@ -530,7 +531,7 @@ export default function useFilterPresets(scope = FILTER_PRESET_SCOPE_DEFAULT) {
 
       try {
 
-        const response = await fetchWithAuth(`/api/filter-presets/${encodeURIComponent(presetId)}`, {
+        const response = await fetchWithAuth(`${API_LEGACY_ROUTES.filterPresets}/${encodeURIComponent(presetId)}`, {
 
           method: 'PUT',
 
@@ -608,7 +609,7 @@ export default function useFilterPresets(scope = FILTER_PRESET_SCOPE_DEFAULT) {
 
       try {
 
-        const response = await fetchWithAuth(`/api/filter-presets/${encodeURIComponent(presetId)}`, {
+        const response = await fetchWithAuth(`${API_LEGACY_ROUTES.filterPresets}/${encodeURIComponent(presetId)}`, {
 
           method: 'DELETE',
 

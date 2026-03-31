@@ -140,7 +140,7 @@ describe('AuditLog', () => {
 
     expect(fetchSpy).toHaveBeenCalledWith(
 
-      '/api/admin/backups/summary',
+      '/api/v4/backups/summary',
 
       expect.objectContaining({ cache: 'no-store' })
 
@@ -240,13 +240,13 @@ describe('AuditLog', () => {
 
     fetchSpy.mockImplementation((url) => {
 
-      if (url === '/api/admin/backups/summary') {
+      if (url === '/api/v4/backups/summary') {
 
         return Promise.resolve(summaryResponse);
 
       }
 
-      if (url === '/api/admin/backups/files') {
+      if (url === '/api/v4/backups/files') {
 
         return Promise.resolve({
 
@@ -258,7 +258,7 @@ describe('AuditLog', () => {
 
       }
 
-      if (url === '/api/admin/backups/schedule') {
+      if (url === '/api/v4/backups/schedule') {
 
         return Promise.resolve(updateResponse);
 

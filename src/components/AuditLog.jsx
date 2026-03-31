@@ -3,6 +3,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "@/shared/toast";
 
 import { fetchWithAuth } from '@/auth/localAuth.js';
+import { API_LEGACY_ROUTES, API_V4_ROUTES } from '@/lib/apiRoutes.js';
 
 
 
@@ -208,7 +209,7 @@ export default function AuditLog({ currentUser }) {
 
     try {
 
-      const response = await fetchWithAuth("/api/admin/backups/summary", {
+      const response = await fetchWithAuth(API_V4_ROUTES.backups.summary, {
 
         cache: "no-store",
 
@@ -252,7 +253,7 @@ export default function AuditLog({ currentUser }) {
 
     try {
 
-      const response = await fetchWithAuth("/api/admin/backups/files", {
+      const response = await fetchWithAuth(API_V4_ROUTES.backups.files, {
 
         cache: "no-store",
 
@@ -532,7 +533,7 @@ export default function AuditLog({ currentUser }) {
 
         const directoryPayload = directoryDraft.trim();
 
-        const response = await fetchWithAuth("/api/admin/backups/schedule", {
+        const response = await fetchWithAuth(API_V4_ROUTES.backups.schedule, {
 
           method: "POST",
 
@@ -686,7 +687,9 @@ export default function AuditLog({ currentUser }) {
 
       const query = params.toString();
 
-      const endpoint = query ? `/api/admin/audit/export?${query}` : "/api/admin/audit/export";
+      const endpoint = query
+        ? `${API_LEGACY_ROUTES.auditExport}?${query}`
+        : API_LEGACY_ROUTES.auditExport;
 
       const response = await fetchWithAuth(endpoint, {
 
@@ -760,7 +763,7 @@ export default function AuditLog({ currentUser }) {
 
         const directoryValue = manualDirectory.trim();
 
-        const response = await fetchWithAuth("/api/admin/backups/run", {
+        const response = await fetchWithAuth(API_V4_ROUTES.backups.run, {
 
           method: "POST",
 
@@ -858,7 +861,7 @@ export default function AuditLog({ currentUser }) {
 
       try {
 
-        const response = await fetchWithAuth("/api/admin/backups/restore", {
+        const response = await fetchWithAuth(API_V4_ROUTES.backups.restore, {
 
           method: "POST",
 

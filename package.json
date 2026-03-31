@@ -45,7 +45,9 @@
     "gitnexus:refresh": "node scripts/gitnexus-refresh.mjs",
     "gitnexus:serve": "npx gitnexus serve --host 127.0.0.1 --port 4747",
     "bd:safe": "node scripts/bd-safe.mjs",
-    "bd:check": "node scripts/check-bd-consistency.mjs"
+    "bd:check": "node scripts/check-bd-consistency.mjs",
+    "api:contract:report": "node scripts/check-frontend-api-contract.mjs",
+    "api:contract:gate": "node scripts/check-frontend-api-contract.mjs --fail-on-legacy"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.0.1",

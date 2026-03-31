@@ -158,7 +158,10 @@ describe('hqHistoryClient', () => {
 
     const result = await refreshHQHistoryCache({ limit: 50 });
 
-    expect(fetchWithAuth).toHaveBeenCalledWith(expect.stringContaining('/api/hq/history'), expect.any(Object));
+    expect(fetchWithAuth).toHaveBeenCalledWith(
+      expect.stringContaining('/api/v4/hq-agencies/history'),
+      expect.any(Object),
+    );
 
     expect(result).toHaveLength(1);
 
