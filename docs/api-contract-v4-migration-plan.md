@@ -95,8 +95,8 @@ Nguồn chính: controllers/services ở `declarations`, `hq-agencies`, `kpi-adj
 |---|---|---|---|
 | Data health | `/api/data-health/summary` | `/api/v4/data-health/summary` | Da co module `server-v4`; chua migrate frontend caller |
 | Duplicate policy | `/api/duplicate-policy` | `/api/v4/duplicate-policy` | Da co module `server-v4`; chua migrate frontend caller |
-| Filter presets | `/api/filter-presets*` | `/api/v4/...` | Cần backend module hoá |
-| Feedback/training | `/api/training-resources`, `/api/feedback*` | `/api/v4/...` | Hiện đang bám legacy store |
+| Filter presets | `/api/filter-presets*` | `/api/v4/filter-presets*` | Da co module `server-v4`; chua migrate frontend caller |
+| Feedback/training | `/api/training-resources`, `/api/feedback*` | `/api/v4/feedback-training/*` | Da co module `server-v4`; chua migrate frontend caller |
 | AI assistant | `/api/ai/*` | `/api/v4/ai/*` | Có thể migrate theo từng subdomain |
 | Report export | `/api/reports/export*`, `/api/admin/audit/export` | `/api/v4/reporting/*` | Cần chuẩn hoá response + file export flow |
 

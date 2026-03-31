@@ -65,6 +65,8 @@ describe('legacy server-v4 module selection', () => {
       { id: 'backup' },
       { id: 'data-health' },
       { id: 'duplicate-policy' },
+      { id: 'feedback-training' },
+      { id: 'filter-presets' },
       { id: 'declarations' },
     ];
 
@@ -77,6 +79,8 @@ describe('legacy server-v4 module selection', () => {
       'backup',
       'data-health',
       'duplicate-policy',
+      'feedback-training',
+      'filter-presets',
     ]);
     expect(LEGACY_V4_MODULE_IDS).toEqual([
       'reporting',
@@ -89,6 +93,8 @@ describe('legacy server-v4 module selection', () => {
       'backup',
       'data-health',
       'duplicate-policy',
+      'feedback-training',
+      'filter-presets',
     ]);
     expect(result.selectedModules.map((entry) => entry.id)).toEqual(LEGACY_V4_MODULE_IDS);
     expect(result.missingModuleIds).toEqual([]);
@@ -116,6 +122,12 @@ describe('legacy server-v4 module selection', () => {
       'alerts',
       'data-health',
     ]);
-    expect(result.missingModuleIds).toEqual(['kpi-adjustments', 'backup', 'duplicate-policy']);
+    expect(result.missingModuleIds).toEqual([
+      'kpi-adjustments',
+      'backup',
+      'duplicate-policy',
+      'feedback-training',
+      'filter-presets',
+    ]);
   });
 });

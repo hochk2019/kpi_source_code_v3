@@ -10,6 +10,8 @@ describe('server-v4 module catalog', () => {
       'backup',
       'data-health',
       'duplicate-policy',
+      'feedback-training',
+      'filter-presets',
       'declarations',
       'mst-assignments',
       'teams',

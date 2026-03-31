@@ -446,6 +446,25 @@ async function mountReportingV4App(targetApp) {
           };
         },
       },
+      feedbackTraining: {
+        getTrainingResources: () => getTrainingResources(),
+        getFeedbackSummary: () => getFeedbackSummary(),
+        listFeedbackEntries: ({ limit } = {}) => listFeedbackEntries({ limit }),
+        addFeedbackEntry: (payload) => addFeedbackEntry(payload),
+        pushNotification,
+      },
+      filterPresets: {
+        sanitizeFilterPresetScope,
+        listFilterPresetsForUser: (username, options = {}) =>
+          listFilterPresetsForUser(username, options),
+        createFilterPresetForUser: (username, body, options = {}) =>
+          createFilterPresetForUser(username, body, options),
+        updateFilterPresetForUser: (username, presetId, body, options = {}) =>
+          updateFilterPresetForUser(username, presetId, body, options),
+        deleteFilterPresetForUser: (username, presetId, options = {}) =>
+          deleteFilterPresetForUser(username, presetId, options),
+        pushAuditLog,
+      },
     });
 
     targetApp.use(v4App);

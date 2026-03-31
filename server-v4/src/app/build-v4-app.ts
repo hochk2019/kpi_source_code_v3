@@ -12,6 +12,14 @@ import {
 import { buildDataHealthRouter } from '../modules/data-health/dataHealthRoutes.js';
 import { buildDeclarationsRouter } from '../modules/declarations/declarationsRoutes.js';
 import { buildDuplicatePolicyRouter } from '../modules/duplicate-policy/duplicatePolicyRoutes.js';
+import {
+  buildFeedbackTrainingRouter,
+  type FeedbackTrainingRuntime,
+} from '../modules/feedback-training/feedbackTrainingRoutes.js';
+import {
+  buildFilterPresetsRouter,
+  type FilterPresetsRuntime,
+} from '../modules/filter-presets/filterPresetsRoutes.js';
 import type { EcusSqlHealthCheck } from '../modules/declarations/declarationsEcusSyncService.js';
 import type { CoDiscrepancyRunner } from '../modules/declarations/ecusCoDiscrepancyRunner.js';
 import { buildHqAgenciesRouter } from '../modules/hq-agencies/hqAgenciesRoutes.js';
@@ -65,6 +73,8 @@ export type BuildV4AppOptions = ServerV4ConfigInput & {
       summary: unknown;
     }>;
   };
+  feedbackTraining?: FeedbackTrainingRuntime;
+  filterPresets?: FilterPresetsRuntime;
 };
 
 function buildDefaultModuleRouter(domainModule: DomainModule): Router {
@@ -113,6 +123,8 @@ export function buildV4App(input?: readonly DomainModule[] | BuildV4AppOptions):
     'backup',
     'data-health',
     'duplicate-policy',
+    'feedback-training',
+    'filter-presets',
     'declarations',
     'hq-agencies',
     'mst-assignments',
@@ -199,6 +211,22 @@ export function buildV4App(input?: readonly DomainModule[] | BuildV4AppOptions):
       app.use(
         domainModule.basePath,
         buildDuplicatePolicyRouter(domainModule, persistence.authStore, options.duplicatePolicy),
+      );
+      continue;
+    }
+
+    if (domainModule.id === 'filter-presets') {
+      app.use(
+        domainModule.basePath,
+        buildFilterPresetsRouter(domainModule, persistence.authStore, options.filterPresets),
+      );
+      continue;
+    }
+
+    if (domainModule.id === 'feedback-training') {
+      app.use(
+        domainModule.basePath,
+        buildFeedbackTrainingRouter(domainModule, persistence.authStore, options.feedbackTraining),
       );
       continue;
     }

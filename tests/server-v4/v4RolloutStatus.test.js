@@ -17,6 +17,8 @@ const implementedModuleIds = [
   'backup',
   'data-health',
   'duplicate-policy',
+  'feedback-training',
+  'filter-presets',
   'declarations',
   'hq-agencies',
   'kpi-adjustments',

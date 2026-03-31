@@ -21,8 +21,10 @@
   - da chuyen board `docs/big-bang-execution-status.md` sang trang thai Week1=Done, Week2-3=In Progress
   - da ship lane dau W2: module `data-health` trong `server-v4` voi canonical route `GET /api/v4/data-health/summary`
   - da ship lane tiep theo W2: module `duplicate-policy` trong `server-v4` voi canonical routes `GET/PUT /api/v4/duplicate-policy`
+  - da ship lane tiep theo W2: module `filter-presets` trong `server-v4` voi canonical routes `GET/POST/PUT/DELETE /api/v4/filter-presets`
+  - da ship lane tiep theo W2: module `feedback-training` trong `server-v4` voi canonical routes `GET /api/v4/feedback-training/training-resources`, `GET /api/v4/feedback-training/feedback/summary`, `GET/POST /api/v4/feedback-training/feedback`
   - da wire mount legacy runtime (`server/v4RolloutMount.js`, `mountReportingV4App`) de route moi co mat trong v4 app khi mount wave hien tai
-  - da bo sung regression `tests/server-v4/dataHealthRoutes.test.js`, `tests/server-v4/duplicatePolicyRoutes.test.js` va cap nhat rollout/module matrix tests
+  - da bo sung regression `tests/server-v4/dataHealthRoutes.test.js`, `tests/server-v4/duplicatePolicyRoutes.test.js`, `tests/server-v4/filterPresetsRoutes.test.js`, `tests/server-v4/feedbackTrainingRoutes.test.js` va cap nhat rollout/module matrix tests
 
 ## Handoff
 
@@ -35,7 +37,7 @@
 - Risk: neu khong duy tri 3 nguon truth (`bd`, `task.md`, `docs/big-bang-execution-status.md`) thi se lap lai tinh trang "epic dong som" du plan chua xong.
 - Decision: tu gio theo doi tien do big-bang bang epic `cng-mbu` va board `docs/big-bang-execution-status.md`; moi lane tuan bat buoc co bead + gate + evidence.
 - Decision tiep theo (owner request): giam tan suat commit, gom theo lane/slice lon (khong commit moi thay doi nho).
-- Next: tiep tuc `cng-mbu.2` voi lane `filter-presets` canonical module + compat wiring.
+- Next: tiep tuc `cng-mbu.2` voi lane `rules-history` canonical endpoint + compat wiring.
 ## Recent Completed Slices
 
 - `cng-7z0.30` da hoan tat storage sync error hardening:
