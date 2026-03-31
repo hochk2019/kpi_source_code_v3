@@ -10,6 +10,7 @@ export const kpiRulesModule = createDomainModule({
       name: 'rule-sets',
       routes: [
         { method: 'GET', path: '/', purpose: 'List KPI rule sets and active version.' },
+        { method: 'GET', path: '/history', purpose: 'Return recent KPI rule-set history entries.' },
         { method: 'POST', path: '/', purpose: 'Create a new KPI rule-set draft.' },
         { method: 'POST', path: '/:ruleSetId/activate', purpose: 'Activate a rule set for downstream KPI recomputation.' },
       ],

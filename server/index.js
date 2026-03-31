@@ -248,6 +248,47 @@ async function loadCompiledV4Runtime() {
 
 }
 
+let legacyRulesHistoryHandler = null;
+let legacyReportExportHandler = null;
+let legacyReportExportAuditHandler = null;
+let legacyAdminAuditExportHandler = null;
+
+function handleLegacyRulesHistory(req, res) {
+  const handler = legacyRulesHistoryHandler;
+  if (typeof handler !== 'function') {
+    res.status(503).json({ ok: false, error: 'Rules history runtime chưa sẵn sàng.' });
+    return;
+  }
+  return handler(req, res);
+}
+
+function handleLegacyReportExport(req, res) {
+  const handler = legacyReportExportHandler;
+  if (typeof handler !== 'function') {
+    res.status(503).json({ ok: false, error: 'Report export runtime chưa sẵn sàng.' });
+    return;
+  }
+  return handler(req, res);
+}
+
+function handleLegacyReportExportAudit(req, res) {
+  const handler = legacyReportExportAuditHandler;
+  if (typeof handler !== 'function') {
+    res.status(503).json({ ok: false, error: 'Report export audit runtime chưa sẵn sàng.' });
+    return;
+  }
+  return handler(req, res);
+}
+
+function handleLegacyAdminAuditExport(req, res) {
+  const handler = legacyAdminAuditExportHandler;
+  if (typeof handler !== 'function') {
+    res.status(503).json({ ok: false, error: 'Admin audit export runtime chưa sẵn sàng.' });
+    return;
+  }
+  return handler(req, res);
+}
+
 async function mountReportingV4App(targetApp) {
 
   try {
@@ -464,6 +505,14 @@ async function mountReportingV4App(targetApp) {
         deleteFilterPresetForUser: (username, presetId, options = {}) =>
           deleteFilterPresetForUser(username, presetId, options),
         pushAuditLog,
+      },
+      kpiRules: {
+        getRulesHistory: handleLegacyRulesHistory,
+      },
+      reporting: {
+        exportReport: handleLegacyReportExport,
+        listExportAudit: handleLegacyReportExportAudit,
+        exportAdminAudit: handleLegacyAdminAuditExport,
       },
     });
 
@@ -22060,7 +22109,7 @@ app.post('/api/admin/backups/restore', async (req, res) => {
 
 
 
-app.get('/api/admin/audit/export', (req, res) => {
+legacyAdminAuditExportHandler = (req, res) => {
 
   const { denied } = requireAuditView(req, res);
 
@@ -22194,7 +22243,9 @@ app.get('/api/admin/audit/export', (req, res) => {
 
   }
 
-});
+};
+
+app.get('/api/admin/audit/export', handleLegacyAdminAuditExport);
 
 
 
@@ -22636,7 +22687,7 @@ app.delete('/api/v4/reporting/schedules/:id', (req, res) => {
 
 
 
-app.post('/api/reports/export', async (req, res) => {
+legacyReportExportHandler = async (req, res) => {
 
   try {
 
@@ -22841,11 +22892,13 @@ app.post('/api/reports/export', async (req, res) => {
 
   }
 
-});
+};
+
+app.post('/api/reports/export', handleLegacyReportExport);
 
 
 
-app.get('/api/reports/export/audit', (req, res) => {
+legacyReportExportAuditHandler = (req, res) => {
 
   const { context, denied } = requireExportAuditView(req, res);
 
@@ -23205,7 +23258,9 @@ app.get('/api/reports/export/audit', (req, res) => {
 
   }
 
-});
+};
+
+app.get('/api/reports/export/audit', handleLegacyReportExportAudit);
 
 
 
@@ -23576,7 +23631,7 @@ registerAiRoutes(app, {
   clearAiCache,
 });
 
-app.get('/api/rules/history', (req, res) => {
+legacyRulesHistoryHandler = (req, res) => {
 
   const { denied } = requireRulesManage(req, res);
 
@@ -23600,7 +23655,9 @@ app.get('/api/rules/history', (req, res) => {
 
   }
 
-});
+};
+
+app.get('/api/rules/history', handleLegacyRulesHistory);
 
 app.get('/api/import/ecus/config', (req, res) => {
 

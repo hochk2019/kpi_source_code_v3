@@ -23,6 +23,8 @@ export const reportingModule = createDomainModule({
       name: 'exports-and-schedules',
       routes: [
         { method: 'POST', path: '/exports', purpose: 'Create an export job and audit record.' },
+        { method: 'GET', path: '/exports/audit', purpose: 'List report export audit entries.' },
+        { method: 'GET', path: '/audit/export', purpose: 'Export admin audit logs as CSV.' },
         { method: 'GET', path: '/schedules', purpose: 'List report schedules.' },
         { method: 'POST', path: '/schedules', purpose: 'Create or update a report schedule.' },
       ],

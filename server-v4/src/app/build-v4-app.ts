@@ -24,9 +24,15 @@ import type { EcusSqlHealthCheck } from '../modules/declarations/declarationsEcu
 import type { CoDiscrepancyRunner } from '../modules/declarations/ecusCoDiscrepancyRunner.js';
 import { buildHqAgenciesRouter } from '../modules/hq-agencies/hqAgenciesRoutes.js';
 import { buildKpiAdjustmentsRouter } from '../modules/kpi-adjustments/kpiAdjustmentsRoutes.js';
-import { buildKpiRulesRouter } from '../modules/kpi-rules/kpiRulesRoutes.js';
+import {
+  buildKpiRulesRouter,
+  type KpiRulesRuntime,
+} from '../modules/kpi-rules/kpiRulesRoutes.js';
 import { buildMstAssignmentsRouter } from '../modules/mst-assignments/mstAssignmentsRoutes.js';
-import { buildReportingRouter } from '../modules/reporting/reportingRoutes.js';
+import {
+  buildReportingRouter,
+  type ReportingRuntime,
+} from '../modules/reporting/reportingRoutes.js';
 import { buildTeamsRouter } from '../modules/teams/teamsRoutes.js';
 import { createRuntimePersistence, type RuntimePersistence } from '../persistence/runtimePersistence.js';
 import { createCsrfProtection } from './csrfProtection.js';
@@ -75,6 +81,8 @@ export type BuildV4AppOptions = ServerV4ConfigInput & {
   };
   feedbackTraining?: FeedbackTrainingRuntime;
   filterPresets?: FilterPresetsRuntime;
+  kpiRules?: KpiRulesRuntime;
+  reporting?: ReportingRuntime;
 };
 
 function buildDefaultModuleRouter(domainModule: DomainModule): Router {
@@ -239,6 +247,7 @@ export function buildV4App(input?: readonly DomainModule[] | BuildV4AppOptions):
           persistence.kpiRulesReader,
           persistence.kpiRulesStore,
           persistence.authStore,
+          options.kpiRules,
         ),
       );
       continue;
@@ -265,7 +274,7 @@ export function buildV4App(input?: readonly DomainModule[] | BuildV4AppOptions):
           declarationsReader: persistence.declarationsReader,
           kpiRulesReader: persistence.kpiRulesReader,
           teamsReader: persistence.teamsReader,
-        }),
+        }, options.reporting),
       );
       continue;
     }

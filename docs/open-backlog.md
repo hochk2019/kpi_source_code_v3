@@ -28,6 +28,7 @@ Reconciliation note:
 - Reconciled again on 2026-03-31 after completing `cng-2k4.24`; skip-to-content keyboard navigation is shipped with regression tests, and epic `cng-2k4` is now closed with no remaining open child beads.
 - Reconciled again on 2026-03-31 after importing PLAN.md big-bang execution lanes: opened epic `cng-mbu` with week-mapped child beads and dependency graph, plus single status board `docs/big-bang-execution-status.md`.
 - Reconciled again on 2026-03-31 after W1 sign-off (`cng-mbu.1`): ownership matrix da lock trong contract plan, bead `cng-mbu.1` closed, va `cng-mbu.2` duoc mo in-progress.
+- Reconciled again on 2026-03-31 after completing `cng-mbu.2`; backend modularization lanes (data-health, duplicate-policy, filter-presets, feedback-training, rules-history, reports-export, notifications parity) da hoan tat va next ready item chuyen sang `cng-mbu.3`.
 
 Rule:
 - Every unfinished item from review notes, rollout plans, decomposition plans, or UX backlogs must be in one of two states:
@@ -38,7 +39,7 @@ Current open epics:
 - `cng-mbu` - Big-bang FE+BE redesign 6-8 week execution.
 
 Current highest-priority ready items:
-- `cng-mbu.2` (in_progress) - W2-3 Backend Full Modularization.
+- `cng-mbu.3` (in_progress) - W3-5 Frontend Redesign Canonical Client.
 
 ## Big-bang Program (PLAN.md)
 
@@ -46,8 +47,8 @@ Epic: `cng-mbu`
 Source set: `E:/OneDrive - MSFT/Desktop/PLAN.md`, `docs/big-bang-execution-status.md`, `task.md`
 
 - `cng-mbu.1` - W1 Contract and Architecture Freeze (closed)
-- `cng-mbu.2` - W2-3 Backend Full Modularization (open; depends on `cng-mbu.1`)
-- `cng-mbu.3` - W3-5 Frontend Redesign Canonical Client (open; depends on `cng-mbu.1`)
+- `cng-mbu.2` - W2-3 Backend Full Modularization (closed)
+- `cng-mbu.3` - W3-5 Frontend Redesign Canonical Client (in_progress; depends on `cng-mbu.1`)
 - `cng-mbu.4` - W5-6 Integration and Behavior Parity (open; depends on `cng-mbu.2`, `cng-mbu.3`)
 - `cng-mbu.5` - W6-7 Hardening and UAT (open; depends on `cng-mbu.4`)
 - `cng-mbu.6` - Release Gates and Acceptance Closure (open; depends on `cng-mbu.4`, `cng-mbu.5`)
