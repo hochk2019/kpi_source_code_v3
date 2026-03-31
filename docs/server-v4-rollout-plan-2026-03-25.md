@@ -8,6 +8,10 @@ Reconciliation note 2026-03-27:
 - Planning artifact nay da xong vai tro sequencing.
 - Cac viec rollout con mo hien duoc track canonically trong `docs/open-backlog.md` duoi epic `cng-2k4`, dac biet: `cng-2k4.1`, `cng-2k4.2`, `cng-2k4.3`, `cng-2k4.4`, `cng-2k4.6`, `cng-2k4.7`, `cng-2k4.8`, va `cng-2k4.9`.
 
+Reconciliation note 2026-03-31:
+- Trang thai thuc thi big-bang 6-8 tuan duoc track lai theo epic `cng-mbu`.
+- Nguon PM duy nhat de theo doi tien do va gate: `docs/big-bang-execution-status.md`.
+
 ## Current State
 
 - The legacy server already mounts the compiled `server-v4` runtime, but only with the `reporting` module via `mountReportingV4App` in `server/index.js`.

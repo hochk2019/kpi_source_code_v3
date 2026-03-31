@@ -2,6 +2,8 @@
 
 Tài liệu này định nghĩa gate bật traffic cho `server-v4` sau Phase 3.
 
+Tracking board: [docs/big-bang-execution-status.md](/E:/GPT/kpi_source_code_v4/docs/big-bang-execution-status.md)
+
 ## Gate API
 
 Trước mỗi lần chuyển stage, kiểm tra:

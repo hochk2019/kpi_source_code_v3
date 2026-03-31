@@ -3,54 +3,35 @@
 ## Canonical Open Backlog
 
 - Source of truth cho tat ca viec chua xong hien tai la `docs/open-backlog.md`.
-- Da reconcile ngay 2026-03-29 voi cac nguon: `Gemini_review_V1.md`, `docs/gemini-review-v1-factcheck-2026-03-25.md`, `docs/server-v4-rollout-plan-2026-03-25.md`, `frontend-wave1-decomposition.md`, `docs/ux-improvement-backlog.md`, va bead database.
+- Da reconcile ngay 2026-03-31 voi `PLAN.md` big-bang, `docs/api-contract-v4-migration-plan.md`, `docs/server-v4-rollout-plan-2026-03-25.md`, va bead database.
 - Open epics hien tai:
-  - Khong con open epics trong bead tracker.
+  - `cng-mbu` (Big-bang FE+BE redesign 6-8 week execution).
 - Highest-priority ready items hien tai:
-  - Khong co bead `ready`/`in_progress`; cho user seed lane tiep theo.
+  - `cng-mbu.1` (in_progress): W1 Contract and Architecture Freeze.
 
 ## Active Slice
 
--- Title: Add skip-to-content keyboard navigation affordance
--- Bead: [none]
--- Status: done
+-- Title: W1 Contract and Architecture Freeze
+-- Bead: cng-mbu.1
+-- Status: in_progress
 -- Last updated: 2026-03-31
 
-- `cng-7z0.30` da hoan tat:
-  - them module `src/lib/storageSyncErrors.js` de normalize network/auth/http sync failures va xep retryability thong nhat
-  - cap nhat `src/lib/storageClient.js` voi rollback giu gia tri moi nhat khi in-flight write fail, bo sung sync error metadata (`code/hint/retryable`) va chan auto-retry voi non-retryable errors
-  - bo sung regression `tests/storageSyncErrors.test.js`, cap nhat `tests/storageClient.test.js` cho rollback + payload-too-large behavior
-  - targeted verify da pass:
-    - `pnpm exec eslint src/lib/storageClient.js src/lib/storageSyncErrors.js tests/storageClient.test.js tests/storageSyncErrors.test.js`
-    - `pnpm exec vitest run tests/storageClient.test.js tests/storageSyncErrors.test.js`
-    - `pnpm exec vitest run tests/store.test.js tests/useDataImporterSyncStatusToast.test.jsx tests/commandCenter.pinStorage.test.js`
-- `cng-2k4.6` da hoan tat: tach legacy notification + import alert routes va declaration-alert domain (`get/save config`, `get/save state`, review/unreview, evaluate summary/payload) khoi `server/index.js` sang `server-v4/src/modules/alerts/*`; bo sung regression `tests/server.alertLegacyRoutes.test.js` va `tests/server.alertLegacyDomain.test.js`.
-- `cng-7z0.31` da hoan tat:
-  - them telemetry module `src/lib/frontendPerformanceTelemetry.js` (Web Vitals + render-duration snapshot theo tab)
-  - `KPICalculator.jsx` da emit `recordScreenRenderMetric` khi tab panel render va start Web Vitals capture lifecycle
-  - `DataHealthDashboard.jsx` da subscribe telemetry va render panel moi `DataHealthFrontendPerformancePanel`
-  - regression moi: `tests/frontendPerformanceTelemetry.test.js`, `tests/dataHealthFrontendPerformancePanel.test.jsx`, va bo sung assertion integration trong `tests/dataHealthDashboard.test.jsx`
-  - targeted verify da pass:
-    - `pnpm exec eslint src/lib/frontendPerformanceTelemetry.js src/components/KPICalculator.jsx src/components/DataHealthDashboard.jsx src/components/data-health-dashboard/DataHealthFrontendPerformancePanel.jsx tests/frontendPerformanceTelemetry.test.js tests/dataHealthFrontendPerformancePanel.test.jsx tests/dataHealthDashboard.test.jsx`
-    - `pnpm exec vitest run tests/frontendPerformanceTelemetry.test.js tests/dataHealthFrontendPerformancePanel.test.jsx tests/dataHealthDashboard.test.jsx tests/dataHealthDashboardViewModels.test.js --environment jsdom`
-- `cng-2k4.23` da hoan tat:
-  - reconcile toan bo checkbox `[ ]` con sot trong cac source backlog docs va map lai voi bead da close
-  - cap nhat `docs/ux-improvement-backlog.md` + `docs/open-backlog.md` + `task.md` de khong con orphan checklist item
-  - tao child bead tiep theo `cng-2k4.24` (skip-to-content keyboard navigation) va chuyen sang `in_progress`
-- `cng-2k4.24` da hoan tat:
-  - them skip link visible-on-focus `Bỏ qua tới nội dung chính` o shell (`src/App.jsx`) va focus handoff vao main landmark
-  - main content target nay co `id="app-main-content"` + `tabIndex={-1}` de keyboard users co the bo qua navigation nhanh
-  - bo sung regression `tests/app.skipLink.test.jsx` cho contract href/id/tabindex va keyboard focus handoff bang Enter
-  - targeted verify da pass:
-    - `pnpm exec eslint src/App.jsx tests/app.skipLink.test.jsx`
-    - `pnpm exec vitest run tests/app.skipLink.test.jsx tests/appRoot.errorBoundary.test.jsx --environment jsdom`
+- Scope da lam trong slice hien tai:
+  - chot matrix contract freeze cho toan bo luong trong PLAN big-bang
+  - map tung nhom contract (endpoint mapping, envelope, error model, permission model, pagination/filter/sort) vao evidence table
+  - cap nhat board `docs/big-bang-execution-status.md` theo ket qua freeze gate
+
 ## Handoff
 
-- Slice vua xong: `cng-7z0.31` (frontend performance telemetry + slow-screen dashboard), commit `8634b5a`.
-- Slice vua xong tiep theo: `cng-2k4.23` (source backlog reconciliation + next-slice definition).
-- Slice vua xong moi nhat: `cng-2k4.24` (skip-to-content keyboard navigation + regression tests).
-- Epic `cng-2k4` da dong; hien khong con bead mo trong backlog canonical.
-- Cho user seed lane/bead tiep theo truoc khi mo implementation moi.
+- Done: dat "control tower" cho plan big-bang de khong mat context khi doi tai khoan/phien (bead `cng-mbu.8` da close).
+- Verify:
+  - `bd ready --json` (mo lai `cng-mbu` + child beads)
+  - `bd dep add ...` (dependency graph lane tuan)
+  - `pnpm run api:contract:report` (baseline canonical=27, legacy=22)
+  - `pnpm bd:check` (nhat quan task.md/open-backlog/BD)
+- Risk: neu khong duy tri 3 nguon truth (`bd`, `task.md`, `docs/big-bang-execution-status.md`) thi se lap lai tinh trang "epic dong som" du plan chua xong.
+- Decision: tu gio theo doi tien do big-bang bang epic `cng-mbu` va board `docs/big-bang-execution-status.md`; moi lane tuan bat buoc co bead + gate + evidence.
+- Next: hoan tat deliverable contract-freeze cua `cng-mbu.1`, sau do mo `cng-mbu.2`/`cng-mbu.3` theo dependency graph.
 ## Recent Completed Slices
 
 - `cng-7z0.30` da hoan tat storage sync error hardening:

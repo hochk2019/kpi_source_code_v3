@@ -26,6 +26,7 @@ Reconciliation note:
 - Reconciled again on 2026-03-31 after completing `cng-7z0.31`; frontend performance telemetry and slow-screen dashboard are shipped, and epic `cng-7z0` is closed.
 - Reconciled again on 2026-03-31 after completing `cng-2k4.23`; source checklist drift is cleared, and next technical slice `cng-2k4.24` is opened.
 - Reconciled again on 2026-03-31 after completing `cng-2k4.24`; skip-to-content keyboard navigation is shipped with regression tests, and epic `cng-2k4` is now closed with no remaining open child beads.
+- Reconciled again on 2026-03-31 after importing PLAN.md big-bang execution lanes: opened epic `cng-mbu` with week-mapped child beads and dependency graph, plus single status board `docs/big-bang-execution-status.md`.
 
 Rule:
 - Every unfinished item from review notes, rollout plans, decomposition plans, or UX backlogs must be in one of two states:
@@ -33,10 +34,24 @@ Rule:
 - explicitly marked deferred or removed in its source document
 
 Current open epics:
-- None.
+- `cng-mbu` - Big-bang FE+BE redesign 6-8 week execution.
 
 Current highest-priority ready items:
-- None.
+- `cng-mbu.1` (in_progress) - W1 Contract and Architecture Freeze.
+
+## Big-bang Program (PLAN.md)
+
+Epic: `cng-mbu`  
+Source set: `E:/OneDrive - MSFT/Desktop/PLAN.md`, `docs/big-bang-execution-status.md`, `task.md`
+
+- `cng-mbu.1` - W1 Contract and Architecture Freeze (open)
+- `cng-mbu.2` - W2-3 Backend Full Modularization (open; depends on `cng-mbu.1`)
+- `cng-mbu.3` - W3-5 Frontend Redesign Canonical Client (open; depends on `cng-mbu.1`)
+- `cng-mbu.4` - W5-6 Integration and Behavior Parity (open; depends on `cng-mbu.2`, `cng-mbu.3`)
+- `cng-mbu.5` - W6-7 Hardening and UAT (open; depends on `cng-mbu.4`)
+- `cng-mbu.6` - Release Gates and Acceptance Closure (open; depends on `cng-mbu.4`, `cng-mbu.5`)
+- `cng-mbu.7` - W8 Big-bang Cutover and Hypercare (open; depends on `cng-mbu.6`)
+- `cng-mbu.8` - Context Continuity and Session Bootstrap (closed)
 
 ## Technical Stabilization
 
