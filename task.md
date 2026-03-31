@@ -16,17 +16,24 @@
 
 ## Active Slice
 
--- Title: Server-v4 AI module extraction prep
--- Bead: cng-2k4.5
--- Status: ready
+-- Title: Server-v4 alert + notification extraction prep
+-- Bead: cng-2k4.6
+-- Status: in_progress
 -- Last updated: 2026-03-31
 
-- `cng-7z0.7` da hoan tat: queue sync ECUS nay co backend-detached commit job (`async: true`) + poll status theo `jobId`, resume duoc sau khi dong trinh duyet, va fallback re-submit khi job cu khong con tren server.
-- Next ready lane quay lai backend cutover:
-  - `cng-2k4.5` — extract AI assistant backend routes vao `server-v4` ai module
+- `cng-2k4.5` da xong: tach toan bo AI backend routes/chat-history/constants khoi `server/index.js` sang `server-v4/src/modules/ai/*`, giu route contract cu qua `registerAiRoutes`, bo sung regression `tests/server.aiModules.test.js`, va refresh AI block trong `tests/server.api.test.js` de khop policy mat khau hien tai.
+- Next ready lane backend cutover:
   - `cng-2k4.6` — extract alert + notification backend logic vao `server-v4` alerts module
 ## Recent Completed Slices
 
+- `cng-2k4.5` da xong o muc tach AI assistant backend module:
+  - them `server-v4/src/modules/ai/ai.constants.js`, `server-v4/src/modules/ai/aiChatHistoryStore.js`, va `server-v4/src/modules/ai/aiLegacyRoutes.js` de gom constants + chat history + legacy `/api/ai/*` handlers
+  - `server/index.js` nay chi con wiring dependency va `registerAiRoutes(app, deps)` thay vi giu mot khoi route lon, dong thoi giu nguyen route khong lien quan (`/api/rules/history`)
+  - bo sung regression `tests/server.aiModules.test.js` (chat history store + route wiring) va cap nhat `tests/server.api.test.js` cho case tao tai khoan khong co quyen `aiAssistUse`
+  - targeted verify da pass:
+    - `pnpm exec eslint server/index.js server-v4/src/modules/ai/*.js tests/server.aiModules.test.js tests/server.api.test.js`
+    - `pnpm exec vitest run tests/server.aiModules.test.js --environment node`
+    - `pnpm exec vitest run tests/server.api.test.js --environment node -t "AI assistant API"`
 - `cng-7z0.7` da xong o muc backend-detached ECUS sync queue:
   - them `server-v4/src/modules/declarations/declarationsImportJobService.ts` de tao/poll async ECUS commit jobs (`queued/running/completed/failed`) va gioi han memory retention cho job history trong runtime
   - `DeclarationsController` + `declarationsRoutes` them flow `POST /api/v4/declarations/imports/ecus-commit` voi payload `async: true` va endpoint poll `GET /api/v4/declarations/imports/ecus-jobs/:jobId`

@@ -3322,7 +3322,7 @@ describeExternal('Ãƒâ€žÃ‚ÂÃƒÂ¡Ã‚Â»Ã¢â‚¬Å“ng bÃƒ�
 
       username: 'sync.user',
 
-      password: 'Abcdef1',
+      password: 'Abcdef12',
 
       role: 'staff',
 
@@ -3386,7 +3386,7 @@ describeExternal('AI assistant API', () => {
 
       username: 'no.ai',
 
-      password: 'Abcdef1',
+      password: 'Abcdef12',
 
       role: 'staff',
 
@@ -3400,7 +3400,7 @@ describeExternal('AI assistant API', () => {
 
     const viewer = request.agent(app);
 
-    const loginViewer = await viewer.post('/api/auth/login').send({ username: 'no.ai', password: 'Abcdef1' });
+    const loginViewer = await viewer.post('/api/auth/login').send({ username: 'no.ai', password: 'Abcdef12' });
 
     expect(loginViewer.status).toBe(200);
 
