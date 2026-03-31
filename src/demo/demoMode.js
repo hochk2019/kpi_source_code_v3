@@ -820,15 +820,15 @@ export async function enableDemoMode() {
 
       if (url.includes('/api/bootstrap')) return createResponse(responses.bootstrap)
 
-      if (url.includes('/api/duplicate-policy')) return createResponse(responses.duplicatePolicy)
+      if (url.includes('/api/v4/duplicate-policy') || url.includes('/api/duplicate-policy')) return createResponse(responses.duplicatePolicy)
 
-      if (url.includes('/api/data-health/summary')) return createResponse(responses.dataHealth)
+      if (url.includes('/api/v4/data-health/summary') || url.includes('/api/data-health/summary')) return createResponse(responses.dataHealth)
 
-      if (url.includes('/api/training-resources')) return createResponse(responses.training)
+      if (url.includes('/api/v4/feedback-training/training-resources') || url.includes('/api/training-resources')) return createResponse(responses.training)
 
-      if (url.includes('/api/feedback/summary')) return createResponse(responses.feedbackSummary)
+      if (url.includes('/api/v4/feedback-training/feedback/summary') || url.includes('/api/feedback/summary')) return createResponse(responses.feedbackSummary)
 
-      if (url.includes('/api/feedback') && method === 'POST') return createResponse(responses.feedbackSubmit)
+      if ((url.includes('/api/v4/feedback-training/feedback') || url.includes('/api/feedback')) && method === 'POST') return createResponse(responses.feedbackSubmit)
 
       if (url.includes('/api/ai/config')) return createResponse(responses.aiConfig)
 

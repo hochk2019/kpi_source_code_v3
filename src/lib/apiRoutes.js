@@ -1,4 +1,18 @@
 export const API_V4_ROUTES = Object.freeze({
+  dataHealth: Object.freeze({
+    summary: '/api/v4/data-health/summary',
+  }),
+  duplicatePolicy: Object.freeze({
+    base: '/api/v4/duplicate-policy',
+  }),
+  filterPresets: Object.freeze({
+    base: '/api/v4/filter-presets',
+  }),
+  feedbackTraining: Object.freeze({
+    trainingResources: '/api/v4/feedback-training/training-resources',
+    feedback: '/api/v4/feedback-training/feedback',
+    feedbackSummary: '/api/v4/feedback-training/feedback/summary',
+  }),
   hqAgencies: Object.freeze({
     history: '/api/v4/hq-agencies/history',
   }),

@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { fetchWithAuth } from '@/auth/localAuth.js';
-import { API_LEGACY_ROUTES, API_V4_ROUTES } from '@/lib/apiRoutes.js';
+import { API_V4_ROUTES } from '@/lib/apiRoutes.js';
 
 import { fetchNotificationHistory, subscribeNotificationStream } from '@/lib/notificationClient.js';
 
@@ -409,7 +409,7 @@ export default function DataHealthDashboard({ currentUser, canManage = false }) 
 
   const summaryTask = useCallback(async ({ signal }) => {
 
-    const response = await fetchWithAuth(API_LEGACY_ROUTES.dataHealthSummary, { cache: 'no-store', signal });
+    const response = await fetchWithAuth(API_V4_ROUTES.dataHealth.summary, { cache: 'no-store', signal });
 
     if (!response.ok) {
 
@@ -513,7 +513,7 @@ export default function DataHealthDashboard({ currentUser, canManage = false }) 
 
   const policyTask = useCallback(async ({ signal }) => {
 
-    const response = await fetchWithAuth(API_LEGACY_ROUTES.duplicatePolicy, { cache: 'no-store', signal });
+    const response = await fetchWithAuth(API_V4_ROUTES.duplicatePolicy.base, { cache: 'no-store', signal });
 
     if (!response.ok) {
 
@@ -1184,7 +1184,7 @@ export default function DataHealthDashboard({ currentUser, canManage = false }) 
 
       };
 
-      const response = await fetchWithAuth(API_LEGACY_ROUTES.duplicatePolicy, {
+      const response = await fetchWithAuth(API_V4_ROUTES.duplicatePolicy.base, {
 
         method: 'PUT',
 
@@ -1254,7 +1254,7 @@ export default function DataHealthDashboard({ currentUser, canManage = false }) 
 
       try {
 
-        const response = await fetchWithAuth(API_LEGACY_ROUTES.duplicatePolicy, {
+        const response = await fetchWithAuth(API_V4_ROUTES.duplicatePolicy.base, {
 
           method: 'PUT',
 
@@ -1344,7 +1344,7 @@ export default function DataHealthDashboard({ currentUser, canManage = false }) 
 
       try {
 
-        const response = await fetchWithAuth(API_LEGACY_ROUTES.duplicatePolicy, {
+        const response = await fetchWithAuth(API_V4_ROUTES.duplicatePolicy.base, {
 
           method: 'PUT',
 

@@ -141,7 +141,7 @@ describe('DataHealthDashboard rollout integration', () => {
   beforeEach(() => {
     rolloutPanelSpy.mockReset();
     fetchSpy = vi.spyOn(auth, 'fetchWithAuth').mockImplementation(async (url) => {
-      if (url === '/api/data-health/summary') {
+      if (url === '/api/v4/data-health/summary') {
         return createJsonResponse(createSummaryPayload());
       }
 
@@ -149,7 +149,7 @@ describe('DataHealthDashboard rollout integration', () => {
         return createJsonResponse(createRolloutPayload());
       }
 
-      if (url === '/api/duplicate-policy') {
+      if (url === '/api/v4/duplicate-policy') {
         return createJsonResponse({
           ok: true,
           config: null,

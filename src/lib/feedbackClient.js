@@ -1,10 +1,10 @@
-import { API_LEGACY_ROUTES } from '@/lib/apiRoutes.js';
+import { API_V4_ROUTES } from '@/lib/apiRoutes.js';
 
-const TRAINING_ENDPOINT = API_LEGACY_ROUTES.trainingResources;
+const TRAINING_ENDPOINT = API_V4_ROUTES.feedbackTraining.trainingResources;
 
-const FEEDBACK_ENDPOINT = API_LEGACY_ROUTES.feedback;
+const FEEDBACK_ENDPOINT = API_V4_ROUTES.feedbackTraining.feedback;
 
-const FEEDBACK_SUMMARY_ENDPOINT = API_LEGACY_ROUTES.feedbackSummary;
+const FEEDBACK_SUMMARY_ENDPOINT = API_V4_ROUTES.feedbackTraining.feedbackSummary;
 
 
 

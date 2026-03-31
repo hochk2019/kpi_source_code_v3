@@ -21,6 +21,9 @@
   - da cap nhat canonical metadata routing/runtime bridge cho `rules-history` + `reports-export` trong `server-v4` va `server/index.js`
   - da bo sung regression `tests/server-v4/kpiRulesHistoryRoutes.test.js` va `tests/server-v4/reportingExportRoutes.test.js`
   - da chuyen active bead sang `cng-mbu.3` de tiep tuc week 3-5 frontend redesign
+  - da ship slice dau frontend canonicalization cho lanes `data-health`, `duplicate-policy`, `filter-presets`, `feedback-training`: caller o `DataHealthDashboard`, `useFilterPresets`, `feedbackClient` da chuyen sang `/api/v4/*` route constants
+  - da cap nhat demo routing fallback cho canonical feedback/data-health/policy route trong `src/demo/demoMode.js`
+  - da cap nhat regression `tests/apiRoutes.test.js`, `tests/dataHealthDashboard.test.jsx`, `tests/dataImporter.preview.test.jsx`
 
 ## Handoff
 
@@ -33,7 +36,7 @@
 - Risk: neu khong duy tri 3 nguon truth (`bd`, `task.md`, `docs/big-bang-execution-status.md`) thi se lap lai tinh trang "epic dong som" du plan chua xong.
 - Decision: tu gio theo doi tien do big-bang bang epic `cng-mbu` va board `docs/big-bang-execution-status.md`; moi lane tuan bat buoc co bead + gate + evidence.
 - Decision tiep theo (owner request): giam tan suat commit, gom theo lane/slice lon (khong commit moi thay doi nho).
-- Next: bat dau lane dau cua `cng-mbu.3` theo ownership matrix trong `docs/api-contract-v4-migration-plan.md`.
+- Next: tiep tuc slice ke tiep cua `cng-mbu.3` cho `rules-history` + `reports-export/audit` frontend clients sang route canonical `/api/v4/reporting/*` va `/api/v4/rules/history`.
 ## Recent Completed Slices
 
 - `cng-7z0.30` da hoan tat storage sync error hardening:

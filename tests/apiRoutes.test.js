@@ -17,7 +17,13 @@ function collectRouteValues(node, bucket = []) {
 }
 
 describe('apiRoutes', () => {
-  it('exposes canonical v4 routes for hq history and backups', () => {
+  it('exposes canonical v4 routes for health, feedback, hq history, and backups', () => {
+    expect(API_V4_ROUTES.dataHealth.summary).toBe('/api/v4/data-health/summary')
+    expect(API_V4_ROUTES.duplicatePolicy.base).toBe('/api/v4/duplicate-policy')
+    expect(API_V4_ROUTES.filterPresets.base).toBe('/api/v4/filter-presets')
+    expect(API_V4_ROUTES.feedbackTraining.trainingResources).toBe('/api/v4/feedback-training/training-resources')
+    expect(API_V4_ROUTES.feedbackTraining.feedback).toBe('/api/v4/feedback-training/feedback')
+    expect(API_V4_ROUTES.feedbackTraining.feedbackSummary).toBe('/api/v4/feedback-training/feedback/summary')
     expect(API_V4_ROUTES.hqAgencies.history).toBe('/api/v4/hq-agencies/history')
     expect(API_V4_ROUTES.backups.summary).toBe('/api/v4/backups/summary')
     expect(API_V4_ROUTES.backups.files).toBe('/api/v4/backups/files')

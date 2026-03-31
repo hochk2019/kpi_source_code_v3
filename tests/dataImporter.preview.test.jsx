@@ -495,7 +495,7 @@ describe('DataImporter preview UI', () => {
 
       }
 
-      if (url.startsWith('/api/filter-presets')) {
+      if (url.startsWith('/api/v4/filter-presets')) {
 
         return Promise.resolve(
 
@@ -1462,7 +1462,7 @@ describe('DataImporter saved data actions', () => {
 
       }
 
-      if (url.startsWith('/api/filter-presets')) {
+      if (url.startsWith('/api/v4/filter-presets')) {
 
         return Promise.resolve(createJsonResponse({ ok: true, scope: 'data-importer', presets: [] }));
 
