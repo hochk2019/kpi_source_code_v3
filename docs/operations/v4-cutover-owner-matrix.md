@@ -2,7 +2,12 @@
 
 Last updated: 2026-04-01  
 Program: `cng-mbu`  
-Execution lane: `cng-mbu.7`
+Execution lane: `cng-mbu.7`  
+Status: `Archived template` after repository package closure
+
+Archive note:
+- this file remains a blank owner template; repo closure did not invent operational owners or sign-offs
+- final repository closure is recorded in [v4-hypercare-completion-report-2026-04-01.md](/E:/GPT/kpi_source_code_v4/docs/operations/v4-hypercare-completion-report-2026-04-01.md)
 
 ## Purpose
 

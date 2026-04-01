@@ -50,6 +50,47 @@ function toHeadersObject(headersList) {
 
 }
 
+function buildCorsHeaders(requestHeaders) {
+
+  const requestOrigin = String(requestHeaders?.origin || '').trim();
+  const referer = String(requestHeaders?.referer || '').trim();
+  const fallbackBaseUrl = String(process.env.PLAYWRIGHT_BASE_URL || '')
+    .trim()
+    || `http://127.0.0.1:${process.env.PLAYWRIGHT_PORT || '4173'}`;
+  let fallbackOrigin = 'http://127.0.0.1:4173';
+  try {
+    fallbackOrigin = new URL(fallbackBaseUrl).origin;
+  } catch {
+    // keep default fallback origin
+  }
+
+  let allowOrigin = requestOrigin;
+  if (!allowOrigin && referer) {
+    try {
+      allowOrigin = new URL(referer).origin;
+    } catch {
+      allowOrigin = '';
+    }
+  }
+  if (!allowOrigin) {
+    allowOrigin = fallbackOrigin;
+  }
+  const allowHeaders =
+    String(requestHeaders?.['access-control-request-headers'] || '').trim() ||
+    'Content-Type, X-CSRF-Token';
+
+  return {
+    'access-control-allow-origin': allowOrigin,
+    'access-control-allow-credentials': 'true',
+    'access-control-allow-methods': 'GET,POST,PUT,PATCH,DELETE,OPTIONS',
+    'access-control-allow-headers': allowHeaders,
+    'access-control-allow-private-network': 'true',
+    'access-control-expose-headers': 'Content-Type, Content-Disposition',
+    vary: 'Origin',
+  };
+
+}
+
 
 
 const test = base.extend({
@@ -464,25 +505,36 @@ const test = base.extend({
 
       const path = normalisePath(url);
 
+      const headersArray =
+
+        typeof request.headersArray === 'function'
+
+          ? request.headersArray()
+
+          : Object.entries(request.headers());
+
+      const requestHeaders = toHeadersObject(headersArray);
+      const corsHeaders = buildCorsHeaders(requestHeaders);
+
       apiEvents.requests.push({ method, path });
+
+      if (method === 'OPTIONS') {
+
+        await route.fulfill({ status: 204, body: '', headers: corsHeaders });
+
+        return;
+
+      }
 
       const handler = resolveHandler(handlerMap, method, path);
 
       if (handler) {
 
-        const headersArray =
-
-          typeof request.headersArray === 'function'
-
-            ? request.headersArray()
-
-            : Object.entries(request.headers());
-
         const init = {
 
           method,
 
-          headers: toHeadersObject(headersArray),
+          headers: requestHeaders,
 
           body: request.postData(),
 
@@ -492,7 +544,7 @@ const test = base.extend({
 
         if (!result) {
 
-          await route.fulfill({ status: 204, body: '' });
+          await route.fulfill({ status: 204, body: '', headers: corsHeaders });
 
           return;
 
@@ -500,7 +552,7 @@ const test = base.extend({
 
 
 
-        const headers = { 'content-type': 'application/json', ...(result.headers || {}) };
+        const headers = { ...corsHeaders, 'content-type': 'application/json', ...(result.headers || {}) };
 
         const status = result.status ?? (result.ok === false ? 500 : 200);
 
@@ -530,7 +582,11 @@ const test = base.extend({
 
 
 
-      await route.fulfill({ status: 200, body: JSON.stringify({ ok: true }), headers: { 'content-type': 'application/json' } });
+      await route.fulfill({
+        status: 200,
+        body: JSON.stringify({ ok: true }),
+        headers: { ...corsHeaders, 'content-type': 'application/json' },
+      });
 
     });
 

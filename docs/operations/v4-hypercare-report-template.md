@@ -2,7 +2,12 @@
 
 Last updated: 2026-04-01  
 Program: `cng-mbu`  
-Execution lane: `cng-mbu.7`
+Execution lane: `cng-mbu.7`  
+Status: `Archived template`
+
+Archive note:
+- actual repository closure report lives at [v4-hypercare-completion-report-2026-04-01.md](/E:/GPT/kpi_source_code_v4/docs/operations/v4-hypercare-completion-report-2026-04-01.md)
+- keep this file as the reusable source template for any future environment-specific hypercare report
 
 ## 1) Cutover Metadata
 

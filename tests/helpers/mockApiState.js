@@ -648,7 +648,11 @@ export function createDefaultHandlers(state) {
     'GET /api/audit': () => jsonResponse({ ok: true, logs: [] }),
 
     'GET /api/v4/auth/accounts': () =>
-      jsonResponse({ ok: true, data: { accounts: listClientAccounts(state) } }),
+      jsonResponse({
+        ok: true,
+        data: { accounts: listClientAccounts(state) },
+        accounts: listClientAccounts(state),
+      }),
 
     'POST /api/v4/auth/accounts': ({ init }) => {
 
@@ -692,7 +696,16 @@ export function createDefaultHandlers(state) {
       state.accounts.push(account);
       state.passwords.set(account.username, password);
 
-      return jsonResponse({ ok: true, data: { account, accounts: listClientAccounts(state) } }, 201);
+      const accounts = listClientAccounts(state);
+      return jsonResponse(
+        {
+          ok: true,
+          data: { account, accounts },
+          account,
+          accounts,
+        },
+        201,
+      );
 
     },
 
@@ -732,7 +745,13 @@ export function createDefaultHandlers(state) {
 
       }
 
-      return jsonResponse({ ok: true, data: { account: updated, accounts: listClientAccounts(state) } });
+      const accounts = listClientAccounts(state);
+      return jsonResponse({
+        ok: true,
+        data: { account: updated, accounts },
+        account: updated,
+        accounts,
+      });
 
     },
 
@@ -760,7 +779,12 @@ export function createDefaultHandlers(state) {
 
       state.passwords.set(state.accounts[index].username, password);
 
-      return jsonResponse({ ok: true, data: { accounts: listClientAccounts(state) } });
+      const accounts = listClientAccounts(state);
+      return jsonResponse({
+        ok: true,
+        data: { accounts },
+        accounts,
+      });
 
     },
 
@@ -786,7 +810,12 @@ export function createDefaultHandlers(state) {
 
       }
 
-      return jsonResponse({ ok: true, data: { accounts: listClientAccounts(state) } });
+      const accounts = listClientAccounts(state);
+      return jsonResponse({
+        ok: true,
+        data: { accounts },
+        accounts,
+      });
 
     },
 
@@ -820,6 +849,9 @@ export function createDefaultHandlers(state) {
           user: state.currentUser,
           expiresAt: null,
         },
+        user: state.currentUser,
+        account: state.currentUser,
+        expiresAt: null,
       });
 
     },
@@ -831,6 +863,9 @@ export function createDefaultHandlers(state) {
           user: state.currentUser,
           expiresAt: null,
         },
+        user: state.currentUser,
+        account: state.currentUser,
+        expiresAt: null,
       }),
 
     'POST /api/v4/auth/logout': () => {

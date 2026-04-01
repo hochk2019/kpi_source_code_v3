@@ -32,13 +32,11 @@ Reconciliation note:
 - Reconciled again on 2026-03-31 after completing `cng-mbu.3`; frontend canonical client migration da dat `api:contract:gate` (legacy usage = 0), `cng-mbu.3` closed, va `cng-mbu.4` duoc chuyen in-progress.
 - Reconciled again on 2026-04-01 after completing `cng-mbu.4`; W5-6 parity/rehearsal da dat gate xanh, evidence rehearsal da duoc luu, va next ready item chuyen sang `cng-mbu.5`.
 - Reconciled again on 2026-04-01 after completing `cng-mbu.5`; hardening smoke + UAT da dat gate xanh (smoke core, parity, a11y/perf/security/auth, Playwright UAT 19/19), va next ready item chuyen sang `cng-mbu.6`.
-- Reconciled again on 2026-04-01 after closing `cng-mbu.6`; release gates da duoc khoa qua sign-off package, va next execution lane chuyen sang `cng-mbu.7` (cutover + hypercare).
-- Reconciled again on 2026-04-01 sau khi khoi tao `cng-mbu.7` runbook package (`docs/operations/v4-cutover-hypercare-runbook.md`) de thuc thi preflight/cutover/hypercare.
-- Reconciled again on 2026-04-01 sau khi bo sung artifact van hanh cho `cng-mbu.7`: owner matrix, hypercare checkpoint log, va hypercare completion report template; remaining work con lai la execution tren staging/prod window.
-- Reconciled again on 2026-04-01 sau khi bo sung `docs/operations/v4-cutover-window-and-comms-plan.md`; lane `cng-mbu.7` con lai thao tac runtime + communication execution trong cua so cutover that.
+- Reconciled again on 2026-04-01 after closing `cng-mbu.6`; release gates da duoc khoa, va bo tai lieu `cng-mbu.7` (runbook, owner matrix, comms plan, hypercare checkpoint log, completion template) da duoc tao de bao phu phase cutover/hypercare.
 - Reconciled again on 2026-04-01 after closing `cng-mbu.7`; engineering cutover package and local verification gates are complete, and all child beads under epic `cng-mbu` are now closed.
-- Reconciled again on 2026-04-01 after validating full Big-bang engineering gates (`api:contract:gate`, `verify:v4:parity`, `verify:v4:cutover-preflight --dry-run`) and closing epic `cng-mbu`; repository now has no open beads.
+- Reconciled again on 2026-04-01 after validating full Big-bang engineering gates (`api:contract:gate`, `verify:v4:parity`, `verify:v4:cutover-preflight --dry-run`) and closing epic `cng-mbu`; repository had no open beads before hard-gate execution epic `cng-m2r` was opened.
 - Reconciled again on 2026-04-01 after opening hard-gate execution epic `cng-m2r` with phase chain `cng-m2r.1..cng-m2r.6`, plus canonical board `docs/operations/v4-cutover-execution-board.md` and automation gate `pnpm run cutover:check`.
+- Reconciled again on 2026-04-01 after closing `cng-m2r.6` and epic `cng-m2r`; UAT smoke + cutover preflight with `--with-uat-smoke` are green, repository cutover board is fully closed, and there are no open beads.
 
 Rule:
 - Every unfinished item from review notes, rollout plans, decomposition plans, or UX backlogs must be in one of two states:
@@ -46,14 +44,14 @@ Rule:
 - explicitly marked deferred or removed in its source document
 
 Current open epics:
-- `cng-m2r` (Hard-gate backend v4 full cutover execution).
+- none.
 
 Current highest-priority ready items:
-- `cng-m2r.6`.
+- none.
 
 ## Hard-gate Cutover Program
 
-Epic: `cng-m2r` (open)  
+Epic: `cng-m2r` (closed)  
 Source set: `docs/operations/v4-cutover-execution-board.md`, `task.md`
 
 - `cng-m2r.1` - Phase 0 Re-baseline contract/parity gates (closed)
@@ -61,7 +59,7 @@ Source set: `docs/operations/v4-cutover-execution-board.md`, `task.md`
 - `cng-m2r.3` - Phase 2 Remove server-v4 legacy compat routes (closed)
 - `cng-m2r.4` - Phase 3 Migrate scripts off `server/index.js` (closed)
 - `cng-m2r.5` - Phase 4 Decommission legacy runtime entrypoint (closed)
-- `cng-m2r.6` - Phase 5 Big-bang cutover window + hypercare (in_progress; UAT smoke blockers)
+- `cng-m2r.6` - Phase 5 Big-bang cutover window + hypercare (closed; UAT smoke blockers resolved)
 
 ## Big-bang Program (PLAN.md) [closed]
 

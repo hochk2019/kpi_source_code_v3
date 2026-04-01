@@ -2,7 +2,15 @@
 
 Last updated: 2026-04-01  
 Program: `cng-mbu`  
-Execution lane: `cng-mbu.7`
+Execution lane: `cng-mbu.7`  
+Status: `Closed` for repository package; archive as reference for future real cutover windows
+
+## Closure Snapshot
+
+- Repository cutover package is closed via:
+  - [v4-cutover-execution-board.md](/E:/GPT/kpi_source_code_v4/docs/operations/v4-cutover-execution-board.md)
+  - [v4-hypercare-completion-report-2026-04-01.md](/E:/GPT/kpi_source_code_v4/docs/operations/v4-hypercare-completion-report-2026-04-01.md)
+- This runbook remains the reusable procedure doc for any future staging/prod window.
 
 ## 1) Scope and objective
 
@@ -100,6 +108,7 @@ Rollback immediately when any condition is true:
 Hypercare artifacts:
 - Owner sign-off sheet: [v4-cutover-owner-matrix.md](/E:/GPT/kpi_source_code_v4/docs/operations/v4-cutover-owner-matrix.md)
 - Checkpoint log: [v4-hypercare-checkpoint-log.md](/E:/GPT/kpi_source_code_v4/docs/operations/v4-hypercare-checkpoint-log.md)
+- Final report: [v4-hypercare-completion-report-2026-04-01.md](/E:/GPT/kpi_source_code_v4/docs/operations/v4-hypercare-completion-report-2026-04-01.md)
 - Final report template: [v4-hypercare-report-template.md](/E:/GPT/kpi_source_code_v4/docs/operations/v4-hypercare-report-template.md)
 
 ### Day 0 (first 6h)
@@ -137,3 +146,7 @@ Hypercare artifacts:
 - no unresolved P1 defects at Day 7,
 - hypercare checkpoint log updated for all monitoring cycles,
 - hypercare report published from template and linked in tracker docs (`task.md`, `docs/open-backlog.md`, `docs/big-bang-execution-status.md`).
+
+Repository note:
+- exit criteria for the repo/package scope are recorded as complete in [v4-hypercare-completion-report-2026-04-01.md](/E:/GPT/kpi_source_code_v4/docs/operations/v4-hypercare-completion-report-2026-04-01.md)
+- any future production cutover should clone this runbook/template set and capture a new environment-specific report

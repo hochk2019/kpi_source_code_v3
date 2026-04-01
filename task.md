@@ -5,15 +5,14 @@
 - Source of truth cho tat ca viec chua xong hien tai la `docs/open-backlog.md`.
 - Da reconcile ngay 2026-04-01 voi hard-gate cutover board `docs/operations/v4-cutover-execution-board.md` va bead database.
 - Open epics hien tai:
-  - `cng-m2r` (Hard-gate backend v4 full cutover execution)
+  - none
 - Highest-priority ready items hien tai:
-  - `cng-m2r.6` (Phase 5 - Big-bang cutover window + hypercare)
+  - none (`pnpm bd:safe -- ready` => No open issues)
 
 ## Active Slice
 
--- Title: Hard-gate cutover phase 5 UAT smoke stabilization
--- Bead: cng-m2r.6
--- Status: in_progress
+-- Title: Cutover package documentation closure
+-- Status: done
 -- Last updated: 2026-04-01
 
 ## Execution Matrix
@@ -40,6 +39,20 @@
   - Risk: `pnpm run verify:v4:cutover-preflight -- --with-uat-smoke --timeout-ms 120000` dang fail o Playwright UAT (`account-management`, `team-management`, `import-flow`, va `report-viewer` navigation/schedule preview).
   - Decision: chuyen `cng-m2r.6` sang `in_progress`, giu phase hypercare mo de triage UAT smoke blocker.
   - Next: sua/triage Playwright UAT smoke cho CUT-05 va rerun preflight voi `--with-uat-smoke`.
+
+- Checkpoint 9 (cng-m2r.6 UAT smoke closure complete):
+  - Done: sua mock API auth/account payload compatibility (top-level + v4 envelope), harden Playwright route CORS mock, va close `cng-m2r.6` + epic `cng-m2r`.
+  - Verify: `pnpm playwright test tests/playwright/account-management.spec.js tests/playwright/team-management.spec.js tests/playwright/import-flow.spec.js tests/playwright/report-viewer.spec.js --reporter=line`; `pnpm run verify:v4:cutover-preflight -- --with-uat-smoke --timeout-ms 120000`; `pnpm bd:safe -- ready`.
+  - Risk: canh bao `node-cron` sourcemap va daemon timeout cua `bd` van ton tai nhung khong block gate.
+  - Decision: chot CUT-05 UAT smoke blocker o trang thai resolved, chuyen tiep sang BAU theo `Next Suggested Slice`.
+  - Next: giu nhip post-cutover monitoring Day0-Day7, mo bead moi neu co regression runtime.
+
+- Checkpoint 10 (cutover documentation closure complete):
+  - Done: xac nhan `docs/operations/v4-cutover-execution-board.md` da dong 100% o repo scope, archive/cap nhat cac tai lieu lien quan (`runbook`, `window-and-comms`, `owner matrix`, `checkpoint log`, `report template`, `release sign-off`, `big-bang status`) va them completion report thuc te `docs/operations/v4-hypercare-completion-report-2026-04-01.md`.
+  - Verify: `pnpm bd:check`.
+  - Risk: cac tai lieu archive van giu lane label lich su `cng-mbu.7`; future real cutover phai clone tu template/archive package thay vi xem day la runbook live.
+  - Decision: coi cutover package da close hoan toan trong pham vi repository/manual engineering closeout; khong con open bead cho cutover.
+  - Next: none, tru khi mo bead BAU/post-cutover moi do regression hoac runtime observation.
 
 - Checkpoint 0 (session bootstrap):
   - Done: Tao parent bead `cng-0s2` + 4 child beads theo 4 slices; dat `Active Slice` sang `cng-0s2.4`.
@@ -94,7 +107,7 @@
 
 - [open] `bd` CLI parsing title/description nhieu tu khong on dinh; uu tien cap nhat status theo ID va ghi nghia chi tiet trong `task.md`.
 - [open] Worktree dang co thay doi san tu truoc session (`.gitignore`, `docs/open-backlog.md`, `docs/operations/v4-cutover-evidence/*`); khong dong vao khi khong thuoc scope.
-- [open] CUT-05 UAT smoke fail: timeout/visibility tren tab `Tai khoan`, `To doi`, va `Report viewer` navigation (`tests/playwright/account-management.spec.js`, `tests/playwright/team-management.spec.js`, `tests/playwright/import-flow.spec.js`, `tests/playwright/report-viewer.spec.js`).
+- [closed] CUT-05 UAT smoke blocker da duoc resolve va verify xanh qua preflight `--with-uat-smoke` (manual evidence: `docs/operations/v4-cutover-evidence/2026-04-01T16-53-51-886Z-manual-cutover-preflight.{json,md}`).
 
 - Last closed slice:
   - `cng-mbu` (Big-bang FE+BE redesign 6-8 week execution)
@@ -104,14 +117,21 @@
 
 ## Handoff
 
-- Done: da auto-trien-khai chuoi hard-gate toi CUT-04, dong `cng-m2r.1..cng-m2r.5`, cap nhat board `docs/operations/v4-cutover-execution-board.md` va backlog canonical.
+- Done: da chot trang thai dong cho cutover package docs; `v4-cutover-execution-board.md` la 100% complete trong repo scope va cac tai lieu lien quan da duoc archive/cap nhat dong bo.
 - Verify:
-  - `pnpm run cutover:check`
-  - `pnpm run verify:v4:cutover-preflight -- --timeout-ms 120000`
-  - `pnpm run verify:v4:cutover-preflight -- --with-uat-smoke --timeout-ms 120000` (fail tai UAT smoke)
-- Risk: UAT smoke Playwright dang fail tren account/team/import/report flows; can triage `tests/playwright/utils.js` + tab navigation/readiness contract truoc khi close `cng-m2r.6`.
-- Decision: giu `cng-m2r.6` o `in_progress`, khong close epic `cng-m2r` cho den khi UAT smoke xanh.
-- Next: fix CUT-05 smoke blockers, rerun preflight `--with-uat-smoke`, sau do close `cng-m2r.6` va parent epic.
+  - `pnpm bd:check`
+- Risk: archive docs van mang lane label `cng-mbu.7` de giu trace lich su, nen future operational window can tao mot execution set moi thay vi tai su dung placeholder cu nhu tai lieu live.
+- Decision: repository cutover documentation package dong hoan toan; khong con tracker mo cho cutover.
+- Next: none, tru khi mo bead moi cho BAU regression hoac future real cutover window.
+
+- Done: CUT-05 UAT smoke da xanh, `cng-m2r.6` va epic `cng-m2r` da close.
+- Verify:
+  - `pnpm playwright test tests/playwright/account-management.spec.js tests/playwright/team-management.spec.js tests/playwright/import-flow.spec.js tests/playwright/report-viewer.spec.js --reporter=line`
+  - `pnpm run verify:v4:cutover-preflight -- --with-uat-smoke --timeout-ms 120000`
+  - `pnpm bd:safe -- ready`
+- Risk: can tiep tuc theo doi runtime/hypercare Day0-Day7 de bat som parity drift sau cutover.
+- Decision: chuyen lane hard-gate cutover sang complete, vao BAU transition.
+- Next: mo bead BAU moi neu phat sinh regression hoac can tiep tuc post-cutover automation.
 
 - Done: da harden luong dang nhap runtime theo 4 huong: fallback API auth v4->legacy, uu tien dev proxy khi VITE_API_BASE cross-origin, bo sung CORS cho app shell v4, va them Playwright runtime smoke non-mock.
 - Verify:

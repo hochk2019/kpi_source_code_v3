@@ -26,14 +26,17 @@ export async function loginAsAdmin(page) {
 
   await page.goto('/');
 
-  await page.getByRole('button', { name: 'Đăng nhập quản trị' }).click();
+  const loginButton = page.getByRole('button', { name: 'Đăng nhập quản trị' });
+  if ((await loginButton.count()) === 0) {
+    await page.getByRole('button', { name: 'Đăng xuất' }).waitFor({ timeout: 10000 });
+    return;
+  }
 
+  await loginButton.click();
   await page.getByPlaceholder('admin').fill('admin');
-
   await page.getByPlaceholder(/•/).fill('admin123');
 
-  await Promise.all([
-
+  const loginResponse = await Promise.all([
     page.waitForResponse((resp) => {
       if (resp.request().method() !== 'POST') {
         return false;
@@ -41,17 +44,25 @@ export async function loginAsAdmin(page) {
       const pathname = new URL(resp.url()).pathname;
       return pathname === '/api/v4/auth/login';
     }),
-
     page.getByRole('button', { name: /^Đăng nhập$/i }).click(),
+  ]).then(([response]) => response);
 
-  ]);
+  if (loginResponse.status() >= 400) {
+    const payload = await loginResponse.text().catch(() => '');
+    throw new Error(`Đăng nhập quản trị thất bại (${loginResponse.status()}): ${payload}`);
+  }
 
-  await Promise.any([
-    page.getByText(/Xin chào, \s*Quản trị viên/i).waitFor({ timeout: 20000 }),
-    page.getByText(/Người dùng admin/i).waitFor({ timeout: 20000 }),
-    page.getByRole('tab', { name: /Dashboard KPI/i }).waitFor({ timeout: 20000 }),
-    page.getByRole('button', { name: /Command Center/i }).first().waitFor({ timeout: 20000 }),
-  ]);
+  const signedInWithoutReload = await page
+    .getByRole('button', { name: 'Đăng xuất' })
+    .isVisible()
+    .catch(() => false);
+
+  if (!signedInWithoutReload) {
+    await page.reload();
+  }
+
+  await page.getByRole('button', { name: 'Đăng xuất' }).waitFor({ timeout: 20000 });
+  await page.getByRole('button', { name: 'Đăng nhập quản trị' }).waitFor({ state: 'hidden', timeout: 20000 });
 
 }
 

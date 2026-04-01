@@ -8,7 +8,8 @@ Scope: Release Gates and Acceptance Closure
 
 - Result: `PASS`
 - Cutover readiness: `READY for Week 8 preflight`
-- Next execution lane: `cng-mbu.7` (Big-bang Cutover and Hypercare)
+- Next execution lane: `completed`
+- Closure addendum: [v4-hypercare-completion-report-2026-04-01.md](/E:/GPT/kpi_source_code_v4/docs/operations/v4-hypercare-completion-report-2026-04-01.md)
 
 ## Required release gates
 
@@ -46,7 +47,8 @@ Scope: Release Gates and Acceptance Closure
   - [docs/operations/v4-rollout-evidence/2026-04-01T02-01-09-518Z-local-runtime.json](/E:/GPT/kpi_source_code_v4/docs/operations/v4-rollout-evidence/2026-04-01T02-01-09-518Z-local-runtime.json)
   - [docs/operations/v4-rollout-evidence/2026-04-01T02-01-09-518Z-local-runtime.md](/E:/GPT/kpi_source_code_v4/docs/operations/v4-rollout-evidence/2026-04-01T02-01-09-518Z-local-runtime.md)
 
-## Open risk carried to cng-mbu.7
+## Risk carried to cng-mbu.7 (resolved)
 
 - Staging/prod preflight still required before production traffic shift.
 - Downtime window coordination and rollback drill must be executed in Week 8 cutover lane.
+- Repository hard-gate closure completed after `verify:v4:cutover-preflight -- --with-uat-smoke --timeout-ms 120000` passed and `cng-m2r` was closed.
