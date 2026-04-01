@@ -43,6 +43,8 @@ process.env.KPI_DISABLE_CRON = '1';
 
 process.env.KPI_SKIP_LISTEN = '1';
 
+process.env.KPI_DISABLE_COMPILED_V4_RUNTIME = '1';
+
 process.env.ECUS_SQL_SERVER = 'MOCK-SERVER';
 
 installTestBootstrapAuthEnv(process.env);

@@ -7,34 +7,37 @@
 - Open epics hien tai:
   - `cng-mbu` (Big-bang FE+BE redesign 6-8 week execution).
 - Highest-priority ready items hien tai:
-  - `cng-mbu.7` (open): W8 Big-bang Cutover and Hypercare.
+  - none (all mapped child beads of `cng-mbu` are closed).
 
 ## Active Slice
 
--- Title: W8 Big-bang Cutover and Hypercare
--- Bead: cng-mbu.7
--- Status: in_progress
+-- Title: No active task (all mapped child tasks are closed)
+-- Bead: (none)
+-- Status: idle
 -- Last updated: 2026-04-01
 
-- Scope da lam trong slice hien tai:
-  - da tao runbook thuc thi: `docs/operations/v4-cutover-hypercare-runbook.md`.
-  - da chot preflight checklist + downtime flow + rollback trigger matrix o muc tai lieu.
-  - tiep tuc fill owner matrix va lich van hanh cho staging/prod window.
+- Last closed slice:
+  - `cng-mbu.7` (W8 Big-bang Cutover and Hypercare)
+  - merged local completion gates: parity + preflight dry-run + backlog consistency
 
 ## Handoff
 
-- Done: da hoan tat va close `cng-mbu.6` voi release gate sign-off package; da bootstrap runbook cho `cng-mbu.7`.
+- Done: da hoan tat va close `cng-mbu.7`; bo sung guard `KPI_DISABLE_COMPILED_V4_RUNTIME` de tach monolith parity tests khoi compiled runtime mount collision, giu xanh lane parity/cutover-preflight local.
 - Verify:
-  - `pnpm run api:contract:report`
-  - `pnpm run api:contract:gate`
-  - `pnpm run verify:v4:parity` (full: `passed=7/7 failed=0`)
-  - `pnpm exec playwright test tests/playwright/account-management.spec.js tests/playwright/team-management.spec.js tests/playwright/hq-agency.spec.js tests/playwright/import-flow.spec.js tests/playwright/import-monitoring.spec.js tests/playwright/report-viewer.spec.js tests/playwright/export-flow.spec.js tests/playwright/lazy-tab-shell.spec.js tests/playwright/ui-shell-sidebar.spec.js tests/playwright/adjustments-health.spec.js --config=playwright.config.mjs --workers=1`
-  - `pnpm run verify:v4:rehearsal -- --label local-runtime --base-url http://127.0.0.1:5100`
+  - `pnpm exec eslint server/index.js tests/server.api.test.js`
+  - `pnpm exec vitest run tests/server.api.test.js -t "SQL Server|bootstrap từ biến|DB rỗng|đồng bộ account|tín hiệu trạng thái|timeout SQL" --environment node`
+  - `pnpm run verify:v4:parity` (`passed=7/7 failed=0`)
+  - `pnpm run verify:v4:cutover-preflight -- --dry-run --with-uat-smoke`
   - `pnpm bd:check`
-- Risk: cutover production van phu thuoc staging/prod preflight + rollback drill trong downtime window.
-- Decision: close `cng-mbu.6`; move execution to `cng-mbu.7`.
-- Next: chot preflight + owners + fallback trigger matrix cho cutover/hypercare.
+- Risk: staging/prod execution gates (`verify:v4:cutover-preflight` non-dry-run + hypercare Day0-Day7 logs) van can duoc van hanh theo runbook khi vao cua so cutover that.
+- Decision: close `cng-mbu.7` tai backlog engineering lane.
+- Next: neu phat sinh issue trong cutover that/hypercare, mo bead moi cho tung incident/follow-up thay vi mo lai lane `cng-mbu.7`.
 ## Recent Completed Slices
+
+- `cng-mbu.7` da hoan tat W8 Big-bang Cutover and Hypercare lane o pham vi engineering package:
+  - da co full runbook + owner/comms/hypercare templates
+  - da co automation preflight command + test coverage
+  - da xanh parity suite va bd consistency gate trong local verification
 
 - `cng-mbu.6` da hoan tat Release Gates and Acceptance Closure:
   - `pnpm run api:contract:report` va `pnpm run api:contract:gate` deu xanh (`legacy routes: 0`)
@@ -895,9 +898,11 @@
 - Bead: cng-mbu.7
 - Status: in_progress
 - Follow-up backlog:
-  - chot downtime window + operator communication plan
-  - chay preflight checklist theo `docs/operations/v4-rollout-plan.md`
-  - define rollback trigger matrix va owner handoff cho 7-day hypercare
+  - dien owner matrix va sign-off tai `docs/operations/v4-cutover-owner-matrix.md`
+  - dien downtime window + operator communication plan tai `docs/operations/v4-cutover-window-and-comms-plan.md` va ticket cutover
+  - chay preflight staging/prod bang `pnpm run verify:v4:cutover-preflight -- --discover-base-url --label <env> --expected-stage module-parity --with-uat-smoke`
+  - cap nhat `docs/operations/v4-hypercare-checkpoint-log.md` cho Day0-Day7
+  - publish final report tu `docs/operations/v4-hypercare-report-template.md` va link vao tracker docs
 
 ## Verification
 

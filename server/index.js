@@ -291,6 +291,14 @@ function handleLegacyAdminAuditExport(req, res) {
 
 async function mountReportingV4App(targetApp) {
 
+  const disableCompiledV4Runtime = ['1', 'true', 'yes'].includes(
+    String(process.env.KPI_DISABLE_COMPILED_V4_RUNTIME || '').trim().toLowerCase()
+  );
+  if (disableCompiledV4Runtime) {
+    console.warn('[v4 Migration] Skip mounting reporting v4 runtime because KPI_DISABLE_COMPILED_V4_RUNTIME is enabled.');
+    return;
+  }
+
   try {
 
     const runtimeModule = await loadCompiledV4Runtime();
