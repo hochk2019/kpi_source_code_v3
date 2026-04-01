@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 
-const LOGIN_PATHNAMES = new Set(['/api/v4/auth/login', '/api/auth/login', '/api/login']);
+const LOGIN_PATHNAMES = new Set(['/api/v4/auth/login']);
 
 test.describe('runtime non-mock smoke', () => {
   test('health check and login request reach backend runtime', async ({ page, request }) => {

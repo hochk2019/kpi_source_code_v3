@@ -98,7 +98,7 @@ describe('Login component', () => {
 
   });
 
-  it('tự fallback sang endpoint auth legacy khi API v4 chưa sẵn sàng', async () => {
+  it('không fallback sang endpoint auth legacy khi API v4 trả 404', async () => {
     fetchMock = installMockApi({
       'POST /api/v4/auth/login': () =>
         new Response(JSON.stringify({ ok: false, error: 'Not found' }), {
@@ -109,9 +109,9 @@ describe('Login component', () => {
 
     const result = await login('admin', 'admin123');
 
-    expect(result.ok).toBe(true);
+    expect(result.ok).toBe(false);
     expect(fetchMock.mock.calls.some((call) => String(call[0]).includes('/api/v4/auth/login'))).toBe(true);
-    expect(fetchMock.mock.calls.some((call) => String(call[0]).includes('/api/auth/login'))).toBe(true);
+    expect(fetchMock.mock.calls.some((call) => String(call[0]).includes('/api/auth/login'))).toBe(false);
   });
 
   it('trả thông báo thân thiện khi không kết nối được backend đăng nhập', async () => {

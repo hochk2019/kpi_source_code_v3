@@ -37,7 +37,6 @@ import {
 import { buildTeamsRouter } from '../modules/teams/teamsRoutes.js';
 import { createRuntimePersistence, type RuntimePersistence } from '../persistence/runtimePersistence.js';
 import { createCsrfProtection } from './csrfProtection.js';
-import { buildLegacyCompatRouter } from './legacyCompatRoutes.js';
 import {
   createImporterCompatTrafficTracker,
   type ImporterCompatGuardMode,
@@ -328,13 +327,6 @@ export function buildV4App(input?: readonly DomainModule[] | BuildV4AppOptions):
 
     app.use(domainModule.basePath, buildDefaultModuleRouter(domainModule));
   }
-
-  app.use(
-    buildLegacyCompatRouter(persistence, {
-      ...options.declarations,
-      importerCompatTracker,
-    }),
-  );
 
   return app;
 }

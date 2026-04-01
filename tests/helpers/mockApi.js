@@ -62,7 +62,7 @@ export function installMockApi(overrides = {}) {
 
 
 
-    if (path.startsWith('/api/v4/auth/accounts/') || path.startsWith('/api/auth/accounts/')) {
+    if (path.startsWith('/api/v4/auth/accounts/')) {
 
       const parts = path.split('/').filter(Boolean);
 
@@ -228,7 +228,7 @@ export function installMockApi(overrides = {}) {
 
 
 
-    if ((path === '/api/v4/auth/accounts' || path === '/api/auth/accounts') && method === 'POST') {
+    if (path === '/api/v4/auth/accounts' && method === 'POST') {
 
       const body = safeParse(init?.body, {});
 
@@ -286,7 +286,7 @@ export function installMockApi(overrides = {}) {
 
 
 
-    if ((path === '/api/v4/auth/password/change' || path === '/api/auth/password/change') && method === 'POST') {
+    if (path === '/api/v4/auth/password/change' && method === 'POST') {
 
       const body = safeParse(init?.body, {});
 

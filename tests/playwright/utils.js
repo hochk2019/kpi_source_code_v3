@@ -39,11 +39,7 @@ export async function loginAsAdmin(page) {
         return false;
       }
       const pathname = new URL(resp.url()).pathname;
-      return (
-        pathname === '/api/v4/auth/login' ||
-        pathname === '/api/auth/login' ||
-        pathname === '/api/login'
-      );
+      return pathname === '/api/v4/auth/login';
     }),
 
     page.getByRole('button', { name: /^Đăng nhập$/i }).click(),

@@ -15,26 +15,26 @@ describe("backend entrypoint plan", () => {
 
     expect(plan.mode).toBe(API_ENTRYPOINT_MODES.serverV4);
     expect(plan.label).toBe("server-v4-standalone");
-    expect(plan.rollbackMode).toBe(API_ENTRYPOINT_MODES.legacy);
+    expect(plan.rollbackMode).toBe(API_ENTRYPOINT_MODES.serverV4);
     expect(plan.entryFile).toMatch(/apps[\\/]api[\\/]src[\\/]cli\.js$/);
   });
 
-  it("supports explicit legacy rollback mode", () => {
+  it("supports explicit server-v4 mode", () => {
     const plan = resolveBackendEntrypointPlan({
-      envMode: "legacy",
+      envMode: "server-v4",
       rootDir: "/workspace/kpi",
     });
 
-    expect(plan.mode).toBe(API_ENTRYPOINT_MODES.legacy);
-    expect(plan.label).toBe("legacy-monolith");
-    expect(plan.rollbackMode).toBe(API_ENTRYPOINT_MODES.legacy);
-    expect(plan.entryFile).toMatch(/server[\\/]index\.js$/);
+    expect(plan.mode).toBe(API_ENTRYPOINT_MODES.serverV4);
+    expect(plan.label).toBe("server-v4-standalone");
+    expect(plan.rollbackMode).toBe(API_ENTRYPOINT_MODES.serverV4);
+    expect(plan.entryFile).toMatch(/apps[\\/]api[\\/]src[\\/]cli\.js$/);
   });
 
-  it("lets the CLI flag override the environment", () => {
+  it("keeps server-v4 when CLI flag and environment match", () => {
     expect(
       resolveApiEntrypointMode({
-        envMode: "legacy",
+        envMode: "server-v4",
         flagMode: "server-v4",
       }),
     ).toBe("server-v4");
@@ -44,6 +44,14 @@ describe("backend entrypoint plan", () => {
     expect(() =>
       resolveApiEntrypointMode({
         envMode: "canary",
+      }),
+    ).toThrow(/KPI_API_ENTRYPOINT_MODE/i);
+  });
+
+  it("rejects legacy rollback mode", () => {
+    expect(() =>
+      resolveApiEntrypointMode({
+        envMode: "legacy",
       }),
     ).toThrow(/KPI_API_ENTRYPOINT_MODE/i);
   });

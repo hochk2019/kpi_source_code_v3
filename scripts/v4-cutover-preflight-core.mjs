@@ -13,6 +13,11 @@ export const DEFAULT_CUTOVER_PREFLIGHT_OUT_DIR = "docs/operations/v4-cutover-evi
 
 export const CUTOVER_PREFLIGHT_COMMAND_CATALOG = Object.freeze([
   {
+    id: "cutover-governance-gate",
+    label: "Hard-gate taskboard consistency",
+    command: "pnpm run cutover:check",
+  },
+  {
     id: "api-contract-report",
     label: "Frontend contract inventory",
     command: "pnpm run api:contract:report",

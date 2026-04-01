@@ -38,6 +38,7 @@ Reconciliation note:
 - Reconciled again on 2026-04-01 sau khi bo sung `docs/operations/v4-cutover-window-and-comms-plan.md`; lane `cng-mbu.7` con lai thao tac runtime + communication execution trong cua so cutover that.
 - Reconciled again on 2026-04-01 after closing `cng-mbu.7`; engineering cutover package and local verification gates are complete, and all child beads under epic `cng-mbu` are now closed.
 - Reconciled again on 2026-04-01 after validating full Big-bang engineering gates (`api:contract:gate`, `verify:v4:parity`, `verify:v4:cutover-preflight --dry-run`) and closing epic `cng-mbu`; repository now has no open beads.
+- Reconciled again on 2026-04-01 after opening hard-gate execution epic `cng-m2r` with phase chain `cng-m2r.1..cng-m2r.6`, plus canonical board `docs/operations/v4-cutover-execution-board.md` and automation gate `pnpm run cutover:check`.
 
 Rule:
 - Every unfinished item from review notes, rollout plans, decomposition plans, or UX backlogs must be in one of two states:
@@ -45,10 +46,22 @@ Rule:
 - explicitly marked deferred or removed in its source document
 
 Current open epics:
-- none.
+- `cng-m2r` (Hard-gate backend v4 full cutover execution).
 
 Current highest-priority ready items:
-- none.
+- `cng-m2r.6`.
+
+## Hard-gate Cutover Program
+
+Epic: `cng-m2r` (open)  
+Source set: `docs/operations/v4-cutover-execution-board.md`, `task.md`
+
+- `cng-m2r.1` - Phase 0 Re-baseline contract/parity gates (closed)
+- `cng-m2r.2` - Phase 1 Remove frontend legacy auth fallbacks (closed)
+- `cng-m2r.3` - Phase 2 Remove server-v4 legacy compat routes (closed)
+- `cng-m2r.4` - Phase 3 Migrate scripts off `server/index.js` (closed)
+- `cng-m2r.5` - Phase 4 Decommission legacy runtime entrypoint (closed)
+- `cng-m2r.6` - Phase 5 Big-bang cutover window + hypercare (in_progress; UAT smoke blockers)
 
 ## Big-bang Program (PLAN.md) [closed]
 

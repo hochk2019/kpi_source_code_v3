@@ -1,5 +1,11 @@
 import process from 'node:process';
 
+import {
+  createRuntimeAdminContext,
+  ensureSqliteBaseline,
+  resolveDefaultBackupDirectory,
+} from './runtime-v4-admin.mjs';
+
 export const DEFAULT_BACKUP_REASON = 'bootstrap-local';
 
 export const DEFAULT_BACKUP_COMMAND = 'pnpm backup:run';
@@ -63,21 +69,32 @@ export function parseBackupCliArgs(argv = []) {
   return options;
 }
 
-export async function main(argv = process.argv.slice(2), { logger = console } = {}) {
+export async function main(
+  argv = process.argv.slice(2),
+  {
+    logger = console,
+    runtimeContextFactory = createRuntimeAdminContext,
+  } = {},
+) {
   process.env.KPI_SKIP_LISTEN = process.env.KPI_SKIP_LISTEN || '1';
   process.env.KPI_DISABLE_CRON = process.env.KPI_DISABLE_CRON || '1';
 
   const options = parseBackupCliArgs(argv);
-  const serverModule = await import('../server/index.js');
-  const { performDatabaseBackup, getBackupDirectory } = serverModule;
-
-  const result = await performDatabaseBackup({
-    reason: options.reason,
-    note: options.note,
-    retention: options.retention,
-    actor: options.actor,
-    backupDir: options.directory ?? getBackupDirectory(),
-  });
+  const runtimeContext = await runtimeContextFactory({ logger, env: process.env });
+  let result;
+  try {
+    await ensureSqliteBaseline(runtimeContext);
+    const backupDir = options.directory ?? resolveDefaultBackupDirectory(runtimeContext?.config?.dbFile);
+    result = await runtimeContext.backupAdmin.domain.performDatabaseBackup({
+      reason: options.reason,
+      note: options.note,
+      retention: options.retention,
+      actor: options.actor,
+      backupDir,
+    });
+  } finally {
+    await runtimeContext?.dispose?.();
+  }
 
   if (!result?.ok) {
     const reason = result?.reason || 'unknown';

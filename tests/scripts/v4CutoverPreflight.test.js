@@ -117,6 +117,8 @@ describe("v4 cutover preflight helpers", () => {
 
   it("builds default plan without optional UAT smoke", () => {
     const plan = buildCutoverPreflightPlan();
+    expect(plan[0]?.id).toBe("cutover-governance-gate");
+    expect(plan.some((entry) => entry.id === "cutover-governance-gate")).toBe(true);
     expect(plan.some((entry) => entry.id === "uat-smoke")).toBe(false);
   });
 

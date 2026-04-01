@@ -75,7 +75,6 @@ async function ensureBetterSqlite3({ forceRebuild = false } = {}) {
 function extractFlags(argv) {
   const flags = new Set();
   const passthrough = [];
-  let entrypointMode;
   for (const arg of argv) {
     if (arg === '--rebuild') {
       flags.add('rebuild');
@@ -86,16 +85,15 @@ function extractFlags(argv) {
       continue;
     }
     if (arg === '--legacy-entrypoint') {
-      entrypointMode = 'legacy';
+      throw new Error('Flag --legacy-entrypoint da bi loai bo. Runtime chi ho tro server-v4.');
       continue;
     }
     if (arg === '--server-v4-entrypoint') {
-      entrypointMode = 'server-v4';
       continue;
     }
     passthrough.push(arg);
   }
-  return { flags, passthrough, entrypointMode };
+  return { flags, passthrough };
 }
 
 function normalizeListenHost(value) {
@@ -180,7 +178,7 @@ async function isPortBusy(host, port) {
 }
 async function startServer() {
   const args = process.argv.slice(2);
-  const { flags, passthrough, entrypointMode } = extractFlags(args);
+  const { flags, passthrough } = extractFlags(args);
   const forceRebuild = flags.has('rebuild');
   const production = flags.has('production');
 
@@ -213,7 +211,6 @@ async function startServer() {
   const repoRoot = resolve(__dirname, '..');
   const entrypointPlan = resolveBackendEntrypointPlan({
     envMode: process.env.KPI_API_ENTRYPOINT_MODE,
-    flagMode: entrypointMode,
     rootDir: repoRoot,
   });
   const serverEntry = entrypointPlan.entryFile;
@@ -226,11 +223,6 @@ async function startServer() {
     process.exit(1);
   }
   console.log(`Khoi dong backend (${entrypointPlan.label}) tu`, serverEntry);
-  if (entrypointPlan.mode !== entrypointPlan.rollbackMode) {
-    console.log(
-      `Rollback nhanh: dat KPI_API_ENTRYPOINT_MODE=${entrypointPlan.rollbackMode} hoac chay lai voi --legacy-entrypoint.`,
-    );
-  }
   const childEnv = {
     ...process.env,
     KPI_API_ENTRYPOINT_MODE: entrypointPlan.mode,

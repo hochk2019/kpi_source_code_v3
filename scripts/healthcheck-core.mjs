@@ -1,5 +1,10 @@
 import process from 'node:process';
 
+import {
+  createRuntimeAdminContext,
+  ensureSqliteBaseline,
+} from './runtime-v4-admin.mjs';
+
 export const IGNORED_BACKUP_ISSUE_CODES = ['schedule_inactive', 'schedule_reason_cron_disabled_env'];
 export const BACKUP_REMEDIATION_COMMAND = 'pnpm backup:run';
 
@@ -11,10 +16,43 @@ function collectIssueCodes(issues) {
   );
 }
 
+async function createDefaultServerModule({ env, logger }) {
+  const runtimeContext = await createRuntimeAdminContext({ env, logger });
+  await ensureSqliteBaseline(runtimeContext);
+
+  const dbFile = runtimeContext?.config?.dbFile;
+  const BetterSqlite3 = (await import('better-sqlite3')).default;
+  const sqlite =
+    typeof dbFile === 'string' && dbFile.trim()
+      ? new BetterSqlite3(dbFile === ':memory:' ? ':memory:' : dbFile)
+      : null;
+
+  return {
+    DB_FILE: dbFile,
+    getDatabaseHandle() {
+      return sqlite;
+    },
+    getDatabaseInitState() {
+      return null;
+    },
+    async checkSqlServerHealth() {
+      return {
+        ok: false,
+        state: 'not_configured',
+        message: 'SQL Server health bridge chưa được cấu hình cho script healthcheck runtime-v4.',
+      };
+    },
+    async dispose() {
+      sqlite?.close?.();
+      await runtimeContext?.dispose?.();
+    },
+  };
+}
+
 export async function runHealthcheck({
   logger = console,
   env = process.env,
-  serverModuleLoader = () => import('../server/index.js'),
+  serverModuleLoader,
   serverModule: providedServerModule,
   startAt = Date.now(),
 } = {}) {
@@ -22,9 +60,13 @@ export async function runHealthcheck({
   env.KPI_DISABLE_CRON = env.KPI_DISABLE_CRON || '1';
 
   logger.log('🔍 Đang chạy health check backend...');
+  let loadedServerModule = null;
 
   try {
-    const serverModule = providedServerModule ?? (await serverModuleLoader());
+    const serverModule =
+      providedServerModule ??
+      (await (serverModuleLoader ?? createDefaultServerModule)({ env, logger }));
+    loadedServerModule = serverModule;
     const { DB_FILE, getDatabaseHandle, checkSqlServerHealth, getDatabaseInitState } = serverModule;
     const db = typeof serverModule.getDatabaseHandle === 'function' ? serverModule.getDatabaseHandle() : getDatabaseHandle?.();
 
@@ -134,5 +176,9 @@ export async function runHealthcheck({
   } catch (err) {
     logger.error('Không thể tải backend để kiểm tra:', err.message);
     return 1;
+  } finally {
+    if (!providedServerModule) {
+      await loadedServerModule?.dispose?.();
+    }
   }
 }

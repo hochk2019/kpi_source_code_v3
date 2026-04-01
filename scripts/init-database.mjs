@@ -1,8 +1,10 @@
-#!/usr/bin/env node
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
 import { spawn } from 'node:child_process';
+import { pathToFileURL } from 'node:url';
+
+import { createRuntimeAdminContext, ensureSqliteBaseline } from './runtime-v4-admin.mjs';
 
 const isWin = process.platform === 'win32';
 
@@ -49,44 +51,69 @@ async function ensureBetterSqlite3() {
   }
 }
 
-async function main() {
-  process.env.KPI_SKIP_LISTEN = process.env.KPI_SKIP_LISTEN || '1';
+export async function runInitDatabase({
+  env = process.env,
+  logger = console,
+  ensureSqlite = ensureBetterSqlite3,
+  runtimeContextFactory = createRuntimeAdminContext,
+} = {}) {
+  env.KPI_SKIP_LISTEN = env.KPI_SKIP_LISTEN || '1';
 
-  await ensureBetterSqlite3();
+  await ensureSqlite();
 
   const start = Date.now();
-  const module = await import('../server/index.js');
-  const { DB_FILE, initializeDatabase } = module;
+  const runtimeContext = await runtimeContextFactory({ env, logger });
+  const dbFile = runtimeContext?.config?.dbFile;
 
-  if (!DB_FILE) {
-    console.error('Không xác định được đường dẫn cơ sở dữ liệu.');
-    process.exitCode = 1;
-    return;
-  }
-
-  const database = await initializeDatabase({ dbFile: DB_FILE });
-  database.close?.();
-
-  let stats = null;
   try {
-    stats = await fs.stat(DB_FILE);
-  } catch (err) {
-    if (err?.code !== 'ENOENT') {
-      throw err;
+    if (!dbFile || dbFile === ':memory:') {
+      logger.error('Không xác định được đường dẫn cơ sở dữ liệu SQLite cho runtime-v4.');
+      return 1;
     }
-  }
 
-  const prettyPath = path.relative(process.cwd(), DB_FILE);
-  if (stats) {
-    const sizeKb = (stats.size / 1024).toFixed(1);
-    console.log(`Đã sẵn sàng cơ sở dữ liệu SQLite tại ${prettyPath} (${sizeKb} KB, tạo trong ${Date.now() - start}ms).`);
-  } else {
-    console.warn(`Không thể tạo file SQLite tại ${prettyPath}. Kiểm tra quyền ghi và thử lại.`);
-    process.exitCode = 1;
+    await ensureSqliteBaseline(runtimeContext);
+
+    let stats = null;
+    try {
+      stats = await fs.stat(dbFile);
+    } catch (err) {
+      if (err?.code !== 'ENOENT') {
+        throw err;
+      }
+    }
+
+    const prettyPath = path.relative(process.cwd(), dbFile);
+    if (stats) {
+      const sizeKb = (stats.size / 1024).toFixed(1);
+      logger.log(
+        `Đã sẵn sàng cơ sở dữ liệu SQLite tại ${prettyPath} (${sizeKb} KB, tạo trong ${Date.now() - start}ms).`,
+      );
+      return 0;
+    }
+
+    logger.warn(`Không thể tạo file SQLite tại ${prettyPath}. Kiểm tra quyền ghi và thử lại.`);
+    return 1;
+  } finally {
+    await runtimeContext?.dispose?.();
   }
 }
 
-main().catch((err) => {
-  console.error('Khởi tạo cơ sở dữ liệu thất bại:', err);
-  process.exitCode = 1;
-});
+async function main() {
+  const exitCode = await runInitDatabase();
+  process.exitCode = exitCode;
+}
+
+function isExecutedAsScript() {
+  const entry = process.argv[1];
+  if (!entry) {
+    return false;
+  }
+  return import.meta.url === pathToFileURL(path.resolve(entry)).href;
+}
+
+if (isExecutedAsScript()) {
+  main().catch((err) => {
+    console.error('Khởi tạo cơ sở dữ liệu thất bại:', err);
+    process.exitCode = 1;
+  });
+}

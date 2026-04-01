@@ -812,11 +812,11 @@ export async function enableDemoMode() {
 
     try {
 
-      if (url.includes('/api/v4/auth/login') || url.includes('/api/auth/login')) return createResponse(responses.login)
+      if (url.includes('/api/v4/auth/login')) return createResponse(responses.login)
 
-      if (url.includes('/api/v4/auth/session') || url.includes('/api/auth/session')) return createResponse(responses.session)
+      if (url.includes('/api/v4/auth/session')) return createResponse(responses.session)
 
-      if (url.includes('/api/v4/auth/accounts') || url.includes('/api/auth/accounts')) return createResponse(responses.accounts)
+      if (url.includes('/api/v4/auth/accounts')) return createResponse(responses.accounts)
 
       if (url.includes('/api/bootstrap')) return createResponse(responses.bootstrap)
 

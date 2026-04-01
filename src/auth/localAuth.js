@@ -55,7 +55,6 @@ const LEGACY_SESSION_TOKEN_STORAGE_KEY = 'kpi_session_token';
 const CSRF_COOKIE_NAME = 'kpi_csrf';
 const CSRF_HEADER_NAME = 'X-CSRF-Token';
 const UNSAFE_HTTP_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
-const LEGACY_AUTH_BASE = '/api/auth';
 
 
 
@@ -382,44 +381,6 @@ function readAuthAccounts(payload) {
   return Array.isArray(accounts) ? accounts : [];
 }
 
-function isRouteNotFoundError(error) {
-  if (!error) {
-    return false;
-  }
-
-  if (Number(error.status) === 404) {
-    return true;
-  }
-
-  const message = String(error.message || "").trim().toLowerCase();
-  return message.includes("http 404") || message.includes("not found");
-}
-
-async function requestJsonWithFallback(paths, options = {}) {
-  const candidates = Array.isArray(paths) ? paths.filter(Boolean) : [paths].filter(Boolean);
-  if (!candidates.length) {
-    throw new Error("Thiếu đường dẫn API để gọi");
-  }
-
-  let lastError = null;
-  for (let index = 0; index < candidates.length; index += 1) {
-    const path = candidates[index];
-    const hasNextCandidate = index < candidates.length - 1;
-    try {
-      return await requestJson(path, options);
-    } catch (error) {
-      lastError = error;
-      if (!hasNextCandidate || !isRouteNotFoundError(error)) {
-        throw error;
-      }
-    }
-  }
-
-  throw lastError || new Error("Không thể hoàn tất yêu cầu API");
-}
-
-
-
 function sanitizeUserForSession(user) {
 
   if (!user) return null;
@@ -492,18 +453,18 @@ function syncSessionForUser(user) {
 
 }
 
-function authRoutes(...segments) {
+function authRoute(...segments) {
   const normalizedSegments = segments
     .map((segment) => String(segment || "").replace(/^\/+|\/+$/g, ""))
     .filter(Boolean);
   const suffix = normalizedSegments.length ? `/${normalizedSegments.join("/")}` : "";
-  return [`/api/v4/auth${suffix}`, `${LEGACY_AUTH_BASE}${suffix}`];
+  return `/api/v4/auth${suffix}`;
 }
 
-const AUTH_LOGIN_ROUTES = [...authRoutes("login"), "/api/login"];
-const AUTH_SESSION_ROUTES = [...authRoutes("session"), "/api/session"];
-const AUTH_LOGOUT_ROUTES = [...authRoutes("logout"), "/api/logout"];
-const AUTH_ACCOUNTS_ROUTES = authRoutes("accounts");
+const AUTH_LOGIN_ROUTE = authRoute("login");
+const AUTH_SESSION_ROUTE = authRoute("session");
+const AUTH_LOGOUT_ROUTE = authRoute("logout");
+const AUTH_ACCOUNTS_ROUTE = authRoute("accounts");
 
 function toUserFacingLoginError(error) {
   const status = Number(error?.status);
@@ -600,7 +561,7 @@ export async function login(usernameInput, passwordInput) {
 
   try {
 
-    const payload = await requestJsonWithFallback(AUTH_LOGIN_ROUTES, {
+    const payload = await requestJson(AUTH_LOGIN_ROUTE, {
 
       method: "POST",
 
@@ -628,7 +589,7 @@ export async function loadSession() {
 
   try {
 
-    const payload = await requestJsonWithFallback(AUTH_SESSION_ROUTES);
+    const payload = await requestJson(AUTH_SESSION_ROUTE);
 
     const sessionUser = readAuthUser(payload);
     const session = setSessionFromUser(sessionUser);
@@ -657,7 +618,7 @@ export async function logout() {
 
   try {
 
-    await requestJsonWithFallback(AUTH_LOGOUT_ROUTES, { method: "POST" });
+    await requestJson(AUTH_LOGOUT_ROUTE, { method: "POST" });
 
   } catch {
 
@@ -699,7 +660,7 @@ export function getPermissionTemplate(role = DEFAULT_ROLE) {
 
 export async function reloadAccounts() {
 
-  const payload = await requestJsonWithFallback(AUTH_ACCOUNTS_ROUTES);
+  const payload = await requestJson(AUTH_ACCOUNTS_ROUTE);
 
   const accounts = setAccountCache(readAuthAccounts(payload));
 
@@ -723,7 +684,7 @@ export async function reloadAccounts() {
 
 export async function createAccount(payload) {
 
-  const response = await requestJsonWithFallback(AUTH_ACCOUNTS_ROUTES, {
+  const response = await requestJson(AUTH_ACCOUNTS_ROUTE, {
 
     method: "POST",
 
@@ -741,7 +702,7 @@ export async function createAccount(payload) {
 
 export async function updateAccount(usernameInput, patch) {
 
-  const response = await requestJsonWithFallback(authRoutes("accounts", encodeURIComponent(usernameInput)), {
+  const response = await requestJson(authRoute("accounts", encodeURIComponent(usernameInput)), {
 
     method: "PATCH",
 
@@ -770,8 +731,8 @@ export async function setAccountPassword(usernameInput, newPasswordInput) {
 
   }
 
-  const response = await requestJsonWithFallback(
-    authRoutes("accounts", encodeURIComponent(usernameInput), "password"),
+  const response = await requestJson(
+    authRoute("accounts", encodeURIComponent(usernameInput), "password"),
     {
 
       method: "POST",
@@ -797,7 +758,7 @@ export async function setAccountPassword(usernameInput, newPasswordInput) {
 
 export async function deleteAccount(usernameInput) {
 
-  const response = await requestJsonWithFallback(authRoutes("accounts", encodeURIComponent(usernameInput)), {
+  const response = await requestJson(authRoute("accounts", encodeURIComponent(usernameInput)), {
 
     method: "DELETE",
 
@@ -833,7 +794,7 @@ export async function changeOwnPassword(usernameInput, currentPasswordInput, new
 
   }
 
-  const response = await requestJsonWithFallback(authRoutes("password", "change"), {
+  const response = await requestJson(authRoute("password", "change"), {
 
     method: "POST",
 

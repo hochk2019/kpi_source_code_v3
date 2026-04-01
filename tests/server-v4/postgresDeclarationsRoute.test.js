@@ -519,7 +519,7 @@ describe("server-v4 postgres declarations route wiring", () => {
     );
   });
 
-  it("exposes legacy ECUS sync preview and run routes through the shared ECUS fetch seam", async () => {
+  it("exposes canonical ECUS sync preview and run routes through the shared ECUS fetch seam", async () => {
     const runtime = createDeclarationsRuntimeStub([
       createDeclarationRow({
         declaration_id: "decl-existing",
@@ -610,7 +610,7 @@ describe("server-v4 postgres declarations route wiring", () => {
     });
 
     const forbiddenPreview = await request(app)
-      .post("/api/import/ecus/preview")
+      .post("/api/v4/declarations/imports/ecus-preview")
       .set(sessionHeaders("session-staff"))
       .send({
         from: "2026-02-14",
@@ -624,7 +624,7 @@ describe("server-v4 postgres declarations route wiring", () => {
     });
 
     const previewResponse = await request(app)
-      .post("/api/import/ecus/preview")
+      .post("/api/v4/declarations/imports/ecus-preview")
       .set(sessionHeaders("session-manager"))
       .send({
         from: "2026-02-14",
@@ -666,7 +666,7 @@ describe("server-v4 postgres declarations route wiring", () => {
     });
 
     const runResponse = await request(app)
-      .post("/api/import/ecus/run")
+      .post("/api/v4/declarations/imports/ecus-commit")
       .set(sessionHeaders("session-manager"))
       .send({
         from: "2026-02-14",
@@ -1243,7 +1243,7 @@ describe("server-v4 postgres declarations route wiring", () => {
     expect(retiredAliasResponse.status).toBe(404);
   });
 
-  it("owns C/O monitoring config routes behind session-backed syncManage permission and exposes legacy aliases", async () => {
+  it("owns C/O monitoring config routes behind session-backed syncManage permission", async () => {
     const runtime = createDeclarationsRuntimeStub([]);
     const authStore = createAuthStore([
       createAccount({
@@ -1323,17 +1323,7 @@ describe("server-v4 postgres declarations route wiring", () => {
     const legacyCodesResponse = await request(app)
       .get("/api/import/co-codes")
       .set(sessionHeaders("session-manager"));
-    expect(legacyCodesResponse.status).toBe(200);
-    expect(legacyCodesResponse.body).toEqual({
-      ok: true,
-      config: {
-        version: 1,
-        whitelist: ["A1", "B2"],
-        blacklist: ["B01", "C3"],
-        updatedAt: expect.any(String),
-        updatedBy: "manager",
-      },
-    });
+    expect(legacyCodesResponse.status).toBe(404);
 
     const discrepancyResponse = await request(app)
       .get("/api/v4/declarations/imports/co-discrepancy")
@@ -1396,36 +1386,10 @@ describe("server-v4 postgres declarations route wiring", () => {
     const legacyDiscrepancyResponse = await request(app)
       .get("/api/import/co-discrepancy")
       .set(sessionHeaders("session-manager"));
-    expect(legacyDiscrepancyResponse.status).toBe(200);
-    expect(legacyDiscrepancyResponse.body).toEqual({
-      ok: true,
-      config: {
-        enabled: true,
-        cron: "15 1 * * *",
-        rangeDays: 1,
-        threshold: 17,
-        sampleLimit: 0,
-        updatedAt: expect.any(String),
-        updatedBy: "manager",
-      },
-      state: {
-        lastRunAt: null,
-        range: null,
-        mismatchCount: 0,
-        totalChecked: 0,
-        status: "idle",
-        error: null,
-        durationMs: 0,
-        mismatches: [],
-        triggered: false,
-        limited: false,
-        actor: null,
-        reason: null,
-      },
-    });
+    expect(legacyDiscrepancyResponse.status).toBe(404);
   });
 
-  it("owns C/O discrepancy run routes behind session-backed syncManage permission and exposes legacy aliases", async () => {
+  it("owns C/O discrepancy run routes behind session-backed syncManage permission", async () => {
     const runtime = createDeclarationsRuntimeStub([
       createDeclarationRow({
         so_tk: "00000012345",
@@ -1595,21 +1559,7 @@ describe("server-v4 postgres declarations route wiring", () => {
           to: "2026-02-15",
         },
       });
-    expect(legacyRunResponse.status).toBe(200);
-    expect(legacyRunResponse.body).toEqual({
-      ok: true,
-      result: expect.objectContaining({
-        config: expect.objectContaining({
-          threshold: 10,
-        }),
-        state: expect.objectContaining({
-          mismatchCount: 1,
-          totalChecked: 2,
-          actor: "manager",
-          reason: "manual",
-        }),
-      }),
-    });
+    expect(legacyRunResponse.status).toBe(404);
   });
 
   it("owns declaration alerts routes behind session-backed alertsManage permission", async () => {

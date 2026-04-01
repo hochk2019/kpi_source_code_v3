@@ -3,17 +3,17 @@
 ## Canonical Open Backlog
 
 - Source of truth cho tat ca viec chua xong hien tai la `docs/open-backlog.md`.
-- Da reconcile ngay 2026-03-31 voi `PLAN.md` big-bang, `docs/api-contract-v4-migration-plan.md`, `docs/server-v4-rollout-plan-2026-03-25.md`, va bead database.
+- Da reconcile ngay 2026-04-01 voi hard-gate cutover board `docs/operations/v4-cutover-execution-board.md` va bead database.
 - Open epics hien tai:
-  - none (`pnpm bd:safe -- ready` -> `No open issues`)
+  - `cng-m2r` (Hard-gate backend v4 full cutover execution)
 - Highest-priority ready items hien tai:
-  - none (all slices in `cng-0s2` closed)
+  - `cng-m2r.6` (Phase 5 - Big-bang cutover window + hypercare)
 
 ## Active Slice
 
--- Title: Standalone reporting domain runtime (real audit/export data)
--- Bead: (none)
--- Status: done
+-- Title: Hard-gate cutover phase 5 UAT smoke stabilization
+-- Bead: cng-m2r.6
+-- Status: in_progress
 -- Last updated: 2026-04-01
 
 ## Execution Matrix
@@ -26,6 +26,20 @@
 | cng-0s2.1 | Runtime smoke + closure/reconcile | `pnpm run test:playwright:runtime`, `pnpm bd:check` | done | `pnpm exec vitest run tests/auth.test.jsx tests/dataImporterShellProps.test.js tests/dataImporterFileActions.test.jsx tests/reportingScopeSections.test.jsx --environment jsdom`; `pnpm exec vitest run tests/server-v4/appShell.test.js tests/server.api.test.js --environment node`; `pnpm run test:playwright:runtime`; `pnpm exec eslint src/auth/localAuth.js src/components/ReportViewer.jsx src/components/dataImporter/importGate.js src/components/dataImporter/DataImporterFileActions.jsx src/components/dataImporter/dataImporterShellProps.js src/components/dataImporter/useDataImporterImportFlow.js src/components/dataImporter/useDataImporterWorkflowSession.js src/components/reporting/reportingExportState.js src/components/reporting/useReportViewerActions.js src/components/reporting/ReportingStaffSection.jsx src/components/reporting/ReportingTeamSection.jsx src/components/reporting/StaffDetailCard.jsx src/components/reporting/TeamDetailCard.jsx tests/helpers/mockApiState.js tests/auth.test.jsx tests/dataImporterImportGate.test.js tests/dataImporterShellProps.test.js tests/dataImporterFileActions.test.jsx tests/useDataImporterImportFlow.test.jsx tests/reportingExportState.test.js tests/reportingScopeSections.test.jsx tests/useReportViewerActions.test.jsx`; `pnpm bd:check` |
 
 ## Checkpoint Log
+
+- Checkpoint 7 (Hard-gate cutover governance bootstrap):
+  - Done: Tao epic `cng-m2r` + child beads `cng-m2r.1..cng-m2r.6`, tao board `docs/operations/v4-cutover-execution-board.md`, va them gate script `scripts/check-cutover-taskboard.mjs`.
+  - Verify: `pnpm run cutover:check`; `pnpm exec vitest run tests/scripts/cutoverTaskboardCheck.test.js tests/scripts/v4CutoverPreflight.test.js --environment node`.
+  - Risk: `bd` parser cat title/description khi tao issue co dau cach; tracker dung ID + board lam source-of-truth de tranh mat nghia.
+  - Decision: enforce HARD_GATE o preflight command catalog (`cutover-governance-gate`) thay vi checklist thu cong.
+  - Next: tiep tuc CUT-01/CUT-02 de xoa legacy auth fallback va legacy-compat routes theo phase dependencies.
+
+- Checkpoint 8 (cng-m2r phased execution to CUT-04 complete):
+  - Done: close `cng-m2r.1 -> cng-m2r.5`; hoan tat CUT-00..CUT-04 gates (contract gate, parity suite, `test:server-v4`, `healthcheck`, `test:backend`) va update board/open-backlog theo trang thai moi.
+  - Verify: `pnpm run api:contract:report`; `pnpm run api:contract:gate`; `pnpm run verify:v4:parity`; `pnpm run build:server-v4`; `pnpm run healthcheck`; `pnpm run test:server-v4`; `pnpm run test:backend`; `pnpm run verify:v4:cutover-preflight -- --timeout-ms 120000`.
+  - Risk: `pnpm run verify:v4:cutover-preflight -- --with-uat-smoke --timeout-ms 120000` dang fail o Playwright UAT (`account-management`, `team-management`, `import-flow`, va `report-viewer` navigation/schedule preview).
+  - Decision: chuyen `cng-m2r.6` sang `in_progress`, giu phase hypercare mo de triage UAT smoke blocker.
+  - Next: sua/triage Playwright UAT smoke cho CUT-05 va rerun preflight voi `--with-uat-smoke`.
 
 - Checkpoint 0 (session bootstrap):
   - Done: Tao parent bead `cng-0s2` + 4 child beads theo 4 slices; dat `Active Slice` sang `cng-0s2.4`.
@@ -80,6 +94,7 @@
 
 - [open] `bd` CLI parsing title/description nhieu tu khong on dinh; uu tien cap nhat status theo ID va ghi nghia chi tiet trong `task.md`.
 - [open] Worktree dang co thay doi san tu truoc session (`.gitignore`, `docs/open-backlog.md`, `docs/operations/v4-cutover-evidence/*`); khong dong vao khi khong thuoc scope.
+- [open] CUT-05 UAT smoke fail: timeout/visibility tren tab `Tai khoan`, `To doi`, va `Report viewer` navigation (`tests/playwright/account-management.spec.js`, `tests/playwright/team-management.spec.js`, `tests/playwright/import-flow.spec.js`, `tests/playwright/report-viewer.spec.js`).
 
 - Last closed slice:
   - `cng-mbu` (Big-bang FE+BE redesign 6-8 week execution)
@@ -88,6 +103,15 @@
   - merged local completion gates: parity + preflight dry-run + backlog consistency
 
 ## Handoff
+
+- Done: da auto-trien-khai chuoi hard-gate toi CUT-04, dong `cng-m2r.1..cng-m2r.5`, cap nhat board `docs/operations/v4-cutover-execution-board.md` va backlog canonical.
+- Verify:
+  - `pnpm run cutover:check`
+  - `pnpm run verify:v4:cutover-preflight -- --timeout-ms 120000`
+  - `pnpm run verify:v4:cutover-preflight -- --with-uat-smoke --timeout-ms 120000` (fail tai UAT smoke)
+- Risk: UAT smoke Playwright dang fail tren account/team/import/report flows; can triage `tests/playwright/utils.js` + tab navigation/readiness contract truoc khi close `cng-m2r.6`.
+- Decision: giu `cng-m2r.6` o `in_progress`, khong close epic `cng-m2r` cho den khi UAT smoke xanh.
+- Next: fix CUT-05 smoke blockers, rerun preflight `--with-uat-smoke`, sau do close `cng-m2r.6` va parent epic.
 
 - Done: da harden luong dang nhap runtime theo 4 huong: fallback API auth v4->legacy, uu tien dev proxy khi VITE_API_BASE cross-origin, bo sung CORS cho app shell v4, va them Playwright runtime smoke non-mock.
 - Verify:
