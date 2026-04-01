@@ -16,7 +16,7 @@ test('quản trị viên xem báo cáo KPI và đổi cấu hình hiển thị',
 
   await expect(page.getByText(/Top nhân viên theo điểm KPI/i)).toBeVisible();
 
-  const rangeSelect = reportControls.getByRole('combobox').first();
+  const rangeSelect = reportControls.locator('label:has-text("Khoảng thời gian") + select').first();
 
   await rangeSelect.selectOption('all_time');
   await expect(rangeSelect).toHaveValue('all_time');
@@ -98,13 +98,11 @@ test('schedule preview cập nhật đầu ra và next-run ngay khi chỉnh draf
   await expect(schedulePanel.getByText('Xem trước lần gửi kế tiếp')).toBeVisible();
 
   await schedulePanel.getByLabel('Tên lịch gửi').fill('Lịch điều hành');
-  await schedulePanel
-    .getByLabel('Email nhận (phân tách bằng dấu phẩy)')
-    .fill('ceo@company.vn, ops@company.vn');
+  await schedulePanel.getByLabel(/Email nhận/i).fill('ceo@company.vn, ops@company.vn');
   await schedulePanel.getByLabel('Chu kỳ gửi').selectOption('monthly');
   await schedulePanel.getByRole('spinbutton').fill('15');
   await schedulePanel.getByLabel('Thời gian gửi').fill('09:45');
-  await schedulePanel.getByRole('checkbox', { name: 'PDF' }).check();
+  await schedulePanel.getByRole('checkbox', { name: 'PDF', exact: true }).check();
 
   await expect(schedulePanel).toContainText('Lịch điều hành');
   await expect(schedulePanel).toContainText('Ngày 15 hàng tháng lúc 09:45');

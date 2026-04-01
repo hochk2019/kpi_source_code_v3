@@ -31,9 +31,9 @@ Moi phien moi, moi tai khoan moi, bat buoc doc file nay truoc khi code.
 | Week 2-3 - Backend full modularization | `cng-mbu.2` | Done | `server-v4/src/modules/{ai,alerts,auth,backup,data-health,duplicate-policy,filter-presets,feedback-training,declarations,reporting,rules,...}`, [docs/api-contract-v4-migration-plan.md](/E:/GPT/kpi_source_code_v4/docs/api-contract-v4-migration-plan.md) | Da hoan tat lane backend modularization theo W2-3 scope |
 | Week 3-5 - Frontend redesign + canonical client | `cng-mbu.3` | Done | [docs/api-contract-v4-migration-plan.md](/E:/GPT/kpi_source_code_v4/docs/api-contract-v4-migration-plan.md), `api:contract:gate` | Hoan tat canonical FE clients (bao gom AI + notifications), legacy FE contract usage = 0 |
 | Week 5-6 - Integration + parity | `cng-mbu.4` | Done | Gate da dinh nghia trong [docs/operations/v4-rollout-plan.md](/E:/GPT/kpi_source_code_v4/docs/operations/v4-rollout-plan.md); runner `pnpm run verify:v4:parity` + `pnpm run verify:v4:rehearsal` | Hoan tat adapter-vs-canonical parity, rollout rehearsal evidence, va xu ly blocker runtime build phu thuoc JS companion |
-| Week 6-7 - Hardening + UAT | `cng-mbu.5` | Not Started | QA matrix san co | Chay full regression, a11y, perf, security smoke, UAT 2 nhom |
+| Week 6-7 - Hardening + UAT | `cng-mbu.5` | Done | `pnpm run test:smoke:core`, `pnpm run verify:v4:parity`, hardening smoke suites, Playwright UAT batch (19/19), rehearsal evidence `2026-04-01T02-01-09-518Z` | Da hoan tat full regression + hardening smoke + UAT 2 nhom |
 | Week 8 - Big-bang cutover + hypercare | `cng-mbu.7` | Not Started | Rollout stages + fallback da co | Freeze, preflight, cutover, 7-day hypercare |
-| Release gates / acceptance closure | `cng-mbu.6` | Not Started | `api:contract:gate` da pass (`legacy usage = 0`) | Dat `contract mismatch = 0`, parity + UAT pass |
+| Release gates / acceptance closure | `cng-mbu.6` | In Progress | `api:contract:gate` da pass (`legacy usage = 0`) | Dat `contract mismatch = 0`, parity + UAT pass + sign-off package |
 
 ## Continuity Setup
 
@@ -68,7 +68,16 @@ Moi phien moi, moi tai khoan moi, bat buoc doc file nay truoc khi code.
 - `pnpm run verify:v4:parity` (2026-04-01):
   - pass (`failed=0`)
 - `pnpm run verify:v4:rehearsal -- --label local-runtime --base-url http://127.0.0.1:5100` (2026-04-01):
-  - pass, evidence luu tai `docs/operations/v4-rollout-evidence/2026-04-01T00-18-51-947Z-local-runtime.{json,md}`
+  - pass, evidence luu tai `docs/operations/v4-rollout-evidence/2026-04-01T02-01-09-518Z-local-runtime.{json,md}`
+- `pnpm run test:smoke:core` (2026-04-01):
+  - pass (`backend-core + frontend-core + frontend-canonical`)
+- Hardening smoke suites (2026-04-01):
+  - pass:
+    - `pnpm exec vitest run tests/accessibility.test.jsx tests/dataHealthFrontendPerformancePanel.test.jsx tests/frontendPerformanceTelemetry.test.js --environment jsdom`
+    - `pnpm exec vitest run tests/securityHardening.test.js tests/server-v4/authRoutes.test.js --environment node`
+    - `pnpm exec playwright test tests/playwright/accessibility-admin.spec.js --config=playwright.config.mjs --workers=1`
+- UAT 2 nhom Playwright batch (2026-04-01):
+  - pass (`19 passed`)
 
 W1 closure note:
 - Sign-off freeze da dat ngay 2026-03-31 cho `cng-mbu.1`.

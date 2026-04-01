@@ -26,7 +26,7 @@
     "test:smoke:frontend-core": "vitest run tests/auth.test.jsx tests/appShellFrame.test.jsx tests/commandCenter.test.jsx tests/dataImporter.preview.test.jsx tests/reportViewer.test.jsx --environment jsdom",
     "test:smoke:frontend-canonical": "pnpm exec vite build && pnpm exec playwright test tests/playwright/sync-flow.spec.js",
     "test:smoke:core": "pnpm run test:smoke:backend-core && pnpm run test:smoke:frontend-core && pnpm run test:smoke:frontend-canonical",
-    "build:server-v4": "tsc -p tsconfig.server-v4.build.json",
+    "build:server-v4": "tsc -p tsconfig.server-v4.build.json && node scripts/copy-server-v4-js-companions.mjs",
     "typecheck:server-v4": "tsc -p tsconfig.server-v4.json --noEmit",
     "verify:server-v4": "pnpm run lint:server-v4 && pnpm run typecheck:server-v4 && pnpm run test:server-v4",
     "verify:smoke:core": "pnpm run verify:server-v4 && pnpm run test:smoke:core",

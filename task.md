@@ -7,38 +7,43 @@
 - Open epics hien tai:
   - `cng-mbu` (Big-bang FE+BE redesign 6-8 week execution).
 - Highest-priority ready items hien tai:
-  - `cng-mbu.5` (open): W6-7 Hardening and UAT.
+  - `cng-mbu.6` (open): Release Gates and Acceptance Closure.
 
 ## Active Slice
 
--- Title: W6-7 Hardening and UAT
--- Bead: cng-mbu.5
--- Status: open
+-- Title: Release Gates and Acceptance Closure
+-- Bead: cng-mbu.6
+-- Status: in_progress
 -- Last updated: 2026-04-01
 
 - Scope da lam trong slice hien tai:
-  - tiep theo sau W5-6 la hardening/UAT toan bo lane theo gate `cng-mbu.5`.
-  - giu baseline verify tu W5-6:
-    - `pnpm run verify:v4:parity`
-    - `pnpm run verify:v4:rehearsal -- --label <env>`
-  - bo sung check runtime build readiness cho standalone `server-v4`:
-    - `build:server-v4` nay emit ca JS companion files (`server-v4/src/**/*.js`) vao `dist/server-v4`.
-    - `loadCompiledBuildV4App` nay bao ro loi dependency thieu thay vi thong bao chung chung.
+  - chot release gate acceptance cho `cng-mbu.6` dua tren baseline da dat o `cng-mbu.5`.
+  - reconcile contract/parity/uat/rehearsal evidence vao mot bo handoff duy nhat cho cutover week 8.
+  - khoa lai checklist gate trong `docs/big-bang-execution-status.md` + `docs/open-backlog.md` + bead states.
 
 ## Handoff
 
-- Done: da hoan tat `cng-mbu.4` voi parity gate xanh + rehearsal evidence capture; da sua blocker runtime build (`dist/server-v4` thieu JS companion) va bo sung diagnostic ro rang cho loader.
+- Done: da hoan tat `cng-mbu.5` voi full hardening/UAT gate va close bead.
 - Verify:
-  - `pnpm run build:server-v4`
-  - `pnpm exec vitest run tests/appsApiStartServer.test.js --environment node`
-  - `pnpm exec eslint apps/api/src/startApiServer.js tests/appsApiStartServer.test.js`
+  - `pnpm run test:smoke:core`
   - `pnpm run verify:v4:parity` (full: `passed=7/7 failed=0`)
+  - `pnpm exec vitest run tests/accessibility.test.jsx tests/dataHealthFrontendPerformancePanel.test.jsx tests/frontendPerformanceTelemetry.test.js --environment jsdom`
+  - `pnpm exec vitest run tests/securityHardening.test.js tests/server-v4/authRoutes.test.js --environment node`
+  - `pnpm exec playwright test tests/playwright/accessibility-admin.spec.js --config=playwright.config.mjs --workers=1`
+  - `pnpm exec playwright test tests/playwright/account-management.spec.js tests/playwright/team-management.spec.js tests/playwright/hq-agency.spec.js tests/playwright/import-flow.spec.js tests/playwright/import-monitoring.spec.js tests/playwright/report-viewer.spec.js tests/playwright/export-flow.spec.js tests/playwright/lazy-tab-shell.spec.js tests/playwright/ui-shell-sidebar.spec.js tests/playwright/adjustments-health.spec.js --config=playwright.config.mjs --workers=1`
   - `pnpm run verify:v4:rehearsal -- --label local-runtime --base-url http://127.0.0.1:5100`
   - `pnpm bd:check`
-- Risk: rehearsal tren staging/prod that van can van hanh thuc hien theo runbook va monitor Data Health truoc gate cutover.
-- Decision: close `cng-mbu.4`; chuyen epic sang lane `cng-mbu.5` (hardening + UAT) voi baseline parity/rehearsal giu nguyen.
-- Next: bat dau `cng-mbu.5` bang full regression matrix + UAT script 2 nhom, dong thoi attach evidence rehearsal moi moi moi truong rollout.
+- Risk: cutover week 8 van phu thuoc rehearsal tren staging/prod theo runbook de xac nhan env-specific readiness gates.
+- Decision: close `cng-mbu.5`; mo `cng-mbu.6` de chot release acceptance va handoff cutover.
+- Next: hoan tat gate checklist cua `cng-mbu.6`, chot contract mismatch report = 0, va freeze rollout sign-off package.
 ## Recent Completed Slices
+
+- `cng-mbu.5` da hoan tat W6-7 Hardening and UAT:
+  - full regression lane xanh qua `pnpm run test:smoke:core`
+  - parity baseline van xanh `pnpm run verify:v4:parity` (`passed=7/7 failed=0`)
+  - hardening smoke xanh cho a11y/perf/security/auth route suites
+  - UAT 2 nhom xanh qua Playwright batch 19 testcase (`19 passed`)
+  - tiep tuc giu rehearsal evidence local-runtime tai `docs/operations/v4-rollout-evidence/2026-04-01T02-01-09-518Z-local-runtime.{json,md}`
 
 - `cng-mbu.4` da hoan tat W5-6 Integration and Behavior Parity:
   - giu xanh parity gate `pnpm run verify:v4:parity` va rehearsal gate `pnpm run verify:v4:rehearsal`

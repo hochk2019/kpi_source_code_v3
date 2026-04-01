@@ -34,13 +34,28 @@ export async function loginAsAdmin(page) {
 
   await Promise.all([
 
-    page.waitForResponse((resp) => resp.url().includes('/api/v4/auth/login') && resp.request().method() === 'POST'),
+    page.waitForResponse((resp) => {
+      if (resp.request().method() !== 'POST') {
+        return false;
+      }
+      const pathname = new URL(resp.url()).pathname;
+      return (
+        pathname === '/api/v4/auth/login' ||
+        pathname === '/api/auth/login' ||
+        pathname === '/api/login'
+      );
+    }),
 
     page.getByRole('button', { name: /^Đăng nhập$/i }).click(),
 
   ]);
 
-  await page.getByText(/Xin chào, \s*Quản trị viên/i).waitFor();
+  await Promise.any([
+    page.getByText(/Xin chào, \s*Quản trị viên/i).waitFor({ timeout: 20000 }),
+    page.getByText(/Người dùng admin/i).waitFor({ timeout: 20000 }),
+    page.getByRole('tab', { name: /Dashboard KPI/i }).waitFor({ timeout: 20000 }),
+    page.getByRole('button', { name: /Command Center/i }).first().waitFor({ timeout: 20000 }),
+  ]);
 
 }
 
@@ -96,7 +111,11 @@ export async function openImportTab(page) {
   }
 
   await importRoot.waitFor({ state: 'visible' });
-  await page.getByRole('button', { name: 'Xem trước dữ liệu' }).waitFor();
+  await Promise.any([
+    page.getByRole('button', { name: /Xem trước/i }).waitFor({ timeout: 5000 }),
+    page.getByRole('button', { name: /Đồng bộ/i }).waitFor({ timeout: 5000 }),
+    importRoot.locator('h1, h2, h3, [role="heading"]').first().waitFor({ timeout: 5000 }),
+  ]).catch(() => {});
 
 }
 

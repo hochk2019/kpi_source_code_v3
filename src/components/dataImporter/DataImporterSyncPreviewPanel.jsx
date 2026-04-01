@@ -30,7 +30,8 @@ const PREFLIGHT_STATUS_META = {
     label: "Đạt",
   },
   warn: {
-    badgeClass: "border border-amber-200 bg-amber-50 text-amber-700",
+    badgeClass:
+      "border border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-500/50 dark:bg-amber-500/10 dark:text-amber-100",
     label: "Lưu ý",
   },
   fail: {
@@ -48,7 +49,8 @@ const ACTIVITY_LOG_LEVEL_META = {
 const SYNC_HISTORY_STATUS_META = {
   completed: "border border-emerald-200 bg-emerald-50 text-emerald-700",
   failed: "border border-red-200 bg-red-50 text-red-700",
-  resume_required: "border border-amber-200 bg-amber-50 text-amber-700",
+  resume_required:
+    "border border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-500/50 dark:bg-amber-500/10 dark:text-amber-100",
   default:
     "border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-muted)] text-[color:var(--ds-text-muted)]",
 };
