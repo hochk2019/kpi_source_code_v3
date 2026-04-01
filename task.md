@@ -5,33 +5,47 @@
 - Source of truth cho tat ca viec chua xong hien tai la `docs/open-backlog.md`.
 - Da reconcile ngay 2026-03-31 voi `PLAN.md` big-bang, `docs/api-contract-v4-migration-plan.md`, `docs/server-v4-rollout-plan-2026-03-25.md`, va bead database.
 - Open epics hien tai:
-  - `cng-mbu` (Big-bang FE+BE redesign 6-8 week execution).
+  - none (epic `cng-mbu` da closed ngay 2026-04-01).
 - Highest-priority ready items hien tai:
-  - none (all mapped child beads of `cng-mbu` are closed).
+  - none (`bd ready` hien tai tra ve `No open issues`).
 
 ## Active Slice
 
--- Title: No active task (all mapped child tasks are closed)
+-- Title: Auth runtime reliability hardening (API base/proxy + CORS + login UX + runtime smoke)
 -- Bead: (none)
--- Status: idle
+-- Status: completed
 -- Last updated: 2026-04-01
 
 - Last closed slice:
+  - `cng-mbu` (Big-bang FE+BE redesign 6-8 week execution)
+  - all child beads `cng-mbu.1 -> cng-mbu.8` da closed
   - `cng-mbu.7` (W8 Big-bang Cutover and Hypercare)
   - merged local completion gates: parity + preflight dry-run + backlog consistency
 
 ## Handoff
 
-- Done: da hoan tat va close `cng-mbu.7`; bo sung guard `KPI_DISABLE_COMPILED_V4_RUNTIME` de tach monolith parity tests khoi compiled runtime mount collision, giu xanh lane parity/cutover-preflight local.
+- Done: da harden luong dang nhap runtime theo 4 huong: fallback API auth v4->legacy, uu tien dev proxy khi VITE_API_BASE cross-origin, bo sung CORS cho app shell v4, va them Playwright runtime smoke non-mock.
 - Verify:
-  - `pnpm exec eslint server/index.js tests/server.api.test.js`
-  - `pnpm exec vitest run tests/server.api.test.js -t "SQL Server|bootstrap từ biến|DB rỗng|đồng bộ account|tín hiệu trạng thái|timeout SQL" --environment node`
+  - `pnpm exec vitest run tests/auth.test.jsx tests/reportExport.test.js --environment jsdom`
+  - `pnpm exec vitest run tests/server-v4/appShell.test.js --environment node`
+  - `pnpm run test:playwright:runtime`
+- Risk: runtime smoke hien xac nhan duoc request login cham backend va khong vo network/CORS error; van phu thuoc account seed tren moi moi truong nen test dung invalid credential pattern de on dinh.
+- Decision: giu `fetchWithAuth` khong sua truc tiep (impact CRITICAL), chi sua o layer route resolution/fallback va test bao ve.
+- Next: neu muon rat chat cho release gate, co the them 1 runtime smoke nua cho luong export `/api/v4/reporting/exports` khong mock.
+
+- Done: da complete full engineering scope cua Big-bang plan va close epic `cng-mbu` (sau khi verify tat ca child beads da closed).
+- Verify:
+  - `pnpm bd:safe -- show cng-mbu` (`CLOSED`)
+  - `pnpm bd:safe -- ready` (`No open issues`)
+  - `pnpm run api:contract:gate` (`legacy routes: 0`)
   - `pnpm run verify:v4:parity` (`passed=7/7 failed=0`)
   - `pnpm run verify:v4:cutover-preflight -- --dry-run --with-uat-smoke`
+  - `pnpm exec eslint server/index.js tests/server.api.test.js`
+  - `pnpm exec vitest run tests/server.api.test.js -t "SQL Server|bootstrap từ biến|DB rỗng|đồng bộ account|tín hiệu trạng thái|timeout SQL" --environment node`
   - `pnpm bd:check`
-- Risk: staging/prod execution gates (`verify:v4:cutover-preflight` non-dry-run + hypercare Day0-Day7 logs) van can duoc van hanh theo runbook khi vao cua so cutover that.
-- Decision: close `cng-mbu.7` tai backlog engineering lane.
-- Next: neu phat sinh issue trong cutover that/hypercare, mo bead moi cho tung incident/follow-up thay vi mo lai lane `cng-mbu.7`.
+- Risk: proof hien tai la engineering/local gate; van can governance van hanh cho cutover thuc te (preflight non-dry-run, checkpoint Day0-Day7, final hypercare report).
+- Decision: close `cng-mbu` va dong trang thai Big-bang execution lane trong backlog.
+- Next: chuyen sang post-bigbang BAU roadmap theo cac track o `Next Suggested Slice`.
 ## Recent Completed Slices
 
 - `cng-mbu.7` da hoan tat W8 Big-bang Cutover and Hypercare lane o pham vi engineering package:
@@ -894,15 +908,20 @@
 
 ## Next Suggested Slice
 
-- Title: Week 8 cutover preflight and hypercare setup
-- Bead: cng-mbu.7
-- Status: in_progress
+- Title: Post-bigbang BAU transition
+- Bead: (to be opened as new BAU bead)
+- Status: ready for intake
 - Follow-up backlog:
-  - dien owner matrix va sign-off tai `docs/operations/v4-cutover-owner-matrix.md`
-  - dien downtime window + operator communication plan tai `docs/operations/v4-cutover-window-and-comms-plan.md` va ticket cutover
-  - chay preflight staging/prod bang `pnpm run verify:v4:cutover-preflight -- --discover-base-url --label <env> --expected-stage module-parity --with-uat-smoke`
-  - cap nhat `docs/operations/v4-hypercare-checkpoint-log.md` cho Day0-Day7
-  - publish final report tu `docs/operations/v4-hypercare-report-template.md` va link vao tracker docs
+  - Track 1 (operations hardening):
+    - chay `verify:v4:cutover-preflight` non-dry-run cho staging/prod window
+    - ghi Day0-Day7 vao `docs/operations/v4-hypercare-checkpoint-log.md`
+    - publish final hypercare report va link vao runbook/tracker docs
+  - Track 2 (runtime reliability):
+    - theo doi parity drift hang tuan (`api:contract:gate` + `verify:v4:parity`)
+    - mo incident bead ngay khi co rollback trigger hoac P1 regression
+  - Track 3 (product BAU backlog):
+    - mo epic BAU moi cho cac yeu cau tinh nang sau cutover
+    - phan loai theo 3 lane: feature delivery, reliability/perf, DX/tooling
 
 ## Verification
 

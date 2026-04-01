@@ -28,7 +28,10 @@ export default defineConfig({
 
       '/api': {
 
-        target: process.env.VITE_API_BASE || 'http://localhost:5000',
+        target:
+          process.env.VITE_API_PROXY_TARGET ||
+          process.env.VITE_API_BASE ||
+          'http://localhost:5000',
 
         changeOrigin: true,
 

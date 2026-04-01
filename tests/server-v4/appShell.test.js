@@ -78,6 +78,20 @@ describe('server-v4 app shell', () => {
     }
   });
 
+  it('allows CORS preflight for browser clients', async () => {
+    const app = buildV4App();
+    const origin = 'http://127.0.0.1:5173';
+
+    const response = await request(app)
+      .options('/api/v4/auth/login')
+      .set('Origin', origin)
+      .set('Access-Control-Request-Method', 'POST');
+
+    expect([200, 204]).toContain(response.status);
+    expect(response.headers['access-control-allow-origin']).toBe(origin);
+    expect(response.headers['access-control-allow-credentials']).toBe('true');
+  });
+
   it('exposes rollout metadata with migration checks and fallback guidance', async () => {
     const app = buildV4App({
       dbFile: READY_DB_FILE,

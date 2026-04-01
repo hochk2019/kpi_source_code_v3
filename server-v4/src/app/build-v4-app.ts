@@ -1,4 +1,5 @@
 import express, { type Express, type Router } from 'express';
+import cors from 'cors';
 
 import { resolveServerV4Config, type ServerV4ConfigInput } from '../config/server-v4-config.js';
 import { buildAlertsRouter } from '../modules/alerts/alertsRoutes.js';
@@ -141,6 +142,7 @@ export function buildV4App(input?: readonly DomainModule[] | BuildV4AppOptions):
   ]);
 
   app.disable('x-powered-by');
+  app.use(cors({ origin: true, credentials: true }));
   app.use(express.json());
   app.use(createCsrfProtection());
   app.locals.runtimePersistenceDispose = async () => {

@@ -55,6 +55,7 @@ const LEGACY_SESSION_TOKEN_STORAGE_KEY = 'kpi_session_token';
 const CSRF_COOKIE_NAME = 'kpi_csrf';
 const CSRF_HEADER_NAME = 'X-CSRF-Token';
 const UNSAFE_HTTP_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+const LEGACY_AUTH_BASE = '/api/auth';
 
 
 
@@ -158,6 +159,44 @@ function setAccountCache(accounts) {
 
 let apiBaseCache = null;
 
+function normalizeApiBase(rawBase) {
+  if (typeof rawBase !== "string") {
+    return "";
+  }
+
+  const trimmed = rawBase.trim();
+  if (!trimmed || trimmed === "/") {
+    return "";
+  }
+
+  return trimmed.endsWith("/") ? trimmed.slice(0, -1) : trimmed;
+}
+
+function shouldPreferDevProxy(base) {
+  if (!base) {
+    return false;
+  }
+
+  if (typeof window === "undefined") {
+    return false;
+  }
+
+  if (typeof import.meta === "undefined" || import.meta.env?.DEV !== true) {
+    return false;
+  }
+
+  if (!(base.startsWith("http://") || base.startsWith("https://"))) {
+    return false;
+  }
+
+  try {
+    const targetOrigin = new URL(base).origin;
+    return targetOrigin !== window.location.origin;
+  } catch {
+    return false;
+  }
+}
+
 
 
 function resolveApiBase() {
@@ -176,15 +215,8 @@ function resolveApiBase() {
 
   }
 
-  if (typeof base !== "string") {
-
-    base = "";
-
-  }
-
-  base = base.trim();
-
-  apiBaseCache = base.endsWith("/") ? base.slice(0, -1) : base;
+  const normalizedBase = normalizeApiBase(base);
+  apiBaseCache = shouldPreferDevProxy(normalizedBase) ? "" : normalizedBase;
 
   return apiBaseCache;
 
@@ -316,13 +348,50 @@ async function requestJson(path, { method = "GET", body } = {}) {
   if (!response.ok) {
 
     const message = payload?.error || payload?.message || `HTTP ${response.status}`;
-
-    throw new Error(message);
+    const error = new Error(message);
+    error.status = response.status;
+    throw error;
 
   }
 
   return payload;
 
+}
+
+function isRouteNotFoundError(error) {
+  if (!error) {
+    return false;
+  }
+
+  if (Number(error.status) === 404) {
+    return true;
+  }
+
+  const message = String(error.message || "").trim().toLowerCase();
+  return message.includes("http 404") || message.includes("not found");
+}
+
+async function requestJsonWithFallback(paths, options = {}) {
+  const candidates = Array.isArray(paths) ? paths.filter(Boolean) : [paths].filter(Boolean);
+  if (!candidates.length) {
+    throw new Error("Thiếu đường dẫn API để gọi");
+  }
+
+  let lastError = null;
+  for (let index = 0; index < candidates.length; index += 1) {
+    const path = candidates[index];
+    const hasNextCandidate = index < candidates.length - 1;
+    try {
+      return await requestJson(path, options);
+    } catch (error) {
+      lastError = error;
+      if (!hasNextCandidate || !isRouteNotFoundError(error)) {
+        throw error;
+      }
+    }
+  }
+
+  throw lastError || new Error("Không thể hoàn tất yêu cầu API");
 }
 
 
@@ -399,6 +468,58 @@ function syncSessionForUser(user) {
 
 }
 
+function authRoutes(...segments) {
+  const normalizedSegments = segments
+    .map((segment) => String(segment || "").replace(/^\/+|\/+$/g, ""))
+    .filter(Boolean);
+  const suffix = normalizedSegments.length ? `/${normalizedSegments.join("/")}` : "";
+  return [`/api/v4/auth${suffix}`, `${LEGACY_AUTH_BASE}${suffix}`];
+}
+
+const AUTH_LOGIN_ROUTES = [...authRoutes("login"), "/api/login"];
+const AUTH_SESSION_ROUTES = [...authRoutes("session"), "/api/session"];
+const AUTH_LOGOUT_ROUTES = [...authRoutes("logout"), "/api/logout"];
+const AUTH_ACCOUNTS_ROUTES = authRoutes("accounts");
+
+function toUserFacingLoginError(error) {
+  const status = Number(error?.status);
+  const rawMessage = String(error?.message || "").trim();
+  const normalized = rawMessage.toLowerCase();
+
+  if (!rawMessage) {
+    return "Không đăng nhập được. Vui lòng thử lại.";
+  }
+
+  if (
+    normalized.includes("sai tài khoản") ||
+    normalized.includes("sai mat khau") ||
+    normalized.includes("invalid credential") ||
+    status === 401
+  ) {
+    return "Sai tài khoản hoặc mật khẩu";
+  }
+
+  if (status === 404 || normalized.includes("http 404")) {
+    return "Không tìm thấy API đăng nhập. Vui lòng kiểm tra API base/proxy.";
+  }
+
+  if (
+    normalized.includes("failed to fetch") ||
+    normalized.includes("networkerror") ||
+    normalized.includes("load failed") ||
+    normalized.includes("cors") ||
+    normalized.includes("err_network")
+  ) {
+    return "Không kết nối được máy chủ đăng nhập. Vui lòng kiểm tra proxy/CORS.";
+  }
+
+  if (status === 429 || normalized.includes("too many request")) {
+    return "Bạn thử đăng nhập quá nhiều lần. Vui lòng đợi một lúc rồi thử lại.";
+  }
+
+  return rawMessage;
+}
+
 
 
 function loadUsers() {
@@ -455,7 +576,7 @@ export async function login(usernameInput, passwordInput) {
 
   try {
 
-    const payload = await requestJson("/api/v4/auth/login", {
+    const payload = await requestJsonWithFallback(AUTH_LOGIN_ROUTES, {
 
       method: "POST",
 
@@ -471,7 +592,7 @@ export async function login(usernameInput, passwordInput) {
 
   } catch (err) {
 
-    return { ok: false, error: err?.message || "Sai tài khoản hoặc mật khẩu" };
+    return { ok: false, error: toUserFacingLoginError(err) };
 
   }
 
@@ -483,7 +604,7 @@ export async function loadSession() {
 
   try {
 
-    const payload = await requestJson("/api/v4/auth/session");
+    const payload = await requestJsonWithFallback(AUTH_SESSION_ROUTES);
 
     const session = setSessionFromUser(payload?.user);
 
@@ -511,7 +632,7 @@ export async function logout() {
 
   try {
 
-    await requestJson("/api/v4/auth/logout", { method: "POST" });
+    await requestJsonWithFallback(AUTH_LOGOUT_ROUTES, { method: "POST" });
 
   } catch {
 
@@ -553,7 +674,7 @@ export function getPermissionTemplate(role = DEFAULT_ROLE) {
 
 export async function reloadAccounts() {
 
-  const payload = await requestJson("/api/v4/auth/accounts");
+  const payload = await requestJsonWithFallback(AUTH_ACCOUNTS_ROUTES);
 
   const accounts = setAccountCache(payload?.accounts ?? []);
 
@@ -577,7 +698,7 @@ export async function reloadAccounts() {
 
 export async function createAccount(payload) {
 
-  const response = await requestJson("/api/v4/auth/accounts", {
+  const response = await requestJsonWithFallback(AUTH_ACCOUNTS_ROUTES, {
 
     method: "POST",
 
@@ -595,7 +716,7 @@ export async function createAccount(payload) {
 
 export async function updateAccount(usernameInput, patch) {
 
-  const response = await requestJson(`/api/v4/auth/accounts/${encodeURIComponent(usernameInput)}`, {
+  const response = await requestJsonWithFallback(authRoutes("accounts", encodeURIComponent(usernameInput)), {
 
     method: "PATCH",
 
@@ -623,13 +744,16 @@ export async function setAccountPassword(usernameInput, newPasswordInput) {
 
   }
 
-  const response = await requestJson(`/api/v4/auth/accounts/${encodeURIComponent(usernameInput)}/password`, {
+  const response = await requestJsonWithFallback(
+    authRoutes("accounts", encodeURIComponent(usernameInput), "password"),
+    {
 
-    method: "POST",
+      method: "POST",
 
-    body: { password },
+      body: { password },
 
-  });
+    },
+  );
 
   setAccountCache(response?.accounts ?? []);
 
@@ -647,7 +771,7 @@ export async function setAccountPassword(usernameInput, newPasswordInput) {
 
 export async function deleteAccount(usernameInput) {
 
-  const response = await requestJson(`/api/v4/auth/accounts/${encodeURIComponent(usernameInput)}`, {
+  const response = await requestJsonWithFallback(authRoutes("accounts", encodeURIComponent(usernameInput)), {
 
     method: "DELETE",
 
@@ -683,7 +807,7 @@ export async function changeOwnPassword(usernameInput, currentPasswordInput, new
 
   }
 
-  const response = await requestJson("/api/v4/auth/password/change", {
+  const response = await requestJsonWithFallback(authRoutes("password", "change"), {
 
     method: "POST",
 

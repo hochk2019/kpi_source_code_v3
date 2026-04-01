@@ -13,62 +13,6 @@ function ensureWindow() {
 
 
 
-let apiBaseCache = null;
-
-
-
-function resolveApiBase() {
-
-  if (apiBaseCache !== null) {
-
-    return apiBaseCache;
-
-  }
-
-  let base = "";
-
-  if (typeof import.meta !== "undefined") {
-
-    base = import.meta.env?.VITE_API_BASE ?? "";
-
-  }
-
-  if (typeof base !== "string") {
-
-    base = "";
-
-  }
-
-  base = base.trim();
-
-  apiBaseCache = base.endsWith("/") ? base.slice(0, -1) : base;
-
-  return apiBaseCache;
-
-}
-
-
-
-function buildUrl(path) {
-
-  const base = resolveApiBase();
-
-  if (!path) return base || "";
-
-  if (path.startsWith("http://") || path.startsWith("https://")) {
-
-    return path;
-
-  }
-
-  const normalized = path.startsWith("/") ? path : `/${path}`;
-
-  return `${base || ""}${normalized}`;
-
-}
-
-
-
 function parseFilename(disposition) {
 
   if (!disposition) return null;
@@ -139,7 +83,7 @@ async function requestExport(kind, payload, fallbackFilename) {
 
 
 
-  const response = await fetchWithAuth(buildUrl(API_V4_ROUTES.reporting.exports), {
+  const response = await fetchWithAuth(API_V4_ROUTES.reporting.exports, {
 
     method: "POST",
 

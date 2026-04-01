@@ -98,6 +98,36 @@ describe('Login component', () => {
 
   });
 
+  it('tự fallback sang endpoint auth legacy khi API v4 chưa sẵn sàng', async () => {
+    fetchMock = installMockApi({
+      'POST /api/v4/auth/login': () =>
+        new Response(JSON.stringify({ ok: false, error: 'Not found' }), {
+          status: 404,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+    });
+
+    const result = await login('admin', 'admin123');
+
+    expect(result.ok).toBe(true);
+    expect(fetchMock.mock.calls.some((call) => String(call[0]).includes('/api/v4/auth/login'))).toBe(true);
+    expect(fetchMock.mock.calls.some((call) => String(call[0]).includes('/api/auth/login'))).toBe(true);
+  });
+
+  it('trả thông báo thân thiện khi không kết nối được backend đăng nhập', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        throw new TypeError('Failed to fetch');
+      }),
+    );
+
+    const result = await login('admin', 'admin123');
+
+    expect(result.ok).toBe(false);
+    expect(result.error).toMatch(/Không kết nối được máy chủ đăng nhập/i);
+  });
+
   it('đăng nhập thành công và gọi callback', async () => {
 
     const user = userEvent.setup();
