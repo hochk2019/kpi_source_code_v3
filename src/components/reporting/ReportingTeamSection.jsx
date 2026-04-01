@@ -7,6 +7,7 @@ import {
   METRIC_SORT_OPTIONS,
   getSegmentedButtonClass,
 } from "@/components/reporting/reportingDetailUtils.js";
+import { resolveReportingExportState } from "@/components/reporting/reportingExportState.js";
 
 export function ReportingTeamSection({
   reportLoading,
@@ -61,6 +62,13 @@ export function ReportingTeamSection({
   }
 
   if (selectedTeam === "all") {
+    const teamExportState = resolveReportingExportState({
+      canExport,
+      exporting,
+      reportLoading,
+      reportError,
+      summary,
+    });
     const totalTeamRows = filteredTeamList.length;
     const teamSliceStart = teamDetailPage * detailPageSize;
     const teamPageItems = filteredTeamList.slice(teamSliceStart, teamSliceStart + detailPageSize);
@@ -123,15 +131,21 @@ export function ReportingTeamSection({
             <button
               type="button"
               onClick={handleExportTeamAll}
-              disabled={!canExport || exporting}
+              disabled={!teamExportState.canExport}
               className={`inline-flex items-center justify-center rounded-full border px-3 py-1.5 text-xs font-semibold shadow-sm transition-colors ${
-                canExport && !exporting
+                teamExportState.canExport
                   ? "border-[color:var(--ds-border-strong)] bg-[color:var(--ds-accent)] text-[color:var(--ds-text-inverse)] hover:bg-[color:var(--ds-accent-strong)]"
                   : "cursor-not-allowed border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-muted)] text-[color:var(--ds-text-disabled)]"
               }`}
             >
               {exporting ? "Đang xuất..." : "Xuất Excel"}
             </button>
+
+            {!teamExportState.canExport && teamExportState.disabledReason ? (
+              <span className="text-[11px] text-[color:var(--ds-text-muted)]">
+                {teamExportState.disabledReason}
+              </span>
+            ) : null}
 
             <span className="text-[11px] text-[color:var(--ds-text-muted)]">
               Nhấn Ctrl+P để in nhanh toàn trang
@@ -307,7 +321,8 @@ export function ReportingTeamSection({
                   <TeamDetailCard
                     key={item.key}
                     team={item}
-                    canExport={canExport}
+                    canExport={teamExportState.canExport}
+                    exportDisabledReason={teamExportState.disabledReason}
                     onExport={() => handleExportTeamDetail(item)}
                     exporting={exporting}
                     visibleColumns={columnVisibility}
@@ -335,10 +350,19 @@ export function ReportingTeamSection({
     return null;
   }
 
+  const singleTeamExportState = resolveReportingExportState({
+    canExport,
+    exporting,
+    reportLoading,
+    reportError,
+    summary,
+  });
+
   return (
     <TeamDetailCard
       team={activeTeam}
-      canExport={canExport}
+      canExport={singleTeamExportState.canExport}
+      exportDisabledReason={singleTeamExportState.disabledReason}
       onExport={() => handleExportTeamDetail(activeTeam)}
       exporting={exporting}
       visibleColumns={columnVisibility}

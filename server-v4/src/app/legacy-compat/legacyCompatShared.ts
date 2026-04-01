@@ -3,7 +3,7 @@ import { z, ZodError } from 'zod';
 
 import type { RuntimePersistence } from '../../persistence/runtimePersistence.js';
 import { createDefaultKpiRuleCollection } from '../../modules/kpi-rules/kpiRuleDefaults.js';
-import { createEmptyTeamRoster } from '../../modules/teams/teamRosterDocument.js';
+import { createEmptyTeamRoster, normalizeTeamRoster } from '../../modules/teams/teamRosterDocument.js';
 import { AuthHttpError, AuthService } from '../../modules/auth/authService.js';
 import type { AuthAccountView } from '../../modules/auth/authTypes.js';
 import { sanitizeAuthAccount, toUsernameKey } from '../../modules/auth/authShared.js';
@@ -118,6 +118,10 @@ export async function writeLegacyStorageValue(
   value: unknown,
 ): Promise<unknown | undefined> {
   switch (key) {
+    case TEAM_ROSTER_STORAGE_KEY: {
+      const nextRoster = normalizeTeamRoster(normalizeLegacyStoragePayload(value));
+      return persistence.teamsStore.writeRoster(nextRoster);
+    }
     case COMMAND_CENTER_PINS_STORAGE_KEY: {
       const nextValue =
         value === null || value === undefined

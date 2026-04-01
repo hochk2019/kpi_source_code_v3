@@ -16,6 +16,8 @@ export function TeamDetailCard({
 
   canExport,
 
+  exportDisabledReason = "",
+
   onExport,
 
   exporting,
@@ -257,6 +259,12 @@ export function TeamDetailCard({
                 {exporting ? "Đang xuất..." : "Xuất Excel"}
               </button>
             </div>
+
+            {!canExport && exportDisabledReason ? (
+              <span className="text-[11px] text-[color:var(--ds-text-muted)]">
+                {exportDisabledReason}
+              </span>
+            ) : null}
 
             <span className="text-[11px] text-gray-400">Dùng Ctrl+P nếu cần in nhanh</span>
           </div>

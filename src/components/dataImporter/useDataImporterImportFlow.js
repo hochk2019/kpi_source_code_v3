@@ -1,5 +1,6 @@
 import { useCallback } from "react";
 
+import resolveImportEligibility from "@/components/dataImporter/importGate.js";
 import { parseDataImporterWorkbook } from "@/components/dataImporter/dataImporterWorkbookParser.js";
 
 function resetFileInput(fileRef, inputElement) {
@@ -17,6 +18,7 @@ export default function useDataImporterImportFlow({
   isReadOnlyForEdits = false,
   hasUnsaved = false,
   mode = "source",
+  previewSource = null,
   selectedFile = "",
   effectivePreviewRows = [],
   importPreview = null,
@@ -265,27 +267,17 @@ export default function useDataImporterImportFlow({
   );
 
   const handleImport = useCallback(() => {
-    if (!canUploadFiles) {
-      alert(
-        'Tài khoản của bạn chưa được cấp quyền "Import Data – tải file". Vui lòng liên hệ quản trị viên để mở quyền tải file import.',
-      );
-      return;
-    }
+    const importGate = resolveImportEligibility({
+      canUploadFiles,
+      isReadOnlyForEdits,
+      mode,
+      previewSource,
+      effectivePreviewRows,
+      importPreview,
+    });
 
-    if (isReadOnlyForEdits) {
-      alert(
-        "Bạn không có quyền import dữ liệu. Đăng nhập bằng tài khoản được cấp quyền để tiếp tục.",
-      );
-      return;
-    }
-
-    if (mode !== "preview") {
-      alert("Hãy chọn file XLSX để import.");
-      return;
-    }
-
-    if (effectivePreviewRows.length === 0) {
-      alert("Không có dữ liệu để import");
+    if (!importGate.canImport) {
+      alert(importGate.reason);
       return;
     }
 
@@ -375,6 +367,7 @@ export default function useDataImporterImportFlow({
     loadSavedRows,
     mode,
     overwrite,
+    previewSource,
     pushImportLog,
     saveDeclRows,
     selectedFile,

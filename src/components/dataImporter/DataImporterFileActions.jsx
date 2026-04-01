@@ -10,6 +10,7 @@ export default function DataImporterFileActions({
   isReadOnlyForEdits = false,
   canEdit = false,
   canImport = false,
+  importDisabledReason = "",
   canViewSavedRows = false,
   selectedFile = "",
   modeLabel = "",
@@ -46,6 +47,14 @@ export default function DataImporterFileActions({
         >
           Import XLSX
         </button>
+      ) : null}
+      {canEdit && !canImport && importDisabledReason ? (
+        <p
+          className="basis-full text-xs text-[color:var(--ds-text-muted)]"
+          data-testid="import-disabled-reason"
+        >
+          {importDisabledReason}
+        </p>
       ) : null}
       <button type="button" onClick={onLoadSavedRows} className="px-3 py-1.5 rounded border">
         Hiển thị dữ liệu đã lưu

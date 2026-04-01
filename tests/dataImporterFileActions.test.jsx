@@ -18,6 +18,7 @@ function createProps(overrides = {}) {
     isReadOnlyForEdits: false,
     canEdit: true,
     canImport: true,
+    importDisabledReason: "",
     canViewSavedRows: true,
     selectedFile: "imports.xlsx",
     modeLabel: "Đang xem dữ liệu đã lưu",
@@ -78,10 +79,14 @@ describe("DataImporterFileActions", () => {
       <DataImporterFileActions
         {...createProps({
           canImport: false,
+          importDisabledReason: "Không có dữ liệu để import.",
         })}
       />,
     );
 
     expect(screen.getByRole("button", { name: "Import XLSX" })).toBeDisabled();
+    expect(screen.getByTestId("import-disabled-reason")).toHaveTextContent(
+      "Không có dữ liệu để import.",
+    );
   });
 });

@@ -5,16 +5,81 @@
 - Source of truth cho tat ca viec chua xong hien tai la `docs/open-backlog.md`.
 - Da reconcile ngay 2026-03-31 voi `PLAN.md` big-bang, `docs/api-contract-v4-migration-plan.md`, `docs/server-v4-rollout-plan-2026-03-25.md`, va bead database.
 - Open epics hien tai:
-  - none (epic `cng-mbu` da closed ngay 2026-04-01).
+  - none (`pnpm bd:safe -- ready` -> `No open issues`)
 - Highest-priority ready items hien tai:
-  - none (`bd ready` hien tai tra ve `No open issues`).
+  - none (all slices in `cng-0s2` closed)
 
 ## Active Slice
 
--- Title: Auth runtime reliability hardening (API base/proxy + CORS + login UX + runtime smoke)
+-- Title: Standalone reporting domain runtime (real audit/export data)
 -- Bead: (none)
--- Status: completed
+-- Status: done
 -- Last updated: 2026-04-01
+
+## Execution Matrix
+
+| ID | Scope | Test Gate | Status | Evidence |
+| --- | --- | --- | --- | --- |
+| cng-0s2.4 | Auth payload normalization (v4 envelope + legacy fallback), auth mock update | `tests/auth.test.jsx` + auth/api related tests | done | `pnpm exec vitest run tests/auth.test.jsx tests/accountManager.staff.test.jsx --environment jsdom`; `pnpm exec eslint src/auth/localAuth.js tests/helpers/mockApiState.js tests/auth.test.jsx tests/accountManager.staff.test.jsx` |
+| cng-0s2.2 | Import enable flow + disable reason UX | `tests/dataImporterShellProps.test.js`, `tests/dataImporterFileActions.test.jsx` (+ importer hooks) | done | `pnpm exec vitest run tests/dataImporterShellProps.test.js tests/dataImporterFileActions.test.jsx tests/useDataImporterImportFlow.test.jsx tests/dataImporterImportGate.test.js --environment jsdom`; `pnpm exec eslint src/components/dataImporter/importGate.js src/components/dataImporter/dataImporterShellProps.js src/components/dataImporter/DataImporterFileActions.jsx src/components/dataImporter/useDataImporterImportFlow.js src/components/dataImporter/useDataImporterWorkflowSession.js tests/dataImporterImportGate.test.js tests/dataImporterShellProps.test.js tests/dataImporterFileActions.test.jsx tests/useDataImporterImportFlow.test.jsx` |
+| cng-0s2.3 | Reporting export visibility/permission consistency | `tests/reportingScopeSections.test.jsx`, `tests/reportViewer.test.jsx` (+ reporting actions/panels) | done | `pnpm exec vitest run tests/reportingScopeSections.test.jsx tests/reportViewer.test.jsx tests/reportingPanels.test.jsx tests/useReportViewerActions.test.jsx tests/reportingExportState.test.js --environment jsdom`; `pnpm exec eslint src/components/ReportViewer.jsx src/components/reporting/reportingExportState.js src/components/reporting/useReportViewerActions.js src/components/reporting/ReportingStaffSection.jsx src/components/reporting/ReportingTeamSection.jsx src/components/reporting/StaffDetailCard.jsx src/components/reporting/TeamDetailCard.jsx tests/reportingExportState.test.js tests/reportingScopeSections.test.jsx tests/useReportViewerActions.test.jsx` |
+| cng-0s2.1 | Runtime smoke + closure/reconcile | `pnpm run test:playwright:runtime`, `pnpm bd:check` | done | `pnpm exec vitest run tests/auth.test.jsx tests/dataImporterShellProps.test.js tests/dataImporterFileActions.test.jsx tests/reportingScopeSections.test.jsx --environment jsdom`; `pnpm exec vitest run tests/server-v4/appShell.test.js tests/server.api.test.js --environment node`; `pnpm run test:playwright:runtime`; `pnpm exec eslint src/auth/localAuth.js src/components/ReportViewer.jsx src/components/dataImporter/importGate.js src/components/dataImporter/DataImporterFileActions.jsx src/components/dataImporter/dataImporterShellProps.js src/components/dataImporter/useDataImporterImportFlow.js src/components/dataImporter/useDataImporterWorkflowSession.js src/components/reporting/reportingExportState.js src/components/reporting/useReportViewerActions.js src/components/reporting/ReportingStaffSection.jsx src/components/reporting/ReportingTeamSection.jsx src/components/reporting/StaffDetailCard.jsx src/components/reporting/TeamDetailCard.jsx tests/helpers/mockApiState.js tests/auth.test.jsx tests/dataImporterImportGate.test.js tests/dataImporterShellProps.test.js tests/dataImporterFileActions.test.jsx tests/useDataImporterImportFlow.test.jsx tests/reportingExportState.test.js tests/reportingScopeSections.test.jsx tests/useReportViewerActions.test.jsx`; `pnpm bd:check` |
+
+## Checkpoint Log
+
+- Checkpoint 0 (session bootstrap):
+  - Done: Tao parent bead `cng-0s2` + 4 child beads theo 4 slices; dat `Active Slice` sang `cng-0s2.4`.
+  - Verify: `pnpm bd:safe -- children cng-0s2`.
+  - Risk: `bd` CLI parse string co xu huong cat title/description theo token.
+  - Decision: Dung ID + labels + Execution Matrix trong `task.md` lam nguon su that thay vi phu thuoc title bead.
+  - Next: Chay Slice A theo no-skip gate (`impact -> code -> test -> lint -> update task/bead`).
+
+- Checkpoint 1 (Slice A complete):
+  - Done: Chuan hoa auth adapter trong `src/auth/localAuth.js` de doc ca v4 envelope (`data.user/data.account/data.accounts`) va legacy payload; update mock v4 auth trong `tests/helpers/mockApiState.js`.
+  - Verify: `pnpm exec vitest run tests/auth.test.jsx tests/accountManager.staff.test.jsx --environment jsdom`; `pnpm exec eslint src/auth/localAuth.js tests/helpers/mockApiState.js tests/auth.test.jsx tests/accountManager.staff.test.jsx`.
+  - Risk: `setSessionFromUser` co blast radius MEDIUM, da gioi han sua o tang parse payload, khong thay doi semantic session cache.
+  - Decision: Dong `cng-0s2.4`, chuyen sang `cng-0s2.2`.
+  - Next: Trien khai import disable reason UX va gate canImport nhat quan.
+
+- Checkpoint 2 (Slice B complete):
+  - Done: Them module `src/components/dataImporter/importGate.js` de chuan hoa gate `canImport`; dong bo shell + hook import flow; bo sung disabled reason tren `DataImporterFileActions`.
+  - Verify: `pnpm exec vitest run tests/dataImporterShellProps.test.js tests/dataImporterFileActions.test.jsx tests/useDataImporterImportFlow.test.jsx tests/dataImporterImportGate.test.js --environment jsdom`; `pnpm exec eslint src/components/dataImporter/importGate.js src/components/dataImporter/dataImporterShellProps.js src/components/dataImporter/DataImporterFileActions.jsx src/components/dataImporter/useDataImporterImportFlow.js src/components/dataImporter/useDataImporterWorkflowSession.js tests/dataImporterImportGate.test.js tests/dataImporterShellProps.test.js tests/dataImporterFileActions.test.jsx tests/useDataImporterImportFlow.test.jsx`.
+  - Risk: thay doi thong diep gate co the lam doi text assertion cua test UI khac; da them regression cho gate moi de giam hoi quy.
+  - Decision: Dong `cng-0s2.2`, chuyen sang `cng-0s2.3`.
+  - Next: Dong nhat export visibility/disable reason trong reporting scope sections + report viewer.
+
+- Checkpoint 3 (Slice C complete):
+  - Done: Them `reportingExportState` de thong nhat export gate theo permission/loading/error/summary/exporting; surfacing disabled reason cho staff/team section va detail cards; dong bo `useReportViewerActions` voi gate moi.
+  - Verify: `pnpm exec vitest run tests/reportingScopeSections.test.jsx tests/reportViewer.test.jsx tests/reportingPanels.test.jsx tests/useReportViewerActions.test.jsx tests/reportingExportState.test.js --environment jsdom`; `pnpm exec eslint src/components/ReportViewer.jsx src/components/reporting/reportingExportState.js src/components/reporting/useReportViewerActions.js src/components/reporting/ReportingStaffSection.jsx src/components/reporting/ReportingTeamSection.jsx src/components/reporting/StaffDetailCard.jsx src/components/reporting/TeamDetailCard.jsx tests/reportingExportState.test.js tests/reportingScopeSections.test.jsx tests/useReportViewerActions.test.jsx`; `pnpm bd:check`.
+  - Risk: helper gate moi disable export khi report co loi read-model de tranh xuat snapshot khong nhat quan; can giam sat UX neu van hanh muon cho phep xuat stale snapshot.
+  - Decision: Dong `cng-0s2.3`, chuyen sang `cng-0s2.1`.
+  - Next: Chay runtime smoke + full verification matrix va chot closure bead/package.
+
+- Checkpoint 4 (Slice D complete + package closure):
+  - Done: Chay full runtime closure matrix, dong `cng-0s2.1`, dong parent `cng-0s2`, va reconcile lai backlog/tracker.
+  - Verify: `pnpm exec vitest run tests/auth.test.jsx tests/dataImporterShellProps.test.js tests/dataImporterFileActions.test.jsx tests/reportingScopeSections.test.jsx --environment jsdom`; `pnpm exec vitest run tests/server-v4/appShell.test.js tests/server.api.test.js --environment node`; `pnpm run test:playwright:runtime`; `pnpm exec eslint src/auth/localAuth.js src/components/ReportViewer.jsx src/components/dataImporter/importGate.js src/components/dataImporter/DataImporterFileActions.jsx src/components/dataImporter/dataImporterShellProps.js src/components/dataImporter/useDataImporterImportFlow.js src/components/dataImporter/useDataImporterWorkflowSession.js src/components/reporting/reportingExportState.js src/components/reporting/useReportViewerActions.js src/components/reporting/ReportingStaffSection.jsx src/components/reporting/ReportingTeamSection.jsx src/components/reporting/StaffDetailCard.jsx src/components/reporting/TeamDetailCard.jsx tests/helpers/mockApiState.js tests/auth.test.jsx tests/dataImporterImportGate.test.js tests/dataImporterShellProps.test.js tests/dataImporterFileActions.test.jsx tests/useDataImporterImportFlow.test.jsx tests/reportingExportState.test.js tests/reportingScopeSections.test.jsx tests/useReportViewerActions.test.jsx`; `pnpm bd:check`; `pnpm bd:safe -- ready`.
+  - Risk: runtime smoke phu thuoc local seed credential (`admin/admin123`) va backend local (`:5000`) nen can giu bootstrap env nhat quan tren may khac.
+  - Decision: Chot package `cng-0s2` o trang thai done, khong mo them refactor ngoai scope.
+  - Next: none (cho user chi dao lane tiep theo).
+
+- Checkpoint 5 (Hotfix report export audit runtime):
+  - Done: Wire `createDefaultReportingRuntime()` vao `apps/api/src/startApiServer.js` de route `/api/v4/reporting/exports/audit` khong con tra `503` khi standalone backend chua inject reporting runtime.
+  - Verify: `pnpm exec vitest run tests/appsApiStart.test.js --environment node`; `pnpm exec vitest run tests/server-v4/reportingExportRoutes.test.js --environment node`; `node -e "fetch('http://127.0.0.1:5000/api/v4/reporting/exports/audit?limit=5&page=1').then(async r=>{console.log(r.status);console.log(await r.text())})"`.
+  - Risk: fallback runtime hien tra audit rong (`entries=[]`) va `exportReport` tra `501` (khong thay legacy export implementation day du trong standalone mode).
+  - Decision: uu tien bo chan toast/runtime error tren frontend, giu API contract on dinh de UI khong bi fail.
+  - Next: neu can du lieu audit/export that trong standalone, tiep tuc wire reporting domain implementation thay vi fallback runtime.
+
+- Checkpoint 6 (Standalone reporting runtime complete):
+  - Done: them `server-v4/src/modules/reporting/reportingRuntime.ts`, export qua `server-v4/src/index.ts`, va wire `apps/api/src/startApiServer.js` de standalone runtime dung reporting domain that (auth + audit list + CSV export + persistence) thay vi fallback rong.
+  - Verify: `pnpm exec vitest run tests/server-v4/reportingRuntime.test.js tests/server-v4/reportingExportRoutes.test.js tests/appsApiStart.test.js tests/appsApiStartServer.test.js --environment node`; `pnpm exec eslint apps/api/src/startApiServer.js server-v4/src/index.ts server-v4/src/modules/reporting/reportingRuntime.ts tests/server-v4/reportingRuntime.test.js tests/appsApiStart.test.js tests/appsApiStartServer.test.js tests/server-v4/reportingExportRoutes.test.js`.
+  - Risk: loader helper `loadCompiledRuntimeModule` khong duoc GitNexus index rieng nen impact gate chi xac nhan truc tiep cho `loadCompiledBuildV4App` (LOW, 0 upstream); pham vi sua da gioi han trong loader return contract.
+  - Decision: giu fallback runtime lam duong lui cho custom `buildApp` injection/test harness, chi bat runtime that khi co `createRuntimePersistence + createStandaloneReportingRuntime`.
+  - Next: cho user retest standalone `/api/v4/reporting/exports` va `/api/v4/reporting/exports/audit` tren moi truong local.
+
+## Open Risks/Blockers
+
+- [open] `bd` CLI parsing title/description nhieu tu khong on dinh; uu tien cap nhat status theo ID va ghi nghia chi tiet trong `task.md`.
+- [open] Worktree dang co thay doi san tu truoc session (`.gitignore`, `docs/open-backlog.md`, `docs/operations/v4-cutover-evidence/*`); khong dong vao khi khong thuoc scope.
 
 - Last closed slice:
   - `cng-mbu` (Big-bang FE+BE redesign 6-8 week execution)

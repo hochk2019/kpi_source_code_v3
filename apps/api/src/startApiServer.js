@@ -4,7 +4,81 @@ import { existsSync } from "node:fs";
 
 import { resolveApiProjectRoot, resolveApiRuntimeConfig } from "./apiRuntimeConfig.js";
 
-export async function loadCompiledBuildV4App(projectRoot = resolveApiProjectRoot()) {
+const EXPORT_AUDIT_DEFAULT_LIMIT = 50;
+const EXPORT_AUDIT_MAX_LIMIT = 200;
+
+function normalizeQueryString(value) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function clampPositiveInt(value, { min = 1, max = Number.MAX_SAFE_INTEGER, fallback = 1 } = {}) {
+  const numeric = Number.parseInt(`${value ?? ""}`, 10);
+  if (!Number.isFinite(numeric) || numeric < min) {
+    return fallback;
+  }
+  if (numeric > max) {
+    return max;
+  }
+  return numeric;
+}
+
+export function createDefaultReportingRuntime() {
+  return {
+    exportReport: async (_req, res) => {
+      res.status(501).json({
+        ok: false,
+        error: "Tính năng xuất báo cáo chưa được cấu hình cho runtime backend hiện tại.",
+      });
+    },
+    listExportAudit: async (req, res) => {
+      const rawLimit = Array.isArray(req?.query?.limit) ? req.query.limit[0] : req?.query?.limit;
+      const rawPage = Array.isArray(req?.query?.page) ? req.query.page[0] : req?.query?.page;
+      const rawFrom = Array.isArray(req?.query?.from) ? req.query.from[0] : req?.query?.from;
+      const rawTo = Array.isArray(req?.query?.to) ? req.query.to[0] : req?.query?.to;
+      const rawKind = Array.isArray(req?.query?.kind) ? req.query.kind[0] : req?.query?.kind;
+      const rawSearch = Array.isArray(req?.query?.search) ? req.query.search[0] : req?.query?.search;
+
+      const limit = clampPositiveInt(rawLimit, {
+        min: 10,
+        max: EXPORT_AUDIT_MAX_LIMIT,
+        fallback: EXPORT_AUDIT_DEFAULT_LIMIT,
+      });
+      const page = clampPositiveInt(rawPage, { min: 1, max: 1000, fallback: 1 });
+      const kind = normalizeQueryString(rawKind).toLowerCase();
+
+      res.status(200).json({
+        ok: true,
+        entries: [],
+        total: 0,
+        page,
+        pageSize: limit,
+        pageCount: 1,
+        summary: {
+          total: 0,
+          latestCreatedAt: null,
+          byKind: [],
+          topUsers: [],
+          latestView: null,
+          recentViews: [],
+          totalViews: 0,
+        },
+        filters: {
+          from: normalizeQueryString(rawFrom),
+          to: normalizeQueryString(rawTo),
+          kind: kind && kind !== "all" ? kind : "all",
+          search: normalizeQueryString(rawSearch),
+        },
+        availableKinds: [],
+      });
+    },
+    exportAdminAudit: async (_req, res) => {
+      res.setHeader("content-type", "text/csv; charset=utf-8");
+      res.status(200).send("ts,actor,action,detail\r\n");
+    },
+  };
+}
+
+async function loadCompiledRuntimeModule(projectRoot = resolveApiProjectRoot()) {
   const modulePath = path.resolve(projectRoot, "dist", "server-v4", "index.js");
 
   try {
@@ -13,7 +87,7 @@ export async function loadCompiledBuildV4App(projectRoot = resolveApiProjectRoot
       throw new Error(`Compiled server-v4 runtime is missing buildV4App(): ${modulePath}`);
     }
 
-    return runtimeModule.buildV4App;
+    return runtimeModule;
   } catch (error) {
     const message = String(error?.message ?? "");
     const isMissingModuleError =
@@ -49,6 +123,11 @@ export async function loadCompiledBuildV4App(projectRoot = resolveApiProjectRoot
   }
 }
 
+export async function loadCompiledBuildV4App(projectRoot = resolveApiProjectRoot()) {
+  const runtimeModule = await loadCompiledRuntimeModule(projectRoot);
+  return runtimeModule.buildV4App;
+}
+
 export function formatListenAddress(address) {
   if (!address) {
     return "unknown";
@@ -62,20 +141,78 @@ export function formatListenAddress(address) {
   return `${host}:${address.port}`;
 }
 
+function resolveReportingReaders(persistence) {
+  return {
+    adjustmentsReader: persistence.adjustmentsReader,
+    declarationsReader: persistence.declarationsReader,
+    kpiRulesReader: persistence.kpiRulesReader,
+    teamsReader: persistence.teamsReader,
+  };
+}
+
+function resolveStandaloneReportingRuntime(options, config, runtimeModule) {
+  if (options.reporting) {
+    return { reportingRuntime: options.reporting, runtimePersistence: null };
+  }
+
+  if (options.buildApp) {
+    return { reportingRuntime: createDefaultReportingRuntime(), runtimePersistence: null };
+  }
+
+  const createRuntimePersistence = runtimeModule?.createRuntimePersistence;
+  const createStandaloneReportingRuntime = runtimeModule?.createStandaloneReportingRuntime;
+  if (
+    typeof createRuntimePersistence !== "function" ||
+    typeof createStandaloneReportingRuntime !== "function"
+  ) {
+    return { reportingRuntime: createDefaultReportingRuntime(), runtimePersistence: null };
+  }
+
+  const runtimePersistence = createRuntimePersistence({
+    dbFile: config.dbFile,
+    persistenceMode: config.persistenceMode,
+    postgresUrl: config.postgresUrl,
+    postgresLegacySqliteFallback: config.postgresLegacySqliteFallback,
+  });
+  const reportingRuntime = createStandaloneReportingRuntime({
+    authStore: runtimePersistence.authStore,
+    projections: runtimePersistence.projections,
+    readers: resolveReportingReaders(runtimePersistence),
+  });
+
+  return { reportingRuntime, runtimePersistence };
+}
+
 export async function startApiServer(options = {}) {
   const config = resolveApiRuntimeConfig(options);
-  const buildApp = options.buildApp ?? (await loadCompiledBuildV4App(config.projectRoot));
+  const runtimeModule =
+    options.runtimeModule ?? (options.buildApp ? null : await loadCompiledRuntimeModule(config.projectRoot));
+  const buildApp = options.buildApp ?? runtimeModule?.buildV4App;
+  if (typeof buildApp !== "function") {
+    throw new Error("Unable to resolve buildApp() from runtime module.");
+  }
+  const { reportingRuntime, runtimePersistence } = resolveStandaloneReportingRuntime(
+    options,
+    config,
+    runtimeModule,
+  );
   if (config.persistenceMode === "postgres" && !config.postgresUrl) {
     throw new Error("KPI_API_POSTGRES_URL is required when KPI_API_PERSISTENCE_MODE=postgres.");
   }
 
-  const app = buildApp({
+  const buildOptions = {
     dbFile: config.dbFile,
     importerCompatGuardMode: config.importerCompatGuardMode,
     persistenceMode: config.persistenceMode,
     postgresUrl: config.postgresUrl,
     postgresLegacySqliteFallback: config.postgresLegacySqliteFallback,
-  });
+    reporting: reportingRuntime,
+  };
+  if (runtimePersistence) {
+    buildOptions.persistence = runtimePersistence;
+  }
+
+  const app = buildApp(buildOptions);
   if (!app || typeof app.listen !== "function") {
     throw new Error("buildApp() must return an Express-compatible application with listen()");
   }

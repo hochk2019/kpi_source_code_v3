@@ -7,6 +7,7 @@ import {
   METRIC_SORT_OPTIONS,
   getSegmentedButtonClass,
 } from "@/components/reporting/reportingDetailUtils.js";
+import { resolveReportingExportState } from "@/components/reporting/reportingExportState.js";
 
 export function ReportingStaffSection({
   reportLoading,
@@ -61,6 +62,13 @@ export function ReportingStaffSection({
   }
 
   if (selectedStaff === "all") {
+    const staffExportState = resolveReportingExportState({
+      canExport,
+      exporting,
+      reportLoading,
+      reportError,
+      summary,
+    });
     const totalStaffRows = filteredStaffList.length;
     const staffSliceStart = staffDetailPage * detailPageSize;
     const staffPageItems = filteredStaffList.slice(
@@ -126,15 +134,21 @@ export function ReportingStaffSection({
             <button
               type="button"
               onClick={handleExportStaffAll}
-              disabled={!canExport || exporting}
+              disabled={!staffExportState.canExport}
               className={`inline-flex items-center justify-center rounded-full border px-3 py-1.5 text-xs font-semibold shadow-sm transition-colors ${
-                canExport && !exporting
+                staffExportState.canExport
                   ? "border-[color:var(--ds-border-strong)] bg-[color:var(--ds-accent)] text-[color:var(--ds-text-inverse)] hover:bg-[color:var(--ds-accent-strong)]"
                   : "cursor-not-allowed border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-muted)] text-[color:var(--ds-text-disabled)]"
               }`}
             >
               {exporting ? "Đang xuất..." : "Xuất Excel"}
             </button>
+
+            {!staffExportState.canExport && staffExportState.disabledReason ? (
+              <span className="text-[11px] text-[color:var(--ds-text-muted)]">
+                {staffExportState.disabledReason}
+              </span>
+            ) : null}
 
             <span className="text-[11px] text-[color:var(--ds-text-muted)]">
               Nhấn Ctrl+P để in nhanh toàn trang
@@ -313,7 +327,8 @@ export function ReportingStaffSection({
                   <StaffDetailCard
                     key={item.key}
                     staff={item}
-                    canExport={canExport}
+                    canExport={staffExportState.canExport}
+                    exportDisabledReason={staffExportState.disabledReason}
                     onExport={() => handleExportStaffDetail(item)}
                     exporting={exporting}
                     visibleColumns={columnVisibility}
@@ -340,10 +355,19 @@ export function ReportingStaffSection({
     return null;
   }
 
+  const singleStaffExportState = resolveReportingExportState({
+    canExport,
+    exporting,
+    reportLoading,
+    reportError,
+    summary,
+  });
+
   return (
     <StaffDetailCard
       staff={activeStaff}
-      canExport={canExport}
+      canExport={singleStaffExportState.canExport}
+      exportDisabledReason={singleStaffExportState.disabledReason}
       onExport={() => handleExportStaffDetail(activeStaff)}
       exporting={exporting}
       visibleColumns={columnVisibility}

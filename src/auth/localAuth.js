@@ -358,6 +358,30 @@ async function requestJson(path, { method = "GET", body } = {}) {
 
 }
 
+function readResponseData(payload) {
+  if (!payload || typeof payload !== "object") {
+    return null;
+  }
+  const data = payload.data;
+  return data && typeof data === "object" ? data : null;
+}
+
+function readAuthUser(payload) {
+  const data = readResponseData(payload);
+  return data?.user ?? payload?.user ?? data?.account ?? payload?.account ?? null;
+}
+
+function readAuthAccount(payload) {
+  const data = readResponseData(payload);
+  return data?.account ?? payload?.account ?? null;
+}
+
+function readAuthAccounts(payload) {
+  const data = readResponseData(payload);
+  const accounts = data?.accounts ?? payload?.accounts ?? [];
+  return Array.isArray(accounts) ? accounts : [];
+}
+
 function isRouteNotFoundError(error) {
   if (!error) {
     return false;
@@ -584,7 +608,7 @@ export async function login(usernameInput, passwordInput) {
 
     });
 
-    const session = setSessionFromUser(payload?.user);
+    const session = setSessionFromUser(readAuthUser(payload));
 
     await reloadAccounts().catch(() => {});
 
@@ -606,9 +630,10 @@ export async function loadSession() {
 
     const payload = await requestJsonWithFallback(AUTH_SESSION_ROUTES);
 
-    const session = setSessionFromUser(payload?.user);
+    const sessionUser = readAuthUser(payload);
+    const session = setSessionFromUser(sessionUser);
 
-    if (payload?.user) {
+    if (sessionUser) {
 
       await reloadAccounts().catch(() => {});
 
@@ -676,7 +701,7 @@ export async function reloadAccounts() {
 
   const payload = await requestJsonWithFallback(AUTH_ACCOUNTS_ROUTES);
 
-  const accounts = setAccountCache(payload?.accounts ?? []);
+  const accounts = setAccountCache(readAuthAccounts(payload));
 
   if (sessionCache) {
 
@@ -706,9 +731,9 @@ export async function createAccount(payload) {
 
   });
 
-  setAccountCache(response?.accounts ?? []);
+  setAccountCache(readAuthAccounts(response));
 
-  return response?.account ?? null;
+  return readAuthAccount(response);
 
 }
 
@@ -724,11 +749,12 @@ export async function updateAccount(usernameInput, patch) {
 
   });
 
-  const accounts = setAccountCache(response?.accounts ?? []);
+  const accounts = setAccountCache(readAuthAccounts(response));
+  const updatedAccount = readAuthAccount(response);
 
-  syncSessionForUser(response?.account);
+  syncSessionForUser(updatedAccount);
 
-  return response?.account ?? accounts.find((account) => account.username === usernameInput) ?? null;
+  return updatedAccount ?? accounts.find((account) => account.username === usernameInput) ?? null;
 
 }
 
@@ -755,7 +781,7 @@ export async function setAccountPassword(usernameInput, newPasswordInput) {
     },
   );
 
-  setAccountCache(response?.accounts ?? []);
+  setAccountCache(readAuthAccounts(response));
 
   if (sessionCache?.username === usernameInput) {
 
@@ -777,7 +803,7 @@ export async function deleteAccount(usernameInput) {
 
   });
 
-  const accounts = setAccountCache(response?.accounts ?? []);
+  const accounts = setAccountCache(readAuthAccounts(response));
 
   const session = getAuth();
 
@@ -817,7 +843,7 @@ export async function changeOwnPassword(usernameInput, currentPasswordInput, new
 
   await reloadAccounts().catch(() => {});
 
-  const session = setSessionFromUser(response?.account);
+  const session = setSessionFromUser(readAuthAccount(response) ?? readAuthUser(response));
 
   return session;
 

@@ -51,7 +51,7 @@ describe("useReportViewerActions", () => {
         canExport: false,
         summary: { decls: 10 },
       }),
-    ).toMatch(/khong duoc phep xuat bao cao/i);
+    ).toMatch(/không có quyền xuất báo cáo/i);
 
     const { result } = renderHook(() =>
       useReportViewerActions({
@@ -67,7 +67,28 @@ describe("useReportViewerActions", () => {
     });
 
     expect(window.alert).toHaveBeenCalledWith(
-      expect.stringMatching(/khong duoc phep xuat bao cao/i),
+      expect.stringMatching(/không có quyền xuất báo cáo/i),
+    );
+    expect(result.current.exporting).toBe(false);
+  });
+
+  it("blocks export when report read model is in error state", async () => {
+    const { result } = renderHook(() =>
+      useReportViewerActions({
+        canExport: true,
+        summary: { decls: 10 },
+        report: { range: {}, rules: {} },
+        exportColumns: {},
+        reportError: "boom",
+      }),
+    );
+
+    await act(async () => {
+      await result.current.handleExportTeamAll();
+    });
+
+    expect(window.alert).toHaveBeenCalledWith(
+      expect.stringMatching(/không thể xuất báo cáo khi dữ liệu đang lỗi tải: boom/i),
     );
     expect(result.current.exporting).toBe(false);
   });

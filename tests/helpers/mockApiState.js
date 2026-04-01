@@ -647,7 +647,8 @@ export function createDefaultHandlers(state) {
 
     'GET /api/audit': () => jsonResponse({ ok: true, logs: [] }),
 
-    'GET /api/v4/auth/accounts': () => jsonResponse({ ok: true, accounts: listClientAccounts(state) }),
+    'GET /api/v4/auth/accounts': () =>
+      jsonResponse({ ok: true, data: { accounts: listClientAccounts(state) } }),
 
     'POST /api/v4/auth/accounts': ({ init }) => {
 
@@ -691,7 +692,7 @@ export function createDefaultHandlers(state) {
       state.accounts.push(account);
       state.passwords.set(account.username, password);
 
-      return jsonResponse({ ok: true, account, accounts: listClientAccounts(state) }, 201);
+      return jsonResponse({ ok: true, data: { account, accounts: listClientAccounts(state) } }, 201);
 
     },
 
@@ -731,7 +732,7 @@ export function createDefaultHandlers(state) {
 
       }
 
-      return jsonResponse({ ok: true, account: updated, accounts: listClientAccounts(state) });
+      return jsonResponse({ ok: true, data: { account: updated, accounts: listClientAccounts(state) } });
 
     },
 
@@ -759,7 +760,7 @@ export function createDefaultHandlers(state) {
 
       state.passwords.set(state.accounts[index].username, password);
 
-      return jsonResponse({ ok: true, accounts: listClientAccounts(state) });
+      return jsonResponse({ ok: true, data: { accounts: listClientAccounts(state) } });
 
     },
 
@@ -785,7 +786,7 @@ export function createDefaultHandlers(state) {
 
       }
 
-      return jsonResponse({ ok: true, accounts: listClientAccounts(state) });
+      return jsonResponse({ ok: true, data: { accounts: listClientAccounts(state) } });
 
     },
 
@@ -813,11 +814,24 @@ export function createDefaultHandlers(state) {
 
       state.currentUser = sanitizeAccount(account);
 
-      return jsonResponse({ ok: true, user: state.currentUser });
+      return jsonResponse({
+        ok: true,
+        data: {
+          user: state.currentUser,
+          expiresAt: null,
+        },
+      });
 
     },
 
-    'GET /api/v4/auth/session': () => jsonResponse({ ok: true, user: state.currentUser }),
+    'GET /api/v4/auth/session': () =>
+      jsonResponse({
+        ok: true,
+        data: {
+          user: state.currentUser,
+          expiresAt: null,
+        },
+      }),
 
     'POST /api/v4/auth/logout': () => {
 

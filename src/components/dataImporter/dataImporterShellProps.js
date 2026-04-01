@@ -1,3 +1,5 @@
+import resolveImportEligibility from "@/components/dataImporter/importGate.js";
+
 export default function createDataImporterShellProps({
   columnDraftHidden = new Set(),
   totalConfigColumns = 0,
@@ -96,13 +98,15 @@ export default function createDataImporterShellProps({
     totalConfigColumns - Math.min(columnDraftHidden.size, totalConfigColumns),
   );
 
-  const derivedCanImport =
-    !isSyncPreview &&
-    !isReadOnlyForEdits &&
-    mode === "preview" &&
-    effectivePreviewRows.length > 0 &&
-    importPreview &&
-    !importPreview.error;
+  const importGate = resolveImportEligibility({
+    canUploadFiles,
+    isReadOnlyForEdits,
+    mode,
+    previewSource,
+    effectivePreviewRows,
+    importPreview,
+  });
+  const derivedCanImport = importGate.canImport;
 
   const derivedCanSave = canSave ?? (!isReadOnlyForEdits && mode === "saved" && rawRowsLength > 0);
   const canResolveDuplicates11 = deleteEnabled && hasDuplicate11Rows;
@@ -124,6 +128,7 @@ export default function createDataImporterShellProps({
     isReadOnlyForEdits,
     canEdit,
     canImport: derivedCanImport,
+    importDisabledReason: importGate.reason,
     canViewSavedRows,
     selectedFile,
     modeLabel,
@@ -198,6 +203,7 @@ export default function createDataImporterShellProps({
     mode,
     canEdit,
     canImport: derivedCanImport,
+    importDisabledReason: importGate.reason,
     canSave: derivedCanSave,
     canUploadFiles,
     canManageSync,
@@ -245,6 +251,7 @@ export default function createDataImporterShellProps({
   return {
     columnDraftVisibleCount,
     canImport: derivedCanImport,
+    importDisabledReason: importGate.reason,
     canSave: derivedCanSave,
     canResolveDuplicates11,
     workflowGuideProps,

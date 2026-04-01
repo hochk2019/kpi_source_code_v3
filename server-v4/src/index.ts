@@ -6,3 +6,7 @@ export { createAlertsRuntime } from './modules/alerts/alertsRuntime.js';
 export type { AlertsRuntime } from './modules/alerts/alertsRuntime.js';
 export { createBackupAdminRuntime } from './modules/backup/backupRuntime.js';
 export type { BackupAdminRuntime } from './modules/backup/backupRuntime.js';
+export { createStandaloneReportingRuntime } from './modules/reporting/reportingRuntime.js';
+export type { StandaloneReportingRuntimeDependencies } from './modules/reporting/reportingRuntime.js';
+export { createRuntimePersistence } from './persistence/runtimePersistence.js';
+export type { RuntimePersistence } from './persistence/runtimePersistence.js';

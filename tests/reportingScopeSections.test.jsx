@@ -222,6 +222,22 @@ describe("reporting scope sections", () => {
     expect(screen.getByText("Tổ đội: Team 1")).toBeTruthy();
   });
 
+  it("keeps staff export visible but disabled with reason when permission is denied", () => {
+    render(
+      <ReportingStaffSection
+        {...buildStaffSectionProps({
+          canExport: false,
+          selectedStaff: "all",
+          staffViewMode: "summary",
+        })}
+      />,
+    );
+
+    const exportButton = screen.getByRole("button", { name: "Xuất Excel" });
+    expect(exportButton).toBeDisabled();
+    expect(screen.getByText(/không có quyền xuất báo cáo/i)).toBeTruthy();
+  });
+
   it("renders team detail mode for the all-teams scope and forwards paging/sort actions", () => {
     const props = buildTeamSectionProps({
       teamViewMode: "detail",
@@ -253,5 +269,22 @@ describe("reporting scope sections", () => {
 
     expect(screen.getByText("Tổ đội: Team Alpha")).toBeTruthy();
     expect(screen.getByText(/thành viên: an team alpha, bình team alpha/i)).toBeTruthy();
+  });
+
+  it("disables team export with error hint when report read model has errors", () => {
+    render(
+      <ReportingTeamSection
+        {...buildTeamSectionProps({
+          reportError: "boom",
+          summary: { decls: 2 },
+          selectedTeam: "all",
+          teamViewMode: "summary",
+        })}
+      />,
+    );
+
+    const exportButton = screen.getByRole("button", { name: "Xuất Excel" });
+    expect(exportButton).toBeDisabled();
+    expect(screen.getByText(/không thể xuất báo cáo khi dữ liệu đang lỗi tải: boom/i)).toBeTruthy();
   });
 });

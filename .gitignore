@@ -14,3 +14,4 @@ server/data/rules-history/
 test-results/
 .codex_tmp/
 .gitnexus
+.tmp/

@@ -10,6 +10,7 @@ function createProps(overrides = {}) {
     isReadOnlyForEdits: false,
     hasUnsaved: false,
     mode: "source",
+    previewSource: null,
     selectedFile: "",
     effectivePreviewRows: [],
     importPreview: { invalid: 0, inserted: 1, updated: 0 },
@@ -185,5 +186,44 @@ describe("useDataImporterImportFlow", () => {
     expect(props.fetchAlerts).toHaveBeenCalledTimes(1);
     expect(props.fileRef.current.value).toBe("");
     expect(alertSpy).toHaveBeenCalledWith("Import xong: thêm 1, cập nhật 2, bỏ qua 3 (khóa 1).");
+  });
+
+  it("blocks import when preview source is ECUS sync", async () => {
+    const alertSpy = vi.spyOn(window, "alert").mockImplementation(() => {});
+    const props = createProps({
+      mode: "preview",
+      previewSource: "sync",
+      selectedFile: "",
+      effectivePreviewRows: [{ so_tk: "TK-SYNC", date: "2025-03-01" }],
+      importPreview: { inserted: 1, updated: 0, invalid: 0 },
+    });
+    const { result } = renderHook(() => useDataImporterImportFlow(props));
+
+    await act(async () => {
+      result.current.handleImport();
+    });
+
+    expect(props.saveDeclRows).not.toHaveBeenCalled();
+    expect(alertSpy).toHaveBeenCalledWith(
+      'Bạn đang xem trước dữ liệu ECUS. Hãy dùng nút "Đồng bộ ngay" để đưa dữ liệu vào workspace.',
+    );
+  });
+
+  it("blocks import when import preview has validation errors", async () => {
+    const alertSpy = vi.spyOn(window, "alert").mockImplementation(() => {});
+    const props = createProps({
+      mode: "preview",
+      selectedFile: "imports.xlsx",
+      effectivePreviewRows: [{ so_tk: "TK-ERR", date: "2025-03-01" }],
+      importPreview: { error: "preview failed" },
+    });
+    const { result } = renderHook(() => useDataImporterImportFlow(props));
+
+    await act(async () => {
+      result.current.handleImport();
+    });
+
+    expect(props.saveDeclRows).not.toHaveBeenCalled();
+    expect(alertSpy).toHaveBeenCalledWith("Không thể kiểm tra file import. preview failed");
   });
 });

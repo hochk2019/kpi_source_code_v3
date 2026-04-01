@@ -189,6 +189,56 @@ describe('server-v4 legacy compatibility routes', () => {
     expect(bootstrapResponse.body.data.kpi_command_center_pins_v1).toBe(JSON.stringify(nextPins));
   });
 
+  it('writes and rereads team roster via legacy storage routes', async () => {
+    const authStore = createAuthStore([
+      createAccount({
+        username: 'admin',
+        password: 'admin123',
+        role: ADMIN_ROLE,
+        name: 'Admin User',
+      }),
+    ]);
+    const app = buildV4App({
+      modules: [authModule],
+      persistence: createPersistenceStub({ authStore }),
+    });
+
+    const loginResponse = await request(app).post('/api/auth/login').send({
+      username: 'admin',
+      password: 'admin123',
+    });
+    const cookie = getCookieHeader(loginResponse);
+    const csrfToken = getCookieValue(loginResponse, CSRF_COOKIE_NAME);
+    const nextRoster = {
+      version: 1,
+      teams: [{ id: 'team-hq', name: 'HQ', members: [{ id: 'alice', name: 'Alice' }] }],
+    };
+
+    const writeResponse = await request(app)
+      .put('/api/storage/team_roster_v1')
+      .set('Cookie', cookie)
+      .set(CSRF_HEADER_NAME, csrfToken)
+      .send({
+        value: JSON.stringify(nextRoster),
+      });
+
+    expect(writeResponse.status).toBe(200);
+    expect(writeResponse.body).toMatchObject({
+      ok: true,
+      key: 'team_roster_v1',
+      value: nextRoster,
+      raw: JSON.stringify(nextRoster),
+    });
+
+    const readResponse = await request(app).get('/api/storage/team_roster_v1').set('Cookie', cookie);
+    expect(readResponse.status).toBe(200);
+    expect(readResponse.body.value).toEqual(nextRoster);
+
+    const bootstrapResponse = await request(app).get('/api/bootstrap').set('Cookie', cookie);
+    expect(bootstrapResponse.status).toBe(200);
+    expect(bootstrapResponse.body.data.team_roster_v1).toBe(JSON.stringify(nextRoster));
+  });
+
   it('returns 404 for the retired legacy deleted declarations route', async () => {
     const authStore = createAuthStore([
       createAccount({
@@ -538,6 +588,7 @@ function createPersistenceStub({
   const projectionValues = new Map(
     Object.entries(clone(sharedProjectionValues) ?? {}).map(([key, value]) => [key, clone(value)]),
   );
+  let rosterState = clone(roster);
 
   return {
     mode: 'postgres',
@@ -617,10 +668,13 @@ function createPersistenceStub({
       getSourceKind: () => 'relational-store',
       getHotPathKeys: () => [],
       getLegacyDbFile: () => null,
-      readTeamRoster: async () => clone(roster),
+      readTeamRoster: async () => clone(rosterState),
     },
     teamsStore: {
-      writeRoster: async (value) => value,
+      writeRoster: async (value) => {
+        rosterState = clone(value);
+        return clone(rosterState);
+      },
     },
     projections: {
       readValue: async (key) => clone(projectionValues.get(key) ?? null),

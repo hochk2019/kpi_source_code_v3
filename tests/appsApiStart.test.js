@@ -26,13 +26,18 @@ describe("apps/api server launcher", () => {
     });
 
     try {
-      expect(receivedOptions).toEqual({
+      expect(receivedOptions).toEqual(expect.objectContaining({
         dbFile: ":memory:",
         importerCompatGuardMode: "off",
         persistenceMode: "sqlite-dual-write",
         postgresUrl: null,
         postgresLegacySqliteFallback: false,
-      });
+        reporting: expect.objectContaining({
+          exportReport: expect.any(Function),
+          listExportAudit: expect.any(Function),
+          exportAdminAudit: expect.any(Function),
+        }),
+      }));
       expect(runtime.config.dbFile).toBe(":memory:");
       expect(runtime.config.persistenceMode).toBe("sqlite-dual-write");
       expect(runtime.listenAddress).toMatch(/^127\.0\.0\.1:\d+$/);
@@ -69,13 +74,18 @@ describe("apps/api server launcher", () => {
     });
 
     try {
-      expect(receivedOptions).toEqual({
+      expect(receivedOptions).toEqual(expect.objectContaining({
         dbFile: null,
         importerCompatGuardMode: "off",
         persistenceMode: "postgres",
         postgresUrl: "postgres://runtime/kpi",
         postgresLegacySqliteFallback: false,
-      });
+        reporting: expect.objectContaining({
+          exportReport: expect.any(Function),
+          listExportAudit: expect.any(Function),
+          exportAdminAudit: expect.any(Function),
+        }),
+      }));
       expect(runtime.config.dbFile).toBeNull();
     } finally {
       await runtime.close();
@@ -98,13 +108,18 @@ describe("apps/api server launcher", () => {
     });
 
     try {
-      expect(receivedOptions).toEqual({
+      expect(receivedOptions).toEqual(expect.objectContaining({
         dbFile: ":memory:",
         importerCompatGuardMode: "off",
         persistenceMode: "postgres",
         postgresUrl: "postgres://runtime/kpi",
         postgresLegacySqliteFallback: true,
-      });
+        reporting: expect.objectContaining({
+          exportReport: expect.any(Function),
+          listExportAudit: expect.any(Function),
+          exportAdminAudit: expect.any(Function),
+        }),
+      }));
     } finally {
       await runtime.close();
     }
@@ -123,14 +138,86 @@ describe("apps/api server launcher", () => {
     });
 
     try {
-      expect(receivedOptions).toEqual({
+      expect(receivedOptions).toEqual(expect.objectContaining({
         dbFile: expect.any(String),
         importerCompatGuardMode: "block-migrated",
         persistenceMode: "sqlite-dual-write",
         postgresUrl: null,
         postgresLegacySqliteFallback: false,
-      });
+        reporting: expect.objectContaining({
+          exportReport: expect.any(Function),
+          listExportAudit: expect.any(Function),
+          exportAdminAudit: expect.any(Function),
+        }),
+      }));
       expect(runtime.config.importerCompatGuardMode).toBe("block-migrated");
+    } finally {
+      await runtime.close();
+    }
+  });
+
+  it("provides a default reporting audit handler that returns an empty successful payload", async () => {
+    let receivedOptions = null;
+
+    const runtime = await startApiServer({
+      disableSignalHandlers: true,
+      buildApp(options) {
+        receivedOptions = options;
+        return express();
+      },
+    });
+
+    try {
+      const req = {
+        query: {
+          from: "2026-04-01",
+          to: "2026-04-02",
+          kind: "all",
+          search: "admin",
+          limit: "25",
+          page: "2",
+        },
+      };
+      const res = {
+        statusCode: 200,
+        payload: null,
+        status(code) {
+          this.statusCode = code;
+          return this;
+        },
+        json(body) {
+          this.payload = body;
+          return this;
+        },
+      };
+
+      await receivedOptions.reporting.listExportAudit(req, res);
+
+      expect(res.statusCode).toBe(200);
+      expect(res.payload).toEqual({
+        ok: true,
+        entries: [],
+        total: 0,
+        page: 2,
+        pageSize: 25,
+        pageCount: 1,
+        summary: {
+          total: 0,
+          latestCreatedAt: null,
+          byKind: [],
+          topUsers: [],
+          latestView: null,
+          recentViews: [],
+          totalViews: 0,
+        },
+        filters: {
+          from: "2026-04-01",
+          to: "2026-04-02",
+          kind: "all",
+          search: "admin",
+        },
+        availableKinds: [],
+      });
     } finally {
       await runtime.close();
     }

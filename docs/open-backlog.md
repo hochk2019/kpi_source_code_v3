@@ -37,6 +37,7 @@ Reconciliation note:
 - Reconciled again on 2026-04-01 sau khi bo sung artifact van hanh cho `cng-mbu.7`: owner matrix, hypercare checkpoint log, va hypercare completion report template; remaining work con lai la execution tren staging/prod window.
 - Reconciled again on 2026-04-01 sau khi bo sung `docs/operations/v4-cutover-window-and-comms-plan.md`; lane `cng-mbu.7` con lai thao tac runtime + communication execution trong cua so cutover that.
 - Reconciled again on 2026-04-01 after closing `cng-mbu.7`; engineering cutover package and local verification gates are complete, and all child beads under epic `cng-mbu` are now closed.
+- Reconciled again on 2026-04-01 after validating full Big-bang engineering gates (`api:contract:gate`, `verify:v4:parity`, `verify:v4:cutover-preflight --dry-run`) and closing epic `cng-mbu`; repository now has no open beads.
 
 Rule:
 - Every unfinished item from review notes, rollout plans, decomposition plans, or UX backlogs must be in one of two states:
@@ -44,14 +45,14 @@ Rule:
 - explicitly marked deferred or removed in its source document
 
 Current open epics:
-- `cng-mbu` - Big-bang FE+BE redesign 6-8 week execution.
+- none.
 
 Current highest-priority ready items:
 - none.
 
-## Big-bang Program (PLAN.md)
+## Big-bang Program (PLAN.md) [closed]
 
-Epic: `cng-mbu`  
+Epic: `cng-mbu` (closed)  
 Source set: `E:/OneDrive - MSFT/Desktop/PLAN.md`, `docs/big-bang-execution-status.md`, `task.md`
 
 - `cng-mbu.1` - W1 Contract and Architecture Freeze (closed)

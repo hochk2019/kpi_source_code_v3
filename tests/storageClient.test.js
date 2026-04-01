@@ -1048,6 +1048,41 @@ describe('storageClient remote đồng bộ lại khi server lên trễ', () => 
 
   });
 
+  it('uu tien proxy noi bo o browser dev khi baseUrl khac origin', async () => {
+    const fetchMock = vi.fn(async (input) => {
+      const url = typeof input === 'string' ? input : input?.url ?? '';
+      if (url.includes('/api/bootstrap?mode=shared-light')) {
+        return {
+          ok: true,
+          json: async () => ({
+            data: { kpi_users_v1: '[]' },
+            mode: 'shared-light',
+            deferredKeys: [],
+          }),
+        };
+      }
+      return { ok: true, json: async () => ({ ok: true }) };
+    });
+
+    vi.stubGlobal('fetch', fetchMock);
+
+    const initial = await initSharedStorage({ baseUrl: 'http://192.168.1.114:5000' });
+
+    expect(initial).toBe(true);
+    expect(fetchMock).toHaveBeenCalled();
+
+    const bootstrapCall = fetchMock.mock.calls.find((args) => {
+      const input = args?.[0];
+      const url = typeof input === 'string' ? input : input?.url ?? '';
+      return url.includes('/api/bootstrap?mode=shared-light');
+    });
+
+    expect(bootstrapCall).toBeTruthy();
+    const bootstrapUrl = typeof bootstrapCall?.[0] === 'string' ? bootstrapCall[0] : bootstrapCall?.[0]?.url ?? '';
+    expect(bootstrapUrl).toContain('/api/bootstrap?mode=shared-light');
+    expect(bootstrapUrl).not.toContain('192.168.1.114:5000');
+  });
+
 });
 
 describe('storageClient giới hạn dung lượng khi backend trả về 413', () => {

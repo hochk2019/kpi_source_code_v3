@@ -117,6 +117,7 @@ describe("dataImporterShellProps", () => {
 
     expect(props.columnDraftVisibleCount).toBe(1);
     expect(props.canImport).toBe(true);
+    expect(props.importDisabledReason).toBe("");
     expect(props.canSave).toBe(false);
     expect(props.canResolveDuplicates11).toBe(true);
 
@@ -128,6 +129,7 @@ describe("dataImporterShellProps", () => {
       onOpenDeletedList,
       canEdit: true,
       canImport: true,
+      importDisabledReason: "",
       canViewSavedRows: true,
       selectedFile: "input.xlsx",
       modeLabel: "Đang xem dữ liệu từ file (chưa lưu)",
@@ -282,6 +284,7 @@ describe("dataImporterShellProps", () => {
     });
 
     expect(props.canImport).toBe(false);
+    expect(props.importDisabledReason).not.toBe("");
     expect(props.canSave).toBe(false);
     expect(props.workflowGuideProps).toMatchObject({
       mode: "saved",
@@ -300,6 +303,7 @@ describe("dataImporterShellProps", () => {
       onOpenFilePicker: expect.any(Function),
     });
     expect(props.fileActionsProps.modeLabel).toBe("Đang xem dữ liệu đã lưu");
+    expect(props.fileActionsProps.importDisabledReason).toBe(props.importDisabledReason);
     expect(props.duplicateWorkflowControlsProps.canResolveDuplicates11).toBe(false);
     expect(props.columnDraftVisibleCount).toBe(3);
   });
@@ -399,8 +403,10 @@ describe("dataImporterShellProps", () => {
     });
 
     expect(props.canImport).toBe(false);
+    expect(props.importDisabledReason).toContain("Đồng bộ ngay");
     expect(props.fileActionsProps.modeLabel).toBe("Đang rà soát xem trước đồng bộ ECUS");
     expect(props.fileActionsProps.canImport).toBe(false);
+    expect(props.fileActionsProps.importDisabledReason).toContain("Đồng bộ ngay");
     expect(props.workflowGuideProps.previewSource).toBe("sync");
     expect(props.listControlsPanelProps.previewSource).toBe("sync");
   });

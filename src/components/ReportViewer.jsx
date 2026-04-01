@@ -605,6 +605,8 @@ export default function ReportViewer({ canExport = true, currentUser = null }) {
     summary,
     report,
     exportColumns,
+    reportLoading,
+    reportError,
   });
 
   const excludeCodes = report.rules?.licenseExcludedSummary || "Không có";

@@ -8,6 +8,7 @@ import {
   createScheduleDraft,
   toSchedulePayload,
 } from "@/components/reporting/reportingScheduleDraft.js";
+import { validateReportExportPermissionState } from "@/components/reporting/reportingExportState.js";
 import { toast } from "@/shared/toast.js";
 
 let reportExporterPromise;
@@ -21,15 +22,10 @@ function loadReportExporterModule() {
 }
 
 export function validateReportExportPermission({ canExport = true, summary = {} }) {
-  if (!canExport) {
-    return "Tai khoan hien tai khong duoc phep xuat bao cao.";
-  }
-
-  if (!summary?.decls) {
-    return "Khong co du lieu de xuat";
-  }
-
-  return "";
+  return validateReportExportPermissionState({
+    canExport,
+    summary,
+  });
 }
 
 export function useReportViewerActions({
@@ -37,6 +33,8 @@ export function useReportViewerActions({
   summary = {},
   report = {},
   exportColumns = {},
+  reportLoading = false,
+  reportError = "",
 }) {
   const [scheduleDraft, setScheduleDraft] = useState(() => createScheduleDraft());
   const [editingScheduleId, setEditingScheduleId] = useState("");
@@ -164,7 +162,12 @@ export function useReportViewerActions({
   };
 
   const handleExportStaffAll = async () => {
-    const message = validateReportExportPermission({ canExport, summary });
+    const message = validateReportExportPermissionState({
+      canExport,
+      summary,
+      reportLoading,
+      reportError,
+    });
     if (message) {
       window.alert(message);
       return;
@@ -180,7 +183,12 @@ export function useReportViewerActions({
   };
 
   const handleExportStaffDetail = async (staffEntry) => {
-    const message = validateReportExportPermission({ canExport, summary });
+    const message = validateReportExportPermissionState({
+      canExport,
+      summary,
+      reportLoading,
+      reportError,
+    });
     if (message) {
       window.alert(message);
       return;
@@ -197,7 +205,12 @@ export function useReportViewerActions({
   };
 
   const handleExportTeamAll = async () => {
-    const message = validateReportExportPermission({ canExport, summary });
+    const message = validateReportExportPermissionState({
+      canExport,
+      summary,
+      reportLoading,
+      reportError,
+    });
     if (message) {
       window.alert(message);
       return;
@@ -213,7 +226,12 @@ export function useReportViewerActions({
   };
 
   const handleExportTeamDetail = async (teamEntry) => {
-    const message = validateReportExportPermission({ canExport, summary });
+    const message = validateReportExportPermissionState({
+      canExport,
+      summary,
+      reportLoading,
+      reportError,
+    });
     if (message) {
       window.alert(message);
       return;

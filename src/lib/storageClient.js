@@ -465,6 +465,50 @@ function isBrowserRuntime() {
 
 
 
+function shouldPreferDevProxy(baseUrl) {
+
+  if (!baseUrl || !isBrowserRuntime()) {
+
+    return false;
+
+  }
+
+  if (typeof import.meta === 'undefined' || import.meta.env?.DEV !== true) {
+
+    return false;
+
+  }
+
+  if (!/^https?:\/\//i.test(baseUrl)) {
+
+    return false;
+
+  }
+
+  try {
+
+    return new URL(baseUrl).origin !== window.location.origin;
+
+  } catch {
+
+    return false;
+
+  }
+
+}
+
+
+
+function resolveRemoteBaseUrl(baseUrl) {
+
+  const normalized = normalizeBaseUrl(baseUrl ?? '');
+
+  return shouldPreferDevProxy(normalized) ? '' : normalized;
+
+}
+
+
+
 function canUseRemoteSync(baseUrl) {
 
   if (typeof fetch !== 'function') {
@@ -684,7 +728,7 @@ async function bootstrapFromServer(baseUrl) {
 
   }
 
-  const normalizedBase = normalizeBaseUrl(baseUrl ?? '');
+  const normalizedBase = resolveRemoteBaseUrl(baseUrl ?? '');
 
   apiBase = normalizedBase;
 
@@ -1185,7 +1229,7 @@ export async function initSharedStorage(options = {}) {
 
     '';
 
-  const normalizedBase = normalizeBaseUrl(baseUrl);
+  const normalizedBase = resolveRemoteBaseUrl(baseUrl);
 
   apiBase = normalizedBase;
 
