@@ -13,5 +13,7 @@ server/data/rules-history/
 .env
 test-results/
 .codex_tmp/
+.codex_tmp_*
 .gitnexus
 .tmp/
+/node
