@@ -44,6 +44,9 @@ Tài liệu này gom các lệnh verify tối thiểu trước khi mở thêm tr
   - đánh giá gate (`readiness blocked`, `migration checks fail`)
   - ghi bằng chứng JSON/Markdown dưới `docs/operations/v4-rollout-evidence/`
 - Nếu chưa chắc cổng backend, dùng `pnpm run verify:v4:rehearsal:auto -- --label staging` để auto probe `baseUrl` trước khi capture evidence.
+- Nếu local port `5000` đang bị chiếm bởi frontend/proxy, chạy backend v4 trên cổng riêng trước khi rehearsal:
+  - PowerShell: `$env:PORT='5100'; $env:KPI_LISTEN_HOST='127.0.0.1'; node scripts/start-backend.mjs --prod`
+  - sau đó chạy `pnpm run verify:v4:rehearsal -- --label local-runtime --base-url http://127.0.0.1:5100`
 - Thêm `--allow-failed-gates` chỉ khi cần chụp chứng cứ điều tra mà không muốn command fail CI.
 
 ## Exit rule

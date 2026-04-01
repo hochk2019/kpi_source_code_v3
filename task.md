@@ -7,59 +7,44 @@
 - Open epics hien tai:
   - `cng-mbu` (Big-bang FE+BE redesign 6-8 week execution).
 - Highest-priority ready items hien tai:
-  - `cng-mbu.4` (in_progress): W5-6 Integration and Behavior Parity.
+  - `cng-mbu.5` (open): W6-7 Hardening and UAT.
 
 ## Active Slice
 
--- Title: W5-6 Integration and Behavior Parity
--- Bead: cng-mbu.4
--- Status: in_progress
+-- Title: W6-7 Hardening and UAT
+-- Bead: cng-mbu.5
+-- Status: open
 -- Last updated: 2026-04-01
 
 - Scope da lam trong slice hien tai:
-  - da hoan tat va close `cng-mbu.3`: frontend clients da dung canonical v4 routes cho lanes data-health, duplicate-policy, filter-presets, feedback-training, rules-history, reports-export/audit, ai-assistant, va notifications
-  - da them alias backend `/api/v4/ai/*` song song `/api/ai/*` trong `server-v4/src/modules/ai/aiLegacyRoutes.js` de FE migrate an toan khong pha tuong thich
-  - da bo sung route registry canonical cho `ai` va `alerts.notifications*` trong `src/lib/apiRoutes.js`; cleanup xong `API_LEGACY_ROUTES` (khong con caller runtime)
-  - da cap nhat demo fallback cho ca canonical + legacy ai/notifications trong `src/demo/demoMode.js`
-  - da bo sung regression:
-    - `tests/aiClient.test.js`
-    - `tests/notificationClient.test.js`
-    - `tests/server.aiModules.test.js` (assert canonical ai aliases)
-    - `tests/aiAssistant.config.test.jsx` + `tests/apiRoutes.test.js` (cap nhat canonical paths)
-  - contract gate hien xanh:
-    - `pnpm run api:contract:report` => canonical `52`, legacy `0`
-    - `pnpm run api:contract:gate` => pass
-  - da them parity rehearsal runner cho W5-6:
-    - script core: `scripts/v4-parity-suite-core.mjs`
-    - cli runner: `scripts/v4-parity-suite.mjs`
-    - package scripts: `pnpm run verify:v4:parity`, `pnpm run verify:v4:parity:quick`
-    - regression: `tests/scripts/v4ParitySuite.test.js`
-    - docs cap nhat ma tran: `docs/operations/v4-qa-matrix.md`
-  - da them rollout rehearsal evidence collector cho migration rehearsal:
-    - script core: `scripts/v4-rollout-rehearsal-core.mjs`
-    - cli runner: `scripts/v4-rollout-rehearsal.mjs`
-    - package script: `pnpm run verify:v4:rehearsal`
-    - auto-probe variant: `pnpm run verify:v4:rehearsal:auto`
-    - regression: `tests/scripts/v4RolloutRehearsal.test.js`
-    - docs cap nhat helper usage va output path: `docs/operations/v4-qa-matrix.md`
+  - tiep theo sau W5-6 la hardening/UAT toan bo lane theo gate `cng-mbu.5`.
+  - giu baseline verify tu W5-6:
+    - `pnpm run verify:v4:parity`
+    - `pnpm run verify:v4:rehearsal -- --label <env>`
+  - bo sung check runtime build readiness cho standalone `server-v4`:
+    - `build:server-v4` nay emit ca JS companion files (`server-v4/src/**/*.js`) vao `dist/server-v4`.
+    - `loadCompiledBuildV4App` nay bao ro loi dependency thieu thay vi thong bao chung chung.
 
 ## Handoff
 
-- Done: da nang cap rollout rehearsal collector voi `--discover-base-url` + probe candidate fallback, them script `verify:v4:rehearsal:auto`, cap nhat regression cho discovery flow/error diagnostics, va giu `verify:v4:parity` lam gate matrix.
+- Done: da hoan tat `cng-mbu.4` voi parity gate xanh + rehearsal evidence capture; da sua blocker runtime build (`dist/server-v4` thieu JS companion) va bo sung diagnostic ro rang cho loader.
 - Verify:
-  - `pnpm exec eslint scripts/v4-rollout-rehearsal-core.mjs scripts/v4-rollout-rehearsal.mjs tests/scripts/v4RolloutRehearsal.test.js`
-  - `pnpm exec vitest run tests/scripts/v4RolloutRehearsal.test.js --environment node`
-  - `pnpm run verify:v4:rehearsal:auto -- --dry-run --allow-failed-gates --label local`
-  - `pnpm run verify:v4:rehearsal -- --dry-run --allow-failed-gates`
-  - `pnpm exec eslint scripts/v4-parity-suite-core.mjs scripts/v4-parity-suite.mjs tests/scripts/v4ParitySuite.test.js`
-  - `pnpm exec vitest run tests/scripts/v4ParitySuite.test.js --environment node`
-  - `pnpm run verify:v4:parity -- --dry-run --with-diff`
+  - `pnpm run build:server-v4`
+  - `pnpm exec vitest run tests/appsApiStartServer.test.js --environment node`
+  - `pnpm exec eslint apps/api/src/startApiServer.js tests/appsApiStartServer.test.js`
   - `pnpm run verify:v4:parity` (full: `passed=7/7 failed=0`)
+  - `pnpm run verify:v4:rehearsal -- --label local-runtime --base-url http://127.0.0.1:5100`
   - `pnpm bd:check`
-- Risk: lane `cng-mbu.4` van con migration rehearsal thu cong tren moi truong rollout that; script runner moi chi automate matrix command va gate local.
-- Decision: giu `cng-mbu.4` o trang thai `in_progress`; dung `verify:v4:parity` lam gate bat buoc truoc moi cap nhat stage W5-6.
-- Next: tiep tuc `cng-mbu.4` voi sub-slice "staging/prod rehearsal runbook execution" (chay `verify:v4:rehearsal` tren moi truong that, attach artifact vao rollout issue, va doi chieu voi Data Health Dashboard truoc gate W6).
+- Risk: rehearsal tren staging/prod that van can van hanh thuc hien theo runbook va monitor Data Health truoc gate cutover.
+- Decision: close `cng-mbu.4`; chuyen epic sang lane `cng-mbu.5` (hardening + UAT) voi baseline parity/rehearsal giu nguyen.
+- Next: bat dau `cng-mbu.5` bang full regression matrix + UAT script 2 nhom, dong thoi attach evidence rehearsal moi moi moi truong rollout.
 ## Recent Completed Slices
+
+- `cng-mbu.4` da hoan tat W5-6 Integration and Behavior Parity:
+  - giu xanh parity gate `pnpm run verify:v4:parity` va rehearsal gate `pnpm run verify:v4:rehearsal`
+  - bo sung regression `tests/appsApiStartServer.test.js` de khoa runtime loader behavior khi thieu `dist/server-v4/index.js` hoac thieu dependency transitive
+  - bo sung error message ro nghia cho runtime transitive dependency missing trong `loadCompiledBuildV4App` de de triage tren moi truong rollout
+  - capture evidence local runtime tai `docs/operations/v4-rollout-evidence/2026-04-01T00-18-51-947Z-local-runtime.{json,md}`
 
 - `cng-7z0.30` da hoan tat storage sync error hardening:
   - them `src/lib/storageSyncErrors.js` de chuan hoa sync error (`code`, `message`, `hint`, `retryable`) cho network/offline/auth/http status

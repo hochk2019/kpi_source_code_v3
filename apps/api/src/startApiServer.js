@@ -1,5 +1,6 @@
 import path from "node:path";
 import { pathToFileURL } from "node:url";
+import { existsSync } from "node:fs";
 
 import { resolveApiProjectRoot, resolveApiRuntimeConfig } from "./apiRuntimeConfig.js";
 
@@ -14,12 +15,33 @@ export async function loadCompiledBuildV4App(projectRoot = resolveApiProjectRoot
 
     return runtimeModule.buildV4App;
   } catch (error) {
-    if (
+    const message = String(error?.message ?? "");
+    const isMissingModuleError =
       error?.code === "ERR_MODULE_NOT_FOUND" ||
-      String(error?.message ?? "").includes("Cannot find module")
-    ) {
+      message.includes("Cannot find module") ||
+      message.includes("Cannot find package") ||
+      message.includes("Failed to load url");
+
+    if (isMissingModuleError) {
+      if (!existsSync(modulePath)) {
+        throw new Error(
+          `Missing compiled server-v4 runtime at ${modulePath}. Run "pnpm build:server-v4" first.`,
+        );
+      }
+
+      const missingDependency =
+        message.match(/Cannot find module '([^']+)'/i)?.[1] ??
+        message.match(/Cannot find package '([^']+)'/i)?.[1] ??
+        message.match(/Failed to load url ([^\s)]+)/i)?.[1] ??
+        null;
+      const importedFrom = message.match(/imported from ([^\n]+)/i)?.[1]?.trim() ?? null;
+      const dependencyHint = missingDependency
+        ? `Missing dependency "${missingDependency}"` +
+          (importedFrom ? ` imported from ${importedFrom}` : "")
+        : "A dependency of the compiled runtime is missing";
+
       throw new Error(
-        `Missing compiled server-v4 runtime at ${modulePath}. Run "pnpm build:server-v4" first.`,
+        `Compiled server-v4 runtime at ${modulePath} cannot be loaded. ${dependencyHint}. Run "pnpm build:server-v4" and ensure JS companion files are emitted to dist/server-v4.`,
       );
     }
 
