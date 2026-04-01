@@ -34,6 +34,8 @@
     "verify:v4:parity:quick": "node scripts/v4-parity-suite.mjs --scope quick",
     "verify:v4:rehearsal": "node scripts/v4-rollout-rehearsal.mjs",
     "verify:v4:rehearsal:auto": "node scripts/v4-rollout-rehearsal.mjs --discover-base-url",
+    "verify:v4:cutover-preflight": "node scripts/v4-cutover-preflight.mjs",
+    "verify:v4:cutover-preflight:auto": "node scripts/v4-cutover-preflight.mjs --discover-base-url",
     "healthcheck": "node scripts/healthcheck.mjs",
     "backup:run": "node scripts/run-backup.mjs",
     "ecus:mock": "node scripts/ecus-tools.mjs mock",

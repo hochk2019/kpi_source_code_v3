@@ -19,9 +19,13 @@ All checks below must be PASS before cutover starts.
 
 ### Contract + parity
 
-- [ ] `pnpm run api:contract:gate`
-- [ ] `pnpm run verify:v4:parity`
-- [ ] `pnpm run verify:v4:rehearsal -- --label staging --expected-stage module-parity`
+- [ ] run unified preflight gate (staging/prod label theo moi window):
+  - `pnpm run verify:v4:cutover-preflight -- --discover-base-url --label staging --expected-stage module-parity --with-uat-smoke`
+- [ ] archive generated evidence (`docs/operations/v4-cutover-evidence/*.json|*.md`) into cutover ticket
+- [ ] fallback manual verification commands (chi dung khi can triage):
+  - `pnpm run api:contract:gate`
+  - `pnpm run verify:v4:parity`
+  - `pnpm run verify:v4:rehearsal -- --label staging --expected-stage module-parity`
 
 ### Runtime readiness
 
@@ -44,6 +48,9 @@ All checks below must be PASS before cutover starts.
   - `pnpm exec playwright test tests/playwright/account-management.spec.js tests/playwright/team-management.spec.js tests/playwright/import-flow.spec.js tests/playwright/report-viewer.spec.js --config=playwright.config.mjs --workers=1`
 
 ## 3) Downtime window execution (T0)
+
+Window/comms planning sheet:
+- [v4-cutover-window-and-comms-plan.md](/E:/GPT/kpi_source_code_v4/docs/operations/v4-cutover-window-and-comms-plan.md)
 
 ### T0-15m: Freeze
 
@@ -90,6 +97,11 @@ Rollback immediately when any condition is true:
 
 ## 6) Hypercare (Day 0 -> Day 7)
 
+Hypercare artifacts:
+- Owner sign-off sheet: [v4-cutover-owner-matrix.md](/E:/GPT/kpi_source_code_v4/docs/operations/v4-cutover-owner-matrix.md)
+- Checkpoint log: [v4-hypercare-checkpoint-log.md](/E:/GPT/kpi_source_code_v4/docs/operations/v4-hypercare-checkpoint-log.md)
+- Final report template: [v4-hypercare-report-template.md](/E:/GPT/kpi_source_code_v4/docs/operations/v4-hypercare-report-template.md)
+
 ### Day 0 (first 6h)
 
 - monitor every 30 minutes:
@@ -113,14 +125,15 @@ Rollback immediately when any condition is true:
 
 ## 7) Owner matrix (fill before T0)
 
-- Incident commander: `<name>`
-- Backend owner: `<name>`
-- Frontend owner: `<name>`
-- QA/UAT owner: `<name>`
-- Communications owner: `<name>`
+- Fill and sign in: [v4-cutover-owner-matrix.md](/E:/GPT/kpi_source_code_v4/docs/operations/v4-cutover-owner-matrix.md)
+- Minimum requirement before T0:
+  - 1 primary + 1 backup for each role
+  - contact channel and escalation path verified
+  - Day 0 / Day 1-2 / Day 3-7 coverage windows assigned
 
 ## 8) Exit criteria for closing cng-mbu.7
 
 - no rollback trigger crossed during window and Day 0 stabilization,
 - no unresolved P1 defects at Day 7,
-- hypercare report published and linked in tracker docs (`task.md`, `docs/open-backlog.md`, `docs/big-bang-execution-status.md`).
+- hypercare checkpoint log updated for all monitoring cycles,
+- hypercare report published from template and linked in tracker docs (`task.md`, `docs/open-backlog.md`, `docs/big-bang-execution-status.md`).
