@@ -32,6 +32,7 @@ Reconciliation note:
 - Reconciled again on 2026-03-31 after completing `cng-mbu.3`; frontend canonical client migration da dat `api:contract:gate` (legacy usage = 0), `cng-mbu.3` closed, va `cng-mbu.4` duoc chuyen in-progress.
 - Reconciled again on 2026-04-01 after completing `cng-mbu.4`; W5-6 parity/rehearsal da dat gate xanh, evidence rehearsal da duoc luu, va next ready item chuyen sang `cng-mbu.5`.
 - Reconciled again on 2026-04-01 after completing `cng-mbu.5`; hardening smoke + UAT da dat gate xanh (smoke core, parity, a11y/perf/security/auth, Playwright UAT 19/19), va next ready item chuyen sang `cng-mbu.6`.
+- Reconciled again on 2026-04-01 after closing `cng-mbu.6`; release gates da duoc khoa qua sign-off package, va next execution lane chuyen sang `cng-mbu.7` (cutover + hypercare).
 
 Rule:
 - Every unfinished item from review notes, rollout plans, decomposition plans, or UX backlogs must be in one of two states:
@@ -42,7 +43,7 @@ Current open epics:
 - `cng-mbu` - Big-bang FE+BE redesign 6-8 week execution.
 
 Current highest-priority ready items:
-- `cng-mbu.6` (open) - Release Gates and Acceptance Closure.
+- `cng-mbu.7` (open) - W8 Big-bang Cutover and Hypercare.
 
 ## Big-bang Program (PLAN.md)
 
@@ -54,7 +55,7 @@ Source set: `E:/OneDrive - MSFT/Desktop/PLAN.md`, `docs/big-bang-execution-statu
 - `cng-mbu.3` - W3-5 Frontend Redesign Canonical Client (closed)
 - `cng-mbu.4` - W5-6 Integration and Behavior Parity (closed; depends on `cng-mbu.2`, `cng-mbu.3`)
 - `cng-mbu.5` - W6-7 Hardening and UAT (closed; depends on `cng-mbu.4`)
-- `cng-mbu.6` - Release Gates and Acceptance Closure (open; depends on `cng-mbu.4`, `cng-mbu.5`)
+- `cng-mbu.6` - Release Gates and Acceptance Closure (closed; depends on `cng-mbu.4`, `cng-mbu.5`)
 - `cng-mbu.7` - W8 Big-bang Cutover and Hypercare (open; depends on `cng-mbu.6`)
 - `cng-mbu.8` - Context Continuity and Session Bootstrap (closed)
 

@@ -7,36 +7,40 @@
 - Open epics hien tai:
   - `cng-mbu` (Big-bang FE+BE redesign 6-8 week execution).
 - Highest-priority ready items hien tai:
-  - `cng-mbu.6` (open): Release Gates and Acceptance Closure.
+  - `cng-mbu.7` (open): W8 Big-bang Cutover and Hypercare.
 
 ## Active Slice
 
--- Title: Release Gates and Acceptance Closure
--- Bead: cng-mbu.6
+-- Title: W8 Big-bang Cutover and Hypercare
+-- Bead: cng-mbu.7
 -- Status: in_progress
 -- Last updated: 2026-04-01
 
 - Scope da lam trong slice hien tai:
-  - chot release gate acceptance cho `cng-mbu.6` dua tren baseline da dat o `cng-mbu.5`.
-  - reconcile contract/parity/uat/rehearsal evidence vao mot bo handoff duy nhat cho cutover week 8.
-  - khoa lai checklist gate trong `docs/big-bang-execution-status.md` + `docs/open-backlog.md` + bead states.
+  - execute preflight checklist cho cutover theo `docs/operations/v4-rollout-plan.md`.
+  - chot rollout execution order cho window downtime co kiem soat.
+  - thiet lap hypercare 7 ngay voi monitor, rollback trigger, va owner ro rang.
 
 ## Handoff
 
-- Done: da hoan tat `cng-mbu.5` voi full hardening/UAT gate va close bead.
+- Done: da hoan tat va close `cng-mbu.6` voi release gate sign-off package.
 - Verify:
-  - `pnpm run test:smoke:core`
+  - `pnpm run api:contract:report`
+  - `pnpm run api:contract:gate`
   - `pnpm run verify:v4:parity` (full: `passed=7/7 failed=0`)
-  - `pnpm exec vitest run tests/accessibility.test.jsx tests/dataHealthFrontendPerformancePanel.test.jsx tests/frontendPerformanceTelemetry.test.js --environment jsdom`
-  - `pnpm exec vitest run tests/securityHardening.test.js tests/server-v4/authRoutes.test.js --environment node`
-  - `pnpm exec playwright test tests/playwright/accessibility-admin.spec.js --config=playwright.config.mjs --workers=1`
   - `pnpm exec playwright test tests/playwright/account-management.spec.js tests/playwright/team-management.spec.js tests/playwright/hq-agency.spec.js tests/playwright/import-flow.spec.js tests/playwright/import-monitoring.spec.js tests/playwright/report-viewer.spec.js tests/playwright/export-flow.spec.js tests/playwright/lazy-tab-shell.spec.js tests/playwright/ui-shell-sidebar.spec.js tests/playwright/adjustments-health.spec.js --config=playwright.config.mjs --workers=1`
   - `pnpm run verify:v4:rehearsal -- --label local-runtime --base-url http://127.0.0.1:5100`
   - `pnpm bd:check`
-- Risk: cutover week 8 van phu thuoc rehearsal tren staging/prod theo runbook de xac nhan env-specific readiness gates.
-- Decision: close `cng-mbu.5`; mo `cng-mbu.6` de chot release acceptance va handoff cutover.
-- Next: hoan tat gate checklist cua `cng-mbu.6`, chot contract mismatch report = 0, va freeze rollout sign-off package.
+- Risk: cutover production van phu thuoc staging/prod preflight + rollback drill trong downtime window.
+- Decision: close `cng-mbu.6`; move execution to `cng-mbu.7`.
+- Next: chot preflight + owners + fallback trigger matrix cho cutover/hypercare.
 ## Recent Completed Slices
+
+- `cng-mbu.6` da hoan tat Release Gates and Acceptance Closure:
+  - `pnpm run api:contract:report` va `pnpm run api:contract:gate` deu xanh (`legacy routes: 0`)
+  - `pnpm run verify:v4:parity` xanh (`passed=7/7 failed=0`)
+  - UAT role-based checklist giu xanh (`19 passed`)
+  - da chot artifact sign-off: `docs/operations/v4-release-gate-signoff-2026-04-01.md`
 
 - `cng-mbu.5` da hoan tat W6-7 Hardening and UAT:
   - full regression lane xanh qua `pnpm run test:smoke:core`
@@ -887,11 +891,13 @@
 
 ## Next Suggested Slice
 
-- Title: Add skip-to-content keyboard navigation affordance
-- Bead: none
-- Status: done
+- Title: Week 8 cutover preflight and hypercare setup
+- Bead: cng-mbu.7
+- Status: in_progress
 - Follow-up backlog:
-  - khong co follow-up mo trong bead tracker sau khi dong `cng-2k4.24` va epic `cng-2k4`
+  - chot downtime window + operator communication plan
+  - chay preflight checklist theo `docs/operations/v4-rollout-plan.md`
+  - define rollback trigger matrix va owner handoff cho 7-day hypercare
 
 ## Verification
 

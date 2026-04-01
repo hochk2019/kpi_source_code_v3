@@ -32,8 +32,8 @@ Moi phien moi, moi tai khoan moi, bat buoc doc file nay truoc khi code.
 | Week 3-5 - Frontend redesign + canonical client | `cng-mbu.3` | Done | [docs/api-contract-v4-migration-plan.md](/E:/GPT/kpi_source_code_v4/docs/api-contract-v4-migration-plan.md), `api:contract:gate` | Hoan tat canonical FE clients (bao gom AI + notifications), legacy FE contract usage = 0 |
 | Week 5-6 - Integration + parity | `cng-mbu.4` | Done | Gate da dinh nghia trong [docs/operations/v4-rollout-plan.md](/E:/GPT/kpi_source_code_v4/docs/operations/v4-rollout-plan.md); runner `pnpm run verify:v4:parity` + `pnpm run verify:v4:rehearsal` | Hoan tat adapter-vs-canonical parity, rollout rehearsal evidence, va xu ly blocker runtime build phu thuoc JS companion |
 | Week 6-7 - Hardening + UAT | `cng-mbu.5` | Done | `pnpm run test:smoke:core`, `pnpm run verify:v4:parity`, hardening smoke suites, Playwright UAT batch (19/19), rehearsal evidence `2026-04-01T02-01-09-518Z` | Da hoan tat full regression + hardening smoke + UAT 2 nhom |
-| Week 8 - Big-bang cutover + hypercare | `cng-mbu.7` | Not Started | Rollout stages + fallback da co | Freeze, preflight, cutover, 7-day hypercare |
-| Release gates / acceptance closure | `cng-mbu.6` | In Progress | `api:contract:gate` da pass (`legacy usage = 0`) | Dat `contract mismatch = 0`, parity + UAT pass + sign-off package |
+| Week 8 - Big-bang cutover + hypercare | `cng-mbu.7` | In Progress | [docs/operations/v4-release-gate-signoff-2026-04-01.md](/E:/GPT/kpi_source_code_v4/docs/operations/v4-release-gate-signoff-2026-04-01.md) | Execute preflight checklist, controlled cutover window, 7-day hypercare and rollback drill |
+| Release gates / acceptance closure | `cng-mbu.6` | Done | [docs/operations/v4-release-gate-signoff-2026-04-01.md](/E:/GPT/kpi_source_code_v4/docs/operations/v4-release-gate-signoff-2026-04-01.md), `api:contract:gate` pass, `verify:v4:parity` pass | Gate da khoa, theo doi sang cutover lane |
 
 ## Continuity Setup
 
@@ -60,13 +60,15 @@ Moi phien moi, moi tai khoan moi, bat buoc doc file nay truoc khi code.
 
 ## Current Observable Metrics
 
-- `pnpm run api:contract:report` (2026-03-31):
+- `pnpm run api:contract:report` (2026-04-01):
   - canonical routes: `52`
   - legacy routes: `0`
-- `pnpm run api:contract:gate`:
+- `pnpm run api:contract:gate` (2026-04-01):
   - pass (khong con legacy FE contract usage)
 - `pnpm run verify:v4:parity` (2026-04-01):
   - pass (`failed=0`)
+- Release gate sign-off package (2026-04-01):
+  - [docs/operations/v4-release-gate-signoff-2026-04-01.md](/E:/GPT/kpi_source_code_v4/docs/operations/v4-release-gate-signoff-2026-04-01.md)
 - `pnpm run verify:v4:rehearsal -- --label local-runtime --base-url http://127.0.0.1:5100` (2026-04-01):
   - pass, evidence luu tai `docs/operations/v4-rollout-evidence/2026-04-01T02-01-09-518Z-local-runtime.{json,md}`
 - `pnpm run test:smoke:core` (2026-04-01):
