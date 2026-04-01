@@ -17,13 +17,13 @@
 -- Last updated: 2026-04-01
 
 - Scope da lam trong slice hien tai:
-  - execute preflight checklist cho cutover theo `docs/operations/v4-rollout-plan.md`.
-  - chot rollout execution order cho window downtime co kiem soat.
-  - thiet lap hypercare 7 ngay voi monitor, rollback trigger, va owner ro rang.
+  - da tao runbook thuc thi: `docs/operations/v4-cutover-hypercare-runbook.md`.
+  - da chot preflight checklist + downtime flow + rollback trigger matrix o muc tai lieu.
+  - tiep tuc fill owner matrix va lich van hanh cho staging/prod window.
 
 ## Handoff
 
-- Done: da hoan tat va close `cng-mbu.6` voi release gate sign-off package.
+- Done: da hoan tat va close `cng-mbu.6` voi release gate sign-off package; da bootstrap runbook cho `cng-mbu.7`.
 - Verify:
   - `pnpm run api:contract:report`
   - `pnpm run api:contract:gate`

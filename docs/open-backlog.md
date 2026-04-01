@@ -33,6 +33,7 @@ Reconciliation note:
 - Reconciled again on 2026-04-01 after completing `cng-mbu.4`; W5-6 parity/rehearsal da dat gate xanh, evidence rehearsal da duoc luu, va next ready item chuyen sang `cng-mbu.5`.
 - Reconciled again on 2026-04-01 after completing `cng-mbu.5`; hardening smoke + UAT da dat gate xanh (smoke core, parity, a11y/perf/security/auth, Playwright UAT 19/19), va next ready item chuyen sang `cng-mbu.6`.
 - Reconciled again on 2026-04-01 after closing `cng-mbu.6`; release gates da duoc khoa qua sign-off package, va next execution lane chuyen sang `cng-mbu.7` (cutover + hypercare).
+- Reconciled again on 2026-04-01 sau khi khoi tao `cng-mbu.7` runbook package (`docs/operations/v4-cutover-hypercare-runbook.md`) de thuc thi preflight/cutover/hypercare.
 
 Rule:
 - Every unfinished item from review notes, rollout plans, decomposition plans, or UX backlogs must be in one of two states:
