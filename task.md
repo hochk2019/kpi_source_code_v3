@@ -7,24 +7,25 @@
 - Da reconcile lai ngay 2026-04-02 sau khi mo epic frontend modernization `cng-1wj` voi child chain `cng-1wj.1..cng-1wj.11`.
 - Da reconcile them ngay 2026-04-02 sau khi hoan tat phase-0 freeze/design (`cng-1wj.1`, `cng-1wj.2`) va chuyen active slice sang `cng-1wj.3`.
 - Da reconcile tiep ngay 2026-04-02 sau khi ship shell/dashboard/command-center/workflow-guide/async primitives (`cng-1wj.3..cng-1wj.8`) va state extraction wave A (`cng-1wj.9`); next ready slice la `cng-1wj.10`.
+- Da reconcile tiep ngay 2026-04-02 sau khi dong `cng-1wj.10`; wave B da tach them `reportSchedules`, `importColumnConfig`, va `kpiAdjustments` khoi `store.js`, va next ready slice la `cng-1wj.11`.
 - Open epics hien tai:
   - `cng-1wj` — frontend modernization shell/state
 - Highest-priority ready items hien tai:
-  - `cng-1wj.10` — state extraction wave B
+  - `cng-1wj.11` — modernization regression hardening
 
 ## Active Slice
 
--- Bead: cng-1wj.10
--- Title: cng-1wj.10 / state extraction wave b
--- Status: in_progress
+-- Bead: cng-1wj.11
+-- Title: cng-1wj.11 / modernization regression hardening
+-- Status: open
 -- Last updated: 2026-04-02
 
 ## Sync Notebook
 
-- Goal: tiep tuc `cng-1wj.10` sau commit wave A bang cach tach 2 low-risk slices khoi `store.js` (`reportSchedules` va `importColumnConfig`), them module test rieng, va cap nhat notebook de handoff vao thang wave B implementation.
-- Files In Scope: `src/lib/store.js`, `src/lib/reportSchedules.js`, `src/lib/importColumnConfig.js`, `tests/reportSchedules.test.js`, `tests/importColumnConfig.test.js`, `tests/store.test.js`, `tests/useDataImporterColumnConfig.test.jsx`, `task.md`, va bead `cng-1wj.10`.
-- Verify: `pnpm exec vitest run tests/importColumnConfig.test.js tests/reportSchedules.test.js tests/store.test.js tests/useDataImporterColumnConfig.test.jsx --environment jsdom`; `pnpm exec eslint src/lib/importColumnConfig.js src/lib/reportSchedules.js src/lib/store.js tests/importColumnConfig.test.js tests/reportSchedules.test.js`; `pnpm bd:check`; `gitnexus_detect_changes(scope=all)`.
-- Handoff: neu context bi nen/reset, bat dau lai bang `task.md`, xem `cng-1wj.3..cng-1wj.9` la done, report schedule + import column config extraction trong `cng-1wj.10` da xong, va lane tiep theo nen uu tien mot slice nho cho KPI adjustments hoac health/import runtime state sau khi impact-gate tung symbol.
+- Goal: tiep tuc phase hardening `cng-1wj.11` sau khi dong wave B; `store.js` da lui ve facade cho `reportSchedules`, `importColumnConfig`, va `kpiAdjustments`, nen slice tiep theo la verify/regression + shell smoke thay vi mo rong refactor state nua.
+- Files In Scope: `src/lib/store.js`, `src/lib/reportSchedules.js`, `src/lib/importColumnConfig.js`, `src/lib/kpiAdjustments.js`, `tests/reportSchedules.test.js`, `tests/importColumnConfig.test.js`, `tests/kpiAdjustmentsStore.test.js`, `tests/store.test.js`, `tests/kpiAdjustments.test.jsx`, `tests/kpiAdjustments.hooks.test.jsx`, `tests/automation.flows.test.js`, `docs/open-backlog.md`, `task.md`, va bead `cng-1wj.11`.
+- Verify: `pnpm exec vitest run tests/kpiAdjustmentsStore.test.js tests/store.test.js tests/kpiAdjustments.test.jsx tests/kpiAdjustments.hooks.test.jsx tests/automation.flows.test.js --environment jsdom`; `pnpm exec eslint src/lib/kpiAdjustments.js src/lib/store.js tests/kpiAdjustmentsStore.test.js`; `pnpm bd:check`; `gitnexus_detect_changes(scope=all)`.
+- Handoff: neu context bi nen/reset, bat dau lai bang `task.md`; `cng-1wj.10` da xong voi 3 extraction modules (`reportSchedules`, `importColumnConfig`, `kpiAdjustments`), bead tiep theo la `cng-1wj.11` de chay regression gates rong hon (lint/test/playwright shell smoke) va reconcile rollout notes.
 
 ## Execution Matrix
 
@@ -71,6 +72,13 @@
   - Risk: KPI adjustments helper graph van bao `HIGH/CRITICAL`, nen turn tiep theo khong nen tiep tuc theo huong tach settings/helpers cua adjustment trong cung buoc voi importer.
   - Decision: tiep tuc uu tien low-risk import slice de lam monolith nho dan ma khong mo them regression hot-path; defer KPI adjustments sang mot sub-slice rieng sau khi khoanh symbol an toan hon.
   - Next: trong `cng-1wj.10`, danh gia slice ke tiep giua health/import runtime state va KPI adjustments facade nho.
+
+- Checkpoint 24 (wave B KPI adjustments extraction complete):
+  - Done: tao `src/lib/kpiAdjustments.js` de tach toan bo settings/persistence/audit/grouping logic cho KPI adjustments, doi `src/lib/store.js` sang facade wrappers giu nguyen public API, va them regression suite `tests/kpiAdjustmentsStore.test.js`.
+  - Verify: `pnpm exec vitest run tests/kpiAdjustmentsStore.test.js tests/store.test.js tests/kpiAdjustments.test.jsx tests/kpiAdjustments.hooks.test.jsx tests/automation.flows.test.js --environment jsdom`; `pnpm exec eslint src/lib/kpiAdjustments.js src/lib/store.js tests/kpiAdjustmentsStore.test.js`.
+  - Risk: `getKpiAdjustments` van la symbol `HIGH` trong impact graph, nen phase tiep theo khong nen mo rong state rewrite; chi nen chay hardening gates + shell smoke tren public contract hien co.
+  - Decision: xem `cng-1wj.10` da dat muc tieu wave B bang facade extraction tang dan, khong big-bang rewrite `store.js`.
+  - Next: claim `cng-1wj.11`, chay full hardening gates (lint/test/playwright shell smoke), va cap nhat rollout/handoff notes cho frontend modernization track.
 
 - Checkpoint 18 (ad hoc GitNexus upgrade for repo usage):
   - Done: xac minh `npx gitnexus --version` dang dung cache cu `1.4.8`, trong khi `codex mcp list` da tro toi `cmd /c npx -y gitnexus@latest mcp`; cap nhat `package.json` (`gitnexus:analyze`, `gitnexus:serve`) va `scripts/gitnexus-refresh.mjs` de buoc repo dung `npx -y gitnexus@latest`, chinh test `tests/gitnexus-refresh.test.js` theo invocation moi, va dong bo huong dan trong `AGENTS.md`/`CLAUDE.md` sang `pnpm run gitnexus:analyze` + direct-call fallback `npx -y gitnexus@latest ...`.
@@ -219,14 +227,14 @@
 
 ## Handoff
 
-- Done: frontend modernization da ship den het wave A; beads `cng-1wj.3..cng-1wj.9` da close, va wave B da tach xong 2 slices dau tien khoi `store.js`: `src/lib/reportSchedules.js` va `src/lib/importColumnConfig.js`.
+- Done: frontend modernization da ship xong wave B; beads `cng-1wj.3..cng-1wj.10` da close, va `store.js` da tach 3 slices ra module rieng: `src/lib/reportSchedules.js`, `src/lib/importColumnConfig.js`, va `src/lib/kpiAdjustments.js`.
 - Verify:
-  - `pnpm exec vitest run tests/importColumnConfig.test.js tests/reportSchedules.test.js tests/store.test.js tests/useDataImporterColumnConfig.test.jsx --environment jsdom`
-  - `pnpm exec eslint src/lib/importColumnConfig.js src/lib/reportSchedules.js src/lib/store.js tests/importColumnConfig.test.js tests/reportSchedules.test.js`
+  - `pnpm exec vitest run tests/kpiAdjustmentsStore.test.js tests/store.test.js tests/kpiAdjustments.test.jsx tests/kpiAdjustments.hooks.test.jsx tests/automation.flows.test.js --environment jsdom`
+  - `pnpm exec eslint src/lib/kpiAdjustments.js src/lib/store.js tests/kpiAdjustmentsStore.test.js`
   - `pnpm bd:check`
-- Risk: `store.js` da nho them 2 slices nhung KPI adjustments helper graph van `HIGH/CRITICAL`; turn sau can khoanh mot slice hep hon thay vi tach ca cum adjustment/settings.
-- Decision: giu `cng-1wj.10` o `in_progress`, xem report schedule extraction la moc khoi dong wave B thay vi dong bead qua som.
-- Next: tiep tuc tu `cng-1wj.10`, uu tien chon mot slice `LOW`/`MEDIUM` tiep theo cho import-health runtime state; neu quay lai KPI adjustments thi phai impact-gate tung symbol va giu facade contract rat chat.
+- Risk: wave B da hoan tat nhung phase hardening chua chay het full matrix (`Playwright shell smoke`, regression paths reporting/import/adjustments/health), nen track chua the dong.
+- Decision: chuyen active slice sang `cng-1wj.11`; dung lai sau wave B de giu scope commit nho va de hardening co mot gate rieng.
+- Next: tiep tuc tu `cng-1wj.11`, chay full hardening gates va reconcile rollout notes truoc khi xem track `cng-1wj` la complete.
 
 - Done: da chot trang thai dong cho cutover package docs; `v4-cutover-execution-board.md` la 100% complete trong repo scope va cac tai lieu lien quan da duoc archive/cap nhat dong bo.
 - Verify:
@@ -1142,14 +1150,14 @@
 
 ## Next Suggested Slice
 
-- Title: cng-1wj.10 / state extraction wave b
-- Bead: cng-1wj.10
-- Status: in_progress
+- Title: cng-1wj.11 / modernization regression hardening
+- Bead: cng-1wj.11
+- Status: open
 - Follow-up backlog:
-  - tach reporting filters + presets khoi `store.js` thanh domain selectors/hooks nho
-  - tach import / adjustments / health state theo tung cum, giu compatibility layer de khong big-bang rewrite
-  - moi domain migrate xong phai co unit/integration tests di kem truoc khi move tiep
-  - sau khi wave B xanh, chuyen sang `cng-1wj.11` de chay regression hardening (eslint/vitest/playwright/bd check)
+  - chay full hardening matrix cho shell/navigation/dashboard/command center/workflow guide/adjustments/import/reporting
+  - rerun `pnpm bd:check`, lint/test gates, va Playwright shell smoke tren worktree sau wave B
+  - dung `gitnexus_detect_changes(scope=all)` de xac nhan blast radius chi nam trong modernization track truoc commit tiep theo
+  - cap nhat rollout/handoff notes de co the dong epic `cng-1wj` sau khi hardening xanh
 
 ## Verification
 

@@ -43,6 +43,7 @@ Reconciliation note:
 - Reconciled again on 2026-04-02 after opening frontend modernization epic `cng-1wj`; phase chain `cng-1wj.1..cng-1wj.11` now tracks the full shell/state modernization plan.
 - Reconciled again on 2026-04-02 after completing phase-0 freeze/design (`cng-1wj.1`, `cng-1wj.2`); source brief `docs/opus-review-v2-modernization-brief-2026-04-02.md` is now the shell/state phase-0 reference, and `cng-1wj.3` is the active shell navigation slice.
 - Reconciled again on 2026-04-02 after shipping shell/dashboard/command-center/workflow-guide/async primitives plus wave A state extraction; `cng-1wj.3..cng-1wj.9` are closed, and next ready slice is `cng-1wj.10`.
+- Reconciled again on 2026-04-02 after completing `cng-1wj.10`; wave B now extracts report schedules, import column config, and KPI adjustments into dedicated modules, and `cng-1wj.11` is the next ready hardening slice.
 
 Rule:
 - Every unfinished item from review notes, rollout plans, decomposition plans, or UX backlogs must be in one of two states:
@@ -53,7 +54,7 @@ Current open epics:
 - `cng-1wj` - frontend-modernization-shell-state
 
 Current highest-priority ready items:
-- `cng-1wj.10` - state-extraction-wave-b
+- `cng-1wj.11` - modernization-regression-hardening
 
 ## Frontend Modernization Shell/State
 
@@ -69,7 +70,7 @@ Source set: `Opus_review_v2.md`, Stitch design deliverables, `task.md`
 - `cng-1wj.7` - workflow-guide-stateful-panel (closed)
 - `cng-1wj.8` - shell-loading-empty-error-primitives (closed)
 - `cng-1wj.9` - state-extraction-wave-a (closed; shell navigation, command center, dashboard summary moved to dedicated hooks/selectors)
-- `cng-1wj.10` - state-extraction-wave-b (open; depends on `cng-1wj.9`)
+- `cng-1wj.10` - state-extraction-wave-b (closed; report schedules, import column config, and KPI adjustments extracted behind `store.js` facades)
 - `cng-1wj.11` - modernization-regression-hardening (open; depends on `cng-1wj.10`)
 
 ## Hard-gate Cutover Program
