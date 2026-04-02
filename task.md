@@ -11,7 +11,7 @@
 
 ## Active Slice
 
--- Title: ad hoc / broader sync regression repair (storageClient + auth proxy base)
+-- Title: ad hoc / dev backend stale dist guard for shared-sync bootstrap
 -- Status: completed
 -- Last updated: 2026-04-02
 
@@ -32,6 +32,13 @@
 | cng-0s2.1 | Runtime smoke + closure/reconcile | `pnpm run test:playwright:runtime`, `pnpm bd:check` | done | `pnpm exec vitest run tests/auth.test.jsx tests/dataImporterShellProps.test.js tests/dataImporterFileActions.test.jsx tests/reportingScopeSections.test.jsx --environment jsdom`; `pnpm exec vitest run tests/server-v4/appShell.test.js tests/server.api.test.js --environment node`; `pnpm run test:playwright:runtime`; `pnpm exec eslint src/auth/localAuth.js src/components/ReportViewer.jsx src/components/dataImporter/importGate.js src/components/dataImporter/DataImporterFileActions.jsx src/components/dataImporter/dataImporterShellProps.js src/components/dataImporter/useDataImporterImportFlow.js src/components/dataImporter/useDataImporterWorkflowSession.js src/components/reporting/reportingExportState.js src/components/reporting/useReportViewerActions.js src/components/reporting/ReportingStaffSection.jsx src/components/reporting/ReportingTeamSection.jsx src/components/reporting/StaffDetailCard.jsx src/components/reporting/TeamDetailCard.jsx tests/helpers/mockApiState.js tests/auth.test.jsx tests/dataImporterImportGate.test.js tests/dataImporterShellProps.test.js tests/dataImporterFileActions.test.jsx tests/useDataImporterImportFlow.test.jsx tests/reportingExportState.test.js tests/reportingScopeSections.test.jsx tests/useReportViewerActions.test.jsx`; `pnpm bd:check` |
 
 ## Checkpoint Log
+
+- Checkpoint 17 (ad hoc dev backend stale dist guard):
+  - Done: xac dinh banner `HTTP 404 Not Found` o dev khong do route source bi mat ma do `pnpm server` dang nap `dist/server-v4` cu; them helper `scripts/server-v4-build-sync.mjs` de check canary compiled outputs (`index.js`, `app/build-v4-app.js`, `app/shared-sync/sharedSyncRoutes.js`) va auto-chay `pnpm build:server-v4` trong `scripts/start-backend.mjs` khi dist thieu/stale.
+  - Verify: `pnpm exec vitest run tests/serverV4BuildSync.test.js tests/appsApiStartServer.test.js tests/appsApiStart.test.js --environment node`; `pnpm exec eslint scripts/start-backend.mjs scripts/server-v4-build-sync.mjs tests/serverV4BuildSync.test.js`.
+  - Risk: startup dev lan dau sau khi source `server-v4` thay doi se ton them thoi gian build; production path van skip guard nay de tranh side effect ngoai y muon.
+  - Decision: fix dung o startup workflow, khong mo rong sua client/shared-sync runtime vi source route da dung.
+  - Next: user retest `pnpm server` + reload app dev; neu banner bien mat thi khong can mo bead moi.
 
 - Checkpoint 16 (ad hoc broader sync regression repair):
   - Done: sua `src/lib/storageClient.js` de cho phep remote sync khi `baseUrl` rong trong node/test va giu uu tien internal proxy cho shared-sync bootstrap, dong thoi sua `src/auth/localAuth.js` de `fetchWithAuth` khong rebuild absolute dev base trong `MODE=test` cho nhung request da duoc route qua proxy noi bo.

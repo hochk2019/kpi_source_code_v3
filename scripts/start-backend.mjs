@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { existsSync } from 'node:fs';
 import { resolveBackendEntrypointPlan } from '../apps/api/src/backendEntrypointPlan.js';
+import { ensureServerV4BuildSynced } from './server-v4-build-sync.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -181,6 +182,7 @@ async function startServer() {
   const { flags, passthrough } = extractFlags(args);
   const forceRebuild = flags.has('rebuild');
   const production = flags.has('production');
+  const repoRoot = resolve(__dirname, '..');
 
   if (production) {
     process.env.NODE_ENV = 'production';
@@ -206,9 +208,17 @@ async function startServer() {
     process.exit(1);
   }
 
+  await ensureServerV4BuildSynced({
+    projectRoot: repoRoot,
+    skip: production,
+    build: async () => {
+      const { command, args } = resolvePnpmCommand();
+      await run(command, [...args, 'build:server-v4'], { cwd: repoRoot });
+    },
+  });
+
   await ensureBetterSqlite3({ forceRebuild });
 
-  const repoRoot = resolve(__dirname, '..');
   const entrypointPlan = resolveBackendEntrypointPlan({
     envMode: process.env.KPI_API_ENTRYPOINT_MODE,
     rootDir: repoRoot,
