@@ -720,15 +720,15 @@ describe('storageClient remote đồng bộ lại khi server lên trễ', () => 
 
 
 
-    const remoteDisabled = await waitForCondition(() => !getSyncStatus().remoteEnabled);
+    const writeBackoffScheduled = await waitForCondition(() => getSyncStatus().nextRetryAt !== null);
 
-    expect(remoteDisabled).toBe(true);
+    expect(writeBackoffScheduled).toBe(true);
 
 
 
     const statusAfterFailure = getSyncStatus();
 
-    expect(statusAfterFailure.remoteEnabled).toBe(false);
+    expect(statusAfterFailure.remoteEnabled).toBe(true);
 
     expect(statusAfterFailure.pendingWrites).toBe(1);
 
@@ -846,13 +846,14 @@ describe('storageClient remote đồng bộ lại khi server lên trễ', () => 
 
     releaseFirstWrite?.();
 
-    const remoteDisabled = await waitForCondition(() => !getSyncStatus().remoteEnabled);
+    const writeBackoffScheduled = await waitForCondition(() => getSyncStatus().nextRetryAt !== null);
 
-    expect(remoteDisabled).toBe(true);
+    expect(writeBackoffScheduled).toBe(true);
 
     const statusAfterFailure = getSyncStatus();
 
     expect(statusAfterFailure.pendingWrites).toBe(1);
+    expect(statusAfterFailure.remoteEnabled).toBe(true);
 
     expect(statusAfterFailure.lastRollback).toMatchObject({
 
@@ -873,6 +874,73 @@ describe('storageClient remote đồng bộ lại khi server lên trễ', () => 
     const replayedPayload = JSON.parse(storageWrites[1].body);
 
     expect(replayedPayload.value).toBe(secondPayload);
+
+  });
+
+  it('giu read path hoat dong khi write retryable that bai', async () => {
+
+    let writeAttempts = 0;
+
+    const fetchMock = vi.fn(async (input, init) => {
+
+      const method = (init?.method || 'GET').toUpperCase();
+
+      const url = typeof input === 'string' ? input : input?.url ?? '';
+
+      if (url.includes('/api/v4/shared-sync/bootstrap')) {
+
+        return createBootstrapResponse({ decl_rows_v1: '[]' });
+
+      }
+
+      if (url.includes('/api/v4/shared-sync/storage/decl_rows_v1') && method === 'PUT') {
+
+        writeAttempts += 1;
+        throw new Error('lan write mat ket noi');
+
+      }
+
+      if (url.includes('/api/v4/shared-sync/storage/decl_rows_v1') && method === 'GET') {
+
+        return {
+
+          ok: true,
+
+          status: 200,
+
+          json: async () => ({
+            value: [{ so_tk: 'SERVER-READ-STILL-OK' }],
+            raw: JSON.stringify([{ so_tk: 'SERVER-READ-STILL-OK' }]),
+          }),
+
+        };
+
+      }
+
+      return { ok: true, json: async () => ({ ok: true }) };
+
+    });
+
+    vi.stubGlobal('fetch', fetchMock);
+
+    const initial = await initSharedStorage({ baseUrl: '' });
+
+    expect(initial).toBe(true);
+
+    sharedSetItem('decl_rows_v1', JSON.stringify([{ so_tk: 'LOCAL-PENDING-WRITE' }]));
+
+    const writeBackoffScheduled = await waitForCondition(() => getSyncStatus().nextRetryAt !== null);
+
+    expect(writeBackoffScheduled).toBe(true);
+    expect(getSyncStatus().remoteEnabled).toBe(true);
+    expect(getSyncStatus().pendingWrites).toBe(1);
+
+    const refreshed = await refreshSharedKeys(['decl_rows_v1']);
+
+    expect(refreshed.decl_rows_v1).toEqual([{ so_tk: 'SERVER-READ-STILL-OK' }]);
+    expect(sharedGetItem('decl_rows_v1')).toBe(JSON.stringify([{ so_tk: 'SERVER-READ-STILL-OK' }]));
+    expect(getSyncStatus().remoteEnabled).toBe(true);
+    expect(writeAttempts).toBe(1);
 
   });
 
@@ -1283,5 +1351,6 @@ describe('storageClient giới hạn dung lượng khi backend trả về 413', 
   });
 
 });
+
 
 

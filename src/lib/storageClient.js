@@ -298,6 +298,7 @@ const pendingWrites = new Map();
 let flushPromise = null;
 
 let retryTimer = null;
+let writeRetryTimer = null;
 
 const RETRY_MIN_MS = 500;
 
@@ -313,8 +314,10 @@ let lastSyncErrorHint = '';
 let lastSyncErrorRetryable = true;
 
 let nextRetryAt = null;
+let nextWriteRetryAt = null;
 let lastRollbackInfo = null;
 let consecutiveRefreshFailures = 0;
+let writeRetryDelayMs = RETRY_MIN_MS;
 
 
 
@@ -397,6 +400,7 @@ function notify(key) {
 
 
 function createSyncSnapshot() {
+  const retryState = getNextRetryState();
 
   return {
 
@@ -404,16 +408,17 @@ function createSyncSnapshot() {
 
     pendingWrites: pendingWrites.size,
 
-    waitingForBackend: pendingWrites.size > 0 && !remoteEnabled,
+    waitingForBackend:
+      pendingWrites.size > 0 && (!remoteEnabled || hasPendingWriteRetry() || !lastSyncErrorRetryable),
 
     lastError: lastSyncError,
     lastErrorCode: lastSyncErrorCode,
     lastErrorHint: lastSyncErrorHint,
     lastErrorRetryable: lastSyncErrorRetryable,
 
-    retryDelayMs,
+    retryDelayMs: retryState.delayMs,
 
-    nextRetryAt,
+    nextRetryAt: retryState.at,
     lastRollback: lastRollbackInfo,
 
   };
@@ -430,6 +435,51 @@ function emitSyncStatus() {
 
   return pendingSyncSnapshot;
 
+}
+
+function getNextRetryState() {
+  if (nextRetryAt === null && nextWriteRetryAt === null) {
+    return {
+      at: null,
+      delayMs: retryDelayMs,
+    };
+  }
+
+  if (nextRetryAt === null) {
+    return {
+      at: nextWriteRetryAt,
+      delayMs: writeRetryDelayMs,
+    };
+  }
+
+  if (nextWriteRetryAt === null || nextRetryAt <= nextWriteRetryAt) {
+    return {
+      at: nextRetryAt,
+      delayMs: retryDelayMs,
+    };
+  }
+
+  return {
+    at: nextWriteRetryAt,
+    delayMs: writeRetryDelayMs,
+  };
+}
+
+function hasPendingWriteRetry() {
+  return writeRetryTimer !== null || nextWriteRetryAt !== null;
+}
+
+function clearWriteRetryState(options = {}) {
+  if (writeRetryTimer) {
+    clearTimeout(writeRetryTimer);
+    writeRetryTimer = null;
+  }
+
+  nextWriteRetryAt = null;
+
+  if (options.resetDelay === true) {
+    writeRetryDelayMs = RETRY_MIN_MS;
+  }
 }
 
 
@@ -642,13 +692,74 @@ function scheduleRetry() {
 
 }
 
+function scheduleWriteRetry() {
+
+  if (writeRetryTimer || typeof fetch !== 'function') {
+
+    return;
+
+  }
+
+  const base = typeof apiBase === 'string' ? apiBase : '';
+
+  if (!canUseRemoteSync(base) || !lastSyncErrorRetryable) {
+
+    nextWriteRetryAt = null;
+
+    emitSyncStatus();
+
+    return;
+
+  }
+
+  nextWriteRetryAt = Date.now() + writeRetryDelayMs;
+
+  emitSyncStatus();
+
+  writeRetryTimer = setTimeout(async () => {
+
+    writeRetryTimer = null;
+
+    nextWriteRetryAt = null;
+
+    emitSyncStatus();
+
+    try {
+
+      if (!remoteEnabled) {
+
+        await bootstrapFromServer(base);
+
+      } else {
+
+        await flushPending();
+
+      }
+
+    } catch (err) {
+
+      console.warn('Không thể thử lại đồng bộ ghi dữ liệu chia sẻ', err);
+
+    }
+
+    emitSyncStatus();
+
+  }, writeRetryDelayMs);
+
+}
+
 
 
 
 
 async function flushPending() {
 
-  if (flushPromise || pendingWrites.size === 0 || typeof fetch !== 'function') {
+  if (
+    flushPromise ||
+    pendingWrites.size === 0 ||
+    typeof fetch !== 'function' ||
+    hasPendingWriteRetry()
+  ) {
 
     return flushPromise;
 
@@ -682,6 +793,7 @@ async function flushPending() {
 
         await sendWrite(base, key, value);
         lastRollbackInfo = null;
+        clearWriteRetryState({ resetDelay: true });
         clearSyncErrorState();
 
         emitSyncStatus();
@@ -700,21 +812,27 @@ async function flushPending() {
           restoredPreviousValue: !hasNewerPendingValue,
         };
 
-        remoteEnabled = false;
-
         const normalized = setSyncErrorState(err, {
           defaultMessage: 'Không thể kết nối backend đồng bộ.',
         });
-        if (normalized.retryable) {
-          retryDelayMs = Math.min(Math.max(Math.floor(retryDelayMs * 1.5), RETRY_MIN_MS), RETRY_MAX_MS);
-        } else {
+
+        if (normalized.code === 'auth_required') {
+          remoteEnabled = false;
+          clearWriteRetryState({ resetDelay: true });
           retryDelayMs = RETRY_MIN_MS;
+        } else if (normalized.retryable) {
+          writeRetryDelayMs = Math.min(
+            Math.max(Math.floor(writeRetryDelayMs * 1.5), RETRY_MIN_MS),
+            RETRY_MAX_MS,
+          );
+        } else {
+          clearWriteRetryState({ resetDelay: true });
         }
 
         emitSyncStatus();
 
-        if (normalized.retryable) {
-          scheduleRetry();
+        if (normalized.retryable && normalized.code !== 'auth_required') {
+          scheduleWriteRetry();
         }
 
         break;
@@ -921,6 +1039,12 @@ function queueSync(key, value) {
   if (!remoteEnabled) {
 
     scheduleRetry();
+
+    return;
+
+  }
+
+  if (hasPendingWriteRetry()) {
 
     return;
 
@@ -1226,7 +1350,7 @@ export async function waitForSharedWrites(options = {}) {
 
     }
 
-    if (!remoteEnabled) {
+    if (!remoteEnabled || !lastSyncErrorRetryable) {
 
       break;
 
@@ -1330,6 +1454,8 @@ export function resetStorageClientForTests() {
 
   }
 
+  clearWriteRetryState({ resetDelay: true });
+
   cache.clear();
 
   pendingWrites.clear();
@@ -1343,10 +1469,12 @@ export function resetStorageClientForTests() {
   flushPromise = null;
 
   retryDelayMs = RETRY_MIN_MS;
+  writeRetryDelayMs = RETRY_MIN_MS;
 
   clearSyncErrorState();
 
   nextRetryAt = null;
+  nextWriteRetryAt = null;
   lastRollbackInfo = null;
 
   pendingSyncSnapshot = null;

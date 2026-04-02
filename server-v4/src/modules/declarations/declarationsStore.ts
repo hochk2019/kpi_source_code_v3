@@ -96,6 +96,16 @@ export type DeclarationStoreTarget = {
   current: Record<string, unknown>;
 };
 
+export type DeclarationBatchPatchEntry = {
+  target: DeclarationStoreTarget;
+  normalizedPatch: NormalizedDeclarationPatch;
+};
+
+export type DeclarationBatchPatchResult = {
+  key: string;
+  nextRecord: Record<string, unknown>;
+};
+
 export type DeclarationImportRange = {
   from: string;
   to: string;
@@ -129,6 +139,10 @@ export interface DeclarationsStore {
     normalizedPatch: NormalizedDeclarationPatch,
     actor: DeclarationActor,
   ): Promise<Record<string, unknown>>;
+  patchDeclarationsBatch?(
+    entries: readonly DeclarationBatchPatchEntry[],
+    actor: DeclarationActor,
+  ): Promise<DeclarationBatchPatchResult[]>;
   commitImportedDeclarations(input: DeclarationImportCommitInput): Promise<void>;
   listDeclarationEvents(target: DeclarationStoreTarget): Promise<DeclarationEventRecord[]>;
   listDeletedDeclarations(filters?: DeletedDeclarationFilters): Promise<DeletedDeclarationRecord[]>;

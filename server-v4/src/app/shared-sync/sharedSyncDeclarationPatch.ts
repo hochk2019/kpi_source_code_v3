@@ -3,7 +3,10 @@ import {
   createDeclarationRowKey,
   normalizeDeclarationPatch,
   type DeclarationActor,
+  type DeclarationBatchPatchEntry,
+  type DeclarationBatchPatchResult,
   type DeclarationStoreTarget,
+  type DeclarationsStore,
 } from '../../modules/declarations/declarationsStore.js';
 
 type SharedSyncDeclarationUpdate = {
@@ -38,6 +41,7 @@ export async function patchSharedSyncDeclarations(
 
   let updated = 0;
   const skippedKeys: string[] = [];
+  const patchEntries: DeclarationBatchPatchEntry[] = [];
 
   for (const entry of Array.isArray(updates) ? updates : []) {
     const key = typeof entry?.key === 'string' ? entry.key.trim() : '';
@@ -61,14 +65,43 @@ export async function patchSharedSyncDeclarations(
       continue;
     }
 
-    const target = buildDeclarationTarget(key, current);
-    const nextRecord = await persistence.declarationsStore.patchDeclaration(
-      target,
+    patchEntries.push({
+      target: buildDeclarationTarget(key, current),
       normalizedPatch,
-      actor,
-    );
-    rowsByKey.set(key, nextRecord);
-    updated += 1;
+    });
+  }
+
+  if (patchEntries.length === 0) {
+    return {
+      updated,
+      totalStored: rows.length,
+      skippedKeys,
+    };
+  }
+
+  const store = persistence.declarationsStore as DeclarationsStore & {
+    patchDeclarationsBatch?: (
+      entries: readonly DeclarationBatchPatchEntry[],
+      actor: DeclarationActor,
+    ) => Promise<DeclarationBatchPatchResult[]>;
+  };
+
+  if (typeof store.patchDeclarationsBatch === 'function') {
+    const batchResults = await store.patchDeclarationsBatch(patchEntries, actor);
+    for (const result of Array.isArray(batchResults) ? batchResults : []) {
+      rowsByKey.set(result.key, result.nextRecord);
+      updated += 1;
+    }
+  } else {
+    for (const entry of patchEntries) {
+      const nextRecord = await persistence.declarationsStore.patchDeclaration(
+        entry.target,
+        entry.normalizedPatch,
+        actor,
+      );
+      rowsByKey.set(entry.target.key, nextRecord);
+      updated += 1;
+    }
   }
 
   return {

@@ -26,6 +26,8 @@ import {
 } from './ecusSyncConfig.js';
 import {
   applyDeclarationPatch,
+  type DeclarationBatchPatchEntry,
+  type DeclarationBatchPatchResult,
   buildDeclarationDeletionEvent,
   buildDeclarationUpdateEvent,
   cloneDeclarationRecord,
@@ -81,6 +83,74 @@ type StoredDeletedDeclarationEntry = {
 
 export class SqliteDeclarationsStore implements DeclarationsStore {
   constructor(private readonly dbFile: string) {}
+
+  async patchDeclarationsBatch(
+    entries: readonly DeclarationBatchPatchEntry[],
+    actor: DeclarationActor,
+  ): Promise<DeclarationBatchPatchResult[]> {
+    return this.withDatabase((database) => {
+      const patchEntries = Array.isArray(entries) ? entries : [];
+      if (patchEntries.length === 0) {
+        return [];
+      }
+
+      const rows = this.readRows(database);
+      const rowIndexByKey = new Map<string, number>();
+      rows.forEach((row, index) => {
+        const key = createDeclarationRowKey(row.so_tk, row.nhanh ?? row.branch);
+        if (key) {
+          rowIndexByKey.set(key, index);
+        }
+      });
+
+      const historyEntries: Array<{
+        target: DeclarationStoreTarget;
+        updatedAt: string;
+        changes: DeclarationHistoryChange[];
+      }> = [];
+      const results: DeclarationBatchPatchResult[] = [];
+
+      for (const entry of patchEntries) {
+        const index = rowIndexByKey.get(entry.target.key);
+        if (index === undefined) {
+          throw new Error(`Declaration ${entry.target.key} is not available in the SQLite compatibility store.`);
+        }
+
+        const currentRow = cloneDeclarationRecord(rows[index]);
+        const result = applyDeclarationPatch(currentRow, entry.normalizedPatch);
+        const nextRow = cloneDeclarationRecord(result.nextRecord);
+        rows[index] = nextRow;
+
+        if (result.historyChanges.length > 0) {
+          historyEntries.push({
+            target: entry.target,
+            updatedAt: `${nextRow.updatedAt ?? new Date().toISOString()}`,
+            changes: result.historyChanges,
+          });
+        }
+
+        results.push({
+          key: entry.target.key,
+          nextRecord: cloneDeclarationRecord(nextRow),
+        });
+      }
+
+      writeDeclarationRowsSnapshot(database, rows);
+      this.writeStoredRows(database, rows);
+
+      for (const entry of historyEntries) {
+        this.appendHistoryEntry(
+          database,
+          entry.target,
+          entry.updatedAt,
+          actor.username,
+          entry.changes,
+        );
+      }
+
+      return results;
+    });
+  }
 
   async patchDeclaration(
     target: DeclarationStoreTarget,

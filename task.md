@@ -5,16 +5,14 @@
 - Source of truth cho tat ca viec chua xong hien tai la `docs/open-backlog.md`.
 - Da reconcile ngay 2026-04-02 voi bead epic `cng-yn6` cho lane sync latency/disconnect refactor.
 - Open epics hien tai:
-  - `cng-yn6` - sync latency/disconnect refactor
+  - none
 - Highest-priority ready items hien tai:
-  - `cng-yn6.5` - optimize persistence hot path
-  - `cng-yn6.6` - verify contract, regression, and perf
+  - none (`pnpm bd:safe -- ready` -> `No open issues`)
 
 ## Active Slice
 
--- Title: cng-yn6.4 / SYNC-4 isolate sync failures and LAN retry policy
--- Bead: cng-yn6.4
--- Status: in_progress
+-- Title: cng-yn6 / sync lane complete
+-- Status: completed
 -- Last updated: 2026-04-02
 
 ## Sync Notebook
@@ -22,7 +20,7 @@
 - Goal: khoa lane refactor browser-backend sync theo thu tu `instrumentation -> canonical contract -> client migration -> failure isolation -> persistence optimization -> verification`.
 - Files In Scope: `task.md`, `docs/open-backlog.md`, `server-v4/src/app/build-v4-app.ts`, `server-v4/src/app/legacy-compat/*`, `src/lib/storageClient.js`, `src/lib/apiContractScanner.js`, sync/perf tests lien quan.
 - Verify: moi slice phai co targeted tests + lint/contract gate tuong ung truoc khi chuyen slice; khong nhan hoan tat neu `task.md` va bead state lech nhau.
-- Handoff: neu context bi nen/reset, bat dau lai bang `task.md` + bead epic `cng-yn6`; tiep tuc tu `cng-yn6.4`, khong suy luan tu tri nho hoi thoai.
+- Handoff: neu context bi nen/reset, bat dau lai bang `task.md`; lane `cng-yn6` da close hoan toan, va hien `bd ready` tra ve `No open issues`, khong suy luan tu tri nho hoi thoai.
 
 ## Execution Matrix
 
@@ -34,6 +32,27 @@
 | cng-0s2.1 | Runtime smoke + closure/reconcile | `pnpm run test:playwright:runtime`, `pnpm bd:check` | done | `pnpm exec vitest run tests/auth.test.jsx tests/dataImporterShellProps.test.js tests/dataImporterFileActions.test.jsx tests/reportingScopeSections.test.jsx --environment jsdom`; `pnpm exec vitest run tests/server-v4/appShell.test.js tests/server.api.test.js --environment node`; `pnpm run test:playwright:runtime`; `pnpm exec eslint src/auth/localAuth.js src/components/ReportViewer.jsx src/components/dataImporter/importGate.js src/components/dataImporter/DataImporterFileActions.jsx src/components/dataImporter/dataImporterShellProps.js src/components/dataImporter/useDataImporterImportFlow.js src/components/dataImporter/useDataImporterWorkflowSession.js src/components/reporting/reportingExportState.js src/components/reporting/useReportViewerActions.js src/components/reporting/ReportingStaffSection.jsx src/components/reporting/ReportingTeamSection.jsx src/components/reporting/StaffDetailCard.jsx src/components/reporting/TeamDetailCard.jsx tests/helpers/mockApiState.js tests/auth.test.jsx tests/dataImporterImportGate.test.js tests/dataImporterShellProps.test.js tests/dataImporterFileActions.test.jsx tests/useDataImporterImportFlow.test.jsx tests/reportingExportState.test.js tests/reportingScopeSections.test.jsx tests/useReportViewerActions.test.jsx`; `pnpm bd:check` |
 
 ## Checkpoint Log
+
+- Checkpoint 14 (SYNC-6 final verification + epic closure):
+  - Done: chay verify bundle cuoi cho toan lane `cng-yn6`, close `cng-yn6.5`, close `cng-yn6.6`, va close epic `cng-yn6`; `bd ready` hien khong con issue mo.
+  - Verify: `pnpm exec vitest run tests/storageClient.test.js tests/store.test.js`; `pnpm exec vitest run tests/apiContractScanner.test.js tests/server-v4/sharedSyncRoutes.test.js tests/server-v4/sharedSyncDeclarationPatch.test.js tests/server-v4/declarationsStore.test.js tests/server-v4/postgresDeclarationsRoute.test.js --environment node`; `pnpm exec eslint src/lib/storageClient.js server-v4/src/app/shared-sync/sharedSyncDeclarationPatch.ts server-v4/src/modules/declarations/declarationsStore.ts server-v4/src/modules/declarations/sqliteDeclarationsStore.ts tests/storageClient.test.js tests/server-v4/sharedSyncDeclarationPatch.test.js tests/server-v4/sharedSyncRoutes.test.js`; `pnpm bd:check`; `gitnexus_detect_changes(scope=all)`.
+  - Risk: `gitnexus_detect_changes()` van bao `CRITICAL` vi diff chua commit gom `storageClient.js` hot path + declarations store/shared-sync helper + tracker docs; pham vi nay khop dung lane `cng-yn6` vua hoan tat.
+  - Decision: xem `cng-yn6` da complete; buoc con lai chi la commit diff hien tai theo yeu cau nguoi dung.
+  - Next: tao commit cho phan failure isolation + persistence hot path, sau do handoff rang repo khong con bead mo.
+
+- Checkpoint 13 (SYNC-5 persistence hot path optimized):
+  - Done: them batch-capable path optional cho `DeclarationsStore`, implement batch patch trong `SqliteDeclarationsStore`, va cho `patchSharedSyncDeclarations` uu tien batch mode de PATCH nhieu row khong con read/write full snapshot N lan.
+  - Verify: `pnpm exec vitest run tests/server-v4/sharedSyncDeclarationPatch.test.js tests/server-v4/sharedSyncRoutes.test.js --environment node`; `pnpm exec vitest run tests/server-v4/declarationsStore.test.js tests/server-v4/postgresDeclarationsRoute.test.js --environment node`; `pnpm exec eslint server-v4/src/app/shared-sync/sharedSyncDeclarationPatch.ts server-v4/src/modules/declarations/declarationsStore.ts server-v4/src/modules/declarations/sqliteDeclarationsStore.ts tests/server-v4/sharedSyncDeclarationPatch.test.js`.
+  - Risk: batch optimization hien chi duoc bat tren SQLite compatibility store; Postgres van fallback per-row de tranh mo rong blast radius khi chua co nhu cau/perf harness rieng.
+  - Decision: du scope cho `cng-yn6.5`; defer benchmark so lieu thuc te ve bead verify cuoi cung thay vi tao infra perf moi trong lane nay.
+  - Next: chay verification bundle cuoi + close lane `cng-yn6`.
+
+- Checkpoint 12 (SYNC-4 failure isolation closed):
+  - Done: tach retry state read/write trong `src/lib/storageClient.js`, giu remote read path song song voi write backoff, khong hard-disable `remoteEnabled` cho write failure retryable, va bo sung regression test cho rollback + read-path survival.
+  - Verify: `pnpm exec vitest run tests/storageClient.test.js tests/store.test.js`; `pnpm exec eslint src/lib/storageClient.js tests/storageClient.test.js`.
+  - Risk: `tests/store.test.js` van in console error expected khi mock tra invalid sync response; day la noise hop le trong regression suite, khong phai test fail.
+  - Decision: xem `cng-yn6.4` da dat muc tieu; chuyen active slice sang `cng-yn6.5` de toi uu hot path persistence phia server.
+  - Next: impact analysis + toi uu `server-v4/src/app/shared-sync/sharedSyncDeclarationPatch.ts` va test regression/perf cho declaration patch path.
 
 - Checkpoint 11 (sync baseline + canonical contract complete):
   - Done: mount `/api/v4/shared-sync` vao `buildV4App`, migrate `src/lib/storageClient.js` sang canonical bootstrap/storage/declarations endpoints, bo sung partial-refresh regression va test route canonical `tests/server-v4/sharedSyncRoutes.test.js`.

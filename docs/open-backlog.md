@@ -46,11 +46,10 @@ Rule:
 - explicitly marked deferred or removed in its source document
 
 Current open epics:
-- `cng-yn6` - Sync-latency-refactor.
+- none.
 
 Current highest-priority ready items:
-- `cng-yn6.5` - SYNC-5-optimize-persistence-hot-path.
-- `cng-yn6.6` - SYNC-6-verify-contract-regression-perf.
+- none.
 
 ## Hard-gate Cutover Program
 
@@ -93,9 +92,9 @@ Source set: user latency/disconnect investigation, `task.md`
 - `cng-yn6.1` - SYNC-1 notebook and baseline (closed)
 - `cng-yn6.2` - SYNC-2 canonical shared-sync server-v4 routes (closed)
 - `cng-yn6.3` - SYNC-3 migrate storage client to canonical shared-sync API (closed)
-- `cng-yn6.4` - SYNC-4 isolate sync failures and LAN retry policy (in_progress)
-- `cng-yn6.5` - SYNC-5 optimize persistence hot path (open)
-- `cng-yn6.6` - SYNC-6 verify contract, regression, and perf (open)
+- `cng-yn6.4` - SYNC-4 isolate sync failures and LAN retry policy (closed)
+- `cng-yn6.5` - SYNC-5 optimize persistence hot path (closed)
+- `cng-yn6.6` - SYNC-6 verify contract, regression, and perf (closed)
 
 ## UX Improvement Backlog
 
