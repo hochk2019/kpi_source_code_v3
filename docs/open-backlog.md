@@ -39,6 +39,7 @@ Reconciliation note:
 - Reconciled again on 2026-04-01 after closing `cng-m2r.6` and epic `cng-m2r`; UAT smoke + cutover preflight with `--with-uat-smoke` are green, repository cutover board is fully closed, and there are no open beads.
 - Reconciled again on 2026-04-02 after opening sync refactor epic `cng-yn6` with child slices `cng-yn6.1..cng-yn6.6`; `cng-yn6.1` is in progress and `task.md` now carries the canonical session notebook for this lane.
 - Reconciled again on 2026-04-02 after completing `cng-yn6.1`, `cng-yn6.2`, and `cng-yn6.3`; canonical `/api/v4/shared-sync/*` routes plus storage-client migration are shipped, and next ready work moves to failure isolation + persistence hot path.
+- Reconciled again on 2026-04-02 after closing late cleanup bead `cng-yn6.7`; SQLite declarations now persist through canonical live rows with targeted regression tests, so sync lane `cng-yn6` is fully closed again and there are no open beads.
 
 Rule:
 - Every unfinished item from review notes, rollout plans, decomposition plans, or UX backlogs must be in one of two states:
@@ -95,6 +96,7 @@ Source set: user latency/disconnect investigation, `task.md`
 - `cng-yn6.4` - SYNC-4 isolate sync failures and LAN retry policy (closed)
 - `cng-yn6.5` - SYNC-5 optimize persistence hot path (closed)
 - `cng-yn6.6` - SYNC-6 verify contract, regression, and perf (closed)
+- `cng-yn6.7` - SYNC-6 cleanup SQLite declaration row-level persistence + notebook/backlog reconcile (closed)
 
 ## UX Improvement Backlog
 

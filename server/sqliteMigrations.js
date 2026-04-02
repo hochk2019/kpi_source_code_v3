@@ -311,6 +311,41 @@ const BUSINESS_SNAPSHOT_MIGRATIONS = [
     },
   },
   {
+    id: '0202a_declaration_live_rows',
+    apply(database) {
+      database.exec(
+        'CREATE TABLE IF NOT EXISTS declaration_live_rows (\n' +
+          '  declaration_key TEXT PRIMARY KEY,\n' +
+          '  sort_order INTEGER NOT NULL,\n' +
+          '  so_tk TEXT NOT NULL DEFAULT \'\',\n' +
+          '  so_tk_full TEXT NOT NULL DEFAULT \'\',\n' +
+          '  branch TEXT NOT NULL DEFAULT \'\',\n' +
+          '  mst TEXT NOT NULL DEFAULT \'\',\n' +
+          '  registered_at TEXT NOT NULL DEFAULT \'\',\n' +
+          '  company TEXT NOT NULL DEFAULT \'\',\n' +
+          '  status TEXT NOT NULL DEFAULT \'\',\n' +
+          '  staff_name TEXT NOT NULL DEFAULT \'\',\n' +
+          '  team_name TEXT NOT NULL DEFAULT \'\',\n' +
+          '  deleted_at TEXT NOT NULL DEFAULT \'\',\n' +
+          '  co_count INTEGER NOT NULL DEFAULT 0,\n' +
+          '  duplicate_prefix TEXT NOT NULL DEFAULT \'\',\n' +
+          '  agency_search TEXT NOT NULL DEFAULT \'\',\n' +
+          '  payload TEXT NOT NULL,\n' +
+          '  updated_at TEXT NOT NULL\n' +
+          ')',
+      );
+      database.exec(
+        'CREATE INDEX IF NOT EXISTS idx_declaration_live_rows_sort_order ON declaration_live_rows(sort_order)',
+      );
+      database.exec(
+        'CREATE INDEX IF NOT EXISTS idx_declaration_live_rows_status ON declaration_live_rows(status)',
+      );
+      database.exec(
+        'CREATE INDEX IF NOT EXISTS idx_declaration_live_rows_mst ON declaration_live_rows(mst)',
+      );
+    },
+  },
+  {
     id: '0203_mst_assignment_snapshot_rows',
     apply(database) {
       database.exec(

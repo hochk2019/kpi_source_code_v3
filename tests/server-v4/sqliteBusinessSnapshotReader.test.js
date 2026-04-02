@@ -12,6 +12,7 @@ import {
   writeRuleCollectionSnapshot,
 } from '../../server/businessSnapshotSqlite.js';
 import { writeReportingProjectionValue } from '../../server/reportingProjectionSqlite.js';
+import { replaceCanonicalSqliteDeclarationRows } from '../../server-v4/src/modules/declarations/sqliteDeclarationRowsTable.ts';
 import { writeTeamRosterSnapshot } from '../../server/teamRosterSqlite.js';
 import { LEGACY_BUSINESS_HOT_PATH_KEYS } from '../../server-v4/src/persistence/businessSnapshotReader.ts';
 import { SqliteBusinessSnapshotReader } from '../../server-v4/src/persistence/sqliteBusinessSnapshotReader.ts';
@@ -238,6 +239,26 @@ describe('SqliteBusinessSnapshotReader', () => {
       sets: [{ id: 'typed-kpi', name: 'Typed KPI', groups: {} }],
     });
     expect(reader.readAdjustmentRows()).toEqual([{ id: 'adj-typed', totalPoints: 2, status: 'approved' }]);
+  });
+
+  it('prefers canonical declaration live rows when typed snapshot rows drift stale', () => {
+    const dbFile = createRuntimeDb({
+      decl_rows_v1: [{ so_tk: 'TYPED-TK', nhanh: 'Blue', mst: '0101111111', agency: 'Typed Agency' }],
+    });
+    const db = new Database(dbFile);
+    replaceCanonicalSqliteDeclarationRows(db, [
+      { so_tk: 'LIVE-TK', nhanh: 'Red', mst: '0102222222', agency: 'Live Agency' },
+    ]);
+    writeDeclarationRowsSnapshot(db, [
+      { so_tk: 'TYPED-TK', nhanh: 'Blue', mst: '0101111111', agency: 'Typed Agency' },
+    ]);
+    db.close();
+
+    const reader = new SqliteBusinessSnapshotReader(dbFile);
+
+    expect(reader.readDeclarationRows()).toEqual([
+      { so_tk: 'LIVE-TK', nhanh: 'Red', mst: '0102222222', agency: 'Live Agency' },
+    ]);
   });
 
   it('can be marked as relational-store for future non-dual-write runtimes', () => {

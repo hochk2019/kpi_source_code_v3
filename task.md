@@ -3,7 +3,7 @@
 ## Canonical Open Backlog
 
 - Source of truth cho tat ca viec chua xong hien tai la `docs/open-backlog.md`.
-- Da reconcile ngay 2026-04-02 voi bead epic `cng-yn6` cho lane sync latency/disconnect refactor.
+- Da reconcile ngay 2026-04-02 sau khi dong bead `cng-yn6.7`; lane sync latency/disconnect refactor khong con backlog mo.
 - Open epics hien tai:
   - none
 - Highest-priority ready items hien tai:
@@ -11,7 +11,7 @@
 
 ## Active Slice
 
--- Title: cng-yn6 / sync lane complete
+-- Title: ad hoc / broader sync regression repair (storageClient + auth proxy base)
 -- Status: completed
 -- Last updated: 2026-04-02
 
@@ -20,7 +20,7 @@
 - Goal: khoa lane refactor browser-backend sync theo thu tu `instrumentation -> canonical contract -> client migration -> failure isolation -> persistence optimization -> verification`.
 - Files In Scope: `task.md`, `docs/open-backlog.md`, `server-v4/src/app/build-v4-app.ts`, `server-v4/src/app/legacy-compat/*`, `src/lib/storageClient.js`, `src/lib/apiContractScanner.js`, sync/perf tests lien quan.
 - Verify: moi slice phai co targeted tests + lint/contract gate tuong ung truoc khi chuyen slice; khong nhan hoan tat neu `task.md` va bead state lech nhau.
-- Handoff: neu context bi nen/reset, bat dau lai bang `task.md`; lane `cng-yn6` da close hoan toan, va hien `bd ready` tra ve `No open issues`, khong suy luan tu tri nho hoi thoai.
+- Handoff: neu context bi nen/reset, bat dau lai bang `task.md`; lane `cng-yn6` da duoc re-close sau cleanup bead `cng-yn6.7`, va hien `bd ready` tra ve `No open issues`, khong suy luan tu tri nho hoi thoai.
 
 ## Execution Matrix
 
@@ -32,6 +32,20 @@
 | cng-0s2.1 | Runtime smoke + closure/reconcile | `pnpm run test:playwright:runtime`, `pnpm bd:check` | done | `pnpm exec vitest run tests/auth.test.jsx tests/dataImporterShellProps.test.js tests/dataImporterFileActions.test.jsx tests/reportingScopeSections.test.jsx --environment jsdom`; `pnpm exec vitest run tests/server-v4/appShell.test.js tests/server.api.test.js --environment node`; `pnpm run test:playwright:runtime`; `pnpm exec eslint src/auth/localAuth.js src/components/ReportViewer.jsx src/components/dataImporter/importGate.js src/components/dataImporter/DataImporterFileActions.jsx src/components/dataImporter/dataImporterShellProps.js src/components/dataImporter/useDataImporterImportFlow.js src/components/dataImporter/useDataImporterWorkflowSession.js src/components/reporting/reportingExportState.js src/components/reporting/useReportViewerActions.js src/components/reporting/ReportingStaffSection.jsx src/components/reporting/ReportingTeamSection.jsx src/components/reporting/StaffDetailCard.jsx src/components/reporting/TeamDetailCard.jsx tests/helpers/mockApiState.js tests/auth.test.jsx tests/dataImporterImportGate.test.js tests/dataImporterShellProps.test.js tests/dataImporterFileActions.test.jsx tests/useDataImporterImportFlow.test.jsx tests/reportingExportState.test.js tests/reportingScopeSections.test.jsx tests/useReportViewerActions.test.jsx`; `pnpm bd:check` |
 
 ## Checkpoint Log
+
+- Checkpoint 16 (ad hoc broader sync regression repair):
+  - Done: sua `src/lib/storageClient.js` de cho phep remote sync khi `baseUrl` rong trong node/test va giu uu tien internal proxy cho shared-sync bootstrap, dong thoi sua `src/auth/localAuth.js` de `fetchWithAuth` khong rebuild absolute dev base trong `MODE=test` cho nhung request da duoc route qua proxy noi bo.
+  - Verify: `pnpm exec vitest run tests/storageClient.test.js --environment node`; `pnpm exec vitest run tests/storageClient.test.js tests/store.test.js tests/server-v4/sharedSyncRoutes.test.js tests/server-v4/sharedSyncDeclarationPatch.test.js tests/server-v4/declarationsStore.test.js tests/server-v4/postgresDeclarationsRoute.test.js tests/server-v4/sqliteBusinessSnapshotReader.test.js tests/server-v4/sqliteDeclarationsStore.test.js --environment node`; `pnpm exec vitest run tests/auth.test.jsx --environment jsdom`; `pnpm exec eslint src/lib/storageClient.js src/auth/localAuth.js tests/storageClient.test.js tests/auth.test.jsx`; `gitnexus_detect_changes(scope=all)`.
+  - Risk: impact gate cho `fetchWithAuth` va `buildUrl` la `CRITICAL`; patch da gioi han o dev/test proxy heuristics, nhung worktree uncommitted van bao gom diff SQLite/docs cua slice truoc nen `detect_changes()` tiep tuc bao scope rong o muc file/process.
+  - Decision: broader sync regression da xanh tro lai va du dieu kien de commit sau nay, nhung giu nguyen worktree local theo yeu cau user.
+  - Next: neu user yeu cau, buoc tiep theo la gom diff thanh commit hoac tiep tuc chay them gate rong hon.
+
+- Checkpoint 15 (SYNC-6 late closure bead `cng-yn6.7`):
+  - Done: them canonical SQLite declaration live rows (`declaration_live_rows`), cho `SqliteDeclarationsStore` bootstrap tu typed snapshot roi ghi row-level vao live/projection tables, sua `SqliteBusinessSnapshotReader` uu tien live rows, va bo sung regression tests cho bootstrap + stale typed snapshot fallback.
+  - Verify: `pnpm exec vitest run tests/server-v4/sqliteBusinessSnapshotReader.test.js tests/server-v4/sqliteDeclarationsStore.test.js --environment node`; `pnpm exec eslint server-v4/src/modules/declarations/sqliteDeclarationsStore.ts server-v4/src/modules/declarations/sqliteDeclarationRowsTable.ts server-v4/src/persistence/sqliteBusinessSnapshotReader.ts tests/server-v4/sqliteBusinessSnapshotReader.test.js tests/server-v4/sqliteDeclarationsStore.test.js`; `gitnexus_detect_changes(scope=all)`.
+  - Risk: `gitnexus_detect_changes()` van bao `CRITICAL` do `server/sqliteMigrations.js` nam tren helper dung chung va index quy nap file-level blast radius rong; pham vi diff thuc te chi la 4 file code/test cho declaration SQLite hot path.
+  - Decision: xem day la phan con lai cuoi cung cua lane `cng-yn6`; sau khi reconcile tracker/docs, sync lane quay lai trang thai complete.
+  - Next: none, tru khi user yeu cau commit/push hoac mo bead moi.
 
 - Checkpoint 14 (SYNC-6 final verification + epic closure):
   - Done: chay verify bundle cuoi cho toan lane `cng-yn6`, close `cng-yn6.5`, close `cng-yn6.6`, va close epic `cng-yn6`; `bd ready` hien khong con issue mo.
@@ -158,6 +172,15 @@
 - Risk: archive docs van mang lane label `cng-mbu.7` de giu trace lich su, nen future operational window can tao mot execution set moi thay vi tai su dung placeholder cu nhu tai lieu live.
 - Decision: repository cutover documentation package dong hoan toan; khong con tracker mo cho cutover.
 - Next: none, tru khi mo bead moi cho BAU regression hoac future real cutover window.
+
+- Done: lane `cng-yn6` da duoc reconcile lai bang cleanup bead `cng-yn6.7`; SQLite declaration persistence nay uu tien live rows + row-level projection updates thay cho fallback blob/write-full-snapshot tren hot path.
+- Verify:
+  - `pnpm exec vitest run tests/server-v4/sqliteBusinessSnapshotReader.test.js tests/server-v4/sqliteDeclarationsStore.test.js --environment node`
+  - `pnpm exec eslint server-v4/src/modules/declarations/sqliteDeclarationsStore.ts server-v4/src/modules/declarations/sqliteDeclarationRowsTable.ts server-v4/src/persistence/sqliteBusinessSnapshotReader.ts tests/server-v4/sqliteBusinessSnapshotReader.test.js tests/server-v4/sqliteDeclarationsStore.test.js`
+  - `gitnexus_detect_changes(scope=all)`
+- Risk: GitNexus index van danh `CRITICAL` do thay doi migration helper dung chung; neu commit tiep theo mo rong scope ngoai declarations hot path thi can re-check blast radius truoc khi hop nhat.
+- Decision: giu repo o trang thai chua commit theo yeu cau user, nhung notebook/backlog da coi sync lane la complete.
+- Next: broader sync regression local repair da xanh; neu tiep tuc, uu tien commit/push theo lenh user hoac chay them gate mo rong hon.
 
 - Done: CUT-05 UAT smoke da xanh, `cng-m2r.6` va epic `cng-m2r` da close.
 - Verify:

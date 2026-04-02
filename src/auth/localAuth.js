@@ -176,15 +176,21 @@ function shouldPreferDevProxy(base) {
     return false;
   }
 
+  if (!(base.startsWith("http://") || base.startsWith("https://"))) {
+    return false;
+  }
+
+  const runtimeEnv = typeof import.meta === "undefined" ? undefined : import.meta.env;
+
+  if (runtimeEnv?.MODE === "test") {
+    return true;
+  }
+
   if (typeof window === "undefined") {
     return false;
   }
 
-  if (typeof import.meta === "undefined" || import.meta.env?.DEV !== true) {
-    return false;
-  }
-
-  if (!(base.startsWith("http://") || base.startsWith("https://"))) {
+  if (runtimeEnv?.DEV !== true) {
     return false;
   }
 

@@ -9,6 +9,7 @@ import {
   readRuleCollectionSnapshot,
 } from '../../../server/businessSnapshotSqlite.js';
 import { readReportingProjectionValue } from '../../../server/reportingProjectionSqlite.js';
+import { readCanonicalSqliteDeclarationRows } from '../modules/declarations/sqliteDeclarationRowsTable.js';
 import {
   DEFAULT_MONTHLY_REPORTING_AGGREGATE_KEY,
   MONTHLY_REPORTING_AGGREGATE_KEY,
@@ -50,6 +51,10 @@ export class SqliteBusinessSnapshotReader implements BusinessSnapshotReader {
   }
 
   readDeclarationRows(): unknown[] {
+    const canonicalRows = this.readSnapshot((database) => readCanonicalSqliteDeclarationRows(database));
+    if (Array.isArray(canonicalRows) && canonicalRows.length > 0) {
+      return ensureArray(canonicalRows);
+    }
     const typedSnapshot = this.readSnapshot((database) => readDeclarationRowsSnapshot(database));
     return ensureArray(typedSnapshot);
   }

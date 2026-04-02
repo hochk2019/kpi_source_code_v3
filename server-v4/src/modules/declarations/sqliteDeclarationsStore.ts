@@ -1,10 +1,7 @@
 import Database from 'better-sqlite3';
 import { ensureSqliteKvStore } from '../../../../server/sqliteMigrations.js';
+import { readDeclarationRowsSnapshot } from '../../../../server/businessSnapshotSqlite.js';
 
-import {
-  readDeclarationRowsSnapshot,
-  writeDeclarationRowsSnapshot,
-} from '../../../../server/businessSnapshotSqlite.js';
 import {
   normalizeCoCodeConfig,
   normalizeCoDiscrepancyConfig,
@@ -44,6 +41,12 @@ import {
   type DeclarationsStore,
   type NormalizedDeclarationPatch,
 } from './declarationsStore.js';
+import {
+  hasCanonicalSqliteDeclarationRows,
+  readCanonicalSqliteDeclarationRows,
+  replaceCanonicalSqliteDeclarationRows,
+  upsertCanonicalSqliteDeclarationRows,
+} from './sqliteDeclarationRowsTable.js';
 
 const DECLARATION_ROWS_STORAGE_KEY = 'decl_rows_v1';
 const DECLARATION_HISTORY_STORAGE_KEY = 'decl_history_v1';
@@ -94,6 +97,7 @@ export class SqliteDeclarationsStore implements DeclarationsStore {
         return [];
       }
 
+      const canonicalRowsExist = hasCanonicalSqliteDeclarationRows(database);
       const rows = this.readRows(database);
       const rowIndexByKey = new Map<string, number>();
       rows.forEach((row, index) => {
@@ -135,8 +139,25 @@ export class SqliteDeclarationsStore implements DeclarationsStore {
         });
       }
 
-      writeDeclarationRowsSnapshot(database, rows);
-      this.writeStoredRows(database, rows);
+      if (!canonicalRowsExist) {
+        replaceCanonicalSqliteDeclarationRows(database, rows);
+      } else {
+        upsertCanonicalSqliteDeclarationRows(
+          database,
+          results
+            .map((entry) => {
+              const index = rowIndexByKey.get(entry.key);
+              if (index === undefined) {
+                return null;
+              }
+              return {
+                row: rows[index],
+                sortOrder: index,
+              };
+            })
+            .filter((entry): entry is { row: Record<string, unknown>; sortOrder: number } => entry !== null),
+        );
+      }
 
       for (const entry of historyEntries) {
         this.appendHistoryEntry(
@@ -158,6 +179,7 @@ export class SqliteDeclarationsStore implements DeclarationsStore {
     actor: DeclarationActor,
   ): Promise<Record<string, unknown>> {
     return this.withDatabase((database) => {
+      const canonicalRowsExist = hasCanonicalSqliteDeclarationRows(database);
       const rows = this.readRows(database);
       const index = rows.findIndex((row) => declarationTargetMatchesRow(row, target));
       if (index === -1) {
@@ -169,8 +191,11 @@ export class SqliteDeclarationsStore implements DeclarationsStore {
       const nextRow = result.nextRecord;
       rows[index] = cloneDeclarationRecord(nextRow);
 
-      writeDeclarationRowsSnapshot(database, rows);
-      this.writeStoredRows(database, rows);
+      if (!canonicalRowsExist) {
+        replaceCanonicalSqliteDeclarationRows(database, rows);
+      } else {
+        upsertCanonicalSqliteDeclarationRows(database, [{ row: rows[index], sortOrder: index }]);
+      }
 
       if (result.historyChanges.length > 0) {
         this.appendHistoryEntry(database, target, nextRow.updatedAt, actor.username, result.historyChanges);
@@ -182,7 +207,9 @@ export class SqliteDeclarationsStore implements DeclarationsStore {
 
   async commitImportedDeclarations(input: DeclarationImportCommitInput): Promise<void> {
     this.withDatabase((database) => {
+      const canonicalRowsExist = hasCanonicalSqliteDeclarationRows(database);
       const rows = this.readRows(database);
+      const changedKeys = new Set<string>();
 
       for (const entry of input.entries ?? []) {
         const nextRow = cloneDeclarationRecord(entry.nextRecord);
@@ -196,14 +223,29 @@ export class SqliteDeclarationsStore implements DeclarationsStore {
 
         if (index >= 0) {
           rows[index] = nextRow;
+          changedKeys.add(entry.key);
           continue;
         }
 
         rows.push(nextRow);
+        changedKeys.add(entry.key);
       }
 
-      writeDeclarationRowsSnapshot(database, rows);
-      this.writeStoredRows(database, rows);
+      if (!canonicalRowsExist) {
+        replaceCanonicalSqliteDeclarationRows(database, rows);
+      } else if (changedKeys.size > 0) {
+        upsertCanonicalSqliteDeclarationRows(
+          database,
+          rows
+            .map((row, index) => ({
+              row,
+              sortOrder: index,
+              key: createDeclarationRowKey(row.so_tk, row.nhanh ?? row.branch ?? row.branch_code),
+            }))
+            .filter((entry) => entry.key && changedKeys.has(entry.key))
+            .map(({ row, sortOrder }) => ({ row, sortOrder })),
+        );
+      }
     });
   }
 
@@ -358,6 +400,7 @@ export class SqliteDeclarationsStore implements DeclarationsStore {
 
   async markDeclarationsReviewed(keys: readonly string[], actor: string): Promise<number> {
     return this.withDatabase((database) => {
+      const canonicalRowsExist = hasCanonicalSqliteDeclarationRows(database);
       const keySet = new Set(
         (Array.isArray(keys) ? keys : []).map((key) => normalizeText(key)).filter(Boolean),
       );
@@ -384,8 +427,21 @@ export class SqliteDeclarationsStore implements DeclarationsStore {
       });
 
       if (updated > 0) {
-        writeDeclarationRowsSnapshot(database, nextRows);
-        this.writeStoredRows(database, nextRows);
+        if (!canonicalRowsExist) {
+          replaceCanonicalSqliteDeclarationRows(database, nextRows);
+        } else {
+          upsertCanonicalSqliteDeclarationRows(
+            database,
+            nextRows
+              .map((row, index) => ({
+                row,
+                sortOrder: index,
+                key: createDeclarationRowKey(row.so_tk, row.nhanh ?? row.branch ?? row.branch_code),
+              }))
+              .filter((entry) => entry.key && keySet.has(entry.key))
+              .map(({ row, sortOrder }) => ({ row, sortOrder })),
+          );
+        }
       }
 
       return updated;
@@ -394,6 +450,7 @@ export class SqliteDeclarationsStore implements DeclarationsStore {
 
   async unmarkDeclarationsReviewed(keys: readonly string[], _actor: string): Promise<number> {
     return this.withDatabase((database) => {
+      const canonicalRowsExist = hasCanonicalSqliteDeclarationRows(database);
       const keySet = new Set(
         (Array.isArray(keys) ? keys : []).map((key) => normalizeText(key)).filter(Boolean),
       );
@@ -418,8 +475,21 @@ export class SqliteDeclarationsStore implements DeclarationsStore {
       });
 
       if (updated > 0) {
-        writeDeclarationRowsSnapshot(database, nextRows);
-        this.writeStoredRows(database, nextRows);
+        if (!canonicalRowsExist) {
+          replaceCanonicalSqliteDeclarationRows(database, nextRows);
+        } else {
+          upsertCanonicalSqliteDeclarationRows(
+            database,
+            nextRows
+              .map((row, index) => ({
+                row,
+                sortOrder: index,
+                key: createDeclarationRowKey(row.so_tk, row.nhanh ?? row.branch ?? row.branch_code),
+              }))
+              .filter((entry) => entry.key && keySet.has(entry.key))
+              .map(({ row, sortOrder }) => ({ row, sortOrder })),
+          );
+        }
       }
 
       return updated;
@@ -427,24 +497,20 @@ export class SqliteDeclarationsStore implements DeclarationsStore {
   }
 
   private readRows(database: Database): Record<string, unknown>[] {
-    const snapshotRows = readDeclarationRowsSnapshot(database);
-    if (Array.isArray(snapshotRows) && snapshotRows.length > 0) {
-      return snapshotRows
-        .filter((entry) => entry && typeof entry === 'object' && !Array.isArray(entry))
-        .map((entry) => cloneDeclarationRecord(entry as Record<string, unknown>));
+    const canonicalRows = readCanonicalSqliteDeclarationRows(database);
+    if (canonicalRows.length > 0) {
+      return canonicalRows;
+    }
+
+    const typedSnapshotRows = readDeclarationRowsSnapshot(database) ?? [];
+    if (typedSnapshotRows.length > 0) {
+      return typedSnapshotRows.map((entry) => cloneDeclarationRecord(entry));
     }
 
     const legacyRows = this.readStoredArray(database, DECLARATION_ROWS_STORAGE_KEY);
     return legacyRows
       .filter((entry) => entry && typeof entry === 'object' && !Array.isArray(entry))
       .map((entry) => cloneDeclarationRecord(entry as Record<string, unknown>));
-  }
-
-  private writeStoredRows(database: Database, rows: readonly Record<string, unknown>[]): void {
-    this.ensureKvStore(database);
-    database
-      .prepare(UPSERT_KV_VALUE_SQL)
-      .run(DECLARATION_ROWS_STORAGE_KEY, JSON.stringify(rows.map((row) => cloneDeclarationRecord(row))));
   }
 
   private appendHistoryEntry(

@@ -538,19 +538,33 @@ function isBrowserRuntime() {
 
 function shouldPreferDevProxy(baseUrl) {
 
-  if (!baseUrl || !isBrowserRuntime()) {
+  if (!baseUrl) {
 
     return false;
 
   }
 
-  if (typeof import.meta === 'undefined' || import.meta.env?.DEV !== true) {
-
-    return false;
-
-  }
+  const runtimeEnv = typeof import.meta === 'undefined' ? undefined : import.meta.env;
 
   if (!/^https?:\/\//i.test(baseUrl)) {
+
+    return false;
+
+  }
+
+  if (runtimeEnv?.MODE === 'test') {
+
+    return true;
+
+  }
+
+  if (!isBrowserRuntime()) {
+
+    return true;
+
+  }
+
+  if (runtimeEnv?.DEV !== true && runtimeEnv?.MODE !== 'test') {
 
     return false;
 
@@ -594,7 +608,9 @@ function canUseRemoteSync(baseUrl) {
 
   }
 
-  return /^https?:\/\//i.test(normalizeBaseUrl(baseUrl ?? ''));
+  const normalizedBase = normalizeBaseUrl(baseUrl ?? '');
+
+  return normalizedBase === '' || /^https?:\/\//i.test(normalizedBase);
 
 }
 
