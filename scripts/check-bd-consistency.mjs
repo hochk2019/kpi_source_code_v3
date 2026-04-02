@@ -25,6 +25,10 @@ export function parseReadyBeads(backlogContent) {
   return [...ids];
 }
 
+export function shouldWarnMissingActiveBead({ activeBead, inProgressIds }) {
+  return !activeBead && inProgressIds.size > 0;
+}
+
 function extractJsonArray(rawOutput) {
   const start = rawOutput.indexOf("[");
   const end = rawOutput.lastIndexOf("]");
@@ -81,9 +85,12 @@ function main() {
   const errors = [];
   const warnings = [];
 
-  if (!activeBead) {
+  if (shouldWarnMissingActiveBead({ activeBead, inProgressIds })) {
     warnings.push("task.md chưa có `-- Bead:` trong phần Active Slice.");
   } else {
+    if (!activeBead) {
+      // No active bead is acceptable when the repo has no in-progress work.
+    } else {
     const activeStatus = statusById.get(activeBead);
     if (!activeStatus) {
       errors.push(`Active bead \`${activeBead}\` không tồn tại trong BD.`);
@@ -91,6 +98,7 @@ function main() {
       errors.push(
         `Active bead \`${activeBead}\` đang ở trạng thái \`${activeStatus}\`, cần \`in_progress\`.`,
       );
+    }
     }
   }
 

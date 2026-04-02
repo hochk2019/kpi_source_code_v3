@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   parseActiveBead,
   parseReadyBeads,
+  shouldWarnMissingActiveBead,
 } from "../../scripts/check-bd-consistency.mjs";
 
 describe("check-bd-consistency parsers", () => {
@@ -30,5 +31,23 @@ Current highest-priority ready items:
 
   it("returns empty list when ready section is missing", () => {
     expect(parseReadyBeads("No ready block here")).toEqual([]);
+  });
+
+  it("does not warn about a missing active bead when no work is in progress", () => {
+    expect(
+      shouldWarnMissingActiveBead({
+        activeBead: "",
+        inProgressIds: new Set(),
+      }),
+    ).toBe(false);
+  });
+
+  it("warns about a missing active bead when BD still has in-progress work", () => {
+    expect(
+      shouldWarnMissingActiveBead({
+        activeBead: "",
+        inProgressIds: new Set(["cng-7z0.7"]),
+      }),
+    ).toBe(true);
   });
 });
