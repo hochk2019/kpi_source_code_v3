@@ -45,6 +45,8 @@ Reconciliation note:
 - Reconciled again on 2026-04-02 after shipping shell/dashboard/command-center/workflow-guide/async primitives plus wave A state extraction; `cng-1wj.3..cng-1wj.9` are closed, and next ready slice is `cng-1wj.10`.
 - Reconciled again on 2026-04-02 after completing `cng-1wj.10`; wave B now extracts report schedules, import column config, and KPI adjustments into dedicated modules, and `cng-1wj.11` is the next ready hardening slice.
 - Reconciled again on 2026-04-02 after completing `cng-1wj.11` and closing epic `cng-1wj`; shell/state modernization hardening is green, and the only remaining note in this lane is an explicit deferred follow-up to split `src/lib/kpiAdjustments.js` further when a future KPI-adjustments slice already touches that domain.
+- Reconciled again on 2026-04-02 after creating `cng-1se`; the deferred KPI-adjustments follow-up is now tracked as an active standalone bead for internal module decomposition behind the existing facade.
+- Reconciled again on 2026-04-02 after finishing code/test cho `cng-1se`; KPI adjustments internals are now decomposed behind the same facade/API, but bead nay van `in progress` cho den khi diff local duoc commit.
 
 Rule:
 - Every unfinished item from review notes, rollout plans, decomposition plans, or UX backlogs must be in one of two states:
@@ -73,7 +75,10 @@ Source set: `Opus_review_v2.md`, Stitch design deliverables, `task.md`
 - `cng-1wj.9` - state-extraction-wave-a (closed; shell navigation, command center, dashboard summary moved to dedicated hooks/selectors)
 - `cng-1wj.10` - state-extraction-wave-b (closed; report schedules, import column config, and KPI adjustments extracted behind `store.js` facades)
 - `cng-1wj.11` - modernization-regression-hardening (closed; runtime shell smoke and regression matrix xanh)
-- Deferred follow-up (explicitly deferred, no bead yet): `src/lib/kpiAdjustments.js` van hon 800 LOC sau wave B extraction; chi tach them khi mot slice KPI adjustments/adjustments hardening trong tuong lai da can sua file nay.
+
+## KPI Adjustments Follow-up
+
+- `cng-1se` - kpi-adjustments-module-decomposition (in progress; code/test da xanh, `src/lib/kpiAdjustments.js` da tach thanh internal submodules va facade giu nguyen, dang cho commit diff local)
 
 ## Hard-gate Cutover Program
 
