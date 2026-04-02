@@ -44,6 +44,7 @@ Reconciliation note:
 - Reconciled again on 2026-04-02 after completing phase-0 freeze/design (`cng-1wj.1`, `cng-1wj.2`); source brief `docs/opus-review-v2-modernization-brief-2026-04-02.md` is now the shell/state phase-0 reference, and `cng-1wj.3` is the active shell navigation slice.
 - Reconciled again on 2026-04-02 after shipping shell/dashboard/command-center/workflow-guide/async primitives plus wave A state extraction; `cng-1wj.3..cng-1wj.9` are closed, and next ready slice is `cng-1wj.10`.
 - Reconciled again on 2026-04-02 after completing `cng-1wj.10`; wave B now extracts report schedules, import column config, and KPI adjustments into dedicated modules, and `cng-1wj.11` is the next ready hardening slice.
+- Reconciled again on 2026-04-02 after completing `cng-1wj.11` and closing epic `cng-1wj`; shell/state modernization hardening is green, and the only remaining note in this lane is an explicit deferred follow-up to split `src/lib/kpiAdjustments.js` further when a future KPI-adjustments slice already touches that domain.
 
 Rule:
 - Every unfinished item from review notes, rollout plans, decomposition plans, or UX backlogs must be in one of two states:
@@ -51,14 +52,14 @@ Rule:
 - explicitly marked deferred or removed in its source document
 
 Current open epics:
-- `cng-1wj` - frontend-modernization-shell-state
+- none
 
 Current highest-priority ready items:
-- `cng-1wj.11` - modernization-regression-hardening
+- none
 
 ## Frontend Modernization Shell/State
 
-Epic: `cng-1wj`  
+Epic: `cng-1wj` (closed)  
 Source set: `Opus_review_v2.md`, Stitch design deliverables, `task.md`
 
 - `cng-1wj.1` - opus-review-fact-check-freeze (closed; source brief locked in `docs/opus-review-v2-modernization-brief-2026-04-02.md`)
@@ -71,7 +72,8 @@ Source set: `Opus_review_v2.md`, Stitch design deliverables, `task.md`
 - `cng-1wj.8` - shell-loading-empty-error-primitives (closed)
 - `cng-1wj.9` - state-extraction-wave-a (closed; shell navigation, command center, dashboard summary moved to dedicated hooks/selectors)
 - `cng-1wj.10` - state-extraction-wave-b (closed; report schedules, import column config, and KPI adjustments extracted behind `store.js` facades)
-- `cng-1wj.11` - modernization-regression-hardening (open; depends on `cng-1wj.10`)
+- `cng-1wj.11` - modernization-regression-hardening (closed; runtime shell smoke and regression matrix xanh)
+- Deferred follow-up (explicitly deferred, no bead yet): `src/lib/kpiAdjustments.js` van hon 800 LOC sau wave B extraction; chi tach them khi mot slice KPI adjustments/adjustments hardening trong tuong lai da can sua file nay.
 
 ## Hard-gate Cutover Program
 

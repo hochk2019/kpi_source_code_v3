@@ -64,10 +64,10 @@ test.describe('runtime import + reporting smoke', () => {
 
     await openReportsTab(page);
 
-    await page.getByRole('button', { name: 'Nhân viên' }).click();
+    await page.getByRole('button', { name: 'Nhân viên', exact: true }).click();
     await expectReportingScopeState(page);
 
-    await page.getByRole('button', { name: 'Tổ đội' }).click();
+    await page.getByRole('button', { name: 'Tổ đội', exact: true }).click();
     await expectReportingScopeState(page);
   });
 });

@@ -4,7 +4,7 @@ const LOGIN_PATHNAMES = new Set(['/api/v4/auth/login']);
 
 test.describe('runtime non-mock smoke', () => {
   test('health check and login request reach backend runtime', async ({ page, request }) => {
-    const healthResponse = await request.get('/api/health');
+    const healthResponse = await request.get('/api/v4/health');
     expect(healthResponse.ok()).toBe(true);
 
     const loginStatuses = [];

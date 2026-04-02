@@ -27,8 +27,14 @@ export async function loginAsAdmin(page) {
   await page.goto('/');
 
   const loginButton = page.getByRole('button', { name: 'Đăng nhập quản trị' });
-  if ((await loginButton.count()) === 0) {
-    await page.getByRole('button', { name: 'Đăng xuất' }).waitFor({ timeout: 10000 });
+  const logoutButton = page.getByRole('button', { name: 'Đăng xuất' });
+
+  await Promise.race([
+    loginButton.waitFor({ state: 'visible', timeout: 10000 }),
+    logoutButton.waitFor({ state: 'visible', timeout: 10000 }),
+  ]);
+
+  if (await logoutButton.isVisible().catch(() => false)) {
     return;
   }
 

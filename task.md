@@ -8,24 +8,25 @@
 - Da reconcile them ngay 2026-04-02 sau khi hoan tat phase-0 freeze/design (`cng-1wj.1`, `cng-1wj.2`) va chuyen active slice sang `cng-1wj.3`.
 - Da reconcile tiep ngay 2026-04-02 sau khi ship shell/dashboard/command-center/workflow-guide/async primitives (`cng-1wj.3..cng-1wj.8`) va state extraction wave A (`cng-1wj.9`); next ready slice la `cng-1wj.10`.
 - Da reconcile tiep ngay 2026-04-02 sau khi dong `cng-1wj.10`; wave B da tach them `reportSchedules`, `importColumnConfig`, va `kpiAdjustments` khoi `store.js`, va next ready slice la `cng-1wj.11`.
+- Da reconcile tiep ngay 2026-04-02 sau khi dong `cng-1wj.11` va epic `cng-1wj`; frontend modernization hardening da xanh tren shell + state extraction matrix, va follow-up tach nho `src/lib/kpiAdjustments.js` duoc ghi ro la deferred cho mot slice KPI adjustments trong tuong lai.
 - Open epics hien tai:
-  - `cng-1wj` — frontend modernization shell/state
+  - none
 - Highest-priority ready items hien tai:
-  - `cng-1wj.11` — modernization regression hardening
+  - none (cho bead moi; xem deferred note cho `src/lib/kpiAdjustments.js`)
 
 ## Active Slice
 
--- Bead: cng-1wj.11
--- Title: cng-1wj.11 / modernization regression hardening
--- Status: open
+No active bead. Frontend modernization lane is closed and notebook is idle.
+-- Title: no active slice / frontend modernization closed
+-- Status: idle
 -- Last updated: 2026-04-02
 
 ## Sync Notebook
 
-- Goal: tiep tuc phase hardening `cng-1wj.11` sau khi dong wave B; `store.js` da lui ve facade cho `reportSchedules`, `importColumnConfig`, va `kpiAdjustments`, nen slice tiep theo la verify/regression + shell smoke thay vi mo rong refactor state nua.
-- Files In Scope: `src/lib/store.js`, `src/lib/reportSchedules.js`, `src/lib/importColumnConfig.js`, `src/lib/kpiAdjustments.js`, `tests/reportSchedules.test.js`, `tests/importColumnConfig.test.js`, `tests/kpiAdjustmentsStore.test.js`, `tests/store.test.js`, `tests/kpiAdjustments.test.jsx`, `tests/kpiAdjustments.hooks.test.jsx`, `tests/automation.flows.test.js`, `docs/open-backlog.md`, `task.md`, va bead `cng-1wj.11`.
-- Verify: `pnpm exec vitest run tests/kpiAdjustmentsStore.test.js tests/store.test.js tests/kpiAdjustments.test.jsx tests/kpiAdjustments.hooks.test.jsx tests/automation.flows.test.js --environment jsdom`; `pnpm exec eslint src/lib/kpiAdjustments.js src/lib/store.js tests/kpiAdjustmentsStore.test.js`; `pnpm bd:check`; `gitnexus_detect_changes(scope=all)`.
-- Handoff: neu context bi nen/reset, bat dau lai bang `task.md`; `cng-1wj.10` da xong voi 3 extraction modules (`reportSchedules`, `importColumnConfig`, `kpiAdjustments`), bead tiep theo la `cng-1wj.11` de chay regression gates rong hon (lint/test/playwright shell smoke) va reconcile rollout notes.
+- Goal: giu notebook sau khi dong `cng-1wj.11`; frontend modernization da complete, chua co bead moi, va follow-up tach nho `src/lib/kpiAdjustments.js` duoc defer cho mot turn KPI adjustments phu hop thay vi mo them refactor ngay bay gio.
+- Files In Scope: `tests/playwright/runtime-login-smoke.spec.js`, `tests/playwright/runtime-import-reporting-smoke.spec.js`, `tests/playwright/utils.js`, `src/lib/kpiAdjustments.js`, `docs/open-backlog.md`, `task.md`, va bead `cng-1wj.11`.
+- Verify: `pnpm exec vitest run tests/kpiAdjustmentsStore.test.js tests/store.test.js tests/kpiAdjustments.test.jsx tests/kpiAdjustments.hooks.test.jsx tests/automation.flows.test.js --environment jsdom`; `pnpm exec vitest run tests/useKpiShellState.test.jsx tests/useCommandCenterState.test.jsx tests/appDashboardSummary.test.js tests/commandCenter.test.jsx tests/appDashboardLanding.test.jsx tests/appShellWorkflowState.test.js tests/appShellWorkflowGuide.test.jsx tests/appShellFrame.test.jsx tests/kpiCalculator.navigation.test.jsx --environment jsdom`; `pnpm exec playwright test --config playwright.runtime.config.mjs tests/playwright/runtime-login-smoke.spec.js tests/playwright/runtime-import-reporting-smoke.spec.js`; `pnpm exec eslint src/lib/kpiAdjustments.js src/lib/store.js tests/kpiAdjustmentsStore.test.js tests/playwright/runtime-login-smoke.spec.js tests/playwright/runtime-import-reporting-smoke.spec.js tests/playwright/utils.js`; `pnpm bd:check`; `gitnexus_detect_changes(scope=all)`.
+- Handoff: neu context bi nen/reset, bat dau lai bang `task.md`; epic `cng-1wj` da close sau khi hardening matrix xanh, va ghi nho rang `src/lib/kpiAdjustments.js` van lon (~1k LOC) nhung chi nen tach them khi mot slice KPI adjustments trong tuong lai da can mo file nay.
 
 ## Execution Matrix
 
@@ -79,6 +80,13 @@
   - Risk: `getKpiAdjustments` van la symbol `HIGH` trong impact graph, nen phase tiep theo khong nen mo rong state rewrite; chi nen chay hardening gates + shell smoke tren public contract hien co.
   - Decision: xem `cng-1wj.10` da dat muc tieu wave B bang facade extraction tang dan, khong big-bang rewrite `store.js`.
   - Next: claim `cng-1wj.11`, chay full hardening gates (lint/test/playwright shell smoke), va cap nhat rollout/handoff notes cho frontend modernization track.
+
+- Checkpoint 25 (frontend modernization hardening complete):
+  - Done: harden Playwright runtime smoke theo contract runtime that (`/api/v4/health`, exact reporting scope button selectors, `loginAsAdmin` wait logic), rerun shell/state regression matrix, close `cng-1wj.11`, va dong epic `cng-1wj`.
+  - Verify: `pnpm exec vitest run tests/kpiAdjustmentsStore.test.js tests/store.test.js tests/kpiAdjustments.test.jsx tests/kpiAdjustments.hooks.test.jsx tests/automation.flows.test.js --environment jsdom`; `pnpm exec vitest run tests/useKpiShellState.test.jsx tests/useCommandCenterState.test.jsx tests/appDashboardSummary.test.js tests/commandCenter.test.jsx tests/appDashboardLanding.test.jsx tests/appShellWorkflowState.test.js tests/appShellWorkflowGuide.test.jsx tests/appShellFrame.test.jsx tests/kpiCalculator.navigation.test.jsx --environment jsdom`; `pnpm exec playwright test --config playwright.runtime.config.mjs tests/playwright/runtime-login-smoke.spec.js tests/playwright/runtime-import-reporting-smoke.spec.js`; `pnpm exec eslint tests/playwright/runtime-login-smoke.spec.js tests/playwright/runtime-import-reporting-smoke.spec.js tests/playwright/utils.js`.
+  - Risk: `src/lib/kpiAdjustments.js` van hon 800 LOC sau extraction; hien tai khong mo them refactor de tranh mo rong blast radius sau khi hardening da xanh.
+  - Decision: ghi ro follow-up nay la deferred, chi quay lai tach nho `src/lib/kpiAdjustments.js` khi mot slice KPI adjustments/adjustments hardening trong tuong lai da can cham file do.
+  - Next: khong con bead mo; neu mo lai lane KPI adjustments thi uu tien chia `src/lib/kpiAdjustments.js` thanh cac submodule nho hon (`settings`, `persistence`, `audit/history`) truoc khi them feature moi.
 
 - Checkpoint 18 (ad hoc GitNexus upgrade for repo usage):
   - Done: xac minh `npx gitnexus --version` dang dung cache cu `1.4.8`, trong khi `codex mcp list` da tro toi `cmd /c npx -y gitnexus@latest mcp`; cap nhat `package.json` (`gitnexus:analyze`, `gitnexus:serve`) va `scripts/gitnexus-refresh.mjs` de buoc repo dung `npx -y gitnexus@latest`, chinh test `tests/gitnexus-refresh.test.js` theo invocation moi, va dong bo huong dan trong `AGENTS.md`/`CLAUDE.md` sang `pnpm run gitnexus:analyze` + direct-call fallback `npx -y gitnexus@latest ...`.
@@ -217,6 +225,7 @@
 
 - [open] `bd` CLI parsing title/description nhieu tu khong on dinh; uu tien cap nhat status theo ID va ghi nghia chi tiet trong `task.md`.
 - [open] Worktree dang co thay doi san tu truoc session (`.gitignore`, `docs/open-backlog.md`, `docs/operations/v4-cutover-evidence/*`); khong dong vao khi khong thuoc scope.
+- [open] Deferred follow-up: `src/lib/kpiAdjustments.js` van kha lon sau wave B extraction; chi tach them khi co slice KPI adjustments phu hop de tranh mo rong blast radius hardening vua khoa xanh.
 - [closed] CUT-05 UAT smoke blocker da duoc resolve va verify xanh qua preflight `--with-uat-smoke` (manual evidence: `docs/operations/v4-cutover-evidence/2026-04-01T16-53-51-886Z-manual-cutover-preflight.{json,md}`).
 
 - Last closed slice:
@@ -226,6 +235,16 @@
   - merged local completion gates: parity + preflight dry-run + backlog consistency
 
 ## Handoff
+
+- Done: `cng-1wj.11` da xanh va epic `cng-1wj` da close; hardening pass tren wave A shell/navigation/dashboard/command center/workflow guide, wave B adjustments/store regressions, va Playwright runtime smoke.
+- Verify:
+  - `pnpm exec vitest run tests/kpiAdjustmentsStore.test.js tests/store.test.js tests/kpiAdjustments.test.jsx tests/kpiAdjustments.hooks.test.jsx tests/automation.flows.test.js --environment jsdom`
+  - `pnpm exec vitest run tests/useKpiShellState.test.jsx tests/useCommandCenterState.test.jsx tests/appDashboardSummary.test.js tests/commandCenter.test.jsx tests/appDashboardLanding.test.jsx tests/appShellWorkflowState.test.js tests/appShellWorkflowGuide.test.jsx tests/appShellFrame.test.jsx tests/kpiCalculator.navigation.test.jsx --environment jsdom`
+  - `pnpm exec playwright test --config playwright.runtime.config.mjs tests/playwright/runtime-login-smoke.spec.js tests/playwright/runtime-import-reporting-smoke.spec.js`
+  - `pnpm exec eslint tests/playwright/runtime-login-smoke.spec.js tests/playwright/runtime-import-reporting-smoke.spec.js tests/playwright/utils.js`
+- Risk: `src/lib/kpiAdjustments.js` van lon sau extraction; khong mo bead moi trong session nay, nhung note nay da duoc ghi ro la deferred de quay lai khi mot slice KPI adjustments can mo file.
+- Decision: khong mo rong refactor them sau khi hardening matrix da xanh; dong epic modernization tai day va de notebook o trang thai idle.
+- Next: khi co slice moi cham domain KPI adjustments, uu tien tach `src/lib/kpiAdjustments.js` thanh submodules nho hon truoc khi them feature/logic moi.
 
 - Done: frontend modernization da ship xong wave B; beads `cng-1wj.3..cng-1wj.10` da close, va `store.js` da tach 3 slices ra module rieng: `src/lib/reportSchedules.js`, `src/lib/importColumnConfig.js`, va `src/lib/kpiAdjustments.js`.
 - Verify:
@@ -1150,14 +1169,12 @@
 
 ## Next Suggested Slice
 
-- Title: cng-1wj.11 / modernization regression hardening
-- Bead: cng-1wj.11
-- Status: open
+- Title: no-open-bead / wait for next prioritized slice
+- Bead: none
+- Status: idle
 - Follow-up backlog:
-  - chay full hardening matrix cho shell/navigation/dashboard/command center/workflow guide/adjustments/import/reporting
-  - rerun `pnpm bd:check`, lint/test gates, va Playwright shell smoke tren worktree sau wave B
-  - dung `gitnexus_detect_changes(scope=all)` de xac nhan blast radius chi nam trong modernization track truoc commit tiep theo
-  - cap nhat rollout/handoff notes de co the dong epic `cng-1wj` sau khi hardening xanh
+  - neu bead moi dung domain KPI adjustments, uu tien tach `src/lib/kpiAdjustments.js` thanh cac submodule nho hon truoc khi them logic moi
+  - nguoc lai, bat dau bang `bd ready` va reconcile `task.md`/`docs/open-backlog.md` truoc khi claim slice ke tiep
 
 ## Verification
 
