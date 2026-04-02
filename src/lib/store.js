@@ -22,10 +22,23 @@ import {
   patchDeclRows,
   updateCachedItem,
 } from './storageClient.js';
+import {
+  REPORT_SCHEDULE_KEY,
+  calculateNextReportScheduleRun,
+  createReportScheduleStore,
+} from './reportSchedules.js';
+import {
+  IMPORT_AUX_COLUMN_IDS,
+  IMPORT_COLUMN_IDS,
+  IMPORT_SENSITIVE_COLUMNS,
+  createImportColumnConfigStore,
+} from './importColumnConfig.js';
 
 
 
 export { KPI_ADJUSTMENT_CATEGORY_CONFIG } from '../../shared/kpiAdjustments.js';
+export { REPORT_SCHEDULE_KEY, calculateNextReportScheduleRun };
+export { IMPORT_COLUMN_IDS, IMPORT_AUX_COLUMN_IDS, IMPORT_SENSITIVE_COLUMNS };
 
 
 
@@ -61,81 +74,7 @@ export const DECL_DELETED_LOG_LIMIT = 500;
 
 export const UI_LAYOUT_KEY = "ui_layout_config_v1"; // cấu hình bố cục giao diện dùng chung
 
-export const REPORT_SCHEDULE_KEY = "kpi_report_schedule_v1"; // lịch gửi báo cáo KPI
 
-
-
-export const IMPORT_COLUMN_IDS = Object.freeze([
-
-  "date",
-
-  "declaration",
-
-  "mst",
-
-  "company",
-
-  "type",
-
-  "co",
-
-  "items",
-
-  "staff",
-
-  "team",
-
-  "agency",
-
-  "status",
-
-  "licenses",
-
-  "kpi",
-
-]);
-
-
-
-export const IMPORT_AUX_COLUMN_IDS = Object.freeze(["history", "update"]);
-
-export const IMPORT_SENSITIVE_COLUMNS = Object.freeze(["status", "history", "update"]);
-
-
-
-const IMPORT_CONFIG_COLUMN_IDS = Object.freeze([
-
-  ...IMPORT_COLUMN_IDS,
-
-  ...IMPORT_AUX_COLUMN_IDS,
-
-]);
-
-
-
-const BASE_IMPORT_COLUMN_ID_SET = new Set(IMPORT_COLUMN_IDS);
-
-const IMPORT_COLUMN_ID_SET = new Set(IMPORT_CONFIG_COLUMN_IDS);
-
-const DEFAULT_IMPORT_COLUMN_VERSION = 2;
-
-const DEFAULT_IMPORT_COLUMN_CONFIG = Object.freeze({
-
-  hidden: [...new Set([...IMPORT_AUX_COLUMN_IDS, "status"])],
-
-  version: DEFAULT_IMPORT_COLUMN_VERSION,
-
-  widths: Object.freeze({}),
-
-});
-
-const MIN_IMPORT_COLUMN_WIDTH = 80;
-
-
-
-const VALID_SCHEDULE_FREQUENCIES = new Set(["weekly", "monthly"]);
-
-const VALID_SCHEDULE_FORMATS = new Set(["excel", "pdf"]);
 
 const ADJUSTMENT_POINT_PRECISION = 2;
 
@@ -190,406 +129,6 @@ function writeUILayoutConfig(config) {
   setItem(UI_LAYOUT_KEY, JSON.stringify(target));
 
   return target;
-
-}
-
-
-
-function normalizeColumnWidths(input) {
-
-  if (!input || typeof input !== "object" || Array.isArray(input)) {
-
-    return {};
-
-  }
-
-  const result = {};
-
-  for (const [key, value] of Object.entries(input)) {
-
-    if (typeof key !== "string" || !IMPORT_COLUMN_ID_SET.has(key)) {
-
-      continue;
-
-    }
-
-    const numeric = Number(value);
-
-    if (!Number.isFinite(numeric)) {
-
-      continue;
-
-    }
-
-    const clamped = Math.max(MIN_IMPORT_COLUMN_WIDTH, Math.round(numeric));
-
-    result[key] = clamped;
-
-  }
-
-  return result;
-
-}
-
-function normalizeImportColumnConfig(input) {
-
-  if (!input || typeof input !== "object" || Array.isArray(input)) {
-
-    return {
-
-      hidden: DEFAULT_IMPORT_COLUMN_CONFIG.hidden.slice(),
-
-      version: DEFAULT_IMPORT_COLUMN_CONFIG.version,
-
-      widths: {},
-
-    };
-
-  }
-
-
-
-  const rawHidden = Array.isArray(input.hidden) ? input.hidden : [];
-
-  const seen = new Set();
-
-  const sanitized = [];
-
-  let baseHiddenCount = 0;
-
-
-
-  for (const key of rawHidden) {
-
-    if (typeof key !== "string") continue;
-
-    const trimmed = key.trim();
-
-    if (!trimmed || !IMPORT_COLUMN_ID_SET.has(trimmed) || seen.has(trimmed)) {
-
-      continue;
-
-    }
-
-    sanitized.push(trimmed);
-
-    seen.add(trimmed);
-
-    if (BASE_IMPORT_COLUMN_ID_SET.has(trimmed)) {
-
-      baseHiddenCount += 1;
-
-    }
-
-  }
-
-
-
-  let version = Number.isFinite(input.version) ? Number(input.version) : 1;
-
-
-
-  if (version < DEFAULT_IMPORT_COLUMN_VERSION) {
-
-    for (const key of DEFAULT_IMPORT_COLUMN_CONFIG.hidden) {
-
-      if (!seen.has(key) && IMPORT_COLUMN_ID_SET.has(key)) {
-
-        sanitized.push(key);
-
-        seen.add(key);
-
-        if (BASE_IMPORT_COLUMN_ID_SET.has(key)) {
-
-          baseHiddenCount += 1;
-
-        }
-
-      }
-
-    }
-
-    version = DEFAULT_IMPORT_COLUMN_VERSION;
-
-  }
-
-
-
-  if (baseHiddenCount >= IMPORT_COLUMN_IDS.length) {
-
-    const fallbackHidden = DEFAULT_IMPORT_COLUMN_CONFIG.hidden.filter((key) =>
-
-      IMPORT_COLUMN_ID_SET.has(key),
-
-    );
-
-    return {
-
-      hidden: fallbackHidden,
-
-      version: DEFAULT_IMPORT_COLUMN_VERSION,
-
-      widths: normalizeColumnWidths(input.widths),
-
-    };
-
-  }
-
-
-
-  return {
-
-    hidden: sanitized,
-
-    version: Math.max(version, DEFAULT_IMPORT_COLUMN_VERSION),
-
-    widths: normalizeColumnWidths(input.widths),
-
-  };
-
-}
-
-
-
-function isSameColumnConfig(a, b) {
-
-  if (a === b) return true;
-
-  if (!a || !b) return false;
-
-  const hiddenA = Array.isArray(a.hidden) ? a.hidden : [];
-
-  const hiddenB = Array.isArray(b.hidden) ? b.hidden : [];
-
-  if (hiddenA.length !== hiddenB.length) {
-
-    return false;
-
-  }
-
-  const setB = new Set(hiddenB);
-
-  for (const key of hiddenA) {
-
-    if (!setB.has(key)) {
-
-      return false;
-
-    }
-
-  }
-
-  const versionA = Number.isFinite(a.version) ? Number(a.version) : 0;
-
-  const versionB = Number.isFinite(b.version) ? Number(b.version) : 0;
-
-  if (versionA !== versionB) {
-
-    return false;
-
-  }
-
-  const widthsA = a.widths && typeof a.widths === "object" && !Array.isArray(a.widths) ? a.widths : {};
-
-  const widthsB = b.widths && typeof b.widths === "object" && !Array.isArray(b.widths) ? b.widths : {};
-
-  const keysA = Object.keys(widthsA);
-
-  const keysB = Object.keys(widthsB);
-
-  if (keysA.length !== keysB.length) {
-
-    return false;
-
-  }
-
-  for (const key of keysA) {
-
-    if (!keysB.includes(key)) {
-
-      return false;
-
-    }
-
-    const valueA = Number(widthsA[key]);
-
-    const valueB = Number(widthsB[key]);
-
-    if (!Number.isFinite(valueA) || !Number.isFinite(valueB)) {
-
-      if (valueA === valueB) {
-
-        continue;
-
-      }
-
-      return false;
-
-    }
-
-    if (valueA !== valueB) {
-
-      return false;
-
-    }
-
-  }
-
-  return true;
-
-}
-
-
-
-export function getImportColumnConfig() {
-
-  const layout = readUILayoutConfig();
-
-  const importData = layout && typeof layout.importData === "object" ? layout.importData : {};
-
-  const current = normalizeImportColumnConfig(importData.columns);
-
-  const hiddenBaseCount = current.hidden.filter((key) => BASE_IMPORT_COLUMN_ID_SET.has(key)).length;
-
-  if (hiddenBaseCount >= IMPORT_COLUMN_IDS.length) {
-
-    return {
-
-      hidden: DEFAULT_IMPORT_COLUMN_CONFIG.hidden.slice(),
-
-      version: DEFAULT_IMPORT_COLUMN_CONFIG.version,
-
-      widths: {},
-
-    };
-
-  }
-
-  return current;
-
-}
-
-
-
-export function saveImportColumnConfig({ hidden, widths } = {}, { actor = "system" } = {}) {
-
-  const layout = readUILayoutConfig();
-
-  const importSection = layout && typeof layout.importData === "object" ? layout.importData : {};
-
-  const current = normalizeImportColumnConfig(importSection.columns);
-
-  const targetHidden = Array.isArray(hidden) ? hidden : current.hidden;
-
-  const targetWidths =
-
-    widths && typeof widths === "object" && !Array.isArray(widths) ? widths : current.widths;
-
-  const next = normalizeImportColumnConfig({
-
-    hidden: targetHidden,
-
-    version: DEFAULT_IMPORT_COLUMN_VERSION,
-
-    widths: targetWidths,
-
-  });
-
-  const hiddenBaseCount = next.hidden.filter((key) => BASE_IMPORT_COLUMN_ID_SET.has(key)).length;
-
-  if (hiddenBaseCount >= IMPORT_COLUMN_IDS.length) {
-
-    return current;
-
-  }
-
-  if (isSameColumnConfig(current, next)) {
-
-    return current;
-
-  }
-
-  const nextLayout = {
-
-    ...layout,
-
-    importData: {
-
-      ...importSection,
-
-      columns: next,
-
-    },
-
-  };
-
-  writeUILayoutConfig(nextLayout);
-
-  const visibleBaseColumns = IMPORT_COLUMN_IDS.length - hiddenBaseCount;
-
-  pushAuditLog({
-
-    actor,
-
-    action: "import.columns.update",
-
-    detail: `Cập nhật cột Import Data (${visibleBaseColumns}/${IMPORT_COLUMN_IDS.length} cột dữ liệu hiển thị)`,
-
-    meta: {
-
-      hidden: next.hidden.slice(),
-
-      version: next.version,
-
-      widths: { ...next.widths },
-
-    },
-
-  });
-
-  return next;
-
-}
-
-
-
-export function subscribeImportColumnConfig(listener) {
-
-  const fn = typeof listener === "function" ? listener : null;
-
-  if (!fn) {
-
-    return () => {};
-
-  }
-
-  const emit = () => {
-
-    try {
-
-      fn(getImportColumnConfig());
-
-    } catch (err) {
-
-      console.error("Không thể đọc cấu hình cột Import Data", err);
-
-    }
-
-  };
-
-  const unsubscribe = subscribe(UI_LAYOUT_KEY, emit);
-
-  emit();
-
-  return () => {
-
-    if (typeof unsubscribe === "function") {
-
-      unsubscribe();
-
-    }
-
-  };
 
 }
 
@@ -8667,470 +8206,6 @@ export function pushImportLog(entry, extraMeta = null) {
 
 
 
-function normalizeScheduleTime(value) {
-
-  if (typeof value === 'string') {
-
-    const trimmed = value.trim();
-
-    const match = trimmed.match(/^(\d{1,2}):(\d{1,2})$/);
-
-    if (match) {
-
-      const hours = Math.min(Math.max(parseInt(match[1], 10), 0), 23);
-
-      const minutes = Math.min(Math.max(parseInt(match[2], 10), 0), 59);
-
-      return {
-
-        label: `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`,
-
-        hour: hours,
-
-        minute: minutes,
-
-      };
-
-    }
-
-  }
-
-  return { label: '08:00', hour: 8, minute: 0 };
-
-}
-
-
-
-function clampWeekday(value) {
-
-  const day = Number.isFinite(Number(value)) ? Number(value) : 1;
-
-  if (day < 1) return 1;
-
-  if (day > 7) return 7;
-
-  return Math.round(day);
-
-}
-
-
-
-function clampMonthDay(value) {
-
-  const day = Number.isFinite(Number(value)) ? Number(value) : 1;
-
-  if (day < 1) return 1;
-
-  if (day > 31) return 31;
-
-  return Math.round(day);
-
-}
-
-
-
-function normalizeScheduleRecipients(input) {
-
-  const list = Array.isArray(input)
-
-    ? input
-
-    : typeof input === 'string'
-
-    ? input.split(/[;,]/)
-
-    : [];
-
-  const seen = new Set();
-
-  const result = [];
-
-  for (const entry of list) {
-
-    const value = String(entry ?? '')
-
-      .trim()
-
-      .replace(/[\r\n]+/g, ' ');
-
-    if (!value) continue;
-
-    const key = value.toLowerCase();
-
-    if (seen.has(key)) continue;
-
-    seen.add(key);
-
-    result.push(value);
-
-  }
-
-  return result;
-
-}
-
-
-
-function normalizeScheduleFormats(input) {
-
-  const list = Array.isArray(input)
-
-    ? input
-
-    : typeof input === 'string'
-
-    ? input.split(/[;,]/)
-
-    : [];
-
-  const seen = new Set();
-
-  const result = [];
-
-  for (const entry of list) {
-
-    const value = String(entry ?? '').trim().toLowerCase();
-
-    if (!VALID_SCHEDULE_FORMATS.has(value)) continue;
-
-    if (seen.has(value)) continue;
-
-    seen.add(value);
-
-    result.push(value);
-
-  }
-
-  if (!result.length) {
-
-    result.push('excel');
-
-  }
-
-  return result;
-
-}
-
-
-
-export function calculateNextReportScheduleRun(schedule, { fromDate = new Date() } = {}) {
-
-  if (!schedule || typeof schedule !== 'object') {
-
-    return null;
-
-  }
-
-  if (schedule.active === false) {
-
-    return null;
-
-  }
-
-  const frequency = typeof schedule.frequency === 'string' ? schedule.frequency.trim() : '';
-
-  if (!VALID_SCHEDULE_FREQUENCIES.has(frequency)) {
-
-    return null;
-
-  }
-
-  const base = fromDate instanceof Date ? new Date(fromDate) : new Date();
-
-  if (Number.isNaN(base.getTime())) {
-
-    return null;
-
-  }
-
-  const timeInfo = normalizeScheduleTime(schedule.time);
-
-  const candidate = new Date(base.getTime());
-
-  candidate.setSeconds(0, 0);
-
-  candidate.setMilliseconds(0);
-
-  if (frequency === 'weekly') {
-
-    const targetDay = clampWeekday(schedule.dayOfWeek);
-
-    const current = candidate.getDay() === 0 ? 7 : candidate.getDay();
-
-    candidate.setHours(timeInfo.hour, timeInfo.minute, 0, 0);
-
-    let diff = targetDay - current;
-
-    if (diff < 0 || (diff === 0 && candidate <= base)) {
-
-      diff += 7;
-
-    }
-
-    candidate.setDate(candidate.getDate() + diff);
-
-    candidate.setHours(timeInfo.hour, timeInfo.minute, 0, 0);
-
-    return candidate.toISOString();
-
-  }
-
-  if (frequency === 'monthly') {
-
-    const targetDay = clampMonthDay(schedule.dayOfMonth);
-
-    const initial = new Date(candidate.getFullYear(), candidate.getMonth(), 1, timeInfo.hour, timeInfo.minute, 0, 0);
-
-    const daysInMonth = new Date(initial.getFullYear(), initial.getMonth() + 1, 0).getDate();
-
-    const day = Math.min(targetDay, daysInMonth);
-
-    initial.setDate(day);
-
-    if (initial <= base) {
-
-      initial.setDate(1);
-
-      initial.setMonth(initial.getMonth() + 1);
-
-      const nextDays = new Date(initial.getFullYear(), initial.getMonth() + 1, 0).getDate();
-
-      initial.setDate(Math.min(targetDay, nextDays));
-
-    }
-
-    initial.setHours(timeInfo.hour, timeInfo.minute, 0, 0);
-
-    return initial.toISOString();
-
-  }
-
-  return null;
-
-}
-
-
-
-function normalizeReportScheduleEntry(entry, fallback = null) {
-
-  const base = fallback && typeof fallback === 'object' ? fallback : {};
-
-  const raw = entry && typeof entry === 'object' ? entry : {};
-
-  const id = String(raw.id || base.id || `schedule-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
-
-  const name = String(raw.name ?? base.name ?? 'Báo cáo KPI')
-
-    .trim()
-
-    .slice(0, 120) || 'Báo cáo KPI';
-
-  const rawFrequency = typeof raw.frequency === 'string' ? raw.frequency.trim() : '';
-
-  const baseFrequency = typeof base.frequency === 'string' ? base.frequency.trim() : '';
-
-  const frequency = VALID_SCHEDULE_FREQUENCIES.has(rawFrequency)
-
-    ? rawFrequency
-
-    : VALID_SCHEDULE_FREQUENCIES.has(baseFrequency)
-
-    ? baseFrequency
-
-    : 'weekly';
-
-  const timeInfo = normalizeScheduleTime(raw.time ?? base.time ?? '08:00');
-
-  const recipients = normalizeScheduleRecipients(raw.recipients ?? base.recipients ?? []);
-
-  const formats = normalizeScheduleFormats(raw.formats ?? base.formats ?? []);
-
-  const active = raw.active ?? base.active ?? true;
-
-  const lastRun = typeof raw.lastRun === 'string' && raw.lastRun ? raw.lastRun : typeof base.lastRun === 'string' ? base.lastRun : '';
-
-  let nextRun = typeof raw.nextRun === 'string' && raw.nextRun ? raw.nextRun : typeof base.nextRun === 'string' ? base.nextRun : '';
-
-
-
-  const normalized = {
-
-    id,
-
-    name,
-
-    frequency,
-
-    time: timeInfo.label,
-
-    dayOfWeek: frequency === 'weekly' ? clampWeekday(raw.dayOfWeek ?? base.dayOfWeek ?? 1) : null,
-
-    dayOfMonth: frequency === 'monthly' ? clampMonthDay(raw.dayOfMonth ?? base.dayOfMonth ?? 1) : null,
-
-    recipients,
-
-    formats,
-
-    active: Boolean(active),
-
-    lastRun,
-
-    nextRun,
-
-  };
-
-
-
-  if (normalized.active) {
-
-    const upcoming = calculateNextReportScheduleRun(normalized);
-
-    if (upcoming) {
-
-      normalized.nextRun = upcoming;
-
-    }
-
-  } else {
-
-    normalized.nextRun = '';
-
-  }
-
-
-
-  return normalized;
-
-}
-
-
-
-function readReportSchedules() {
-
-  const stored = safeParse(getItem(REPORT_SCHEDULE_KEY), []);
-
-  return Array.isArray(stored) ? stored.filter(Boolean) : [];
-
-}
-
-
-
-function writeReportSchedules(list) {
-
-  const payload = Array.isArray(list) ? list : [];
-
-  setItem(REPORT_SCHEDULE_KEY, JSON.stringify(payload));
-
-  refreshSharedKeys([REPORT_SCHEDULE_KEY]);
-
-  return payload;
-
-}
-
-
-
-export function getReportSchedules() {
-
-  const stored = readReportSchedules();
-
-  return stored.map((entry) => normalizeReportScheduleEntry(entry));
-
-}
-
-
-
-export function saveReportSchedule(entry, { actor = 'system' } = {}) {
-
-  const stored = readReportSchedules();
-
-  const normalizedId = entry && entry.id ? String(entry.id) : '';
-
-  const index = normalizedId ? stored.findIndex((item) => item?.id === normalizedId) : -1;
-
-  const base = index >= 0 ? stored[index] : null;
-
-  const normalized = normalizeReportScheduleEntry(entry, base);
-
-  if (index >= 0) {
-
-    stored[index] = normalized;
-
-  } else {
-
-    stored.push(normalized);
-
-  }
-
-  writeReportSchedules(stored);
-
-  pushAuditLog({
-
-    actor,
-
-    action: 'report.schedule.save',
-
-    detail: `Cập nhật lịch gửi báo cáo ${normalized.name}`,
-
-    meta: {
-
-      scheduleId: normalized.id,
-
-      frequency: normalized.frequency,
-
-      formats: normalized.formats,
-
-      active: normalized.active,
-
-    },
-
-  });
-
-  return normalized;
-
-}
-
-
-
-export function deleteReportSchedule(id, { actor = 'system' } = {}) {
-
-  const stored = readReportSchedules();
-
-  const normalizedId = String(id || '').trim();
-
-  if (!normalizedId) {
-
-    return false;
-
-  }
-
-  const next = stored.filter((item) => item && item.id !== normalizedId);
-
-  if (next.length === stored.length) {
-
-    return false;
-
-  }
-
-  writeReportSchedules(next);
-
-  pushAuditLog({
-
-    actor,
-
-    action: 'report.schedule.delete',
-
-    detail: `Xoá lịch gửi báo cáo ${normalizedId}`,
-
-    meta: { scheduleId: normalizedId },
-
-  });
-
-  return true;
-
-}
-
-
-
 // ===== K_RULES (Ä‘á»ƒ RulesEditor khÃ´ng lá»—i khi chÆ°a cÃ³ dá»¯ liá»‡u) =====
 
 export const K_RULES = (() => {
@@ -9250,6 +8325,67 @@ export function pushAuditLog({
   setItem(AUDIT_KEY, JSON.stringify(limited));
 
   return entry;
+
+}
+
+
+
+const reportScheduleStore = createReportScheduleStore({
+  getItem,
+  setItem,
+  refreshSharedKeys,
+  pushAuditLog,
+});
+
+const importColumnConfigStore = createImportColumnConfigStore({
+  readUILayoutConfig,
+  writeUILayoutConfig,
+  subscribeKey: subscribe,
+  pushAuditLog,
+  uiLayoutKey: UI_LAYOUT_KEY,
+});
+
+export function getImportColumnConfig() {
+
+  return importColumnConfigStore.getImportColumnConfig();
+
+}
+
+
+
+export function saveImportColumnConfig(config, options) {
+
+  return importColumnConfigStore.saveImportColumnConfig(config, options);
+
+}
+
+
+
+export function subscribeImportColumnConfig(listener) {
+
+  return importColumnConfigStore.subscribeImportColumnConfig(listener);
+
+}
+
+export function getReportSchedules() {
+
+  return reportScheduleStore.getReportSchedules();
+
+}
+
+
+
+export function saveReportSchedule(entry, options) {
+
+  return reportScheduleStore.saveReportSchedule(entry, options);
+
+}
+
+
+
+export function deleteReportSchedule(id, options) {
+
+  return reportScheduleStore.deleteReportSchedule(id, options);
 
 }
 

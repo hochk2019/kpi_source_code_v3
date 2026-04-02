@@ -21,10 +21,10 @@
 
 ## Sync Notebook
 
-- Goal: reconcile notebook/backlog voi worktree thuc te sau khi dong `cng-1wj.9`, claim `cng-1wj.10` lam active slice ke tiep, va khoa state handoff cho wave B ma chua mo rong code domain moi trong session nay.
-- Files In Scope: `task.md`, `docs/open-backlog.md`, trang thai bead `cng-1wj.9` / `cng-1wj.10`, va output verify cho shell/dashboard/command-center/workflow-guide/async primitives/wave A.
-- Verify: `wsl -d Ubuntu-2204 -u sam -- bash -lc "cd /mnt/e/GPT/kpi_source_code_v4 && bd show cng-1wj.9 && bd show cng-1wj.10"`; `pnpm bd:check`; `gitnexus_detect_changes(scope=all)`.
-- Handoff: neu context bi nen/reset, bat dau lai bang `task.md`, giu `docs/opus-review-v2-modernization-brief-2026-04-02.md` lam scope freeze, xem `cng-1wj.3..cng-1wj.9` la done, va tiep tuc thuc thi `cng-1wj.10` cho reporting/import/adjustments/health state extraction.
+- Goal: tiep tuc `cng-1wj.10` sau commit wave A bang cach tach 2 low-risk slices khoi `store.js` (`reportSchedules` va `importColumnConfig`), them module test rieng, va cap nhat notebook de handoff vao thang wave B implementation.
+- Files In Scope: `src/lib/store.js`, `src/lib/reportSchedules.js`, `src/lib/importColumnConfig.js`, `tests/reportSchedules.test.js`, `tests/importColumnConfig.test.js`, `tests/store.test.js`, `tests/useDataImporterColumnConfig.test.jsx`, `task.md`, va bead `cng-1wj.10`.
+- Verify: `pnpm exec vitest run tests/importColumnConfig.test.js tests/reportSchedules.test.js tests/store.test.js tests/useDataImporterColumnConfig.test.jsx --environment jsdom`; `pnpm exec eslint src/lib/importColumnConfig.js src/lib/reportSchedules.js src/lib/store.js tests/importColumnConfig.test.js tests/reportSchedules.test.js`; `pnpm bd:check`; `gitnexus_detect_changes(scope=all)`.
+- Handoff: neu context bi nen/reset, bat dau lai bang `task.md`, xem `cng-1wj.3..cng-1wj.9` la done, report schedule + import column config extraction trong `cng-1wj.10` da xong, va lane tiep theo nen uu tien mot slice nho cho KPI adjustments hoac health/import runtime state sau khi impact-gate tung symbol.
 
 ## Execution Matrix
 
@@ -57,6 +57,20 @@
   - Risk: `gitnexus_detect_changes()` van co the bao scope rong/critical vi index chua refresh va diff hien tai gom ca phase 0-2 + wave A; can dien giai ket qua nay nhu stale-index warning, khong phai regression xac nhan.
   - Decision: dung lai sau wave A thay vi mo rong sang wave B trong cung session, de giu scope nho va verify-on-green.
   - Next: mo `cng-1wj.10` cho reporting filters/presets, adjustments, import, health theo tung domain hook/store nho; chua dong `cng-1wj.11`.
+
+- Checkpoint 22 (wave B started with reporting schedule extraction):
+  - Done: tao `src/lib/reportSchedules.js` de dong goi normalize/persistence/audit wiring cho report schedules, doi `src/lib/store.js` sang facade wrappers giu nguyen public API, va them regression suite `tests/reportSchedules.test.js`.
+  - Verify: `pnpm exec vitest run tests/reportSchedules.test.js tests/store.test.js --environment jsdom`; `pnpm exec eslint src/lib/reportSchedules.js src/lib/store.js tests/reportSchedules.test.js`; `pnpm bd:check`.
+  - Risk: wave B moi chi tach xong report schedules; cac domain con lai trong `store.js` (KPI adjustments/import/health) van chua duoc cat nho nen blast radius cua turn sau van can impact gate rieng truoc khi sua.
+  - Decision: bat dau wave B bang reporting schedule slice vi co blast radius thap va co contract test ro rang, thay vi nhay thang vao `KPIAdjustments`/import path lon hon.
+  - Next: tiep tuc `cng-1wj.10` voi KPI adjustments state extraction, sau do den import va health state.
+
+- Checkpoint 23 (wave B import column config extraction):
+  - Done: tao `src/lib/importColumnConfig.js` de tach normalization/persistence/subscription cho import column config, doi `src/lib/store.js` sang facade wrappers giu nguyen `getImportColumnConfig`/`saveImportColumnConfig`/`subscribeImportColumnConfig`, va them regression suite `tests/importColumnConfig.test.js`.
+  - Verify: `pnpm exec vitest run tests/importColumnConfig.test.js tests/reportSchedules.test.js tests/store.test.js tests/useDataImporterColumnConfig.test.jsx --environment jsdom`; `pnpm exec eslint src/lib/importColumnConfig.js src/lib/reportSchedules.js src/lib/store.js tests/importColumnConfig.test.js tests/reportSchedules.test.js`.
+  - Risk: KPI adjustments helper graph van bao `HIGH/CRITICAL`, nen turn tiep theo khong nen tiep tuc theo huong tach settings/helpers cua adjustment trong cung buoc voi importer.
+  - Decision: tiep tuc uu tien low-risk import slice de lam monolith nho dan ma khong mo them regression hot-path; defer KPI adjustments sang mot sub-slice rieng sau khi khoanh symbol an toan hon.
+  - Next: trong `cng-1wj.10`, danh gia slice ke tiep giua health/import runtime state va KPI adjustments facade nho.
 
 - Checkpoint 18 (ad hoc GitNexus upgrade for repo usage):
   - Done: xac minh `npx gitnexus --version` dang dung cache cu `1.4.8`, trong khi `codex mcp list` da tro toi `cmd /c npx -y gitnexus@latest mcp`; cap nhat `package.json` (`gitnexus:analyze`, `gitnexus:serve`) va `scripts/gitnexus-refresh.mjs` de buoc repo dung `npx -y gitnexus@latest`, chinh test `tests/gitnexus-refresh.test.js` theo invocation moi, va dong bo huong dan trong `AGENTS.md`/`CLAUDE.md` sang `pnpm run gitnexus:analyze` + direct-call fallback `npx -y gitnexus@latest ...`.
@@ -205,15 +219,14 @@
 
 ## Handoff
 
-- Done: frontend modernization da ship den het wave A; beads `cng-1wj.3..cng-1wj.9` da close, shell/dashboard/command-center state da duoc tach khoi component monolith thanh hook/selector rieng.
+- Done: frontend modernization da ship den het wave A; beads `cng-1wj.3..cng-1wj.9` da close, va wave B da tach xong 2 slices dau tien khoi `store.js`: `src/lib/reportSchedules.js` va `src/lib/importColumnConfig.js`.
 - Verify:
-  - `pnpm exec vitest run tests/useKpiShellState.test.jsx tests/useCommandCenterState.test.jsx tests/appDashboardSummary.test.js tests/commandCenter.test.jsx tests/appDashboardLanding.test.jsx tests/appShellWorkflowState.test.js tests/appShellWorkflowGuide.test.jsx tests/appShellFrame.test.jsx tests/kpiCalculator.navigation.test.jsx --environment jsdom`
-  - `pnpm exec eslint src/components/KPICalculator.jsx src/components/CommandCenter.jsx src/components/appShell/AppDashboardLanding.jsx src/components/appShell/useKpiShellState.js src/components/appShell/appDashboardSummary.js src/components/command-center/useCommandCenterState.js tests/useKpiShellState.test.jsx tests/useCommandCenterState.test.jsx tests/appDashboardSummary.test.js tests/commandCenter.test.jsx tests/appDashboardLanding.test.jsx tests/kpiCalculator.navigation.test.jsx`
-  - `wsl -d Ubuntu-2204 -u sam -- bash -lc "cd /mnt/e/GPT/kpi_source_code_v4 && bd show cng-1wj.9 && bd show cng-1wj.10"`
+  - `pnpm exec vitest run tests/importColumnConfig.test.js tests/reportSchedules.test.js tests/store.test.js tests/useDataImporterColumnConfig.test.jsx --environment jsdom`
+  - `pnpm exec eslint src/lib/importColumnConfig.js src/lib/reportSchedules.js src/lib/store.js tests/importColumnConfig.test.js tests/reportSchedules.test.js`
   - `pnpm bd:check`
-- Risk: wave B chua bat dau, nen `store.js` van con phan domain nang cho reporting/import/adjustments/health; GitNexus scope check truoc commit co the van bao rong cho den khi index duoc refresh.
-- Decision: dong bo lai notebook va BD bang cach claim `cng-1wj.10` sang `in_progress`; turn nay chi khoa handoff/checks, chua mo rong code wave B.
-- Next: tiep tuc tu `cng-1wj.10`, uu tien tach reporting filters/presets va import/health state theo tung module nho co test.
+- Risk: `store.js` da nho them 2 slices nhung KPI adjustments helper graph van `HIGH/CRITICAL`; turn sau can khoanh mot slice hep hon thay vi tach ca cum adjustment/settings.
+- Decision: giu `cng-1wj.10` o `in_progress`, xem report schedule extraction la moc khoi dong wave B thay vi dong bead qua som.
+- Next: tiep tuc tu `cng-1wj.10`, uu tien chon mot slice `LOW`/`MEDIUM` tiep theo cho import-health runtime state; neu quay lai KPI adjustments thi phai impact-gate tung symbol va giu facade contract rat chat.
 
 - Done: da chot trang thai dong cho cutover package docs; `v4-cutover-execution-board.md` la 100% complete trong repo scope va cac tai lieu lien quan da duoc archive/cap nhat dong bo.
 - Verify:
