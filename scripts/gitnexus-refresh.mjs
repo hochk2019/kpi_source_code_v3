@@ -3,6 +3,7 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 const CONTEXT_FILES = ['AGENTS.md', 'CLAUDE.md'];
+const GITNEXUS_NPX_ARGS = ['-y', 'gitnexus@latest'];
 
 function run(command, args, options = {}) {
   return spawnSync(command, args, {
@@ -52,7 +53,7 @@ export function restoreSnapshots(snapshots, deps = {}) {
 export function refreshGitNexus(cwd = process.cwd(), deps = {}) {
   const runner = deps.runner ?? run;
   const snapshots = collectSnapshots(CONTEXT_FILES, cwd, deps);
-  const result = runner('npx', ['gitnexus', 'analyze'], {
+  const result = runner('npx', [...GITNEXUS_NPX_ARGS, 'analyze'], {
     cwd,
     stdio: 'inherit',
     shell: process.platform === 'win32',

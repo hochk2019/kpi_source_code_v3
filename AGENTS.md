@@ -126,7 +126,7 @@ pnpm bd:check                         # Kiem tra task.md/open-backlog co lech vo
 
 This project is indexed by GitNexus as **kpi_source_code_v4** (5590 symbols, 18025 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
-> If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
+> If any GitNexus tool warns the index is stale, run `pnpm run gitnexus:analyze` in terminal first. If you must call GitNexus directly, use `npx -y gitnexus@latest ...` instead of bare `npx gitnexus ...`.
 
 ## Always Do
 
@@ -197,13 +197,13 @@ Before completing any code modification task, verify:
 After committing code changes, the GitNexus index becomes stale. Re-run analyze to update it:
 
 ```bash
-npx gitnexus analyze
+pnpm run gitnexus:analyze
 ```
 
 If the index previously included embeddings, preserve them by adding `--embeddings`:
 
 ```bash
-npx gitnexus analyze --embeddings
+npx -y gitnexus@latest analyze --embeddings
 ```
 
 To check whether embeddings exist, inspect `.gitnexus/meta.json` — the `stats.embeddings` field shows the count (0 means no embeddings). **Running analyze without `--embeddings` will delete any previously generated embeddings.**

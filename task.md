@@ -11,16 +11,16 @@
 
 ## Active Slice
 
--- Title: ad hoc / dev backend stale dist guard for shared-sync bootstrap
+-- Title: ad hoc / upgrade GitNexus CLI invocations to latest
 -- Status: completed
 -- Last updated: 2026-04-02
 
 ## Sync Notebook
 
-- Goal: khoa lane refactor browser-backend sync theo thu tu `instrumentation -> canonical contract -> client migration -> failure isolation -> persistence optimization -> verification`.
-- Files In Scope: `task.md`, `docs/open-backlog.md`, `server-v4/src/app/build-v4-app.ts`, `server-v4/src/app/legacy-compat/*`, `src/lib/storageClient.js`, `src/lib/apiContractScanner.js`, sync/perf tests lien quan.
-- Verify: moi slice phai co targeted tests + lint/contract gate tuong ung truoc khi chuyen slice; khong nhan hoan tat neu `task.md` va bead state lech nhau.
-- Handoff: neu context bi nen/reset, bat dau lai bang `task.md`; lane `cng-yn6` da duoc re-close sau cleanup bead `cng-yn6.7`, va hien `bd ready` tra ve `No open issues`, khong suy luan tu tri nho hoi thoai.
+- Goal: dong bo toan bo diem goi GitNexus trong repo sang `gitnexus@latest` de tranh `npx gitnexus` dung cache cu (`1.4.8`) trong khi MCP global da tro toi `gitnexus@latest`.
+- Files In Scope: `task.md`, `package.json`, `scripts/gitnexus-refresh.mjs`, `tests/gitnexus-refresh.test.js`.
+- Verify: `pnpm exec eslint scripts/gitnexus-refresh.mjs tests/gitnexus-refresh.test.js`; `pnpm exec vitest run tests/gitnexus-refresh.test.js --environment node`; `pnpm run gitnexus:analyze -- --help`; `npx -y gitnexus@latest --version`; `codex mcp list`.
+- Handoff: neu context bi nen/reset, bat dau lai bang `task.md`; GitNexus MCP global da tro toi `cmd /c npx -y gitnexus@latest mcp`, va repo nay da duoc doi script `gitnexus:*`/refresh helper sang latest. Bead CLI qua WSL dang bi `Access is denied`, nen task ad hoc nay chi duoc ghi vao notebook thay vi tao bead moi.
 
 ## Execution Matrix
 
@@ -32,6 +32,13 @@
 | cng-0s2.1 | Runtime smoke + closure/reconcile | `pnpm run test:playwright:runtime`, `pnpm bd:check` | done | `pnpm exec vitest run tests/auth.test.jsx tests/dataImporterShellProps.test.js tests/dataImporterFileActions.test.jsx tests/reportingScopeSections.test.jsx --environment jsdom`; `pnpm exec vitest run tests/server-v4/appShell.test.js tests/server.api.test.js --environment node`; `pnpm run test:playwright:runtime`; `pnpm exec eslint src/auth/localAuth.js src/components/ReportViewer.jsx src/components/dataImporter/importGate.js src/components/dataImporter/DataImporterFileActions.jsx src/components/dataImporter/dataImporterShellProps.js src/components/dataImporter/useDataImporterImportFlow.js src/components/dataImporter/useDataImporterWorkflowSession.js src/components/reporting/reportingExportState.js src/components/reporting/useReportViewerActions.js src/components/reporting/ReportingStaffSection.jsx src/components/reporting/ReportingTeamSection.jsx src/components/reporting/StaffDetailCard.jsx src/components/reporting/TeamDetailCard.jsx tests/helpers/mockApiState.js tests/auth.test.jsx tests/dataImporterImportGate.test.js tests/dataImporterShellProps.test.js tests/dataImporterFileActions.test.jsx tests/useDataImporterImportFlow.test.jsx tests/reportingExportState.test.js tests/reportingScopeSections.test.jsx tests/useReportViewerActions.test.jsx`; `pnpm bd:check` |
 
 ## Checkpoint Log
+
+- Checkpoint 18 (ad hoc GitNexus upgrade for repo usage):
+  - Done: xac minh `npx gitnexus --version` dang dung cache cu `1.4.8`, trong khi `codex mcp list` da tro toi `cmd /c npx -y gitnexus@latest mcp`; cap nhat `package.json` (`gitnexus:analyze`, `gitnexus:serve`) va `scripts/gitnexus-refresh.mjs` de buoc repo dung `npx -y gitnexus@latest`, chinh test `tests/gitnexus-refresh.test.js` theo invocation moi, va dong bo huong dan trong `AGENTS.md`/`CLAUDE.md` sang `pnpm run gitnexus:analyze` + direct-call fallback `npx -y gitnexus@latest ...`.
+  - Verify: `pnpm exec eslint scripts/gitnexus-refresh.mjs tests/gitnexus-refresh.test.js`; `pnpm exec vitest run tests/gitnexus-refresh.test.js --environment node`; `pnpm run gitnexus:analyze -- --help`; `npx -y gitnexus@latest --version`; `codex mcp list`; `Select-String -Path AGENTS.md,CLAUDE.md -Pattern 'pnpm run gitnexus:analyze|gitnexus@latest analyze --embeddings'`.
+  - Risk: repo hien theo doi `gitnexus@latest` nen nhung thay doi lon o upstream co the anh huong hanh vi trong tuong lai; neu can reproducible build thi buoc tiep theo la pin sang mot version cu the.
+  - Decision: uu tien latest de dong bo voi README/upstream va cau hinh MCP global hien co, thay vi pin tam thoi `1.5.3`.
+  - Next: neu can khoa version on dinh, doi sang `gitnexus@1.5.3` (hoac version mong muon) cho package scripts + MCP config global trong mot slice rieng.
 
 - Checkpoint 17 (ad hoc dev backend stale dist guard):
   - Done: xac dinh banner `HTTP 404 Not Found` o dev khong do route source bi mat ma do `pnpm server` dang nap `dist/server-v4` cu; them helper `scripts/server-v4-build-sync.mjs` de check canary compiled outputs (`index.js`, `app/build-v4-app.js`, `app/shared-sync/sharedSyncRoutes.js`) va auto-chay `pnpm build:server-v4` trong `scripts/start-backend.mjs` khi dist thieu/stale.
