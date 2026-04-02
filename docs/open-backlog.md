@@ -1,6 +1,6 @@
 # Open Backlog
 
-Last reconciled: 2026-04-01
+Last reconciled: 2026-04-02
 
 This file is the canonical source of truth for unfinished work in this repo.
 
@@ -37,6 +37,8 @@ Reconciliation note:
 - Reconciled again on 2026-04-01 after validating full Big-bang engineering gates (`api:contract:gate`, `verify:v4:parity`, `verify:v4:cutover-preflight --dry-run`) and closing epic `cng-mbu`; repository had no open beads before hard-gate execution epic `cng-m2r` was opened.
 - Reconciled again on 2026-04-01 after opening hard-gate execution epic `cng-m2r` with phase chain `cng-m2r.1..cng-m2r.6`, plus canonical board `docs/operations/v4-cutover-execution-board.md` and automation gate `pnpm run cutover:check`.
 - Reconciled again on 2026-04-01 after closing `cng-m2r.6` and epic `cng-m2r`; UAT smoke + cutover preflight with `--with-uat-smoke` are green, repository cutover board is fully closed, and there are no open beads.
+- Reconciled again on 2026-04-02 after opening sync refactor epic `cng-yn6` with child slices `cng-yn6.1..cng-yn6.6`; `cng-yn6.1` is in progress and `task.md` now carries the canonical session notebook for this lane.
+- Reconciled again on 2026-04-02 after completing `cng-yn6.1`, `cng-yn6.2`, and `cng-yn6.3`; canonical `/api/v4/shared-sync/*` routes plus storage-client migration are shipped, and next ready work moves to failure isolation + persistence hot path.
 
 Rule:
 - Every unfinished item from review notes, rollout plans, decomposition plans, or UX backlogs must be in one of two states:
@@ -44,10 +46,11 @@ Rule:
 - explicitly marked deferred or removed in its source document
 
 Current open epics:
-- none.
+- `cng-yn6` - Sync-latency-refactor.
 
 Current highest-priority ready items:
-- none.
+- `cng-yn6.5` - SYNC-5-optimize-persistence-hot-path.
+- `cng-yn6.6` - SYNC-6-verify-contract-regression-perf.
 
 ## Hard-gate Cutover Program
 
@@ -81,6 +84,18 @@ Epic: `cng-2k4` (closed)
 Source set: `Gemini_review_V1.md`, `docs/gemini-review-v1-factcheck-2026-03-25.md`, `docs/server-v4-rollout-plan-2026-03-25.md`, `frontend-wave1-decomposition.md`, `task.md`
 
 - No open child tasks currently tracked in BD for epic `cng-2k4` (epic closed).
+
+## Sync Latency And Disconnect Refactor
+
+Epic: `cng-yn6`
+Source set: user latency/disconnect investigation, `task.md`
+
+- `cng-yn6.1` - SYNC-1 notebook and baseline (closed)
+- `cng-yn6.2` - SYNC-2 canonical shared-sync server-v4 routes (closed)
+- `cng-yn6.3` - SYNC-3 migrate storage client to canonical shared-sync API (closed)
+- `cng-yn6.4` - SYNC-4 isolate sync failures and LAN retry policy (in_progress)
+- `cng-yn6.5` - SYNC-5 optimize persistence hot path (open)
+- `cng-yn6.6` - SYNC-6 verify contract, regression, and perf (open)
 
 ## UX Improvement Backlog
 

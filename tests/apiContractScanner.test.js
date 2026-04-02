@@ -13,12 +13,14 @@ describe('apiContractScanner', () => {
       const a = "/api/v4/auth/session"
       const b = '/api/filter-presets'
       const c = \`/api/reports/export?from=2024-01-01\`
+      const d = \`\${base}/api/v4/shared-sync/storage/\${encodeURIComponent(key)}\`
       const notApi = "/static/assets/logo.svg"
     `
     expect(extractApiPathsFromSource(sourceText)).toEqual([
       '/api/v4/auth/session',
       '/api/filter-presets',
       '/api/reports/export?from=2024-01-01',
+      '/api/v4/shared-sync/storage/${encodeURIComponent',
     ])
   })
 

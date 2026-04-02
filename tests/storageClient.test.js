@@ -120,7 +120,7 @@ describe('storageClient remote đồng bộ lại khi server lên trễ', () => 
 
       const url = typeof input === 'string' ? input : input?.url ?? '';
 
-      if (url.includes('/api/bootstrap')) {
+      if (url.includes('/api/v4/shared-sync/bootstrap')) {
 
         const next = bootstrapQueue.shift() ?? { kind: 'success', data: {} };
 
@@ -134,7 +134,7 @@ describe('storageClient remote đồng bộ lại khi server lên trễ', () => 
 
       }
 
-      if (url.includes('/api/storage/') && method === 'PUT') {
+      if (url.includes('/api/v4/shared-sync/storage/') && method === 'PUT') {
 
         storageWrites.push({ url, body: init?.body });
 
@@ -168,7 +168,7 @@ describe('storageClient remote đồng bộ lại khi server lên trễ', () => 
 
 
 
-    await vi.advanceTimersByTimeAsync(5000);
+    await vi.advanceTimersByTimeAsync(500);
 
     await Promise.resolve();
 
@@ -200,13 +200,13 @@ describe('storageClient remote đồng bộ lại khi server lên trễ', () => 
 
       const url = typeof input === 'string' ? input : input?.url ?? '';
 
-      if (url.includes('/api/bootstrap')) {
+      if (url.includes('/api/v4/shared-sync/bootstrap')) {
 
         return createBootstrapResponse({ hq_agencies_v1: '[]', hq_history_v1: '[]' });
 
       }
 
-      if (url.includes('/api/storage/') && method === 'PUT') {
+      if (url.includes('/api/v4/shared-sync/storage/') && method === 'PUT') {
 
         storageWrites.push({ url, body: init?.body });
 
@@ -242,7 +242,7 @@ describe('storageClient remote đồng bộ lại khi server lên trễ', () => 
 
     expect(storageWrites).toHaveLength(1);
 
-    expect(storageWrites[0].url).toContain('/api/storage/hq_agencies_v1');
+    expect(storageWrites[0].url).toContain('/api/v4/shared-sync/storage/hq_agencies_v1');
 
     const saved = JSON.parse(storageWrites[0].body);
 
@@ -262,13 +262,13 @@ describe('storageClient remote đồng bộ lại khi server lên trễ', () => 
 
       const url = typeof input === 'string' ? input : input?.url ?? '';
 
-      if (url.includes('/api/bootstrap')) {
+      if (url.includes('/api/v4/shared-sync/bootstrap')) {
 
         return createBootstrapResponse({ mst_history_v1: '[]', hq_history_v1: '[]' });
 
       }
 
-      if (url.includes('/api/storage/') && method === 'PUT') {
+      if (url.includes('/api/v4/shared-sync/storage/') && method === 'PUT') {
 
         storageWrites.push({ url, body: init?.body });
 
@@ -328,7 +328,7 @@ describe('storageClient remote đồng bộ lại khi server lên trễ', () => 
 
     expect(storageWrites).toHaveLength(1);
 
-    expect(storageWrites[0].url).toContain('/api/storage/mst_history_v1');
+    expect(storageWrites[0].url).toContain('/api/v4/shared-sync/storage/mst_history_v1');
 
     const saved = JSON.parse(storageWrites[0].body);
 
@@ -346,13 +346,13 @@ describe('storageClient remote đồng bộ lại khi server lên trễ', () => 
 
       const url = typeof input === 'string' ? input : input?.url ?? '';
 
-      if (url.includes('/api/bootstrap')) {
+      if (url.includes('/api/v4/shared-sync/bootstrap')) {
 
         return createBootstrapResponse({ kpi_command_center_pins_v1: '[]' });
 
       }
 
-      if (url.includes('/api/storage/') && method === 'PUT') {
+      if (url.includes('/api/v4/shared-sync/storage/') && method === 'PUT') {
 
         storageWrites.push({ url, body: init?.body });
 
@@ -388,7 +388,7 @@ describe('storageClient remote đồng bộ lại khi server lên trễ', () => 
 
     expect(storageWrites).toHaveLength(1);
 
-    expect(storageWrites[0].url).toContain('/api/storage/kpi_command_center_pins_v1');
+    expect(storageWrites[0].url).toContain('/api/v4/shared-sync/storage/kpi_command_center_pins_v1');
 
     const saved = JSON.parse(storageWrites[0].body);
 
@@ -408,13 +408,13 @@ describe('storageClient remote đồng bộ lại khi server lên trễ', () => 
 
       const url = typeof input === 'string' ? input : input?.url ?? '';
 
-      if (url.includes('/api/bootstrap')) {
+      if (url.includes('/api/v4/shared-sync/bootstrap')) {
 
         return createBootstrapResponse({ hq_history_v1: '[]' });
 
       }
 
-      if (url.includes('/api/storage/') && method === 'PUT') {
+      if (url.includes('/api/v4/shared-sync/storage/') && method === 'PUT') {
 
         storageWrites.push({ url, body: init?.body });
 
@@ -472,7 +472,7 @@ describe('storageClient remote đồng bộ lại khi server lên trễ', () => 
 
     expect(storageWrites).toHaveLength(1);
 
-    expect(storageWrites[0].url).toContain('/api/storage/hq_history_v1');
+    expect(storageWrites[0].url).toContain('/api/v4/shared-sync/storage/hq_history_v1');
 
     const saved = JSON.parse(storageWrites[0].body);
 
@@ -500,7 +500,7 @@ describe('storageClient remote đồng bộ lại khi server lên trễ', () => 
 
       const url = typeof input === 'string' ? input : input?.url ?? '';
 
-      if (url.includes('/api/bootstrap')) {
+      if (url.includes('/api/v4/shared-sync/bootstrap')) {
 
         const next = bootstrapQueue.shift() ?? { kind: 'success', data: {} };
 
@@ -514,7 +514,7 @@ describe('storageClient remote đồng bộ lại khi server lên trễ', () => 
 
       }
 
-      if (url.includes('/api/storage/') && method === 'PUT') {
+      if (url.includes('/api/v4/shared-sync/storage/') && method === 'PUT') {
 
         storageWrites.push({ url, body: init?.body });
 
@@ -560,7 +560,7 @@ describe('storageClient remote đồng bộ lại khi server lên trễ', () => 
 
 
 
-    await vi.advanceTimersByTimeAsync(5000);
+    await vi.advanceTimersByTimeAsync(500);
 
     await Promise.resolve();
 
@@ -592,7 +592,7 @@ describe('storageClient remote đồng bộ lại khi server lên trễ', () => 
 
       const url = typeof input === 'string' ? input : input?.url ?? '';
 
-      if (url.includes('/api/bootstrap')) {
+      if (url.includes('/api/v4/shared-sync/bootstrap')) {
 
         throw new Error('offline');
 
@@ -622,7 +622,7 @@ describe('storageClient remote đồng bộ lại khi server lên trễ', () => 
 
     const firstDelay = setTimeoutSpy.mock.calls[0]?.[1];
 
-    expect(firstDelay).toBe(5000);
+    expect(firstDelay).toBe(500);
 
 
 
@@ -662,7 +662,7 @@ describe('storageClient remote đồng bộ lại khi server lên trễ', () => 
 
       const url = typeof input === 'string' ? input : input?.url ?? '';
 
-      if (url.includes('/api/bootstrap')) {
+      if (url.includes('/api/v4/shared-sync/bootstrap')) {
 
         bootstrapCalls += 1;
 
@@ -676,7 +676,7 @@ describe('storageClient remote đồng bộ lại khi server lên trễ', () => 
 
       }
 
-      if (url.includes('/api/storage/') && method === 'PUT') {
+      if (url.includes('/api/v4/shared-sync/storage/') && method === 'PUT') {
 
         storageWrites.push({ url, body: init?.body });
 
@@ -702,7 +702,7 @@ describe('storageClient remote đồng bộ lại khi server lên trễ', () => 
 
     const beforeFailureDelay = getSyncStatus().retryDelayMs;
 
-    expect(beforeFailureDelay).toBe(5000);
+    expect(beforeFailureDelay).toBe(500);
 
 
 
@@ -734,9 +734,9 @@ describe('storageClient remote đồng bộ lại khi server lên trễ', () => 
 
     const expectedDelay = Math.min(
 
-      Math.max(Math.floor(beforeFailureDelay * 1.5), 5000),
+      Math.max(Math.floor(beforeFailureDelay * 1.5), 500),
 
-      60000,
+      5000,
 
     );
 
@@ -762,9 +762,9 @@ describe('storageClient remote đồng bộ lại khi server lên trễ', () => 
 
     const expectedAfterRetryDelay = Math.min(
 
-      Math.max(Math.floor(expectedDelay * 1.5), 5000),
+      Math.max(Math.floor(expectedDelay * 1.5), 500),
 
-      60000,
+      5000,
 
     );
 
@@ -800,13 +800,13 @@ describe('storageClient remote đồng bộ lại khi server lên trễ', () => 
 
       const url = typeof input === 'string' ? input : input?.url ?? '';
 
-      if (url.includes('/api/bootstrap')) {
+      if (url.includes('/api/v4/shared-sync/bootstrap')) {
 
         return createBootstrapResponse({ decl_rows_v1: '[]' });
 
       }
 
-      if (url.includes('/api/storage/') && method === 'PUT') {
+      if (url.includes('/api/v4/shared-sync/storage/') && method === 'PUT') {
 
         storageWrites.push({ url, body: init?.body });
 
@@ -886,13 +886,13 @@ describe('storageClient remote đồng bộ lại khi server lên trễ', () => 
 
       const url = typeof input === 'string' ? input : input?.url ?? '';
 
-      if (url.includes('/api/bootstrap')) {
+      if (url.includes('/api/v4/shared-sync/bootstrap')) {
 
         return createBootstrapResponse({ decl_rows_v1: '[]' });
 
       }
 
-      if (url.includes('/api/storage/decl_rows_v1') && method === 'GET') {
+      if (url.includes('/api/v4/shared-sync/storage/decl_rows_v1') && method === 'GET') {
 
         const rows = [{ so_tk: 'REFRESH-001', nhanh: '', date: '2025-08-11' }];
 
@@ -916,7 +916,7 @@ describe('storageClient remote đồng bộ lại khi server lên trễ', () => 
 
       }
 
-      if (url.includes('/api/storage/') && method === 'PUT') {
+      if (url.includes('/api/v4/shared-sync/storage/') && method === 'PUT') {
 
         return { ok: true, json: async () => ({ ok: true }) };
 
@@ -950,7 +950,103 @@ describe('storageClient remote đồng bộ lại khi server lên trễ', () => 
 
     expect(JSON.parse(cached)).toEqual([{ so_tk: 'REFRESH-001', nhanh: '', date: '2025-08-11' }]);
 
-    expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('/api/storage/decl_rows_v1'), expect.objectContaining({ method: 'GET' }));
+    expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('/api/v4/shared-sync/storage/decl_rows_v1'), expect.objectContaining({ method: 'GET' }));
+
+  });
+
+  it('giu remoteEnabled khi refreshSharedKeys chi that bai mot phan', async () => {
+
+    const fetchMock = vi.fn(async (input, init) => {
+
+      const method = (init?.method || 'GET').toUpperCase();
+
+      const url = typeof input === 'string' ? input : input?.url ?? '';
+
+      if (url.includes('/api/v4/shared-sync/bootstrap')) {
+
+        return createBootstrapResponse({ decl_rows_v1: '[]', kpi_command_center_pins_v1: '[]' });
+
+      }
+
+      if (url.includes('/api/v4/shared-sync/storage/decl_rows_v1') && method === 'GET') {
+
+        return {
+
+          ok: false,
+
+          status: 503,
+
+          statusText: 'Service Unavailable',
+
+        };
+
+      }
+
+      if (url.includes('/api/v4/shared-sync/storage/kpi_command_center_pins_v1') && method === 'GET') {
+
+        const pins = ['navigate:hq'];
+
+        return {
+
+          ok: true,
+
+          json: async () => ({
+
+            ok: true,
+
+            key: 'kpi_command_center_pins_v1',
+
+            value: pins,
+
+            raw: JSON.stringify(pins),
+
+          }),
+
+        };
+
+      }
+
+      if (url.includes('/api/v4/shared-sync/storage/') && method === 'PUT') {
+
+        return { ok: true, json: async () => ({ ok: true }) };
+
+      }
+
+      return { ok: true, json: async () => ({ ok: true }) };
+
+    });
+
+    vi.stubGlobal('fetch', fetchMock);
+
+
+
+    const initial = await initSharedStorage({ baseUrl: '' });
+
+    expect(initial).toBe(true);
+
+
+
+    const result = await refreshSharedKeys(['decl_rows_v1', 'kpi_command_center_pins_v1'], { baseUrl: '' });
+
+    expect(result).toEqual({
+
+      kpi_command_center_pins_v1: ['navigate:hq'],
+
+    });
+
+    expect(JSON.parse(sharedGetItem('kpi_command_center_pins_v1'))).toEqual(['navigate:hq']);
+
+
+
+    const status = getSyncStatus();
+
+    expect(status.remoteEnabled).toBe(true);
+
+    expect(status.lastErrorCode).toBe('http_retryable');
+
+    expect(status.lastErrorRetryable).toBe(true);
+
+    expect(status.nextRetryAt).not.toBeNull();
 
   });
 
@@ -962,7 +1058,7 @@ describe('storageClient remote đồng bộ lại khi server lên trễ', () => 
 
       const url = typeof input === 'string' ? input : input?.url ?? '';
 
-      if (url.includes('/api/bootstrap?mode=shared-light')) {
+      if (url.includes('/api/v4/shared-sync/bootstrap?mode=shared-light')) {
 
         return {
 
@@ -982,7 +1078,7 @@ describe('storageClient remote đồng bộ lại khi server lên trễ', () => 
 
       }
 
-      if (url.includes('/api/storage/decl_rows_v1') && method === 'GET') {
+      if (url.includes('/api/v4/shared-sync/storage/decl_rows_v1') && method === 'GET') {
 
         const rows = [{ so_tk: 'LIGHT-001', nhanh: '', date: '2025-08-11' }];
 
@@ -1006,7 +1102,7 @@ describe('storageClient remote đồng bộ lại khi server lên trễ', () => 
 
       }
 
-      if (url.includes('/api/storage/') && method === 'PUT') {
+      if (url.includes('/api/v4/shared-sync/storage/') && method === 'PUT') {
 
         return { ok: true, json: async () => ({ ok: true }) };
 
@@ -1032,7 +1128,7 @@ describe('storageClient remote đồng bộ lại khi server lên trễ', () => 
 
     expect(fetchMock).toHaveBeenCalledWith(
 
-      expect.stringContaining('/api/bootstrap?mode=shared-light'),
+      expect.stringContaining('/api/v4/shared-sync/bootstrap?mode=shared-light'),
 
       expect.objectContaining({ cache: 'no-store' })
 
@@ -1040,7 +1136,7 @@ describe('storageClient remote đồng bộ lại khi server lên trễ', () => 
 
     expect(fetchMock).toHaveBeenCalledWith(
 
-      expect.stringContaining('/api/storage/decl_rows_v1'),
+      expect.stringContaining('/api/v4/shared-sync/storage/decl_rows_v1'),
 
       expect.objectContaining({ method: 'GET' })
 
@@ -1051,7 +1147,7 @@ describe('storageClient remote đồng bộ lại khi server lên trễ', () => 
   it('uu tien proxy noi bo o browser dev khi baseUrl khac origin', async () => {
     const fetchMock = vi.fn(async (input) => {
       const url = typeof input === 'string' ? input : input?.url ?? '';
-      if (url.includes('/api/bootstrap?mode=shared-light')) {
+      if (url.includes('/api/v4/shared-sync/bootstrap?mode=shared-light')) {
         return {
           ok: true,
           json: async () => ({
@@ -1074,12 +1170,12 @@ describe('storageClient remote đồng bộ lại khi server lên trễ', () => 
     const bootstrapCall = fetchMock.mock.calls.find((args) => {
       const input = args?.[0];
       const url = typeof input === 'string' ? input : input?.url ?? '';
-      return url.includes('/api/bootstrap?mode=shared-light');
+      return url.includes('/api/v4/shared-sync/bootstrap?mode=shared-light');
     });
 
     expect(bootstrapCall).toBeTruthy();
     const bootstrapUrl = typeof bootstrapCall?.[0] === 'string' ? bootstrapCall[0] : bootstrapCall?.[0]?.url ?? '';
-    expect(bootstrapUrl).toContain('/api/bootstrap?mode=shared-light');
+    expect(bootstrapUrl).toContain('/api/v4/shared-sync/bootstrap?mode=shared-light');
     expect(bootstrapUrl).not.toContain('192.168.1.114:5000');
   });
 
@@ -1187,4 +1283,5 @@ describe('storageClient giới hạn dung lượng khi backend trả về 413', 
   });
 
 });
+
 

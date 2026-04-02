@@ -3,17 +3,26 @@
 ## Canonical Open Backlog
 
 - Source of truth cho tat ca viec chua xong hien tai la `docs/open-backlog.md`.
-- Da reconcile ngay 2026-04-01 voi hard-gate cutover board `docs/operations/v4-cutover-execution-board.md` va bead database.
+- Da reconcile ngay 2026-04-02 voi bead epic `cng-yn6` cho lane sync latency/disconnect refactor.
 - Open epics hien tai:
-  - none
+  - `cng-yn6` - sync latency/disconnect refactor
 - Highest-priority ready items hien tai:
-  - none (`pnpm bd:safe -- ready` => No open issues)
+  - `cng-yn6.5` - optimize persistence hot path
+  - `cng-yn6.6` - verify contract, regression, and perf
 
 ## Active Slice
 
--- Title: Cutover package documentation closure
--- Status: done
--- Last updated: 2026-04-01
+-- Title: cng-yn6.4 / SYNC-4 isolate sync failures and LAN retry policy
+-- Bead: cng-yn6.4
+-- Status: in_progress
+-- Last updated: 2026-04-02
+
+## Sync Notebook
+
+- Goal: khoa lane refactor browser-backend sync theo thu tu `instrumentation -> canonical contract -> client migration -> failure isolation -> persistence optimization -> verification`.
+- Files In Scope: `task.md`, `docs/open-backlog.md`, `server-v4/src/app/build-v4-app.ts`, `server-v4/src/app/legacy-compat/*`, `src/lib/storageClient.js`, `src/lib/apiContractScanner.js`, sync/perf tests lien quan.
+- Verify: moi slice phai co targeted tests + lint/contract gate tuong ung truoc khi chuyen slice; khong nhan hoan tat neu `task.md` va bead state lech nhau.
+- Handoff: neu context bi nen/reset, bat dau lai bang `task.md` + bead epic `cng-yn6`; tiep tuc tu `cng-yn6.4`, khong suy luan tu tri nho hoi thoai.
 
 ## Execution Matrix
 
@@ -25,6 +34,13 @@
 | cng-0s2.1 | Runtime smoke + closure/reconcile | `pnpm run test:playwright:runtime`, `pnpm bd:check` | done | `pnpm exec vitest run tests/auth.test.jsx tests/dataImporterShellProps.test.js tests/dataImporterFileActions.test.jsx tests/reportingScopeSections.test.jsx --environment jsdom`; `pnpm exec vitest run tests/server-v4/appShell.test.js tests/server.api.test.js --environment node`; `pnpm run test:playwright:runtime`; `pnpm exec eslint src/auth/localAuth.js src/components/ReportViewer.jsx src/components/dataImporter/importGate.js src/components/dataImporter/DataImporterFileActions.jsx src/components/dataImporter/dataImporterShellProps.js src/components/dataImporter/useDataImporterImportFlow.js src/components/dataImporter/useDataImporterWorkflowSession.js src/components/reporting/reportingExportState.js src/components/reporting/useReportViewerActions.js src/components/reporting/ReportingStaffSection.jsx src/components/reporting/ReportingTeamSection.jsx src/components/reporting/StaffDetailCard.jsx src/components/reporting/TeamDetailCard.jsx tests/helpers/mockApiState.js tests/auth.test.jsx tests/dataImporterImportGate.test.js tests/dataImporterShellProps.test.js tests/dataImporterFileActions.test.jsx tests/useDataImporterImportFlow.test.jsx tests/reportingExportState.test.js tests/reportingScopeSections.test.jsx tests/useReportViewerActions.test.jsx`; `pnpm bd:check` |
 
 ## Checkpoint Log
+
+- Checkpoint 11 (sync baseline + canonical contract complete):
+  - Done: mount `/api/v4/shared-sync` vao `buildV4App`, migrate `src/lib/storageClient.js` sang canonical bootstrap/storage/declarations endpoints, bo sung partial-refresh regression va test route canonical `tests/server-v4/sharedSyncRoutes.test.js`.
+  - Verify: `pnpm exec vitest run tests/apiContractScanner.test.js tests/storageClient.test.js tests/server-v4/sharedSyncRoutes.test.js`; `pnpm exec eslint src/lib/apiContractScanner.js src/lib/storageClient.js tests/apiContractScanner.test.js tests/storageClient.test.js tests/server-v4/sharedSyncRoutes.test.js`; `gitnexus_detect_changes(scope=all)`.
+  - Risk: `gitnexus_detect_changes()` bao HIGH vi `buildV4App` va `storageClient.js` nam tren hot path chung; symbol moi trong `server-v4/src/app/shared-sync/*` chua co trong index hien tai, va `flushPending()` van hard-disable remote khi write fail.
+  - Decision: close `cng-yn6.1`, `cng-yn6.2`, `cng-yn6.3`; giu slice ke tiep tap trung vao failure isolation truoc khi toi uu persistence.
+  - Next: thuc hien `cng-yn6.4` bang cach tach read/write failure policy trong `flushPending()` va bo sung regression cho write failure khong lam sap toan bo remote read path.
 
 - Checkpoint 7 (Hard-gate cutover governance bootstrap):
   - Done: Tao epic `cng-m2r` + child beads `cng-m2r.1..cng-m2r.6`, tao board `docs/operations/v4-cutover-execution-board.md`, va them gate script `scripts/check-cutover-taskboard.mjs`.
@@ -156,6 +172,11 @@
 - Decision: close `cng-mbu` va dong trang thai Big-bang execution lane trong backlog.
 - Next: chuyen sang post-bigbang BAU roadmap theo cac track o `Next Suggested Slice`.
 ## Recent Completed Slices
+
+- `cng-yn6.1` / `cng-yn6.2` / `cng-yn6.3` da hoan tat baseline sync lane:
+  - notebook + backlog da reconcile theo epic `cng-yn6`
+  - contract moi `/api/v4/shared-sync/*` da duoc mount va verify
+  - `storageClient` da chuyen sang canonical API va co regression cho partial refresh
 
 - `cng-mbu.7` da hoan tat W8 Big-bang Cutover and Hypercare lane o pham vi engineering package:
   - da co full runbook + owner/comms/hypercare templates
@@ -1017,13 +1038,13 @@
 
 ## Next Suggested Slice
 
-- Title: Post-bigbang BAU transition
-- Bead: (to be opened as new BAU bead)
-- Status: ready for intake
+- Title: cng-yn6.4 / SYNC-4 isolate sync failures and LAN retry policy
+- Bead: cng-yn6.4
+- Status: ready
 - Follow-up backlog:
-  - Track 1 (operations hardening):
-    - chay `verify:v4:cutover-preflight` non-dry-run cho staging/prod window
-    - ghi Day0-Day7 vao `docs/operations/v4-hypercare-checkpoint-log.md`
+  - tach chinh sach degrade giua `refreshSharedKeys()` va `flushPending()`
+  - tranh write failure hard-disable toan bo read sync neu auth/session van hop le
+  - them targeted regression cho queued writes, retry timer, va disconnect/reconnect LAN
     - publish final hypercare report va link vao runbook/tracker docs
   - Track 2 (runtime reliability):
     - theo doi parity drift hang tuan (`api:contract:gate` + `verify:v4:parity`)

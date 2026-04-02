@@ -5,6 +5,25 @@ import { createSyncError, normalizeSyncError } from './storageSyncErrors.js';
 export const STORAGE_LIMIT_ERROR_MESSAGE =
   'Dung lượng dữ liệu vượt quá giới hạn máy chủ đồng bộ. Vui lòng chia nhỏ dữ liệu hoặc liên hệ quản trị viên để nâng giới hạn.';
 
+const SHARED_SYNC_BASE_PATH = '/api/v4/shared-sync';
+
+function buildSharedSyncBootstrapUrl(base) {
+  const urlBase = base || '';
+  return `${urlBase}${SHARED_SYNC_BASE_PATH}/bootstrap?mode=${encodeURIComponent(
+    SHARED_LIGHT_BOOTSTRAP_MODE,
+  )}`;
+}
+
+function buildSharedSyncStorageUrl(base, key) {
+  const urlBase = base || '';
+  return `${urlBase}${SHARED_SYNC_BASE_PATH}/storage/${encodeURIComponent(key)}`;
+}
+
+function buildSharedSyncDeclarationsUrl(base) {
+  const urlBase = base || '';
+  return `${urlBase}${SHARED_SYNC_BASE_PATH}/declarations`;
+}
+
 
 
 function formatHttpError(response) {
@@ -47,9 +66,7 @@ async function sendWrite(base, key, value) {
 
   const payload = value === null || value === undefined ? { value: null } : { value };
 
-  const urlBase = base || '';
-
-  const target = `${urlBase}/api/storage/${encodeURIComponent(key)}`;
+  const target = buildSharedSyncStorageUrl(base, key);
 
   let response;
 
@@ -146,7 +163,7 @@ export async function patchDeclRows(updates, options = {}) {
 
     ) || '';
 
-  const target = `${base}/api/storage/${encodeURIComponent('decl_rows_v1')}`;
+  const target = buildSharedSyncDeclarationsUrl(base);
 
   const payload = {
 
@@ -282,9 +299,11 @@ let flushPromise = null;
 
 let retryTimer = null;
 
-const RETRY_MIN_MS = 5000;
+const RETRY_MIN_MS = 500;
 
-const RETRY_MAX_MS = 60000;
+const RETRY_MAX_MS = 5000;
+
+const REMOTE_REFRESH_FAILURE_THRESHOLD = 2;
 
 let retryDelayMs = RETRY_MIN_MS;
 
@@ -295,6 +314,7 @@ let lastSyncErrorRetryable = true;
 
 let nextRetryAt = null;
 let lastRollbackInfo = null;
+let consecutiveRefreshFailures = 0;
 
 
 
@@ -420,6 +440,7 @@ function clearSyncErrorState() {
   lastSyncErrorCode = null;
   lastSyncErrorHint = '';
   lastSyncErrorRetryable = true;
+  consecutiveRefreshFailures = 0;
 
 }
 
@@ -755,7 +776,7 @@ async function bootstrapFromServer(baseUrl) {
       try {
 
         response = await fetchWithAuth(
-          `${normalizedBase}/api/bootstrap?mode=${encodeURIComponent(SHARED_LIGHT_BOOTSTRAP_MODE)}`,
+          buildSharedSyncBootstrapUrl(normalizedBase),
           {
 
             cache: 'no-store',
@@ -818,6 +839,7 @@ async function bootstrapFromServer(baseUrl) {
       applyRemoteSnapshot(payload?.data);
 
       remoteEnabled = true;
+      consecutiveRefreshFailures = 0;
 
       lastRollbackInfo = null;
       clearSyncErrorState();
@@ -938,10 +960,10 @@ export async function refreshSharedKeys(keys, options = {}) {
 
   const results = {};
 
-  const entries = await Promise.all(
+  const settledEntries = await Promise.allSettled(
     targets.map(async (key) => {
 
-      const url = `${base}/api/storage/${encodeURIComponent(key)}`;
+      const url = buildSharedSyncStorageUrl(base, key);
 
       let response;
 
@@ -953,12 +975,13 @@ export async function refreshSharedKeys(keys, options = {}) {
 
         const message = `Không thể tải khóa đồng bộ "${key}": ${error?.message ?? error}`;
 
-        remoteEnabled = false;
-        setSyncErrorState(error, { defaultMessage: message });
-
-        emitSyncStatus();
-
-        throw new Error(message, { cause: error instanceof Error ? error : undefined });
+        throw createSyncError({
+          code: 'read_request_failed',
+          message,
+          retryable: true,
+          hint: 'Kiểm tra mạng/VPN nội bộ rồi thử lại.',
+          cause: error,
+        });
 
       }
 
@@ -966,30 +989,33 @@ export async function refreshSharedKeys(keys, options = {}) {
 
         const message = 'Không nhận được phản hồi hợp lệ từ máy chủ đồng bộ';
 
-        remoteEnabled = false;
-        setSyncErrorState(new Error(message), { defaultMessage: message });
-
-        emitSyncStatus();
-
-        throw new Error(message);
+        throw createSyncError({
+          code: 'invalid_response',
+          message,
+          retryable: true,
+        });
 
       }
 
       if (!response.ok) {
 
         const message = formatHttpError(response);
+        const isAuthFailure = isAuthErrorResponse(response);
+        const retryable = !isAuthFailure && (response.status === 408 || response.status === 429 || response.status >= 500);
 
-        remoteEnabled = false;
-        setSyncErrorState(createSyncError({
-          code: response.status === 413 ? 'payload_too_large' : 'http_non_retryable',
+        throw createSyncError({
+          code: isAuthFailure
+            ? 'auth_required'
+            : response.status === 413
+              ? 'payload_too_large'
+              : retryable
+                ? 'http_retryable'
+                : 'http_non_retryable',
           status: response.status,
           message,
-          retryable: response.status === 408 || response.status === 429 || response.status >= 500,
-        }), { defaultMessage: message });
-
-        emitSyncStatus();
-
-        throw new Error(message);
+          retryable,
+          hint: isAuthFailure ? 'Vui lòng đăng nhập lại để tiếp tục đồng bộ.' : '',
+        });
 
       }
 
@@ -1003,12 +1029,12 @@ export async function refreshSharedKeys(keys, options = {}) {
 
         const message = `Không thể phân tích phản hồi JSON cho khóa đồng bộ "${key}"`;
 
-        remoteEnabled = false;
-        setSyncErrorState(error, { defaultMessage: message });
-
-        emitSyncStatus();
-
-        throw new Error(message, { cause: error instanceof Error ? error : undefined });
+        throw createSyncError({
+          code: 'invalid_json',
+          message,
+          retryable: true,
+          cause: error,
+        });
 
       }
 
@@ -1017,7 +1043,14 @@ export async function refreshSharedKeys(keys, options = {}) {
     })
   );
 
-  for (const [key, payload] of entries) {
+  const failures = [];
+  for (const entry of settledEntries) {
+    if (entry.status === 'rejected') {
+      failures.push(entry.reason);
+      continue;
+    }
+
+    const [key, payload] = entry.value;
 
     const raw = payload?.raw;
 
@@ -1041,12 +1074,46 @@ export async function refreshSharedKeys(keys, options = {}) {
 
   }
 
-  remoteEnabled = true;
+  if (Object.keys(results).length > 0) {
+    remoteEnabled = true;
+    consecutiveRefreshFailures = 0;
+
+    if (failures.length > 0) {
+      const normalized = setSyncErrorState(failures[0], {
+        defaultMessage: 'Một phần dữ liệu đồng bộ chưa làm mới được.',
+      });
+      if (normalized.retryable) {
+        scheduleRetry();
+      }
+    } else {
+      clearSyncErrorState();
+    }
+
+    emitSyncStatus();
+    return results;
+  }
+
+  if (failures.length > 0) {
+    consecutiveRefreshFailures += 1;
+    const normalized = setSyncErrorState(failures[0], {
+      defaultMessage: 'Không thể làm mới dữ liệu đồng bộ từ backend.',
+    });
+
+    if (normalized.code === 'auth_required' || consecutiveRefreshFailures >= REMOTE_REFRESH_FAILURE_THRESHOLD) {
+      remoteEnabled = false;
+    }
+
+    emitSyncStatus();
+
+    if (normalized.retryable) {
+      scheduleRetry();
+    }
+
+    throw failures[0];
+  }
 
   clearSyncErrorState();
-
   emitSyncStatus();
-
   return results;
 
 }

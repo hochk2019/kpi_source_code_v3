@@ -1,4 +1,4 @@
-const API_LITERAL_REGEX = /["'`](\/api\/[^"'`\s]*)["'`]/g
+const API_PATH_REGEX = /\/api\/[A-Za-z0-9_./:?${}=&%-]*/g
 
 export function extractApiPathsFromSource(sourceText = '') {
   if (typeof sourceText !== 'string' || !sourceText) {
@@ -6,13 +6,13 @@ export function extractApiPathsFromSource(sourceText = '') {
   }
 
   const paths = new Set()
-  let match = API_LITERAL_REGEX.exec(sourceText)
+  let match = API_PATH_REGEX.exec(sourceText)
   while (match) {
-    const value = match[1]
-    if (value) {
+    const value = match[0]
+    if (value && !value.startsWith('/api//')) {
       paths.add(value)
     }
-    match = API_LITERAL_REGEX.exec(sourceText)
+    match = API_PATH_REGEX.exec(sourceText)
   }
   return Array.from(paths)
 }

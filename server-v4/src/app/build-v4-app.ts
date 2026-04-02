@@ -10,6 +10,7 @@ import {
   createBackupAdminRuntime,
   type BackupAdminRuntime,
 } from '../modules/backup/backupRuntime.js';
+import { buildSharedSyncRouter } from './shared-sync/sharedSyncRoutes.js';
 import { buildDataHealthRouter } from '../modules/data-health/dataHealthRoutes.js';
 import { buildDeclarationsRouter } from '../modules/declarations/declarationsRoutes.js';
 import { buildDuplicatePolicyRouter } from '../modules/duplicate-policy/duplicatePolicyRoutes.js';
@@ -191,6 +192,8 @@ export function buildV4App(input?: readonly DomainModule[] | BuildV4AppOptions):
       }),
     });
   });
+
+  app.use('/api/v4/shared-sync', buildSharedSyncRouter(persistence, persistence.authStore));
 
   for (const domainModule of safeModules) {
     if (domainModule.id === 'alerts') {
