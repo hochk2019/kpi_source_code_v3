@@ -15,6 +15,11 @@ import { getAuth, getViewerAuth, loadSession, logout } from './auth/localAuth.js
 import './App.css';
 
 import { clearStorageCache, getSyncStatus, initSharedStorage, subscribeSyncStatus } from './lib/storageClient.js';
+import {
+  APP_SHELL_FALLBACK_TAB,
+  parseAppShellLocation,
+  serializeAppShellLocation,
+} from './lib/appShellNavigation.js';
 
 import useTooltipTitles from './hooks/useTooltipTitles.js';
 
@@ -40,10 +45,25 @@ export default function App() {
 
   const [syncStatus, setSyncStatus] = useState(() => getSyncStatus());
 
-  const [activeTab, setActiveTab] = useState('reports');
+  const [activeTab, setActiveTab] = useState(() => {
+    const initialUser =
+      getAuth() ||
+      getViewerAuth() || {
+        username: 'guest',
+        role: 'viewer',
+        permissions: {},
+      };
+
+    if (typeof window === 'undefined') {
+      return APP_SHELL_FALLBACK_TAB;
+    }
+
+    return parseAppShellLocation(window.location.search, initialUser).tab;
+  });
   const [navigationIntent, setNavigationIntent] = useState(null);
 
   const rootRef = useRef(null);
+  const effectiveAuthRef = useRef(null);
 
 
 
@@ -189,6 +209,62 @@ export default function App() {
 
   const isAdmin = isAdminRole(effectiveAuth?.role);
 
+  useEffect(() => {
+    effectiveAuthRef.current = effectiveAuth;
+  }, [effectiveAuth]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    const nextTab = parseAppShellLocation(
+      window.location.search,
+      effectiveAuth,
+      APP_SHELL_FALLBACK_TAB,
+    ).tab;
+
+    setActiveTab((currentTab) => (currentTab === nextTab ? currentTab : nextTab));
+  }, [effectiveAuth]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return undefined;
+    }
+
+    const applyLocationState = () => {
+      const nextTab = parseAppShellLocation(
+        window.location.search,
+        effectiveAuthRef.current,
+        APP_SHELL_FALLBACK_TAB,
+      ).tab;
+      setActiveTab((currentTab) => (currentTab === nextTab ? currentTab : nextTab));
+    };
+
+    window.addEventListener('popstate', applyLocationState);
+    return () => window.removeEventListener('popstate', applyLocationState);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    const nextSearch = serializeAppShellLocation({
+      search: window.location.search,
+      tab: activeTab,
+      currentUser: effectiveAuth,
+      fallbackTab: APP_SHELL_FALLBACK_TAB,
+    });
+
+    if (nextSearch === window.location.search) {
+      return;
+    }
+
+    const nextUrl = `${window.location.pathname}${nextSearch}${window.location.hash || ''}`;
+    window.history.replaceState(window.history.state, '', nextUrl);
+  }, [activeTab, effectiveAuth]);
+
 
 
   const syncDetail = useMemo(() => {
@@ -326,79 +402,60 @@ export default function App() {
         Bỏ qua tới nội dung chính
       </a>
 
-      <header className="border-b border-gray-200 bg-white/80 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-white/60 dark:border-gray-800 dark:bg-slate-900/70">
+      <header className="border-b border-stone-200/80 bg-[#fafaf5]/90 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-[#fafaf5]/75 dark:border-stone-800 dark:bg-slate-900/75">
 
-        <div className="mx-auto flex w-full max-w-6xl flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="mx-auto flex w-full max-w-7xl flex-col gap-3 px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
 
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2 text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-stone-500 dark:text-stone-300">
+            <span className="rounded-full border border-stone-300/80 bg-white/70 px-3 py-1 dark:border-stone-700 dark:bg-slate-900/60">
+              Golden Logistics
+            </span>
+            <span className="rounded-full border border-teal-700/15 bg-teal-900/5 px-3 py-1 text-teal-800 dark:border-teal-400/20 dark:bg-teal-400/10 dark:text-teal-200">
+              Ops shell
+            </span>
+          </div>
 
-            <img
+          <div className="flex flex-col items-stretch gap-2 text-sm lg:items-end">
 
-              src="/golden-logistics-logo.svg"
+            <div className="flex flex-wrap items-center justify-end gap-2 text-right text-stone-600 dark:text-stone-300">
 
-              alt="Logo Golden Logistics"
+              {auth ? (
 
-              className="h-14 w-14 flex-shrink-0"
+                <span>
 
-            />
+                  Xin chào, <b>{auth.name}</b> ({auth.role})
 
-            <div className="text-gray-800 dark:text-gray-100">
+                </span>
 
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-600 dark:text-amber-400">
+              ) : (
 
-                Golden Logistics Co., Ltd
+                <span>Đang xem với quyền hạn giới hạn (khách).</span>
 
-              </p>
+              )}
 
-              <h1 className="text-xl font-semibold leading-tight">Hệ thống KPI nhân viên khai báo hải quan</h1>
+              <CommandCenter
 
-              <p className="text-sm text-gray-500 dark:text-gray-400">Công ty TNHH Tiếp Vận Hoàng Kim</p>
+                currentUser={effectiveAuth}
+
+                onRequestLogin={() => setShowLogin(true)}
+
+                onRequestLogout={handleLogout}
+
+                onRequestChangePassword={() => setShowChangePassword(true)}
+
+              />
+
+              <NotificationCenter />
+
+              <Suspense fallback={null}>
+
+                <SupportCenter currentTabId={activeTab} />
+
+              </Suspense>
+
+              <ThemeToggle />
 
             </div>
-
-          </div>
-
-          <div className="flex flex-col items-stretch gap-2 text-sm sm:items-end">
-
-          <div className="flex flex-wrap items-center justify-end gap-2 text-right text-gray-600 dark:text-gray-300">
-
-            {auth ? (
-
-              <span>
-
-                Xin chào, <b>{auth.name}</b> ({auth.role})
-
-              </span>
-
-            ) : (
-
-              <span>Đang xem với quyền hạn giới hạn (khách).</span>
-
-            )}
-
-            <CommandCenter
-
-              currentUser={effectiveAuth}
-
-              onRequestLogin={() => setShowLogin(true)}
-
-              onRequestLogout={handleLogout}
-
-              onRequestChangePassword={() => setShowChangePassword(true)}
-
-            />
-
-            <NotificationCenter />
-
-            <Suspense fallback={null}>
-
-              <SupportCenter currentTabId={activeTab} />
-
-            </Suspense>
-
-            <ThemeToggle />
-
-          </div>
 
             <div className="flex flex-wrap items-center justify-end gap-2">
 
@@ -412,7 +469,7 @@ export default function App() {
 
                     onClick={() => setShowChangePassword(true)}
 
-                    className="rounded border border-amber-400 px-3 py-1 text-amber-700 transition hover:bg-amber-50 dark:border-amber-500 dark:text-amber-300 dark:hover:bg-amber-500/10"
+                    className="rounded-full border border-teal-700/20 bg-white/80 px-3 py-1.5 text-teal-800 transition hover:bg-teal-50 dark:border-teal-400/25 dark:bg-slate-900/60 dark:text-teal-200 dark:hover:bg-teal-400/10"
 
                     data-tooltip="Đổi mật khẩu cho tài khoản đang đăng nhập"
 
@@ -428,7 +485,7 @@ export default function App() {
 
                     onClick={handleLogout}
 
-                    className="rounded border border-gray-300 px-3 py-1 transition hover:bg-gray-100 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-slate-800"
+                    className="rounded-full border border-stone-300 bg-white/80 px-3 py-1.5 transition hover:bg-stone-100 dark:border-stone-700 dark:bg-slate-900/60 dark:text-gray-200 dark:hover:bg-slate-800"
 
                     data-tooltip="Đăng xuất khỏi phiên làm việc hiện tại"
 
@@ -448,7 +505,7 @@ export default function App() {
 
                   onClick={() => setShowLogin(true)}
 
-                  className="rounded bg-amber-500 px-3 py-1 font-medium text-white shadow-sm transition hover:bg-amber-600"
+                  className="rounded-full bg-teal-700 px-3 py-1.5 font-medium text-white shadow-sm transition hover:bg-teal-800"
 
                   data-tooltip="Mở hộp thoại đăng nhập quản trị"
 

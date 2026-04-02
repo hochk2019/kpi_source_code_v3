@@ -4,23 +4,27 @@
 
 - Source of truth cho tat ca viec chua xong hien tai la `docs/open-backlog.md`.
 - Da reconcile ngay 2026-04-02 sau khi dong bead `cng-yn6.7`; lane sync latency/disconnect refactor khong con backlog mo.
+- Da reconcile lai ngay 2026-04-02 sau khi mo epic frontend modernization `cng-1wj` voi child chain `cng-1wj.1..cng-1wj.11`.
+- Da reconcile them ngay 2026-04-02 sau khi hoan tat phase-0 freeze/design (`cng-1wj.1`, `cng-1wj.2`) va chuyen active slice sang `cng-1wj.3`.
+- Da reconcile tiep ngay 2026-04-02 sau khi ship shell/dashboard/command-center/workflow-guide/async primitives (`cng-1wj.3..cng-1wj.8`) va state extraction wave A (`cng-1wj.9`); next ready slice la `cng-1wj.10`.
 - Open epics hien tai:
-  - none
+  - `cng-1wj` — frontend modernization shell/state
 - Highest-priority ready items hien tai:
-  - none (`pnpm bd:safe -- ready` -> `No open issues`)
+  - `cng-1wj.10` — state extraction wave B
 
 ## Active Slice
 
--- Title: ad hoc / upgrade GitNexus CLI invocations to latest
--- Status: completed
+-- Bead: cng-1wj.10
+-- Title: cng-1wj.10 / state extraction wave b
+-- Status: in_progress
 -- Last updated: 2026-04-02
 
 ## Sync Notebook
 
-- Goal: dong bo toan bo diem goi GitNexus trong repo sang `gitnexus@latest` de tranh `npx gitnexus` dung cache cu (`1.4.8`) trong khi MCP global da tro toi `gitnexus@latest`.
-- Files In Scope: `task.md`, `package.json`, `scripts/gitnexus-refresh.mjs`, `tests/gitnexus-refresh.test.js`.
-- Verify: `pnpm exec eslint scripts/gitnexus-refresh.mjs tests/gitnexus-refresh.test.js`; `pnpm exec vitest run tests/gitnexus-refresh.test.js --environment node`; `pnpm run gitnexus:analyze -- --help`; `npx -y gitnexus@latest --version`; `codex mcp list`.
-- Handoff: neu context bi nen/reset, bat dau lai bang `task.md`; GitNexus MCP global da tro toi `cmd /c npx -y gitnexus@latest mcp`, va repo nay da duoc doi script `gitnexus:*`/refresh helper sang latest. Bead CLI qua WSL dang bi `Access is denied`, nen task ad hoc nay chi duoc ghi vao notebook thay vi tao bead moi.
+- Goal: reconcile notebook/backlog voi worktree thuc te sau khi dong `cng-1wj.9`, claim `cng-1wj.10` lam active slice ke tiep, va khoa state handoff cho wave B ma chua mo rong code domain moi trong session nay.
+- Files In Scope: `task.md`, `docs/open-backlog.md`, trang thai bead `cng-1wj.9` / `cng-1wj.10`, va output verify cho shell/dashboard/command-center/workflow-guide/async primitives/wave A.
+- Verify: `wsl -d Ubuntu-2204 -u sam -- bash -lc "cd /mnt/e/GPT/kpi_source_code_v4 && bd show cng-1wj.9 && bd show cng-1wj.10"`; `pnpm bd:check`; `gitnexus_detect_changes(scope=all)`.
+- Handoff: neu context bi nen/reset, bat dau lai bang `task.md`, giu `docs/opus-review-v2-modernization-brief-2026-04-02.md` lam scope freeze, xem `cng-1wj.3..cng-1wj.9` la done, va tiep tuc thuc thi `cng-1wj.10` cho reporting/import/adjustments/health state extraction.
 
 ## Execution Matrix
 
@@ -32,6 +36,27 @@
 | cng-0s2.1 | Runtime smoke + closure/reconcile | `pnpm run test:playwright:runtime`, `pnpm bd:check` | done | `pnpm exec vitest run tests/auth.test.jsx tests/dataImporterShellProps.test.js tests/dataImporterFileActions.test.jsx tests/reportingScopeSections.test.jsx --environment jsdom`; `pnpm exec vitest run tests/server-v4/appShell.test.js tests/server.api.test.js --environment node`; `pnpm run test:playwright:runtime`; `pnpm exec eslint src/auth/localAuth.js src/components/ReportViewer.jsx src/components/dataImporter/importGate.js src/components/dataImporter/DataImporterFileActions.jsx src/components/dataImporter/dataImporterShellProps.js src/components/dataImporter/useDataImporterImportFlow.js src/components/dataImporter/useDataImporterWorkflowSession.js src/components/reporting/reportingExportState.js src/components/reporting/useReportViewerActions.js src/components/reporting/ReportingStaffSection.jsx src/components/reporting/ReportingTeamSection.jsx src/components/reporting/StaffDetailCard.jsx src/components/reporting/TeamDetailCard.jsx tests/helpers/mockApiState.js tests/auth.test.jsx tests/dataImporterImportGate.test.js tests/dataImporterShellProps.test.js tests/dataImporterFileActions.test.jsx tests/useDataImporterImportFlow.test.jsx tests/reportingExportState.test.js tests/reportingScopeSections.test.jsx tests/useReportViewerActions.test.jsx`; `pnpm bd:check` |
 
 ## Checkpoint Log
+
+- Checkpoint 19 (frontend modernization track bootstrap):
+  - Done: mo epic `cng-1wj` va child chain `cng-1wj.1..cng-1wj.11` trong BD, reconcile `docs/open-backlog.md` de phan shell/state modernization thanh phase ro rang, va claim `cng-1wj.1` lam active slice.
+  - Verify: `wsl -d Ubuntu-2204 -u sam -- bash -lc "cd /mnt/e/GPT/kpi_source_code_v4 && bd list --json"`; `pnpm bd:check`.
+  - Risk: `bd-safe` qua WSL lam noisy stdout khi tao bead hang loat, nen dependency graph duoc normalize bang WSL direct `bd`; labels trong DB tam thoi giu toi gian, backlog/notebook moi la nguon phase/task mo ta day du.
+  - Decision: uu tien graph dung + source-of-truth docs ro rang thay vi co gang perfect labels trong database ngay turn nay.
+  - Next: hoan tat `cng-1wj.1` bang implementation brief fact-check cho `Opus_review_v2.md`, sau do bat dau `cng-1wj.2` voi Stitch design foundation.
+
+- Checkpoint 20 (frontend modernization phase 0 freeze complete):
+  - Done: them brief `docs/opus-review-v2-modernization-brief-2026-04-02.md` de khoa verified/stale/deferred findings, boundary implementation, va design foundation tu Stitch project `projects/2389602522155416936`; close `cng-1wj.1`, close `cng-1wj.2`, va chuyen `cng-1wj.3` sang `in_progress`.
+  - Verify: `wsl -d Ubuntu-2204 -u sam -- bash -lc "cd /mnt/e/GPT/kpi_source_code_v4 && bd close cng-1wj.1 && bd close cng-1wj.2 && bd update cng-1wj.3 --status in_progress && bd sync"`; Stitch artifacts `assets/ec04f12fca7146309a2f634e5bbe79e9`, screen ids `193b4bde927044268f33dd3178e05e97`, `f4c9e8d98e6845549793d5253d7dc1da`, `a740538e976e40b2bb3602ee62ff7cdf`, `91e753611e0747aca034c25862fe87c4`.
+  - Risk: 2/4 Stitch screens tra ve mobile composition thay vi desktop shell; chung chi duoc dung lam visual reference, khong phai viewport contract cuoi cung.
+  - Decision: giu source-of-truth design trong brief + project id, roi bat dau implement shell navigation/dashboard tren codebase thay vi tiep tuc lap lai planning.
+  - Next: sua `src/lib/appShellNavigation.js`, `src/App.jsx`, `src/components/KPICalculator.jsx`, `src/components/appShell/AppShellFrame.jsx` va test de ship `cng-1wj.3 -> cng-1wj.5`.
+
+- Checkpoint 21 (frontend modernization wave A complete):
+  - Done: close `cng-1wj.3..cng-1wj.9`; ship URL shell contract, unified shell/header cleanup, dashboard landing, command center decomposition, workflow-guide collapse persistence, async state primitives, va wave A state extraction qua `useKpiShellState`, `useCommandCenterState`, `buildAppDashboardSummaryState`.
+  - Verify: `wsl -d Ubuntu-2204 -u sam -- bash -lc "cd /mnt/e/GPT/kpi_source_code_v4 && bd close cng-1wj.3 && bd close cng-1wj.4 && bd close cng-1wj.5 && bd close cng-1wj.6 && bd close cng-1wj.7 && bd close cng-1wj.8 && bd close cng-1wj.9 && bd sync"`; `pnpm exec vitest run tests/useKpiShellState.test.jsx tests/useCommandCenterState.test.jsx tests/appDashboardSummary.test.js tests/commandCenter.test.jsx tests/appDashboardLanding.test.jsx tests/appShellWorkflowState.test.js tests/appShellWorkflowGuide.test.jsx tests/appShellFrame.test.jsx tests/kpiCalculator.navigation.test.jsx --environment jsdom`; `pnpm exec eslint src/components/KPICalculator.jsx src/components/CommandCenter.jsx src/components/appShell/AppDashboardLanding.jsx src/components/appShell/useKpiShellState.js src/components/appShell/appDashboardSummary.js src/components/command-center/useCommandCenterState.js tests/useKpiShellState.test.jsx tests/useCommandCenterState.test.jsx tests/appDashboardSummary.test.js tests/commandCenter.test.jsx tests/appDashboardLanding.test.jsx tests/kpiCalculator.navigation.test.jsx`.
+  - Risk: `gitnexus_detect_changes()` van co the bao scope rong/critical vi index chua refresh va diff hien tai gom ca phase 0-2 + wave A; can dien giai ket qua nay nhu stale-index warning, khong phai regression xac nhan.
+  - Decision: dung lai sau wave A thay vi mo rong sang wave B trong cung session, de giu scope nho va verify-on-green.
+  - Next: mo `cng-1wj.10` cho reporting filters/presets, adjustments, import, health theo tung domain hook/store nho; chua dong `cng-1wj.11`.
 
 - Checkpoint 18 (ad hoc GitNexus upgrade for repo usage):
   - Done: xac minh `npx gitnexus --version` dang dung cache cu `1.4.8`, trong khi `codex mcp list` da tro toi `cmd /c npx -y gitnexus@latest mcp`; cap nhat `package.json` (`gitnexus:analyze`, `gitnexus:serve`) va `scripts/gitnexus-refresh.mjs` de buoc repo dung `npx -y gitnexus@latest`, chinh test `tests/gitnexus-refresh.test.js` theo invocation moi, va dong bo huong dan trong `AGENTS.md`/`CLAUDE.md` sang `pnpm run gitnexus:analyze` + direct-call fallback `npx -y gitnexus@latest ...`.
@@ -179,6 +204,16 @@
   - merged local completion gates: parity + preflight dry-run + backlog consistency
 
 ## Handoff
+
+- Done: frontend modernization da ship den het wave A; beads `cng-1wj.3..cng-1wj.9` da close, shell/dashboard/command-center state da duoc tach khoi component monolith thanh hook/selector rieng.
+- Verify:
+  - `pnpm exec vitest run tests/useKpiShellState.test.jsx tests/useCommandCenterState.test.jsx tests/appDashboardSummary.test.js tests/commandCenter.test.jsx tests/appDashboardLanding.test.jsx tests/appShellWorkflowState.test.js tests/appShellWorkflowGuide.test.jsx tests/appShellFrame.test.jsx tests/kpiCalculator.navigation.test.jsx --environment jsdom`
+  - `pnpm exec eslint src/components/KPICalculator.jsx src/components/CommandCenter.jsx src/components/appShell/AppDashboardLanding.jsx src/components/appShell/useKpiShellState.js src/components/appShell/appDashboardSummary.js src/components/command-center/useCommandCenterState.js tests/useKpiShellState.test.jsx tests/useCommandCenterState.test.jsx tests/appDashboardSummary.test.js tests/commandCenter.test.jsx tests/appDashboardLanding.test.jsx tests/kpiCalculator.navigation.test.jsx`
+  - `wsl -d Ubuntu-2204 -u sam -- bash -lc "cd /mnt/e/GPT/kpi_source_code_v4 && bd show cng-1wj.9 && bd show cng-1wj.10"`
+  - `pnpm bd:check`
+- Risk: wave B chua bat dau, nen `store.js` van con phan domain nang cho reporting/import/adjustments/health; GitNexus scope check truoc commit co the van bao rong cho den khi index duoc refresh.
+- Decision: dong bo lai notebook va BD bang cach claim `cng-1wj.10` sang `in_progress`; turn nay chi khoa handoff/checks, chua mo rong code wave B.
+- Next: tiep tuc tu `cng-1wj.10`, uu tien tach reporting filters/presets va import/health state theo tung module nho co test.
 
 - Done: da chot trang thai dong cho cutover package docs; `v4-cutover-execution-board.md` la 100% complete trong repo scope va cac tai lieu lien quan da duoc archive/cap nhat dong bo.
 - Verify:
@@ -1094,20 +1129,14 @@
 
 ## Next Suggested Slice
 
-- Title: cng-yn6.4 / SYNC-4 isolate sync failures and LAN retry policy
-- Bead: cng-yn6.4
-- Status: ready
+- Title: cng-1wj.10 / state extraction wave b
+- Bead: cng-1wj.10
+- Status: in_progress
 - Follow-up backlog:
-  - tach chinh sach degrade giua `refreshSharedKeys()` va `flushPending()`
-  - tranh write failure hard-disable toan bo read sync neu auth/session van hop le
-  - them targeted regression cho queued writes, retry timer, va disconnect/reconnect LAN
-    - publish final hypercare report va link vao runbook/tracker docs
-  - Track 2 (runtime reliability):
-    - theo doi parity drift hang tuan (`api:contract:gate` + `verify:v4:parity`)
-    - mo incident bead ngay khi co rollback trigger hoac P1 regression
-  - Track 3 (product BAU backlog):
-    - mo epic BAU moi cho cac yeu cau tinh nang sau cutover
-    - phan loai theo 3 lane: feature delivery, reliability/perf, DX/tooling
+  - tach reporting filters + presets khoi `store.js` thanh domain selectors/hooks nho
+  - tach import / adjustments / health state theo tung cum, giu compatibility layer de khong big-bang rewrite
+  - moi domain migrate xong phai co unit/integration tests di kem truoc khi move tiep
+  - sau khi wave B xanh, chuyen sang `cng-1wj.11` de chay regression hardening (eslint/vitest/playwright/bd check)
 
 ## Verification
 

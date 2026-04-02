@@ -55,7 +55,7 @@ describe('KPICalculator navigation and loading fallbacks', () => {
       throw new Promise(() => {});
     });
 
-    expect(await screen.findByRole('status')).toHaveTextContent('Đang tải nội dung Báo cáo KPI...');
+    expect(await screen.findByRole('status')).toHaveTextContent('Đang tải Báo cáo KPI');
   });
 
   it('fallback focus về tab root khi target report export chưa mount', async () => {
@@ -70,7 +70,7 @@ describe('KPICalculator navigation and loading fallbacks', () => {
       },
     );
 
-    expect(screen.getByRole('status')).toHaveTextContent('Đang tải nội dung Báo cáo KPI...');
+    expect(screen.getByRole('status')).toHaveTextContent('Đang tải Báo cáo KPI');
 
     const reportsRoot = document.getElementById('app-tab-root-reports');
 

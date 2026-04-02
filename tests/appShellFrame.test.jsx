@@ -86,10 +86,10 @@ describe('AppShellFrame', () => {
       </AppShellFrame>,
     );
 
-    expect(screen.getByText('KPI Control Center')).toBeInTheDocument();
+    expect(screen.getByText('Bảng điều hành KPI')).toBeInTheDocument();
     expect(screen.getAllByText('Hieu suat').length).toBeGreaterThanOrEqual(2);
     expect(screen.getByRole('tab', { name: /Bao cao KPI/i })).toBeInTheDocument();
-    expect(screen.getByText(/Nguoi dung admin/i)).toBeInTheDocument();
+    expect(screen.getByText(/Người dùng admin/i)).toBeInTheDocument();
     expect(screen.getByText(/Workflow Bao cao KPI/i)).toBeInTheDocument();
     expect(screen.getByText(/Dashboard tong hop va xuat bao cao theo ky\./i)).toBeInTheDocument();
     expect(screen.getAllByRole('button', { name: /Command Center/i }).length).toBeGreaterThan(0);
@@ -141,7 +141,7 @@ describe('AppShellFrame', () => {
 
     const shell = document.querySelector('.ds-app-shell__layout');
     expect(shell).toHaveAttribute('data-shell-layout', 'compact');
-    expect(screen.getByText('3 modules')).toBeInTheDocument();
+    expect(screen.getByText('3 module')).toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: /Import Data/i })).not.toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /Bao cao KPI/i })).toBeInTheDocument();
 

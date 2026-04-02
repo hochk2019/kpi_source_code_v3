@@ -27,10 +27,30 @@ describe('appShellWorkflowState', () => {
     });
 
     expect(state.eyebrow).toMatch(/Report center/i);
+    expect(state.preferenceId).toBe('reports');
+    expect(state.defaultCollapsed).toBe(false);
     expect(state.steps.at(-1).targetId).toBe(APP_SHELL_WORKFLOW_TARGETS.reports.export);
 
     state.actions[0].onClick();
     expect(onNavigate).toHaveBeenCalledWith('reports', 'dashboard');
+  });
+
+  it('builds a dedicated dashboard landing workflow', () => {
+    const onNavigate = vi.fn();
+
+    const state = buildAppShellWorkflowState({
+      currentTab: { id: 'dashboard', label: 'Tổng quan KPI' },
+      canViewDataHealth: true,
+      onNavigate,
+      onOpenCommandCenter: vi.fn(),
+    });
+
+    expect(state.eyebrow).toMatch(/Dashboard landing/i);
+    expect(state.preferenceId).toBe('dashboard');
+    expect(state.steps[0].targetId).toBe(APP_SHELL_WORKFLOW_TARGETS.dashboard.landing);
+
+    state.actions[0].onClick();
+    expect(onNavigate).toHaveBeenCalledWith('import', 'source');
   });
 
   it('falls back to a generic workflow for non-specialized tabs', () => {
@@ -43,6 +63,7 @@ describe('appShellWorkflowState', () => {
     });
 
     expect(state.headline).toMatch(/Quản lý Tổ đội/);
+    expect(state.preferenceId).toBe('teams');
     expect(state.steps[0].targetId).toBe(getAppTabRootId('teams'));
   });
 });

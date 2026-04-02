@@ -3,6 +3,9 @@ import { WORKFLOW_STAGE_IDS as DATA_IMPORTER_STAGE_IDS } from "@/components/data
 export const APP_TAB_ROOT_ID_PREFIX = "app-tab-root-";
 
 export const APP_SHELL_WORKFLOW_TARGETS = Object.freeze({
+  dashboard: Object.freeze({
+    landing: "app-workflow-dashboard-landing",
+  }),
   mst: Object.freeze({
     queue: "app-workflow-mst-queue",
     review: "app-workflow-mst-review",
@@ -39,6 +42,24 @@ function createAction(label, onClick, variant = "secondary") {
 
 function createStep(number, title, detail, targetId) {
   return { number, title, detail, targetId };
+}
+
+function createWorkflowGuideState(
+  preferenceId,
+  eyebrow,
+  headline,
+  actions,
+  steps,
+  defaultCollapsed = false,
+) {
+  return {
+    preferenceId,
+    defaultCollapsed,
+    eyebrow,
+    headline,
+    actions,
+    steps,
+  };
 }
 
 export function getAppTabRootId(tabId = "") {
@@ -81,15 +102,16 @@ export function resolveAppShellFocusTarget(tabId, focus) {
 }
 
 function buildMstWorkflowState({ onNavigate, onOpenCommandCenter }) {
-  return {
-    eyebrow: "MST queue workflow",
-    headline: "Chuẩn hóa hàng chờ MST, gán người phụ trách, rồi khóa lịch sử thay đổi trong một bề mặt duy nhất.",
-    actions: [
+  return createWorkflowGuideState(
+    'mst',
+    "MST queue workflow",
+    "Chuẩn hóa hàng chờ MST, gán người phụ trách, rồi khóa lịch sử thay đổi trong một bề mặt duy nhất.",
+    [
       createAction("Đi tới hàng chờ MST", () => onNavigate?.("mst", "queue"), "primary"),
       createAction("Rà soát gán xử lý", () => onNavigate?.("mst", "review")),
       createAction("Mở Command Center", onOpenCommandCenter),
     ].filter(Boolean),
-    steps: [
+    [
       createStep(
         1,
         "1. Chuẩn bị hàng chờ",
@@ -109,19 +131,57 @@ function buildMstWorkflowState({ onNavigate, onOpenCommandCenter }) {
         APP_SHELL_WORKFLOW_TARGETS.mst.history,
       ),
     ],
-  };
+    false,
+  );
+}
+
+function buildDashboardWorkflowState({ onNavigate, onOpenCommandCenter, canViewDataHealth }) {
+  return createWorkflowGuideState(
+    'dashboard',
+    "Dashboard landing",
+    "Điểm vào mặc định ưu tiên tóm tắt điều hành, thao tác nhanh và điều hướng sang đúng workflow thay vì mở thẳng một màn hình chuyên sâu.",
+    [
+      createAction("Bắt đầu với Import dữ liệu", () => onNavigate?.("import", "source"), "primary"),
+      createAction("Mở báo cáo KPI", () => onNavigate?.("reports", "dashboard")),
+      canViewDataHealth
+        ? createAction("Kiểm tra sức khỏe dữ liệu", () => onNavigate?.("health", "sync"))
+        : createAction("Mở Command Center", onOpenCommandCenter),
+    ].filter(Boolean),
+    [
+      createStep(
+        1,
+        "1. Đọc tổng quan",
+        "Xem dashboard landing để xác định cụm công việc, bề mặt hỗ trợ và đường đi ưu tiên.",
+        APP_SHELL_WORKFLOW_TARGETS.dashboard.landing,
+      ),
+      createStep(
+        2,
+        "2. Chọn workflow chính",
+        "Đi sang import, báo cáo hoặc sức khỏe dữ liệu từ cùng shell thay vì tự dò tab thủ công.",
+        APP_SHELL_WORKFLOW_TARGETS.dashboard.landing,
+      ),
+      createStep(
+        3,
+        "3. Khoá bước tiếp theo",
+        "Sau khi chốt hướng đi, chuyển vào module chuyên sâu tương ứng để bắt đầu thao tác.",
+        APP_SHELL_WORKFLOW_TARGETS.dashboard.landing,
+      ),
+    ],
+    false,
+  );
 }
 
 function buildImportWorkflowState({ onNavigate, onOpenCommandCenter }) {
-  return {
-    eyebrow: "Import workflow",
-    headline: "Luồng import đã được chia stage; shell cấp cao giờ chỉ cần nhảy đúng bước thay vì gửi người dùng vào màn hình phẳng.",
-    actions: [
+  return createWorkflowGuideState(
+    'import',
+    "Import workflow",
+    "Luồng import đã được chia stage; shell cấp cao giờ chỉ cần nhảy đúng bước thay vì gửi người dùng vào màn hình phẳng.",
+    [
       createAction("Chọn nguồn dữ liệu", () => onNavigate?.("import", "source"), "primary"),
       createAction("Rà soát workspace", () => onNavigate?.("import", "review")),
       createAction("Mở Command Center", onOpenCommandCenter),
     ].filter(Boolean),
-    steps: [
+    [
       createStep(
         1,
         "1. Nạp nguồn",
@@ -141,19 +201,21 @@ function buildImportWorkflowState({ onNavigate, onOpenCommandCenter }) {
         APP_SHELL_WORKFLOW_TARGETS.import.save,
       ),
     ],
-  };
+    false,
+  );
 }
 
 function buildAdjustmentWorkflowState({ onNavigate }) {
-  return {
-    eyebrow: "Adjustment workflow",
-    headline: "Điều chỉnh KPI không còn là một bảng đơn lẻ; shell hướng người vận hành đi từ chọn kỳ tới đối chiếu báo cáo.",
-    actions: [
+  return createWorkflowGuideState(
+    'adjustments',
+    "Adjustment workflow",
+    "Điều chỉnh KPI không còn là một bảng đơn lẻ; shell hướng người vận hành đi từ chọn kỳ tới đối chiếu báo cáo.",
+    [
       createAction("Chọn kỳ điều chỉnh", () => onNavigate?.("adjustments", "scope"), "primary"),
       createAction("Mở danh sách điều chỉnh", () => onNavigate?.("adjustments", "review")),
       createAction("Đối chiếu trên báo cáo KPI", () => onNavigate?.("reports", "dashboard")),
     ].filter(Boolean),
-    steps: [
+    [
       createStep(
         1,
         "1. Chọn kỳ và phạm vi",
@@ -173,21 +235,23 @@ function buildAdjustmentWorkflowState({ onNavigate }) {
         APP_SHELL_WORKFLOW_TARGETS.adjustments.publish,
       ),
     ],
-  };
+    false,
+  );
 }
 
 function buildReportWorkflowState({ onNavigate, onOpenCommandCenter, canViewAudit }) {
-  return {
-    eyebrow: "Report center",
-    headline: "Report center giờ có hierarchy rõ hơn: chốt phạm vi, đọc insight, drill-down theo lát cắt phù hợp, rồi mới phát hành hoặc truy vết lịch sử.",
-    actions: [
+  return createWorkflowGuideState(
+    'reports',
+    "Report center",
+    "Report center giờ có hierarchy rõ hơn: chốt phạm vi, đọc insight, drill-down theo lát cắt phù hợp, rồi mới phát hành hoặc truy vết lịch sử.",
+    [
       createAction("Mở dashboard KPI", () => onNavigate?.("reports", "dashboard"), "primary"),
       createAction("Tới khu export", () => onNavigate?.("reports", "export")),
       canViewAudit
         ? createAction("Mở audit trail", () => onNavigate?.("audit"))
         : createAction("Mở Command Center", onOpenCommandCenter),
     ].filter(Boolean),
-    steps: [
+    [
       createStep(
         1,
         "1. Chốt phạm vi báo cáo",
@@ -207,19 +271,21 @@ function buildReportWorkflowState({ onNavigate, onOpenCommandCenter, canViewAudi
         APP_SHELL_WORKFLOW_TARGETS.reports.export,
       ),
     ],
-  };
+    false,
+  );
 }
 
 function buildHealthWorkflowState({ onNavigate, onOpenCommandCenter }) {
-  return {
-    eyebrow: "Health & sync",
-    headline: "Điểm vào cho vận hành sync và cảnh báo dữ liệu được gom thành một workflow triage thay vì chỉ là màn hình theo dõi.",
-    actions: [
+  return createWorkflowGuideState(
+    'health',
+    "Health & sync",
+    "Điểm vào cho vận hành sync và cảnh báo dữ liệu được gom thành một workflow triage thay vì chỉ là màn hình theo dõi.",
+    [
       createAction("Kiểm tra sync", () => onNavigate?.("health", "sync"), "primary"),
       createAction("Rà soát cảnh báo", () => onNavigate?.("health", "alerts")),
       createAction("Mở Command Center", onOpenCommandCenter),
     ].filter(Boolean),
-    steps: [
+    [
       createStep(
         1,
         "1. Kiểm tra đồng bộ",
@@ -239,14 +305,16 @@ function buildHealthWorkflowState({ onNavigate, onOpenCommandCenter }) {
         APP_SHELL_WORKFLOW_TARGETS.health.alerts,
       ),
     ],
-  };
+    false,
+  );
 }
 
 function buildGenericWorkflowState({ currentTab, onNavigate, onOpenCommandCenter }) {
-  return {
-    eyebrow: "Operator workflow",
-    headline: `${currentTab?.label || "Module"} đang chạy trong shell mới; dùng workflow guide và Command Center để điều phối thay vì tìm tab thủ công.`,
-    actions: [
+  return createWorkflowGuideState(
+    currentTab?.id || 'workspace',
+    "Operator workflow",
+    `${currentTab?.label || "Module"} đang chạy trong shell mới; dùng workflow guide và Command Center để điều phối thay vì tìm tab thủ công.`,
+    [
       createAction(
         `Đi tới ${currentTab?.label || "module"}`,
         () => onNavigate?.(currentTab?.id),
@@ -255,7 +323,7 @@ function buildGenericWorkflowState({ currentTab, onNavigate, onOpenCommandCenter
       createAction("Mở báo cáo KPI", () => onNavigate?.("reports", "dashboard")),
       createAction("Mở Command Center", onOpenCommandCenter),
     ].filter(Boolean),
-    steps: [
+    [
       createStep(
         1,
         "1. Vào workspace",
@@ -275,7 +343,8 @@ function buildGenericWorkflowState({ currentTab, onNavigate, onOpenCommandCenter
         getAppTabRootId("reports"),
       ),
     ],
-  };
+    false,
+  );
 }
 
 export function buildAppShellWorkflowState({
@@ -283,12 +352,15 @@ export function buildAppShellWorkflowState({
   onNavigate,
   onOpenCommandCenter,
   canViewAudit = false,
+  canViewDataHealth = false,
 } = {}) {
   if (!currentTab?.id) {
     return null;
   }
 
   switch (currentTab.id) {
+    case "dashboard":
+      return buildDashboardWorkflowState({ onNavigate, onOpenCommandCenter, canViewDataHealth });
     case "mst":
       return buildMstWorkflowState({ onNavigate, onOpenCommandCenter });
     case "import":

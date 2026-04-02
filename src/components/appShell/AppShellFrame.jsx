@@ -56,13 +56,14 @@ export default function AppShellFrame({
   const username = currentUser?.username || 'guest';
   const role = currentUser?.role || 'viewer';
   const currentSectionId = currentSection?.id || null;
-  const currentTabLabel = currentTab?.label || 'KPI Control Center';
-  const currentTabDescription = currentTab?.commandDescription || currentTab?.tooltip || 'Chon mot module de bat dau thao tac.';
+  const currentTabLabel = currentTab?.label || 'Bảng điều hành KPI';
+  const currentTabDescription =
+    currentTab?.commandDescription || currentTab?.tooltip || 'Chọn một module để bắt đầu thao tác.';
   const totalTabs = React.useMemo(
     () => sections.reduce((count, section) => count + section.tabs.length, 0),
     [sections],
   );
-  const compactSummary = `${totalTabs} module${totalTabs === 1 ? '' : 's'}`;
+  const compactSummary = `${totalTabs} module`;
   const isCompactLayout = useCompactShellLayout();
   const navPanelIdPrefix = React.useId();
   const [expandedSectionId, setExpandedSectionId] = React.useState(() =>
@@ -100,17 +101,17 @@ export default function AppShellFrame({
         className="ds-app-shell__layout"
         data-shell-layout={isCompactLayout ? 'compact' : 'full'}
       >
-        <aside className="ds-app-shell__sidebar" aria-label="Dieu huong ung dung">
+        <aside className="ds-app-shell__sidebar" aria-label="Điều hướng ứng dụng">
           <div className="ds-app-shell__brand">
-            <p className="ds-app-shell__eyebrow">Operator shell</p>
-            <h1 className="ds-app-shell__brand-title">KPI Control Center</h1>
+            <p className="ds-app-shell__eyebrow">Điều hướng điều hành</p>
+            <h1 className="ds-app-shell__brand-title">Bảng điều hành KPI</h1>
             <p className="ds-app-shell__brand-copy">
-              Dieu huong theo domain de giam fan-out thao tac va giu command surfaces nhat quan.
+              Điều hướng theo domain để giữ shell gọn, rõ ngữ cảnh và giảm thời gian tìm đúng workflow.
             </p>
           </div>
 
-          <div className="ds-app-shell__compact-status" aria-label="Tong quan compact shell">
-            <p className="ds-app-shell__compact-label">{currentSection?.label || 'Dieu huong'}</p>
+          <div className="ds-app-shell__compact-status" aria-label="Tổng quan compact shell">
+            <p className="ds-app-shell__compact-label">{currentSection?.label || 'Điều hướng'}</p>
             <div className="ds-app-shell__compact-title-row">
               <p className="ds-app-shell__compact-title">{currentTabLabel}</p>
               <span className="ds-app-shell__compact-count">{compactSummary}</span>
@@ -126,7 +127,7 @@ export default function AppShellFrame({
               const sectionSummary =
                 isActiveSection && currentTab?.label
                   ? currentTab.label
-                  : `${section.tabs.length} module${section.tabs.length === 1 ? '' : 's'}`;
+                  : `${section.tabs.length} module`;
 
               return (
                 <section
@@ -179,7 +180,7 @@ export default function AppShellFrame({
         <div className="ds-app-shell__main">
           <header className="ds-app-shell__hero">
             <div className="ds-app-shell__hero-copy">
-              <p className="ds-app-shell__eyebrow">{currentSection?.label || 'Dieu huong'}</p>
+              <p className="ds-app-shell__eyebrow">{currentSection?.label || 'Điều hướng'}</p>
               <div className="ds-app-shell__hero-title-row">
                 <h2 className="ds-app-shell__hero-title">{currentTabLabel}</h2>
                 <span className="ds-app-shell__role-pill">{role}</span>
@@ -187,16 +188,16 @@ export default function AppShellFrame({
               <p className="ds-app-shell__hero-description">{currentTabDescription}</p>
             </div>
 
-            <div className="ds-app-shell__hero-meta" aria-label="Ngu canh hien tai">
-              <span className="ds-app-shell__meta-pill">Nguoi dung {username}</span>
-              <span className="ds-app-shell__meta-pill">Workflow {currentTab?.label || 'Tong quan'}</span>
+            <div className="ds-app-shell__hero-meta" aria-label="Ngữ cảnh hiện tại">
+              <span className="ds-app-shell__meta-pill">Người dùng {username}</span>
+              <span className="ds-app-shell__meta-pill">Workflow {currentTab?.label || 'Tổng quan'}</span>
               {typeof onOpenCommandCenter === 'function' ? (
                 <button
                   type="button"
                   onClick={onOpenCommandCenter}
                   className="ds-app-shell__command-button"
                 >
-                  Command Center
+                  Mở Command Center
                 </button>
               ) : null}
             </div>

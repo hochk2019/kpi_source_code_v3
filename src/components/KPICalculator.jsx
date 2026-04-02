@@ -1,4 +1,4 @@
-import React, { Suspense, useEffect, useMemo, useState } from 'react';
+import React, { Suspense, useEffect, useMemo } from 'react';
 
 import { TabsContent } from '@/components/ui/tabs.jsx';
 
@@ -21,18 +21,16 @@ const DataHealthDashboard = React.lazy(() => import('./DataHealthDashboard.jsx')
 const ExportAuditReport = React.lazy(() => import('./ExportAuditReport.jsx'));
 
 import {
-  getVisibleAppNavigationSections,
-  getVisibleAppTabIds,
-  getVisibleAppTabs,
-  resolveVisibleAppTab,
+  APP_SHELL_FALLBACK_TAB,
 } from '@/lib/appShellNavigation.js';
 import {
-  APP_SHELL_WORKFLOW_TARGETS,
   buildAppShellWorkflowState,
   getAppTabRootId,
-  resolveAppShellFocusTarget,
 } from '@/components/appShell/appShellWorkflowState.js';
+import { AppShellLoadingState } from '@/components/appShell/AppShellAsyncStates.jsx';
 import AppShellFrame from '@/components/appShell/AppShellFrame.jsx';
+import AppDashboardLanding from '@/components/appShell/AppDashboardLanding.jsx';
+import useKpiShellState from '@/components/appShell/useKpiShellState.js';
 import { emitCommand } from '@/lib/commandBus.js';
 const MSTWorkflowPanel = React.lazy(() => import('@/components/workflows/MSTWorkflowPanel.jsx'));
 const KPIAdjustmentsWorkflowPanel = React.lazy(() =>
@@ -48,8 +46,11 @@ import {
 } from '@/lib/frontendPerformanceTelemetry.js';
 
 const TabPanelLoadingState = ({ tabLabel }) => (
-  <div aria-live="polite" className="p-4 text-sm text-gray-500" role="status">
-    {`Đang tải nội dung ${tabLabel}...`}
+  <div aria-live="polite" role="status">
+    <AppShellLoadingState
+      title={`Đang tải ${tabLabel}`}
+      description="Shell đang khởi tạo module và giữ nguyên ngữ cảnh điều hướng hiện tại."
+    />
   </div>
 );
 
@@ -65,26 +66,9 @@ const TabPanel = ({ children, panelRootId, tabLabel, panelClassName = 'ds-panel_
   </RuntimeErrorBoundary>
 );
 
-const resolveTabRootFallbackTarget = (targetId) => {
-  if (!targetId) {
-    return null;
-  }
-
-  if (targetId.startsWith('app-tab-root-')) {
-    return targetId;
-  }
-
-  const matchingTabId = Object.entries(APP_SHELL_WORKFLOW_TARGETS).find(([, targets]) =>
-    Object.values(targets).includes(targetId),
-  )?.[0];
-
-  return matchingTabId ? getAppTabRootId(matchingTabId) : null;
-};
-
-
 const KPICalculator = ({
   auth,
-  activeTab = 'reports',
+  activeTab = APP_SHELL_FALLBACK_TAB,
   onTabChange,
   navigationIntent = null,
 }) => {
@@ -121,62 +105,20 @@ const KPICalculator = ({
   const canManageDataHealth = !!permissions.dataHealthManage;
 
   const canViewDataHealth = !!permissions.dataHealthView || canManageDataHealth;
-
-  const visibleTabs = useMemo(() => getVisibleAppTabs(effectiveAuth), [effectiveAuth]);
-
-  const navigationSections = useMemo(() => getVisibleAppNavigationSections(effectiveAuth), [effectiveAuth]);
-
-  const allowedTabs = useMemo(() => getVisibleAppTabIds(effectiveAuth), [effectiveAuth]);
-
-  const initialTab = useMemo(() => resolveVisibleAppTab(activeTab, effectiveAuth), [activeTab, effectiveAuth]);
-
-  const [tabValue, setTabValue] = useState(initialTab);
-  const [loadedTabs, setLoadedTabs] = useState(() => new Set([initialTab]));
-  const [pendingFocusTarget, setPendingFocusTarget] = useState(null);
-
-
-
-  useEffect(() => {
-
-    const nextTab = resolveVisibleAppTab(activeTab, effectiveAuth);
-
-    setLoadedTabs((prev) => {
-      if (prev.has(nextTab)) {
-        return prev;
-      }
-      return new Set([...prev, nextTab]);
-    });
-
-    setTabValue(nextTab);
-
-  }, [activeTab, effectiveAuth]);
-
-
-
-  useEffect(() => {
-
-    if (!allowedTabs.has(tabValue)) {
-
-      const fallback = resolveVisibleAppTab(tabValue, effectiveAuth);
-
-      setLoadedTabs((prev) => {
-        if (prev.has(fallback)) {
-          return prev;
-        }
-        return new Set([...prev, fallback]);
-      });
-
-      setTabValue(fallback);
-
-      if (fallback !== tabValue) {
-
-        onTabChange?.(fallback);
-
-      }
-
-    }
-
-  }, [allowedTabs, effectiveAuth, tabValue, onTabChange]);
+  const {
+    currentSection,
+    currentTab,
+    handleTabChange,
+    loadedTabs,
+    navigationSections,
+    requestTabNavigation,
+    tabValue,
+  } = useKpiShellState({
+    activeTab,
+    currentUser: effectiveAuth,
+    onTabChange,
+    navigationIntent,
+  });
 
 
 
@@ -244,110 +186,10 @@ const KPICalculator = ({
     };
   }, []);
 
-  const handleTabChange = (value) => {
-
-    if (!allowedTabs.has(value)) {
-
-      return;
-
-    }
-
-    setTabValue(value);
-    setLoadedTabs((prev) => {
-      if (prev.has(value)) {
-        return prev;
-      }
-      return new Set([...prev, value]);
-    });
-
-    onTabChange?.(value);
-
-  };
-
-  useEffect(() => {
-    const nextTarget = resolveAppShellFocusTarget(navigationIntent?.tab, navigationIntent?.focus);
-    if (nextTarget) {
-      setPendingFocusTarget(nextTarget);
-    }
-  }, [navigationIntent]);
-
-  useEffect(() => {
-    if (!pendingFocusTarget || typeof window === 'undefined') {
-      return undefined;
-    }
-
-    let attempts = 0;
-    let timeoutId = null;
-
-    const scrollToTarget = () => {
-      const target = document.getElementById(pendingFocusTarget);
-      if (target) {
-        if (typeof target.scrollIntoView === 'function') {
-          target.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        }
-        if (typeof target.focus === 'function') {
-          target.focus({ preventScroll: true });
-        }
-        setPendingFocusTarget(null);
-        return;
-      }
-
-      const fallbackTargetId = resolveTabRootFallbackTarget(pendingFocusTarget);
-      if (fallbackTargetId && fallbackTargetId !== pendingFocusTarget) {
-        const fallbackTarget = document.getElementById(fallbackTargetId);
-        if (fallbackTarget) {
-          if (typeof fallbackTarget.scrollIntoView === 'function') {
-            fallbackTarget.scrollIntoView({ behavior: 'smooth', block: 'start' });
-          }
-          if (typeof fallbackTarget.focus === 'function') {
-            fallbackTarget.focus({ preventScroll: true });
-          }
-          setPendingFocusTarget(null);
-          return;
-        }
-      }
-
-      attempts += 1;
-      if (attempts < 8) {
-        timeoutId = window.setTimeout(scrollToTarget, 90);
-      }
-    };
-
-    timeoutId = window.setTimeout(scrollToTarget, 60);
-
-    return () => {
-      if (timeoutId) {
-        window.clearTimeout(timeoutId);
-      }
-    };
-  }, [pendingFocusTarget, tabValue]);
-
-  const requestTabNavigation = (tabId, focus = null) => {
-    const targetId = resolveAppShellFocusTarget(tabId, focus);
-    if (targetId) {
-      setPendingFocusTarget(targetId);
-    }
-    handleTabChange(tabId);
-  };
-
-  const currentTab = useMemo(
-    () => visibleTabs.find((tab) => tab.id === tabValue) || visibleTabs[0] || null,
-    [tabValue, visibleTabs],
-  );
-
-  const currentSection = useMemo(
-    () =>
-      navigationSections.find((section) =>
-        section.tabs.some((tab) => tab.id === currentTab?.id),
-      ) ||
-      navigationSections[0] ||
-      null,
-    [currentTab, navigationSections],
-  );
-
   const workflowGuide = buildAppShellWorkflowState({
     currentTab,
     canViewAudit,
+    canViewDataHealth,
     onNavigate: requestTabNavigation,
     onOpenCommandCenter: () => emitCommand('open:command-center'),
   });
@@ -368,7 +210,25 @@ const KPICalculator = ({
         onOpenCommandCenter={() => emitCommand('open:command-center')}
       >
 
+        <TabsContent value="dashboard" className="ds-panel">
 
+          {loadedTabs.has('dashboard') ? (
+          <TabPanel panelRootId={getAppTabRootId('dashboard')} tabLabel="Tổng quan KPI">
+
+            <AppDashboardLanding
+              currentUser={effectiveAuth}
+              sections={navigationSections}
+              onNavigate={requestTabNavigation}
+              onOpenCommandCenter={() => emitCommand('open:command-center')}
+              canUseAi={canUseAi}
+              canViewAudit={canViewAudit}
+              canViewDataHealth={canViewDataHealth}
+            />
+
+          </TabPanel>
+          ) : null}
+
+        </TabsContent>
 
         <TabsContent value="mst" className="ds-panel">
 

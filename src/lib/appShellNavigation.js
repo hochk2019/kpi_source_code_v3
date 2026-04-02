@@ -1,29 +1,45 @@
-export const APP_SHELL_FALLBACK_TAB = 'reports';
+export const APP_SHELL_FALLBACK_TAB = 'dashboard';
+export const APP_SHELL_SECTION_QUERY_PARAM = 'section';
+export const APP_SHELL_TAB_QUERY_PARAM = 'tab';
 
 export const APP_NAVIGATION_SECTION_DEFINITIONS = Object.freeze([
   {
+    id: 'overview',
+    label: 'Tổng quan',
+    description: 'Điểm vào mặc định để nắm sức khỏe vận hành và lối tắt ưu tiên.',
+  },
+  {
     id: 'operations',
-    label: 'Van hanh',
-    description: 'Nhap lieu, gan MST va van hanh doi tac dau vao.',
+    label: 'Vận hành',
+    description: 'Nhập liệu, gán MST và vận hành đối tác đầu vào.',
   },
   {
     id: 'performance',
-    label: 'Hieu suat',
-    description: 'To doi, quy tac KPI va dashboard tong hop.',
+    label: 'Hiệu suất',
+    description: 'Tổ đội, quy tắc KPI và báo cáo điều hành.',
   },
   {
     id: 'observability',
-    label: 'Giam sat',
-    description: 'Theo doi suc khoe du lieu va tro giup van hanh.',
+    label: 'Giám sát',
+    description: 'Theo dõi sức khỏe dữ liệu và trợ giúp vận hành.',
   },
   {
     id: 'governance',
-    label: 'Quan tri',
-    description: 'Tai khoan, audit trail va truy vet export.',
+    label: 'Quản trị',
+    description: 'Tài khoản, audit trail và truy vết export.',
   },
 ]);
 
 export const APP_TAB_DEFINITIONS = Object.freeze([
+  {
+    id: 'dashboard',
+    sectionId: 'overview',
+    label: 'Tổng quan KPI',
+    tooltip: 'Điểm vào mặc định để xem lối tắt, trạng thái và bề mặt điều hành chính',
+    commandLabel: 'Đi tới dashboard Tổng quan KPI',
+    commandDescription: 'Mở điểm vào mặc định với tóm tắt shell, thao tác nhanh và trạng thái vận hành',
+    commandKeywords: ['dashboard', 'tong quan', 'overview', 'home', 'landing', 'kpi'],
+  },
   {
     id: 'mst',
     sectionId: 'operations',
@@ -140,6 +156,9 @@ export const APP_TAB_DEFINITIONS = Object.freeze([
 ]);
 
 const APP_TAB_DEFINITION_MAP = new Map(APP_TAB_DEFINITIONS.map((tab) => [tab.id, tab]));
+const APP_SECTION_DEFINITION_MAP = new Map(
+  APP_NAVIGATION_SECTION_DEFINITIONS.map((section) => [section.id, section]),
+);
 
 export function getAppShellAccess(currentUser) {
   const permissions = currentUser?.permissions || {};
@@ -169,6 +188,10 @@ export function getAppTabDefinition(tabId) {
   return APP_TAB_DEFINITION_MAP.get(tabId) || null;
 }
 
+export function getAppNavigationSectionDefinition(sectionId) {
+  return APP_SECTION_DEFINITION_MAP.get(sectionId) || null;
+}
+
 export function getVisibleAppNavigationSections(currentUser) {
   const visibleTabs = getVisibleAppTabs(currentUser);
   const sections = APP_NAVIGATION_SECTION_DEFINITIONS.map((section) => ({
@@ -187,14 +210,75 @@ export function getVisibleAppNavigationSections(currentUser) {
   return sections.filter((section) => section.tabs.length > 0);
 }
 
-export function resolveVisibleAppTab(requestedTab, currentUser, fallbackTab = APP_SHELL_FALLBACK_TAB) {
+function createSearchParams(search) {
+  if (search instanceof URLSearchParams) {
+    return new URLSearchParams(search);
+  }
+  if (typeof search === 'string') {
+    return new URLSearchParams(search.startsWith('?') ? search.slice(1) : search);
+  }
+  return new URLSearchParams(search || '');
+}
+
+export function resolveVisibleAppTab(
+  requestedTab,
+  currentUser,
+  fallbackTab = APP_SHELL_FALLBACK_TAB,
+  requestedSection = null,
+) {
   const visibleTabs = getVisibleAppTabs(currentUser);
   const visibleIds = new Set(visibleTabs.map((tab) => tab.id));
   if (requestedTab && visibleIds.has(requestedTab)) {
     return requestedTab;
   }
+  if (requestedSection) {
+    const sectionMatch = visibleTabs.find((tab) => tab.sectionId === requestedSection);
+    if (sectionMatch) {
+      return sectionMatch.id;
+    }
+  }
   if (visibleIds.has(fallbackTab)) {
     return fallbackTab;
   }
   return visibleTabs[0]?.id || fallbackTab;
+}
+
+export function parseAppShellLocation(search, currentUser, fallbackTab = APP_SHELL_FALLBACK_TAB) {
+  const params = createSearchParams(search);
+  const requestedSection = params.get(APP_SHELL_SECTION_QUERY_PARAM);
+  const requestedTab = params.get(APP_SHELL_TAB_QUERY_PARAM);
+  const tab = resolveVisibleAppTab(requestedTab, currentUser, fallbackTab, requestedSection);
+
+  return {
+    requestedSection,
+    requestedTab,
+    section: getAppTabDefinition(tab)?.sectionId || null,
+    tab,
+  };
+}
+
+export function serializeAppShellLocation({
+  search = '',
+  tab,
+  currentUser,
+  fallbackTab = APP_SHELL_FALLBACK_TAB,
+} = {}) {
+  const params = createSearchParams(search);
+  const resolvedTab = resolveVisibleAppTab(tab, currentUser, fallbackTab);
+  const resolvedSection = getAppTabDefinition(resolvedTab)?.sectionId || null;
+
+  if (resolvedSection) {
+    params.set(APP_SHELL_SECTION_QUERY_PARAM, resolvedSection);
+  } else {
+    params.delete(APP_SHELL_SECTION_QUERY_PARAM);
+  }
+
+  if (resolvedTab) {
+    params.set(APP_SHELL_TAB_QUERY_PARAM, resolvedTab);
+  } else {
+    params.delete(APP_SHELL_TAB_QUERY_PARAM);
+  }
+
+  const nextSearch = params.toString();
+  return nextSearch ? `?${nextSearch}` : '';
 }

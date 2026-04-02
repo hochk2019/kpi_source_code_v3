@@ -1,6 +1,10 @@
 import React, { Suspense } from "react";
 
 import {
+  AppShellEmptyState,
+  AppShellLoadingState,
+} from "@/components/appShell/AppShellAsyncStates.jsx";
+import {
   APP_SHELL_WORKFLOW_TARGETS,
 } from "@/components/appShell/appShellWorkflowState.js";
 import { SectionHeader, SectionSurface } from "@/components/designSystem/shellPrimitives.jsx";
@@ -10,9 +14,10 @@ const ExportAuditReport = React.lazy(() => import("@/components/ExportAuditRepor
 
 function ReportSurfaceFallback({ label }) {
   return (
-    <div className="rounded-xl border border-dashed border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-muted)]/40 p-4 text-sm text-[color:var(--ds-text-secondary)]">
-      Đang tải {label}...
-    </div>
+    <AppShellLoadingState
+      title={`Đang tải ${label}`}
+      description="Report center đang chuẩn bị dashboard hoặc export surface cho workflow hiện tại."
+    />
   );
 }
 
@@ -84,10 +89,10 @@ export default function ReportCenterPanel({
             </Suspense>
           </div>
         ) : (
-          <p className="text-sm text-[color:var(--ds-text-secondary)]">
-            Bạn chưa có quyền audit trail. Export và lịch gửi vẫn khả dụng trong dashboard KPI phía
-            trên; audit chỉ xuất hiện khi tài khoản được cấp quyền truy vết.
-          </p>
+          <AppShellEmptyState
+            title="Audit trail chưa khả dụng"
+            description="Export và lịch gửi vẫn khả dụng trong dashboard KPI phía trên; audit chỉ xuất hiện khi tài khoản được cấp quyền truy vết."
+          />
         )}
       </SectionSurface>
     </div>

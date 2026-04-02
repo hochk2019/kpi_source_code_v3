@@ -40,6 +40,9 @@ Reconciliation note:
 - Reconciled again on 2026-04-02 after opening sync refactor epic `cng-yn6` with child slices `cng-yn6.1..cng-yn6.6`; `cng-yn6.1` is in progress and `task.md` now carries the canonical session notebook for this lane.
 - Reconciled again on 2026-04-02 after completing `cng-yn6.1`, `cng-yn6.2`, and `cng-yn6.3`; canonical `/api/v4/shared-sync/*` routes plus storage-client migration are shipped, and next ready work moves to failure isolation + persistence hot path.
 - Reconciled again on 2026-04-02 after closing late cleanup bead `cng-yn6.7`; SQLite declarations now persist through canonical live rows with targeted regression tests, so sync lane `cng-yn6` is fully closed again and there are no open beads.
+- Reconciled again on 2026-04-02 after opening frontend modernization epic `cng-1wj`; phase chain `cng-1wj.1..cng-1wj.11` now tracks the full shell/state modernization plan.
+- Reconciled again on 2026-04-02 after completing phase-0 freeze/design (`cng-1wj.1`, `cng-1wj.2`); source brief `docs/opus-review-v2-modernization-brief-2026-04-02.md` is now the shell/state phase-0 reference, and `cng-1wj.3` is the active shell navigation slice.
+- Reconciled again on 2026-04-02 after shipping shell/dashboard/command-center/workflow-guide/async primitives plus wave A state extraction; `cng-1wj.3..cng-1wj.9` are closed, and next ready slice is `cng-1wj.10`.
 
 Rule:
 - Every unfinished item from review notes, rollout plans, decomposition plans, or UX backlogs must be in one of two states:
@@ -47,10 +50,27 @@ Rule:
 - explicitly marked deferred or removed in its source document
 
 Current open epics:
-- none.
+- `cng-1wj` - frontend-modernization-shell-state
 
 Current highest-priority ready items:
-- none.
+- `cng-1wj.10` - state-extraction-wave-b
+
+## Frontend Modernization Shell/State
+
+Epic: `cng-1wj`  
+Source set: `Opus_review_v2.md`, Stitch design deliverables, `task.md`
+
+- `cng-1wj.1` - opus-review-fact-check-freeze (closed; source brief locked in `docs/opus-review-v2-modernization-brief-2026-04-02.md`)
+- `cng-1wj.2` - shell-design-stitch-foundation (closed; Stitch project `projects/2389602522155416936`, design system `assets/ec04f12fca7146309a2f634e5bbe79e9`)
+- `cng-1wj.3` - shell-navigation-contract (closed)
+- `cng-1wj.4` - shell-unified-header-layout (closed)
+- `cng-1wj.5` - dashboard-landing (closed)
+- `cng-1wj.6` - command-center-refactor (closed)
+- `cng-1wj.7` - workflow-guide-stateful-panel (closed)
+- `cng-1wj.8` - shell-loading-empty-error-primitives (closed)
+- `cng-1wj.9` - state-extraction-wave-a (closed; shell navigation, command center, dashboard summary moved to dedicated hooks/selectors)
+- `cng-1wj.10` - state-extraction-wave-b (open; depends on `cng-1wj.9`)
+- `cng-1wj.11` - modernization-regression-hardening (open; depends on `cng-1wj.10`)
 
 ## Hard-gate Cutover Program
 
