@@ -13,21 +13,21 @@
 - Open epics hien tai:
   - none
 - Highest-priority ready items hien tai:
-  - `cng-y29` - store-hq-agency-extraction
+  - `cng-gti` - store-deleted-decl-log-extraction
 
 ## Active Slice
 
--- Bead: cng-y29
--- Title: cng-y29 / store-hq-agency-extraction
+-- Bead: cng-gti
+-- Title: cng-gti / store-deleted-decl-log-extraction
 -- Status: in_progress
 -- Last updated: 2026-04-03
 
 ## Sync Notebook
 
-- Goal: tiep tuc giam monolith `src/lib/store.js` bang mot slice hep chi tach domain HQ agency + HQ history khoi facade hien tai, giu nguyen public API.
-- Files In Scope: `src/lib/store.js`, module HQ moi duoi `src/lib/`, regression tests lien quan HQ/store, `docs/open-backlog.md`, `task.md`, va bead `cng-y29`.
-- Verify: truoc khi sua code HQ phai chay `gitnexus_impact` cho cac symbol HQ chinh; sau khi sua chay regression HQ/store phu hop, `pnpm bd:check`, va `gitnexus_detect_changes(scope=all)`.
-- Handoff: neu context bi nen/reset, bat dau lai bang `task.md`; `cng-vtn` da hoan tat va da tach MST assignment/history sang `src/lib/mstAssignments.js` voi regression MST/store/automation xanh. Next ready slice la `cng-y29` de tach HQ agency rows + HQ history helpers khoi `src/lib/store.js` sau theo cung facade pattern.
+- Goal: tiep tuc giam monolith `src/lib/store.js` bang mot slice hep chi tach domain deleted declaration log khoi facade hien tai, giu nguyen `DECL_DELETED_LOG_*` API.
+- Files In Scope: `src/lib/store.js`, module deleted-log moi duoi `src/lib/`, regression tests lien quan deleted-log/store, `docs/open-backlog.md`, `task.md`, va bead `cng-gti`.
+- Verify: truoc khi sua code deleted-log phai chay `gitnexus_impact` cho cac symbol deleted-log chinh; sau khi sua chay regression deleted-log/store phu hop, `pnpm bd:check`, va `gitnexus_detect_changes(scope=all)`.
+- Handoff: neu context bi nen/reset, bat dau lai bang `task.md`; `cng-y29` da hoan tat o muc code va da tach logic HQ agency/history sang `src/lib/hqAgencies.js` voi regression `tests/hqAgenciesStore.test.js`, `tests/store.test.js`, `tests/hqIntegration.test.js`, va `tests/hqHistoryClient.test.js` xanh. Slice tiep theo la `cng-gti` de tach deleted declaration log helpers theo cung facade pattern.
 
 ## Execution Matrix
 
