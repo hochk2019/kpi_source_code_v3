@@ -24,11 +24,10 @@ Canonical program board for fully decomposing `src/lib/store.js` under epic `cng
 
 ## Active Resume State
 
-- Active bead: `cng-ro9.5`
-- Resume from: declaration read/query da duoc tach sang `src/lib/declReadStore.js`; tiep tuc chay impact cho `previewDeclRows` va `saveDeclRows`, sau do tach declaration save/import pipeline sang module moi ma khong dong vao lifecycle mutations.
+- Active bead: `cng-ro9.6`
+- Resume from: declaration save/import pipeline da duoc tach sang `src/lib/declWriteStore.js`; tiep tuc chay impact cho lifecycle mutation facades, sau do tach update/delete/restore/review lane sang module moi ma khong quay lai save pipeline da xanh.
 - Pending verify:
-  - `gitnexus_impact(target=previewDeclRows,direction=upstream)`
-  - `gitnexus_impact(target=saveDeclRows,direction=upstream)`
+  - `gitnexus_impact` cho declaration lifecycle mutation facades
   - `pnpm bd:check`
   - `gitnexus_detect_changes(scope=all)` sau khi xong slice
 
@@ -41,8 +40,8 @@ Canonical program board for fully decomposing `src/lib/store.js` under epic `cng
 | `cng-ro9.2` | 1 | Tach rules persistence | `getRules`, `setRules`, storage keys lien quan; khong doi business logic `src/lib/rules.js` | yes | no | `gitnexus_impact(getRules)` + `gitnexus_impact(setRules)`; rules/store regression; `pnpm bd:check`; `gitnexus_detect_changes()` | `closed` | Hoan tat 2026-04-03; module `src/lib/rulesPersistence.js` + facade regression da xanh, scope giu o `getRules`/`setRules` | none |
 | `cng-ro9.3` | 2 | Tach team roster domain | roster read/subscribe/save, map/apply helpers, audit side effect qua module audit | yes | no | `gitnexus_impact` cho roster symbols; team manager/store regression; `pnpm bd:check`; `gitnexus_detect_changes()` | `closed` | Hoan tat 2026-04-03; module `src/lib/teamRoster.js` + facade regression da xanh, scope giu o roster read/save/subscribe/map/apply | none |
 | `cng-ro9.4` | 3 | Tach declaration read/query | `getDeclRows`, sort/filter/query helpers, `getData` facade alias | yes | no | `gitnexus_impact(getDeclRows)`; decl read regression; `pnpm bd:check`; `gitnexus_detect_changes()` | `closed` | Hoan tat 2026-04-03; module `src/lib/declReadStore.js` + facade regression da xanh, scope giu o getDeclRows/getRecentDeclRows/getData/refresh read path | none |
-| `cng-ro9.5` | 3 | Tach declaration save pipeline | `previewDeclRows`, `saveDeclRows`, import/save merge helpers | yes | no | `gitnexus_impact(previewDeclRows)` + `gitnexus_impact(saveDeclRows)`; importer/store regression; `pnpm bd:check`; `gitnexus_detect_changes()` | `in_progress` | Read/query extraction da xong; save lane co the move private helpers theo pipeline ma khong doi facade | Xong save pipeline de mo mutations |
-| `cng-ro9.6` | 3 | Tach declaration lifecycle mutations | update/delete/restore/review helpers | yes | no | `gitnexus_impact` cho mutation symbols; row lifecycle regression; `pnpm bd:check`; `gitnexus_detect_changes()` | `open` | Cho `cng-ro9.5`; note blast radius rieng cho tung symbol | Xong mutations de mo core helpers |
+| `cng-ro9.5` | 3 | Tach declaration save pipeline | `previewDeclRows`, `saveDeclRows`, import/save merge helpers | yes | no | `gitnexus_impact(previewDeclRows)` + `gitnexus_context(saveDeclRows@store.js)`; importer/store regression; `pnpm bd:check`; `gitnexus_detect_changes()` | `closed` | Hoan tat 2026-04-03; module `src/lib/declWriteStore.js` + facade regression da xanh, scope giu o preview/save lane va helper inject de tranh lan sang mutations | none |
+| `cng-ro9.6` | 3 | Tach declaration lifecycle mutations | update/delete/restore/review helpers | yes | no | `gitnexus_impact` cho mutation symbols; row lifecycle regression; `pnpm bd:check`; `gitnexus_detect_changes()` | `in_progress` | Cho `cng-ro9.5`; note blast radius rieng cho tung symbol | Xong mutations de mo core helpers |
 | `cng-ro9.7` | 4 | Tach shared core helpers | core cross-domain helpers that su dung chung; day private helpers ve module dich | yes | no | helper module unit tests; cross-domain regression; `pnpm bd:check`; `gitnexus_detect_changes()` | `open` | Cho declaration waves xong de co full map helper ownership | Xong core extraction de mo caller migration |
 | `cng-ro9.8` | 5 | Migrate callers off `store.js` | direct imports cho libs/hooks/components theo dot, track residual shim consumers | mixed | yes | caller import diff review; targeted regression; `pnpm bd:check`; `gitnexus_detect_changes()` | `open` | Cho `cng-ro9.7`; bat dau low-risk libs/hooks truoc | So caller shim giam ve muc shim-only |
 | `cng-ro9.9` | 6 | Lock `store.js` thanh shim mong | chi de lai import/re-export, compat comments, deprecation notes | yes | yes | shim regression; import scan; `pnpm bd:check`; `gitnexus_detect_changes()` | `open` | Cho caller migration dat muc chap nhan duoc | Quyết định mo bead xoa facade con lai neu can |

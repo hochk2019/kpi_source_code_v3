@@ -57,6 +57,7 @@ Reconciliation note:
 - Reconciled again on 2026-04-03 after closing `cng-ro9.2`; rules persistence is extracted into `src/lib/rulesPersistence.js` with dedicated tests, and next active slice is `cng-ro9.3` for team roster domain extraction.
 - Reconciled again on 2026-04-03 after closing `cng-ro9.3`; team roster domain is extracted into `src/lib/teamRoster.js` with dedicated tests, and next active slice is `cng-ro9.4` for declaration read/query extraction.
 - Reconciled again on 2026-04-03 after closing `cng-ro9.4`; declaration read/query helpers are extracted into `src/lib/declReadStore.js` with dedicated tests, and next active slice is `cng-ro9.5` for declaration save pipeline extraction.
+- Reconciled again on 2026-04-03 after closing `cng-ro9.5`; declaration save/import pipeline is extracted into `src/lib/declWriteStore.js` with dedicated tests, and next active slice is `cng-ro9.6` for declaration lifecycle mutations.
 
 Rule:
 - Every unfinished item from review notes, rollout plans, decomposition plans, or UX backlogs must be in one of two states:
@@ -67,7 +68,7 @@ Current open epics:
 - `cng-ro9` - store-decomposition-program
 
 Current highest-priority ready items:
-- `cng-ro9.5` - active wave-3 code slice for declaration save/import pipeline extraction behind the existing `src/lib/store.js` facade
+- `cng-ro9.6` - active wave-3 code slice for declaration lifecycle mutation extraction behind the existing `src/lib/store.js` facade
 
 ## Frontend Modernization Shell/State
 
@@ -106,8 +107,8 @@ Canonical board: `docs/store-decomposition-execution-board.md`
   - `cng-ro9.2` - store-rules-persistence-extraction (closed; wave-1 rules persistence facade extraction behind `src/lib/store.js` with dedicated module coverage)
   - `cng-ro9.3` - store-team-roster-extraction (closed; wave-2 team roster domain extraction behind `src/lib/store.js` with dedicated module coverage)
   - `cng-ro9.4` - store-decl-read-extraction (closed; wave-3 declaration read/query split behind `src/lib/store.js` with dedicated module coverage in `src/lib/declReadStore.js`)
-  - `cng-ro9.5` - store-decl-save-pipeline-extraction (in progress; wave-3 declaration save/import pipeline split)
-  - `cng-ro9.6` - store-decl-mutations-extraction (open; wave-3 declaration lifecycle mutations split)
+  - `cng-ro9.5` - store-decl-save-pipeline-extraction (closed; wave-3 declaration save/import pipeline split behind `src/lib/store.js` with dedicated module coverage in `src/lib/declWriteStore.js`)
+  - `cng-ro9.6` - store-decl-mutations-extraction (in progress; wave-3 declaration lifecycle mutations split)
   - `cng-ro9.7` - store-core-helpers-extraction (open; wave-4 shared core helper extraction)
   - `cng-ro9.8` - store-caller-migration (open; wave-5 direct caller migration off `@/lib/store.js`)
   - `cng-ro9.9` - store-shim-lockdown (open; wave-6 lock `store.js` as thin compatibility shim)
