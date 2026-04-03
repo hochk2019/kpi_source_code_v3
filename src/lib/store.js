@@ -50,6 +50,9 @@ import {
 import {
   createAuditLogStore,
 } from './auditLog.js';
+import {
+  createRulesPersistenceStore,
+} from './rulesPersistence.js';
 
 
 
@@ -3958,21 +3961,29 @@ export function pushImportLog(entry, extraMeta = null) {
 
 // ===== K_RULES (Ä‘á»ƒ RulesEditor khÃ´ng lá»—i khi chÆ°a cÃ³ dá»¯ liá»‡u) =====
 
+const rulesPersistenceStore = createRulesPersistenceStore({
+  getItem,
+  setItem,
+  safeParse,
+  createDefaultRuleCollection,
+  rulesKey: RULES_KEY,
+});
+
 export const K_RULES = (() => {
 
-  return safeParse(getItem(RULES_KEY), createDefaultRuleCollection());
+  return rulesPersistenceStore.getRules();
 
 })();
 
 export function getRules() {
 
-  return safeParse(getItem(RULES_KEY), createDefaultRuleCollection());
+  return rulesPersistenceStore.getRules();
 
 }
 
 export function setRules(v) {
 
-  setItem(RULES_KEY, JSON.stringify(v));
+  rulesPersistenceStore.setRules(v);
 
 }
 

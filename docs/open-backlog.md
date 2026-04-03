@@ -54,6 +54,7 @@ Reconciliation note:
 - Reconciled again on 2026-04-03 after opening epic `cng-ro9`; the store decomposition lane now uses canonical board `docs/store-decomposition-execution-board.md`, active bootstrap slice `cng-ro9.1`, and child-bead execution order so another agent can resume safely after context loss or power interruption.
 - Reconciled again on 2026-04-03 after closing `cng-ro9.1`; wave-0 bootstrap is complete, `cng-bl9` is now the active wave-1 code slice, and the execution board remains the canonical resume surface for the lane.
 - Reconciled again on 2026-04-03 after closing `cng-bl9`; audit log helpers are extracted into `src/lib/auditLog.js` with dedicated tests, and next ready slice is `cng-ro9.2` for rules persistence extraction.
+- Reconciled again on 2026-04-03 after closing `cng-ro9.2`; rules persistence is extracted into `src/lib/rulesPersistence.js` with dedicated tests, and next active slice is `cng-ro9.3` for team roster domain extraction.
 
 Rule:
 - Every unfinished item from review notes, rollout plans, decomposition plans, or UX backlogs must be in one of two states:
@@ -64,7 +65,7 @@ Current open epics:
 - `cng-ro9` - store-decomposition-program
 
 Current highest-priority ready items:
-- `cng-ro9.2` - active wave-1 code slice for rules persistence extraction behind the existing `src/lib/store.js` facade
+- `cng-ro9.3` - active wave-2 code slice for team roster domain extraction behind the existing `src/lib/store.js` facade
 
 ## Frontend Modernization Shell/State
 
@@ -100,8 +101,8 @@ Canonical board: `docs/store-decomposition-execution-board.md`
 - Active/resume-safe child chain:
   - `cng-ro9.1` - store-decomposition-bootstrap (closed; wave-0 anti-drop bootstrap for board, bead graph, notebook, and backlog reconcile)
   - `cng-bl9` - store-audit-log-extraction (closed; wave-1 audit facade extraction behind the existing store shim)
-  - `cng-ro9.2` - store-rules-persistence-extraction (in progress; wave-1 rules persistence facade extraction)
-  - `cng-ro9.3` - store-team-roster-extraction (open; wave-2 team roster domain extraction)
+  - `cng-ro9.2` - store-rules-persistence-extraction (closed; wave-1 rules persistence facade extraction behind `src/lib/store.js` with dedicated module coverage)
+  - `cng-ro9.3` - store-team-roster-extraction (in progress; wave-2 team roster domain extraction)
   - `cng-ro9.4` - store-decl-read-extraction (open; wave-3 declaration read/query split)
   - `cng-ro9.5` - store-decl-save-pipeline-extraction (open; wave-3 declaration save pipeline split)
   - `cng-ro9.6` - store-decl-mutations-extraction (open; wave-3 declaration lifecycle mutations split)

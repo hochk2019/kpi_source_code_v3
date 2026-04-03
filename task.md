@@ -13,25 +13,34 @@
 - Da reconcile tiep ngay 2026-04-03 sau khi mo epic `cng-ro9` cho chuong trinh triet de tach `src/lib/store.js`; active slice duoc doi sang `cng-ro9.1` de bootstrap execution board + anti-drop resume control, va `cng-bl9` duoc chuyen thanh child wave-1 cua epic nay.
 - Da reconcile tiep ngay 2026-04-03 sau khi dong `cng-ro9.1`; execution board + anti-drop resume control da duoc khoa, va active slice duoc chuyen sang `cng-bl9` de bat dau wave-1 audit extraction.
 - Da reconcile tiep ngay 2026-04-03 sau khi dong `cng-bl9`; audit log helpers da duoc tach thanh `src/lib/auditLog.js` co test rieng, va next slice duoc chuyen sang `cng-ro9.2` cho rules persistence.
+- Da reconcile tiep ngay 2026-04-03 sau khi dong `cng-ro9.2`; rules persistence da duoc tach thanh `src/lib/rulesPersistence.js` co test rieng, facade `store.js` giu nguyen API, va next slice duoc chuyen sang `cng-ro9.3` cho team roster domain.
 - Open epics hien tai:
   - `cng-ro9` - store-decomposition-program
 - Highest-priority ready items hien tai:
-  - `cng-ro9.2` (active wave-1 code slice tiep theo: tach rules persistence va giu facade trong `src/lib/store.js`)
+  - `cng-ro9.3` (active wave-2 code slice tiep theo: tach team roster domain va giu facade trong `src/lib/store.js`)
 
 ## Active Slice
 
--- Bead: cng-ro9.2
--- Title: cng-ro9.2 / store-rules-persistence-extraction
+-- Bead: cng-ro9.3
+-- Title: cng-ro9.3 / store-team-roster-extraction
 -- Status: in_progress
 -- Last updated: 2026-04-03
 
 ## Sync Notebook
 
-- Goal: thuc hien wave-1 `cng-ro9.2` bang cach tach `getRules`/`setRules` persistence khoi `src/lib/store.js` thanh module rieng co test, giu facade/API va khong doi business logic trong `src/lib/rules.js`.
-- Files In Scope: `src/lib/store.js`, module rules persistence moi, `src/lib/rules.js` chi doc de map caller, va test module/store regression lien quan.
-- Pending Verify: `gitnexus_impact(target=getRules,direction=upstream)`; `gitnexus_impact(target=setRules,direction=upstream)`; test module moi + regression rules/store; `pnpm bd:check`; `gitnexus_detect_changes(scope=all)`.
-- Verify: chua bat dau edit `cng-ro9.2`; phai chay impact cho `getRules`/`setRules` truoc khi sua vi cluster nay da duoc ghi nhan `CRITICAL` trong planning note. Sau khi sua phai dat unit test module moi + regression facade store/rules, `pnpm bd:check`, va `gitnexus_detect_changes(scope=all)`.
-- Handoff: neu context bi nen/reset, doc lan luot `task.md` -> `docs/store-decomposition-execution-board.md` -> `docs/open-backlog.md`; `cng-bl9` da xong, next la `cng-ro9.2`. Khong bat dau team roster (`cng-ro9.3`) cho den khi rules persistence facade xanh va board/backlog da reconcile.
+- Goal: thuc hien wave-2 `cng-ro9.3` bang cach tach team roster read/subscribe/save + mapping/apply helpers khoi `src/lib/store.js`, tai su dung shared primitives va bat buoc di qua audit module da tach.
+- Files In Scope: `src/lib/store.js`, module team roster moi, callers/team mapping helpers lien quan, va test module/store regression cho roster subscribe/save/apply.
+- Pending Verify: `gitnexus_impact(target=getTeamRoster,direction=upstream)`; `gitnexus_impact(target=setTeamRoster,direction=upstream)`; `gitnexus_impact(target=subscribeTeamRoster,direction=upstream)`; team roster module tests; roster/store regression; `pnpm bd:check`; `gitnexus_detect_changes(scope=all)`.
+- Verify: `cng-ro9.2` da xanh voi `pnpm exec eslint src/lib/rulesPersistence.js src/lib/store.js tests/rulesPersistenceStore.test.js tests/store.test.js`; `pnpm exec vitest run tests/rulesPersistenceStore.test.js tests/store.test.js tests/rules.test.js tests/useDataImporterImportFlow.test.jsx tests/useDataImporterSavedSession.test.jsx tests/useDataImporterWorkflowSession.test.jsx --environment jsdom`; `pnpm bd:check`; `gitnexus_detect_changes(scope=all)` (van `critical` do coarse file-level attribution tren `src/lib/store.js`, nhung scope thuc te chi la facade `getRules`/`setRules` + test lien quan).
+- Handoff: neu context bi nen/reset, doc lan luot `task.md` -> `docs/store-decomposition-execution-board.md` -> `docs/open-backlog.md`; `cng-ro9.2` da xong va next la `cng-ro9.3`. Bat dau bang impact cho `getTeamRoster` / `setTeamRoster` / `subscribeTeamRoster`, giu strategy facade-only va khong dong vao declaration waves.
+
+### Checkpoint: cng-ro9.2
+
+- Done: tach rules persistence thanh `src/lib/rulesPersistence.js`, wire facade `getRules`/`setRules` va `K_RULES` trong `src/lib/store.js`, them test module rieng va regression facade trong `tests/store.test.js`.
+- Verify: `pnpm exec eslint src/lib/rulesPersistence.js src/lib/store.js tests/rulesPersistenceStore.test.js tests/store.test.js`; `pnpm exec vitest run tests/rulesPersistenceStore.test.js tests/store.test.js tests/rules.test.js tests/useDataImporterImportFlow.test.jsx tests/useDataImporterSavedSession.test.jsx tests/useDataImporterWorkflowSession.test.jsx --environment jsdom`; `pnpm bd:check`; `gitnexus_detect_changes(scope=all)`.
+- Risk: `gitnexus_impact(getRules)` = `CRITICAL`, `gitnexus_impact(setRules)` = `HIGH`; `gitnexus_detect_changes()` van danh dau `critical` vi file-level attribution tren `store.js`, can tiep tuc coi `store.js` la hot file khi danh gia scope.
+- Decision: giu extraction o muc move-only/facade-only, khong doi payload shape, khong doi business logic trong `src/lib/rules.js`.
+- Next: claim `cng-ro9.3`, chay impact cho team roster symbols, va tach roster read/subscribe/save + mapping/apply helpers qua module rieng co regression audit side effect.
 
 ## Execution Matrix
 

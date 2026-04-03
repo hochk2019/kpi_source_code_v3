@@ -110,6 +110,12 @@ import {
 
   REPORT_SCHEDULE_KEY,
 
+  getRules,
+
+  setRules,
+
+  RULES_KEY,
+
 } from '@/lib/store.js';
 
 import { clearStorageCache, getItem as sharedGetItem, setItem as sharedSetItem } from '@/lib/storageClient.js';
@@ -433,6 +439,46 @@ describe('audit log facade', () => {
     expect(getAuditLogs()).toEqual([cleared]);
 
     expect(sharedGetItem(AUDIT_KEY)).toContain('audit.clear');
+
+  });
+
+});
+
+describe('rules persistence facade', () => {
+
+  it('reads and writes rules through the extracted store facade', () => {
+
+    const nextRules = {
+
+      activeId: 'custom-rule',
+
+      sets: [
+
+        {
+
+          id: 'custom-rule',
+
+          name: 'Quy tắc kiểm thử',
+
+          groups: [],
+
+          license: {},
+
+        },
+
+      ],
+
+    };
+
+
+
+    setRules(nextRules);
+
+
+
+    expect(getRules()).toEqual(nextRules);
+
+    expect(sharedGetItem(RULES_KEY)).toBe(JSON.stringify(nextRules));
 
   });
 
