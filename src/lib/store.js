@@ -47,6 +47,9 @@ import {
   DECL_HISTORY_KEY,
   createDeclHistoryStore,
 } from './declHistory.js';
+import {
+  createAuditLogStore,
+} from './auditLog.js';
 
 
 
@@ -3977,101 +3980,17 @@ export function setRules(v) {
 
 // ===== Nhật ký hệ thống =====
 
+const auditLogStore = createAuditLogStore({
+  getItem,
+  setItem,
+  safeParse,
+  shallowClone,
+  auditKey: AUDIT_KEY,
+});
 
+export function pushAuditLog(entry) {
 
-function inferAuditCategory(action) {
-
-  if (typeof action !== "string" || !action) {
-
-    return "khac";
-
-  }
-
-  const normalized = action.trim();
-
-  const separatorIndex = normalized.indexOf(".");
-
-  if (separatorIndex <= 0) {
-
-    return normalized;
-
-  }
-
-  return normalized.slice(0, separatorIndex);
-
-}
-
-
-
-function normalizeAuditNote(value) {
-
-  if (value === null || value === undefined) {
-
-    return null;
-
-  }
-
-  const text = `${value}`.trim();
-
-  if (!text) {
-
-    return null;
-
-  }
-
-  return text.normalize("NFC");
-
-}
-
-
-
-export function pushAuditLog({
-
-  actor = "system",
-
-  action = "unknown",
-
-  detail = "",
-
-  meta = null,
-
-  category,
-
-  result = null,
-
-  note = null,
-
-} = {}) {
-
-  const entry = {
-
-    ts: new Date().toISOString(),
-
-    actor,
-
-    action,
-
-    category: category || inferAuditCategory(action),
-
-    detail,
-
-    result: result === null || result === undefined ? null : `${result}`.trim() || null,
-
-    note: normalizeAuditNote(note),
-
-    meta: meta == null ? null : shallowClone(meta),
-
-  };
-
-  const logs = safeParse(getItem(AUDIT_KEY), []);
-
-  logs.unshift(entry);
-
-  const limited = logs.slice(0, 200);
-
-  setItem(AUDIT_KEY, JSON.stringify(limited));
-
-  return entry;
+  return auditLogStore.pushAuditLog(entry);
 
 }
 
@@ -4273,41 +4192,15 @@ export function deleteReportSchedule(id, options) {
 
 export function getAuditLogs(limit = 100) {
 
-  const logs = safeParse(getItem(AUDIT_KEY), []);
-
-  if (!Number.isFinite(limit) || limit <= 0) return logs;
-
-  return logs.slice(0, limit);
+  return auditLogStore.getAuditLogs(limit);
 
 }
 
 
 
-export function clearAuditLogs({ actor = "system", note = "Xóa toàn bộ nhật ký" } = {}) {
+export function clearAuditLogs(options = {}) {
 
-  const entry = {
-
-    ts: new Date().toISOString(),
-
-    actor,
-
-    action: "audit.clear",
-
-    category: "audit",
-
-    detail: note,
-
-    result: "success",
-
-    note: normalizeAuditNote(note),
-
-    meta: null,
-
-  };
-
-  setItem(AUDIT_KEY, JSON.stringify([entry]));
-
-  return entry;
+  return auditLogStore.clearAuditLogs(options);
 
 }
 

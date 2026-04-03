@@ -48,7 +48,11 @@ import {
 
   AUDIT_KEY,
 
+  pushAuditLog,
+
   getAuditLogs,
+
+  clearAuditLogs,
 
   DECL_DELETED_LOG_KEY,
 
@@ -373,6 +377,62 @@ describe('report schedules', () => {
     expect(removed).toBe(true);
 
     expect(getReportSchedules()).toHaveLength(0);
+
+  });
+
+});
+
+
+
+describe('audit log facade', () => {
+
+  it('persists pushed entries and clear operation through the store facade', () => {
+
+    pushAuditLog({
+
+      actor: 'tester',
+
+      action: 'team.save',
+
+      detail: 'Lưu tổ đội',
+
+      note: '  ghi chu  ',
+
+    });
+
+
+
+    const pushed = getAuditLogs(1)[0];
+
+    expect(pushed).toMatchObject({
+
+      actor: 'tester',
+
+      action: 'team.save',
+
+      category: 'team',
+
+      detail: 'Lưu tổ đội',
+
+      note: 'ghi chu',
+
+    });
+
+
+
+    const cleared = clearAuditLogs({
+
+      actor: 'admin',
+
+      note: '  Xóa nhật ký thủ công  ',
+
+    });
+
+
+
+    expect(getAuditLogs()).toEqual([cleared]);
+
+    expect(sharedGetItem(AUDIT_KEY)).toContain('audit.clear');
 
   });
 

@@ -10,24 +10,28 @@
 - Da reconcile tiep ngay 2026-04-02 sau khi dong `cng-1wj.10`; wave B da tach them `reportSchedules`, `importColumnConfig`, va `kpiAdjustments` khoi `store.js`, va next ready slice la `cng-1wj.11`.
 - Da reconcile tiep ngay 2026-04-02 sau khi dong `cng-1wj.11` va epic `cng-1wj`; frontend modernization hardening da xanh tren shell + state extraction matrix, va follow-up tach nho `src/lib/kpiAdjustments.js` duoc ghi ro la deferred cho mot slice KPI adjustments trong tuong lai.
 - Da reconcile tiep ngay 2026-04-03 sau khi commit va dong `cng-1se`; `src/lib/kpiAdjustments.js` da duoc tach thanh submodule noi bo co test rieng va landed trong commit `a54be12`.
+- Da reconcile tiep ngay 2026-04-03 sau khi mo epic `cng-ro9` cho chuong trinh triet de tach `src/lib/store.js`; active slice duoc doi sang `cng-ro9.1` de bootstrap execution board + anti-drop resume control, va `cng-bl9` duoc chuyen thanh child wave-1 cua epic nay.
+- Da reconcile tiep ngay 2026-04-03 sau khi dong `cng-ro9.1`; execution board + anti-drop resume control da duoc khoa, va active slice duoc chuyen sang `cng-bl9` de bat dau wave-1 audit extraction.
+- Da reconcile tiep ngay 2026-04-03 sau khi dong `cng-bl9`; audit log helpers da duoc tach thanh `src/lib/auditLog.js` co test rieng, va next slice duoc chuyen sang `cng-ro9.2` cho rules persistence.
 - Open epics hien tai:
-  - none
+  - `cng-ro9` - store-decomposition-program
 - Highest-priority ready items hien tai:
-  - none (active slice `cng-bl9` da duoc claim `in_progress`)
+  - `cng-ro9.2` (active wave-1 code slice tiep theo: tach rules persistence va giu facade trong `src/lib/store.js`)
 
 ## Active Slice
 
--- Bead: cng-bl9
--- Title: cng-bl9 / store-audit-log-extraction
+-- Bead: cng-ro9.2
+-- Title: cng-ro9.2 / store-rules-persistence-extraction
 -- Status: in_progress
 -- Last updated: 2026-04-03
 
 ## Sync Notebook
 
-- Goal: tiep tuc giam monolith `src/lib/store.js` bang mot slice hep chi tach audit log helpers khoi facade hien tai, giu nguyen `pushAuditLog`, `getAuditLogs`, va `clearAuditLogs` contract.
-- Files In Scope: `src/lib/store.js`, module audit-log moi duoi `src/lib/`, regression tests lien quan audit/store, `docs/open-backlog.md`, `task.md`, va bead `cng-bl9`.
-- Verify: truoc khi sua code audit log phai chay `gitnexus_impact` cho `getAuditLogs`/`pushAuditLog`/`clearAuditLogs`; sau khi sua chay regression audit/store phu hop, `pnpm bd:check`, va `gitnexus_detect_changes(scope=all)`.
-- Handoff: neu context bi nen/reset, bat dau lai bang `task.md`; `cng-d51` da hoan tat va da tach declaration history sang `src/lib/declHistory.js`, `store.js` giu facade cho `DECL_HISTORY_KEY`, `buildDeclHistoryChanges`, `appendDeclHistoryEntry`, va `getDeclHistoryForRow`, them unit `tests/declHistoryStore.test.js`, va verify xanh voi `pnpm exec vitest run tests/declHistoryStore.test.js tests/store.test.js tests/useDataImporterRowHistory.test.jsx --environment jsdom`, `pnpm exec eslint src/lib/declHistory.js src/lib/store.js tests/declHistoryStore.test.js`, `pnpm bd:check`. Huong tiep theo la `cng-bl9`; `gitnexus_impact(target=getAuditLogs, direction=upstream)` dang `LOW`, trong khi `getRules` va `getTeamRoster` van `CRITICAL`, nen audit log la slice hop ly hon de tiep tuc giam kich thuoc `store.js` voi blast radius thap.
+- Goal: thuc hien wave-1 `cng-ro9.2` bang cach tach `getRules`/`setRules` persistence khoi `src/lib/store.js` thanh module rieng co test, giu facade/API va khong doi business logic trong `src/lib/rules.js`.
+- Files In Scope: `src/lib/store.js`, module rules persistence moi, `src/lib/rules.js` chi doc de map caller, va test module/store regression lien quan.
+- Pending Verify: `gitnexus_impact(target=getRules,direction=upstream)`; `gitnexus_impact(target=setRules,direction=upstream)`; test module moi + regression rules/store; `pnpm bd:check`; `gitnexus_detect_changes(scope=all)`.
+- Verify: chua bat dau edit `cng-ro9.2`; phai chay impact cho `getRules`/`setRules` truoc khi sua vi cluster nay da duoc ghi nhan `CRITICAL` trong planning note. Sau khi sua phai dat unit test module moi + regression facade store/rules, `pnpm bd:check`, va `gitnexus_detect_changes(scope=all)`.
+- Handoff: neu context bi nen/reset, doc lan luot `task.md` -> `docs/store-decomposition-execution-board.md` -> `docs/open-backlog.md`; `cng-bl9` da xong, next la `cng-ro9.2`. Khong bat dau team roster (`cng-ro9.3`) cho den khi rules persistence facade xanh va board/backlog da reconcile.
 
 ## Execution Matrix
 
@@ -39,6 +43,20 @@
 | cng-0s2.1 | Runtime smoke + closure/reconcile | `pnpm run test:playwright:runtime`, `pnpm bd:check` | done | `pnpm exec vitest run tests/auth.test.jsx tests/dataImporterShellProps.test.js tests/dataImporterFileActions.test.jsx tests/reportingScopeSections.test.jsx --environment jsdom`; `pnpm exec vitest run tests/server-v4/appShell.test.js tests/server.api.test.js --environment node`; `pnpm run test:playwright:runtime`; `pnpm exec eslint src/auth/localAuth.js src/components/ReportViewer.jsx src/components/dataImporter/importGate.js src/components/dataImporter/DataImporterFileActions.jsx src/components/dataImporter/dataImporterShellProps.js src/components/dataImporter/useDataImporterImportFlow.js src/components/dataImporter/useDataImporterWorkflowSession.js src/components/reporting/reportingExportState.js src/components/reporting/useReportViewerActions.js src/components/reporting/ReportingStaffSection.jsx src/components/reporting/ReportingTeamSection.jsx src/components/reporting/StaffDetailCard.jsx src/components/reporting/TeamDetailCard.jsx tests/helpers/mockApiState.js tests/auth.test.jsx tests/dataImporterImportGate.test.js tests/dataImporterShellProps.test.js tests/dataImporterFileActions.test.jsx tests/useDataImporterImportFlow.test.jsx tests/reportingExportState.test.js tests/reportingScopeSections.test.jsx tests/useReportViewerActions.test.jsx`; `pnpm bd:check` |
 
 ## Checkpoint Log
+
+- Checkpoint 38 (store decomposition bootstrap complete):
+  - Done: mo epic `cng-ro9` + child chain `cng-ro9.1`, `cng-bl9`, `cng-ro9.2..cng-ro9.9`; tao board `docs/store-decomposition-execution-board.md`; reparent `cng-bl9`; khoa protocol anti-drop trong `task.md` + `docs/open-backlog.md`.
+  - Verify: `pnpm bd:safe -- children cng-ro9 --json`; `pnpm bd:safe -- show cng-ro9.1 --json`; `pnpm bd:safe -- show cng-bl9 --json`; `pnpm bd:check`.
+  - Risk: metadata/title trong BD van bi cat ngan o mot so issue cu, nen board/notebook van la source-of-truth cho resume lane nay.
+  - Decision: dong `cng-ro9.1`, chuyen active slice sang `cng-bl9`, va giu quy tac `1 slice = 1 bead = 1 verify gate` cho toan bo decomposition program.
+  - Next: tach audit log helpers ra `src/lib/auditLog.js`, giu facade trong `src/lib/store.js`, va bo sung test rieng cho module moi.
+
+- Checkpoint 39 (cng-bl9 audit extraction complete):
+  - Done: tao `src/lib/auditLog.js` voi `createAuditLogStore`; doi `src/lib/store.js` sang audit facade mong; them `tests/auditLogStore.test.js`; bo sung regression facade trong `tests/store.test.js`.
+  - Verify: `pnpm exec vitest run tests/auditLogStore.test.js --environment node`; `pnpm exec vitest run tests/store.test.js --environment jsdom`; `pnpm exec vitest run tests/server.api.test.js --environment node`; `pnpm exec eslint src/lib/auditLog.js src/lib/store.js tests/auditLogStore.test.js tests/store.test.js`; `pnpm bd:check`; `gitnexus_detect_changes(scope=all)`.
+  - Risk: `gitnexus_detect_changes(scope=all)` bao `critical` chu yeu vi `src/lib/store.js` la file hot path lon va graph hien tai attribute thay doi o muc file-level; pham vi sua thuc te cua slice nay chi la move-only quanh audit facade + notebook docs, da duoc regression test che phu.
+  - Decision: dong `cng-bl9`, chuyen baton sang `cng-ro9.2`, va giu nguyen quy tac khong doi signature/behavior trong cac wave extraction risk cao.
+  - Next: chay impact cho `getRules` va `setRules`, sau do tach rules persistence thanh module rieng co test.
 
 - Checkpoint 19 (frontend modernization track bootstrap):
   - Done: mo epic `cng-1wj` va child chain `cng-1wj.1..cng-1wj.11` trong BD, reconcile `docs/open-backlog.md` de phan shell/state modernization thanh phase ro rang, va claim `cng-1wj.1` lam active slice.

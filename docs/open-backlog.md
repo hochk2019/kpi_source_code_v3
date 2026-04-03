@@ -51,6 +51,9 @@ Reconciliation note:
 - Reconciled again on 2026-04-03 after closing `cng-y29`; HQ agency/history is now extracted behind `src/lib/store.js`, and next ready slice `cng-gti` continues the decomposition lane for deleted declaration log helpers.
 - Reconciled again on 2026-04-03 after closing `cng-gti`; deleted declaration log helpers are now extracted behind `src/lib/store.js`, and next ready slice `cng-d51` continues the decomposition lane for declaration history helpers.
 - Reconciled again on 2026-04-03 after closing `cng-d51`; declaration history helpers are now extracted behind `src/lib/store.js`, and next ready slice `cng-bl9` continues the decomposition lane for audit log helpers.
+- Reconciled again on 2026-04-03 after opening epic `cng-ro9`; the store decomposition lane now uses canonical board `docs/store-decomposition-execution-board.md`, active bootstrap slice `cng-ro9.1`, and child-bead execution order so another agent can resume safely after context loss or power interruption.
+- Reconciled again on 2026-04-03 after closing `cng-ro9.1`; wave-0 bootstrap is complete, `cng-bl9` is now the active wave-1 code slice, and the execution board remains the canonical resume surface for the lane.
+- Reconciled again on 2026-04-03 after closing `cng-bl9`; audit log helpers are extracted into `src/lib/auditLog.js` with dedicated tests, and next ready slice is `cng-ro9.2` for rules persistence extraction.
 
 Rule:
 - Every unfinished item from review notes, rollout plans, decomposition plans, or UX backlogs must be in one of two states:
@@ -58,10 +61,10 @@ Rule:
 - explicitly marked deferred or removed in its source document
 
 Current open epics:
-- none
+- `cng-ro9` - store-decomposition-program
 
 Current highest-priority ready items:
-- none (active slice `cng-bl9` is already in progress)
+- `cng-ro9.2` - active wave-1 code slice for rules persistence extraction behind the existing `src/lib/store.js` facade
 
 ## Frontend Modernization Shell/State
 
@@ -84,13 +87,27 @@ Source set: `Opus_review_v2.md`, Stitch design deliverables, `task.md`
 
 - No open child tasks currently tracked for this follow-up; `cng-1se` is closed in commit `a54be12`.
 
-## Store Decomposition Follow-up
+## Store Decomposition Program
 
-- `cng-vtn` - store-mst-assignment-extraction (closed; MST assignment + MST history helpers are now extracted behind the existing facade with dedicated regression coverage)
-- `cng-y29` - store-hq-agency-extraction (closed; HQ agency rows + HQ history helpers are now extracted behind the existing facade with dedicated regression coverage)
-- `cng-gti` - store-deleted-decl-log-extraction (closed; deleted declaration log helpers are now extracted behind the existing facade with focused regression coverage for storage/filter/limit behavior)
-- `cng-d51` - store-decl-history-extraction (closed; declaration history helpers are now extracted behind the existing facade with focused regression coverage for sanitize/persist/read behavior)
-- `cng-bl9` - store-audit-log-extraction (open; next slice should extract audit log helpers out of `src/lib/store.js` behind the existing facade, with focused regression coverage for write/read/clear behavior)
+Epic: `cng-ro9`  
+Canonical board: `docs/store-decomposition-execution-board.md`
+
+- Historical completed slices before epic bootstrap:
+  - `cng-vtn` - store-mst-assignment-extraction (closed; MST assignment + MST history helpers are now extracted behind the existing facade with dedicated regression coverage)
+  - `cng-y29` - store-hq-agency-extraction (closed; HQ agency rows + HQ history helpers are now extracted behind the existing facade with dedicated regression coverage)
+  - `cng-gti` - store-deleted-decl-log-extraction (closed; deleted declaration log helpers are now extracted behind the existing facade with focused regression coverage for storage/filter/limit behavior)
+  - `cng-d51` - store-decl-history-extraction (closed; declaration history helpers are now extracted behind the existing facade with focused regression coverage for sanitize/persist/read behavior)
+- Active/resume-safe child chain:
+  - `cng-ro9.1` - store-decomposition-bootstrap (closed; wave-0 anti-drop bootstrap for board, bead graph, notebook, and backlog reconcile)
+  - `cng-bl9` - store-audit-log-extraction (closed; wave-1 audit facade extraction behind the existing store shim)
+  - `cng-ro9.2` - store-rules-persistence-extraction (in progress; wave-1 rules persistence facade extraction)
+  - `cng-ro9.3` - store-team-roster-extraction (open; wave-2 team roster domain extraction)
+  - `cng-ro9.4` - store-decl-read-extraction (open; wave-3 declaration read/query split)
+  - `cng-ro9.5` - store-decl-save-pipeline-extraction (open; wave-3 declaration save pipeline split)
+  - `cng-ro9.6` - store-decl-mutations-extraction (open; wave-3 declaration lifecycle mutations split)
+  - `cng-ro9.7` - store-core-helpers-extraction (open; wave-4 shared core helper extraction)
+  - `cng-ro9.8` - store-caller-migration (open; wave-5 direct caller migration off `@/lib/store.js`)
+  - `cng-ro9.9` - store-shim-lockdown (open; wave-6 lock `store.js` as thin compatibility shim)
 
 ## Hard-gate Cutover Program
 
