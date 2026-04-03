@@ -49,6 +49,7 @@ Reconciliation note:
 - Reconciled again on 2026-04-03 after landing commit `a54be12` and closing `cng-1se`; KPI adjustments internals are now decomposed behind the same facade/API, and next focused slice `cng-vtn` is opened to continue shrinking `src/lib/store.js` via MST assignment/history extraction.
 - Reconciled again on 2026-04-03 after closing `cng-vtn`; MST assignment/history is now extracted behind `src/lib/store.js`, and next ready slice `cng-y29` continues the same decomposition lane for HQ agency/history helpers.
 - Reconciled again on 2026-04-03 after closing `cng-y29`; HQ agency/history is now extracted behind `src/lib/store.js`, and next ready slice `cng-gti` continues the decomposition lane for deleted declaration log helpers.
+- Reconciled again on 2026-04-03 after closing `cng-gti`; deleted declaration log helpers are now extracted behind `src/lib/store.js`, and next ready slice `cng-d51` continues the decomposition lane for declaration history helpers.
 
 Rule:
 - Every unfinished item from review notes, rollout plans, decomposition plans, or UX backlogs must be in one of two states:
@@ -59,7 +60,7 @@ Current open epics:
 - none
 
 Current highest-priority ready items:
-- `cng-gti` - store-deleted-decl-log-extraction
+- none (active slice `cng-d51` is already in progress)
 
 ## Frontend Modernization Shell/State
 
@@ -86,7 +87,8 @@ Source set: `Opus_review_v2.md`, Stitch design deliverables, `task.md`
 
 - `cng-vtn` - store-mst-assignment-extraction (closed; MST assignment + MST history helpers are now extracted behind the existing facade with dedicated regression coverage)
 - `cng-y29` - store-hq-agency-extraction (closed; HQ agency rows + HQ history helpers are now extracted behind the existing facade with dedicated regression coverage)
-- `cng-gti` - store-deleted-decl-log-extraction (open; next slice should extract deleted declaration log helpers out of `src/lib/store.js` behind the existing facade, with focused regression coverage for storage/filter/limit behavior)
+- `cng-gti` - store-deleted-decl-log-extraction (closed; deleted declaration log helpers are now extracted behind the existing facade with focused regression coverage for storage/filter/limit behavior)
+- `cng-d51` - store-decl-history-extraction (open; next slice should extract declaration history helpers out of `src/lib/store.js` behind the existing facade, with focused regression coverage for sanitize/persist/read behavior)
 
 ## Hard-gate Cutover Program
 

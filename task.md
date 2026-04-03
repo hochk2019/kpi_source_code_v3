@@ -13,21 +13,21 @@
 - Open epics hien tai:
   - none
 - Highest-priority ready items hien tai:
-  - `cng-gti` - store-deleted-decl-log-extraction
+  - none (active slice `cng-d51` da duoc claim `in_progress`)
 
 ## Active Slice
 
--- Bead: cng-gti
--- Title: cng-gti / store-deleted-decl-log-extraction
+-- Bead: cng-d51
+-- Title: cng-d51 / store-decl-history-extraction
 -- Status: in_progress
 -- Last updated: 2026-04-03
 
 ## Sync Notebook
 
-- Goal: tiep tuc giam monolith `src/lib/store.js` bang mot slice hep chi tach domain deleted declaration log khoi facade hien tai, giu nguyen `DECL_DELETED_LOG_*` API.
-- Files In Scope: `src/lib/store.js`, module deleted-log moi duoi `src/lib/`, regression tests lien quan deleted-log/store, `docs/open-backlog.md`, `task.md`, va bead `cng-gti`.
-- Verify: truoc khi sua code deleted-log phai chay `gitnexus_impact` cho cac symbol deleted-log chinh; sau khi sua chay regression deleted-log/store phu hop, `pnpm bd:check`, va `gitnexus_detect_changes(scope=all)`.
-- Handoff: neu context bi nen/reset, bat dau lai bang `task.md`; `cng-y29` da hoan tat o muc code va da tach logic HQ agency/history sang `src/lib/hqAgencies.js` voi regression `tests/hqAgenciesStore.test.js`, `tests/store.test.js`, `tests/hqIntegration.test.js`, va `tests/hqHistoryClient.test.js` xanh. Slice tiep theo la `cng-gti` de tach deleted declaration log helpers theo cung facade pattern.
+- Goal: tiep tuc giam monolith `src/lib/store.js` bang mot slice hep chi tach domain declaration history khoi facade hien tai, giu nguyen `DECL_HISTORY_KEY` + `getDeclHistoryForRow` contract.
+- Files In Scope: `src/lib/store.js`, module declaration-history moi duoi `src/lib/`, regression tests lien quan decl-history/store, `docs/open-backlog.md`, `task.md`, va bead `cng-d51`.
+- Verify: truoc khi sua code declaration history phai chay `gitnexus_impact` cho cac symbol decl-history chinh; sau khi sua chay regression decl-history/store phu hop, `pnpm bd:check`, va `gitnexus_detect_changes(scope=all)`.
+- Handoff: neu context bi nen/reset, bat dau lai bang `task.md`; `cng-gti` da hoan tat va da tach deleted declaration log sang `src/lib/declDeletedLog.js`, `store.js` giu facade cho `DECL_DELETED_LOG_KEY`, `DECL_DELETED_LOG_LIMIT`, va `getDeletedDeclLog`, them regression `tests/declDeletedLogStore.test.js`, va verify xanh voi `pnpm exec vitest run tests/declDeletedLogStore.test.js tests/store.test.js --environment jsdom`, `pnpm exec eslint src/lib/declDeletedLog.js src/lib/store.js tests/declDeletedLogStore.test.js`, `pnpm bd:check`. Bead tiep theo la `cng-d51` de tach declaration history helpers; `gitnexus_impact(target=getDeclHistoryForRow, direction=upstream)` dang `LOW`, trong khi `team roster` van `CRITICAL`, nen declaration history la lane hop ly hon cho slice ke tiep.
 
 ## Execution Matrix
 
