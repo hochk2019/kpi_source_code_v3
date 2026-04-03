@@ -9,25 +9,25 @@
 - Da reconcile tiep ngay 2026-04-02 sau khi ship shell/dashboard/command-center/workflow-guide/async primitives (`cng-1wj.3..cng-1wj.8`) va state extraction wave A (`cng-1wj.9`); next ready slice la `cng-1wj.10`.
 - Da reconcile tiep ngay 2026-04-02 sau khi dong `cng-1wj.10`; wave B da tach them `reportSchedules`, `importColumnConfig`, va `kpiAdjustments` khoi `store.js`, va next ready slice la `cng-1wj.11`.
 - Da reconcile tiep ngay 2026-04-02 sau khi dong `cng-1wj.11` va epic `cng-1wj`; frontend modernization hardening da xanh tren shell + state extraction matrix, va follow-up tach nho `src/lib/kpiAdjustments.js` duoc ghi ro la deferred cho mot slice KPI adjustments trong tuong lai.
-- Da reconcile tiep ngay 2026-04-02 sau khi hoan tat code/test cho `cng-1se`; `src/lib/kpiAdjustments.js` da duoc tach thanh submodule noi bo co test rieng, va bead nay duoc giu `in_progress` cho den khi diff local duoc commit.
+- Da reconcile tiep ngay 2026-04-03 sau khi commit va dong `cng-1se`; `src/lib/kpiAdjustments.js` da duoc tach thanh submodule noi bo co test rieng va landed trong commit `a54be12`.
 - Open epics hien tai:
   - none
 - Highest-priority ready items hien tai:
-  - none
+  - `cng-vtn` - store-mst-assignment-extraction
 
 ## Active Slice
 
--- Bead: cng-1se
--- Title: cng-1se / kpi-adjustments-module-decomposition
+-- Bead: cng-vtn
+-- Title: cng-vtn / store-mst-assignment-extraction
 -- Status: in_progress
--- Last updated: 2026-04-02
+-- Last updated: 2026-04-03
 
 ## Sync Notebook
 
-- Goal: hoan tat `cng-1se` bang cach tach `src/lib/kpiAdjustments.js` thanh `constants`, `settings`, `entries`, `createStore`, giu nguyen public API facade cua `@/lib/kpiAdjustments.js`, va bo sung test module-level.
-- Files In Scope: `src/lib/kpiAdjustments.js`, `src/lib/kpiAdjustments/*.js`, `tests/kpiAdjustmentsStore.test.js`, `tests/kpiAdjustments.settings.test.js`, `tests/kpiAdjustments.entries.test.js`, `docs/open-backlog.md`, `task.md`, va bead `cng-1se`.
-- Verify: `pnpm exec vitest run tests/kpiAdjustmentsStore.test.js tests/kpiAdjustments.settings.test.js tests/kpiAdjustments.entries.test.js tests/store.test.js tests/kpiAdjustments.test.jsx tests/kpiAdjustments.hooks.test.jsx tests/automation.flows.test.js --environment jsdom`; `pnpm exec eslint src/lib/kpiAdjustments.js src/lib/kpiAdjustments/*.js tests/kpiAdjustmentsStore.test.js tests/kpiAdjustments.settings.test.js tests/kpiAdjustments.entries.test.js`; `pnpm bd:check`; `gitnexus_detect_changes(scope=all)`.
-- Handoff: neu context bi nen/reset, bat dau lai bang `task.md`; code/test cua `cng-1se` da xanh, nhung bead van giu `in_progress` vi worktree hien van chua commit/push phan slice nay.
+- Goal: tiep tuc giam monolith `src/lib/store.js` bang mot slice hep chi tach domain MST assignment + MST history khoi facade hien tai, giu nguyen public API.
+- Files In Scope: `src/lib/store.js`, module MST moi duoi `src/lib/`, regression tests lien quan MST/store/automation, `docs/open-backlog.md`, `task.md`, va bead `cng-vtn`.
+- Verify: truoc khi sua code MST phai chay `gitnexus_impact` cho cac symbol MST chinh; sau khi sua chay regression MST/store/automation phu hop, `pnpm bd:check`, va `gitnexus_detect_changes(scope=all)`.
+- Handoff: neu context bi nen/reset, bat dau lai bang `task.md`; `cng-1se` da dong trong commit `a54be12`, va active slice moi la `cng-vtn` de tach MST assignment/history khoi `src/lib/store.js`.
 
 ## Execution Matrix
 
@@ -1206,9 +1206,9 @@
 
 - Title: none
 - Bead: none
-- Status: idle
+- Status: queued-behind-active
 - Follow-up backlog:
-  - cho bead moi / yeu cau commit tiep theo tu user
+  - sau `cng-vtn`, tiep tuc chon 1 domain nho tiep theo trong `src/lib/store.js` truoc khi dong vao `storageClient.js`
 
 ## Verification
 

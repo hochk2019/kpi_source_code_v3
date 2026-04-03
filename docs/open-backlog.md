@@ -46,7 +46,7 @@ Reconciliation note:
 - Reconciled again on 2026-04-02 after completing `cng-1wj.10`; wave B now extracts report schedules, import column config, and KPI adjustments into dedicated modules, and `cng-1wj.11` is the next ready hardening slice.
 - Reconciled again on 2026-04-02 after completing `cng-1wj.11` and closing epic `cng-1wj`; shell/state modernization hardening is green, and the only remaining note in this lane is an explicit deferred follow-up to split `src/lib/kpiAdjustments.js` further when a future KPI-adjustments slice already touches that domain.
 - Reconciled again on 2026-04-02 after creating `cng-1se`; the deferred KPI-adjustments follow-up is now tracked as an active standalone bead for internal module decomposition behind the existing facade.
-- Reconciled again on 2026-04-02 after finishing code/test cho `cng-1se`; KPI adjustments internals are now decomposed behind the same facade/API, but bead nay van `in progress` cho den khi diff local duoc commit.
+- Reconciled again on 2026-04-03 after landing commit `a54be12` and closing `cng-1se`; KPI adjustments internals are now decomposed behind the same facade/API, and next focused slice `cng-vtn` is opened to continue shrinking `src/lib/store.js` via MST assignment/history extraction.
 
 Rule:
 - Every unfinished item from review notes, rollout plans, decomposition plans, or UX backlogs must be in one of two states:
@@ -78,7 +78,11 @@ Source set: `Opus_review_v2.md`, Stitch design deliverables, `task.md`
 
 ## KPI Adjustments Follow-up
 
-- `cng-1se` - kpi-adjustments-module-decomposition (in progress; code/test da xanh, `src/lib/kpiAdjustments.js` da tach thanh internal submodules va facade giu nguyen, dang cho commit diff local)
+- No open child tasks currently tracked for this follow-up; `cng-1se` is closed in commit `a54be12`.
+
+## Store Decomposition Follow-up
+
+- `cng-vtn` - store-mst-assignment-extraction (in progress; next slice should extract MST assignment + MST history helpers out of `src/lib/store.js` behind the existing facade, with dedicated regression coverage)
 
 ## Hard-gate Cutover Program
 
