@@ -1,6 +1,6 @@
 # Open Backlog
 
-Last reconciled: 2026-04-02
+Last reconciled: 2026-04-03
 
 This file is the canonical source of truth for unfinished work in this repo.
 
@@ -47,6 +47,7 @@ Reconciliation note:
 - Reconciled again on 2026-04-02 after completing `cng-1wj.11` and closing epic `cng-1wj`; shell/state modernization hardening is green, and the only remaining note in this lane is an explicit deferred follow-up to split `src/lib/kpiAdjustments.js` further when a future KPI-adjustments slice already touches that domain.
 - Reconciled again on 2026-04-02 after creating `cng-1se`; the deferred KPI-adjustments follow-up is now tracked as an active standalone bead for internal module decomposition behind the existing facade.
 - Reconciled again on 2026-04-03 after landing commit `a54be12` and closing `cng-1se`; KPI adjustments internals are now decomposed behind the same facade/API, and next focused slice `cng-vtn` is opened to continue shrinking `src/lib/store.js` via MST assignment/history extraction.
+- Reconciled again on 2026-04-03 after closing `cng-vtn`; MST assignment/history is now extracted behind `src/lib/store.js`, and next ready slice `cng-y29` continues the same decomposition lane for HQ agency/history helpers.
 
 Rule:
 - Every unfinished item from review notes, rollout plans, decomposition plans, or UX backlogs must be in one of two states:
@@ -57,7 +58,7 @@ Current open epics:
 - none
 
 Current highest-priority ready items:
-- none
+- `cng-y29` - store-hq-agency-extraction
 
 ## Frontend Modernization Shell/State
 
@@ -82,7 +83,8 @@ Source set: `Opus_review_v2.md`, Stitch design deliverables, `task.md`
 
 ## Store Decomposition Follow-up
 
-- `cng-vtn` - store-mst-assignment-extraction (in progress; next slice should extract MST assignment + MST history helpers out of `src/lib/store.js` behind the existing facade, with dedicated regression coverage)
+- `cng-vtn` - store-mst-assignment-extraction (closed; MST assignment + MST history helpers are now extracted behind the existing facade with dedicated regression coverage)
+- `cng-y29` - store-hq-agency-extraction (open; next slice should extract HQ agency rows + HQ history helpers out of `src/lib/store.js` behind the existing facade, with dedicated regression coverage)
 
 ## Hard-gate Cutover Program
 
