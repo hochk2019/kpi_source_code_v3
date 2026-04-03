@@ -15,25 +15,34 @@
 - Da reconcile tiep ngay 2026-04-03 sau khi dong `cng-bl9`; audit log helpers da duoc tach thanh `src/lib/auditLog.js` co test rieng, va next slice duoc chuyen sang `cng-ro9.2` cho rules persistence.
 - Da reconcile tiep ngay 2026-04-03 sau khi dong `cng-ro9.2`; rules persistence da duoc tach thanh `src/lib/rulesPersistence.js` co test rieng, facade `store.js` giu nguyen API, va next slice duoc chuyen sang `cng-ro9.3` cho team roster domain.
 - Da reconcile tiep ngay 2026-04-03 sau khi dong `cng-ro9.3`; team roster domain da duoc tach thanh `src/lib/teamRoster.js` co test rieng, facade `store.js` giu nguyen API roster, va next slice duoc chuyen sang `cng-ro9.4` cho declaration read/query extraction.
+- Da reconcile tiep ngay 2026-04-03 sau khi dong `cng-ro9.4`; declaration read/query helpers da duoc tach thanh `src/lib/declReadStore.js` co test rieng, facade `store.js` giu nguyen `getDeclRows`/`getRecentDeclRows`/`getData`, va next slice duoc chuyen sang `cng-ro9.5` cho declaration save pipeline extraction.
 - Open epics hien tai:
   - `cng-ro9` - store-decomposition-program
 - Highest-priority ready items hien tai:
-  - `cng-ro9.4` (active wave-3 code slice tiep theo: tach declaration read/query va giu facade `getDeclRows`/`getData`)
+  - `cng-ro9.5` (active wave-3 code slice tiep theo: tach declaration save pipeline va giu facade `previewDeclRows`/`saveDeclRows`)
 
 ## Active Slice
 
--- Bead: cng-ro9.4
--- Title: cng-ro9.4 / store-decl-read-extraction
+-- Bead: cng-ro9.5
+-- Title: cng-ro9.5 / store-decl-save-pipeline-extraction
 -- Status: in_progress
 -- Last updated: 2026-04-03
 
 ## Sync Notebook
 
-- Goal: thuc hien wave-3 `cng-ro9.4` bang cach tach declaration read/query helpers khoi `src/lib/store.js`, giu facade `getDeclRows`/`getData`, va khong dong vao declaration save/mutation lanes.
-- Files In Scope: `src/lib/store.js`, declaration read/query module moi, private read-only helpers lien quan, va regression cho read/query consumers.
-- Pending Verify: `gitnexus_impact(target=getDeclRows,direction=upstream)`; `gitnexus_impact(target=getData,direction=upstream)` neu van la facade alias dang sua; declaration read module tests; declaration read/store regression; `pnpm bd:check`; `gitnexus_detect_changes(scope=all)`.
-- Verify: `cng-ro9.3` da xanh voi `pnpm exec eslint src/lib/teamRoster.js src/lib/store.js tests/teamRosterStore.test.js tests/store.test.js`; `pnpm exec vitest run tests/teamRosterStore.test.js tests/store.test.js tests/useDataImporterEditAccess.test.jsx tests/useDataImporterImportFlow.test.jsx tests/useDataImporterWorkflowSession.test.jsx --environment jsdom`; `pnpm bd:check`; `gitnexus_detect_changes(scope=all)` (van `critical` do coarse file-level attribution tren `src/lib/store.js`, nhung regression thuc te chi ra scope team roster facade + wiring module moi).
-- Handoff: neu context bi nen/reset, doc lan luot `task.md` -> `docs/store-decomposition-execution-board.md` -> `docs/open-backlog.md`; `cng-ro9.3` da xong va active bead hien tai la `cng-ro9.4`. Bat dau bang impact cho `getDeclRows` va cac read facade lien quan, giu strategy read-only/module-only truoc khi mo `cng-ro9.5`.
+- Goal: thuc hien wave-3 `cng-ro9.5` bang cach tach declaration save/import pipeline khoi `src/lib/store.js`, giu facade `previewDeclRows`/`saveDeclRows`, va khong dong vao declaration lifecycle mutation lanes.
+- Files In Scope: `src/lib/store.js`, declaration save module moi, private helpers phuc vu preview/save merge pipeline, va regression cho import/save consumers.
+- Pending Verify: `gitnexus_impact(target=previewDeclRows,direction=upstream)`; `gitnexus_impact(target=saveDeclRows,direction=upstream)`; declaration save module tests; importer/save/store regression; `pnpm bd:check`; `gitnexus_detect_changes(scope=all)`.
+- Verify: `cng-ro9.4` da xanh voi `pnpm exec eslint src/lib/declReadStore.js src/lib/store.js tests/declReadStore.test.js tests/store.test.js`; `pnpm exec vitest run tests/declReadStore.test.js tests/store.test.js tests/dataImporter.preview.test.jsx tests/hqIntegration.test.js tests/useDataImporterSync.test.jsx tests/useKpiAdjustmentFormWorkspace.test.jsx --environment jsdom`; `gitnexus_detect_changes(scope=all)` (van `critical` do coarse file-level attribution tren `src/lib/store.js`, nhung diff thuc te chi gom facade read/query + module/test moi).
+- Handoff: neu context bi nen/reset, doc lan luot `task.md` -> `docs/store-decomposition-execution-board.md` -> `docs/open-backlog.md`; `cng-ro9.4` da xong va active bead hien tai la `cng-ro9.5`. Bat dau bang impact cho `previewDeclRows`/`saveDeclRows`, giu strategy save-pipeline-only truoc khi mo `cng-ro9.6`.
+
+### Checkpoint: cng-ro9.4
+
+- Done: tao `src/lib/declReadStore.js` voi `createDeclReadStore`; doi `src/lib/store.js` sang declaration read/query facade mong cho `getDeclRowsRaw`/`getDeclRows`/`refreshDeclRowsFromServer`/`sortDeclRows`/`getRecentDeclRows`/`getData`; them `tests/declReadStore.test.js`; bo sung regression facade `getData` trong `tests/store.test.js`.
+- Verify: `pnpm exec eslint src/lib/declReadStore.js src/lib/store.js tests/declReadStore.test.js tests/store.test.js`; `pnpm exec vitest run tests/declReadStore.test.js tests/store.test.js tests/dataImporter.preview.test.jsx tests/hqIntegration.test.js tests/useDataImporterSync.test.jsx tests/useKpiAdjustmentFormWorkspace.test.jsx --environment jsdom`; `gitnexus_detect_changes(scope=all)`.
+- Risk: `gitnexus_impact(sortDeclRows)` = `HIGH` va `gitnexus_impact(getDeclRowsRaw)` = `CRITICAL`; can tiep tuc giu extraction o muc move-only/facade-only, va dien giai `detect_changes()` theo diff thuc te vi `src/lib/store.js` la hot file.
+- Decision: giu nguyen behavior read/query byte-for-byte, dung closure injection hai chieu giua `declReadStore` va `hqAgencyStore` thay vi doi contract giua cac domain, va chua mo rong sang preview/save lane.
+- Next: chuyen active slice sang `cng-ro9.5`, chay impact cho `previewDeclRows`/`saveDeclRows`, va tach declaration save pipeline sang module rieng.
 
 ### Checkpoint: cng-ro9.3
 
@@ -74,6 +83,13 @@
   - Risk: `gitnexus_impact(getTeamRoster)` da canh bao `CRITICAL`, va `gitnexus_detect_changes(scope=all)` van coarse-attribute nhieu symbol trong `src/lib/store.js`; can tiep tuc giam scope o cac wave declaration tiep theo va giai nghia detect-changes theo diff thuc te.
   - Decision: giu extraction team roster o muc facade-only, inject `sanitizeMSTRow` vao module team roster de khong tao cycle, va khong doi behavior roster seed/save/map/apply.
   - Next: chuyen active slice sang `cng-ro9.4`, chay impact cho declaration read facades, va tach read/query helpers sang module rieng truoc khi mo save pipeline.
+
+- Checkpoint 41 (cng-ro9.4 declaration read extraction complete):
+  - Done: tao `src/lib/declReadStore.js` voi `createDeclReadStore`; doi `src/lib/store.js` sang read/query facade mong cho `getDeclRowsRaw`/`getDeclRows`/`refreshDeclRowsFromServer`/`sortDeclRows`/`getRecentDeclRows`/`getData`; them `tests/declReadStore.test.js`; bo sung regression `getData` trong `tests/store.test.js`.
+  - Verify: `pnpm exec eslint src/lib/declReadStore.js src/lib/store.js tests/declReadStore.test.js tests/store.test.js`; `pnpm exec vitest run tests/declReadStore.test.js tests/store.test.js tests/dataImporter.preview.test.jsx tests/hqIntegration.test.js tests/useDataImporterSync.test.jsx tests/useKpiAdjustmentFormWorkspace.test.jsx --environment jsdom`; `gitnexus_detect_changes(scope=all)`.
+  - Risk: `gitnexus_impact(sortDeclRows)` bao `HIGH`, `gitnexus_impact(getDeclRowsRaw)` bao `CRITICAL`, va `gitnexus_detect_changes(scope=all)` van coarse-attribute tren `src/lib/store.js`; can tiep tuc xu ly wave declaration theo huong move-only/facade-only.
+  - Decision: giu nguyen logic read/query, khong doi public contract, va dung closure injection giua declaration read store voi HQ agency store de tranh cycle import.
+  - Next: chuyen active slice sang `cng-ro9.5`, chay impact cho `previewDeclRows`/`saveDeclRows`, va tach save/import pipeline sang module rieng truoc khi mo mutations.
 
 - Checkpoint 19 (frontend modernization track bootstrap):
   - Done: mo epic `cng-1wj` va child chain `cng-1wj.1..cng-1wj.11` trong BD, reconcile `docs/open-backlog.md` de phan shell/state modernization thanh phase ro rang, va claim `cng-1wj.1` lam active slice.

@@ -56,6 +56,9 @@ import {
 import {
   createTeamRosterStore,
 } from './teamRoster.js';
+import {
+  createDeclReadStore,
+} from './declReadStore.js';
 
 
 
@@ -1097,35 +1100,7 @@ function normalizeDeclRows(rows) {
 
 
 function getDeclRowsRaw() {
-
-  const rawString = getItem(DECL_KEY);
-
-  const stored = safeParse(rawString, []);
-
-  const normalized = normalizeDeclRows(stored);
-
-
-
-  try {
-
-    const serialized = JSON.stringify(normalized);
-
-    if (rawString !== serialized) {
-
-      setItem(DECL_KEY, serialized);
-
-    }
-
-  } catch {
-
-    // Bỏ qua lỗi tuần tự hóa, hàm vẫn trả về dữ liệu đã chuẩn hóa
-
-  }
-
-
-
-  return normalized;
-
+  return declReadStore.getDeclRowsRaw();
 }
 
 
@@ -1143,99 +1118,25 @@ function writeDeclRows(rows) {
 
 
 export function getDeclRows() {
-
-  const rows = getDeclRowsRaw();
-
-  return applyAgenciesToDeclRows(rows);
-
+  return declReadStore.getDeclRows();
 }
 
 
 
 export async function refreshDeclRowsFromServer(options = {}) {
-
-  await refreshSharedKeys([DECL_KEY], options);
-
-  const rows = getDeclRowsRaw();
-
-  return applyAgenciesToDeclRows(rows);
-
+  return declReadStore.refreshDeclRowsFromServer(options);
 }
 
 
 
 export function sortDeclRows(rows) {
-
-  const arr = Array.isArray(rows) ? rows : [];
-
-  const parseTime = (value) => {
-
-    if (!value) return 0;
-
-    const ts = Date.parse(value);
-
-    return Number.isFinite(ts) ? ts : 0;
-
-  };
-
-
-
-  return arr
-
-    .map((row, idx) => ({ row, idx, ts: parseTime(row?.date) }))
-
-    .sort((a, b) => {
-
-      if (a.ts !== b.ts) return b.ts - a.ts; // má»›i nháº¥t trÆ°á»›c
-
-
-
-      const soA = (a.row?.so_tk ?? "").toString();
-
-      const soB = (b.row?.so_tk ?? "").toString();
-
-      if (soA !== soB) {
-
-        const cmp = soB.localeCompare(soA, undefined, { numeric: true, sensitivity: "base" });
-
-        if (cmp !== 0) return cmp;
-
-      }
-
-
-
-      const nhanhA = (a.row?.nhanh ?? "").toString();
-
-      const nhanhB = (b.row?.nhanh ?? "").toString();
-
-      if (nhanhA !== nhanhB) {
-
-        const cmpNhanh = nhanhB.localeCompare(nhanhA, undefined, { numeric: true, sensitivity: "base" });
-
-        if (cmpNhanh !== 0) return cmpNhanh;
-
-      }
-
-
-
-      return b.idx - a.idx; // giá»¯ thá»© tá»± chÃ¨n gáº§n nháº¥t
-
-    })
-
-    .map(item => item.row);
-
+  return declReadStore.sortDeclRows(rows);
 }
 
 
 
 export function getRecentDeclRows(limit = 20) {
-
-  const sorted = sortDeclRows(getDeclRows());
-
-  if (!Number.isFinite(limit) || limit <= 0) return sorted;
-
-  return sorted.slice(0, limit);
-
+  return declReadStore.getRecentDeclRows(limit);
 }
 
 
@@ -3229,9 +3130,7 @@ export function getHQHistoryForMST(mst, limit = 50) {
 // ===== Compat layer cho cÃ¡c file khÃ¡c =====
 
 export function getData() {           // RulesEditor.jsx Ä‘ang import
-
-  return getDeclRows();
-
+  return declReadStore.getData();
 }
 
 export function setData(rows, opts) { // rules.js/RulesEditor.jsx cÃ³ thá»ƒ gá»i
@@ -3485,6 +3384,15 @@ const hqAgencyStore = createHQAgencyStore({
   saveDeclRows,
   hqKey: HQ_KEY,
   hqHistoryKey: HQ_HISTORY_KEY,
+});
+const declReadStore = createDeclReadStore({
+  getItem,
+  setItem,
+  refreshSharedKeys,
+  safeParse,
+  normalizeDeclRows,
+  applyAgenciesToDeclRows: (...args) => hqAgencyStore.applyAgenciesToDeclRows(...args),
+  declKey: DECL_KEY,
 });
 const declDeletedLogStore = createDeclDeletedLogStore({
   getItem,

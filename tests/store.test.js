@@ -18,6 +18,8 @@ import {
 
   getRecentDeclRows,
 
+  getData,
+
   getTeamRoster,
 
   setTeamRoster,
@@ -2045,6 +2047,24 @@ describe('getRecentDeclRows', () => {
     expect(latest.map(r => r.so_tk)).toEqual(['00000000004', '00000000003', '00000000002']);
 
     expect(latest.map(r => r.so_tk_full)).toEqual(['TK04', 'TK03', 'TK02']);
+
+  });
+
+});
+
+describe('getData', () => {
+
+  it('giu facade tuong thich voi getDeclRows', () => {
+
+    saveDeclRows([
+
+      { so_tk: 'TK100', nhanh: 'A', date: '2024-09-01', agency: '' },
+
+    ], { overwrite: true });
+
+
+
+    expect(getData()).toEqual(getDeclRows());
 
   });
 
