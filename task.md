@@ -17,25 +17,34 @@
 - Da reconcile tiep ngay 2026-04-03 sau khi dong `cng-ro9.3`; team roster domain da duoc tach thanh `src/lib/teamRoster.js` co test rieng, facade `store.js` giu nguyen API roster, va next slice duoc chuyen sang `cng-ro9.4` cho declaration read/query extraction.
 - Da reconcile tiep ngay 2026-04-03 sau khi dong `cng-ro9.4`; declaration read/query helpers da duoc tach thanh `src/lib/declReadStore.js` co test rieng, facade `store.js` giu nguyen `getDeclRows`/`getRecentDeclRows`/`getData`, va next slice duoc chuyen sang `cng-ro9.5` cho declaration save pipeline extraction.
 - Da reconcile tiep ngay 2026-04-03 sau khi dong `cng-ro9.5`; declaration save/import pipeline da duoc tach thanh `src/lib/declWriteStore.js` co test rieng, facade `store.js` giu nguyen `previewDeclRows`/`saveDeclRows`, va next slice duoc chuyen sang `cng-ro9.6` cho declaration lifecycle mutations.
+- Da reconcile tiep ngay 2026-04-07 sau khi dong `cng-ro9.6`; declaration lifecycle mutations da duoc tach thanh `src/lib/declMutationStore.js` co test rieng, facade `store.js` giu nguyen `saveDeclRowDiffs`/`updateDeclRowFields`/`softDeleteDeclRows`/`hardDeleteDeclRows`/`restoreDeclRows`/`markDeclRowsReviewed`/`unmarkDeclRowsReviewed`, va next slice duoc chuyen sang `cng-ro9.7` cho shared core helper extraction.
 - Open epics hien tai:
   - `cng-ro9` - store-decomposition-program
 - Highest-priority ready items hien tai:
-  - `cng-ro9.6` (active wave-3 code slice tiep theo: tach declaration lifecycle mutations va giu facade import/save da on dinh)
+  - `cng-ro9.7` (active wave-4 code slice tiep theo: tach shared core helpers sau khi declaration mutation lane da on dinh)
 
 ## Active Slice
 
--- Bead: cng-ro9.6
--- Title: cng-ro9.6 / store-decl-mutations-extraction
+-- Bead: cng-ro9.7
+-- Title: cng-ro9.7 / store-core-helpers-extraction
 -- Status: in_progress
--- Last updated: 2026-04-03
+-- Last updated: 2026-04-07
 
 ## Sync Notebook
 
-- Goal: thuc hien wave-3 `cng-ro9.6` bang cach tach declaration lifecycle mutations khoi `src/lib/store.js`, giu facade update/delete/restore/review, va khong quay lai save/import pipeline da tach xong.
-- Files In Scope: `src/lib/store.js`, declaration mutation module moi, private helpers phuc vu update/delete/restore/review lane, va regression cho row lifecycle consumers.
-- Pending Verify: `gitnexus_impact` cho mutation facade chinh; declaration mutation module tests; lifecycle/store regression; `pnpm bd:check`; `gitnexus_detect_changes(scope=all)`.
-- Verify: `cng-ro9.5` da xanh voi `pnpm exec eslint src/lib/declWriteStore.js src/lib/store.js tests/declWriteStore.test.js tests/store.test.js`; `pnpm exec vitest run tests/declWriteStore.test.js tests/store.test.js tests/automation.flows.test.js tests/hqIntegration.test.js tests/dataImporter.preview.test.jsx --environment jsdom`; `gitnexus_detect_changes(scope=all)` (van `critical` do coarse file-level attribution tren `src/lib/store.js`, nhung diff thuc te chi gom facade save/import + module/test moi).
-- Handoff: neu context bi nen/reset, doc lan luot `task.md` -> `docs/store-decomposition-execution-board.md` -> `docs/open-backlog.md`; `cng-ro9.5` da xong va active bead hien tai la `cng-ro9.6`. Bat dau bang impact cho declaration lifecycle mutation facades, giu strategy mutation-only/facade-only.
+- Goal: thuc hien wave-4 `cng-ro9.7` bang cach tach shared core helpers khoi `src/lib/store.js` sau khi declaration mutation lane da on dinh, giu `store.js` tiep tuc la facade mong va khong lan sang caller migration.
+- Files In Scope: `src/lib/store.js`, module helper core moi neu can, va regression cho cac domain dang inject helper chung (`declReadStore`, `declWriteStore`, `declMutationStore`, HQ/MST helpers neu bi anh huong).
+- Pending Verify: `gitnexus_impact` cho helper symbols duoc tach; helper module tests; cross-domain/store regression; `pnpm bd:check`; `gitnexus_detect_changes(scope=all)`.
+- Verify: `cng-ro9.6` da xanh voi `pnpm exec eslint src/lib/declMutationStore.js src/lib/store.js tests/declMutationStore.test.js tests/store.test.js tests/useDataImporterSavedEdits.test.jsx tests/useDataImporterRowMutations.test.jsx tests/useDataImporterReviewActions.test.jsx tests/useDataImporterWorkflowSession.test.jsx tests/useDataImporterSessionSyncBundle.test.jsx tests/server.api.test.js`; `pnpm exec vitest run tests/declMutationStore.test.js tests/store.test.js tests/useDataImporterSavedEdits.test.jsx tests/useDataImporterRowMutations.test.jsx tests/useDataImporterReviewActions.test.jsx tests/useDataImporterWorkflowSession.test.jsx tests/useDataImporterSessionSyncBundle.test.jsx --environment jsdom`; `pnpm exec vitest run tests/server.api.test.js --environment node`.
+- Handoff: neu context bi nen/reset, doc lan luot `task.md` -> `docs/store-decomposition-execution-board.md` -> `docs/open-backlog.md`; `cng-ro9.6` da xong va active bead hien tai la `cng-ro9.7`. Bat dau bang impact cho shared helper symbols con duoc `declReadStore`/`declWriteStore`/`declMutationStore` cung inject tu `store.js`.
+
+### Checkpoint: cng-ro9.6
+
+- Done: tao `src/lib/declMutationStore.js` voi `createDeclMutationStore`; doi `src/lib/store.js` sang declaration mutation facade mong cho `saveDeclRowDiffs`/`updateDeclRowFields`/`softDeleteDeclRows`/`hardDeleteDeclRows`/`restoreDeclRows`/`markDeclRowsReviewed`/`unmarkDeclRowsReviewed`; them `tests/declMutationStore.test.js`.
+- Verify: `gitnexus_impact(saveDeclRowDiffs/updateDeclRowFields/softDeleteDeclRows/hardDeleteDeclRows/restoreDeclRows/markDeclRowsReviewed/unmarkDeclRowsReviewed)` = `LOW`; `pnpm exec eslint src/lib/declMutationStore.js src/lib/store.js tests/declMutationStore.test.js tests/store.test.js tests/useDataImporterSavedEdits.test.jsx tests/useDataImporterRowMutations.test.jsx tests/useDataImporterReviewActions.test.jsx tests/useDataImporterWorkflowSession.test.jsx tests/useDataImporterSessionSyncBundle.test.jsx tests/server.api.test.js`; `pnpm exec vitest run tests/declMutationStore.test.js tests/store.test.js tests/useDataImporterSavedEdits.test.jsx tests/useDataImporterRowMutations.test.jsx tests/useDataImporterReviewActions.test.jsx tests/useDataImporterWorkflowSession.test.jsx tests/useDataImporterSessionSyncBundle.test.jsx --environment jsdom`; `pnpm exec vitest run tests/server.api.test.js --environment node`.
+- Risk: `saveDeclRowDiffs` va `restoreDeclRows` van co d=1 callers trong DataImporter hooks; can tiep tuc giu facade va contract return shape on dinh cho lane caller migration. `gitnexus_detect_changes()` du kien van coarse tren `store.js` vi hot file attribution.
+- Decision: chi move implementation mutation lane sang module rieng, con `sanitizePartialDeclUpdates`/`applyPartialUpdatesToRow`/history + deleted-log helpers van o lai `store.js` va duoc inject vao module moi de danh scope cho `cng-ro9.7`.
+- Next: chuyen active slice sang `cng-ro9.7`, chay impact cho shared helper symbols, va tach helper core dung chung cho declaration lanes truoc khi bat dau caller migration.
 
 ### Checkpoint: cng-ro9.5
 
