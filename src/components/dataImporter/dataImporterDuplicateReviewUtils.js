@@ -1,4 +1,4 @@
-import { normalizeDeclarationNumber, normalizeStr } from "@/lib/store.js";
+import { normalizeDeclarationNumber, normalizeStr } from "@/lib/storeCoreHelpers.js";
 
 const TIMESTAMP_FIELD_LABELS = Object.freeze({
   updatedAt: "Cập nhật gần nhất",

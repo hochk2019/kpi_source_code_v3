@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 
-import { normalizeStr } from "@/lib/store.js";
+import { normalizeStr } from "@/lib/storeCoreHelpers.js";
 import { coLineCount } from "../../../packages/domain/src/co.js";
 import useDataImporterDeletedRows from "@/components/dataImporter/useDataImporterDeletedRows.js";
 import { buildDataImporterCoFilterSummary } from "@/components/dataImporter/dataImporterCoFilterSummary.js";

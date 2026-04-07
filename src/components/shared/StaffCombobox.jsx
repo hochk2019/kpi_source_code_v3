@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 
-import { normalizeName, normalizeStr } from "@/lib/store.js";
+import { normalizeName, normalizeStr } from "@/lib/storeCoreHelpers.js";
 import { buildStaffComboboxTeams } from "@/components/shared/staffComboboxOptions.js";
 import { Button } from "@/components/ui/button.jsx";
 import {

@@ -60,6 +60,7 @@ Reconciliation note:
 - Reconciled again on 2026-04-03 after closing `cng-ro9.5`; declaration save/import pipeline is extracted into `src/lib/declWriteStore.js` with dedicated tests, and next active slice is `cng-ro9.6` for declaration lifecycle mutations.
 - Reconciled again on 2026-04-07 after closing `cng-ro9.6`; declaration lifecycle mutations are extracted into `src/lib/declMutationStore.js` with dedicated tests, and next active slice is `cng-ro9.7` for shared core helper extraction.
 - Reconciled again on 2026-04-07 after closing `cng-ro9.7`; shared core helpers now live in `src/lib/storeCoreHelpers.js` and `src/lib/declMutationHelpers.js`, `store.js` remains a facade/re-export, and next active slice is `cng-ro9.8` for caller migration.
+- Reconciled again on 2026-04-07 after landing batch-1 of `cng-ro9.8`; 8 low-risk normalize/helper callers now import `src/lib/storeCoreHelpers.js` directly, while `dataImporterRowUtils` remains in the same open bead because `gitnexus_impact(buildRosterTeams)` is `HIGH`.
 
 Rule:
 - Every unfinished item from review notes, rollout plans, decomposition plans, or UX backlogs must be in one of two states:
@@ -112,7 +113,7 @@ Canonical board: `docs/store-decomposition-execution-board.md`
   - `cng-ro9.5` - store-decl-save-pipeline-extraction (closed; wave-3 declaration save/import pipeline split behind `src/lib/store.js` with dedicated module coverage in `src/lib/declWriteStore.js`)
   - `cng-ro9.6` - store-decl-mutations-extraction (closed; wave-3 declaration lifecycle mutations split into `src/lib/declMutationStore.js` with dedicated module coverage)
   - `cng-ro9.7` - store-core-helpers-extraction (closed; wave-4 shared core helper extraction into dedicated helper modules while keeping `store.js` as facade)
-  - `cng-ro9.8` - store-caller-migration (in progress; wave-5 direct caller migration off `@/lib/store.js`)
+  - `cng-ro9.8` - store-caller-migration (in progress; wave-5 direct caller migration off `@/lib/store.js`, batch-1 normalize/helper callers landed)
   - `cng-ro9.9` - store-shim-lockdown (open; wave-6 lock `store.js` as thin compatibility shim)
 
 ## Hard-gate Cutover Program

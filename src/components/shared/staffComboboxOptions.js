@@ -1,4 +1,4 @@
-import { normalizeName, normalizeStr } from "@/lib/store.js";
+import { normalizeName, normalizeStr } from "@/lib/storeCoreHelpers.js";
 
 const collator = new Intl.Collator("vi", { sensitivity: "base" });
 

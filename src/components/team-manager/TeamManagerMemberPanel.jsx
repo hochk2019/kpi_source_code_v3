@@ -1,6 +1,6 @@
 import React from "react";
 
-import { normalizeName } from "@/lib/store.js";
+import { normalizeName } from "@/lib/storeCoreHelpers.js";
 
 function TeamManagerMemberPanel({
   selectedTeam,
