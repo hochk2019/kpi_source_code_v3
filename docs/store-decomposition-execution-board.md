@@ -24,10 +24,10 @@ Canonical program board for fully decomposing `src/lib/store.js` under epic `cng
 
 ## Active Resume State
 
-- Active bead: `cng-ro9.8`
-- Resume from: batch-1 `.8` da doi 8 caller `normalize*` low-risk sang `src/lib/storeCoreHelpers.js`; tiep tuc scan caller low-risk con import `@/lib/store.js`, nhung giu `dataImporterRowUtils` cho mot dot rieng vi `gitnexus_impact(buildRosterTeams)` = `HIGH`.
+- Active bead: `cng-ro9.9`
+- Resume from: `cng-ro9.8` da xong voi 2 batch caller migration low-risk; tong residual source caller import `@/lib/store.js` con 24 file, nhung phan lon dang dung singleton wrapper/runtime facade, nen `.9` se dua wiring ra module dich va khoa `store.js` thanh shim mong.
 - Pending verify:
-  - `gitnexus_detect_changes(scope=all)` cho batch-1 `.8`
+  - `gitnexus_detect_changes(scope=all)` cho closeout `.8`
   - `pnpm bd:check`
 
 ## Wave Board
@@ -42,5 +42,5 @@ Canonical program board for fully decomposing `src/lib/store.js` under epic `cng
 | `cng-ro9.5` | 3 | Tach declaration save pipeline | `previewDeclRows`, `saveDeclRows`, import/save merge helpers | yes | no | `gitnexus_impact(previewDeclRows)` + `gitnexus_context(saveDeclRows@store.js)`; importer/store regression; `pnpm bd:check`; `gitnexus_detect_changes()` | `closed` | Hoan tat 2026-04-03; module `src/lib/declWriteStore.js` + facade regression da xanh, scope giu o preview/save lane va helper inject de tranh lan sang mutations | none |
 | `cng-ro9.6` | 3 | Tach declaration lifecycle mutations | update/delete/restore/review helpers | yes | no | `gitnexus_impact` cho mutation symbols; row lifecycle regression; `pnpm bd:check`; `gitnexus_detect_changes()` | `closed` | Hoan tat 2026-04-07; module `src/lib/declMutationStore.js` + facade regression da xanh, scope giu o mutation lane va helper inject de tranh lan sang core wave | none |
 | `cng-ro9.7` | 4 | Tach shared core helpers | core cross-domain helpers that su dung chung; day private helpers ve module dich | yes | no | helper module unit tests; cross-domain regression; `pnpm bd:check`; `gitnexus_detect_changes()` | `closed` | Hoan tat 2026-04-07; `store.js` da import/re-export helper core tu module moi, declaration stores co default helper noi bo, va private mutation helper khong con o lai trong `store.js` | none |
-| `cng-ro9.8` | 5 | Migrate callers off `store.js` | direct imports cho libs/hooks/components theo dot, track residual shim consumers | mixed | yes | caller import diff review; targeted regression; `pnpm bd:check`; `gitnexus_detect_changes()` | `in_progress` | Batch-1 normalize/helper callers da migrate sang `storeCoreHelpers.js`; `dataImporterRowUtils` van defer trong cung bead do `HIGH` impact | So caller shim giam du de `.9` khoa facade ma khong tao risky batch |
-| `cng-ro9.9` | 6 | Lock `store.js` thanh shim mong | chi de lai import/re-export, compat comments, deprecation notes | yes | yes | shim regression; import scan; `pnpm bd:check`; `gitnexus_detect_changes()` | `open` | Cho caller migration dat muc chap nhan duoc | Quyết định mo bead xoa facade con lai neu can |
+| `cng-ro9.8` | 5 | Migrate callers off `store.js` | direct imports cho libs/hooks/components theo dot, track residual shim consumers | mixed | yes | caller import diff review; targeted regression; `pnpm bd:check`; `gitnexus_detect_changes()` | `closed` | Batch-1 + batch-2 low-risk caller migration da land; source imports giam xuong 24 file, va residual consumers chu yeu la singleton wrappers/runtime facade | none |
+| `cng-ro9.9` | 6 | Lock `store.js` thanh shim mong | chi de lai import/re-export, compat comments, deprecation notes | yes | yes | shim regression; import scan; `pnpm bd:check`; `gitnexus_detect_changes()` | `in_progress` | Resume bang cach dua singleton/runtime wiring ra khoi `store.js`, sau do giu file nay lam compat facade cho residual imports | Hoan tat shim extraction ma khong vo API public/tang scope test ngoai team-hq-mst-kpi-audit-decl lanes |

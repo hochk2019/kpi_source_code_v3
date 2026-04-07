@@ -8,7 +8,7 @@ import {
   isConfigColumnKey,
   sanitizeColumnWidths,
 } from "@/components/dataImporter/dataImporterConfig.js";
-import { getImportColumnConfig, saveImportColumnConfig } from "@/lib/store.js";
+import { getImportColumnConfig, saveImportColumnConfig } from "@/lib/importColumnConfig.js";
 import { normalizeStatusKey } from "../../../packages/domain/src/declSearch.js";
 
 function normalizePresetStatuses(status) {

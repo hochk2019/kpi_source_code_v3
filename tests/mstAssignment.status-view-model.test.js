@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { MST_ASSIGNMENT_STATUS } from "@/lib/store.js";
+import { MST_ASSIGNMENT_STATUS } from "@/lib/mstAssignments.js";
 import { buildStatusViewModel } from "@/components/mst-assignment/model/statusViewModel.js";
 
 describe("buildStatusViewModel", () => {

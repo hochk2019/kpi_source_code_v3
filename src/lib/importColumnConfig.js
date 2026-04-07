@@ -259,3 +259,27 @@ export function createImportColumnConfigStore({
     subscribeImportColumnConfig,
   };
 }
+
+let importColumnConfigRuntimeStore = createImportColumnConfigStore();
+
+export function configureImportColumnConfigRuntime(options = {}) {
+  importColumnConfigRuntimeStore = createImportColumnConfigStore(options);
+  return importColumnConfigRuntimeStore;
+}
+
+export function resetImportColumnConfigRuntime() {
+  importColumnConfigRuntimeStore = createImportColumnConfigStore();
+  return importColumnConfigRuntimeStore;
+}
+
+export function getImportColumnConfig() {
+  return importColumnConfigRuntimeStore.getImportColumnConfig();
+}
+
+export function saveImportColumnConfig(config, options) {
+  return importColumnConfigRuntimeStore.saveImportColumnConfig(config, options);
+}
+
+export function subscribeImportColumnConfig(listener) {
+  return importColumnConfigRuntimeStore.subscribeImportColumnConfig(listener);
+}

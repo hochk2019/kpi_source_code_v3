@@ -5,7 +5,7 @@ import {
   buildDisplayList,
   buildGroupedStages,
 } from "@/components/mst-assignment/model/displaySelectors.js";
-import { MST_ASSIGNMENT_STATUS } from "@/lib/store.js";
+import { MST_ASSIGNMENT_STATUS } from "@/lib/mstAssignments.js";
 
 const EMPTY_SET = new Set();
 

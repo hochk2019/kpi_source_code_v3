@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { MST_ASSIGNMENT_STATUS } from "@/lib/store.js";
+import { MST_ASSIGNMENT_STATUS } from "@/lib/mstAssignments.js";
 import {
   computeStatusDisplay,
   computeStoredStatus,

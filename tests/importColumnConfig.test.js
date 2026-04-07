@@ -1,9 +1,14 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   IMPORT_COLUMN_IDS,
   IMPORT_SENSITIVE_COLUMNS,
   createImportColumnConfigStore,
+  configureImportColumnConfigRuntime,
+  getImportColumnConfig,
+  resetImportColumnConfigRuntime,
+  saveImportColumnConfig,
+  subscribeImportColumnConfig,
 } from '@/lib/importColumnConfig.js';
 
 function createImportConfigHarness(initialLayout = {}) {
@@ -37,12 +42,18 @@ function createImportConfigHarness(initialLayout = {}) {
       }
     },
     pushAuditLog,
+    readUILayoutConfig,
     store,
     subscribeKey,
+    writeUILayoutConfig,
   };
 }
 
 describe('importColumnConfig', () => {
+  afterEach(() => {
+    resetImportColumnConfigRuntime();
+  });
+
   it('defaults to hiding sensitive columns when no config is stored', () => {
     const { store } = createImportConfigHarness();
 
@@ -133,6 +144,43 @@ describe('importColumnConfig', () => {
       expect.objectContaining({
         hidden: expect.arrayContaining([IMPORT_COLUMN_IDS[0]]),
       }),
+    );
+
+    unsubscribe();
+  });
+
+  it('exposes configured singleton wrappers for runtime callers', () => {
+    const harness = createImportConfigHarness();
+    const listener = vi.fn();
+
+    configureImportColumnConfigRuntime({
+      readUILayoutConfig: harness.readUILayoutConfig,
+      writeUILayoutConfig: harness.writeUILayoutConfig,
+      subscribeKey: harness.subscribeKey,
+      pushAuditLog: harness.pushAuditLog,
+      uiLayoutKey: 'ui_layout_config_v1',
+    });
+
+    expect(getImportColumnConfig()).toEqual(
+      expect.objectContaining({
+        hidden: expect.arrayContaining(IMPORT_SENSITIVE_COLUMNS),
+      }),
+    );
+
+    const unsubscribe = subscribeImportColumnConfig(listener);
+    expect(listener).toHaveBeenCalledTimes(1);
+
+    saveImportColumnConfig({ hidden: [IMPORT_COLUMN_IDS[0]] }, { actor: 'admin' });
+    harness.notifySubscribers();
+
+    expect(listener).toHaveBeenCalledTimes(2);
+    expect(listener).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        hidden: expect.arrayContaining([IMPORT_COLUMN_IDS[0]]),
+      }),
+    );
+    expect(harness.getLayoutState().importData.columns.hidden).toEqual(
+      expect.arrayContaining([IMPORT_COLUMN_IDS[0]]),
     );
 
     unsubscribe();

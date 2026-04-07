@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { normalizeName, normalizeStr } from "@/lib/store.js";
+import { normalizeName, normalizeStr } from "@/lib/storeCoreHelpers.js";
 import { getItem, setItem } from "@/lib/storageClient.js";
 
 const KPI_ADJUSTMENT_FILTER_PREFERENCES_KEY = "kpi_adjustment_filter_preferences_v1";

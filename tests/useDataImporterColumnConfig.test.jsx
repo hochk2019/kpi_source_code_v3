@@ -2,10 +2,9 @@ import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { act, renderHook, fireEvent } from "@testing-library/react";
 
-vi.mock("@/lib/store.js", () => ({
+vi.mock("@/lib/importColumnConfig.js", () => ({
   IMPORT_COLUMN_IDS: ["date", "company", "status"],
   IMPORT_SENSITIVE_COLUMNS: ["status", "history", "update"],
-  normalizeMST: (value) => value,
   getImportColumnConfig: vi.fn(() => ({
     hidden: ["status"],
     widths: { date: 160 },
@@ -34,7 +33,7 @@ import {
   getImportColumnConfig,
   saveImportColumnConfig,
   subscribeImportColumnConfig,
-} from "@/lib/store.js";
+} from "@/lib/importColumnConfig.js";
 import { toast } from "@/shared/toast.js";
 
 function createProps(overrides = {}) {

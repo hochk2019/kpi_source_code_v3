@@ -1,8 +1,8 @@
 import {
   IMPORT_COLUMN_IDS,
   IMPORT_SENSITIVE_COLUMNS,
-  normalizeMST,
-} from "@/lib/store.js";
+} from "@/lib/importColumnConfig.js";
+import { normalizeMST } from "@/lib/storeCoreHelpers.js";
 
 export const DECL_HISTORY_FIELD_LABELS = Object.freeze({
   nhan_vien: "Nhân viên",

@@ -1,4 +1,4 @@
-import { KPI_ADJUSTMENT_CATEGORY_CONFIG } from "@/lib/store.js";
+import { KPI_ADJUSTMENT_CATEGORY_CONFIG } from "../../../../shared/kpiAdjustments.js";
 
 import {
   buildCalculationInfo,

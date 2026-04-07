@@ -16,7 +16,7 @@ vi.mock("@/lib/store.js", async () => {
   };
 });
 
-import { KPI_ADJUSTMENT_CATEGORY_CONFIG } from "@/lib/store.js";
+import { KPI_ADJUSTMENT_CATEGORY_CONFIG } from "../shared/kpiAdjustments.js";
 import {
   buildBusinessDirectory,
   buildDeclarationSuggestions,

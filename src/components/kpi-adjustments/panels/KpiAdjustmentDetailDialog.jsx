@@ -9,7 +9,7 @@ import {
 } from "@/components/ui/dialog.jsx";
 import { Textarea } from "@/components/ui/textarea.jsx";
 import { emitCommand } from "@/lib/commandBus.js";
-import { KPI_ADJUSTMENT_CATEGORY_CONFIG } from "@/lib/store.js";
+import { KPI_ADJUSTMENT_CATEGORY_CONFIG } from "../../../../shared/kpiAdjustments.js";
 
 function copyLookupValue(value) {
   const normalizedValue = String(value || "").trim();

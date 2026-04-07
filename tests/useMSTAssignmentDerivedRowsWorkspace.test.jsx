@@ -4,7 +4,8 @@ import { describe, expect, it } from "vitest";
 import useMSTAssignmentDerivedRowsWorkspace, {
   filterAndPrioritizeRows,
 } from "@/components/mst-assignment/hooks/useMSTAssignmentDerivedRowsWorkspace.js";
-import { MST_ASSIGNMENT_STATUS, normalizeStr } from "@/lib/store.js";
+import { MST_ASSIGNMENT_STATUS } from "@/lib/mstAssignments.js";
+import { normalizeStr } from "@/lib/storeCoreHelpers.js";
 
 describe("useMSTAssignmentDerivedRowsWorkspace", () => {
   it("filters rows by history, status, staff query, and search while prioritizing imported rows", () => {

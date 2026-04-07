@@ -8,7 +8,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog.jsx";
 import { Input } from "@/components/ui/input.jsx";
-import { KPI_ADJUSTMENT_CATEGORY_CONFIG } from "@/lib/store.js";
+import { KPI_ADJUSTMENT_CATEGORY_CONFIG } from "../../../../shared/kpiAdjustments.js";
 
 export default function KpiAdjustmentSettingsDialog({
   open,

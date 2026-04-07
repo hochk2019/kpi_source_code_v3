@@ -4,7 +4,7 @@ import {
   getImportColumnConfig,
   saveImportColumnConfig,
   subscribeImportColumnConfig,
-} from "@/lib/store.js";
+} from "@/lib/importColumnConfig.js";
 import {
   AUX_COLUMN_LABELS,
   IMPORT_TABLE_COLUMNS,

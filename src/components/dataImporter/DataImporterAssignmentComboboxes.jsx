@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 
 import SharedStaffCombobox from "@/components/shared/StaffCombobox.jsx";
-import { normalizeName, normalizeStr } from "@/lib/store.js";
+import { normalizeName, normalizeStr } from "@/lib/storeCoreHelpers.js";
 import { Button } from "@/components/ui/button.jsx";
 import {
   Command,

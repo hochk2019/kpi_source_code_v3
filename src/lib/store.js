@@ -22,7 +22,7 @@ import {
   IMPORT_AUX_COLUMN_IDS,
   IMPORT_COLUMN_IDS,
   IMPORT_SENSITIVE_COLUMNS,
-  createImportColumnConfigStore,
+  configureImportColumnConfigRuntime,
 } from './importColumnConfig.js';
 import {
   KPI_ADJUSTMENTS_KEY,
@@ -1624,7 +1624,7 @@ const reportScheduleStore = createReportScheduleStore({
   pushAuditLog,
 });
 
-const importColumnConfigStore = createImportColumnConfigStore({
+const importColumnConfigStore = configureImportColumnConfigRuntime({
   readUILayoutConfig,
   writeUILayoutConfig,
   subscribeKey: subscribe,

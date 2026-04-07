@@ -1,4 +1,4 @@
-import { MST_ASSIGNMENT_STATUS } from "@/lib/store.js";
+import { MST_ASSIGNMENT_STATUS } from "@/lib/mstAssignments.js";
 
 import { computeStatusDisplay, normalizeStatusLabel } from "./statusDate.js";
 

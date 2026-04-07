@@ -1,4 +1,4 @@
-import { normalizeStr } from "@/lib/store.js";
+import { normalizeStr } from "@/lib/storeCoreHelpers.js";
 
 export function buildStaffOptions(roster) {
   const options = [];
