@@ -25,18 +25,26 @@
 
 ## Active Slice
 
--- Bead: cng-ro9.7
--- Title: cng-ro9.7 / store-core-helpers-extraction
+-- Bead: cng-ro9.8
+-- Title: cng-ro9.8 / store-caller-migration
 -- Status: in_progress
 -- Last updated: 2026-04-07
 
 ## Sync Notebook
 
-- Goal: thuc hien wave-4 `cng-ro9.7` bang cach tach shared core helpers khoi `src/lib/store.js` sau khi declaration mutation lane da on dinh, giu `store.js` tiep tuc la facade mong va khong lan sang caller migration.
-- Files In Scope: `src/lib/store.js`, module helper core moi neu can, va regression cho cac domain dang inject helper chung (`declReadStore`, `declWriteStore`, `declMutationStore`, HQ/MST helpers neu bi anh huong).
-- Pending Verify: `gitnexus_impact` cho helper symbols duoc tach; helper module tests; cross-domain/store regression; `pnpm bd:check`; `gitnexus_detect_changes(scope=all)`.
-- Verify: `cng-ro9.6` da xanh voi `pnpm exec eslint src/lib/declMutationStore.js src/lib/store.js tests/declMutationStore.test.js tests/store.test.js tests/useDataImporterSavedEdits.test.jsx tests/useDataImporterRowMutations.test.jsx tests/useDataImporterReviewActions.test.jsx tests/useDataImporterWorkflowSession.test.jsx tests/useDataImporterSessionSyncBundle.test.jsx tests/server.api.test.js`; `pnpm exec vitest run tests/declMutationStore.test.js tests/store.test.js tests/useDataImporterSavedEdits.test.jsx tests/useDataImporterRowMutations.test.jsx tests/useDataImporterReviewActions.test.jsx tests/useDataImporterWorkflowSession.test.jsx tests/useDataImporterSessionSyncBundle.test.jsx --environment jsdom`; `pnpm exec vitest run tests/server.api.test.js --environment node`.
-- Handoff: neu context bi nen/reset, doc lan luot `task.md` -> `docs/store-decomposition-execution-board.md` -> `docs/open-backlog.md`; `cng-ro9.6` da xong va active bead hien tai la `cng-ro9.7`. Bat dau bang impact cho shared helper symbols con duoc `declReadStore`/`declWriteStore`/`declMutationStore` cung inject tu `store.js`.
+- Goal: thuc hien wave-5 `cng-ro9.8` bang cach migrate caller low-risk roi track residual shim consumers cua `@/lib/store.js`, sau khi shared core helpers da duoc tach khoi `store.js`.
+- Files In Scope: caller imports `@/lib/store.js` trong libs/hooks/components low-risk, facade export map trong `src/lib/store.js`, va regression cho nhung surface duoc doi import.
+- Pending Verify: import scan truoc/sau migration; targeted regression cho caller duoc doi; `pnpm bd:check`; `gitnexus_detect_changes(scope=all)`.
+- Verify: `cng-ro9.7` da xanh voi `pnpm exec eslint src/lib/storeCoreHelpers.js src/lib/declMutationHelpers.js src/lib/declReadStore.js src/lib/declWriteStore.js src/lib/declMutationStore.js src/lib/store.js tests/storeCoreHelpers.test.js tests/declMutationHelpers.test.js tests/declReadStore.test.js tests/declWriteStore.test.js tests/declMutationStore.test.js tests/store.test.js`; `pnpm exec vitest run tests/storeCoreHelpers.test.js tests/declMutationHelpers.test.js tests/declReadStore.test.js tests/declWriteStore.test.js tests/declMutationStore.test.js tests/store.test.js --environment jsdom`.
+- Handoff: neu context bi nen/reset, doc lan luot `task.md` -> `docs/store-decomposition-execution-board.md` -> `docs/open-backlog.md`; `cng-ro9.7` da xong va active bead hien tai la `cng-ro9.8`. Bat dau bang scan caller imports `@/lib/store.js`, uu tien low-risk util/hooks truoc component lon.
+
+### Checkpoint: cng-ro9.7
+
+- Done: tao `src/lib/storeCoreHelpers.js` va `src/lib/declMutationHelpers.js`; doi `src/lib/store.js` sang import/re-export helper core thay vi giu implementation inline; cap nhat `declReadStore`/`declWriteStore`/`declMutationStore` de default helper den tu module moi thay vi phu thuoc implementation noi bo trong `store.js`.
+- Verify: `gitnexus_impact` cho `sanitizePartialDeclUpdates` va `applyPartialUpdatesToRow` = `LOW`; cac helper generic (`normalizeStr`/`normalizeMST`/`normalizeName`/`normalizeDeclarationNumber`/`safeParse`) bi GitNexus disambiguate sang homonym server-side nen da bo sung `gitnexus_context(..., file_path: "src/lib/store.js")` de xac nhan caller frontend truoc khi giu facade export khong doi; `pnpm exec eslint src/lib/storeCoreHelpers.js src/lib/declMutationHelpers.js src/lib/declReadStore.js src/lib/declWriteStore.js src/lib/declMutationStore.js src/lib/store.js tests/storeCoreHelpers.test.js tests/declMutationHelpers.test.js tests/declReadStore.test.js tests/declWriteStore.test.js tests/declMutationStore.test.js tests/store.test.js`; `pnpm exec vitest run tests/storeCoreHelpers.test.js tests/declMutationHelpers.test.js tests/declReadStore.test.js tests/declWriteStore.test.js tests/declMutationStore.test.js tests/store.test.js --environment jsdom`.
+- Risk: `normalizeStr`/`normalizeMST`/`normalizeName`/`normalizeDeclarationNumber` van co caller frontend rong, nen `.7` chi doi ownership implementation va giu `store.js` la facade/re-export; caller migration de lai cho `cng-ro9.8`.
+- Decision: move helper code ra module rieng, bo helper private khoi `store.js`, va de declaration stores tu co default helper noi bo; khong doi import cua caller ben ngoai trong slice nay.
+- Next: close `cng-ro9.7`, chuyen `cng-ro9.8` sang `in_progress`, scan importers con dung `@/lib/store.js`, va migrate theo dot low-risk truoc khi danh gia co mo duoc `cng-ro9.9` hay khong.
 
 ### Checkpoint: cng-ro9.6
 

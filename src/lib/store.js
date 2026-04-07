@@ -65,6 +65,14 @@ import {
 import {
   createDeclMutationStore,
 } from './declMutationStore.js';
+import {
+  normalizeDeclarationNumber,
+  normalizeMST,
+  normalizeName,
+  normalizeStr,
+  safeParse,
+  stripDiacritics,
+} from './storeCoreHelpers.js';
 
 
 
@@ -76,6 +84,7 @@ export { HQ_HISTORY_LIMIT };
 export { DECL_DELETED_LOG_KEY, DECL_DELETED_LOG_LIMIT };
 export { DECL_HISTORY_KEY };
 export { KPI_ADJUSTMENT_STATUS_SET, KPI_ADJUSTMENTS_KEY, KPI_ADJUSTMENT_SETTINGS_KEY };
+export { normalizeStr, normalizeName, normalizeMST, normalizeDeclarationNumber } from './storeCoreHelpers.js';
 
 
 
@@ -123,14 +132,6 @@ export function roundAdjustmentPoint(value, precision = ADJUSTMENT_POINT_PRECISI
 
 // ===== Helpers =====
 
-function safeParse(json, fallback) {
-
-  try { const v = JSON.parse(json); return v ?? fallback; } catch { return fallback; }
-
-}
-
-
-
 function shallowClone(obj) {
 
   return JSON.parse(JSON.stringify(obj ?? null));
@@ -161,38 +162,6 @@ function writeUILayoutConfig(config) {
 
 
 
-// Chuáº©n hoÃ¡ chuá»—i (trim + bá» khoáº£ng tráº¯ng thá»«a)
-
-export function normalizeStr(s) {
-
-  return (s ?? "").toString().replace(/\s+/g, " ").trim();
-
-}
-
-
-
-function stripDiacritics(input) {
-
-  return normalizeStr(input)
-
-    .normalize("NFD")
-
-    .replace(/[\u0300-\u036f]/g, "")
-
-    .trim();
-
-}
-
-
-
-export function normalizeName(name) {
-
-  return stripDiacritics(name).toLowerCase();
-
-}
-
-
-
 function pickFirstValue(source, keys, fallback) {
 
   if (!source || typeof source !== 'object') {
@@ -218,46 +187,6 @@ function pickFirstValue(source, keys, fallback) {
   }
 
   return fallback;
-
-}
-
-
-
-// MST: giá»¯ dáº¡ng chuá»—i sá»‘, bá» má»i kÃ½ tá»± khÃ´ng pháº£i sá»‘
-
-export function normalizeMST(mst) {
-
-  return (mst ?? "").toString().replace(/\D/g, "");
-
-}
-
-
-
-export function normalizeDeclarationNumber(input, length = 11) {
-
-  const raw = (input ?? "").toString();
-
-  if (!raw.trim()) return "";
-
-  const digits = raw.replace(/[^0-9]/g, "");
-
-  if (!digits) return "";
-
-  const targetLength = Number.isFinite(length) && length > 0 ? Math.floor(length) : 11;
-
-  if (digits.length < targetLength) {
-
-    return digits.padStart(targetLength, "0");
-
-  }
-
-  if (digits.length > targetLength) {
-
-    return digits.slice(0, targetLength);
-
-  }
-
-  return digits;
 
 }
 
@@ -399,18 +328,6 @@ function getDeclarationKey(row) {
   const branch = normalizeStr(row.nhanh || row.branch || "");
 
   return `${soTk}_${suffix}_${branch}`;
-
-}
-
-function getDeclRowSimpleKey(row) {
-
-  if (!row || typeof row !== "object") return "";
-
-  const soTk = (row.so_tk ?? "").toString();
-
-  const nhanh = (row.nhanh ?? "").toString();
-
-  return `${soTk}_${nhanh}`.trim();
 
 }
 
@@ -1421,214 +1338,6 @@ function persistAndAnnotateDeclRows(rows) {
 
 
 
-function sanitizePartialDeclUpdates(updates = {}) {
-
-  if (!updates || typeof updates !== "object") {
-
-    return {};
-
-  }
-
-  const safe = {};
-
-  const assign = (key, value) => {
-
-    safe[key] = value;
-
-  };
-
-
-
-  for (const [field, value] of Object.entries(updates)) {
-
-    switch (field) {
-
-      case "nhan_vien": {
-
-        assign("nhan_vien", normalizeStr(value));
-
-        break;
-
-      }
-
-      case "team": {
-
-        assign("team", normalizeStr(value));
-
-        break;
-
-      }
-
-      case "agency": {
-
-        assign("agency", normalizeStr(value));
-
-        break;
-
-      }
-
-      case "dai_ly": {
-
-        assign("dai_ly", normalizeStr(value));
-
-        break;
-
-      }
-
-      case "licenses":
-      case "so_luong_gp":
-      case "licenseManualCount": {
-        if (value === "" || value === null || value === undefined) {
-          assign("licenses", "");
-          assign("so_luong_gp", "");
-          assign("licenseManualCount", null);
-          break;
-        }
-
-        const parsed = Number(value);
-
-        if (Number.isFinite(parsed)) {
-          const normalized = Math.max(0, Math.round(parsed));
-          assign("licenses", normalized);
-          assign("so_luong_gp", normalized);
-          assign("licenseManualCount", normalized);
-        }
-
-        break;
-      }
-
-      default: {
-
-        assign(field, value);
-
-        break;
-
-      }
-
-    }
-
-  }
-
-
-
-  if (
-
-    Object.prototype.hasOwnProperty.call(safe, "agency") &&
-
-    !Object.prototype.hasOwnProperty.call(safe, "dai_ly")
-
-  ) {
-
-    assign("dai_ly", safe.agency);
-
-  }
-
-  if (
-
-    Object.prototype.hasOwnProperty.call(safe, "dai_ly") &&
-
-    !Object.prototype.hasOwnProperty.call(safe, "agency")
-
-  ) {
-
-    assign("agency", safe.dai_ly);
-
-  }
-
-
-
-  return safe;
-
-}
-
-
-
-function applyPartialUpdatesToRow(row, updates, { sanitized = false } = {}) {
-
-  if (!row || typeof row !== "object") {
-
-    return { changed: false, nextRow: row };
-
-  }
-
-  const safeUpdates = sanitized && updates && typeof updates === "object"
-
-    ? updates
-
-    : sanitizePartialDeclUpdates(updates);
-
-  const entries = Object.entries(safeUpdates);
-
-  if (!entries.length) {
-
-    return { changed: false, nextRow: row };
-
-  }
-
-  let changed = false;
-
-  const nextRow = { ...row };
-
-  for (const [field, value] of entries) {
-
-    if (value === null) {
-
-      if (Object.prototype.hasOwnProperty.call(nextRow, field)) {
-
-        delete nextRow[field];
-
-        changed = true;
-
-      }
-
-      continue;
-
-    }
-
-    if (value === undefined) {
-
-      continue;
-
-    }
-
-    if (field === "licenses" || field === "so_luong_gp") {
-
-      const normalized = value === "" ? "" : Number(value);
-
-      if (nextRow[field] !== normalized) {
-
-        nextRow[field] = normalized;
-
-        changed = true;
-
-      }
-
-      continue;
-
-    }
-
-    if (nextRow[field] !== value) {
-
-      nextRow[field] = value;
-
-      changed = true;
-
-    }
-
-  }
-
-  if (changed) {
-
-    nextRow.updatedAt = new Date().toISOString();
-
-  }
-
-  return { changed, nextRow };
-
-}
-
-
-
 export function previewDeclRows(newRows, { overwrite = false, actor = "system" } = {}) {
   return declWriteStore.previewDeclRows(newRows, { overwrite, actor });
 
@@ -1976,13 +1685,11 @@ const declReadStore = createDeclReadStore({
   getItem,
   setItem,
   refreshSharedKeys,
-  safeParse,
   normalizeDeclRows,
   applyAgenciesToDeclRows: (...args) => hqAgencyStore.applyAgenciesToDeclRows(...args),
   declKey: DECL_KEY,
 });
 const declWriteStore = createDeclWriteStore({
-  normalizeStr,
   normalizeDeclRows,
   getDeclRowsRaw,
   getDeclarationKey,
@@ -1994,7 +1701,6 @@ const declWriteStore = createDeclWriteStore({
   mstAssignmentStatusPending: MST_ASSIGNMENT_STATUS.PENDING,
   persistAndAnnotateDeclRows,
   pushAuditLog,
-  normalizeDeclarationNumber,
   mergeDeclarationRowClient,
 });
 const declDeletedLogStore = createDeclDeletedLogStore({
@@ -2015,11 +1721,7 @@ const declHistoryStore = createDeclHistoryStore({
   historyKey: DECL_HISTORY_KEY,
 });
 const declMutationStore = createDeclMutationStore({
-  normalizeStr,
   getDeclRowsRaw,
-  getDeclRowSimpleKey,
-  sanitizePartialDeclUpdates,
-  applyPartialUpdatesToRow,
   patchDeclRows,
   applyAgenciesToDeclRows,
   updateCachedItem,

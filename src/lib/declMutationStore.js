@@ -1,9 +1,16 @@
+import {
+  applyPartialUpdatesToRow as defaultApplyPartialUpdatesToRow,
+  getDeclRowSimpleKey as defaultGetDeclRowSimpleKey,
+  sanitizePartialDeclUpdates as defaultSanitizePartialDeclUpdates,
+} from "./declMutationHelpers.js";
+import { normalizeStr as defaultNormalizeStr } from "./storeCoreHelpers.js";
+
 export function createDeclMutationStore({
-  normalizeStr = (value) => (value == null ? "" : String(value).trim()),
+  normalizeStr = defaultNormalizeStr,
   getDeclRowsRaw = () => [],
-  getDeclRowSimpleKey = () => "",
-  sanitizePartialDeclUpdates = (updates) => updates || {},
-  applyPartialUpdatesToRow = (row) => ({ changed: false, nextRow: row }),
+  getDeclRowSimpleKey = defaultGetDeclRowSimpleKey,
+  sanitizePartialDeclUpdates = defaultSanitizePartialDeclUpdates,
+  applyPartialUpdatesToRow = defaultApplyPartialUpdatesToRow,
   patchDeclRows = async () => {},
   applyAgenciesToDeclRows = (rows) => (Array.isArray(rows) ? rows : []),
   updateCachedItem = () => {},

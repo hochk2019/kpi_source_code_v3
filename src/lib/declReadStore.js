@@ -1,8 +1,10 @@
+import { safeParse as defaultSafeParse } from "./storeCoreHelpers.js";
+
 export function createDeclReadStore({
   getItem = () => null,
   setItem = () => {},
   refreshSharedKeys = async () => {},
-  safeParse = (_json, fallback) => fallback,
+  safeParse = defaultSafeParse,
   normalizeDeclRows = (rows) => (Array.isArray(rows) ? rows : []),
   applyAgenciesToDeclRows = (rows) => rows,
   declKey = "decl_rows_v1",

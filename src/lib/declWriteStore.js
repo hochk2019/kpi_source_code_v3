@@ -1,5 +1,10 @@
+import {
+  normalizeDeclarationNumber as defaultNormalizeDeclarationNumber,
+  normalizeStr as defaultNormalizeStr,
+} from "./storeCoreHelpers.js";
+
 export function createDeclWriteStore({
-  normalizeStr = (value) => (value == null ? "" : String(value).trim()),
+  normalizeStr = defaultNormalizeStr,
   normalizeDeclRows = (rows) => (Array.isArray(rows) ? rows : []),
   getDeclRowsRaw = () => [],
   getDeclarationKey = () => "",
@@ -11,7 +16,7 @@ export function createDeclWriteStore({
   mstAssignmentStatusPending = "pending",
   persistAndAnnotateDeclRows = (rows) => rows,
   pushAuditLog = () => {},
-  normalizeDeclarationNumber = (value) => (value == null ? "" : String(value)),
+  normalizeDeclarationNumber = defaultNormalizeDeclarationNumber,
   mergeDeclarationRowClient = (_existing, incoming) => incoming,
 } = {}) {
   function ensureMSTEntriesForDeclRows(declRows, { actor = "system", dryRun = false } = {}) {
