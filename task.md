@@ -20,25 +20,34 @@
 - Da reconcile tiep ngay 2026-04-07 sau khi dong `cng-ro9.6`; declaration lifecycle mutations da duoc tach thanh `src/lib/declMutationStore.js` co test rieng, facade `store.js` giu nguyen `saveDeclRowDiffs`/`updateDeclRowFields`/`softDeleteDeclRows`/`hardDeleteDeclRows`/`restoreDeclRows`/`markDeclRowsReviewed`/`unmarkDeclRowsReviewed`, va next slice duoc chuyen sang `cng-ro9.7` cho shared core helper extraction.
 - Da reconcile tiep ngay 2026-04-07 sau khi commit `cng-ro9.7` va land batch-1 cua `cng-ro9.8`; 8 caller low-risk da doi import `normalize*` sang `src/lib/storeCoreHelpers.js`, trong khi `dataImporterRowUtils` duoc giu lai trong bead hien tai vi `gitnexus_impact(buildRosterTeams)` = `HIGH`.
 - Da reconcile tiep ngay 2026-04-07 sau khi land batch-2 cua `cng-ro9.8`; them 11 caller low-risk da doi sang `src/lib/storeCoreHelpers.js`, `src/lib/importColumnConfig.js`, `src/lib/mstAssignments.js`, va `shared/kpiAdjustments.js`, reducing direct `@/lib/store.js` consumers xuong 24 file trong `src`, va next active slice duoc doi sang `cng-ro9.9` de khoa `store.js` thanh shim mong.
+- Da reconcile tiep ngay 2026-04-08 sau khi dong `cng-ro9.9` va epic `cng-ro9`; `src/lib/store.js` nay chi con shim deprecation re-export sang `src/lib/storeRuntime.js`, batch `cng-ro9.8` da duoc commit `2111f22`, va lane store decomposition da hoan tat end-to-end.
 - Open epics hien tai:
-  - `cng-ro9` - store-decomposition-program
+  - none (cho user chon lane moi sau khi `cng-ro9` complete)
 - Highest-priority ready items hien tai:
-  - `cng-ro9.9` (active wave-6 code slice: khoa `src/lib/store.js` thanh compat shim mong sau khi caller migration low-risk da giam blast radius)
+  - none pinned; chon lai tu `docs/open-backlog.md` khi mo lane moi
 
 ## Active Slice
 
--- Bead: cng-ro9.9
--- Title: cng-ro9.9 / store-shim-lockdown
--- Status: in_progress
--- Last updated: 2026-04-07
+-- Bead: [idle]
+-- Title: awaiting-next-directive
+-- Status: idle
+-- Last updated: 2026-04-08
 
 ## Sync Notebook
 
-- Goal: thuc hien wave-6 `cng-ro9.9` bang cach dua singleton/runtime wiring ra khoi `src/lib/store.js`, sau do khoa file nay thanh compat shim chu yeu re-export/deprecation notes.
-- Files In Scope: `src/lib/store.js` va cac runtime/domain module can lo singleton accessors cho caller residual; giu API public on dinh cho source/test hien co.
-- Pending Verify: `pnpm bd:check`; `gitnexus_detect_changes(scope=all)`; import scan xac nhan `store.js` chi con shim/runtime facade mong; targeted regression cho team/hq/mst/kpi/audit callers.
-- Verify: `cng-ro9.8` batch-1 + batch-2 da xanh; batch-2 verify da pass voi `pnpm exec eslint src/components/dataImporter/DataImporterAssignmentComboboxes.jsx src/components/dataImporter/dataImporterConfig.js src/components/dataImporter/useDataImporterColumnConfig.jsx src/components/dataImporter/useDataImporterFilterPresets.js src/components/kpi-adjustments/hooks/useKpiAdjustmentFilters.js src/components/kpi-adjustments/model/categoryOptions.js src/components/kpi-adjustments/model/guidanceGroups.js src/components/kpi-adjustments/model/settingsDraft.js src/components/kpi-adjustments/model/staffOptions.js src/components/kpi-adjustments/panels/KpiAdjustmentDetailDialog.jsx src/components/kpi-adjustments/panels/KpiAdjustmentSettingsDialog.jsx src/components/mst-assignment/hooks/useMSTAssignmentDerivedRowsWorkspace.js src/components/mst-assignment/model/statusDate.js src/components/mst-assignment/model/statusViewModel.js tests/dataImporterAssignmentComboboxes.test.jsx tests/dataImporterConfig.test.js tests/useDataImporterColumnConfig.test.jsx tests/useDataImporterFilterPresets.test.jsx tests/kpiAdjustmentDialogs.test.jsx tests/kpiAdjustments.categoryOptions.test.js tests/kpiAdjustments.hooks.test.jsx tests/kpiAdjustments.model.test.js tests/kpiAdjustments.staffOptions.test.js tests/mstAssignment.status-date.test.js tests/mstAssignment.status-view-model.test.js tests/useMSTAssignmentDerivedRowsWorkspace.test.jsx`; `pnpm exec vitest run tests/dataImporterAssignmentComboboxes.test.jsx tests/dataImporterConfig.test.js tests/useDataImporterColumnConfig.test.jsx tests/useDataImporterFilterPresets.test.jsx tests/kpiAdjustmentDialogs.test.jsx tests/kpiAdjustments.categoryOptions.test.js tests/kpiAdjustments.hooks.test.jsx tests/kpiAdjustments.model.test.js tests/kpiAdjustments.staffOptions.test.js tests/mstAssignment.status-date.test.js tests/mstAssignment.status-view-model.test.js tests/useMSTAssignmentDerivedRowsWorkspace.test.jsx --environment jsdom`.
-- Handoff: neu context bi nen/reset, doc lan luot `task.md` -> `docs/store-decomposition-execution-board.md` -> `docs/open-backlog.md`; `cng-ro9.8` da xong voi 2 batch low-risk caller migration, residual source callers chu yeu dang can singleton public accessors/runtime facade, va `.9` la pha khoa `store.js` thanh shim mong de hoan tat epic.
+- Goal: lane `cng-ro9` da hoan tat; ghi nho rang `src/lib/store.js` nay chi con shim deprecation re-export sang `src/lib/storeRuntime.js`, va code moi phai import truc tiep domain modules.
+- Files In Scope: none active; lane store decomposition da close.
+- Pending Verify: none.
+- Verify: `pnpm exec eslint src/lib/store.js src/lib/storeRuntime.js tests/storeShim.test.js`; `pnpm exec vitest run --config vitest.frontend.config.mjs tests/storeShim.test.js tests/store.test.js tests/dataImporter.preview.test.jsx`; `pnpm bd:check`; `gitnexus_detect_changes(scope=all)` closeout cho `.9`.
+- Handoff: neu can resume lich su lane nay, doc `docs/store-decomposition-execution-board.md`; neu tiep tuc codebase o lane khac, lay backlog moi tu `docs/open-backlog.md` va giu quy tac khong them import moi tu `@/lib/store.js`.
+
+### Checkpoint: cng-ro9.9 / store shim lockdown complete
+
+- Done: doi `src/lib/store.js` thanh shim deprecation 6 dong chi `export *` sang `src/lib/storeRuntime.js`; move toan bo legacy runtime facade sang `src/lib/storeRuntime.js`; bo sung `tests/storeShim.test.js`; giu batch fix `.8` voi `src/lib/importColumnConfig.js` runtime wrapper va commit `2111f22`.
+- Verify: `gitnexus_impact(createRulesPersistenceStore)` = `MEDIUM`; `gitnexus_impact(createAuditLogStore)` = `MEDIUM`; `gitnexus_impact(createReportScheduleStore)` = `MEDIUM`; `gitnexus_impact(createKpiAdjustmentStore)` = `MEDIUM`; targeted `eslint` + `vitest` shim regression xanh; `store.js` line count giam ve shim mong.
+- Risk: caller import `@/lib/store.js` van con ton tai cho compat, nen lane tiep theo khong duoc them import moi vao shim; `dataImporterRowUtils` va `referenceParsing` van chua migrate direct vi da duoc xep `HIGH` impact o `.8`, nhung khong con can chan closeout epic.
+- Decision: dong `cng-ro9.9` va dong luon epic `cng-ro9`; coi `storeRuntime.js` la legacy runtime surface, con `store.js` la compat facade tam thoi.
+- Next: khong co child bead nao mo trong lane nay; chon lane moi tu canonical backlog khi user yeu cau tiep.
 
 ### Checkpoint: cng-ro9.8 / batch-2
 

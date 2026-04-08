@@ -1,6 +1,6 @@
 # Open Backlog
 
-Last reconciled: 2026-04-07
+Last reconciled: 2026-04-08
 
 This file is the canonical source of truth for unfinished work in this repo.
 
@@ -62,6 +62,7 @@ Reconciliation note:
 - Reconciled again on 2026-04-07 after closing `cng-ro9.7`; shared core helpers now live in `src/lib/storeCoreHelpers.js` and `src/lib/declMutationHelpers.js`, `store.js` remains a facade/re-export, and next active slice is `cng-ro9.8` for caller migration.
 - Reconciled again on 2026-04-07 after landing batch-1 of `cng-ro9.8`; 8 low-risk normalize/helper callers now import `src/lib/storeCoreHelpers.js` directly, while `dataImporterRowUtils` remains in the same open bead because `gitnexus_impact(buildRosterTeams)` is `HIGH`.
 - Reconciled again on 2026-04-07 after closing `cng-ro9.8`; batch-2 moved additional low-risk callers to `src/lib/storeCoreHelpers.js`, `src/lib/importColumnConfig.js`, `src/lib/mstAssignments.js`, and `shared/kpiAdjustments.js`, direct `@/lib/store.js` consumers in `src` dropped to 24 files, and next active slice is `cng-ro9.9` for shim lockdown/runtime extraction.
+- Reconciled again on 2026-04-08 after closing `cng-ro9.9` and epic `cng-ro9`; `src/lib/store.js` is now a thin deprecated shim that re-exports `src/lib/storeRuntime.js`, the `.8` caller migration/fix batch landed in commit `2111f22`, and the store decomposition program is complete.
 
 Rule:
 - Every unfinished item from review notes, rollout plans, decomposition plans, or UX backlogs must be in one of two states:
@@ -69,10 +70,10 @@ Rule:
 - explicitly marked deferred or removed in its source document
 
 Current open epics:
-- `cng-ro9` - store-decomposition-program
+- none pinned
 
 Current highest-priority ready items:
-- `cng-ro9.9` - active wave-6 shim lockdown slice to move singleton/runtime wiring out of `src/lib/store.js`
+- none pinned; choose the next lane explicitly before resuming work
 
 ## Frontend Modernization Shell/State
 
@@ -97,7 +98,7 @@ Source set: `Opus_review_v2.md`, Stitch design deliverables, `task.md`
 
 ## Store Decomposition Program
 
-Epic: `cng-ro9`  
+Epic: `cng-ro9` (closed)  
 Canonical board: `docs/store-decomposition-execution-board.md`
 
 - Historical completed slices before epic bootstrap:
@@ -115,7 +116,7 @@ Canonical board: `docs/store-decomposition-execution-board.md`
   - `cng-ro9.6` - store-decl-mutations-extraction (closed; wave-3 declaration lifecycle mutations split into `src/lib/declMutationStore.js` with dedicated module coverage)
   - `cng-ro9.7` - store-core-helpers-extraction (closed; wave-4 shared core helper extraction into dedicated helper modules while keeping `store.js` as facade)
   - `cng-ro9.8` - store-caller-migration (closed; wave-5 low-risk caller migration landed in 2 batches and reduced residual source imports enough to proceed to shim phase)
-  - `cng-ro9.9` - store-shim-lockdown (in progress; wave-6 moves singleton/runtime wiring out of `store.js` and leaves a thin compatibility shim)
+  - `cng-ro9.9` - store-shim-lockdown (closed; wave-6 moved the heavy runtime facade into `src/lib/storeRuntime.js` and left `src/lib/store.js` as a thin deprecated compatibility shim)
 
 ## Hard-gate Cutover Program
 
