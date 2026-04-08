@@ -5,7 +5,7 @@ import path from 'node:path';
 import Database from 'better-sqlite3';
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { readTeamRosterSnapshot } from '../../server/teamRosterSqlite.js';
+import { readTeamRosterSnapshot } from '@kpi/backend-shared/persistence';
 import { SqliteTeamsStore } from '../../server-v4/src/modules/teams/sqliteTeamsStore.ts';
 
 const tempFiles = [];

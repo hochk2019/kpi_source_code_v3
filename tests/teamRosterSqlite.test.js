@@ -6,7 +6,7 @@ import {
   ensureTeamRosterTables,
   readTeamRosterSnapshot,
   writeTeamRosterSnapshot,
-} from '../server/teamRosterSqlite.js';
+} from '@kpi/backend-shared/persistence';
 
 describe('teamRosterSqlite', () => {
   it('writes and restores typed roster snapshots while preserving legacy ids only when provided', () => {

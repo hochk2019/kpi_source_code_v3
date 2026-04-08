@@ -1,0 +1,15 @@
+{
+  "name": "@kpi/backend-shared",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.js",
+    "./auth": "./src/auth/index.js",
+    "./ecus": "./src/ecus/index.js",
+    "./persistence": {
+      "types": "./src/persistence/index.d.ts",
+      "default": "./src/persistence/index.js"
+    },
+    "./reporting": "./src/reporting/index.js"
+  }
+}

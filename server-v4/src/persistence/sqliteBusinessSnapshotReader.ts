@@ -3,19 +3,17 @@ import fs from 'node:fs';
 import Database from 'better-sqlite3';
 
 import {
-  readAdjustmentRowsSnapshot,
-  readDeclarationRowsSnapshot,
-  readMstAssignmentRowsSnapshot,
-  readRuleCollectionSnapshot,
-} from '../../../server/businessSnapshotSqlite.js';
-import { readReportingProjectionValue } from '../../../server/reportingProjectionSqlite.js';
-import { readCanonicalSqliteDeclarationRows } from '../modules/declarations/sqliteDeclarationRowsTable.js';
-import {
   DEFAULT_MONTHLY_REPORTING_AGGREGATE_KEY,
   MONTHLY_REPORTING_AGGREGATE_KEY,
   REPORT_SCHEDULE_STORAGE_KEY,
-} from '../../../server/reportingProjectionStore.js';
-import { readTeamRosterSnapshot } from '../../../server/teamRosterSqlite.js';
+  readAdjustmentRowsSnapshot,
+  readDeclarationRowsSnapshot,
+  readMstAssignmentRowsSnapshot,
+  readReportingProjectionValue,
+  readRuleCollectionSnapshot,
+  readTeamRosterSnapshot,
+} from '@kpi/backend-shared/persistence';
+import { readCanonicalSqliteDeclarationRows } from '../modules/declarations/sqliteDeclarationRowsTable.js';
 import {
   LEGACY_BUSINESS_HOT_PATH_KEYS,
   type BusinessSnapshotReader,

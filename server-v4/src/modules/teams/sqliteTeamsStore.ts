@@ -1,7 +1,8 @@
 import Database from 'better-sqlite3';
-import { ensureSqliteKvStore } from '../../../../server/sqliteMigrations.js';
-
-import { writeTeamRosterSnapshot } from '../../../../server/teamRosterSqlite.js';
+import {
+  ensureSqliteKvStore,
+  writeTeamRosterSnapshot,
+} from '@kpi/backend-shared/persistence';
 import { cloneTeamRoster, normalizeTeamRoster, type TeamRoster } from './teamRosterDocument.js';
 import type { TeamsStore } from './teamsStore.js';
 

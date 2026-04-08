@@ -1,12 +1,12 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import {
-  createReportingProjectionStore,
   DEFAULT_MONTHLY_REPORTING_AGGREGATE_KEY,
   MONTHLY_REPORTING_AGGREGATE_KEY,
   REPORTING_JOB_RUNS_KEY,
   REPORT_SCHEDULE_STORAGE_KEY,
-} from '../server/reportingProjectionStore.js';
+  createReportingProjectionStore,
+} from '@kpi/backend-shared/persistence';
 
 function createMemoryStore() {
   const values = new Map();

@@ -7,10 +7,10 @@ import {
   ensureReportingProjectionTable,
   readReportingJobRunProjectionEntries,
   readReportingMonthlyAggregateProjectionEntries,
-  readReportingScheduleProjectionEntries,
   readReportingProjectionValue,
+  readReportingScheduleProjectionEntries,
   writeReportingProjectionValue,
-} from '../../../server/reportingProjectionSqlite.js';
+} from '@kpi/backend-shared/persistence';
 
 export type ReportingProjectionPayload = Record<string, unknown> | Record<string, unknown>[] | null;
 

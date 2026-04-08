@@ -1,0 +1,257 @@
+{
+  "epicId": "cng-sr1",
+  "boardPath": "docs/server-retirement-execution-board.md",
+  "createdAt": "2026-04-08",
+  "scope": {
+    "scanRoots": ["server-v4/src", "tests"],
+    "scanExtensions": [".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs"]
+  },
+  "legacyAuditBaseline": {
+    "runtimeRefs": 25,
+    "runtimeFiles": 14,
+    "testRefs": 59,
+    "testFiles": 38,
+    "note": "Historical pre-lane audit counted broader server references; verify:server-retirement enforces direct import edges."
+  },
+  "directImportBaseline": {
+    "runtimeRefs": 25,
+    "runtimeFiles": 14,
+    "testRefs": 52,
+    "testFiles": 35,
+    "targets": 29
+  },
+  "matrix": [
+    {
+      "target": "server/aiProviders/index.js",
+      "ownerWave": "5",
+      "destination": "@kpi/backend-shared/runtime",
+      "runtimeRefs": 0,
+      "testRefs": 1,
+      "status": "open"
+    },
+    {
+      "target": "server/alertsDelivery.js",
+      "ownerWave": "5",
+      "destination": "@kpi/backend-shared/runtime",
+      "runtimeRefs": 0,
+      "testRefs": 1,
+      "status": "open"
+    },
+    {
+      "target": "server/bootstrapAccountPasswords.js",
+      "ownerWave": "4",
+      "destination": "@kpi/backend-shared/auth",
+      "runtimeRefs": 1,
+      "testRefs": 2,
+      "status": "open"
+    },
+    {
+      "target": "server/businessSnapshotSqlite.js",
+      "ownerWave": "2",
+      "destination": "@kpi/backend-shared/persistence",
+      "runtimeRefs": 0,
+      "testRefs": 0,
+      "status": "closed"
+    },
+    {
+      "target": "server/declarationSnapshotSearch.js",
+      "ownerWave": "2",
+      "destination": "@kpi/backend-shared/persistence",
+      "runtimeRefs": 0,
+      "testRefs": 0,
+      "status": "closed"
+    },
+    {
+      "target": "server/ecus/bridgeService.js",
+      "ownerWave": "4",
+      "destination": "@kpi/backend-shared/ecus",
+      "runtimeRefs": 1,
+      "testRefs": 1,
+      "status": "open"
+    },
+    {
+      "target": "server/ecusBridgeMutations.js",
+      "ownerWave": "4",
+      "destination": "@kpi/backend-shared/ecus",
+      "runtimeRefs": 0,
+      "testRefs": 1,
+      "status": "open"
+    },
+    {
+      "target": "server/https/aiHttpsConfig.js",
+      "ownerWave": "5",
+      "destination": "@kpi/backend-shared/runtime",
+      "runtimeRefs": 0,
+      "testRefs": 1,
+      "status": "open"
+    },
+    {
+      "target": "server/index.js",
+      "ownerWave": "6",
+      "destination": "delete after runtime/test cutover",
+      "runtimeRefs": 0,
+      "testRefs": 4,
+      "status": "open"
+    },
+    {
+      "target": "server/legacyReportingBridge.js",
+      "ownerWave": "3",
+      "destination": "@kpi/backend-shared/reporting",
+      "runtimeRefs": 1,
+      "testRefs": 1,
+      "status": "open"
+    },
+    {
+      "target": "server/reportExport.js",
+      "ownerWave": "3",
+      "destination": "@kpi/backend-shared/reporting",
+      "runtimeRefs": 1,
+      "testRefs": 2,
+      "status": "open"
+    },
+    {
+      "target": "server/reportExportPayloads.js",
+      "ownerWave": "3",
+      "destination": "@kpi/backend-shared/reporting",
+      "runtimeRefs": 1,
+      "testRefs": 1,
+      "status": "open"
+    },
+    {
+      "target": "server/reportingAggregateRuntime.js",
+      "ownerWave": "3",
+      "destination": "@kpi/backend-shared/reporting",
+      "runtimeRefs": 0,
+      "testRefs": 1,
+      "status": "open"
+    },
+    {
+      "target": "server/reportingObservability.js",
+      "ownerWave": "3",
+      "destination": "@kpi/backend-shared/reporting",
+      "runtimeRefs": 1,
+      "testRefs": 1,
+      "status": "open"
+    },
+    {
+      "target": "server/reportingObservabilityCollections.js",
+      "ownerWave": "3",
+      "destination": "@kpi/backend-shared/reporting",
+      "runtimeRefs": 1,
+      "testRefs": 1,
+      "status": "open"
+    },
+    {
+      "target": "server/reportingProjectionSqlite.js",
+      "ownerWave": "2",
+      "destination": "@kpi/backend-shared/persistence",
+      "runtimeRefs": 0,
+      "testRefs": 0,
+      "status": "closed"
+    },
+    {
+      "target": "server/reportingProjectionStore.js",
+      "ownerWave": "2",
+      "destination": "@kpi/backend-shared/persistence",
+      "runtimeRefs": 0,
+      "testRefs": 0,
+      "status": "closed"
+    },
+    {
+      "target": "server/reportingReadModels.js",
+      "ownerWave": "3",
+      "destination": "@kpi/backend-shared/reporting",
+      "runtimeRefs": 1,
+      "testRefs": 3,
+      "status": "open"
+    },
+    {
+      "target": "server/reportingRuleSelection.js",
+      "ownerWave": "3",
+      "destination": "@kpi/backend-shared/reporting",
+      "runtimeRefs": 0,
+      "testRefs": 2,
+      "status": "open"
+    },
+    {
+      "target": "server/reportingScheduleRuntime.js",
+      "ownerWave": "3",
+      "destination": "@kpi/backend-shared/reporting",
+      "runtimeRefs": 0,
+      "testRefs": 1,
+      "status": "open"
+    },
+    {
+      "target": "server/reportWatermark.js",
+      "ownerWave": "3",
+      "destination": "@kpi/backend-shared/reporting",
+      "runtimeRefs": 0,
+      "testRefs": 1,
+      "status": "open"
+    },
+    {
+      "target": "server/runtimeStorageLifecycle.js",
+      "ownerWave": "3",
+      "destination": "@kpi/backend-shared/reporting",
+      "runtimeRefs": 0,
+      "testRefs": 1,
+      "status": "open"
+    },
+    {
+      "target": "server/securityHardening.js",
+      "ownerWave": "5",
+      "destination": "@kpi/backend-shared/runtime",
+      "runtimeRefs": 0,
+      "testRefs": 1,
+      "status": "open"
+    },
+    {
+      "target": "server/sqliteMigrations.js",
+      "ownerWave": "2/4",
+      "destination": "@kpi/backend-shared/persistence + auth",
+      "runtimeRefs": 0,
+      "testRefs": 0,
+      "status": "closed"
+    },
+    {
+      "target": "server/sqlMonitor.js",
+      "ownerWave": "5",
+      "destination": "@kpi/backend-shared/runtime",
+      "runtimeRefs": 0,
+      "testRefs": 1,
+      "status": "open"
+    },
+    {
+      "target": "server/storageRouteController.js",
+      "ownerWave": "5",
+      "destination": "@kpi/backend-shared/runtime",
+      "runtimeRefs": 0,
+      "testRefs": 1,
+      "status": "open"
+    },
+    {
+      "target": "server/storageRouteRuntime.js",
+      "ownerWave": "5",
+      "destination": "@kpi/backend-shared/runtime",
+      "runtimeRefs": 0,
+      "testRefs": 1,
+      "status": "open"
+    },
+    {
+      "target": "server/teamRosterSqlite.js",
+      "ownerWave": "2",
+      "destination": "@kpi/backend-shared/persistence",
+      "runtimeRefs": 0,
+      "testRefs": 0,
+      "status": "closed"
+    },
+    {
+      "target": "server/v4RolloutMount.js",
+      "ownerWave": "5",
+      "destination": "server-v4/src/app",
+      "runtimeRefs": 0,
+      "testRefs": 1,
+      "status": "open"
+    }
+  ]
+}

@@ -13,7 +13,7 @@ import fs from 'node:fs/promises';
 import Database from 'better-sqlite3';
 
 import { describe, it, expect, beforeAll } from 'vitest';
-import { readAppliedSqliteMigrations } from '../server/sqliteMigrations.js';
+import { readAppliedSqliteMigrations } from '@kpi/backend-shared/persistence';
 
 
 

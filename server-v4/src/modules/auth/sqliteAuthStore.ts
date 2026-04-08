@@ -1,5 +1,5 @@
 import Database from 'better-sqlite3';
-import { ensureSqliteAuthTables } from '../../../../server/sqliteMigrations.js';
+import { ensureSqliteAuthTables } from '@kpi/backend-shared/persistence';
 
 import type { AuthStore } from './authStore.js';
 import type { AuthAccountRecord, AuthSessionRecord } from './authTypes.js';

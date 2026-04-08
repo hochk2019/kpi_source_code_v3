@@ -11,6 +11,9 @@ importers:
       '@hookform/resolvers':
         specifier: ^5.0.1
         version: 5.2.2(react-hook-form@7.63.0(react@19.1.1))
+      '@kpi/backend-shared':
+        specifier: workspace:*
+        version: link:packages/backend-shared
       '@radix-ui/react-accordion':
         specifier: ^1.2.10
         version: 1.2.12(@types/react-dom@19.1.9(@types/react@19.1.15))(@types/react@19.1.15)(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
@@ -293,6 +296,8 @@ importers:
   apps/web: {}
 
   packages/api-client: {}
+
+  packages/backend-shared: {}
 
   packages/domain: {}
 

@@ -5,7 +5,10 @@ import path from 'node:path';
 import Database from 'better-sqlite3';
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { readDeclarationRowsSnapshot, writeDeclarationRowsSnapshot } from '../../server/businessSnapshotSqlite.js';
+import {
+  readDeclarationRowsSnapshot,
+  writeDeclarationRowsSnapshot,
+} from '@kpi/backend-shared/persistence';
 import {
   SQLITE_DECLARATION_LIVE_ROW_TABLE,
   readCanonicalSqliteDeclarationRows,

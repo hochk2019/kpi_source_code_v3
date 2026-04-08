@@ -63,6 +63,7 @@ Reconciliation note:
 - Reconciled again on 2026-04-07 after landing batch-1 of `cng-ro9.8`; 8 low-risk normalize/helper callers now import `src/lib/storeCoreHelpers.js` directly, while `dataImporterRowUtils` remains in the same open bead because `gitnexus_impact(buildRosterTeams)` is `HIGH`.
 - Reconciled again on 2026-04-07 after closing `cng-ro9.8`; batch-2 moved additional low-risk callers to `src/lib/storeCoreHelpers.js`, `src/lib/importColumnConfig.js`, `src/lib/mstAssignments.js`, and `shared/kpiAdjustments.js`, direct `@/lib/store.js` consumers in `src` dropped to 24 files, and next active slice is `cng-ro9.9` for shim lockdown/runtime extraction.
 - Reconciled again on 2026-04-08 after closing `cng-ro9.9` and epic `cng-ro9`; `src/lib/store.js` is now a thin deprecated shim that re-exports `src/lib/storeRuntime.js`, the `.8` caller migration/fix batch landed in commit `2111f22`, and the store decomposition program is complete.
+- Reconciled again on 2026-04-08 after opening server retirement epic `cng-sr1`; canonical lane surfaces now exist in `docs/server-retirement-execution-board.md`, `docs/server-retirement-inventory.json`, and `task.md`, while `pnpm verify:server-retirement` enforces the frozen direct-import matrix.
 
 Rule:
 - Every unfinished item from review notes, rollout plans, decomposition plans, or UX backlogs must be in one of two states:
@@ -70,10 +71,10 @@ Rule:
 - explicitly marked deferred or removed in its source document
 
 Current open epics:
-- none pinned
+- `cng-sr1` - Server Dependency Retirement Program
 
 Current highest-priority ready items:
-- none pinned; choose the next lane explicitly before resuming work
+- `cng-sr1.3` - reporting-export-observability-extraction (active wave for reporting/export/observability helper migration into `@kpi/backend-shared/reporting`)
 
 ## Frontend Modernization Shell/State
 
@@ -117,6 +118,19 @@ Canonical board: `docs/store-decomposition-execution-board.md`
   - `cng-ro9.7` - store-core-helpers-extraction (closed; wave-4 shared core helper extraction into dedicated helper modules while keeping `store.js` as facade)
   - `cng-ro9.8` - store-caller-migration (closed; wave-5 low-risk caller migration landed in 2 batches and reduced residual source imports enough to proceed to shim phase)
   - `cng-ro9.9` - store-shim-lockdown (closed; wave-6 moved the heavy runtime facade into `src/lib/storeRuntime.js` and left `src/lib/store.js` as a thin deprecated compatibility shim)
+
+## Server Dependency Retirement Program
+
+Epic: `cng-sr1`
+Canonical board: `docs/server-retirement-execution-board.md`
+Frozen inventory: `docs/server-retirement-inventory.json`
+
+- `cng-sr1.1` - bootstrap-and-inventory-freeze (closed; board/notebook/backlog surfaces, frozen direct-import inventory, `packages/backend-shared` skeleton, and `pnpm verify:server-retirement` are in place)
+- `cng-sr1.2` - sqlite-snapshot-and-persistence-extraction (closed; `server-v4` and wave-2 tests now import SQLite/snapshot/projection helpers from `@kpi/backend-shared/persistence`, and direct-import gate dropped to 8 runtime / 31 test refs)
+- `cng-sr1.3` - reporting-export-observability-extraction (in progress; move reporting/export/observability helpers and legacy report bridge off `server/`)
+- `cng-sr1.4` - ecus-and-auth-bootstrap-extraction (open; move ECUS bridge and auth/bootstrap helpers off `server/`)
+- `cng-sr1.5` - legacy-test-and-orphan-helper-migration (open; remove remaining test imports plus orphan runtime helpers still pinned to `server/`)
+- `cng-sr1.6` - server-entrypoint-retirement-and-delete (open; remove `server/index.js`, stale references, and delete `server/` only after import counts hit zero)
 
 ## Hard-gate Cutover Program
 

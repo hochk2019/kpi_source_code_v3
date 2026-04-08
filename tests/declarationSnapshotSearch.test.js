@@ -2,11 +2,11 @@ import Database from 'better-sqlite3';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import {
-  DECLARATION_SNAPSHOT_DOMAIN_KEY,
   ACTIVE_BUSINESS_SNAPSHOT_KEY,
+  DECLARATION_SNAPSHOT_DOMAIN_KEY,
+  searchDeclarationSnapshot,
   writeDeclarationRowsSnapshot,
-} from '../server/businessSnapshotSqlite.js';
-import { searchDeclarationSnapshot } from '../server/declarationSnapshotSearch.js';
+} from '@kpi/backend-shared/persistence';
 
 describe('declarationSnapshotSearch', () => {
   let db;

@@ -1,7 +1,8 @@
 import Database from 'better-sqlite3';
-import { ensureSqliteKvStore } from '../../../../server/sqliteMigrations.js';
-
-import { writeRuleCollectionSnapshot } from '../../../../server/businessSnapshotSqlite.js';
+import {
+  ensureSqliteKvStore,
+  writeRuleCollectionSnapshot,
+} from '@kpi/backend-shared/persistence';
 import type { KpiRuleCollection } from './kpiRuleDefaults.js';
 import { cloneKpiRuleCollection, type KpiRulesStore } from './kpiRulesStore.js';
 

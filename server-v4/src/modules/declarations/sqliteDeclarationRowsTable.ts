@@ -11,8 +11,8 @@ import {
   BUSINESS_SNAPSHOT_STATE_TABLE,
   DECLARATION_SNAPSHOT_DOMAIN_KEY,
   DECLARATION_SNAPSHOT_ROW_TABLE,
-} from '../../../../server/businessSnapshotSqlite.js';
-import { ensureSqliteBusinessSnapshotTables } from '../../../../server/sqliteMigrations.js';
+  ensureSqliteBusinessSnapshotTables,
+} from '@kpi/backend-shared/persistence';
 import { cloneDeclarationRecord, createDeclarationRowKey } from './declarationsStore.js';
 
 export const SQLITE_DECLARATION_LIVE_ROW_TABLE = 'declaration_live_rows';

@@ -21,25 +21,36 @@
 - Da reconcile tiep ngay 2026-04-07 sau khi commit `cng-ro9.7` va land batch-1 cua `cng-ro9.8`; 8 caller low-risk da doi import `normalize*` sang `src/lib/storeCoreHelpers.js`, trong khi `dataImporterRowUtils` duoc giu lai trong bead hien tai vi `gitnexus_impact(buildRosterTeams)` = `HIGH`.
 - Da reconcile tiep ngay 2026-04-07 sau khi land batch-2 cua `cng-ro9.8`; them 11 caller low-risk da doi sang `src/lib/storeCoreHelpers.js`, `src/lib/importColumnConfig.js`, `src/lib/mstAssignments.js`, va `shared/kpiAdjustments.js`, reducing direct `@/lib/store.js` consumers xuong 24 file trong `src`, va next active slice duoc doi sang `cng-ro9.9` de khoa `store.js` thanh shim mong.
 - Da reconcile tiep ngay 2026-04-08 sau khi dong `cng-ro9.9` va epic `cng-ro9`; `src/lib/store.js` nay chi con shim deprecation re-export sang `src/lib/storeRuntime.js`, batch `cng-ro9.8` da duoc commit `2111f22`, va lane store decomposition da hoan tat end-to-end.
+- Da reconcile tiep ngay 2026-04-08 sau khi mo epic `cng-sr1`; lane server retirement da co board canonical `docs/server-retirement-execution-board.md`, frozen inventory `docs/server-retirement-inventory.json`, verifier `pnpm verify:server-retirement`, va active slice duoc chuyen sang `cng-sr1.1`.
+- Da reconcile tiep ngay 2026-04-08 sau khi dong `cng-sr1.1` va claim `cng-sr1.2`; active slice chuyen sang wave SQLite/snapshot/persistence extraction de repoint `server-v4` va tests sang `@kpi/backend-shared/persistence`.
+- Da reconcile tiep ngay 2026-04-08 sau khi dong `cng-sr1.2`; wave-2 direct imports vao `server/businessSnapshotSqlite.js`, `server/declarationSnapshotSearch.js`, `server/reportingProjectionSqlite.js`, `server/reportingProjectionStore.js`, `server/sqliteMigrations.js`, va `server/teamRosterSqlite.js` da ve 0, va next ready slice la `cng-sr1.3`.
 - Open epics hien tai:
-  - none (cho user chon lane moi sau khi `cng-ro9` complete)
+  - `cng-sr1` (server retirement program; next ready slice la `cng-sr1.3`)
 - Highest-priority ready items hien tai:
-  - none pinned; chon lai tu `docs/open-backlog.md` khi mo lane moi
+  - `cng-sr1.3` - reporting-export-observability-extraction
 
 ## Active Slice
 
--- Bead: [idle]
--- Title: awaiting-next-directive
--- Status: idle
+-- Bead: cng-sr1.3
+-- Title: reporting-export-observability-extraction
+-- Status: in_progress
 -- Last updated: 2026-04-08
 
 ## Sync Notebook
 
-- Goal: lane `cng-ro9` da hoan tat; ghi nho rang `src/lib/store.js` nay chi con shim deprecation re-export sang `src/lib/storeRuntime.js`, va code moi phai import truc tiep domain modules.
-- Files In Scope: none active; lane store decomposition da close.
-- Pending Verify: none.
-- Verify: `pnpm exec eslint src/lib/store.js src/lib/storeRuntime.js tests/storeShim.test.js`; `pnpm exec vitest run --config vitest.frontend.config.mjs tests/storeShim.test.js tests/store.test.js tests/dataImporter.preview.test.jsx`; `pnpm bd:check`; `gitnexus_detect_changes(scope=all)` closeout cho `.9`.
-- Handoff: neu can resume lich su lane nay, doc `docs/store-decomposition-execution-board.md`; neu tiep tuc codebase o lane khac, lay backlog moi tu `docs/open-backlog.md` va giu quy tac khong them import moi tu `@/lib/store.js`.
+- Goal: bat dau wave-3 bang cach migrate reporting/export/observability helpers sang `@kpi/backend-shared/reporting`, sau do repoint `server-v4` reporting runtime, `legacy-report-bridge`, va reporting-focused tests de tiep tuc giam direct imports vao `server/`.
+- Files In Scope: `server-v4/src/modules/reporting/**`; `server-v4/src/legacy/legacy-report-bridge.ts`; `packages/backend-shared/src/reporting/**`; `tests/reporting*.test.js`; `tests/runtimeStorageLifecycle.test.js`; `tests/server-v4/**report*.test.js`; `docs/server-retirement-execution-board.md`; `docs/open-backlog.md`; `task.md`; inventory rows owner wave `3`.
+- Pending Verify: targeted reporting lint/tests; `pnpm verify:server-retirement`; `pnpm bd:check`.
+- Verify: wave-2 da xanh voi `pnpm exec eslint ...`, `pnpm exec vitest run ... --environment node`, `pnpm run typecheck:server-v4`, `pnpm verify:server-retirement`, va `pnpm bd:check`.
+- Handoff: resume tu `server/reportExport.js`, `server/reportExportPayloads.js`, `server/reportingObservability.js`, `server/reportingObservabilityCollections.js`, `server/reportingReadModels.js`, `server/reportingAggregateRuntime.js`, `server/reportingScheduleRuntime.js`, `server/reportingRuleSelection.js`, `server/runtimeStorageLifecycle.js`, `server/reportWatermark.js`, `server/reportTemplateImages.js`, va consumer `server-v4/src/modules/reporting/*`; giu no-behavior-change, uu tien move/re-export truoc khi sua logic.
+
+### Checkpoint: cng-sr1.2 / sqlite-snapshot-and-persistence-extraction complete
+
+- Done: tao `packages/backend-shared/src/persistence/declarationSnapshotSearch.js` + `index.d.ts`, mo rong `@kpi/backend-shared/persistence` exports, repoint 9 runtime consumers trong `server-v4/src/**` va 14 wave-2 test files sang package moi, va them workspace dependency `@kpi/backend-shared` vao root package.
+- Verify: `pnpm install`; `pnpm exec eslint server-v4/src/modules/auth/sqliteAuthStore.ts server-v4/src/modules/declarations/sqliteDeclarationRowsTable.ts server-v4/src/modules/declarations/sqliteDeclarationsStore.ts server-v4/src/modules/hq-agencies/sqliteHqAgenciesStore.ts server-v4/src/modules/kpi-adjustments/sqliteKpiAdjustmentsStore.ts server-v4/src/modules/kpi-rules/sqliteKpiRulesStore.ts server-v4/src/modules/teams/sqliteTeamsStore.ts server-v4/src/persistence/reportingProjectionPersistence.ts server-v4/src/persistence/sqliteBusinessSnapshotReader.ts packages/backend-shared/src/persistence/index.js packages/backend-shared/src/persistence/declarationSnapshotSearch.js packages/backend-shared/src/persistence/reportingProjectionStore.js tests/businessSnapshotSqlite.test.js tests/declarationSnapshotSearch.test.js tests/reportingProjectionSqlite.test.js tests/reportingProjectionStore.test.js tests/runtimeStorageLifecycle.test.js tests/server-v4/runtimeRoutes.test.js tests/server-v4/sqliteBusinessSnapshotReader.test.js tests/server-v4/sqliteDeclarationsStore.test.js tests/server-v4/sqliteTeamsStore.test.js tests/server.api.test.js tests/server.seed.test.js tests/sqliteMigrations.test.js tests/teamRosterSqlite.test.js tests/workspaceLayout.test.js`; `pnpm exec vitest run tests/businessSnapshotSqlite.test.js tests/declarationSnapshotSearch.test.js tests/reportingProjectionSqlite.test.js tests/reportingProjectionStore.test.js tests/runtimeStorageLifecycle.test.js tests/server-v4/runtimeRoutes.test.js tests/server-v4/sqliteBusinessSnapshotReader.test.js tests/server-v4/sqliteDeclarationsStore.test.js tests/server-v4/sqliteTeamsStore.test.js tests/server.api.test.js tests/server.seed.test.js tests/sqliteMigrations.test.js tests/teamRosterSqlite.test.js tests/workspaceLayout.test.js --environment node`; `pnpm run typecheck:server-v4`; `pnpm verify:server-retirement`; `pnpm bd:check`.
+- Risk: `packages/backend-shared/src/persistence/reportingProjectionStore.js` van con phu thuoc vao `server/reportingReadModels.js` va `server/reportingObservability.js` bang relative import noi bo; do do wave-3 can move reporting helpers som de package khong con cross-import nguọc vao legacy tree.
+- Decision: close `cng-sr1.2`; chot wave-2 la boundary migration thanh cong va giu logic runtime/test khong doi.
+- Next: `cng-sr1.3` tap trung reporting/export/observability extraction, uu tien xoa nốt runtime imports con lai trong `server-v4/src/modules/reporting/*` va `server-v4/src/legacy/legacy-report-bridge.ts`.
 
 ### Checkpoint: cng-ro9.9 / store shim lockdown complete
 

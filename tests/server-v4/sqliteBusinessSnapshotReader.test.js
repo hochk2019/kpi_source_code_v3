@@ -10,10 +10,10 @@ import {
   writeDeclarationRowsSnapshot,
   writeMstAssignmentRowsSnapshot,
   writeRuleCollectionSnapshot,
-} from '../../server/businessSnapshotSqlite.js';
-import { writeReportingProjectionValue } from '../../server/reportingProjectionSqlite.js';
+  writeReportingProjectionValue,
+  writeTeamRosterSnapshot,
+} from '@kpi/backend-shared/persistence';
 import { replaceCanonicalSqliteDeclarationRows } from '../../server-v4/src/modules/declarations/sqliteDeclarationRowsTable.ts';
-import { writeTeamRosterSnapshot } from '../../server/teamRosterSqlite.js';
 import { LEGACY_BUSINESS_HOT_PATH_KEYS } from '../../server-v4/src/persistence/businessSnapshotReader.ts';
 import { SqliteBusinessSnapshotReader } from '../../server-v4/src/persistence/sqliteBusinessSnapshotReader.ts';
 

@@ -1,10 +1,10 @@
 import Database from 'better-sqlite3';
-import { ensureSqliteKvStore } from '../../../../server/sqliteMigrations.js';
-
 import {
+  ensureSqliteKvStore,
   readAdjustmentRowsSnapshot,
   writeAdjustmentRowsSnapshot,
-} from '../../../../server/businessSnapshotSqlite.js';
+} from '@kpi/backend-shared/persistence';
+
 import {
   cloneAdjustmentSettings,
   createDefaultAdjustmentSettings,

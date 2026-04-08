@@ -12,7 +12,7 @@ import {
   ensureSqliteKvStore,
   ensureSqliteTeamRosterTables,
   readAppliedSqliteMigrations,
-} from '../server/sqliteMigrations.js';
+} from '@kpi/backend-shared/persistence';
 
 describe('sqliteMigrations', () => {
   it('records applied migration ids for core and typed snapshot targets', () => {

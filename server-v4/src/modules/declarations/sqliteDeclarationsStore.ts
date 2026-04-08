@@ -1,6 +1,8 @@
 import Database from 'better-sqlite3';
-import { ensureSqliteKvStore } from '../../../../server/sqliteMigrations.js';
-import { readDeclarationRowsSnapshot } from '../../../../server/businessSnapshotSqlite.js';
+import {
+  ensureSqliteKvStore,
+  readDeclarationRowsSnapshot,
+} from '@kpi/backend-shared/persistence';
 
 import {
   normalizeCoCodeConfig,

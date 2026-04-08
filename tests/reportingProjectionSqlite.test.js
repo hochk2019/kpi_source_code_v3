@@ -5,8 +5,6 @@
 import Database from 'better-sqlite3';
 
 import { describe, expect, it } from 'vitest';
-import { readAppliedSqliteMigrations } from '../server/sqliteMigrations.js';
-
 import {
   REPORTING_JOB_RUN_ENTRY_TABLE,
   REPORTING_MONTHLY_AGGREGATE_ENTRY_TABLE,
@@ -18,8 +16,9 @@ import {
   readReportingMonthlyAggregateProjectionEntries,
   readReportingProjectionValue,
   readReportingScheduleProjectionEntries,
+  readAppliedSqliteMigrations,
   writeReportingProjectionValue,
-} from '../server/reportingProjectionSqlite.js';
+} from '@kpi/backend-shared/persistence';
 
 describe('reportingProjectionSqlite', () => {
   it('creates the reporting projection table and round-trips aggregate payloads', () => {

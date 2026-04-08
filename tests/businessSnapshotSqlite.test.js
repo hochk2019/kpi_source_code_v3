@@ -14,7 +14,7 @@ import {
   writeDeclarationRowsSnapshot,
   writeMstAssignmentRowsSnapshot,
   writeRuleCollectionSnapshot,
-} from '../server/businessSnapshotSqlite.js';
+} from '@kpi/backend-shared/persistence';
 
 describe('businessSnapshotSqlite', () => {
   let db;

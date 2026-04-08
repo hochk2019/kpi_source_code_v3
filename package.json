@@ -29,6 +29,7 @@
     "build:server-v4": "tsc -p tsconfig.server-v4.build.json && node scripts/copy-server-v4-js-companions.mjs",
     "typecheck:server-v4": "tsc -p tsconfig.server-v4.json --noEmit",
     "verify:server-v4": "pnpm run lint:server-v4 && pnpm run typecheck:server-v4 && pnpm run test:server-v4",
+    "verify:server-retirement": "node scripts/check-server-retirement.mjs",
     "verify:smoke:core": "pnpm run verify:server-v4 && pnpm run test:smoke:core",
     "verify:v4:parity": "node scripts/v4-parity-suite.mjs --scope full",
     "verify:v4:parity:quick": "node scripts/v4-parity-suite.mjs --scope quick",
@@ -58,6 +59,7 @@
     "api:contract:gate": "node scripts/check-frontend-api-contract.mjs --fail-on-legacy"
   },
   "dependencies": {
+    "@kpi/backend-shared": "workspace:*",
     "@hookform/resolvers": "^5.0.1",
     "@radix-ui/react-accordion": "^1.2.10",
     "@radix-ui/react-alert-dialog": "^1.1.13",

@@ -1,5 +1,5 @@
 import Database from 'better-sqlite3';
-import { ensureSqliteKvStore } from '../../../../server/sqliteMigrations.js';
+import { ensureSqliteKvStore } from '@kpi/backend-shared/persistence';
 
 import {
   HQ_AGENCIES_STORAGE_KEY,

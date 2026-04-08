@@ -5,7 +5,7 @@ import {
   DEFAULT_MONTHLY_REPORTING_AGGREGATE_KEY,
   MONTHLY_REPORTING_AGGREGATE_KEY,
   REPORT_SCHEDULE_STORAGE_KEY,
-} from '../server/reportingProjectionStore.js';
+} from '@kpi/backend-shared/persistence';
 import { createRuntimeStorageLifecycle } from '../server/runtimeStorageLifecycle.js';
 
 function seedKv(database, entries) {

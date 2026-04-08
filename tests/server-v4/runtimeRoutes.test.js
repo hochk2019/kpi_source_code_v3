@@ -11,9 +11,9 @@ import {
   writeDeclarationRowsSnapshot,
   writeMstAssignmentRowsSnapshot,
   writeRuleCollectionSnapshot,
-} from '../../server/businessSnapshotSqlite.js';
-import { writeReportingProjectionValue } from '../../server/reportingProjectionSqlite.js';
-import { writeTeamRosterSnapshot } from '../../server/teamRosterSqlite.js';
+  writeReportingProjectionValue,
+  writeTeamRosterSnapshot,
+} from '@kpi/backend-shared/persistence';
 import { buildV4App } from '../../server-v4/src/index.ts';
 
 function createLegacyDb(seed = {}) {

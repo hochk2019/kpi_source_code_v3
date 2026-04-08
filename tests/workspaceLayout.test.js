@@ -53,6 +53,13 @@ describe("workspace layout", () => {
         type: "module",
       }),
     );
+    expect(readJson("packages/backend-shared/package.json")).toEqual(
+      expect.objectContaining({
+        name: "@kpi/backend-shared",
+        private: true,
+        type: "module",
+      }),
+    );
     expect(readJson("packages/ui/package.json")).toEqual(
       expect.objectContaining({
         name: "@kpi/ui",
