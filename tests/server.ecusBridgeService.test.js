@@ -69,7 +69,7 @@ vi.mock('mssql', () => {
 });
 
 async function importModule() {
-  return import('../server/ecus/bridgeService.js');
+  return import('@kpi/backend-shared/ecus');
 }
 
 function buildServiceFactory(module, overrides = {}) {

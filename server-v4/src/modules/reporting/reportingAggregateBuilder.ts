@@ -170,7 +170,7 @@ function cloneStats(stats: Partial<ReportStats> | undefined): ReportStats {
       ? { ...(stats as ReportStats).adjustmentTotals }
       : {},
     licenseCodes: Array.isArray((stats as ReportStats | undefined)?.licenseCodes)
-      ? [...(stats as ReportStats).licenseCodes]
+      ? [...((stats as ReportStats).licenseCodes ?? [])]
       : [],
     licenseCount: Number((stats as ReportStats | undefined)?.licenseCount || 0),
   };

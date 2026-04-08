@@ -2,9 +2,12 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 
 import ExcelJS from 'exceljs';
 
-import { applyWorkbookWatermark, computeWatermarkSignature } from '../server/reportWatermark.js';
-
-import { generateReport, clearReportCache } from '../server/reportExport.js';
+import {
+  applyWorkbookWatermark,
+  clearReportCache,
+  computeWatermarkSignature,
+  generateReport,
+} from '@kpi/backend-shared/reporting';
 
 
 

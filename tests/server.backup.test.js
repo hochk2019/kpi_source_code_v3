@@ -52,7 +52,7 @@ beforeAll(async () => {
 
     getDataHealthSnapshot,
 
-  } = await import('../server/index.js'));
+  } = await import('@kpi/backend-shared/testing'));
 
 });
 

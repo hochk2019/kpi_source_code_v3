@@ -5,10 +5,14 @@ const { buildLegacyReportDataMock, aggregateLegacyCompaniesMock } = vi.hoisted((
   aggregateLegacyCompaniesMock: vi.fn(),
 }));
 
-vi.mock('../../server/legacyReportingBridge.js', () => ({
-  buildLegacyReportData: buildLegacyReportDataMock,
-  aggregateLegacyCompanies: aggregateLegacyCompaniesMock,
-}));
+vi.mock('@kpi/backend-shared/reporting', async () => {
+  const actual = await vi.importActual('@kpi/backend-shared/reporting');
+  return {
+    ...actual,
+    buildLegacyReportData: buildLegacyReportDataMock,
+    aggregateLegacyCompanies: aggregateLegacyCompaniesMock,
+  };
+});
 
 describe('server-v4 legacy report bridge', () => {
   beforeEach(() => {

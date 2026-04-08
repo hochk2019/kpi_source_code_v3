@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { createEcusBridgeMutations } from '../server/ecusBridgeMutations.js';
+import { createEcusBridgeMutations } from '@kpi/backend-shared/ecus';
 
 function createMutations(overrides = {}) {
   const state = {

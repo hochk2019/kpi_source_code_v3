@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { createStorageRouteController } from '../server/storageRouteController.js';
+import { createStorageRouteController } from '@kpi/backend-shared/runtime';
 
 function createRes() {
   const res = {

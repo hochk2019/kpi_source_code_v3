@@ -2,7 +2,7 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { resolveReportingRule } from '../server/reportingRuleSelection.js';
+import { resolveReportingRule } from '@kpi/backend-shared/reporting';
 
 describe('resolveReportingRule', () => {
   it('accepts legacy rule sets without groups when license config is present', () => {

@@ -6,7 +6,7 @@ import {
   MONTHLY_REPORTING_AGGREGATE_KEY,
   REPORT_SCHEDULE_STORAGE_KEY,
 } from '@kpi/backend-shared/persistence';
-import { createRuntimeStorageLifecycle } from '../server/runtimeStorageLifecycle.js';
+import { createRuntimeStorageLifecycle } from '@kpi/backend-shared/reporting';
 
 function seedKv(database, entries) {
   const stmt = database.prepare(

@@ -4,11 +4,11 @@ import {
   buildReportingJobRun,
   normalizeReportingJobRuns,
   summarizeReportingJobRuns,
-} from '../server/reportingObservability.js';
+} from '@kpi/backend-shared/reporting';
 import {
   buildMonthlyAggregateCollection,
   buildReportingJobRunCollection,
-} from '../server/reportingObservabilityCollections.js';
+} from '@kpi/backend-shared/reporting';
 
 describe('reportingObservability', () => {
   it('normalizes reporting job runs and sorts newest first', () => {

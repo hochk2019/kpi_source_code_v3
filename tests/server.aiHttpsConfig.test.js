@@ -6,7 +6,7 @@ import os from 'node:os';
 
 import path from 'node:path';
 
-import { loadAiHttpsConfig } from '../server/https/aiHttpsConfig.js';
+import { loadAiHttpsConfig } from '@kpi/backend-shared/runtime';
 
 
 

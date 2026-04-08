@@ -11,11 +11,11 @@ vi.mock('../src/lib/reports.js', () => ({
   buildReportData: buildReportDataMock,
 }));
 
-vi.mock('../server/reportingReadModels.js', () => ({
+vi.mock('../packages/backend-shared/src/reporting/reportingReadModels.js', () => ({
   buildReportingReadModels: buildReportingReadModelsMock,
 }));
 
-import { buildCompactReportExportPayload } from '../server/reportExportPayloads.js';
+import { buildCompactReportExportPayload } from '../packages/backend-shared/src/reporting/reportExportPayloads.js';
 
 function createRuleSet(overrides = {}) {
   return {

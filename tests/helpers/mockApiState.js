@@ -1,6 +1,4 @@
-import { buildReportingReadModels } from '../../server/reportingReadModels.js';
-
-import { resolveReportingRule } from '../../server/reportingRuleSelection.js';
+import { buildReportingReadModels, resolveReportingRule } from '@kpi/backend-shared/reporting';
 
 import {
   ADMIN_ROLE,

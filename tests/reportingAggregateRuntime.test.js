@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { createReportingAggregateRuntime } from '../server/reportingAggregateRuntime.js';
+import { createReportingAggregateRuntime } from '@kpi/backend-shared/reporting';
 
 const ACTIVE_SNAPSHOT_KEY = 'kpi_reporting_monthly_aggregates_v1';
 const DEFAULT_SNAPSHOT_KEY = 'kpi_reporting_monthly_aggregates_default_v1';

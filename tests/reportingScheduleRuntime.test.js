@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { createReportingScheduleRuntime } from '../server/reportingScheduleRuntime.js';
+import { createReportingScheduleRuntime } from '@kpi/backend-shared/reporting';
 
 describe('createReportingScheduleRuntime', () => {
   it('reads schedules with aggregate status and materializes the default snapshot when needed', () => {

@@ -5,7 +5,7 @@ const { buildLegacyReportDataMock, aggregateLegacyCompaniesMock } = vi.hoisted((
   aggregateLegacyCompaniesMock: vi.fn(),
 }));
 
-vi.mock('../server/legacyReportingBridge.js', () => ({
+vi.mock('../packages/backend-shared/src/reporting/legacyReportingBridge.js', () => ({
   buildLegacyReportData: buildLegacyReportDataMock,
   aggregateLegacyCompanies: aggregateLegacyCompaniesMock,
 }));
@@ -57,7 +57,7 @@ describe('reportingReadModels shared bridge', () => {
       },
     ]);
 
-    const { buildReportingReadModels } = await import('../server/reportingReadModels.js');
+    const { buildReportingReadModels } = await import('../packages/backend-shared/src/reporting/reportingReadModels.js');
 
     const result = buildReportingReadModels(
       [{ so_tk: 'TK1' }],
@@ -99,7 +99,7 @@ describe('reportingReadModels shared bridge', () => {
       adjustments: {},
     }));
 
-    const { buildMonthlyReportingAggregates } = await import('../server/reportingReadModels.js');
+    const { buildMonthlyReportingAggregates } = await import('../packages/backend-shared/src/reporting/reportingReadModels.js');
 
     const result = buildMonthlyReportingAggregates(
       [

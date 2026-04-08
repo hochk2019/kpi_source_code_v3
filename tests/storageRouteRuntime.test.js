@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { createStorageRouteRuntime } from '../server/storageRouteRuntime.js';
+import { createStorageRouteRuntime } from '@kpi/backend-shared/runtime';
 
 function createHarness(overrides = {}) {
   const deps = {

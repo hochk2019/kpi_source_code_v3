@@ -9,7 +9,7 @@ import {
   listBootstrapPasswordEnvKeys,
   normalizeBootstrapPasswordEnvSegment,
   readBootstrapAccountPassword,
-} from '../server/bootstrapAccountPasswords.js';
+} from '@kpi/backend-shared/auth';
 
 describe('bootstrapAccountPasswords', () => {
   it('ưu tiên alias rõ nghĩa cho admin và vẫn hỗ trợ generic key', () => {

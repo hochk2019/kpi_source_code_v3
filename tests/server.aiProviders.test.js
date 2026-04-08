@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildDefaultAiProviders, detectDefaultAiProvider } from '../server/aiProviders/index.js';
+import { buildDefaultAiProviders, detectDefaultAiProvider } from '@kpi/backend-shared/runtime';
 
 
 describe('buildDefaultAiProviders', () => {

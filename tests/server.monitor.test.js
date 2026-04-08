@@ -20,21 +20,17 @@ process.env.MONITOR_ACCESS_TOKEN = 'test-monitor-token';
 
 import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from 'vitest';
 
-import {
+let initializeDatabase;
 
-  initializeDatabase,
+let appendEcusMonitorHistory;
 
-  appendEcusMonitorHistory,
+let getEcusMonitorHistory;
 
-  getEcusMonitorHistory,
+let clearEcusMonitorHistory;
 
-  clearEcusMonitorHistory,
+let buildEcusMonitorMetrics;
 
-  buildEcusMonitorMetrics,
-
-  buildEcusMonitorSeries,
-
-} from '../server/index.js';
+let buildEcusMonitorSeries;
 
 
 
@@ -117,6 +113,22 @@ function buildSnapshot({
 describe('ecus monitor history & metrics', () => {
 
   beforeAll(async () => {
+
+    ({
+
+      initializeDatabase,
+
+      appendEcusMonitorHistory,
+
+      getEcusMonitorHistory,
+
+      clearEcusMonitorHistory,
+
+      buildEcusMonitorMetrics,
+
+      buildEcusMonitorSeries,
+
+    } = await import('@kpi/backend-shared/testing'));
 
     await initializeDatabase({ dbFile: ':memory:' });
 

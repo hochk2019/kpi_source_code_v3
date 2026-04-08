@@ -36,7 +36,7 @@ type EcusBridgeModule = {
 };
 
 const require = createRequire(import.meta.url);
-const { createEcusBridgeService } = require('../../../../server/ecus/bridgeService.js') as EcusBridgeModule;
+const { createEcusBridgeService } = require('@kpi/backend-shared/ecus') as EcusBridgeModule;
 const { buildSqlConnectionConfig, createSqlPoolManager } =
   require('../../../../apps/ecus-bridge/src/sqlBridge.js') as SqlBridgeModule;
 

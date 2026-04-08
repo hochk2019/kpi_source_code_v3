@@ -2,7 +2,7 @@ import express from 'express';
 import request from 'supertest';
 import { describe, expect, it, vi } from 'vitest';
 
-import { createLoginRateLimit, createSecurityMiddleware } from '../server/securityHardening.js';
+import { createLoginRateLimit, createSecurityMiddleware } from '@kpi/backend-shared/runtime';
 
 describe('securityHardening', () => {
   it('adds baseline security headers', async () => {

@@ -4,7 +4,7 @@ import {
   type LegacyCompanySummaryRow,
   type LegacyReportData,
   type LegacyReportRow,
-} from '../../../server/legacyReportingBridge.js';
+} from '@kpi/backend-shared/reporting';
 
 import type { DeclarationRecord } from '../modules/declarations/DeclarationsRepository.js';
 import type { KpiRuleSet } from '../modules/kpi-rules/kpiRuleDefaults.js';

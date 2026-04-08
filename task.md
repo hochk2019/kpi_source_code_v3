@@ -24,25 +24,34 @@
 - Da reconcile tiep ngay 2026-04-08 sau khi mo epic `cng-sr1`; lane server retirement da co board canonical `docs/server-retirement-execution-board.md`, frozen inventory `docs/server-retirement-inventory.json`, verifier `pnpm verify:server-retirement`, va active slice duoc chuyen sang `cng-sr1.1`.
 - Da reconcile tiep ngay 2026-04-08 sau khi dong `cng-sr1.1` va claim `cng-sr1.2`; active slice chuyen sang wave SQLite/snapshot/persistence extraction de repoint `server-v4` va tests sang `@kpi/backend-shared/persistence`.
 - Da reconcile tiep ngay 2026-04-08 sau khi dong `cng-sr1.2`; wave-2 direct imports vao `server/businessSnapshotSqlite.js`, `server/declarationSnapshotSearch.js`, `server/reportingProjectionSqlite.js`, `server/reportingProjectionStore.js`, `server/sqliteMigrations.js`, va `server/teamRosterSqlite.js` da ve 0, va next ready slice la `cng-sr1.3`.
+- Da reconcile tiep ngay 2026-04-08 sau khi land waves `cng-sr1.3..cng-sr1.5`; reporting/auth/runtime helpers da duoc repoint sang `@kpi/backend-shared/*`, direct-import gate `pnpm verify:server-retirement` da ve 0 runtime / 0 test / 0 mapped target, va active slice duoc chuyen sang `cng-sr1.6` de retire test harness dang quarantine qua `packages/backend-shared/src/testing/index.js` truoc khi xoa vat ly `server/`.
 - Open epics hien tai:
-  - `cng-sr1` (server retirement program; next ready slice la `cng-sr1.3`)
+  - `cng-sr1` (server retirement program; active slice la `cng-sr1.6`)
 - Highest-priority ready items hien tai:
-  - `cng-sr1.3` - reporting-export-observability-extraction
+  - `cng-sr1.6` - server-entrypoint-retirement-and-delete
 
 ## Active Slice
 
--- Bead: cng-sr1.3
--- Title: reporting-export-observability-extraction
+-- Bead: cng-sr1.6
+-- Title: server-entrypoint-retirement-and-delete
 -- Status: in_progress
 -- Last updated: 2026-04-08
 
 ## Sync Notebook
 
-- Goal: bat dau wave-3 bang cach migrate reporting/export/observability helpers sang `@kpi/backend-shared/reporting`, sau do repoint `server-v4` reporting runtime, `legacy-report-bridge`, va reporting-focused tests de tiep tuc giam direct imports vao `server/`.
-- Files In Scope: `server-v4/src/modules/reporting/**`; `server-v4/src/legacy/legacy-report-bridge.ts`; `packages/backend-shared/src/reporting/**`; `tests/reporting*.test.js`; `tests/runtimeStorageLifecycle.test.js`; `tests/server-v4/**report*.test.js`; `docs/server-retirement-execution-board.md`; `docs/open-backlog.md`; `task.md`; inventory rows owner wave `3`.
-- Pending Verify: targeted reporting lint/tests; `pnpm verify:server-retirement`; `pnpm bd:check`.
-- Verify: wave-2 da xanh voi `pnpm exec eslint ...`, `pnpm exec vitest run ... --environment node`, `pnpm run typecheck:server-v4`, `pnpm verify:server-retirement`, va `pnpm bd:check`.
-- Handoff: resume tu `server/reportExport.js`, `server/reportExportPayloads.js`, `server/reportingObservability.js`, `server/reportingObservabilityCollections.js`, `server/reportingReadModels.js`, `server/reportingAggregateRuntime.js`, `server/reportingScheduleRuntime.js`, `server/reportingRuleSelection.js`, `server/runtimeStorageLifecycle.js`, `server/reportWatermark.js`, `server/reportTemplateImages.js`, va consumer `server-v4/src/modules/reporting/*`; giu no-behavior-change, uu tien move/re-export truoc khi sua logic.
+- Goal: khoa xong waves 3-5 cua server retirement, sau do hoan tat wave-6 bang cach thay test quarantine `@kpi/backend-shared/testing` de khong con noi bo nao phu thuoc `server/index.js`, roi moi xoa vat ly cay `server/`.
+- Files In Scope: `packages/backend-shared/src/testing/**`; `tests/server.api.test.js`; `tests/server.backup.test.js`; `tests/server.monitor.test.js`; `tests/server.seed.test.js`; neu can thi `server-v4/src/app/**` va runtime/module harness lien quan; `docs/server-retirement-execution-board.md`; `docs/open-backlog.md`; `task.md`.
+- Pending Verify: targeted legacy API/backups/seed/monitor test harness verify; `pnpm verify:server-retirement`; `pnpm bd:check`.
+- Verify: `pnpm exec eslint tests/server.api.test.js tests/server.backup.test.js tests/server.monitor.test.js tests/server.seed.test.js packages/backend-shared/src/testing/index.js`; `pnpm exec vitest run tests/server.api.test.js tests/server.backup.test.js tests/server.monitor.test.js tests/server.seed.test.js --environment node`; `pnpm verify:server-retirement`; `pnpm bd:check`.
+- Handoff: direct imports da ve 0, nhung `packages/backend-shared/src/testing/index.js` van la quarantine layer re-export `server/index.js` de phuc vu legacy route suite (`/api/auth/*`, `/api/bootstrap`, `/api/notifications`, `/api/ai/*`, ...); muon dong that su `cng-sr1.6` can thay layer nay bang harness/modular runtime khong con import noi bo vao `server/`.
+
+### Checkpoint: cng-sr1.5 / legacy-test-and-orphan-helper-migration complete
+
+- Done: repoint toan bo direct imports con lai trong `tests/**` sang `@kpi/backend-shared/testing`, khoa eager import trong `tests/server.monitor.test.js`, va dua gate `pnpm verify:server-retirement` ve `0 runtime / 0 test / 0 mapped target`.
+- Verify: `pnpm exec eslint tests/server.api.test.js tests/server.backup.test.js tests/server.monitor.test.js tests/server.seed.test.js packages/backend-shared/src/testing/index.js`; `pnpm exec vitest run tests/server.api.test.js tests/server.backup.test.js tests/server.monitor.test.js tests/server.seed.test.js --environment node`; `pnpm verify:server-retirement`; `pnpm bd:check`.
+- Risk: `packages/backend-shared/src/testing/index.js` van re-export noi bo tu `server/index.js`; neu dong epic ngay bay gio thi chi la hide direct imports, chua retire vat ly legacy entrypoint.
+- Decision: close waves `cng-sr1.3..cng-sr1.5`, giu `cng-sr1.6` mo va doi active slice sang test-harness/server-entrypoint retirement that su.
+- Next: thiet ke harness thay the cho legacy API test suite de `server/index.js` co the bi bo hoan toan truoc khi xoa cay `server/`.
 
 ### Checkpoint: cng-sr1.2 / sqlite-snapshot-and-persistence-extraction complete
 

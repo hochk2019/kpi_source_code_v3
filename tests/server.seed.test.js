@@ -35,7 +35,7 @@ let getDatabaseInitState;
 
 beforeAll(async () => {
 
-  ({ initializeDatabase, getDatabaseInitState } = await import('../server/index.js'));
+  ({ initializeDatabase, getDatabaseInitState } = await import('@kpi/backend-shared/testing'));
 
 });
 

@@ -14,9 +14,13 @@ vi.mock('../../server-v4/src/modules/reporting/reportingAggregateBuilder.js', as
   };
 });
 
-vi.mock('../../server/reportingReadModels.js', () => ({
-  buildReportingReadModels: buildReportingReadModelsMock,
-}));
+vi.mock('@kpi/backend-shared/reporting', async () => {
+  const actual = await vi.importActual('@kpi/backend-shared/reporting');
+  return {
+    ...actual,
+    buildReportingReadModels: buildReportingReadModelsMock,
+  };
+});
 
 import { ReportingService } from '../../server-v4/src/modules/reporting/reportingService.ts';
 

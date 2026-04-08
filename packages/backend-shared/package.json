@@ -4,12 +4,20 @@
   "type": "module",
   "exports": {
     ".": "./src/index.js",
-    "./auth": "./src/auth/index.js",
+    "./auth": {
+      "types": "./src/auth/index.d.ts",
+      "default": "./src/auth/index.js"
+    },
     "./ecus": "./src/ecus/index.js",
     "./persistence": {
       "types": "./src/persistence/index.d.ts",
       "default": "./src/persistence/index.js"
     },
-    "./reporting": "./src/reporting/index.js"
+    "./reporting": {
+      "types": "./src/reporting/index.d.ts",
+      "default": "./src/reporting/index.js"
+    },
+    "./runtime": "./src/runtime/index.js",
+    "./testing": "./src/testing/index.js"
   }
 }

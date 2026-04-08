@@ -1,4 +1,4 @@
-import { getBootstrapPasswordEnvKey } from '../../server/bootstrapAccountPasswords.js';
+import { getBootstrapPasswordEnvKey } from '@kpi/backend-shared/auth';
 
 export const TEST_BOOTSTRAP_CREDENTIALS = Object.freeze({
   admin: 'admin123',

@@ -1,14 +1,15 @@
 import {
+  DEFAULT_REPORTING_JOB_RUN_LIMIT,
+  buildMonthlyAggregateCollection,
+  buildReportingJobRun,
+  buildReportingJobRunCollection,
+  buildReportingReadModels,
+  normalizeReportingJobRuns,
   type LegacyCompanySummaryRow,
   type LegacyReportData,
-} from '../../legacy/legacy-report-bridge.js';
+  type ReportingMonthlyAggregateCollection,
+} from '@kpi/backend-shared/reporting';
 import { ReportingRepository, type ReportingSourceSnapshot } from './ReportingRepository.js';
-import {
-  buildDefaultMonthlyAggregateQuery,
-  buildMonthlyAggregateQueryKey,
-  buildMonthlyReportingAggregates,
-  type ReportingMonthlyAggregateResponse,
-} from './reportingAggregateBuilder.js';
 import {
   normalizeReportingScheduleEntry,
   removeReportingScheduleEntry,
@@ -16,16 +17,11 @@ import {
   upsertReportingScheduleEntry,
 } from './reportingScheduleNormalizer.js';
 import {
-  DEFAULT_REPORTING_JOB_RUN_LIMIT,
-  buildReportingJobRun,
-  normalizeReportingJobRuns,
-} from '../../../../server/reportingObservability.js';
-import {
-  buildMonthlyAggregateCollection,
-  buildReportingJobRunCollection,
-  type ReportingMonthlyAggregateCollection,
-} from '../../../../server/reportingObservabilityCollections.js';
-import { buildReportingReadModels } from '../../../../server/reportingReadModels.js';
+  buildDefaultMonthlyAggregateQuery,
+  buildMonthlyAggregateQueryKey,
+  buildMonthlyReportingAggregates,
+  type ReportingMonthlyAggregateResponse,
+} from './reportingAggregateBuilder.js';
 
 const ACTIVE_MONTHLY_AGGREGATE_KEY = 'kpi_reporting_monthly_aggregates_v1';
 const DEFAULT_MONTHLY_AGGREGATE_KEY = 'kpi_reporting_monthly_aggregates_default_v1';

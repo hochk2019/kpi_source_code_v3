@@ -3,7 +3,7 @@ import crypto from 'node:crypto';
 import bcrypt from 'bcryptjs';
 import type { Request, Response } from 'express';
 
-import { readBootstrapAccountPassword } from '../../../../server/bootstrapAccountPasswords.js';
+import { readBootstrapAccountPassword } from '@kpi/backend-shared/auth';
 import {
   ACCOUNT_PERMISSION_KEYS,
   ADMIN_ROLE,

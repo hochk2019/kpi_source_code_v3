@@ -1,15 +1,15 @@
-import { buildMonthlyAggregateQueryKey } from '../../../../server/reportingReadModels.js';
+import { buildMonthlyAggregateQueryKey } from '../reporting/reportingReadModels.js';
 import {
   DEFAULT_REPORTING_JOB_RUN_LIMIT,
   REPORTING_JOB_RUNS_KEY,
   buildReportingJobRun,
   normalizeReportingJobRuns,
-} from '../../../../server/reportingObservability.js';
+} from '../reporting/reportingObservability.js';
 
 export const MONTHLY_REPORTING_AGGREGATE_KEY = 'kpi_reporting_monthly_aggregates_v1';
 export const DEFAULT_MONTHLY_REPORTING_AGGREGATE_KEY = 'kpi_reporting_monthly_aggregates_default_v1';
 export const REPORT_SCHEDULE_STORAGE_KEY = 'kpi_report_schedule_v1';
-export { REPORTING_JOB_RUNS_KEY } from '../../../../server/reportingObservability.js';
+export { REPORTING_JOB_RUNS_KEY } from '../reporting/reportingObservability.js';
 
 export function createReportingProjectionStore(storage = {}) {
   const readJsonValue =

@@ -3,10 +3,10 @@ import { randomUUID as nodeRandomUUID } from 'node:crypto';
 import type { Request, Response } from 'express';
 
 import { normalizeRoleKey } from '../../../../packages/domain/src/accountRoles.js';
-// @ts-expect-error -- Legacy JS module is not typed in this TS project.
-import { generateReport } from '../../../../server/reportExport.js';
-// @ts-expect-error -- Legacy JS module is not typed in this TS project.
-import { buildCompactReportExportPayload } from '../../../../server/reportExportPayloads.js';
+import {
+  buildCompactReportExportPayload,
+  generateReport,
+} from '@kpi/backend-shared/reporting';
 import type { AuthStore } from '../auth/authStore.js';
 import type { AuthAccountRecord } from '../auth/authTypes.js';
 import { readSessionAccount, readSessionTokenFromRequest } from '../auth/authSessionContext.js';

@@ -17,7 +17,7 @@ import { AUDIT_KEY, saveDeclRows, markDeclRowsReviewed, updateDeclRowFields, get
 
 import { clearStorageCache, setItem } from '../src/lib/storageClient.js';
 
-import { resetSqlMonitor, getSqlTimeoutEvents } from '../server/sqlMonitor.js';
+import { resetSqlMonitor, getSqlTimeoutEvents } from '@kpi/backend-shared/runtime';
 import {
   readAdjustmentRowsSnapshot,
   readDeclarationRowsSnapshot,
@@ -1862,7 +1862,7 @@ const excelModule = await import('exceljs');
 
 const excelMock = excelModule.default;
 
-const reportExportModule = await import('../server/reportExport.js');
+const reportExportModule = await import('@kpi/backend-shared/reporting');
 
 const { clearReportCache } = reportExportModule;
 
@@ -1882,7 +1882,7 @@ let waitAccountSync;
 
 beforeAll(async () => {
 
-  const serverModule = await import('../server/index.js');
+  const serverModule = await import('@kpi/backend-shared/testing');
 
   app = serverModule.app;
 

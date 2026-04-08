@@ -43,7 +43,7 @@ describe('server legacyReportingBridge', () => {
     buildReportDataMock.mockReturnValue(report);
     aggregateByCompanyMock.mockReturnValue(companies);
 
-    const bridge = await import('../server/legacyReportingBridge.js');
+    const bridge = await import('@kpi/backend-shared/reporting');
 
     expect(bridge.buildLegacyReportData(rows, options)).toBe(report);
     expect(bridge.aggregateLegacyCompanies(rows, { includeStaff: true })).toBe(companies);

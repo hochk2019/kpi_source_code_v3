@@ -9,7 +9,7 @@ import {
   WAVE2_V4_MODULE_IDS,
   selectLegacyV4Modules,
   selectWave1V4Modules,
-} from '../server/v4RolloutMount.js';
+} from '@kpi/backend-shared/runtime';
 
 describe('v4 rollout wave-1 module selection', () => {
   it('keeps the requested module order and detects missing modules', () => {
