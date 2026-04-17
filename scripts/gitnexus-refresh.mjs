@@ -1,9 +1,35 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { resolve, join } from 'node:path';
 
 const CONTEXT_FILES = ['AGENTS.md', 'CLAUDE.md'];
-const GITNEXUS_NPX_ARGS = ['-y', 'gitnexus@latest'];
+
+// Get the pnpm command based on platform
+function getPnpmCommand() {
+  if (process.platform === 'win32') {
+    // Use absolute path to pnpm.cmd on Windows
+    return 'C:\\Users\\PC\\AppData\\Roaming\\npm\\pnpm.cmd';
+  }
+  return 'pnpm';
+}
+
+// Run gitnexus analyze via pnpm exec
+function runNpmCommand(args, options = {}) {
+  const cwd = options.cwd ?? process.cwd();
+  const pnpmCmd = getPnpmCommand();
+
+  // On Windows, use shell: true to properly handle .cmd files
+  const result = spawnSync(pnpmCmd, ['exec', 'gitnexus', ...args], {
+    cwd,
+    stdio: options.stdio ?? 'inherit',
+    encoding: options.encoding ?? 'utf8',
+    shell: true,
+    ...options
+  });
+
+  return result;
+}
 
 function run(command, args, options = {}) {
   return spawnSync(command, args, {
@@ -21,12 +47,12 @@ export function isGitFileClean(filePath, cwd, runner = run) {
 }
 
 export function collectSnapshots(files, cwd, deps = {}) {
-  const runner = deps.runner ?? run;
+  // Use the 'run' function for git operations, not the npm runner
   const exists = deps.existsSync ?? existsSync;
   const read = deps.readFileSync ?? readFileSync;
 
   return files
-    .filter((filePath) => exists(filePath) && isGitFileClean(filePath, cwd, runner))
+    .filter((filePath) => exists(filePath) && isGitFileClean(filePath, cwd, run))
     .map((filePath) => ({
       filePath,
       contents: read(filePath),
@@ -51,13 +77,9 @@ export function restoreSnapshots(snapshots, deps = {}) {
 }
 
 export function refreshGitNexus(cwd = process.cwd(), deps = {}) {
-  const runner = deps.runner ?? run;
+  const runner = deps.runner ?? runNpmCommand;
   const snapshots = collectSnapshots(CONTEXT_FILES, cwd, deps);
-  const result = runner('npx', [...GITNEXUS_NPX_ARGS, 'analyze'], {
-    cwd,
-    stdio: 'inherit',
-    shell: process.platform === 'win32',
-  });
+  const result = runner(['analyze'], { cwd });
 
   if (result.status === 0) {
     restoreSnapshots(snapshots, deps);
