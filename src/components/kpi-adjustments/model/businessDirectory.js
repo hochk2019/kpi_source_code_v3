@@ -60,7 +60,7 @@ export function extractMstFromRow(row) {
 }
 
 export function buildDeclarationSuggestions(limit = MAX_DECLARATION_SUGGESTIONS) {
-  const rows = sortDeclRows(getDeclRows());
+  const rows = sortDeclRows(getDeclRows(), { excludeDeleted: true });
   const suggestions = [];
   const seenKeys = new Set();
   const baseTime = Date.now();

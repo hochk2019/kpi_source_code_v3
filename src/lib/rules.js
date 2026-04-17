@@ -1589,13 +1589,23 @@ function addByTiers(numItems, tiers = [], isCumulative = false) {
 
       sum += Number(add || 0);
 
-    } else if (numItems >= from && numItems <= to) {
+    } else {
 
-      sum = Number(add || 0);
+      if (numItems >= from && numItems <= to) {
 
-    } else if (numItems > to) {
+        sum = Number(add || 0);
 
-      sum = Number(add || 0);
+        break;
+
+      }
+
+      if (numItems > to) {
+
+        sum = Number(add || 0);
+
+        break;
+
+      }
 
     }
 

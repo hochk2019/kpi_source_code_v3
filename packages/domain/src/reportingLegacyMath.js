@@ -1055,7 +1055,7 @@ export function buildReportData(rowsInput, { roster, rules, from, to, adjustment
 
 
 
-    const hasCO = Boolean(sanitized.has_co || (Array.isArray(sanitized.co_codes) && sanitized.co_codes.length));
+    const hasCO = Boolean(sanitized.has_co);
 
     const coLineCount = Number(sanitized.co_line_count || 0) || 0;
 

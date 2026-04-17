@@ -178,7 +178,7 @@ export function useKpiAdjustmentFormWorkspace({
     if (digits && primaryResults.length < 10) {
       const seenKeys = new Set(primaryResults.map((item) => item.key));
       const fallback = [];
-      const rows = sortDeclRows(getDeclRows());
+      const rows = sortDeclRows(getDeclRows(), { excludeDeleted: true });
 
       for (const row of rows) {
         if (primaryResults.length + fallback.length >= 10) {

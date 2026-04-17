@@ -37,8 +37,13 @@ export function createDeclReadStore({
     return applyAgenciesToDeclRows(rows);
   }
 
-  function sortDeclRows(rows) {
-    const arr = Array.isArray(rows) ? rows : [];
+  function sortDeclRows(rows, options = {}) {
+    const { excludeDeleted = false } = options;
+    let arr = Array.isArray(rows) ? rows : [];
+
+    if (excludeDeleted) {
+      arr = arr.filter((row) => !row?.deleted_at);
+    }
 
     const parseTime = (value) => {
       if (!value) return 0;

@@ -716,14 +716,13 @@ export function computeLicenseSnapshot(row, rules) {
 
 
 
-  const sourceCount = sourceCodes.length
-
-    ? sourceCodes.length
-
-    : manualCount !== null
-
+  // Note: sourceCount reflects the raw license count before exclusion,
+  // while includedCount reflects the count after manual override or exclusion.
+  // They may differ intentionally - sourceCount is for audit/display purposes.
+  const sourceCount = manualCount !== null
     ? manualCount
-
+    : sourceCodes.length
+    ? sourceCodes.length
     : fallbackCount;
 
 

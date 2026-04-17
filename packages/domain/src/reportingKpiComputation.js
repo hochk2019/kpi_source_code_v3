@@ -140,10 +140,15 @@ function addByTiers(numItems, tiers = [], isCumulative = false) {
     if (numItems < from) continue;
     if (isCumulative) {
       sum += Number(add || 0);
-    } else if (numItems >= from && numItems <= to) {
-      sum = Number(add || 0);
-    } else if (numItems > to) {
-      sum = Number(add || 0);
+    } else {
+      if (numItems >= from && numItems <= to) {
+        sum = Number(add || 0);
+        break;
+      }
+      if (numItems > to) {
+        sum = Number(add || 0);
+        break;
+      }
     }
   }
   return sum;
