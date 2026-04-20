@@ -41,7 +41,7 @@ Current verified state after `cng-sr1.5`:
 | `cng-sr1.3` | 3 | Reporting, export, observability, legacy report bridge extraction | closed |
 | `cng-sr1.4` | 4 | ECUS bridge and auth/bootstrap helper extraction | closed |
 | `cng-sr1.5` | 5 | Remaining legacy test imports and orphan runtime helpers | closed |
-| `cng-sr1.6` | 6 | Final `server/index.js` retirement and delete `server/` | in_progress |
+| `cng-sr1.6` | 6 | Final `server/index.js` retirement and delete `server/` | closed |
 
 ## Closeout Gates
 
@@ -63,7 +63,7 @@ Each wave closes only when all three pass:
 | `server/ecus/bridgeService.js` | 4 | `@kpi/backend-shared/ecus` | 0 | 0 | closed |
 | `server/ecusBridgeMutations.js` | 4 | `@kpi/backend-shared/ecus` | 0 | 0 | closed |
 | `server/https/aiHttpsConfig.js` | 5 | `@kpi/backend-shared/runtime` | 0 | 0 | closed |
-| `server/index.js` | 6 | `replace testing quarantine before delete` | 0 | 0 | in_progress |
+| `server/index.js` | 6 | `deleted permanently` | 0 | 0 | closed |
 | `server/legacyReportingBridge.js` | 3 | `@kpi/backend-shared/reporting` | 0 | 0 | closed |
 | `server/reportExport.js` | 3 | `@kpi/backend-shared/reporting` | 0 | 0 | closed |
 | `server/reportExportPayloads.js` | 3 | `@kpi/backend-shared/reporting` | 0 | 0 | closed |

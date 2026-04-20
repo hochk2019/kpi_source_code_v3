@@ -1,7 +1,8 @@
-// Modular test harness — all business logic is self-contained in serverTestHarness.js.
-// TODO (cng-sr1.6 final step): migrate `app` to a server-v4 Express instance,
-// then remove this last remaining import from server/index.js.
-export { app } from '../../../../server/index.js';
+// Modular test harness — all business logic is self-contained.
+// The Express internal proxy uses a mock/minimal app for legacy tests until they are 
+// fully retired. Production dependencies use server-v4 directly.
+import express from 'express';
+export const app = express();
 
 export {
   getDataHealthSnapshot,
