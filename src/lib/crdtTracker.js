@@ -14,7 +14,8 @@ export function initCrdt(clientId = Math.random().toString(36).slice(2, 8)) {
         if (raw) {
             crdtMeta = JSON.parse(raw);
         }
-    } catch (err) {
+    } catch {
+        /* ignore */
         crdtMeta = {};
     }
 }
@@ -22,7 +23,7 @@ export function initCrdt(clientId = Math.random().toString(36).slice(2, 8)) {
 function saveCrdtMeta() {
     try {
         localStorage.setItem(CRDT_STORAGE_KEY, JSON.stringify(crdtMeta));
-    } catch (e) { }
+    } catch { /* ignore */ }
 }
 
 /**

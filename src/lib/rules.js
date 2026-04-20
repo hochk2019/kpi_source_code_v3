@@ -603,7 +603,9 @@ function loadRuleCollection() {
           if (typeof setStorageItem === 'function') {
             setStorageItem('kpi_rules_legacy_backup', legacyRaw);
           }
-        } catch (e) { }
+        } catch (e) {
+          console.warn('Backup error:', e);
+        }
 
         return persistCollection(collection);
 

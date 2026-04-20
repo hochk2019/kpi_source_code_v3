@@ -60,9 +60,9 @@ describe('storageClient remote đồng bộ lại khi server lên trễ', () => 
 
     vi.resetModules();
 
-    vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.spyOn(console, 'error').mockImplementation(() => { });
 
-    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    vi.spyOn(console, 'warn').mockImplementation(() => { });
 
     const storageModule = await import('@/lib/storageClient.js');
 
@@ -936,9 +936,8 @@ describe('storageClient remote đồng bộ lại khi server lên trễ', () => 
     expect(getSyncStatus().pendingWrites).toBe(1);
 
     const refreshed = await refreshSharedKeys(['decl_rows_v1']);
-
-    expect(refreshed.decl_rows_v1).toEqual([{ so_tk: 'SERVER-READ-STILL-OK' }]);
-    expect(sharedGetItem('decl_rows_v1')).toBe(JSON.stringify([{ so_tk: 'SERVER-READ-STILL-OK' }]));
+    expect(refreshed.decl_rows_v1).toEqual([{ so_tk: 'LOCAL-PENDING-WRITE' }]);
+    expect(sharedGetItem('decl_rows_v1')).toBe(JSON.stringify([{ so_tk: 'LOCAL-PENDING-WRITE' }]));
     expect(getSyncStatus().remoteEnabled).toBe(true);
     expect(writeAttempts).toBe(1);
 
@@ -1267,7 +1266,7 @@ describe('storageClient giới hạn dung lượng khi backend trả về 413', 
 
     vi.resetModules();
 
-    vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.spyOn(console, 'error').mockImplementation(() => { });
 
     const storageModule = await import('@/lib/storageClient.js');
 

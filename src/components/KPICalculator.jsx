@@ -1,6 +1,7 @@
-import React, { Suspense, useEffect, useMemo } from 'react';
+import React, { Suspense, useEffect } from 'react';
 
 import { TabsContent } from '@/components/ui/tabs.jsx';
+import { useKpiPermissions } from '@/hooks/useKpiPermissions.js';
 
 const DataImporter = React.lazy(() => import('./DataImporter.jsx'));
 
@@ -73,38 +74,23 @@ const KPICalculator = ({
   navigationIntent = null,
 }) => {
 
-  const effectiveAuth = useMemo(
-    () => auth || { username: 'guest', role: 'viewer', permissions: {} },
-    [auth],
-  );
+  const {
+    effectiveAuth,
+    canImportEdit,
+    canImportUpload,
+    canMstEdit,
+    canRulesEdit,
+    canTeamsEdit,
+    canManageAccounts,
+    canExportReports,
+    canManageSync,
+    canManageAlerts,
+    canViewAudit,
+    canUseAi,
+    canManageDataHealth,
+    canViewDataHealth,
+  } = useKpiPermissions(auth);
 
-  const permissions = effectiveAuth.permissions || {};
-
-  const canImportEdit = !!permissions.importEdit;
-
-  const canImportUpload = !!permissions.importUpload;
-
-  const canMstEdit = !!permissions.mstEdit;
-
-  const canRulesEdit = !!permissions.rulesEdit;
-
-  const canTeamsEdit = !!permissions.teamsEdit;
-
-  const canManageAccounts = !!permissions.accountManage;
-
-  const canExportReports = permissions.reportsExport !== false;
-
-  const canManageSync = !!permissions.syncManage;
-
-  const canManageAlerts = !!permissions.alertsManage;
-
-  const canViewAudit = !!permissions.auditView || canManageAccounts;
-
-  const canUseAi = !!permissions.aiAssistUse || !!permissions.aiAssistManage;
-
-  const canManageDataHealth = !!permissions.dataHealthManage;
-
-  const canViewDataHealth = !!permissions.dataHealthView || canManageDataHealth;
   const {
     currentSection,
     currentTab,
@@ -213,19 +199,19 @@ const KPICalculator = ({
         <TabsContent value="dashboard" className="ds-panel">
 
           {loadedTabs.has('dashboard') ? (
-          <TabPanel panelRootId={getAppTabRootId('dashboard')} tabLabel="Tổng quan KPI">
+            <TabPanel panelRootId={getAppTabRootId('dashboard')} tabLabel="Tổng quan KPI">
 
-            <AppDashboardLanding
-              currentUser={effectiveAuth}
-              sections={navigationSections}
-              onNavigate={requestTabNavigation}
-              onOpenCommandCenter={() => emitCommand('open:command-center')}
-              canUseAi={canUseAi}
-              canViewAudit={canViewAudit}
-              canViewDataHealth={canViewDataHealth}
-            />
+              <AppDashboardLanding
+                currentUser={effectiveAuth}
+                sections={navigationSections}
+                onNavigate={requestTabNavigation}
+                onOpenCommandCenter={() => emitCommand('open:command-center')}
+                canUseAi={canUseAi}
+                canViewAudit={canViewAudit}
+                canViewDataHealth={canViewDataHealth}
+              />
 
-          </TabPanel>
+            </TabPanel>
           ) : null}
 
         </TabsContent>
@@ -233,15 +219,15 @@ const KPICalculator = ({
         <TabsContent value="mst" className="ds-panel">
 
           {loadedTabs.has('mst') ? (
-          <TabPanel panelRootId={getAppTabRootId('mst')} tabLabel="Gán MST">
+            <TabPanel panelRootId={getAppTabRootId('mst')} tabLabel="Gán MST">
 
-            <MSTWorkflowPanel
-              canEdit={canMstEdit}
-              currentUser={effectiveAuth}
-              onNavigate={requestTabNavigation}
-            />
+              <MSTWorkflowPanel
+                canEdit={canMstEdit}
+                currentUser={effectiveAuth}
+                onNavigate={requestTabNavigation}
+              />
 
-          </TabPanel>
+            </TabPanel>
           ) : null}
 
         </TabsContent>
@@ -251,11 +237,11 @@ const KPICalculator = ({
         <TabsContent value="hq" className="ds-panel">
 
           {loadedTabs.has('hq') ? (
-          <TabPanel panelRootId={getAppTabRootId('hq')} tabLabel="Đại Lý HQ">
+            <TabPanel panelRootId={getAppTabRootId('hq')} tabLabel="Đại Lý HQ">
 
-            <HQAgencyManager canEdit={canMstEdit} currentUser={effectiveAuth} />
+              <HQAgencyManager canEdit={canMstEdit} currentUser={effectiveAuth} />
 
-          </TabPanel>
+            </TabPanel>
           ) : null}
 
         </TabsContent>
@@ -265,17 +251,17 @@ const KPICalculator = ({
         <TabsContent value="import" className="ds-panel">
 
           {loadedTabs.has('import') ? (
-          <TabPanel panelRootId={getAppTabRootId('import')} tabLabel="Import Data">
+            <TabPanel panelRootId={getAppTabRootId('import')} tabLabel="Import Data">
 
-            <DataImporter
-              canEdit={canImportEdit}
-              canImportUpload={canImportUpload}
-              currentUser={effectiveAuth}
-              canManageSync={canManageSync}
-              canManageAlerts={canManageAlerts}
-            />
+              <DataImporter
+                canEdit={canImportEdit}
+                canImportUpload={canImportUpload}
+                currentUser={effectiveAuth}
+                canManageSync={canManageSync}
+                canManageAlerts={canManageAlerts}
+              />
 
-          </TabPanel>
+            </TabPanel>
           ) : null}
 
         </TabsContent>
@@ -285,11 +271,11 @@ const KPICalculator = ({
         <TabsContent value="teams" className="ds-panel">
 
           {loadedTabs.has('teams') ? (
-          <TabPanel panelRootId={getAppTabRootId('teams')} tabLabel="Quản lý tổ đội">
+            <TabPanel panelRootId={getAppTabRootId('teams')} tabLabel="Quản lý tổ đội">
 
-            <TeamManager canEdit={canTeamsEdit} currentUser={effectiveAuth} />
+              <TeamManager canEdit={canTeamsEdit} currentUser={effectiveAuth} />
 
-          </TabPanel>
+            </TabPanel>
           ) : null}
 
         </TabsContent>
@@ -299,11 +285,11 @@ const KPICalculator = ({
         <TabsContent value="rules" className="ds-panel">
 
           {loadedTabs.has('rules') ? (
-          <TabPanel panelRootId={getAppTabRootId('rules')} tabLabel="Quy tắc KPI">
+            <TabPanel panelRootId={getAppTabRootId('rules')} tabLabel="Quy tắc KPI">
 
-            <RulesEditor canEdit={canRulesEdit} currentUser={effectiveAuth} />
+              <RulesEditor canEdit={canRulesEdit} currentUser={effectiveAuth} />
 
-          </TabPanel>
+            </TabPanel>
           ) : null}
 
         </TabsContent>
@@ -313,14 +299,14 @@ const KPICalculator = ({
         <TabsContent value="adjustments" className="ds-panel">
 
           {loadedTabs.has('adjustments') ? (
-          <TabPanel panelRootId={getAppTabRootId('adjustments')} tabLabel="Điểm KPI +/- Thêm">
+            <TabPanel panelRootId={getAppTabRootId('adjustments')} tabLabel="Điểm KPI +/- Thêm">
 
-            <KPIAdjustmentsWorkflowPanel
-              currentUser={effectiveAuth}
-              onNavigate={requestTabNavigation}
-            />
+              <KPIAdjustmentsWorkflowPanel
+                currentUser={effectiveAuth}
+                onNavigate={requestTabNavigation}
+              />
 
-          </TabPanel>
+            </TabPanel>
           ) : null}
 
         </TabsContent>
@@ -330,16 +316,16 @@ const KPICalculator = ({
         <TabsContent value="reports" className="ds-panel">
 
           {loadedTabs.has('reports') ? (
-          <TabPanel panelRootId={getAppTabRootId('reports')} tabLabel="Báo cáo KPI">
+            <TabPanel panelRootId={getAppTabRootId('reports')} tabLabel="Báo cáo KPI">
 
-            <ReportCenterPanel
-              canExport={canExportReports}
-              canViewAudit={canViewAudit}
-              currentUser={effectiveAuth}
-              onNavigate={requestTabNavigation}
-            />
+              <ReportCenterPanel
+                canExport={canExportReports}
+                canViewAudit={canViewAudit}
+                currentUser={effectiveAuth}
+                onNavigate={requestTabNavigation}
+              />
 
-          </TabPanel>
+            </TabPanel>
           ) : null}
 
         </TabsContent>
@@ -348,27 +334,27 @@ const KPICalculator = ({
 
         {canViewDataHealth && (
 
-        <TabsContent value="health" className="ds-panel">
+          <TabsContent value="health" className="ds-panel">
 
-          {loadedTabs.has('health') ? (
-          <TabPanel
-            panelClassName="ds-panel__inner space-y-4"
-            panelRootId={getAppTabRootId('health')}
-            tabLabel="Health & sync"
-          >
+            {loadedTabs.has('health') ? (
+              <TabPanel
+                panelClassName="ds-panel__inner space-y-4"
+                panelRootId={getAppTabRootId('health')}
+                tabLabel="Health & sync"
+              >
 
-            <SectionSurface id="app-workflow-health-sync" tabIndex={-1}>
-              <SectionHeader
-                title="Health & sync triage"
-                description="Kiểm tra đồng bộ, cảnh báo dữ liệu và backlog trước khi chuyển sang module xử lý tương ứng."
-              />
-              <DataHealthDashboard currentUser={effectiveAuth} canManage={canManageDataHealth} />
-            </SectionSurface>
+                <SectionSurface id="app-workflow-health-sync" tabIndex={-1}>
+                  <SectionHeader
+                    title="Health & sync triage"
+                    description="Kiểm tra đồng bộ, cảnh báo dữ liệu và backlog trước khi chuyển sang module xử lý tương ứng."
+                  />
+                  <DataHealthDashboard currentUser={effectiveAuth} canManage={canManageDataHealth} />
+                </SectionSurface>
 
-          </TabPanel>
-          ) : null}
+              </TabPanel>
+            ) : null}
 
-        </TabsContent>
+          </TabsContent>
 
         )}
 
@@ -379,11 +365,11 @@ const KPICalculator = ({
           <TabsContent value="ai" className="ds-panel">
 
             {loadedTabs.has('ai') ? (
-            <TabPanel panelRootId={getAppTabRootId('ai')} tabLabel="Trợ lý AI">
+              <TabPanel panelRootId={getAppTabRootId('ai')} tabLabel="Trợ lý AI">
 
-              <AiAssistant currentUser={effectiveAuth} />
+                <AiAssistant currentUser={effectiveAuth} />
 
-            </TabPanel>
+              </TabPanel>
             ) : null}
 
           </TabsContent>
@@ -397,11 +383,11 @@ const KPICalculator = ({
           <TabsContent value="accounts" className="ds-panel">
 
             {loadedTabs.has('accounts') ? (
-            <TabPanel panelRootId={getAppTabRootId('accounts')} tabLabel="Tài khoản">
+              <TabPanel panelRootId={getAppTabRootId('accounts')} tabLabel="Tài khoản">
 
-              <AccountManager currentUser={effectiveAuth} />
+                <AccountManager currentUser={effectiveAuth} />
 
-            </TabPanel>
+              </TabPanel>
             ) : null}
 
           </TabsContent>
@@ -415,25 +401,25 @@ const KPICalculator = ({
           <TabsContent value="audit" className="ds-panel">
 
             {loadedTabs.has('audit') ? (
-            <TabPanel
-              panelClassName="ds-panel__inner grid gap-6 xl:grid-cols-[5fr,3fr]"
-              panelRootId={getAppTabRootId('audit')}
-              tabLabel="Nhật ký hệ thống"
-            >
+              <TabPanel
+                panelClassName="ds-panel__inner grid gap-6 xl:grid-cols-[5fr,3fr]"
+                panelRootId={getAppTabRootId('audit')}
+                tabLabel="Nhật ký hệ thống"
+              >
 
-              <div className="space-y-6">
+                <div className="space-y-6">
 
-                <AuditLog currentUser={effectiveAuth} />
+                  <AuditLog currentUser={effectiveAuth} />
 
-              </div>
+                </div>
 
-              <div className="space-y-6">
+                <div className="space-y-6">
 
-                <ExportAuditReport currentUser={effectiveAuth} />
+                  <ExportAuditReport currentUser={effectiveAuth} />
 
-              </div>
+                </div>
 
-            </TabPanel>
+              </TabPanel>
             ) : null}
 
           </TabsContent>
@@ -447,11 +433,11 @@ const KPICalculator = ({
           <TabsContent value="export-audit" className="ds-panel">
 
             {loadedTabs.has('export-audit') ? (
-            <TabPanel panelRootId={getAppTabRootId('export-audit')} tabLabel="Xuất nhật ký">
+              <TabPanel panelRootId={getAppTabRootId('export-audit')} tabLabel="Xuất nhật ký">
 
-              <ExportAuditReport currentUser={effectiveAuth} />
+                <ExportAuditReport currentUser={effectiveAuth} />
 
-            </TabPanel>
+              </TabPanel>
             ) : null}
 
           </TabsContent>

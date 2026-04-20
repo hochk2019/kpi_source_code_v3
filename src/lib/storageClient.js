@@ -1202,7 +1202,11 @@ export async function refreshSharedKeys(keys, options = {}) {
     const generatedAtMs = payload?.meta?.generatedAt ? new Date(payload.meta.generatedAt).getTime() : Date.now();
 
     if (!resolveRemoteConflict(key, generatedAtMs)) {
-      results[key] = getItem(key);
+      try {
+        results[key] = JSON.parse(getItem(key) || 'null');
+      } catch {
+        results[key] = null;
+      }
       continue;
     }
 
