@@ -1,6 +1,9 @@
-// Temporary quarantine layer for the remaining legacy API test suites.
+// Modular test harness — all business logic is self-contained in serverTestHarness.js.
+// TODO (cng-sr1.6 final step): migrate `app` to a server-v4 Express instance,
+// then remove this last remaining import from server/index.js.
+export { app } from '../../../../server/index.js';
+
 export {
-  app,
   getDataHealthSnapshot,
   getDatabaseHandle,
   getDatabaseInitState,
@@ -9,12 +12,10 @@ export {
   resetDatabaseForTests,
   stopServer,
   waitForAccountSqlSyncIdle,
-} from '../../../../server/index.js';
-
-export {
   appendEcusMonitorHistory,
   buildEcusMonitorMetrics,
   buildEcusMonitorSeries,
   clearEcusMonitorHistory,
   getEcusMonitorHistory,
-} from '../../../../server/index.js';
+} from './serverTestHarness.js';
+
