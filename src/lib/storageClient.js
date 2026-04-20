@@ -1,6 +1,9 @@
 import { fetchWithAuth } from '../auth/localAuth.js';
 import { SHARED_LIGHT_BOOTSTRAP_MODE } from '../../packages/domain/src/bootstrapStorageKeys.js';
 import { createSyncError, normalizeSyncError } from './storageSyncErrors.js';
+import { initCrdt, recordLocalUpdate, resolveRemoteConflict } from './crdtTracker.js';
+
+initCrdt();
 
 export const STORAGE_LIMIT_ERROR_MESSAGE =
   'Dung lượng dữ liệu vượt quá giới hạn máy chủ đồng bộ. Vui lòng chia nhỏ dữ liệu hoặc liên hệ quản trị viên để nâng giới hạn.';
@@ -153,13 +156,13 @@ export async function patchDeclRows(updates, options = {}) {
 
       options.baseUrl ??
 
-        options.apiBase ??
+      options.apiBase ??
 
-        apiBase ??
+      apiBase ??
 
-        (typeof import.meta !== 'undefined' ? import.meta.env?.VITE_API_BASE : '') ??
+      (typeof import.meta !== 'undefined' ? import.meta.env?.VITE_API_BASE : '') ??
 
-        ''
+      ''
 
     ) || '';
 
@@ -615,12 +618,14 @@ function canUseRemoteSync(baseUrl) {
 }
 
 
-
-function applyRemoteSnapshot(data) {
+function applyRemoteSnapshot(data, generatedAtMs) {
 
   const entries = data && typeof data === 'object' ? Object.entries(data) : [];
 
   for (const [key, value] of entries) {
+    if (!resolveRemoteConflict(key, generatedAtMs)) {
+      continue;
+    }
 
     if (value === null || value === undefined) {
 
@@ -970,7 +975,8 @@ async function bootstrapFromServer(baseUrl) {
 
       }
 
-      applyRemoteSnapshot(payload?.data);
+      const generatedAtMs = payload?.meta?.generatedAt ? new Date(payload.meta.generatedAt).getTime() : Date.now();
+      applyRemoteSnapshot(payload?.data, generatedAtMs);
 
       remoteEnabled = true;
       consecutiveRefreshFailures = 0;
@@ -1088,13 +1094,13 @@ export async function refreshSharedKeys(keys, options = {}) {
 
       options.baseUrl ??
 
-        options.apiBase ??
+      options.apiBase ??
 
-        apiBase ??
+      apiBase ??
 
-        (typeof import.meta !== 'undefined' ? import.meta.env?.VITE_API_BASE : '') ??
+      (typeof import.meta !== 'undefined' ? import.meta.env?.VITE_API_BASE : '') ??
 
-        ''
+      ''
 
     ) || '';
 
@@ -1193,6 +1199,12 @@ export async function refreshSharedKeys(keys, options = {}) {
     const [key, payload] = entry.value;
 
     const raw = payload?.raw;
+    const generatedAtMs = payload?.meta?.generatedAt ? new Date(payload.meta.generatedAt).getTime() : Date.now();
+
+    if (!resolveRemoteConflict(key, generatedAtMs)) {
+      results[key] = getItem(key);
+      continue;
+    }
 
     if (raw === null || raw === undefined) {
 
@@ -1302,6 +1314,8 @@ export function setItem(key, value) {
 
   const stringValue = value === null || value === undefined ? null : String(value);
 
+  recordLocalUpdate(key);
+
   if (stringValue === null) {
 
     cache.delete(key);
@@ -1394,7 +1408,7 @@ export function subscribe(key, listener) {
 
   const fn = typeof listener === 'function' ? listener : null;
 
-  if (!fn) return () => {};
+  if (!fn) return () => { };
 
   if (!listeners.has(key)) {
 
@@ -1521,7 +1535,7 @@ export function subscribeSyncStatus(listener) {
 
   if (!fn) {
 
-    return () => {};
+    return () => { };
 
   }
 

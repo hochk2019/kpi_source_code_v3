@@ -1,0 +1,15 @@
+81d001c fix: resolve post-commit hook failure on Windows
+c36dcfb fix(bugs): resolve 4 confirmed bugs in KPI computation
+6cba4a1 ref(backend): retire direct server import lanes
+94ea4f3 ref(backend): extract server retirement persistence lane
+f31356b ref(store): Lock store facade behind runtime shim
+2111f22 ref(store): Migrate low-risk callers off store facade
+9d10925 ref(store): Migrate low-risk helper callers
+6c39293 ref(store): Extract shared helper core
+d8dc3d8 ref(store): Extract declaration mutation lane
+81d1627 ref(store): Extract declaration save pipeline
+1c7c85b ref(store): Extract declaration read helpers
+4f3d536 ref(store): Extract team roster module
+055bfcb ref(store): Extract rules persistence module
+8fb1a11 ref(store): Extract audit log module
+bb0fa6f ref(store): Extract declaration history module

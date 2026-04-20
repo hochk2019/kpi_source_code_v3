@@ -18,9 +18,7 @@ export function normalizeAdjustmentCategory(value) {
 export function normalizeAdjustmentMonth(value, { normalizeStr }) {
   if (!value) return "";
   if (value instanceof Date && !Number.isNaN(value.getTime())) {
-    const year = value.getFullYear();
-    const month = String(value.getMonth() + 1).padStart(2, "0");
-    return `${year}-${month}`;
+    return value.toISOString().slice(0, 7);
   }
 
   const str = normalizeStr(value);

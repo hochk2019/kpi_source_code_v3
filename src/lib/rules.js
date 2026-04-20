@@ -159,13 +159,13 @@ function normalizeGroup(rawGroup, fallbackGroup) {
 
       : typeof input.codes === 'string'
 
-      ? input.codes.split(',')
+        ? input.codes.split(',')
 
-      : Array.isArray(base.codes)
+        : Array.isArray(base.codes)
 
-      ? base.codes
+          ? base.codes
 
-      : [],
+          : [],
 
     base: Number.isFinite(Number(input.base)) ? Number(input.base) : Number(base.base) || 0,
 
@@ -231,9 +231,9 @@ function normalizeLicense(rawLicense, fallbackLicense) {
 
     : Array.isArray(base.codePoints)
 
-    ? base.codePoints
+      ? base.codePoints
 
-    : [];
+      : [];
 
 
 
@@ -259,9 +259,9 @@ function normalizeLicense(rawLicense, fallbackLicense) {
 
     : Array.isArray(base?.exclude?.codes)
 
-    ? base.exclude.codes
+      ? base.exclude.codes
 
-    : [];
+      : [];
 
 
 
@@ -271,9 +271,9 @@ function normalizeLicense(rawLicense, fallbackLicense) {
 
     : Array.isArray(base?.exclude?.agencies)
 
-    ? base.exclude.agencies
+      ? base.exclude.agencies
 
-    : [];
+      : [];
 
 
 
@@ -397,9 +397,9 @@ function normalizeRule(rawRule) {
 
     : Number.isFinite(Number(skeleton.version))
 
-    ? Number(skeleton.version)
+      ? Number(skeleton.version)
 
-    : 0;
+      : 0;
 
   next.version = Math.max(0, baseVersion);
 
@@ -599,6 +599,12 @@ function loadRuleCollection() {
 
         });
 
+        try {
+          if (typeof setStorageItem === 'function') {
+            setStorageItem('kpi_rules_legacy_backup', legacyRaw);
+          }
+        } catch (e) { }
+
         return persistCollection(collection);
 
       }
@@ -617,6 +623,29 @@ function loadRuleCollection() {
 
   return persistCollection(defaults);
 
+}
+
+
+
+export function rollbackLegacyRules() {
+  try {
+    const backupRaw = getStorageItem('kpi_rules_legacy_backup');
+    if (backupRaw) {
+      setStorageItem(LEGACY_KEY_ACTIVE, backupRaw);
+      const parsed = JSON.parse(backupRaw);
+      const legacyRule = migrateLegacyRule(parsed);
+      const defaults = createDefaultRuleSetV2();
+      const collection = normalizeCollection({
+        activeId: defaults.id,
+        sets: legacyRule ? [legacyRule, defaults] : [defaults],
+      });
+      persistCollection(collection);
+      return { success: true, data: collection };
+    }
+    return { success: false, error: new Error('Không tìm thấy bản sao lưu hệ thống cũ') };
+  } catch (err) {
+    return { success: false, error: err };
+  }
 }
 
 
