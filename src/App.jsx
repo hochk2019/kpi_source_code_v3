@@ -14,7 +14,7 @@ import { getAuth, getViewerAuth, loadSession, logout } from './auth/localAuth.js
 
 import './App.css';
 
-import { clearStorageCache, getSyncStatus, initSharedStorage, subscribeSyncStatus } from './lib/storageClient.js';
+import { clearStorageCache } from './lib/storageClient.js';
 import {
   APP_SHELL_FALLBACK_TAB,
   parseAppShellLocation,
@@ -43,8 +43,6 @@ export default function App() {
 
   const [showChangePassword, setShowChangePassword] = useState(false);
 
-  const [syncStatus, setSyncStatus] = useState(() => getSyncStatus());
-
   const [activeTab, setActiveTab] = useState(() => {
     const initialUser =
       getAuth() ||
@@ -67,7 +65,7 @@ export default function App() {
 
 
 
-  useTooltipTitles(rootRef, [auth, showLogin, showChangePassword, syncStatus]);
+  useTooltipTitles(rootRef, [auth, showLogin, showChangePassword]);
 
 
 
@@ -88,58 +86,6 @@ export default function App() {
         setAuth(null);
 
       });
-
-  }, []);
-
-
-
-  useEffect(() => {
-
-    if (!auth?.username) {
-
-      clearStorageCache();
-
-      return undefined;
-
-    }
-
-    if (getSyncStatus().remoteEnabled) {
-
-      return undefined;
-
-    }
-
-    let cancelled = false;
-
-    initSharedStorage().catch((error) => {
-
-      if (!cancelled) {
-
-        console.warn('Không thể đồng bộ bộ nhớ chia sẻ sau khi xác thực.', error);
-
-      }
-
-    });
-
-    return () => {
-
-      cancelled = true;
-
-    };
-
-  }, [auth?.username]);
-
-
-
-  useEffect(() => {
-
-    const unsubscribe = subscribeSyncStatus((status) => {
-
-      setSyncStatus(status);
-
-    });
-
-    return () => unsubscribe();
 
   }, []);
 
@@ -203,9 +149,7 @@ export default function App() {
 
 
 
-  const viewer = getViewerAuth();
-
-  const effectiveAuth = auth || viewer;
+  const effectiveAuth = useMemo(() => auth || getViewerAuth(), [auth]);
 
   const isAdmin = isAdminRole(effectiveAuth?.role);
 
@@ -267,41 +211,6 @@ export default function App() {
 
 
 
-  const syncDetail = useMemo(() => {
-
-    if (!syncStatus?.waitingForBackend) {
-
-      return '';
-
-    }
-
-    const parts = [];
-
-    if (typeof syncStatus.pendingWrites === 'number' && syncStatus.pendingWrites > 0) {
-
-      parts.push(`${syncStatus.pendingWrites.toLocaleString('vi-VN')} thay đổi chưa gửi`);
-
-    }
-
-    if (syncStatus.nextRetryAt) {
-
-      parts.push(`Thử lại lúc ${new Date(syncStatus.nextRetryAt).toLocaleTimeString('vi-VN')}`);
-
-    } else if (syncStatus.retryDelayMs) {
-
-      parts.push(`Thử lại sau khoảng ${Math.round(syncStatus.retryDelayMs / 1000)} giây`);
-
-    }
-
-    if (syncStatus.lastError) {
-
-      parts.push(`Lý do gần nhất: ${syncStatus.lastError}`);
-
-    }
-
-    return parts.join(' • ');
-
-  }, [syncStatus]);
 
 
 
@@ -524,34 +433,6 @@ export default function App() {
         </div>
 
       </header>
-
-
-
-      {syncStatus?.waitingForBackend && isAdmin && (
-
-        <div className="border-b border-amber-200 bg-amber-50 dark:border-amber-400/40 dark:bg-amber-500/15">
-
-          <div className="mx-auto flex max-w-6xl flex-col gap-1 px-4 py-3 text-sm text-amber-800 dark:text-amber-200 sm:flex-row sm:items-center sm:justify-between">
-
-            <div className="font-medium">
-
-              Dữ liệu mới đang tạm lưu cục bộ vì backend chưa sẵn sàng đồng bộ.
-
-            </div>
-
-            {syncDetail && <div className="text-xs text-amber-700 dark:text-amber-200 sm:text-sm">{syncDetail}</div>}
-
-            <div className="text-xs text-amber-700 dark:text-amber-200 sm:text-sm">
-
-              Vui lòng khởi động dịch vụ backend (pnpm server) hoặc kiểm tra kết nối LAN rồi chờ hệ thống tự đồng bộ.
-
-            </div>
-
-          </div>
-
-        </div>
-
-      )}
 
 
 

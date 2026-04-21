@@ -499,22 +499,24 @@ function normalizeCollection(rawCollection) {
 
 
 
-function persistCollection(collection) {
-
+async function persistCollectionAsync(collection) {
   const normalized = normalizeCollection(collection);
-
-  persistRules(normalized);
-
+  await persistRules(normalized);
   const activeRule = normalized.sets.find((rule) => rule.id === normalized.activeId) || normalized.sets[0] || null;
-
   if (activeRule) {
-
-    setStorageItem(LEGACY_KEY_ACTIVE, JSON.stringify(activeRule));
-
+    setStorageItem(LEGACY_KEY_ACTIVE, JSON.stringify(activeRule)).catch((e) => console.warn(e));
   }
-
   return normalized;
+}
 
+function persistCollectionSync(collection) {
+  const normalized = normalizeCollection(collection);
+  persistRules(normalized).catch((err) => console.error("Background persistRules failed", err));
+  const activeRule = normalized.sets.find((rule) => rule.id === normalized.activeId) || normalized.sets[0] || null;
+  if (activeRule) {
+    setStorageItem(LEGACY_KEY_ACTIVE, JSON.stringify(activeRule)).catch((e) => console.warn(e));
+  }
+  return normalized;
 }
 
 
@@ -569,7 +571,7 @@ function loadRuleCollection() {
 
       });
 
-      return persistCollection(collection);
+      return persistCollectionSync(collection);
 
     }
 
@@ -607,7 +609,7 @@ function loadRuleCollection() {
           console.warn('Backup error:', e);
         }
 
-        return persistCollection(collection);
+        return persistCollectionSync(collection);
 
       }
 
@@ -623,7 +625,7 @@ function loadRuleCollection() {
 
   const defaults = createDefaultRuleCollection();
 
-  return persistCollection(defaults);
+  return persistCollectionSync(defaults);
 
 }
 
@@ -641,7 +643,7 @@ export function rollbackLegacyRules() {
         activeId: defaults.id,
         sets: legacyRule ? [legacyRule, defaults] : [defaults],
       });
-      persistCollection(collection);
+      persistCollectionSync(collection);
       return { success: true, data: collection };
     }
     return { success: false, error: new Error('Không tìm thấy bản sao lưu hệ thống cũ') };
@@ -850,7 +852,7 @@ function resolveRuleId(ruleInput, fallbackId) {
 
 
 
-export function saveRules(ruleInput, opts = {}) {
+export async function saveRules(ruleInput, opts = {}) {
 
   const collection = loadRuleCollection();
 
@@ -906,7 +908,7 @@ export function saveRules(ruleInput, opts = {}) {
 
 
 
-  const persisted = persistCollection(collection);
+  const persisted = await persistCollectionAsync(collection);
 
   if (opts.appendHistory !== false) {
 
@@ -958,7 +960,7 @@ export function saveRules(ruleInput, opts = {}) {
 
 
 
-export function restoreRuleVersion(snapshotInput, opts = {}) {
+export async function restoreRuleVersion(snapshotInput, opts = {}) {
 
   if (!snapshotInput || typeof snapshotInput !== 'object') {
 
@@ -970,7 +972,7 @@ export function restoreRuleVersion(snapshotInput, opts = {}) {
 
   const normalizedSnapshot = normalizeRule(snapshotInput);
 
-  const restored = saveRules(
+  const restored = await saveRules(
 
     { ...normalizedSnapshot, updatedAt: new Date().toISOString() },
 
@@ -1038,7 +1040,7 @@ export function setDefaultRule(ruleId, { actor = 'system' } = {}) {
 
   collection.activeId = normalizedId;
 
-  const persisted = persistCollection(collection);
+  const persisted = persistCollectionSync(collection);
 
   const activeRule = persisted.sets.find((rule) => rule.id === persisted.activeId) || null;
 
@@ -1096,7 +1098,7 @@ export function exportRuleCollection() {
 
 export function restoreRuleCollection(collectionInput, { actor = 'system' } = {}) {
 
-  const persisted = persistCollection(collectionInput);
+  const persisted = persistCollectionSync(collectionInput);
 
   const activeRule = persisted.sets.find((entry) => entry.id === persisted.activeId);
 
@@ -1582,7 +1584,7 @@ export function deleteRule(ruleId, { actor = 'system' } = {}) {
 
   }
 
-  const persisted = persistCollection(collection);
+  const persisted = persistCollectionSync(collection);
 
   pushAuditLog({
 

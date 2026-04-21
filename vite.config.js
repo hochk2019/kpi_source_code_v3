@@ -23,6 +23,13 @@ export default defineConfig({
   server: {
 
     host: true,
+    watch: {
+      ignored: [
+        '**/data/**',
+        '**/*.sqlite*',
+        '**/backend-log.txt'
+      ]
+    },
 
     proxy: {
 
